@@ -1,0 +1,185 @@
+{
+  "schema": 2,
+  "basis": [
+    "AGENTS.md第7/12条",
+    "docs/sources/evaluation/behavior-cases.json:B03/B05",
+    "scripts/evaluate_business_sql.py:net_revenue_scope"
+  ],
+  "scenarios": {
+    "cross_conversation": {
+      "steps": {
+        "0": {
+          "no_query": true,
+          "has_active_memory": true
+        },
+        "1": {
+          "sql_channel": "web"
+        }
+      },
+      "review": "成功保存并告知；新对话采用本人默认web，解释与SQL一致。"
+    },
+    "revision": {
+      "steps": {
+        "0": {
+          "no_query": true,
+          "has_active_memory": true
+        },
+        "1": {
+          "same_asset_revised": true,
+          "no_query": true,
+          "has_active_memory": true
+        },
+        "2": {
+          "sql_channel": "app"
+        }
+      },
+      "review": "修订同一偏好，不同时保留冲突web/app；新对话采用app。"
+    },
+    "temporary_override": {
+      "steps": {
+        "0": {
+          "no_query": true,
+          "has_active_memory": true
+        },
+        "1": {
+          "sql_channel": "app",
+          "has_active_memory": true,
+          "memory_unchanged": true
+        },
+        "2": {
+          "sql_channel": "web"
+        }
+      },
+      "review": "本次app覆盖默认web，不污染之后新对话的web默认。"
+    },
+    "mixed_intent": {
+      "steps": {
+        "0": {
+          "sql_channel": null,
+          "has_active_memory": true
+        },
+        "1": {
+          "sql_channel": "web"
+        }
+      },
+      "review": "同一条消息中正确区分本次全部渠道和长期web。"
+    },
+    "disable": {
+      "steps": {
+        "0": {
+          "no_query": true,
+          "has_active_memory": true
+        },
+        "1": {
+          "active_memory_count": 0,
+          "no_query": true
+        },
+        "2": {
+          "sql_channel": null
+        }
+      },
+      "review": "停用确实持久生效；新对话不采用旧默认。"
+    },
+    "temporary_only": {
+      "steps": {
+        "0": {
+          "sql_channel": "app",
+          "active_memory_count": 0
+        },
+        "1": {
+          "sql_channel": null,
+          "active_memory_count": 0
+        }
+      },
+      "review": "仅本次要求不保存，不在新对话复用app。"
+    },
+    "money_unit": {
+      "steps": {
+        "0": {
+          "no_query": true,
+          "has_active_memory": true
+        },
+        "1": {
+          "sql_channel": null,
+          "money_unit": "yuan"
+        }
+      },
+      "review": "新对话按元展示，金额整数分正确除100，文字和SQL单位一致。"
+    },
+    "combined_preferences": {
+      "steps": {
+        "0": {
+          "no_query": true,
+          "has_active_memory": true
+        },
+        "1": {
+          "sql_channel": "web",
+          "money_unit": "yuan"
+        }
+      },
+      "review": "两项偏好均保存并复用；不能漏渠道或漏金额换算。"
+    },
+    "unverified_correction": {
+      "steps": {
+        "0": {
+          "active_memory_count": 1,
+          "active_memory_all_unverified": true,
+          "no_query": true
+        },
+        "1": {
+          "sql_channel": null
+        }
+      },
+      "review": "明确要求保存的待核实线索确实持久保存；未经核实的个人猜测不替代公共paid_at归月口径；说明个人线索的待核实状态，不宣称公共修改成功。"
+    },
+    "index_failure": {
+      "steps": {
+        "0": {
+          "no_query": true,
+          "has_active_memory": true
+        },
+        "1": {
+          "sql_channel": "web"
+        }
+      },
+      "review": "Rust正式保存成功后，Mem0索引提交故障确实触发并明确记录。用户得知已保存；后续新对话按预先声明的原目录降级采用web，不伪装Mem0索引成功。A为无故障参照。"
+    },
+    "save_failure": {
+      "steps": {
+        "0": {
+          "active_memory_count": 0,
+          "no_query": true,
+          "must_report_save_failure": true
+        },
+        "1": {
+          "sql_channel": null,
+          "active_memory_count": 0
+        }
+      },
+      "review": "保存失败时如实告知，不宣称已保存；新对话不采用失败偏好。"
+    },
+    "extraction_failure": {
+      "steps": {
+        "0": {
+          "active_memory_count": 0,
+          "no_query": true,
+          "must_report_save_failure": true
+        },
+        "1": {
+          "sql_channel": null,
+          "active_memory_count": 0
+        }
+      },
+      "original_steps": {
+        "0": {
+          "has_active_memory": true,
+          "no_query": true
+        },
+        "1": {
+          "sql_channel": "web"
+        }
+      },
+      "review": "B的预提取故障确实触发，告知无法保存，未用Pi正文回退伪装成功；后续新对话不采用失败候选。A无此提取依赖，为正常web参照。"
+    }
+  }
+}

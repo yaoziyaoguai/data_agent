@@ -1,0 +1,53 @@
+import assert from 'node:assert/strict';
+import {randomUUID} from 'node:crypto';
+import {writeFile} from 'node:fs/promises';
+import {SessionManager} from '@earendil-works/pi-coding-agent';
+import {exportCheckpoint} from '../../apps/agent/session/checkpoint.ts';
+import {harness,until} from './harness.mjs';
+const checks=[];let passed=false;
+const check=(name)=>checks.push({name,passed:true});
+const h=await harness();
+try{
+ const cid=await h.create();
+ await h.send(cid,'以后我的分析默认只看web，这次查2026年1月全部渠道净收入');await h.finished(cid);
+ let assets=(await h.request('/assets')).value.assets;assert.equal(assets.length,1);let memory=assets[0];assert.match(memory.body,/web/);
+ await h.send(cid,'以后默认改成app，忘掉旧web偏好，这次仍查2026年1月全部渠道净收入');await h.finished(cid,2);
+ assets=(await h.request('/assets')).value.assets;assert.equal(assets.length,1);assert.equal(assets[0].id,memory.id);assert.equal(assets[0].version,'2');assert.match(assets[0].body,/app/);
+ assert.equal(h.sql(`SELECT JSON_OBJECT('n',COUNT(*)) FROM personal_asset_versions WHERE asset_id='${memory.id}'`)[0].n,2);
+ const fresh=await h.create();await h.send(fresh,'查2026年1月净收入');await h.finished(fresh);
+ assert.equal((await h.request(`/conversations/${fresh}/queries`)).value.queries[0].parameters.channel,'app');
+ await h.send(cid,'忘掉默认渠道记忆');await h.finished(cid,3);
+ assets=(await h.request('/assets')).value.assets;assert.equal(assets.length,1);assert.equal(assets[0].state,'disabled');assert.equal(assets[0].version,'3');
+ const forgotten=await h.create();await h.send(forgotten,'查2026年1月净收入');await h.finished(forgotten);
+ assert.equal((await h.request(`/conversations/${forgotten}/queries`)).value.queries[0].parameters.channel,undefined);
+ check('聊天经Pi工具新增→修订同一记忆→停用，跨会话只采用新版；历史版本保留（模拟模型）');
+ const create={operation_id:randomUUID(),kind:'document',name:'持续维护长文',body:'合成说明'.repeat(15000),related_ids:['table-demo_order_detail'],source_url:'https://example.org/old'};
+ const doc=(await h.request('/knowledge',create)).value;assert.ok(doc.id);
+ const longSearch=await h.request('/knowledge?q='+encodeURIComponent(create.name));assert.equal(longSearch.status,200);assert.ok(longSearch.value.objects.some(v=>v.id===doc.id));
+ const edit={operation_id:randomUUID(),expected_version:doc.version,entry_id:'body',value:create.body+'新增说明',clear_override:false,source_url:'https://example.org/new',related_ids:['table-raw_payments']};
+ const changed=await h.request('/knowledge/'+doc.id,edit,'alice','PATCH');assert.equal(changed.status,200);assert.equal(changed.value.entries[0].effective_value.length,60004);
+ assert.equal(changed.value.entries[0].human_override.source_url,edit.source_url);assert.deepEqual(changed.value.related_ids,edit.related_ids);
+ assert.deepEqual((await h.request('/knowledge/'+doc.id,edit,'alice','PATCH')).value,changed.value);
+ const old=(await h.request('/knowledge/'+doc.id+'?version=1')).value;assert.equal(old.entries[0].human_override.source_url,create.source_url);assert.deepEqual(old.related_ids,create.related_ids);
+ assert.equal((await h.request('/knowledge/'+doc.id,{...edit,operation_id:randomUUID()},'alice','PATCH')).value.code,'version_conflict');
+ assert.equal((await h.request('/knowledge/'+doc.id,{...edit,operation_id:randomUUID(),expected_version:changed.value.version},'bob','PATCH')).status,403);
+ for(const metadata of [{source_url:'javascript:alert(1)'},{related_ids:['missing-object']}]) assert.ok((await h.request('/knowledge/'+doc.id,{...edit,operation_id:randomUUID(),expected_version:changed.value.version,...metadata},'alice','PATCH')).status>=400);
+ check('60000字文档可再次编辑，来源链接/多表关联一起改版，旧版本/幂等/权限/非法链接校验保留');
+ await h.pauseWorker();
+ const historyId=await h.create();const message=await h.send(historyId,'首条真实问题标题');
+ await h.send(historyId,'第二条不会改标题');
+ for(let i=0;i<111;i++) { const id=await h.create();h.sql(`UPDATE conversations SET title='历史样例 ${i}' WHERE id='${id}'`); }
+ const first=(await h.request('/conversations')).value;assert.equal(first.conversations.length,100);assert.ok(first.next_before_id);
+ const second=(await h.request('/conversations?before_id='+first.next_before_id)).value;assert.ok(second.conversations.some(v=>v.id===historyId&&v.title==='首条真实问题标题'));assert.equal(new Set([...first.conversations,...second.conversations].map(v=>v.id)).size,first.conversations.length+second.conversations.length);
+ const search=(await h.request('/conversations?q='+encodeURIComponent('首条真实问题'))).value;assert.deepEqual(search.conversations.map(v=>v.id),[historyId]);
+ assert.equal((await h.request('/conversations?q='+encodeURIComponent('首条真实问题'),undefined,'bob')).value.conversations.length,0);
+ assert.equal((await h.request('/conversations?before_id=missing')).status,400);
+ check('超过100会话的稳定分页、首问题标题、服务端标题搜索和用户隔离');
+ // 扩大目录仅验证旧5000截断的反例，不宣称千表语义准确率或吞吐。
+ h.sql("SET SESSION cte_max_recursion_depth=5200;INSERT INTO knowledge_objects(id,space_id,kind,name,version,state,body,source_id,source_version,updated_by) WITH RECURSIVE n AS (SELECT 1 AS i UNION ALL SELECT i+1 FROM n WHERE i<5100) SELECT CONCAT('bulk-',LPAD(i,5,'0')),'demo','field',CONCAT('目录字段',i),1,'enabled',JSON_OBJECT('id',CONCAT('bulk-',LPAD(i,5,'0')),'kind','field','name',CONCAT('目录字段',i),'version','1','state','enabled','entries',JSON_ARRAY(),'related_ids',JSON_ARRAY(),'source_id',NULL,'source_version','0','updated_by','test'),NULL,0,'test' FROM n");
+ const q=(await h.request('/knowledge?q='+encodeURIComponent('net_revenue')));assert.equal(q.status,200);assert.ok(q.value.objects.some(v=>v.id==='metric-net_revenue'));
+ const directory=(await h.request('/knowledge')).value;assert.equal(directory.objects.length,100);assert.ok(directory.next_after_id);
+ const page=(await h.request('/knowledge?after_id='+directory.next_after_id)).value;assert.equal(page.objects.length,100);assert.ok(page.objects.every(v=>v.id>directory.next_after_id));
+ check('5100字段后指标精确命中仍回源可见；公共知识目录有界分页，不静默截断');
+ passed=true;console.log(JSON.stringify({passed,checks,officialRequests:0}));
+}finally{await writeFile('.local/checks/mvp-completion-gaps.json',JSON.stringify({passed,checks},null,2));await h.close();}

@@ -1,0 +1,176 @@
+{
+  "schema": 2,
+  "scenarios": [
+    {
+      "id": "cross_conversation",
+      "steps": [
+        {
+          "conversation": "learn",
+          "text": "请记住：以后我的分析默认只看web渠道。现在只保存这个偏好，不需要查询数据。"
+        },
+        {
+          "conversation": "probe",
+          "text": "查2026年1月净收入，给出SQL，等待页面按钮确认。"
+        }
+      ]
+    },
+    {
+      "id": "revision",
+      "steps": [
+        {
+          "conversation": "learn",
+          "text": "请记住：以后我的分析默认只看web渠道。现在不查数据。"
+        },
+        {
+          "conversation": "learn",
+          "text": "以后默认渠道改成app，请修订原来的偏好，忘掉旧web默认。现在不查数据。"
+        },
+        {
+          "conversation": "probe",
+          "text": "查2026年1月净收入，给SQL等待页面按钮确认。"
+        }
+      ]
+    },
+    {
+      "id": "temporary_override",
+      "steps": [
+        {
+          "conversation": "learn",
+          "text": "请记住：以后我的分析默认只看web渠道。现在不查数据。"
+        },
+        {
+          "conversation": "one_time",
+          "text": "这次查2026年1月app渠道净收入；仅本次，不修改长期偏好，给SQL等待确认。"
+        },
+        {
+          "conversation": "probe",
+          "text": "查2026年1月净收入，给SQL等待确认。"
+        }
+      ]
+    },
+    {
+      "id": "mixed_intent",
+      "steps": [
+        {
+          "conversation": "learn",
+          "text": "以后我的分析默认只看web，但这次查2026年1月全部渠道净收入，给SQL等待确认。"
+        },
+        {
+          "conversation": "probe",
+          "text": "查2026年1月净收入，给SQL等待确认。"
+        }
+      ]
+    },
+    {
+      "id": "disable",
+      "steps": [
+        {
+          "conversation": "learn",
+          "text": "请记住：以后我的分析默认只看web渠道。现在不查数据。"
+        },
+        {
+          "conversation": "learn",
+          "text": "请忘掉默认渠道记忆，今后不再使用这条默认偏好。现在不查数据。"
+        },
+        {
+          "conversation": "probe",
+          "text": "查2026年1月净收入，给SQL等待确认。"
+        }
+      ]
+    },
+    {
+      "id": "temporary_only",
+      "steps": [
+        {
+          "conversation": "one_time",
+          "text": "这次查2026年1月app渠道净收入，给SQL等待确认；仅本次，不要保存长期渠道偏好。"
+        },
+        {
+          "conversation": "probe",
+          "text": "查2026年1月净收入，给SQL等待确认。"
+        }
+      ]
+    },
+    {
+      "id": "money_unit",
+      "steps": [
+        {
+          "conversation": "learn",
+          "text": "请记住：以后金额默认以元展示，保留到分的精度。现在只保存偏好，不查数据。"
+        },
+        {
+          "conversation": "probe",
+          "text": "查2026年1月净收入，给SQL等待确认。"
+        }
+      ]
+    },
+    {
+      "id": "combined_preferences",
+      "steps": [
+        {
+          "conversation": "learn",
+          "text": "请记住：以后我的分析默认只看web渠道。另外请记住：以后金额以元展示，保留到分的精度。现在只保存偏好，不查数据。"
+        },
+        {
+          "conversation": "probe",
+          "text": "查2026年1月净收入，给SQL等待确认。"
+        }
+      ]
+    },
+    {
+      "id": "unverified_correction",
+      "steps": [
+        {
+          "conversation": "learn",
+          "text": "请记住这个待核实线索：我猜净收入应按order_date归月。这只是我的猜测，还没核实；公共口径不修改。现在不查数据。"
+        },
+        {
+          "conversation": "probe",
+          "text": "按现有已确认的业务口径查2026年1月净收入，给SQL等待确认。"
+        }
+      ]
+    },
+    {
+      "id": "index_failure",
+      "fault": "index_commit_unavailable",
+      "steps": [
+        {
+          "conversation": "learn",
+          "text": "请记住：以后我的分析默认只看web渠道。现在只保存这个偏好，不需要查询数据。"
+        },
+        {
+          "conversation": "probe",
+          "text": "查2026年1月净收入，给SQL等待确认。"
+        }
+      ]
+    },
+    {
+      "id": "save_failure",
+      "fault": "reject_memory_insert",
+      "steps": [
+        {
+          "conversation": "learn",
+          "text": "请记住：以后我的分析默认只看web渠道。现在只保存偏好，不需要查询数据。"
+        },
+        {
+          "conversation": "probe",
+          "text": "查2026年1月净收入，给SQL等待确认。"
+        }
+      ]
+    },
+    {
+      "id": "extraction_failure",
+      "fault": "extraction_unavailable",
+      "steps": [
+        {
+          "conversation": "learn",
+          "text": "请记住：以后我的分析默认只看web渠道。现在只保存偏好，不需要查询数据。"
+        },
+        {
+          "conversation": "probe",
+          "text": "查2026年1月净收入，给SQL等待确认。"
+        }
+      ]
+    }
+  ]
+}

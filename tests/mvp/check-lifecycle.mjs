@@ -1,0 +1,54 @@
+import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
+import { writeFile } from 'node:fs/promises';
+import { SessionManager } from '@earendil-works/pi-coding-agent';
+import { exportCheckpoint } from '../../apps/agent/session/checkpoint.ts';
+import { harness, until } from './harness.mjs';
+const h=await harness({capture:true,env:{DATA_AGENT_LEASE_MS:'120000',DATA_AGENT_QUERY_DELAY_SECONDS:'0.1'}});
+const manager=SessionManager.inMemory('/synthetic/data-agent');
+const conditions={time_start:'2026-01-01T00:00:00Z',time_end:'2026-02-01T00:00:00Z',timezone:'UTC',metric:'net_revenue',channel:null,group_by:[],filters:['is_test=0'],knowledge_refs:[],notes:'保持订单口径'};
+const checks=[];let passed=false;let run;
+const invoke=async(tool_name,args)=>{
+ const input={run_id:run.run_id,lease_epoch:run.lease_epoch,sdk_tool_call_id:randomUUID(),tool_name,arguments:args,checkpoint:exportCheckpoint(manager,run.workspace_context.authority_revision,run.workspace_context.authority_snapshot)};
+ const registration=await h.internal('/internal/data/tool-calls',input);
+ if(registration.status!==200) return registration;
+ return h.internal('/internal/data/tools',input);
+};
+const update=(extra)=>invoke('update_analysis_task',{action:'create',task_id:null,expected_version:null,goal:'生命周期测试',conditions,question:null,options:[],...extra});
+const finish=async()=>{
+ assert.equal((await h.internal('/internal/outputs',{run_id:run.run_id,lease_epoch:run.lease_epoch,chunk_seq:'1',text:'已保存'})).status,200);
+ assert.equal((await h.internal('/internal/finish',{run_id:run.run_id,lease_epoch:run.lease_epoch,commit_id:run.output_id,final_text:'已保存',checkpoint:exportCheckpoint(manager)})).status,200);
+ h.releaseRun(run.run_id);
+};
+try{
+ const cid=await h.create();run=await h.capture(cid,'本消息应用订单条件');await h.pauseWorker();
+ const created=await update({});assert.equal(created.status,200);let task=created.value.data;
+ const withdrawn=await h.request(`/conversations/${cid}/messages/${run.message_id}/withdraw`,{operation_id:randomUUID()});
+ assert.equal(withdrawn.value.code,'input_already_applied');
+ assert.equal(h.sql(`SELECT JSON_OBJECT('state',disposition) FROM conversation_messages WHERE id='${run.message_id}'`)[0].state,'pending');
+ checks.push({name:'已生效条件在半轮失败前仍不可撤回，改用新修订',passed:true});
+ const revised=await update({action:'revise',task_id:task.task_id,expected_version:task.condition_version,conditions:undefined,condition_patch:{set:{channel:'app'},unset:[]}});
+ assert.equal(revised.status,200,JSON.stringify(revised.value));task=revised.value.data;
+ assert.equal(task.conditions.channel,'app');assert.equal(task.conditions.time_start,conditions.time_start);assert.deepEqual(task.conditions.filters,conditions.filters);assert.equal(task.conditions.notes,conditions.notes);
+ const invalid=await update({action:'revise',task_id:task.task_id,expected_version:task.condition_version,condition_patch:{set:{channel:null},unset:[]}});assert.equal(invalid.status,400);
+ const unset=await update({action:'revise',task_id:task.task_id,expected_version:task.condition_version,conditions:undefined,condition_patch:{set:{},unset:['channel']}});assert.equal(unset.status,200);task=unset.value.data;assert.equal(task.conditions.channel,null);assert.equal(task.conditions.time_start,conditions.time_start);
+ checks.push({name:'宿主合并set/unset，省略旧条件保留，null不能暗中删条件',passed:true});
+ const q=(await invoke('request_query',{task_id:task.task_id,condition_version:task.condition_version,sql:'SELECT 1 AS value',parameters:{},target_id:'synthetic-sqlite', replaces_query_id: null,summary:'生命周期结果',knowledge_refs:[]})).value.data;
+ await finish();
+ await h.request(`/queries/${q.id}/confirm`,{operation_id:randomUUID(),draft_version:q.draft_version,condition_version:q.condition_version});
+ await h.resumeWorker();await until(()=>h.captured.length>=2,'result explanation');run=h.captured[1];await h.pauseWorker();
+ assert.equal(h.sql(`SELECT JSON_OBJECT('task',routed_task_id) FROM conversation_messages WHERE id='${run.message_id}'`)[0].task,task.task_id);
+ assert.equal((await h.request(`/conversations/${cid}/tasks/${task.task_id}/cancel`,{operation_id:randomUUID(),expected_version:task.condition_version})).status,200);
+ assert.equal(h.sql(`SELECT JSON_OBJECT('state',state) FROM agent_runs WHERE id='${run.run_id}'`)[0].state,'cancelled');
+ assert.equal(h.sql(`SELECT JSON_OBJECT('state',disposition) FROM conversation_messages WHERE id='${run.message_id}'`)[0].state,'withdrawn');
+ assert.equal((await h.internal('/internal/model/issue',{run_id:run.run_id,lease_epoch:run.lease_epoch,call_attempt_id:randomUUID()})).status,409);
+ checks.push({name:'查询结果解释绑定原任务，取消后停止运行并跳过输入',passed:true});h.releaseRun(run.run_id);
+ await h.resumeWorker();const cid2=await h.create();run=await h.capture(cid2,'澄清等待与失败输入');await h.pauseWorker();
+ task=(await update({action:'clarify',question:'用哪一月份？',options:['一月','二月']})).value.data;
+ h.sql(`UPDATE agent_runs SET state='failed' WHERE id='${run.run_id}';UPDATE conversation_messages SET disposition='failed' WHERE id='${run.message_id}';UPDATE conversations SET lease_owner=NULL,lease_until=NULL WHERE id='${cid2}';`);
+ assert.equal((await h.request(`/conversations/${cid2}/tasks/${task.task_id}/cancel`,{operation_id:randomUUID(),expected_version:task.condition_version})).status,200);
+ assert.equal(h.sql(`SELECT JSON_OBJECT('state',disposition) FROM conversation_messages WHERE id='${run.message_id}'`)[0].state,'withdrawn');
+ assert.equal(h.sql(`SELECT JSON_OBJECT('state',state) FROM clarifications WHERE task_id='${task.task_id}'`)[0].state,'cancelled');
+ checks.push({name:'取消任务统一处置failed输入并关闭开放澄清',passed:true});passed=true;
+ console.log(JSON.stringify({passed,checks,officialRequests:0}));
+}finally{await writeFile('.local/checks/mvp-lifecycle.json',JSON.stringify({passed,checks},null,2));await h.close();}

@@ -1,0 +1,54 @@
+import assert from 'node:assert/strict';
+import {randomUUID} from 'node:crypto';
+import {writeFile} from 'node:fs/promises';
+import {SessionManager} from '@earendil-works/pi-coding-agent';
+import {exportCheckpoint} from '../../apps/agent/session/checkpoint.ts';
+import {harness,until} from './harness.mjs';
+const h=await harness({capture:true,env:{DATA_AGENT_LEASE_MS:'120000',DATA_AGENT_BUSINESS_TIMEZONE:'Asia/Shanghai',DATA_AGENT_QUERY_DELAY_SECONDS:'0.1'}});
+const manager=SessionManager.inMemory('/synthetic/data-agent');const checks=[];let passed=false,run;
+const stamp={reference_time_utc:'2026-01-01T23:30:00.000000Z',business_timezone:'Asia/Shanghai'};
+const invoke=async(tool_name,args,sdk=randomUUID())=>{
+ const input={run_id:run.run_id,lease_epoch:run.lease_epoch,sdk_tool_call_id:sdk,tool_name,arguments:args,checkpoint:exportCheckpoint(manager)};
+ assert.equal((await h.internal('/internal/data/tool-calls',input)).status,200);
+ return {input,result:await h.internal('/internal/data/tools',input)};
+};
+const finish=async()=>{
+ const text='已保存待确认查询。';const binding={run_id:run.run_id,lease_epoch:run.lease_epoch};
+ assert.equal((await h.internal('/internal/outputs',{...binding,chunk_seq:'1',text})).status,200);
+ assert.equal((await h.internal('/internal/finish',{...binding,commit_id:run.output_id,final_text:text,checkpoint:exportCheckpoint(manager)})).status,200);
+ h.releaseRun(run.run_id);
+};
+try{
+ await h.pauseWorker();const cid=await h.create();const received=await h.request('/conversations/'+cid+'/messages',{client_message_id:'result-user-request',text:'查询上个月净收入，业务日按上海时区'});assert.equal(received.status,200);const accepted=received.value;
+ h.sql(`UPDATE conversation_messages SET reference_time_utc='${stamp.reference_time_utc}',business_timezone='${stamp.business_timezone}' WHERE id='${accepted.message_id}';UPDATE conversation_events SET payload=JSON_SET(payload,'$.request_clock',CAST('${JSON.stringify(stamp)}' AS JSON)) WHERE conversation_id='${cid}' AND event_type='message';`);
+ await h.resumeWorker();run=await until(()=>h.captured.find(v=>v.message_id===accepted.message_id),'first captured time');await h.pauseWorker();
+ assert.deepEqual(run.request_clock,stamp);assert.deepEqual(run.workspace_context.request_clock,stamp);
+ const history=(await invoke('read_conversation',{after_seq:'0'})).result;assert.equal(history.status,200);assert.deepEqual(history.value.data.events[0].payload.request_clock,stamp);
+ const conditions={time_start:'2025-11-30T16:00:00Z',time_end:'2025-12-31T16:00:00Z',timezone:'Asia/Shanghai',metric:'net_revenue',channel:null,group_by:[],filters:['is_test=0','paid_amount_cents>0'],knowledge_refs:[],notes:'独立边界检查：2026年1月2日上海业务日的上个月为2025年12月；此处只验证宿主时钟和恢复，并非模拟模型准确率。'};
+ const sdk=randomUUID();const taskArgs={action:'create',task_id:null,expected_version:null,goal:'上个月净收入',conditions,question:null,options:[]};
+ const task=(await invoke('update_analysis_task',taskArgs,sdk)).result.value.data;
+ h.releaseRun(run.run_id);
+ h.sql(`UPDATE agent_runs SET state='interrupted' WHERE id='${run.run_id}';UPDATE conversations SET lease_owner=NULL,lease_until=NULL WHERE id='${cid}';UPDATE background_jobs SET state='queued',lease_owner=NULL,lease_until=NULL WHERE message_id='${run.message_id}';UPDATE conversation_messages SET created_at=TIMESTAMPADD(DAY,2,created_at) WHERE id='${run.message_id}';`);
+ h.env.DATA_AGENT_BUSINESS_TIMEZONE='UTC';await h.resumeWorker();const original=run;
+ run=await until(()=>h.captured.find(v=>v.message_id===accepted.message_id&&v.run_id!==original.run_id),'recovery captured time');await h.pauseWorker();
+ assert.deepEqual(run.request_clock,stamp);assert.equal(run.recovery_chain_id,original.recovery_chain_id);
+ assert.deepEqual((await invoke('update_analysis_task',taskArgs,sdk)).result.value.data,task);
+ const saved=(await invoke('request_query',{task_id:task.task_id,condition_version:task.condition_version,sql:'SELECT SUM(paid_amount_cents-refunded_amount_cents) AS net_revenue_cents FROM demo_order_detail WHERE is_test=0 AND paid_amount_cents>0 AND paid_at>=:start AND paid_at<:end',parameters:{start:conditions.time_start,end:conditions.time_end},target_id:'synthetic-sqlite', replaces_query_id: null,summary:'上海时区2025年12月净收入；等待按钮确认',knowledge_refs:[]})).result;
+ assert.equal(saved.status,200);await finish();
+ const q=saved.value.data;
+ const other=await h.create();
+ const collision=await h.request('/conversations/'+other+'/messages',{client_message_id:'result-'+q.id,text:'用户可提交包含查询ID的普通消息'});
+ assert.equal(collision.status,200);
+ assert.equal((await h.request('/conversations/'+other+'/messages',{client_message_id:'server:query-result:'+q.id,text:'试图占用服务端结果标识'})).status,400);
+ assert.equal((await h.request('/conversations/'+other+'/messages/'+collision.value.message_id+'/withdraw',{operation_id:randomUUID()})).status,200);
+ assert.equal((await h.request('/queries/'+q.id+'/confirm',{operation_id:randomUUID(),draft_version:q.draft_version,condition_version:q.condition_version})).status,200);
+ await h.resumeWorker();const wake=await until(()=>h.captured.find(v=>v.text.startsWith('[已确认查询结果事件]')),'result time');
+ assert.deepEqual(wake.request_clock,stamp);assert.deepEqual(wake.workspace_context.request_clock,stamp);
+ assert.equal(wake.budget_scope_id,original.budget_scope_id);
+ assert.equal((await h.request('/queries/'+q.id)).value.execution_state,'succeeded');
+ assert.equal((await h.snapshot(cid)).events.filter(e=>e.type==='query_result'&&e.payload.query_id===q.id).length,1);
+ assert.notEqual(wake.message_id,original.message_id);h.releaseRun(wake.run_id);
+ checks.push({name:'消息接收固定UTC参考时刻/业务时区，模型历史可读；跨日恢复/环境时区改变及结果唤醒均保留原请求时间和预算',passed:true});
+ checks.push({name:'另一会话的合法result-查询ID消息，即使撤回后仍保留幂等记录，也不能占用内部结果事件或阻断Pi唤醒',passed:true});
+ passed=true;console.log(JSON.stringify({passed,checks,officialRequests:0}));
+}finally{await writeFile('.local/checks/mvp-request-clock.json',JSON.stringify({passed,checks},null,2));await h.close();}

@@ -1,0 +1,2601 @@
+[
+  {
+    "name": "valid HTTP message",
+    "schema": "MessageInput",
+    "value": {
+      "client_message_id": "msg-1",
+      "text": "分析虚构订单"
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "client query result prefix remains valid",
+    "schema": "MessageInput",
+    "value": {
+      "client_message_id": "result-00000000-0000-0000-0000-000000000001",
+      "text": "普通用户消息"
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "server query result namespace rejected",
+    "schema": "MessageInput",
+    "value": {
+      "client_message_id": "server:query-result:00000000-0000-0000-0000-000000000001",
+      "text": "服务端标识不能由客户端占用"
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "missing required",
+    "schema": "MessageInput",
+    "value": {
+      "text": "订单"
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "unknown identity",
+    "schema": "MessageInput",
+    "value": {
+      "client_message_id": "m",
+      "text": "订单",
+      "user_id": "bob"
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "null body",
+    "schema": "MessageInput",
+    "value": {
+      "client_message_id": "m",
+      "text": null
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "empty body",
+    "schema": "MessageInput",
+    "value": {
+      "client_message_id": "m",
+      "text": ""
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "tagged success",
+    "schema": "ToolOutcome",
+    "value": {
+      "type": "succeeded",
+      "receipt": {
+        "operation_id": "op",
+        "task_id": "task",
+        "condition_version": "9007199254740993",
+        "state": "active"
+      }
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "wrong tagged branch",
+    "schema": "ToolOutcome",
+    "value": {
+      "type": "failed",
+      "receipt": {
+        "operation_id": "op",
+        "task_id": "task",
+        "condition_version": "9007199254740993",
+        "state": "active"
+      }
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "unknown tag",
+    "schema": "ToolOutcome",
+    "value": {
+      "type": "other",
+      "receipt": {
+        "operation_id": "op",
+        "task_id": "task",
+        "condition_version": "9007199254740993",
+        "state": "active"
+      }
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "ambiguous branch",
+    "schema": "ToolOutcome",
+    "value": {
+      "type": "succeeded",
+      "receipt": {
+        "operation_id": "op",
+        "task_id": "task",
+        "condition_version": "9007199254740993",
+        "state": "active"
+      },
+      "error": {}
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "exact integer string",
+    "schema": "ToolReceipt",
+    "value": {
+      "operation_id": "op",
+      "task_id": "task",
+      "condition_version": "9007199254740993",
+      "state": "active"
+    },
+    "valid": true,
+    "roundtrip": false
+  },
+  {
+    "name": "unsafe integer number",
+    "schema": "ToolReceipt",
+    "value": {
+      "operation_id": "op",
+      "task_id": "task",
+      "condition_version": 9007199254740992,
+      "state": "active"
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "leading zero version",
+    "schema": "ToolReceipt",
+    "value": {
+      "operation_id": "op",
+      "task_id": "task",
+      "condition_version": "01",
+      "state": "active"
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "negative epoch",
+    "schema": "ToolReceipt",
+    "value": {
+      "operation_id": "op",
+      "task_id": "task",
+      "condition_version": "-1",
+      "state": "active"
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "tool binding precise and nullable",
+    "schema": "ToolInvocation",
+    "value": {
+      "run_id": "run",
+      "lease_epoch": "9007199254740993",
+      "sdk_tool_call_id": "call",
+      "arguments": {
+        "action": "create_task",
+        "goal": "订单"
+      },
+      "checkpoint": {
+        "sdk_version": "1.0.0",
+        "entries": [],
+        "leaf_id": null
+      }
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "numeric lease",
+    "schema": "ToolInvocation",
+    "value": {
+      "run_id": "run",
+      "lease_epoch": 2,
+      "sdk_tool_call_id": "call",
+      "arguments": {
+        "action": "create_task",
+        "goal": "订单"
+      },
+      "checkpoint": {
+        "sdk_version": "1.0.0",
+        "entries": [],
+        "leaf_id": null
+      }
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "unsupported action",
+    "schema": "TaskInput",
+    "value": {
+      "action": "delete",
+      "goal": "订单"
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "tool extra authority",
+    "schema": "TaskInput",
+    "value": {
+      "action": "create_task",
+      "goal": "订单",
+      "owner_id": "bob"
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "checkpoint missing nullable field",
+    "schema": "Checkpoint",
+    "value": {
+      "sdk_version": "1.0.0",
+      "entries": []
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "wrong SDK version",
+    "schema": "Checkpoint",
+    "value": {
+      "sdk_version": "2.0.0",
+      "entries": [],
+      "leaf_id": null
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "non-object SDK entry",
+    "schema": "Checkpoint",
+    "value": {
+      "sdk_version": "1.0.0",
+      "entries": [
+        "bad"
+      ],
+      "leaf_id": null
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "valid finish",
+    "schema": "FinishRun",
+    "value": {
+      "run_id": "r",
+      "lease_epoch": "1",
+      "commit_id": "o",
+      "final_text": "完成",
+      "checkpoint": {
+        "sdk_version": "1.0.0",
+        "entries": [],
+        "leaf_id": null
+      }
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "valid SSE",
+    "schema": "Event",
+    "value": {
+      "schema_version": 1,
+      "event_seq": "9007199254740993",
+      "event_id": "e",
+      "conversation_id": "c",
+      "type": "message",
+      "payload": {
+        "text": "订单"
+      }
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "wrong event version",
+    "schema": "Event",
+    "value": {
+      "schema_version": 2,
+      "event_seq": "1",
+      "event_id": "e",
+      "conversation_id": "c",
+      "type": "message",
+      "payload": {}
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "tagged failure roundtrip",
+    "schema": "ToolOutcome",
+    "valid": true,
+    "roundtrip": true,
+    "value": {
+      "type": "failed",
+      "error": {
+        "code": "invalid_input",
+        "message": "invalid_input",
+        "request_id": "synthetic-request",
+        "retryable": false
+      }
+    }
+  },
+  {
+    "name": "ConversationReceipt valid",
+    "schema": "ConversationReceipt",
+    "value": {
+      "conversation_id": "test-conversation"
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "ConversationReceipt missing required",
+    "schema": "ConversationReceipt",
+    "value": {},
+    "valid": false
+  },
+  {
+    "name": "ConversationReceipt unknown field",
+    "schema": "ConversationReceipt",
+    "value": {
+      "conversation_id": "test-conversation",
+      "unexpected": true
+    },
+    "valid": false
+  },
+  {
+    "name": "MessageReceipt valid",
+    "schema": "MessageReceipt",
+    "value": {
+      "message_id": "test-message",
+      "request_id": "test-request"
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "MessageReceipt missing required",
+    "schema": "MessageReceipt",
+    "value": {},
+    "valid": false
+  },
+  {
+    "name": "MessageReceipt unknown field",
+    "schema": "MessageReceipt",
+    "value": {
+      "message_id": "test-message",
+      "unexpected": true,
+      "request_id": "test-request"
+    },
+    "valid": false
+  },
+  {
+    "name": "History valid",
+    "schema": "History",
+    "value": {
+      "conversations": [
+        {
+          "id": "test-conversation",
+          "title": "首问题标题"
+        }
+      ],
+      "next_before_id": null
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "History missing required",
+    "schema": "History",
+    "value": {},
+    "valid": false
+  },
+  {
+    "name": "History unknown field",
+    "schema": "History",
+    "value": {
+      "conversations": [
+        {
+          "id": "test-conversation"
+        }
+      ],
+      "unexpected": true
+    },
+    "valid": false
+  },
+  {
+    "name": "Identity valid",
+    "schema": "Identity",
+    "value": {
+      "user_id": "alice",
+      "model_label": "本地模拟模型"
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "Identity missing required",
+    "schema": "Identity",
+    "value": {},
+    "valid": false
+  },
+  {
+    "name": "Identity unknown field",
+    "schema": "Identity",
+    "value": {
+      "user_id": "alice",
+      "unexpected": true,
+      "model_label": "本地模拟模型"
+    },
+    "valid": false
+  },
+  {
+    "name": "SessionReceipt valid",
+    "schema": "SessionReceipt",
+    "value": {
+      "state": "authenticated",
+      "user_id": "alice",
+      "model_label": "本地模拟模型"
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "SessionReceipt missing required",
+    "schema": "SessionReceipt",
+    "value": {},
+    "valid": false
+  },
+  {
+    "name": "SessionReceipt unknown field",
+    "schema": "SessionReceipt",
+    "value": {
+      "state": "authenticated",
+      "user_id": "alice",
+      "unexpected": true,
+      "model_label": "本地模拟模型"
+    },
+    "valid": false
+  },
+  {
+    "name": "ModelProfile 精确往返",
+    "schema": "ModelProfile",
+    "valid": true,
+    "roundtrip": true,
+    "value": {
+      "provider_id": "deepseek",
+      "model_id": "deepseek-flash",
+      "trial_id": "trial-test",
+      "price_version": "2026-10-04-peak-usd",
+      "input_limit": 4096,
+      "output_limit": 1024,
+      "trial_call_limit": 6,
+      "trial_cost_micros": "50000"
+    }
+  },
+  {
+    "name": "ModelProfile 缺必填",
+    "schema": "ModelProfile",
+    "valid": false,
+    "value": {
+      "model_id": "deepseek-flash",
+      "trial_id": "trial-test",
+      "price_version": "2026-10-04-peak-usd",
+      "input_limit": 4096,
+      "output_limit": 1024,
+      "trial_call_limit": 6,
+      "trial_cost_micros": "50000"
+    }
+  },
+  {
+    "name": "ModelProfile 非法字段",
+    "schema": "ModelProfile",
+    "valid": false,
+    "value": {
+      "provider_id": "deepseek",
+      "model_id": "deepseek-flash",
+      "trial_id": "trial-test",
+      "price_version": "2026-10-04-peak-usd",
+      "input_limit": 4096,
+      "output_limit": 1024,
+      "trial_call_limit": 6,
+      "trial_cost_micros": "50000",
+      "unexpected": true
+    }
+  },
+  {
+    "name": "ReserveModelCall 精确往返",
+    "schema": "ReserveModelCall",
+    "valid": true,
+    "roundtrip": true,
+    "value": {
+      "run_id": "run-test",
+      "lease_epoch": "1",
+      "call_attempt_id": "call-test",
+      "parameters_fingerprint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "input_tokens_upper": 4096,
+      "output_tokens_max": 1024
+    }
+  },
+  {
+    "name": "ReserveModelCall 缺必填",
+    "schema": "ReserveModelCall",
+    "valid": false,
+    "value": {
+      "lease_epoch": "1",
+      "call_attempt_id": "call-test",
+      "parameters_fingerprint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "input_tokens_upper": 4096,
+      "output_tokens_max": 1024
+    }
+  },
+  {
+    "name": "ReserveModelCall 非法字段",
+    "schema": "ReserveModelCall",
+    "valid": false,
+    "value": {
+      "run_id": "run-test",
+      "lease_epoch": "1",
+      "call_attempt_id": "call-test",
+      "parameters_fingerprint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "input_tokens_upper": 4096,
+      "output_tokens_max": 1024,
+      "unexpected": true
+    }
+  },
+  {
+    "name": "SendModelCall 精确往返",
+    "schema": "SendModelCall",
+    "valid": true,
+    "roundtrip": true,
+    "value": {
+      "run_id": "run-test",
+      "lease_epoch": "1",
+      "call_attempt_id": "call-test",
+      "parameters_fingerprint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+  },
+  {
+    "name": "SendModelCall 缺必填",
+    "schema": "SendModelCall",
+    "valid": false,
+    "value": {
+      "lease_epoch": "1",
+      "call_attempt_id": "call-test",
+      "parameters_fingerprint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+  },
+  {
+    "name": "SendModelCall 非法字段",
+    "schema": "SendModelCall",
+    "valid": false,
+    "value": {
+      "run_id": "run-test",
+      "lease_epoch": "1",
+      "call_attempt_id": "call-test",
+      "parameters_fingerprint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "unexpected": true
+    }
+  },
+  {
+    "name": "ModelUsage 精确往返",
+    "schema": "ModelUsage",
+    "valid": true,
+    "roundtrip": true,
+    "value": {
+      "input_tokens": 500,
+      "output_tokens": 100,
+      "elapsed_ms": 500
+    }
+  },
+  {
+    "name": "ModelUsage 缺必填",
+    "schema": "ModelUsage",
+    "valid": false,
+    "value": {
+      "output_tokens": 100,
+      "elapsed_ms": 500
+    }
+  },
+  {
+    "name": "ModelUsage 非法字段",
+    "schema": "ModelUsage",
+    "valid": false,
+    "value": {
+      "input_tokens": 500,
+      "output_tokens": 100,
+      "elapsed_ms": 500,
+      "unexpected": true
+    }
+  },
+  {
+    "name": "FinalizeModelCall 精确往返",
+    "schema": "FinalizeModelCall",
+    "valid": true,
+    "roundtrip": true,
+    "value": {
+      "run_id": "run-test",
+      "lease_epoch": "1",
+      "call_attempt_id": "call-test",
+      "parameters_fingerprint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "usage": null
+    }
+  },
+  {
+    "name": "FinalizeModelCall 缺必填",
+    "schema": "FinalizeModelCall",
+    "valid": false,
+    "value": {
+      "lease_epoch": "1",
+      "call_attempt_id": "call-test",
+      "parameters_fingerprint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "usage": null
+    }
+  },
+  {
+    "name": "FinalizeModelCall 非法字段",
+    "schema": "FinalizeModelCall",
+    "valid": false,
+    "value": {
+      "run_id": "run-test",
+      "lease_epoch": "1",
+      "call_attempt_id": "call-test",
+      "parameters_fingerprint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "usage": null,
+      "unexpected": true
+    }
+  },
+  {
+    "name": "ModelCallReceipt 精确往返",
+    "schema": "ModelCallReceipt",
+    "valid": true,
+    "roundtrip": true,
+    "value": {
+      "state": "unknown",
+      "send_allowed": false
+    }
+  },
+  {
+    "name": "ModelCallReceipt 缺必填",
+    "schema": "ModelCallReceipt",
+    "valid": false,
+    "value": {
+      "send_allowed": false
+    }
+  },
+  {
+    "name": "ModelCallReceipt 非法字段",
+    "schema": "ModelCallReceipt",
+    "valid": false,
+    "value": {
+      "state": "unknown",
+      "send_allowed": false,
+      "unexpected": true
+    }
+  },
+  {
+    "name": "CancelRun 精确往返",
+    "schema": "CancelRun",
+    "valid": true,
+    "roundtrip": true,
+    "value": {
+      "run_id": "run-test",
+      "lease_epoch": "1"
+    }
+  },
+  {
+    "name": "CancelRun 缺必填",
+    "schema": "CancelRun",
+    "valid": false,
+    "value": {
+      "lease_epoch": "1"
+    }
+  },
+  {
+    "name": "CancelRun 非法字段",
+    "schema": "CancelRun",
+    "valid": false,
+    "value": {
+      "run_id": "run-test",
+      "lease_epoch": "1",
+      "unexpected": true
+    }
+  },
+  {
+    "name": "CancelReceipt 精确往返",
+    "schema": "CancelReceipt",
+    "valid": true,
+    "roundtrip": true,
+    "value": {
+      "run_id": "run-test",
+      "state": "cancelled"
+    }
+  },
+  {
+    "name": "CancelReceipt 缺必填",
+    "schema": "CancelReceipt",
+    "valid": false,
+    "value": {
+      "state": "cancelled"
+    }
+  },
+  {
+    "name": "CancelReceipt 非法字段",
+    "schema": "CancelReceipt",
+    "valid": false,
+    "value": {
+      "run_id": "run-test",
+      "state": "cancelled",
+      "unexpected": true
+    }
+  },
+  {
+    "name": "ModelProfile 拒绝 trial_call_limit7",
+    "schema": "ModelProfile",
+    "valid": false,
+    "value": {
+      "provider_id": "deepseek",
+      "model_id": "deepseek-flash",
+      "trial_id": "trial-test",
+      "price_version": "2026-10-04-peak-usd",
+      "input_limit": 4096,
+      "output_limit": 1024,
+      "trial_call_limit": 7,
+      "trial_cost_micros": "50000"
+    }
+  },
+  {
+    "name": "ModelProfile 拒绝 model_iddeepseek-chat",
+    "schema": "ModelProfile",
+    "valid": false,
+    "value": {
+      "provider_id": "deepseek",
+      "model_id": "deepseek-chat",
+      "trial_id": "trial-test",
+      "price_version": "2026-10-04-peak-usd",
+      "input_limit": 4096,
+      "output_limit": 1024,
+      "trial_call_limit": 6,
+      "trial_cost_micros": "50000"
+    }
+  },
+  {
+    "name": "ReserveModelCall 拒绝 input_tokens_upper4097",
+    "schema": "ReserveModelCall",
+    "valid": false,
+    "value": {
+      "run_id": "run-test",
+      "lease_epoch": "1",
+      "call_attempt_id": "call-test",
+      "parameters_fingerprint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "input_tokens_upper": 4097,
+      "output_tokens_max": 1024
+    }
+  },
+  {
+    "name": "ReserveModelCall 拒绝 output_tokens_max1025",
+    "schema": "ReserveModelCall",
+    "valid": false,
+    "value": {
+      "run_id": "run-test",
+      "lease_epoch": "1",
+      "call_attempt_id": "call-test",
+      "parameters_fingerprint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "input_tokens_upper": 4096,
+      "output_tokens_max": 1025
+    }
+  },
+  {
+    "name": "ModelUsage 拒绝 input_tokens-1",
+    "schema": "ModelUsage",
+    "valid": false,
+    "value": {
+      "input_tokens": -1,
+      "output_tokens": 100,
+      "elapsed_ms": 500
+    }
+  },
+  {
+    "name": "ModelUsage 拒绝 output_tokens0.5",
+    "schema": "ModelUsage",
+    "valid": false,
+    "value": {
+      "input_tokens": 500,
+      "output_tokens": 0.5,
+      "elapsed_ms": 500
+    }
+  },
+  {
+    "name": "CancelRun 拒绝 lease_epoch-1",
+    "schema": "CancelRun",
+    "valid": false,
+    "value": {
+      "run_id": "run-test",
+      "lease_epoch": "-1"
+    }
+  },
+  {
+    "name": "可靠usage结算往返",
+    "schema": "FinalizeModelCall",
+    "valid": true,
+    "roundtrip": true,
+    "value": {
+      "run_id": "run-test",
+      "lease_epoch": "1",
+      "call_attempt_id": "call-test",
+      "parameters_fingerprint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "usage": {
+        "input_tokens": 500,
+        "output_tokens": 100,
+        "elapsed_ms": 500
+      }
+    }
+  },
+  {
+    "name": "拒绝低报输入预留",
+    "schema": "ReserveModelCall",
+    "valid": false,
+    "value": {
+      "run_id": "run-test",
+      "lease_epoch": "1",
+      "call_attempt_id": "call-test",
+      "parameters_fingerprint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "input_tokens_upper": 1,
+      "output_tokens_max": 1024
+    }
+  },
+  {
+    "name": "完整数据工具使用独立预算profile",
+    "schema": "ModelProfile",
+    "valid": true,
+    "roundtrip": true,
+    "value": {
+      "provider_id": "deepseek",
+      "model_id": "deepseek-flash",
+      "trial_id": "trial-test",
+      "price_version": "2026-10-04-peak-usd",
+      "input_limit": 32768,
+      "output_limit": 2048,
+      "trial_call_limit": 24,
+      "trial_cost_micros": "300000",
+      "toolset": "data",
+      "request_call_limit": 12,
+      "payload_bytes_limit": 65536
+    }
+  },
+  {
+    "name": "数据预算必须明确请求体上限",
+    "schema": "ModelProfile",
+    "valid": false,
+    "value": {
+      "provider_id": "deepseek",
+      "model_id": "deepseek-flash",
+      "trial_id": "trial-test",
+      "price_version": "2026-10-04-peak-usd",
+      "input_limit": 32768,
+      "output_limit": 2048,
+      "trial_call_limit": 24,
+      "trial_cost_micros": "300000",
+      "toolset": "data",
+      "request_call_limit": 12
+    }
+  },
+  {
+    "name": "条件补丁只改渠道",
+    "schema": "ConditionPatch",
+    "value": {
+      "set": {
+        "channel": "app"
+      },
+      "unset": []
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "条件补丁显式删除渠道",
+    "schema": "ConditionPatch",
+    "value": {
+      "set": {},
+      "unset": [
+        "channel"
+      ]
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "条件补丁拒绝null暗删",
+    "schema": "ConditionPatch",
+    "value": {
+      "set": {
+        "channel": null
+      },
+      "unset": []
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "条件补丁禁止修改用户归属",
+    "schema": "ConditionPatch",
+    "value": {
+      "set": {
+        "owner_id": "other"
+      },
+      "unset": []
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "长文分块读取",
+    "schema": "ReadKnowledgeInput",
+    "value": {
+      "object_id": "doc-synthetic",
+      "entry_id": "body",
+      "offset": 4096,
+      "limit": 2048
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "早期任务读取回执",
+    "schema": "DataToolOutcome",
+    "value": {
+      "operation_id": "op-history-task",
+      "tool_name": "read_analysis_task",
+      "data": {
+        "id": "task-old"
+      }
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "memory correction updates an existing version",
+    "schema": "AssetToolInput",
+    "value": {
+      "action": "update_memory",
+      "asset_id": "memory-existing",
+      "expected_version": "1",
+      "name": "默认渠道",
+      "body": "默认渠道=app",
+      "scope": "未指定渠道的订单分析",
+      "verified": false,
+      "dependencies": [],
+      "instruction_quote": "以后默认渠道使用 app"
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "memory correction requires version",
+    "schema": "AssetToolInput",
+    "value": {
+      "action": "update_memory",
+      "asset_id": "memory-existing",
+      "name": "默认渠道",
+      "body": "默认渠道=app",
+      "scope": "未指定渠道的订单分析",
+      "verified": false,
+      "dependencies": [],
+      "instruction_quote": "以后默认渠道使用 app"
+    },
+    "valid": false
+  },
+  {
+    "name": "memory disable requires only identity and version",
+    "schema": "AssetToolInput",
+    "value": {
+      "action": "disable_memory",
+      "asset_id": "memory-existing",
+      "expected_version": "2"
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "disabled memory cannot include replacement body",
+    "schema": "AssetToolInput",
+    "value": {
+      "action": "disable_memory",
+      "asset_id": "memory-existing",
+      "expected_version": "2",
+      "body": "ignored"
+    },
+    "valid": false
+  },
+  {
+    "name": "history cursor and title query",
+    "schema": "HistoryQuery",
+    "value": {
+      "before_id": "older-conversation",
+      "q": "净收入"
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "request reference clock",
+    "schema": "RequestClock",
+    "value": {
+      "reference_time_utc": "2026-01-01T23:30:00.000000Z",
+      "business_timezone": "Asia/Shanghai"
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "request clock cannot use an unknown timezone",
+    "schema": "RequestClock",
+    "value": {
+      "reference_time_utc": "2026-01-01T23:30:00.000000Z",
+      "business_timezone": "made-up-zone"
+    },
+    "valid": false
+  },
+  {
+    "name": "history requires a display title",
+    "schema": "History",
+    "value": {
+      "conversations": [
+        {
+          "id": "test-conversation"
+        }
+      ],
+      "next_before_id": null
+    },
+    "valid": false
+  },
+  {
+    "name": "bounded public knowledge search coverage",
+    "schema": "KnowledgeList",
+    "value": {
+      "objects": [],
+      "next_after_id": null,
+      "retrieval_mode": "lexical_authoritative",
+      "search_coverage": {
+        "state": "candidate_limit",
+        "candidate_limit": 2000
+      }
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "search coverage cannot expose filtered counts",
+    "schema": "KnowledgeList",
+    "value": {
+      "objects": [],
+      "next_after_id": null,
+      "retrieval_mode": "lexical_authoritative",
+      "search_coverage": {
+        "state": "candidate_limit",
+        "candidate_limit": 2000,
+        "rejected": 17
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "full business profile supports explicitly authorized larger trial",
+    "schema": "ModelProfile",
+    "value": {
+      "provider_id": "deepseek",
+      "model_id": "deepseek-flash",
+      "trial_id": "trial-test",
+      "price_version": "2026-10-04-peak-usd",
+      "input_limit": 32768,
+      "output_limit": 2048,
+      "trial_call_limit": 160,
+      "trial_cost_micros": "1000000",
+      "toolset": "data",
+      "request_call_limit": 12,
+      "payload_bytes_limit": 65536
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "data profile retains a finite call limit",
+    "schema": "ModelProfile",
+    "value": {
+      "provider_id": "deepseek",
+      "model_id": "deepseek-flash",
+      "trial_id": "trial-test",
+      "price_version": "2026-10-04-peak-usd",
+      "input_limit": 32768,
+      "output_limit": 2048,
+      "trial_call_limit": 201,
+      "trial_cost_micros": "300000",
+      "toolset": "data",
+      "request_call_limit": 12,
+      "payload_bytes_limit": 65536
+    },
+    "valid": false
+  },
+  {
+    "name": "new query without revision identity remains compatible",
+    "schema": "RequestQueryInput",
+    "value": {
+      "task_id": "task-1",
+      "condition_version": "1",
+      "sql": "SELECT 1",
+      "parameters": {},
+      "target_id": "synthetic-sqlite",
+      "summary": "独立查询",
+      "knowledge_refs": []
+    },
+    "valid": true
+  },
+  {
+    "name": "SQL revision binds an existing query identity",
+    "schema": "RequestQueryInput",
+    "value": {
+      "task_id": "task-1",
+      "condition_version": "1",
+      "sql": "SELECT 1",
+      "parameters": {},
+      "target_id": "synthetic-sqlite",
+      "summary": "独立查询",
+      "knowledge_refs": [],
+      "replaces_query_id": "query-1"
+    },
+    "valid": true
+  },
+  {
+    "name": "invalid revision identity rejected",
+    "schema": "RequestQueryInput",
+    "value": {
+      "task_id": "task-1",
+      "condition_version": "1",
+      "sql": "SELECT 1",
+      "parameters": {},
+      "target_id": "synthetic-sqlite",
+      "summary": "独立查询",
+      "knowledge_refs": [],
+      "replaces_query_id": "bad/query"
+    },
+    "valid": false
+  },
+  {
+    "name": "SQL-only revision route binds task and prior query",
+    "schema": "AnalysisUpdate",
+    "value": {
+      "action": "route",
+      "task_id": "task-1",
+      "expected_version": "1",
+      "goal": "SQL修订",
+      "question": null,
+      "options": [],
+      "replaces_query_id": "query-1"
+    },
+    "valid": true,
+    "roundtrip": true,
+    "roundtrip_value": {
+      "action": "route",
+      "task_id": "task-1",
+      "expected_version": "1",
+      "goal": "SQL修订",
+      "options": [],
+      "replaces_query_id": "query-1"
+    }
+  },
+  {
+    "name": "SQL-only revision route requires the current task version",
+    "schema": "AnalysisUpdate",
+    "value": {
+      "action": "route",
+      "task_id": "task-1",
+      "expected_version": null,
+      "goal": "SQL修订",
+      "question": null,
+      "options": [],
+      "replaces_query_id": "query-1"
+    },
+    "valid": false
+  },
+  {
+    "name": "query replacement cannot be hidden in an unrelated task update",
+    "schema": "AnalysisUpdate",
+    "value": {
+      "action": "create",
+      "task_id": "task-1",
+      "expected_version": "1",
+      "goal": "SQL修订",
+      "question": null,
+      "options": [],
+      "replaces_query_id": "query-1"
+    },
+    "valid": false
+  },
+  {
+    "name": "new task requires full conditions before reaching business code",
+    "schema": "AnalysisUpdate",
+    "value": {
+      "action": "create",
+      "task_id": null,
+      "expected_version": null,
+      "goal": "解释合成字段",
+      "question": null,
+      "options": []
+    },
+    "valid": false
+  },
+  {
+    "name": "explanation task can explicitly leave unspecified conditions unknown",
+    "schema": "AnalysisUpdate",
+    "value": {
+      "action": "create",
+      "task_id": null,
+      "expected_version": null,
+      "goal": "解释合成字段",
+      "question": null,
+      "options": [],
+      "conditions": {
+        "time_start": null,
+        "time_end": null,
+        "timezone": "UTC",
+        "metric": null,
+        "channel": null,
+        "group_by": [],
+        "filters": [],
+        "knowledge_refs": [],
+        "notes": ""
+      }
+    },
+    "valid": true,
+    "roundtrip": true,
+    "roundtrip_value": {
+      "action": "create",
+      "goal": "解释合成字段",
+      "options": [],
+      "conditions": {
+        "time_start": null,
+        "time_end": null,
+        "timezone": "UTC",
+        "metric": null,
+        "channel": null,
+        "group_by": [],
+        "filters": [],
+        "knowledge_refs": [],
+        "notes": ""
+      }
+    }
+  },
+  {
+    "name": "empty prefill is not a completed analysis",
+    "schema": "PrefillResult",
+    "value": {
+      "entries": []
+    },
+    "valid": false
+  },
+  {
+    "name": "new task cannot invent a task identifier",
+    "schema": "AnalysisUpdate",
+    "value": {
+      "action": "create",
+      "task_id": "T1",
+      "expected_version": null,
+      "goal": "解释合成字段",
+      "question": null,
+      "options": [],
+      "conditions": {
+        "time_start": null,
+        "time_end": null,
+        "timezone": "UTC",
+        "metric": null,
+        "channel": null,
+        "group_by": [],
+        "filters": [],
+        "knowledge_refs": [],
+        "notes": ""
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "new task uses JSON null rather than the string null",
+    "schema": "AnalysisUpdate",
+    "value": {
+      "action": "create",
+      "task_id": null,
+      "expected_version": "null",
+      "goal": "解释合成字段",
+      "question": null,
+      "options": [],
+      "conditions": {
+        "time_start": null,
+        "time_end": null,
+        "timezone": "UTC",
+        "metric": null,
+        "channel": null,
+        "group_by": [],
+        "filters": [],
+        "knowledge_refs": [],
+        "notes": ""
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "existing task revision requires a condition patch",
+    "schema": "AnalysisUpdate",
+    "value": {
+      "action": "revise",
+      "task_id": "task-1",
+      "expected_version": "1",
+      "goal": "解释合成字段",
+      "question": null,
+      "options": [],
+      "conditions": {
+        "time_start": null,
+        "time_end": null,
+        "timezone": "UTC",
+        "metric": null,
+        "channel": null,
+        "group_by": [],
+        "filters": [],
+        "knowledge_refs": [],
+        "notes": ""
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "existing task revision carries an explicit patch",
+    "schema": "AnalysisUpdate",
+    "value": {
+      "action": "revise",
+      "task_id": "task-1",
+      "expected_version": "1",
+      "goal": "解释合成字段",
+      "question": null,
+      "options": [],
+      "conditions": {
+        "time_start": null,
+        "time_end": null,
+        "timezone": "UTC",
+        "metric": null,
+        "channel": null,
+        "group_by": [],
+        "filters": [],
+        "knowledge_refs": [],
+        "notes": ""
+      },
+      "condition_patch": {
+        "set": {},
+        "unset": []
+      }
+    },
+    "valid": true,
+    "roundtrip": true,
+    "roundtrip_value": {
+      "action": "revise",
+      "task_id": "task-1",
+      "expected_version": "1",
+      "goal": "解释合成字段",
+      "options": [],
+      "conditions": {
+        "time_start": null,
+        "time_end": null,
+        "timezone": "UTC",
+        "metric": null,
+        "channel": null,
+        "group_by": [],
+        "filters": [],
+        "knowledge_refs": [],
+        "notes": ""
+      },
+      "condition_patch": {
+        "set": {},
+        "unset": []
+      }
+    }
+  },
+  {
+    "name": "a string null is not a user clarification",
+    "schema": "AnalysisUpdate",
+    "value": {
+      "action": "create",
+      "task_id": null,
+      "expected_version": null,
+      "goal": "解释合成字段",
+      "question": "null",
+      "options": [],
+      "conditions": {
+        "time_start": null,
+        "time_end": null,
+        "timezone": "UTC",
+        "metric": null,
+        "channel": null,
+        "group_by": [],
+        "filters": [],
+        "knowledge_refs": [],
+        "notes": ""
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "empty placeholder is not a user clarification",
+    "schema": "AnalysisUpdate",
+    "value": {
+      "action": "create",
+      "task_id": null,
+      "expected_version": null,
+      "goal": "解释合成字段",
+      "question": "",
+      "options": [],
+      "conditions": {
+        "time_start": null,
+        "time_end": null,
+        "timezone": "UTC",
+        "metric": null,
+        "channel": null,
+        "group_by": [],
+        "filters": [],
+        "knowledge_refs": [],
+        "notes": ""
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "whitespace is not a user clarification",
+    "schema": "AnalysisUpdate",
+    "value": {
+      "action": "create",
+      "task_id": null,
+      "expected_version": null,
+      "goal": "解释合成字段",
+      "question": "  ",
+      "options": [],
+      "conditions": {
+        "time_start": null,
+        "time_end": null,
+        "timezone": "UTC",
+        "metric": null,
+        "channel": null,
+        "group_by": [],
+        "filters": [],
+        "knowledge_refs": [],
+        "notes": ""
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "final output can identify the last assistant message range",
+    "schema": "FinishRun",
+    "value": {
+      "run_id": "r",
+      "lease_epoch": "1",
+      "commit_id": "o",
+      "final_text": "完成",
+      "checkpoint": {
+        "sdk_version": "1.0.0",
+        "entries": [],
+        "leaf_id": null
+      },
+      "final_start_chunk_seq": "2"
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "final output range cannot start at zero",
+    "schema": "FinishRun",
+    "value": {
+      "run_id": "r",
+      "lease_epoch": "1",
+      "commit_id": "o",
+      "final_text": "完成",
+      "checkpoint": {
+        "sdk_version": "1.0.0",
+        "entries": [],
+        "leaf_id": null
+      },
+      "final_start_chunk_seq": "0"
+    },
+    "valid": false
+  },
+  {
+    "name": "普通归属不改变条件",
+    "schema": "AnalysisUpdate",
+    "value": {
+      "action": "route",
+      "task_id": "task-1",
+      "expected_version": "1",
+      "goal": "",
+      "question": null,
+      "options": []
+    },
+    "valid": true
+  },
+  {
+    "name": "归属不能吞掉条件修改",
+    "schema": "AnalysisUpdate",
+    "value": {
+      "action": "route",
+      "task_id": "task-1",
+      "expected_version": "1",
+      "goal": "",
+      "question": null,
+      "options": [],
+      "condition_patch": {
+        "set": {
+          "channel": "app"
+        },
+        "unset": []
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "归属不能吞掉澄清问题",
+    "schema": "AnalysisUpdate",
+    "value": {
+      "action": "route",
+      "task_id": "task-1",
+      "expected_version": "1",
+      "goal": "",
+      "question": "请选择渠道",
+      "options": []
+    },
+    "valid": false
+  },
+  {
+    "name": "归属不能吞掉完整条件",
+    "schema": "AnalysisUpdate",
+    "value": {
+      "action": "route",
+      "task_id": "task-1",
+      "expected_version": "1",
+      "goal": "",
+      "question": null,
+      "options": [],
+      "conditions": {
+        "time_start": null,
+        "time_end": null,
+        "timezone": "UTC",
+        "metric": null,
+        "channel": "app",
+        "group_by": [],
+        "filters": [],
+        "knowledge_refs": [],
+        "notes": ""
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "新建省略未分配身份与无澄清问题",
+    "schema": "AnalysisUpdate",
+    "value": {
+      "action": "create",
+      "goal": "解释合成字段",
+      "options": [],
+      "conditions": {
+        "time_start": null,
+        "time_end": null,
+        "timezone": "UTC",
+        "metric": null,
+        "channel": null,
+        "group_by": [],
+        "filters": [],
+        "knowledge_refs": [],
+        "notes": ""
+      }
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "省略身份的新建仍须完整条件",
+    "schema": "AnalysisUpdate",
+    "value": {
+      "action": "create",
+      "goal": "解释合成字段",
+      "options": []
+    },
+    "valid": false
+  },
+  {
+    "name": "已有任务不能省略版本",
+    "schema": "AnalysisUpdate",
+    "value": {
+      "action": "route",
+      "task_id": "task-1",
+      "goal": "追问",
+      "options": []
+    },
+    "valid": false
+  },
+  {
+    "name": "新建澄清保留问题和选项",
+    "schema": "AnalysisUpdate",
+    "value": {
+      "action": "create",
+      "goal": "解释合成字段",
+      "options": [
+        "订单",
+        "金额"
+      ],
+      "conditions": {
+        "time_start": null,
+        "time_end": null,
+        "timezone": "UTC",
+        "metric": null,
+        "channel": null,
+        "group_by": [],
+        "filters": [],
+        "knowledge_refs": [],
+        "notes": ""
+      },
+      "question": "请选择统计分母"
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "没有澄清问题不能留下选项",
+    "schema": "AnalysisUpdate",
+    "value": {
+      "action": "create",
+      "goal": "解释合成字段",
+      "options": [
+        "订单",
+        "金额"
+      ],
+      "conditions": {
+        "time_start": null,
+        "time_end": null,
+        "timezone": "UTC",
+        "metric": null,
+        "channel": null,
+        "group_by": [],
+        "filters": [],
+        "knowledge_refs": [],
+        "notes": ""
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "新建clarify可省略未分配身份",
+    "schema": "AnalysisUpdate",
+    "value": {
+      "action": "clarify",
+      "goal": "解释合成字段",
+      "options": [
+        "订单",
+        "金额"
+      ],
+      "conditions": {
+        "time_start": null,
+        "time_end": null,
+        "timezone": "UTC",
+        "metric": null,
+        "channel": null,
+        "group_by": [],
+        "filters": [],
+        "knowledge_refs": [],
+        "notes": ""
+      },
+      "question": "请选择统计分母"
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "控制消息无分析任务归属往返",
+    "schema": "AnalysisUpdate",
+    "value": {
+      "action": "route",
+      "task_id": null,
+      "expected_version": null,
+      "goal": "读取操作状态",
+      "question": null,
+      "options": []
+    },
+    "valid": true,
+    "roundtrip": true,
+    "roundtrip_value": {
+      "action": "route",
+      "goal": "读取操作状态",
+      "options": []
+    }
+  },
+  {
+    "name": "无任务归属不能夹带版本",
+    "schema": "AnalysisUpdate",
+    "value": {
+      "action": "route",
+      "expected_version": "1",
+      "goal": "读取状态",
+      "options": []
+    },
+    "valid": false
+  },
+  {
+    "name": "替代SQL的route在边界绑定任务与版本",
+    "schema": "AnalysisUpdate",
+    "value": {
+      "action": "route",
+      "goal": "改写SQL",
+      "options": [],
+      "replaces_query_id": "query-1"
+    },
+    "valid": false
+  },
+  {
+    "name": "data thinking uses native provider with shared output limit",
+    "schema": "ModelProfile",
+    "value": {
+      "provider_id": "deepseek",
+      "model_id": "deepseek-flash",
+      "trial_id": "trial-test",
+      "price_version": "2026-10-04-peak-usd",
+      "input_limit": 32768,
+      "output_limit": 8192,
+      "trial_call_limit": 24,
+      "trial_cost_micros": "300000",
+      "toolset": "data",
+      "request_call_limit": 12,
+      "payload_bytes_limit": 65536,
+      "thinking_level": "low"
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "unknown native thinking level rejected",
+    "schema": "ModelProfile",
+    "value": {
+      "provider_id": "deepseek",
+      "model_id": "deepseek-flash",
+      "trial_id": "trial-test",
+      "price_version": "2026-10-04-peak-usd",
+      "input_limit": 32768,
+      "output_limit": 2048,
+      "trial_call_limit": 24,
+      "trial_cost_micros": "300000",
+      "toolset": "data",
+      "request_call_limit": 12,
+      "payload_bytes_limit": 65536,
+      "thinking_level": "ultra"
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "task trial cannot silently enable thinking",
+    "schema": "ModelProfile",
+    "value": {
+      "provider_id": "deepseek",
+      "model_id": "deepseek-flash",
+      "trial_id": "trial-test",
+      "price_version": "2026-10-04-peak-usd",
+      "input_limit": 4096,
+      "output_limit": 1024,
+      "trial_call_limit": 6,
+      "trial_cost_micros": "50000",
+      "thinking_level": "low"
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "valid platform catalog table",
+    "schema": "CatalogTable",
+    "value": {
+      "id": "stable_orders",
+      "name": "orders",
+      "platform_version": "1",
+      "comment": "合成表",
+      "ddl": "CREATE TABLE orders (id INTEGER);",
+      "columns": [
+        {
+          "id": "stable_id",
+          "name": "id",
+          "data_type": "INTEGER",
+          "nullable": false,
+          "comment": "编号"
+        }
+      ],
+      "node": null
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "valid authoritative catalog page",
+    "schema": "CatalogPage",
+    "value": {
+      "schema_version": 1,
+      "source_namespace": "synthetic",
+      "snapshot_id": "snapshot-1",
+      "tables": [
+        {
+          "id": "stable_orders",
+          "name": "orders",
+          "platform_version": "1",
+          "comment": "合成表",
+          "ddl": "CREATE TABLE orders (id INTEGER);",
+          "columns": [
+            {
+              "id": "stable_id",
+              "name": "id",
+              "data_type": "INTEGER",
+              "nullable": false,
+              "comment": "编号"
+            }
+          ],
+          "node": null
+        }
+      ],
+      "next_cursor": null,
+      "complete": true,
+      "authoritative": true
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "catalog page missing deletion authority",
+    "schema": "CatalogPage",
+    "value": {
+      "schema_version": 1,
+      "source_namespace": "synthetic",
+      "snapshot_id": "snapshot-1",
+      "tables": [
+        {
+          "id": "stable_orders",
+          "name": "orders",
+          "platform_version": "1",
+          "comment": "合成表",
+          "ddl": "CREATE TABLE orders (id INTEGER);",
+          "columns": [
+            {
+              "id": "stable_id",
+              "name": "id",
+              "data_type": "INTEGER",
+              "nullable": false,
+              "comment": "编号"
+            }
+          ],
+          "node": null
+        }
+      ],
+      "next_cursor": null,
+      "complete": true
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "catalog platform version cannot regress to zero",
+    "schema": "CatalogTable",
+    "value": {
+      "id": "stable_orders",
+      "name": "orders",
+      "platform_version": "0",
+      "comment": "合成表",
+      "ddl": "CREATE TABLE orders (id INTEGER);",
+      "columns": [
+        {
+          "id": "stable_id",
+          "name": "id",
+          "data_type": "INTEGER",
+          "nullable": false,
+          "comment": "编号"
+        }
+      ],
+      "node": null
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "valid degraded hybrid coverage",
+    "schema": "SearchCoverage",
+    "value": {
+      "state": "bounded",
+      "candidate_limit": 2200,
+      "vector_state": "unavailable",
+      "index_state": "incomplete"
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "valid task directory continuation",
+    "schema": "ConversationReadInput",
+    "value": {
+      "after_seq": "0",
+      "task_directory": true,
+      "task_after": "task-1"
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "mixed input retains all task identities",
+    "schema": "WorkspaceContext",
+    "value": {
+      "tasks": [],
+      "recent_messages": [],
+      "selected_skills": [],
+      "memories": [],
+      "query_observations": [],
+      "authority_revision": "1",
+      "input_task_ids": [
+        "task-a",
+        "task-b"
+      ]
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "duplicate input task identities rejected",
+    "schema": "WorkspaceContext",
+    "value": {
+      "tasks": [],
+      "recent_messages": [],
+      "selected_skills": [],
+      "memories": [],
+      "query_observations": [],
+      "authority_revision": "1",
+      "input_task_ids": [
+        "task-a",
+        "task-a"
+      ]
+    },
+    "valid": false
+  },
+  {
+    "name": "ModelProfile accepts native 8192 output limit",
+    "schema": "ModelProfile",
+    "value": {
+      "provider_id": "deepseek",
+      "model_id": "deepseek-flash",
+      "trial_id": "trial-test",
+      "price_version": "2026-10-04-peak-usd",
+      "input_limit": 32768,
+      "output_limit": 8192,
+      "trial_call_limit": 6,
+      "trial_cost_micros": "50000",
+      "toolset": "data",
+      "payload_bytes_limit": 65536,
+      "thinking_level": "low",
+      "request_call_limit": 24
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "ReserveModelCall accepts native 8192 output limit",
+    "schema": "ReserveModelCall",
+    "value": {
+      "run_id": "run-test",
+      "lease_epoch": "1",
+      "call_attempt_id": "call-test",
+      "parameters_fingerprint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "input_tokens_upper": 4096,
+      "output_tokens_max": 8192
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "analysis preference command roundtrip",
+    "schema": "AnalysisPreferenceCommand",
+    "value": {
+      "operation_id": "preference-test",
+      "expected_version": "1",
+      "preferred": true
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "analysis preference requires explicit boolean",
+    "schema": "AnalysisPreferenceCommand",
+    "value": {
+      "operation_id": "preference-test",
+      "expected_version": "1",
+      "preferred": "true"
+    },
+    "valid": false
+  },
+  {
+    "name": "analysis preference cannot omit configuration version",
+    "schema": "AnalysisPreferenceCommand",
+    "value": {
+      "operation_id": "preference-test",
+      "preferred": true
+    },
+    "valid": false
+  },
+  {
+    "name": "table analysis preference roundtrip",
+    "schema": "TableAnalysisPreference",
+    "value": {
+      "table_id": "table-synthetic",
+      "version": "2",
+      "preferred": true
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "ModelProfile accepts native 16384 output limit",
+    "schema": "ModelProfile",
+    "value": {
+      "provider_id": "deepseek",
+      "model_id": "deepseek-flash",
+      "trial_id": "trial-test",
+      "price_version": "2026-10-04-peak-usd",
+      "input_limit": 32768,
+      "output_limit": 16384,
+      "trial_call_limit": 6,
+      "trial_cost_micros": "50000",
+      "toolset": "data",
+      "payload_bytes_limit": 65536,
+      "thinking_level": "low",
+      "request_call_limit": 24
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "ModelProfile rejects native 16385 output limit",
+    "schema": "ModelProfile",
+    "value": {
+      "provider_id": "deepseek",
+      "model_id": "deepseek-flash",
+      "trial_id": "trial-test",
+      "price_version": "2026-10-04-peak-usd",
+      "input_limit": 32768,
+      "output_limit": 16385,
+      "trial_call_limit": 6,
+      "trial_cost_micros": "50000",
+      "toolset": "data",
+      "payload_bytes_limit": 65536,
+      "thinking_level": "low",
+      "request_call_limit": 24
+    },
+    "valid": false
+  },
+  {
+    "name": "ReserveModelCall accepts native 16384 output limit",
+    "schema": "ReserveModelCall",
+    "value": {
+      "run_id": "run-test",
+      "lease_epoch": "1",
+      "call_attempt_id": "call-test",
+      "parameters_fingerprint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "input_tokens_upper": 4096,
+      "output_tokens_max": 16384
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "ReserveModelCall rejects native 16385 output limit",
+    "schema": "ReserveModelCall",
+    "value": {
+      "run_id": "run-test",
+      "lease_epoch": "1",
+      "call_attempt_id": "call-test",
+      "parameters_fingerprint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "input_tokens_upper": 4096,
+      "output_tokens_max": 16385
+    },
+    "valid": false
+  },
+  {
+    "name": "取消工具仅返回控制字段",
+    "schema": "QueryCancellation",
+    "value": {
+      "id": "synthetic-query",
+      "task_id": "synthetic-task",
+      "condition_version": "1",
+      "execution_state": "cancelled",
+      "cancel_state": "completed"
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "取消工具不得返回SQL正文",
+    "schema": "QueryCancellation",
+    "value": {
+      "id": "synthetic-query",
+      "task_id": "synthetic-task",
+      "condition_version": "1",
+      "execution_state": "cancelled",
+      "cancel_state": "completed",
+      "sql": "SELECT 1"
+    },
+    "valid": false
+  },
+  {
+    "name": "ModelProfile accepts native 32768 output limit",
+    "schema": "ModelProfile",
+    "value": {
+      "provider_id": "deepseek",
+      "model_id": "deepseek-flash",
+      "trial_id": "trial-test",
+      "price_version": "2026-10-04-peak-usd",
+      "input_limit": 32768,
+      "output_limit": 32768,
+      "trial_call_limit": 6,
+      "trial_cost_micros": "50000",
+      "toolset": "data",
+      "payload_bytes_limit": 65536,
+      "thinking_level": "low",
+      "request_call_limit": 24
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "ModelProfile rejects native 32769 output limit",
+    "schema": "ModelProfile",
+    "value": {
+      "provider_id": "deepseek",
+      "model_id": "deepseek-flash",
+      "trial_id": "trial-test",
+      "price_version": "2026-10-04-peak-usd",
+      "input_limit": 32768,
+      "output_limit": 32769,
+      "trial_call_limit": 6,
+      "trial_cost_micros": "50000",
+      "toolset": "data",
+      "payload_bytes_limit": 65536,
+      "thinking_level": "low",
+      "request_call_limit": 24
+    },
+    "valid": false
+  },
+  {
+    "name": "ReserveModelCall accepts native 32768 output limit",
+    "schema": "ReserveModelCall",
+    "value": {
+      "run_id": "run-test",
+      "lease_epoch": "1",
+      "call_attempt_id": "call-test",
+      "parameters_fingerprint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "input_tokens_upper": 4096,
+      "output_tokens_max": 32768
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "ReserveModelCall rejects native 32769 output limit",
+    "schema": "ReserveModelCall",
+    "value": {
+      "run_id": "run-test",
+      "lease_epoch": "1",
+      "call_attempt_id": "call-test",
+      "parameters_fingerprint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "input_tokens_upper": 4096,
+      "output_tokens_max": 32769
+    },
+    "valid": false
+  },
+  {
+    "name": "data model payload 131072 accepted",
+    "schema": "ModelProfile",
+    "value": {
+      "provider_id": "deepseek",
+      "model_id": "deepseek-flash",
+      "trial_id": "trial-test",
+      "price_version": "2026-10-04-peak-usd",
+      "input_limit": 32768,
+      "output_limit": 2048,
+      "trial_call_limit": 24,
+      "trial_cost_micros": "300000",
+      "toolset": "data",
+      "request_call_limit": 12,
+      "payload_bytes_limit": 131072
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "data model payload 131073 rejected",
+    "schema": "ModelProfile",
+    "value": {
+      "provider_id": "deepseek",
+      "model_id": "deepseek-flash",
+      "trial_id": "trial-test",
+      "price_version": "2026-10-04-peak-usd",
+      "input_limit": 32768,
+      "output_limit": 2048,
+      "trial_call_limit": 24,
+      "trial_cost_micros": "300000",
+      "toolset": "data",
+      "request_call_limit": 12,
+      "payload_bytes_limit": 131073
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "native checkpoint reference",
+    "schema": "Checkpoint",
+    "value": {
+      "sdk_version": "1.0.0",
+      "entries": [],
+      "leaf_id": null,
+      "storage": {
+        "kind": "pi_session",
+        "file": "synthetic-session.jsonl",
+        "session_id": "synthetic-session"
+      }
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "immutable host checkpoint reference",
+    "schema": "Checkpoint",
+    "value": {
+      "sdk_version": "1.0.0",
+      "entries": [],
+      "leaf_id": null,
+      "storage": {
+        "kind": "host_checkpoint",
+        "fingerprint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "absolute native path",
+    "schema": "Checkpoint",
+    "value": {
+      "sdk_version": "1.0.0",
+      "entries": [],
+      "leaf_id": null,
+      "storage": {
+        "kind": "pi_session",
+        "file": "/private.jsonl",
+        "session_id": "synthetic-session"
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "native traversal",
+    "schema": "Checkpoint",
+    "value": {
+      "sdk_version": "1.0.0",
+      "entries": [],
+      "leaf_id": null,
+      "storage": {
+        "kind": "pi_session",
+        "file": "../private.jsonl",
+        "session_id": "synthetic-session"
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "native separator",
+    "schema": "Checkpoint",
+    "value": {
+      "sdk_version": "1.0.0",
+      "entries": [],
+      "leaf_id": null,
+      "storage": {
+        "kind": "pi_session",
+        "file": "other/private.jsonl",
+        "session_id": "synthetic-session"
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "missing native session",
+    "schema": "Checkpoint",
+    "value": {
+      "sdk_version": "1.0.0",
+      "entries": [],
+      "leaf_id": null,
+      "storage": {
+        "kind": "pi_session",
+        "file": "synthetic-session.jsonl",
+        "session_id": null
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "unknown checkpoint storage",
+    "schema": "Checkpoint",
+    "value": {
+      "sdk_version": "1.0.0",
+      "entries": [],
+      "leaf_id": null,
+      "storage": {
+        "kind": "other",
+        "file": "synthetic-session.jsonl",
+        "session_id": "synthetic-session"
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "reference cannot carry inline history",
+    "schema": "Checkpoint",
+    "value": {
+      "sdk_version": "1.0.0",
+      "entries": [
+        {
+          "type": "session",
+          "version": 3,
+          "id": "synthetic-session"
+        }
+      ],
+      "leaf_id": null,
+      "storage": {
+        "kind": "pi_session",
+        "file": "synthetic-session.jsonl",
+        "session_id": "synthetic-session"
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "bounded checkpoint read binding",
+    "schema": "ReadCheckpoint",
+    "value": {
+      "run_id": "original-run",
+      "lease_epoch": "1"
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "checkpoint reader cannot choose chain",
+    "schema": "ReadCheckpoint",
+    "value": {
+      "run_id": "original-run",
+      "lease_epoch": "1",
+      "recovery_chain_id": "different-chain"
+    },
+    "valid": false
+  },
+  {
+    "name": "memory save requires its exact instruction quote",
+    "schema": "AssetToolInput",
+    "value": {
+      "action": "save_memory",
+      "name": "金额偏好",
+      "body": "金额用元展示",
+      "scope": "金额显示",
+      "verified": false,
+      "dependencies": []
+    },
+    "valid": false
+  },
+  {
+    "name": "memory update requires its exact instruction quote",
+    "schema": "AssetToolInput",
+    "value": {
+      "action": "update_memory",
+      "name": "金额偏好",
+      "body": "金额用元展示",
+      "scope": "金额显示",
+      "verified": false,
+      "dependencies": [],
+      "asset_id": "memory-existing",
+      "expected_version": "1"
+    },
+    "valid": false
+  },
+  {
+    "name": "memory disable cannot carry an instruction quote",
+    "schema": "AssetToolInput",
+    "value": {
+      "action": "disable_memory",
+      "asset_id": "memory-existing",
+      "expected_version": "1",
+      "instruction_quote": "忘掉它"
+    },
+    "valid": false
+  },
+  {
+    "name": "memory save retains a grounded instruction quote",
+    "schema": "AssetToolInput",
+    "value": {
+      "action": "save_memory",
+      "name": "金额偏好",
+      "body": "金额用元展示",
+      "scope": "金额显示",
+      "verified": false,
+      "dependencies": [],
+      "instruction_quote": "以后金额用元展示"
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "document source alias supports the longest knowledge id",
+    "schema": "ReadSourceInput",
+    "value": {
+      "source_id": "document-dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "version": "1"
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "source alias rejects an oversized knowledge id",
+    "schema": "ReadSourceInput",
+    "value": {
+      "source_id": "document-ddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "version": "1"
+    },
+    "valid": false
+  },
+  {
+    "name": "Pro原生high配置精确往返",
+    "schema": "ModelProfile",
+    "value": {
+      "provider_id": "deepseek",
+      "model_id": "deepseek-v4-pro",
+      "trial_id": "pro-contract",
+      "price_version": "2026-10-05-pro-peak-usd",
+      "input_limit": 32768,
+      "output_limit": 32768,
+      "trial_call_limit": 60,
+      "trial_cost_micros": "5000000",
+      "request_call_limit": 24,
+      "toolset": "data",
+      "payload_bytes_limit": 131072,
+      "thinking_level": "high"
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "Pro拒绝Flash价格",
+    "schema": "ModelProfile",
+    "value": {
+      "provider_id": "deepseek",
+      "model_id": "deepseek-v4-pro",
+      "trial_id": "pro-contract",
+      "price_version": "2026-10-04-peak-usd",
+      "input_limit": 32768,
+      "output_limit": 32768,
+      "trial_call_limit": 60,
+      "trial_cost_micros": "5000000",
+      "request_call_limit": 24,
+      "toolset": "data",
+      "payload_bytes_limit": 131072,
+      "thinking_level": "high"
+    },
+    "valid": false
+  },
+  {
+    "name": "Flash拒绝Pro价格",
+    "schema": "ModelProfile",
+    "value": {
+      "provider_id": "deepseek",
+      "model_id": "deepseek-flash",
+      "trial_id": "pro-contract",
+      "price_version": "2026-10-05-pro-peak-usd",
+      "input_limit": 32768,
+      "output_limit": 32768,
+      "trial_call_limit": 60,
+      "trial_cost_micros": "5000000",
+      "request_call_limit": 24,
+      "toolset": "data",
+      "payload_bytes_limit": 131072,
+      "thinking_level": "high"
+    },
+    "valid": false
+  },
+  {
+    "name": "Pro拒绝未支持的low档",
+    "schema": "ModelProfile",
+    "value": {
+      "provider_id": "deepseek",
+      "model_id": "deepseek-v4-pro",
+      "trial_id": "pro-contract",
+      "price_version": "2026-10-05-pro-peak-usd",
+      "input_limit": 32768,
+      "output_limit": 32768,
+      "trial_call_limit": 60,
+      "trial_cost_micros": "5000000",
+      "request_call_limit": 24,
+      "toolset": "data",
+      "payload_bytes_limit": 131072,
+      "thinking_level": "low"
+    },
+    "valid": false
+  },
+  {
+    "name": "Pro支持off档",
+    "schema": "ModelProfile",
+    "value": {
+      "provider_id": "deepseek",
+      "model_id": "deepseek-v4-pro",
+      "trial_id": "pro-contract",
+      "price_version": "2026-10-05-pro-peak-usd",
+      "input_limit": 32768,
+      "output_limit": 32768,
+      "trial_call_limit": 60,
+      "trial_cost_micros": "5000000",
+      "request_call_limit": 24,
+      "toolset": "data",
+      "payload_bytes_limit": 131072,
+      "thinking_level": "off"
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "旧I0不改用Pro",
+    "schema": "ModelProfile",
+    "value": {
+      "provider_id": "deepseek",
+      "model_id": "deepseek-v4-pro",
+      "trial_id": "trial-test",
+      "price_version": "2026-10-05-pro-peak-usd",
+      "input_limit": 4096,
+      "output_limit": 1024,
+      "trial_call_limit": 6,
+      "trial_cost_micros": "50000"
+    },
+    "valid": false
+  },
+  {
+    "name": "Pro身份模型标签精确往返",
+    "schema": "Identity",
+    "value": {
+      "user_id": "alice",
+      "model_label": "DeepSeek V4 Pro"
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "Pro登录回执模型标签精确往返",
+    "schema": "SessionReceipt",
+    "value": {
+      "state": "authenticated",
+      "user_id": "alice",
+      "model_label": "DeepSeek V4 Pro"
+    },
+    "valid": true,
+    "roundtrip": true
+  }
+]

@@ -1,0 +1,4 @@
+# 只属于独立实验；完整传递依赖及下载哈希见 requirements.lock。
+mem0ai==2.2.1
+pymilvus==2.5.18
+psutil>=7
