@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "synthetic": true,
+  "sql_dialect": "sqlite3",
+  "snapshot_exclusive": "2026-02-04T00:00:00Z",
+  "knowledge_files": [
+    "schema.sql",
+    "etl.sql",
+    "business-guide.md"
+  ],
+  "optional_synthetic_data_files": [
+    "seed.sql"
+  ],
+  "excluded_from_model_context": [
+    "evaluation/**",
+    "verify.py"
+  ],
+  "note": "应用按允许列表导入；验收题与答案不会自动加入知识。",
+  "derived_knowledge_files": [
+    "semantic-catalog.json"
+  ],
+  "derivation": "schema.sql、etl.sql、business-guide.md 的合成结构化预填；不读取 evaluation"
+}

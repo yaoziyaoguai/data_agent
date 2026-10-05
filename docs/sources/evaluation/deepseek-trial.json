@@ -1,0 +1,72 @@
+{
+  "passed": true,
+  "provider": "https://api.deepseek.com",
+  "model": "deepseek-flash",
+  "thinking": "disabled",
+  "piSdk": "1.0.0",
+  "material": "synthetic only",
+  "requestBodyByteLimit": 2048,
+  "inputBudgetEstimate": 4096,
+  "inputLimitMethod": "conservative estimate plus actual usage verification",
+  "outputLimit": 1024,
+  "callLimit": 6,
+  "costLimitMicros": 50000,
+  "priceVersion": "2026-10-04-peak-usd",
+  "conversation_id": "16951d88-8ee6-4571-aab5-9e34438b15e3",
+  "attempts": [
+    {
+      "id": "20706193-1d74-4c83-961f-2f0465f02ff9",
+      "state": "settled",
+      "usage": {
+        "elapsed_ms": 791,
+        "input_tokens": 580,
+        "output_tokens": 148
+      },
+      "actual_micros": 352,
+      "output_tokens_max": 1024,
+      "input_tokens_upper": 4096
+    },
+    {
+      "id": "b553f4d4-157d-4418-8ae3-5b0957555c3e",
+      "state": "settled",
+      "usage": {
+        "elapsed_ms": 1284,
+        "input_tokens": 371,
+        "output_tokens": 129
+      },
+      "actual_micros": 267,
+      "output_tokens_max": 1024,
+      "input_tokens_upper": 4096
+    }
+  ],
+  "ledger": {
+    "state": "active",
+    "spent_micros": 619,
+    "allocated_calls": 2,
+    "reserved_micros": 0
+  },
+  "tasks": [
+    {
+      "condition_version": "1",
+      "goal": "针对虚构商店进行订单退款分析，时间范围为近七天。分析目标包括：统计近七天内的订单退款总量（退款订单数与退款金额），按退款原因/类型进行分类汇总，识别退款高发的商品或订单来源渠道，观察退款随日期的变化趋势，并给出可能的原因假设与后续跟进建议。",
+      "id": "693fd3ae-aedc-4954-9c07-53d7e22a2e4a"
+    }
+  ],
+  "answer": [
+    "I'll create this analysis task for you.任务已建立并保存成功。\n\n- **任务 ID**：693fd3ae-aedc-4954-9c07-53d7e22a2e4a\n- **操作 ID**：2cab1ec4-9b32-49a1-b666-0b053f2e7bb9\n- **状态**：active（生效中）\n\n**任务目标**：对虚构商店做近七天订单退款分析，涵盖退款量与金额统计、退款原因分类汇总、退款高发的商品/渠道识别、退款日期趋势观察，以及原因假设与跟进建议。\n\n如需调整时间范围或补充分析维度（例如按地区、客单价分层），告诉我即可更新。"
+  ],
+  "sourceHashes": {
+    "apps/agent/provider/deepseek.ts": "cd81492056775c4d87b88d067d752694fd844bf5fab161da56239e56f84026f0",
+    "apps/agent/session/deliver.ts": "8d67522463f855c2ba83146e0a68d3b2f2ccc78c0a77ad1b523f4bbfbcbe89a8",
+    "apps/agent/session/resources.ts": "628ae69f10bc99473e51cb962719337828b1febcf49f6bde1ec6207ce24e955c",
+    "apps/agent/tools/update-analysis-task.ts": "bece777ba3f9379ea5cb06479f0c1cb1a380856af687de3f3c1f08596458d5ef",
+    "apps/agent/transport/client.ts": "85a171a903b34b34db83b7e462e7433320fb0da1f03bb04a11b11147e8fd60fd",
+    "apps/agent/transport/server.ts": "cfc5d6161d17b6d3fc5ff9d6bc72d814faa7efc7ecfab23e9d042f2d33dc9970",
+    "packages/contracts/schema.json": "c73a0c9f5ad6e778af2fc6e8f229545be4087800fe0fff77c3bba8b63f014ecf",
+    "crates/data-agent/src/modules/runtime/model_calls/store.rs": "405ae0600cb10ab568738a5b040a950c0c67d3a9c003e376c9f93d825a6776df",
+    "crates/data-agent/src/use_cases/model_calls.rs": "eba26636375bad7c26559f599c006f140e13664f3c10132e13d74c871226709e",
+    "migrations/202610040001_model_calls.sql": "cd33b09781d430471c0d6080753870d4150473551adce273ae642f0da8120d22",
+    "package-lock.json": "6a8bfe52b06025ccaaba75ca3f096c18369ad02be78056b18db68cb1d640d5c9"
+  },
+  "verifiedAt": "2026-10-03T23:56:48.118Z"
+}

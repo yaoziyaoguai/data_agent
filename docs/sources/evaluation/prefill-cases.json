@@ -1,0 +1,458 @@
+{
+  "version": 1,
+  "status": "待自动预填实现后执行；这些是独立验收参考，未证明模型生成已通过",
+  "synthetic": true,
+  "table": "demo_order_detail",
+  "knowledge_inputs": [
+    "schema.sql",
+    "etl.sql",
+    "business-guide.md"
+  ],
+  "source_path_base": "docs/sources",
+  "evaluation_only": true,
+  "instructions_for_evaluator": [
+    "仅将 knowledge_inputs 中的合成文件提供给预填服务；本文件及 evaluation 目录其他答案不进入模型、检索或 Skill。",
+    "每个字段先运行初次预填，按 required_facts、unknowns 和 forbidden_claims 独立判断，再应用 manual_override 并运行重新预填。",
+    "metadata_fact 是 DDL 可核对的结构事实；sql_fact 是加工 SQL 支持的规则；document_rule 是业务文档约定。输出应保留各自出处，不能将模型推导冒充平台原始注释或人工验证。",
+    "sources 的 file 相对 source_path_base，quote 是可在源文件中匹配的原文；section 是供人定位的章节说明，不要求生成文字逐字一致。",
+    "未知或未覆盖的内容应明确保留缺口。不要因为模型给了置信分就接受缺少依据的业务结论。",
+    "人工修改测试值仅用于检验保护行为。重新预填不得覆盖人工有效值或抹去修改标记；新建议及依据应单独保留供比较；人工修改不等于结果验证通过。",
+    "保存初次生成内容、引用、缺口、人工修改版本、重新预填内容与字段状态作为证据。静态引用核对不计入自动预填通过数。"
+  ],
+  "cases": [
+    {
+      "id": "P01",
+      "field": "paid_amount_cents",
+      "required_facts": [
+        {
+          "kind": "metadata_fact",
+          "text": "主表字段为非空非负 INTEGER。",
+          "sources": [
+            {
+              "file": "schema.sql",
+              "quote": "paid_amount_cents INTEGER NOT NULL CHECK (paid_amount_cents >= 0)"
+            }
+          ]
+        },
+        {
+          "kind": "sql_fact",
+          "text": "来自快照截止前成功付款事件，先按订单与行聚合；退款不计入付款累计金额。",
+          "sources": [
+            {
+              "file": "etl.sql",
+              "quote": "SUM(CASE WHEN event_type = 'charge' THEN amount_cents ELSE 0 END) AS paid"
+            },
+            {
+              "file": "etl.sql",
+              "quote": "WHERE event_status = 'success'\n      AND event_at < '2026-02-04T00:00:00Z'\n    GROUP BY order_id, line_id"
+            }
+          ]
+        },
+        {
+          "kind": "sql_fact",
+          "text": "聚合后按订单与行左连接到订单行，付款金额空值补 0。",
+          "sources": [
+            {
+              "file": "etl.sql",
+              "quote": "COALESCE(p.paid, 0), COALESCE(p.refunded, 0), p.paid_at"
+            },
+            {
+              "file": "etl.sql",
+              "quote": "LEFT JOIN line_payments AS p ON l.order_id = p.order_id AND l.line_id = p.line_id"
+            }
+          ]
+        },
+        {
+          "kind": "document_rule",
+          "text": "金额单位为整数分，已经分摊到行，可按行相加；该字段是付款金额，净收入还需扣除退款。",
+          "sources": [
+            {
+              "file": "business-guide.md",
+              "quote": "| `paid_amount_cents` | INTEGER | 成功付款累计金额，已分摊到当前行，整数分 |",
+              "section": "4. 字段说明"
+            },
+            {
+              "file": "business-guide.md",
+              "quote": "`paid_amount_cents` 和 `refunded_amount_cents` 已分摊到行，可以按行相加。",
+              "section": "2. 一行代表什么"
+            },
+            {
+              "file": "business-guide.md",
+              "quote": "`SUM(paid_amount_cents - refunded_amount_cents)`",
+              "section": "5.1 支付归属净收入"
+            }
+          ]
+        }
+      ],
+      "unknowns": [
+        {
+          "text": "材料没有给出税费、运费或折扣分摊算法，不能补成付款金额的已知组成。",
+          "sources": [
+            {
+              "file": "business-guide.md",
+              "quote": "它不模拟税费、运费、折扣分摊算法",
+              "section": "7. 样例覆盖及边界"
+            }
+          ]
+        }
+      ],
+      "forbidden_claims": [
+        "金额单位是元",
+        "付款金额已经扣除退款",
+        "直接按成功事件条数计算付款金额",
+        "所有金额为 0 的行都对应取消订单"
+      ],
+      "manual_override": {
+        "field": "description",
+        "value": "成功付款累计金额（分），已落到订单行；看净收入时需要扣除退款。",
+        "edited_by": "synthetic-maintainer",
+        "human_modified": true,
+        "result_verified": false,
+        "expectation": "重新预填后有效值和人工修改标记保持不变；保留新的建议及其依据供对比；不能因人工修改或重新预填把结果验证状态改成已通过"
+      }
+    },
+    {
+      "id": "P02",
+      "field": "paid_at",
+      "required_facts": [
+        {
+          "kind": "metadata_fact",
+          "text": "主表为可空 TEXT 字段。",
+          "sources": [
+            {
+              "file": "schema.sql",
+              "quote": "    paid_at TEXT,"
+            }
+          ]
+        },
+        {
+          "kind": "sql_fact",
+          "text": "在截止前成功事件中，按订单与行取 charge 事件的最早时间；不是下单日期。",
+          "sources": [
+            {
+              "file": "etl.sql",
+              "quote": "MIN(CASE WHEN event_type = 'charge' THEN event_at END) AS paid_at"
+            },
+            {
+              "file": "etl.sql",
+              "quote": "WHERE event_status = 'success'\n      AND event_at < '2026-02-04T00:00:00Z'\n    GROUP BY order_id, line_id"
+            },
+            {
+              "file": "etl.sql",
+              "quote": "SUBSTR(l.ordered_at, 1, 10), l.channel, c.region, l.is_test"
+            }
+          ]
+        },
+        {
+          "kind": "document_rule",
+          "text": "时间是当前订单行首笔成功付款的 UTC 时刻；没有成功付款时为 NULL。",
+          "sources": [
+            {
+              "file": "business-guide.md",
+              "quote": "`paid_at` 是这一个订单行首笔成功付款的 UTC 时刻",
+              "section": "3.2 付款事件 raw_payments"
+            },
+            {
+              "file": "business-guide.md",
+              "quote": "没有成功付款时，`paid_at` 为 `NULL`",
+              "section": "3.2 付款事件 raw_payments"
+            }
+          ]
+        },
+        {
+          "kind": "document_rule",
+          "text": "收入和支付客户的默认时间依据为 paid_at；收入归属规则需要业务文档支持。",
+          "sources": [
+            {
+              "file": "business-guide.md",
+              "quote": "| `paid_at` | TEXT，可空 | 当前行首笔成功付款时刻，UTC；收入和支付客户的默认时间依据 |",
+              "section": "4. 字段说明"
+            },
+            {
+              "file": "business-guide.md",
+              "quote": "退款按原付款期间归属。",
+              "section": "5.1 支付归属净收入"
+            }
+          ]
+        }
+      ],
+      "unknowns": [
+        {
+          "text": "样例未覆盖同一订单行跨月分次付款，不能承诺这种情况下一定按首笔付款月归属所有收入。",
+          "sources": [
+            {
+              "file": "business-guide.md",
+              "quote": "本样例一行的分次付款都在同一天，且不存在同一 `(order_id, line_id)` 跨月分次付款。",
+              "section": "3.2 付款事件 raw_payments"
+            }
+          ]
+        }
+      ],
+      "forbidden_claims": [
+        "paid_at 是下单时间",
+        "paid_at 是最后一次付款或退款的时间",
+        "每行 paid_at 都非空",
+        "仅凭 SQL 就确认该字段适用于所有真实业务的收入归属"
+      ],
+      "manual_override": {
+        "field": "description",
+        "value": "这一订单行首笔成功付款时间，UTC；支付归属分析默认使用它。",
+        "edited_by": "synthetic-maintainer",
+        "human_modified": true,
+        "result_verified": false,
+        "expectation": "重新预填后有效值和人工修改标记保持不变；保留新的建议及其依据供对比；不能因人工修改或重新预填把结果验证状态改成已通过"
+      }
+    },
+    {
+      "id": "P03",
+      "field": "region",
+      "required_facts": [
+        {
+          "kind": "metadata_fact",
+          "text": "主表地区字段为可空 TEXT，客户维表的 customer_id 是主键。",
+          "sources": [
+            {
+              "file": "schema.sql",
+              "quote": "    region TEXT"
+            },
+            {
+              "file": "schema.sql",
+              "quote": "CREATE TABLE dim_customers (\n    customer_id TEXT PRIMARY KEY,"
+            }
+          ]
+        },
+        {
+          "kind": "sql_fact",
+          "text": "地区取自 dim_customers.region，按 customer_id 左连接。",
+          "sources": [
+            {
+              "file": "etl.sql",
+              "quote": "l.channel, c.region, l.is_test"
+            },
+            {
+              "file": "etl.sql",
+              "quote": "LEFT JOIN dim_customers AS c ON l.customer_id = c.customer_id"
+            }
+          ]
+        },
+        {
+          "kind": "document_rule",
+          "text": "这是当前客户快照地区，不能承诺交易时的历史地区。",
+          "sources": [
+            {
+              "file": "business-guide.md",
+              "quote": "此维表没有历史拉链，本样例的地区分析表示当前快照地区，不承诺还原交易时地区。",
+              "section": "3.3 客户 dim_customers"
+            }
+          ]
+        },
+        {
+          "kind": "document_rule",
+          "text": "匿名购买没有客户 ID，已知客户也可能没有地区；两类都保留 NULL，展示时可叫未知。",
+          "sources": [
+            {
+              "file": "business-guide.md",
+              "quote": "匿名购买没有客户 ID；已知客户也可能没有地区。两类未知地区都保留 `NULL`，不能猜成默认地区。",
+              "section": "3.3 客户 dim_customers"
+            },
+            {
+              "file": "business-guide.md",
+              "quote": "| `region` | TEXT，可空 | 当前客户快照地区；空值在展示上可以叫“未知”，存储保留 NULL |",
+              "section": "4. 字段说明"
+            }
+          ]
+        }
+      ],
+      "unknowns": [
+        {
+          "text": "没有历史地区变化或交易时地区资料；仅凭空地区也不能确定客户是否匿名。",
+          "sources": [
+            {
+              "file": "business-guide.md",
+              "quote": "已知客户也可能没有地区。",
+              "section": "3.3 客户 dim_customers"
+            },
+            {
+              "file": "business-guide.md",
+              "quote": "此维表没有历史拉链",
+              "section": "3.3 客户 dim_customers"
+            }
+          ]
+        }
+      ],
+      "forbidden_claims": [
+        "region 是下单时地区",
+        "NULL 地区都表示匿名客户",
+        "缺失地区自动填为某个默认地区",
+        "有完整的客户地区历史"
+      ],
+      "manual_override": {
+        "field": "description",
+        "value": "客户当前快照地区；空值统一展示为“未知”，不能表示购买时地区。",
+        "edited_by": "synthetic-maintainer",
+        "human_modified": true,
+        "result_verified": false,
+        "expectation": "重新预填后有效值和人工修改标记保持不变；保留新的建议及其依据供对比；不能因人工修改或重新预填把结果验证状态改成已通过"
+      }
+    },
+    {
+      "id": "P04",
+      "field": "quantity",
+      "required_facts": [
+        {
+          "kind": "metadata_fact",
+          "text": "主表字段为非空 INTEGER；上游 raw_order_lines 对 quantity 有大于 0 的约束。",
+          "sources": [
+            {
+              "file": "schema.sql",
+              "quote": "    quantity INTEGER NOT NULL,"
+            },
+            {
+              "file": "schema.sql",
+              "quote": "    quantity INTEGER NOT NULL CHECK (quantity > 0),"
+            }
+          ]
+        },
+        {
+          "kind": "sql_fact",
+          "text": "从订单行的 quantity 直接带入，主表一行由 order_id 与 line_id 唯一标识。",
+          "sources": [
+            {
+              "file": "etl.sql",
+              "quote": "SELECT l.order_id, l.line_id, l.customer_id, l.product_id, l.quantity,"
+            },
+            {
+              "file": "schema.sql",
+              "quote": "    PRIMARY KEY (order_id, line_id)"
+            }
+          ]
+        },
+        {
+          "kind": "document_rule",
+          "text": "quantity 是下单件数；SUM(quantity)、行数与订单数代表不同含义。",
+          "sources": [
+            {
+              "file": "business-guide.md",
+              "quote": "| `quantity` | INTEGER | 下单件数；没有单独的退货件数，不能推导净售出件数 |",
+              "section": "4. 字段说明"
+            },
+            {
+              "file": "business-guide.md",
+              "quote": "商品件数用 `SUM(quantity)`；行数、订单数、件数含义不同。",
+              "section": "2. 一行代表什么"
+            }
+          ]
+        }
+      ],
+      "unknowns": [
+        {
+          "text": "没有退货件数，不能从金额比例或订单状态推断净售出件数。",
+          "sources": [
+            {
+              "file": "business-guide.md",
+              "quote": "没有单独的退货件数，不能推导净售出件数",
+              "section": "4. 字段说明"
+            }
+          ]
+        }
+      ],
+      "forbidden_claims": [
+        "quantity 已经扣除退货件数",
+        "一行恒等于一件商品",
+        "SUM(quantity) 等于订单数",
+        "用退款金额除以付款金额即可确定退货件数"
+      ],
+      "manual_override": {
+        "field": "description",
+        "value": "下单商品件数；只有下单数量，净售出件数还缺退货数量。",
+        "edited_by": "synthetic-maintainer",
+        "human_modified": true,
+        "result_verified": false,
+        "expectation": "重新预填后有效值和人工修改标记保持不变；保留新的建议及其依据供对比；不能因人工修改或重新预填把结果验证状态改成已通过"
+      }
+    },
+    {
+      "id": "P05",
+      "field": "order_status",
+      "required_facts": [
+        {
+          "kind": "metadata_fact",
+          "text": "主表为非空 TEXT，允许 paid、refunded、cancelled、unpaid。",
+          "sources": [
+            {
+              "file": "schema.sql",
+              "quote": "order_status TEXT NOT NULL CHECK (order_status IN ('paid', 'refunded', 'cancelled', 'unpaid'))"
+            }
+          ]
+        },
+        {
+          "kind": "sql_fact",
+          "text": "先把行级支付、退款累计成整单金额，再生成状态；判断依次为源状态取消、整单无付款、整单退款等于付款，其余为 paid。",
+          "sources": [
+            {
+              "file": "etl.sql",
+              "quote": "SELECT order_id, SUM(paid) AS paid, SUM(refunded) AS refunded\n    FROM line_payments\n    GROUP BY order_id"
+            },
+            {
+              "file": "etl.sql",
+              "quote": "CASE WHEN l.source_status = 'cancelled' THEN 'cancelled'\n            WHEN COALESCE(t.paid, 0) = 0 THEN 'unpaid'\n            WHEN t.refunded = t.paid THEN 'refunded'\n            ELSE 'paid' END"
+            }
+          ]
+        },
+        {
+          "kind": "document_rule",
+          "text": "字段虽然出现在订单行表中，含义是整单状态；某一行全退不代表整单全退。",
+          "sources": [
+            {
+              "file": "business-guide.md",
+              "quote": "`order_status` 是整单状态。同一订单的某行全部退款，整单仍可能只是部分退款。",
+              "section": "4. 字段说明"
+            }
+          ]
+        },
+        {
+          "kind": "document_rule",
+          "text": "判断发生过退款应看退款金额，不能只筛选 refunded；订单退款率包括部分退款。",
+          "sources": [
+            {
+              "file": "business-guide.md",
+              "quote": "不能把 `order_status='refunded'` 当作“出现过退款”的过滤条件。",
+              "section": "4. 字段说明"
+            },
+            {
+              "file": "business-guide.md",
+              "quote": "全额和部分退款订单都计分子",
+              "section": "5.3 订单退款率"
+            }
+          ]
+        }
+      ],
+      "unknowns": [
+        {
+          "text": "样例不模拟取消后付款，不能据此承诺真实平台中状态与金额的处理方式。",
+          "sources": [
+            {
+              "file": "business-guide.md",
+              "quote": "订单取消后付款",
+              "section": "7. 样例覆盖及边界"
+            }
+          ]
+        }
+      ],
+      "forbidden_claims": [
+        "order_status 是单行退款状态",
+        "paid 表示没有发生过任何退款",
+        "只筛选 refunded 就能得到所有退款订单",
+        "某行全退必然使同一订单所有行都变成 refunded"
+      ],
+      "manual_override": {
+        "field": "description",
+        "value": "整单状态，按订单总付款和总退款判断；某行全退时整单仍可能为 paid。",
+        "edited_by": "synthetic-maintainer",
+        "human_modified": true,
+        "result_verified": false,
+        "expectation": "重新预填后有效值和人工修改标记保持不变；保留新的建议及其依据供对比；不能因人工修改或重新预填把结果验证状态改成已通过"
+      }
+    }
+  ]
+}

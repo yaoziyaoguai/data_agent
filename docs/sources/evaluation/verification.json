@@ -1,0 +1,135 @@
+{
+  "verified_at_utc": "2026-10-04T22:44:26.437101+00:00",
+  "environment": {
+    "python": "3.14.7",
+    "sqlite": "3.53.4",
+    "database": "in_memory"
+  },
+  "scope": "合成数据、SQLite加工、13条参考SQL及11项边界检查；不包含Agent行为或模型接入",
+  "status": "passed",
+  "checks_passed": 24,
+  "checks_total": 24,
+  "checks": [
+    {
+      "id": "Q01",
+      "passed": true
+    },
+    {
+      "id": "Q02",
+      "passed": true
+    },
+    {
+      "id": "Q03",
+      "passed": true
+    },
+    {
+      "id": "Q04",
+      "passed": true
+    },
+    {
+      "id": "Q05",
+      "passed": true
+    },
+    {
+      "id": "Q06",
+      "passed": true
+    },
+    {
+      "id": "Q07",
+      "passed": true
+    },
+    {
+      "id": "Q08",
+      "passed": true
+    },
+    {
+      "id": "Q09",
+      "passed": true
+    },
+    {
+      "id": "Q10",
+      "passed": true
+    },
+    {
+      "id": "Q11",
+      "passed": true
+    },
+    {
+      "id": "Q12",
+      "passed": true
+    },
+    {
+      "id": "Q13",
+      "passed": true
+    },
+    {
+      "id": "I01_counts",
+      "passed": true
+    },
+    {
+      "id": "I02_foreign_keys",
+      "passed": true
+    },
+    {
+      "id": "I03_line_payment_aggregation",
+      "passed": true
+    },
+    {
+      "id": "I04_cancelled_unpaid_full_refund",
+      "passed": true
+    },
+    {
+      "id": "I05_unknown_customer_region",
+      "passed": true
+    },
+    {
+      "id": "I06_failed_payment_ignored",
+      "passed": true
+    },
+    {
+      "id": "I07_order_dimensions_consistent",
+      "passed": true
+    },
+    {
+      "id": "I08_etl_repeatable",
+      "passed": true
+    },
+    {
+      "id": "I09_snapshot_excludes_boundary",
+      "passed": true
+    },
+    {
+      "id": "I10_join_counterexample",
+      "passed": true
+    },
+    {
+      "id": "I11_main_field_count",
+      "passed": true
+    }
+  ],
+  "file_sha256": {
+    "schema.sql": "49c13a97ad3b53bf161d549d35cc33f741b2d47701c2b744c20883cfedf2b72a",
+    "seed.sql": "a51ebf11cbcb1676f6705aee220db9d87353618ae67a2d2b674660d8d703aa2c",
+    "etl.sql": "42e2f1e7dfbd74bcbd07a0b2a712bd85b73adeb65ba8cf86e29619c07724de56",
+    "business-guide.md": "db322cbb2bb4d7f92e9ca6bc56d0e4ee8cd957354ff1b78c41ece5bee258e610",
+    "knowledge-manifest.json": "fe1a0edb60af1eafa3f3a371aa77c95e0921f40e07c60e74ddf6f35983e99bd3",
+    "verify.py": "fc0d92cd71bf5d0da687167d3ce7608627578d8053f142893e167aa2766142ab",
+    "evaluation/behavior-cases.json": "bc83f98e276d9e63c5a55335b39c02ed29d57f05d947644dd90eacaf1914d29f",
+    "evaluation/cases.json": "2adb33f74b3b559374d70af6e2b0489001e3d49e38e26866ef72e1b820f0e0c9",
+    "evaluation/deepseek-trial.json": "83c300bb6daeef80236a40f0f90ec827b9f18f493d88b89008f9eb189e8afce3",
+    "evaluation/prefill-cases.json": "8c42c5df5db32e7425bb02b307697ca323e17c45167e88e469bca822f6b72f7a",
+    "evaluation/queries/q01.sql": "8ccbdc4753881e8c87c800b1744343b11171ca3abde7ce022db1d08db3f63ccf",
+    "evaluation/queries/q02.sql": "c1b0adc824076ce7f20b9405880320fc99368afe0e04273e24a608bcf88fd11a",
+    "evaluation/queries/q03.sql": "a141cd510b09754fe692046769dcc8661496d2c695b2a3da28ad0b757785491f",
+    "evaluation/queries/q04.sql": "4c3e7035b91b91d7a4144b54ae792cb1f9a1cff8b7a832c0f86de43a9363faa4",
+    "evaluation/queries/q05.sql": "ea2658c930fa2be06b23c3c58a6569b5840d7431e16f6dad864e643877f56291",
+    "evaluation/queries/q06.sql": "3a7053f8f7dd2b0c68f50c33999d1b1065102899aec17733f4835e8550cbd6f0",
+    "evaluation/queries/q07.sql": "cc2325578484ab6f2f27564f7b719fb382e45976897d4f37cee40db0c718706d",
+    "evaluation/queries/q08.sql": "54deeb81b0fcf0906c9593d7e969a1d7e7f8bce73c32fb735779c0b59111b1d2",
+    "evaluation/queries/q09.sql": "aafcd2a2051e0f7c456993eab6b5d70df8e95aeabe1a44361b374743f008e394",
+    "evaluation/queries/q10.sql": "39ccf2252947d659dcb6ced888cc75484659c4ccc3030363d4c939161de97195",
+    "evaluation/queries/q11.sql": "7d95571dfa4573236deba8d50a458e5171a60c394487b8aff63649e1634762a0",
+    "evaluation/queries/q12.sql": "568e1d9b88f1f19e08cc1b51e361040a839e68620896071d376cd6e6f5147524",
+    "evaluation/queries/q13.sql": "3f1bc4ea938bef83cd7f92becb461be84ae078df9e3ca669fd5196b91a79b9ce"
+  }
+}

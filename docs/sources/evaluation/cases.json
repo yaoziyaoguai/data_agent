@@ -1,0 +1,217 @@
+{
+  "version": 1,
+  "scope": "离线合成样例参考结果，非 Agent 测试结果",
+  "expected_results_source": "根据构造的订单逐笔手工核算，未从待测查询自动生成",
+  "cases": [
+    {
+      "id": "Q01",
+      "question": "2026 年 1 月支付金额、累计退款和净收入是多少？",
+      "sql_file": "queries/q01.sql",
+      "expected_columns": [
+        "paid_cents",
+        "refunded_cents",
+        "net_cents"
+      ],
+      "expected_rows": [
+        [
+          16000,
+          3600,
+          12400
+        ]
+      ]
+    },
+    {
+      "id": "Q02",
+      "question": "2026 年 1 月有多少已知支付客户？",
+      "sql_file": "queries/q02.sql",
+      "expected_columns": [
+        "customer_uv"
+      ],
+      "expected_rows": [
+        [
+          5
+        ]
+      ]
+    },
+    {
+      "id": "Q03",
+      "question": "每日去重客户数之和是否等于月去重客户数？",
+      "sql_file": "queries/q03.sql",
+      "expected_columns": [
+        "daily_uv_sum"
+      ],
+      "expected_rows": [
+        [
+          7
+        ]
+      ]
+    },
+    {
+      "id": "Q04",
+      "question": "明确采用订单数作分母，2026 年 1 月的订单退款率是多少？",
+      "sql_file": "queries/q04.sql",
+      "expected_columns": [
+        "refunded_orders",
+        "paid_orders",
+        "order_refund_rate"
+      ],
+      "expected_rows": [
+        [
+          4,
+          8,
+          0.5
+        ]
+      ]
+    },
+    {
+      "id": "Q05",
+      "question": "明确按退款金额占支付金额，2026 年 1 月退款比例是多少？",
+      "sql_file": "queries/q05.sql",
+      "expected_columns": [
+        "amount_refund_rate"
+      ],
+      "expected_rows": [
+        [
+          0.225
+        ]
+      ]
+    },
+    {
+      "id": "Q06",
+      "question": "有 vip 或 newsletter 标签的客户在 2026 年 1 月贡献多少净收入？",
+      "sql_file": "queries/q06.sql",
+      "expected_columns": [
+        "net_cents"
+      ],
+      "expected_rows": [
+        [
+          11600
+        ]
+      ]
+    },
+    {
+      "id": "Q07",
+      "question": "2026 年 1 月未知地区的净收入是多少？",
+      "sql_file": "queries/q07.sql",
+      "expected_columns": [
+        "unknown_region_net_cents"
+      ],
+      "expected_rows": [
+        [
+          1800
+        ]
+      ]
+    },
+    {
+      "id": "Q08",
+      "question": "2026 年 1 月按渠道的净收入是多少？",
+      "sql_file": "queries/q08.sql",
+      "expected_columns": [
+        "channel",
+        "net_cents"
+      ],
+      "expected_rows": [
+        [
+          "app",
+          1600
+        ],
+        [
+          "store",
+          800
+        ],
+        [
+          "web",
+          10000
+        ]
+      ]
+    },
+    {
+      "id": "Q09",
+      "question": "截至快照按支付月分别统计净收入和已知支付客户。",
+      "sql_file": "queries/q09.sql",
+      "expected_columns": [
+        "paid_month",
+        "net_cents",
+        "customer_uv"
+      ],
+      "expected_rows": [
+        [
+          "2026-01",
+          12400,
+          5
+        ],
+        [
+          "2026-02",
+          4000,
+          2
+        ]
+      ]
+    },
+    {
+      "id": "Q10",
+      "question": "2026 年 3 月没有已支付订单时，订单退款率返回什么？",
+      "sql_file": "queries/q10.sql",
+      "expected_columns": [
+        "paid_orders",
+        "order_refund_rate"
+      ],
+      "expected_rows": [
+        [
+          0,
+          null
+        ]
+      ]
+    },
+    {
+      "id": "Q11",
+      "question": "查看 O1013 各行，为什么某行全部退款而订单状态仍是 paid？",
+      "sql_file": "queries/q11.sql",
+      "expected_columns": [
+        "line_id",
+        "paid_amount_cents",
+        "refunded_amount_cents",
+        "order_status"
+      ],
+      "expected_rows": [
+        [
+          1,
+          600,
+          0,
+          "paid"
+        ],
+        [
+          2,
+          400,
+          400,
+          "paid"
+        ]
+      ]
+    },
+    {
+      "id": "Q12",
+      "question": "按退款发生时间，2026 年 2 月截至快照实际成功退款多少？",
+      "sql_file": "queries/q12.sql",
+      "expected_columns": [
+        "refund_cash_cents"
+      ],
+      "expected_rows": [
+        [
+          500
+        ]
+      ]
+    },
+    {
+      "id": "Q13",
+      "question": "2026 年 1 月测试交易的支付金额是多少？",
+      "sql_file": "queries/q13.sql",
+      "expected_columns": [
+        "test_paid_cents"
+      ],
+      "expected_rows": [
+        [
+          9900
+        ]
+      ]
+    }
+  ]
+}

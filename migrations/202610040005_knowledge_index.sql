@@ -1,0 +1,2 @@
+CREATE TABLE knowledge_index_jobs(object_id VARCHAR(64) NOT NULL,version BIGINT UNSIGNED NOT NULL,state VARCHAR(16) NOT NULL DEFAULT 'pending',PRIMARY KEY(object_id,version));
+CREATE TABLE retrieval_documents(object_id VARCHAR(64) PRIMARY KEY,space_id VARCHAR(64) NOT NULL,version BIGINT UNSIGNED NOT NULL,body JSON NOT NULL,indexed_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3));

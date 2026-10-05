@@ -1,0 +1,4816 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://data-agent.example/contracts",
+  "title": "Boundary",
+  "type": "object",
+  "$defs": {
+    "CreateConversation": {
+      "type": "object",
+      "properties": {
+        "operation_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        }
+      },
+      "required": [
+        "operation_id"
+      ],
+      "additionalProperties": false,
+      "title": "CreateConversation"
+    },
+    "MessageInput": {
+      "type": "object",
+      "properties": {
+        "client_message_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 8000
+        }
+      },
+      "required": [
+        "client_message_id",
+        "text"
+      ],
+      "additionalProperties": false,
+      "title": "MessageInput"
+    },
+    "TaskInput": {
+      "type": "object",
+      "properties": {
+        "action": {
+          "const": "create_task",
+          "type": "string"
+        },
+        "goal": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 8000
+        }
+      },
+      "required": [
+        "action",
+        "goal"
+      ],
+      "additionalProperties": false,
+      "title": "TaskInput"
+    },
+    "Checkpoint": {
+      "type": "object",
+      "properties": {
+        "sdk_version": {
+          "const": "1.0.0",
+          "type": "string"
+        },
+        "entries": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "leaf_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "authority_revision": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "authority_snapshot": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "storage": {
+          "$ref": "#/$defs/CheckpointReference"
+        }
+      },
+      "required": [
+        "sdk_version",
+        "entries",
+        "leaf_id"
+      ],
+      "additionalProperties": false,
+      "title": "Checkpoint",
+      "allOf": [
+        {
+          "if": {
+            "required": [
+              "storage"
+            ]
+          },
+          "then": {
+            "properties": {
+              "entries": {
+                "maxItems": 0
+              }
+            }
+          }
+        }
+      ]
+    },
+    "RunEnvelope": {
+      "type": "object",
+      "properties": {
+        "run_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "conversation_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "recovery_chain_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "lease_epoch": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]{0,19})$"
+        },
+        "budget_scope_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "output_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "attempt_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "message_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 8000
+        },
+        "checkpoint": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Checkpoint"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "request_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "model_profile": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ModelProfile"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "workspace_context": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/WorkspaceContext"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "resume_same_input": {
+          "type": "boolean"
+        },
+        "request_clock": {
+          "$ref": "#/$defs/RequestClock"
+        }
+      },
+      "required": [
+        "run_id",
+        "conversation_id",
+        "recovery_chain_id",
+        "lease_epoch",
+        "budget_scope_id",
+        "output_id",
+        "attempt_id",
+        "message_id",
+        "text",
+        "checkpoint",
+        "request_id",
+        "model_profile"
+      ],
+      "additionalProperties": false,
+      "title": "RunEnvelope"
+    },
+    "ToolInvocation": {
+      "type": "object",
+      "properties": {
+        "run_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "lease_epoch": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]{0,19})$"
+        },
+        "sdk_tool_call_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "arguments": {
+          "$ref": "#/$defs/TaskInput"
+        },
+        "checkpoint": {
+          "$ref": "#/$defs/Checkpoint"
+        }
+      },
+      "required": [
+        "run_id",
+        "lease_epoch",
+        "sdk_tool_call_id",
+        "arguments",
+        "checkpoint"
+      ],
+      "additionalProperties": false,
+      "title": "ToolInvocation"
+    },
+    "AppendOutput": {
+      "type": "object",
+      "properties": {
+        "run_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "lease_epoch": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]{0,19})$"
+        },
+        "chunk_seq": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]{0,19})$"
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 8000
+        }
+      },
+      "required": [
+        "run_id",
+        "lease_epoch",
+        "chunk_seq",
+        "text"
+      ],
+      "additionalProperties": false,
+      "title": "AppendOutput"
+    },
+    "FinishRun": {
+      "type": "object",
+      "properties": {
+        "run_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "lease_epoch": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]{0,19})$"
+        },
+        "commit_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "final_text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 8000
+        },
+        "checkpoint": {
+          "$ref": "#/$defs/Checkpoint"
+        },
+        "final_start_chunk_seq": {
+          "type": "string",
+          "pattern": "^[1-9][0-9]{0,19}$",
+          "description": "Pi最后助手消息的首个已保存片段序号；省略时沿用从1起的完整文本校验。"
+        }
+      },
+      "required": [
+        "run_id",
+        "lease_epoch",
+        "commit_id",
+        "final_text",
+        "checkpoint"
+      ],
+      "additionalProperties": false,
+      "title": "FinishRun"
+    },
+    "ModelAttempt": {
+      "type": "object",
+      "properties": {
+        "run_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "lease_epoch": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]{0,19})$"
+        },
+        "call_attempt_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        }
+      },
+      "required": [
+        "run_id",
+        "lease_epoch",
+        "call_attempt_id"
+      ],
+      "additionalProperties": false,
+      "title": "ModelAttempt"
+    },
+    "ToolReceipt": {
+      "type": "object",
+      "properties": {
+        "operation_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "task_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "condition_version": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]{0,19})$"
+        },
+        "state": {
+          "const": "active",
+          "type": "string"
+        }
+      },
+      "required": [
+        "operation_id",
+        "task_id",
+        "condition_version",
+        "state"
+      ],
+      "additionalProperties": false,
+      "title": "ToolReceipt"
+    },
+    "Event": {
+      "type": "object",
+      "properties": {
+        "schema_version": {
+          "type": "integer",
+          "const": 1
+        },
+        "event_seq": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]{0,19})$"
+        },
+        "event_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "conversation_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "type": {
+          "type": "string",
+          "enum": [
+            "message",
+            "assistant_delta",
+            "assistant_committed",
+            "assistant_replaced",
+            "tool_result",
+            "run_failed",
+            "run_cancelled",
+            "query_changed",
+            "query_result",
+            "memory_saved",
+            "task_changed",
+            "conversation_deleted",
+            "message_withdrawn",
+            "task_cancelled",
+            "memory_disabled"
+          ]
+        },
+        "payload": {
+          "type": "object"
+        }
+      },
+      "required": [
+        "schema_version",
+        "event_seq",
+        "event_id",
+        "conversation_id",
+        "type",
+        "payload"
+      ],
+      "additionalProperties": false,
+      "title": "Event"
+    },
+    "ChatMessage": {
+      "type": "object",
+      "properties": {
+        "role": {
+          "type": "string",
+          "enum": [
+            "user",
+            "assistant"
+          ]
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 8000
+        },
+        "attempt_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "committed": {
+          "type": "boolean"
+        },
+        "message_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "event_seq": {
+          "type": "string",
+          "pattern": "^[0-9]+$"
+        },
+        "output_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "request_clock": {
+          "$ref": "#/$defs/RequestClock"
+        }
+      },
+      "required": [
+        "role",
+        "text",
+        "attempt_id",
+        "committed"
+      ],
+      "additionalProperties": false,
+      "title": "ChatMessage"
+    },
+    "TaskSnapshot": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "goal": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 8000
+        },
+        "condition_version": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]{0,19})$"
+        },
+        "lifecycle": {
+          "type": "string"
+        },
+        "phase": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "goal",
+        "condition_version"
+      ],
+      "additionalProperties": false,
+      "title": "TaskSnapshot"
+    },
+    "RunSnapshot": {
+      "type": "object",
+      "properties": {
+        "run_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "state": {
+          "type": "string",
+          "enum": [
+            "running",
+            "interrupted",
+            "finished",
+            "failed",
+            "cancelled"
+          ]
+        },
+        "lease_epoch": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]{0,19})$"
+        }
+      },
+      "required": [
+        "run_id",
+        "state",
+        "lease_epoch"
+      ],
+      "additionalProperties": false,
+      "title": "RunSnapshot"
+    },
+    "Snapshot": {
+      "type": "object",
+      "properties": {
+        "conversation_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "messages": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ChatMessage"
+          }
+        },
+        "tasks": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/TaskSnapshot"
+          }
+        },
+        "runs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/RunSnapshot"
+          }
+        },
+        "events": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Event"
+          }
+        },
+        "first_event_seq": {
+          "type": "string",
+          "pattern": "^[0-9]+$"
+        },
+        "has_older": {
+          "type": "boolean"
+        },
+        "last_event_seq": {
+          "type": "string",
+          "pattern": "^[0-9]+$"
+        },
+        "has_newer": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "conversation_id",
+        "messages",
+        "tasks",
+        "runs",
+        "events"
+      ],
+      "additionalProperties": false,
+      "title": "Snapshot"
+    },
+    "AppError": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "string",
+          "enum": [
+            "budget_exhausted",
+            "chunk_gap",
+            "forbidden",
+            "idempotency_conflict",
+            "input_already_applied",
+            "invalid_evidence",
+            "invalid_input",
+            "lease_lost",
+            "message_pending",
+            "not_available",
+            "outcome_unknown",
+            "result_unavailable",
+            "scope_incomplete",
+            "selection_required",
+            "source_unavailable",
+            "stale_context",
+            "stale_knowledge",
+            "unauthenticated",
+            "unavailable",
+            "unsupported",
+            "version_conflict",
+            "memory_unavailable",
+            "memory_extraction_empty",
+            "memory_operation_unknown",
+            "vector_unconfigured",
+            "vector_unavailable",
+            "embedding_unavailable",
+            "source_interrupted"
+          ]
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 8000
+        },
+        "request_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "retryable": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "code",
+        "message",
+        "request_id",
+        "retryable"
+      ],
+      "additionalProperties": false,
+      "title": "AppError"
+    },
+    "ToolOutcome": {
+      "title": "ToolOutcome",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "succeeded",
+              "type": "string"
+            },
+            "receipt": {
+              "$ref": "#/$defs/ToolReceipt"
+            }
+          },
+          "required": [
+            "type",
+            "receipt"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "failed",
+              "type": "string"
+            },
+            "error": {
+              "$ref": "#/$defs/AppError"
+            }
+          },
+          "required": [
+            "type",
+            "error"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "ConversationReceipt": {
+      "title": "ConversationReceipt",
+      "type": "object",
+      "properties": {
+        "conversation_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        }
+      },
+      "required": [
+        "conversation_id"
+      ],
+      "additionalProperties": false
+    },
+    "MessageReceipt": {
+      "title": "MessageReceipt",
+      "type": "object",
+      "properties": {
+        "message_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "request_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        }
+      },
+      "required": [
+        "message_id",
+        "request_id"
+      ],
+      "additionalProperties": false
+    },
+    "HistoryItem": {
+      "title": "HistoryItem",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "title": {
+          "type": "string",
+          "maxLength": 240
+        }
+      },
+      "required": [
+        "id",
+        "title"
+      ],
+      "additionalProperties": false
+    },
+    "History": {
+      "title": "History",
+      "type": "object",
+      "properties": {
+        "conversations": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/HistoryItem"
+          }
+        },
+        "next_before_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "conversations",
+        "next_before_id"
+      ],
+      "additionalProperties": false
+    },
+    "Identity": {
+      "title": "Identity",
+      "type": "object",
+      "properties": {
+        "user_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "model_label": {
+          "type": "string",
+          "enum": [
+            "本地模拟模型",
+            "DeepSeek Flash",
+            "DeepSeek V4 Pro"
+          ]
+        }
+      },
+      "required": [
+        "user_id",
+        "model_label"
+      ],
+      "additionalProperties": false
+    },
+    "SessionReceipt": {
+      "title": "SessionReceipt",
+      "type": "object",
+      "properties": {
+        "state": {
+          "type": "string",
+          "const": "authenticated"
+        },
+        "user_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "model_label": {
+          "type": "string",
+          "enum": [
+            "本地模拟模型",
+            "DeepSeek Flash",
+            "DeepSeek V4 Pro"
+          ]
+        }
+      },
+      "required": [
+        "state",
+        "user_id",
+        "model_label"
+      ],
+      "additionalProperties": false
+    },
+    "LogoutReceipt": {
+      "title": "LogoutReceipt",
+      "type": "object",
+      "properties": {
+        "state": {
+          "type": "string",
+          "const": "logged_out"
+        }
+      },
+      "required": [
+        "state"
+      ],
+      "additionalProperties": false
+    },
+    "OperationReceipt": {
+      "title": "OperationReceipt",
+      "type": "object",
+      "properties": {
+        "operation_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        }
+      },
+      "required": [
+        "operation_id"
+      ],
+      "additionalProperties": false
+    },
+    "OutputReceipt": {
+      "title": "OutputReceipt",
+      "type": "object",
+      "properties": {
+        "chunk_seq": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]{0,19})$"
+        }
+      },
+      "required": [
+        "chunk_seq"
+      ],
+      "additionalProperties": false
+    },
+    "FinishReceipt": {
+      "title": "FinishReceipt",
+      "type": "object",
+      "properties": {
+        "state": {
+          "type": "string",
+          "const": "finished"
+        },
+        "output_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        }
+      },
+      "required": [
+        "state",
+        "output_id"
+      ],
+      "additionalProperties": false
+    },
+    "ModelReceipt": {
+      "title": "ModelReceipt",
+      "type": "object",
+      "properties": {
+        "state": {
+          "type": "string",
+          "enum": [
+            "issued",
+            "settled"
+          ]
+        }
+      },
+      "required": [
+        "state"
+      ],
+      "additionalProperties": false
+    },
+    "ModelProfile": {
+      "title": "ModelProfile",
+      "type": "object",
+      "properties": {
+        "provider_id": {
+          "type": "string",
+          "const": "deepseek"
+        },
+        "model_id": {
+          "type": "string",
+          "pattern": "^(deepseek-flash|deepseek-v4-pro)$"
+        },
+        "trial_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "price_version": {
+          "type": "string",
+          "pattern": "^(2026-10-04-peak-usd|2026-10-05-pro-peak-usd)$"
+        },
+        "input_limit": {
+          "type": "integer",
+          "enum": [
+            4096,
+            16384,
+            32768,
+            65536
+          ]
+        },
+        "output_limit": {
+          "type": "integer",
+          "enum": [
+            1024,
+            2048,
+            4096,
+            8192,
+            16384,
+            32768
+          ]
+        },
+        "trial_call_limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 200
+        },
+        "trial_cost_micros": {
+          "type": "string",
+          "pattern": "^[1-9][0-9]{0,6}$"
+        },
+        "request_call_limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 24
+        },
+        "toolset": {
+          "type": "string",
+          "enum": [
+            "task",
+            "data"
+          ]
+        },
+        "payload_bytes_limit": {
+          "type": "integer",
+          "minimum": 2048,
+          "maximum": 131072
+        },
+        "thinking_level": {
+          "type": "string",
+          "enum": [
+            "off",
+            "low",
+            "high"
+          ],
+          "description": "通过Pi/DeepSeek原生思考模式；省略为off。思考tokens计入同一输出上限与用量。"
+        }
+      },
+      "required": [
+        "provider_id",
+        "model_id",
+        "trial_id",
+        "price_version",
+        "input_limit",
+        "output_limit",
+        "trial_call_limit",
+        "trial_cost_micros"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "toolset": {
+                "const": "data"
+              }
+            },
+            "required": [
+              "toolset"
+            ]
+          },
+          "then": {
+            "required": [
+              "request_call_limit",
+              "payload_bytes_limit"
+            ]
+          },
+          "else": {
+            "properties": {
+              "input_limit": {
+                "const": 4096
+              },
+              "output_limit": {
+                "const": 1024
+              },
+              "trial_call_limit": {
+                "maximum": 6
+              },
+              "trial_cost_micros": {
+                "const": "50000"
+              },
+              "payload_bytes_limit": {
+                "const": 2048
+              },
+              "request_call_limit": {
+                "maximum": 6
+              },
+              "thinking_level": {
+                "const": "off"
+              },
+              "model_id": {
+                "const": "deepseek-flash"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "model_id": {
+                "const": "deepseek-v4-pro"
+              }
+            },
+            "required": [
+              "model_id"
+            ]
+          },
+          "then": {
+            "properties": {
+              "price_version": {
+                "const": "2026-10-05-pro-peak-usd"
+              },
+              "thinking_level": {
+                "enum": [
+                  "off",
+                  "high"
+                ]
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "price_version": {
+                "const": "2026-10-04-peak-usd"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "ReserveModelCall": {
+      "title": "ReserveModelCall",
+      "type": "object",
+      "properties": {
+        "run_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "lease_epoch": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]{0,19})$"
+        },
+        "call_attempt_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "parameters_fingerprint": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "input_tokens_upper": {
+          "type": "integer",
+          "enum": [
+            4096,
+            16384,
+            32768,
+            65536
+          ]
+        },
+        "output_tokens_max": {
+          "type": "integer",
+          "enum": [
+            1024,
+            2048,
+            4096,
+            8192,
+            16384,
+            32768
+          ]
+        }
+      },
+      "required": [
+        "run_id",
+        "lease_epoch",
+        "call_attempt_id",
+        "parameters_fingerprint",
+        "input_tokens_upper",
+        "output_tokens_max"
+      ],
+      "additionalProperties": false
+    },
+    "SendModelCall": {
+      "title": "SendModelCall",
+      "type": "object",
+      "properties": {
+        "run_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "lease_epoch": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]{0,19})$"
+        },
+        "call_attempt_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "parameters_fingerprint": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      },
+      "required": [
+        "run_id",
+        "lease_epoch",
+        "call_attempt_id",
+        "parameters_fingerprint"
+      ],
+      "additionalProperties": false
+    },
+    "ModelUsage": {
+      "title": "ModelUsage",
+      "type": "object",
+      "properties": {
+        "input_tokens": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "output_tokens": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 384000
+        },
+        "elapsed_ms": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 120000
+        }
+      },
+      "required": [
+        "input_tokens",
+        "output_tokens",
+        "elapsed_ms"
+      ],
+      "additionalProperties": false
+    },
+    "FinalizeModelCall": {
+      "title": "FinalizeModelCall",
+      "type": "object",
+      "properties": {
+        "run_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "lease_epoch": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]{0,19})$"
+        },
+        "call_attempt_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "parameters_fingerprint": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "usage": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ModelUsage"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "run_id",
+        "lease_epoch",
+        "call_attempt_id",
+        "parameters_fingerprint",
+        "usage"
+      ],
+      "additionalProperties": false
+    },
+    "ModelCallReceipt": {
+      "title": "ModelCallReceipt",
+      "type": "object",
+      "properties": {
+        "state": {
+          "type": "string",
+          "enum": [
+            "reserved",
+            "issued",
+            "settled",
+            "unknown"
+          ]
+        },
+        "send_allowed": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "state",
+        "send_allowed"
+      ],
+      "additionalProperties": false
+    },
+    "CancelRun": {
+      "title": "CancelRun",
+      "type": "object",
+      "properties": {
+        "run_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "lease_epoch": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]{0,19})$"
+        }
+      },
+      "required": [
+        "run_id",
+        "lease_epoch"
+      ],
+      "additionalProperties": false
+    },
+    "CancelReceipt": {
+      "title": "CancelReceipt",
+      "type": "object",
+      "properties": {
+        "run_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "state": {
+          "type": "string",
+          "enum": [
+            "cancelled",
+            "finished",
+            "interrupted",
+            "failed"
+          ]
+        }
+      },
+      "required": [
+        "run_id",
+        "state"
+      ],
+      "additionalProperties": false
+    },
+    "EvidenceRef": {
+      "title": "EvidenceRef",
+      "type": "object",
+      "properties": {
+        "object_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$",
+          "description": "read_knowledge或search_knowledge返回的知识对象id；不是read_source返回的source_id。"
+        },
+        "version": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]{0,19})$"
+        },
+        "path": {
+          "type": "string",
+          "maxLength": 400,
+          "description": "该知识对象entries中的path，必须确实存在于对应version。"
+        }
+      },
+      "required": [
+        "object_id",
+        "version",
+        "path"
+      ],
+      "additionalProperties": false
+    },
+    "KnowledgeEntry": {
+      "title": "KnowledgeEntry",
+      "type": "object",
+      "properties": {
+        "entry_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 24000
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 24000
+        },
+        "source_facts": {
+          "type": "object"
+        },
+        "suggestion": {
+          "type": "object"
+        },
+        "human_override": {
+          "anyOf": [
+            {
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "effective_value": {
+          "type": "string",
+          "maxLength": 100000
+        },
+        "review_state": {
+          "type": "string",
+          "enum": [
+            "unverified",
+            "confirmed",
+            "needs_review"
+          ]
+        }
+      },
+      "required": [
+        "entry_id",
+        "path",
+        "label",
+        "source_facts",
+        "suggestion",
+        "human_override",
+        "effective_value",
+        "review_state"
+      ],
+      "additionalProperties": false
+    },
+    "KnowledgeObject": {
+      "title": "KnowledgeObject",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "table",
+            "field",
+            "metric",
+            "document",
+            "relationship",
+            "term"
+          ]
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 24000
+        },
+        "version": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]{0,19})$"
+        },
+        "state": {
+          "type": "string",
+          "enum": [
+            "enabled",
+            "disabled",
+            "deleted"
+          ]
+        },
+        "entries": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/KnowledgeEntry"
+          },
+          "maxItems": 200
+        },
+        "related_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64,
+            "pattern": "^[A-Za-z0-9_-]+$"
+          },
+          "maxItems": 100
+        },
+        "source_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "source_version": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]{0,19})$"
+        },
+        "updated_by": {
+          "type": "string"
+        },
+        "prefill_status": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "attempt_id": {
+              "type": "string"
+            },
+            "state": {
+              "type": "string"
+            },
+            "error_code": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "attempt_id",
+            "state",
+            "error_code"
+          ],
+          "additionalProperties": false
+        },
+        "state_origin": {
+          "type": "string",
+          "enum": [
+            "platform",
+            "human"
+          ],
+          "description": "平台移除与人工停用分开；重新出现只能恢复平台导致的停用。"
+        },
+        "analysis_preference": {
+          "$ref": "#/$defs/TableAnalysisPreference"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "name",
+        "version",
+        "state",
+        "entries",
+        "related_ids",
+        "source_id",
+        "source_version",
+        "updated_by"
+      ],
+      "additionalProperties": false
+    },
+    "KnowledgeList": {
+      "title": "KnowledgeList",
+      "type": "object",
+      "properties": {
+        "objects": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/KnowledgeObject"
+          }
+        },
+        "retrieval_mode": {
+          "type": "string"
+        },
+        "next_after_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "search_coverage": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SearchCoverage"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "objects",
+        "retrieval_mode",
+        "next_after_id"
+      ],
+      "additionalProperties": false
+    },
+    "KnowledgeEdit": {
+      "title": "KnowledgeEdit",
+      "type": "object",
+      "properties": {
+        "operation_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "expected_version": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]{0,19})$"
+        },
+        "entry_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "value": {
+          "type": "string",
+          "maxLength": 100000
+        },
+        "clear_override": {
+          "type": "boolean"
+        },
+        "source_url": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 2000
+        },
+        "related_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64,
+            "pattern": "^[A-Za-z0-9_-]+$"
+          },
+          "maxItems": 100
+        }
+      },
+      "required": [
+        "operation_id",
+        "expected_version",
+        "entry_id",
+        "value"
+      ],
+      "additionalProperties": false
+    },
+    "KnowledgeCreate": {
+      "title": "KnowledgeCreate",
+      "type": "object",
+      "properties": {
+        "operation_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "table",
+            "field",
+            "metric",
+            "document",
+            "relationship",
+            "term"
+          ]
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 24000
+        },
+        "body": {
+          "type": "string",
+          "maxLength": 100000
+        },
+        "related_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64,
+            "pattern": "^[A-Za-z0-9_-]+$"
+          },
+          "maxItems": 100
+        },
+        "source_url": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 2000
+        }
+      },
+      "required": [
+        "operation_id",
+        "kind",
+        "name",
+        "body",
+        "related_ids"
+      ],
+      "additionalProperties": false
+    },
+    "VersionCommand": {
+      "title": "VersionCommand",
+      "type": "object",
+      "properties": {
+        "operation_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "expected_version": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]{0,19})$"
+        }
+      },
+      "required": [
+        "operation_id",
+        "expected_version"
+      ],
+      "additionalProperties": false
+    },
+    "Asset": {
+      "title": "Asset",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "memory",
+            "skill"
+          ]
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 24000
+        },
+        "body": {
+          "type": "string",
+          "maxLength": 40000
+        },
+        "scope": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 24000
+        },
+        "version": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]{0,19})$"
+        },
+        "state": {
+          "type": "string",
+          "enum": [
+            "enabled",
+            "disabled",
+            "deleted"
+          ]
+        },
+        "verified": {
+          "type": "boolean"
+        },
+        "source_text": {
+          "type": "string",
+          "maxLength": 8000
+        },
+        "dependencies": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/EvidenceRef"
+          }
+        },
+        "selected": {
+          "type": "boolean"
+        },
+        "memory_index_state": {
+          "type": "string",
+          "enum": [
+            "queued",
+            "issued",
+            "indexed",
+            "failed",
+            "superseded"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "name",
+        "body",
+        "scope",
+        "version",
+        "state",
+        "verified",
+        "source_text",
+        "dependencies",
+        "selected"
+      ],
+      "additionalProperties": false
+    },
+    "AssetList": {
+      "title": "AssetList",
+      "type": "object",
+      "properties": {
+        "assets": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Asset"
+          }
+        }
+      },
+      "required": [
+        "assets"
+      ],
+      "additionalProperties": false
+    },
+    "AssetSave": {
+      "title": "AssetSave",
+      "type": "object",
+      "properties": {
+        "operation_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "expected_version": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^(0|[1-9][0-9]{0,19})$"
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "memory",
+            "skill"
+          ]
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 24000
+        },
+        "body": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 40000
+        },
+        "scope": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 24000
+        },
+        "verified": {
+          "type": "boolean"
+        },
+        "source_text": {
+          "type": "string",
+          "maxLength": 8000
+        },
+        "dependencies": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/EvidenceRef"
+          },
+          "maxItems": 50
+        }
+      },
+      "required": [
+        "operation_id",
+        "id",
+        "expected_version",
+        "kind",
+        "name",
+        "body",
+        "scope",
+        "verified",
+        "source_text",
+        "dependencies"
+      ],
+      "additionalProperties": false
+    },
+    "SkillSelection": {
+      "title": "SkillSelection",
+      "type": "object",
+      "properties": {
+        "operation_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "asset_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "version": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]{0,19})$"
+        }
+      },
+      "required": [
+        "operation_id",
+        "asset_id",
+        "version"
+      ],
+      "additionalProperties": false
+    },
+    "Conditions": {
+      "title": "Conditions",
+      "type": "object",
+      "properties": {
+        "time_start": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 64
+        },
+        "time_end": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 64
+        },
+        "timezone": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "metric": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 200
+        },
+        "channel": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "web",
+            "app",
+            "store",
+            null
+          ]
+        },
+        "group_by": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "maxItems": 20
+        },
+        "filters": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 24000
+          },
+          "maxItems": 40
+        },
+        "knowledge_refs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/EvidenceRef"
+          },
+          "maxItems": 50
+        },
+        "notes": {
+          "type": "string",
+          "maxLength": 8000
+        }
+      },
+      "required": [
+        "time_start",
+        "time_end",
+        "timezone",
+        "metric",
+        "channel",
+        "group_by",
+        "filters",
+        "knowledge_refs",
+        "notes"
+      ],
+      "additionalProperties": false
+    },
+    "AnalysisUpdate": {
+      "title": "AnalysisUpdate",
+      "type": "object",
+      "properties": {
+        "action": {
+          "type": "string",
+          "enum": [
+            "create",
+            "revise",
+            "clarify",
+            "route"
+          ]
+        },
+        "task_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "新建任务省略此字段（也接受JSON null）；已有任务用工具回执中的真实ID，不能填字符串null。"
+        },
+        "expected_version": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^[1-9][0-9]*$",
+          "description": "新建任务省略此字段（也接受JSON null）；已有任务必须提供工具回执中的当前版本数字字符串。"
+        },
+        "goal": {
+          "type": "string",
+          "maxLength": 8000
+        },
+        "conditions": {
+          "$ref": "#/$defs/Conditions",
+          "description": "新建任务必须完整给出；未指定的可空标量用JSON null，列表用[]，notes用空字符串，timezone按宿主业务时区。"
+        },
+        "question": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 4000,
+          "description": "需要用户补充的实际问题；无需澄清时省略（也接受JSON null），不能填字符串null、空文本或用户原问题。",
+          "minLength": 1,
+          "not": {
+            "enum": [
+              "null",
+              "undefined"
+            ]
+          },
+          "pattern": "\\S"
+        },
+        "options": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 24000
+          },
+          "maxItems": 8,
+          "description": "澄清问题的候选答案；question=null时传[]。"
+        },
+        "condition_patch": {
+          "$ref": "#/$defs/ConditionPatch",
+          "description": "修改已存任务条件时必填，action用revise或clarify；set指定新值，unset必须提供（不清空时为[]）。route禁止携带condition_patch，因为route只登记归属。"
+        },
+        "replaces_query_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        }
+      },
+      "required": [
+        "action",
+        "goal",
+        "options"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "required": [
+              "replaces_query_id"
+            ],
+            "properties": {
+              "replaces_query_id": {
+                "type": "string"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "action": {
+                "const": "route"
+              },
+              "task_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "expected_version": {
+                "type": "string",
+                "pattern": "^[1-9][0-9]*$"
+              }
+            },
+            "required": [
+              "task_id",
+              "expected_version"
+            ]
+          }
+        },
+        {
+          "if": {
+            "anyOf": [
+              {
+                "properties": {
+                  "action": {
+                    "const": "create"
+                  }
+                }
+              },
+              {
+                "properties": {
+                  "action": {
+                    "enum": [
+                      "revise",
+                      "clarify"
+                    ]
+                  },
+                  "task_id": {
+                    "type": "null"
+                  }
+                }
+              }
+            ]
+          },
+          "then": {
+            "required": [
+              "conditions"
+            ],
+            "properties": {
+              "task_id": {
+                "type": "null"
+              },
+              "expected_version": {
+                "type": "null"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "action": {
+                "enum": [
+                  "revise",
+                  "clarify"
+                ]
+              },
+              "task_id": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "task_id"
+            ]
+          },
+          "then": {
+            "required": [
+              "condition_patch",
+              "expected_version"
+            ],
+            "properties": {
+              "expected_version": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "action": {
+                "const": "route"
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "condition_patch"
+                  ]
+                },
+                {
+                  "required": [
+                    "conditions"
+                  ]
+                }
+              ]
+            },
+            "properties": {
+              "question": {
+                "type": "null"
+              },
+              "options": {
+                "maxItems": 0
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "task_id"
+            ],
+            "properties": {
+              "task_id": {
+                "type": "string"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "expected_version"
+            ],
+            "properties": {
+              "expected_version": {
+                "type": "string",
+                "pattern": "^[1-9][0-9]*$"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "not": {
+              "required": [
+                "question"
+              ],
+              "properties": {
+                "question": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "options": {
+                "maxItems": 0
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "not": {
+              "required": [
+                "task_id"
+              ],
+              "properties": {
+                "task_id": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "expected_version": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "SearchInput": {
+      "title": "SearchInput",
+      "type": "object",
+      "properties": {
+        "query": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 30
+        },
+        "asset_after": {
+          "type": "string",
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        }
+      },
+      "required": [
+        "query"
+      ],
+      "additionalProperties": false
+    },
+    "ReadKnowledgeInput": {
+      "title": "ReadKnowledgeInput",
+      "type": "object",
+      "properties": {
+        "object_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "version": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "offset": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 10000000
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 8192
+        },
+        "entry_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        }
+      },
+      "required": [
+        "object_id"
+      ],
+      "additionalProperties": false
+    },
+    "ReadSourceInput": {
+      "title": "ReadSourceInput",
+      "type": "object",
+      "properties": {
+        "source_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 73,
+          "pattern": "^[A-Za-z0-9_-]+$",
+          "description": "原始来源ID或document-加知识文档ID的保留别名；文档仍按当前空间、状态和版本校验。"
+        },
+        "version": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]{0,19})$"
+        },
+        "offset": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 10000000
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 8192
+        }
+      },
+      "required": [
+        "source_id",
+        "version"
+      ],
+      "additionalProperties": false
+    },
+    "RequestQueryInput": {
+      "title": "RequestQueryInput",
+      "type": "object",
+      "properties": {
+        "task_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "condition_version": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]{0,19})$"
+        },
+        "sql": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 24000
+        },
+        "parameters": {
+          "type": "object"
+        },
+        "target_id": {
+          "type": "string",
+          "const": "synthetic-sqlite"
+        },
+        "summary": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 8000
+        },
+        "knowledge_refs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/EvidenceRef"
+          },
+          "maxItems": 50
+        },
+        "replaces_query_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        }
+      },
+      "required": [
+        "task_id",
+        "condition_version",
+        "sql",
+        "parameters",
+        "target_id",
+        "summary",
+        "knowledge_refs"
+      ],
+      "additionalProperties": false
+    },
+    "ReadQueryInput": {
+      "title": "ReadQueryInput",
+      "type": "object",
+      "properties": {
+        "query_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "cursor": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^[0-9]{1,8}$"
+        }
+      },
+      "required": [
+        "query_id"
+      ],
+      "additionalProperties": false
+    },
+    "AssetToolInput": {
+      "title": "AssetToolInput",
+      "type": "object",
+      "properties": {
+        "action": {
+          "type": "string",
+          "enum": [
+            "save_memory",
+            "update_memory",
+            "disable_memory"
+          ]
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 24000,
+          "description": "候选显示名称；自动保存时宿主从最终正文截取前40个Unicode字符作为正式标签，避免另一次概括改变业务对象。"
+        },
+        "body": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 24000
+        },
+        "scope": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 24000,
+          "description": "候选范围，参与临时限定预检查。自动保存时正式scope与最终body使用同一份完整提取文字，保留对象/限定；不能增加指标别名或扩大范围。以工具回执为准。"
+        },
+        "verified": {
+          "type": "boolean"
+        },
+        "dependencies": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/EvidenceRef"
+          },
+          "maxItems": 50
+        },
+        "asset_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "expected_version": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]{0,19})$"
+        },
+        "instruction_quote": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 24000,
+          "description": "保存或修订记忆所依据的本条用户消息逐字原文；句子/分号边界或逗号后明确以另外/此外另起的指令可作起点。引用在逗号结束时，宿主补齐同句剩余原文至句末/分号，核对并保存source_text，避免裁掉尾部否定与限定；最终正文只保留可复用内容，scope完整沿用最终正文中的对象和限定；不能把当次请求写为长期默认。"
+        }
+      },
+      "required": [
+        "action"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "action": {
+                "const": "save_memory"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "name",
+              "body",
+              "scope",
+              "verified",
+              "dependencies",
+              "instruction_quote"
+            ],
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "asset_id"
+                  ]
+                },
+                {
+                  "required": [
+                    "expected_version"
+                  ]
+                }
+              ]
+            }
+          },
+          "else": {
+            "required": [
+              "asset_id",
+              "expected_version"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "action": {
+                "const": "update_memory"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "name",
+              "body",
+              "scope",
+              "verified",
+              "dependencies",
+              "instruction_quote"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "action": {
+                "const": "disable_memory"
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "name"
+                  ]
+                },
+                {
+                  "required": [
+                    "body"
+                  ]
+                },
+                {
+                  "required": [
+                    "scope"
+                  ]
+                },
+                {
+                  "required": [
+                    "verified"
+                  ]
+                },
+                {
+                  "required": [
+                    "dependencies"
+                  ]
+                },
+                {
+                  "required": [
+                    "instruction_quote"
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "ProposalInput": {
+      "title": "ProposalInput",
+      "type": "object",
+      "properties": {
+        "object_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "base_version": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]{0,19})$"
+        },
+        "entry_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "value": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 24000
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 24000
+        },
+        "evidence": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/EvidenceRef"
+          },
+          "minItems": 1,
+          "maxItems": 50
+        }
+      },
+      "required": [
+        "object_id",
+        "base_version",
+        "entry_id",
+        "value",
+        "reason",
+        "evidence"
+      ],
+      "additionalProperties": false
+    },
+    "DataToolInvocation": {
+      "title": "DataToolInvocation",
+      "type": "object",
+      "properties": {
+        "run_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "lease_epoch": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]{0,19})$"
+        },
+        "sdk_tool_call_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "tool_name": {
+          "type": "string",
+          "enum": [
+            "search_knowledge",
+            "read_knowledge",
+            "read_source",
+            "validate_sql",
+            "request_query",
+            "update_analysis_task",
+            "get_query",
+            "cancel_query",
+            "manage_personal_asset",
+            "propose_semantic_change",
+            "read_conversation",
+            "read_analysis_task"
+          ]
+        },
+        "arguments": {
+          "type": "object"
+        },
+        "checkpoint": {
+          "$ref": "#/$defs/Checkpoint"
+        }
+      },
+      "required": [
+        "run_id",
+        "lease_epoch",
+        "sdk_tool_call_id",
+        "tool_name",
+        "arguments",
+        "checkpoint"
+      ],
+      "additionalProperties": false
+    },
+    "DataToolOutcome": {
+      "title": "DataToolOutcome",
+      "type": "object",
+      "properties": {
+        "operation_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "tool_name": {
+          "type": "string",
+          "enum": [
+            "search_knowledge",
+            "read_knowledge",
+            "read_source",
+            "validate_sql",
+            "request_query",
+            "update_analysis_task",
+            "get_query",
+            "cancel_query",
+            "manage_personal_asset",
+            "propose_semantic_change",
+            "read_conversation",
+            "read_analysis_task"
+          ]
+        },
+        "data": {
+          "type": "object"
+        }
+      },
+      "required": [
+        "operation_id",
+        "tool_name",
+        "data"
+      ],
+      "additionalProperties": false
+    },
+    "WorkspaceContext": {
+      "title": "WorkspaceContext",
+      "type": "object",
+      "properties": {
+        "tasks": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "recent_messages": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ChatMessage"
+          }
+        },
+        "selected_skills": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ModelAssetPreview"
+          }
+        },
+        "memories": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ModelAssetPreview"
+          }
+        },
+        "query_observations": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "authority_revision": {
+          "type": "string"
+        },
+        "authority_snapshot": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "asset_counts": {
+          "type": "object",
+          "properties": {
+            "memories": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "selected_skills": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "memories",
+            "selected_skills"
+          ],
+          "additionalProperties": false
+        },
+        "request_clock": {
+          "$ref": "#/$defs/RequestClock"
+        },
+        "input_task_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64,
+            "pattern": "^[A-Za-z0-9_-]+$"
+          },
+          "uniqueItems": true,
+          "description": "当前输入的持久全部任务归属；恢复时按当前lifecycle继续剩余目标。"
+        },
+        "memory_retrieval": {
+          "type": "string",
+          "enum": [
+            "mem0_authoritative",
+            "directory_fallback"
+          ]
+        }
+      },
+      "required": [
+        "tasks",
+        "recent_messages",
+        "selected_skills",
+        "memories",
+        "query_observations",
+        "authority_revision"
+      ],
+      "additionalProperties": false
+    },
+    "QueryView": {
+      "title": "QueryView",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "conversation_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "task_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "condition_version": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]{0,19})$"
+        },
+        "draft_version": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]{0,19})$"
+        },
+        "sql": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 24000
+        },
+        "parameters": {
+          "type": "object"
+        },
+        "target_id": {
+          "type": "string"
+        },
+        "summary": {
+          "type": "string"
+        },
+        "knowledge_refs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/EvidenceRef"
+          }
+        },
+        "confirmation_state": {
+          "type": "string"
+        },
+        "execution_state": {
+          "type": "string"
+        },
+        "cancel_state": {
+          "type": "string"
+        },
+        "result_ref": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "check_state": {
+          "type": "string"
+        },
+        "error": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "replaces_query_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "error_details": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "code": {
+              "type": "string",
+              "maxLength": 64
+            },
+            "message": {
+              "type": "string",
+              "maxLength": 1000
+            }
+          },
+          "required": [
+            "code",
+            "message"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "id",
+        "conversation_id",
+        "task_id",
+        "condition_version",
+        "draft_version",
+        "sql",
+        "parameters",
+        "target_id",
+        "summary",
+        "knowledge_refs",
+        "confirmation_state",
+        "execution_state",
+        "cancel_state",
+        "result_ref",
+        "check_state",
+        "error"
+      ],
+      "additionalProperties": false
+    },
+    "QueryList": {
+      "title": "QueryList",
+      "type": "object",
+      "properties": {
+        "queries": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/QueryView"
+          }
+        },
+        "confirmation_blocked": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "queries",
+        "confirmation_blocked"
+      ],
+      "additionalProperties": false
+    },
+    "ConfirmQuery": {
+      "title": "ConfirmQuery",
+      "type": "object",
+      "properties": {
+        "operation_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "draft_version": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]{0,19})$"
+        },
+        "condition_version": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]{0,19})$"
+        }
+      },
+      "required": [
+        "operation_id",
+        "draft_version",
+        "condition_version"
+      ],
+      "additionalProperties": false
+    },
+    "ResultColumn": {
+      "title": "ResultColumn",
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string"
+        },
+        "encoding": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "type",
+        "encoding"
+      ],
+      "additionalProperties": false
+    },
+    "QueryResults": {
+      "title": "QueryResults",
+      "type": "object",
+      "properties": {
+        "query_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "source": {
+          "type": "string",
+          "enum": [
+            "mock"
+          ]
+        },
+        "columns": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ResultColumn"
+          }
+        },
+        "rows": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        },
+        "result_complete": {
+          "type": "boolean"
+        },
+        "truncated": {
+          "type": "boolean"
+        },
+        "data_freshness": {
+          "type": "string"
+        },
+        "result_ref": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "next_cursor": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "fetched_offset": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]{0,19})$"
+        }
+      },
+      "required": [
+        "query_id",
+        "source",
+        "columns",
+        "rows",
+        "result_complete",
+        "truncated",
+        "data_freshness",
+        "result_ref",
+        "next_cursor",
+        "fetched_offset"
+      ],
+      "additionalProperties": false
+    },
+    "MutationReceipt": {
+      "title": "MutationReceipt",
+      "type": "object",
+      "properties": {
+        "operation_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "resource_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "version": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]{0,19})$"
+        },
+        "state": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "operation_id",
+        "resource_id",
+        "version",
+        "state"
+      ],
+      "additionalProperties": false
+    },
+    "Proposal": {
+      "title": "Proposal",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "object_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "base_version": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]{0,19})$"
+        },
+        "entry_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "value": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 24000
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 24000
+        },
+        "evidence": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/EvidenceRef"
+          }
+        },
+        "state": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "object_id",
+        "base_version",
+        "entry_id",
+        "value",
+        "reason",
+        "evidence",
+        "state"
+      ],
+      "additionalProperties": false
+    },
+    "ProposalList": {
+      "title": "ProposalList",
+      "type": "object",
+      "properties": {
+        "proposals": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Proposal"
+          }
+        }
+      },
+      "required": [
+        "proposals"
+      ],
+      "additionalProperties": false
+    },
+    "ConversationReadInput": {
+      "title": "ConversationReadInput",
+      "type": "object",
+      "properties": {
+        "after_seq": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]{0,19})$"
+        },
+        "message_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "offset": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 10000000
+        },
+        "task_directory": {
+          "type": "boolean"
+        },
+        "task_after": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        }
+      },
+      "required": [
+        "after_seq"
+      ],
+      "additionalProperties": false
+    },
+    "SourceDocument": {
+      "title": "SourceDocument",
+      "type": "object",
+      "properties": {
+        "source_id": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        },
+        "current_version": {
+          "type": "string"
+        },
+        "body": {
+          "type": "string"
+        },
+        "complete": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "source_id",
+        "version",
+        "current_version",
+        "body",
+        "complete"
+      ],
+      "additionalProperties": false
+    },
+    "SQLInput": {
+      "title": "SQLInput",
+      "type": "object",
+      "properties": {
+        "sql": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 24000
+        },
+        "parameters": {
+          "type": "object"
+        },
+        "target_id": {
+          "type": "string",
+          "const": "synthetic-sqlite"
+        }
+      },
+      "required": [
+        "sql",
+        "parameters",
+        "target_id"
+      ],
+      "additionalProperties": false
+    },
+    "ReadTaskInput": {
+      "title": "ReadTaskInput",
+      "type": "object",
+      "properties": {
+        "task_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        }
+      },
+      "required": [
+        "task_id"
+      ],
+      "additionalProperties": false
+    },
+    "ConditionPatch": {
+      "title": "ConditionPatch",
+      "type": "object",
+      "properties": {
+        "set": {
+          "$ref": "#/$defs/ConditionSet"
+        },
+        "unset": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "time_start",
+              "time_end",
+              "metric",
+              "channel",
+              "group_by",
+              "filters",
+              "knowledge_refs",
+              "notes"
+            ]
+          },
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "set",
+        "unset"
+      ],
+      "additionalProperties": false
+    },
+    "ContentPage": {
+      "title": "ContentPage",
+      "type": "object",
+      "properties": {
+        "offset": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "total_chars": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "complete": {
+          "type": "boolean"
+        },
+        "next_offset": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        }
+      },
+      "required": [
+        "offset",
+        "total_chars",
+        "complete",
+        "next_offset"
+      ],
+      "additionalProperties": false
+    },
+    "ModelAssetPreview": {
+      "title": "ModelAssetPreview",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "memory",
+            "skill"
+          ]
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 24000
+        },
+        "body": {
+          "type": "string",
+          "maxLength": 40000
+        },
+        "scope": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 24000
+        },
+        "version": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]{0,19})$"
+        },
+        "state": {
+          "type": "string",
+          "enum": [
+            "enabled",
+            "disabled",
+            "deleted"
+          ]
+        },
+        "verified": {
+          "type": "boolean"
+        },
+        "source_text": {
+          "type": "string",
+          "maxLength": 8000
+        },
+        "dependencies": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/EvidenceRef"
+          }
+        },
+        "selected": {
+          "type": "boolean"
+        },
+        "content_page": {
+          "$ref": "#/$defs/ContentPage"
+        },
+        "scope_page": {
+          "$ref": "#/$defs/ContentPage"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "name",
+        "body",
+        "scope",
+        "version",
+        "state",
+        "verified",
+        "source_text",
+        "dependencies",
+        "selected"
+      ],
+      "additionalProperties": false
+    },
+    "PrefillResult": {
+      "title": "PrefillResult",
+      "type": "object",
+      "properties": {
+        "entries": {
+          "type": "array",
+          "maxItems": 100,
+          "items": {
+            "type": "object",
+            "properties": {
+              "entry_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 64
+              },
+              "value": {
+                "type": "string",
+                "maxLength": 24000
+              },
+              "gaps": {
+                "type": "array",
+                "maxItems": 20,
+                "items": {
+                  "type": "string",
+                  "maxLength": 2000,
+                  "minLength": 1
+                }
+              },
+              "evidence": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 20,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "source_id": {
+                      "type": "string"
+                    },
+                    "version": {
+                      "type": "string"
+                    },
+                    "quote": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 24000
+                    },
+                    "location": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    }
+                  },
+                  "required": [
+                    "source_id",
+                    "version",
+                    "quote",
+                    "location"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "required": [
+              "entry_id",
+              "value",
+              "gaps",
+              "evidence"
+            ],
+            "additionalProperties": false
+          },
+          "minItems": 1
+        }
+      },
+      "required": [
+        "entries"
+      ],
+      "additionalProperties": false
+    },
+    "HistoryQuery": {
+      "title": "HistoryQuery",
+      "type": "object",
+      "properties": {
+        "before_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "q": {
+          "type": "string",
+          "maxLength": 240
+        }
+      },
+      "additionalProperties": false
+    },
+    "KnowledgeListQuery": {
+      "title": "KnowledgeListQuery",
+      "type": "object",
+      "properties": {
+        "after_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "q": {
+          "type": "string",
+          "maxLength": 400
+        },
+        "related_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        }
+      },
+      "additionalProperties": false,
+      "not": {
+        "required": [
+          "related_id",
+          "q"
+        ]
+      }
+    },
+    "RequestClock": {
+      "title": "RequestClock",
+      "type": "object",
+      "properties": {
+        "reference_time_utc": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3,6}Z$"
+        },
+        "business_timezone": {
+          "type": "string",
+          "enum": [
+            "UTC",
+            "Asia/Shanghai"
+          ]
+        }
+      },
+      "required": [
+        "reference_time_utc",
+        "business_timezone"
+      ],
+      "additionalProperties": false
+    },
+    "SearchCoverage": {
+      "title": "SearchCoverage",
+      "type": "object",
+      "properties": {
+        "state": {
+          "type": "string",
+          "enum": [
+            "complete",
+            "candidate_limit",
+            "bounded"
+          ]
+        },
+        "candidate_limit": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "vector_state": {
+          "type": "string",
+          "enum": [
+            "available",
+            "unconfigured",
+            "unavailable"
+          ]
+        },
+        "index_state": {
+          "type": "string",
+          "enum": [
+            "current",
+            "incomplete",
+            "unconfigured"
+          ]
+        }
+      },
+      "required": [
+        "state",
+        "candidate_limit"
+      ],
+      "additionalProperties": false
+    },
+    "ConditionSet": {
+      "type": "object",
+      "properties": {
+        "time_start": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "time_end": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "timezone": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "metric": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "channel": {
+          "type": "string",
+          "enum": [
+            "web",
+            "app",
+            "store"
+          ]
+        },
+        "group_by": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "maxItems": 20
+        },
+        "filters": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 24000
+          },
+          "maxItems": 40
+        },
+        "knowledge_refs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/EvidenceRef"
+          },
+          "maxItems": 50
+        },
+        "notes": {
+          "type": "string",
+          "maxLength": 8000
+        }
+      },
+      "additionalProperties": false,
+      "title": "ConditionSet"
+    },
+    "CatalogColumn": {
+      "title": "CatalogColumn",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "data_type": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "nullable": {
+          "type": "boolean"
+        },
+        "comment": {
+          "type": "string",
+          "maxLength": 4000
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "data_type",
+        "nullable",
+        "comment"
+      ],
+      "additionalProperties": false
+    },
+    "CatalogNode": {
+      "title": "CatalogNode",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "sql": {
+          "type": "string",
+          "maxLength": 40000
+        },
+        "upstream_ids": {
+          "type": "array",
+          "maxItems": 100,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          }
+        }
+      },
+      "required": [
+        "id",
+        "sql",
+        "upstream_ids"
+      ],
+      "additionalProperties": false
+    },
+    "CatalogTable": {
+      "title": "CatalogTable",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "platform_version": {
+          "type": "string",
+          "pattern": "^[1-9][0-9]{0,15}$"
+        },
+        "comment": {
+          "type": "string",
+          "maxLength": 4000
+        },
+        "ddl": {
+          "type": "string",
+          "maxLength": 40000
+        },
+        "columns": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 200,
+          "items": {
+            "$ref": "#/$defs/CatalogColumn"
+          }
+        },
+        "node": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CatalogNode"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "platform_version",
+        "comment",
+        "ddl",
+        "columns",
+        "node"
+      ],
+      "additionalProperties": false
+    },
+    "CatalogPage": {
+      "title": "CatalogPage",
+      "type": "object",
+      "properties": {
+        "schema_version": {
+          "const": 1
+        },
+        "source_namespace": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "snapshot_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "tables": {
+          "type": "array",
+          "maxItems": 50,
+          "items": {
+            "$ref": "#/$defs/CatalogTable"
+          }
+        },
+        "next_cursor": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 256
+        },
+        "complete": {
+          "type": "boolean"
+        },
+        "authoritative": {
+          "type": "boolean",
+          "description": "true表示该snapshot覆盖完整命名空间，可在全部分页成功后使缺席对象失效；false不允许推断删除。"
+        }
+      },
+      "required": [
+        "schema_version",
+        "source_namespace",
+        "snapshot_id",
+        "tables",
+        "next_cursor",
+        "complete",
+        "authoritative"
+      ],
+      "additionalProperties": false
+    },
+    "TableAnalysisPreference": {
+      "title": "TableAnalysisPreference",
+      "type": "object",
+      "properties": {
+        "table_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "version": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]{0,19})$"
+        },
+        "preferred": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "table_id",
+        "version",
+        "preferred"
+      ],
+      "additionalProperties": false
+    },
+    "AnalysisPreferenceCommand": {
+      "title": "AnalysisPreferenceCommand",
+      "type": "object",
+      "properties": {
+        "operation_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "expected_version": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]{0,19})$"
+        },
+        "preferred": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "operation_id",
+        "expected_version",
+        "preferred"
+      ],
+      "additionalProperties": false
+    },
+    "QueryCancellation": {
+      "title": "QueryCancellation",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "task_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "condition_version": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]{0,19})$"
+        },
+        "execution_state": {
+          "type": "string"
+        },
+        "cancel_state": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "task_id",
+        "condition_version",
+        "execution_state",
+        "cancel_state"
+      ],
+      "additionalProperties": false
+    },
+    "PiSessionReference": {
+      "title": "PiSessionReference",
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "pi_session"
+        },
+        "file": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{1,128}\\.jsonl$"
+        },
+        "session_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{1,64}$"
+        }
+      },
+      "required": [
+        "kind",
+        "file",
+        "session_id"
+      ],
+      "additionalProperties": false
+    },
+    "HostCheckpointReference": {
+      "title": "HostCheckpointReference",
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "host_checkpoint"
+        },
+        "fingerprint": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      },
+      "required": [
+        "kind",
+        "fingerprint"
+      ],
+      "additionalProperties": false
+    },
+    "ReadCheckpoint": {
+      "title": "ReadCheckpoint",
+      "type": "object",
+      "properties": {
+        "run_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "lease_epoch": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]{0,19})$"
+        }
+      },
+      "required": [
+        "run_id",
+        "lease_epoch"
+      ],
+      "additionalProperties": false
+    },
+    "CheckpointReference": {
+      "title": "CheckpointReference",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "pi_session"
+            },
+            "file": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{1,128}\\.jsonl$"
+            },
+            "session_id": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{1,64}$"
+            }
+          },
+          "required": [
+            "kind",
+            "file",
+            "session_id"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "host_checkpoint"
+            },
+            "fingerprint": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            }
+          },
+          "required": [
+            "kind",
+            "fingerprint"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "MemoryBudgetBinding": {
+      "title": "MemoryBudgetBinding",
+      "type": "object",
+      "properties": {
+        "kind": {
+          "enum": [
+            "run",
+            "index"
+          ]
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "epoch": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]{0,19})$"
+        },
+        "sdk_tool_call_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "pattern": "^[A-Za-z0-9_-]+$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "operation_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        }
+      },
+      "required": [
+        "kind",
+        "id",
+        "epoch",
+        "sdk_tool_call_id",
+        "operation_id"
+      ],
+      "additionalProperties": false
+    },
+    "MemoryExtractionRequest": {
+      "title": "MemoryExtractionRequest",
+      "type": "object",
+      "properties": {
+        "operation_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "owner_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "space_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "message": {
+          "type": "string",
+          "maxLength": 16000
+        },
+        "quote": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 16000
+        },
+        "budget": {
+          "$ref": "#/$defs/MemoryBudgetBinding"
+        }
+      },
+      "required": [
+        "operation_id",
+        "owner_id",
+        "space_id",
+        "message",
+        "quote",
+        "budget"
+      ],
+      "additionalProperties": false
+    },
+    "MemoryExtractionReceipt": {
+      "title": "MemoryExtractionReceipt",
+      "type": "object",
+      "properties": {
+        "operation_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "body": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 12000
+        },
+        "replayed": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "operation_id",
+        "body",
+        "replayed"
+      ],
+      "additionalProperties": false
+    },
+    "MemoryIndexRequest": {
+      "title": "MemoryIndexRequest",
+      "type": "object",
+      "properties": {
+        "operation_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "owner_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "space_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "asset": {
+          "$ref": "#/$defs/Asset"
+        },
+        "extraction_operation_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "pattern": "^[A-Za-z0-9_-]+$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "budget": {
+          "$ref": "#/$defs/MemoryBudgetBinding"
+        }
+      },
+      "required": [
+        "operation_id",
+        "owner_id",
+        "space_id",
+        "asset",
+        "extraction_operation_id",
+        "budget"
+      ],
+      "additionalProperties": false
+    },
+    "MemoryIndexReceipt": {
+      "title": "MemoryIndexReceipt",
+      "type": "object",
+      "properties": {
+        "operation_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "state": {
+          "enum": [
+            "ready",
+            "removed",
+            "superseded"
+          ]
+        }
+      },
+      "required": [
+        "operation_id",
+        "state"
+      ],
+      "additionalProperties": false
+    },
+    "MemorySearchRequest": {
+      "title": "MemorySearchRequest",
+      "type": "object",
+      "properties": {
+        "operation_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "owner_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "space_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "query": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1600
+        },
+        "budget": {
+          "$ref": "#/$defs/MemoryBudgetBinding"
+        }
+      },
+      "required": [
+        "operation_id",
+        "owner_id",
+        "space_id",
+        "query",
+        "budget"
+      ],
+      "additionalProperties": false
+    },
+    "MemoryCandidate": {
+      "title": "MemoryCandidate",
+      "type": "object",
+      "properties": {
+        "asset_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "version": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]{0,19})$"
+        }
+      },
+      "required": [
+        "asset_id",
+        "version"
+      ],
+      "additionalProperties": false
+    },
+    "MemorySearchReceipt": {
+      "title": "MemorySearchReceipt",
+      "type": "object",
+      "properties": {
+        "candidates": {
+          "type": "array",
+          "maxItems": 200,
+          "items": {
+            "$ref": "#/$defs/MemoryCandidate"
+          }
+        },
+        "bounded": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "candidates",
+        "bounded"
+      ],
+      "additionalProperties": false
+    },
+    "MemoryModelCall": {
+      "title": "MemoryModelCall",
+      "type": "object",
+      "properties": {
+        "action": {
+          "enum": [
+            "issue",
+            "finalize"
+          ]
+        },
+        "budget": {
+          "$ref": "#/$defs/MemoryBudgetBinding"
+        },
+        "call_attempt_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "purpose": {
+          "enum": [
+            "memory_extraction",
+            "memory_embedding"
+          ]
+        },
+        "parameters_fingerprint": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "input_tokens_upper": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65536
+        },
+        "output_tokens_max": {
+          "type": "integer",
+          "enum": [
+            0,
+            4096
+          ]
+        },
+        "usage": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ModelUsage"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "action",
+        "budget",
+        "call_attempt_id",
+        "purpose",
+        "parameters_fingerprint",
+        "input_tokens_upper",
+        "output_tokens_max",
+        "usage"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "properties": {
+    "createConversation": {
+      "$ref": "#/$defs/CreateConversation"
+    },
+    "messageInput": {
+      "$ref": "#/$defs/MessageInput"
+    },
+    "taskInput": {
+      "$ref": "#/$defs/TaskInput"
+    },
+    "checkpoint": {
+      "$ref": "#/$defs/Checkpoint"
+    },
+    "runEnvelope": {
+      "$ref": "#/$defs/RunEnvelope"
+    },
+    "toolInvocation": {
+      "$ref": "#/$defs/ToolInvocation"
+    },
+    "appendOutput": {
+      "$ref": "#/$defs/AppendOutput"
+    },
+    "finishRun": {
+      "$ref": "#/$defs/FinishRun"
+    },
+    "modelAttempt": {
+      "$ref": "#/$defs/ModelAttempt"
+    },
+    "toolReceipt": {
+      "$ref": "#/$defs/ToolReceipt"
+    },
+    "event": {
+      "$ref": "#/$defs/Event"
+    },
+    "chatMessage": {
+      "$ref": "#/$defs/ChatMessage"
+    },
+    "taskSnapshot": {
+      "$ref": "#/$defs/TaskSnapshot"
+    },
+    "runSnapshot": {
+      "$ref": "#/$defs/RunSnapshot"
+    },
+    "snapshot": {
+      "$ref": "#/$defs/Snapshot"
+    },
+    "appError": {
+      "$ref": "#/$defs/AppError"
+    },
+    "toolOutcome": {
+      "$ref": "#/$defs/ToolOutcome"
+    },
+    "conversationReceipt": {
+      "$ref": "#/$defs/ConversationReceipt"
+    },
+    "messageReceipt": {
+      "$ref": "#/$defs/MessageReceipt"
+    },
+    "historyItem": {
+      "$ref": "#/$defs/HistoryItem"
+    },
+    "history": {
+      "$ref": "#/$defs/History"
+    },
+    "identity": {
+      "$ref": "#/$defs/Identity"
+    },
+    "sessionReceipt": {
+      "$ref": "#/$defs/SessionReceipt"
+    },
+    "logoutReceipt": {
+      "$ref": "#/$defs/LogoutReceipt"
+    },
+    "operationReceipt": {
+      "$ref": "#/$defs/OperationReceipt"
+    },
+    "outputReceipt": {
+      "$ref": "#/$defs/OutputReceipt"
+    },
+    "finishReceipt": {
+      "$ref": "#/$defs/FinishReceipt"
+    },
+    "modelReceipt": {
+      "$ref": "#/$defs/ModelReceipt"
+    },
+    "modelProfile": {
+      "$ref": "#/$defs/ModelProfile"
+    },
+    "reserveModelCall": {
+      "$ref": "#/$defs/ReserveModelCall"
+    },
+    "sendModelCall": {
+      "$ref": "#/$defs/SendModelCall"
+    },
+    "modelUsage": {
+      "$ref": "#/$defs/ModelUsage"
+    },
+    "finalizeModelCall": {
+      "$ref": "#/$defs/FinalizeModelCall"
+    },
+    "modelCallReceipt": {
+      "$ref": "#/$defs/ModelCallReceipt"
+    },
+    "cancelRun": {
+      "$ref": "#/$defs/CancelRun"
+    },
+    "cancelReceipt": {
+      "$ref": "#/$defs/CancelReceipt"
+    },
+    "evidenceRef": {
+      "$ref": "#/$defs/EvidenceRef"
+    },
+    "knowledgeEntry": {
+      "$ref": "#/$defs/KnowledgeEntry"
+    },
+    "knowledgeObject": {
+      "$ref": "#/$defs/KnowledgeObject"
+    },
+    "knowledgeList": {
+      "$ref": "#/$defs/KnowledgeList"
+    },
+    "knowledgeEdit": {
+      "$ref": "#/$defs/KnowledgeEdit"
+    },
+    "knowledgeCreate": {
+      "$ref": "#/$defs/KnowledgeCreate"
+    },
+    "versionCommand": {
+      "$ref": "#/$defs/VersionCommand"
+    },
+    "asset": {
+      "$ref": "#/$defs/Asset"
+    },
+    "assetList": {
+      "$ref": "#/$defs/AssetList"
+    },
+    "assetSave": {
+      "$ref": "#/$defs/AssetSave"
+    },
+    "skillSelection": {
+      "$ref": "#/$defs/SkillSelection"
+    },
+    "conditions": {
+      "$ref": "#/$defs/Conditions"
+    },
+    "analysisUpdate": {
+      "$ref": "#/$defs/AnalysisUpdate"
+    },
+    "searchInput": {
+      "$ref": "#/$defs/SearchInput"
+    },
+    "readKnowledgeInput": {
+      "$ref": "#/$defs/ReadKnowledgeInput"
+    },
+    "readSourceInput": {
+      "$ref": "#/$defs/ReadSourceInput"
+    },
+    "sqlInput": {
+      "$ref": "#/$defs/SQLInput"
+    },
+    "requestQueryInput": {
+      "$ref": "#/$defs/RequestQueryInput"
+    },
+    "readQueryInput": {
+      "$ref": "#/$defs/ReadQueryInput"
+    },
+    "assetToolInput": {
+      "$ref": "#/$defs/AssetToolInput"
+    },
+    "proposalInput": {
+      "$ref": "#/$defs/ProposalInput"
+    },
+    "dataToolInvocation": {
+      "$ref": "#/$defs/DataToolInvocation"
+    },
+    "dataToolOutcome": {
+      "$ref": "#/$defs/DataToolOutcome"
+    },
+    "workspaceContext": {
+      "$ref": "#/$defs/WorkspaceContext"
+    },
+    "queryView": {
+      "$ref": "#/$defs/QueryView"
+    },
+    "queryList": {
+      "$ref": "#/$defs/QueryList"
+    },
+    "confirmQuery": {
+      "$ref": "#/$defs/ConfirmQuery"
+    },
+    "resultColumn": {
+      "$ref": "#/$defs/ResultColumn"
+    },
+    "queryResults": {
+      "$ref": "#/$defs/QueryResults"
+    },
+    "mutationReceipt": {
+      "$ref": "#/$defs/MutationReceipt"
+    },
+    "proposal": {
+      "$ref": "#/$defs/Proposal"
+    },
+    "proposalList": {
+      "$ref": "#/$defs/ProposalList"
+    },
+    "conversationReadInput": {
+      "$ref": "#/$defs/ConversationReadInput"
+    },
+    "sourceDocument": {
+      "$ref": "#/$defs/SourceDocument"
+    },
+    "readTaskInput": {
+      "$ref": "#/$defs/ReadTaskInput"
+    },
+    "prefillResult": {
+      "$ref": "#/$defs/PrefillResult"
+    },
+    "historyQuery": {
+      "$ref": "#/$defs/HistoryQuery"
+    },
+    "knowledgeListQuery": {
+      "$ref": "#/$defs/KnowledgeListQuery"
+    },
+    "CatalogColumn": {
+      "$ref": "#/$defs/CatalogColumn"
+    },
+    "CatalogNode": {
+      "$ref": "#/$defs/CatalogNode"
+    },
+    "CatalogTable": {
+      "$ref": "#/$defs/CatalogTable"
+    },
+    "CatalogPage": {
+      "$ref": "#/$defs/CatalogPage"
+    },
+    "TableAnalysisPreference": {
+      "$ref": "#/$defs/TableAnalysisPreference"
+    },
+    "AnalysisPreferenceCommand": {
+      "$ref": "#/$defs/AnalysisPreferenceCommand"
+    },
+    "queryCancellation": {
+      "$ref": "#/$defs/QueryCancellation"
+    },
+    "pi_session_reference": {
+      "$ref": "#/$defs/PiSessionReference"
+    },
+    "host_checkpoint_reference": {
+      "$ref": "#/$defs/HostCheckpointReference"
+    },
+    "read_checkpoint": {
+      "$ref": "#/$defs/ReadCheckpoint"
+    },
+    "checkpoint_reference": {
+      "$ref": "#/$defs/CheckpointReference"
+    },
+    "memoryBudgetBinding": {
+      "$ref": "#/$defs/MemoryBudgetBinding"
+    },
+    "memoryExtractionRequest": {
+      "$ref": "#/$defs/MemoryExtractionRequest"
+    },
+    "memoryExtractionReceipt": {
+      "$ref": "#/$defs/MemoryExtractionReceipt"
+    },
+    "memoryIndexRequest": {
+      "$ref": "#/$defs/MemoryIndexRequest"
+    },
+    "memoryIndexReceipt": {
+      "$ref": "#/$defs/MemoryIndexReceipt"
+    },
+    "memorySearchRequest": {
+      "$ref": "#/$defs/MemorySearchRequest"
+    },
+    "memoryCandidate": {
+      "$ref": "#/$defs/MemoryCandidate"
+    },
+    "memorySearchReceipt": {
+      "$ref": "#/$defs/MemorySearchReceipt"
+    },
+    "memoryModelCall": {
+      "$ref": "#/$defs/MemoryModelCall"
+    }
+  },
+  "required": [
+    "createConversation",
+    "messageInput",
+    "taskInput",
+    "checkpoint",
+    "runEnvelope",
+    "toolInvocation",
+    "appendOutput",
+    "finishRun",
+    "modelAttempt",
+    "toolReceipt",
+    "event",
+    "chatMessage",
+    "taskSnapshot",
+    "runSnapshot",
+    "snapshot",
+    "appError",
+    "toolOutcome",
+    "conversationReceipt",
+    "messageReceipt",
+    "historyItem",
+    "history",
+    "identity",
+    "sessionReceipt",
+    "logoutReceipt",
+    "operationReceipt",
+    "outputReceipt",
+    "finishReceipt",
+    "modelReceipt",
+    "modelProfile",
+    "reserveModelCall",
+    "sendModelCall",
+    "modelUsage",
+    "finalizeModelCall",
+    "modelCallReceipt",
+    "cancelRun",
+    "cancelReceipt",
+    "evidenceRef",
+    "knowledgeEntry",
+    "knowledgeObject",
+    "knowledgeList",
+    "knowledgeEdit",
+    "knowledgeCreate",
+    "versionCommand",
+    "asset",
+    "assetList",
+    "assetSave",
+    "skillSelection",
+    "conditions",
+    "analysisUpdate",
+    "searchInput",
+    "readKnowledgeInput",
+    "readSourceInput",
+    "sqlInput",
+    "requestQueryInput",
+    "readQueryInput",
+    "assetToolInput",
+    "proposalInput",
+    "dataToolInvocation",
+    "dataToolOutcome",
+    "workspaceContext",
+    "queryView",
+    "queryList",
+    "confirmQuery",
+    "resultColumn",
+    "queryResults",
+    "mutationReceipt",
+    "proposal",
+    "proposalList",
+    "conversationReadInput",
+    "sourceDocument",
+    "prefillResult",
+    "historyQuery",
+    "knowledgeListQuery",
+    "pi_session_reference",
+    "host_checkpoint_reference",
+    "read_checkpoint",
+    "checkpoint_reference"
+  ],
+  "additionalProperties": false
+}
