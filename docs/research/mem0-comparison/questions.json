@@ -1,0 +1,467 @@
+{
+  "schema_version": 1,
+  "synthetic": true,
+  "authority_defaults": {
+    "state": "enabled",
+    "current_version": "1"
+  },
+  "authority_snapshots": {
+    "current": {
+      "include_versions": [
+        "monthly_buyers@1",
+        "order_grain@1",
+        "net_receipts@1",
+        "money_units@1",
+        "payment_calendar@1",
+        "undefined_ratio@1",
+        "item_refund_rate@1",
+        "default_channel@1",
+        "daily_visitors@1",
+        "campaign_audience@1",
+        "gmv_rule@1",
+        "delivery_fee@1",
+        "refund_calendar@1",
+        "cancelled_orders@1",
+        "display_order@1",
+        "inventory_snapshot@1",
+        "merchant_balance@1",
+        "discount_ratio@1",
+        "refund_count@1",
+        "demo_filter@1",
+        "other_user_policy@1",
+        "subscription_policy@1",
+        "warehouse_picking@1",
+        "stock_turnover@1"
+      ],
+      "asset_overrides": [],
+      "knowledge_versions": {
+        "synthetic_gmv_rule": "3"
+      }
+    },
+    "channel_revised": {
+      "include_versions": [
+        "monthly_buyers@1",
+        "order_grain@1",
+        "net_receipts@1",
+        "money_units@1",
+        "payment_calendar@1",
+        "undefined_ratio@1",
+        "item_refund_rate@1",
+        "default_channel@1",
+        "default_channel@2",
+        "daily_visitors@1",
+        "campaign_audience@1",
+        "gmv_rule@1",
+        "delivery_fee@1",
+        "refund_calendar@1",
+        "cancelled_orders@1",
+        "display_order@1",
+        "inventory_snapshot@1",
+        "merchant_balance@1",
+        "discount_ratio@1",
+        "refund_count@1",
+        "demo_filter@1",
+        "other_user_policy@1",
+        "subscription_policy@1",
+        "warehouse_picking@1",
+        "stock_turnover@1"
+      ],
+      "asset_overrides": [
+        {
+          "asset_id": "default_channel",
+          "owner_id": "demo_analyst",
+          "space_id": "synthetic_shop",
+          "current_version": "2",
+          "state": "enabled"
+        }
+      ],
+      "knowledge_versions": {
+        "synthetic_gmv_rule": "3"
+      }
+    },
+    "channel_disabled": {
+      "base": "current",
+      "asset_overrides": [
+        {
+          "asset_id": "default_channel",
+          "owner_id": "demo_analyst",
+          "space_id": "synthetic_shop",
+          "current_version": "1",
+          "state": "disabled"
+        }
+      ]
+    },
+    "channel_deleted": {
+      "base": "current",
+      "asset_overrides": [
+        {
+          "asset_id": "default_channel",
+          "owner_id": "demo_analyst",
+          "space_id": "synthetic_shop",
+          "current_version": "1",
+          "state": "deleted"
+        }
+      ]
+    },
+    "knowledge_revised": {
+      "base": "current",
+      "knowledge_versions": {
+        "synthetic_gmv_rule": "4"
+      }
+    }
+  },
+  "questions": [
+    {
+      "query_id": "monthly_buyers_direct",
+      "group_id": "monthly_buyers",
+      "text": "这个月的购买人数，可以把每天去重的客户数加起来吗？",
+      "principal": {
+        "user_id": "demo_analyst",
+        "space_id": "synthetic_shop"
+      },
+      "snapshot": "current",
+      "conversation_id": "synthetic_monthly_buyers_1"
+    },
+    {
+      "query_id": "monthly_buyers_paraphrase",
+      "group_id": "monthly_buyers",
+      "text": "同一个买家隔几天又来付款，月报里应该算几个人？",
+      "principal": {
+        "user_id": "demo_analyst",
+        "space_id": "synthetic_shop"
+      },
+      "snapshot": "current",
+      "conversation_id": "synthetic_monthly_buyers_2"
+    },
+    {
+      "query_id": "order_grain_direct",
+      "group_id": "order_grain",
+      "text": "订单明细有多行时，订单数怎么统计？",
+      "principal": {
+        "user_id": "demo_analyst",
+        "space_id": "synthetic_shop"
+      },
+      "snapshot": "current",
+      "conversation_id": "synthetic_order_grain_1"
+    },
+    {
+      "query_id": "order_grain_paraphrase",
+      "group_id": "order_grain",
+      "text": "一笔交易买了三件货，行数变成三条了，统计成交笔数该怎么处理？",
+      "principal": {
+        "user_id": "demo_analyst",
+        "space_id": "synthetic_shop"
+      },
+      "snapshot": "current",
+      "conversation_id": "synthetic_order_grain_2"
+    },
+    {
+      "query_id": "net_receipts_direct",
+      "group_id": "net_receipts",
+      "text": "净实收金额要怎么处理退款和优惠券？",
+      "principal": {
+        "user_id": "demo_analyst",
+        "space_id": "synthetic_shop"
+      },
+      "snapshot": "current",
+      "conversation_id": "synthetic_net_receipts_1"
+    },
+    {
+      "query_id": "net_receipts_paraphrase",
+      "group_id": "net_receipts",
+      "text": "我想看这段时间真正收进来再扣掉退回去的钱，应该参考哪条规则？",
+      "principal": {
+        "user_id": "demo_analyst",
+        "space_id": "synthetic_shop"
+      },
+      "snapshot": "current",
+      "conversation_id": "synthetic_net_receipts_2"
+    },
+    {
+      "query_id": "money_units_direct",
+      "group_id": "money_units",
+      "text": "paid_amount_minor展示成人民币元时怎样换算？",
+      "principal": {
+        "user_id": "demo_analyst",
+        "space_id": "synthetic_shop"
+      },
+      "snapshot": "current",
+      "conversation_id": "synthetic_money_units_1"
+    },
+    {
+      "query_id": "money_units_paraphrase",
+      "group_id": "money_units",
+      "text": "收款字段里存着350，要在金额报表里显示成元，需要怎样处理单位？",
+      "principal": {
+        "user_id": "demo_analyst",
+        "space_id": "synthetic_shop"
+      },
+      "snapshot": "current",
+      "conversation_id": "synthetic_money_units_2"
+    },
+    {
+      "query_id": "payment_calendar_direct",
+      "group_id": "payment_calendar",
+      "text": "按北京时间统计支付自然月，UTC的paid_at怎么筛？",
+      "principal": {
+        "user_id": "demo_analyst",
+        "space_id": "synthetic_shop"
+      },
+      "snapshot": "current",
+      "conversation_id": "synthetic_payment_calendar_1"
+    },
+    {
+      "query_id": "payment_calendar_paraphrase",
+      "group_id": "payment_calendar",
+      "text": "月初零点附近的一笔付款，数据库记的是世界时，月报按国内日期该归哪边？",
+      "principal": {
+        "user_id": "demo_analyst",
+        "space_id": "synthetic_shop"
+      },
+      "snapshot": "current",
+      "conversation_id": "synthetic_payment_calendar_2"
+    },
+    {
+      "query_id": "undefined_ratio_direct",
+      "group_id": "undefined_ratio",
+      "text": "转化率分母为0时显示0%还是NULL？",
+      "principal": {
+        "user_id": "demo_analyst",
+        "space_id": "synthetic_shop"
+      },
+      "snapshot": "current",
+      "conversation_id": "synthetic_undefined_ratio_1"
+    },
+    {
+      "query_id": "undefined_ratio_paraphrase",
+      "group_id": "undefined_ratio",
+      "text": "没有任何可比较样本的时候，比例这个格子应该怎么填？",
+      "principal": {
+        "user_id": "demo_analyst",
+        "space_id": "synthetic_shop"
+      },
+      "snapshot": "current",
+      "conversation_id": "synthetic_undefined_ratio_2"
+    },
+    {
+      "query_id": "combined_amount_direct",
+      "group_id": "combined_amount",
+      "text": "告诉我净实收怎么扣退款，再以元展示收款与退款金额。",
+      "principal": {
+        "user_id": "demo_analyst",
+        "space_id": "synthetic_shop"
+      },
+      "snapshot": "current",
+      "conversation_id": "synthetic_combined_amount_1"
+    },
+    {
+      "query_id": "combined_amount_paraphrase",
+      "group_id": "combined_amount",
+      "text": "我想看最终收进来的钱，先扣实际退的钱，金额库里是最小单位，结果要人民币元。",
+      "principal": {
+        "user_id": "demo_analyst",
+        "space_id": "synthetic_shop"
+      },
+      "snapshot": "current",
+      "conversation_id": "synthetic_combined_amount_2"
+    },
+    {
+      "query_id": "cross_conversation_direct",
+      "group_id": "cross_conversation",
+      "text": "我新开了一个对话，订单分析没有写渠道时默认看哪个？",
+      "principal": {
+        "user_id": "demo_analyst",
+        "space_id": "synthetic_shop"
+      },
+      "snapshot": "current",
+      "conversation_id": "synthetic_cross_conversation_1"
+    },
+    {
+      "query_id": "cross_conversation_paraphrase",
+      "group_id": "cross_conversation",
+      "text": "换个聊天继续工作，没指定从哪里来的订单时沿用我什么偏好？",
+      "principal": {
+        "user_id": "demo_analyst",
+        "space_id": "synthetic_shop"
+      },
+      "snapshot": "current",
+      "conversation_id": "synthetic_cross_conversation_2"
+    },
+    {
+      "query_id": "one_request_exception_direct",
+      "group_id": "one_request_exception",
+      "text": "平时订单看web，但这次我要app，之前存的默认渠道偏好是什么？",
+      "principal": {
+        "user_id": "demo_analyst",
+        "space_id": "synthetic_shop"
+      },
+      "snapshot": "current",
+      "conversation_id": "synthetic_one_request_exception_1"
+    },
+    {
+      "query_id": "one_request_exception_paraphrase",
+      "group_id": "one_request_exception",
+      "text": "这次只分析app渠道，同时回顾一下我平常的默认渠道设置。",
+      "principal": {
+        "user_id": "demo_analyst",
+        "space_id": "synthetic_shop"
+      },
+      "snapshot": "current",
+      "conversation_id": "synthetic_one_request_exception_2"
+    },
+    {
+      "query_id": "channel_revised_direct",
+      "group_id": "channel_revised",
+      "text": "我刚把默认渠道从web改成app，现在订单分析应找到哪条最新偏好？",
+      "principal": {
+        "user_id": "demo_analyst",
+        "space_id": "synthetic_shop"
+      },
+      "snapshot": "channel_revised",
+      "conversation_id": "synthetic_channel_revised_1"
+    },
+    {
+      "query_id": "channel_revised_paraphrase",
+      "group_id": "channel_revised",
+      "text": "还是看我平常默认的订单渠道，要以最近一次修改为准。",
+      "principal": {
+        "user_id": "demo_analyst",
+        "space_id": "synthetic_shop"
+      },
+      "snapshot": "channel_revised",
+      "conversation_id": "synthetic_channel_revised_2"
+    },
+    {
+      "query_id": "channel_disabled_direct",
+      "group_id": "channel_disabled",
+      "text": "之前那条默认订单渠道已经停用了，还能找到什么可用偏好？",
+      "principal": {
+        "user_id": "demo_analyst",
+        "space_id": "synthetic_shop"
+      },
+      "snapshot": "channel_disabled",
+      "conversation_id": "synthetic_channel_disabled_1"
+    },
+    {
+      "query_id": "channel_disabled_paraphrase",
+      "group_id": "channel_disabled",
+      "text": "不要再用已停用的渠道设置，检查一下当前能用的订单渠道记忆。",
+      "principal": {
+        "user_id": "demo_analyst",
+        "space_id": "synthetic_shop"
+      },
+      "snapshot": "channel_disabled",
+      "conversation_id": "synthetic_channel_disabled_2"
+    },
+    {
+      "query_id": "channel_deleted_direct",
+      "group_id": "channel_deleted",
+      "text": "我删掉了默认订单渠道记忆，现在还有这条吗？",
+      "principal": {
+        "user_id": "demo_analyst",
+        "space_id": "synthetic_shop"
+      },
+      "snapshot": "channel_deleted",
+      "conversation_id": "synthetic_channel_deleted_1"
+    },
+    {
+      "query_id": "channel_deleted_paraphrase",
+      "group_id": "channel_deleted",
+      "text": "已经忘掉的渠道偏好，不能再带进新的订单分析。",
+      "principal": {
+        "user_id": "demo_analyst",
+        "space_id": "synthetic_shop"
+      },
+      "snapshot": "channel_deleted",
+      "conversation_id": "synthetic_channel_deleted_2"
+    },
+    {
+      "query_id": "user_boundary_direct",
+      "group_id": "user_boundary",
+      "text": "备件补货只统计蓝色周转箱批次，这是谁的规定？",
+      "principal": {
+        "user_id": "demo_analyst",
+        "space_id": "synthetic_shop"
+      },
+      "snapshot": "current",
+      "conversation_id": "synthetic_user_boundary_1"
+    },
+    {
+      "query_id": "user_boundary_paraphrase",
+      "group_id": "user_boundary",
+      "text": "我能用那条只看蓝色箱子、不看红色箱子的补货偏好吗？",
+      "principal": {
+        "user_id": "demo_analyst",
+        "space_id": "synthetic_shop"
+      },
+      "snapshot": "current",
+      "conversation_id": "synthetic_user_boundary_2"
+    },
+    {
+      "query_id": "space_boundary_direct",
+      "group_id": "space_boundary",
+      "text": "年度会员续订应该按contract_id去重吗？",
+      "principal": {
+        "user_id": "demo_analyst",
+        "space_id": "synthetic_shop"
+      },
+      "snapshot": "current",
+      "conversation_id": "synthetic_space_boundary_1"
+    },
+    {
+      "query_id": "space_boundary_paraphrase",
+      "group_id": "space_boundary",
+      "text": "合成年费合同的续约人数到底按哪条规则数？",
+      "principal": {
+        "user_id": "demo_analyst",
+        "space_id": "synthetic_shop"
+      },
+      "snapshot": "current",
+      "conversation_id": "synthetic_space_boundary_2"
+    },
+    {
+      "query_id": "knowledge_revised_direct",
+      "group_id": "knowledge_revised",
+      "text": "现在的GMV成交额还是照原来第3版记忆计算吗？",
+      "principal": {
+        "user_id": "demo_analyst",
+        "space_id": "synthetic_shop"
+      },
+      "snapshot": "knowledge_revised",
+      "conversation_id": "synthetic_knowledge_revised_1"
+    },
+    {
+      "query_id": "knowledge_revised_paraphrase",
+      "group_id": "knowledge_revised",
+      "text": "成交额定义文档刚改过版，以前那条排除配送费的个人经验还有效吗？",
+      "principal": {
+        "user_id": "demo_analyst",
+        "space_id": "synthetic_shop"
+      },
+      "snapshot": "knowledge_revised",
+      "conversation_id": "synthetic_knowledge_revised_2"
+    },
+    {
+      "query_id": "unverified_correction_direct",
+      "group_id": "unverified_correction",
+      "text": "活动转化分析要排除is_demo=1，这条说法核实过了吗？",
+      "principal": {
+        "user_id": "demo_analyst",
+        "space_id": "synthetic_shop"
+      },
+      "snapshot": "current",
+      "conversation_id": "synthetic_unverified_correction_1"
+    },
+    {
+      "query_id": "unverified_correction_paraphrase",
+      "group_id": "unverified_correction",
+      "text": "有人说把演示订单排掉再看活动效果，有没有我记下的待确认线索？",
+      "principal": {
+        "user_id": "demo_analyst",
+        "space_id": "synthetic_shop"
+      },
+      "snapshot": "current",
+      "conversation_id": "synthetic_unverified_correction_2"
+    }
+  ]
+}

@@ -1,0 +1,96 @@
+{
+  "reviewer": "audit_agent_reality（未参与对应实现的独立语义审查者）",
+  "reviewed_date": "2026-10-05",
+  "conclusion": "passed_for_selected_case_only",
+  "scope": "聊天说明修改后的S01单题正式官方复验；不覆盖P01-P05或完整16题，不用代表拼接声明AC08或MVP完成。",
+  "evidence": ".local/model-workflow/answer-scope-quality-representative-result.json",
+  "evidence_sha256": "de665a80c549238e8fa2a0ef7f41a42ddabaa054d28fb204b56366cbcbd1df46",
+  "evidence_kind": "official_representative_semantic_review",
+  "summary": "S01正式回答可按原题通过：解释行级付款累计、截止与成功筛选、LEFT JOIN/COALESCE补零、退款CHECK与有效保存值；零元成交未定义，无确定业务映射。完整加工公式准确；跨粒度例子使用可能性并提供CASE优先级，未再次将整单付款正数当paid充分条件。",
+  "checks": [
+    {
+      "id": "S01",
+      "passed": true,
+      "required_facts": [
+        {
+          "fact": "行级成功charge累计，按快照截止和成功状态筛选，付款与退款分开。",
+          "passed": true
+        },
+        {
+          "fact": "左连接付款聚合且COALESCE补0，取消/未付行保留。",
+          "passed": true
+        },
+        {
+          "fact": "正数事件约束只说明资金事件金额，不能推出未定义成交价。",
+          "passed": true
+        },
+        {
+          "fact": "只有成功退款可使中间paid=0，但目标退款CHECK拒绝该输入；实际零付款记录的退款为0、paid_at为NULL。",
+          "passed": true
+        },
+        {
+          "fact": "0不必然等于零元成交、整单unpaid或cancelled；同单其他行可付款，本行仍可能为0。",
+          "passed": true
+        },
+        {
+          "fact": "不知道实际零值行频率/分布，未定义业务概念保持未知；取数须另行确认。",
+          "passed": true
+        }
+      ],
+      "finding_ids": []
+    }
+  ],
+  "findings": [],
+  "verification": {
+    "formal_s01_committed": true,
+    "formal_s01_matches_report_persisted_message": true,
+    "formal_s01_matches_assistant_committed_event": true,
+    "processing_sql_block_matches_source_ignoring_whitespace": true,
+    "read_complete_processing_sql_v1": true,
+    "semantic_source_sha256": {
+      "docs/sources/schema.sql": "49c13a97ad3b53bf161d549d35cc33f741b2d47701c2b744c20883cfedf2b72a",
+      "docs/sources/etl.sql": "42e2f1e7dfbd74bcbd07a0b2a712bd85b73adeb65ba8cf86e29619c07724de56",
+      "docs/sources/business-guide.md": "db322cbb2bb4d7f92e9ca6bc56d0e4ee8cd957354ff1b78c41ece5bee258e610"
+    },
+    "source_snapshot_code_sha256": {
+      "apps/agent/session/resources.ts": "43cd80ffd7283e06f6e9cafc6eb3bf73d79d647ae81858aaf0eada23e056fb47",
+      "apps/agent/session/deliver.ts": "0385eb6d192e157a475a7ac1b6eed8cc1e9faca9fb9a3fbf310d9f77cdaa7bb2",
+      "apps/agent/session/checkpoint.ts": "24ff13be74efae72e0e77e272b7eed6a4e872f758e24f236bddfcb8564ea0d0f",
+      "crates/data-agent/src/modules/ingestion/prefill.rs": "c0afb798f11cd9047ba6c7c56dde08ba2d5463759316463f27c19ee1098914ef"
+    },
+    "official_requests": 4,
+    "receipt_count": 4,
+    "all_receipts_settled": true,
+    "ledger": {
+      "calls": 4,
+      "state": "active",
+      "spent_micros": 25260,
+      "reserved_micros": 0
+    },
+    "reviewer_official_requests_added": 0,
+    "reviewer_mysql_requests_added": 0
+  },
+  "prior_findings_rechecked": [
+    {
+      "id": "S01-PAID-BRANCH-PRECONDITIONS",
+      "status": "正文称本行仍可为0而整单是paid，表达可存在的组合；前面的完整CASE明确取消与全退优先，没有t.paid>0因而paid的必然因果。"
+    },
+    {
+      "id": "S01-UNDEFINED-CONCEPT-MAPPING",
+      "status": "明确不能由资金正数约束反推未定义成交价，也不能确定若存在零元成交会映射到何值。"
+    },
+    {
+      "id": "S01-SQLITE-ABORT-NOT-ROLLBACK",
+      "status": "只陈述目标CHECK拒绝不能落表，没有再次承诺自动整事务回滚。"
+    },
+    {
+      "id": "S01-REFUND-ONLY-OUTPUT",
+      "status": "明确中间分组与成功保存目标值的区别，refund-only不能作为成功零付款记录成因。"
+    }
+  ],
+  "non_blocking_notes": [
+    "回答中的每笔成功charge为正须按该段已经给出的success及快照截止筛选理解，不按脱离上下文的全时间范围重判。",
+    "source_status取消分支在SQL中明确为l.source_status；后文称其整单状态优先cancelled按目标字段业务名称理解，未断言同单所有行状态相同。",
+    "只读审查单次输出不证明同类问法整体准确率，也不证明其他题或后续修改后的版本完成。"
+  ]
+}

@@ -1,0 +1,216 @@
+{
+  "reviewer": "audit_agent_reality（未参与对应实现的独立语义审查者）",
+  "reviewed_date": "2026-10-05",
+  "conclusion": "passed_for_catalog_representative_only",
+  "overall_mvp_complete": false,
+  "scope": "单个从零构造的通用目录表：本表及上游DDL/加工SQL、关联业务文档和仅关联上游金额字段的文档；7个语义条目初次/人工修改后再次的分析与复核，以及真实Pi读取维护产物后的正式解释。",
+  "evidence": ".local/model-workflow/catalog-semantic-sample-result.json",
+  "evidence_sha256": "3be732ee6637939792db7f978834bb355520f7b81ce1f26514f21a4659db63ef",
+  "evidence_kind": "official_representative_semantic_review",
+  "summary": "限定代表通过。两次正式预填的7个条目与4份实际冻结资料一致；四阶段93条引用全部逐字匹配对应来源及版本。再次预填保留人工有效值，实际Pi工具回执将新候选标为pending_review。正式解释正确说明粒度、人民币元、上海本地日、购买事件数、退款边界及税费/运费未知，无编造JOIN。11次官方调用全结算、预留0。确认状态和元数据缺失两处表达不够清楚，作为非阻塞观察保留。",
+  "checks": [
+    {
+      "id": "description",
+      "initial_passed": true,
+      "repeated_passed": true,
+      "passed": true,
+      "assessment": "两轮正确说明营业日×渠道的购买事件汇总用途；初轮说明偏长但未给出错误业务结论。再次建议未覆盖人工说明，实际工具回执仍以人工文本为有效值。"
+    },
+    {
+      "id": "grain",
+      "initial_passed": true,
+      "repeated_passed": true,
+      "passed": true,
+      "assessment": "两轮按business_day与channel组合解释每行，以purchase筛选和GROUP BY对应粒度；再次明确refund不参与生成行，没有将事件条数当客户数。"
+    },
+    {
+      "id": "time",
+      "initial_passed": true,
+      "repeated_passed": true,
+      "passed": true,
+      "assessment": "两轮依据业务文档采用Asia/Shanghai本地字符串YYYY-MM-DD HH:mm:ss，按substr前10字符取日期；没有按旧样例套用UTC或补出时区转换。实际数据日期范围未提供，保留未知正确。"
+    },
+    {
+      "id": "keys",
+      "initial_passed": true,
+      "repeated_passed": true,
+      "passed": true,
+      "assessment": "两轮正式建议区分目标复合主键与上游event_id，说明分组产出与目标约束的不同作用；初稿较宽的写入措辞已在正式复核中收窄，没有声称重复运行INSERT幂等。"
+    },
+    {
+      "id": "filters",
+      "initial_passed": true,
+      "repeated_passed": true,
+      "passed": true,
+      "assessment": "两轮只纳入purchase并排除refund；相关CHECK明确归属上游，再次限定经该加工路径的channel和非负金额，未把上游约束冒充目标表约束。"
+    },
+    {
+      "id": "metrics",
+      "initial_passed": true,
+      "repeated_passed": true,
+      "passed": true,
+      "assessment": "两轮明确SUM(amount_yuan)、COUNT(*)，人民币元且不换算为分，购买事件数不是客户数；退款不冲抵本表金额，不能计算扣退款净额。"
+    },
+    {
+      "id": "limitations",
+      "initial_passed": true,
+      "repeated_passed": true,
+      "passed": true,
+      "assessment": "两轮保留税费和运费是否包含尚未定义、不能计算退款净额、不能推客户数和血缘不等于查询JOIN；未编造可用关联键或净额公式。"
+    },
+    {
+      "id": "HUMAN-OVERRIDE-AND-CANDIDATE",
+      "passed": true,
+      "assessment": "版本4人工description的effective_value与human_override在版本6完整保留；新suggestion.value独立保存，review_state=needs_review。实际两次read_knowledge回执中人工正文完整、候选详情完整且application=pending_review。候选没有取代人工正文。"
+    },
+    {
+      "id": "PI-EXPLANATION",
+      "passed": true,
+      "assessment": "正式committed助手消息与报告explanation相同，运行finished。回答引用表版本6及两份文档版本1，正确复述本代表业务事实、计算公式和真实未知；说明元数据约束与文档约定的出处。工具轨迹含实际知识读取，没有request_query、validate_sql、get_query或cancel_query，本代表runner另断言会话查询数为0。"
+    }
+  ],
+  "findings": [],
+  "verification": {
+    "official_requests": 11,
+    "prefill_requests": 4,
+    "pi_requests": 7,
+    "receipt_count": 11,
+    "all_receipts_settled": true,
+    "ledger": {
+      "calls": 11,
+      "state": "active",
+      "spent_micros": 112791,
+      "reserved_micros": 0
+    },
+    "provider": "deepseek",
+    "model": "deepseek-flash",
+    "thinking_level": "high",
+    "quote_counts": {
+      "initial_review": 23,
+      "initial_analysis": 26,
+      "repeated_review": 22,
+      "repeated_analysis": 22
+    },
+    "quote_count": 93,
+    "quote_errors": [],
+    "formal_suggestions_match_review_result": true,
+    "human_effective_value_and_record_preserved": true,
+    "model_receipt_candidate_application": "pending_review",
+    "formal_explanation_matches_committed_message": true,
+    "source_snapshot_file_count": 124,
+    "source_snapshot_current_hashes_match": false,
+    "source_snapshot_fingerprint_algorithm": "SHA256 of sorted path + TAB + SHA256 + newline",
+    "source_snapshot_sha256": "8ed1541a32c55209216fda811083347c7477dbd7e4fd27eea669b2f9c638528b",
+    "source_snapshot_code_sha256": {
+      "apps/agent/session/resources.ts": "106afca0f3288a04b6a1a63160304b40a1f5933c5dda52892d4fc1b817c14866",
+      "apps/agent/tools/data-tools.ts": "eaae774a0b373c5547483eba588aa3cc0809ebcbe94adcfe8dccdad3ae32b016",
+      "crates/data-agent/src/modules/ingestion/prefill.rs": "5fdbb2dd9decef94177310a6dc04acb292d1e140a4e2e8e2ed5806829dcb1afa",
+      "crates/data-agent/src/modules/retrieval/mod.rs": "f6e0385960eb3e4fa22d1ade440c9f55427937cc28f4819b432cf5e004257b16",
+      "crates/data-agent/src/use_cases/prefill_materials.rs": "bcbe490d2d8fa700dff1e65f82b93b92e06b47f57f1b4c38fc96948a46dfec64",
+      "crates/data-agent/src/use_cases/knowledge_sources.rs": "c54b2a894ec088ea03a3e5de79371ab5b30180bee140a477ccd5c1ee0d4146e2",
+      "tests/mvp/run-catalog-semantic-sample.mjs": "bd2d1d4576465798856c8caf699b8c04d5d98da61b2256d9bf972ddecaf8b5f2"
+    },
+    "reviewer_official_requests_added": 0,
+    "reviewer_mysql_requests_added": 0,
+    "reviewer_builds_added": 0,
+    "process_exit_evidence": "父代理确认13237完整退出0；本审查者只读核对最终产物、调用回执、实际材料、工具回执和正式输出。",
+    "source_snapshot_matched_at_initial_review": true,
+    "current_applicability_review": {
+      "date": "2026-10-05",
+      "artifact_unchanged": true,
+      "official_requests_remain": 11,
+      "new_official_requests": 0,
+      "historical_snapshot_file_count": 124,
+      "currently_unchanged_snapshot_files": 118,
+      "currently_changed_snapshot_files": 6,
+      "changed_files": {
+        "apps/agent/session/resources.ts": {
+          "historical_sha256": "106afca0f3288a04b6a1a63160304b40a1f5933c5dda52892d4fc1b817c14866",
+          "current_sha256": "b5ac7860b55ae3ea2acfe1e778b4f0f4de20503a3354da5c783391d103023c13",
+          "assessment": "当前聊天系统指令已经精简，字段解释、来源完整性、人工有效值与新候选、SQL说明等要求以新的文字组织。该文件直接决定Pi系统提示，原代表的7次Pi响应和最终解释仅为旧提示下已发生的历史证据；未用当前提示重新运行通用目录题，不能声称新提示下目录解释质量通过。预填模型的材料装配与分析/复核实现不在本文件内，其未变路径另按实际指纹记录。"
+        },
+        "apps/agent/tools/data-tools.ts": {
+          "historical_sha256": "eaae774a0b373c5547483eba588aa3cc0809ebcbe94adcfe8dccdad3ae32b016",
+          "current_sha256": "c47f81694870330c93f7e99a5eb31cf41815ba638dbb6a780293c98065bb9324",
+          "assessment": "当前manage_personal_asset说明改为允许定位引用后由宿主补齐同句限定，body/scope保留模型判断。read_knowledge的独立建议分页与pending_review说明仍和本轮实际工具回执相符；通用目录题没有调用manage_personal_asset。但工具说明本身进入Pi工具集，因此原7次Pi响应仍是历史试验，不承诺当前工具提示下会生成相同答案。"
+        },
+        "crates/data-agent/src/modules/assets/mod.rs": {
+          "historical_sha256": "b3d93854336d536b8c92de1eb223da97e5456ab393e19592805e74dadd5cfb79",
+          "current_sha256": "3ef444001787e44b16637214c464531734fa2b2fa91c8471ca2a2f625ce1a3e0",
+          "assessment": "当前memory_source对逗号边界引用补齐后半句并核对临时/否定限定，返回完整审计source_text；测试覆盖B05句式及尾部否定。此路径只在保存/修订个人记忆使用，原通用目录代表没有执行该工具；预填材料、采用及知识投影没有经过此函数。本记录不验收该记忆修复。"
+        },
+        "packages/contracts/generated/boundary.rs": {
+          "historical_sha256": "5e92b0c1f18428426eca4bc214ba431941239c2e2d71c977fe095df71781243b",
+          "current_sha256": "970160e868641b53bc84e5e8274fed52453b5800068b77ba6678354e80f22bcf",
+          "assessment": "已检查当前AssetToolInput.instruction_quote仍为Option<String>及省略未提供字段的序列化注解，文档说明同步来源规则。生成文件历史哈希与当前不同；本代表使用的知识与预填业务实现指纹未变化。"
+        },
+        "packages/contracts/generated/boundary.ts": {
+          "historical_sha256": "3d71ae5af6fdd0d3914cb4786dc88686a40766671e622fbc860750c07d9ff414",
+          "current_sha256": "12fa69f9e7a2f71ba0995df45a7a567fb9594869f3ba99c3a35b69d5822acc71",
+          "assessment": "已检查当前AssetToolInput.instruction_quote仍为可选字符串类型，附带补齐同句限定的说明；生成类型随同源契约改变。类型文件历史哈希与当前不同，不把原官方调用当作新生成文件的运行验证。"
+        },
+        "packages/contracts/schema.json": {
+          "historical_sha256": "f55610af9b68746e1f27c2d35d133b68bc5ceba350a2cd8df2659b707c417d37",
+          "current_sha256": "78b1a289dda395a06c3d292b8bc1ba810b10fb084344b9e5f19aed7c13920d94",
+          "assessment": "已检查当前instruction_quote描述与保存/修订必填、停用禁带规则，以及ReadKnowledgeInput/ReadSourceInput和KnowledgeEntry相关结构。描述解释宿主补齐原文，未要求预填/知识读取调用提供记忆引用。整个schema文件哈希已变化，原契约快照仍按历史保留，不能标成相同。"
+        }
+      },
+      "unchanged_material_and_semantic_paths": {
+        "crates/data-agent/src/use_cases/prefill_materials.rs": "bcbe490d2d8fa700dff1e65f82b93b92e06b47f57f1b4c38fc96948a46dfec64",
+        "crates/data-agent/src/use_cases/knowledge_sources.rs": "c54b2a894ec088ea03a3e5de79371ab5b30180bee140a477ccd5c1ee0d4146e2",
+        "crates/data-agent/src/use_cases/semantic_prefill.rs": "7f619496e3b42d719cac416e9ffb5fb0f08f2fd24e6fcf5b0e5333e35d4718fd",
+        "crates/data-agent/src/modules/ingestion/prefill.rs": "5fdbb2dd9decef94177310a6dc04acb292d1e140a4e2e8e2ed5806829dcb1afa",
+        "crates/data-agent/src/modules/ingestion/store.rs": "cc5b7cba2fae46e6083236cd000ff149d20863e80b73d3fc83e2c5f4ad626a4a",
+        "crates/data-agent/src/modules/knowledge/store.rs": "25f74acb7b1b1342bf05a94bacf6119d662bd96de16d484a2e474190e0355280",
+        "crates/data-agent/src/modules/retrieval/mod.rs": "f6e0385960eb3e4fa22d1ade440c9f55427937cc28f4819b432cf5e004257b16",
+        "crates/data-agent/src/use_cases/data_tools.rs": "96e4062297ef09e2cbfd4298e3395c26d88203a4ca245de03ad3411383b2d65b",
+        "apps/agent/session/deliver.ts": "0385eb6d192e157a475a7ac1b6eed8cc1e9faca9fb9a3fbf310d9f77cdaa7bb2",
+        "tests/mvp/run-catalog-semantic-sample.mjs": "bd2d1d4576465798856c8caf699b8c04d5d98da61b2256d9bf972ddecaf8b5f2",
+        "tests/mvp/harness.mjs": "2d7d26ec83ae337fb9ec83a149001308c4efb9d4de6a01ff7d06b0d1436cc1b5"
+      },
+      "additional_evaluation_files_not_in_catalog_snapshot": [
+        {
+          "path": "scripts/evaluate_business_sql.py",
+          "current_sha256": "e9cdbe77c110d05b282ee7707bb519a8723bbe4fa08af7ab6f0c85ea0a8c11bc",
+          "assessment": "当前净收入核算器按输出列的金额角色和明确单位逐列计算，并为Q06使用标签筛选及数据变体；这是后续S03/Q06业务SQL验收工具。原catalog runner未导入/执行该核算器，原代表不执行取数SQL。原124份快照不覆盖本文件，无法从该快照给出其旧版本差异。"
+        },
+        {
+          "path": "tests/mvp/run-business-acceptance.mjs",
+          "current_sha256": "9434d8c71a158a0247495873fdf6deb39dba317c369d7d0a359efff4d719cc51",
+          "assessment": "当前S03通过verifyNetScope检查app范围，再逐列比较平台结果与独立结果；S05沿verifySql检查Q06。此runner与未改变的run-catalog-semantic-sample.mjs为不同入口，没有被原catalog试验调用。原快照不覆盖本文件，不能把原11次调用视作其验收。"
+        }
+      ],
+      "applicability": "原7条初次/再次建议、93条引用、人工值保护及当时Pi解释的语义审查结论作为历史记录保留。预填材料、原始来源、采用校验、知识读取和投影业务实现指纹均未变，限定保留这些路径对应的历史证据。当前系统提示resources、工具说明及跨语言文件已有变化；原Pi解释仅证明旧提示下该次代表的表现，没有验证新提示下的通用目录解释质量。本报告不是当前版本整条链路复跑或完整16题的通过记录。",
+      "method": "本次只读重新比对全部124份历史输入哈希：118份相同、6份变化；新变化为resources.ts，并已读取其当前完整内容。此前5份变化文件及2份独立验收文件的当前哈希保持上次适用性审查值；11份所列资料装配/预填/回源/投影及目录runner路径的哈希仍与原快照相同。未启动数据库、构建或模型，仅更新本审查记录的适用性说明。"
+    }
+  },
+  "non_blocking_notes": [
+    {
+      "id": "CONFIRMATION-STATUS-WORDING",
+      "observation": "聊天将人工description的needs_review与其他模型建议的unverified一起解释为当前维护文本与待确认解释，未直接讲明人工值仍生效、待复核的是新候选。",
+      "assessment": "实际持久状态和工具回执清楚区分二者；回答没有把候选说成人工修改，也没有推翻人工说明中的purchase/净额限制，不构成本代表错误业务结论。属于用户可读表达不足，建议后续在一般产品展示中清楚呈现有效值和待复核建议，不据此机械追加单题提示词。"
+    },
+    {
+      "id": "SOURCE-COMMENT-GAP-WORDING",
+      "observation": "标题写上游字段级说明缺失，正文具体限定catalog表/列注释为空，occurred_at依赖业务文档；此前已实际读取并引用原始金额字段说明。",
+      "assessment": "标题可能让用户误以为所有字段文档缺失，但完整回答没有否认已提供金额说明或将已知单位/时区写成未知。判为非阻塞措辞问题，不因此否定资料装配或本代表语义结论。"
+    },
+    {
+      "id": "NATIVE-METRICS-WORDING",
+      "observation": "开头称表内可用指标只有两个，随后列出两个已存储的指标列。",
+      "assessment": "按本问题和上下文理解为表中原生指标列；本轮没有询问派生均值等指标，不能据此证明系统支持或拒绝所有可派生指标。"
+    },
+    {
+      "id": "REVIEW-IMPROVEMENT",
+      "observation": "初次分析keys写入不会在该键上重复较宽；复核改为目标主键唯一性与GROUP BY每组一行。",
+      "assessment": "最终采用文本没有重复执行或事务恢复保证，不将已在两阶段内修正的草稿措辞升级为正式结果失败。"
+    }
+  ],
+  "limits": [
+    "这是一个清晰且相互一致的合成场景，规模为1张目标表、1张上游表、2份短文档和7个语义条目；不代表未见复杂SQL、冲突资料、全部字段对象或任意业务的准确率。",
+    "两阶段同模型不是独立正确性证明，本记录的通过结论来自对实际冻结资料与最终输出的另外核对。",
+    "本轮证明模型读取后的解释可用，未执行真实数据查询，未接真实Datasight、正式认证或真实用户试用。",
+    "该通用目录代表补充ALIGN-05的实际多条目验证，但不能代替完整16题、最终verify-increment收据或整个MVP验收。历史失败保持原结论。",
+    "审查结论绑定该次产物和源码快照；后续变更不能直接沿用本次通过结论。"
+  ]
+}

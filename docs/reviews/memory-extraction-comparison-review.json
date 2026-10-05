@@ -1,0 +1,207 @@
+{
+  "schema": 1,
+  "increment_id": "I2-MEMORY-EXTRACTION",
+  "conclusion": "passed",
+  "scope_sha256": "c466fb650f3cd4e5e47c5c0985f613d4815bac4c7d85df10f176f698c46ebd1a",
+  "reviewer": "独立审查者 /root/review_memory_comparison；未参与产品与实验实现",
+  "reviewed_at": "2026-10-05T15:03:11.105088+00:00",
+  "summary": "固定范围的记忆来源修复与原始消息Mem0比较交付审查通过。旧MVP303份输入仅assets/mod.rs变化；实验复用正式Pi SDK交付和Rust业务边界，未接入生产或扩展MVP。48组合逐项内容审查、原始账本和报告数字一致；正常完整成功均16/18，故障触达不齐与模型失败如实保留。证据采集的三文件后置修正已独立绑定精确SHA，未改输入、模型、预期或测量结果。此收据表示独立范围审查通过，最终六条验收仍由verify-increment执行并生成本增量收据。",
+  "requirements": [
+    "D10",
+    "D11",
+    "C05"
+  ],
+  "modules": [
+    "M04",
+    "M08",
+    "M09",
+    "M11"
+  ],
+  "allowed_paths": [
+    "crates/data-agent/src/modules/assets/mod.rs",
+    "experiments/mem0-comparison",
+    "docs/CURRENT.md",
+    "docs/research",
+    "docs/reviews"
+  ],
+  "findings": [],
+  "requirements_review": {
+    "D10": "来源句尾和换行误拒已修；正式记忆保存/修订/停用、个人隔离、临时范围和未核实线索逐项核对。没有把个人纠错改成公共口径。",
+    "D11": "生产仍为MySQL正式资产与既有检索，Mem0只存在实验接缝；Pi继续负责是否保存及原生会话/模型工具循环，未自建完整记忆框架。",
+    "C05": "实验同工具身份重放使用同正文，候选提交与未知费用留痕；固定预算不补额，失败不伪装成功。活动工具跨run恢复不在本次验证内，原需求映射未删除或声明全新覆盖。"
+  },
+  "boundary_review": {
+    "product_changed_paths": [
+      "crates/data-agent/src/modules/assets/mod.rs"
+    ],
+    "mvp_frozen_inputs": 303,
+    "mvp_unchanged_inputs": 302,
+    "pi_reuse": "runner导入apps/agent/session/deliver.ts并调用正式deliver；apps及锁定SDK输入保持原指纹。没有新增Agent规划/压缩/会话管理实现。",
+    "naming": "新增实现名称表达候选准备/提交、故障证据与实验评分职责，未用任务阶段编号命名产品代码。",
+    "public_materials": "本轮全为合成输入；凭据未被审查者读取，公开报告只用项目相对路径。verify-materials静态216项通过。",
+    "standards": "完整句引用修复和临时例外评分纠正有独立依据；正式测量后只纠正两项SQLSTATE证据误报，原评分保留。未修改题目或放宽最终含义标准。"
+  },
+  "acceptance_review": {
+    "MEMORY-AC01": {
+      "review": "通过：独立重跑2项Rust来源测试；diff只修完整句尾和换行边界，否定/临时限制反例保留。",
+      "evidence": [
+        "crates/data-agent/src/modules/assets/mod.rs"
+      ],
+      "command": [
+        "sh",
+        "-c",
+        "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --offline --locked -p data-agent --lib modules::assets::tests"
+      ],
+      "requirements": [
+        "D10"
+      ]
+    },
+    "MEMORY-AC02": {
+      "review": "通过：当前评分10项自测独立执行通过；临时覆盖按身份、版本、正文、来源及范围保持判断，缺失分母固定。",
+      "evidence": [
+        "experiments/mem0-comparison/agent-scoring.py"
+      ],
+      "command": [
+        "python3",
+        "experiments/mem0-comparison/agent-scoring.py",
+        "--self-test"
+      ],
+      "requirements": [
+        "D10",
+        "D11",
+        "C05"
+      ]
+    },
+    "MEMORY-AC04": {
+      "review": "通过：11项提交隔离测试已独立核对；真实小样及正式轨迹证明pending排序前过滤、独立候选身份和三路径重放。",
+      "evidence": [
+        "experiments/mem0-comparison/test_agent_memory.py",
+        "docs/reviews/memory-extraction-design-review.md",
+        ".local/mem0-agent-comparison/20261005T141435351Z_0b6e2c3e/measurement-source-review.json"
+      ],
+      "command": [
+        "python3",
+        "experiments/mem0-comparison/test_agent_memory.py"
+      ],
+      "requirements": [
+        "D10",
+        "D11",
+        "C05"
+      ]
+    },
+    "MEMORY-AC03": {
+      "review": "通过：独立audit()与48项内容审查完成；512次Agent账本、40次提取、19次提交和60次参数重放可核对。失败、未知预留、未触达和缺失如实保留，非100%正确验收。",
+      "evidence": [
+        ".local/mem0-agent-comparison/20261005T141435351Z_0b6e2c3e/result.json",
+        ".local/mem0-agent-comparison/20261005T141435351Z_0b6e2c3e/independent-content-review.json",
+        ".local/mem0-agent-comparison/20261005T141435351Z_0b6e2c3e/measurement-source-review.json",
+        ".local/mem0-agent-comparison/20261005T141435351Z_0b6e2c3e/scoring-log-corrected.json"
+      ],
+      "command": [
+        "python3",
+        "experiments/mem0-comparison/audit-agent-comparison.py",
+        ".local/mem0-agent-comparison/20261005T141435351Z_0b6e2c3e",
+        "--source-review",
+        ".local/mem0-agent-comparison/20261005T141435351Z_0b6e2c3e/measurement-source-review.json"
+      ],
+      "requirements": [
+        "D10",
+        "D11",
+        "C05"
+      ]
+    },
+    "MEMORY-AC05": {
+      "review": "已有知识工作流日志12项全部通过、officialRequests=0；命令复用原测试，未放宽断言。最终交付仍需由verify-increment在本次指纹执行。",
+      "evidence": [
+        ".local/memory-extraction-repair/knowledge-workflow.log",
+        "tests/mvp/check-knowledge-workflow.mjs"
+      ],
+      "command": [
+        "node",
+        "tests/mvp/check-knowledge-workflow.mjs"
+      ],
+      "requirements": [
+        "D10",
+        "C05"
+      ]
+    },
+    "MEMORY-AC06": {
+      "review": "已有日志完整记录Rust fmt/Clippy、TS检查、React构建通过；命令未改变。最终交付仍需由verify-increment在本次指纹执行。",
+      "evidence": [
+        ".local/memory-extraction-repair/code-quality.log",
+        "Makefile"
+      ],
+      "command": [
+        "make",
+        "verify-code"
+      ],
+      "requirements": [
+        "D10"
+      ]
+    }
+  },
+  "independent_measurement": {
+    "result_sha256": "fd1bc196ac109e077663f92575cecd900dd51a023aa090fc4577a98dd3a0f503",
+    "content_review_sha256": "2032b653d912e620fd2d8d246cc186b4ac1b864a67c4bae6e3512a0838a6b6b1",
+    "measurement_source_review_sha256": "4ef21e6aaa224a3c9f3693e93ed38d52c7a142d841b3223b14fcb16478ae3488",
+    "original_scoring_sha256": "bee99f38e3a4806a98ac8ee425cb0e333e048356e585bb6b849a624f00ad943b",
+    "report_sha256": "8d65e2c7f2a1256fd2a27279018b940ae930abd6749e83700c93641331844aa5",
+    "reviewed_combinations": 48,
+    "normal_full": {
+      "original": [
+        16,
+        18
+      ],
+      "mem0": [
+        16,
+        18
+      ]
+    },
+    "normal_memory": {
+      "original": [
+        16,
+        18
+      ],
+      "mem0": [
+        17,
+        18
+      ]
+    },
+    "normal_sql": {
+      "original": [
+        22,
+        24
+      ],
+      "mem0": [
+        24,
+        24
+      ]
+    },
+    "applicable_fault_success": {
+      "original": [
+        1,
+        2
+      ],
+      "mem0": [
+        4,
+        6
+      ]
+    },
+    "expected_messages": 108,
+    "attempted_messages": 107,
+    "complete_messages": 106,
+    "agent_calls": 512,
+    "spent_micros": 2400917,
+    "unknown_reserved_micros": 49152,
+    "report_metrics_recomputed": true,
+    "journal_sha_and_call_list_checked": true
+  },
+  "residual_limits": [
+    "三个正常保存失败仍因截短instruction_quote被scope_incomplete拒绝；24次尝试持续改scope，是后续错误反馈改进依据，本轮未再次扩大产品修复或重跑。",
+    "Mem0组一次最终退款快照解释错误；相应记忆和SQL正确，完整场景仍判失败。",
+    "一条模型请求失败、随后一条缺失，以及三项未触达故障均保留；审查通过不代表每题通过。",
+    "只有9类合成情境的两次重复，每场景最多两条记忆；未证明大记忆池或实际业务优劣，未验证真实Datasight。",
+    "六条验收需在本scope下完成；旧MVP收据只证明历史版本，不代替本增量收据。"
+  ],
+  "scope_file_count": 91
+}

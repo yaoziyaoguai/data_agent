@@ -1,0 +1,208 @@
+{
+  "reviewer": "independent-business-quality-reviewer",
+  "reviewed_at": "2026-10-05",
+  "conclusion": "measurement_complete",
+  "evidence": ".local/model-workflow/complete-business-result.json",
+  "evidence_sha256": "39c8835320520b27b73dbe83ec009a64b46a5799b325427a27a1794028e966e1",
+  "summary": {
+    "total": 16,
+    "passed": 12,
+    "failed": 4,
+    "accuracy": 0.75
+  },
+  "scope": {
+    "model_id": "deepseek-flash",
+    "thinking_level": "high",
+    "trial_id": "1a446fdb-831c-4a2e-9d35-8807f102af3c",
+    "verified_at": "2026-10-05T06:16:57.211Z",
+    "official_requests": 142,
+    "settled_receipts": 142,
+    "spent_micros": 1077145,
+    "reserved_micros": 0,
+    "machine_passed": 16,
+    "machine_total": 16,
+    "source_fingerprints_checked": 157,
+    "source_fingerprint_mismatches": [],
+    "resources_sha256": "b5ac7860b55ae3ea2acfe1e778b4f0f4de20503a3354da5c783391d103023c13"
+  },
+  "method": [
+    "只审查本轮正式产物，逐题核对最终助手回答、工具回执、SQL、独立结果及预填初次/人工/再次内容，不拼接历史轮次的正确答案。",
+    "依据原始 schema.sql、etl.sql、business-guide.md 以及原有 evaluation 验收要求判断；SQL 另核对产物已保存的独立样例和数据变体结果。",
+    "判分单位为完整场景。存在实质错误，或遗漏原验收明确要求保留的未知项，整题记 false；仍分别保留该题已通过的部分。P01–P05 要求初次及再次预填均满足原参考，不能用再次正确覆盖初次错误。",
+    "本次只读核对和写审查记录，未运行模型、数据库、构建或重新执行场景，未修改实现、提示词、原始资料或验收要求。",
+    "measurement_complete 表示16题已完成独立测量，保留4题失败，不表示语义全部正确，也不单独代表整个MVP所有工程要求完成。"
+  ],
+  "checks": [
+    {
+      "id": "S01",
+      "passed": false,
+      "summary": "付款0值的核心加工解释及行/整单区分正确，但把测试标记列为0金额成因，并把未定义的零价行放进可确定的来源列表，混淆已知规则与未知业务。",
+      "evidence_path": "checks[S01].artifacts.explanation",
+      "quotes": [
+        "**0 的可能来源**：① 从未付款；② 只有 `failed`/`pending` 事件（被 WHERE 排除，不计金额）；③ 付款发生时间 ≥ 快照截止（`event_at < '2026-02-04T00:00:00Z'` 右开，快照外）；④ 测试行 `is_test=1`；⑤ 业务上本就无 charge 事件的零价行。",
+        "在当前 DDL 约束下，成功 charge 金额必为正，因此\"`paid_at` 非空而 `paid=0`\"在样例数据中不应出现——若实际出现，说明数据违反约束，需要单独查证。"
+      ],
+      "counterevidence": [
+        "docs/sources/etl.sql 只按付款状态、时间筛事件；is_test 原样投影，不清零付款额。docs/sources/seed.sql 的 O1007 为 is_test=1，E011 是截止前成功 charge 9900分，是测试标记不导致0的直接反例。",
+        "schema、ETL和业务指南没有零价成交或免费商品的识别字段；回答后文也承认该业务口径未知。可作为待确认假设，但不能与ETL已知分支并列为确定来源。",
+        "目标DDL允许 paid_at TEXT 为空或非空，没有它与paid_amount_cents的联动CHECK；非空paid_at且金额0与当前加工路径不符，但不能笼统声称违反目标DDL约束。"
+      ],
+      "passed_parts": [
+        "正确识别整数分、成功事件累计、快照右开、先按行聚合再LEFT JOIN补0。",
+        "正确说明本行付款0不等于整单未付款；退款不会冲减累计付款字段。"
+      ]
+    },
+    {
+      "id": "S02",
+      "passed": true,
+      "summary": "按整月非测试支付行COUNT(DISTINCT customer_id)，保留全退客户；匿名订单单列，未把NULL合并成一个客户。产物独立结果为已知客户5、匿名订单1，七个数据变体全部一致，解释与SQL口径相符。",
+      "evidence_paths": ["checks[S02].artifacts.query", "checks[S02].artifacts.independent", "checks[S02].artifacts.explanation"]
+    },
+    {
+      "id": "S03",
+      "passed": true,
+      "summary": "补充app后保留1月条件，在同一任务生成草稿版本2、条件版本2；SQL绑定app，仍待用户确认。旧版本失效由场景机器检查证明，独立结果1600分及渠道/时期/测试行变体一致，回答解释为16元。",
+      "evidence_paths": ["checks[S03].artifacts.old", "checks[S03].artifacts.current", "checks[S03].artifacts.independent", "checks[S03].artifacts.explanation"]
+    },
+    {
+      "id": "S04",
+      "passed": true,
+      "summary": "未约定退款率时先澄清分母。订单口径先确定期间付款订单，再检查这些订单全部行的退款，独立结果4/8=0.5；金额口径按期间付款行累计退款/付款，结果3600/16000=0.225，未误写为退款发生月。3月零分母返回NULL并解释快照范围，三个SQL的独立变体全部一致。",
+      "evidence_paths": ["checks[S04].artifacts.clarification", "checks[S04].artifacts.order", "checks[S04].artifacts.money", "checks[S04].artifacts.empty", "checks[S04].traces"]
+    },
+    {
+      "id": "S05",
+      "passed": true,
+      "summary": "用EXISTS筛选vip或newsletter标签，避免一对多标签放大行金额；付款期间、测试排除和净收入公式正确。独立结果11600分及数据变体一致，已确认查询结果解释为116元，待确认状态与执行阶段区分正确。",
+      "evidence_paths": ["checks[S05].artifacts.query", "checks[S05].artifacts.independent", "checks[S05].artifacts.explanation"]
+    },
+    {
+      "id": "B04",
+      "passed": true,
+      "summary": "依据业务指南和加工资料区分order_date与行首笔成功付款paid_at，解释月底下单次月付款仅为条件式例子；缺少订单号和明细时没有断言某笔订单实际原因，UTC及快照限制明确。",
+      "evidence_paths": ["checks[B04].artifacts.explanation", "checks[B04].traces"]
+    },
+    {
+      "id": "B05",
+      "passed": true,
+      "summary": "本次明确全渠道优先；web偏好形成版本1，新会话SQL采用web；同一资产修改为app版本2后新会话采用app；停用版本3后新会话无渠道限制。回答、工具回执、资产版本和独立SQL结果一致，公共口径未被改写。",
+      "evidence_paths": ["checks[B05].artifacts.memory", "checks[B05].artifacts.changed", "checks[B05].artifacts.disabled", "checks[B05].artifacts.defaultWeb", "checks[B05].artifacts.defaultApp", "checks[B05].artifacts.explicitlyAll", "checks[B05].artifacts.afterDisabled"],
+      "minor_observation": "停用答复额外承诺以后未指定渠道会先确认，随后新会话按全渠道生成SQL。原场景要求是停用后不再采用旧偏好，已满足；该多余承诺记录为表述问题，未扩张成新增验收要求。"
+    },
+    {
+      "id": "B05-failure",
+      "passed": true,
+      "summary": "记忆保存两次unavailable回执后如实告知长期偏好未保存；当前及新会话均查全渠道，没有把失败保存当成有效记忆。两个SQL的独立结果和渠道变体均符合全渠道条件。",
+      "evidence_paths": ["checks[B05-failure].artifacts.failedSaveScope", "checks[B05-failure].artifacts.noFailedPreference", "checks[B05-failure].artifacts.explanation", "checks[B05-failure].traces"]
+    },
+    {
+      "id": "B06",
+      "passed": true,
+      "summary": "明确资料缺少退货件数，quantity只代表下单件数，不能用退款金额推算净售出件数；未生成伪造字段或结果。提出的下单件数等替代指标标明是不同口径并等待用户选择。",
+      "evidence_paths": ["checks[B06].artifacts.explanation", "checks[B06].traces"]
+    },
+    {
+      "id": "B07",
+      "passed": true,
+      "summary": "识别dim_customers只有当前地区快照、缺购买时地区历史；说明不能据此还原交易时地区，提出当前快照分析选项并形成待澄清状态，未擅自生成历史地区SQL。",
+      "evidence_paths": ["checks[B07].artifacts.explanation", "checks[B07].traces"]
+    },
+    {
+      "id": "B08",
+      "passed": false,
+      "summary": "长查询期间可提新问题，最终旧结果回归原任务且新查询仍待确认；但第二次回答把已确认并处于运行流程的旧查询说成仍待确认，错误要求用户再确认旧查询，属于用户可见状态误述。",
+      "evidence_path": "checks[B08].traces[0].snapshot.messages[event_seq=783]",
+      "quotes": [
+        "**两个任务互不干扰**：净收入查询（任务 `2d043a22-3e52-4ad0-8058-587526749e7f`，查询 `7515dfe2-...`）仍按自己的条件版本待确认，两者的结果不能互相替代。",
+        "两个查询都需你分别确认后才能取数。"
+      ],
+      "counterevidence": [
+        "tests/mvp/run-business-acceptance.mjs 的B08先确认original查询，再等状态submitted/running，之后才发送支付客户数的独立问题。original产物是确认前快照，不能据其awaiting_confirmation证明第二答正确。",
+        "get_query回执显示原查询7515dfe2-5b6c-4194-9bef-fdecd8cc9968最终为confirmed/succeeded，结果12400分，绑定原净收入任务2d043a22-3e52-4ad0-8058-587526749e7f。"
+      ],
+      "passed_parts": [
+        "新查询6146635c-4dda-44e2-9d43-f081138cf1d3绑定独立客户数任务，SQL及独立变体正确。",
+        "最终答复正确解释旧净收入124元并标原任务/条件版本，新客户数未被自动提交或旧结果覆盖。",
+        "该失败是语言状态报告不正确，不表示程序实际绕过确认或重复执行。"
+      ]
+    },
+    {
+      "id": "P01",
+      "passed": false,
+      "summary": "金额字段的主要事实、加工来源和人工保护均正确，但初次预填未保留原参考明确指定的税费/运费未知，仅列分摊算法和多币种缺口；再次虽补齐，初次覆盖不足仍按原要求记失败。",
+      "evidence_path": "checks[P01].artifacts.initial.entries[path=meaning].suggestion",
+      "quotes": [
+        "上游每笔付款事件金额按订单行分摊的具体算法未给出（资料只说明每笔事件已分摊至对应订单行），样例也不模拟折扣分摊算法；该业务场景适用性未验证。",
+        "资料未说明是否支持多币种或汇率换算；只规定单位为整数分、展示时可除以 100 得到元，且样例不模拟货币兑换，该业务场景适用性未验证。"
+      ],
+      "counterevidence": [
+        "docs/sources/evaluation/prefill-cases.json 的P01 unknowns要求：材料没有给出税费、运费或折扣分摊算法，不能补成付款金额的已知组成；共同评审说明要求未知或未覆盖内容明确保留缺口。",
+        "初次value、gaps与引用都未提税费/运费未知；这是明确要求的覆盖缺失，不是声称模型虚构了税费组成。"
+      ],
+      "passed_parts": [
+        "整数分、非空非负、按成功charge累计、行聚合、LEFT JOIN补0、可相加、净收入需扣退款正确。",
+        "再次内容明确不模拟税费和运费；人工effective_value及修改标记保留，新建议独立保存为needs_review。"
+      ]
+    },
+    {
+      "id": "P02",
+      "passed": false,
+      "summary": "paid_at的首笔成功付款、UTC、行粒度和跨月未覆盖等主要解释正确；初次预填却把仅有成功退款无charge解释成可写入目标表的NULL路径，忽略目标退款不得超过付款的CHECK，且COALESCE不会把正退款补成0。再次正确不覆盖初次错误。",
+      "evidence_path": "checks[P02].artifacts.initial.entries[path=meaning].suggestion.value",
+      "quotes": [
+        "该行在快照截止前没有成功 charge 事件时（左连接未命中，或该行仅有失败/等待事件与成功退款而使 MIN 取不到值）写入 NULL。",
+        "文档相应表述为“没有成功付款时，`paid_at` 为 `NULL`，两个金额为 0”（两个金额经 COALESCE 补 0）。"
+      ],
+      "counterevidence": [
+        "etl.sql先筛成功事件。假设某行只剩一笔成功refund 100分，则中间paid=0、refunded=100、paid_at=NULL；COALESCE(refunded,0)仍为100。",
+        "schema.sql目标约束refunded_amount_cents BETWEEN 0 AND paid_amount_cents拒绝上述0/100组合，所以它只能说明中间表达式为何NULL，不能说明该记录成功写入目标表。此为静态资料反例，本轮未执行额外SQL。"
+      ],
+      "passed_parts": [
+        "初次及再次其余核心事实有来源，分清下单日期和退款时间，保留同一行跨月分次付款及取消后付款未验证范围。",
+        "再次内容没有重复该错误，人工值、修改人和操作标识完整保留，候选仍为needs_review。"
+      ]
+    },
+    {
+      "id": "P03",
+      "passed": true,
+      "summary": "两轮正确解释TEXT可空、dim_customers.region来源、按唯一customer_id左连接、当前快照非购买时历史地区；匿名未匹配与已知客户缺地区两类NULL均保留。初次引用已说明连接唯一性，再次正文明确主键，未要求固定措辞。人工值与来源保留，新建议待审。",
+      "evidence_paths": ["checks[P03].artifacts.initial", "checks[P03].artifacts.edited", "checks[P03].artifacts.repeated"]
+    },
+    {
+      "id": "P04",
+      "passed": true,
+      "summary": "两轮正确区分目标INTEGER NOT NULL和上游quantity>0约束，解释l.quantity直接投影、订单行下单件数、SUM与行数/订单数的区别；明确无退货件数不能推导净售出件数。未知限制写在正文而非gaps数组，不按字段位置机械扣分。人工保护正确。",
+      "evidence_paths": ["checks[P04].artifacts.initial", "checks[P04].artifacts.edited", "checks[P04].artifacts.repeated"]
+    },
+    {
+      "id": "P05",
+      "passed": true,
+      "summary": "两轮完整说明四枚举及非空TEXT，取消优先、整单无付款、整单全退、其余paid的CASE顺序；区分本行全退与整单全退，不能用refunded筛所有退款。正确保留行source_status一致性和未模拟场景缺口；初次明确超额退款被目标CHECK拒绝。人工保护正确。",
+      "evidence_paths": ["checks[P05].artifacts.initial", "checks[P05].artifacts.edited", "checks[P05].artifacts.repeated"]
+    }
+  ],
+  "cross_cutting_evidence": {
+    "prefill_citations": {
+      "checked": 126,
+      "mismatches": 0,
+      "method": "初次与再次meaning建议的每条quote均在相应schema、etl或business-guide章节原文中匹配；只证明引用原文存在，不保证由此推断的业务结论正确。"
+    },
+    "prefill_manual_protection": {
+      "cases_checked": 5,
+      "versions": ["3", "4", "6"],
+      "effective_values_retained": 5,
+      "human_overrides_retained": 5,
+      "source_facts_retained": 5,
+      "repeated_review_state": "needs_review",
+      "note": "人工编辑后的confirmed与再次预填后的needs_review属于字段审阅状态；未把人工覆盖当成业务结果验证通过。"
+    },
+    "sql_result_review": "所有已保存的独立SQL核算及其数据变体均为passed，人工同时核对了SQL的期间、测试排除、渠道、去重和聚合口径；没有用SQL通过替代对自然语言、引用或实际状态的审查。"
+  },
+  "limitations": [
+    "75%是本轮固定16场景的完整场景通过率，含多轮和多次调用，不是142次调用的逐调用准确率，也不估计所有真实用户问题的总体准确率。",
+    "本轮已完整运行且全部机器断言通过，但语言业务质量4题失败，失败保留；不追加修复、提示词改写、换模型或重测以追求100%。",
+    "平台仍为mock，数据、SQL和文档为小规模合成零售资料；该结果不证明真实Datasight、真实业务、大规模目录检索或正式用户试用已经通过。",
+    "审查使用本轮持久产物及当前指纹匹配的源码/资料，未读取数据库中的完整预填实际请求包，不能单凭该记录扩大为所有模型输入安全性的证明。",
+    "本记录只完成既定业务质量测量；工程边界、启动、浏览器交互和全部MVP关闭还需对应独立证据，不能从measurement_complete直接推导。"
+  ]
+}

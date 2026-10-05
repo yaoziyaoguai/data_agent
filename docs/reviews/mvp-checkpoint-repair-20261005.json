@@ -1,0 +1,253 @@
+{
+  "schema": 1,
+  "reviewer": "independent-correctness-reviewer",
+  "reviewed_at": "2026-10-05T07:53:44.676191+00:00",
+  "increment": "I2-MVP",
+  "goal_revision": 12,
+  "conclusion": "passed",
+  "ready_for_final_increment_execution": true,
+  "overall_mvp_complete": false,
+  "scope_sha256": "41aa9c446564320f9a47a12e81317325a54b37ccc908ba93829074dd3a1d2f50",
+  "scope_binding": {
+    "method": "scripts.check_delivery.review_scope",
+    "file_count": 302,
+    "contract_sha256": "1477256200a4aff8642f06cc91e528895749ee78c5ebdfe32392968f07926227",
+    "decisions_sha256": "c6456f454f3efb5763440301d1ea3298c518024f0fede2cb6be7dd86fa103e3b",
+    "checker_sha256": "444fa265c86b916224f538c8cf7ec11eeab3699f3ef0c14e9e58df93929a2bdf",
+    "meaning": "绑定当前声明、要求、代码/测试/契约和证据输入，排除本审查记录及审查指针；最终收据仍须绑定本文件并完整执行十项验收。"
+  },
+  "summary": "限定差异审查通过。检查点修复保持原恢复选择规则，并由真实SQLx排序内存反例、大JSON回归和原Pi迁移/续聊流程支持；验收日志与源测量审查改动没有放宽原失败、超时或质量判分条件。原16题12/16质量测量作为修复前基线保留，不能称为修复后再次实测。当前可执行最终十项验收，尚无本轮完整成功收据。",
+  "independence": {
+    "implementation_role": "本审查者未修改生产实现、验收脚本或测试，仅先做只读诊断建议并创建本独立记录。",
+    "review_method": "核对CURRENT goal_revision=12、相关要求和M08契约；读取生产差异、测试及执行日志；以第三轮归档收据的旧文件哈希核对完整改动集合。store使用原副本精确diff，其余七份文件在内存逆向还原本轮修改后均匹配旧哈希。未重跑构建、数据库、集成测试或模型。",
+    "prior_review": "未变化的实现范围沿用docs/reviews/mvp-final-increment-20261005.json的原独立审查；该文件保持冻结历史，不能代替当前执行收据。"
+  },
+  "requirement_basis": [
+    {
+      "path": "docs/CURRENT.md",
+      "section": "delivery.increment / goal_revision=12 / 最终验收的检查点排序故障",
+      "requirements": [
+        "D08",
+        "D09",
+        "C01",
+        "C05",
+        "A02",
+        "A04",
+        "A09",
+        "A10"
+      ],
+      "acceptance": [
+        "I2-MVP-AC05",
+        "I2-MVP-AC08"
+      ]
+    },
+    {
+      "path": "docs/semantic-retrieval-design.md",
+      "section": "19.7 恢复与输出；20.3 证据适用范围；21 需求映射"
+    },
+    {
+      "path": "docs/architecture/runtime-modules.md",
+      "section": "5. M08 runtime：私有检查点、恢复链、原会话与authority校验"
+    }
+  ],
+  "diff_baseline": {
+    "receipt": ".local/checks/mvp-final-checks-runtime-failure.json",
+    "receipt_status": "failed",
+    "before_equals_after": true,
+    "old_review_scope_sha256": "07f2183e53c664c2c4686e6fae1bf93857a044f7574e20ac8b2d97c013a34aa3",
+    "note": "原审查文件不再是当前review指针，未被删除或改写。CURRENT仅是唯一状态记录；本轮生产与验收差异为下列八份文件。"
+  },
+  "reviewed_changes": [
+    {
+      "path": "crates/data-agent/src/modules/runtime/store.rs",
+      "before": "b6c277b02aaf5a81cf2faacc4d9070649d22a9402b0704f0a4a9ff195498e37e",
+      "after": "65ab6fbb9739589cfee8e6eabf5c60a468cf86c8a70b55f5be3f09f301afe4f8",
+      "review": "先选键后读检查点JSON；保留原选择语义，并添加真实MySQL/SQLx私有存储回归。"
+    },
+    {
+      "path": "docs/reviews/mvp-accuracy-20261005.md",
+      "before": "ed03d19efa1f29b032b34b965a5618f2717706e9968477093ec6f6179f33b3fe",
+      "after": "c33ff062b594f850595fa4bbdd4e20c296120a4011ba25d545ea4c01f6f5a958",
+      "review": "增加测量后工程修复说明，明确75%没有在修复后重测；原四项失败和分项统计不变。"
+    },
+    {
+      "path": "docs/semantic-retrieval-design.md",
+      "before": "d8d2c4b93b0ca5ccdc1c1267851f2ba2329ed6cda31b67f4e4379bad38b66501",
+      "after": "90cf401cf2da196a0a2156ca9b12a844dbfc242f91fb3f49fee05d0813890ded",
+      "review": "第20.3节补充修复后保留原测量的逐文件独立差异审查条件，不将工程修复名称视为效果不变。"
+    },
+    {
+      "path": "scripts/check_delivery.py",
+      "before": "366a8cc8eca72ffbd26e058db7769ccfde21864c7180713c22a02dd385efaa44",
+      "after": "444fa265c86b916224f538c8cf7ec11eeab3699f3ef0c14e9e58df93929a2bdf",
+      "review": "子命令输出由DEVNULL改为本地独占创建的0600日志，收据增加日志相对路径；退出码、超时、失败停止和前后指纹规则不变。"
+    },
+    {
+      "path": "scripts/test_check_delivery.py",
+      "before": "fce123bacf11eb4f0660997303af207ecacce709455b9d2a4c7c75007bcc21b4",
+      "after": "a46d82149e6b30b097cadcfd5f1899c23fb9037be0c913443cc012d141f8e847",
+      "review": "新增退出3的命令同时保留stdout/stderr与0600权限检查，仍断言收据失败。"
+    },
+    {
+      "path": "tests/mvp/check-checkpoint-storage.mjs",
+      "before": "b28b254da4b16ab15510a76199a507542ad90c1ebf66b514bbed983c62d6e57f",
+      "after": "12aac89bec26b23832afffe27cf7a890bf9977af1ffd7745bf5b3824516f2a80",
+      "review": "在原合成会话中调用真实Rust私有存储回归；原迁移、续聊、指纹和失效拒绝断言保持。"
+    },
+    {
+      "path": "tests/mvp/check-official-business-evidence.mjs",
+      "before": "b3e4bbed68b0a40c3c522134e4eb05cba31fd1abbf6a321665c23d2bce794ccc",
+      "after": "df9ea6dc455e5ef418045c3b717d4592d89f8e3de59d3a8754e886f6155cf827",
+      "review": "显式传入本审查，保留原11种拒绝反例，增加7种源差异拒绝及缺审查拒绝；总计2正例/19拒绝待执行。"
+    },
+    {
+      "path": "tests/mvp/run-business-acceptance.mjs",
+      "before": "0a159a6992164eceb8cfe0ac90cfe549cfa6c94d8ad072c5be335425e107b518",
+      "after": "7ed124e84db3db4f1eccee06777a33b9e5fabbcd74c901ef7cb7aca8f01ac9af",
+      "review": "新增显式源差异审查分支及诚实的测量版本输出；完整测量、逐题布尔判分、统计和调用回执条件保持。"
+    }
+  ],
+  "findings": [],
+  "resolved_findings": [
+    {
+      "id": "CHK-01",
+      "path": "crates/data-agent/src/modules/runtime/store.rs",
+      "result": "旧宽JSON排序失败已由合法p-first计划和实际SQLx稳定复现1038；修复先在不可合并的LIMIT派生表中筛选键，再按主键读取payload。",
+      "preserved_rules": [
+        "同一conversation_id且state=finished",
+        "内层保留检查点存在性JOIN，最新finished无检查点时仍选较早有效记录",
+        "按lease_epoch降序，不改为created_at或checkpoint.version",
+        "没有候选返回None，完整JSON内容不裁剪",
+        "当前recovery_chain优先、authority检查、旧inline不可变绑定及Pi原生会话恢复入口不变"
+      ],
+      "test_evidence": [
+        "多个超过512KiB的候选和262144字节会话sort_buffer_size",
+        "更高epoch无checkpoint、running、failed候选被排除",
+        "created_at逆序仍取最高有效lease_epoch",
+        "其他会话无候选返回None",
+        "强制检查点优先连接计划成功且完整JSON相等",
+        "原迁移/续聊/内部权限/旧租约/终态/失效依据测试通过"
+      ]
+    }
+  ],
+  "log_review": {
+    "output_handling": "os.open使用O_EXCL与0600，新时间戳目录下每条命令独立日志；stdout和stderr进入同一日志，终端与公开收据不包含正文。父进程关闭其文件句柄后，子进程仍持有自己的输出描述符。",
+    "failure_semantics": "非0退出、超时、命令启动失败仍为失败；超时/中断仍终止进程组；首个失败仍停止后续命令；收据仍要求所有命令成功且before=after。",
+    "limits": "日志用于本地排障，现有收据核验不把日志当成不可篡改证明；同权限本地材料仍依赖审查和执行纪律。"
+  },
+  "measurement_decision": "retain_original_measurement",
+  "measurement_evidence_sha256": "39c8835320520b27b73dbe83ec009a64b46a5799b325427a27a1794028e966e1",
+  "source_changes": [
+    {
+      "path": "crates/data-agent/src/modules/runtime/store.rs",
+      "before": "b6c277b02aaf5a81cf2faacc4d9070649d22a9402b0704f0a4a9ff195498e37e",
+      "after": "65ab6fbb9739589cfee8e6eabf5c60a468cf86c8a70b55f5be3f09f301afe4f8",
+      "reason": "生产改动仅将会话检查点查询改为在含LIMIT的派生表中选择恢复链ID，再按主键读取完整JSON；同会话、finished、检查点存在性与lease_epoch降序规则保留。新增cfg(test)私有存储回归不进入生产逻辑。实际SQLx反例与修复后大历史/选择语义测试已有证据。保留原质量测量为修复前基线，不据此声称修复后真实模型已重测。"
+    },
+    {
+      "path": "tests/mvp/run-business-acceptance.mjs",
+      "before": "0a159a6992164eceb8cfe0ac90cfe549cfa6c94d8ad072c5be335425e107b518",
+      "after": "7ed124e84db3db4f1eccee06777a33b9e5fabbcd74c901ef7cb7aca8f01ac9af",
+      "reason": "仅修改--audit分支及审计输出：默认仍要求原/现源哈希完全一致；显式--source-review才接受独立审查绑定的原产物SHA、完整逐文件前后哈希与原因，并输出measuredSourcesMatchCurrent=false。--run、--check、场景、独立预期、提示和模型调用逻辑均未改变。"
+    }
+  ],
+  "measurement_review": {
+    "artifact": ".local/model-workflow/complete-business-result.json",
+    "quality_review": "docs/reviews/mvp-business-quality-20261005.json",
+    "measured_source_files": 157,
+    "unchanged_source_files": 155,
+    "changed_source_files": 2,
+    "machine_cases": 16,
+    "quality": {
+      "total": 16,
+      "passed": 12,
+      "failed": 4,
+      "accuracy": 0.75
+    },
+    "failed_cases": [
+      "S01",
+      "B08",
+      "P01",
+      "P02"
+    ],
+    "official_calls": 142,
+    "receipt_state": "全部settled；原trial未知预留0",
+    "new_official_requests": 0,
+    "measuredSourcesMatchCurrent": false,
+    "model": "deepseek-flash",
+    "thinking_level": "high",
+    "scope_statement": "75%是工程修复前既有合成16场景的一次测量；原产物及逐题判分SHA未变，提示、知识、工具、业务题、SQL独立参考和模型配置未改变。本记录允许保留其历史基线，不证明修复后质量实测或业务泛化。",
+    "audit_guards": [
+      "未传--source-review仍要求原/现完整源哈希一致",
+      "显式审查必须passed、有reviewer、retain_original_measurement和精确原产物SHA",
+      "按path排序的source_changes必须精确覆盖原/现全集差异，逐项before/after一致且reason非空",
+      "完整16题、Flash/high、空pending、逐题布尔判分、准确汇总、已结算唯一回执和预留0规则保持",
+      "有变化时输出measuredSourcesMatchCurrent=false；--run与--check执行路径保持原样"
+    ]
+  },
+  "verification_review": [
+    {
+      "path": ".local/checks/mvp-checkpoint-sort-plan-reproduction.json",
+      "result": "旧合法连接计划exit1/1038；先选键计划exit0，完整630830字节原生JSON相同。"
+    },
+    {
+      "path": ".local/checks/mvp-checkpoint-sort-counterexample.log",
+      "result": "实际SQLx回归以1038失败，证明旧查询的可执行反例。"
+    },
+    {
+      "path": ".local/checks/mvp-checkpoint-sort-repaired.log",
+      "result": "SQLx回归1通过；原迁移/续聊和失效拒绝全部通过，legacyBytes=628551、referenceBytes=1118、journalBytes=714489，0官方调用。其后仅将测试模块移至文件尾以满足Clippy，最终冻结版本完整十项仍待执行。"
+    },
+    {
+      "path": ".local/checks/mvp-checkpoint-repair-code.log",
+      "result": "父代理确认完整退出0；日志核对fmt、all-targets Clippy、TypeScript、Web构建和178组同源契约通过。此前测试模块位于文件中部的Clippy失败不记为成功。"
+    },
+    {
+      "path": ".local/checks/mvp-delivery-log-validation.log",
+      "result": "16个交付检查器单测完整OK，覆盖新增日志及原失败、超时、中断、漂移和过期证据拒绝。"
+    }
+  ],
+  "prior_failures": [
+    {
+      "receipt": ".local/checks/mvp-final-checks-review-write-race.json",
+      "status": "failed",
+      "detail": "十条命令exit0，但执行期间最终审查文件变化；失败收据保留，不能记作通过。"
+    },
+    {
+      "receipt": ".local/checks/mvp-final-checks-knowledge-failure.json",
+      "status": "failed",
+      "detail": "第二轮AC01/02通过，AC03在45323ms退出2且未超时；缺少子命令日志，具体原因仍未确定，不能把本次checkpoint修复归因为该失败的修复。"
+    },
+    {
+      "receipt": ".local/checks/mvp-final-checks-runtime-failure.json",
+      "status": "failed",
+      "detail": "第三轮AC01–AC04通过，AC05退出2且未超时；前后输入一致。检查点排序1038已由后续有界诊断和反例确认。"
+    }
+  ],
+  "residual_risks": [
+    "当前尚无本轮十项统一成功收据；审查passed只表示限定差异可进入最终验收。",
+    "源差异审查和日志是普通本地证据，不防同权限篡改，也不替代模型、平台或用户授权。",
+    "真实Datasight、正式认证、用户试用、任意业务泛化与生产性能仍属于I3。",
+    "历史Pro的1次unknown与173016微美元预留保持历史；本轮Flash预留0不能覆盖它。"
+  ],
+  "testing_gaps": [
+    "父代理待执行当前2正例/19拒绝的官方测量证据检查；本记录仅完成其静态独立审查，不预报运行成功。",
+    "待以本冻结审查和当前输入完整执行I2-MVP-AC01至AC10；后续成功收据仅做只读核对，不再改写本文件。",
+    "真实模型质量按用户决定不追加重测，保留修复前12/16及四项失败。"
+  ],
+  "evidence_sha256": {
+    ".local/checks/checkpoint-store-before-sort-fix.rs": "b6c277b02aaf5a81cf2faacc4d9070649d22a9402b0704f0a4a9ff195498e37e",
+    ".local/checks/mvp-checkpoint-sort-native-reproduction.json": "5e40a36f48ab2988fcee64e15e5d7da514cc7c176eee6566b323c66a5682b12f",
+    ".local/checks/mvp-checkpoint-sort-plan-reproduction.json": "9800887eb6b797283b651e44e42f1b6dda1cb0df2faf98c979b5ab71f2e39c2d",
+    ".local/checks/mvp-checkpoint-sort-counterexample.log": "763ab5e057a9f06d67c14740c7f82e74a41e33c10445ef471a5ad2be7f8bb199",
+    ".local/checks/mvp-checkpoint-sort-repaired.log": "7c8dd1355a2bdbadccbba0760f9f917d74232aedc7b6f852212b4fb0bc708d67",
+    ".local/checks/mvp-checkpoint-repair-code.log": "0ed382ce80d3da148c58e204ab92abbe454e14dc6275d237fe1a130224d769d7",
+    ".local/checks/mvp-delivery-log-validation.log": "a4e545a0a0e3fa76b0033b373141a31e00e643d3247c880a40111c333d199ad8",
+    ".local/checks/mvp-final-checks-review-write-race.json": "c942d0c27168de6e36549289172a5f499643950ef58a0a613c6f3e02353e1d8c",
+    ".local/checks/mvp-final-checks-knowledge-failure.json": "9582caf8f84f795071592d4697c5ef705eab0cf9852deb72d22a048b2f46176f",
+    ".local/checks/mvp-final-checks-runtime-failure.json": "8d84886a07aa7b632a993c166594d5eb5a985bca12d1b9a2d27acba48fb57717",
+    "docs/reviews/mvp-final-increment-20261005.json": "da8ab1cd10e1a82b77c486523cc6bec2bb69954bb1188378ccce581c8836f66b",
+    ".local/model-workflow/complete-business-result.json": "39c8835320520b27b73dbe83ec009a64b46a5799b325427a27a1794028e966e1",
+    "docs/reviews/mvp-business-quality-20261005.json": "f86e5b76558aedd36aae7bef1367cf1a8e0ce05b7a33b67963bd677ad13fac01"
+  }
+}

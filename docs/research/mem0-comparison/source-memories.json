@@ -1,0 +1,412 @@
+{
+  "schema_version": 1,
+  "synthetic": true,
+  "description": "从零构造的记忆语料。没有来自真实业务或私人聊天的内容。",
+  "records": [
+    {
+      "asset_id": "monthly_buyers",
+      "version": "1",
+      "owner_id": "demo_analyst",
+      "space_id": "synthetic_shop",
+      "kind": "memory",
+      "name": "月购买人数去重",
+      "body": "月购买人数在整个月的已支付订单中按 customer_id 去重，不能把每日去重人数相加。",
+      "scope": "合成商店的月购买人数；按支付发生月统计。",
+      "verified": true,
+      "dependencies": [],
+      "source": {
+        "kind": "synthetic_fixture",
+        "reference": "authored_for_memory_comparison"
+      }
+    },
+    {
+      "asset_id": "order_grain",
+      "version": "1",
+      "owner_id": "demo_analyst",
+      "space_id": "synthetic_shop",
+      "kind": "memory",
+      "name": "订单数量与明细行",
+      "body": "订单明细一行是一件商品。同一 order_id 可有多行，订单数须按 order_id 去重，不能使用明细行数。",
+      "scope": "合成商店的订单数量；不适用于商品件数。",
+      "verified": true,
+      "dependencies": [],
+      "source": {
+        "kind": "synthetic_fixture",
+        "reference": "authored_for_memory_comparison"
+      }
+    },
+    {
+      "asset_id": "net_receipts",
+      "version": "1",
+      "owner_id": "demo_analyst",
+      "space_id": "synthetic_shop",
+      "kind": "memory",
+      "name": "净实收金额",
+      "body": "净实收金额为统计期内成功收款金额减去同期间实际退款金额；下单金额和优惠券面额不属于实收。",
+      "scope": "合成商店的现金收付分析；收款与退款分别按实际发生时间。",
+      "verified": true,
+      "dependencies": [],
+      "source": {
+        "kind": "synthetic_fixture",
+        "reference": "authored_for_memory_comparison"
+      }
+    },
+    {
+      "asset_id": "money_units",
+      "version": "1",
+      "owner_id": "demo_analyst",
+      "space_id": "synthetic_shop",
+      "kind": "memory",
+      "name": "金额单位换算",
+      "body": "paid_amount_minor 和 refund_amount_minor 的单位都是分。以元展示时先保持原精度计算，再除以100；不能直接加人民币符号当作元。",
+      "scope": "合成商店的这两个金额字段；不推广到其他单位字段。",
+      "verified": true,
+      "dependencies": [],
+      "source": {
+        "kind": "synthetic_fixture",
+        "reference": "authored_for_memory_comparison"
+      }
+    },
+    {
+      "asset_id": "payment_calendar",
+      "version": "1",
+      "owner_id": "demo_analyst",
+      "space_id": "synthetic_shop",
+      "kind": "memory",
+      "name": "支付日期边界",
+      "body": "支付时间 paid_at 保存为UTC。按北京时间的自然日或自然月分析支付时，先用 Asia/Shanghai 的边界确定区间，再换算为UTC过滤。",
+      "scope": "合成商店支付发生时间；不适用于按下单日期分组。",
+      "verified": true,
+      "dependencies": [],
+      "source": {
+        "kind": "synthetic_fixture",
+        "reference": "authored_for_memory_comparison"
+      }
+    },
+    {
+      "asset_id": "undefined_ratio",
+      "version": "1",
+      "owner_id": "demo_analyst",
+      "space_id": "synthetic_shop",
+      "kind": "memory",
+      "name": "零分母的比例",
+      "body": "分母为0时，该比例没有定义，输出NULL并解释没有可比较样本，不显示0%。",
+      "scope": "合成商店的转化与退款比例。",
+      "verified": true,
+      "dependencies": [],
+      "source": {
+        "kind": "synthetic_fixture",
+        "reference": "authored_for_memory_comparison"
+      }
+    },
+    {
+      "asset_id": "item_refund_rate",
+      "version": "1",
+      "owner_id": "demo_analyst",
+      "space_id": "synthetic_shop",
+      "kind": "memory",
+      "name": "按件计算退款比例",
+      "body": "按商品件数计算的退款比例，分子是退回件数，分母是发出件数；不能用退款订单数除以商品件数。",
+      "scope": "合成商店的按件退款比例；与按订单退款率不同。",
+      "verified": true,
+      "dependencies": [],
+      "source": {
+        "kind": "synthetic_fixture",
+        "reference": "authored_for_memory_comparison"
+      }
+    },
+    {
+      "asset_id": "default_channel",
+      "version": "1",
+      "owner_id": "demo_analyst",
+      "space_id": "synthetic_shop",
+      "kind": "memory",
+      "name": "默认分析渠道",
+      "body": "未明确指定渠道时，我的订单分析默认采用web渠道。本次问题明确指定渠道时，以本次要求为准。",
+      "scope": "本人在合成商店的默认订单分析偏好。",
+      "verified": true,
+      "dependencies": [],
+      "source": {
+        "kind": "synthetic_fixture",
+        "reference": "authored_for_memory_comparison"
+      }
+    },
+    {
+      "asset_id": "default_channel",
+      "version": "2",
+      "owner_id": "demo_analyst",
+      "space_id": "synthetic_shop",
+      "kind": "memory",
+      "name": "默认分析渠道",
+      "body": "未明确指定渠道时，我的订单分析默认采用app渠道。本次问题明确指定渠道时，以本次要求为准。",
+      "scope": "本人在合成商店的默认订单分析偏好。",
+      "verified": true,
+      "dependencies": [],
+      "source": {
+        "kind": "synthetic_fixture",
+        "reference": "authored_for_memory_comparison"
+      }
+    },
+    {
+      "asset_id": "daily_visitors",
+      "version": "1",
+      "owner_id": "demo_analyst",
+      "space_id": "synthetic_shop",
+      "kind": "memory",
+      "name": "每日访问人数",
+      "body": "每日访问人数按visitor_id在当天去重，未登录访客也参与。它不等于当天的购买客户数。",
+      "scope": "合成商店的访问分析。",
+      "verified": true,
+      "dependencies": [],
+      "source": {
+        "kind": "synthetic_fixture",
+        "reference": "authored_for_memory_comparison"
+      }
+    },
+    {
+      "asset_id": "campaign_audience",
+      "version": "1",
+      "owner_id": "demo_analyst",
+      "space_id": "synthetic_shop",
+      "kind": "memory",
+      "name": "活动参与人数",
+      "body": "活动参与人数按activity_id与member_id组合去重，同一人参与两个活动可以在各活动中各计一次。",
+      "scope": "合成商店的活动参与分析。",
+      "verified": true,
+      "dependencies": [],
+      "source": {
+        "kind": "synthetic_fixture",
+        "reference": "authored_for_memory_comparison"
+      }
+    },
+    {
+      "asset_id": "gmv_rule",
+      "version": "1",
+      "owner_id": "demo_analyst",
+      "space_id": "synthetic_shop",
+      "kind": "memory",
+      "name": "成交额采用的定义",
+      "body": "成交额按已支付商品的标价金额减商品折扣计算，运费单列；本记忆依据规则文档第3版。",
+      "scope": "合成商店的GMV口径；引用规则改版后需要复核。",
+      "verified": true,
+      "dependencies": [
+        {
+          "object_id": "synthetic_gmv_rule",
+          "version": "3"
+        }
+      ],
+      "source": {
+        "kind": "synthetic_fixture",
+        "reference": "authored_for_memory_comparison"
+      }
+    },
+    {
+      "asset_id": "delivery_fee",
+      "version": "1",
+      "owner_id": "demo_analyst",
+      "space_id": "synthetic_shop",
+      "kind": "memory",
+      "name": "配送费单列",
+      "body": "配送费保存在delivery_fee_minor中，单位为分，单独汇总展示。不要把它当作商品折扣。",
+      "scope": "合成商店的配送费用分析。",
+      "verified": true,
+      "dependencies": [],
+      "source": {
+        "kind": "synthetic_fixture",
+        "reference": "authored_for_memory_comparison"
+      }
+    },
+    {
+      "asset_id": "refund_calendar",
+      "version": "1",
+      "owner_id": "demo_analyst",
+      "space_id": "synthetic_shop",
+      "kind": "memory",
+      "name": "退款日期边界",
+      "body": "按发生时间分析退款时使用refund_at；按原订单月份分析退款归属是另一个问题，需要明确口径。",
+      "scope": "合成商店退款分析的时间选择。",
+      "verified": true,
+      "dependencies": [],
+      "source": {
+        "kind": "synthetic_fixture",
+        "reference": "authored_for_memory_comparison"
+      }
+    },
+    {
+      "asset_id": "cancelled_orders",
+      "version": "1",
+      "owner_id": "demo_analyst",
+      "space_id": "synthetic_shop",
+      "kind": "memory",
+      "name": "取消单与未付款单",
+      "body": "订单取消状态和未付款状态是不同字段。不能仅凭paid_amount为0判定订单已经取消。",
+      "scope": "合成商店的订单状态解释。",
+      "verified": true,
+      "dependencies": [],
+      "source": {
+        "kind": "synthetic_fixture",
+        "reference": "authored_for_memory_comparison"
+      }
+    },
+    {
+      "asset_id": "display_order",
+      "version": "1",
+      "owner_id": "demo_analyst",
+      "space_id": "synthetic_shop",
+      "kind": "memory",
+      "name": "渠道展示顺序",
+      "body": "展示渠道对比时，我偏好先列web，再列app，最后列门店。该顺序不改变查询的渠道范围。",
+      "scope": "本人的图表和表格展示偏好。",
+      "verified": true,
+      "dependencies": [],
+      "source": {
+        "kind": "synthetic_fixture",
+        "reference": "authored_for_memory_comparison"
+      }
+    },
+    {
+      "asset_id": "inventory_snapshot",
+      "version": "1",
+      "owner_id": "demo_analyst",
+      "space_id": "synthetic_shop",
+      "kind": "memory",
+      "name": "库存是时点数量",
+      "body": "期末库存取所需时点的库存快照，不能把每天的库存余额相加作为月末库存。",
+      "scope": "合成商店库存分析。",
+      "verified": true,
+      "dependencies": [],
+      "source": {
+        "kind": "synthetic_fixture",
+        "reference": "authored_for_memory_comparison"
+      }
+    },
+    {
+      "asset_id": "merchant_balance",
+      "version": "1",
+      "owner_id": "demo_analyst",
+      "space_id": "synthetic_shop",
+      "kind": "memory",
+      "name": "余额与发生额",
+      "body": "账户余额是一个时点的值；期间发生额才可按日期求和。月末余额取月末有效快照。",
+      "scope": "合成商店的商户资金账户。",
+      "verified": true,
+      "dependencies": [],
+      "source": {
+        "kind": "synthetic_fixture",
+        "reference": "authored_for_memory_comparison"
+      }
+    },
+    {
+      "asset_id": "discount_ratio",
+      "version": "1",
+      "owner_id": "demo_analyst",
+      "space_id": "synthetic_shop",
+      "kind": "memory",
+      "name": "折扣率分母",
+      "body": "折扣率以商品原标价为分母，折扣金额为分子；运费不参与。",
+      "scope": "合成商店的商品折扣分析。",
+      "verified": true,
+      "dependencies": [],
+      "source": {
+        "kind": "synthetic_fixture",
+        "reference": "authored_for_memory_comparison"
+      }
+    },
+    {
+      "asset_id": "refund_count",
+      "version": "1",
+      "owner_id": "demo_analyst",
+      "space_id": "synthetic_shop",
+      "kind": "memory",
+      "name": "退款笔数",
+      "body": "一张订单可发生多笔退款，退款笔数按refund_id计数，不能按order_id计数。",
+      "scope": "合成商店的退款交易笔数。",
+      "verified": true,
+      "dependencies": [],
+      "source": {
+        "kind": "synthetic_fixture",
+        "reference": "authored_for_memory_comparison"
+      }
+    },
+    {
+      "asset_id": "demo_filter",
+      "version": "1",
+      "owner_id": "demo_analyst",
+      "space_id": "synthetic_shop",
+      "kind": "memory",
+      "name": "待核实的演示订单排除建议",
+      "body": "用户提出统计活动转化时可能需要排除is_demo=1。该说法尚未核实，需要查正式定义，不能当作已生效规则。",
+      "scope": "合成商店活动转化分析的待查证线索。",
+      "verified": false,
+      "dependencies": [],
+      "source": {
+        "kind": "synthetic_fixture",
+        "reference": "authored_for_memory_comparison"
+      }
+    },
+    {
+      "asset_id": "other_user_policy",
+      "version": "1",
+      "owner_id": "another_analyst",
+      "space_id": "synthetic_shop",
+      "kind": "memory",
+      "name": "备件补货的独有偏好",
+      "body": "备件补货只统计蓝色周转箱批次，忽略红色周转箱。这是另一位用户的个人工作偏好。",
+      "scope": "仅另一位用户的备件补货工作。",
+      "verified": true,
+      "dependencies": [],
+      "source": {
+        "kind": "synthetic_fixture",
+        "reference": "authored_for_memory_comparison"
+      }
+    },
+    {
+      "asset_id": "subscription_policy",
+      "version": "1",
+      "owner_id": "demo_analyst",
+      "space_id": "synthetic_subscriptions",
+      "kind": "memory",
+      "name": "年度会员订阅的独有口径",
+      "body": "年度会员续订按contract_id去重，只统计续订日发生在统计期内的有效合同。",
+      "scope": "合成订阅空间的年度会员续订。",
+      "verified": true,
+      "dependencies": [],
+      "source": {
+        "kind": "synthetic_fixture",
+        "reference": "authored_for_memory_comparison"
+      }
+    },
+    {
+      "asset_id": "warehouse_picking",
+      "version": "1",
+      "owner_id": "demo_analyst",
+      "space_id": "synthetic_shop",
+      "kind": "memory",
+      "name": "仓库拣货耗时",
+      "body": "拣货耗时从picked_started_at到picked_finished_at，不包含打包和配送时间。",
+      "scope": "合成商店的仓库操作分析。",
+      "verified": true,
+      "dependencies": [],
+      "source": {
+        "kind": "synthetic_fixture",
+        "reference": "authored_for_memory_comparison"
+      }
+    },
+    {
+      "asset_id": "stock_turnover",
+      "version": "1",
+      "owner_id": "demo_analyst",
+      "space_id": "synthetic_shop",
+      "kind": "memory",
+      "name": "周转天数展示",
+      "body": "库存周转天数保留一位小数；缺失成本数据时说明无法计算，不能补为0。",
+      "scope": "合成商店库存周转分析。",
+      "verified": true,
+      "dependencies": [],
+      "source": {
+        "kind": "synthetic_fixture",
+        "reference": "authored_for_memory_comparison"
+      }
+    }
+  ]
+}

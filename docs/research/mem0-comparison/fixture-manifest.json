@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "purpose": "Frozen synthetic inputs for the Mem0 comparison; no execution results.",
+  "files": {
+    "source-memories.json": {
+      "sha256": "0669712f02c19a62436bbe205bd53e96948ec39849d89ce68328c342fc4d35f8",
+      "bytes": 14560
+    },
+    "questions.json": {
+      "sha256": "cd68ff7aea7465aada18071ad28fa355960e6cb3059719ec61da78c085cc3554",
+      "bytes": 14908
+    },
+    "expected-results.json": {
+      "sha256": "78f9c5b816996ece33db7ce8663b30818aa3b1271167575e740ea34f72b84224",
+      "bytes": 8787
+    },
+    "README.md": {
+      "sha256": "1281ed1038c488bb8d6339f03ed8f646265a99fbc9710bd8189258a9b7eb3579",
+      "bytes": 20344
+    }
+  },
+  "counts": {
+    "logical_assets": 24,
+    "version_records": 25,
+    "question_groups": 16,
+    "questions": 32,
+    "positive_questions": 22,
+    "negative_questions": 10
+  }
+}

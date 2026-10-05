@@ -1,0 +1,31 @@
+{
+  "nodes": 11,
+  "edges": 19,
+  "views": [
+    {
+      "file": "data-agent-runtime",
+      "width": 1920,
+      "height": 900,
+      "issues": []
+    },
+    {
+      "file": "data-agent-knowledge",
+      "width": 1920,
+      "height": 1050,
+      "issues": []
+    },
+    {
+      "file": "data-agent-memory",
+      "width": 1920,
+      "height": 1030,
+      "issues": []
+    },
+    {
+      "file": "data-agent-c4-container",
+      "width": 1920,
+      "height": 2980,
+      "issues": []
+    }
+  ],
+  "issues": []
+}

@@ -1,0 +1,137 @@
+{
+  "schema": 1,
+  "conclusion": "failed",
+  "reviewer": "independent audit_agent_reality; 未参与Pro接入改动、模型调用或验收runner实现",
+  "scope": "Pro在原问题、原业务资料及同一精简系统指令下的S01/S04代表。S01可完成语义判断；S04仅已提交的澄清可判断，其后续超时未完成。不得据此给出整轮通过率或模型整体排名。",
+  "overall_mvp_complete": false,
+  "evidence": ".local/model-workflow/pro-representative-result.json",
+  "evidence_sha256": "989777458e20134edd4d80fd61bb498453dd1cb91bd47fe23be4e54999fe4aeb",
+  "evidence_verified_at": "2026-10-05T04:07:21.348Z",
+  "database": "data_agent_trial_299a66ed422d23bc",
+  "trial_id": "8a0b9350-b2b5-485f-bb1a-1fd11ba0a1a5",
+  "evidence_kind": "official DeepSeek model; synthetic SQLite platform adapter and project-created materials",
+  "profile": {
+    "provider_id": "deepseek",
+    "model_id": "deepseek-v4-pro",
+    "thinking_level": "high",
+    "price_version": "2026-10-05-pro-peak-usd",
+    "input_limit": 32768,
+    "output_limit": 32768
+  },
+  "execution": {
+    "machine_passed": false,
+    "completion": "incomplete",
+    "selected_cases": ["S01", "S04"],
+    "machine_completed_cases": ["S01"],
+    "incomplete_cases": ["S04"],
+    "official_requests": 7,
+    "receipt_count": 7,
+    "settled_receipts": 6,
+    "unknown_receipts": 1,
+    "unknown_receipt_id": "b79a298f-bbba-48ce-bed6-ea0c51eca3db",
+    "unknown_receipt_usage": null,
+    "spent_micros": 113440,
+    "reserved_micros": 173016,
+    "accounting_note": "已结算费用为113440微美元，另有173016微美元预留尚未核销。unknown调用没有usage，不把预留当作已消费、已释放或可重新使用额度。",
+    "timeout": {
+      "case_id": "S04",
+      "error": "model_timeout",
+      "official_request_timeout_ms": 90000,
+      "configuration_source": "apps/agent/provider/deepseek.ts:29",
+      "stage": "已完成退款率分母澄清，收到用户选择按订单计算后，下一次模型请求超时。",
+      "claim_limit": "没有完整订单SQL、金额比例及零分母子场景产物，不能判断这些部分的语义正确性；一次超时也不能证明模型整体速度或稳定性。"
+    }
+  },
+  "findings": [
+    {
+      "id": "PRO-SEMANTIC-GRAIN-01",
+      "case_id": "S01",
+      "priority": 1,
+      "title": "行级零付款被错误限制为整单未付、取消或失败/等待付款",
+      "conversation_id": "556ac945-5f2b-471e-8073-7fd1c081785c",
+      "evidence_pointer": "checks[id=S01].artifacts.explanation",
+      "observed": "回答断言paid_amount_cents=0“只出现在以下情形”：该订单行未付款（order_status='unpaid'）、已取消，或其唯一/全部付款事件是failed/pending。",
+      "expected": "该字段是订单行付款累计，order_status的付款/退款分支来自整单金额。某行没有事件时可为0，同时因同单其他行已有付款而状态为paid，或因其他行全退而状态为refunded。不能把行级无付款等同于整单unpaid。",
+      "counterexample_from_existing_contract": {
+        "description": "同一非取消订单有两行，行1在快照前有成功charge100分，行2无付款事件。两行其他订单属性一致，均在快照前下单。",
+        "line2_without_refund": {"paid_amount_cents": 0, "refunded_amount_cents": 0, "paid_at": null, "order_status": "paid"},
+        "line2_after_line1_fully_refunded": {"paid_amount_cents": 0, "refunded_amount_cents": 0, "paid_at": null, "order_status": "refunded"},
+        "reason": "行2经LEFT JOIN补0，状态读取整单order_totals。它没有任何失败或等待事件，也没有取消，目标DDL允许0/0，故不属于回答列出的穷尽情形。",
+        "verification_scope": "沿用原DDL与ETL的静态推导，未添加实际数据库记录或运行新的模型请求；不冒称新增执行测试已通过。"
+      },
+      "basis": [
+        "docs/sources/schema.sql:45：paid_amount_cents允许0。",
+        "docs/sources/schema.sql:46：refunded_amount_cents=0在paid=0时合法。",
+        "docs/sources/etl.sql:14：order_totals按order_id聚合。",
+        "docs/sources/etl.sql:21：行金额COALESCE补0。",
+        "docs/sources/etl.sql:23：状态在行取消优先后依据整单paid/refunded判定。"
+      ],
+      "input_delivery_checked": {
+        "table_operation_id": "f1fcc50c-10ff-46d1-a29e-0bd5268c998a",
+        "upstream_document_operation_id": "db513228-83b3-4196-b279-43f673dea897",
+        "assessment": "实际read_knowledge回执含完整637字目标DDL、1397字ETL及862字上游文档；整单汇总、行级连接和状态CASE均已交给Pi。错误不能归因于这些来源未提供或被截断。"
+      },
+      "impact": "用户询问零付款原因时，回答排除了原数据契约允许的情况，会误导后续按状态筛选或排查。"
+    }
+  ],
+  "checks": [
+    {
+      "id": "S01",
+      "passed": false,
+      "status": "semantic_failed",
+      "machine_passed": true,
+      "official_requests": 3,
+      "summary": "主结论、成功charge过滤、按订单行聚合、整数分与COALESCE基本正确，也说明paid=0时退款必为0。但穷尽成因列表混淆行级金额和整单状态，见PRO-SEMANTIC-GRAIN-01。最终artifacts.explanation与committed助手消息一致。",
+      "boundary_assessment": {
+        "refund_only": "没有把仅成功refund且无charge明确列为可成功落表来源。其“没有charge时聚合结果为空”是过于宽的中间过程表述：仅refund时中间paid可为0，但目标CHECK拒绝该行。保留这一不严谨点，主要失败依据仍为明确的行级/整单混淆。",
+        "zero_value_charge": "raw_payments.amount_cents>0能够证明该模型不接受金额为0的charge事件，回答对此限制有依据。",
+        "zero_price_business": "资料没有商品成交价格或零元成交的业务定义。回答将“零价格商品/折扣摊成0元”写为样例不模拟，比原文更宽；不能把0金额charge被禁止等同于商业上的零元成交已被排除。本审查不把已明确限定的“无成功支付0元事件”单独判成错误，也不把这一额外措辞当成主要失败。"
+      }
+    },
+    {
+      "id": "S04",
+      "passed": null,
+      "status": "incomplete",
+      "machine_passed": false,
+      "summary": "已提交澄清正确区分订单、金额和客户分母，并等待用户选择；用户选按订单后模型请求超时。没有完整SQL和后续子场景证据，不评为语义错误，也不评为通过。",
+      "completed_subchecks": [
+        {"id": "refund_denominator_clarification", "passed": true, "summary": "三种候选口径的文字公式正确；订单率说明订单去重且包含全额/部分退款，没有默认执行猜测口径。"}
+      ],
+      "unverified_subchecks": ["order_refund_sql", "amount_refund_ratio_sql_and_explanation", "zero_denominator_sql_and_explanation"]
+    }
+  ],
+  "comparison_with_flash": {
+    "evidence": ".local/model-workflow/concise-instructions-representative-result.json",
+    "evidence_sha256": "4dc93f4b1d45c230a2cb57b2d8c2aecf01d33ffa2515f6bdac1aac66a03ae484",
+    "quality_review": "docs/reviews/mvp-concise-instructions-quality-20261005.json",
+    "same_resources_sha256": "b5ac7860b55ae3ea2acfe1e778b4f0f4de20503a3354da5c783391d103023c13",
+    "same_scope": "问题、业务资料、独立SQL核算器、精简聊天系统指令、input/output上限和high思考设置的指纹或配置相同。profile差异仅为model_id、trial_id和对应price_version。",
+    "reported_source_hash_changes": [
+      "apps/agent/session/deliver.ts",
+      "apps/api/src/routes.rs",
+      "crates/data-agent/src/modules/ingestion/prefill.rs",
+      "crates/data-agent/src/modules/runtime/model_calls/store.rs",
+      "packages/contracts/generated/boundary.rs",
+      "packages/contracts/generated/boundary.ts",
+      "packages/contracts/schema.json",
+      "tests/mvp/run-business-acceptance.mjs"
+    ],
+    "source_comparison_limit": "两份报告中8份源码指纹不同。当前相关代码支持按profile选择Pro、对应预算价格、模型契约和显示名称；本记录没有将这些变化假定为零行为影响，不能称为整个应用源码完全相同的严格单变量实验。Pro报告的全部sourceHashes与本次审查时源码匹配。",
+    "s01": "Flash代表错误地把整单全退推出每行付款>0；Pro代表错误地把行级零付款限定到整单unpaid/cancelled或失败/等待事件。两份已完成回答均未通过同一粒度标准，不能据此证明更换为Pro已经解决该问题。",
+    "s04": "Flash代表完成且通过语义审查；Pro只完成正确的澄清，后续超时。因此不能比较两者完整S04的质量或给出整轮通过率。",
+    "conclusion_limit": "没有足够样本支持模型整体强弱、稳定性或成本效益排名；尤其不能把Pro少完成的调用数当作同等任务更省。"
+  },
+  "review_actions": {
+    "new_official_requests": 0,
+    "database_requests": 0,
+    "credential_reads": 0,
+    "source_or_test_edits": 0,
+    "method": "只读正式产物、上一轮Flash代表、原业务资料、源码中相关模型配置和超时定义，核对SHA、实际工具回执及已提交回答；仅创建本审查记录。"
+  },
+  "limits": [
+    "本轮没有完成原计划的两题代表，更没有完成完整16题；不创建最终MVP质量通过记录。",
+    "S01语义失败与S04执行超时分别记录；不拿超时推断语义错误，也不以S01机器通过抵消可核对的实质错误。",
+    "unknown调用的最终用量和费用尚未查证，保留原预留账本；本审查不修改账本或发起重试。",
+    "历史Flash失败记录和原通用目录历史证据保持原范围，不拼接成新的完整验收结果。"
+  ]
+}

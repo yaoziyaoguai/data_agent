@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="900" viewBox="0 0 1920 900" role="img" aria-labelledby="title description"><title id="title">Data Agent 软件架构 · 工作台与 Agent</title><desc id="description">同一架构按工作台与 Agent、共享语义与查询、个人记忆三个视图呈现。组件、调用方向与职责不随视图变化。MySQL 保存正式状态，Pi 是唯一 Agent 循环，Mem0 处理个人记忆，Milvus 是可重建索引。</desc><g transform="translate(0 0)"><g class="view" data-view="runtime" font-family="Arial, PingFang SC, Microsoft YaHei, sans-serif">
+    <defs><marker id="arrow-runtime" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10Z" fill="#718297"/></marker></defs>
+    <rect width="1920" height="900" fill="white"/>
+    <text x="35" y="38" font-size="14" font-weight="600" fill="#577395" text-anchor="start" >DATA AGENT  /  C4 CONTAINER  /  01</text>
+    <text x="35" y="82" font-size="34" font-weight="650" fill="#172e50" text-anchor="start" >工作台与 Agent</text>
+    <text x="35" y="112" font-size="19" font-weight="400" fill="#607086" text-anchor="start" >同一对话持续多轮；Pi 负责调查，Rust 保存可核对的业务状态。</text>
+    <text x="1885" y="38" font-size="15" font-weight="500" fill="#607086" text-anchor="end" >2026-10-06 · 合成平台 MVP</text>
+    <g class="boundary" fill="none" stroke="#c0cddd" stroke-width="1.5" stroke-dasharray="7 6"><rect x="275" y="130" width="1200" height="665" rx="16"/></g>
+    <text x="295" y="153" font-size="14" font-weight="500" fill="#718297" text-anchor="start" >Data Agent · 系统边界（仅显示本视图相关组件）</text>
+    <g class="relationship" data-edge="use" data-source="users" data-target="web"><path d="M250 355 L310 355" fill="none" stroke="white" stroke-width="8"/><path d="M250 355 L310 355" fill="none" stroke="#718297" stroke-width="2" stroke-linejoin="round" marker-end="url(#arrow-runtime)"/></g><g class="relationship" data-edge="web-api" data-source="web" data-target="api"><path d="M570 355 L670 355" fill="none" stroke="white" stroke-width="8"/><path d="M570 355 L670 355" fill="none" stroke="#718297" stroke-width="2" stroke-linejoin="round" marker-end="url(#arrow-runtime)"/></g><g class="relationship" data-edge="run" data-source="api" data-target="pi"><path d="M900 235 L900 180 L1190 180 L1190 250" fill="none" stroke="white" stroke-width="8"/><path d="M900 235 L900 180 L1190 180 L1190 250" fill="none" stroke="#718297" stroke-width="2" stroke-linejoin="round" marker-end="url(#arrow-runtime)"/></g><g class="relationship" data-edge="tools" data-source="pi" data-target="api"><path d="M1110 395 L1000 395" fill="none" stroke="white" stroke-width="8"/><path d="M1110 395 L1000 395" fill="none" stroke="#718297" stroke-width="2" stroke-linejoin="round" marker-end="url(#arrow-runtime)"/></g><g class="relationship" data-edge="generate" data-source="pi" data-target="models"><path d="M1430 355 L1545 355" fill="none" stroke="white" stroke-width="8"/><path d="M1430 355 L1545 355" fill="none" stroke="#718297" stroke-width="2" stroke-linejoin="round" marker-end="url(#arrow-runtime)"/></g><g class="relationship" data-edge="records" data-source="api" data-target="mysql"><path d="M835 465 L835 585" fill="none" stroke="white" stroke-width="8"/><path d="M835 465 L835 585" fill="none" stroke="#718297" stroke-width="2" stroke-linejoin="round" marker-end="url(#arrow-runtime)"/></g><g class="relationship" data-edge="session-store" data-source="pi" data-target="journal"><path d="M1280 450 L1280 585" fill="none" stroke="white" stroke-width="8"/><path d="M1280 450 L1280 585" fill="none" stroke="#718297" stroke-width="2" stroke-linejoin="round" marker-end="url(#arrow-runtime)"/></g>
+    <g class="node" data-node="users">
+    <rect class="node-box" x="35" y="275" width="215" height="170" rx="10" fill="#203a5d" stroke="#203a5d" stroke-width="1.4"/>
+    <path d="M53 275 H232" stroke="#203a5d" stroke-width="4"/>
+    <text x="57" y="303" font-size="14" font-weight="500" fill="#d4e2f3" text-anchor="start" >Person</text>
+    <text x="57" y="337" font-size="25" font-weight="650" fill="#ffffff" text-anchor="start" >业务用户</text>
+    <text x="57" y="365" font-size="12" font-weight="500" fill="#d4e2f3" text-anchor="start" >产品 · 算法 · 分析</text>
+    <text x="57" y="403" font-size="18" font-weight="400" fill="#ffffff" text-anchor="start" >数据开发维护语义</text>
+  </g><g class="node" data-node="web">
+    <rect class="node-box" x="310" y="250" width="260" height="200" rx="10" fill="#f1f6ff" stroke="#3866ac" stroke-width="1.4"/>
+    <path d="M328 250 H552" stroke="#3866ac" stroke-width="4"/>
+    <text x="332" y="278" font-size="14" font-weight="500" fill="#53677d" text-anchor="start" >Container</text>
+    <text x="332" y="312" font-size="25" font-weight="650" fill="#172e50" text-anchor="start" >Web 应用</text>
+    <text x="332" y="340" font-size="16" font-weight="500" fill="#53677d" text-anchor="start" >React / TypeScript</text>
+    <text x="332" y="378" font-size="18" font-weight="400" fill="#172e50" text-anchor="start" >提问、SQL、结果与历史</text><text x="332" y="406" font-size="18" font-weight="400" fill="#172e50" text-anchor="start" >语义管理 · 我的积累</text>
+  </g><g class="node" data-node="api">
+    <rect class="node-box" x="670" y="235" width="330" height="230" rx="10" fill="#f1f6ff" stroke="#3866ac" stroke-width="1.4"/>
+    <path d="M688 235 H982" stroke="#3866ac" stroke-width="4"/>
+    <text x="692" y="263" font-size="14" font-weight="500" fill="#53677d" text-anchor="start" >Container</text>
+    <text x="692" y="297" font-size="25" font-weight="650" fill="#172e50" text-anchor="start" >业务 API 服务</text>
+    <text x="692" y="325" font-size="16" font-weight="500" fill="#53677d" text-anchor="start" >Rust / Axum</text>
+    <text x="692" y="363" font-size="18" font-weight="400" fill="#172e50" text-anchor="start" >权限、版本、确认与调用预算</text><text x="692" y="391" font-size="18" font-weight="400" fill="#172e50" text-anchor="start" >会话、语义与个人资产规则</text><text x="692" y="419" font-size="18" font-weight="400" fill="#172e50" text-anchor="start" >受控工具与平台查询适配</text>
+  </g><g class="node" data-node="pi">
+    <rect class="node-box" x="1110" y="250" width="320" height="200" rx="10" fill="#f1f6ff" stroke="#3866ac" stroke-width="1.4"/>
+    <path d="M1128 250 H1412" stroke="#3866ac" stroke-width="4"/>
+    <text x="1132" y="278" font-size="14" font-weight="500" fill="#53677d" text-anchor="start" >Container</text>
+    <text x="1132" y="312" font-size="25" font-weight="650" fill="#172e50" text-anchor="start" >Agent 运行进程</text>
+    <text x="1132" y="340" font-size="16" font-weight="500" fill="#53677d" text-anchor="start" >Node.js / Pi SDK 1.0.0</text>
+    <text x="1132" y="378" font-size="18" font-weight="400" fill="#172e50" text-anchor="start" >唯一模型与工具循环</text><text x="1132" y="406" font-size="18" font-weight="400" fill="#172e50" text-anchor="start" >澄清、SQL、解释与原生压缩</text>
+  </g><g class="node" data-node="models">
+    <rect class="node-box" x="1545" y="250" width="340" height="230" rx="10" fill="#f7f5f0" stroke="#9a8050" stroke-width="1.4"/>
+    <path d="M1563 250 H1867" stroke="#9a8050" stroke-width="4"/>
+    <text x="1567" y="278" font-size="14" font-weight="500" fill="#53677d" text-anchor="start" >Model APIs / 本地 Embedding</text>
+    <text x="1567" y="312" font-size="25" font-weight="650" fill="#4b402c" text-anchor="start" >模型能力</text>
+    <text x="1567" y="340" font-size="16" font-weight="500" fill="#53677d" text-anchor="start" >DeepSeek Flash · E5 · 百炼 Qwen</text>
+    <text x="1567" y="378" font-size="18" font-weight="400" fill="#4b402c" text-anchor="start" >生成与提取：DeepSeek Flash</text><text x="1567" y="406" font-size="18" font-weight="400" fill="#4b402c" text-anchor="start" >共享知识：本地 E5 / 384 维</text><text x="1567" y="434" font-size="18" font-weight="400" fill="#4b402c" text-anchor="start" >个人记忆：百炼 Qwen / 1024 维</text>
+  </g><g class="node" data-node="mysql">
+    <rect class="node-box" x="670" y="585" width="330" height="185" rx="10" fill="#eef7f3" stroke="#438471" stroke-width="1.4"/>
+    <path d="M688 585 H982" stroke="#438471" stroke-width="4"/>
+    <text x="692" y="613" font-size="14" font-weight="500" fill="#53677d" text-anchor="start" >Data Store</text>
+    <text x="692" y="647" font-size="25" font-weight="650" fill="#173e34" text-anchor="start" >正式业务记录</text>
+    <text x="692" y="675" font-size="16" font-weight="500" fill="#53677d" text-anchor="start" >MySQL 8.4</text>
+    <text x="692" y="713" font-size="18" font-weight="400" fill="#173e34" text-anchor="start" >知识、版本、会话与查询状态</text><text x="692" y="741" font-size="18" font-weight="400" fill="#173e34" text-anchor="start" >个人资产、预算与持久待办</text>
+  </g><g class="node" data-node="journal">
+    <rect class="node-box" x="1110" y="585" width="345" height="185" rx="10" fill="#eef7f3" stroke="#438471" stroke-width="1.4"/>
+    <path d="M1128 585 H1437" stroke="#438471" stroke-width="4"/>
+    <text x="1132" y="613" font-size="14" font-weight="500" fill="#53677d" text-anchor="start" >Data Store</text>
+    <text x="1132" y="647" font-size="25" font-weight="650" fill="#173e34" text-anchor="start" >Pi 原生会话</text>
+    <text x="1132" y="675" font-size="16" font-weight="500" fill="#53677d" text-anchor="start" >私有 JSONL / 同一宿主</text>
+    <text x="1132" y="713" font-size="18" font-weight="400" fill="#173e34" text-anchor="start" >完整 SDK 会话树与工具历史</text><text x="1132" y="741" font-size="18" font-weight="400" fill="#173e34" text-anchor="start" >精确 leaf / 授权引用保存在 MySQL</text>
+  </g>
+    <g class="edge-label" data-edge="use"><text x="280" y="315" font-size="17" font-weight="500" fill="#33475e" text-anchor="middle" paint-order="stroke" stroke="white" stroke-width="8" stroke-linejoin="round">使用</text><text x="280" y="337" font-size="15" font-weight="400" fill="#607086" text-anchor="middle" paint-order="stroke" stroke="white" stroke-width="8" stroke-linejoin="round">浏览器</text></g><g class="edge-label" data-edge="web-api"><text x="620" y="311" font-size="17" font-weight="500" fill="#33475e" text-anchor="middle" paint-order="stroke" stroke="white" stroke-width="8" stroke-linejoin="round">请求 / 事件</text><text x="620" y="333" font-size="15" font-weight="400" fill="#607086" text-anchor="middle" paint-order="stroke" stroke="white" stroke-width="8" stroke-linejoin="round">HTTP · SSE</text></g><g class="edge-label" data-edge="run"><text x="1060" y="158" font-size="17" font-weight="500" fill="#33475e" text-anchor="middle" paint-order="stroke" stroke="white" stroke-width="8" stroke-linejoin="round">启动 / 恢复 / 取消</text><text x="1060" y="180" font-size="15" font-weight="400" fill="#607086" text-anchor="middle" paint-order="stroke" stroke="white" stroke-width="8" stroke-linejoin="round">内部 HTTP · 事件流</text></g><g class="edge-label" data-edge="tools"><text x="1055" y="346" font-size="17" font-weight="500" fill="#33475e" text-anchor="middle" paint-order="stroke" stroke="white" stroke-width="8" stroke-linejoin="round">受控工具</text><text x="1055" y="368" font-size="15" font-weight="400" fill="#607086" text-anchor="middle" paint-order="stroke" stroke="white" stroke-width="8" stroke-linejoin="round">HTTP / JSON</text></g><g class="edge-label" data-edge="generate"><text x="1487" y="311" font-size="17" font-weight="500" fill="#33475e" text-anchor="middle" paint-order="stroke" stroke="white" stroke-width="8" stroke-linejoin="round">模型推理</text><text x="1487" y="333" font-size="15" font-weight="400" fill="#607086" text-anchor="middle" paint-order="stroke" stroke="white" stroke-width="8" stroke-linejoin="round">HTTPS / JSON</text></g><g class="edge-label" data-edge="records"><text x="835" y="515" font-size="17" font-weight="500" fill="#33475e" text-anchor="middle" paint-order="stroke" stroke="white" stroke-width="8" stroke-linejoin="round">正式记录 / 登记任务</text><text x="835" y="537" font-size="15" font-weight="400" fill="#607086" text-anchor="middle" paint-order="stroke" stroke="white" stroke-width="8" stroke-linejoin="round">SQL / TCP</text></g><g class="edge-label" data-edge="session-store"><text x="1280" y="515" font-size="17" font-weight="500" fill="#33475e" text-anchor="middle" paint-order="stroke" stroke="white" stroke-width="8" stroke-linejoin="round">持久保存 / 恢复</text><text x="1280" y="537" font-size="15" font-weight="400" fill="#607086" text-anchor="middle" paint-order="stroke" stroke="white" stroke-width="8" stroke-linejoin="round">Pi 原生文件 · fsync</text></g>
+    <text x="310" y="605" font-size="17" font-weight="400" fill="#33475e" text-anchor="start" >SQL 先展示，确认后执行。</text><text x="310" y="641" font-size="17" font-weight="400" fill="#33475e" text-anchor="start" >执行前可补充或纠正条件。</text><text x="310" y="677" font-size="17" font-weight="400" fill="#33475e" text-anchor="start" >数据库与 Pi 会话文件一同保留。</text>
+    <line x1="35" y1="842" x2="1885" y2="842" stroke="#dde5ee"/>
+    <text x="35" y="871" font-size="17" font-weight="400" fill="#607086" text-anchor="start" >箭头表示调用方向，返回值省略。蓝色：应用进程；绿色：存储；米色：模型或平台能力。Container 不等同于微服务。</text>
+  </g></g></svg>

@@ -1,0 +1,295 @@
+{
+  "schema_version": 1,
+  "visibility": "evaluator_only",
+  "description": "由执行包作者在比较程序实现前给定。不得传入检索器、嵌入模型或任何生成模型；不得按实际输出回填。",
+  "cases": [
+    {
+      "query_id": "monthly_buyers_direct",
+      "relevant_records": [
+        "monthly_buyers@1"
+      ],
+      "category": "relevance",
+      "note": "按整月去重的记忆应被找到。"
+    },
+    {
+      "query_id": "monthly_buyers_paraphrase",
+      "relevant_records": [
+        "monthly_buyers@1"
+      ],
+      "category": "relevance",
+      "note": "按整月去重的记忆应被找到。"
+    },
+    {
+      "query_id": "order_grain_direct",
+      "relevant_records": [
+        "order_grain@1"
+      ],
+      "category": "relevance",
+      "note": "区分明细行与订单。"
+    },
+    {
+      "query_id": "order_grain_paraphrase",
+      "relevant_records": [
+        "order_grain@1"
+      ],
+      "category": "relevance",
+      "note": "区分明细行与订单。"
+    },
+    {
+      "query_id": "net_receipts_direct",
+      "relevant_records": [
+        "net_receipts@1"
+      ],
+      "category": "relevance",
+      "note": "净实收与下单金额不同。"
+    },
+    {
+      "query_id": "net_receipts_paraphrase",
+      "relevant_records": [
+        "net_receipts@1"
+      ],
+      "category": "relevance",
+      "note": "净实收与下单金额不同。"
+    },
+    {
+      "query_id": "money_units_direct",
+      "relevant_records": [
+        "money_units@1"
+      ],
+      "category": "relevance",
+      "note": "找出分转元的字段级规则，不推广到全部数值字段。"
+    },
+    {
+      "query_id": "money_units_paraphrase",
+      "relevant_records": [
+        "money_units@1"
+      ],
+      "category": "relevance",
+      "note": "找出分转元的字段级规则，不推广到全部数值字段。"
+    },
+    {
+      "query_id": "payment_calendar_direct",
+      "relevant_records": [
+        "payment_calendar@1"
+      ],
+      "category": "relevance",
+      "note": "时间边界按业务时区解释。"
+    },
+    {
+      "query_id": "payment_calendar_paraphrase",
+      "relevant_records": [
+        "payment_calendar@1"
+      ],
+      "category": "relevance",
+      "note": "时间边界按业务时区解释。"
+    },
+    {
+      "query_id": "undefined_ratio_direct",
+      "relevant_records": [
+        "undefined_ratio@1"
+      ],
+      "category": "relevance",
+      "note": "没有样本不等于比例为0。"
+    },
+    {
+      "query_id": "undefined_ratio_paraphrase",
+      "relevant_records": [
+        "undefined_ratio@1"
+      ],
+      "category": "relevance",
+      "note": "没有样本不等于比例为0。"
+    },
+    {
+      "query_id": "combined_amount_direct",
+      "relevant_records": [
+        "net_receipts@1",
+        "money_units@1"
+      ],
+      "category": "relevance",
+      "note": "两个必要记忆都应被召回。"
+    },
+    {
+      "query_id": "combined_amount_paraphrase",
+      "relevant_records": [
+        "net_receipts@1",
+        "money_units@1"
+      ],
+      "category": "relevance",
+      "note": "两个必要记忆都应被召回。"
+    },
+    {
+      "query_id": "cross_conversation_direct",
+      "relevant_records": [
+        "default_channel@1"
+      ],
+      "category": "relevance",
+      "note": "仅验证脱离先前聊天文本的检索；不冒称Pi跨会话流程实测。"
+    },
+    {
+      "query_id": "cross_conversation_paraphrase",
+      "relevant_records": [
+        "default_channel@1"
+      ],
+      "category": "relevance",
+      "note": "仅验证脱离先前聊天文本的检索；不冒称Pi跨会话流程实测。"
+    },
+    {
+      "query_id": "one_request_exception_direct",
+      "relevant_records": [
+        "default_channel@1"
+      ],
+      "category": "usage_not_evaluated",
+      "note": "找到长期偏好是检索成功；是否正确服从本次app要求须另测Agent采用行为。"
+    },
+    {
+      "query_id": "one_request_exception_paraphrase",
+      "relevant_records": [
+        "default_channel@1"
+      ],
+      "category": "usage_not_evaluated",
+      "note": "找到长期偏好是检索成功；是否正确服从本次app要求须另测Agent采用行为。"
+    },
+    {
+      "query_id": "channel_revised_direct",
+      "relevant_records": [
+        "default_channel@2"
+      ],
+      "category": "version_boundary",
+      "note": "原始索引刻意同时留有1/2版；最终上下文只允许2版。",
+      "forbidden_final_records": [
+        "default_channel@1"
+      ]
+    },
+    {
+      "query_id": "channel_revised_paraphrase",
+      "relevant_records": [
+        "default_channel@2"
+      ],
+      "category": "version_boundary",
+      "note": "原始索引刻意同时留有1/2版；最终上下文只允许2版。",
+      "forbidden_final_records": [
+        "default_channel@1"
+      ]
+    },
+    {
+      "query_id": "channel_disabled_direct",
+      "relevant_records": [],
+      "category": "state_boundary",
+      "note": "旧索引允许滞后，最终不得暴露已停用的default_channel。",
+      "forbidden_final_records": [
+        "default_channel@1",
+        "default_channel@2"
+      ]
+    },
+    {
+      "query_id": "channel_disabled_paraphrase",
+      "relevant_records": [],
+      "category": "state_boundary",
+      "note": "旧索引允许滞后，最终不得暴露已停用的default_channel。",
+      "forbidden_final_records": [
+        "default_channel@1",
+        "default_channel@2"
+      ]
+    },
+    {
+      "query_id": "channel_deleted_direct",
+      "relevant_records": [],
+      "category": "state_boundary",
+      "note": "旧索引允许滞后，最终不得暴露已删除的default_channel。",
+      "forbidden_final_records": [
+        "default_channel@1",
+        "default_channel@2"
+      ]
+    },
+    {
+      "query_id": "channel_deleted_paraphrase",
+      "relevant_records": [],
+      "category": "state_boundary",
+      "note": "旧索引允许滞后，最终不得暴露已删除的default_channel。",
+      "forbidden_final_records": [
+        "default_channel@1",
+        "default_channel@2"
+      ]
+    },
+    {
+      "query_id": "user_boundary_direct",
+      "relevant_records": [],
+      "category": "identity_boundary",
+      "note": "当前用户没有该记忆；other_user_policy不能进入原始检索结果或最终上下文。",
+      "forbidden_raw_and_final_records": [
+        "other_user_policy@1"
+      ]
+    },
+    {
+      "query_id": "user_boundary_paraphrase",
+      "relevant_records": [],
+      "category": "identity_boundary",
+      "note": "当前用户没有该记忆；other_user_policy不能进入原始检索结果或最终上下文。",
+      "forbidden_raw_and_final_records": [
+        "other_user_policy@1"
+      ]
+    },
+    {
+      "query_id": "space_boundary_direct",
+      "relevant_records": [],
+      "category": "identity_boundary",
+      "note": "当前商店空间没有该记忆；subscription_policy不能跨空间返回。",
+      "forbidden_raw_and_final_records": [
+        "subscription_policy@1"
+      ]
+    },
+    {
+      "query_id": "space_boundary_paraphrase",
+      "relevant_records": [],
+      "category": "identity_boundary",
+      "note": "当前商店空间没有该记忆；subscription_policy不能跨空间返回。",
+      "forbidden_raw_and_final_records": [
+        "subscription_policy@1"
+      ]
+    },
+    {
+      "query_id": "knowledge_revised_direct",
+      "relevant_records": [],
+      "category": "dependency_boundary",
+      "note": "正式规则已为4版，引用3版的gmv_rule不能成为有效上下文。",
+      "forbidden_final_records": [
+        "gmv_rule@1"
+      ]
+    },
+    {
+      "query_id": "knowledge_revised_paraphrase",
+      "relevant_records": [],
+      "category": "dependency_boundary",
+      "note": "正式规则已为4版，引用3版的gmv_rule不能成为有效上下文。",
+      "forbidden_final_records": [
+        "gmv_rule@1"
+      ]
+    },
+    {
+      "query_id": "unverified_correction_direct",
+      "relevant_records": [
+        "demo_filter@1"
+      ],
+      "category": "verification_boundary",
+      "note": "可召回待核实线索，但verified=false与来源不得丢失；不评Agent最终采纳。",
+      "required_metadata": {
+        "demo_filter@1": {
+          "verified": false
+        }
+      }
+    },
+    {
+      "query_id": "unverified_correction_paraphrase",
+      "relevant_records": [
+        "demo_filter@1"
+      ],
+      "category": "verification_boundary",
+      "note": "可召回待核实线索，但verified=false与来源不得丢失；不评Agent最终采纳。",
+      "required_metadata": {
+        "demo_filter@1": {
+          "verified": false
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,261 @@
+{
+  "reviewer": "adversarial（未参与对应实现的独立语义审查者）",
+  "conclusion": "failed",
+  "scope": "四题真实代表轮的正式回答与六份采用建议；不代表完整16题或最终AC08",
+  "evidence": ".local/model-workflow/maintenance-boundary-quality-representative-result.json",
+  "evidence_sha256": "4c416d6f593e99da4d4ec1db3b4c0e00c01c7b17539c8d267f92e7cdee01eb17",
+  "evidence_kind": "official_representative_semantic_review",
+  "summary": "机器链路四题均通过；独立语义结论为S01失败、P01和P04通过、P05初次失败而再次通过。110条引用、来源版本和定位均核对通过，三字段人工值、修改记录和来源事实均保留。发现两项P2，当前代表语义不通过；不关闭I2-MVP，不创建完整AC08或MVP通过收据。",
+  "checks": [
+    {
+      "id": "S01",
+      "passed": false,
+      "summary": "加工汇总和零值必要条件正确，未复述旧的明确refund-only错误；但对未定义零元成交作确定事件映射，正式回答不通过。",
+      "finding_ids": [
+        "S01-UNDEFINED-CONCEPT-MAPPING"
+      ]
+    },
+    {
+      "id": "P01",
+      "passed": true,
+      "initial_passed": true,
+      "repeated_passed": true,
+      "summary": "定义、非空非负、行级成功charge、快照过滤、左连接补0、整数分和净收入扣退款正确。初次明确refund-only违反输出CHECK，并区分取消带付款的未模拟边界与程序拒绝；再次没有旧错误。"
+    },
+    {
+      "id": "P04",
+      "passed": true,
+      "initial_passed": true,
+      "repeated_passed": true,
+      "summary": "原样投影、上游正数约束与目标NOT NULL分开，件数、行数和订单数区分清楚，缺少退货件数保留。初次其他写入路径未知是范围限制，不是已知资料缺失；再次gaps为空但正文仍保留该限定。"
+    },
+    {
+      "id": "P05",
+      "passed": false,
+      "initial_passed": false,
+      "repeated_passed": true,
+      "summary": "两份建议均正确区分行级取消与订单级金额分支，并区分未模拟与程序拒绝。初次开头同单一致陈述与自身合法反例矛盾；再次已限定源状态不一致的情况，正确保留可由输出约束推出的整单全退各行金额相等。",
+      "finding_ids": [
+        "P05-INITIAL-CONSISTENCY-CONTRADICTION"
+      ]
+    }
+  ],
+  "findings": [
+    {
+      "id": "S01-UNDEFINED-CONCEPT-MAPPING",
+      "priority": "P2",
+      "confidence": 100,
+      "title": "未定义零元成交，却断言它一定不产生付款事件并显示为零",
+      "location": {
+        "path": ".local/model-workflow/maintenance-boundary-quality-representative-result.json",
+        "line": 187,
+        "json_pointer": "/checks/0/artifacts/explanation"
+      },
+      "evidence": [
+        "正式回答承认零元成交未定义、没有成交价或应付金额字段，随后却写：若真存在0元成交，它在当前模型里也不会产生charge事件，会表现为和未付款相同的0。",
+        "schema.sql:10–31没有成交价字段或成交价与付款事件之间的关系约束；amount_cents>0只约束单笔事件金额。",
+        "etl.sql:7–13只依据charge、success、快照时点和订单行键汇总，未判断或定义零元成交。",
+        "上述程序事实无法支持未知业务概念一定不产生charge或一定映射为主表0。该确定映射超出原始资料，也与回答前文的无法识别边界不相容。",
+        "持久消息已committed且逐字等于报告explanation，不是未采用草稿。"
+      ],
+      "recommendation": "未知业务概念保留无法判定的结论；程序约束只用于其实际记录和谓词，不能为未知概念补出确定的数据映射。",
+      "autofix_class": "advisory",
+      "owner": "human"
+    },
+    {
+      "id": "P05-INITIAL-CONSISTENCY-CONTRADICTION",
+      "priority": "P2",
+      "confidence": 100,
+      "title": "初次建议先称同单状态相同，末尾又给出能够落表的不同状态反例",
+      "location": {
+        "path": ".local/model-workflow/maintenance-boundary-quality-representative-result.json",
+        "line": 17013,
+        "json_pointer": "/checks/3/artifacts/initial/entries/0/suggestion/value"
+      },
+      "evidence": [
+        "初次正文开头无条件称同一订单多行会重复携带同一订单状态。",
+        "同一份采用正文末尾正确指出取消分支按行级source_status判断，并给出同单cancelled与placed混合、无成功付款时分别输出cancelled和unpaid的合法见证。",
+        "该见证满足上游枚举、主键及行级条件，输出两行paid/refunded均为0，满足schema.sql:45–52全部相关CHECK；etl.sql:23–26确实产生不同状态。",
+        "因此前文的同单一致陈述必须在原句限定，不能依靠后文与gaps再否定它。此问题在初次采用结果中，重填的再次建议已明确该限制。"
+      ],
+      "recommendation": "在同单状态重复的陈述处直接限定分支或源状态一致的前提，统一正文和gaps的表述。",
+      "autofix_class": "advisory",
+      "owner": "human"
+    }
+  ],
+  "verification": {
+    "semantic_source_sha256": {
+      "docs/sources/schema.sql": "49c13a97ad3b53bf161d549d35cc33f741b2d47701c2b744c20883cfedf2b72a",
+      "docs/sources/etl.sql": "42e2f1e7dfbd74bcbd07a0b2a712bd85b73adeb65ba8cf86e29619c07724de56",
+      "docs/sources/business-guide.md": "54b1abe47939cb92d4d46f77c023dc325b936a2ff4f906604bb1e14108bfeedf",
+      "docs/sources/evaluation/prefill-cases.json": "186264de6e92de8ce2fc8b36352791dcc8a9b449e986b60684d21aa79d82e64f"
+    },
+    "source_snapshot_code_sha256": {
+      "apps/agent/session/resources.ts": "3ef225ff7eddab6652b0085f987bcee2a445a8a92441702724f8a1aeac56f4ac",
+      "crates/data-agent/src/modules/ingestion/prefill.rs": "0ffbef9d1bff22da6dd543f728914af01b54828300e49e13f789cd9c05071640",
+      "apps/agent/transport/server.ts": "3b8652b631e6c0e719f856b150c727b7ba95210edacc0280729396e9939643c8"
+    },
+    "quote_count": 110,
+    "full_location_quotes": 109,
+    "contiguous_partial_location_quotes": 1,
+    "quote_errors": [],
+    "case_details": [
+      {
+        "id": "S01",
+        "formal_answer_committed": true,
+        "artifact_text_matches_persisted_message": true,
+        "replacement_character_count": 0
+      },
+      {
+        "id": "P01",
+        "manual_effective_value_preserved": true,
+        "human_override_record_preserved": true,
+        "source_facts_preserved": true,
+        "stages": [
+          {
+            "stage": "initial",
+            "knowledge_version": "3",
+            "prefill_state": "succeeded",
+            "review_state": "unverified",
+            "quote_count": 20,
+            "full_location_quotes": 20,
+            "contiguous_partial_location_quotes": 0,
+            "quotes_and_locations_passed": true,
+            "replacement_character_count": 0,
+            "gaps": [],
+            "validation_label": "引用和格式已核对，业务含义尚未人工确认"
+          },
+          {
+            "stage": "repeated",
+            "knowledge_version": "6",
+            "prefill_state": "succeeded",
+            "review_state": "needs_review",
+            "quote_count": 20,
+            "full_location_quotes": 20,
+            "contiguous_partial_location_quotes": 0,
+            "quotes_and_locations_passed": true,
+            "replacement_character_count": 0,
+            "gaps": [],
+            "validation_label": "引用和格式已核对，业务含义尚未人工确认"
+          }
+        ]
+      },
+      {
+        "id": "P04",
+        "manual_effective_value_preserved": true,
+        "human_override_record_preserved": true,
+        "source_facts_preserved": true,
+        "stages": [
+          {
+            "stage": "initial",
+            "knowledge_version": "3",
+            "prefill_state": "succeeded",
+            "review_state": "unverified",
+            "quote_count": 16,
+            "full_location_quotes": 15,
+            "contiguous_partial_location_quotes": 1,
+            "quotes_and_locations_passed": true,
+            "replacement_character_count": 0,
+            "gaps": [
+              "资料只提供 etl.sql 中对 demo_order_detail 的整表重建加工（DELETE + INSERT，etl L4、etl L19），未说明是否存在其他写入 demo_order_detail.quantity 的路径；由于目标表 quantity 自身只有 NOT NULL、无 >0 的 CHECK（schema L44），在该加工路径之外是否会写入 quantity ≤ 0 无法确认。"
+            ],
+            "validation_label": "引用和格式已核对，业务含义尚未人工确认"
+          },
+          {
+            "stage": "repeated",
+            "knowledge_version": "6",
+            "prefill_state": "succeeded",
+            "review_state": "needs_review",
+            "quote_count": 15,
+            "full_location_quotes": 15,
+            "contiguous_partial_location_quotes": 0,
+            "quotes_and_locations_passed": true,
+            "replacement_character_count": 0,
+            "gaps": [],
+            "validation_label": "引用和格式已核对，业务含义尚未人工确认"
+          }
+        ]
+      },
+      {
+        "id": "P05",
+        "manual_effective_value_preserved": true,
+        "human_override_record_preserved": true,
+        "source_facts_preserved": true,
+        "stages": [
+          {
+            "stage": "initial",
+            "knowledge_version": "3",
+            "prefill_state": "succeeded",
+            "review_state": "unverified",
+            "quote_count": 20,
+            "full_location_quotes": 20,
+            "contiguous_partial_location_quotes": 0,
+            "quotes_and_locations_passed": true,
+            "replacement_character_count": 0,
+            "gaps": [
+              "材料未声明、也未说明生成器/验收是否核对 `raw_order_lines.source_status` 在同一订单各行一致（文档只覆盖客户、渠道、下单时间、测试标记），而目标表 `demo_order_detail` 只有行级约束、无跨行约束；因此 `order_status` 作为“整单状态”在同订单各行是否一致缺乏保证。若上游同订单出现 `source_status` 为 `cancelled`/`placed` 混合且该订单无成功付款，目标两行可分别落 `cancelled` 与 `unpaid`（已核对彼时两行金额均为 0，满足输出表全部约束）。",
+              "样例种子与验收是否包含同一订单 `source_status` 混合、或包含 `cancelled` 行同时带成功付款事件的数据，材料未说明；文档列举的样例覆盖类型中未提及这两种组合，故其在样例中的实际出现情况仍未知。"
+            ],
+            "validation_label": "引用和格式已核对，业务含义尚未人工确认"
+          },
+          {
+            "stage": "repeated",
+            "knowledge_version": "6",
+            "prefill_state": "succeeded",
+            "review_state": "needs_review",
+            "quote_count": 19,
+            "full_location_quotes": 19,
+            "contiguous_partial_location_quotes": 0,
+            "quotes_and_locations_passed": true,
+            "replacement_character_count": 0,
+            "gaps": [
+              "business-guide 的同订单一致性清单只列客户、渠道、下单时间和测试标记，未声明 raw_order_lines.source_status 在同一订单各行间一致；schema 也未约束同订单各行 source_status 相同，而 ETL 的 cancelled 分支按行级 l.source_status 判断。因此同一订单各行的 order_status 是否必然相同、能否按 order_id 直接取用单一 order_status，缺少可验证依据。"
+            ],
+            "validation_label": "引用和格式已核对，业务含义尚未人工确认"
+          }
+        ]
+      }
+    ],
+    "official_requests": 17,
+    "receipt_count": 17,
+    "all_receipts_settled": true,
+    "ledger": {
+      "calls": 17,
+      "state": "active",
+      "spent_micros": 199283,
+      "reserved_micros": 0
+    },
+    "reviewer_official_requests_added": 0
+  },
+  "prior_findings_rechecked": [
+    {
+      "id": "S01-REFUND-ONLY-OUTPUT",
+      "status": "旧的明确列举在本轮S01中消失；P01初次也已明确输出约束，不将无charge这一必要条件机械等同成功refund-only可落表。"
+    },
+    {
+      "id": "P05-UNSUPPORTED-AS-CONSTRAINT",
+      "status": "初次和再次均修正未模拟等于数据库拒绝的错误。"
+    },
+    {
+      "id": "P05-ROW-CANCELLATION-CONSISTENCY",
+      "status": "再次已保留行级取消分支例外；初次另有本记录指出的前后陈述矛盾。"
+    }
+  ],
+  "independent_reference_boundary": {
+    "evidence": ".local/checks/mvp-refund-rate-reference-before-fix.json",
+    "evidence_sha256": "ff7e4ddef49676e36be0a61b6c98dd0180582a3b64781262c8f7f0d51408cb44",
+    "summary": "经授权SQLite内存见证证明旧Q04对所述合法两行订单返回退款率0，按文档5.3订单集合定义应为1；同单跨行分月付款是否受未模拟跨月分次付款边界排除需明确。S04未在本代表轮执行，本项不混入四题结论。"
+  },
+  "limits": [
+    "本轮绑定代表产物实际sourceHashes，不更新其旧源码快照。审查时Bridge源码已开始变化；此记录不能证明修复后UTF8或Pi持久引用边界通过。",
+    "17次调用结算和机器通过仅证明本轮协议运行；不能替代语义结论。",
+    "未读取凭据、未访问网络或模型、未运行MySQL或构建；只有另获明确授权的Q04 SQLite内存探针。",
+    "独立参考答案和反例没有写入业务源码或模型输入；审查记录只包含合成材料的技术结论。"
+  ],
+  "remaining_work": [
+    "修复两项语义陈述并用新代表产物重新独立复核。",
+    "明确并处理Q04独立参考的适用边界后进行完整16题。",
+    "最终代码变更需新证据绑定，完整AC08和I2-MVP保持未完成。"
+  ],
+  "reviewed_at": "2026-10-04T22:17:07.566178+00:00"
+}

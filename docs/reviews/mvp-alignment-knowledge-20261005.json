@@ -1,0 +1,166 @@
+{
+  "reviewer": "audit_agent_reality（未参与本次材料及语义实现的独立审查者）",
+  "date": "2026-10-05",
+  "conclusion": "passed_limited_scope_full_workflow_pending",
+  "increment": "I2-MVP",
+  "overall_mvp_complete": false,
+  "scope": "ALIGN-01/ALIGN-02 的当前材料装配、两阶段版本冻结、文档来源回源、人工覆盖保护和模型语义投影；复核三项实现中发现的收口问题。ALIGN-05仅确认新增通用多条目回环覆盖，未确认真实模型业务质量。",
+  "method": "只读核对要求、实现和行为断言，读取父代理执行的完整局部日志；本审查者没有运行模型、数据库、构建、launcher，也未修改实现、测试或CURRENT。",
+  "fingerprint_algorithm": "SHA256 of sorted path + TAB + SHA256 + newline",
+  "scope_sha256": "83417ad4b1663fceccb7018166376757071719f104c4bd57dbab7c72e282530e",
+  "source_sha256": {
+    "AGENTS.md": "d3c1996e4d6684a158d3ed94fbd31dcdd28328d39cd58a6d01fe5518b8281d31",
+    "Makefile": "4f5e6dafaedd79cab970c4ccd3eff7c4116d9d641def638310a7e0d7a2acad8c",
+    "apps/agent/tools/data-tools.ts": "eaae774a0b373c5547483eba588aa3cc0809ebcbe94adcfe8dccdad3ae32b016",
+    "crates/data-agent/src/modules/ingestion/catalog.rs": "0b991cee661f59dec180590847842c0824aedc447833ecc0ccc78f0f5247b12a",
+    "crates/data-agent/src/modules/ingestion/mod.rs": "23573e8844a22ce7884e107623759a08018c7e94b4b7e1672cbd6d6a7c50a2ca",
+    "crates/data-agent/src/modules/ingestion/prefill.rs": "5fdbb2dd9decef94177310a6dc04acb292d1e140a4e2e8e2ed5806829dcb1afa",
+    "crates/data-agent/src/modules/ingestion/store.rs": "cc5b7cba2fae46e6083236cd000ff149d20863e80b73d3fc83e2c5f4ad626a4a",
+    "crates/data-agent/src/modules/knowledge/store.rs": "25f74acb7b1b1342bf05a94bacf6119d662bd96de16d484a2e474190e0355280",
+    "crates/data-agent/src/modules/retrieval/mod.rs": "f6e0385960eb3e4fa22d1ade440c9f55427937cc28f4819b432cf5e004257b16",
+    "crates/data-agent/src/use_cases/catalog_import.rs": "c89978c88306feffbb2abd85e48583e6385aa5d4c6ce5e0f53e7e6c95f1c5152",
+    "crates/data-agent/src/use_cases/data_tools.rs": "96e4062297ef09e2cbfd4298e3395c26d88203a4ca245de03ad3411383b2d65b",
+    "crates/data-agent/src/use_cases/knowledge.rs": "3847c2413aaf6b0cf2c35af62a35f1a7cba5bb1756a50ba632be26b7527bc0c2",
+    "crates/data-agent/src/use_cases/knowledge_sources.rs": "c54b2a894ec088ea03a3e5de79371ab5b30180bee140a477ccd5c1ee0d4146e2",
+    "crates/data-agent/src/use_cases/prefill_materials.rs": "bcbe490d2d8fa700dff1e65f82b93b92e06b47f57f1b4c38fc96948a46dfec64",
+    "crates/data-agent/src/use_cases/semantic_prefill.rs": "7f619496e3b42d719cac416e9ffb5fb0f08f2fd24e6fcf5b0e5333e35d4718fd",
+    "docs/reviews/mvp-architecture-alignment-20261005.md": "912b9017f82cb9ca82028e95cb3dd757978b4f80b1d76fffc9b7dc2bd06926f0",
+    "packages/contracts/schema.json": "f55610af9b68746e1f27c2d35d133b68bc5ceba350a2cd8df2659b707c417d37",
+    "tests/mvp/check-prefill-materials.mjs": "f13eb99e11ac36063405d91bd879b27c5f9a970b6be0a20b9361a38dfd02982a",
+    "tests/mvp/check-prefill-timeouts.mjs": "0374a871fe2f53de4ab8ba15b0882c84a76bfec0a460c0306945cf7013d6153f"
+  },
+  "findings": [],
+  "closed_findings": [
+    {
+      "id": "ALIGN-01",
+      "status": "closed_in_limited_scope",
+      "assessment": "检索预览保留建议详情入口；read_knowledge按单独字符页提供gaps、evidence、validated及material_coverage。存在人工覆盖时有效值保持人工值，新候选value及其缺口/依据位于pending_review建议中，工具说明明确该区分。",
+      "source_paths": [
+        "crates/data-agent/src/modules/retrieval/mod.rs",
+        "crates/data-agent/src/use_cases/data_tools.rs",
+        "apps/agent/tools/data-tools.ts"
+      ],
+      "behavior_evidence": [
+        "check-prefill-materials正式工具读到分析缺口和document依据",
+        "人工覆盖后read_knowledge同时保留人工effective_value与pending_review候选value"
+      ],
+      "test_limits": "独立分页拼接和人工建议归属另有源码内单测；本记录未单独执行这些单测。"
+    },
+    {
+      "id": "ALIGN-02",
+      "status": "closed_in_limited_scope",
+      "assessment": "当前表原始来源、必要上游正文和关联文档由组合层装配。目录同步将原来源及目标原子排队，等分页采集终止后首次调用前持久冻结材料；固定分析与复核共用输入。采用前锁原始来源头，再锁目标和递归文档版本；文档正文继续由M02持有，document-只是来源别名。数量、深度、正文限制和不可读资料留下明确coverage。",
+      "source_paths": [
+        "crates/data-agent/src/use_cases/prefill_materials.rs",
+        "crates/data-agent/src/use_cases/knowledge_sources.rs",
+        "crates/data-agent/src/use_cases/semantic_prefill.rs",
+        "crates/data-agent/src/use_cases/catalog_import.rs",
+        "crates/data-agent/src/modules/ingestion/store.rs"
+      ],
+      "behavior_evidence": [
+        "同批第1页下游与第2页上游进入固定材料",
+        "关联文档经搜索/read_knowledge/read_source均可读取",
+        "分析途中改版产生superseded，文档停用后依赖知识无法读或搜索",
+        "长正文总量不超过24576字节并标记不完整"
+      ]
+    },
+    {
+      "id": "PREFILL-DOCUMENT-SELF-REFERENCE",
+      "status": "closed_in_limited_scope",
+      "assessment": "收集文档时排除目标自身，不把文档本次待更新的旧正文作为新增来源；保留其原始来源。测试重新分析有原始来源文档后要求succeeded且该文档仍能搜索到，并检查冻结输入不存在自身document来源。",
+      "source_paths": [
+        "crates/data-agent/src/use_cases/prefill_materials.rs"
+      ],
+      "test": "tests/mvp/check-prefill-materials.mjs"
+    },
+    {
+      "id": "PREFILL-UPSTREAM-FIELD-DOCUMENT",
+      "status": "closed_in_limited_scope",
+      "assessment": "related_documents查询从已关联上游表展开其enabled字段，纳入仅关联该字段的解释文档；新增fixture文档只关联raw_values.amount，正式预填输入须包含该文档原文。",
+      "source_paths": [
+        "crates/data-agent/src/modules/knowledge/store.rs"
+      ],
+      "test": "tests/mvp/check-prefill-materials.mjs"
+    },
+    {
+      "id": "PREFILL-METADATA-PAYLOAD",
+      "status": "closed_in_limited_scope",
+      "assessment": "DDL/ETL metadata只保留来源定位，不复制quote/value全文；type引用限定512字符；quote_catalog独立按4096字节总预算分配。最终完整JSON请求体仍按profile限制，在预留预算和发送之前拒绝超限。长DDL及长文档用例要求全部19个回环请求均不超过65536字节，并核对metadata无重复正文。",
+      "source_paths": [
+        "crates/data-agent/src/modules/ingestion/prefill.rs"
+      ],
+      "test": "tests/mvp/check-prefill-materials.mjs"
+    },
+    {
+      "id": "KNOWLEDGE-WORKFLOW-TIMEOUT-INTERLEAVING",
+      "status": "closed_in_limited_scope",
+      "assessment": "旧fixture持有operation锁、让Worker持目标锁后同步等待人工PATCH，构成测试安排的循环等待。新fixture在复核模型响应后等待Worker阻塞于source_sync_locks，人工PATCH先提交后释放来源锁，旧建议在目标版本的当前锁读取处被拒绝。人工值、superseded、知识版本总数、无空操作回执、两次真实回环与全部用量结算断言均保留。error_code从晚期version_conflict改为前置stale_knowledge，符合新增锁内校验路径，没有放松旧建议不得覆盖人工结果的要求。",
+      "test": "tests/mvp/check-prefill-timeouts.mjs",
+      "evidence": ".local/checks/mvp-alignment-boundary-fixes.log",
+      "coverage_limit": "新fixture不再人为制造在持目标锁之后发生对象改版的旧交错，也不直接命中reanalyze_in_tx删除空占位的分支；该交错在当前目标锁持有期无法由普通人工PATCH实现。测试仍要求最终没有遗留空回执，不能据此宣称覆盖了该清理分支的全部直接调用场景。"
+    }
+  ],
+  "evidence": [
+    {
+      "path": ".local/checks/mvp-prefill-materials-expanded.log",
+      "sha256": "a272dc31cd57e852fe5f7980adf4d9c2e13ddf3111f40b38284d38f1e7f1439f",
+      "status": "completed_pass_report_read",
+      "result": "9组检查通过，19次本地回环调用，0官方模型调用。此日志为父代理执行所得，本审查者独立核对对应断言和源码。"
+    },
+    {
+      "path": ".local/checks/mvp-alignment-knowledge-workflow.log",
+      "sha256": "00460043203d0431ad0752cd6c7ea1d7ef23498bcc8aad9377a1a70e7a54d4e8",
+      "status": "failed",
+      "result": "日志可见此前知识、边界、上下文、预填30回环、材料19回环及预填并发通过；check-prefill-timeouts.mjs:56的late_version_conflict分支随后503 != 200，make Error 1。不能声称完整verify-knowledge-workflow通过。"
+    },
+    {
+      "path": ".local/checks/mvp-alignment-boundary-fixes.log",
+      "sha256": "78184a5a9c7733e17d5a45261a6e12d104fbfe7a10a68bb46abf7a5de188e09f",
+      "status": "completed_pass_report_read",
+      "result": "7组预填租约/超时/重启/人工竞争用例全部通过，0官方调用；父代理确认进程77041完整退出0。日志另含memory4组，本记录不据此扩大对记忆实现的审查范围。"
+    }
+  ],
+  "verification_blockers": [
+    {
+      "id": "FULL-KNOWLEDGE-WORKFLOW-RERUN",
+      "status": "pending_full_run",
+      "observed": "先前完整知识工作流的失败证据保留；相关7组定向复验已通过。",
+      "required": "最终verify-increment重新运行整条verify-knowledge-workflow并取得完整退出结果；Makefile现为semantic_context_tests，须看到两项建议分页/人工候选单测实际运行，不能仅以零项测试的退出0代替。"
+    }
+  ],
+  "residual_risks": [
+    "真实DeepSeek对正式多条目对象、上游和关联文档的语义质量尚未由本轮回环证明。ALIGN-05的模型质量范围继续待验收。",
+    "同模型分析与复核两次不构成独立正确性保证；逐字引用和JSON格式合法不代表业务解释正确。",
+    "新材料正文预算、深度和条数是有界实现；coverage明确缺口，但不证明所有业务资料已经找到或任意千表质量通过。",
+    "当前审查仅绑定上述输入指纹。并行实现改变相关源码、契约或测试后，应复核受影响部分。",
+    "历史代表试验失败与完整16题缺口继续保留；本记录不能关闭整个MVP或替代真实平台、正式认证和用户试用。"
+  ],
+  "review_updates": [
+    {
+      "reason": "重新核对失败并发夹具的适配及本范围变化",
+      "changed_inputs": [
+        {
+          "path": "Makefile",
+          "previous_sha256": "1dca3011dfdef24272215599f47b0fd27bbac5c1591e7ed6cf243e72bd60de3d",
+          "current_sha256": "4f5e6dafaedd79cab970c4ccd3eff7c4116d9d641def638310a7e0d7a2acad8c"
+        },
+        {
+          "path": "apps/agent/tools/data-tools.ts",
+          "previous_sha256": "fe306e5250b61b3adce1ce210bd0be1848744a13d44f8e249280d77655f4b8bb",
+          "current_sha256": "eaae774a0b373c5547483eba588aa3cc0809ebcbe94adcfe8dccdad3ae32b016"
+        },
+        {
+          "path": "packages/contracts/schema.json",
+          "previous_sha256": "292b912852dd02e74dd3d9a593a4a3403595817642a310a4fb5b0ea89edb2e84",
+          "current_sha256": "f55610af9b68746e1f27c2d35d133b68bc5ceba350a2cd8df2659b707c417d37"
+        },
+        {
+          "path": "tests/mvp/check-prefill-timeouts.mjs",
+          "previous_sha256": "bf74c8ffeed095853e4081ef4e6eec505c57e977f80217a91eec296e8f217587",
+          "current_sha256": "0374a871fe2f53de4ab8ba15b0882c84a76bfec0a460c0306945cf7013d6153f"
+        }
+      ],
+      "assessment": "材料装配、版本锁、文档来源与建议投影实现的原输入哈希均未变化。工具说明中的记忆指令调整不属于本审查范围，read_knowledge建议分页说明仍一致；契约ReadSourceInput的73字符上限可容纳document-与64字符文档ID，来源身份仍回源校验。Makefile添加必要单测，已核对并修正retrieval过滤为semantic_context_tests，实际执行证据仍待最终回归。"
+    }
+  ]
+}

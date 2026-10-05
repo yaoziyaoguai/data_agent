@@ -1,0 +1,232 @@
+{
+  "schema": 1,
+  "reviewer": "correctness / audit_runtime_independent",
+  "reviewed_date": "2026-10-05",
+  "conclusion": "passed_for_reviewed_scope",
+  "static_conclusion": "no_open_static_blocker",
+  "overall_mvp_complete": false,
+  "scope": "Pro同题对照的模型配置、Pi原生目录选择、聊天及预填请求、模型标签契约、价格与预留结算，以及对应启动和契约验证。不是完整MVP或模型业务质量验收。",
+  "independence": "审查者未修改对应源码、prompt、业务资料或验收标准；本轮仅写本审查记录，未运行数据库、构建、测试或官方模型调用，未读取.env或凭据。",
+  "requirement_basis": [
+    {
+      "path": "AGENTS.md",
+      "sections": [
+        "第4条 同源契约与运行时校验",
+        "第6条 稳定身份、未知回执与原预算",
+        "第9条 验证边界",
+        "第12条 复用Pi",
+        "开发防漂移约定"
+      ]
+    },
+    {
+      "path": "docs/CURRENT.md",
+      "section": "2026-10-05 Pro同题对照授权与准备"
+    }
+  ],
+  "closed_findings": [
+    {
+      "id": "PRO-MODEL-LABEL-CONTRACT",
+      "status": "closed_for_reviewed_scope",
+      "severity": "P1",
+      "confidence": 100,
+      "locations": [
+        "packages/contracts/schema.json:817",
+        "packages/contracts/schema.json:842",
+        "apps/web/src/main.tsx:96"
+      ],
+      "original_failure": "Pro响应标签未列入Identity及SessionReceipt的model_label枚举；前者被API success拒绝，后者被登录页面运行时校验拒绝。",
+      "resolution": "两种同源响应均加入DeepSeek V4 Pro，Rust/TypeScript生成类型与精确往返样本已同步。",
+      "verification": [
+        ".local/checks/mvp-pro-integration-validation.log",
+        ".local/checks/mvp-pro-startup-current.log"
+      ]
+    },
+    {
+      "id": "PRO-LAUNCHER-MODEL-LABEL",
+      "status": "closed_for_reviewed_scope",
+      "severity": "P1",
+      "confidence": 100,
+      "locations": [
+        "scripts/development.py:175"
+      ],
+      "original_failure": "launcher对所有真实模型固定断言DeepSeek Flash，Pro健康检查必然AssertionError并关闭本次子进程。",
+      "resolution": "健康检查按持久profile.model_id选择模型标签。",
+      "verification": [
+        ".local/checks/mvp-pro-integration-validation.log",
+        ".local/checks/mvp-pro-startup-current.log"
+      ]
+    }
+  ],
+  "findings": [],
+  "checks": [
+    {
+      "id": "model_identity_and_native_pi",
+      "result": "passed_static_scope_review",
+      "locations": [
+        "apps/agent/session/deliver.ts:117",
+        "apps/agent/session/deliver.ts:144",
+        "apps/agent/provider/deepseek.ts:94",
+        "crates/data-agent/src/modules/ingestion/prefill.rs:301",
+        "scripts/development.py:127",
+        "tests/mvp/run-business-acceptance.mjs:255"
+      ],
+      "assessment": "ModelProfile决定Pi目录项、受控provider模型、实际聊天payload与预填model字段；启动和官方业务脚本只在进程环境采用profile模型，不写.env。Pi仍承担模型与工具循环、会话与压缩，没有新增Agent循环。锁定pi-ai及pi-coding-agent均为1.0.0，本地原生目录含deepseek-v4-pro及high映射。",
+      "sdk_catalog_sha256": "10a296fb3e898f7715c80890c8af0af4f5fd58f22dbcd6612fdc5d762157ccdc"
+    },
+    {
+      "id": "price_and_reservation",
+      "result": "passed_static_scope_review",
+      "locations": [
+        "crates/data-agent/src/modules/runtime/model_calls/store.rs:9",
+        "crates/data-agent/src/modules/runtime/model_calls/store.rs:111",
+        "crates/data-agent/src/modules/runtime/model_calls/store.rs:243"
+      ],
+      "assessment": "Pro与2026-10-05-pro-peak-usd配对，按ceil((input*132+output*396)/100)保存整数微美元；Flash保留ceil((input*30+output*120)/100)。聊天与维护调用共用此定价，结算采用原profile与实际可靠usage。高峰缓存未命中预估不冒充服务商账单。",
+      "independent_arithmetic": {
+        "pro_32768_input_32768_output_reservation_micros": 173016,
+        "pro_startup_chat_100_input_25_output_micros": 231,
+        "pro_startup_prefill_100_input_80_output_micros": 449,
+        "pro_startup_two_chat_four_prefill_micros": 2258,
+        "flash_startup_two_chat_four_prefill_micros": 624
+      }
+    },
+    {
+      "id": "locks_and_idempotency",
+      "result": "passed_static_scope_review",
+      "locations": [
+        "crates/data-agent/src/use_cases/model_calls.rs:15",
+        "crates/data-agent/src/modules/runtime/model_calls/store.rs:118",
+        "crates/data-agent/src/modules/runtime/model_calls/store.rs:148",
+        "crates/data-agent/src/modules/runtime/model_calls/store.rs:176",
+        "crates/data-agent/src/use_cases/semantic_prefill.rs:117"
+      ],
+      "assessment": "聊天保持conversation、run、call、budget、trial的获取顺序；先插入调用身份再按原budget profile计算预留并在同一事务更新，失败由外层事务回滚。重复调用不再预留，相同结算幂等、异参拒绝，未知usage保留预留。trial配置指纹包含模型、价格与额度，同一ID不能切换配置补额；维护结算先独立提交，后续版本校验不持trial锁等待来源。"
+    },
+    {
+      "id": "contracts_and_legacy_flash",
+      "result": "passed_static_scope_review",
+      "assessment": "ModelProfile同源Schema限制Pro/Flash与相应price_version配对；Pro允许off/high并拒绝low，旧task/I0仍限定Flash。Rust与TypeScript接入执行JSON Schema校验，生成类型不能单独替代这些规则。Identity和SessionReceipt现均支持Pro标签。"
+    },
+    {
+      "id": "unchanged_business_materials",
+      "result": "passed_fingerprint_comparison",
+      "baseline": ".local/model-workflow/concise-instructions-representative-result.json",
+      "assessment": "与精简后Flash代表产物sourceHashes比较，resources.ts、docs/sources以及独立SQL验收器指纹未变；绑定源码变化限于模型接入、价格、生成契约与业务运行脚本。启动和契约样本不在该旧产物的全部输入清单中，另纳入本记录当前指纹。"
+    },
+    {
+      "id": "current_code_and_contracts",
+      "result": "passed_in_supplied_complete_log",
+      "evidence": ".local/checks/mvp-pro-integration-validation.log",
+      "observed": {
+        "contract_cases": 178,
+        "rust": true,
+        "typescript": true
+      },
+      "assessment": "当前make verify-code、verify-contracts与build日志完整；格式、Clippy、TypeScript、Web构建、同源生成检查、178项Rust/TypeScript契约样本和workspace构建通过。主代理确认命令完整退出0。"
+    },
+    {
+      "id": "formal_startup_both_models",
+      "result": "passed_in_supplied_complete_log",
+      "evidence": ".local/checks/mvp-pro-startup-current.log",
+      "source": "tests/mvp/check-model-startup.mjs",
+      "observed": {
+        "flash": {
+          "calls": 6,
+          "chat_calls": 2,
+          "maintenance_calls": 4,
+          "spent_micros": 624,
+          "reserved_micros": 0
+        },
+        "pro": {
+          "calls": 6,
+          "chat_calls": 2,
+          "maintenance_calls": 4,
+          "spent_micros": 2258,
+          "reserved_micros": 0
+        },
+        "official_requests": 0,
+        "development_python_tests": 1
+      },
+      "assessment": "当前测试核对每个实际请求的model、thinking及high时的reasoning_effort；通过正式development.py启动、浏览器登录和标签、聊天及两次预填，确认人工值保护、原trial计账、旧环境trial不混入。精确账本值与独立价格计算相符；主代理确认全部命令完整退出0。",
+      "historical_failure": ".local/checks/mvp-pro-startup-validation.log",
+      "historical_failure_limit": "首轮Pro formal_launcher_exited原因不确定，失败日志保留。后续Pro改用独立端口并记录launcher诊断，不降低业务断言；新日志证明当前运行通过，不能反推旧失败原因。"
+    },
+    {
+      "id": "flash_provider_budget_regression",
+      "result": "passed_in_supplied_log_with_scoped_applicability",
+      "evidence": ".local/checks/mvp-pro-integration-code.log",
+      "sources": [
+        "tests/runtime/check-model-provider.mjs",
+        "tests/runtime/check-model-admission.mjs"
+      ],
+      "assessment": "本轮首次接入改动后执行的Flash协议回环覆盖价格、未知预留、重复许可、原调用结算、异参拒绝、最后额度竞争、额度/期限拒绝、超用熔断及SDK失败边界；13次本地网络请求，发送前拒绝检查无请求。之后的改动仅补齐模型标签契约和启动测试，对这些预算与发送路径的适用性已静态核对；当前完整契约及启动另由后续日志绑定。",
+      "limitation": "此日志的契约数为176，不能代替当前178项契约证据；它也不证明Pro已逐一重跑全部失败与并发场景。"
+    },
+    {
+      "id": "official_pro_connectivity_and_ledger",
+      "result": "passed_for_connectivity_and_accounting_scope",
+      "evidence": ".local/model-workflow/pro-representative-result.json",
+      "observed": {
+        "model_id": "deepseek-v4-pro",
+        "price_version": "2026-10-05-pro-peak-usd",
+        "official_requests": 7,
+        "settled_calls": 6,
+        "unknown_calls": 1,
+        "spent_micros": 113440,
+        "independently_calculated_spent_micros": 113440,
+        "reserved_micros": 173016,
+        "business_completion": "incomplete",
+        "s04_error": "model_timeout"
+      },
+      "assessment": "正式产物sourceHashes与当前绑定源码逐项匹配。六次可靠usage按Pro价格分别向上取整再求和为113440微美元，与持久账本相等。超时调用未当作零费用或成功，完整保留一次32768/32768上限对应173016微美元预留。",
+      "limitation": "只核对真实连通、价格与未知回执边界，不评判S01/S04语义质量；单次90秒超时不提供扩大超时或重试的依据。"
+    }
+  ],
+  "residual_risks": [
+    "保守价格使用输入1.32/output3.96 USD每百万tokens，依据主代理已核实的官方价格且与锁定SDK目录一致；未把本地账本当成服务商账单。",
+    "切换模型不保证解决S01语义错误。此前AC08仍失败，九项旧工程证据不自动适用于本次新输入，整个I2-MVP继续未完成。"
+  ],
+  "reviewed_inputs_sha256": {
+    "AGENTS.md": "d3c1996e4d6684a158d3ed94fbd31dcdd28328d39cd58a6d01fe5518b8281d31",
+    "apps/agent/session/deliver.ts": "9c123e4430769765d552ec1e034979617fed0cabe05329e78d27137b3a5c1a25",
+    "apps/agent/session/resources.ts": "b5ac7860b55ae3ea2acfe1e778b4f0f4de20503a3354da5c783391d103023c13",
+    "apps/agent/provider/deepseek.ts": "1e46364bbe5369b544b7096dbb411bbc4e6a59c034378f48c28dc5455ae2cb41",
+    "apps/api/src/routes.rs": "dcce89a345e2a39b833f63de6260718434d444dda32bf905abaaadf6ee3dee65",
+    "apps/api/src/main.rs": "c5df950182388d098c04d3933a3f3e1a937e596dab3b991dccec9b4b9d3c94d9",
+    "apps/web/src/main.tsx": "a24a17b7fbf4d47842c73f3ee0cc9d33aeb5db2cb0a53e7af9aead39e042eb91",
+    "crates/data-agent/src/contracts.rs": "a34632f6069c0993b1954ae356ed44eacb115bdf20554dc8f48d7aef4e9bd9ac",
+    "crates/data-agent/src/modules/ingestion/prefill.rs": "6f21ed6cf6e4ae209869f1daaf3202fa9351f0f773b44986804fd270f7fda6da",
+    "crates/data-agent/src/modules/runtime/model_calls/store.rs": "4075437accd07efb03848c9281aa54f4f10ff231310c0c5ee395734aea704ecc",
+    "crates/data-agent/src/modules/runtime/store.rs": "b6c277b02aaf5a81cf2faacc4d9070649d22a9402b0704f0a4a9ff195498e37e",
+    "crates/data-agent/src/use_cases/model_calls.rs": "f223f4ad0716842c0fbb3efd3342d40c1cd11324e11521f4734a40e2ca5539a5",
+    "crates/data-agent/src/use_cases/semantic_prefill.rs": "7f619496e3b42d719cac416e9ffb5fb0f08f2fd24e6fcf5b0e5333e35d4718fd",
+    "packages/contracts/schema.json": "a1e83d60b19d63016d9150656c85e2140c2a49c74e23eddd22efe58983251203",
+    "packages/contracts/generated/boundary.rs": "a780f9adbc028ff543b8b394857493ee6245709af80a9ea7754f2acdf8742785",
+    "packages/contracts/generated/boundary.ts": "36a2d6d4cf2557738609207ec7d7452f80d1b1c2d1a7511b6a6624b751199a3b",
+    "packages/contracts/generated/names.ts": "41e499bb1487e559003aa13262cebf35dd191a2a337be6c89cd1c606753e986d",
+    "packages/contracts/validate.ts": "99beffd8f9b0327ddfb6e4daaa2449a9f6274f79679a190352e22a27804c5c1a",
+    "scripts/development.py": "a295029e92d0b373b49b62d52786a9145f4ae3dcaa0fe16d51317e24d98f4591",
+    "tests/mvp/run-business-acceptance.mjs": "d38c3031a6a847362fdd931368858d3a0c8d732ab81d8d073aa2ba8ba0ca2573",
+    "tests/mvp/check-model-startup.mjs": "a8045b9f52e3d47b090751a2d41fe067f5b503d117afa059ad23c066ec60cd39",
+    "tests/contracts/cases.json": "32d8148669046ff29608c7167b2fa5359dabeb6b5a98d6931329076abf6fa6e3",
+    "tests/runtime/check-model-provider.mjs": "b65a490322256c84e599d567e60828dacf499af6cd3cf4177bc8cfbacced5066",
+    "tests/runtime/check-model-admission.mjs": "388044e093013fa3d1213f69faf49fec05010c2aef23bea6fc17dcc88f477dd9",
+    "package-lock.json": "9f346b484c51b02da71c2cea72c184eba102c65ac5f2fc35ff7a150a51ed7200",
+    "scripts/test_development.py": "eb4a9338eac031679d34cd9083261539d6b788e00071aca838de8186e186dae2"
+  },
+  "evidence_inputs_sha256": {
+    ".local/checks/mvp-pro-integration-code.log": "11f55d1468163cf5e35d919c56ab8309ba604d453823bc56e18b729c9eeebaca",
+    ".local/checks/mvp-pro-integration-validation.log": "bb104dd2f56db57dfc79f850c629475ad8bc95b1fd1e490a61afc4051d3a03a7",
+    ".local/checks/mvp-pro-startup-current.log": "1b11ea0ce6725f0fdc056efd1750e0653953adf80e0307f9b553e614f7d777e2",
+    ".local/checks/mvp-pro-startup-validation.log": "e65ecd340d4018112e1a67586ef6c9edca81a7e912b267d710133f1336f39b5d",
+    ".local/model-workflow/concise-instructions-representative-result.json": "4dc93f4b1d45c230a2cb57b2d8c2aecf01d33ffa2515f6bdac1aac66a03ae484",
+    ".local/model-workflow/pro-representative-result.json": "989777458e20134edd4d80fd61bb498453dd1cb91bd47fe23be4e54999fe4aeb"
+  },
+  "testing_gaps": [
+    "审查者未运行数据库、构建、测试或官方调用；本轮只读取完整日志、正式产物和源码，主代理确认相关命令完整退出。",
+    "Pro回环证明实际模型参数、正式登录/标签和精确结算；官方产物另外证明超时保留未知预算。其余错误和竞争边界由共同实现的本轮Flash回环覆盖，未宣称Pro逐项实跑所有失败和并发场景。",
+    "官方S01/S04代表产物machinePassed=false、completion=incomplete，S04因90秒model_timeout失败；语义质量另由指定审查者评估，AC08与完整MVP仍未完成。",
+    "九项旧工程证据不因本轮限定接入验证而自动成为当前增量通过收据，后续完整验收须重新绑定相关输入。"
+  ],
+  "summary": "本轮独立发现的Identity/SessionReceipt标签契约遗漏及launcher固定Flash断言已修正并获当前178项契约与两模型正式启动回环验证。模型ID传播、Pro配对价格、原预算身份和Pi复用在限定范围内通过。官方Pro已连通：7次调用中6次结算113440微美元，1次S04超时保持unknown并保留173016微美元预留；该正式产物仍为incomplete。不将旧九项工程验收自动绑定新输入，不将本记录视为业务语义或AC08通过。"
+}

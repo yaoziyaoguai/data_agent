@@ -1,0 +1,101 @@
+<style>
+#da-knowledge { display:grid; gap:16px; }
+#da-knowledge .flow { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+#da-knowledge .arrow { color:var(--muted-foreground); }
+#da-knowledge .heading { display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:8px; }
+#da-knowledge h3 { margin:0; }
+</style>
+<div id="da-knowledge">
+  <p class="text-small text-muted">公开教学版 · 2026-10-03 · 全部业务样例均为虚构。当前决定与实现进度见 <a href="../semantic-retrieval-design.md">实施基线</a>；本页不代表组件已运行。</p>
+  <div class="flow" aria-label="语义准备顺序"><span>平台元数据 / 血缘 / SQL</span><span class="arrow" aria-hidden="true">→</span><span>确定事实 + 模型分析</span><span class="arrow" aria-hidden="true">→</span><span>预填与人工修订</span><span class="arrow" aria-hidden="true">→</span><span>当前语义 + 检索索引</span></div>
+  <div class="viz-grid" role="group" aria-label="六类语义知识">
+    <button type="button" class="btn btn-block" data-kind="table" aria-pressed="false">表：这是什么数据</button>
+    <button type="button" class="btn btn-block" data-kind="field" aria-pressed="true">字段：每个值什么意思</button>
+    <button type="button" class="btn btn-block" data-kind="metric" aria-pressed="false">指标：这个数怎么算</button>
+    <button type="button" class="btn btn-block" data-kind="join" aria-pressed="false">关联：两张表怎样合用</button>
+    <button type="button" class="btn btn-block" data-kind="term" aria-pressed="false">业务用语：大家怎么叫</button>
+    <button type="button" class="btn btn-block" data-kind="example" aria-pressed="false">已验证问句与 SQL</button>
+  </div>
+  <div class="heading"><h3 data-title>字段与取值</h3><span class="viz-badge" data-location>维护页：字段语义</span></div>
+  <table class="table table-sm" aria-label="所选语义对象的构成"><tbody data-body>
+    <tr><th scope="row">例子</th><td>paid_amount_cents：没有成功支付记录时填 0，需要结合支付时间理解。</td></tr>
+  </tbody></table>
+  <hr>
+  <table class="table table-sm" aria-label="每项语义共有的记录">
+    <tbody>
+      <tr><th scope="row">身份与范围</th><td>稳定对象标识、所属空间/表、适用业务域与使用条件</td></tr>
+      <tr><th scope="row">依据</th><td>原始资料、原文位置、来源版本；区分直接事实、模型推断、人工修订</td></tr>
+      <tr><th scope="row">使用状态</th><td>当前有效版本、人工修改标识、人工确认、查询验证、依据失效分别记录</td></tr>
+      <tr><th scope="row">依赖与缺口</th><td>依赖哪些字段、规则、上游和案例；缺什么、影响什么问题</td></tr>
+    </tbody>
+  </table>
+  <div class="text-small" aria-live="polite" data-selection>当前查看：字段与取值</div>
+</div>
+<script>
+(() => {
+  const root=document.getElementById('da-knowledge');
+  const content={
+    table:{title:'表的说明',location:'维护页：表语义',rows:[
+      ['保存什么','名称与含义、覆盖范围、每行代表什么、候选唯一键、业务时间、更新方式、适用问题。'],
+      ['虚构零售例子','demo_order_detail 每行是订单行，(order_id, line_id) 唯一；订单数不能直接数行。'],
+      ['自动预填来源','元数据、加工 SQL 的来源/过滤/窗口/关联，必要时沿血缘补查。'],
+      ['查询怎样用','判断能否覆盖时间与所需维度、粒度是否合适，避免只按相似表名选表。'],
+      ['补齐后的细节','把业务事件时间、分区时间、数据到齐依据分清；最大事件时间不能单独证明数据到齐。'],
+      ['当前边界','公开零售资料仅用于离线演示，不能据此证明整个目标目录的检索效果。']
+    ]},
+    field:{title:'字段与取值',location:'维护页：字段语义',rows:[
+      ['保存什么','名称、类型、清楚的解释、枚举/默认值、计算来源、适用提醒；map 子项保留父字段和 key。'],
+      ['虚构零售例子','paid_amount_cents：成功支付先按订单行汇总，再关联明细；无匹配支付记录时填 0。'],
+      ['容易误解','0 不自动证明零元成交，也可能是没有成功支付记录。结合 paid_at 和 order_status 阅读。'],
+      ['模型的作用','把逻辑解释成人话、补充可能含义、发现冲突；推断保留来源和疑问。'],
+      ['查询怎样用','把“非测试订单”映射为 is_test=0；支付客户数还要求已支付且客户标识非空。'],
+      ['证据边界','SQL 能证明聚合与填值；正式指标仍需明确支付、退款和测试订单的范围。']
+    ]},
+    metric:{title:'指标与计算规则',location:'维护页：指标与 SQL',rows:[
+      ['保存什么','统计对象、算法、分子分母、时间、分组维度、过滤、去重、空值规则、可用表与 SQL。'],
+      ['虚构零售例子','月支付客户数在整月范围按 customer_id 去重；净收入按支付金额减累计退款计算。'],
+      ['自动预填来源','字段、加工逻辑与可用统计可以提出候选算法；不会自动产生正式业务口径。'],
+      ['查询怎样用','将正式规则带入本次计算条件；适用范围不同的表实现要明确选择。'],
+      ['共享方式','一个指标有统一标识，多张表引用；改口径时能定位受影响的表与案例。'],
+      ['当前边界','公开样例有净收入、支付客户数和订单退款率；笼统“退款率”仍需澄清按订单数还是金额。']
+    ]},
+    join:{title:'可用查询关联',location:'维护页：血缘与节点 / 关联规则',rows:[
+      ['保存什么','两端表和字段、方向、完整匹配条件、时间条件、预期匹配数量、去重要求、证据与验证范围。'],
+      ['虚构零售例子','customer_tags 每客户可有多行；筛标签宜用 EXISTS 或去重客户集合，避免金额被重复累计。'],
+      ['三种关系','生产血缘表示数据从哪来；ETL JOIN 记录当前加工怎么连；查询关联说明本次分析能怎样用。'],
+      ['查询怎样用','按需要找到另一端；不要求另一端也在向量高分结果里。防止关联后放大订单数或金额。'],
+      ['补齐后的细节','按计算需要核对唯一性证据；抽样没发现重复，只能说明该次样本情况。'],
+      ['当前边界','ETL 读取订单行、支付事件和客户维表；标签表是额外查询关系，不是 ETL 上游。']
+    ]},
+    term:{title:'业务用语与默认规则',location:'归属相应表/字段/指标；底层统一引用',rows:[
+      ['保存什么','别名、简称、业务含义、适用范围、默认条件和例外。'],
+      ['虚构零售例子','“客户数”可能指注册客户或支付客户；“退款率”可能按订单或金额，不能全目录绑定一个含义。'],
+      ['自动预填来源','元数据注释、明确的 SQL 条件、已有业务材料；模型可以提出同义词建议。'],
+      ['查询怎样用','业务问法对应到真实对象和值。域不明确时保留候选，而不是全空间绑定一个含义。'],
+      ['补齐后的细节','默认条件有适用范围；本轮澄清的答案只改变本轮问题，不能自动改成全局规则。'],
+      ['当前边界','中文、英文标识、下划线名称与编码的匹配，需要关键词基线和混合检索样本验证。']
+    ]},
+    example:{title:'已验证问句与 SQL',location:'关联到相关指标、表与验证记录',rows:[
+      ['保存什么','问句、SQL、适用目的、参数范围、依赖版本、认可的口径和结果验证记录。'],
+      ['虚构零售例子','“计算月支付客户数”的 SQL 需核对口径与固定样例结果；独立标准答案不能喂给待验收模型。'],
+      ['与加工 SQL 的区别','节点 SQL 说明表怎么加工；业务查询案例说明某个问题曾怎样正确回答。'],
+      ['查询怎样用','相似问题参考它，再核对时间、粒度、过滤和当前定义。新问题也能依据充分的语义生成。'],
+      ['补齐后的细节','案例依赖的字段或规则变化后要复核；点赞、执行成功都不自动证明口径正确。'],
+      ['当前边界','首批 20 个场景以虚构样例重写；Agent 验收与离线 fixture 验证分别记录。']
+    ]}
+  };
+  let selected='field';
+  function render(kind){
+    selected=content[kind]?kind:'field';const data=content[selected];
+    root.querySelector('[data-title]').textContent=data.title;root.querySelector('[data-location]').textContent=data.location;
+    root.querySelector('[data-selection]').textContent='当前查看：'+data.title;
+    root.querySelectorAll('[data-kind]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.kind===selected)));
+    const body=root.querySelector('[data-body]');body.replaceChildren();
+    data.rows.forEach(([label,value])=>{const tr=document.createElement('tr');const th=document.createElement('th');th.scope='row';th.textContent=label;const td=document.createElement('td');td.textContent=value;tr.append(th,td);body.append(tr);});
+  }
+  function restore(state){render(state?.privateContent?.kind||state?.modelContent?.kind||'field');}
+  root.querySelectorAll('[data-kind]').forEach(b=>b.addEventListener('click',()=>{render(b.dataset.kind);if(window.openai?.setWidgetState)window.openai.setWidgetState({modelContent:{view:'语义层的六类知识',kind:selected},privateContent:{kind:selected}}).catch(()=>{});}));
+  window.addEventListener('openai:set_globals',e=>{if(e.detail?.globals?.widgetState)restore(e.detail.globals.widgetState);});
+  restore(window.openai?.widgetState);
+})();
+</script>

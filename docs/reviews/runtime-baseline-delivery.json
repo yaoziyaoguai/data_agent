@@ -1,0 +1,147 @@
+{
+  "historical": true,
+  "completed_increment": {
+    "id": "I0-01",
+    "phase": "I0",
+    "status": "complete",
+    "goal": "用合成资料和明确标记的模拟provider跑通React提交消息、Rust持久保存、Pi调用受控工具、返回持久结果的最小链路；验证接口、隔离和中断恢复。只关闭这一增量，不代表完整I0或MVP完成。",
+    "requirements": [
+      "D07",
+      "D16",
+      "D17",
+      "C01",
+      "C02",
+      "C07",
+      "A02",
+      "A09",
+      "A10",
+      "C05",
+      "C08"
+    ],
+    "modules": [
+      "M01",
+      "M05",
+      "M06",
+      "M08",
+      "M10",
+      "M11",
+      "M12"
+    ],
+    "allowed_paths": [
+      "apps/api",
+      "apps/worker",
+      "apps/agent",
+      "apps/web",
+      "crates/data-agent",
+      "packages/contracts",
+      "migrations",
+      "tests",
+      "scripts",
+      "Cargo.toml",
+      "Cargo.lock",
+      "package.json",
+      "package-lock.json",
+      "Makefile",
+      "docs",
+      "tsconfig.json"
+    ],
+    "non_goals": [
+      "本增量不执行真实平台SQL，不实现全部语义维护和向量检索。",
+      "本增量不调用真实付费模型；真实DeepSeek接入仍是后续I0必需项，不能删掉或推迟到I3。",
+      "不提前创建所有模块空壳、全量数据库表、微服务或额外任务系统。",
+      "不改变已确认的产品行为；不提交、推送、发布或使用历史密钥。"
+    ],
+    "invariants": [
+      "Pi是唯一Agent循环；模拟provider必须经过真实Pi工具路径，不能用预置回复替代SDK接入。",
+      "身份由宿主绑定；两个模拟用户仍须在服务端隔离，模型与前端不能自报他人归属。",
+      "同一逻辑操作跨run保留operation_id；旧代次不能新写，已提交副作用不能重复。",
+      "模块私有存储，协调层不写SQL；取得当前事实遵守既定锁序。",
+      "验证资料与模型输入分开；合成数值参考不作为模型答案模板。"
+    ],
+    "acceptance": [
+      {
+        "id": "I0-01-AC01",
+        "requirements": [
+          "D07",
+          "C07"
+        ],
+        "expected": "同源生成Rust/TypeScript边界类型；相同正反例对必填、标签分支、空值、未知字段和精确数字作一致判断，运行时拒绝非法输入。",
+        "command": [
+          "make",
+          "verify-contracts"
+        ],
+        "timeout_seconds": 60,
+        "evidence_kind": "contract"
+      },
+      {
+        "id": "I0-01-AC02",
+        "requirements": [
+          "D07",
+          "D16",
+          "D17",
+          "C01",
+          "C02",
+          "C08"
+        ],
+        "expected": "真实React/Rust/Node与Pi SDK、模拟provider和MySQL跑通消息到受控工具及持久结果；两个用户不能读取或调用彼此对象，刷新回看原结果，调用记录能定位请求/运行/工具。",
+        "command": [
+          "make",
+          "verify-runtime-flow"
+        ],
+        "timeout_seconds": 120,
+        "evidence_kind": "runtime"
+      },
+      {
+        "id": "I0-01-AC03",
+        "requirements": [
+          "A02",
+          "C01",
+          "C02",
+          "C05"
+        ],
+        "expected": "分别在业务提交前、提交后未交付回执、最终输出后未提交检查点注入退出；新run恢复原操作，只产生一份业务副作用，旧代次拒绝新写且不串用户。",
+        "command": [
+          "make",
+          "verify-recovery"
+        ],
+        "timeout_seconds": 120,
+        "evidence_kind": "runtime"
+      },
+      {
+        "id": "I0-01-AC04",
+        "requirements": [
+          "A09",
+          "A10",
+          "C07"
+        ],
+        "expected": "对协调层SQL与兄弟模块互导故意制造反例，工程检查必须失败；实际涉及的并发写入使用所属模块锁入口，并验证锁内当前读取和一致锁序。",
+        "command": [
+          "make",
+          "verify-architecture"
+        ],
+        "timeout_seconds": 60,
+        "evidence_kind": "architecture"
+      }
+    ],
+    "verification_inputs": [
+      "apps",
+      "crates/data-agent",
+      "packages/contracts",
+      "migrations",
+      "tests",
+      "scripts",
+      "Cargo.toml",
+      "Cargo.lock",
+      "package.json",
+      "package-lock.json",
+      "Makefile",
+      "tsconfig.json"
+    ],
+    "review": {
+      "status": "passed",
+      "record": "docs/reviews/runtime-increment.json"
+    },
+    "evidence": ".local/delivery/I0-01-result.json"
+  },
+  "receipt": ".local/delivery/I0-01-result.json"
+}

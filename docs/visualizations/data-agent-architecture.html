@@ -1,0 +1,350 @@
+<style>
+#da-architecture { display:grid; gap:14px; }
+#da-architecture h2 { margin:0; }
+#da-architecture .arch-heading { display:flex; flex-wrap:wrap; align-items:baseline; justify-content:space-between; gap:8px 20px; }
+#da-architecture .arch-legend { display:flex; flex-wrap:wrap; align-items:center; gap:8px 18px; }
+#da-architecture .arch-key { display:inline-flex; align-items:center; gap:6px; }
+#da-architecture .arch-swatch { display:inline-block; width:10px; height:10px; border-radius:2px; }
+#da-architecture .arch-swatch.own { background:var(--viz-series-1); }
+#da-architecture .arch-swatch.existing { background:var(--viz-series-2); }
+#da-architecture .arch-swatch.candidate { background:var(--viz-series-3); }
+#da-architecture .arch-canvas { width:100%; min-width:0; }
+#da-architecture .arch-diagram { display:block; width:100%; overflow:visible; }
+#da-architecture .arch-diagram text { fill:var(--foreground); font-family:inherit; }
+#da-architecture .arch-diagram .secondary { fill:var(--muted-foreground); }
+#da-architecture .arch-diagram .node-title { font-weight:500; }
+#da-architecture .arch-diagram .node-shape { stroke:var(--border); stroke-width:1; }
+#da-architecture .arch-diagram .own .node-shape { fill:color-mix(in srgb,var(--viz-series-1) 8%,var(--background)); }
+#da-architecture .arch-diagram .existing .node-shape { fill:color-mix(in srgb,var(--viz-series-2) 9%,var(--background)); }
+#da-architecture .arch-diagram .candidate .node-shape { fill:color-mix(in srgb,var(--viz-series-3) 8%,var(--background)); stroke-dasharray:5 4; }
+#da-architecture .arch-diagram .store .node-shape { fill:var(--secondary); }
+#da-architecture .arch-diagram .note .node-shape { fill:var(--background); }
+#da-architecture .arch-diagram .node-rail.own { fill:var(--viz-series-1); }
+#da-architecture .arch-diagram .node-rail.existing { fill:var(--viz-series-2); }
+#da-architecture .arch-diagram .node-rail.candidate { fill:var(--viz-series-3); }
+#da-architecture .arch-diagram .boundary { fill:none; stroke:var(--border); stroke-width:1; }
+#da-architecture .arch-diagram .wire { fill:none; stroke:var(--muted-foreground); stroke-width:1.25; stroke-linejoin:round; }
+#da-architecture .arch-diagram .wire.optional { stroke-dasharray:4 4; }
+#da-architecture .arch-diagram .wire-label-bg { fill:var(--background); }
+#da-architecture .arch-caption { margin:0; }
+</style>
+<div id="da-architecture">
+  <p class="text-small text-muted">历史教学草图 · 2026-10-03 · 全部业务样例均为虚构。后续已接入 Pi SDK 与 Mem0；最新分工和调用关系见 <a href="../architecture/README.md">软件架构</a>，交付状态见 <a href="../CURRENT.md">CURRENT</a>。下方保留当时的讨论内容。</p>
+  <div class="arch-heading">
+    <h2>Data Agent 系统架构</h2>
+    <span class="text-small text-muted">示例大目录全空间 · 2026-10-02</span>
+  </div>
+  <div class="viz-row" role="group" aria-label="切换架构视图">
+    <button class="btn" type="button" data-view="overall" aria-pressed="true">整体架构</button>
+    <button class="btn" type="button" data-view="query" aria-pressed="false">一次查询</button>
+    <button class="btn" type="button" data-view="knowledge" aria-pressed="false">知识与纠错</button>
+  </div>
+  <div class="arch-legend text-small" aria-label="建设与选型状态">
+    <span class="arch-key"><i class="arch-swatch existing" aria-hidden="true"></i>已有平台</span>
+    <span class="arch-key"><i class="arch-swatch own" aria-hidden="true"></i>需建设的业务能力</span>
+    <span class="arch-key"><i class="arch-swatch candidate" aria-hidden="true"></i>接入待验证组件</span>
+    <span class="text-muted">技术偏好另标；框表示职责边界</span>
+  </div>
+  <div class="arch-canvas">
+    <svg class="arch-diagram" role="img" aria-labelledby="da-arch-title da-arch-description"></svg>
+  </div>
+  <div class="arch-caption text-small text-muted" aria-live="polite" data-caption></div>
+</div>
+<script>
+(() => {
+  const root = document.getElementById('da-architecture');
+  const svg = root.querySelector('.arch-diagram');
+  const canvas = root.querySelector('.arch-canvas');
+  const ns = 'http://www.w3.org/2000/svg';
+  let view = 'overall';
+  let width = 0;
+  let scale = 1;
+  let drawing;
+  const captions = {
+    overall:'①—⑧ 对应原八模块；Rust 与 Pi 已定，Pi 接入与 Mem0 候选待验证。数据库与模型沿用选型偏好。',
+    query:'MVP：查懂数据、输出复杂 SQL、按需取数与分析；每次运行保留条件、引用版本与任务状态。',
+    knowledge:'MVP：维护语义、个人记忆和显式调用 Skill；自动学习、团队技能市场与多 Agent 后续评估。'
+  };
+  function el(name, attrs = {}, parent = drawing) {
+    const item = document.createElementNS(ns,name);
+    for (const [key,value] of Object.entries(attrs)) item.setAttribute(key,String(value));
+    parent.append(item);
+    return item;
+  }
+  function text(x,y,value,opts = {}) {
+    const item = el('text',{x,y,class:opts.className || 'text-small','text-anchor':opts.anchor || 'start'});
+    item.textContent = value;
+    return item;
+  }
+  function label(x,y,value,anchor = 'middle') {
+    const t = text(x,y,value,{anchor});
+    const box = t.getBBox();
+    const r = el('rect',{x:box.x-4,y:box.y-2,width:box.width+8,height:box.height+4,class:'wire-label-bg'});
+    drawing.insertBefore(r,t);
+    return t;
+  }
+  function wire(points, options = {}) {
+    const path = 'M'+points.map(p=>p.join(',')).join(' L');
+    const attrs = {d:path,class:'wire'+(options.optional?' optional':''),'data-edge':options.id || ''};
+    if (options.end !== false) attrs['marker-end'] = 'url(#da-arch-arrow)';
+    if (options.both) attrs['marker-start'] = 'url(#da-arch-arrow-start)';
+    el('path',attrs);
+    if (options.label) label(options.label[0],options.label[1],options.label[2],options.label[3]);
+  }
+  function node(id,x,y,w,h,tag,title,lines,kind = 'own') {
+    const g = el('g',{class:'arch-node '+kind,'data-node':id});
+    const old = drawing; drawing = g;
+    el('rect',{x,y,width:w,height:h,rx:6,class:'node-shape'});
+    if (['own','existing','candidate'].includes(kind)) el('rect',{x:x+1,y:y+13,width:3,height:h-26,rx:1,class:'node-rail '+kind});
+    text(x+14,y+20,tag,{className:'text-small secondary'});
+    text(x+14,y+43,title,{className:'node-title'});
+    lines.forEach((line,i)=>text(x+14,y+65+i*18,line));
+    drawing = old;
+    return {id,x,y,w,h,cx:x+w/2,cy:y+h/2,bottom:y+h,right:x+w};
+  }
+  function group(x,y,w,h,title,tag) {
+    el('rect',{x,y,width:w,height:h,rx:8,class:'boundary'});
+    text(x+14,y+22,title,{className:'text-small node-title'});
+    if(tag) text(x+w-14,y+22,tag,{className:'text-small secondary',anchor:'end'});
+  }
+  function connectDown(a,b,words,options={}) {
+    const mid=(a.bottom+b.y)/2;
+    const points=a.cx===b.cx?[[a.cx,a.bottom],[b.cx,b.y]]:[[a.cx,a.bottom],[a.cx,mid],[b.cx,mid],[b.cx,b.y]];
+    wire(points,{...options,label:words?[b.cx+12,mid+4,words,'start']:undefined});
+  }
+  function header(words) { text(width/2,17,words,{anchor:'middle',className:'text-small secondary'}); }
+  function overallWide() {
+    header('产品 / 算法 / 数据分析 / 数据开发');
+    const m=24, full=width-48, gap=20, col=(full-2*gap)/3;
+    const ui=node('ui',m,36,full,88,'前端 · React / TypeScript 方向','④ 用户入口与工作台',['提问与结果  /  语义与业务文档维护  /  我的记录、记忆与 Skill']);
+    const api=node('api',m,170,full,88,'主业务后端 · Rust 已定','请求入口与上下文管理',['认证用户与空间  ·  本次计算条件  ·  会话 / 任务记录  ·  Skill 版本']);
+    connectDown(ui,api,'请求 / 流式响应',{both:true,id:'ui-api'});
+    const piW=(full-48)*0.63;
+    const pi=node('pi',m,310,piW,110,'Pi 已选 · SDK 接入待验证','Agent 运行组件',['⑤ 理解规划 · ⑥ SQL 草稿 · ⑧ 解释','工具循环 · 流式输出 · 会话压缩'],'candidate');
+    const model=node('model',m+piW+48,310,full-piW-48,110,'模型偏好','DeepSeek',['理解 / 生成 / 分析','向量模型另选'],'store');
+    wire([[api.cx,api.bottom],[api.cx,282],[pi.cx,282],[pi.cx,pi.y]],{both:true,label:[pi.cx+12,296,'任务 / 上下文 / 运行事件','start'],id:'api-pi'});
+    wire([[pi.right,pi.cy],[model.x,model.cy]],{both:true,id:'pi-model'});
+    label((pi.right+model.x)/2,350,'调用');
+    group(12,470,width-24,226,'Rust 数据业务工具','同一业务边界');
+    const gate=node('gate',m,506,full,40,'工具入口：身份与范围  /  数据权限  /  有效版本','',[]);
+    gate.cy=526;
+    wire([[pi.cx,pi.bottom],[pi.cx,506]],{both:true,label:[pi.cx+12,449,'工具请求 / 工具结果','start'],id:'pi-tools'});
+    wire([[api.x,api.cy],[7,api.cy],[7,526],[m,526]],{label:[18,447,'维护 / 个人操作','start'],id:'api-maintain'});
+    const retrieval=node('retrieval',m,580,col,96,'③ 知识服务','语义与文档检索',['精确 / 关键词 / 向量','口径 · 关联 · 依据补齐']);
+    const query=node('query',m+col+gap,580,col,96,'⑥ 检查 · ⑦ 执行','SQL 与查询任务',['权限 / 方言 / 计算条件','确认版本 · 提交 · 查状态']);
+    const personal=node('personal',m+2*(col+gap),580,col,96,'按用户与空间','个人资产服务',['记录 · 记忆 · 纠错','Skill 参数 / 步骤 / 版本']);
+    [retrieval,query,personal].forEach(n=>wire([[n.cx,546],[n.cx,n.y]],{id:'gate-'+n.id}));
+    group(12,750,width-24,150,'正式记录与检索依赖','按范围读取');
+    node('mysql',m,788,col,94,'偏好 · 正式记录','MySQL',['语义 / 文档 / 用户资产','会话 / SQL / 任务 / 版本'],'store');
+    node('vector',m+col+gap,788,col,94,'偏好 · 可重建索引','Zilliz / Milvus',['相关知识与案例检索','对象标识 · 内容版本'],'store');
+    node('mem0',m+2*(col+gap),788,col,94,'候选 · 记忆组件','Mem0',['辅助提取 / 检索记忆','有效状态回 MySQL 核对'],'candidate');
+    wire([[retrieval.cx,696],[retrieval.cx,750]],{both:true,label:[retrieval.cx+12,729,'有效记录 / 检索索引','start'],id:'tools-storage'});
+    const half=(full-48)/2;
+    const platform=node('platformAdapter',m,998,half,112,'平台边界 · 先 mock','数据平台适配器 / 数仓',['元数据 · 血缘 · 节点 SQL','查询 / 身份接口待核实'],'existing');
+    const build=node('build',m+half+48,998,half,112,'Rust 后台任务','① 接入 · ② 语义建设',['SQL 解析 · 模型预填 · 人工修订','来源版本 · 人工标识 · 索引任务']);
+    wire([[platform.right,platform.cy],[build.x,build.cy]],{label:[(platform.right+build.x)/2,platform.cy-10,'同步'],id:'source-build'});
+    wire([[build.cx,build.y],[build.cx,942],[m+col/2,942],[m+col/2,882]],{id:'build-mysql'});
+    wire([[build.cx,942],[m+col+gap+col/2,942],[m+col+gap+col/2,882]],{id:'build-index'});
+    label(build.cx+12,972,'语义与索引更新','start');
+    wire([[query.cx,query.bottom],[query.cx,719],[width-7,719],[width-7,1154],[platform.cx,1154],[platform.cx,platform.bottom]],{both:true,label:[width/2,1154,'SQL / 任务状态 / 结果'],id:'query-platform'});
+    return 1178;
+  }
+  function overallNarrow() {
+    header('产品 · 算法 · 分析 · 数据开发');
+    const x=24,w=width-48;
+    const items=[
+      ['ui','前端 · React 方向','④ 用户工作台',['提问 / 结果 · 语义 / 文档维护','我的记录 · 记忆 · Skill'],'own'],
+      ['api','Rust 已定','请求与上下文',['用户 / 空间 · 本次计算条件','会话 / 任务 · Skill 版本'],'own'],
+      ['pi','Pi 已选 · Node.js 接入','Pi SDK',['⑤ 理解规划 · ⑥ 草稿 · ⑧ 解释','工具循环 · 流式输出 · 压缩'],'candidate'],
+      ['model','模型偏好','DeepSeek',['模型调用 · 语义预填','向量模型另选'],'store'],
+      ['gate','Rust 业务服务','受控数据工具',['③ 语义 / 文档 / 案例检索','⑥ SQL 检查 · ⑦ 查询执行'],'own'],
+      ['personal','Rust · 按用户与空间','个人资产',['记录 / 记忆 / 纠错','Skill 参数 / 步骤 / 依赖版本'],'own'],
+      ['mysql','偏好 · 正式记录','MySQL',['语义 / 文档 / 用户资产','会话 / SQL / 任务 / 版本'],'store'],
+      ['vector','偏好 · 可重建索引','Zilliz / Milvus',['检索相关知识与案例','回 MySQL 读取有效版本'],'store'],
+      ['mem0','候选 · 可替换组件','Mem0',['辅助提取和检索记忆','由 Rust 核对用户与有效状态'],'candidate'],
+      ['build','Rust 后台任务','① 接入 · ② 语义建设',['SQL 解析 · 模型预填 · 人工修订','保存来源 / 版本 / 索引任务'],'own'],
+      ['platformAdapter','平台边界 · 先 mock','数据平台适配器 / 数仓',['元数据 · 血缘 · 节点 SQL','查询 / 身份接口待核实'],'existing']
+    ];
+    const nodes={};
+    let y=38;
+    items.forEach(item=>{nodes[item[0]]=node(item[0],x,y,w,100,...item.slice(1));y+=137;});
+    const route=(from,to,side,words,optional=false,inset=8)=>{
+      const a=nodes[from],b=nodes[to],rail=side==='left'?inset:width-inset;
+      const ax=side==='left'?a.x:a.right,bx=side==='left'?b.x:b.right;
+      wire([[ax,a.cy],[rail,a.cy],[rail,b.cy],[bx,b.cy]],{both:true,optional,id:from+'-'+to});
+      if(words) label(width/2,a.bottom+23,words);
+    };
+    connectDown(nodes.ui,nodes.api,'',{both:true,id:'ui-api'});
+    connectDown(nodes.api,nodes.pi,'任务 / 上下文',{both:true,id:'api-pi'});
+    connectDown(nodes.pi,nodes.model,'模型调用',{both:true,id:'pi-model'});
+    route('pi','gate','left','',false);
+    text(x+12,nodes.gate.y-12,'Pi ↔ Rust：带权限的工具调用',{className:'text-small secondary'});
+    connectDown(nodes.gate,nodes.personal,'业务工具',{id:'tools-personal'});
+    connectDown(nodes.personal,nodes.mysql,'正式记录',{both:true,id:'personal-mysql'});
+    connectDown(nodes.mysql,nodes.vector,'回源核对',{both:true,id:'index-source'});
+    text(x+12,nodes.mem0.y-12,'个人资产服务 ↔ 记忆组件',{className:'text-small secondary'});
+    route('personal','mem0','right','',true,16);
+    route('build','mysql','right','',false);
+    wire([[nodes.platformAdapter.cx,nodes.platformAdapter.y],[nodes.build.cx,nodes.build.bottom]],{label:[nodes.build.cx+12,nodes.build.bottom+24,'资料同步','start'],id:'source-build'});
+    text(x+12,nodes.build.y-12,'生成与修订 → MySQL / 索引',{className:'text-small secondary'});
+    route('gate','platformAdapter','left','',false,16);
+    text(width/2,y-10,'Rust 查询工具 ↔ 数据平台适配器任务 / 结果',{anchor:'middle',className:'text-small secondary'});
+    return y+8;
+  }
+  function queryView() {
+    header('示例：计算上个月支付客户数');
+    const wide=width>=640,m=24,mainW=wide?(width-100)*0.64:width-48;
+    const sideX=m+mainW+40,sideW=width-24-sideX;
+    const steps=[
+      ['q-entry','④ Rust 入口','问题与当前上下文',['用户 / 空间 · 目标 · 时间 · 维度','读取已选 Skill 和适用记忆'],'own'],
+      ['q-understand','⑤ Pi / DeepSeek · 接入待验证','理解与澄清',['确定统计对象与过滤条件','关键条件不足时向用户澄清'],'candidate'],
+      ['q-retrieve','③ Rust 知识工具','找语义、文档与案例',['精确 / 关键词 / 向量找候选','回源核对权限、版本及适用范围'],'own'],
+      ['q-plan','Rust 保存 · Pi 使用','本次计算条件',['指标 / 依赖版本 · 时间 · 维度','过滤 · 关联 · 数据范围'],'own'],
+      ['q-sql','⑥ Pi 生成 → Rust 检查','SQL 生成与检查',['权限 / 方言 / 计算条件；失败修正','展示 SQL，确认当前版本后取数'],'own'],
+      ['q-execute','⑦ Rust → 数据平台适配器','查询执行与状态跟踪',['保留提交标识 · 查状态 · 可取消','任务未知先查证，限制重复提交'],'own'],
+      ['q-result','⑦ Rust 结果检查','结果完整性',['分页取全 / 截断 · 数据到齐','区分无数据、未到齐与数值为零'],'own'],
+      ['q-answer','⑧ Pi 分析 → 页面返回','解释结果与依据',['结果 / SQL · 采用的口径与版本','本次范围 · 依据 · 未解决的限制'],'candidate']
+    ];
+    let y=42,previous;
+    const nodes={};
+    for(const row of steps){
+      const n=node(row[0],m,y,mainW,104,...row.slice(1));
+      nodes[row[0]]=n;
+      if(previous) connectDown(previous,n,'',{id:previous.id+'-next'});
+      previous=n;y+=140;
+    }
+    if(wide){
+      const missing=node('clarify',sideX,nodes['q-understand'].y,sideW,104,'条件不足','回到用户澄清',['口径有冲突','或关键条件缺失'],'note');
+      wire([[nodes['q-understand'].right,missing.cy],[missing.x,missing.cy]],{id:'clarify'});
+      const insufficient=node('insufficient',sideX,nodes['q-retrieve'].y,sideW,104,'关键依据不足 / 冲突','补查或澄清',['保留不确定项','补齐后继续'],'note');
+      wire([[nodes['q-retrieve'].right,insufficient.cy],[insufficient.x,insufficient.cy]],{id:'missing-evidence'});
+      const contract=node('contract',sideX,nodes['q-plan'].y,sideW,104,'贯穿后续步骤','同一份条件',['SQL 检查','与结果解释共用'],'note');
+      wire([[nodes['q-plan'].right,contract.cy],[contract.x,contract.cy]],{end:false,id:'condition-contract'});
+      node('sql-only',sideX,nodes['q-sql'].y,sideW,104,'用户只要 SQL','此处返回',['保留适用条件','及检查结果'],'note');
+      wire([[nodes['q-sql'].right,nodes['q-sql'].cy],[sideX,nodes['q-sql'].cy]],{id:'sql-only'});
+      node('unknown',sideX,nodes['q-execute'].y,sideW,104,'执行回执未知','查证原任务',['恢复查询状态','再决定下一步'],'note');
+      wire([[nodes['q-execute'].right,nodes['q-execute'].cy],[sideX,nodes['q-execute'].cy]],{id:'query-unknown'});
+    }
+    return y-12;
+  }
+  function knowledgeView() {
+    const wide=width>=640,m=24,full=width-48;
+    header('共享业务知识与个人经验分别维护，使用时共同核对');
+    let y=42;
+    let sourceA,sourceB;
+    if(wide){
+      const half=(full-40)/2;
+      sourceA=node('k-platform',m,y,half,102,'已有资料','数据平台适配器',['元数据 · 血缘 · 调度节点','节点 SQL · 可用数据证据'],'existing');
+      sourceB=node('k-docs',m+half+40,y,half,102,'人工录入 / 接口视情况接入','业务文档',['字段长说明 · 表 / 跨表业务','文档正文 · 章节 · 来源'],'own');
+      y+=160;
+    }else{
+      sourceA=node('k-platform',m,y,full,100,'已有资料','数据平台适配器',['元数据 · 血缘 · 调度节点','节点 SQL · 可用数据证据'],'existing');y+=130;
+      sourceB=node('k-docs',m,y,full,100,'人工录入 / 接口视情况接入','业务文档',['字段长说明 · 表 / 跨表业务','文档正文 · 章节 · 来源'],'own');y+=140;
+    }
+    const build=node('k-build',m,y,full,102,'① 接入 · ② 预填 · Rust Worker','事实提取与模型分析',wide?['解析 SQL 与血缘事实 · DeepSeek 补充业务解释','每条建议保留来源、依据与待核实项']:['SQL / 血缘提取事实 · 模型补解释','保留来源、依据与待核实项']);
+    if(wide){
+      const mid=build.y-28;
+      wire([[sourceA.cx,sourceA.bottom],[sourceA.cx,mid],[build.cx,mid],[build.cx,build.y]],{id:'k-source-build'});
+      wire([[sourceB.cx,sourceB.bottom],[sourceB.cx,mid],[build.cx,mid]],{end:false,id:'k-doc-build'});
+    }else{
+      connectDown(sourceB,build,'');
+      wire([[sourceA.x,sourceA.cy],[16,sourceA.cy],[16,build.cy],[build.x,build.cy]],{id:'k-source-build'});
+    }
+    y+=146;
+    const maintain=node('k-maintain',m,y,full,102,'② 数据开发维护','人工修订与有效版本',wide?['原始资料 / 分析建议 / 人工修改分别保留','来源变化时定位受影响内容，保留人工修订']:['原始资料 / 建议 / 人工修改分开','来源变化定位影响，保留人工修订']);
+    connectDown(build,maintain,'');y+=146;
+    const truth=node('k-truth',m,y,full,120,'③ MySQL 正式记录',wide?'共享语义、文档与已验证案例':'共享语义、文档与案例',wide?['表 / 字段与取值 / 指标 / 查询关联 / 业务用语','已验证问句 SQL · 文档 / 章节 / 跨表业务主题','稳定对象标识 · 有效版本 · 依据与维护记录']:['表 / 字段 / 指标 / 关联 / 用语','已验证 SQL · 文档 / 章节 / 主题','对象标识 · 版本 · 依据 · 维护记录'],'store');
+    connectDown(maintain,truth,'');
+    wire([[build.x,build.cy],[8,build.cy],[8,truth.cy],[truth.x,truth.cy]],{label:[m+12,truth.y-12,'有依据草稿可先入库','start'],id:'draft-to-record'});
+    y+=164;
+    const index=node('k-index',m,y,full,100,'③ Zilliz / Milvus · 可重建索引','供当前问题检索与核对',['正式修改与索引任务一起登记','召回后回 MySQL 核对当前版本和权限'],'store');
+    connectDown(truth,index,'');y+=150;
+    const feedback=node('k-feedback',m,y,full,102,'用户反馈与方法积累',wide?'纠错 / 请记住 / 保存为我的 Skill':'纠错 / 记住 / 保存 Skill',['先修正本次，保留原话与依据','再整理可复用的经验或方法']);
+    y+=160;
+    const branches=[
+      ['k-memory','个人经验','记忆与纠错',['范围 / 来源 / 依据 / 状态','可编辑、停用与删除'],'own'],
+      ['k-skill','个人方法','我的 Skill',['参数 / 步骤 / 输出要求','引用指标与文档版本'],'own'],
+      ['k-shared','公共业务定义','共享语义修订',['按维护权限修改后生效','正确 SQL 经验证入案例'],'own']
+    ];
+    if(wide){
+      const col=(full-40)/3;
+      branches.forEach((row,i)=>{
+        const n=node(row[0],m+i*(col+20),y,col,102,...row.slice(1));
+        wire([[feedback.cx,feedback.bottom],[feedback.cx,y-28],[n.cx,y-28],[n.cx,n.y]],{id:'feedback-'+row[0]});
+      });
+      wire([[width-24,y+51],[width-7,y+51],[width-7,truth.cy],[truth.right,truth.cy]],{id:'shared-revision'});
+      y+=130;
+      text(width/2,y,'个人资产存 MySQL；Mem0 候选辅助记忆提取与检索',{anchor:'middle',className:'text-small secondary'});
+      y+=25;
+      text(width/2,y,'下次使用：核对用户 / 空间、适用范围、状态与依赖版本',{anchor:'middle',className:'text-small secondary'});
+    }else{
+      branches.forEach(row=>{
+        const n=node(row[0],m,y,full,102,...row.slice(1));
+        wire([[feedback.x,feedback.cy],[8,feedback.cy],[8,n.cy],[n.x,n.cy]],{id:'feedback-'+row[0]});
+        y+=134;
+      });
+      text(m+12,y-8,'个人资产存 MySQL · Mem0 待验证',{className:'text-small secondary'});
+      y+=17;
+      text(m+12,y-8,'使用前核对归属、范围、状态与版本',{className:'text-small secondary'});
+    }
+    return y+18;
+  }
+  // 窄屏保留文字大小，通过重新排布节点适配，不缩小整张图。
+  function fitText() {
+    svg.querySelectorAll('.arch-node').forEach(g=>{
+      const box=g.querySelector('rect');
+      const max=Number(box.getAttribute('width'))-28;
+      g.querySelectorAll('text').forEach(t=>{
+        if(t.getComputedTextLength()<=max)return;
+        const content=t.textContent;
+        const x=t.getAttribute('x'),y=Number(t.getAttribute('y'));
+        const lines=[];let line='';
+        for(const ch of content){
+          t.textContent=line+ch;
+          if(t.getComputedTextLength()>max&&line){lines.push(line);line=ch;}else line+=ch;
+        }
+        if(line)lines.push(line);
+        t.textContent='';
+        lines.forEach((part,i)=>el('tspan',{x,y:y+i*18},t).textContent=part);
+        // 输入标签采用短文案，正文超宽应在校验中暴露，避免静默截断。
+        t.dataset.wrapped=String(lines.length);
+      });
+    });
+  }
+  function render(){
+    const measured=canvas.getBoundingClientRect().width;
+    if(measured<1)return;
+    scale=1;
+    width=measured/scale;
+    svg.replaceChildren();
+    const title=el('title',{id:'da-arch-title'},svg);
+    title.textContent={overall:'Data Agent 整体系统架构',query:'一次查询的处理与异常分支',knowledge:'语义建设与用户纠错积累'}[view];
+    const desc=el('desc',{id:'da-arch-description'},svg);
+    desc.textContent='Rust 主业务服务连接用户、数据工具与数据平台适配器；Pi 已选定，具体运行接入待验证；Mem0 为记忆候选。共享语义、个人记忆和 Skill 分别管理。';
+    const defs=el('defs',{},svg);
+    const end=el('marker',{id:'da-arch-arrow',viewBox:'0 0 8 8',refX:7,refY:4,markerWidth:7,markerHeight:7,orient:'auto',markerUnits:'userSpaceOnUse'},defs);
+    el('path',{d:'M1,1 L7,4 L1,7',fill:'none',stroke:'var(--muted-foreground)','stroke-width':1.2},end);
+    const start=el('marker',{id:'da-arch-arrow-start',viewBox:'0 0 8 8',refX:1,refY:4,markerWidth:7,markerHeight:7,orient:'auto',markerUnits:'userSpaceOnUse'},defs);
+    el('path',{d:'M7,1 L1,4 L7,7',fill:'none',stroke:'var(--muted-foreground)','stroke-width':1.2},start);
+    drawing=el('g',{transform:`scale(${scale})`},svg);
+    const height=view==='overall'?(width>=640?overallWide():overallNarrow()):view==='query'?queryView():knowledgeView();
+    svg.setAttribute('viewBox',`0 0 ${measured} ${height*scale}`);
+    svg.setAttribute('height',height*scale);
+    fitText();
+    root.querySelector('[data-caption]').textContent=captions[view];
+    root.querySelectorAll('[data-view]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.view===view)));
+  }
+  function restore(state){
+    const incoming=state?.privateContent;
+    view=incoming?.revision===1&&Object.hasOwn(captions,incoming.view)?incoming.view:'overall';
+    render();
+  }
+  root.querySelectorAll('[data-view]').forEach(b=>b.addEventListener('click',()=>{
+    view=b.dataset.view;render();
+    if(window.openai?.setWidgetState)window.openai.setWidgetState({modelContent:{view:'Data Agent 系统架构',section:b.textContent},privateContent:{revision:1,view}}).catch(()=>{});
+  }));
+  window.addEventListener('openai:set_globals',event=>{if(event.detail?.globals?.widgetState)restore(event.detail.globals.widgetState);});
+  restore(window.openai?.widgetState);
+  new ResizeObserver(()=>render()).observe(canvas);
+})();
+</script>

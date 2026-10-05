@@ -1,0 +1,252 @@
+{
+  "reviewer": "audit_agent_reality（未参与对应实现的独立语义审查者）",
+  "reviewed_date": "2026-10-05",
+  "conclusion": "failed",
+  "scope": "四题官方代表轮；审查正式S01回答以及P01/P04/P05初次和再次六份成功采用建议。该代表轮不等于完整16题或最终MVP。",
+  "evidence": ".local/model-workflow/semantic-guarantee-quality-representative-result.json",
+  "evidence_sha256": "648a591b27732ea982b3a07bad201ea4f810a2f333cfe0eab76f0afcca43777a",
+  "evidence_kind": "official_representative_semantic_review",
+  "supplementary_evidence": [
+    {
+      "path": ".local/model-workflow/semantic-guarantee-quality-s01-preview.json",
+      "sha256": "98bb1815e327f1da868c361e27e4f2f881dcd1f789620ba7556402065022cc19",
+      "scope": "父代理只读导出的持久提交事件；与正式报告和committed消息逐字相同。"
+    },
+    {
+      "path": ".local/model-workflow/semantic-guarantee-prefill-preview.json",
+      "sha256": "c832d8d4659a3f3c4cc21dfc7eb519f59b1f5ea36736c7eea145781a77bed3af",
+      "scope": "父代理只读导出的P01/P04版本3/4/6；所有持久body、suggestion、人工和来源内容与报告相同，正式API另附analysis_preference及prefill_status。"
+    }
+  ],
+  "summary": "机器四题通过仍不能关闭质量验收。S01漏掉paid分支前提；P01初次漏既定金额组成未知边界。P01再次、P04两次、P05两次可通过。97条引用全部匹配，人工值/标记/原事实保留；20官方请求全结算、预留0。",
+  "checks": [
+    {
+      "id": "S01",
+      "passed": false,
+      "summary": "加工、退款CHECK、事务失败和未定义业务概念边界已改善，但新的多行订单例子把整单付款为正当成paid充分条件，遗漏整单全退及行级取消分支。",
+      "finding_ids": [
+        "S01-PAID-BRANCH-PRECONDITIONS"
+      ]
+    },
+    {
+      "id": "P01",
+      "passed": false,
+      "initial_passed": false,
+      "repeated_passed": true,
+      "summary": "初次金额类型、来源、粒度、净收入和退款排除均成立，未再明确承诺refund-only能落表；但正文/gaps没有明确税费与运费的未覆盖边界。再次全部必需事实和金额组成边界成立。",
+      "finding_ids": [
+        "P01-INITIAL-AMOUNT-COMPONENT-GAP"
+      ]
+    },
+    {
+      "id": "P04",
+      "passed": true,
+      "initial_passed": true,
+      "repeated_passed": true,
+      "summary": "两份均保留订单行下单件数、直接投影、上游正数CHECK与目标非空的区别、SUM(quantity)和行/订单数区别，以及缺少退货件数不能推净售出件数。"
+    },
+    {
+      "id": "P05",
+      "passed": true,
+      "initial_passed": true,
+      "repeated_passed": true,
+      "summary": "两次均成功完整采用，给出CASE优先级、行级取消与整单金额的区别、状态一致性缺口和不模拟取消后付款的边界；按相邻完整CASE限定理解后续简短改述，不仅因复述省略前提再增硬失败。"
+    }
+  ],
+  "findings": [
+    {
+      "id": "S01-PAID-BRANCH-PRECONDITIONS",
+      "priority": "P2",
+      "confidence": 100,
+      "title": "把整单付款为正说成paid状态的充分条件",
+      "location": {
+        "path": ".local/model-workflow/semantic-guarantee-quality-representative-result.json",
+        "json_pointer": "/checks/0/artifacts/explanation"
+      },
+      "evidence": [
+        "正式已提交回答称：A行成功付款、B行无成功付款时，B行paid_amount_cents=0、paid_at=NULL，而整单t.paid>0因而状态为paid。",
+        "etl.sql先检查行级cancelled，再检查整单付款为0、整单退款等于付款，最后才取paid；t.paid>0不能单独推出paid。",
+        "审查者用原schema.sql及etl.sql纯内存执行：同单A行成功charge100与refund100、B行无事件且两行source_status=placed，成功落表后B行是paid_amount_cents=0、refunded_amount_cents=0、paid_at=NULL、order_status=refunded。"
+      ],
+      "recommendation": "生成因果结论和例子时同时校核所有先行CASE分支，给出充分前提；保留0可以出现在paid行上的可能性结论。",
+      "autofix_class": "advisory"
+    },
+    {
+      "id": "P01-INITIAL-AMOUNT-COMPONENT-GAP",
+      "priority": "P2",
+      "confidence": 98,
+      "title": "初次付款字段预填遗漏既定税费和运费未知边界",
+      "location": {
+        "path": ".local/model-workflow/semantic-guarantee-quality-representative-result.json",
+        "json_pointer": "/checks/1/artifacts/initial/entries/0/suggestion"
+      },
+      "evidence": [
+        "独立P01 unknowns原要求材料未给出税费、运费或折扣分摊算法，不能补成付款金额的已知组成；原要求未修改。",
+        "初次正文适用限制列出退款超过付款、取消后付款、跨月分次付款、折扣分摊算法；gaps仅说事件金额如何分摊到行的算法未提供，未交代费用组成未知。",
+        "第7节完整引用包含税费/运费，但建议正文及缺口没有将该边界表达为需要保留的未知内容。行级分摊未知与付款金额组成未知含义不同；再次建议已明确列出税费/运费，不代表初次已满足。"
+      ],
+      "recommendation": "按字段用途保留原资料中会影响金额解释的未知组成与覆盖范围；引用原文之外，在建议或缺口中明确说明。",
+      "autofix_class": "advisory"
+    }
+  ],
+  "verification": {
+    "semantic_source_sha256": {
+      "docs/sources/schema.sql": "49c13a97ad3b53bf161d549d35cc33f741b2d47701c2b744c20883cfedf2b72a",
+      "docs/sources/etl.sql": "42e2f1e7dfbd74bcbd07a0b2a712bd85b73adeb65ba8cf86e29619c07724de56",
+      "docs/sources/business-guide.md": "db322cbb2bb4d7f92e9ca6bc56d0e4ee8cd957354ff1b78c41ece5bee258e610",
+      "docs/sources/evaluation/prefill-cases.json": "8c42c5df5db32e7425bb02b307697ca323e17c45167e88e469bca822f6b72f7a"
+    },
+    "source_snapshot_code_sha256": {
+      "apps/agent/session/resources.ts": "de977b6b13d2784193384b162f7599f159e605d300d00f858d073ed888f44c5d",
+      "apps/agent/session/deliver.ts": "0385eb6d192e157a475a7ac1b6eed8cc1e9faca9fb9a3fbf310d9f77cdaa7bb2",
+      "apps/agent/session/checkpoint.ts": "24ff13be74efae72e0e77e272b7eed6a4e872f758e24f236bddfcb8564ea0d0f",
+      "crates/data-agent/src/modules/ingestion/prefill.rs": "c0afb798f11cd9047ba6c7c56dde08ba2d5463759316463f27c19ee1098914ef"
+    },
+    "scope_note": "绑定该次运行保存的源码指纹；之后修改的提示词不改变这次产物的结论。",
+    "formal_s01_committed": true,
+    "formal_s01_matches_partial_preview": true,
+    "formal_s01_matches_report_persisted_message": true,
+    "prefill_preview_persistent_body_matches_report": true,
+    "prefill_preview_extra_response_fields": [
+      "analysis_preference",
+      "prefill_status"
+    ],
+    "quote_count": 97,
+    "full_location_quotes": 96,
+    "contiguous_partial_location_quotes": 1,
+    "quote_errors": [],
+    "case_details": [
+      {
+        "id": "P01",
+        "manual_effective_value_preserved": true,
+        "human_override_record_preserved": true,
+        "source_facts_preserved": true,
+        "review_state": "needs_review",
+        "stages": [
+          {
+            "stage": "initial",
+            "knowledge_version": "3",
+            "prefill_state": "succeeded",
+            "quote_count": 20,
+            "semantic_passed": false
+          },
+          {
+            "stage": "repeated",
+            "knowledge_version": "6",
+            "prefill_state": "succeeded",
+            "quote_count": 20,
+            "semantic_passed": true
+          }
+        ]
+      },
+      {
+        "id": "P04",
+        "manual_effective_value_preserved": true,
+        "human_override_record_preserved": true,
+        "source_facts_preserved": true,
+        "review_state": "needs_review",
+        "stages": [
+          {
+            "stage": "initial",
+            "knowledge_version": "3",
+            "prefill_state": "succeeded",
+            "quote_count": 15,
+            "semantic_passed": true
+          },
+          {
+            "stage": "repeated",
+            "knowledge_version": "6",
+            "prefill_state": "succeeded",
+            "quote_count": 10,
+            "semantic_passed": true
+          }
+        ]
+      },
+      {
+        "id": "P05",
+        "manual_effective_value_preserved": true,
+        "human_override_record_preserved": true,
+        "source_facts_preserved": true,
+        "review_state": "needs_review",
+        "stages": [
+          {
+            "stage": "initial",
+            "knowledge_version": "3",
+            "prefill_state": "succeeded",
+            "quote_count": 16,
+            "semantic_passed": true
+          },
+          {
+            "stage": "repeated",
+            "knowledge_version": "6",
+            "prefill_state": "succeeded",
+            "quote_count": 16,
+            "semantic_passed": true
+          }
+        ]
+      }
+    ],
+    "pure_sqlite_witnesses": [
+      {
+        "id": "refunded_order_unpaid_line",
+        "engine": "Python sqlite3 in-memory with original schema.sql/etl.sql",
+        "steps": [
+          "Insert two placed raw order lines in one order, same time/channel/test flag, no customer.",
+          "Add successful charge100 and refund100 to line1 before snapshot; no event for line2.",
+          "Run original ETL and inspect successful output."
+        ],
+        "observed": [
+          {
+            "line_id": 1,
+            "paid_amount_cents": 100,
+            "refunded_amount_cents": 100,
+            "paid_at": "2026-01-02T00:00:00Z",
+            "order_status": "refunded"
+          },
+          {
+            "line_id": 2,
+            "paid_amount_cents": 0,
+            "refunded_amount_cents": 0,
+            "paid_at": null,
+            "order_status": "refunded"
+          }
+        ]
+      }
+    ],
+    "official_requests": 20,
+    "receipt_count": 20,
+    "all_receipts_settled": true,
+    "ledger": {
+      "calls": 20,
+      "state": "active",
+      "spent_micros": 195421,
+      "reserved_micros": 0
+    },
+    "reviewer_official_requests_added": 0,
+    "reviewer_mysql_requests_added": 0
+  },
+  "prior_findings_rechecked": [
+    {
+      "id": "S01-SQLITE-ABORT-NOT-ROLLBACK",
+      "status": "本轮只称INSERT被拒绝，没有再声称自动整事务回滚。"
+    },
+    {
+      "id": "P01-INITIAL-REFUND-ONLY-OUTPUT",
+      "status": "本轮初次只称无匹配时COALESCE为0，没有再明确列出只有成功退款为能落表的零付款来源；再次在目标退款CHECK及样例文档上下文中解释无付款行。"
+    },
+    {
+      "id": "P05-REPEATED-OUTPUT-INCOMPLETE",
+      "status": "本轮再次完整成功、knowledge版本6，已经保留新建议；不再用之前被拒绝截断结果作通过依据。"
+    },
+    {
+      "id": "S01-UNDEFINED-CONCEPT-MAPPING",
+      "status": "本轮明确零元成交未定义、不提供该概念与技术值的确定映射。"
+    }
+  ],
+  "non_blocking_notes": [
+    "S01手写SUM表达式省略原SQL的ELSE 0；应提高加工表达式转述精度，本轮不把该展示差异另外算一项业务失败。",
+    "P04初次额外称未模拟行内数量变更/履约件数，三份来源没有相应追踪字段或加工，按当前样例范围理解可接受；更精确措辞可说明资料未提供相应记录。",
+    "P04再次“付款汇总再左连接只作用于金额/paid_at”按该行级p左连接的投影范围理解；全链路还通过t影响order_status，建议后续避免脱离quantity上下文被读成全链路穷举。",
+    "P05再次完整CASE后的“即整单退款额等于付款额时为refunded”是就前述顺序的简略复述，结合前文与取消优先的再次明确限定，不等同于S01另举无前提具体例子的确定错误。"
+  ]
+}

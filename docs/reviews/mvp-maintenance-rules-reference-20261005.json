@@ -1,0 +1,129 @@
+{
+  "reviewer": "adversarial（未参与对应实现的独立审查者）",
+  "conclusion": "rules_static_review_passed_reference_clarification_required",
+  "scope": "当前两处通用推断规则的静态复核，以及Q04原文适用边界；不评价未提供的新模型产物，不关闭AC08或MVP。",
+  "source_sha256": {
+    "apps/agent/session/resources.ts": "4d49e738f5c162859e8bb60a986d7772a69b14d3f435f49b0741808c55a64d69",
+    "crates/data-agent/src/modules/ingestion/prefill.rs": "92c94e68b5b5da7101ada1226cd194dbb787f9a1cf088e32699d5d84845b4a01",
+    "docs/sources/schema.sql": "49c13a97ad3b53bf161d549d35cc33f741b2d47701c2b744c20883cfedf2b72a",
+    "docs/sources/etl.sql": "42e2f1e7dfbd74bcbd07a0b2a712bd85b73adeb65ba8cf86e29619c07724de56",
+    "docs/sources/business-guide.md": "54b1abe47939cb92d4d46f77c023dc325b936a2ff4f906604bb1e14108bfeedf",
+    "docs/sources/verify.py": "fc0d92cd71bf5d0da687167d3ce7608627578d8053f142893e167aa2766142ab",
+    "docs/sources/evaluation/queries/q04.sql": "506ae0e2bca3df78b4b9318a177ab94dc71cb5ec11d3797edf28195c369cce49",
+    "docs/sources/evaluation/queries/q10.sql": "dcaa0ebac8883d678c41ee056ae77a3e37f4b87921c26c69cf85c4dbaf15d166",
+    "scripts/evaluate_business_sql.py": "ee906ab8f56306085148f820a9f1d733609b4fd5c12dc2a2f7a02aa0a18c7427"
+  },
+  "rules_review": {
+    "passed": true,
+    "evidence": [
+      {
+        "path": "apps/agent/session/resources.ts",
+        "line": 14,
+        "summary": "未知业务概念的确定或条件必然技术映射必须有独立关系依据，否则保留无法判定并停止推演。"
+      },
+      {
+        "path": "crates/data-agent/src/modules/ingestion/prefill.rs",
+        "line": 257,
+        "summary": "首句、标题、摘要与正文均为正式定义；发现例外须直接改写前面的无条件陈述，不能用末尾或gaps抵消。"
+      },
+      {
+        "path": "crates/data-agent/src/modules/ingestion/prefill.rs",
+        "line": 268,
+        "summary": "复核从首句到末句检查粒度和范围，统一已被反例推翻的定义，并继续只引用原sources。"
+      }
+    ],
+    "assessment": "规则处理的是未知关系被补成事实、局部限制没有传播到全文的通用成因。新增文字没有具体样例字段、金额、题号、预期结果或固定SQL；没有增加宿主规划器或替代Pi循环。完整条目覆盖、逐字来源引用和业务边界要求仍保留。",
+    "limitations": "静态规则符合方向不等于实际模型输出通过；此前S01/P05失败记录保持，需新正式产物重新独立复核。"
+  },
+  "q04_boundary_review": {
+    "explicitly_excludes_cross_line_payment_months": false,
+    "assessment": "原文未明确未模拟跨月分次付款包括同单不同商品行分月付款，不能把它当作同单paid_at同月保证。",
+    "evidence": [
+      {
+        "path": "docs/sources/business-guide.md",
+        "lines": "29-33",
+        "summary": "付款和首笔时间的主语是订单行；一行分次付款同日的限制未写成整单各行付款同月。"
+      },
+      {
+        "path": "docs/sources/business-guide.md",
+        "line": 19,
+        "summary": "同单一致性列举客户、渠道、下单时间和测试标记，没有paid_at。"
+      },
+      {
+        "path": "docs/sources/schema.sql",
+        "lines": "23-31",
+        "summary": "付款事件关联订单行，没有跨行付款月份约束。"
+      },
+      {
+        "path": "docs/sources/etl.sql",
+        "lines": "5-17",
+        "summary": "行级MIN付款时间保留，不以整单统一日期覆盖；订单级汇总只合并金额。"
+      },
+      {
+        "path": "docs/sources/business-guide.md",
+        "lines": "86-89",
+        "summary": "订单退款率分子是分母订单截至快照至少有一行成功退款，未将退款所在行付款月份再限制在分母期间。"
+      },
+      {
+        "path": "docs/sources/verify.py",
+        "lines": "66-72",
+        "summary": "现有同单一致性检查包含源状态，但没有首笔付款同月检查。"
+      }
+    ],
+    "recommended_clarification": {
+      "section_3_2": "本样例对分次付款的限制以(order_id,line_id)为范围：同一订单行的多笔成功charge在同一天，不覆盖同一订单行跨月的分次付款。该限制不要求同一订单不同商品行的首笔成功付款发生在同一天或同一个月。",
+      "section_5_3": "先按paid_at的期间条件选出至少一行成功付款的非测试order_id集合作为分母；再在该集合对应的截至快照全部订单行中，判断是否有refunded_amount_cents>0。判定分子不重复按各行paid_at限制在分母月份。",
+      "scope_reason": "说明已有行级日期与订单集合定义，不增加指标、数据源、Agent工具或实际平台能力；不把反例结果或独立答案加入业务模型知识。"
+    },
+    "reference_correction_basis": "采用上述与现有5.3一致的澄清时，旧Q04及Q10的期内行聚合不能代表全部分母订单行；refund_expectation重复相同缩窄，需要同步核对。应保留原种子数值断言，在合法内存见证上验证两阶段订单集合定义，不能依据模型当前输出修改答案。",
+    "alternative_not_recommended": "若把未模拟边界扩大解释为整单所有行paid_at必须同月，应明确新增这一业务前提并验证；现有材料不支持默默增加该前提来豁免旧参考。"
+  },
+  "independent_probe": {
+    "path": ".local/checks/mvp-refund-rate-reference-before-fix.json",
+    "sha256": "ff7e4ddef49676e36be0a61b6c98dd0180582a3b64781262c8f7f0d51408cb44",
+    "previous_authorization": "父代理明确允许的SQLite内存最小合成见证；本轮没有重新执行探针。",
+    "original_result": {
+      "refunded_orders": 0,
+      "paid_orders": 1,
+      "order_refund_rate": 0
+    },
+    "document_rule_result": {
+      "refunded_orders": 1,
+      "paid_orders": 1,
+      "order_refund_rate": 1
+    },
+    "legal_processing": "原schema与原etl执行成功，所有相关CHECK和外键成立；同单属性一致，每行仅一笔charge。"
+  },
+  "previous_failed_review": {
+    "path": "docs/reviews/mvp-maintenance-quality-representative-20261005.json",
+    "sha256": "f78586ec5642ccadd78147e19f08233a5af6fa0aaf36a6c2f7345d17236408e1",
+    "preserved": true
+  },
+  "findings": [
+    {
+      "id": "Q04-REFERENCE-ORDER-SET-SCOPE",
+      "priority": "P2",
+      "confidence": 75,
+      "title": "同单跨行分月付款时，参考和独立预期缩窄分子到期内行",
+      "location": {
+        "path": "docs/sources/evaluation/queries/q04.sql",
+        "line": 4
+      },
+      "evidence": [
+        "原Q04先按行paid_at筛期间，再MAX(refunded_amount_cents>0)，会漏掉同一分母订单中另一支付月的退款行。",
+        "授权内存见证得到原参考0/1=0，按文档5.3订单集合定义得到1/1=1，原schema和etl接受该见证。",
+        "refund_expectation也在同一期间行过滤上计算分子，会与错误参考互相印证。",
+        "未模拟跨月分次付款的范围目前不明确，因此先澄清语义；此项不混入此前四题语义失败，也不依赖业务模型输出。"
+      ],
+      "recommendation": "明确分次付款以订单行为范围，按已有分母订单集合核对全部截至快照退款行，同步核对参考与独立预期。",
+      "autofix_class": "advisory",
+      "owner": "human"
+    }
+  ],
+  "limits": [
+    "只读业务源码、原始来源和参考答案；仅新写对应审查记录，没有覆盖其他代理修改。",
+    "本轮没有访问网络、凭据、模型、MySQL或构建，也没有操作或停止launcher 54998。",
+    "新代表产物尚未提供；完整16题、最终源码指纹及AC08仍待验证。"
+  ],
+  "reviewed_at": "2026-10-04T22:40:04.176688+00:00"
+}

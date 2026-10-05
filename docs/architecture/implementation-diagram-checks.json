@@ -1,0 +1,214 @@
+{
+  "status": "passed",
+  "scope": "图册与Mermaid渲染、模块操作表、导航/缩放、手机文档溢出检查；不证明业务实现",
+  "renderer": {
+    "mermaid": "10.9.3",
+    "sha256": "5a8ec91820bd55afef049068489369910e5d6ce70c8103952f27e29d3e76e8bc",
+    "browser": "153.0.8010.12"
+  },
+  "sources": {
+    "implementation-views.md": "df059bc08d468632f49becfa7433f8af65ab2287754a9efb693582bb94810b3c",
+    "knowledge-modules.md": "56d1d56089470f565474e8f90ea302c60ff5f5b00a2d33b4250a8bf8c9f4aac2",
+    "runtime-modules.md": "2b5aa3a1c76c27fc1e173648277e7fe65c842500eaae661f9a36e52a40880941"
+  },
+  "diagrams": [
+    {
+      "id": "V01",
+      "width": 2094.9296875,
+      "height": 891.674560546875,
+      "textCount": 45,
+      "outsideLabels": []
+    },
+    {
+      "id": "V02",
+      "width": 1279.57421875,
+      "height": 652,
+      "textCount": 29,
+      "outsideLabels": []
+    },
+    {
+      "id": "V03",
+      "width": 1637,
+      "height": 3493,
+      "textCount": 90,
+      "outsideLabels": []
+    },
+    {
+      "id": "F01",
+      "width": 547.75,
+      "height": 1117,
+      "textCount": 18,
+      "outsideLabels": []
+    },
+    {
+      "id": "F02",
+      "width": 615.671875,
+      "height": 2196,
+      "textCount": 37,
+      "outsideLabels": []
+    },
+    {
+      "id": "F03",
+      "width": 1448.7421875,
+      "height": 2173.296875,
+      "textCount": 43,
+      "outsideLabels": []
+    },
+    {
+      "id": "F04",
+      "width": 553.5859375,
+      "height": 1499,
+      "textCount": 23,
+      "outsideLabels": []
+    },
+    {
+      "id": "F05",
+      "width": 681.5,
+      "height": 986,
+      "textCount": 22,
+      "outsideLabels": []
+    },
+    {
+      "id": "F06",
+      "width": 566,
+      "height": 1250,
+      "textCount": 20,
+      "outsideLabels": []
+    },
+    {
+      "id": "F07",
+      "width": 775.21875,
+      "height": 1777,
+      "textCount": 32,
+      "outsideLabels": []
+    },
+    {
+      "id": "F08",
+      "width": 981.4921875,
+      "height": 1533,
+      "textCount": 27,
+      "outsideLabels": []
+    },
+    {
+      "id": "F09",
+      "width": 688.0625,
+      "height": 1908,
+      "textCount": 35,
+      "outsideLabels": []
+    },
+    {
+      "id": "F10",
+      "width": 1276.109375,
+      "height": 357.25,
+      "textCount": 16,
+      "outsideLabels": []
+    },
+    {
+      "id": "F11",
+      "width": 2688.640625,
+      "height": 324.25,
+      "textCount": 28,
+      "outsideLabels": []
+    },
+    {
+      "id": "F12",
+      "width": 1930.015625,
+      "height": 317.25,
+      "textCount": 20,
+      "outsideLabels": []
+    },
+    {
+      "id": "F13",
+      "width": 1599,
+      "height": 2228,
+      "textCount": 60,
+      "outsideLabels": []
+    },
+    {
+      "id": "S01",
+      "width": 845,
+      "height": 258,
+      "textCount": 13,
+      "outsideLabels": []
+    },
+    {
+      "id": "S02",
+      "width": 1403.015625,
+      "height": 231.7998809814453,
+      "textCount": 16,
+      "outsideLabels": []
+    },
+    {
+      "id": "S03",
+      "width": 1077.625,
+      "height": 352.7814025878906,
+      "textCount": 16,
+      "outsideLabels": []
+    },
+    {
+      "id": "S04",
+      "width": 683.671875,
+      "height": 328.75,
+      "textCount": 13,
+      "outsideLabels": []
+    },
+    {
+      "id": "S05",
+      "width": 1216.25,
+      "height": 527,
+      "textCount": 22,
+      "outsideLabels": []
+    },
+    {
+      "id": "S06",
+      "width": 1643.921875,
+      "height": 367,
+      "textCount": 20,
+      "outsideLabels": []
+    },
+    {
+      "id": "S07",
+      "width": 1527.90625,
+      "height": 613,
+      "textCount": 27,
+      "outsideLabels": []
+    },
+    {
+      "id": "S08",
+      "width": 1866.8125,
+      "height": 477.5,
+      "textCount": 24,
+      "outsideLabels": []
+    },
+    {
+      "id": "S09",
+      "width": 1425.15625,
+      "height": 268.89971923828125,
+      "textCount": 21,
+      "outsideLabels": []
+    },
+    {
+      "id": "S10",
+      "width": 763.5625,
+      "height": 274,
+      "textCount": 11,
+      "outsideLabels": []
+    },
+    {
+      "id": "S11",
+      "width": 1003.5078125,
+      "height": 484.553466796875,
+      "textCount": 21,
+      "outsideLabels": []
+    },
+    {
+      "id": "S12",
+      "width": 905.9921875,
+      "height": 274,
+      "textCount": 19,
+      "outsideLabels": []
+    }
+  ],
+  "pageErrors": [],
+  "mobileOverflow": false
+}

@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Data Agent · 分析工作台</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="./style.css">
+  <link rel="stylesheet" href="./knowledge.css">
+  <link rel="stylesheet" href="./shell.css">
+  <link rel="stylesheet" href="./workbench.css">
+</head>
+<body class="system-prototype" data-page="workbench">
+  <svg class="svg-library" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <symbol id="i-table" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M9 9v11M3 14h18"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></symbol>
+    <symbol id="i-code" viewBox="0 0 24 24"><path d="m8 7-5 5 5 5m8-10 5 5-5 5m-3-14-2 18"/></symbol>
+    <symbol id="i-flow" viewBox="0 0 24 24"><rect x="8" y="2" width="8" height="5" rx="1"/><rect x="2" y="17" width="7" height="5" rx="1"/><rect x="15" y="17" width="7" height="5" rx="1"/><path d="M12 7v5M5.5 17v-5h13v5"/></symbol>
+    <symbol id="i-edit" viewBox="0 0 24 24"><path d="m15 4 5 5M4 20l5-1L20 8a2 2 0 0 0-5-5L4 14z"/></symbol>
+    <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+    <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 10a8 8 0 0 0-14-5L3 8m0-5v5h5M4 14a8 8 0 0 0 14 5l3-3m0 5v-5h-5"/></symbol>
+    <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M4 12h16m-6-6 6 6-6 6"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></symbol>
+    <symbol id="i-copy" viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M15 8V3H3v13h5"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6m0-10v1"/></symbol>
+    <symbol id="i-chevron" viewBox="0 0 24 24"><path d="m9 5 7 7-7 7"/></symbol>
+  </svg>
+
+  <aside class="shell-sidebar" aria-label="主导航">
+    <a class="shell-brand" href="?page=workbench"><span class="brand-mark">D<span></span></span><strong>Data Agent</strong></a>
+    <nav class="shell-nav">
+      <button data-page="workbench" aria-label="工作台" title="工作台" aria-current="page"><svg class="icon"><use href="#i-code"/></svg><span>工作台</span></button>
+      <button data-page="assets" aria-label="我的积累" title="我的积累"><svg class="icon"><use href="#i-copy"/></svg><span>我的积累</span></button>
+      <button data-page="semantic" aria-label="语义管理" title="语义管理"><svg class="icon"><use href="#i-table"/></svg><span>语义管理</span></button>
+    </nav>
+    <section class="shell-conversations" id="shell-conversations" aria-label="工作台会话">
+      <div class="shell-recent-heading"><span>最近会话</span><button class="shell-new" data-shell-new aria-label="新对话" title="新对话 · ⌘/Ctrl K"><svg class="icon"><use href="#i-plus"/></svg><span>新对话</span></button></div>
+      <nav id="shell-recents" class="shell-recents" aria-label="最近会话"></nav>
+      <button class="shell-history-all" data-shell-history>查看全部会话<svg class="icon"><use href="#i-chevron"/></svg></button>
+    </section>
+    <div class="shell-sidebar-foot"><span class="shell-space-dot"></span><div><strong>零售演示空间</strong><span>retail_demo · 全合成资料</span></div></div>
+  </aside>
+  <div class="shell-area">
+    <header class="shell-header">
+      <div class="shell-breadcrumb"><span>零售演示</span><span>/</span><strong id="shell-page-title">工作台</strong></div>
+      <div class="shell-header-actions"><button class="button" data-shell-return hidden>返回分析</button><button class="shell-mobile-history icon-button" data-shell-history aria-label="查看历史会话" title="历史会话"><svg class="icon"><use href="#i-clock"/></svg></button><span class="shell-demo-badge" title="浏览器交互原型，未接入模型、账号或真实查询">交互原型</span><label class="shell-profile"><span class="shell-avatar" id="shell-avatar">A</span><select id="shell-profile" aria-label="切换模拟用户"><option value="analyst-a">分析员 A · 模拟用户</option><option value="developer-b">开发者 B · 模拟用户</option></select></label></div>
+    </header>
+    <main id="workbench-workspace" class="shell-workbench" aria-label="分析工作台"></main>
+    <section id="assets-workspace" class="shell-section" hidden aria-label="我的积累">
+      <div class="shell-section-heading"><div><div class="shell-eyebrow">个人空间</div><h1>我的积累</h1><p>让纠错成为经验，让有效的分析方法可以再次使用。</p></div><span class="shell-owner" id="shell-asset-owner">仅分析员 A 可见 · 演示</span></div>
+      <nav class="shell-subtabs" aria-label="个人资产类型"><button data-asset-section="memory" aria-current="page">记忆与纠错</button><button data-asset-section="skills">我的 Skill</button></nav>
+      <main id="personal-workspace" class="personal-workspace"></main>
+      <section id="skills-workspace" hidden aria-label="我的 Skill"></section>
+    </section>
+  <div class="workspace" id="semantic-workspace" hidden>
+    <aside class="catalog" aria-label="数据表目录">
+      <div class="catalog-heading"><span>数据空间</span><span class="space-badge">retail_demo</span></div>
+      <label class="search"><svg class="icon"><use href="#i-search"/></svg><input id="table-search" placeholder="搜索表名、中文名" aria-label="搜索数据表"></label>
+      <div class="catalog-caption"><span>当前维护示例</span><span id="table-count">3</span></div>
+      <nav id="table-list" class="table-list"></nav>
+      <div class="catalog-bottom"><div class="tiny-icon"><svg class="icon"><use href="#i-flow"/></svg></div><strong>可重建的合成样例</strong><p>元数据 · 血缘 · 调度节点 · SQL</p><span>当前仅展示 3 张表的维护示例</span></div>
+    </aside>
+
+    <main class="main">
+      <span class="prototype-label semantic-material" id="material-label">全虚构零售样例 · 分析草稿</span>
+      <div class="breadcrumbs">语义管理 <span>/</span> 数据表 <span>/</span> <strong>表语义维护</strong></div>
+      <section class="page-heading">
+        <div><div class="title-row"><h1>表语义维护</h1><span class="draft-pill" id="draft-status">草稿</span></div><p>已有资料先预填，核对解释与依据，让 Agent 知道这张表怎么用。</p></div>
+        <div class="page-actions"><button id="refresh-button" class="button"><svg class="icon"><use href="#i-refresh"/></svg>重新预填</button><button id="changes-button" class="button">查看修改 <span id="changes-count" class="button-count">0</span></button><button id="save-button" class="button primary">保存草稿</button></div>
+      </section>
+
+      <section class="table-heading">
+        <div class="table-heading-icon"><svg class="icon"><use href="#i-table"/></svg></div>
+        <div class="table-heading-text"><h2 id="table-title"></h2><div><code id="table-full-name"></code><span id="table-layer" class="layer-pill"></span></div></div>
+        <div class="heading-side"><span>主要维护者</span><strong>数据开发</strong></div>
+      </section>
+
+      <div class="source-strip"><div><svg class="icon"><use href="#i-info"/></svg><span>所有预填可编辑；点击来源标识查看原文和分析依据。</span></div><div class="legend"><span class="badge synced">样例原文</span><span class="badge inferred">分析补充</span><span class="badge manual">人工修改</span></div></div>
+
+      <details id="review-summary" class="review-summary"></details>
+
+      <nav class="tabs" id="tabs" aria-label="语义维护分区" role="tablist">
+        <button role="tab" data-tab="overview" class="tab active"><svg class="icon"><use href="#i-table"/></svg>表语义</button>
+        <button role="tab" data-tab="fields" class="tab">字段语义 <span id="fields-count"></span></button>
+        <button role="tab" data-tab="lineage" class="tab">血缘与节点</button>
+        <button role="tab" data-tab="metrics" class="tab">指标与 SQL <span id="metrics-count"></span></button>
+        <button role="tab" data-tab="documents" class="tab">业务文档 <span id="documents-count"></span></button>
+        <button role="tab" data-tab="history" class="tab">变更记录</button>
+      </nav>
+
+      <div class="editor-layout">
+        <section id="content" class="editor-content" role="tabpanel" aria-label="表语义"></section>
+        <aside id="evidence" class="evidence" aria-label="预填依据"></aside>
+      </div>
+      <footer class="page-footer"><span id="material-note">依据：从零编写的合成 DDL 与加工 SQL；未接入数据平台。</span><span id="save-status">未保存的修改仅保留在当前页面</span></footer>
+    </main>
+  </div>
+  </div>
+  <dialog id="history-dialog" aria-labelledby="history-dialog-title"><div class="source-dialog-heading"><h2 id="history-dialog-title">历史会话</h2><button class="icon-button" data-history-close aria-label="关闭历史记录">×</button></div><div id="history-workspace"></div></dialog>
+  <dialog id="skill-dialog" aria-labelledby="skill-dialog-title"><div class="source-dialog-heading"><h2 id="skill-dialog-title">编辑分析方法</h2><button class="icon-button" data-skill-close aria-label="关闭 Skill 窗口">×</button></div><div id="skill-dialog-content"></div></dialog>
+  <dialog id="knowledge-dialog" aria-labelledby="knowledge-title"><div class="source-dialog-heading"><h2 id="knowledge-title">业务文档</h2><button class="icon-button" data-knowledge-close aria-label="关闭文档窗口">×</button></div><div id="knowledge-detail"></div></dialog>
+  <dialog id="memory-dialog" aria-labelledby="memory-title"><div class="source-dialog-heading"><h2 id="memory-title">个人记忆</h2><button class="icon-button" data-memory-close aria-label="关闭记忆窗口">×</button></div><div id="memory-detail"></div></dialog>
+  <dialog id="refresh-dialog" aria-labelledby="refresh-title"><div class="dialog-heading"><div class="dialog-icon"><svg class="icon"><use href="#i-refresh"/></svg></div><h2 id="refresh-title">重新预填</h2><p>重新载入当前材料对应的分析草稿。</p></div><div class="refresh-summary"><div><span>未人工修改的信息</span><strong>载入本版预填内容</strong></div><div><span>人工修改的信息 <b id="protected-count"></b></span><strong class="amber-text">保留你的修改</strong></div></div><p class="dialog-note">此原型使用已整理的分析结果。模型分析与数据平台同步尚未接入。</p><div class="dialog-actions"><button class="button" id="cancel-refresh">取消</button><button class="button primary" id="confirm-refresh">载入预填，保留人工修改</button></div></dialog>
+  <dialog id="source-dialog" aria-labelledby="source-title"><div class="source-dialog-heading"><h2 id="source-title">预填值与当前值</h2><button class="icon-button" id="close-source" aria-label="关闭">×</button></div><div id="source-detail"></div><div class="dialog-actions"><button class="button" id="restore-value">恢复预填值</button><button class="button primary" id="finish-source">完成</button></div></dialog>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script src="./demo-source.js"></script>
+  <script src="./demo-analysis.js"></script>
+  <script src="./knowledge.js"></script>
+  <script src="./personal.js"></script>
+  <script src="./app.js"></script>
+  <script src="./workbench-fixture.js"></script>
+  <script src="./workbench.js"></script>
+  <script src="./shell.js"></script>
+</body>
+</html>

@@ -1,0 +1,547 @@
+{
+  "reviewer": "correctness（未参与对应实现的独立审查者）",
+  "conclusion": "passed_limited_scope",
+  "scope": "IA01、IA02、IA03、IA06、IA07、IA09，以及查询修订重放、维护操作重放、依赖变化后重放、旧重分析指纹、来源覆盖清除、目录血缘缺失和预填冲突占位清理的限定复核。",
+  "increment": "I2-MVP",
+  "overall_mvp_complete": false,
+  "fingerprint_algorithm": "SHA256 of sorted path + TAB + SHA256 + newline",
+  "scope_sha256": "71daf8e71d01e1706c7ced57f423f96f83667cb1c10ec3c5fcc6f95f485699f3",
+  "source_sha256": {
+    "apps/api/src/data_routes.rs": "2b55bf4f677b579c4a7411ae0d70d8dbf5a7ced990914ebcf7eeb2cc42fa211e",
+    "apps/platform-mock/server.py": "35cb8c17f76b69c5095419de9e7e00eec8b894eae70f76556b89a9fc0af0bb58",
+    "crates/data-agent/src/modules/assets/mod.rs": "946d2b207d2eaab1e1674319323ad8abc04a518df1d445bd8ae592731b4cd1df",
+    "crates/data-agent/src/modules/assets/store.rs": "5d82394a2d1ead9d6747ef13aa2f900afe38c46f48e312eab837435b6fed62ec",
+    "crates/data-agent/src/modules/conversations/store.rs": "ae1b1eb0190a2fb4e68e6cd97d5bef7bb105b05f70c050b35926871440a5d00d",
+    "crates/data-agent/src/modules/ingestion/catalog.rs": "a6502224c6ae8ecc23271e11a686202aca7c7ff6913f4406a286ad399b308319",
+    "crates/data-agent/src/modules/ingestion/mod.rs": "7be9b1905a451322568cf885e6179739aa5f6c36c059038092172a5301599a7c",
+    "crates/data-agent/src/modules/ingestion/store.rs": "39f9752d1ff3639b5a02ef329aceb9b709d00cfe3449a0eaf6bef168dda89809",
+    "crates/data-agent/src/modules/knowledge/mod.rs": "8919334c648236cd997f217b72aeb0067262272b398c32411ecf9dc129a00071",
+    "crates/data-agent/src/modules/knowledge/store.rs": "4458e3a919d37a9ce077754d9ebea13b3cd1f249d7367c5861360903923f3e3c",
+    "crates/data-agent/src/modules/queries/mod.rs": "353b5db9d97c034092fea4c862f26963f9660c3922fb0fc889d0c1de282a4ae8",
+    "crates/data-agent/src/modules/queries/platform.rs": "7b7f519b388383b6db7cdd63859a811c2eeee1b69b7af7786fb43bf876a69447",
+    "crates/data-agent/src/modules/queries/store.rs": "745eb383df94cbc4f92eb933906237dda300df82a89a2ce443796841498493cc",
+    "crates/data-agent/src/modules/retrieval/mod.rs": "9cccedc843207928ed30ed296ee3ed92fe9a08bf444f9c7eb08bd5aa4ac6bd20",
+    "crates/data-agent/src/modules/retrieval/store.rs": "15c1d2b8c0ef7c23a188204959f1e1c510115900290b7e55ba98622c4211bd5c",
+    "crates/data-agent/src/modules/retrieval/vector.rs": "5e26bddaf37ac75eb2adcc64211d853f2cd9a2e277c76afd1e69c5394d359986",
+    "crates/data-agent/src/persistence/mod.rs": "701bff0bf384e1c054f44aa942269499defe057f6cef53029af7ac8444e4bd53",
+    "crates/data-agent/src/types/mod.rs": "720382828e638f0dc3f7fb7975288eba30cd8475569a7cd9f1146df8fe336941",
+    "crates/data-agent/src/use_cases/catalog_import.rs": "35f7b86a62a62eca8a4cc5c807febdd37bb0bbeacc4eae62d9e392a5b443afb8",
+    "crates/data-agent/src/use_cases/context_authority.rs": "e14a8abe6e1a25ed0fc2311a0aff54b5ffec79c58f8174650081ccafd94a9d4e",
+    "crates/data-agent/src/use_cases/data_tools.rs": "e2777e8a73eb629cbdf27eb918e3b0694a3388ed04a4d0d23187da6a86b5e02d",
+    "crates/data-agent/src/use_cases/knowledge.rs": "d00d1029f0062bc036274e131a53be02fe6c6544a1d643398607210e60ec03b5",
+    "crates/data-agent/src/use_cases/personal_assets.rs": "df8ba66d0928de7a124e9c4361ad9b2aa3025b77be4dfa37a5b92457fcf1e1d6",
+    "crates/data-agent/src/use_cases/query_workflow.rs": "6da4cbb840e2b28780e74865a2af1f1a537ca8d737c2d636cdb173cb9bcaae45",
+    "crates/data-agent/src/use_cases/semantic_prefill.rs": "9d633bf51ea41aba23d4421ae7472254dc7e8e89c70c9d4b2993ca044265f0eb",
+    "docs/architecture/knowledge-modules.md": "1d57fe1080d998c4f483b874a62e567ecd5f09726841b75cfb9331205b016737",
+    "docs/semantic-retrieval-design.md": "6bd913469cd03b4d9011a4139e361e33fc56c71a8a224f5f6a18581e15aac0fc",
+    "tests/mvp/check-catalog-import.mjs": "d2b47e18e7fbdd05adf6341a540add012e5c0a8cecbb3a03989ebd96695343ae",
+    "tests/mvp/check-hybrid-retrieval.mjs": "ea06bc1b01e8cadde1d6aa17db3f9fcbc2aab176a5e5c9ae4834544f885d132b",
+    "tests/mvp/check-knowledge-workflow.mjs": "52342011d2c0d621e33beb2543d13d62fa5e710c7360df71942f3523e9190536",
+    "tests/mvp/check-maintenance-replay.mjs": "b16b1ddeb08bf7b03bf97abaad6220b2d15a5673b7512dd88aea55a5e8ad4d12",
+    "tests/mvp/check-prefill-concurrency.mjs": "3ca6fb429585dd626754f73c203d914cbf33a0e3e6a1d05c2589d253b5919e7b",
+    "tests/mvp/check-prefill-timeouts.mjs": "bf74c8ffeed095853e4081ef4e6eec505c57e977f80217a91eec296e8f217587",
+    "tests/mvp/check-prefill.mjs": "1c63c506983c591337ef7c0dd8464f23ade8aed6d6d5d1f2dd1b45cfcc2d030b",
+    "tests/mvp/check-query-boundaries.mjs": "dcb14d2cf063453e8de2b32692f75cefdf1bfee57501bb298710d8957cbe8476",
+    "tests/mvp/check-query-workflow.mjs": "88709e39021b6c6443d0c482434d5043f8f0f09d7a1c6f137010c7451538f650",
+    "tests/mvp/check-retrieval-coverage.mjs": "90196dd3ac5ed63794bfac580c01a8eac657861132a99231b3dff51f65abdf29",
+    "tests/mvp/check-workflow-reliability.mjs": "4a80cd17559723e3fab4e1614e0fc8adf9e42ffd08581e95e8eee056761f6cb7",
+    "tests/mvp/harness.mjs": "2d7d26ec83ae337fb9ec83a149001308c4efb9d4de6a01ff7d06b0d1436cc1b5"
+  },
+  "findings": [],
+  "original_review": {
+    "path": "docs/reviews/mvp-independent-audit-20261004.json",
+    "sha256": "92f0cecde502dcd07e408c5852d781497191e21bf80a230525f8c4015a199b1c",
+    "assessment": "从原问题的输入、状态转换及失败边界复核修复；原审计文件保留历史开放状态，本文件记录本限定范围的后续结论。IA04、IA05、IA08与后续Pi journal由运行时独立审查者负责。"
+  },
+  "closed_findings": [
+    {
+      "id": "IA01",
+      "requirements": [
+        "C04",
+        "C05"
+      ],
+      "status": "closed_in_limited_scope",
+      "assessment": "SQL修订在外部平台检查之前使指定旧稿失效；修订失败仍不能确认旧稿。已确认原查询独立收尾，其他独立查询保留确认能力。相同操作在第二事务持锁后重查成功回执，避免首次空回执、其他调用提交后继、当前调用再获锁的交错误报version_conflict。",
+      "source_paths": [
+        "crates/data-agent/src/modules/queries/store.rs",
+        "crates/data-agent/src/use_cases/data_tools.rs"
+      ],
+      "tests": [
+        "tests/mvp/check-workflow-reliability.mjs"
+      ],
+      "evidence": [
+        ".local/checks/mvp-maintenance-replay-full-final.log",
+        ".local/checks/mvp-query-reliability-interleaved-fixed.log",
+        ".local/checks/mvp-replay-interleaving-negative.log"
+      ],
+      "negative_control": "移除第二事务回执检查后，固定MySQL锁交错触发409 != 200；恢复检查后同断言通过。24个相同修订重传只保留一个后继。"
+    },
+    {
+      "id": "IA02",
+      "requirements": [
+        "D01",
+        "D06",
+        "C07"
+      ],
+      "status": "closed_in_limited_scope",
+      "assessment": "纯人工文档清除覆盖后，effective_value保存合法空字符串；列表与再次编辑可用，历史正文保留。非法编辑在事务提交前拒绝。",
+      "source_paths": [
+        "crates/data-agent/src/modules/knowledge/store.rs",
+        "crates/data-agent/src/use_cases/knowledge.rs"
+      ],
+      "tests": [
+        "tests/mvp/check-workflow-reliability.mjs",
+        "tests/mvp/check-maintenance-replay.mjs"
+      ],
+      "evidence": [
+        ".local/checks/mvp-maintenance-replay-full-final.log"
+      ]
+    },
+    {
+      "id": "SOURCE-CLEAR",
+      "status": "closed_in_limited_scope",
+      "assessment": "来源条目清除人工覆盖时，依次采用suggestion.value、source_facts.value；旧条目缺少value时，组合层读取同版来源候选。description/meaning和DDL/type均恢复正确值，不把quote当作类型；没有来源的文档退为空字符串，人工历史保留。",
+      "source_paths": [
+        "crates/data-agent/src/modules/knowledge/store.rs",
+        "crates/data-agent/src/use_cases/knowledge.rs",
+        "crates/data-agent/src/modules/ingestion/catalog.rs"
+      ],
+      "tests": [
+        "tests/mvp/check-maintenance-replay.mjs"
+      ],
+      "evidence": [
+        ".local/checks/mvp-maintenance-replay-full-final.log"
+      ]
+    },
+    {
+      "id": "IA03",
+      "requirements": [
+        "C02"
+      ],
+      "status": "closed_in_limited_scope",
+      "assessment": "get_query返回正文前校验knowledge_refs。cancel_query首次返回与旧成功回执重放都投影成五个控制字段：id、task_id、condition_version、execution_state、cancel_state；不回流SQL、参数、说明、诊断或旧依据。旧回执error为null或非空都走同一过滤。",
+      "source_paths": [
+        "crates/data-agent/src/use_cases/data_tools.rs"
+      ],
+      "tests": [
+        "tests/mvp/check-workflow-reliability.mjs"
+      ],
+      "evidence": [
+        ".local/checks/mvp-maintenance-replay-full-final.log"
+      ],
+      "coverage_limit": "专门运行反例覆盖待执行、已cancelled及旧error为null/非空的回执；succeeded/failed没有专门运行反例。当前五字段投影没有状态分支，静态适用于这些终态。"
+    },
+    {
+      "id": "IA06",
+      "requirements": [
+        "C04",
+        "C05"
+      ],
+      "status": "closed_in_limited_scope",
+      "assessment": "平台明确拒绝提交直接进入failed且只提交一次；真正未知先lookup，只有确认不存在才允许再提，总提交次数最多三次，耗尽后保存submission_retry_exhausted。",
+      "source_paths": [
+        "crates/data-agent/src/use_cases/query_workflow.rs",
+        "crates/data-agent/src/modules/queries/store.rs",
+        "crates/data-agent/src/modules/queries/platform.rs"
+      ],
+      "tests": [
+        "tests/mvp/check-workflow-reliability.mjs"
+      ],
+      "evidence": [
+        ".local/checks/mvp-maintenance-replay-full-final.log"
+      ]
+    },
+    {
+      "id": "IA07",
+      "requirements": [
+        "C03",
+        "D15"
+      ],
+      "status": "closed_in_limited_scope",
+      "assessment": "编译、执行溢出、超时与取消查证保留诊断并沿平台与API返回；整数参数越过SQLite有符号64位范围时返回parameter_out_of_range，大数字符串保持字符串。未将失败伪装成空结果。",
+      "source_paths": [
+        "apps/platform-mock/server.py",
+        "crates/data-agent/src/modules/queries/store.rs",
+        "crates/data-agent/src/use_cases/query_workflow.rs"
+      ],
+      "tests": [
+        "tests/mvp/check-workflow-reliability.mjs",
+        "tests/mvp/check-query-boundaries.mjs"
+      ],
+      "evidence": [
+        ".local/checks/mvp-maintenance-replay-full-final.log"
+      ]
+    },
+    {
+      "id": "IA09",
+      "requirements": [
+        "D12",
+        "C05"
+      ],
+      "status": "closed_in_limited_scope",
+      "assessment": "Skill选择先锁唯一操作记录，并将会话纳入指纹。相同操作异资产、异会话或异参数拒绝，同参数返回原回执；重传旧选择不会重新激活已经改版的Skill。",
+      "source_paths": [
+        "crates/data-agent/src/modules/assets/store.rs",
+        "crates/data-agent/src/use_cases/personal_assets.rs"
+      ],
+      "tests": [
+        "tests/mvp/check-workflow-reliability.mjs",
+        "tests/mvp/check-maintenance-replay.mjs"
+      ],
+      "evidence": [
+        ".local/checks/mvp-maintenance-replay-full-final.log"
+      ]
+    },
+    {
+      "id": "MAINTENANCE-REPLAY",
+      "status": "closed_in_limited_scope",
+      "assessment": "知识与个人资产的创建、修改、启停及选择在检查业务版本前锁唯一operation行；同操作同参重放接回原成功回执，同操作异参拒绝，不同操作竞争旧业务版本仍冲突。固定锁交错与并发重传未增加业务版本或副作用。",
+      "source_paths": [
+        "crates/data-agent/src/modules/knowledge/store.rs",
+        "crates/data-agent/src/modules/assets/store.rs",
+        "crates/data-agent/src/use_cases/knowledge.rs",
+        "crates/data-agent/src/use_cases/personal_assets.rs"
+      ],
+      "tests": [
+        "tests/mvp/check-maintenance-replay.mjs"
+      ],
+      "evidence": [
+        ".local/checks/mvp-maintenance-replay-full-final.log"
+      ]
+    },
+    {
+      "id": "MAINTENANCE-REPLAY-DEPENDENCIES",
+      "status": "closed_in_limited_scope",
+      "assessment": "assets公开begin_save_in_tx与begin_selection_in_tx，personal_assets在宿主身份及相应会话校验之后、首次依赖有效性校验之前接回原成功回执。依赖改版或停用后，同参数重放仍返回原回执；新操作仍拒绝失效依赖，并回滚占位及副作用。",
+      "source_paths": [
+        "crates/data-agent/src/modules/assets/mod.rs",
+        "crates/data-agent/src/modules/assets/store.rs",
+        "crates/data-agent/src/use_cases/personal_assets.rs"
+      ],
+      "tests": [
+        "tests/mvp/check-maintenance-replay.mjs"
+      ],
+      "evidence": [
+        ".local/checks/mvp-maintenance-replay-full-final.log",
+        ".local/checks/mvp-maintenance-dependency-before-fix.log"
+      ],
+      "negative_control": "原二进制上依赖变化后同参重放返回409而预期200；修复后保留同一断言并通过。"
+    },
+    {
+      "id": "LEGACY-REANALYSIS",
+      "status": "closed_in_limited_scope",
+      "assessment": "旧重分析成功回执仅按同一对象与原输入核对历史source_version字符串指纹。六个真实历史合成操作独立重算后，字符串版本全部匹配，数字版本全部不匹配。fixture覆盖同参、跨对象、异参和来源改版后的重放，不将异操作误认为旧成功。",
+      "source_paths": [
+        "crates/data-agent/src/modules/knowledge/store.rs",
+        "crates/data-agent/src/use_cases/knowledge.rs"
+      ],
+      "tests": [
+        "tests/mvp/check-maintenance-replay.mjs"
+      ],
+      "evidence": [
+        ".local/checks/mvp-maintenance-replay-full-final.log",
+        ".local/checks/legacy-reanalysis-fingerprint.json"
+      ]
+    },
+    {
+      "id": "CATALOG-REMOVED-LINEAGE",
+      "status": "closed_in_limited_scope",
+      "assessment": "目录node缺失时仍生成带当前来源版本的lineage空值及缺口；重新分析刷新相关来源版本，人工血缘覆盖与不可变历史保留。清除人工血缘后退回当前空值，恢复node后准确恢复来源；检索和模型受控读取均能读取当前对象，不再误判旧血缘过期。",
+      "source_paths": [
+        "crates/data-agent/src/modules/ingestion/catalog.rs",
+        "crates/data-agent/src/modules/knowledge/store.rs",
+        "crates/data-agent/src/use_cases/knowledge.rs",
+        "crates/data-agent/src/modules/retrieval/store.rs",
+        "crates/data-agent/src/use_cases/data_tools.rs"
+      ],
+      "tests": [
+        "tests/mvp/check-maintenance-replay.mjs",
+        "tests/mvp/check-catalog-import.mjs",
+        "tests/mvp/check-retrieval-coverage.mjs"
+      ],
+      "evidence": [
+        ".local/checks/mvp-maintenance-replay-full-final.log"
+      ]
+    },
+    {
+      "id": "PREFILL-EMPTY-RECEIPT",
+      "status": "closed_in_limited_scope",
+      "assessment": "reanalyze在操作锁之后发现对象版本冲突时，只删除本owner、operation、同指纹且receipt为JSON null的占位。随后semantic_prefill可以在同一事务保存superseded，保留人工版本与已结算调用，不提交空操作回执。其他新操作调用者失败均退出原事务；data_tools另开事务记录拒绝。",
+      "source_paths": [
+        "crates/data-agent/src/modules/knowledge/store.rs",
+        "crates/data-agent/src/use_cases/semantic_prefill.rs",
+        "crates/data-agent/src/use_cases/data_tools.rs"
+      ],
+      "tests": [
+        "tests/mvp/check-prefill-timeouts.mjs",
+        "tests/mvp/check-maintenance-replay.mjs"
+      ],
+      "evidence": [
+        ".local/checks/mvp-maintenance-replay-full-final.log",
+        ".local/checks/mvp-prefill-conflict-before-cleanup.log"
+      ],
+      "negative_control": "固定check_current通过→操作锁等待→HTTP人工改版→locked冲突的时序，原二进制遗留空操作行1而预期0；修复后验证人工版本、0操作行和全部可靠usage结算。"
+    }
+  ],
+  "verification": {
+    "method": "此前独立核对原需求、完整源码调用链、测试断言和完整日志；本次仅复核当前指纹、证据哈希及必要源码位置，未重跑数据库或模型。",
+    "historical_completed_run": {
+      "path": ".local/checks/mvp-maintenance-replay-full-final.log",
+      "sha256": "461227b1429bc5c456119294ba856e1b96243b0835a8ee35b8cad84f689a2099",
+      "exit_code": 0,
+      "completion_provenance": "父代理已通过write_stdin取得完整进程退出0；本审查者只读核对日志内容和哈希。",
+      "shared_contract_cases": 154,
+      "observed_targeted_groups": [
+        {
+          "test": "tests/mvp/check-workflow-reliability.mjs",
+          "checks": 12,
+          "passed": true,
+          "officialRequests": 0,
+          "note": "日志中的IA08由运行时独立审查者负责，本文件不借该组结果关闭IA08。"
+        },
+        {
+          "test": "tests/mvp/check-maintenance-replay.mjs",
+          "checks": 6,
+          "passed": true,
+          "officialRequests": 0
+        },
+        {
+          "test": "tests/mvp/check-prefill-timeouts.mjs",
+          "checks": 7,
+          "passed": true,
+          "officialRequests": 0
+        },
+        {
+          "test": "tests/mvp/check-catalog-import.mjs",
+          "checks": 12,
+          "passed": true,
+          "officialRequests": 0
+        },
+        {
+          "test": "tests/mvp/check-retrieval-coverage.mjs",
+          "checks": 2,
+          "passed": true,
+          "officialRequests": 0
+        }
+      ],
+      "environment_scope": "真实MySQL事务/Worker与可执行合成SQLite平台，模型调用为local mock；官方模型请求为0。",
+      "applicability": "完整旧运行证明其当时版本。当前限定结论结合相同输入子集与新日志局部结果；不把旧55文件整体指纹冒称当前完全相同。"
+    },
+    "evidence_sha256": {
+      ".local/checks/mvp-maintenance-replay-full-final.log": "461227b1429bc5c456119294ba856e1b96243b0835a8ee35b8cad84f689a2099",
+      ".local/checks/mvp-maintenance-dependency-before-fix.log": "41439102ed0ea3a53b1501f5b0c6b58338d854d04218d6f90ae4969ddafd35b6",
+      ".local/checks/mvp-prefill-conflict-before-cleanup.log": "2d2f8829c8a51b1995841784b8af16c860968984158407da042141e143d1f30d",
+      ".local/checks/legacy-reanalysis-fingerprint.json": "1d7d6a3bf7f5082097b6cceb538855a1ae19163ea4e2fcb84344dbe8b097948b",
+      ".local/checks/mvp-query-reliability-interleaved-fixed.log": "48e9cc8ed6cd74fedf4d9534ff4a79d14f1ac63833f6689674b795ae6038025f",
+      ".local/checks/mvp-replay-interleaving-negative.log": "3fbf1b4e177791620c79716fb1aab0bd2069f22860ab389a88adc51d717205b1"
+    },
+    "negative_control_policy": "保留原失败证据；没有删除场景、放宽断言或依据实现输出修改这些预期。",
+    "newer_run_observation": {
+      "path": ".local/checks/mvp-native-journal-full-final.log",
+      "observed_at_utc": "2026-10-04T22:53:47.136729+00:00",
+      "observed_contract_cases": 164,
+      "observed_targeted_groups_passed": {
+        "query_reliability": 12,
+        "maintenance_replay": 6,
+        "prefill_timeouts_and_conflict": 7,
+        "catalog_import": 12,
+        "retrieval_coverage": 2
+      },
+      "execution_completion_confirmed": false,
+      "status": "观察时日志已进入后续检查；尚未收到此进程完整退出确认。这里只记录已见结果，不固定进行中日志的最终哈希，也不声明新一轮完整通过。"
+    }
+  },
+  "snapshot_comparison": {
+    "historical_scope_sha256": "eaf355ff2c33acc711646bf0fdf671311ab947a08c8fe540f3b338151a7a3002",
+    "historical_input_count": 55,
+    "historical_source_sha256": {
+      "AGENTS.md": "d3c1996e4d6684a158d3ed94fbd31dcdd28328d39cd58a6d01fe5518b8281d31",
+      "Makefile": "be24d9fed5fb65417bdc0f3571364d58c03919d0c05c59fa3d5931fec2972890",
+      "apps/api/src/data_routes.rs": "2b55bf4f677b579c4a7411ae0d70d8dbf5a7ced990914ebcf7eeb2cc42fa211e",
+      "apps/api/src/routes.rs": "65f37a2a35e92aa48eed1253bad48f712148a59fd324e38a847c730a27c9a61f",
+      "apps/platform-mock/server.py": "35cb8c17f76b69c5095419de9e7e00eec8b894eae70f76556b89a9fc0af0bb58",
+      "crates/data-agent/src/modules/assets/mod.rs": "946d2b207d2eaab1e1674319323ad8abc04a518df1d445bd8ae592731b4cd1df",
+      "crates/data-agent/src/modules/assets/store.rs": "5d82394a2d1ead9d6747ef13aa2f900afe38c46f48e312eab837435b6fed62ec",
+      "crates/data-agent/src/modules/conversations/store.rs": "ae1b1eb0190a2fb4e68e6cd97d5bef7bb105b05f70c050b35926871440a5d00d",
+      "crates/data-agent/src/modules/ingestion/catalog.rs": "a6502224c6ae8ecc23271e11a686202aca7c7ff6913f4406a286ad399b308319",
+      "crates/data-agent/src/modules/ingestion/mod.rs": "7be9b1905a451322568cf885e6179739aa5f6c36c059038092172a5301599a7c",
+      "crates/data-agent/src/modules/ingestion/prefill.rs": "0ffbef9d1bff22da6dd543f728914af01b54828300e49e13f789cd9c05071640",
+      "crates/data-agent/src/modules/ingestion/store.rs": "39f9752d1ff3639b5a02ef329aceb9b709d00cfe3449a0eaf6bef168dda89809",
+      "crates/data-agent/src/modules/knowledge/mod.rs": "8919334c648236cd997f217b72aeb0067262272b398c32411ecf9dc129a00071",
+      "crates/data-agent/src/modules/knowledge/store.rs": "4458e3a919d37a9ce077754d9ebea13b3cd1f249d7367c5861360903923f3e3c",
+      "crates/data-agent/src/modules/queries/mod.rs": "353b5db9d97c034092fea4c862f26963f9660c3922fb0fc889d0c1de282a4ae8",
+      "crates/data-agent/src/modules/queries/platform.rs": "7b7f519b388383b6db7cdd63859a811c2eeee1b69b7af7786fb43bf876a69447",
+      "crates/data-agent/src/modules/queries/store.rs": "745eb383df94cbc4f92eb933906237dda300df82a89a2ce443796841498493cc",
+      "crates/data-agent/src/modules/retrieval/mod.rs": "9cccedc843207928ed30ed296ee3ed92fe9a08bf444f9c7eb08bd5aa4ac6bd20",
+      "crates/data-agent/src/modules/retrieval/store.rs": "15c1d2b8c0ef7c23a188204959f1e1c510115900290b7e55ba98622c4211bd5c",
+      "crates/data-agent/src/modules/retrieval/vector.rs": "5e26bddaf37ac75eb2adcc64211d853f2cd9a2e277c76afd1e69c5394d359986",
+      "crates/data-agent/src/modules/runtime/store.rs": "6a206e893df9cdd02017686f8b9033f33f6f5c7697a027e0a8af18f605b51c6e",
+      "crates/data-agent/src/persistence/mod.rs": "701bff0bf384e1c054f44aa942269499defe057f6cef53029af7ac8444e4bd53",
+      "crates/data-agent/src/types/mod.rs": "720382828e638f0dc3f7fb7975288eba30cd8475569a7cd9f1146df8fe336941",
+      "crates/data-agent/src/use_cases/catalog_import.rs": "35f7b86a62a62eca8a4cc5c807febdd37bb0bbeacc4eae62d9e392a5b443afb8",
+      "crates/data-agent/src/use_cases/context_authority.rs": "e14a8abe6e1a25ed0fc2311a0aff54b5ffec79c58f8174650081ccafd94a9d4e",
+      "crates/data-agent/src/use_cases/data_tools.rs": "e2777e8a73eb629cbdf27eb918e3b0694a3388ed04a4d0d23187da6a86b5e02d",
+      "crates/data-agent/src/use_cases/knowledge.rs": "d00d1029f0062bc036274e131a53be02fe6c6544a1d643398607210e60ec03b5",
+      "crates/data-agent/src/use_cases/personal_assets.rs": "df8ba66d0928de7a124e9c4361ad9b2aa3025b77be4dfa37a5b92457fcf1e1d6",
+      "crates/data-agent/src/use_cases/query_workflow.rs": "6da4cbb840e2b28780e74865a2af1f1a537ca8d737c2d636cdb173cb9bcaae45",
+      "crates/data-agent/src/use_cases/semantic_prefill.rs": "9d633bf51ea41aba23d4421ae7472254dc7e8e89c70c9d4b2993ca044265f0eb",
+      "docs/architecture/knowledge-modules.md": "1d57fe1080d998c4f483b874a62e567ecd5f09726841b75cfb9331205b016737",
+      "docs/architecture/runtime-modules.md": "de94a55b3189119fa5f25216fcba770f34a180d9953840d5acbc5fd9973d0b1a",
+      "docs/semantic-retrieval-design.md": "6bd913469cd03b4d9011a4139e361e33fc56c71a8a224f5f6a18581e15aac0fc",
+      "packages/contracts/generated/boundary.rs": "4c9b41ecf051c1c8317ebff8e344cb5b48dca386946bcb979f656820b8a17f3d",
+      "packages/contracts/generated/boundary.ts": "2e31dc8d1d2d16d6472a1f6bc8e12525cdc7bfab6cc47b4acaefc5187509bda7",
+      "packages/contracts/schema.json": "a3334c241540fcfa5b61b979bf03abcc761f2f888c0ad81ddcccb9afef251387",
+      "tests/contracts/cases.json": "56d92e9fed9c30598f834457a7ae41459b3ef125da2ab7a90c2d6060447a3c76",
+      "tests/mvp/check-analysis-preference.mjs": "1ce2e10ee2b03a189375629874f694178e26efb0f6058353f9b3a242ccd7cb7a",
+      "tests/mvp/check-asset-directory.mjs": "f1f88c8cd89acaa8effadced152ac6cd2e5ed65aff2f4cbbfff1db38df8ce22f",
+      "tests/mvp/check-authority.mjs": "eb6e3b47d4cb4f96703bd5527ea211e9b7af0fdd1ec8aad43ebc8e0bec4fc0c5",
+      "tests/mvp/check-boundaries.mjs": "eba13ed524cce55207289441054ad7bd286ecfd27266519906bd03693ea0eb47",
+      "tests/mvp/check-catalog-import.mjs": "d2b47e18e7fbdd05adf6341a540add012e5c0a8cecbb3a03989ebd96695343ae",
+      "tests/mvp/check-completion-gaps.mjs": "0f8a0a4c2226cdd1a1d0aefa9e674f739bcc0d94cdb698443dead9fa062bb9b9",
+      "tests/mvp/check-hybrid-retrieval.mjs": "ea06bc1b01e8cadde1d6aa17db3f9fcbc2aab176a5e5c9ae4834544f885d132b",
+      "tests/mvp/check-knowledge-workflow.mjs": "52342011d2c0d621e33beb2543d13d62fa5e710c7360df71942f3523e9190536",
+      "tests/mvp/check-maintenance-replay.mjs": "b16b1ddeb08bf7b03bf97abaad6220b2d15a5673b7512dd88aea55a5e8ad4d12",
+      "tests/mvp/check-memory-revisions.mjs": "20a18c5dffbe6a64f36360a2bf703a079d812eff8cce37e52e65d154f7fc6410",
+      "tests/mvp/check-prefill-concurrency.mjs": "3ca6fb429585dd626754f73c203d914cbf33a0e3e6a1d05c2589d253b5919e7b",
+      "tests/mvp/check-prefill-timeouts.mjs": "bf74c8ffeed095853e4081ef4e6eec505c57e977f80217a91eec296e8f217587",
+      "tests/mvp/check-prefill.mjs": "1c63c506983c591337ef7c0dd8464f23ade8aed6d6d5d1f2dd1b45cfcc2d030b",
+      "tests/mvp/check-query-boundaries.mjs": "dcb14d2cf063453e8de2b32692f75cefdf1bfee57501bb298710d8957cbe8476",
+      "tests/mvp/check-query-workflow.mjs": "88709e39021b6c6443d0c482434d5043f8f0f09d7a1c6f137010c7451538f650",
+      "tests/mvp/check-retrieval-coverage.mjs": "90196dd3ac5ed63794bfac580c01a8eac657861132a99231b3dff51f65abdf29",
+      "tests/mvp/check-workflow-reliability.mjs": "4a80cd17559723e3fab4e1614e0fc8adf9e42ffd08581e95e8eee056761f6cb7",
+      "tests/mvp/harness.mjs": "2d7d26ec83ae337fb9ec83a149001308c4efb9d4de6a01ff7d06b0d1436cc1b5"
+    },
+    "current_unchanged_count": 46,
+    "unchanged_paths": [
+      "AGENTS.md",
+      "apps/api/src/data_routes.rs",
+      "apps/platform-mock/server.py",
+      "crates/data-agent/src/modules/assets/mod.rs",
+      "crates/data-agent/src/modules/assets/store.rs",
+      "crates/data-agent/src/modules/conversations/store.rs",
+      "crates/data-agent/src/modules/ingestion/catalog.rs",
+      "crates/data-agent/src/modules/ingestion/mod.rs",
+      "crates/data-agent/src/modules/ingestion/store.rs",
+      "crates/data-agent/src/modules/knowledge/mod.rs",
+      "crates/data-agent/src/modules/knowledge/store.rs",
+      "crates/data-agent/src/modules/queries/mod.rs",
+      "crates/data-agent/src/modules/queries/platform.rs",
+      "crates/data-agent/src/modules/queries/store.rs",
+      "crates/data-agent/src/modules/retrieval/mod.rs",
+      "crates/data-agent/src/modules/retrieval/store.rs",
+      "crates/data-agent/src/modules/retrieval/vector.rs",
+      "crates/data-agent/src/persistence/mod.rs",
+      "crates/data-agent/src/types/mod.rs",
+      "crates/data-agent/src/use_cases/catalog_import.rs",
+      "crates/data-agent/src/use_cases/context_authority.rs",
+      "crates/data-agent/src/use_cases/data_tools.rs",
+      "crates/data-agent/src/use_cases/knowledge.rs",
+      "crates/data-agent/src/use_cases/personal_assets.rs",
+      "crates/data-agent/src/use_cases/query_workflow.rs",
+      "crates/data-agent/src/use_cases/semantic_prefill.rs",
+      "docs/architecture/knowledge-modules.md",
+      "docs/semantic-retrieval-design.md",
+      "tests/mvp/check-analysis-preference.mjs",
+      "tests/mvp/check-asset-directory.mjs",
+      "tests/mvp/check-authority.mjs",
+      "tests/mvp/check-boundaries.mjs",
+      "tests/mvp/check-catalog-import.mjs",
+      "tests/mvp/check-completion-gaps.mjs",
+      "tests/mvp/check-hybrid-retrieval.mjs",
+      "tests/mvp/check-knowledge-workflow.mjs",
+      "tests/mvp/check-maintenance-replay.mjs",
+      "tests/mvp/check-memory-revisions.mjs",
+      "tests/mvp/check-prefill-concurrency.mjs",
+      "tests/mvp/check-prefill-timeouts.mjs",
+      "tests/mvp/check-prefill.mjs",
+      "tests/mvp/check-query-boundaries.mjs",
+      "tests/mvp/check-query-workflow.mjs",
+      "tests/mvp/check-retrieval-coverage.mjs",
+      "tests/mvp/check-workflow-reliability.mjs",
+      "tests/mvp/harness.mjs"
+    ],
+    "current_limited_input_count": 39,
+    "changed_inputs": [
+      {
+        "path": "Makefile",
+        "historical_sha256": "be24d9fed5fb65417bdc0f3571364d58c03919d0c05c59fa3d5931fec2972890",
+        "current_sha256": "b38c4e03dc981487d8ca2ba0e3f363bf56aa898ac04f98e8fece81300584619b"
+      },
+      {
+        "path": "apps/api/src/routes.rs",
+        "historical_sha256": "65f37a2a35e92aa48eed1253bad48f712148a59fd324e38a847c730a27c9a61f",
+        "current_sha256": "c7f08859c5123a96bf6186656440a304f2fd96f3fac7a19ea1ec020bfc3f66ac"
+      },
+      {
+        "path": "crates/data-agent/src/modules/ingestion/prefill.rs",
+        "historical_sha256": "0ffbef9d1bff22da6dd543f728914af01b54828300e49e13f789cd9c05071640",
+        "current_sha256": "92c94e68b5b5da7101ada1226cd194dbb787f9a1cf088e32699d5d84845b4a01"
+      },
+      {
+        "path": "crates/data-agent/src/modules/runtime/store.rs",
+        "historical_sha256": "6a206e893df9cdd02017686f8b9033f33f6f5c7697a027e0a8af18f605b51c6e",
+        "current_sha256": "b6c277b02aaf5a81cf2faacc4d9070649d22a9402b0704f0a4a9ff195498e37e"
+      },
+      {
+        "path": "docs/architecture/runtime-modules.md",
+        "historical_sha256": "de94a55b3189119fa5f25216fcba770f34a180d9953840d5acbc5fd9973d0b1a",
+        "current_sha256": "58ac1655f707d8785e12f34d5cccf6ebdc0637d79e9cb710e5e5b8d73c2abbe0"
+      },
+      {
+        "path": "packages/contracts/generated/boundary.rs",
+        "historical_sha256": "4c9b41ecf051c1c8317ebff8e344cb5b48dca386946bcb979f656820b8a17f3d",
+        "current_sha256": "78b35b97fa584ca54e41ef3f95256c3bcf4b1d5ea7ca9e9e2b9e8f5728829876"
+      },
+      {
+        "path": "packages/contracts/generated/boundary.ts",
+        "historical_sha256": "2e31dc8d1d2d16d6472a1f6bc8e12525cdc7bfab6cc47b4acaefc5187509bda7",
+        "current_sha256": "80491c1593054e0b30d748a6b96504cb3d19f82b465417b9559a163b80136cc8"
+      },
+      {
+        "path": "packages/contracts/schema.json",
+        "historical_sha256": "a3334c241540fcfa5b61b979bf03abcc761f2f888c0ad81ddcccb9afef251387",
+        "current_sha256": "e48d892e69d105b79130786a4934513e3f4fb8621d53690a6e7931973b057e11"
+      },
+      {
+        "path": "tests/contracts/cases.json",
+        "historical_sha256": "56d92e9fed9c30598f834457a7ae41459b3ef125da2ab7a90c2d6060447a3c76",
+        "current_sha256": "22380d9f335c9fece42b22b064d32bed42228b3d83e864f3a1f61a3d53a4b195"
+      }
+    ],
+    "assessment": "查询、知识、资产与本记录使用的专门测试当前保持历史审查内容。9个后续变化路径明确排除出相同子集；运行时journal及整体契约的新行为由运行时独立审查负责。prefill.rs本轮规则文字已有单独静态审查，不将文件整体称为未改。"
+  },
+  "related_reviews": [
+    {
+      "path": "docs/reviews/mvp-maintenance-rules-reference-20261005.json",
+      "sha256": "1aaaa83ace965351126ccaf4cef8b363e6e1690037f875185c1033336d02f782",
+      "scope": "后续通用推断规则的静态复核；模型实际语义输出仍需正式产物验证。其Q04参考发现由下一份记录后续处理。"
+    },
+    {
+      "path": "docs/reviews/mvp-order-refund-reference-correctness-20261005.json",
+      "sha256": "4b5599ee7f224612ed6aeab3785ab83b4b09d6ec0eca09be4a6bf92cc5da8a1e",
+      "scope": "Q04/Q10订单集合参考及独立预期的单独限定复核，本记录仅引用且不重复运行。"
+    }
+  ],
+  "residual_risks": [
+    "新Pi journal、最终完整回归及全范围增量收据需要最终独立审查。本记录不关闭IA04/IA05/IA08、AC08或整个I2-MVP。",
+    "官方真实模型语义质量、真实Datasight/正式认证与真实用户试用不由本地mock和合成平台结果证明。",
+    "这里保存普通本地证据与内容哈希，后续源文件、测试、契约或日志修改需要重新核对适用性。"
+  ],
+  "testing_gaps": [
+    "取消过滤专门运行反例未分别覆盖succeeded和failed；五字段投影的状态无关性经过静态核对，此项是覆盖限制。",
+    "没有在本次记录阶段运行MySQL、编译、真实模型、网络请求或整体MVP验收；仅新增本审查JSON。",
+    "新完整日志观察不能替代进程退出结果，最终审查者需核对完成状态及最终指纹。"
+  ],
+  "limits": {
+    "business_code_changes": false,
+    "source_test_or_contract_changes": false,
+    "mysql_run_this_record": false,
+    "build_run_this_record": false,
+    "model_calls_this_record": 0,
+    "credential_reads": false,
+    "launcher_operation": false,
+    "only_new_file": "docs/reviews/mvp-query-maintenance-correctness-20261005.json",
+    "public_paths": "仅项目相对路径；原始本地日志可能含机器路径，因此本记录只保存相对引用、哈希和必要摘要。"
+  },
+  "reviewed_at": "2026-10-04T22:53:47.136729+00:00"
+}

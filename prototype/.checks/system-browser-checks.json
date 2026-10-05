@@ -1,0 +1,767 @@
+{
+  "startedAt": "2026-10-03T04:31:43.414Z",
+  "scope": "隔离浏览器中的前端合成流程；不验证模型、账号权限、数仓查询或生产恢复。",
+  "inputHashes": {
+    "index.html": "c7c334034a4fe24c85a3227bc2af3542c7c9ae7c90757e9a553ef844b8c55cff",
+    "app.js": "2ba74474df8fe812dabe166746d71a5cb28d1c528cd7f3826c586ef944b0b0eb",
+    "personal.js": "dcbdc88ab8addbe07367b9f45c7684ee29d2c9fa9f90dae77cb4b26a9ea94fbf",
+    "knowledge.js": "0a615d30efc8a7451bc14b9ba3ecba2b1ed5e41ffb5f7b2ff014a5ce648c53f4",
+    "shell.js": "5cd821899b571d5bb6cde3186726a7587c52826d5df4785083cb480c63292521",
+    "shell.css": "aa766a042bc66c3e67df20b86a0f79800bcf3b60a3aca5bf41e7fe132431f1b4",
+    "workbench.js": "2bd7f2bb33a3831d03fbbbef39dc7c27aa4b1e5ec54d190c24881bb1a75fa0a5",
+    "workbench.css": "94430422c644d3fcb240b3d3a80479c8ed1dbef36bdfce915821327b3c096bc9",
+    "workbench-fixture.js": "bdb2d14608392ec04772f339e24e9075c9afc9675f72569435e81919e01d5cd8",
+    "demo-source.js": "5081563e872de4d63f13d15f58bc3f4016a50836ebaed94616cc3bfd44008f1f",
+    "demo-analysis.js": "01f81f7bc0c47144219e5cdf6f68baa32ef7e26133660392981e67df6eb3ed38",
+    "style.css": "04984c5091c084d1409178def49614392c7d8bde6b9abc92ae65d0c632e9efe9",
+    "knowledge.css": "3c1d6279118c47607e2393b1fba81bb7e54b1d0114f451129a508f0aaefe50c9"
+  },
+  "scenarios": [
+    {
+      "name": "default-entry-and-widths",
+      "checks": [
+        {
+          "name": "默认工作台",
+          "passed": true
+        },
+        {
+          "name": "首页无可见空详情",
+          "passed": true
+        },
+        {
+          "name": "首页为单列网格",
+          "passed": true,
+          "details": {
+            "columns": "1224px"
+          }
+        },
+        {
+          "name": "示例只填写输入",
+          "passed": true
+        },
+        {
+          "name": "桌面首页无水平溢出",
+          "passed": true
+        },
+        {
+          "name": "移动首页无水平溢出",
+          "passed": true
+        },
+        {
+          "name": "移动历史入口可见",
+          "passed": true
+        },
+        {
+          "name": "移动历史弹层可达",
+          "passed": true
+        },
+        {
+          "name": "移动历史无水平溢出",
+          "passed": true
+        }
+      ],
+      "passed": true
+    },
+    {
+      "name": "conversation-entry-scope-and-drafts-desktop",
+      "checks": [
+        {
+          "name": "首次首页没有历史会话",
+          "passed": true
+        },
+        {
+          "name": "新对话位于工作台会话区",
+          "passed": true
+        },
+        {
+          "name": "无需新建即可提问并生成SQL",
+          "passed": true
+        },
+        {
+          "name": "单任务不显示任务切换",
+          "passed": true
+        },
+        {
+          "name": "assets:不显示新对话与会话入口",
+          "passed": true
+        },
+        {
+          "name": "assets:返回原对话并保留未发送输入",
+          "passed": true
+        },
+        {
+          "name": "assets:保留当前任务和SQL查看版本",
+          "passed": true
+        },
+        {
+          "name": "semantic:不显示新对话与会话入口",
+          "passed": true
+        },
+        {
+          "name": "semantic:返回原对话并保留未发送输入",
+          "passed": true
+        },
+        {
+          "name": "semantic:保留当前任务和SQL查看版本",
+          "passed": true
+        },
+        {
+          "name": "新会话入口命名为新对话",
+          "passed": true
+        },
+        {
+          "name": "新对话清空当前输入且保留旧历史",
+          "passed": true
+        },
+        {
+          "name": "空白重复点击不生成额外空会话",
+          "passed": true
+        },
+        {
+          "name": "返回第一旧会话恢复其独立草稿",
+          "passed": true
+        },
+        {
+          "name": "返回第二旧会话恢复其独立草稿",
+          "passed": true
+        },
+        {
+          "name": "草稿切换不发送消息或执行查询",
+          "passed": true
+        },
+        {
+          "name": "会话区和页面无水平溢出",
+          "passed": true
+        }
+      ],
+      "passed": true
+    },
+    {
+      "name": "conversation-entry-scope-and-drafts-mobile",
+      "checks": [
+        {
+          "name": "首次首页没有历史会话",
+          "passed": true
+        },
+        {
+          "name": "新对话位于工作台会话区",
+          "passed": true
+        },
+        {
+          "name": "无需新建即可提问并生成SQL",
+          "passed": true
+        },
+        {
+          "name": "单任务不显示任务切换",
+          "passed": true
+        },
+        {
+          "name": "assets:不显示新对话与会话入口",
+          "passed": true
+        },
+        {
+          "name": "assets:返回原对话并保留未发送输入",
+          "passed": true
+        },
+        {
+          "name": "assets:保留当前任务和SQL查看版本",
+          "passed": true
+        },
+        {
+          "name": "semantic:不显示新对话与会话入口",
+          "passed": true
+        },
+        {
+          "name": "semantic:返回原对话并保留未发送输入",
+          "passed": true
+        },
+        {
+          "name": "semantic:保留当前任务和SQL查看版本",
+          "passed": true
+        },
+        {
+          "name": "新会话入口命名为新对话",
+          "passed": true
+        },
+        {
+          "name": "新对话清空当前输入且保留旧历史",
+          "passed": true
+        },
+        {
+          "name": "空白重复点击不生成额外空会话",
+          "passed": true
+        },
+        {
+          "name": "返回第一旧会话恢复其独立草稿",
+          "passed": true
+        },
+        {
+          "name": "返回第二旧会话恢复其独立草稿",
+          "passed": true
+        },
+        {
+          "name": "草稿切换不发送消息或执行查询",
+          "passed": true
+        },
+        {
+          "name": "会话区和页面无水平溢出",
+          "passed": true
+        }
+      ],
+      "passed": true
+    },
+    {
+      "name": "legacy-composer-migration",
+      "checks": [
+        {
+          "name": "旧版全局草稿恢复到原活动会话",
+          "passed": true
+        },
+        {
+          "name": "旧版草稿不串到其他会话",
+          "passed": true
+        },
+        {
+          "name": "迁移草稿在会话切换后仍保留",
+          "passed": true
+        },
+        {
+          "name": "迁移不发送草稿或执行查询",
+          "passed": true
+        }
+      ],
+      "passed": true
+    },
+    {
+      "name": "unsent-first-message-in-history",
+      "checks": [
+        {
+          "name": "首条未发送草稿成为可恢复记录",
+          "passed": true
+        },
+        {
+          "name": "从历史恢复首条未发送草稿",
+          "passed": true
+        },
+        {
+          "name": "恢复草稿仍没有消息与SQL",
+          "passed": true
+        }
+      ],
+      "passed": true
+    },
+    {
+      "name": "refund-clarification-and-version-guard",
+      "checks": [
+        {
+          "name": "order:提供三种退款分母",
+          "passed": true
+        },
+        {
+          "name": "order:澄清前没有可确认SQL",
+          "passed": true
+        },
+        {
+          "name": "order:SQL采用选择的分母",
+          "passed": true
+        },
+        {
+          "name": "order:未确认不执行",
+          "passed": true
+        },
+        {
+          "name": "amount:提供三种退款分母",
+          "passed": true
+        },
+        {
+          "name": "amount:澄清前没有可确认SQL",
+          "passed": true
+        },
+        {
+          "name": "amount:SQL采用选择的分母",
+          "passed": true
+        },
+        {
+          "name": "amount:未确认不执行",
+          "passed": true
+        },
+        {
+          "name": "customer:提供三种退款分母",
+          "passed": true
+        },
+        {
+          "name": "customer:澄清前没有可确认SQL",
+          "passed": true
+        },
+        {
+          "name": "customer:SQL采用选择的分母",
+          "passed": true
+        },
+        {
+          "name": "customer:未确认不执行",
+          "passed": true
+        },
+        {
+          "name": "修订增加版本",
+          "passed": true
+        },
+        {
+          "name": "旧版本没有确认入口",
+          "passed": true
+        },
+        {
+          "name": "当前版本可以确认",
+          "passed": true
+        }
+      ],
+      "passed": true
+    },
+    {
+      "name": "query-task-attribution-result-and-csv",
+      "checks": [
+        {
+          "name": "SQL展示且未提交",
+          "passed": true
+        },
+        {
+          "name": "重复确认只创建一次查询",
+          "passed": true
+        },
+        {
+          "name": "确认后进入运行状态",
+          "passed": true
+        },
+        {
+          "name": "运行时可以新建第二任务",
+          "passed": true
+        },
+        {
+          "name": "完成结果仍归原任务",
+          "passed": true
+        },
+        {
+          "name": "净收入为12400分",
+          "passed": true
+        },
+        {
+          "name": "结果对应原查询",
+          "passed": true
+        },
+        {
+          "name": "结果表显示12400分",
+          "passed": true
+        },
+        {
+          "name": "已执行SQL在结果下方且默认折叠",
+          "passed": true
+        },
+        {
+          "name": "CSV与结果表一致",
+          "passed": true
+        },
+        {
+          "name": "历史搜索定位原查询",
+          "passed": true
+        },
+        {
+          "name": "历史打开原查询",
+          "passed": true
+        },
+        {
+          "name": "移动结果页无水平溢出",
+          "passed": true
+        }
+      ],
+      "passed": true
+    },
+    {
+      "name": "evidence-navigation-and-unsaved-semantic",
+      "checks": [
+        {
+          "name": "依据定位paid_at字段",
+          "passed": true
+        },
+        {
+          "name": "返回分析对话不丢",
+          "passed": true
+        },
+        {
+          "name": "未保存语义跨页保留",
+          "passed": true
+        },
+        {
+          "name": "依据定位净收入指标",
+          "passed": true
+        },
+        {
+          "name": "依据定位业务文档章节",
+          "passed": true
+        },
+        {
+          "name": "文档返回对话不丢",
+          "passed": true
+        }
+      ],
+      "passed": true
+    },
+    {
+      "name": "correction-memory-and-one-off-conditions",
+      "checks": [
+        {
+          "name": "一次性月份修改不生成长期记忆",
+          "passed": true
+        },
+        {
+          "name": "明确UV纠错自动记住",
+          "passed": true
+        },
+        {
+          "name": "自动记忆通知含查看和撤销",
+          "passed": true
+        },
+        {
+          "name": "查看定位个人记忆卡片",
+          "passed": true
+        },
+        {
+          "name": "撤销自动记忆保留对话",
+          "passed": true
+        },
+        {
+          "name": "重复纠错不重复保存",
+          "passed": true
+        },
+        {
+          "name": "已有纠错通知不重复提供新建撤销",
+          "passed": true
+        }
+      ],
+      "passed": true
+    },
+    {
+      "name": "skills-lifecycle-and-user-assets",
+      "checks": [
+        {
+          "name": "分析保存Skill且v1",
+          "passed": true
+        },
+        {
+          "name": "保存不会自动采用",
+          "passed": true
+        },
+        {
+          "name": "Skill编辑产生v2并保留旧版",
+          "passed": true
+        },
+        {
+          "name": "显式选用Skill版本",
+          "passed": true
+        },
+        {
+          "name": "后续任务采用已选Skill",
+          "passed": true
+        },
+        {
+          "name": "停用后不可选用",
+          "passed": true
+        },
+        {
+          "name": "停用清除后续采用",
+          "passed": true
+        },
+        {
+          "name": "删除清除后续采用",
+          "passed": true
+        },
+        {
+          "name": "工作台生成A的专属纠错",
+          "passed": true
+        },
+        {
+          "name": "用户B无A的Skill",
+          "passed": true
+        },
+        {
+          "name": "用户B无A会话",
+          "passed": true
+        },
+        {
+          "name": "用户B只显示自身记忆",
+          "passed": true
+        },
+        {
+          "name": "新纠错不进入B的界面或存储",
+          "passed": true
+        },
+        {
+          "name": "切回A恢复新纠错",
+          "passed": true
+        },
+        {
+          "name": "切回A恢复专属Skill",
+          "passed": true
+        }
+      ],
+      "passed": true
+    },
+    {
+      "name": "assets-and-semantic-widths",
+      "checks": [
+        {
+          "name": "desktop:memory资产可见且无水平溢出",
+          "passed": true
+        },
+        {
+          "name": "desktop:skills资产可见且无水平溢出",
+          "passed": true
+        },
+        {
+          "name": "desktop:overview语义页无水平溢出",
+          "passed": true
+        },
+        {
+          "name": "desktop:fields语义页无水平溢出",
+          "passed": true
+        },
+        {
+          "name": "desktop:lineage语义页无水平溢出",
+          "passed": true
+        },
+        {
+          "name": "desktop:metrics语义页无水平溢出",
+          "passed": true
+        },
+        {
+          "name": "desktop:documents语义页无水平溢出",
+          "passed": true
+        },
+        {
+          "name": "desktop:history语义页无水平溢出",
+          "passed": true
+        },
+        {
+          "name": "mobile:memory资产可见且无水平溢出",
+          "passed": true
+        },
+        {
+          "name": "mobile:skills资产可见且无水平溢出",
+          "passed": true
+        },
+        {
+          "name": "mobile:overview语义页无水平溢出",
+          "passed": true
+        },
+        {
+          "name": "mobile:fields语义页无水平溢出",
+          "passed": true
+        },
+        {
+          "name": "mobile:lineage语义页无水平溢出",
+          "passed": true
+        },
+        {
+          "name": "mobile:metrics语义页无水平溢出",
+          "passed": true
+        },
+        {
+          "name": "mobile:documents语义页无水平溢出",
+          "passed": true
+        },
+        {
+          "name": "mobile:history语义页无水平溢出",
+          "passed": true
+        }
+      ],
+      "passed": true
+    },
+    {
+      "name": "mobile-chat-and-task-navigation",
+      "checks": [
+        {
+          "name": "移动对话可继续输入",
+          "passed": true
+        },
+        {
+          "name": "移动对话不重复展示执行确认",
+          "passed": true
+        },
+        {
+          "name": "移动任务显示SQL并收起输入框",
+          "passed": true
+        },
+        {
+          "name": "移动任务显示所属结果",
+          "passed": true
+        },
+        {
+          "name": "移动结果在首屏内开始展示",
+          "passed": true,
+          "details": {
+            "resultTop": 326.484375
+          }
+        },
+        {
+          "name": "移动任务页无水平溢出",
+          "passed": true
+        },
+        {
+          "name": "返回对话保留消息与输入",
+          "passed": true
+        },
+        {
+          "name": "移动返回后可以开始新任务",
+          "passed": true
+        },
+        {
+          "name": "移动第二任务仍需确认",
+          "passed": true
+        }
+      ],
+      "passed": true
+    },
+    {
+      "name": "keyboard-focus-dialogs-and-icon-name",
+      "checks": [
+        {
+          "name": "desktop:Tab可到工作台导航且焦点可见",
+          "passed": true,
+          "details": {
+            "isActive": true,
+            "focusVisible": true,
+            "outlineStyle": "solid",
+            "outlineWidth": 2,
+            "onscreen": true
+          }
+        },
+        {
+          "name": "desktop:工作台导航具备可访问名称",
+          "passed": true
+        },
+        {
+          "name": "desktop:历史弹层获得内部焦点",
+          "passed": true
+        },
+        {
+          "name": "desktop:Esc关闭历史并返回触发按钮",
+          "passed": true
+        },
+        {
+          "name": "desktop:Skill弹层获得内部焦点",
+          "passed": true
+        },
+        {
+          "name": "desktop:Esc关闭Skill并返回触发按钮",
+          "passed": true
+        },
+        {
+          "name": "mobile:Tab可到工作台导航且焦点可见",
+          "passed": true,
+          "details": {
+            "isActive": true,
+            "focusVisible": true,
+            "outlineStyle": "solid",
+            "outlineWidth": 2,
+            "onscreen": true
+          }
+        },
+        {
+          "name": "mobile:工作台导航具备可访问名称",
+          "passed": true
+        },
+        {
+          "name": "mobile:历史弹层获得内部焦点",
+          "passed": true
+        },
+        {
+          "name": "mobile:Esc关闭历史并返回触发按钮",
+          "passed": true
+        },
+        {
+          "name": "mobile:Skill弹层获得内部焦点",
+          "passed": true
+        },
+        {
+          "name": "mobile:Esc关闭Skill并返回触发按钮",
+          "passed": true
+        }
+      ],
+      "passed": true
+    },
+    {
+      "name": "running-user-switch-reload-and-cancel",
+      "checks": [
+        {
+          "name": "切用户前查询运行中",
+          "passed": true
+        },
+        {
+          "name": "在B中不可见A的查询",
+          "passed": true
+        },
+        {
+          "name": "A后台完成不写入B",
+          "passed": true
+        },
+        {
+          "name": "切回原用户看到原查询完成",
+          "passed": true
+        },
+        {
+          "name": "运行任务持久化dueAt",
+          "passed": true
+        },
+        {
+          "name": "刷新恢复同一查询并完成",
+          "passed": true
+        },
+        {
+          "name": "取消状态可见",
+          "passed": true
+        },
+        {
+          "name": "取消在刷新和到期后不变完成",
+          "passed": true
+        }
+      ],
+      "passed": true
+    }
+  ],
+  "pageErrors": [],
+  "screenshots": [
+    "system-flow-desktop-home.png",
+    "system-flow-mobile-home.png",
+    "system-flow-desktop-conversation-restored.png",
+    "system-flow-desktop-conversation-history.png",
+    "system-flow-mobile-conversation-restored.png",
+    "system-flow-mobile-conversation-history.png",
+    "system-flow-sql-revision.png",
+    "system-flow-result.png",
+    "system-flow-mobile-result.png",
+    "system-flow-correction.png",
+    "system-flow-skills.png",
+    "system-flow-mobile-assets-memory.png",
+    "system-flow-mobile-assets-skills.png",
+    "system-flow-mobile-semantic.png",
+    "system-flow-mobile-focused-result.png",
+    "system-flow-keyboard-focus.png"
+  ],
+  "completedAt": "2026-10-03T04:32:11.151Z",
+  "finalInputHashes": {
+    "index.html": "c7c334034a4fe24c85a3227bc2af3542c7c9ae7c90757e9a553ef844b8c55cff",
+    "app.js": "2ba74474df8fe812dabe166746d71a5cb28d1c528cd7f3826c586ef944b0b0eb",
+    "personal.js": "dcbdc88ab8addbe07367b9f45c7684ee29d2c9fa9f90dae77cb4b26a9ea94fbf",
+    "knowledge.js": "0a615d30efc8a7451bc14b9ba3ecba2b1ed5e41ffb5f7b2ff014a5ce648c53f4",
+    "shell.js": "5cd821899b571d5bb6cde3186726a7587c52826d5df4785083cb480c63292521",
+    "shell.css": "aa766a042bc66c3e67df20b86a0f79800bcf3b60a3aca5bf41e7fe132431f1b4",
+    "workbench.js": "2bd7f2bb33a3831d03fbbbef39dc7c27aa4b1e5ec54d190c24881bb1a75fa0a5",
+    "workbench.css": "94430422c644d3fcb240b3d3a80479c8ed1dbef36bdfce915821327b3c096bc9",
+    "workbench-fixture.js": "bdb2d14608392ec04772f339e24e9075c9afc9675f72569435e81919e01d5cd8",
+    "demo-source.js": "5081563e872de4d63f13d15f58bc3f4016a50836ebaed94616cc3bfd44008f1f",
+    "demo-analysis.js": "01f81f7bc0c47144219e5cdf6f68baa32ef7e26133660392981e67df6eb3ed38",
+    "style.css": "04984c5091c084d1409178def49614392c7d8bde6b9abc92ae65d0c632e9efe9",
+    "knowledge.css": "3c1d6279118c47607e2393b1fba81bb7e54b1d0114f451129a508f0aaefe50c9"
+  },
+  "inputsChangedDuringRun": false,
+  "passed": true,
+  "checkCount": 151
+}

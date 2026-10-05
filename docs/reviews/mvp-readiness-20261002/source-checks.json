@@ -1,0 +1,189 @@
+{
+  "review_date": "2026-10-02",
+  "scope": "Selected public source excerpts supporting the audit; not runtime or accuracy evidence. Architecture sources are linked and discussed in the audit. No internal business material was sent in these public reads.",
+  "sources": [
+    {
+      "name": "dbt_joins",
+      "url": "https://docs.getdbt.com/docs/build/join-logic",
+      "final_url": "https://docs.getdbt.com/docs/build/join-logic",
+      "status": 200,
+      "text_length": 11454,
+      "snippets": [
+        {
+          "term": "fan-out",
+          "count": 7,
+          "text": "ow creates a graph using the semantic models as nodes and the join paths as edges to perform joins automatically. MetricFlow chooses the appropriate join type and avoids fan-out or chasm joins with other tables based on the entity types.\nWhat are fan-out or chasm joins?\nFan-out joins are when one row in a table is joined to multiple rows in another table, resulting in more output rows than input rows.\nChasm joins are when two tables have a many-to-many relationship through an intermediate table, and the join results in duplicate or missing data.\nTypes of joins\n​\nJoins are auto-generated\nMetricFlow automatically generates the necessary joins to the defined semantic objects, eliminating the need for you to create new semantic models or configuration files.\nThis section explains the different types of joins that can be used with entities and how to query them.\n"
+        },
+        {
+          "term": "chasm",
+          "count": 4,
+          "text": "a graph using the semantic models as nodes and the join paths as edges to perform joins automatically. MetricFlow chooses the appropriate join type and avoids fan-out or chasm joins with other tables based on the entity types.\nWhat are fan-out or chasm joins?\nFan-out joins are when one row in a table is joined to multiple rows in another table, resulting in more output rows than input rows.\nChasm joins are when two tables have a many-to-many relationship through an intermediate table, and the join results in duplicate or missing data.\nTypes of joins\n​\nJoins are auto-generated\nMetricFlow automatically generates the necessary joins to the defined semantic objects, eliminating the need for you to create new semantic models or configuration files.\nThis section explains the different types of joins that can be used with entities and how to query them.\nMetricflow "
+        },
+        {
+          "term": "Primary",
+          "count": 13,
+          "text": "ft joins unless otherwise specified. For scenarios involving multiple\nfct\nmodels, MetricFlow uses full outer joins.\nentity type - Table A\nentity type - Table B\nJoin type\nPrimary\nPrimary\n✅ Left\nPrimary\nUnique\n✅ Left\nPrimary\nForeign\n❌ Fan-out (Not allowed)\nUnique\nPrimary\n✅ Left\nUnique\nUnique\n✅ Left\nUnique\nForeign\n❌ Fan-out (Not allowed)\nForeign\nPrimary\n✅ Left\nForeign\nUnique\n✅ Left\nForeign\nForeign\n❌ Fan-out (Not allowed)\nSemantic validation\n​\nMetricFlow performs semantic validation by executing\nexplain\nqueries in the data platform to ensure that the generated SQL gets executed without errors. This validation includes:\nVerifying that all referenced tables and columns exist.\nEnsuring the data platform supports SQL functions, such as\ndate_diff(x, y)\n.\nChecking for ambiguous joins or paths in multi-hop joins.\nIf validation fails, MetricFlow surfaces errors for user"
+        },
+        {
+          "term": "join",
+          "count": 63,
+          "text": " best way to develop locally with dbt.\nInstall free extension\nRequest your demo\nResources\nVS Code Extension\nResource Hub\ndbt Learn\nCertification\nDeveloper Blog\nCommunity\nJoin the Community\nBecome a Contributor\nOpen Source dbt Packages\nCommunity Forum\nSupport\nContact Support\nProfessional Services\nFind a Partner\nSystem Status\nConnect with Us\n© 2026 dbt Labs, LLC. All Rights Reserved.\nTerms of Service\nPrivacy Policy\nSecurity\nCookie Settings"
+        }
+      ]
+    },
+    {
+      "name": "dbt_semantic",
+      "url": "https://docs.getdbt.com/docs/build/about-metricflow",
+      "final_url": "https://docs.getdbt.com/docs/build/about-metricflow",
+      "status": 200,
+      "text_length": 19243,
+      "snippets": [
+        {
+          "term": "SQL",
+          "count": 8,
+          "text": "any's metrics. It's an opinionated set of abstractions and helps data consumers retrieve metric datasets from a data platform quickly and efficiently.\nMetricFlow handles SQL query construction and defines the specification for dbt semantic models and metrics. It allows you to define metrics in your dbt project and query them with\nMetricFlow commands\nwhether in\ndbt\nor\ndbt v1\n.\nPrerequisites\n​\nBefore you start, consider the following guidelines:\n(Applies to dbt v1.12 and later)\nDefine metrics in YAML and query them using the\nlatest metric specifications\n.\nAvailable on the\ndbt v2\nor\ndbt Latest\nin the\ndbt platform\n.\nUse MetricFlow with Snowflake, BigQuery, Databricks, Postgres (\ndbt v1\nonly), or Redshift.\nDiscover insights and query your metrics using the\nSemantic Layer\nand its diverse range of\navailable integrations\n.\nMetricFlow\n​\nMetricFlow is a SQL query gene"
+        },
+        {
+          "term": "metrics",
+          "count": 38,
+          "text": "\nWas this page helpful?\nYes\nNo\nPrivacy policy\nCreate a GitHub issue\nThis site is protected by reCAPTCHA and the Google\nPrivacy Policy\nand\nTerms of Service\napply.\n0\nTags:\nMetrics\nSemantic Layer\nEdit this page\nLast updated\non\nSep 10, 2026\nNext\nJoins\nGet started\nStart building with dbt.\nThe free dbt VS Code extension is the best way to develop locally with dbt.\nInstall free extension\nRequest your demo\nResources\nVS Code Extension\nResource Hub\ndbt Learn\nCertification\nDeveloper Blog\nCommunity\nJoin the Community\nBecome a Contributor\nOpen Source dbt Packages\nCommunity Forum\nSupport\nContact Support\nProfessional Services\nFind a Partner\nSystem Status\nConnect with Us\n© 2026 dbt Labs, LLC. All Rights Reserved.\nTerms of Service\nPrivacy Policy\nSecurity\nCookie Settings"
+        },
+        {
+          "term": "semantic",
+          "count": 52,
+          "text": "s page helpful?\nYes\nNo\nPrivacy policy\nCreate a GitHub issue\nThis site is protected by reCAPTCHA and the Google\nPrivacy Policy\nand\nTerms of Service\napply.\n0\nTags:\nMetrics\nSemantic Layer\nEdit this page\nLast updated\non\nSep 10, 2026\nNext\nJoins\nGet started\nStart building with dbt.\nThe free dbt VS Code extension is the best way to develop locally with dbt.\nInstall free extension\nRequest your demo\nResources\nVS Code Extension\nResource Hub\ndbt Learn\nCertification\nDeveloper Blog\nCommunity\nJoin the Community\nBecome a Contributor\nOpen Source dbt Packages\nCommunity Forum\nSupport\nContact Support\nProfessional Services\nFind a Partner\nSystem Status\nConnect with Us\n© 2026 dbt Labs, LLC. All Rights Reserved.\nTerms of Service\nPrivacy Policy\nSecurity\nCookie Settings"
+        }
+      ]
+    },
+    {
+      "name": "cube_joins",
+      "url": "https://cube.dev/docs/product/data-modeling/reference/joins",
+      "final_url": "https://docs.cube.dev/reference/data-modeling/joins",
+      "status": 200,
+      "text_length": 13400,
+      "snippets": [
+        {
+          "term": "fan",
+          "count": 5,
+          "text": "cript SDK\nJavascript sdk\nReact\nVue\nAngular\nSDK Reference\nOn this page\nParameters\nname\nrelationship\nOne-to-one\nOne-to-many\nMany-to-one\nsql\nSetting a primary key\nChasm and fan traps\nCUBE reference\nTransitive joins\nData Modeling\nJoins\nJoins define relationships between cubes, allowing you to access and compare members from multiple cubes at the same time.\nYou can use the\njoins\nparameter within\ncubes\nto define joins to other cubes.\nJoins allow to access and compare members from two or more cubes at the same time.\nYAML\nJavaScript\ncubes\n:\n-\nname\n:\nmy_cube\n# ...\njoins\n:\n-\nname\n:\ntarget_cube\nrelationship\n:\none_to_one || one_to_many || many_to_one\nsql\n:\nSQL ON clause\ncube\n(\n`my_cube`\n, {\n// ...\njoins:\n{\ntarget_cube:\n{\nrelationship:\n`one_to_one`\n||\n`one_to_many`\n||\n`many_to_one`\n,\nsql:\n`SQL ON clause`\n}\n}\n})\nAll joins are generated as\nLEFT JOIN\n. The cube which define"
+        },
+        {
+          "term": "primary_key",
+          "count": 13,
+          "text": "ion of the `customers` cube\nsql:\n`\n${\nCUBE\n}\n.customer_id =\n${\ncustomers\n.\nid\n}\n`\n}\n}\n})\n​\nSetting a primary key\nIn order for a join to work, it is necessary to define a\nprimary_key\nas\nspecified below. It is a requirement when a join is defined so that Cube can\nhandle row multiplication issues such as chasm and fan traps.\nLet’s imagine you want to calculate\nOrder Amount\nby\nOrder Item Product Name\n.\nIn this case,\nOrder\nrows will be multiplied by the\nOrder Item\njoin due to\nthe\none_to_many\nrelationship. In order to produce correct results, Cube will\nselect distinct primary keys from\nOrder\nfirst and then will join these primary\nkeys with\nOrder\nto get the correct\nOrder Amount\nsum result. Please note that\nprimary_key\nshould be defined in the\ndimensions\nsection.\nYAML\nJavaScript\ncubes\n:\n-\nname\n:\norders\n# ...\ndimensions\n:\n-\nname\n:\ncustomer_id\nsql\n:\nid\ntype\n:\nnumber\np"
+        },
+        {
+          "term": "relationship",
+          "count": 37,
+          "text": "id =\n${\nb\n.\nid\n}\n`\n,\nrelationship:\n`many_to_one`\n}\n},\nmeasures:\n{\ncount:\n{\ntype:\n`count`\n}\n}\n})\ncube\n(\n`b`\n, {\n// ...\njoins:\n{\nc:\n{\nsql:\n`\n${\nb\n}\n.c_id =\n${\nc\n.\nid\n}\n`\n,\nrelationship:\n`many_to_one`\n}\n}\n})\ncube\n(\n`c`\n, {\n// ...\ndimensions:\n{\ncategory:\n{\nsql:\n`category`\n,\ntype:\n`string`\n}\n}\n})\nAssume that the following query is run:\n{\n\"measures\"\n: [\n\"a.count\"\n],\n\"dimensions\"\n: [\n\"c.category\"\n]\n}\nJoins\na → b\nand\nb → c\nwill be resolved automatically. Cube uses the\nDijkstra algorithm\nto find a join path between cubes given\nrequested members.\nIn case there are multiple join paths that can be used to join the same set of cubes, Cube will collect cube names from members in the following order:\nMeasures\nDimensions\nSegments\nTime dimensions\nCube makes join trees as predictable and stable as possible, but this isn’t guaranteed in case multiple join paths exist.\nPlease u"
+        }
+      ]
+    },
+    {
+      "name": "zilliz_hybrid",
+      "url": "https://docs.zilliz.com/docs/hybrid-search",
+      "final_url": "https://docs.zilliz.com/docs/hybrid-search",
+      "status": 200,
+      "text_length": 44028,
+      "snippets": [
+        {
+          "term": "BM25",
+          "count": 39,
+          "text": "()\n.name(\"rrf\")\n.functionType(FunctionType.RERANK)\n.param(\"reranker\", \"rrf\")\n.param(\"k\", \"100\")\n.build()\njavascript\nAsk AI\nconst\nranker\n=\n{\nname\n:\n'rrf'\n,\ndescription\n:\n'bm25 function'\n,\ntype\n:\nFunctionType\n.\nRERANK\n,\ninput_field_names\n:\n[\n]\n,\nparams\n:\n{\n\"reranker\"\n:\n\"rrf\"\n,\n\"k\"\n:\n100\n}\n,\n}\n;\ngo\nAsk AI\nimport\n(\n\"github.com/milvus-io/milvus/client/v2/entity\"\n)\nranker\n:=\nentity\n.\nNewFunction\n(\n)\n.\nWithName\n(\n\"rrf\"\n)\n.\nWithType\n(\nentity\n.\nFunctionTypeRerank\n)\n.\nWithParam\n(\n\"reranker\"\n,\n\"rrf\"\n)\n.\nWithParam\n(\n\"k\"\n,\n\"100\"\n)\nbash\nAsk AI\n# Restful\nexport ranker='{\n\"functions\": [\n{\n\"name\": \"rrf\",\n\"type\": \"Rerank\",\n\"inputFieldNames\": [],\n\"params\": {\n\"reranker\": \"rrf\",\n\"k\": 100\n}\n}\n]\n}'\nc++\nAsk AI\nauto ranker = std::make_shared<milvus::RRFRerank>(100);\nshell\nAsk AI\n# Zilliz CLI\ncat > rerank.json << 'EOF'\n{\"strategy\": \"rrf\", \"params\": {\"k\": 100}}\nEOF\nStep 3: Perform a H"
+        },
+        {
+          "term": "filter",
+          "count": 13,
+          "text": "and Search\nConnect for On-Demand Search\nSearch & Query\nSearch & Query\nBasic Vector Search\nBasic Vector Search\nDQL sessions\nDQL sessions\nTune Recall Rate\nTune Recall Rate\nFiltered Search\nFiltered Search\nRange Search\nRange Search\nGrouping Search\nGrouping Search\nSearch Aggregation\nSearch Aggregation\nPrimary-Key Search\nPrimary-Key Search\nHybrid Search\nHybrid Search\nQuery\nQuery\nFiltering\nFiltering\nOverview\nOverview\nBasic\nBasic\nPattern Matching\nPattern Matching\nTemplate\nTemplate\nJSON\nJSON\nArray\nArray\nStructArray\nStructArray\nRandom Sampling\nRandom Sampling\nGeometry\nGeometry\nFull Text Search\nFull Text Search\nText Match\nText Match\nLexical Highlighter\nLexical Highlighter\nPhrase Match\nPhrase Match\nSearch with StructArray\nSearch with StructArray\nBasic Vector Search\nBasic Vector Search\nFiltered Search\nFiltered Search\nRange Search\nRange Search\nGrouping Search\nGrouping Sea"
+        },
+        {
+          "term": "hybrid",
+          "count": 44,
+          "text": "ate index\nCreate collection\nInsert data\nPerform Hybrid Search\nStep 1: Create multiple AnnSearchRequest instances\nStep 2: Configure a reranking strategy\nStep 3: Perform a Hybrid Search\nCtrl I"
+        }
+      ]
+    },
+    {
+      "name": "genie-rules",
+      "url": "https://docs.databricks.com/aws/en/genie-agents/tune-quality",
+      "verification": "Public text read by delegated researcher; quoted passages checked against saved text by primary agent.",
+      "snippets": [
+        {
+          "matched_phrase": "Defining business logic as SQL expressions produces more consistent results",
+          "text": " work with it.\n\n\nSQL expression examples​\n\nThe following examples show one expression of each type. Defining business logic as SQL expressions produces more consistent results than text instructions, because Genie applies the logic exactly as written rather than interpreting it from natural language.\n\nFilter: High-value orders\n\n\nName: High-value orders\n\nCode: orders.amount > 10000\n\nSynonyms: large orders, big deals, significant orders\n\nInstructions: Apply when users ask about large or high-value orders. The threshold is $10,000.\n\n\nMeasure: Win rate\n\n\nName: Win rate\n\nCode: COUNT(CASE WHEN stage = 'Closed Won' THEN 1 END) / NULLIF(COUNT(*), 0)\n\nSynonyms: close rate, conversion rate\n\nInstructions: Returns the fraction of opportunities that are"
+        },
+        {
+          "matched_phrase": "when the exact text of a parameterized query is used",
+          "text": "d type, Genie treats it as the incorrect type, which can lead to inaccurate results.\n\nIn chat mode, when the exact text of a parameterized query is used in a response, Genie provides a verified answer. See Trusted assets.\n\nTrusted assets​\n\nTrusted assets are example SQL queries and SQL functions that provide verified answers to questions you anticipate from users. When Genie uses a trusted asset to answer a question, it provides a verified answer, giving agent users an extra layer of confidence in the result's accuracy.\n\nTrusted assets include:\n\n\nParameterized example SQL queries: In chat mode, when the exact text of a parameterized query is used to generate a response, Genie provides a verified answer. Agent users can edit the parameter va"
+        }
+      ]
+    },
+    {
+      "name": "genie-feedback",
+      "url": "https://docs.databricks.com/aws/en/genie-agents/monitor",
+      "verification": "Public text read by delegated researcher; quoted passages checked against saved text by primary agent.",
+      "snippets": [
+        {
+          "matched_phrase": "Your Genie Agent's behavior does not change",
+          "text": "tional context.\n\n\nAs an editor, you can view feedback and flagged responses in the Genie interface. Your Genie Agent's behavior does not change based on user feedback alone. You should use feedback to identify improvement opportunities or respond directly to user questions. Databricks recommends encouraging users to provide feedback on the agent using this mechanism.\n\nBusiness users can view updates to the questions they've marked for review on their Monitor page.\nUsers with at least CAN MANAGE permission on the Genie Agent can review the specific exchange, comment on the request, and confirm or correct the response. They can access feedback and review requests on the monitoring page. Then you can use that feedback to tune responses and ite"
+        }
+      ]
+    },
+    {
+      "name": "genie-identity",
+      "url": "https://docs.databricks.com/aws/en/genie-agents/set-up",
+      "verification": "Public text read by delegated researcher; quoted passages checked against saved text by primary agent.",
+      "snippets": [
+        {
+          "matched_phrase": "Data access is always evaluated as the end user",
+          "text": "entials of the author who configured the warehouse, so end users do not need warehouse permissions. Data access is always evaluated as the end user's own Unity Catalog identity: users see only the data they are authorized to access, and each query is attributed to the end user in query history and the agent's monitoring page. Any question about data a user cannot access generates an empty response. See How data access works.\n\nTo restrict the data each user can see within the same Genie Agent, apply row-level security to the underlying tables in Unity Catalog. Row filters and column masks defined in Unity Catalog are enforced per user automatically, regardless of how the Genie Agent is shared. See Row filters and column masks.\n\nWhen you shar"
+        }
+      ]
+    },
+    {
+      "name": "genie-scope",
+      "url": "https://docs.databricks.com/aws/en/genie-agents/best-practices",
+      "verification": "Public text read by delegated researcher; quoted passages checked against saved text by primary agent.",
+      "snippets": [
+        {
+          "matched_phrase": "An agent should answer questions for a particular topic",
+          "text": "specific audience and purpose helps you decide which data, instructions, and test questions to use. An agent should answer questions for a particular topic and audience, not general questions across various domains. You can simplify your datasets by prejoining tables and removing unnecessary columns before adding data to an agent. As you add data to your agent, keep it tightly focused on the agent's defined purpose. Hide any columns that might be confusing or unimportant. See Hide or show relevant columns.\n\nAdd metadata and synonyms​\n\nYou can add column synonyms and custom descriptions to data in a Genie Agent. This metadata is scoped to your Genie Agent and does not overwrite metadata stored in Unity Catalog. Quality column descriptions an"
+        },
+        {
+          "matched_phrase": "Work within the 50 table limit",
+          "text": "ocused on a small amount of data is ideal, so limit the number of columns in your included tables.\n\nWork within the 50 table limit: Genie Agents support up to 50 tables, views, or metric views. If your data topic requires more than 50 tables, prejoin related tables into views or metric views before adding them to your agent. Metric views are particularly effective for Genie Agents because they pre-define metrics, dimensions, and aggregations. This approach helps you stay within the limit, simplifies your data model, and can improve Genie's response accuracy. See  Manage data objects for details on adding data objects to your agent.\n\nPlan to iterate: Start with a minimal setup for your agent, focusing on essential tables and basic instructio"
+        }
+      ]
+    },
+    {
+      "name": "snowflake-evaluation",
+      "url": "https://docs.snowflake.com/en/user-guide/snowflake-cortex/cortex-analyst-evaluations",
+      "verification": "Public text read by delegated researcher; quoted passages checked against saved text by primary agent.",
+      "snippets": [
+        {
+          "matched_phrase": "creates a temporary copy",
+          "text": "are used during evaluation¶\n\nWhen you select verified queries for an evaluation run, Cortex Analyst creates a temporary copy of your semantic view with those selected queries removed. Cortex Analyst then generates SQL using this temporary copy, which does not contain the evaluation queries. This prevents the evaluation queries from influencing SQL generation, ensuring that the evaluation measures how well Cortex Analyst can answer questions without relying on exact matches from verified queries.\n\nVerified queries that you do not select for evaluation remain in the temporary semantic view and continue to guide Cortex Analyst during the evaluation run, just as they would during normal usage.\n\nNote\nA verified query can either guide Cortex Anal"
+        },
+        {
+          "matched_phrase": "comparing the results",
+          "text": " SQL in general.\n\nEvaluations measure accuracy by executing the SQL generated by Cortex Analyst and comparing the results against your verified queries. Regression metrics are aggregated to track verified queries that were previously answered correctly but are now failing. In addition to these correctness metrics, latency is recorded to track the performance of queries. These metrics can be used to identify weaknesses and iteratively refine your semantic views to improve SQL accuracy while preventing regressions.\n\n\nAccess control requirements¶\n\nThe ability to run a Cortex Analyst evaluation requires a role with the following:\n\n\nThe DATABASE ROLE SNOWFLAKE.CORTEX_USER\n\nThe USE AI FUNCTIONS account-level privilege (or the per-function USE AI "
+        }
+      ]
+    },
+    {
+      "name": "snowflake-vqr",
+      "url": "https://docs.snowflake.com/en/user-guide/views-semantic/verified-query-repository",
+      "verification": "Public text read by delegated researcher; quoted passages checked against saved text by primary agent.",
+      "snippets": [
+        {
+          "matched_phrase": "Invalid or inaccurate queries",
+          "text": "tically correct and\nactually answer the posed questions; this is the essence of a “verified query.” Invalid or inaccurate queries can\nnegatively impact Cortex Analyst’s performance and accuracy.\n\nTip\nUse the open-source semantic model generator app, described in the next section, to help add verified queries to\nyour semantic model, without needing to concern yourself with SQL or YAML syntax.\n\n\nAdding verified queries using the semantic model generator¶\n\nSnowflake provides an open-source Streamlit app to help add verified queries to your model. To\ninstall and use this app, follow these instructions.\n\n\nClone the repository. Start by cloning the semantic-model-generator\nrepository.\n\nConfigure credentials and install the app. Follow the setup i"
+        },
+        {
+          "matched_phrase": "a collection of questions",
+          "text": "ed Query Repository (VQR) can help improve the accuracy and trustworthiness of results by\nproviding a collection of questions and corresponding SQL queries to answer them. Cortex Analyst then leverages\nrelevant SQL queries from the repository when answering similar questions. You can specify verified queries in your\nsemantic model YAML file.\n\nImportant\nVerified SQL queries must use the names of the logical tables and columns defined in the semantic model, not those\nin the underlying dataset. See the example query and its discussion\nfor more information.\n\nVerified queries are specified in the verified_queries section of the semantic model, as shown here.\nCopy codeverified_queries:\n\n# Verified Query 1\n- name:                         # A descr"
+        }
+      ]
+    }
+  ]
+}

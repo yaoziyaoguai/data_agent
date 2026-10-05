@@ -1,0 +1,128 @@
+{
+  "reviewer": "mvp_repair_review（未参与本轮实现的独立 adversarial 审查者）",
+  "conclusion": "passed",
+  "scope_sha256": "94b3f181f65dc5cabefd3bfb65240778d95edf2619ed5e2a5d1687bc4509228a",
+  "summary": "已按当前要求、模块契约、运行时边界和独立验收参考核对本轮R01–R06修复，以及审查补出的五处组合失败。本地AC01–AC07的适用检查范围通过，未发现未解决的阻断问题。启动配置只读取三个DeepSeek字段并清除遗留预填变量，聊天与预填复用同一个trial；目录轮询保留分页游标并直接刷新当前对象；结果唤醒按预算持久身份读取原消息时钟，内部幂等键与合法客户端消息隔离；检索达到回源上限明确表达覆盖不足。记忆保存的明确失败持久拒绝工具，未知回执仍按原operation查证；个人修改和停用后的SDK恢复不能复活旧依据。Pi继续是唯一Agent循环，原生压缩调用沿用持久预算。独立审查亲自执行无网络、无数据库的纯探针，并核对实现者运行的完整日志与实际退出结果；没有重复构建、运行数据库或浏览器，没有读取真实凭据或调用官方模型。首轮整套回归退出2的记录保留，后续受影响检查的完整退出0分别引用。当前完整I2-MVP保持active，AC08真实模型业务及预填质量、AC09原I3范围未完成；本记录不关闭整体MVP、不生成完成收据。",
+  "reviewed_scope": {
+    "increment": "I2-MVP",
+    "local_acceptance_ids": [
+      "I2-MVP-AC01",
+      "I2-MVP-AC02",
+      "I2-MVP-AC03",
+      "I2-MVP-AC04",
+      "I2-MVP-AC05",
+      "I2-MVP-AC06",
+      "I2-MVP-AC07"
+    ],
+    "overall_mvp_complete": false,
+    "official_requests_in_this_repair": 0,
+    "fingerprint_method": "scripts/check_delivery.py: read_delivery、fingerprint(for_review=True)、review_scope；审查者独立计算，排除本记录及review指针",
+    "input_file_count": 226,
+    "depth": "deep（会话、权限、持久副作用和跨进程状态组合）"
+  },
+  "resolved_review_findings": [
+    {
+      "id": "AR01",
+      "scenario": "遗留.env或父进程预填配置覆盖共用profile/trial，导致聊天和预填分账。",
+      "resolution": "凭据白名单及清除继承配置；正式启动聊天与两次预填共四调用、同trial、未知预留0。"
+    },
+    {
+      "id": "AR02",
+      "scenario": "两秒首页轮询重置语义目录游标，用户停顿后无法进入第三页；首页外对象不刷新。",
+      "resolution": "首次初始化游标与后续合并分开；当前及展开对象周期直读；超过200对象和外部文档改版浏览器反例通过。"
+    },
+    {
+      "id": "AR03",
+      "scenario": "合法result-客户端消息ID被当作内部结果排除，原请求时钟无法定位，查询终态回滚。",
+      "resolution": "M08从预算读原message_id，M01按明确身份取持久时钟；合法前缀、跨日恢复及结果唤醒反例通过。"
+    },
+    {
+      "id": "AR04",
+      "scenario": "首1000个检索候选都失效时返回空，模型把未搜索到误解为不存在。",
+      "resolution": "两通道取1001候选并有界回源；SearchCoverage表达candidate_limit；页面和Pi工具均收到覆盖不足。"
+    },
+    {
+      "id": "AR05",
+      "scenario": "另一会话使用合法result-<query_id>客户端键后撤回，残留幂等记录阻断原查询结果唤醒。",
+      "resolution": "内部结果键改server:query-result:<query_id>，客户端契约拒绝冒号；原合法result-前缀保留。反例先真实失败，修复后同查询终态、单个结果事件、原预算及时钟通过。"
+    }
+  ],
+  "reviewer_executed_probes": [
+    {
+      "source": "tests/mvp/check-business-evaluator.mjs",
+      "result": "13个独立参考SQL与4个错误反例通过；未调用模型或数据库服务。"
+    },
+    {
+      "source": "tests/mvp/check-conversation-timeline.mjs",
+      "result": "1250事件合并、重叠去重、跨页最终回答替代片段和恢复隐藏旧尝试四项通过。"
+    },
+    {
+      "source": "scripts/development.py: read_model_credentials",
+      "result": "使用合成配置对象，六个配置仅返回三个DeepSeek字段；未读取真实.env。"
+    },
+    {
+      "source": "packages/contracts/schema.json: ModelProfile",
+      "result": "AJV接受data=160和task=6，拒绝data=201与task=7。"
+    },
+    {
+      "source": "packages/contracts/schema.json: MessageInput",
+      "result": "合法result-消息ID通过；server:query-result:<UUID>被拒；内部UUID键长56，未超存储64字符。"
+    },
+    {
+      "source": "packages/contracts/schema.json: 记忆及语义操作",
+      "result": "记忆修订/停用合法参数及100000字正文通过，两个错误记忆参数形状拒绝。"
+    }
+  ],
+  "implementation_evidence_reviewed": [
+    {
+      "path": ".local/checks/mvp-repair-final.log",
+      "process_exit_code": 2,
+      "use": "只采用实际通过的知识、生命周期、授权、预填、检索反例等对应段落；旧runtime标题定位超时，整轮不当作成功。"
+    },
+    {
+      "path": ".local/checks/mvp-repair-final-remaining.log",
+      "process_exit_code": 0,
+      "use": "原运行链路、三个实际进程退出恢复、事务锁边界和7项架构反例；Pi续接/原生压缩（16回环调用、2压缩、280短历史，最大64543字节）、启动、业务、204项材料/24项离线核算及15项交付检查器。退出由实现者确认，审查者核对完整日志。"
+    },
+    {
+      "path": ".local/checks/mvp-result-namespace-final.log",
+      "process_exit_code": 0,
+      "use": "最终代码检查、94项跨语言契约、8项查询流程、6项查询边界、两项时钟及键碰撞反例、独立SQL核算和当前16场景S/B/P；综合查询与预填23调用、未知预留0。退出由实现者确认，审查者核对完整日志。"
+    },
+    {
+      "path": ".local/checks/mvp-repair-browser-startup-final.log",
+      "process_exit_code": 0,
+      "use": "最终8场景正式浏览器、4时间线、5历史浏览器及正式启动四调用共用trial；移动截图等真实Skill/人工表值加载并禁动画，横向布局、结果、身份和错误断言保留。退出由实现者确认，审查者核对完整日志及测试源码。"
+    },
+    {
+      "path": ".local/checks/mvp-business-acceptance.json",
+      "use": "16个S/B/P场景、三个有界本地fixture共112回环请求、0官方请求、未知预留0。官方模式必须保持传入同一持久trial/database，不重置补额；质量标签保留protocol_passed_quality_unverified。"
+    },
+    {
+      "path": ".local/checks/mvp-migration-status.json",
+      "use": "实现者只读核对日常开发库011/012实际已应用，SHA384校验和与源码一致；审查者核对证据和新增012源码，没有操作数据库。"
+    },
+    {
+      "path": ".local/checks/mvp-result-key-counterexample.log",
+      "process_exit_code": 1,
+      "use": "保留AR05修复前失败，不能作为通过证据；最终request-clock反例验证修复。"
+    }
+  ],
+  "remaining_work": [
+    {
+      "acceptance_id": "I2-MVP-AC08",
+      "status": "unverified",
+      "reason": "本轮0新增官方请求，原小样预算到期。真实模型取数、分析、纠错、引用及P01–P05语义质量须获新费用/调用授权并独立审查。"
+    },
+    {
+      "acceptance_id": "I2-MVP-AC09",
+      "status": "unimplemented_or_unverified",
+      "reason": "全目录通用导入、Embedding/Milvus组合检索、千表召回/延迟/成本、真实Datasight和认证及获准用户试用保留原I3范围。"
+    }
+  ],
+  "testing_limits": [
+    "回环固定策略只验证宿主协议与业务边界；13个参考SQL和错误反例不证明真实模型能生成正确SQL。",
+    "审查者没有运行构建、MySQL、浏览器或官方模型；集成运行由实现者完成，审查者核对源码、独立预期、完整日志和退出报告。",
+    "范围指纹是普通本地证据，不能防同权限篡改或自动约束后续会话。"
+  ]
+}

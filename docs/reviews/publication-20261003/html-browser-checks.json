@@ -1,0 +1,53 @@
+{
+  "checked_at_utc": "2026-10-02T16:34:28.522Z",
+  "environment": {
+    "browser": "151.0.7922.34",
+    "mode": "headless, independent temporary browser contexts"
+  },
+  "scope": "6 HTML fragments loaded directly from files; visible buttons and selects exercised, no host widget API/theme integration or Agent behavior tested",
+  "status": "passed",
+  "pages": [
+    {
+      "file": "docs/visualizations/data-agent-architecture.html",
+      "sha256": "ca5f5cb66c6325e3f40286f522ed071fb54c4b02bc0648c7c6cc013af5566b7e",
+      "buttons_clicked": 3,
+      "selects_changed": 0,
+      "errors": []
+    },
+    {
+      "file": "docs/visualizations/data-agent-changes-and-failures.html",
+      "sha256": "db917791bd062e869982082987adbeab3a961548ca3f03a8c9e047ac59f17343",
+      "buttons_clicked": 0,
+      "selects_changed": 1,
+      "errors": []
+    },
+    {
+      "file": "docs/visualizations/data-agent-overall.html",
+      "sha256": "36586c40da9a14cc82df1801bb792c343b2ed0e46336632a18d497cd5966d85b",
+      "buttons_clicked": 16,
+      "selects_changed": 1,
+      "errors": []
+    },
+    {
+      "file": "docs/visualizations/data-agent-query-journey.html",
+      "sha256": "e0dc5b6d3e46e3c6731909e284b481b81a5c54d9d0f916671f92bbb13ae1995c",
+      "buttons_clicked": 7,
+      "selects_changed": 1,
+      "errors": []
+    },
+    {
+      "file": "docs/visualizations/data-agent-semantic-content.html",
+      "sha256": "0d8827f04d1a65e82ba2159fc4842af42b6694b4d4ae56e06b5262eb3210b0c7",
+      "buttons_clicked": 6,
+      "selects_changed": 0,
+      "errors": []
+    },
+    {
+      "file": "docs/visualizations/data-agent-technology-and-scope.html",
+      "sha256": "87d42eccfba8193fb0759b00636c1f2fbc89743214b15f878c6f48a073a3d2eb",
+      "buttons_clicked": 5,
+      "selects_changed": 0,
+      "errors": []
+    }
+  ]
+}

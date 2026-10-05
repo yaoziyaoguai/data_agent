@@ -1,0 +1,186 @@
+{
+  "reviewer": "主审与独立查询审查、独立 Pi 运行审查；审查者未修改本轮业务实现",
+  "conclusion": "changes_requested",
+  "scope_sha256": "94b3f181f65dc5cabefd3bfb65240778d95edf2619ed5e2a5d1687bc4509228a",
+  "summary": "对原需求、模块契约、AGENTS 和当前源码独立复核，确认9项实现问题（3项P1、6项P2）。上一轮226文件范围指纹与当前一致，本次反例因此推翻此前本地范围无未解决问题的结论。主审重跑真实桥接/Pi SDK的两个内存探针、原Platform的内存SQLite探针、94组JS契约、生成类型一致性和7项架构反例。完整静态路径与探针范围分别注明，不冒称已执行MySQL或真实模型。整体I2-MVP维持active、review pending、evidence null。",
+  "report": "docs/reviews/mvp-independent-audit-20261004.md",
+  "reviewed_scope": {
+    "increment": "I2-MVP",
+    "input_file_count": 226,
+    "overall_mvp_complete": false,
+    "previous_review": "docs/reviews/mvp-repair-20261004.json",
+    "previous_scope_matches": true
+  },
+  "findings": [
+    {
+      "id": "IA01",
+      "priority": "P1",
+      "title": "仅修订 SQL 后旧草稿仍可确认执行",
+      "location": {
+        "path": "crates/data-agent/src/modules/queries/store.rs",
+        "line": 55
+      },
+      "requirements": [
+        "C04",
+        "C05"
+      ],
+      "evidence_kind": "static_call_chain",
+      "status": "open"
+    },
+    {
+      "id": "IA02",
+      "priority": "P1",
+      "title": "清除人工文档覆盖后保存了不符合契约的空值",
+      "location": {
+        "path": "crates/data-agent/src/modules/knowledge/store.rs",
+        "line": 175
+      },
+      "requirements": [
+        "D01",
+        "D06",
+        "C07"
+      ],
+      "evidence_kind": "static_call_chain_and_contract_probe",
+      "status": "open"
+    },
+    {
+      "id": "IA03",
+      "priority": "P1",
+      "title": "失效依据可经 get_query 的历史 SQL 和说明回流",
+      "location": {
+        "path": "crates/data-agent/src/use_cases/data_tools.rs",
+        "line": 365
+      },
+      "requirements": [
+        "C02"
+      ],
+      "evidence_kind": "static_call_chain",
+      "status": "open"
+    },
+    {
+      "id": "IA04",
+      "priority": "P2",
+      "title": "多工具恢复再次中断后漏接未完成调用",
+      "location": {
+        "path": "apps/agent/session/deliver.ts",
+        "line": 42
+      },
+      "requirements": [
+        "C05",
+        "A02"
+      ],
+      "evidence_kind": "actual_bridge_and_sdk_in_memory_probe",
+      "status": "open"
+    },
+    {
+      "id": "IA05",
+      "priority": "P2",
+      "title": "恢复分支绕过 Pi 的溢出压缩处理",
+      "location": {
+        "path": "apps/agent/session/deliver.ts",
+        "line": 209
+      },
+      "requirements": [
+        "C01",
+        "C05"
+      ],
+      "evidence_kind": "actual_bridge_and_sdk_in_memory_probe",
+      "status": "open"
+    },
+    {
+      "id": "IA06",
+      "priority": "P2",
+      "title": "平台明确拒绝被当成未知回执并无限重提",
+      "location": {
+        "path": "crates/data-agent/src/use_cases/query_workflow.rs",
+        "line": 140
+      },
+      "requirements": [
+        "C04",
+        "C05"
+      ],
+      "evidence_kind": "platform_memory_probe_and_static_worker_path",
+      "status": "open"
+    },
+    {
+      "id": "IA07",
+      "priority": "P2",
+      "title": "SQL 执行错误诊断被丢弃",
+      "location": {
+        "path": "apps/platform-mock/server.py",
+        "line": 82
+      },
+      "requirements": [
+        "C03",
+        "D15"
+      ],
+      "evidence_kind": "actual_platform_memory_probe",
+      "status": "open"
+    },
+    {
+      "id": "IA08",
+      "priority": "P2",
+      "title": "删除会话后原模型调用的可靠用量无法结算",
+      "location": {
+        "path": "crates/data-agent/src/use_cases/model_calls.rs",
+        "line": 64
+      },
+      "requirements": [
+        "D03",
+        "C05"
+      ],
+      "evidence_kind": "static_call_chain",
+      "status": "open"
+    },
+    {
+      "id": "IA09",
+      "priority": "P2",
+      "title": "Skill 选择操作 ID 冲突返回虚假成功",
+      "location": {
+        "path": "crates/data-agent/src/modules/assets/store.rs",
+        "line": 151
+      },
+      "requirements": [
+        "D12",
+        "C05"
+      ],
+      "evidence_kind": "static_call_chain_and_unique_constraints",
+      "status": "open"
+    }
+  ],
+  "verification": {
+    "delivery_metadata": "make verify-delivery 完整退出0；15项检查器测试通过，业务仍待修复",
+    "architecture_checks": "passed; 7 checker cases",
+    "generated_contracts": "passed",
+    "javascript_contract_cases": 94,
+    "recovery_probe": "second-call remains registered after retry",
+    "compaction_probe": {
+      "normal": {
+        "generation_calls": 2,
+        "summary_calls": 1,
+        "committed": true
+      },
+      "resumed": {
+        "generation_calls": 1,
+        "summary_calls": 0,
+        "committed": false,
+        "error": "model_run_failed"
+      }
+    },
+    "platform_probe": "explicit sql_not_supported then not_available; execution failure omits diagnostic",
+    "raw_probes": ".local/checks/mvp-independent-audit-20261004-probes.json"
+  },
+  "limits": {
+    "mysql_run": false,
+    "browser_run": false,
+    "rust_rebuild": false,
+    "official_model_requests": 0,
+    "credential_reads": false,
+    "business_code_changes": false
+  },
+  "remaining_work": [
+    "IA01–IA09与对应回归测试",
+    "AC08真实模型业务与预填质量；新额度未获准",
+    "AC09原I3范围：全目录导入、组合检索、千表实测、真实平台/认证及获准试用"
+  ]
+}

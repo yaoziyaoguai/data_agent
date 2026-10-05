@@ -1,0 +1,130 @@
+<style>
+#da-journey { display:grid; gap:16px; }
+#da-journey .step-heading { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:8px; }
+#da-journey h3 { margin:0; }
+#da-journey pre { white-space:pre-wrap; overflow-wrap:anywhere; margin:0; }
+#da-journey .sample { display:grid; gap:8px; }
+#da-journey .sample[hidden] { display:none; }
+</style>
+<div id="da-journey">
+  <p class="text-small text-muted">公开教学版 · 2026-10-03 · 全部业务样例均为虚构。当前决定与实现进度见 <a href="../semantic-retrieval-design.md">实施基线</a>；本页不代表组件已运行。</p>
+  <div class="viz-controls"><label class="form-label">问题场景<select class="form-select" data-question aria-label="选择查询场景"><option value="uv">计算 2026 年 1 月支付客户数</option><option value="followup">追问：再按渠道拆开看</option><option value="rate">计算退款率，需要澄清分母</option></select></label></div>
+  <div class="viz-row"><span class="viz-badge">方案演示 · 未执行业务 SQL</span><span class="text-small">例子中的时间、过滤条件和数值为演示设定</span></div>
+  <div class="viz-controls" role="group" aria-label="查询流程步骤">
+    <button type="button" class="btn" data-step="0" aria-pressed="true">1 提问</button>
+    <button type="button" class="btn" data-step="1" aria-pressed="false">2 整理条件</button>
+    <button type="button" class="btn" data-step="2" aria-pressed="false">3 找依据</button>
+    <button type="button" class="btn" data-step="3" aria-pressed="false">4 检查缺项</button>
+    <button type="button" class="btn" data-step="4" aria-pressed="false">5 写并检查 SQL</button>
+    <button type="button" class="btn" data-step="5" aria-pressed="false">6 平台执行</button>
+    <button type="button" class="btn" data-step="6" aria-pressed="false">7 返回与追问</button>
+  </div>
+  <div class="step-heading"><h3 data-title>1 · 提问入口</h3><span class="viz-badge" data-status>保留原始问题</span></div>
+  <table class="table table-sm" aria-label="当前步骤的输入和行为"><tbody data-body><tr><th scope="row">问题</th><td>计算 2026 年 1 月支付客户数。</td></tr></tbody></table>
+  <div class="sample" data-sql-panel hidden><span class="text-small">SQL 结构示意 · 需用户确认后才能查询</span><pre><code data-sql></code></pre></div>
+  <div class="sample" data-sample-panel hidden>
+    <h3>独立三行教学样本（非完整验收数据）</h3>
+    <table class="table table-sm" aria-label="构造的演示数据"><thead><tr><th>日期</th><th>客户</th><th>订单</th><th>渠道</th></tr></thead><tbody><tr><td>1 月 1 日</td><td>C001</td><td>O001</td><td>web</td></tr><tr><td>1 月 1 日</td><td>C002</td><td>O002</td><td>web</td></tr><tr><td>1 月 2 日</td><td>C001</td><td>O003</td><td>app</td></tr></tbody></table>
+    <div class="viz-row" aria-live="polite"><span data-sample-result>三行教学样本：整月支付客户数 = 2</span></div>
+  </div>
+  <div class="text-small" aria-live="polite" data-current>当前步骤：1 / 7</div>
+</div>
+<script>
+(() => {
+  const root=document.getElementById('da-journey');
+  const choices=['uv','followup','rate']; let question='uv';let step=0;
+  function stepsFor(kind){
+    const follow=kind==='followup';
+    const steps=[
+      {title:'1 · 提问入口',status:'原模块 ④',rows:[
+        ['用户输入',follow?'再按渠道拆开看。':'计算 2026 年 1 月支付客户数。'],
+        ['系统记下','原话、提问时间、用户身份和当前会话；本轮时间固定为 2026 年 1 月，不受电脑日期影响。'],
+        ['任务类型','既需要生成 SQL，也需要通过平台取数并解释；仅解释字段含义时可直接走知识回答。'],
+        ['仍需明确','确认是支付客户而非注册客户，采用支付时间及非测试规则；已有有效上下文能提供的，不重复询问。']
+      ]},
+      {title:'2 · 整理本次计算条件',status:'原模块 ⑤ · 审计补强',rows:[
+        ['统计对象','支付客户；在整月范围按非空 customer_id 去重。'],
+        ['演示时间','UTC；2026-01-01 00:00 ≤ paid_at < 2026-02-01 00:00。这是虚构样例的明确时间约定。'],
+        ['分组',follow?'增加 channel 分组，时间、非测试过滤、支付条件和统计对象与上一问一致。':'先计算整月总体支付客户数，不按渠道分组。'],
+        ['演示过滤','is_test=0，paid_amount_cents>0，customer_id 非空；采用公开业务指南的默认规则。'],
+        ['计算顺序','确定支付时间与过滤 → 在整月范围去重 → 按要求分组；不累加每日去重客户数。'],
+        ['保存下来','本轮条件、使用的语义版本、尚未解决的问题；后面写 SQL 和解释结果共用这些条件。']
+      ]},
+      {title:'3 · 找相关对象，再补齐依据',status:'原模块 ③ ↔ ⑤',rows:[
+        ['第一步定位','表名/字段名精确查找，结合别名、关键词和向量；在用户允许访问的范围内找候选。'],
+        ['逐项需要','订单行表、客户标识、支付时间、测试订单规则；追问再补渠道含义。'],
+        ['选表理由','数据时间范围和粒度能满足本题，所需字段存在；记录选择与排除相似候选的理由。'],
+        ['补充关联','单表已具备条件时直接使用；涉及客户标签时读取完整一对多关系，避免重复金额。'],
+        ['使用前核对','回 MySQL 读取有效内容，核对权限、来源、版本与适用条件；旧向量文本不能直接当答案。'],
+        ['案例的作用','有已验证 SQL 则参考适用部分；没有案例也可以按充分依据生成新查询。']
+      ]},
+      {title:'4 · 判断现在能走到哪一步',status:'原模块 ⑤ · 条件按题检查',rows:[
+        ['进入 SQL 的条件','本题所需定义与条件齐全、无未解决的关键冲突；“齐全”只允许进入检查流程。'],
+        ['业务有多种含义','提出具体选择，例如退款率按订单数还是按金额；不要自动猜分母。'],
+        ['资料确实不足','列出缺上游 SQL、枚举映射或关联依据等具体缺项；已有事实仍可解释。'],
+        ['服务出错','明确模型/检索/接口故障，或者注明可用的降级路径；不能说成业务没有数据。'],
+        ['本例后续','假设演示条件和必要依据已经核实，继续生成 SQL；没有要求其他无关表字段也先人工确认。']
+      ]},
+      {title:'5 · 生成并分层检查 SQL',status:'原模块 ⑥ · 检查不能只靠模型',rows:[
+        ['生成策略','标准指标按规则组织；复杂取数结合语义与适用案例。跨表、子查询、去重、聚合、窗口都在 MVP 范围。'],
+        ['语法和平台','检查 SQLite 演示方言、字段、函数与类型；后续平台的分区与方言单独核实。'],
+        ['只读与权限','执行允许范围由后端和平台检查，平台落实行列权限；不执行资料中的生产写入或删除 SQL。'],
+        ['计算是否写偏','核对整月去重、分组、过滤、时间、关联顺序；不能为了修复报错而擅改这些条件。'],
+        ['输出与状态','给用户 SQL、条件和检查结果；等待用户确认当前版本后才提交，补充信息后重新展示。']
+      ]},
+      {title:'6 · 交给平台执行并跟踪',status:'原模块 ⑦ · 审计补强',rows:[
+        ['提交前','核对已确认的草稿版本，保存任务、SQL、身份和请求标识；执行前再次检查权限与关键变更。'],
+        ['提交后','取得平台查询标识，跟踪排队、运行、失败或成功；平台接口契约仍待核实。'],
+        ['断网或超时','先查询平台状态；无法确定是否提交成功时显示“执行状态未知”，不盲目重提。'],
+        ['点击取消','记录取消请求，等待平台终态；取消和成功同时发生时以真实状态为准。'],
+        ['获取结果','跟踪每页/每块是否拿全、是否被限制截断，读取字段类型以及平台可提供的数据到齐信息。'],
+        ['控制成本','扫描、耗时、并发、模型调用和重试都有预算；具体数值用平台能力与样本确定。']
+      ]},
+      {title:'7 · 返回结果并接住追问',status:'原模块 ⑧ → ④',rows:[
+        ['返回内容','数据 + SQL + 本次口径 + 所用语义版本与依据 + 数据范围和完整性状态。'],
+        ['数值从哪里来','由 SQL 或确定性程序计算；模型负责表达、总结，说明观察到的变化。'],
+        ['构造样本的答案',follow?'三行教学样本：web 有 2 名客户，app 有 1 名；整月总体去重仍为 2，不能把渠道数相加。':'三行教学样本：两天各有 2 和 1 名支付客户，整段去重为 2；完整验收数据另见 sources。'],
+        ['结果限制','预览行不代表全量；数据未到齐不解释成下降；三行教学样本不代表完整验收数据。'],
+        ['后续追问','保留未改动的时间、过滤和去重条件；新分组重新计算。若定义已变更，先指出再核对。'],
+        ['反馈和恢复','解释失败可基于已有结果重试解释；用户指出错误时关联任务证据，修订后重测。']
+      ]}
+    ];
+    if(kind==='rate'){
+      steps[0]={title:'1 · 提问入口',status:'原模块 ④',rows:[['用户输入','计算 2026 年 1 月的退款率。'],['已经给定','演示中月份与 UTC 时区明确。'],['待查内容','支付、退款、订单粒度、分子分母、测试过滤和时间归属。']]};
+      steps[1]={title:'2 · 整理本次条件',status:'原模块 ⑤',rows:[['目标','一个比率，需要明确分子和分母。'],['已知','累计退款归属原支付月份，默认排除测试订单。'],['还不清楚','要按退款订单数/已付订单数，还是退款金额/支付金额？'],['不得自动补成','对订单行退款标记直接求平均，称作订单退款率。']]};
+      steps[2]={title:'3 · 找到两种有依据的定义',status:'原模块 ③ ↔ ⑤',rows:[['找到的事实','订单行包含支付和累计退款金额；一个订单可以有多行。'],['两种定义','业务指南分别定义订单退款率与金额退款率；两者分子分母不同。'],['已有依据','公开 schema、ETL 和业务指南；独立参考答案不进入检索。'],['检索结论','可以说明两种计算方式，但需要用户选择本次分析目的。']]};
+      steps[3]={title:'4 · 澄清口径后继续',status:'等待用户回复',rows:[['具体澄清内容','本次关注多少订单发生退款，还是支付金额中退回多少？'],['可以先回答','解释两种比率、订单行与订单区别，以及退款的时间归属。'],['什么条件下继续','用户选定本次口径，核对条件，再生成 SQL 并展示确认。'],['答案的作用范围','选择作用于本次任务，不自动改写共享指标。'],['仍缺资料时','展示具体缺口；不以反复检索代替必要的业务选择。']]};
+    }
+    return steps;
+  }
+  function render(){
+    if(!choices.includes(question)) question='uv';
+    const max=question==='rate'?3:6;step=Math.max(0,Math.min(Number.isInteger(step)?step:0,max));
+    root.querySelector('[data-question]').value=question;
+    const data=stepsFor(question)[step];root.querySelector('[data-title]').textContent=data.title;root.querySelector('[data-status]').textContent=data.status;
+    root.querySelectorAll('[data-step]').forEach(b=>{const n=Number(b.dataset.step);b.disabled=n>max;b.setAttribute('aria-pressed',String(n===step));});
+    const body=root.querySelector('[data-body]');body.replaceChildren();
+    data.rows.forEach(([label,value])=>{const tr=document.createElement('tr');const th=document.createElement('th');th.scope='row';th.textContent=label;const td=document.createElement('td');td.textContent=value;tr.append(th,td);body.append(tr);});
+    root.querySelector('[data-sql-panel]').hidden=step!==4;
+    const grouped=question==='followup';
+    root.querySelector('[data-sql]').textContent=[
+      'SELECT '+(grouped?'channel, ':'')+'COUNT(DISTINCT customer_id) AS paying_customers',
+      'FROM demo_order_detail',
+      "WHERE paid_at >= '2026-01-01T00:00:00Z'",
+      "  AND paid_at < '2026-02-01T00:00:00Z'",
+      '  AND is_test = 0 AND paid_amount_cents > 0',
+      '  AND customer_id IS NOT NULL',
+      grouped?'GROUP BY channel;':';'
+    ].join(String.fromCharCode(10));
+    root.querySelector('[data-sample-panel]').hidden=step!==6;
+    root.querySelector('[data-sample-result]').textContent=question==='followup'?'三行样本：web = 2 名，app = 1 名；总体去重 = 2 名。':'三行样本：客户 C001 跨日重复支付，只计一次；总体为 2 名。';
+    root.querySelector('[data-current]').textContent='当前步骤：'+(step+1)+' / 7'+(question==='rate'?'；关键口径未定，后续计算暂停。':'；全部为流程与样本演示。');
+  }
+  function save(){if(window.openai?.setWidgetState)window.openai.setWidgetState({modelContent:{view:'一次提问的完整过程',question,step:step+1},privateContent:{question,step}}).catch(()=>{});}
+  function restore(state){question=state?.privateContent?.question||'uv';step=state?.privateContent?.step??0;render();}
+  root.querySelector('[data-question]').addEventListener('change',e=>{question=e.target.value;step=0;render();save();});
+  root.querySelectorAll('[data-step]').forEach(b=>b.addEventListener('click',()=>{step=Number(b.dataset.step);render();save();}));
+  window.addEventListener('openai:set_globals',e=>{if(e.detail?.globals?.widgetState)restore(e.detail.globals.widgetState);});
+  restore(window.openai?.widgetState);
+})();
+</script>

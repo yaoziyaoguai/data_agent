@@ -1,0 +1,90 @@
+<style>
+#da-scope { display:grid; gap:16px; }
+#da-scope .flow { display:flex; flex-wrap:wrap; align-items:center; gap:8px; }
+#da-scope .arrow { color:var(--muted-foreground); }
+#da-scope .heading { display:flex; flex-wrap:wrap; align-items:center; gap:8px; justify-content:space-between; }
+#da-scope h3 { margin:0; }
+#da-scope .row-note { margin-top:6px; }
+</style>
+<div id="da-scope">
+  <p class="text-small text-muted">公开教学版 · 2026-10-03 · 全部业务样例均为虚构。当前决定与实现进度见 <a href="../semantic-retrieval-design.md">实施基线</a>；本页不代表组件已运行。</p>
+  <div class="viz-controls" role="group" aria-label="技术与范围的查看角度">
+    <button type="button" class="btn" data-view="tech" aria-pressed="true">技术与存储</button>
+    <button type="button" class="btn" data-view="contracts" aria-pressed="false">模块之间传什么</button>
+    <button type="button" class="btn" data-view="mvp" aria-pressed="false">MVP 与后续</button>
+    <button type="button" class="btn" data-view="verification" aria-pressed="false">怎样验收</button>
+    <button type="button" class="btn" data-view="decisions" aria-pressed="false">已定与待定</button>
+  </div>
+  <div class="flow" data-flow aria-label="技术调用关系"><span>React 页面</span><span class="arrow" aria-hidden="true">→</span><span>Rust API / 后台任务</span><span class="arrow" aria-hidden="true">→</span><span>MySQL · 检索 · 模型 · 数据平台适配器</span></div>
+  <div class="heading"><h3 data-title>每种技术各自负责什么</h3><span class="viz-badge" data-status>Rust 已选 · 其余细节按状态区分</span></div>
+  <div class="table-responsive"><table class="table table-sm" aria-label="方案细节"><thead><tr><th data-col-one>位置</th><th data-col-two>职责与保存内容</th></tr></thead><tbody data-body>
+    <tr><th scope="row">Rust 后端</th><td>控制步骤、权限核对、任务状态、SQL 检查与平台接入。当前状态：语言已选。</td></tr>
+  </tbody></table></div>
+  <div class="text-small" aria-live="polite" data-current>当前查看：技术与存储</div>
+</div>
+<script>
+(() => {
+  const root=document.getElementById('da-scope');
+  const views={
+    tech:{title:'每种技术各自负责什么',status:'Rust 已选 · 其余细节按状态区分',columns:['位置','职责与保存内容','当前状态'],flow:['React 页面','Rust API / 后台任务','MySQL · 检索 · 模型 · 数据平台适配器'],rows:[
+      ['React + TypeScript','提问、澄清、SQL/结果、状态与语义维护页面。当前原型是原生 HTML/JS。','前端方向；集成方式待核实'],
+      ['Rust API','接收请求、组织流程、核对规则、访问存储和平台；模型提议的下一步由代码控制。','语言已选；Axum + Tokio 为推荐'],
+      ['Rust 后台任务','同步资料、生成预填、更新索引、跟踪长查询；同一项目分进程，任务写入 MySQL 后可恢复。','统一交付已定；租约与恢复契约待实现'],
+      ['MySQL','正式保存六类语义、原始快照、依据、版本、人工修改、会话、本次条件、SQL、任务与验证记录。','正式存储已定；逻辑关系已设计，迁移待实现'],
+      ['Zilliz / Milvus','保存对象标识、范围、版本、检索文本与向量，用于找候选。正式含义回 MySQL 读取；索引可以重建。','用户偏好；托管/自建、索引配置待定'],
+      ['DeepSeek','辅助语义解释、理解问题、规划、SQL 草稿和结果表达。实际数值由查询引擎或确定性程序计算。','用户偏好；版本、部署、接口待定'],
+      ['向量化模型','把文字转为可比较的数字表示。问题与知识使用配套模型、版本和维度；与生成模型分开选择。','尚未选定；要测中文与英文标识'],
+      ['数据平台适配器 / 原数仓','已有元数据、血缘、节点与 SQL；继续保管业务明细。优先复用查询、权限、状态、结果与取消能力。','当前为虚构资料与 mock；具体平台接口待核实']
+    ]},
+    contracts:{title:'四组信息把八个模块接起来',status:'实施契约见设计第 18–19 节',columns:['模块之间','至少交付什么','用来检查什么'],flow:['本次条件','必要依据','查询任务','可解释的结果'],rows:[
+      ['理解 → SQL / 解释','任务类型、统计对象/键、时间字段/时区/边界、分组、过滤、去重/关联/窗口顺序；适用时补分子分母、空值和维度时点。','所有步骤按同一份本次条件工作'],
+      ['检索 → 规划 / SQL','选中的表字段、指标规则、关联、案例、来源版本、适用范围、必需依据清单及缺项。','找到相关表之后，是否真的具备计算条件'],
+      ['执行 → 页面 / 后台','本地任务标识、用户身份、SQL 与版本、请求标识、平台查询标识、状态、错误、取消与重试记录。','断网后能否查证恢复，是否重复提交'],
+      ['平台 → 分析 / 页面','结果标识、字段类型/单位、分页/截断状态、取回范围、查询时间，以及可用的数据版本和到齐依据。','拿到了什么，能否做完整期间结论'],
+      ['共同约束','按当前权限读取；保留版本和证据；错误阶段可定位；缺信息有明确状态；预算和重试有限。','可解释、可追踪、可恢复']
+    ]},
+    mvp:{title:'第一版的基础与后续范围',status:'18 项选择已确认 · 实际行为待验证',columns:['类别','范围','验收关注'],flow:['全空间资产可发现','按问题补齐依据','虚构样例先验证，再接真实平台'],rows:[
+      ['MVP · 查懂数据','解释表、字段和指标，给来源与冲突；缺口可以明确说明或澄清。','找到适用依据；不能按字段名编造含义'],
+      ['MVP · 复杂 SQL','多表、子查询、聚合、去重、窗口；查看 SQL、时间、过滤、关联和检查结果。','既检查能执行，也检查是否符合口径'],
+      ['MVP · 取数与基本分析','平台只读执行、汇总、趋势、分组对比和追问；清楚的查询/取消/失败/结果状态。','实际数据与同范围参考结果一致'],
+      ['MVP · 维护语义','预填、人工修改保护、版本与依据、源变化复核、修改生效和索引更新。','修订后相关查询采用正确的新规则'],
+      ['贯穿第一版','身份与数据传播边界、持久任务、失联恢复、结果完整与到齐、有限预算、反馈及数值反例。','不能用综合正确率掩盖关键错误'],
+      ['样本后再定','向量模型、候选数量、中文分词/关键词方案、融合参数、是否额外重排、超时和并发数值。','比较基线与改进，记录耗时和成本'],
+      ['后续扩展','复杂自动归因、主动监控、长报告、自动吸收反馈、复杂缓存；其他技术按实际问题引入。','有需求和证据后再安排'],
+      ['当前无需作为前提','千张表逐项人工认证、多 Agent、图数据库、微服务、大型语义计算引擎、微调。','全空间仍是产品范围，样本集仅用于验证']
+    ]},
+    verification:{title:'用什么证据判断这套方案好用',status:'已有 20 个场景 · 全部尚待执行',columns:['验证对象','具体检查','当前证据'],flow:['原文与规则','小数据反例','故障模拟','真实接入与规模'],rows:[
+      ['已有原型','完全虚构的订单行、支付、客户与标签资料；保留编辑、搜索、证据和本机保存演示。','公开样例已替换；页面与真实接入需分别验证'],
+      ['解释与计算 · E01–E14','零支付解释、整月客户去重、退款率分母、支付月归属、当前地区、订单行粒度和标签关联放大。','虚构资料与参考查询分别保存；模型效果待测'],
+      ['会话与控制 · E15–E20','相似表、跨域同名、追问保留条件、语义更新、旧索引、无权限、服务故障与资料缺失。','案例已设计；需构造条件并执行'],
+      ['审计补充反例','跨日重复客户、关联一对多、提交回执丢失、取消竞态、结果缺页、未到齐、零分母、大整数、编辑冲突。','需补参考结果与可观察预期'],
+      ['评价分开记录','必需依据是否找齐、口径/数值是否正确、该澄清时是否澄清、错误拒答、覆盖范围、耗时与成本。','不能仅比较 SQL 文本或让模型给总分'],
+      ['避免记住答案','检索中的已验证案例与独立验收问题分开；构造会让错误 SQL 失败的数据。','参考 SQL 也需认可口径与同一数据范围'],
+      ['规模与运行证据','加入真实的跨域、相似表和跨表问题；先比较精确/关键词，再测混合检索。','单表或合成千表目录不能证明真实全空间效果'],
+      ['最终边界','离线规则、模拟接口、真实模型、真实平台、业务结果分别记录验证结论。','本次讲解没有新增生产运行证据']
+    ]},
+    decisions:{title:'哪些已定，哪些仍需讨论或验证',status:'已确认设计与实现进度分别说明',columns:['状态','已经知道什么','接下来要做什么'],flow:['已定方向','补齐规则','核实接口','小样本验证'],rows:[
+      ['已明确','Rust 后端；复用数据平台适配器；面向示例大目录全空间；四类 MVP 能力；数据开发维护五区页面。','沿用这些决定继续设计'],
+      ['已认可原型','原始/分析/当前值对照、证据、人工修改标识、确认状态和本机草稿。','用作交互依据；接后端后再验证实际生效'],
+      ['偏好与推荐','MySQL、Zilliz/Milvus、DeepSeek；React + TypeScript；Axum + Tokio；API 与 Worker 分进程。','明确版本、接口、部署与可行性'],
+      ['已确认行为','Pi 唯一运行循环、SQL 展示确认、后台继续、纠错自动保存、Skill 显式选用；详细 18 项决定见当前记录。','按已定实施基线实现；不用历史建议覆盖后续决定'],
+      ['平台待核实','稳定对象标识、分页与增量、来源版本、执行方言、身份委托、行列权限、提交/状态/取消、结果交付和到齐依据。','优先对照现有平台接口资料'],
+      ['业务待核实','正式过滤与分母、时区、历史属性、关联基数与唯一性、参考查询结果。','从当前问题出发补证，不要求一次填完整空间'],
+      ['模型与效果待验证','生成模型版本及结构输出、向量化模型、中文/英文检索、1000 多表效果与成本。','在明确接入范围后开展代表性小试验'],
+      ['推荐下一步','用“计算上个月支付客户数”串清本次条件、依据、SQL 检查和结果说明。','据此细化 MySQL 对象、Zilliz 索引与 Rust 接口']
+    ]}
+  };
+  let selected='tech';
+  function render(id){
+    selected=views[id]?id:'tech';const data=views[selected];root.querySelector('[data-title]').textContent=data.title;root.querySelector('[data-status]').textContent=data.status;
+    root.querySelectorAll('[data-view]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.view===selected)));
+    ['one','two'].forEach((name,i)=>root.querySelector('[data-col-'+name+']').textContent=data.columns[i]);
+    const flow=root.querySelector('[data-flow]');flow.replaceChildren();data.flow.forEach((label,i)=>{const span=document.createElement('span');span.textContent=label;flow.append(span);if(i<data.flow.length-1){const arrow=document.createElement('span');arrow.className='arrow';arrow.setAttribute('aria-hidden','true');arrow.textContent='→';flow.append(arrow);}});
+    const body=root.querySelector('[data-body]');body.replaceChildren();data.rows.forEach(row=>{const tr=document.createElement('tr');const th=document.createElement('th');th.scope='row';row[0].split(/([A-Za-z]+)/).forEach(part=>{if(/^[A-Za-z]+$/.test(part)){const span=document.createElement('span');span.className='text-nowrap';span.textContent=part;th.append(span);}else th.append(document.createTextNode(part));});const td=document.createElement('td');const value=document.createElement('div');value.textContent=row[1];const note=document.createElement('div');note.className='row-note text-small';note.textContent=data.columns[2]+'：'+row[2];td.append(value,note);tr.append(th,td);body.append(tr);});
+    root.querySelector('[data-current]').textContent='当前查看：'+root.querySelector('[data-view="'+selected+'"]').textContent;
+  }
+  function restore(state){render(state?.privateContent?.view||state?.modelContent?.section||'tech');}
+  root.querySelectorAll('[data-view]').forEach(b=>b.addEventListener('click',()=>{render(b.dataset.view);if(window.openai?.setWidgetState)window.openai.setWidgetState({modelContent:{view:'技术、接口、MVP与验收',section:selected},privateContent:{view:selected}}).catch(()=>{});}));
+  window.addEventListener('openai:set_globals',e=>{if(e.detail?.globals?.widgetState)restore(e.detail.globals.widgetState);});restore(window.openai?.widgetState);
+})();
+</script>

@@ -1,0 +1,117 @@
+{
+  "schema": 1,
+  "conclusion": "failed",
+  "reviewer": "independent audit_agent_reality; 未参与本轮聊天生成、预填实现或验收 runner 修改",
+  "scope": "对同一完整官方轮次的16题进行语义审查；本记录保留失败，不能用于关闭MVP，也不能与其他轮次的通过题拼接。",
+  "evidence": ".local/model-workflow/mvp-reviewed-semantic-failed.json",
+  "evidence_sha256": "d575b7837b4c11af5f5dec1c4324ecad5e27b77454acf5cc223cdc13e5a518c1",
+  "evidence_verified_at": "2026-10-05T02:41:11.935Z",
+  "database": "data_agent_trial_7e6172ef29641930",
+  "trial_id": "1962552a-1375-4826-b85a-760444288c7e",
+  "evidence_kind": "official DeepSeek model; synthetic SQLite platform adapter and project-created materials",
+  "execution": {
+    "machine_passed": true,
+    "selected_cases": 16,
+    "completed_cases": 16,
+    "official_requests": 137,
+    "settled_receipts": 137,
+    "reserved_micros": 0,
+    "spent_micros": 1102054,
+    "semantic_passed_cases": 14,
+    "semantic_failed_cases": ["S01", "S04"]
+  },
+  "reconciliation": {
+    "record": ".local/model-workflow/business-quality-evidence-reconciliation.json",
+    "committed_answers_matched": 26,
+    "query_sql_and_parameters_matched": 15,
+    "tool_receipts_matched": 30,
+    "prefill_stages_matched": 10,
+    "analysis_and_review_quotes_checked": 249,
+    "quotes_matching_actual_input_source_and_version": 249,
+    "notes": [
+      "运行期间的只读预览与归档报告按数据库、试验ID、对话ID、查询ID、文本和参数精确核对。没有使用此前失败轮次的回答补齐本轮。",
+      "归档会话快照是事件分页，结果唤醒不展示为用户消息；26份已提交助手回答全部与只读提取一致，未声称每条数据库输入都出现在当前快照页。",
+      "预填最终来源输入和analysis/review记录来自授权数据库的只读SELECT，保存在.local/model-workflow/business-quality-prefill-final-extract.json。10个最终review的value、gaps和evidence均与归档initial/repeated产物一致。",
+      "本审查未启动harness、模型、构建或测试，未修改数据库、实现、prompt、验收预期或CURRENT。"
+    ]
+  },
+  "findings": [
+    {
+      "id": "SEMANTIC-01",
+      "case_id": "S01",
+      "priority": 1,
+      "title": "把退款单独形成的中间聚合值当成可成功落表的零付款来源",
+      "conversation_id": "f9f17717-e51f-46c5-92f3-c6c552dfbcaa",
+      "evidence_pointer": "checks[id=S01].artifacts.explanation",
+      "observed": [
+        "回答先说“落表的0有两个来源路径”，其中之一为匹配到了成功事件但没有任何charge，CASE全部为0。",
+        "回答后面又说落表paid=0无法区分“只有退款类事件”，同时承认目标CHECK禁止paid=0且refund>0。"
+      ],
+      "expected": "只有成功refund且无charge时，中间line_payments可以得到paid=0，但refund>0；目标CHECK(refunded_amount_cents BETWEEN 0 AND paid_amount_cents)拒绝该行。必须区分中间表达式可能值与成功写入目标表的可能值。",
+      "basis": [
+        "docs/sources/schema.sql:27：事件类型只能是charge或refund。",
+        "docs/sources/schema.sql:28：事件金额大于0。",
+        "docs/sources/schema.sql:46：退款金额不得超过付款金额。",
+        "docs/sources/etl.sql:7：按类型分别累计付款与退款。"
+      ],
+      "input_delivery_checked": {
+        "ddl_operation_id": "306a1067-7af6-404f-895f-e80cd92a96be",
+        "etl_operation_id": "f33eadcd-2102-4662-bad8-bb2ea395771c",
+        "business_source_operation_id": "7c1a4d64-0090-4306-bb10-d5e17303f279",
+        "result": "read_knowledge实际返回完整目标DDL与ETL；read_source返回3998字的business-guide且complete=true，含金额恒正及样例边界。未发现截断或种子有效值直接提供上述错误落表结论。",
+        "supplemental_record": ".local/model-workflow/business-quality-tool-receipts.json"
+      },
+      "impact": "用户询问字段真实含义时得到互相冲突的解释，会把不能成功入表的数据异常误当正常零付款成因。主结论“不能直接认定零元成交”正确，不能抵消这处来源解释错误。"
+    },
+    {
+      "id": "SEMANTIC-02",
+      "case_id": "S04",
+      "priority": 1,
+      "title": "金额退款比例的文字结论与SQL公式相反",
+      "conversation_id": "3fbb4c2c-5818-4b4b-bd05-27db19679b54",
+      "evidence_pointer": "checks[id=S04].traces[cid=3fbb4c2c-5818-4b4b-bd05-27db19679b54].snapshot.messages",
+      "observed": "最终回答的口径结论为“截至快照未退金额 ÷ 付款金额”，但实际SQL为SUM(refunded_amount_cents)/SUM(paid_amount_cents)，即退款金额比例。",
+      "expected": "说明和已保存SQL必须都表达退款金额除以付款金额。未退金额比例是另一个结果，不能依靠用户读SQL纠正文字结论。",
+      "basis": [
+        "docs/sources/business-guide.md:91：退款金额占支付金额比例。",
+        "docs/sources/business-guide.md第4节：refunded_amount_cents为成功退款累计金额。",
+        "归档S04.money中的独立SQL核算通过，SQL结果为0.225；这不证明最终文字解释正确。"
+      ],
+      "input_delivery_checked": {
+        "field_document_operation_id": "ed8e4ec8-a2d7-4b62-bc66-27d97e5452ec",
+        "metric_document_operation_id": "691985f8-c17c-4571-8d5d-60fc57e7c478",
+        "etl_operation_id": "147e40d4-a628-4c30-83e9-60921d068fb3",
+        "result": "Pi实际读到了退款累计金额的字段定义、退款金额占支付金额比例的文档表述、完整ETL以及正确的request_query回执。未发现工具截断或种子将比例定义成未退金额；错误出现在最终自然语言结论。"
+      },
+      "impact": "退款与未退款表达相反的业务量。该错误位于用户最容易采信的结论段，属于业务解释失败。"
+    }
+  ],
+  "checks": [
+    {"id": "S01", "passed": false, "summary": "未执行查询，引用和不能判定零元成交的主结论成立；但把仅退款导致的中间paid=0说成可成功落表来源，与目标CHECK冲突，见SEMANTIC-01。"},
+    {"id": "S02", "passed": true, "summary": "整月按已知customer_id去重，排除测试、按UTC的paid_at选期，保留全退客户，匿名订单单列边界；SQL与已确认结果5名客户、1个匿名订单一致。"},
+    {"id": "S03", "passed": true, "summary": "同一任务新增app条件并保留1月、UTC和净收入口径；旧稿superseded，新稿确认执行。解释1600分=16元，与实际单列结果和原任务版本一致。"},
+    {"id": "S04", "passed": false, "summary": "先询问分母；订单率使用期内付款订单集合并检查全部行退款，金额率和3月零分母SQL独立核算均通过。金额题最终文字却把退款比例写成未退金额比例，见SEMANTIC-02。"},
+    {"id": "S05", "passed": true, "summary": "用EXISTS处理vip/newsletter一对多，避免金额放大；1月净收入11600分=116元的结果解释、快照及匿名/无标签边界正确。"},
+    {"id": "B04", "passed": true, "summary": "说明收入按订单行首次成功付款而非下单日期归期，举例均是条件式；明确无订单明细时不能确定实际原因，并保留同单不同行不同付款月和快照边界。"},
+    {"id": "B05", "passed": true, "summary": "长期web偏好保存成功并告知，本次全部渠道覆盖默认；新会话采用web，之后同条记忆修订为app，本次仍全渠道，新会话采用app。停用后新会话不加渠道，不把个人偏好变成公共口径。"},
+    {"id": "B05-failure", "passed": true, "summary": "保存失败后明确说明未保存，未冒称已记住；本次和之后新会话SQL均为全渠道，失败偏好未生效。"},
+    {"id": "B06", "passed": true, "summary": "明确缺少退货件数和净件数口径，未用金额比例或状态推测；仅把SUM(quantity)作为不同的下单件数口径供选择。"},
+    {"id": "B07", "passed": true, "summary": "解释只有当前快照地区且无历史拉链；请求确认是否改用当前地区，没有擅自将region作为购买时地区。"},
+    {"id": "B08", "passed": true, "summary": "运行中的净收入与新支付客户数问题保持独立任务；旧结果12400分回到原任务条件版本，新客户数查询仍待确认。"},
+    {"id": "P01", "passed": true, "summary": "两轮覆盖按成功charge及截止时间、订单行聚合、LEFT JOIN补0、整数分、非空非负和按行可加总；不把税费、运费或折扣分摊算法补成已知规则。再次建议未重复净收入公式，但保留的人工有效值明确要求扣退款，原始类型条目仍为INTEGER；未产生相反结论。"},
+    {"id": "P02", "passed": true, "summary": "两轮覆盖可空TEXT、截止前成功charge的MIN时间、UTC、订单行粒度及收入/支付客户默认时间的文档依据；未承诺同一行跨月分次付款的真实归属。再次输出把未覆盖边界写在正文，gaps为空不等于边界丢失。"},
+    {"id": "P03", "passed": true, "summary": "两轮覆盖dim_customers唯一customer_id的LEFT JOIN、当前快照地区、匿名和已知客户都可能NULL；不把当前地区当历史地区，不推测默认地区或取值枚举。"},
+    {"id": "P04", "passed": true, "summary": "两轮准确区分目标INTEGER NOT NULL与上游quantity>0约束，说明直接投影、订单行粒度、SUM件数不同于行数和订单数；明确无退货件数、不能推净售出件数。"},
+    {"id": "P05", "passed": true, "summary": "两轮覆盖非空TEXT四枚举、行取消优先及整单金额CASE顺序，区分单行全退和整单全退，不把refunded当所有退款。明确行source_status的一致性缺口及取消后付款等业务未验证，同时保留已确定的技术分支。"}
+  ],
+  "prefill_manual_protection": {
+    "checked_cases": ["P01", "P02", "P03", "P04", "P05"],
+    "result": "每题初次版本3、人工版本4、再次版本6均已核对。再次有效值、human_override全文及operation_id与人工版本一致，原source_facts不变；新模型建议与依据单独保存。初次unverified、再次needs_review，没有因人工修改或再次预填宣称业务结果验证通过。"
+  },
+  "limits": [
+    "结论绑定此归档及其sourceHashes快照；后续prompt调整或新官方轮次须另行记录，不能改写本轮失败。",
+    "其余14题通过仅表示本轮这些合成场景的语义审查通过，不证明真实Datasight、正式认证、千表业务语义准确率或真实用户验收。",
+    "249条逐字引用核对证明引用真实存在；语义正确性来自逐题独立对照，不由引用数或机器通过数替代。",
+    "MVP当前最终质量记录mvp-business-quality-20261005.json未创建。本失败记录不能替代后续完整产物的独立审查。"
+  ]
+}

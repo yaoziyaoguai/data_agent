@@ -1,0 +1,124 @@
+<style>
+#da-resilience { display:grid; gap:16px; }
+#da-resilience .state-path { display:flex; flex-wrap:wrap; align-items:center; gap:10px; list-style:none; margin:0; padding:0; }
+#da-resilience .state-path li { display:flex; align-items:center; gap:10px; }
+#da-resilience .arrow { color:var(--muted-foreground); }
+#da-resilience .heading { display:flex; flex-wrap:wrap; align-items:center; gap:8px; justify-content:space-between; }
+#da-resilience h3 { margin:0; }
+</style>
+<div id="da-resilience">
+  <p class="text-small text-muted">公开教学版 · 2026-10-03 · 全部业务样例均为虚构。当前决定与实现进度见 <a href="../semantic-retrieval-design.md">实施基线</a>；本页不代表组件已运行。</p>
+  <div class="viz-controls"><label class="form-label">发生什么变化<select class="form-select" data-scenario aria-label="选择异常或修改场景">
+    <optgroup label="查询与结果"><option value="unknown">SQL 已提交，但没有收到回执</option><option value="cancel">取消请求与查询成功同时发生</option><option value="partial">结果只取到一部分</option><option value="freshness">昨天的数据还没到齐</option><option value="explain">查询完成，但模型解释失败</option></optgroup>
+    <optgroup label="语义维护"><option value="index">人工修改已保存，向量索引尚未更新</option><option value="source">上游 SQL 改了，人工说明还在</option><option value="concurrent">两个人从同一版本开始编辑</option><option value="sync">资料同步只完成一部分</option></optgroup>
+    <optgroup label="权限与服务"><option value="permission">用户权限变化或模型服务未获准接收数据</option><option value="outage">向量或模型服务暂时不可用</option></optgroup>
+  </select></label></div>
+  <div class="heading"><h3 data-title>提交后失联</h3><span class="viz-badge">审计补充建议 · 具体接口待核实</span></div>
+  <ol class="state-path" aria-label="该场景的处理顺序" data-path><li>保存提交记录<span class="arrow" aria-hidden="true">→</span></li><li>执行状态未知<span class="arrow" aria-hidden="true">→</span></li><li>按标识查证</li></ol>
+  <table class="table table-sm" aria-label="异常场景的最小处理规则"><tbody data-body><tr><th scope="row">核心动作</th><td>查证平台状态，避免盲目重复提交。</td></tr></tbody></table>
+  <div class="text-small" aria-live="polite" data-current>当前场景：提交后失联</div>
+</div>
+<script>
+(() => {
+  const root=document.getElementById('da-resilience');
+  const scenarios={
+    unknown:{title:'提交后失联',path:['提交前留记录','平台可能已收到','执行状态未知','查证后恢复'],rows:[
+      ['用户看到','正在核实这次查询的状态；尚未确认成功或失败。'],
+      ['后台动作','用已保存的请求标识或平台查询标识查证；已在运行则继续跟踪，已完成则取结果。'],
+      ['关键规则','无法查证时不自动再提交同一 SQL；本地任务记录只能帮助恢复，不能代替平台的重复请求识别能力。'],
+      ['数据记录','SQL、用户身份、条件与语义版本、提交记录、请求标识、平台查询标识及错误。'],
+      ['平台待核实','能否按请求号找回查询、支持何种重试约定、状态保留多久。'],
+      ['验收方法','模拟回执丢失、重复点击和进程重启，检查平台实际接收了几次 SQL。']
+    ]},
+    cancel:{title:'取消与成功发生竞争',path:['用户请求取消','平台处理请求','读取平台终态','展示真实结果'],rows:[
+      ['用户看到','先显示“取消中”；收到平台确认后显示“已取消”，若已完成则如实显示查询已完成。'],
+      ['后台动作','记录取消意图并调用平台取消接口；继续跟踪，处理取消与成功的先后。'],
+      ['关键规则','关闭页面不等于查询停止；发送取消请求也不等于已取消。'],
+      ['恢复约束','恢复后的 Worker 核对最新任务状态，晚到更新不能覆盖较新的有效状态。'],
+      ['平台待核实','取消接口、状态含义与终态查询；平台不支持的能力要明确记录。'],
+      ['验收方法','安排查询刚完成时点击取消，核对页面、任务和平台最终状态一致。']
+    ]},
+    partial:{title:'只有部分结果',path:['查询成功','获取结果页','检查缺页或截断','限定可解释范围'],rows:[
+      ['用户看到','结果尚未取全，或当前只显示预览；缺页和展示限制分别说明。'],
+      ['后台动作','跟踪结果页/分块、返回行数与截断标识；可以取全时按预算继续获取。'],
+      ['关键规则','汇总在完整的所选数据范围计算；展示可以限行，但不能用预览行推断总体。'],
+      ['类型规则','保留字段类型与单位，大整数标识和精确小数无损传递。区分 NULL、0、无记录与错误。'],
+      ['平台待核实','分页、分块、下载结果、过期时间与截断状态怎样返回。'],
+      ['验收方法','漏一页或强制限制行数，系统仍准确标注范围，不输出全量结论。']
+    ]},
+    freshness:{title:'业务数据尚未到齐',path:['收到查询数据','核对到齐依据','完整 / 未完整 / 未知','按范围解释'],rows:[
+      ['用户看到','数据覆盖到哪里、是否已完成应到批次；没有可靠依据时显示“到齐情况未知”。'],
+      ['后台动作','结合平台提供的调度产出状态、分区完成信息或业务约定判断；具体可用依据待核实。'],
+      ['关键规则','能查到一条最新记录不证明该时间段已到齐；“未到齐”和“已到齐但为零”分别处理。'],
+      ['可以回答','已有范围内的事实；说明与上期对比的可比性限制。业务因果需要额外证据。'],
+      ['存储与复现','记录查询时间、数据范围及平台可提供的版本；旧数值重放取决于快照或结果保留能力。'],
+      ['验收方法','构造昨日分区未完成和真正零记录两种情况，不能都解释为业务下降。']
+    ]},
+    explain:{title:'查询成功，解释失败',path:['查询已完成','结果可用','解释超时或失败','基于原结果重试'],rows:[
+      ['用户看到','数据与 SQL 可用，自动说明暂未完成；查询与解释状态分别展示。'],
+      ['后台动作','保存结果引用与本次条件；在允许范围内重新调用解释步骤。'],
+      ['关键规则','重试解释不需要再次提交 SQL；如果结果已过期，明确说明再决定下一步。'],
+      ['数值来源','直接使用 SQL 或确定性计算得到的数值，模型不凭空补缺失数据。'],
+      ['平台待核实','结果可保留多久、如何安全取回、是否可按查询标识访问。'],
+      ['验收方法','让模型在解释阶段失败，核对查询提交次数保持不变。']
+    ]},
+    index:{title:'修改已保存，索引仍旧',path:['保存新定义和更新任务','当前版本已生效','索引更新中','检索回源核对'],rows:[
+      ['用户看到','内容已保存；检索更新中。版本号在此仅作设计概念，页面目前仍是本机草稿。'],
+      ['后台动作','在一个 MySQL 事务中保存新版本并登记索引任务；Worker 按对象与版本更新索引。'],
+      ['本次查询','旧索引命中后读取 MySQL 当前版本并重判适用性；新别名可用精确/关键词补查。覆盖不足时注明检索更新未完成。'],
+      ['关键规则','晚完成的旧任务不能把版本改回去；正式定义保存在 MySQL，向量索引可以重建。'],
+      ['修改如何生效','纯说明修改影响解释；计算规则修改必须影响后续条件与 SQL；共享指标显示受影响的引用。'],
+      ['验收方法','修改后立刻用新别名提问，并安排旧任务晚完成，核对内容与版本都不回退。']
+    ]},
+    source:{title:'来源变了，人工文字保留',path:['发现 SQL 版本变化','定位受影响依赖','标记旧依据需复核','重新分析与修订'],rows:[
+      ['用户看到','人工说明仍在；同时看到来源变化和需要复核的字段、规则、指标或案例。'],
+      ['后台动作','对照来源版本与对象依赖，只处理受影响部分；保持原始材料和历史版本可追溯。'],
+      ['关键规则','保留人工文字不代表旧依据仍有效；本题关键依据发生变化时要重新核对。'],
+      ['会话与在途任务','固定本次引用版本；生成或执行前发现关键变化时重新核对，追问不悄悄切换口径。'],
+      ['对原型的补充','已有修改标识和确认失效；还需让后端的依赖、版本及当前查询使用同一规则。'],
+      ['验收方法','源字段删除或算法变化后，旧案例仍被命中时不能直接照搬。']
+    ]},
+    concurrent:{title:'同一条语义被两人修改',path:['从同一版本开始','一人先保存','第二人保存时核对版本','显示差异再处理'],rows:[
+      ['用户看到','这条内容已经被更新，显示自己的修改与当前版本的差异。'],
+      ['后台动作','保存时检查编辑起点版本；发现冲突就保留两份改动，避免静默覆盖。'],
+      ['轻量做法','有权维护者保存后生效可作为 MVP 建议；单独审批流程尚未成为必要前提。'],
+      ['状态要分开','本轮查询条件、编辑草稿、当前有效定义；人工修改、人工确认与实际查询验证。'],
+      ['权限待定','沿用可用的平台身份，明确谁可维护共享定义、谁可修改本轮条件。'],
+      ['验收方法','两人同时编辑同一版本，后保存者不会无提示抹掉先保存者的内容。']
+    ]},
+    sync:{title:'资料只同步了一部分',path:['启动同步','部分接口失败','记录不完整范围','恢复或重试'],rows:[
+      ['用户看到','哪些资料已更新、哪些尚未同步或需要补充；缺失原因可定位。'],
+      ['后台动作','记录分页/批次与来源状态；保留已知版本，按有限重试规则恢复。'],
+      ['关键规则','未收到一个对象不等于已删除；真正删除、改名或结构变化需要可靠依据。'],
+      ['对检索的影响','能用的资料继续按有效性判断；缺少关键上游时给出缺口，不伪造完整分析。'],
+      ['平台待核实','稳定对象标识、分页、增量、版本、删除事件和完整同步的判定方式。'],
+      ['验收方法','故意中断一页同步，已有资产不能被误删。']
+    ]},
+    permission:{title:'权限贯穿资料、模型和结果',path:['检查当前身份','检查允许发送范围','平台按身份执行','读取结果再次鉴权'],rows:[
+      ['需要覆盖','元数据、加工 SQL、样例值、模型请求、执行身份、会话、日志和历史结果。'],
+      ['关键区别','目录可见、明细可查、可送给某个模型服务是不同许可；具体规则与部署方式需核实。'],
+      ['平台负责','按真实授权落实数据访问与行列限制；Agent 不通过更高权限账号绕过。'],
+      ['Agent 负责','只把获准内容送入模型与索引；自身历史记录和结果出口按有效权限检查；暂不增加跨身份结果缓存。'],
+      ['资料里的文字','SQL 注释、检索内容和结果单元格均当作资料，不能越过应用规则触发额外操作。'],
+      ['验收方法','用两个权限不同的身份并模拟撤权，核对模型上下文、执行与历史结果出口。']
+    ]},
+    outage:{title:'检索或模型服务不可用',path:['识别故障来源','检查可用替代路径','有限重试或明确降级','返回状态与已有事实'],rows:[
+      ['用户看到','哪项能力暂不可用，以及当前还能完成哪些部分。'],
+      ['向量服务失效','明确表名/字段名可通过 MySQL 名称与映射定位；无法充分匹配业务问法时标明限制。'],
+      ['模型调用超时','记录阶段与错误，按预算有限重试；不能把失败当成业务上没有相关数据。'],
+      ['补查边界','明确引用的依赖按需要展开；搜索和模型调用有预算，耗尽时保留具体缺项。'],
+      ['当前待定','向量模型、召回数量、是否额外重排，以及各阶段超时值都要通过样本选择。'],
+      ['验收方法','服务故障、确无资料、权限不足三个原因分别构造，行为与文案不能混淆。']
+    ]}
+  };
+  let selected='unknown';
+  function render(id){
+    selected=scenarios[id]?id:'unknown';const data=scenarios[selected];root.querySelector('[data-scenario]').value=selected;root.querySelector('[data-title]').textContent=data.title;root.querySelector('[data-current]').textContent='当前场景：'+data.title;
+    const path=root.querySelector('[data-path]');path.replaceChildren();data.path.forEach((label,i)=>{const li=document.createElement('li');const value=document.createElement('span');value.textContent=label;li.append(value);if(i<data.path.length-1){const arrow=document.createElement('span');arrow.className='arrow';arrow.setAttribute('aria-hidden','true');arrow.textContent='→';li.append(arrow);}path.append(li);});
+    const body=root.querySelector('[data-body]');body.replaceChildren();data.rows.forEach(([label,value])=>{const tr=document.createElement('tr');const th=document.createElement('th');th.scope='row';th.textContent=label;const td=document.createElement('td');td.textContent=value;tr.append(th,td);body.append(tr);});
+  }
+  function restore(state){render(state?.privateContent?.scenario||state?.modelContent?.scenario||'unknown');}
+  root.querySelector('[data-scenario]').addEventListener('change',e=>{render(e.target.value);if(window.openai?.setWidgetState)window.openai.setWidgetState({modelContent:{view:'修改与异常处理',scenario:selected},privateContent:{scenario:selected}}).catch(()=>{});});
+  window.addEventListener('openai:set_globals',e=>{if(e.detail?.globals?.widgetState)restore(e.detail.globals.widgetState);});restore(window.openai?.widgetState);
+})();
+</script>

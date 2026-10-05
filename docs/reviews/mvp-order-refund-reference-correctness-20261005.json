@@ -1,0 +1,207 @@
+{
+  "reviewer": "correctness（未参与对应实现的独立审查者）",
+  "conclusion": "passed_limited_scope",
+  "scope": "Q04/Q10订单退款集合参考、独立预期、合成语义SQL、业务说明及预填引用的限定复核；不关闭真实模型质量或整体MVP验收。",
+  "scope_sha256": "94263d5402d01d934ac05f622421572bc7ffbccbb664073015e2eb36aa2a79b9",
+  "fingerprint_algorithm": "SHA256 of sorted path + TAB + SHA256 + newline",
+  "source_sha256": {
+    "docs/sources/business-guide.md": "db322cbb2bb4d7f92e9ca6bc56d0e4ee8cd957354ff1b78c41ece5bee258e610",
+    "docs/sources/etl.sql": "42e2f1e7dfbd74bcbd07a0b2a712bd85b73adeb65ba8cf86e29619c07724de56",
+    "docs/sources/evaluation/cases.json": "2adb33f74b3b559374d70af6e2b0489001e3d49e38e26866ef72e1b820f0e0c9",
+    "docs/sources/evaluation/prefill-cases.json": "8c42c5df5db32e7425bb02b307697ca323e17c45167e88e469bca822f6b72f7a",
+    "docs/sources/evaluation/queries/q04.sql": "4c3e7035b91b91d7a4144b54ae792cb1f9a1cff8b7a832c0f86de43a9363faa4",
+    "docs/sources/evaluation/queries/q10.sql": "39ccf2252947d659dcb6ced888cc75484659c4ccc3030363d4c939161de97195",
+    "docs/sources/schema.sql": "49c13a97ad3b53bf161d549d35cc33f741b2d47701c2b744c20883cfedf2b72a",
+    "docs/sources/seed.sql": "a51ebf11cbcb1676f6705aee220db9d87353618ae67a2d2b674660d8d703aa2c",
+    "docs/sources/semantic-catalog.json": "13dc2261e3e521b533979c473f194fd627595403e5eff4861d58dd0b08b76553",
+    "scripts/build_semantic_catalog.py": "10d5b201897ce934caa8e8f21d303ad75a12bba59ce22f6714e421ad13d41f05",
+    "scripts/evaluate_business_sql.py": "2cee2dd1e2b363f12d5fd44d4b301296c20fd3e82210c8b1e78503b4c8fe0c6a",
+    "tests/mvp/check-business-evaluator.mjs": "d39a75cb269cf1fc1164be076125c33887ca189fe1465fd6cc4fa7d16b3d73b2"
+  },
+  "evidence_sha256": {
+    ".local/checks/mvp-order-refund-oracle-before-fix.log": "c5969e7b70382695547b2730ba7b59aa844e1b192124de9f805ef3e9e1969515",
+    ".local/checks/mvp-refund-rate-reference-before-fix.json": "ff7e4ddef49676e36be0a61b6c98dd0180582a3b64781262c8f7f0d51408cb44",
+    "docs/reviews/mvp-maintenance-rules-reference-20261005.json": "1aaaa83ace965351126ccaf4cef8b363e6e1690037f875185c1033336d02f782"
+  },
+  "findings": [],
+  "requirement_assessment": {
+    "original_guide_sha256": "54b1abe47939cb92d4d46f77c023dc325b936a2ff4f906604bb1e14108bfeedf",
+    "original_guide_verified_from": ".local/checks/prefill-sources-a75878a5-540d-4ea7-ac08-ad741656d3db/business-guide.md",
+    "assessment": "已按原guide内容哈希找到历史副本并逐行比较。第3.2及7节明确分次付款以订单行为范围；第5.3补充先圈付款订单集合、再检查其全部行退款。这与原分母订单集合及截至快照至少一行成功退款的定义一致，没有更换指标、分母、快照或零分母NULL要求。",
+    "acceptance_change_record": "docs/CURRENT.md 已说明Q04/Q10旧值、新值、独立依据、种子数值不变和影响。",
+    "circular_oracle": false,
+    "rationale": "refund_expectation读取非测试行后用Python集合交集计算，不读取Q04/Q10参考SQL或待测SQL的结果来构造预期。生成合成语义的脚本仅读取business-guide/schema/etl，没有读取evaluation。额外用人工枚举的原始事件见证验证三种实现。",
+    "requirements_weakened": false
+  },
+  "verification": {
+    "independent_command": {
+      "argv": [
+        "node",
+        "tests/mvp/check-business-evaluator.mjs"
+      ],
+      "exit_code": 0,
+      "referenceCases": 13,
+      "rejectedCounterexamples": 18,
+      "officialRequests": 0
+    },
+    "fixed_seed_assertions": {
+      "all_13_reference_rows_equal_cases_json": true,
+      "Q04": [
+        [
+          4,
+          8,
+          0.5
+        ]
+      ],
+      "Q10": [
+        [
+          0,
+          null
+        ]
+      ],
+      "method": "独立新建SQLite内存库执行schema/seed/etl，并逐条直接执行13个参考SQL，与cases.json已保存数值比较。"
+    },
+    "prefill_references": {
+      "checked_quotes": 41,
+      "invalid_quotes": 0,
+      "method": "递归核对prefill-cases.json所有file/quote，逐字匹配当前来源文件；P02新引用有效。"
+    },
+    "negative_control": {
+      "path": ".local/checks/mvp-order-refund-oracle-before-fix.log",
+      "observed": "原oracle将旧期内行聚合判为通过，新增严格断言Q04 adversarial在true!=false处失败。"
+    },
+    "independent_raw_event_probe": {
+      "storage": ":memory:",
+      "source_files": [
+        "docs/sources/schema.sql",
+        "docs/sources/etl.sql"
+      ],
+      "rows_format": [
+        "order_id",
+        "line_id",
+        "is_test",
+        "successful_charge_at",
+        "charge_cents",
+        "refund_cents"
+      ],
+      "raw_rows": [
+        [
+          "audit-cross-month",
+          1,
+          0,
+          "2026-01-10T00:00:00Z",
+          100,
+          0
+        ],
+        [
+          "audit-cross-month",
+          2,
+          0,
+          "2026-02-02T00:00:00Z",
+          100,
+          50
+        ],
+        [
+          "audit-unrefunded",
+          1,
+          0,
+          "2026-01-12T00:00:00Z",
+          250,
+          0
+        ],
+        [
+          "audit-outside-only",
+          1,
+          0,
+          "2026-02-02T00:00:00Z",
+          100,
+          100
+        ],
+        [
+          "audit-test-only",
+          1,
+          1,
+          "2026-01-15T00:00:00Z",
+          100,
+          100
+        ],
+        [
+          "audit-multi-line",
+          1,
+          0,
+          "2026-01-17T00:00:00Z",
+          1000,
+          500
+        ],
+        [
+          "audit-multi-line",
+          2,
+          0,
+          "2026-01-17T00:00:00Z",
+          1000,
+          0
+        ],
+        [
+          "audit-anonymous",
+          1,
+          0,
+          "2026-01-18T00:00:00Z",
+          100,
+          5
+        ]
+      ],
+      "construction": "每行写raw_order_lines：customer_id=NULL、product_id=audit-product-加行号、quantity=1、ordered_at=2026-01-05T00:00:00Z、channel=web、source_status=placed；每行一笔成功charge，非零退款另写2026-02-03T00:00:00Z成功refund；唯一事件ID按订单/类型/行号构造。随后执行原etl.sql，不直接写demo_order_detail。",
+      "hand_counted_paid_orders": [
+        "audit-cross-month",
+        "audit-unrefunded",
+        "audit-multi-line",
+        "audit-anonymous"
+      ],
+      "hand_counted_refunded_orders": [
+        "audit-cross-month",
+        "audit-multi-line",
+        "audit-anonymous"
+      ],
+      "Q04": [
+        3,
+        4,
+        0.75
+      ],
+      "old_period_row_aggregation": [
+        2,
+        4,
+        0.5
+      ],
+      "semantic_metric": [
+        0.75
+      ],
+      "python_expectation": [
+        [
+          3,
+          4,
+          0.75
+        ]
+      ],
+      "Q10": [
+        0,
+        null
+      ],
+      "foreign_key_check": [],
+      "integrity_check": [
+        [
+          "ok"
+        ]
+      ],
+      "network_requests": 0
+    }
+  },
+  "residual_risks": [
+    "本结论验证独立参考与合成数据上的SQL行为，不能据此认定模型的文字解释、引用推理、真实平台或整体MVP通过。",
+    "评估器变体在内存明细表中构造，主要验证集合计算；本轮另行从原始事件经过未改schema/etl的合法见证补足该业务边界的依据。"
+  ],
+  "testing_gaps": [],
+  "limits": [
+    "未运行MySQL、应用构建或模型，未操作launcher 54998。",
+    "没有修改业务来源、参考SQL、评估器或他人文件；只新增本审查JSON。"
+  ]
+}

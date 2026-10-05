@@ -1,0 +1,273 @@
+{
+  "reviewer": "correctness / audit_runtime_independent",
+  "reviewed_date": "2026-10-05",
+  "conclusion": "passed_for_reviewed_scope",
+  "scope": "六项纠偏中的实际模型资料依赖、记忆原文范围与 Pi 复用，以及静态系统提示收敛的规则覆盖与改动范围；限定代码与已有回环证据复核，不是最终增量或完整 MVP 验收。",
+  "independence": "审查者未参与对应业务实现；本轮只写本审查记录，未运行数据库、模型、构建或测试。",
+  "summary": "实际依赖、Pi原生压缩及旧上下文隔离的限定结论保持。真实完整轮B05暴露的逗号前引用已通过保留完整同句source_text修复；引文包含逗号本身的等价变体也已补齐，并有Rust/HTTP正反例通过证据。静态系统提示收敛保留了任务、证据、确认、结果归属、时钟和个人资产约束，参数细节继续由未变的工具说明承载；未发现需要补回的要求。本范围没有未闭合发现；提示精简不证明真实语义错误已修复，真实业务质量与最终增量仍由后续完整验收确定。",
+  "requirement_basis": [
+    {
+      "path": "AGENTS.md",
+      "sections": [
+        "第5条 硬约束与Agent判断空间",
+        "第7条 失效资料及派生上下文",
+        "第12条 复用Pi及持续会话"
+      ]
+    },
+    {
+      "path": "docs/semantic-retrieval-design.md",
+      "sections": [
+        "13.4 会话与上下文",
+        "个人和公共修改规则"
+      ]
+    },
+    {
+      "path": "docs/CURRENT.md",
+      "section": "2026-10-05 按已确认六项纠偏恢复实施"
+    }
+  ],
+  "closed_findings": [
+    {
+      "id": "GLOBAL-CONTEXT-INVALIDATION",
+      "status": "closed_for_reviewed_scope",
+      "evidence": [
+        "context_authority::observe只合并实际交付的结构化对象/引用，不再扫描全空间知识。",
+        "deliver_run在workspace裁剪后登记初始依赖，有效Pi检查点的早期依赖继续保留。",
+        "data_tools在业务回执事务内增量合并，runtime/store同步更新恢复链检查点并以服务端清单覆盖旧Node封套。",
+        "上下文回归覆盖未读对象停用不阻断、已读对象停用拒绝及裁掉的记忆不进入依赖。"
+      ]
+    },
+    {
+      "id": "CONTEXT-REBUILD-01",
+      "status": "closed",
+      "locations": [
+        "crates/data-agent/src/use_cases/deliver_run.rs:107",
+        "tests/mvp/check-context-dependencies.mjs:42"
+      ],
+      "evidence": "额外recent_messages只包含未撤回用户输入；助手历史由经过依赖校验的Pi检查点承担。回归在重建轮完成后再开一轮，确认旧助手结论未重新混入。"
+    },
+    {
+      "id": "MEMORY-QUOTE-01",
+      "status": "closed",
+      "locations": [
+        "crates/data-agent/src/modules/assets/mod.rs:12",
+        "crates/data-agent/src/modules/assets/mod.rs:43"
+      ],
+      "evidence": "普通逗号不再作为独立引用边界；“不要记住，金额用元展示”取后半与“金额用元展示，仅本次”取前半均被当前分支拒绝。"
+    },
+    {
+      "id": "MEMORY-COMMA-INDEPENDENT-INTENT",
+      "status": "closed",
+      "original_reproduction": {
+        "message": "仅本次按 web 渠道分析，另外请记住以后金额用元展示。",
+        "instruction_quote": "另外请记住以后金额用元展示",
+        "scope": "金额展示偏好"
+      },
+      "locations": [
+        "crates/data-agent/src/modules/assets/mod.rs:13",
+        "tests/mvp/check-memory-revisions.mjs:43",
+        "packages/contracts/schema.json:2474",
+        "apps/agent/tools/data-tools.ts:50"
+      ],
+      "evidence": [
+        "真实逗号后的quote仅以另外/此外明确另起指令时可作起点；保存并核验的source_text保留到句/分号边界。",
+        "完整quote中临时/否定限定继续拒绝；不能利用新起点裁掉尾部逗号中的不要保存。",
+        "新增Rust单测和HTTP反例同时覆盖独立长期指令正例、前置否定、尾部仅本次、独立指令尾部不要保存的截短与完整引用。",
+        "mvp-alignment-boundary-fixes.log显示Rust单测1项通过及记忆HTTP四组通过；主代理报告该进程完整退出0。"
+      ]
+    },
+    {
+      "id": "PI-HOST-01",
+      "status": "closed_for_confirmed_mixed_intent_cases",
+      "evidence": "不再按整条用户消息中的临时/否定子串拒绝全部资产操作。引用绑定到相关完整指令；分号及另外/此外明确独立指令正例均有通过证据。"
+    },
+    {
+      "id": "B05-INSTRUCTION-QUOTE-END",
+      "status": "closed_in_boundary_code_and_local_checks",
+      "original_message": "以后我的分析默认只看web，但这次查2026年1月全部渠道净收入",
+      "original_instruction_quote": "以后我的分析默认只看web",
+      "evidence": [
+        "历史官方完整轮报告B05未通过，machinePassed=false、completion=incomplete；76次调用，reserved_micros=0。该失败不因局部修复而改记为官方通过。",
+        "mvp-memory-comma-before-fix.log中精确B05 Rust反例因scope_incomplete实际失败。",
+        "memory_source先验证原文和合法起点，再在quote后的真实逗号处把source_text扩到同句末或分号；临时/否定校验作用于扩展后的完整source与scope，body/scope仍按Pi工具参数保存。",
+        "mvp-memory-source-fixed.log中Rust单测和四组HTTP记忆检查通过；HTTP核对精确B05的source_text保留完整原句。Rust另核对分号后的独立临时指令不被吞入。",
+        "mvp-memory-source-code-contracts.log中同源生成检查与170项Rust/TypeScript契约检查通过。"
+      ],
+      "locations": [
+        "crates/data-agent/src/modules/assets/mod.rs:18",
+        "crates/data-agent/src/use_cases/data_tools.rs:509",
+        "tests/mvp/check-memory-revisions.mjs:43"
+      ]
+    },
+    {
+      "id": "MEMORY-QUOTE-TRAILING-COMMA",
+      "status": "closed",
+      "original_reproduction": {
+        "message": "以后我的分析默认只看web，但这次查2026年1月全部渠道净收入",
+        "instruction_quote": "以后我的分析默认只看web，",
+        "scope": "默认渠道偏好"
+      },
+      "locations": [
+        "crates/data-agent/src/modules/assets/mod.rs:28",
+        "crates/data-agent/src/modules/assets/mod.rs:54",
+        "tests/mvp/check-memory-revisions.mjs:43"
+      ],
+      "evidence": [
+        "扩展分支同时接受suffix以真实逗号开头或quote本身包含尾逗号；起点规则不变。",
+        "两种B05逐字quote都扩展到同一句末，产生相同source_text，不更改body/scope。",
+        "Rust及HTTP同时覆盖带/不带逗号的正例，以及带尾逗号后仍包含仅本次/不要保存的拒绝；原归属、版本、幂等、检查点恢复反例继续保留。",
+        "mvp-memory-punctuation-fixed.log显示Rust单测1项及HTTP四组通过；主代理报告进程81781完整退出0。"
+      ]
+    }
+  ],
+  "findings": [],
+  "checks": [
+    {
+      "id": "context_dependency_lifecycle",
+      "result": "passed_in_supplied_log",
+      "evidence": ".local/checks/mvp-context-dependencies-fixed.log",
+      "source": "tests/mvp/check-context-dependencies.mjs",
+      "covered": [
+        "裁剪后登记实际记忆",
+        "未读对象停用不影响当前许可",
+        "跨轮保留早期读取依赖",
+        "已读对象撤回拒绝",
+        "缺dependency_schema时新输入重建",
+        "重建完成后下一轮不混入旧助手回答"
+      ]
+    },
+    {
+      "id": "native_compaction_dependencies",
+      "result": "passed_in_supplied_log",
+      "evidence": ".local/checks/mvp-native-compaction-dependencies.log",
+      "source": "tests/mvp/check-native-compaction.mjs",
+      "covered": [
+        "受控read_knowledge实际登记依赖并写入Pi工具结果",
+        "24轮历史后续接6轮保持原SDK session",
+        "原生compaction条目存在",
+        "压缩后早期知识仍在authority",
+        "撤回早期知识后发送预留拒绝",
+        "全部回环调用计入原trial且reserved=0"
+      ],
+      "observed": {
+        "calls": 19,
+        "compactions": 5,
+        "officialRequests": 0
+      },
+      "limitation": "provider为本地协议回环；摘要内容由测试provider产生，不证明真实模型摘要质量。"
+    },
+    {
+      "id": "memory_intents",
+      "result": "passed_in_updated_supplied_log",
+      "evidence": ".local/checks/mvp-memory-punctuation-fixed.log",
+      "source": "tests/mvp/check-memory-revisions.mjs",
+      "covered": [
+        "本人资产与版本边界",
+        "记忆修订/停用幂等",
+        "变更记忆后旧检查点拒绝恢复",
+        "分号混合意图",
+        "词内裁剪/伪造原文拒绝",
+        "逗号后另外独立长期指令允许",
+        "前置否定/尾部临时限定不可裁剪",
+        "另外指令尾部不要保存的截短和完整引用均拒绝",
+        "精确B05逗号前引用自动保留完整同句source_text",
+        "分号后的独立临时要求不进入source_text",
+        "带/不带尾逗号的B05引文保存同一完整source_text",
+        "包含尾逗号的临时/禁止限定仍拒绝"
+      ],
+      "limitation": "这是原文边界、资产写入和恢复行为的本地验证，不证明真实模型会正确理解任意自然语言意图。",
+      "evidence_history": [
+        ".local/checks/mvp-alignment-boundary-fixes.log",
+        ".local/checks/mvp-memory-source-fixed.log"
+      ]
+    },
+    {
+      "id": "pi_reuse",
+      "result": "passed_static_scope_review",
+      "locations": [
+        "apps/agent/session/deliver.ts:184",
+        "apps/agent/session/deliver.ts:234",
+        "apps/agent/session/checkpoint.ts:14"
+      ],
+      "assessment": "仍以createAgentSession/session.prompt、SessionManager和session.compact承担模型循环、会话恢复与压缩；本次Rust清单是业务有效性依赖，不是第二套会话树或压缩器。"
+    },
+    {
+      "id": "shared_contracts",
+      "result": "passed_in_supplied_log",
+      "evidence": ".local/checks/mvp-memory-source-code-contracts.log",
+      "assessment": "共享JSON Schema生成检查和170项Rust/TypeScript契约样本通过。此次instruction_quote说明与工具说明均同步明确引用起终点。",
+      "previous_evidence": ".local/checks/mvp-alignment-code-contracts-updated.log"
+    },
+    {
+      "id": "system_prompt_consolidation",
+      "result": "passed_static_scope_review",
+      "source": "apps/agent/session/resources.ts",
+      "baseline": ".local/checks/chat-instructions-before-consolidation.ts",
+      "baseline_sha256": "106afca0f3288a04b6a1a63160304b40a1f5933c5dda52892d4fc1b817c14866",
+      "reviewed_sha256": "b5ac7860b55ae3ea2acfe1e778b4f0f4de20503a3354da5c783391d103023c13",
+      "locations": [
+        "apps/agent/session/resources.ts:11",
+        "apps/agent/session/resources.ts:14",
+        "apps/agent/session/resources.ts:18",
+        "apps/agent/session/resources.ts:23",
+        "apps/agent/session/resources.ts:28",
+        "apps/agent/tools/data-tools.ts:15"
+      ],
+      "assessment": "与保存的旧稿逐段比较，改动仅在context模板中的静态提示正文；宿主context插入、无context时的提示、ResourceLoader隔离和SDK接入保持。工具说明指纹未变，原有25个审查输入指纹全部匹配。未新增Agent编排、调查顺序或模型复核循环。",
+      "covered": [
+        "每条输入登记归属，复用真实任务及版本，多目标恢复核对lifecycle并保留原身份和工具回执",
+        "按需补查有界上下文，核对正文完整性与版本，人工值和待复核建议分别处理",
+        "完整相关DDL、SQL和文档支持粒度、关联、过滤与约束判断，上游事件、中间计算和合法目标记录分别推断",
+        "结论、公式、文字说明与实际SQL采用同一口径；未知概念、执行器保证和样例覆盖不补设关系",
+        "仅为会改变答案的真实歧义保存澄清并等待，资料必需字段缺失明确留缺口",
+        "单位、精度与业务时区沿用当前条件，相对时间及恢复沿用原请求时钟",
+        "SQL修订失效旧稿，执行要求页面确认具体版本，结果归属原任务和条件版本，取消请求不冒称终态",
+        "明确长期偏好执行本人资产保存、修订或停用，临时条件不长期化，成功回执后才称已保存",
+        "Skill限定本会话已选有效版本，资料不能授予权限，宿主硬约束与Pi原生会话职责保持"
+      ],
+      "limitation": "仅证明本次静态规则覆盖与改动范围可接受。没有运行新版测试或模型，不证明S01/S04语义错误已修复，也不将旧版官方轮或机器通过结果转记为新版语义通过。"
+    }
+  ],
+  "residual_risks": [
+    "依赖以对象及版本为粒度并沿有效会话取并集；即使摘要已省略某资料，也会保守保留早期依赖。该取舍不等于逐字摘要依赖分析。",
+    "instruction_quote只提供原文与有限边界校验；自然语言意图仍由Pi/模型理解，不能据此宣称覆盖所有中文否定、指代和授权表达。",
+    "旧或缺清单的同输入恢复继续明确拒绝；不能用创建新SDK身份完成未知副作用。",
+    "系统提示收敛是维护调整，现有证据不能证明长提示是语义错误的原因；更短的提示也不能替代真实模型答案与完整来源的一致性验收。"
+  ],
+  "testing_gaps": [
+    "审查者没有运行数据库、模型、构建或测试，只核对现有源码及完整日志；主代理报告memory-source与memory-punctuation验证进程均完整退出0。",
+    "历史官方B05失败报告保留，局部修复与本地回归不将其改记为官方通过；后续真实完整轮、验收器独立复核和最终增量另行完成。",
+    "IA04/IA05/IA08与journal历史证据已向最终增量审查者提供，本轮不扩大重新审计；其当前输入与最终验收由最终审查统一绑定。",
+    "静态提示新版尚无本审查确认的测试或真实模型证据；需另行核对答案、SQL与来源之间的一致性，不能仅据机器通过关闭语义缺口。"
+  ],
+  "reviewed_inputs_sha256": {
+    "AGENTS.md": "d3c1996e4d6684a158d3ed94fbd31dcdd28328d39cd58a6d01fe5518b8281d31",
+    "apps/agent/session/resources.ts": "b5ac7860b55ae3ea2acfe1e778b4f0f4de20503a3354da5c783391d103023c13",
+    ".local/checks/chat-instructions-before-consolidation.ts": "106afca0f3288a04b6a1a63160304b40a1f5933c5dda52892d4fc1b817c14866",
+    "crates/data-agent/src/use_cases/context_authority.rs": "3c36eb08fa9de40d51ecd24b848f0e6f539110b0eb6d6660d9bb67bd94450880",
+    "crates/data-agent/src/use_cases/deliver_run.rs": "aa0c0b259f4f024e20142713930940a126b70dd35232483842c8d23e511300e7",
+    "crates/data-agent/src/use_cases/data_tools.rs": "96e4062297ef09e2cbfd4298e3395c26d88203a4ca245de03ad3411383b2d65b",
+    "crates/data-agent/src/use_cases/model_calls.rs": "f223f4ad0716842c0fbb3efd3342d40c1cd11324e11521f4734a40e2ca5539a5",
+    "crates/data-agent/src/modules/runtime/store.rs": "b6c277b02aaf5a81cf2faacc4d9070649d22a9402b0704f0a4a9ff195498e37e",
+    "crates/data-agent/src/modules/assets/mod.rs": "3ef444001787e44b16637214c464531734fa2b2fa91c8471ca2a2f625ce1a3e0",
+    "crates/data-agent/src/modules/conversations/store.rs": "ae1b1eb0190a2fb4e68e6cd97d5bef7bb105b05f70c050b35926871440a5d00d",
+    "apps/agent/session/deliver.ts": "0385eb6d192e157a475a7ac1b6eed8cc1e9faca9fb9a3fbf310d9f77cdaa7bb2",
+    "apps/agent/session/checkpoint.ts": "24ff13be74efae72e0e77e272b7eed6a4e872f758e24f236bddfcb8564ea0d0f",
+    "apps/agent/session/journal.ts": "b876821f2d13ac99469dce56eed3ea1096c81bd38be1858925a54f16fe0695cd",
+    "apps/agent/tools/data-tools.ts": "c47f81694870330c93f7e99a5eb31cf41815ba638dbb6a780293c98065bb9324",
+    "packages/contracts/schema.json": "78b1a289dda395a06c3d292b8bc1ba810b10fb084344b9e5f19aed7c13920d94",
+    "tests/mvp/check-context-dependencies.mjs": "5ea8dd24df73584b0b7ac58dc1636a3f840e22206b0715050ee10e67f775242d",
+    "tests/mvp/check-native-compaction.mjs": "5dc3e0d305d77d0eeff560a15739ae3c6d4302acbf057f23746d3cd95cc82be4",
+    "tests/mvp/check-memory-revisions.mjs": "3bb1186707509299c00ccb797b832c4ac9e38a7cf216e11362fbd751332e4ec2",
+    ".local/checks/mvp-context-dependencies-fixed.log": "32e22c8d5eda45d31cc0c329b97beac879910db6a17023e2a7b9442e0b17e7ef",
+    ".local/checks/mvp-native-compaction-dependencies.log": "43989280b7697d17f7902a3bd9130e0bca48eefe4baa9cdffa6b75c4772dcc53",
+    ".local/checks/mvp-memory-intents-current.log": "9543def6b372535456e10955d42a8c2c0a1ac21ffda391fa425fc96af433960d",
+    ".local/checks/mvp-alignment-boundary-fixes.log": "78184a5a9c7733e17d5a45261a6e12d104fbfe7a10a68bb46abf7a5de188e09f",
+    ".local/checks/mvp-alignment-code-contracts-updated.log": "7eac991eb04c016f7ac27de83450524759c54d5f31de07d5f579aedcf572aaef",
+    ".local/checks/mvp-memory-comma-before-fix.log": "68f84a44f4043d053000c02ec34ad1d45e8af84ceafd396061b66ffe2b7774bb",
+    ".local/checks/mvp-memory-source-fixed.log": "4d9a61026439c4ea27a949a47a8e123b6e33f605300412964ef6d3233b749648",
+    ".local/checks/mvp-memory-source-code-contracts.log": "880fe92b9520533a3e3f7cecbf8bed6d3bad7086f9487307d0d35422de001265",
+    ".local/model-workflow/mvp-alignment-complete-memory-boundary-failed.json": "895deeccf85734ca51af695c8d0177d33d0bbf774ce00045814c420d4dd7040e",
+    ".local/checks/mvp-memory-punctuation-fixed.log": "a6122d9d6ed84ee2447534310a2cfce54aea2e061fa3aaf520d0ddc48021f362"
+  }
+}

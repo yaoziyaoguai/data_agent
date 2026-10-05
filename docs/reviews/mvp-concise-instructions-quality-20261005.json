@@ -1,0 +1,83 @@
+{
+  "schema": 1,
+  "conclusion": "failed",
+  "reviewer": "independent audit_agent_reality; 未参与指令精简、模型运行或验收runner实现",
+  "scope": "只审查精简聊天指令后的S01/S04真实模型代表，不与其他轮次题目拼接，不代表完整16题或MVP通过。",
+  "evidence": ".local/model-workflow/concise-instructions-representative-result.json",
+  "evidence_sha256": "4dc93f4b1d45c230a2cb57b2d8c2aecf01d33ffa2515f6bdac1aac66a03ae484",
+  "evidence_verified_at": "2026-10-05T02:49:23.514Z",
+  "database": "data_agent_trial_71059da47e517186",
+  "evidence_kind": "official DeepSeek model; synthetic SQLite platform and project-created business materials",
+  "execution": {
+    "machine_passed": true,
+    "selected_cases": ["S01", "S04"],
+    "official_requests": 29,
+    "settled_receipts": 29,
+    "reserved_micros": 0,
+    "spent_micros": 193310,
+    "semantic_passed_cases": ["S04"],
+    "semantic_failed_cases": ["S01"]
+  },
+  "source_comparison": {
+    "baseline_evidence": ".local/model-workflow/mvp-reviewed-semantic-failed.json",
+    "baseline_evidence_sha256": "d575b7837b4c11af5f5dec1c4324ecad5e27b77454acf5cc223cdc13e5a518c1",
+    "changed_reported_input_paths": ["apps/agent/session/resources.ts"],
+    "previous_resources_sha256": "106afca0f3288a04b6a1a63160304b40a1f5933c5dda52892d4fc1b817c14866",
+    "reviewed_resources_sha256": "b5ac7860b55ae3ea2acfe1e778b4f0f4de20503a3354da5c783391d103023c13",
+    "assessment": "两份报告的sourceHashes逐项比较，仅聊天resources变化；样例材料、独立参考、业务runner、预填及契约指纹保持。这只描述本代表的版本范围。"
+  },
+  "findings": [
+    {
+      "id": "SEMANTIC-GRAIN-01",
+      "case_id": "S01",
+      "priority": 1,
+      "title": "整单全退被错误推导为每行付款金额都大于0",
+      "conversation_id": "fab068bf-39b0-4aad-8803-1438e08adc46",
+      "evidence_pointer": "checks[id=S01].artifacts.explanation",
+      "observed": "回答写道“整单全退的行仍保留付款金额，是 refunded_amount_cents = paid_amount_cents > 0（净收入贡献0），order_status='refunded'”。它把整单状态与订单行的正付款金额绑定。",
+      "expected": "付款金额是行级累计，状态的付款/退款分支来自整单总额。整单全退时，未付款行仍可合法保存paid=refund=0、paid_at=NULL，同时状态为refunded。退款不会抹去付款累计额的主结论正确，但不能据此声称整单全退的每一行都大于0。",
+      "counterexample_from_existing_contract": {
+        "description": "同一非取消订单有两行。行1有成功charge100分、refund100分；行2没有付款事件。两行的下单及事件时间均在快照前，其他订单属性一致。",
+        "line1": {"paid_amount_cents": 100, "refunded_amount_cents": 100, "order_status": "refunded"},
+        "line2": {"paid_amount_cents": 0, "refunded_amount_cents": 0, "paid_at": null, "order_status": "refunded"},
+        "reason": "行2经LEFT JOIN和COALESCE补0；整单paid/refund均100，因此其CASE进入refunded。0/0满足目标非负及退款不超付款约束。此反例不依赖未模拟的零元charge、退款超付款或取消后付款。",
+        "verification_scope": "根据原有DDL和ETL逐步推导；本审查未运行数据库变更或新的模型请求，不把该推导冒称新增测试已执行。"
+      },
+      "basis": [
+        "docs/sources/schema.sql:45：行级付款金额允许0。",
+        "docs/sources/schema.sql:46：paid=refund=0满足约束。",
+        "docs/sources/etl.sql:14：order_totals按order_id汇总。",
+        "docs/sources/etl.sql:21：无匹配行金额COALESCE补0。",
+        "docs/sources/etl.sql:23：非取消行先判整单paid为0，再判整单refund=paid。",
+        "docs/sources/business-guide.md第4节：order_status是整单状态，不能当作单行退款标记。"
+      ],
+      "input_delivery_checked": {
+        "etl_operation_id": "c88755bc-f3b9-403c-8cd1-aa74d51961d2",
+        "field_document_operation_id": "a6db9ff7-81db-43ef-99c8-30df7385b996",
+        "assessment": "实际read_knowledge回执含完整1397字ETL及889字字段文档；整单汇总和CASE分支已经交给Pi。没有把错误归因于资料未提供或工具截断。"
+      },
+      "impact": "S01本来在解释零付款行的可能性；该额外结论误导用户按整单状态排除本来合法的零付款行，属于实质粒度错误。"
+    }
+  ],
+  "checks": [
+    {
+      "id": "S01",
+      "passed": false,
+      "summary": "原来的refund-only可落表路径已不再出现；成功事件过滤、COALESCE、金额单位和不能认定零元成交的主结论成立。但新增整单全退行必有正付款的错误断言，见SEMANTIC-GRAIN-01。"
+    },
+    {
+      "id": "S04",
+      "passed": true,
+      "summary": "先澄清分母；订单率先定期内付款订单集合再查全部行退款，文字与SQL一致；金额率明确为退款金额/支付金额，没有旧轮“未退金额”反向说明。独立结果分别为订单率0.5、金额率0.225、3月零分母NULL，变体结果一致；3份SQL均保持awaiting_confirmation/not_submitted，未冒称已执行。"
+    }
+  ],
+  "non_blocking_observations": [
+    "S01说零付款行“通常”是unpaid/cancelled，没有断言所有行都如此，本审查不单独将该句判为失败。",
+    "S01使用“缺失语义被0和零元成交合并了”这一含混表述；其上下文同时说明零元成交定义和实际存在与否未知。本记录保留此措辞问题，但不靠它构造主要失败。"
+  ],
+  "limits": [
+    "只证明本次两题代表的实际表现；其他14题未在此轮执行。",
+    "原完整轮的语义失败记录保持不变。S04本次通过不能替换旧轮失败题，也不能据此宣布完整MVP通过。",
+    "本审查只读产物与原始要求，未改prompt、实现、验收预期或CURRENT，未新增模型调用。"
+  ]
+}

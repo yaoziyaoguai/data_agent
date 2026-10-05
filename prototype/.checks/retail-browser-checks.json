@@ -1,0 +1,216 @@
+{
+  "verifiedAt": "2026-10-02T16:36:04.802966+00:00",
+  "method": "Existing Playwright CLI with isolated Chromium session; completed browser assertions without application errors.",
+  "checks": [
+    {
+      "name": "主表13字段与3指标",
+      "passed": true
+    },
+    {
+      "name": "全虚构标签",
+      "passed": true
+    },
+    {
+      "name": "字段可展开 order_id",
+      "passed": true
+    },
+    {
+      "name": "字段可展开 line_id",
+      "passed": true
+    },
+    {
+      "name": "字段可展开 customer_id",
+      "passed": true
+    },
+    {
+      "name": "字段可展开 product_id",
+      "passed": true
+    },
+    {
+      "name": "字段可展开 quantity",
+      "passed": true
+    },
+    {
+      "name": "字段可展开 paid_amount_cents",
+      "passed": true
+    },
+    {
+      "name": "字段可展开 refunded_amount_cents",
+      "passed": true
+    },
+    {
+      "name": "字段可展开 paid_at",
+      "passed": true
+    },
+    {
+      "name": "字段可展开 order_date",
+      "passed": true
+    },
+    {
+      "name": "字段可展开 channel",
+      "passed": true
+    },
+    {
+      "name": "字段可展开 region",
+      "passed": true
+    },
+    {
+      "name": "字段可展开 is_test",
+      "passed": true
+    },
+    {
+      "name": "字段可展开 order_status",
+      "passed": true
+    },
+    {
+      "name": "字段人工修改标记",
+      "passed": true
+    },
+    {
+      "name": "字段确认",
+      "passed": true
+    },
+    {
+      "name": "编辑撤销确认",
+      "passed": true
+    },
+    {
+      "name": "语义保存刷新恢复",
+      "passed": true
+    },
+    {
+      "name": "重新预填保留人工修改",
+      "passed": true
+    },
+    {
+      "name": "来源包含合成DDL及SQL",
+      "passed": true
+    },
+    {
+      "name": "恢复预填移除人工标记",
+      "passed": true
+    },
+    {
+      "name": "字段搜索",
+      "passed": true
+    },
+    {
+      "name": "待核实筛选",
+      "passed": true
+    },
+    {
+      "name": "支付事件元数据",
+      "passed": true
+    },
+    {
+      "name": "客户维度元数据",
+      "passed": true
+    },
+    {
+      "name": "仅3个ETL上游",
+      "passed": true
+    },
+    {
+      "name": "标签未伪装ETL上游",
+      "passed": true
+    },
+    {
+      "name": "指标SQL net_revenue",
+      "passed": true
+    },
+    {
+      "name": "指标SQL paid_customer_uv",
+      "passed": true
+    },
+    {
+      "name": "指标SQL order_refund_rate",
+      "passed": true
+    },
+    {
+      "name": "指标编辑撤销口径确认",
+      "passed": true
+    },
+    {
+      "name": "4份独立说明",
+      "passed": true
+    },
+    {
+      "name": "文档章节及多对象引用",
+      "passed": true
+    },
+    {
+      "name": "文档生成v2",
+      "passed": true
+    },
+    {
+      "name": "文档保留旧版本",
+      "passed": true
+    },
+    {
+      "name": "文档刷新恢复",
+      "passed": true
+    },
+    {
+      "name": "模拟用户A",
+      "passed": true
+    },
+    {
+      "name": "纠错改版待核对",
+      "passed": true
+    },
+    {
+      "name": "个人记忆停用",
+      "passed": true
+    },
+    {
+      "name": "记忆删除",
+      "passed": true
+    },
+    {
+      "name": "撤销删除",
+      "passed": true
+    },
+    {
+      "name": "用户B记录隔离",
+      "passed": true
+    },
+    {
+      "name": "用户A个人修改保留",
+      "passed": true
+    },
+    {
+      "name": "会话条件保留",
+      "passed": true
+    },
+    {
+      "name": "纠错定位共享指标",
+      "passed": true
+    },
+    {
+      "name": "无页面脚本异常",
+      "passed": true
+    },
+    {
+      "name": "支付来源表复用关联文档",
+      "passed": true
+    },
+    {
+      "name": "客户维度复用关联文档",
+      "passed": true
+    }
+  ],
+  "checkCount": 49,
+  "scope": "静态原型交互；真实账号权限、模型和数据平台均未接入。",
+  "screenshots": [
+    "retail-overview.png",
+    "retail-metrics.png",
+    "retail-documents.png",
+    "retail-personal.png"
+  ],
+  "notes": [
+    "合成样例初始状态已恢复。",
+    "首次测试中将paid_at搜索错误地预期为精确字段匹配；现按原型现有全文搜索行为核对可见字段，完整重跑通过。",
+    "工具无法连接既有Chrome DevTools和IAB，使用已安装Playwright CLI完成验证，未安装组件。",
+    "已按实际目录对象ID核对两张上游表的文档引用。"
+  ]
+}

@@ -1,0 +1,279 @@
+{
+  "reviewer": "audit_agent_reality（未参与对应实现的独立语义审查者）",
+  "reviewed_date": "2026-10-05",
+  "conclusion": "failed",
+  "scope": "四题官方代表轮；审查正式S01回答和五份成功采用的字段建议。P05再次复核截断并被拒绝，不评价为已完成建议，不代表完整16题或最终MVP。",
+  "evidence": ".local/model-workflow/native-session-quality-representative-result.json",
+  "evidence_sha256": "920ee872b2f83149985ae15cec05ebe55e8695675f241dcee3d3758a9a0f8555",
+  "evidence_kind": "official_representative_semantic_review",
+  "supplementary_evidence": [
+    {
+      "path": ".local/model-workflow/native-session-quality-p05-history.json",
+      "sha256": "793d324f34d4a2b5a153c7bd68c5c05df99fb1953a416ad8d8ff57eab566fa91",
+      "scope": "父代理一次只读导出的P05知识版本3/4/5及两次维护attempt；审查者未运行MySQL。"
+    },
+    {
+      "path": ".local/model-workflow/native-session-quality-s01-preview.json",
+      "sha256": "26a27687e4aa0e9b641c9e91885bf2debfdf63708af6d8e5f78a25fe1756d46f",
+      "scope": "父代理只读导出的S01持久提交事件；与完整报告及committed消息逐字匹配。"
+    }
+  ],
+  "summary": "S01机器通过但新增自动全事务回滚错误；P01初次再次把只有成功退款列为输出零付款成因，语义失败，P01再次可通过。P04初次/再次通过。P05初次在前文CASE限定下可通过，再次finish_reason=length被拒绝，整个P05未完成。82条成功采用建议的引用/来源版本/定位核对通过，人工值和标记保留。16次官方调用全结算、未知预留0；本轮不可关闭质量验收。",
+  "checks": [
+    {
+      "id": "S01",
+      "passed": false,
+      "summary": "行级付款汇总、零值与未知业务概念的边界已改善，refund-only也被明确排除；但把SQLite CHECK导致的INSERT失败说成自动整事务回滚，独立内存见证反驳。",
+      "finding_ids": [
+        "S01-SQLITE-ABORT-NOT-ROLLBACK"
+      ]
+    },
+    {
+      "id": "P01",
+      "passed": false,
+      "initial_passed": false,
+      "repeated_passed": true,
+      "summary": "初次类型/空值段明确把只有成功退款解释为输出字段0，未核对目标退款CHECK；再次只陈述中间SUM取值和本列约束，不无条件承诺refund-only能成功落表，其他定义、单位、粒度、用途及未模拟金额组成边界成立。",
+      "finding_ids": [
+        "P01-INITIAL-REFUND-ONLY-OUTPUT"
+      ]
+    },
+    {
+      "id": "P04",
+      "passed": true,
+      "initial_passed": true,
+      "repeated_passed": true,
+      "summary": "两份均正确区分上游正数CHECK和主表NOT NULL、原样投影、行级下单件数、SUM(quantity)与行数/订单数，以及缺少退货件数。初次补充商品计量/其他写入路径未知未冒充现有规则缺失；再次简洁保留必需边界。"
+    },
+    {
+      "id": "P05",
+      "passed": false,
+      "initial_passed": true,
+      "repeated_passed": null,
+      "repeated_status": "incomplete_output_rejected",
+      "summary": "补证确认初次v3实际采用结果与成功attempt.review完全一致；CASE优先级、行级取消与订单级金额、状态一致性及样例不模拟和程序可落表已区分。再次review输出达到上限，未通过格式完整性校验、未采用；不能以初次正确替代完整初次/人工编辑/再次成功流程。",
+      "finding_ids": [
+        "P05-REPEATED-OUTPUT-INCOMPLETE"
+      ]
+    }
+  ],
+  "findings": [
+    {
+      "id": "S01-SQLITE-ABORT-NOT-ROLLBACK",
+      "priority": "P2",
+      "confidence": 100,
+      "title": "把SQLite语句失败误说成自动回滚整个事务",
+      "location": {
+        "path": ".local/model-workflow/native-session-quality-representative-result.json",
+        "line": 189,
+        "json_pointer": "/checks/0/artifacts/explanation"
+      },
+      "evidence": [
+        "正式已提交正文称：插入会失败、整个事务回滚。",
+        "etl.sql按BEGIN、DELETE、INSERT、COMMIT执行，未声明ON CONFLICT ROLLBACK或驱动异常处理。SQLite默认CHECK冲突中止INSERT语句，事务仍处于打开状态。",
+        "独立纯内存见证：已有1行目标记录，加入成功refund-only后重跑原ETL，CHECK失败后in_transaction=true，当前事务目标行数为0；显式rollback后才恢复原1行。"
+      ],
+      "recommendation": "分别陈述语句失败、事务尚未提交及执行器回滚；没有方言与驱动处理依据时，不承诺失败会自动回滚整个事务。",
+      "autofix_class": "advisory"
+    },
+    {
+      "id": "P01-INITIAL-REFUND-ONLY-OUTPUT",
+      "priority": "P2",
+      "confidence": 100,
+      "title": "已采用的初次预填把无法落表的refund-only输入列为零付款成因",
+      "location": {
+        "path": ".local/model-workflow/native-session-quality-representative-result.json",
+        "line": 15995,
+        "json_pointer": "/checks/1/artifacts/initial/entries/0/suggestion/value"
+      },
+      "evidence": [
+        "初次采用正文称：没有成功charge的行（完全无事件、只有failed/pending事件、或只有成功退款）本字段为0而非NULL。",
+        "只有截止前成功refund时，中间paid=0、refunded>0；schema.sql的refunded_amount_cents BETWEEN 0 AND paid_amount_cents使该记录不能成功插入目标表。",
+        "原schema/ETL纯内存执行实际报CHECK constraint failed。引用真实以及本列>=0成立，不证明完整记录符合另一列CHECK。"
+      ],
+      "recommendation": "将中间表达式结果和成功保存的目标记录分开；字段解释只列已通过完整加工与输出约束核对的成因。",
+      "autofix_class": "advisory"
+    },
+    {
+      "id": "P05-REPEATED-OUTPUT-INCOMPLETE",
+      "priority": "P2",
+      "confidence": 100,
+      "title": "P05再次复核达到输出上限，完整预填流程未完成",
+      "location": {
+        "path": ".local/model-workflow/native-session-quality-representative-result.json",
+        "line": 16946,
+        "json_pointer": "/checks/3/prefillFailure/attempt/result/review/invalid_response"
+      },
+      "evidence": [
+        "再次复核保存reason=output_limit、finish_reason=length，内容在来源引用中途结束。",
+        "attempt状态invalid_prefill，knowledge保持版本5，人工有效值及修改标记保留。",
+        "报告machinePassed=false，P05本题失败；当前不能产生再次成功的语义结论。"
+      ],
+      "recommendation": "控制条目内容范围及冗余，保持格式完整性和引用校验；新有限试验实际完成后再评价再次建议，不将被拒绝草稿当作已采用结果。",
+      "autofix_class": "advisory"
+    }
+  ],
+  "verification": {
+    "semantic_source_sha256": {
+      "docs/sources/schema.sql": "49c13a97ad3b53bf161d549d35cc33f741b2d47701c2b744c20883cfedf2b72a",
+      "docs/sources/etl.sql": "42e2f1e7dfbd74bcbd07a0b2a712bd85b73adeb65ba8cf86e29619c07724de56",
+      "docs/sources/business-guide.md": "db322cbb2bb4d7f92e9ca6bc56d0e4ee8cd957354ff1b78c41ece5bee258e610",
+      "docs/sources/evaluation/prefill-cases.json": "8c42c5df5db32e7425bb02b307697ca323e17c45167e88e469bca822f6b72f7a"
+    },
+    "source_snapshot_code_sha256": {
+      "apps/agent/session/resources.ts": "4d49e738f5c162859e8bb60a986d7772a69b14d3f435f49b0741808c55a64d69",
+      "apps/agent/session/deliver.ts": "0385eb6d192e157a475a7ac1b6eed8cc1e9faca9fb9a3fbf310d9f77cdaa7bb2",
+      "apps/agent/session/checkpoint.ts": "24ff13be74efae72e0e77e272b7eed6a4e872f758e24f236bddfcb8564ea0d0f",
+      "crates/data-agent/src/modules/ingestion/prefill.rs": "92c94e68b5b5da7101ada1226cd194dbb787f9a1cf088e32699d5d84845b4a01"
+    },
+    "scope_note": "绑定本轮实际产物和其中保存的源码指纹；不将后续提示词修改当作该产物已修复。",
+    "formal_s01_committed": true,
+    "formal_s01_matches_partial_preview": true,
+    "formal_s01_matches_report_persisted_message": true,
+    "quote_count": 82,
+    "full_location_quotes": 79,
+    "contiguous_partial_location_quotes": 3,
+    "quote_errors": [],
+    "case_details": [
+      {
+        "id": "P01",
+        "manual_effective_value_preserved": true,
+        "human_override_record_preserved": true,
+        "source_facts_preserved": true,
+        "stages": [
+          {
+            "stage": "initial",
+            "knowledge_version": "3",
+            "prefill_state": "succeeded",
+            "quote_count": 20,
+            "semantic_passed": false
+          },
+          {
+            "stage": "repeated",
+            "knowledge_version": "6",
+            "prefill_state": "succeeded",
+            "quote_count": 20,
+            "semantic_passed": true
+          }
+        ]
+      },
+      {
+        "id": "P04",
+        "manual_effective_value_preserved": true,
+        "human_override_record_preserved": true,
+        "source_facts_preserved": true,
+        "stages": [
+          {
+            "stage": "initial",
+            "knowledge_version": "3",
+            "prefill_state": "succeeded",
+            "quote_count": 14,
+            "semantic_passed": true
+          },
+          {
+            "stage": "repeated",
+            "knowledge_version": "6",
+            "prefill_state": "succeeded",
+            "quote_count": 8,
+            "semantic_passed": true
+          }
+        ]
+      },
+      {
+        "id": "P05",
+        "manual_effective_value_preserved_after_failure": true,
+        "human_override_record_preserved_after_failure": true,
+        "source_facts_preserved_after_failure": true,
+        "initial_adopted_matches_successful_attempt_review": true,
+        "failed_attempt_matches_report": true,
+        "stages": [
+          {
+            "stage": "initial",
+            "knowledge_version": "3",
+            "prefill_state": "succeeded",
+            "quote_count": 20,
+            "semantic_passed": true
+          },
+          {
+            "stage": "repeated",
+            "knowledge_version": "5",
+            "prefill_state": "invalid_prefill",
+            "finish_reason": "length",
+            "reason": "output_limit",
+            "semantic_passed": null,
+            "adopted": false
+          }
+        ]
+      }
+    ],
+    "pure_sqlite_witnesses": [
+      {
+        "id": "check_failure_transaction_boundary",
+        "engine": "Python sqlite3 in-memory with original schema.sql/etl.sql",
+        "steps": [
+          "Initialize schema and one placed raw order line without events; run original ETL successfully.",
+          "Commit one positive successful refund event without a charge for that line; run the same ETL.",
+          "Catch IntegrityError without implicitly closing the connection; inspect transaction and target row count.",
+          "Call explicit rollback and inspect target row count."
+        ],
+        "observed": {
+          "rows_before_rebuild": 1,
+          "error": "CHECK constraint failed: refunded_amount_cents BETWEEN 0 AND paid_amount_cents",
+          "in_transaction_after_error": true,
+          "rows_visible_after_error": 0,
+          "rows_after_explicit_rollback": 1
+        }
+      },
+      {
+        "id": "refund_only_rejected",
+        "observed": "成功refund=100且没有charge时，目标退款CHECK拒绝INSERT。"
+      },
+      {
+        "id": "mixed_row_cancellation",
+        "observed": "同单无付款cancelled与placed行可分别落cancelled、unpaid。"
+      },
+      {
+        "id": "refunded_order_unpaid_line",
+        "observed": "同单一行paid=refund=100、另一行无事件，后一行paid=0、refund=0、status=refunded仍能落表。"
+      },
+      {
+        "id": "cancelled_with_payment",
+        "observed": "cancelled行成功charge100、refund0可落表；文档未模拟不等于CHECK拒绝。"
+      }
+    ],
+    "official_requests": 16,
+    "receipt_count": 16,
+    "all_receipts_settled": true,
+    "ledger": {
+      "calls": 16,
+      "state": "active",
+      "spent_micros": 226792,
+      "reserved_micros": 0
+    },
+    "reviewer_official_requests_added": 0,
+    "reviewer_mysql_requests_added": 0
+  },
+  "prior_findings_rechecked": [
+    {
+      "id": "S01-UNDEFINED-CONCEPT-MAPPING",
+      "status": "本轮明确业务概念未定义、不能确定如何映射，没有再断言零元成交一定无charge或一定映射0；开头的记录表述按随后明确边界整体理解。"
+    },
+    {
+      "id": "P05-INITIAL-CONSISTENCY-CONTRADICTION",
+      "status": "初次正文分别描述行级取消与订单级金额，并明确同单状态可能不同，没有再无条件断言各行相同。"
+    },
+    {
+      "id": "S01-REFUND-ONLY-OUTPUT",
+      "status": "S01正式回答已排除成功refund-only的可落表解释，但P01初次采用结果重新出现该错误，见本轮finding。"
+    },
+    {
+      "id": "P05-UNSUPPORTED-AS-CONSTRAINT",
+      "status": "初次建议区分程序中取消分支确定取值与文档未模拟的业务边界，没有把取消后付款说成数据库拒绝。"
+    }
+  ],
+  "non_blocking_notes": [
+    "P05初次“可落表取值”段的箭头举例省略了非取消/订单金额前提，但该段有“满足前提的输入经上述CASE”限定，前文完整CASE已给出这些条件；按上下文整体判读，不仅因该省略增加硬失败。后续可删去该冗余例举以减少歧义。",
+    "S01关于取消和未付不计收入的表述位于引用本样例指标口径的说明中，未将其独立宣称为真实平台或数据库普遍保证；本轮不额外归为取消CHECK错误。",
+    "P05再次analysis草稿包含可疑推断，但review截断导致整个再次尝试未采用；本次不把未采用草稿作为正式语义通过或另一项产品错误。"
+  ]
+}
