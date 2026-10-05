@@ -3,7 +3,7 @@ const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 const { chromium } = require('playwright');
 
-// 三张视图共用原有 11 个组件和 19 条关系；拆开连线只为阅读，不改变部署或职责。
+// 总览与三张详图共用 11 个组件和 19 条关系；定稿与现有实现的差异在架构说明中单列。
 const nodes = {
   users: { name: '业务用户', type: 'Person', tech: '产品 · 算法 · 分析', lines: ['数据开发维护语义'], kind: 'person' },
   web: { name: 'Web 应用', type: 'Container', tech: 'React / TypeScript', lines: ['提问、SQL、结果与历史', '语义管理 · 我的积累'], kind: 'app' },
@@ -13,8 +13,8 @@ const nodes = {
   worker: { name: '后台任务进程', type: 'Container', tech: 'Rust Worker', lines: ['来源同步、预填与索引更新', '查询跟踪、作业租约与重试'], kind: 'app' },
   mysql: { name: '正式业务记录', type: 'Data Store', tech: 'MySQL 8.4', lines: ['知识、版本、会话与查询状态', '个人资产、预算与持久待办'], kind: 'store' },
   vector: { name: '检索索引', type: 'Data Store', tech: 'Milvus 3.0 / 可接 Zilliz', lines: ['共享知识与个人记忆分别索引', '携带归属和版本，可从正式记录重建'], kind: 'store' },
-  memory: { name: '个人记忆适配进程', type: 'Container', tech: 'Python / Mem0 OSS 2.2.1', lines: ['从原始消息提取候选、检索记忆', 'SQLite 保存 SDK 历史与技术回执'], kind: 'app' },
-  models: { name: '模型能力', type: 'Model APIs / 本地 Embedding', tech: 'DeepSeek Flash · E5 · 百炼 Qwen', lines: ['生成与提取：DeepSeek Flash', '共享知识：本地 E5 / 384 维', '个人记忆：百炼 Qwen / 1024 维'], kind: 'integration' },
+  memory: { name: 'Mem0 个人记忆', type: 'Container', tech: 'Python / Mem0 OSS 2.2.1', lines: ['从原始消息提取候选、检索记忆', 'SQLite 保存 SDK 历史与技术回执'], kind: 'app' },
+  models: { name: '模型能力', type: 'Model APIs', tech: 'DeepSeek Flash · 百炼 Qwen', lines: ['理解、生成与提取：DeepSeek Flash', '向量：qwen3.7-text-embedding', '共享知识与个人记忆分开建索引'], kind: 'integration' },
   platform: { name: '数据平台 / 查询引擎', type: 'External Software System', tech: '当前：可执行合成平台 / SQLite', lines: ['元数据、血缘、节点与加工 SQL', '权限、查询提交、状态与结果', '真实平台后续经适配器接入'], kind: 'integration' },
 };
 
@@ -29,7 +29,7 @@ const relations = {
   remember: ['api', 'memory', '原始消息提取 / 记忆检索', '内部 HTTP'],
   execute: ['api', 'platform', '用户确认后查询 / 权限与结果', '平台适配接口'],
   generate: ['pi', 'models', '模型推理', 'HTTPS / JSON'],
-  'embed-query': ['api', 'models', '问题向量化', '本地 Embedding'],
+  'embed-query': ['api', 'models', '问题向量化', '百炼 Embedding'],
   'memory-model': ['memory', 'models', '提取 / 向量化', '取得逐调用预算许可后发送'],
   claim: ['worker', 'mysql', '领取任务 / 保存状态', 'SQL / TCP'],
   index: ['worker', 'vector', '共享知识索引更新', 'Milvus REST API'],
@@ -41,6 +41,30 @@ const relations = {
 };
 
 const views = [
+  {
+    id: 'overview', title: 'Data Agent · 定稿架构总览', subtitle: 'Pi SDK 负责 Agent；Mem0 负责个人记忆；Rust 负责业务约束与正式状态。', height: 1490,
+    boundaryPath: 'M275 175 H1200 V570 H1870 V1350 H460 V960 H275 Z',
+    boundaryBoxes: [[275, 175, 925, 785], [460, 570, 1410, 780]],
+    places: { users: [35, 265, 215, 170], web: [330, 250, 300, 200], api: [780, 235, 350, 230], models: [1480, 235, 370, 230], worker: [330, 665, 330, 200], pi: [780, 665, 350, 200], memory: [1350, 665, 390, 230], platform: [35, 1080, 370, 230], mysql: [510, 1110, 350, 190], journal: [985, 1110, 350, 190], vector: [1460, 1110, 390, 200] },
+    edges: [
+      ['use', [[250, 345], [330, 345]], [290, 311], ['使用']],
+      ['web-api', [[630, 345], [780, 345]], [705, 309], ['请求 / 事件']],
+      ['run', [[935, 465], [935, 665]], [925, 539], ['启动 / 恢复 / 取消']],
+      ['tools', [[1100, 665], [1100, 465]], [1100, 582], ['受控工具']],
+      ['generate', [[1130, 725], [1250, 725], [1250, 330], [1480, 330]], [1360, 308], ['模型推理']],
+      ['remember', [[1130, 435], [1340, 435], [1340, 580], [1530, 580], [1530, 665]], [1480, 551], ['提取 / 检索个人记忆']],
+      ['memory-model', [[1720, 665], [1720, 465]], [1740, 541], ['提取 / 向量化']],
+      ['records', [[780, 435], [730, 435], [730, 995], [685, 995], [685, 1110]], [705, 1054], ['保存正式记录']],
+      ['execute', [[780, 390], [710, 390], [710, 515], [120, 515], [120, 1080]], [455, 500], ['用户确认后查询 / 权限与结果']],
+      ['claim', [[495, 865], [495, 1020], [585, 1020], [585, 1110]], [514, 990], ['任务 / 状态']],
+      ['sync', [[330, 775], [200, 775], [200, 1080]], [200, 952], ['资料 / 查询状态']],
+      ['commit-memory', [[660, 805], [710, 805], [710, 940], [1395, 940], [1395, 895]], [1055, 920], ['正式资产提交后的索引待办']],
+      ['session-store', [[955, 865], [955, 1020], [1160, 1020], [1160, 1110]], [1160, 1060], ['Pi 原生会话']],
+      ['memory-index', [[1740, 825], [1880, 825], [1880, 1010], [1660, 1010], [1660, 1110]], [1680, 986], ['个人记忆索引']],
+      ['search', [[1130, 450], [1220, 450], [1220, 960], [1420, 960], [1420, 1220], [1460, 1220]], [1430, 1060], ['共享语义检索']],
+    ],
+    footer: '定稿视图显示全部组件与主要关系；完整 19 条关系见后续详图。共享语义向量接入的实现差异见架构说明。',
+  },
   {
     id: 'runtime', title: '工作台与 Agent', subtitle: '同一对话持续多轮；Pi 负责调查，Rust 保存可核对的业务状态。', height: 900,
     boundary: [275, 130, 1200, 665],
@@ -70,7 +94,7 @@ const views = [
       ['sync', [[245, 890], [245, 975], [1655, 975], [1655, 920]], [950, 959]],
       ['prefill', [[245, 690], [245, 550], [1370, 550], [1370, 420], [1470, 420]], [942, 527]],
     ],
-    footer: '平台接口当前由合成适配器实现；真实平台需联调。E5 在本机运行，DeepSeek 与百炼为外部端点。',
+    footer: '定稿使用 DeepSeek 与百炼模型端点；共享语义向量接入尚待对齐。平台接口当前由合成适配器实现。',
   },
   {
     id: 'memory', title: '个人记忆的提取与采用', subtitle: 'Mem0 先提取候选；Rust 校验并正式保存后，Worker 提交可检索版本。', height: 1030,
@@ -117,20 +141,20 @@ function edge([id, points], viewId) {
   return `<g class="relationship" data-edge="${id}" data-source="${from}" data-target="${to}"><path d="${d}" fill="none" stroke="white" stroke-width="8"/><path d="${d}" fill="none" stroke="#718297" stroke-width="2" stroke-linejoin="round" marker-end="url(#arrow-${viewId})"/></g>`;
 }
 
-function label([id, , at]) {
-  return `<g class="edge-label" data-edge="${id}">${relations[id].slice(2).map((line, i) => text(at[0], at[1] + i * 22, line, i ? 15 : 17, i ? 400 : 500, i ? '#607086' : '#33475e', 'middle', 'paint-order="stroke" stroke="white" stroke-width="8" stroke-linejoin="round"')).join('')}</g>`;
+function label([id, , at, shortLines]) {
+  return `<g class="edge-label" data-edge="${id}">${(shortLines ?? relations[id].slice(2)).map((line, i) => text(at[0], at[1] + i * 22, line, i ? 15 : 17, i ? 400 : 500, i ? '#607086' : '#33475e', 'middle', 'paint-order="stroke" stroke="white" stroke-width="8" stroke-linejoin="round"')).join('')}</g>`;
 }
 
 function content(v, index) {
   const boundary = v.boundary ? `<rect x="${v.boundary[0]}" y="${v.boundary[1]}" width="${v.boundary[2]}" height="${v.boundary[3]}" rx="16"/>` : `<path d="${v.boundaryPath}"/>`;
-  const bx = v.boundary?.[0] ?? 35, by = v.boundary?.[1] ?? 225;
+  const bx = v.boundary?.[0] ?? v.boundaryBoxes?.[0][0] ?? 35, by = v.boundary?.[1] ?? v.boundaryBoxes?.[0][1] ?? 225;
   return `<g class="view" data-view="${v.id}" font-family="Arial, PingFang SC, Microsoft YaHei, sans-serif">
     <defs><marker id="arrow-${v.id}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10Z" fill="#718297"/></marker></defs>
     <rect width="${W}" height="${v.height}" fill="white"/>
     ${text(35, 38, `DATA AGENT  /  C4 CONTAINER  /  ${String(index + 1).padStart(2, '0')}`, 14, 600, '#577395')}
     ${text(35, 82, v.title, 34, 650, '#172e50')}
     ${text(35, 112, v.subtitle, 19, 400, '#607086')}
-    ${text(1885, 38, '2026-10-06 · 合成平台 MVP', 15, 500, '#607086', 'end')}
+    ${text(1885, 38, '2026-10-06 · 定稿方案 / 实现差异单列', 15, 500, '#607086', 'end')}
     <g class="boundary" fill="none" stroke="#c0cddd" stroke-width="1.5" stroke-dasharray="7 6">${boundary}</g>
     ${text(bx + 20, by + 23, 'Data Agent · 系统边界（仅显示本视图相关组件）', 14, 500, '#718297')}
     ${v.edges.map(e => edge(e, v.id)).join('')}
@@ -145,7 +169,7 @@ function content(v, index) {
 function svg(selected) {
   const height = selected.reduce((sum, v) => sum + v.height, 0);
   let offset = 0;
-  return `<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${height}" viewBox="0 0 ${W} ${height}" role="img" aria-labelledby="title description"><title id="title">Data Agent 软件架构 · ${selected.length === 1 ? selected[0].title : 'C4 容器视图'}</title><desc id="description">同一架构按工作台与 Agent、共享语义与查询、个人记忆三个视图呈现。组件、调用方向与职责不随视图变化。MySQL 保存正式状态，Pi 是唯一 Agent 循环，Mem0 处理个人记忆，Milvus 是可重建索引。</desc>${selected.map(v => { const group = `<g transform="translate(0 ${offset})">${content(v, views.indexOf(v))}</g>`; offset += v.height; return group; }).join('')}</svg>\n`;
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${height}" viewBox="0 0 ${W} ${height}" role="img" aria-labelledby="title description"><title id="title">Data Agent 软件架构 · ${selected.length === 1 ? selected[0].title : 'C4 容器视图'}</title><desc id="description">定稿架构由总览和工作台与 Agent、共享语义与查询、个人记忆三张详图呈现；共享语义向量实现尚待对齐。组件、调用方向与职责不随视图变化。MySQL 保存正式状态，Pi 是唯一 Agent 循环，Mem0 处理个人记忆，Milvus 是可重建索引。</desc>${selected.map(v => { const group = `<g transform="translate(0 ${offset})">${content(v, views.indexOf(v))}</g>`; offset += v.height; return group; }).join('')}</svg>\n`;
 }
 
 function drawio() {
@@ -154,7 +178,8 @@ function drawio() {
     const add = (id, value, style, box) => cells.push(`<mxCell id="${id}" value="${esc(value)}" style="${style}" vertex="1" parent="1"><mxGeometry x="${box[0]}" y="${box[1]}" width="${box[2]}" height="${box[3]}" as="geometry"/></mxCell>`);
     add('heading', `${index + 1}. ${v.title}\n${v.subtitle}`, 'text;html=0;align=left;fontSize=24;fontFamily=PingFang SC;', [35, 40, 1750, 70]);
     const boundaryStyle = 'rounded=1;dashed=1;fillColor=none;strokeColor=#c0cddd;verticalAlign=top;align=left;spacing=14;fontSize=14;';
-    if (v.boundary) add('boundary', 'Data Agent · 系统边界', boundaryStyle, v.boundary);
+    if (v.boundaryBoxes) v.boundaryBoxes.forEach((box, i) => add(`boundary-${i}`, 'Data Agent · 同一系统边界', boundaryStyle, box));
+    else if (v.boundary) add('boundary', 'Data Agent · 系统边界', boundaryStyle, v.boundary);
     else {
       add('boundary', 'Data Agent · 系统边界', boundaryStyle, [35, 225, 1130, 710]);
       add('storage-boundary', 'Data Agent · 同系统索引', boundaryStyle, [1435, 635, 435, 300]);
@@ -163,8 +188,8 @@ function drawio() {
       const n = nodes[id], [fill, border, ink] = palette[n.kind];
       add(id, [n.name, `[${n.type}]`, n.tech, '', ...n.lines].join('\n'), `rounded=1;arcSize=6;whiteSpace=wrap;html=0;fillColor=${fill};strokeColor=${border};fontColor=${ink};fontSize=18;fontFamily=PingFang SC;align=left;spacing=20;`, box);
     }
-    for (const [id, points, at] of v.edges) {
-      const [from, to, ...lines] = relations[id], a = v.places[from], b = v.places[to], start = points[0], end = points.at(-1);
+    for (const [id, points, at, shortLines] of v.edges) {
+      const [from, to] = relations[id], lines = shortLines ?? relations[id].slice(2), a = v.places[from], b = v.places[to], start = points[0], end = points.at(-1);
       const ports = `exitX=${(start[0] - a[0]) / a[2]};exitY=${(start[1] - a[1]) / a[3]};entryX=${(end[0] - b[0]) / b[2]};entryY=${(end[1] - b[1]) / b[3]};`;
       cells.push(`<mxCell id="rel-${id}" style="edgeStyle=segmentEdgeStyle;rounded=0;jumpStyle=arc;endArrow=block;strokeColor=#718297;strokeWidth=2;${ports}" edge="1" parent="1" source="${from}" target="${to}"><mxGeometry relative="1" as="geometry"><Array as="points">${points.slice(1, -1).map(p => `<mxPoint x="${p[0]}" y="${p[1]}"/>`).join('')}</Array></mxGeometry></mxCell>`);
       const labelWidth = Math.max(...lines.map(line => [...line].reduce((sum, char) => sum + (char.charCodeAt(0) > 255 ? 16 : 8.5), 0))) + 12;

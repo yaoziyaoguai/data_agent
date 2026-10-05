@@ -10,6 +10,14 @@
 #da-overall .route-label { color:var(--muted-foreground); }
 #da-overall .dependencies { display:grid; gap:8px; }
 </style>
+<section style="font:16px/1.7 system-ui,sans-serif;color:#172e50;background:#fff;padding:18px;border:1px solid #dbe4ef;border-radius:8px">
+  <h2 style="margin:0 0 8px">当前定稿架构 · Pi SDK + Mem0</h2>
+  <p>生成模型：DeepSeek Flash。向量方案：百炼 Qwen。<strong>实现核对发现共享语义仍使用 E5，尚待对齐；个人记忆已使用 Qwen。</strong></p>
+  <p><a href="../architecture/README.md">查看完整架构与实现差异</a> · <a href="../architecture/data-agent-overview.svg">放大总览</a></p>
+  <img src="../architecture/data-agent-overview.svg" alt="定稿架构总览：Pi、Mem0、Rust、Flash、百炼Qwen与存储" style="display:block;width:100%;height:auto">
+</section>
+<details style="margin-top:18px">
+<summary>展开 2026-10-03 的历史讨论草图（状态已过时）</summary>
 <div id="da-overall">
   <p class="text-small text-muted">公开教学版 · 2026-10-03 · 全部业务样例均为虚构。当前决定与实现进度见 <a href="../semantic-retrieval-design.md">实施基线</a>；本页不代表组件已运行。</p>
   <h3>Data Agent：知识、查询与纠错</h3>
@@ -52,6 +60,7 @@
   <div class="viz-row"><label class="form-label">查看方面<select class="form-select" data-facet aria-label="查看所选模块的职责、存储或验收"></select></label></div>
   <div class="selected-detail" aria-live="polite" data-detail></div>
 </div>
+</details>
 <script>
 (() => {
   const root = document.getElementById('da-overall');

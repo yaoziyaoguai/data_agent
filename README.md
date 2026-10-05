@@ -8,6 +8,8 @@
 
 > **当前状态：合成平台 MVP 已完成。** 已实现 React 工作台、Rust 业务服务、Pi SDK、Mem0 个人记忆及可执行合成数据平台，完成本地验收和真实 DeepSeek Flash 针对性试用。真实数据平台、正式认证和同事实际使用验收属于后续接入。最新进度和证据见 [CURRENT](docs/CURRENT.md)。
 
+> **架构实现差异（2026-10-06）：** 定稿的向量方案是百炼 Qwen。Mem0 已使用该模型，共享语义检索仍是 E5，尚未统一。下图展示定稿方案，差异见[架构说明](docs/architecture/README.md#定稿与当前实现的差异)；既有验收不包含共享向量模型的替换。
+
 ![工作台展示 SQL、参数、依据及用户确认按钮](docs/images/workbench-sql.png)
 
 *正式 React 工作台截图。这里使用本地模拟模型与合成订单资料；SQL 展示后由用户确认执行。*
@@ -61,9 +63,9 @@ Skill 保存可复用的分析方法，用户明确选用后在当前对话采�
 
 React 负责交互，Rust 负责业务约束，Pi SDK 负责唯一的 Agent 循环，Mem0 负责个人记忆提取与检索。API 和 Worker 复用同一个 Rust 业务库，按职责分进程、统一交付。
 
-![C4 容器视图：工作台、Rust API、Pi SDK、模型与持久会话](docs/architecture/data-agent-runtime.svg)
+![定稿架构总览：React、Rust、Pi SDK、Mem0、Flash、百炼 Qwen、MySQL 与 Milvus](docs/architecture/data-agent-overview.svg)
 
-*上图聚焦会话运行。[完整架构说明](docs/architecture/README.md)还包含共享语义、查询与个人记忆视图，完整保留 11 个组件、19 条调用关系。*
+*上图展示全部组件，Mem0 是明确采用的个人记忆组件。[完整架构说明](docs/architecture/README.md)包含三张详图及实现差异，完整保留 11 个组件、19 条调用关系。*
 
 | 部分 | 技术 | 负责什么 |
 | --- | --- | --- |
@@ -74,7 +76,7 @@ React 负责交互，Rust 负责业务约束，Pi SDK 负责唯一的 Agent 循�
 | 正式业务记录 | MySQL 8.4 | 语义、文档、资产、会话引用、SQL、状态、预算与版本 |
 | 会话与技术回执 | Pi JSONL / Mem0 SQLite | 原生 SDK 会话历史；记忆组件的幂等回执与 SDK 历史 |
 | 检索索引 | Milvus 3.0 | 可重建的共享知识和个人记忆索引，保留 Zilliz 适配方向 |
-| 模型 | DeepSeek Flash / 本地 E5 / 百炼 Qwen | 理解与生成；共享知识 384 维向量；个人记忆 1024 维向量 |
+| 模型（定稿） | DeepSeek Flash / 百炼 Qwen | Flash 理解与生成；Qwen 1024 维向量；共享语义链路尚待从 E5 对齐 |
 | 数据平台适配器 | 当前为合成 SQLite 平台 | 元数据、血缘、节点 SQL、权限、只读查询及结果 |
 
 **语义层连接业务含义和数据结构。** Agent 取得的是有出处、有版本的表、字段、指标、SQL 与文档。共享知识和个人记忆的向量索引都能重建；正式内容以 MySQL 为准，采用前重新核对权限和状态。

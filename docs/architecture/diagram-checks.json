@@ -3,6 +3,12 @@
   "edges": 19,
   "views": [
     {
+      "file": "data-agent-overview",
+      "width": 1920,
+      "height": 1490,
+      "issues": []
+    },
+    {
       "file": "data-agent-runtime",
       "width": 1920,
       "height": 900,
@@ -23,7 +29,7 @@
     {
       "file": "data-agent-c4-container",
       "width": 1920,
-      "height": 2980,
+      "height": 4470,
       "issues": []
     }
   ],

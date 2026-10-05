@@ -28,6 +28,14 @@
 #da-architecture .arch-diagram .wire-label-bg { fill:var(--background); }
 #da-architecture .arch-caption { margin:0; }
 </style>
+<section style="font:16px/1.7 system-ui,sans-serif;color:#172e50;background:#fff;padding:18px;border:1px solid #dbe4ef;border-radius:8px">
+  <h2 style="margin:0 0 8px">当前定稿架构 · Pi SDK + Mem0</h2>
+  <p>生成模型：DeepSeek Flash。向量方案：百炼 Qwen。<strong>实现核对发现共享语义仍使用 E5，尚待对齐；个人记忆已使用 Qwen。</strong></p>
+  <p><a href="../architecture/README.md">查看完整架构与实现差异</a> · <a href="../architecture/data-agent-overview.svg">放大总览</a></p>
+  <img src="../architecture/data-agent-overview.svg" alt="定稿架构总览：Pi、Mem0、Rust、Flash、百炼Qwen与存储" style="display:block;width:100%;height:auto">
+</section>
+<details style="margin-top:18px">
+<summary>展开 2026-10-03 的历史讨论草图（状态已过时）</summary>
 <div id="da-architecture">
   <p class="text-small text-muted">历史教学草图 · 2026-10-03 · 全部业务样例均为虚构。后续已接入 Pi SDK 与 Mem0；最新分工和调用关系见 <a href="../architecture/README.md">软件架构</a>，交付状态见 <a href="../CURRENT.md">CURRENT</a>。下方保留当时的讨论内容。</p>
   <div class="arch-heading">
@@ -50,6 +58,7 @@
   </div>
   <div class="arch-caption text-small text-muted" aria-live="polite" data-caption></div>
 </div>
+</details>
 <script>
 (() => {
   const root = document.getElementById('da-architecture');
