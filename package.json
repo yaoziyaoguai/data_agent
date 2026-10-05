@@ -1,0 +1,49 @@
+{
+  "name": "data-agent",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "npm@11.19.0",
+  "engines": {
+    "node": "26.8.1",
+    "npm": "11.19.0"
+  },
+  "scripts": {
+    "check:node": "node scripts/check-node.mjs",
+    "check:browser": "node scripts/check-browser.mjs",
+    "browser:install": "playwright install chromium",
+    "contracts:generate": "node packages/contracts/generate.mjs",
+    "contracts:check": "node packages/contracts/generate.mjs --check",
+    "check:types": "tsc --noEmit",
+    "build:web": "vite build apps/web --config apps/web/vite.config.ts --outDir ../../.local/web-build",
+    "check:bridge": "node tests/runtime/check-bridge.mjs && node tests/runtime/check-checkpoint-journal.mjs"
+  },
+  "dependencies": {
+    "@earendil-works/pi-agent-core": "1.0.0",
+    "@earendil-works/pi-ai": "1.0.0",
+    "@earendil-works/pi-coding-agent": "1.0.0",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "react-markdown": "10.1.0",
+    "remark-gfm": "4.0.1",
+    "typebox": "1.3.27"
+  },
+  "devDependencies": {
+    "@types/node": "26.6.4",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "ajv": "8.20.0",
+    "ajv-formats": "3.0.1",
+    "playwright": "1.63.0",
+    "prettier": "3.9.9",
+    "quicktype": "26.0.0",
+    "typescript": "7.0.2",
+    "vite": "8.3.2"
+  },
+  "allowScripts": {
+    "esbuild@0.28.2": true,
+    "@google/genai": false,
+    "protobufjs": false,
+    "fsevents": false
+  }
+}

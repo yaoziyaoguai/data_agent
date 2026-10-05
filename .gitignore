@@ -1,0 +1,17 @@
+# 本地配置、凭据和私密导出不进入 Git。
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+.DS_Store
+.private/
+.local/
+# 旧迁移材料已归档到仓库外，继续防止误加入。
+/.migration/
+node_modules/
+target/
+__pycache__/
+*.pyc
+.playwright-cli/
+.project-workflow/

@@ -1,0 +1,7 @@
+[workspace]
+members = ["tools/check-rust", "crates/data-agent", "apps/api", "apps/worker"]
+resolver = "3"
+
+# 本地开发也需要校验大模型文件；避免未优化SHA-256拖慢首次检索。
+[profile.dev.package.sha2]
+opt-level = 3

@@ -1,0 +1,3 @@
+[env]
+# 官方锁定版本的运行库由 scripts/setup_embedding.py 校验并解压。
+ORT_LIB_PATH = { value = ".local/embedding-runtime", relative = true, force = false }

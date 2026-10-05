@@ -1,0 +1,148 @@
+name: data-agent
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: 10m
+    max-file: "3"
+
+x-milvus-image: &milvus-image milvusdb/milvus:v3.0.2@sha256:5f13bf88e110a517911c3e6dd8172454e90042c21e606a868084615a4302c8a0
+
+services:
+  mysql:
+    image: mysql:8.4.11@sha256:6ea90827b1100f8f2ae306a539f86d2c264a26ed435a2a9f75551dd5c3aeb242
+    platform: linux/arm64
+    restart: unless-stopped
+    mem_limit: 1024m
+    environment:
+      MYSQL_DATABASE: data_agent
+      MYSQL_USER: data_agent
+      MYSQL_ROOT_PASSWORD_FILE: /run/secrets/mysql_root_password
+      MYSQL_PASSWORD_FILE: /run/secrets/mysql_app_password
+    command: ["--innodb-buffer-pool-size=134217728", "--max-connections=100", "--table-definition-cache=400", "--table-open-cache=400", "--temptable-max-ram=67108864"]
+    ports:
+      - "127.0.0.1:13306:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+    secrets:
+      - mysql_root_password
+      - mysql_app_password
+      - mysql_root_client
+    healthcheck:
+      test: ["CMD", "mysql", "--defaults-extra-file=/run/secrets/mysql_root_client", "--batch", "--skip-column-names", "--execute=SELECT 1"]
+      interval: 10s
+      timeout: 5s
+      start_period: 60s
+      retries: 12
+    logging: *logging
+
+  etcd:
+    image: quay.io/coreos/etcd:v3.5.25@sha256:52f17f7e56e4f7239f0320dbfcbcc24721163d7d78ae710b466af3254ccf6366
+    platform: linux/arm64
+    restart: unless-stopped
+    mem_limit: 384m
+    environment:
+      ETCD_AUTO_COMPACTION_MODE: revision
+      ETCD_AUTO_COMPACTION_RETENTION: "1000"
+      ETCD_QUOTA_BACKEND_BYTES: "536870912"
+      ETCD_SNAPSHOT_COUNT: "50000"
+    command: ["etcd", "--advertise-client-urls=http://etcd:2379", "--listen-client-urls=http://0.0.0.0:2379", "--data-dir=/etcd"]
+    volumes:
+      - etcd-data:/etcd
+    healthcheck:
+      test: ["CMD", "etcdctl", "endpoint", "health"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    logging: *logging
+
+  minio:
+    image: milvusdb/minio:RELEASE.2024-12-18T13-15-44Z@sha256:1dce27c494a16bae114774f1cec295493f3613142713130c2d22dd5696be6ad3
+    platform: linux/arm64
+    restart: unless-stopped
+    mem_limit: 384m
+    environment:
+      MINIO_ROOT_USER_FILE: /run/secrets/minio_root_user
+      MINIO_ROOT_PASSWORD_FILE: /run/secrets/minio_root_password
+    command: ["server", "/minio_data", "--console-address", ":9001"]
+    volumes:
+      - minio-data:/minio_data
+    secrets:
+      - minio_root_user
+      - minio_root_password
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    logging: *logging
+
+  milvus-volume-init:
+    image: *milvus-image
+    platform: linux/arm64
+    user: "0:0"
+    network_mode: none
+    read_only: true
+    restart: "no"
+    entrypoint: ["/bin/sh", "/opt/data-agent/prepare-milvus.sh"]
+    volumes:
+      - milvus-data:/var/lib/milvus
+      - milvus-config:/prepared-config
+      - ./infra/prepare-milvus.sh:/opt/data-agent/prepare-milvus.sh:ro
+    secrets:
+      - milvus_config
+    logging: *logging
+
+  milvus:
+    image: *milvus-image
+    platform: linux/arm64
+    restart: unless-stopped
+    mem_limit: 3584m
+    command: ["milvus", "run", "standalone"]
+    security_opt:
+      - seccomp:unconfined
+    environment:
+      MINIO_REGION: us-east-1
+      ETCD_ENDPOINTS: etcd:2379
+      MINIO_ADDRESS: minio:9000
+    ports:
+      - "127.0.0.1:19531:19530"
+      - "127.0.0.1:19091:9091"
+    volumes:
+      - milvus-data:/var/lib/milvus
+      - milvus-config:/milvus/configs:ro
+    depends_on:
+      milvus-volume-init:
+        condition: service_completed_successfully
+      etcd:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://localhost:9091/healthz"]
+      interval: 10s
+      timeout: 5s
+      start_period: 90s
+      retries: 18
+    logging: *logging
+
+volumes:
+  mysql-data:
+  etcd-data:
+  minio-data:
+  milvus-data:
+  milvus-config:
+
+secrets:
+  mysql_root_password:
+    file: ./.local/infra/mysql-root-password
+  mysql_app_password:
+    file: ./.local/infra/mysql-app-password
+  mysql_root_client:
+    file: ./.local/infra/mysql-root-client.cnf
+  minio_root_user:
+    file: ./.local/infra/minio-root-user
+  minio_root_password:
+    file: ./.local/infra/minio-root-password
+  milvus_config:
+    file: ./.local/infra/milvus-user.yaml

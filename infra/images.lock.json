@@ -1,0 +1,35 @@
+{
+  "checked_on": "2026-10-03",
+  "platform": "linux/arm64",
+  "sources": [
+    "https://dev.mysql.com/doc/relnotes/mysql/8.4/en/news-8-4-11.html",
+    "https://github.com/milvus-io/milvus/releases/tag/v3.0.2",
+    "https://github.com/milvus-io/milvus/releases/download/v3.0.2/milvus-standalone-docker-compose.yaml"
+  ],
+  "images": {
+    "mysql": {
+      "tag": "mysql:8.4.11",
+      "index_digest": "sha256:6ea90827b1100f8f2ae306a539f86d2c264a26ed435a2a9f75551dd5c3aeb242",
+      "arm64_digest": "sha256:ca3f0494c0f1fc86eb45f5e4786a1bb9f64d2f85b562cc74a9595046f6519a42",
+      "manifest_source": "https://hub.docker.com/v2/repositories/library/mysql/tags/8.4.11"
+    },
+    "milvus": {
+      "tag": "milvusdb/milvus:v3.0.2",
+      "index_digest": "sha256:5f13bf88e110a517911c3e6dd8172454e90042c21e606a868084615a4302c8a0",
+      "arm64_digest": "sha256:1f0c3647749fea4a8a4502cf94ef2edca2f997a7284116ce0f174cb257b18c54",
+      "manifest_source": "https://hub.docker.com/v2/repositories/milvusdb/milvus/tags/v3.0.2"
+    },
+    "etcd": {
+      "tag": "quay.io/coreos/etcd:v3.5.25",
+      "index_digest": "sha256:52f17f7e56e4f7239f0320dbfcbcc24721163d7d78ae710b466af3254ccf6366",
+      "arm64_digest": "sha256:8da34a9df5dc1bd879bea716a301113c4e49b6bbdbe5778214707c6043ccf65d",
+      "manifest_source": "https://quay.io/v2/coreos/etcd/manifests/v3.5.25"
+    },
+    "minio": {
+      "tag": "milvusdb/minio:RELEASE.2024-12-18T13-15-44Z",
+      "index_digest": "sha256:1dce27c494a16bae114774f1cec295493f3613142713130c2d22dd5696be6ad3",
+      "arm64_digest": "sha256:dca4c608031e569387ebb9dbc5738542a4ddd68f57464c1f7ad5a2d31cefcb8d",
+      "manifest_source": "https://hub.docker.com/v2/repositories/milvusdb/minio/tags/RELEASE.2024-12-18T13-15-44Z"
+    }
+  }
+}
