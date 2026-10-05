@@ -1,0 +1,8 @@
+{
+  "model_url": "https://api.deepseek.com/chat/completions",
+  "embedding_url": "https://dashscope.aliyuncs.com/compatible-mode/v1/embeddings",
+  "embedding_key_file": ".local/memory/embedding-key",
+  "milvus_url": "http://127.0.0.1:19531",
+  "milvus_token_file": ".local/infra/milvus-root-password",
+  "collection": "data_agent_personal_memory_qwen1024"
+}

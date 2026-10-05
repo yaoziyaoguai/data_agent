@@ -1,0 +1,4 @@
+# Mem0用于提取及检索；jsonschema执行packages/contracts同源边界校验。
+mem0ai==2.2.1
+pymilvus==2.5.18
+jsonschema==4.26.0
