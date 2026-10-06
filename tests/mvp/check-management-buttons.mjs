@@ -49,11 +49,15 @@ try{
  const proposal={id:randomUUID(),object_id:target.id,base_version:target.version,entry_id:'description',value:'合成审查：每行是一条订单商品明细',reason:'按钮测试的合成修改建议',evidence:[{object_id:target.id,version:target.version,path:'description'}],state:'open'};
  const quoted=value=>"'"+value.replaceAll("'","''")+"'";
  h.sql(`INSERT INTO semantic_change_proposals(id,owner_id,space_id,body) VALUES(${quoted(proposal.id)},'alice','demo',${quoted(JSON.stringify(proposal))})`);
+ await page.getByText(/我的私人草稿 · 1/).click();
  await page.getByText(proposal.reason,{exact:true}).waitFor();
  assert.equal((await h.request('/knowledge-proposals',undefined,'bob')).value.proposals.length,0);
- await click('核对后保存到正式语义');await page.getByText(proposal.reason,{exact:true}).waitFor({state:'detached'});
+ await click('整理并提交给负责人');await page.getByLabel(/已核对以上内容可共享/).check();await click('确认提交给负责人');await page.getByRole('dialog').waitFor({state:'detached'});
+ await click('接受，待修改');await page.getByLabel('处理理由',{exact:true}).fill('核对合成依据，同意修改方向');await click('确认接受');await page.getByRole('dialog').waitFor({state:'detached'});
+ assert.equal((await h.request('/knowledge/'+target.id)).value.version,target.version);
+ await click('核对并编辑保存');await page.getByLabel('已核对当前版本与共享依据').check();await click('保存为正式新版本');await page.getByRole('dialog').waitFor({state:'detached'});await page.getByText('已保存到正式语义',{exact:true}).waitFor();
  assert.equal((await h.request('/knowledge/'+target.id)).value.entries.find(v=>v.entry_id==='description').effective_value,proposal.value);
- checks.push('非空修改建议读取、本人范围和明确应用按钮，正式版本实际更新');
+ checks.push('私人草稿提交、本人范围、接受不生效和编辑保存，正式版本实际更新');
  await click('录入业务文档');await page.getByLabel('文档名称',{exact:true}).fill('合成跨表说明');await page.getByLabel('正文（支持 Markdown 章节）').fill('# 合成说明\n只用于页面检查，不是业务真值。');await page.getByLabel('关联对象 ID（逗号分隔，可关联多表或字段）').fill('table-demo_order_detail');await click('保存文档');
  await page.getByRole('heading',{name:'合成跨表说明',exact:true}).waitFor();checks.push('文档创建及关联表单真实保存');
  await page.getByRole('button',{name:/工作台/}).first().click();await page.getByLabel('新对话').click();await page.getByRole('button',{name:'查2026年1月净收入 ↗',exact:true}).click();assert.equal(await page.getByLabel('你的数据问题').inputValue(),'查2026年1月净收入');await click('发送 ↑');await page.getByRole('button',{name:'执行查询',exact:true}).waitFor();

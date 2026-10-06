@@ -2,52 +2,55 @@
 {
   "workflow": "dev_co",
   "schema": 1,
-  "phase": "delivery",
-  "status": "complete",
-  "goal_revision": 19,
+  "phase": "deliver",
+  "status": "active",
+  "goal_revision": 22,
   "environment": "macOS arm64 / Node 26.8.1 / npm 11.19.0 / Rust 1.99.0 / Python 3.14.7 / SQLite 3.53.4 / Colima 0.10.1 / Docker Engine 29.2.1 / Compose 5.3.1 / MySQL 8.4.11 / Milvus 3.0.2",
   "verification": {
-    "level": "integration",
-    "reason": "将共享语义Embedding统一为百炼Qwen，验证调用预算、索引迁移与检索回归。",
+    "level": "targeted",
+    "reason": "验证逐对象权限、共享建议状态机、原子保存和浏览器协作流程；使用隔离 MySQL 与合成平台，不调用付费模型。",
     "freshness": "content",
     "inputs": [
-      ".cargo",
-      "apps",
-      "crates/data-agent",
+      "AGENTS.md",
+      "README.md",
+      "docs/CURRENT.md",
+      "docs/development.md",
+      "docs/semantic-retrieval-design.md",
+      "docs/architecture",
+      "docs/visualizations",
+      "crates/data-agent/src/modules/access",
+      "crates/data-agent/src/modules/knowledge",
+      "crates/data-agent/src/use_cases",
+      "apps/api/src",
+      "apps/web/src/features/knowledge",
+      "apps/web/src/styles.css",
+      "apps/platform-mock",
       "packages/contracts",
       "migrations",
-      "tests",
-      "scripts",
-      "Cargo.toml",
-      "Cargo.lock",
-      "package.json",
-      "package-lock.json",
+      "scripts/check_architecture.py",
+      "scripts/development.py",
+      "tests/mvp",
+      "tests/contracts",
       "Makefile",
-      "tsconfig.json",
-      "AGENTS.md",
-      "docs/development.md",
-      "README.md",
-      "docs/sources",
-      "docs/reviews/mvp-independent-audit-20261004.json",
-      "compose.yaml",
-      "docs/architecture",
-      "infra"
+      "docs/reviews",
+      "crates/data-agent/src/modules/ingestion/store.rs"
     ],
     "checks": [
       {
-        "id": "delivery-record",
+        "id": "public-materials",
         "argv": [
           "make",
+          "verify-materials",
           "verify-delivery"
         ],
         "cost": "local",
         "timeout_seconds": 60
       },
       {
-        "id": "public-materials",
+        "id": "architecture-docs",
         "argv": [
-          "make",
-          "verify-materials"
+          "python3",
+          "docs/architecture/check-implementation.py"
         ],
         "cost": "local",
         "timeout_seconds": 60
@@ -58,153 +61,196 @@
     "schema": 1,
     "registry": "docs/semantic-retrieval-design.md",
     "increment": {
-      "id": "I2-SHARED-EMBEDDING",
+      "id": "I2-SEMANTIC-GOVERNANCE",
       "phase": "I2",
       "status": "complete",
-      "goal": "共享语义向量从本地E5统一为百炼qwen3.7-text-embedding 1024维，保留权限/预算/版本边界并重建索引，更新文档后提交推送。",
+      "goal": "实现逐表语义维护权限及跨用户纠错协作。表负责人同步自 Datasight mock，共用对象独立指定负责人；接受后编辑保存才生效。",
       "requirements": [
-        "D04",
-        "D05",
-        "D06",
+        "D01",
+        "D10",
+        "D13",
         "C02",
-        "C05",
-        "C06",
-        "C07"
+        "C04",
+        "A08"
       ],
       "modules": [
         "M01",
         "M02",
+        "M03",
         "M04",
+        "M07",
         "M08",
-        "M10"
+        "M09",
+        "M10",
+        "M11",
+        "M12"
       ],
       "allowed_paths": [
-        "crates/data-agent",
-        "apps/api/src/main.rs",
-        "apps/worker/src/main.rs",
-        "scripts/development.py",
-        "scripts/setup_embedding.py",
-        "scripts/test_development.py",
-        "infra/embedding-model.json",
-        "infra/embedding.example.json",
-        "infra/embedding-profile.example.json",
-        "migrations",
-        "Cargo.lock",
-        "Makefile",
-        ".env.example",
-        "tests/mvp",
-        "tests/contracts",
-        "tests/architecture",
+        "AGENTS.md",
         "README.md",
         "docs/CURRENT.md",
         "docs/development.md",
         "docs/semantic-retrieval-design.md",
         "docs/architecture",
         "docs/visualizations",
+        "crates/data-agent/src/modules/access",
+        "crates/data-agent/src/modules/knowledge",
+        "crates/data-agent/src/use_cases",
+        "apps/api/src",
+        "apps/web/src/features/knowledge",
+        "apps/platform-mock",
+        "packages/contracts",
+        "migrations",
+        "scripts/check_architecture.py",
+        "scripts/development.py",
+        "tests/mvp",
+        "tests/contracts",
+        "Makefile",
         "docs/reviews",
-        "docs/sources/evaluation/qwen-shared-trial.json",
-        "docs/sources/evaluation/qwen-shared-trial-byte-estimate.json",
-        "infra/README.md",
-        "packages/contracts"
+        "apps/agent/tools/data-tools.ts",
+        "crates/data-agent/src/modules/ingestion/catalog.rs",
+        "apps/web/src/shared/WorkspaceShell.tsx",
+        "crates/data-agent/src/modules/ingestion/store.rs"
       ],
       "non_goals": [
-        "不增加Agent框架或MVP功能，不改变Pi/Mem0分工，不接真实平台或部署。",
-        "不重写历史评分，不删除正式语义或个人记忆索引。"
+        "不改变已完成 MVP 的 Agent/Pi/Mem0 架构；不增加审批服务、外部通知或新的 Agent 循环。",
+        "不接真实 Datasight/正式认证；不提交、推送或部署。"
       ],
       "invariants": [
-        "生成仍为DeepSeek Flash；共享和个人向量分别索引，MySQL正式内容不变。",
-        "每次外部向量调用受固定原预算限制；未知不换ID重发，回执丢失和索引重试可核对。",
-        "新模型使用独立1024维集合，旧384维集合不得混用；命中回源核权限/状态/版本。",
-        "默认模拟模式保持无付费调用，真实配置显式启用百炼；只发送合成数据。"
+        "表维护者负责该表共享语义，超级维护者管理本系统全部表共享语义；录入人/修改人/负责人分别记录。",
+        "本系统语义权限与Datasight资料读取、查询和SQL执行权限分别校验；个人记录仍按本人和空间隔离。",
+        "私人草稿不自动公开；提交、接受和驳回均不改变正式语义或共享索引，核对编辑并明确保存才生效。",
+        "保存重核当前授权、知识基版本、建议修订及依据范围，正式版本/应用记录/待办原子保存，Pi仍为唯一Agent循环。"
       ],
       "acceptance": [
         {
-          "id": "EMBED01",
+          "id": "GOV01",
           "requirements": [
-            "C02",
-            "C05",
-            "C07"
+            "D01",
+            "C02"
           ],
-          "expected": "协议、维度、批量顺序、失败预算/未知/重试及配置边界回归通过",
-          "evidence_kind": "runtime",
-          "command": [
-            "make",
-            "verify-shared-embedding"
-          ],
-          "timeout_seconds": 420
-        },
-        {
-          "id": "EMBED02",
-          "requirements": [
-            "D04",
-            "D05",
-            "D06",
-            "C06"
-          ],
-          "expected": "共享混合检索真实Milvus索引、旧集合隔离、版本/恢复及回源验证通过；模型mock与真实小样分别报告",
-          "evidence_kind": "runtime",
-          "command": [
-            "make",
-            "verify-hybrid-retrieval"
-          ],
-          "timeout_seconds": 3000
-        },
-        {
-          "id": "EMBED03",
-          "requirements": [
-            "C05",
-            "C07"
-          ],
-          "expected": "代码、契约、模块边界与Mem0预算复用回归通过",
-          "evidence_kind": "runtime",
-          "command": [
-            "make",
-            "verify-code",
-            "verify-contracts",
-            "verify-architecture",
-            "verify-memory"
-          ],
-          "timeout_seconds": 600
-        },
-        {
-          "id": "EMBED04",
-          "requirements": [
-            "C02",
-            "C06"
-          ],
-          "expected": "百炼真实合成小样完成向量生成/建索引/检索并核对真实usage，审计已完成证据不重新付费",
+          "expected": "普通用户不能编辑正式语义；负责人只能维护负责范围；超级维护者可维护全部表，录入和修改不自动授予负责人身份。",
           "evidence_kind": "runtime",
           "command": [
             "node",
-            "tests/mvp/run-shared-embedding-trial.mjs",
-            "--audit"
+            "tests/mvp/check-semantic-governance.mjs",
+            "--case",
+            "GOV01"
           ],
-          "timeout_seconds": 60
+          "timeout_seconds": 240
+        },
+        {
+          "id": "GOV02",
+          "requirements": [
+            "C02",
+            "C04"
+          ],
+          "expected": "系统负责人或超级维护者没有平台查询权时不得执行SQL；拥有平台查询权也不能因此改语义；执行仍需确认具体SQL版本。",
+          "evidence_kind": "runtime",
+          "command": [
+            "node",
+            "tests/mvp/check-semantic-governance.mjs",
+            "--case",
+            "GOV02"
+          ],
+          "timeout_seconds": 240
+        },
+        {
+          "id": "GOV03",
+          "requirements": [
+            "D13",
+            "A08"
+          ],
+          "expected": "A提交可共享建议后B可在负责范围处理；驳回有理由，接受后状态为待修改，正式语义/索引不变；A可看到状态，本次SQL不等待审核。",
+          "evidence_kind": "runtime",
+          "command": [
+            "node",
+            "tests/mvp/check-semantic-governance.mjs",
+            "--case",
+            "GOV03"
+          ],
+          "timeout_seconds": 240
+        },
+        {
+          "id": "GOV04",
+          "requirements": [
+            "D01",
+            "A08"
+          ],
+          "expected": "负责人核对编辑保存才形成新版本及应用回执；权限收回、建议修订冲突、旧基版和事务失败不生效；重传不重复，索引待办与正式版本原子提交。",
+          "evidence_kind": "runtime",
+          "command": [
+            "node",
+            "tests/mvp/check-semantic-governance.mjs",
+            "--case",
+            "GOV04"
+          ],
+          "timeout_seconds": 240
+        },
+        {
+          "id": "GOV05",
+          "requirements": [
+            "D10",
+            "C02",
+            "A08"
+          ],
+          "expected": "历史私人提案不因升级公开；B只能读提交内容，普通第三人不可读；聊天/记忆/Skill保持隔离，待处理/仅接受建议不进入共享召回。",
+          "evidence_kind": "runtime",
+          "command": [
+            "node",
+            "tests/mvp/check-semantic-governance.mjs",
+            "--case",
+            "GOV05"
+          ],
+          "timeout_seconds": 240
+        },
+        {
+          "id": "GOV06",
+          "requirements": [
+            "D01",
+            "D13",
+            "A08"
+          ],
+          "expected": "实际浏览器走私人草稿、显式提交、修订重审、负责人接受与编辑保存、驳回、响应丢失重试以及宽窄屏可用。",
+          "evidence_kind": "runtime",
+          "command": [
+            "node",
+            "tests/mvp/check-semantic-governance-browser.mjs"
+          ],
+          "timeout_seconds": 300
         }
       ],
       "verification_inputs": [
-        "crates/data-agent",
-        "apps/api/src/main.rs",
-        "apps/worker/src/main.rs",
-        "scripts/development.py",
-        "scripts/test_development.py",
-        "infra",
-        "docs/sources/evaluation/qwen-shared-trial.json",
-        "docs/sources/evaluation/qwen-shared-trial-byte-estimate.json",
+        "AGENTS.md",
+        "README.md",
+        "docs/development.md",
+        "docs/semantic-retrieval-design.md",
+        "docs/architecture",
+        "docs/visualizations",
+        "crates/data-agent/src/modules/access",
+        "crates/data-agent/src/modules/knowledge",
+        "crates/data-agent/src/use_cases",
+        "apps/api/src",
+        "apps/web/src/features/knowledge",
+        "apps/platform-mock",
+        "packages/contracts",
         "migrations",
-        "Cargo.lock",
-        "Makefile",
+        "scripts/check_architecture.py",
+        "scripts/development.py",
         "tests/mvp",
         "tests/contracts",
-        "docs/architecture/knowledge-modules.md",
-        "docs/architecture/implementation-design.md",
-        "packages/contracts"
+        "Makefile",
+        "docs/reviews",
+        "apps/agent/tools/data-tools.ts",
+        "crates/data-agent/src/modules/ingestion/catalog.rs",
+        "apps/web/src/shared/WorkspaceShell.tsx",
+        "crates/data-agent/src/modules/ingestion/store.rs"
       ],
       "review": {
         "status": "passed",
-        "record": "docs/reviews/shared-embedding-review.json"
+        "record": "docs/reviews/semantic-governance-review.json"
       },
-      "evidence": ".local/delivery/I2-SHARED-EMBEDDING-result.json"
+      "evidence": ".local/delivery/I2-SEMANTIC-GOVERNANCE-result.json"
     }
   }
 }
@@ -212,10 +258,103 @@
 
 # Data Agent 当前记录
 
+更新：2026-10-07。唯一活动项目目录：`~/work_space/data_agent`。
+
+## 当前任务：合入主分支并推送 GitHub
+
+`goal_revision=22`。用户已授权提交本轮代码、合入主分支并推送 GitHub。该授权替代上一开发轮“不提交、推送”的限制；冻结的业务验收契约保留。本次只完成 Git 交付，不新增产品行为或部署。
+
+- GitHub 当前默认分支为 `codex/semantic-maintenance-prototype`，沿用此分支；来源分支为 `codex/semantic-governance`。目标仓库为 `yaoziyaoguai/data_agent`，已公开。
+- 已获取远端最新状态，本地与远端基线均为 `cd8266702b1482178e0abac6acc7de366d067dc5`，可以快进合并。
+- `make verify-delivery verify-materials` 通过：已完成收据与当前契约及 246 个绑定文件一致，16 项检查器测试、280 项材料检查通过。GOV01–GOV06 原冻结验收全部退出 0，无超时；本轮源码未变，复用该证据。
+- `git diff --check` 通过；待提交的 63 个文本文件未检出疑似 API Key、GitHub Token、私钥或个人绝对路径。本地凭据、运行收据与截图仍留在被忽略的目录中。
+
+下一步：提交功能与配套文档，快进合入默认分支，推送后核对远端提交和工作区状态。
+
+## 已完成增量：语义维护权限与跨用户纠错
+
+`goal_revision=21`，用户授权按 AGENTS.md 和 dev_co 实现 MVP 后的第一个增量；替代上一轮仅更新文档的限制。开发验收阶段未提交、推送或部署；后续 Git 交付见上节。
+
+- 表负责人必须来自 Datasight 维护人，当前使用平台 mock，在来源同步时更新本地授权快照。页面显示来源；每次正式变更在事务内锁定并重核当前授权。未同步的平台变化不能宣称实时生效。
+- 指标、业务文档等共用对象独立指定负责人，由本系统超级维护者配置；引用的表不传播维护权。超级维护者由可信启动配置指定，不从浏览器、模型或录入人推导。
+- 保留私人提案表，新增独立的共享提交记录。普通用户可提交明确整理的内容；只有提出者、目标负责人和超级维护者能读。接受/驳回不改正式知识；核对编辑保存后才创建版本和索引待办。
+- 本系统语义维护权限与平台查询/执行权限独立；聊天、Mem0 记忆和 Skill 仍按本人隔离。
+
+### 实施与验证
+
+实现已接入现有语义管理页面。GOV01–GOV05 分别覆盖逐对象权限、两套权限独立、跨用户协作、事务与幂等、共享内容和个人隐私边界；GOV06 使用真实浏览器验证完整操作。六组最终验收已在冻结版本上完整退出 0，无超时；执行前后指纹一致。`make verify-increment` 通过，增量已置 complete，证据为 `.local/delivery/I2-SEMANTIC-GOVERNANCE-result.json`。受影响回归与静态检查也已完成。
+
+- 后端复用 M01/M02 的私有存储及具名用例；同源契约新增共享建议与授权响应。旧私人提案保留本人范围，录入人/修改人/负责人分开记录。Pi 仅更新既有工具说明，继续使用 SDK 的会话与工具循环。
+- GOV04 已补充并通过目录移除与改派/新增表同时发生的三个并发场景。旧首次来源同步回归修复后通过；来源当前读、缺失集合重核和授权锁顺序均经独立复核。
+- 浏览器七项检查通过，含私人草稿、共享确认、修订重审、接受不生效、负责人编辑保存、驳回理由和响应丢失重试；1440px/390px 无横向溢出或脚本错误，已人工查看截图。证据：`.local/checks/semantic-governance-browser/result.json`。
+- 受影响回归已通过：旧工具/提案边界 7 项、长文/分页/记忆 4 项、管理按钮 6 组。证据：`.local/checks/mvp-boundaries.json`、`mvp-completion-gaps.json`、`management-buttons.json`。最后锁序修复后的目录导入 12 项和来源/知识工作流 12 项也已复验通过；后者使用真实 Pi SDK 与模拟模型。证据：`.local/checks/mvp-catalog-import.json`、`mvp-knowledge.json`。
+- 183 条同源契约、Rust/TypeScript 构建、7 条架构反例及启动配置 4 项通过；最后代码静态检查与锁序检查也已完整退出 0。公开材料、交付记录静态检查、HTML 讲解及 28 张图册已通过。
+
+独立审查见 [语义协作审查记录](reviews/semantic-governance-review.json)。审查者未参与实现，确认已修问题与测试边界、无剩余阻断项；记录批准最终验收，实际六组执行结果以本轮收据为准。开发验收时分支为 `codex/semantic-governance`，尚未提交、推送或部署；既有常驻工作台进程未重启，新代码在隔离测试进程中验证。
+
+### 接入边界
+
+本轮使用隔离 MySQL、可实际执行 SQL 的合成平台及 Pi 模拟模型，官方模型调用为 0。表维护人以最近一次成功同步为准；真实 Datasight 资料 ACL、正式认证和维护人变更时效仍需实际接入。本系统超级维护者不获得他人的聊天/记忆/Skill，也不获得平台查询权限。现有 MVP 模型准确率和 Mem0 比较结论不由本轮测试重估。
+
+### 验收与要求变更
+
+- 本轮执行指纹不再包含 CURRENT 全文，避免写完成记录使刚完成的验收失效。检查器仍自动绑定完整 delivery 契约和已确认 18 项决定，AGENTS、系统设计、源码、测试和接口继续纳入指纹；验收命令与预期不变。此调整经独立审查确认。顶层阶段/状态和工作日志不受该业务收据保护；新产品决定必须同步契约或系统设计并重新验收，不能借修改日志沿用旧证据。一般材料验证仍读取 CURRENT。
+
+- 原并发首次来源同步回归发现新增授权登记提前固定 RR 快照，导致第二个同步返回 404。空授权登记改为前置独立幂等事务，来源/正式知识/索引保持原事务，原 200/409 断言不变。独立复核另发现权威目录移除的授权/来源锁倒序；统一先撤授权再查来源基线，退休读取采用当前行锁，并在取得来源锁后重核缺失集合；GOV04 增加移除与改派/新增表的并发回归。必要修改范围补入 M03 私有 store，不改变对外权限或产品要求。
+
+- 旧按钮测试直接采用私人提案，新页面改为“整理提交→接受→编辑保存”；旧私人记录保留，新增共享记录独立。更新原按钮脚本为这一已确认流程，并保留其他文档、查询和退出断言。
+- 5100 字段分页测试仍直接构造隔离数据，补充新授权表的夹具关系，不删字段、不缩小检索或分页断言。
+- Pi SDK 冷导入单独测得 41.508 秒。新增验收及受影响的知识工作流回归把启动就绪上限从原 20 秒设为 60 秒；纯授权场景复用已有 capture 接收端，SQL 场景仍使用真实 Pi SDK + 模拟模型。最初 20/60 秒启动超时保留诊断，不计为业务通过。
+- 目录导入回归 `check-catalog-import.mjs` 在 20/60 秒均未等到 Pi bridge 启动（API 已就绪、bridge 无输出）。该组没有发送聊天或消费模型队列，原脚本也立即暂停 Worker；改用既有 capture 接收端并不启动 Worker，只验证真实 API/MySQL 与合成平台目录。全部原目录/快照/删除断言保留，不把该组当 Pi 证据。GOV02/GOV03 与知识工作流仍使用真实 Pi SDK + 模拟模型。
+
+- 最新用户选择：表负责人沿用 Datasight（B）；跨表共用对象独立指定负责人（A）。新能力允许跨用户明确提交，不开放历史私人草稿。
+- 原 MVP 私人提案采用端点作为兼容入口保留，补齐逐对象授权；共享建议必须经过接受与编辑保存两个动作。既有测试和评分保留，新测试来自上述已确认规则。
+
+
+
+# 上一轮记录：设计文档
+
 更新：2026-10-06。唯一活动项目目录：`~/work_space/data_agent`。本文件是当前决定、真实进度和下一步的唯一入口。
 
 
-## 当前任务：共享语义向量统一百炼（已完成）
+## 当前任务：语义维护权限与跨用户纠错设计更新
+
+2026-10-06，goal_revision=20。用户只授权更新文档、资料和架构图；本轮不改产品程序。下面是已确认规则，`delivery.increment=I2-SEMANTIC-GOVERNANCE` 登记为 `planned`，表示后续实现待启动。本轮允许路径仅覆盖文档与图源；验收命令留空，实现前再绑定实际源码范围、契约、迁移和行为测试。
+
+### 已确认的有效规则
+
+- 表维护者就是该表的语义负责人。普通用户能对有权对象提建议，不能直接改正式语义；超级维护者可以维护本系统全部表的共享语义。
+- 这是 Data Agent 内部权限。Datasight 的资料读取、查询、取数与 SQL 执行权限独立；任一侧的权限都不自动授予另一侧，系统超级维护者也不获得他人聊天、记忆或 Skill 的访问权。
+- A 是纠错提出者，B 是表负责人。A 的本次问题先调查、修订 SQL 并重新确认；共享错误另形成可提交给 B 的建议。B 可驳回并记录理由，或接受后自己核对、编辑并明确保存；仅接受不改变正式语义。
+- 建议提交只共享明确整理的修改和依据，原聊天/记忆/结果仍受原归属限制。正式保存创建新版本并原子登记索引/依赖待办，待处理和已接受建议不进入共享召回。
+- 录入人、修改人、提出者和负责人分别记录。权限、基版本、建议修订、依据范围、重复操作和保存失败由 Rust 校验；Pi 与 Mem0 继续按已有职责运行。
+
+### 当前实现差距
+
+源码只以 `demo/alice` 作为演示维护者。`semantic_change_proposals` 的读取和采用按 `owner_id + space_id` 限定本人，没有逐表负责人、超级维护者或跨用户提交/接受/驳回流程。新增规则尚未实现；不能通过移除私人记录过滤来完成转交，也不能把旧 apply 接口当作“只接受、不生效”。
+
+规则入口：[系统设计第 6.1 节](semantic-retrieval-design.md#61-语义维护权限与平台数据权限)、[第 11.7 节](semantic-retrieval-design.md#117-跨用户纠错与共享语义维护)。模块与数据入口：[知识模块第 2、3 节](architecture/knowledge-modules.md)；接口缺口：[实现设计第 4.2.1 节](architecture/implementation-design.md#421-语义协作接口)。架构图与讲解：[架构说明](architecture/README.md)、[语义与记忆讲解](visualizations/data-agent-knowledge-and-memory.html)。
+
+### 验收与要求变更
+
+- 原限制：建议仅本人可读、由本人获得维护权后采用，不提供跨用户转交。新要求：独立提交可共享建议，目标负责人/超级维护者接受或驳回，接受后编辑保存才生效。依据是本轮用户确认；D01、C02、A08 映射补充后续验收，原测试与历史评分保持。
+- 既有 MVP 和共享向量增量在提交 `cd8266702b1482178e0abac6acc7de366d067dc5` 的完成结论保留。[当时 CURRENT](https://github.com/yaoziyaoguai/data_agent/blob/cd8266702b1482178e0abac6acc7de366d067dc5/docs/CURRENT.md)、原 `.local/delivery/I2-SHARED-EMBEDDING-result.json` 与独立审查保留为历史。本文和架构设计已变化，不能再用旧指纹证明新增协作已通过。
+- 本轮只验证文档内容、材料链接、图源与显示，不重跑模型、数据库或整个 MVP。未来 GOV01–GOV05 尚无执行证据，planned 通过材料检查不代表业务完成。
+
+### 文档交付与下一步
+
+本轮文档更新已完成，状态 `done` 仅指本次设计交付；`delivery.increment.status=planned` 继续表示新增业务待实现。
+
+- 已同步系统设计、M01/M02 模块与数据职责、当前接口/待补操作说明、README、开发指南、AGENTS.md、架构图及语义/记忆讲解。明确替代旧“仅本人采用”限制，保留旧行为说明和验收证据。
+- `make verify-materials verify-delivery` 通过：281 项材料检查及 16 项交付检查器测试；planned 只证明声明和需求覆盖有效。`git diff --check` 通过。
+- C4 总览及详图重新导出，11 个组件和 19 条关系方向与修改前一致，5 个视图未检出文字或标签遮挡。模块图册 28 张图、12 个模块重新生成，图源/链接检查通过；无脚本错误或窄屏横向溢出。未变图源的 SVG 保留原导出，避免无关的随机 ID 变化。
+- HTML 讲解仍为 8 节，写作检查 0 警告。1440px / 390px 的目录、明暗与主题切换均通过；无页面横向溢出、缺图或脚本错误。更新后的纠错图宽 250px，可在窄屏完整显示。人工查看了纠错图和 F02 导出；189 个本地文件/标题链接核对通过。
+- 未负责编辑的审查者只读核对权限、隐私、状态、源码差距及旧验收边界。发现并修正“提交建议也似乎要求维护权”的歧义，复核后无剩余阻断项；仅针对文档，不充当新增业务验收。
+- 本地检查与截图保存在 `.local/semantic-governance-docs/`，包括 `structure-checks.json`、`browser-checks.json`、`document-review.json`。产品源码、可执行契约、迁移及业务测试未变；未调用模型或数据库，未提交、推送。
+
+实现前需细化表负责人初始化/变更来源、跨表公共对象归属及跨空间角色配置，然后收敛源码范围并补接口、迁移和 GOV01–GOV05 行为验证。本轮没有启动产品实现。
+
+## 上一开发增量：共享语义向量统一百炼（已完成）
 
 本轮 goal_revision=19，`delivery.increment=I2-SHARED-EMBEDDING`。用户授权实际替换共享语义 E5 并提交、推送。范围限 Rust 向量适配、原预算复用、新集合迁移、启动配置、相关回归及文档。旧 MVP 收尾证据保留，新的源码不再沿用旧指纹宣称通过。
 

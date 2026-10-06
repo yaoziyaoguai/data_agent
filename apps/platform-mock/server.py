@@ -58,7 +58,7 @@ class Platform:
                 for name,ddl in db.execute("SELECT name,sql FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name"):
                     columns=[{'id':column[1],'name':column[1],'data_type':column[2] or 'TEXT','nullable':not bool(column[3] or column[5]),'comment':''} for column in db.execute('PRAGMA table_info("'+name.replace('"','""')+'")')]
                     node={'id':'build-demo-order-detail','sql':(ROOT/'docs/sources/etl.sql').read_text(),'upstream_ids':['raw_order_lines','raw_payments']} if name=='demo_order_detail' else None
-                    tables.append({'id':name,'name':name,'platform_version':'1','comment':'','ddl':ddl,'columns':columns,'node':node})
+                    tables.append({'id':name,'name':name,'platform_version':'1','maintainer_id':'alice','comment':'','ddl':ddl,'columns':columns,'node':node})
             catalog={'source_namespace':'synthetic-sqlite','tables':tables}
         snapshot=hashlib.sha256(json.dumps(catalog,sort_keys=True,ensure_ascii=False).encode()).hexdigest()
         if payload.get('snapshot_id') not in (None,snapshot): raise ValueError('version_conflict')
@@ -85,6 +85,9 @@ class Platform:
         if path=='/validate': return self.compile(payload)
         qid=payload.get('query_id'); owner=payload.get('owner_id')
         if not isinstance(qid,str) or not isinstance(owner,str): raise ValueError('invalid_input')
+        permission_file=self.catalog_file.parent/'permissions.json'
+        permissions=json.loads(permission_file.read_text()) if permission_file.exists() else {}
+        if path in ('/submit','/results') and owner in permissions.get('denied_query_users',[]): raise ValueError('forbidden')
         with LOCK,sqlite3.connect(self.ledger) as db:
             db.row_factory=sqlite3.Row
             row=db.execute('SELECT * FROM submissions WHERE id=? AND owner=?',(qid,owner)).fetchone()
@@ -141,7 +144,7 @@ class Handler(BaseHTTPRequestHandler):
             size=int(self.headers.get('Content-Length','0'))
             if size<2 or size>131072: raise ValueError('invalid_input')
             data=json.loads(self.rfile.read(size)); result=self.server.platform.operate(self.path,data); self.send(200,result)
-        except ValueError as e: self.send(409,{'code':str(e) if str(e) in {'invalid_input','sql_not_supported','idempotency_conflict','outcome_unknown','not_available','result_expired','result_unavailable','version_conflict'} else 'invalid_input'})
+        except ValueError as e: self.send(409,{'code':str(e) if str(e) in {'forbidden','invalid_input','sql_not_supported','idempotency_conflict','outcome_unknown','not_available','result_expired','result_unavailable','version_conflict'} else 'invalid_input'})
         except (sqlite3.Error,OSError): self.send(503,{'code':'upstream_failed'})
 
 if __name__=='__main__':

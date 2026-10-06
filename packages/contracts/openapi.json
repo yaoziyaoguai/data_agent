@@ -1778,6 +1778,40 @@
             }
           }
         }
+      },
+      "post": {
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schema.json#/$defs/Proposal"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "应用错误；权限、版本、待归属、未知和服务失败保留独立code",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schema.json#/$defs/AppError"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "./schema.json#/$defs/ProposalDraftCommand"
+              }
+            }
+          }
+        }
       }
     },
     "/knowledge-proposals/{id}/apply": {
@@ -2075,6 +2109,319 @@
                 "schema": {
                   "$ref": "./schema.json#/$defs/ModelCallReceipt"
                 }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/semantic-access": {
+      "get": {
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schema.json#/$defs/SemanticAccess"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "应用错误；权限、版本、待归属、未知和服务失败保留独立code",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schema.json#/$defs/AppError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/knowledge/{id}/maintainer": {
+      "post": {
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schema.json#/$defs/SemanticMaintenance"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "应用错误；权限、版本、待归属、未知和服务失败保留独立code",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schema.json#/$defs/AppError"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "./schema.json#/$defs/AssignSemanticMaintainer"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/semantic-corrections": {
+      "get": {
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schema.json#/$defs/SemanticCorrectionList"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "应用错误；权限、版本、待归属、未知和服务失败保留独立code",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schema.json#/$defs/AppError"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "after_id",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      },
+      "post": {
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schema.json#/$defs/SemanticCorrection"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "应用错误；权限、版本、待归属、未知和服务失败保留独立code",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schema.json#/$defs/AppError"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "./schema.json#/$defs/SubmitSemanticCorrection"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/semantic-corrections/{id}": {
+      "get": {
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schema.json#/$defs/SemanticCorrection"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "应用错误；权限、版本、待归属、未知和服务失败保留独立code",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schema.json#/$defs/AppError"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      },
+      "patch": {
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schema.json#/$defs/SemanticCorrection"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "应用错误；权限、版本、待归属、未知和服务失败保留独立code",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schema.json#/$defs/AppError"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "./schema.json#/$defs/ReviseSemanticCorrection"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/semantic-corrections/{id}/review": {
+      "post": {
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schema.json#/$defs/SemanticCorrection"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "应用错误；权限、版本、待归属、未知和服务失败保留独立code",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schema.json#/$defs/AppError"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "./schema.json#/$defs/ReviewSemanticCorrection"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/semantic-corrections/{id}/apply": {
+      "post": {
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schema.json#/$defs/SemanticCorrection"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "应用错误；权限、版本、待归属、未知和服务失败保留独立code",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schema.json#/$defs/AppError"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "./schema.json#/$defs/ApplySemanticCorrection"
               }
             }
           }

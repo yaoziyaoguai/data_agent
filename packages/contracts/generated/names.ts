@@ -102,4 +102,14 @@ export interface ContractTypes {
   MemorySearchReceipt: Boundary.MemorySearchReceipt;
   MemoryModelCall: Boundary.MemoryModelCall;
   EmbeddingProfile: Boundary.EmbeddingProfile;
+  SemanticAccess: Boundary.SemanticAccess;
+  SemanticMaintenance: Boundary.SemanticMaintenance;
+  AssignSemanticMaintainer: Boundary.AssignSemanticMaintainer;
+  ProposalDraftCommand: Boundary.ProposalDraftCommand;
+  SubmitSemanticCorrection: Boundary.SubmitSemanticCorrection;
+  ReviseSemanticCorrection: Boundary.ReviseSemanticCorrection;
+  ReviewSemanticCorrection: Boundary.ReviewSemanticCorrection;
+  ApplySemanticCorrection: Boundary.ApplySemanticCorrection;
+  SemanticCorrection: Boundary.SemanticCorrection;
+  SemanticCorrectionList: Boundary.SemanticCorrectionList;
 }

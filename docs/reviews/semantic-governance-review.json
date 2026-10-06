@@ -1,0 +1,302 @@
+{
+  "schema": 1,
+  "goal_revision": 21,
+  "increment_id": "I2-SEMANTIC-GOVERNANCE",
+  "conclusion": "passed",
+  "reviewer": "独立正确性审查者 /root/semantic_governance_review；未参与本轮产品代码、契约、测试或设计文档实现，只提出审查意见并编写本记录。",
+  "reviewed_at": "2026-10-06T13:39:32.308474+00:00",
+  "scope_sha256": "abd783b7e05d6e7cf1b0a3f67f2799f4cfa60c449f58998c1ee21f3bf03ba4b1",
+  "summary": "按 AGENTS、当前交付契约和系统设计核对逐对象权限、跨用户纠错、隐私、版本、幂等、事务及 Pi 复用。已追踪并复核首次同步旧快照、目录退休锁倒序和锁等待期间缺失集合过期等修复；前端提交、重传与分页问题已修正。已核对预跑和受影响回归产物，没有剩余阻断项。本记录仅批准进入六组 make verify-increment；最终冻结范围上的联合验收尚未执行。",
+  "ready_for_final_increment_execution": true,
+  "final_increment_execution": {
+    "executed": false,
+    "status": "not_run",
+    "command": [
+      "make",
+      "verify-increment"
+    ],
+    "required_groups": [
+      "GOV01",
+      "GOV02",
+      "GOV03",
+      "GOV04",
+      "GOV05",
+      "GOV06"
+    ],
+    "limitation": "六组须在本审查绑定的输入上完整退出 0、无超时，并生成 before/after 一致的执行收据。单组预跑及本记录不能代替该收据。"
+  },
+  "requirements": [
+    "D01",
+    "D10",
+    "D13",
+    "C02",
+    "C04",
+    "A08"
+  ],
+  "modules": [
+    "M01",
+    "M02",
+    "M03",
+    "M04",
+    "M07",
+    "M08",
+    "M09",
+    "M10",
+    "M11",
+    "M12"
+  ],
+  "requirements_review": {
+    "D01": "正式知识按逐对象权限维护；字段继承所属表，共用文档、指标和关系独立指定负责人。来源事实、人工覆盖、不可变历史和索引待办复用原规则。表维护人变化只经平台目录同步，assignment 接口不能改表负责人。",
+    "D10": "个人聊天、记忆与 Skill 继续按本人和空间隔离。旧 semantic_change_proposals 保留私人读取范围，新 semantic_corrections 保存经显式提交的独立共享内容，未将私人记录批量公开。",
+    "D13": "既有 Pi propose_semantic_change 工具仍只写私人草稿；工具说明明确后续共享提交、接受和保存的区别。本次 SQL 的调查、修订与确认不等待共享建议审核，没有新增 Agent 循环或记忆编排器。",
+    "C02": "身份来自宿主上下文，超级维护角色来自可信配置；语义授权在 Rust 事务内核对。平台拒绝查询时，表负责人及超级维护者的查询仍以 forbidden 失败，普通用户拥有查询权也不能编辑正式语义。",
+    "C04": "SQL 展示与用户确认契约保留。GOV02 核对确认前未提交以及确认后平台独立拒绝；语义协作没有增加自动执行 SQL 的入口。",
+    "A08": "提交、接受和驳回均不改正式知识；仅有权负责人核对、编辑并明确保存才创建正式版本。保存核对当前维护权、目标与依据版本、建议修订，知识版本、建议采用记录、回执和索引待办同事务提交。"
+  },
+  "resolved_findings": [
+    {
+      "id": "SUBMISSION-SCHEMA",
+      "issue": "整理已有私人草稿或修订共享建议时，展开整个对象会把额外字段发给 additionalProperties=false 的接口。",
+      "resolution": "CorrectionComposer 按允许字段构造请求，保持私人草稿与共享命令独立。",
+      "files": [
+        "apps/web/src/features/knowledge/CorrectionComposer.tsx",
+        "packages/contracts/schema.json"
+      ]
+    },
+    {
+      "id": "OWNERSHIP-IDENTITY",
+      "issue": "按显示表名匹配维护关系会使同名平台对象或跨 namespace 对象串权。",
+      "resolution": "平台对象按空间、namespace 和稳定 ID 定位；合成资料只保留五张固定表的一一别名。GOV01 覆盖同名异 ID、跨 namespace、跨表和字段授权。",
+      "files": [
+        "crates/data-agent/src/modules/ingestion/catalog.rs",
+        "crates/data-agent/src/use_cases/catalog_import.rs",
+        "tests/mvp/check-semantic-governance.mjs"
+      ]
+    },
+    {
+      "id": "INITIAL-SYNC-SNAPSHOT",
+      "issue": "新增授权登记的普通 SELECT 在来源锁之前建立 RR 快照，第二个首次同步等待后仍读不到先提交的来源版本，实际回归返回 404。",
+      "resolution": "合成目录的空授权登记单独幂等提交，然后重新开启来源、知识及索引事务。空登记不授予维护权。原首次同步的 200/409 断言保留；最终知识工作流记录为一个 200、一个 version_conflict。",
+      "files": [
+        "crates/data-agent/src/use_cases/knowledge.rs",
+        "crates/data-agent/src/use_cases/semantic_governance.rs",
+        "tests/mvp/check-knowledge-workflow.mjs"
+      ]
+    },
+    {
+      "id": "GOVERNANCE-LOCK-ORDER",
+      "issue": "提交路径及目录退休路径曾在知识或来源锁之后再取授权锁，与逐表导入及人工维护的顺序相反。",
+      "resolution": "提交先锁授权，再按 ID 锁目标及依据。目录退休先按顺序处理待撤授权，再取得来源锁并核对基线；失败整体回滚。runtime 新增对象在来源/知识写入前登记，已有登记不重复通过 INSERT IGNORE 获取共享锁。",
+      "files": [
+        "crates/data-agent/src/use_cases/semantic_governance.rs",
+        "crates/data-agent/src/use_cases/catalog_import.rs",
+        "crates/data-agent/src/modules/access/store.rs"
+      ]
+    },
+    {
+      "id": "RETIREMENT-CURRENT-SET",
+      "issue": "缺失目录集合移到来源锁之前读取后，锁等待期间的新增表可能被旧快照遗漏。",
+      "resolution": "取得来源锁后使用 FOR SHARE 当前读重核排序后的缺失集合，发生变化即返回 version_conflict，不再追加授权锁。退休来源的版本及指纹使用 FOR UPDATE 当前读。GOV04 三轮同时释放空目录与保留改派、新增表快照，检查成功或明确冲突、撤权一致及空目录无可用遗留表。",
+      "files": [
+        "crates/data-agent/src/use_cases/catalog_import.rs",
+        "crates/data-agent/src/modules/ingestion/store.rs",
+        "tests/mvp/check-semantic-governance.mjs"
+      ]
+    },
+    {
+      "id": "BROWSER-REPLAY-AND-PAGING",
+      "issue": "表单重传曾生成新的操作身份，列表轮询曾丢弃后续分页。",
+      "resolution": "提交、修订、审核、正式保存和负责人表单对相同内容复用 operation_id；轮询重新加载已展开页数。浏览器测试在服务端已处理提交后丢弃响应，重试仅产生一条共享建议。",
+      "files": [
+        "apps/web/src/features/knowledge/semantic-commands.ts",
+        "apps/web/src/features/knowledge/SemanticCorrections.tsx",
+        "apps/web/src/features/knowledge/ReviewCorrection.tsx",
+        "apps/web/src/features/knowledge/SemanticMaintainer.tsx",
+        "tests/mvp/check-semantic-governance-browser.mjs"
+      ]
+    },
+    {
+      "id": "TEST-EVIDENCE-BOUNDARIES",
+      "issue": "平台拒绝场景最初未断言具体错误；并发参数中 await 会延后启动第二项操作；旧测试夹具缺少新增授权关系。",
+      "resolution": "GOV02 明确断言 forbidden；GOV04 在 Promise.all 前读取修订内容；5100 字段测试补授权夹具但不减少规模或搜索断言；旧管理按钮改为已确认的提交、接受、编辑保存流程，并保留其它按钮验收。",
+      "files": [
+        "tests/mvp/check-semantic-governance.mjs",
+        "tests/mvp/check-completion-gaps.mjs",
+        "tests/mvp/check-management-buttons.mjs"
+      ]
+    },
+    {
+      "id": "DESIGN-STATE",
+      "issue": "系统设计第 6.1 节开头仍描述逐表权限尚未实现。",
+      "resolution": "更新为本轮已接入 mock 维护人同步、独立负责人及可信超级角色，并保留真实平台和正式身份未验证的边界。",
+      "files": [
+        "docs/semantic-retrieval-design.md"
+      ]
+    }
+  ],
+  "test_expectation_review": {
+    "basis": "用户确认的表负责人来自 Datasight、共享对象独立负责、两套权限分离，以及原设计中的私有记录、版本、幂等和明确保存规则。",
+    "preserved": [
+      "首次同步只接受成功或明确 version_conflict，不将 404 当作合法并发结果。",
+      "原目录导入 12 项、知识工作流 12 项、旧工具边界 7 项、长文/分页/记忆 4 项和管理按钮 6 组行为保留。",
+      "5100 字段夹具规模及原检索和分页断言保留。",
+      "事务故障回滚、旧知识及建议修订冲突、重复提交与响应丢失检查保留。"
+    ],
+    "catalog_harness_change": {
+      "before": "harness() 后立即 pauseWorker()，仍会先启动 Pi bridge。",
+      "after": "复用既有 capture 接收端，startWorker=false，startupTimeout=60000。",
+      "rationale": "该脚本没有发送聊天、推进会话、调用 Agent 工具或消费模型队列；只经真实 API/MySQL 与合成平台验证目录同步和预填排队。变更仅移除无关启动依赖，全部业务断言保留。",
+      "limitation": "不作为 Pi 启动、会话或模型行为通过证据；原 20/60 秒启动失败保留。GOV02/GOV03 与知识工作流仍使用真实 Pi SDK 和模拟模型。"
+    },
+    "startup_timeout_change": "知识工作流只把服务启动就绪上限从 20 秒调整为 60 秒，没有更改业务等待或断言。已记录 Pi SDK 冷导入实测与启动失败；不宣称修复 Pi 性能。"
+  },
+  "evidence_review": {
+    "reviewer_executed": [
+      {
+        "command": [
+          "git",
+          "diff",
+          "--check"
+        ],
+        "exit_code": 0,
+        "result": "冻结前及最终复核均无补丁空白错误。"
+      },
+      {
+        "command": [
+          "python3",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "scripts",
+          "-p",
+          "test_check_delivery.py"
+        ],
+        "exit_code": 0,
+        "check_count": 16,
+        "result": "契约、已确认决定、源码、测试及审查变更会使旧证据失效；失败、超时和执行期间漂移不能形成通过收据。"
+      }
+    ],
+    "reviewer_command_note": "首次直接用 python3 -m unittest scripts.test_check_delivery 因测试模块的 import 路径失败；改用项目 discover 入口后 16 项完整通过，首次调用不计为通过。",
+    "inspected_artifacts": [
+      {
+        "path": ".local/checks/semantic-governance-GOV01.json",
+        "sha256": "87117f4223851fa0a9108aa212caa31a90293a6e798e00a18e33fb7cd2daf07a",
+        "modified_at": "2026-10-06T12:50:21.309872+00:00",
+        "check_count": 1,
+        "all_reported_checks_passed": true
+      },
+      {
+        "path": ".local/checks/semantic-governance-GOV02.json",
+        "sha256": "a31d09193f97208cb16873a477badc8e8172ffa5824c258c6a078f99081d2782",
+        "modified_at": "2026-10-06T13:01:31.278797+00:00",
+        "check_count": 1,
+        "all_reported_checks_passed": true
+      },
+      {
+        "path": ".local/checks/semantic-governance-GOV03.json",
+        "sha256": "39d14f5f1c3e70354d14f9c02f193eef0f51954ac4e3f77ac3268faa78641b2f",
+        "modified_at": "2026-10-06T13:00:59.757923+00:00",
+        "check_count": 1,
+        "all_reported_checks_passed": true
+      },
+      {
+        "path": ".local/checks/semantic-governance-GOV04.json",
+        "sha256": "af52c19a5037c3e2d9a581a4b9b86ff5039936c39233048037de49998a52bee3",
+        "modified_at": "2026-10-06T13:20:13.802268+00:00",
+        "check_count": 1,
+        "all_reported_checks_passed": true
+      },
+      {
+        "path": ".local/checks/semantic-governance-GOV05.json",
+        "sha256": "b5a2f418ab3cafd18212a85c56159ea528872b5dafdf9e689fe18643b78d8e5c",
+        "modified_at": "2026-10-06T12:36:11.334917+00:00",
+        "check_count": 1,
+        "all_reported_checks_passed": true
+      },
+      {
+        "path": ".local/checks/semantic-governance-browser/result.json",
+        "sha256": "f3ec8ff3e6a038bebca3ef62d02974ce2ad92f756cf61445eecf9517cf92431a",
+        "modified_at": "2026-10-06T13:00:13.552803+00:00",
+        "check_count": 7,
+        "all_reported_checks_passed": true
+      },
+      {
+        "path": ".local/checks/mvp-catalog-import.json",
+        "sha256": "133a84ae42924a52f359198ff4324964157a91006698a88f51b52b05ec350957",
+        "modified_at": "2026-10-06T13:28:38.937840+00:00",
+        "check_count": 12,
+        "all_reported_checks_passed": true
+      },
+      {
+        "path": ".local/checks/mvp-knowledge.json",
+        "sha256": "77aa4026a572d99e2ae1f97ecbdbe87b513b5a354d7b8589c1662e2591798892",
+        "modified_at": "2026-10-06T13:30:03.427498+00:00",
+        "check_count": 12,
+        "all_reported_checks_passed": true
+      },
+      {
+        "path": ".local/checks/mvp-boundaries.json",
+        "sha256": "ab6acf6f97ec224f9b133c31b2c47fedb26b29e5f60605675b22dd1a71e44fc4",
+        "modified_at": "2026-10-06T13:05:23.511176+00:00",
+        "check_count": 7,
+        "all_reported_checks_passed": true
+      },
+      {
+        "path": ".local/checks/mvp-completion-gaps.json",
+        "sha256": "03d75f82b20b6561b6b385db50fa498e8ce88b7dee6e6f2d31d7b47903aa46a7",
+        "modified_at": "2026-10-06T13:06:33.604838+00:00",
+        "check_count": 4,
+        "all_reported_checks_passed": true
+      },
+      {
+        "path": ".local/checks/management-buttons.json",
+        "sha256": "5744e1d80aafa64e2b092063daa9a26e14ae2d00078526d0b8c94540121a57fd",
+        "modified_at": "2026-10-06T13:03:45.099466+00:00",
+        "check_count": 6,
+        "all_reported_checks_passed": true
+      }
+    ],
+    "artifact_limitation": "上述文件是各组预跑和受影响回归的结果，部分早于最后锁序修复。审查核对测试预期及产物，并结合实现者报告的完整退出结果；它们不代替即将生成的冻结范围联合验收收据。",
+    "implementation_runner_reports": [
+      "最后 GOV04 新并发、catalog-import 12 项及 knowledge-workflow 12 项完整退出 0；知识工作流保留真实 Pi SDK 与模拟模型。",
+      "GOV01–GOV05、浏览器 7 项、旧边界 7 项、completion 4 项与管理按钮 6 组完整通过；结果文件已经独立读取并记录摘要。",
+      "make verify-code、verify-architecture 及同源契约检查通过，包含 183 条契约、7 条架构反例、锁序检查和 4 项启动配置；材料 279 项与图册 28 项通过。"
+    ],
+    "official_model_requests_by_reviewer": 0
+  },
+  "scope_review": {
+    "branch": "codex/semantic-governance",
+    "base_head": "cd8266702b1482178e0abac6acc7de366d067dc5",
+    "changed_file_count_before_review_record": 67,
+    "changed_paths_within_allowed_scope": true,
+    "remaining_blockers": [],
+    "new_agent_framework": false,
+    "pi_or_mem0_responsibility_changed": false,
+    "private_records_made_public_by_migration": false,
+    "cross_module_private_store_bypass_found": false,
+    "reviewer_writes": [
+      "docs/reviews/semantic-governance-review.json"
+    ],
+    "current_fingerprint_change": {
+      "decision": "本增量 verification_inputs 不再包含 CURRENT 全文，一般材料 verification.inputs 仍包含 CURRENT。",
+      "still_bound": [
+        "完整 delivery 契约（按既有规则排除状态/证据，审查摘要另外排除 review 指针）",
+        "CURRENT 已确认 18 项决定",
+        "AGENTS.md 与系统设计",
+        "声明的源码、契约、测试、相关文档及检查器",
+        "最终验收中的审查文件本身"
+      ],
+      "rationale": "避免写完成状态及工作日志使已执行业务验收自我失效；不删命令或放宽预期。",
+      "limitation": "CURRENT 其它日志及顶层 phase/status/goal_revision 不受本业务收据自动保护。新产品决定仍须同步 delivery 或系统设计并重新审查验收；不得用旧收据宣称新目标完成。"
+    }
+  },
+  "remaining_blockers": [],
+  "limits": [
+    "本记录只批准开始六组最终验收，不证明 make verify-increment 已通过，不自动关闭增量。",
+    "本轮是隔离 MySQL、合成平台及模拟模型环境；真实 Datasight ACL、正式身份认证和维护人同步时效仍未验证。",
+    "表负责人权限以最近一次成功同步为准，不能宣称平台端变更实时撤权。",
+    "不重估原 MVP 的模型准确率、千表业务质量或 Mem0 对比结论；原证据各自保留。",
+    "本地记录和摘要不防同权限篡改，未提交、推送或部署。"
+  ]
+}

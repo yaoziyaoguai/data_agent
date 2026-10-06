@@ -15,7 +15,7 @@
     <text x="57" y="303" font-size="14" font-weight="500" fill="#d4e2f3" text-anchor="start" >Person</text>
     <text x="57" y="337" font-size="25" font-weight="650" fill="#ffffff" text-anchor="start" >业务用户</text>
     <text x="57" y="365" font-size="12" font-weight="500" fill="#d4e2f3" text-anchor="start" >产品 · 算法 · 分析</text>
-    <text x="57" y="403" font-size="18" font-weight="400" fill="#ffffff" text-anchor="start" >数据开发维护语义</text>
+    <text x="57" y="403" font-size="18" font-weight="400" fill="#ffffff" text-anchor="start" >授权维护者编辑语义</text>
   </g><g class="node" data-node="web">
     <rect class="node-box" x="310" y="250" width="260" height="200" rx="10" fill="#f1f6ff" stroke="#3866ac" stroke-width="1.4"/>
     <path d="M328 250 H552" stroke="#3866ac" stroke-width="4"/>
@@ -29,7 +29,7 @@
     <text x="692" y="263" font-size="14" font-weight="500" fill="#53677d" text-anchor="start" >Container</text>
     <text x="692" y="297" font-size="25" font-weight="650" fill="#172e50" text-anchor="start" >业务 API 服务</text>
     <text x="692" y="325" font-size="16" font-weight="500" fill="#53677d" text-anchor="start" >Rust / Axum</text>
-    <text x="692" y="363" font-size="18" font-weight="400" fill="#172e50" text-anchor="start" >权限、版本、确认与调用预算</text><text x="692" y="391" font-size="18" font-weight="400" fill="#172e50" text-anchor="start" >会话、语义与个人资产规则</text><text x="692" y="419" font-size="18" font-weight="400" fill="#172e50" text-anchor="start" >受控工具与平台查询适配</text>
+    <text x="692" y="363" font-size="18" font-weight="400" fill="#172e50" text-anchor="start" >系统维护授权、版本与调用预算</text><text x="692" y="391" font-size="18" font-weight="400" fill="#172e50" text-anchor="start" >会话、语义与个人资产规则</text><text x="692" y="419" font-size="18" font-weight="400" fill="#172e50" text-anchor="start" >查询前另核平台权限与用户确认</text>
   </g><g class="node" data-node="pi">
     <rect class="node-box" x="1110" y="250" width="320" height="200" rx="10" fill="#f1f6ff" stroke="#3866ac" stroke-width="1.4"/>
     <path d="M1128 250 H1412" stroke="#3866ac" stroke-width="4"/>

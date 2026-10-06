@@ -9,8 +9,8 @@ OWNERS={
  'conversations':{'conversations','conversation_messages','conversation_events','conversation_message_tasks'},
  'analysis':{'analysis_tasks','condition_revisions','clarifications','task_lifecycle_operations'},
  'runtime':{'agent_runs','pi_checkpoints','tool_calls','assistant_outputs','output_chunks','budget_scopes','model_call_attempts','model_trials','maintenance_model_calls'},
- 'jobs':{'background_jobs'},'access':set(),
- 'queries':{'query_requests'},'knowledge':{'knowledge_objects','knowledge_versions','knowledge_operations','semantic_change_proposals','knowledge_index_jobs','knowledge_index_rebuilds'},
+ 'jobs':{'background_jobs'},'access':{'semantic_ownership','semantic_owner_operations'},
+ 'queries':{'query_requests'},'knowledge':{'knowledge_objects','knowledge_versions','knowledge_operations','semantic_change_proposals','knowledge_index_jobs','knowledge_index_rebuilds','semantic_corrections','semantic_correction_operations'},
  'ingestion':{'source_heads', 'source_sync_locks','source_snapshots','prefill_attempts','catalog_imports','catalog_platform_heads','catalog_table_snapshots','catalog_namespace_heads','table_analysis_preferences','analysis_preference_operations'},'assets':{'personal_memory_index_jobs','personal_assets','personal_asset_versions','asset_operations','skill_selections','asset_adoptions'},'retrieval':{'retrieval_documents'},
 }
 def violations(root:Path)->list[str]:

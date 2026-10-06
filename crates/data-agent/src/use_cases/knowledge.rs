@@ -12,8 +12,11 @@ pub async fn initialize(pool: &MySqlPool) -> Result<()> {
         space_id: "demo".into(),
         request_id: id(),
     };
+    sync_catalog(pool, &ctx).await?;
     let mut tx = AppTx::begin(pool).await?;
-    sync_catalog_in_tx(&mut tx, &ctx).await?;
+    for object in knowledge::list_in_tx(&mut tx, &ctx, false).await? {
+        super::semantic_governance::register_object_in_tx(&mut tx, &ctx, &object).await?;
+    }
     tx.commit().await
 }
 pub async fn list(
@@ -44,6 +47,7 @@ pub async fn list(
     };
     let mut values = values;
     for value in &mut values {
+        super::semantic_governance::decorate_in_tx(&mut tx, ctx, value).await?;
         value["prefill_status"] =
             ingestion::prefill_status_in_tx(&mut tx, ctx, value["id"].as_str().unwrap_or(""))
                 .await?;
@@ -74,6 +78,7 @@ pub async fn read(
             v["analysis_preference"] = preference;
         }
     }
+    super::semantic_governance::decorate_in_tx(&mut tx, ctx, &mut v).await?;
     tx.commit().await?;
     Ok(v)
 }
@@ -84,12 +89,30 @@ pub async fn edit(
     action: &str,
     input: Value,
 ) -> Result<Value> {
-    access::authorize_maintainer(ctx)?;
     let mut tx = AppTx::begin(pool).await?;
-    let v = match action {
+    if action == "create" {
+        access::authorize_maintainer(ctx)?;
+    } else {
+        let target = if action == "apply-proposal" {
+            knowledge::proposal_in_tx(&mut tx, ctx, object.ok_or(Error::new("invalid_input"))?)
+                .await?["object_id"]
+                .as_str()
+                .unwrap_or("")
+                .to_owned()
+        } else {
+            object.ok_or(Error::new("invalid_input"))?.to_owned()
+        };
+        access::authorize_semantic_in_tx(&mut tx, ctx, &target).await?;
+    }
+    let mut v = match action {
         "create" => {
             contracts::validate("KnowledgeCreate", &input)?;
-            knowledge::create_in_tx(&mut tx, ctx, &input).await?
+            let v = knowledge::create_in_tx(&mut tx, ctx, &input).await?;
+            super::semantic_governance::register_object_in_tx(&mut tx, ctx, &v).await?;
+            if input.get("maintainer_id").is_some() {
+                access::assign_in_tx(&mut tx,ctx,v["id"].as_str().unwrap_or(""),&json!({"operation_id":input["operation_id"],"expected_version":"1","maintainer_id":input["maintainer_id"]})).await?;
+            }
+            v
         }
         "edit" => {
             contracts::validate("KnowledgeEdit", &input)?;
@@ -197,6 +220,7 @@ pub async fn edit(
         }
         _ => return Err(Error::new("invalid_input")),
     };
+    super::semantic_governance::decorate_in_tx(&mut tx, ctx, &mut v).await?;
     contracts::validate("KnowledgeObject", &v)?;
     tx.commit().await?;
     Ok(v)
@@ -219,9 +243,9 @@ pub async fn set_table_analysis_preference(
     table: &str,
     input: Value,
 ) -> Result<Value> {
-    access::authorize_maintainer(ctx)?;
     contracts::validate("AnalysisPreferenceCommand", &input)?;
     let mut tx = AppTx::begin(pool).await?;
+    access::authorize_semantic_in_tx(&mut tx, ctx, table).await?;
     let object = knowledge::read_in_tx(&mut tx, ctx, table, None, true).await?;
     if object["kind"] != "table" {
         return Err(Error::new("invalid_input"));
@@ -255,13 +279,22 @@ pub async fn proposals(pool: &MySqlPool, ctx: &AccessContext) -> Result<Value> {
 }
 pub async fn sync(pool: &MySqlPool, ctx: &AccessContext, key: &str) -> Result<Value> {
     access::authorize_maintainer(ctx)?;
-    let mut tx = AppTx::begin(pool).await?;
-    sync_catalog_in_tx(&mut tx, ctx).await?;
-    tx.commit().await?;
+    sync_catalog(pool, ctx).await?;
     super::catalog_import::sync(pool, ctx, key).await
 }
 
-async fn sync_catalog_in_tx(tx: &mut AppTx<'_>, ctx: &AccessContext) -> Result<Vec<(String, u64)>> {
+async fn sync_catalog(pool: &MySqlPool, ctx: &AccessContext) -> Result<()> {
+    // 空授权登记不授予维护权；单独提交，避免提前固定随后来源同步的旧快照。
+    let mut registration = AppTx::begin(pool).await?;
+    super::semantic_governance::register_catalog_in_tx(
+        &mut registration,
+        ctx,
+        &ingestion::synthetic_catalog()?,
+    )
+    .await?;
+    registration.commit().await?;
+    let mut transaction = AppTx::begin(pool).await?;
+    let tx = &mut transaction;
     let changed = ingestion::sync_sources_in_tx(tx, &ctx.space_id).await?;
     let catalog = current_catalog_in_tx(tx, ctx).await?;
     let objects = knowledge::list_in_tx(tx, ctx, false).await?;
@@ -282,7 +315,7 @@ async fn sync_catalog_in_tx(tx: &mut AppTx<'_>, ctx: &AccessContext) -> Result<V
             }
         }
     }
-    Ok(changed)
+    transaction.commit().await
 }
 pub async fn valid_assets_in_tx(
     tx: &mut AppTx<'_>,

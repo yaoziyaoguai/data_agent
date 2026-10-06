@@ -15,7 +15,7 @@
     <text x="57" y="293" font-size="14" font-weight="500" fill="#d4e2f3" text-anchor="start" >Person</text>
     <text x="57" y="327" font-size="25" font-weight="650" fill="#ffffff" text-anchor="start" >业务用户</text>
     <text x="57" y="355" font-size="12" font-weight="500" fill="#d4e2f3" text-anchor="start" >产品 · 算法 · 分析</text>
-    <text x="57" y="393" font-size="18" font-weight="400" fill="#ffffff" text-anchor="start" >数据开发维护语义</text>
+    <text x="57" y="393" font-size="18" font-weight="400" fill="#ffffff" text-anchor="start" >授权维护者编辑语义</text>
   </g><g class="node" data-node="web">
     <rect class="node-box" x="330" y="250" width="300" height="200" rx="10" fill="#f1f6ff" stroke="#3866ac" stroke-width="1.4"/>
     <path d="M348 250 H612" stroke="#3866ac" stroke-width="4"/>
@@ -29,7 +29,7 @@
     <text x="802" y="263" font-size="14" font-weight="500" fill="#53677d" text-anchor="start" >Container</text>
     <text x="802" y="297" font-size="25" font-weight="650" fill="#172e50" text-anchor="start" >业务 API 服务</text>
     <text x="802" y="325" font-size="16" font-weight="500" fill="#53677d" text-anchor="start" >Rust / Axum</text>
-    <text x="802" y="363" font-size="18" font-weight="400" fill="#172e50" text-anchor="start" >权限、版本、确认与调用预算</text><text x="802" y="391" font-size="18" font-weight="400" fill="#172e50" text-anchor="start" >会话、语义与个人资产规则</text><text x="802" y="419" font-size="18" font-weight="400" fill="#172e50" text-anchor="start" >受控工具与平台查询适配</text>
+    <text x="802" y="363" font-size="18" font-weight="400" fill="#172e50" text-anchor="start" >系统维护授权、版本与调用预算</text><text x="802" y="391" font-size="18" font-weight="400" fill="#172e50" text-anchor="start" >会话、语义与个人资产规则</text><text x="802" y="419" font-size="18" font-weight="400" fill="#172e50" text-anchor="start" >查询前另核平台权限与用户确认</text>
   </g><g class="node" data-node="models">
     <rect class="node-box" x="1480" y="235" width="370" height="230" rx="10" fill="#f7f5f0" stroke="#9a8050" stroke-width="1.4"/>
     <path d="M1498 235 H1832" stroke="#9a8050" stroke-width="4"/>
@@ -64,7 +64,7 @@
     <text x="57" y="1108" font-size="14" font-weight="500" fill="#53677d" text-anchor="start" >External Software System</text>
     <text x="57" y="1142" font-size="25" font-weight="650" fill="#4b402c" text-anchor="start" >数据平台 / 查询引擎</text>
     <text x="57" y="1170" font-size="16" font-weight="500" fill="#53677d" text-anchor="start" >当前：可执行合成平台 / SQLite</text>
-    <text x="57" y="1208" font-size="18" font-weight="400" fill="#4b402c" text-anchor="start" >元数据、血缘、节点与加工 SQL</text><text x="57" y="1236" font-size="18" font-weight="400" fill="#4b402c" text-anchor="start" >权限、查询提交、状态与结果</text><text x="57" y="1264" font-size="18" font-weight="400" fill="#4b402c" text-anchor="start" >真实平台后续经适配器接入</text>
+    <text x="57" y="1208" font-size="18" font-weight="400" fill="#4b402c" text-anchor="start" >元数据、血缘、节点与加工 SQL</text><text x="57" y="1236" font-size="18" font-weight="400" fill="#4b402c" text-anchor="start" >独立数据权限、执行与结果</text><text x="57" y="1264" font-size="18" font-weight="400" fill="#4b402c" text-anchor="start" >Datasight 后续经适配器接入</text>
   </g><g class="node" data-node="mysql">
     <rect class="node-box" x="510" y="1110" width="350" height="190" rx="10" fill="#eef7f3" stroke="#438471" stroke-width="1.4"/>
     <path d="M528 1110 H842" stroke="#438471" stroke-width="4"/>

@@ -5,9 +5,9 @@ const { chromium } = require('playwright');
 
 // 总览与三张详图共用 11 个组件和 19 条关系，职责与当前合成平台实现一致。
 const nodes = {
-  users: { name: '业务用户', type: 'Person', tech: '产品 · 算法 · 分析', lines: ['数据开发维护语义'], kind: 'person' },
+  users: { name: '业务用户', type: 'Person', tech: '产品 · 算法 · 分析', lines: ['授权维护者编辑语义'], kind: 'person' },
   web: { name: 'Web 应用', type: 'Container', tech: 'React / TypeScript', lines: ['提问、SQL、结果与历史', '语义管理 · 我的积累'], kind: 'app' },
-  api: { name: '业务 API 服务', type: 'Container', tech: 'Rust / Axum', lines: ['权限、版本、确认与调用预算', '会话、语义与个人资产规则', '受控工具与平台查询适配'], kind: 'app' },
+  api: { name: '业务 API 服务', type: 'Container', tech: 'Rust / Axum', lines: ['系统维护授权、版本与调用预算', '会话、语义与个人资产规则', '查询前另核平台权限与用户确认'], kind: 'app' },
   pi: { name: 'Agent 运行进程', type: 'Container', tech: 'Node.js / Pi SDK 1.0.0', lines: ['唯一模型与工具循环', '澄清、SQL、解释与原生压缩'], kind: 'app' },
   journal: { name: 'Pi 原生会话', type: 'Data Store', tech: '私有 JSONL / 同一宿主', lines: ['完整 SDK 会话树与工具历史', '精确 leaf / 授权引用保存在 MySQL'], kind: 'store' },
   worker: { name: '后台任务进程', type: 'Container', tech: 'Rust Worker', lines: ['来源同步、预填与索引更新', '查询跟踪、作业租约与重试'], kind: 'app' },
@@ -15,7 +15,7 @@ const nodes = {
   vector: { name: '检索索引', type: 'Data Store', tech: 'Milvus 3.0 / 可接 Zilliz', lines: ['共享知识与个人记忆分别索引', '携带归属和版本，可从正式记录重建'], kind: 'store' },
   memory: { name: 'Mem0 个人记忆', type: 'Container', tech: 'Python / Mem0 OSS 2.2.1', lines: ['从原始消息提取候选、检索记忆', 'SQLite 保存 SDK 历史与技术回执'], kind: 'app' },
   models: { name: '模型能力', type: 'Model APIs', tech: 'DeepSeek Flash · 百炼 Qwen', lines: ['理解、生成与提取：DeepSeek Flash', '向量：qwen3.7-text-embedding', '共享知识与个人记忆分开建索引'], kind: 'integration' },
-  platform: { name: '数据平台 / 查询引擎', type: 'External Software System', tech: '当前：可执行合成平台 / SQLite', lines: ['元数据、血缘、节点与加工 SQL', '权限、查询提交、状态与结果', '真实平台后续经适配器接入'], kind: 'integration' },
+  platform: { name: '数据平台 / 查询引擎', type: 'External Software System', tech: '当前：可执行合成平台 / SQLite', lines: ['元数据、血缘、节点与加工 SQL', '独立数据权限、执行与结果', 'Datasight 后续经适配器接入'], kind: 'integration' },
 };
 
 const relations = {
@@ -82,7 +82,7 @@ const views = [
     noteAt: [310, 605],
   },
   {
-    id: 'knowledge', title: '共享语义、检索与查询', subtitle: '来源事实、模型建议与人工覆盖分别保存；检索命中回源核对权限、有效状态和版本。', height: 1050,
+    id: 'knowledge', title: '共享语义、检索与查询', subtitle: '系统语义维护与 Datasight 查询权限独立；事实、建议、人工值分开保存，检索命中回源核对。', height: 1050,
     boundary: [35, 225, 1125, 720],
     places: { api: [80, 265, 330, 230], vector: [750, 265, 360, 200], models: [1470, 265, 370, 230], worker: [80, 690, 330, 200], mysql: [750, 690, 360, 200], platform: [1470, 690, 370, 230] },
     edges: [
@@ -94,7 +94,7 @@ const views = [
       ['sync', [[245, 890], [245, 975], [1655, 975], [1655, 920]], [950, 959]],
       ['prefill', [[245, 690], [245, 550], [1370, 550], [1370, 420], [1470, 420]], [942, 527]],
     ],
-    footer: 'DeepSeek 生成，百炼 Qwen 向量；共享与个人索引分开。平台接口由合成适配器实现。',
+    footer: '表负责人同步自平台；共用对象独立负责。建议接受后编辑保存，详见 F02；语义角色不授予查询权。',
   },
   {
     id: 'memory', title: '个人记忆的提取与采用', subtitle: 'Mem0 先提取候选；Rust 校验并正式保存后，Worker 提交可检索版本。', height: 1030,

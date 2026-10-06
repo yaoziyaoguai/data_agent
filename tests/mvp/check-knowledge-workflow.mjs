@@ -12,6 +12,7 @@ for (const name of [
 ])
   await copyFile("docs/sources/" + name, dir + "/" + name);
 const h = await harness({
+  startupTimeout: 60000,
   env: { DATA_AGENT_SYNTHETIC_SOURCE_DIRECTORY: process.cwd() + "/" + dir },
 });
 const checks = [];

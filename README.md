@@ -31,6 +31,10 @@
 - 重新预填保留人工值；来源变化会触发受影响内容的重新分析。
 - 常用表优先分析，普通表按需深入。检索结合名称、关键词与向量，命中后回源核对权限和有效版本。
 
+**语义维护与纠错协作：**表和字段沿用 Datasight 最近一次同步的维护人；跨表共用指标、文档等对象独立指定负责人。其他用户先保存私人草稿，核对共享内容后提交。负责人可驳回，或接受后核对、编辑并保存；只有正式保存才改变共享语义。页面展示每个对象的负责人、来源和本人可做的操作。
+
+这属于 **Data Agent 内部权限**。Datasight 的查询、取数和 SQL 执行权限独立校验，语义角色不授予平台权限。流程与接口见[语义维护设计](docs/semantic-retrieval-design.md#117-跨用户纠错与共享语义维护)。
+
 <details>
 <summary>查看语义管理界面</summary>
 
@@ -140,11 +144,12 @@ make verify-shared-embedding verify-memory
 
 ### 后续接入
 
+- 语义协作增量已接入：逐表负责人、独立对象负责人、跨用户提交/接受/驳回和编辑保存。独立验收见 `docs/CURRENT.md`；平台维护人当前来自 mock 同步。
 - 真实数据平台的元数据、权限、执行与状态接口，以及正式身份认证。
 - 同事实际使用、真实业务正确率、长期运行与容量验证。
 - 更大个人记忆库下的效果、延迟与费用测量。
 
-这些事项保留在后续范围；本次 MVP 在已约定的合成平台范围收尾。
+既有 MVP 在合成平台范围收尾；新增语义协作按独立增量验证，不沿用旧验收结论。
 
 ## 文档导航
 
@@ -153,6 +158,7 @@ make verify-shared-embedding verify-memory
 | 当前状态、有效决定、剩余事项 | [CURRENT](docs/CURRENT.md) |
 | 系统方案和需求边界 | [系统设计](docs/semantic-retrieval-design.md) |
 | 软件架构与调用关系 | [架构说明](docs/architecture/README.md) |
+| 语义、个人记忆与两类召回 | [图文讲解](docs/visualizations/data-agent-knowledge-and-memory.html)，含最新语义权限与纠错流程 |
 | 模块接口、存储归属与流程 | [实现设计](docs/architecture/implementation-design.md)、[知识模块](docs/architecture/knowledge-modules.md)、[运行模块](docs/architecture/runtime-modules.md) |
 | HTTP、工具和事件契约 | [OpenAPI 3.1](packages/contracts/openapi.json)、[共用 JSON Schema](packages/contracts/schema.json) |
 | 安装、配置、检查与恢复 | [开发指南](docs/development.md)、[基础设施](infra/README.md) |

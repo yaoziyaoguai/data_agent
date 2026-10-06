@@ -76,6 +76,7 @@ export async function harness(options = {}) {
     platformPort = await freePort(),
     webPort = await freePort();
   const tokens = {
+    carol: randomBytes(32).toString("hex"),
     alice: randomBytes(32).toString("hex"),
     bob: randomBytes(32).toString("hex"),
   };
@@ -90,6 +91,7 @@ export async function harness(options = {}) {
     PI_OFFLINE: "1",
     DATA_AGENT_MODE: "development",
     DATA_AGENT_TOOLSET: "data",
+    DATA_AGENT_SEMANTIC_SUPER_MAINTAINERS: JSON.stringify({demo: ["alice"]}),
     DATA_AGENT_DIAGNOSTICS: "1",
     DATA_AGENT_DATABASE_URL:
       "mysql://data_agent:" +
@@ -98,6 +100,7 @@ export async function harness(options = {}) {
       database,
     DATA_AGENT_DEV_IDENTITIES: JSON.stringify({
       [tokens.alice]: "alice",
+      [tokens.carol]: "carol",
       [tokens.bob]: "bob",
     }),
     DATA_AGENT_INTERNAL_TOKEN: internal,
@@ -152,7 +155,7 @@ export async function harness(options = {}) {
       } catch {
         return false;
       }
-    }, "service health " + port);
+    }, "service health " + port, options.startupTimeout ?? 20000);
   const request = async (
     path,
     body,
@@ -169,16 +172,16 @@ export async function harness(options = {}) {
     });
     return { status: r.status, value: await r.json() };
   };
-  const snapshot = async (cid) => {
-    const r = await request("/conversations/" + cid + "/snapshot");
+  const snapshot = async (cid, user = "alice") => {
+    const r = await request("/conversations/" + cid + "/snapshot", undefined, user);
     assert.equal(r.status, 200);
     return r.value;
   };
-  const send = async (cid, text) => {
+  const send = async (cid, text, user = "alice") => {
     const r = await request("/conversations/" + cid + "/messages", {
       client_message_id: randomUUID(),
       text,
-    });
+    }, user);
     assert.equal(r.status, 200);
     return r.value;
   };
@@ -191,9 +194,9 @@ export async function harness(options = {}) {
     assert.equal(r.status, 200);
     return r.value.conversation_id;
   };
-  const finished = async (cid, count = 1) =>
+  const finished = async (cid, count = 1, user = "alice") =>
     until(async () => {
-      const s = await snapshot(cid);
+      const s = await snapshot(cid, user);
       if (s.events.some((e) => e.type === "run_failed"))
         throw new Error(
           "agent failed: " + logs.map((l) => l.output).join("\n"),
@@ -244,6 +247,8 @@ export async function harness(options = {}) {
       await health(webPort, "/");
     }
   } catch (e) {
+    await writeFile(directory + "/startup-failure.json", JSON.stringify(logs, null, 2));
+    console.error("startup diagnostics:", directory + "/startup-failure.json");
     release.forEach((r) => r());
     if (bridge) await new Promise((r) => bridge.close(r));
     for (const child of children.reverse()) await stop(child);

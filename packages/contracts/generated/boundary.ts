@@ -4,10 +4,12 @@ export interface Boundary {
     analysisUpdate:             AnalysisUpdate;
     appendOutput:               AppendOutput;
     appError:                   AppError;
+    ApplySemanticCorrection?:   ApplySemanticCorrection;
     asset:                      Asset;
     assetList:                  AssetList;
     assetSave:                  AssetSave;
     assetToolInput:             AssetToolInput;
+    AssignSemanticMaintainer?:  AssignSemanticMaintainer;
     cancelReceipt:              CancelReceipt;
     cancelRun:                  CancelRun;
     CatalogColumn?:             CatalogColumn;
@@ -64,6 +66,7 @@ export interface Boundary {
     pi_session_reference:       PiSessionReference;
     prefillResult:              PrefillResult;
     proposal:                   Proposal;
+    ProposalDraftCommand?:      ProposalDraftCommand;
     proposalInput:              ProposalInput;
     proposalList:               ProposalList;
     queryCancellation?:         QueryCancellation;
@@ -78,15 +81,22 @@ export interface Boundary {
     requestQueryInput:          RequestQueryInput;
     reserveModelCall:           ReserveModelCall;
     resultColumn:               ResultColumn;
+    ReviewSemanticCorrection?:  ReviewSemanticCorrection;
+    ReviseSemanticCorrection?:  ReviseSemanticCorrection;
     runEnvelope:                RunEnvelope;
     runSnapshot:                RunSnapshot;
     searchInput:                SearchInput;
+    SemanticAccess?:            SemanticAccess;
+    SemanticCorrection?:        SemanticCorrection;
+    SemanticCorrectionList?:    SemanticCorrectionList;
+    SemanticMaintenance?:       SemanticMaintenance;
     sendModelCall:              SendModelCall;
     sessionReceipt:             SessionReceipt;
     skillSelection:             SkillSelection;
     snapshot:                   Snapshot;
     sourceDocument:             SourceDocument;
     sqlInput:                   SQLInput;
+    SubmitSemanticCorrection?:  SubmitSemanticCorrection;
     TableAnalysisPreference?:   TableAnalysisPreference;
     taskInput:                  TaskInput;
     taskSnapshot:               TaskSnapshot;
@@ -101,6 +111,22 @@ export interface AnalysisPreferenceCommand {
     expected_version: string;
     operation_id:     string;
     preferred:        boolean;
+}
+
+export interface ApplySemanticCorrection {
+    expected_revision: string;
+    expected_version:  string;
+    operation_id:      string;
+    value:             string;
+}
+
+export interface AssignSemanticMaintainer {
+    expected_version: string;
+    /**
+     * Datasight 维护人；未提供或 null 表示暂无负责人，不继承录入者。
+     */
+    maintainer_id: null | string;
+    operation_id:  string;
 }
 
 export interface CatalogColumn {
@@ -131,13 +157,123 @@ export interface CatalogPage {
 }
 
 export interface CatalogTable {
-    columns:          [CatalogColumn, ...CatalogColumn[]];
-    comment:          string;
-    ddl:              string;
-    id:               string;
+    columns: [CatalogColumn, ...CatalogColumn[]];
+    comment: string;
+    ddl:     string;
+    id:      string;
+    /**
+     * Datasight 维护人；未提供或 null 表示暂无负责人，不继承录入者。
+     */
+    maintainer_id?:   null | string;
     name:             string;
     node:             CatalogNode | null;
     platform_version: string;
+}
+
+export interface ProposalDraftCommand {
+    base_version: string;
+    entry_id:     string;
+    evidence:     [EvidenceRef, ...EvidenceRef[]];
+    object_id:    string;
+    operation_id: string;
+    reason:       string;
+    value:        string;
+}
+
+export interface EvidenceRef {
+    /**
+     * read_knowledge或search_knowledge返回的知识对象id；不是read_source返回的source_id。
+     */
+    object_id: string;
+    /**
+     * 该知识对象entries中的path，必须确实存在于对应version。
+     */
+    path:    string;
+    version: string;
+}
+
+export interface ReviewSemanticCorrection {
+    decision:          Decision;
+    expected_revision: string;
+    operation_id:      string;
+    reason:            string;
+}
+
+export type Decision = "accepted" | "rejected";
+
+export interface ReviseSemanticCorrection {
+    base_version:      string;
+    entry_id:          string;
+    evidence:          [EvidenceRef, ...EvidenceRef[]];
+    expected_revision: string;
+    object_id:         string;
+    operation_id:      string;
+    reason:            string;
+    share_confirmed:   boolean;
+    value:             string;
+}
+
+export interface SemanticAccess {
+    can_admin: boolean;
+}
+
+export interface SemanticCorrection {
+    /**
+     * Datasight 维护人；未提供或 null 表示暂无负责人，不继承录入者。
+     */
+    applied_by:      null | string;
+    applied_value:   null | string;
+    applied_version: null | string;
+    base_version:    string;
+    can_review:      boolean;
+    can_revise:      boolean;
+    entry_id:        string;
+    evidence:        [EvidenceRef, ...EvidenceRef[]];
+    id:              string;
+    object_id:       string;
+    original_value:  string;
+    reason:          string;
+    review_reason:   null | string;
+    /**
+     * Datasight 维护人；未提供或 null 表示暂无负责人，不继承录入者。
+     */
+    reviewer_id:  null | string;
+    revision:     string;
+    state:        SemanticCorrectionState;
+    submitter_id: string;
+    value:        string;
+}
+
+export type SemanticCorrectionState = "submitted" | "accepted" | "rejected" | "applied";
+
+export interface SemanticCorrectionList {
+    corrections:   SemanticCorrection[];
+    next_after_id: null | string;
+}
+
+export interface SemanticMaintenance {
+    authority_id: string;
+    can_assign:   boolean;
+    can_edit:     boolean;
+    /**
+     * Datasight 维护人；未提供或 null 表示暂无负责人，不继承录入者。
+     */
+    maintainer_id: null | string;
+    source:        SemanticMaintenanceSource;
+    version:       string;
+}
+
+export type SemanticMaintenanceSource = "datasight" | "system";
+
+export interface SubmitSemanticCorrection {
+    base_version:    string;
+    entry_id:        string;
+    evidence:        [EvidenceRef, ...EvidenceRef[]];
+    object_id:       string;
+    operation_id:    string;
+    reason:          string;
+    share_confirmed: boolean;
+    value:           string;
 }
 
 export interface TableAnalysisPreference {
@@ -201,18 +337,6 @@ export interface ConditionSet {
 }
 
 export type Channel = "web" | "app" | "store";
-
-export interface EvidenceRef {
-    /**
-     * read_knowledge或search_knowledge返回的知识对象id；不是read_source返回的source_id。
-     */
-    object_id: string;
-    /**
-     * 该知识对象entries中的path，必须确实存在于对应version。
-     */
-    path:    string;
-    version: string;
-}
 
 export type Unset = "time_start" | "time_end" | "metric" | "channel" | "group_by" | "filters" | "knowledge_refs" | "notes";
 
@@ -480,12 +604,16 @@ export interface Identity {
 export type ModelLabel = "本地模拟模型" | "DeepSeek Flash" | "DeepSeek V4 Pro";
 
 export interface KnowledgeCreate {
-    body:         string;
-    kind:         KnowledgeCreateKind;
-    name:         string;
-    operation_id: string;
-    related_ids:  string[];
-    source_url?:  null | string;
+    body: string;
+    kind: KnowledgeCreateKind;
+    /**
+     * Datasight 维护人；未提供或 null 表示暂无负责人，不继承录入者。
+     */
+    maintainer_id?: null | string;
+    name:           string;
+    operation_id:   string;
+    related_ids:    string[];
+    source_url?:    null | string;
 }
 
 export type KnowledgeCreateKind = "table" | "field" | "metric" | "document" | "relationship" | "term";
@@ -522,9 +650,11 @@ export interface KnowledgeList {
 
 export interface KnowledgeObject {
     analysis_preference?: TableAnalysisPreference;
+    created_by?:          string;
     entries:              KnowledgeEntry[];
     id:                   string;
     kind:                 KnowledgeCreateKind;
+    maintenance?:         SemanticMaintenance;
     name:                 string;
     prefill_status?:      PrefillStatus | null;
     related_ids:          string[];
@@ -818,7 +948,7 @@ export interface QueryResults {
     result_complete: boolean;
     result_ref:      string;
     rows:            Array<Array<null | string>>;
-    source:          Source;
+    source:          QueryResultsSource;
     truncated:       boolean;
 }
 
@@ -828,7 +958,7 @@ export interface ResultColumn {
     type:     string;
 }
 
-export type Source = "mock";
+export type QueryResultsSource = "mock";
 
 export interface ReadKnowledgeInput {
     entry_id?: string;

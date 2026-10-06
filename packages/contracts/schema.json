@@ -1550,6 +1550,12 @@
         },
         "analysis_preference": {
           "$ref": "#/$defs/TableAnalysisPreference"
+        },
+        "maintenance": {
+          "$ref": "#/$defs/SemanticMaintenance"
+        },
+        "created_by": {
+          "type": "string"
         }
       },
       "required": [
@@ -1702,6 +1708,20 @@
             "null"
           ],
           "maxLength": 2000
+        },
+        "maintainer_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "pattern": "^[A-Za-z0-9_-]+$"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Datasight 维护人；未提供或 null 表示暂无负责人，不继承录入者。"
         }
       },
       "required": [
@@ -3847,6 +3867,20 @@
               "type": "null"
             }
           ]
+        },
+        "maintainer_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "pattern": "^[A-Za-z0-9_-]+$"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Datasight 维护人；未提供或 null 表示暂无负责人，不继承录入者。"
         }
       },
       "required": [
@@ -4474,6 +4508,527 @@
         "call_limit",
         "cost_limit_micros"
       ]
+    },
+    "SemanticAccess": {
+      "title": "SemanticAccess",
+      "type": "object",
+      "properties": {
+        "can_admin": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "can_admin"
+      ],
+      "additionalProperties": false
+    },
+    "SemanticMaintenance": {
+      "title": "SemanticMaintenance",
+      "type": "object",
+      "properties": {
+        "authority_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "maintainer_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "pattern": "^[A-Za-z0-9_-]+$"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Datasight 维护人；未提供或 null 表示暂无负责人，不继承录入者。"
+        },
+        "source": {
+          "type": "string",
+          "enum": [
+            "datasight",
+            "system"
+          ]
+        },
+        "version": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]{0,19})$"
+        },
+        "can_edit": {
+          "type": "boolean"
+        },
+        "can_assign": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "authority_id",
+        "maintainer_id",
+        "source",
+        "version",
+        "can_edit",
+        "can_assign"
+      ],
+      "additionalProperties": false
+    },
+    "AssignSemanticMaintainer": {
+      "title": "AssignSemanticMaintainer",
+      "type": "object",
+      "properties": {
+        "operation_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "expected_version": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]{0,19})$"
+        },
+        "maintainer_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "pattern": "^[A-Za-z0-9_-]+$"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Datasight 维护人；未提供或 null 表示暂无负责人，不继承录入者。"
+        }
+      },
+      "required": [
+        "operation_id",
+        "expected_version",
+        "maintainer_id"
+      ],
+      "additionalProperties": false
+    },
+    "ProposalDraftCommand": {
+      "title": "ProposalDraftCommand",
+      "type": "object",
+      "properties": {
+        "operation_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "object_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "base_version": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]{0,19})$"
+        },
+        "entry_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "value": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 24000
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 24000
+        },
+        "evidence": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/EvidenceRef"
+          },
+          "minItems": 1,
+          "maxItems": 50
+        }
+      },
+      "required": [
+        "operation_id",
+        "object_id",
+        "base_version",
+        "entry_id",
+        "value",
+        "reason",
+        "evidence"
+      ],
+      "additionalProperties": false
+    },
+    "SubmitSemanticCorrection": {
+      "title": "SubmitSemanticCorrection",
+      "type": "object",
+      "properties": {
+        "operation_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "object_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "base_version": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]{0,19})$"
+        },
+        "entry_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "value": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 24000
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 24000
+        },
+        "evidence": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/EvidenceRef"
+          },
+          "minItems": 1,
+          "maxItems": 50
+        },
+        "share_confirmed": {
+          "type": "boolean",
+          "const": true
+        }
+      },
+      "required": [
+        "operation_id",
+        "object_id",
+        "base_version",
+        "entry_id",
+        "value",
+        "reason",
+        "evidence",
+        "share_confirmed"
+      ],
+      "additionalProperties": false
+    },
+    "ReviseSemanticCorrection": {
+      "title": "ReviseSemanticCorrection",
+      "type": "object",
+      "properties": {
+        "operation_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "expected_revision": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]{0,19})$"
+        },
+        "object_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "base_version": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]{0,19})$"
+        },
+        "entry_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "value": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 24000
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 24000
+        },
+        "evidence": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/EvidenceRef"
+          },
+          "minItems": 1,
+          "maxItems": 50
+        },
+        "share_confirmed": {
+          "type": "boolean",
+          "const": true
+        }
+      },
+      "required": [
+        "operation_id",
+        "expected_revision",
+        "object_id",
+        "base_version",
+        "entry_id",
+        "value",
+        "reason",
+        "evidence",
+        "share_confirmed"
+      ],
+      "additionalProperties": false
+    },
+    "ReviewSemanticCorrection": {
+      "title": "ReviewSemanticCorrection",
+      "type": "object",
+      "properties": {
+        "operation_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "expected_revision": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]{0,19})$"
+        },
+        "decision": {
+          "type": "string",
+          "enum": [
+            "accepted",
+            "rejected"
+          ]
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 24000
+        }
+      },
+      "required": [
+        "operation_id",
+        "expected_revision",
+        "decision",
+        "reason"
+      ],
+      "additionalProperties": false
+    },
+    "ApplySemanticCorrection": {
+      "title": "ApplySemanticCorrection",
+      "type": "object",
+      "properties": {
+        "operation_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "expected_revision": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]{0,19})$"
+        },
+        "expected_version": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]{0,19})$"
+        },
+        "value": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 24000
+        }
+      },
+      "required": [
+        "operation_id",
+        "expected_revision",
+        "expected_version",
+        "value"
+      ],
+      "additionalProperties": false
+    },
+    "SemanticCorrection": {
+      "title": "SemanticCorrection",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "submitter_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "object_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "base_version": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]{0,19})$"
+        },
+        "entry_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "value": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 24000
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 24000
+        },
+        "evidence": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/EvidenceRef"
+          },
+          "minItems": 1,
+          "maxItems": 50
+        },
+        "original_value": {
+          "type": "string",
+          "maxLength": 100000
+        },
+        "revision": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]{0,19})$"
+        },
+        "state": {
+          "type": "string",
+          "enum": [
+            "submitted",
+            "accepted",
+            "rejected",
+            "applied"
+          ]
+        },
+        "reviewer_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "pattern": "^[A-Za-z0-9_-]+$"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Datasight 维护人；未提供或 null 表示暂无负责人，不继承录入者。"
+        },
+        "review_reason": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "applied_by": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "pattern": "^[A-Za-z0-9_-]+$"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Datasight 维护人；未提供或 null 表示暂无负责人，不继承录入者。"
+        },
+        "applied_version": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^(0|[1-9][0-9]{0,19})$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "applied_value": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "can_review": {
+          "type": "boolean"
+        },
+        "can_revise": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "id",
+        "submitter_id",
+        "object_id",
+        "base_version",
+        "entry_id",
+        "value",
+        "reason",
+        "evidence",
+        "original_value",
+        "revision",
+        "state",
+        "reviewer_id",
+        "review_reason",
+        "applied_by",
+        "applied_version",
+        "applied_value",
+        "can_review",
+        "can_revise"
+      ],
+      "additionalProperties": false
+    },
+    "SemanticCorrectionList": {
+      "title": "SemanticCorrectionList",
+      "type": "object",
+      "properties": {
+        "corrections": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SemanticCorrection"
+          }
+        },
+        "next_after_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "corrections",
+        "next_after_id"
+      ],
+      "additionalProperties": false
     }
   },
   "properties": {
@@ -4761,6 +5316,36 @@
     },
     "embeddingProfile": {
       "$ref": "#/$defs/EmbeddingProfile"
+    },
+    "SemanticAccess": {
+      "$ref": "#/$defs/SemanticAccess"
+    },
+    "SemanticMaintenance": {
+      "$ref": "#/$defs/SemanticMaintenance"
+    },
+    "AssignSemanticMaintainer": {
+      "$ref": "#/$defs/AssignSemanticMaintainer"
+    },
+    "ProposalDraftCommand": {
+      "$ref": "#/$defs/ProposalDraftCommand"
+    },
+    "SubmitSemanticCorrection": {
+      "$ref": "#/$defs/SubmitSemanticCorrection"
+    },
+    "ReviseSemanticCorrection": {
+      "$ref": "#/$defs/ReviseSemanticCorrection"
+    },
+    "ReviewSemanticCorrection": {
+      "$ref": "#/$defs/ReviewSemanticCorrection"
+    },
+    "ApplySemanticCorrection": {
+      "$ref": "#/$defs/ApplySemanticCorrection"
+    },
+    "SemanticCorrection": {
+      "$ref": "#/$defs/SemanticCorrection"
+    },
+    "SemanticCorrectionList": {
+      "$ref": "#/$defs/SemanticCorrectionList"
     }
   },
   "required": [

@@ -54,7 +54,7 @@ export function WorkspaceShell({
           <div>
             <strong>{user}</strong>
             <small>
-              {user === "alice" ? "数据开发 · 可维护" : "分析用户 · 只读语义"}
+              语义权限按对象校验
             </small>
           </div>
           <button onClick={onLogout}>退出</button>

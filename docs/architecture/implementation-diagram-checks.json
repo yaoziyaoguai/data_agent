@@ -7,8 +7,8 @@
     "browser": "153.0.8010.12"
   },
   "sources": {
-    "implementation-views.md": "df059bc08d468632f49becfa7433f8af65ab2287754a9efb693582bb94810b3c",
-    "knowledge-modules.md": "fc7e8a84bb65bc274fdc3b17ff9c6bd5b9994af73315684689a86f98fc501ad1",
+    "implementation-views.md": "9b6c81b395756e06f7c02927128717c709b44363c02c1c9d11912e57fba0855e",
+    "knowledge-modules.md": "aed0f5be0f7606723d77bebef783496e53b5117bb58fb23db53e97980ac8354c",
     "runtime-modules.md": "2b5aa3a1c76c27fc1e173648277e7fe65c842500eaae661f9a36e52a40880941"
   },
   "diagrams": [
@@ -35,16 +35,16 @@
     },
     {
       "id": "F01",
-      "width": 547.75,
-      "height": 1117,
-      "textCount": 18,
+      "width": 1152.9375,
+      "height": 1954,
+      "textCount": 35,
       "outsideLabels": []
     },
     {
       "id": "F02",
-      "width": 615.671875,
-      "height": 2196,
-      "textCount": 37,
+      "width": 736.0859375,
+      "height": 2723,
+      "textCount": 45,
       "outsideLabels": []
     },
     {
@@ -126,16 +126,16 @@
     },
     {
       "id": "S01",
-      "width": 845,
-      "height": 258,
-      "textCount": 13,
+      "width": 1155.515625,
+      "height": 248.5,
+      "textCount": 17,
       "outsideLabels": []
     },
     {
       "id": "S02",
-      "width": 1403.015625,
-      "height": 231.7998809814453,
-      "textCount": 16,
+      "width": 1932.515625,
+      "height": 266.6000061035156,
+      "textCount": 21,
       "outsideLabels": []
     },
     {

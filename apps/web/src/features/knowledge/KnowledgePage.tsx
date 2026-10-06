@@ -5,6 +5,9 @@ import type {
   SourceDocument,
   Proposal,
 } from "../../../../../packages/contracts/generated/boundary.ts";
+import { ProposeCorrection } from "./CorrectionComposer.tsx";
+import { SemanticCorrections } from "./SemanticCorrections.tsx";
+import { SemanticMaintainer } from "./SemanticMaintainer.tsx";
 import { api } from "../../shared/api.ts";
 import { Modal } from "../../shared/Modal.tsx";
 function currentObject(previous: KnowledgeObject | undefined, incoming: KnowledgeObject): KnowledgeObject {
@@ -28,12 +31,14 @@ function EntryEditor({
   canEdit,
   onSaved,
   onSource,
+  onCorrection,
 }: {
   object: KnowledgeObject;
   entry: KnowledgeEntry;
   canEdit: boolean;
   onSaved: (object: KnowledgeObject) => void;
   onSource: (id: string) => void;
+  onCorrection: () => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState(entry.effective_value);
@@ -165,6 +170,7 @@ function EntryEditor({
           </section>
         </div>
       </details>
+      <ProposeCorrection object={object} entry={entry} onSaved={onCorrection}/>
       {error && (
         <p className="error" role="alert">
           {error === "version_conflict"
@@ -212,13 +218,14 @@ export function KnowledgePage({
   const directoryInitialized = useRef(false);
   const visibleObjectIds = useRef<string[]>([]);
   const expandedFields = useRef(new Set<string>());
-  const canEdit = user === "alice";
+  const [canAdmin,setCanAdmin]=useState(false);
   const refresh = async () => {
     const generation = ++refreshGeneration.current;
-    const [knowledge, proposals, visible] = await Promise.all([
+    const [knowledge, proposals, visible, access] = await Promise.all([
       api("KnowledgeList", "/knowledge"),
       api("ProposalList", "/knowledge-proposals"),
       Promise.all(visibleObjectIds.current.map(id => api("KnowledgeObject", "/knowledge/" + id))),
+      api("SemanticAccess","/semantic-access"),
     ]);
     if (generation !== refreshGeneration.current) return;
     if (!directoryInitialized.current) {
@@ -227,6 +234,7 @@ export function KnowledgePage({
     }
     setObjects((old) => { const byId = new Map(old.map(o => [o.id,o])); for (const v of [...knowledge.objects, ...visible]) byId.set(v.id, currentObject(byId.get(v.id),v)); return [...byId.values()]; });
     setProposals(proposals.proposals);
+    setCanAdmin(access.can_admin);
   };
   useEffect(() => {
     void refresh().catch((e) => setError(e.message));
@@ -288,6 +296,7 @@ export function KnowledgePage({
     catch(e){setError(String(e));} finally{setLoadingMore(false);}
   };
   const selected = objects.find((o) => o.id === current);
+  const canEdit=selected?.maintenance?.can_edit??false;
   const changePreference=async()=>{
     const preference=selected?.analysis_preference;
     if(!selected || !preference || savingPreference)return;
@@ -403,14 +412,14 @@ export function KnowledgePage({
         <div className="actions">
           <button
             onClick={()=>void synchronize()}
-            disabled={!canEdit || syncing}
+            disabled={!canAdmin || syncing}
           >
             {syncing?"同步中…":"同步来源"}
           </button>
-          {canEdit && <button onClick={()=>void rebuild()} disabled={rebuilding}>{rebuilding?"正在排队…":"重建检索索引"}</button>}
+          {canAdmin && <button onClick={()=>void rebuild()} disabled={rebuilding}>{rebuilding?"正在排队…":"重建检索索引"}</button>}
           <button
             className="primary"
-            disabled={!canEdit}
+            disabled={!canAdmin}
             onClick={() => setCreating(true)}
           >
             录入业务文档
@@ -482,6 +491,7 @@ export function KnowledgePage({
                   )}
                 </div>
               </div>
+              <SemanticMaintainer object={selected} onSaved={()=>void refresh()}/>
               {selected.kind==="table" && selected.analysis_preference && <p className="quiet">{selected.analysis_preference.preferred?"此表和所属字段优先深入分析，状态见各对象。":"基础资料已入目录；可设为常用表优先分析，或按需重新预填。"}</p>}
               {selected.prefill_status && <p className="quiet" role="status">{({queued:"来源已更新，等待语义分析",issued:"语义分析中；中断后会保留未知状态",budget_unavailable:"来源事实已更新；未配置可用维护预算，模型建议待补充",succeeded:"本次模型建议已保存，引用和格式已核对，业务含义仍需复核",superseded:"分析期间来源或人工版本已变化，旧建议未应用",unknown:"模型调用回执未知，保留预算且未自动重试",invalid_prefill:"模型结果未通过引用或格式校验，未应用"} as Record<string,string>)[selected.prefill_status.state] ?? selected.prefill_status.state}</p>}
               {selected.kind === "table" && (
@@ -521,6 +531,7 @@ export function KnowledgePage({
                           {o.name} <small>v{o.version}</small>
                         </h3>
                       )}
+                      {o.id!==current && <SemanticMaintainer object={o} onSaved={()=>void refresh()}/>}
                       {o.kind === "field" ? (
                         <details onToggle={event => {
                           if (event.currentTarget.open) expandedFields.current.add(o.id);
@@ -541,7 +552,8 @@ export function KnowledgePage({
                               key={e.entry_id}
                               object={o}
                               entry={e}
-                              canEdit={canEdit}
+                              canEdit={o.maintenance?.can_edit??false}
+                              onCorrection={()=>void refresh()}
                               onSaved={save}
                               onSource={(id) => void showSource(id)}
                             />
@@ -553,7 +565,8 @@ export function KnowledgePage({
                             key={e.entry_id}
                             object={o}
                             entry={e}
-                            canEdit={canEdit}
+                            canEdit={o.maintenance?.can_edit??false}
+                              onCorrection={()=>void refresh()}
                             onSaved={save}
                             onSource={(id) => void showSource(id)}
                           />
@@ -568,41 +581,7 @@ export function KnowledgePage({
           {!selected && <p className="quiet">请选择一个语义对象。</p>}
         </div>
       </div>
-      {proposals.length > 0 && (
-        <section className="proposal-panel">
-          <h2>我的语义修改建议</h2>
-          {proposals.map((p) => (
-            <article key={p.id}>
-              <strong>
-                {p.object_id} · 基于 v{p.base_version}
-              </strong>
-              <p>{p.reason}</p>
-              <blockquote>{p.value}</blockquote>
-              <button
-                disabled={!canEdit}
-                onClick={() =>
-                  void api(
-                    "KnowledgeObject",
-                    "/knowledge-proposals/" + p.id + "/apply",
-                    "POST",
-                    {
-                      operation_id: crypto.randomUUID(),
-                      expected_version: p.base_version,
-                    },
-                  )
-                    .then((v) => {
-                      save(v);
-                      return refresh();
-                    })
-                    .catch((e) => setError(e.message))
-                }
-              >
-                核对后保存到正式语义
-              </button>
-            </article>
-          ))}
-        </section>
-      )}
+      <SemanticCorrections key={user} user={user} proposals={proposals} onSaved={()=>void refresh()}/>
       {error && (
         <p role="alert" className="error">
           {error}

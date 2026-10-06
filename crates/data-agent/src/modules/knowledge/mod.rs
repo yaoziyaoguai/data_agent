@@ -14,3 +14,8 @@ pub use store::retire_source_objects_in_tx;
 pub use store::{current_objects_in_tx, index_coverage_in_tx, rebuild_index_in_tx};
 
 pub use store::bind_index_embedding_in_tx;
+
+pub mod corrections;
+pub use store::proposal_in_tx;
+
+pub use store::source_tables_in_tx;

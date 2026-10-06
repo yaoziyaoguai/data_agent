@@ -1,0 +1,1434 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="shadcn" data-mode="light" data-style="80">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="generator" content="Answer me with HTML 0.4.8">
+<title>Data Agent：语义、记忆与召回</title>
+<style>
+html[data-theme="blueprint"], html[data-theme="blueprint"][data-mode="light"] {
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, "JetBrains Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  --radius: 0px;
+  --shadow: none;
+  --bw: 1.5px;
+  --head-font: var(--font-sans);
+  --bg: #f6f6f3;
+  --paper: #ffffff;
+  --ink: #16181d;
+  --ink-2: #4b5260;
+  --ink-3: #8b929e;
+  --line: #1d2026;
+  --line-2: #d6dae1;
+  --fill: #f3f5f8;
+  --accent: #1d5fbf;
+  --accent-bg: #e4ecf8;
+  --ok: #1d5fbf;
+  --ok-bg: #e4ecf8;
+  --err: #c62828;
+  --err-bg: #fbeaea;
+  --warn: #a8620a;
+  --warn-bg: #fdf3e2;
+  --head-bg: #16181d;
+  --head-fg: #ffffff;
+}
+html[data-theme="blueprint"][data-mode="dark"] {
+  --bg: #081322;
+  --paper: #0d1c31;
+  --ink: #e6edf7;
+  --ink-2: #a9b8cc;
+  --ink-3: #6b7f99;
+  --line: #c9d6e8;
+  --line-2: #23385a;
+  --fill: #12253f;
+  --accent: #6ea8ff;
+  --accent-bg: #16305a;
+  --ok: #6ea8ff;
+  --ok-bg: #16305a;
+  --err: #ff7070;
+  --err-bg: #3b1620;
+  --warn: #f0b14a;
+  --warn-bg: #3a2a10;
+  --head-bg: #e6edf7;
+  --head-fg: #081322;
+}
+@media (prefers-color-scheme: dark) {
+html[data-theme="blueprint"][data-mode="auto"] {
+  --bg: #081322;
+  --paper: #0d1c31;
+  --ink: #e6edf7;
+  --ink-2: #a9b8cc;
+  --ink-3: #6b7f99;
+  --line: #c9d6e8;
+  --line-2: #23385a;
+  --fill: #12253f;
+  --accent: #6ea8ff;
+  --accent-bg: #16305a;
+  --ok: #6ea8ff;
+  --ok-bg: #16305a;
+  --err: #ff7070;
+  --err-bg: #3b1620;
+  --warn: #f0b14a;
+  --warn-bg: #3a2a10;
+  --head-bg: #e6edf7;
+  --head-fg: #081322;
+}
+}
+
+html[data-theme="shadcn"], html[data-theme="shadcn"][data-mode="light"] {
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, "JetBrains Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  --radius: 8px;
+  --shadow: 0 1px 2px 0 rgba(0,0,0,0.05);
+  --bw: 1px;
+  --head-font: var(--font-sans);
+  --bg: #fafafa;
+  --paper: #ffffff;
+  --ink: #09090b;
+  --ink-2: #71717a;
+  --ink-3: #a1a1aa;
+  --line: #e4e4e7;
+  --line-2: #f0f0f2;
+  --fill: #f4f4f5;
+  --accent: #2563eb;
+  --accent-bg: #eff6ff;
+  --ok: #16a34a;
+  --ok-bg: #f0fdf4;
+  --err: #dc2626;
+  --err-bg: #fef2f2;
+  --warn: #d97706;
+  --warn-bg: #fffbeb;
+  --head-bg: #18181b;
+  --head-fg: #fafafa;
+}
+html[data-theme="shadcn"][data-mode="dark"] {
+  --bg: #09090b;
+  --paper: #121215;
+  --ink: #fafafa;
+  --ink-2: #a1a1aa;
+  --ink-3: #71717a;
+  --line: #27272a;
+  --line-2: #1c1c1f;
+  --fill: #18181b;
+  --accent: #60a5fa;
+  --accent-bg: #172554;
+  --ok: #4ade80;
+  --ok-bg: #052e16;
+  --err: #f87171;
+  --err-bg: #450a0a;
+  --warn: #fbbf24;
+  --warn-bg: #451a03;
+  --head-bg: #fafafa;
+  --head-fg: #18181b;
+}
+@media (prefers-color-scheme: dark) {
+html[data-theme="shadcn"][data-mode="auto"] {
+  --bg: #09090b;
+  --paper: #121215;
+  --ink: #fafafa;
+  --ink-2: #a1a1aa;
+  --ink-3: #71717a;
+  --line: #27272a;
+  --line-2: #1c1c1f;
+  --fill: #18181b;
+  --accent: #60a5fa;
+  --accent-bg: #172554;
+  --ok: #4ade80;
+  --ok-bg: #052e16;
+  --err: #f87171;
+  --err-bg: #450a0a;
+  --warn: #fbbf24;
+  --warn-bg: #451a03;
+  --head-bg: #fafafa;
+  --head-fg: #18181b;
+}
+}
+
+html[lang="ja"][data-theme][data-mode] {
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic UI", "Yu Gothic", Meiryo, "Noto Sans CJK JP", "Noto Sans JP", "PingFang SC", "Microsoft YaHei", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+html[lang="ja"][data-theme="3b1b"][data-mode] {
+  --v-title-font: "CMU Serif", "Latin Modern Roman", "Iowan Old Style", "Palatino", "Hiragino Mincho ProN", "Yu Mincho", "Noto Serif CJK JP", "Noto Serif JP", "Songti SC", serif;
+}
+
+/* Answer me with HTML base — uses theme variables only, never hard-coded colors (theme tokens: themes/index.js). Exception: the var() fallbacks of diagrams (flow / sequence) equal the blueprint light tokens, guarded by a test. */
+*, *::before, *::after { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  background: var(--bg); color: var(--ink);
+  font-family: var(--font-sans); font-size: 14px; line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+code, pre, kbd { font-family: var(--font-mono); }
+
+/* ── Toolbar ─────────────────────────────── */
+.am-toolbar {
+  position: fixed; top: 12px; right: 12px; z-index: 10; display: flex; gap: 6px;
+}
+.am-btn {
+  font: 12px/1 var(--font-sans); color: var(--ink); background: var(--paper);
+  border: 1px solid var(--line-2); border-radius: var(--radius); padding: 7px 10px; cursor: pointer;
+}
+.am-btn:hover { border-color: var(--ink-3); }
+.am-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* ── Header ───────────────────────────────── */
+.am-head { margin: 0 0 20px; padding-right: 260px; }
+.am-head h1 { margin: 0; font-size: 24px; line-height: 1.25; letter-spacing: -0.01em; }
+.am-sub { margin: 4px 0 0; color: var(--ink-2); }
+.am-head-meta { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 10px; font-size: 12px; color: var(--ink-2); }
+.am-head-meta b { font-family: var(--font-mono); font-weight: 400; color: var(--ink-3); margin-right: 6px; }
+.am-intro { margin-top: 12px; max-width: 80ch; }
+
+/* ── sheet template ────────────────────────── */
+.am-sheet { max-width: 1680px; margin: 0 auto; padding: 32px 28px 40px; }
+.am-frame { position: relative; }
+.am-grid {
+  display: grid; grid-template-columns: repeat(var(--cols, 3), minmax(0, 1fr));
+  gap: 20px; align-items: start;
+}
+.am-ruler { display: none; }
+html[data-theme="blueprint"] .am-frame { border: 1px solid var(--line); padding: 30px; }
+html[data-theme="blueprint"] .am-frame::before {
+  content: ""; position: absolute; inset: 18px; border: 1px solid var(--line); pointer-events: none;
+}
+html[data-theme="blueprint"] .am-ruler {
+  display: flex; position: absolute; font: 10px/1 var(--font-mono); color: var(--ink-3);
+}
+.am-ruler span { flex: 1; display: flex; align-items: center; justify-content: center; }
+.am-ruler--top, .am-ruler--bottom { left: 18px; right: 18px; height: 18px; }
+.am-ruler--top { top: 0; }
+.am-ruler--bottom { bottom: 0; }
+.am-ruler--left, .am-ruler--right { top: 18px; bottom: 18px; width: 18px; flex-direction: column; }
+.am-ruler--left { left: 0; }
+.am-ruler--right { right: 0; }
+.am-ruler--top span + span, .am-ruler--bottom span + span { border-left: 1px solid var(--line); }
+.am-ruler--left span + span, .am-ruler--right span + span { border-top: 1px solid var(--line); }
+
+/* ── Panels ───────────────────────────────── */
+.am-panel {
+  background: var(--paper); border: var(--bw) solid var(--line); border-radius: var(--radius);
+  box-shadow: var(--shadow); min-width: 0; overflow: hidden;
+}
+.am-panel-head {
+  display: flex; align-items: stretch; gap: 0; border-bottom: var(--bw) solid var(--line); min-height: 34px;
+}
+.am-panel-id {
+  display: flex; align-items: center; justify-content: center; min-width: 34px; padding: 0 8px;
+  background: var(--head-bg); color: var(--head-fg); font-weight: 600; font-size: 14px;
+}
+html[data-theme="shadcn"] .am-panel-id { border-radius: 6px; min-width: 24px; height: 24px; margin: 9px 0 9px 14px; font-size: 12px; }
+html[data-theme="shadcn"] .am-panel-head { border-bottom-width: 1px; }
+.am-panel-head h2 { margin: 0; padding: 7px 12px; font-size: 15px; font-weight: 600; flex: 1; display: flex; align-items: center; }
+.am-panel-meta { align-self: center; padding: 0 12px; font: 11px/1.3 var(--font-mono); color: var(--ink-2); text-align: right; }
+.am-panel-body { padding: 14px 16px 16px; }
+.am-panel-body > * + * { margin-top: 12px; }
+
+/* ── Markdown body ───────────────────────── */
+.am-md > :first-child { margin-top: 0; }
+.am-md > :last-child { margin-bottom: 0; }
+.am-md p { margin: 0 0 8px; }
+.am-md ul, .am-md ol { margin: 0 0 8px; padding-left: 20px; }
+.am-md li + li { margin-top: 3px; }
+.am-md h3, .am-md h4 { margin: 14px 0 6px; font-size: 13px; }
+.am-md a { color: var(--accent); }
+.am-md blockquote { margin: 0 0 8px; padding: 2px 12px; border-left: 3px solid var(--line-2); color: var(--ink-2); }
+.am-md :not(pre) > code { font-size: 0.9em; background: var(--fill); padding: 1px 5px; border-radius: 4px; }
+.am-md hr { border: 0; border-top: 1px solid var(--line-2); margin: 12px 0; }
+.am-md table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.am-md th {
+  text-align: left; font: 11px/1.3 var(--font-mono); color: var(--ink-2); font-weight: 400;
+  padding: 6px 10px; border-bottom: 1px solid var(--line-2);
+}
+/* th { text-align: left } outranks the align attribute from Markdown alignment, so restore right and center columns explicitly. */
+.am-md th[align="right"] { text-align: right; }
+.am-md th[align="center"] { text-align: center; }
+.am-md td { padding: 7px 10px; border-bottom: 1px solid var(--line-2); vertical-align: top; }
+.am-md tbody tr:nth-child(even) td { background: var(--fill); }
+.am-table-wrap { overflow-x: auto; }
+.am-code {
+  margin: 0; padding: 12px 14px; background: var(--fill); border: 1px solid var(--line-2);
+  border-radius: var(--radius); overflow-x: auto; font-size: 12.5px; line-height: 1.5;
+}
+
+/* ── Status badges ok / no / warn ──────────────── */
+.am-status { white-space: nowrap; font-weight: 500; }
+.am-status--ok { color: var(--ok); }
+.am-status--no { color: var(--err); }
+.am-status--warn { color: var(--warn); }
+.am-status-icon { display: inline-block; width: 1.1em; font-weight: 700; }
+
+/* ── callout ─────────────────────────────── */
+.am-callout {
+  border: 1px solid var(--line-2); border-left: 3px solid var(--accent); background: var(--accent-bg);
+  padding: 10px 14px; border-radius: var(--radius);
+}
+.am-callout--ok { border-left-color: var(--ok); background: var(--ok-bg); }
+.am-callout--warn { border-left-color: var(--warn); background: var(--warn-bg); }
+.am-callout--err { border-left-color: var(--err); background: var(--err-bg); }
+.am-callout-title { font-weight: 600; margin-bottom: 4px; }
+
+/* ── kv title block ─────────────────────────── */
+.am-kv {
+  display: grid; grid-template-columns: repeat(var(--kv-cols, 2), minmax(0, 1fr)); margin: 0;
+  border-top: var(--bw) solid var(--line); border-left: var(--bw) solid var(--line);
+}
+.am-kv-cell { border-right: var(--bw) solid var(--line); border-bottom: var(--bw) solid var(--line); padding: 6px 10px 8px; min-width: 0; }
+.am-kv-cell--wide { grid-column: 1 / -1; }
+.am-kv dt { font: 11px/1.4 var(--font-mono); color: var(--ink-2); }
+.am-kv dd { margin: 2px 0 0; font-size: 14px; font-weight: 500; overflow-wrap: anywhere; }
+.am-kv-cell--wide dd { font-size: 17px; font-weight: 600; }
+html[data-theme="shadcn"] .am-kv { border-color: var(--line); border-radius: var(--radius); overflow: hidden; }
+
+/* ── timeline ────────────────────────────── */
+.am-timeline { list-style: none; margin: 0; padding: 0; }
+.am-timeline--h { display: grid; grid-template-columns: repeat(var(--n, 1), minmax(0, 1fr)); padding-top: 4px; }
+.am-timeline--h li { position: relative; text-align: center; padding: 0 6px; }
+.am-timeline--h li::before {
+  content: ""; position: absolute; top: 31px; left: 0; right: 0; border-top: var(--bw) solid var(--line);
+}
+.am-timeline--h li:first-child::before { left: 50%; }
+.am-timeline--h li:last-child::before { right: 50%; }
+.am-tl-when { display: block; font-size: 15px; font-weight: 500; height: 24px; }
+.am-tl-dot {
+  position: relative; display: block; width: 11px; height: 11px; margin: 2px auto 8px;
+  border: var(--bw) solid var(--line); border-radius: 50%; background: var(--paper);
+}
+.am-tl-item--hi .am-tl-dot { background: var(--accent); border-color: var(--accent); }
+.am-tl-title { display: block; font-size: 12.5px; font-weight: 500; }
+.am-tl-text { display: block; font-size: 12px; color: var(--ink-2); line-height: 1.45; }
+.am-timeline--v li { position: relative; padding: 0 0 14px 22px; }
+.am-timeline--v li::before { content: ""; position: absolute; left: 5px; top: 6px; bottom: -6px; border-left: var(--bw) solid var(--line-2); }
+.am-timeline--v li:last-child::before { display: none; }
+.am-timeline--v .am-tl-dot { position: absolute; left: 0; top: 4px; margin: 0; }
+.am-timeline--v .am-tl-when { display: inline; height: auto; font: 12px var(--font-mono); color: var(--ink-2); margin-right: 8px; }
+.am-timeline--v .am-tl-title { display: inline; font-size: 14px; }
+.am-timeline--v .am-tl-text { margin-top: 2px; }
+
+/* ── annot sentence notes ──────────────────────── */
+.am-annot + .am-annot { border-top: 1px solid var(--line-2); padding-top: 12px; }
+.am-annot-head { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; font-weight: 600; margin-bottom: 8px; }
+.am-annot-meta { font: 11px var(--font-mono); font-weight: 400; color: var(--ink-2); }
+.am-annot-scroll { overflow-x: auto; }
+.am-annot-line {
+  position: relative; display: inline-block; white-space: pre; font: 14px/1.6 var(--font-mono);
+  padding-bottom: calc(var(--rows, 0) * 17px + 14px);
+}
+.am-annot-line--wrap { display: block; white-space: normal; padding-bottom: 10px; }
+.am-annot-line--wrap .am-seg { white-space: nowrap; }
+.am-seg { position: relative; }
+.am-seg::after {
+  content: ""; position: absolute; left: 1px; right: 1px; top: calc(100% + 1px); height: 5px;
+  border: 1px solid var(--accent); border-top: 0;
+}
+.am-seg-n {
+  position: absolute; left: 0; top: calc(100% + 8px + var(--row, 0) * 17px);
+  font: 11px/16px var(--font-sans); color: var(--accent); white-space: nowrap;
+}
+.am-seg--err { color: var(--err); }
+.am-seg--err::after { border-color: var(--err); }
+.am-seg--err .am-seg-n { color: var(--err); }
+.am-annot-caption { font-size: 12px; color: var(--ink-2); }
+
+/* ── limits bars ───────────────────────── */
+.am-lim + .am-lim { margin-top: 14px; }
+.am-lim-head { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; margin-bottom: 4px; }
+.am-lim-val { font: 12px var(--font-mono); color: var(--accent); white-space: nowrap; }
+.am-lim-track { position: relative; height: 12px; border: 1px solid var(--line-2); background: var(--fill); border-radius: calc(var(--radius) / 2); }
+.am-lim-fill { position: absolute; left: 0; top: 0; bottom: 0; background: var(--accent-bg); border-right: 1px solid var(--accent); }
+.am-lim-mark { position: absolute; top: -4px; bottom: -4px; border-left: 2px solid var(--accent); }
+.am-lim.is-over .am-lim-fill { background: var(--err-bg); border-right-color: var(--err); }
+.am-lim.is-over .am-lim-val { color: var(--err); }
+.am-lim-ticks { position: relative; height: 16px; font: 10px/16px var(--font-mono); color: var(--ink-3); }
+.am-lim-ticks span { position: absolute; transform: translateX(-50%); }
+.am-lim-ticks span:first-child { transform: none; }
+.am-lim-note { font-size: 11px; color: var(--ink-2); margin-left: 6px; }
+
+/* ── tree ─────────────────────────── */
+.am-tree { font-size: 13px; }
+.am-tree-root { display: flex; justify-content: center; position: relative; padding-bottom: 18px; }
+.am-tree-root::after { content: ""; position: absolute; bottom: 0; left: 50%; height: 18px; border-left: var(--bw) solid var(--line); }
+.am-tree-root--solo { padding-bottom: 12px; }
+.am-tree-root--solo::after { display: none; }
+.am-tree-box {
+  border: var(--bw) solid var(--line); background: var(--paper); padding: 6px 14px; text-align: center;
+  border-radius: var(--radius); font-weight: 600;
+}
+.am-tree-box small { display: block; font-weight: 400; color: var(--ink-2); font-size: 12px; }
+.am-tree-box--root { background: var(--accent-bg); font-size: 15px; padding: 8px 28px; }
+.am-tree-cols { display: grid; grid-template-columns: repeat(var(--n, 1), minmax(0, 1fr)); }
+.am-tree-col { position: relative; padding: 18px 8px 0; min-width: 0; }
+.am-tree-col::before { content: ""; position: absolute; top: 0; left: 0; right: 0; border-top: var(--bw) solid var(--line); }
+.am-tree-col:first-child::before { left: 50%; }
+.am-tree-col:last-child::before { right: 50%; }
+.am-tree-col::after { content: ""; position: absolute; top: 0; left: 50%; height: 18px; border-left: var(--bw) solid var(--line); }
+.am-tree-list, .am-tree-list ul { list-style: none; margin: 0; padding: 0; }
+.am-tree-col > .am-tree-list { margin: 8px 0 0 14px; }
+.am-tree-list ul { margin-left: 16px; }
+.am-tree-list li { position: relative; padding: 3px 0 3px 18px; }
+.am-tree-list li::before { content: ""; position: absolute; left: 0; top: 0.95em; width: 12px; border-top: 1px solid var(--ink-3); }
+.am-tree-list li::after { content: ""; position: absolute; left: 0; top: 0; bottom: 0; border-left: 1px solid var(--ink-3); }
+.am-tree-list li:last-child::after { bottom: auto; height: 0.95em; }
+.am-tree-tag { font: 11px var(--font-mono); color: var(--ink-3); margin-right: 4px; }
+.am-tree code { font: 12px var(--font-mono); }
+.am-tree-sub { display: block; font-size: 11.5px; color: var(--ink-2); }
+.am-tree-hi > .am-tree-label { color: var(--accent); font-weight: 600; }
+
+/* ── Diagrams (flow / sequence) ───────────────── */
+.am-diagram { margin: 0; overflow-x: auto; text-align: center; }
+/* Embedded previews can lose html[data-theme]; the fallbacks keep diagrams readable, and defined theme variables still win. */
+.am-diagram svg { max-width: 100%; height: auto; font-family: var(--font-sans, sans-serif); }
+.am-diagram text { fill: var(--ink, #16181d); font-size: 13px; }
+.am-node-shape { fill: var(--paper, #ffffff); stroke: var(--line, #1d2026); stroke-width: var(--bw, 1.5px); }
+.am-node--hi .am-node-shape { fill: var(--accent-bg, #e4ecf8); stroke: var(--accent, #1d5fbf); }
+.am-node--hi text { fill: var(--accent, #1d5fbf); font-weight: 600; }
+.am-edge { fill: none; stroke: var(--ink-2, #4b5260); stroke-width: 1.3; }
+.am-edge--dashed { stroke-dasharray: 5 4; }
+.am-arrow { fill: var(--ink-2, #4b5260); }
+.am-edge-label rect { fill: var(--paper, #ffffff); }
+.am-diagram .am-edge-label text { fill: var(--accent, #1d5fbf); font-size: 11.5px; }
+.am-cluster { fill: var(--fill, #f3f5f8); stroke: var(--line-2, #d6dae1); stroke-width: 1; stroke-dasharray: 4 3; }
+.am-diagram .am-cluster-label { fill: var(--ink-2, #4b5260); font: 11px var(--font-mono, monospace); }
+.am-lifeline { stroke: var(--ink-3, #8b929e); stroke-width: 1; stroke-dasharray: 4 4; }
+.am-actor { fill: var(--paper, #ffffff); stroke: var(--line, #1d2026); stroke-width: var(--bw, 1.5px); }
+.am-note { fill: var(--warn-bg, #fdf3e2); stroke: var(--warn, #a8620a); stroke-width: 1; }
+.am-diagram .am-step { fill: var(--ink-3, #8b929e); font: 10px var(--font-mono, monospace); }
+
+/* ── doc template ────────────────────────── */
+.am-doc { max-width: 1120px; margin: 0 auto; padding: 40px 28px 64px; }
+.am-doc-layout { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 32px; align-items: start; }
+.am-doc-layout--notoc { grid-template-columns: minmax(0, 1fr); max-width: 860px; }
+.am-toc { position: sticky; top: 24px; font-size: 13px; }
+.am-toc a { display: block; color: var(--ink-2); text-decoration: none; padding: 4px 0 4px 10px; border-left: 2px solid var(--line-2); }
+.am-toc a:hover { color: var(--ink); border-left-color: var(--accent); }
+.am-doc-body > .am-panel + .am-panel { margin-top: 20px; }
+
+/* ── Responsive and print ─────────────────────────── */
+@media (max-width: 1100px) {
+  .am-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .am-grid > .am-panel { grid-column: auto !important; }
+  .am-grid > .am-panel.am-span-wide { grid-column: 1 / -1 !important; }
+}
+@media (max-width: 760px) {
+  .am-sheet, .am-doc { padding: 56px 12px 24px; }
+  .am-head { padding-right: 0; }
+  .am-grid { grid-template-columns: minmax(0, 1fr); }
+  .am-grid > .am-panel.am-span-wide { grid-column: auto !important; }
+  html[data-theme="blueprint"] .am-frame { padding: 0; border: 0; }
+  html[data-theme="blueprint"] .am-frame::before, html[data-theme="blueprint"] .am-ruler { display: none; }
+  .am-doc-layout { grid-template-columns: minmax(0, 1fr); }
+  .am-toc { position: static; }
+  .am-timeline--h { grid-template-columns: minmax(0, 1fr); }
+  .am-tree-cols { grid-template-columns: minmax(0, 1fr); }
+  /* Tables and diagrams keep their size: the wrapper scrolls horizontally when they overflow. */
+  .am-md th, .am-md td { min-width: 6em; }
+  .am-diagram svg { max-width: none; }
+}
+.am-colophon { text-align: center; padding: 0 0 28px; font: 11px var(--font-mono); color: var(--ink-3); }
+
+@media print {
+  .am-toolbar { display: none; }
+  body { background: var(--paper); }
+  .am-panel { break-inside: avoid; box-shadow: none; }
+}
+.am-panel--bare { border: 0; background: transparent; box-shadow: none; }
+.am-panel--bare > .am-panel-body { padding: 0; }
+.am-panel--bare .am-kv { background: var(--paper); }
+
+</style>
+</head>
+<body>
+<div class="am-toolbar">
+<button class="am-btn" type="button" data-am="theme" data-labels="{&quot;blueprint&quot;:&quot;主题：图纸&quot;,&quot;shadcn&quot;:&quot;主题：卡片&quot;}">主题：卡片</button>
+<button class="am-btn" type="button" data-am="mode" data-labels="{&quot;auto&quot;:&quot;明暗：跟随系统&quot;,&quot;light&quot;:&quot;明暗：亮&quot;,&quot;dark&quot;:&quot;明暗：暗&quot;}">明暗：亮</button>
+<button class="am-btn" type="button" data-am="copy" data-done="已复制 ✓">复制源稿</button>
+</div>
+<main class="am-doc">
+<header class="am-head"><h1>Data Agent：语义、记忆与召回</h1><p class="am-sub">从一张表的解释，到一次有依据的查询。</p><div class="am-head-meta"><span><b>source</b>2026-10-06 · 语义协作增量 · Datasight mock</span></div><div class="am-intro am-md"><div class="am-md"><p><strong>共享语义回答“数据是什么、应该怎样算”。个人记忆回答“这个用户长期有什么偏好和纠错”。Pi 会话上下文回答“这段对话已经聊到哪里”。</strong></p>
+<p>“召回”就是从存储中找出本次可能需要的材料。找到之后，还要读原文、核对有效性，再决定怎样用。</p>
+</div></div></header>
+<div class="am-doc-layout">
+<nav class="am-toc" aria-label="目录"><a href="#panel-A">A · 先分清：项目里有哪三种“记住”？</a><a href="#panel-B">B · 语义怎样从原始资料构建出来？</a><a href="#panel-C">C · 共享语义的原文和索引分别存在哪里？</a><a href="#panel-D">D · 一条个人记忆怎样保存？</a><a href="#panel-E">E · 语义召回：怎样从很多表里找出本次需要的知识？</a><a href="#panel-F">F · 个人记忆和对话历史又怎样找回来？</a><a href="#panel-G">G · 用一个完整例子，把三类内容放到一起</a><a href="#panel-H">H · 最后记住：哪里靠模型，哪里靠程序？</a></nav><div class="am-doc-body">
+<section class="am-panel" id="panel-A">
+<header class="am-panel-head"><span class="am-panel-id">A</span><h2>先分清：项目里有哪三种“记住”？</h2></header>
+<div class="am-panel-body"><div class="am-md"><p>这里把你说的“整体记忆”对应为<strong>共享知识库</strong>。它保存同一空间内可共享的业务知识。具体能看什么，仍由权限决定。</p>
+<div class="am-table-wrap"><table>
+<thead>
+<tr>
+<th>类别</th>
+<th>记住什么</th>
+<th>谁可以复用</th>
+<th>主要负责者</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>共享语义，也就是共享业务知识</td>
+<td>表、字段、指标、关联、术语、业务文档</td>
+<td>同一空间内有权限的人</td>
+<td>Rust 语义模块</td>
+</tr>
+<tr>
+<td>个人长期记忆</td>
+<td>本人的默认偏好、纠错、适用范围与例外</td>
+<td>同一用户、同一空间，可跨对话</td>
+<td>Mem0 提取与检索；Rust 管正式版本</td>
+</tr>
+<tr>
+<td>当前对话上下文</td>
+<td>消息、工具历史、已明确条件、分析任务</td>
+<td>继续这段有权访问的对话时使用</td>
+<td>Pi SDK 与 Rust 任务记录</td>
+</tr>
+</tbody></table></div>
+<p><strong>共享知识与个人记忆有明确归属。</strong> 用户聊天中的一句纠错，先属于本人；公共定义需要走语义维护流程。</p>
+<h3>整个产品怎样工作</h3>
+</div>
+<figure class="am-diagram am-flow"><svg viewBox="0 0 654 63" width="654" height="63" role="img" aria-label="流程图：用户问题、查资料与澄清、SQL草稿、用户确认、查询与解释" xmlns="http://www.w3.org/2000/svg"><defs><marker id="am1-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="am-arrow" d="M0,0 L10,5 L0,10 z"/></marker></defs><g></g><g><g data-step="0"><path class="am-edge" d="M94,31.5 L105.5,31.5 Q117,31.5 128.5,31.5 L140,31.5" marker-end="url(#am1-arrow)"/></g><g data-step="0"><path class="am-edge" d="M246,31.5 L257.5,31.5 Q269,31.5 280.5,31.5 L292,31.5" marker-end="url(#am1-arrow)"/></g><g data-step="0"><path class="am-edge" d="M374.9,31.5 L386.4,31.5 Q397.9,31.5 409.4,31.5 L420.9,31.5" marker-end="url(#am1-arrow)"/></g><g data-step="0"><path class="am-edge" d="M500.9,31.5 L512.4,31.5 Q523.9,31.5 535.4,31.5 L546.9,31.5" marker-end="url(#am1-arrow)"/></g></g><g><g class="am-node am-node--rect" data-key="用户问题" data-step="0"><rect class="am-node-shape" x="14" y="14" width="80" height="35" rx="3"/><text x="54" y="31.5" text-anchor="middle" dominant-baseline="central">用户问题</text></g><g class="am-node am-node--rect" data-key="查资料与澄清" data-step="0"><rect class="am-node-shape" x="140" y="14" width="106" height="35" rx="3"/><text x="193" y="31.5" text-anchor="middle" dominant-baseline="central">查资料与澄清</text></g><g class="am-node am-node--rect" data-key="SQL草稿" data-step="0"><rect class="am-node-shape" x="292" y="14" width="82.9" height="35" rx="3"/><text x="333.4" y="31.5" text-anchor="middle" dominant-baseline="central">SQL草稿</text></g><g class="am-node am-node--rect" data-key="用户确认" data-step="0"><rect class="am-node-shape" x="420.9" y="14" width="80" height="35" rx="3"/><text x="460.9" y="31.5" text-anchor="middle" dominant-baseline="central">用户确认</text></g><g class="am-node am-node--rect" data-key="查询与解释" data-step="0"><rect class="am-node-shape" x="546.9" y="14" width="93" height="35" rx="3"/><text x="593.4" y="31.5" text-anchor="middle" dominant-baseline="central">查询与解释</text></g></g></svg></figure>
+<div class="am-md"><ul>
+<li>React 展示聊天、SQL、结果、语义页和个人积累。</li>
+<li>Pi SDK 运行唯一的 Agent 循环，使用 DeepSeek Flash。</li>
+<li>Pi 按问题选择工具，可以补查、追问和修改 SQL。</li>
+<li>Rust 校验权限、版本、预算和具体 SQL 的确认状态。</li>
+<li>当前查询平台使用可执行合成数据；真实平台通过适配器接入。</li>
+</ul>
+<p>这张图只表示用户过程。调查中的工具顺序由 Pi 判断，用户也能在执行前继续补充。</p>
+<p>依据：<a href="../architecture/README.md">架构职责</a>、<a href="https://github.com/yaoziyaoguai/data_agent/blob/cd82667/apps/agent/session/resources.ts">Agent 当前行为约定</a>。</p>
+</div></div>
+</section>
+<section class="am-panel" id="panel-B">
+<header class="am-panel-head"><span class="am-panel-id">B</span><h2>语义怎样从原始资料构建出来？</h2></header>
+<div class="am-panel-body"><div class="am-md"><p><strong>语义层要把“有这些字段”补成“这些数据该怎样使用”。</strong> 预填页面是维护入口，背后保存的是有来源、有版本的知识。</p>
+<h3>页面维护哪些内容</h3>
+<div class="am-table-wrap"><table>
+<thead>
+<tr>
+<th>内容</th>
+<th>需要解释的问题</th>
+<th>合成零售例子</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>表</td>
+<td>一行代表什么？主键是什么？哪些时间可用？</td>
+<td>一行是一个订单行，主键是订单号加行号</td>
+</tr>
+<tr>
+<td>字段</td>
+<td>含义、单位、取值、空值和边界是什么？</td>
+<td><code>paid_amount_cents</code> 是当前行的成功支付金额，单位为分</td>
+</tr>
+<tr>
+<td>指标及计算 SQL</td>
+<td>怎么算？按什么时间？有哪些过滤和维度？</td>
+<td>支付归属净收入＝付款减退款，按付款月统计</td>
+</tr>
+<tr>
+<td>查询关联</td>
+<td>怎样连接？会不会把金额重复计算？</td>
+<td>客户标签是一对多关系，直接连接可能放大金额</td>
+</tr>
+<tr>
+<td>术语与规则</td>
+<td>业务叫法和例外怎样解释？</td>
+<td>“退款率”仍需明确用订单数还是金额作分母</td>
+</tr>
+<tr>
+<td>文档、章节和主题</td>
+<td>哪些内容需要完整说明？</td>
+<td>一篇文档解释退款归属，同时关联表、字段和指标</td>
+</tr>
+</tbody></table></div>
+<h3>预填的实际过程</h3>
+</div>
+<figure class="am-diagram am-flow"><svg viewBox="0 0 391 567" width="391" height="567" role="img" aria-label="流程图：平台元数据与加工SQL、固定本次材料和版本、血缘与关联文档、DeepSeek语义分析、DeepSeek依据复核、Rust核对引用与版本、逐条合并、人工已改内容" xmlns="http://www.w3.org/2000/svg"><defs><marker id="am2-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="am-arrow" d="M0,0 L10,5 L0,10 z"/></marker></defs><g></g><g><g data-step="0"><path class="am-edge" d="M249.4,49 L249.4,60.5 Q249.4,72 224.5,83.5 L199.5,95" marker-end="url(#am2-arrow)"/></g><g data-step="1"><path class="am-edge" d="M73.5,49 L73.5,60.5 Q73.5,72 98.5,83.5 L123.5,95" marker-end="url(#am2-arrow)"/></g><g data-step="2"><path class="am-edge" d="M161.5,130 L161.5,141.5 Q161.5,153 161.5,164.5 L161.5,176" marker-end="url(#am2-arrow)"/></g><g data-step="3"><path class="am-edge" d="M161.5,211 L161.5,222.5 Q161.5,234 161.5,245.5 L161.5,257" marker-end="url(#am2-arrow)"/></g><g data-step="4"><path class="am-edge" d="M161.5,292 L161.5,303.5 Q161.5,315 161.5,326.5 L161.5,338" marker-end="url(#am2-arrow)"/></g><g data-step="5"><path class="am-edge" d="M161.5,373 L161.5,389 Q161.5,405 187.7,421 L213.9,437" marker-end="url(#am2-arrow)"/></g><g data-step="6"><path class="am-edge" d="M323.7,373 L323.7,389 Q323.7,405 297.5,421 L271.3,437" marker-end="url(#am2-arrow)"/><g class="am-edge-label"><rect x="290" y="396" width="67.5" height="18" rx="3"/><text x="323.7" y="405" text-anchor="middle" dominant-baseline="central">保留人工值</text></g></g><g data-step="7"><path class="am-edge" d="M242.6,472 L242.6,483.5 Q242.6,495 242.6,506.5 L242.6,518" marker-end="url(#am2-arrow)"/></g></g><g><g class="am-node am-node--rect" data-key="平台元数据与加工SQL" data-step="0"><rect class="am-node-shape" x="169" y="14" width="160.9" height="35" rx="3"/><text x="249.4" y="31.5" text-anchor="middle" dominant-baseline="central">平台元数据与加工SQL</text></g><g class="am-node am-node--rect" data-key="固定本次材料和版本" data-step="0"><rect class="am-node-shape" x="89" y="95" width="145" height="35" rx="3"/><text x="161.5" y="112.5" text-anchor="middle" dominant-baseline="central">固定本次材料和版本</text></g><g class="am-node am-node--rect" data-key="血缘与关联文档" data-step="1"><rect class="am-node-shape" x="14" y="14" width="119" height="35" rx="3"/><text x="73.5" y="31.5" text-anchor="middle" dominant-baseline="central">血缘与关联文档</text></g><g class="am-node am-node--rect" data-key="DeepSeek语义分析" data-step="2"><rect class="am-node-shape" x="89.6" y="176" width="143.7" height="35" rx="3"/><text x="161.5" y="193.5" text-anchor="middle" dominant-baseline="central">DeepSeek语义分析</text></g><g class="am-node am-node--rect" data-key="DeepSeek依据复核" data-step="3"><rect class="am-node-shape" x="89.6" y="257" width="143.7" height="35" rx="3"/><text x="161.5" y="274.5" text-anchor="middle" dominant-baseline="central">DeepSeek依据复核</text></g><g class="am-node am-node--rect" data-key="Rust核对引用与版本" data-step="4"><rect class="am-node-shape" x="88.2" y="338" width="146.6" height="35" rx="3"/><text x="161.5" y="355.5" text-anchor="middle" dominant-baseline="central">Rust核对引用与版本</text></g><g class="am-node am-node--rect" data-key="逐条合并" data-step="5"><rect class="am-node-shape" x="202.6" y="437" width="80" height="35" rx="3"/><text x="242.6" y="454.5" text-anchor="middle" dominant-baseline="central">逐条合并</text></g><g class="am-node am-node--rect" data-key="人工已改内容" data-step="6"><rect class="am-node-shape" x="270.7" y="338" width="106" height="35" rx="3"/><text x="323.7" y="355.5" text-anchor="middle" dominant-baseline="central">人工已改内容</text></g><g class="am-node am-node--rect" data-key="新语义版本" data-step="7"><rect class="am-node-shape" x="196.1" y="518" width="93" height="35" rx="3"/><text x="242.6" y="535.5" text-anchor="middle" dominant-baseline="central">新语义版本</text></g></g></svg></figure>
+<div class="am-md"><p>平台资料先保存快照，结构事实可直接预填。模型再结合 DDL、加工 SQL、血缘和业务文档解释含义。当前模型预填分为分析、依据复核两次调用。</p>
+<p>关联文档保存在知识库，按版本加入分析材料。只保存链接但读不到正文时，系统保留“正文不可用”的缺口。</p>
+<h3>同一个条目保留三类内容</h3>
+<div class="am-table-wrap"><table>
+<thead>
+<tr>
+<th>层次</th>
+<th>保存的内容</th>
+<th>更新规则</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>来源事实</td>
+<td>原始字段类型、注释、SQL、来源版本和引用</td>
+<td>同步新来源，保留出处</td>
+</tr>
+<tr>
+<td>模型建议</td>
+<td>对含义、单位、边界的解释及证据、缺口</td>
+<td>重新分析可以更新建议</td>
+</tr>
+<tr>
+<td>人工覆盖</td>
+<td>数据开发填写的值、修改人和操作记录</td>
+<td>后续预填保留人工值</td>
+</tr>
+</tbody></table></div>
+<p>页面采用的值由这三层合成。人工覆盖优先；没有人工值时，可使用来源事实或模型建议。模型建议仍标记未验证，不能显示成“人工已确认”。</p>
+<p>来源变化时，系统更新版本并标记需要复核。人工内容会保留，新建议也能查看。</p>
+</div>
+<div class="am-callout am-callout--warn" role="note"><div class="am-callout-title">两个容易误判的地方</div><div class="am-callout-body am-md"><p>SQL 可以证明“代码做了什么”。收入归属等业务含义，还需要业务依据。</p>
+<p>血缘说明“数据从哪里来”。查询能否直接 JOIN，还要核对关联键和一对多关系。</p>
+<p>引用逐字匹配，只能证明引用存在。模型的业务推导仍可能有错。</p>
+</div></div>
+<div class="am-md"><p>依据：<a href="../architecture/knowledge-modules.md">语义条目与人工保护</a>、<a href="https://github.com/yaoziyaoguai/data_agent/blob/cd82667/crates/data-agent/src/modules/ingestion/prefill.rs">模型预填实现</a>、<a href="https://github.com/yaoziyaoguai/data_agent/blob/cd82667/crates/data-agent/src/use_cases/semantic_prefill.rs">两阶段处理</a>。</p>
+</div></div>
+</section>
+<section class="am-panel" id="panel-C">
+<header class="am-panel-head"><span class="am-panel-id">C</span><h2>共享语义的原文和索引分别存在哪里？</h2></header>
+<div class="am-panel-body"><div class="am-md"><p><strong>MySQL 保存正式内容，Milvus 帮助找相关内容。</strong> 模型把文本转成一串数字，这个过程叫 embedding，也就是向量化。</p>
+</div>
+<figure class="am-diagram am-flow"><svg viewBox="0 0 578 63" width="578" height="63" role="img" aria-label="流程图：当前有效语义、文本切片、Qwen向量化、Milvus共享索引" xmlns="http://www.w3.org/2000/svg"><defs><marker id="am3-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="am-arrow" d="M0,0 L10,5 L0,10 z"/></marker></defs><g></g><g><g data-step="0"><path class="am-edge" d="M120,31.5 L131.5,31.5 Q143,31.5 154.5,31.5 L166,31.5" marker-end="url(#am3-arrow)"/></g><g data-step="0"><path class="am-edge" d="M246,31.5 L257.5,31.5 Q269,31.5 280.5,31.5 L292,31.5" marker-end="url(#am3-arrow)"/></g><g data-step="0"><path class="am-edge" d="M395.9,31.5 L407.4,31.5 Q418.9,31.5 430.4,31.5 L441.9,31.5" marker-end="url(#am3-arrow)"/></g></g><g><g class="am-node am-node--rect" data-key="当前有效语义" data-step="0"><rect class="am-node-shape" x="14" y="14" width="106" height="35" rx="3"/><text x="67" y="31.5" text-anchor="middle" dominant-baseline="central">当前有效语义</text></g><g class="am-node am-node--rect" data-key="文本切片" data-step="0"><rect class="am-node-shape" x="166" y="14" width="80" height="35" rx="3"/><text x="206" y="31.5" text-anchor="middle" dominant-baseline="central">文本切片</text></g><g class="am-node am-node--rect" data-key="Qwen向量化" data-step="0"><rect class="am-node-shape" x="292" y="14" width="103.9" height="35" rx="3"/><text x="344" y="31.5" text-anchor="middle" dominant-baseline="central">Qwen向量化</text></g><g class="am-node am-node--rect" data-key="Milvus共享索引" data-step="0"><rect class="am-node-shape" x="441.9" y="14" width="121.3" height="35" rx="3"/><text x="502.6" y="31.5" text-anchor="middle" dominant-baseline="central">Milvus共享索引</text></g></g></svg></figure>
+<div class="am-md"><div class="am-table-wrap"><table>
+<thead>
+<tr>
+<th>保存位置</th>
+<th>实际内容</th>
+<th>用途</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>MySQL 来源记录</td>
+<td>平台快照、来源头和采集版本</td>
+<td>能追溯分析所用的原始资料</td>
+</tr>
+<tr>
+<td>MySQL 共享知识</td>
+<td>对象、不可变版本、条目、文档、引用与人工覆盖</td>
+<td>编辑、读取和核对正式定义</td>
+</tr>
+<tr>
+<td>MySQL 词法检索副本</td>
+<td>当前知识的可检索文字</td>
+<td>按名称或关键词找候选</td>
+</tr>
+<tr>
+<td>MySQL 索引任务与调用回执</td>
+<td>索引进度、原预算、成功向量和使用量</td>
+<td>失败恢复、重建及费用核对</td>
+</tr>
+<tr>
+<td>Milvus 共享集合</td>
+<td>语义片段的向量、对象 ID、版本、空间及片段文字</td>
+<td>按意思相近查找候选</td>
+</tr>
+</tbody></table></div>
+<p>例如，“净收入”和“扣完退款还剩多少”用词不同。向量模型有机会把它们放得较近。这个相似度帮助定位资料，不能决定业务定义是否正确。</p>
+<h3>当前实现的几个具体细节</h3>
+<ul>
+<li>向量模型是百炼 <code>qwen3.7-text-embedding</code>，每个向量有 1024 维。</li>
+<li>共享知识和个人记忆使用两个独立的 Milvus 集合。</li>
+<li>个人集合内再按用户与空间隔离，无需为每个人另建数据库。</li>
+<li>共享语义按 360 字符切片，相邻片段重叠 80 字符。</li>
+<li>每对象最多 128 个片段；超过范围会标记覆盖不足。</li>
+<li>当前共享向量索引跳过原始 DDL、加工 SQL 条目。</li>
+<li>原始 DDL 和加工 SQL 仍保留，可由工具回源阅读。</li>
+</ul>
+<p>语义更新后，Worker 更新对应版本的索引。新索引尚未完成时，正式文字依然存在。检索会说明索引状态，旧向量也不能代替新的正式版本。</p>
+<p><strong>这里的 MySQL 是应用存储。</strong> 用户要查询的业务明细属于数据平台；当前合成平台用 SQLite 执行样例 SQL。</p>
+<p>依据：<a href="https://github.com/yaoziyaoguai/data_agent/blob/cd82667/crates/data-agent/src/modules/retrieval/vector.rs">共享索引切片</a>、<a href="../architecture/implementation-design.md">调用与恢复设计</a>、<a href="../development.md">本地运行说明</a>。</p>
+</div></div>
+</section>
+<section class="am-panel" id="panel-D">
+<header class="am-panel-head"><span class="am-panel-id">D</span><h2>一条个人记忆怎样保存？</h2></header>
+<div class="am-panel-body"><div class="am-md"><p>假设用户说：<strong>“以后我的收入分析默认只看 web 渠道；明确说别的渠道时，以当次要求为准。”</strong> 这是一条教学示例，用来说明保存过程。</p>
+<p>Pi 判断需要长期保存，先查本人已有记忆。Rust 核对引用的原话、归属和依赖，再交给 Mem0 提取。</p>
+</div>
+<figure class="am-diagram am-seq"><svg viewBox="0 0 725 390" width="725" height="390" role="img" aria-label="时序图：用户、Pi与Rust、Mem0、MySQL、Milvus" xmlns="http://www.w3.org/2000/svg"><defs><marker id="am4-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="am-arrow" d="M0,0 L10,5 L0,10 z"/></marker></defs><line class="am-lifeline" x1="54" y1="42" x2="54" y2="386"/><g data-key="用户"><rect class="am-actor" x="12" y="8" width="84" height="34" rx="2"/><text x="54" y="25" text-anchor="middle" dominant-baseline="central" font-weight="600">用户</text></g><line class="am-lifeline" x1="231" y1="42" x2="231" y2="386"/><g data-key="Pi与Rust"><rect class="am-actor" x="189" y="8" width="84" height="34" rx="2"/><text x="231" y="25" text-anchor="middle" dominant-baseline="central" font-weight="600">Pi与Rust</text></g><line class="am-lifeline" x1="447" y1="42" x2="447" y2="386"/><g data-key="Mem0"><rect class="am-actor" x="405" y="8" width="84" height="34" rx="2"/><text x="447" y="25" text-anchor="middle" dominant-baseline="central" font-weight="600">Mem0</text></g><line class="am-lifeline" x1="559" y1="42" x2="559" y2="386"/><g data-key="MySQL"><rect class="am-actor" x="517" y="8" width="84" height="34" rx="2"/><text x="559" y="25" text-anchor="middle" dominant-baseline="central" font-weight="600">MySQL</text></g><line class="am-lifeline" x1="671" y1="42" x2="671" y2="386"/><g data-key="Milvus"><rect class="am-actor" x="629" y="8" width="84" height="34" rx="2"/><text x="671" y="25" text-anchor="middle" dominant-baseline="central" font-weight="600">Milvus</text></g><g data-step="0"><text x="142.5" y="70" text-anchor="middle">以后默认只看web</text><path class="am-edge" d="M54,80 L229,80" marker-end="url(#am4-arrow)"/><text class="am-step" x="60" y="74" text-anchor="start">1</text></g><g data-step="1"><text x="339" y="110" text-anchor="middle">完整消息、相关原话和本人范围</text><path class="am-edge" d="M231,120 L445,120" marker-end="url(#am4-arrow)"/><text class="am-step" x="237" y="114" text-anchor="start">2</text></g><g data-step="2"><text x="559" y="150" text-anchor="middle">提取并暂存候选，状态pending</text><path class="am-edge" d="M447,160 L669,160" marker-end="url(#am4-arrow)"/><text class="am-step" x="453" y="154" text-anchor="start">3</text></g><g data-step="3"><text x="339" y="190" text-anchor="middle">返回提取后的正文</text><path class="am-edge am-edge--dashed" d="M447,200 L233,200" marker-end="url(#am4-arrow)"/><text class="am-step" x="441" y="194" text-anchor="end">4</text></g><g data-step="4"><text x="395" y="230" text-anchor="middle">保存正式记忆版本与索引待办</text><path class="am-edge" d="M231,240 L557,240" marker-end="url(#am4-arrow)"/><text class="am-step" x="237" y="234" text-anchor="start">5</text></g><g data-step="5"><text x="142.5" y="270" text-anchor="middle">报告保存结果和索引状态</text><path class="am-edge am-edge--dashed" d="M231,280 L56,280" marker-end="url(#am4-arrow)"/><text class="am-step" x="225" y="274" text-anchor="end">6</text></g><g data-step="6"><text x="339" y="310" text-anchor="middle">Worker提交正式资产ID和版本</text><path class="am-edge" d="M231,320 L445,320" marker-end="url(#am4-arrow)"/><text class="am-step" x="237" y="314" text-anchor="start">7</text></g><g data-step="7"><text x="559" y="350" text-anchor="middle">核对正文，提交为ready</text><path class="am-edge" d="M447,360 L669,360" marker-end="url(#am4-arrow)"/><text class="am-step" x="453" y="354" text-anchor="start">8</text></g></svg></figure>
+<div class="am-md"><h3>为什么既用 Mem0，又写 MySQL</h3>
+<p>Mem0 从<strong>用户原话</strong>中提取候选。Rust 保存经校验的正式版本，并负责页面编辑、启停、删除和用户隔离。</p>
+<p>Mem0 在提取时可能已生成向量。此时状态是 <code>pending</code>，查询不能采用。MySQL 保存成功后，Worker 再把对应候选提交为 <code>ready</code>。</p>
+<p>所以，要分别看“正式记忆已保存”和“索引已就绪”。MySQL 保存失败，不能告诉用户已经记住；索引暂时失败，也不能丢掉正式正文。</p>
+<div class="am-table-wrap"><table>
+<thead>
+<tr>
+<th>位置</th>
+<th>个人记忆相关数据</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>MySQL</td>
+<td>用户、空间、正文、原话、范围、版本、依赖和启停状态</td>
+</tr>
+<tr>
+<td>Milvus 个人集合</td>
+<td>Mem0 候选及已提交记忆的向量、资产 ID 与版本</td>
+</tr>
+<tr>
+<td>Mem0 本地 SQLite</td>
+<td>SDK 历史、提取回执、资产与向量的映射、操作恢复记录</td>
+</tr>
+</tbody></table></div>
+<h3>哪些内容会长期保存</h3>
+<ul>
+<li>明确说“记住”“以后默认”“修改之前的偏好”时，走保存或修订流程。</li>
+<li>“这次只看 app”属于当次条件，不自动写成长久偏好。</li>
+<li>自动记忆的正文与适用范围使用同一份 Mem0 最终文本。</li>
+<li>原话单独保留，便于追溯范围和例外。</li>
+<li>页面手工编辑直接保存用户填写的正文，再建立索引。</li>
+<li>手工正文不再交给 Mem0 改写，避免改变用户原意。</li>
+</ul>
+<p>个人 Skill 也存为个人资产，表示可复用的方法。当前由页面维护并明确选择，Agent 采用本对话已选的有效版本。</p>
+<p>依据：<a href="https://github.com/yaoziyaoguai/data_agent/blob/cd82667/apps/memory/service.py">Mem0 提取、提交与存储</a>、<a href="https://github.com/yaoziyaoguai/data_agent/blob/cd82667/crates/data-agent/src/use_cases/personal_memory.rs">Rust 记忆用例</a>。</p>
+</div></div>
+</section>
+<section class="am-panel" id="panel-E">
+<header class="am-panel-head"><span class="am-panel-id">E</span><h2>语义召回：怎样从很多表里找出本次需要的知识？</h2></header>
+<div class="am-panel-body"><div class="am-md"><p>以“查 2026 年 1 月净收入”为例。Agent 需要找到指标、表、金额字段、时间口径和相关文档。</p>
+<h3>三条查找通道合起来使用</h3>
+<div class="am-table-wrap"><table>
+<thead>
+<tr>
+<th>通道</th>
+<th>适合什么问题</th>
+<th>当前做法</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>精确匹配</td>
+<td>用户知道表名、对象名或 ID</td>
+<td>精确名称优先</td>
+</tr>
+<tr>
+<td>关键词</td>
+<td>问题与资料有相同词语</td>
+<td>查正式内容及词法检索副本</td>
+</tr>
+<tr>
+<td>向量相似</td>
+<td>用户换了一种说法</td>
+<td>Qwen 生成问句向量，Milvus 找相近片段</td>
+</tr>
+</tbody></table></div>
+</div>
+<figure class="am-diagram am-flow"><svg viewBox="0 0 379 549" width="379" height="549" role="img" aria-label="流程图：问题、精确名称候选、关键词候选、向量候选、合并候选、MySQL回源核对、排名并补充相关对象、给Pi目录与摘录" xmlns="http://www.w3.org/2000/svg"><defs><marker id="am5-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="am-arrow" d="M0,0 L10,5 L0,10 z"/></marker></defs><g></g><g><g data-step="0"><path class="am-edge" d="M208.5,41.1 L260.3,56.5 Q312,72 312,83.5 L312,95" marker-end="url(#am5-arrow)"/></g><g data-step="0"><path class="am-edge" d="M176.5,49 L176.5,60.5 Q176.5,72 176.5,83.5 L176.5,95" marker-end="url(#am5-arrow)"/></g><g data-step="0"><path class="am-edge" d="M144.5,42.1 L99.3,57 Q54,72 54,83.5 L54,95" marker-end="url(#am5-arrow)"/></g><g data-step="1"><path class="am-edge" d="M312,130 L312,141.5 Q312,153 264.3,167.3 L216.5,181.5" marker-end="url(#am5-arrow)"/></g><g data-step="2"><path class="am-edge" d="M176.5,130 L176.5,141.5 Q176.5,153 176.5,164.5 L176.5,176" marker-end="url(#am5-arrow)"/></g><g data-step="3"><path class="am-edge" d="M54,130 L54,141.5 Q54,153 95.3,166.6 L136.5,180.3" marker-end="url(#am5-arrow)"/></g><g data-step="4"><path class="am-edge" d="M176.5,211 L176.5,222.5 Q176.5,234 176.5,245.5 L176.5,257" marker-end="url(#am5-arrow)"/></g><g data-step="5"><path class="am-edge" d="M176.5,292 L176.5,303.5 Q176.5,315 176.5,326.5 L176.5,338" marker-end="url(#am5-arrow)"/></g><g data-step="6"><path class="am-edge" d="M176.5,373 L176.5,384.5 Q176.5,396 176.5,407.5 L176.5,419" marker-end="url(#am5-arrow)"/></g><g data-step="7"><path class="am-edge" d="M176.5,454 L176.5,465.5 Q176.5,477 176.5,488.5 L176.5,500" marker-end="url(#am5-arrow)"/></g></g><g><g class="am-node am-node--rect" data-key="问题" data-step="0"><rect class="am-node-shape" x="144.5" y="14" width="64" height="35" rx="3"/><text x="176.5" y="31.5" text-anchor="middle" dominant-baseline="central">问题</text></g><g class="am-node am-node--rect" data-key="精确名称候选" data-step="0"><rect class="am-node-shape" x="259" y="95" width="106" height="35" rx="3"/><text x="312" y="112.5" text-anchor="middle" dominant-baseline="central">精确名称候选</text></g><g class="am-node am-node--rect" data-key="关键词候选" data-step="0"><rect class="am-node-shape" x="130" y="95" width="93" height="35" rx="3"/><text x="176.5" y="112.5" text-anchor="middle" dominant-baseline="central">关键词候选</text></g><g class="am-node am-node--rect" data-key="向量候选" data-step="0"><rect class="am-node-shape" x="14" y="95" width="80" height="35" rx="3"/><text x="54" y="112.5" text-anchor="middle" dominant-baseline="central">向量候选</text></g><g class="am-node am-node--rect" data-key="合并候选" data-step="1"><rect class="am-node-shape" x="136.5" y="176" width="80" height="35" rx="3"/><text x="176.5" y="193.5" text-anchor="middle" dominant-baseline="central">合并候选</text></g><g class="am-node am-node--rect" data-key="MySQL回源核对" data-step="4"><rect class="am-node-shape" x="112.8" y="257" width="127.3" height="35" rx="3"/><text x="176.5" y="274.5" text-anchor="middle" dominant-baseline="central">MySQL回源核对</text></g><g class="am-node am-node--rect" data-key="排名并补充相关对象" data-step="5"><rect class="am-node-shape" x="104" y="338" width="145" height="35" rx="3"/><text x="176.5" y="355.5" text-anchor="middle" dominant-baseline="central">排名并补充相关对象</text></g><g class="am-node am-node--rect" data-key="给Pi目录与摘录" data-step="6"><rect class="am-node-shape" x="117" y="419" width="119" height="35" rx="3"/><text x="176.5" y="436.5" text-anchor="middle" dominant-baseline="central">给Pi目录与摘录</text></g><g class="am-node am-node--rect" data-key="按需读全文和原始依据" data-step="7"><rect class="am-node-shape" x="97.5" y="500" width="158" height="35" rx="3"/><text x="176.5" y="517.5" text-anchor="middle" dominant-baseline="central">按需读全文和原始依据</text></g></g></svg></figure>
+<div class="am-md"><p><strong>回源</strong>就是拿着候选 ID，回到 MySQL 读当前正式记录。系统核对空间权限、启停状态、对象版本和来源版本。查到了旧版本或失效来源，就不能把它当作当前依据。</p>
+<p>排名会综合关键词与向量的名次。结果还尽量包含表、字段、指标、文档等不同类型，并补入少量关联对象。当前没有另调一个大模型逐项打分。</p>
+<p><code>search_knowledge</code> 先返回目录和摘录。Pi 可再用 <code>read_knowledge</code> 分段读正文，用 <code>read_source</code> 读原始资料。<strong>能定位到文档，还不等于已经读懂完整口径。</strong></p>
+<h3>检索不完整时怎样处理</h3>
+<p>向量服务不可用时，系统明确报告降级，保留精确与关键词通道。候选扫描或索引覆盖有限时，会返回覆盖状态。</p>
+<p>因此，空结果只能表示本次没找到。Agent 可以缩小业务范围、换名称、按已知 ID 读取，或询问用户。</p>
+<p>依据：<a href="https://github.com/yaoziyaoguai/data_agent/blob/cd82667/crates/data-agent/src/use_cases/knowledge.rs#L475">三路合并与回源</a>、<a href="https://github.com/yaoziyaoguai/data_agent/blob/cd82667/crates/data-agent/src/modules/retrieval/mod.rs#L27">排名规则</a>、<a href="https://github.com/yaoziyaoguai/data_agent/blob/cd82667/crates/data-agent/src/use_cases/data_tools.rs#L253">受控知识工具</a>。</p>
+</div></div>
+</section>
+<section class="am-panel" id="panel-F">
+<header class="am-panel-head"><span class="am-panel-id">F</span><h2>个人记忆和对话历史又怎样找回来？</h2></header>
+<div class="am-panel-body"><div class="am-md"><p><strong>个人记忆与共享语义分别检索，最后一起供本轮判断。</strong> 同一个知识工具可以返回两类结果，返回字段仍然分开。</p>
+</div>
+<figure class="am-diagram am-flow"><svg viewBox="0 0 365 503" width="365" height="503" role="img" aria-label="流程图：本次问题、Mem0按本人和空间搜索、个人Milvus候选、返回资产ID与版本、Rust核对MySQL正式资产、相关摘要进入本轮上下文、本人有效资产目录" xmlns="http://www.w3.org/2000/svg"><defs><marker id="am6-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="am-arrow" d="M0,0 L10,5 L0,10 z"/></marker></defs><g></g><g><g data-step="0"><path class="am-edge" d="M98.5,49 L98.5,60.5 Q98.5,72 98.5,83.5 L98.5,95" marker-end="url(#am6-arrow)"/></g><g data-step="1"><path class="am-edge" d="M98.5,130 L98.5,141.5 Q98.5,153 98.5,164.5 L98.5,176" marker-end="url(#am6-arrow)"/></g><g data-step="2"><path class="am-edge" d="M98.5,211 L98.5,222.5 Q98.5,234 98.5,245.5 L98.5,257" marker-end="url(#am6-arrow)"/></g><g data-step="3"><path class="am-edge" d="M98.5,292 L98.5,303.5 Q98.5,315 98.5,326.5 L98.5,338" marker-end="url(#am6-arrow)"/></g><g data-step="4"><path class="am-edge" d="M98.5,390 L98.5,406 Q98.5,422 128.5,438 L158.6,454" marker-end="url(#am6-arrow)"/></g><g data-step="5"><path class="am-edge" d="M284.4,381.5 L284.4,401.8 Q284.4,422 254.3,438 L224.3,454" marker-end="url(#am6-arrow)"/><g class="am-edge-label"><rect x="250.7" y="413" width="67.5" height="18" rx="3"/><text x="284.4" y="422" text-anchor="middle" dominant-baseline="central">补充与降级</text></g></g></g><g><g class="am-node am-node--rect" data-key="本次问题" data-step="0"><rect class="am-node-shape" x="58.5" y="14" width="80" height="35" rx="3"/><text x="98.5" y="31.5" text-anchor="middle" dominant-baseline="central">本次问题</text></g><g class="am-node am-node--rect" data-key="Mem0按本人和空间搜索" data-step="0"><rect class="am-node-shape" x="14" y="95" width="168.9" height="35" rx="3"/><text x="98.5" y="112.5" text-anchor="middle" dominant-baseline="central">Mem0按本人和空间搜索</text></g><g class="am-node am-node--rect" data-key="个人Milvus候选" data-step="1"><rect class="am-node-shape" x="37.8" y="176" width="121.3" height="35" rx="3"/><text x="98.5" y="193.5" text-anchor="middle" dominant-baseline="central">个人Milvus候选</text></g><g class="am-node am-node--rect" data-key="返回资产ID与版本" data-step="2"><rect class="am-node-shape" x="31.3" y="257" width="134.3" height="35" rx="3"/><text x="98.5" y="274.5" text-anchor="middle" dominant-baseline="central">返回资产ID与版本</text></g><g class="am-node am-node--rect" data-key="Rust核对MySQL正式资产" data-step="3"><rect class="am-node-shape" x="14.5" y="338" width="167.9" height="52" rx="3"/><text x="98.5" y="355.5" text-anchor="middle" dominant-baseline="central">Rust核对MySQL正式资</text><text x="98.5" y="372.5" text-anchor="middle" dominant-baseline="central">产</text></g><g class="am-node am-node--rect" data-key="相关摘要进入本轮上下文" data-step="4"><rect class="am-node-shape" x="105.9" y="454" width="171" height="35" rx="3"/><text x="191.4" y="471.5" text-anchor="middle" dominant-baseline="central">相关摘要进入本轮上下文</text></g><g class="am-node am-node--rect" data-key="本人有效资产目录" data-step="5"><rect class="am-node-shape" x="218.4" y="346.5" width="132" height="35" rx="3"/><text x="284.4" y="364" text-anchor="middle" dominant-baseline="central">本人有效资产目录</text></g></g></svg></figure>
+<div class="am-md"><h3>个人记忆的两次使用机会</h3>
+<p><strong>新一轮启动时：</strong> 若本人有有效记忆，Rust 用本次问题调用 Mem0。它先挑相关项，再从正式目录补充未进入索引的有效项。当前最多准备 20 条记忆摘要，然后按整体输入大小裁剪。</p>
+<p><strong>Agent 调查中：</strong> Pi 调用 <code>search_knowledge</code> 时，也能取得个人记忆候选。需要更多内容，可分页查看本人目录，再按版本读取正文。</p>
+<p>Mem0 搜索限定当前用户、空间及 <code>ready</code> 状态。侧车最多取得 200 个候选，并核对其映射。Rust 还会检查正式资产的版本、状态和依赖。</p>
+<p>Mem0 暂不可用时，系统回退到本人正式目录，并报告回退状态。停用记忆后，后续采用以 MySQL 状态为准，不必等待旧向量清理完成。</p>
+<h3>对话上下文走另一条路</h3>
+<div class="am-table-wrap"><table>
+<thead>
+<tr>
+<th>问题</th>
+<th>个人长期记忆</th>
+<th>Pi 对话上下文</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>保存什么</td>
+<td>跨对话可复用的偏好、纠错</td>
+<td>这段对话的消息、工具调用与压缩记录</td>
+</tr>
+<tr>
+<td>主体内容在哪里</td>
+<td>MySQL 正式资产，Milvus 提供检索</td>
+<td>Pi 原生 JSONL 会话文件</td>
+</tr>
+<tr>
+<td>怎样恢复</td>
+<td>Mem0 搜索，再回源核对</td>
+<td>Pi SDK 恢复同一会话及已提交的位置</td>
+</tr>
+<tr>
+<td>历史太长怎么办</td>
+<td>选相关摘要，完整内容按需补读</td>
+<td>使用 Pi 原生上下文压缩</td>
+</tr>
+<tr>
+<td>Rust 另外保存什么</td>
+<td>归属、版本、依赖和索引任务</td>
+<td>对话与任务状态、查询、精确检查点引用</td>
+</tr>
+</tbody></table></div>
+<p>同一对话可以持续多轮、包含多个任务。模型本轮看到的是有效历史、必要摘要和工具补读内容，不会一次装入所有存储。</p>
+<p>语义改版、记忆停用或权限变化后，Rust 复核此前使用的依据。必要时为新一轮重建上下文；恢复中断任务时也不能继续采用失效资料。</p>
+<p>依据：<a href="https://github.com/yaoziyaoguai/data_agent/blob/cd82667/crates/data-agent/src/use_cases/personal_memory.rs#L292">启动时召回个人记忆</a>、<a href="https://github.com/yaoziyaoguai/data_agent/blob/cd82667/apps/memory/service.py#L155">Mem0 搜索过滤</a>、<a href="https://github.com/yaoziyaoguai/data_agent/blob/cd82667/apps/agent/session/journal.ts">Pi 会话持久化</a>。</p>
+</div></div>
+</section>
+<section class="am-panel" id="panel-G">
+<header class="am-panel-head"><span class="am-panel-id">G</span><h2>用一个完整例子，把三类内容放到一起</h2></header>
+<div class="am-panel-body"><div class="am-md"><p>以下基于仓库的虚构零售样例。个人偏好和提问用于教学，<strong>不是本页发起的实时查询结果</strong>。</p>
+<h3>三类材料分别贡献什么</h3>
+<div class="am-table-wrap"><table>
+<thead>
+<tr>
+<th>材料</th>
+<th>已有内容</th>
+<th>本轮用途</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>共享语义</td>
+<td>一行是一个订单行；金额单位为分</td>
+<td>避免把行数当订单数，或把分当元</td>
+</tr>
+<tr>
+<td>共享指标</td>
+<td>净收入＝付款减退款；按 <code>paid_at</code> 归属月份</td>
+<td>决定公式、时间列及退款归属</td>
+</tr>
+<tr>
+<td>共享规则</td>
+<td>默认排除测试交易；退款累计到样例快照</td>
+<td>决定过滤，并解释数据截止范围</td>
+</tr>
+<tr>
+<td>小陈的个人记忆</td>
+<td>收入分析默认只看 web；当次明确条件优先</td>
+<td>用户没指定渠道时，补上默认渠道</td>
+</tr>
+<tr>
+<td>本次对话</td>
+<td>“查 2026 年 1 月净收入”</td>
+<td>固定本次期间和目标</td>
+</tr>
+</tbody></table></div>
+<p>Agent 应解释采用的口径，展示 SQL 草稿，等待用户确认。这个样例的快照截止于 2026 年 2 月 4 日 00:00 UTC。</p>
+<h3>如果用户改口，会改变哪里</h3>
+<div class="am-table-wrap"><table>
+<thead>
+<tr>
+<th>用户接着说</th>
+<th>当次任务</th>
+<th>个人记忆</th>
+<th>共享语义</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>“这次改成 app”</td>
+<td>生成 app 条件的新 SQL 版本</td>
+<td>仍保留默认 web</td>
+<td>不变</td>
+</tr>
+<tr>
+<td>“以后默认改成 app”</td>
+<td>按当前明确目标处理</td>
+<td>Mem0 提取后修订本人记忆</td>
+<td>不变</td>
+</tr>
+<tr>
+<td>“再按天拆开”</td>
+<td>沿用当前任务并修改分组</td>
+<td>不自动保存新的长期偏好</td>
+<td>仍按原指标口径</td>
+</tr>
+<tr>
+<td>另一位用户问同一问题</td>
+<td>使用对方本人的条件</td>
+<td>不取得小陈的偏好</td>
+<td>可读取对方有权限的共享定义</td>
+</tr>
+<tr>
+<td>“这张表的金额其实是元”</td>
+<td>先查来源，冲突时澄清</td>
+<td>可保留本人的待核实纠错</td>
+<td>有权维护者核实后修改公共版本</td>
+</tr>
+</tbody></table></div>
+<p>“这次改成 app”会使旧 SQL 草稿失效。执行必须对应用户后来确认的具体版本。</p>
+<h3>A 纠错，B 是表负责人：已确认的新规则</h3>
+<p>A 看了 SQL 后指出：“金额单位是分，展示成元要除以 100。”B 是该表的语义负责人。</p>
+</div>
+<div class="am-callout am-callout--info" role="note"><div class="am-callout-title">接受后编辑保存才生效</div><div class="am-callout-body am-md"><p>表维护者负责该表语义。超级维护者可维护本系统全部表的共享语义。</p>
+<p>A 可以提交纠错建议。B 可以驳回，或接受后核对、编辑并保存。</p>
+<p>只有正式保存才改变共享语义。接受建议表示准备修改。</p>
+</div></div>
+<div class="am-md"><h3>两套权限各管什么</h3>
+<div class="am-table-wrap"><table>
+<thead>
+<tr>
+<th>权限</th>
+<th>决定什么</th>
+<th>边界</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Data Agent 内部语义权限</td>
+<td>谁能改哪张表的语义、处理哪些建议</td>
+<td>表负责人维护负责范围；超级维护者维护全部表</td>
+</tr>
+<tr>
+<td>Datasight 数据权限</td>
+<td>谁能读平台资料、查询数据和执行 SQL</td>
+<td>继续由平台校验，系统角色不会扩大它</td>
+</tr>
+<tr>
+<td>本人记录的访问范围</td>
+<td>谁能读聊天、个人记忆和 Skill</td>
+<td>语义维护角色不能读取他人的私人记录</td>
+</tr>
+</tbody></table></div>
+<p>即使 B 有语义维护权，核验时执行 SQL 仍需平台权限与用户确认。反过来，A 有数据查询权，也不能直接修改共享语义。</p>
+<p>录入人和最后修改人分别记录。表负责人来自 Datasight 最近一次同步；共用指标和文档独立指定负责人。</p>
+<h3>纠错怎样成为共享改进</h3>
+</div>
+<figure class="am-diagram am-flow"><svg viewBox="0 0 250 585" width="250" height="585" role="img" aria-label="流程图：A提交可共享建议、B或超级维护者、已驳回、已接受待修改、核对并编辑、明确保存、新共享版本与待办、更新共享索引" xmlns="http://www.w3.org/2000/svg"><defs><marker id="am7-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="am-arrow" d="M0,0 L10,5 L0,10 z"/></marker></defs><g></g><g><g data-step="0"><path class="am-edge" d="M141.3,49 L141.3,60.5 Q141.3,72 141.3,83.5 L141.3,95" marker-end="url(#am7-arrow)"/></g><g data-step="1"><path class="am-edge" d="M162.9,130 L182.7,146 Q202.5,162 202.5,178 L202.5,194" marker-end="url(#am7-arrow)"/><g class="am-edge-label"><rect x="174.5" y="153" width="56" height="18" rx="3"/><text x="202.5" y="162" text-anchor="middle" dominant-baseline="central">记录理由</text></g></g><g data-step="2"><path class="am-edge" d="M119.6,130 L99.8,146 Q80,162 80,178 L80,194" marker-end="url(#am7-arrow)"/></g><g data-step="3"><path class="am-edge" d="M80,229 L80,245 Q80,261 80,277 L80,293" marker-end="url(#am7-arrow)"/><g class="am-edge-label"><rect x="52" y="252" width="56" height="18" rx="3"/><text x="80" y="261" text-anchor="middle" dominant-baseline="central">尚未生效</text></g></g><g data-step="4"><path class="am-edge" d="M80,328 L80,339.5 Q80,351 80,362.5 L80,374" marker-end="url(#am7-arrow)"/></g><g data-step="5"><path class="am-edge" d="M80,409 L80,420.5 Q80,432 80,443.5 L80,455" marker-end="url(#am7-arrow)"/></g><g data-step="6"><path class="am-edge" d="M80,490 L80,501.5 Q80,513 80,524.5 L80,536" marker-end="url(#am7-arrow)"/></g></g><g><g class="am-node am-node--rect" data-key="A提交可共享建议" data-step="0"><rect class="am-node-shape" x="77.3" y="14" width="127.8" height="35" rx="3"/><text x="141.3" y="31.5" text-anchor="middle" dominant-baseline="central">A提交可共享建议</text></g><g class="am-node am-node--rect" data-key="B或超级维护者" data-step="0"><rect class="am-node-shape" x="83.8" y="95" width="114.8" height="35" rx="3"/><text x="141.3" y="112.5" text-anchor="middle" dominant-baseline="central">B或超级维护者</text></g><g class="am-node am-node--rect" data-key="已驳回" data-step="1"><rect class="am-node-shape" x="169" y="194" width="67" height="35" rx="3"/><text x="202.5" y="211.5" text-anchor="middle" dominant-baseline="central">已驳回</text></g><g class="am-node am-node--rect" data-key="已接受待修改" data-step="2"><rect class="am-node-shape" x="27" y="194" width="106" height="35" rx="3"/><text x="80" y="211.5" text-anchor="middle" dominant-baseline="central">已接受待修改</text></g><g class="am-node am-node--rect" data-key="核对并编辑" data-step="3"><rect class="am-node-shape" x="33.5" y="293" width="93" height="35" rx="3"/><text x="80" y="310.5" text-anchor="middle" dominant-baseline="central">核对并编辑</text></g><g class="am-node am-node--rect" data-key="明确保存" data-step="4"><rect class="am-node-shape" x="40" y="374" width="80" height="35" rx="3"/><text x="80" y="391.5" text-anchor="middle" dominant-baseline="central">明确保存</text></g><g class="am-node am-node--rect" data-key="新共享版本与待办" data-step="5"><rect class="am-node-shape" x="14" y="455" width="132" height="35" rx="3"/><text x="80" y="472.5" text-anchor="middle" dominant-baseline="central">新共享版本与待办</text></g><g class="am-node am-node--rect" data-key="更新共享索引" data-step="6"><rect class="am-node-shape" x="27" y="536" width="106" height="35" rx="3"/><text x="80" y="553.5" text-anchor="middle" dominant-baseline="central">更新共享索引</text></g></g></svg></figure>
+<div class="am-md"><div class="am-table-wrap"><table>
+<thead>
+<tr>
+<th>状态</th>
+<th>A 能看到什么</th>
+<th>大家共用的语义</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>本人草稿</td>
+<td>自己整理的建议</td>
+<td>保持原版本</td>
+</tr>
+<tr>
+<td>已提交待处理</td>
+<td>提交内容与待处理状态</td>
+<td>保持原版本；不参与共享召回</td>
+</tr>
+<tr>
+<td>已驳回</td>
+<td>处理人和理由</td>
+<td>保持原版本</td>
+</tr>
+<tr>
+<td>已接受待修改</td>
+<td>已接受，负责人准备修订</td>
+<td>保持原版本</td>
+</tr>
+<tr>
+<td>正式保存成功</td>
+<td>实际修改内容和生效版本</td>
+<td>新版本生效，索引异步更新</td>
+</tr>
+</tbody></table></div>
+<p>A 的本次查询不必等待 B 处理。A 的聊天全文、查询结果与 Mem0 个人记忆不会随建议开放；只共享明确提交的修改与依据。</p>
+<p>保存时，Rust 重查当前维护权限、建议修订和语义基版本。别人已经改过时，先显示差异再核对，不能用旧建议覆盖新内容。</p>
+<h3>当前程序到了哪一步</h3>
+<div class="am-table-wrap"><table>
+<thead>
+<tr>
+<th>当前能力</th>
+<th>实际状态</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>修订本次 SQL</td>
+<td>已有；修订后等待用户确认新版本</td>
+</tr>
+<tr>
+<td>本人纠错记忆</td>
+<td>已有；明确可复用纠错按原规则保存，未核实内容作查证线索</td>
+</tr>
+<tr>
+<td>本人语义建议</td>
+<td>已有；Pi 可保存目标、基版本、建议值、理由和依据</td>
+</tr>
+<tr>
+<td>负责人处理建议</td>
+<td>页面先显式提交，再由负责人接受、核对编辑并保存；旧本人采用 API 保留逐对象权限校验</td>
+</tr>
+<tr>
+<td>逐表负责人、超级维护者</td>
+<td>已接入；表负责人来自平台同步，超级维护者由可信配置指定</td>
+</tr>
+<tr>
+<td>A 提交给 B，B 接受或驳回</td>
+<td>已接入；私人草稿显式提交后，B 可接受或驳回</td>
+</tr>
+</tbody></table></div>
+<p>当前没有把每一次聊天纠错都自动登记为建议的程序规则。未来也应区分一次性条件、个人偏好与共享语义错误。</p>
+<p>旧私人建议保留原来的私人范围。跨表共用指标和文档由超级维护者独立指定负责人，引用它们的表负责人可以提出建议；引用关系不授予编辑权。</p>
+<p>本次明确条件优先于长期偏好。共享定义发生冲突时，Agent 要解释或澄清，并核对来源。</p>
+<p>依据：<a href="../sources/business-guide.md">合成业务说明</a>、<a href="https://github.com/yaoziyaoguai/data_agent/blob/cd82667/crates/data-agent/src/modules/knowledge/store.rs#L434">当前本人建议实现</a>、<a href="https://github.com/yaoziyaoguai/data_agent/blob/cd82667/crates/data-agent/src/modules/access/mod.rs#L56">当前演示权限</a>、<a href="../architecture/knowledge-modules.md">已确认的权限与纠错设计</a>。</p>
+</div></div>
+</section>
+<section class="am-panel" id="panel-H">
+<header class="am-panel-head"><span class="am-panel-id">H</span><h2>最后记住：哪里靠模型，哪里靠程序？</h2></header>
+<div class="am-panel-body"><div class="am-md"><div class="am-table-wrap"><table>
+<thead>
+<tr>
+<th>工作</th>
+<th>当前由谁负责</th>
+<th>为什么这样分</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>理解业务问题、选工具、追问、生成 SQL</td>
+<td>Pi SDK 运行 DeepSeek Flash</td>
+<td>给 Agent 调查和判断空间</td>
+</tr>
+<tr>
+<td>解释原始资料，补充语义建议</td>
+<td>DeepSeek Flash；Rust 核验并保存</td>
+<td>附上依据、缺口与版本，保留人工修改</td>
+</tr>
+<tr>
+<td>整理个人记忆、按意思搜索本人记忆</td>
+<td>Mem0 与模型、个人向量索引</td>
+<td>复用已有记忆能力</td>
+</tr>
+<tr>
+<td>共享知识的关键词与向量混合检索</td>
+<td>Rust 检索模块与 Qwen、Milvus</td>
+<td>按数据知识类型排序，并回源核对</td>
+</tr>
+<tr>
+<td>权限、状态、版本、预算、SQL 确认</td>
+<td>Rust 与平台边界</td>
+<td>由程序拒绝不允许的操作</td>
+</tr>
+<tr>
+<td>会话续接和上下文压缩</td>
+<td>Pi SDK</td>
+<td>沿用同一会话，减少重复实现</td>
+</tr>
+</tbody></table></div>
+<p><strong>共享知识的质量决定依据是否可靠。检索决定本轮能否找到这些依据。Agent 决定如何理解、补查和使用。</strong> 这三个环节需要一起工作。</p>
+<h3>当前验证到了哪里</h3>
+<ul>
+<li>Qwen 真实小样：4 个中文问题均进入前 6 个候选。</li>
+<li>千表工程回归：1204 张合成表，索引与两次重建通过。</li>
+<li>千表回归使用协议向量，不能代替真实模型的千表召回测量。</li>
+<li>Mem0 的存储、隔离、版本、恢复和预算回归已通过。</li>
+<li>上述证据不表示任何业务问题都能回答正确。</li>
+<li>真实平台、正式认证和同事试用仍是约定的后续接入。</li>
+</ul>
+<p>G 节协作已接入本轮增量。平台维护人当前来自 mock；真实 Datasight ACL 仍待接入。流程图省略了重试和预算细节；实际模型调用仍按原授权计费与记录。</p>
+<p>来源：<a href="../CURRENT.md">当前完成记录</a>、<a href="../sources/evaluation/qwen-shared-trial.json">共享向量真实小样</a>、<a href="../semantic-retrieval-design.md">完整设计</a>、<a href="../architecture/data-agent-overview.svg">完整架构图</a>。</p>
+</div></div>
+</section>
+</div>
+</div>
+</main>
+<footer class="am-colophon">Generated by Answer me with HTML 0.4.8 · 2026-10-06 21:02</footer>
+<textarea id="am-source" hidden readonly aria-hidden="true">---
+template: doc
+theme: shadcn
+mode: light
+style: 80
+lang: zh
+title: Data Agent：语义、记忆与召回
+subtitle: 从一张表的解释，到一次有依据的查询。
+source: 2026-10-06 · 语义协作增量 · Datasight mock
+---
+
+**共享语义回答“数据是什么、应该怎样算”。个人记忆回答“这个用户长期有什么偏好和纠错”。Pi 会话上下文回答“这段对话已经聊到哪里”。**
+
+“召回”就是从存储中找出本次可能需要的材料。找到之后，还要读原文、核对有效性，再决定怎样用。
+
+## A 先分清：项目里有哪三种“记住”？
+
+这里把你说的“整体记忆”对应为**共享知识库**。它保存同一空间内可共享的业务知识。具体能看什么，仍由权限决定。
+
+| 类别 | 记住什么 | 谁可以复用 | 主要负责者 |
+| --- | --- | --- | --- |
+| 共享语义，也就是共享业务知识 | 表、字段、指标、关联、术语、业务文档 | 同一空间内有权限的人 | Rust 语义模块 |
+| 个人长期记忆 | 本人的默认偏好、纠错、适用范围与例外 | 同一用户、同一空间，可跨对话 | Mem0 提取与检索；Rust 管正式版本 |
+| 当前对话上下文 | 消息、工具历史、已明确条件、分析任务 | 继续这段有权访问的对话时使用 | Pi SDK 与 Rust 任务记录 |
+
+**共享知识与个人记忆有明确归属。** 用户聊天中的一句纠错，先属于本人；公共定义需要走语义维护流程。
+
+### 整个产品怎样工作
+
+```flow LR
+用户问题 -&gt; 查资料与澄清 -&gt; SQL草稿 -&gt; 用户确认 -&gt; 查询与解释
+```
+
+- React 展示聊天、SQL、结果、语义页和个人积累。
+- Pi SDK 运行唯一的 Agent 循环，使用 DeepSeek Flash。
+- Pi 按问题选择工具，可以补查、追问和修改 SQL。
+- Rust 校验权限、版本、预算和具体 SQL 的确认状态。
+- 当前查询平台使用可执行合成数据；真实平台通过适配器接入。
+
+这张图只表示用户过程。调查中的工具顺序由 Pi 判断，用户也能在执行前继续补充。
+
+依据：[架构职责](../architecture/README.md)、[Agent 当前行为约定](https://github.com/yaoziyaoguai/data_agent/blob/cd82667/apps/agent/session/resources.ts)。
+
+## B 语义怎样从原始资料构建出来？
+
+**语义层要把“有这些字段”补成“这些数据该怎样使用”。** 预填页面是维护入口，背后保存的是有来源、有版本的知识。
+
+### 页面维护哪些内容
+
+| 内容 | 需要解释的问题 | 合成零售例子 |
+| --- | --- | --- |
+| 表 | 一行代表什么？主键是什么？哪些时间可用？ | 一行是一个订单行，主键是订单号加行号 |
+| 字段 | 含义、单位、取值、空值和边界是什么？ | `paid_amount_cents` 是当前行的成功支付金额，单位为分 |
+| 指标及计算 SQL | 怎么算？按什么时间？有哪些过滤和维度？ | 支付归属净收入＝付款减退款，按付款月统计 |
+| 查询关联 | 怎样连接？会不会把金额重复计算？ | 客户标签是一对多关系，直接连接可能放大金额 |
+| 术语与规则 | 业务叫法和例外怎样解释？ | “退款率”仍需明确用订单数还是金额作分母 |
+| 文档、章节和主题 | 哪些内容需要完整说明？ | 一篇文档解释退款归属，同时关联表、字段和指标 |
+
+### 预填的实际过程
+
+```flow
+平台元数据与加工SQL -&gt; 固定本次材料和版本
+血缘与关联文档 -&gt; 固定本次材料和版本
+固定本次材料和版本 -&gt; DeepSeek语义分析
+DeepSeek语义分析 -&gt; DeepSeek依据复核
+DeepSeek依据复核 -&gt; Rust核对引用与版本
+Rust核对引用与版本 -&gt; 逐条合并
+人工已改内容 -&gt; 逐条合并: 保留人工值
+逐条合并 -&gt; 新语义版本
+```
+
+平台资料先保存快照，结构事实可直接预填。模型再结合 DDL、加工 SQL、血缘和业务文档解释含义。当前模型预填分为分析、依据复核两次调用。
+
+关联文档保存在知识库，按版本加入分析材料。只保存链接但读不到正文时，系统保留“正文不可用”的缺口。
+
+### 同一个条目保留三类内容
+
+| 层次 | 保存的内容 | 更新规则 |
+| --- | --- | --- |
+| 来源事实 | 原始字段类型、注释、SQL、来源版本和引用 | 同步新来源，保留出处 |
+| 模型建议 | 对含义、单位、边界的解释及证据、缺口 | 重新分析可以更新建议 |
+| 人工覆盖 | 数据开发填写的值、修改人和操作记录 | 后续预填保留人工值 |
+
+页面采用的值由这三层合成。人工覆盖优先；没有人工值时，可使用来源事实或模型建议。模型建议仍标记未验证，不能显示成“人工已确认”。
+
+来源变化时，系统更新版本并标记需要复核。人工内容会保留，新建议也能查看。
+
+```callout warn 两个容易误判的地方
+SQL 可以证明“代码做了什么”。收入归属等业务含义，还需要业务依据。
+
+血缘说明“数据从哪里来”。查询能否直接 JOIN，还要核对关联键和一对多关系。
+
+引用逐字匹配，只能证明引用存在。模型的业务推导仍可能有错。
+```
+
+依据：[语义条目与人工保护](../architecture/knowledge-modules.md)、[模型预填实现](https://github.com/yaoziyaoguai/data_agent/blob/cd82667/crates/data-agent/src/modules/ingestion/prefill.rs)、[两阶段处理](https://github.com/yaoziyaoguai/data_agent/blob/cd82667/crates/data-agent/src/use_cases/semantic_prefill.rs)。
+
+## C 共享语义的原文和索引分别存在哪里？
+
+**MySQL 保存正式内容，Milvus 帮助找相关内容。** 模型把文本转成一串数字，这个过程叫 embedding，也就是向量化。
+
+```flow LR
+当前有效语义 -&gt; 文本切片 -&gt; Qwen向量化 -&gt; Milvus共享索引
+```
+
+| 保存位置 | 实际内容 | 用途 |
+| --- | --- | --- |
+| MySQL 来源记录 | 平台快照、来源头和采集版本 | 能追溯分析所用的原始资料 |
+| MySQL 共享知识 | 对象、不可变版本、条目、文档、引用与人工覆盖 | 编辑、读取和核对正式定义 |
+| MySQL 词法检索副本 | 当前知识的可检索文字 | 按名称或关键词找候选 |
+| MySQL 索引任务与调用回执 | 索引进度、原预算、成功向量和使用量 | 失败恢复、重建及费用核对 |
+| Milvus 共享集合 | 语义片段的向量、对象 ID、版本、空间及片段文字 | 按意思相近查找候选 |
+
+例如，“净收入”和“扣完退款还剩多少”用词不同。向量模型有机会把它们放得较近。这个相似度帮助定位资料，不能决定业务定义是否正确。
+
+### 当前实现的几个具体细节
+
+- 向量模型是百炼 `qwen3.7-text-embedding`，每个向量有 1024 维。
+- 共享知识和个人记忆使用两个独立的 Milvus 集合。
+- 个人集合内再按用户与空间隔离，无需为每个人另建数据库。
+- 共享语义按 360 字符切片，相邻片段重叠 80 字符。
+- 每对象最多 128 个片段；超过范围会标记覆盖不足。
+- 当前共享向量索引跳过原始 DDL、加工 SQL 条目。
+- 原始 DDL 和加工 SQL 仍保留，可由工具回源阅读。
+
+语义更新后，Worker 更新对应版本的索引。新索引尚未完成时，正式文字依然存在。检索会说明索引状态，旧向量也不能代替新的正式版本。
+
+**这里的 MySQL 是应用存储。** 用户要查询的业务明细属于数据平台；当前合成平台用 SQLite 执行样例 SQL。
+
+依据：[共享索引切片](https://github.com/yaoziyaoguai/data_agent/blob/cd82667/crates/data-agent/src/modules/retrieval/vector.rs)、[调用与恢复设计](../architecture/implementation-design.md)、[本地运行说明](../development.md)。
+
+## D 一条个人记忆怎样保存？
+
+假设用户说：**“以后我的收入分析默认只看 web 渠道；明确说别的渠道时，以当次要求为准。”** 这是一条教学示例，用来说明保存过程。
+
+Pi 判断需要长期保存，先查本人已有记忆。Rust 核对引用的原话、归属和依赖，再交给 Mem0 提取。
+
+```sequence num
+participants: 用户, Pi与Rust, Mem0, MySQL, Milvus
+用户 -&gt; Pi与Rust: 以后默认只看web
+Pi与Rust -&gt; Mem0: 完整消息、相关原话和本人范围
+Mem0 -&gt; Milvus: 提取并暂存候选，状态pending
+Mem0 --&gt; Pi与Rust: 返回提取后的正文
+Pi与Rust -&gt; MySQL: 保存正式记忆版本与索引待办
+Pi与Rust --&gt; 用户: 报告保存结果和索引状态
+Pi与Rust -&gt; Mem0: Worker提交正式资产ID和版本
+Mem0 -&gt; Milvus: 核对正文，提交为ready
+```
+
+### 为什么既用 Mem0，又写 MySQL
+
+Mem0 从**用户原话**中提取候选。Rust 保存经校验的正式版本，并负责页面编辑、启停、删除和用户隔离。
+
+Mem0 在提取时可能已生成向量。此时状态是 `pending`，查询不能采用。MySQL 保存成功后，Worker 再把对应候选提交为 `ready`。
+
+所以，要分别看“正式记忆已保存”和“索引已就绪”。MySQL 保存失败，不能告诉用户已经记住；索引暂时失败，也不能丢掉正式正文。
+
+| 位置 | 个人记忆相关数据 |
+| --- | --- |
+| MySQL | 用户、空间、正文、原话、范围、版本、依赖和启停状态 |
+| Milvus 个人集合 | Mem0 候选及已提交记忆的向量、资产 ID 与版本 |
+| Mem0 本地 SQLite | SDK 历史、提取回执、资产与向量的映射、操作恢复记录 |
+
+### 哪些内容会长期保存
+
+- 明确说“记住”“以后默认”“修改之前的偏好”时，走保存或修订流程。
+- “这次只看 app”属于当次条件，不自动写成长久偏好。
+- 自动记忆的正文与适用范围使用同一份 Mem0 最终文本。
+- 原话单独保留，便于追溯范围和例外。
+- 页面手工编辑直接保存用户填写的正文，再建立索引。
+- 手工正文不再交给 Mem0 改写，避免改变用户原意。
+
+个人 Skill 也存为个人资产，表示可复用的方法。当前由页面维护并明确选择，Agent 采用本对话已选的有效版本。
+
+依据：[Mem0 提取、提交与存储](https://github.com/yaoziyaoguai/data_agent/blob/cd82667/apps/memory/service.py)、[Rust 记忆用例](https://github.com/yaoziyaoguai/data_agent/blob/cd82667/crates/data-agent/src/use_cases/personal_memory.rs)。
+
+## E 语义召回：怎样从很多表里找出本次需要的知识？
+
+以“查 2026 年 1 月净收入”为例。Agent 需要找到指标、表、金额字段、时间口径和相关文档。
+
+### 三条查找通道合起来使用
+
+| 通道 | 适合什么问题 | 当前做法 |
+| --- | --- | --- |
+| 精确匹配 | 用户知道表名、对象名或 ID | 精确名称优先 |
+| 关键词 | 问题与资料有相同词语 | 查正式内容及词法检索副本 |
+| 向量相似 | 用户换了一种说法 | Qwen 生成问句向量，Milvus 找相近片段 |
+
+```flow
+问题 -&gt; 精确名称候选 &amp; 关键词候选 &amp; 向量候选
+精确名称候选 -&gt; 合并候选
+关键词候选 -&gt; 合并候选
+向量候选 -&gt; 合并候选
+合并候选 -&gt; MySQL回源核对
+MySQL回源核对 -&gt; 排名并补充相关对象
+排名并补充相关对象 -&gt; 给Pi目录与摘录
+给Pi目录与摘录 -&gt; 按需读全文和原始依据
+```
+
+**回源**就是拿着候选 ID，回到 MySQL 读当前正式记录。系统核对空间权限、启停状态、对象版本和来源版本。查到了旧版本或失效来源，就不能把它当作当前依据。
+
+排名会综合关键词与向量的名次。结果还尽量包含表、字段、指标、文档等不同类型，并补入少量关联对象。当前没有另调一个大模型逐项打分。
+
+`search_knowledge` 先返回目录和摘录。Pi 可再用 `read_knowledge` 分段读正文，用 `read_source` 读原始资料。**能定位到文档，还不等于已经读懂完整口径。**
+
+### 检索不完整时怎样处理
+
+向量服务不可用时，系统明确报告降级，保留精确与关键词通道。候选扫描或索引覆盖有限时，会返回覆盖状态。
+
+因此，空结果只能表示本次没找到。Agent 可以缩小业务范围、换名称、按已知 ID 读取，或询问用户。
+
+依据：[三路合并与回源](https://github.com/yaoziyaoguai/data_agent/blob/cd82667/crates/data-agent/src/use_cases/knowledge.rs#L475)、[排名规则](https://github.com/yaoziyaoguai/data_agent/blob/cd82667/crates/data-agent/src/modules/retrieval/mod.rs#L27)、[受控知识工具](https://github.com/yaoziyaoguai/data_agent/blob/cd82667/crates/data-agent/src/use_cases/data_tools.rs#L253)。
+
+## F 个人记忆和对话历史又怎样找回来？
+
+**个人记忆与共享语义分别检索，最后一起供本轮判断。** 同一个知识工具可以返回两类结果，返回字段仍然分开。
+
+```flow
+本次问题 -&gt; Mem0按本人和空间搜索
+Mem0按本人和空间搜索 -&gt; 个人Milvus候选
+个人Milvus候选 -&gt; 返回资产ID与版本
+返回资产ID与版本 -&gt; Rust核对MySQL正式资产
+Rust核对MySQL正式资产 -&gt; 相关摘要进入本轮上下文
+本人有效资产目录 -&gt; 相关摘要进入本轮上下文: 补充与降级
+```
+
+### 个人记忆的两次使用机会
+
+**新一轮启动时：** 若本人有有效记忆，Rust 用本次问题调用 Mem0。它先挑相关项，再从正式目录补充未进入索引的有效项。当前最多准备 20 条记忆摘要，然后按整体输入大小裁剪。
+
+**Agent 调查中：** Pi 调用 `search_knowledge` 时，也能取得个人记忆候选。需要更多内容，可分页查看本人目录，再按版本读取正文。
+
+Mem0 搜索限定当前用户、空间及 `ready` 状态。侧车最多取得 200 个候选，并核对其映射。Rust 还会检查正式资产的版本、状态和依赖。
+
+Mem0 暂不可用时，系统回退到本人正式目录，并报告回退状态。停用记忆后，后续采用以 MySQL 状态为准，不必等待旧向量清理完成。
+
+### 对话上下文走另一条路
+
+| 问题 | 个人长期记忆 | Pi 对话上下文 |
+| --- | --- | --- |
+| 保存什么 | 跨对话可复用的偏好、纠错 | 这段对话的消息、工具调用与压缩记录 |
+| 主体内容在哪里 | MySQL 正式资产，Milvus 提供检索 | Pi 原生 JSONL 会话文件 |
+| 怎样恢复 | Mem0 搜索，再回源核对 | Pi SDK 恢复同一会话及已提交的位置 |
+| 历史太长怎么办 | 选相关摘要，完整内容按需补读 | 使用 Pi 原生上下文压缩 |
+| Rust 另外保存什么 | 归属、版本、依赖和索引任务 | 对话与任务状态、查询、精确检查点引用 |
+
+同一对话可以持续多轮、包含多个任务。模型本轮看到的是有效历史、必要摘要和工具补读内容，不会一次装入所有存储。
+
+语义改版、记忆停用或权限变化后，Rust 复核此前使用的依据。必要时为新一轮重建上下文；恢复中断任务时也不能继续采用失效资料。
+
+依据：[启动时召回个人记忆](https://github.com/yaoziyaoguai/data_agent/blob/cd82667/crates/data-agent/src/use_cases/personal_memory.rs#L292)、[Mem0 搜索过滤](https://github.com/yaoziyaoguai/data_agent/blob/cd82667/apps/memory/service.py#L155)、[Pi 会话持久化](https://github.com/yaoziyaoguai/data_agent/blob/cd82667/apps/agent/session/journal.ts)。
+
+## G 用一个完整例子，把三类内容放到一起
+
+以下基于仓库的虚构零售样例。个人偏好和提问用于教学，**不是本页发起的实时查询结果**。
+
+### 三类材料分别贡献什么
+
+| 材料 | 已有内容 | 本轮用途 |
+| --- | --- | --- |
+| 共享语义 | 一行是一个订单行；金额单位为分 | 避免把行数当订单数，或把分当元 |
+| 共享指标 | 净收入＝付款减退款；按 `paid_at` 归属月份 | 决定公式、时间列及退款归属 |
+| 共享规则 | 默认排除测试交易；退款累计到样例快照 | 决定过滤，并解释数据截止范围 |
+| 小陈的个人记忆 | 收入分析默认只看 web；当次明确条件优先 | 用户没指定渠道时，补上默认渠道 |
+| 本次对话 | “查 2026 年 1 月净收入” | 固定本次期间和目标 |
+
+Agent 应解释采用的口径，展示 SQL 草稿，等待用户确认。这个样例的快照截止于 2026 年 2 月 4 日 00:00 UTC。
+
+### 如果用户改口，会改变哪里
+
+| 用户接着说 | 当次任务 | 个人记忆 | 共享语义 |
+| --- | --- | --- | --- |
+| “这次改成 app” | 生成 app 条件的新 SQL 版本 | 仍保留默认 web | 不变 |
+| “以后默认改成 app” | 按当前明确目标处理 | Mem0 提取后修订本人记忆 | 不变 |
+| “再按天拆开” | 沿用当前任务并修改分组 | 不自动保存新的长期偏好 | 仍按原指标口径 |
+| 另一位用户问同一问题 | 使用对方本人的条件 | 不取得小陈的偏好 | 可读取对方有权限的共享定义 |
+| “这张表的金额其实是元” | 先查来源，冲突时澄清 | 可保留本人的待核实纠错 | 有权维护者核实后修改公共版本 |
+
+“这次改成 app”会使旧 SQL 草稿失效。执行必须对应用户后来确认的具体版本。
+
+### A 纠错，B 是表负责人：已确认的新规则
+
+A 看了 SQL 后指出：“金额单位是分，展示成元要除以 100。”B 是该表的语义负责人。
+
+```callout info 接受后编辑保存才生效
+表维护者负责该表语义。超级维护者可维护本系统全部表的共享语义。
+
+A 可以提交纠错建议。B 可以驳回，或接受后核对、编辑并保存。
+
+只有正式保存才改变共享语义。接受建议表示准备修改。
+```
+
+### 两套权限各管什么
+
+| 权限 | 决定什么 | 边界 |
+| --- | --- | --- |
+| Data Agent 内部语义权限 | 谁能改哪张表的语义、处理哪些建议 | 表负责人维护负责范围；超级维护者维护全部表 |
+| Datasight 数据权限 | 谁能读平台资料、查询数据和执行 SQL | 继续由平台校验，系统角色不会扩大它 |
+| 本人记录的访问范围 | 谁能读聊天、个人记忆和 Skill | 语义维护角色不能读取他人的私人记录 |
+
+即使 B 有语义维护权，核验时执行 SQL 仍需平台权限与用户确认。反过来，A 有数据查询权，也不能直接修改共享语义。
+
+录入人和最后修改人分别记录。表负责人来自 Datasight 最近一次同步；共用指标和文档独立指定负责人。
+
+### 纠错怎样成为共享改进
+
+```flow
+A提交可共享建议 -&gt; B或超级维护者
+B或超级维护者 -&gt; 已驳回: 记录理由
+B或超级维护者 -&gt; 已接受待修改
+已接受待修改 -&gt; 核对并编辑: 尚未生效
+核对并编辑 -&gt; 明确保存
+明确保存 -&gt; 新共享版本与待办
+新共享版本与待办 -&gt; 更新共享索引
+```
+
+| 状态 | A 能看到什么 | 大家共用的语义 |
+| --- | --- | --- |
+| 本人草稿 | 自己整理的建议 | 保持原版本 |
+| 已提交待处理 | 提交内容与待处理状态 | 保持原版本；不参与共享召回 |
+| 已驳回 | 处理人和理由 | 保持原版本 |
+| 已接受待修改 | 已接受，负责人准备修订 | 保持原版本 |
+| 正式保存成功 | 实际修改内容和生效版本 | 新版本生效，索引异步更新 |
+
+A 的本次查询不必等待 B 处理。A 的聊天全文、查询结果与 Mem0 个人记忆不会随建议开放；只共享明确提交的修改与依据。
+
+保存时，Rust 重查当前维护权限、建议修订和语义基版本。别人已经改过时，先显示差异再核对，不能用旧建议覆盖新内容。
+
+### 当前程序到了哪一步
+
+| 当前能力 | 实际状态 |
+| --- | --- |
+| 修订本次 SQL | 已有；修订后等待用户确认新版本 |
+| 本人纠错记忆 | 已有；明确可复用纠错按原规则保存，未核实内容作查证线索 |
+| 本人语义建议 | 已有；Pi 可保存目标、基版本、建议值、理由和依据 |
+| 负责人处理建议 | 页面先显式提交，再由负责人接受、核对编辑并保存；旧本人采用 API 保留逐对象权限校验 |
+| 逐表负责人、超级维护者 | 已接入；表负责人来自平台同步，超级维护者由可信配置指定 |
+| A 提交给 B，B 接受或驳回 | 已接入；私人草稿显式提交后，B 可接受或驳回 |
+
+当前没有把每一次聊天纠错都自动登记为建议的程序规则。未来也应区分一次性条件、个人偏好与共享语义错误。
+
+旧私人建议保留原来的私人范围。跨表共用指标和文档由超级维护者独立指定负责人，引用它们的表负责人可以提出建议；引用关系不授予编辑权。
+
+本次明确条件优先于长期偏好。共享定义发生冲突时，Agent 要解释或澄清，并核对来源。
+
+依据：[合成业务说明](../sources/business-guide.md)、[当前本人建议实现](https://github.com/yaoziyaoguai/data_agent/blob/cd82667/crates/data-agent/src/modules/knowledge/store.rs#L434)、[当前演示权限](https://github.com/yaoziyaoguai/data_agent/blob/cd82667/crates/data-agent/src/modules/access/mod.rs#L56)、[已确认的权限与纠错设计](../architecture/knowledge-modules.md)。
+
+## H 最后记住：哪里靠模型，哪里靠程序？
+
+| 工作 | 当前由谁负责 | 为什么这样分 |
+| --- | --- | --- |
+| 理解业务问题、选工具、追问、生成 SQL | Pi SDK 运行 DeepSeek Flash | 给 Agent 调查和判断空间 |
+| 解释原始资料，补充语义建议 | DeepSeek Flash；Rust 核验并保存 | 附上依据、缺口与版本，保留人工修改 |
+| 整理个人记忆、按意思搜索本人记忆 | Mem0 与模型、个人向量索引 | 复用已有记忆能力 |
+| 共享知识的关键词与向量混合检索 | Rust 检索模块与 Qwen、Milvus | 按数据知识类型排序，并回源核对 |
+| 权限、状态、版本、预算、SQL 确认 | Rust 与平台边界 | 由程序拒绝不允许的操作 |
+| 会话续接和上下文压缩 | Pi SDK | 沿用同一会话，减少重复实现 |
+
+**共享知识的质量决定依据是否可靠。检索决定本轮能否找到这些依据。Agent 决定如何理解、补查和使用。** 这三个环节需要一起工作。
+
+### 当前验证到了哪里
+
+- Qwen 真实小样：4 个中文问题均进入前 6 个候选。
+- 千表工程回归：1204 张合成表，索引与两次重建通过。
+- 千表回归使用协议向量，不能代替真实模型的千表召回测量。
+- Mem0 的存储、隔离、版本、恢复和预算回归已通过。
+- 上述证据不表示任何业务问题都能回答正确。
+- 真实平台、正式认证和同事试用仍是约定的后续接入。
+
+G 节协作已接入本轮增量。平台维护人当前来自 mock；真实 Datasight ACL 仍待接入。流程图省略了重试和预算细节；实际模型调用仍按原授权计费与记录。
+
+来源：[当前完成记录](../CURRENT.md)、[共享向量真实小样](../sources/evaluation/qwen-shared-trial.json)、[完整设计](../semantic-retrieval-design.md)、[完整架构图](../architecture/data-agent-overview.svg)。
+</textarea>
+<script>
+(() => {
+  const root = document.documentElement;
+  const cycle = (list, cur) => list[(list.indexOf(cur) + 1) % list.length];
+  const label = (btn, value) => {
+    const map = JSON.parse(btn.dataset.labels || '{}');
+    btn.textContent = map[value] || value;
+  };
+  const bind = (name, attr, values) => {
+    const btn = document.querySelector(`[data-am="${name}"]`);
+    if (!btn) return;
+    label(btn, root.getAttribute(attr));
+    btn.addEventListener('click', () => {
+      const next = cycle(values, root.getAttribute(attr));
+      root.setAttribute(attr, next);
+      label(btn, next);
+    });
+  };
+  bind('theme', 'data-theme', ['blueprint', 'shadcn']);
+  bind('mode', 'data-mode', ['auto', 'light', 'dark']);
+
+  const copyBtn = document.querySelector('[data-am="copy"]');
+  copyBtn?.addEventListener('click', async () => {
+    const nodes = document.querySelectorAll('#am-source');
+    const text = nodes[nodes.length - 1]?.value ?? '';
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      const ta = Object.assign(document.createElement('textarea'), { value: text });
+      document.body.append(ta);
+      ta.select();
+      document.execCommand('copy');
+      ta.remove();
+    }
+    const original = copyBtn.textContent;
+    copyBtn.textContent = copyBtn.dataset.done;
+    setTimeout(() => { copyBtn.textContent = original; }, 1400);
+  });
+})();
+</script>
+</body>
+</html>

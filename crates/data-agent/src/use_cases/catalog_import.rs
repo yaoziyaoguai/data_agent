@@ -76,6 +76,44 @@ async fn fetch_and_apply(
                 return Err(Error::new("invalid_input"));
             }
             let mut tx = AppTx::begin(pool).await?;
+            // 先锁授权、后写知识；与人工保存保持同序，平台维护人只由此路径同步。
+            let scope_objects = ingestion::catalog::objects(ctx, page_namespace, table, 1)?;
+            let table_id = scope_objects[0]["id"]
+                .as_str()
+                .ok_or(Error::new("invalid_input"))?;
+            for object in &scope_objects {
+                access::register_in_tx(
+                    &mut tx,
+                    ctx,
+                    object["id"].as_str().unwrap_or(""),
+                    table_id,
+                    "datasight",
+                )
+                .await?;
+            }
+            let mut ids = vec![table_id.to_owned()];
+            // 仅兼容从零合成夹具中的明确别名，平台对象按 namespace + id 定位。
+            if let Some(alias) = ingestion::catalog::synthetic_alias(
+                page_namespace,
+                table["id"].as_str().unwrap_or(""),
+            ) {
+                match knowledge::read_in_tx(&mut tx, ctx, &alias, None, true).await {
+                    Ok(_) => ids.push(alias),
+                    Err(e) if e.code == "not_available" => {}
+                    Err(e) => return Err(e),
+                }
+            }
+            ids.sort();
+            ids.dedup();
+            for object in ids {
+                access::sync_maintainer_in_tx(
+                    &mut tx,
+                    ctx,
+                    &object,
+                    table["maintainer_id"].as_str(),
+                )
+                .await?;
+            }
             let (version, changed) =
                 ingestion::save_catalog_table_in_tx(&mut tx, ctx, read, page_namespace, table)
                     .await?;
@@ -147,8 +185,48 @@ async fn fetch_and_apply(
         match (&cursor, page["complete"].as_bool()) {
             (None, Some(true)) => {
                 let mut tx = AppTx::begin(pool).await?;
+                // 撤权先于来源锁；与逐表导入同序，目录基线失败时整个事务回滚。
+                let missing = if authoritative == Some(true) {
+                    ingestion::missing_catalog_sources_in_tx(
+                        &mut tx,
+                        ctx,
+                        page_namespace,
+                        &seen,
+                        false,
+                    )
+                    .await?
+                } else {
+                    Vec::new()
+                };
+                let mut revoked = std::collections::BTreeSet::new();
+                for source in &missing {
+                    revoked.extend(knowledge::source_tables_in_tx(&mut tx, ctx, source).await?);
+                    if let Some(alias) = ingestion::catalog::retired_synthetic_alias(
+                        &ctx.space_id,
+                        page_namespace,
+                        source,
+                    ) {
+                        revoked.insert(alias);
+                    }
+                }
+                for object in revoked {
+                    access::sync_maintainer_in_tx(&mut tx, ctx, &object, None).await?;
+                }
                 ingestion::check_catalog_read_in_tx(&mut tx, ctx, read, page_namespace).await?;
                 if authoritative == Some(true) {
+                    // 等待锁时目录可能已改变；只校验当前集合，不在来源锁后追加授权锁。
+                    if ingestion::missing_catalog_sources_in_tx(
+                        &mut tx,
+                        ctx,
+                        page_namespace,
+                        &seen,
+                        true,
+                    )
+                    .await?
+                        != missing
+                    {
+                        return Err(Error::new("version_conflict"));
+                    }
                     for (source, (version, keep)) in &imported {
                         ingestion::check_prefill_sources_in_tx(
                             &mut tx,
@@ -158,13 +236,6 @@ async fn fetch_and_apply(
                         .await?;
                         knowledge::retire_source_objects_in_tx(&mut tx, ctx, source, keep).await?;
                     }
-                    let missing = ingestion::missing_catalog_sources_in_tx(
-                        &mut tx,
-                        ctx,
-                        page_namespace,
-                        &seen,
-                    )
-                    .await?;
                     for source in missing {
                         ingestion::retire_catalog_source_in_tx(&mut tx, ctx, read, &source).await?;
                         knowledge::retire_source_objects_in_tx(

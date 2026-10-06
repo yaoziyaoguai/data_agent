@@ -4,7 +4,8 @@ import {writeFile} from 'node:fs/promises';
 import {createServer} from 'node:http';
 import {harness,until} from './harness.mjs';
 
-const h=await harness();await h.pauseWorker();
+// 目录与来源事务只依赖 API/平台/MySQL；此组不推进 Agent，也不消费预填队列。
+const h=await harness({capture:true,startWorker:false,startupTimeout:60000});
 let passed=false,server,release;const checks=[];
 const column=(id,name=id)=>({id,name,data_type:'INTEGER',nullable:false,comment:'合成整数字段'});
 const table=(id,name=id,version='1',columns=[column('record_id'),column('amount')])=>({id,name,platform_version:version,comment:'合成订单金额表',ddl:`CREATE TABLE ${name} (record_id INTEGER, amount INTEGER);`,columns,node:{id:'load-'+id,sql:`INSERT INTO ${name} SELECT record_id, amount FROM synthetic_source;`,upstream_ids:['synthetic_source']}});

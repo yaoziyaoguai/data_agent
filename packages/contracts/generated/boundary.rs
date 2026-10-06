@@ -23,10 +23,14 @@ pub struct Boundary {
     pub analysis_update: AnalysisUpdate,
     pub append_output: AppendOutput,
     pub app_error: AppError,
+    #[serde(rename = "ApplySemanticCorrection")]
+    pub apply_semantic_correction: Option<ApplySemanticCorrection>,
     pub asset: Asset,
     pub asset_list: AssetList,
     pub asset_save: AssetSave,
     pub asset_tool_input: AssetToolInput,
+    #[serde(rename = "AssignSemanticMaintainer")]
+    pub assign_semantic_maintainer: Option<AssignSemanticMaintainer>,
     pub cancel_receipt: CancelReceipt,
     pub cancel_run: CancelRun,
     #[serde(rename = "CatalogColumn")]
@@ -90,6 +94,8 @@ pub struct Boundary {
     pub pi_session_reference: PiSessionReference,
     pub prefill_result: PrefillResult,
     pub proposal: Proposal,
+    #[serde(rename = "ProposalDraftCommand")]
+    pub proposal_draft_command: Option<ProposalDraftCommand>,
     pub proposal_input: ProposalInput,
     pub proposal_list: ProposalList,
     pub query_cancellation: Option<QueryCancellation>,
@@ -105,15 +111,29 @@ pub struct Boundary {
     pub request_query_input: RequestQueryInput,
     pub reserve_model_call: ReserveModelCall,
     pub result_column: ResultColumn,
+    #[serde(rename = "ReviewSemanticCorrection")]
+    pub review_semantic_correction: Option<ReviewSemanticCorrection>,
+    #[serde(rename = "ReviseSemanticCorrection")]
+    pub revise_semantic_correction: Option<ReviseSemanticCorrection>,
     pub run_envelope: RunEnvelope,
     pub run_snapshot: RunSnapshot,
     pub search_input: SearchInput,
+    #[serde(rename = "SemanticAccess")]
+    pub semantic_access: Option<SemanticAccess>,
+    #[serde(rename = "SemanticCorrection")]
+    pub semantic_correction: Option<SemanticCorrection>,
+    #[serde(rename = "SemanticCorrectionList")]
+    pub semantic_correction_list: Option<SemanticCorrectionList>,
+    #[serde(rename = "SemanticMaintenance")]
+    pub semantic_maintenance: Option<SemanticMaintenance>,
     pub send_model_call: SendModelCall,
     pub session_receipt: SessionReceipt,
     pub skill_selection: SkillSelection,
     pub snapshot: Snapshot,
     pub source_document: SourceDocument,
     pub sql_input: SqlInput,
+    #[serde(rename = "SubmitSemanticCorrection")]
+    pub submit_semantic_correction: Option<SubmitSemanticCorrection>,
     #[serde(rename = "TableAnalysisPreference")]
     pub table_analysis_preference: Option<TableAnalysisPreference>,
     pub task_input: TaskInput,
@@ -319,6 +339,14 @@ pub struct AppendOutput {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ApplySemanticCorrection {
+    pub expected_revision: String,
+    pub expected_version: String,
+    pub operation_id: String,
+    pub value: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Asset {
     pub body: String,
     pub dependencies: Vec<EvidenceRef>,
@@ -416,6 +444,14 @@ pub enum AssetToolInputAction {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AssignSemanticMaintainer {
+    pub expected_version: String,
+    /// Datasight 维护人；未提供或 null 表示暂无负责人，不继承录入者。
+    pub maintainer_id: Option<String>,
+    pub operation_id: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CancelReceipt {
     pub run_id: String,
     pub state: CancelReceiptState,
@@ -470,6 +506,9 @@ pub struct CatalogTable {
     pub comment: String,
     pub ddl: String,
     pub id: String,
+    /// Datasight 维护人；未提供或 null 表示暂无负责人，不继承录入者。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub maintainer_id: Option<String>,
     pub name: String,
     pub node: Option<CatalogNode>,
     pub platform_version: String,
@@ -772,6 +811,9 @@ pub enum ModelLabel {
 pub struct KnowledgeCreate {
     pub body: String,
     pub kind: KnowledgeCreateKind,
+    /// Datasight 维护人；未提供或 null 表示暂无负责人，不继承录入者。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub maintainer_id: Option<String>,
     pub name: String,
     pub operation_id: String,
     pub related_ids: Vec<String>,
@@ -838,9 +880,13 @@ pub struct KnowledgeList {
 pub struct KnowledgeObject {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub analysis_preference: Option<TableAnalysisPreference>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub created_by: Option<String>,
     pub entries: Vec<KnowledgeEntry>,
     pub id: String,
     pub kind: KnowledgeCreateKind,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub maintenance: Option<SemanticMaintenance>,
     pub name: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub prefill_status: Option<PrefillStatus>,
@@ -860,6 +906,24 @@ pub struct TableAnalysisPreference {
     pub preferred: bool,
     pub table_id: String,
     pub version: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SemanticMaintenance {
+    pub authority_id: String,
+    pub can_assign: bool,
+    pub can_edit: bool,
+    /// Datasight 维护人；未提供或 null 表示暂无负责人，不继承录入者。
+    pub maintainer_id: Option<String>,
+    pub source: SemanticMaintenanceSource,
+    pub version: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SemanticMaintenanceSource {
+    Datasight,
+    System,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1195,6 +1259,17 @@ pub struct Proposal {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProposalDraftCommand {
+    pub base_version: String,
+    pub entry_id: String,
+    pub evidence: Vec<EvidenceRef>,
+    pub object_id: String,
+    pub operation_id: String,
+    pub reason: String,
+    pub value: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProposalInput {
     pub base_version: String,
     pub entry_id: String,
@@ -1264,7 +1339,7 @@ pub struct QueryResults {
     pub result_complete: bool,
     pub result_ref: String,
     pub rows: Vec<Vec<Option<String>>>,
-    pub source: Source,
+    pub source: QueryResultsSource,
     pub truncated: bool,
 }
 
@@ -1278,7 +1353,7 @@ pub struct ResultColumn {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum Source {
+pub enum QueryResultsSource {
     Mock,
 }
 
@@ -1352,6 +1427,34 @@ pub struct ReserveModelCall {
     pub output_tokens_max: i64,
     pub parameters_fingerprint: String,
     pub run_id: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ReviewSemanticCorrection {
+    pub decision: Decision,
+    pub expected_revision: String,
+    pub operation_id: String,
+    pub reason: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Decision {
+    Accepted,
+    Rejected,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ReviseSemanticCorrection {
+    pub base_version: String,
+    pub entry_id: String,
+    pub evidence: Vec<EvidenceRef>,
+    pub expected_revision: String,
+    pub object_id: String,
+    pub operation_id: String,
+    pub reason: String,
+    pub share_confirmed: bool,
+    pub value: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1466,6 +1569,50 @@ pub struct SearchInput {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SemanticAccess {
+    pub can_admin: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SemanticCorrection {
+    /// Datasight 维护人；未提供或 null 表示暂无负责人，不继承录入者。
+    pub applied_by: Option<String>,
+    pub applied_value: Option<String>,
+    pub applied_version: Option<String>,
+    pub base_version: String,
+    pub can_review: bool,
+    pub can_revise: bool,
+    pub entry_id: String,
+    pub evidence: Vec<EvidenceRef>,
+    pub id: String,
+    pub object_id: String,
+    pub original_value: String,
+    pub reason: String,
+    pub review_reason: Option<String>,
+    /// Datasight 维护人；未提供或 null 表示暂无负责人，不继承录入者。
+    pub reviewer_id: Option<String>,
+    pub revision: String,
+    pub state: SemanticCorrectionState,
+    pub submitter_id: String,
+    pub value: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SemanticCorrectionState {
+    Accepted,
+    Applied,
+    Rejected,
+    Submitted,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SemanticCorrectionList {
+    pub corrections: Vec<SemanticCorrection>,
+    pub next_after_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SendModelCall {
     pub call_attempt_id: String,
     pub lease_epoch: String,
@@ -1535,6 +1682,18 @@ pub struct SqlInput {
     pub parameters: HashMap<String, Option<serde_json::Value>>,
     pub sql: String,
     pub target_id: TargetId,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SubmitSemanticCorrection {
+    pub base_version: String,
+    pub entry_id: String,
+    pub evidence: Vec<EvidenceRef>,
+    pub object_id: String,
+    pub operation_id: String,
+    pub reason: String,
+    pub share_confirmed: bool,
+    pub value: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

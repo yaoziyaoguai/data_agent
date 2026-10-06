@@ -51,7 +51,7 @@ const definitions = {
   ],
   propose_semantic_change: [
     "ProposalInput",
-    "保存本人的语义修改建议及公共依据；正式知识只有维护者在页面明确保存才修改。",
+    "保存本人的私人语义纠错草稿及可共享依据；用户在语义管理页核对内容并明确提交后，负责人才能看到。负责人接受后仍需编辑并明确保存才修改正式知识。草稿、提交和审核不阻塞本次 SQL 调查、修订与确认；不要宣称草稿已公开或正式生效。",
   ],
   read_analysis_task: [
     "ReadTaskInput",

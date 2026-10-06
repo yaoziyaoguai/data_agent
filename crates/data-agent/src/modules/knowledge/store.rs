@@ -45,8 +45,12 @@ async fn record(
     Ok(())
 }
 async fn persist(tx: &mut AppTx<'_>, ctx: &AccessContext, v: &Value) -> Result<()> {
+    let mut v = v.clone();
+    if v.get("created_by").is_none() {
+        v["created_by"] = v["updated_by"].clone();
+    }
     sqlx::query("INSERT INTO knowledge_objects(id,space_id,kind,name,version,state,body,source_id,source_version,updated_by) VALUES(?,?,?,?,?,?,?,?,?,?) ON DUPLICATE KEY UPDATE name=VALUES(name),version=VALUES(version),state=VALUES(state),body=VALUES(body),source_version=VALUES(source_version),updated_by=VALUES(updated_by)")
- .bind(v["id"].as_str()).bind(&ctx.space_id).bind(v["kind"].as_str()).bind(v["name"].as_str()).bind(epoch(v["version"].as_str().ok_or(Error::new("invalid_input"))?)?).bind(v["state"].as_str()).bind(sqlx::types::Json(v)).bind(v["source_id"].as_str()).bind(epoch(v["source_version"].as_str().unwrap_or("0"))?).bind(&ctx.user_id).execute(tx.connection()).await?;
+ .bind(v["id"].as_str()).bind(&ctx.space_id).bind(v["kind"].as_str()).bind(v["name"].as_str()).bind(epoch(v["version"].as_str().ok_or(Error::new("invalid_input"))?)?).bind(v["state"].as_str()).bind(sqlx::types::Json(&v)).bind(v["source_id"].as_str()).bind(epoch(v["source_version"].as_str().unwrap_or("0"))?).bind(&ctx.user_id).execute(tx.connection()).await?;
     sqlx::query("INSERT INTO knowledge_index_jobs(object_id,version) VALUES(?,?)")
         .bind(v["id"].as_str())
         .bind(epoch(v["version"].as_str().unwrap_or("0"))?)
@@ -55,7 +59,7 @@ async fn persist(tx: &mut AppTx<'_>, ctx: &AccessContext, v: &Value) -> Result<(
     sqlx::query("INSERT INTO knowledge_versions(object_id,version,body) VALUES(?,?,?)")
         .bind(v["id"].as_str())
         .bind(epoch(v["version"].as_str().unwrap_or("0"))?)
-        .bind(sqlx::types::Json(v))
+        .bind(sqlx::types::Json(&v))
         .execute(tx.connection())
         .await?;
     Ok(())
@@ -311,7 +315,7 @@ pub async fn create_in_tx(tx: &mut AppTx<'_>, ctx: &AccessContext, input: &Value
     } else {
         "人工录入，尚无平台来源"
     };
-    let v = json!({"id":id(),"kind":input["kind"],"name":input["name"],"version":"1","state":"enabled","entries":[{"entry_id":"body","path":"body","label":"正文","source_facts":{"complete":false,"gap":gap},"suggestion":{},"human_override":{"value":input["body"],"edited_by":ctx.user_id,"source_url":input["source_url"]},"effective_value":input["body"],"review_state":"confirmed"}],"related_ids":input["related_ids"],"source_id":null,"source_version":"0","updated_by":ctx.user_id});
+    let v = json!({"id":id(),"kind":input["kind"],"name":input["name"],"version":"1","state":"enabled","entries":[{"entry_id":"body","path":"body","label":"正文","source_facts":{"complete":false,"gap":gap},"suggestion":{},"human_override":{"value":input["body"],"edited_by":ctx.user_id,"source_url":input["source_url"]},"effective_value":input["body"],"review_state":"confirmed"}],"related_ids":input["related_ids"],"source_id":null,"source_version":"0","updated_by":ctx.user_id,"created_by":ctx.user_id});
     persist(tx, ctx, &v).await?;
     record(tx, ctx, key, input, &v).await?;
     Ok(v)
@@ -821,4 +825,25 @@ pub async fn bind_index_embedding_in_tx(
     .execute(tx.connection())
     .await?;
     Ok(profile.clone())
+}
+
+pub async fn proposal_in_tx(tx: &mut AppTx<'_>, ctx: &AccessContext, id: &str) -> Result<Value> {
+    let row = sqlx::query(
+        "SELECT body FROM semantic_change_proposals WHERE id=? AND owner_id=? AND space_id=?",
+    )
+    .bind(id)
+    .bind(&ctx.user_id)
+    .bind(&ctx.space_id)
+    .fetch_optional(tx.connection())
+    .await?
+    .ok_or(Error::new("not_available"))?;
+    Ok(body(&row))
+}
+
+pub async fn source_tables_in_tx(
+    tx: &mut AppTx<'_>,
+    ctx: &AccessContext,
+    source: &str,
+) -> Result<Vec<String>> {
+    Ok(sqlx::query_scalar("SELECT id FROM knowledge_objects WHERE space_id=? AND kind='table' AND source_id=? ORDER BY id").bind(&ctx.space_id).bind(source).fetch_all(tx.connection()).await?)
 }

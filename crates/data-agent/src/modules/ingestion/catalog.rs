@@ -217,3 +217,34 @@ pub async fn fetch_page(cursor: Option<&str>, snapshot: Option<&str>) -> Result<
     contracts::validate("CatalogPage", &value)?;
     Ok(value)
 }
+
+// 固定合成资料与模拟平台五张表的一一映射；真实目录不得按显示名称传播权限。
+pub fn synthetic_alias(namespace: &str, table: &str) -> Option<String> {
+    if namespace == "synthetic-sqlite"
+        && matches!(
+            table,
+            "demo_order_detail"
+                | "raw_order_lines"
+                | "raw_payments"
+                | "dim_customers"
+                | "customer_tags"
+        )
+    {
+        Some(format!("table-{table}"))
+    } else {
+        None
+    }
+}
+
+pub fn retired_synthetic_alias(space: &str, namespace: &str, source: &str) -> Option<String> {
+    [
+        "demo_order_detail",
+        "raw_order_lines",
+        "raw_payments",
+        "dim_customers",
+        "customer_tags",
+    ]
+    .iter()
+    .find(|table| source_id(space, namespace, table) == source)
+    .and_then(|table| synthetic_alias(namespace, table))
+}

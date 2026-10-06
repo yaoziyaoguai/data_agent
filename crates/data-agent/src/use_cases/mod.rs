@@ -22,3 +22,5 @@ mod context_authority;
 pub mod personal_memory;
 
 mod knowledge_embeddings;
+
+pub mod semantic_governance;

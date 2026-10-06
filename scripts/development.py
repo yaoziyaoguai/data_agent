@@ -174,6 +174,7 @@ def main():
             model_credentials['DEEPSEEK_MODEL'] = model_profile['model_id']
     env = dict(os.environ, PI_OFFLINE='1', DATA_AGENT_MODE='development', DATA_AGENT_TOOLSET='data', DATA_AGENT_PLATFORM_URL='http://127.0.0.1:'+str(ports['platform']),
                DATA_AGENT_DATABASE_URL='mysql://data_agent:' + quote(password, safe='') + '@127.0.0.1:13306/'+database,
+               DATA_AGENT_SEMANTIC_SUPER_MAINTAINERS=os.environ.get('DATA_AGENT_SEMANTIC_SUPER_MAINTAINERS', json.dumps({'demo': ['alice']})),
                DATA_AGENT_DEV_IDENTITIES=json.dumps({identities[u]: u for u in ('alice', 'bob')}),
                DATA_AGENT_INTERNAL_TOKEN=identities['internal'], DATA_AGENT_API_PORT=str(ports['api']),
                DATA_AGENT_BRIDGE_PORT=str(ports['bridge']), DATA_AGENT_API_URL='http://127.0.0.1:' + str(ports['api']),

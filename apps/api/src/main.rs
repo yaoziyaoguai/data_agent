@@ -1,5 +1,6 @@
 mod data_routes;
 mod routes;
+mod semantic_routes;
 use axum::{
     Router,
     routing::{get, post},
@@ -115,7 +116,24 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/queries/{id}/cancel", post(data_routes::cancel))
         .route("/queries/{id}/results", get(data_routes::results))
         .route("/queries/{id}/export.csv", get(data_routes::export))
-        .route("/knowledge-proposals", get(data_routes::proposals))
+        .route("/semantic-access", get(semantic_routes::access))
+        .route("/knowledge/{id}/maintainer", post(semantic_routes::assign))
+        .route(
+            "/semantic-corrections",
+            get(semantic_routes::list).post(semantic_routes::submit),
+        )
+        .route(
+            "/semantic-corrections/{id}",
+            get(semantic_routes::read).patch(semantic_routes::revise),
+        )
+        .route(
+            "/semantic-corrections/{id}/{action}",
+            post(semantic_routes::action),
+        )
+        .route(
+            "/knowledge-proposals",
+            get(data_routes::proposals).post(semantic_routes::draft),
+        )
         .route(
             "/knowledge-proposals/{id}/apply",
             post(data_routes::apply_proposal),

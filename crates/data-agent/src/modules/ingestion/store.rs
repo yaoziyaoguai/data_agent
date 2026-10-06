@@ -541,9 +541,18 @@ pub async fn missing_catalog_sources_in_tx(
     ctx: &AccessContext,
     namespace: &str,
     seen: &std::collections::HashSet<String>,
+    lock_current: bool,
 ) -> Result<Vec<String>> {
-    let rows=sqlx::query("SELECT c.source_id,c.platform_table_id FROM catalog_platform_heads c JOIN source_heads s ON s.id=c.source_id WHERE s.space_id=? AND c.namespace=?")
-      .bind(&ctx.space_id).bind(namespace).fetch_all(tx.connection()).await?;
+    let query = if lock_current {
+        "SELECT c.source_id,c.platform_table_id FROM catalog_platform_heads c JOIN source_heads s ON s.id=c.source_id WHERE s.space_id=? AND c.namespace=? ORDER BY c.source_id FOR SHARE"
+    } else {
+        "SELECT c.source_id,c.platform_table_id FROM catalog_platform_heads c JOIN source_heads s ON s.id=c.source_id WHERE s.space_id=? AND c.namespace=? ORDER BY c.source_id"
+    };
+    let rows = sqlx::query(query)
+        .bind(&ctx.space_id)
+        .bind(namespace)
+        .fetch_all(tx.connection())
+        .await?;
     Ok(rows
         .iter()
         .filter(|r| !seen.contains(&r.get::<String, _>("platform_table_id")))
@@ -560,18 +569,21 @@ pub async fn retire_catalog_source_in_tx(
         .bind(&ctx.space_id)
         .fetch_one(tx.connection())
         .await?;
-    let version = source_version_in_tx(tx, &ctx.space_id, source).await?;
+    // 授权检查可能已建立快照；退休必须核对拿到来源锁之后的当前版本。
+    let current = sqlx::query(
+        "SELECT version,fingerprint FROM source_heads WHERE id=? AND space_id=? FOR UPDATE",
+    )
+    .bind(source)
+    .bind(&ctx.space_id)
+    .fetch_one(tx.connection())
+    .await?;
+    let version: u64 = current.get("version");
     if Some(version) != read["baseline"][source].as_u64() {
         return Err(Error::new("version_conflict"));
     }
     let body = "平台已在权威完整目录中移除此表；历史说明保留，但不能继续用于新分析。";
     let fp = fingerprint(&json!(body));
-    let old: String =
-        sqlx::query_scalar("SELECT fingerprint FROM source_heads WHERE id=? AND space_id=?")
-            .bind(source)
-            .bind(&ctx.space_id)
-            .fetch_one(tx.connection())
-            .await?;
+    let old: String = current.get("fingerprint");
     if old != fp {
         sqlx::query("INSERT INTO source_snapshots(source_id,version,body) VALUES(?,?,?)")
             .bind(source)

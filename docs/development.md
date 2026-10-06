@@ -2,6 +2,8 @@
 
 当前合成平台 MVP 已完成。验证环境为 macOS ARM64：Node / Rust / Python 在本机运行，MySQL / Milvus 在专用 Colima 实例运行。正式工作台使用 React、Rust API/Worker 与 Pi SDK；真实模型模式已接入 DeepSeek Flash 和 Mem0 个人记忆。当前状态和证据见 [CURRENT](CURRENT.md)，运行职责见[架构说明](architecture/README.md)。真实数据平台、正式认证和同事使用验收属于后续接入。
 
+**语义权限的当前边界：**表负责人通过 `/source-syncs` 从 Datasight mock 目录的 `maintainer_id` 同步；按平台 `namespace + id` 匹配，不按同名表推断。字段继承所属表，共用指标、文档等由超级维护者在本系统单独指定。`DATA_AGENT_SEMANTIC_SUPER_MAINTAINERS` 是可信启动 JSON 配置，例如 `{"demo":["alice"]}`；未配置不授予超级角色。开发启动脚本显式配置 Alice，正式身份接入仍未实现。此角色只管理共享语义，不扩大平台查询权或个人资产范围。
+
 ## 1. 固定的运行时与依赖
 
 | 部分 | 固定版本与依据 |
@@ -268,3 +270,13 @@ make verify-contracts    # 包括WorkspaceContext的记忆检索状态
 ```
 
 公开HTTP仍是`/assets`和已有启停删除接口，增加可选`memory_index_state`。新内部`/internal/memory/model-calls`及侧车`/extract`、`/index`、`/search`均使用同源Schema和内部token，详见[个人资产模块契约](architecture/knowledge-modules.md#正式mem0接缝同源契约)。服务凭据只给承担调用的进程；共享embedding凭据文件供Rust API/Worker读取；Mem0凭据只供侧车读取。页面与公开报告不接收密钥。上述命令的替身通过只证明工程边界，真实模型试用和内容评分须另列证据。
+
+## 语义纠错协作验证
+
+`node tests/mvp/check-semantic-governance.mjs --case GOV01` 至 `GOV05` 验证授权、平台查询拒绝、状态机、并发事务及隐私；`node tests/mvp/check-semantic-governance-browser.mjs` 走两个用户的实际页面流程。均使用隔离数据库与合成资料，不调用官方模型。
+
+- 启动迁移增加 `semantic_ownership`、`semantic_owner_operations`、`semantic_corrections`、`semantic_correction_operations`。历史 `semantic_change_proposals` 保留私人归属，升级不转公开。
+- 表/字段负责人不能在本系统直接指定；变更 mock 目录后点击“同步来源”。无维护人字段、明确 null 或权威目录移除会撤销同步的维护权。同步失败不假装新负责人已经生效；不承诺平台变更即时生效。
+- 共用指标、文档、术语和关系默认无负责人，超级维护者可在对象页面“指定负责人”；录入者和最后修改者单独保存。
+- 提交者能修订未生效建议；修订后重新待审，之前的接受不再有效。旧语义版本、旧建议修订或过期依据必须重新核对，不自动套用到新版。
+- 超级维护者配置仅控制 Data Agent 内部语义动作。平台资料读取目前仍使用 demo 空间的模拟范围；查询拒绝由独立平台 mock 测试，真实 Datasight ACL、身份目录和及时撤权待实际接入。

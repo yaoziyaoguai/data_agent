@@ -52,11 +52,25 @@ pub fn authorize_model(profile: &str) -> Result<()> {
     }
     Ok(())
 }
-// 开发空间固定两种角色；接入真实身份平台时由适配器提供角色证明。
+// 角色仅由可信部署配置提供；浏览器身份与模型参数不能授予角色。
+pub fn is_super_maintainer(ctx: &AccessContext) -> Result<bool> {
+    let config =
+        std::env::var("DATA_AGENT_SEMANTIC_SUPER_MAINTAINERS").unwrap_or_else(|_| "{}".into());
+    let roles: HashMap<String, Vec<String>> =
+        serde_json::from_str(&config).map_err(|_| Error::new("invalid_input"))?;
+    Ok(roles
+        .get(&ctx.space_id)
+        .is_some_and(|users| users.contains(&ctx.user_id)))
+}
 pub fn authorize_maintainer(ctx: &AccessContext) -> Result<()> {
-    if ctx.space_id == "demo" && ctx.user_id == "alice" {
+    if is_super_maintainer(ctx)? {
         Ok(())
     } else {
         Err(Error::new("forbidden"))
     }
 }
+mod store;
+pub use store::{
+    assign_in_tx, authorize_semantic_in_tx, maintainable_ids_in_tx, maintenance_in_tx,
+    register_in_tx, sync_maintainer_in_tx,
+};

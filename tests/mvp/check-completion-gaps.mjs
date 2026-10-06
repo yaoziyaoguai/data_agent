@@ -45,6 +45,7 @@ try{
  check('超过100会话的稳定分页、首问题标题、服务端标题搜索和用户隔离');
  // 扩大目录仅验证旧5000截断的反例，不宣称千表语义准确率或吞吐。
  h.sql("SET SESSION cte_max_recursion_depth=5200;INSERT INTO knowledge_objects(id,space_id,kind,name,version,state,body,source_id,source_version,updated_by) WITH RECURSIVE n AS (SELECT 1 AS i UNION ALL SELECT i+1 FROM n WHERE i<5100) SELECT CONCAT('bulk-',LPAD(i,5,'0')),'demo','field',CONCAT('目录字段',i),1,'enabled',JSON_OBJECT('id',CONCAT('bulk-',LPAD(i,5,'0')),'kind','field','name',CONCAT('目录字段',i),'version','1','state','enabled','entries',JSON_ARRAY(),'related_ids',JSON_ARRAY(),'source_id',NULL,'source_version','0','updated_by','test'),NULL,0,'test' FROM n");
+ h.sql("INSERT INTO semantic_ownership(space_id,object_id,authority_id,maintainer_id,source,updated_by) SELECT space_id,id,id,NULL,'system','test' FROM knowledge_objects WHERE id LIKE 'bulk-%'");
  const q=(await h.request('/knowledge?q='+encodeURIComponent('net_revenue')));assert.equal(q.status,200);assert.ok(q.value.objects.some(v=>v.id==='metric-net_revenue'));
  const directory=(await h.request('/knowledge')).value;assert.equal(directory.objects.length,100);assert.ok(directory.next_after_id);
  const page=(await h.request('/knowledge?after_id='+directory.next_after_id)).value;assert.equal(page.objects.length,100);assert.ok(page.objects.every(v=>v.id>directory.next_after_id));
