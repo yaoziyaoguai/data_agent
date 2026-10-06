@@ -1,0 +1,5 @@
+{
+  "trial_id": "replace_with_authorized_embedding_trial",
+  "call_limit": 100,
+  "cost_limit_micros": "100000"
+}

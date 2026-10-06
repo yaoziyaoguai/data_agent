@@ -20,3 +20,5 @@ pub mod conversation_lifecycle;
 mod context_authority;
 
 pub mod personal_memory;
+
+mod knowledge_embeddings;

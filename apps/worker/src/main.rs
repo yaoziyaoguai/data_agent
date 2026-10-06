@@ -65,8 +65,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let index_pool = pool.clone();
         tokio::spawn(async move {
             loop {
-                if let Err(e) = data_agent::use_cases::knowledge::process_index(&index_pool).await {
-                    eprintln!("knowledge_index_failure code={}", e.code);
+                match data_agent::use_cases::knowledge::process_index(&index_pool).await {
+                    Ok(true) => continue,
+                    Ok(false) => {}
+                    Err(e) => eprintln!("knowledge_index_failure code={}", e.code),
                 }
                 tokio::time::sleep(Duration::from_millis(100)).await;
             }

@@ -27,7 +27,7 @@ pub async fn list(
         return Err(Error::new("invalid_input"));
     }
     let vector = if let Some(query) = query {
-        retrieval::vector::search(&ctx.space_id, query).await
+        super::knowledge_embeddings::search(pool, ctx, query, None).await
     } else {
         retrieval::vector::Candidates::lexical()
     };
@@ -368,7 +368,26 @@ pub async fn process_index(pool: &MySqlPool) -> Result<bool> {
     tx.commit().await?;
     // Embedding、Milvus及查证均在领取事务外；查询Worker独立运行。
     let applied = if vector {
-        Some(retrieval::vector::apply(&ctx.space_id, &valid).await)
+        Some(
+            retrieval::vector::apply(&ctx.space_id, &valid, |object, batch, texts| {
+                let jobs = &jobs;
+                let ctx = &ctx;
+                async move {
+                    let job = jobs
+                        .iter()
+                        .find(|j| j["object_id"] == object["id"])
+                        .ok_or(Error::new("not_available"))?;
+                    super::knowledge_embeddings::embed(
+                        pool,
+                        ctx,
+                        super::knowledge_embeddings::Binding::Index(job, batch),
+                        texts,
+                    )
+                    .await
+                }
+            })
+            .await,
+        )
     } else {
         None
     };

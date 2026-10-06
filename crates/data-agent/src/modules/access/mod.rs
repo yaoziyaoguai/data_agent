@@ -47,7 +47,7 @@ pub fn authorize_owner(context: &AccessContext, owner_id: &str, space_id: &str) 
     Ok(())
 }
 pub fn authorize_model(profile: &str) -> Result<()> {
-    if profile != "local_mock" && profile != "deepseek" {
+    if profile != "local_mock" && profile != "deepseek" && profile != "bailian" {
         return Err(Error::new("not_available"));
     }
     Ok(())

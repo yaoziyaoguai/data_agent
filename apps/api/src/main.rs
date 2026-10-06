@@ -39,7 +39,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         data_agent::modules::runtime::configure_trial(&state.pool, profile).await?;
     }
     data_agent::use_cases::knowledge::initialize(&state.pool).await?;
-    tokio::spawn(data_agent::modules::retrieval::vector::warm());
     let router = Router::new()
         .route("/health", get(|| async { "ok" }))
         .route(

@@ -1,113 +1,16 @@
+use super::embedding;
 use crate::types::{Error, Result, fingerprint};
-use fastembed::{EmbeddingModel, TextEmbedding, TextInitOptions};
 use serde_json::{Value, json};
-use sha2::{Digest, Sha256};
-use std::sync::{Arc, Mutex, OnceLock};
-
-const MODEL: &str = "multilingual-e5-small-384-614241f-text1";
-static EMBEDDING: OnceLock<Mutex<Option<TextEmbedding>>> = OnceLock::new();
-static INFERENCE: OnceLock<Arc<tokio::sync::Semaphore>> = OnceLock::new();
-
 pub fn enabled() -> bool {
     std::env::var("DATA_AGENT_VECTOR_URL").is_ok_and(|v| !v.is_empty())
 }
 pub fn target() -> String {
     fingerprint(&json!([
-        MODEL,
+        embedding::SPEC.version,
         std::env::var("DATA_AGENT_VECTOR_URL").unwrap_or_default(),
         std::env::var("DATA_AGENT_VECTOR_COLLECTION")
-            .unwrap_or_else(|_| "data_agent_e5_small_text1".into())
+            .unwrap_or_else(|_| "data_agent_shared_qwen1024".into())
     ]))
-}
-
-async fn embed(texts: Vec<String>, kind: &'static str) -> Result<Vec<Vec<f32>>> {
-    let gate = INFERENCE
-        .get_or_init(|| Arc::new(tokio::sync::Semaphore::new(1)))
-        .clone();
-    let permit = gate
-        .try_acquire_owned()
-        .map_err(|_| Error::new("embedding_busy"))?;
-    tokio::task::spawn_blocking(move || {
-        let _permit = permit;
-        let mut cached = EMBEDDING
-            .get_or_init(|| Mutex::new(None))
-            .lock()
-            .map_err(|_| Error::new("embedding_unavailable"))?;
-        if cached.is_none() {
-            *cached = Some(load_model()?);
-        }
-        let input = texts
-            .into_iter()
-            .map(|text| format!("{kind}: {text}"))
-            .collect::<Vec<_>>();
-        let vectors = cached
-            .as_mut()
-            .ok_or(Error::new("embedding_unavailable"))?
-            .embed(input, Some(32))
-            .map_err(|_| Error::new("embedding_unavailable"))?;
-        if !vectors
-            .iter()
-            .all(|v| v.len() == 384 && v.iter().all(|x| x.is_finite()))
-        {
-            return Err(Error::new("embedding_unavailable"));
-        }
-        Ok(vectors)
-    })
-    .await
-    .map_err(|_| Error::new("embedding_unavailable"))?
-}
-
-fn load_model() -> Result<TextEmbedding> {
-    let manifest: Value =
-        serde_json::from_str(include_str!("../../../../../infra/embedding-model.json"))
-            .map_err(|_| Error::new("embedding_unavailable"))?;
-    let read = |name: &str| -> Result<()> {
-        let bytes = std::fs::read(std::path::Path::new(".local/embedding-model").join(name))
-            .map_err(|_| Error::new("embedding_unavailable"))?;
-        let expected = &manifest["files"][name];
-        if Some(bytes.len() as u64) != expected["size"].as_u64()
-            || format!("{:x}", Sha256::digest(&bytes)) != expected["sha256"].as_str().unwrap_or("")
-        {
-            return Err(Error::new("embedding_unavailable"));
-        }
-        Ok(())
-    };
-    let cache = std::path::Path::new(".local/embedding-model/hf-cache");
-    let repo = cache.join("models--intfloat--multilingual-e5-small");
-    if std::fs::read_to_string(repo.join("refs/main"))
-        .ok()
-        .as_deref()
-        != manifest["revision"].as_str()
-    {
-        return Err(Error::new("embedding_unavailable"));
-    }
-    for name in manifest["files"]
-        .as_object()
-        .ok_or(Error::new("embedding_unavailable"))?
-        .keys()
-    {
-        read(name)?;
-        let cached = repo
-            .join("snapshots")
-            .join(manifest["revision"].as_str().unwrap_or(""))
-            .join(name);
-        if cached.canonicalize().ok()
-            != std::path::Path::new(".local/embedding-model")
-                .join(name)
-                .canonicalize()
-                .ok()
-        {
-            return Err(Error::new("embedding_unavailable"));
-        }
-    }
-    // 先核验完整的固定本地快照，复用SDK的文件加载，避免复制整份ONNX到内存。
-    TextEmbedding::try_new(
-        TextInitOptions::new(EmbeddingModel::MultilingualE5Small)
-            .with_cache_dir(cache.to_path_buf())
-            .with_show_download_progress(false)
-            .with_intra_threads(4),
-    )
-    .map_err(|_| Error::new("embedding_unavailable"))
 }
 
 struct Milvus {
@@ -131,7 +34,7 @@ impl Milvus {
             return Err(Error::new("invalid_input"));
         }
         let collection = std::env::var("DATA_AGENT_VECTOR_COLLECTION")
-            .unwrap_or_else(|_| "data_agent_e5_small_text1".into());
+            .unwrap_or_else(|_| "data_agent_shared_qwen1024".into());
         if collection.is_empty()
             || collection.len() > 128
             || !collection
@@ -191,18 +94,29 @@ impl Milvus {
         }
         Ok(value["data"].clone())
     }
-    async fn ensure_collection(&self) -> Result<()> {
+    async fn ensure_collection(&self) -> Result<String> {
         if self.call("collections/has", json!({})).await?["has"] == true {
-            return Ok(());
+            return self.identity().await;
         }
-        let create=self.call("collections/create",json!({"dimension":384,"idType":"VarChar","autoID":false,"primaryFieldName":"id","vectorFieldName":"vector","metricType":"COSINE","consistencyLevel":"Strong","params":{"max_length":"128","enableDynamicField":true}})).await;
+        let create=self.call("collections/create",json!({"dimension":embedding::SPEC.dimension,"idType":"VarChar","autoID":false,"primaryFieldName":"id","vectorFieldName":"vector","metricType":"COSINE","consistencyLevel":"Strong","params":{"max_length":"128","enableDynamicField":true}})).await;
         if create.is_err() && self.call("collections/has", json!({})).await?["has"] != true {
             return Err(Error::new("vector_unavailable"));
         }
-        Ok(())
+        self.identity().await
     }
     async fn identity(&self) -> Result<String> {
         let description = self.call("collections/describe", json!({})).await?;
+        let vector = description["fields"]
+            .as_array()
+            .and_then(|fields| fields.iter().find(|f| f["name"] == "vector"));
+        let dimension = vector
+            .and_then(|f| f["params"].as_array())
+            .and_then(|params| params.iter().find(|p| p["key"] == "dim"))
+            .and_then(|p| p["value"].as_str())
+            .and_then(|v| v.parse::<usize>().ok());
+        if dimension != Some(embedding::SPEC.dimension) {
+            return Err(Error::new("vector_dimension_mismatch"));
+        }
         let id = description
             .get("collectionID")
             .or_else(|| description.get("collectionId"))
@@ -215,17 +129,8 @@ impl Milvus {
 }
 pub async fn index_target() -> Result<String> {
     let milvus = Milvus::configured()?;
-    milvus.ensure_collection().await?;
-    milvus.identity().await
+    milvus.ensure_collection().await
 }
-pub async fn warm() {
-    if enabled()
-        && let Err(error) = embed(vec!["模型准备".into()], "query").await
-    {
-        eprintln!("embedding_warm_failure code={}", error.code);
-    }
-}
-
 pub struct Candidates {
     pub values: Vec<Value>,
     pub state: &'static str,
@@ -243,15 +148,14 @@ impl Candidates {
     }
 }
 
-pub async fn search(space: &str, query: &str) -> Candidates {
+pub async fn search(space: &str, query: &str, vector: Vec<f32>) -> Candidates {
     if !enabled() {
         return Candidates::lexical();
     }
     let search = async {
         let milvus = Milvus::configured()?;
         let identity = milvus.identity().await?;
-        let mut vectors = embed(vec![query.chars().take(1600).collect()], "query").await?;
-        let value=milvus.call("entities/search",json!({"data":[vectors.remove(0)],"annsField":"vector","filter":format!("space_id == {} && model == {}",json!(space),json!(MODEL)),"limit":200,"outputFields":["object_id","object_version","kind"],"consistencyLevel":"Strong"})).await?;
+        let value=milvus.call("entities/search",json!({"data":[vector],"annsField":"vector","filter":format!("space_id == {} && model == {}",json!(space),json!(embedding::SPEC.version)),"limit":200,"outputFields":["object_id","object_version","kind"],"consistencyLevel":"Strong"})).await?;
         let items = value.as_array().ok_or(Error::new("vector_unavailable"))?;
         let mut values = Vec::new();
         let mut seen = std::collections::HashSet::new();
@@ -327,65 +231,68 @@ fn fragments(space: &str, object: &Value) -> (Vec<Value>, bool) {
                 object["version"],
                 entry["entry_id"],
                 offset,
-                MODEL
+                embedding::SPEC.version
             ]));
-            pieces.push(json!({"id":key,"space_id":space,"object_id":object["id"],"object_version":object["version"].as_str().unwrap_or("0").parse::<u64>().unwrap_or(0),"kind":object["kind"],"model":MODEL,"text":text}));
+            pieces.push(json!({"id":key,"space_id":space,"object_id":object["id"],"object_version":object["version"].as_str().unwrap_or("0").parse::<u64>().unwrap_or(0),"kind":object["kind"],"model":embedding::SPEC.version,"text":text}));
         }
     }
     if pieces.is_empty() {
-        pieces.push(json!({"id":fingerprint(&json!([space,object["id"],object["version"],MODEL])),"space_id":space,"object_id":object["id"],"object_version":object["version"].as_str().unwrap_or("0").parse::<u64>().unwrap_or(0),"kind":object["kind"],"model":MODEL,"text":object["name"]}));
+        pieces.push(json!({"id":fingerprint(&json!([space,object["id"],object["version"],embedding::SPEC.version])),"space_id":space,"object_id":object["id"],"object_version":object["version"].as_str().unwrap_or("0").parse::<u64>().unwrap_or(0),"kind":object["kind"],"model":embedding::SPEC.version,"text":object["name"]}));
     }
     (pieces, bounded)
 }
 
 // 不可变版本/片段键使重发可查证；旧任务只能删除比自己更旧的片段，不能覆盖新版。
-pub async fn apply(space: &str, objects: &[Value]) -> Result<Vec<Value>> {
+pub async fn apply<F, Fut>(space: &str, objects: &[Value], mut embed: F) -> Result<Vec<Value>>
+where
+    F: FnMut(Value, usize, Vec<String>) -> Fut + Send,
+    Fut: Future<Output = Result<Vec<Vec<f32>>>> + Send,
+{
     let milvus = Milvus::configured()?;
-    milvus.ensure_collection().await?;
+    // 调用者领取前已核验集合；中途丢库由下一次领取重新核验，避免每对象重复describe。
     let mut reports = Vec::new();
-    let mut pieces = Vec::new();
     for object in objects {
-        let (object_pieces, bounded) = fragments(space, object);
-        pieces.extend(object_pieces);
+        let (pieces, bounded) = fragments(space, object);
+        for (batch, chunk) in embedding::batches(&pieces)?.into_iter().enumerate() {
+            let ids = chunk.iter().map(|v| v["id"].clone()).collect::<Vec<_>>();
+            let existing=milvus.call("entities/query",json!({"filter":format!("id in {}",json!(ids)),"outputFields":["id"],"limit":512,"consistencyLevel":"Strong"})).await?;
+            let present = existing
+                .as_array()
+                .ok_or(Error::new("vector_unavailable"))?
+                .iter()
+                .filter_map(|v| v["id"].as_str())
+                .collect::<std::collections::HashSet<_>>();
+            if chunk
+                .iter()
+                .all(|v| present.contains(v["id"].as_str().unwrap_or("")))
+            {
+                continue;
+            }
+            let vectors = embed(
+                object.clone(),
+                batch,
+                chunk
+                    .iter()
+                    .map(|v| v["text"].as_str().unwrap_or("").to_owned())
+                    .collect(),
+            )
+            .await?;
+            if vectors.len() != chunk.len() {
+                return Err(Error::new("embedding_unavailable"));
+            }
+            let data = chunk
+                .iter()
+                .zip(vectors)
+                .map(|(piece, vector)| {
+                    let mut piece = piece.clone();
+                    piece.as_object_mut().expect("fragment").remove("text");
+                    piece["vector"] = json!(vector);
+                    piece
+                })
+                .collect::<Vec<_>>();
+            milvus.call("entities/upsert", json!({"data":data})).await?;
+        }
         reports.push(json!({"id":object["id"],"version":object["version"],"state":if bounded{"bounded"}else{"indexed"}}));
-    }
-    let mut pending = Vec::new();
-    for chunk in pieces.chunks(512) {
-        let ids = chunk.iter().map(|v| v["id"].clone()).collect::<Vec<_>>();
-        let existing=milvus.call("entities/query",json!({"filter":format!("id in {}",json!(ids)),"outputFields":["id"],"limit":512,"consistencyLevel":"Strong"})).await?;
-        let present = existing
-            .as_array()
-            .ok_or(Error::new("vector_unavailable"))?
-            .iter()
-            .filter_map(|v| v["id"].as_str())
-            .collect::<std::collections::HashSet<_>>();
-        pending.extend(
-            chunk
-                .iter()
-                .filter(|v| !present.contains(v["id"].as_str().unwrap_or("")))
-                .cloned(),
-        );
-    }
-    for chunk in pending.chunks(256) {
-        let vectors = embed(
-            chunk
-                .iter()
-                .map(|v| v["text"].as_str().unwrap_or("").to_owned())
-                .collect(),
-            "passage",
-        )
-        .await?;
-        let data = chunk
-            .iter()
-            .zip(vectors)
-            .map(|(piece, vector)| {
-                let mut piece = piece.clone();
-                piece.as_object_mut().expect("fragment").remove("text");
-                piece["vector"] = json!(vector);
-                piece
-            })
-            .collect::<Vec<_>>();
-        milvus.call("entities/upsert", json!({"data":data})).await?;
     }
     for batch in objects.chunks(64) {
         let mut filters = Vec::new();
@@ -406,7 +313,7 @@ pub async fn apply(space: &str, objects: &[Value]) -> Result<Vec<Value>> {
             ));
         }
         if !filters.is_empty() {
-            milvus.call("entities/delete",json!({"filter":format!("space_id == {} && model == {} && ({})",json!(space),json!(MODEL),filters.join(" || "))})).await?;
+            milvus.call("entities/delete",json!({"filter":format!("space_id == {} && model == {} && ({})",json!(space),json!(embedding::SPEC.version),filters.join(" || "))})).await?;
         }
     }
     Ok(reports)

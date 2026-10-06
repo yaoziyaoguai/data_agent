@@ -1,0 +1,4 @@
+{
+  "embedding_url": "https://dashscope.aliyuncs.com/compatible-mode/v1/embeddings",
+  "embedding_key_file": ".local/memory/embedding-key"
+}

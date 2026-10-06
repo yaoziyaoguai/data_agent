@@ -206,7 +206,7 @@ pub async fn model_call(pool: &MySqlPool, input: Value) -> Result<Value> {
     let binding = &input["budget"];
     let mut tx = AppTx::begin(pool).await?;
     if input["action"] == "finalize" {
-        let receipt = runtime::memory_calls::finish_in_tx(&mut tx, &input).await?;
+        let receipt = runtime::provider_calls::finish_in_tx(&mut tx, &input).await?;
         tx.commit().await?;
         return Ok(receipt);
     }
@@ -241,10 +241,10 @@ pub async fn model_call(pool: &MySqlPool, input: Value) -> Result<Value> {
         let profile = runtime::read_budget_profile_in_tx(&mut tx, &run.budget_scope_id)
             .await?
             .ok_or(Error::new("not_available"))?;
-        runtime::memory_calls::MemoryBudget {
-            scope_id: Some(run.budget_scope_id),
+        runtime::provider_calls::ProviderBudget::from_model_profile(
+            Some(run.budget_scope_id),
             profile,
-        }
+        )?
     } else {
         let job =
             assets::memory_index::read_job_in_tx(&mut tx, binding["id"].as_str().unwrap_or(""))
@@ -283,12 +283,9 @@ pub async fn model_call(pool: &MySqlPool, input: Value) -> Result<Value> {
         } else {
             contracts::decode("ModelProfile", job["model_profile"].clone())?
         };
-        runtime::memory_calls::MemoryBudget {
-            scope_id: scope,
-            profile,
-        }
+        runtime::provider_calls::ProviderBudget::from_model_profile(scope, profile)?
     };
-    let receipt = runtime::memory_calls::issue_in_tx(&mut tx, &budget, &input).await?;
+    let receipt = runtime::provider_calls::issue_in_tx(&mut tx, &budget, &input).await?;
     tx.commit().await?;
     Ok(receipt)
 }

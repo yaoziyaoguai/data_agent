@@ -48,6 +48,7 @@ pub struct Boundary {
     pub create_conversation: CreateConversation,
     pub data_tool_invocation: DataToolInvocation,
     pub data_tool_outcome: DataToolOutcome,
+    pub embedding_profile: EmbeddingProfile,
     pub event: Event,
     pub evidence_ref: EvidenceRef,
     pub finalize_model_call: FinalizeModelCall,
@@ -624,6 +625,13 @@ pub struct DataToolOutcome {
     pub data: HashMap<String, Option<serde_json::Value>>,
     pub operation_id: String,
     pub tool_name: ToolName,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EmbeddingProfile {
+    pub call_limit: i32,
+    pub cost_limit_micros: String,
+    pub trial_id: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

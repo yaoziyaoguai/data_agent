@@ -509,8 +509,8 @@ pub async fn claim_index_batch_in_tx(
 ) -> Result<Vec<Value>> {
     // 候选不加锁；随后先锁对象、再按作业主键锁定，和语义保存使用同一顺序。
     // 不能在UPDATE JOIN中先扫描作业并取得间隙锁，再等待正在保存的对象。
-    let candidates=sqlx::query_scalar::<_,String>("SELECT DISTINCT k.id FROM knowledge_objects k JOIN knowledge_index_jobs j ON j.object_id=k.id WHERE k.space_id=? AND ((j.version<k.version AND j.vector_state NOT IN ('indexed','bounded','superseded')) OR (j.version=k.version AND ((?=1 AND (j.vector_target IS NULL OR j.vector_target<>?)) OR (?=1 AND j.vector_state IN ('sending','unknown') AND j.vector_attempts>=3 AND j.lease_until<UTC_TIMESTAMP(3)) OR ((j.state='pending' OR (?=1 AND j.vector_state IN ('pending','sending','unknown'))) AND (j.lease_until IS NULL OR j.lease_until<UTC_TIMESTAMP(3)) AND j.vector_attempts<3)))) ORDER BY k.id LIMIT 64")
-        .bind(&ctx.space_id).bind(vector).bind(target).bind(vector).bind(vector).fetch_all(tx.connection()).await?;
+    let candidates=sqlx::query_scalar::<_,String>("SELECT DISTINCT k.id FROM knowledge_objects k JOIN knowledge_index_jobs j ON j.object_id=k.id WHERE k.space_id=? AND ((j.version<k.version AND j.vector_state NOT IN ('indexed','bounded','superseded')) OR (j.version=k.version AND ((?=1 AND (j.vector_target IS NULL OR j.vector_target<>?)) OR (?=1 AND j.vector_state IN ('sending','unknown') AND j.vector_attempts>=3 AND j.lease_until<UTC_TIMESTAMP(3)) OR ((j.state='pending' OR (?=1 AND j.vector_state IN ('pending','sending','unknown'))) AND (j.lease_until IS NULL OR j.lease_until<UTC_TIMESTAMP(3)) AND j.vector_attempts<3)))) ORDER BY k.id LIMIT ?")
+        .bind(&ctx.space_id).bind(vector).bind(target).bind(vector).bind(vector).bind(if vector { 1_u32 } else { 64_u32 }).fetch_all(tx.connection()).await?;
     let mut jobs = Vec::new();
     for object_id in candidates {
         let Some(current_version)=sqlx::query_scalar::<_,u64>("SELECT version FROM knowledge_objects WHERE id=? AND space_id=? FOR UPDATE SKIP LOCKED")
@@ -777,4 +777,48 @@ pub async fn retire_source_objects_in_tx(
         persist(tx, ctx, &object).await?;
     }
     Ok(())
+}
+
+// 先核对当前知识与领取代次，再冻结维护预算；重试不能从新环境配置补额。
+pub async fn bind_index_embedding_in_tx(
+    tx: &mut AppTx<'_>,
+    ctx: &AccessContext,
+    job: &Value,
+    profile: Option<&Value>,
+) -> Result<Value> {
+    let object = read_in_tx(
+        tx,
+        ctx,
+        job["object_id"].as_str().unwrap_or(""),
+        None,
+        false,
+    )
+    .await?;
+    if object["version"] != job["job_version"] {
+        return Err(Error::new("version_conflict"));
+    }
+    let row=sqlx::query("SELECT embedding_profile,lease_epoch,vector_state,lease_until>UTC_TIMESTAMP(3) AS valid FROM knowledge_index_jobs WHERE object_id=? AND version=? FOR UPDATE")
+        .bind(job["object_id"].as_str()).bind(epoch(job["job_version"].as_str().unwrap_or("0"))?).fetch_one(tx.connection()).await?;
+    if row.get::<String, _>("vector_state") != "sending"
+        || row.get::<u64, _>("lease_epoch").to_string() != job["lease_epoch"].as_str().unwrap_or("")
+        || row.get::<i64, _>("valid") != 1
+    {
+        return Err(Error::new("lease_lost"));
+    }
+    // 云端长文分批处理：仅续接尚有效的同代租约，过期领取不能复活。
+    sqlx::query("UPDATE knowledge_index_jobs SET lease_until=TIMESTAMPADD(SECOND,120,UTC_TIMESTAMP(3)) WHERE object_id=? AND version=?")
+        .bind(job["object_id"].as_str()).bind(epoch(job["job_version"].as_str().unwrap_or("0"))?).execute(tx.connection()).await?;
+    if let Some(saved) = row.get::<Option<sqlx::types::Json<Value>>, _>("embedding_profile") {
+        return Ok(saved.0);
+    }
+    let profile = profile.ok_or(Error::new("budget_unavailable"))?;
+    sqlx::query(
+        "UPDATE knowledge_index_jobs SET embedding_profile=? WHERE object_id=? AND version=?",
+    )
+    .bind(sqlx::types::Json(profile))
+    .bind(job["object_id"].as_str())
+    .bind(epoch(job["job_version"].as_str().unwrap_or("0"))?)
+    .execute(tx.connection())
+    .await?;
+    Ok(profile.clone())
 }

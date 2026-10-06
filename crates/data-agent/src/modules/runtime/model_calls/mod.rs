@@ -47,3 +47,10 @@ pub async fn finalize_model_call_in_tx(
 ) -> Result<Value> {
     store::finalize_model_call(tx, run, input).await
 }
+
+pub async fn configure_embedding_trial(
+    pool: &MySqlPool,
+    profile: &crate::contracts::generated::EmbeddingProfile,
+) -> Result<()> {
+    store::configure_embedding_trial(pool, profile).await
+}

@@ -101,4 +101,5 @@ export interface ContractTypes {
   MemoryCandidate: Boundary.MemoryCandidate;
   MemorySearchReceipt: Boundary.MemorySearchReceipt;
   MemoryModelCall: Boundary.MemoryModelCall;
+  EmbeddingProfile: Boundary.EmbeddingProfile;
 }

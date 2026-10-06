@@ -12,3 +12,5 @@ pub use store::is_deleted_in_tx;
 pub use store::retire_source_objects_in_tx;
 
 pub use store::{current_objects_in_tx, index_coverage_in_tx, rebuild_index_in_tx};
+
+pub use store::bind_index_embedding_in_tx;

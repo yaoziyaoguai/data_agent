@@ -1,8 +1,8 @@
 mod budgets;
 mod checkpoints;
-pub mod memory_calls;
 mod model_calls;
 mod outputs;
+pub mod provider_calls;
 mod runs;
 mod store;
 mod tool_ledger;
@@ -11,8 +11,9 @@ pub use checkpoints::read_conversation_checkpoint_in_tx;
 pub use checkpoints::{bind_delivery_checkpoint_in_tx, read_delivery_checkpoint_in_tx};
 pub use checkpoints::{read_checkpoint_in_tx, save_checkpoint_in_tx};
 pub use model_calls::{
-    configure_trial, finalize_model_call_in_tx, reserve_maintenance_in_tx,
-    reserve_model_call_in_tx, send_model_call_in_tx, settle_maintenance_in_tx,
+    configure_embedding_trial, configure_trial, finalize_model_call_in_tx,
+    reserve_maintenance_in_tx, reserve_model_call_in_tx, send_model_call_in_tx,
+    settle_maintenance_in_tx,
 };
 pub use outputs::{append_output_in_tx, read_output_text_in_tx};
 pub use runs::{

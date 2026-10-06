@@ -91,16 +91,43 @@ pub(super) async fn configure_trial(
     pool: &MySqlPool,
     profile: &crate::contracts::generated::ModelProfile,
 ) -> Result<()> {
-    let fp = crate::types::fingerprint(
+    configure_budget(
+        pool,
         &serde_json::to_value(profile).map_err(|_| Error::new("invalid_input"))?,
-    );
+        &profile.trial_id,
+        profile.trial_call_limit as u32,
+        &profile.trial_cost_micros,
+    )
+    .await
+}
+pub(super) async fn configure_embedding_trial(
+    pool: &MySqlPool,
+    profile: &crate::contracts::generated::EmbeddingProfile,
+) -> Result<()> {
+    configure_budget(
+        pool,
+        &serde_json::to_value(profile).map_err(|_| Error::new("invalid_input"))?,
+        &profile.trial_id,
+        profile.call_limit as u32,
+        &profile.cost_limit_micros,
+    )
+    .await
+}
+async fn configure_budget(
+    pool: &MySqlPool,
+    configuration: &Value,
+    trial_id: &str,
+    call_limit: u32,
+    cost_limit: &str,
+) -> Result<()> {
+    let fp = crate::types::fingerprint(configuration);
     let mut tx = AppTx::begin(pool).await?;
     sqlx::query("INSERT INTO model_trials(id,configuration_fingerprint,call_limit,cost_limit_micros,expires_at) VALUES(?,?,?,?,TIMESTAMPADD(SECOND,3600,UTC_TIMESTAMP(3))) ON DUPLICATE KEY UPDATE id=id")
-        .bind(&profile.trial_id).bind(&fp).bind(profile.trial_call_limit).bind(crate::types::epoch(&profile.trial_cost_micros)?).execute(tx.connection()).await?;
+        .bind(trial_id).bind(&fp).bind(call_limit).bind(crate::types::epoch(cost_limit)?).execute(tx.connection()).await?;
     let current: String = sqlx::query_scalar(
         "SELECT configuration_fingerprint FROM model_trials WHERE id=? FOR UPDATE",
     )
-    .bind(&profile.trial_id)
+    .bind(trial_id)
     .fetch_one(tx.connection())
     .await?;
     if current != fp {

@@ -322,6 +322,7 @@ pub fn bound_workspace(context: &mut Value) {
     }
 }
 
+pub mod embedding;
 pub mod vector;
 
 #[cfg(test)]

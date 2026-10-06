@@ -14,4 +14,3 @@ uuid = { version = "1", features = ["v4"] }
 sha2 = "0.10"
 
 reqwest = { version = "=0.13.5", default-features = false, features = ["json", "rustls"] }
-fastembed = { version = "=7.1.0", default-features = false, features = ["ort-download-binaries-rustls-tls", "hf-hub-rustls-tls"] }

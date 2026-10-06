@@ -24,6 +24,7 @@ export interface Boundary {
     createConversation:         CreateConversation;
     dataToolInvocation:         DataToolInvocation;
     dataToolOutcome:            DataToolOutcome;
+    embeddingProfile:           EmbeddingProfile;
     event:                      Event;
     evidenceRef:                EvidenceRef;
     finalizeModelCall:          FinalizeModelCall;
@@ -397,6 +398,12 @@ export interface DataToolOutcome {
     data:         { [key: string]: unknown };
     operation_id: string;
     tool_name:    ToolName;
+}
+
+export interface EmbeddingProfile {
+    call_limit:        number;
+    cost_limit_micros: string;
+    trial_id:          string;
 }
 
 export interface Event {

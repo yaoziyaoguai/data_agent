@@ -10,7 +10,6 @@ setup-node:
 
 setup-rust:
 	$(CARGO) fetch --locked
-	$(PYTHON) scripts/setup_embedding.py
 
 verify: verify-materials verify-delivery verify-fixture verify-node verify-rust
 
@@ -217,3 +216,10 @@ verify-message-markdown:
 verify-closeout-session:
 	node tests/mvp/check-session.mjs
 	node tests/mvp/check-native-compaction.mjs
+
+.PHONY: verify-shared-embedding
+verify-shared-embedding:
+	$(CARGO) build --offline --locked -p data-agent-api -p data-agent-worker
+	$(CARGO) test --offline --locked -p data-agent --lib modules::retrieval::embedding::tests
+	$(PYTHON) -m unittest discover -s scripts -p 'test_development.py'
+	node tests/mvp/check-shared-embedding.mjs

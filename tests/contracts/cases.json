@@ -2597,5 +2597,56 @@
     },
     "valid": true,
     "roundtrip": true
+  },
+  {
+    "name": "共享向量维护预算",
+    "schema": "EmbeddingProfile",
+    "value": {
+      "trial_id": "shared-embedding-test",
+      "call_limit": 5000,
+      "cost_limit_micros": "100000"
+    },
+    "valid": true
+  },
+  {
+    "name": "共享向量拒绝零调用额度",
+    "schema": "EmbeddingProfile",
+    "value": {
+      "trial_id": "shared-embedding-test",
+      "call_limit": 0,
+      "cost_limit_micros": "100000"
+    },
+    "valid": false
+  },
+  {
+    "name": "共享向量拒绝无界额度",
+    "schema": "EmbeddingProfile",
+    "value": {
+      "trial_id": "shared-embedding-test",
+      "call_limit": 100001,
+      "cost_limit_micros": "100000"
+    },
+    "valid": false
+  },
+  {
+    "name": "共享向量拒绝负费用",
+    "schema": "EmbeddingProfile",
+    "value": {
+      "trial_id": "shared-embedding-test",
+      "call_limit": 5000,
+      "cost_limit_micros": "-1"
+    },
+    "valid": false
+  },
+  {
+    "name": "共享向量拒绝额外模型字段",
+    "schema": "EmbeddingProfile",
+    "value": {
+      "trial_id": "shared-embedding-test",
+      "call_limit": 5000,
+      "cost_limit_micros": "100000",
+      "model_id": "unapproved"
+    },
+    "valid": false
   }
 ]

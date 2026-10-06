@@ -217,7 +217,7 @@ async fn execute(pool: &MySqlPool, ctx: &AccessContext, input: Value) -> Result<
     let (memory_candidates, memory_retrieval) =
         super::personal_memory::search(pool, ctx, &input).await;
     let vector = if name == "search_knowledge" {
-        retrieval::vector::search(&ctx.space_id, text(args, "query")?).await
+        super::knowledge_embeddings::search(pool, ctx, text(args, "query")?, Some(&input)).await
     } else {
         retrieval::vector::Candidates::lexical()
     };
