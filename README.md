@@ -8,7 +8,7 @@
 
 > **当前状态：合成平台 MVP 已完成。** 已实现 React 工作台、Rust 业务服务、Pi SDK、Mem0 个人记忆及可执行合成数据平台，完成本地验收和真实 DeepSeek Flash 针对性试用。真实数据平台、正式认证和同事实际使用验收属于后续接入。最新进度和证据见 [CURRENT](docs/CURRENT.md)。
 
-> **架构实现差异（2026-10-06）：** 定稿的向量方案是百炼 Qwen。Mem0 已使用该模型，共享语义检索仍是 E5，尚未统一。下图展示定稿方案，差异见[架构说明](docs/architecture/README.md#定稿与当前实现的差异)；既有验收不包含共享向量模型的替换。
+> **向量方案已统一为百炼 Qwen 1024 维。** 共享语义由 Rust 接入，个人记忆由 Mem0 接入；分别保存到独立 Milvus 集合。正式内容与版本继续保存在 MySQL，模型调用沿用持久预算。
 
 ![工作台展示 SQL、参数、依据及用户确认按钮](docs/images/workbench-sql.png)
 
@@ -65,7 +65,7 @@ React 负责交互，Rust 负责业务约束，Pi SDK 负责唯一的 Agent 循�
 
 ![定稿架构总览：React、Rust、Pi SDK、Mem0、Flash、百炼 Qwen、MySQL 与 Milvus](docs/architecture/data-agent-overview.svg)
 
-*上图展示全部组件，Mem0 是明确采用的个人记忆组件。[完整架构说明](docs/architecture/README.md)包含三张详图及实现差异，完整保留 11 个组件、19 条调用关系。*
+*上图展示全部组件，Mem0 是明确采用的个人记忆组件。[完整架构说明](docs/architecture/README.md)包含三张详图及存储职责，完整保留 11 个组件、19 条调用关系。*
 
 | 部分 | 技术 | 负责什么 |
 | --- | --- | --- |
@@ -76,7 +76,7 @@ React 负责交互，Rust 负责业务约束，Pi SDK 负责唯一的 Agent 循�
 | 正式业务记录 | MySQL 8.4 | 语义、文档、资产、会话引用、SQL、状态、预算与版本 |
 | 会话与技术回执 | Pi JSONL / Mem0 SQLite | 原生 SDK 会话历史；记忆组件的幂等回执与 SDK 历史 |
 | 检索索引 | Milvus 3.0 | 可重建的共享知识和个人记忆索引，保留 Zilliz 适配方向 |
-| 模型（定稿） | DeepSeek Flash / 百炼 Qwen | Flash 理解与生成；Qwen 1024 维向量；共享语义链路尚待从 E5 对齐 |
+| 模型 | DeepSeek Flash / 百炼 Qwen | Flash 理解与生成；共享语义与个人记忆使用 Qwen 1024 维向量 |
 | 数据平台适配器 | 当前为合成 SQLite 平台 | 元数据、血缘、节点 SQL、权限、只读查询及结果 |
 
 **语义层连接业务含义和数据结构。** Agent 取得的是有出处、有版本的表、字段、指标、SQL 与文档。共享知识和个人记忆的向量索引都能重建；正式内容以 MySQL 为准，采用前重新核对权限和状态。
@@ -97,12 +97,12 @@ make dev
 
 打开 **http://127.0.0.1:5173/**，用启动器生成的 `.local/development/identities.json` 中 `alice` 或 `bob` 的值登录。该文件只保存在本机。Ctrl+C 关闭应用进程，数据库与会话保留；结束后可用 `make infra-down` 停止基础服务，或用 `make vm-stop` 停止项目虚拟机。
 
-默认使用**本地模拟模型**，无需模型密钥。可以先问“查 2026 年 1 月净收入”，查看 SQL 后点击执行，再补充“改成 2 月，只看 app”。模拟模式只支持合成场景演示；自由提问需要切换真实模型。
+默认使用**本地模拟模型和词法检索**，无需模型密钥，不调用付费向量接口。可以先问“查 2026 年 1 月净收入”，查看 SQL 后点击执行，再补充“改成 2 月，只看 app”。模拟模式只支持合成场景演示；自由提问需要切换真实模型。
 
 | 运行方式 | 入口与说明 |
 | --- | --- |
 | 正式工作台，本地模拟 | `make dev`；运行 React、Rust、Pi 与可执行合成平台 |
-| 真实 Flash + Mem0 | 先 `make setup-memory`，再按[模型配置](docs/development.md#6-真实模型小样与取消)和[记忆配置](docs/development.md#7-mem0个人记忆)启动；需要模型及 embedding 凭据、有明确额度的 profile |
+| 真实 Flash + Mem0 | 先 `make setup-memory`，再按[模型配置](docs/development.md#6-真实模型小样与取消)和[记忆配置](docs/development.md#7-mem0个人记忆)启动；需要模型及 embedding 凭据、生成模型 profile 和共享向量维护 profile |
 | 纯交互原型 | `make prototype`，打开 `http://127.0.0.1:8765/`；使用浏览器本地存储，不执行 SQL、不调用模型 |
 
 本地服务只监听回环地址。`.env.example` 和 `apps/memory/config.example.json` 提供配置格式；凭据、运行数据库、会话和日志保存在被 Git 忽略的本地目录。启动方式、端口、恢复及索引重建见[开发指南](docs/development.md)。
@@ -117,9 +117,10 @@ make dev
 | 真实 Flash 质量基线 | 固定 16 个合成场景各测一次，独立内容判分 **12/16（75%）**；这是历史版本基线，保留 4 个错例 |
 | 记忆方案对比 | 完整场景均为 **16/18**；Mem0 的记忆管理 **17/18**、SQL **24/24**，原方案为 **16/18**、**22/24**；据分项选择 Mem0，小样未证明稳定统计优势 |
 | 接入后试用与修复 | 原始试用 **5/6**、SQL **7/7**；自动记忆范围扩写和 Markdown 显示两项问题已修复。新针对性回归 **4/4 条消息**通过，旧评分不改写 |
-| 合成目录规模 | 1204 张合成表的导入与检索应用检查通过；未证明任意真实业务的召回准确率或低延迟 |
+| 真实共享向量小样 | 百炼 Qwen 1024维，原4个中文问题均在前6候选命中；56次调用、6,317输入token；小样不代表千表召回率 |
+| 合成目录规模与恢复 | 1204 张合成表、2408 个新增对象，首次建索引和两次丢库重建通过；协议向量用于工程验证，中文语义质量由上方真实小样单列，不代表千表真实模型召回率或低延迟 |
 
-证据入口：[收尾审查](docs/reviews/mvp-closeout-review.json) · [质量基线](docs/reviews/mvp-accuracy-20261005.md) · [记忆 A/B 对比](docs/research/mem0-extraction-comparison-results.md) · [接入与修复报告](docs/research/memory-adoption-trial.md)。这些测量的题目、版本和分母不同，分别保留。
+证据入口：[共享向量真实小样](docs/sources/evaluation/qwen-shared-trial.json) · [共享向量审查](docs/reviews/shared-embedding-review.json) · [最终验收记录](docs/CURRENT.md#完成与验证) · [收尾审查](docs/reviews/mvp-closeout-review.json) · [质量基线](docs/reviews/mvp-accuracy-20261005.md) · [记忆 A/B 对比](docs/research/mem0-extraction-comparison-results.md) · [接入与修复报告](docs/research/memory-adoption-trial.md)。这些测量的题目、版本和分母不同，分别保留。
 
 ### 在本机检查
 
@@ -132,6 +133,7 @@ make verify-code verify-contracts
 make verify-query-workflow verify-knowledge-workflow
 make verify-mvp-browser verify-mvp-regression
 make verify-business-acceptance verify-hybrid-retrieval
+make verify-shared-embedding verify-memory
 ```
 
 检查使用合成资料和隔离测试环境。完整命令及依赖见[开发指南](docs/development.md#4-正式工作台与增量检查)。`make verify-increment`、官方试用审计等命令还需要本机冻结的私有运行证据；新克隆仓库只有公开报告和测试源码，不能直接重放未发布的收据。源码检查、本地模拟、真实模型和真实平台证据分别报告。
@@ -174,6 +176,6 @@ experiments/        独立记忆对比实验
 
 表、SQL、数据、业务文档和案例均为从零构造的**合成材料**。独立验收答案与 Agent 知识输入分开；密钥、私有会话及原始试用日志不进入 Git。
 
-首次准备会下载依赖、镜像和固定版本的本地 E5 权重。真实模型模式会向配置的 DeepSeek / 百炼端点发送允许的模型输入；Mem0 遥测在本项目适配器中关闭。默认模拟模式不发起付费模型调用。
+首次准备会下载依赖和镜像；不再下载本地 embedding 权重。真实模型模式会向配置的 DeepSeek / 百炼端点发送允许的模型输入；Mem0 遥测在本项目适配器中关闭。默认模拟模式不发起付费模型调用。
 
 本仓库尚未指定开源许可证；公开可见与授予开源使用许可是两件事。各依赖的许可证以其自身声明为准。

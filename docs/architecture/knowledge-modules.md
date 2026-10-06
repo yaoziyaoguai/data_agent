@@ -470,9 +470,13 @@ M03的事实提取与单次模型适配器位于`modules/ingestion/prefill.rs`�
 
 个人资产目录通过search_knowledge按query检索，query=*及asset_after翻页。正文仍按read_knowledge固定版本分段，启动16KB候选被裁掉的本人memory和已选Skill保持可发现；未选Skill不进入目录。
 
-### 本地Embedding及目录实施细化
+### 百炼Embedding及目录实施细化
 
-- 当前Embedding在本机CPU运行，无外部资料发送或付费HTTP。M04用单个推理并发许可、有限文本/片段与检索期限控制资源；仅外部Embedding仍需要M01资料范围及M08持久模型调用许可。本地模型固定revision、SHA-256及池化方式，版本进入索引目标标识。这个选择替代上文对“所有Embedding均为外部端点”的实现假设，不取消真实DeepSeek和预填的持久预算。
+- 共享Embedding固定为百炼 `qwen3.7-text-embedding`、1024维，M04只处理HTTP协议、有限分批和向量校验，`use_cases/knowledge_embeddings.rs`组合M01权限、M02版本/索引租约、M08预算。每批最多20条，以每条UTF-8字节数加64 tokens模板余量分批，总预估不超过8192 tokens（正文也不超过8192字节），单次20秒、无隐式重试；不添加旧模型文本前缀。模型版本进入片段键和索引目标。
+- M08的`runtime::provider_calls`保存逐调用许可、usage与成功向量回执。聊天使用原工具operation_id和budget_scope_id；索引使用空间/对象/版本/模型/固定片段批次，页面检索使用当前请求身份。成功向量和费用原子提交；未知保持预留，不换ID重发。向量内容失败但有usage仍结算真实用量。共享与个人向量调用复用账本，Mem0对外协议不新增共享用途。
+- `EmbeddingProfile`由共用Schema生成，字段为trial_id、call_limit、cost_limit_micros。索引首次授权冻结到`knowledge_index_jobs.embedding_profile`；集合变化、重试、换当前配置均不替换该版本原额度。索引一次领取一个对象，每批发送前在同代有效租约内续期120秒；过期、版本变化或换代拒绝发送。
+- MySQL的正式正文保留，`model_call_attempts.response_json`保存可复用向量；Milvus以新1024维共享集合重建。集合维度不符明确拒绝，旧384维集合与个人集合不自动删除。候选继续回源核权限、状态、版本。向量失败明确降级，精确/词法通道继续。当前外发范围仅为公开合成demo空间。
+- 模拟启动默认词法检索；真实Flash模式默认共享Qwen混合检索，需显式维护预算和本地凭据文件。无配置不自动申请新额度；账本沿用当前试用的一小时期限，重启不延长。
 - M03目录同步捕获来源头及namespace范围代次。完整同步即使正文未变，也推进范围代次；缺席退休与成功回执在同一事务提交。分页不完整、过期或旧基线不能批量删除。新表/字段和来源改版在同一小事务排队分析与复核，保护人工覆盖；未配置维护模型则明确保留缺口。
 - 派生索引进度由M02私有store存储，M04只负责生成候选/向量及Milvus协议；具名知识用例组合领取、外部计算和回写。索引目标绑定collection与模型；第三次领取崩溃明确失败，维护者可用幂等命令将当前知识重新排队，不改变正文或版本。
 

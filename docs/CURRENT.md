@@ -3,12 +3,12 @@
   "workflow": "dev_co",
   "schema": 1,
   "phase": "delivery",
-  "status": "ready",
-  "goal_revision": 18,
+  "status": "complete",
+  "goal_revision": 19,
   "environment": "macOS arm64 / Node 26.8.1 / npm 11.19.0 / Rust 1.99.0 / Python 3.14.7 / SQLite 3.53.4 / Colima 0.10.1 / Docker Engine 29.2.1 / Compose 5.3.1 / MySQL 8.4.11 / Milvus 3.0.2",
   "verification": {
     "level": "integration",
-    "reason": "只修自动记忆范围扩写与助手Markdown显示，按新独立样本及局部回归收尾MVP。",
+    "reason": "将共享语义Embedding统一为百炼Qwen，验证调用预算、索引迁移与检索回归。",
     "freshness": "content",
     "inputs": [
       ".cargo",
@@ -58,139 +58,153 @@
     "schema": 1,
     "registry": "docs/semantic-retrieval-design.md",
     "increment": {
-      "id": "I2-MVP-CLOSEOUT",
+      "id": "I2-SHARED-EMBEDDING",
       "phase": "I2",
       "status": "complete",
-      "goal": "依次修复QUALITY-01自动记忆范围扩写和UI-03助手Markdown显示，完成对应真实回归及独立审查后结束当前合成平台MVP。",
+      "goal": "共享语义向量从本地E5统一为百炼qwen3.7-text-embedding 1024维，保留权限/预算/版本边界并重建索引，更新文档后提交推送。",
       "requirements": [
-        "D10",
-        "D11",
-        "D13",
-        "C01",
+        "D04",
+        "D05",
+        "D06",
         "C02",
         "C05",
-        "C08"
+        "C06",
+        "C07"
       ],
       "modules": [
-        "M09",
-        "M10",
-        "M11",
-        "M12"
+        "M01",
+        "M02",
+        "M04",
+        "M08",
+        "M10"
       ],
       "allowed_paths": [
-        "apps/memory/service.py",
-        "apps/agent/tools/data-tools.ts",
-        "apps/web/src",
-        "crates/data-agent/src/use_cases/data_tools.rs",
-        "packages/contracts",
-        "package.json",
-        "package-lock.json",
-        "tests/mvp",
+        "crates/data-agent",
+        "apps/api/src/main.rs",
+        "apps/worker/src/main.rs",
+        "scripts/development.py",
+        "scripts/setup_embedding.py",
+        "scripts/test_development.py",
+        "infra/embedding-model.json",
+        "infra/embedding.example.json",
+        "infra/embedding-profile.example.json",
+        "migrations",
+        "Cargo.lock",
         "Makefile",
+        ".env.example",
+        "tests/mvp",
+        "tests/contracts",
+        "tests/architecture",
+        "README.md",
         "docs/CURRENT.md",
+        "docs/development.md",
         "docs/semantic-retrieval-design.md",
-        "docs/architecture/knowledge-modules.md",
-        "docs/architecture/implementation-design.md",
-        "docs/research/memory-adoption-trial.md",
-        "docs/reviews"
+        "docs/architecture",
+        "docs/visualizations",
+        "docs/reviews",
+        "docs/sources/evaluation/qwen-shared-trial.json",
+        "docs/sources/evaluation/qwen-shared-trial-byte-estimate.json",
+        "infra/README.md",
+        "packages/contracts"
       ],
       "non_goals": [
-        "不扩展MVP功能，不更换Pi/Mem0，不新增记忆框架或额外模型判断。",
-        "不改写历史评测，不接真实Datasight/正式认证，不提交推送部署。"
+        "不增加Agent框架或MVP功能，不改变Pi/Mem0分工，不接真实平台或部署。",
+        "不重写历史评分，不删除正式语义或个人记忆索引。"
       ],
       "invariants": [
-        "自动记忆正文、范围及名称来自同一份最终正文；保留原话、用户隔离、版本、幂等与正式保存后采用。",
-        "人工维护值由用户明确保存；Mem0仍负责正式提取，Pi仍负责唯一Agent循环。",
-        "Markdown仅作用于助手消息，禁用原始HTML和不安全链接；原有SQL用户确认不变。",
-        "真实回归使用固定合成材料及独立预算，保留失败和旧评分，不追求100%。"
+        "生成仍为DeepSeek Flash；共享和个人向量分别索引，MySQL正式内容不变。",
+        "每次外部向量调用受固定原预算限制；未知不换ID重发，回执丢失和索引重试可核对。",
+        "新模型使用独立1024维集合，旧384维集合不得混用；命中回源核权限/状态/版本。",
+        "默认模拟模式保持无付费调用，真实配置显式启用百炼；只发送合成数据。"
       ],
       "acceptance": [
         {
-          "id": "CLOSE01",
+          "id": "EMBED01",
           "requirements": [
-            "D10",
-            "D11",
             "C02",
-            "C05"
+            "C05",
+            "C07"
           ],
-          "expected": "自动新建/修订统一最终正文，错误scope/名称不持久化；跨会话、人工修改、隔离、幂等及索引预算回归通过",
+          "expected": "协议、维度、批量顺序、失败预算/未知/重试及配置边界回归通过",
           "evidence_kind": "runtime",
           "command": [
             "make",
-            "verify-memory",
-            "verify-memory-scope"
+            "verify-shared-embedding"
           ],
-          "timeout_seconds": 360
+          "timeout_seconds": 420
         },
         {
-          "id": "CLOSE02",
+          "id": "EMBED02",
           "requirements": [
-            "C01",
-            "D11"
+            "D04",
+            "D05",
+            "D06",
+            "C06"
           ],
-          "expected": "类型、构建、同源契约、模块边界以及Pi会话/原生压缩回归通过",
+          "expected": "共享混合检索真实Milvus索引、旧集合隔离、版本/恢复及回源验证通过；模型mock与真实小样分别报告",
+          "evidence_kind": "runtime",
+          "command": [
+            "make",
+            "verify-hybrid-retrieval"
+          ],
+          "timeout_seconds": 3000
+        },
+        {
+          "id": "EMBED03",
+          "requirements": [
+            "C05",
+            "C07"
+          ],
+          "expected": "代码、契约、模块边界与Mem0预算复用回归通过",
           "evidence_kind": "runtime",
           "command": [
             "make",
             "verify-code",
             "verify-contracts",
             "verify-architecture",
-            "verify-closeout-session"
+            "verify-memory"
           ],
           "timeout_seconds": 600
         },
         {
-          "id": "CLOSE03",
+          "id": "EMBED04",
           "requirements": [
-            "D13",
-            "C08"
+            "C02",
+            "C06"
           ],
-          "expected": "助手Markdown加粗/列表/SQL代码/表格安全渲染，用户消息纯文本，窄屏与刷新正确；原工作台确认查询按钮回归通过",
-          "evidence_kind": "runtime",
-          "command": [
-            "make",
-            "verify-message-markdown",
-            "verify-mvp-browser"
-          ],
-          "timeout_seconds": 420
-        },
-        {
-          "id": "CLOSE04",
-          "requirements": [
-            "D10",
-            "D11",
-            "C01"
-          ],
-          "expected": "固定真实Flash/Mem0纠错新建、修订、跨会话复用独立复核，保存/回答无指标扩写，历史测量不改写",
+          "expected": "百炼真实合成小样完成向量生成/建索引/检索并核对真实usage，审计已完成证据不重新付费",
           "evidence_kind": "runtime",
           "command": [
             "node",
-            "tests/mvp/run-memory-scope-trial.mjs",
+            "tests/mvp/run-shared-embedding-trial.mjs",
             "--audit"
           ],
           "timeout_seconds": 60
         }
       ],
       "verification_inputs": [
-        "apps/memory",
-        "apps/agent",
-        "apps/web/src",
         "crates/data-agent",
-        "packages/contracts",
-        "package.json",
-        "package-lock.json",
-        "tests/mvp",
+        "apps/api/src/main.rs",
+        "apps/worker/src/main.rs",
+        "scripts/development.py",
+        "scripts/test_development.py",
+        "infra",
+        "docs/sources/evaluation/qwen-shared-trial.json",
+        "docs/sources/evaluation/qwen-shared-trial-byte-estimate.json",
+        "migrations",
+        "Cargo.lock",
         "Makefile",
-        "docs/semantic-retrieval-design.md",
+        "tests/mvp",
+        "tests/contracts",
         "docs/architecture/knowledge-modules.md",
         "docs/architecture/implementation-design.md",
-        "docs/research/memory-adoption-trial.md"
+        "packages/contracts"
       ],
       "review": {
         "status": "passed",
-        "record": "docs/reviews/mvp-closeout-review.json"
+        "record": "docs/reviews/shared-embedding-review.json"
       },
-      "evidence": ".local/delivery/I2-MVP-CLOSEOUT-result.json"
+      "evidence": ".local/delivery/I2-SHARED-EMBEDDING-result.json"
     }
   }
 }
@@ -201,7 +215,36 @@
 更新：2026-10-06。唯一活动项目目录：`~/work_space/data_agent`。本文件是当前决定、真实进度和下一步的唯一入口。
 
 
-## 当前任务：按定稿纠正架构图（文档已核验，保留实现差异）
+## 当前任务：共享语义向量统一百炼（已完成）
+
+本轮 goal_revision=19，`delivery.increment=I2-SHARED-EMBEDDING`。用户授权实际替换共享语义 E5 并提交、推送。范围限 Rust 向量适配、原预算复用、新集合迁移、启动配置、相关回归及文档。旧 MVP 收尾证据保留，新的源码不再沿用旧指纹宣称通过。
+
+- 百炼 `qwen3.7-text-embedding`、1024 维，使用独立共享集合；复用已有本地凭据，私钥不输出或提交。
+- 复用现有持久模型调用许可/结算；稳定请求身份和已成功向量回执用于恢复，未知调用保持预留。聊天查询沿用原请求预算，索引及页面检索使用明确维护配置。
+- 默认模拟启动无外部付费；真实模式启用百炼。删除不再使用的 E5 依赖和下载步骤，正式语义与个人索引保留。
+- 验证按上方四组进行；先协议和有限真实样本，再核对迁移/回源/预算及独立审查。
+
+### 完成与验证
+
+- Rust API/Worker构建通过；共享向量9项协议与集成边界通过，包括原预算、未知回执、拒绝工具、长文续租与集合恢复。两项向量单测、四项启动配置测试通过。
+- 183条跨语言契约用例、Rust clippy、TypeScript检查及Web构建通过。架构总览/详图仍为11个组件、19条关系，5个导出视图无文字或标签遮挡；28张模块/流程图册重生成，无脚本错误或窄屏溢出。
+- 百炼真实合成小样已通过：修正后56次调用、6,317输入token、原四个中文问题全部在前6候选命中，usage全部结算且未知预留为0。按¥0.5/百万token估算约¥0.00316；记录为 `docs/sources/evaluation/qwen-shared-trial.json`，保留数据库和回执供无付费审计。Mem0九项Python测试及九组接入/预算场景通过（41次回环调用、0官方调用）。
+- 千表最终复验通过：1204张合成表、2408个新增对象，首次建索引和两次集合丢失后的完整恢复均成功；8项检查覆盖未知写入回执查证、旧版本、停用、个人隔离与明确降级。首次建索引606.4秒，整组1683.0秒；首轮360秒等待超时仍保留为历史失败，不宣称低延迟或千表真实模型召回率。证据为 `.local/checks/mvp-hybrid-retrieval.json`，该组使用协议向量、0次官方模型调用。
+- 本机工作台共享索引迁移已通过：31个对象均在1024维新集合，`search_coverage`为complete/current/available，正式知识与个人资产版本正文摘要不变，原集合均保留。31份旧成功回执加模板余量后的最大上界2708≤8192，证明本次实际存量分批兼容；新维护trial仅收到1个短问句调用（18 tokens，2 micros预估费用，未知预留0），未给旧索引补额。证据为 `.local/checks/shared-embedding-migration.json`，工作台继续使用原Flash/Mem0配置与同一数据库。
+- 独立审查见 `docs/reviews/shared-embedding-review.json`。随后 `make verify-increment` 完整运行 EMBED01–EMBED04，四组退出0、无超时，执行前后指纹一致；收据为 `.local/delivery/I2-SHARED-EMBEDDING-result.json`。最终真实小样审计复用既有回执，新增官方调用0次。独立审查者再次只读核对四组完整日志、收据及175份冻结输入，确认当前审查与执行证据有效，没有阻断提交、推送的问题。
+- 共享语义运行时已移除E5及其下载依赖；README、设计、契约与架构图均按Qwen和Mem0的现行分工更新。本次替换没有剩余阻断项；真实平台、正式认证和同事试用仍沿用既定后续接入范围。
+
+### 验收与要求变更
+
+- 实际工作台短问句“净收入”9 UTF-8字节返回18 input_tokens，原仅按字节估算会误触发熔断。现改为每条字节数加64 tokens模板余量，固定分批总上界仍为8192；保留实际用量核验。旧32次维护账本（31个对象索引+1短问句）保留breached，费用未丢失，原成功向量保留。新的有限维护配置仅用于新请求/尚未绑定的新对象版本，旧作业不补额。原56次四题真实小样保存在 `docs/sources/evaluation/qwen-shared-trial-byte-estimate.json`；修正后重新用短问句与原四题核验，通过当前 `qwen-shared-trial.json`，不改旧评分。
+
+- 千表初次新协议回归在原360秒索引期限超时，未通过；新增逐对象调用账本和1024维结果增加了网络/持久化工作。保留全部2408个新增对象与三次建索引覆盖，单次等待上限改为900秒、整组3000秒，并记录实际耗时；这不放宽任何业务命中或恢复断言，也不宣称低延迟。移除每对象重复集合核验，并取消有工作时的固定等待，避免不必要开销。
+
+- 原千表回归使用本地 E5 并同时断言四个中文问法。替换后，`check-hybrid-retrieval.mjs` 使用通用字符 hash 协议向量验证 1204 张合成表、索引恢复、版本、权限、精确名称与降级；不把协议向量称为语义模型。四个原中文问法和前六候选命中要求保持不变，移至真实百炼小样，额外混入六类合成干扰对象。该小样不证明千表下的真实模型召回率；千表规模与中文语义质量分别报告。
+- 云向量每个知识对象有多个付费批次。索引 Worker 改为一次领取一个对象，在各批外发前对尚有效的同代租约续期；完成后立即处理下一对象，空队列或错误仍等待。此为替换云调用必需的租约处理，沿用原 Worker 与索引作业，不增加调度系统。
+- 独立审查发现并修正：集合变化保留该知识版本原维护预算；拒绝工具不新增向量调用。对应恢复与预算测试纳入 EMBED01。
+
+## 上一轮：按定稿纠正架构图（文档已完成）
 
 2026-10-06，用户指出架构首图未显示 Mem0、仍显示 E5，要求按最后定稿展示。本轮继续修正文档和图源，沿用上一轮提交、推送授权，不改业务代码或重建向量索引。
 

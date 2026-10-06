@@ -110,9 +110,24 @@ make vm-stop
 
 MySQL集成测试串行运行。查询跟踪、索引和语义预填在同一Worker中的独立异步任务运行；同一Pi会话仍串行。检索融合精确名称、关键词与Milvus候选，所有命中回源核对权限、当前版本、状态与来源。向量不可用时返回明确降级；候选限额和索引积压均标明覆盖不足。常用表可优先分析表及字段，普通表首次只做基础导入并可检索，深入分析按需发起；来源改版仍自动重分析全部受影响对象。配置版本独立于知识版本。预填固定分析和依据复核各一次，只有两轮引用/格式和当前版本全部通过才应用，人工值保留。回环协议与真实模型质量分别验收。
 
-`make setup-rust`除锁定运行库外，还按`infra/embedding-model.json`准备`intfloat/multilingual-e5-small`的固定revision和SHA-256，384维、均值池化、512 token；运行时只读取`.local/embedding-model`并再次核验，不自动下载新权重。文本以`query:`或`passage:`输入；版本化片段使用360字符窗口及280字符步长，每对象最多128片段，超限明确报告。Milvus本地端口19531，凭据只通过忽略文件提供。
+`make setup-rust`仅获取锁定的Rust依赖。共享向量使用 `infra/embedding-model.json` 固定的百炼 `qwen3.7-text-embedding`、1024维，运行时不下载本地权重。文本分成360字符窗口、280字符步长，每对象最多128片段，超限明确报告；不加旧模型前缀。请求最多20条，以每条UTF-8字节数加64 tokens模板余量估算，总预估不超过8192（正文也不超过8192字节），20秒超时、无网络重试。Milvus本地端口19531，凭据只通过忽略文件提供。
 
-启动器默认启用组合检索；可显式运行`python3 scripts/development.py --retrieval lexical`。更换collection或模型后，旧索引完成状态失效。维护者页面“重建检索索引”及`POST /knowledge-index/rebuilds`使用operation_id幂等排队，从当前MySQL重建索引；正式知识版本不变。回执未知先查已存在的不可变片段，每个作业最多3次；第3次领取后进程中断会明确失败，仍可经该入口重建。
+共享向量配置可直接复用 `.local/memory/configuration.json` 的 `embedding_url` 与 `embedding_key_file`，也可使用 `infra/embedding.example.json` 格式单独配置。密钥文件权限0600。共享集合名为 `data_agent_shared_qwen1024_<数据库摘要>`，与Mem0个人集合分开。把 `infra/embedding-profile.example.json` 复制到 `.local/embedding/profile.json` 后按已授权范围设置有限额度。profile不是密钥，也不自动创建新的授权。
+
+```sh
+python3 scripts/development.py --model deepseek \
+  --model-profile .local/model-workflow/configuration.json \
+  --embedding-configuration .local/memory/configuration.json \
+  --embedding-profile .local/embedding/profile.json
+```
+
+`ModelProfile`管理Flash以及同一聊天请求内的共享/个人向量调用；独立 `EmbeddingProfile`（trial_id、call_limit、cost_limit_micros）管理共享索引与页面搜索，沿用持久账本和一小时试用期限。重启不重置额度。默认 `make dev` 使用模拟模型与词法检索，不读取模型凭据、不调用百炼；`--retrieval lexical`可在真实模型模式显式使用词法通道。
+
+**从旧共享索引迁移：**保留原MySQL，以新启动配置运行；Worker按当前知识版本自动重建1024维集合。旧384维集合不会混用或自动删除，个人索引也不改变。成功向量与usage原子保存在MySQL，相同版本重建复用回执；回执未知不自动重发，集合变化也不为旧作业更换预算。新维护配置只供尚未绑定预算的新对象版本使用。现有目标维度错误时明确拒绝，页面与工具显示向量不可用并保留词法检索。
+
+`make verify-shared-embedding`验证协议、租约、预算和失败恢复；`make verify-hybrid-retrieval`验证1204张合成表的应用索引与回源（协议向量，不是质量评测）。`node tests/mvp/run-shared-embedding-trial.mjs --run`需要已授权的百炼调用；`--audit`只核对既有真实证据，不付费。四个原中文检索题的真实小样另列结果，不把它称为千表准确率。
+
+真实DeepSeek启动默认启用组合检索；可显式运行`python3 scripts/development.py --retrieval lexical`。更换collection或模型后，旧索引完成状态失效。维护者页面“重建检索索引”及`POST /knowledge-index/rebuilds`使用operation_id幂等排队，从当前MySQL重建索引；正式知识版本不变。回执未知先查已存在的不可变片段，每个作业最多3次；第3次领取后进程中断会明确失败，仍可经该入口重建。
 
 `make verify-hybrid-retrieval`在独立数据库和临时Milvus collection中导入1204张合成表，验证中文检索、精确名称、实际写入回执丢失、旧版过滤、个人资产隔离、服务降级，以及保留MySQL后的索引重建。实际结果统一见CURRENT，测试规模本身不构成通过证据。
 
@@ -177,6 +192,8 @@ Agent读取长文、来源、记忆、Skill和历史采用有界分页，正文�
 python3 scripts/development.py --model deepseek --model-profile .local/model-workflow/configuration.json
 ```
 
+启动器保留现有代理设置，并在子进程的NO_PROXY/no_proxy/no_grpc_proxy中追加回环地址，保证Mem0的本机Milvus gRPC连接不经代理。
+
 本机已有工作台时，启动验收会选用独立端口和`.local/checks`运行目录。也可以显式传`--port-offset 18000 --runtime-dir .local/checks/my-startup`，保留现有工作台、身份及平台账本。
 
 持久试验配置的 `profile.model_id` 决定本次模型；`.env` 的 `DEEPSEEK_MODEL` 保留默认选择。Flash 配对 `2026-10-04-peak-usd`，Pro 配对 `2026-10-05-pro-peak-usd`；Flash 支持 off/low/high；Pro 的现有试验配置限 off/high。本地MVP沿用用户选定的Flash。价格依据[官方价格页](https://api-docs.deepseek.com/quick_start/pricing)，以高峰未命中价保守计账。更换模型须新建有授权的有限试验，不能重用旧 trial 改额。
@@ -205,7 +222,7 @@ node tests/mvp/run-business-acceptance.mjs --audit
 
 宿主环境变量`DATA_AGENT_BUSINESS_TIMEZONE`目前支持`UTC`（默认）和`Asia/Shanghai`。每条消息接收时固定UTC参考时刻和业务时区；重传、跨日恢复、查询结果唤醒均沿用原值。相对日期仍由Pi模型展开，宿主提供可信输入而不猜测用户时间意图。
 
-历史会话按首问题标题搜索、每页100条；对话事件用`before_seq`补旧页、`after_seq`增量读取，已加载历史持续保留。公共语义目录按ID每页100对象，后台刷新保持已推进游标并直读当前对象和展开的相关对象。搜索候选达到工作量上限时返回`search_coverage.state=candidate_limit`，页面和模型明确提示缩小范围；不透露被权限过滤的数量。当前支持本地Embedding/Milvus组合检索与受限合成千表验证；更广跨业务质量和真实目录仍属I3，实际证据统一见CURRENT。
+历史会话按首问题标题搜索、每页100条；对话事件用`before_seq`补旧页、`after_seq`增量读取，已加载历史持续保留。公共语义目录按ID每页100对象，后台刷新保持已推进游标并直读当前对象和展开的相关对象。搜索候选达到工作量上限时返回`search_coverage.state=candidate_limit`，页面和模型明确提示缩小范围；不透露被权限过滤的数量。当前支持百炼Qwen/Milvus组合检索与受限合成千表验证；更广跨业务质量和真实目录仍属I3，实际证据统一见CURRENT。
 
 
 ### Pi 原生会话文件
@@ -237,7 +254,7 @@ python3 scripts/development.py --model deepseek \
 | 幂等提取、候选提交、调用技术回执及SDK历史 | `.local/memory/state/<database>/<collection>/`内的SQLite文件 |
 | 模型次数、预留、实际usage和费用 | MySQL M08原账本；侧车SQLite不代替预算 |
 
-启动器把配置中的collection前缀加上数据库摘要；不同试用数据库隔离，同库同集合重启复用状态目录。禁止两个侧车同时使用同一目录。共享知识E5/384维检索与个人记忆1024维索引分别配置，不互相替换。本轮不安装可选spaCy实体模型；SDK可能提示未安装，中文记忆提取与向量检索仍由LLM/embedding完成，不据此宣称实体图谱可用。
+启动器把配置中的collection前缀加上数据库摘要；不同试用数据库隔离，同库同集合重启复用状态目录。禁止两个侧车同时使用同一目录。共享知识与个人记忆均用百炼Qwen 1024维，集合分别配置，不互相替换。本轮不安装可选spaCy实体模型；SDK可能提示未安装，中文记忆提取与向量检索仍由LLM/embedding完成，不据此宣称实体图谱可用。
 
 **已有资产与重建：**启动Worker后，每批最多32条当前启用且目标索引缺失的正式记忆自动排队，人工正文使用`infer=False`。页面显示索引待处理/完成/失败。索引丢失或需要重建时，停止本次应用、在本地配置使用新的collection前缀，再以同一数据库和有剩余额度的原profile启动；新集合及新技术回执由MySQL正文重建。旧资产版本、旧队列、旧账本保留。不要删除旧预算、改已使用trial_id或把未知作业清成未调用来“重试”；预算耗尽时另行明确维护额度。停用/删除立即禁止采用，异步清理不等于物理抹除全部历史。
 
@@ -250,4 +267,4 @@ make verify-memory       # 真实Rust/MySQL/Worker + 受控网络替身；不付
 make verify-contracts    # 包括WorkspaceContext的记忆检索状态
 ```
 
-公开HTTP仍是`/assets`和已有启停删除接口，增加可选`memory_index_state`。新内部`/internal/memory/model-calls`及侧车`/extract`、`/index`、`/search`均使用同源Schema和内部token，详见[个人资产模块契约](architecture/knowledge-modules.md#正式mem0接缝同源契约)。服务凭据只给承担调用的进程；API、页面、公开报告不接收密钥。上述命令的替身通过只证明工程边界，真实模型试用和内容评分须另列证据。
+公开HTTP仍是`/assets`和已有启停删除接口，增加可选`memory_index_state`。新内部`/internal/memory/model-calls`及侧车`/extract`、`/index`、`/search`均使用同源Schema和内部token，详见[个人资产模块契约](architecture/knowledge-modules.md#正式mem0接缝同源契约)。服务凭据只给承担调用的进程；共享embedding凭据文件供Rust API/Worker读取；Mem0凭据只供侧车读取。页面与公开报告不接收密钥。上述命令的替身通过只证明工程边界，真实模型试用和内容评分须另列证据。

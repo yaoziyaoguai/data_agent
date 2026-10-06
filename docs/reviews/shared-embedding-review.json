@@ -1,0 +1,304 @@
+{
+  "schema": 1,
+  "goal_revision": 19,
+  "increment_id": "I2-SHARED-EMBEDDING",
+  "conclusion": "passed",
+  "reviewer": "独立审查者 /root/review_shared_embedding；未参与本轮产品、契约、测试或文档实现，仅提出边界审查意见并编写本审查记录。",
+  "reviewed_at": "2026-10-06T00:18:33.021239+00:00",
+  "scope_sha256": "18f42fa207b7795947534efbf532b781ae34b3388f2d654a67052ae0fdec7fcf",
+  "summary": "按CURRENT、AGENTS及D04/D05/D06/C02/C05/C06/C07核对共享Qwen替换、预算/权限/恢复、模块职责、测试预期和实际证据。预算重绑、拒绝工具、长文租约及真实短问句用量估算问题已修正；共享迁移31个对象已完成且正式内容不变，旧账本保留。未发现阻止最终增量验收的代码缺陷；本记录仅批准进入make verify-increment，千表复验和最终四组gate尚未执行。",
+  "ready_for_final_increment_execution": true,
+  "final_increment_execution": {
+    "executed": false,
+    "status": "not_run",
+    "command": [
+      "make",
+      "verify-increment"
+    ],
+    "required_groups": [
+      "EMBED01",
+      "EMBED02",
+      "EMBED03",
+      "EMBED04"
+    ],
+    "limitation": "四组必须在本审查绑定的输入上完整退出0、无超时并生成指纹一致的执行收据。当前千表旧记录为failed，必须实际复验通过，不能用本审查或旧MVP收据覆盖。"
+  },
+  "requirements": [
+    "D04",
+    "D05",
+    "D06",
+    "C02",
+    "C05",
+    "C06",
+    "C07"
+  ],
+  "modules": [
+    "M01",
+    "M02",
+    "M04",
+    "M08",
+    "M10"
+  ],
+  "allowed_paths": [
+    "crates/data-agent",
+    "apps/api/src/main.rs",
+    "apps/worker/src/main.rs",
+    "scripts/development.py",
+    "scripts/setup_embedding.py",
+    "scripts/test_development.py",
+    "infra/embedding-model.json",
+    "infra/embedding.example.json",
+    "infra/embedding-profile.example.json",
+    "migrations",
+    "Cargo.lock",
+    "Makefile",
+    ".env.example",
+    "tests/mvp",
+    "tests/contracts",
+    "tests/architecture",
+    "README.md",
+    "docs/CURRENT.md",
+    "docs/development.md",
+    "docs/semantic-retrieval-design.md",
+    "docs/architecture",
+    "docs/visualizations",
+    "docs/reviews",
+    "docs/sources/evaluation/qwen-shared-trial.json",
+    "docs/sources/evaluation/qwen-shared-trial-byte-estimate.json",
+    "infra/README.md",
+    "packages/contracts"
+  ],
+  "requirements_review": {
+    "D04": "保留合成目录导入和现有分层知识，不改变预填范围。千表夹具保留1204张表与2408个新增对象；本轮只覆盖共享索引替换，未将D04所有I3范围标为完成。",
+    "D05": "来源、人工覆盖和正式语义版本写入规则未变；索引片段包含对象版本，新目标重建不改正文。晚到旧片段、停用过滤及回执丢失场景保留在最终千表验收。",
+    "D06": "正文片段和对象关联规则保留，分批输入有界。长文按同代有效租约续期，旧代次或过期作业不能获得新许可；不新增附件解析能力。",
+    "C02": "共享外发限定合成demo空间和固定百炼端点。工具由宿主验证会话、run、租约、当前上下文、参数指纹和拒绝状态；个人索引不并入共享集合，命中仍从MySQL复核。",
+    "C05": "共享与Mem0复用runtime调用许可/结算。工具继承原scope；对象版本首次维护profile冻结，集合变化不补额；固定输入和operation生成稳定调用ID。成功向量与usage原子持久化，unknown保留预留且不重发。真实短问句按带余量的保守估算预留，实际usage结算与超限熔断保留；错误估算旧账本未重置。",
+    "C06": "Milvus新集合核验1024维，旧384维集合和Mem0集合不删除。混合候选继续回源并明确降级。原四题/top6在真实Qwen小样验证；千表为协议规模回归，当前待最终gate，不声称千表真实模型召回率。",
+    "C07": "EmbeddingProfile由同源Schema生成并在边界校验；HTTP/Pi/SSE和Mem0内部协议不因共享用途扩权。M04管外部协议，M08管调用账本，M02管索引状态，用例负责组合；未发现私有store越界或另造Agent循环。"
+  },
+  "resolved_findings": [
+    {
+      "id": "INDEX-BUDGET",
+      "issue": "集合ID变化曾清空同一对象版本的embedding_profile，可能转用新trial。",
+      "resolution": "目标变化保留首次维护profile；新回归在部分索引后耗尽原额度，更换当前profile并重建集合，确认零新增调用及原绑定不变。",
+      "files": [
+        "crates/data-agent/src/modules/knowledge/store.rs",
+        "tests/mvp/check-shared-embedding.mjs"
+      ]
+    },
+    {
+      "id": "REJECTED-TOOL",
+      "issue": "已拒绝的读工具可能在接回拒绝回执前触发新embedding调用。",
+      "resolution": "共享工具authorizer在许可前拒绝rejected状态，保留成功工具向量回执复用；回归检查拒绝重放零外发。",
+      "files": [
+        "crates/data-agent/src/use_cases/knowledge_embeddings.rs",
+        "tests/mvp/check-shared-embedding.mjs"
+      ]
+    },
+    {
+      "id": "INDEX-LEASE",
+      "issue": "长文多个云请求可超过原120秒租约，单纯减小领取数无法保证完成。",
+      "resolution": "云向量每次领取一个对象，每批只续接仍有效同代租约；词法仍批量64，Worker有工作立即继续，空闲或错误等待。回归将剩余租期缩短后核对下一批续租。",
+      "files": [
+        "crates/data-agent/src/modules/knowledge/store.rs",
+        "apps/worker/src/main.rs",
+        "tests/mvp/check-shared-embedding.mjs"
+      ]
+    },
+    {
+      "id": "LOCAL-GRPC-PROXY",
+      "issue": "实际启动的Mem0连接回环Milvus时受到宿主代理环境影响。",
+      "resolution": "仅为开发子进程复制并合并NO_PROXY/no_proxy/no_grpc_proxy，追加127.0.0.1、localhost、::1，保留已有排除项及代理地址，不修改父进程或全局环境。独立执行4项启动配置单测通过。",
+      "files": [
+        "scripts/development.py",
+        "scripts/test_development.py"
+      ]
+    },
+    {
+      "id": "EMBEDDING-USAGE-ESTIMATE",
+      "issue": "真实短问句净收入为9 UTF-8字节，却返回18 input_tokens；仅以正文字节为上界导致误熔断。",
+      "resolution": "每条文本采用UTF-8字节数加64 tokens保守余量，prepare与固定分批使用同一上界且总额仍不超过8192。仍核验实际usage，超限保留真实费用并熔断，不增加次数或费用授权。旧breached trial和失败查询保留；新请求使用明确的新维护profile，旧索引预算不变。",
+      "files": [
+        "crates/data-agent/src/modules/retrieval/embedding.rs",
+        "tests/mvp/embedding-provider.mjs",
+        "tests/mvp/check-shared-embedding.mjs",
+        "tests/mvp/run-shared-embedding-trial.mjs"
+      ],
+      "evidence": "新真实小样代表请求净收入实际18 tokens且trial active；迁移31份成功回执的原上界加64×向量条数最大2708≤8192，本次实际存量分批保持兼容。",
+      "limitation": "64为保守估算余量而非官方保证。兼容核验针对本次31个存量对象，不宣称任意历史临界长文批次永久兼容。"
+    }
+  ],
+  "test_expectation_review": {
+    "basis": "原要求和原千表夹具中的独立四题，而非根据当前模型输出改答案。",
+    "preserved": [
+      "1204张合成表、2408个新增对象、三次完整索引/重建",
+      "旧版本、停用、个人资产隔离、Milvus未知查证、权限与明确降级",
+      "原四个中文问题及前六候选命中门槛"
+    ],
+    "changes": "千表改用通用字符hash向量验证协议与规模；真实Qwen小样使用原四题加六类干扰目录。首次360秒索引等待超时记为失败；保留规模和业务断言，将单次等待改900秒、整组3000秒，并移除重复集合describe与有工作时的固定sleep。CURRENT已记录原值、新值、原因和证据限制。实际迁移额外发现短问句token模板开销，使用真实18tokens记录补协议场景；旧56次6319tokens报告单独保留，修正后新56次6317tokens报告另行真实生成。",
+    "limitation": "小样4/4不证明真实千表召回率或低延迟，所有要求仅在本次替换范围内评审。"
+  },
+  "evidence_review": {
+    "reviewer_executed": [
+      {
+        "command": [
+          "node",
+          "tests/mvp/run-shared-embedding-trial.mjs",
+          "--audit"
+        ],
+        "exit_code": 0,
+        "additional_model_requests": 0,
+        "result": "当前公开报告与保留数据库账本一致，sourceHashes匹配当前源码和小样脚本；56条已结算1024维回执、6317输入token，代表短问句18 tokens且trial active，原题排名6/2/2/2。"
+      },
+      {
+        "command": [
+          "git",
+          "diff",
+          "--check"
+        ],
+        "exit_code": 0,
+        "result": "无补丁空白错误。"
+      },
+      {
+        "command": [
+          "python3",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "scripts",
+          "-p",
+          "test_development.py"
+        ],
+        "exit_code": 0,
+        "result": "4项配置单测通过；覆盖共享集合/私钥路径、环境代理绕过保留原项和原环境不变。"
+      },
+      {
+        "kind": "migration_read_only_sql",
+        "command": "对迁移数据库执行只读SELECT汇总knowledge_index_jobs与model_trials/model_call_attempts，不输出凭据或正文。",
+        "exit_code": 0,
+        "result": {
+          "indexed": 31,
+          "other_index_states": 0,
+          "old_ledger": {
+            "calls": 32,
+            "state": "breached",
+            "vectors": 31,
+            "spent_micros": 527,
+            "reserved_micros": 0,
+            "maximum_adjusted_upper": 2708
+          },
+          "new_ledger": {
+            "calls": 1,
+            "state": "active",
+            "vectors": 1,
+            "spent_micros": 2,
+            "reserved_micros": 0
+          }
+        },
+        "additional_model_requests": 0
+      }
+    ],
+    "inspected_artifacts": [
+      {
+        "path": ".local/checks/shared-embedding.json",
+        "sha256": "cb35fc1ed5c458c2b185c2b51b6fa0a6e0ea6967e5473e87e19896eec7c7e7b4",
+        "passed": true,
+        "check_count": 9
+      },
+      {
+        "path": ".local/checks/memory-provider.json",
+        "sha256": "9a5c0c784cc93cb2eb24c3bdde6b3ea137a1ba02e9faa986f978a1e0deb2c051",
+        "passed": true,
+        "check_count": 9
+      },
+      {
+        "path": ".local/checks/runtime-locking.json",
+        "sha256": "a2b75f771e473cc235f96ba0c973f576cd3fe0868e88042b68380cb247fbaff9",
+        "passed": true,
+        "check_count": 1
+      },
+      {
+        "path": ".local/checks/mvp-hybrid-retrieval.json",
+        "sha256": "5c3d2f44b6bbc338d10b32691251d611243afcfc90ea9cae1e67177288ad90bf",
+        "passed": false,
+        "check_count": 0
+      },
+      {
+        "path": ".local/checks/shared-embedding-migration.json",
+        "sha256": "e48c56b9e280295b33eb34d276c02b34ed03c8c6271e1e14a6ce71466301ac07",
+        "passed": true,
+        "check_count": 0
+      }
+    ],
+    "implementation_runner_reports": [
+      "短问句修复后共享9组协议与集成场景报告通过；随后补充精确18tokens及trial active断言，已审查其预期，最终gate将执行最终测试文本。两项Rust单测及四项启动配置测试已有通过报告。",
+      "make verify-code verify-contracts verify-architecture verify-memory：实现者报告完整退出0；独立复核对应测试源码、Mem0和锁序持久结果，最终gate将完整重跑。"
+    ],
+    "real_provider": {
+      "report": "docs/sources/evaluation/qwen-shared-trial.json",
+      "sha256": "8cb3d284676bcbfed0b246f0327786597076fea78d57b0c46dcb24858c1cba62",
+      "model": "qwen3.7-text-embedding",
+      "dimension": 1024,
+      "calls": 56,
+      "input_tokens": 6317,
+      "reserved_micros": 0,
+      "trial_state": "active",
+      "representative_input_tokens": 18,
+      "ranks": [
+        6,
+        2,
+        2,
+        2
+      ],
+      "scope": "10 synthetic catalog tables plus built-in demo knowledge; not a thousand-table model accuracy claim"
+    },
+    "pending": [
+      "EMBED02最终千表复验：旧结果failed，不计通过。",
+      "四组最终verify-increment执行收据，包含最后补充的短问句精确18tokens及trial active断言。"
+    ],
+    "report_bound_to_increment": "当前小样qwen-shared-trial.json及历史qwen-shared-trial-byte-estimate.json均加入verification_inputs；最终收据绑定两份报告和当前实现。",
+    "historical_real_provider": {
+      "report": "docs/sources/evaluation/qwen-shared-trial-byte-estimate.json",
+      "sha256": "5288399ba681281a13dc3b4a6eaee075d0a4e4318474d3b51d48d5cc92d50087",
+      "calls": 56,
+      "input_tokens": 6319,
+      "status": "保留原字节估算版本的历史结果与sourceHashes，不作为当前源码通过证据。"
+    },
+    "migration": {
+      "report": ".local/checks/shared-embedding-migration.json",
+      "indexed_objects": 31,
+      "dimension": 1024,
+      "coverage": {
+        "candidate_limit": 2200,
+        "index_state": "current",
+        "state": "complete",
+        "vector_state": "available"
+      },
+      "formal_content_hashes_unchanged": true,
+      "original_collections_preserved": true,
+      "legacy_batch_compatibility": {
+        "n": 31,
+        "maximumAdjustedUpper": 2708
+      },
+      "limitation": "正式内容摘要及集合保留依该次迁移记录；审查者另外只读核对31个索引状态、原账本和新账本。"
+    }
+  },
+  "scope_review": {
+    "changed_paths_within_allowed_scope": true,
+    "checked_changed_file_count": 65,
+    "new_agent_framework": false,
+    "pi_or_mem0_responsibility_changed": false,
+    "destructive_business_migration": false,
+    "public_api_behavior_expanded": false,
+    "notes": "仅新增可空向量回执与维护预算列；不改个人资产或正式知识内容。默认mock切为词法以维持零付费，真实模式显式配置百炼。"
+  },
+  "unresolved_blocking_findings": [],
+  "limits": [
+    "本收据是普通本地审查证据，不防同权限篡改。",
+    "本次独立审查仅做既有真实小样无付费audit与迁移只读SQL；没有发起新模型请求。",
+    "千表协议规模、中文四题小样、实际31对象迁移分别报告；不能用其中一项替代另一项或冒称全业务准确率。",
+    "本记录仅批准进入最终四组gate，不证明该gate已通过或整体MVP新增所有需求完成。"
+  ]
+}

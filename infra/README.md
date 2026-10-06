@@ -26,3 +26,7 @@
 Milvus 请求依据固定版本源码：[创建与加载](https://github.com/milvus-io/milvus/blob/v3.0.2/internal/distributed/proxy/httpserver/handler_v2.go#L2868)、[插入](https://github.com/milvus-io/milvus/blob/v3.0.2/internal/distributed/proxy/httpserver/handler_v2.go#L1773)、[查询](https://github.com/milvus-io/milvus/blob/v3.0.2/internal/distributed/proxy/httpserver/handler_v2.go#L1549)、[搜索](https://github.com/milvus-io/milvus/blob/v3.0.2/internal/distributed/proxy/httpserver/handler_v2.go#L2002)。先等待 collection 加载，查询和搜索均指定 `Strong`；本机 REST 请求显式禁用代理。
 
 此检查证明本机依赖可用，不证明应用数据库迁移、Embedding、语义检索质量、持久化重启恢复或生产容量。
+
+## 共享向量配置
+
+`embedding-model.json`固定百炼Qwen模型、1024维和输入上限。`embedding.example.json`只给端点与本地密钥文件路径；`embedding-profile.example.json`给有限维护预算格式。实际文件放在被忽略的`.local`，密钥文件设0600。共享集合按数据库隔离，个人Mem0集合独立。启动、重建、调用账本与故障边界见[开发指南](../docs/development.md#4-正式工作台与增量检查)。

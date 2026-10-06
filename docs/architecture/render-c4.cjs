@@ -3,7 +3,7 @@ const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 const { chromium } = require('playwright');
 
-// 总览与三张详图共用 11 个组件和 19 条关系；定稿与现有实现的差异在架构说明中单列。
+// 总览与三张详图共用 11 个组件和 19 条关系，职责与当前合成平台实现一致。
 const nodes = {
   users: { name: '业务用户', type: 'Person', tech: '产品 · 算法 · 分析', lines: ['数据开发维护语义'], kind: 'person' },
   web: { name: 'Web 应用', type: 'Container', tech: 'React / TypeScript', lines: ['提问、SQL、结果与历史', '语义管理 · 我的积累'], kind: 'app' },
@@ -63,7 +63,7 @@ const views = [
       ['memory-index', [[1740, 825], [1880, 825], [1880, 1010], [1660, 1010], [1660, 1110]], [1680, 986], ['个人记忆索引']],
       ['search', [[1130, 450], [1220, 450], [1220, 960], [1420, 960], [1420, 1220], [1460, 1220]], [1430, 1060], ['共享语义检索']],
     ],
-    footer: '定稿视图显示全部组件与主要关系；完整 19 条关系见后续详图。共享语义向量接入的实现差异见架构说明。',
+    footer: '当前视图显示全部组件与主要关系；完整 19 条关系见后续详图。共享语义与个人记忆均使用 Qwen 1024 维独立索引。',
   },
   {
     id: 'runtime', title: '工作台与 Agent', subtitle: '同一对话持续多轮；Pi 负责调查，Rust 保存可核对的业务状态。', height: 900,
@@ -94,7 +94,7 @@ const views = [
       ['sync', [[245, 890], [245, 975], [1655, 975], [1655, 920]], [950, 959]],
       ['prefill', [[245, 690], [245, 550], [1370, 550], [1370, 420], [1470, 420]], [942, 527]],
     ],
-    footer: '定稿使用 DeepSeek 与百炼模型端点；共享语义向量接入尚待对齐。平台接口当前由合成适配器实现。',
+    footer: 'DeepSeek 生成，百炼 Qwen 向量；共享与个人索引分开。平台接口由合成适配器实现。',
   },
   {
     id: 'memory', title: '个人记忆的提取与采用', subtitle: 'Mem0 先提取候选；Rust 校验并正式保存后，Worker 提交可检索版本。', height: 1030,
@@ -154,7 +154,7 @@ function content(v, index) {
     ${text(35, 38, `DATA AGENT  /  C4 CONTAINER  /  ${String(index + 1).padStart(2, '0')}`, 14, 600, '#577395')}
     ${text(35, 82, v.title, 34, 650, '#172e50')}
     ${text(35, 112, v.subtitle, 19, 400, '#607086')}
-    ${text(1885, 38, '2026-10-06 · 定稿方案 / 实现差异单列', 15, 500, '#607086', 'end')}
+    ${text(1885, 38, '2026-10-06 · 当前实现 / 合成平台', 15, 500, '#607086', 'end')}
     <g class="boundary" fill="none" stroke="#c0cddd" stroke-width="1.5" stroke-dasharray="7 6">${boundary}</g>
     ${text(bx + 20, by + 23, 'Data Agent · 系统边界（仅显示本视图相关组件）', 14, 500, '#718297')}
     ${v.edges.map(e => edge(e, v.id)).join('')}
@@ -169,7 +169,7 @@ function content(v, index) {
 function svg(selected) {
   const height = selected.reduce((sum, v) => sum + v.height, 0);
   let offset = 0;
-  return `<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${height}" viewBox="0 0 ${W} ${height}" role="img" aria-labelledby="title description"><title id="title">Data Agent 软件架构 · ${selected.length === 1 ? selected[0].title : 'C4 容器视图'}</title><desc id="description">定稿架构由总览和工作台与 Agent、共享语义与查询、个人记忆三张详图呈现；共享语义向量实现尚待对齐。组件、调用方向与职责不随视图变化。MySQL 保存正式状态，Pi 是唯一 Agent 循环，Mem0 处理个人记忆，Milvus 是可重建索引。</desc>${selected.map(v => { const group = `<g transform="translate(0 ${offset})">${content(v, views.indexOf(v))}</g>`; offset += v.height; return group; }).join('')}</svg>\n`;
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${height}" viewBox="0 0 ${W} ${height}" role="img" aria-labelledby="title description"><title id="title">Data Agent 软件架构 · ${selected.length === 1 ? selected[0].title : 'C4 容器视图'}</title><desc id="description">定稿架构由总览和工作台与 Agent、共享语义与查询、个人记忆三张详图呈现；共享语义与个人记忆使用百炼 Qwen 1024 维独立索引。组件、调用方向与职责不随视图变化。MySQL 保存正式状态，Pi 是唯一 Agent 循环，Mem0 处理个人记忆，Milvus 是可重建索引。</desc>${selected.map(v => { const group = `<g transform="translate(0 ${offset})">${content(v, views.indexOf(v))}</g>`; offset += v.height; return group; }).join('')}</svg>\n`;
 }
 
 function drawio() {

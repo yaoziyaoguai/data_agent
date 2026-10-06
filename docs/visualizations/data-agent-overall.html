@@ -12,8 +12,8 @@
 </style>
 <section style="font:16px/1.7 system-ui,sans-serif;color:#172e50;background:#fff;padding:18px;border:1px solid #dbe4ef;border-radius:8px">
   <h2 style="margin:0 0 8px">当前定稿架构 · Pi SDK + Mem0</h2>
-  <p>生成模型：DeepSeek Flash。向量方案：百炼 Qwen。<strong>实现核对发现共享语义仍使用 E5，尚待对齐；个人记忆已使用 Qwen。</strong></p>
-  <p><a href="../architecture/README.md">查看完整架构与实现差异</a> · <a href="../architecture/data-agent-overview.svg">放大总览</a></p>
+  <p>生成模型：DeepSeek Flash。向量方案：百炼 Qwen。<strong>共享语义与个人记忆均已接入 Qwen 1024 维，分别保存到独立 Milvus 集合。</strong></p>
+  <p><a href="../architecture/README.md">查看完整架构与组件职责</a> · <a href="../architecture/data-agent-overview.svg">放大总览</a></p>
   <img src="../architecture/data-agent-overview.svg" alt="定稿架构总览：Pi、Mem0、Rust、Flash、百炼Qwen与存储" style="display:block;width:100%;height:auto">
 </section>
 <details style="margin-top:18px">

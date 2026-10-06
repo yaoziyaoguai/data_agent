@@ -1,0 +1,898 @@
+{
+  "passed": true,
+  "provider": "https://dashscope.aliyuncs.com/compatible-mode/v1/embeddings",
+  "model": "qwen3.7-text-embedding",
+  "dimension": 1024,
+  "material": "synthetic only",
+  "limits": {
+    "trial_id": "shared_sample_a81e318d-302b-477f-9776-7157e3d28745",
+    "call_limit": 160,
+    "cost_limit_micros": "100000"
+  },
+  "results": [
+    {
+      "question": "顾客付的钱退回多少？",
+      "expected": "fund_returns",
+      "rank": 6,
+      "candidates": [
+        "buyers_monthly",
+        "refunded_amount_cents",
+        "订单退款率",
+        "5. 三个示例指标",
+        "订单行与支付事件",
+        "fund_returns",
+        "支付归属净收入",
+        "4. 字段说明",
+        "order_status",
+        "月支付客户数",
+        "paid_amount_cents",
+        "raw_payments",
+        "synthetic_distractor_5",
+        "1. 本样例回答什么",
+        "2. 一行代表什么",
+        "3. 上游与加工",
+        "quantity",
+        "revenue_period",
+        "7. 样例覆盖及边界",
+        "synthetic_distractor_2",
+        "paid_at",
+        "dim_customers",
+        "buyer_labels",
+        "customer_id",
+        "客户标签关联",
+        "customer_tags",
+        "revenue_period.record_id",
+        "synthetic_distractor_4",
+        "is_test",
+        "demo_order_detail"
+      ],
+      "coverage": {
+        "candidate_limit": 2200,
+        "index_state": "current",
+        "state": "complete",
+        "vector_state": "available"
+      }
+    },
+    {
+      "question": "同一顾客这个月买了三次应该算几位顾客？",
+      "expected": "buyers_monthly",
+      "rank": 2,
+      "candidates": [
+        "5. 三个示例指标",
+        "buyers_monthly",
+        "customer_id",
+        "月支付客户数",
+        "客户标签关联",
+        "2. 一行代表什么",
+        "4. 字段说明",
+        "3. 上游与加工",
+        "7. 样例覆盖及边界",
+        "buyer_labels",
+        "订单退款率",
+        "customer_tags",
+        "revenue_period",
+        "dim_customers",
+        "order_id",
+        "支付归属净收入",
+        "1. 本样例回答什么",
+        "quantity",
+        "buyers_monthly.record_id",
+        "order_date",
+        "synthetic_distractor_3",
+        "synthetic_distractor_4",
+        "fund_returns",
+        "buyer_labels.record_id",
+        "revenue_period.record_id",
+        "line_id",
+        "订单行与支付事件",
+        "demo_order_detail",
+        "is_test",
+        "refunded_amount_cents"
+      ],
+      "coverage": {
+        "candidate_limit": 2200,
+        "index_state": "current",
+        "state": "complete",
+        "vector_state": "available"
+      }
+    },
+    {
+      "question": "月底创建的订单为何收入算下个月？",
+      "expected": "revenue_period",
+      "rank": 2,
+      "candidates": [
+        "支付归属净收入",
+        "revenue_period",
+        "order_date",
+        "5. 三个示例指标",
+        "订单行与支付事件",
+        "3. 上游与加工",
+        "1. 本样例回答什么",
+        "订单退款率",
+        "4. 字段说明",
+        "月支付客户数",
+        "2. 一行代表什么",
+        "paid_at",
+        "7. 样例覆盖及边界",
+        "order_id",
+        "fund_returns",
+        "line_id",
+        "6. 可填写与可推断的范围",
+        "buyer_labels",
+        "raw_order_lines",
+        "demo_order_detail",
+        "buyers_monthly",
+        "synthetic_distractor_2",
+        "revenue_period.record_id",
+        "quantity",
+        "order_status",
+        "raw_payments",
+        "synthetic_distractor_5",
+        "is_test",
+        "dim_customers",
+        "paid_amount_cents"
+      ],
+      "coverage": {
+        "candidate_limit": 2200,
+        "index_state": "current",
+        "state": "complete",
+        "vector_state": "available"
+      }
+    },
+    {
+      "question": "为客户打多种标记会不会让订单金额被算两次？",
+      "expected": "buyer_labels",
+      "rank": 2,
+      "candidates": [
+        "3. 上游与加工",
+        "buyer_labels",
+        "order_id",
+        "月支付客户数",
+        "客户标签关联",
+        "订单退款率",
+        "2. 一行代表什么",
+        "5. 三个示例指标",
+        "customer_tags",
+        "订单行与支付事件",
+        "1. 本样例回答什么",
+        "4. 字段说明",
+        "7. 样例覆盖及边界",
+        "line_id",
+        "支付归属净收入",
+        "fund_returns",
+        "paid_amount_cents",
+        "customer_id",
+        "6. 可填写与可推断的范围",
+        "buyers_monthly",
+        "refunded_amount_cents",
+        "paid_at",
+        "revenue_period",
+        "demo_order_detail",
+        "raw_order_lines",
+        "synthetic_distractor_4",
+        "region",
+        "dim_customers",
+        "synthetic_distractor_2",
+        "quantity"
+      ],
+      "coverage": {
+        "candidate_limit": 2200,
+        "index_state": "current",
+        "state": "complete",
+        "vector_state": "available"
+      }
+    }
+  ],
+  "sourceHashes": {
+    "crates/data-agent/src/modules/retrieval/embedding.rs": "57e6b2d52336d90475bfc04bc4988276c4841ae06e042a8c11e339f4d3a89844",
+    "crates/data-agent/src/modules/retrieval/vector.rs": "4a424fb872012ca5f6db9abebc0a81ab87659afa8e4aa5157533505b75cf4d65",
+    "crates/data-agent/src/modules/runtime/provider_calls/store.rs": "11abdb143928549dfcfc7e964432fdcc301f0eb964bed4558e015b14ff4328bb",
+    "crates/data-agent/src/modules/runtime/model_calls/store.rs": "fea8ce824636b960d7096b30f2bd0fb025e917738819ca37503b795f0e82e625",
+    "crates/data-agent/src/modules/knowledge/store.rs": "2afece657bad5e3cc4eeb76391be773a8a5a18ac95ef394f462a9749a6393566",
+    "crates/data-agent/src/use_cases/knowledge_embeddings.rs": "5636331791edf9d318a67d5cb9dd02a47ac69994d3b935e6bacb2a41fb77cb3f",
+    "crates/data-agent/src/use_cases/knowledge.rs": "e30ffecca69990129cade6c3cca6bf550fcda74dfa2577f66a9b33f883560f2a",
+    "crates/data-agent/src/use_cases/data_tools.rs": "8311ecffb6dc015733b1661d4375d749d8f301a293bcff694ccb1ed93508746e",
+    "apps/worker/src/main.rs": "bd73aa17829aea4971e7b029d0141c533e12022006862fb8a30f849618fe9808",
+    "infra/embedding-model.json": "5b7bba13943d433bff792e157c6a3b5a6d69d51ac7c55c8ac61a1de098adace3",
+    "migrations/202610060004_shared_embedding_receipts.sql": "ae7cf2fd31ff0b3fb3549833068c9cab2c1719f04f131d85b608532dd191c1ec",
+    "packages/contracts/schema.json": "51e89d4f820fa4377b99879ca9330b18797369b9c7d4f1ba450bbaff79bbcbf7",
+    "tests/mvp/shared-retrieval-fixture.mjs": "081a7a96573f233ae968d13bfbea3d6adb5e2307a193f6676bc87a4ec77a79ad",
+    "tests/mvp/run-shared-embedding-trial.mjs": "fc0d948760a333deb255d3c35078ad5364921efec4b7ee06d3e377257675a6c5"
+  },
+  "verifiedAt": "2026-10-06T00:02:48.605Z",
+  "scope": "10 synthetic catalog tables plus built-in demo knowledge; not a thousand-table model accuracy claim",
+  "representative": {
+    "id": "0d0128413d94b9de858961ed6b77ee109bf97ddab7013f918a6aa7a29888fb0b",
+    "state": "settled",
+    "usage": {
+      "elapsed_ms": 293,
+      "input_tokens": 20,
+      "output_tokens": 0
+    },
+    "vectors": 1,
+    "dimension": 1024,
+    "actual_micros": 2
+  },
+  "ledger": {
+    "calls": 56,
+    "state": "active",
+    "spent_micros": 658,
+    "reserved_micros": 0
+  },
+  "attempts": [
+    {
+      "id": "05414ca0a4c3b3688ca89b3bd4b1dd8e0832057920f7f472efdf7c7b03c0123d",
+      "state": "settled",
+      "usage": {
+        "elapsed_ms": 334,
+        "input_tokens": 59,
+        "output_tokens": 0
+      },
+      "vectors": 2,
+      "dimension": 1024,
+      "actual_micros": 6
+    },
+    {
+      "id": "0d0128413d94b9de858961ed6b77ee109bf97ddab7013f918a6aa7a29888fb0b",
+      "state": "settled",
+      "usage": {
+        "elapsed_ms": 293,
+        "input_tokens": 20,
+        "output_tokens": 0
+      },
+      "vectors": 1,
+      "dimension": 1024,
+      "actual_micros": 2
+    },
+    {
+      "id": "10d0b576cafab4ed4c47940eedfeab32901458ffcf4f8c44034e067b355986f6",
+      "state": "settled",
+      "usage": {
+        "elapsed_ms": 154,
+        "input_tokens": 53,
+        "output_tokens": 0
+      },
+      "vectors": 1,
+      "dimension": 1024,
+      "actual_micros": 6
+    },
+    {
+      "id": "10fc2a56f36ddcb67b3dea25c9ef9e85e56b6aa41e4f9d09fd82348cd42234d9",
+      "state": "settled",
+      "usage": {
+        "elapsed_ms": 505,
+        "input_tokens": 50,
+        "output_tokens": 0
+      },
+      "vectors": 1,
+      "dimension": 1024,
+      "actual_micros": 5
+    },
+    {
+      "id": "13da5ab61b3df0b607e9a7a1599655a26c0cf0d8bd09681434f34467aff6fa97",
+      "state": "settled",
+      "usage": {
+        "elapsed_ms": 255,
+        "input_tokens": 67,
+        "output_tokens": 0
+      },
+      "vectors": 2,
+      "dimension": 1024,
+      "actual_micros": 7
+    },
+    {
+      "id": "159d0424ee478376338a569e0dbd5994fde53f23b4fe307c3b42de8a86495c71",
+      "state": "settled",
+      "usage": {
+        "elapsed_ms": 324,
+        "input_tokens": 269,
+        "output_tokens": 0
+      },
+      "vectors": 2,
+      "dimension": 1024,
+      "actual_micros": 27
+    },
+    {
+      "id": "197cc3b6a98f821a5d266fbb268029486c4f72f25d97888524aa7bc1b8c79ff0",
+      "state": "settled",
+      "usage": {
+        "elapsed_ms": 204,
+        "input_tokens": 56,
+        "output_tokens": 0
+      },
+      "vectors": 2,
+      "dimension": 1024,
+      "actual_micros": 6
+    },
+    {
+      "id": "1ab1dd0f4f9e55f1eae1fd58d3f3796308a1c5a0b597646f7caefdb69affa7fd",
+      "state": "settled",
+      "usage": {
+        "elapsed_ms": 221,
+        "input_tokens": 44,
+        "output_tokens": 0
+      },
+      "vectors": 1,
+      "dimension": 1024,
+      "actual_micros": 5
+    },
+    {
+      "id": "1e16d5cf7060cfe47372f532230e9856a62691e2c92d64c490e8140935417683",
+      "state": "settled",
+      "usage": {
+        "elapsed_ms": 229,
+        "input_tokens": 67,
+        "output_tokens": 0
+      },
+      "vectors": 2,
+      "dimension": 1024,
+      "actual_micros": 7
+    },
+    {
+      "id": "20b9ae989116aa93fed5d4e278e9ee501f2451d34fb0649a32e43093f776813e",
+      "state": "settled",
+      "usage": {
+        "elapsed_ms": 228,
+        "input_tokens": 61,
+        "output_tokens": 0
+      },
+      "vectors": 2,
+      "dimension": 1024,
+      "actual_micros": 7
+    },
+    {
+      "id": "21c61ef336566695811555a59c7eab7cc70302a4bc05b0fd4996778a341bf9bf",
+      "state": "settled",
+      "usage": {
+        "elapsed_ms": 232,
+        "input_tokens": 42,
+        "output_tokens": 0
+      },
+      "vectors": 1,
+      "dimension": 1024,
+      "actual_micros": 5
+    },
+    {
+      "id": "2d2b49755566f11c905176898d843d290955723b48ab9b67db72dc9d016a337a",
+      "state": "settled",
+      "usage": {
+        "elapsed_ms": 194,
+        "input_tokens": 25,
+        "output_tokens": 0
+      },
+      "vectors": 1,
+      "dimension": 1024,
+      "actual_micros": 3
+    },
+    {
+      "id": "30c9f7507c0d7ec8c7808a2e7efc3bf16453f4ee580ba9460f566212e29b5217",
+      "state": "settled",
+      "usage": {
+        "elapsed_ms": 184,
+        "input_tokens": 54,
+        "output_tokens": 0
+      },
+      "vectors": 1,
+      "dimension": 1024,
+      "actual_micros": 6
+    },
+    {
+      "id": "342c7031e8e6b3428af2c3f5a2c19088a7b40d3a84c7fde268cb60a80ea545a2",
+      "state": "settled",
+      "usage": {
+        "elapsed_ms": 246,
+        "input_tokens": 66,
+        "output_tokens": 0
+      },
+      "vectors": 2,
+      "dimension": 1024,
+      "actual_micros": 7
+    },
+    {
+      "id": "363ad51cc7d26daf49497c35cfb3154918cb2212c58012abb9f61709b22bd181",
+      "state": "settled",
+      "usage": {
+        "elapsed_ms": 181,
+        "input_tokens": 41,
+        "output_tokens": 0
+      },
+      "vectors": 1,
+      "dimension": 1024,
+      "actual_micros": 5
+    },
+    {
+      "id": "3861257477fbd30bc331c5427fc38dc7a0de248e92db796990bdcdd398de0f8b",
+      "state": "settled",
+      "usage": {
+        "elapsed_ms": 237,
+        "input_tokens": 57,
+        "output_tokens": 0
+      },
+      "vectors": 2,
+      "dimension": 1024,
+      "actual_micros": 6
+    },
+    {
+      "id": "3f09f8f2b0895bbd7ac60f567e7cce9839e7b94bd6db115bf32017753eca3515",
+      "state": "settled",
+      "usage": {
+        "elapsed_ms": 199,
+        "input_tokens": 44,
+        "output_tokens": 0
+      },
+      "vectors": 1,
+      "dimension": 1024,
+      "actual_micros": 5
+    },
+    {
+      "id": "43608514980506609988a653cd48141544574d281c101b1f356ba4e91a946a1d",
+      "state": "settled",
+      "usage": {
+        "elapsed_ms": 225,
+        "input_tokens": 54,
+        "output_tokens": 0
+      },
+      "vectors": 1,
+      "dimension": 1024,
+      "actual_micros": 6
+    },
+    {
+      "id": "45e22b1f29fd1dabe9e2f3cdb45b8a053b0bbd7d6b0e2fe40482743cd3ef2425",
+      "state": "settled",
+      "usage": {
+        "elapsed_ms": 309,
+        "input_tokens": 648,
+        "output_tokens": 0
+      },
+      "vectors": 4,
+      "dimension": 1024,
+      "actual_micros": 65
+    },
+    {
+      "id": "473af98f6eef1a8a3678b3cb2ec2827f44fb4abd9ee6000f79db95fc0c0ee118",
+      "state": "settled",
+      "usage": {
+        "elapsed_ms": 193,
+        "input_tokens": 67,
+        "output_tokens": 0
+      },
+      "vectors": 2,
+      "dimension": 1024,
+      "actual_micros": 7
+    },
+    {
+      "id": "51e552275f663bf21b414ebdfd1d4b355685e6eb1c64ac0ff3c5f3d25ef3ee1e",
+      "state": "settled",
+      "usage": {
+        "elapsed_ms": 194,
+        "input_tokens": 64,
+        "output_tokens": 0
+      },
+      "vectors": 2,
+      "dimension": 1024,
+      "actual_micros": 7
+    },
+    {
+      "id": "52b6ed4421a71c65892975e1a91b4a1b54a0398cdf7661660ebc296907d4890a",
+      "state": "settled",
+      "usage": {
+        "elapsed_ms": 157,
+        "input_tokens": 22,
+        "output_tokens": 0
+      },
+      "vectors": 1,
+      "dimension": 1024,
+      "actual_micros": 3
+    },
+    {
+      "id": "543bcb1e1df3b7f69f7b4eab04657625ed718e64a4ea219d42d72776a548ab72",
+      "state": "settled",
+      "usage": {
+        "elapsed_ms": 237,
+        "input_tokens": 479,
+        "output_tokens": 0
+      },
+      "vectors": 5,
+      "dimension": 1024,
+      "actual_micros": 48
+    },
+    {
+      "id": "5817f20a71890e550b674c7cd11193922303aea68d26d48a95c5f8351f1818db",
+      "state": "settled",
+      "usage": {
+        "elapsed_ms": 162,
+        "input_tokens": 56,
+        "output_tokens": 0
+      },
+      "vectors": 1,
+      "dimension": 1024,
+      "actual_micros": 6
+    },
+    {
+      "id": "58a4670a510da8c321c6cba2d33464c53f685345ff68b1fac7899b1bcd318940",
+      "state": "settled",
+      "usage": {
+        "elapsed_ms": 319,
+        "input_tokens": 67,
+        "output_tokens": 0
+      },
+      "vectors": 2,
+      "dimension": 1024,
+      "actual_micros": 7
+    },
+    {
+      "id": "58efc45e64ce68cba63f3eecf478517564ff5060193812c3591d5eb910966472",
+      "state": "settled",
+      "usage": {
+        "elapsed_ms": 216,
+        "input_tokens": 61,
+        "output_tokens": 0
+      },
+      "vectors": 2,
+      "dimension": 1024,
+      "actual_micros": 7
+    },
+    {
+      "id": "608e82a89e66f771997dcd25aee1da4eb76907d4bc58b139ab40bbf983602e70",
+      "state": "settled",
+      "usage": {
+        "elapsed_ms": 164,
+        "input_tokens": 34,
+        "output_tokens": 0
+      },
+      "vectors": 1,
+      "dimension": 1024,
+      "actual_micros": 4
+    },
+    {
+      "id": "613c088f245c9c3aea9ba20306d0230ed184705e4dbcee2ca49af742b74f27fb",
+      "state": "settled",
+      "usage": {
+        "elapsed_ms": 268,
+        "input_tokens": 82,
+        "output_tokens": 0
+      },
+      "vectors": 2,
+      "dimension": 1024,
+      "actual_micros": 9
+    },
+    {
+      "id": "644ea3231435a3e7976915a922aa111b4102db0accc7bca10ba2885ccfb83875",
+      "state": "settled",
+      "usage": {
+        "elapsed_ms": 184,
+        "input_tokens": 28,
+        "output_tokens": 0
+      },
+      "vectors": 1,
+      "dimension": 1024,
+      "actual_micros": 3
+    },
+    {
+      "id": "66195b77206e2b41351da6aada8ef9adaeac5cd8838ec37627f6351fbad93afc",
+      "state": "settled",
+      "usage": {
+        "elapsed_ms": 350,
+        "input_tokens": 39,
+        "output_tokens": 0
+      },
+      "vectors": 1,
+      "dimension": 1024,
+      "actual_micros": 4
+    },
+    {
+      "id": "6b9a6287657a86e4b7a3abb58a92497c0d445a69ad1978b219d2d0dc0d473d0a",
+      "state": "settled",
+      "usage": {
+        "elapsed_ms": 217,
+        "input_tokens": 68,
+        "output_tokens": 0
+      },
+      "vectors": 2,
+      "dimension": 1024,
+      "actual_micros": 7
+    },
+    {
+      "id": "6d4b262d2d97acb63d78209cbed0fc5101d2fcc777eedd64f0030a99cf4185e2",
+      "state": "settled",
+      "usage": {
+        "elapsed_ms": 210,
+        "input_tokens": 151,
+        "output_tokens": 0
+      },
+      "vectors": 1,
+      "dimension": 1024,
+      "actual_micros": 16
+    },
+    {
+      "id": "7785c7025e9d6b1540e52540549d156dd95ea70c7eef626c70a6ca730b5c5380",
+      "state": "settled",
+      "usage": {
+        "elapsed_ms": 214,
+        "input_tokens": 57,
+        "output_tokens": 0
+      },
+      "vectors": 2,
+      "dimension": 1024,
+      "actual_micros": 6
+    },
+    {
+      "id": "79f98793461c9bf27e6835e6e5235ecaa0a6459a7bbdbb8b3255470b094980ea",
+      "state": "settled",
+      "usage": {
+        "elapsed_ms": 208,
+        "input_tokens": 67,
+        "output_tokens": 0
+      },
+      "vectors": 2,
+      "dimension": 1024,
+      "actual_micros": 7
+    },
+    {
+      "id": "7fb84d579b393c143c013112a98cdba4ae2c095ec46a3b527f48e5904a388a48",
+      "state": "settled",
+      "usage": {
+        "elapsed_ms": 218,
+        "input_tokens": 239,
+        "output_tokens": 0
+      },
+      "vectors": 2,
+      "dimension": 1024,
+      "actual_micros": 24
+    },
+    {
+      "id": "82dae45366555b60d998898782ebe4e8b6ea4a0148ee73df5592c8978e90c94a",
+      "state": "settled",
+      "usage": {
+        "elapsed_ms": 193,
+        "input_tokens": 42,
+        "output_tokens": 0
+      },
+      "vectors": 1,
+      "dimension": 1024,
+      "actual_micros": 5
+    },
+    {
+      "id": "84c43755a037b2a9d8bb34fb53c497ab77dbeb7f3495b799d447f83a3c40a347",
+      "state": "settled",
+      "usage": {
+        "elapsed_ms": 178,
+        "input_tokens": 42,
+        "output_tokens": 0
+      },
+      "vectors": 1,
+      "dimension": 1024,
+      "actual_micros": 5
+    },
+    {
+      "id": "955a33e08166c1026d9181d2e917e8cefb6f20fa293c51d2c5acce15bbbc9d42",
+      "state": "settled",
+      "usage": {
+        "elapsed_ms": 406,
+        "input_tokens": 236,
+        "output_tokens": 0
+      },
+      "vectors": 3,
+      "dimension": 1024,
+      "actual_micros": 24
+    },
+    {
+      "id": "9fddff7aa9ba1af83bbd62b5af086b3a20c73e6929d4d201c4fc0a7c8351b6fc",
+      "state": "settled",
+      "usage": {
+        "elapsed_ms": 294,
+        "input_tokens": 642,
+        "output_tokens": 0
+      },
+      "vectors": 4,
+      "dimension": 1024,
+      "actual_micros": 65
+    },
+    {
+      "id": "a53f1cbdf78edd621169fcd4dbc0a36121fe9f575805ab9986c7dbfbe6661129",
+      "state": "settled",
+      "usage": {
+        "elapsed_ms": 186,
+        "input_tokens": 56,
+        "output_tokens": 0
+      },
+      "vectors": 2,
+      "dimension": 1024,
+      "actual_micros": 6
+    },
+    {
+      "id": "a6340cdd8aadbc83656f93d90e8d502dd4e7a7612c88af8f94328094911dbff7",
+      "state": "settled",
+      "usage": {
+        "elapsed_ms": 375,
+        "input_tokens": 61,
+        "output_tokens": 0
+      },
+      "vectors": 2,
+      "dimension": 1024,
+      "actual_micros": 7
+    },
+    {
+      "id": "a7f21f15f67512212afe3b9d70b5ca790e201d13b30e24ef809cfdee15cd2578",
+      "state": "settled",
+      "usage": {
+        "elapsed_ms": 293,
+        "input_tokens": 362,
+        "output_tokens": 0
+      },
+      "vectors": 4,
+      "dimension": 1024,
+      "actual_micros": 37
+    },
+    {
+      "id": "aaa021c626c33b4dab73f09f9452db01fa4472151f859b527b646b15262fcca0",
+      "state": "settled",
+      "usage": {
+        "elapsed_ms": 199,
+        "input_tokens": 73,
+        "output_tokens": 0
+      },
+      "vectors": 2,
+      "dimension": 1024,
+      "actual_micros": 8
+    },
+    {
+      "id": "b1d0cafffe57696166008e08b46cf3cbb6a93b5e1a93ea9b80a2e0846ef426d5",
+      "state": "settled",
+      "usage": {
+        "elapsed_ms": 297,
+        "input_tokens": 118,
+        "output_tokens": 0
+      },
+      "vectors": 1,
+      "dimension": 1024,
+      "actual_micros": 12
+    },
+    {
+      "id": "b3cc05f3883ba28a25c7f366b6f08d52170c3c4a92ca925a1ae9be1fe03e55fe",
+      "state": "settled",
+      "usage": {
+        "elapsed_ms": 531,
+        "input_tokens": 664,
+        "output_tokens": 0
+      },
+      "vectors": 3,
+      "dimension": 1024,
+      "actual_micros": 67
+    },
+    {
+      "id": "b866686f4b6b6e2a1a6c65fbfa991e017dd3e63c5f4c88d5326189923d4e07ce",
+      "state": "settled",
+      "usage": {
+        "elapsed_ms": 204,
+        "input_tokens": 35,
+        "output_tokens": 0
+      },
+      "vectors": 1,
+      "dimension": 1024,
+      "actual_micros": 4
+    },
+    {
+      "id": "bd49fbddbe3783a90c8793a6db41c26086a41a53f3298ea511fc102e4e2ef301",
+      "state": "settled",
+      "usage": {
+        "elapsed_ms": 166,
+        "input_tokens": 27,
+        "output_tokens": 0
+      },
+      "vectors": 1,
+      "dimension": 1024,
+      "actual_micros": 3
+    },
+    {
+      "id": "ca621ad9aa45c599242507841214e0d0c60c8815b7b52e5a53da6bcbf550e71c",
+      "state": "settled",
+      "usage": {
+        "elapsed_ms": 203,
+        "input_tokens": 66,
+        "output_tokens": 0
+      },
+      "vectors": 2,
+      "dimension": 1024,
+      "actual_micros": 7
+    },
+    {
+      "id": "cc9dc1ea6b2d6a257b1bfdfcaa049c072bfc5ac35db70c2c892c93ce32e9be8d",
+      "state": "settled",
+      "usage": {
+        "elapsed_ms": 217,
+        "input_tokens": 67,
+        "output_tokens": 0
+      },
+      "vectors": 2,
+      "dimension": 1024,
+      "actual_micros": 7
+    },
+    {
+      "id": "cd4b20dd30d4a5d1e324e7cfe1338434c6affb3222185ff4b6e17e2d801accbe",
+      "state": "settled",
+      "usage": {
+        "elapsed_ms": 241,
+        "input_tokens": 67,
+        "output_tokens": 0
+      },
+      "vectors": 2,
+      "dimension": 1024,
+      "actual_micros": 7
+    },
+    {
+      "id": "e562cb70d80f9f37245edbe0c97d82cb2671adb51f8f5e86e849a4e79729bf42",
+      "state": "settled",
+      "usage": {
+        "elapsed_ms": 217,
+        "input_tokens": 43,
+        "output_tokens": 0
+      },
+      "vectors": 1,
+      "dimension": 1024,
+      "actual_micros": 5
+    },
+    {
+      "id": "eae2f83d555657d503c5e7aed2ea4e6faf5bad2636a16dece11277afbe2a606f",
+      "state": "settled",
+      "usage": {
+        "elapsed_ms": 290,
+        "input_tokens": 59,
+        "output_tokens": 0
+      },
+      "vectors": 2,
+      "dimension": 1024,
+      "actual_micros": 6
+    },
+    {
+      "id": "f03ef30ba77bbafb0c307667c7e8c59c37ff4c1bf5fadffba29bb31b0f65ccc2",
+      "state": "settled",
+      "usage": {
+        "elapsed_ms": 493,
+        "input_tokens": 44,
+        "output_tokens": 0
+      },
+      "vectors": 1,
+      "dimension": 1024,
+      "actual_micros": 5
+    },
+    {
+      "id": "f49fa9602b5c2f3b596ca47e7b4778b83ac345d6eb97912f5530b07aa1bcf14c",
+      "state": "settled",
+      "usage": {
+        "elapsed_ms": 308,
+        "input_tokens": 57,
+        "output_tokens": 0
+      },
+      "vectors": 2,
+      "dimension": 1024,
+      "actual_micros": 6
+    },
+    {
+      "id": "fa2271892da7e5e42cd893c3a89d719d6eb5b2d5d929c3d68ce616388364a66c",
+      "state": "settled",
+      "usage": {
+        "elapsed_ms": 226,
+        "input_tokens": 163,
+        "output_tokens": 0
+      },
+      "vectors": 1,
+      "dimension": 1024,
+      "actual_micros": 17
+    },
+    {
+      "id": "ff40dbe8ecb866ea11825fc66bee4fa3ff62aa7ce4c5fb7e356672fe092df632",
+      "state": "settled",
+      "usage": {
+        "elapsed_ms": 154,
+        "input_tokens": 37,
+        "output_tokens": 0
+      },
+      "vectors": 1,
+      "dimension": 1024,
+      "actual_micros": 4
+    }
+  ],
+  "totalInputTokens": 6319,
+  "estimatedCny": 0.0031595
+}
