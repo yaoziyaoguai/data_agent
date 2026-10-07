@@ -276,7 +276,7 @@ make verify-contracts    # 包括WorkspaceContext的记忆检索状态
 `node tests/mvp/check-semantic-governance.mjs --case GOV01` 至 `GOV05` 验证授权、平台查询拒绝、状态机、并发事务及隐私；`node tests/mvp/check-semantic-governance-browser.mjs` 走两个用户的实际页面流程。均使用隔离数据库与合成资料，不调用官方模型。
 
 - 启动迁移增加 `semantic_ownership`、`semantic_owner_operations`、`semantic_corrections`、`semantic_correction_operations`。历史 `semantic_change_proposals` 保留私人归属，升级不转公开。
-- 表/字段负责人不能在本系统直接指定；变更 mock 目录后点击“同步来源”。无维护人字段、明确 null 或权威目录移除会撤销同步的维护权。同步失败不假装新负责人已经生效；不承诺平台变更即时生效。
+- 表/字段负责人不能在本系统直接指定；变更 mock 目录后点击“同步来源”。无维护人字段、明确 null 或权威目录移除会撤销同步的维护权。负责人变更只在完整目录校验结束后，与同步成功回执同一事务生效；中途或最终事务失败不改变旧负责人及创建资格。来源元数据仍逐表导入，不承诺平台变更即时生效。
 - 独立人工创建的指标、文档、术语和关系默认由创建者负责；超级维护者可在对象页面“指定负责人”调整归属。系统导入与预填无可信人工创建者时保持未指定，录入者和最后修改者单独保存。
 - 提交者能修订未生效建议；修订后重新待审，之前的接受不再有效。旧语义版本、旧建议修订或过期依据必须重新核对，不自动套用到新版。
 - 超级维护者配置仅控制 Data Agent 内部语义动作。平台资料读取目前仍使用 demo 空间的模拟范围；查询拒绝由独立平台 mock 测试，真实 Datasight ACL、身份目录和及时撤权待实际接入。
@@ -284,3 +284,11 @@ make verify-contracts    # 包括WorkspaceContext的记忆检索状态
 ### 创建者归属升级
 
 `202610070001_creator_ownership.sql` 给创建资格查询补索引，并回填此前未指派且首版有明确人工录入者的独立对象。已指派、撤销、系统导入与预填不重分配。API 与 Web 需一同更新：`SemanticAccess` 新增必填 `can_create`，创建请求取消 `maintainer_id`（提交该字段会校验失败）；负责人调整继续使用已有管理接口。表交接后失去全部表维护关系者不能新建，仍可维护其已创建对象。新建按钮和服务端均使用当前创建资格。
+
+### 角色边界修复验证
+
+`check-semantic-role-boundaries.mjs --case sync|members|directory` 分别验证完整同步生效、负责人转交成员校验及管理目录；`check-semantic-role-boundaries-browser.mjs` 验证停用后离页找回、重新启用、成员选择、关联详情和宽窄屏。均在 `tests/mvp/`，使用隔离 MySQL 与合成平台，不调用模型。
+
+`GET /semantic-members` 仅供超级维护者读取本空间有效用户 ID，不返回登录凭据；当前名单来自已加载的开发登录配置。转交用例在写入前核对同一目录，不存在或跨空间目标返回 `invalid_input`，空值仍表示撤销。正式身份目录接入不在本轮。
+
+`GET /knowledge?directory=all|maintained` 按名称、状态及游标分页；`maintained` 使用当前对象负责人关系。`state=enabled|disabled` 仅用于管理目录，省略时包含两者，删除对象始终排除。原 `/knowledge?q=` 的语义召回规则保持。

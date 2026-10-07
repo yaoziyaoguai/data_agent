@@ -126,6 +126,8 @@ pub struct Boundary {
     pub semantic_correction_list: Option<SemanticCorrectionList>,
     #[serde(rename = "SemanticMaintenance")]
     pub semantic_maintenance: Option<SemanticMaintenance>,
+    #[serde(rename = "SemanticMemberList")]
+    pub semantic_member_list: Option<SemanticMemberList>,
     pub send_model_call: SendModelCall,
     pub session_receipt: SessionReceipt,
     pub skill_selection: SkillSelection,
@@ -979,10 +981,32 @@ pub enum VectorState {
 pub struct KnowledgeListQuery {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub after_id: Option<String>,
+    /// 管理目录按名称和状态分页；maintained按当前负责人关系筛选，包含停用项。省略时保留现有语义检索。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub directory: Option<Directory>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub q: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub related_id: Option<String>,
+    /// 仅用于管理目录；省略时包含启用及停用，始终排除已删除对象。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub state: Option<KnowledgeListQueryState>,
+}
+
+/// 管理目录按名称和状态分页；maintained按当前负责人关系筛选，包含停用项。省略时保留现有语义检索。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Directory {
+    All,
+    Maintained,
+}
+
+/// 仅用于管理目录；省略时包含启用及停用，始终排除已删除对象。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum KnowledgeListQueryState {
+    Disabled,
+    Enabled,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1611,6 +1635,11 @@ pub enum SemanticCorrectionState {
 pub struct SemanticCorrectionList {
     pub corrections: Vec<SemanticCorrection>,
     pub next_after_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SemanticMemberList {
+    pub user_ids: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

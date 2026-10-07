@@ -112,4 +112,5 @@ export interface ContractTypes {
   ApplySemanticCorrection: Boundary.ApplySemanticCorrection;
   SemanticCorrection: Boundary.SemanticCorrection;
   SemanticCorrectionList: Boundary.SemanticCorrectionList;
+  SemanticMemberList: Boundary.SemanticMemberList;
 }

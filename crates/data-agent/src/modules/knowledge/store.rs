@@ -678,6 +678,27 @@ async fn validate_document_metadata(
 }
 
 // 管理目录有界分页，不能把任意截断当成整个空间。
+pub async fn directory_page_in_tx(
+    tx: &mut AppTx<'_>,
+    ctx: &AccessContext,
+    after: Option<&str>,
+    name: Option<&str>,
+    state: Option<&str>,
+    maintained_ids: Option<&[String]>,
+) -> Result<(Vec<Value>, Option<String>)> {
+    let ids = maintained_ids.map(|ids| json!(ids).to_string());
+    let rows = sqlx::query("SELECT body FROM knowledge_objects FORCE INDEX(PRIMARY) WHERE space_id=? AND state<>'deleted' AND (? IS NULL OR state=?) AND (? IS NULL OR id>?) AND (? IS NULL OR INSTR(LOWER(name),LOWER(?))>0) AND (? IS NULL OR JSON_CONTAINS(CAST(? AS JSON),JSON_QUOTE(id))) ORDER BY id LIMIT 101")
+        .bind(&ctx.space_id).bind(state).bind(state).bind(after).bind(after)
+        .bind(name).bind(name).bind(&ids).bind(&ids).fetch_all(tx.connection()).await?;
+    let next = if rows.len() > 100 {
+        rows.get(99)
+            .and_then(|r| body(r)["id"].as_str().map(str::to_owned))
+    } else {
+        None
+    };
+    Ok((rows.iter().take(100).map(body).collect(), next))
+}
+
 pub async fn page_in_tx(
     tx: &mut AppTx<'_>,
     ctx: &AccessContext,

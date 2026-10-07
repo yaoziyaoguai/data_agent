@@ -9,9 +9,13 @@ use sqlx::MySqlPool;
 
 pub async fn read_access(pool: &MySqlPool, ctx: &AccessContext) -> Result<Value> {
     let mut tx = AppTx::begin(pool).await?;
-    let result = json!({"can_admin":access::is_super_maintainer(ctx)?,"can_create":access::can_create_in_tx(&mut tx, ctx).await?});
+    let result = json!({"can_admin":access::is_super_maintainer(ctx)?,"can_create":access::can_create_snapshot_in_tx(&mut tx, ctx).await?});
     tx.commit().await?;
     Ok(result)
+}
+pub fn list_members(ctx: &AccessContext, members: &access::SpaceMembers) -> Result<Value> {
+    access::authorize_maintainer(ctx)?;
+    Ok(json!({"user_ids":members.user_ids(ctx)?}))
 }
 
 pub async fn register_object_in_tx(
@@ -52,8 +56,11 @@ pub async fn assign(
     ctx: &AccessContext,
     object: &str,
     input: Value,
+    members: &access::SpaceMembers,
 ) -> Result<Value> {
     contracts::validate("AssignSemanticMaintainer", &input)?;
+    access::authorize_maintainer(ctx)?;
+    members.require_member(ctx, input["maintainer_id"].as_str())?;
     let mut tx = AppTx::begin(pool).await?;
     knowledge::read_in_tx(&mut tx, ctx, object, None, true).await?;
     let v = access::assign_in_tx(&mut tx, ctx, object, &input).await?;
@@ -75,17 +82,32 @@ pub async fn draft(pool: &MySqlPool, ctx: &AccessContext, input: Value) -> Resul
     tx.commit().await?;
     Ok(v)
 }
-async fn visible_in_tx(tx: &mut AppTx<'_>, ctx: &AccessContext, v: &Value) -> Result<bool> {
+async fn visible_in_tx(
+    tx: &mut AppTx<'_>,
+    ctx: &AccessContext,
+    v: &Value,
+    lock_authorization: bool,
+) -> Result<bool> {
     let object = v["object_id"].as_str().ok_or(Error::new("invalid_input"))?;
     knowledge::read_in_tx(tx, ctx, object, None, true).await?;
-    let can_review = access::maintenance_in_tx(tx, ctx, object).await?["can_edit"] == true;
+    let maintenance = if lock_authorization {
+        access::maintenance_in_tx(tx, ctx, object).await?
+    } else {
+        access::maintenance_snapshot_in_tx(tx, ctx, object).await?
+    };
+    let can_review = maintenance["can_edit"] == true;
     if v["submitter_id"] != ctx.user_id && !can_review {
         return Err(Error::new("not_available"));
     }
     Ok(can_review)
 }
-async fn view_in_tx(tx: &mut AppTx<'_>, ctx: &AccessContext, mut v: Value) -> Result<Value> {
-    let can_review = visible_in_tx(tx, ctx, &v).await?;
+async fn view_in_tx(
+    tx: &mut AppTx<'_>,
+    ctx: &AccessContext,
+    mut v: Value,
+    lock_authorization: bool,
+) -> Result<Value> {
+    let can_review = visible_in_tx(tx, ctx, &v, lock_authorization).await?;
     v["can_review"] = json!(can_review && v["state"] != "applied");
     v["can_revise"] = json!(v["submitter_id"] == ctx.user_id && v["state"] != "applied");
     contracts::validate("SemanticCorrection", &v)?;
@@ -94,7 +116,7 @@ async fn view_in_tx(tx: &mut AppTx<'_>, ctx: &AccessContext, mut v: Value) -> Re
 pub async fn read(pool: &MySqlPool, ctx: &AccessContext, correction: &str) -> Result<Value> {
     let mut tx = AppTx::begin(pool).await?;
     let v = knowledge::corrections::read_in_tx(&mut tx, ctx, correction, false).await?;
-    let v = view_in_tx(&mut tx, ctx, v).await?;
+    let v = view_in_tx(&mut tx, ctx, v, false).await?;
     tx.commit().await?;
     Ok(v)
 }
@@ -117,7 +139,7 @@ pub async fn list(pool: &MySqlPool, ctx: &AccessContext, after: Option<&str>) ->
     };
     let mut values = Vec::new();
     for row in rows {
-        match view_in_tx(&mut tx, ctx, row).await {
+        match view_in_tx(&mut tx, ctx, row, false).await {
             Ok(v) => values.push(v),
             Err(e) if e.code == "not_available" => {}
             Err(e) => return Err(e),
@@ -194,7 +216,7 @@ pub async fn change(
     };
     // 当前授权先于幂等回执检查；撤权者不能用旧操作读取正式保存内容。
     if let Some(v) = &initial {
-        let reviewer = visible_in_tx(&mut tx, ctx, v).await?;
+        let reviewer = visible_in_tx(&mut tx, ctx, v, true).await?;
         if action == "revise" {
             if v["submitter_id"] != ctx.user_id {
                 return Err(Error::new("forbidden"));
@@ -216,7 +238,7 @@ pub async fn change(
     }
     let command = json!({"action":action,"id":correction,"input":input});
     if let Some(v) = knowledge::corrections::begin_in_tx(&mut tx, ctx, &command).await? {
-        let v = view_in_tx(&mut tx, ctx, v).await?;
+        let v = view_in_tx(&mut tx, ctx, v, true).await?;
         tx.commit().await?;
         return Ok(v);
     }
@@ -284,7 +306,7 @@ pub async fn change(
     v["revision"] = json!((epoch(v["revision"].as_str().unwrap_or(""))? + 1).to_string());
     knowledge::corrections::save_in_tx(&mut tx, ctx, &v).await?;
     knowledge::corrections::record_in_tx(&mut tx, ctx, &command, &v).await?;
-    let v = view_in_tx(&mut tx, ctx, v).await?;
+    let v = view_in_tx(&mut tx, ctx, v, true).await?;
     tx.commit().await?;
     Ok(v)
 }

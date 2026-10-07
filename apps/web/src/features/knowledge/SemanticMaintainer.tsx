@@ -19,8 +19,15 @@ export function SemanticMaintainer({
     [version, setVersion] = useState(""),
     [busy, setBusy] = useState(false),
     [error, setError] = useState("");
+  const [members, setMembers] = useState<string[] | null>(null);
   const maintenance = object.maintenance;
   if (!maintenance) return null;
+  const loadMembers = async () => {
+    setMembers(null);
+    setError("");
+    try { setMembers((await api("SemanticMemberList", "/semantic-members")).user_ids); }
+    catch (e) { setError(message(e)); }
+  };
   const save = async () => {
     setBusy(true);
     setError("");
@@ -42,7 +49,7 @@ export function SemanticMaintainer({
       setEditing(false);
       onSaved();
     } catch (e) {
-      setError(message(e));
+      setError(e instanceof Error && e.message === "invalid_input" ? "负责人已不在当前有效成员中，请重新选择。" : message(e));
     } finally {
       setBusy(false);
     }
@@ -67,6 +74,7 @@ export function SemanticMaintainer({
             setEditing(true);
             setOwner(maintenance.maintainer_id ?? "");
             setVersion(maintenance.version);
+            void loadMembers();
           }}
         >
           指定负责人
@@ -76,12 +84,17 @@ export function SemanticMaintainer({
         <Modal title="指定独立语义负责人" onClose={() => setEditing(false)}>
           <p>此授权仅用于本对象的语义维护，不改变资料读取或 SQL 执行权限。</p>
           <label className="form-label">
-            负责人用户 ID（留空则撤销）
-            <input value={owner} onChange={(e) => setOwner(e.target.value)} />
+            负责人
+            <select aria-label="负责人" value={owner} disabled={members === null || busy} onChange={(e) => setOwner(e.target.value)}>
+              <option value="">暂不指定（撤销负责人）</option>
+              {owner && !members?.includes(owner) && <option value={owner} disabled>{members === null ? "正在读取成员…" : "原负责人已不在当前成员中"}</option>}
+              {members?.map(user => <option key={user} value={user}>{user}</option>)}
+            </select>
           </label>
+          {members === null && (error ? <button onClick={() => void loadMembers()}>重试读取成员</button> : <p role="status">正在读取当前空间成员…</p>)}
           <button
             className="primary"
-            disabled={busy}
+            disabled={busy || members === null || (owner !== "" && !members.includes(owner))}
             onClick={() => void save()}
           >
             保存负责人

@@ -25,11 +25,15 @@ pub async fn list(
     query: Option<&str>,
     after: Option<&str>,
     related: Option<&str>,
+    directory: Option<&str>,
+    state: Option<&str>,
 ) -> Result<Value> {
-    if query.is_some() && related.is_some() {
+    if (query.is_some() || directory.is_some()) && related.is_some()
+        || state.is_some() && directory.is_none()
+    {
         return Err(Error::new("invalid_input"));
     }
-    let vector = if let Some(query) = query {
+    let vector = if let Some(query) = query.filter(|_| directory.is_none()) {
         super::knowledge_embeddings::search(pool, ctx, query, None).await
     } else {
         retrieval::vector::Candidates::lexical()
@@ -38,7 +42,17 @@ pub async fn list(
     if let Some(object) = related {
         knowledge::read_in_tx(&mut tx, ctx, object, None, true).await?;
     }
-    let (values, next, coverage) = if let Some(query) = query {
+    let (values, next, coverage) = if let Some(directory) = directory {
+        let ids = if directory == "maintained" {
+            Some(access::maintainable_ids_in_tx(&mut tx, ctx).await?)
+        } else {
+            None
+        };
+        let (values, next) =
+            knowledge::directory_page_in_tx(&mut tx, ctx, after, query, state, ids.as_deref())
+                .await?;
+        (values, next, None)
+    } else if let Some(query) = query {
         let result = retrieve_in_tx(&mut tx, ctx, query, 30, &vector).await?;
         (result.objects, None, Some(result.coverage))
     } else {
@@ -47,7 +61,9 @@ pub async fn list(
     };
     let mut values = values;
     for value in &mut values {
-        super::semantic_governance::decorate_in_tx(&mut tx, ctx, value).await?;
+        value["maintenance"] =
+            access::maintenance_snapshot_in_tx(&mut tx, ctx, value["id"].as_str().unwrap_or(""))
+                .await?;
         value["prefill_status"] =
             ingestion::prefill_status_in_tx(&mut tx, ctx, value["id"].as_str().unwrap_or(""))
                 .await?;
@@ -78,7 +94,7 @@ pub async fn read(
             v["analysis_preference"] = preference;
         }
     }
-    super::semantic_governance::decorate_in_tx(&mut tx, ctx, &mut v).await?;
+    v["maintenance"] = access::maintenance_snapshot_in_tx(&mut tx, ctx, object).await?;
     tx.commit().await?;
     Ok(v)
 }

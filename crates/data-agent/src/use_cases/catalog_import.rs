@@ -45,6 +45,7 @@ async fn fetch_and_apply(
         std::collections::HashMap::<String, (u64, std::collections::HashSet<String>)>::new();
     let mut seen = std::collections::HashSet::new();
     let mut cursors = std::collections::HashSet::new();
+    let mut maintainers = std::collections::BTreeMap::<String, Option<String>>::new();
     for _ in 0..100 {
         // 网络读取完全在事务外；read中的采集前基线始终不改绑。
         let page = ingestion::catalog::fetch_page(cursor.as_deref(), snapshot.as_deref()).await?;
@@ -76,7 +77,7 @@ async fn fetch_and_apply(
                 return Err(Error::new("invalid_input"));
             }
             let mut tx = AppTx::begin(pool).await?;
-            // 先锁授权、后写知识；与人工保存保持同序，平台维护人只由此路径同步。
+            // 新对象先登记授权范围；负责人等完整同步成功后统一生效。
             let scope_objects = ingestion::catalog::objects(ctx, page_namespace, table, 1)?;
             let table_id = scope_objects[0]["id"]
                 .as_str()
@@ -103,16 +104,8 @@ async fn fetch_and_apply(
                     Err(e) => return Err(e),
                 }
             }
-            ids.sort();
-            ids.dedup();
             for object in ids {
-                access::sync_maintainer_in_tx(
-                    &mut tx,
-                    ctx,
-                    &object,
-                    table["maintainer_id"].as_str(),
-                )
-                .await?;
+                maintainers.insert(object, table["maintainer_id"].as_str().map(str::to_owned));
             }
             let (version, changed) =
                 ingestion::save_catalog_table_in_tx(&mut tx, ctx, read, page_namespace, table)
@@ -185,7 +178,7 @@ async fn fetch_and_apply(
         match (&cursor, page["complete"].as_bool()) {
             (None, Some(true)) => {
                 let mut tx = AppTx::begin(pool).await?;
-                // 撤权先于来源锁；与逐表导入同序，目录基线失败时整个事务回滚。
+                // 改派和撤权与成功回执同事务；统一先锁授权，再锁来源与知识。
                 let missing = if authoritative == Some(true) {
                     ingestion::missing_catalog_sources_in_tx(
                         &mut tx,
@@ -210,9 +203,21 @@ async fn fetch_and_apply(
                     }
                 }
                 for object in revoked {
-                    access::sync_maintainer_in_tx(&mut tx, ctx, &object, None).await?;
+                    maintainers.insert(object, None);
+                }
+                for (object, owner) in &maintainers {
+                    access::sync_maintainer_in_tx(&mut tx, ctx, object, owner.as_deref()).await?;
                 }
                 ingestion::check_catalog_read_in_tx(&mut tx, ctx, read, page_namespace).await?;
+                // 非权威目录也不能用已被并发导入替换的来源提交旧负责人。
+                for (source, (version, _)) in &imported {
+                    ingestion::check_prefill_sources_in_tx(
+                        &mut tx,
+                        &ctx.space_id,
+                        &json!([{"source_id":source,"version":version.to_string()}]),
+                    )
+                    .await?;
+                }
                 if authoritative == Some(true) {
                     // 等待锁时目录可能已改变；只校验当前集合，不在来源锁后追加授权锁。
                     if ingestion::missing_catalog_sources_in_tx(
@@ -227,13 +232,7 @@ async fn fetch_and_apply(
                     {
                         return Err(Error::new("version_conflict"));
                     }
-                    for (source, (version, keep)) in &imported {
-                        ingestion::check_prefill_sources_in_tx(
-                            &mut tx,
-                            &ctx.space_id,
-                            &json!([{"source_id":source,"version":version.to_string()}]),
-                        )
-                        .await?;
+                    for (source, (_, keep)) in &imported {
                         knowledge::retire_source_objects_in_tx(&mut tx, ctx, source, keep).await?;
                     }
                     for source in missing {

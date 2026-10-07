@@ -8,6 +8,7 @@ import type {
 import { ProposeCorrection } from "./CorrectionComposer.tsx";
 import { SemanticCorrections } from "./SemanticCorrections.tsx";
 import { KnowledgeCreator } from "./KnowledgeCreator.tsx";
+import { KnowledgeDirectory } from "./KnowledgeDirectory.tsx";
 import { SemanticMaintainer } from "./SemanticMaintainer.tsx";
 import { api } from "../../shared/api.ts";
 import { Modal } from "../../shared/Modal.tsx";
@@ -16,15 +17,22 @@ function currentObject(previous: KnowledgeObject | undefined, incoming: Knowledg
   const oldPreference=previous.analysis_preference;
   const newPreference=incoming.analysis_preference;
   const preference=oldPreference && (!newPreference || BigInt(oldPreference.version)>BigInt(newPreference.version))?oldPreference:newPreference;
-  if (BigInt(previous.version) > BigInt(incoming.version)) return preference?{...previous,analysis_preference:preference}:previous;
-  if(preference)incoming={...incoming,analysis_preference:preference};
+  const oldMaintenance = previous.maintenance;
+  const newMaintenance = incoming.maintenance;
+  const maintenance = oldMaintenance && (!newMaintenance || (oldMaintenance.authority_id === newMaintenance.authority_id && BigInt(oldMaintenance.version) > BigInt(newMaintenance.version))) ? oldMaintenance : newMaintenance;
+  // 内容、负责人和分析偏好分别更新，旧目录不能覆盖已收到的新权限。
+  const current = {
+    ...(BigInt(previous.version) > BigInt(incoming.version) ? previous : incoming),
+    ...(preference ? { analysis_preference: preference } : {}),
+    ...(maintenance ? { maintenance } : {}),
+  };
   const oldStatus = previous.prefill_status;
   const newStatus = incoming.prefill_status;
   const rank = (state: string) => state === "queued" ? 0 : state === "issued" ? 1 : 2;
   if (previous.version === incoming.version && oldStatus && newStatus && oldStatus.attempt_id === newStatus.attempt_id && rank(oldStatus.state) > rank(newStatus.state)) {
-    return { ...incoming, prefill_status: oldStatus };
+    return { ...current, prefill_status: oldStatus };
   }
-  return incoming;
+  return current;
 }
 function EntryEditor({
   object,
@@ -195,6 +203,8 @@ export function KnowledgePage({
   );
   const [tab, setTab] = useState("概览");
   const [query, setQuery] = useState("");
+  const [directoryScope, setDirectoryScope] = useState<"tables" | "all" | "maintained">("tables");
+  const [directoryRevision, setDirectoryRevision] = useState(0);
   const [nextAfter, setNextAfter] = useState<string | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
   const [relatedPage, setRelatedPage] = useState<{parent: string; ids: string[]; next: string | null; loading: boolean; failed: boolean}>({parent: "", ids: [], next: null, loading: false, failed: false});
@@ -322,7 +332,13 @@ export function KnowledgePage({
   const tables = objects.filter((o) => o.kind === "table");
   const save = (v: KnowledgeObject) => {
     ++refreshGeneration.current;
+    setDirectoryRevision(value => value + 1);
     setObjects((old) => old.map((o) => (o.id === v.id ? currentObject(o, v) : o)));
+  };
+  const selectObject = (v: KnowledgeObject) => {
+    setObjects(old => [...old.filter(o => o.id !== v.id), currentObject(old.find(o => o.id === v.id), v)]);
+    setCurrent(v.id);
+    setTab("概览");
   };
   const showSource = async (id: string) => {
     try {
@@ -392,13 +408,19 @@ export function KnowledgePage({
           {canAdmin && <button onClick={()=>void rebuild()} disabled={rebuilding}>{rebuilding?"正在排队…":"重建检索索引"}</button>}
           <KnowledgeCreator user={user} canCreate={canCreate} relatedId={current} onCreated={v => {
             ++refreshGeneration.current;
+            setDirectoryRevision(value => value + 1);
             setObjects(old => [...old.filter(o => o.id !== v.id), v]);
             setCurrent(v.id);
             setTab("概览");
           }}/>
         </div>
       </div>
-      <label className="search-box">
+      <label className="form-label directory-scope">语义目录范围
+        <select aria-label="语义目录范围" value={directoryScope} onChange={e => setDirectoryScope(e.target.value as "tables" | "all" | "maintained")}>
+          <option value="tables">按表浏览</option><option value="all">全部对象</option><option value="maintained">我负责的对象</option>
+        </select>
+      </label>
+      {directoryScope === "tables" && <label className="search-box">
         <span>⌕</span>
         <input
           aria-label="搜索语义对象"
@@ -406,13 +428,13 @@ export function KnowledgePage({
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
-      </label>
-      {searchLimited && <p className="quiet" role="status">候选较多，本次只核对了部分匹配对象。请补充具体名称或业务范围；当前结果不能说明其他对象不存在。</p>}
-      {vectorUnavailable && <p className="quiet" role="status">语义检索暂不可用，当前使用名称和关键词查找。可稍后重试；检索结果仍按当前知识版本核对。</p>}
+      </label>}
+      {directoryScope === "tables" && searchLimited && <p className="quiet" role="status">候选较多，本次只核对了部分匹配对象。请补充具体名称或业务范围；当前结果不能说明其他对象不存在。</p>}
+      {directoryScope === "tables" && vectorUnavailable && <p className="quiet" role="status">语义检索暂不可用，当前使用名称和关键词查找。可稍后重试；检索结果仍按当前知识版本核对。</p>}
       {maintenanceNotice && <p className="quiet" role="status">{maintenanceNotice}</p>}
       <div className="knowledge-layout">
-        <nav aria-label="语义对象" className="object-list">
-          {(query ? matches.map(o=>objects.find(current=>current.id===o.id)??o) : tables
+        <nav aria-label="语义对象" className={"object-list" + (directoryScope !== "tables" ? " management-directory" : "")}>
+          {directoryScope !== "tables" ? <KnowledgeDirectory scope={directoryScope} current={current} revision={directoryRevision} onSelect={selectObject}/> : <>{(query ? matches.map(o=>objects.find(current=>current.id===o.id)??o) : tables
           ).map((o) => (
             <button
               key={o.id}
@@ -429,6 +451,7 @@ export function KnowledgePage({
             </button>
           ))}
           {nextAfter && !query && <button disabled={loadingMore} onClick={() => void loadMore()}>加载更多语义对象</button>}
+          </>}
         </nav>
         <div className="knowledge-content">
           {selected && (
@@ -463,7 +486,7 @@ export function KnowledgePage({
                   )}
                 </div>
               </div>
-              <SemanticMaintainer object={selected} onSaved={()=>void refresh()}/>
+              <SemanticMaintainer object={selected} onSaved={()=>{setDirectoryRevision(value => value + 1);void refresh();}}/>
               {selected.kind==="table" && selected.analysis_preference && <p className="quiet">{selected.analysis_preference.preferred?"此表和所属字段优先深入分析，状态见各对象。":"基础资料已入目录；可设为常用表优先分析，或按需重新预填。"}</p>}
               {selected.prefill_status && <p className="quiet" role="status">{({queued:"来源已更新，等待语义分析",issued:"语义分析中；中断后会保留未知状态",budget_unavailable:"来源事实已更新；未配置可用维护预算，模型建议待补充",succeeded:"本次模型建议已保存，引用和格式已核对，业务含义仍需复核",superseded:"分析期间来源或人工版本已变化，旧建议未应用",unknown:"模型调用回执未知，保留预算且未自动重试",invalid_prefill:"模型结果未通过引用或格式校验，未应用"} as Record<string,string>)[selected.prefill_status.state] ?? selected.prefill_status.state}</p>}
               {selected.kind === "table" && (
@@ -501,6 +524,7 @@ export function KnowledgePage({
                       {o.id !== current && (
                         <h3>
                           {o.name} <small>v{o.version}</small>
+                          <button onClick={() => selectObject(o)}>打开详情</button>
                         </h3>
                       )}
                       {o.id!==current && <SemanticMaintainer object={o} onSaved={()=>void refresh()}/>}

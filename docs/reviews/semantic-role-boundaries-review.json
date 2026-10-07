@@ -1,0 +1,257 @@
+{
+  "schema": 1,
+  "goal_revision": 25,
+  "increment_id": "I2-ROLE-BOUNDARIES",
+  "conclusion": "passed",
+  "reviewer": "独立正确性复审者 /root/semantic_governance_review；未参与本次产品代码、契约、测试或设计实现。仅阅读源码、差异与运行产物，提出审查意见，并更新本记录；未运行 MySQL 或浏览器测试。",
+  "reviewed_at": "2026-10-07T08:40:23.284261+00:00",
+  "scope_sha256": "609c836d462b7b551b3293de121c9e78bfdd517e4a22b75e1763fdd6f8b7bc62",
+  "summary": "按 goal_revision=25 仅复核两个显示读取修复及新增回归。KnowledgePage 分别合并知识、负责人和分析偏好版本，旧目录不再覆盖已收到的新负责人；创建资格展示采用已提交快照，正式创建仍通过原带锁当前授权入口。已核对修复前依据及 ROLE03 两组、ROLE04 六项预跑结果，未放宽原条件。与上轮通过收据逐文件比较，只有约定的四个产品文件和两个测试文件改变，原三项角色修复保留。本记录批准启动十组最终冻结验收，尚不能宣称最终完成。",
+  "ready_for_final_increment_execution": true,
+  "final_increment_execution": {
+    "executed": false,
+    "status": "not_run",
+    "command": [
+      "make",
+      "verify-increment"
+    ],
+    "required_groups": [
+      "ROLE01",
+      "ROLE02",
+      "ROLE03",
+      "ROLE04",
+      "ROLE05",
+      "GOV01",
+      "GOV02",
+      "GOV04",
+      "GOV05",
+      "OWNER01"
+    ],
+    "limitation": "十组须在本次新审查绑定的输入上完整退出 0、无超时，并生成执行前后指纹一致的收据；前一轮完整收据及本次两组预跑都不能关闭本次修复。"
+  },
+  "prior_review": {
+    "goal_revision": 24,
+    "reviewer": "独立正确性审查者 /root/role_decision_audit；未参与本增量产品代码、正式契约、验收脚本或设计实现。独立阅读要求及补丁、提出问题，并在获准的 .local/checks 中编写隔离死锁复现；正式文件只编写本记录。",
+    "reviewed_at": "2026-10-07T06:12:03.142746+00:00",
+    "scope_sha256": "8646d5dd462c6030460e5dd23b06752241bf87b1bb30fadad1a0f6951df34dd1",
+    "record_path": ".local/role-display-repair/before/docs/reviews/semantic-role-boundaries-review.json",
+    "record_sha256": "9bf8547be384b13b36b22f92422c178034b89d35ff69dfde66573b6e68ff19ce",
+    "final_receipt_path": ".local/role-display-repair/previous-increment-result.json",
+    "final_receipt_sha256": "d35d38179ec3d7c9dd1346687df3284a4fe8f21e11777eac81c8054841cc8955",
+    "final_receipt_status": "passed",
+    "record_matches_previous_receipt": true,
+    "resolved_findings": [
+      {
+        "id": "OWNERSHIP-DISPLAY-DEADLOCK",
+        "issue": "批量同步按表 ID 获取授权写锁，知识列表按字段 ID 获取继承表的共享锁，可能反序；共享建议展示也存在同类路径。",
+        "reproduction": "审查者在隔离 MySQL 中用未修改的生产 SELECT 重现目录前两次授权读取，冲突方调用真实来源同步 API。performance_schema.data_lock_waits 证实同步等待 B 且已持 A 的写锁，读取端返回 MySQL 1213 (40001)，同步 API 返回 200。",
+        "resolution": "实现者为展示读取增加非加锁权限快照，知识列表/详情和建议列表/详情均采用该路径；修改动作保留锁内最新授权。审查者复核所有调用点及新增 ROLE03，五个真实展示接口在未提交改派期间返回已提交的 Bob 权限，Bob 的停用与审核等待提交给 Carol 后分别被 403/404 拒绝，知识及建议状态不变，撤权后的新读取被拒绝。",
+        "evidence": [
+          ".local/checks/semantic-role-lock-reproduction.json",
+          ".local/checks/reproduce-semantic-role-locks.mjs",
+          ".local/checks/semantic-role-directory.json"
+        ],
+        "limitation": "独立确定性复现使用目录的生产 SQL 与真实同步 API，未声称完整 GET 请求本身接受了确定性调度。修复后五个展示入口的完整 HTTP 回归由实现者运行，本审查读取结果并核对源码。"
+      },
+      {
+        "id": "MEMBER-OPENAPI-DESCRIPTION",
+        "issue": "新成员接口描述误复制 can_create/can_admin 返回说明，与实际 user_ids 响应不符。",
+        "resolution": "已改为当前空间有效 user_ids、仅超级维护者读取、不返回凭据且转交时再校验；同源类型和反例保持。",
+        "files": [
+          "packages/contracts/openapi.json"
+        ]
+      },
+      {
+        "id": "REVIEW-INPUT-PATH",
+        "issue": "冻结输入误写不存在的 docs/architecture/implementation-diagrams.html，审查指纹计算明确失败。",
+        "resolution": "实现者核对实际文件和渲染器后，将 allowed_paths 和 verification_inputs 改为 docs/architecture/implementation-atlas.html；图册内容和业务预期未变。审查者随后成功重新生成范围指纹。",
+        "files": [
+          "docs/CURRENT.md",
+          "docs/architecture/implementation-atlas.html",
+          "docs/architecture/render-implementation.mjs"
+        ]
+      }
+    ],
+    "reuse_boundary": "此历史审查覆盖完整同步发布负责人、当前空间成员转交、管理目录及五个展示入口的锁分离。其审查文件摘要与旧收据一致。旧证据仅证明旧版本；本次逐文件比对确认其余绑定内容保留，新增修复按当前记录另行复核，最终仍重新执行十组。"
+  },
+  "requirements": [
+    "D01",
+    "D10",
+    "D13",
+    "C02",
+    "C04",
+    "A08"
+  ],
+  "modules": [
+    "M01",
+    "M02",
+    "M03",
+    "M04",
+    "M07",
+    "M08",
+    "M09",
+    "M10",
+    "M11",
+    "M12"
+  ],
+  "requirements_review": {
+    "D01": "负责人版本独立于知识内容版本比较。旧目录对象、较旧正文或迟到结果不能覆盖已经收到的较新负责人；原分析偏好及同次预填状态保护保留。完整来源同步、成员转交及停用对象管理原有实现未变。",
+    "D10": "本次无个人资产、聊天、记忆、Skill 或私人提案公开范围变化；原 GOV05 继续在最终十组中验证。",
+    "D13": "以真实页面复现跨用户改派后的旧目录回退，新增浏览器断言捕获短暂回退；原独立对象录入、停用、找回、转交、详情和宽窄屏流程保留。",
+    "C02": "GET /semantic-access 单独使用 can_create_snapshot_in_tx；正式创建仍使用 can_create_in_tx 的 FOR SHARE 当前读。两个入口共用相同空间、来源、主体与 self authority 条件，不把展示结果当成授权。",
+    "C04": "SQL 确认及平台查询权限无修改，原 GOV02 继续在最终十组中验证，不能用本轮展示修复声称真实平台接入完成。",
+    "A08": "写授权、版本、幂等和事务路径保留。ROLE03 在未提交改派期间校验读展示不阻塞，同时让创建、编辑和审核等待，提交撤权后分别被 403、403、404 拒绝，未产生新对象或状态变更。"
+  },
+  "correctness_review": [
+    {
+      "area": "独立版本合并",
+      "result": "currentObject 先按 knowledge.version 选正文，再按各自版本合并 maintenance 与 analysis_preference；即使正文版本不推进，较新负责人仍保留。负责人只在 authority_id 相同时比较版本，未将不同授权对象的版本混作同一序列；同版本同 attempt_id 的预填终态保护未删除。"
+    },
+    {
+      "area": "创建资格读写分离",
+      "result": "read_access 是唯一改用 can_create_snapshot_in_tx 的用例。knowledge::edit 的 create 分支仍调用 can_create_in_tx；私有 read_can_create_in_tx 只按明确参数决定是否附加 FOR SHARE，其他谓词和超级维护者判断与修复前相同。"
+    },
+    {
+      "area": "失败与撤权",
+      "result": "ROLE03 扩大持锁夹具为 Bob 所有平台维护关系，避免其从另一张未锁的表获得资格而漏测。未提交时展示读取已提交的 true；三个真实修改请求等待，提交后创建与编辑 403、审核 404，创建对象缺席、知识和建议状态保持。"
+    },
+    {
+      "area": "页面行为回归",
+      "result": "ROLE04 先确认页面已收到 Carol，再点击仍持旧对象的管理目录；MutationObserver 捕获负责人、编辑和停用按钮的短暂回退，避免下一轮轮询恢复掩盖问题；另经服务端请求确认 Bob 仍被拒绝。"
+    },
+    {
+      "area": "收尾范围",
+      "result": "和上一轮完整验收的逐文件摘要比较，仅授权的四个产品文件及两个测试文件变化；没有新增 Schema、接口、迁移、依赖或 Agent 能力，其余原三项修复保留。"
+    }
+  ],
+  "resolved_findings": [
+    {
+      "id": "CACHED-OWNERSHIP-REGRESSION",
+      "issue": "知识正文版本未变时，旧目录对象覆盖已轮询到的新 maintenance，页面短暂恢复旧负责人和编辑/停用按钮。",
+      "before_evidence": ".local/checks/role-reaudit-result.json",
+      "resolution": "内容、负责人、分析偏好分别比较版本，再保留原预填状态合并规则。浏览器新增完整断言通过，服务端仍拒绝撤权者。",
+      "files": [
+        "apps/web/src/features/knowledge/KnowledgePage.tsx",
+        "tests/mvp/check-semantic-role-boundaries-browser.mjs"
+      ],
+      "classification": "显示状态回退；修复前服务端已返回 403，未描述为权限绕过。"
+    },
+    {
+      "id": "CREATION-CAPABILITY-DISPLAY-LOCK",
+      "issue": "只读 /semantic-access 复用创建时的 FOR SHARE 查询，KnowledgePage.refresh 会随负责人写锁等待。",
+      "before_evidence": ".local/role-display-repair/before-api.log",
+      "resolution": "展示读取独立的已提交资格快照，正式创建保留当前读和锁；新增回归同时证明展示不阻塞和撤权后写入被拒绝。",
+      "files": [
+        "crates/data-agent/src/modules/access/store.rs",
+        "crates/data-agent/src/modules/access/mod.rs",
+        "crates/data-agent/src/use_cases/semantic_governance.rs",
+        "tests/mvp/check-semantic-role-boundaries.mjs"
+      ],
+      "classification": "显示等待；未把普通锁等待扩大为新增死锁或越权结论。"
+    }
+  ],
+  "test_expectation_review": {
+    "basis": "用户授权仅修复已复现的两处显示读取问题，CURRENT goal_revision=25 将 ROLE03、ROLE04 补充为对应可观察行为。",
+    "preserved": [
+      "原 ROLE03 管理目录、名称、状态、103 项分页、跨维护者拒绝、Agent 排除停用项及编辑/审核撤权断言保留。",
+      "新增锁定全部 Bob 维护关系，扩展真实展示请求至 /semantic-access，并额外检查创建等待、403 及没有新建对象。",
+      "原 ROLE04 文档和指标录入、停用、离页找回、启用、管理员转交、关联详情、1440/390 布局与无脚本错误保留。",
+      "十组最终验收命令、超时和原要求未删除；本次只增加行为断言。"
+    ],
+    "before_failure_handling": "旧代码上的 API 回归准确失败于 /semantic-access 等待写锁。组合浏览器预跑在原有第二次录入指标按钮等待处超时，尚未达到新增断言，不作为目标故障证据；修复前浏览器依据使用已有定向复现，其 KnowledgePage 摘要已与修复前快照独立核对一致。",
+    "not_relaxed": "没有删除断言、放宽等待、替换为模拟页面或按当前实现反写结果。"
+  },
+  "evidence_review": {
+    "reviewer_executed": [
+      {
+        "command": [
+          "git",
+          "diff",
+          "--check"
+        ],
+        "exit_code": 0,
+        "result": "冻结补丁无空白错误。"
+      },
+      {
+        "check": "将当前绑定文件摘要与上轮执行收据及修复前快照比较",
+        "result": "只改变六个授权产品/测试文件，旧审查文件与上轮收据对应；定向浏览器复现的源码摘要与修复前快照一致。"
+      }
+    ],
+    "inspected_artifacts": [
+      {
+        "path": ".local/checks/semantic-role-directory.json",
+        "sha256": "09366e8be3ff20c0c791a8c15a11f2a08fb5ca7f7e10b783ab07aab1c4eaf42b",
+        "modified_at": "2026-10-07T08:33:33.269687+00:00",
+        "reported_passed": 2
+      },
+      {
+        "path": ".local/checks/semantic-role-browser/result.json",
+        "sha256": "1ae86ac65a7e5081e53fe15d0df2720afd4403de1b6040a39dcc9322a0766758",
+        "modified_at": "2026-10-07T08:34:24.626260+00:00",
+        "reported_passed": 6
+      },
+      {
+        "path": ".local/checks/role-reaudit-result.json",
+        "sha256": "4a9129e7691f811d64540cd19262cdef73f7e6a656f6e9905c065cd7c6f26a2b",
+        "modified_at": "2026-10-07T06:32:34.922550+00:00"
+      },
+      {
+        "path": ".local/role-display-repair/before-api.log",
+        "sha256": "ad92d4337321c3f2f634465263b56238156bee874ac0d5c1f84b14e8d2861a0b",
+        "modified_at": "2026-10-07T08:27:35.877352+00:00"
+      },
+      {
+        "path": ".local/role-display-repair/before-browser.log",
+        "sha256": "5c95688f21b2ec4e09698fa98937000d841ebfdf2d3fa57b85d79f31b4353b42",
+        "modified_at": "2026-10-07T08:28:47.853068+00:00"
+      },
+      {
+        "path": ".local/role-display-repair/before/docs/reviews/semantic-role-boundaries-review.json",
+        "sha256": "9bf8547be384b13b36b22f92422c178034b89d35ff69dfde66573b6e68ff19ce",
+        "modified_at": "2026-10-07T06:12:03.148135+00:00"
+      },
+      {
+        "path": ".local/role-display-repair/previous-increment-result.json",
+        "sha256": "d35d38179ec3d7c9dd1346687df3284a4fe8f21e11777eac81c8054841cc8955",
+        "modified_at": "2026-10-07T06:18:20.898910+00:00"
+      }
+    ],
+    "implementation_runner_reports": [
+      "实现者报告 API/Worker 离线锁定构建、cargo fmt、cargo clippy --all-targets -D warnings、TypeScript 和 Web 构建均完整退出 0；本复审没有重跑这些命令。",
+      "实现者报告 ROLE03 两组与 ROLE04 六项完整退出 0；本复审独立读取最新 JSON 产物并核对测试源码和预期。",
+      "实现者报告 7 条架构反例、282 项材料与 16 项交付检查器通过；本复审没有将报告等同于独立重新执行。"
+    ],
+    "artifact_limitation": "最新两组预跑证明直接受影响行为；十组最终冻结验收尚未开始。修复前未到目标断言的浏览器超时保留且不计为目标复现，旧十组通过收据只作为历史基线。",
+    "official_model_requests_by_reviewer": 0
+  },
+  "scope_review": {
+    "branch": "codex/semantic-role-boundaries",
+    "base_head": "0db0bb8ecc312734debec1b8ebf8292ef74b2ab7",
+    "repair_changed_product_and_test_files": [
+      "apps/web/src/features/knowledge/KnowledgePage.tsx",
+      "crates/data-agent/src/modules/access/mod.rs",
+      "crates/data-agent/src/modules/access/store.rs",
+      "crates/data-agent/src/use_cases/semantic_governance.rs",
+      "tests/mvp/check-semantic-role-boundaries-browser.mjs",
+      "tests/mvp/check-semantic-role-boundaries.mjs"
+    ],
+    "previous_bound_files_preserved_outside_repair": true,
+    "new_schema_or_api": false,
+    "new_migration_or_dependency": false,
+    "new_agent_framework": false,
+    "pi_or_mem0_responsibility_changed": false,
+    "reviewer_writes": [
+      "docs/reviews/semantic-role-boundaries-review.json"
+    ],
+    "fingerprint_boundary": "沿用 scripts/check_delivery.py：当前 delivery 契约、18 项决定、AGENTS、设计及声明输入绑定新 scope；审查摘要排除本审查文件，最终执行另将本文件绑定。CURRENT 状态和工作日志不能代替新的行为验收。"
+  },
+  "remaining_blockers": [],
+  "limits": [
+    "只批准启动 ROLE01–ROLE05、GOV01、GOV02、GOV04、GOV05、OWNER01 十组最终验收，不能据本记录宣布完成。",
+    "本次独立复核没有运行 MySQL 或浏览器测试；实现者运行命令与审查者查看源码/产物已分别列明。",
+    "运行环境为隔离 MySQL、合成平台与开发身份；真实 Datasight ACL、正式身份和同步时效不在本轮验证范围。",
+    "展示读取已提交快照，正式写入重验当前授权；展示修复不改变原有权限或平台 SQL 执行边界。",
+    "不重估 MVP 模型效果、千表检索或 Mem0，不修改 Pi SDK 或模型配置；未提交、推送、部署或重启常驻实例。",
+    "本地审查与摘要不能防同权限篡改。"
+  ]
+}

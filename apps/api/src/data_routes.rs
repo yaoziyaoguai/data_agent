@@ -28,6 +28,8 @@ pub async fn knowledge(
         query.get("q").map(String::as_str),
         query.get("after_id").map(String::as_str),
         query.get("related_id").map(String::as_str),
+        query.get("directory").map(String::as_str),
+        query.get("state").map(String::as_str),
     )
     .await
     .map_err(failure)?;

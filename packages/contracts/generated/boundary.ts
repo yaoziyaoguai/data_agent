@@ -90,6 +90,7 @@ export interface Boundary {
     SemanticCorrection?:        SemanticCorrection;
     SemanticCorrectionList?:    SemanticCorrectionList;
     SemanticMaintenance?:       SemanticMaintenance;
+    SemanticMemberList?:        SemanticMemberList;
     sendModelCall:              SendModelCall;
     sessionReceipt:             SessionReceipt;
     skillSelection:             SkillSelection;
@@ -268,6 +269,10 @@ export interface SemanticMaintenance {
 }
 
 export type SemanticMaintenanceSource = "datasight" | "creator" | "system";
+
+export interface SemanticMemberList {
+    user_ids: string[];
+}
 
 export interface SubmitSemanticCorrection {
     base_version:    string;
@@ -697,10 +702,28 @@ export type SearchCoverageState = "complete" | "candidate_limit" | "bounded";
 export type VectorState = "available" | "unconfigured" | "unavailable";
 
 export interface KnowledgeListQuery {
-    after_id?:   string;
+    after_id?: string;
+    /**
+     * 管理目录按名称和状态分页；maintained按当前负责人关系筛选，包含停用项。省略时保留现有语义检索。
+     */
+    directory?:  Directory;
     q?:          string;
     related_id?: string;
+    /**
+     * 仅用于管理目录；省略时包含启用及停用，始终排除已删除对象。
+     */
+    state?: KnowledgeListQueryState;
 }
+
+/**
+ * 管理目录按名称和状态分页；maintained按当前负责人关系筛选，包含停用项。省略时保留现有语义检索。
+ */
+export type Directory = "all" | "maintained";
+
+/**
+ * 仅用于管理目录；省略时包含启用及停用，始终排除已删除对象。
+ */
+export type KnowledgeListQueryState = "enabled" | "disabled";
 
 export interface LogoutReceipt {
     state: LogoutReceiptState;

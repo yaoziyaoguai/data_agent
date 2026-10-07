@@ -20,6 +20,14 @@ pub async fn access(AxumState(state): AxumState<State>, headers: HeaderMap) -> R
             .map_err(failure)?,
     )
 }
+pub async fn members(AxumState(state): AxumState<State>, headers: HeaderMap) -> ResponseResult {
+    let ctx = user(&state, &headers).map_err(failure)?;
+    success(
+        "SemanticMemberList",
+        semantic_governance::list_members(&ctx, &state.identities.members(&ctx))
+            .map_err(failure)?,
+    )
+}
 pub async fn assign(
     AxumState(state): AxumState<State>,
     headers: HeaderMap,
@@ -29,9 +37,15 @@ pub async fn assign(
     let ctx = user(&state, &headers).map_err(failure)?;
     success(
         "SemanticMaintenance",
-        semantic_governance::assign(&state.pool, &ctx, &id, input)
-            .await
-            .map_err(failure)?,
+        semantic_governance::assign(
+            &state.pool,
+            &ctx,
+            &id,
+            input,
+            &state.identities.members(&ctx),
+        )
+        .await
+        .map_err(failure)?,
     )
 }
 pub async fn draft(

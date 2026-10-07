@@ -876,6 +876,20 @@
             "schema": {
               "$ref": "./schema.json#/$defs/KnowledgeListQuery/properties/related_id"
             }
+          },
+          {
+            "name": "directory",
+            "in": "query",
+            "schema": {
+              "$ref": "./schema.json#/$defs/KnowledgeListQuery/properties/directory"
+            }
+          },
+          {
+            "name": "state",
+            "in": "query",
+            "schema": {
+              "$ref": "./schema.json#/$defs/KnowledgeListQuery/properties/state"
+            }
           }
         ]
       },
@@ -2428,6 +2442,34 @@
             }
           }
         }
+      }
+    },
+    "/semantic-members": {
+      "get": {
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schema.json#/$defs/SemanticMemberList"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "应用错误；权限、版本、待归属、未知和服务失败保留独立code",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schema.json#/$defs/AppError"
+                }
+              }
+            }
+          }
+        },
+        "description": "仅超级维护者可读取当前空间可信登录身份目录中的有效成员 user_ids，用于转交独立对象；响应不含凭据，服务端转交时仍独立校验。",
+        "summary": "超级维护者查询当前空间有效成员，用于调整独立对象负责人"
       }
     }
   }

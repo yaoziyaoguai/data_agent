@@ -6,12 +6,37 @@ use serde_json::{Value, json};
 use sqlx::Row;
 
 pub async fn can_create_in_tx(tx: &mut AppTx<'_>, ctx: &AccessContext) -> Result<bool> {
+    // 锁住一个当前有效的表维护关系，创建与该关系撤回按事务先后生效。
+    read_can_create_in_tx(tx, ctx, true).await
+}
+
+pub async fn can_create_snapshot_in_tx(tx: &mut AppTx<'_>, ctx: &AccessContext) -> Result<bool> {
+    // 展示只读取已提交资格；实际创建仍须调用带锁的当前授权检查。
+    read_can_create_in_tx(tx, ctx, false).await
+}
+
+async fn read_can_create_in_tx(
+    tx: &mut AppTx<'_>,
+    ctx: &AccessContext,
+    lock_authorization: bool,
+) -> Result<bool> {
     if super::is_super_maintainer(ctx)? {
         return Ok(true);
     }
-    // 锁住一个当前有效的表维护关系，创建与该关系撤回按事务先后生效。
-    let table: Option<String> = sqlx::query_scalar("SELECT object_id FROM semantic_ownership WHERE space_id=? AND source='datasight' AND maintainer_id=? AND authority_id=object_id ORDER BY object_id LIMIT 1 FOR SHARE")
-        .bind(&ctx.space_id).bind(&ctx.user_id).fetch_optional(tx.connection()).await?;
+    let mut sql = sqlx::QueryBuilder::<sqlx::MySql>::new(
+        "SELECT object_id FROM semantic_ownership WHERE space_id=",
+    );
+    sql.push_bind(&ctx.space_id)
+        .push(" AND source='datasight' AND maintainer_id=")
+        .push_bind(&ctx.user_id)
+        .push(" AND authority_id=object_id ORDER BY object_id LIMIT 1");
+    if lock_authorization {
+        sql.push(" FOR SHARE");
+    }
+    let table: Option<String> = sql
+        .build_query_scalar()
+        .fetch_optional(tx.connection())
+        .await?;
     Ok(table.is_some())
 }
 
@@ -54,8 +79,38 @@ pub async fn maintenance_in_tx(
     object: &str,
 ) -> Result<Value> {
     // 授权和正式保存处于同一事务；负责人同步或撤销需等待此共享锁释放。
-    let row = sqlx::query("SELECT b.authority_id,o.maintainer_id,o.source,o.version FROM semantic_ownership b JOIN semantic_ownership o ON o.space_id=b.space_id AND o.object_id=b.authority_id WHERE b.space_id=? AND b.object_id=? FOR SHARE")
-        .bind(&ctx.space_id).bind(object).fetch_optional(tx.connection()).await?.ok_or(Error::new("not_available"))?;
+    read_maintenance_in_tx(tx, ctx, object, true).await
+}
+
+pub async fn maintenance_snapshot_in_tx(
+    tx: &mut AppTx<'_>,
+    ctx: &AccessContext,
+    object: &str,
+) -> Result<Value> {
+    // 页面列表按知识对象排序，不持有跨表授权锁；修改动作必须另行当前读授权。
+    read_maintenance_in_tx(tx, ctx, object, false).await
+}
+
+async fn read_maintenance_in_tx(
+    tx: &mut AppTx<'_>,
+    ctx: &AccessContext,
+    object: &str,
+    lock_authorization: bool,
+) -> Result<Value> {
+    let mut sql = sqlx::QueryBuilder::<sqlx::MySql>::new(
+        "SELECT b.authority_id,o.maintainer_id,o.source,o.version FROM semantic_ownership b JOIN semantic_ownership o ON o.space_id=b.space_id AND o.object_id=b.authority_id WHERE b.space_id=",
+    );
+    sql.push_bind(&ctx.space_id)
+        .push(" AND b.object_id=")
+        .push_bind(object);
+    if lock_authorization {
+        sql.push(" FOR SHARE");
+    }
+    let row = sql
+        .build()
+        .fetch_optional(tx.connection())
+        .await?
+        .ok_or(Error::new("not_available"))?;
     let owner: Option<String> = row.get("maintainer_id");
     let source: String = row.get("source");
     let authority: String = row.get("authority_id");

@@ -3614,13 +3614,44 @@
           "minLength": 1,
           "maxLength": 64,
           "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "directory": {
+          "type": "string",
+          "enum": [
+            "all",
+            "maintained"
+          ],
+          "description": "管理目录按名称和状态分页；maintained按当前负责人关系筛选，包含停用项。省略时保留现有语义检索。"
+        },
+        "state": {
+          "type": "string",
+          "enum": [
+            "enabled",
+            "disabled"
+          ],
+          "description": "仅用于管理目录；省略时包含启用及停用，始终排除已删除对象。"
         }
       },
       "additionalProperties": false,
       "not": {
-        "required": [
-          "related_id",
-          "q"
+        "anyOf": [
+          {
+            "required": [
+              "related_id",
+              "q"
+            ]
+          },
+          {
+            "required": [
+              "related_id",
+              "directory"
+            ]
+          }
+        ]
+      },
+      "dependentRequired": {
+        "state": [
+          "directory"
         ]
       }
     },
@@ -5022,6 +5053,26 @@
         "next_after_id"
       ],
       "additionalProperties": false
+    },
+    "SemanticMemberList": {
+      "title": "SemanticMemberList",
+      "type": "object",
+      "properties": {
+        "user_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64,
+            "pattern": "^[A-Za-z0-9_-]+$"
+          },
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "user_ids"
+      ],
+      "additionalProperties": false
     }
   },
   "properties": {
@@ -5339,6 +5390,9 @@
     },
     "SemanticCorrectionList": {
       "$ref": "#/$defs/SemanticCorrectionList"
+    },
+    "SemanticMemberList": {
+      "$ref": "#/$defs/SemanticMemberList"
     }
   },
   "required": [

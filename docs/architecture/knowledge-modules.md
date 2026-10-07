@@ -559,3 +559,11 @@ M03的事实提取与单次模型适配器位于`modules/ingestion/prefill.rs`�
 ### 创建资格与升级边界
 
 `GET /semantic-access` 返回 `can_create` 与 `can_admin`。M01 在创建事务中当前读并锁定有效表维护关系；M02 保存正文、首版与索引待办，具名用例组合登记创建者，任一步失败全部回滚。来源为 `datasight`、`creator` 或 `system`；管理调整后记为 `system`。新增迁移仅回填首版人工记录明确、授权版本为 1 且未指派的独立对象，保留系统预填和主动撤销。表交接更新创建资格，不改变独立对象归属。
+
+### 当前角色边界补充
+
+- `DevelopmentIdentity::members` 从已用于登录的可信配置产生当前空间 `SpaceMembers`；成员快照不携带凭据。`semantic_governance::assign` 先校验操作者和目标成员，再进入既有版本/幂等事务。`GET /semantic-members` 只对超级维护者开放；不新增成员管理或组织服务。
+- `catalog_import` 收集本次平台表负责人，在完整目录、版本及租约校验通过的完成事务中统一应用，同时提交同步成功回执。中途失败可以保留已导入的来源知识，但表维护权及创建资格仍取自上次完整成功快照。
+- M01 的 `maintainable_ids_in_tx` 为“我负责的”提供当前对象集合；M02 `directory_page_in_tx` 按名称、状态和游标返回启用/停用对象。管理目录与 Agent 的有效知识召回分别调用，不把停用项送回 Agent。
+
+页面的知识与建议列表/详情使用 M01 的已提交权限快照，避免按显示顺序跨表持锁与同步批量改派形成死锁。编辑、建议提交/审核/应用仍使用 `maintenance_in_tx` 的当前读共享锁；页面的 `can_edit` 只作展示，不能授权保存。

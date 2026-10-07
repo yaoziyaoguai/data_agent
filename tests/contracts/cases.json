@@ -2692,5 +2692,81 @@
     },
     "valid": true,
     "roundtrip": true
+  },
+  {
+    "name": "management directory includes disabled name search",
+    "schema": "KnowledgeListQuery",
+    "value": {
+      "directory": "maintained",
+      "state": "disabled",
+      "q": "合成文档"
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "management directory excludes deleted filter",
+    "schema": "KnowledgeListQuery",
+    "value": {
+      "directory": "all",
+      "state": "deleted"
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "state filter requires management directory",
+    "schema": "KnowledgeListQuery",
+    "value": {
+      "state": "disabled"
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "directory cannot mix related scope",
+    "schema": "KnowledgeListQuery",
+    "value": {
+      "directory": "all",
+      "related_id": "table-a"
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "valid current space member list",
+    "schema": "SemanticMemberList",
+    "value": {
+      "user_ids": [
+        "alice",
+        "bob"
+      ]
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "member list cannot carry credentials",
+    "schema": "SemanticMemberList",
+    "value": {
+      "user_ids": [
+        "alice"
+      ],
+      "tokens": {}
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "member list has unique ids",
+    "schema": "SemanticMemberList",
+    "value": {
+      "user_ids": [
+        "alice",
+        "alice"
+      ]
+    },
+    "valid": false,
+    "roundtrip": false
   }
 ]

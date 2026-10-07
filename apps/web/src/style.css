@@ -869,6 +869,11 @@ th {
   font: 10px/1.7 sans-serif;
   margin-top: 5px;
 }
+.directory-scope { max-width: 240px; }
+.directory-filters { display: grid; gap: 8px; margin-bottom: 12px; }
+.directory-filters .form-label { margin: 0; min-width: 0; }
+.object-list.management-directory { display: block; }
+.management-directory > button { width: 100%; text-align: left; }
 .knowledge-content {
   padding: 25px 26px;
   min-width: 0;
@@ -1144,6 +1149,7 @@ dialog::backdrop {
   margin: 18px 0;
 }
 .form-label input,
+.form-label select,
 .form-label textarea {
   display: block;
   width: 100%;

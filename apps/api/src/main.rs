@@ -117,6 +117,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/queries/{id}/results", get(data_routes::results))
         .route("/queries/{id}/export.csv", get(data_routes::export))
         .route("/semantic-access", get(semantic_routes::access))
+        .route("/semantic-members", get(semantic_routes::members))
         .route("/knowledge/{id}/maintainer", post(semantic_routes::assign))
         .route(
             "/semantic-corrections",

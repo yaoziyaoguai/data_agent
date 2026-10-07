@@ -3,12 +3,12 @@
   "workflow": "dev_co",
   "schema": 1,
   "phase": "deliver",
-  "status": "done",
-  "goal_revision": 23,
+  "status": "in_progress",
+  "goal_revision": 26,
   "environment": "macOS arm64 / Node 26.8.1 / npm 11.19.0 / Rust 1.99.0 / Python 3.14.7 / SQLite 3.53.4 / Colima 0.10.1 / Docker Engine 29.2.1 / Compose 5.3.1 / MySQL 8.4.11 / Milvus 3.0.2",
   "verification": {
     "level": "targeted",
-    "reason": "验证逐对象权限、共享建议状态机、原子保存和浏览器协作流程；使用隔离 MySQL 与合成平台，不调用付费模型。",
+    "reason": "复审后只修复旧目录覆盖新负责人展示，以及创建资格展示等待改派锁；保留正式写入当前授权校验和既有十组验收，无付费模型。",
     "freshness": "content",
     "inputs": [
       "AGENTS.md",
@@ -61,10 +61,10 @@
     "schema": 1,
     "registry": "docs/semantic-retrieval-design.md",
     "increment": {
-      "id": "I2-CREATOR-OWNERSHIP",
+      "id": "I2-ROLE-BOUNDARIES",
       "phase": "I2",
       "status": "complete",
-      "goal": "修正共享知识创建资格与负责人来源：当前空间 Datasight 表维护人可创建指标、文档等独立对象，首次创建者自动负责；表和字段继续平台同步。",
+      "goal": "修复三项角色与维护边界：完整同步后统一生效表负责人、转交核对当前空间有效成员、停用独立对象可在管理目录找回并启用。 复审收尾仅补负责人独立版本合并及创建资格展示快照读取。",
       "requirements": [
         "D01",
         "D10",
@@ -86,45 +86,131 @@
         "M12"
       ],
       "allowed_paths": [
-        "AGENTS.md",
-        "README.md",
         "docs/CURRENT.md",
-        "docs/development.md",
         "docs/semantic-retrieval-design.md",
-        "docs/architecture",
-        "docs/visualizations",
+        "docs/development.md",
+        "docs/architecture/knowledge-modules.md",
+        "docs/architecture/implementation-design.md",
+        "docs/reviews/semantic-role-boundaries-review.json",
         "crates/data-agent/src/modules/access",
         "crates/data-agent/src/modules/knowledge",
-        "crates/data-agent/src/use_cases",
+        "crates/data-agent/src/use_cases/catalog_import.rs",
+        "crates/data-agent/src/use_cases/semantic_governance.rs",
+        "crates/data-agent/src/use_cases/knowledge.rs",
         "apps/api/src",
         "apps/web/src/features/knowledge",
-        "apps/platform-mock",
+        "apps/web/src/style.css",
         "packages/contracts",
-        "migrations",
-        "scripts/check_architecture.py",
-        "scripts/development.py",
-        "tests/mvp",
-        "tests/contracts",
-        "Makefile",
-        "docs/reviews",
-        "apps/agent/tools/data-tools.ts",
-        "crates/data-agent/src/modules/ingestion/catalog.rs",
-        "apps/web/src/shared/WorkspaceShell.tsx",
-        "crates/data-agent/src/modules/ingestion/store.rs",
-        "apps/web/src/style.css"
+        "tests/contracts/cases.json",
+        "tests/mvp/check-semantic-role-boundaries.mjs",
+        "tests/mvp/check-semantic-role-boundaries-browser.mjs",
+        "tests/mvp/check-semantic-governance-browser.mjs",
+        "tests/mvp/check-creator-ownership-browser.mjs",
+        "docs/architecture/implementation-atlas.html",
+        "docs/architecture/implementation-diagram-checks.json",
+        "docs/architecture/module-diagrams"
       ],
       "non_goals": [
-        "不改变 Pi、Mem0、检索或 SQL 执行架构；不扩建组织权限服务。",
-        "不接真实 Datasight 或正式认证，不部署；用户已授权提交并推送现有 GitHub 主分支。"
+        "不改变既定角色、Pi、Mem0、Agent检索、SQL执行或私人资产规则；不建设组织管理、真实身份或新权限服务。",
+        "本轮仅修复、验证并同步必要契约文档；不部署或重启常驻实例，不提交推送。",
+        "本次继续修改仅限 KnowledgePage、access 模块、semantic_governance 的 read_access、两份角色边界测试及 CURRENT/审查记录；其余既有未提交改动保留，不新增接口、迁移或依赖。"
       ],
       "invariants": [
         "表维护者负责该表共享语义，超级维护者管理本系统全部表共享语义；录入人/修改人/负责人分别记录。",
         "本系统语义权限与Datasight资料读取、查询和SQL执行权限分别校验；个人记录仍按本人和空间隔离。",
         "私人草稿不自动公开；提交、接受和驳回均不改变正式语义或共享索引，核对编辑并明确保存才生效。",
         "保存重核当前授权、知识基版本、建议修订及依据范围，正式版本/应用记录/待办原子保存，Pi仍为唯一Agent循环。",
-        "维护成员资格由本空间平台表维护人并集派生；新建独立对象的负责人绑定可信登录者，不能由请求自报；已有对象引用、编辑与重试不转移归属。"
+        "维护成员资格由本空间平台表维护人并集派生；新建独立对象的负责人绑定可信登录者，不能由请求自报；已有对象引用、编辑与重试不转移归属。",
+        "同步未完整成功或最终事务失败，表维护人及创建资格保持上一成功快照；来源与知识继续复用既有逐表导入规则。",
+        "转交目标必须来自当前空间可信有效成员目录；成员身份不自动授予创建资格或平台查询权。",
+        "管理目录可按名称找到启用或停用的对象；Agent召回继续排除停用对象，服务端逐对象授权保持。",
+        "负责人版本与知识版本分别比较，旧目录数据不能覆盖已经收到的新负责人信息；创建资格展示读取已提交快照，正式创建仍锁定当前维护关系并在撤权后拒绝。"
       ],
       "acceptance": [
+        {
+          "id": "ROLE01",
+          "requirements": [
+            "D01",
+            "C02",
+            "A08"
+          ],
+          "expected": "同步中途失败、分页不完整或最终事务失败均不改变旧表负责人及创建资格；完整成功才原子改派与撤权，并保留并发版本检查。",
+          "evidence_kind": "runtime",
+          "command": [
+            "node",
+            "tests/mvp/check-semantic-role-boundaries.mjs",
+            "--case",
+            "sync"
+          ],
+          "timeout_seconds": 240
+        },
+        {
+          "id": "ROLE02",
+          "requirements": [
+            "D01",
+            "C02"
+          ],
+          "expected": "只有超级维护者可读取当前空间成员并转交；不存在和跨空间成员被拒绝且不改归属/回执；有效成员转交、撤销、重试保持既有行为。",
+          "evidence_kind": "runtime",
+          "command": [
+            "node",
+            "tests/mvp/check-semantic-role-boundaries.mjs",
+            "--case",
+            "members"
+          ],
+          "timeout_seconds": 240
+        },
+        {
+          "id": "ROLE03",
+          "requirements": [
+            "D01",
+            "D13",
+            "C02"
+          ],
+          "expected": "管理目录按名称、当前归属、状态及分页查找独立对象，停用对象可读且只由负责人或超级维护者启用；原Agent检索继续排除停用项。 展示读取已提交权限快照，不等待负责人改派写锁；编辑及建议审核仍等待改派并重验最新授权，撤权者不能生效。 创建资格展示同样不等改派锁；真正创建等待事务结束后重验，失去全部表维护关系者不可创建。",
+          "evidence_kind": "runtime",
+          "command": [
+            "node",
+            "tests/mvp/check-semantic-role-boundaries.mjs",
+            "--case",
+            "directory"
+          ],
+          "timeout_seconds": 240
+        },
+        {
+          "id": "ROLE04",
+          "requirements": [
+            "D01",
+            "D13",
+            "C02"
+          ],
+          "expected": "浏览器由非超级负责人创建并停用无关联文档/指标、离页后从管理目录找回再启用；超级维护者通过成员选择转交，关联对象可进入详情，宽窄屏可用。 已收到新负责人的页面再次选择旧目录条目时，负责人说明及编辑/启停按钮不得恢复旧权限，旧负责人服务端写入仍被拒绝。",
+          "evidence_kind": "runtime",
+          "command": [
+            "node",
+            "tests/mvp/check-semantic-role-boundaries-browser.mjs"
+          ],
+          "timeout_seconds": 300
+        },
+        {
+          "id": "ROLE05",
+          "requirements": [
+            "C02"
+          ],
+          "expected": "成员目录与登录使用同一可信身份集合；只列当前空间去重后的成员，跨空间快照和其他空间成员不能用于转交。",
+          "evidence_kind": "runtime",
+          "command": [
+            "cargo",
+            "test",
+            "--offline",
+            "--locked",
+            "-p",
+            "data-agent",
+            "--lib",
+            "modules::access::tests"
+          ],
+          "timeout_seconds": 120
+        },
         {
           "id": "GOV01",
           "requirements": [
@@ -147,29 +233,13 @@
             "C02",
             "C04"
           ],
-          "expected": "系统负责人或超级维护者没有平台查询权时不得执行SQL；拥有平台查询权也不能因此改语义；执行仍需确认具体SQL版本。",
+          "expected": "本系统超级维护者与表维护人仍不能越过平台 SQL 执行授权；普通用户的查询权不授予语义编辑权，SQL 未确认时不提交。",
           "evidence_kind": "runtime",
           "command": [
             "node",
             "tests/mvp/check-semantic-governance.mjs",
             "--case",
             "GOV02"
-          ],
-          "timeout_seconds": 240
-        },
-        {
-          "id": "GOV03",
-          "requirements": [
-            "D13",
-            "A08"
-          ],
-          "expected": "A提交可共享建议后B可在负责范围处理；驳回有理由，接受后状态为待修改，正式语义/索引不变；A可看到状态，本次SQL不等待审核。",
-          "evidence_kind": "runtime",
-          "command": [
-            "node",
-            "tests/mvp/check-semantic-governance.mjs",
-            "--case",
-            "GOV03"
           ],
           "timeout_seconds": 240
         },
@@ -193,10 +263,9 @@
           "id": "GOV05",
           "requirements": [
             "D10",
-            "C02",
-            "A08"
+            "C02"
           ],
-          "expected": "历史私人提案不因升级公开；B只能读提交内容，普通第三人不可读；聊天/记忆/Skill保持隔离，待处理/仅接受建议不进入共享召回。",
+          "expected": "超级维护者和表维护者均不可读取他人私人提案、会话与个人资产；共享建议读取核对当前权限，撤权后不得读取。",
           "evidence_kind": "runtime",
           "command": [
             "node",
@@ -205,21 +274,6 @@
             "GOV05"
           ],
           "timeout_seconds": 240
-        },
-        {
-          "id": "GOV06",
-          "requirements": [
-            "D01",
-            "D13",
-            "A08"
-          ],
-          "expected": "实际浏览器走私人草稿、显式提交、修订重审、负责人接受与编辑保存、驳回、响应丢失重试以及宽窄屏可用。",
-          "evidence_kind": "runtime",
-          "command": [
-            "node",
-            "tests/mvp/check-semantic-governance-browser.mjs"
-          ],
-          "timeout_seconds": 300
         },
         {
           "id": "OWNER01",
@@ -235,55 +289,44 @@
             "tests/mvp/check-creator-ownership.mjs"
           ],
           "timeout_seconds": 240
-        },
-        {
-          "id": "OWNER02",
-          "requirements": [
-            "D01",
-            "D13",
-            "C02"
-          ],
-          "expected": "非超级表维护者在浏览器创建指标及文档，显示本人为负责人并能编辑；响应丢失重试不重复创建；普通用户无创建入口，跨维护者只能提建议，宽窄屏正常。",
-          "evidence_kind": "runtime",
-          "command": [
-            "node",
-            "tests/mvp/check-creator-ownership-browser.mjs"
-          ],
-          "timeout_seconds": 300
         }
       ],
       "verification_inputs": [
         "AGENTS.md",
-        "README.md",
-        "docs/development.md",
         "docs/semantic-retrieval-design.md",
-        "docs/architecture",
-        "docs/visualizations",
+        "docs/development.md",
+        "docs/architecture/knowledge-modules.md",
+        "docs/architecture/implementation-design.md",
+        "docs/reviews/semantic-role-boundaries-review.json",
         "crates/data-agent/src/modules/access",
         "crates/data-agent/src/modules/knowledge",
-        "crates/data-agent/src/use_cases",
+        "crates/data-agent/src/use_cases/catalog_import.rs",
+        "crates/data-agent/src/use_cases/semantic_governance.rs",
+        "crates/data-agent/src/use_cases/knowledge.rs",
         "apps/api/src",
         "apps/web/src/features/knowledge",
-        "apps/platform-mock",
+        "apps/web/src/style.css",
         "packages/contracts",
-        "migrations",
-        "scripts/check_architecture.py",
-        "scripts/development.py",
-        "tests/mvp",
-        "tests/contracts",
+        "tests/contracts/cases.json",
+        "tests/mvp/check-semantic-role-boundaries.mjs",
+        "tests/mvp/check-semantic-role-boundaries-browser.mjs",
+        "tests/mvp/check-semantic-governance-browser.mjs",
+        "tests/mvp/check-creator-ownership-browser.mjs",
+        "crates/data-agent/src/modules/ingestion",
+        "tests/mvp/check-semantic-governance.mjs",
+        "tests/mvp/check-creator-ownership.mjs",
+        "tests/mvp/harness.mjs",
+        "scripts/check_delivery.py",
         "Makefile",
-        "docs/reviews",
-        "apps/agent/tools/data-tools.ts",
-        "crates/data-agent/src/modules/ingestion/catalog.rs",
-        "apps/web/src/shared/WorkspaceShell.tsx",
-        "crates/data-agent/src/modules/ingestion/store.rs",
-        "apps/web/src/style.css"
+        "docs/architecture/implementation-atlas.html",
+        "docs/architecture/implementation-diagram-checks.json",
+        "docs/architecture/module-diagrams"
       ],
       "review": {
         "status": "passed",
-        "record": "docs/reviews/creator-ownership-review.json"
+        "record": "docs/reviews/semantic-role-boundaries-review.json"
       },
-      "evidence": ".local/delivery/I2-CREATOR-OWNERSHIP-result.json"
+      "evidence": ".local/delivery/I2-ROLE-BOUNDARIES-result.json"
     }
   }
 }
@@ -293,7 +336,68 @@
 
 更新：2026-10-07。唯一活动项目目录：`~/work_space/data_agent`。
 
-## 当前任务：创建者自动负责共享知识（已完成并推送）
+## 当前任务：提交推送与实际试用（进行中）
+
+`goal_revision=26`。用户已授权提交推送当前修复，再实际使用系统并记录结果；此授权替代上一开发轮不提交/推送的操作限制。沿用 `codex/semantic-role-boundaries` 分支，先提交并推送已验收代码，再进行合成数据试用并提交试用记录。不合并其他分支、不部署或覆盖现有常驻实例，不因试用发现问题自动增加功能。
+
+试用重点为工作台、语义维护、创建者归属、跨用户纠错、负责人转交、停用对象找回及个人积累。使用现有启动和测试工具创建独立环境；模型模式与实际覆盖在报告中逐项说明，不把模拟流程计作真实模型准确率。问题记录复现步骤、预期/实际、影响和状态，源码不在本轮自行扩修。上一个增量的冻结契约与完成收据保留。
+
+## 上次完成：修复角色与维护边界（已验收）
+
+`goal_revision=25`，增量 `I2-ROLE-BOUNDARIES`。保留此前三项修复；用户授权仅收尾复审发现的两处显示读取问题。基线 `0db0bb8`，本地分支 `codex/semantic-role-boundaries`。
+
+- 负责人同步：读取并校验各表时收集负责人，完整分页完成后与同步成功回执在同一事务内提交；沿用现有授权 → 来源 → 知识锁序与版本校验，失败保留原角色快照。来源元数据仍采用现有逐表提交。
+- 转交校验：复用当前可信登录身份目录，限定当前空间有效成员；当前 mock 身份，未来接入不在本轮。超级维护者的选择列表和服务端校验使用同一目录，空值仍表示撤销。
+- 管理目录：补“全部对象 / 我负责的”与状态、名称、分页查找，允许独立对象和关联对象进入详情；Agent检索继续排除停用项。
+- 角色本身不改：表/字段来源于Datasight；独立对象创建者负责；引用不传递维护权；超级维护者不获得平台查询权或他人个人资产。
+- 本次复审收尾：页面分别比较知识与负责人版本，旧目录不覆盖新负责人；创建资格展示读取已提交快照，实际创建继续锁定当前授权。
+
+### 验收与要求变更
+
+审计在隔离环境复现同步失败却授予权限、无效用户转交成功和停用文档不可发现。证据 `.local/checks/role-audit-20261007.json`，仅作为修复前证据。新增 ROLE01–ROLE05，保留直接相关治理与归属原断言；最终增量收据见下文，旧收据不覆盖本轮变更。
+
+ROLE01 初跑在故障夹具创建时遇到 MySQL 客户端分隔符错误；给复合触发器补 `DELIMITER`，保持最终提交失败、原归属不变及重试断言。此前执行不计为通过。
+
+ROLE03 初跑错误地要求语义搜索结果总数为零；原检索按中文二字词与关键词召回，允许返回其他相关启用对象（系统设计第 1、15 节及既有 retrieval::tokens / knowledge::matching_in_tx）。改为检查停用对象 ID 不在结果中、所有结果均启用，并增加停用前能找到该对象的正向对照。管理目录、越权启用和分页预期保持；不改产品搜索规则，首次失败不计为通过。
+
+ROLE04 初跑在关联详情场景按表显示名定位时，命中内置资料与平台导入两个同名样例。改为从工作台重新进入默认的内置样例表，再打开其关联文档；创建、停用离页找回、启用及成员转交均保持真实页面操作和原断言。
+
+验收绑定检查发现 D10/C04 未绑定当前八组命令。补入既有 GOV02（平台执行权与语义维护权分离）和 GOV05（私人资产隔离），共十组；保留全部需求映射，不增加产品能力。
+
+独立审查定向复现目录展示与本次批量改派之间的反序死锁（`.local/checks/semantic-role-lock-reproduction.json`）。仅对知识与建议列表/详情展示采用已提交权限快照，编辑、提交、审核和应用建议继续在事务中加共享锁重验当前权限；ROLE03 增加未提交改派期间的真实接口读取，以及等待改派提交后拒绝旧负责人的保存/审核。此修复属于负责人统一提交的并发边界，不改变角色或产品范围。
+
+### 此前修复后验证（本次复审前）
+
+- ROLE01/ROLE02 预跑通过；最新 ROLE03 的目录、103 条分页、停用排除和并发权限快照两组行为完整通过，证据 `.local/checks/semantic-role-{sync,members,directory}.json`。ROLE05 当前空间成员单测通过。
+- ROLE04 浏览器 5 项流程完整通过，实际完成无关联文档/指标停用后离页找回与启用、成员下拉转交、关联条目详情；已查看 1440px 和 390px 截图，筛选、名称、状态、负责人和操作均可见，无横向溢出或页面脚本错误。证据 `.local/checks/semantic-role-browser/result.json` 及同目录截图。
+- 最新实现已通过 Rust fmt/clippy、TypeScript 和 Web 正式构建。194 条同源契约、281 项材料检查、16 条交付检查器测试、7 条架构反例与 28 张图册检查通过。构建保留 bundle 大小提示；本轮不扩展构建优化。图册用既有渲染器刷新来源校验，未变图形保持原文件，部署拓扑没有改变。
+- 独立审查已通过（`docs/reviews/semantic-role-boundaries-review.json`）；本轮验证环境为隔离 MySQL、合成 Datasight、开发身份与真实浏览器，没有付费模型调用，也不代表真实平台或正式身份接入通过。
+
+### 此前完成证据与边界（本次更新前）
+
+`make verify-increment` 完整退出 0：ROLE01–ROLE05、GOV01、GOV02、GOV04、GOV05、OWNER01 十组全部通过，均未超时，执行前后指纹一致。最终收据 `.local/delivery/I2-ROLE-BOUNDARIES-result.json`，各组完整日志由收据引用；独立审查：[角色边界修复审查](reviews/semantic-role-boundaries-review.json)，无剩余阻断项。既有 `make verify-architecture` 的事务锁回归亦通过。
+
+本轮仅完成上述三项修复及其同步/展示并发边界，角色规则、Pi SDK、Mem0、Agent 检索和 SQL 权限设计保持。系统设计、API、开发说明与模块资料已同步，图册来源校验有效。正式 Datasight 和正式身份接入仍属原有后续范围；无新付费模型调用，未重测模型准确率。本轮改动保存在 `codex/semantic-role-boundaries`，未提交、推送、部署或重启常驻实例。
+
+### 本次复审收尾（已完成）
+
+复审已确认两个场景：负责人由 Bob 转交 Carol 且详情已更新后，旧目录条目仍可把负责人及编辑/停用按钮短暂恢复为 Bob；`GET /semantic-access` 展示读取仍等待 Datasight 改派事务的写锁。修复前证据为 `.local/checks/role-reaudit-result.json` 和 `.local/checks/semantic-access-reaudit-result.json`，旧负责人实际写入返回 403，未发现越权。
+
+本次仅修改 `KnowledgePage.tsx` 的独立版本合并、access 创建资格读取与 `semantic_governance::read_access`，扩充 ROLE03/ROLE04 对应两份测试并更新当前/审查记录。不改角色规则、页面布局、外部契约、SQL 执行、Pi、Mem0、数据库结构或依赖。来源负责人完整提交、成员转交和停用对象找回的既有未提交修改继续保留。
+
+验收增补来自上述复现和既定 C02/D01/D13：ROLE04 不允许已更新的权限被旧目录覆盖；ROLE03 增加创建资格展示不等锁，以及正式创建等待改派后拒绝失去资格的用户。保留此前全部十组命令及原断言，不放宽超时或状态预期。变更前源码/测试/当前记录及审查记录保存于 `.local/role-display-repair/before/`；旧最终收据保存在 `.local/role-display-repair/previous-increment-result.json`，不用于关闭本次修复。
+
+本次实现已限制在上述六个产品/测试文件：页面按各自版本合并内容、负责人和分析偏好；M01 的创建资格展示与写入入口共用同一查询条件，展示读取已提交快照，正式创建仍保留当前读共享锁。外部接口及角色规则均未改变。
+
+- 修复前新增 ROLE03 完整失败于 `/semantic-access` 等待未提交改派锁，记录 `.local/role-display-repair/before-api.log`。修复前 ROLE04 组合执行在原有第二次“录入指标”按钮等待处超时，尚未到新增断言，不计为目标缺陷证据；明确的旧目录回退依据仍是前述独立定向浏览器复现。没有放宽超时、按钮条件或原有断言。
+- 修复后 API/Worker 编译及 Rust 格式检查通过；ROLE03 两组全部通过，包含六个展示入口以及三类正式写入等待撤权后拒绝。ROLE04 六项完整通过，包含旧目录不得恢复 Bob 负责人及编辑/停用按钮、旧负责人写入 403，以及原有五项流程；1440/390 页面无横向溢出或脚本错误。
+- TypeScript 与 Web 构建通过，保留既有 bundle 大小提示；模块边界检查、7 条架构反例、282 项材料检查和 16 个交付检查器单测通过。
+
+Rust clippy 与独立审查已完整通过。最终联合验收首轮前六组通过，GOV02 在隔离 Agent 监听端口前健康检查超时，未进入业务断言；失败收据保存在 `.local/role-display-repair/first-final-result.json`，不计为完成。未修改 Agent、测试条件或超时：独立加载同一 Pi 入口成功（约 10.9 秒），随后单独 GOV02 完整退出 0。随后在相同冻结输入上重新执行十组联合验收，ROLE01–ROLE05、GOV01、GOV02、GOV04、GOV05、OWNER01 全部完整退出 0、无超时，执行前后指纹一致。预跑证据仍在 `.local/checks/semantic-role-directory.json`、`.local/checks/semantic-role-browser/result.json`；本次最终收据为 `.local/delivery/I2-ROLE-BOUNDARIES-result.json`，完整日志目录由收据各组引用；旧收据只作历史。独立审查记录 `docs/reviews/semantic-role-boundaries-review.json` 绑定 goal_revision=25，scope 为 `609c836d462b7b551b3293de121c9e78bfdd517e4a22b75e1763fdd6f8b7bc62`，无剩余阻断项。28 张图册的既有覆盖、链接及来源检查也通过。
+
+本次仅新增这两处局部修复及回归，实际验证为隔离 MySQL、合成 Datasight、开发身份和真实浏览器；正式平台与身份接入仍未验证。未改 Agent、模型、超时、外部接口、迁移或依赖。改动留在现有分支，未提交、推送、部署、重启常驻实例或调用付费模型。
+
+## 上次交付：创建者自动负责共享知识（已完成并推送）
 
 `goal_revision=23`。用户于 2026-10-07 澄清并授权修正文档与实现、验收后提交推送。开发分支为 `codex/semantic-creator-ownership`，基线为主分支提交 `f253c19`；已快进合入默认分支 `codex/semantic-maintenance-prototype`。
 
