@@ -879,7 +879,7 @@ html[data-theme="shadcn"] .am-kv { border-color: var(--line); border-radius: var
 </tr>
 </tbody></table></div>
 <p>即使 B 有语义维护权，核验时执行 SQL 仍需平台权限与用户确认。反过来，A 有数据查询权，也不能直接修改共享语义。</p>
-<p>录入人和最后修改人分别记录。表负责人来自 Datasight 最近一次同步；共用指标和文档独立指定负责人。</p>
+<p>录入人和最后修改人分别记录。表负责人来自 Datasight 最近一次同步；指标和文档首次人工创建者自动负责，超级维护者可调整归属。</p>
 <h3>纠错怎样成为共享改进</h3>
 </div>
 <figure class="am-diagram am-flow"><svg viewBox="0 0 250 585" width="250" height="585" role="img" aria-label="流程图：A提交可共享建议、B或超级维护者、已驳回、已接受待修改、核对并编辑、明确保存、新共享版本与待办、更新共享索引" xmlns="http://www.w3.org/2000/svg"><defs><marker id="am7-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="am-arrow" d="M0,0 L10,5 L0,10 z"/></marker></defs><g></g><g><g data-step="0"><path class="am-edge" d="M141.3,49 L141.3,60.5 Q141.3,72 141.3,83.5 L141.3,95" marker-end="url(#am7-arrow)"/></g><g data-step="1"><path class="am-edge" d="M162.9,130 L182.7,146 Q202.5,162 202.5,178 L202.5,194" marker-end="url(#am7-arrow)"/><g class="am-edge-label"><rect x="174.5" y="153" width="56" height="18" rx="3"/><text x="202.5" y="162" text-anchor="middle" dominant-baseline="central">记录理由</text></g></g><g data-step="2"><path class="am-edge" d="M119.6,130 L99.8,146 Q80,162 80,178 L80,194" marker-end="url(#am7-arrow)"/></g><g data-step="3"><path class="am-edge" d="M80,229 L80,245 Q80,261 80,277 L80,293" marker-end="url(#am7-arrow)"/><g class="am-edge-label"><rect x="52" y="252" width="56" height="18" rx="3"/><text x="80" y="261" text-anchor="middle" dominant-baseline="central">尚未生效</text></g></g><g data-step="4"><path class="am-edge" d="M80,328 L80,339.5 Q80,351 80,362.5 L80,374" marker-end="url(#am7-arrow)"/></g><g data-step="5"><path class="am-edge" d="M80,409 L80,420.5 Q80,432 80,443.5 L80,455" marker-end="url(#am7-arrow)"/></g><g data-step="6"><path class="am-edge" d="M80,490 L80,501.5 Q80,513 80,524.5 L80,536" marker-end="url(#am7-arrow)"/></g></g><g><g class="am-node am-node--rect" data-key="A提交可共享建议" data-step="0"><rect class="am-node-shape" x="77.3" y="14" width="127.8" height="35" rx="3"/><text x="141.3" y="31.5" text-anchor="middle" dominant-baseline="central">A提交可共享建议</text></g><g class="am-node am-node--rect" data-key="B或超级维护者" data-step="0"><rect class="am-node-shape" x="83.8" y="95" width="114.8" height="35" rx="3"/><text x="141.3" y="112.5" text-anchor="middle" dominant-baseline="central">B或超级维护者</text></g><g class="am-node am-node--rect" data-key="已驳回" data-step="1"><rect class="am-node-shape" x="169" y="194" width="67" height="35" rx="3"/><text x="202.5" y="211.5" text-anchor="middle" dominant-baseline="central">已驳回</text></g><g class="am-node am-node--rect" data-key="已接受待修改" data-step="2"><rect class="am-node-shape" x="27" y="194" width="106" height="35" rx="3"/><text x="80" y="211.5" text-anchor="middle" dominant-baseline="central">已接受待修改</text></g><g class="am-node am-node--rect" data-key="核对并编辑" data-step="3"><rect class="am-node-shape" x="33.5" y="293" width="93" height="35" rx="3"/><text x="80" y="310.5" text-anchor="middle" dominant-baseline="central">核对并编辑</text></g><g class="am-node am-node--rect" data-key="明确保存" data-step="4"><rect class="am-node-shape" x="40" y="374" width="80" height="35" rx="3"/><text x="80" y="391.5" text-anchor="middle" dominant-baseline="central">明确保存</text></g><g class="am-node am-node--rect" data-key="新共享版本与待办" data-step="5"><rect class="am-node-shape" x="14" y="455" width="132" height="35" rx="3"/><text x="80" y="472.5" text-anchor="middle" dominant-baseline="central">新共享版本与待办</text></g><g class="am-node am-node--rect" data-key="更新共享索引" data-step="6"><rect class="am-node-shape" x="27" y="536" width="106" height="35" rx="3"/><text x="80" y="553.5" text-anchor="middle" dominant-baseline="central">更新共享索引</text></g></g></svg></figure>
@@ -953,7 +953,7 @@ html[data-theme="shadcn"] .am-kv { border-color: var(--line); border-radius: var
 </tr>
 </tbody></table></div>
 <p>当前没有把每一次聊天纠错都自动登记为建议的程序规则。未来也应区分一次性条件、个人偏好与共享语义错误。</p>
-<p>旧私人建议保留原来的私人范围。跨表共用指标和文档由超级维护者独立指定负责人，引用它们的表负责人可以提出建议；引用关系不授予编辑权。</p>
+<p>旧私人建议保留原来的私人范围。当前空间 Datasight 表维护人的并集具有创建指标和文档的资格；首次正式录入者自动负责，超级维护者可调整归属。其他表负责人可提出建议；引用关系不授予编辑权。</p>
 <p>本次明确条件优先于长期偏好。共享定义发生冲突时，Agent 要解释或澄清，并核对来源。</p>
 <p>依据：<a href="../sources/business-guide.md">合成业务说明</a>、<a href="https://github.com/yaoziyaoguai/data_agent/blob/cd82667/crates/data-agent/src/modules/knowledge/store.rs#L434">当前本人建议实现</a>、<a href="https://github.com/yaoziyaoguai/data_agent/blob/cd82667/crates/data-agent/src/modules/access/mod.rs#L56">当前演示权限</a>、<a href="../architecture/knowledge-modules.md">已确认的权限与纠错设计</a>。</p>
 </div></div>
@@ -1319,7 +1319,7 @@ A 可以提交纠错建议。B 可以驳回，或接受后核对、编辑并保�
 
 即使 B 有语义维护权，核验时执行 SQL 仍需平台权限与用户确认。反过来，A 有数据查询权，也不能直接修改共享语义。
 
-录入人和最后修改人分别记录。表负责人来自 Datasight 最近一次同步；共用指标和文档独立指定负责人。
+录入人和最后修改人分别记录。表负责人来自 Datasight 最近一次同步；指标和文档首次人工创建者自动负责，超级维护者可调整归属。
 
 ### 纠错怎样成为共享改进
 
@@ -1358,7 +1358,7 @@ A 的本次查询不必等待 B 处理。A 的聊天全文、查询结果与 Mem
 
 当前没有把每一次聊天纠错都自动登记为建议的程序规则。未来也应区分一次性条件、个人偏好与共享语义错误。
 
-旧私人建议保留原来的私人范围。跨表共用指标和文档由超级维护者独立指定负责人，引用它们的表负责人可以提出建议；引用关系不授予编辑权。
+旧私人建议保留原来的私人范围。当前空间 Datasight 表维护人的并集具有创建指标和文档的资格；首次正式录入者自动负责，超级维护者可调整归属。其他表负责人可提出建议；引用关系不授予编辑权。
 
 本次明确条件优先于长期偏好。共享定义发生冲突时，Agent 要解释或澄清，并核对来源。
 

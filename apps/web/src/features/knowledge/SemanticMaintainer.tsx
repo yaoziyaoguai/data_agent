@@ -53,7 +53,7 @@ export function SemanticMaintainer({
         语义负责人：{maintenance.maintainer_id ?? "暂未指定"} ·{" "}
         {maintenance.source === "datasight"
           ? "来自 Datasight 最近一次同步"
-          : "本系统独立指定"}
+          : maintenance.source === "creator" ? "首次录入后自动负责" : "本系统管理归属"}
         {maintenance.authority_id !== object.id ? " · 沿用所属表" : ""} ·{" "}
         {maintenance.can_edit ? "你可以维护" : "你可以提出纠错"}
       </p>

@@ -7,6 +7,13 @@ use crate::{
 use serde_json::{Value, json};
 use sqlx::MySqlPool;
 
+pub async fn read_access(pool: &MySqlPool, ctx: &AccessContext) -> Result<Value> {
+    let mut tx = AppTx::begin(pool).await?;
+    let result = json!({"can_admin":access::is_super_maintainer(ctx)?,"can_create":access::can_create_in_tx(&mut tx, ctx).await?});
+    tx.commit().await?;
+    Ok(result)
+}
+
 pub async fn register_object_in_tx(
     tx: &mut AppTx<'_>,
     ctx: &AccessContext,

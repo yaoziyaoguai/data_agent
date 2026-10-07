@@ -94,7 +94,7 @@ const views = [
       ['sync', [[245, 890], [245, 975], [1655, 975], [1655, 920]], [950, 959]],
       ['prefill', [[245, 690], [245, 550], [1370, 550], [1370, 420], [1470, 420]], [942, 527]],
     ],
-    footer: '表负责人同步自平台；共用对象独立负责。建议接受后编辑保存，详见 F02；语义角色不授予查询权。',
+    footer: '表负责人同步自平台；指标与文档由创建者负责。建议接受后编辑保存，详见 F02；语义角色不授予查询权。',
   },
   {
     id: 'memory', title: '个人记忆的提取与采用', subtitle: 'Mem0 先提取候选；Rust 校验并正式保存后，Worker 提交可检索版本。', height: 1030,
@@ -154,7 +154,7 @@ function content(v, index) {
     ${text(35, 38, `DATA AGENT  /  C4 CONTAINER  /  ${String(index + 1).padStart(2, '0')}`, 14, 600, '#577395')}
     ${text(35, 82, v.title, 34, 650, '#172e50')}
     ${text(35, 112, v.subtitle, 19, 400, '#607086')}
-    ${text(1885, 38, '2026-10-06 · 当前实现 / 合成平台', 15, 500, '#607086', 'end')}
+    ${text(1885, 38, '2026-10-07 · 当前实现 / 合成平台', 15, 500, '#607086', 'end')}
     <g class="boundary" fill="none" stroke="#c0cddd" stroke-width="1.5" stroke-dasharray="7 6">${boundary}</g>
     ${text(bx + 20, by + 23, 'Data Agent · 系统边界（仅显示本视图相关组件）', 14, 500, '#718297')}
     ${v.edges.map(e => edge(e, v.id)).join('')}

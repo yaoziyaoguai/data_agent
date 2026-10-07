@@ -7,6 +7,7 @@ import type {
 } from "../../../../../packages/contracts/generated/boundary.ts";
 import { ProposeCorrection } from "./CorrectionComposer.tsx";
 import { SemanticCorrections } from "./SemanticCorrections.tsx";
+import { KnowledgeCreator } from "./KnowledgeCreator.tsx";
 import { SemanticMaintainer } from "./SemanticMaintainer.tsx";
 import { api } from "../../shared/api.ts";
 import { Modal } from "../../shared/Modal.tsx";
@@ -208,17 +209,13 @@ export function KnowledgePage({
   const searchGeneration = useRef(0);
   const [error, setError] = useState("");
   const [source, setSource] = useState<SourceDocument | null>(null);
-  const [creating, setCreating] = useState(false);
-  const [name, setName] = useState("");
-  const [body, setBody] = useState("");
-  const [sourceUrl, setSourceUrl] = useState("");
-  const [related, setRelated] = useState("table-demo_order_detail");
   const [proposals, setProposals] = useState<Proposal[]>([]);
   const refreshGeneration = useRef(0);
   const directoryInitialized = useRef(false);
   const visibleObjectIds = useRef<string[]>([]);
   const expandedFields = useRef(new Set<string>());
   const [canAdmin,setCanAdmin]=useState(false);
+  const [canCreate,setCanCreate]=useState(false);
   const refresh = async () => {
     const generation = ++refreshGeneration.current;
     const [knowledge, proposals, visible, access] = await Promise.all([
@@ -235,6 +232,7 @@ export function KnowledgePage({
     setObjects((old) => { const byId = new Map(old.map(o => [o.id,o])); for (const v of [...knowledge.objects, ...visible]) byId.set(v.id, currentObject(byId.get(v.id),v)); return [...byId.values()]; });
     setProposals(proposals.proposals);
     setCanAdmin(access.can_admin);
+    setCanCreate(access.can_create);
   };
   useEffect(() => {
     void refresh().catch((e) => setError(e.message));
@@ -351,31 +349,6 @@ export function KnowledgePage({
       setError(String(e));
     }
   };
-  const create = async () => {
-    try {
-      const v = await api("KnowledgeObject", "/knowledge", "POST", {
-        operation_id: crypto.randomUUID(),
-        kind: "document",
-        name,
-        body,
-        related_ids: related
-          .split(",")
-          .map((s) => s.trim())
-          .filter(Boolean),
-        source_url: sourceUrl.trim() || null,
-      });
-      ++refreshGeneration.current;
-      setObjects((old) => [...old.filter((o) => o.id !== v.id), v]);
-      setCurrent(v.id);
-      setTab("概览");
-      setCreating(false);
-      setName("");
-      setBody("");
-      setSourceUrl("");
-    } catch (e) {
-      setError(String(e));
-    }
-  };
   const relatedObjects = relatedPage.parent === current ? objects.filter(o => relatedPage.ids.includes(o.id)) : [];
   const groups =
     tab === "字段语义"
@@ -417,13 +390,12 @@ export function KnowledgePage({
             {syncing?"同步中…":"同步来源"}
           </button>
           {canAdmin && <button onClick={()=>void rebuild()} disabled={rebuilding}>{rebuilding?"正在排队…":"重建检索索引"}</button>}
-          <button
-            className="primary"
-            disabled={!canAdmin}
-            onClick={() => setCreating(true)}
-          >
-            录入业务文档
-          </button>
+          <KnowledgeCreator user={user} canCreate={canCreate} relatedId={current} onCreated={v => {
+            ++refreshGeneration.current;
+            setObjects(old => [...old.filter(o => o.id !== v.id), v]);
+            setCurrent(v.id);
+            setTab("概览");
+          }}/>
         </div>
       </div>
       <label className="search-box">
@@ -599,48 +571,7 @@ export function KnowledgePage({
           <pre className="source-body">{source.body}</pre>
         </Modal>
       )}
-      {creating && (
-        <Modal title="录入业务文档" onClose={() => setCreating(false)}>
-          <label className="form-label">
-            文档名称
-            <input value={name} onChange={(e) => setName(e.target.value)} />
-          </label>
-          <label className="form-label">
-            正文（支持 Markdown 章节）
-            <textarea
-              rows={12}
-              value={body}
-              onChange={(e) => setBody(e.target.value)}
-            />
-          </label>
-          <label className="form-label">
-            关联对象 ID（逗号分隔，可关联多表或字段）
-            <input
-              value={related}
-              onChange={(e) => setRelated(e.target.value)}
-            />
-          </label>
-          <label className="form-label">
-            来源链接（可选）
-            <input
-              type="url"
-              value={sourceUrl}
-              onChange={(e) => setSourceUrl(e.target.value)}
-              placeholder="https://example.invalid/business-guide"
-            />
-          </label>
-          <p className="quiet">
-            只有链接时会标明正文未录入，Agent不会自动假定已经读过。
-          </p>
-          <button
-            className="primary"
-            disabled={!name.trim() || (!body.trim() && !sourceUrl.trim())}
-            onClick={() => void create()}
-          >
-            保存文档
-          </button>
-        </Modal>
-      )}
+
     </section>
   );
 }

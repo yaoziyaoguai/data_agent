@@ -106,6 +106,10 @@ nav button[aria-current="true"] {
   font-size: 12px;
   color: #718199;
 }
+.semantic-maintainer .quiet,
+.quiet.semantic-creation-notice {
+  display: block;
+}
 .identity {
   display: flex;
   gap: 9px;

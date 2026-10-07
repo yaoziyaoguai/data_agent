@@ -911,7 +911,8 @@
               }
             }
           }
-        }
+        },
+        "description": "当前空间 Datasight 表维护人或超级维护者可创建独立指标、文档等，首次创建者自动负责；请求不得自报 maintainer_id。"
       }
     },
     "/knowledge/{id}": {
@@ -2138,7 +2139,8 @@
               }
             }
           }
-        }
+        },
+        "description": "返回独立对象创建资格 can_create 和全局管理权 can_admin；服务端动作仍独立授权。"
       }
     },
     "/knowledge/{id}/maintainer": {

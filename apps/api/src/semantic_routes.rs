@@ -7,15 +7,17 @@ use axum::{
     extract::{Path, Query, State as AxumState},
     http::HeaderMap,
 };
-use data_agent::{modules::access, use_cases::semantic_governance};
-use serde_json::{Value, json};
+use data_agent::use_cases::semantic_governance;
+use serde_json::Value;
 use std::collections::HashMap;
 type ResponseResult = Result<Json<Value>, (axum::http::StatusCode, Json<Value>)>;
 pub async fn access(AxumState(state): AxumState<State>, headers: HeaderMap) -> ResponseResult {
     let ctx = user(&state, &headers).map_err(failure)?;
     success(
         "SemanticAccess",
-        json!({"can_admin":access::is_super_maintainer(&ctx).map_err(failure)?}),
+        semantic_governance::read_access(&state.pool, &ctx)
+            .await
+            .map_err(failure)?,
     )
 }
 pub async fn assign(

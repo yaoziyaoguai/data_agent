@@ -123,7 +123,7 @@ export interface ApplySemanticCorrection {
 export interface AssignSemanticMaintainer {
     expected_version: string;
     /**
-     * Datasight 维护人；未提供或 null 表示暂无负责人，不继承录入者。
+     * 超级维护者调整独立对象负责人；null 撤销，不能调整 Datasight 表或字段。
      */
     maintainer_id: null | string;
     operation_id:  string;
@@ -215,6 +215,10 @@ export interface ReviseSemanticCorrection {
 
 export interface SemanticAccess {
     can_admin: boolean;
+    /**
+     * 可创建独立指标、文档等；由当前空间已同步的 Datasight 表维护关系或超级维护者角色确定。
+     */
+    can_create: boolean;
 }
 
 export interface SemanticCorrection {
@@ -256,14 +260,14 @@ export interface SemanticMaintenance {
     can_assign:   boolean;
     can_edit:     boolean;
     /**
-     * Datasight 维护人；未提供或 null 表示暂无负责人，不继承录入者。
+     * 当前对象负责人：表来自 Datasight；独立人工对象默认创建者，超级维护者可调整。
      */
     maintainer_id: null | string;
     source:        SemanticMaintenanceSource;
     version:       string;
 }
 
-export type SemanticMaintenanceSource = "datasight" | "system";
+export type SemanticMaintenanceSource = "datasight" | "creator" | "system";
 
 export interface SubmitSemanticCorrection {
     base_version:    string;
@@ -603,17 +607,16 @@ export interface Identity {
 
 export type ModelLabel = "本地模拟模型" | "DeepSeek Flash" | "DeepSeek V4 Pro";
 
+/**
+ * 独立对象首次创建时自动归属可信登录者；请求不接受负责人字段，后续调整使用独立管理接口。
+ */
 export interface KnowledgeCreate {
-    body: string;
-    kind: KnowledgeCreateKind;
-    /**
-     * Datasight 维护人；未提供或 null 表示暂无负责人，不继承录入者。
-     */
-    maintainer_id?: null | string;
-    name:           string;
-    operation_id:   string;
-    related_ids:    string[];
-    source_url?:    null | string;
+    body:         string;
+    kind:         KnowledgeCreateKind;
+    name:         string;
+    operation_id: string;
+    related_ids:  string[];
+    source_url?:  null | string;
 }
 
 export type KnowledgeCreateKind = "table" | "field" | "metric" | "document" | "relationship" | "term";

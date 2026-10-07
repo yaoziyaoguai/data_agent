@@ -8,7 +8,7 @@
   },
   "sources": {
     "implementation-views.md": "9b6c81b395756e06f7c02927128717c709b44363c02c1c9d11912e57fba0855e",
-    "knowledge-modules.md": "aed0f5be0f7606723d77bebef783496e53b5117bb58fb23db53e97980ac8354c",
+    "knowledge-modules.md": "df3d6256676b0750d8321a810a2d0485bfc20df102424048d45e4bc11a63a73e",
     "runtime-modules.md": "2b5aa3a1c76c27fc1e173648277e7fe65c842500eaae661f9a36e52a40880941"
   },
   "diagrams": [
@@ -35,7 +35,7 @@
     },
     {
       "id": "F01",
-      "width": 1152.9375,
+      "width": 1169.9375,
       "height": 1954,
       "textCount": 35,
       "outsideLabels": []
@@ -126,7 +126,7 @@
     },
     {
       "id": "S01",
-      "width": 1155.515625,
+      "width": 1184.828125,
       "height": 248.5,
       "textCount": 17,
       "outsideLabels": []

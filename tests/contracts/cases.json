@@ -2648,5 +2648,49 @@
       "model_id": "unapproved"
     },
     "valid": false
+  },
+  {
+    "name": "shared creation capability",
+    "schema": "SemanticAccess",
+    "value": {
+      "can_admin": false,
+      "can_create": true
+    },
+    "valid": true
+  },
+  {
+    "name": "missing creation capability",
+    "schema": "SemanticAccess",
+    "value": {
+      "can_admin": false
+    },
+    "valid": false
+  },
+  {
+    "name": "create cannot forge owner",
+    "schema": "KnowledgeCreate",
+    "value": {
+      "operation_id": "creator-check",
+      "kind": "document",
+      "name": "合成文档",
+      "body": "独立说明",
+      "related_ids": [],
+      "maintainer_id": "another"
+    },
+    "valid": false
+  },
+  {
+    "name": "creator ownership response",
+    "schema": "SemanticMaintenance",
+    "value": {
+      "authority_id": "shared-document",
+      "maintainer_id": "bob",
+      "source": "creator",
+      "version": "1",
+      "can_edit": true,
+      "can_assign": false
+    },
+    "valid": true,
+    "roundtrip": true
   }
 ]

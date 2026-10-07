@@ -3,8 +3,8 @@
   "workflow": "dev_co",
   "schema": 1,
   "phase": "deliver",
-  "status": "done",
-  "goal_revision": 22,
+  "status": "active",
+  "goal_revision": 23,
   "environment": "macOS arm64 / Node 26.8.1 / npm 11.19.0 / Rust 1.99.0 / Python 3.14.7 / SQLite 3.53.4 / Colima 0.10.1 / Docker Engine 29.2.1 / Compose 5.3.1 / MySQL 8.4.11 / Milvus 3.0.2",
   "verification": {
     "level": "targeted",
@@ -23,7 +23,7 @@
       "crates/data-agent/src/use_cases",
       "apps/api/src",
       "apps/web/src/features/knowledge",
-      "apps/web/src/styles.css",
+      "apps/web/src/style.css",
       "apps/platform-mock",
       "packages/contracts",
       "migrations",
@@ -61,10 +61,10 @@
     "schema": 1,
     "registry": "docs/semantic-retrieval-design.md",
     "increment": {
-      "id": "I2-SEMANTIC-GOVERNANCE",
+      "id": "I2-CREATOR-OWNERSHIP",
       "phase": "I2",
       "status": "complete",
-      "goal": "实现逐表语义维护权限及跨用户纠错协作。表负责人同步自 Datasight mock，共用对象独立指定负责人；接受后编辑保存才生效。",
+      "goal": "修正共享知识创建资格与负责人来源：当前空间 Datasight 表维护人可创建指标、文档等独立对象，首次创建者自动负责；表和字段继续平台同步。",
       "requirements": [
         "D01",
         "D10",
@@ -110,17 +110,19 @@
         "apps/agent/tools/data-tools.ts",
         "crates/data-agent/src/modules/ingestion/catalog.rs",
         "apps/web/src/shared/WorkspaceShell.tsx",
-        "crates/data-agent/src/modules/ingestion/store.rs"
+        "crates/data-agent/src/modules/ingestion/store.rs",
+        "apps/web/src/style.css"
       ],
       "non_goals": [
-        "不改变已完成 MVP 的 Agent/Pi/Mem0 架构；不增加审批服务、外部通知或新的 Agent 循环。",
-        "不接真实 Datasight/正式认证；不提交、推送或部署。"
+        "不改变 Pi、Mem0、检索或 SQL 执行架构；不扩建组织权限服务。",
+        "不接真实 Datasight 或正式认证，不部署；用户已授权提交并推送现有 GitHub 主分支。"
       ],
       "invariants": [
         "表维护者负责该表共享语义，超级维护者管理本系统全部表共享语义；录入人/修改人/负责人分别记录。",
         "本系统语义权限与Datasight资料读取、查询和SQL执行权限分别校验；个人记录仍按本人和空间隔离。",
         "私人草稿不自动公开；提交、接受和驳回均不改变正式语义或共享索引，核对编辑并明确保存才生效。",
-        "保存重核当前授权、知识基版本、建议修订及依据范围，正式版本/应用记录/待办原子保存，Pi仍为唯一Agent循环。"
+        "保存重核当前授权、知识基版本、建议修订及依据范围，正式版本/应用记录/待办原子保存，Pi仍为唯一Agent循环。",
+        "维护成员资格由本空间平台表维护人并集派生；新建独立对象的负责人绑定可信登录者，不能由请求自报；已有对象引用、编辑与重试不转移归属。"
       ],
       "acceptance": [
         {
@@ -129,7 +131,7 @@
             "D01",
             "C02"
           ],
-          "expected": "普通用户不能编辑正式语义；负责人只能维护负责范围；超级维护者可维护全部表，录入和修改不自动授予负责人身份。",
+          "expected": "普通用户不能编辑正式语义；表与字段维护权按平台负责人；新建独立对象由创建者负责，其他维护者仅提建议；超级维护者可调整独立对象负责人。",
           "evidence_kind": "runtime",
           "command": [
             "node",
@@ -218,6 +220,36 @@
             "tests/mvp/check-semantic-governance-browser.mjs"
           ],
           "timeout_seconds": 300
+        },
+        {
+          "id": "OWNER01",
+          "requirements": [
+            "D01",
+            "C02",
+            "A08"
+          ],
+          "expected": "平台表维护人可创建独立指标和文档且自动负责；普通用户、跨空间与伪造归属被拒绝；重复及并发创建、转交后重试不改归属；迁移仅补真实人工创建且未指派对象；表交接改变创建资格而不转交独立对象。",
+          "evidence_kind": "runtime",
+          "command": [
+            "node",
+            "tests/mvp/check-creator-ownership.mjs"
+          ],
+          "timeout_seconds": 240
+        },
+        {
+          "id": "OWNER02",
+          "requirements": [
+            "D01",
+            "D13",
+            "C02"
+          ],
+          "expected": "非超级表维护者在浏览器创建指标及文档，显示本人为负责人并能编辑；响应丢失重试不重复创建；普通用户无创建入口，跨维护者只能提建议，宽窄屏正常。",
+          "evidence_kind": "runtime",
+          "command": [
+            "node",
+            "tests/mvp/check-creator-ownership-browser.mjs"
+          ],
+          "timeout_seconds": 300
         }
       ],
       "verification_inputs": [
@@ -244,13 +276,14 @@
         "apps/agent/tools/data-tools.ts",
         "crates/data-agent/src/modules/ingestion/catalog.rs",
         "apps/web/src/shared/WorkspaceShell.tsx",
-        "crates/data-agent/src/modules/ingestion/store.rs"
+        "crates/data-agent/src/modules/ingestion/store.rs",
+        "apps/web/src/style.css"
       ],
       "review": {
         "status": "passed",
-        "record": "docs/reviews/semantic-governance-review.json"
+        "record": "docs/reviews/creator-ownership-review.json"
       },
-      "evidence": ".local/delivery/I2-SEMANTIC-GOVERNANCE-result.json"
+      "evidence": ".local/delivery/I2-CREATOR-OWNERSHIP-result.json"
     }
   }
 }
@@ -260,7 +293,30 @@
 
 更新：2026-10-07。唯一活动项目目录：`~/work_space/data_agent`。
 
-## 当前任务：合入主分支并推送 GitHub（已完成）
+## 当前任务：创建者自动负责共享知识（开发与验收已完成）
+
+`goal_revision=23`。用户于 2026-10-07 澄清并授权修正文档与实现、验收后提交推送。当前分支 `codex/semantic-creator-ownership`；基线为主分支提交 `f253c19`。
+
+- 当前空间最近一次成功同步的 Datasight 表维护人并集，构成共享知识创建人员；超级维护者也可创建。创建资格实时读取本系统同步快照，不另建成员管理。
+- 表和字段由 Datasight 维护人负责。指标、文档、术语和关系等独立人工对象首次正式保存时，由可信登录者自动负责；其他维护者可创建自己的对象，对已有他人对象提出建议。
+- 超级维护者保留调整独立对象负责人的能力；已调整或撤销的归属不被创建重试和升级覆盖。表交接只改变对应表权限和创建资格，已创建独立对象不随表交接转移。
+- 升级只补齐有可信首次人工录入记录、原归属尚未设置的独立对象；系统导入和模型预填不冒认人类创建者。平台查询权、私人资产和建议接受后编辑保存的规则保持。
+- 本轮同步 AGENTS、系统设计、模块/API、开发指南、README、架构图和 HTML 讲解。验收覆盖创建、归属、越权、幂等、迁移及浏览器，再回归原协作流程。使用隔离 MySQL 与合成平台，无需付费模型。
+
+### 验收与要求变更
+
+- 新增 OWNER01 初稿错误地把数据库故障写为 HTTP 500；按既有 `types/mod.rs`、`routes.rs` 及 GOV04 的独立契约，修正为 HTTP 503 并新增 `unavailable` 错误码断言，完整回滚与重试断言保留。首次失败不计为通过。
+- OWNER02 实测窄屏全局 `.quiet` 隐藏负责人；在现有样式中仅恢复语义负责人及创建归属说明可见，纳入新增量路径和指纹，保留窄屏可见断言。测试目录维护人变化时递增平台版本，保留原来源版本冲突规则。
+
+旧规则要求超级维护者创建和指定共享对象负责人，新规则允许平台表维护人创建并自动负责；依据是用户本轮明确澄清。GOV01 原“新文档负责人为 null”改为可信创建者，其他越权和转交断言保留；新增 OWNER01/OWNER02。旧六组收据仅证明旧版本，不用于关闭此次修正；待新独立审查与冻结验收通过后再完成。
+
+新增创建者权限、接口、页面和升级已实现。预跑 OWNER01 的 6 组接口/迁移行为及 OWNER02 的 6 项浏览器行为均完整退出 0；1440px/390px 无页面错误和横向溢出。证据：`.local/checks/creator-ownership.json`、`.local/checks/creator-ownership-browser/result.json`。Rust fmt/clippy、TypeScript、正式 Web 构建、187 条同源契约通过；7 条架构反例、28 张图册、16 条交付检查器测试和 280 项材料检查通过。
+
+最终联合验收已通过：`make verify-increment` 完整退出 0，GOV01–GOV06、OWNER01、OWNER02 共 8 组均无超时，执行前后指纹一致。完成收据：`.local/delivery/I2-CREATOR-OWNERSHIP-result.json`；独立审查：[创建者归属审查](reviews/creator-ownership-review.json)，无剩余阻断项。已人工查看更新后的架构图与 390px 页面，负责人和录入/修改人均可见。
+
+真实平台与正式身份仍待接入验证；本轮不调用付费模型，原有 Pi 相关回归使用 SDK 与模拟模型。下一步仅为用户已授权的 Git 交付：提交、快进合入现有默认分支并推送。
+
+## 上次交付：合入主分支并推送 GitHub（已完成）
 
 `goal_revision=22`。用户已授权提交本轮代码、合入主分支并推送 GitHub。该授权替代上一开发轮“不提交、推送”的限制；冻结的业务验收契约保留。本次只完成 Git 交付，不新增产品行为或部署。
 

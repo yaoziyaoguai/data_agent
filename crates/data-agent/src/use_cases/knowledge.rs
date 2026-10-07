@@ -91,7 +91,12 @@ pub async fn edit(
 ) -> Result<Value> {
     let mut tx = AppTx::begin(pool).await?;
     if action == "create" {
-        access::authorize_maintainer(ctx)?;
+        contracts::validate("KnowledgeCreate", &input)?;
+        if input["kind"] == "table" || input["kind"] == "field" {
+            access::authorize_maintainer(ctx)?;
+        } else if !access::can_create_in_tx(&mut tx, ctx).await? {
+            return Err(Error::new("forbidden"));
+        }
     } else {
         let target = if action == "apply-proposal" {
             knowledge::proposal_in_tx(&mut tx, ctx, object.ok_or(Error::new("invalid_input"))?)
@@ -106,11 +111,12 @@ pub async fn edit(
     }
     let mut v = match action {
         "create" => {
-            contracts::validate("KnowledgeCreate", &input)?;
             let v = knowledge::create_in_tx(&mut tx, ctx, &input).await?;
-            super::semantic_governance::register_object_in_tx(&mut tx, ctx, &v).await?;
-            if input.get("maintainer_id").is_some() {
-                access::assign_in_tx(&mut tx,ctx,v["id"].as_str().unwrap_or(""),&json!({"operation_id":input["operation_id"],"expected_version":"1","maintainer_id":input["maintainer_id"]})).await?;
+            if v["kind"] == "table" || v["kind"] == "field" {
+                super::semantic_governance::register_object_in_tx(&mut tx, ctx, &v).await?;
+            } else {
+                access::register_creator_in_tx(&mut tx, ctx, v["id"].as_str().unwrap_or(""))
+                    .await?;
             }
             v
         }

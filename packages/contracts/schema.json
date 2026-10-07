@@ -1708,20 +1708,6 @@
             "null"
           ],
           "maxLength": 2000
-        },
-        "maintainer_id": {
-          "anyOf": [
-            {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 64,
-              "pattern": "^[A-Za-z0-9_-]+$"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "Datasight 维护人；未提供或 null 表示暂无负责人，不继承录入者。"
         }
       },
       "required": [
@@ -1731,7 +1717,8 @@
         "body",
         "related_ids"
       ],
-      "additionalProperties": false
+      "additionalProperties": false,
+      "description": "独立对象首次创建时自动归属可信登录者；请求不接受负责人字段，后续调整使用独立管理接口。"
     },
     "VersionCommand": {
       "title": "VersionCommand",
@@ -4515,10 +4502,15 @@
       "properties": {
         "can_admin": {
           "type": "boolean"
+        },
+        "can_create": {
+          "type": "boolean",
+          "description": "可创建独立指标、文档等；由当前空间已同步的 Datasight 表维护关系或超级维护者角色确定。"
         }
       },
       "required": [
-        "can_admin"
+        "can_admin",
+        "can_create"
       ],
       "additionalProperties": false
     },
@@ -4544,12 +4536,13 @@
               "type": "null"
             }
           ],
-          "description": "Datasight 维护人；未提供或 null 表示暂无负责人，不继承录入者。"
+          "description": "当前对象负责人：表来自 Datasight；独立人工对象默认创建者，超级维护者可调整。"
         },
         "source": {
           "type": "string",
           "enum": [
             "datasight",
+            "creator",
             "system"
           ]
         },
@@ -4600,7 +4593,7 @@
               "type": "null"
             }
           ],
-          "description": "Datasight 维护人；未提供或 null 表示暂无负责人，不继承录入者。"
+          "description": "超级维护者调整独立对象负责人；null 撤销，不能调整 Datasight 表或字段。"
         }
       },
       "required": [

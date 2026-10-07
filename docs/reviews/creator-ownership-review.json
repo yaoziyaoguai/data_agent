@@ -1,0 +1,221 @@
+{
+  "schema": 1,
+  "goal_revision": 23,
+  "increment_id": "I2-CREATOR-OWNERSHIP",
+  "conclusion": "passed",
+  "reviewer": "独立正确性审查者 /root/semantic_governance_review；未参与本增量产品代码、契约、测试或设计文档实现，只提出审查意见并编写本记录。",
+  "reviewed_at": "2026-10-07T01:02:46.519776+00:00",
+  "scope_sha256": "3c6da03485a04b8ab947fdaa15c95cdaeb8e3a68b8ef4b932747bde458f32215",
+  "summary": "按用户最新创建者归属规则、AGENTS、当前交付契约及系统设计复核服务端权限、空间隔离、事务、幂等、迁移和页面。已核对创建与负责人登记同事务、重放不覆盖转交或撤销、表交接不转移独立对象。新接口及浏览器预跑各 6 项通过；审查发现的测试目录版本、错误状态预期及窄屏负责人隐藏问题均已修复并复核。没有剩余阻断项；本记录仅批准启动 GOV01–GOV06、OWNER01、OWNER02 八组最终冻结验收，不能代替最终收据。",
+  "ready_for_final_increment_execution": true,
+  "final_increment_execution": {
+    "executed": false,
+    "status": "not_run",
+    "command": [
+      "make",
+      "verify-increment"
+    ],
+    "required_groups": [
+      "GOV01",
+      "GOV02",
+      "GOV03",
+      "GOV04",
+      "GOV05",
+      "GOV06",
+      "OWNER01",
+      "OWNER02"
+    ],
+    "limitation": "八组必须在本审查绑定的范围上完整退出 0、无超时，并生成 before/after 一致的执行收据。旧治理收据及本次两组预跑不能关闭新增量。"
+  },
+  "requirements": [
+    "D01",
+    "D10",
+    "D13",
+    "C02",
+    "C04",
+    "A08"
+  ],
+  "modules": [
+    "M01",
+    "M02",
+    "M03",
+    "M04",
+    "M07",
+    "M08",
+    "M09",
+    "M10",
+    "M11",
+    "M12"
+  ],
+  "requirements_review": {
+    "D01": "当前空间 Datasight 表维护人及超级维护者可创建独立指标、文档、术语和关系；首次创建由可信登录者自动负责。表及字段仍沿用平台归属；引用关系不传播编辑权。创建人、修改人与当前负责人分别保存。",
+    "D10": "未修改个人资产或私人提案的公开范围；升级仅处理既有共享知识的负责人记录，未从聊天、个人记忆或 Skill 导出共享内容。",
+    "D13": "前端创建资格与全局管理分开；其他维护者对创建者的文档只能提出建议。未引入新的 Agent 循环、记忆编排或上下文管理，Pi SDK 与既有私人提案工具职责保留。",
+    "C02": "创建资格取自当前空间平台表维护关系；服务端在事务内用当前读共享锁保护资格。创建请求拒绝 maintainer_id 自报；独立对象所有权本身不授予创建资格。Datasight 查询执行权与本系统语义权限继续分离。",
+    "C04": "本轮没有改动 SQL 草稿、版本确认或查询执行入口；最终 GOV02 仍须证明原确认及平台授权边界。",
+    "A08": "知识、首版、索引待办、创建回执及初始负责人同事务提交。旧创建回执重验空间与当前可用性，登记使用已有归属优先的写法，不覆盖之后转交或撤销；接受建议后编辑保存才生效的流程保持。"
+  },
+  "correctness_review": [
+    {
+      "area": "创建与撤权",
+      "result": "can_create_in_tx 按当前空间及 source=datasight 筛选 self authority 的维护关系，并在创建事务持共享锁；平台交接需取得同一授权关系的写锁。锁顺序沿用授权在前、知识在后的既有约定。表交接的顺序行为已有运行验证，特定创建/撤权交错时序由本次代码追踪核对。"
+    },
+    {
+      "area": "幂等与归属",
+      "result": "同一用户同一 operation_id 的创建在操作表串行；响应丢失重试复用原操作。已有负责人登记不被创建重放覆盖，返回值装饰当前 maintenance。改派后、撤销后重放及并发重复创建均有新测试覆盖。"
+    },
+    {
+      "area": "升级",
+      "result": "迁移限定 source=system、self authority、无负责人、授权版本=1、独立类型且无平台 source_id；要求首版 created_by 与首条 human_override.edited_by 相同，并排除系统身份。已指派或主动撤销会推进授权版本，因此不会被回填。"
+    },
+    {
+      "area": "模块与状态归属",
+      "result": "M01 只处理自己的授权记录，M02 处理自己的知识与回执，具名 use case 组合事务；无跨模块私有 store 越界、没有新增服务或 Pi/Mem0 职责变化。"
+    },
+    {
+      "area": "界面",
+      "result": "can_create 控制独立对象创建，can_admin 控制同步和全局管理；KnowledgeCreator 使用稳定表单操作身份。窄屏恢复语义负责人及创建归属说明可见，保留服务器权限校验。"
+    }
+  ],
+  "resolved_findings": [
+    {
+      "id": "CATALOG-FIXTURE-VERSION",
+      "issue": "两份新测试改变 maintainer_id 后仍沿用原 platform_version，第二次同步会被来源版本冲突规则拒绝。",
+      "resolution": "测试每次发布目录前递增平台版本；未修改服务端的相同版本正文冲突规则，也未放宽成功状态断言。",
+      "files": [
+        "tests/mvp/check-creator-ownership.mjs",
+        "tests/mvp/check-creator-ownership-browser.mjs"
+      ]
+    },
+    {
+      "id": "STORAGE-ERROR-EXPECTATION",
+      "issue": "故障注入初稿预期 HTTP 500，实际返回既有契约的 HTTP 503。",
+      "resolution": "按 types/mod.rs、API routes.rs 和原 GOV04 的独立依据改为 503，并额外断言 unavailable；完整回滚与同 operation_id 重试仍必须通过。首次失败不作为通过证据。",
+      "files": [
+        "tests/mvp/check-creator-ownership.mjs",
+        "crates/data-agent/src/types/mod.rs",
+        "apps/api/src/routes.rs"
+      ]
+    },
+    {
+      "id": "MOBILE-OWNERSHIP-VISIBILITY",
+      "issue": "max-width:700px 全局隐藏 .quiet，导致语义负责人、归属来源及录入/修改人不可见，浏览器验收超时。",
+      "resolution": "只为 .semantic-maintainer .quiet 与 .quiet.semantic-creation-notice 恢复可见。保留 390px 的负责人可见断言，没有切回宽屏绕过；新截图已经独立查看。实际 style.css 纳入本增量路径和指纹。",
+      "files": [
+        "apps/web/src/style.css",
+        "apps/web/src/features/knowledge/KnowledgeCreator.tsx",
+        "tests/mvp/check-creator-ownership-browser.mjs"
+      ]
+    }
+  ],
+  "test_expectation_review": {
+    "basis": "用户 2026-10-07 确认当前空间平台表维护人可以创建独立共享对象、创建者自动负责、表及字段归属继续平台同步。",
+    "authorized_behavior_change": "GOV01 新建文档的 maintainer_id 由 null 改为可信创建者 alice，符合新规则；其余普通用户越权、引用不授予编辑权和管理员改派断言保留。",
+    "preserved": [
+      "OWNER01 保留跨空间拒绝、伪造负责人拒绝、四种独立对象、并发幂等、改派/撤销重放、事务回滚、升级与表交接断言。",
+      "OWNER02 保留真实 API 响应丢失再提交只创建一个对象、创建者编辑、普通/其他维护者隔离、1440px/390px 布局与无页面错误。",
+      "原 GOV01–GOV06 都在本次最终验收契约中，旧收据不会替代八组重新运行。"
+    ],
+    "not_relaxed": "平台版本修正是有效目录夹具；503 是既有错误契约修正且增加错误码断言；窄屏通过修改产品样式恢复要求，没有删断言或换模拟页面。"
+  },
+  "evidence_review": {
+    "reviewer_executed": [
+      {
+        "command": [
+          "git",
+          "diff",
+          "--check"
+        ],
+        "exit_code": 0,
+        "result": "最终冻结补丁无空白错误。"
+      }
+    ],
+    "inspected_artifacts": [
+      {
+        "path": ".local/checks/creator-api.log",
+        "sha256": "8cbabb3ad4cd64c0b9d37d23e467c4bc8f937942940250f334b17d4ee32990ce",
+        "modified_at": "2026-10-07T00:58:23.499572+00:00"
+      },
+      {
+        "path": ".local/checks/creator-browser.log",
+        "sha256": "c5970e61b25ff58ca9617244492a001f63e09130a721eb67ef9b4e6d2f369ea6",
+        "modified_at": "2026-10-07T00:58:25.079201+00:00"
+      },
+      {
+        "path": ".local/checks/creator-ownership.json",
+        "sha256": "7861f3f97a020da619f6355913038f956828d9ebce8f9e0929b01c8defec5a59",
+        "modified_at": "2026-10-07T00:58:23.498914+00:00",
+        "reported_passed": 6
+      },
+      {
+        "path": ".local/checks/creator-ownership-browser/result.json",
+        "sha256": "4a4ab5b5fa27fac4dc53feacc5b75d2d02fed4728c4e7e57384625223be1facf",
+        "modified_at": "2026-10-07T00:58:25.078595+00:00",
+        "reported_passed": 6
+      },
+      {
+        "path": ".local/checks/creator-ownership-browser/390.png",
+        "sha256": "c94d27c023c43b3c8f27f9a28397171eff42399b964186efd0e448634b5b3756",
+        "modified_at": "2026-10-07T00:58:20.357633+00:00"
+      },
+      {
+        "path": ".local/checks/creator-ownership-browser/1440.png",
+        "sha256": "46805bae09871fa8582350cc4fa5928cd3aba60e475c4f5ed2f6e7f2b50c85f8",
+        "modified_at": "2026-10-07T00:58:20.296395+00:00"
+      },
+      {
+        "path": ".local/checks/creator-build.log",
+        "sha256": "122e57b1a5825f61b0b81c53c6ed34f46a087a20baa285fa0672096cc57da984",
+        "modified_at": "2026-10-07T00:52:37.048270+00:00"
+      },
+      {
+        "path": ".local/checks/creator-web-build.log",
+        "sha256": "506c63299cbe71f69e6b227df23e832a8b470f46a4d81a92ba6e8a25f2d2d9fa",
+        "modified_at": "2026-10-07T00:58:49.092746+00:00"
+      },
+      {
+        "path": ".local/checks/creator-diagrams.log",
+        "sha256": "a17dcc84363b545f759f11fe39613bf58a0ce57f44478134f8088a8f124afd1d",
+        "modified_at": "2026-10-07T00:54:25.264301+00:00"
+      },
+      {
+        "path": ".local/checks/creator-c4.log",
+        "sha256": "83ec2b159e5055497a7c43188e3b1bc74b5636ec9155ef25ceab17727884d6fd",
+        "modified_at": "2026-10-07T00:54:18.726934+00:00"
+      }
+    ],
+    "visual_inspection": {
+      "path": ".local/checks/creator-ownership-browser/390.png",
+      "result": "页面显示 Bob 为指标负责人、首次录入归属来源、录入/最后修改人及编辑入口；画面无横向页面溢出。"
+    },
+    "implementation_runner_reports": [
+      "OWNER01 和 OWNER02 各 6 项完整退出 0；本审查独立读取 JSON 结果和短日志并核对测试源码。",
+      "make verify-code verify-contracts build 完整通过，含 187 条同源契约；样式修正后再次 Web 生产构建通过。相关构建日志已经读取。",
+      "7 条架构反例、28 张图册、16 条交付检查器测试及 280 项材料检查通过；图册日志已读取，其余以实现者提供的完整命令退出结果为证据来源。"
+    ],
+    "artifact_limitation": "本次预跑产物验证两个新增场景；六组治理回归的当前冻结运行仍待最终 gate。构建日志保留现有 bundle 大小与输出目录警告，不将警告描述为失败或本轮已解决问题。",
+    "official_model_requests_by_reviewer": 0
+  },
+  "scope_review": {
+    "branch": "codex/semantic-creator-ownership",
+    "base_head": "f253c19af814faa76495ad6668079f7148ab9dd9",
+    "changed_file_count_before_review_record": 48,
+    "changed_paths_within_allowed_scope": true,
+    "new_agent_framework": false,
+    "pi_or_mem0_responsibility_changed": false,
+    "private_records_made_public_by_migration": false,
+    "cross_module_private_store_bypass_found": false,
+    "reviewer_writes": [
+      "docs/reviews/creator-ownership-review.json"
+    ],
+    "fingerprint_boundary": "沿用既有检查器规则：CURRENT 全文不在本增量 verification_inputs 中；完整 delivery 契约、18 项决定、AGENTS、设计、声明源码/契约/测试仍绑定。最终执行另绑定本审查文件，单纯状态及工作日志更新不使已执行证据自我失效。"
+  },
+  "remaining_blockers": [],
+  "limits": [
+    "只批准开始八组最终验收，尚未执行 make verify-increment，不能据本记录关闭增量。",
+    "运行环境为隔离 MySQL、合成 Datasight 与浏览器；真实 Datasight ACL、正式身份和维护人同步时效没有在本轮验证。",
+    "创建资格以最近一次成功平台同步为准，不能宣称平台端修改实时撤权。",
+    "没有重估原 MVP 的模型准确率、千表质量或 Mem0 结论；没有改变 Pi 或模型配置。",
+    "本地审查记录和摘要不能防同权限篡改；本审查未提交、推送或部署。"
+  ]
+}

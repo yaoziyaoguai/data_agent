@@ -241,7 +241,7 @@ try {
         related_ids: [table, "table-raw_payments"],
       });
       assert.equal(doc.created_by, "alice");
-      assert.equal(doc.maintenance.maintainer_id, null);
+      assert.equal(doc.maintenance.maintainer_id, "alice");
       assert.equal((await edit(doc, "bob", "引用表不授予编辑权")).status, 403);
       const assign = {
         ...command(),

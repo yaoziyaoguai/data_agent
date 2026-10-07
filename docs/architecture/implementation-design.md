@@ -165,9 +165,10 @@ AppError = { code, message, retryable, request_id, resource_ref? }
 
 | HTTP | 输入与响应 Schema | 行为 |
 | --- | --- | --- |
-| `GET /semantic-access` | `SemanticAccess` | 是否可管理全局语义；仅用于展示，动作仍重验权限 |
+| `POST /knowledge` | `KnowledgeCreate` → `KnowledgeObject` | 本空间平台表维护人或超级维护者创建独立对象，自动归属可信登录者；不接收 maintainer_id，调整负责人另调管理接口 |
+| `GET /semantic-access` | `SemanticAccess` | 返回 can_admin 和 can_create；分别表示全局管理与独立对象创建资格，动作仍在事务内重验 |
 | `GET /knowledge`、`GET /knowledge/{id}` | `KnowledgeObject.maintenance` | 返回负责人、授权来源、授权版本、can_edit/can_assign；created_by 与 updated_by 分开 |
-| `POST /knowledge/{id}/maintainer` | `AssignSemanticMaintainer` → `SemanticMaintenance` | 超级维护者指定独立对象负责人；表和字段拒绝本地改派 |
+| `POST /knowledge/{id}/maintainer` | `AssignSemanticMaintainer` → `SemanticMaintenance` | 超级维护者调整独立对象负责人；首次创建自动归属登录者，表和字段拒绝本地改派 |
 | `POST /knowledge-proposals` | `ProposalDraftCommand` → `Proposal` | 保存私人草稿，与 Pi 的私人提案相同归属 |
 | `POST /semantic-corrections` | `SubmitSemanticCorrection` → `SemanticCorrection` | 提交可共享内容；share_confirmed 必须 true，原值由服务端读取 |
 | `GET /semantic-corrections`、`GET /semantic-corrections/{id}` | `SemanticCorrectionList` / `SemanticCorrection` | 本人提交及当前负责范围；after_id 每页最多 50 条，含 next_after_id |

@@ -446,7 +446,7 @@ pub enum AssetToolInputAction {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AssignSemanticMaintainer {
     pub expected_version: String,
-    /// Datasight 维护人；未提供或 null 表示暂无负责人，不继承录入者。
+    /// 超级维护者调整独立对象负责人；null 撤销，不能调整 Datasight 表或字段。
     pub maintainer_id: Option<String>,
     pub operation_id: String,
 }
@@ -807,13 +807,11 @@ pub enum ModelLabel {
     Empty,
 }
 
+/// 独立对象首次创建时自动归属可信登录者；请求不接受负责人字段，后续调整使用独立管理接口。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct KnowledgeCreate {
     pub body: String,
     pub kind: KnowledgeCreateKind,
-    /// Datasight 维护人；未提供或 null 表示暂无负责人，不继承录入者。
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub maintainer_id: Option<String>,
     pub name: String,
     pub operation_id: String,
     pub related_ids: Vec<String>,
@@ -913,7 +911,7 @@ pub struct SemanticMaintenance {
     pub authority_id: String,
     pub can_assign: bool,
     pub can_edit: bool,
-    /// Datasight 维护人；未提供或 null 表示暂无负责人，不继承录入者。
+    /// 当前对象负责人：表来自 Datasight；独立人工对象默认创建者，超级维护者可调整。
     pub maintainer_id: Option<String>,
     pub source: SemanticMaintenanceSource,
     pub version: String,
@@ -922,6 +920,7 @@ pub struct SemanticMaintenance {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SemanticMaintenanceSource {
+    Creator,
     Datasight,
     System,
 }
@@ -1571,6 +1570,8 @@ pub struct SearchInput {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SemanticAccess {
     pub can_admin: bool,
+    /// 可创建独立指标、文档等；由当前空间已同步的 Datasight 表维护关系或超级维护者角色确定。
+    pub can_create: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -307,6 +307,14 @@ pub async fn save_edit_in_tx(
 pub async fn create_in_tx(tx: &mut AppTx<'_>, ctx: &AccessContext, input: &Value) -> Result<Value> {
     let key = input["operation_id"].as_str().unwrap_or("");
     if let Some(v) = begin_operation(tx, ctx, key, input).await? {
+        read_in_tx(
+            tx,
+            ctx,
+            v["id"].as_str().ok_or(Error::new("invalid_input"))?,
+            None,
+            false,
+        )
+        .await?;
         return Ok(v);
     }
     validate_document_metadata(tx, ctx, input).await?;
