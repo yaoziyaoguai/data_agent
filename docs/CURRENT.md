@@ -3,7 +3,7 @@
   "workflow": "dev_co",
   "schema": 1,
   "phase": "deliver",
-  "status": "active",
+  "status": "done",
   "goal_revision": 31,
   "environment": "macOS arm64 / Node 26.8.1 / npm 11.19.0 / Rust 1.99.0 / Python 3.14.7 / SQLite 3.53.4 / Colima 0.10.1 / Docker Engine 29.2.1 / Compose 5.3.1 / MySQL 8.4.11 / Milvus 3.0.2",
   "verification": {
@@ -211,15 +211,15 @@
 
 更新：2026-10-08。唯一活动项目目录：`~/work_space/data_agent`。
 
-## 当前任务：资产维护补充审计与修复（修复与文档已完成）
+## 当前任务：资产维护补充审计与修复（已完成并推送）
 
-`goal_revision=31`，增量 `I2-ASSET-MAINTENANCE` 的修复与文档同步均已完成，正在分批提交推送。2026-10-08 用户要求使用 `oracle-web` 第五档再审计，与本地复现对照后修复。审计基线 `665e519`，当前仍在 `codex/semantic-role-boundaries`。
+`goal_revision=31`，增量 `I2-ASSET-MAINTENANCE` 的修复与文档同步均已完成，并已分批提交推送。2026-10-08 用户要求使用 `oracle-web` 第五档再审计，与本地复现对照后修复。审计基线 `665e519`，当前仍在 `codex/semantic-role-boundaries`。
 
 ### 文档与 Git 交付
 
 2026-10-08 用户明确授权补齐 README 和相关文档，并分批提交、推送 GitHub。目标为 `origin/codex/semantic-role-boundaries`，沿用当前分支。本次授权替代审计阶段“不提交、推送”的限制；产品范围、代码和验收命令保持，新增四份文档已纳入允许路径及验收输入。
 
-本次补充 `README.md`、`docs/development.md`、`docs/semantic-retrieval-design.md`、`docs/architecture/implementation-views.md` 中的依赖维护、核对标记及回执恢复说明，README增加维护流程图和最新证据入口。这些是已完成行为的文档同步，未新增接口或改变架构。计划分两批提交：实现与回归测试；文档与审计记录。系统设计文档属于验收指纹，文档定稿后已重新通过独立复核及同7组验收；旧审查与收据分别保留在 `.local/asset-maintenance/review-before-documentation.json` 和 `.local/asset-maintenance/verified-before-documentation.json`。31份实现、测试、契约及Makefile与前次通过记录保持同哈希，需求和测试标准未变。实现与两份回归测试已提交为 `c82978a35308f226503dfd92e84709f1be5f4394`（`fix: guard asset mutations and repair stale dependencies`）。第二批保存 README、设计、使用指南、执行包及审计记录，完成后统一推送当前分支，再保存远端核对结果。
+本次补充 `README.md`、`docs/development.md`、`docs/semantic-retrieval-design.md`、`docs/architecture/implementation-views.md` 中的依赖维护、核对标记及回执恢复说明，README增加维护流程图和最新证据入口。这些是已完成行为的文档同步，未新增接口或改变架构。本次按两批提交：实现与回归测试；文档与审计记录。系统设计文档属于验收指纹，文档定稿后已重新通过独立复核及同7组验收；旧审查与收据分别保留在 `.local/asset-maintenance/review-before-documentation.json` 和 `.local/asset-maintenance/verified-before-documentation.json`。31份实现、测试、契约及Makefile与前次通过记录保持同哈希，需求和测试标准未变。实现与两份回归测试已提交为 `c82978a35308f226503dfd92e84709f1be5f4394`（`fix: guard asset mutations and repair stale dependencies`）。第二批 README、设计、使用指南、执行包及审计记录已提交为 `1e86013b031339c5176d7a2d1b7a9a26ff6d590e`（`docs: document asset maintenance and audit results`）。两批已成功推送到 `origin/codex/semantic-role-boundaries`，远端读取与本地提交号一致。本节作为后续交付记录单独保存；未合并默认分支或部署。
 
 交付前检查：309项材料检查、16项交付检查器测试通过；完整收据与当前输入一致，`git diff --check`通过。公开463份文本按凭据格式、个人绝对路径和原业务标识检查未检出问题，扫描结果保存在 `.local/asset-maintenance/publication-check.json`。
 
