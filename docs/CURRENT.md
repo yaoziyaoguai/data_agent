@@ -3,7 +3,7 @@
   "workflow": "dev_co",
   "schema": 1,
   "phase": "deliver",
-  "status": "ready",
+  "status": "done",
   "goal_revision": 30,
   "environment": "macOS arm64 / Node 26.8.1 / npm 11.19.0 / Rust 1.99.0 / Python 3.14.7 / SQLite 3.53.4 / Colima 0.10.1 / Docker Engine 29.2.1 / Compose 5.3.1 / MySQL 8.4.11 / Milvus 3.0.2",
   "verification": {
@@ -367,9 +367,9 @@
 
 更新：2026-10-08。唯一活动项目目录：`~/work_space/data_agent`。
 
-## 本轮交付：Pi 原生 Skill 与空间共享收尾（已验收，待提交推送）
+## 本轮交付：Pi 原生 Skill 与空间共享收尾（已完成并推送）
 
-`goal_revision=30`，增量 `I2-SKILL-CLOSEOUT` 已完成。六项复现的产品问题已修复，独立审查通过，第十四次统一验收13组全部成功。用户已授权完整验收后提交并推送当前分支 `codex/semantic-role-boundaries`；当前进入Git交付，不合并默认分支或部署。
+`goal_revision=30`，增量 `I2-SKILL-CLOSEOUT` 已完成。六项复现的产品问题已修复，独立审查通过，第十四次统一验收13组全部成功。用户已授权完整验收后提交并推送当前分支 `codex/semantic-role-boundaries`；实现及配套材料已提交并推送该分支，未合并默认分支或部署。
 
 ### 本次交付内容
 
@@ -404,7 +404,9 @@
 
 ### Git交付状态
 
-当前完整验收与独立收据复核已完成，待提交推送。分支为 `codex/semantic-role-boundaries`，基线 `cdf4b0c`；全部114项待提交路径中，113项属于当前增量允许范围，另1项是前序已授权、一直未提交的历史审计文档 `docs/reviews/dogfood-and-pi-skills-audit-20261007.md`。该文档保留原审计时点及后续CURRENT入口，随本次交付保存，不修改本增量冻结范围。最终提交推送结果将在本节更新。
+实现及全部配套材料已提交为 `c3a12e8857d4d81eaba838a4e2ab66b06cd0ed57`（`feat: adopt native Pi skills with personal and shared ownership`），并成功推送到 `origin/codex/semantic-role-boundaries`。本条作为同一分支的后续完成记录单独提交；没有合并默认分支或部署。
+
+本次交付114项路径中，113项属于当前增量允许范围，另1项是前序已授权、此前未提交的历史审计文档 `docs/reviews/dogfood-and-pi-skills-audit-20261007.md`。独立审查补核对确认该文档属于原审计授权，保留原审计时点及CURRENT入口；随本次交付保存，不修改本增量冻结范围。
 
 完成记录更新后，`make verify-materials verify-delivery` 完整退出0：294项材料检查、16项交付检查器测试通过；完整收据仍与当前范围一致，`git diff --check` 通过。独立最终证据为 `.local/skill-release/final-evidence-review-20261008.json`，复核13组最终日志、真实6条、千表8项和当前指纹，无阻断项。
 
