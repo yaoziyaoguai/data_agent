@@ -1,0 +1,164 @@
+import assert from 'node:assert/strict';
+import {randomUUID} from 'node:crypto';
+import {mkdir, writeFile} from 'node:fs/promises';
+import {chromium} from 'playwright';
+import {harness, until} from './harness.mjs';
+import {assetInput, editInput, ok, select} from './skill-fixtures.mjs';
+
+const h = await harness({web: true, capture: true, startWorker: false});
+const browser = await chromium.launch();
+const page = await browser.newPage({viewport: {width: 1440, height: 1000}});
+page.setDefaultTimeout(10000);
+const directory = '.local/checks/asset-dependencies';
+await mkdir(directory, {recursive: true});
+const checks = [], errors = [];
+page.on('pageerror', e => errors.push(e.message));
+let passed = false;
+const card = name => page.locator('.asset-card').filter({has: page.getByRole('heading', {name, exact: true})});
+const current = async (id, user = 'bob') => ok(await h.request('/assets', undefined, user)).assets.find(a => a.id === id);
+const login = async user => {
+  if (page.url() === 'about:blank') await page.goto(h.url);
+  else await page.getByRole('button', {name: '退出', exact: true}).click();
+  await page.getByLabel('演示登录凭据').fill(h.tokens[user]);
+  await page.getByRole('button', {name: '进入工作台 →'}).click();
+  await page.getByRole('navigation', {name: '主导航'}).getByRole('button', {name: /我的积累/}).click();
+};
+const edit = async asset => {
+  await card(asset.name).getByRole('button', {name: '编辑', exact: true}).click();
+  const form = page.getByRole('dialog');
+  await form.getByRole('group', {name: '知识依赖'}).waitFor();
+  return form;
+};
+const updateRef = async (form, version) => {
+  const row = form.locator('.asset-dependency').first();
+  const update = row.getByRole('button', {name: `更新引用到 v${version}`, exact: true});
+  await update.waitFor();
+  assert.equal(await update.isDisabled(), true);
+  await row.getByLabel('我已核对新版内容及方法适用范围').check();
+  await update.click();
+  return row;
+};
+const save = async form => {
+  const response = page.waitForResponse(r => r.url().endsWith('/api/assets') && r.request().method() === 'POST');
+  await form.getByRole('button', {name: '保存', exact: true}).click();
+  const result = await response;
+  assert.equal(result.status(), 200, await result.text());
+  await form.waitFor({state: 'detached'});
+};
+try {
+  const doc = ok(await h.request('/knowledge', {operation_id: randomUUID(), kind: 'document', name: '合成渠道口径', body: '只排除测试渠道。', related_ids: []}));
+  const dep = {object_id: doc.id, version: doc.version, path: 'body'};
+  const personal = ok(await h.request('/assets', assetInput({name: '合成个人依赖方法', verified: true, dependencies: [dep]}), 'bob'));
+  const shared = ok(await h.request(`/assets/${personal.id}/publish`, {operation_id: randomUUID(), expected_version: personal.version, share_confirmed: true}, 'bob'));
+  const memory = ok(await h.request('/assets', assetInput({kind: 'memory', name: '合成带依据记忆', dependencies: [dep]})));
+  const cid = await h.create('bob'); ok(await select(h, cid, shared, 'bob'));
+  const selection = async () => ok(await h.request(`/conversations/${cid}/skill-selections`, undefined, 'bob')).selections.find(s => s.asset_id === shared.id);
+  const revised = ok(await h.request(`/knowledge/${doc.id}`, {operation_id: randomUUID(), expected_version: doc.version, entry_id: doc.entries[0].entry_id, value: '排除测试渠道及撤销订单。'}, 'alice', 'PATCH'));
+  assert.equal((await selection()).availability, 'dependency_unavailable');
+  assert.equal((await select(h, cid, shared, 'bob')).value.code, 'stale_knowledge');
+  await login('bob'); await page.getByRole('tab', {name: /^我的 Skill/}).click();
+  let form = await edit(personal);
+  await form.getByText('排除测试渠道及撤销订单。', {exact: true}).waitFor();
+  const confirmation = () => form.getByLabel('我已核对这条个人定义');
+  assert.equal(await confirmation().isChecked(), true);
+  for (const [label, value] of [['名称', '合成改名'], ['内容', '改动的正文'], ['适用范围与例外', '改动的范围']]) {
+    await form.getByLabel(label, {exact: true}).fill(value);
+    assert.equal(await confirmation().isChecked(), false);
+    await confirmation().check();
+  }
+  await form.getByRole('button', {name: '添加文本附件'}).click();
+  assert.equal(await confirmation().isChecked(), false);
+  await form.getByRole('button', {name: '移除此附件'}).click();
+  await page.keyboard.press('Escape');
+  form = await edit(personal);
+  assert.equal(await confirmation().isChecked(), true);
+  await form.getByRole('button', {name: '保存', exact: true}).click();
+  await form.getByRole('alert').waitFor();
+  assert.match(await form.getByRole('alert').innerText(), /stale_knowledge|依赖/);
+  assert.equal((await current(personal.id)).dependencies[0].version, doc.version);
+  await updateRef(form, revised.version);
+  assert.equal(await confirmation().isChecked(), false);
+  await page.keyboard.press('Escape');
+  assert.deepEqual((await current(personal.id)).dependencies, [dep]);
+  form = await edit(personal);
+  await updateRef(form, revised.version);
+  await save(form);
+  assert.equal((await current(personal.id)).dependencies[0].version, revised.version);
+  assert.equal((await current(personal.id)).verified, false);
+  assert.equal((await current(shared.id)).dependencies[0].version, doc.version);
+  checks.push('旧依赖仍被服务端拒绝；修改名称、正文、范围、附件或依赖撤销旧核对标记；取消不生效，私人修订不传播公共副本');
+
+  await page.getByRole('tab', {name: /^空间公共 Skill/}).click();
+  form = await edit(shared); await updateRef(form, revised.version);
+  // 核对之后知识再次变化，保存必须继续以服务端最新版本为准。
+  const newer = ok(await h.request(`/knowledge/${doc.id}`, {operation_id: randomUUID(), expected_version: revised.version, entry_id: revised.entries[0].entry_id, value: '排除测试渠道及撤销订单；金额使用支付币种。'}, 'alice', 'PATCH'));
+  await form.getByRole('button', {name: '保存', exact: true}).click();
+  await form.getByRole('alert').waitFor();
+  assert.equal(await form.isVisible(), true);
+  assert.equal((await current(shared.id)).version, shared.version);
+  await form.getByRole('button', {name: '重新读取当前知识'}).click();
+  await updateRef(form, newer.version);
+  assert.equal(await form.getByLabel('我已核对这条公共定义').isChecked(), false);
+  await form.getByLabel('我已核对这条公共定义').check();
+  await page.screenshot({path: directory + '/desktop-review.png', fullPage: true});
+  await page.setViewportSize({width: 390, height: 844});
+  assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth));
+  assert.ok(await form.evaluate(e => e.scrollWidth <= e.clientWidth + 1));
+  await page.screenshot({path: directory + '/mobile-review.png', fullPage: true});
+  await save(form); await page.setViewportSize({width: 1440, height: 1000});
+  let publicCurrent = await current(shared.id);
+  assert.equal(publicCurrent.dependencies[0].version, newer.version);
+  assert.equal(publicCurrent.owner_id, 'bob');
+  assert.equal(publicCurrent.verified, true);
+  assert.equal((await selection()).availability, 'version_changed');
+  assert.equal((await selection()).selected_version, shared.version);
+  ok(await select(h, cid, publicCurrent, 'bob'));
+  assert.equal((await selection()).availability, 'available');
+  checks.push('负责人可修复公共依赖；核对后再次改版仍拒绝，重新读取和确认可恢复；旧选择不会升级，明确重选后可用');
+
+  const disabled = ok(await h.request(`/knowledge/${doc.id}/disable`, {operation_id: randomUUID(), expected_version: newer.version}));
+  assert.equal((await selection()).availability, 'dependency_unavailable');
+  form = await edit(publicCurrent);
+  await form.getByText('该知识已停用，不能用于当前引用。', {exact: true}).waitFor();
+  assert.equal(await form.getByRole('button', {name: /^更新引用到/}).count(), 0);
+  await form.getByRole('button', {name: '核对后移除此依赖'}).click();
+  assert.equal(await form.getByLabel('我已核对这条公共定义').isChecked(), false);
+  await page.keyboard.press('Escape');
+  assert.equal((await current(shared.id)).dependencies.length, 1);
+  form = await edit(publicCurrent);
+  await form.getByRole('button', {name: '核对后移除此依赖'}).click();
+  await save(form);
+  publicCurrent = await current(shared.id);
+  assert.deepEqual(publicCurrent.dependencies, []);
+  assert.equal(publicCurrent.verified, false);
+  assert.equal((await selection()).availability, 'version_changed');
+  ok(await select(h, cid, publicCurrent, 'bob'));
+  checks.push('停用依赖不可升级；明确移除仍需保存，取消不生效；修订不自动恢复旧选择');
+
+  await login('carol'); await page.getByRole('tab', {name: /^空间公共 Skill/}).click();
+  await card(shared.name).waitFor();
+  assert.equal(await card(shared.name).getByRole('button', {name: '编辑', exact: true}).count(), 0);
+  assert.equal((await h.request('/assets', editInput(publicCurrent, {body: '越权修订'}), 'carol')).status, 403);
+  await login('alice'); await page.getByRole('tab', {name: /^空间公共 Skill/}).click();
+  form = await edit(publicCurrent);
+  await form.getByLabel('内容', {exact: true}).fill('超级维护者核对后的合成方法');
+  await save(form);
+  assert.equal((await current(shared.id)).owner_id, 'bob');
+  checks.push('普通成员没有编辑入口且服务端拒绝；超级维护者可修订，归属仍为原负责人');
+
+  ok(await h.request(`/knowledge/${doc.id}/delete`, {operation_id: randomUUID(), expected_version: disabled.version}));
+  await page.getByRole('tab', {name: /^记忆与纠错/}).click();
+  form = await edit(memory);
+  await form.getByText(/无法读取该知识/).waitFor();
+  assert.equal(await form.getByRole('button', {name: /^更新引用到/}).count(), 0);
+  await form.getByRole('button', {name: '核对后移除此依赖'}).click();
+  await save(form);
+  assert.deepEqual((await current(memory.id, 'alice')).dependencies, []);
+  checks.push('个人记忆也可明确移除已删除或不可读的依据，不伪造新版本');
+  assert.deepEqual(errors, []); passed = true;
+} finally {
+  await writeFile(directory + '/report.json', JSON.stringify({passed, checks, errors, officialRequests: 0}, null, 2));
+  if (!passed) await page.screenshot({path: directory + '/failure.png', fullPage: true});
+  await browser.close(); await h.close();
+  console.log(JSON.stringify({passed, checks, errors, officialRequests: 0}));
+}

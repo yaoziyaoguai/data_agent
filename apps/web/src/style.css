@@ -1385,3 +1385,12 @@ dialog::backdrop {
 .skill-files{border:1px solid #d9ddd9;border-radius:8px;padding:12px;margin:18px 0}.skill-file-editor{margin:12px 0 20px}
 .skill-preview{white-space:pre-wrap;overflow-wrap:anywhere;max-height:320px;overflow:auto;font:13px/1.65 ui-monospace,monospace}
 .skill-suggestion{padding:18px 0;border-top:1px solid #d9ddd9;margin-top:16px}
+.asset-dependencies{min-width:0;border:1px solid #dfe6ef;border-radius:8px;padding:16px;margin:20px 0;font-size:13px;line-height:1.7}
+.asset-dependencies legend{font-weight:600;padding:0 6px}
+.asset-dependency{border-top:1px solid #e8edf4;padding:14px 0;overflow-wrap:anywhere}
+.asset-dependency h3{font-size:14px;margin:0 0 6px}
+.asset-dependency p{margin:8px 0}
+.asset-dependency .actions{flex-wrap:wrap;gap:8px;margin-top:12px}
+.dependency-update{margin:12px 0}
+.asset-list-error{padding:12px 16px;margin-top:18px;border:1px solid #e7cead;border-radius:7px;background:#fff8ef;color:#754320;font-size:13px}
+.asset-operation-note{padding:12px 16px;margin-top:18px;border:1px solid #dfe6ef;border-radius:7px;background:#f7f9fc;font-size:13px}

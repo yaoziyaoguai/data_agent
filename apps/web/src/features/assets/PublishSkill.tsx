@@ -2,7 +2,7 @@ import {useState} from 'react';
 import type {Asset} from '../../../../../packages/contracts/generated/boundary.ts';
 import {api} from '../../shared/api.ts';
 import {Modal} from '../../shared/Modal.tsx';
-export function PublishSkill({asset, onClose, onPublished}: {asset: Asset; onClose: () => void; onPublished: () => Promise<void>}) {
+export function PublishSkill({asset, onClose, onPublished, onFailed}: {asset: Asset; onClose: () => void; onPublished: () => Promise<void>; onFailed: () => void}) {
   const [confirmed, setConfirmed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -13,7 +13,7 @@ export function PublishSkill({asset, onClose, onPublished}: {asset: Asset; onClo
     try {
       await api('Asset', '/assets/' + asset.id + '/publish', 'POST', {operation_id: operation, expected_version: asset.version, share_confirmed: true});
       await onPublished();
-    } catch (e) { setError(e instanceof Error && e.message === 'skill_already_published' ? '此方法已经发布。请到空间公共页维护公共副本。' : e instanceof Error && e.message === 'version_conflict' ? '原方法已变化，请关闭并重新核对最新版本。' : e instanceof Error ? e.message : '发布失败'); }
+    } catch (e) { onFailed(); setError(e instanceof Error && e.message === 'skill_already_published' ? '此方法已经发布。请到空间公共页维护公共副本。' : e instanceof Error && e.message === 'version_conflict' ? '原方法已变化，请关闭并重新核对最新版本。' : e instanceof Error ? e.message : '发布失败'); }
     finally { setBusy(false); }
   };
   return <Modal title="发布到当前空间" onClose={onClose}>

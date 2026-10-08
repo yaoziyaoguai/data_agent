@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from "react";
-import type { Asset, SkillFile } from "../../../../../packages/contracts/generated/boundary.ts";
+import type { Asset, AssetKind, EvidenceRef, SkillFile } from "../../../../../packages/contracts/generated/boundary.ts";
 import { api } from "../../shared/api.ts";
 import { SkillFilesEditor } from "./SkillFilesEditor.tsx";
 import { PublishSkill } from "./PublishSkill.tsx";
 import { SkillSuggestions } from "./SkillSuggestions.tsx";
+import { AssetDependenciesEditor } from "./AssetDependenciesEditor.tsx";
 import { Modal } from "../../shared/Modal.tsx";
 export function AssetsPage({
   user,
@@ -15,11 +16,15 @@ export function AssetsPage({
   const [assets, setAssets] = useState<Asset[]>([]);
   const [tab, setTab] = useState<"memory" | "skill" | "shared">("memory");
   const [editing, setEditing] = useState<Asset | null | undefined>();
+  const [editingKind, setEditingKind] = useState<AssetKind>("memory");
+  const [dependencies, setDependencies] = useState<EvidenceRef[]>([]);
   const [files, setFiles] = useState<SkillFile[]>([]);
-  const [publishing, setPublishing] = useState<Asset | null>(null);
+  const [publishing, setPublishing] = useState<{asset: Asset; session: number; page: number} | null>(null);
   const [suggesting, setSuggesting] = useState<Asset | null>(null);
   const [saving, setSaving] = useState(false);
   const editorSession = useRef(0);
+  const publicationSession = useRef(0);
+  const pageSession = useRef(0);
   const saveOperation = useRef({key: "", id: ""});
   const [name, setName] = useState("");
   const [body, setBody] = useState("");
@@ -27,19 +32,32 @@ export function AssetsPage({
   const [verified, setVerified] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [backgroundOutcome, setBackgroundOutcome] = useState("");
+  const [listError, setListError] = useState("");
   const listRequest = useRef(0);
   const refresh = async () => {
     const request = ++listRequest.current;
-    const result = await api("AssetList", "/assets");
-    if (request === listRequest.current) setAssets(result.assets);
+    const page = pageSession.current;
+    try {
+      const result = await api("AssetList", "/assets");
+      if (page === pageSession.current && request === listRequest.current) {
+        setAssets(result.assets);
+        setListError("");
+      }
+    } catch {
+      if (page === pageSession.current && request === listRequest.current) {
+        setListError("列表暂时未能更新，已收到的保存或发布成功回执仍然有效。请重新加载列表。");
+      }
+    }
   };
   useEffect(() => {
-    void refresh().catch((e) => setError(e.message));
-    return () => { listRequest.current++; editorSession.current++; };
+    pageSession.current++;
+    void refresh();
+    return () => { pageSession.current++; listRequest.current++; editorSession.current++; publicationSession.current++; };
   }, [user]);
   useEffect(() => {
     if (!assets.some(a => a.memory_index_state === "queued" || a.memory_index_state === "issued")) return;
-    const timer = setTimeout(() => { void refresh().catch(e => setError(e.message)); }, 1500);
+    const timer = setTimeout(() => { void refresh(); }, 1500);
     return () => clearTimeout(timer);
   }, [assets]);
   const edit = (asset: Asset | null) => {
@@ -47,7 +65,11 @@ export function AssetsPage({
     setSaving(false);
     saveOperation.current = {key: "", id: ""};
     setError("");
+    setNotice("");
+    setBackgroundOutcome("");
     setFiles(asset?.files ?? []);
+    setDependencies(asset?.dependencies ?? []);
+    setEditingKind(asset?.kind ?? (tab === "memory" ? "memory" : "skill"));
     setEditing(asset);
     setName(asset?.name ?? "");
     setBody(
@@ -67,49 +89,66 @@ export function AssetsPage({
   const save = async () => {
     if (saving) return;
     const session = editorSession.current;
+    const page = pageSession.current;
     setSaving(true); setError("");
-    listRequest.current++;
     try {
       const input = {
         id: editing?.id ?? null,
         expected_version: editing?.version ?? null,
-        kind: editing?.kind ?? (tab === "memory" ? "memory" : "skill"),
+        kind: editingKind,
         files,
         name,
         body,
         scope,
         verified,
         source_text: editing?.source_text ?? "用户在个人积累页明确保存",
-        dependencies: editing?.dependencies ?? [],
+        dependencies,
       };
       const key = JSON.stringify(input);
       if (saveOperation.current.key !== key) saveOperation.current = {key, id: crypto.randomUUID()};
       const saved = await api("Asset", "/assets", "POST", { ...input, operation_id: saveOperation.current.id });
-      // 回执只结束发起保存的编辑，关闭后再新建的草稿不受影响。
-      if (session !== editorSession.current) return;
-      setEditing(undefined);
-      setTab(saved.kind === "memory" ? "memory" : saved.visibility === "space" ? "shared" : "skill");
+      if (page !== pageSession.current) return;
+      // 窗口状态只归原编辑所有；已提交的数据仍须同步到当前页面的列表。
+      if (session === editorSession.current) {
+        setEditing(undefined);
+        setTab(saved.kind === "memory" ? "memory" : saved.visibility === "space" ? "shared" : "skill");
+        setNotice(saved.visibility === "space" ? "公共方法已保存新版本；会话仍需明确重选。" : "已保存到你的个人积累，其他用户无法读取。");
+      }
       await refresh();
-      if (session === editorSession.current) setNotice(saved.visibility === "space" ? "公共方法已保存新版本；会话仍需明确重选。" : "已保存到你的个人积累，其他用户无法读取。");
     } catch (e) {
       if (session === editorSession.current) setError(e instanceof Error && e.message === "skill_line_too_long" ? "方法或附件中有单行内容过长，请分行后保存（每行不超过 50 KiB）。" : e instanceof Error ? e.message : "保存失败");
+      else if (page === pageSession.current) setBackgroundOutcome(`《${name}》的保存未收到成功回执，请重新加载列表核对。`);
     } finally { if (session === editorSession.current) setSaving(false); }
   };
+  const publish = (asset: Asset) => {
+    setNotice("");
+    setBackgroundOutcome("");
+    setPublishing({asset, session: ++publicationSession.current, page: pageSession.current});
+  };
+  const closePublisher = () => {
+    publicationSession.current++;
+    setPublishing(null);
+  };
   const state = async (asset: Asset, action: string) => {
-    listRequest.current++;
+    const page = pageSession.current;
+    const editor = editorSession.current;
+    const publication = publicationSession.current;
+    const feedbackIsCurrent = () => page === pageSession.current && editor === editorSession.current && publication === publicationSession.current;
     try {
       await api("Asset", "/assets/" + asset.id + "/" + action, "POST", {
         operation_id: crypto.randomUUID(),
         expected_version: asset.version,
       });
-      await refresh();
-      setNotice(
+      if (page !== pageSession.current) return;
+      if (feedbackIsCurrent()) setNotice(
         action === "delete"
           ? "已删除，后续不再采用。"
           : "状态已更新，后续运行按最新状态核对。",
       );
+      await refresh();
     } catch (e) {
-      setError(String(e));
+      if (feedbackIsCurrent()) setError(String(e));
+      else if (page === pageSession.current) setBackgroundOutcome(`《${asset.name}》的状态修改未收到成功回执，请重新加载列表核对。`);
     }
   };
   const matches = (asset: Asset) => tab === "memory" ? asset.kind === "memory" : asset.kind === "skill" && (tab === "shared" ? asset.visibility === "space" : asset.visibility !== "space");
@@ -202,7 +241,7 @@ export function AssetsPage({
                 <button onClick={() => void state(asset, "delete")}>
                   删除
                 </button></>}
-                {asset.kind === "skill" && asset.visibility !== "space" && asset.state === "enabled" && <button onClick={() => setPublishing(asset)}>发布到空间</button>}
+                {asset.kind === "skill" && asset.visibility !== "space" && asset.state === "enabled" && <button onClick={() => publish(asset)}>发布到空间</button>}
                 {asset.visibility === "space" && <button onClick={() => setSuggesting(asset)}>修改建议</button>}
                 {asset.kind === "skill" && asset.state === "enabled" && (
                   <button
@@ -250,17 +289,19 @@ export function AssetsPage({
           {error}
         </p>
       )}
+      {listError && <div className="asset-list-error" role="alert"><p>{listError}</p><button onClick={() => void refresh()}>重新加载列表</button></div>}
+      {backgroundOutcome && <div className="asset-operation-note" role="status"><p>{backgroundOutcome}</p><button onClick={() => void refresh()}>核对已提交记录</button></div>}
       {editing !== undefined && (
         <Modal
           title={
             (editing ? "编辑" : "新增") +
-            (tab === "memory" ? "个人记忆" : "Skill")
+            (editingKind === "memory" ? "个人记忆" : "Skill")
           }
           onClose={closeEditor}
         >
           <label className="form-label">
             名称
-            <input disabled={saving} aria-label="名称" value={name} onChange={(e) => setName(e.target.value)} />
+            <input disabled={saving} aria-label="名称" value={name} onChange={(e) => { setName(e.target.value); setVerified(false); }} />
           </label>
           <label className="form-label">
             内容
@@ -269,7 +310,7 @@ export function AssetsPage({
               disabled={saving}
               rows={12}
               value={body}
-              onChange={(e) => setBody(e.target.value)}
+              onChange={(e) => { setBody(e.target.value); setVerified(false); }}
             />
           </label>
           <label className="form-label">
@@ -277,11 +318,12 @@ export function AssetsPage({
             <input
               disabled={saving}
               value={scope}
-              onChange={(e) => setScope(e.target.value)}
+              onChange={(e) => { setScope(e.target.value); setVerified(false); }}
               placeholder="哪些问题可采用，哪些情况除外"
             />
           </label>
-          {(editing?.kind ?? (tab === "memory" ? "memory" : "skill")) === "skill" && <SkillFilesEditor files={files} onChange={setFiles} disabled={saving}/>}
+          {editingKind === "skill" && <SkillFilesEditor files={files} onChange={value => { setFiles(value); setVerified(false); }} disabled={saving}/>}
+          <AssetDependenciesEditor key={editorSession.current} dependencies={dependencies} onChange={value => { setDependencies(value); setVerified(false); }} disabled={saving}/>
           <label className="checkbox-label">
             <input
               type="checkbox"
@@ -301,7 +343,19 @@ export function AssetsPage({
           </button>
         </Modal>
       )}
-      {publishing && <PublishSkill asset={publishing} onClose={() => setPublishing(null)} onPublished={async () => { setPublishing(null); setTab("shared"); await refresh(); setNotice("已发布独立公共副本。私人方法后续修改不会自动公开。"); }}/>}
+      {publishing && <PublishSkill key={publishing.session} asset={publishing.asset} onClose={closePublisher} onFailed={() => {
+        if (publishing.page === pageSession.current && publishing.session !== publicationSession.current) {
+          setBackgroundOutcome(`《${publishing.asset.name}》的发布未收到成功回执，请重新加载列表核对。`);
+        }
+      }} onPublished={async () => {
+        if (publishing.page !== pageSession.current) return;
+        if (publishing.session === publicationSession.current) {
+          setPublishing(null);
+          setTab("shared");
+          setNotice("已发布独立公共副本。私人方法后续修改不会自动公开。");
+        }
+        await refresh();
+      }}/>}
       {suggesting && <SkillSuggestions asset={suggesting} onClose={() => setSuggesting(null)}/>}
     </section>
   );
