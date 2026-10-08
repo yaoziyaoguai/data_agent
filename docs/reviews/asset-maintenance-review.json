@@ -1,0 +1,226 @@
+{
+  "schema": 1,
+  "increment_id": "I2-ASSET-MAINTENANCE",
+  "reviewer": "correctness /root/asset_maintenance_review；未参与产品、正式测试、CURRENT或设计文件实现，仅编写独立探针与本审查记录。",
+  "reviewed_at": "2026-10-08T10:47:41.286852+00:00",
+  "base_head": "665e5193b4b9bea121aafbef900f3384048c4e6c",
+  "conclusion": "passed",
+  "scope_sha256": "f66d231bae97da58ba623ffbb93b8ce06ffadea6c94db5148544c33139a1b503",
+  "summary": "文档交付复核通过，未发现与实现或既定要求冲突的新增说明。README、开发指南、系统设计和M12说明准确描述人工维护依赖、撤销旧核对标记、关窗后回执、只读核对及明确重选；已提交保存不因关窗取消。与10:11 UTC完整7组收据逐文件比对，31份实现/测试/契约/Makefile输入全部同哈希，原绑定文件只改变系统设计文档。逐项还原新增文档路径及授权说明后，delivery契约哈希精确恢复原值，证明验收命令、时限、要求及预期保持。当前重新绑定文档范围，最终统一验收由主任务继续执行。",
+  "requirements_reviewed": {
+    "C02": "页面不提交用户/空间/负责人声明；私人/公共可见性与can_edit来自服务端，保存继续经过require_edit及引用权限校验。",
+    "C05": "保存operation_id仍由完整输入指纹复用；回执绑定页面与发起窗口；列表成功和失败按请求代次保护。提交开始不再作废有效读取，成功后才刷新；关窗后的未知反馈具名且只提供GET核对，同窗发布同参重试保持原操作身份。",
+    "C07": "继续使用既有运行时api解码、EvidenceRef和AssetSave；未更改HTTP/Schema或跨语言类型来源。",
+    "C08": "保留显式核对和取消草稿语义；内容材料改动撤销旧verified，重新勾选才表示核对新内容，未核对仍可保存；依赖读取失败与停用分开。",
+    "D12": "依赖更新只在点击确认后修改草稿；保存校验当前版本/路径/权限；修订不替换既有会话selected_version。",
+    "D13": "关闭保存窗口后仍同步列表，刷新失败可单独恢复；已有引用可逐条更新或移除形成新资产版本。"
+  },
+  "changed_files_reviewed": [
+    "apps/web/src/features/assets/AssetsPage.tsx",
+    "apps/web/src/features/assets/AssetDependenciesEditor.tsx",
+    "apps/web/src/features/assets/PublishSkill.tsx",
+    "apps/web/src/style.css",
+    "tests/mvp/check-asset-mutation-browser.mjs",
+    "tests/mvp/check-asset-dependencies-browser.mjs",
+    "README.md",
+    "docs/development.md",
+    "docs/semantic-retrieval-design.md",
+    "docs/architecture/implementation-views.md"
+  ],
+  "supporting_files_read": [
+    "AGENTS.md",
+    "docs/CURRENT.md",
+    "docs/dogfood-repair-execution.md",
+    "docs/semantic-retrieval-design.md",
+    "docs/architecture/implementation-design.md",
+    "docs/architecture/knowledge-modules.md",
+    "apps/web/src/main.tsx",
+    "apps/web/src/shared/api.ts",
+    "apps/web/src/shared/Modal.tsx",
+    "apps/web/src/features/assets/PublishSkill.tsx",
+    "packages/contracts/generated/boundary.ts",
+    "packages/contracts/schema.json",
+    "crates/data-agent/src/use_cases/personal_assets.rs",
+    "crates/data-agent/src/use_cases/knowledge.rs",
+    "crates/data-agent/src/modules/assets/store.rs",
+    "crates/data-agent/src/modules/knowledge/store.rs",
+    "tests/mvp/check-asset-editor-browser.mjs",
+    "tests/mvp/harness.mjs",
+    "tests/mvp/skill-fixtures.mjs",
+    "apps/web/src/features/assets/SkillFilesEditor.tsx",
+    "docs/research/asset-maintenance-audit-20261008.md"
+  ],
+  "implementation_boundaries": {
+    "new_agent_loop_or_pi_capability": false,
+    "pi_reuse_assessment": "仅React编辑状态、资产/知识HTTP调用与浏览器回归变更；没有新增Agent规划、会话、压缩或工具循环，因此未重复Pi原生能力。",
+    "automatic_dependency_upgrade": false,
+    "api_or_permission_contract_change": false,
+    "ownership": "已有资产修订由Rust从旧记录保留owner_id和visibility；公共维护仍是负责人或超级维护者，私人修改不传播独立公共副本。"
+  },
+  "findings": [],
+  "resolved_findings": [
+    {
+      "id": "AM-05",
+      "severity": "P2",
+      "confidence": 100,
+      "location": "apps/web/src/features/assets/AssetsPage.tsx:129",
+      "existed_in_base": true,
+      "trigger": "alice停用个人Skill，服务端已提交而200回执被延迟；退出并以bob打开资产页后释放旧200。",
+      "before": "原state回调额外发起1次GET /api/assets，使用bob的当前cookie；未发生alice私人数据在bob页面展示。",
+      "correction": "state捕获page/editor/publication代次，旧页面不再刷新；新窗口已打开时抑制旧反馈，当前页面仍同步已提交状态。",
+      "after": "相同退出身份反例额外读取为0；迟到503不污染新编辑，迟到200仍同步当前列表且保留新草稿。",
+      "evidence_before": ".local/asset-maintenance-review/before-state-guard.json",
+      "evidence_after": ".local/asset-maintenance-review/report.json"
+    }
+  ],
+  "independently_executed": {
+    "command": "node .local/asset-maintenance-review/oracle-followup-probe.mjs",
+    "environment": "隔离MySQL、真实Rust API、Chromium、合成平台与身份；web=true,capture=true,startWorker=false；finally关闭浏览器与harness。",
+    "passed": true,
+    "checks": [
+      "POST503后初始GET仍显示全部三条记录，失败草稿保留且可重试",
+      "POST成功后的GET已显示新资产；此前截取的旧列表随后返回不能覆盖它",
+      "名称/正文/范围/附件路径及内容/更新与移除依赖均撤销旧核对；可未核对保存、重新核对保存，取消保持旧记录",
+      "保存已提交但关窗后网络失败，具名提示保持未知，新草稿不受影响；核对仅GET且记录只有一份",
+      "发布已提交但关窗后网络失败，具名提示原资产且不影响另一发布确认；核对仅GET、不重复公开",
+      "保存与发布的旧503在换身份后不显示旧名称/反馈，不读取新身份列表",
+      "同一发布窗口回执丢失后重试operation_id不变，只有一个公共副本，页面级旧失败提示不误触发"
+    ],
+    "page_errors": [],
+    "official_model_requests": 0,
+    "limitations": "网络故障由浏览器路由注入；两条关窗未知路径先让真实Rust提交，再中断响应，核对实际MySQL记录数量。不调用外部模型或真实平台。"
+  },
+  "implementation_evidence_inspected": [
+    {
+      "path": ".local/checks/asset-mutation/report.json",
+      "passed": true,
+      "checks": 8,
+      "coverage": "保留原6组；新增失败写入保留初始列表、关闭后保存/发布迟到503的具名反馈与只读核对。已读取完整JSON与对应断言。"
+    },
+    {
+      "path": ".local/checks/asset-dependencies/report.json",
+      "passed": true,
+      "checks": 5,
+      "coverage": "原5组断言保留；新增对正文/名称/范围/附件/引用修改撤销核对，以及false保存和重新勾选true的持久值核对。"
+    },
+    {
+      "path": ".local/checks/asset-editor/report.json",
+      "passed": true,
+      "checks": 4,
+      "coverage": "此前由主任务执行且通过；与旧统一收据的脚本哈希完全一致。本轮新的统一验收仍待，不把旧运行冒称本轮重跑。"
+    }
+  ],
+  "reviewed_file_sha256": {
+    "apps/web/src/features/assets/AssetsPage.tsx": "86194b24d424b3a67554ffcbd45458706cb0a99c62610e11f72aebeed3c66192",
+    "apps/web/src/features/assets/AssetDependenciesEditor.tsx": "41a774271fd29387369012f3e61e6d72f4a7385b7ccec7a77524c075872bb6f3",
+    "apps/web/src/features/assets/PublishSkill.tsx": "284020a3ab3f49fb1900dae1582764fd3e130f8ce33449e0bdc43866c77ba4c4",
+    "apps/web/src/style.css": "4e5245d195d4942342a7b303a42ca58f409650536264a8a2df4be577c2690030",
+    "tests/mvp/check-asset-mutation-browser.mjs": "73bdeb2c89c481a077e84c69eb12cb11fdcfa78107f2944ab9fe92c213c9f76e",
+    "tests/mvp/check-asset-dependencies-browser.mjs": "c3bc4042270cb36b5a58ab9ce9173e254b135c68a64cf9e2a4c3b47c3e92c330",
+    "README.md": "28798d849a4b398b5a32c0c279780a4cd5cff9cabe265864fc341f133a9c0b63",
+    "docs/development.md": "7499a64c71aba3400e9ccb9acc8a0f8a1cc1b94c32ca43d87d9df8dd7b331aa8",
+    "docs/semantic-retrieval-design.md": "d4cc7d0ccf4f87312865562ed0c9e5456b15a6820970df1afa1f0ec20e155a26",
+    "docs/architecture/implementation-views.md": "e179cd90de17ebe1b4a4fe5f5c5f90fdce95f3c8e8eb2d118aed7b7287a7f5ab"
+  },
+  "evidence_sha256": {
+    ".local/asset-maintenance-review/probe.mjs": "419adfa7332cfa404b7693c96ba062ca6140f0b4b335deed2e650c29af7aa573",
+    ".local/asset-maintenance-review/before-state-guard.json": "f487ff25b2e099feecbf02894545139abcf3861dae8e5bcb580fa64968b6dc4a",
+    ".local/asset-maintenance-review/report.json": "2032e968fcd051b3443068312a30e8f0abea2ed36aea623f653513b902a7b22c",
+    ".local/checks/asset-mutation/report.json": "b1b587e6a78921de678b3a739f0cd406818b0ec4f9c2ef58e99ccdf7ab34a064",
+    ".local/checks/asset-dependencies/report.json": "c12a48f82bcf0cf2dabf9ab52048097f1551247d826c3561dc863e6c06c1ecb6",
+    ".local/checks/asset-editor/report.json": "4cbeb3c6c9d744ef8fd3b7579720ed8f3aa1505938dbaa190d4f5ff71a71c74d",
+    ".local/asset-maintenance-review/oracle-followup-probe.mjs": "fa0d460dedc2094811807347da942f68d62677f60866c52b960802ec700cd7a2",
+    ".local/asset-maintenance-review/oracle-followup-report.json": "aae2d72568ee3ab15265bb84cd24becc3b33b52dae0db2bcf13b336b7f63a1cc",
+    ".local/asset-maintenance-review/before-oracle-followups-review.json": "ef9eddd1c9b918338bd3a32b9fb1cc8c34d9deff768bb3edfe3f0506c22da07e",
+    ".local/asset-maintenance/verified-before-oracle-followups.json": "dd9890b26b2dc1d0c7c2da5b4b3d46a3e33b00f35e71c493e72b8174e76eb659",
+    ".local/audit-20261008/oracle-followups.json": "39912b8a8dc5a9a721a426afdecfb52345d73b2d2a3db6506a1fc4b3e090921d",
+    ".local/asset-maintenance-review/documentation-scope-check.json": "f2b98b83cc310b81dd4edc7667f87d9491c4732352261caf66998cdd80d67ff5",
+    ".local/asset-maintenance/review-before-documentation.json": "e35244cd107e4e6c860d97a40ea16088ef4e4cff5a0ae6c87424efe30b67a796",
+    ".local/asset-maintenance/verified-before-documentation.json": "1ee6936f4a120260e8c3dd38033b213d2a87923c9c9185f66658758ef42722c0"
+  },
+  "residual_risks": [
+    "本地证据使用合成平台和身份；未验证真实Datasight、生产身份或真实模型行为。",
+    "关闭窗口后不提供继续原操作的入口；具名未知反馈与列表核对不能充当跨窗口操作账本。该实现取舍已在项目记录说明，没有自动重做未知写入。"
+  ],
+  "testing_gaps": [
+    "4份文档及交付声明已纳入新的审查范围；主任务仍需执行新范围的同7组make verify-increment，并更新CURRENT最终时点与证据指针。"
+  ],
+  "reviewer_write_scope": [
+    "docs/reviews/asset-maintenance-review.json",
+    ".local/asset-maintenance-review/"
+  ],
+  "review_history": [
+    {
+      "scope_sha256": "b97e7f3cf75db1e13ffa231c7239ca3a40c632eabe6015ba4d0c937616209fc0",
+      "review_snapshot": ".local/asset-maintenance-review/before-oracle-followups-review.json",
+      "independent_evidence": ".local/asset-maintenance-review/report.json",
+      "formal_receipt": ".local/asset-maintenance/verified-before-oracle-followups.json",
+      "reason": "Oracle对照后补AM-06/07/08，改变已冻结实现、两份新增测试及执行包。旧审查、8组独立反例和7组统一通过收据均保留为原范围历史，不冒称覆盖本轮新输入。"
+    },
+    {
+      "scope_sha256": "73ee4077583483dabf2e713575b84dd0082f218a52452ffa9956dcf1fa6aa7e2",
+      "review_snapshot": ".local/asset-maintenance/review-before-documentation.json",
+      "formal_receipt": ".local/asset-maintenance/verified-before-documentation.json",
+      "reason": "用户授权文档及Git交付，新增4份文档到声明范围，并更新non_goals授权说明；产品与测试未变。10:11 UTC的原7组通过收据及审查完整保留，重新绑定文档后的范围仍待主任务统一验收。"
+    }
+  ],
+  "prior_independent_execution": {
+    "scope_sha256": "b97e7f3cf75db1e13ffa231c7239ca3a40c632eabe6015ba4d0c937616209fc0",
+    "report": ".local/asset-maintenance-review/report.json",
+    "passed": true,
+    "checks": 8,
+    "scope_note": "先前范围证据；本轮未重复全部8组，仅复测此次变化直接影响的列表、确认及回执路径。"
+  },
+  "followup_review": {
+    "scope": "仅AM-06有效初始读取、AM-07旧核对撤销、AM-08关窗后具名反馈，以及这些修改影响的原列表代次、页面身份和同参重试。",
+    "new_findings": [],
+    "verified_behaviors": [
+      "POST503后初始GET仍显示全部三条记录，失败草稿保留且可重试",
+      "POST成功后的GET已显示新资产；此前截取的旧列表随后返回不能覆盖它",
+      "名称/正文/范围/附件路径及内容/更新与移除依赖均撤销旧核对；可未核对保存、重新核对保存，取消保持旧记录",
+      "保存已提交但关窗后网络失败，具名提示保持未知，新草稿不受影响；核对仅GET且记录只有一份",
+      "发布已提交但关窗后网络失败，具名提示原资产且不影响另一发布确认；核对仅GET、不重复公开",
+      "保存与发布的旧503在换身份后不显示旧名称/反馈，不读取新身份列表",
+      "同一发布窗口回执丢失后重试operation_id不变，只有一个公共副本，页面级旧失败提示不误触发"
+    ],
+    "original_assertions": "逐条核对两份新增浏览器脚本，原发布/保存窗口、私人可见性、版本冲突、取消、公共独立副本、选用状态、owner和移动断言保留。与前次正式收据逐文件比较，既有editor/shared/selection/workspace、API、Rust、Schema及其他验证输入未变；变化仅限本轮声明的产品文件、两份新增测试和执行包。",
+    "oracle_evidence_boundary": "读取项目Oracle对照记录及本地AM-06/07反例；未再次调用Oracle或以Oracle结论代替独立代码与运行验证。",
+    "implementation_decisions_checked": [
+      "去掉save/state提交开始的listRequest增量，refresh仍先推进请求代次；原成功/失败回包顺序保护保留。",
+      "名称、正文、范围、附件与依赖onChange清除旧verified；初始加载、只读知识刷新与重新勾选不会自动清除当前确认。",
+      "保存name闭包与发布asset闭包保持原对象名称，backgroundOutcome只能写回原有效页面；新窗口错误和确认不受污染。",
+      "核对按钮只调用refresh，无自动重复写入；没有新增跨窗口操作账本、前端回执合并、Agent循环或协议。"
+    ],
+    "formal_execution_after_followup": {
+      "status": "passed",
+      "receipt": ".local/asset-maintenance/verified-before-documentation.json",
+      "started_at": "2026-10-08T10:11:01.695439+00:00",
+      "finished_at": "2026-10-08T10:11:58.589755+00:00",
+      "groups": 7,
+      "boundary": "补充AM-06/07/08后的实现验收已完成；它不包含后来加入的4份文档声明。"
+    }
+  },
+  "documentation_review": {
+    "scope": "仅4份新增文档、CURRENT交付声明及相对原成功收据的指纹；未重新审计产品或调用Oracle、外部模型。",
+    "documents": [
+      "README.md",
+      "docs/development.md",
+      "docs/semantic-retrieval-design.md",
+      "docs/architecture/implementation-views.md"
+    ],
+    "findings": [],
+    "content_checks": [
+      "README的8项修复及7组验收描述有原问题记录、独立反例与10:11成功收据支持；保留合成数据、应用模型0调用和真实平台限制。",
+      "开发指南区分更新引用与明确移除，不自动升级；改动撤销旧verified但仍允许未核对保存；私人/公共独立、owner维护和会话明确重选保持。",
+      "开发指南与系统设计明确提交前关闭丢弃草稿，关窗不能取消已经提交的保存；成功回执与列表读取失败分别表述。",
+      "只读核对描述与按钮实现一致；同窗同参重试保持operation_id，关闭后新增是新资产，没有声称跨窗口续接原操作。",
+      "M12说明准确分配AssetsPage、PublishSkill及AssetDependenciesEditor职责，继续经既有GET/POST与M02/M09校验，没有添加协议或权限。"
+    ],
+    "fingerprint_evidence": ".local/asset-maintenance-review/documentation-scope-check.json",
+    "unchanged_bound_implementation_paths": 31,
+    "acceptance_contract_unchanged_after_reversing_declared_documentation_and_authorization_changes": true,
+    "additional_runtime_tests_executed": false,
+    "runtime_basis": "实现未变化，本次检查原7组完整成功收据及逐文件指纹；此前8组与补充7组独立反例按各自范围保留。",
+    "finalization_note": "主任务最终执行后同步CURRENT的审查指纹、执行时间和收据引用；10:11结果是本次文档前的原范围证据。"
+  }
+}

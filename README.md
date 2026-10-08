@@ -54,6 +54,18 @@ Skill 保存可复用的分析方法，用户明确选用固定版本后在当�
 
 Pi 继续负责会话延续和原生上下文压缩，Mem0 个人记忆负责跨会话的长期积累。
 
+**引用的语义改版后怎样维护：**在“我的积累”打开编辑，在“知识依赖”中读取当前内容，核对后更新引用版本，或在方法已不再依赖它时明确移除。保存会产生新的资产版本，已有对话中的 Skill 需要重新选用。修改正文、范围、附件或依赖会撤销旧的“已核对”标记；可以重新核对后勾选，也可以保存为待核对线索。
+
+```mermaid
+flowchart LR
+  A["引用的语义改版"] --> B["读取当前内容并人工核对"]
+  B --> C["更新或移除引用<br/>同步修改正文与附件"]
+  C --> D["保存新版本<br/>服务端校验权限和依赖"]
+  D --> E["在对话中重新选用 Skill"]
+```
+
+保存或发布成功后，列表刷新失败会单独提示，可重新加载列表。关窗后未收到成功回执时，页面保留原资产名称供核对；核对操作只读取列表。完整操作说明见[资产维护与结果核对](docs/development.md#资产维护与结果核对)。
+
 <details>
 <summary>查看个人积累与真实模型回答</summary>
 
@@ -127,8 +139,11 @@ make dev
 | 接入后试用与修复 | 原始试用 **5/6**、SQL **7/7**；自动记忆范围扩写和 Markdown 显示两项问题已修复。新针对性回归 **4/4 条消息**通过，旧评分不改写 |
 | 真实共享向量小样 | 百炼 Qwen 1024维，原4个中文问题均在前6候选命中；56次调用、6,317输入token；小样不代表千表召回率 |
 | 合成目录规模与恢复 | 1204 张合成表、2408 个新增对象，首次建索引和两次丢库重建通过；协议向量用于工程验证，中文语义质量由上方真实小样单列，不代表千表真实模型召回率或低延迟 |
+| 资产维护补充修复 | 8 项确认的问题已修复；7 组统一验收和补充独立审查通过。覆盖迟到回执、列表同步、依赖维护及核对标记；使用合成平台、真实 Rust API、隔离 MySQL 和 Chromium，本轮应用模型调用为 0 |
 
 证据入口：[共享向量真实小样](docs/sources/evaluation/qwen-shared-trial.json) · [共享向量审查](docs/reviews/shared-embedding-review.json) · [最终验收记录](docs/CURRENT.md#完成与验证) · [收尾审查](docs/reviews/mvp-closeout-review.json) · [质量基线](docs/reviews/mvp-accuracy-20261005.md) · [记忆 A/B 对比](docs/research/mem0-extraction-comparison-results.md) · [接入与修复报告](docs/research/memory-adoption-trial.md)。这些测量的题目、版本和分母不同，分别保留。
+
+资产维护的最新证据：[问题与修复对照](docs/research/asset-maintenance-audit-20261008.md) · [独立审查](docs/reviews/asset-maintenance-review.json) · [当前交付记录](docs/CURRENT.md)。
 
 ### 在本机检查
 
@@ -168,6 +183,7 @@ make verify-shared-embedding verify-memory
 | 安装、配置、检查与恢复 | [开发指南](docs/development.md)、[基础设施](infra/README.md) |
 | 合成业务及独立参考答案 | [样例资料](docs/sources/README.md) |
 | 个人记忆接入与选型依据 | [Mem0 接入报告](docs/research/memory-adoption-trial.md)、[比较实验](experiments/mem0-comparison/README.md) |
+| Skill 依赖修复、保存反馈与验收 | [操作说明](docs/development.md#资产维护与结果核对)、[维护契约](docs/dogfood-repair-execution.md#11-资产维护补充修复)、[审计对照](docs/research/asset-maintenance-audit-20261008.md) |
 | 工程规则和防漂移约定 | [AGENTS.md](AGENTS.md) |
 
 ```text

@@ -3,23 +3,21 @@
   "workflow": "dev_co",
   "schema": 1,
   "phase": "deliver",
-  "status": "done",
-  "goal_revision": 30,
+  "status": "active",
+  "goal_revision": 31,
   "environment": "macOS arm64 / Node 26.8.1 / npm 11.19.0 / Rust 1.99.0 / Python 3.14.7 / SQLite 3.53.4 / Colima 0.10.1 / Docker Engine 29.2.1 / Compose 5.3.1 / MySQL 8.4.11 / Milvus 3.0.2",
   "verification": {
     "level": "targeted",
-    "reason": "用户授权最后审计、在既定范围修复、完整场景dogfood留证，完成后提交并推送当前分支。",
+    "reason": "用户明确要求 Oracle 再审计、与本地复现对照后修复。仅验证资产维护的迟到回执、列表同步和依赖修复，不重跑无关千表或真实模型验收。",
     "freshness": "content",
     "inputs": [
       "AGENTS.md",
       "docs/CURRENT.md",
-      "docs/research/semantic-governance-dogfood-20261007.md",
-      "docs/reviews/dogfood-and-pi-skills-audit-20261007.md",
       "docs/dogfood-repair-execution.md"
     ],
     "checks": [
       {
-        "id": "skill-scope-materials",
+        "id": "asset-maintenance-materials",
         "argv": [
           "make",
           "verify-materials",
@@ -34,239 +32,85 @@
     "schema": 1,
     "registry": "docs/semantic-retrieval-design.md",
     "increment": {
-      "id": "I2-SKILL-CLOSEOUT",
+      "id": "I2-ASSET-MAINTENANCE",
       "phase": "I2",
       "status": "complete",
-      "goal": "完成原生Skill及空间共享最后审计，修复复现问题，覆盖既定全流程及关键异常场景，留证后提交推送。",
+      "goal": "对照Oracle与本地审计，修复资产维护迟到响应和失效依赖的已复现问题，完成针对性回归与独立审查。",
       "requirements": [
-        "A07",
-        "C01",
         "C02",
-        "C04",
         "C05",
         "C07",
         "C08",
-        "D01",
-        "D03",
-        "D07",
-        "D11",
         "D12",
         "D13"
       ],
       "modules": [
-        "M01",
         "M02",
-        "M03",
-        "M04",
-        "M05",
-        "M07",
-        "M08",
         "M09",
-        "M10",
-        "M11",
         "M12"
       ],
       "allowed_paths": [
+        "apps/web/src/features/assets",
+        "apps/web/src/style.css",
+        "tests/mvp/check-asset-mutation-browser.mjs",
+        "tests/mvp/check-asset-dependencies-browser.mjs",
         "docs/CURRENT.md",
         "docs/dogfood-repair-execution.md",
-        "docs/semantic-retrieval-design.md",
-        "docs/architecture",
-        "docs/development.md",
-        "docs/reviews/native-skills-review.json",
-        "AGENTS.md",
-        "scripts/development.py",
-        "scripts/test_development.py",
-        "scripts/check_architecture.py",
-        "apps/memory/server.py",
-        "apps/memory/service.py",
-        "apps/agent",
-        "apps/api/src",
-        "apps/web/src",
-        "crates/data-agent/src/modules/assets",
-        "crates/data-agent/src/modules/retrieval/mod.rs",
-        "crates/data-agent/src/use_cases",
-        "packages/contracts",
-        "migrations",
-        "tests/mvp",
-        "tests/contracts",
-        "tests/runtime",
-        "Makefile",
+        "docs/research/asset-maintenance-audit-20261008.md",
+        "docs/reviews/asset-maintenance-review.json",
         "README.md",
-        "docs/reviews/skill-closeout-review.json",
-        "docs/research/skill-closeout-dogfood-20261007.md",
-        "apps/memory/providers.py",
-        "tests/memory"
+        "docs/development.md",
+        "docs/semantic-retrieval-design.md",
+        "docs/architecture/implementation-views.md"
       ],
       "non_goals": [
-        "保持原生Skill、共享权限和四项修复的既定产品范围；不新增Agent循环、自动选用、脚本执行、市场或记忆算法。",
-        "只修复复现的现有流程问题；不部署、不合并默认分支、不重启常驻实例；本次真实试用按用户最新授权取消费用、次数与旧期限限制，不重构产品预算系统。"
+        "不改变Pi、Mem0、平台/语义权限、查询确认、公共发布语义或现有API契约；不新增资产自动升级或Agent能力。",
+        "沿用当前分支分批提交并推送已授权修复与文档；不合并默认分支或部署，不重跑无关的千表和真实模型验收。"
       ],
       "invariants": [
-        "公共仅当前空间，成员发布自己的Skill并成为负责人；负责人和超级维护者维护，私人资产仍本人隔离。",
-        "公共发布是独立副本，后续个人修改不自动同步；建议只记录意见，不自动生效。",
-        "Skill选择固定版本且须有效，实际调用重新校验授权与依赖；SQL确认和平台权限保持。",
-        "复用Pi SDK原生目录、read工具和会话/压缩，关闭直接文件命令，保留原操作身份、用量记录和单次输入输出边界。"
+        "资产种类在编辑开始时固定；私人/公共归属不由页面任意切换，公开仍须用户预览确认。",
+        "迟到回执只能结束原操作；同一有效页面同步已提交记录，未知结果重试保留原operation_id。",
+        "知识依赖必须人工核对后显式更新或移除；选用仍绑定新版本，服务端版本与权限校验保持。"
       ],
       "acceptance": [
         {
-          "id": "START01",
+          "id": "MUTATIONS",
           "requirements": [
-            "D07",
-            "C07"
-          ],
-          "expected": "独立运行目录下准确定位启动阶段、提前退出和超时；未ready不报成功，日志无凭据。",
-          "evidence_kind": "runtime",
-          "command": [
-            "python3",
-            "-m",
-            "unittest",
-            "discover",
-            "-s",
-            "scripts",
-            "-p",
-            "test_development.py"
-          ],
-          "timeout_seconds": 240
-        },
-        {
-          "id": "START02",
-          "requirements": [
-            "D07",
-            "D11",
-            "C01"
-          ],
-          "expected": "原Flash/Mem0/hybrid配置启动、重复启动及真实方法/记忆小样留证；mock不能替代真实。",
-          "evidence_kind": "runtime",
-          "command": [
-            "node",
-            "tests/mvp/check-skill-dogfood.mjs",
-            "--real"
-          ],
-          "timeout_seconds": 1200
-        },
-        {
-          "id": "FEEDBACK",
-          "requirements": [
-            "D01",
-            "D13",
+            "C05",
             "C08",
-            "A07"
+            "D13"
           ],
-          "expected": "同名来源可区分，冲突提示可理解且同号查日志；工作台刷新、切换、窄屏及已选版本状态准确。",
+          "expected": "迟到发布或保存回执不关闭其他窗口、不改变新草稿种类；保存完成后列表同步，失败与刷新失败分别表达。",
           "evidence_kind": "runtime",
           "command": [
             "node",
-            "tests/mvp/check-workspace-feedback-browser.mjs"
+            "tests/mvp/check-asset-mutation-browser.mjs"
           ],
-          "timeout_seconds": 300
+          "timeout_seconds": 240
         },
         {
-          "id": "SHARED",
+          "id": "DEPENDENCIES",
           "requirements": [
             "D12",
+            "D13",
             "C02",
-            "C05"
-          ],
-          "expected": "个人隔离，成员明确发布独立空间公共版本，负责人/超级维护者维护，跨空间拒绝，建议不自动改正文，版本/幂等/停用有效。",
-          "evidence_kind": "runtime",
-          "command": [
-            "node",
-            "tests/mvp/check-shared-skills.mjs"
-          ],
-          "timeout_seconds": 300
-        },
-        {
-          "id": "SELECTION",
-          "requirements": [
-            "D03",
-            "D12",
-            "C02"
-          ],
-          "expected": "选择摘要分页、会话归属、版本改变/停用/删除/依赖失效以及公共可见性均准确，不静默升级。",
-          "evidence_kind": "runtime",
-          "command": [
-            "node",
-            "tests/mvp/check-conversation-skill-selections.mjs"
-          ],
-          "timeout_seconds": 240
-        },
-        {
-          "id": "NATIVE",
-          "requirements": [
-            "C01",
-            "D12",
-            "C05"
-          ],
-          "expected": "锁定Pi原生目录和read工具按需加载，资料/模板路径受控，多Skill/长文/撤权恢复通过，关闭直接文件命令且不开放bash。",
-          "evidence_kind": "runtime",
-          "command": [
-            "node",
-            "tests/mvp/check-native-skills.mjs"
-          ],
-          "timeout_seconds": 300
-        },
-        {
-          "id": "QUERY",
-          "requirements": [
-            "C04",
-            "C02"
-          ],
-          "expected": "SQL仍必须按版本确认执行，个人/公共Skill不赋予数据权限。",
-          "evidence_kind": "runtime",
-          "command": [
-            "node",
-            "tests/mvp/check-query-boundaries.mjs"
-          ],
-          "timeout_seconds": 240
-        },
-        {
-          "id": "CONTRACT",
-          "requirements": [
-            "C07"
-          ],
-          "expected": "同源Schema与OpenAPI生成一致，正反例通过。",
-          "evidence_kind": "contract",
-          "command": [
-            "make",
-            "verify-contracts"
-          ],
-          "timeout_seconds": 240
-        },
-        {
-          "id": "ASSETS",
-          "requirements": [
-            "D12",
-            "C02"
-          ],
-          "expected": "原个人资产目录分页、长正文、未选Skill隔离和依赖回源保持。",
-          "evidence_kind": "runtime",
-          "command": [
-            "node",
-            "tests/mvp/check-asset-directory.mjs"
-          ],
-          "timeout_seconds": 240
-        },
-        {
-          "id": "PROVIDER",
-          "requirements": [
-            "C01",
-            "D11"
-          ],
-          "expected": "13个受控数据工具包含原生read；经Pi真实OpenAI协议到本地provider通过，仍受原预算和请求体限制。",
-          "evidence_kind": "runtime",
-          "command": [
-            "node",
-            "tests/mvp/check-data-provider.mjs"
-          ],
-          "timeout_seconds": 240
-        },
-        {
-          "id": "LIFECYCLE",
-          "requirements": [
-            "D12",
             "C08"
           ],
-          "expected": "公共入口新建私人Skill后能看到并继续操作，旧保存回执不能关闭或清除后续草稿；实际浏览器复现与回归。",
+          "expected": "个人及公共资产的失效引用可人工核对后更新或移除；不能自动升级；保存和重新选用沿用服务端权限与版本校验。",
+          "evidence_kind": "runtime",
+          "command": [
+            "node",
+            "tests/mvp/check-asset-dependencies-browser.mjs"
+          ],
+          "timeout_seconds": 240
+        },
+        {
+          "id": "EDITOR",
+          "requirements": [
+            "C05",
+            "D13"
+          ],
+          "expected": "已有编辑器晚到响应保护、独立新建和同参重试幂等保持。",
           "evidence_kind": "runtime",
           "command": [
             "node",
@@ -275,89 +119,89 @@
           "timeout_seconds": 180
         },
         {
-          "id": "GOVERNANCE",
+          "id": "SHARED",
           "requirements": [
             "C02",
-            "D01",
-            "D12",
-            "D13",
-            "A07"
+            "D12"
           ],
-          "expected": "表负责人同步、独立对象创建者归属、跨用户纠错、接受后另行保存、撤权及角色交互保持。",
+          "expected": "私人隔离、独立公共副本、负责人/超级维护者、版本竞争和建议权限保持。",
           "evidence_kind": "runtime",
           "command": [
-            "make",
-            "verify-semantic-governance"
+            "node",
+            "tests/mvp/check-shared-skills.mjs"
           ],
-          "timeout_seconds": 600
+          "timeout_seconds": 240
         },
         {
-          "id": "REGRESSION",
+          "id": "SELECTION",
           "requirements": [
-            "C01",
             "C02",
-            "C04",
-            "C05",
-            "C07",
-            "D01",
-            "D03",
-            "D07",
-            "D11",
-            "D12",
-            "D13",
-            "C08",
-            "A07"
+            "D12"
           ],
-          "expected": "现有工作台、语义构建维护、查询、个人资产、Mem0/向量、Pi长会话恢复及管理按钮的既定正向/反向场景全部通过；官方调用单列。",
+          "expected": "依赖失效、改版、停用和显式重新选用的状态仍准确。",
           "evidence_kind": "runtime",
           "command": [
-            "make",
-            "verify-mvp-regression",
-            "verify-memory",
-            "verify-shared-embedding",
-            "verify-query-workflow",
-            "verify-knowledge-workflow",
-            "verify-mvp-browser",
-            "verify-management-buttons",
-            "verify-business-acceptance",
-            "verify-hybrid-retrieval"
+            "node",
+            "tests/mvp/check-conversation-skill-selections.mjs"
           ],
-          "timeout_seconds": 4200
+          "timeout_seconds": 240
+        },
+        {
+          "id": "WORKSPACE",
+          "requirements": [
+            "C08",
+            "D13"
+          ],
+          "expected": "资产创建、发布、选择、工作台返回和移动端反馈沿原完整流程通过。",
+          "evidence_kind": "runtime",
+          "command": [
+            "node",
+            "tests/mvp/check-workspace-feedback-browser.mjs"
+          ],
+          "timeout_seconds": 300
+        },
+        {
+          "id": "ENGINEERING",
+          "requirements": [
+            "C07"
+          ],
+          "expected": "Rust/TypeScript/Web工程检查与同源契约检查通过，无协议漂移。",
+          "evidence_kind": "contract",
+          "command": [
+            "make",
+            "verify-code",
+            "verify-contracts"
+          ],
+          "timeout_seconds": 300
         }
       ],
       "verification_inputs": [
         "docs/dogfood-repair-execution.md",
-        "docs/semantic-retrieval-design.md",
-        "docs/architecture",
-        "docs/development.md",
-        "AGENTS.md",
-        "scripts/development.py",
-        "scripts/test_development.py",
-        "scripts/check_architecture.py",
-        "apps/memory/server.py",
-        "apps/memory/service.py",
-        "apps/agent",
-        "apps/api/src",
-        "apps/web/src",
+        "apps/web/src/features/assets",
+        "apps/web/src/shared/api.ts",
+        "apps/web/src/shared/Modal.tsx",
+        "apps/web/src/style.css",
+        "crates/data-agent/src/use_cases/personal_assets.rs",
         "crates/data-agent/src/modules/assets",
-        "crates/data-agent/src/modules/retrieval/mod.rs",
-        "crates/data-agent/src/use_cases",
         "packages/contracts",
-        "migrations",
-        "tests/mvp",
-        "tests/contracts",
-        "tests/runtime",
+        "tests/mvp/check-asset-mutation-browser.mjs",
+        "tests/mvp/check-asset-dependencies-browser.mjs",
+        "tests/mvp/check-asset-editor-browser.mjs",
+        "tests/mvp/check-shared-skills.mjs",
+        "tests/mvp/check-conversation-skill-selections.mjs",
+        "tests/mvp/check-workspace-feedback-browser.mjs",
+        "tests/mvp/harness.mjs",
+        "tests/mvp/skill-fixtures.mjs",
         "Makefile",
         "README.md",
-        "docs/research/skill-closeout-dogfood-20261007.md",
-        "apps/memory/providers.py",
-        "tests/memory"
+        "docs/development.md",
+        "docs/architecture/implementation-views.md"
       ],
       "review": {
         "status": "passed",
-        "record": "docs/reviews/skill-closeout-review.json"
+        "record": "docs/reviews/asset-maintenance-review.json"
       },
-      "evidence": ".local/delivery/I2-SKILL-CLOSEOUT-result.json"
+      "evidence": ".local/delivery/I2-ASSET-MAINTENANCE-result.json"
     }
   }
 }
@@ -367,7 +211,47 @@
 
 更新：2026-10-08。唯一活动项目目录：`~/work_space/data_agent`。
 
-## 本轮交付：Pi 原生 Skill 与空间共享收尾（已完成并推送）
+## 当前任务：资产维护补充审计与修复（修复与文档已完成）
+
+`goal_revision=31`，增量 `I2-ASSET-MAINTENANCE` 的修复与文档同步均已完成，正在分批提交推送。2026-10-08 用户要求使用 `oracle-web` 第五档再审计，与本地复现对照后修复。审计基线 `665e519`，当前仍在 `codex/semantic-role-boundaries`。
+
+### 文档与 Git 交付
+
+2026-10-08 用户明确授权补齐 README 和相关文档，并分批提交、推送 GitHub。目标为 `origin/codex/semantic-role-boundaries`，沿用当前分支。本次授权替代审计阶段“不提交、推送”的限制；产品范围、代码和验收命令保持，新增四份文档已纳入允许路径及验收输入。
+
+本次补充 `README.md`、`docs/development.md`、`docs/semantic-retrieval-design.md`、`docs/architecture/implementation-views.md` 中的依赖维护、核对标记及回执恢复说明，README增加维护流程图和最新证据入口。这些是已完成行为的文档同步，未新增接口或改变架构。计划分两批提交：实现与回归测试；文档与审计记录。系统设计文档属于验收指纹，文档定稿后已重新通过独立复核及同7组验收；旧审查与收据分别保留在 `.local/asset-maintenance/review-before-documentation.json` 和 `.local/asset-maintenance/verified-before-documentation.json`。31份实现、测试、契约及Makefile与前次通过记录保持同哈希，需求和测试标准未变。实现与两份回归测试已提交为 `c82978a35308f226503dfd92e84709f1be5f4394`（`fix: guard asset mutations and repair stale dependencies`）。第二批保存 README、设计、使用指南、执行包及审计记录，完成后统一推送当前分支，再保存远端核对结果。
+
+交付前检查：309项材料检查、16项交付检查器测试通过；完整收据与当前输入一致，`git diff --check`通过。公开463份文本按凭据格式、个人绝对路径和原业务标识检查未检出问题，扫描结果保存在 `.local/asset-maintenance/publication-check.json`。
+
+### 已确认并修复
+
+- AM-01–04：迟到发布回执影响另一窗口及新资产种类；失效依赖缺少网页修复入口；保存中关窗导致列表漏刷新；写入成功与刷新失败反馈混在一起。
+- AM-05：启停、删除的旧回执缺少页面身份检查，退出换用户后会额外读取新身份列表。独立复现实测从额外1次GET降为0次，未发现跨用户资产泄露。
+- AM-06–08：失败提交提前作废有效的初始列表；修改内容或依赖仍沿用旧“已核对”；关窗后才收到保存/发布失败时缺少具名反馈。现已保留有效列表、撤销旧确认，并提供只读列表的核对入口。
+- 依赖维护展示当前内容，人工核对后才更新同一引用的版本或明确移除；保存沿用服务端权限和版本校验，修订后会话仍需明确重选。修改仅涉及资产维护前端、相应测试和文档；未改后端、API Schema、Pi、Mem0、SQL确认及平台权限。
+
+### Oracle与独立审查
+
+Oracle第五档咨询 `asset-maintenance-max-retry-20261008-093039` 已完成。网页实际验证 `Power, item 5 of 5 (slider ARIA)`，有提交和完整回答证据，临时浏览器及Profile已清理。原第四档已中止、首次第五档未提交，均不作为有效结论。Oracle与本地一致的AM-01–04及补充边界已逐项核对；未证实的风险与未采用的实现建议另有说明，见[补充审计](research/asset-maintenance-audit-20261008.md)。
+
+[独立审查](reviews/asset-maintenance-review.json)通过，审查者未参与本次实现。补充复审7组独立反例全部通过，包括真实写入后丢回执、只GET核对、身份切换和同窗幂等重试；四份补充文档由同一审查者核对后重绑，当前审查指纹 `f66d231bae97da58ba623ffbb93b8ce06ffadea6c94db5148544c33139a1b503`。审查记录保留正式验收前时点，最终执行结果如下。
+
+### 最终验收
+
+2026-10-08 10:48:11–10:49:40 UTC（北京时间18:48:11–18:49:40），`make verify-increment`完整退出0。MUTATIONS、DEPENDENCIES、EDITOR、SHARED、SELECTION、WORKSPACE、ENGINEERING共7组全部通过，无超时，执行前后指纹与当前输入一致。
+
+- 浏览器验收覆盖窗口归属、列表乱序及失败、依赖修复、原编辑流程、个人/公共权限、明确选用和工作台反馈；Rust fmt/Clippy、TypeScript/Web构建及206项同源契约案例通过。
+- 正式收据：`.local/delivery/I2-ASSET-MAINTENANCE-result.json`；独立保存副本：`.local/asset-maintenance/verified-documentation-result.json`；执行日志：`.local/asset-maintenance/verification-documentation.log`。分组日志位于 `.local/delivery/I2-ASSET-MAINTENANCE-1791456491558585000/`。
+- 独立补充反例：`.local/asset-maintenance-review/oracle-followup-report.json`。补充前8组独立反例和7组正式验收仅作为历史保留，旧收据为 `.local/asset-maintenance/verified-before-oracle-followups.json`，未拼接为本轮通过。文档同步前10:11 UTC的7组收据另保留在 `.local/asset-maintenance/verified-before-documentation.json`。
+- 使用真实Rust API、隔离MySQL及Chromium，平台、数据、身份均为合成mock，应用模型请求为0。实际查看1440px、390px依赖维护界面，无横向溢出。本轮未重跑千表、真实模型或真实平台验收；Oracle咨询不代替应用模型验收。
+
+### 验收与要求边界
+
+沿用原要求及已有断言，新增本轮反例和从失效到修复的维护流程，没有删减或放宽原验收。关闭保存的用例安排在创建记忆前，防止记忆同步轮询掩盖漏刷新；断言保持。前一增量的完成事实及证据保留。
+
+同一打开窗口的同参重试保留原`operation_id`；关闭后的未知结果具名提示且只提供GET核对，没有自动重做写入。页面没有跨窗口继续原操作的入口；“新增”仍明确创建新资产。本轮范围内无剩余已确认阻断项。
+
+## 上次交付：Pi 原生 Skill 与空间共享收尾（已完成并推送）
 
 `goal_revision=30`，增量 `I2-SKILL-CLOSEOUT` 已完成。六项复现的产品问题已修复，独立审查通过，第十四次统一验收13组全部成功。用户已授权完整验收后提交并推送当前分支 `codex/semantic-role-boundaries`；实现及配套材料已提交并推送该分支，未合并默认分支或部署。
 
