@@ -2768,5 +2768,145 @@
     },
     "valid": false,
     "roundtrip": false
+  },
+  {
+    "name": "skill publication requires explicit confirmation",
+    "schema": "PublishSkill",
+    "value": {
+      "operation_id": "publish-1",
+      "expected_version": "1",
+      "share_confirmed": true
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "skill publication cannot omit confirmation",
+    "schema": "PublishSkill",
+    "value": {
+      "operation_id": "publish-1",
+      "expected_version": "1"
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "skill publication cannot grant owner",
+    "schema": "PublishSkill",
+    "value": {
+      "operation_id": "publish-1",
+      "expected_version": "1",
+      "share_confirmed": true,
+      "owner_id": "other"
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "skill reference text file",
+    "schema": "SkillFile",
+    "value": {
+      "path": "references/report.md",
+      "content": "合成说明"
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "skill text file cannot traverse",
+    "schema": "SkillFile",
+    "value": {
+      "path": "references/../secret.md",
+      "content": "x"
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "skill text file cannot be executable",
+    "schema": "SkillFile",
+    "value": {
+      "path": "assets/run.sh",
+      "content": "x"
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "skill read uses positive line offset",
+    "schema": "SkillReadInput",
+    "value": {
+      "path": "/skills/sample/1/SKILL.md",
+      "offset": 1,
+      "limit": 100
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "skill read zero offset rejected",
+    "schema": "SkillReadInput",
+    "value": {
+      "path": "/skills/sample/1/SKILL.md",
+      "offset": 0
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "skill read noninteger limit rejected",
+    "schema": "SkillReadInput",
+    "value": {
+      "path": "/skills/sample/1/SKILL.md",
+      "limit": 1.5
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "skill selection unavailable metadata",
+    "schema": "ConversationSkillSelections",
+    "value": {
+      "conversation_id": "c1",
+      "selections": [
+        {
+          "asset_id": "s1",
+          "selected_version": "1",
+          "current_version": null,
+          "name": null,
+          "visibility": null,
+          "owner_id": null,
+          "availability": "unavailable"
+        }
+      ],
+      "next_after_id": null
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "skill suggestion has explicit sharing",
+    "schema": "SuggestSkill",
+    "value": {
+      "operation_id": "s1",
+      "expected_version": "1",
+      "content": "合成建议",
+      "share_confirmed": true
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "skill suggestion cannot silently apply body",
+    "schema": "ReviewSkillSuggestion",
+    "value": {
+      "operation_id": "review",
+      "expected_revision": "1",
+      "state": "handled",
+      "response": "核对后另行编辑",
+      "body": "修改正文"
+    },
+    "valid": false,
+    "roundtrip": false
   }
 ]

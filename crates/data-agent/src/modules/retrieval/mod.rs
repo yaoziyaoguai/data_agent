@@ -165,6 +165,8 @@ fn suggestion_page(entry: &Value, offset: usize, limit: usize) -> (Value, usize)
 pub fn model_page(mut object: Value, offset: usize, limit: usize, entry_id: Option<&str>) -> Value {
     if let Some(value) = object.as_object_mut() {
         value.remove("memory_index_state");
+        value.remove("files");
+        value.remove("can_edit");
     }
     let asset_scope = object.get("scope").is_some() && entry_id == Some("scope");
     if let Some(body) = object["body"].as_str() {
@@ -251,16 +253,14 @@ pub fn asset_directory(
                     .any(|key| v[key].as_str().unwrap_or("").to_lowercase().contains(token))
             })
     });
+    let normalized_query = query.to_lowercase();
+    let name_match = |v: &Value| {
+        let name = v["name"].as_str().unwrap_or("").to_lowercase();
+        (name == normalized_query, name.contains(&normalized_query))
+    };
     items.sort_by(|a, b| {
-        let exact = |v: &Value| {
-            v["name"]
-                .as_str()
-                .unwrap_or("")
-                .to_lowercase()
-                .contains(&query.to_lowercase())
-        };
-        exact(b)
-            .cmp(&exact(a))
+        name_match(b)
+            .cmp(&name_match(a))
             .then_with(|| a["id"].as_str().cmp(&b["id"].as_str()))
     });
     let total = items.len();
@@ -277,6 +277,11 @@ pub fn asset_directory(
         {
             next = page.last().map(|v: &Value| v["id"].clone());
             break;
+        }
+        if item["kind"] == "skill" {
+            // 目录仅交付元信息；正文由 Pi 原生 read 经受控入口加载。
+            page.push(serde_json::json!({"id":item["id"],"kind":"skill","version":item["version"],"name":item["name"].as_str().unwrap_or("").chars().take(160).collect::<String>(),"scope":item["scope"].as_str().unwrap_or("").chars().take(160).collect::<String>(),"selected":true,"visibility":item["visibility"],"native_path":format!("/skills/{}/{}/SKILL.md",item["id"].as_str().unwrap_or(""),item["version"].as_str().unwrap_or(""))}));
+            continue;
         }
         let (body, content_page) = text_page(item["body"].as_str().unwrap_or(""), 0, 160);
         let (scope, scope_page) = text_page(item["scope"].as_str().unwrap_or(""), 0, 160);
@@ -329,6 +334,26 @@ pub mod vector;
 mod semantic_context_tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn asset_search_keeps_exact_name_ahead_of_prefix_matches() {
+        for (query, name) in [("合成方法1", "合成方法1"), ("REPORT", "report")] {
+            let asset = |id: String, name: String| {
+                json!({"id":id,"kind":"memory","name":name,"version":"1",
+                    "body":"合成正文".repeat(60),"scope":"合成范围".repeat(60),
+                    "verified":false,"selected":false})
+            };
+            let mut items: Vec<Value> = (0..20)
+                .map(|i| asset(format!("prefix-{i:02}"), format!("{name}{i}")))
+                .collect();
+            items.push(asset("target".into(), name.into()));
+            let page = asset_directory(items, query, None, 30);
+            // 长摘要触发字节分页时，完整名称仍应留在首页，不能被同前缀条目挤掉。
+            assert_eq!(page["memories"][0]["id"], "target");
+            assert!(!page["next_asset_after"].is_null());
+            assert_eq!(page["total"], 21);
+        }
+    }
 
     #[test]
     fn model_can_read_all_analysis_gaps_and_evidence_across_pages() {

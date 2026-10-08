@@ -375,11 +375,11 @@ flowchart TD
     K --> G
 ```
 
-## 6. M09 `assets`：个人记忆、纠错与 Skill
+## 6. M09 `assets`：个人记忆与个人/公共 Skill
 
-**职责：**按用户与空间管理独立版本的记忆和 Skill，核对适用范围、依赖、验证和替代关系。会话删除不自动删除已独立保存资产，来源显示已删除且不可读回正文；个人聊天不直接修改公共定义。
+**职责：**按用户与空间管理私人记忆和个人/当前空间公共 Skill，核对适用范围、依赖、验证和替代关系。会话删除不自动删除已独立保存资产，来源显示已删除且不可读回正文；个人聊天不直接修改公共定义。
 
-**私有数据：**`personal_assets`、`personal_asset_versions`、`personal_memory_index_jobs`、来源/知识依赖、替代关系、资产验证、Skill 选择与采用记录。记忆保存原话与整理后修正、错误反例、范围/例外、来源任务及依据；Skill 保存名称、说明、参数、步骤、输出要求和依赖。选择前由组合层向 M05 / M06 核对会话/任务归属；选择与采用由 M09 独占保存，M05 / M06 只引用记录 ID。
+**私有数据：**`personal_assets`、`personal_asset_versions`、`personal_memory_index_jobs`、`skill_publications`、`skill_suggestions`、来源/知识依赖、替代关系、资产验证、Skill 选择与采用记录。记忆保存原话与整理后修正、错误反例、范围/例外、来源任务及依据；Skill 保存名称、说明、参数、步骤、输出要求和依赖。选择前由组合层向 M05 / M06 核对会话/任务归属；选择与采用由 M09 独占保存，M05 / M06 只引用记录 ID。
 
 | 公开操作 | 输入 | 输出 | 错误、副作用与幂等 |
 | --- | --- | --- | --- |
@@ -414,6 +414,14 @@ flowchart TD
 
 存量/重建每批最多32条，从正式正文排队，使用明确维护profile。目标集合绑定数据库；新集合保留旧队列与账本，旧目标不会被当前Worker领取。SQLite回执目录跟随数据库与集合持久保存，服务互斥启动。索引丢失后按开发文档切换新集合重建，不重置收费历史。
 
+### 原生 Skill 与公共协作（2026-10-07）
+
+旧资产默认 visibility=personal；scope 保留业务适用范围。当前成员明确发布自己的 Skill，创建独立公共副本并成为负责人；负责人和超级维护者维护，其他成员只读/选用/提建议。发布预览包含正文、附件和知识引用，私人 source_text 不复制。修改建议的处理状态不改变正文，正式修订单独保存。
+
+M09 的 publish_in_tx、suggestions_in_tx、selection_page_in_tx 处理发布、建议和选择摘要；权限由 use_cases 组合可信 M01 能力，SQL 留在私有 store。asset_operations 增加空间主键，旧 demo 回执保持；附件同主版本、同权限。受控 read 路径为 /skills/{id}/{version}/SKILL.md 或同目录下的 references/assets 文本；每次调用都检查已选版本、状态、知识依赖。
+
+M11 复用 Pi 原生目录及 read，M09 不实现读取分页或第二套 Skill 引擎。详情契约和反例见[执行包](../dogfood-repair-execution.md#10-个人与公共-skill-的权限与数据契约)。
+
 ### S09 模块内部结构
 
 图中是 M09 内部职责；记忆与 Skill 共用归属和版本规则，选择及采用记录仍由本模块保存，Mem0通过窄HTTP接缝提供提取与检索，不接管业务授权。
@@ -421,13 +429,15 @@ flowchart TD
 ```mermaid
 flowchart LR
     Memory[记忆纠错与适用范围] --> Lifecycle[归属 版本与启停删除]
-    Skill[Skill 方法与参数] --> Lifecycle
+    Skill[个人与空间公共 Skill] --> Lifecycle
+    Skill --> Publish[明确发布独立副本与修改建议]
+    Publish --> Store
     Lifecycle --> Store[(私有 store.rs<br/>资产版本 选择与采用)]
     Memory --> Provider[Mem0原始消息提取与检索]
     Provider --> Index[(Milvus候选与派生索引)]
     Lifecycle --> Jobs[同事务保存索引待办]
     Jobs --> Provider
-    Applicability[依赖与适用性核对] --> Selection[Skill 选择与加载]
+    Applicability[依赖与适用性核对] --> Selection[固定版本选择与受控文本读取]
     Selection --> Adoption[实际采用与依据记录]
     Adoption --> Store
     Applicability --> Store
@@ -454,7 +464,8 @@ flowchart TD
     G -->|Skill 未选择| H[仅推荐 正常问题继续处理]
     G -->|Skill 已选择| J[组合层核对会话任务 M09保存选择]
     G -->|记忆| I[按范围采用 M09保存采用记录及引用版本]
-    J --> I
+    J --> Native[Pi 原生目录与 read 按需加载]
+    Native --> I
 ```
 
 ## 7. 完整流程：来源变化到可用检索结果
@@ -535,7 +546,7 @@ M03的事实提取与单次模型适配器位于`modules/ingestion/prefill.rs`�
 
 单次输出`PrefillResult`包含条目值、缺口与固定source_id/version/quote/location；宿主核对每条原文引用和条目标识。引用校验不等于业务推导正确。网络调用在事务外，提交时锁来源头、核对对象版本，复用M02人工保护。45秒后未完成的领取显示unknown，保留预留且不重发；需新的明确维护操作再分析。
 
-个人资产目录通过search_knowledge按query检索，query=*及asset_after翻页。正文仍按read_knowledge固定版本分段，启动16KB候选被裁掉的本人memory和已选Skill保持可发现；未选Skill不进入目录。
+个人资产目录通过search_knowledge按query检索，query=*及asset_after翻页。名称完全相等优先于名称包含，再保留正文/范围匹配，组内按稳定ID排序，防止长摘要分页把完整名称命中挤到后页。正文仍按read_knowledge固定版本分段，启动16KB候选被裁掉的本人memory和已选Skill保持可发现；未选Skill不进入目录。
 
 ### 百炼Embedding及目录实施细化
 

@@ -1,0 +1,1087 @@
+{
+  "schema": 1,
+  "goal_revision": 30,
+  "increment_id": "I2-SKILL-CLOSEOUT",
+  "conclusion": "passed",
+  "reviewer": "独立审查者 /root/native_skills_review；未参与本轮产品实现、正式测试、CURRENT或设计文件修改。亲自执行隔离反例并只读审阅差异与运行产物；本轮仅编写本审查记录。",
+  "reviewed_at": "2026-10-08T05:24:34.126160+00:00",
+  "scope_sha256": "b26792a5f244dd0e9f4e1b89ea431839cb4ae21010668e387095fe5767b40013",
+  "summary": "限定复核通过，无新增产品代码缺陷，六项产品修复和已完成的独立恢复验证保持。第十二次前12组（含GOVERNANCE和真实START02）通过，REGRESSION后续查询流程在Pi仍imports_started时超过公共harness的20秒启动等待。仅将公共harness的默认启动轮询等待20秒改为60秒；逐字逆转该一处值后哈希精确等于原收据，普通until、显式override、业务断言、产品超时和13组声明均保持。审查者独立验证默认等待、显式20秒/0覆盖、默认到期拒绝、普通等待未变和实际启动失败留证六个边界；主任务查询流程8项正对照通过，均0官方请求。前12次失败均保留，仍需新范围统一13组完整成功收据后才能关闭增量。",
+  "ready_for_final_increment_execution": true,
+  "final_increment_execution": {
+    "executed": true,
+    "status": "shared_startup_wait_reviewed_query_checks_passed_final_retry_pending",
+    "current_scope_executed": false,
+    "command": [
+      "make",
+      "verify-increment"
+    ],
+    "required_groups": [
+      "START01",
+      "START02",
+      "FEEDBACK",
+      "SHARED",
+      "SELECTION",
+      "NATIVE",
+      "QUERY",
+      "CONTRACT",
+      "ASSETS",
+      "PROVIDER",
+      "LIFECYCLE",
+      "GOVERNANCE",
+      "REGRESSION"
+    ],
+    "command_group_count": 13,
+    "first_attempt": {
+      "artifact": ".local/skill-release/final-attempt-1-result.json",
+      "status": "failed",
+      "passed_groups": [
+        "START01"
+      ],
+      "failed_group": "START02",
+      "remaining_groups_not_executed": true
+    },
+    "preconditions": [
+      "用户已明确授权本次收尾不限制费用、调用次数和旧两小时期限；该决定取代旧等待授权条款，无须重复确认。",
+      "继续使用原两个试验及历史操作身份，实际用量、模型输入输出边界、SQL确认和权限规则保持；本次只读审查没有修改预算或发起官方调用。",
+      "按当前13组顺序完整执行：GOVERNANCE在REGRESSION前，REGRESSION先原其他8个目标、千表最后。新的完整成功收据和未变指纹均必须满足；旧成功结果不能拼接，失败和未知调用不能计通过。"
+    ],
+    "budget_authorization_at_review": "当前用户明确授权，已由父任务转述并与CURRENT最新授权及本地恢复证据核对；旧预算等待已解除。",
+    "limitation": "第十二次前12组及REGRESSION已执行子目标的通过、当前独立等待边界与查询正对照是各自范围证据；第十二次整体仍failed。当前公共harness变化后，必须重新取得统一13组成功收据，不拼接历史结果。",
+    "second_attempt": {
+      "artifact": ".local/skill-release/final-attempt-2-result.json",
+      "status": "failed",
+      "passed_groups": [
+        "START01",
+        "FEEDBACK",
+        "SHARED",
+        "SELECTION",
+        "NATIVE",
+        "QUERY",
+        "CONTRACT"
+      ],
+      "failed_group": "ASSETS",
+      "official_requests_added": 0,
+      "remaining_groups_not_executed": true
+    },
+    "third_attempt": {
+      "artifact": ".local/skill-release/final-attempt-3-result.json",
+      "status": "failed",
+      "passed_groups": [
+        "START01",
+        "FEEDBACK",
+        "SHARED",
+        "SELECTION",
+        "NATIVE",
+        "QUERY",
+        "CONTRACT",
+        "ASSETS",
+        "PROVIDER",
+        "LIFECYCLE"
+      ],
+      "failed_group": "REGRESSION",
+      "failed_subcommand": "node tests/mvp/check-history-browser.mjs",
+      "official_requests_added": 0,
+      "remaining_groups_not_executed": true,
+      "inspected_partial_evidence": "已逐条对照Makefile和command11，知识流程21个脚本各自passed；core、memory、embedding、query及check-browser/conversation-timeline也有通过输出，但组合最终exit_code=2。"
+    },
+    "fourth_attempt": {
+      "artifact": ".local/skill-release/final-attempt-4-result.json",
+      "status": "failed",
+      "passed_groups": [
+        "START01",
+        "FEEDBACK",
+        "SHARED",
+        "SELECTION",
+        "NATIVE",
+        "QUERY",
+        "CONTRACT",
+        "ASSETS",
+        "PROVIDER",
+        "LIFECYCLE",
+        "REGRESSION",
+        "GOVERNANCE"
+      ],
+      "failed_group": "START02",
+      "failure_reason": "原账本过期；在启动真实服务及发送官方请求前拒绝",
+      "before_after_fingerprint_identical": true,
+      "official_requests_added": 0,
+      "regression_duration_ms": 2805472,
+      "current_non_review_files_differ": false
+    },
+    "fifth_attempt": {
+      "artifact": ".local/skill-release/final-attempt-5-result.json",
+      "status": "failed",
+      "passed_groups": [
+        "START01",
+        "START02",
+        "FEEDBACK",
+        "SHARED",
+        "SELECTION",
+        "NATIVE",
+        "QUERY",
+        "CONTRACT",
+        "ASSETS",
+        "PROVIDER",
+        "LIFECYCLE"
+      ],
+      "failed_group": "REGRESSION",
+      "failed_subcommand": "node tests/mvp/check-hybrid-retrieval.mjs",
+      "before_after_fingerprint_identical": true,
+      "failure_reason": "waitCurrentIndex使用Date.now墙钟900秒截止；系统事件记录合盖休眠985秒，与约246806毫秒有效运行后超时一致。保留失败，不推定千表成功。",
+      "remaining_groups_not_executed": true,
+      "real_group": {
+        "passed": true,
+        "duration_ms": 212700,
+        "artifact": ".local/skill-delivery/real-b73f1924-f1e7-432d-9442-78bb0bbcc035/report.json",
+        "new_official_calls": 39,
+        "settled_cost_micros": 135861,
+        "reserved_micros_after": 0,
+        "checks": [
+          "两次启动就绪",
+          "选定Skill与附件原生read成功",
+          "SQL草稿修订为web条件并由用户确认后查询",
+          "合成查询结果解释",
+          "本次创建正式记忆并完成Mem0索引",
+          "新会话召回本次记忆相同ID和版本"
+        ]
+      }
+    },
+    "sixth_attempt": {
+      "artifact": ".local/skill-release/final-attempt-6-result.json",
+      "status": "failed",
+      "passed_groups": [
+        "START01"
+      ],
+      "failed_group": "START02",
+      "before_after_fingerprint_identical": true,
+      "failure_reason": "首条真实输入的180秒测试等待到期；不是业务断言失败，外层600秒组超时未触发。",
+      "duration_ms": 206434,
+      "remaining_groups_not_executed": true,
+      "settled_agent_call_elapsed_ms": [
+        51097,
+        8887,
+        21280,
+        88013
+      ],
+      "settled_agent_elapsed_total_ms": 169277,
+      "other_settled_calls": {
+        "memory_embedding": 1
+      },
+      "unknown_call_count": 1,
+      "unknown_call_state": "issued",
+      "unknown_call_usage": null,
+      "reserved_micros_after": 29492,
+      "unknown_result_counted_as_success": false
+    },
+    "eleventh_attempt": {
+      "artifact": ".local/skill-release/final-attempt-11-result.json",
+      "status": "failed",
+      "passed_groups": [
+        "START01",
+        "START02",
+        "FEEDBACK",
+        "SHARED",
+        "SELECTION",
+        "NATIVE",
+        "QUERY",
+        "CONTRACT",
+        "ASSETS",
+        "PROVIDER",
+        "LIFECYCLE"
+      ],
+      "failed_group": "REGRESSION",
+      "failed_subcommand": "node tests/runtime/check-runtime.mjs --recovery",
+      "before_after_fingerprint_identical": true,
+      "failure_reason": "前两项故障恢复通过；第三次Pi导入仅记录imports_started，20秒健康等待到期，未进入第三项行为断言。",
+      "remaining_groups_not_executed": true,
+      "completed_hybrid_checks": 8,
+      "hybrid_artifact": ".local/skill-release/hybrid-completed-11.json",
+      "real_group": {
+        "passed": true,
+        "cases": 6,
+        "artifact": ".local/skill-delivery/real-9688d0e2-b5f7-4b43-8d37-bf6094bb47cd/report.json",
+        "duration_ms": 189694
+      },
+      "isolated_failure": {
+        "artifact": ".local/skill-release/runtime-startup-probe-11.json",
+        "log": ".local/skill-release/runtime-recovery-isolated-11.log",
+        "expected_runs": 2,
+        "actual_runs": 3,
+        "evidence": "epoch2工具已提交后API明确lease_lost，Bridge失败，随后epoch3完成；短租约额外失租破坏测试预期，未显示重复业务副作用。"
+      },
+      "isolated_fix": {
+        "main_task_log": ".local/skill-release/runtime-recovery-fixed-11.log",
+        "reviewer_artifact": ".local/checks/reviewer-runtime-recovery-ff6ef052b70e47f7bbfdac6b5547f10a/runtime-recovery.json",
+        "reviewer_elapsed_seconds": 67.847,
+        "passed_cases": 3,
+        "official_requests": 0
+      }
+    },
+    "additional_preserved_failed_attempts": [
+      {
+        "attempt": 7,
+        "artifact": ".local/skill-release/final-attempt-7-result.json",
+        "status": "failed",
+        "before_after_fingerprint_identical": true,
+        "failed_groups": [
+          "REGRESSION"
+        ],
+        "limitation": "只核对收据失败与指纹，不将本轮未重审的局部结果计作当前完整通过。"
+      },
+      {
+        "attempt": 8,
+        "artifact": ".local/skill-release/final-attempt-8-result.json",
+        "status": "failed",
+        "before_after_fingerprint_identical": true,
+        "failed_groups": [
+          "REGRESSION"
+        ],
+        "limitation": "只核对收据失败与指纹，不将本轮未重审的局部结果计作当前完整通过。"
+      },
+      {
+        "attempt": 9,
+        "artifact": ".local/skill-release/final-attempt-9-result.json",
+        "status": "failed",
+        "before_after_fingerprint_identical": true,
+        "failed_groups": [
+          "REGRESSION"
+        ],
+        "limitation": "只核对收据失败与指纹，不将本轮未重审的局部结果计作当前完整通过。"
+      },
+      {
+        "attempt": 10,
+        "artifact": ".local/skill-release/final-attempt-10-result.json",
+        "status": "failed",
+        "before_after_fingerprint_identical": true,
+        "failed_groups": [
+          "START02"
+        ],
+        "limitation": "只核对收据失败与指纹，不将本轮未重审的局部结果计作当前完整通过。"
+      }
+    ],
+    "twelfth_attempt": {
+      "artifact": ".local/skill-release/final-attempt-12-result.json",
+      "status": "failed",
+      "passed_groups": [
+        "START01",
+        "START02",
+        "FEEDBACK",
+        "SHARED",
+        "SELECTION",
+        "NATIVE",
+        "QUERY",
+        "CONTRACT",
+        "ASSETS",
+        "PROVIDER",
+        "LIFECYCLE",
+        "GOVERNANCE"
+      ],
+      "failed_group": "REGRESSION",
+      "failed_subcommand": "node tests/mvp/check-query-workflow.mjs",
+      "before_after_fingerprint_identical": true,
+      "failure_reason": "公共harness健康等待20秒到期；Bridge仅imports_started，尚未进入查询行为断言。",
+      "startup_failure_artifact": ".local/skill-release/query-startup-failure-12.json",
+      "remaining_groups_not_executed": false,
+      "remaining_regression_subcommands_not_executed": true,
+      "isolated_fix": {
+        "main_task_log": ".local/skill-release/query-workflow-startup-fixed-12.log",
+        "query_checks_passed": 8,
+        "main_task_reported_exit_code": 0,
+        "reviewer_artifact": ".local/skill-release/reviewer-shared-startup-boundaries-12.json",
+        "reviewer_boundary_checks": 6,
+        "official_requests": 0
+      }
+    }
+  },
+  "requirements": [
+    "A07",
+    "C01",
+    "C02",
+    "C04",
+    "C05",
+    "C07",
+    "C08",
+    "D01",
+    "D03",
+    "D07",
+    "D11",
+    "D12",
+    "D13"
+  ],
+  "modules": [
+    "M01",
+    "M02",
+    "M03",
+    "M04",
+    "M05",
+    "M07",
+    "M08",
+    "M09",
+    "M10",
+    "M11",
+    "M12"
+  ],
+  "baseline_review": {
+    "record": "docs/reviews/native-skills-review.json",
+    "increment_id": "I2-NATIVE-SKILLS",
+    "review_scope_sha256": "47c96fa17e982be37b415d43e4cac4ec7bc181c80ac965f6c37195bad972818c",
+    "final_receipt": ".local/delivery/I2-NATIVE-SKILLS-result.json",
+    "receipt_status": "passed",
+    "command_groups": 10,
+    "limitation": "旧审查和旧真实试用完整保留，不把其指纹或成功替代当前增量验收。本轮有界复核覆盖其后修改及回归失败。"
+  },
+  "resolved_findings": [
+    {
+      "id": "ASSET-CATEGORY",
+      "priority": "P2",
+      "issue": "公共分类新增私人Skill后仍留在公共列表，新建资产不可见。",
+      "resolution": "仅依据服务端正式保存结果的kind/visibility切换分类，不自动发布。",
+      "evidence": "修复前浏览器探针已复现；四组编辑器回归的第一组确认可见且Bob仍不可见。",
+      "files": [
+        "apps/web/src/features/assets/AssetsPage.tsx",
+        "tests/mvp/check-asset-editor-browser.mjs"
+      ]
+    },
+    {
+      "id": "ASSET-LATE-RECEIPT",
+      "priority": "P2",
+      "issue": "保存响应迟到时关闭旧弹窗并创建新草稿，旧响应关闭新编辑并丢失未保存草稿。",
+      "resolution": "编辑会话代次隔离成功、失败与finally结果；保存中禁用原字段和附件，新编辑重置操作身份，同一次未知提交保留原身份重试。",
+      "evidence": "修复前探针复现；修复后四组包括迟到成功、迟到失败和真实服务端先保存再丢回执，重试严格同operation_id且只有一份资产。",
+      "files": [
+        "apps/web/src/features/assets/AssetsPage.tsx",
+        "apps/web/src/features/assets/SkillFilesEditor.tsx",
+        "tests/mvp/check-asset-editor-browser.mjs"
+      ]
+    },
+    {
+      "id": "READ-REPLAY",
+      "priority": "P1",
+      "issue": "read成功后依赖存储不可用，同SDK调用重放把本次unavailable错误替换为旧成功正文。下一次模型准入另有有效性检查，没有证据证明已对外泄漏。",
+      "resolution": "复用原六类可接回已提交回执的操作分类，同时约束execute前置接回与invoke的unavailable兜底；read须重新验证，失败明确返回。",
+      "evidence": "审查者独立反例与主任务复现吻合。修复后审查者在隔离harness中验证故障拒绝、恢复后同ID成功、Skill停用后同ID拒绝、原写回执仍接回及仅一条read操作；正式native八组再通过。",
+      "files": [
+        "crates/data-agent/src/use_cases/data_tools.rs",
+        "tests/mvp/skill-runtime-boundaries.mjs"
+      ]
+    },
+    {
+      "id": "REANALYZE-RECEIPT",
+      "priority": "P2",
+      "issue": "重新预填的提前重放分支未装饰maintenance，八路并发响应严格等值断言失败。",
+      "resolution": "提前返回前复用semantic_governance::decorate_in_tx，然后验证同一KnowledgeObject契约并提交；前置当前权限及同事务共享锁保持。",
+      "evidence": "独立核对原日志字段差异、代码和原测试未改；maintenance-replay六组完整通过，保留并发同回执、仅一版、仅一次排队和计数断言。",
+      "files": [
+        "crates/data-agent/src/use_cases/knowledge.rs",
+        "tests/mvp/check-maintenance-replay.mjs"
+      ]
+    },
+    {
+      "id": "MEMORY-EMBEDDING-RESERVATION",
+      "priority": "P2",
+      "issue": "Mem0向量调用仅按正文UTF-8字节预留。真实9字节短查询被provider计为18 tokens，Rust按实际用量正确将主账本标记breached，后续调查停止。",
+      "resolution": "每条文本增加64 tokens模板预留，与共享语义向量适配现有算法一致。保持总预留8192及20条上限，显式拒绝空文本；实际usage超出预留仍先结算然后封锁，同一操作不能隐式重试。",
+      "evidence": "独立对账9条唯一settled调用合计12054微美元，累计70→79、265999→278053、预留0；唯一超限调用为memory_embedding的9→18。修复前新增测试失败，修复后审查者亲自运行12项Memory测试和10项边界探针全部通过，官方调用0。",
+      "files": [
+        "apps/memory/providers.py",
+        "tests/memory/test_sdk_failures.py"
+      ],
+      "limitation": "字节加64是沿用既有接入的保守估算，不是provider token数量保证；真实使用仍必须核验实际usage，当前修复尚未真实重试。"
+    },
+    {
+      "id": "ASSET-EXACT-NAME",
+      "priority": "P2",
+      "issue": "个人资产目录把name.contains(query)当作exact。完全同名与前缀相似条目同级，随机ID排序和长body/scope摘要的字节分页会使精确名称目标落到后页，违反原ASSETS首页精确命中断言。",
+      "resolution": "名称按(完全相等,包含查询)元组降序，然后稳定ID升序。候选过滤、字节页限、游标处理、正文分页和权限边界保持，原名称包含优先不被取消。",
+      "evidence": "第二次正式验收原ASSETS失败日志保留。新增确定性中文/大小写单元令target的ID晚于20个prefix，修前确实返回prefix-00，修后通过。审查者另用实际API、16份长摘要资产及受控Pi搜索工具验证精确项ID最后仍首页第一，名称包含先于ID更小的正文命中；大小写查询跨2页完整无重复，通配查询按稳定ID跨2页完整无重复。",
+      "requirements_basis": [
+        "docs/semantic-retrieval-design.md 第11.4节：全部有效个人资产按需发现与目录分页",
+        "docs/architecture/knowledge-modules.md：启动16KB候选外本人memory与已选Skill可搜索",
+        "tests/mvp/check-asset-directory.mjs：原名称检索命中、分页和旧版本拒绝断言"
+      ],
+      "files": [
+        "crates/data-agent/src/modules/retrieval/mod.rs",
+        "docs/architecture/knowledge-modules.md"
+      ],
+      "official_requests_by_reviewer": 0
+    }
+  ],
+  "acceptance_integrity": {
+    "original_expectations_preserved": true,
+    "changes": [
+      {
+        "area": "个人Skill按钮",
+        "change": "旧新增Skill定位更新为新增个人 Skill。",
+        "basis": "已确认个人/公共区分及当前可访问名称；录入、选用、刷新、SQL确认断言不变。"
+      },
+      {
+        "area": "关联内容与检索fixture",
+        "change": "直接造数补semantic_ownership；字段沿用表，独立metric/document/relationship沿用自身system归属。",
+        "basis": "逐项对照正式register_object_in_tx及读取约束。105字段翻页、四类内容、404/400、1000来源过期、候选上限和精确召回均保留。"
+      },
+      {
+        "area": "记忆捕获式回归",
+        "change": "用正式withdraw结束捕获输入，断言200后releaseRun。",
+        "basis": "原测试只释放HTTP却留下未完成消息，随后租约重领占住捕获器；不修改生产调度、租约或记忆规则。"
+      },
+      {
+        "area": "多目标取消租约",
+        "change": "测试1500ms改为系统原有默认15000ms，并新增取消前attempts=1、运行/作业代次一致及仅一条运行。",
+        "basis": "审查者独立负对照在取消前已出现attempts=2和旧运行interrupted；正对照两原场景全部原断言通过。最终attempts为1/3、6调用、1未知回执、原账本和Bridge409断言保持，不修改产品恢复逻辑。"
+      },
+      {
+        "area": "业务协议fixture",
+        "change": "仅--check分支65536改为项目已确认131072字节。",
+        "basis": "HEAD的docs/development.md第144行及已有决策明确128KiB；原B04在provider准入明确超限。官方profile、题目、独立参考、调用/费用额度和provider实现不变。审查者执行准入探针证明旧64KiB及超128KiB继续拒绝且0网络请求。"
+      },
+      {
+        "area": "原生Skill捕获式回归",
+        "change": "平台forbidden断言之后，用既有任务cancel结束测试目标并释放该会话捕获。",
+        "basis": "捕获器不会解释失败查询产生的结果唤醒；收尾发生在原生成、等待确认、failed/forbidden断言之后，后续依赖故障和重放断言保留。"
+      },
+      {
+        "area": "完整回归等待时间",
+        "change": "REGRESSION组合上限2400秒改4200秒。",
+        "basis": "预跑统一900秒包装不足以覆盖千表首次索引、丢库恢复和受控重建三阶段；原超时保留并不算通过。数据规模、单段有限等待、结果与恢复断言、产品超时和付费预算未改。"
+      },
+      {
+        "area": "Mem0向量预留反例",
+        "change": "增加短文本/20条批量、加模板后8192上限及实际usage超预留不重试三项测试，原测试保持。",
+        "basis": "首次真实调用的实际用量与既有共享向量适配提供独立依据；Rust准入、费用、结算和breached规则完全不改。审查者另验证单条/20条/中文精确8192及8193拒绝，实际74大于预留73但小于全局8192时仍正确结算并封锁。"
+      },
+      {
+        "area": "完整验收顺序",
+        "change": "START02移至最后，其余12组顺序不变。",
+        "basis": "付费账本等待授权期间可先执行本地验收。13组的命令、断言、超时、费用限制保持，缺官方成功仍整体验收未完成。"
+      },
+      {
+        "area": "精确资产名称优先",
+        "change": "新增中文与大小写的确定性单元反例；原ASSETS集成脚本零改动。",
+        "basis": "第2次正式验收原断言失败；源码contains同级排序提供直接依据。修复保留名称包含优先及稳定ID，审查者独立黑盒验证查询及通配完整分页，不扩大候选、页限或权限范围。"
+      },
+      {
+        "area": "历史浏览器fixture",
+        "change": "仅给本次随机前缀的230张表补semantic_ownership，object_id=authority_id、source=datasight；新增GET /knowledge必须200的前提断言。",
+        "basis": "与semantic_governance::register_object_in_tx的正式表登记一致；没有新增maintainer或绕过权限。修前前提断言实际404 not_available，修后通过。原1200+50事件、1247用户消息、100条外会话、230表第三页及轮询、60000/60002文档编辑和版本/元数据断言全部保留。"
+      },
+      {
+        "area": "REGRESSION内部顺序",
+        "change": "将verify-hybrid-retrieval从第八个make目标移到首个，其余八目标相对顺序保持。",
+        "basis": "优先取得此前未完整完成的千表结果。独立比较第三次收据argv与当前声明，九个make目标集合相同，4200秒上限不变；原13组及START02最后的规则不变。不能据此拼接旧局部结果宣称完成。"
+      },
+      {
+        "area": "最新授权及最终验收顺序",
+        "change": "费用/次数/旧期限限制由用户明确取消；START02从末尾移至START01后。",
+        "basis": "逐项对照第四次收据，十三组command与timeout_seconds完全一致；代码、测试及其余冻结文件哈希无变化。只重绑声明与审查，不修改产品规则或放宽断言。"
+      },
+      {
+        "area": "真实试用有限等待",
+        "change": "tests/mvp/check-skill-dogfood.mjs每条真实输入180000→360000毫秒并增加说明注释；CURRENT的START02包装上限600→1200秒。",
+        "basis": "第五次同脚本真实组完成，耗时212700毫秒；第六次四个Agent调用已结算并累计169277毫秒，另一次issued回执未知，因180秒测试等待到期退出。将当前脚本去注释并恢复180000后SHA256精确等于旧收据；恢复START02原600秒及review已通过状态后声明哈希精确一致。其余冻结文件、13组命令和业务断言不变；产品模型请求超时、运行状态和输入输出规则未改，不增加隐式重试或计未知成功。"
+      },
+      {
+        "area": "会话故障恢复测试前提",
+        "change": "仅recovery_worker租约1500→15000毫秒；故障Worker仍1500毫秒。新增恢复前runs=1、attempts=1。healthy从20秒改为有限60秒，所有调用传入已有child，退出/被信号终止时立即失败。",
+        "basis": "产品原默认为15000毫秒，隔离旧失败在epoch2提交工具后明确lease_lost，随后epoch3完成；正式旧失败停在第三次imports_started，前两例已通过。审查者逐项核对diff并独立执行3例正对照和健康检查4边界。原恰好2个运行、1个任务/工具/正式输出、operation/origin/SDK身份、旧epoch拒绝、同预算范围断言完全保持；其余行为等待与生产逻辑不变。"
+      },
+      {
+        "area": "最终13组与REGRESSION顺序",
+        "change": "GOVERNANCE由REGRESSION后移至其前；REGRESSION内verify-hybrid-retrieval由首个移至最后，原其他8目标相对顺序不变。",
+        "basis": "第十一次千表8项完整通过后才遇短启动等待失败，先执行频繁启动的检查可减少失败前重复长步骤。将顺序还原及review状态恢复passed后，contract_sha256精确等于第十一次原声明，证明其余验收命令、预期、要求和时限未变。仍须统一执行，不删除或拼接验收。"
+      },
+      {
+        "area": "公共harness默认启动等待",
+        "change": "tests/mvp/harness.mjs中options.startupTimeout ?? 20000改为options.startupTimeout ?? 60000，仅一行。",
+        "basis": "第12轮查询工作流在Bridge只记录imports_started时20秒健康等待失败，前12组与既有恢复验证通过。逆转此一处值后SHA256等于原执行收据；除试用说明外其余冻结文件未变，验收声明也精确匹配（仅review pending状态有差异）。普通until默认20000、显式startupTimeout值（含0）、全部业务断言、组时限和产品/模型超时不变。审查者6项反例/正例及主任务8项查询流程通过；失败仍保存诊断并向调用者抛出，不以空结果冒充成功。"
+      }
+    ]
+  },
+  "evidence_review": {
+    "reviewer_executed": [
+      {
+        "check": "隔离read故障/恢复/停用与写回执独立反例",
+        "passed": true,
+        "official_requests": 0,
+        "details": "仅临时harness数据库和进程；自行关闭清理，不接触持久试验。"
+      },
+      {
+        "check": "纯内存Pi read边界探针",
+        "passed": true,
+        "details": "精确50KiB行、CRLF第二行、回执路径绑定、超EOF offset拒绝、schema offset/limit边界，未调用官方模型。"
+      },
+      {
+        "check": "1500ms租约负对照及15000ms正对照",
+        "passed": true,
+        "details": "负对照保留失败，正对照普通和延迟两场景原断言全过；官方调用0。"
+      },
+      {
+        "check": "node tests/runtime/check-model-admission.mjs",
+        "exit_code": 0,
+        "details": "64KiB对70KB拒绝，128KiB对70KB进入预算检查，超128KiB拒绝；networkRequests=0。"
+      },
+      {
+        "check": "git diff --check",
+        "exit_code": 0
+      },
+      {
+        "check": ".local/memory-venv/bin/python -m unittest discover -s tests/memory -p test_*.py",
+        "exit_code": 0,
+        "tests": 12,
+        "official_requests": 0,
+        "details": "实际运行锁定Mem0测试，仅替换网络。日志中的memory_operation_unknown是既有SDK fallback拒绝反例预期输出，最终OK。"
+      },
+      {
+        "check": "Mem0预留独立边界探针",
+        "passed": true,
+        "checks": 10,
+        "official_requests": 0,
+        "details": "单条8128字节+64=8192通过，8129拒绝；20条总字节6912+1280=8192通过，多1字节拒绝；中文按UTF-8精确边界；空批、空文本、批内空文本、21条均在issue和发送前拒绝；实际74超过预留73先结算仅一次且第二次封锁。"
+      },
+      {
+        "check": "首次真实失败调用与预算变化只读对账",
+        "passed": true,
+        "details": "9条唯一已settled调用；唯一输入越界9→18；12054微美元等于主账本差额，79次累计、预留0。未读取或修改真实预算数据库。"
+      },
+      {
+        "check": "实际API与受控搜索工具的个人资产排序/分页独立反例",
+        "passed": true,
+        "assets": 16,
+        "query_pages": 2,
+        "wildcard_pages": 2,
+        "official_requests": 0,
+        "details": "通过公开资产接口创建并修订合成数据，让最大ID为完全同名report、最小ID仅正文含report、中间14项name包含report。REPORT与report两次完整查询返回exact→name_contains→body顺序且无重复，query=*完整返回ID顺序。使用临时harness数据库、进程和合成平台，已撤回输入并全部清理，没有写正式测试或产品文件。"
+      },
+      {
+        "check": "第四次冻结收据与当前文件、命令及授权前后快照只读一致性校验",
+        "passed": true,
+        "official_requests": 0,
+        "details": "before==after；十二本地组均exit0且无超时；当前非审查文件与第四次收据哈希无差异；十三组argv/timeout按ID一致。两笔原试验仅state/call_limit/expires_at/cost_limit_micros变化，ID/指纹/历史计数费用预留一致。"
+      },
+      {
+        "check": "第五/六次失败收据与有限等待调整只读精确复核",
+        "passed": true,
+        "official_requests": 0,
+        "details": "两轮before==after；第五前11组passed、真实报告6条输入的运行均finished、新增39调用且预留归零；第六四个Agent调用169277ms已结算，另一次issued无usage且29492微美元预留保留。旧脚本哈希通过仅逆转新注释和等待值精确还原；旧验收声明哈希通过仅恢复START02超时及review状态精确还原。没有重跑长测试、发起官方请求或修改账本。"
+      },
+      {
+        "check": "当前测试改动、旧指纹与验收顺序只读一致性",
+        "passed": true,
+        "official_requests": 0,
+        "details": "与第11次after逐文件比较，除审查记录外仅恢复测试和试用说明变化。HEAD恢复脚本SHA256等于旧收据，git diff仅包含限定健康/租约/前提调整。还原两层执行顺序和review已通过状态后，验收声明哈希精确匹配旧收据。"
+      },
+      {
+        "check": "健康等待边界独立反例",
+        "passed": true,
+        "checks": 4,
+        "official_requests": 0,
+        "details": "从当前脚本提取真实until/healthy函数；健康成功、子进程exitCode提前退出、SIGTERM提前退出、活进程不健康时有限超时均通过。退出分支在fetch前拒绝；使用虚拟时钟和受控fetch，0网络请求。"
+      },
+      {
+        "check": "独立三个故障恢复正对照",
+        "passed": true,
+        "exit_code": 0,
+        "official_requests": 0,
+        "elapsed_seconds": 67.847,
+        "artifact": ".local/checks/reviewer-runtime-recovery-ff6ef052b70e47f7bbfdac6b5547f10a/runtime-recovery.json",
+        "details": "执行当前测试的--recovery全部原断言，仅在内存中改import相对基址及报告隔离目录；复用忽略目录NODE_COMPILE_CACHE。before_business_commit/after_business_commit/before_checkpoint_commit真实退出73/74/75，3例均通过。临时本地MySQL及Pi mock进程由原finally清理，不触及官方账本或常驻实例。"
+      },
+      {
+        "check": "公共harness等待与失败证据独立边界",
+        "passed": true,
+        "checks": 6,
+        "official_requests": 0,
+        "artifact": ".local/skill-release/reviewer-shared-startup-boundaries-12.json",
+        "details": "提取当前实际until/health函数配合虚拟时钟：默认允许25秒就绪、显式20秒覆盖仍失败、显式0在fetch前失败、不可用至默认60秒拒绝、普通until仍20秒。另实际调用当前harness({startupTimeout:1})，确认拒绝并生成startup-failure.json，原catch完成临时资源清理。没有重跑千表、全套或官方服务。"
+      },
+      {
+        "check": "第12轮与当前一行差异/声明只读一致性",
+        "passed": true,
+        "official_requests": 0,
+        "details": "执行前后指纹相同；当前非审查文件仅harness和试用说明变化。反转默认等待这一处字符后原harness哈希精确相等；当前声明仅恢复review.status=passed即与旧contract_sha256相同。读取查询正对照8项全部passed、officialRequests=0；没有删除、放宽或替换原行为断言。"
+      }
+    ],
+    "inspected_artifacts": [
+      {
+        "path": "docs/reviews/native-skills-review.json",
+        "sha256": "feb17bdad9ef660552a28fd35ff22b3d1a5040ccc49976a02440980ebecc7eae",
+        "modified_at": "2026-10-07T13:48:19.470233+00:00"
+      },
+      {
+        "path": ".local/delivery/I2-NATIVE-SKILLS-result.json",
+        "sha256": "0d7dddbfaf78679be760c3bcbdab6d88a6714b137793e093f0c82c34cb3db756",
+        "modified_at": "2026-10-07T13:57:03.188824+00:00"
+      },
+      {
+        "path": ".local/skill-release/assets-probe-before.json",
+        "sha256": "41428bb1370ff3eafde20aea4225da2aacd53f57d98bb42dbfadc76c2b2bbe2a",
+        "modified_at": "2026-10-07T14:09:53.822773+00:00"
+      },
+      {
+        "path": ".local/skill-release/read-replay-confirmed.json",
+        "sha256": "44aa9182715e8cd670cd20d4e34d33a181919057a2980a02f38e145ff12a796f",
+        "modified_at": "2026-10-07T14:23:33.787049+00:00"
+      },
+      {
+        "path": ".local/checks/asset-editor/report.json",
+        "sha256": "4cbeb3c6c9d744ef8fd3b7579720ed8f3aa1505938dbaa190d4f5ff71a71c74d",
+        "modified_at": "2026-10-07T14:57:31.278891+00:00"
+      },
+      {
+        "path": ".local/skill-release/local-regression/report.json",
+        "sha256": "2e9756420fc67cd1e11e58c7891c98946619c12b8537c1c9bb4e64fbbace7503",
+        "modified_at": "2026-10-07T14:58:31.241814+00:00"
+      },
+      {
+        "path": ".local/skill-release/repaired-local/report.json",
+        "sha256": "5671d5d68fdd00d11a9bd43ec0ce7a71bb2c4dd78ff2e75e86778a6edc16e46f",
+        "modified_at": "2026-10-07T14:45:26.133404+00:00"
+      },
+      {
+        "path": ".local/skill-release/repaired-local/knowledge-workflow.json",
+        "sha256": "ae9fbb97788720bf7e26c6be1ba6ec494a6e1586bc307a91743465d8a6e5ff54",
+        "modified_at": "2026-10-07T14:56:39.594161+00:00"
+      },
+      {
+        "path": ".local/skill-release/repaired-local/knowledge-workflow.log",
+        "sha256": "5eab4158322a1c156135159519651c6066f2f528d2877c042bb388b60f1b58e3",
+        "modified_at": "2026-10-07T14:56:39.588186+00:00"
+      },
+      {
+        "path": ".local/skill-release/repaired-local/receipt-repairs.json",
+        "sha256": "7418ecde9ad56641c428d2d91fad32db32d2b2219724dfac7a5e43a4b69562d8",
+        "modified_at": "2026-10-07T15:04:20.098263+00:00"
+      },
+      {
+        "path": ".local/skill-release/repaired-local/business-acceptance.json",
+        "sha256": "10e904183eb893107f65be098f5171b1cbb4f2ad9e21d9a27a1397fcb05b3dbf",
+        "modified_at": "2026-10-07T15:00:45.709292+00:00"
+      },
+      {
+        "path": ".local/skill-release/repaired-local/business-acceptance.log",
+        "sha256": "de8ce3c0e21a128169e3997da51f4bfe3ae5bd09db60db4c6348b64acf1bc994",
+        "modified_at": "2026-10-07T15:00:45.670050+00:00"
+      },
+      {
+        "path": ".local/skill-release/repaired-local/knowledge-tail.json",
+        "sha256": "c343b26b568760f39abbe5965ac326124200855182c7ffb6088d168319f3387d",
+        "modified_at": "2026-10-07T15:08:07.913320+00:00"
+      },
+      {
+        "path": ".local/skill-release/repaired-local/knowledge-tail-completed.json",
+        "sha256": "45d75b0e0caea8a58772b86ee3ad40c746599259fdbd8976ac9703c259cc33b3",
+        "modified_at": "2026-10-07T15:12:29.210715+00:00"
+      },
+      {
+        "path": ".local/checks/reviewer-mixed-lease-9c95eb62-b80c-4ed9-80a5-00bdaaed1c03.json",
+        "sha256": "9d7eaae73344547398f8e8beedd4e7fcfd5bc3ec3e58998f4dc2f2f60bd3e9a7",
+        "modified_at": "2026-10-07T14:44:56.422399+00:00"
+      },
+      {
+        "path": ".local/checks/reviewer-mixed-default-lease-a40b61ef-22f3-41b2-a22d-99d5fa6f0a95.json",
+        "sha256": "f4c1a67b03b8afc05f61725df2a3552eb8202dfc6c87ca7c15d992cf5cb024dc",
+        "modified_at": "2026-10-07T14:47:45.352145+00:00"
+      },
+      {
+        "path": ".local/checks/native-skills.json",
+        "sha256": "5b909519eddd75bbd2619a43224ed5872b652f82929af05a406bd97113161c15",
+        "modified_at": "2026-10-07T15:04:19.772947+00:00"
+      },
+      {
+        "path": ".local/checks/mvp-maintenance-replay.json",
+        "sha256": "187cd542fc80035d585e01a0682bbe5ce63a07d42aa680384b19c654e31e1642",
+        "modified_at": "2026-10-07T15:04:01.662816+00:00"
+      },
+      {
+        "path": ".local/checks/mvp-business-acceptance.json",
+        "sha256": "bd819b85e76f6268ffb80bf5dd009c4b84b1d3f85b34ae98b5d13c2aade5e882",
+        "modified_at": "2026-10-07T15:00:45.669394+00:00"
+      },
+      {
+        "path": ".local/skill-release/review-before-embedding-fix.json",
+        "sha256": "6834beef45f84c0d5cd3f884e6a6618725a146631af92ac4d1f429851cabc00e",
+        "modified_at": "2026-10-07T15:25:57.690929+00:00"
+      },
+      {
+        "path": ".local/skill-release/final-attempt-1-result.json",
+        "sha256": "c3ade2c3ca4571a42707b1c7c14324662f86fc0fd56483791e32408b56ef1f23",
+        "modified_at": "2026-10-07T15:25:57.689788+00:00"
+      },
+      {
+        "path": ".local/skill-delivery/real-854f5c4c-c993-4e02-ad40-26b968bf7908/report.json",
+        "sha256": "4bdba46659752c4f0e42cbafa2bb5a0d238f3a37f76b99c1e95a79815be1d4ee",
+        "modified_at": "2026-10-07T15:20:01.231402+00:00"
+      },
+      {
+        "path": ".local/skill-release/budget-breach-calls.json",
+        "sha256": "ba2d53dc32e6b3d5f0000d05b762cc02d9994d95980c042d04a8272fa6afeaf7",
+        "modified_at": "2026-10-07T15:23:12.017250+00:00"
+      },
+      {
+        "path": ".local/skill-release/embedding-budget-before.log",
+        "sha256": "ea686cc19f7f836f5b54451d81fe6d189993deb9d98c921858a34ca415f9e926",
+        "modified_at": "2026-10-07T15:26:59.996270+00:00"
+      },
+      {
+        "path": ".local/skill-release/embedding-budget-after.log",
+        "sha256": "cb94f2bddb6c857e8309c83dbd7f86da95ddb17fa9e54535f63289aab26769b5",
+        "modified_at": "2026-10-07T15:28:16.159765+00:00"
+      },
+      {
+        "path": ".local/skill-release/final-attempt-2-result.json",
+        "sha256": "569ab77119db0c0d7955a9bfcd7c2e954a47218d70ed736067027132ea882c19",
+        "modified_at": "2026-10-07T15:42:53.879151+00:00"
+      },
+      {
+        "path": ".local/skill-release/asset-search-before.log",
+        "sha256": "3037c3eb8c5a7b178101df8ecd5a4545e2c3ab60a910e5fc7ef44a979c3ddb0d",
+        "modified_at": "2026-10-07T15:45:48.352935+00:00"
+      },
+      {
+        "path": ".local/skill-release/asset-search-after.log",
+        "sha256": "3e40a12bd07b7df98f64a33381995a8c8f79f08b7a2abc9fb91ed0d0ed5aa7a7",
+        "modified_at": "2026-10-07T15:47:13.562239+00:00"
+      },
+      {
+        "path": ".local/skill-release/final-attempt-3-result.json",
+        "sha256": "0d1c2f6924a57e185b986fcd9a0bfa8fe4a2b1d31c15f125a814a54976fce39e",
+        "modified_at": "2026-10-07T16:13:11.246327+00:00"
+      },
+      {
+        "path": ".local/delivery/I2-SKILL-CLOSEOUT-1791388447377699000/command-11.log",
+        "sha256": "c28e09f3104be61c4a1a9a568a177e151ac47a86cd0f94a87790b2d0f8aa2870",
+        "modified_at": "2026-10-07T16:12:30.085220+00:00"
+      },
+      {
+        "path": ".local/skill-release/history-ownership-before.log",
+        "sha256": "860d232aeee58d4a45ec0e4a8ff55c6650b761a3ec6dfd57c7c41752b9c4c7db",
+        "modified_at": "2026-10-07T16:15:05.847615+00:00"
+      },
+      {
+        "path": ".local/skill-release/history-ownership-after.log",
+        "sha256": "55c6d882673c5e3aad30dc33befdfd293bb5f892f1d4f5483c43ca62cbbee43d",
+        "modified_at": "2026-10-07T16:16:27.333984+00:00"
+      },
+      {
+        "path": ".local/skill-release/management-final-check.log",
+        "sha256": "74fbedc8feb49f5d1886a839fef98e15067c4fd9768d748203fedf132c65f75d",
+        "modified_at": "2026-10-07T16:17:02.176106+00:00"
+      },
+      {
+        "path": ".local/skill-release/final-attempt-4-result.json",
+        "sha256": "581ef2cd478b92f89067e01d33fbc9398a3979d30b079d66556b37f722034321",
+        "modified_at": "2026-10-07T17:15:44.987817+00:00"
+      },
+      {
+        "path": ".local/skill-release/hybrid-completed.json",
+        "sha256": "30b07bbd668086d9c0c0747dbf090f8588f9abde7c984acf8fc1cc4e0bbcd390",
+        "modified_at": "2026-10-07T16:55:55.984667+00:00"
+      },
+      {
+        "path": ".local/skill-delivery/real-648431a1-f94c-4fce-afcb-2f3ae1a88d4e/report.json",
+        "sha256": "f99d15306f2f4225113f6fb051281597cb228d8db6107970059e2484d4c5fb42",
+        "modified_at": "2026-10-07T17:15:04.904457+00:00"
+      },
+      {
+        "path": ".local/skill-release/authorized-trial-resume-20261008.json",
+        "sha256": "daca802f444ba9e097f29f54c995d530ba0917e283409f2b0f3744058bb618bb",
+        "modified_at": "2026-10-07T22:49:05.620274+00:00"
+      },
+      {
+        "path": ".local/delivery/I2-SKILL-CLOSEOUT-1791390295153387000/command-11.log",
+        "sha256": "b54c14279ca232a4c6dcb189e41d8b074fb9b2d19ed768931f5f7a7384be7b1a",
+        "modified_at": "2026-10-07T17:13:10.130898+00:00"
+      },
+      {
+        "path": ".local/delivery/I2-SKILL-CLOSEOUT-1791390295153387000/command-13.log",
+        "sha256": "7d7c69b111775c6cee4c6f5e07b2279e79fd032c2a4c6adf5610dcb72dcba7c0",
+        "modified_at": "2026-10-07T17:15:04.920024+00:00"
+      },
+      {
+        "path": ".local/skill-release/final-attempt-5-result.json",
+        "sha256": "9eb7a2e2d6a90fccb57e6690d14427bc15d391d1caecaf8d682f6501723973be",
+        "modified_at": "2026-10-08T02:14:37.916480+00:00"
+      },
+      {
+        "path": ".local/skill-release/host-sleep-20261008.json",
+        "sha256": "f86f53a415cab9ebe76233e332d88f3c1d51a7ed0cd731c6c76df01346e679e2",
+        "modified_at": "2026-10-08T02:14:37.914891+00:00"
+      },
+      {
+        "path": ".local/skill-delivery/real-b73f1924-f1e7-432d-9442-78bb0bbcc035/report.json",
+        "sha256": "c6ed964a5c3e8213455f8ecf9f2254d8b4204fe2159a3464b9228d35c740fc56",
+        "modified_at": "2026-10-07T22:56:15.430940+00:00"
+      },
+      {
+        "path": ".local/delivery/I2-SKILL-CLOSEOUT-1791413562116046000/command-12.log",
+        "sha256": "5f8339f87c668be5b62ebc0cc952198b705f2fc44ece467501c587b77e055b46",
+        "modified_at": "2026-10-07T23:18:19.163505+00:00"
+      },
+      {
+        "path": ".local/skill-release/final-attempt-6-result.json",
+        "sha256": "574a578d524a358e1d2daab9ba11cc0a3d21df1b06a45ac16acb7ea2c2fc727f",
+        "modified_at": "2026-10-08T02:19:37.762023+00:00"
+      },
+      {
+        "path": ".local/skill-release/real-provider-latency-20261008.json",
+        "sha256": "75853b9522603cabd8dfb16faea1ac143fa0f756dd87ba567052f57def5e4afa",
+        "modified_at": "2026-10-08T02:19:37.785447+00:00"
+      },
+      {
+        "path": ".local/skill-delivery/real-2320af7a-99b0-46e0-914f-9ca65136f9a3/report.json",
+        "sha256": "bd6d137a4bdd19296fb86c4d9c495885d68466073bf53a49756239cf925c2f1b",
+        "modified_at": "2026-10-08T02:18:05.422002+00:00"
+      },
+      {
+        "path": ".local/skill-release/final-attempt-11-result.json",
+        "sha256": "abe92d4a6a0d30ccf70bae826832a60082f872183cfe619f1d5c21e910e52bae",
+        "modified_at": "2026-10-08T04:47:21.269555+00:00"
+      },
+      {
+        "path": ".local/skill-release/hybrid-completed-11.json",
+        "sha256": "729288a0e7d3484b72d8def25de741bfda49844e51b0b133e5e356e37c5b4b7c",
+        "modified_at": "2026-10-08T04:43:39.815019+00:00"
+      },
+      {
+        "path": ".local/skill-release/runtime-startup-failure-11.json",
+        "sha256": "42f15e2618c070ee72b8d6666b891ea45ed4f7665e8dc2d69049f27574965e08",
+        "modified_at": "2026-10-08T04:47:59.563304+00:00"
+      },
+      {
+        "path": ".local/skill-release/runtime-startup-probe-11.json",
+        "sha256": "33e613ee1170ee26e61bb400a0b9bb3764a951351e0457101e1c7c147493bd3c",
+        "modified_at": "2026-10-08T04:48:54.354248+00:00"
+      },
+      {
+        "path": ".local/skill-release/runtime-recovery-isolated-11.log",
+        "sha256": "fc60f07e7540e5c1ffc61156096ded1d8dc7f53450af71ee1a748164a8a7fa5c",
+        "modified_at": "2026-10-08T04:48:22.853310+00:00"
+      },
+      {
+        "path": ".local/skill-release/runtime-recovery-fixed-11.log",
+        "sha256": "1b1574be010204d4a1a19cc8940440f34a9483da2d7849334c888abf722a65a6",
+        "modified_at": "2026-10-08T04:53:02.361356+00:00"
+      },
+      {
+        "path": ".local/checks/reviewer-runtime-recovery-ff6ef052b70e47f7bbfdac6b5547f10a/runtime-recovery.json",
+        "sha256": "49de3051c189b03bea4a7a583cdd893b1f9b47e885c1488c397fa96374a4a470",
+        "modified_at": "2026-10-08T04:55:55.110227+00:00"
+      },
+      {
+        "path": ".local/skill-delivery/real-9688d0e2-b5f7-4b43-8d37-bf6094bb47cd/report.json",
+        "sha256": "56e6da75efe5d952138dbe248ba1e24505e4a6e57d1909ec56e7520e9980ed55",
+        "modified_at": "2026-10-08T04:11:33.545571+00:00"
+      },
+      {
+        "path": ".local/skill-release/final-attempt-7-result.json",
+        "sha256": "310714712ac5762316302d57691bbb46cb5a169a6bb9d8712fc4a2d6df593a3d",
+        "modified_at": "2026-10-08T02:40:46.777967+00:00"
+      },
+      {
+        "path": ".local/skill-release/final-attempt-8-result.json",
+        "sha256": "a42d1d8bbbca691946e4488449bd5127cdcbacc4b7d7a045dc3e375c43b8d6fd",
+        "modified_at": "2026-10-08T02:56:19.949599+00:00"
+      },
+      {
+        "path": ".local/skill-release/final-attempt-9-result.json",
+        "sha256": "91464ea4480214e51919854418b78ae9ea6f637d6454895eb9077a57719f91ac",
+        "modified_at": "2026-10-08T03:49:15.417439+00:00"
+      },
+      {
+        "path": ".local/skill-release/final-attempt-10-result.json",
+        "sha256": "1829f4c1c69eb6e0b687e823371a80b55d88d2d5516a90e184aed5d2de41c19e",
+        "modified_at": "2026-10-08T03:58:37.201172+00:00"
+      },
+      {
+        "path": ".local/skill-release/final-attempt-12-result.json",
+        "sha256": "0826681a196b50d02922b93443233a931fb5235d80406ce3d8c1d8f690bf6ccb",
+        "modified_at": "2026-10-08T05:19:24.120982+00:00"
+      },
+      {
+        "path": ".local/skill-release/query-startup-failure-12.json",
+        "sha256": "dd26c562615cc30f6f4339eeb0775867822332c9d636e1a59bcf7eccee1b8841",
+        "modified_at": "2026-10-08T05:19:24.282916+00:00"
+      },
+      {
+        "path": ".local/skill-release/query-workflow-startup-fixed-12.log",
+        "sha256": "230b2dc8e429f2532eae09cb351cbd49e74367e9509087a47e3f27cbd005c423",
+        "modified_at": "2026-10-08T05:21:48.129237+00:00"
+      },
+      {
+        "path": ".local/skill-release/reviewer-shared-startup-boundaries-12.json",
+        "sha256": "5d996efaaba4e347dce4b3cec2fc747a9bb60481ad7be5d027f5686dd42f84df",
+        "modified_at": "2026-10-08T05:23:06.527408+00:00"
+      },
+      {
+        "path": ".local/checks/mvp-e94395a19ee01af7/startup-failure.json",
+        "sha256": "fafa8153b62b4b3438a4881edc464eef1c9d36170185172f282aad4db4fe3d61",
+        "modified_at": "2026-10-08T05:23:06.403771+00:00"
+      },
+      {
+        "path": ".local/delivery/I2-SKILL-CLOSEOUT-1791435523558799000/command-13.log",
+        "sha256": "e5b5879d380cb3401f617b45e121fdc8ed02b704321f7e37f03381beac8a3422",
+        "modified_at": "2026-10-08T05:17:09.668924+00:00"
+      }
+    ],
+    "inspected_current_results": [
+      "资产编辑浏览器四组passed，errors为空，officialRequests=0。",
+      "最初三项修正的完整日志与report.json均退出0：memory-provider、browser、related-knowledge-browser。",
+      "receipt-repairs.json三项退出0；maintenance-replay六组、native-skills八组均完整通过。",
+      "business-acceptance.json退出0；实际读取日志，全部16个协议题通过，officialRequests=0；不是模型质量测量。",
+      "knowledge-tail.json保留前两项通过和原retrieval失败；knowledge-tail-completed.json四项全部退出0，逐项查看日志尾部：coverage、index-concurrency、catalog-import、analysis-preference。",
+      "原15组预跑status=failed，包含失败和千表超时；没有把后续针对性成功拼成一份完整通过收据。",
+      "首次正式验收仅执行两组：START01退出0，真实START02退出1；整轮failed，未将首次部分结果算完整通过。修复前后本地日志保留。",
+      "第二次正式验收前7组通过，第8组ASSETS因原精确名称首页命中断言失败；未进入后续组及真实START02。",
+      "asset-search-before.log中新增确定性单元实际失败，asset-search-after.log含3项单元、API/Worker构建及原ASSETS全流程通过，officialRequests=0。",
+      "第三次正式验收前10组通过，REGRESSION失败于check-history-browser；与Makefile对照确认此前知识流程21个脚本均报告passed，仍将组合保留为failed。",
+      "history-ownership-before.log稳定404 not_available；只补正式归属后，history-ownership-after.log历史浏览器5项passed。management-final-check.log按钮6组、关联内容3组passed；本轮是读取实现者运行产物，审查者未重新执行这些浏览器脚本。",
+      "独立比较当前REGRESSION argv与第三次收据，仅千表目标移首；九个目标集合、13组顺序及4200秒上限保持。",
+      "第四次正式十二本地组完整通过，REGRESSION耗时2805.472秒；实际核对千表八组及业务协议16题通过日志，原千表未验证项已解决。",
+      "第四次START02在启动/案例执行前拒绝，账本前后79次/278053微美元/预留0完全一致，无新增官方请求。",
+      "用户最新授权的两笔原试验恢复证据已只读逐字段核对；没有新增试验ID、清零历史或修改配置指纹。"
+    ],
+    "implementation_reports_not_independently_executed": [
+      "实现者报告最新材料292项、交付声明和16个检查器自测通过。",
+      "实现者报告已停止被900秒包装中断的千表预跑，按唯一合成对象标识清理该次临时库/collection；本审查只核对其范围记录，不以此证明千表检索通过。",
+      "实现者报告最新材料292项、检查器16项、458份公开文本扫描及基础服务健康通过；这些检查不能替代当前完整验收或预算恢复授权。",
+      "父任务报告最新verify-materials/verify-delivery/verify-code完整退出0，材料292项、检查器16项、Rust fmt/clippy、TypeScript/Web构建及458公开文本扫描通过；本轮未重跑这些或长回归。"
+    ],
+    "official_model_requests_by_reviewer": 0,
+    "limitation": "产物哈希记录本次读取版本，正式验收可能生成新版本地产物。审查者未执行官方调用，没有修改凭据、预算、旧审查、旧收据或CURRENT。"
+  },
+  "scope_review": {
+    "branch": "codex/semantic-role-boundaries",
+    "base_head": "cdf4b0cd783afc0b3a5461d8944ba09ce0c95986",
+    "reviewer_writes": [
+      "docs/reviews/skill-closeout-review.json"
+    ],
+    "new_agent_framework": false,
+    "mem0_algorithm_changed": false,
+    "pi_reuse": "延续锁定SDK原生loadSkills、ResourceLoader、createReadTool、会话与压缩；当前修改只修宿主有效性、正式响应和页面会话归属，不增加另一套Agent循环。",
+    "permission_boundaries": "个人Skill与记忆仍本人/空间隔离；公共Skill是明确发布的当前空间独立副本，负责人或超级维护者维护。显式选用固定版本，使用时重验依赖；资料和Skill不能授予语义编辑或平台查询执行权。",
+    "fingerprint_boundary": "当前scripts/check_delivery.py的read_delivery/review_scope，排除本审查文件和审查指针；最终验收将进一步绑定本记录。"
+  },
+  "remaining_code_findings": [],
+  "remaining_blockers": [
+    {
+      "id": "FINAL-INCREMENT",
+      "status": "authorized_final_execution_pending",
+      "detail": "当前未发现剩余产品代码或授权阻断。公共harness默认启动等待限定修正、独立边界和查询8项正对照通过；仍须当前范围13组统一成功收据。旧第12次局部通过不能代替最终完整执行。"
+    }
+  ],
+  "limits": [
+    "本地平台、数据和身份均为合成mock；未验证真实Datasight ACL或生产身份。",
+    "已有多轮真实Flash/Mem0/向量合成小样通过，只证明各自输入上的原生Skill、查询确认和跨会话记忆流程，不证明普遍准确率或100%正确。旧失败和未知回执保留；当前统一13组最终验收仍待。",
+    "历史偶发Mem0/Pi健康超时的具体根因仍未证实；已确认启动修复仅TIME_WAIT端口误判。",
+    "本审查不提交、推送或部署；仅供既有授权下的最终验收与交付使用。",
+    "新增每条64 tokens预留不能保证任意文本永不超预留，实际usage核验和超限封锁继续执行；本次审查未调用官方服务、恢复账本或修改预算。",
+    "2026-10-08最新授权取消本次试验费用、次数与旧期限限制；审查者未改账本。此前预算等待仅历史，不能继续阻止已授权收尾；模型输入输出边界和实际usage核验仍保持。"
+  ],
+  "review_history": [
+    {
+      "scope_sha256": "35a6272044cc8ab6ba3bd6079e3507d29a2cd0247c257c2c4fbbd8b27744058a",
+      "snapshot": ".local/skill-release/review-before-embedding-fix.json",
+      "reason": "首次正式START02发现向量预留缺陷后修改实现、测试和文档，旧审查失效。此更新重审限定差异并绑定新输入；旧记录和失败快照保留。"
+    },
+    {
+      "scope_sha256": "051ebb21fb9f8324c76263435bfb6fa3dca7a5aa521f60b4ea46be20b2e8d10f",
+      "failed_attempt": ".local/skill-release/final-attempt-2-result.json",
+      "reason": "第二次正式ASSETS发现精确名称排序缺陷后，限定修改retrieval/mod.rs及对应说明；原ASSETS场景与断言保留，新确定性反例修前失败、修后通过，旧范围审查失效。"
+    },
+    {
+      "scope_sha256": "ad609ba54c0c4a44eb009bc95e89355ee15b3665bfcd9ae3b01d14ee3163ef82",
+      "failed_attempt": ".local/skill-release/final-attempt-3-result.json",
+      "reason": "第三次正式REGRESSION暴露历史页面fixture缺少semantic_ownership。仅补合成表的正式归属前提及HTTP200断言、更新说明，并调整REGRESSION内部同九目标的执行顺序。产品修复仍六项，旧范围审查失效。"
+    },
+    {
+      "scope_sha256": "a61f018b68926c2246d0b07c4e9a904a3bb695b2fa07ef367046aef7786aaa4e",
+      "evidence": ".local/skill-release/final-attempt-4-result.json",
+      "reason": "第四次十二个本地组完整通过且代码/测试未变。用户最新授权取代旧额度/期限等待；验收仅把START02移至START01后，其余十三组命令与超时不变，因此按新声明重绑范围。"
+    },
+    {
+      "scope_sha256": "29c4aac1f0df4a386fa5d397ec8daefb1fd50c0c68c74d4d000caad8e062c242",
+      "failed_attempts": [
+        ".local/skill-release/final-attempt-5-result.json",
+        ".local/skill-release/final-attempt-6-result.json"
+      ],
+      "reason": "第五次真实组已通过，后续千表等待遇主机合盖休眠；第六次真实组因单条输入180秒测试等待到期失败。仅延长测试每条输入等待至360秒、START02整组至1200秒并加中文注释；逐字还原旧脚本后哈希等于第六次收据，恢复旧超时及review状态后验收声明哈希也完全一致。其余冻结文件未变，产品修复仍六项，业务断言和产品超时保持。"
+    },
+    {
+      "scope_sha256": "e620b750315d1851a13792bd5e93426cd9405e2a3a3b01eb3b0d4d9255982b0d",
+      "failed_attempt": ".local/skill-release/final-attempt-11-result.json",
+      "reason": "第十一次千表及前11组完成后，恢复测试第三次Pi导入超20秒；1500ms隔离复跑另因lease_lost出现额外运行。仅调整测试恢复租约、健康等待和提前退出检查，新增初始前提断言及对应说明；另调整原13组/REGRESSION内部目标顺序，不改产品、原业务断言或组时限。通过独立正对照后重新绑定当前范围。"
+    },
+    {
+      "scope_sha256": "d9e896f5b509ee1538125abc0b50a20bf80e96e22c2944f43d9d5ca419c65571",
+      "failed_attempt": ".local/skill-release/final-attempt-12-result.json",
+      "reason": "第十二次前12组通过，查询工作流尚在Pi导入时触发公共harness默认20秒健康等待。仅把该默认值改60秒并补依据；恢复脚本和产品未变，原13组命令/预期/时限保持。独立6个边界及主任务8项查询正对照通过后重绑范围，旧失败不计通过。"
+    }
+  ],
+  "supersession_notice": "本记录中前四次验收、旧预算等待及旧千表超时描述保留为历史。当前授权和验证状态以本次summary、budget_authorization_review、fourth_attempt及remaining_blockers为准；旧120次/US$5和两小时期限不再约束本次已授权真实收尾。",
+  "budget_authorization_review": {
+    "status": "authorized_and_applied_by_main_task",
+    "authorization_source": "父任务转述用户最新明确授权“费用可以无限用，次数也无限，账本不用关心”，与docs/CURRENT.md最新授权及本地证据一致。",
+    "artifact": ".local/skill-release/authorized-trial-resume-20261008.json",
+    "scope": "本次收尾的原主试验与原向量维护试验；不重构产品预算系统。",
+    "checked_changes_only": [
+      "call_limit",
+      "cost_limit_micros",
+      "expires_at",
+      "state"
+    ],
+    "preserved_fields": [
+      "id",
+      "configuration_fingerprint",
+      "allocated_calls",
+      "spent_micros",
+      "reserved_micros"
+    ],
+    "preserved_history": [
+      {
+        "calls": 79,
+        "spent_micros": 278053,
+        "reserved_micros": 0
+      },
+      {
+        "calls": 30,
+        "spent_micros": 498,
+        "reserved_micros": 0
+      }
+    ],
+    "implementation": "持久字段不支持无穷值，使用可表示的4294967295调用和9007199254740991微美元上限，以及9999年末期限；两个原状态均active。审查者只读对比，未修改数据库。",
+    "old_limits_superseded": true,
+    "model_input_output_and_usage_checks_unchanged": true
+  },
+  "hybrid_verification": {
+    "status": "passed",
+    "artifact": ".local/skill-release/hybrid-completed.json",
+    "formal_receipt": ".local/skill-release/final-attempt-4-result.json",
+    "checks": 8,
+    "tables": 1204,
+    "new_objects": 2408,
+    "initial_build_seconds": 571.8126712499999,
+    "official_requests": 0,
+    "temporary_collection_removed": true,
+    "coverage": [
+      "首次索引",
+      "末尾精确名称优先",
+      "同名collection丢失后自动恢复全量",
+      "第3次领取崩溃失败及受控完整重建",
+      "实际写入丢回执查证",
+      "旧版与停用过滤",
+      "私人记忆不进入共享索引",
+      "向量故障降级"
+    ],
+    "limitation": "真实应用与Milvus配合协议向量及合成数据；不代表中文语义准确率、真实Datasight或生产部署已验证。",
+    "latest_completed": {
+      "artifact": ".local/skill-release/hybrid-completed-11.json",
+      "formal_receipt": ".local/skill-release/final-attempt-11-result.json",
+      "checks": 8,
+      "initial_build_seconds": 622.597133958,
+      "official_requests": 0,
+      "status": "passed",
+      "formal_regression_group_status": "failed",
+      "limitation": "千表子目标通过不能代替其后失败的完整REGRESSION或新范围最终收据。"
+    }
+  }
+}

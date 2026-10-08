@@ -1,5 +1,19 @@
 import { decodeContract } from "../../../../packages/contracts/validate.ts";
 import type { ContractTypes } from "../../../../packages/contracts/generated/names.ts";
+export class ApiError extends Error {
+  readonly code: string;
+  readonly serverMessage: string;
+  readonly requestId: string;
+  readonly retryable: boolean;
+  constructor(value: ContractTypes["AppError"]) {
+    super(value.code); // 现有机器码分支保持兼容，面向用户的说明由具体操作提供。
+    this.name = "ApiError";
+    this.code = value.code;
+    this.serverMessage = value.message;
+    this.requestId = value.request_id;
+    this.retryable = value.retryable;
+  }
+}
 export async function api<N extends keyof ContractTypes>(
   schema: N,
   path: string,
@@ -18,8 +32,6 @@ export async function api<N extends keyof ContractTypes>(
   });
   const value: unknown = await response.json();
   if (!response.ok)
-    throw new Error(
-      decodeContract<ContractTypes["AppError"]>("AppError", value).code,
-    );
+    throw new ApiError(decodeContract<ContractTypes["AppError"]>("AppError", value));
   return decodeContract<ContractTypes[N]>(schema, value);
 }

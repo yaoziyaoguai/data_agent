@@ -3,54 +3,27 @@
   "workflow": "dev_co",
   "schema": 1,
   "phase": "deliver",
-  "status": "complete",
-  "goal_revision": 26,
+  "status": "ready",
+  "goal_revision": 30,
   "environment": "macOS arm64 / Node 26.8.1 / npm 11.19.0 / Rust 1.99.0 / Python 3.14.7 / SQLite 3.53.4 / Colima 0.10.1 / Docker Engine 29.2.1 / Compose 5.3.1 / MySQL 8.4.11 / Milvus 3.0.2",
   "verification": {
     "level": "targeted",
-    "reason": "复审后只修复旧目录覆盖新负责人展示，以及创建资格展示等待改派锁；保留正式写入当前授权校验和既有十组验收，无付费模型。",
+    "reason": "用户授权最后审计、在既定范围修复、完整场景dogfood留证，完成后提交并推送当前分支。",
     "freshness": "content",
     "inputs": [
       "AGENTS.md",
-      "README.md",
       "docs/CURRENT.md",
-      "docs/development.md",
-      "docs/semantic-retrieval-design.md",
-      "docs/architecture",
-      "docs/visualizations",
-      "crates/data-agent/src/modules/access",
-      "crates/data-agent/src/modules/knowledge",
-      "crates/data-agent/src/use_cases",
-      "apps/api/src",
-      "apps/web/src/features/knowledge",
-      "apps/web/src/style.css",
-      "apps/platform-mock",
-      "packages/contracts",
-      "migrations",
-      "scripts/check_architecture.py",
-      "scripts/development.py",
-      "tests/mvp",
-      "tests/contracts",
-      "Makefile",
-      "docs/reviews",
-      "crates/data-agent/src/modules/ingestion/store.rs"
+      "docs/research/semantic-governance-dogfood-20261007.md",
+      "docs/reviews/dogfood-and-pi-skills-audit-20261007.md",
+      "docs/dogfood-repair-execution.md"
     ],
     "checks": [
       {
-        "id": "public-materials",
+        "id": "skill-scope-materials",
         "argv": [
           "make",
           "verify-materials",
           "verify-delivery"
-        ],
-        "cost": "local",
-        "timeout_seconds": 60
-      },
-      {
-        "id": "architecture-docs",
-        "argv": [
-          "python3",
-          "docs/architecture/check-implementation.py"
         ],
         "cost": "local",
         "timeout_seconds": 60
@@ -61,23 +34,31 @@
     "schema": 1,
     "registry": "docs/semantic-retrieval-design.md",
     "increment": {
-      "id": "I2-ROLE-BOUNDARIES",
+      "id": "I2-SKILL-CLOSEOUT",
       "phase": "I2",
       "status": "complete",
-      "goal": "修复三项角色与维护边界：完整同步后统一生效表负责人、转交核对当前空间有效成员、停用独立对象可在管理目录找回并启用。 复审收尾仅补负责人独立版本合并及创建资格展示快照读取。",
+      "goal": "完成原生Skill及空间共享最后审计，修复复现问题，覆盖既定全流程及关键异常场景，留证后提交推送。",
       "requirements": [
-        "D01",
-        "D10",
-        "D13",
+        "A07",
+        "C01",
         "C02",
         "C04",
-        "A08"
+        "C05",
+        "C07",
+        "C08",
+        "D01",
+        "D03",
+        "D07",
+        "D11",
+        "D12",
+        "D13"
       ],
       "modules": [
         "M01",
         "M02",
         "M03",
         "M04",
+        "M05",
         "M07",
         "M08",
         "M09",
@@ -87,246 +68,296 @@
       ],
       "allowed_paths": [
         "docs/CURRENT.md",
+        "docs/dogfood-repair-execution.md",
         "docs/semantic-retrieval-design.md",
+        "docs/architecture",
         "docs/development.md",
-        "docs/architecture/knowledge-modules.md",
-        "docs/architecture/implementation-design.md",
-        "docs/reviews/semantic-role-boundaries-review.json",
-        "crates/data-agent/src/modules/access",
-        "crates/data-agent/src/modules/knowledge",
-        "crates/data-agent/src/use_cases/catalog_import.rs",
-        "crates/data-agent/src/use_cases/semantic_governance.rs",
-        "crates/data-agent/src/use_cases/knowledge.rs",
+        "docs/reviews/native-skills-review.json",
+        "AGENTS.md",
+        "scripts/development.py",
+        "scripts/test_development.py",
+        "scripts/check_architecture.py",
+        "apps/memory/server.py",
+        "apps/memory/service.py",
+        "apps/agent",
         "apps/api/src",
-        "apps/web/src/features/knowledge",
-        "apps/web/src/style.css",
+        "apps/web/src",
+        "crates/data-agent/src/modules/assets",
+        "crates/data-agent/src/modules/retrieval/mod.rs",
+        "crates/data-agent/src/use_cases",
         "packages/contracts",
-        "tests/contracts/cases.json",
-        "tests/mvp/check-semantic-role-boundaries.mjs",
-        "tests/mvp/check-semantic-role-boundaries-browser.mjs",
-        "tests/mvp/check-semantic-governance-browser.mjs",
-        "tests/mvp/check-creator-ownership-browser.mjs",
-        "docs/architecture/implementation-atlas.html",
-        "docs/architecture/implementation-diagram-checks.json",
-        "docs/architecture/module-diagrams"
+        "migrations",
+        "tests/mvp",
+        "tests/contracts",
+        "tests/runtime",
+        "Makefile",
+        "README.md",
+        "docs/reviews/skill-closeout-review.json",
+        "docs/research/skill-closeout-dogfood-20261007.md",
+        "apps/memory/providers.py",
+        "tests/memory"
       ],
       "non_goals": [
-        "不改变既定角色、Pi、Mem0、Agent检索、SQL执行或私人资产规则；不建设组织管理、真实身份或新权限服务。",
-        "本轮仅修复、验证并同步必要契约文档；不部署或重启常驻实例，不提交推送。",
-        "本次继续修改仅限 KnowledgePage、access 模块、semantic_governance 的 read_access、两份角色边界测试及 CURRENT/审查记录；其余既有未提交改动保留，不新增接口、迁移或依赖。"
+        "保持原生Skill、共享权限和四项修复的既定产品范围；不新增Agent循环、自动选用、脚本执行、市场或记忆算法。",
+        "只修复复现的现有流程问题；不部署、不合并默认分支、不重启常驻实例；本次真实试用按用户最新授权取消费用、次数与旧期限限制，不重构产品预算系统。"
       ],
       "invariants": [
-        "表维护者负责该表共享语义，超级维护者管理本系统全部表共享语义；录入人/修改人/负责人分别记录。",
-        "本系统语义权限与Datasight资料读取、查询和SQL执行权限分别校验；个人记录仍按本人和空间隔离。",
-        "私人草稿不自动公开；提交、接受和驳回均不改变正式语义或共享索引，核对编辑并明确保存才生效。",
-        "保存重核当前授权、知识基版本、建议修订及依据范围，正式版本/应用记录/待办原子保存，Pi仍为唯一Agent循环。",
-        "维护成员资格由本空间平台表维护人并集派生；新建独立对象的负责人绑定可信登录者，不能由请求自报；已有对象引用、编辑与重试不转移归属。",
-        "同步未完整成功或最终事务失败，表维护人及创建资格保持上一成功快照；来源与知识继续复用既有逐表导入规则。",
-        "转交目标必须来自当前空间可信有效成员目录；成员身份不自动授予创建资格或平台查询权。",
-        "管理目录可按名称找到启用或停用的对象；Agent召回继续排除停用对象，服务端逐对象授权保持。",
-        "负责人版本与知识版本分别比较，旧目录数据不能覆盖已经收到的新负责人信息；创建资格展示读取已提交快照，正式创建仍锁定当前维护关系并在撤权后拒绝。"
+        "公共仅当前空间，成员发布自己的Skill并成为负责人；负责人和超级维护者维护，私人资产仍本人隔离。",
+        "公共发布是独立副本，后续个人修改不自动同步；建议只记录意见，不自动生效。",
+        "Skill选择固定版本且须有效，实际调用重新校验授权与依赖；SQL确认和平台权限保持。",
+        "复用Pi SDK原生目录、read工具和会话/压缩，关闭直接文件命令，保留原操作身份、用量记录和单次输入输出边界。"
       ],
       "acceptance": [
         {
-          "id": "ROLE01",
+          "id": "START01",
           "requirements": [
-            "D01",
-            "C02",
-            "A08"
+            "D07",
+            "C07"
           ],
-          "expected": "同步中途失败、分页不完整或最终事务失败均不改变旧表负责人及创建资格；完整成功才原子改派与撤权，并保留并发版本检查。",
+          "expected": "独立运行目录下准确定位启动阶段、提前退出和超时；未ready不报成功，日志无凭据。",
           "evidence_kind": "runtime",
           "command": [
-            "node",
-            "tests/mvp/check-semantic-role-boundaries.mjs",
-            "--case",
-            "sync"
+            "python3",
+            "-m",
+            "unittest",
+            "discover",
+            "-s",
+            "scripts",
+            "-p",
+            "test_development.py"
           ],
           "timeout_seconds": 240
         },
         {
-          "id": "ROLE02",
+          "id": "START02",
           "requirements": [
-            "D01",
-            "C02"
+            "D07",
+            "D11",
+            "C01"
           ],
-          "expected": "只有超级维护者可读取当前空间成员并转交；不存在和跨空间成员被拒绝且不改归属/回执；有效成员转交、撤销、重试保持既有行为。",
+          "expected": "原Flash/Mem0/hybrid配置启动、重复启动及真实方法/记忆小样留证；mock不能替代真实。",
           "evidence_kind": "runtime",
           "command": [
             "node",
-            "tests/mvp/check-semantic-role-boundaries.mjs",
-            "--case",
-            "members"
+            "tests/mvp/check-skill-dogfood.mjs",
+            "--real"
           ],
-          "timeout_seconds": 240
+          "timeout_seconds": 1200
         },
         {
-          "id": "ROLE03",
+          "id": "FEEDBACK",
           "requirements": [
             "D01",
             "D13",
-            "C02"
+            "C08",
+            "A07"
           ],
-          "expected": "管理目录按名称、当前归属、状态及分页查找独立对象，停用对象可读且只由负责人或超级维护者启用；原Agent检索继续排除停用项。 展示读取已提交权限快照，不等待负责人改派写锁；编辑及建议审核仍等待改派并重验最新授权，撤权者不能生效。 创建资格展示同样不等改派锁；真正创建等待事务结束后重验，失去全部表维护关系者不可创建。",
+          "expected": "同名来源可区分，冲突提示可理解且同号查日志；工作台刷新、切换、窄屏及已选版本状态准确。",
           "evidence_kind": "runtime",
           "command": [
             "node",
-            "tests/mvp/check-semantic-role-boundaries.mjs",
-            "--case",
-            "directory"
-          ],
-          "timeout_seconds": 240
-        },
-        {
-          "id": "ROLE04",
-          "requirements": [
-            "D01",
-            "D13",
-            "C02"
-          ],
-          "expected": "浏览器由非超级负责人创建并停用无关联文档/指标、离页后从管理目录找回再启用；超级维护者通过成员选择转交，关联对象可进入详情，宽窄屏可用。 已收到新负责人的页面再次选择旧目录条目时，负责人说明及编辑/启停按钮不得恢复旧权限，旧负责人服务端写入仍被拒绝。",
-          "evidence_kind": "runtime",
-          "command": [
-            "node",
-            "tests/mvp/check-semantic-role-boundaries-browser.mjs"
+            "tests/mvp/check-workspace-feedback-browser.mjs"
           ],
           "timeout_seconds": 300
         },
         {
-          "id": "ROLE05",
+          "id": "SHARED",
           "requirements": [
-            "C02"
+            "D12",
+            "C02",
+            "C05"
           ],
-          "expected": "成员目录与登录使用同一可信身份集合；只列当前空间去重后的成员，跨空间快照和其他空间成员不能用于转交。",
-          "evidence_kind": "runtime",
-          "command": [
-            "cargo",
-            "test",
-            "--offline",
-            "--locked",
-            "-p",
-            "data-agent",
-            "--lib",
-            "modules::access::tests"
-          ],
-          "timeout_seconds": 120
-        },
-        {
-          "id": "GOV01",
-          "requirements": [
-            "D01",
-            "C02"
-          ],
-          "expected": "普通用户不能编辑正式语义；表与字段维护权按平台负责人；新建独立对象由创建者负责，其他维护者仅提建议；超级维护者可调整独立对象负责人。",
+          "expected": "个人隔离，成员明确发布独立空间公共版本，负责人/超级维护者维护，跨空间拒绝，建议不自动改正文，版本/幂等/停用有效。",
           "evidence_kind": "runtime",
           "command": [
             "node",
-            "tests/mvp/check-semantic-governance.mjs",
-            "--case",
-            "GOV01"
+            "tests/mvp/check-shared-skills.mjs"
+          ],
+          "timeout_seconds": 300
+        },
+        {
+          "id": "SELECTION",
+          "requirements": [
+            "D03",
+            "D12",
+            "C02"
+          ],
+          "expected": "选择摘要分页、会话归属、版本改变/停用/删除/依赖失效以及公共可见性均准确，不静默升级。",
+          "evidence_kind": "runtime",
+          "command": [
+            "node",
+            "tests/mvp/check-conversation-skill-selections.mjs"
           ],
           "timeout_seconds": 240
         },
         {
-          "id": "GOV02",
+          "id": "NATIVE",
+          "requirements": [
+            "C01",
+            "D12",
+            "C05"
+          ],
+          "expected": "锁定Pi原生目录和read工具按需加载，资料/模板路径受控，多Skill/长文/撤权恢复通过，关闭直接文件命令且不开放bash。",
+          "evidence_kind": "runtime",
+          "command": [
+            "node",
+            "tests/mvp/check-native-skills.mjs"
+          ],
+          "timeout_seconds": 300
+        },
+        {
+          "id": "QUERY",
+          "requirements": [
+            "C04",
+            "C02"
+          ],
+          "expected": "SQL仍必须按版本确认执行，个人/公共Skill不赋予数据权限。",
+          "evidence_kind": "runtime",
+          "command": [
+            "node",
+            "tests/mvp/check-query-boundaries.mjs"
+          ],
+          "timeout_seconds": 240
+        },
+        {
+          "id": "CONTRACT",
+          "requirements": [
+            "C07"
+          ],
+          "expected": "同源Schema与OpenAPI生成一致，正反例通过。",
+          "evidence_kind": "contract",
+          "command": [
+            "make",
+            "verify-contracts"
+          ],
+          "timeout_seconds": 240
+        },
+        {
+          "id": "ASSETS",
+          "requirements": [
+            "D12",
+            "C02"
+          ],
+          "expected": "原个人资产目录分页、长正文、未选Skill隔离和依赖回源保持。",
+          "evidence_kind": "runtime",
+          "command": [
+            "node",
+            "tests/mvp/check-asset-directory.mjs"
+          ],
+          "timeout_seconds": 240
+        },
+        {
+          "id": "PROVIDER",
+          "requirements": [
+            "C01",
+            "D11"
+          ],
+          "expected": "13个受控数据工具包含原生read；经Pi真实OpenAI协议到本地provider通过，仍受原预算和请求体限制。",
+          "evidence_kind": "runtime",
+          "command": [
+            "node",
+            "tests/mvp/check-data-provider.mjs"
+          ],
+          "timeout_seconds": 240
+        },
+        {
+          "id": "LIFECYCLE",
+          "requirements": [
+            "D12",
+            "C08"
+          ],
+          "expected": "公共入口新建私人Skill后能看到并继续操作，旧保存回执不能关闭或清除后续草稿；实际浏览器复现与回归。",
+          "evidence_kind": "runtime",
+          "command": [
+            "node",
+            "tests/mvp/check-asset-editor-browser.mjs"
+          ],
+          "timeout_seconds": 180
+        },
+        {
+          "id": "GOVERNANCE",
           "requirements": [
             "C02",
-            "C04"
-          ],
-          "expected": "本系统超级维护者与表维护人仍不能越过平台 SQL 执行授权；普通用户的查询权不授予语义编辑权，SQL 未确认时不提交。",
-          "evidence_kind": "runtime",
-          "command": [
-            "node",
-            "tests/mvp/check-semantic-governance.mjs",
-            "--case",
-            "GOV02"
-          ],
-          "timeout_seconds": 240
-        },
-        {
-          "id": "GOV04",
-          "requirements": [
             "D01",
-            "A08"
+            "D12",
+            "D13",
+            "A07"
           ],
-          "expected": "负责人核对编辑保存才形成新版本及应用回执；权限收回、建议修订冲突、旧基版和事务失败不生效；重传不重复，索引待办与正式版本原子提交。",
+          "expected": "表负责人同步、独立对象创建者归属、跨用户纠错、接受后另行保存、撤权及角色交互保持。",
           "evidence_kind": "runtime",
           "command": [
-            "node",
-            "tests/mvp/check-semantic-governance.mjs",
-            "--case",
-            "GOV04"
+            "make",
+            "verify-semantic-governance"
           ],
-          "timeout_seconds": 240
+          "timeout_seconds": 600
         },
         {
-          "id": "GOV05",
+          "id": "REGRESSION",
           "requirements": [
-            "D10",
-            "C02"
-          ],
-          "expected": "超级维护者和表维护者均不可读取他人私人提案、会话与个人资产；共享建议读取核对当前权限，撤权后不得读取。",
-          "evidence_kind": "runtime",
-          "command": [
-            "node",
-            "tests/mvp/check-semantic-governance.mjs",
-            "--case",
-            "GOV05"
-          ],
-          "timeout_seconds": 240
-        },
-        {
-          "id": "OWNER01",
-          "requirements": [
-            "D01",
+            "C01",
             "C02",
-            "A08"
+            "C04",
+            "C05",
+            "C07",
+            "D01",
+            "D03",
+            "D07",
+            "D11",
+            "D12",
+            "D13",
+            "C08",
+            "A07"
           ],
-          "expected": "平台表维护人可创建独立指标和文档且自动负责；普通用户、跨空间与伪造归属被拒绝；重复及并发创建、转交后重试不改归属；迁移仅补真实人工创建且未指派对象；表交接改变创建资格而不转交独立对象。",
+          "expected": "现有工作台、语义构建维护、查询、个人资产、Mem0/向量、Pi长会话恢复及管理按钮的既定正向/反向场景全部通过；官方调用单列。",
           "evidence_kind": "runtime",
           "command": [
-            "node",
-            "tests/mvp/check-creator-ownership.mjs"
+            "make",
+            "verify-mvp-regression",
+            "verify-memory",
+            "verify-shared-embedding",
+            "verify-query-workflow",
+            "verify-knowledge-workflow",
+            "verify-mvp-browser",
+            "verify-management-buttons",
+            "verify-business-acceptance",
+            "verify-hybrid-retrieval"
           ],
-          "timeout_seconds": 240
+          "timeout_seconds": 4200
         }
       ],
       "verification_inputs": [
-        "AGENTS.md",
+        "docs/dogfood-repair-execution.md",
         "docs/semantic-retrieval-design.md",
+        "docs/architecture",
         "docs/development.md",
-        "docs/architecture/knowledge-modules.md",
-        "docs/architecture/implementation-design.md",
-        "docs/reviews/semantic-role-boundaries-review.json",
-        "crates/data-agent/src/modules/access",
-        "crates/data-agent/src/modules/knowledge",
-        "crates/data-agent/src/use_cases/catalog_import.rs",
-        "crates/data-agent/src/use_cases/semantic_governance.rs",
-        "crates/data-agent/src/use_cases/knowledge.rs",
+        "AGENTS.md",
+        "scripts/development.py",
+        "scripts/test_development.py",
+        "scripts/check_architecture.py",
+        "apps/memory/server.py",
+        "apps/memory/service.py",
+        "apps/agent",
         "apps/api/src",
-        "apps/web/src/features/knowledge",
-        "apps/web/src/style.css",
+        "apps/web/src",
+        "crates/data-agent/src/modules/assets",
+        "crates/data-agent/src/modules/retrieval/mod.rs",
+        "crates/data-agent/src/use_cases",
         "packages/contracts",
-        "tests/contracts/cases.json",
-        "tests/mvp/check-semantic-role-boundaries.mjs",
-        "tests/mvp/check-semantic-role-boundaries-browser.mjs",
-        "tests/mvp/check-semantic-governance-browser.mjs",
-        "tests/mvp/check-creator-ownership-browser.mjs",
-        "crates/data-agent/src/modules/ingestion",
-        "tests/mvp/check-semantic-governance.mjs",
-        "tests/mvp/check-creator-ownership.mjs",
-        "tests/mvp/harness.mjs",
-        "scripts/check_delivery.py",
+        "migrations",
+        "tests/mvp",
+        "tests/contracts",
+        "tests/runtime",
         "Makefile",
-        "docs/architecture/implementation-atlas.html",
-        "docs/architecture/implementation-diagram-checks.json",
-        "docs/architecture/module-diagrams"
+        "README.md",
+        "docs/research/skill-closeout-dogfood-20261007.md",
+        "apps/memory/providers.py",
+        "tests/memory"
       ],
       "review": {
         "status": "passed",
-        "record": "docs/reviews/semantic-role-boundaries-review.json"
+        "record": "docs/reviews/skill-closeout-review.json"
       },
-      "evidence": ".local/delivery/I2-ROLE-BOUNDARIES-result.json"
+      "evidence": ".local/delivery/I2-SKILL-CLOSEOUT-result.json"
     }
   }
 }
@@ -334,9 +365,249 @@
 
 # Data Agent 当前记录
 
-更新：2026-10-07。唯一活动项目目录：`~/work_space/data_agent`。
+更新：2026-10-08。唯一活动项目目录：`~/work_space/data_agent`。
 
-## 最近完成：提交推送与实际试用记录
+## 本轮交付：Pi 原生 Skill 与空间共享收尾（已验收，待提交推送）
+
+`goal_revision=30`，增量 `I2-SKILL-CLOSEOUT` 已完成。六项复现的产品问题已修复，独立审查通过，第十四次统一验收13组全部成功。用户已授权完整验收后提交并推送当前分支 `codex/semantic-role-boundaries`；当前进入Git交付，不合并默认分支或部署。
+
+### 本次交付内容
+
+- Pi SDK 原生 Skill 目录与 `read` 按需读取正文、说明和文本模板；个人/当前空间公共 Skill，明确发布独立副本，按负责人或超级维护者维护。
+- 对话明确选用固定版本；改版、停用、撤权及依赖失效后重新核验。SQL 保持先展示、补充修订、再按具体版本确认执行。
+- 六项产品修复：公共分类中新建个人 Skill 后不可见；迟到保存回执影响新草稿；依赖故障时 read 接回旧成功正文；重新预填重放遗漏维护权限视图；Mem0 短文本向量预留遗漏模板开销；精确名称搜索被同前缀对象挤出首页。
+- 接口、迁移、React 页面、设计、架构图及 README 已同步。详细复现、修复与测试前提调整见[最终试用记录](research/skill-closeout-dogfood-20261007.md)，独立审查见[收尾审查](reviews/skill-closeout-review.json)。本轮没有新增 Agent 循环或记忆算法。
+
+### 最终验收结果
+
+2026-10-08 15:12:16–16:03:26 北京时间（07:12:16–08:03:26 UTC），`make verify-increment` 完整退出0。START01、START02、FEEDBACK、SHARED、SELECTION、NATIVE、QUERY、CONTRACT、ASSETS、PROVIDER、LIFECYCLE、GOVERNANCE、REGRESSION共13组均无超时；执行前后指纹与当前文件一致。
+
+| 验证 | 结果与范围 |
+| --- | --- |
+| 真实服务试用 | DeepSeek Flash、Mem0、百炼向量6条输入通过：Skill正文及附件、SQL生成与渠道修订、确认执行、结果解释、保存个人记忆与新会话召回同ID/版本；平台和业务数据为合成mock |
+| 功能与边界 | 工作台、SQL确认、个人/公共Skill权限、语义负责人和建议处理、长会话/原生压缩/恢复、记忆修订、预填保护、未知回执与取消、历史分页及管理按钮通过 |
+| 契约与工程 | 206项契约案例、Rust fmt/Clippy、TypeScript/Web构建、12项Memory测试、完整验收时292项、完成记录更新后294项材料检查及16个业务协议场景通过；模拟协议场景不作为真实模型准确率 |
+| 千表检索与恢复 | 1204张合成表、2408个新增对象，8项检查通过；首次索引529.53秒，集合丢失自动恢复、受控重建、丢回执查证、旧版过滤、私人记忆隔离和降级均通过；临时测试库/集合已清理 |
+| 公开内容 | 458份公开文本扫描未检出凭据、个人绝对路径或原业务表名，未跟踪`.env`；最终提交前继续核对CURRENT与暂存差异 |
+
+正式收据：`.local/delivery/I2-SKILL-CLOSEOUT-result.json`；独立保存副本：`.local/skill-release/final-attempt-14-result.json`。完整分组日志在 `.local/delivery/I2-SKILL-CLOSEOUT-1791443536446150000/`，执行日志为 `.local/skill-release/final-verification-14.log`。
+
+真实试用报告：`.local/skill-delivery/real-e240a2cc-2bea-4b78-a713-7bf81c7dfc2f/report.json`。千表结果副本：`.local/skill-release/hybrid-completed-14.json`。汇总：`.local/skill-release/final-success-summary-20261008.json`。公开扫描：`.local/skill-release/publication-reboot-20261008.json`。这些私有运行产物不提交Git。
+
+独立审查范围仍为 `b26792a5f244dd0e9f4e1b89ea431839cb4ae21010668e387095fe5767b40013`，无剩余已确认产品代码阻断。冻结审查记录保留验收前时点；本节及上述统一收据给出最终完成状态。前13次失败或中断证据全部保留，不拼接为本次成功。
+
+### 验收与要求边界
+
+- 原需求、业务断言和产品时限保持。测试造数、定位器、恢复租约前提和启动等待的修正依据均已记入试用记录并通过独立复核；本次重启后未再修改产品或测试。
+- 真实 Datasight、生产身份认证和真实业务正确率未验证；千表使用协议向量证明工程行为，不代表千表中文语义召回率，也不承诺所有输入100%正确。
+- 用户恢复后继续原费用/次数授权；本次只按原范围完成验收，没有重构产品预算系统。
+
+### Git交付状态
+
+当前完整验收与独立收据复核已完成，待提交推送。分支为 `codex/semantic-role-boundaries`，基线 `cdf4b0c`；全部114项待提交路径中，113项属于当前增量允许范围，另1项是前序已授权、一直未提交的历史审计文档 `docs/reviews/dogfood-and-pi-skills-audit-20261007.md`。该文档保留原审计时点及后续CURRENT入口，随本次交付保存，不修改本增量冻结范围。最终提交推送结果将在本节更新。
+
+完成记录更新后，`make verify-materials verify-delivery` 完整退出0：294项材料检查、16项交付检查器测试通过；完整收据仍与当前范围一致，`git diff --check` 通过。独立最终证据为 `.local/skill-release/final-evidence-review-20261008.json`，复核13组最终日志、真实6条、千表8项和当前指纹，无阻断项。
+
+<details>
+<summary>本轮过程记录与历史失败（以本节上方最终结果为准）</summary>
+
+## 当前任务：最终审计、试用与提交推送
+
+`goal_revision=30`，增量`I2-SKILL-CLOSEOUT`。用户明确授权最后审计、发现问题就修复、覆盖已约定流程和关键异常场景dogfood、记录后提交推送。此授权替代上一轮“不提交推送”；目标为当前分支`codex/semantic-role-boundaries`，不合并默认分支或部署。原`I2-NATIVE-SKILLS`的声明和完整收据分别保存在`.local/skill-release/native-skills-delivery.json`及`.local/delivery/I2-NATIVE-SKILLS-result.json`，不修改旧成功证据。
+
+范围：复核本次99项未提交文件，独立审查服务端/Pi边界，主任务检查界面并复用现有全流程场景；保留原权限、版本、预算、模型和Pi复用规则。不能穷尽所有输入、网络与调度组合，具体覆盖和剩余边界见[最终试用记录](research/skill-closeout-dogfood-20261007.md)。不把一次模拟或真实小样称为100%准确率。
+
+### 重新开机后继续
+
+2026-10-08 用户已明确恢复本任务，暂停撤销。重新核对：仍为原分支、原HEAD及114项未提交路径；当前验收输入与第十三次前后指纹完全一致，独立审查指纹 `b26792a5f244dd0e9f4e1b89ea431839cb4ae21010668e387095fe5767b40013` 继续有效。先恢复本项目基础服务，处理已核实的上次隔离测试资源，再按现有完整命令取得最终收据。没有修改产品、测试、验收断言或费用授权；完成后沿用原授权提交推送当前分支。
+
+第十三次因用户关机主动中断的收据和日志保留，不修改成通过；以下暂停说明已由本次恢复决定取代。
+
+基础服务已恢复且健康；仅清理已核实的第十三次隔离测试库与集合，证据`.local/skill-release/resume-interrupted-resources-20261008.json`。第十四次正式验收已启动，日志`.local/skill-release/final-verification-14.log`。重启后shell默认Node22/Python3.12，本次命令显式使用原Homebrew Node26.8.1/npm11.19.0/Python3.14.7并为本机回环地址绕过代理；不修改全局默认、产品配置和测试源码。冻结范围与审查保持，尚未提交推送。
+
+### 用户暂停：准备关闭机器
+
+2026-10-08 14:20 北京时间，用户明确要求先停止以便关机。已停止第十三次验收进程组及其API、Pi、Worker子进程，未提交、推送或合并；代码及历史证据保留。`make vm-stop` 已于14:21:55北京时间完整退出0，本项目MySQL、Milvus等容器及独立虚拟机均已停止，数据卷和本地配置保留。
+
+第十三次执行于05:25:29–06:21:12 UTC运行，前12组全部通过，包含真实Flash/Mem0/向量服务6条输入及GOVERNANCE。最后REGRESSION的其他8个目标已通过；千表首次索引和删除集合后的自动恢复完成，最终受控重建途中按用户要求发送SIGTERM。REGRESSION退出-15，统一收据按原检查器记failed；这是用户主动中断，不能计为完整通过，也没有据此确认新产品缺陷。执行前后指纹一致，独立审查仍有效，增量保持active且evidence=null，工作流状态为paused。
+
+- 停止证据：`.local/skill-release/user-pause-20261008.json`、`user-pause-20261008-progress.log`。
+- 原始统一收据及保留副本：`.local/delivery/I2-SKILL-CLOSEOUT-result.json`、`.local/skill-release/final-attempt-13-result.json`。
+- 真实6条报告：`.local/skill-delivery/real-b5b10ad8-31fe-4453-aeb1-82699ba20519/report.json`。
+- 正式日志：`.local/skill-release/final-verification-13.log`；分组日志：`.local/delivery/I2-SKILL-CLOSEOUT-1791437129891075000/`。
+- 恢复前先确认基础服务、Git状态及遗留隔离测试库/向量集合；本次中断未执行测试finally清理，不能把旧完成数当成新运行结果。仅处理本次已核实的临时资源，不改常驻数据。
+- 恢复后沿用既定产品范围与当前授权，按冻结声明取得完整成功收据，再核验、提交并推送当前分支。此前费用、次数授权保持；不自动增加功能或继续运行。
+
+以下“进行中”及旧失败描述均为暂停前历史，以本节为准。
+
+### 最新授权与执行状态
+
+2026-10-08 用户选择 A：完整验收通过后提交推送；本次真实试用费用、调用次数和旧期限不限，不再询问这些授权。继续使用原主试验和向量维护试验，保留历史用量、操作身份及未知回执；现有字段使用足够大的可表示上限和最远有效期，未重构产品预算系统。调整前后证据：`.local/skill-release/authorized-trial-resume-20261008.json`。
+
+六项产品修复和独立审查已完成；恢复测试前提与顺序调整经限定复核后，当前范围指纹为 `b26792a5f244dd0e9f4e1b89ea431839cb4ae21010668e387095fe5767b40013`。当前缺口是同一冻结范围的统一13组成功收据及Git交付。START02前移并按下述实测依据调整测试包装等待；其余命令、业务断言和超时保持。不以分次结果拼接完整通过。
+
+### 本次最终验收进展
+
+暂停前：第十三次正式执行前12组全部通过（含真实6条与GOVERNANCE），REGRESSION最终千表阶段被用户主动中断。真实报告`.local/skill-delivery/real-b5b10ad8-31fe-4453-aeb1-82699ba20519/report.json`；正式日志`.local/skill-release/final-verification-13.log`。完整收据成功前保持active，未提交推送。下述第11、12次为保留的失败历史。
+
+第十二次完整验收于05:18 UTC失败。前12组含真实6条及GOVERNANCE全部通过，REGRESSION中的模型协议、会话主流程、3个恢复用例、原生压缩/续接、Mem0协议、Memory单测和共享向量通过；查询测试在公共harness的Pi导入阶段超过20秒，尚未提交业务请求。同期负载60.98、15GB内存已用。收据`.local/skill-release/final-attempt-12-result.json`、启动证据`query-startup-failure-12.json`保留，前后指纹一致。
+
+限定调整公共测试入口`tests/mvp/harness.mjs`的默认健康等待20→60秒，原`startupTimeout`显式覆盖、有限失败、普通until等待、产品启动器、模型/查询超时和全部业务断言保持。第7及12次均有Pi停在imports_started的对应证据，不修改产品SDK或扩大功能。查询8项正对照通过；独立审查6个边界通过，包括实际startupTimeout=1时的失败留证与临时资源清理。当前审查记录已定稿，继续第十三次同范围完整执行，日志`.local/skill-release/final-verification-13.log`；完成前保持active、未提交推送。
+
+接续时先执行最小启动诊断。首次Mem0在5.34秒就绪、Pi导入超过25秒；单独导入随后为2.24秒，表明启动延迟仍有明显波动。随后b、c两次完整真实配置启动、页面和开发身份检查均通过，日志为`.local/skill-release/readiness-20261008-b.log`及`readiness-20261008-c.log`。MySQL健康、约648MiB，当前无本项目应用常驻进程；未关闭用户应用或调整数据库内存、永久电源设置、产品代码及测试上限。
+
+第十一次验收于04:46 UTC失败结束，前11组全部通过。千表8项全部通过，首轮索引622.60秒，临时资源已清理；随后模型协议、会话主流程和前两个故障恢复用例通过，第三次Pi启动停在imports_started，超过原20秒健康等待，尚未进入该故障的行为断言。失败收据`.local/skill-release/final-attempt-11-result.json`、启动日志`.local/skill-release/runtime-startup-failure-11.json`及完整千表快照`.local/skill-release/hybrid-completed-11.json`保留。真实6条报告为`.local/skill-delivery/real-9688d0e2-b5f7-4b43-8d37-bf6094bb47cd/report.json`。执行前后指纹一致，没有新增已确认产品缺陷。
+
+下一轮仅调整验收顺序：GOVERNANCE移到REGRESSION前；REGRESSION先执行原8个其余目标，verify-hybrid-retrieval最后执行。原因是第十一次昂贵千表完成后才遇后续短启动超时；让需频繁启动的检查先失败退出，避免再次重复已验证的长时步骤。13组、全部原命令、业务断言、数据量和有限时限保持，未改产品或测试源码；不拼接旧结果，不删除失败收据。该顺序调整须经独立审查核对后，再完整执行。 隔离复跑在原1500ms短租约下出现3次运行而预期2次；API明确记录第二次运行tool_committed后lease_lost。失败报告`.local/skill-release/runtime-startup-probe-11.json`及日志`runtime-recovery-isolated-11.log`保留，正由独立审查核对测试前提，独立审查确认测试租约前提失效；仅将恢复Worker设为产品原默认15000ms，故障Worker仍1500ms，增加恢复前1次运行/领取断言。健康等待20→60秒并检查提前退出；产品及其余行为时限不变，全部原业务断言保留。依据和影响见最终试用记录“会话恢复测试的调度前提修正”。主任务3例恢复正对照通过；独立审查另运行3例恢复与4项健康边界均通过，见`docs/reviews/skill-closeout-review.json`。第十二次正式验收据此开始，日志`.local/skill-release/final-verification-12.log`；完成前仍保持active，不提交推送。
+
+
+此前环境失败保留，不计为通过：
+
+| 尝试 | 实际结果与原因 | 保留证据 |
+| --- | --- | --- |
+| 5 | 前11组含真实6轮通过；千表检查遇合盖休眠985秒，未取得完整结果 | `.local/skill-release/final-attempt-5-result.json`、`host-sleep-20261008.json` |
+| 6 | 真实输入中4次有效模型调用累计169.277秒，原180秒等待不足；未知回执保留 | `.local/skill-release/final-attempt-6-result.json`、`real-provider-latency-20261008.json` |
+| 7 | 前11组通过；Pi导入超过20秒，同期负载82.34、内存不足 | `.local/skill-release/final-attempt-7-result.json`、`host-pressure-20261008.json` |
+| 8 | 前11组通过；MySQL达到1GiB容器限制并OOM自动重启，连接中断；已清理本次隔离库和集合 | `.local/skill-release/final-attempt-8-result.json`、`mysql-oom-cleanup-20261008.json` |
+| 9 | 前11组、千表首轮777.237秒及丢库自动恢复通过；主动重建900秒到期时未完成，负载182.71、CPU空闲0.6% | `.local/skill-release/final-attempt-9-result.json`、`host-pressure-final-20261008.json` |
+| 10 | Mem0初始化超过25秒，尚未调用官方服务；主调用数前后254，指纹未变 | `.local/skill-release/final-attempt-10-result.json`、`.local/skill-delivery/real-8c7c474c-cc73-483d-b231-2432622569c8/report.json` |
+
+已通过的真实小样包括本次Skill正文及附件读取、SQL按web渠道修订、用户确认后合成平台执行、结果解释、新记忆入Mem0与新会话召回同一ID/版本。第五次完整报告为`.local/skill-delivery/real-b73f1924-f1e7-432d-9442-78bb0bbcc035/report.json`。这些只证明各自小样，最终结论仍以本轮统一收据为准。
+
+以下早期费用等待与未完成说明属于当时记录，已被上述用户授权和当前执行状态取代。
+
+### 上次完整执行：12组本地通过，真实组被旧期限拦截
+
+- 六项已确认产品问题全部修复，独立审查通过，暂无剩余已确认代码问题。包括个人Skill分类、迟到保存回执、依赖故障时read旧回执、重新预填维护视图、Mem0短文本向量预留及个人资产完整名称排序。修复与旧测试造数前提的调整分别记录在最终试用记录中。
+- 第四次正式执行于2026-10-07 16:24:55–17:15:05 UTC完成（北京时间10月8日00:24–01:15）。START01、FEEDBACK、SHARED、SELECTION、NATIVE、QUERY、CONTRACT、ASSETS、PROVIDER、LIFECYCLE、REGRESSION、GOVERNANCE共12组全部退出0、无超时；执行前后指纹一致。完整执行收据在 `.local/delivery/I2-SKILL-CLOSEOUT-result.json`，保留的本次完整快照另存 `.local/skill-release/final-attempt-4-result.json`。收据整体仍为failed，因为最后的START02被过期账本拦下，不能把12组本地成功称作13组全部完成。
+- 完整REGRESSION耗时2805秒，其中1204张合成表、2408个新对象完成首次索引、同名集合丢失后的自动恢复、受控完整重建，以及丢回执查证、旧版过滤、私人记忆隔离和向量故障降级8组检查；首次索引用时约572秒，临时集合已清理。独立快照 `.local/skill-release/hybrid-completed.json`。协议向量与精确召回通过不代表中文向量语义准确率已验证。
+- 核心会话、Pi原生压缩/恢复、12项Memory测试、共享向量、查询、完整知识流程、历史与管理浏览器、16个业务协议场景、语义负责人/创建者/建议流程均在本次正式命令中完整通过。Datasight、身份和业务数据仍使用合成mock；官方模型、Mem0真实调用的最终小样另列START02，真实平台权限及生产部署未验证。
+- 最终独立审查记录为 `docs/reviews/skill-closeout-review.json`，范围指纹 `a61f018b68926c2246d0b07c4e9a904a3bb695b2fa07ef367046aef7786aaa4e`；审查者未参与实现，并独立验证预算、排序分页及回执反例。前三次失败收据与修复前日志全部保留。
+- 收尾再次核对审查与执行收据，指纹仍与当前文件一致；292项材料检查、16项检查器测试及 `git diff --check` 通过。扫描458个公开文本文件未发现凭据、个人绝对路径或受跟踪的 `.env`，结果在 `.local/skill-release/publication-final-check.json`。这些静态检查不替代尚未通过的真实组。
+- START02在启动真实服务及请求模型之前拒绝，主账本前后均为79次、US$0.278053、预留0，状态breached且已过期；第四次执行新增官方调用0。证据 `.local/skill-delivery/real-648431a1-f94c-4fce-afcb-2f3ae1a88d4e/report.json`。该次运行未恢复或改期；现在按上节新授权继续。
+- 增量保持active，未提交、推送、合并或部署。当前分支仍为 `codex/semantic-role-boundaries`。下一步完成已获授权的真实验收及要求的最终收据核验，再提交推送；不重开产品范围，也不以旧真实成功替代本次要求。
+
+已复现：公共分类中新增私人Skill后仍留在公共列表，新建对象不可见；前一次保存回执延迟期间关闭弹窗并开始下一份编辑，旧回执会关闭新弹窗并丢弃未保存草稿。证据`.local/skill-release/assets-probe-before.json`。修复只涉及资产页的保存结果归属及对应浏览器回归，不调整后端契约或公共权限。管理按钮旧测试仍按原私人标签定位，后续按实际回归结果核对。
+
+两项UI修复及四组浏览器反例通过。独立审查的read回执候选也已隔离复现：依赖存储故障时返回旧正文；限定原已提交操作的回执回放分类，新增故障/恢复与写回执保持回归。管理回归另有旧关联标题定位器不含既有“打开详情”按钮，按完整可访问标题修正，字段翻页/种类/权限断言均保留；失败日志和独立依据见最终试用记录。当前继续完整场景和修复后复核。主模型账本沿用原120次/US$5及已用70次，不扩额或重置；新的官方调用必须在剩余额度和有效期内。
+
+### 最终真实验收发现的阻断
+
+第一次正式13组验收在START02失败，原收据另存 `.local/skill-release/final-attempt-1-result.json`，原审查快照另存 `.local/skill-release/review-before-embedding-fix.json`。本次9次调用后主账本从70到79、已结算US$0.278053、预留0，状态变为breached。根因已核实：Mem0向量适配只按输入UTF-8字节预留，一条短查询预留9 tokens，百炼实际usage18 tokens；触发正确的超预留保护。共享语义向量适配已有每条64 tokens开销预留，Mem0侧漏了同一问题。真实调用已停止，不能将本次试用计为通过；将限定修复Mem0适配及回归，并在用户授权前保持账本封锁和原历史。
+
+已完成该限定修复及12项Mem0测试；新增短文本/批量、输入上限及超预留后停止重试三个反例，修复前失败、修复后通过，证据见最终试用记录。独立审查重新核对新增改动，旧审查指纹不再用于关闭本增量。最终验收只调整执行顺序：先执行其余12组本地验收，START02置后；所有命令、断言、预算和超时保持，真实组未通过仍不能关闭增量。原账本于15:31:22 UTC到期；已请求用户批准恢复同一账本并从恢复时延长2小时，保留79次历史、实际费用和原120次/US$5总上限，尚未收到答复。
+
+第二次正式验收前7组通过，ASSETS原有精确名称搜索断言失败，原收据保存在 `.local/skill-release/final-attempt-2-result.json`。根因是名称包含与完全相等并列，随机ID排序下长摘要分页可排除首页中的等名对象；新增确定性反例在修复前失败。修复保留名称包含优先级和分页边界，先排名称完全相等，未改原ASSETS断言。审查再次设为pending，最终状态须由修复后完整执行证明。
+
+第三次正式验收前10组通过，REGRESSION中的核心会话、模型协议、记忆、查询及完整知识流程全部通过，浏览器主流程和时间线也通过。历史浏览器测试直接造数的230表缺少维护归属，目录API返回404；新增前提断言已复现，限定补齐本批测试数据，所有原分页与长文断言保持。失败收据另存 `.local/skill-release/final-attempt-3-result.json`；产品修复仍为6项，完整增量未完成，千表检索及最终真实组仍待执行。历史浏览器及管理按钮完整复跑通过；仅将REGRESSION内部千表检查置首，优先取得此前缺少的完整结果，其余命令、断言和4200秒组合上限保持。
+
+### 真实试用等待时间调整
+
+第六次验收在START02的首条输入等待180秒后退出。已完成的官方模型调用分别耗时51.097、8.887、21.280、88.013秒，四次原生read和任务更新已成功，最后一次模型回执在停止时未知，按原规则保留预留。不是业务断言失败，也不把未知回执计为成功。失败收据`.local/skill-release/final-attempt-6-result.json`及调用对照`.local/skill-release/real-provider-latency-20261008.json`保留。
+
+原值：真实测试每条输入等待180秒，START02整组600秒。新值：每条输入360秒，整组1200秒。依据是上述多次有效官方调用的累计耗时和此前完整真实成功，等待上限用于容纳当前provider延迟；产品模型请求超时、输入/输出限制、运行状态和所有业务断言保持。该调整仅影响验收包装器，不改变已确认的产品行为或加入隐式重试。独立审查已通过该限定改动，当前范围指纹为 `e620b750315d1851a13792bd5e93426cd9405e2a3a3b01eb3b0d4d9255982b0d`，按新等待范围重新冻结执行。
+
+### 本轮验收与要求变更
+
+本轮未改变产品要求。扩大回归发现三个测试维护问题，均先保留失败再修正：旧“新增Skill”定位改为“新增个人 Skill”；关联造数补齐正式语义归属，不放宽105字段、四类内容及权限断言；捕获式记忆测试用公开撤回结束旧输入，防止假的未完成输入重领挡住后续消息。三项独立复跑均通过，原失败、修正依据和日志见最终试用记录。独立对照确认多目标取消测试在取消前已被1500ms短租约触发换代；改用现有默认15000ms并新增取消前基线，保留全部次数、状态、预算及Bridge 409断言。完整语义流程已通过取消及全部预填反例，后段发现重新预填重放缺少maintenance字段；已修复早返回分支并通过原严格回执测试。
+
+最终审计已修复四项产品问题：私人Skill新建后的分类、编辑会话迟到回执、依赖故障时读取旧回执，以及重新预填重复回执缺少维护信息。尾部检索覆盖测试也补齐了直接造数缺失的系统归属关系，保持其候选数量、过期来源及精确命中的原断言。
+
+业务协议fixture单独同步已确认的128KiB请求体配置，完整业务回归通过；官方profile与硬限制不变。原生Skill捕获测试补失败查询结果唤醒的收尾，不改生产行为。千表预跑外层900秒超时，未取得完整结果；正式REGRESSION组合等待由2400改为4200秒，以容纳三段千表建库/重建及其他回归，数据规模和所有断言保留。各项原失败均保留，详细依据见最终试用记录。
+
+
+</details>
+
+## 上次交付：四项修复、Pi 原生 Skill 与空间公共方法（已完成）
+
+`goal_revision=29`，增量 `I2-NATIVE-SKILLS` 已完成。设计、契约、迁移、实现、架构图、README、独立审查及完整冻结验收已同步。沿用 `codex/semantic-role-boundaries`，本轮改动保留本地未提交状态。
+
+确认规则：公共 Skill 仅当前空间；任意当前成员可以明确发布自己的 Skill，发布人成为负责人，负责人和本系统超级维护者可修订/停用。其他成员可以选用和提修改建议。个人 Skill/记忆仍私人；公共方法不授予 Datasight 读取或执行权。首次发布创建独立公共副本，后续从公共入口修订，不自动同步私人改动；发布只包含页面预览的方法、附件及知识引用，不携带私人来源原话。
+
+实施细节采用最小方案：M09沿用资产ID/版本/操作账本，新增可见范围、受控文本附件、公共发布映射和建议记录；旧数据默认personal。建议以待处理/已处理/已驳回表达，处理不自动修改正文。Pi复用公开loadSkills、ResourceLoader及createReadTool，数据库正文通过受控读取交付，关闭SDK直接文件命令；模型仍只接触用户明确选定的有效版本。
+
+原 `I2-ROLE-BOUNDARIES` 完成记录见提交 `cdf4b0c` 中的 CURRENT，原审查/收据不修改，本地声明快照在 `.local/skill-delivery/previous-delivery.json`。本轮已生成自己的完整执行收据，旧收据继续保留其原有范围。
+
+按设计与同源契约完成启动诊断、资料/错误反馈、资产共享与选择、Pi接入、界面和测试。下节保留各阶段发现与修正，最终完成状态以“最终验收与边界”为准。
+
+### 本轮进展与验收调整
+
+- 新增共享资产、明确发布、建议、选择摘要和 Pi 原生 read 接入已进入实现。共享权限/并发接口测试通过，完整验收与独立审查待完成。
+- 启动阶段日志下，原 Flash/Mem0/hybrid 配置首轮成功：Mem0 13.05 秒、Pi 14.79 秒，保留原 25 秒等待。无法据此归因上次偶发超时，重复启动与真实调用待验。
+- 新选择测试原先假定“停掉 mock 平台会让已同步知识依赖不可用”；实际来源版本由已提交快照校验，平台断连并不删除来源，200 符合现有契约。改为在独立测试库短暂重命名 source_heads，验证真实存储故障返回失败并恢复表名。成功状态的断言未放宽，也不把业务无效与服务故障混同。
+- 重复启动确实发现并修复一个端口预检问题：服务退出后 TCP TIME_WAIT 被未设置 SO_REUSEADDR 的探测器误判为端口占用。独立回环实验复现 errno 48，设置后可绑定；启动器新增“关闭连接可重启”和“活跃监听仍拒绝”回归，9项通过。该原因解释本轮重复启动失败，不能直接证明上次 Mem0/Pi 健康超时也是同一原因。
+- 契约206项、Rust格式/Clippy、TypeScript、Web构建通过。SQL边界、资产目录、上下文依赖和Pi恢复回归通过。视觉检查发现移动端原有 quiet 样式遮住新公共方法负责人，已限定修正并补可见性断言；完整冻结验收待完成。
+
+
+- 独立审查发现并修复：中文单行可超过 Pi 原生 50 KiB 上限、资产跨编辑会话及成功建议提交错误复用操作身份。新增服务端中文长行正反例、网页同内容跨种类/同种类新建与重复建议、原生字面命令、公共方法同输入失效和平台执行拒绝反例。
+- 新增 read 后受控工具集合为13项，旧provider门槛为12导致全部拒绝；本地真实OpenAI协议先复现失败，修正后15次协议调用通过（0官方请求），新增PROVIDER冻结验收。旧“tools=12”预期按新增已确认read契约改为13，原预算、请求体、业务断言保持。
+- 当前7组原生Skill行为、7组公共权限/附件、3组选择摘要、6组浏览器流程均通过；契约206项与verify-code再次通过。实际查看桌面/390px截图，公共负责人提示可见，新增按钮使用现有样式。架构5视图及28张模块图生成检查通过，图义保持。
+- 真实栈已连续正常启动；真正模型调用被原持久账本期限拒绝。只读核查为120次/US$5额度、已用0/US$0/预留0，expires_at已过期。已向用户请求同一账本延长2小时，未改期限、身份、额度或重置记录。真实Skill/Mem0闭环尚未通过，不能用本地结果替代。
+- 真实验收进一步限定本次manage_personal_asset回执的ID/版本、唯一合成范围、索引状态与跨会话召回目标，同时核对SQL修订的web条件。避免借持久试用库中的旧记忆误报成功。该脚本尚待有效预算执行。
+
+
+### 最终验收与边界
+
+- **完整十组冻结验收通过，增量已关闭。** `make verify-increment` 于2026-10-07 13:49:20–13:57:03 UTC完整执行 START01、START02、FEEDBACK、SHARED、SELECTION、NATIVE、QUERY、CONTRACT、ASSETS、PROVIDER；全部退出0、无超时、前后指纹一致。正式收据：`.local/delivery/I2-NATIVE-SKILLS-result.json`。
+- [独立审查](reviews/native-skills-review.json)通过当前实现和验收脚本，范围指纹为`47c96fa17e982be37b415d43e4cac4ec7bc181c80ac965f6c37195bad972818c`。审查者未参与实现，复核了需求、契约、失败修复、真实证据及用量；其定稿先于最终十组执行，最终完成证据由上述收据提供。
+- 两轮真实Flash/Mem0/hybrid合成试用均通过，每轮6条输入：原生Skill及附件读取，SQL生成、渠道修订、用户确认后查询、结果解释，以及本次新建私人记忆索引和新会话同ID/版本召回。第一次报告在`.local/skill-delivery/real-990dce60-9796-4c92-9272-5a29cde333ca/report.json`；冻结验收报告在`.local/skill-delivery/real-dd56a4ab-6f23-4a55-8e1e-36aa0a5b8740/report.json`。
+- 主试验账本累计70次调用，全部已结算且ID唯一：Agent 45、知识向量6、记忆向量17、记忆抽取2；实际费用265999微美元（US$0.265999），预留0。明细求和与总账一致，仍在原120次/US$5上限内。未重置、补额或创建新试验绕过预算。
+- 原独立向量维护账本历史30次/498微美元/预留0，已于13:17:38 UTC到期，本轮未改其期限或额度；只读快照见首次成功目录的`embedding-ledger.json`。本次查询向量、记忆抽取/索引/召回已在有效主账本内完成；未据此宣称独立维护试验仍可继续运行。
+- Rust workspace构建、verify-code、架构边界、Pi恢复额外回归、291项材料检查和16项验收检查器自测通过；冻结CONTRACT执行206项同源契约案例。实际查看本轮桌面和390px页面截图，已选版本、公共负责人及操作入口可见。证据分别在`.local/checks/workspace-feedback/`、`.local/checks/native-skills.json`及`.local/checks/shared-skills.json`。架构5视图及28张模块图已同步并通过生成检查。
+- 验证边界：模型、Mem0及向量服务为真实接入；Datasight、身份和业务数据使用合成mock，尚未证明真实平台ACL或生产部署。原历史Mem0/Pi偶发健康超时具体原因仍未证实；本轮连续启动正常，有证据的修复为TIME_WAIT端口误判及分阶段诊断。两轮小样不代表总体准确率。
+- 自测观察：真实回答较长，包含任务ID等技术信息；记录为后续表达优化，不增加本轮实现范围。没有剩余代码发现或冻结验收缺口；未提交、推送、部署或重启用户常驻实例。
+
+### 验收过程与脚本修正
+
+- `.local/checks/native-local-validation.json`保留此前9组本地验收的partial收据；完整十组已另行生成正式收据，未覆盖该历史证据。
+- START02原先尝试读取TaskSnapshot中不存在的conditions；依照服务端契约，改从同任务及同条件版本的update_analysis_task正式回执核对web渠道，并保留SQL或参数含web的断言。修正经独立审查和两轮真实执行验证。
+- 用户选择A授权同一主试验账本延长2小时，保持120次/US$5总上限及全部历史。数据库时间2026-10-07 13:31:22 UTC执行，新的到期时间为15:31:22 UTC；前后只有expires_at改变，当时调用/费用/预留均为0。证据：`.local/skill-delivery/budget-extension-a68a7923-444e-4065-a4a1-d063248cb248.json`。
+- 延期后首次脚本在调用前失败：MySQL JSON_OBJECT返回布尔true，原断言错误要求数字1。修正为严格要求true，仍拒绝false；失败记录在`.local/skill-delivery/real-543704cc-c501-4f69-a2ae-e537609e2393/report.json`。未改变期限、额度或产品预期，未消耗模型调用。
+- 首次真实成功后核对报告明细，发现原查询只按model_call_attempts.trial_id取记录，遗漏通过budget_scopes.model_profile关联的主模型调用；总账正确。报告补LEFT JOIN及COALESCE关联，未改业务或验收断言。首次成功目录的`usage-reconciliation.json`核对当时29次/134013微美元；冻结验收使用修正后的查询，70次明细与总账完全一致。原失败及成功报告保留。
+
+## 上次讨论：原生 Skill 与个人/公共范围补充
+
+`goal_revision=28`。用户已选择采用 Pi 原生 Skill，并提出个人与公共分类，要求总结全部待办及执行包缺口。本轮继续范围讨论、权限选择与交接材料补充；不修改产品代码、不提交推送。
+
+### 已确定方向与全部待办
+
+- Pi 原生 Skill 从“后续候选”调整为本次需要设计接入的方向。继续复用 Pi SDK，Rust/MySQL 保留正式记录、业务授权、版本与选择；尚未接入完成。
+- 全部工作为四项 dogfood 修复（启动、同名来源、错误提示、Skill 工作台反馈），两项 Skill 增强（原生接入、个人/公共），加相关设计/API/存储/架构文档更新与整体验收。[执行包](dogfood-repair-execution.md) 已按此更新范围，保留原四项细节。
+- 原执行包不足以覆盖新增范围。公共 Skill 的权限、发布边界、存储迁移、接口和验收还需补齐，不能用此前“准备完成”的结论开始全部编码。
+- 原四项问题仍未修复；当前源码仍为 `cdf4b0cd783afc0b3a5461d8944ba09ce0c95986`。原生接入及公共分类尚无实现验收，上一轮 Oracle 仅审计当时材料，不覆盖新增公共方案。
+
+### 待确认权限与推荐方案
+
+已向用户提出两个选择题，答案尚未返回：
+
+1. 公共可见范围：推荐仅当前业务空间；另一选项为全系统跨空间。
+2. 发布与维护：推荐空间内任意成员明确发布自己的 Skill，发布人成为负责人，由负责人和本系统超级维护者修改/停用；另可选择仅语义维护成员发布，或经超级维护者审核发布。
+
+以上推荐不是已确认决定。公共方法可用不授予 Datasight 数据读取或 SQL 执行权；个人记忆继续私人，个人 Skill 也不因新增公共区而自动公开。发布前预览、私人/公共版本的关系及建议处理方式，须在权限答案后细化。
+
+### 验证、范围与下一步
+
+本轮只更新 CURRENT 与既有执行包，不修改旧 `delivery.increment=I2-ROLE-BOUNDARIES` 的冻结声明、审查或收据，也不放宽旧验收。新增完整范围尚未达到可开工状态；收到权限选择后补齐其接口、迁移和行为验收，再登记相应增量。四项中无依赖的诊断和修复可在后续实施授权内独立推进。 本轮 `make verify-materials verify-delivery` 通过（286 项材料检查、16 项检查器自测，原收据仍有效），执行包链接与 `git diff --check` 通过；这些检查不代表新能力已实现或权限已确定。
+
+## 上次完成：四项问题审计与修复执行包
+
+`goal_revision=27`。用户要求本机复核、Oracle 外部审计四项 dogfood 问题，核对 Skill 是否复用 Pi，再整理执行包。当前授权是审计与交接准备，本轮不修改产品代码，不提交推送。源码基线 `cdf4b0cd783afc0b3a5461d8944ba09ce0c95986`，沿用 `codex/semantic-role-boundaries`。
+
+### 审计结论与交接
+
+- [综合审计](reviews/dogfood-and-pi-skills-audit-20261007.md)：DF-01 启动阻塞及诊断不足成立，具体根因仍未知；DF-02 来源身份不易区分、DF-03 错误信息丢失、DF-04 会话 Skill 选择不可见均成立。四项保持未关闭。
+- [修复执行包](dogfood-repair-execution.md)：固定允许路径、顺序、现有 AppError 复用、来源展示、一个会话级 Skill 选择 GET 接口、验收与关闭标准。真正开工再登记新修复增量，现有 `delivery.increment=I2-ROLE-BOUNDARIES` 继续保存上次开发完成事实和收据。
+- Skill 当前复用了 Pi 的 Agent 运行能力，个人 Skill 由应用校验后供给正文，`getSkills()` 仍为空。系统设计第 12.3 节已明确这是 MVP 取舍；原生 Skill 装载器迁移单列候选，不自动加入四项修复。
+- Oracle 单次咨询 `dogfood-skills-audit-20261007-180411` 已完成并退出 0；档位 `Power, item 4 of 5 (slider ARIA)` 经核验，答案已捕获，本次 Chrome PID 与临时 Profile 已清理。已逐条核对建议，纠正“20 项是产品上限”、同步全部回滚的提示和直接并入 Skill 迁移的范围。
+- 本机补充探针：Mem0 等依赖导入 8.764 秒、Pi 交付模块导入 16.604 秒；三组 SDK 目录格式小样符合源码。无业务模型请求，不代表完整服务或真实模型通过。脱敏原始证据在 `.local/oracle-dogfood-audit/`。
+
+### 验收与要求变更
+
+本轮不改变产品要求、旧断言、旧收据或角色增量冻结契约。审计补充了需要修复的证据和待实施验收；完整栈恢复、四项修复及真实试用均未由本次文档任务完成。`make verify-materials verify-delivery` 已通过（285 项材料检查、16 项检查器自测，原增量收据仍与输入一致）；另核对新文档 24 个内部链接、敏感信息模式及 `git diff --check`。这些只证明文档交付，源码未改，未重跑整体 MVP。
+
+下一步：按用户后续实施指令领取执行包，先诊断 DF-01，再完成三个有明确原因的修复；未解决的真实启动问题不能由模拟通过覆盖。
+
+## 上次完成：提交推送与实际试用记录
 
 `goal_revision=26`。用户已授权提交推送当前修复，再实际使用系统并记录结果；此授权替代上一开发轮不提交/推送的操作限制。沿用 `codex/semantic-role-boundaries` 分支，先提交并推送已验收代码，再进行合成数据试用并提交试用记录。不合并其他分支、不部署或覆盖现有常驻实例，不因试用发现问题自动增加功能。
 

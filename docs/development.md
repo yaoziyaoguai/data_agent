@@ -114,6 +114,8 @@ MySQL集成测试串行运行。查询跟踪、索引和语义预填在同一Wor
 
 `make setup-rust`仅获取锁定的Rust依赖。共享向量使用 `infra/embedding-model.json` 固定的百炼 `qwen3.7-text-embedding`、1024维，运行时不下载本地权重。文本分成360字符窗口、280字符步长，每对象最多128片段，超限明确报告；不加旧模型前缀。请求最多20条，以每条UTF-8字节数加64 tokens模板余量估算，总预估不超过8192（正文也不超过8192字节），20秒超时、无网络重试。Milvus本地端口19531，凭据只通过忽略文件提供。
 
+Mem0的向量接入也按每条UTF-8字节数加64 tokens预留模板开销，最多20条，总预留不超过8192。两条向量路径均按provider实际usage结算；估算不构成服务端token硬限制，实际超预留仍封锁账本。不得因短文本或SDK批量失败绕过预算检查、隐式重试或重置历史。
+
 共享向量配置可直接复用 `.local/memory/configuration.json` 的 `embedding_url` 与 `embedding_key_file`，也可使用 `infra/embedding.example.json` 格式单独配置。密钥文件权限0600。共享集合名为 `data_agent_shared_qwen1024_<数据库摘要>`，与Mem0个人集合分开。把 `infra/embedding-profile.example.json` 复制到 `.local/embedding/profile.json` 后按已授权范围设置有限额度。profile不是密钥，也不自动创建新的授权。
 
 ```sh
@@ -292,3 +294,11 @@ make verify-contracts    # 包括WorkspaceContext的记忆检索状态
 `GET /semantic-members` 仅供超级维护者读取本空间有效用户 ID，不返回登录凭据；当前名单来自已加载的开发登录配置。转交用例在写入前核对同一目录，不存在或跨空间目标返回 `invalid_input`，空值仍表示撤销。正式身份目录接入不在本轮。
 
 `GET /knowledge?directory=all|maintained` 按名称、状态及游标分页；`maintained` 使用当前对象负责人关系。`state=enabled|disabled` 仅用于管理目录，省略时包含两者，删除对象始终排除。原 `/knowledge?q=` 的语义召回规则保持。
+
+## 试用修复与 Skill 验证
+
+启动器输出 service、stage、elapsed 和本次 runtime 的日志路径；Mem0 区分导入/SDK构造/监听，Pi 区分模块加载/监听。健康检查仍以完整初始化完成为准。默认等待 25 秒；遇到超时应先读具体阶段，不能用提前就绪掩盖未完成初始化。
+
+当前空间公共 Skill 从“我的积累”中明确发布，负责人维护，其他成员可选用和提建议。个人资产默认保持私人，发布预览不复制来源备注。附件仅接受受控文本，不能执行脚本。SQL 仍须按具体版本确认。
+
+相关验收：`check-shared-skills.mjs`、`check-conversation-skill-selections.mjs`、`check-native-skills.mjs` 和 `check-workspace-feedback-browser.mjs` 位于 tests/mvp。真实试用命令为 `node tests/mvp/check-skill-dogfood.mjs --real`，只沿用既有获准本地配置与预算；新机器先配置现有启动器所需依赖，不能以新试验 ID 绕过额度。测试不包含 Datasight 真实接入。

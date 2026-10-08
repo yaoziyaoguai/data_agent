@@ -213,6 +213,8 @@ flowchart LR
 flowchart TB
   subgraph Bridge["M11 · Node 桥"]
     Session["session · 恢复、交付与取消"] --> Tools["tools · 受控工具映射"]
+    Session --> Skills["skills · 原生目录与元信息"]
+    Skills --> Tools
     Session --> Provider["provider · 每次调用许可与结算"]
     Session --> Transport["transport · Rust 协议与事件"]
     Session --> Checkpoint["checkpoint · 小引用 / 精确 leaf"]
@@ -220,12 +222,13 @@ flowchart TB
     Tools & Provider --> Transport
   end
   Session --> SDK["Pi SDK · 唯一 Agent 循环"]
+  Skills --> SDK
   Journal --> SDK
   Journal --> Files[(私有 JSONL 会话树)]
   Transport --> Rust["Rust 受控接口"]
 ```
 
-箭头表示桥内依赖及外部边界。session 装配工具和 provider；journal 复用 SDK 的 create/open/branch/resetLeaf，不另造会话或压缩器。目录 0700、文件 0600；引用提交前校验原 session/leaf 并 fsync。transport 只发送契约 DTO；旧 inline 仅从宿主绑定的不可变副本读取，核对原始响应指纹后一次性迁入原生文件。provider 为每次实际请求取许可，tools 不持有通用数据库写入能力。
+箭头表示桥内依赖及外部边界。session 装配工具和 provider；skills 调用 SDK loadSkills 解析已授权元信息，read 工具复用 SDK 分页并由 Rust 获取当前版本正文/附件。关闭直接 /skill 命令展开，不启用 bash 或主机文件工具；journal 复用 SDK 的 create/open/branch/resetLeaf，不另造会话或压缩器。目录 0700、文件 0600；引用提交前校验原 session/leaf 并 fsync。transport 只发送契约 DTO；旧 inline 仅从宿主绑定的不可变副本读取，核对原始响应指纹后一次性迁入原生文件。provider 为每次实际请求取许可，tools 不持有通用数据库写入能力。
 
 ### F11 Pi 桥内部流程
 

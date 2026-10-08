@@ -14,9 +14,13 @@ use serde_json::{Value, json};
 use std::collections::HashMap;
 type ResponseResult = Result<Json<Value>, (StatusCode, Json<Value>)>;
 pub(crate) fn failure(error: Error) -> (StatusCode, Json<Value>) {
-    eprintln!("request_rejected code={}", error.code);
+    let request_id = id();
+    eprintln!(
+        "request_rejected request_id={} code={}",
+        request_id, error.code
+    );
     let status = match error.code {
-        "invalid_input" => StatusCode::BAD_REQUEST,
+        "invalid_input" | "skill_line_too_long" => StatusCode::BAD_REQUEST,
         "forbidden" => StatusCode::FORBIDDEN,
         "unauthenticated" => StatusCode::UNAUTHORIZED,
         "not_available" => StatusCode::NOT_FOUND,
@@ -31,7 +35,7 @@ pub(crate) fn failure(error: Error) -> (StatusCode, Json<Value>) {
     (
         status,
         Json(
-            json!({"code":error.code,"message":error.code,"request_id":id(),"retryable":error.code=="unavailable"}),
+            json!({"code":error.code,"message":error.code,"request_id":request_id,"retryable":error.code=="unavailable"}),
         ),
     )
 }

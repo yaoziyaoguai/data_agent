@@ -27,6 +27,8 @@ pub struct Boundary {
     pub apply_semantic_correction: Option<ApplySemanticCorrection>,
     pub asset: Asset,
     pub asset_list: AssetList,
+    #[serde(rename = "AssetPageQuery")]
+    pub asset_page_query: Option<AssetPageQuery>,
     pub asset_save: AssetSave,
     pub asset_tool_input: AssetToolInput,
     #[serde(rename = "AssignSemanticMaintainer")]
@@ -49,6 +51,10 @@ pub struct Boundary {
     pub confirm_query: ConfirmQuery,
     pub conversation_read_input: ConversationReadInput,
     pub conversation_receipt: ConversationReceipt,
+    #[serde(rename = "ConversationSkillSelection")]
+    pub conversation_skill_selection: Option<ConversationSkillSelection>,
+    #[serde(rename = "ConversationSkillSelections")]
+    pub conversation_skill_selections: Option<ConversationSkillSelections>,
     pub create_conversation: CreateConversation,
     pub data_tool_invocation: DataToolInvocation,
     pub data_tool_outcome: DataToolOutcome,
@@ -98,6 +104,8 @@ pub struct Boundary {
     pub proposal_draft_command: Option<ProposalDraftCommand>,
     pub proposal_input: ProposalInput,
     pub proposal_list: ProposalList,
+    #[serde(rename = "PublishSkill")]
+    pub publish_skill: Option<PublishSkill>,
     pub query_cancellation: Option<QueryCancellation>,
     pub query_list: QueryList,
     pub query_results: QueryResults,
@@ -113,6 +121,8 @@ pub struct Boundary {
     pub result_column: ResultColumn,
     #[serde(rename = "ReviewSemanticCorrection")]
     pub review_semantic_correction: Option<ReviewSemanticCorrection>,
+    #[serde(rename = "ReviewSkillSuggestion")]
+    pub review_skill_suggestion: Option<ReviewSkillSuggestion>,
     #[serde(rename = "ReviseSemanticCorrection")]
     pub revise_semantic_correction: Option<ReviseSemanticCorrection>,
     pub run_envelope: RunEnvelope,
@@ -130,12 +140,22 @@ pub struct Boundary {
     pub semantic_member_list: Option<SemanticMemberList>,
     pub send_model_call: SendModelCall,
     pub session_receipt: SessionReceipt,
+    #[serde(rename = "SkillFile")]
+    pub skill_file: Option<SkillFile>,
+    #[serde(rename = "SkillReadInput")]
+    pub skill_read_input: Option<SkillReadInput>,
     pub skill_selection: SkillSelection,
+    #[serde(rename = "SkillSuggestion")]
+    pub skill_suggestion: Option<SkillSuggestion>,
+    #[serde(rename = "SkillSuggestionList")]
+    pub skill_suggestion_list: Option<SkillSuggestionList>,
     pub snapshot: Snapshot,
     pub source_document: SourceDocument,
     pub sql_input: SqlInput,
     #[serde(rename = "SubmitSemanticCorrection")]
     pub submit_semantic_correction: Option<SubmitSemanticCorrection>,
+    #[serde(rename = "SuggestSkill")]
+    pub suggest_skill: Option<SuggestSkill>,
     #[serde(rename = "TableAnalysisPreference")]
     pub table_analysis_preference: Option<TableAnalysisPreference>,
     pub task_input: TaskInput,
@@ -351,18 +371,33 @@ pub struct ApplySemanticCorrection {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Asset {
     pub body: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub can_edit: Option<bool>,
     pub dependencies: Vec<EvidenceRef>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub files: Option<Vec<SkillFile>>,
     pub id: String,
     pub kind: AssetKind,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub memory_index_state: Option<MemoryIndexState>,
     pub name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub owner_id: Option<String>,
     pub scope: String,
     pub selected: bool,
     pub source_text: String,
     pub state: AssetState,
     pub verified: bool,
     pub version: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub visibility: Option<Visibility>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SkillFile {
+    /// UTF-8 文本；每行最多 51200 字节，业务边界校验并返回 skill_line_too_long。
+    pub content: String,
+    pub path: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -391,15 +426,31 @@ pub enum AssetState {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Visibility {
+    Personal,
+    Space,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AssetList {
     pub assets: Vec<Asset>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AssetPageQuery {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub after_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AssetSave {
+    /// Skill 的正文及生成资源每行最多 51200 UTF-8 字节；超限须分行保存。记忆不受此行限制。
     pub body: String,
     pub dependencies: Vec<EvidenceRef>,
     pub expected_version: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub files: Option<Vec<SkillFile>>,
     pub id: Option<String>,
     pub kind: AssetKind,
     pub name: String,
@@ -618,6 +669,36 @@ pub struct ConversationReceipt {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ConversationSkillSelection {
+    pub asset_id: String,
+    pub availability: Availability,
+    pub current_version: Option<String>,
+    pub name: Option<String>,
+    pub owner_id: Option<String>,
+    pub selected_version: String,
+    pub visibility: Option<Visibility>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Availability {
+    Available,
+    #[serde(rename = "dependency_unavailable")]
+    DependencyUnavailable,
+    Disabled,
+    Unavailable,
+    #[serde(rename = "version_changed")]
+    VersionChanged,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ConversationSkillSelections {
+    pub conversation_id: String,
+    pub next_after_id: Option<String>,
+    pub selections: Vec<ConversationSkillSelection>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CreateConversation {
     pub operation_id: String,
 }
@@ -643,6 +724,7 @@ pub enum ToolName {
     ManagePersonalAsset,
     #[serde(rename = "propose_semantic_change")]
     ProposeSemanticChange,
+    Read,
     #[serde(rename = "read_analysis_task")]
     ReadAnalysisTask,
     #[serde(rename = "read_conversation")]
@@ -1308,6 +1390,13 @@ pub struct ProposalList {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PublishSkill {
+    pub expected_version: String,
+    pub operation_id: String,
+    pub share_confirmed: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct QueryCancellation {
     pub cancel_state: String,
     pub condition_version: String,
@@ -1468,6 +1557,21 @@ pub enum Decision {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ReviewSkillSuggestion {
+    pub expected_revision: String,
+    pub operation_id: String,
+    pub response: String,
+    pub state: ReviewSkillSuggestionState,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ReviewSkillSuggestionState {
+    Handled,
+    Rejected,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ReviseSemanticCorrection {
     pub base_version: String,
     pub entry_id: String,
@@ -1538,6 +1642,10 @@ pub struct ModelAssetPreview {
     pub id: String,
     pub kind: AssetKind,
     pub name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub native_path: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub owner_id: Option<String>,
     pub scope: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub scope_page: Option<ContentPage>,
@@ -1546,6 +1654,8 @@ pub struct ModelAssetPreview {
     pub state: AssetState,
     pub verified: bool,
     pub version: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub visibility: Option<Visibility>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1664,10 +1774,46 @@ pub enum SessionReceiptState {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SkillReadInput {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub limit: Option<i32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub offset: Option<i32>,
+    pub path: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SkillSelection {
     pub asset_id: String,
     pub operation_id: String,
     pub version: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SkillSuggestion {
+    pub asset_id: String,
+    pub asset_version: String,
+    pub author_id: String,
+    pub content: String,
+    pub id: String,
+    pub response: String,
+    pub reviewed_by: Option<String>,
+    pub revision: String,
+    pub state: SkillSuggestionState,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SkillSuggestionState {
+    Handled,
+    Pending,
+    Rejected,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SkillSuggestionList {
+    pub next_after_id: Option<String>,
+    pub suggestions: Vec<SkillSuggestion>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1724,6 +1870,14 @@ pub struct SubmitSemanticCorrection {
     pub reason: String,
     pub share_confirmed: bool,
     pub value: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SuggestSkill {
+    pub content: String,
+    pub expected_version: String,
+    pub operation_id: String,
+    pub share_confirmed: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

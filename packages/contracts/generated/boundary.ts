@@ -1,111 +1,121 @@
 // Generated from packages/contracts/schema.json; do not edit.
 export interface Boundary {
-    AnalysisPreferenceCommand?: AnalysisPreferenceCommand;
-    analysisUpdate:             AnalysisUpdate;
-    appendOutput:               AppendOutput;
-    appError:                   AppError;
-    ApplySemanticCorrection?:   ApplySemanticCorrection;
-    asset:                      Asset;
-    assetList:                  AssetList;
-    assetSave:                  AssetSave;
-    assetToolInput:             AssetToolInput;
-    AssignSemanticMaintainer?:  AssignSemanticMaintainer;
-    cancelReceipt:              CancelReceipt;
-    cancelRun:                  CancelRun;
-    CatalogColumn?:             CatalogColumn;
-    CatalogNode?:               CatalogNode;
-    CatalogPage?:               CatalogPage;
-    CatalogTable?:              CatalogTable;
-    chatMessage:                ChatMessage;
-    checkpoint:                 Checkpoint;
-    checkpoint_reference:       CheckpointReference;
-    conditions:                 Conditions;
-    confirmQuery:               ConfirmQuery;
-    conversationReadInput:      ConversationReadInput;
-    conversationReceipt:        ConversationReceipt;
-    createConversation:         CreateConversation;
-    dataToolInvocation:         DataToolInvocation;
-    dataToolOutcome:            DataToolOutcome;
-    embeddingProfile:           EmbeddingProfile;
-    event:                      Event;
-    evidenceRef:                EvidenceRef;
-    finalizeModelCall:          FinalizeModelCall;
-    finishReceipt:              FinishReceipt;
-    finishRun:                  FinishRun;
-    history:                    History;
-    historyItem:                HistoryItem;
-    historyQuery:               HistoryQuery;
-    host_checkpoint_reference:  HostCheckpointReference;
-    identity:                   Identity;
-    knowledgeCreate:            KnowledgeCreate;
-    knowledgeEdit:              KnowledgeEdit;
-    knowledgeEntry:             KnowledgeEntry;
-    knowledgeList:              KnowledgeList;
-    knowledgeListQuery:         KnowledgeListQuery;
-    knowledgeObject:            KnowledgeObject;
-    logoutReceipt:              LogoutReceipt;
-    memoryBudgetBinding?:       MemoryBudgetBinding;
-    memoryCandidate?:           MemoryCandidate;
-    memoryExtractionReceipt?:   MemoryExtractionReceipt;
-    memoryExtractionRequest?:   MemoryExtractionRequest;
-    memoryIndexReceipt?:        MemoryIndexReceipt;
-    memoryIndexRequest?:        MemoryIndexRequest;
-    memoryModelCall?:           MemoryModelCall;
-    memorySearchReceipt?:       MemorySearchReceipt;
-    memorySearchRequest?:       MemorySearchRequest;
-    messageInput:               MessageInput;
-    messageReceipt:             MessageReceipt;
-    modelAttempt:               ModelAttempt;
-    modelCallReceipt:           ModelCallReceipt;
-    modelProfile:               ModelProfile;
-    modelReceipt:               ModelReceipt;
-    modelUsage:                 ModelUsage;
-    mutationReceipt:            MutationReceipt;
-    operationReceipt:           OperationReceipt;
-    outputReceipt:              OutputReceipt;
-    pi_session_reference:       PiSessionReference;
-    prefillResult:              PrefillResult;
-    proposal:                   Proposal;
-    ProposalDraftCommand?:      ProposalDraftCommand;
-    proposalInput:              ProposalInput;
-    proposalList:               ProposalList;
-    queryCancellation?:         QueryCancellation;
-    queryList:                  QueryList;
-    queryResults:               QueryResults;
-    queryView:                  QueryView;
-    read_checkpoint:            ReadCheckpoint;
-    readKnowledgeInput:         ReadKnowledgeInput;
-    readQueryInput:             ReadQueryInput;
-    readSourceInput:            ReadSourceInput;
-    readTaskInput?:             ReadTaskInput;
-    requestQueryInput:          RequestQueryInput;
-    reserveModelCall:           ReserveModelCall;
-    resultColumn:               ResultColumn;
-    ReviewSemanticCorrection?:  ReviewSemanticCorrection;
-    ReviseSemanticCorrection?:  ReviseSemanticCorrection;
-    runEnvelope:                RunEnvelope;
-    runSnapshot:                RunSnapshot;
-    searchInput:                SearchInput;
-    SemanticAccess?:            SemanticAccess;
-    SemanticCorrection?:        SemanticCorrection;
-    SemanticCorrectionList?:    SemanticCorrectionList;
-    SemanticMaintenance?:       SemanticMaintenance;
-    SemanticMemberList?:        SemanticMemberList;
-    sendModelCall:              SendModelCall;
-    sessionReceipt:             SessionReceipt;
-    skillSelection:             SkillSelection;
-    snapshot:                   Snapshot;
-    sourceDocument:             SourceDocument;
-    sqlInput:                   SQLInput;
-    SubmitSemanticCorrection?:  SubmitSemanticCorrection;
-    TableAnalysisPreference?:   TableAnalysisPreference;
-    taskInput:                  TaskInput;
-    taskSnapshot:               TaskSnapshot;
-    toolInvocation:             ToolInvocation;
-    toolOutcome:                ToolOutcome;
-    toolReceipt:                ToolReceipt;
-    versionCommand:             VersionCommand;
-    workspaceContext:           WorkspaceContext;
+    AnalysisPreferenceCommand?:   AnalysisPreferenceCommand;
+    analysisUpdate:               AnalysisUpdate;
+    appendOutput:                 AppendOutput;
+    appError:                     AppError;
+    ApplySemanticCorrection?:     ApplySemanticCorrection;
+    asset:                        Asset;
+    assetList:                    AssetList;
+    AssetPageQuery?:              AssetPageQuery;
+    assetSave:                    AssetSave;
+    assetToolInput:               AssetToolInput;
+    AssignSemanticMaintainer?:    AssignSemanticMaintainer;
+    cancelReceipt:                CancelReceipt;
+    cancelRun:                    CancelRun;
+    CatalogColumn?:               CatalogColumn;
+    CatalogNode?:                 CatalogNode;
+    CatalogPage?:                 CatalogPage;
+    CatalogTable?:                CatalogTable;
+    chatMessage:                  ChatMessage;
+    checkpoint:                   Checkpoint;
+    checkpoint_reference:         CheckpointReference;
+    conditions:                   Conditions;
+    confirmQuery:                 ConfirmQuery;
+    conversationReadInput:        ConversationReadInput;
+    conversationReceipt:          ConversationReceipt;
+    ConversationSkillSelection?:  ConversationSkillSelection;
+    ConversationSkillSelections?: ConversationSkillSelections;
+    createConversation:           CreateConversation;
+    dataToolInvocation:           DataToolInvocation;
+    dataToolOutcome:              DataToolOutcome;
+    embeddingProfile:             EmbeddingProfile;
+    event:                        Event;
+    evidenceRef:                  EvidenceRef;
+    finalizeModelCall:            FinalizeModelCall;
+    finishReceipt:                FinishReceipt;
+    finishRun:                    FinishRun;
+    history:                      History;
+    historyItem:                  HistoryItem;
+    historyQuery:                 HistoryQuery;
+    host_checkpoint_reference:    HostCheckpointReference;
+    identity:                     Identity;
+    knowledgeCreate:              KnowledgeCreate;
+    knowledgeEdit:                KnowledgeEdit;
+    knowledgeEntry:               KnowledgeEntry;
+    knowledgeList:                KnowledgeList;
+    knowledgeListQuery:           KnowledgeListQuery;
+    knowledgeObject:              KnowledgeObject;
+    logoutReceipt:                LogoutReceipt;
+    memoryBudgetBinding?:         MemoryBudgetBinding;
+    memoryCandidate?:             MemoryCandidate;
+    memoryExtractionReceipt?:     MemoryExtractionReceipt;
+    memoryExtractionRequest?:     MemoryExtractionRequest;
+    memoryIndexReceipt?:          MemoryIndexReceipt;
+    memoryIndexRequest?:          MemoryIndexRequest;
+    memoryModelCall?:             MemoryModelCall;
+    memorySearchReceipt?:         MemorySearchReceipt;
+    memorySearchRequest?:         MemorySearchRequest;
+    messageInput:                 MessageInput;
+    messageReceipt:               MessageReceipt;
+    modelAttempt:                 ModelAttempt;
+    modelCallReceipt:             ModelCallReceipt;
+    modelProfile:                 ModelProfile;
+    modelReceipt:                 ModelReceipt;
+    modelUsage:                   ModelUsage;
+    mutationReceipt:              MutationReceipt;
+    operationReceipt:             OperationReceipt;
+    outputReceipt:                OutputReceipt;
+    pi_session_reference:         PiSessionReference;
+    prefillResult:                PrefillResult;
+    proposal:                     Proposal;
+    ProposalDraftCommand?:        ProposalDraftCommand;
+    proposalInput:                ProposalInput;
+    proposalList:                 ProposalList;
+    PublishSkill?:                PublishSkill;
+    queryCancellation?:           QueryCancellation;
+    queryList:                    QueryList;
+    queryResults:                 QueryResults;
+    queryView:                    QueryView;
+    read_checkpoint:              ReadCheckpoint;
+    readKnowledgeInput:           ReadKnowledgeInput;
+    readQueryInput:               ReadQueryInput;
+    readSourceInput:              ReadSourceInput;
+    readTaskInput?:               ReadTaskInput;
+    requestQueryInput:            RequestQueryInput;
+    reserveModelCall:             ReserveModelCall;
+    resultColumn:                 ResultColumn;
+    ReviewSemanticCorrection?:    ReviewSemanticCorrection;
+    ReviewSkillSuggestion?:       ReviewSkillSuggestion;
+    ReviseSemanticCorrection?:    ReviseSemanticCorrection;
+    runEnvelope:                  RunEnvelope;
+    runSnapshot:                  RunSnapshot;
+    searchInput:                  SearchInput;
+    SemanticAccess?:              SemanticAccess;
+    SemanticCorrection?:          SemanticCorrection;
+    SemanticCorrectionList?:      SemanticCorrectionList;
+    SemanticMaintenance?:         SemanticMaintenance;
+    SemanticMemberList?:          SemanticMemberList;
+    sendModelCall:                SendModelCall;
+    sessionReceipt:               SessionReceipt;
+    SkillFile?:                   SkillFile;
+    SkillReadInput?:              SkillReadInput;
+    skillSelection:               SkillSelection;
+    SkillSuggestion?:             SkillSuggestion;
+    SkillSuggestionList?:         SkillSuggestionList;
+    snapshot:                     Snapshot;
+    sourceDocument:               SourceDocument;
+    sqlInput:                     SQLInput;
+    SubmitSemanticCorrection?:    SubmitSemanticCorrection;
+    SuggestSkill?:                SuggestSkill;
+    TableAnalysisPreference?:     TableAnalysisPreference;
+    taskInput:                    TaskInput;
+    taskSnapshot:                 TaskSnapshot;
+    toolInvocation:               ToolInvocation;
+    toolOutcome:                  ToolOutcome;
+    toolReceipt:                  ToolReceipt;
+    versionCommand:               VersionCommand;
+    workspaceContext:             WorkspaceContext;
 }
 
 export interface AnalysisPreferenceCommand {
@@ -119,6 +129,10 @@ export interface ApplySemanticCorrection {
     expected_version:  string;
     operation_id:      string;
     value:             string;
+}
+
+export interface AssetPageQuery {
+    after_id?: string;
 }
 
 export interface AssignSemanticMaintainer {
@@ -171,6 +185,26 @@ export interface CatalogTable {
     platform_version: string;
 }
 
+export interface ConversationSkillSelection {
+    asset_id:         string;
+    availability:     Availability;
+    current_version:  null | string;
+    name:             null | string;
+    owner_id:         null | string;
+    selected_version: string;
+    visibility:       Visibility | null;
+}
+
+export type Availability = "available" | "version_changed" | "disabled" | "dependency_unavailable" | "unavailable";
+
+export type Visibility = "personal" | "space";
+
+export interface ConversationSkillSelections {
+    conversation_id: string;
+    next_after_id:   null | string;
+    selections:      ConversationSkillSelection[];
+}
+
 export interface ProposalDraftCommand {
     base_version: string;
     entry_id:     string;
@@ -193,6 +227,12 @@ export interface EvidenceRef {
     version: string;
 }
 
+export interface PublishSkill {
+    expected_version: string;
+    operation_id:     string;
+    share_confirmed:  boolean;
+}
+
 export interface ReviewSemanticCorrection {
     decision:          Decision;
     expected_revision: string;
@@ -201,6 +241,15 @@ export interface ReviewSemanticCorrection {
 }
 
 export type Decision = "accepted" | "rejected";
+
+export interface ReviewSkillSuggestion {
+    expected_revision: string;
+    operation_id:      string;
+    response:          string;
+    state:             ReviewSkillSuggestionState;
+}
+
+export type ReviewSkillSuggestionState = "handled" | "rejected";
 
 export interface ReviseSemanticCorrection {
     base_version:      string;
@@ -274,6 +323,39 @@ export interface SemanticMemberList {
     user_ids: string[];
 }
 
+export interface SkillFile {
+    /**
+     * UTF-8 文本；每行最多 51200 字节，业务边界校验并返回 skill_line_too_long。
+     */
+    content: string;
+    path:    string;
+}
+
+export interface SkillReadInput {
+    limit?:  number;
+    offset?: number;
+    path:    string;
+}
+
+export interface SkillSuggestion {
+    asset_id:      string;
+    asset_version: string;
+    author_id:     string;
+    content:       string;
+    id:            string;
+    response:      string;
+    reviewed_by:   null | string;
+    revision:      string;
+    state:         SkillSuggestionState;
+}
+
+export type SkillSuggestionState = "pending" | "handled" | "rejected";
+
+export interface SkillSuggestionList {
+    next_after_id: null | string;
+    suggestions:   SkillSuggestion[];
+}
+
 export interface SubmitSemanticCorrection {
     base_version:    string;
     entry_id:        string;
@@ -283,6 +365,13 @@ export interface SubmitSemanticCorrection {
     reason:          string;
     share_confirmed: boolean;
     value:           string;
+}
+
+export interface SuggestSkill {
+    content:          string;
+    expected_version: string;
+    operation_id:     string;
+    share_confirmed:  boolean;
 }
 
 export interface TableAnalysisPreference {
@@ -382,17 +471,21 @@ export interface AppendOutput {
 
 export interface Asset {
     body:                string;
+    can_edit?:           boolean;
     dependencies:        EvidenceRef[];
+    files?:              SkillFile[];
     id:                  string;
     kind:                AssetKind;
     memory_index_state?: MemoryIndexState;
     name:                string;
+    owner_id?:           string;
     scope:               string;
     selected:            boolean;
     source_text:         string;
     state:               AssetState;
     verified:            boolean;
     version:             string;
+    visibility?:         Visibility;
 }
 
 export type AssetKind = "memory" | "skill";
@@ -406,9 +499,13 @@ export interface AssetList {
 }
 
 export interface AssetSave {
+    /**
+     * Skill 的正文及生成资源每行最多 51200 UTF-8 字节；超限须分行保存。记忆不受此行限制。
+     */
     body:             string;
     dependencies:     EvidenceRef[];
     expected_version: null | string;
+    files?:           SkillFile[];
     id:               null | string;
     kind:             AssetKind;
     name:             string;
@@ -525,7 +622,7 @@ export interface DataToolInvocation {
     tool_name:        ToolName;
 }
 
-export type ToolName = "search_knowledge" | "read_knowledge" | "read_source" | "validate_sql" | "request_query" | "update_analysis_task" | "get_query" | "cancel_query" | "manage_personal_asset" | "propose_semantic_change" | "read_conversation" | "read_analysis_task";
+export type ToolName = "search_knowledge" | "read_knowledge" | "read_source" | "validate_sql" | "request_query" | "update_analysis_task" | "get_query" | "cancel_query" | "manage_personal_asset" | "propose_semantic_change" | "read_conversation" | "read_analysis_task" | "read";
 
 export interface DataToolOutcome {
     data:         { [key: string]: unknown };
@@ -1087,6 +1184,8 @@ export interface ModelAssetPreview {
     id:            string;
     kind:          AssetKind;
     name:          string;
+    native_path?:  string;
+    owner_id?:     string;
     scope:         string;
     scope_page?:   ContentPage;
     selected:      boolean;
@@ -1094,6 +1193,7 @@ export interface ModelAssetPreview {
     state:         AssetState;
     verified:      boolean;
     version:       string;
+    visibility?:   Visibility;
 }
 
 export interface ContentPage {

@@ -9,8 +9,12 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse
 
+import time
+_started = time.monotonic()
+print("startup service=memory stage=imports_started", flush=True)
 import jsonschema
 from service import MemoryService
+print(f"startup service=memory stage=imports_ready elapsed={time.monotonic()-_started:.2f}s", flush=True)
 from store import MemoryError
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -89,7 +93,9 @@ def main():
                 service.gateway.binding = None
                 lock.release()
 
-    ThreadingHTTPServer(("127.0.0.1", args.port), Handler).serve_forever()
+    server = ThreadingHTTPServer(("127.0.0.1", args.port), Handler)
+    print(f"startup service=memory stage=listening elapsed={time.monotonic()-_started:.2f}s", flush=True)
+    server.serve_forever()
 
 
 if __name__ == "__main__":

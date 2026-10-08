@@ -78,18 +78,25 @@ def request(url, token=None, body=None):
     return urllib.request.build_opener(urllib.request.ProxyHandler({})).open(req, timeout=2)
 
 
-def wait_health(url, processes):
-    end = time.monotonic() + 25
-    while time.monotonic() < end:
-        if any(p.poll() is not None for p in processes):
-            raise RuntimeError('开发进程退出，请检查 .local/development/*.log')
+def wait_health(url, processes, service, runtime_dir, timeout=25):
+    started = time.monotonic()
+    log = runtime_dir / (service + '.log')
+    print(f'startup service={service} stage=waiting log={log}', flush=True)
+    while time.monotonic() - started < timeout:
+        for name, process in processes:
+            code = process.poll()
+            if code is not None:
+                elapsed = time.monotonic() - started
+                raise RuntimeError(f'startup service={name} stage=exited code={code} elapsed={elapsed:.2f}s log={runtime_dir / (name + ".log")}')
         try:
             with request(url) as response:
                 if response.status == 200:
+                    print(f'startup service={service} stage=ready elapsed={time.monotonic()-started:.2f}s log={log}', flush=True)
                     return
         except (OSError, urllib.error.URLError):
-            time.sleep(.1)
-    raise RuntimeError('启动超时，请检查本项目的开发日志')
+            pass
+        time.sleep(.1)
+    raise RuntimeError(f'startup service={service} stage=timeout elapsed={time.monotonic()-started:.2f}s log={log}')
 
 
 def available_ports(offset):
@@ -98,6 +105,8 @@ def available_ports(offset):
         raise RuntimeError('端口偏移超出允许范围')
     for port in ports.values():
         with socket.socket() as probe:
+            # 与应用监听器一致，允许重启时复用已关闭连接的 TIME_WAIT 端口；仍拒绝活跃监听。
+            probe.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             probe.bind(('127.0.0.1', port))
     return ports
 
@@ -225,10 +234,11 @@ def main():
         for name, argv in commands:
             log = (private / (name + '.log')).open('w')
             logs.append(log)
-            processes.append(subprocess.Popen(argv, cwd=ROOT, env={**env,**(model_credentials if name in ('bridge','worker','memory') else {})}, stdout=log, stderr=log))
+            print(f'startup service={name} stage=spawn log={log.name}', flush=True)
+            processes.append((name, subprocess.Popen(argv, cwd=ROOT, env={**env,**(model_credentials if name in ('bridge','worker','memory') else {})}, stdout=log, stderr=log)))
             if name in ('api', 'bridge','platform','memory'):
-                wait_health('http://127.0.0.1:' + str(ports[name]) + '/health', processes)
-        wait_health('http://127.0.0.1:' + str(ports['web']), processes)
+                wait_health('http://127.0.0.1:' + str(ports[name]) + '/health', processes, name, private)
+        wait_health('http://127.0.0.1:' + str(ports['web']), processes, 'web', private)
         model_label = ('DeepSeek V4 Pro' if model_profile['model_id'] == 'deepseek-v4-pro' else 'DeepSeek Flash') if model_profile else '本地模拟模型'
         for user in ('alice', 'bob'):
             with request(env['DATA_AGENT_API_URL'] + '/session', identities[user]) as response:
@@ -240,11 +250,11 @@ def main():
             return
         print('Ctrl+C 关闭本次启动的应用进程；数据库和会话保留。', flush=True)
         while True:
-            if any(p.poll() is not None for p in processes):
+            if any(p.poll() is not None for _, p in processes):
                 raise RuntimeError('应用进程退出，请检查开发日志')
             time.sleep(.3)
     finally:
-        for process in reversed(processes):
+        for _, process in reversed(processes):
             if process.poll() is None:
                 process.terminate()
                 try:

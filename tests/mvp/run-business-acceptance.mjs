@@ -85,7 +85,7 @@ if(audit){
 }
 const config=protocol?{
   database:'data_agent_test_'+randomBytes(8).toString('hex'),
-  profile:{provider_id:'deepseek',model_id:'deepseek-flash',trial_id:randomUUID(),price_version:'2026-10-04-peak-usd',input_limit:32768,output_limit:2048,trial_call_limit:100,trial_cost_micros:'300000',request_call_limit:12,toolset:'data',payload_bytes_limit:65536},
+  profile:{provider_id:'deepseek',model_id:'deepseek-flash',trial_id:randomUUID(),price_version:'2026-10-04-peak-usd',input_limit:32768,output_limit:2048,trial_call_limit:100,trial_cost_micros:'300000',request_call_limit:12,toolset:'data',payload_bytes_limit:131072},
 }:JSON.parse(await readFile(option('--model-profile')??'.local/model-workflow/configuration.json','utf8'));
 if(official){assert.match(config.database,/^data_agent_trial_[a-f0-9]+$/);assert.equal(config.profile.toolset,'data');}
 const h=await harness({capture:true,profile:config.profile,database:config.database,keep:official,env:{DATA_AGENT_LEASE_MS:'120000',DATA_AGENT_QUERY_DELAY_SECONDS:'5'}});

@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState } from "react";
-import type { Asset } from "../../../../../packages/contracts/generated/boundary.ts";
+import type { Asset, SkillFile } from "../../../../../packages/contracts/generated/boundary.ts";
 import { api } from "../../shared/api.ts";
+import { SkillFilesEditor } from "./SkillFilesEditor.tsx";
+import { PublishSkill } from "./PublishSkill.tsx";
+import { SkillSuggestions } from "./SkillSuggestions.tsx";
 import { Modal } from "../../shared/Modal.tsx";
 export function AssetsPage({
   user,
@@ -10,8 +13,14 @@ export function AssetsPage({
   onUseSkill: (asset: Asset) => Promise<void>;
 }) {
   const [assets, setAssets] = useState<Asset[]>([]);
-  const [tab, setTab] = useState<"memory" | "skill">("memory");
+  const [tab, setTab] = useState<"memory" | "skill" | "shared">("memory");
   const [editing, setEditing] = useState<Asset | null | undefined>();
+  const [files, setFiles] = useState<SkillFile[]>([]);
+  const [publishing, setPublishing] = useState<Asset | null>(null);
+  const [suggesting, setSuggesting] = useState<Asset | null>(null);
+  const [saving, setSaving] = useState(false);
+  const editorSession = useRef(0);
+  const saveOperation = useRef({key: "", id: ""});
   const [name, setName] = useState("");
   const [body, setBody] = useState("");
   const [scope, setScope] = useState("");
@@ -26,7 +35,7 @@ export function AssetsPage({
   };
   useEffect(() => {
     void refresh().catch((e) => setError(e.message));
-    return () => { listRequest.current++; };
+    return () => { listRequest.current++; editorSession.current++; };
   }, [user]);
   useEffect(() => {
     if (!assets.some(a => a.memory_index_state === "queued" || a.memory_index_state === "issued")) return;
@@ -34,38 +43,57 @@ export function AssetsPage({
     return () => clearTimeout(timer);
   }, [assets]);
   const edit = (asset: Asset | null) => {
+    editorSession.current++;
+    setSaving(false);
+    saveOperation.current = {key: "", id: ""};
+    setError("");
+    setFiles(asset?.files ?? []);
     setEditing(asset);
     setName(asset?.name ?? "");
     setBody(
       asset?.body ??
-        (tab === "skill"
+        (tab !== "memory"
           ? "# 分析方法\n\n## 适用范围\n\n## 步骤\n1. 核对资料与口径\n2. 展示 SQL，等待用户确认\n3. 解释查询结果\n\n## 输出要求\n列出依据、范围与限制"
           : ""),
     );
     setScope(asset?.scope ?? "");
     setVerified(asset?.verified ?? false);
   };
+  const closeEditor = () => {
+    editorSession.current++;
+    setEditing(undefined);
+    setSaving(false);
+  };
   const save = async () => {
+    if (saving) return;
+    const session = editorSession.current;
+    setSaving(true); setError("");
     listRequest.current++;
     try {
-      await api("Asset", "/assets", "POST", {
-        operation_id: crypto.randomUUID(),
+      const input = {
         id: editing?.id ?? null,
         expected_version: editing?.version ?? null,
-        kind: editing?.kind ?? tab,
+        kind: editing?.kind ?? (tab === "memory" ? "memory" : "skill"),
+        files,
         name,
         body,
         scope,
         verified,
         source_text: editing?.source_text ?? "用户在个人积累页明确保存",
         dependencies: editing?.dependencies ?? [],
-      });
+      };
+      const key = JSON.stringify(input);
+      if (saveOperation.current.key !== key) saveOperation.current = {key, id: crypto.randomUUID()};
+      const saved = await api("Asset", "/assets", "POST", { ...input, operation_id: saveOperation.current.id });
+      // 回执只结束发起保存的编辑，关闭后再新建的草稿不受影响。
+      if (session !== editorSession.current) return;
       setEditing(undefined);
+      setTab(saved.kind === "memory" ? "memory" : saved.visibility === "space" ? "shared" : "skill");
       await refresh();
-      setNotice("已保存到你的个人积累，其他用户无法读取。");
+      if (session === editorSession.current) setNotice(saved.visibility === "space" ? "公共方法已保存新版本；会话仍需明确重选。" : "已保存到你的个人积累，其他用户无法读取。");
     } catch (e) {
-      setError(e instanceof Error ? e.message : "保存失败");
-    }
+      if (session === editorSession.current) setError(e instanceof Error && e.message === "skill_line_too_long" ? "方法或附件中有单行内容过长，请分行后保存（每行不超过 50 KiB）。" : e instanceof Error ? e.message : "保存失败");
+    } finally { if (session === editorSession.current) setSaving(false); }
   };
   const state = async (asset: Asset, action: string) => {
     listRequest.current++;
@@ -84,6 +112,7 @@ export function AssetsPage({
       setError(String(e));
     }
   };
+  const matches = (asset: Asset) => tab === "memory" ? asset.kind === "memory" : asset.kind === "skill" && (tab === "shared" ? asset.visibility === "space" : asset.visibility !== "space");
   return (
     <section className="management assets-page">
       <div className="page-heading">
@@ -93,7 +122,7 @@ export function AssetsPage({
           <p>纠错记住适用范围，方法由你决定何时采用。</p>
         </div>
         <button className="primary" onClick={() => edit(null)}>
-          新增{tab === "memory" ? "记忆" : "Skill"}
+          新增{tab === "memory" ? "记忆" : "个人 Skill"}
         </button>
       </div>
       <div className="tabs" role="tablist">
@@ -111,12 +140,14 @@ export function AssetsPage({
           onClick={() => setTab("skill")}
         >
           我的 Skill{" "}
-          <small>{assets.filter((a) => a.kind === "skill").length}</small>
+          <small>{assets.filter((a) => a.kind === "skill" && a.visibility !== "space").length}</small>
         </button>
+        <button role="tab" aria-selected={tab === "shared"} onClick={() => setTab("shared")}>空间公共 Skill <small>{assets.filter(a => a.visibility === "space").length}</small></button>
       </div>
+      {tab === "shared" && <p className="quiet skill-sharing-note">本空间成员共享的分析方法。负责人维护正文，其他成员可以提出建议；使用时仍需明确选用。</p>}
       <div className="asset-grid">
         {assets
-          .filter((a) => a.kind === tab)
+          .filter(matches)
           .map((asset) => (
             <article
               key={asset.id}
@@ -134,6 +165,7 @@ export function AssetsPage({
                 </span>
               </div>
               <h2>{asset.name}</h2>
+              {asset.kind === "skill" && <p className="quiet skill-owner">{asset.visibility === "space" ? "空间公共" : "个人"} · 负责人 {asset.owner_id ?? user}</p>}
               <p className="asset-body">{asset.body}</p>
               <div className="asset-scope">
                 <strong>适用范围</strong>
@@ -153,7 +185,9 @@ export function AssetsPage({
                 <p>{asset.source_text}</p>
                 <pre>{JSON.stringify(asset.dependencies, null, 2)}</pre>
               </details>
+              {(asset.files ?? []).map(file => <details key={file.path}><summary>{file.path}</summary><pre className="skill-preview">{file.content}</pre></details>)}
               <div className="actions">
+                {asset.can_edit && <>
                 <button onClick={() => edit(asset)}>编辑</button>
                 <button
                   onClick={() =>
@@ -167,7 +201,9 @@ export function AssetsPage({
                 </button>
                 <button onClick={() => void state(asset, "delete")}>
                   删除
-                </button>
+                </button></>}
+                {asset.kind === "skill" && asset.visibility !== "space" && asset.state === "enabled" && <button onClick={() => setPublishing(asset)}>发布到空间</button>}
+                {asset.visibility === "space" && <button onClick={() => setSuggesting(asset)}>修改建议</button>}
                 {asset.kind === "skill" && asset.state === "enabled" && (
                   <button
                     className="primary"
@@ -186,7 +222,7 @@ export function AssetsPage({
             </article>
           ))}
       </div>
-      {!assets.some((a) => a.kind === tab) && (
+      {!assets.some(matches) && (
         <div className="asset-empty">
           <span>◇</span>
           <h2>
@@ -220,15 +256,17 @@ export function AssetsPage({
             (editing ? "编辑" : "新增") +
             (tab === "memory" ? "个人记忆" : "Skill")
           }
-          onClose={() => setEditing(undefined)}
+          onClose={closeEditor}
         >
           <label className="form-label">
             名称
-            <input value={name} onChange={(e) => setName(e.target.value)} />
+            <input disabled={saving} aria-label="名称" value={name} onChange={(e) => setName(e.target.value)} />
           </label>
           <label className="form-label">
             内容
             <textarea
+              aria-label="内容"
+              disabled={saving}
               rows={12}
               value={body}
               onChange={(e) => setBody(e.target.value)}
@@ -237,28 +275,34 @@ export function AssetsPage({
           <label className="form-label">
             适用范围与例外
             <input
+              disabled={saving}
               value={scope}
               onChange={(e) => setScope(e.target.value)}
               placeholder="哪些问题可采用，哪些情况除外"
             />
           </label>
+          {(editing?.kind ?? (tab === "memory" ? "memory" : "skill")) === "skill" && <SkillFilesEditor files={files} onChange={setFiles} disabled={saving}/>}
           <label className="checkbox-label">
             <input
               type="checkbox"
+              disabled={saving}
               checked={verified}
               onChange={(e) => setVerified(e.target.checked)}
             />
-            我已核对这条个人定义
+            我已核对这条{editing?.visibility === "space" ? "公共" : "个人"}定义
           </label>
+          {error && <p role="alert" className="error">{error}</p>}
           <button
             className="primary"
-            disabled={!name.trim() || !body.trim() || !scope.trim()}
+            disabled={saving || !name.trim() || !body.trim() || !scope.trim()}
             onClick={() => void save()}
           >
             保存
           </button>
         </Modal>
       )}
+      {publishing && <PublishSkill asset={publishing} onClose={() => setPublishing(null)} onPublished={async () => { setPublishing(null); setTab("shared"); await refresh(); setNotice("已发布独立公共副本。私人方法后续修改不会自动公开。"); }}/>}
+      {suggesting && <SkillSuggestions asset={suggesting} onClose={() => setSuggesting(null)}/>}
     </section>
   );
 }

@@ -106,9 +106,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             get(data_routes::assets).post(data_routes::save_asset),
         )
         .route("/assets/{id}/{action}", post(data_routes::asset_action))
+        .route("/assets/{id}/publish", post(data_routes::publish_skill))
+        .route(
+            "/assets/{id}/suggestions",
+            get(data_routes::skill_suggestions).post(data_routes::suggest_skill),
+        )
+        .route(
+            "/assets/{id}/suggestions/{suggestion_id}/review",
+            post(data_routes::review_skill_suggestion),
+        )
         .route(
             "/conversations/{id}/skill-selections",
-            post(data_routes::select_skill),
+            post(data_routes::select_skill).get(data_routes::skill_selections),
         )
         .route("/conversations/{id}/queries", get(data_routes::queries))
         .route("/queries/{id}", get(data_routes::query))

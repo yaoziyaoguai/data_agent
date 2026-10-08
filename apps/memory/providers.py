@@ -10,6 +10,9 @@ from pathlib import Path
 import httpx
 from store import MemoryError
 
+# 与共享语义向量接入一致，为每条百炼输入预留模板开销；仍按实际usage结算和核验。
+TOKEN_OVERHEAD_PER_TEXT = 64
+
 
 class ModelGateway:
     def __init__(self, config, store):
@@ -109,10 +112,10 @@ class BudgetedEmbedding:
         return self.embed_batch([text], memory_action)[0]
 
     def embed_batch(self, texts, memory_action=None):
-        if not texts or len(texts) > 20:
+        if not texts or len(texts) > 20 or any(not text for text in texts):
             raise MemoryError("memory_unavailable")
         value = self.gateway.call("memory_embedding", {"model": "qwen3.7-text-embedding", "input": texts,
-                                  "dimensions": 1024, "encoding_format": "float"}, sum(len(t.encode()) for t in texts))
+                                  "dimensions": 1024, "encoding_format": "float"}, sum(len(t.encode()) + TOKEN_OVERHEAD_PER_TEXT for t in texts))
         items = sorted(value["data"], key=lambda x: x["index"])
         if [v["index"] for v in items] != list(range(len(texts))):
             raise MemoryError("memory_unavailable")

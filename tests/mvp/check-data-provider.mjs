@@ -5,6 +5,7 @@ import { writeFile } from "node:fs/promises";
 import { deliver } from "../../apps/agent/session/deliver.ts";
 import { restoreCheckpoint } from "../../apps/agent/session/checkpoint.ts";
 import { harness } from "./harness.mjs";
+import {assetInput, ok, select} from './skill-fixtures.mjs';
 const profile = {
   provider_id: "deepseek",
   model_id: "deepseek-flash",
@@ -45,7 +46,8 @@ const provider = createServer(async (req, res) => {
   const body = JSON.parse(raw);
   bytes.push(Buffer.byteLength(raw));
   calls++;
-  assert.equal(body.tools.length, 12);
+  assert.equal(body.tools.length, 13);
+  assert.ok(body.tools.some(tool => tool.function.name === 'read'));
   assert.equal(body.max_tokens, 2048);
   assert.ok(Buffer.byteLength(raw) <= profile.payload_bytes_limit);
   assert.deepEqual(body.thinking, { type: "disabled" });
@@ -156,6 +158,8 @@ process.env.DATA_AGENT_PROVIDER_TEST = "1";
 try {
   document=(await h.request('/knowledge',{operation_id:randomUUID(),kind:'document',name:'净收入长文合成说明',body:'合成文档'.repeat(8000)+'尾部合成口径：退款按支付行归属。',related_ids:['table-demo_order_detail'],source_url:null})).value;
   const cid = await h.create();
+  const skill = ok(await h.request('/assets',assetInput({name:'合成试用报告方法',body:'需要查看结果时先核对语义与时间。SQL 必须经用户按钮确认。回答顺序遵守 references/report.md。',files:[{path:'references/report.md',content:'先给结论，再列依据。'}]})));
+  ok(await select(h,cid,skill));
   const run = await h.capture(cid, "查2026年1月净收入");
   await h.pauseWorker();
   await deliver(
@@ -232,7 +236,7 @@ try {
       passed,
       calls,
       payloadBytes: bytes,
-      tools: 12,
+      tools: 13,
       mode: "Pi OpenAI protocol via local provider",
       officialRequests: 0,
     }),

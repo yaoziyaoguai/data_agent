@@ -51,6 +51,12 @@ const invoke=async(name,args,sdk=randomUUID())=>{
  return {input,result:await h.internal('/internal/data/tools',input)};
 };
 const details={name:'金额展示偏好',body:'这是Pi生成的正文，不应成为正式记忆',scope:'未指定单位的收入分析',verified:false,dependencies:[]};
+const stopCapturedInput=async()=>{
+ // 捕获器没有真正的Pi完成回调；显式撤回测试输入，避免旧待处理消息重领后占住Worker。
+ const result=await h.request(`/conversations/${run.conversation_id}/messages/${run.message_id}/withdraw`,{operation_id:randomUUID()});
+ assert.equal(result.status,200,JSON.stringify(result.value));
+ h.releaseRun(run.run_id);
+};
 try{
  h=await harness({capture:true,profile,env:{DATA_AGENT_MEMORY_URL:'http://127.0.0.1:'+server.address().port}});
  const cid=await h.create();run=await h.capture(cid,'请记住：以后金额用元展示。现在不查数据。');
@@ -99,7 +105,7 @@ try{
  await until(async()=>(await h.request('/assets')).value.assets.length===0,'remove backfill fixture');
  checks.push('存量记忆在新目标自动回填，正式版本不变；旧目标作业保留、不重置旧预算');
  // 超过启动上下文的20条上限，候选排序必须先于截断。
- h.releaseRun(run.run_id);await h.pauseWorker();const many=[];
+ await stopCapturedInput();await h.pauseWorker();const many=[];
  for(let n=0;n<25;n++){const v=await h.request('/assets',{operation_id:randomUUID(),id:null,expected_version:null,kind:'memory',...details,name:'合成检查'+n,body:'合成月度检查提醒'+n,source_text:'独立目录验证'});assert.equal(v.status,200);many.push(v.value);}
  preferredCandidate=many.map(v=>v.id).sort().at(-1);await h.resumeWorker();
  await until(async()=>(await h.request('/assets')).value.assets.every(v=>v.memory_index_state==='indexed'),'25条索引完成',40000);
@@ -121,7 +127,7 @@ try{
  await h.request('/assets/'+assetId+'/delete',{operation_id:randomUUID(),expected_version:'2'});await h.resumeWorker();
  checks.push('领取后停用阻止新的embedding许可，没有外发或预留；旧作业不得复活资产');
  // 正式表中造一条属于测试的故障；候选虽已提取，事务失败不排索引。
- h.releaseRun(run.run_id);
+ await stopCapturedInput();
  const otherCid=await h.create();run=await h.capture(otherCid,'请记住：以后金额用元展示。');
  h.sql("CREATE TRIGGER memory_save_failure BEFORE INSERT ON personal_assets FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='synthetic_failure'");
  const before=indexes.size;
@@ -134,7 +140,7 @@ try{
  const unauth=await fetch(h.env.DATA_AGENT_API_URL+'/internal/memory/model-calls',{method:'POST',headers:{'content-type':'application/json'},body:'{}'});assert.equal(unauth.status,401);
  checks.push('新增内部模型接口拒绝无内部凭据请求');
  // 重现正式试用中的范围扩写：提取正文正确，主Agent的名称、正文和scope故意带错指标。
- failExtract=false;h.releaseRun(run.run_id);
+ failExtract=false;await stopCapturedInput();
  run=await h.capture(await h.create(),'请记住：检查月支付客户数时按整月客户去重，不能累加每日去重人数；具体口径仍查正式文档。');
  extractedBody='检查月支付客户数时，按整月客户去重，不能累加每日去重人数；具体口径仍查正式文档。';
  const expanded={...details,name:'月活（MAU）检查',body:'检查所有月活用户',scope:'月支付客户数（MAU口径的支付客户去重月活人数）检查与取数'};
@@ -150,7 +156,7 @@ try{
  assert.deepEqual((await h.internal('/internal/data/tools',correction.input)).value,correction.result.value);
  await until(async()=>(await h.request('/assets')).value.assets.find(v=>v.id===corrected.id)?.memory_index_state==='indexed','correction indexed');
  await h.restartApi();checkContent((await h.request('/assets')).value.assets.find(v=>v.id===corrected.id));
- h.releaseRun(run.run_id);
+ await stopCapturedInput();
  run=await h.capture(await h.create(),'修订我的月支付客户数检查提醒：整月去重，并核对客户标识为空的处理；只作为个人检查提醒，具体口径仍以正式文档为准。');
  checkContent(run.workspace_context.memories.find(v=>v.id===corrected.id));
  extractedBody='检查月支付客户数时按整月客户去重，并核对客户标识为空的处理；仅为个人检查提醒，具体口径以正式文档为准。';
@@ -159,7 +165,7 @@ try{
  assert.equal(revised.result.value.data.version,'2');
  assert.deepEqual((await h.internal('/internal/data/tools',revised.input)).value,revised.result.value);
  await until(async()=>(await h.request('/assets')).value.assets.find(v=>v.id===corrected.id)?.memory_index_state==='indexed','revision indexed');
- h.releaseRun(run.run_id);run=await h.capture(await h.create(),'按我的提醒核查月支付客户数');
+ await stopCapturedInput();run=await h.capture(await h.create(),'按我的提醒核查月支付客户数');
  checkContent(run.workspace_context.memories.find(v=>v.id===corrected.id));
  const human={operation_id:randomUUID(),id:corrected.id,expected_version:'2',kind:'memory',...details,name:'人工维护的支付客户检查',body:extractedBody,scope:'仅检查月支付客户数，具体口径查正式文档',source_text:'用户明确维护'};
  const humanSaved=await h.request('/assets',human);assert.equal(humanSaved.status,200);

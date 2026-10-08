@@ -94,7 +94,7 @@ export function guardedDeepSeekStream(transport: RustTransport, profile: ModelPr
             const payload = JSON.parse(JSON.stringify({ ...value, model: profile.model_id, max_tokens: profile.output_limit,
               thinking: { type: profile.thinking_level && profile.thinking_level !== 'off' ? 'enabled' : 'disabled' }, stream_options: { include_usage: true } }));
             // 保守预估门槛；服务端工具模板未公开，实际usage才是用量事实。
-            if (!Array.isArray(payload.messages) || (profile.toolset!=='data' && payload.messages.length > 8) || (payload.tools!==undefined && !Array.isArray(payload.tools)) || (profile.toolset!=='data' && payload.tools?.length !== 1) || (profile.toolset==='data' && (payload.tools?.length??0)>12)) throw new Error('provider_payload_invalid');
+            if (!Array.isArray(payload.messages) || (profile.toolset!=='data' && payload.messages.length > 8) || (payload.tools!==undefined && !Array.isArray(payload.tools)) || (profile.toolset!=='data' && payload.tools?.length !== 1) || (profile.toolset==='data' && (payload.tools?.length??0)>13)) throw new Error('provider_payload_invalid');
             if (Buffer.byteLength(JSON.stringify(payload), 'utf8') > (profile.payload_bytes_limit??2048)) throw new Error(profile.toolset==='data' ? 'request_too_large: model_input_limit' : 'model_input_limit');
             parameters_fingerprint = createHash('sha256').update(JSON.stringify(payload)).digest('hex');
             try {

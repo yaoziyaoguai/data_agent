@@ -1809,6 +1809,29 @@
             "failed",
             "superseded"
           ]
+        },
+        "visibility": {
+          "type": "string",
+          "enum": [
+            "personal",
+            "space"
+          ]
+        },
+        "owner_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "files": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SkillFile"
+          },
+          "maxItems": 12
+        },
+        "can_edit": {
+          "type": "boolean"
         }
       },
       "required": [
@@ -1880,7 +1903,8 @@
         "body": {
           "type": "string",
           "minLength": 1,
-          "maxLength": 40000
+          "maxLength": 40000,
+          "description": "Skill 的正文及生成资源每行最多 51200 UTF-8 字节；超限须分行保存。记忆不受此行限制。"
         },
         "scope": {
           "type": "string",
@@ -1900,6 +1924,13 @@
             "$ref": "#/$defs/EvidenceRef"
           },
           "maxItems": 50
+        },
+        "files": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SkillFile"
+          },
+          "maxItems": 12
         }
       },
       "required": [
@@ -2734,7 +2765,8 @@
             "manage_personal_asset",
             "propose_semantic_change",
             "read_conversation",
-            "read_analysis_task"
+            "read_analysis_task",
+            "read"
           ]
         },
         "arguments": {
@@ -2778,7 +2810,8 @@
             "manage_personal_asset",
             "propose_semantic_change",
             "read_conversation",
-            "read_analysis_task"
+            "read_analysis_task",
+            "read"
           ]
         },
         "data": {
@@ -3483,6 +3516,23 @@
         },
         "scope_page": {
           "$ref": "#/$defs/ContentPage"
+        },
+        "visibility": {
+          "type": "string",
+          "enum": [
+            "personal",
+            "space"
+          ]
+        },
+        "owner_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "native_path": {
+          "type": "string",
+          "maxLength": 240
         }
       },
       "required": [
@@ -5073,6 +5123,340 @@
         "user_ids"
       ],
       "additionalProperties": false
+    },
+    "SkillFile": {
+      "title": "SkillFile",
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 240,
+          "pattern": "^(references|assets)/[A-Za-z0-9_/-]+\\.(md|txt|csv|json)$"
+        },
+        "content": {
+          "type": "string",
+          "maxLength": 40000,
+          "description": "UTF-8 文本；每行最多 51200 字节，业务边界校验并返回 skill_line_too_long。"
+        }
+      },
+      "required": [
+        "path",
+        "content"
+      ],
+      "additionalProperties": false
+    },
+    "PublishSkill": {
+      "title": "PublishSkill",
+      "type": "object",
+      "properties": {
+        "operation_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "expected_version": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]{0,19})$"
+        },
+        "share_confirmed": {
+          "const": true
+        }
+      },
+      "required": [
+        "operation_id",
+        "expected_version",
+        "share_confirmed"
+      ],
+      "additionalProperties": false
+    },
+    "SuggestSkill": {
+      "title": "SuggestSkill",
+      "type": "object",
+      "properties": {
+        "operation_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "expected_version": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]{0,19})$"
+        },
+        "content": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 8000
+        },
+        "share_confirmed": {
+          "const": true
+        }
+      },
+      "required": [
+        "operation_id",
+        "expected_version",
+        "content",
+        "share_confirmed"
+      ],
+      "additionalProperties": false
+    },
+    "ReviewSkillSuggestion": {
+      "title": "ReviewSkillSuggestion",
+      "type": "object",
+      "properties": {
+        "operation_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "expected_revision": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]{0,19})$"
+        },
+        "state": {
+          "type": "string",
+          "enum": [
+            "handled",
+            "rejected"
+          ]
+        },
+        "response": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 8000
+        }
+      },
+      "required": [
+        "operation_id",
+        "expected_revision",
+        "state",
+        "response"
+      ],
+      "additionalProperties": false
+    },
+    "SkillSuggestion": {
+      "title": "SkillSuggestion",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "asset_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "author_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "asset_version": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]{0,19})$"
+        },
+        "content": {
+          "type": "string"
+        },
+        "state": {
+          "type": "string",
+          "enum": [
+            "pending",
+            "handled",
+            "rejected"
+          ]
+        },
+        "revision": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]{0,19})$"
+        },
+        "response": {
+          "type": "string"
+        },
+        "reviewed_by": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "asset_id",
+        "author_id",
+        "asset_version",
+        "content",
+        "state",
+        "revision",
+        "response",
+        "reviewed_by"
+      ],
+      "additionalProperties": false
+    },
+    "SkillSuggestionList": {
+      "title": "SkillSuggestionList",
+      "type": "object",
+      "properties": {
+        "suggestions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SkillSuggestion"
+          }
+        },
+        "next_after_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "suggestions",
+        "next_after_id"
+      ],
+      "additionalProperties": false
+    },
+    "ConversationSkillSelection": {
+      "title": "ConversationSkillSelection",
+      "type": "object",
+      "properties": {
+        "asset_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "selected_version": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]{0,19})$"
+        },
+        "current_version": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "visibility": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "personal",
+            "space",
+            null
+          ]
+        },
+        "owner_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "availability": {
+          "type": "string",
+          "enum": [
+            "available",
+            "version_changed",
+            "disabled",
+            "dependency_unavailable",
+            "unavailable"
+          ]
+        }
+      },
+      "required": [
+        "asset_id",
+        "selected_version",
+        "current_version",
+        "name",
+        "visibility",
+        "owner_id",
+        "availability"
+      ],
+      "additionalProperties": false
+    },
+    "ConversationSkillSelections": {
+      "title": "ConversationSkillSelections",
+      "type": "object",
+      "properties": {
+        "conversation_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "selections": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ConversationSkillSelection"
+          }
+        },
+        "next_after_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "conversation_id",
+        "selections",
+        "next_after_id"
+      ],
+      "additionalProperties": false
+    },
+    "AssetPageQuery": {
+      "title": "AssetPageQuery",
+      "type": "object",
+      "properties": {
+        "after_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        }
+      },
+      "required": [],
+      "additionalProperties": false
+    },
+    "SkillReadInput": {
+      "title": "SkillReadInput",
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 400
+        },
+        "offset": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100000
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2000
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "additionalProperties": false
     }
   },
   "properties": {
@@ -5393,6 +5777,36 @@
     },
     "SemanticMemberList": {
       "$ref": "#/$defs/SemanticMemberList"
+    },
+    "SkillFile": {
+      "$ref": "#/$defs/SkillFile"
+    },
+    "PublishSkill": {
+      "$ref": "#/$defs/PublishSkill"
+    },
+    "SuggestSkill": {
+      "$ref": "#/$defs/SuggestSkill"
+    },
+    "ReviewSkillSuggestion": {
+      "$ref": "#/$defs/ReviewSkillSuggestion"
+    },
+    "SkillSuggestion": {
+      "$ref": "#/$defs/SkillSuggestion"
+    },
+    "SkillSuggestionList": {
+      "$ref": "#/$defs/SkillSuggestionList"
+    },
+    "ConversationSkillSelection": {
+      "$ref": "#/$defs/ConversationSkillSelection"
+    },
+    "ConversationSkillSelections": {
+      "$ref": "#/$defs/ConversationSkillSelections"
+    },
+    "AssetPageQuery": {
+      "$ref": "#/$defs/AssetPageQuery"
+    },
+    "SkillReadInput": {
+      "$ref": "#/$defs/SkillReadInput"
     }
   },
   "required": [

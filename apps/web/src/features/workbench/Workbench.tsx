@@ -8,6 +8,7 @@ import { api } from "../../shared/api.ts";
 import { WorkspaceShell, type View } from "../../shared/WorkspaceShell.tsx";
 import { Modal } from "../../shared/Modal.tsx";
 import { mergeSnapshot } from "./conversation-timeline.ts";
+import { SkillSelections } from "./SkillSelections.tsx";
 import { QueryCard } from "./QueryCard.tsx";
 import { AssistantMessage } from "./AssistantMessage.tsx";
 export function Workbench({
@@ -452,6 +453,7 @@ export function Workbench({
               />
             ))}
         </div>
+        {cid && <SkillSelections key={user + ":" + cid} cid={cid} onManage={() => onView("assets")}/> }
         <div className="composer">
           <label className="sr-only" htmlFor="question">
             你的数据问题

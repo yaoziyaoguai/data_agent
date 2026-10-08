@@ -113,4 +113,14 @@ export interface ContractTypes {
   SemanticCorrection: Boundary.SemanticCorrection;
   SemanticCorrectionList: Boundary.SemanticCorrectionList;
   SemanticMemberList: Boundary.SemanticMemberList;
+  SkillFile: Boundary.SkillFile;
+  PublishSkill: Boundary.PublishSkill;
+  SuggestSkill: Boundary.SuggestSkill;
+  ReviewSkillSuggestion: Boundary.ReviewSkillSuggestion;
+  SkillSuggestion: Boundary.SkillSuggestion;
+  SkillSuggestionList: Boundary.SkillSuggestionList;
+  ConversationSkillSelection: Boundary.ConversationSkillSelection;
+  ConversationSkillSelections: Boundary.ConversationSkillSelections;
+  AssetPageQuery: Boundary.AssetPageQuery;
+  SkillReadInput: Boundary.SkillReadInput;
 }

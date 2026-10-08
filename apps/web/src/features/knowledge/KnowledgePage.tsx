@@ -10,7 +10,8 @@ import { SemanticCorrections } from "./SemanticCorrections.tsx";
 import { KnowledgeCreator } from "./KnowledgeCreator.tsx";
 import { KnowledgeDirectory } from "./KnowledgeDirectory.tsx";
 import { SemanticMaintainer } from "./SemanticMaintainer.tsx";
-import { api } from "../../shared/api.ts";
+import { KnowledgeOrigin } from "./KnowledgeOrigin.tsx";
+import { ApiError, api } from "../../shared/api.ts";
 import { Modal } from "../../shared/Modal.tsx";
 function currentObject(previous: KnowledgeObject | undefined, incoming: KnowledgeObject): KnowledgeObject {
   if (!previous) return incoming;
@@ -321,7 +322,12 @@ export function KnowledgePage({
     if(syncing)return;
     setSyncing(true);setError("");setMaintenanceNotice("");
     try{await api("MutationReceipt","/source-syncs","POST",{operation_id:crypto.randomUUID()});await refresh();setMaintenanceNotice("来源同步完成；语义分析按维护配置继续处理，人工修改保留。");}
-    catch(e){setError(e instanceof Error?e.message:"同步失败");}finally{setSyncing(false);}
+    catch(e){
+      const message = e instanceof ApiError && e.code === "version_conflict" ? "来源同步发生版本冲突。请刷新查看当前状态，核对平台来源版本后重试。"
+        : e instanceof ApiError && e.code === "forbidden" ? "当前账号无权同步来源，请联系本系统超级维护者。"
+        : "来源同步未完成，请查看当前状态后重试。";
+      setError(message + (e instanceof ApiError ? ` 错误码：${e.code}；诊断编号：${e.requestId}` : ''));
+    }finally{setSyncing(false);}
   };
   const rebuild=async()=>{
     if(rebuilding)return;
@@ -445,6 +451,7 @@ export function KnowledgePage({
               }}
             >
               <span>{o.name}</span>
+              <KnowledgeOrigin object={o}/>
               <small>
                 {o.kind} · v{o.version}{o.analysis_preference?.preferred?" · 常用":""}
               </small>
@@ -462,6 +469,7 @@ export function KnowledgePage({
                     {selected.kind.toUpperCase()} · VERSION {selected.version}
                   </span>
                   <h2>{selected.name}</h2>
+                  <KnowledgeOrigin object={selected} detail/>
                 </div>
                 <div className="actions">
                   <span className="status-pill">

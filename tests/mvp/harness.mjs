@@ -155,7 +155,7 @@ export async function harness(options = {}) {
       } catch {
         return false;
       }
-    }, "service health " + port, options.startupTimeout ?? 20000);
+    }, "service health " + port, options.startupTimeout ?? 60000);
   const request = async (
     path,
     body,

@@ -2,6 +2,7 @@
 import hashlib
 import json
 import os
+import time
 from pathlib import Path
 
 from providers import BudgetedEmbedding, BudgetedLLM, ModelGateway
@@ -16,11 +17,15 @@ class MemoryService:
     def __init__(self, config, directory):
         os.environ["MEM0_TELEMETRY"] = "False"
         os.environ["MEM0_DIR"] = str(directory / "sdk")
+        started = time.monotonic()
+        print("startup service=memory stage=mem0_import_started", flush=True)
         from mem0 import Memory
+        print(f"startup service=memory stage=mem0_import_ready elapsed={time.monotonic()-started:.2f}s", flush=True)
 
         self.store = ReceiptStore(directory / "receipts.sqlite")
         self.gateway = ModelGateway(config, self.store)
         self.fingerprint = digest(config)
+        print("startup service=memory stage=configuration_started", flush=True)
         self.memory = Memory.from_config({
             "vector_store": {"provider": "milvus", "config": {
                 "url": config["milvus_url"], "token": "root:" + Path(config["milvus_token_file"]).read_text().strip(),
@@ -28,6 +33,7 @@ class MemoryService:
             "embedder": {"provider": "openai", "config": {"model": "qwen3.7-text-embedding", "embedding_dims": 1024, "api_key": "host-adapter"}},
             "llm": {"provider": "openai", "config": {"api_key": "host-adapter", "enable_vision": False}},
             "history_db_path": str(directory / "history.sqlite"), "reranker": None})
+        print(f"startup service=memory stage=configuration_ready elapsed={time.monotonic()-started:.2f}s", flush=True)
         # 固定SDK构造器不发模型请求；替换公开实例属性以沿用宿主预算，SDK算法保持原样。
         self.memory.llm = BudgetedLLM(self.gateway)
         self.memory.embedding_model = BudgetedEmbedding(self.gateway)

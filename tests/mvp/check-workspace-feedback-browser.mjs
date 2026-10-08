@@ -1,0 +1,60 @@
+import assert from 'node:assert/strict';
+import {randomUUID} from 'node:crypto';
+import {mkdir, writeFile} from 'node:fs/promises';
+import {chromium} from 'playwright';
+import {harness, until} from './harness.mjs';
+import {assetInput, editInput, ok, select} from './skill-fixtures.mjs';
+const h=await harness({web:true,capture:true,startWorker:false,startupTimeout:60000});
+const browser=await chromium.launch({headless:true});const page=await browser.newPage({viewport:{width:1440,height:1000}});
+const directory='.local/checks/workspace-feedback';await mkdir(directory,{recursive:true});
+const checks=[],errors=[];let passed=false;page.on('pageerror',e=>errors.push(e.message));
+const navigate=name=>page.getByRole('navigation',{name:'主导航'}).getByRole('button',{name:new RegExp(name)}).click();
+const login=async user=>{await page.goto(h.url);await page.getByLabel('演示登录凭据').fill(h.tokens[user]);await page.getByRole('button',{name:'进入工作台 →'}).click();};
+const tab=name=>page.getByRole('tab',{name:new RegExp('^'+name)}).click();
+try {
+ ok(await h.request('/source-syncs',{operation_id:randomUUID()}));
+ const catalog=await fetch(h.env.DATA_AGENT_PLATFORM_URL+'/catalog',{method:'POST',headers:{authorization:'Bearer '+h.env.DATA_AGENT_INTERNAL_TOKEN,'content-type':'application/json'},body:JSON.stringify({limit:50})}).then(r=>r.json());
+ const ownership=h.sql("SELECT JSON_OBJECT('id',object_id,'owner',maintainer_id,'version',CAST(version AS CHAR)) FROM semantic_ownership ORDER BY object_id");
+ await writeFile(h.directory+'/platform/catalog.json',JSON.stringify({source_namespace:catalog.source_namespace,tables:catalog.tables.map(t=>({...t,maintainer_id:'bob'}))}));
+ await login('alice');await navigate('语义管理');await page.getByRole('button',{name:'同步来源',exact:true}).click();
+ const error=page.getByRole('alert').filter({hasText:'来源同步发生版本冲突'});await error.waitFor();const errorText=await error.innerText();assert.match(errorText,/version_conflict/);const requestId=errorText.match(/诊断编号：([A-Za-z0-9_-]+)/)[1];
+ assert.ok(h.logs.find(v=>v.name==='api').output.includes(`request_id=${requestId} code=version_conflict`));assert.deepEqual(h.sql("SELECT JSON_OBJECT('id',object_id,'owner',maintainer_id,'version',CAST(version AS CHAR)) FROM semantic_ownership ORDER BY object_id"),ownership);
+ checks.push('真实同步冲突有中文说明/下一步/原码，与API脱敏日志同号；负责人快照未改变');
+ await writeFile(h.directory+'/platform/catalog.json',JSON.stringify({source_namespace:catalog.source_namespace,tables:catalog.tables.map(t=>({...t,platform_version:'2'}))}));
+ await page.getByRole('button',{name:'同步来源',exact:true}).click();await page.getByText('来源同步完成；语义分析按维护配置继续处理，人工修改保留。').waitFor();
+ const seed=ok(await h.request('/knowledge/table-demo_order_detail'));
+ const listing=page.getByRole('navigation',{name:'语义对象'});const matching=listing.getByRole('button').filter({hasText:seed.name});
+ await until(async()=>await matching.count()>=2,'two same named tables');
+ const originTexts=await matching.locator('.knowledge-origin').allTextContents();assert.equal(new Set(originTexts).size,originTexts.length);
+ for(let i=0;i<2;i++){const origin=await matching.nth(i).locator('.knowledge-origin').innerText();await matching.nth(i).click();await until(async()=>origin.replace(/\s/g,'')===(await page.locator('.knowledge-content .knowledge-origin.detail').innerText()).replace(/\s/g,''),'click exact object');}
+ await page.getByLabel('语义目录范围',{exact:true}).selectOption('all');await page.getByLabel('管理目录名称').fill(seed.name);await until(async()=>await matching.count()>=2,'same named management entries');assert.ok((await matching.first().innerText()).includes('对象：'));
+ await page.screenshot({path:directory+'/sources-desktop.png',fullPage:true});checks.push('同名表默认与管理目录显示完整来源/对象身份，点击详情保持原ID');
+ await navigate('个人积累|我的积累');
+ for (const kind of ['memory','memory','skill']) {
+  await tab(kind==='memory'?'记忆与纠错':'我的 Skill');await page.getByRole('button',{name:kind==='memory'?'新增记忆':'新增个人 Skill',exact:true}).click();
+  const form=page.getByRole('dialog');await form.getByLabel('名称',{exact:true}).fill('独立保存的同名条目');await form.getByLabel('内容',{exact:true}).fill('相同的合成内容');await form.getByLabel('适用范围与例外').fill('相同的合成范围');await form.getByRole('button',{name:'保存',exact:true}).click();await form.waitFor({state:'detached'});
+ }
+ const separate=ok(await h.request('/assets')).assets.filter(v=>v.name==='独立保存的同名条目');assert.equal(separate.length,3);assert.equal(separate.filter(v=>v.kind==='memory').length,2);assert.equal(separate.filter(v=>v.kind==='skill').length,1);
+ checks.push('成功保存后再新建同内容条目及跨种类新建使用独立操作身份，不接回旧资产或冲突');
+ await navigate('个人积累|我的积累');await tab('我的 Skill');await page.getByRole('button',{name:'新增个人 Skill',exact:true}).click();let dialog=page.getByRole('dialog');
+ await dialog.getByLabel('名称',{exact:true}).fill('合成浏览器方法');await dialog.getByLabel('内容',{exact:true}).fill('先核对月份与口径，SQL 由用户确认。');await dialog.getByLabel('适用范围与例外').fill('合成订单分析');await dialog.getByRole('button',{name:'添加文本附件'}).click();await dialog.getByLabel('文件路径').fill('references/guide.md');await dialog.getByLabel('文件内容').fill('配套说明应随同版本读取。');await dialog.getByRole('button',{name:'保存',exact:true}).click();await dialog.waitFor({state:'detached'});
+ const card=page.locator('.asset-card').filter({hasText:'合成浏览器方法'});await card.getByRole('button',{name:'在当前对话选用'}).click();const selected=page.getByRole('region',{name:'本会话已选 Skill'});await selected.getByText(/合成浏览器方法.*已选 v1/).waitFor();assert.match(await selected.innerText(),/个人.*可供本会话采用/);
+ await page.reload();await selected.getByText(/合成浏览器方法.*已选 v1/).waitFor();
+ let asset=ok(await h.request('/assets')).assets.find(v=>v.name==='合成浏览器方法');asset=ok(await h.request('/assets',editInput(asset,{body:'增加单位检查。'})));
+ await selected.getByText(/已选 v1.*当前 v2/).waitFor();await selected.getByText(/版本已变化，请重新选用/).waitFor();
+ await selected.getByRole('button',{name:'管理与选用'}).click();await tab('我的 Skill');await card.getByRole('button',{name:'在当前对话选用'}).click();await selected.getByText(/已选 v2/).waitFor();
+ await page.screenshot({path:directory+'/selection-desktop.png',fullPage:true});checks.push('UI新增附件与方法、明确选用后工作台可见，刷新保持；后台改版显示旧/新版本，重新选用后恢复可用');
+ await navigate('个人积累|我的积累');await tab('我的 Skill');await card.getByRole('button',{name:'发布到空间'}).click();dialog=page.getByRole('dialog');await dialog.getByRole('heading',{name:'发布到当前空间'}).waitFor();assert.equal(await dialog.getByRole('button',{name:'确认发布独立副本'}).isDisabled(),true);await dialog.getByLabel('我已核对以上公开内容').check();await dialog.getByRole('button',{name:'确认发布独立副本'}).click();await dialog.waitFor({state:'detached'});await tab('空间公共 Skill');await card.getByText(/负责人 alice/).waitFor();
+ await page.getByRole('button',{name:'退出',exact:true}).click();await login('bob');await navigate('个人积累|我的积累');await tab('空间公共 Skill');assert.equal(await card.getByRole('button',{name:'编辑',exact:true}).count(),0);await card.getByRole('button',{name:'修改建议'}).click();dialog=page.getByRole('dialog');await dialog.getByLabel('你的建议').fill('建议增加时区说明。');await dialog.getByLabel('确认内容可在当前空间共享').check();await dialog.getByRole('button',{name:'提交修改建议'}).click();await dialog.locator('.skill-suggestion .entry-value').filter({hasText:'建议增加时区说明。'}).waitFor();await dialog.getByLabel('你的建议').fill('建议增加时区说明。');await dialog.getByLabel('确认内容可在当前空间共享').check();await dialog.getByRole('button',{name:'提交修改建议'}).click();await until(async()=>await dialog.getByText('建议增加时区说明。',{exact:true}).count()===2,'new suggestion has new operation');await page.keyboard.press('Escape');
+ await page.getByRole('button',{name:'退出',exact:true}).click();await login('alice');await navigate('个人积累|我的积累');await tab('空间公共 Skill');await card.getByRole('button',{name:'修改建议'}).click();dialog=page.getByRole('dialog');await dialog.getByLabel('处理说明').first().fill('已核对，正文另行保存。');await dialog.getByRole('button',{name:'标记已处理'}).first().click();await dialog.getByText('已处理',{exact:true}).waitFor();await page.keyboard.press('Escape');assert.match(await card.innerText(),/增加单位检查/);assert.ok(!(await card.locator('.asset-body').innerText()).includes('建议增加时区说明'));
+ await page.setViewportSize({width:390,height:844});assert.ok(await card.getByText(/负责人 alice/).isVisible());assert.ok(await page.locator('.skill-sharing-note').isVisible());await page.screenshot({path:directory+'/shared-mobile.png',fullPage:true});assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));checks.push('发布需预览确认；其他成员无编辑按钮，可提建议，负责人处理不改正文；390px负责人说明可见且无横向溢出');
+ await page.setViewportSize({width:1440,height:1000});const a=await h.create(), b=await h.create();const methodA=ok(await h.request('/assets',assetInput({name:'会话甲专属方法'}))),methodB=ok(await h.request('/assets',assetInput({name:'会话乙专属方法'})));ok(await select(h,a,methodA));ok(await select(h,b,methodB));await h.send(a,'合成会话甲');await h.send(b,'合成会话乙');
+ await page.evaluate(id=>localStorage.setItem('data-agent.conversation.alice',id),a);
+ let release;const gate=new Promise(resolve=>release=resolve);let delayed=false;
+ await page.route(`**/api/conversations/${a}/skill-selections`,async route=>{if(!delayed){delayed=true;const response=await route.fetch();await gate;await route.fulfill({response});}else await route.continue();});
+ await navigate('工作台');await until(()=>delayed,'delayed selection request');
+ await page.getByRole('navigation',{name:'会话历史'}).getByRole('button',{name:/合成会话乙/}).click();await selected.getByText(/会话乙专属方法/).waitFor();release();await until(async()=>await selected.getByText(/会话乙专属方法/).count()===1,'later response does not replace selected conversation');assert.equal(await selected.getByText(/会话甲专属方法/).count(),0);
+ checks.push('切换对话后延迟的旧选择响应不能覆盖当前会话');
+ await page.unrouteAll({behavior:'wait'});
+ assert.deepEqual(errors,[]);passed=true;console.log(JSON.stringify({passed,checks,officialRequests:0}));
+} finally {await page.screenshot({path:directory+'/last-state.png',fullPage:true}).catch(()=>{});await writeFile(directory+'/report.json',JSON.stringify({passed,checks,errors},null,2));await browser.close();await h.close();}

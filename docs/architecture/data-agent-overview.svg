@@ -29,7 +29,7 @@
     <text x="802" y="263" font-size="14" font-weight="500" fill="#53677d" text-anchor="start" >Container</text>
     <text x="802" y="297" font-size="25" font-weight="650" fill="#172e50" text-anchor="start" >业务 API 服务</text>
     <text x="802" y="325" font-size="16" font-weight="500" fill="#53677d" text-anchor="start" >Rust / Axum</text>
-    <text x="802" y="363" font-size="18" font-weight="400" fill="#172e50" text-anchor="start" >系统维护授权、版本与调用预算</text><text x="802" y="391" font-size="18" font-weight="400" fill="#172e50" text-anchor="start" >会话、语义与个人资产规则</text><text x="802" y="419" font-size="18" font-weight="400" fill="#172e50" text-anchor="start" >查询前另核平台权限与用户确认</text>
+    <text x="802" y="363" font-size="18" font-weight="400" fill="#172e50" text-anchor="start" >系统维护授权、版本与调用预算</text><text x="802" y="391" font-size="18" font-weight="400" fill="#172e50" text-anchor="start" >会话、语义与共享方法规则</text><text x="802" y="419" font-size="18" font-weight="400" fill="#172e50" text-anchor="start" >查询前另核平台权限与用户确认</text>
   </g><g class="node" data-node="models">
     <rect class="node-box" x="1480" y="235" width="370" height="230" rx="10" fill="#f7f5f0" stroke="#9a8050" stroke-width="1.4"/>
     <path d="M1498 235 H1832" stroke="#9a8050" stroke-width="4"/>
@@ -50,7 +50,7 @@
     <text x="802" y="693" font-size="14" font-weight="500" fill="#53677d" text-anchor="start" >Container</text>
     <text x="802" y="727" font-size="25" font-weight="650" fill="#172e50" text-anchor="start" >Agent 运行进程</text>
     <text x="802" y="755" font-size="16" font-weight="500" fill="#53677d" text-anchor="start" >Node.js / Pi SDK 1.0.0</text>
-    <text x="802" y="793" font-size="18" font-weight="400" fill="#172e50" text-anchor="start" >唯一模型与工具循环</text><text x="802" y="821" font-size="18" font-weight="400" fill="#172e50" text-anchor="start" >澄清、SQL、解释与原生压缩</text>
+    <text x="802" y="793" font-size="18" font-weight="400" fill="#172e50" text-anchor="start" >唯一模型与工具循环</text><text x="802" y="821" font-size="18" font-weight="400" fill="#172e50" text-anchor="start" >原生 Skill、会话续接与压缩</text>
   </g><g class="node" data-node="memory">
     <rect class="node-box" x="1350" y="665" width="390" height="230" rx="10" fill="#f1f6ff" stroke="#3866ac" stroke-width="1.4"/>
     <path d="M1368 665 H1722" stroke="#3866ac" stroke-width="4"/>
@@ -71,7 +71,7 @@
     <text x="532" y="1138" font-size="14" font-weight="500" fill="#53677d" text-anchor="start" >Data Store</text>
     <text x="532" y="1172" font-size="25" font-weight="650" fill="#173e34" text-anchor="start" >正式业务记录</text>
     <text x="532" y="1200" font-size="16" font-weight="500" fill="#53677d" text-anchor="start" >MySQL 8.4</text>
-    <text x="532" y="1238" font-size="18" font-weight="400" fill="#173e34" text-anchor="start" >知识、版本、会话与查询状态</text><text x="532" y="1266" font-size="18" font-weight="400" fill="#173e34" text-anchor="start" >个人资产、预算与持久待办</text>
+    <text x="532" y="1238" font-size="18" font-weight="400" fill="#173e34" text-anchor="start" >知识、版本、会话与查询状态</text><text x="532" y="1266" font-size="18" font-weight="400" fill="#173e34" text-anchor="start" >私人记忆、公共方法与预算</text>
   </g><g class="node" data-node="journal">
     <rect class="node-box" x="985" y="1110" width="350" height="190" rx="10" fill="#eef7f3" stroke="#438471" stroke-width="1.4"/>
     <path d="M1003 1110 H1317" stroke="#438471" stroke-width="4"/>

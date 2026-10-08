@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { KnowledgeObject } from "../../../../../packages/contracts/generated/boundary.ts";
+import { KnowledgeOrigin } from "./KnowledgeOrigin.tsx";
 import { api } from "../../shared/api.ts";
 
 export function KnowledgeDirectory({ scope, current, revision, onSelect }: {
@@ -48,7 +49,7 @@ export function KnowledgeDirectory({ scope, current, revision, onSelect }: {
       <button disabled={loading} onClick={() => setRefresh(value => value + 1)}>刷新目录</button>
     </div>
     {objects.map(o => <button key={o.id} aria-current={o.id === current ? "true" : undefined} onClick={() => onSelect(o)}>
-      <span>{o.name}</span><small>{o.kind} · v{o.version} · {o.state === "disabled" ? "已停用" : "启用"}</small>
+      <span>{o.name}</span><KnowledgeOrigin object={o}/><small>{o.kind} · v{o.version} · {o.state === "disabled" ? "已停用" : "启用"}</small>
     </button>)}
     {loading && <p role="status">正在读取目录…</p>}
     {!loading && !error && objects.length === 0 && <p role="status">没有符合当前条件的对象。</p>}

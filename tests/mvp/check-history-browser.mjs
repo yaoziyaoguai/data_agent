@@ -34,6 +34,9 @@ try{
   return `(${q(id)},'demo','table',${q(value.name)},1,'enabled',${q(JSON.stringify(value))},NULL,0,'test')`;
  });
  h.sql('INSERT INTO knowledge_objects(id,space_id,kind,name,version,state,body,source_id,source_version,updated_by) VALUES'+tableRows.join(','));
+ // 批量合成表与正式导入一样登记Datasight归属，保持目录读取的正式权限前提。
+ h.sql(`INSERT INTO semantic_ownership(space_id,object_id,authority_id,source,updated_by) SELECT space_id,id,id,'datasight','test' FROM knowledge_objects WHERE id LIKE ${q(doc.id.slice(0,9)+'-page-table-%')}`);
+ const seededDirectory=await h.request('/knowledge');assert.equal(seededDirectory.status,200,JSON.stringify(seededDirectory.value));
  await page.getByRole('button',{name:/语义管理/}).click();
  const directory=page.getByRole('navigation',{name:'语义对象'});
  await directory.getByRole('button',{name:'加载更多语义对象',exact:true}).click();await directory.getByRole('button',{name:/^分页表150/}).waitFor();

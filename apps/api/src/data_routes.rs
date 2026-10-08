@@ -477,3 +477,92 @@ pub async fn memory_model_call(
             .map_err(failure)?,
     )
 }
+
+pub async fn publish_skill(
+    AxumState(state): AxumState<State>,
+    headers: HeaderMap,
+    Path(asset): Path<String>,
+    Json(input): Json<Value>,
+) -> ResponseResult {
+    let ctx = user(&state, &headers).map_err(failure)?;
+    success(
+        "Asset",
+        use_cases::personal_assets::publish(&state.pool, &ctx, &asset, input)
+            .await
+            .map_err(failure)?,
+    )
+}
+pub async fn skill_selections(
+    AxumState(state): AxumState<State>,
+    headers: HeaderMap,
+    Path(cid): Path<String>,
+    Query(query): Query<HashMap<String, String>>,
+) -> ResponseResult {
+    let ctx = user(&state, &headers).map_err(failure)?;
+    data_agent::contracts::validate("AssetPageQuery", &json!(query)).map_err(failure)?;
+    success(
+        "ConversationSkillSelections",
+        use_cases::personal_assets::selections(
+            &state.pool,
+            &ctx,
+            &cid,
+            query.get("after_id").map(String::as_str).unwrap_or(""),
+        )
+        .await
+        .map_err(failure)?,
+    )
+}
+pub async fn skill_suggestions(
+    AxumState(state): AxumState<State>,
+    headers: HeaderMap,
+    Path(asset): Path<String>,
+    Query(query): Query<HashMap<String, String>>,
+) -> ResponseResult {
+    let ctx = user(&state, &headers).map_err(failure)?;
+    data_agent::contracts::validate("AssetPageQuery", &json!(query)).map_err(failure)?;
+    success(
+        "SkillSuggestionList",
+        use_cases::personal_assets::suggestions(
+            &state.pool,
+            &ctx,
+            &asset,
+            query.get("after_id").map(String::as_str).unwrap_or(""),
+        )
+        .await
+        .map_err(failure)?,
+    )
+}
+pub async fn suggest_skill(
+    AxumState(state): AxumState<State>,
+    headers: HeaderMap,
+    Path(asset): Path<String>,
+    Json(input): Json<Value>,
+) -> ResponseResult {
+    let ctx = user(&state, &headers).map_err(failure)?;
+    success(
+        "SkillSuggestion",
+        use_cases::personal_assets::suggest(&state.pool, &ctx, &asset, input)
+            .await
+            .map_err(failure)?,
+    )
+}
+pub async fn review_skill_suggestion(
+    AxumState(state): AxumState<State>,
+    headers: HeaderMap,
+    Path((asset, suggestion)): Path<(String, String)>,
+    Json(input): Json<Value>,
+) -> ResponseResult {
+    let ctx = user(&state, &headers).map_err(failure)?;
+    success(
+        "SkillSuggestion",
+        use_cases::personal_assets::review_suggestion(
+            &state.pool,
+            &ctx,
+            &asset,
+            &suggestion,
+            input,
+        )
+        .await
+        .map_err(failure)?,
+    )
+}

@@ -22,6 +22,7 @@ import {
   connectionFromEnvironment,
 } from "../provider/deepseek.ts";
 import { mockStream } from "../provider/mock.ts";
+import { selectedSkillResources } from "./skills.ts";
 import { resources } from "./resources.ts";
 import { restoreCheckpoint, exportCheckpoint, RECOVERY_NOTICE } from "./checkpoint.ts";
 import { decodeContract } from "../../../packages/contracts/validate.ts";
@@ -76,22 +77,11 @@ export async function deliver(
             call.id,
             decodeContract<TaskInput>("TaskInput", call.arguments),
           );
-      manager.appendMessage({
-        role: "toolResult",
-        toolCallId: call.id,
-        toolName: call.name,
-        content: [
-          {
-            type: "text",
-            text: JSON.stringify(
-              data && "data" in receipt ? receipt.data : receipt,
-            ),
-          },
-        ],
-        details: JSON.parse(JSON.stringify(receipt)),
-        isError: !!(data && "data" in receipt && receipt.data.error),
-        timestamp: Date.now(),
-      });
+      const formatted = data && "data" in receipt
+        ? await data.formatResult(call.name, call.arguments, receipt, signal)
+        : {content: [{type: "text" as const, text: JSON.stringify(receipt)}], details: receipt, isError: false};
+      manager.appendMessage({role: "toolResult", toolCallId: call.id, toolName: call.name,
+        content: formatted.content, details: formatted.details ? JSON.parse(JSON.stringify(formatted.details)) : undefined, isError: formatted.isError, timestamp: Date.now()});
     }
   }
   const credentials: CredentialStore = {
@@ -194,6 +184,7 @@ export async function deliver(
             authority_revision: undefined,
           })
         : undefined,
+      selectedSkillResources(run.workspace_context?.selected_skills ?? []),
     ),
     tools: data ? data.tools.map((t) => t.name) : ["update_analysis_task"],
     customTools: data ? data.tools : [tool.definition],
@@ -238,7 +229,7 @@ export async function deliver(
         RECOVERY_NOTICE + " 继续处理原输入。已接回的工具结果保持有效，不重新建立任务或重做已成功操作。",
         { expandPromptTemplates: false },
       );
-    else await session.prompt(run.text);
+    else await session.prompt(run.text, { expandPromptTemplates: false });
     await pending;
     if (data && process.env.DATA_AGENT_TEST_COMPACT === "1")
       await session.compact();

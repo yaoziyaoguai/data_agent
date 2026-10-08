@@ -1,0 +1,520 @@
+{
+  "schema": 1,
+  "goal_revision": 29,
+  "increment_id": "I2-NATIVE-SKILLS",
+  "conclusion": "passed",
+  "reviewer": "独立审查者 /root/native_skills_review；未参与产品代码、契约、设计或正式验收脚本实现。只读核对要求、源码和运行产物；独立执行本地长行与临时浏览器反例，提出修复意见；正式文件只编写本记录。",
+  "reviewed_at": "2026-10-07T13:47:40.759463+00:00",
+  "scope_sha256": "47c96fa17e982be37b415d43e4cac4ec7bc181c80ac965f6c37195bad972818c",
+  "summary": "本轮实现符合个人隔离、当前空间公共副本、负责人/超级维护者维护和显式版本选择的约定。Pi 接入复用锁定 SDK 的 loadSkills、ResourceLoader 和 read，不新增 Agent 循环。已发现的中文超长单行不可读、网页新操作错误复用身份和13工具provider门槛均已修复并有本地反例覆盖。九组本地冻结验收通过；原主试验账本按用户选择仅延长2小时后，首次真实 Flash/Mem0/向量接入试用通过：6条输入完成原生Skill及附件读取、SQL修订确认、合成平台查询解释、本次新记忆索引及跨会话同ID/版本召回。29次主试验调用全部结算、134013微美元、预留0；报告明细关联修正与独立对账已核对。完整十组 make verify-increment 仍未执行，本记录通过仅表示可进入该最终验收。",
+  "ready_for_final_increment_execution": true,
+  "final_increment_execution": {
+    "executed": false,
+    "status": "not_run",
+    "command": [
+      "make",
+      "verify-increment"
+    ],
+    "required_groups": [
+      "START01",
+      "START02",
+      "FEEDBACK",
+      "SHARED",
+      "SELECTION",
+      "NATIVE",
+      "QUERY",
+      "CONTRACT",
+      "ASSETS",
+      "PROVIDER"
+    ],
+    "preconditions": [
+      "沿用用户已批准延期的同一主账本，120次/US$5上限及原历史保持；到期时间为2026-10-07 15:31:22.764 UTC。最终真实调用仍须处于原有效额度与期限内，不重置或新建账本补额。"
+    ],
+    "limitation": "全部十组必须在本记录绑定输入上完整退出0并生成前后指纹一致的收据。九组本地部分收据与首次真实成功是独立证据，尚不能合并宣称已执行完整冻结验收；首次真实通过之后仅修订报告调用明细关联，完整验收将运行该修订。"
+  },
+  "requirements": [
+    "A07",
+    "C01",
+    "C02",
+    "C04",
+    "C05",
+    "C07",
+    "C08",
+    "D01",
+    "D03",
+    "D07",
+    "D11",
+    "D12",
+    "D13"
+  ],
+  "modules": [
+    "M01",
+    "M02",
+    "M03",
+    "M04",
+    "M05",
+    "M07",
+    "M08",
+    "M09",
+    "M10",
+    "M11",
+    "M12"
+  ],
+  "requirements_review": {
+    "D01/D13/A07": "来源同步冲突保留结构化错误与同号日志；默认和管理目录均显示完整 source_id/object_id，点击身份与原授权不变。工作台显示服务端固定版本选择；页面加载、空、失败和失效状态分开。",
+    "D03/D12": "MySQL 保存资产与版本，公共发布创建独立ID/v1，私人后续修订不传播；私人 source_text 不复制。公共建议经明确共享提交，处理只改建议状态，正文须独立保存。50项分页保留失效选择，已不可见项不返回名称、owner或当前版本。",
+    "C02/C05": "所有公共写入通过可信当前空间身份及 owner/super 校验，超级维护者不能读取他人私人资产；引用不授予数据权限。asset_operations 主键包含 owner_id/space_id/operation_id，发布和选择操作包含对象/会话语义；附件及Skill正文实际读取重验选择、版本、状态和知识依赖。",
+    "C01": "对照锁定 Pi 1.0.0 源码确认 ResourceLoader 的 skills 在自定义 system prompt 下仍生成原生目录，expandPromptTemplates:false 跳过 /skill 文件展开，createReadTool 使用受控 operations 并保留原生分页。恢复通过原SDK会话和调用ID接回格式化 read；不开放 bash/默认文件工具、全局发现或另一套循环。",
+    "C04": "SQL仍必须确认具体草稿/条件版本；新增公共Skill反例先生成待确认SQL，再在平台拒绝alice执行时得到failed/forbidden，公共方法未改变执行授权。",
+    "D07/C07": "启动器可定位等待/就绪/退出/超时并显示实际runtime日志。SO_REUSEADDR只解决已复现TIME_WAIT端口预检问题；先前偶发Mem0/Pi健康超时的具体原因仍未证实。契约由同源生成，真实与本地协议的证据分别标记。",
+    "D11/C08": "Mem0个人记忆职责与模型、向量接入未改。修订真实脚本限定本次保存的ID/版本、唯一合成范围、同版本索引和跨会话召回目标；首次官方试用已实际命中该新记忆正式版本并通过。真实Flash/Mem0/向量接入与合成mock平台分别标记，单次通过不代表普遍准确率或真实平台通过。"
+  },
+  "correctness_review": [
+    {
+      "area": "公共维护与幂等",
+      "result": "personal_assets的可见查询为本人或同空间公共skill；locked/current version与require_edit控制写入。发布在来源行锁内校验精确版本并保存独立副本和映射；并发编辑只允许一个expected_version成功。客户端不能提交owner/visibility来绕过规则。"
+    },
+    {
+      "area": "迁移兼容",
+      "result": "旧资产visibility默认personal，body投影补owner/visibility/files；旧开发身份实现固定demo，因此旧asset_operations回执默认demo与当前身份基线一致。新增公共映射/建议留在M09私有store，use_cases不含通用SQL入口。"
+    },
+    {
+      "area": "恢复与撤权",
+      "result": "read回执进入既有操作账本，恢复重新使用同一个SDK格式器；authority snapshot观察实际Skill ID/版本，并在模型准入及同输入恢复前重验。新轮改版重建旧上下文；同输入失效拒绝恢复，保留原调用身份与预算。"
+    },
+    {
+      "area": "长文本和附件",
+      "result": "正文、生成后的SKILL.md及附件按UTF-8逐行检查50KiB；用split(换行)保留CRLF中回车的字节意义，与SDK一致。超限明确拒绝而不是截断或提示执行未开放bash；存量正文读取时也校验。附件类型、相对路径和总量受契约及Rust限制。"
+    },
+    {
+      "area": "SDK及provider",
+      "result": "新增read后实际工具集为13，受控provider限制同步到13；本地OpenAI协议断言read存在，保留请求体、max_tokens、预算及响应行为断言。桥接新诊断只输出白名单错误码，不输出原始异常或凭据。"
+    },
+    {
+      "area": "页面操作身份",
+      "result": "新编辑弹窗重置保存操作，完整保存payload决定同一未完成提交的重试身份；成功提交建议后清空操作身份。已成功的新动作不再接回旧资产/旧建议；网络未知的同参重试仍可接回。"
+    }
+  ],
+  "resolved_findings": [
+    {
+      "id": "NATIVE-LONG-LINE",
+      "priority": "P2",
+      "issue": "20,000个连续汉字符合原40,000字符契约，但60,000字节单行触发Pi只返回bash替代指令，本项目无bash且offset不能读取行内剩余文本。",
+      "independent_reproduction": "审查者直接调用真实formatSkillRead和锁定SDK，输入合成20,000汉字单行，实际输出Line 1 is 58.6KB ... Use bash，originalTextRead=false；没有模型调用。",
+      "resolution": "服务端保存/生成正文/读取增加50KiB单行显式限制与skill_line_too_long提示；多行长文仍使用SDK分页。SHARED补正文和附件的中文长行拒绝及分行后完整保留反例；执行包、契约说明和CURRENT记录兼容限制。",
+      "files": [
+        "crates/data-agent/src/modules/assets/skill_files.rs",
+        "crates/data-agent/src/modules/assets/store.rs",
+        "crates/data-agent/src/use_cases/data_tools.rs",
+        "tests/mvp/check-shared-skills.mjs"
+      ]
+    },
+    {
+      "id": "NEW-ASSET-OPERATION-REUSED",
+      "priority": "P2",
+      "issue": "saveOperation跨成功保存与新弹窗保留且key遗漏kind，先建记忆再建相同内容Skill复用了原操作号并返回409 idempotency_conflict。相同内容同种类新建则错误接回旧对象。",
+      "independent_reproduction": "审查者在harness自动创建并清理的隔离合成库及真实Playwright页面操作，记录第一POST kind=memory返回200，第二POST kind=skill用同operation返回409，弹窗显示idempotency_conflict。",
+      "resolution": "新编辑会话重置身份，完整payload参与重试键；成功建议提交后也清理旧操作。FEEDBACK新增连续memory/memory/skill同内容新建应得到3个资产，以及相同内容新建议应有2条记录。",
+      "files": [
+        "apps/web/src/features/assets/AssetsPage.tsx",
+        "apps/web/src/features/assets/SkillSuggestions.tsx",
+        "tests/mvp/check-workspace-feedback-browser.mjs"
+      ]
+    },
+    {
+      "id": "REAL-MEMORY-EVIDENCE-IDENTITY",
+      "priority": "P2",
+      "issue": "原真实试用以body包含“元”且indexed挑任意资产，持久库旧记录可能掩盖本次保存失败；只看mem0_authoritative也不能证明目标记忆被召回。",
+      "resolution": "改为本次会话manage_personal_asset成功回执、此前ID/版本对照、唯一合成范围、对应版本索引就绪及新会话命中同ID/版本；SQL修订从同任务/同条件版本的持久工具回执核对web条件。首次真实试用已完整通过，见 first_real_execution；后续完整冻结验收仍待执行。",
+      "files": [
+        "tests/mvp/check-skill-dogfood.mjs"
+      ]
+    },
+    {
+      "id": "NATIVE-RUNTIME-NEGATIVE-COVERAGE",
+      "priority": "P2",
+      "issue": "初稿未直接证明/skill命令关闭、公共同输入失效恢复拒绝及公共不授予平台执行权。",
+      "resolution": "新增skill-runtime-boundaries经真实Pi会话和mock模型核对字面输入没有正文展开；读公共Skill后停用使下一次模型准入/读取和Worker同输入恢复拒绝；平台deny最终forbidden。最新NATIVE产物7组通过。",
+      "files": [
+        "tests/mvp/check-native-skills.mjs",
+        "tests/mvp/skill-runtime-boundaries.mjs"
+      ]
+    }
+  ],
+  "test_expectation_review": {
+    "basis": "以用户确认的范围、CURRENT I2-NATIVE-SKILLS及执行包第9/10节为准，未按当前实现反写业务答案。",
+    "preserved": [
+      "个人/公共权限、独立副本、旧版本确认、明确发布、建议不改正文、未选隔离及恢复身份断言均保留。",
+      "增加长行明确拒绝和新编辑操作身份的反例，没有把不可读内容算作读取成功。",
+      "停平台不使已提交来源快照自动失效，依赖故障用独立测试库短暂重命名source_heads再finally恢复，检验存储错误不被吞；CURRENT说明依据。",
+      "工具数量12改13由已确认新增read契约决定；预算和payload限制未放宽，新增PROVIDER为第十组冻结验收。",
+      "真实记忆及SQL修订断言补强；未用mock替换START02，也未删掉失败报告。",
+      "START02 将不存在于 TaskSnapshot 的 conditions 读取修正为同任务/同条件版本的持久工具回执；仍要求 web 条件、SQL或参数中的 web 及原确认/执行流程，不放宽产品预期。首次真实修订后执行已通过，完整验收仍待。",
+      "valid的1→true由实际JSON类型和0调用失败证据支持，继续严格拒绝false，不改变预算或产品要求。",
+      "首次真实成功后的调用明细修正只修报告关联；29次唯一调用和费用独立求和与主账本相符，没有减少用量、重置额度或改写首次成功报告。"
+    ]
+  },
+  "evidence_review": {
+    "reviewer_executed": [
+      {
+        "check": "git diff --check",
+        "exit_code": 0
+      },
+      {
+        "check": "python3 scripts/check_architecture.py",
+        "exit_code": 0,
+        "result": "模块依赖、SQL位置和表归属通过。"
+      },
+      {
+        "check": "python3 -m unittest discover -s scripts -p test_development.py",
+        "exit_code": 0,
+        "result": "9项通过；无模型调用。"
+      },
+      {
+        "check": "本地formatSkillRead超长中文行独立反例",
+        "result": "复现正文不可读与不可用的bash替代提示；对应问题已由服务端边界修复。"
+      },
+      {
+        "check": "临时Playwright页面+隔离MySQL保存身份独立反例",
+        "result": "复现先记忆200、后同内容Skill409且operation相同；测试自行清理其进程/数据库。"
+      },
+      {
+        "check": "node --check tests/mvp/check-skill-dogfood.mjs",
+        "exit_code": 0,
+        "result": "仅语法检查；未读取真实配置、调用模型或执行 START02。"
+      },
+      {
+        "check": "首次真实报告与usage-reconciliation.json的只读一致性断言",
+        "result": "6个唯一输入全部finished；新建和召回对话不同，memory同ID/版本且indexed；29条唯一调用全部settled，独立求和134013微美元等于主账本，预留0。没有连接模型或修改数据库。"
+      }
+    ],
+    "inspected_artifacts": [
+      {
+        "path": ".local/checks/shared-skills.json",
+        "sha256": "f32414364cfe254871ba19cd185fe61a6bca52891dc06bae7fae512e81781d3e",
+        "modified_at": "2026-10-07T12:47:56.960456+00:00",
+        "reported_passed": true,
+        "check_count": 7
+      },
+      {
+        "path": ".local/checks/conversation-skill-selections.json",
+        "sha256": "3f1350cf7505330b041afcc9cc996bf1f92e524223009abb5c831b75a192964c",
+        "modified_at": "2026-10-07T12:48:02.002521+00:00",
+        "reported_passed": true,
+        "check_count": 3
+      },
+      {
+        "path": ".local/checks/native-skills.json",
+        "sha256": "8c05ab7bb3a8e4ffd4d96e6c144fa8657a8f6afe30e9b01c6b40acf1286457cd",
+        "modified_at": "2026-10-07T12:48:12.977216+00:00",
+        "reported_passed": true,
+        "check_count": 7
+      },
+      {
+        "path": ".local/checks/workspace-feedback/report.json",
+        "sha256": "abb540d35c6c1867d943395980475d1e406c337d83b65dc05cd365d2ee24fbcc",
+        "modified_at": "2026-10-07T12:47:52.856814+00:00",
+        "reported_passed": true,
+        "check_count": 6
+      },
+      {
+        "path": ".local/checks/mvp-data-provider.json",
+        "sha256": "faa89deecff9e4236c6db8848b10bfa80f6c787bd501a4f310781fe5e8078a2c",
+        "modified_at": "2026-10-07T12:48:51.874641+00:00",
+        "reported_passed": true,
+        "check_count": 0
+      },
+      {
+        "path": ".local/checks/mvp-context-dependencies.json",
+        "sha256": "05b4613445c8871008b0bd9e4bc575bd0a0ab3c014a0df922c49f3e905f16005",
+        "modified_at": "2026-10-07T12:15:17.037930+00:00",
+        "reported_passed": true,
+        "check_count": 4
+      },
+      {
+        "path": ".local/checks/skill-dogfood-real.json",
+        "sha256": "be88580a848954cc8a0e661b8760b021edf8844777f8309943893e6ba353dc9b",
+        "modified_at": "2026-10-07T13:39:14.904900+00:00",
+        "reported_passed": true,
+        "check_count": 0
+      },
+      {
+        "path": ".local/skill-delivery/real-5687cc28-543d-42ba-800f-848da73f742d/report.json",
+        "sha256": "8f9caebe1d6ae57402fb17d9573c5020cdc1cf2317b3fbc9eeae331c1b101df6",
+        "modified_at": "2026-10-07T12:35:59.198755+00:00",
+        "reported_passed": false,
+        "check_count": 0
+      },
+      {
+        "path": ".local/skill-delivery/real-5687cc28-543d-42ba-800f-848da73f742d/runtime/bridge.log",
+        "sha256": "57c77e11a59b5f75ebc07fa8b6eecb663fe70fe7b6383e81e5dcc04cffcc3aae",
+        "modified_at": "2026-10-07T12:35:43.905426+00:00"
+      },
+      {
+        "path": ".local/checks/native-local-validation.json",
+        "sha256": "a169aa6a43984aa24850c41c95a6868384ce9ebaf6af6b6c45f9d9d47431de16",
+        "modified_at": "2026-10-07T12:48:52.353895+00:00",
+        "reported_status": "partial",
+        "local_passed": true,
+        "command_count": 9
+      },
+      {
+        "path": ".local/skill-delivery/real-990dce60-9796-4c92-9272-5a29cde333ca/report.json",
+        "sha256": "dcc31ea92fba508a43b71a735374f09d51fe9f558beffbd6e10aa6f4e38395bd",
+        "modified_at": "2026-10-07T13:39:14.902963+00:00",
+        "reported_passed": true
+      },
+      {
+        "path": ".local/skill-delivery/real-990dce60-9796-4c92-9272-5a29cde333ca/usage-reconciliation.json",
+        "sha256": "dad1b0fdcdd542fb682522ee1a02c9c85f035171592640603f9e1cb8b36faa78",
+        "modified_at": "2026-10-07T13:41:24.415784+00:00"
+      },
+      {
+        "path": ".local/skill-delivery/real-990dce60-9796-4c92-9272-5a29cde333ca/embedding-ledger.json",
+        "sha256": "8cd0f7e8ca129bb905d23adabed14526d5b3daf735cfc39115f5ac2a67822ef8",
+        "modified_at": "2026-10-07T13:43:33.050404+00:00"
+      },
+      {
+        "path": ".local/skill-delivery/budget-extension-a68a7923-444e-4065-a4a1-d063248cb248.json",
+        "sha256": "46865d2a3958341de0ece6a967328df6c694c21d2097ca8442a481fec76926c2",
+        "modified_at": "2026-10-07T13:31:22.698445+00:00"
+      },
+      {
+        "path": ".local/skill-delivery/real-543704cc-c501-4f69-a2ae-e537609e2393/report.json",
+        "sha256": "59d41fec18790fc9b50f5e4237a668dc35fc2a4156d8efde657d7c3980c3b304",
+        "modified_at": "2026-10-07T13:32:25.154953+00:00",
+        "reported_passed": false
+      }
+    ],
+    "visual_review": [
+      "实际查看shared-mobile.png：390px公共范围、负责人、维护和选用按钮可见，无明显裁切。",
+      "实际查看selection-desktop.png：已选v2、个人来源和当前可用状态位于输入附近，管理入口可辨。"
+    ],
+    "implementation_runner_reports": [
+      "实现者报告契约206项和verify-code完整通过；本审查读取相关代码、生成契约和上述运行产物，没有重跑全部构建。",
+      "实现者报告QUERY、ASSETS、上下文依赖与Pi恢复回归通过；本审查核对断言与相关回执。",
+      "早期真实失败报告证明两次完整栈就绪；当时bridge日志为model_budget_exhausted，前后账本均0调用/0费用/0预留。实现者只读数据库核实原expires_at已过期；审查者未查询或修改预算数据库。",
+      "实现者执行首次真实Flash/Mem0/hybrid试用通过；独立审查者已读取报告、核对新记忆及召回版本、查询结果和调用对账。首次成功报告保持原样，报告明细修正留单独对账证据。"
+    ],
+    "official_model_requests_by_reviewer": 0,
+    "artifact_limitation": "本地九组部分收据、历史真实失败和首次真实成功分别保留。报告明细只读对账补全Agent调用，没有覆盖原成功报告。当前完整十组冻结验收尚未执行，独立向量维护账本已到期且不属于主试验29次统计范围。"
+  },
+  "scope_review": {
+    "branch": "codex/semantic-role-boundaries",
+    "base_head": "cdf4b0cd783afc0b3a5461d8944ba09ce0c95986",
+    "reviewer_writes": [
+      "docs/reviews/native-skills-review.json"
+    ],
+    "new_agent_framework": false,
+    "mem0_algorithm_changed": false,
+    "fingerprint_boundary": "使用scripts/check_delivery.py的read_delivery/review_scope，绑定本轮delivery声明、既有决定、AGENTS和所有verification_inputs；排除本审查文件与审查指针，最终执行再绑定审查文件。"
+  },
+  "remaining_code_findings": [],
+  "remaining_blockers": [
+    {
+      "id": "FINAL-INCREMENT",
+      "status": "not_run",
+      "detail": "首次真实试用已通过；十组make verify-increment仍未完整执行，CURRENT必须保持active，不能以两次独立部分结果替代完整冻结收据。"
+    }
+  ],
+  "limits": [
+    "审查结论仅批准当前范围进入完整验收；用户已批准的主账本延期、原额度和历史必须保留，本记录不另行延长或授权额外调用。",
+    "原历史Mem0/Pi健康超时具体根因未证实；本次有证据的启动修复是TIME_WAIT端口误判。",
+    "个人记忆保持私人，公共仅Skill；原生能力限定目录与文本read，不含任意脚本、自动采用或跨空间Skill市场。",
+    "运行身份、平台与数据均为合成mock；尚未验证真实Datasight ACL或正式生产身份、多空间部署。",
+    "未提交、推送或部署；本地审查和哈希不能防同权限篡改。"
+  ],
+  "local_frozen_execution": {
+    "status": "partial",
+    "executed_by": "实现者；独立审查者读取回执及九组完整日志尾部核对",
+    "artifact": ".local/checks/native-local-validation.json",
+    "artifact_sha256": "a169aa6a43984aa24850c41c95a6868384ce9ebaf6af6b6c45f9d9d47431de16",
+    "scope_sha256": "a685578ecfac397c802302212691a77a2f821529ae930616dbb8f8995bad95f1",
+    "after_scope_sha256": "a685578ecfac397c802302212691a77a2f821529ae930616dbb8f8995bad95f1",
+    "started_at": "2026-10-07T12:47:37.456175+00:00",
+    "finished_at": "2026-10-07T12:48:52.353012+00:00",
+    "local_passed": true,
+    "passed_groups": [
+      "START01",
+      "FEEDBACK",
+      "SHARED",
+      "SELECTION",
+      "NATIVE",
+      "QUERY",
+      "CONTRACT",
+      "ASSETS",
+      "PROVIDER"
+    ],
+    "logs": [
+      {
+        "acceptance_ids": [
+          "START01"
+        ],
+        "path": ".local/checks/native-local-4ee9cf81-8cca-4efd-b5be-190233190188/0.log",
+        "sha256": "a50f2bbf86653a16e46403cd32569260ca1aaf1749bd7185207ecca030d37a47",
+        "exit_code": 0,
+        "timed_out": false
+      },
+      {
+        "acceptance_ids": [
+          "FEEDBACK"
+        ],
+        "path": ".local/checks/native-local-4ee9cf81-8cca-4efd-b5be-190233190188/2.log",
+        "sha256": "4c511a2f2ff5f20b0506211f14140886f5291775ea43001194f357cd5e676d79",
+        "exit_code": 0,
+        "timed_out": false
+      },
+      {
+        "acceptance_ids": [
+          "SHARED"
+        ],
+        "path": ".local/checks/native-local-4ee9cf81-8cca-4efd-b5be-190233190188/3.log",
+        "sha256": "d11c3ea81fc6def219fdc652f3731cc8f9f0013e41cf9b2edd4e86a0adedfc5e",
+        "exit_code": 0,
+        "timed_out": false
+      },
+      {
+        "acceptance_ids": [
+          "SELECTION"
+        ],
+        "path": ".local/checks/native-local-4ee9cf81-8cca-4efd-b5be-190233190188/4.log",
+        "sha256": "3db03ebe0f94409ce784a8c19f04440415670d3aaf089983a3dace48d736fe25",
+        "exit_code": 0,
+        "timed_out": false
+      },
+      {
+        "acceptance_ids": [
+          "NATIVE"
+        ],
+        "path": ".local/checks/native-local-4ee9cf81-8cca-4efd-b5be-190233190188/5.log",
+        "sha256": "50f9fdf10b36d2c797c9c0acac58116d627b7725271f448bd99f3bd5501d4479",
+        "exit_code": 0,
+        "timed_out": false
+      },
+      {
+        "acceptance_ids": [
+          "QUERY"
+        ],
+        "path": ".local/checks/native-local-4ee9cf81-8cca-4efd-b5be-190233190188/6.log",
+        "sha256": "e8374b8dd4c7493e3b3f029d4c1084e28b1b3b69ed7829378204345238de43de",
+        "exit_code": 0,
+        "timed_out": false
+      },
+      {
+        "acceptance_ids": [
+          "CONTRACT"
+        ],
+        "path": ".local/checks/native-local-4ee9cf81-8cca-4efd-b5be-190233190188/7.log",
+        "sha256": "059079f503068c0bb8e2274b38f72d2479cd9d6b2145d52697ac869253c6ecfa",
+        "exit_code": 0,
+        "timed_out": false
+      },
+      {
+        "acceptance_ids": [
+          "ASSETS"
+        ],
+        "path": ".local/checks/native-local-4ee9cf81-8cca-4efd-b5be-190233190188/8.log",
+        "sha256": "241a79b4ad6b3bd14118a45928267d20d5f215c209761a2caf362d272f13b7af",
+        "exit_code": 0,
+        "timed_out": false
+      },
+      {
+        "acceptance_ids": [
+          "PROVIDER"
+        ],
+        "path": ".local/checks/native-local-4ee9cf81-8cca-4efd-b5be-190233190188/9.log",
+        "sha256": "e37b4616cb5a20d91c34f2d450fc5ca4d238bcdc924a0bb5a16ccd6cc0af7e0c",
+        "exit_code": 0,
+        "timed_out": false
+      }
+    ],
+    "current_scope_differs": true,
+    "post_validation_changes": [
+      {
+        "path": "tests/mvp/check-skill-dogfood.mjs",
+        "reason": "TaskSnapshot 不包含 conditions；改从本会话 update_analysis_task 成功持久回执核对相同 task_id、condition_version 和 conditions.channel=web，同时保留 SQL/参数包含 web 的断言。",
+        "evidence": "实现者报告这是九组本地验收之后唯一变更；独立审查者对照 TaskSnapshot 契约及 analysis::apply_update_in_tx 的返回值核对了当前脚本，并独立执行 node --check 及 git diff --check。",
+        "runtime_verified": true,
+        "affected_acceptance": "START02",
+        "runtime_evidence": ".local/skill-delivery/real-990dce60-9796-4c92-9272-5a29cde333ca/report.json"
+      },
+      {
+        "path": "tests/mvp/check-skill-dogfood.mjs",
+        "reason": "预算有效性JSON为布尔true，修正严格断言中的数字1为true；仍拒绝false。",
+        "evidence": ".local/skill-delivery/real-543704cc-c501-4f69-a2ae-e537609e2393/report.json",
+        "runtime_verified": true,
+        "runtime_evidence": ".local/skill-delivery/real-990dce60-9796-4c92-9272-5a29cde333ca/report.json",
+        "affected_acceptance": "START02"
+      },
+      {
+        "path": "tests/mvp/check-skill-dogfood.mjs",
+        "reason": "报告明细增加LEFT JOIN budget_scopes与COALESCE以包含通过scope关联原trial的Agent调用；不改业务断言。",
+        "evidence": ".local/skill-delivery/real-990dce60-9796-4c92-9272-5a29cde333ca/usage-reconciliation.json",
+        "runtime_verified": false,
+        "read_only_reconciliation_verified": true,
+        "affected_acceptance": "START02"
+      }
+    ],
+    "limitation": "这份旧指纹部分收据证明九组本地验收通过；其后仅真实脚本的条件字段来源、布尔类型及报告用量关联有修正。首次真实业务流程另已通过，最终报告关联已只读对账，完整十组仍须在当前范围重新执行。",
+    "pending_at_execution": [
+      "START02: 原持久模型预算到期，等待延长期限授权"
+    ],
+    "current_followup_status": "首次真实试用已通过；仍待当前审查指纹的完整十组验收。"
+  },
+  "first_real_execution": {
+    "status": "passed",
+    "executed_by": "实现者；独立审查者只读核对脚本、原始报告和对账产物并独立计算关键一致性",
+    "artifact": ".local/skill-delivery/real-990dce60-9796-4c92-9272-5a29cde333ca/report.json",
+    "started_at": "2026-10-07T13:34:34.069Z",
+    "finished_at": "2026-10-07T13:39:14.694Z",
+    "provider_mode": "official_flash_mem0_hybrid_mock_platform",
+    "cases": 6,
+    "startup_runs": 2,
+    "native_read_files": [
+      "SKILL.md",
+      "references/report.md"
+    ],
+    "query_result_source": "mock",
+    "query_result_rows": [
+      [
+        "web",
+        "10000"
+      ]
+    ],
+    "memory": {
+      "id": "d8ce4955-3413-4525-a1e2-2b3be1f1a964",
+      "version": "1",
+      "index_state": "indexed",
+      "topic": "合成订单验收8d1d5f8e"
+    },
+    "cross_conversation_recalled_same_id_and_version": true,
+    "main_trial_calls": 29,
+    "purpose_counts": {
+      "agent": 22,
+      "knowledge_embedding": 2,
+      "memory_embedding": 4,
+      "memory_extraction": 1
+    },
+    "all_calls_settled": true,
+    "spent_micros": 134013,
+    "reserved_micros": 0,
+    "usage_reconciliation": ".local/skill-delivery/real-990dce60-9796-4c92-9272-5a29cde333ca/usage-reconciliation.json",
+    "original_report_preserved": true,
+    "reporting_change_after_execution": "原明细按model_call_attempts.trial_id筛选只含7次抽取/向量调用；现在LEFT JOIN budget_scopes主键，COALESCE直接trial_id和model_profile内trial_id以纳入22次Agent调用。原主账本无误，独立只读对账29条唯一调用与费用相等；未改业务断言，完整验收将执行修正后的完整脚本。",
+    "limits": "当前成功覆盖本次6条合成输入，真实模型/记忆/向量服务配合mock数据平台；不证明真实Datasight、全面准确率或完整十组验收通过。"
+  },
+  "budget_authorization_review": {
+    "artifact": ".local/skill-delivery/budget-extension-a68a7923-444e-4065-a4a1-d063248cb248.json",
+    "authorization_source": "主任务转述用户选择A，产物记录同一账本延长2小时；审查者没有修改账本或发起模型调用。",
+    "before_after_review": "id、configuration_fingerprint、120次/US$5及历史计数相同；仅expires_at改为2026-10-07 15:31:22.764 UTC。",
+    "separate_embedding_maintenance": {
+      "artifact": ".local/skill-delivery/real-990dce60-9796-4c92-9272-5a29cde333ca/embedding-ledger.json",
+      "calls": 30,
+      "spent_micros": 498,
+      "reserved_micros": 0,
+      "valid": false,
+      "expires_at": "2026-10-07 13:17:38.776 UTC",
+      "decision": "这是另一个原向量维护账本，未延长或修改。主账本29次不能表示历史全部向量调用；本次新记忆已在有效主账本内索引及召回成功，未发现阻断当前增量最终验收的证据，不据此扩展索引维护任务。"
+    }
+  }
+}

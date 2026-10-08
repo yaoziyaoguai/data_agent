@@ -15,7 +15,7 @@
     <text x="102" y="293" font-size="14" font-weight="500" fill="#53677d" text-anchor="start" >Container</text>
     <text x="102" y="327" font-size="25" font-weight="650" fill="#172e50" text-anchor="start" >业务 API 服务</text>
     <text x="102" y="355" font-size="16" font-weight="500" fill="#53677d" text-anchor="start" >Rust / Axum</text>
-    <text x="102" y="393" font-size="18" font-weight="400" fill="#172e50" text-anchor="start" >系统维护授权、版本与调用预算</text><text x="102" y="421" font-size="18" font-weight="400" fill="#172e50" text-anchor="start" >会话、语义与个人资产规则</text><text x="102" y="449" font-size="18" font-weight="400" fill="#172e50" text-anchor="start" >查询前另核平台权限与用户确认</text>
+    <text x="102" y="393" font-size="18" font-weight="400" fill="#172e50" text-anchor="start" >系统维护授权、版本与调用预算</text><text x="102" y="421" font-size="18" font-weight="400" fill="#172e50" text-anchor="start" >会话、语义与共享方法规则</text><text x="102" y="449" font-size="18" font-weight="400" fill="#172e50" text-anchor="start" >查询前另核平台权限与用户确认</text>
   </g><g class="node" data-node="vector">
     <rect class="node-box" x="750" y="265" width="360" height="200" rx="10" fill="#eef7f3" stroke="#438471" stroke-width="1.4"/>
     <path d="M768 265 H1092" stroke="#438471" stroke-width="4"/>
@@ -43,7 +43,7 @@
     <text x="772" y="718" font-size="14" font-weight="500" fill="#53677d" text-anchor="start" >Data Store</text>
     <text x="772" y="752" font-size="25" font-weight="650" fill="#173e34" text-anchor="start" >正式业务记录</text>
     <text x="772" y="780" font-size="16" font-weight="500" fill="#53677d" text-anchor="start" >MySQL 8.4</text>
-    <text x="772" y="818" font-size="18" font-weight="400" fill="#173e34" text-anchor="start" >知识、版本、会话与查询状态</text><text x="772" y="846" font-size="18" font-weight="400" fill="#173e34" text-anchor="start" >个人资产、预算与持久待办</text>
+    <text x="772" y="818" font-size="18" font-weight="400" fill="#173e34" text-anchor="start" >知识、版本、会话与查询状态</text><text x="772" y="846" font-size="18" font-weight="400" fill="#173e34" text-anchor="start" >私人记忆、公共方法与预算</text>
   </g><g class="node" data-node="platform">
     <rect class="node-box" x="1470" y="690" width="370" height="230" rx="10" fill="#f7f5f0" stroke="#9a8050" stroke-width="1.4"/>
     <path d="M1488 690 H1822" stroke="#9a8050" stroke-width="4"/>

@@ -644,6 +644,7 @@ header strong {
 .management button:not(.object-list button, .tabs button),
 .result-panel > button,
 .asset-empty button,
+.skill-selections button,
 .history-dialog button {
   border: 1px solid #dce4ee;
   background: #fff;
@@ -1372,3 +1373,15 @@ dialog::backdrop {
     }
   }
 }
+
+/* Skill 来源与版本状态置于输入附近，保留现有工作台视觉层级。 */
+.quiet.skill-sharing-note,.quiet.skill-owner,.skill-selections .quiet{display:block}
+.skill-selections{margin:12px 0;border-top:1px solid var(--line,#d9ddd9);padding:12px 0;font-size:13px}
+.selection-heading{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.skill-selection{display:flex;flex-direction:column;gap:4px;margin-top:8px;overflow-wrap:anywhere}
+.skill-selection small{color:#586557}.skill-selection:not(.available) small{color:#8a422f}
+.knowledge-origin{display:flex;flex-direction:column;font-size:11px;line-height:1.5;color:#526052;overflow-wrap:anywhere;margin:4px 0}
+.knowledge-origin.detail{font-size:12px;max-width:650px}
+.skill-files{border:1px solid #d9ddd9;border-radius:8px;padding:12px;margin:18px 0}.skill-file-editor{margin:12px 0 20px}
+.skill-preview{white-space:pre-wrap;overflow-wrap:anywhere;max-height:320px;overflow:auto;font:13px/1.65 ui-monospace,monospace}
+.skill-suggestion{padding:18px 0;border-top:1px solid #d9ddd9;margin-top:16px}

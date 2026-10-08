@@ -25,7 +25,10 @@ function start(name,command,args=[],extra={}){
 }
 async function stop(child){if(!child||child.exitCode!==null||child.signalCode!==null)return;child.kill('SIGTERM');await Promise.race([new Promise(resolve=>child.once('exit',resolve)),new Promise(resolve=>setTimeout(resolve,2000))]);if(child.exitCode===null&&child.signalCode===null){child.kill('SIGKILL');await new Promise(resolve=>child.once('exit',resolve));}}
 async function until(action,label,timeout=10000){const end=Date.now()+timeout;while(Date.now()<end){const value=await action();if(value)return value;await new Promise(resolve=>setTimeout(resolve,100));}throw new Error('timeout: '+label);}
-async function healthy(p){await until(async()=>{try{return(await fetch('http://127.0.0.1:'+p+'/health')).ok;}catch{return false;}},'health '+p,20000);}
+async function healthy(p,child){await until(async()=>{
+ if(child.exitCode!==null||child.signalCode!==null)throw new Error('service exited before health '+p);
+ try{return(await fetch('http://127.0.0.1:'+p+'/health')).ok;}catch{return false;}
+},'health '+p,60000);}
 async function request(path,body,token=alice,method=body?'POST':'GET'){
  const response=await fetch(env.DATA_AGENT_API_URL+path,{method,headers:{authorization:'Bearer '+token,'content-type':'application/json'},body:body===undefined?undefined:JSON.stringify(body)});
  const text=await response.text();return {status:response.status,value:text?JSON.parse(text):null};
@@ -38,10 +41,10 @@ let browser;
 try{
  sql('CREATE DATABASE '+database+'; GRANT ALL ON '+database+'.* TO data_agent;');
  if(process.argv.includes('--locking')){execFileSync(process.env.HOME+'/.cargo/bin/cargo',['test','--locked','-p','data-agent','locking_','--','--nocapture'],{env,cwd:root,stdio:['ignore','pipe','pipe']});checks.push({name:'锁内当前读取、事务快照归属、锁序及并发领取',passed:true});await writeFile(sandbox+'/runtime-locking.json',JSON.stringify({passed:true,checks},null,2)+'\n');console.log(JSON.stringify({passed:true,checks}));}else{
- const api=start('api','target/debug/data-agent-api');await healthy(apiPort);
+ const api=start('api','target/debug/data-agent-api');await healthy(apiPort,api);
  let bridge,worker;
  if(!process.argv.includes('--recovery')){
- bridge=start('bridge','node',['apps/agent/server.ts']);await healthy(bridgePort);
+ bridge=start('bridge','node',['apps/agent/server.ts']);await healthy(bridgePort,bridge);
  worker=start('worker','target/debug/data-agent-worker');
  const cid=await create();const message={client_message_id:randomUUID(),text:'分析合成订单近七天的退款情况'};
  const accepted=await request('/conversations/'+cid+'/messages',message);assert.equal(accepted.status,200);
@@ -79,13 +82,16 @@ try{
  }
  if(!process.argv.includes('--flow')){
  for(const [fault,expectedCode,preTasks] of [['before_business_commit',73,0],['after_business_commit',74,1],['before_checkpoint_commit',75,1]]){
-  bridge=start('fault_'+fault,'node',['apps/agent/server.ts'],{DATA_AGENT_FAULT:fault});await healthy(bridgePort);worker=start('worker_fault','target/debug/data-agent-worker');
+  bridge=start('fault_'+fault,'node',['apps/agent/server.ts'],{DATA_AGENT_FAULT:fault});await healthy(bridgePort,bridge);worker=start('worker_fault','target/debug/data-agent-worker');
   const conversation=await create();const submitted=await request('/conversations/'+conversation+'/messages',{client_message_id:randomUUID(),text:'分析虚构订单的销售情况'});assert.equal(submitted.status,200);
   await until(()=>bridge.exitCode!==null,'actual process exit');assert.equal(bridge.exitCode,expectedCode);await stop(worker);
   assert.deepEqual(counts(conversation),{tasks:preTasks,tools:1,outputs:0});
   const before=data(`SELECT JSON_OBJECT('operation_id',operation_id,'origin_run_id',origin_run_id,'sdk_tool_call_id',sdk_tool_call_id) FROM tool_calls WHERE conversation_id='${conversation}'`)[0];
-  const old=(await snapshot(conversation)).runs[0];
-  bridge=start('recovery_bridge','node',['apps/agent/server.ts']);await healthy(bridgePort);worker=start('recovery_worker','target/debug/data-agent-worker');
+  const initial=await snapshot(conversation);assert.equal(initial.runs.length,1,'恢复前仅有故障注入运行');
+  assert.equal(data(`SELECT JSON_OBJECT('attempts',attempts) FROM background_jobs WHERE conversation_id='${conversation}'`)[0].attempts,1,'恢复前只领取一次');
+  const old=initial.runs[0];
+  // 故障注入沿用短租约；恢复使用产品默认租约，避免主机调度延迟引入额外失租。
+  bridge=start('recovery_bridge','node',['apps/agent/server.ts']);await healthy(bridgePort,bridge);worker=start('recovery_worker','target/debug/data-agent-worker',[],{DATA_AGENT_LEASE_MS:'15000'});
   const recovered=await finished(conversation);assert.equal(recovered.runs.length,2);assert.notEqual(recovered.runs[1].run_id,old.run_id);assert.deepEqual(counts(conversation),{tasks:1,tools:1,outputs:1});
   const after=data(`SELECT JSON_OBJECT('operation_id',operation_id,'origin_run_id',origin_run_id,'sdk_tool_call_id',sdk_tool_call_id) FROM tool_calls WHERE conversation_id='${conversation}'`)[0];assert.deepEqual(after,before);
   assert.equal((await request('/internal/outputs',{run_id:old.run_id,lease_epoch:old.lease_epoch,chunk_seq:'1',text:'旧运行晚到'},internal)).status,409);
@@ -97,7 +103,7 @@ try{
  }
  }
  if(!process.argv.includes('--recovery')){
- bridge=start('slow_bridge','node',['apps/agent/server.ts'],{DATA_AGENT_MOCK_DELAY_MS:'2200'});await healthy(bridgePort);
+ bridge=start('slow_bridge','node',['apps/agent/server.ts'],{DATA_AGENT_MOCK_DELAY_MS:'2200'});await healthy(bridgePort,bridge);
  worker=start('serial_worker','target/debug/data-agent-worker');const otherWorker=start('second_worker','target/debug/data-agent-worker');
  const busyCid=await create();const busyFirst=await request('/conversations/'+busyCid+'/messages',{client_message_id:randomUUID(),text:'先分析合成订单'});
  await until(async()=>(await snapshot(busyCid)).runs.length===1,'first turn acquired');
@@ -107,7 +113,7 @@ try{
  await until(async()=>{const s=await snapshot(busyCid);return s.runs.filter(r=>r.state==='finished').length===2;},'two serial turns',20000);
  assert.deepEqual(counts(busyCid),{tasks:2,tools:2,outputs:2});assert.equal(data(`SELECT JSON_OBJECT('attempts',attempts) FROM background_jobs WHERE message_id='${busyFirst.value.message_id}'`)[0].attempts,1);
  await stop(worker);await stop(otherWorker);await stop(bridge);checks.push({name:'两个Worker串行推进同会话，会话忙不消耗交付次数',passed:true});
- bridge=start('failure_recovery_bridge','node',['apps/agent/server.ts']);await healthy(bridgePort);await stop(bridge);
+ bridge=start('failure_recovery_bridge','node',['apps/agent/server.ts']);await healthy(bridgePort,bridge);await stop(bridge);
  worker=start('exhausted_worker','target/debug/data-agent-worker');
  const failedCid=await create();await request('/conversations/'+failedCid+'/messages',{client_message_id:randomUUID(),text:'验证交付失败可见状态'});
  const failed=await until(async()=>{const s=await snapshot(failedCid);return s.runs.length===4&&s.runs.every(r=>r.state==='failed')?s:false;},'bounded retry exhaustion',15000);

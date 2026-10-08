@@ -76,7 +76,7 @@ pub async fn start_delivery(
         let selected = selected
             .into_iter()
             .take(20)
-            .map(|v| crate::modules::retrieval::model_page(v, 0, 1200, None))
+            .map(|v| crate::modules::assets::skill_files::descriptor(&v))
             .collect::<Vec<_>>();
         if checkpoint.is_none() {
             checkpoint =

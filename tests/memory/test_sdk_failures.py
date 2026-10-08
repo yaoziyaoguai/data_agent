@@ -19,6 +19,57 @@ from store import MemoryError, ReceiptStore
 os.environ['MEM0_TELEMETRY'] = 'False'
 
 
+class EmbeddingBudgetTests(unittest.TestCase):
+    def setUp(self):
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        store = ReceiptStore(Path(directory.name) / 'receipts.sqlite')
+        self.addCleanup(store.db.close)
+        self.gateway = ModelGateway.__new__(ModelGateway)
+        self.gateway.store, self.gateway.failure = store, None
+        self.gateway.binding = {'operation_id': 'synthetic-embedding'}
+        self.gateway.config = {'embedding_url': 'http://127.0.0.1/synthetic'}
+        self.gateway.embedding_key = 'synthetic-not-a-key'
+        self.permits, self.sent = [], []
+        self.usage = None
+        self.gateway.host = lambda value: self.permits.append(value) or {'send_allowed': True}
+
+        def post(_url, **kwargs):
+            texts = kwargs['json']['input']
+            self.sent.append(texts)
+            return SimpleNamespace(status_code=200, json=lambda: {
+                'usage': {'prompt_tokens': self.usage or 18 * len(texts)},
+                'data': [{'index': i, 'embedding': [1.0] + [0.0] * 1023} for i in range(len(texts))]})
+
+        self.gateway.client = SimpleNamespace(post=post)
+        self.embedding = BudgetedEmbedding(self.gateway)
+
+    def test_short_text_and_batch_reserve_provider_template_usage(self):
+        # 真实短查询曾出现9字节输入、18 tokens用量；批量每条同样有模板开销。
+        for texts in [['synthetic'], ['a'] * 20]:
+            self.assertEqual(len(self.embedding.embed_batch(texts)), len(texts))
+            issued, settled = self.permits[-2:]
+            self.assertLessEqual(settled['usage']['input_tokens'], issued['input_tokens_upper'])
+            self.assertLessEqual(issued['input_tokens_upper'], 8192)
+        self.assertEqual(len(self.sent), 2)
+
+    def test_template_reservation_keeps_total_input_cap(self):
+        with self.assertRaisesRegex(MemoryError, 'memory_unavailable'):
+            self.embedding.embed('a' * 8192)
+        self.assertEqual(self.sent, [])
+        self.assertEqual(self.permits, [])
+
+    def test_usage_over_reservation_is_settled_then_blocks_retry(self):
+        self.usage = 9000
+        for _ in range(2):
+            with self.assertRaisesRegex(MemoryError, 'budget_exhausted'):
+                self.embedding.embed('synthetic')
+        self.assertEqual(len(self.sent), 1)
+        self.assertEqual(len(self.permits), 2)
+        self.assertEqual(self.permits[-1]['action'], 'finalize')
+        self.assertEqual(self.permits[-1]['usage']['input_tokens'], 9000)
+
+
 class SdkFailureTests(unittest.TestCase):
     def test_batch_timeout_cannot_issue_sdk_individual_fallback_requests(self):
         main = importlib.import_module('mem0.memory.main')

@@ -188,9 +188,10 @@ pub async fn edit(
         "reanalyze" => {
             contracts::validate("VersionCommand", &input)?;
             let object = object.ok_or(Error::new("invalid_input"))?;
-            if let Some(receipt) =
+            if let Some(mut receipt) =
                 knowledge::begin_reanalysis_in_tx(&mut tx, ctx, object, &input).await?
             {
+                super::semantic_governance::decorate_in_tx(&mut tx, ctx, &mut receipt).await?;
                 contracts::validate("KnowledgeObject", &receipt)?;
                 tx.commit().await?;
                 return Ok(receipt);
@@ -346,11 +347,10 @@ pub async fn valid_assets_in_tx(
 ) -> Result<Vec<Value>> {
     let mut valid = Vec::new();
     for item in items {
-        if check_refs_in_tx(tx, ctx, &item["dependencies"])
-            .await
-            .is_ok()
-        {
-            valid.push(item);
+        match check_refs_in_tx(tx, ctx, &item["dependencies"]).await {
+            Ok(()) => valid.push(item),
+            Err(error) if matches!(error.code, "stale_knowledge" | "not_available") => (),
+            Err(error) => return Err(error),
         }
     }
     Ok(valid)

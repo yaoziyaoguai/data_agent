@@ -1,10 +1,11 @@
 import os
+import socket
 from pathlib import Path
 import tempfile
 import unittest
 
-from development import read_model_credentials, memory_configuration, embedding_configuration, with_local_proxy_bypass
-from unittest.mock import patch
+from development import read_model_credentials, memory_configuration, embedding_configuration, with_local_proxy_bypass, wait_health, available_ports
+from unittest.mock import patch, Mock
 import json
 
 
@@ -64,6 +65,51 @@ class ModelCredentialsTest(unittest.TestCase):
             os.chmod(source, 0o600)
             self.assertEqual(set(read_model_credentials(source)), {
                 'DEEPSEEK_API_KEY', 'DEEPSEEK_BASE_URL', 'DEEPSEEK_MODEL'})
+
+
+class StartupHealthTest(unittest.TestCase):
+    def test_restart_accepts_closed_connections_in_time_wait(self):
+        with socket.socket() as listener:
+            listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            listener.bind(('127.0.0.1', 0))
+            listener.listen()
+            port = listener.getsockname()[1]
+            with socket.create_connection(('127.0.0.1', port)) as client:
+                connection, _ = listener.accept()
+                connection.close()
+                self.assertEqual(client.recv(1), b'')
+        with patch('development.PORTS', {'api': port}):
+            self.assertEqual(available_ports(0), {'api': port})
+
+    def test_active_listener_is_still_rejected(self):
+        with socket.socket() as listener:
+            listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            listener.bind(('127.0.0.1', 0))
+            listener.listen()
+            with patch('development.PORTS', {'api': listener.getsockname()[1]}):
+                with self.assertRaises(OSError):
+                    available_ports(0)
+
+    def test_delayed_health_records_actual_service_and_runtime(self):
+        process = Mock(); process.poll.return_value = None
+        response = Mock(); response.__enter__ = Mock(return_value=response); response.__exit__ = Mock(return_value=False)
+        response.status = 200
+        with patch('development.request', side_effect=[OSError(), response]), patch('development.time.sleep'), patch('builtins.print') as output:
+            wait_health('http://127.0.0.1/health', [('bridge', process)], 'bridge', Path('/tmp/isolated-startup'))
+        self.assertIn('stage=ready', output.call_args.args[0])
+        self.assertIn('/tmp/isolated-startup/bridge.log', output.call_args.args[0])
+
+    def test_early_exit_names_failed_process(self):
+        process = Mock(); process.poll.return_value = 73
+        with self.assertRaisesRegex(RuntimeError, 'service=memory stage=exited code=73.*log=/tmp/isolated-startup/memory.log'):
+            wait_health('http://127.0.0.1/health', [('memory', process)], 'bridge', Path('/tmp/isolated-startup'))
+
+    def test_unready_service_never_reports_success(self):
+        process = Mock(); process.poll.return_value = None
+        with patch('development.request', side_effect=OSError()), patch('builtins.print') as output:
+            with self.assertRaisesRegex(RuntimeError, 'service=bridge stage=timeout.*log=/tmp/isolated-startup/bridge.log'):
+                wait_health('http://127.0.0.1/health', [('bridge', process)], 'bridge', Path('/tmp/isolated-startup'), timeout=.02)
+        self.assertFalse(any('stage=ready' in call.args[0] for call in output.call_args_list))
 
 
 if __name__ == '__main__':

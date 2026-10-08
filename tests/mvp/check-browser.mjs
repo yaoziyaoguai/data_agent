@@ -152,7 +152,7 @@ try {
   check("页面切换保留当前对话及未发送草稿");
   await page.getByRole("button", { name: "我的积累", exact: false }).click();
   await page.getByRole("tab", { name: /我的 Skill/ }).click();
-  await page.getByRole("button", { name: "新增Skill", exact: true }).click();
+  await page.getByRole("button", { name: "新增个人 Skill", exact: true }).click();
   await page.getByLabel("名称", { exact: true }).fill("渠道分析方法");
   await page.getByLabel("适用范围与例外").fill("订单收入分析");
   await page.getByRole("button", { name: "保存", exact: true }).click();

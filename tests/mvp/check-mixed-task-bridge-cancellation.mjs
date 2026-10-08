@@ -46,7 +46,7 @@ try{
       throw error;
     }
   }:undefined;
-  h=await harness({profile,deliveryDispatch,protocolProviderUrl:'http://127.0.0.1:'+provider.address().port,env:{DATA_AGENT_LEASE_MS:'1500'}});
+  h=await harness({profile,deliveryDispatch,protocolProviderUrl:'http://127.0.0.1:'+provider.address().port,env:{DATA_AGENT_LEASE_MS:'15000'}});
   if(delayed){process.env.DEEPSEEK_API_KEY='synthetic-protocol-key';process.env.DEEPSEEK_BASE_URL='http://127.0.0.1:'+provider.address().port;process.env.DATA_AGENT_PROVIDER_TEST='1';}
   const cid=await h.create();
   const message=await h.send(cid,'分别解释合成金额和时间，这是两个独立目标。');
@@ -57,6 +57,10 @@ try{
   const original=snapshot.runs.find(run=>run.state==='running');
   const identity=h.sql(`SELECT JSON_OBJECT('message_id',message_id,'chain',recovery_chain_id,'scope',budget_scope_id) FROM agent_runs WHERE id='${original.run_id}'`)[0];
   assert.equal(identity.message_id,message.message_id);
+  // 本场景从首次正常运行发起取消；领取超时恢复由其他用例覆盖。
+  const initial=h.sql(`SELECT JSON_OBJECT('attempts',j.attempts,'job_epoch',j.lease_epoch,'run_epoch',r.job_lease_epoch) FROM background_jobs j JOIN agent_runs r ON r.job_id=j.id WHERE r.id='${original.run_id}'`)[0];
+  assert.equal(initial.attempts,1);assert.equal(initial.job_epoch,initial.run_epoch);
+  assert.equal(snapshot.runs.length,1);
   if(delayed)h.sql(`UPDATE background_jobs SET attempts=3 WHERE message_id='${message.message_id}'`);
   phase='continuation';
   const started=performance.now();

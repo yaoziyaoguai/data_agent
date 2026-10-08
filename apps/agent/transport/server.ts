@@ -3,6 +3,14 @@ import { decodeContract } from '../../../packages/contracts/validate.ts';
 import type { RunEnvelope, CancelRun } from '../../../packages/contracts/generated/boundary.ts';
 import type { deliver } from '../session/deliver.ts';
 
+function failureCode(error: unknown): string {
+  const allowed = new Set(['provider_configuration_invalid', 'provider_model_unavailable', 'invalid_skill_resource', 'model_run_failed', 'model_request_failed', 'model_input_limit', 'model_budget_exhausted', 'stale_context', 'checkpoint_conflict', 'invalid_skill_receipt']);
+  if (!(error instanceof Error)) return 'unexpected_error';
+  const code = (error as Error & {code?: unknown}).code;
+  if (typeof code === 'string' && allowed.has(code)) return code;
+  return allowed.has(error.message) ? error.message : 'unexpected_error';
+}
+
 export function createDeliveryServer(apiUrl:string,token:string,dispatch:typeof deliver,fault='') {
   const active=new Map<string,{run:RunEnvelope,controller:AbortController}>();
   return createServer(async(request,response)=>{
@@ -23,7 +31,7 @@ export function createDeliveryServer(apiUrl:string,token:string,dispatch:typeof 
       if(active.has(run.conversation_id)){response.writeHead(409).end();return;}
       const controller=new AbortController();active.set(run.conversation_id,{run,controller});acquired=true;
       await dispatch(run,apiUrl,token,fault,controller.signal);response.writeHead(200).end('finished');
-    }catch(error){if(process.env.DATA_AGENT_DIAGNOSTICS==='1'&&!process.env.DEEPSEEK_API_KEY)console.error('bridge_diagnostic '+(error instanceof Error?error.message.replaceAll(token,'[redacted]'):'unknown'));console.error('bridge_failed run='+ (run?.run_id??'invalid'));response.writeHead(500).end('delivery_failed');}
+    }catch(error){if(process.env.DATA_AGENT_DIAGNOSTICS==='1'&&!process.env.DEEPSEEK_API_KEY)console.error('bridge_diagnostic '+(error instanceof Error?error.message.replaceAll(token,'[redacted]'):'unknown'));console.error('bridge_failed run='+ (run?.run_id??'invalid')+' code='+failureCode(error));response.writeHead(500).end('delivery_failed');}
     finally{if(acquired&&run)active.delete(run.conversation_id);}
   });
 }

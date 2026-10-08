@@ -223,3 +223,19 @@ verify-shared-embedding:
 	$(CARGO) test --offline --locked -p data-agent --lib modules::retrieval::embedding::tests
 	$(PYTHON) -m unittest discover -s scripts -p 'test_development.py'
 	node tests/mvp/check-shared-embedding.mjs
+
+.PHONY: verify-semantic-governance
+verify-semantic-governance:
+	$(CARGO) build --offline --locked -p data-agent-api -p data-agent-worker
+	node tests/mvp/check-semantic-governance.mjs --case GOV01
+	node tests/mvp/check-semantic-governance.mjs --case GOV02
+	node tests/mvp/check-semantic-governance.mjs --case GOV03
+	node tests/mvp/check-semantic-governance.mjs --case GOV04
+	node tests/mvp/check-semantic-governance.mjs --case GOV05
+	node tests/mvp/check-creator-ownership.mjs
+	node tests/mvp/check-semantic-role-boundaries.mjs --case sync
+	node tests/mvp/check-semantic-role-boundaries.mjs --case members
+	node tests/mvp/check-semantic-role-boundaries.mjs --case directory
+	node tests/mvp/check-semantic-governance-browser.mjs
+	node tests/mvp/check-creator-ownership-browser.mjs
+	node tests/mvp/check-semantic-role-boundaries-browser.mjs
