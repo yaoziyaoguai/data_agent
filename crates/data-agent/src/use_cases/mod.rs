@@ -1,3 +1,4 @@
+pub mod conversation_models;
 pub mod deliver_run;
 pub mod finish_run;
 pub mod invoke_tool;
@@ -8,6 +9,7 @@ pub mod cancel_run;
 pub mod catalog_import;
 pub mod data_tools;
 pub mod knowledge;
+pub mod knowledge_documents;
 pub(crate) mod knowledge_sources;
 pub mod model_calls;
 pub mod personal_assets;

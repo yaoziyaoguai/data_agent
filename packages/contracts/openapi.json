@@ -1688,7 +1688,8 @@
               }
             }
           }
-        }
+        },
+        "description": "保留的显式客户端确认入口，绑定已保存SQL及草稿/条件版本；Web通过聊天执行意图调用内部execute_query，二者复用确认规则。"
       }
     },
     "/queries/{id}/cancel": {
@@ -1992,7 +1993,8 @@
               }
             }
           }
-        }
+        },
+        "description": "Pi受控工具入口。execute_query使用ExecuteQueryInput：完整当前用户原话、查询ID、草稿和条件版本；真实消息/用户/预算从当前运行绑定，同事务记录首次执行授权与消息已应用，稳定工具重放不重复执行。"
       }
     },
     "/knowledge-index/rebuilds": {
@@ -2202,7 +2204,7 @@
             }
           }
         },
-        "description": "返回独立对象创建资格 can_create 和全局管理权 can_admin；服务端动作仍独立授权。"
+        "description": "返回独立对象创建资格 can_create、全局管理权 can_admin 以及当前空间最高语义角色 highest_role（user、maintainer、super_maintainer）。角色仅供展示，服务端动作仍独立授权。"
       }
     },
     "/knowledge/{id}/maintainer": {
@@ -2721,6 +2723,192 @@
               "minLength": 1,
               "maxLength": 64,
               "pattern": "^[A-Za-z0-9_-]+$"
+            }
+          }
+        ]
+      }
+    },
+    "/knowledge/{id}/document": {
+      "get": {
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schema.json#/$defs/KnowledgeDocument"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "应用错误；权限、版本、待归属、未知和服务失败保留独立code",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schema.json#/$defs/AppError"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      },
+      "patch": {
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schema.json#/$defs/KnowledgeDocument"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "应用错误；权限、版本、待归属、未知和服务失败保留独立code",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schema.json#/$defs/AppError"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "./schema.json#/$defs/KnowledgeDocumentEdit"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/models": {
+      "get": {
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schema.json#/$defs/ModelCatalog"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "应用错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schema.json#/$defs/AppError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/conversations/{conversation_id}/model-selection": {
+      "get": {
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schema.json#/$defs/ConversationModelSelection"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "应用错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schema.json#/$defs/AppError"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "conversation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      },
+      "post": {
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schema.json#/$defs/ConversationModelSelection"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "应用错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schema.json#/$defs/AppError"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "./schema.json#/$defs/SaveModelSelection"
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "conversation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
             }
           }
         ]

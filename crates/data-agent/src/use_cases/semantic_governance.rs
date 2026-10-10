@@ -9,7 +9,16 @@ use sqlx::MySqlPool;
 
 pub async fn read_access(pool: &MySqlPool, ctx: &AccessContext) -> Result<Value> {
     let mut tx = AppTx::begin(pool).await?;
-    let result = json!({"can_admin":access::is_super_maintainer(ctx)?,"can_create":access::can_create_snapshot_in_tx(&mut tx, ctx).await?});
+    let can_admin = access::is_super_maintainer(ctx)?;
+    let can_create = access::can_create_snapshot_in_tx(&mut tx, ctx).await?;
+    let highest_role = if can_admin {
+        "super_maintainer"
+    } else if can_create || access::has_maintenance_snapshot_in_tx(&mut tx, ctx).await? {
+        "maintainer"
+    } else {
+        "user"
+    };
+    let result = json!({"can_admin":can_admin,"can_create":can_create,"highest_role":highest_role});
     tx.commit().await?;
     Ok(result)
 }

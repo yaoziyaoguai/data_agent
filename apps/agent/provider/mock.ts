@@ -112,8 +112,8 @@ export function mockStream(transport: RustTransport, delayMs = 0) {
           const content = last.content.find((c) => c.type === "text");
           if (!content || content.type !== "text")
             throw new Error("missing tool receipt");
-          const receipt = JSON.parse(content.text);
-          const text = `已建立分析任务：${receipt.task_id}。目标已保存，条件版本为 ${receipt.condition_version}。当前为本地模拟模型演示，尚未生成或执行 SQL。`;
+          JSON.parse(content.text);
+          const text = "已记录你的分析目标。当前为本地模拟模型演示，尚未生成或执行 SQL。";
           message.content.push({ type: "text", text: "" });
           stream.push({
             type: "text_start",

@@ -2654,7 +2654,8 @@
     "schema": "SemanticAccess",
     "value": {
       "can_admin": false,
-      "can_create": true
+      "can_create": true,
+      "highest_role": "maintainer"
     },
     "valid": true
   },
@@ -2662,7 +2663,8 @@
     "name": "missing creation capability",
     "schema": "SemanticAccess",
     "value": {
-      "can_admin": false
+      "can_admin": false,
+      "highest_role": "user"
     },
     "valid": false
   },
@@ -2905,6 +2907,499 @@
       "state": "handled",
       "response": "核对后另行编辑",
       "body": "修改正文"
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "whole document edit preserves Markdown and version binding",
+    "schema": "KnowledgeDocumentEdit",
+    "value": {
+      "operation_id": "document-edit",
+      "body": "# 合成文档\n\n完整正文。\n",
+      "parts": [
+        {
+          "id": "synthetic-document",
+          "expected_version": "3"
+        }
+      ]
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "whole document edit requires all submitted versions",
+    "schema": "KnowledgeDocumentEdit",
+    "value": {
+      "operation_id": "document-edit",
+      "body": "# 合成文档\n\n完整正文。\n",
+      "parts": [
+        {
+          "id": "synthetic-document"
+        }
+      ]
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "whole document edit rejects an empty part set",
+    "schema": "KnowledgeDocumentEdit",
+    "value": {
+      "operation_id": "document-edit",
+      "body": "# 合成文档\n\n完整正文。\n",
+      "parts": []
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "whole document edit rejects a numeric version",
+    "schema": "KnowledgeDocumentEdit",
+    "value": {
+      "operation_id": "document-edit",
+      "body": "# 合成文档\n\n完整正文。\n",
+      "parts": [
+        {
+          "id": "synthetic-document",
+          "expected_version": 3
+        }
+      ]
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "whole document edit cannot accept caller identity",
+    "schema": "KnowledgeDocumentEdit",
+    "value": {
+      "operation_id": "document-edit",
+      "body": "# 合成文档\n\n完整正文。\n",
+      "parts": [
+        {
+          "id": "synthetic-document",
+          "expected_version": "3"
+        }
+      ],
+      "user_id": "bob"
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "whole document read carries ordered parts",
+    "schema": "KnowledgeDocument",
+    "value": {
+      "title": "合成文档",
+      "body": "# 合成文档\n\n完整正文。\n",
+      "parts": [
+        {
+          "id": "synthetic-document",
+          "kind": "document",
+          "name": "合成文档",
+          "version": "3",
+          "state": "enabled",
+          "entries": [],
+          "related_ids": [],
+          "source_id": null,
+          "source_version": "0",
+          "updated_by": "alice",
+          "document_order": 0
+        }
+      ],
+      "can_edit": true
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "document order rejects negative positions",
+    "schema": "KnowledgeObject",
+    "value": {
+      "id": "synthetic-document",
+      "kind": "document",
+      "name": "合成文档",
+      "version": "3",
+      "state": "enabled",
+      "entries": [],
+      "related_ids": [],
+      "source_id": null,
+      "source_version": "0",
+      "updated_by": "alice",
+      "document_order": -1
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "document order rejects out of range positions",
+    "schema": "KnowledgeObject",
+    "value": {
+      "id": "synthetic-document",
+      "kind": "document",
+      "name": "合成文档",
+      "version": "3",
+      "state": "enabled",
+      "entries": [],
+      "related_ids": [],
+      "source_id": null,
+      "source_version": "0",
+      "updated_by": "alice",
+      "document_order": 200
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "ordinary workspace role",
+    "schema": "SemanticAccess",
+    "value": {
+      "can_admin": false,
+      "can_create": false,
+      "highest_role": "user"
+    },
+    "valid": true
+  },
+  {
+    "name": "independent object maintainer need not have creation capability",
+    "schema": "SemanticAccess",
+    "value": {
+      "can_admin": false,
+      "can_create": false,
+      "highest_role": "maintainer"
+    },
+    "valid": true
+  },
+  {
+    "name": "super maintainer workspace role",
+    "schema": "SemanticAccess",
+    "value": {
+      "can_admin": true,
+      "can_create": true,
+      "highest_role": "super_maintainer"
+    },
+    "valid": true
+  },
+  {
+    "name": "workspace role is required",
+    "schema": "SemanticAccess",
+    "value": {
+      "can_admin": false,
+      "can_create": false
+    },
+    "valid": false
+  },
+  {
+    "name": "unknown workspace role rejected",
+    "schema": "SemanticAccess",
+    "value": {
+      "can_admin": false,
+      "can_create": false,
+      "highest_role": "admin"
+    },
+    "valid": false
+  },
+  {
+    "name": "execute query from complete user instruction",
+    "schema": "ExecuteQueryInput",
+    "value": {
+      "query_id": "query-1",
+      "draft_version": "2",
+      "condition_version": "3",
+      "instruction_quote": "改成二月，再执行。\n其他条件不变。"
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "execution cannot declare message_id",
+    "schema": "ExecuteQueryInput",
+    "value": {
+      "query_id": "query-1",
+      "draft_version": "2",
+      "condition_version": "3",
+      "instruction_quote": "改成二月，再执行。\n其他条件不变。",
+      "message_id": "forged"
+    },
+    "valid": false
+  },
+  {
+    "name": "execution cannot declare owner_id",
+    "schema": "ExecuteQueryInput",
+    "value": {
+      "query_id": "query-1",
+      "draft_version": "2",
+      "condition_version": "3",
+      "instruction_quote": "改成二月，再执行。\n其他条件不变。",
+      "owner_id": "forged"
+    },
+    "valid": false
+  },
+  {
+    "name": "execution cannot declare budget_scope_id",
+    "schema": "ExecuteQueryInput",
+    "value": {
+      "query_id": "query-1",
+      "draft_version": "2",
+      "condition_version": "3",
+      "instruction_quote": "改成二月，再执行。\n其他条件不变。",
+      "budget_scope_id": "forged"
+    },
+    "valid": false
+  },
+  {
+    "name": "execution cannot declare confirmed",
+    "schema": "ExecuteQueryInput",
+    "value": {
+      "query_id": "query-1",
+      "draft_version": "2",
+      "condition_version": "3",
+      "instruction_quote": "改成二月，再执行。\n其他条件不变。",
+      "confirmed": true
+    },
+    "valid": false
+  },
+  {
+    "name": "execution needs original instruction",
+    "schema": "ExecuteQueryInput",
+    "value": {
+      "query_id": "query-1",
+      "draft_version": "2",
+      "condition_version": "3"
+    },
+    "valid": false
+  },
+  {
+    "name": "model selection deepseek-flash off",
+    "schema": "ModelSelection",
+    "value": {
+      "model_id": "deepseek-flash",
+      "thinking_level": "off"
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "model selection deepseek-flash low",
+    "schema": "ModelSelection",
+    "value": {
+      "model_id": "deepseek-flash",
+      "thinking_level": "low"
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "model selection deepseek-flash high",
+    "schema": "ModelSelection",
+    "value": {
+      "model_id": "deepseek-flash",
+      "thinking_level": "high"
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "model selection deepseek-flash max",
+    "schema": "ModelSelection",
+    "value": {
+      "model_id": "deepseek-flash",
+      "thinking_level": "max"
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "model selection deepseek-v4-pro off",
+    "schema": "ModelSelection",
+    "value": {
+      "model_id": "deepseek-v4-pro",
+      "thinking_level": "off"
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "model selection deepseek-v4-pro high",
+    "schema": "ModelSelection",
+    "value": {
+      "model_id": "deepseek-v4-pro",
+      "thinking_level": "high"
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "model selection deepseek-v4-pro max",
+    "schema": "ModelSelection",
+    "value": {
+      "model_id": "deepseek-v4-pro",
+      "thinking_level": "max"
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "model selection rejects Pro low",
+    "schema": "ModelSelection",
+    "value": {
+      "model_id": "deepseek-v4-pro",
+      "thinking_level": "low"
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "model selection rejects unknown model",
+    "schema": "ModelSelection",
+    "value": {
+      "model_id": "unknown",
+      "thinking_level": "off"
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "model selection rejects unknown level",
+    "schema": "ModelSelection",
+    "value": {
+      "model_id": "deepseek-flash",
+      "thinking_level": "ultra"
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "model selection rejects client budget",
+    "schema": "ModelSelection",
+    "value": {
+      "model_id": "deepseek-v4-pro",
+      "thinking_level": "max",
+      "trial_cost_micros": "9999999"
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "model selection message carries choice",
+    "schema": "MessageInput",
+    "value": {
+      "client_message_id": "synthetic-model-message",
+      "text": "解释合成指标",
+      "model_selection": {
+        "model_id": "deepseek-v4-pro",
+        "thinking_level": "max"
+      }
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "model selection null initial state",
+    "schema": "ConversationModelSelection",
+    "value": {
+      "selection": null,
+      "version": "0"
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "model selection saved state",
+    "schema": "ConversationModelSelection",
+    "value": {
+      "selection": {
+        "model_id": "deepseek-v4-pro",
+        "thinking_level": "max"
+      },
+      "version": "2"
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "model selection save request",
+    "schema": "SaveModelSelection",
+    "value": {
+      "selection": {
+        "model_id": "deepseek-v4-pro",
+        "thinking_level": "max"
+      },
+      "expected_version": "1"
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "model selection missing expected version",
+    "schema": "SaveModelSelection",
+    "value": {
+      "selection": {
+        "model_id": "deepseek-v4-pro",
+        "thinking_level": "max"
+      }
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "model selection deepseek-flash native max profile",
+    "schema": "ModelProfile",
+    "value": {
+      "provider_id": "deepseek",
+      "model_id": "deepseek-flash",
+      "trial_id": "trial-test",
+      "price_version": "2026-10-04-peak-usd",
+      "input_limit": 32768,
+      "output_limit": 2048,
+      "trial_call_limit": 24,
+      "trial_cost_micros": "300000",
+      "toolset": "data",
+      "request_call_limit": 12,
+      "payload_bytes_limit": 65536,
+      "thinking_level": "max"
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "model selection deepseek-v4-pro native max profile",
+    "schema": "ModelProfile",
+    "value": {
+      "provider_id": "deepseek",
+      "model_id": "deepseek-v4-pro",
+      "trial_id": "trial-test",
+      "price_version": "2026-10-05-pro-peak-usd",
+      "input_limit": 32768,
+      "output_limit": 2048,
+      "trial_call_limit": 24,
+      "trial_cost_micros": "300000",
+      "toolset": "data",
+      "request_call_limit": 12,
+      "payload_bytes_limit": 65536,
+      "thinking_level": "max"
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "history UTC creation time",
+    "schema": "HistoryItem",
+    "value": {
+      "id": "synthetic-conversation",
+      "title": "同名分析",
+      "created_at": "2026-10-10T01:02:03.000000Z"
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "history creation time rejects opaque text",
+    "schema": "HistoryItem",
+    "value": {
+      "id": "synthetic-conversation",
+      "title": "同名分析",
+      "created_at": "recently"
     },
     "valid": false,
     "roundtrip": false

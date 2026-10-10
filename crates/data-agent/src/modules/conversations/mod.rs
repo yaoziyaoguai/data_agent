@@ -12,6 +12,7 @@ pub use store::{
     lock_for_cleanup_in_tx, pending_ids_in_tx, recent_messages_in_tx, route_message_in_tx,
     withdraw_in_tx,
 };
+pub use store::{read_model_selection, save_model_selection_in_tx};
 
 pub use store::model_history_in_tx;
 

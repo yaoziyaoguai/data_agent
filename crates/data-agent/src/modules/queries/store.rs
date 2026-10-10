@@ -55,6 +55,22 @@ pub async fn read_in_tx(tx: &mut AppTx<'_>, ctx: &AccessContext, qid: &str) -> R
         .ok_or(Error::new("not_available"))?;
     Ok(view(&r))
 }
+pub async fn is_confirmation_message_in_tx(
+    tx: &mut AppTx<'_>,
+    ctx: &AccessContext,
+    qid: &str,
+    message_id: &str,
+) -> Result<bool> {
+    let count: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM query_requests WHERE id=? AND owner_id=? AND confirmation_message_id=?",
+    )
+    .bind(qid)
+    .bind(&ctx.user_id)
+    .bind(message_id)
+    .fetch_one(tx.connection())
+    .await?;
+    Ok(count > 0)
+}
 pub async fn supersede_in_tx(tx: &mut AppTx<'_>, cid: &str, task: &str) -> Result<()> {
     tx.lock_rank(5)?;
     sqlx::query("UPDATE query_requests SET confirmation_state='superseded' WHERE conversation_id=? AND task_id=? AND confirmation_state='awaiting_confirmation' AND execution_state='not_submitted'").bind(cid).bind(task).execute(tx.connection()).await?;
@@ -116,12 +132,18 @@ pub async fn save_draft_in_tx(
     sqlx::query("INSERT INTO query_requests(id,conversation_id,owner_id,task_id,condition_version,draft_version,operation_id,sql_text,parameters,target_id,target_version,summary,knowledge_refs,check_state,confirmation_state,budget_scope_id,error_code,replaces_query_id,error_details) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)").bind(&qid).bind(cid).bind(&ctx.user_id).bind(task).bind(epoch(input["condition_version"].as_str().unwrap_or("0"))?).bind(draft).bind(operation).bind(input["sql"].as_str()).bind(sqlx::types::Json(&input["parameters"])).bind(input["target_id"].as_str()).bind("1").bind(input["summary"].as_str()).bind(sqlx::types::Json(&input["knowledge_refs"])).bind(if passed{"passed"}else{"rejected"}).bind(if passed{"awaiting_confirmation"}else{"rejected"}).bind(budget).bind(if passed{None}else{Some("sql_not_supported")}).bind(replaced).bind(if passed {None} else {report.get("diagnostic").map(sqlx::types::Json)}).execute(tx.connection()).await?;
     read_in_tx(tx, ctx, &qid).await
 }
+pub struct MessageAuthorization<'a> {
+    pub message_id: &'a str,
+    pub budget_scope_id: &'a str,
+}
+
 pub async fn confirm_in_tx(
     tx: &mut AppTx<'_>,
     ctx: &AccessContext,
     qid: &str,
     input: &Value,
     blocked: bool,
+    message_authorization: Option<MessageAuthorization<'_>>,
 ) -> Result<Value> {
     tx.lock_rank(5)?;
     let row = sqlx::query("SELECT * FROM query_requests WHERE id=? AND owner_id=? FOR UPDATE")
@@ -149,7 +171,12 @@ pub async fn confirm_in_tx(
     {
         return Err(Error::new("version_conflict"));
     }
-    sqlx::query("UPDATE query_requests SET confirmation_state='confirmed',execution_state='queued',confirmation_key=? WHERE id=?").bind(input["operation_id"].as_str()).bind(qid).execute(tx.connection()).await?;
+    // 首次执行由明确提出执行的消息承担结果解释预算；幂等重放在上方返回，不能补额。
+    sqlx::query("UPDATE query_requests SET confirmation_state='confirmed',execution_state='queued',confirmation_key=?,confirmation_message_id=?,budget_scope_id=COALESCE(?,budget_scope_id) WHERE id=?")
+        .bind(input["operation_id"].as_str())
+        .bind(message_authorization.as_ref().map(|a| a.message_id))
+        .bind(message_authorization.as_ref().map(|a| a.budget_scope_id))
+        .bind(qid).execute(tx.connection()).await?;
     read_in_tx(tx, ctx, qid).await
 }
 pub async fn cancel_in_tx(tx: &mut AppTx<'_>, ctx: &AccessContext, qid: &str) -> Result<Value> {
@@ -183,7 +210,8 @@ pub async fn cancel_in_tx(tx: &mut AppTx<'_>, ctx: &AccessContext, qid: &str) ->
 }
 pub async fn claim_due(pool: &MySqlPool, worker: &str) -> Result<Option<Value>> {
     let mut tx = AppTx::begin(pool).await?;
-    let row=sqlx::query("SELECT * FROM query_requests WHERE execution_state IN ('queued','submitting','submission_unknown','running') AND (lease_until IS NULL OR lease_until<UTC_TIMESTAMP(3)) ORDER BY created_at LIMIT 1 FOR UPDATE SKIP LOCKED").fetch_optional(tx.connection()).await?;
+    // 先处理尚未领取和较早到期的查询，避免旧查询的反复轮询阻塞后来的请求。
+    let row=sqlx::query("SELECT * FROM query_requests WHERE execution_state IN ('queued','submitting','submission_unknown','running') AND (lease_until IS NULL OR lease_until<UTC_TIMESTAMP(3)) ORDER BY lease_until,created_at,id LIMIT 1 FOR UPDATE SKIP LOCKED").fetch_optional(tx.connection()).await?;
     let result = if let Some(r) = row {
         let qid = r.get::<String, _>("id");
         let lease = r.get::<u64, _>("lease_epoch") + 1;

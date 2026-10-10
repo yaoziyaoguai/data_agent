@@ -6,6 +6,7 @@ pub use store::{
     finish_index_in_tx, list_in_tx, matching_in_tx, page_in_tx, proposals_in_tx, propose_in_tx,
     read_in_tx, reanalyze_in_tx, save_edit_in_tx, seed_in_tx,
 };
+pub use store::{document_parts_in_tx, save_document_in_tx};
 pub use store::{lock_versions_in_tx, related_documents_in_tx};
 
 pub use store::is_deleted_in_tx;

@@ -15,6 +15,15 @@ pub async fn can_create_snapshot_in_tx(tx: &mut AppTx<'_>, ctx: &AccessContext) 
     read_can_create_in_tx(tx, ctx, false).await
 }
 
+pub async fn has_maintenance_snapshot_in_tx(
+    tx: &mut AppTx<'_>,
+    ctx: &AccessContext,
+) -> Result<bool> {
+    // 独立对象负责人可能已失去表维护关系，不能用创建资格代替维护身份。
+    Ok(sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM semantic_ownership WHERE space_id=? AND maintainer_id=? AND authority_id=object_id)")
+        .bind(&ctx.space_id).bind(&ctx.user_id).fetch_one(tx.connection()).await?)
+}
+
 async fn read_can_create_in_tx(
     tx: &mut AppTx<'_>,
     ctx: &AccessContext,

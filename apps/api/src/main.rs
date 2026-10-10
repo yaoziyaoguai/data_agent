@@ -1,4 +1,5 @@
 mod data_routes;
+mod model_routes;
 mod routes;
 mod semantic_routes;
 use axum::{
@@ -42,6 +43,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     data_agent::use_cases::knowledge::initialize(&state.pool).await?;
     let router = Router::new()
         .route("/health", get(|| async { "ok" }))
+        .route("/models", get(model_routes::catalog))
+        .route(
+            "/conversations/{cid}/model-selection",
+            get(model_routes::read).post(model_routes::save),
+        )
         .route(
             "/session",
             post(routes::login)
@@ -86,6 +92,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route(
             "/knowledge/{id}",
             get(data_routes::read_knowledge).patch(data_routes::edit_knowledge),
+        )
+        .route(
+            "/knowledge/{id}/document",
+            get(data_routes::read_document).patch(data_routes::edit_document),
         )
         .route(
             "/knowledge/{id}/{action}",

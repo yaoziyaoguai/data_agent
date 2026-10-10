@@ -106,8 +106,8 @@ pub fn authorize_maintainer(ctx: &AccessContext) -> Result<()> {
 mod store;
 pub use store::{
     assign_in_tx, authorize_semantic_in_tx, can_create_in_tx, can_create_snapshot_in_tx,
-    maintainable_ids_in_tx, maintenance_in_tx, maintenance_snapshot_in_tx, register_creator_in_tx,
-    register_in_tx, sync_maintainer_in_tx,
+    has_maintenance_snapshot_in_tx, maintainable_ids_in_tx, maintenance_in_tx,
+    maintenance_snapshot_in_tx, register_creator_in_tx, register_in_tx, sync_maintainer_in_tx,
 };
 
 #[cfg(test)]

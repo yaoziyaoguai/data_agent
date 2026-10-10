@@ -22,6 +22,7 @@ export interface Boundary {
     checkpoint_reference:         CheckpointReference;
     conditions:                   Conditions;
     confirmQuery:                 ConfirmQuery;
+    conversationModelSelection:   ConversationModelSelection;
     conversationReadInput:        ConversationReadInput;
     conversationReceipt:          ConversationReceipt;
     ConversationSkillSelection?:  ConversationSkillSelection;
@@ -32,6 +33,7 @@ export interface Boundary {
     embeddingProfile:             EmbeddingProfile;
     event:                        Event;
     evidenceRef:                  EvidenceRef;
+    executeQueryInput:            ExecuteQueryInput;
     finalizeModelCall:            FinalizeModelCall;
     finishReceipt:                FinishReceipt;
     finishRun:                    FinishRun;
@@ -41,6 +43,8 @@ export interface Boundary {
     host_checkpoint_reference:    HostCheckpointReference;
     identity:                     Identity;
     knowledgeCreate:              KnowledgeCreate;
+    knowledgeDocument?:           KnowledgeDocument;
+    knowledgeDocumentEdit?:       KnowledgeDocumentEdit;
     knowledgeEdit:                KnowledgeEdit;
     knowledgeEntry:               KnowledgeEntry;
     knowledgeList:                KnowledgeList;
@@ -60,8 +64,11 @@ export interface Boundary {
     messageReceipt:               MessageReceipt;
     modelAttempt:                 ModelAttempt;
     modelCallReceipt:             ModelCallReceipt;
+    modelCatalog:                 ModelCatalog;
+    modelOption:                  ModelOption;
     modelProfile:                 ModelProfile;
     modelReceipt:                 ModelReceipt;
+    modelSelection:               ModelSelection;
     modelUsage:                   ModelUsage;
     mutationReceipt:              MutationReceipt;
     operationReceipt:             OperationReceipt;
@@ -90,6 +97,7 @@ export interface Boundary {
     ReviseSemanticCorrection?:    ReviseSemanticCorrection;
     runEnvelope:                  RunEnvelope;
     runSnapshot:                  RunSnapshot;
+    saveModelSelection:           SaveModelSelection;
     searchInput:                  SearchInput;
     SemanticAccess?:              SemanticAccess;
     SemanticCorrection?:          SemanticCorrection;
@@ -111,6 +119,7 @@ export interface Boundary {
     TableAnalysisPreference?:     TableAnalysisPreference;
     taskInput:                    TaskInput;
     taskSnapshot:                 TaskSnapshot;
+    thinkingOption:               ThinkingOption;
     toolInvocation:               ToolInvocation;
     toolOutcome:                  ToolOutcome;
     toolReceipt:                  ToolReceipt;
@@ -269,7 +278,16 @@ export interface SemanticAccess {
      * 可创建独立指标、文档等；由当前空间已同步的 Datasight 表维护关系或超级维护者角色确定。
      */
     can_create: boolean;
+    /**
+     * 当前空间用于展示的最高语义角色。超级维护者优先；负责表或独立语义对象则为维护者；其余为普通用户。该摘要不授予权限，独立对象负责人不一定有创建资格。
+     */
+    highest_role: HighestRole;
 }
+
+/**
+ * 当前空间用于展示的最高语义角色。超级维护者优先；负责表或独立语义对象则为维护者；其余为普通用户。该摘要不授予权限，独立对象负责人不一定有创建资格。
+ */
+export type HighestRole = "user" | "maintainer" | "super_maintainer";
 
 export interface SemanticCorrection {
     /**
@@ -597,6 +615,21 @@ export interface ConfirmQuery {
     operation_id:      string;
 }
 
+export interface ConversationModelSelection {
+    selection: ModelSelection | null;
+    version:   string;
+}
+
+export interface ModelSelection {
+    model_id:       string;
+    thinking_level: ThinkingLevel;
+}
+
+/**
+ * 通过Pi/DeepSeek原生思考模式；省略为off。思考tokens计入同一输出上限与用量。
+ */
+export type ThinkingLevel = "off" | "low" | "high" | "max";
+
 export interface ConversationReadInput {
     after_seq:       string;
     message_id?:     string;
@@ -622,7 +655,7 @@ export interface DataToolInvocation {
     tool_name:        ToolName;
 }
 
-export type ToolName = "search_knowledge" | "read_knowledge" | "read_source" | "validate_sql" | "request_query" | "update_analysis_task" | "get_query" | "cancel_query" | "manage_personal_asset" | "propose_semantic_change" | "read_conversation" | "read_analysis_task" | "read";
+export type ToolName = "search_knowledge" | "read_knowledge" | "read_source" | "validate_sql" | "request_query" | "execute_query" | "update_analysis_task" | "get_query" | "cancel_query" | "manage_personal_asset" | "propose_semantic_change" | "read_conversation" | "read_analysis_task" | "read";
 
 export interface DataToolOutcome {
     data:         { [key: string]: unknown };
@@ -646,6 +679,13 @@ export interface Event {
 }
 
 export type EventType = "message" | "assistant_delta" | "assistant_committed" | "assistant_replaced" | "tool_result" | "run_failed" | "run_cancelled" | "query_changed" | "query_result" | "memory_saved" | "task_changed" | "conversation_deleted" | "message_withdrawn" | "task_cancelled" | "memory_disabled";
+
+export interface ExecuteQueryInput {
+    condition_version: string;
+    draft_version:     string;
+    instruction_quote: string;
+    query_id:          string;
+}
 
 export interface FinalizeModelCall {
     call_attempt_id:        string;
@@ -686,8 +726,12 @@ export interface History {
 }
 
 export interface HistoryItem {
-    id:    string;
-    title: string;
+    /**
+     * 会话创建时间（UTC）；用于区分同名会话，不改变分页顺序。
+     */
+    created_at?: string;
+    id:          string;
+    title:       string;
 }
 
 export interface HistoryQuery {
@@ -723,14 +767,39 @@ export interface KnowledgeCreate {
 
 export type KnowledgeCreateKind = "table" | "field" | "metric" | "document" | "relationship" | "term";
 
-export interface KnowledgeEdit {
-    clear_override?:  boolean;
-    entry_id:         string;
-    expected_version: string;
-    operation_id:     string;
-    related_ids?:     string[];
-    source_url?:      null | string;
-    value:            string;
+/**
+ * 将同一来源的业务文档按自然章节组合阅读；parts保留原引用身份，编辑时一次提交全部章节。
+ */
+export interface KnowledgeDocument {
+    body:     string;
+    can_edit: boolean;
+    parts:    [KnowledgeObject, ...KnowledgeObject[]];
+    title:    string;
+}
+
+export interface KnowledgeObject {
+    analysis_preference?: TableAnalysisPreference;
+    created_by?:          string;
+    /**
+     * 整篇编辑后后台片段的拼接顺序；与正文同版本保存，不作为页面字段。
+     */
+    document_order?: number;
+    entries:         KnowledgeEntry[];
+    id:              string;
+    kind:            KnowledgeCreateKind;
+    maintenance?:    SemanticMaintenance;
+    name:            string;
+    prefill_status?: PrefillStatus | null;
+    related_ids:     string[];
+    source_id:       null | string;
+    source_version:  string;
+    state:           AssetState;
+    /**
+     * 平台移除与人工停用分开；重新出现只能恢复平台导致的停用。
+     */
+    state_origin?: StateOrigin;
+    updated_by:    string;
+    version:       string;
 }
 
 export interface KnowledgeEntry {
@@ -746,34 +815,6 @@ export interface KnowledgeEntry {
 
 export type ReviewState = "unverified" | "confirmed" | "needs_review";
 
-export interface KnowledgeList {
-    next_after_id:    null | string;
-    objects:          KnowledgeObject[];
-    retrieval_mode:   string;
-    search_coverage?: SearchCoverage | null;
-}
-
-export interface KnowledgeObject {
-    analysis_preference?: TableAnalysisPreference;
-    created_by?:          string;
-    entries:              KnowledgeEntry[];
-    id:                   string;
-    kind:                 KnowledgeCreateKind;
-    maintenance?:         SemanticMaintenance;
-    name:                 string;
-    prefill_status?:      PrefillStatus | null;
-    related_ids:          string[];
-    source_id:            null | string;
-    source_version:       string;
-    state:                AssetState;
-    /**
-     * 平台移除与人工停用分开；重新出现只能恢复平台导致的停用。
-     */
-    state_origin?: StateOrigin;
-    updated_by:    string;
-    version:       string;
-}
-
 export interface PrefillStatus {
     attempt_id: string;
     error_code: null | string;
@@ -784,6 +825,39 @@ export interface PrefillStatus {
  * 平台移除与人工停用分开；重新出现只能恢复平台导致的停用。
  */
 export type StateOrigin = "platform" | "human";
+
+/**
+ * 完整Markdown与完整片段版本集合；服务端逐一授权，正文与后台顺序同事务保存，重复操作返回原回执。
+ */
+export interface KnowledgeDocumentEdit {
+    body:         string;
+    operation_id: string;
+    parts:        [Part, ...Part[]];
+    related_ids?: string[];
+    source_url?:  null | string;
+}
+
+export interface Part {
+    expected_version: string;
+    id:               string;
+}
+
+export interface KnowledgeEdit {
+    clear_override?:  boolean;
+    entry_id:         string;
+    expected_version: string;
+    operation_id:     string;
+    related_ids?:     string[];
+    source_url?:      null | string;
+    value:            string;
+}
+
+export interface KnowledgeList {
+    next_after_id:    null | string;
+    objects:          KnowledgeObject[];
+    retrieval_mode:   string;
+    search_coverage?: SearchCoverage | null;
+}
 
 export interface SearchCoverage {
     candidate_limit: number;
@@ -904,6 +978,7 @@ export interface MemorySearchRequest {
 
 export interface MessageInput {
     client_message_id: string;
+    model_selection?:  ModelSelection;
     text:              string;
 }
 
@@ -925,6 +1000,22 @@ export interface ModelCallReceipt {
 
 export type ModelCallReceiptState = "reserved" | "issued" | "settled" | "unknown";
 
+export interface ModelCatalog {
+    default_selection: ModelSelection | null;
+    models:            ModelOption[];
+}
+
+export interface ModelOption {
+    id:               string;
+    label:            string;
+    thinking_options: ThinkingOption[];
+}
+
+export interface ThinkingOption {
+    label: string;
+    value: ThinkingLevel;
+}
+
 export interface ModelProfile {
     input_limit:          number;
     model_id:             string;
@@ -944,11 +1035,6 @@ export interface ModelProfile {
 }
 
 export type ProviderID = "deepseek";
-
-/**
- * 通过Pi/DeepSeek原生思考模式；省略为off。思考tokens计入同一输出上限与用量。
- */
-export type ThinkingLevel = "off" | "low" | "high";
 
 export type Toolset = "task" | "data";
 
@@ -1212,6 +1298,11 @@ export interface RunSnapshot {
 }
 
 export type RunSnapshotState = "running" | "interrupted" | "finished" | "failed" | "cancelled";
+
+export interface SaveModelSelection {
+    expected_version: string;
+    selection:        ModelSelection;
+}
 
 export interface SearchInput {
     asset_after?: string;

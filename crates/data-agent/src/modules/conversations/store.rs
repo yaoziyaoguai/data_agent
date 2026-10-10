@@ -26,6 +26,8 @@ pub struct LockedConversation {
     pub lease_owner: Option<String>,
     pub lease_valid: bool,
     pub deleted: bool,
+    pub model_selection: Option<crate::contracts::generated::ModelSelection>,
+    pub model_selection_version: u64,
     transaction_id: String,
 }
 #[derive(Clone)]
@@ -102,11 +104,54 @@ pub async fn lock_for_cleanup_in_tx(
         lease_owner: row.get("lease_owner"),
         lease_valid: row.get::<i64, _>("lease_valid") != 0,
         deleted: row.get::<bool, _>("deleted"),
+        model_selection: row
+            .get::<Option<sqlx::types::Json<Value>>, _>("model_selection")
+            .map(|v| crate::contracts::decode("ModelSelection", v.0))
+            .transpose()?,
+        model_selection_version: row.get("model_selection_version"),
         transaction_id: tx.id().into(),
     })
 }
 fn current(tx: &AppTx<'_>, locked: &LockedConversation) -> Result<()> {
     tx.assert_snapshot(&locked.transaction_id)
+}
+
+pub async fn read_model_selection(
+    pool: &sqlx::MySqlPool,
+    context: &AccessContext,
+    cid: &str,
+) -> Result<Value> {
+    let row = sqlx::query("SELECT model_selection,model_selection_version FROM conversations WHERE id=? AND owner_id=? AND space_id=? AND deleted=FALSE")
+        .bind(cid).bind(&context.user_id).bind(&context.space_id)
+        .fetch_optional(pool).await?.ok_or(Error::new("not_available"))?;
+    let selection = row.get::<Option<sqlx::types::Json<Value>>, _>("model_selection");
+    let version: u64 = row.get("model_selection_version");
+    Ok(json!({"selection":selection.map(|value| value.0),"version":version.to_string()}))
+}
+
+pub async fn save_model_selection_in_tx(
+    tx: &mut AppTx<'_>,
+    locked: &LockedConversation,
+    expected_version: u64,
+    selection: &crate::contracts::generated::ModelSelection,
+) -> Result<Value> {
+    current(tx, locked)?;
+    let value = serde_json::to_value(selection).map_err(|_| Error::new("invalid_input"))?;
+    crate::contracts::validate("ModelSelection", &value)?;
+    if locked.model_selection_version != expected_version {
+        // 仅接回同一版本、同一内容的已完成保存，旧操作不能覆盖较新的选择。
+        if expected_version.checked_add(1) == Some(locked.model_selection_version)
+            && serde_json::to_value(&locked.model_selection).ok().as_ref() == Some(&value)
+        {
+            return Ok(
+                json!({"selection":value,"version":locked.model_selection_version.to_string()}),
+            );
+        }
+        return Err(Error::new("version_conflict"));
+    }
+    sqlx::query("UPDATE conversations SET model_selection=?,model_selection_version=model_selection_version+1 WHERE id=?")
+        .bind(sqlx::types::Json(&value)).bind(&locked.id).execute(tx.connection()).await?;
+    Ok(json!({"selection":value,"version":(expected_version+1).to_string()}))
 }
 pub async fn find_message_in_tx(
     tx: &mut AppTx<'_>,
@@ -307,7 +352,7 @@ pub async fn list_conversations_in_tx(
     } else {
         None
     };
-    let rows = sqlx::query("SELECT id,COALESCE(title,'新对话') AS title FROM conversations WHERE owner_id=? AND space_id=? AND deleted=0 AND INSTR(LOWER(COALESCE(title,'')),LOWER(?))>0 AND (? IS NULL OR created_at<? OR (created_at=? AND id<?)) ORDER BY created_at DESC,id DESC LIMIT 101")
+    let rows = sqlx::query("SELECT id,COALESCE(title,'新对话') AS title,DATE_FORMAT(created_at,'%Y-%m-%dT%H:%i:%s.%fZ') AS created_at FROM conversations WHERE owner_id=? AND space_id=? AND deleted=0 AND INSTR(LOWER(COALESCE(title,'')),LOWER(?))>0 AND (? IS NULL OR created_at<? OR (created_at=? AND id<?)) ORDER BY created_at DESC,id DESC LIMIT 101")
         .bind(&context.user_id).bind(&context.space_id).bind(query).bind(&cursor).bind(&cursor).bind(&cursor).bind(before).fetch_all(tx.connection()).await?;
     let next = if rows.len() > 100 {
         rows.get(99).map(|r| r.get::<String, _>("id"))
@@ -315,7 +360,7 @@ pub async fn list_conversations_in_tx(
         None
     };
     Ok(
-        json!({"conversations":rows.iter().take(100).map(|r|json!({"id":r.get::<String,_>("id"),"title":r.get::<String,_>("title")})).collect::<Vec<_>>(),"next_before_id":next}),
+        json!({"conversations":rows.iter().take(100).map(|r|json!({"id":r.get::<String,_>("id"),"title":r.get::<String,_>("title"),"created_at":r.get::<String,_>("created_at")})).collect::<Vec<_>>(),"next_before_id":next}),
     )
 }
 

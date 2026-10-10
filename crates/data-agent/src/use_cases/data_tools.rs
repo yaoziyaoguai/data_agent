@@ -14,6 +14,7 @@ fn input_schema(name: &str) -> Result<&'static str> {
         "read" => "SkillReadInput",
         "validate_sql" => "SQLInput",
         "request_query" => "RequestQueryInput",
+        "execute_query" => "ExecuteQueryInput",
         "update_analysis_task" => "AnalysisUpdate",
         "get_query" | "cancel_query" => "ReadQueryInput",
         "manage_personal_asset" => "AssetToolInput",
@@ -41,6 +42,7 @@ fn can_replay_receipt(name: &str) -> bool {
     matches!(
         name,
         "request_query"
+            | "execute_query"
             | "validate_sql"
             | "update_analysis_task"
             | "manage_personal_asset"
@@ -206,10 +208,28 @@ async fn execute(pool: &MySqlPool, ctx: &AccessContext, input: Value) -> Result<
             let qid = text(args, "query_id")?;
             let q = super::query_workflow::read(pool, ctx, qid).await?;
             if q["execution_state"] == "succeeded" {
-                match super::query_workflow::results(pool, ctx, qid, args["cursor"].as_str()).await
-                {
-                    Ok(v) => Some(v),
-                    Err(e) => Some(json!({"error":e.code})),
+                let mut tx = AppTx::begin(pool).await?;
+                let conv = conversations::lock_conversation_in_tx(&mut tx, ctx, &cid).await?;
+                conversations::assert_turn_in_tx(
+                    &tx,
+                    &conv,
+                    text(&input, "run_id")?,
+                    epoch(text(&input, "lease_epoch")?)?,
+                )?;
+                let run = runtime::lock_run_in_tx(&mut tx, text(&input, "run_id")?, &cid).await?;
+                let defer_results =
+                    queries::is_confirmation_message_in_tx(&mut tx, ctx, qid, &run.message_id)
+                        .await?;
+                tx.commit().await?;
+                if defer_results {
+                    None
+                } else {
+                    match super::query_workflow::results(pool, ctx, qid, args["cursor"].as_str())
+                        .await
+                    {
+                        Ok(v) => Some(v),
+                        Err(e) => Some(json!({"error":e.code})),
+                    }
                 }
             } else {
                 None
@@ -539,7 +559,26 @@ async fn execute(pool: &MySqlPool, ctx: &AccessContext, input: Value) -> Result<
                 return Err(Error::new("not_available"));
             }
             super::knowledge::check_refs_in_tx(&mut tx, ctx, &q["knowledge_refs"]).await?;
-            json!({"query":q,"results":external})
+            if q["execution_state"] == "succeeded"
+                && queries::is_confirmation_message_in_tx(&mut tx, ctx, qid, &run.message_id)
+                    .await?
+            {
+                // 快查询也只在已有的结果交付轮解释，避免执行轮与结果通知重复作答。
+                json!({"query":q,"results":null,"hint":"本消息刚提交的查询已完成。请结束本轮，系统会自动交付结果并续接解释；不要继续轮询或在本轮推断结果。"})
+            } else {
+                json!({"query":q,"results":external})
+            }
+        }
+        "execute_query" => {
+            super::query_workflow::execute_from_message_in_tx(
+                &mut tx,
+                ctx,
+                &conv,
+                &run,
+                &tool.operation_id,
+                args,
+            )
+            .await?
         }
         "cancel_query" => {
             let qid = text(args, "query_id")?;
@@ -547,7 +586,7 @@ async fn execute(pool: &MySqlPool, ctx: &AccessContext, input: Value) -> Result<
             if q["conversation_id"] != cid {
                 return Err(Error::new("not_available"));
             }
-            let cancelled = queries::cancel_in_tx(&mut tx, ctx, qid).await?;
+            let cancelled = super::query_workflow::cancel_in_tx(&mut tx, ctx, &conv, qid).await?;
             let state = cancellation_state(&cancelled);
             contracts::validate("QueryCancellation", &state)?;
             state

@@ -35,6 +35,33 @@ pub async fn knowledge(
     .map_err(failure)?;
     success("KnowledgeList", v)
 }
+pub async fn read_document(
+    AxumState(state): AxumState<State>,
+    headers: HeaderMap,
+    Path(object): Path<String>,
+) -> ResponseResult {
+    let ctx = user(&state, &headers).map_err(failure)?;
+    success(
+        "KnowledgeDocument",
+        use_cases::knowledge_documents::read(&state.pool, &ctx, &object)
+            .await
+            .map_err(failure)?,
+    )
+}
+pub async fn edit_document(
+    AxumState(state): AxumState<State>,
+    headers: HeaderMap,
+    Path(object): Path<String>,
+    Json(input): Json<Value>,
+) -> ResponseResult {
+    let ctx = user(&state, &headers).map_err(failure)?;
+    success(
+        "KnowledgeDocument",
+        use_cases::knowledge_documents::edit(&state.pool, &ctx, &object, input)
+            .await
+            .map_err(failure)?,
+    )
+}
 pub async fn read_knowledge(
     AxumState(state): AxumState<State>,
     headers: HeaderMap,

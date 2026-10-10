@@ -42,6 +42,9 @@ export function syntheticAction(
   const latest = (name: string) => tools.findLast((t) => t.name === name)?.data;
   const workspace = run.workspace_context!;
   const tasks = workspace.tasks as RecordValue[];
+  // 只为确定性界面验收识别几句固定样例；真实意图仍由 Pi 中的模型判断。
+  const executeOnly = /^执行(?:上面这|上面那|这|刚才这|刚才那)(?:一)?(?:条|份)(?:SQL|查询)?[。！!]?$/i.test(input);
+  const executeAfterRevision = /(?:再|然后)执行/.test(input) && !/(不要|别|不必)执行/.test(input);
   const targetId = input.match(/\[task:([^\]]+)\]/)?.[1];
   let previous = targetId
     ? tasks.find((t) => t.id === targetId)
@@ -55,6 +58,10 @@ export function syntheticAction(
     );
   if (!previous && revision)
     previous = tasks.findLast((t) => t.lifecycle === "active");
+  if (executeOnly) {
+    const query = workspace.query_observations.find(q => q.execution_state === "not_submitted");
+    previous = tasks.find(t => t.id === query?.task_id) ?? previous;
+  }
   const empty: Conditions = {
     time_start: null,
     time_end: null,
@@ -106,7 +113,7 @@ export function syntheticAction(
         text: `查询状态为 ${result.query.execution_state}，尚无可解释的结果。`,
       };
     return {
-      text: `原任务 ${result.query.task_id}（条件版本 ${result.query.condition_version}）的查询已完成。${r.columns.map((c: RecordValue) => c.name).join("、")}：${r.rows.map((row: unknown[]) => row.map((v) => v ?? "NULL").join(" / ")).join("；") || "无符合条件的行"}。来源为可执行合成数据；${r.result_complete ? "本页已取完整查询结果" : "当前为部分结果，不能代表全量"}。金额字段单位为分，退款归属以本次SQL和业务口径为准。分组差异不能直接证明原因。`,
+      text: `查询已完成：${result.query.summary}\n\n${r.columns.map((c: RecordValue) => c.name).join("、")}：${r.rows.map((row: unknown[]) => row.map((v) => v ?? "NULL").join(" / ")).join("；") || "无符合条件的行"}。来源为可执行合成数据；${r.result_complete ? "本页已取完整查询结果" : "当前为部分结果，不能代表全量"}。金额字段单位为分，退款归属以本次SQL和业务口径为准。分组差异不能直接证明原因。`,
     };
   }
   if (
@@ -115,6 +122,15 @@ export function syntheticAction(
   ) {
     if (!has("update_analysis_task")) return route();
     return { text: "可以继续在这个对话提问、修改已有任务，或开始新的分析。" };
+  }
+  if (executeOnly) {
+    if (!has("update_analysis_task")) return route();
+    const observation = workspace.query_observations.find(q => q.task_id === previous?.id);
+    if (!observation) return {text: "请说明要执行哪份 SQL。"};
+    if (!has("get_query")) return {tool: "get_query", args: {query_id: observation.id}};
+    const query = latest("get_query").query;
+    if (!has("execute_query")) return {tool: "execute_query", args: {query_id: query.id, draft_version: query.draft_version, condition_version: query.condition_version, instruction_quote: run.text}};
+    return {text: latest("execute_query").error ? "这份查询暂未执行，请核对条件后再试。" : "已提交这份 SQL，结果会显示在对话中。"};
   }
   if (!has("search_knowledge"))
     return {
@@ -303,14 +319,15 @@ export function syntheticAction(
         sql,
         parameters,
         target_id: "synthetic-sqlite",
-        replaces_query_id: null,
+        replaces_query_id: previous ? workspace.query_observations.find(q => q.task_id === previous.id)?.id ?? null : null,
         summary: `${conditions.time_start} 至 ${conditions.time_end}，UTC，截止不含。${conditions.channel ? "渠道 " + conditions.channel : "全部渠道"}；排除测试、只统计成功付款行。${conditions.notes} 指标：${conditions.metric}。`,
         knowledge_refs: conditions.knowledge_refs,
       },
     };
   }
   const query = latest("request_query");
+  if (executeAfterRevision && query.check_state === "passed" && !has("execute_query")) return {tool: "execute_query", args: {query_id: query.id, draft_version: query.draft_version, condition_version: query.condition_version, instruction_quote: run.text}};
   return {
-      text: `SQL已保存，草稿版本 ${query.draft_version}，${query.check_state === "passed" ? "只读检查通过，请查看后点击“执行查询”。" : "检查未通过，请补充或修改。"}执行前可继续修改任何业务条件。${latest("manage_personal_asset")?.id ? "已保存你的个人默认渠道偏好，本次明确条件仍优先。" : latest("manage_personal_asset")?.error ? "长期偏好未保存成功，本次仍采用明确条件。" : ""}`,
+      text: `${has("execute_query") ? "已按修改后的条件提交查询，结果会显示在对话中。" : query.check_state === "passed" ? "SQL已准备好，可以继续补充条件，或说“执行这条”。" : "检查未通过，请补充或修改。"}${latest("manage_personal_asset")?.id ? "已保存你的个人默认渠道偏好，本次明确条件仍优先。" : latest("manage_personal_asset")?.error ? "长期偏好未保存成功，本次仍采用明确条件。" : ""}`,
   };
 }

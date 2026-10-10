@@ -123,4 +123,13 @@ export interface ContractTypes {
   ConversationSkillSelections: Boundary.ConversationSkillSelections;
   AssetPageQuery: Boundary.AssetPageQuery;
   SkillReadInput: Boundary.SkillReadInput;
+  KnowledgeDocument: Boundary.KnowledgeDocument;
+  KnowledgeDocumentEdit: Boundary.KnowledgeDocumentEdit;
+  ExecuteQueryInput: Boundary.ExecuteQueryInput;
+  ModelSelection: Boundary.ModelSelection;
+  ThinkingOption: Boundary.ThinkingOption;
+  ModelOption: Boundary.ModelOption;
+  ModelCatalog: Boundary.ModelCatalog;
+  ConversationModelSelection: Boundary.ConversationModelSelection;
+  SaveModelSelection: Boundary.SaveModelSelection;
 }

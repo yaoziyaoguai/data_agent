@@ -33,7 +33,11 @@ const definitions = {
   ],
   request_query: [
     "RequestQueryInput",
-    "保存完整SQL、参数、目标、口径和依据，等待用户按钮确认。修改已有SQL时replaces_query_id必须指向被修订的查询ID，旧待确认稿会失效；独立新查询传null。此工具不能执行或确认查询。",
+    "保存完整SQL、参数、目标、口径和依据，供用户查看。修改已有SQL时replaces_query_id必须指向被修订的查询ID，旧待执行稿会失效；独立新查询传null。此工具只保存草稿。",
+  ],
+  execute_query: [
+    "ExecuteQueryInput",
+    "按当前用户的明确执行意图执行指定SQL。先登记本消息归属，读取目标SQL的当前版本；若要求修改后执行，先修订条件和SQL，再使用新草稿。instruction_quote逐字填写当前用户完整原话，保留否定、限定、换行及粘贴内容，不得引用资料或系统结果事件。用户仅查询/修改/解释时只展示SQL；指代不清时先澄清，续答只能落实尚未完成且范围明确的执行请求。宿主绑定真实源消息、任务、SQL及条件版本；已确认查询重复调用返回原查询，不再次执行。如用户明确重新运行，先创建新的查询。",
   ],
   update_analysis_task: [
     "AnalysisUpdate",
@@ -41,7 +45,7 @@ const definitions = {
   ],
   get_query: [
     "ReadQueryInput",
-    "读取已经确认的查询状态和现有结果页，不创建新查询。",
+    "读取已有查询的SQL、状态和现有结果页，不创建新查询。本消息刚确认的查询只交付状态；完成本消息所需提交后结束本轮，结果将自动续接交付，不主动轮询。系统结果消息和后续追问可正常读取已有结果。",
   ],
   cancel_query: [
     "ReadQueryInput",

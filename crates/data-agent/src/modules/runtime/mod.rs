@@ -1,6 +1,8 @@
 mod budgets;
 mod checkpoints;
 mod model_calls;
+mod model_selection;
+pub use model_selection::{model_catalog, selected_profile};
 mod outputs;
 pub mod provider_calls;
 mod runs;

@@ -49,6 +49,7 @@ pub struct Boundary {
     pub checkpoint_reference: CheckpointReference,
     pub conditions: Conditions,
     pub confirm_query: ConfirmQuery,
+    pub conversation_model_selection: ConversationModelSelection,
     pub conversation_read_input: ConversationReadInput,
     pub conversation_receipt: ConversationReceipt,
     #[serde(rename = "ConversationSkillSelection")]
@@ -61,6 +62,7 @@ pub struct Boundary {
     pub embedding_profile: EmbeddingProfile,
     pub event: Event,
     pub evidence_ref: EvidenceRef,
+    pub execute_query_input: ExecuteQueryInput,
     pub finalize_model_call: FinalizeModelCall,
     pub finish_receipt: FinishReceipt,
     pub finish_run: FinishRun,
@@ -71,6 +73,8 @@ pub struct Boundary {
     pub host_checkpoint_reference: HostCheckpointReference,
     pub identity: Identity,
     pub knowledge_create: KnowledgeCreate,
+    pub knowledge_document: Option<KnowledgeDocument>,
+    pub knowledge_document_edit: Option<KnowledgeDocumentEdit>,
     pub knowledge_edit: KnowledgeEdit,
     pub knowledge_entry: KnowledgeEntry,
     pub knowledge_list: KnowledgeList,
@@ -90,8 +94,11 @@ pub struct Boundary {
     pub message_receipt: MessageReceipt,
     pub model_attempt: ModelAttempt,
     pub model_call_receipt: ModelCallReceipt,
+    pub model_catalog: ModelCatalog,
+    pub model_option: ModelOption,
     pub model_profile: ModelProfile,
     pub model_receipt: ModelReceipt,
+    pub model_selection: ModelSelection,
     pub model_usage: ModelUsage,
     pub mutation_receipt: MutationReceipt,
     pub operation_receipt: OperationReceipt,
@@ -127,6 +134,7 @@ pub struct Boundary {
     pub revise_semantic_correction: Option<ReviseSemanticCorrection>,
     pub run_envelope: RunEnvelope,
     pub run_snapshot: RunSnapshot,
+    pub save_model_selection: SaveModelSelection,
     pub search_input: SearchInput,
     #[serde(rename = "SemanticAccess")]
     pub semantic_access: Option<SemanticAccess>,
@@ -160,6 +168,7 @@ pub struct Boundary {
     pub table_analysis_preference: Option<TableAnalysisPreference>,
     pub task_input: TaskInput,
     pub task_snapshot: TaskSnapshot,
+    pub thinking_option: ThinkingOption,
     pub tool_invocation: ToolInvocation,
     pub tool_outcome: ToolOutcome,
     pub tool_receipt: ToolReceipt,
@@ -651,6 +660,28 @@ pub struct ConfirmQuery {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ConversationModelSelection {
+    pub selection: Option<ModelSelection>,
+    pub version: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ModelSelection {
+    pub model_id: String,
+    pub thinking_level: ThinkingLevel,
+}
+
+/// 通过Pi/DeepSeek原生思考模式；省略为off。思考tokens计入同一输出上限与用量。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ThinkingLevel {
+    High,
+    Low,
+    Max,
+    Off,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConversationReadInput {
     pub after_seq: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -718,6 +749,8 @@ pub struct DataToolInvocation {
 pub enum ToolName {
     #[serde(rename = "cancel_query")]
     CancelQuery,
+    #[serde(rename = "execute_query")]
+    ExecuteQuery,
     #[serde(rename = "get_query")]
     GetQuery,
     #[serde(rename = "manage_personal_asset")]
@@ -803,6 +836,14 @@ pub enum EventType {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ExecuteQueryInput {
+    pub condition_version: String,
+    pub draft_version: String,
+    pub instruction_quote: String,
+    pub query_id: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FinalizeModelCall {
     pub call_attempt_id: String,
     pub lease_epoch: String,
@@ -850,6 +891,9 @@ pub struct History {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HistoryItem {
+    /// 会话创建时间（UTC）；用于区分同名会话，不改变分页顺序。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub created_at: Option<String>,
     pub id: String,
     pub title: String,
 }
@@ -914,48 +958,13 @@ pub enum KnowledgeCreateKind {
     Term,
 }
 
+/// 将同一来源的业务文档按自然章节组合阅读；parts保留原引用身份，编辑时一次提交全部章节。
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct KnowledgeEdit {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub clear_override: Option<bool>,
-    pub entry_id: String,
-    pub expected_version: String,
-    pub operation_id: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub related_ids: Option<Vec<String>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub source_url: Option<String>,
-    pub value: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct KnowledgeEntry {
-    pub effective_value: String,
-    pub entry_id: String,
-    pub human_override: Option<HashMap<String, Option<serde_json::Value>>>,
-    pub label: String,
-    pub path: String,
-    pub review_state: ReviewState,
-    pub source_facts: HashMap<String, Option<serde_json::Value>>,
-    pub suggestion: HashMap<String, Option<serde_json::Value>>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum ReviewState {
-    Confirmed,
-    #[serde(rename = "needs_review")]
-    NeedsReview,
-    Unverified,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct KnowledgeList {
-    pub next_after_id: Option<String>,
-    pub objects: Vec<KnowledgeObject>,
-    pub retrieval_mode: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub search_coverage: Option<SearchCoverage>,
+pub struct KnowledgeDocument {
+    pub body: String,
+    pub can_edit: bool,
+    pub parts: Vec<KnowledgeObject>,
+    pub title: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -964,6 +973,9 @@ pub struct KnowledgeObject {
     pub analysis_preference: Option<TableAnalysisPreference>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub created_by: Option<String>,
+    /// 整篇编辑后后台片段的拼接顺序；与正文同版本保存，不作为页面字段。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub document_order: Option<i32>,
     pub entries: Vec<KnowledgeEntry>,
     pub id: String,
     pub kind: KnowledgeCreateKind,
@@ -988,6 +1000,27 @@ pub struct TableAnalysisPreference {
     pub preferred: bool,
     pub table_id: String,
     pub version: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct KnowledgeEntry {
+    pub effective_value: String,
+    pub entry_id: String,
+    pub human_override: Option<HashMap<String, Option<serde_json::Value>>>,
+    pub label: String,
+    pub path: String,
+    pub review_state: ReviewState,
+    pub source_facts: HashMap<String, Option<serde_json::Value>>,
+    pub suggestion: HashMap<String, Option<serde_json::Value>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ReviewState {
+    Confirmed,
+    #[serde(rename = "needs_review")]
+    NeedsReview,
+    Unverified,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1022,6 +1055,47 @@ pub struct PrefillStatus {
 pub enum StateOrigin {
     Human,
     Platform,
+}
+
+/// 完整Markdown与完整片段版本集合；服务端逐一授权，正文与后台顺序同事务保存，重复操作返回原回执。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct KnowledgeDocumentEdit {
+    pub body: String,
+    pub operation_id: String,
+    pub parts: Vec<Part>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub related_ids: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source_url: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Part {
+    pub expected_version: String,
+    pub id: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct KnowledgeEdit {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub clear_override: Option<bool>,
+    pub entry_id: String,
+    pub expected_version: String,
+    pub operation_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub related_ids: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source_url: Option<String>,
+    pub value: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct KnowledgeList {
+    pub next_after_id: Option<String>,
+    pub objects: Vec<KnowledgeObject>,
+    pub retrieval_mode: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub search_coverage: Option<SearchCoverage>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1212,6 +1286,8 @@ pub struct MemorySearchRequest {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MessageInput {
     pub client_message_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub model_selection: Option<ModelSelection>,
     pub text: String,
 }
 
@@ -1244,6 +1320,25 @@ pub enum ModelCallReceiptState {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ModelCatalog {
+    pub default_selection: Option<ModelSelection>,
+    pub models: Vec<ModelOption>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ModelOption {
+    pub id: String,
+    pub label: String,
+    pub thinking_options: Vec<ThinkingOption>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ThinkingOption {
+    pub label: String,
+    pub value: ThinkingLevel,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ModelProfile {
     pub input_limit: i64,
     pub model_id: String,
@@ -1268,15 +1363,6 @@ pub struct ModelProfile {
 #[serde(rename_all = "snake_case")]
 pub enum ProviderId {
     Deepseek,
-}
-
-/// 通过Pi/DeepSeek原生思考模式；省略为off。思考tokens计入同一输出上限与用量。
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum ThinkingLevel {
-    High,
-    Low,
-    Off,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1693,6 +1779,12 @@ pub enum RunSnapshotState {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SaveModelSelection {
+    pub expected_version: String,
+    pub selection: ModelSelection,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SearchInput {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub asset_after: Option<String>,
@@ -1706,6 +1798,18 @@ pub struct SemanticAccess {
     pub can_admin: bool,
     /// 可创建独立指标、文档等；由当前空间已同步的 Datasight 表维护关系或超级维护者角色确定。
     pub can_create: bool,
+    /// 当前空间用于展示的最高语义角色。超级维护者优先；负责表或独立语义对象则为维护者；其余为普通用户。该摘要不授予权限，独立对象负责人不一定有创建资格。
+    pub highest_role: HighestRole,
+}
+
+/// 当前空间用于展示的最高语义角色。超级维护者优先；负责表或独立语义对象则为维护者；其余为普通用户。该摘要不授予权限，独立对象负责人不一定有创建资格。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum HighestRole {
+    Maintainer,
+    #[serde(rename = "super_maintainer")]
+    SuperMaintainer,
+    User,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

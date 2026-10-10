@@ -14,7 +14,10 @@ pub struct ProviderBudget {
 }
 impl ProviderBudget {
     pub fn from_model_profile(scope_id: Option<String>, profile: ModelProfile) -> Result<Self> {
-        if profile.model_id != "deepseek-flash" {
+        if !matches!(
+            profile.model_id.as_str(),
+            "deepseek-flash" | "deepseek-v4-pro"
+        ) {
             return Err(Error::new("invalid_input"));
         }
         Ok(Self {
@@ -240,4 +243,28 @@ pub async fn finish_embedding_in_tx(
             .bind(sqlx::types::Json(response)).bind(input["call_attempt_id"].as_str()).execute(tx.connection()).await?;
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn auxiliary_calls_keep_the_request_budget_when_chat_uses_pro() {
+        let profile = crate::contracts::decode("ModelProfile", json!({
+            "provider_id":"deepseek", "model_id":"deepseek-v4-pro", "thinking_level":"max",
+            "price_version":"2026-10-05-pro-peak-usd", "trial_id":"shared-request-trial",
+            "input_limit":32768,"output_limit":4096,"trial_call_limit":24,"trial_cost_micros":"300000",
+            "request_call_limit":12,"toolset":"data","payload_bytes_limit":65536
+        })).unwrap();
+        let budget =
+            ProviderBudget::from_model_profile(Some("original-scope".into()), profile).unwrap();
+        assert_eq!(budget.scope_id.as_deref(), Some("original-scope"));
+        assert_eq!(budget.trial_id, "shared-request-trial");
+        assert_eq!((budget.input_limit, budget.output_limit), (32768, 4096));
+        // 辅助模型未改：记忆抽取仍按Flash，向量仍按原百炼配置预留。
+        assert_eq!(cost("memory_extraction", 1000, 1000), 1500);
+        assert_eq!(cost("memory_embedding", 1000, 0), 100);
+        assert_eq!(cost("knowledge_embedding", 1000, 0), 100);
+    }
 }
