@@ -1,11 +1,13 @@
 import {useEffect, useRef, useState} from 'react';
 import type {Asset, SkillSuggestion} from '../../../../../packages/contracts/generated/boundary.ts';
 import {api} from '../../shared/api.ts';
+import {useNavigationGuard, useUnsavedChanges} from '../../shared/UnsavedChanges.tsx';
 import {Modal} from '../../shared/Modal.tsx';
 function ReviewSuggestion({asset, suggestion, onReviewed}: {asset: Asset; suggestion: SkillSuggestion; onReviewed: () => Promise<void>}) {
   const [response, setResponse] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  useUnsavedChanges(Boolean(response), () => setResponse(''));
   const operation = useRef({key: '', id: ''});
   const review = async (state: 'handled' | 'rejected') => {
     if (busy || !response.trim()) return;
@@ -14,7 +16,7 @@ function ReviewSuggestion({asset, suggestion, onReviewed}: {asset: Asset; sugges
     setBusy(true); setError('');
     try {
       await api('SkillSuggestion', `/assets/${asset.id}/suggestions/${suggestion.id}/review`, 'POST', {operation_id: operation.current.id, expected_revision: suggestion.revision, state, response});
-      await onReviewed();
+      setResponse(''); await onReviewed();
     } catch (e) { setError(e instanceof Error ? e.message : '处理失败'); }
     finally { setBusy(false); }
   };
@@ -30,6 +32,8 @@ export function SkillSuggestions({asset, onClose}: {asset: Asset; onClose: () =>
   const [confirmed, setConfirmed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  useUnsavedChanges(Boolean(content), onClose);
+  const leave = useNavigationGuard();
   const generation = useRef(0);
   const operation = useRef({key: '', id: ''});
   const refresh = async (cursor?: string) => {
@@ -50,13 +54,13 @@ export function SkillSuggestions({asset, onClose}: {asset: Asset; onClose: () =>
     } catch (e) { setError(e instanceof Error ? e.message : '提交失败'); }
     finally { setBusy(false); }
   };
-  return <Modal title={'修改建议 · ' + asset.name} onClose={onClose}>
+  return <Modal title={'修改建议 · ' + asset.name} onClose={() => { if (!busy) leave(onClose); }}>
     <p>建议向当前空间成员公开；负责人核对后另行修改正文。</p>
     <label className="form-label">你的建议<textarea disabled={busy} rows={4} maxLength={8000} value={content} onChange={e => setContent(e.target.value)}/></label>
     <label className="checkbox-label"><input disabled={busy} type="checkbox" checked={confirmed} onChange={e => setConfirmed(e.target.checked)}/>确认内容可在当前空间共享</label>
     <button className="primary" disabled={busy || !confirmed || !content.trim()} onClick={() => void submit()}>提交修改建议</button>
     {error && <p className="error" role="alert">{error}<button onClick={() => void refresh().then(() => setError('')).catch(e => setError(e.message))}>刷新建议</button></p>}
-    {items.map(item => <article key={item.id} className="skill-suggestion"><strong>{item.author_id} · 对 v{item.asset_version} 的建议</strong><p className="entry-value">{item.content}</p><small>{item.state === 'pending' ? '待处理' : item.state === 'handled' ? '已处理' : '已驳回'}</small>
+    {items.map(item => <article key={item.id} className="skill-suggestion"><strong>{item.author_id} 的建议</strong><p className="entry-value">{item.content}</p><small>{item.state === 'pending' ? '待处理' : item.state === 'handled' ? '已处理' : '已驳回'}</small>
       {item.response && <p>{item.reviewed_by}：{item.response}</p>}
       {asset.can_edit && item.state === 'pending' && <ReviewSuggestion asset={asset} suggestion={item} onReviewed={refresh}/>}
     </article>)}

@@ -1,6 +1,8 @@
 import { useState } from "react";
 import type { KnowledgeObject } from "../../../../../packages/contracts/generated/boundary.ts";
 import { api } from "../../shared/api.ts";
+import { KnowledgePicker } from "../../shared/KnowledgePicker.tsx";
+import { useUnsavedChanges } from "../../shared/UnsavedChanges.tsx";
 import { Modal } from "../../shared/Modal.tsx";
 import { semanticError, useStableOperation } from "./semantic-commands.ts";
 
@@ -20,9 +22,10 @@ export function KnowledgeCreator({
   const [name, setName] = useState("");
   const [body, setBody] = useState("");
   const [sourceUrl, setSourceUrl] = useState("");
-  const [related, setRelated] = useState("");
+  const [related, setRelated] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const confirmClose = useUnsavedChanges(kind !== null && Boolean(name || body || sourceUrl || JSON.stringify(related) !== JSON.stringify(relatedId ? [relatedId] : [])), () => setKind(null));
   const operation = useStableOperation();
   const label = kind === "metric" ? "指标" : "文档";
   const open = (value: "metric" | "document") => {
@@ -31,7 +34,7 @@ export function KnowledgeCreator({
     setName("");
     setBody("");
     setSourceUrl("");
-    setRelated(relatedId);
+    setRelated(relatedId ? [relatedId] : []);
     setError("");
   };
   const save = async () => {
@@ -41,10 +44,7 @@ export function KnowledgeCreator({
       name,
       body,
       source_url: sourceUrl.trim() || null,
-      related_ids: related
-        .split(",")
-        .map((v) => v.trim())
-        .filter(Boolean),
+      related_ids: related,
     };
     setBusy(true);
     setError("");
@@ -53,6 +53,7 @@ export function KnowledgeCreator({
         ...input,
         operation_id: operation({ formId, ...input }),
       });
+      confirmClose.markSaved();
       setKind(null);
       onCreated(value);
     } catch (e) {
@@ -77,7 +78,7 @@ export function KnowledgeCreator({
         <Modal
           title={kind === "metric" ? "录入指标" : "录入业务文档"}
           onClose={() => {
-            if (!busy) setKind(null);
+            if (!busy) confirmClose(() => setKind(null));
           }}
         >
           <p className="quiet semantic-creation-notice">
@@ -103,14 +104,7 @@ export function KnowledgeCreator({
               onChange={(e) => setBody(e.target.value)}
             />
           </label>
-          <label className="form-label">
-            关联对象 ID（逗号分隔，可关联多表或字段）
-            <input
-              value={related}
-              disabled={busy}
-              onChange={(e) => setRelated(e.target.value)}
-            />
-          </label>
+          <fieldset disabled={busy}><legend>关联资料（可选）</legend><KnowledgePicker selected={related} disabled={busy} onAdd={object => setRelated(old => [...old, object.id])} onRemove={id => setRelated(old => old.filter(value => value !== id))}/></fieldset>
           <label className="form-label">
             来源链接（可选）
             <input

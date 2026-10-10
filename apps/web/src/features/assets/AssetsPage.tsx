@@ -6,15 +6,23 @@ import { PublishSkill } from "./PublishSkill.tsx";
 import { SkillSuggestions } from "./SkillSuggestions.tsx";
 import { AssetDependenciesEditor } from "./AssetDependenciesEditor.tsx";
 import { Modal } from "../../shared/Modal.tsx";
+import { MarkdownContent } from "../../shared/MarkdownContent.tsx";
+import { KnowledgeReference } from "../../shared/KnowledgeReference.tsx";
+import { useUnsavedChanges } from "../../shared/UnsavedChanges.tsx";
+import { Tabs } from "../../shared/Tabs.tsx";
+import { SkillExamples } from "./SkillExamples.tsx";
 export function AssetsPage({
   user,
-  onUseSkill,
+  initialTab = "memory",
+  onUseSkill, onTab,
 }: {
   user: string;
+  initialTab?: "memory" | "skill" | "shared";
+  onTab?: (tab: "memory" | "skill" | "shared") => void;
   onUseSkill: (asset: Asset) => Promise<void>;
 }) {
   const [assets, setAssets] = useState<Asset[]>([]);
-  const [tab, setTab] = useState<"memory" | "skill" | "shared">("memory");
+  const [tab, setTab] = useState<"memory" | "skill" | "shared">(initialTab);
   const [editing, setEditing] = useState<Asset | null | undefined>();
   const [editingKind, setEditingKind] = useState<AssetKind>("memory");
   const [dependencies, setDependencies] = useState<EvidenceRef[]>([]);
@@ -30,6 +38,18 @@ export function AssetsPage({
   const [body, setBody] = useState("");
   const [scope, setScope] = useState("");
   const [verified, setVerified] = useState(false);
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
+  const initialEdit = useRef("");
+  const confirmClose = useUnsavedChanges(editing !== undefined && initialEdit.current !== JSON.stringify([name, body, scope, verified, files, dependencies]), () => closeEditor());
+  useEffect(() => {
+    if (initialTab !== tab) {
+      editorSession.current++; publicationSession.current++;
+      setEditing(undefined); setPublishing(null); setSuggesting(null); setSaving(false);
+      setSearch(""); setStatusFilter(""); setTab(initialTab);
+    }
+  }, [initialTab]);
+  const changeTab = (value: "memory" | "skill" | "shared") => { setTab(value); setSearch(""); setStatusFilter(""); onTab?.(value); };
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [backgroundOutcome, setBackgroundOutcome] = useState("");
@@ -61,6 +81,7 @@ export function AssetsPage({
     return () => clearTimeout(timer);
   }, [assets]);
   const edit = (asset: Asset | null) => {
+    initialEdit.current = JSON.stringify([asset?.name ?? "", asset?.body ?? "", asset?.scope ?? "", asset?.verified ?? false, asset?.files ?? [], asset?.dependencies ?? []]);
     editorSession.current++;
     setSaving(false);
     saveOperation.current = {key: "", id: ""};
@@ -72,12 +93,7 @@ export function AssetsPage({
     setEditingKind(asset?.kind ?? (tab === "memory" ? "memory" : "skill"));
     setEditing(asset);
     setName(asset?.name ?? "");
-    setBody(
-      asset?.body ??
-        (tab !== "memory"
-          ? "# 分析方法\n\n## 适用范围\n\n## 步骤\n1. 核对资料与口径\n2. 展示 SQL，等待用户确认\n3. 解释查询结果\n\n## 输出要求\n列出依据、范围与限制"
-          : ""),
-    );
+    setBody(asset?.body ?? "");
     setScope(asset?.scope ?? "");
     setVerified(asset?.verified ?? false);
   };
@@ -110,9 +126,10 @@ export function AssetsPage({
       if (page !== pageSession.current) return;
       // 窗口状态只归原编辑所有；已提交的数据仍须同步到当前页面的列表。
       if (session === editorSession.current) {
+        confirmClose.markSaved();
         setEditing(undefined);
-        setTab(saved.kind === "memory" ? "memory" : saved.visibility === "space" ? "shared" : "skill");
-        setNotice(saved.visibility === "space" ? "公共方法已保存新版本；会话仍需明确重选。" : "已保存到你的个人积累，其他用户无法读取。");
+        changeTab(saved.kind === "memory" ? "memory" : saved.visibility === "space" ? "shared" : "skill");
+        setNotice(saved.visibility === "space" ? "公共方法已更新；使用中的会话需要重新选用。" : "已保存到你的个人积累，其他用户无法读取。");
       }
       await refresh();
     } catch (e) {
@@ -156,37 +173,21 @@ export function AssetsPage({
     <section className="management assets-page">
       <div className="page-heading">
         <div>
-          <div className="eyebrow">积累能继续使用的经验</div>
           <h1>我的积累</h1>
-          <p>纠错记住适用范围，方法由你决定何时采用。</p>
         </div>
-        <button className="primary" onClick={() => edit(null)}>
-          新增{tab === "memory" ? "记忆" : "个人 Skill"}
-        </button>
+        {tab === "shared" ? <button onClick={() => changeTab("skill")}>从我的 Skill 发布</button> : <button className="primary" onClick={() => edit(null)}>新增{tab === "memory" ? "记忆" : "个人 Skill"}</button>}
       </div>
-      <div className="tabs" role="tablist">
-        <button
-          role="tab"
-          aria-selected={tab === "memory"}
-          onClick={() => setTab("memory")}
-        >
-          记忆与纠错{" "}
-          <small>{assets.filter((a) => a.kind === "memory").length}</small>
-        </button>
-        <button
-          role="tab"
-          aria-selected={tab === "skill"}
-          onClick={() => setTab("skill")}
-        >
-          我的 Skill{" "}
-          <small>{assets.filter((a) => a.kind === "skill" && a.visibility !== "space").length}</small>
-        </button>
-        <button role="tab" aria-selected={tab === "shared"} onClick={() => setTab("shared")}>空间公共 Skill <small>{assets.filter(a => a.visibility === "space").length}</small></button>
-      </div>
+      <Tabs label="个人与公共资产" value={tab} onChange={changeTab} items={[
+        {value:"memory",label:<>个人记忆 <small>{assets.filter(a => a.kind === "memory").length}</small></>},
+        {value:"skill",label:<>我的 Skill <small>{assets.filter(a => a.kind === "skill" && a.visibility !== "space").length}</small></>},
+        {value:"shared",label:<>空间公共 Skill <small>{assets.filter(a => a.visibility === "space").length}</small></>},
+      ]}/>
+      <div className="asset-filters"><label className="search-box"><input aria-label="搜索资产" placeholder="搜索名称、内容或适用范围" value={search} onChange={event => setSearch(event.target.value)}/></label><select aria-label="资产状态" value={statusFilter} onChange={event => setStatusFilter(event.target.value)}><option value="">全部状态</option><option value="enabled">已启用</option><option value="disabled">已停用</option></select></div>
+      {tab === "skill" && <p className="quiet">Skill 是可重复使用的分析方法，选用后为当前对话提供步骤和注意事项。</p>}
       {tab === "shared" && <p className="quiet skill-sharing-note">本空间成员共享的分析方法。负责人维护正文，其他成员可以提出建议；使用时仍需明确选用。</p>}
       <div className="asset-grid">
         {assets
-          .filter(matches)
+          .filter(matches).filter(asset => (!statusFilter || asset.state === statusFilter) && [asset.name, asset.body, asset.scope].some(value => value.toLowerCase().includes(search.trim().toLowerCase())))
           .map((asset) => (
             <article
               key={asset.id}
@@ -194,40 +195,26 @@ export function AssetsPage({
                 "asset-card " + (asset.state === "disabled" ? "disabled" : "")
               }
             >
-              <div className="card-heading">
-                <span className="eyebrow">
-                  {asset.kind === "memory" ? "PERSONAL MEMORY" : "SKILL"} · v
-                  {asset.version}
-                </span>
-                <span className="status-pill">
-                  {asset.state === "enabled" ? "启用" : "停用"}
-                </span>
-              </div>
-              <h2>{asset.name}</h2>
+              <div className="asset-main"><h2 title={asset.name}>{asset.name}</h2><p className="asset-body asset-excerpt">{asset.body.replace(/^#+\s*/gm, "")}</p></div>
+              <div className="asset-scope"><p title={asset.scope}>{asset.scope}</p></div>
+              <div className="asset-state"><span className="status-pill">{asset.state === "enabled" ? "已启用" : "已停用"}</span><small>{asset.verified ? "已核对" : "待核对"}</small></div>
+              <div className="actions asset-primary-actions">{asset.can_edit && <button onClick={() => edit(asset)}>编辑</button>}{asset.kind === "skill" && asset.state === "enabled" && <button className="primary" onClick={() => void onUseSkill(asset).catch(e => setError(e.message))}>在当前对话选用</button>}</div>
+              <details className="asset-full-content"><summary>查看完整{asset.kind === "memory" ? "记忆" : "方法"}</summary><MarkdownContent text={asset.body}/><p><strong>适用范围：</strong>{asset.scope}</p>
               {asset.kind === "skill" && <p className="quiet skill-owner">{asset.visibility === "space" ? "空间公共" : "个人"} · 负责人 {asset.owner_id ?? user}</p>}
-              <p className="asset-body">{asset.body}</p>
-              <div className="asset-scope">
-                <strong>适用范围</strong>
-                <p>{asset.scope}</p>
-                <small>
-                  {asset.verified ? "用户已确认" : "待核对线索"} ·{" "}
-                  {asset.dependencies.length} 个知识依赖
-                </small>
-              </div>
-              {asset.memory_index_state && (
+              {asset.memory_index_state && asset.memory_index_state !== "indexed" && (
                 <p className="asset-index-state" role="status">
-                  {asset.memory_index_state === "indexed" ? "记忆检索已同步" : asset.memory_index_state === "failed" ? "记忆已保存，检索同步失败；仍可从个人目录查找。" : "记忆已保存，正在同步检索。"}
+                  {asset.memory_index_state === "failed" ? "记忆已保存，检索同步失败；仍可从个人目录查找。" : "记忆已保存，正在同步检索。"}
                 </p>
               )}
               <details>
                 <summary>查看来源与依赖</summary>
                 <p>{asset.source_text}</p>
-                <pre>{JSON.stringify(asset.dependencies, null, 2)}</pre>
+                {asset.dependencies.map(reference => <p key={reference.object_id + reference.path}><KnowledgeReference id={reference.object_id} path={reference.path}/></p>)}
+                <details className="technical-details"><summary>维护记录</summary><p>版本 {asset.version} · 记录编号 {asset.id}</p><pre>{JSON.stringify(asset.dependencies, null, 2)}</pre></details>
               </details>
-              {(asset.files ?? []).map(file => <details key={file.path}><summary>{file.path}</summary><pre className="skill-preview">{file.content}</pre></details>)}
+              {(asset.files ?? []).map(file => <details key={file.path}><summary>{file.path.replace(/^(references|assets)\//, "")}</summary><pre className="skill-preview">{file.content}</pre></details>)}
               <div className="actions">
                 {asset.can_edit && <>
-                <button onClick={() => edit(asset)}>编辑</button>
                 <button
                   onClick={() =>
                     void state(
@@ -243,40 +230,25 @@ export function AssetsPage({
                 </button></>}
                 {asset.kind === "skill" && asset.visibility !== "space" && asset.state === "enabled" && <button onClick={() => publish(asset)}>发布到空间</button>}
                 {asset.visibility === "space" && <button onClick={() => setSuggesting(asset)}>修改建议</button>}
-                {asset.kind === "skill" && asset.state === "enabled" && (
-                  <button
-                    className="primary"
-                    onClick={() =>
-                      void onUseSkill(asset)
-                        .then(() =>
-                          setNotice("已选择该版本，回到工作台继续提问。"),
-                        )
-                        .catch((e) => setError(e.message))
-                    }
-                  >
-                    在当前对话选用
-                  </button>
-                )}
-              </div>
+
+              </div></details>
             </article>
           ))}
       </div>
+      {assets.some(matches) && !assets.filter(matches).some(asset => (!statusFilter || asset.state === statusFilter) && [asset.name, asset.body, asset.scope].some(value => value.toLowerCase().includes(search.trim().toLowerCase())) ) && <div className="asset-empty"><p>没有符合当前条件的内容。</p><button onClick={() => { setSearch(""); setStatusFilter(""); }}>清除筛选</button></div>}
       {!assets.some(matches) && (
         <div className="asset-empty">
           <span>◇</span>
           <h2>
             {tab === "memory"
               ? "让有价值的纠错留下来"
-              : "把分析方法写成自己的 Skill"}
+              : tab === "shared" ? "空间还没有公共分析方法" : "把分析方法写成自己的 Skill"}
           </h2>
           <p>
             {tab === "memory"
-              ? "对话中的明确纠错与偏好可保存到这里，也可以手动录入。每条记忆都属于你。"
-              : "保存适用范围、步骤和输出要求，再在需要的对话中明确选用。"}
+              ? "对话中的明确纠错与偏好可保存到这里，也可以手动录入。"
+              : tab === "shared" ? "可以将自己的 Skill 明确发布到空间，生成独立的公共副本。" : "保存适用范围、步骤和输出要求，再在需要的对话中明确选用。"}
           </p>
-          <button onClick={() => edit(null)}>
-            创建第一条{tab === "memory" ? "记忆" : "Skill"}
-          </button>
         </div>
       )}
       {notice && (
@@ -297,33 +269,38 @@ export function AssetsPage({
             (editing ? "编辑" : "新增") +
             (editingKind === "memory" ? "个人记忆" : "Skill")
           }
-          onClose={closeEditor}
+          onClose={() => confirmClose(closeEditor)}
+          className="asset-editor-dialog"
+          footer={<><span className="quiet">{editing?.visibility === "space" ? "空间公共方法" : "仅自己可用"}</span><button onClick={() => confirmClose(closeEditor)}>取消</button><button className="primary" disabled={saving || !name.trim() || !body.trim() || !scope.trim()} onClick={() => void save()}>{saving ? "保存中…" : "保存"}</button></>}
         >
+          {editingKind === "skill" && editing === null && <SkillExamples disabled={saving} hasDraft={Boolean(name || body || scope)} onChoose={example => { setName(example.name); setBody(example.body); setScope(example.scope); setVerified(false); }}/>}
           <label className="form-label">
-            名称
+            名称 <small aria-hidden="true">必填</small>
             <input disabled={saving} aria-label="名称" value={name} onChange={(e) => { setName(e.target.value); setVerified(false); }} />
           </label>
           <label className="form-label">
-            内容
+            内容 <small aria-hidden="true">必填</small>
             <textarea
               aria-label="内容"
               disabled={saving}
-              rows={12}
+              rows={5}
+              placeholder={editingKind === "skill" ? "告诉 Agent 应该先确认什么、怎样分析、最后如何汇报。普通文字即可。" : "例如：我的周报金额统一以元展示，临时要求优先。"}
               value={body}
               onChange={(e) => { setBody(e.target.value); setVerified(false); }}
             />
           </label>
           <label className="form-label">
-            适用范围与例外
+            适用范围与例外 <small aria-hidden="true">必填</small>
             <input
               disabled={saving}
+              aria-label="适用范围与例外"
               value={scope}
               onChange={(e) => { setScope(e.target.value); setVerified(false); }}
-              placeholder="哪些问题可采用，哪些情况除外"
+              placeholder="例如：仅用于收入周报；时间或口径不清时先问我"
             />
           </label>
-          {editingKind === "skill" && <SkillFilesEditor files={files} onChange={value => { setFiles(value); setVerified(false); }} disabled={saving}/>}
-          <AssetDependenciesEditor key={editorSession.current} dependencies={dependencies} onChange={value => { setDependencies(value); setVerified(false); }} disabled={saving}/>
+          {editingKind === "skill" && <details className="asset-attachments" open={files.length > 0}><summary>补充说明与报告模板（可选）{files.length > 0 ? ` · ${files.length} 份` : ""}</summary><SkillFilesEditor files={files} onChange={value => { setFiles(value); setVerified(false); }} disabled={saving}/></details>}
+          {dependencies.length > 0 && <AssetDependenciesEditor key={editorSession.current} dependencies={dependencies} onChange={value => { setDependencies(value); setVerified(false); }} disabled={saving}/>}
           <label className="checkbox-label">
             <input
               type="checkbox"
@@ -331,16 +308,10 @@ export function AssetsPage({
               checked={verified}
               onChange={(e) => setVerified(e.target.checked)}
             />
-            我已核对这条{editing?.visibility === "space" ? "公共" : "个人"}定义
+            我已核对这条{editing?.visibility === "space" ? "公共" : "个人"}定义 <small aria-hidden="true">（可选）</small>
           </label>
           {error && <p role="alert" className="error">{error}</p>}
-          <button
-            className="primary"
-            disabled={saving || !name.trim() || !body.trim() || !scope.trim()}
-            onClick={() => void save()}
-          >
-            保存
-          </button>
+
         </Modal>
       )}
       {publishing && <PublishSkill key={publishing.session} asset={publishing.asset} onClose={closePublisher} onFailed={() => {
@@ -351,7 +322,7 @@ export function AssetsPage({
         if (publishing.page !== pageSession.current) return;
         if (publishing.session === publicationSession.current) {
           setPublishing(null);
-          setTab("shared");
+          changeTab("shared");
           setNotice("已发布独立公共副本。私人方法后续修改不会自动公开。");
         }
         await refresh();

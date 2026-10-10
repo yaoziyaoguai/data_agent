@@ -1,3 +1,4 @@
+import {navigateWorkspace, logoutWorkspace} from './experience-navigation.mjs';
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
@@ -19,14 +20,11 @@ async function login(user) {
   await page.goto(h.url);
   await page.getByLabel("演示登录凭据").fill(h.tokens[user]);
   await page.getByRole("button", { name: "进入工作台 →" }).click();
-  await page
-    .getByRole("button", { name: /语义管理/ })
-    .first()
-    .click();
+  await navigateWorkspace(page, '语义管理');
   await page.getByRole("heading", { name: "语义管理", exact: true }).waitFor();
 }
 async function logout() {
-  await page.getByRole("button", { name: "退出", exact: true }).click();
+  await logoutWorkspace(page);
   await page.getByLabel("演示登录凭据").waitFor();
 }
 try {
@@ -81,7 +79,7 @@ try {
     .getByRole("heading", { name: "合成创建者文档", exact: true })
     .waitFor();
   await page
-    .getByText(/语义负责人：bob.*首次录入后自动负责/)
+    .getByText(/负责人：bob/)
     .first()
     .waitFor();
   assert.equal(
@@ -90,10 +88,10 @@ try {
     )[0].n,
     1,
   );
-  const entry = page.locator(".semantic-entry").first();
-  await entry.getByRole("button", { name: "编辑", exact: true }).click();
-  await entry.locator("textarea").fill("创建者核对后的合成业务文档。");
-  await entry.getByRole("button", { name: "保存修改", exact: true }).click();
+  const entry = page.locator(".document-reader").first();
+  await entry.getByRole("button", { name: "编辑文档", exact: true }).click();
+  await page.getByRole("dialog").getByLabel("文档正文", {exact:true}).fill("创建者核对后的合成业务文档。");
+  await page.getByRole("dialog").getByRole("button", { name: "保存文档", exact: true }).click();
   await entry
     .getByText("创建者核对后的合成业务文档。", { exact: true })
     .waitFor();
@@ -150,21 +148,20 @@ try {
     .getByRole("heading", { name: "合成创建者文档", exact: true })
     .waitFor();
   await page
-    .getByText(/语义负责人：bob/)
+    .getByText(/负责人：bob/)
     .first()
     .waitFor();
+  const documentReader = page.locator('.document-reader');
+  await documentReader.getByRole('heading', {name: '合成创建者文档', exact: true}).waitFor();
+  await documentReader.getByText('维护与纠错', {exact: true}).click();
   assert.equal(
-    await page
-      .locator(".semantic-entry")
-      .first()
-      .getByRole("button", { name: "编辑", exact: true })
+    await documentReader
+      .getByRole("button", { name: "编辑文档", exact: true })
       .count(),
     0,
   );
   assert.equal(
-    await page
-      .locator(".semantic-entry")
-      .first()
+    await documentReader
       .getByRole("button", { name: "提出纠错", exact: true })
       .count(),
     1,

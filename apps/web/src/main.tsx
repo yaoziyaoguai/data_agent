@@ -6,10 +6,17 @@ import "./style.css";
 import { KnowledgePage } from "./features/knowledge/KnowledgePage.tsx";
 import { AssetsPage } from "./features/assets/AssetsPage.tsx";
 import { WorkspaceShell, type View } from "./shared/WorkspaceShell.tsx";
+import { UnsavedChangesProvider, useNavigationGuard } from "./shared/UnsavedChanges.tsx";
+import { useWorkspaceLocation } from "./shared/workspace-location.ts";
+import { KnowledgeEvidence } from "./features/knowledge/KnowledgeEvidence.tsx";
+import { Modal } from "./shared/Modal.tsx";
 import type { Asset } from "../../../packages/contracts/generated/boundary.ts";
 function App() {
-  const [view, setView] = useState<View>("workbench");
-  const [object, setObject] = useState<string | null>(null);
+  const { location, navigate: changeLocation } = useWorkspaceLocation();
+  const { view, object, assetsTab: assetsEntry } = location;
+  const guard = useNavigationGuard();
+  const [evidence, setEvidence] = useState<{id: string; version?: string; summary?: string} | null>(null);
+  const [showEvidence, setShowEvidence] = useState(false);
   const [modelLabel, setModelLabel] = useState("");
   const [user, setUser] = useState<string | null>(null);
   const [token, setToken] = useState("");
@@ -26,7 +33,9 @@ function App() {
     void api("LogoutReceipt", "/session", "DELETE")
       .then(() => {
         setUser(null);
-        setView("workbench");
+        setShowEvidence(false);
+        setEvidence(null);
+        changeLocation({ view: "workbench", object: null });
       })
       .catch((e) => setError(e.message));
   };
@@ -46,34 +55,55 @@ function App() {
       asset_id: asset.id,
       version: asset.version,
     });
-    setView("workbench");
+    changeLocation({ view: "workbench" });
+  };
+  const navigate = (destination: View) => {
+    setShowEvidence(false);
+    changeLocation({ view: destination, ...(destination === "assets" ? { assetsTab: "memory" } : {}) });
   };
   if (user) {
     if (view === "workbench")
       return (
-        <Workbench
-          user={user}
-          modelLabel={modelLabel}
-          onLogout={logout}
-          onView={setView}
-          onEvidence={(id) => {
-            setObject(id);
-            setView("knowledge");
-          }}
-        />
+        <>
+          <Workbench
+            user={user}
+            modelLabel={modelLabel}
+            onLogout={() => guard(logout)}
+            onView={navigate}
+            onManageSkills={() => {
+              changeLocation({ view: "assets", assetsTab: "skill" });
+            }}
+            onEvidence={(id, summary, version) => {
+              setEvidence({id, summary, version});
+              setShowEvidence(true);
+            }}
+          />
+          {showEvidence && evidence && (
+            <Modal
+              title="口径依据"
+              className="evidence-dialog"
+              onClose={() => setShowEvidence(false)}
+              footer={<><button onClick={() => { setShowEvidence(false); changeLocation({view: "knowledge", object: evidence.id, tab: "概览"}); }}>去维护此内容</button><button className="primary" onClick={() => setShowEvidence(false)}>返回对话</button></>}
+            >
+              <div className="evidence-content">
+                <KnowledgeEvidence id={evidence.id} version={evidence.version} querySummary={evidence.summary}/>
+              </div>
+            </Modal>
+          )}
+        </>
       );
     return (
       <WorkspaceShell
         user={user}
         modelLabel={modelLabel}
-        onLogout={logout}
+        onLogout={() => guard(logout)}
         view={view}
-        onView={setView}
+        onView={navigate}
       >
         {view === "knowledge" ? (
-          <KnowledgePage user={user} initialObject={object} />
+          <KnowledgePage user={user} initialObject={object} initialTab={location.tab} initialScope={location.scope} onLocation={(patch, replace) => changeLocation(patch, replace)} />
         ) : (
-          <AssetsPage user={user} onUseSkill={useSkill} />
+          <AssetsPage user={user} initialTab={assetsEntry} onTab={assetsTab => changeLocation({assetsTab})} onUseSkill={useSkill} />
         )}
       </WorkspaceShell>
     );
@@ -130,6 +160,6 @@ function App() {
 }
 createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    <App />
+    <UnsavedChangesProvider><App /></UnsavedChangesProvider>
   </React.StrictMode>,
 );

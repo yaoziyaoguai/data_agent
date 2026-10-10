@@ -1,3 +1,4 @@
+import {discardEditor, expandAsset} from './experience-navigation.mjs';
 import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
 import {mkdir, writeFile} from 'node:fs/promises';
@@ -26,12 +27,12 @@ const login = async user => {
 const edit = async asset => {
   await card(asset.name).getByRole('button', {name: '编辑', exact: true}).click();
   const form = page.getByRole('dialog');
-  await form.getByRole('group', {name: '知识依赖'}).waitFor();
+  await form.getByLabel('内容', {exact: true}).waitFor();
   return form;
 };
 const updateRef = async (form, version) => {
   const row = form.locator('.asset-dependency').first();
-  const update = row.getByRole('button', {name: `更新引用到 v${version}`, exact: true});
+  const update = row.getByRole('button', {name: '采用核对后的最新内容', exact: true});
   await update.waitFor();
   assert.equal(await update.isDisabled(), true);
   await row.getByLabel('我已核对新版内容及方法适用范围').check();
@@ -66,10 +67,11 @@ try {
     assert.equal(await confirmation().isChecked(), false);
     await confirmation().check();
   }
+  await form.getByText('补充说明与报告模板（可选）', {exact: true}).click();
   await form.getByRole('button', {name: '添加文本附件'}).click();
   assert.equal(await confirmation().isChecked(), false);
   await form.getByRole('button', {name: '移除此附件'}).click();
-  await page.keyboard.press('Escape');
+  await discardEditor(page);
   form = await edit(personal);
   assert.equal(await confirmation().isChecked(), true);
   await form.getByRole('button', {name: '保存', exact: true}).click();
@@ -78,7 +80,7 @@ try {
   assert.equal((await current(personal.id)).dependencies[0].version, doc.version);
   await updateRef(form, revised.version);
   assert.equal(await confirmation().isChecked(), false);
-  await page.keyboard.press('Escape');
+  await discardEditor(page);
   assert.deepEqual((await current(personal.id)).dependencies, [dep]);
   form = await edit(personal);
   await updateRef(form, revised.version);
@@ -120,10 +122,10 @@ try {
   assert.equal((await selection()).availability, 'dependency_unavailable');
   form = await edit(publicCurrent);
   await form.getByText('该知识已停用，不能用于当前引用。', {exact: true}).waitFor();
-  assert.equal(await form.getByRole('button', {name: /^更新引用到/}).count(), 0);
+  assert.equal(await form.getByRole('button', {name: /^采用核对后的最新内容/}).count(), 0);
   await form.getByRole('button', {name: '核对后移除此依赖'}).click();
   assert.equal(await form.getByLabel('我已核对这条公共定义').isChecked(), false);
-  await page.keyboard.press('Escape');
+  await discardEditor(page);
   assert.equal((await current(shared.id)).dependencies.length, 1);
   form = await edit(publicCurrent);
   await form.getByRole('button', {name: '核对后移除此依赖'}).click();
@@ -147,10 +149,10 @@ try {
   checks.push('普通成员没有编辑入口且服务端拒绝；超级维护者可修订，归属仍为原负责人');
 
   ok(await h.request(`/knowledge/${doc.id}/delete`, {operation_id: randomUUID(), expected_version: disabled.version}));
-  await page.getByRole('tab', {name: /^记忆与纠错/}).click();
+  await page.getByRole('tab', {name: /^个人记忆/}).click();
   form = await edit(memory);
   await form.getByText(/无法读取该知识/).waitFor();
-  assert.equal(await form.getByRole('button', {name: /^更新引用到/}).count(), 0);
+  assert.equal(await form.getByRole('button', {name: /^采用核对后的最新内容/}).count(), 0);
   await form.getByRole('button', {name: '核对后移除此依赖'}).click();
   await save(form);
   assert.deepEqual((await current(memory.id, 'alice')).dependencies, []);

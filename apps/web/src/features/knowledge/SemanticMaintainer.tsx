@@ -57,17 +57,9 @@ export function SemanticMaintainer({
   return (
     <div className="semantic-maintainer">
       <p className="quiet">
-        语义负责人：{maintenance.maintainer_id ?? "暂未指定"} ·{" "}
-        {maintenance.source === "datasight"
-          ? "来自 Datasight 最近一次同步"
-          : maintenance.source === "creator" ? "首次录入后自动负责" : "本系统管理归属"}
-        {maintenance.authority_id !== object.id ? " · 沿用所属表" : ""} ·{" "}
-        {maintenance.can_edit ? "你可以维护" : "你可以提出纠错"}
+        负责人：{maintenance.maintainer_id ?? "暂未指定"} · {maintenance.can_edit ? "你可以编辑" : "你可以提出纠错"}
       </p>
-      <p className="quiet">
-        录入：{object.created_by ?? "历史记录未提供"} · 最后修改：
-        {object.updated_by}
-      </p>
+      <details><summary>维护信息</summary><p className="quiet">{maintenance.source === "datasight" ? "负责人来自 Datasight" : maintenance.source === "creator" ? "由首次录入者负责" : "本系统指定负责人"} · 录入：{object.created_by ?? "历史记录未提供"} · 最近修改：{object.updated_by}</p></details>
       {maintenance.can_assign && (
         <button
           onClick={() => {

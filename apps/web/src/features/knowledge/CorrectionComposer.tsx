@@ -1,5 +1,8 @@
 import { useEffect, useState } from "react";
 import { api } from "../../shared/api.ts";
+import { KnowledgeReference } from "../../shared/KnowledgeReference.tsx";
+import { KnowledgePicker } from "../../shared/KnowledgePicker.tsx";
+import { useUnsavedChanges } from "../../shared/UnsavedChanges.tsx";
 import { Modal } from "../../shared/Modal.tsx";
 import {
   semanticError as message,
@@ -34,8 +37,9 @@ export function CorrectionComposer({
     [evidence, setEvidence] = useState<EvidenceRef[]>(content.evidence);
   const [busy, setBusy] = useState(false),
     [error, setError] = useState("");
-  const [refId, setRefId] = useState(""),
+  const [refObject, setRefObject] = useState<KnowledgeObject | null>(null),
     [refPath, setRefPath] = useState("");
+  const confirmClose = useUnsavedChanges((value !== content.value || reason !== content.reason || JSON.stringify(evidence) !== JSON.stringify(content.evidence) || Boolean(refObject)), onClose);
   const refreshBasis = async () => {
     try {
       const object = await api(
@@ -57,18 +61,19 @@ export function CorrectionComposer({
   };
   const addEvidence = async () => {
     try {
-      const object = await api("KnowledgeObject", "/knowledge/" + refId.trim());
+      if (!refObject) return;
+      const object = await api("KnowledgeObject", "/knowledge/" + refObject.id);
       if (
         !object.entries.some(
           (e) => e.entry_id === refPath.trim() || e.path === refPath.trim(),
         )
       )
-        throw new Error("请填写该对象中真实存在的条目路径。");
+        throw new Error("请选择资料中的说明条目。");
       setEvidence((old) => [
         ...old,
         { object_id: object.id, version: object.version, path: refPath.trim() },
       ]);
-      setRefId("");
+      setRefObject(null);
       setRefPath("");
       setShared(false);
     } catch (e) {
@@ -111,6 +116,7 @@ export function CorrectionComposer({
             ...(revision ? { expected_revision: revision.value } : {}),
           },
         );
+      confirmClose.markSaved();
       onSaved();
       onClose();
     } catch (e) {
@@ -122,10 +128,10 @@ export function CorrectionComposer({
   return (
     <Modal
       title={revision ? "修订并重新提交建议" : "整理语义纠错建议"}
-      onClose={onClose}
+      onClose={() => { if (!busy) confirmClose(onClose); }}
     >
       <p>
-        {content.object_id} · {content.entry_id} · 基于 v{baseVersion}
+        <KnowledgeReference id={content.object_id} path={content.entry_id}/>
       </p>
       <p className="quiet">
         提交后，提出者、对象负责人和超级维护者可见以下内容。当前对话可继续修改
@@ -157,7 +163,7 @@ export function CorrectionComposer({
       <ul>
         {evidence.map((r, i) => (
           <li key={i}>
-            {r.object_id} · v{r.version} · {r.path}{" "}
+            <KnowledgeReference id={r.object_id} path={r.path}/>{" "}
             <button
               onClick={() => {
                 setEvidence((old) => old.filter((_, n) => n !== i));
@@ -172,23 +178,17 @@ export function CorrectionComposer({
       </ul>
       <details>
         <summary>补充正式知识依据</summary>
-        <label className="form-label">
-          依据对象 ID
-          <input value={refId} onChange={(e) => setRefId(e.target.value)} />
-        </label>
-        <label className="form-label">
-          依据条目路径
-          <input value={refPath} onChange={(e) => setRefPath(e.target.value)} />
-        </label>
+        <KnowledgePicker selected={refObject ? [refObject.id] : []} onAdd={object => { setRefObject(object); setRefPath(object.entries[0]?.entry_id ?? ""); }} onRemove={() => { setRefObject(null); setRefPath(""); }}/>
+        {refObject && <label className="form-label">引用内容<select value={refPath} onChange={e => setRefPath(e.target.value)}>{refObject.entries.map(entry => <option key={entry.entry_id} value={entry.entry_id}>{entry.label}</option>)}</select></label>}
         <button
           onClick={() => void addEvidence()}
-          disabled={!refId.trim() || !refPath.trim()}
+          disabled={!refObject || !refPath.trim()}
         >
           添加依据
         </button>
       </details>
       <button onClick={() => void refreshBasis()}>
-        读取当前版本并重选依据
+        重新核对最新内容与依据
       </button>
       <label className="form-label">
         <span>

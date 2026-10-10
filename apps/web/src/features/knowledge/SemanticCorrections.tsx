@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { KnowledgeReference } from "../../shared/KnowledgeReference.tsx";
 import { api } from "../../shared/api.ts";
 import { semanticError as message } from "./semantic-commands.ts";
 import {
@@ -93,7 +94,7 @@ export function SemanticCorrections({
           {proposals.map((p) => (
             <article key={p.id}>
               <strong>
-                {p.object_id} · {p.entry_id}
+                <KnowledgeReference id={p.object_id} path={p.entry_id}/>
               </strong>
               <p>{p.reason}</p>
               <blockquote>{p.value}</blockquote>
@@ -113,13 +114,12 @@ export function SemanticCorrections({
         <article key={c.id} data-correction-id={c.id}>
           <div className="actions">
             <strong>
-              {c.object_id} · {c.entry_id}
+              <KnowledgeReference id={c.object_id} path={c.entry_id}/>
             </strong>
             <span className="status-pill">{labels[c.state]}</span>
           </div>
           <p>
-            提出者 {c.submitter_id} · 基于 v{c.base_version} · 建议修订{" "}
-            {c.revision}
+            提出者 {c.submitter_id}
           </p>
           <p>{c.reason}</p>
           <details>
@@ -131,7 +131,7 @@ export function SemanticCorrections({
             <ul>
               {c.evidence.map((r, i) => (
                 <li key={i}>
-                  {r.object_id} · v{r.version} · {r.path}
+                  <KnowledgeReference id={r.object_id} path={r.path}/>
                 </li>
               ))}
             </ul>
@@ -143,7 +143,7 @@ export function SemanticCorrections({
           )}
           {c.applied_version && (
             <p>
-              由 {c.applied_by} 保存为 v{c.applied_version}：{c.applied_value}
+              由 {c.applied_by} 保存：{c.applied_value}
             </p>
           )}
           <div className="actions">

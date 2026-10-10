@@ -53,6 +53,7 @@ try {
   assert.deepEqual(await ok("/semantic-access", undefined, "bob"), {
     can_admin: false,
     can_create: false,
+    highest_role: "user",
   });
   assert.equal(
     (await h.request("/knowledge", createInput("document"), "bob")).status,
@@ -84,10 +85,12 @@ try {
   assert.deepEqual(await ok("/semantic-access", undefined, "bob"), {
     can_admin: false,
     can_create: true,
+    highest_role: "maintainer",
   });
   assert.deepEqual(await ok("/semantic-access"), {
     can_admin: true,
     can_create: true,
+    highest_role: "super_maintainer",
   });
   h.sql(
     "INSERT INTO semantic_ownership(space_id,object_id,authority_id,maintainer_id,source,updated_by) VALUES('other-space','foreign-table','foreign-table','carol','datasight','test')",
@@ -222,6 +225,7 @@ try {
   );
 
   await synchronize("carol");
+  assert.equal((await ok("/semantic-access", undefined, "bob")).highest_role, "maintainer");
   assert.equal(
     (await ok("/semantic-access", undefined, "bob")).can_create,
     false,

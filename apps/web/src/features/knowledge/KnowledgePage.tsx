@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type {
   KnowledgeObject,
   KnowledgeEntry,
@@ -8,11 +8,19 @@ import type {
 import { ProposeCorrection } from "./CorrectionComposer.tsx";
 import { SemanticCorrections } from "./SemanticCorrections.tsx";
 import { KnowledgeCreator } from "./KnowledgeCreator.tsx";
+import { KnowledgeDocument, documentRepresentatives } from "./KnowledgeDocument.tsx";
+import { KnowledgePicker } from "../../shared/KnowledgePicker.tsx";
+import { useStableOperation } from "./semantic-commands.ts";
 import { KnowledgeDirectory } from "./KnowledgeDirectory.tsx";
 import { SemanticMaintainer } from "./SemanticMaintainer.tsx";
 import { KnowledgeOrigin } from "./KnowledgeOrigin.tsx";
 import { ApiError, api } from "../../shared/api.ts";
 import { Modal } from "../../shared/Modal.tsx";
+import { MarkdownContent } from "../../shared/MarkdownContent.tsx";
+import { useUnsavedChanges, useNavigationGuard } from "../../shared/UnsavedChanges.tsx";
+import { Tabs } from "../../shared/Tabs.tsx";
+import type { WorkspaceLocation } from "../../shared/workspace-location.ts";
+import { knowledgeKindLabels } from "../../shared/knowledge-labels.ts";
 function currentObject(previous: KnowledgeObject | undefined, incoming: KnowledgeObject): KnowledgeObject {
   if (!previous) return incoming;
   const oldPreference=previous.analysis_preference;
@@ -50,14 +58,24 @@ function EntryEditor({
   onSource: (id: string) => void;
   onCorrection: () => void;
 }) {
+  const operation = useStableOperation();
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState(entry.effective_value);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [editVersion, setEditVersion] = useState(object.version);
   const isDocument = object.kind === "document" && entry.entry_id === "body";
+  let displayValue = entry.effective_value;
+  if (entry.path === "lineage") {
+    try {
+      const upstream: unknown = JSON.parse(displayValue);
+      if (Array.isArray(upstream) && upstream.every(value => typeof value === "string")) displayValue = upstream.join("、") || "暂无上游表";
+    } catch { /* 人工填写的自然语言按原文展示。 */ }
+  }
   const [editUrl, setEditUrl] = useState(String(entry.human_override?.source_url ?? ""));
-  const [editRelated, setEditRelated] = useState(object.related_ids.join(", "));
+  const [editRelated, setEditRelated] = useState(object.related_ids);
+  const initialEdit = useRef("");
+  const confirmClose = useUnsavedChanges(editing && initialEdit.current !== JSON.stringify([value, editUrl, editRelated]), () => { setEditing(false); setValue(entry.effective_value); });
   useEffect(() => {
     if (!editing) setValue(entry.effective_value);
   }, [object.version, entry.entry_id, editing]);
@@ -70,14 +88,15 @@ function EntryEditor({
         "/knowledge/" + object.id,
         "PATCH",
         {
-          operation_id: crypto.randomUUID(),
+          operation_id: operation({ object: object.id, entry: entry.entry_id, editVersion, value, clear, editUrl, editRelated }),
           expected_version: editVersion,
           entry_id: entry.entry_id,
           value,
           clear_override: clear,
-          ...(isDocument && !clear ? { source_url: editUrl.trim() || null, related_ids: editRelated.split(",").map(v => v.trim()).filter(Boolean) } : {}),
+          ...(isDocument && !clear ? { source_url: editUrl.trim() || null, related_ids: editRelated } : {}),
         },
       );
+      confirmClose.markSaved();
       onSaved(v);
       setEditing(false);
     } catch (e) {
@@ -94,14 +113,11 @@ function EntryEditor({
     <div className="semantic-entry">
       <div className="entry-head">
         <strong>{entry.label}</strong>
-        <span className={"provenance " + (entry.human_override ? "human" : "")}>
-          {entry.human_override ? "人工修改" : entry.suggestion.analysis_state === "validated" ? "模型建议" : "来源预填"}
-        </span>
         {entry.review_state === "needs_review" && (
-          <span className="review-mark">来源重分析后待复核</span>
+          <span className="review-mark">依据有变化，请核对</span>
         )}
         {canEdit && !editing && (
-          <button onClick={() => {setEditVersion(object.version);setEditUrl(String(entry.human_override?.source_url ?? ""));setEditRelated(object.related_ids.join(", "));setEditing(true);}}>编辑</button>
+          <button onClick={() => {initialEdit.current = JSON.stringify([entry.effective_value, String(entry.human_override?.source_url ?? ""), object.related_ids]);setEditVersion(object.version);setEditUrl(String(entry.human_override?.source_url ?? ""));setEditRelated(object.related_ids);setEditing(true);}}>编辑</button>
         )}
       </div>
       {editing ? (
@@ -110,6 +126,7 @@ function EntryEditor({
             {entry.label}
           </label>
           <textarea
+            disabled={busy}
             id={object.id + "-" + entry.entry_id}
             className="editor"
             rows={Math.min(14, Math.max(3, value.split("\n").length))}
@@ -118,7 +135,7 @@ function EntryEditor({
           />
           {isDocument && <>
             <label className="form-label">来源链接<input aria-label="编辑来源链接" value={editUrl} onChange={e => setEditUrl(e.target.value)} /></label>
-            <label className="form-label">关联对象（逗号分隔）<input aria-label="编辑关联对象" value={editRelated} onChange={e => setEditRelated(e.target.value)} /></label>
+            <KnowledgePicker selected={editRelated} disabled={busy} onAdd={object => setEditRelated(old => [...old, object.id])} onRemove={id => setEditRelated(old => old.filter(value => value !== id))}/>
           </>}
           <div className="actions">
             <button
@@ -129,10 +146,8 @@ function EntryEditor({
               保存修改
             </button>
             <button
-              onClick={() => {
-                setEditing(false);
-                setValue(entry.effective_value);
-              }}
+              disabled={busy}
+              onClick={() => confirmClose(() => { setEditing(false); setValue(entry.effective_value); })}
             >
               放弃本次编辑
             </button>
@@ -143,7 +158,7 @@ function EntryEditor({
             )}
           </div>
         </>
-      ) : (
+      ) : !["sql", "ddl", "etl", "lineage"].includes(entry.path) ? <MarkdownContent text={entry.effective_value || "尚缺说明"} className="entry-value" /> : (
         <p
           className={
             entry.path === "sql" || entry.path === "ddl" || entry.path === "etl"
@@ -151,36 +166,33 @@ function EntryEditor({
               : "entry-value"
           }
         >
-          {entry.effective_value || "尚缺说明"}
+          {displayValue || "尚缺说明"}
         </p>
       )}
       {typeof entry.human_override?.source_url === "string" && /^https?:\/\//i.test(entry.human_override.source_url) && (
         <p className="quiet"><a href={entry.human_override.source_url} target="_blank" rel="noopener noreferrer">打开来源链接 ↗</a>{!entry.effective_value.trim() && " · 正文尚未录入，Agent无法据此解释业务"}</p>
       )}
       <details className="provenance-detail">
-        <summary>查看来源事实、分析建议与人工记录</summary>
+        <summary>查看依据与修改记录</summary>
         <div className="provenance-columns">
           <section>
-            <h4>来源事实</h4>
-            <pre>{JSON.stringify(entry.source_facts, null, 2)}</pre>
+            <h4>来源资料</h4>
+            <p>{String(entry.source_facts.value ?? entry.source_facts.gap ?? "请查看来源正文")}</p>
             {sourceId && (
               <button onClick={() => onSource(sourceId)}>查看来源正文 ↗</button>
             )}
           </section>
           <section>
             <h4>分析建议</h4>
-            <pre>{JSON.stringify(entry.suggestion, null, 2)}</pre>
-            <p className="quiet">
-              建议保留引用、缺口和分析状态。模型补全须配置维护预算；人工保存不等于业务验收通过。
-            </p>
+            <p>{String(entry.suggestion.value ?? "暂无分析建议")}</p>
           </section>
           <section>
-            <h4>人工覆盖</h4>
-            <pre>{JSON.stringify(entry.human_override, null, 2)}</pre>
+            <h4>人工修改</h4>
+            <p>{entry.human_override ? `由 ${String(entry.human_override.edited_by ?? object.updated_by)} 修改` : "尚未人工修改"}</p>
           </section>
         </div>
       </details>
-      <ProposeCorrection object={object} entry={entry} onSaved={onCorrection}/>
+      {!canEdit && <ProposeCorrection object={object} entry={entry} onSaved={onCorrection}/>}
       {error && (
         <p className="error" role="alert">
           {error === "version_conflict"
@@ -193,19 +205,40 @@ function EntryEditor({
 }
 export function KnowledgePage({
   user,
-  initialObject,
+  initialObject, initialTab = "概览", initialScope = "tables", onLocation,
 }: {
   user: string;
   initialObject?: string | null;
+  initialTab?: string;
+  initialScope?: "tables" | "all" | "maintained";
+  onLocation?: (patch: Partial<WorkspaceLocation>, replace?: boolean) => boolean;
 }) {
   const [objects, setObjects] = useState<KnowledgeObject[]>([]);
   const [current, setCurrent] = useState(
     initialObject ?? "table-demo_order_detail",
   );
-  const [tab, setTab] = useState("概览");
+  const [tab, setTab] = useState(initialTab);
+  const directoryElement = useRef<HTMLElement>(null);
+  useLayoutEffect(() => {
+    const alignSelection = () => {
+      const list = directoryElement.current;
+      const selected = list?.querySelector<HTMLElement>('[aria-current="true"]');
+      if (!list || !selected || window.innerWidth > 700) return;
+      const offset = selected.getBoundingClientRect().left - list.getBoundingClientRect().left;
+      if (offset < 0 || offset + selected.offsetWidth > list.clientWidth) list.scrollLeft += offset - 10;
+    };
+    alignSelection(); window.addEventListener("resize", alignSelection);
+    return () => window.removeEventListener("resize", alignSelection);
+  }, [current, objects.length]);
+  const guard = useNavigationGuard();
+  const move = (id: string, nextTab = "概览", scope = directoryScope) => {
+    if (onLocation) { if (onLocation({object: id, tab: nextTab, scope})) { setCurrent(id); setTab(nextTab); setDirectoryScope(scope); } }
+    else guard(() => { setCurrent(id); setTab(nextTab); setDirectoryScope(scope); });
+  };
   const [query, setQuery] = useState("");
-  const [directoryScope, setDirectoryScope] = useState<"tables" | "all" | "maintained">("tables");
+  const [directoryScope, setDirectoryScope] = useState<"tables" | "all" | "maintained">(initialScope);
   const [directoryRevision, setDirectoryRevision] = useState(0);
+  const [createdObjectId, setCreatedObjectId] = useState("");
   const [nextAfter, setNextAfter] = useState<string | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
   const [relatedPage, setRelatedPage] = useState<{parent: string; ids: string[]; next: string | null; loading: boolean; failed: boolean}>({parent: "", ids: [], next: null, loading: false, failed: false});
@@ -250,11 +283,10 @@ export function KnowledgePage({
     return () => { ++refreshGeneration.current; };
   }, [user]);
   useEffect(() => {
-    if (initialObject) {
-      setCurrent(initialObject);
-      setTab("概览");
-    }
-  }, [initialObject]);
+    if (initialObject !== undefined) setCurrent(initialObject ?? (initialScope === "tables" ? "table-demo_order_detail" : ""));
+    setTab(["概览", "字段语义", "关联与血缘", "指标 SQL", "业务文档", "变更记录"].includes(initialTab) ? initialTab : "概览");
+    setDirectoryScope(initialScope);
+  }, [initialObject, initialTab, initialScope]);
   useEffect(() => {
     const timer = window.setInterval(() => {
       void refresh().catch((e) => setError(e.message));
@@ -263,19 +295,22 @@ export function KnowledgePage({
   }, [user, current, tab]);
   useEffect(() => {
     const generation = ++searchGeneration.current;
+    if (directoryScope !== "tables") return;
     if (!query.trim()) { setMatches([]); setSearchLimited(false); setVectorUnavailable(false); return; }
     const timer = window.setTimeout(() => {
       void api("KnowledgeList", "/knowledge?q=" + encodeURIComponent(query)).then(page => {
         if (generation !== searchGeneration.current) return;
         setMatches(page.objects);
+        setCurrent(previous => page.objects.some(object => object.id === previous) ? previous : page.objects[0]?.id ?? "");
         setSearchLimited(page.search_coverage?.state !== "complete");
         setVectorUnavailable(page.search_coverage?.vector_state === "unavailable");
         setObjects(old => { const byId = new Map(old.map(o => [o.id,o])); for (const v of page.objects) byId.set(v.id,currentObject(byId.get(v.id),v)); return [...byId.values()]; });
       }).catch(e => { if(generation === searchGeneration.current) setError(e.message); });
     }, 150);
     return () => { window.clearTimeout(timer); ++searchGeneration.current; };
-  }, [query]);
+  }, [query, directoryScope]);
   useEffect(() => {
+    if (!current) return;
     let live=true;
     void api("KnowledgeObject","/knowledge/"+current).then(v => { if(live) setObjects(old => [...old.filter(o => o.id!==v.id),currentObject(old.find(o => o.id===v.id),v)]); }).catch(e => { if(live) setError(e.message); });
     return () => {live=false;};
@@ -295,6 +330,7 @@ export function KnowledgePage({
     }
   };
   useEffect(() => {
+    if (!current) { setRelatedPage({parent: "", ids: [], next: null, loading: false, failed: false}); return; }
     void loadRelated(current);
     return () => { ++relatedGeneration.current; };
   }, [current]);
@@ -338,13 +374,21 @@ export function KnowledgePage({
   const tables = objects.filter((o) => o.kind === "table");
   const save = (v: KnowledgeObject) => {
     ++refreshGeneration.current;
-    setDirectoryRevision(value => value + 1);
+    if (objects.find(object => object.id === v.id)?.state !== v.state) setDirectoryRevision(value => value + 1);
     setObjects((old) => old.map((o) => (o.id === v.id ? currentObject(o, v) : o)));
   };
-  const selectObject = (v: KnowledgeObject) => {
+  const selectObject = (v: KnowledgeObject | null) => {
+    if (!v) { setCurrent(""); return; }
     setObjects(old => [...old.filter(o => o.id !== v.id), currentObject(old.find(o => o.id === v.id), v)]);
-    setCurrent(v.id);
-    setTab("概览");
+    move(v.id);
+  };
+  const showDirectoryPage = (values: KnowledgeObject[], append: boolean) => {
+    setObjects(old => { const byId = new Map(old.map(o => [o.id, o])); for (const value of values) byId.set(value.id, currentObject(byId.get(value.id), value)); return [...byId.values()]; });
+    if (!append && !values.some(value => value.id === current)) {
+      const next = values[0]?.id ?? "";
+      if (onLocation) { if (onLocation({object: next, tab: "概览"}, true)) { setCurrent(next); setTab("概览"); } }
+      else guard(() => { setCurrent(next); setTab("概览"); });
+    }
   };
   const showSource = async (id: string) => {
     try {
@@ -395,34 +439,34 @@ export function KnowledgePage({
               : [];
   visibleObjectIds.current = [...new Set([current, ...groups
     .filter(o => o.kind !== "field" || expandedFields.current.has(o.id))
-    .map(o => o.id)])];
+    .map(o => o.id)].filter(Boolean))];
   return (
     <section className="management">
       <div className="page-heading">
         <div>
-          <div className="eyebrow">从来源到可复用的业务知识</div>
           <h1>语义管理</h1>
-          <p>事实有出处，建议可核对，人工修改始终保留。</p>
         </div>
         <div className="actions">
+          <details className="maintenance-menu"><summary>维护操作</summary><div className="actions">
           <button
             onClick={()=>void synchronize()}
             disabled={!canAdmin || syncing}
           >
             {syncing?"同步中…":"同步来源"}
           </button>
-          {canAdmin && <button onClick={()=>void rebuild()} disabled={rebuilding}>{rebuilding?"正在排队…":"重建检索索引"}</button>}
+          {canAdmin && <button onClick={()=>void rebuild()} disabled={rebuilding}>{rebuilding?"正在排队…":"重建检索索引"}</button>}</div></details>
           <KnowledgeCreator user={user} canCreate={canCreate} relatedId={current} onCreated={v => {
             ++refreshGeneration.current;
-            setDirectoryRevision(value => value + 1);
+            // 新建成功后清除旧筛选，并取消旧目录请求，避免刚保存的对象被切走。
+            setCreatedObjectId(v.id);
+            setQuery("");
             setObjects(old => [...old.filter(o => o.id !== v.id), v]);
-            setCurrent(v.id);
-            setTab("概览");
+            move(v.id, "概览", directoryScope === "tables" ? "maintained" : directoryScope);
           }}/>
         </div>
       </div>
-      <label className="form-label directory-scope">语义目录范围
-        <select aria-label="语义目录范围" value={directoryScope} onChange={e => setDirectoryScope(e.target.value as "tables" | "all" | "maintained")}>
+      <div className="knowledge-toolbar"><label className="form-label directory-scope">语义目录范围
+        <select aria-label="语义目录范围" value={directoryScope} onChange={e => move(e.target.value === "tables" ? tables[0]?.id ?? "" : "", "概览", e.target.value as "tables" | "all" | "maintained")}>
           <option value="tables">按表浏览</option><option value="all">全部对象</option><option value="maintained">我负责的对象</option>
         </select>
       </label>
@@ -432,28 +476,25 @@ export function KnowledgePage({
           aria-label="搜索语义对象"
           placeholder="搜索表、字段、指标或业务文档"
           value={query}
-          onChange={(e) => setQuery(e.target.value)}
+          onChange={(e) => { const value = e.target.value; guard(() => { setQuery(value); setCurrent(previous => value.trim() ? "" : tables.some(table => table.id === previous) ? previous : tables[0]?.id ?? ""); setTab("概览"); }); }}
         />
-      </label>}
+      </label>}</div>
       {directoryScope === "tables" && searchLimited && <p className="quiet" role="status">候选较多，本次只核对了部分匹配对象。请补充具体名称或业务范围；当前结果不能说明其他对象不存在。</p>}
       {directoryScope === "tables" && vectorUnavailable && <p className="quiet" role="status">语义检索暂不可用，当前使用名称和关键词查找。可稍后重试；检索结果仍按当前知识版本核对。</p>}
       {maintenanceNotice && <p className="quiet" role="status">{maintenanceNotice}</p>}
       <div className="knowledge-layout">
-        <nav aria-label="语义对象" className={"object-list" + (directoryScope !== "tables" ? " management-directory" : "")}>
-          {directoryScope !== "tables" ? <KnowledgeDirectory scope={directoryScope} current={current} revision={directoryRevision} onSelect={selectObject}/> : <>{(query ? matches.map(o=>objects.find(current=>current.id===o.id)??o) : tables
+        <nav ref={directoryElement} aria-label="语义对象" className={"object-list" + (directoryScope !== "tables" ? " management-directory" : "")}>
+          {directoryScope !== "tables" ? <KnowledgeDirectory key={createdObjectId} user={user} scope={directoryScope} current={current} revision={directoryRevision} onSelect={selectObject} onPage={showDirectoryPage}/> : <>{(query ? matches.map(o=>objects.find(current=>current.id===o.id)??o) : tables
           ).map((o) => (
             <button
               key={o.id}
               aria-current={o.id === current ? "true" : undefined}
-              onClick={() => {
-                setCurrent(o.id);
-                setTab("概览");
-              }}
+              onClick={() => move(o.id)}
             >
               <span>{o.name}</span>
-              <KnowledgeOrigin object={o}/>
+              {tables.some(other => other.id !== o.id && other.name === o.name) && <KnowledgeOrigin object={o}/>}
               <small>
-                {o.kind} · v{o.version}{o.analysis_preference?.preferred?" · 常用":""}
+                {knowledgeKindLabels[o.kind]}{o.analysis_preference?.preferred?" · 常用":""}
               </small>
             </button>
           ))}
@@ -466,17 +507,17 @@ export function KnowledgePage({
               <div className="object-heading">
                 <div>
                   <span className="eyebrow">
-                    {selected.kind.toUpperCase()} · VERSION {selected.version}
+                    {knowledgeKindLabels[selected.kind]}
                   </span>
-                  <h2>{selected.name}</h2>
-                  <KnowledgeOrigin object={selected} detail/>
+                  {selected.kind !== "document" && <h2>{selected.name}</h2>}
+                  <details className="object-source"><summary>来源信息</summary><KnowledgeOrigin object={selected} detail/></details>
                 </div>
                 <div className="actions">
                   <span className="status-pill">
                     {selected.state === "enabled" ? "当前启用" : "已停用"}
                   </span>
                   {selected.kind==="table" && selected.analysis_preference && <button role="switch" aria-label="常用表优先分析" aria-checked={selected.analysis_preference.preferred} disabled={!canEdit || savingPreference} onClick={()=>void changePreference()}>{savingPreference?"保存中…":selected.analysis_preference.preferred?"常用表 · 优先分析":"设为常用表"}</button>}
-                  {canEdit && (
+                  {canEdit && (selected.kind !== "document" || !selected.source_id) && (
                     <button
                       onClick={() =>
                         void state(
@@ -487,7 +528,7 @@ export function KnowledgePage({
                       {selected.state === "enabled" ? "停用" : "启用"}
                     </button>
                   )}
-                  {canEdit && selected.source_id && (
+                  {canEdit && selected.kind !== "document" && selected.source_id && (
                     <button onClick={() => void state("reanalyze")}>
                       重新预填
                     </button>
@@ -495,28 +536,9 @@ export function KnowledgePage({
                 </div>
               </div>
               <SemanticMaintainer object={selected} onSaved={()=>{setDirectoryRevision(value => value + 1);void refresh();}}/>
-              {selected.kind==="table" && selected.analysis_preference && <p className="quiet">{selected.analysis_preference.preferred?"此表和所属字段优先深入分析，状态见各对象。":"基础资料已入目录；可设为常用表优先分析，或按需重新预填。"}</p>}
-              {selected.prefill_status && <p className="quiet" role="status">{({queued:"来源已更新，等待语义分析",issued:"语义分析中；中断后会保留未知状态",budget_unavailable:"来源事实已更新；未配置可用维护预算，模型建议待补充",succeeded:"本次模型建议已保存，引用和格式已核对，业务含义仍需复核",superseded:"分析期间来源或人工版本已变化，旧建议未应用",unknown:"模型调用回执未知，保留预算且未自动重试",invalid_prefill:"模型结果未通过引用或格式校验，未应用"} as Record<string,string>)[selected.prefill_status.state] ?? selected.prefill_status.state}</p>}
+              {selected.prefill_status && selected.prefill_status.state !== "succeeded" && <p className="quiet" role="status">{({queued:"正在等待补充语义说明",issued:"正在分析资料，补充说明",budget_unavailable:"自动补充暂不可用，仍可人工维护",superseded:"资料已变化，本次分析未采用",unknown:"分析暂未完成，请稍后查看状态",invalid_prefill:"本次分析未通过检查，已有内容保留"} as Record<string,string>)[selected.prefill_status.state] ?? "分析状态待核对"}</p>}
               {selected.kind === "table" && (
-                <div className="tabs" role="tablist">
-                  {[
-                    "概览",
-                    "字段语义",
-                    "关联与血缘",
-                    "指标 SQL",
-                    "业务文档",
-                    "变更记录",
-                  ].map((label) => (
-                    <button
-                      key={label}
-                      role="tab"
-                      aria-selected={tab === label}
-                      onClick={() => setTab(label)}
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </div>
+                <Tabs label="表的语义内容" value={tab} items={["概览", "字段语义", "关联与血缘", "指标 SQL", "业务文档", "变更记录"].map(label => ({value: label, label}))} onChange={next => move(current, next)}/>
               )}
               {tab === "变更记录" ? (
                 <VersionHistory object={selected} />
@@ -527,15 +549,15 @@ export function KnowledgePage({
                     {!relatedPage.loading && !relatedPage.failed && groups.length === 0 && <p className="quiet">当前已读取的内容中没有此类关联。</p>}
                     {(relatedPage.next || relatedPage.failed) && <button disabled={relatedPage.loading} onClick={() => void loadRelated(current, relatedPage.next)}>{relatedPage.failed ? "重试关联内容" : "加载更多关联内容"}</button>}
                   </>}
-                  {groups.map((o) => (
-                    <article key={o.id} className="semantic-object">
-                      {o.id !== current && (
+                  {documentRepresentatives(groups).map((o) => o.kind === "document" ? <KnowledgeDocument key={o.source_id ?? o.id} object={o} onOpen={o.id !== current ? () => selectObject(o) : undefined} onSaved={parts => { ++refreshGeneration.current; setDirectoryRevision(value => value + 1); setObjects(old => { const byId = new Map(old.map(o => [o.id, o])); for (const part of parts) byId.set(part.id, currentObject(byId.get(part.id), part)); return [...byId.values()]; }); }} onCorrection={() => void refresh()}/> : (
+                    <article key={o.id} className={"semantic-object" + (o.kind === "field" ? " field-object" : "")}>
+                      {o.id !== current && o.kind !== "field" && (
                         <h3>
-                          {o.name} <small>v{o.version}</small>
+                          {o.name}
                           <button onClick={() => selectObject(o)}>打开详情</button>
                         </h3>
                       )}
-                      {o.id!==current && <SemanticMaintainer object={o} onSaved={()=>void refresh()}/>}
+
                       {o.kind === "field" ? (
                         <details onToggle={event => {
                           if (event.currentTarget.open) expandedFields.current.add(o.id);
@@ -545,11 +567,7 @@ export function KnowledgePage({
                             .map(v => v.id)])];
                         }}>
                           <summary>
-                            {o.name} ·{" "}
-                            {
-                              o.entries.find((e) => e.path === "meaning")
-                                ?.effective_value
-                            }
+                            <strong>{o.name.split(".").at(-1)}</strong><span>{o.entries.find(e => e.path === "meaning")?.effective_value || "尚缺说明"}</span><span className="field-detail-label">查看</span>
                           </summary>
                           {o.entries.map((e) => (
                             <EntryEditor
@@ -564,7 +582,7 @@ export function KnowledgePage({
                           ))}
                         </details>
                       ) : (
-                        o.entries.map((e) => (
+                        o.entries.map((e) => ["ddl", "etl"].includes(e.path) ? <details key={e.entry_id} className="technical-source"><summary>{e.label}</summary><EntryEditor object={o} entry={e} canEdit={o.maintenance?.can_edit ?? false} onCorrection={() => void refresh()} onSaved={save} onSource={id => void showSource(id)}/></details> : (
                           <EntryEditor
                             key={e.entry_id}
                             object={o}
@@ -582,7 +600,7 @@ export function KnowledgePage({
               )}
             </>
           )}
-          {!selected && <p className="quiet">请选择一个语义对象。</p>}
+          {!selected && <div className="knowledge-empty"><h2>选择要查看的内容</h2><p>左侧只列出符合当前范围的内容。没有匹配时，可调整范围或搜索条件。</p></div>}
         </div>
       </div>
       <SemanticCorrections key={user} user={user} proposals={proposals} onSaved={()=>void refresh()}/>
@@ -593,12 +611,11 @@ export function KnowledgePage({
       )}
       {source && (
         <Modal
-          title={"来源 · " + source.source_id + " v" + source.version}
+          title="来源资料"
           onClose={() => setSource(null)}
         >
           <p className="quiet">
-            {source.complete ? "正文完整" : "来源内容不完整"} · 当前版本{" "}
-            {source.current_version}
+            {source.complete ? "正文完整" : "来源内容不完整"}
           </p>
           <pre className="source-body">{source.body}</pre>
         </Modal>
@@ -639,7 +656,7 @@ function VersionHistory({ object }: { object: KnowledgeObject }) {
       >
         读取版本
       </button>
-      {old && <pre className="source-body">{JSON.stringify(old, null, 2)}</pre>}
+      {old && <div>{old.entries.map(entry => <section key={entry.entry_id}><h3>{entry.label}</h3><MarkdownContent text={entry.effective_value}/></section>)}</div>}
       {error && <p className="error">{error}</p>}
     </section>
   );

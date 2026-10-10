@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
+import { KnowledgeReference } from "../../shared/KnowledgeReference.tsx";
 import { api } from "../../shared/api.ts";
+import { useUnsavedChanges } from "../../shared/UnsavedChanges.tsx";
 import { Modal } from "../../shared/Modal.tsx";
 import {
   semanticError as message,
@@ -25,6 +27,7 @@ export function ReviewCorrection({
     [checked, setChecked] = useState(false),
     [busy, setBusy] = useState(false),
     [error, setError] = useState("");
+  const confirmClose = useUnsavedChanges(text !== (action === "apply" ? correction.value : ""), onClose);
   const [current, setCurrent] = useState<KnowledgeObject | null>(null);
   useEffect(() => {
     void api("KnowledgeObject", "/knowledge/" + correction.object_id)
@@ -55,6 +58,7 @@ export function ReviewCorrection({
             : { decision: action, reason: text }),
         },
       );
+      confirmClose.markSaved();
       onSaved();
       onClose();
     } catch (e) {
@@ -72,13 +76,12 @@ export function ReviewCorrection({
             ? "接受建议，稍后修改"
             : "驳回建议"
       }
-      onClose={onClose}
+      onClose={() => { if (!busy) confirmClose(onClose); }}
     >
       <p>
-        {correction.object_id} · {correction.entry_id} · 建议修订{" "}
-        {correction.revision}
+        <KnowledgeReference id={correction.object_id} path={correction.entry_id}/>
       </p>
-      <h3>当前正式内容 · v{current?.version ?? "…"}</h3>
+      <h3>当前正式内容</h3>
       <pre className="source-body">
         {
           current?.entries.find((e) => e.entry_id === correction.entry_id)
@@ -128,7 +131,7 @@ export function ReviewCorrection({
         {busy
           ? "正在保存…"
           : action === "apply"
-            ? "保存为正式新版本"
+            ? "保存正式内容"
             : action === "accepted"
               ? "确认接受"
               : "确认驳回"}

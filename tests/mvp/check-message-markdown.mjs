@@ -58,11 +58,21 @@ try{
   await page.setViewportSize({width,height:1000});
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),'page overflows at '+width);
   const box=await page.locator('.assistant-markdown').last().boundingBox();assert.ok(box&&box.width<=width);
+  const table=page.locator('.message-table-scroll').last();
+  const position=await table.evaluate(element=>{
+   element.scrollLeft=Math.min(160,element.scrollWidth-element.clientWidth);
+   window.readingTable=element;
+   return element.scrollLeft;
+  });
+  for(let poll=0;poll<2;poll++)await page.waitForResponse(response=>response.url().includes('/snapshot')&&response.status()===200);
+  assert.equal(await table.evaluate(element=>element===window.readingTable),true,'polling must preserve the table element');
+  assert.equal(await table.evaluate(element=>element.scrollLeft),position,'polling must preserve horizontal reading position');
+  if(width===390)assert.ok(position>0,'narrow viewport must exercise actual horizontal scrolling');
   await page.screenshot({path:'.local/checks/message-markdown-'+width+'.png',fullPage:true,animations:'disabled'});
  }
  await page.reload();await page.getByRole('heading',{name:'检查结论',exact:true}).waitFor();
  assert.equal(await page.locator('.assistant-markdown').count(),2);assert.deepEqual(errors,[]);
- checks.push('超宽代码和表格在桌面/390px中局部滚动，刷新恢复完整回答且无脚本错误');
+ checks.push('超宽代码和表格在桌面/390px中局部滚动，连续刷新保持横向阅读位置，重载恢复完整回答且无脚本错误');
  passed=true;console.log(JSON.stringify({passed,checks,officialRequests:0}));
 }finally{
  await writeFile('.local/checks/message-markdown.json',JSON.stringify({passed,checks,errors,externalRequests},null,2));

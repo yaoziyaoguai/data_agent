@@ -2,6 +2,8 @@ import {useState} from 'react';
 import type {Asset} from '../../../../../packages/contracts/generated/boundary.ts';
 import {api} from '../../shared/api.ts';
 import {Modal} from '../../shared/Modal.tsx';
+import {MarkdownContent} from '../../shared/MarkdownContent.tsx';
+import {KnowledgeReference} from '../../shared/KnowledgeReference.tsx';
 export function PublishSkill({asset, onClose, onPublished, onFailed}: {asset: Asset; onClose: () => void; onPublished: () => Promise<void>; onFailed: () => void}) {
   const [confirmed, setConfirmed] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -18,9 +20,9 @@ export function PublishSkill({asset, onClose, onPublished, onFailed}: {asset: As
   };
   return <Modal title="发布到当前空间" onClose={onClose}>
     <p>以下内容将创建为独立公共副本，你是负责人。后续私人修改不会自动同步。</p>
-    <h3>{asset.name} · v{asset.version}</h3><p>{asset.scope}</p><pre className="skill-preview">{asset.body}</pre>
+    <h3>{asset.name}</h3><p>{asset.scope}</p><MarkdownContent text={asset.body}/>
     {(asset.files ?? []).map(file => <details key={file.path}><summary>{file.path}</summary><pre className="skill-preview">{file.content}</pre></details>)}
-    <details><summary>将公开的知识引用（{asset.dependencies.length}）</summary><pre>{JSON.stringify(asset.dependencies, null, 2)}</pre></details>
+    {asset.dependencies.length > 0 && <details><summary>将公开的引用资料（{asset.dependencies.length}）</summary>{asset.dependencies.map(ref => <p key={ref.object_id + ref.path}><KnowledgeReference id={ref.object_id} path={ref.path}/></p>)}</details>}
     <p className="quiet">原始来源备注、私人聊天、记忆和查询结果不会自动复制。请确认正文和附件适合当前空间成员查看。</p>
     <label className="checkbox-label"><input type="checkbox" checked={confirmed} onChange={e => setConfirmed(e.target.checked)}/>我已核对以上公开内容</label>
     {error && <p role="alert" className="error">{error}</p>}

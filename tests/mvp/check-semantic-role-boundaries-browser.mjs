@@ -37,9 +37,14 @@ try {
     const dialog = page.getByRole("dialog");
     await dialog.getByLabel(kind + "名称", { exact: true }).fill(name);
     await dialog.getByLabel(kind === "文档" ? "正文（支持 Markdown 章节）" : "指标口径与计算 SQL", { exact: true }).fill("合成业务说明，验证负责人找回停用对象。");
-    await dialog.getByLabel("关联对象 ID（逗号分隔，可关联多表或字段）", { exact: true }).fill("");
+    while (await dialog.getByRole("button", {name:"移除关联资料"}).count()) await dialog.getByRole("button", {name:"移除关联资料"}).first().click();
     await dialog.getByRole("button", { name: "保存" + kind, exact: true }).click();
     await dialog.waitFor({ state: "detached" });
+    if (kind === "指标") {
+      assert.equal(await page.getByLabel("管理目录名称").inputValue(), "", "新建成功后清除旧名称筛选");
+      assert.equal(await page.getByLabel("管理目录状态").inputValue(), "", "新建成功后清除旧状态筛选");
+      await listed(name).waitFor();
+    }
     await heading(name).waitFor();
     await page.getByRole("button", { name: "停用", exact: true }).click();
     await page.getByRole("button", { name: "启用", exact: true }).waitFor();
@@ -63,20 +68,20 @@ try {
   await listed(owned.value.name).click();
   await heading(owned.value.name).waitFor();
   const maintenance = page.locator(".knowledge-content .semantic-maintainer").first();
-  await until(async () => (await maintenance.innerText()).includes("语义负责人：bob"), "directory records original owner");
+  await until(async () => (await maintenance.innerText()).includes("负责人：bob"), "directory records original owner");
   assert.equal((await h.request("/knowledge/" + owned.value.id + "/maintainer", { operation_id: randomUUID(), expected_version: owned.value.maintenance.version, maintainer_id: "carol" })).status, 200);
-  await until(async () => (await maintenance.innerText()).includes("语义负责人：carol"), "page receives current owner");
+  await until(async () => (await maintenance.innerText()).includes("负责人：carol"), "page receives current owner");
   // 记录短暂回退，避免下一轮轮询恢复后掩盖旧目录覆盖新权限的问题。
   await page.evaluate(() => {
     window.ownershipRegressed = false;
     const content = document.querySelector(".knowledge-content");
     window.ownershipObserver = new MutationObserver(() => {
-      if (content.querySelector(".semantic-maintainer")?.innerText.includes("语义负责人：bob") || [...content.querySelectorAll("button")].some(button => ["编辑", "停用"].includes(button.textContent.trim()))) window.ownershipRegressed = true;
+      if (content.querySelector(".semantic-maintainer")?.innerText.includes("负责人：bob") || [...content.querySelectorAll("button")].some(button => ["编辑", "停用"].includes(button.textContent.trim()))) window.ownershipRegressed = true;
     });
     window.ownershipObserver.observe(content, { childList: true, subtree: true, characterData: true });
   });
   await listed(owned.value.name).click();
-  assert.match(await maintenance.innerText(), /语义负责人：carol/);
+  assert.match(await maintenance.innerText(), /负责人：carol/);
   assert.equal(await page.getByRole("button", { name: "编辑", exact: true }).count(), 0);
   assert.equal(await page.getByRole("button", { name: "停用", exact: true }).count(), 0);
   assert.equal(await page.evaluate(() => { window.ownershipObserver.disconnect(); return window.ownershipRegressed; }), false);
@@ -95,18 +100,18 @@ try {
   await selector.selectOption("carol");
   await dialog.getByRole("button", { name: "保存负责人", exact: true }).click();
   await dialog.waitFor({ state: "detached" });
-  await page.getByText(/语义负责人：carol/).waitFor();
+  await page.locator(".semantic-maintainer").getByText(/负责人：carol/).waitFor();
   checks.push("超级维护者从当前有效成员列表完成转交");
 
   const linked = await h.request("/knowledge", { operation_id: randomUUID(), kind: "document", name: "合成关联对象详情", body: "说明", related_ids: ["table-demo_order_detail"] }, "bob");
   assert.equal(linked.status, 200);
-  // 重新进入默认样例表；内置资料和平台导入有同名表，不能按显示名猜测对象身份。
-  await navigate("工作台"); await navigate("语义管理");
+  // 地址保留上次对象；用已知资料地址明确打开样例表，避免同名来源歧义。
+  await page.goto(h.url + "/#knowledge?object=table-demo_order_detail&scope=tables");
   const table = (await h.request("/knowledge/table-demo_order_detail")).value;
   await heading(table.name).waitFor();
   await page.getByRole("tab", { name: "业务文档", exact: true }).click();
-  const related = page.locator(".semantic-object").filter({ hasText: "合成关联对象详情" });
-  await related.getByRole("button", { name: "打开详情", exact: true }).click();
+  const related = page.locator(".document-reader").filter({ hasText: "合成关联对象详情" });
+  await related.getByRole("button", { name: "打开文档详情", exact: true }).click();
   await heading("合成关联对象详情").waitFor();
   checks.push("关联条目可以进入独立对象完整详情");
 

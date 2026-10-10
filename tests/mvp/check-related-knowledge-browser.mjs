@@ -20,11 +20,11 @@ try{
  await page.goto(h.url);await page.getByLabel('演示登录凭据').fill(h.tokens.alice);await page.getByRole('button',{name:'进入工作台 →',exact:true}).click();
  await page.getByRole('button',{name:/语义管理/}).click();await page.getByRole('heading',{name:'demo_order_detail',exact:true}).waitFor();
  await page.getByRole('tab',{name:'字段语义',exact:true}).click();
- await page.getByRole('heading',{name:/^合成字段 0 v1 打开详情$/}).waitFor({timeout:6000});
+ await page.locator('.field-object > details > summary').filter({hasText:/^合成字段 0尚缺说明查看$/}).waitFor({timeout:6000});
  checks.push('目录首页无关联字段时，表详情单独读取关联对象');
- await page.getByRole('button',{name:'加载更多关联内容',exact:true}).click();await page.getByRole('heading',{name:/^合成字段 104 v1 打开详情$/}).waitFor();
+ await page.getByRole('button',{name:'加载更多关联内容',exact:true}).click();await page.locator('.field-object > details > summary').filter({hasText:/^合成字段 104尚缺说明查看$/}).waitFor();
  for(const [tab,kind] of [['指标 SQL','metric'],['业务文档','document'],['关联与血缘','relationship']]){
-  await page.getByRole('tab',{name:tab,exact:true}).click();await page.getByRole('heading',{name:new RegExp('^合成关联 '+kind+' v1 打开详情$')}).waitFor();
+  await page.getByRole('tab',{name:tab,exact:true}).click();await page.getByRole('heading',{name:new RegExp('^合成关联 '+kind+(kind==='document'?'':' 打开详情')+'$')}).waitFor();
  }
  checks.push('关联对象独立翻页，字段/指标/文档/关系四页签均可见');
  assert.equal((await h.request('/knowledge?related_id=missing')).status,404);

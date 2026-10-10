@@ -1,3 +1,4 @@
+import {discardEditor, expandAsset} from './experience-navigation.mjs';
 import assert from 'node:assert/strict';
 import {mkdir, writeFile} from 'node:fs/promises';
 import {chromium} from 'playwright';
@@ -34,12 +35,12 @@ const holdPublication = async asset => {
     const response = await route.fetch(); held = true;
     await gate; await route.fulfill({response});
   });
-  await card(asset.name).getByRole('button', {name: '发布到空间', exact: true}).click();
+  await expandAsset(card(asset.name)); await card(asset.name).getByRole('button', {name: '发布到空间', exact: true}).click();
   const dialog = page.getByRole('dialog');
   await dialog.getByLabel('我已核对以上公开内容').check();
   await dialog.getByRole('button', {name: '确认发布独立副本'}).click();
   await until(() => held, '发布已提交，回执延迟');
-  await page.keyboard.press('Escape');
+  await discardEditor(page);
   return async () => {
     const response = page.waitForResponse(r => r.url().endsWith(`/assets/${asset.id}/publish`));
     const refreshed = page.waitForResponse(r => r.url().endsWith('/api/assets') && r.request().method() === 'GET');
@@ -73,11 +74,11 @@ try {
   release(); await card(first.name).waitFor({state: 'attached'});
   assert.equal(await initialForm.isVisible(), true);
   assert.equal((await list()).some(a => a.name === '合成列表在途时保存失败'), false);
-  await page.keyboard.press('Escape'); await page.unroute('**/api/assets');
+  await discardEditor(page); await page.unroute('**/api/assets');
   checks.push('一次失败写入不作废仍有效的初始列表，原有记录可见，失败草稿保留');
 
   let finish = await holdPublication(first);
-  await card(second.name).getByRole('button', {name: '发布到空间', exact: true}).click();
+  await expandAsset(card(second.name)); await card(second.name).getByRole('button', {name: '发布到空间', exact: true}).click();
   let dialog = page.getByRole('dialog');
   assert.equal(await dialog.getByLabel('我已核对以上公开内容').isChecked(), false);
   await finish();
@@ -87,7 +88,7 @@ try {
   assert.equal(await dialog.getByRole('button', {name: '确认发布独立副本'}).isDisabled(), true);
   assert.match(await page.getByRole('tab', {selected: true}).innerText(), /^我的 Skill/);
   assert.equal((await list()).some(a => a.name === second.name && a.visibility === 'space'), false);
-  await page.keyboard.press('Escape');
+  await discardEditor(page);
   checks.push('甲的迟到发布不关闭乙预览，不继承确认，不改变当前分类或发布乙');
 
   await page.getByRole('tab', {name: /^我的 Skill/}).click();
@@ -102,7 +103,7 @@ try {
   dialog = await fill('合成关闭后保存');
   await dialog.getByRole('button', {name: '保存', exact: true}).click();
   await until(() => held, '保存已经提交');
-  await page.keyboard.press('Escape');
+  await discardEditor(page);
   await page.getByRole('button', {name: '新增个人 Skill', exact: true}).click();
   dialog = await fill('合成尚未保存的另一草稿');
   release(); await card('合成关闭后保存').waitFor({state: 'attached'});
@@ -110,11 +111,11 @@ try {
   assert.equal(await dialog.getByLabel('名称', {exact: true}).inputValue(), '合成尚未保存的另一草稿');
   assert.equal(await dialog.getByRole('button', {name: '保存', exact: true}).isEnabled(), true);
   assert.equal((await list()).filter(a => a.name === '合成关闭后保存').length, 1);
-  await page.keyboard.press('Escape'); await page.unroute('**/api/assets');
+  await discardEditor(page); await page.unroute('**/api/assets');
   checks.push('关闭编辑后的成功保存仍同步列表，不结束另一草稿或重复创建');
 
   finish = await holdPublication(third);
-  await page.getByRole('tab', {name: /^记忆与纠错/}).click();
+  await page.getByRole('tab', {name: /^个人记忆/}).click();
   await page.getByRole('button', {name: '新增记忆', exact: true}).click();
   dialog = await fill('合成新记忆草稿');
   await finish();
@@ -157,7 +158,7 @@ try {
       const response = await route.fetch(); assert.equal(response.status(), 200);
       stateHeld = true; await stateGate; await route.fulfill({response});
     });
-    await card(second.name).getByRole('button', {name: label, exact: true}).click();
+    await expandAsset(card(second.name)); await card(second.name).getByRole('button', {name: label, exact: true}).click();
     await until(() => stateHeld, label + '已提交，回执延迟');
     await page.getByRole('button', {name: '退出', exact: true}).click();
     await page.getByLabel('演示登录凭据').fill(h.tokens.bob);
@@ -180,7 +181,7 @@ try {
     failureHeld = true; await failureGate;
     await route.fulfill({status: 503, contentType: 'application/json', body: JSON.stringify({code: 'unavailable', message: '合成状态操作故障', request_id: 'synthetic-state-failure', retryable: true})});
   });
-  await card(refreshSkill.name).getByRole('button', {name: '停用', exact: true}).click();
+  await expandAsset(card(refreshSkill.name)); await card(refreshSkill.name).getByRole('button', {name: '停用', exact: true}).click();
   await until(() => failureHeld, '状态操作失败回执延迟');
   await page.getByRole('button', {name: '新增个人 Skill', exact: true}).click();
   dialog = await fill('合成不受旧状态错误影响的草稿');
@@ -188,7 +189,7 @@ try {
   release(); await failureResponse; await page.waitForTimeout(250);
   assert.equal(await dialog.getByRole('alert').count(), 0);
   assert.equal(await dialog.getByLabel('名称', {exact: true}).inputValue(), '合成不受旧状态错误影响的草稿');
-  await page.keyboard.press('Escape'); await page.unroute(failurePattern);
+  await discardEditor(page); await page.unroute(failurePattern);
   checks.push('启用、停用和删除的旧回执不越过页面身份；旧状态失败不污染新编辑');
 
   for (const action of ['save', 'publish']) {
@@ -205,12 +206,12 @@ try {
       dialog = await fill('合成关闭后失败的保存');
       await dialog.getByRole('button', {name: '保存', exact: true}).click();
     } else {
-      await card(refreshSkill.name).getByRole('button', {name: '发布到空间', exact: true}).click();
+      await expandAsset(card(refreshSkill.name)); await card(refreshSkill.name).getByRole('button', {name: '发布到空间', exact: true}).click();
       dialog = page.getByRole('dialog');
       await dialog.getByLabel('我已核对以上公开内容').check();
       await dialog.getByRole('button', {name: '确认发布独立副本'}).click();
     }
-    await until(() => outcomeHeld, '关闭前请求已发出'); await page.keyboard.press('Escape');
+    await until(() => outcomeHeld, '关闭前请求已发出'); await discardEditor(page);
     await page.getByRole('button', {name: '新增个人 Skill', exact: true}).click();
     dialog = await fill('合成后来打开的草稿'); release();
     await page.locator('.asset-operation-note').waitFor({state: 'attached'});
@@ -218,7 +219,7 @@ try {
     assert.match(await page.locator('.asset-operation-note').innerText(), new RegExp(action === 'save' ? '合成关闭后失败的保存' : refreshSkill.name));
     assert.equal(await dialog.getByRole('alert').count(), 0);
     assert.equal(await dialog.getByLabel('名称', {exact: true}).inputValue(), '合成后来打开的草稿');
-    await page.keyboard.press('Escape'); await page.unroute(pattern);
+    await discardEditor(page); await page.unroute(pattern);
     let posts = 0;
     const countPosts = request => { if (request.method() === 'POST' && request.url().includes('/api/assets')) posts++; };
     page.on('request', countPosts);
@@ -246,7 +247,7 @@ try {
   await card('合成保存成功但列表故障').waitFor();
   await until(async () => await page.getByRole('alert').count() === 0, '刷新错误已恢复');
 
-  await card(refreshSkill.name).getByRole('button', {name: '发布到空间', exact: true}).click();
+  await expandAsset(card(refreshSkill.name)); await card(refreshSkill.name).getByRole('button', {name: '发布到空间', exact: true}).click();
   dialog = page.getByRole('dialog'); await dialog.getByLabel('我已核对以上公开内容').check();
   failList = true; await dialog.getByRole('button', {name: '确认发布独立副本'}).click();
   await dialog.waitFor({state: 'detached'}); await page.getByRole('button', {name: '重新加载列表'}).waitFor();

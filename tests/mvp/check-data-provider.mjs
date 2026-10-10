@@ -46,8 +46,9 @@ const provider = createServer(async (req, res) => {
   const body = JSON.parse(raw);
   bytes.push(Buffer.byteLength(raw));
   calls++;
-  assert.equal(body.tools.length, 13);
+  assert.equal(body.tools.length, 14);
   assert.ok(body.tools.some(tool => tool.function.name === 'read'));
+  assert.ok(body.tools.some(tool => tool.function.name === 'execute_query'));
   assert.equal(body.max_tokens, 2048);
   assert.ok(Buffer.byteLength(raw) <= profile.payload_bytes_limit);
   assert.deepEqual(body.thinking, { type: "disabled" });
@@ -236,7 +237,7 @@ try {
       passed,
       calls,
       payloadBytes: bytes,
-      tools: 13,
+      tools: 14,
       mode: "Pi OpenAI protocol via local provider",
       officialRequests: 0,
     }),

@@ -8,7 +8,7 @@ export function AssetDependenciesEditor({dependencies, onChange, disabled}: {
   disabled: boolean;
 }) {
   return <fieldset className="asset-dependencies" disabled={disabled}>
-    <legend>知识依赖</legend>
+    <legend>引用的资料</legend>
     <p>逐条核对引用的当前内容。更新或移除后，请检查正文与附件，再保存；已选用的会话仍需重新选用。</p>
     {dependencies.length > 0 && <p>移除后，该引用不再参与失效检查。请确认正文、范围和附件已不再依赖它。</p>}
     {dependencies.length === 0 && <p>当前没有知识依赖。</p>}
@@ -48,8 +48,7 @@ function DependencyReview({reference, onUpdate, onRemove}: {
   const changed = current !== null && current.version !== reference.version;
   const canUpdate = current?.state === "enabled" && entry !== undefined && changed;
   return <article className="asset-dependency">
-    <h3>{current?.name ?? reference.object_id}</h3>
-    <p>草稿引用 v{reference.version} · <code>{reference.path}</code>{current && <> · 当前 v{current.version}</>}</p>
+    <h3>{current?.name ?? "正在读取引用资料"}</h3>
     {loading && <p role="status">正在读取当前知识…</p>}
     {error && <p className="error">{error}</p>}
     {current && <>
@@ -60,7 +59,7 @@ function DependencyReview({reference, onUpdate, onRemove}: {
     </>}
     {canUpdate && <div className="dependency-update">
       <label className="checkbox-label"><input type="checkbox" checked={confirmed} onChange={e => setConfirmed(e.target.checked)}/>我已核对新版内容及方法适用范围</label>
-      <button disabled={!confirmed} onClick={() => { onUpdate({...reference, version: current.version}); setConfirmed(false); }}>更新引用到 v{current.version}</button>
+      <button disabled={!confirmed} onClick={() => { onUpdate({...reference, version: current.version}); setConfirmed(false); }}>采用核对后的最新内容</button>
     </div>}
     <div className="actions">
       <button disabled={loading} onClick={() => setReadAttempt(value => value + 1)}>重新读取当前知识</button>

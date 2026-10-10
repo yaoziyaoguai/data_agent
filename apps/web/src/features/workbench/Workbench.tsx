@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useLayoutEffect, useState, useRef } from "react";
 import type {
   Snapshot,
   QueryList,
@@ -6,28 +6,36 @@ import type {
 } from "../../../../../packages/contracts/generated/boundary.ts";
 import { api } from "../../shared/api.ts";
 import { WorkspaceShell, type View } from "../../shared/WorkspaceShell.tsx";
+import { Icon } from "../../shared/Icon.tsx";
 import { Modal } from "../../shared/Modal.tsx";
-import { mergeSnapshot } from "./conversation-timeline.ts";
+import { conversationItems, displayUserMessage, mergeSnapshot } from "./conversation-timeline.ts";
 import { SkillSelections } from "./SkillSelections.tsx";
 import { QueryCard } from "./QueryCard.tsx";
 import { AssistantMessage } from "./AssistantMessage.tsx";
+import { ConversationFeed } from "./ConversationFeed.tsx";
+import { ModelSelector } from "./ModelSelector.tsx";
+import { useModelSelection } from "./useModelSelection.ts";
+const creationTime = (value?: string) => value ? new Date(value).toLocaleString("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false }) : "";
 export function Workbench({
   user,
   modelLabel,
   onLogout,
   onView,
+  onManageSkills,
   onEvidence,
 }: {
   user: string;
   modelLabel: string;
   onLogout: () => void;
   onView: (v: View) => void;
-  onEvidence: (id: string) => void;
+  onManageSkills: () => void;
+  onEvidence: (id: string, summary?: string, version?: string) => void;
 }) {
   const [cid, setCid] = useState<string | null>(() =>
     localStorage.getItem("data-agent.conversation." + user),
   );
   const [history, setHistory] = useState<HistoryItem[]>([]);
+  const model = useModelSelection(user, cid);
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
   const [queries, setQueries] = useState<QueryList>({
     queries: [],
@@ -38,9 +46,9 @@ export function Workbench({
   );
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
+  const [syncUnavailable, setSyncUnavailable] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [historySearch, setHistorySearch] = useState("");
-  const [task, setTask] = useState<string | null>(null);
   const [, setRevision] = useState(0);
   const snapshotRef = useRef<Snapshot | null>(null);
   const [historyNext, setHistoryNext] = useState<string | null>(null);
@@ -48,6 +56,12 @@ export function Workbench({
   const [historyBusy, setHistoryBusy] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const textarea = useRef<HTMLTextAreaElement>(null);
+  useLayoutEffect(() => {
+    const input = textarea.current;
+    if (!input) return;
+    input.style.height = "0px";
+    input.style.height = Math.min(160, Math.max(52, input.scrollHeight)) + "px";
+  }, [text]);
   const viewGeneration = useRef(0);
   const activeConversation = useRef(cid);
   const draftRevision = useRef(0);
@@ -88,7 +102,7 @@ export function Workbench({
     setSnapshot(null);
     setQueries({ queries: [], confirmation_blocked: false });
     setError("");
-    setTask(null);
+    setSyncUnavailable(false);
     setText(localStorage.getItem(draftKey(cid)) ?? "");
     if (cid) localStorage.setItem("data-agent.conversation." + user, cid);
     else localStorage.removeItem("data-agent.conversation." + user);
@@ -105,9 +119,10 @@ export function Workbench({
           snapshotRef.current = mergeSnapshot(snapshotRef.current, s);
           setSnapshot(snapshotRef.current);
           setQueries(q);
+          setSyncUnavailable(false);
         }
-      } catch (e) {
-        if (current) setError(e instanceof Error ? e.message : "读取失败");
+      } catch {
+        if (current) setSyncUnavailable(true);
       } finally { refreshing = false; }
     };
     void refresh();
@@ -118,7 +133,7 @@ export function Workbench({
     };
   }, [cid, user]);
   const submit = async () => {
-    if (!text.trim() || sending) return;
+    if (!text.trim() || sending || !model.ready) return;
     setSending(true);
     setError("");
     const input = text.trim();
@@ -139,7 +154,7 @@ export function Workbench({
         "MessageReceipt",
         "/conversations/" + conversation + "/messages",
         "POST",
-        { client_message_id: crypto.randomUUID(), text: input },
+        { client_message_id: crypto.randomUUID(), text: input, ...(model.selection ? { model_selection: model.selection } : {}) },
       );
       if (viewGeneration.current === generation) {
         const nextDraft = draftRevision.current === submittedRevision
@@ -181,20 +196,6 @@ export function Workbench({
       if (viewGeneration.current === generation) setLoadingOlder(false);
     }
   };
-  const cancelTask = async (id: string, version: string) => {
-    if (!cid) return;
-    try {
-      await api(
-        "MutationReceipt",
-        "/conversations/" + cid + "/tasks/" + id + "/cancel",
-        "POST",
-        { operation_id: crypto.randomUUID(), expected_version: version },
-      );
-      setRevision((v) => v + 1);
-    } catch (e) {
-      setError(String(e));
-    }
-  };
   const withdraw = async (message: string) => {
     if (!cid) return;
     try {
@@ -222,7 +223,6 @@ export function Workbench({
       setError(String(e));
     }
   };
-  const messages = snapshot?.messages ?? [];
   const canLoadOlder = snapshot?.has_older;
   const failedInputs =
     snapshot?.events.filter(
@@ -256,27 +256,16 @@ export function Workbench({
   const historyItems = history;
   const side = (
     <>
-      <div className="history-label">
-        最近会话
-        <button
-          aria-label="新对话"
-          onClick={() => {
-            setCid(null);
-            setText(localStorage.getItem(draftKey(null)) ?? "");
-          }}
-        >
-          ＋
-        </button>
-      </div>
+      <div className="history-label">最近对话</div>
       <nav className="history-nav" aria-label="会话历史">
-        {history.slice(0, 8).map((item, index) => (
+        {history.slice(0, 12).map((item, index) => (
           <button
             key={item.id}
             aria-current={cid === item.id ? "true" : undefined}
             onClick={() => setCid(item.id)}
           >
-            <span>◌</span>
             <span>{item.title || "会话 " + (history.length - index)}</span>
+            {item.created_at && <small><time dateTime={item.created_at}>创建于 {creationTime(item.created_at)}</time></small>}
           </button>
         ))}
       </nav>
@@ -291,20 +280,22 @@ export function Workbench({
   return (
     <WorkspaceShell
       user={user}
-      modelLabel={modelLabel}
+      modelLabel={model.models.find(item => item.id === model.selection?.model_id)?.label ?? modelLabel}
       onLogout={onLogout}
       view="workbench"
       onView={onView}
       sidebar={side}
+      title={history.find(item => item.id === cid)?.title || "新对话"}
+      onNewConversation={() => { setCid(null); setText(localStorage.getItem(draftKey(null)) ?? ""); textarea.current?.focus(); }}
     >
       <section
         className={
           "conversation " + (!snapshot?.messages.length ? "empty" : "")
         }
       >
+        <ConversationFeed key={user + ":" + (cid ?? "new")} firstEventSeq={snapshot?.first_event_seq}>
         {!snapshot?.messages.length ? (
           <div className="welcome">
-            <div className="eyebrow">从问题到有依据的分析</div>
             <h1>
               把数据问题，
               <br />
@@ -338,9 +329,25 @@ export function Workbench({
                 加载更早的消息
               </button>
             )}
-            {messages.map((m, i) => (
+            {conversationItems(snapshot, queries.queries).map(item => item.kind === "query" ? (
+              <div key={item.key} className="message assistant query-message">
+                <div className="message-label">Data Agent · 查询</div>
+                <QueryCard query={item.query} onRefresh={() => setRevision(v => v + 1)} onEvidence={onEvidence}/>
+              </div>
+            ) : item.kind === "query_notice" ? (
+              <div key={item.key} className="query-notice" role="status">
+                <span>{item.text} · {item.query.summary}</span>
+                <button className="text-link" onClick={() => {
+                  const target = document.getElementById("query-" + item.query.id);
+                  const previous = target?.closest<HTMLDetailsElement>("details.previous-query");
+                  if (previous) previous.open = true;
+                  target?.scrollIntoView({ block: "start" });
+                  target?.focus({ preventScroll: true });
+                }}>{item.query.execution_state === "succeeded" ? "查看结果" : "查看查询"}</button>
+              </div>
+            ) : (() => { const m = item.message; const display = displayUserMessage(m.text, snapshot.tasks); return (
               <article
-                key={m.message_id ?? m.attempt_id ?? i}
+                key={item.key}
                 className={"message " + m.role}
               >
                 <div className="message-label">
@@ -352,10 +359,10 @@ export function Workbench({
                 {m.role === "assistant" ? (
                   <AssistantMessage text={m.text} />
                 ) : (
-                  <p>{m.text}</p>
+                  <>{display.subject && <small className="reply-subject">针对：{display.subject}</small>}<p>{display.text}</p></>
                 )}
               </article>
-            ))}
+            ); })())}
             {failedInputs.map((e) => (
               <p className="error" key={e.event_id}>
                 这条输入未完成。撤回后可核对旧SQL，或重新补充条件。
@@ -373,87 +380,20 @@ export function Workbench({
             )}
             {snapshot.runs.some((r) => r.state === "cancelled") && (
               <p className="quiet" role="status">
-                本次生成已停止，已保存的任务仍可查看。
+                本次生成已停止，已保存的消息仍可查看。
               </p>
             )}
             {currentRun && (
               <div className="activity" role="status">
                 <i />
-                正在调查并保存结果{" "}
+                正在查阅资料并分析{" "}
                 <button onClick={() => void cancel()}>停止生成</button>
               </div>
             )}
           </div>
         )}
-        {snapshot?.tasks.length ? (
-          <section className="task-results" aria-label="已保存的任务">
-            <div className="task-strip">
-              <span className="eyebrow">
-                分析任务 · {snapshot.tasks.length}
-              </span>
-              {snapshot.tasks.length > 1 && (
-                <select
-                  aria-label="筛选分析任务"
-                  value={task ?? ""}
-                  onChange={(e) => setTask(e.target.value || null)}
-                >
-                  <option value="">查看所有任务</option>
-                  {snapshot.tasks.map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.goal.slice(0, 32)}
-                    </option>
-                  ))}
-                </select>
-              )}
-            </div>
-            {snapshot.tasks
-              .filter((t) => !task || t.id === task)
-              .map((t) => (
-                <details key={t.id} className="task">
-                  <summary>
-                    <strong>{t.goal}</strong>
-                    <span>
-                      条件版本 {t.condition_version} ·{" "}
-                      {t.lifecycle === "cancelled"
-                        ? "已取消"
-                        : t.phase === "waiting_clarification"
-                          ? "等待你的补充"
-                          : "已保存"}
-                    </span>
-                  </summary>
-                  <small>任务 {t.id}</small>
-                  <button
-                    disabled={t.lifecycle === "cancelled"}
-                    onClick={() => draftInput(`[task:${t.id}] `)}
-                  >
-                    继续这个任务
-                  </button>
-                  {t.lifecycle !== "cancelled" && (
-                    <button
-                      onClick={() => void cancelTask(t.id, t.condition_version)}
-                    >
-                      取消这个任务
-                    </button>
-                  )}
-                </details>
-              ))}
-          </section>
-        ) : null}
-        <div className="query-stack">
-          {queries.queries
-            .filter((q) => !task || q.task_id === task)
-            .map((q) => (
-              <QueryCard
-                key={q.id}
-                query={q}
-                blocked={queries.confirmation_blocked || sending}
-                onRefresh={() => setRevision((v) => v + 1)}
-                onRevise={draftInput}
-                onEvidence={onEvidence}
-              />
-            ))}
-        </div>
-        {cid && <SkillSelections key={user + ":" + cid} cid={cid} onManage={() => onView("assets")}/> }
+        </ConversationFeed>
+        {cid && <SkillSelections key={user + ":" + cid} cid={cid} onManage={onManageSkills}/> }
         <div className="composer">
           <label className="sr-only" htmlFor="question">
             你的数据问题
@@ -461,10 +401,11 @@ export function Workbench({
           <textarea
             ref={textarea}
             id="question"
+            maxLength={32000}
             value={text}
             onChange={(e) => changeText(e.target.value)}
-            placeholder="继续提问，或补充、纠正已有任务…"
-            rows={3}
+            placeholder="继续提问，或补充、纠正刚才的内容…"
+            rows={2}
             onKeyDown={(e) => {
               if (
                 e.key === "Enter" &&
@@ -477,21 +418,25 @@ export function Workbench({
             }}
           />
           <div className="composer-footer">
-            <span>Enter 发送 · Shift + Enter 换行</span>
+            <div className="composer-tools"><button className="skill-selection-trigger" aria-label="＋ 选用分析方法" onClick={onManageSkills}><Icon name="spark"/><span>分析方法</span></button><ModelSelector models={model.models} selection={model.selection} disabled={sending || model.busy} onChange={selection => void model.change(selection)} /></div>
             <button
-              disabled={sending || !text.trim()}
+              aria-label={sending ? "保存中…" : "发送 ↑"}
+              className="send-button"
+              disabled={sending || !model.ready || !text.trim()}
               onClick={() => void submit()}
             >
-              {sending ? "保存中…" : "发送 ↑"}
+              {sending ? "…" : <Icon name="up"/>}
             </button>
           </div>
         </div>
+        {model.error && <p role="alert" className="error model-selection-error">{model.error} <button className="text-link" onClick={() => void model.reload()}>重新读取</button></p>}
+        {syncUnavailable && <p className="quiet conversation-sync" role="status">暂时无法更新对话，正在重试…</p>}
         {error && (
           <p role="alert" className="error">
             {error}
           </p>
         )}
-        <p className="footnote">合成资料 · {modelLabel} · 新查询始终由你确认</p>
+        <p className="footnote">Enter 发送 · Shift + Enter 换行</p>
         {deleteId && (
           <Modal title="删除这个会话？" onClose={() => setDeleteId(null)}>
             <p>
@@ -515,29 +460,13 @@ export function Workbench({
                 onChange={(e) => setHistorySearch(e.target.value)}
               />
             </label>
-            <nav className="history-dialog">
-              {historyItems.map((item) => (
-                <button
-                  key={item.id}
-                  onClick={() => {
-                    setCid(item.id);
-                    setShowHistory(false);
-                  }}
-                >
-                  {item.title ?? "会话 " + item.id.slice(0, 8)}
-                  <small>{item.id}</small>
-                </button>
-              ))}
+            <nav className="history-dialog" aria-label="全部会话">
+              {historyItems.map(item => <div className="history-row" key={item.id}><button onClick={() => { setCid(item.id); setShowHistory(false); }}><span>{item.title || "未命名会话"}</span>{item.created_at && <small><time dateTime={item.created_at}>创建于 {creationTime(item.created_at)}</time></small>}</button><button className="history-delete" aria-label={"删除会话 " + (item.title || "未命名会话")} onClick={() => setDeleteId(item.id)}>删除</button></div>)}
             </nav>
+            {!historyItems.length && !historyBusy && <p className="quiet">没有找到符合条件的会话，请调整搜索词。</p>}
             {historyNext && <button disabled={historyBusy} onClick={() => void refreshHistory(historySearch, historyNext).catch(e => setError(e.message))}>加载更多会话</button>}
             {historyBusy && <p role="status">正在查找会话…</p>}
-            <div className="actions">
-              {historyItems.map((item) => (
-                <button key={item.id} onClick={() => setDeleteId(item.id)}>
-                  删除会话 {item.title ?? item.id.slice(0, 8)}
-                </button>
-              ))}
-            </div>
+
           </Modal>
         )}
       </section>

@@ -85,9 +85,8 @@ if(stage==='collect-pilot'){
    await page.goto(webUrl);await page.getByLabel('演示登录凭据').fill(tokens.alice);await page.getByRole('button',{name:'进入工作台 →',exact:true}).click();
    await page.getByRole('button',{name:/查看全部会话/}).click();
    await page.getByRole('dialog').getByRole('button',{name:/请算2026年1月净收入/}).first().click();
-   await page.getByRole('button',{name:'执行查询',exact:true}).last().click();
-   await page.getByRole('button',{name:'查看结果',exact:true}).last().waitFor({timeout:120000});
-   await page.getByRole('button',{name:'查看结果',exact:true}).last().click();
+   await page.getByLabel('你的数据问题').fill('执行上面这条');
+   await page.getByRole('button',{name:'发送 ↑',exact:true}).click();
    await page.getByRole('table').waitFor();
    await page.screenshot({path:directory+'/real-query.png',fullPage:true});
    active.result=await request('/queries/'+query.id+'/results');

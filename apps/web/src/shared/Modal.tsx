@@ -3,25 +3,36 @@ export function Modal({
   title,
   onClose,
   children,
+  closeLabel,
+  className,
+  footer,
 }: {
   title: string;
   onClose: () => void;
   children: ReactNode;
+  closeLabel?: string;
+  className?: string;
+  footer?: ReactNode;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => {
+    const dialog = ref.current;
     const prior = document.activeElement;
-    ref.current?.showModal();
+    dialog?.showModal();
     return () => {
-      ref.current?.close();
-      if (prior instanceof HTMLElement) prior.focus();
+      // 卸载时 ref 已清空，仍需关闭原节点才能恢复外层焦点。
+      dialog?.close();
+      if (prior instanceof HTMLElement) prior.focus({ preventScroll: true });
     };
   }, []);
   return (
     <dialog
       ref={ref}
+      className={"modal " + (className ?? "")}
+      aria-label={title}
       onCancel={(e) => {
         e.preventDefault();
+        e.stopPropagation();
         onClose();
       }}
       onClick={(e) => {
@@ -30,11 +41,12 @@ export function Modal({
     >
       <div className="modal-head">
         <h2>{title}</h2>
-        <button aria-label="关闭" onClick={onClose}>
-          ×
+        <button aria-label={closeLabel ?? "关闭"} onClick={onClose}>
+          {closeLabel ?? "×"}
         </button>
       </div>
-      {children}
+      <div className="modal-body">{children}</div>
+      {footer && <div className="modal-footer">{footer}</div>}
     </dialog>
   );
 }

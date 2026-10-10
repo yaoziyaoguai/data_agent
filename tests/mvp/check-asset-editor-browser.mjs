@@ -1,3 +1,4 @@
+import {discardEditor, expandAsset} from './experience-navigation.mjs';
 import assert from 'node:assert/strict';
 import {harness, until} from './harness.mjs';
 import {chromium} from 'playwright';
@@ -25,6 +26,7 @@ try {
   await page.getByRole('button', {name: '进入工作台 →'}).click();
   await page.getByRole('navigation', {name: '主导航'}).getByRole('button', {name: /我的积累/}).click();
   await page.getByRole('tab', {name: /^空间公共 Skill/}).click();
+  await page.getByRole('button',{name:'从我的 Skill 发布',exact:true}).click();
   let form = await open('公共入口的私人方法');
   await form.getByRole('button', {name: '保存', exact: true}).click();
   await form.waitFor({state: 'detached'});
@@ -46,8 +48,9 @@ try {
   await form.getByRole('button', {name: '保存', exact: true}).click();
   await until(() => intercepted, '保存已经提交但响应被延迟');
   assert.equal(await form.getByLabel('名称', {exact: true}).isDisabled(), true);
+  await form.getByText('补充说明与报告模板（可选）', {exact:true}).click();
   assert.equal(await form.getByRole('button', {name: '添加文本附件'}).isDisabled(), true);
-  await page.keyboard.press('Escape');
+  await discardEditor(page);
   form = await open('第二份未保存草稿');
   const oldResponse = page.waitForResponse(r => r.request().method() === 'POST' && r.request().postDataJSON()?.name === '第一份慢保存');
   release(); await oldResponse;
@@ -72,14 +75,14 @@ try {
   form = await open('旧编辑的失败回执');
   await form.getByRole('button', {name: '保存', exact: true}).click();
   await until(() => failureArrived, '旧编辑失败响应被延迟');
-  await page.keyboard.press('Escape');
+  await discardEditor(page);
   form = await open('不受旧失败影响的草稿');
   const oldFailure = page.waitForResponse(r => r.request().method() === 'POST' && r.request().postDataJSON()?.name === '旧编辑的失败回执');
   release(); await oldFailure; await page.waitForTimeout(250);
   assert.equal(await form.getByLabel('名称', {exact: true}).inputValue(), '不受旧失败影响的草稿');
   assert.equal(await form.getByRole('alert').count(), 0);
   assert.equal(await form.getByRole('button', {name: '保存', exact: true}).isEnabled(), true);
-  await page.keyboard.press('Escape'); await page.unroute('**/api/assets');
+  await discardEditor(page); await page.unroute('**/api/assets');
   checks.push('旧编辑的失败回执不把错误或忙碌状态带到新的草稿');
 
   const operations = [];

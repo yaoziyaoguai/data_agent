@@ -58,7 +58,7 @@ try {
   const original = (await h.request("/knowledge/" + table)).value;
   await login("bob");
   await page
-    .getByText(/语义负责人：carol/)
+    .getByText(/负责人：carol/)
     .first()
     .waitFor();
   assert.equal(
@@ -140,7 +140,7 @@ try {
     .fill("负责人编辑确认：每行是订单商品明细，按联合键识别");
   await page.getByLabel("已核对当前版本与共享依据").check();
   await page
-    .getByRole("button", { name: "保存为正式新版本", exact: true })
+    .getByRole("button", { name: "保存正式内容", exact: true })
     .click();
   await page.getByRole("dialog").waitFor({ state: "detached" });
   await card.getByText("已保存到正式语义", { exact: true }).waitFor();

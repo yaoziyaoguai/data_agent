@@ -1,3 +1,4 @@
+import {navigateWorkspace} from './experience-navigation.mjs';
 import assert from "node:assert/strict";
 import { writeFile, mkdir } from "node:fs/promises";
 import { chromium } from "playwright";
@@ -31,11 +32,11 @@ try {
   await page.getByRole("heading", { name: "把数据问题， 说清楚。" }).waitFor();
   await screenshot("welcome-desktop");
   await send("查2026年1月净收入");
-  await page.getByRole("button", { name: "执行查询", exact: true }).waitFor();
-  const sql = page.getByRole("region", { name: /SQL草稿版本/ }).first();
+  await page.getByRole("heading", { name: "SQL 已准备好", exact: true }).waitFor();
+  const sql = page.getByRole("region", { name: /^查询：/ }).first();
   assert.match(await sql.locator("pre").innerText(), /is_test = 0/);
   await page.reload();
-  await page.getByRole("button", { name: "执行查询", exact: true }).waitFor();
+  await page.getByRole("heading", { name: "SQL 已准备好", exact: true }).waitFor();
   await screenshot("sql-desktop");
   check("正式页面登录、提问、展示完整SQL，刷新接回待确认草稿");
   let releaseSave;
@@ -58,27 +59,24 @@ try {
   assert.equal(await page.getByLabel("你的数据问题").inputValue(),"保存期间写下的新草稿");
   await page.getByLabel("你的数据问题").fill("");
   check("同会话保存回执迟到时不清掉新草稿，刷新后仍保留");
-  await page.getByRole("button", { name: "执行查询", exact: true }).click();
-  await page.getByRole("button", { name: "查看结果", exact: true }).waitFor();
-  await page.getByRole("button", { name: "查看结果", exact: true }).click();
+  await send("执行这条");
   await page.getByRole("cell", { name: "12400", exact: true }).waitFor();
-  await page.getByRole("button", { name: "图表", exact: true }).click();
-  await page.getByRole("img", { name: "查询结果柱状图" }).waitFor();
+  assert.equal(await page.getByRole("button", { name: "图表", exact: true }).isDisabled(),true,'两列金额不能互作分类和指标');
   const downloadPromise = page.waitForEvent("download");
-  await page.getByRole("link", { name: /导出此查询/ }).click();
+  await page.getByRole("link", { name: /下载 CSV/ }).click();
   const download = await downloadPromise;
   assert.match(download.suggestedFilename(), /csv$/);
   assert.equal(await download.failure(), null);
   await screenshot("result-desktop");
-  check("用户确认后取数，独立参考12400分、图表与同查询CSV可读取");
+  check("聊天确认后取数，独立参考12400分、双金额不误绘图、同查询CSV可读取");
   await send("查2026年1月支付客户数");
-  await page.getByRole("button", { name: "执行查询", exact: true }).waitFor();
+  await page.getByRole("heading", { name: "SQL 已准备好", exact: true }).waitFor();
   assert.equal(
-    await page.getByRole("region", { name: /SQL草稿版本/ }).count(),
+    await page.getByRole("region", { name: /^查询：/ }).count(),
     2,
   );
   await page.getByLabel("你的数据问题").fill("未发送的补充");
-  await page.getByRole("button", { name: "语义管理", exact: false }).click();
+  await navigateWorkspace(page,"语义管理");
   await page.getByRole("heading", { name: "语义管理", exact: true }).waitFor();
   await page
     .locator(".object-list button")
@@ -113,6 +111,7 @@ try {
   await until(async()=>await preferenceSwitch.getAttribute("aria-checked")==="false","常用范围已关闭");
   assert.doesNotMatch(await searchTable.innerText(),/常用/);
   await page.getByLabel("搜索语义对象").fill("");
+  await page.getByRole('heading', {name: 'demo_order_detail', exact: true}).waitFor();
   check("常用表开关持久保存、目录标识更新，晚到旧轮询不回退配置，关闭仍保留语义");
   let releaseOldKnowledge;
   let oldKnowledgeArrived;
@@ -130,15 +129,16 @@ try {
   await description
     .getByRole("button", { name: "保存修改", exact: true })
     .click();
-  await description.getByText("人工修改", { exact: true }).waitFor();
+  await description.locator('.entry-value').filter({hasText: /^人工核对：订单商品行$/}).waitFor();
+  assert.ok((await h.request("/knowledge/table-demo_order_detail")).value.entries.find(e => e.label === "表含义").human_override);
   releaseOldKnowledge();
   await page.waitForTimeout(250);
   assert.equal(await description.locator(".entry-value").innerText(), "人工核对：订单商品行");
   check("保存后旧轮询响应晚到不回退语义值和版本");
   await page.getByRole("tab", { name: "字段语义", exact: true }).click();
-  assert.ok((await page.locator(".semantic-object details").count()) > 1);
+  assert.ok((await page.locator(".field-object details").count()) > 1);
   await page
-    .locator(".semantic-object details")
+    .locator(".field-object details")
     .first()
     .locator(":scope > summary")
     .click();
@@ -150,9 +150,10 @@ try {
     .click();
   await until(async () => await page.getByLabel("你的数据问题").inputValue() === "未发送的补充", "draft restored");
   check("页面切换保留当前对话及未发送草稿");
-  await page.getByRole("button", { name: "我的积累", exact: false }).click();
+  await navigateWorkspace(page,"我的积累");
   await page.getByRole("tab", { name: /我的 Skill/ }).click();
   await page.getByRole("button", { name: "新增个人 Skill", exact: true }).click();
+  await page.getByRole('button', {name: '使用收入概览示例', exact: true}).click();
   await page.getByLabel("名称", { exact: true }).fill("渠道分析方法");
   await page.getByLabel("适用范围与例外").fill("订单收入分析");
   await page.getByRole("button", { name: "保存", exact: true }).click();
@@ -172,7 +173,7 @@ try {
       () => document.documentElement.scrollWidth <= window.innerWidth,
     ),
   );
-  await page.getByRole("button", { name: "我的积累", exact: false }).click();
+  await navigateWorkspace(page,"我的积累");
   await page.getByRole("heading", { name: "我的积累", exact: true }).waitFor();
   await page.getByRole("tab", { name: /我的 Skill/ }).click();
   await page.getByRole("heading", { name: "渠道分析方法" }).waitFor();
@@ -182,7 +183,7 @@ try {
       () => document.documentElement.scrollWidth <= window.innerWidth,
     ),
   );
-  await page.getByRole("button", { name: "语义管理", exact: false }).click();
+  await navigateWorkspace(page,"语义管理");
   await page.locator(".object-list button").filter({ hasText: "demo_order_detail" }).click();
   await page.getByRole("heading", { name: "demo_order_detail", exact: true }).waitFor();
   await page.getByText("人工核对：订单商品行", { exact: true }).waitFor();
