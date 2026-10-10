@@ -1,0 +1,174 @@
+{
+  "schema": 1,
+  "increment_id": "I2-WORKSPACE-ROLE",
+  "reviewer": "correctness /root/conversation_experience_review；未参与本轮产品、正式测试、CURRENT或设计实现，仅写本审查记录与范围核对证据。",
+  "reviewed_at": "2026-10-09T07:21:59.233580+00:00",
+  "base_head": "d84cb41241209fc465eb507cc3897c53717f1140",
+  "baseline": ".local/workspace-role/before/",
+  "conclusion": "passed",
+  "scope_sha256": "cf1d2e83709f7d5923b62eb5ac5d8b82009120340ababbdb497e35472c76c2cb",
+  "summary": "本轮局部独立审查通过，未发现确定性正确性阻断。最高语义角色来自服务端当前空间的可信超级角色和已提交根对象归属；独立对象负责人即使失去创建资格仍显示维护者。原can_admin/can_create及动作授权规则未改。角色组件通过用户/页面key重新挂载、请求代次和卸载标记隔离旧回执；读取失败显示不可用，不降级猜测。已核对同源Schema和生成类型、6组浏览器展示及6组原归属回归，查看1440/390截图；219项同源契约和工程日志没有发现错误。主任务仍需完成本冻结范围的3组统一验收。",
+  "requirements_reviewed": {
+    "C02": "SemanticAccess从宿主AccessContext读取user_id与space_id；超级角色按当前空间配置，根对象查询同时约束space_id、maintainer_id与authority_id=object_id。新增摘要不写授权表、不决定创建/编辑/转交或平台数据权限。",
+    "C08": "用户名旁显示普通用户、语义维护者、超级维护者三种最高角色。进入页面、回到窗口及可见时定时读取；加载与失败有独立显示。换用户/导航卸载旧组件，请求代次拒绝晚到旧角色。"
+  },
+  "changed_files_reviewed": [
+    "apps/web/src/shared/WorkspaceRole.tsx",
+    "apps/web/src/shared/WorkspaceShell.tsx",
+    "apps/web/src/style.css",
+    "crates/data-agent/src/modules/access/mod.rs",
+    "crates/data-agent/src/modules/access/store.rs",
+    "crates/data-agent/src/use_cases/semantic_governance.rs",
+    "docs/architecture/implementation-design.md",
+    "docs/architecture/knowledge-modules.md",
+    "docs/semantic-retrieval-design.md",
+    "packages/contracts/generated/boundary.rs",
+    "packages/contracts/generated/boundary.ts",
+    "packages/contracts/openapi.json",
+    "packages/contracts/schema.json",
+    "tests/contracts/cases.json",
+    "tests/mvp/check-creator-ownership.mjs",
+    "tests/mvp/check-workspace-role-browser.mjs"
+  ],
+  "supporting_files_read": [
+    "AGENTS.md",
+    "docs/CURRENT.md",
+    "apps/api/src/semantic_routes.rs",
+    "apps/web/src/shared/api.ts",
+    "apps/web/src/main.tsx",
+    "tests/mvp/harness.mjs",
+    "scripts/check_delivery.py"
+  ],
+  "implementation_boundaries": {
+    "modules": [
+      "M01",
+      "M12"
+    ],
+    "new_agent_loop_or_pi_capability": false,
+    "pi_reuse_assessment": "manifest中全部apps/agent文件与开工前同哈希；仅增加只读身份摘要及展示，没有Agent、工具、会话、Skill、压缩或模型改动。",
+    "permission_change": false,
+    "schema_change": "SemanticAccess增加必填highest_role枚举user|maintainer|super_maintainer；OpenAPI继续引用同源Schema，Rust/TypeScript从同源生成；未知或缺失角色不能通过边界解码。",
+    "store_ownership": "has_maintenance_snapshot_in_tx仅在M01私有store中读取semantic_ownership，组合层调用公开操作，没有跨模块裸SQL或新的授权写入入口。",
+    "snapshot_semantics": "角色是最近一次已提交授权快照的展示摘要；实际变更继续在原事务内重验授权。"
+  },
+  "findings": [],
+  "resolved_findings": [],
+  "code_paths_checked": [
+    "is_super_maintainer优先于其他类别；can_create继续复用原快照操作，非超级表维护者可显示maintainer，独立对象根归属单独补判。",
+    "其他空间的归属被space_id条件排除；null负责人不匹配，字段继承关系不能凭子对象记录自成根归属。",
+    "WorkspaceRole不接收或提交角色声明；api使用原SemanticAccess解码。失败清掉旧显示并标为角色暂不可用，不能伪装成普通用户。",
+    "WorkspaceShell以user:view为key挂载角色组件；effect卸载置active=false并清理定时器/事件监听。每次读取递增request，旧成功和旧失败都不能覆盖新响应。",
+    "页面隐藏时暂停定时读取，返回窗口或visibilitychange触发更新；可见页面30秒轮询，导航重新挂载立即读取。"
+  ],
+  "acceptance_changes_reviewed": [
+    "原SemanticAccess精确对象断言仅补新增highest_role字段，can_admin/can_create和创建/转交/撤销/回滚/隔离预期不变。",
+    "契约新增普通用户、独立对象负责人但无创建资格、超级维护者正例，以及缺失字段和未知枚举反例；原创建资格缺失反例仍无效。",
+    "新浏览器检查先让真实API返回旧角色，再截留并晚到释放；覆盖当前身份撤权后和切换用户后旧回执，不用前端伪造成功角色替代授权验证。"
+  ],
+  "implementation_evidence_inspected": [
+    {
+      "path": ".local/checks/workspace-role/report.json",
+      "passed": true,
+      "checks": [
+        "普通用户与超级维护者由服务端识别；其他空间的归属不提升当前角色，换用户不沿用旧身份",
+        "已同步的表负责人显示语义维护者，三个主入口都显示角色，三类身份在1440/390画面无横向溢出",
+        "仅负责独立文档的人仍显示维护者；不能创建新对象或编辑他人的表，角色摘要不扩大权限",
+        "撤销最后一个负责对象后刷新为普通用户，晚到的旧维护者响应不能覆盖新角色",
+        "角色读取失败明确显示暂不可用，恢复读取后显示真实角色",
+        "退出换用户后，即使上一用户的超级维护者响应晚到，也不能污染当前身份标识"
+      ],
+      "page_errors": [],
+      "official_model_requests": 0
+    },
+    {
+      "path": ".local/checks/creator-ownership.json",
+      "passed": 6,
+      "checks": [
+        "creation eligibility comes from current-space Datasight table maintainers; ordinary users and forged ownership are denied",
+        "each independent kind belongs to its creator; references grant no table authority; concurrent replay creates one version",
+        "admin transfer and revocation survive create replay; independent ownership does not grant pool membership",
+        "creation, ownership, version, index job and operation receipt roll back together",
+        "upgrade assigns untouched human-created records, preserves explicit transfer/revocation, and leaves imported objects alone",
+        "table handover updates pool eligibility without transferring independent objects"
+      ],
+      "environment": "isolated MySQL and synthetic platform; no model calls"
+    },
+    {
+      "path": ".local/workspace-role/code-contracts.log",
+      "result": "已读取fmt、clippy、TypeScript、Web构建、生成器一致性及Rust/TypeScript 219项同源契约通过日志；最终统一验收另行执行。"
+    },
+    {
+      "path": ".local/workspace-role/materials.log",
+      "result": "312项材料静态核对通过；不据此宣布业务完成。"
+    }
+  ],
+  "independent_work": {
+    "runtime_tests_executed": false,
+    "method": "按开工快照逐行检查16份本轮实现/契约/测试/文档，追踪角色判定、UI读取与乱序回执路径；读取正式测试完整断言与结果，查看桌面和390px实际截图。未重做前两轮完整审查，未调用模型或修改用户试用数据。",
+    "scope_evidence": ".local/workspace-role-review/scope-check.json",
+    "manifest_files": 528,
+    "unchanged_manifest_files": 513,
+    "prior_review_records_unchanged": true,
+    "screenshots_viewed": [
+      ".local/checks/workspace-role/maintainer-1440.png",
+      ".local/checks/workspace-role/super-maintainer-390.png"
+    ]
+  },
+  "reviewed_file_sha256": {
+    "apps/web/src/shared/WorkspaceRole.tsx": "54a7b15c1fb6b3c8583b397291732e95156664a3862b2ab1d769c76b3f9a45b6",
+    "apps/web/src/shared/WorkspaceShell.tsx": "ecb5042fd5f0f4c373cb86493563eb5dcd693e9f35546ab6a183ff470943bf6d",
+    "apps/web/src/style.css": "92419907969e6e78d534a65adbebce415e2ba202c270145f6f451f55644f3e72",
+    "crates/data-agent/src/modules/access/mod.rs": "5e0bf1cc8f4e52f765ce149b91cf547900cfb176601c92303a8ababe6f0295c6",
+    "crates/data-agent/src/modules/access/store.rs": "4538af18b16f72822c7df704e2f68754d304369180ee90be0da0a6cd6361c8e6",
+    "crates/data-agent/src/use_cases/semantic_governance.rs": "80eb5daffe5c84a4a5d34e178b9dc23bb3b3c7a2a2118d4ae421095fc6f78e2c",
+    "docs/architecture/implementation-design.md": "138294d463aef85ba9d3971c02c97321bd6eb8f48abd512f795e39cdfb11f738",
+    "docs/architecture/knowledge-modules.md": "1ef4129564c8d3136e46d2d257c93484ae70dd49c6ece82d067fdc1d1efbd072",
+    "docs/semantic-retrieval-design.md": "ef1bf101fb98781fa74c0e3f60d9994000b7b2e91598ca73ae2e4db89117461c",
+    "packages/contracts/generated/boundary.rs": "ac40058ed1c471e14b41910a0a79fdcbc69ade6f084ed53c2bb2b1b6cb819d06",
+    "packages/contracts/generated/boundary.ts": "9bf2d211933c13a68038fa02f5e2aa81949fd0289a6386608716ab337f6e7f20",
+    "packages/contracts/openapi.json": "84e9db68513bea5037b38cb616346065b9e020c9327156b1bc348eace63c01af",
+    "packages/contracts/schema.json": "5e519506126f4e46d8336de949bba0bd32211eefa15bd87d4ae16542a6d8150f",
+    "tests/contracts/cases.json": "de47d8ebe7b9cd85cd49455936e36ee0945cbcbdea2dffc93f8fc86fceda726c",
+    "tests/mvp/check-creator-ownership.mjs": "6c7ab7db2c9584da347b683e8ebd1da29c9cf28e29749ae7193a0826edba90e3",
+    "tests/mvp/check-workspace-role-browser.mjs": "75a6406ae8c846269700bd5f662d14e2d49a8c1206078a6d3bb96db91164c031"
+  },
+  "baseline_file_sha256": {
+    "apps/web/src/shared/WorkspaceShell.tsx": "9b64021a15ec7bba62d8634f40e00e0cc2dfa1f9fcc695d5126c1b713fed3a41",
+    "apps/web/src/style.css": "4434f08934c7070c38a6485ed1581ea85a3b09eb3b6f662820d05dad3319ffeb",
+    "crates/data-agent/src/modules/access/mod.rs": "2862827238a1dfc4dfa8350174324f912ea7b2ecdc5dcf6fe6b8ee1c17c42b69",
+    "crates/data-agent/src/modules/access/store.rs": "38b476099eec74595823c3412ff77854502c8fa09b15324ba0cbe409b0981368",
+    "crates/data-agent/src/use_cases/semantic_governance.rs": "c79ec9b6316b4fa4684fa6bd40f76a512e933df9bac8623da31e0e4030413d2b",
+    "docs/architecture/implementation-design.md": "ac0f487f6f086995550a9034a0cdd5f4cf1c7266d30e651f6bf457caab917ab2",
+    "docs/architecture/knowledge-modules.md": "f1487b40e1744bc573d837c02829c2bc4a7dfa9ede223d68cf835d3fcfb86f2e",
+    "docs/semantic-retrieval-design.md": "458168d8af1f6a1d21cdea8ec61896c97588d87c315073747c75d6708676791a",
+    "packages/contracts/generated/boundary.rs": "71167170c51b69bb4849b3e0eca8be701ccad318eba46038284ade882953d9be",
+    "packages/contracts/generated/boundary.ts": "29561a1187994c9e074ab25da71b20a7e9dae7f15876bb81ead470c615eacde4",
+    "packages/contracts/openapi.json": "ef5a51d8e0358e968796d1531a127ff9c3725799376b21ccba14428453fc4395",
+    "packages/contracts/schema.json": "2779ee204100a22259e6b059c57047647309dd36cae591125e9df5954eb9efa6",
+    "tests/contracts/cases.json": "c20f4c8413e47f4c4c4f02d82fb8f03220616ce8a5a7a10e97481b9737e50408",
+    "tests/mvp/check-creator-ownership.mjs": "1304f26685afb2ae8231614edf869df6fd5a9f21ba291a0a092fbdc6b51f2cce"
+  },
+  "evidence_sha256": {
+    ".local/workspace-role/before/manifest.json": "df8016cd220263e5d47b4dcabfb91550ce540ea6ecffa2fa25ecaf278deb8f11",
+    ".local/workspace-role-review/scope-check.json": "b778f9b105d10b864fa5d020755f72e94d76546222c4962dcf3f62d403cef424",
+    ".local/checks/workspace-role/report.json": "521ed20a9a9bd168f36880eb397dc6ef880180e3da8ade239ed92752b7f9111e",
+    ".local/checks/creator-ownership.json": "7861f3f97a020da619f6355913038f956828d9ebce8f9e0929b01c8defec5a59",
+    ".local/workspace-role/browser.log": "050e338db102e990ae089693dab325bea52f12583e505adb4ff43eadaf1e72e3",
+    ".local/workspace-role/ownership.log": "8cbabb3ad4cd64c0b9d37d23e467c4bc8f937942940250f334b17d4ee32990ce",
+    ".local/workspace-role/code-contracts.log": "b4fd294258cd1eda8610cce073560ff40c3dbea93363972c4d77ffdcaea1b469",
+    ".local/workspace-role/materials.log": "cdbe28c690f2980368dd1fa98953c4adf0b9c3e5bf71ef6fcc4daeb805f187f4",
+    ".local/checks/workspace-role/maintainer-1440.png": "095b5d2d8898b3ef8e2c741a20000a4f328f12f6bc4526e6582f1572e84dfd4f",
+    ".local/checks/workspace-role/super-maintainer-390.png": "174c1764ba72cd398d78d87b31a85ec4301eea1a2729cfc4ed04a5847e136b83"
+  },
+  "residual_risks": [
+    "角色是最近一次读取的显示摘要；可见页面每30秒触发轮询，窗口/导航也触发刷新，收到当前回执后才反映变更。动作授权不依赖此标签。",
+    "本轮运行证据使用隔离MySQL、合成平台和开发登录身份；未验证真实Datasight或生产身份接入。该展示能力不涉及模型，无新增模型调用。"
+  ],
+  "testing_gaps": [
+    "主任务仍需在当前冻结指纹下完成ROLE-DISPLAY、OWNERSHIP、CONTRACT-CODE三组make verify-increment；独立审查与定向报告不替代统一验收收据。"
+  ],
+  "reviewer_write_scope": [
+    "docs/reviews/workspace-role-review.json",
+    ".local/workspace-role-review/"
+  ]
+}

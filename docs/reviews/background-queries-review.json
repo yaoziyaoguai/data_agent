@@ -1,0 +1,270 @@
+{
+  "schema": 1,
+  "increment_id": "I2-BACKGROUND-QUERIES",
+  "reviewer": "correctness /root/conversation_experience_review；未参与产品、正式测试、CURRENT或设计实现，仅写独立审查记录与隔离验证材料。",
+  "reviewed_at": "2026-10-09T10:04:17.279301+00:00",
+  "base_head": "d84cb41241209fc465eb507cc3897c53717f1140",
+  "baseline": ".local/background-queries/before/manifest.json",
+  "conclusion": "passed",
+  "scope_sha256": "2020863059593331c00596e16e36c62d2239704e610e73328a98e6eae8e3549a",
+  "summary": "本冻结范围的独立正确性审查通过，无剩余确定性阻断。后台查询仍使用现有Rust查询流程和同一Pi SDK会话；新增终态通知、10行预览及固定输入布局，并修复本地取消缺通知、领取饥饿、阅读锚点、短屏、旧稿定位、方法长列表和同步错误恢复边界。已独立运行无数据库Chromium检查、时间线检查及包含成功/取消竞争的隔离宿主检查；也逐项读取实现方最终7组后台浏览器、3组后台状态和10组查询边界断言及结果。主任务仍须在同一冻结范围完成7项统一验收与常驻服务核对，不能用本记录代替这些步骤。",
+  "requirements_reviewed": {
+    "C01": "Pi SDK仍负责唯一Agent循环和会话续接。查询领取只调整已有SQL排序，不增加Agent循环、线程、服务或通用调度器；正式浏览器核对多轮检查点只有一个Pi session_id。",
+    "C02": "查询读、取消和结果仍经原身份/会话与平台边界；独立宿主检查跨用户取消返回404。页面预览、CSV及通知不授予新权限。",
+    "C04": "保持上一增量已确认的聊天执行授权和只读/版本规则；停止只作用目标查询。平台实际成功优先于应用尚未查证的取消请求，不能将已成功查询伪报为取消。",
+    "C05": "取消与通知在同事务完成，重复Pi工具回放及HTTP停止只保留一次事件。领取保持查询身份、原预算、租约代次和行锁；没有重提交已取消或已完成查询。",
+    "C08": "运行查询紧凑显示并可展开SQL，输入可继续使用；终态通知可回到对应组件。桌面、手机、短视口、长方法列表和折叠旧稿的交互边界有对应验证。",
+    "D03": "同一对话可以持续多轮、多项查询；刷新和API/Worker重启保持查询身份及草稿。补历史按事件合并，查询原事件尚未加载时暂置顶部的限制已明确记录。",
+    "D09": "查询独立运行、反序完成不串SQL或参数。终态事件按稳定查询身份去重；平台结果沿原结果消息唤醒Pi，本地取消没有结果不另唤醒模型。",
+    "D14": "QueryCard只将表格/图表展示切片为10行；原结果接口分页与CSV读取保持。25/5/0行预览为10/5/0行，下载仍25/5/0行；合成平台1000行上限、精确数字、空结果、失败及过期明确呈现。"
+  },
+  "changed_files_reviewed": [
+    "docs/CURRENT.md",
+    "apps/web/src/features/workbench/QueryCard.tsx",
+    "apps/web/src/features/workbench/Workbench.tsx",
+    "apps/web/src/features/workbench/conversation-timeline.ts",
+    "apps/web/src/style.css",
+    "tests/mvp/check-conversation-timeline.mjs",
+    "tests/mvp/check-query-boundaries.mjs",
+    "tests/mvp/check-browser.mjs",
+    "README.md",
+    "docs/development.md",
+    "docs/semantic-retrieval-design.md",
+    "docs/architecture/implementation-design.md",
+    "docs/architecture/runtime-modules.md",
+    "docs/images/workbench-sql.png",
+    "apps/web/src/shared/WorkspaceShell.tsx",
+    "docs/architecture/implementation-views.md",
+    "docs/architecture/implementation-atlas.html",
+    "docs/architecture/implementation-diagram-checks.json",
+    "docs/architecture/module-diagrams/V03.svg",
+    "docs/architecture/module-diagrams/F12.svg",
+    "crates/data-agent/src/use_cases/query_workflow.rs",
+    "crates/data-agent/src/use_cases/data_tools.rs",
+    "crates/data-agent/src/modules/queries/store.rs",
+    "apps/web/src/features/workbench/ConversationFeed.tsx",
+    "tests/mvp/check-background-queries-browser.mjs",
+    "tests/mvp/check-background-query-state.mjs"
+  ],
+  "code_paths_checked": [
+    "HTTP取消先locate并核对owner，再锁会话→任务→查询；Pi取消保持会话→run→tool→任务→查询顺序，且核对查询属于当前会话。helper不倒置锁序。",
+    "Worker领取和调用平台分离，提交前后分别在原事务边界核对；本地queued取消先发生时，晚到lookup不会把cancelled变回运行，原终态不可回退。",
+    "record_terminal_in_tx复用result_notified及result-{query_id}，事件、阶段收尾及通知幂等同事务提交；异常导致事务整体回滚。",
+    "平台成功与取消竞争仍以平台真实终态为准；Worker结果解释消息沿原query_id、task_id、condition_version与budget_scope_id，HTTP重复停止不能吞掉或重复解释。",
+    "claim_due仅调整既有领取顺序；WHERE终态排除、未到期租约排除、代次递增、15秒租约及SKIP LOCKED保持。",
+    "query_result只生成独立通知，不再将查询卡片移到终态事件位置；列表以query.id稳定挂载，重复快照与重叠页不复制通知。",
+    "ConversationFeed按user/cid重新挂载；查询组件按query.id保持。读取历史时不强拉到底，补页用首事件变化恢复高度差，短屏回退到可滚动页面。",
+    "成功结果仍调用原结果接口并以generation拒绝旧读取结果；preview只切前10行。CSV链接绑定原query_id，未改SQL或分页参数。",
+    "syncUnavailable只属于对话自动刷新。成功清同步提示不清操作错误；切换会话清状态，旧异步响应由current保护。"
+  ],
+  "findings": [],
+  "resolved_findings": [
+    {
+      "id": "BG-01",
+      "problem": "未提交和排队的查询直接进入cancelled后，Worker不再领取，原取消用例也不写query_result，因此对话永远缺少停止通知。",
+      "fix": "HTTP与Pi取消共用query_workflow::cancel_in_tx；会话、任务、查询按既有锁序进入同一事务，复用稳定result-{query_id}事件及result_notified幂等。没有平台结果的本地取消不唤醒模型。",
+      "verification": "旧二进制报告中两种取消各0通知；修复后独立宿主检查分别1通知，重复调用不增加，平台没有收到提交，也没有结果解释输入。",
+      "evidence": [
+        ".local/background-queries/query-state-before-fix/report.json",
+        ".local/background-queries-review/host-state/report.json"
+      ]
+    },
+    {
+      "id": "BG-02",
+      "problem": "按created_at优先领取会让早期慢查询反复先被轮询；4项试验第二次出现前三项running、第四项10秒后仍queued。第一次偶然通过不能排除该时序。",
+      "fix": "只将领取排序改为lease_until、created_at、id；未领取者及较早到期者先获得一次跟踪机会，原状态过滤、15秒租约、代次与FOR UPDATE SKIP LOCKED保持。",
+      "verification": "主侧修复后状态检查与独立宿主检查均观察到4项同时running；独立检查随后验证各目标独立收尾。",
+      "evidence": [
+        ".local/background-queries/query-fairness-before-fix/report.json",
+        ".local/background-queries-review/host-state/report.json"
+      ]
+    },
+    {
+      "id": "BG-03",
+      "problem": "在消息区顶部加载更早页时，原首条可见消息被推离阅读位置；独立夹具中item-0从y=89移到1369。",
+      "fix": "ConversationFeed接收firstEventSeq，补页时按旧scrollTop与高度差恢复位置；内容伸缩触发的scroll不再误判为用户滚离底部。",
+      "verification": "独立真实Chromium复验item-0仍为y=89、scrollTop从0到1280；历史上方块增高时item-7仍为y=285。正式query-boundaries还验证1101事件补页位置。",
+      "evidence": [
+        ".local/background-queries-review/feed-inspection.json",
+        ".local/background-queries-review/feed-after-fix.json",
+        ".local/checks/mvp-query-boundaries.json"
+      ]
+    },
+    {
+      "id": "BG-04",
+      "problem": "390×420和390×320短视口下固定高度及overflow:hidden会裁掉输入/发送区域，消息区也可被压到0。",
+      "fix": "max-height:600px时允许页面自然滚动，消息区保留至少120px并限制展示高度。",
+      "verification": "独立Chromium中390×844/600/420/320发送按钮均可达，420/320消息区分别210/160px；正式后台浏览器还在两种短视口实际发送并完成续聊。",
+      "evidence": [
+        ".local/background-queries-review/feed-after-fix.json",
+        ".local/checks/background-queries/report.json"
+      ]
+    },
+    {
+      "id": "BG-05",
+      "problem": "Pi取消已被替换的未提交旧稿后会出现终态通知，但目标位于关闭的details.previous-query中；原查看查询只滚动/聚焦，无法显示目标。",
+      "fix": "通知定位前只展开目标所属旧稿details，随后滚动并聚焦。默认折叠规则保持。",
+      "verification": "独立Chromium同DOM处理函数从detailsOpen=false/targetFocused=false变为true/true；正式用例经真实Pi工具取消旧稿，再由浏览器验证展开、SQL可见与焦点归属。",
+      "evidence": [
+        ".local/background-queries-review/collapsed-notice.json",
+        ".local/background-queries-review/collapsed-notice-after-fix.json",
+        ".local/checks/mvp-query-boundaries.json"
+      ]
+    },
+    {
+      "id": "BG-06",
+      "problem": "已选方法列表可有多项，而新固定布局将该区域设为不可收缩。手机10项、桌面20项时独立夹具的消息区高度变为0。",
+      "fix": "只为工作台已选方法区限制max-height:min(20dvh,180px)并允许内部滚动，不限制用户选择数量。",
+      "verification": "修复后独立夹具10/20项时桌面消息区490px、手机218px，发送按钮可达。修复前文件是当时工具输出整理的观察摘要；修复后保存完整输出。",
+      "evidence": [
+        ".local/background-queries-review/skill-list-overflow.json",
+        ".local/background-queries-review/skill-list-after-fix.json"
+      ]
+    },
+    {
+      "id": "BG-07",
+      "problem": "实现方慢查询试用发现结果展开会挤走正在输入的位置。",
+      "fix": "工作台采用独立消息滚动区，输入区保留在可用位置；其他页面布局不受workspace-workbench规则影响。",
+      "verification": "主侧A/B/C乱序完成的浏览器检查保存草稿并核对输入框坐标与焦点，独立夹具也核对消息增高前后的输入区坐标保持。",
+      "evidence": [
+        ".local/checks/background-queries/report.json",
+        ".local/background-queries-review/feed-after-fix.json"
+      ]
+    },
+    {
+      "id": "BG-08",
+      "problem": "实现方截图发现API重启瞬间的自动读取错误在成功恢复后仍停留；若简单在每次成功轮询时清error，会误清发送失败。",
+      "fix": "Workbench用syncUnavailable单独表达可重试同步状态；成功只清这一状态，保留发送、取消等操作错误。",
+      "verification": "已独立核对代码分支与最终正式浏览器断言：注入读取失败和发送失败，恢复读取后同步提示消失，操作错误与未发送草稿保留。",
+      "evidence": [
+        ".local/checks/background-queries/report.json"
+      ]
+    }
+  ],
+  "independent_work": [
+    {
+      "kind": "runtime",
+      "command": "node .local/background-queries-review/inspect-feed.mjs",
+      "environment": "本地Chromium，实际ConversationFeed/WorkspaceShell/CSS；消息与方法区使用合成夹具，不接数据库",
+      "exit_code": 0,
+      "evidence": ".local/background-queries-review/feed-after-fix.json",
+      "scope": "底部跟随、历史增高保持、顶部补页锚点、390×844/600/420/320发送可达"
+    },
+    {
+      "kind": "runtime",
+      "command": "node .local/background-queries-review/inspect-skills-overflow.mjs",
+      "environment": "本地Chromium，实际布局/CSS，SkillSelections相同DOM结构的0/10/20项合成列表",
+      "exit_code": 0,
+      "evidence": ".local/background-queries-review/skill-list-after-fix.json",
+      "scope": "方法列表不再将消息区压至0；桌面/手机输入可达"
+    },
+    {
+      "kind": "runtime",
+      "command": "node tests/mvp/check-conversation-timeline.mjs",
+      "environment": "纯函数；无数据库或网络调用",
+      "exit_code": 0,
+      "scope": "1250事件、重叠刷新、完整消息替换、恢复替换、乱序终态、刷新顺序、失败/取消、未加载查询锚点"
+    },
+    {
+      "kind": "runtime",
+      "command": "node .local/background-queries-review/inspect-host-state.mjs",
+      "environment": "独立MySQL库、Pi SDK检查点与受控工具输入、可执行合成SQLite；harness仅更改运行产物目录；无真实模型调用",
+      "exit_code": 0,
+      "evidence": ".local/background-queries-review/host-state/report.json",
+      "scope": "原3组状态断言与新增平台成功/取消竞争；本地取消无模型结果输入、4查询独立运行、成功结果唯一通知/解释、跨用户及收尾"
+    },
+    {
+      "kind": "static_and_browser_dom",
+      "evidence": ".local/background-queries-review/collapsed-notice-after-fix.json",
+      "scope": "独立Chromium使用相同DOM及定位处理函数验证闭合details的展开/聚焦；完整正式页面路径另读取实现方query-boundaries证据"
+    }
+  ],
+  "implementation_evidence_inspected": [
+    {
+      "path": ".local/checks/background-queries/report.json",
+      "passed": true,
+      "checks": 7,
+      "environment": "Pi SDK、合成模型、MySQL、可执行合成SQLite、真实Chromium；无真实模型请求"
+    },
+    {
+      "path": ".local/checks/background-query-state/report.json",
+      "passed": true,
+      "checks": 3,
+      "environment": "隔离宿主状态与合成平台；4项同时running"
+    },
+    {
+      "path": ".local/checks/mvp-query-boundaries.json",
+      "passed": true,
+      "checks": 10,
+      "environment": "真实SQL执行及浏览器；预览/CSV、旧稿定位、历史1101事件与错误边界"
+    },
+    {
+      "path": ".local/background-queries/checks.log",
+      "scope": "已读取fmt、Clippy、TypeScript、Web构建和225条双语言契约结果；统一验收仍由主任务执行"
+    },
+    {
+      "path": "docs/images/workbench-sql.png",
+      "scope": "独立查看更新后的正式工作台截图；实际SQL/参数、结果和固定输入区可见，未残留自动读取错误"
+    }
+  ],
+  "acceptance_changes_reviewed": [
+    "由已确认用户要求将页面100行/下一页改为10行预览及CSV；接口分页、SQL执行范围、精度和权限断言保留。",
+    "后台浏览器最初将支付客户数误写4，既有独立参考Q02为5；改为读取原参考且保留失败报告，不按产品输出倒写答案。",
+    "刷新后结果按异步读取显示；观察器增加等待两张结果表，没有删减数量/归属断言。",
+    "新增旧稿取消后存在两条取消通知，首次宽泛选择器失败；按预先命名的目标查询定位，展开/可见/焦点断言保持，失败报告保留。",
+    "CURRENT正文从verification_inputs移出，使最终证据和完成记录可更新；交付契约、要求/验收绑定、18项确认决定、源码/测试/设计与检查器仍计算指纹。没有修改验收命令或放宽行为预期。",
+    "第一次4项领取偶然通过、第二次失败及修复后通过分别保留，不以成功样本覆盖失败。"
+  ],
+  "evidence_sha256": {
+    ".local/background-queries-review/final-scope.json": "16958970e080cb89c4fba76b80c0e9cc1150c5b8dfbcf4c0390a54bfe2923ed8",
+    ".local/background-queries-review/final-scope-audit.json": "9cb012d49182fb918f14d71db8e1045f29465b1d06c0b30321c90a92383ec7fe",
+    ".local/background-queries-review/feed-inspection.json": "fb35770096bcca0c88cbe97fdda6b267a2be3528dadc39f06ad8a5df9787bb9b",
+    ".local/background-queries-review/feed-after-fix.json": "8f823f3e043931e9f6dab237b932009c5f4aa04460f8374ec653fbb6367433da",
+    ".local/background-queries-review/inspect-feed.mjs": "fc2dc599b5afb6bd72d3460b51d55a6ac15371d7519361a728d650abbd0d5868",
+    ".local/background-queries-review/skill-list-overflow.json": "045bb2f61ec6e62e8b57113536fa18080120ddcc0e042ad6c66f11c9239d191c",
+    ".local/background-queries-review/skill-list-after-fix.json": "64e9bb2af46dfcab33fae14eb56c1f0992bfe5849458e36a21956e4894772261",
+    ".local/background-queries-review/inspect-skills-overflow.mjs": "75c1efc3245bfe018e476e50b1d5993a1727975992c5661ba58507bb7f9576d4",
+    ".local/background-queries-review/collapsed-notice.json": "f11685dcd2ddda39e80558e1fbc90a35021dec74edc20e9c38cae5480cc690c6",
+    ".local/background-queries-review/collapsed-notice-after-fix.json": "92070dd5597f926d7c20127a2a4a40d3859078a32ef712807c66c543301b1130",
+    ".local/background-queries-review/timeline-gaps.json": "a752d5ca70f014dd659dfebea41520ea1e5211684860d5a23af51559c796a355",
+    ".local/background-queries-review/host-state/report.json": "8105372952af0061517d89a4c92de6b44fcb99df5d2db0e793255edc0d0d4fa1",
+    ".local/background-queries-review/host-state/source-hashes.json": "16c9dd2ea4226775a98916ba9a7016d08185818ff0d7e7238c12f3fbe7287989",
+    ".local/background-queries-review/host-state.log": "e2eaf6cc0c097187a07894b16c95236b82f8bb0107a17d974a6bede70766828c",
+    ".local/background-queries-review/inspect-host-state.mjs": "70671b897b8b8a380da14df2e286ae2c2d9e1aa2b740e10bc16bf47531d30b0a",
+    ".local/background-queries-review/harness-provenance.json": "135702670c042507ce1f1ae595f2ae91bed9c8b58121e959450cf698c36bf82f",
+    ".local/checks/background-queries/report.json": "a7416bd019b506f0add873c492664628a1a17f83bfa522b89da0ba5ed8428be8",
+    ".local/checks/background-query-state/report.json": "b763f6d77b2bde04a8196d8e506916ff00c3392034d4cb09beb795652d0d9bb2",
+    ".local/checks/mvp-query-boundaries.json": "31a25936ab1a8f6b72186c6e90d756b599cdfc093d2457eb8f0f746974188c02",
+    ".local/checks/conversation-experience/report.json": "8092c5df09650e526ae0778565b23c69f95bda6e0e9013b34712cb881275868b",
+    ".local/background-queries/query-state-before-fix/report.json": "f3f271a3516297cf80fe791e95d4db4def1a7d5bfc198465b5584fea717f6787",
+    ".local/background-queries/query-fairness-before-fix/report.json": "c6e42ffa2400c5ac5fcda7214ac0de88fcde62d38b4caa014da4c4f1c7faa85c",
+    ".local/background-queries/checks.log": "8c7880eca56e6608334490f46ffdcec8d4458acd02fabc99c7bfb5a1e2adcb85",
+    ".local/background-queries/query-boundaries.log": "d988ef38900751e92ec96a45a4a52316125dbe4e0b902024efee389d05e68b90",
+    ".local/background-queries/query-state.log": "609abddad27d412368d64341648be7009a66499d7d64f535c1b238e52f5be74e",
+    "docs/images/workbench-sql.png": "0edbd8273341a81bad6e23cdedc7e38eb8a5c0438164dc84a52090ef31b14979"
+  },
+  "prior_review_integrity": {
+    "evidence": ".local/background-queries-review/prior-record-hashes.json",
+    "unchanged_records": [
+      "docs/reviews/conversation-entry-review.json",
+      "docs/reviews/conversation-experience-review.json",
+      "docs/reviews/conversational-query-execution-review.json",
+      "docs/reviews/workspace-role-review.json"
+    ]
+  },
+  "residual_risks": [
+    "这是本增量审查，不能代替主任务的7项统一验收、常驻服务核对或用户接受。",
+    "确认事件尚在未加载历史页时，查询组件暂置顶部，补页才恢复真实位置；已在CURRENT和设计/开发文档说明，不宣称所有历史都已精确定位。",
+    "本轮运行证据使用合成模型/平台；没有真实模型语言准确率、真实Datasight或无限并发压力结论。4项并发验证不代表任意负载的公平性保证。",
+    "平台最多保存1000行，CSV只下载当前授权、未过期且已保存的结果；10行预览不会扩充平台能力。",
+    "独立布局夹具简化了业务内容和已选方法数据；完整业务浏览器结果来自另行读取的实现方测试，两种证据不混作同一次端到端运行。"
+  ],
+  "verification_limits": {
+    "official_model_requests": 0,
+    "review_scope_file_count": 77,
+    "prior_increments_not_reopened": true,
+    "production_code_or_tests_edited_by_reviewer": false,
+    "remote_mutations_by_reviewer": false
+  },
+  "next_action": "主任务以同一冻结范围执行make verify-increment并核对常驻服务，结果写回CURRENT；若源码/测试/契约变化，重新审查相应差异。"
+}

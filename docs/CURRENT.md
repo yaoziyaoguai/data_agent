@@ -4,20 +4,21 @@
   "schema": 1,
   "phase": "deliver",
   "status": "done",
-  "goal_revision": 31,
+  "goal_revision": 40,
   "environment": "macOS arm64 / Node 26.8.1 / npm 11.19.0 / Rust 1.99.0 / Python 3.14.7 / SQLite 3.53.4 / Colima 0.10.1 / Docker Engine 29.2.1 / Compose 5.3.1 / MySQL 8.4.11 / Milvus 3.0.2",
   "verification": {
     "level": "targeted",
-    "reason": "用户明确要求 Oracle 再审计、与本地复现对照后修复。仅验证资产维护的迟到回执、列表同步和依赖修复，不重跑无关千表或真实模型验收。",
+    "reason": "按已确认交互原型优化正式React页面；本地业务回归和浏览器dogfood后提交推送。",
     "freshness": "content",
     "inputs": [
       "AGENTS.md",
       "docs/CURRENT.md",
-      "docs/dogfood-repair-execution.md"
+      "docs/architecture/implementation-design.md",
+      "docs/architecture/knowledge-modules.md"
     ],
     "checks": [
       {
-        "id": "asset-maintenance-materials",
+        "id": "current-materials",
         "argv": [
           "make",
           "verify-materials",
@@ -32,176 +33,166 @@
     "schema": 1,
     "registry": "docs/semantic-retrieval-design.md",
     "increment": {
-      "id": "I2-ASSET-MAINTENANCE",
+      "id": "I2-EXPERIENCE-OPTIMIZATION",
       "phase": "I2",
       "status": "complete",
-      "goal": "对照Oracle与本地审计，修复资产维护迟到响应和失效依赖的已复现问题，完成针对性回归与独立审查。",
+      "goal": "将已确认原型落实到正式工作台、语义管理和个人积累；保留服务端业务约束，完成本地dogfood后分批提交推送。",
       "requirements": [
-        "C02",
-        "C05",
-        "C07",
         "C08",
+        "D09",
+        "D10",
         "D12",
-        "D13"
+        "D13",
+        "D15",
+        "A08"
       ],
       "modules": [
         "M02",
+        "M05",
+        "M07",
         "M09",
         "M12"
       ],
       "allowed_paths": [
-        "apps/web/src/features/assets",
-        "apps/web/src/style.css",
-        "tests/mvp/check-asset-mutation-browser.mjs",
-        "tests/mvp/check-asset-dependencies-browser.mjs",
+        "apps/web/src",
+        "tests/mvp",
         "docs/CURRENT.md",
-        "docs/dogfood-repair-execution.md",
-        "docs/research/asset-maintenance-audit-20261008.md",
-        "docs/reviews/asset-maintenance-review.json",
-        "README.md",
-        "docs/development.md",
+        "docs/architecture/implementation-views.md",
         "docs/semantic-retrieval-design.md",
-        "docs/architecture/implementation-views.md"
+        "docs/reviews/experience-optimization-review.json",
+        "docs/reviews/experience-optimization-visual.md",
+        "README.md",
+        "docs/images",
+        "prototype/experience-preview",
+        "packages/contracts/schema.json",
+        "tests/contracts/cases.json",
+        "packages/contracts/generated",
+        "crates/data-agent/src/modules/conversations/store.rs"
       ],
       "non_goals": [
-        "不改变Pi、Mem0、平台/语义权限、查询确认、公共发布语义或现有API契约；不新增资产自动升级或Agent能力。",
-        "沿用当前分支分批提交并推送已授权修复与文档；不合并默认分支或部署，不重跑无关的千表和真实模型验收。"
+        "不变更后端权限、Pi循环、模型与记忆方案；不复制原型演示逻辑、不新增数据平台或样例业务。"
       ],
       "invariants": [
-        "资产种类在编辑开始时固定；私人/公共归属不由页面任意切换，公开仍须用户预览确认。",
-        "迟到回执只能结束原操作；同一有效页面同步已提交记录，未知结果重试保留原operation_id。",
-        "知识依赖必须人工核对后显式更新或移除；选用仍绑定新版本，服务端版本与权限校验保持。"
+        "查询仍经聊天明确意图执行；10行预览、真实结果下载、停止与未知回执由现有服务端事实决定。",
+        "共享语义与个人/公共资产权限、版本和公开确认保持；人工输入不得静默丢失。",
+        "目录按可信身份区分对象，不按表名删除或合并来源；图表不推测类别或金额单位。"
       ],
       "acceptance": [
         {
-          "id": "MUTATIONS",
+          "id": "EXPERIENCE",
           "requirements": [
-            "C05",
             "C08",
-            "D13"
-          ],
-          "expected": "迟到发布或保存回执不关闭其他窗口、不改变新草稿种类；保存完成后列表同步，失败与刷新失败分别表达。",
-          "evidence_kind": "runtime",
-          "command": [
-            "node",
-            "tests/mvp/check-asset-mutation-browser.mjs"
-          ],
-          "timeout_seconds": 240
-        },
-        {
-          "id": "DEPENDENCIES",
-          "requirements": [
+            "D09",
+            "D10",
             "D12",
             "D13",
-            "C02",
-            "C08"
+            "D15",
+            "A08"
           ],
-          "expected": "个人及公共资产的失效引用可人工核对后更新或移除；不能自动升级；保存和重新选用沿用服务端权限与版本校验。",
+          "expected": "按已确认原型验证草稿保护、目录身份、结果与图表、精简依据、列表搜索、文档预览、地址恢复、键盘与手机交互。",
           "evidence_kind": "runtime",
           "command": [
             "node",
-            "tests/mvp/check-asset-dependencies-browser.mjs"
+            "tests/mvp/check-experience-optimization.mjs"
           ],
-          "timeout_seconds": 240
+          "timeout_seconds": 360
         },
         {
-          "id": "EDITOR",
-          "requirements": [
-            "C05",
-            "D13"
-          ],
-          "expected": "已有编辑器晚到响应保护、独立新建和同参重试幂等保持。",
-          "evidence_kind": "runtime",
-          "command": [
-            "node",
-            "tests/mvp/check-asset-editor-browser.mjs"
-          ],
-          "timeout_seconds": 180
-        },
-        {
-          "id": "SHARED",
-          "requirements": [
-            "C02",
-            "D12"
-          ],
-          "expected": "私人隔离、独立公共副本、负责人/超级维护者、版本竞争和建议权限保持。",
-          "evidence_kind": "runtime",
-          "command": [
-            "node",
-            "tests/mvp/check-shared-skills.mjs"
-          ],
-          "timeout_seconds": 240
-        },
-        {
-          "id": "SELECTION",
-          "requirements": [
-            "C02",
-            "D12"
-          ],
-          "expected": "依赖失效、改版、停用和显式重新选用的状态仍准确。",
-          "evidence_kind": "runtime",
-          "command": [
-            "node",
-            "tests/mvp/check-conversation-skill-selections.mjs"
-          ],
-          "timeout_seconds": 240
-        },
-        {
-          "id": "WORKSPACE",
+          "id": "UI-REGRESSIONS",
           "requirements": [
             "C08",
-            "D13"
+            "D09",
+            "D10",
+            "D12",
+            "D13",
+            "D15",
+            "A08"
           ],
-          "expected": "资产创建、发布、选择、工作台返回和移动端反馈沿原完整流程通过。",
+          "expected": "保留既有资产保存/发布/依赖、语义权限、对象创建、文档、管理按钮与查询边界。",
           "evidence_kind": "runtime",
           "command": [
             "node",
-            "tests/mvp/check-workspace-feedback-browser.mjs"
+            "tests/mvp/check-experience-regressions.mjs"
+          ],
+          "timeout_seconds": 1800
+        },
+        {
+          "id": "CONVERSATION",
+          "requirements": [
+            "C08",
+            "D09",
+            "D10",
+            "D12",
+            "D13",
+            "D15",
+            "A08"
+          ],
+          "expected": "后台多查询、单独停止、续聊及结果恢复保持。",
+          "evidence_kind": "runtime",
+          "command": [
+            "node",
+            "tests/mvp/check-background-queries-browser.mjs"
           ],
           "timeout_seconds": 300
         },
         {
-          "id": "ENGINEERING",
+          "id": "MODEL",
           "requirements": [
-            "C07"
+            "C08",
+            "D09",
+            "D10",
+            "D12",
+            "D13",
+            "D15",
+            "A08"
           ],
-          "expected": "Rust/TypeScript/Web工程检查与同源契约检查通过，无协议漂移。",
+          "expected": "Flash/Pro及受支持思考档位保存、失败和身份/版本边界保持。",
+          "evidence_kind": "runtime",
+          "command": [
+            "node",
+            "tests/mvp/check-model-selection.mjs"
+          ],
+          "timeout_seconds": 360
+        },
+        {
+          "id": "WEB-CHECKS",
+          "requirements": [
+            "C08",
+            "D09",
+            "D10",
+            "D12",
+            "D13",
+            "D15",
+            "A08"
+          ],
+          "expected": "同源契约及正反例、类型、Web构建和Rust检查通过。",
           "evidence_kind": "contract",
           "command": [
-            "make",
-            "verify-code",
-            "verify-contracts"
+            "sh",
+            "-c",
+            "make verify-contracts && npm run check:types && npm run build:web && \"$HOME/.cargo/bin/cargo\" clippy --offline --locked -p data-agent --lib -- -D warnings"
           ],
           "timeout_seconds": 300
         }
       ],
       "verification_inputs": [
-        "docs/dogfood-repair-execution.md",
-        "apps/web/src/features/assets",
-        "apps/web/src/shared/api.ts",
-        "apps/web/src/shared/Modal.tsx",
-        "apps/web/src/style.css",
-        "crates/data-agent/src/use_cases/personal_assets.rs",
-        "crates/data-agent/src/modules/assets",
-        "packages/contracts",
-        "tests/mvp/check-asset-mutation-browser.mjs",
-        "tests/mvp/check-asset-dependencies-browser.mjs",
-        "tests/mvp/check-asset-editor-browser.mjs",
-        "tests/mvp/check-shared-skills.mjs",
-        "tests/mvp/check-conversation-skill-selections.mjs",
-        "tests/mvp/check-workspace-feedback-browser.mjs",
-        "tests/mvp/harness.mjs",
-        "tests/mvp/skill-fixtures.mjs",
-        "Makefile",
-        "README.md",
-        "docs/development.md",
-        "docs/architecture/implementation-views.md"
+        "AGENTS.md",
+        "apps/web/src",
+        "tests/mvp",
+        "packages/contracts/schema.json",
+        "tests/contracts/cases.json",
+        "packages/contracts/generated",
+        "docs/architecture/implementation-views.md",
+        "docs/semantic-retrieval-design.md",
+        "prototype/experience-preview/README.md",
+        "package-lock.json",
+        "crates/data-agent/src/modules/conversations/store.rs"
       ],
       "review": {
         "status": "passed",
-        "record": "docs/reviews/asset-maintenance-review.json"
+        "record": "docs/reviews/experience-optimization-review.json"
       },
-      "evidence": ".local/delivery/I2-ASSET-MAINTENANCE-result.json"
+      "evidence": ".local/delivery/I2-EXPERIENCE-OPTIMIZATION-result.json"
     }
   }
 }
@@ -209,9 +200,296 @@
 
 # Data Agent 当前记录
 
-更新：2026-10-08。唯一活动项目目录：`~/work_space/data_agent`。
+更新：2026-10-10。唯一活动项目目录：`~/work_space/data_agent`。
 
-## 当前任务：资产维护补充审计与修复（已完成并推送）
+## 当前增量：正式页面体验优化（已完成）
+
+`goal_revision=40`，增量 `I2-EXPERIENCE-OPTIMIZATION`。用户批准 `prototype/experience-preview/preview.html`，要求按此优化正式页面，完成本地交互与 dogfood，修复问题后提交推送。
+
+### 决定与范围
+
+- 沿用 dev_co 和已确认原型；保留 `codex/conversation-experience` 上的全部既有改动。开工前端与测试快照在 `.local/experience-optimization/before/`。
+- 复用 React、现有 Modal/Markdown 与接口，不引入 UI 框架。原型中的固定回复、数据、取消计时器不进入正式产品。
+- M12 负责布局、结果展示、编辑保护、地址状态、精简依据、列表与表单。已有权限、版本、查询执行与取消事实继续由 Rust 和平台边界决定。
+- 按当前可靠表标识核对重复来源；没有一致实体证据的同名表保留，并用来源/库名区分，不能按名称合并或删资料。
+- 同一套本地截图复用于视觉复核。确定性合成平台和模型回归证明交互与状态，真实模型仅在需要时做代表性试用，不推导准确率。
+
+### 验收与要求变更
+
+- 原型确认新增离开编辑保护、固定编辑底栏、地址恢复与浏览器后退、紧凑列表/模板、结果优先与显式图表维度。原业务断言与独立数值参考保留；旧测试的页面路径和可访问名称随已确认交互调整，逐项记录。
+- 测试入口更新：公共Skill通过“从我的 Skill 发布”进入个人分类；个人记忆替代原“记忆与纠错”；资产次要操作先展开详情；原直接Esc关窗场景改为明确放弃。异步回执、权限、数值、幂等断言保留，新测试另验继续编辑与取消离开。
+- 旧回归中“离开语义管理后重置默认表”改为显式选择目标，依据为已确认地址恢复要求；手机退出改从导航抽屉进入；字段heading改为紧凑行summary。资产检索成功的技术提示已隐藏，测试改为核对真实接口 `memory_index_state=indexed`，仍要求索引完成。
+- 原金额结果绘图断言改为无分类时禁止绘图，依据为已确认“不能把两个金额列互作分类”要求；图表正例保留在含文本分类的明细查询，新增负数和超大整数验证。横向滚动验证改到确有溢出的390px视口，原滚动经轮询保持、完整CSV与精度断言不减。
+- 前一增量中的“不提交推送”仅约束当时工作；本轮用户明确授权本地验收后提交推送。
+
+- 历史接口仅补可选的真实 `created_at` 字段，前端注明创建时间帮助区分同名会话；没有现成更新时间，不能伪造“最近更新”。不改变原排序、分页和访问权限，无数据库迁移。
+
+### 当前进度
+
+正式页面已落地：结果优先、精简依据、紧凑输入区/资产列表、文档目录与预览、统一未保存保护、地址状态、移动导航；历史使用真实创建时间。短屏发送、保存中离页保护、目录筛选绕过保护、同页后退窗口残留、相同地址重新选择和文档旧回执覆盖新编辑均已修正。提交前复验发现的新建对象被旧筛选切走问题也已修复；独立补审及当前版本的五组统一验收全部通过，本轮本地优化与 dogfood 完成。
+
+- 文档保存的编辑实例单独标识，用户明确放弃后旧回执不关闭新草稿；服务端已提交内容由正常轮询读取。保存失败仍保留输入，离开前不提前清除未保存状态。
+- 平台当前文本列类型为 `text`，图表候选遗漏此类型会错误禁用绘图，已补兼容；双金额结果没有分类仍不绘图，超大整数不转浮点，原表格/下载保持原值。
+- 视觉复核指出手机目录字号与当前对象定位问题，已修正；桌面截图改为等待实际内容加载完成。删掉重复空态创建按钮、归属说明和工作台重复标语。
+- 旧测试观察器修正：页面登录后先等待工作区挂载再判断手机导航；建议提交仅统计已保存的建议行，不能把仍在输入框中的文字算作第二条成功；新对话使用实际按钮角色。修改的是观察时机与入口，不改变保存/权限标准。
+- 模型选择定向回归6组通过：38次本地HTTP替身请求，官方请求0；Flash/Pro七种受支持档位、同一Pi会话、设置保存失败、并发和旧请求恢复均保持。证据 `.local/experience-optimization/model-current.log`。
+- 本轮定向证据：`.local/experience-optimization/experience-current.log`、`report.json`、`background.log`、`types-current.log`。合成平台/本地模型替身；官方模型请求0。
+
+- 首次统一验收的关联资料脚本在业务操作前发生Pi桥启动超时：诊断仅到 `imports_started`，API已健康，60秒内未完成导入。当时8核机器的1分钟负载35.32；后续同入口的管理与聊天脚本正常通过。源代码、测试断言和超时均保持，按同一冻结版本复验；首次失败日志保留在 `.local/delivery/I2-EXPERIENCE-OPTIMIZATION-1791623712607311000/`，启动诊断在 `.local/checks/mvp-a0ff8bfd96758449/startup-failure.json`，不把该轮记为通过。
+
+- 提交前清理新增文档组件的一处行尾空格，补审发现同时误删的JSX闭合符，已恢复；精确字节核对确认最终仅删除空格。原成功收据保留在 `.local/experience-optimization/before-whitespace-cleanup-result.json`。随后复验的14个脚本有12个通过：语义角色脚本暴露新建对象受旧筛选影响的问题，工作台脚本在Pi导入时超时。失败日志 `.local/delivery/I2-EXPERIENCE-OPTIMIZATION-1791625382191891000/`；启动诊断 `.local/checks/mvp-f4b922a251725a9d/startup-failure.json`。
+- 新建对象问题：原名称/状态筛选在保存后继续刷新目录，可能把刚创建的指标切回旧文档。补充断言先稳定失败，见 `.local/experience-optimization/creation-filter-before-fix/reproduction.log`。修复限定在创建成功时重置目录筛选并定位新对象；从按表浏览进入我负责的对象，其他范围保留。普通停用/启用仍保留筛选，不修改服务端角色与权限。新断言补充原有“创建后显示新对象”要求，原权限、停用恢复和布局断言不减。
+- 修后角色定向回归6组通过，见 `.local/experience-optimization/creation-filter-fixed.log`。Pi依赖独立导入10,497ms成功；随后复用Node自带编译缓存减少重复冷导入，工作台9组定向检查完整退出0，见 `pi-import-timing.json`、`pi-import-cache-warmup.json`、`browser-startup-recheck.log`（同目录）。没有修改服务启动60秒阈值、业务断言或Pi实现，新增官方调用0。最终统一验收也沿用该本地编译缓存环境；缓存不纳入Git。
+
+### 最终验收与交付
+
+- 最终 `make verify-increment` 于2026-10-10完整退出0，五条命令全部通过、无超时，执行前后契约、输入和审查指纹一致。当前成功收据 `.local/delivery/I2-EXPERIENCE-OPTIMIZATION-result.json`；完整日志 `.local/delivery/I2-EXPERIENCE-OPTIMIZATION-1791626338862498000/command-01.log` 至 `command-05.log`。之前的成功与失败记录均按上文路径保留，没有改写历史结果。
+- 当前版本的新体验专项7组、14个既有UI业务脚本、后台多查询7组、模型选择6组全部通过。覆盖编辑保护与旧回执、新建对象清除旧筛选、桌面/手机导航与短屏输入、权限与协作、10行预览/完整保存结果下载/精度、滚动位置、后台续聊与单独停止，以及Flash/Pro选择和Pi会话保持。
+- 同源契约245个正反例、TypeScript类型、Web生产构建和Rust Clippy均通过。Vite报告主脚本701.29kB（gzip 201.20kB）的分块大小提示，构建成功；打包拆分不属于本轮交互范围。
+- 独立代码审查见 `docs/reviews/experience-optimization-review.json`，范围SHA256为 `e8c41c9a2d391c4dfd704612e25a53399b79e738ecd5959c7f3347f51b17e638`，8项发现均已关闭。审查记录中的待统一验收是审查时状态，现由上述最终收据补齐。视觉复核和正式服务手动试用见 `docs/reviews/experience-optimization-visual.md`，README截图已更新。
+- 正式本地页面 `http://127.0.0.1:5173/` 保留，可刷新继续试用；未替换现有身份、会话、Mem0或向量配置。本轮新增官方模型与向量调用均为0，最终模型选择回归使用38次本地HTTP协议替身请求。
+- 本轮证据使用合成资料、隔离MySQL、平台/模型替身及正式React/API，覆盖已列流程；不代表真实Datasight、真实模型内容质量、Safari/Firefox或屏幕阅读器验收。已修复所发现的阻塞问题，不声称覆盖所有可能场景。
+- Git交付分三批：`2a6c941` 为后端、迁移与同源契约，`5ca7c2d` 为正式界面及行为回归，本记录所在提交为设计、README、原型、截图与审查证据。交付分支为 `codex/conversation-experience`，推送目标为 `origin`；包含此前已完成的相关增量。
+
+## 前一增量：对话模型与思考选择（已完成）
+
+`goal_revision=39`，增量 `I2-CONVERSATION-MODEL`。用户确认在输入框右上角选择DeepSeek Flash或Pro以及该模型支持的思考强度，要求实现并本地验证。
+
+### 决定与范围
+
+- 独立审查定位Pro配置经过辅助调用预算转换时被旧Flash限定拒绝，会影响语义向量与Mem0。修复仅允许两种已验证的聊天配置共享原预算引用；辅助调用仍使用原Flash/百炼配置和计价，补预算转换边界检查，不改变记忆或检索产品规则。
+
+- 沿用dev_co；保留原工作树，开工快照 `.local/model-selection/before/`。同一Pi会话继续，多模型使用同一已配置DeepSeek凭据；不读出或展示密钥。
+- M05保存本人对话选择及版本；M08从可信默认配置生成可选档位和运行配置。客户端不提交端点、密钥、价格或预算。消息接受时冻结配置到现有budget_scopes，重放/恢复/查询结果解释继续沿原记录。
+- 用户选择立刻保存到已存在对话；新对话随首次消息保存。并发设置按版本核对，保存中暂停发送但不影响后台SQL；每条消息显式携带当时选择，避免设置变化影响已发送请求。
+- 当前锁定Pi 1.0.0模型目录支持Flash的off/low/high/max及Pro的off/high/max；官方思考文档与SDK均支持max。页面中文为关闭/轻度/深度/最高，只展示各模型支持项。模型切换时原档位不支持则回到关闭并清楚显示；默认仍沿启动配置。
+- 验证先使用现有隔离MySQL、实际Pi SDK和本地HTTP协议替身；最后用合成内容做有界真实Flash/Pro切换试用，逐项记录，不能用协议测试代替真实服务结论。
+
+### 本轮验证记录
+
+- 首次协议集成测试停在 `message_pending`：新HTTP替身只检索后直接回复，遗漏真实Agent契约要求的消息归属。修正替身补 `update_analysis_task route`，普通消息与查询通知均完成归属；原产品断言和验收标准不变。失败报告、日志、截图和测试源归档 `.local/model-selection/fixture-routing-before-fix/`。
+
+- 第二次检查已完成两轮Pi交付，但新断言误要求跨模型仍使用 `reasoning_content` 字段。锁定Pi 1.0.0的 `api/transform-messages.js` 明确将跨模型非加密思考转换为文本；修正为验证历史保留，并在同模型工具续调逐次验证 `reasoning_content`，继续复用SDK。原错误断言及失败证据归档 `.local/model-selection/cross-model-reasoning-before-fix/`；不修改产品实现或降低历史保留要求。
+
+- 新测试检查Pi会话ID时使用了不存在的检查点表列。按既有migration及后台查询测试，通过 `agent_runs.recovery_chain_id` 查检查点，要求两轮均有非空相同session ID；断言更明确，产品代码不变。原观察SQL和失败日志归档 `.local/model-selection/checkpoint-observer-before-fix/`。
+
+- 第13轮模型参数测试的合成历史超过请求体门槛：替身每条无关聊天都重复取回约3KB净收入资料，且固定虚构usage无法模拟真实压缩时机。移除与模型选择无关的重复检索，仅保留每轮真实 `route` 工具续调；七档、同会话、并发、后台SQL、恢复与所有原断言不减。完整检索仍由原DATA-PROVIDER验收负责，不把本用例当长上下文压缩验收。失败证据归档 `.local/model-selection/fixture-size-before-fix/`。
+
+- 减少无关检索后原生压缩仍触发。进一步定位替身缺少无工具摘要分支，错误地给Pi压缩请求返回工具调用；补纯文本合成摘要，产品与历史保留断言不改，归档 `.local/model-selection/compaction-fixture-before-fix/`。
+- 按独立审查纠正模型设置GET的额外行锁：M05用单条只读查询校验用户、空间和未删除状态；保存和接受消息继续同会话写锁。
+
+- 定向模型选择检查已通过，6组行为、38次本地协议请求、官方请求0；恢复保留原模型、消息、链与预算，浏览器桌面/窄屏及失败回读通过。稳定证据 `.local/model-selection/verified/`；同源契约243例、类型检查和Web构建通过。新增绑定既有原生压缩回归，不用协议摘要替身声称真实长对话质量。
+
+- 既有原生压缩回归通过：24轮中文历史后继续6轮，同Pi会话、4次压缩、18次本地协议调用，原预算与撤权拒绝保持，官方调用0；证据 `.local/model-selection/compaction.log`。
+- 用户常驻服务已按原参数重启，保留原数据库、身份、试验、Mem0和百炼/Milvus配置。真实浏览器以Flash/off → Pro/high → Flash/low完成同一会话三轮，三次都正确复述合成标记，未提交SQL，刷新保持Flash/low。实际10次官方调用（7次Agent生成、3次个人记忆召回向量）均结算，保守账本金额US$0.056890（不是服务商折扣账单）；证据 `.local/model-selection/real-report.json`、`real-desktop.png`。真实验证仅这三种组合，其余档位有SDK协议验证。
+- README、系统设计、HTTP契约、M05/M08/M11/M12边界和开发说明已同步。独立审查与五项统一验收均已通过；原模型供应商、记忆/向量配置和已运行查询规则保持，本轮未提交推送。
+
+- 首次统一验收的MODEL-SELECTION和DATA-PROVIDER通过；后台回归在首次登录后立即断言发送可用时失败。新增模型目录读取完成前，页面按既定规则暂停发送；该观察器未等待首次配置加载。仅首条消息增加明确就绪等待，其后所有“SQL运行中可立即发送”的原断言保持，也不改产品。原测试、截图、审查和失败统一收据归档 `.local/model-selection/initial-ready-before-fix/`，重审此窄改动后按原五项验收重跑。
+
+### 交付结论
+
+- `make verify-increment` 五项全部退出0：模型选择、原14工具提供者协议、后台多查询浏览器、Pi原生压缩、同源契约/类型/Web构建/Rust检查。契约正反例243条通过，辅助预算单测通过；有效收据 `.local/delivery/I2-CONVERSATION-MODEL-result.json` 与独立审查 `docs/reviews/model-selection-review.json` 对应当前输入。
+- 本地工作台 `http://127.0.0.1:5173/` 已更新，可以继续试用；模型与思考选择随本人对话保存，从下一条消息生效。后台SQL及原请求恢复沿原配置；旧对话默认使用现有服务配置。
+- 真实服务只验证Flash/off、Pro/high、Flash/low三种代表组合；其余档位通过Pi SDK实际HTTP协议测试。查询使用合成SQLite，Datasight仍为mock，本轮没有新增真实平台或完整Mem0写入验收。没有待定产品决策，后续按用户试用反馈处理。
+
+## 上轮交付：手动停止SQL的反馈（已完成）
+
+`goal_revision=38`，增量 `I2-QUERY-STOP-FEEDBACK`。按用户要求实际dogfood运行中的SQL手动停止。现有停止按钮可用：在隔离实例通过真实浏览器聊天启动两条查询，停止收入查询后客户数查询仍运行，草稿与续聊保持。随后暂停本次合成平台，确认停止请求未完成时错误显示`outcome_unknown`及“提交结果待查证”；恢复平台后查询正常取消。
+
+### 验收与要求变更
+
+- 沿用dev_co的局部修复与验证约定。只修M12停止等待的展示，不变更既定取消规则、状态契约或平台适配器。用户停止具体SQL的入口继续保留。
+- 已复现证据 `.local/dogfood-query-stop/first-stop-observation.json`、`first-stop-server-state.json`、`pending-before.json`、`pending-before.jpg`、`pending-server-state.json`；实际使用隔离MySQL、可执行合成SQLite和Pi SDK合成模型，无官方调用。合成模型回复中的技术状态词不作为真实DeepSeek输出质量证据。
+- 新检查覆盖平台短暂不可用时的等待反馈、刷新、恢复及唯一通知；原后台浏览器检查不修改。既有业务要求不变，只新增失败边界的观察断言。
+- 开工快照 `.local/dogfood-query-stop/before/` 保存前一增量输入及记录。原工作树及已完成审查保留；前一增量已完成结果只作历史。
+- QueryCard已优先展示取消待确认状态，未知回执使用中文说明；服务端状态、终态优先和停止请求规则保持。正式浏览器三组检查通过，原始报告和截图归档 `.local/dogfood-query-stop/verified-before-unified/`，不被统一验收覆盖。
+- 修复后在Codex浏览器再次从聊天启动第三条查询、真实点击停止，重复平台中断/刷新/恢复。`.local/dogfood-query-stop/report.json`、`pending-after.json`、`final-observation.json`及同目录截图记录结果；服务端和合成平台均确认三条查询取消完成，各一条通知、三条平台提交记录，草稿保留。临时实例和试用页已关闭，现有用户试用实例未停止。
+- 独立审查 `docs/reviews/query-stop-feedback-review.json` 已保存并通过范围核对，额外验证10种组件状态，确认真实终态优先。页面等待修正后的三组定向检查通过，稳定证据 `.local/dogfood-query-stop/verified-ui-ready/`；冻结范围的三项统一验收已全部通过。新增模型官方调用0，不将合成平台取消推广为真实Datasight数据库引擎取消能力。
+- 首次统一验收在新测试的两个停止按钮计数处失败：服务端已running，但截图中第二条查询仍显示上一次轮询的SQL草稿。新观察器遗漏等待第二个目标按钮出现，不能以服务端已更新代替页面已刷新。补目标按钮和通知可见等待，原“两个按钮”“两条唯一通知”等断言保持不变；产品源码未改。失败收据、截图、旧测试及当时审查归档 `.local/dogfood-query-stop/ui-observer-before-fix/`，按原三项重新验收。
+
+
+### 交付结果与验证边界
+
+- 三项统一验收全部完整退出0、无超时，验收前后指纹一致：手动停止三组、原后台查询七组、TypeScript与Web构建。收据 `.local/delivery/I2-QUERY-STOP-FEEDBACK-result.json`，完整日志由收据引用；最终报告及截图归档 `.local/dogfood-query-stop/final-acceptance/`。首次观察器失败的收据与截图单独保留，不被通过证据覆盖。
+- 独立审查 `docs/reviews/query-stop-feedback-review.json` 已通过，无剩余确定性问题，额外核对10种渲染状态，包括停止请求与成功/失败竞争时优先展示平台真实终态。仅修QueryCard提示、新增定向验收与开发说明；Agent、后端、取消权限及状态机保持既定实现。
+- 停止入口位于每条排队或运行SQL卡片右上角；只停止选中查询，其他查询、输入草稿及续聊保持。平台未确认时显示“正在停止查询”，禁用重复点击；平台恢复并确认后才显示已取消、写入唯一通知。该入口与输入框的“停止生成”分别作用于SQL和Agent回复。
+- 本地 `http://127.0.0.1:5173/` 已提供新版QueryCard，证据 `.local/dogfood-query-stop/local-ui-update.json`。没有重启用户后端或更改用户试用数据。手动dogfood和统一验收均使用Pi SDK、合成模型、隔离MySQL及可执行合成SQLite，官方模型调用0；真实Datasight数据库引擎的取消接口未验证。
+- 本轮增量完成；用户可继续试用。没有提交、推送或扩大产品范围，原工作树修改完整保留。
+
+## 上轮交付：查看依据后返回对话（已完成）
+
+`goal_revision=37`，增量 `I2-EVIDENCE-RETURN`，沿用 `codex/conversation-experience`。用户反馈SQL口径依据会跳走，缺少返回原对话阅读位置的入口。根因是App切换页面时卸载Workbench，滚动、展开及结果视图被重建。局部改为在原对话上打开资料窗口，固定“返回对话”按钮，关闭后恢复原触发入口焦点；原工作台持续挂载，复用现有语义读取与维护权限。
+
+### 验收与要求变更
+
+- 本轮仅M12导航与资料查看窗口；继续沿用dev_co核心约定、现有Modal及KnowledgePage，不增加后端接口或改Agent。直接进入语义管理保持独立页面。
+- 验证指标/文档打开和返回、Escape、桌面/窄屏、草稿/SQL展开/表格位置保留，以及窗口打开时后台查询继续。使用合成资料与模型，不追加真实模型测量。
+- 开工快照 `.local/evidence-return/before/` 记录此前文件，保留原工作树全部修改。旧后台查询验收与审查作为上一增量历史保留。
+- 首次浏览器验收在返回焦点断言失败，原证据归档 `.local/evidence-return/failed-focus-before-repair/`。独立审查同时复现嵌套编辑Escape关闭两层窗口：卸载时ref已清空、未关闭原dialog节点，且React的cancel事件冒泡。局部修复捕获原dialog节点用于清理，并阻止cancel冒泡；保留原焦点、位置和嵌套行为断言，正在复验。
+- 返回路径修复后首轮四组断言通过，但看图发现截图早于资料加载完成。将等待条件从通用容器加强为指定指标/文档标题可见，并补内层关闭后的焦点断言；原要求和断言不变，继续验证实际内容显示及返回。
+- 补强后的正式浏览器四组全部通过，`.local/checks/evidence-return/report.json` 与 `.local/evidence-return/browser-content-ready.log` 保存完整结果；已查看桌面实际文档、窄屏滚动后资料及返回截图。图册29图生成与溢出检查通过。本地Vite已提供新版App/Modal（`.local/evidence-return/local-ui-update.json`）；未重启后端或修改试用库。待独立审查最终保存后运行三项统一验收。
+- 独立审查 `docs/reviews/evidence-return-review.json` 已完整保存并通过范围核对，未发现剩余确定性问题；额外以实际Modal/CSS验证桌面、手机与短视口。三项统一验收已在冻结实现上启动，日志 `.local/evidence-return/increment.log`；材料静态核对314项通过。增量仍active，等待完整收据。
+
+### 交付结果与验证边界
+
+- 三项统一验收全部完整退出0、无超时，前后范围指纹一致：新增依据返回四组、原后台查询七组、TypeScript与Web构建。收据 `.local/delivery/I2-EVIDENCE-RETURN-result.json`，逐项完整日志保存在收据引用的目录。
+- 本轮只修改App资料窗口、共用Modal的关闭行为及局部CSS；原工作台和KnowledgePage继续复用。桌面、窄屏、短视口和嵌套编辑返回均有实际Chromium证据；没有更改Agent、后端、数据权限或查询规则。
+- 最终统一验收重生成的页面截图与报告归档 `.local/evidence-return/final-acceptance/`；独立审查记录中的截图SHA是审查时的上一轮产物，不混作最终运行截图。原失败与加载中截图另行保留。
+- 本地 `http://127.0.0.1:5173/` 已提供新版前端；原试用数据与后端进程保持。本轮使用隔离MySQL、可执行合成SQLite与模型测试替身，新增官方模型调用0；未验证Safari/Firefox、屏幕阅读器或真实平台。
+- 本轮增量关闭，继续等待用户试用反馈。没有提交、推送或扩大产品范围。
+
+## 上轮交付：查询后台运行与结果预览（已完成）
+
+`goal_revision=36`，增量 `I2-BACKGROUND-QUERIES`，沿用 `codex/conversation-experience`。用户明确要求SQL执行不锁聊天，同一会话可发起多条查询，查询在独立小组件中运行，完成后在对话通知；结果预览10行并可下载。按 dev_co 复用已有Pi串行会话和Rust后台查询，不新增Agent框架。
+
+### 验收与要求变更
+
+- 完成记录会在最终验收后更新，因此不把CURRENT全文列为冻结的实现输入；交付契约、需求绑定、18项已确认决定仍由检查器独立计算指纹，产品、测试、设计与审查记录保持冻结。验收命令和行为断言不变。
+- 后台浏览器的API重启后截图暴露自动读取错误残留。对话轮询单独保存可重试读取状态，恢复后只清这项提示，不清发送/取消等操作错误；补读取失败与发送失败并存的浏览器验证。正式截图在刷新恢复结果后拍摄。
+- 独立审查补出两项本轮展示边界：旧SQL折叠时通知无法定位，已选方法较多时固定布局挤没消息区。分别修为定位前展开目标旧稿、已选方法区限制高度并可滚动。未改变Skill选择规则。通知回归首次选择器同时匹配两条取消通知，失败保留在 `.local/background-queries/notice-test-observer/`；改为按测试预先命名的目标查询定位，不放宽展开/焦点断言。
+
+- 修复前独立宿主试验证明未提交和排队查询取消都缺少通知。HTTP/Pi取消改为共用现有终态记录与幂等，尚未提交的本地取消不启动模型解释；后续实测两种取消均只有一条通知。原报告 `.local/background-queries/query-state-before-fix/` 保留。
+- 四项长查询第一次偶然全部进入running，第二次实测前三项运行、第四项10秒后仍排队，失败保留在 `.local/background-queries/query-fairness-before-fix/`。原因是按创建时间领取使旧查询反复先被轮询；改为按租约到期时间、创建时间和ID排序，未领取的请求优先，保留租约、代次和行锁规则。修复后须重新验证，不以第一次通过覆盖复现失败。
+- 事件按页读取：若查询确认事件位于尚未加载的历史页，组件暂置顶部，加载该页后恢复到真实位置。已加载的确认事件位置稳定；更早消息补页需保持阅读锚点，不宣称未加载历史也能精确定位。
+
+- 独立审查确认待提交查询本地取消后没有持久终态事件，Worker不再领取该终态，因而不会通知；补入同一业务用例的终态记录。另补更早页阅读锚点、短高度可滚达发送按钮及四项长查询领取公平性验证。均为当前后台查询流程的边界，不新增调度器或Agent循环。
+
+- 可控慢查询已证明A运行期间续聊、启动B和服务重启保持身份；第二次实测复现B完成后展开结果挤走输入区。修复范围补工作台独立消息滚动与固定输入区，不改其他页面布局。失败产物 `.local/background-queries/composer-displacement/` 保留。
+
+- 首次后台浏览器检查前两组通过，第三组观察器把支付客户数误写为4，独立参考 `docs/sources/evaluation/cases.json` Q02 明确为5；产品实际为5。测试改为读取原有独立参考，不依据产品输出生成预期。失败产物保留 `.local/background-queries/first-observer-failure/`；未放宽结果归属/金额断言。
+
+- 原页面展示100行并可“加载下一页”；新页面只预览前10行，图表采用同一预览范围。原结果接口分页、SQL本身、CSV同查询结果下载均保持，平台超过1000行的截断须明确显示；不能把SQL改成LIMIT 10，也不声称完整下载超出平台保存范围的数据。
+- 原查询跟随最新状态事件移动；新查询在确认后固定在对话位置，终态事件单独显示可回到原查询的通知。页面刷新和重叠事件不重复通知，查询完成不抢输入焦点或清掉草稿。
+- 验证先使用可控慢查询和合成模型/平台，证明同会话A运行时可续聊、可提交B、B先结束，SQL/参数/结果和取消相互隔离；随后核对常驻服务。原真实模型意图小样只作历史，本轮不声称重测模型准确率。
+- 开工快照 `.local/background-queries/before/`；之前全部未提交修改保留。上一增量的审查/收据仍为历史，不用于宣称本轮完成。
+
+### 本轮定向验证
+
+- 后台浏览器7组通过：同一Pi会话内A/B/C三项查询运行、续聊、反序完成、单独停止、API/Worker重启与刷新恢复；原SQL/参数/结果保持，草稿/焦点/阅读位置保持，短视口与读取失败恢复通过。`.local/checks/background-queries/report.json`，使用Pi SDK、合成模型、MySQL和真实执行SQL的合成SQLite，官方模型调用0。
+- 查询状态3组通过：四项长查询全部进入running，未提交和排队取消各写唯一终态通知且不提交平台。`.local/checks/background-query-state/report.json`。查询边界10组通过，涵盖10行预览、25/5/0/1000行CSV、失败/截断、精确数值、横向滚动、折叠旧稿通知定位及1101事件补页阅读位置；`.local/checks/mvp-query-boundaries.json`。
+- 独立审查者另验平台已成功但应用仍运行时点击停止：最终保持成功、唯一结果事件/解释输入，SQL结果正确。`.local/background-queries-review/host-state/report.json`。多项Skill选择的消息区挤压和旧稿定位均已独立复验修复；未改Skill业务规则。
+- Rust格式/Clippy、TypeScript、Web构建及225项同源契约通过；29张架构图渲染检查通过。README替换为实际SQL、下载与固定输入区的正式浏览器截图；设计、模块边界和开发说明已同步。常驻服务已加载新的Rust实现：`.local/background-queries/local-service-update.json`记录五个服务均健康，41个对话、26条查询及身份/模型/记忆/向量配置保持；继续使用DeepSeek Flash、Mem0和百炼混合检索。
+
+### 最终验收与交付
+
+- 独立审查 `docs/reviews/background-queries-review.json` 通过，无剩余确定性阻断，scope `2020863059593331c00596e16e36c62d2239704e610e73328a98e6eae8e3549a`。审查者未参与本轮产品实现，独立复验取消/成功竞争、四查询领取、消息阅读锚点、短视口、方法长列表与旧稿定位。
+- `make verify-increment` 七项绑定验收全部完整退出0，无超时，代码、契约、测试、设计及审查记录的前后指纹一致。收据 `.local/delivery/I2-BACKGROUND-QUERIES-result.json`，逐命令日志在 `.local/delivery/I2-BACKGROUND-QUERIES-1791540277961891000/`。覆盖本轮后台查询、状态边界、时间线、原聊天执行、结果/下载、工作台与代码契约；不是全部真实业务或任意并发负载的验收。
+- 314项材料、模块依赖/SQL归属、锁序和29张架构图检查通过。README、系统设计、模块/交互图及开发指南已同步。本轮使用合成模型与可执行合成SQLite，官方模型调用0；没有重新测量真实模型准确率，真实Datasight仍未接入。
+- 本地服务 `http://127.0.0.1:5173/` 已更新，五个服务健康，41个对话、26条查询及原身份/Flash/Mem0/检索配置保持。查询后台独立执行，Pi继续串行推进同一会话；表格/图表预览10行，CSV下载已保存结果（合成平台最多1000行）。历史确认事件未加载时的暂时定位限制保留在设计中。
+- 本增量完成，用户可继续本地试用。本轮未提交或推送，此前工作树修改完整保留。
+
+## 上轮交付：通过聊天执行 SQL（已完成）
+
+`goal_revision=35`，增量 `I2-CONVERSATIONAL-QUERY`，沿用 `codex/conversation-experience`。用户明确批准执行意图来自聊天：先展示SQL；“执行上面这条”执行，“改成二月再执行”修订后执行，单纯补充条件只修订，含糊才澄清。SQL代码框右上复制，默认去掉补充/执行/取消按钮排；运行中保留停止；完成后直接展示结果和最终实际执行SQL。使用 dev_co 核心约定，先核对现有事务与Pi工具、再完成实现和针对性验收。
+
+### 本轮验收与要求变更
+
+- 用户2026-10-09明确决定替代原第15节“只能点按钮确认具体SQL”的规则。聊天中的明确执行意图可授权本次具体查询；“修改后执行”授权应用同条消息中的修改后再执行，无需追加按钮确认。权限、只读、版本绑定、并发暂停及幂等保留。
+- Pi负责意图和指代判断；Rust核对真实源消息、会话/任务/当前版本、明确工具交付及查询有效性。完整原话匹配只证明依据来源，不声称程序能完全证明自然语言理解正确。模型意图样本与宿主确定性控制分别报告。
+- 原浏览器点击“执行查询”“补充或纠正”的验收改为实际发送聊天并验证最终SQL与结果；参数、金额、身份和版本预期保留。原确认API仍供显式客户端请求使用，前端不再展示其按钮。
+- 本轮只使用从零构造的样例。真实Flash小样沿用已授权端点/模型，先做代表性样本；无模型比较或费用上限扩展。开工快照 `.local/conversational-query/before/`，保留此前全部未提交改动。
+
+实现、独立审查及8项统一验收已完成。审查发现的两项容量问题及重复结果交付均已修复并独立复验；常驻服务已更新，保留原会话、身份及模型/记忆/向量配置。
+
+- `execute_query`复用现有M07确认事务，首次执行绑定真实消息与其预算，原消息同事务标为已应用；稳定SDK调用先接回持久回执。输入只接受查询ID、草稿/条件版本和完整当前原话。普通补充只修订、明确执行才提交；已有确认重复调用不改变授权或预算。
+- Web移除SQL动作按钮排和任务引用，代码框右上复制SQL及JSON注释参数，查询成功自动读结果并显示实际SQL；运行中可停止。查询按最新确认/结果事件定位，稳定组件key保留表格分页和滚动。
+- 消息与完整执行引用上限从8,000改为32,000字符，并同步RunEnvelope/ChatMessage，支持现有24,000字符SQL加常规参数的粘贴。DeepSeek工具数限制从13改为14，原因是本轮新增`execute_query`，原协议测试相应核对该工具；不是放宽工具权限。
+- 设计、API、AGENTS、开发指南、README与模块/时序图已同步。图册原先新增的文档图没有编号，导致渲染器拒绝；将该图标为V04并移到独立视图后，复用原渲染器通过29图检查，没有修改渲染规则。生成图中部分ID变化来自图册再生成。
+- 本轮后台测试故障注入中，曾在Worker写入运行后、送达测试捕获器前将它关闭，造成等待捕获超时；已按该故障证据修正测试的等待点，保留全部断言，未更改产品租约或恢复规则。
+- 独立审查复现32,000字符上限与旧MySQL `TEXT`字节容量不匹配：21,846个中文字符通过契约却保存失败（证据`.local/conversational-query-review/message-capacity.json`）。增加后续迁移将消息正文升为`MEDIUMTEXT`，保留已应用迁移，补最大中文消息保存、运行、重启回读和超限拒绝验收；产品上限不变，原断言不放宽。修复后8组宿主检查完整退出0，日志`.local/conversational-query/message-capacity-fix.log`。新增嵌入迁移在本机增量构建中未被自动检测，已触发迁移加载源码重新编译（内容不变）后实测；长消息测试补足原有必需的任务归属后完成回读，未绕过业务校验。
+
+- 独立审查进一步复现已允许的24,000字符SQL与旧`query_requests.sql_text TEXT`容量不匹配：含中文的只读SQL检查通过却保存失败（证据`.local/conversational-query-review/additional-boundaries.json`）。后续迁移将该列升为`MEDIUMTEXT`，在同组验收中补满长度SQL的检查、保存及重启回读。两项容量修复后的8组宿主检查完整退出0（`.local/conversational-query/sql-capacity-fix.log`），未提高输入上限或改变执行规则。
+
+- 本地真实普通提问→执行试用得到1600分，但执行轮主动读取终态结果、Worker又交付结果通知，造成两段完整解释。第三项修复复用已有`confirmation_message_id`：`get_query`在外部读取前及最终事务识别确认来源消息，保留真实状态但暂不交付结果；同消息新run恢复仍适用。结果事件和后续追问正常读取。Pi完成本消息所需的全部提交后结束本轮，不新增调度器或去重状态。9组宿主验证完整通过（`.local/conversational-query/result-delivery-fix.log`）；旧重复及一次退款时间说明矛盾保留在`.local/conversational-query-review/duplicate-result-before-fix.json`，不把数值通过等同于文字完全正确。
+
+定向证据：`.local/checks/conversational-query.json`的9组宿主边界、`.local/checks/conversation-experience/report.json`的4组浏览器流程、原查询边界7组、工作台9组、管理操作6组均通过。真实Pi协议携带14个工具的15次回环调用通过；Rust格式/Clippy、TypeScript、Web构建、225项同源契约及313项材料检查通过。以上使用隔离MySQL与可执行合成SQLite，确定性测试没有真实模型调用。
+
+前一冻结版本的真实DeepSeek Flash试用：`.local/conversational-query/real-2026-10-09T08-28-05-852Z/report.json`，7组通过，41次调用，费用US$0.211132。覆盖普通取数只给SQL、否定与引用不执行、只修改不执行、自然指代执行的1600分独立参考、粘贴参数SQL并修改后执行、多候选澄清、续答只执行所选查询。真实模型与合成平台分别标识，7组小样不证明任意自然语言100%正确；没有使用Mem0/向量来替代执行意图判断。报告保存对应源码哈希，真实试用不加入普通验证命令自动重跑。 随后的结果交付修复修改了提示词、工具说明和get_query边界；原7组是修复前的意图小样，保留原产物与判分，不声称与最终代码完全同版。修复后快查询在常驻Flash/Mem0/hybrid服务另做针对性真实复验。
+
+
+修复后常驻真实试用：`.local/conversational-query/local-smoke.json`记录不带“不要执行”限定的普通提问先产生待执行SQL，再说“执行上面这条”取得1600分及16元；SQL/参数与原稿一致，只有结果交付轮解释一次，退款时间说明与SQL口径相符。临时观察器最初误限单列，失败原报告保存在`local-smoke-observer-failure.json`；独立审查确认额外元列是同一SUM显式除以100，改按列名核对独立数值后只读回收同一会话，没有重发模型请求。此观察器修正没有改变用户要求或正式验收脚本。新报告绑定7份源码SHA；旧7组意图测量仍按前一版本保留。
+
+常驻服务证据：`.local/conversational-query/local-service-update.json`，API/Pi/Web/平台/Mem0均健康；三个新迁移生效。重启保留当时已有40个对话、25条查询以及4份身份/模型/记忆/向量配置SHA，继续使用Flash、Mem0及百炼混合检索；新增真实试用单独创建合成对话。
+
+
+### 最终验收与交付
+
+- 独立审查：`docs/reviews/conversational-query-execution-review.json`为passed，冻结scope `2ad17eb7ae652106088fb392eb2608a32b1aaa20125739cbf49fbc9a008e4021`。三项确定问题均已修复，审查复核了容量上下界、停用依据拒绝、结果交付与同消息恢复；没有剩余确定性阻断。
+- `make verify-increment`的8项绑定验收全部完整退出0、无超时，执行前后指纹一致。收据`.local/delivery/I2-CONVERSATIONAL-QUERY-result.json`，逐项日志在`.local/delivery/I2-CONVERSATIONAL-QUERY-1791537004625396000/`；9组宿主边界、4组聊天界面流程、原查询与管理回归、225项同源契约、代码构建和14工具Pi协议均通过。此轮统一验收无真实模型调用。
+- 29张架构图检查、313项材料检查、模块依赖/SQL归属检查及差异空白检查通过。README截图、系统设计、API、模块边界、时序图和开发说明已同步。普通取数、明确执行和单次结果解释的最终真实Flash样本见上方，旧7组按原测量版本保留；不据小样声称自然语言全部正确。
+- 本地工作台`http://127.0.0.1:5173/`已运行最终实现，可刷新后继续试用。真实Datasight与正式身份接入仍待后续验证。本轮未提交或推送，原先未提交改动完整保留。
+
+## 上轮交付：账号区显示最高角色（已完成）
+
+`goal_revision=34`，增量 `I2-WORKSPACE-ROLE`，沿用 `codex/conversation-experience`。截图中的用户名旁增加当前空间最高语义角色。按现有身份和归属展示普通用户、语义维护者、超级维护者；维护者包括表和独立指标/文档负责人。三类是界面摘要，不能代替对象权限或 Datasight 数据权限。
+
+本轮将扩展既有 `GET /semantic-access` 的只读响应，前端不根据用户名或创建资格猜角色。失去表归属但仍负责独立对象时仍显示语义维护者；创建资格继续按原规则校验。范围限 M01 只读权限摘要、M12 账号标识、同源契约、对应验证与说明。开始前快照为 `.local/workspace-role/before/`；前两轮改动完整保留。
+
+### 本轮验收与要求变更
+
+- 按本轮用户要求新增最高角色展示，不调整现有权限规则。`SemanticAccess` 增加必填 `highest_role`；原精确响应断言仅补这一字段，原创建/归属/隔离断言保留。
+- 新浏览器场景使用隔离 MySQL、合成平台和登录身份，核对三类、角色变化、独立对象归属、换用户和读取失败；不调用真实模型、不改常驻试用数据。
+
+实现已完成：服务端从当前空间可信超级角色和根对象归属生成 `highest_role`；共享侧栏用户名旁显示中文角色，导航、窗口返回和30秒可见轮询刷新；按登录用户/页面隔离，旧请求不能覆盖新读取，读取失败显示暂不可用。原授权操作、Pi及模型均未修改。
+
+定向验证已通过：`.local/checks/workspace-role/report.json` 的6组浏览器场景、`.local/checks/creator-ownership.json` 的6组原归属回归，Rust格式/Clippy、TypeScript、Web构建和219项同源契约检查。312项准备材料与模块依赖/SQL归属检查通过。桌面与390px截图已查看。独立复核 `docs/reviews/workspace-role-review.json` 通过，范围指纹 `cf1d2e83709f7d5923b62eb5ac5d8b82009120340ababbdb497e35472c76c2cb`。`make verify-increment` 的 ROLE-DISPLAY、OWNERSHIP、CONTRACT-CODE 三组完整退出0，无超时，冻结范围前后指纹一致；收据 `.local/delivery/I2-WORKSPACE-ROLE-result.json`。角色相关体验与既有归属权限通过本轮声明验收，真实平台身份仍未接入。未提交或推送。
+
+常驻服务已按原配置重启；五个服务返回200，身份、Flash/Mem0/向量配置哈希一致，证据 `.local/workspace-role/live-check.json`。当前本地Alice显示超级维护者，Bob未有本空间负责对象，服务端返回普通用户；没有改变归属。已在现有浏览器页面读到Alice的“超级维护者”标识。
+
+## 上轮交付：自然续聊与分析方法入口（已完成）
+
+`goal_revision=33`，增量`I2-CONVERSATION-ENTRY`，继续使用`codex/conversation-experience`。用户补充要求：日常聊天不展示“本次对话中的问题”和继续/停止问题按钮；“选用分析方法”直接进入我的Skill，可切换公共Skill。本轮只调整前端入口、对应验证和说明，复用现有Pi归属与澄清，不修改任务服务或SQL执行边界。
+
+### 本轮验收与要求变更
+
+- 原要求：问题列表折叠展示，可手动继续/停止内部任务。新要求：移除这块列表和动作，普通追问直接发送；后台任务记录和取消API仍保留。依据为用户此次明确反馈。原浏览器点击继续/停止的断言改为列表/按钮不存在，并实际发送无任务标记的追问验证SQL修订；具体查询取消及后台取消断言保留。
+- SQL卡片的“补充或纠正”保留为明确引用，取消引用只移除引用，不停止后台任务。原引用草稿刷新/保留检查改从该入口进入。
+- 原分析方法入口只打开我的积累，默认显示记忆。新入口明确定位我的Skill，同时可切换公共Skill；用户明确选用后回到原对话，普通我的积累入口仍能管理记忆。选择、权限和发布规则不变。
+- 复用三份现有浏览器检查，补入口、自然追问和草稿断言；不改独立金额参考、不改模型或后台测试替身，不放宽确认/隔离判断。前一增量收据与审查保留为历史，本轮只验证上述修改。开工快照在`.local/conversation-entry/before/`，不维护第二份当前计划。
+
+完成记录：移除工作台问题列表、继续/停止问题按钮及已无调用的前端取消函数/样式；普通追问直接发送，SQL引用取消只清引用且保留草稿。分析方法入口明确定位我的Skill，公共Skill仍可切换，选用后回原对话并恢复输入。前后端任务、Pi、模型、SQL确认和权限规则保持。
+
+独立审查`docs/reviews/conversation-entry-review.json`通过，范围指纹`65dc7f449d341fcd85f5049b214805dd562d30de52b1e5a00af18ef005440bf0`。`make verify-increment`5组完整退出0、无超时，执行前后指纹相同，收据`.local/delivery/I2-CONVERSATION-ENTRY-result.json`。验证了直接补充条件修订同一问题、1600分独立参考结果、SQL引用/草稿恢复、私人/公共Skill明确选用、管理/取消查询/删除会话和身份隔离；TypeScript和Web构建通过。这些确定性流程使用合成平台和模拟模型，不推导真实模型任意长对话的归属准确率。
+
+常驻服务已热更新；只读检查确认问题列表消失、分析方法直达我的Skill、公共Skill可切换，1440/390画面已查看，无页面横向溢出。证据在`.local/conversation-entry/live-navigation.json`和同目录`live-my-skills-loaded-1440.png`、`live-public-skills-390.png`。未新增真实模型调用、未修改现有资产或会话内容，未提交或推送。
+
+## 上轮交付：用户试用后的交互修复（已完成，尚未提交）
+
+`goal_revision=32`，增量 `I2-USER-EXPERIENCE`，工作分支 `codex/conversation-experience`。本轮用户要求从用户与产品视角调整三个主入口：工作台以对话为主，技术标识按需查看；语义管理先呈现业务含义和待处理问题；文档按整篇阅读/编辑；Skill有可直接修改的模板示例。SQL确认、权限、历史及真实状态保持。
+
+已核实并修复：试用中的 `demo_order_detail` 负责人仍是 Alice；Bob 的负责目录为空时，旧界面保留 Alice 的详情。现在目录范围和详情联动，晚到的跨范围搜索也不能恢复旧对象。真正由 Bob 负责的表通过隔离平台 mock 验证，不修改用户现有负责人或试用数据。
+
+Markdown 表格的组件定义原先随每次轮询重建，导致滚动回跳；现使用稳定渲染组件。桌面和 390px 的针对性检查已通过；默认版本号和内部 task 标记已收起，SQL按事件顺序归入对话，执行仍绑定服务端的具体 SQL/条件版本。
+
+业务文档改为整篇 Markdown 读写：序言、标题和章节均可修改。内置资料原先有8个引用对象，后台仍保留这些身份和权限，以可选 `document_order` 记录全文拼接顺序；首次全文保存将排序与正文同版本写入。正文和全部片段版本一次提交，同事务授权/保存；空片段保留人工覆盖，重新预填不能恢复已删正文。已有手工完整文档继续使用原对象。没有新增数据库表、迁移、Agent能力或新的检索框架。
+
+可执行平台目前有 **5张合成表**；语义目录同时含样例材料与平台同步记录，目录条数不等于实际表数。本轮保留真实来源身份，没有按同名合并或为增加数量导入不可查询的表。
+
+### 本轮验收与要求调整
+
+- 首次统一验收的Markdown/工作台/文档/Skill四组通过；角色组因调用未带必需`--case`而在参数校验退出，尚未运行角色业务断言。将原无参命令改成既有`sync`、`members`、`directory`三个明确场景（独立依据：Makefile原命令和该脚本支持的参数），测试与权限预期不变。原失败收据留在`.local/conversation-experience/receipt-missing-role-case.json`，最终验收扩为9组；这是调用修正，不放宽验收。
+
+- 用户明确要求默认不展示数字版本与内部标识：原C04“展示条件版本”调整为展示当前SQL/参数/目标与条件；数字版本保留在按需详情和确认请求中，后台版本绑定和旧版拒绝行为不变。
+- 旧浏览器验收的数字版本、task标记、文件路径、关联ID输入及文档分段入口改为业务名称/目标、附件名称、资料选择与全文编辑。资产迟到回执、权限、并发、确认、共享副本和真实持久化断言保持。版本数字的页面断言由“需要重新选用”状态及服务端 `selected_version/current_version` 断言替代；这来自用户本轮要求，不以当前输出反写业务答案。
+- 初版组合编辑仍不能修改序言和标题，独立审查指出缺口；已改为完整Markdown。测试原“未改章节版本不变”仅适用于旧初版：首次全文保存要增加后台拼接顺序，因此全体片段必须改版；后续无内容修改不新增版本。新增全文逐字往返、插入/删除章节、空片段和来源重分析保护测试。
+- 首轮页面测试遇到开发热重载离开当前页；服务日志记录了对应 Vite reload。后续冻结前端再运行。首个对话测试错误使用 capture（捕获并暂停Agent），已改成原有本地模拟模型；无真实模型调用。测试的场景和判断标准保持。
+- 独立审查已复核跨范围晚到搜索、非首段更新后的全文刷新、读取失败时草稿保留及文档名称刷新；发现的问题均已修复。审查记录为`docs/reviews/conversation-experience-review.json`，最终验收另有完整收据。
+
+补充审查确认：合法存量章节合并后可超过10万字符，全文读取契约不再套用单次编辑上限；全文单次保存仍限10万字符，超限时明确提示并保留正文与草稿。完整阅读不截断。独立审查还发现模拟回答仍输出任务ID/数字版本，本轮只调整模拟展示文字和Pi现有提示的用户表达要求，工具参数、归属、原生循环均保持。
+
+回归补充：清空名称搜索时保留仍在表目录中的当前对象，防止后续编辑跳错表。原按钮回归已改为等待正文回读/资料名称加载，避免把尚未完成保存的输入或加载态当成持久化结果；非负责人文档的断言先确认整篇文档可见，再检查无编辑入口及可提出纠错，避免空容器的假通过。旧Skill录入回归使用可修改示例填入正文，因新版新建表单不再暗填演示正文；原持久化/选用要求保持。
+
+移动端复核发现旧样式统一隐藏`.quiet`，会连同来源链接、正文缺口和操作说明一起隐藏。现保留辅助说明，只按既有规则隐藏导航装饰；390px实际验证只有链接的文档仍可打开来源。血缘中的上游表数组以名称列表展示，原值与编辑格式保持。
+
+最终统一验收：`make verify-increment`完整退出0，9组全部通过且没有超时，执行前后输入和审查记录指纹一致。包括Markdown、工作台、文档、Skill、3项角色边界、工程/214项同源契约，以及包含11项既有流程的回归组。收据为`.local/delivery/I2-USER-EXPERIENCE-result.json`，逐项日志由收据引用；早期失败单独保留。模块依赖/SQL归属检查已通过。实际查看1440/390的工作台、Skill示例、语义目录和文档画面，并操作保存、刷新、修订、确认与导出。确定性验收使用隔离MySQL、合成平台和模拟模型，不代表真实Datasight、千表或真实模型业务准确率。
+
+本地应用已按原Flash/Mem0/百炼向量配置重启，身份与持久数据库沿用。首个真实Flash小样正常生成待确认SQL、未执行，但模型回答仍展示查询缩写和条件版本；失败保存在`.local/conversation-experience/local-dogfood.json`，不计为真实表达通过。定位到SQL提示仍要求用户“确认具体版本”，现将用户动作明确为对应卡片的“执行查询”，版本绑定仍由宿主执行，并补充业务目标表达示例。仅修现有Pi提示，无输出清洗或新Agent逻辑。
+
+修订后的真实Flash样本已完成：最终提交的回答无内部ID或数字版本，唯一SQL仍为`not_submitted`，没有执行；证据为`.local/conversation-experience/local-dogfood-after-prompt.json`及`local-dogfood-final-state.json`。后一记录核对最终`finished`和已提交回答，而非只看生成中的页面；保留同一会话中断后恢复的运行记录。原登录身份、模型/Mem0/向量配置哈希和全部既有会话仍在，本轮只新增烟测会话。样本仍重复展示SQL，因此只作为一条合成需求的表达与确认状态验证，不推导普遍表达遵从率或业务准确率。独立复审已通过，审查范围指纹为`2a146ba6bca362a96f30df4e9beec848323b11a6021e22b900955671c9133924`，统一验收已完成。本地服务已加载本轮代码，用户可继续试用；本轮没有清库、改派现有负责人或改模型/记忆配置。已同步设计、文档接口与开发说明。本增量关闭，改动保留在当前工作分支，未提交、推送或部署。
+
+收尾检查：312项材料核对、16项交付检查器测试及`git diff --check`通过，完成收据与最终输入一致（`.local/conversation-experience/final-materials.log`）。Web/API/Pi/平台mock/Mem0健康检查均返回200，配置哈希、Alice/Bob全部既有会话与Flash身份显示保持（`final-service-health.json`）。本地入口为`http://127.0.0.1:5173/`。
+
+## 上轮交付：资产维护补充审计与修复（已完成并推送）
 
 `goal_revision=31`，增量 `I2-ASSET-MAINTENANCE` 的修复与文档同步均已完成，并已分批提交推送。2026-10-08 用户要求使用 `oracle-web` 第五档再审计，与本地复现对照后修复。审计基线 `665e519`；开发分支已合入仓库默认主分支，当前位于 `codex/semantic-maintenance-prototype`。
 

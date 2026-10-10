@@ -1,0 +1,97 @@
+{
+  "date": "2026-10-10",
+  "artifact": "prototype/experience-preview/preview.html",
+  "scope": "独立可点击设计原型，使用合成材料，不连接正式应用后端",
+  "skills": ["oil-ui", "design-html"],
+  "evidence_directory": ".local/experience-preview-20261010/",
+  "viewports_checked": [
+    {"width": 1280, "height": 720},
+    {"width": 1440, "height": 900},
+    {"width": 768, "height": 900},
+    {"width": 390, "height": 844}
+  ],
+  "checks": [
+    {
+      "name": "工作台结果与最终 SQL",
+      "status": "passed",
+      "observed": "数据与趋势可切换；结果旁的最终 SQL 按钮打开详情；复制内容以 SELECT 开头，返回后焦点恢复到入口。"
+    },
+    {
+      "name": "完整合成数据下载",
+      "status": "passed",
+      "observed": "CSV 实际下载后核对为 31 行，日期从 2026-01-01 至 2026-01-31，净收入合计 128436.50 元；页面预览前 10 行。"
+    },
+    {
+      "name": "共享口径与本次条件",
+      "status": "passed",
+      "observed": "依据弹窗将共享定义、时间归属、默认过滤、单位与本次时间和 App 渠道分组；返回对话恢复入口焦点。",
+      "screenshot": "evidence-desktop.png"
+    },
+    {
+      "name": "后台查询的交互演示",
+      "status": "passed",
+      "observed": "本地固定演示运行期间输入框仍可用，能够继续聊天，并单独停止对应查询。",
+      "limit": "没有调用平台，不能据此证明真实查询取消或并发执行。"
+    },
+    {
+      "name": "输入保留与模型选项",
+      "status": "passed",
+      "observed": "离开工作台再返回时保留未发送输入；Pro 的思考选项为关闭、深度、最高。",
+      "limit": "选项仅演示交互，没有发起模型请求。"
+    },
+    {
+      "name": "字段编辑与未保存保护",
+      "status": "passed",
+      "observed": "修改字段后按 Esc 出现保护提示；继续编辑并保存后可以回读修改。",
+      "screenshot": "unsaved-protection.png",
+      "limit": "保存到页面内存，刷新后恢复样例。"
+    },
+    {
+      "name": "完整文档编辑与预览",
+      "status": "passed",
+      "observed": "文档整体展示，手机视口可以打开编辑、切换阅读预览，固定保存栏可见。",
+      "screenshot": "document-mobile.png"
+    },
+    {
+      "name": "Skill 模板与表单可达性",
+      "status": "passed",
+      "observed": "模板填入名称、分析步骤和范围，采用后模板区收紧；关闭未保存内容受到保护。1280×720 下最后一个必填输入框底部约 572px，固定底栏顶部约 626px，输入完整可见。",
+      "screenshot": "skill-editor-desktop.png"
+    },
+    {
+      "name": "桌面与手机布局",
+      "status": "passed",
+      "observed": "1280px 与 390px 下页面没有横向溢出；桌面账户固定在侧栏底部。手机使用导航抽屉，SQL 和模型说明入口位于可视宽度内。",
+      "screenshot": "workbench-mobile.png"
+    },
+    {
+      "name": "源文件语法与独立打包",
+      "status": "passed",
+      "observed": "preview.js、pretext.js 通过 node --check；单文件内嵌 CSS 和脚本，保留完整 Pretext 许可证。浏览器打开 preview.html 并切换趋势成功，error 日志为空。"
+    }
+  ],
+  "visual_review": {
+    "reviewer": "experience_preview_visual_review",
+    "method": "未参与实现的审查者复用 8 张实际页面截图进行静态视觉复核",
+    "score": null,
+    "findings_addressed": [
+      "结果区增加显式最终 SQL 入口，并验证复制与返回",
+      "依据中区分共享口径和本次查询条件",
+      "Skill 表单收紧布局，使最后一个必填项在 1280×720 下完整可见",
+      "移除语义与积累页的重复副标题、重复金额单位和手机键盘提示"
+    ],
+    "verification": "实现者针对上述改动补拍截图并验证相关交互；没有重新执行完整审计，也没有要求审查者为所有交互背书。"
+  },
+  "not_verified": [
+    "后端身份、语义维护权限和个人数据隔离",
+    "真实模型、Datasight、MySQL、Mem0 或向量库行为",
+    "真实查询取消回执、恢复、并发及持久化",
+    "正式应用测试与构建",
+    "完整无障碍标准与独立动效评审"
+  ],
+  "delivery": {
+    "formal_application_replaced": false,
+    "model_api_calls": 0,
+    "committed_or_pushed": false
+  }
+}

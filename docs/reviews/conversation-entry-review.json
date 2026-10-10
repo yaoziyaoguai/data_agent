@@ -1,0 +1,146 @@
+{
+  "schema": 1,
+  "increment_id": "I2-CONVERSATION-ENTRY",
+  "reviewer": "correctness /root/conversation_experience_review；未参与产品、正式测试、CURRENT或设计实现，仅编写本局部审查记录与范围核对证据。",
+  "reviewed_at": "2026-10-09T07:04:20.002589+00:00",
+  "base_head": "d84cb41241209fc465eb507cc3897c53717f1140",
+  "baseline": ".local/conversation-entry/before/",
+  "conclusion": "passed",
+  "scope_sha256": "65dc7f449d341fcd85f5049b214805dd562d30de52b1e5a00af18ef005440bf0",
+  "summary": "局部独立复核通过，未发现本轮确定性正确性阻断。相对开工快照仅4份Web源码、3份原浏览器测试和3份说明改变，与上一增量已通过收据的差异一致；Pi、后端及同源契约未改。移除内部问题列表及继续/停止任务入口，不影响普通发送、SQL确认、停止生成或取消具体查询。两处分析方法按钮明确进入我的Skill，公共Skill仍可切换和明确选用；用户与会话草稿仍由原身份分区恢复。已读取3份定向浏览器通过报告及对应断言，主任务仍需运行本增量5组统一验收。",
+  "requirements_reviewed": {
+    "C04": "QueryCard及确认协议不变，仍由具体SQL卡片提交草稿和条件版本；普通追问处理期间暂停确认，原message_pending断言和确认后1600分独立参考保持。",
+    "C08": "内部问题列表、继续和停止任务按钮及其专属样式移除；输入框直接发送普通追问。停止生成、取消具体查询及明确SQL引用仍有入口；分析方法不再误入记忆。",
+    "D03": "普通追问未添加task标记，测试核对持久消息原文和修订前后相同task_id；现有Agent负责上下文归属，未新增前端规则或Pi替代逻辑。",
+    "D12": "选用分析方法和管理与选用复用onManageSkills进入initialTab=skill；私人/公共切换、显式选用API、固定版本及服务端权限规则保持。",
+    "D13": "原会话标识、未发送文字与SQL引用使用现有按用户/会话分区的本地草稿；取消引用只移除.task并保留文字，不调用后台取消；明确选用后返回原对话且草稿恢复。"
+  },
+  "changed_files_reviewed": [
+    "apps/web/src/features/assets/AssetsPage.tsx",
+    "apps/web/src/features/workbench/Workbench.tsx",
+    "apps/web/src/main.tsx",
+    "apps/web/src/style.css",
+    "docs/architecture/implementation-views.md",
+    "docs/development.md",
+    "docs/semantic-retrieval-design.md",
+    "tests/mvp/check-asset-experience-browser.mjs",
+    "tests/mvp/check-conversation-experience-browser.mjs",
+    "tests/mvp/check-management-buttons.mjs"
+  ],
+  "supporting_files_read": [
+    "docs/CURRENT.md",
+    "AGENTS.md",
+    "apps/web/src/features/workbench/SkillSelections.tsx",
+    "apps/web/src/features/workbench/QueryCard.tsx",
+    "apps/web/src/features/workbench/conversation-timeline.ts",
+    "apps/web/src/shared/WorkspaceShell.tsx",
+    "tests/mvp/harness.mjs"
+  ],
+  "implementation_boundaries": {
+    "modules": [
+      "M12"
+    ],
+    "new_agent_loop_or_pi_capability": false,
+    "pi_reuse_assessment": "普通输入继续调用原消息接口，归属、澄清、修订由既有Pi能力处理；后台任务、模型、工具、运行状态及SDK代码与上一增量收据同哈希。",
+    "backend_api_contract_permission_change": false,
+    "selection_behavior": "页面分类选择与Skill选用区分；切换标签或进入方法页不选用资产，仍须点击在当前对话选用并由原服务端接口校验。",
+    "cancellation_behavior": "取消SQL引用只清本地引用；取消具体查询和停止生成沿用原入口与服务端检查。用户要求删除的内部任务管理入口不再展示，后台取消API未删除。"
+  },
+  "findings": [],
+  "resolved_findings": [],
+  "acceptance_changes_reviewed": [
+    "用户明确要求移除问题列表及继续/停止问题按钮：对应浏览器点击断言改为不存在断言；该改变已在CURRENT记录，不是为了迁就实现删除场景。",
+    "普通追问从不选任务直接输入开始；同时检查持久消息无task前缀、修订task_id等于原task_id、确认暂停及1600分独立参考结果，原金额预期保持。",
+    "原继续问题入口的草稿恢复场景改从具体SQL的补充或纠正进入；保留刷新、取消引用保留草稿并新增后台任务未取消断言。",
+    "管理按钮回归仍实际点击取消查询；已删除的后台任务按钮改经原取消API核验200及任务终态，权限与会话删除、换身份隔离断言仍保留。",
+    "Skill回归新增两个方法入口默认标签、私人及公共明确选用、原会话身份与未发送草稿保持、普通我的积累入口默认记忆；模板/核对标记/原生附件断言未删除。"
+  ],
+  "implementation_evidence_inspected": [
+    {
+      "path": ".local/conversation-entry/conversation-experience-browser.log",
+      "passed": true,
+      "checks": [
+        "不显示内部问题列表及继续/停止问题按钮；直接发送普通追问修订同一问题SQL，新消息暂停确认，确认后执行且独立参考结果1600分正确",
+        "从具体SQL引用补充时不暴露内部标记；刷新恢复引用与草稿，取消引用保留输入且不取消任务"
+      ],
+      "errors": [],
+      "officialRequests": 0
+    },
+    {
+      "path": ".local/conversation-entry/asset-experience-browser.log",
+      "passed": true,
+      "checks": [
+        "三个模板可修改；内容改变撤销旧核对；自然附件名保存为Pi原生路径；私人保存后明确选用并进入当前对话",
+        "选用分析方法与管理入口直达我的Skill，可切换并选用公共Skill，返回原对话且保留草稿；我的积累普通入口仍可管理记忆"
+      ],
+      "errors": [],
+      "officialRequests": 0
+    },
+    {
+      "path": ".local/conversation-entry/management-buttons.log",
+      "passed": true,
+      "checks": [
+        "个人记忆新增、来源、编辑、索引完成、停用、启用、删除真实点按",
+        "同步、未配置索引重建的503提示、放弃编辑、清除覆盖、来源正文、历史版本、对象启停实际点按",
+        "私人草稿提交、本人范围、接受不生效和编辑保存，正式版本实际更新",
+        "文档创建及关联表单真实保存",
+        "新会话示例、复制SQL、补充纠正、取消查询与删除会话真实点按；内部问题按钮不展示，原后台取消API仍有效",
+        "退出删除会话凭据，刷新仍需登录；更换Bob后不展示Alice个人资产"
+      ],
+      "errors": []
+    },
+    {
+      "path": ".local/conversation-entry/types.log",
+      "result": "已读取tsc --noEmit无错误日志，退出0由主任务提供；最终5组收据仍需运行。"
+    }
+  ],
+  "independent_work": {
+    "runtime_tests_executed": false,
+    "scope_comparison": ".local/conversation-entry-review/scope-check.json",
+    "unchanged_prior_bound_files": 147,
+    "method": "逐行比较开工快照和当前10份文件，追踪App入口、AssetsPage挂载、Workbench发送及引用草稿路径；读取正式测试实际断言和3份完整通过报告。未重复上一增量59份审查，未调用新模型或操作试用库。"
+  },
+  "reviewed_file_sha256": {
+    "apps/web/src/features/assets/AssetsPage.tsx": "020440f312862d67dc3e351388f687c30c4c38ef7d7999369b39c84f55aea34b",
+    "apps/web/src/features/workbench/Workbench.tsx": "132c337590eba958f153184321ce380979bc66b42617eff8d15178a2895bab2b",
+    "apps/web/src/main.tsx": "ebb32e4a2616943feaede721cb2affbf1c1806d7667d48948692122755bd1bcb",
+    "apps/web/src/style.css": "4434f08934c7070c38a6485ed1581ea85a3b09eb3b6f662820d05dad3319ffeb",
+    "docs/architecture/implementation-views.md": "b63db96bc4f7d9a7500036802316b3f6b2547c729fd8c3d432e8ad58038bdf69",
+    "docs/development.md": "ed906c769e465df3040831bf7a7070873f6afcaa5cff4e7885106be2017b6fb3",
+    "docs/semantic-retrieval-design.md": "458168d8af1f6a1d21cdea8ec61896c97588d87c315073747c75d6708676791a",
+    "tests/mvp/check-asset-experience-browser.mjs": "00afd385a7354c188bd3b124f44832a19d5b82db960ed6c294f02762e99e2729",
+    "tests/mvp/check-conversation-experience-browser.mjs": "d89aa987c64a56c79eaadb8e2d8dc734951fae3930572afe7f225b2e9755e708",
+    "tests/mvp/check-management-buttons.mjs": "fd1795b756ee543faac590bdde070701f8ca76e8414f9c9a89c6a6af1a18f3da"
+  },
+  "baseline_file_sha256": {
+    "apps/web/src/features/assets/AssetsPage.tsx": "a5d05dbfe067ada1f875a105ed8b8f1ba70fd23d06fabc74c0b88b058c48a436",
+    "apps/web/src/features/workbench/Workbench.tsx": "963c7dc3acf5f36ef106bdcf180ecec4f05e123a4873291b010d11cb24acee51",
+    "apps/web/src/main.tsx": "a24a17b7fbf4d47842c73f3ee0cc9d33aeb5db2cb0a53e7af9aead39e042eb91",
+    "apps/web/src/style.css": "a80e0ba3b709bd1b5209890101a9a4a07cde66b408f521020327a8d6e7fbf88f",
+    "docs/architecture/implementation-views.md": "a93b6756814bc43adf7ca7d2f6ad87b78b37b07a702a7e3b62ccfe14b93464b0",
+    "docs/development.md": "b3313001b7aacd1196fe5216d3e7a69cef0985b4733725f062297aca1fff8a04",
+    "docs/semantic-retrieval-design.md": "529e163ab7b0e546b5dcce54b384eb4b91c00bd84c4eeec630f36007ae1c347b",
+    "tests/mvp/check-asset-experience-browser.mjs": "f1b16e52716b62bd0e54457673a2b94f4b80095f44bb1213c5dfabea109cef03",
+    "tests/mvp/check-conversation-experience-browser.mjs": "b8dc02533af15ee336f1289cc4001a0bd4942e1558e09720e18815e7b01cb8fc",
+    "tests/mvp/check-management-buttons.mjs": "af65a619d3e7ba0340b2f7573968c0d1a305fc8696d8de201f5f17597e7cd4ab"
+  },
+  "evidence_sha256": {
+    ".local/conversation-entry/conversation-experience-browser.log": "0b91a23d155c5cfc6dc8d6084d2c6f87b77e06ad9d079ca6cd046a34191b66a0",
+    ".local/conversation-entry/asset-experience-browser.log": "de5819a28585336f2794a12971e9b1a1eb26e4e2477dda19640da689f0637f1a",
+    ".local/conversation-entry/management-buttons.log": "70c6f4b3070f8be359abb1a951745109de5792525deda6831e6d61889c1509c7",
+    ".local/conversation-entry/types.log": "f50fe1624c26efd634a1d99eca879f67e3b5cd1acf5f9e6642de5a0f1687cd94",
+    ".local/delivery/I2-USER-EXPERIENCE-result.json": "d55e3053718cdc34bb53016b948322456fdc187b5f39860ed90cfa17d70ff209",
+    ".local/conversation-entry-review/scope-check.json": "1437d17d5d5d8aa56dee2cf8295edfa412b0d041387099c1533c519adbe76150"
+  },
+  "residual_risks": [
+    "本轮浏览器运行使用合成平台与本地模拟模型。直接追问修订同一任务的确定性案例不证明真实模型对任意长对话或多目标歧义的普遍准确率；Pi行为本轮未改。",
+    "此前增量的完整验收保留为历史证据，本轮审查只覆盖自然续聊与分析方法入口，不重复证明其他MVP能力。"
+  ],
+  "testing_gaps": [
+    "主任务仍需按冻结范围运行5组make verify-increment（CONVERSATION、SKILLS、CONTROLS、TYPES、BUILD），不得以局部审查或定向报告代替统一收据。"
+  ],
+  "reviewer_write_scope": [
+    "docs/reviews/conversation-entry-review.json",
+    ".local/conversation-entry-review/"
+  ]
+}

@@ -1,0 +1,109 @@
+{
+  "schema": 1,
+  "increment_id": "I2-QUERY-STOP-FEEDBACK",
+  "reviewer": "correctness /root/conversation_experience_review；未参与本轮产品、正式测试或文档实现。",
+  "reviewed_at": "2026-10-09T11:14:51.008108+00:00",
+  "base_head": "d84cb41241209fc465eb507cc3897c53717f1140",
+  "baseline": ".local/dogfood-query-stop/before/manifest.json",
+  "conclusion": "passed",
+  "scope_sha256": "ac024efeb8cae64a78a59ab76c7259148c350ad87f17a3122e7ab80c6cdd6bb7",
+  "summary": "本轮局部审查通过，无确定性阻断。QueryCard仅修正停止等待反馈，独立10种组件状态检查及实现方三组浏览器检查通过。首统一验收暴露页面轮询观察时序，复审确认仅补两处目标元素等待，原数量和唯一性断言保持，产品未改；新定向检查完整退出0。主任务仍须重跑原三项统一验收。",
+  "requirements_reviewed": {
+    "C08": "停止待确认显示中文说明，不泄漏outcome_unknown或误称已停止。正在停止按钮沿用原禁用规则，原SQL/口径依据和结果展示不变；正式浏览器含窄屏及刷新。",
+    "D03": "停止仅作用所选查询；代码未增加对话锁定或清草稿行为。正式浏览器验证原草稿、刷新恢复、停止前后续聊及查询数量保持。",
+    "D09": "非终态且cancel_state=requested才显示正在停止。成功、失败和取消仍按服务端终态显示；后台核对和其他查询不受本轮文案修改影响。"
+  },
+  "changed_files_reviewed": [
+    "apps/web/src/features/workbench/QueryCard.tsx",
+    "tests/mvp/check-query-stop-browser.mjs",
+    "docs/development.md",
+    "docs/CURRENT.md"
+  ],
+  "findings": [],
+  "resolved_findings": [
+    {
+      "problem": "实现方实际停止试用中，平台不可用后标题显示提交结果待查证，正文直接显示outcome_unknown，与停止意图不符。",
+      "fix": "非终态取消请求显示正在停止查询及等待平台确认；未知回执转为中文，并避免重复提交状态说明。实际终态优先，未提前显示已取消。",
+      "verification": "修复前记录确认submission_unknown/requested/outcome_unknown；正式浏览器暂停真实合成平台并点击停止，核对等待、禁重复点击、刷新与恢复后唯一取消通知。独立组件检查确认四种非终态及成功/失败竞争的展示。"
+    }
+  ],
+  "independent_work": [
+    {
+      "command": "node .local/query-stop-feedback-review/build-states.mjs && node .local/query-stop-feedback-review/render-states.cjs",
+      "environment": "Node 26.8.1、rolldown及React服务器渲染；实际QueryCard，无网络、数据库或浏览器事件。",
+      "exit_code": 0,
+      "checks": 10,
+      "evidence": ".local/query-stop-feedback-review/component-states.json",
+      "scope": "普通运行、排队、四种取消待确认、普通未知状态、取消与成功/失败竞争、取消完成。首次夹具构建的相对入口路径错误已修正，不涉及产品或正式验收。"
+    }
+  ],
+  "implementation_evidence_inspected": [
+    {
+      "path": ".local/dogfood-query-stop/verified-ui-ready/report.json",
+      "passed": true,
+      "checks": 3,
+      "scope": "增加两处目标页面等待后的完整真实浏览器三组检查：停止A不影响B，平台不可用时停止B、刷新和恢复、每条唯一通知，草稿及续聊保持。日志check.log记录通过；官方调用0。"
+    },
+    {
+      "path": ".local/dogfood-query-stop/report.json",
+      "passed": true,
+      "scope": "另一次Codex浏览器实际停止试用报告与QueryCard源码SHA对应，三条平台记录cancelled/completed。该试用由实现方执行，审查者未重新运行。"
+    }
+  ],
+  "evidence_sha256": {
+    ".local/query-stop-feedback-review/final-scope.json": "d34fe1124ca838c41a0b115717b163d95361157c16a6d2687da0b6a8bc8275ad",
+    ".local/query-stop-feedback-review/final-scope-audit.json": "1392d75ce058b005eb183a55d99936207adb57f805d31f06c6622df93c2fa2b2",
+    ".local/query-stop-feedback-review/prior-record-hashes.json": "957ef161b3e9fdb02e7fd854c0c6234606ad7d25ce9d142feb33de208a4b84c4",
+    ".local/query-stop-feedback-review/render-states.tsx": "5da43a8abc14db3939201c78343b11cfa1b7e09280baac613c2a841b55f1656f",
+    ".local/query-stop-feedback-review/build-states.mjs": "f7ac176807eca68770ac9b3bf2e376a741e0d4d35f5fbc5c81e71756cf91dcf6",
+    ".local/query-stop-feedback-review/component-states.json": "bcc9855631e94b750ba13f2bfe2f830901d5c1df9405c87aee1d09dc0132fc80",
+    ".local/dogfood-query-stop/first-stop-observation.json": "a8c35c1fd5ac0d6eacb2adc84020f694b682cbbeb812b3601b88dff36b531937",
+    ".local/dogfood-query-stop/first-stop-server-state.json": "24ddbc7b44448d5105599d6a4d8a80690594754de5ee6ee09c5c1b34e1ae9dab",
+    ".local/dogfood-query-stop/pending-before.json": "93450dd7d96427590c4be5375c2f3cac1068e47717eb3d14f99174a7842bdeb6",
+    ".local/dogfood-query-stop/pending-server-state.json": "03d82f1a674ff9bdf11ec79176190fcb18e3934b5d35210cb738e85bb6e64a15",
+    ".local/dogfood-query-stop/report.json": "46a990a46e7c61d1d0ff5a0915ddb116264f0862bc328d63e244421103b0c4b2",
+    ".local/dogfood-query-stop/verified-before-unified/report.json": "40090ef63e9d68ef88b314166cfd33ddfc298c0904d9cb1ca546ea73db80d96e",
+    ".local/dogfood-query-stop/verified-before-unified/pending-mobile.png": "168c0e860569c9a9d5b399af227bacad562f0bf6a702650c5daf90fba681ed92",
+    ".local/query-stop-feedback-review/observer-fix-scope.json": "c74d17d3d656ec024519842915ab22fa593e4cecf85f83a8eae2c7b29084e4d1",
+    ".local/query-stop-feedback-review/observer-fix-audit.json": "526ccbc9464409d9a57bc5a4b14a1ce377544df93e8f87c087506dccc321270c",
+    ".local/dogfood-query-stop/ui-observer-before-fix/query-stop-feedback-review.json": "23b359c48fd0da83e660352854e3816ce601191b1fe54fcdef951a86d14e7d7d",
+    ".local/dogfood-query-stop/ui-observer-before-fix/check-query-stop-browser.mjs": "7ee0c4d391edad6210cdf4e4fdd6dbf3acfab9fc89c290d34f67814a24161ff5",
+    ".local/dogfood-query-stop/ui-observer-before-fix/I2-QUERY-STOP-FEEDBACK-result.json": "998e48ae624e5ceb49472017a99f0ccfbe7190786254811ffec8c517014e2648",
+    ".local/dogfood-query-stop/ui-observer-before-fix/failure.png": "6189c9aac7314a440e167f26214d0849556a4f27a35040481a34f77023b3b843",
+    ".local/dogfood-query-stop/verified-ui-ready/report.json": "40090ef63e9d68ef88b314166cfd33ddfc298c0904d9cb1ca546ea73db80d96e",
+    ".local/dogfood-query-stop/verified-ui-ready/check.log": "a1149c7d97eca65715d849739f6cb57e6d26b794923d6005cd2b73b411de5d78",
+    ".local/dogfood-query-stop/verified-ui-ready/pending-mobile.png": "168c0e860569c9a9d5b399af227bacad562f0bf6a702650c5daf90fba681ed92",
+    ".local/dogfood-query-stop/verified-ui-ready/stopped-desktop.png": "c81cc0372925c77e8ca4df81d054bc19153580ebc49dff7ad66b4ba09a3fbcad"
+  },
+  "prior_review_integrity": {
+    "checked_records": 6,
+    "changes": [],
+    "evidence": ".local/query-stop-feedback-review/prior-record-hashes.json"
+  },
+  "residual_risks": [
+    "独立运行只验证组件渲染；浏览器操作、断网与平台恢复依据实现方正式测试，不混称审查者重新执行。",
+    "本轮不证明真实Datasight引擎的取消接口或真实DeepSeek意图准确率，未修改这些适配。"
+  ],
+  "testing_gaps": [
+    "主任务仍须在同一冻结范围完成QUERY-STOP、BACKGROUND-REGRESSION、WEB-BUILD三项统一验收。"
+  ],
+  "verification_limits": {
+    "official_model_requests": 0,
+    "review_scope_file_count": 20,
+    "shared_database_tests_run_by_reviewer": false,
+    "production_code_or_tests_edited_by_reviewer": false,
+    "remote_mutations_by_reviewer": false
+  },
+  "acceptance_changes_reviewed": [
+    "统一验收首次在服务端B已running但页面未更新时得到一个停止按钮；已查看原失败截图和完整日志。等待B原卡片的停止按钮后仍断言总数等于2。",
+    "两条终态通知分别等待包含各自既有summary的原通知可见后，仍断言总数等于2；每个query_result事件恰好1条及cancelled状态断言原样保留。",
+    "与前次冻结比较仅正式测试新增两行waitFor；产品、文档、契约及原后台用例未变。旧审查、测试、失败收据和截图完整保留，新稳定目录内残留的failure.png不作为本轮通过证据。"
+  ],
+  "review_amendment": {
+    "previous_record": ".local/dogfood-query-stop/ui-observer-before-fix/query-stop-feedback-review.json",
+    "previous_scope_sha256": "cc36c749846e6b2de94921446a4152eb8d846cdffff97f7ef1e14ea3a30de6ea",
+    "scope_evidence": ".local/query-stop-feedback-review/observer-fix-scope.json",
+    "audit_evidence": ".local/query-stop-feedback-review/observer-fix-audit.json",
+    "reason": "测试等待页面完成轮询，不改变业务标准或产品代码。"
+  }
+}

@@ -1,0 +1,404 @@
+{
+  "schema": 1,
+  "increment_id": "I2-EXPERIENCE-OPTIMIZATION",
+  "reviewer": "independent /root/experience_optimization_review；未参与产品源码与正式测试实现",
+  "reviewed_at": "2026-10-10T09:57:11.389788+00:00",
+  "base_head": "d84cb41241209fc465eb507cc3897c53717f1140",
+  "baseline": ".local/experience-optimization/before/",
+  "conclusion": "passed",
+  "scope_sha256": "e8c41c9a2d391c4dfd704612e25a53399b79e738ecd5959c7f3347f51b17e638",
+  "summary": "当前冻结范围的独立代码补审通过，无剩余已确认代码发现。原五项统一验收曾在空格清理前版本全部通过；09:43 的复验暴露新建对象被旧目录筛选切走，并发生另一项工作台测试启动超时。新建目录问题已通过先失败、修复后通过的六组定向检查，修复只改创建成功后的目录实例、筛选和选择；原权限、启停与布局断言保留。启动超时仍由主任务查证，当前范围的五项完整成功收据尚未产生，不能据此关闭增量。",
+  "requirements_reviewed": {
+    "C08": "三个正式入口沿用现有 React 组件与接口；草稿保护、地址恢复、键盘 tab、移动导航与短屏输入有专项断言。合成测试继续调用正式 API。视觉结论引用另一位独立审查者的记录，本审查不冒称重复执行视觉审查。",
+    "D09": "布局和前端状态调整保留同会话后台多查询、单独停止、晚到结果归属与草稿。已检查后台七组通过日志；该日志早于最终 created_at schema 修正，统一 CONVERSATION 仍须重跑。未新增 Pi 循环、调度器或查询状态推断。",
+    "D10": "个人记忆列表、搜索与编辑入口继续经既有服务端操作保存、停用和删除；隐藏技术提示后，管理按钮测试仍通过真实 /assets 响应等待 memory_index_state=indexed，不降低索引完成要求。",
+    "D12": "个人和公共 Skill 的分类、模板、折叠操作和发布入口调整保留明确选用、依赖版本和公开预览确认；已核对 workspace-feedback 的采用、改版、发布与跨成员建议证据。完整资产三组仍由统一 UI-REGRESSIONS 执行。",
+    "D13": "工作台结果优先、语义目录和整篇文档、个人积累三个入口保持连贯；来源返回原对话、刷新恢复地址与草稿保护有针对性断言。新建成功重置旧名称/状态筛选，从按表浏览进入我负责的对象，其他目录范围保持，并定位新对象；普通启停仍保留筛选。目录继续保留同名但不同来源的对象。",
+    "D15": "图表只使用明确分类与可安全表示的数值，兼容平台 text 类型；双金额无分类及空结果禁用图表，负数按原单位显示，大整数不转浮点。表格十行预览和真实 CSV 下载、NULL 与精度、截断与失败边界仍有独立参考断言。本轮不据此声称新增分析算法已验收。",
+    "A08": "建议、接受、编辑后保存继续通过既有服务端规则；测试明确接受不直接改正文，只有正式保存推进版本。个人内容不会因列表或表单调整自动公开，跨用户权限和同操作身份断言保留。"
+  },
+  "architecture_and_contract_review": {
+    "ownership": "本轮主要为 M12 展示、编辑和导航状态；M02/M05/M07/M09 的业务约束继续由既有接口执行。Rust 的增量仅在 conversations 私有存储查询及响应映射补真实创建时间。",
+    "history_created_at": "HistoryItem.created_at 为可选 UTC 字符串，使用 pattern 而非未启用的 date-time format；生成 Rust/TypeScript 保持字符串。值来自原数据库 created_at，界面注明创建于；不伪造更新时间、不改原排序/分页/权限，无迁移。",
+    "pi_reuse": "本轮没有新增或替换 Agent 理解、工具循环、会话恢复与压缩实现；前端继续使用既有运行事实。原模型选择与后台会话验收被保留在当前增量。",
+    "trusted_data": "图表不根据字段名推断金额单位；目录不按表名合并来源。未保存保护属于前端交互，不替代服务端权限、版本或执行授权。"
+  },
+  "findings": [],
+  "resolved_findings": [
+    {
+      "id": "SAVE-IN-FLIGHT-DRAFT-LOSS",
+      "severity": "P1",
+      "location": "apps/web/src/shared/UnsavedChanges.tsx",
+      "problem": "保存期间移除 dirty 保护，用户可以离页；保存失败后原输入已随组件卸载丢失。",
+      "resolution": "dirty 不再因 busy/saving 提前清除；成功回执同步 markSaved，正常保存后导航不重复要求放弃。",
+      "verification": "早期独立合成延迟复现；最终静态复查，专项正式测试覆盖保存中离页、失败后草稿保留和明确放弃。"
+    },
+    {
+      "id": "DIRECTORY-GUARD-AND-STALE-SELECTION",
+      "severity": "P2",
+      "location": "apps/web/src/features/knowledge/KnowledgeDirectory.tsx",
+      "problem": "名称/状态筛选绕过草稿保护；地址恢复和负责人变更后的空目录可能保留不符合当前范围的旧对象。",
+      "resolution": "筛选先经过 guard；后页地址目标以单次 GET 核对可读、名称、状态和负责人；完整首页不含目标时替换选择。onLocation 返回即时放行结果，同地址也同步本地 current/tab/scope。",
+      "verification": "独立合成复现负责人转交后空负责目录旧对象残留；最终静态复查与专项目录、既有知识体验回归日志。"
+    },
+    {
+      "id": "SAME-PAGE-DISCARD-LEFT-EDITOR-OPEN",
+      "severity": "P2",
+      "location": "apps/web/src/shared/UnsavedChanges.tsx",
+      "problem": "浏览器同页后退并确认放弃后，部分编辑窗口和表单仍保留，页面与地址不同步。",
+      "resolution": "useUnsavedChanges 注册 onDiscard，明确放弃时先清理 dirty 和表单再导航；资产 initialTab 变化清理编辑、发布、建议状态并推进编辑会话。",
+      "verification": "独立合成复现与最终静态复查；专项覆盖 Esc、后退、继续编辑和明确放弃。"
+    },
+    {
+      "id": "ENTRY-OLD-RECEIPT-CLOSED-NEW-EDITOR",
+      "severity": "P1",
+      "location": "apps/web/src/features/knowledge/KnowledgePage.tsx",
+      "problem": "EntryEditor 保存中放弃并重开后，旧成功回执会关闭新编辑。",
+      "resolution": "保存期间禁用 textarea 和放弃动作，关闭导致旧回执影响新编辑的入口；页面级明确离开继续经过草稿保护。",
+      "verification": "独立合成延迟复现；后续定向静态复查保存期间的动作与回执路径。"
+    },
+    {
+      "id": "DOCUMENT-OLD-RECEIPT-CLOSED-NEW-DRAFT",
+      "severity": "P1",
+      "location": "apps/web/src/features/knowledge/KnowledgeDocument.tsx",
+      "problem": "文档保存已提交但回执被延迟时，用户明确离开并重开编辑，旧回执会关闭新草稿。",
+      "resolution": "每次编辑使用 generation 和对应 key；明确关闭推进代次，onSaved 只处理当前代次。服务端已提交内容通过正常轮询读取。",
+      "verification": "已静态核对正式测试：真实 PATCH 成功后延迟回执，后退放弃、重开并填写 B，再放行旧回执，B 与编辑窗口保留；experience-current.log/report.json 七组通过。"
+    },
+    {
+      "id": "PLATFORM-TEXT-CHART-CATEGORY",
+      "severity": "P2",
+      "location": "apps/web/src/features/workbench/QueryResultsView.tsx",
+      "problem": "分类列候选遗漏当前平台返回的 text 类型，使合法文本分类结果无法绘图。",
+      "resolution": "分类候选加入 text，继续排除标识列；数值候选仅接受有限且可安全表示的 integer/number。双金额无分类仍禁用图表。",
+      "verification": "静态核对平台 mock 的 text 返回和图表筛选；query-boundaries 正例保留十行图表、负数及超大整数排除，已有通过日志。"
+    },
+    {
+      "id": "DELIVERY-WHITESPACE-REMOVED-JSX-CLOSURE",
+      "severity": "P1",
+      "location": "apps/web/src/features/knowledge/KnowledgeDocument.tsx:79",
+      "problem": "交付前清理行尾时同时删去 JSX 表达式闭合符 } 和空格，破坏 TSX 语法；无法通过仅补回一个空格重建已验收源码哈希。",
+      "resolution": "实施者补回闭合符，最终只删除行尾的单个 U+0020；审查者未修改产品文件。",
+      "verification": "静态检查闭合结构；在内存补回最终行尾空格后，完整文件 SHA256 精确等于旧统一收据 before 值。核对全部冻结输入，除该文件外均与旧收据相同；未运行编译、harness 或模型。",
+      "intermediate_invalid_sha256": "9e53b0f32094ac075cca150ede35c5f5b83baf7d0f83d05a7c277838f0fe5410",
+      "final_sha256": "0db75020224e433c05ca7ee79c6574bb996f0514878871371321e561d9cda1c2"
+    },
+    {
+      "id": "CREATED-OBJECT-HIDDEN-BY-STALE-DIRECTORY-FILTERS",
+      "severity": "P2",
+      "location": "apps/web/src/features/knowledge/KnowledgePage.tsx:459",
+      "problem": "旧目录保留首个文档名称和 enabled 状态筛选；创建第二个指标成功后仅推进 revision，旧筛选响应经 showDirectoryPage 将详情切回原文档。原角色回归等待新指标标题超时，新增筛选断言先稳定失败。",
+      "resolution": "创建成功保存 createdObjectId 并用作 KnowledgeDirectory 的 key，使旧目录实例退出、原请求代次失效并清空名称/状态；清空按表搜索，从 tables 转到 maintained，其余目录范围保持，随后定位新对象。普通启停仍只推进 revision。",
+      "verification": "对照归档仅 KnowledgePage.tsx 与角色回归发生变化；新增五行断言要求名称/状态为空及新对象出现在目录。修前 reproduction.log 在原名称未清空处失败；修后 creation-filter-fixed.log 六组通过，实现者确认命令完整退出 0。静态核对目录 cleanup 递增 generation、分页当前对象核验和原服务端权限调用，审查者未运行 harness。",
+      "evidence": [
+        ".local/experience-optimization/creation-filter-before-fix/reproduction.log",
+        ".local/experience-optimization/creation-filter-fixed.log"
+      ]
+    }
+  ],
+  "independent_work": [
+    {
+      "method": "对照开工快照、已确认需求和模块边界逐轮审查；不把全部相对 HEAD 的既有改动当成本轮实现。",
+      "scope": "本轮 React、样式、导航与草稿状态、history created_at 同源契约及读取映射、正式测试变更。"
+    },
+    {
+      "method": "审查早期通过临时 Node heredoc、现有 harness、隔离 MySQL 与真实 React/API，使用合成延迟独立复现草稿丢失、同页放弃后残留、Entry 旧回执和空负责目录旧对象问题。",
+      "evidence_limit": "诊断输出仅在审查会话工具记录，未保存独立报告文件；不虚构产物路径，也不将早期复现当成最终修复通过证据。"
+    },
+    {
+      "method": "收尾阶段仅静态复查修复和读取实现者完整日志；按主任务的串行验收安排，没有再启动 harness、浏览器或编译。",
+      "scope": "最终修复依据为代码检查及已检查的专项和回归日志；完整冻结范围统一验收尚待主任务执行。"
+    },
+    {
+      "method": "交付补审使用旧统一收据 before 的 138 份文件哈希核对全部当前冻结输入；通过内存重建确认最终源码只少一个行尾空格。",
+      "scope": "识别并关闭中间误删 JSX 闭合符的问题；读取五项成功回执及日志，更新 scope 和验证状态，不扩大产品审查。"
+    },
+    {
+      "method": "本次仅对照 creation-filter-before-fix 归档及其失败收据检查两个文件差异，读取失败日志和六组定向通过日志，并检查创建回调、目录生命周期与筛选。",
+      "scope": "旧实例的 generation 失效、创建后新对象选择、tables 转 maintained、普通启停保持筛选；未运行浏览器、harness、编译或付费模型。"
+    }
+  ],
+  "implementation_evidence_inspected": [
+    {
+      "paths": [
+        ".local/experience-optimization/experience-current.log",
+        ".local/experience-optimization/report.json"
+      ],
+      "passed": true,
+      "checks": 7,
+      "official_requests": 0,
+      "scope": "桌面历史与草稿，资产搜索/Esc/后退/键盘 tab，语义筛选和保存失败保护，文档旧回执，预览和手机保存，窄屏及短屏输入/抽屉。隔离 MySQL、正式 React/API、合成资料。"
+    },
+    {
+      "path": ".local/experience-optimization/regressions-current.log",
+      "passed_cases": [
+        "semantic-role-boundaries-browser",
+        "related-knowledge-browser",
+        "browser",
+        "query-boundaries",
+        "knowledge-experience-browser",
+        "evidence-return-browser"
+      ],
+      "failed_cases_at_that_run": [
+        "workspace-feedback-browser",
+        "creator-ownership-browser",
+        "management-buttons"
+      ],
+      "official_requests": 0,
+      "scope": "完整保留该次六组脚本通过和三组脚本失败；未将部分通过日志当成全套通过。失败入口的修正另经静态核对及下项补跑。"
+    },
+    {
+      "path": ".local/experience-optimization/regressions-repaired.log",
+      "passed": true,
+      "passed_cases": [
+        "workspace-feedback-browser",
+        "creator-ownership-browser",
+        "management-buttons"
+      ],
+      "failed_cases": [],
+      "official_requests": 0,
+      "scope": "完整 wrapper 已结束，三组脚本各六项行为通过；并不代替包含十四个脚本的最终 UI-REGRESSIONS。"
+    },
+    {
+      "path": ".local/experience-optimization/background.log",
+      "passed": true,
+      "checks": 7,
+      "official_requests": 0,
+      "scope": "同会话后台查询、单独停止、结果归属、刷新/重启、短屏和临时失败恢复。日志仍有 created_at 的 date-time format 警告，属 schema 改为 pattern 之前的定向证据；不能代替最终 CONVERSATION。"
+    },
+    {
+      "path": ".local/experience-optimization/model-current.log",
+      "passed": true,
+      "checks": 6,
+      "local_provider_requests": 38,
+      "official_requests": 0,
+      "scope": "七档模型参数、同 Pi 会话、版本/身份/重放、保存与发送竞争、后台查询、浏览器持久化/失败回读和原预算恢复；本地 HTTP 协议替身，未调用真实模型。"
+    },
+    {
+      "path": ".local/experience-optimization/types-current.log",
+      "scope": "日志含 npm run check:types / tsc --noEmit，未见错误；实现者报告命令退出 0。本审查者没有重跑，完整 WEB-CHECKS 仍待统一执行。"
+    },
+    {
+      "path": ".local/experience-optimization/materials.log",
+      "passed": true,
+      "scope": "316 项材料静态检查、delivery 声明与需求覆盖、16 项交付检查器单测；这些检查不证明业务行为通过。"
+    },
+    {
+      "path": "docs/reviews/experience-optimization-visual.md",
+      "scope": "另一位独立视觉审查者检查八张实际截图；主代理处理手机目录和重复说明等问题并核对修正截图。本审查者只读记录，不冒称独立看图或视觉全覆盖。"
+    },
+    {
+      "path": ".local/delivery/I2-EXPERIENCE-OPTIMIZATION-result.json",
+      "observed_at": "2026-10-10T09:42:24.435880+00:00",
+      "started_at": "2026-10-10T09:23:01.555936+00:00",
+      "finished_at": "2026-10-10T09:34:52.262756+00:00",
+      "observed_sha256": "6f10f0be94a6576393f655c3de38c72446617f7a88516d170c28518f47fcb224",
+      "passed": true,
+      "before_after_identical": true,
+      "commands": [
+        {
+          "acceptance_ids": [
+            "EXPERIENCE"
+          ],
+          "log": ".local/delivery/I2-EXPERIENCE-OPTIMIZATION-1791624181558447000/command-01.log",
+          "exit_code": 0,
+          "timed_out": false,
+          "passed": true,
+          "duration_ms": 28840,
+          "sha256": "e97240eed3892578907dda5198086c80ef80199793f73d26743cac89a3c2775d"
+        },
+        {
+          "acceptance_ids": [
+            "UI-REGRESSIONS"
+          ],
+          "log": ".local/delivery/I2-EXPERIENCE-OPTIMIZATION-1791624181558447000/command-02.log",
+          "exit_code": 0,
+          "timed_out": false,
+          "passed": true,
+          "duration_ms": 404044,
+          "sha256": "e9749ce1692293bf5a9e9c2520abdb67b1a40f768b34db3f15c934c24bb1c364"
+        },
+        {
+          "acceptance_ids": [
+            "CONVERSATION"
+          ],
+          "log": ".local/delivery/I2-EXPERIENCE-OPTIMIZATION-1791624181558447000/command-03.log",
+          "exit_code": 0,
+          "timed_out": false,
+          "passed": true,
+          "duration_ms": 57530,
+          "sha256": "a6a62c3beae6642497730e56c783c40000a51894dbc0595a2c637c6292cb26a8"
+        },
+        {
+          "acceptance_ids": [
+            "MODEL"
+          ],
+          "log": ".local/delivery/I2-EXPERIENCE-OPTIMIZATION-1791624181558447000/command-04.log",
+          "exit_code": 0,
+          "timed_out": false,
+          "passed": true,
+          "duration_ms": 74214,
+          "sha256": "0cda829bd6fb9cca481f70e419eef613f615f804a3c314fd92dcc43ffe9d8a64"
+        },
+        {
+          "acceptance_ids": [
+            "WEB-CHECKS"
+          ],
+          "log": ".local/delivery/I2-EXPERIENCE-OPTIMIZATION-1791624181558447000/command-05.log",
+          "exit_code": 0,
+          "timed_out": false,
+          "passed": true,
+          "duration_ms": 145625,
+          "sha256": "1935b2561488d092c656eb4c5ed91c0c0872820bd4a2c26239dfa8ce29bac739"
+        }
+      ],
+      "scope": "已读取五项成功回执及对应完整日志：EXPERIENCE 七组；UI-REGRESSIONS 十四个脚本且 failed=[]；CONVERSATION 七组；MODEL 六组、38 次本地协议请求；WEB-CHECKS 同源契约 245 例、类型、Web 构建与 Rust Clippy。命令均退出 0、未超时。此收据对应行尾空格清理前版本；统一重跑会更新收据路径，以上时间、摘要与独立命令日志保留本次观察。"
+    },
+    {
+      "path": ".local/experience-optimization/creation-filter-before-fix/I2-EXPERIENCE-OPTIMIZATION-result.json",
+      "observed_at": "2026-10-10T09:57:11.389788+00:00",
+      "started_at": "2026-10-10T09:43:02.187201+00:00",
+      "finished_at": "2026-10-10T09:50:50.965483+00:00",
+      "passed": false,
+      "before_after_identical": true,
+      "commands_observed": [
+        {
+          "acceptance_ids": [
+            "EXPERIENCE"
+          ],
+          "exit_code": 0,
+          "timed_out": false,
+          "passed": true,
+          "log": ".local/delivery/I2-EXPERIENCE-OPTIMIZATION-1791625382191891000/command-01.log"
+        },
+        {
+          "acceptance_ids": [
+            "UI-REGRESSIONS"
+          ],
+          "exit_code": 1,
+          "timed_out": false,
+          "passed": false,
+          "log": ".local/delivery/I2-EXPERIENCE-OPTIMIZATION-1791625382191891000/command-02.log"
+        }
+      ],
+      "scope": "复验中 EXPERIENCE 退出 0，UI-REGRESSIONS 退出 1；其十四脚本有十二个通过，semantic-role-boundaries-browser 等待第二个新建指标超时，browser 在 harness service health 等待超时。收据中未执行其余三项；保留失败，不将旧五项成功拼接为当前通过。"
+    },
+    {
+      "path": ".local/experience-optimization/creation-filter-before-fix/reproduction.log",
+      "passed": false,
+      "scope": "产品修复前加入新建后清空目录名称/状态及新对象可见断言，断言在名称仍为合成停用恢复文档时失败；预期来自创建后显示新对象的原要求。"
+    },
+    {
+      "path": ".local/experience-optimization/creation-filter-fixed.log",
+      "passed": true,
+      "checks": 6,
+      "exit_code_reported_by_implementer": 0,
+      "scope": "修复后原文档/指标停用恢复、跨用户转交及服务端拒绝、超级维护者转交、关联详情、1440/390 布局全部通过；新增筛选清空和目录命中新对象断言包含在其中。本审查者读取完整日志并静态核对，未重跑。"
+    }
+  ],
+  "acceptance_changes_reviewed": [
+    "个人记忆、公共 Skill 发布、折叠详情和字段 summary 的入口更新对应已确认原型；权限、幂等、版本、保存和数值断言保留。",
+    "显式选择语义对象替代离页后依赖默认选择，符合地址恢复要求；浏览器后退与取消离开另有专项覆盖。",
+    "手机 navigateWorkspace/logoutWorkspace 先等待 .workspace 再判断导航抽屉；新对话按真实 button 角色和完整名称定位，没有改产品行为。",
+    "建议计数只匹配 .skill-suggestion .entry-value，并等待输入框清空，继续要求两条独立已保存建议；避免输入框中的未保存文字被误算。",
+    "隐藏记忆检索技术提示后，测试等待正式 /assets 响应 memory_index_state=indexed，索引完成仍是验收条件。",
+    "双金额无分类时改为禁用图表，依据为原型禁止金额互作分类；文本分类正例、负数、大整数、空结果仍由 query-boundaries 验证。",
+    "横向滚动验证移至确有溢出的 390px 视口，保留轮询后滚动位置、原值和完整 CSV 断言。",
+    "新增文档旧回执场景先完成真实 PATCH 再延迟响应；没有用失败替身绕过真实提交，也没有把新草稿 B 期望改为服务端旧内容。",
+    "交付前仅清理 KnowledgeDocument.tsx 第 79 行行尾空格；误删 JSX 闭合符的中间错误已修复。原五项验收命令、正式测试、要求与断言均未改变。",
+    "新增五行新建指标后的名称/状态为空及新对象目录可见断言，依据为原有创建后显示新对象要求。先在旧产品上失败，再修复产品；原角色权限、停用恢复、转交、布局和服务端拒绝断言完整保留，未改超时。"
+  ],
+  "scope_audit": {
+    "baseline": ".local/experience-optimization/before/",
+    "frozen_input_file_count": 137,
+    "method": "scope_sha256 由 scripts/check_delivery.py 的当前 delivery 合同、已确认决定摘要、声明输入及检查器哈希生成，排除本审查记录与审查指针；冻结输入数量不代表逐一重新审计所有历史功能。",
+    "review_record_is_local_evidence": true
+  },
+  "testing_gaps": [
+    "当前代码范围尚无五项完整成功收据。09:43 复验仅 EXPERIENCE 通过，UI-REGRESSIONS 失败；新建目录问题已有先失败后六组通过的定向证据，但不能代替完整十四脚本及其余三项验收。",
+    "browser 在 harness service health 启动阶段超时。主任务正在查证 Pi 导入；本审查只核对失败日志，不将超时归为已解决环境问题，不修改业务等待或验收时限。",
+    "本轮证据使用合成资料、隔离 MySQL 和平台/模型替身；不证明真实 Datasight、真实模型内容质量、整体 MVP、Safari/Firefox 或屏幕阅读器验收。"
+  ],
+  "verification_limits": {
+    "official_model_requests_by_reviewer": 0,
+    "product_or_formal_tests_edited_by_reviewer": false,
+    "credentials_read_by_reviewer": false,
+    "remote_mutations_by_reviewer": false,
+    "final_acceptance_run_by_reviewer": false,
+    "visual_review_performed_by_this_reviewer": false,
+    "historical_isolated_reproductions_run_by_reviewer": true
+  },
+  "evidence_sha256": {
+    ".local/experience-optimization/experience-current.log": "e97240eed3892578907dda5198086c80ef80199793f73d26743cac89a3c2775d",
+    ".local/experience-optimization/report.json": "d45e4b34aa9d6ad95d0dd3125c27cb4deb59cfb13d92b1c8dd3f25fcc28da130",
+    ".local/experience-optimization/regressions-current.log": "315ae25e1652318f5d263be154b04487874e35ecb1f46879c434ff413f4b3b64",
+    ".local/experience-optimization/regressions-repaired.log": "39b6517791a50b6a1f212939ca2bdf4b2a9a535571d692203fe21c068cdc4a22",
+    ".local/experience-optimization/background.log": "0c8d459c339b10f71105cb7d8bfae2dfd95dcbdf953a849908d4820515f69ce0",
+    ".local/experience-optimization/model-current.log": "0cda829bd6fb9cca481f70e419eef613f615f804a3c314fd92dcc43ffe9d8a64",
+    ".local/experience-optimization/types-current.log": "f50fe1624c26efd634a1d99eca879f67e3b5cd1acf5f9e6642de5a0f1687cd94",
+    ".local/experience-optimization/materials.log": "b46b5b6bf61810a2b43fad50a60b1da44abc703d5351c03ff6051b2caeb77a63",
+    ".local/delivery/I2-EXPERIENCE-OPTIMIZATION-1791624181558447000/command-01.log": "e97240eed3892578907dda5198086c80ef80199793f73d26743cac89a3c2775d",
+    ".local/delivery/I2-EXPERIENCE-OPTIMIZATION-1791624181558447000/command-02.log": "e9749ce1692293bf5a9e9c2520abdb67b1a40f768b34db3f15c934c24bb1c364",
+    ".local/delivery/I2-EXPERIENCE-OPTIMIZATION-1791624181558447000/command-03.log": "a6a62c3beae6642497730e56c783c40000a51894dbc0595a2c637c6292cb26a8",
+    ".local/delivery/I2-EXPERIENCE-OPTIMIZATION-1791624181558447000/command-04.log": "0cda829bd6fb9cca481f70e419eef613f615f804a3c314fd92dcc43ffe9d8a64",
+    ".local/delivery/I2-EXPERIENCE-OPTIMIZATION-1791624181558447000/command-05.log": "1935b2561488d092c656eb4c5ed91c0c0872820bd4a2c26239dfa8ce29bac739",
+    ".local/experience-optimization/creation-filter-before-fix/I2-EXPERIENCE-OPTIMIZATION-result.json": "aa6c4cda0673f92b37cc9e87e221e622eb2398e1a46d027d3664cbbb5fe222df",
+    ".local/experience-optimization/creation-filter-before-fix/reproduction.log": "450e8ff4c57cf15e8cbad97dafaf60da45e9385724f9b00da6440bfbf6fbbb31",
+    ".local/experience-optimization/creation-filter-fixed.log": "fbd9a1fd387d9426e5af6ed1675f891976d7ebfa15f7bb04eb96ed58078a7d70",
+    ".local/delivery/I2-EXPERIENCE-OPTIMIZATION-1791625382191891000/command-02.log": "6cdabb1301e0a3fa9b9a9d01841e95b5529ed2cc61595c391ea0e235f6c61c6c"
+  },
+  "initial_reviewed_at": "2026-10-10T09:14:41.039908+00:00",
+  "supplemental_reviews": [
+    {
+      "reviewed_at": "2026-10-10T09:42:24.435880+00:00",
+      "head_at_review": "2a6c94161984ffce1e7859ef9e3a9a4f74444bde",
+      "previous_reviewed_at": "2026-10-10T09:14:41.039908+00:00",
+      "previous_scope_sha256": "ab4557009c6465c42cd925ac601aac93a9edbc65b84541058cc2a15d8eb76b5d",
+      "current_scope_sha256": "c74aa734afc323a39e5e982248bbbad2ea55af7637d844f1d2cb4ee02910df9e",
+      "reason": "分批提交前 git diff --cached --check 发现新增文件行尾空格，补审格式修正。",
+      "baseline_receipt_observed_path": ".local/delivery/I2-EXPERIENCE-OPTIMIZATION-result.json",
+      "baseline_receipt_started_at": "2026-10-10T09:23:01.555936+00:00",
+      "baseline_receipt_sha256": "6f10f0be94a6576393f655c3de38c72446617f7a88516d170c28518f47fcb224",
+      "frozen_file_hashes_compared": 138,
+      "only_changed_input": "apps/web/src/features/knowledge/KnowledgeDocument.tsx",
+      "previous_source_sha256": "22d67a790964669f6292c91e6d6b5024dcc5dbbb5a6ad69388360ae1efe29a3a",
+      "current_source_sha256": "0db75020224e433c05ca7ee79c6574bb996f0514878871371321e561d9cda1c2",
+      "removed_bytes": 1,
+      "removed_content": "第 79 行换行前的 U+0020 空格",
+      "exact_reconstruction_matches_baseline": true,
+      "all_other_frozen_inputs_unchanged": true,
+      "contract_decisions_declarations_and_checker_unchanged": true,
+      "behavior_assessment": "最终 JSX 闭合符、组件属性、表达式和控制流完整保留；唯一剩余差异为换行前格式空白，不产生新的渲染文本或行为。",
+      "intermediate_defect": "补审先发现误删闭合符；实施者已恢复，见 DELIVERY-WHITESPACE-REMOVED-JSX-CLOSURE。",
+      "work_performed": "只读取冻结输入、哈希、收据及命令日志并更新本审查记录；未改产品/测试，未操作 Git 暂存或提交，未启动编译/harness/模型。"
+    },
+    {
+      "reviewed_at": "2026-10-10T09:57:11.389788+00:00",
+      "head_at_review": "2a6c94161984ffce1e7859ef9e3a9a4f74444bde",
+      "previous_reviewed_at": "2026-10-10T09:42:24.435880+00:00",
+      "previous_scope_sha256": "c74aa734afc323a39e5e982248bbbad2ea55af7637d844f1d2cb4ee02910df9e",
+      "current_scope_sha256": "e8c41c9a2d391c4dfd704612e25a53399b79e738ecd5959c7f3347f51b17e638",
+      "reason": "最终复验暴露新建对象受旧目录筛选影响，补审最小产品修复及新增回归。",
+      "baseline_receipt": ".local/experience-optimization/creation-filter-before-fix/I2-EXPERIENCE-OPTIMIZATION-result.json",
+      "baseline_receipt_sha256": "aa6c4cda0673f92b37cc9e87e221e622eb2398e1a46d027d3664cbbb5fe222df",
+      "baseline_receipt_status": "failed",
+      "baseline_source_snapshots_match_receipt": true,
+      "changed_inputs": [
+        {
+          "path": "apps/web/src/features/knowledge/KnowledgePage.tsx",
+          "before_sha256": "3cedc1b20caf7c89de96768521fee52489ff4c0f462756d4b8cd98536941ab76",
+          "current_sha256": "895347b205946e98ea0cc7b36af4b6d618878b444e24501790ab6aedcb9cb416"
+        },
+        {
+          "path": "tests/mvp/check-semantic-role-boundaries-browser.mjs",
+          "before_sha256": "7d5c1a5e956dadaef08eb352f0ae7251f3039652cb2a2831d1c7f0109c73225b",
+          "current_sha256": "c75093819e76546a7df4bb4eac00dd9fa366c2baa554aa5d47c9d18ee5003f31"
+        }
+      ],
+      "contract_decisions_declarations_and_checker_unchanged": true,
+      "all_other_frozen_inputs_unchanged": true,
+      "assessment": "创建成功时重挂目录与清空筛选可阻止旧目录覆盖刚创建对象；原请求代次取消路径与新实例首屏/后页对象核验保持。普通状态变更不改变目录 key，保留原筛选。新测试只增加断言，无场景删除或期望放宽。",
+      "remaining_verification": "browser 的 service health 启动超时尚由主任务查证；本补审不将其认定为环境故障或业务通过。须在当前范围重新取得五项完整验收收据。"
+    }
+  ]
+}

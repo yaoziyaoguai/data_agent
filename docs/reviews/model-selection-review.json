@@ -1,0 +1,175 @@
+{
+  "schema": 1,
+  "increment_id": "I2-CONVERSATION-MODEL",
+  "reviewer": "correctness /root/model_selection_review；未参与产品、正式测试或项目文档实现。",
+  "reviewed_at": "2026-10-10T03:41:24.941664+00:00",
+  "base_head": "d84cb41241209fc465eb507cc3897c53717f1140",
+  "baseline": ".local/model-selection/before/manifest.json",
+  "conclusion": "passed",
+  "scope_sha256": "4d80f3cf6f206a1e9e5b282d6d29ac660f2a48a472f02db8d3ed7fc4e9e58a92",
+  "summary": "冻结范围的独立审查通过，无剩余确定性阻断。已关闭Pro辅助预算拒绝及Clippy失败，核对本人设置、消息冻结、并发、恢复与查询归属；独立七档协议、辅助预算单测和定向Clippy通过。补审首次加载就绪等待：仅原后台观察器三处改动，产品输入未变，七组后台回归通过。主任务仍须在新范围完成五项统一验收。",
+  "requirements_reviewed": {
+    "C02": "目录只公开允许的模型和档位；客户端不提供凭据、端点、价格或额度。M05读取按用户、空间、未删除状态过滤；保存先校验本人会话，非法组合及跨用户访问有运行证据。",
+    "C08": "ModelSelector只显示模型支持项，Flash low切到Pro时显示关闭；useModelSelection在保存中暂停发送，失败后回读已保存值，无法回读时停止发送。代次和key阻止旧会话结果覆盖当前界面；桌面和390px截图已独立查看。",
+    "D03": "首次消息同事务保存初次选择和budget profile；后续对话选择持久保存。Pi继续同一session，刷新保留模型和草稿，真实三轮Flash→Pro→Flash继续同一合成话题。",
+    "D09": "save_model_selection只修改选择与版本，不改变运行权或SQL状态。显式消息选择优先于并发对话设置；查询结果仍由原query budget_scope唤醒，恢复包从原范围读取profile。运行证据覆盖后台SQL期间切换及原Flash结果解释。",
+    "C05": "消息原始指纹包含显式选择，先查重放再派生配置；同ID改模型冲突，未带选择的旧输入指纹保持。保存采用期望版本，仅允许紧邻版本同内容重放；profile继承原trial与额度，恢复保持原message/scope/chain并保留unknown调用预留。"
+  },
+  "architecture_and_pi_review": {
+    "ownership": "M05负责对话选择/version和私有存储；M08负责允许组合、可信价格与预算派生；具名conversation_models/receive_message组合，API和React保持接入职责。迁移为现有会话增加可空选择和初始0版本。",
+    "read_boundary": "GET已改为M05单条非锁定查询，同时读取selection/version；保存和消息接收继续同会话行锁，符合普通读取不暗含写锁的规则。",
+    "pi_reuse": "apps/agent/session/deliver.ts和provider/deepseek.ts与开工基线完全一致。继续通过Pi 1.0.0目录、createAgentSession(model,thinkingLevel)、SessionManager和原生压缩接口工作，无新增Agent循环或历史转换器。",
+    "sdk_reference": "锁定pi-ai的DeepSeek目录包含Flash off/low/high/max与Pro off/high/max；api/transform-messages.js:68–90按provider/api/model判断，将跨模型非加密thinking转换为text，同模型继续保留thinking。",
+    "compaction_evidence": ".local/model-selection/compaction.log验证24轮合成中文历史、6轮续聊、4次原生压缩、原预算计账与依赖撤权；共18次本地协议调用。"
+  },
+  "findings": [],
+  "resolved_findings": [
+    {
+      "id": "PRO-AUXILIARY-BUDGET",
+      "severity": "P1",
+      "confidence": 100,
+      "location": "crates/data-agent/src/modules/runtime/provider_calls/store.rs:16",
+      "problem": "Pro消息冻结为deepseek-v4-pro后，共享语义向量和Mem0调用仍把该profile交给仅允许Flash的ProviderBudget转换，直接返回invalid_input。",
+      "resolution": "允许两种已校验聊天模型继承原scope/trial和输入输出上限；记忆提取仍按Flash，向量仍按百炼计价。",
+      "verification": [
+        ".local/model-selection-review/auxiliary-budget-final.log",
+        ".local/model-selection-review/auxiliary-budget-final-report.json",
+        ".local/model-selection/real-report.json"
+      ]
+    },
+    {
+      "id": "CLIPPY-TEST-MODULE-POSITION",
+      "severity": "P2",
+      "confidence": 100,
+      "location": "crates/data-agent/src/modules/runtime/provider_calls/store.rs",
+      "problem": "新增测试模块放在生产项之前，定向Clippy以items_after_test_module失败，退出101，必需CODE-CONTRACTS无法通过。",
+      "resolution": "实现者将测试模块移至文件末尾并格式化，未抑制lint；审查者重跑相同命令退出0，辅助预算单测再次通过。",
+      "verification": [
+        ".local/model-selection-review/clippy-final.log",
+        ".local/model-selection-review/auxiliary-budget-final.log"
+      ]
+    }
+  ],
+  "independent_work": [
+    {
+      "command": "node .local/model-selection-review/check-provider.mjs",
+      "exit_code": 0,
+      "checks": 11,
+      "evidence": ".local/model-selection-review/provider-report.json",
+      "scope": "当前受控provider与Pi SDK的七档请求参数、模型ID、输出上限、reserve/send/finalize及相同参数指纹；拒绝四种非法selection。fetch和宿主许可为合成替身，无数据库或外网。"
+    },
+    {
+      "command": "$HOME/.cargo/bin/cargo test -p data-agent --lib auxiliary_calls_keep_the_request_budget_when_chat_uses_pro",
+      "exit_code": 0,
+      "checks": 1,
+      "evidence": ".local/model-selection-review/auxiliary-budget-final.log",
+      "scope": "直接运行最终源码的辅助预算转换回归；原scope/trial/上限和三种辅助计价。"
+    },
+    {
+      "command": "$HOME/.cargo/bin/cargo clippy -p data-agent --lib --tests -- -D warnings",
+      "exit_code": 0,
+      "evidence": ".local/model-selection-review/clippy-final.log",
+      "scope": "修正测试位置后的data-agent库及测试编译/lint；全工作区检查仍由统一验收执行。"
+    },
+    {
+      "command": "独立核对三张截图和试用账本算术",
+      "evidence": ".local/model-selection-review/final-audit.json",
+      "scope": "桌面、390px保存失败、真实试用刷新截图；按purpose核对7次Agent和3次memory_embedding调用，10条均settled，逐条计价及56890微美元合计一致。"
+    }
+  ],
+  "implementation_evidence_inspected": [
+    {
+      "path": ".local/model-selection/verified/report.json",
+      "passed": true,
+      "checks": 6,
+      "local_provider_requests": 38,
+      "official_requests": 0,
+      "scope": "模型矩阵、持久化、跨用户、设置/发送竞争、进行中生成、后台SQL、浏览器刷新/失败和已开始运行的恢复。审查者未重跑共享数据库。"
+    },
+    {
+      "path": ".local/model-selection/compaction.log",
+      "passed": true,
+      "calls": 18,
+      "compactions": 4,
+      "official_requests": 0,
+      "scope": "既有原生压缩回归，同session及原预算，压缩后依赖失效在发送前拒绝；含280条短历史。"
+    },
+    {
+      "path": ".local/model-selection/real-report.json",
+      "passed": true,
+      "turns": 3,
+      "official_requests": 10,
+      "requests_by_purpose": {
+        "agent": 7,
+        "memory_embedding": 3
+      },
+      "recorded_cost_micros": 56890,
+      "scope": "真实浏览器依次使用Flash/off、Pro/high、Flash/low，正确复述合成标记，无SQL提交，刷新保持选择。账本为保守计价，不是服务商折扣账单。"
+    },
+    {
+      "path": ".local/model-selection/verified-background/report.json",
+      "passed": true,
+      "checks": 7,
+      "official_requests": 0,
+      "scope": "修正首条消息等待初次模型设置读取后，原后台续聊、三查询并行、单独停止、结果归属、刷新恢复、窄屏和错误提示七组回归通过。后续send的即时enabled断言保持；审查者检查稳定报告和日志，未重跑共享数据库。"
+    }
+  ],
+  "acceptance_changes_reviewed": [
+    "新HTTP替身起初未登记消息归属；补route工具调用满足现有业务契约，未修改产品行为。",
+    "跨模型reasoning_content断言按锁定SDK规则改为历史文本保留，并补同模型工具续调的reasoning_content断言；不是根据业务输出反写预期。",
+    "检查点会话查询改为按既有recovery_chain_id关联agent_runs，并要求两轮非空相同session ID；修正不存在的表列。",
+    "移除模型选择替身每轮无关重复检索，保留每轮route续调和全部七档/并发/后台/恢复断言；完整检索仍由DATA-PROVIDER覆盖，长上下文另绑定既有NATIVE-COMPACTION。",
+    "替身为无工具的原生压缩请求补纯文本摘要；未改Pi压缩实现、限制或历史保留标准。五轮失败源码、日志和报告均已归档；已检查相关失败日志。",
+    "原后台观察器在登录后首条发送前立即断言enabled；新增模型目录初次读取期间model.ready为false，此断言与已审产品加载规则冲突。仅首条send增加initialLoad=true并用既有20秒until等待enabled，其余send仍立即断言。未删场景、改期望、改变产品或替换mock；旧测试、失败截图与收据已归档，修正后的七组检查通过。"
+  ],
+  "scope_audit": {
+    "evidence": ".local/model-selection-review/initial-ready-audit.json",
+    "fingerprint": ".local/model-selection-review/initial-ready-scope.json",
+    "baseline_hashes_valid": true,
+    "scope_input_count": 37,
+    "method": "沿用原开工快照审查；本次仅比较上次通过指纹和首次加载修正，确认产品输入全部相同、仅原后台测试变化及允许范围声明增加。不使用整工作树git diff。",
+    "previous_evidence": ".local/model-selection-review/final-audit.json"
+  },
+  "residual_risks": [
+    "真实服务只验证Flash/off、Pro/high、Flash/low三种组合；其余四种组合有锁定SDK和本地HTTP协议证据。",
+    "后台查询使用可执行合成SQLite；本轮不证明真实Datasight平台能力、完整Mem0写入流程或整体MVP质量。",
+    "浏览器、数据库、原生压缩及真实模型证据由实现者运行，审查者检查源码、报告、截图与账本；没有将这些执行声明为审查者重跑。"
+  ],
+  "testing_gaps": [
+    "主任务仍须以修正后冻结范围完成MODEL-SELECTION、DATA-PROVIDER、BACKGROUND-REGRESSION、NATIVE-COMPACTION、CODE-CONTRACTS五项verify-increment；此前统一验收前两项和本次单独后台回归通过，不替代新范围的统一收据。"
+  ],
+  "verification_limits": {
+    "official_model_requests_by_reviewer": 0,
+    "shared_database_tests_run_by_reviewer": false,
+    "product_or_formal_tests_edited_by_reviewer": false,
+    "credentials_read_by_reviewer": false,
+    "remote_mutations_by_reviewer": false
+  },
+  "evidence_sha256": {
+    ".local/model-selection-review/final-scope.json": "15f5b727f7a711a46fbc2673b57e07ff862840e8c778b64a4140a69bdd6054b5",
+    ".local/model-selection-review/final-audit.json": "3e273bbfadd9873d3c9aa13a3ce698aee92aed5543e6e773119f33320a0728eb",
+    ".local/model-selection-review/check-provider.mjs": "bd1f9d283721eaf07c79a2c89f1e202e3ab33ea5750daa49b090e6ab8404ae28",
+    ".local/model-selection-review/provider-report.json": "68ade035e4d5f156d1aca524eaacc4d38b64ab31d57d7fc78357b27700d36b73",
+    ".local/model-selection-review/auxiliary-budget-final-report.json": "7c2a56fcc5b4cf9f3f6649729cf0aeb15cdc91d25c46273468d49dd1bfa14691",
+    ".local/model-selection-review/auxiliary-budget-final.log": "e818e84af10cb105c59cee2ffb9e1f33ddc2628270c35dd1469e0b8962cde54e",
+    ".local/model-selection-review/clippy-final.log": "150dafa5b216bbdb3f708fe41c80785e99d4c3c01c88769a6650fe81ef239f4a",
+    ".local/model-selection/verified/report.json": "9e9e9c8f5cc2e8ae2fb5f3cd0c61e6949c7ba3687ec29f3f84d62650e32b06a2",
+    ".local/model-selection/verified/check.log": "0cda829bd6fb9cca481f70e419eef613f615f804a3c314fd92dcc43ffe9d8a64",
+    ".local/model-selection/verified/protocol-summary.json": "5ac187322dbc203cc3cbe848aa1c4740ac2a08310f5a4c91d8d70346bd8a5829",
+    ".local/model-selection/verified/desktop.png": "5d722e5b5012af9d64e1312dd7ff255a172e6f9e387b39a42131ca97228e05a1",
+    ".local/model-selection/verified/mobile.png": "94743c6bd093344c332ec163a8f9d07203bcf18a5cd1fcfa0283ca9143be23eb",
+    ".local/model-selection/compaction.log": "3818cc9884c2be08e0f84146532518e5783dba4efe2243c39b02b547bde9cf7f",
+    ".local/model-selection/real-report.json": "477f942477c2ecc4b8dd1a2e5f06f484e2aa7ce8abba936229b86fac179ac7a8",
+    ".local/model-selection/real-check.log": "bf12df5f77b5a1c72a7bf5eed8a1d55fe04375fa2412139166050676cb4233c6",
+    ".local/model-selection/real-desktop.png": "ff843b8df7f414232f5d74da719ff10408332730da8c2c90d96bf556aa0aeb2d",
+    ".local/model-selection-review/initial-ready-scope.json": "ae349d3469e69ec0141d871d910903beac1229a5438776c3f55ff975b9b34da6",
+    ".local/model-selection-review/initial-ready-audit.json": "b5f75014dcfe086f00138fee169eb62b39603e63c4a49291b433fecd6dbb7e7b",
+    ".local/model-selection/initial-ready-before-fix/check-background-queries-browser.mjs": "dec353e413cf90741476904fd5024d1006dd8e12cc2cf8f61060b1b24d95471b",
+    ".local/model-selection/initial-ready-before-fix/report.json": "baebbefd29882c227ec61925307ecea2d6fd2c32d5dbccfa7d95dc21fa81a417",
+    ".local/model-selection/initial-ready-before-fix/I2-CONVERSATION-MODEL-result.json": "03f242d923b3bccb550d1cd607d982447c9e0ec83b7500a78c5529f3671caa77",
+    ".local/model-selection/initial-ready-before-fix/failure.png": "7b97cd21fa2dc421c9c318da064bfa3660db5038dbdda0b63bb4f1375c1af3b3",
+    ".local/delivery/I2-CONVERSATION-MODEL-1791603378276643000/command-03.log": "ce2f72a68ca8c6836d50a7dab515c11e65434f70d689cd82e7c53acd3df91ae8",
+    ".local/model-selection/verified-background/report.json": "a7416bd019b506f0add873c492664628a1a17f83bfa522b89da0ba5ed8428be8",
+    ".local/model-selection/verified-background/check.log": "a6a62c3beae6642497730e56c783c40000a51894dbc0595a2c637c6292cb26a8"
+  }
+}

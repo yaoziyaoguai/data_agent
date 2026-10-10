@@ -1,0 +1,143 @@
+{
+  "schema": 1,
+  "increment_id": "I2-EVIDENCE-RETURN",
+  "reviewer": "correctness /root/conversation_experience_review；未参与本轮产品、正式测试、CURRENT及设计实现，仅写独立审查记录和隔离验证材料。",
+  "reviewed_at": "2026-10-09T10:39:23.579379+00:00",
+  "base_head": "d84cb41241209fc465eb507cc3897c53717f1140",
+  "baseline": ".local/evidence-return/before/manifest.json",
+  "conclusion": "passed",
+  "scope_sha256": "bb97ea5c75635c0952eb79516e123397fb0eef97e57dcadd5ff7a66a6282436c",
+  "summary": "本冻结范围的独立正确性审查通过，无剩余确定性阻断。App在原工作台上打开现有语义页，返回时保留原组件及局部状态；两项独立复现的焦点和嵌套Escape问题已修复并复验。独立无数据库Chromium验证覆盖实际Modal/CSS的桌面、手机和短视口；另逐项核对实现方完整业务浏览器的4组断言、通过结果及实际内容截图。主任务仍须运行本轮3项统一验收，本记录不代替后台回归或构建结果。",
+  "requirements_reviewed": {
+    "C08": "保持工作台、我的积累、语义管理三个主入口；从SQL依据进入资料窗口有固定返回入口，Escape逐层关闭，焦点回原按钮且不强制滚动。资料独立滚动，手机和短视口返回可达；样例均从零构造。",
+    "D03": "查看依据时Workbench仍为相同位置的同一组件，不因打开或关闭Modal重建会话、已加载历史、SQL依据展开和结果视图。草稿、原阅读位置及表格横向位置有实际浏览器断言；直接语义管理保留原页面行为。",
+    "D09": "资料窗口只改变前端查看方式，保持原Workbench轮询及查询状态更新。正式浏览器打开文档期间另一条查询完成，关闭后原查询显示42；没有更改Pi推进、后台Worker或查询身份和结果归属规则。"
+  },
+  "changed_files_reviewed": [
+    "docs/CURRENT.md",
+    "apps/web/src/main.tsx",
+    "apps/web/src/shared/Modal.tsx",
+    "apps/web/src/style.css",
+    "tests/mvp/check-evidence-return-browser.mjs",
+    "docs/development.md",
+    "docs/architecture/implementation-views.md",
+    "docs/architecture/implementation-atlas.html",
+    "docs/architecture/implementation-diagram-checks.json"
+  ],
+  "code_paths_checked": [
+    "App的Workbench始终为同一片段的首个子节点；showEvidence仅增加或卸载其后的Modal，不改变Workbench身份。窗口内复用KnowledgePage及既有权限接口。",
+    "显式主导航关闭资料窗口；成功退出清除用户、窗口状态和对象引用，旧用户的知识窗口随登录视图卸载。直接进入语义管理仍使用WorkspaceShell下原独立页面。",
+    "Modal effect捕获原dialog节点，卸载清理在ref清空后仍能调用close，再将焦点交回打开窗口前的元素；preventScroll保持原阅读位置。",
+    "cancel先阻止原生默认关闭及React事件继续冒泡，再调用当前Modal的onClose；嵌套编辑Escape仅关闭内层，再次Escape返回原对话。",
+    "可选closeLabel/className保留其他Modal默认关闭按钮；evidence-dialog类独占90dvh、固定头部和正文滚动规则，没有改其他对话框布局。",
+    "原KnowledgePage/KnowledgeDocument的读取、编辑及异步刷新路径保持，资料窗口没有增加客户端权限或新的写入方式。"
+  ],
+  "findings": [],
+  "resolved_findings": [
+    {
+      "id": "EVIDENCE-01",
+      "problem": "Modal卸载时ref.current已清空，原cleanup未关闭捕获的dialog，返回后焦点落到BODY，无法回到原SQL依据入口。",
+      "fix": "effect保存dialog节点，清理时对该节点调用close，再以preventScroll聚焦原入口。",
+      "verification": "独立修复前观察focusedTag=BODY；实际修复后三种视口的入口焦点、Y坐标、scrollTop、草稿、展开及scrollLeft=130与打开前完全一致。正式业务浏览器也保留原焦点断言并通过。",
+      "evidence": [
+        ".local/evidence-return-review/focus-inspection.json",
+        ".local/evidence-return-review/modal-verification.json",
+        ".local/checks/evidence-return/report.json"
+      ]
+    },
+    {
+      "id": "EVIDENCE-02",
+      "problem": "在资料窗口打开文档编辑后按Escape，cancel事件经React冒泡到外层，导致两层窗口同时关闭。",
+      "fix": "Modal的onCancel在preventDefault后stopPropagation，再执行当前层关闭。",
+      "verification": "独立修复前outerCount和dialogCount均为0；实际修复后仅内层消失，焦点回编辑按钮；再次Escape关闭资料并回原依据入口。正式完整文档编辑路径也明确断言两层状态与内层返回焦点。",
+      "evidence": [
+        ".local/evidence-return-review/modal-inspection.json",
+        ".local/evidence-return-review/modal-verification.json",
+        ".local/checks/evidence-return/report.json"
+      ]
+    }
+  ],
+  "independent_work": [
+    {
+      "kind": "runtime",
+      "command": "node .local/evidence-return-review/verify-modal.mjs",
+      "environment": "Node 26.8.1、项目已有rolldown与Playwright Chromium；加载实际Modal和全部CSS，使用React StrictMode及合成双层窗口和会话滚动内容；不接数据库。",
+      "exit_code": 0,
+      "evidence": ".local/evidence-return-review/modal-verification.json",
+      "scope": "1440×1000、390×844、390×420：资料滚到底部后返回按钮可见，无页面横向溢出；返回后的焦点、Y坐标、纵横滚动、草稿和details展开保持；嵌套Escape逐层关闭。"
+    },
+    {
+      "kind": "static_and_visual",
+      "evidence": ".local/evidence-return-review/final-scope-audit.json",
+      "scope": "逐行核对本轮差异与4组正式浏览器断言；实际查看桌面完整文档、手机滚动资料及原焦点截图。43份开工快照完整；上一冻结范围77份文件中仅本轮允许路径发生变化；五份历史审查未变。"
+    }
+  ],
+  "implementation_evidence_inspected": [
+    {
+      "path": ".local/checks/evidence-return/report.json",
+      "passed": true,
+      "checks": 4,
+      "official_model_requests": 0,
+      "environment": "真实Chromium、受控宿主工具、Pi SDK检查点、MySQL、可执行合成SQLite；无真实模型调用。",
+      "scope": "指标返回保留图表与草稿；完整业务文档及嵌套编辑Escape；阅读资料期间目标查询继续并返回42；桌面和390px返回保留表格横滚；直接语义管理无资料弹窗。"
+    },
+    {
+      "path": ".local/evidence-return/browser-content-ready.log",
+      "scope": "加强明确标题加载条件及内层返回焦点断言后的正式浏览器完整退出0；errors为空。"
+    },
+    {
+      "path": "docs/architecture/implementation-diagram-checks.json",
+      "scope": "29张图渲染通过，来源摘要对应最新说明；没有将图册生成等同于业务验收。"
+    }
+  ],
+  "acceptance_changes_reviewed": [
+    "首次正式检查的返回焦点失败已保留，未删除或放宽原入口、阅读位置和草稿断言；修复产品后复验。",
+    "实现方看截图发现等待通用容器不足以保证正文已加载，将条件加强为指定指标/文档标题可见，并增加编辑窗口关闭后聚焦编辑按钮；保留较早截图与通过记录，没有以加载中截图冒称已看见正文。",
+    "本轮验收仍是EVIDENCE-RETURN、BACKGROUND-REGRESSION、WEB-BUILD三项；未修改前轮后台回归断言，未以mock替换既有SQL执行验证。"
+  ],
+  "evidence_sha256": {
+    ".local/evidence-return-review/final-scope.json": "8b8bc2c60b3f6b1902b20a98a91f2fe4d5417c66a28da938380f5be41dc31488",
+    ".local/evidence-return-review/final-scope-audit.json": "5b7e3f33249c6b5c939905f0a324476db330c53c5c8d23aca23a34a3c326d58d",
+    ".local/evidence-return-review/prior-record-hashes.json": "a3be217cfb02905ba1ac897f2c849f78d7f60a51167dca9a33116046b80ab46d",
+    ".local/evidence-return-review/modal-inspection.json": "caef9bffae66e7d03f63f12f154d06e77a1bf1c3a8a0c37d40c0a89fba7544f6",
+    ".local/evidence-return-review/focus-inspection.json": "742c628c572f94976b34f6f614588a1cdedece3051d22109b0708b625a953a1a",
+    ".local/evidence-return-review/focus-candidate-inspection.json": "65f75e06080b41d08a441aaf5f74c6fcbed56e21b795a0afbaa2f08cd6fc6d5d",
+    ".local/evidence-return-review/verify-modal.mjs": "75751ef71a1c0b5440eaff3f77e20f5535d03abcdb3bacabb514be5bbedcf109",
+    ".local/evidence-return-review/modal-verification.json": "07a0b571b48c4d3df72a756bcaa32469d43ea55583eb9805e55fa71ed7dc5cd9",
+    ".local/evidence-return-review/modal-verification.log": "19d89cd5f3b39bb038df3d72de554e39f8e65aaff33fc1899aa97d6df9773815",
+    ".local/evidence-return-review/modal-390-420.png": "a3b48fa23126c102dc4913c829a79df668444f186096e07175066acd26356f5c",
+    ".local/checks/evidence-return/report.json": "b1b24bbdbd5a1b9c2f5e1f338f0b300ec349d33e8c969f6e0c8c6d8ad6c66455",
+    ".local/checks/evidence-return/evidence-open-1440.png": "b9b06f8fe87ec1f8329aeed32ee65a3bd397cea1459a7c973e787de4ade8beb5",
+    ".local/checks/evidence-return/evidence-390.png": "6ab813e1da18f0b55c408a42059d41be550cfa4bb979d6d6edafa4067ab5b375",
+    ".local/checks/evidence-return/returned-390.png": "52b6d718333669e87a2ff13ceac6d29da0dc0eb8af9c33814f975ce44f3706a1",
+    ".local/evidence-return/browser-content-ready.log": "2a824eb8d37358749b2b418767fa3ad7b9e1cabc654bbb708712a9cab212e5ca",
+    ".local/evidence-return/browser-repaired.log": "2a824eb8d37358749b2b418767fa3ad7b9e1cabc654bbb708712a9cab212e5ca",
+    ".local/evidence-return/browser.log": "e2a0ef45a36246fdecd37319876e94655a5eb490653b9544dc44000bb6059ce0",
+    "docs/architecture/implementation-diagram-checks.json": "e5ca321ad4d6f698a2a3f44639b421bc533daeb7d5c8f8a25bfeceeb56c2c190"
+  },
+  "prior_review_integrity": {
+    "evidence": ".local/evidence-return-review/prior-record-hashes.json",
+    "unchanged_records": [
+      "docs/reviews/background-queries-review.json",
+      "docs/reviews/conversational-query-execution-review.json",
+      "docs/reviews/conversation-entry-review.json",
+      "docs/reviews/conversation-experience-review.json",
+      "docs/reviews/workspace-role-review.json"
+    ]
+  },
+  "residual_risks": [
+    "主任务仍须对同一冻结范围运行3项统一验收，再按真实结果更新CURRENT；本记录不能代替最终后台回归及构建通过。",
+    "独立运行证据是实际Modal/CSS配合合成内容的无数据库夹具；完整业务浏览器证据来自实现方已运行的测试，二者分别标识。",
+    "本轮未进行Safari/Firefox、屏幕阅读器或全量可访问性验证；不声明任意浏览器和辅助技术均已验收。",
+    "本轮没有重测真实DeepSeek语言准确率，也没有真实Datasight接入结论；权限、SQL执行和Pi业务实现未修改。"
+  ],
+  "verification_limits": {
+    "official_model_requests": 0,
+    "review_scope_file_count": 56,
+    "prior_increments_not_reopened": true,
+    "production_code_or_tests_edited_by_reviewer": false,
+    "shared_database_tests_run_by_reviewer": false,
+    "remote_mutations_by_reviewer": false
+  },
+  "next_action": "主任务将审查状态设为passed，保持冻结范围运行make verify-increment三项验收；源码、测试或契约若变化，再审相应差异。"
+}

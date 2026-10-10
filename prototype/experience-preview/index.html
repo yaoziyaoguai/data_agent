@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>Data Agent · 体验优化原型</title>
+  <link rel="stylesheet" href="preview.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">跳到主要内容</a>
+  <div class="app-shell">
+    <aside class="sidebar" id="sidebar" aria-label="空间导航">
+      <a class="brand" href="#workbench"><span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span><strong>Data Agent</strong></a>
+      <div class="space-name"><span class="space-dot"></span>零售分析空间<span class="space-caption">团队</span></div>
+      <button class="new-chat" data-action="new-chat"><span data-icon="plus"></span>新对话<span class="key-hint">＋</span></button>
+      <nav class="primary-nav" aria-label="主要功能">
+        <a href="#workbench" data-nav="workbench"><span data-icon="chat"></span>工作台</a>
+        <a href="#assets/memories" data-nav="assets"><span data-icon="bookmark"></span>我的积累</a>
+        <a href="#knowledge/orders/overview" data-nav="knowledge"><span data-icon="layers"></span>语义管理</a>
+      </nav>
+      <div class="history-heading"><span>最近对话</span><button class="icon-button" data-action="history" aria-label="搜索全部对话"><span data-icon="search"></span></button></div>
+      <div class="history-list" id="history-list">
+        <div class="history-group">今天</div>
+        <button class="history-item selected" data-action="conversation" data-id="revenue">1 月 App 收入分析<span>10:24</span></button>
+        <button class="history-item" data-action="conversation" data-id="refund">退款应该归在哪个月？<span>09:38</span></button>
+        <div class="history-group">昨天</div>
+        <button class="history-item" data-action="conversation" data-id="channels">各渠道支付转化<span>16:42</span></button>
+        <button class="history-item" data-action="conversation" data-id="customers">老客复购的统计口径<span>11:05</span></button>
+        <div class="history-group">本周</div>
+        <button class="history-item" data-action="conversation" data-id="weekly">经营周报的分析方法<span>周三</span></button>
+        <button class="history-item" data-action="conversation" data-id="orders">订单明细有哪些字段？<span>周二</span></button>
+      </div>
+      <button class="history-all" data-action="history">查看全部对话<span data-icon="arrow"></span></button>
+      <button class="account" data-action="account"><span class="avatar">A</span><span class="account-text"><strong>Alice</strong><span>超级维护者</span></span><span data-icon="chevron"></span></button>
+    </aside>
+    <button id="sidebar-scrim" class="sidebar-scrim" aria-label="收起导航" data-action="menu"></button>
+    <main class="main" id="main" tabindex="-1">
+      <header class="topbar"><div class="breadcrumb"><button class="icon-button mobile-menu" data-action="menu" aria-label="展开导航"><span data-icon="menu"></span></button><span id="breadcrumb-section">工作台</span><span class="crumb-slash">/</span><strong id="breadcrumb-title">1 月 App 收入分析</strong></div><div id="topbar-actions"></div></header>
+      <section id="workspace-view" class="workspace-view" aria-label="对话工作台">
+        <div class="conversation-scroll" id="conversation-scroll"><div class="conversation" id="conversation"></div></div>
+        <div class="composer-region">
+          <div id="running-dock"></div>
+          <form class="composer" id="composer-form">
+            <div id="selected-skill"></div>
+            <label class="sr-only" for="message-input">继续对话</label>
+            <textarea id="message-input" rows="2" placeholder="继续提问，或补充、纠正刚才的内容…"></textarea>
+            <div class="composer-toolbar"><div class="composer-options"><button class="text-button" type="button" data-action="select-skill"><span data-icon="spark"></span><span class="method-label">分析方法</span></button><span class="toolbar-divider"></span><label class="sr-only" for="model-select">模型</label><select id="model-select"><option value="flash">Flash</option><option value="pro">Pro</option></select><label class="thinking-label" for="thinking-select">思考</label><select id="thinking-select" aria-label="思考强度"><option value="off">关闭</option><option value="low">轻度</option><option value="high" selected>深度</option><option value="max">最高</option></select><button type="button" class="icon-button setting-info" data-action="model-info" aria-label="模型设置说明"><span data-icon="info"></span></button></div><button class="send-button" aria-label="发送消息" id="send-button"><span data-icon="up"></span></button></div>
+          </form>
+          <div class="composer-footnote">Enter 发送 · Shift + Enter 换行</div>
+        </div>
+      </section>
+      <section id="knowledge-view" class="management-view" hidden></section>
+      <section id="assets-view" class="management-view" hidden></section>
+    </main>
+  </div>
+  <dialog id="detail-dialog" class="detail-dialog"><div id="dialog-content"></div></dialog>
+  <dialog id="discard-dialog" class="discard-dialog" aria-labelledby="discard-title"><div class="discard-body"><span class="discard-symbol" data-icon="edit"></span><h2 id="discard-title">保留刚才的修改吗？</h2><p>内容还没有保存。可以继续编辑，或放弃这次修改。</p></div><div class="modal-footer"><button class="button" id="keep-editing">继续编辑</button><button class="button danger" id="discard-editing">放弃修改</button></div></dialog>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <script src="pretext.js"></script>
+  <script src="preview.js"></script>
+</body>
+</html>
