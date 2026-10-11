@@ -1,0 +1,194 @@
+{
+  "schema": 1,
+  "increment_id": "I2-PRODUCT-RELIABILITY",
+  "reviewer": "independent /root/product_reliability_review；correctness；未参与产品源码或正式测试实现",
+  "reviewed_at": "2026-10-11T13:30:17.509653+00:00",
+  "base_head": "ba21773228e7a73cc69a655f0e46b40d2ea101f6",
+  "branch": "codex/conversation-experience",
+  "baseline": ".local/product-repairs/before/files；其中没有备份的已跟踪文件使用当前HEAD内容",
+  "conclusion": "passed",
+  "scope_sha256": "abe44c621fe293c32681341d8f73a53ed3af9c59ec00612429000a3903cb27ec",
+  "summary": "本轮六项通用修复的独立代码与测试审查通过。两项审查发现已修复并有修前失败及修后通过证据。首次统一验收的Skill测试因1500毫秒租约在预算检查前到期而失败；独立复核诊断、调用链及默认租约修正后的7组通过证据，严格4次耗尽及业务断言均保留，没有剩余已确认缺陷。最终make verify-increment须重新完整执行；本记录不关闭增量，也不声称模型整体准确率或生产性能已经验证。",
+  "requirements_reviewed": {
+    "D01_D13_C08": "语义表单、查询依据及整篇文档共用来源/模型/人工/待复核标签。依据human_override和实际suggestion判别，不把confirmed当作正确性证明；人工保存和来源有效性规则未改。页面仍整体阅读与编辑文档。",
+    "D03_D09_C05": "发送前持久固定会话创建操作、消息ID、正文及模型选择；首次创建、消息保存回执丢失和刷新重试沿原身份。草稿按版本及正文核对后清理，后来输入、其他会话和新对话草稿不被覆盖。明确invalid_input释放未提交载荷；not_available只结束不可再核对的本地重试，不冒称原消息未保存或自动重投执行意图。",
+    "C02": "Identity/SessionReceipt由可信宿主返回space_id，浏览器存储按用户和空间隔离。旧无空间会话经服务端授权回查后迁移关联草稿，无会话旧草稿不随意归属空间。Skill移除先锁本人当前空间会话，不要求重新取得已删除资产正文，也不能移除他人或其他空间会话选择。",
+    "D12": "Skill选择具有独立selection_id，新明确选用更新身份；同操作成功回执先接回，旧删除不能覆盖重新选用。选择/移除在会话锁下共用有效租约或pending输入检查，终态failed不永久阻止变更。M09只删本会话选择，保留资产、其他会话、已授权SQL与预算；新输入沿现有上下文有效性校验丢弃旧Skill检查点。",
+    "D06_C06": "向量回执保留条目、Unicode字符范围和正文指纹。组合层先回源核对当前对象/来源/权限，M04从正式正文重新提取，最多三段并优先不同条目。旧索引用相同片段键生成器还原位置，不请求向量模型或自动重建；未知键、越界、哈希不符或旧版本不伪造片段。排序预计算保留词法稳定排序、精确匹配、融合及类型覆盖。",
+    "C05_C08": "空闲逐步退避、隐藏暂停、重新可见及聚焦立即刷新；活动生成/查询继续约700ms间隔。空增量保留历史对象、查询变化才替换，Skill旧GET代次不能覆盖移除后的状态。Pi输出只合并已产生的文本事件，消息边界先排空、最终起点和正文校验保持；追加按主键前缀查末序号，重复提交查指定正文，仍拒绝缺口和异文冲突。"
+  },
+  "architecture_and_contract_review": {
+    "ownership": "M05公开只读has_pending_input_in_tx，查询仍在其私有store；M09保有Skill选择写入，use_cases在会话锁下组合。M04派生片段不越权直接返回索引正文。M08保持输出幂等和最终校验，M11只薄化传输，不越界更改任务或查询。",
+    "shared_contracts": "packages/contracts同源新增space_id、Skill移除命令/回执及selection_id/change_blocked、KnowledgeRetrieval片段；HTTP路由、OpenAPI和生成Rust/TypeScript同步。262项同源契约证据已读取，最终统一工程验收仍需执行。",
+    "pi_reuse": "继续使用锁定Pi SDK的createAgentSession、原生事件、SessionManager、检查点、read与上下文压缩。outputStream仅排队/合并文本传输；没有新增Agent循环、规划器或压缩器。恢复与Skill专项包含原生压缩检查点、丢弃失效依赖以及原操作身份不变的验证。",
+    "generalization": "生产修复未引入业务名、表名、字段名、期望答案特判。测试另造设备、运输、图书馆等内容，覆盖长文/同名/多条目/Unicode和错误边界；没有修改原业务mock材料来使案例通过。",
+    "scope": "未扩展来源同步或缓冲区、Mem0策略、模型选型、结果标签/逐回答引用系统。保留先前I2-DOGFOOD-READABILITY改动及原Carol账号支持；scripts/development.py本轮仅更新空间字段的精确自检。没有提交推送。"
+  },
+  "findings": [],
+  "resolved_findings": [
+    {
+      "id": "PENDING-TARGET-UNAVAILABLE",
+      "severity": "P2",
+      "confidence": 100,
+      "location": "apps/web/src/features/workbench/Workbench.tsx",
+      "problem": "原消息真实保存后回执丢失，用户删除对应会话或目标不可访问；重试返回not_available，但全局pending只对invalid_input释放，导致同用户空间所有新消息永久不能发送。",
+      "discovery": "独立审查从removeConversation、sendPending、发送disabled和服务端会话锁完整追踪；实现者按该路径补真实故障复现，修前测试在解除pending处超时。",
+      "resolution": "仅对消息提交明确not_available结束对应client_message_id的本地待确认状态；原草稿可只读查看，新会话草稿保留，不声称原消息从未保存，不自动复制或执行原意图。",
+      "verification": "最终8组会话专项涵盖当前页删除和后台删除；原记录仍一条、无自动查询，显式新消息才创建独立记录。修前日志和最终报告均独立读取。"
+    },
+    {
+      "id": "TERMINAL-FAILED-SKILL-BLOCK",
+      "severity": "P2",
+      "confidence": 100,
+      "location": "crates/data-agent/src/use_cases/personal_assets.rs",
+      "problem": "原守卫复用包含failed的pending_ids。输入已经应用任务后交付终态失败，不能撤回已应用输入，后续新消息也不消费旧failed，造成同会话永久不能选用或移除Skill。",
+      "discovery": "独立追踪update_analysis_task的applied_to_task、fail_exhausted、jobs.failed及withdraw拒绝；明确可恢复中断仍为pending，failed由现行耗尽处理保存。",
+      "resolution": "M05新增has_pending_input_in_tx，只读检查仍pending输入；Skill列表与写入共用该查询及有效租约检查。通用pending_ids及失败终止、任务、查询、预算流程不变。",
+      "verification": "实际受控工具应用任务后耗尽本地模型预算，Worker四次失败保存failed/applied/jobfailed/lease0；修前仍blocked，修后允许移除与重选。失租但pending时仍拒绝；新输入没有旧Skill/检查点，原任务、工具身份和预算不变。最终7组全部通过。"
+    }
+  ],
+  "other_repairs_rechecked": [
+    "Skill移除后先发出的旧GET可能恢复已移除项：request generation及延后再刷新防止旧结果覆盖，已读取修前失败与修后7组报告。",
+    "明确invalid_input的冻结载荷先由同源契约拒绝或解除未提交pending，避免强迫用户无限重试相同无效内容；网络错误或无法解码回执继续保留原身份。"
+  ],
+  "test_adjustments_reviewed": [
+    "既有测试会话存储键调整为服务端用户+空间，不更改消息/任务/授权预期；旧键迁移另由真实可读性检查覆盖。",
+    "旧runtime浏览器断言寻找已经取消的任务面板/原始ID；改为原问题/新问题刷新后可见，并保留2任务/2工具/2正式输出的独立数据库断言。开工前基线证明该面板已不存在，原失败日志保留。",
+    "Skill原夹具只把消息改成failed、工作仍queued，不能代表真实終态。已替换为工具真实应用后耗尽预算、Worker原子保存终态，并分别验证pending恢复与failed结束。CURRENT记录原预期、原因及边界；没有放宽权限、已授权查询或副作用幂等要求。",
+    "首次统一验收Skill失败已保留，诊断第二次run在预算检查前返回lease_lost，同run/epoch无人接管、会话租约剩余-223毫秒、任务租约-239毫秒、预算12/12。独立追踪model_attempt先assert_turn后issue_call，未把预算耗尽计数4改为3。专项租约1500改为Worker默认15000毫秒，自然失租/终态等待上限25/70秒，终态等待改异步snapshot；保留pending阻止、failed/applied/jobfailed/attempts4/lease0、原身份/预算及四次budget_exhausted，新增dispatchErrors为空。测试未改产品代码，7组最终完整通过。精确耗时来源未额外证明，不将其描述为产品续租缺陷。"
+  ],
+  "independent_work": [
+    "读取AGENTS、CURRENT、审计报告及M04/M05/M08/M09/M11/M12模块契约；以开工备份和HEAD确定本轮差异，未将前一增量成果重复归为本轮。",
+    "独立追踪跨入口事务、版本、回执、恢复和失败状态，提出两项缺陷后检查生产修复与修前/修后正式测试证据；未编辑业务源码或正式测试。",
+    "无服务、无文件写入的Node测试检查0/1/2047/2048/2049/4096/8193长度、三条助手消息边界与Unicode内容逐字一致；第二次写入失败后后续排队片段不再发送，drain传播失败。7组及失败路径通过。",
+    "查看已保存的模型整理标签和后台查询页面截图；没有重新截图或启动浏览器，未调用模型、读取凭据或重启常驻服务。",
+    "首次统一验收失败后的补审只覆盖Skill测试、对应CURRENT/验证说明与新日志。独立读取API lease_lost日志、诊断状态及默认租约后四次准入失败状态；核对产品默认15000毫秒、租约先于预算校验和严格终态断言。已记录的产品源码SHA全部保持，唯一已审来源变化为tests/mvp/check-skill-removal.mjs。"
+  ],
+  "implementation_evidence_inspected": [
+    {
+      "path": ".local/product-repairs/conversation/report.json",
+      "sha256": "7fd8b0d4fe7021bb6587d7b8552f32a754c7855ce6fd623e3ad64de36960521d",
+      "description": "最终8组会话专项通过；60.010秒12次API GET，活动间隔736/742/723ms，结果293ms；身份空间夹具边界明确。"
+    },
+    {
+      "path": ".local/product-repairs/conversation/deleted-target-reproduction.json",
+      "sha256": "d2fb58bc46906d0ffb36aec7864382db0cdb21aefac4fbfca03e7ce38fa7480c",
+      "description": "待确认目标删除问题的修前失败报告，未覆盖为成功。"
+    },
+    {
+      "path": ".local/product-repairs/conversation-deleted-target-reproduction.log",
+      "sha256": "d6d80aaa2639b4f7ab461b0265bff78a50316ec4874bd992860d7b8d0cb98c6d",
+      "description": "真实保存丢回执后删除目标，修前无法解除pending。"
+    },
+    {
+      "path": ".local/checks/skill-removal/report.json",
+      "sha256": "6ea09eff4005f56dd7bb17e537dbad6e310e70cb11928355cd33b216a3a4ef58",
+      "description": "默认15000毫秒租约下最终7组全部通过；四次严格budget_exhausted、当时租约剩余13.3–14.7秒、dispatchErrors为空、官方请求0。"
+    },
+    {
+      "path": ".local/product-repairs/skill-terminal-failure-repro.log",
+      "sha256": "cc9827ffe8579466d3f99654c5e8b5a5efb34af84a4b4186528eb4f107380f86",
+      "description": "修前真实終态failed仍change_blocked=true的断言失败。"
+    },
+    {
+      "path": ".local/product-repairs/skill-terminal-failure-after.log",
+      "sha256": "0e1c845d5ad5bd18b6085005eef947d8c8e8d381ab30e02e2270a7411e650a49",
+      "description": "修后完整7组通过，真实本地预算路径，官方请求0。"
+    },
+    {
+      "path": ".local/checks/retrieval-excerpts.json",
+      "sha256": "0f3499244c5ca3c6a1759218a84089156a5196bfc03d714b6af045fc0dadcbec",
+      "description": "跨领域长文、片段定位、旧键无重建、未知及越权/失效边界5组通过。"
+    },
+    {
+      "path": ".local/product-repairs/retrieval-final.log",
+      "sha256": "6beb367f875a9c4e4c34dcecf5eaa3dc90a2b7a050b64d836501ea648694ddc9",
+      "description": "10个检索Rust单测和5组集成完整成功。"
+    },
+    {
+      "path": ".local/product-repairs/output-stream.json",
+      "sha256": "132920d19dd61f715140a885882f33eb4165239e471be207002b11cfb4439260",
+      "description": "100/1000同步增量各合并1次写入；1000实际持久片段、幂等/缺口/最终正文一致。"
+    },
+    {
+      "path": ".local/product-repairs/semantic-status.json",
+      "sha256": "d941cc1dbb5331432031c4cc0250145150a5b2a623ac7af6ff3715bda6f50723",
+      "description": "四种维护状态展示，实际人工保存与回读通过。"
+    },
+    {
+      "path": ".local/product-repairs/runtime-regression-current-ui.log",
+      "sha256": "38ae6b359869c741e1f6f909e6978de618c58e12a39014c004b8ff60499baed7",
+      "description": "7组Pi持久化、进程退出恢复、串行化和终态失败通过；早于最后Skill窄修复，最终统一验收待复核。"
+    },
+    {
+      "path": ".local/product-repairs/answer-phase.log",
+      "sha256": "2eca8f21a55cf823c878f1d7de1dfb580d145b871c9e732559636d56d291715a",
+      "description": "任务、正式回答与结果归属6组通过。"
+    },
+    {
+      "path": ".local/product-repairs/contracts.log",
+      "sha256": "cef948b9654b457e5a8b67ba89e3aae7f295e60500af71ff259b2a7763324538",
+      "description": "262项同源契约正反例通过。"
+    },
+    {
+      "path": ".local/product-repairs/unified-first-failure.json",
+      "sha256": "e290613701223d4aebd6296c5662872594bcef424ef018352be78a1b63d3ee86",
+      "description": "首次统一验收失败收据；会话组通过，Skill预算失败计数为3而非严格预期4。"
+    },
+    {
+      "path": ".local/product-repairs/skill-terminal-diagnostic-failure-report.json",
+      "sha256": "a4a7c6e94c1133bafcbcbe286a898c087a53945b26310efc324aa8fc1ea67f94",
+      "description": "保留的诊断失败；第二次run租约已到期，预算12/12、同运行同代次未被接管。"
+    },
+    {
+      "path": ".local/product-repairs/skill-terminal-default-lease.log",
+      "sha256": "cd56292a1072f34f3acca2b40cf13e8ccbe61846ed2dc941d190d259533b4d29",
+      "description": "默认租约与异步终态等待修正后完整7组成功，四次均model_budget_exhausted。"
+    }
+  ],
+  "fingerprint_method": {
+    "function": "scripts/check_delivery.py: review_scope(root, read_delivery(root))",
+    "frozen_input_count": 226,
+    "meaning": "绑定声明范围、决定摘要、输入与检查器；排除审查记录和其指针。数量不代表逐行重审所有历史代码。",
+    "reviewed_source_hashes": {
+      "apps/web/src/features/workbench/Workbench.tsx": "b3a6a933184abdd8fbfb058e50fe444eb455066085dac1a451c1647d14dcb1c6",
+      "apps/web/src/features/workbench/conversation-storage.ts": "c542053de1534686fa2f8524be8712750e73aca0a6cd8752cc28b1415c4c6d0e",
+      "apps/web/src/features/workbench/SkillSelections.tsx": "132799167bdab203995b583f67d0ceec3c722094e4af386d1b080c71c62ee0c9",
+      "apps/web/src/shared/knowledge-labels.ts": "06048e4c81bb2f2ada10150ad4d7a2c56e67bd59953419ba44cbb42d510182a6",
+      "apps/agent/session/output-stream.ts": "8d7aa84bb8023f9cecd3b1a90eb5f3c21f0e9bc36d79b46be46d7ec93000cc17",
+      "apps/agent/session/deliver.ts": "cc918294d94c22f6b137c070ba6003c4eadf144e2268a11a321feac5624607d9",
+      "crates/data-agent/src/modules/conversations/store.rs": "1f19b1f5baa1ffa46b16808f7ed4b8a818c3d376162d47d55d31b99655c0f5d6",
+      "crates/data-agent/src/use_cases/personal_assets.rs": "dc87d7f82879551dcc0b67b84e9d852a8c0f7d1a3ae4cc7f23004fc0038d9709",
+      "crates/data-agent/src/modules/assets/store.rs": "ca38954b6cc7b6b1696c9bbaf8040b244333fd6a76745d5713266e3bc20d7895",
+      "crates/data-agent/src/modules/retrieval/excerpts.rs": "64ee758266c18a492041419e82ef60843c5331ec3641c112aa4b138c6a87918f",
+      "crates/data-agent/src/modules/retrieval/vector.rs": "36e422eea4a4c16222e748976cba696ebc396ebe83d4aeb05a54515a2a5b828f",
+      "crates/data-agent/src/modules/retrieval/mod.rs": "c81f95b8db8bcae1dbc2c67147586b99d0eb81718db89fa0918a044bcd788f29",
+      "crates/data-agent/src/modules/runtime/outputs.rs": "edd9c44f93cc54717d8e8b8ce18a9edde358582da8d3553e62d30bbc6babcc2b",
+      "crates/data-agent/src/modules/runtime/store.rs": "e4443418526a8710307b3ccb60096094eded2eacdd26011e50a094d64f748a4f",
+      "packages/contracts/schema.json": "4bca1963a04d4c0c0ddf4841b266ac045bd96d7900f1f57871aa75894b2d72d2",
+      "tests/mvp/check-conversation-reliability.mjs": "ff2e6371dc14de6ced827a1841b33332ae219152b6ac0930dde3a30417d8625c",
+      "tests/mvp/check-skill-removal.mjs": "e5078c036f64a3c06c3d6b5c80cd80afb71224bb09daff9b1127b15b0d1dccc6",
+      "tests/mvp/check-retrieval-excerpts.mjs": "01801e16557ab684887b4959e458ca2ae9f98b3889fb71668e4be923b01dd1c1",
+      "tests/runtime/check-output-stream.mjs": "7d5e2e772d299a0567d55519d05240e40c35ab438005bdd589224ea596763711"
+    }
+  },
+  "residual_risks": [
+    "本轮没有新的真实商业模型准确率或真实Datasight ACL证据；检索专项使用本地协议向量及完全合成材料，证明依据交付与边界，不能推导整体SQL/解释准确率。",
+    "空闲/活动耗时为单机短样本，隐藏使用浏览器可见性事件夹具；不能推导多用户生产容量或操作系统后台调度行为。",
+    "检索片段最多三段且沿既有有界候选/索引范围；located表示回源核验位置，不表示完整阅读或业务结论正确。",
+    "历史查询分页、个人记忆适用性、逐回答参考与结果业务标签保留为后续候选，本轮没有实施或冒称完成。"
+  ],
+  "testing_gaps": [
+    "最终make verify-increment须重新执行；第一次收据为失败，不能用专项通过代替。六组实际验收完整成功且指纹一致后才能关闭本增量；本独立审查不替代该收据。",
+    "工程及旧回归部分证据早于最后两项边界修复；最终统一验收应覆盖冻结源码、契约、类型、构建和Rust检查。"
+  ],
+  "independence": {
+    "product_or_formal_tests_edited_by_reviewer": false,
+    "harness_run_by_reviewer": false,
+    "official_model_requests_by_reviewer": 0,
+    "credentials_read_by_reviewer": false,
+    "remote_mutations_by_reviewer": false,
+    "pure_in_memory_boundary_checks_run_by_reviewer": true,
+    "only_written_file": "docs/reviews/product-repairs-review.json"
+  }
+}

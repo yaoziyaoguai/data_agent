@@ -93,6 +93,8 @@ make vm-stop
 
 `make dev` 构建Rust和React，并启动API（8780）、Pi Bridge（8781）、Worker及Vite（5173）。全部仅监听回环地址；端口已占用时失败，不关闭其他进程。用`.local/development/identities.json`中的alice或bob值登录，文件由启动器生成并设为0600。已有身份文件保留；Ctrl+C仅关闭当前应用进程，MySQL会话数据保留。`make verify-startup`验证同一启动器后自行停止。
 
+本地身份文件可添加开发账号（例如 `carol`），使用独立生成的64字符随机凭据；重启启动器后生效。`internal` 仅供服务间调用，不注册为登录账号。新增身份本身不授予语义维护权：在本地 Datasight mock 的 `catalog.json` 中指定样例表的 `maintainer_id`，由超级维护者调用 `/source-syncs` 同步后，表负责人才能编辑相应语义。这样可同时保留超级维护者、表语义维护者和普通用户进行试用。
+
 | 命令 | 当前验证行为 |
 | --- | --- |
 | `make verify-code` | Rust fmt/Clippy、TypeScript类型检查、正式React构建 |

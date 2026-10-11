@@ -1,0 +1,167 @@
+{
+  "schema": 1,
+  "increment_id": "I2-LOCAL-DOGFOOD",
+  "reviewer": "independent /root/product_reliability_review；correctness；未参与产品或正式测试实现",
+  "reviewed_at": "2026-10-11T14:15:55.039524+00:00",
+  "base_head": "ba21773228e7a73cc69a655f0e46b40d2ea101f6",
+  "branch": "codex/conversation-experience",
+  "baseline": ".local/local-dogfood/before/files；备份未包含且开工补丁没有改动的已跟踪文件使用HEAD（useModelSelection.ts、check-workspace-role-browser.mjs）",
+  "conclusion": "passed",
+  "scope_sha256": "fdf27009251bb1c439ec6c9beb591dbddead9ced5c083241ba1cc110f6927bf5",
+  "summary": "本轮四项通用产品修复的独立审查通过。独立审查补出的未知回执迁移草稿、空会话首问后首次换模型冲突均已修复，正式浏览器存在修前失败和修后6组通过证据。两处测试证据放宽/缺口已恢复或补强，最终须执行当前冻结的五组make verify-increment；本记录不宣布全功能试用或增量已经完成。",
+  "scope_reviewed": {
+    "product_changes": "与开工备份逐文件核对，本轮产品差异仅main.tsx、Workbench.tsx、conversation-storage.ts、useModelSelection.ts；其他已存在的前后端、查询、检索和Pi改动不归为本轮。",
+    "contracts_and_design": "未改HTTP、SSE或工具契约及服务端权限。implementation-views记录未发模型暂存、选Skill空会话迁移、未知回执先核对和首问设置版本接回；与实际代码一致。",
+    "pi_and_modules": "修复归M12界面状态及既有M05/M08接口使用；应用不新增模型循环、规划器、上下文压缩或Skill实现。服务端首次模型持久化、预期版本冲突、稳定消息ID、SQL执行权限和预算仍由原模块校验。",
+    "generalization": "本轮产品代码未增加业务名、字段名、mock答案分支。新增测试使用合成草稿、协议模型和现有可执行测试环境；维护专项不把协议预填结果当业务正确率。"
+  },
+  "behavior_review": {
+    "draft_persistence": "模型草稿经同源ModelSelection校验，以空间/用户/会话三元键隔离；模型及档位须在当前目录可用。服务端已有设置优先。草稿迁移保留修订标识、不覆盖目标已存在值、不自动发消息。",
+    "unknown_submission": "新对话存在origin=null待确认消息且没有当前会话时，选Skill在POST创建前拒绝并提示回原工作台；原创建操作、消息正文、ID、后来草稿均保留。原回执重试仍发送相同冻结载荷，不把已提交原文转为另一会话的未发草稿。",
+    "first_message_version": "选Skill预建会话首问保存模型后，仅同页面代次/同cid、原设置仍version0且模型请求generation未被后续选择替换时reload。组件卸载、换会话或后续模型更改均阻止旧回执刷新；已保存版本的普通续聊没有额外刷新。",
+    "late_response_and_failure": "原reload/change均保留generation检查；返回设置失败仍保留有效本地草稿，无法回读时暂停发送并提供重试。模型保存与消息保存失败分别表达，不假称未确认消息已成功。",
+    "new_conversation_default": "正常首条确认后仅清理与该提交相同的初始模型草稿；下一空白对话使用默认。后来改变的模型草稿不随原回执删除。"
+  },
+  "findings": [],
+  "resolved_findings": [
+    {
+      "id": "PENDING-SKILL-DRAFT-MIGRATION",
+      "severity": "P2",
+      "confidence": 100,
+      "location": "apps/web/src/main.tsx / conversation-storage.ts",
+      "problem": "新对话消息真实保存但回执丢失，cid仍空；选Skill会另建会话并迁移原草稿。重试原回执后新Skill会话仍展示已提交内容为未发草稿。",
+      "independent_evidence": "独立调用正式storage函数的纯内存复现确认pending始终指向原会话，settle后原草稿为空而第二会话保留原文。实现者补真实浏览器修前失败。",
+      "resolution": "创建前检查本用户本空间的origin=null待确认消息，先要求核对原回执；不创建第二会话、不迁移草稿或选Skill。",
+      "verification": "最新6组专项严格核对会话数量不增、原会话无Skill、同载荷两次请求仅一条消息、后来改写正文保留。"
+    },
+    {
+      "id": "INITIAL-MODEL-VERSION-STALE",
+      "severity": "P2",
+      "confidence": 100,
+      "location": "apps/web/src/features/workbench/useModelSelection.ts / Workbench.tsx",
+      "problem": "Skill预建空会话首问令后端模型版本0变1，cid不变，hook仍持有0；下一次不同选择被错误地当作其他窗口冲突并回退。",
+      "independent_evidence": "独立追踪receive_message首次save_model_selection与前端reload依赖及expected_version；新增浏览器修前首次切换超时。",
+      "resolution": "仅首问成功且请求/会话仍当前时接回初始设置版本，以已有generation阻止覆盖后续选择。",
+      "verification": "最新6组专项首次切换即正式保存Pro，且页面没有其他窗口修改提示。"
+    }
+  ],
+  "test_adjustments_reviewed": [
+    "query-stop首版把共用send全部改为20秒等待，独立审查指出放宽后台查询即时续聊要求；已恢复共用立即可用断言，等待仅发生于首次登录加载模型设置。最终严格版本等待统一重跑。",
+    "移动角色抽屉会重新挂载角色实例，独立审查指出仅检查可见可能接受加载态；已传预期角色并等待正确文本后截图。最终加强版本等待统一重跑。",
+    "history按会话行计数，保留唯一搜索并打开；整篇文档编辑仍核对60000→60002字、版本2、关联顺序和外部改版刷新。没有因旧选择器失效删除业务断言。",
+    "workspace-feedback通过现有focus事件刷新；版本1/2、失效提示及明确重新选用不变。该场景证明焦点刷新，不能单凭它证明无焦点事件的30秒周期。",
+    "新增草稿专项以待确认记录清除及两次真实同载荷请求判断回执完成，不能以按钮从重试变为保存中作为成功。修前失败日志保留。",
+    "维护专项点击实际预填和索引重建，回源核对人工有效值、模型建议和对象版本；后端重建事务先标记索引pending，等待current不能直接沿用旧覆盖状态。独立集合清理限定该测试随机集合。"
+  ],
+  "independent_work": [
+    "只读比较本轮基线和全部本轮实际变化，查阅CURRENT、M12界面契约、服务端模型首次保存/版本检查和相关测试预期。",
+    "独立发现两项产品缺陷后逐项复核修复与正式修前/修后证据，未自行修改产品源码或正式测试。",
+    "委托只读explorer核对四项浏览器观察调整，复核其两项测试缺口并确认当前源码已补强。",
+    "纯内存正式storage测试通过用户/空间隔离、已有目标不覆盖、非法模型草稿拒绝，以及原回执结算保留后来正文和不同的新模型选择；没有启动服务或读取凭据。",
+    "读取主代理保存的真实工具收据和自动化报告；未亲自重跑重型检查或操作真实模型。"
+  ],
+  "implementation_evidence_inspected": [
+    {
+      "path": ".local/local-dogfood/checks/new-conversation-before.log",
+      "sha256": "9ff605f6c5e09e53e3ea59315f778985c9c9bec1fed7bb79eca150ea31f7e5b2",
+      "description": "新对话返回工作台后high不等于原off的修前失败。"
+    },
+    {
+      "path": ".local/local-dogfood/checks/new-conversation-pending-before.log",
+      "sha256": "73a9cfe0b95099d12a91d9256ae1441d2464abb9eec8e7751e52c900cb2c9119",
+      "description": "独立审查所提未知回执与选Skill组合的修前失败，尚无阻止新建的提示。"
+    },
+    {
+      "path": ".local/local-dogfood/checks/first-message-model-before.log",
+      "sha256": "fb69add92d0f304d173be6f67497fa45d0052e1a45dbda3080a615afaa6f2806",
+      "description": "独立审查所提首问后首次切模型失败，真实服务端状态未变为所选模型。"
+    },
+    {
+      "path": ".local/local-dogfood/checks/first-message-model-after.log",
+      "sha256": "9b9bfc43569e8ad0e1609736b90b7ed38cccc442d61bc2d9c9b36107925ee2f7",
+      "description": "最后产品修复后的新草稿专项6组完整通过，官方请求0。"
+    },
+    {
+      "path": ".local/local-dogfood/checks/report.json",
+      "sha256": "dcf022443558502e2b802e055cd0580344b0b9e676b5fb47032058fc0df5622d",
+      "description": "首次21项运行17项通过、4项失败；原失败保留，不把本报告当统一验收通过。"
+    },
+    {
+      "path": ".local/local-dogfood/supplementary/report.json",
+      "sha256": "5a0bb10f3a40b4d8bde717b628aa3eee88799dfd1dfe6effe1f8fc851ad8ad50",
+      "description": "补充8项全部退出0、无超时；恢复/记忆/Pi及展示证据。"
+    },
+    {
+      "path": ".local/local-dogfood/checks/history-after.log",
+      "sha256": "55c6d882673c5e3aad30dc33befdfd293bb5f892f1d4f5483c43ca62cbbee43d",
+      "description": "旧UI观察修正后5组通过，保留历史分页、目录及60000字文档保存。"
+    },
+    {
+      "path": ".local/local-dogfood/checks/feedback-after.log",
+      "sha256": "2690a2106aaf561f1d748dfaa40dc964ae9510642e593ca6e3c8894c33763356",
+      "description": "按现有focus刷新后6组通过，版本、重新选用、权限与旧响应要求保持。"
+    },
+    {
+      "path": ".local/local-dogfood/checks/role-after.log",
+      "sha256": "050e338db102e990ae089693dab325bea52f12583e505adb4ff43eadaf1e72e3",
+      "description": "移动抽屉流程修正后6组通过；最终增加抽屉角色完成断言仍待统一执行。"
+    },
+    {
+      "path": ".local/local-dogfood/checks/stop-after.log",
+      "sha256": "a1149c7d97eca65715d849739f6cb57e6d26b794923d6005cd2b73b411de5d78",
+      "description": "首次就绪观察修正后3组通过；最终恢复后续立即可发断言仍待统一执行。"
+    },
+    {
+      "path": ".local/local-dogfood/checks/maintenance-browser.log",
+      "sha256": "39e2e28aee03419acaf25b0a2a29f818c2a1f3d28768bac8bf52d8a3823df650",
+      "description": "真实页面预填及重建索引2组退出成功。"
+    },
+    {
+      "path": ".local/checks/maintenance-browser/report.json",
+      "sha256": "ddd0579b6bbed8aabbc689f963af6832056cc4ab9612f782dc2d8da73a83e6d1",
+      "description": "独立MySQL/Milvus集合；2次预填和91次embedding均为本地协议，人工值保留，官方请求0。"
+    },
+    {
+      "path": ".local/local-dogfood/live-tools.json",
+      "sha256": "c3317498a080a1ed643c68ba8d38f4cdb229d3425ccbc18db965b571d33ee0bd",
+      "description": "主代理真实试用收据：17次已settled模型调用，两个成功的Pi原生read，Mem0召回与停用后目录为空；不是17道独立准确率题。"
+    }
+  ],
+  "fingerprint_method": {
+    "function": "scripts/check_delivery.py: review_scope(root, read_delivery(root))",
+    "frozen_input_count": 236,
+    "meaning": "绑定本轮声明范围、输入、决定与检查器；排除审查记录和指针，不代表逐行重审所有历史代码。",
+    "reviewed_source_hashes": {
+      "apps/web/src/main.tsx": "fa83a5a45cbc7a3be08477009ed9f432306f5ce9f5fbaa6239c5f1e652c0b3fd",
+      "apps/web/src/features/workbench/Workbench.tsx": "128663036bee2ac9bf232e2cee5ef41a3d68232c87977cee071a9d81f320d9e7",
+      "apps/web/src/features/workbench/conversation-storage.ts": "3c5d4dad05ca775da7a3275a425bf448a0d3d87bc9905ea14b457d55655e8cb0",
+      "apps/web/src/features/workbench/useModelSelection.ts": "95bd69f36d8f7525f223d5598bd300e4f63c75a17829d66bf01f4f913bb88ae1",
+      "tests/mvp/check-new-conversation-draft.mjs": "b1a07a7ef6a6cdf4f5fb8c28de670c8dec9c412bcf5400b46bfcb559213d1745",
+      "tests/mvp/check-maintenance-browser.mjs": "b97ea367d6373d3b3cd058eaaa571445505b8ce266951e21bebe96684e67fe26",
+      "tests/mvp/check-query-stop-browser.mjs": "1c44a789f2a3de7d1947f563ff2f2cfebab22ba7f07d70e653111ff7834bcd83",
+      "tests/mvp/check-history-browser.mjs": "34b0532ca719f67fbff6a0c5aa774bb666ff3c3b55116f109450aac116c86b9a",
+      "tests/mvp/check-workspace-role-browser.mjs": "77291e46aa87f343c38ead05b7e271fb656f5b9ad2cee707e0ba4ed6f5bb5a28",
+      "tests/mvp/check-workspace-feedback-browser.mjs": "ec7c4c3668c84427a442200d59a252f8c217a4fd59028ea07526de2a73126806",
+      "docs/architecture/implementation-views.md": "65d3edc8e985595cb42dd71e8621eb787180d030e75d147d142847cbc476df59",
+      "docs/reviews/local-dogfood-20261011.md": "9c7759cf135e90d9c187eab2b3cba403a6a3833a49b6380d47677a1d6db7bcf7"
+    }
+  },
+  "residual_risks": [
+    "本轮真实模型为一个17次工具往返/解释请求的代表性合成流程，不构成整体SQL、记忆或解释准确率。",
+    "真实Datasight、生产权限与容量未接入，协议替身与隔离数据库只能证明相应接口、持久化和界面行为。",
+    "没有穷举任意输入和并发组合；未把已通过的当前能力扩展为未来同步缓冲等未实现能力。"
+  ],
+  "testing_gaps": [
+    "最终make verify-increment尚待执行，WORKBENCH/ASSETS/KNOWLEDGE/RECOVERY/ENGINEERING五组须完整退出成功、无超时且指纹一致才能关闭增量。",
+    "stop与role最后恢复/加强的断言只有代码复核，其早期通过日志不替代冻结版本最终验收。"
+  ],
+  "independence": {
+    "product_or_formal_tests_edited_by_reviewer": false,
+    "services_started_by_reviewer": false,
+    "official_model_requests_by_reviewer": 0,
+    "credentials_read_by_reviewer": false,
+    "remote_mutations_by_reviewer": false,
+    "pure_in_memory_checks_run_by_reviewer": true,
+    "only_written_file": "docs/reviews/local-dogfood-review.json"
+  }
+}

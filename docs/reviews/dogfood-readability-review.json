@@ -1,0 +1,238 @@
+{
+  "schema": 1,
+  "increment_id": "I2-DOGFOOD-READABILITY",
+  "reviewer": "independent /root/dogfood_repair_review；correctness；未参与产品源码或正式测试实现",
+  "reviewed_at": "2026-10-11T04:36:19.197372+00:00",
+  "base_head": "ba21773228e7a73cc69a655f0e46b40d2ea101f6",
+  "branch": "codex/conversation-experience",
+  "baseline": ".local/dogfood-repairs/before/",
+  "conclusion": "passed",
+  "scope_sha256": "b84d0fd553bbea65f7048d4fc7f1a50395e931f70d334830f213699442261c0d",
+  "summary": "当前冻结范围的独立代码审查通过，没有剩余已确认代码缺陷。两项独立复现的Markdown问题已修复；结果统计补充重复值及次数后，独立SQLite、实际CSV/结果统计和代表性Flash回复相符。最终make verify-increment尚待执行，本记录不关闭增量，也不将单次真实模型成功当作整体准确率。",
+  "requirements_reviewed": {
+    "D01": "管理目录沿用M01维护归属及M02私有存储。grouped按类型过滤后再分页，maintained仍来自当前负责对象ID；直接地址补读核对可读、状态、名称和负责人。Bob空负责目录、Carol表内字段编辑及既有语义协作有验证；服务端保存权限未改。",
+    "D13": "默认目录按表、指标、整篇文档和术语组织，字段/关系通过表内或显式flat视图进入。同名但不同ID来源不合并。101篇合成文档测试检查100项首页、尾页、总ID集合及无重复，覆盖从工作台打开后页地址和刷新恢复。SQL复制、十行预览、完整保存结果下载保持既有入口。",
+    "D15": "M07在原授权结果读取后计算本页行数、非空/NULL、原始文本去重、重复值与次数和正零负计数。BTreeMap只记录非NULL原始文本，重复列表仅含count>1且按文本排序；直接十进制文本判断避免大整数和极小数转浮点。仅offset=0、平台完整、无后页且未截断时声明complete_result，其余为page。get_query读取不新增SQL或扩大授权。",
+    "C08": "短标题取首句并限36个Unicode码点，完整标题仍保留且原消息不变。精确重复SQL及超过十行的消息表格默认折叠，内容可展开；不同SQL和字面量内空白差异保持可见。固定Markdown组件身份通过Context读取数据，保留旧表格DOM、展开、滚动和焦点。feed/skills具名前缀解决同级key冲突。",
+    "A08": "纠错展示省略前后相同段落，保留完整对照和正式保存内容。原处理revision/base_version、理由、复核勾选及明确保存请求不变；测试分别检查接受后正文未变、保存后整篇正文准确。"
+  },
+  "architecture_and_contract_review": {
+    "ownership": "统计规则集中在M07 result_statistics，由query_workflow组合现有权限和平台读取。目录筛选位于M02私有store；HTTP参数校验移入具名用例，没有绕过M01。无新数据库结构或越界私有存储访问。",
+    "shared_contracts": "packages/contracts为同源契约。QueryResults.statistics可选；新统计明确scope、returned_text及repeated_values范围，RepeatedResultValue.count至少为2。AppError补result_expired；directory_view依赖directory，省略或flat保留旧行为。OpenAPI与生成Rust/TypeScript同步，252项契约用例成功。",
+    "pi_reuse": "Agent变化仅现有资源提示和get_query说明；沿用Pi会话、工具循环、结果续接及压缩，无新规划器、循环或记忆框架。工具测试使用SDK SessionManager和原受控入口；后台回归覆盖同一Pi会话多任务。原生压缩本轮未改，未重跑其专项。",
+    "scope": "没有修改来源同步、预填、同步缓冲、模型配置、记忆方案或数据库结构。专项为构造合成负责人调用既有source-syncs，不是新同步实现。",
+    "excluded_existing_changes": [
+      "scripts/development.py",
+      "docs/development.md"
+    ],
+    "exclusion_evidence": "开工前working-tree.patch已包含两项账号配置文件变化，按本轮分工排除，未撤回既有工作。"
+  },
+  "findings": [],
+  "resolved_findings": [
+    {
+      "id": "MARKDOWN-RENDERER-IDENTITY",
+      "severity": "P2",
+      "confidence": 100,
+      "location": "apps/web/src/shared/MarkdownContent.tsx",
+      "problem": "旧sqlKey驱动的useMemo生成新pre/table函数；新增查询使历史节点重建，折叠关闭、滚动与焦点丢失。",
+      "independent_reproduction": "最小真实React浏览器渲染中，新增SELECT 2后sameNode=false、details.open=false、scrollLeft从100变0且焦点丢失；无业务API或模型调用。输出仅保留于审查工具记录。",
+      "resolution": "模块级固定ResultCode/ResultTable从ResultDisplay Context读取变化数据，组件身份保持。",
+      "verification": "静态复核最终实现；readability五组成功结果中的第一组验证后台新增查询后同一DOM节点、横向位置、焦点和两处展开状态保持。"
+    },
+    {
+      "id": "SQL-LITERAL-WHITESPACE-MATCH",
+      "severity": "P2",
+      "confidence": 100,
+      "location": "apps/web/src/shared/MarkdownContent.tsx",
+      "problem": "旧全文空白归一化将SELECT 'a b' AS label;和SELECT 'a  b' AS label;判为同一SQL，误折叠并标注卡片已提供。",
+      "independent_reproduction": "独立最小React浏览器渲染确认空白不同的SQL被误折叠；未写产品或正式测试。",
+      "resolution": "仅trim两端空白，随后精确比较SQL文本。",
+      "verification": "最终源码与正式浏览器断言均已核对；夹具只替换浏览器读取响应，不改数据库SQL、不执行夹具SQL，真正不同的literal保持可见。"
+    }
+  ],
+  "real_model_followup": {
+    "problem_observed_by_implementation": "初版确定性计数已支持14/12/12/2，但真实Flash两次列举重复订单仍漏O1001。两个错误回复留存，未改写为成功。",
+    "preserved_failures": [
+      ".local/dogfood-repairs/real-flash-result.txt",
+      ".local/dogfood-repairs/real-flash-followup-before-repeat-statistics.txt"
+    ],
+    "change_reviewed": "同一page_statistics补repeated_values，覆盖全部当前页的非NULL重复文本及次数；新增工具、存储、查询或Agent循环均为0。测试增加O1001/O1013各2行的原始独立预期，双NULL单测验证NULL不列为重复值。",
+    "independent_reference": "审查者在内存SQLite加载docs/sources/schema.sql、seed.sql和etl.sql，执行实际保存SQL；实际CSV、结果JSON行及所有列统计逐项一致。独立Counter/Decimal检查得到14行、12单、12行正支付、2行零支付、O1001/O1013各2行。无业务服务或模型调用，未写临时数据库。",
+    "representative_result": "已读取修后真实回复：两单均正确列出，各2行，其余10单各1行；当前查询集合没有增加执行。此为同一合成场景续聊的代表性结果，不是批量准确率。",
+    "final_prompt_limit": "此回复后追加的自然语言表达要求用于避免向用户暴露statistics等接口字段名；当前已读取证据仍含这些字段名，不能据此宣称最后一句提示的效果已经实测。"
+  },
+  "test_adjustments_reviewed": [
+    {
+      "change": "统计测试租约从180000ms改为既有允许的120000ms。",
+      "basis": "Worker原限制1000..=120000ms，首次失败在输入捕获前；修改测试配置，没有放宽业务预期或产品限制。",
+      "preserved_failure": ".local/dogfood-repairs/result-statistics-initial.log"
+    },
+    {
+      "change": "新增查询的显示回归使过期场景由1份查询调整为2份且其中1份未提交。",
+      "basis": "仍要求过期不自动重跑；新增SQL是前一项明确生成的未执行草稿，CURRENT已记录原值、新值与原因。"
+    },
+    {
+      "change": "后页地址测试从工作台打开目标，并等待目录载入后检查选择。",
+      "basis": "初次在同页fragment跳转且新目录未刷新时过早检查得到0；当前保留详情、分页数量、ID去重及刷新恢复要求。",
+      "preserved_failure": ".local/dogfood-repairs/readability-pagination-initial.log"
+    },
+    {
+      "change": "专项通过后只追加截图前定位过期提示及等待目录实际内容。",
+      "basis": "当前源码没有减少业务断言，该最终脚本版本等待统一验收重跑。"
+    },
+    {
+      "change": "增加重复订单及双NULL断言。",
+      "basis": "来自原试用已确认O1001与O1013都重复的独立参考及SQL/合成数据，未反写实现输出或降低要求。"
+    }
+  ],
+  "independent_work": [
+    "从AGENTS、CURRENT活动增量、原试用问题及D01/D13/D15/C08/A08要求追踪本轮差异、新模块、调用方、授权、分页与纠错保存。",
+    "早期通过现有Vite及内存独立React挂载复现两项Markdown问题；最终不运行harness、编译、模型或全量测试。",
+    "单独使用内存SQLite与Counter/Decimal核对实际SQL、CSV和所有统计，未连接业务服务。",
+    "唯一写入文件为本审查记录；此前范围变化时在写入前停止，未留下旧指纹记录。"
+  ],
+  "implementation_evidence_inspected": [
+    {
+      "path": ".local/dogfood-repairs/readability.log",
+      "sha256": "d794c2c3fe47a44bb0ac82a5d787ec365affcec0ef38e8692e4cf0d6ce64c6d1",
+      "modified_at_utc": "2026-10-11T04:23:40.126877+00:00",
+      "status": "passed_before_final_test_waits_and_statistics_extension",
+      "details": "五组完成：重复SQL/长表与字面量空白，新查询后节点/展开/滚动/焦点，过期提示，维护目录与同名来源，纠错接受/保存，跨100项分页和后页地址恢复。"
+    },
+    {
+      "path": ".local/dogfood-repairs/result-statistics-current.log",
+      "sha256": "30d1b5caefadcc614a8b62611bab39620062fe0ce6a88cd0ba340246046dd0d0",
+      "modified_at_utc": "2026-10-11T04:31:03.771132+00:00",
+      "status": "passed",
+      "details": "三个Rust单测和四组接口/工具检查完成，包括O1001/O1013各2行、NULL、大整数、空结果、分页截断、跨用户拒绝和get_query传递。"
+    },
+    {
+      "path": ".local/dogfood-repairs/contracts-current.log",
+      "sha256": "e6dd3423eee1e491b836a629419ddd7befa216c328f28b43cfe861215fe19efd",
+      "modified_at_utc": "2026-10-11T04:31:19.508861+00:00",
+      "status": "passed",
+      "details": "同源生成检查及252项Rust/TypeScript正反例完成，包括重复值保留原文及拒绝count=1。"
+    },
+    {
+      "path": ".local/dogfood-repairs/experience-regression.log",
+      "sha256": "e97240eed3892578907dda5198086c80ef80199793f73d26743cac89a3c2775d",
+      "modified_at_utc": "2026-10-11T04:14:24.716253+00:00",
+      "status": "passed_on_earlier_revision",
+      "details": "七组完成：草稿与导航、保存期间离开、旧回执、整篇文档、手机及短屏。早于最终Markdown修正。"
+    },
+    {
+      "path": ".local/dogfood-repairs/governance-regression.log",
+      "sha256": "6e889d9f8ba2bc52eb2ccea2134981979ed83e58c0aeaa030b9dfd975d01f733",
+      "modified_at_utc": "2026-10-11T04:14:37.251566+00:00",
+      "status": "passed_on_earlier_revision",
+      "details": "语义协作浏览器流程完成；早于最终Markdown修正。"
+    },
+    {
+      "path": ".local/dogfood-repairs/background-regression.log",
+      "sha256": "a6a62c3beae6642497730e56c783c40000a51894dbc0595a2c637c6292cb26a8",
+      "modified_at_utc": "2026-10-11T04:15:05.368778+00:00",
+      "status": "passed_on_earlier_revision",
+      "details": "七组完成：同一Pi会话后台多查询、刷新重启、乱序完成、独立取消、原条件归属、权限和焦点/视口。"
+    },
+    {
+      "path": ".local/dogfood-repairs/markdown-regression.log",
+      "sha256": "95b81cd8b2fc5108c01045b652767a1e8d27c4bc58e4f0fb45cde330e926c0cd",
+      "modified_at_utc": "2026-10-11T04:15:18.159234+00:00",
+      "status": "passed_on_earlier_revision",
+      "details": "三组完成：流式Markdown、安全渲染、宽表与轮询节点保持；早于最终Markdown修正。"
+    },
+    {
+      "path": ".local/dogfood-repairs/types-current.log",
+      "sha256": "f50fe1624c26efd634a1d99eca879f67e3b5cd1acf5f9e6642de5a0f1687cd94",
+      "modified_at_utc": "2026-10-11T04:32:07.421989+00:00",
+      "status": "no_diagnostics_in_log",
+      "details": "包含tsc --noEmit命令头且无诊断；未携带退出码，最终BOUNDARIES收据仍待生成。"
+    },
+    {
+      "path": ".local/dogfood-repairs/clippy.log",
+      "sha256": "c21071925583c024ad7bc53acb5238c9d068172274b531680ecb64170513157f",
+      "modified_at_utc": "2026-10-11T04:14:26.934828+00:00",
+      "status": "passed_on_earlier_revision",
+      "details": "Rust检查有Finished标记；早于repeated_values补充，待最终BOUNDARIES重新检查。"
+    },
+    {
+      "path": ".local/dogfood-repairs/build.log",
+      "sha256": "03768d15908275b7ec8a1680736d1fa2decc8900ebc866ff06d7ef13fde8b59f",
+      "modified_at_utc": "2026-10-11T04:14:28.212287+00:00",
+      "status": "passed_on_earlier_revision",
+      "details": "Vite构建完成，主脚本706.51kB并有分块大小提示；早于最终Markdown修正，待最终构建。"
+    },
+    {
+      "path": ".local/dogfood-repairs/real-flash-verification.json",
+      "sha256": "97f2c0f29847d4bdaa81987a43f4c92d65b8ff7d711fdafdbdfff3574717a0cc",
+      "modified_at_utc": "2026-10-11T04:36:12.945553+00:00",
+      "status": "representative_content_verified",
+      "details": "保留两个旧错误回复及修后回复；修后明确14行12单、支付12正2零、O1001/O1013各2行、其余10单各1行。查询集合仍为一个已替代未执行草稿和一个成功查询。"
+    },
+    {
+      "path": ".local/dogfood-repairs/real-independent-reference.json",
+      "sha256": "16d381413623a22dbd0bf705db0665d1c946622887f36faf65f5f09a658a1254",
+      "modified_at_utc": "2026-10-11T04:31:13.955018+00:00",
+      "status": "independently_rechecked",
+      "details": "审查者另外在内存SQLite重建仓库合成数据、执行实际SQL，核对CSV/结果行及所有列统计。"
+    },
+    {
+      "path": ".local/dogfood-repairs/real-flash-query.json",
+      "sha256": "301eaa7a7f2b8c882d25f2305133972774582ad5101321bad07a9802176530b7",
+      "modified_at_utc": "2026-10-11T04:27:40.910544+00:00",
+      "status": "inspected",
+      "details": "实际SQL保留is_test=0、整数分、order_status、原排序，不限制月份或付款状态。"
+    },
+    {
+      "path": ".local/dogfood-repairs/real-flash-results.json",
+      "sha256": "a56eaf9909cc122fc730c144f0076af06332f5bc7f3bc35a59ca75a7a5a7682f",
+      "modified_at_utc": "2026-10-11T04:31:13.924653+00:00",
+      "status": "independently_rechecked",
+      "details": "实际结果包含完整14行和repeated_values；逐列与内存SQLite和独立Counter/Decimal计算一致。"
+    },
+    {
+      "path": ".local/dogfood-repairs/real-flash-orders.csv",
+      "sha256": "ca7210fc19bb3e17a90ff7975a41a8963b3116770f078c06d8d792a23d292189",
+      "modified_at_utc": "2026-10-11T04:31:13.947607+00:00",
+      "status": "independently_rechecked",
+      "details": "BOM/CSV解析后的表头与14行逐字段等于独立SQLite结果。"
+    }
+  ],
+  "fingerprint_method": {
+    "function": "scripts/check_delivery.py: review_scope(root, read_delivery(root))",
+    "frozen_input_count": 159,
+    "meaning": "绑定声明范围、决定摘要、输入和检查器，排除审查记录及指针。输入数量不代表重新审计所有历史功能。",
+    "reviewed_source_hashes": {
+      "crates/data-agent/src/modules/queries/result_statistics.rs": "6845e236395de013a1eebd391465afb170f7a48066dbe731f17195022592dc78",
+      "apps/agent/session/resources.ts": "745d49d4411bb0721fdf38c200a727694e0fb476538e7f1c6107c21313545d60",
+      "apps/agent/tools/data-tools.ts": "30f07d216e5a7f38012b16f75c1671297243ebcbca436f3290530c764b09c2d6",
+      "apps/web/src/shared/MarkdownContent.tsx": "d9ed20eabbc09ce4369d8a81f679b1e215b74f0ce2d266db9ecabf346fc50646",
+      "apps/web/src/features/workbench/Workbench.tsx": "42ddb6158f524af4d47e84f44bb2aa696bb34328b860ac1dd5ba5ac00bbc721e",
+      "packages/contracts/schema.json": "f46378b65461b410a24c6b09f2eb30fa882a525fbc6562574a36725065a2b3f9",
+      "tests/mvp/check-query-result-statistics.mjs": "89e2c9a0f6e2e889d0a9f66e409059d1d67f682e3e93c52b741dc213c52b1c2f",
+      "tests/mvp/check-dogfood-readability.mjs": "6e34e7fe33b3a0526d7a68652af9c9014077e9a9514f27532df2a94b9fc64669"
+    }
+  },
+  "residual_risks": [
+    "统计按当前页原始文本比较；不模拟数据库排序规则，不推断跨页重复、业务主键或单位。实现、契约及提示均明确该限制。",
+    "实际平台仍为合成mock。真实模型证据只来自单一续聊场景，不代表真实Datasight、千表规模或整体模型准确率。",
+    "早期Web构建有分块大小提示；本轮未扩展为打包优化。"
+  ],
+  "testing_gaps": [
+    "最终make verify-increment尚待执行：需要当前冻结范围的RESULTS、READABILITY、REGRESSION、BOUNDARIES完整成功及一致指纹收据后才能关闭增量。",
+    "旧回归、Clippy和Web构建早于最终Markdown或重复值补充，不能替代最终统一检查。五组浏览器专项后追加截图定位等待，也须由最终验收执行。",
+    "最后新增的不暴露接口字段名提示，当前尚无已读取的修后真实回合证据；不影响已独立核对的统计正确性，但表达效果仍待主任务确认。",
+    "未重跑Pi原生压缩、真实平台或完整MVP验收；这些实现本轮未改。"
+  ],
+  "independence": {
+    "product_or_formal_tests_edited_by_reviewer": false,
+    "harness_run_by_reviewer": false,
+    "official_model_requests_by_reviewer": 0,
+    "credentials_read_by_reviewer": false,
+    "remote_mutations_by_reviewer": false,
+    "final_acceptance_run_by_reviewer": false,
+    "early_isolated_browser_reproductions_run_by_reviewer": true,
+    "in_memory_sqlite_reference_checked_by_reviewer": true,
+    "only_written_file": "docs/reviews/dogfood-readability-review.json"
+  }
+}

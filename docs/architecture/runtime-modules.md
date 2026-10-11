@@ -42,6 +42,7 @@
 | `read_model_selection` | `AccessContext, conversation_id` → 选择与版本 | 单条非锁查询，核对用户、空间及未删除状态 |
 | `save_model_selection_in_tx` | 已锁会话、`expected_version`、模型ID和档位 → 已保存选择与新版本 | M08先核对允许组合；版本冲突拒绝覆盖，仅准确接回紧邻版本且同内容的重放；不改运行权、任务或查询 |
 | `lock_inputs_in_tx` | 锁定会话、输入 ID/待处理范围 → 按 `input_seq` 锁定的输入与处分 | 只读本模块记录，校验输入归属；领取、撤回和推进输入游标使用同一会话锁 |
+| `has_pending_input_in_tx` | 已锁会话 → 是否存在 pending 输入 | 只读消息状态，为 Skill 选择变更提供阻塞依据；含可恢复中断，不把交付已耗尽的历史 failed 当作仍可推进的输入；调用方另核对有效运行权 |
 | `accept_message_in_tx` | `client_message_id, text, explicit_task?, clarification_id?, budget_scope_id` → `message_id, event_id, routing_state` | 同用户客户端 ID 唯一；不同会话、正文或目标冲突；保存 `pending` 和会话阻塞，明确目标另返回需冻结的任务 ID |
 | `apply_routing_in_tx` | `message_id, decision, task_refs, clarification_ref?, block_scope` → 新归属与剩余阻塞 | `decision` 限定上述归属枚举；组合层提供同事务已校验的任务/澄清引用；不能解除其他消息的阻塞 |
 | `withdraw_message_in_tx` | 用户动作、锁定消息、期望修订 → 撤回事件与剩余阻塞 | 仅尚未应用消息可撤回；同事务将对应输入置 `withdrawn` 并推进可推进的输入游标；已应用返回 `already_applied`，不改写旧条件 |
@@ -92,6 +93,12 @@ flowchart TD
   E --> H[追加事件并等待事务提交]
   H --> I[SSE按序读取已提交事件]
 ```
+
+### 消息发送与输出传输补充
+
+M12 按服务端返回的用户及空间保存草稿和待确认提交。发送前固定创建 `operation_id`、`client_message_id`、正文及模型选择；网络回执丢失后沿原 ID 和原载荷重试，刷新不另建消息。发送期间继续编辑的草稿独立保留。旧无空间键只有在服务端确认会话可读后才能迁移其关联草稿。M05 的服务端去重规则保持。
+
+M11 仅对 Pi 已产生的文本事件做 50 毫秒或约 2048 字符的合并写入；助手消息边界先排空，正式回答起点仍绑定实际最后一条消息。M08 追加只查询最后序号，重放只核对对应序号正文；最终提交仍读取完整片段核对连续性和正式文本。未知回执、旧代次、序号缺口和异文冲突不放宽；未提交缓冲不能冒充已保存内容。
 
 ## 3. M06 `analysis`：分析目标、条件与澄清
 
@@ -173,6 +180,9 @@ flowchart TD
 **私有数据：**`sql_drafts` 及不可变版本、`query_requests`、确认记录、平台提交/观察/取消回执；每个请求固定 `task_id, condition_revision, draft_version, target_id, target_version`。首次聊天确认写入`confirmation_message_id`，并将`budget_scope_id`绑定执行消息；此后均不可改变。显式HTTP确认保留NULL消息来源和草稿预算。主键在预览时创建；主动重跑创建新待确认请求，SQL 相同仍需用户确认。
 
 结果由现有终态通知续接解释。`is_confirmation_message_in_tx`核对查询与来源消息；组合层在外部结果读取前及最终事务调用它。`get_query`对新确认查询的来源消息只返回状态，成功时`results=null`及等待交付提示，避免执行轮和结果轮重复作答；同消息恢复沿用此边界。系统结果消息、后续真实用户消息和Web结果读取继续正常取数，不改平台终态。
+
+M07 `page_statistics` 对已经授权读取的结果页做确定性列统计，由原 `QueryResults.statistics` 随 HTTP 及 Pi `get_query` 交付，不新增工具或执行 SQL。记录当前行数、每列非空/空值数、按原始返回文本去重的数量，以及出现超过一次的非空值与次数（`repeated_values`）；重复值按文本排序，同样只覆盖当前统计范围。已声明数值类型且所有非空值可解析时提供正/零/负计数，直接核对十进制文本，保留大整数和极小数。仅 `offset=0`、无后页、未截断且平台声明完整时标为 `complete_result`，其余为 `page`；跨页去重不能相加。该统计不推断业务主键、单位或净额，也不替代数据库排序规则。模型据此解释对应列，缺少统计的计算不靠目测补值。`result_expired` 属于共用 AppError，页面明确告知结果过期并保留原 SQL，不自动重跑。
+
 
 | 状态维度 | 初始状态设计 | 规则 |
 | --- | --- | --- |

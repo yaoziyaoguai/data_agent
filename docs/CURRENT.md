@@ -4,11 +4,11 @@
   "schema": 1,
   "phase": "deliver",
   "status": "done",
-  "goal_revision": 40,
+  "goal_revision": 43,
   "environment": "macOS arm64 / Node 26.8.1 / npm 11.19.0 / Rust 1.99.0 / Python 3.14.7 / SQLite 3.53.4 / Colima 0.10.1 / Docker Engine 29.2.1 / Compose 5.3.1 / MySQL 8.4.11 / Milvus 3.0.2",
   "verification": {
     "level": "targeted",
-    "reason": "按已确认交互原型优化正式React页面；本地业务回归和浏览器dogfood后提交推送。",
+    "reason": "全功能本地dogfood：实际点按、编辑、角色协作、故障恢复；记录审计并修复通用问题。",
     "freshness": "content",
     "inputs": [
       "AGENTS.md",
@@ -33,166 +33,200 @@
     "schema": 1,
     "registry": "docs/semantic-retrieval-design.md",
     "increment": {
-      "id": "I2-EXPERIENCE-OPTIMIZATION",
+      "id": "I2-LOCAL-DOGFOOD",
       "phase": "I2",
       "status": "complete",
-      "goal": "将已确认原型落实到正式工作台、语义管理和个人积累；保留服务端业务约束，完成本地dogfood后分批提交推送。",
+      "goal": "实际使用三个主入口及三类角色的全部现有操作，记录可复现问题、通用修复并完成本地验证。",
       "requirements": [
-        "C08",
+        "D01",
+        "D03",
+        "D06",
         "D09",
         "D10",
         "D12",
         "D13",
-        "D15",
-        "A08"
+        "D14",
+        "C02",
+        "C04",
+        "C05",
+        "C08"
       ],
       "modules": [
+        "M01",
         "M02",
+        "M04",
         "M05",
+        "M06",
         "M07",
+        "M08",
         "M09",
+        "M11",
         "M12"
       ],
       "allowed_paths": [
         "apps/web/src",
+        "apps/agent/session",
+        "apps/api/src",
+        "crates/data-agent/src/modules/retrieval",
+        "crates/data-agent/src/modules/runtime",
+        "crates/data-agent/src/modules/assets",
+        "crates/data-agent/src/modules/conversations",
+        "crates/data-agent/src/use_cases",
+        "packages/contracts",
+        "tests/contracts",
+        "tests/runtime",
         "tests/mvp",
         "docs/CURRENT.md",
+        "docs/reviews/product-repairs-review.json",
+        "docs/reviews/product-repairs-verification.md",
+        "docs/architecture/implementation-design.md",
         "docs/architecture/implementation-views.md",
+        "docs/architecture/knowledge-modules.md",
+        "docs/architecture/runtime-modules.md",
         "docs/semantic-retrieval-design.md",
-        "docs/reviews/experience-optimization-review.json",
-        "docs/reviews/experience-optimization-visual.md",
         "README.md",
-        "docs/images",
-        "prototype/experience-preview",
-        "packages/contracts/schema.json",
-        "tests/contracts/cases.json",
-        "packages/contracts/generated",
-        "crates/data-agent/src/modules/conversations/store.rs"
+        "scripts/development.py",
+        "crates/data-agent/src/modules/knowledge",
+        "crates/data-agent/src/modules/queries",
+        "docs/reviews/local-dogfood-20261011.md",
+        "docs/reviews/local-dogfood-review.json"
       ],
       "non_goals": [
-        "不变更后端权限、Pi循环、模型与记忆方案；不复制原型演示逻辑、不新增数据平台或样例业务。"
+        "不增加新产品能力，不改变同步方案、模型或Mem0选型，不以样例名或答案特判；不提交推送。"
       ],
       "invariants": [
-        "查询仍经聊天明确意图执行；10行预览、真实结果下载、停止与未知回执由现有服务端事实决定。",
-        "共享语义与个人/公共资产权限、版本和公开确认保持；人工输入不得静默丢失。",
-        "目录按可信身份区分对象，不按表名删除或合并来源；图表不推测类别或金额单位。"
+        "保留既有用户记录和全部未提交工作；破坏性与批量维护只操作本轮合成试用对象或隔离数据。",
+        "SQL执行和公共发布必须走真实用户操作及服务端授权；Pi继续负责Agent循环。",
+        "覆盖表区分实际浏览器、合成模型自动化、真实模型试用和未验证外部能力。"
       ],
       "acceptance": [
         {
-          "id": "EXPERIENCE",
+          "id": "WORKBENCH",
           "requirements": [
-            "C08",
+            "D03",
             "D09",
-            "D10",
-            "D12",
-            "D13",
-            "D15",
-            "A08"
+            "D14",
+            "C04",
+            "C05",
+            "C08"
           ],
-          "expected": "按已确认原型验证草稿保护、目录身份、结果与图表、精简依据、列表搜索、文档预览、地址恢复、键盘与手机交互。",
+          "expected": "现有用户操作、保存回读、角色隔离与失败恢复符合已确认要求。",
           "evidence_kind": "runtime",
-          "command": [
-            "node",
-            "tests/mvp/check-experience-optimization.mjs"
-          ],
-          "timeout_seconds": 360
-        },
-        {
-          "id": "UI-REGRESSIONS",
-          "requirements": [
-            "C08",
-            "D09",
-            "D10",
-            "D12",
-            "D13",
-            "D15",
-            "A08"
-          ],
-          "expected": "保留既有资产保存/发布/依赖、语义权限、对象创建、文档、管理按钮与查询边界。",
-          "evidence_kind": "runtime",
-          "command": [
-            "node",
-            "tests/mvp/check-experience-regressions.mjs"
-          ],
-          "timeout_seconds": 1800
-        },
-        {
-          "id": "CONVERSATION",
-          "requirements": [
-            "C08",
-            "D09",
-            "D10",
-            "D12",
-            "D13",
-            "D15",
-            "A08"
-          ],
-          "expected": "后台多查询、单独停止、续聊及结果恢复保持。",
-          "evidence_kind": "runtime",
-          "command": [
-            "node",
-            "tests/mvp/check-background-queries-browser.mjs"
-          ],
-          "timeout_seconds": 300
-        },
-        {
-          "id": "MODEL",
-          "requirements": [
-            "C08",
-            "D09",
-            "D10",
-            "D12",
-            "D13",
-            "D15",
-            "A08"
-          ],
-          "expected": "Flash/Pro及受支持思考档位保存、失败和身份/版本边界保持。",
-          "evidence_kind": "runtime",
-          "command": [
-            "node",
-            "tests/mvp/check-model-selection.mjs"
-          ],
-          "timeout_seconds": 360
-        },
-        {
-          "id": "WEB-CHECKS",
-          "requirements": [
-            "C08",
-            "D09",
-            "D10",
-            "D12",
-            "D13",
-            "D15",
-            "A08"
-          ],
-          "expected": "同源契约及正反例、类型、Web构建和Rust检查通过。",
-          "evidence_kind": "contract",
           "command": [
             "sh",
             "-c",
-            "make verify-contracts && npm run check:types && npm run build:web && \"$HOME/.cargo/bin/cargo\" clippy --offline --locked -p data-agent --lib -- -D warnings"
+            "node tests/mvp/check-query-boundaries.mjs && node tests/mvp/check-query-stop-browser.mjs && node tests/mvp/check-evidence-return-browser.mjs && node tests/mvp/check-model-selection.mjs && node tests/mvp/check-history-browser.mjs && node tests/mvp/check-new-conversation-draft.mjs && node tests/mvp/check-conversation-reliability.mjs && node tests/mvp/check-workspace-role-browser.mjs && node tests/mvp/check-workspace-feedback-browser.mjs"
           ],
-          "timeout_seconds": 300
+          "timeout_seconds": 1200
+        },
+        {
+          "id": "ASSETS",
+          "requirements": [
+            "D10",
+            "D12",
+            "C02",
+            "C05",
+            "C08"
+          ],
+          "expected": "现有用户操作、保存回读、角色隔离与失败恢复符合已确认要求。",
+          "evidence_kind": "runtime",
+          "command": [
+            "sh",
+            "-c",
+            "node tests/mvp/check-asset-experience-browser.mjs && node tests/mvp/check-asset-editor-browser.mjs && node tests/mvp/check-asset-mutation-browser.mjs && node tests/mvp/check-asset-dependencies-browser.mjs && node tests/mvp/check-shared-skills.mjs"
+          ],
+          "timeout_seconds": 1200
+        },
+        {
+          "id": "KNOWLEDGE",
+          "requirements": [
+            "D01",
+            "D06",
+            "D13",
+            "C02",
+            "C08"
+          ],
+          "expected": "现有用户操作、保存回读、角色隔离与失败恢复符合已确认要求。",
+          "evidence_kind": "runtime",
+          "command": [
+            "sh",
+            "-c",
+            "node tests/mvp/check-management-buttons.mjs && node tests/mvp/check-semantic-governance-browser.mjs && node tests/mvp/check-semantic-role-boundaries-browser.mjs && node tests/mvp/check-creator-ownership-browser.mjs && node tests/mvp/check-knowledge-experience-browser.mjs && node tests/mvp/check-related-knowledge-browser.mjs && node tests/mvp/check-maintenance-browser.mjs"
+          ],
+          "timeout_seconds": 1200
+        },
+        {
+          "id": "RECOVERY",
+          "requirements": [
+            "D03",
+            "D09",
+            "D10",
+            "D12",
+            "C02",
+            "C04",
+            "C05",
+            "C08"
+          ],
+          "expected": "后台查询不阻塞对话，Markdown与结果滚动稳定，记忆改版/停用与Pi原生Skill沿现有契约。",
+          "evidence_kind": "runtime",
+          "command": [
+            "sh",
+            "-c",
+            "node tests/mvp/check-background-queries-browser.mjs && node tests/mvp/check-dogfood-readability.mjs && node tests/mvp/check-message-markdown.mjs && node tests/mvp/check-memory-provider.mjs && node tests/mvp/check-memory-revisions.mjs && node tests/mvp/check-native-skills.mjs && node tests/mvp/check-query-result-statistics.mjs"
+          ],
+          "timeout_seconds": 1200
+        },
+        {
+          "id": "ENGINEERING",
+          "requirements": [
+            "C02",
+            "C05",
+            "C08"
+          ],
+          "expected": "现有用户操作、保存回读、角色隔离与失败恢复符合已确认要求。",
+          "evidence_kind": "runtime",
+          "command": [
+            "sh",
+            "-c",
+            "make verify-contracts && npm run check:types && npm run build:web && \"$HOME/.cargo/bin/cargo\" fmt --all --check && \"$HOME/.cargo/bin/cargo\" clippy --offline --locked --all-targets -- -D warnings && python3 scripts/check_architecture.py"
+          ],
+          "timeout_seconds": 600
         }
       ],
       "verification_inputs": [
-        "AGENTS.md",
         "apps/web/src",
+        "apps/agent/session",
+        "apps/api/src",
+        "crates/data-agent/src/modules/retrieval",
+        "crates/data-agent/src/modules/runtime",
+        "crates/data-agent/src/modules/assets",
+        "crates/data-agent/src/modules/conversations",
+        "crates/data-agent/src/use_cases",
+        "packages/contracts",
+        "tests/contracts",
+        "tests/runtime",
         "tests/mvp",
-        "packages/contracts/schema.json",
-        "tests/contracts/cases.json",
-        "packages/contracts/generated",
+        "docs/architecture/implementation-design.md",
         "docs/architecture/implementation-views.md",
+        "docs/architecture/knowledge-modules.md",
+        "docs/architecture/runtime-modules.md",
         "docs/semantic-retrieval-design.md",
-        "prototype/experience-preview/README.md",
+        "AGENTS.md",
         "package-lock.json",
-        "crates/data-agent/src/modules/conversations/store.rs"
+        "README.md",
+        "scripts/development.py",
+        "scripts/check_architecture.py",
+        "tests/architecture",
+        "scripts/test_development.py",
+        "crates/data-agent/src/modules/knowledge",
+        "crates/data-agent/src/modules/queries",
+        "docs/reviews/local-dogfood-20261011.md"
       ],
       "review": {
         "status": "passed",
-        "record": "docs/reviews/experience-optimization-review.json"
+        "record": "docs/reviews/local-dogfood-review.json"
       },
-      "evidence": ".local/delivery/I2-EXPERIENCE-OPTIMIZATION-result.json"
+      "evidence": ".local/delivery/I2-LOCAL-DOGFOOD-result.json"
     }
   }
 }
@@ -200,9 +234,99 @@
 
 # Data Agent 当前记录
 
-更新：2026-10-10。唯一活动项目目录：`~/work_space/data_agent`。
+更新：2026-10-11。唯一活动项目目录：`~/work_space/data_agent`。
 
-## 当前增量：正式页面体验优化（已完成）
+
+## 当前增量：全功能本地试用与修复（2026-10-11，已完成）
+
+- 用户要求实际使用全部点击、编辑和现有能力，记录、审计后修复，修后本地复测。沿用dev_co；不增加新功能，不针对mock资料特判。
+- 保留所有既有未提交工作；基线备份 `.local/local-dogfood/before/`。日常路径在当前页面试用，批量维护、破坏性操作和故障注入在隔离本地数据中验证；实际模型沿现有配置，仅用合成资料。
+- 覆盖表与问题证据见[本轮试用记录](reviews/local-dogfood-20261011.md)。先核对工作台/历史/SQL结果、记忆/Skill、语义/纠错/负责人三组操作，再按发现补充有界修复及独立审查。未验证项不得标通过。
+- 本轮未提交推送；同步方案和同步缓冲能力继续暂停。
+- 本轮四项通用修复完成：新对话模型设置丢失、选Skill后未发草稿丢失、回执未知时误迁草稿、空会话首问后模型版本未刷新。按用户/空间/会话保存与迁移临时输入，保留服务端版本、原提交身份和后来编辑；均有修前复现及修后浏览器断言。[独立审查](reviews/local-dogfood-review.json)通过，无剩余确定性发现。
+- 最终 `make verify-increment` 五组全部退出0、无超时，237份输入（含独立审查记录）前后指纹一致；收据 `.local/delivery/I2-LOCAL-DOGFOOD-result.json`，总日志 `.local/local-dogfood/final-verification.log`。覆盖28个冻结运行专项及契约、类型、Web构建、Rust格式/静态检查和模块依赖检查；连同前面已通过的预填、索引并发、分析偏好，共31类专项。query-stop的后台立即可发送、手机抽屉正确角色等待，均在最终严格版本通过。
+- 真实Flash、Mem0与现有向量配置完成代表性合成试用：Pi原生读取Skill及附件，召回本人的记忆；同会话SQL先展示再聊天执行，14行结果与独立SQLite参考一致，预览10行并实际下载；停用记忆后该对话不再采用，随后恢复启用。17次已结算真实模型调用包含工具往返与结果解释，不作为17个问题或整体准确率；自动化检查官方模型调用为0，手工记忆/语义操作使用现有embedding配置。
+- 主页面跨用户协作闭环完成：Bob提文档纠错，Carol接受后另行核对并保存；公共Skill建议标记处理后附件保持原文，负责人独立编辑、保存、重新核对后才生效。浏览器证据与SHA见 `.local/local-dogfood/collaboration-evidence.json`。三个主入口、三类角色的操作、保存回读、隔离与可信失败场景覆盖见本轮试用记录。
+- 本地Web/API/Pi/平台mock/Mem0健康检查均为200，Vite使用最新前端；浏览器回到Carol已完成查询的结果，未遗留编辑弹窗。保留原账号、历史及本轮合成试用对象。本轮未提交推送。
+- 保留的边界：真实Datasight和生产容量未验证；真实模型仅代表性流程，未穷举任意输入及并发组合。构建仍有既有单包超过500KB提示，本轮未扩展打包优化、同步缓冲或模型/记忆选型。
+
+### 验收后的仓库交付（2026-10-11）
+
+- 用户在本轮本地验收通过后，追加授权将全部已验证改动分批提交并推送。前文及冻结记录中的“未提交推送”描述的是验收结束时状态，本次交付沿用新的明确授权。
+- 交付目标为既有 `codex/conversation-experience` 分支，远端为 [GitHub 仓库](https://github.com/yaoziyaoguai/data_agent)。按后端/Agent与契约、界面交互与回归、设计及试用记录分成三批；保持当前分支。
+- 本轮84个待提交文件已逐一归组，未发现凭据、个人绝对路径或本地试用产物混入。现行完成收据与代码指纹仍一致，交付只整理提交与记录，沿用已完成验证。
+- 代码批次已提交为 `2034d5f`（查询依据与Agent运行可靠性）和 `aaeeba5`（草稿保护、语义界面与回归）；第三批包含设计、README、试用审查和本记录。远端推送结果另由Git回执核对。
+
+### 本轮验收与要求变更
+
+- 四项既有测试按当前交互修正：query-stop只在登录首条前等待模型ready，后台查询时立即可发送断言不变；history按会话行搜索（不把删除按钮当另一个会话），60000字文档通过已确定的整篇编辑器与按名称关联入口编辑，长度/版本/关联顺序断言保留；手机角色先打开导航抽屉并等待正确角色；Skill外部改版通过既有focus事件触发刷新，避免旧30秒超时与已确定30秒空闲周期相撞。不改权限、分页、查询或保存预期。
+- 新草稿专项使用本地已配置模型目录、暂停Worker，仅验证设置与消息持久化，不调用官方模型；初版未配置目录导致控件不可操作的试验已纠正。回执重试等待以待确认记录确实清除和两次同身份请求为准，不能把按钮暂时改成发送中当作完成。
+
+## 前一增量：产品审计通用修复（2026-10-11，已完成）
+
+- 用户已授权实施，强调通用性；沿用 dev_co。基线备份 `.local/product-repairs/before/`，保留全部既有改动。
+- 先完成六项确定问题：发送重试身份、空闲请求、语义状态、会话Skill移除、命中片段、流式输出。复用现有模块与Pi，不改业务样例、不增同步范围。
+- 验收使用跨领域合成资料、网络回执丢失、隐藏页面及状态变化；相关既有回归保持。未复现的记忆误用和新参考/结果标签保留为候选，不用猜测扩大本轮。
+- 六项通用修复完成，[独立审查](reviews/product-repairs-review.json)通过，审查发现的删除目标发送死路、终态失败锁住Skill两项均已修复。最终 `make verify-increment` 六组完整成功、无超时，验收前后227份输入（含独立审查记录）指纹一致；收据 `.local/delivery/I2-PRODUCT-RELIABILITY-result.json`。包括8组会话、7组Skill移除及既有Pi原生Skill回归、检索10项单测及跨领域集成、流式与Pi恢复、语义状态、原页面/后台查询回归，以及262项同源契约、类型、构建、格式、静态与模块边界检查。
+- 全部本轮自动化验证使用本地协议替身和合成平台，官方模型与embedding调用为0；不能据此宣布真实模型整体准确率或生产容量已验证。性能短样本与测试边界见[本轮验证记录](reviews/product-repairs-verification.md)。首次统一失败及诊断证据保留，下方说明测试租约修正依据。
+- 本地服务已沿原数据库、模型、Mem0及向量配置重启到最新实现，Web/API/Pi/平台mock/Mem0健康均为200；原账号和数据保留。已查看语义整篇文档状态及查询结果/取消截图。构建仍提示既有单包超过500KB，保留为后续按测量决定的优化。本轮未提交推送；同步、记忆选型及真实准确率评测未扩大。
+
+### 本轮验收与要求变更
+
+- Identity/SessionReceipt新增服务端空间后，启动器登录自检也核对空间；只更新原精确相等断言，保留上一轮Carol账号补齐改动。
+- 独立审查补齐待确认消息目标被删除的边界：服务端明确不可访问后解除对应本地待确认身份，原草稿保留为只读查看，不覆盖新草稿或自动重投执行意图。当前页与后台删除均先复现失败，再通过完整8组会话专项。
+- Skill变更只应被仍待处理输入和有效运行权阻止。真实交付耗尽会将输入与工作置为终态failed；已应用输入此时不能撤回，继续按历史failed阻止会永久锁住选用/移除。修正该检查，保持通用pending_ids含义；M05新增只读待处理判断，允许路径和验收输入相应包含conversations模块。原failed+queued夹具不代表真实终态，补验实际失败处理、有效租约与可恢复pending边界，不放宽SQL授权、预算或恢复身份。
+- 首次统一验收的会话组通过，Skill专项失败：测试将运行租约设为1500毫秒，第二次恢复进入预算检查前已过期，实际返回lease_lost，严格4次budget_exhausted断言只得到3次。诊断记录确认原运行身份未被接管，租约已过期223毫秒。测试改用Worker默认15000毫秒并按其调整等待上限，保留4次耗尽、pending阻止、终态放行、原任务/工具/预算不变断言；不改产品租约或容忍错误类型。失败收据保留 `.local/product-repairs/unified-first-failure.json`。
+
+- 消息存储新增空间隔离后，13处既有MVP测试从旧 `data-agent.conversation.alice` 改读 `data-agent.conversation.["demo","alice"]`；这是测试观察路径变化，会话/消息/权限/执行预期不变。旧真实会话仅授权回查通过后迁移，不能为通过测试硬编码demo兼容。
+- 额外运行的旧 `check-runtime.mjs` 在刷新后寻找“已保存的任务”和原始任务ID而失败；开工前备份及现行页面均已没有该展示。按早已确认的聊天界面要求，改核对原问题和新问题刷新后仍可见，并继续独立断言数据库有2任务/2工具/2正式输出。新建会话ID观察也改为用户+空间键。原失败日志保留 `.local/product-repairs/runtime-regression.log`，修正后7组通过；未修改产品行为或降低持久化/恢复断言。
+- 检索、Skill和发送新增测试使用独立库/集合/端口；仅在隔离测试内注入回执丢失、状态与来源边界，不修改产品mock业务资料。
+
+## 产品视角审计（2026-10-11，实施前评估）
+
+- 用户要求全面审计性能、准确度和可用性并给出优先建议。本轮只读代码、历史证据与实际页面；没有开启实施增量，没有修改产品代码、配置或业务数据，没有新增模型调用。下方已完成增量和原收据保持。
+- 报告：[产品、准确度与性能审计](reviews/product-audit-20261011.md)。当前确认的主要问题包括：检索命中片段位置丢失、语义来源状态不够可见、空闲高频轮询、流式输出重复读库、回执未知重试更换身份，以及会话Skill只能选用不能移除。性能热点与记忆误用风险分别注明实测、代码依据和未验证部分。
+- 当前单个空闲工作台31.875秒共139次API请求，约261.65次/分钟；证据 `.local/product-audit-20261011/idle-request-sample.json`。这是短时单页测量，不代表生产容量。当前没有统一的现行端到端准确率，旧12/16、记忆对比和最新单场景试用不能合并。
+- 建议先处理明确的可靠性与交互问题，再集中改善依据交付和高频口径，随后用小批当前版本内容验证决定记忆与性能投入。该评估后的实施已由用户授权，范围见上方当前增量；同步缓冲区及同步更新继续暂停，未提交推送。
+
+## 前一增量：试用问题修复（2026-10-11，已完成）
+
+- 用户要求修复上轮发现的全部非同步问题，并再次强调语义管理过于零散。范围为：结果统计、结果过期提示、语义目录组织、重复 SQL/结果、长历史标题、纠错全文重复。同步缓冲区与同步更新暂不讨论、不实现。
+- 沿用 dev_co，保留既有账号配置与试用记录；基线备份 `.local/dogfood-repairs/before/`。本轮授权本地修复与验证，没有提交推送授权。
+- M07 在现有结果读取中补充有明确范围的确定性列统计，Pi 沿用现有工具解释结果；不增加 Agent 循环或通用计算系统。M02/M12 的目录按表与独立业务资料组织，字段在表内维护；同名来源继续可辨识，不做数据合并。
+- 验证以六项实际问题为依据，绑定针对性接口/浏览器测试与相关既有回归；最后独立审查和真实 Flash 代表性试用。不以本次验证声称模型达到100%正确。
+- 六项修复已完成。语义管理默认按表、指标、整篇文档、术语组织目录，字段、加工 SQL 与血缘从表内进入；纠错默认突出改动部分。SQL/明细重复、长历史标题、结果过期与结果计数也已修复，原编辑、权限及执行规则保留。
+- 最终 `make verify-increment` 四组验收均完整退出0、无超时，验收前后160份输入指纹一致。包含结果统计4组接口与3项单测、界面专项5组、既有体验/语义协作/后台查询/Markdown回归，以及252项同源契约、类型、构建、Rust格式和静态检查。收据 `.local/delivery/I2-DOGFOOD-READABILITY-result.json`，详细日志由收据引用；这些自动化检查使用合成平台与本地模型替身，官方模型请求为0。
+- [独立审查](reviews/dogfood-readability-review.json)通过。审查发现的两项问题已修复：新增查询时保持历史渲染节点；仅按两端空白清理后的完整SQL匹配，保留字面量内空白。回归验证历史展开、横向滚动和焦点保持，以及跨100项目录分页和后页地址恢复。审查时待跑的最终统一验收现已通过，审查原记录保持。
+- 真实 Flash/off 配合可执行合成数据，在同一会话完成5条用户消息：先给SQL、补充后执行、继续核对原结果。最终正确得到14行、12单、12行正支付、2行零支付，O1001/O1013各2行；14行CSV与独立SQLite参考逐字段一致。最后一回合也已验证自然语言回复不暴露统计接口字段名。原错误回合保留，不将这一个场景推导为整体准确率。证据 `.local/dogfood-repairs/real-flash-verification.json`、`real-flash-final.png` 与 `real-independent-reference.json`。
+- 本地服务已更新并保持运行，Web/API/Pi/平台mock/Mem0健康检查均返回200。已查看最终目录、字段编辑、纠错差异及真实回复截图；完整说明见[修复与验证记录](reviews/dogfood-readability-verification.md)。浏览器下载控制工具超时的限制保留，实际CSV通过导出接口核对。本轮没有提交推送；同步缓冲区与同步更新继续暂停。
+
+### 本轮验收与要求变更
+
+- 既有产品要求、业务预期与权限断言不变。浏览器专项增加一份明确生成但未执行的SQL，因此过期场景从断言“只有1份查询”改为“总计2份、其中1份未提交”；仍验证过期不自动重跑。SQL字面量差异用浏览器响应夹具验证，不改变数据库或执行实际SQL。
+- 结果统计首次接口专项将租约设为180000毫秒，超出既有120000毫秒上限，Worker拒绝启动；修正测试配置，未放宽产品限制。初次日志 `.local/dogfood-repairs/result-statistics-initial.log`。
+- 新增分页测试首次在同页fragment跳转、目录尚未刷新时检查选中项。改为从工作台打开目标地址并等待目录载入，再单独核对刷新恢复；没有改变产品导航行为。初次日志 `.local/dogfood-repairs/readability-pagination-initial.log`。
+- 真实Flash试用首次正确读出14/12/12/2，但两轮列举重复订单时仍漏O1001。原统计中补充本页出现超过一次的非空值及次数，保持原工具、授权与分页范围；接口专项增加O1001与O1013各2行的独立预期，不修改合成数据或降低标准。初次原回复保存在 `.local/dogfood-repairs/real-flash-result.txt` 与 `real-flash-followup-before-repeat-statistics.txt`。
+- 在历史节点稳定性复查中一并消除工作台两个同级组件的重复key，仍按原用户与会话范围重置。界面专项开始捕获重复key控制台错误。
+- 2026-10-10记录中的同步讨论下一步已被本轮暂停决定替代。
+
+## 前轮：实际试用与来源同步讨论（2026-10-10）
+
+- 用户要求先自行 dogfood，再讨论 Datasight 新表和变化表如何同步；同步方案暂不实现。本轮是试用与分析，不开启新的开发增量，不改写下方已完成增量的验收结论。
+- 试用记录：[本地角色与对话试用](reviews/dogfood-20261010.md)。真实 Flash/off 的一个三轮对话，配合本地合成平台；走通文档草稿保护、Bob 提建议与 Carol 核对保存、SQL 修订后执行、10 行预览与 14 行 CSV 下载、个人 Skill 选用和公共副本发布。下载内容与独立 SQLite 参考一致。
+- 当时发现：模型将 12 个订单总结为 13 个，追问后仍未改对；历史结果过期因 `AppError.code` 缺少 `result_expired`，被前端解码成技术报错。另记录负责对象目录平铺、SQL/结果重复、长对话标题和纠错全文重复的体验问题。上述问题已由2026-10-11当前增量修复，原试用证据保留。
+- 来源同步只读核对：已有快照、指纹、并发基线和预填任务，但表级变化判断偏粗；仅改负责人也可能进入表及所有字段的重分析路径。尚未发现自动定时或事件接入，真实 Datasight 能力未验证。候选方向为先比较来源变化，再按影响范围处理；不引入新数据库或服务，不把候选意见写成已定方案。
+- 本轮保留合成文档纠错、Carol 的试用对话及个人/公共 Skill。证据在 `.local/dogfood-20261010/`；浏览器回到 Alice 工作台，未点击来源同步或重建索引。未覆盖慢查询取消、并行查询、真实平台同步和记忆召回，未提交或推送。
+- 当时的同步讨论计划已由用户2026-10-11的暂停决定替代；后续是否恢复讨论由用户决定。当前完成状态以上方增量为准。
+
+## 本地试用账号补齐（2026-10-10，已完成）
+
+- 用户要求提供可实际使用的语义维护者账号。启动器支持读取身份文件中的额外开发账号，保留原有凭据；`internal` 不注册为用户，重复凭据拒绝启动。
+- 本地增加 Carol，由 Datasight mock 的 `maintainer_id` 将合成表 `demo_order_detail` 指定给她，并通过 `/source-syncs` 正式同步。Alice 仍为超级维护者，Bob 仍为普通用户；未改变业务权限规则或平台查询权限。
+- 新建合成文档“订单明细说明（维护练习）”，Carol 为首次创建者和负责人，供用户练习编辑。身份、平台目录覆盖及验证回执均放在被 Git 忽略的 `.local/development/`，不记录凭据正文。
+- 验证：启动器单测9项通过；本地五个HTTP服务健康；三账号登录与角色符合预期；Carol 创建、编辑文档后回读一致；Bob 修改该文档和 Carol 修改其他负责人表均被服务端拒绝（403），对象版本保持。证据：`.local/development/maintainer-setup/verification.json`。本轮是本地账号配置及接口验证，不替代完整产品验收。
+
+## 前一增量：正式页面体验优化（已完成）
 
 `goal_revision=40`，增量 `I2-EXPERIENCE-OPTIMIZATION`。用户批准 `prototype/experience-preview/preview.html`，要求按此优化正式页面，完成本地交互与 dogfood，修复问题后提交推送。
 
