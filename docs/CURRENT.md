@@ -3,18 +3,18 @@
   "workflow": "dev_co",
   "schema": 1,
   "phase": "deliver",
-  "status": "done",
-  "goal_revision": 43,
+  "status": "active",
+  "goal_revision": 44,
   "environment": "macOS arm64 / Node 26.8.1 / npm 11.19.0 / Rust 1.99.0 / Python 3.14.7 / SQLite 3.53.4 / Colima 0.10.1 / Docker Engine 29.2.1 / Compose 5.3.1 / MySQL 8.4.11 / Milvus 3.0.2",
   "verification": {
     "level": "targeted",
-    "reason": "全功能本地dogfood：实际点按、编辑、角色协作、故障恢复；记录审计并修复通用问题。",
+    "reason": "README 图文更新与分支交付；仅验证文档、图片和既有证据引用，不重跑业务或真实模型。",
     "freshness": "content",
     "inputs": [
       "AGENTS.md",
       "docs/CURRENT.md",
-      "docs/architecture/implementation-design.md",
-      "docs/architecture/knowledge-modules.md"
+      "README.md",
+      "docs/images/README.md"
     ],
     "checks": [
       {
@@ -33,200 +33,66 @@
     "schema": 1,
     "registry": "docs/semantic-retrieval-design.md",
     "increment": {
-      "id": "I2-LOCAL-DOGFOOD",
+      "id": "I2-README-PRESENTATION",
       "phase": "I2",
       "status": "complete",
-      "goal": "实际使用三个主入口及三类角色的全部现有操作，记录可复现问题、通用修复并完成本地验证。",
+      "goal": "用生成封面与真实合成页面截图更新 README，说明当前能力和证据边界，完成文档检查后合并推送。",
       "requirements": [
-        "D01",
-        "D03",
-        "D06",
-        "D09",
-        "D10",
-        "D12",
-        "D13",
-        "D14",
-        "C02",
-        "C04",
-        "C05",
         "C08"
       ],
       "modules": [
-        "M01",
-        "M02",
-        "M04",
-        "M05",
-        "M06",
-        "M07",
-        "M08",
-        "M09",
-        "M11",
         "M12"
       ],
       "allowed_paths": [
-        "apps/web/src",
-        "apps/agent/session",
-        "apps/api/src",
-        "crates/data-agent/src/modules/retrieval",
-        "crates/data-agent/src/modules/runtime",
-        "crates/data-agent/src/modules/assets",
-        "crates/data-agent/src/modules/conversations",
-        "crates/data-agent/src/use_cases",
-        "packages/contracts",
-        "tests/contracts",
-        "tests/runtime",
-        "tests/mvp",
-        "docs/CURRENT.md",
-        "docs/reviews/product-repairs-review.json",
-        "docs/reviews/product-repairs-verification.md",
-        "docs/architecture/implementation-design.md",
-        "docs/architecture/implementation-views.md",
-        "docs/architecture/knowledge-modules.md",
-        "docs/architecture/runtime-modules.md",
-        "docs/semantic-retrieval-design.md",
         "README.md",
-        "scripts/development.py",
-        "crates/data-agent/src/modules/knowledge",
-        "crates/data-agent/src/modules/queries",
-        "docs/reviews/local-dogfood-20261011.md",
-        "docs/reviews/local-dogfood-review.json"
+        "docs/CURRENT.md",
+        "docs/images",
+        "docs/reviews/readme-presentation-review.json"
       ],
       "non_goals": [
-        "不增加新产品能力，不改变同步方案、模型或Mem0选型，不以样例名或答案特判；不提交推送。"
+        "不修改产品、接口、架构、测试和模型配置，不实现同步缓冲；不以文档验证替代业务验收。"
       ],
       "invariants": [
-        "保留既有用户记录和全部未提交工作；破坏性与批量维护只操作本轮合成试用对象或隔离数据。",
-        "SQL执行和公共发布必须走真实用户操作及服务端授权；Pi继续负责Agent循环。",
-        "覆盖表区分实际浏览器、合成模型自动化、真实模型试用和未验证外部能力。"
+        "所有公开截图使用项目合成资料，生成封面与真实界面明确区分。",
+        "原业务收据与历史准确率保留原版本及分母；功能与数据边界以既有实现和审查记录为据。",
+        "使用现有准确架构图，保留 Mem0、Pi SDK、Qwen 1024 维和各存储职责。"
       ],
       "acceptance": [
         {
-          "id": "WORKBENCH",
+          "id": "README",
           "requirements": [
-            "D03",
-            "D09",
-            "D14",
-            "C04",
-            "C05",
             "C08"
           ],
-          "expected": "现有用户操作、保存回读、角色隔离与失败恢复符合已确认要求。",
-          "evidence_kind": "runtime",
+          "expected": "README 可解析，5 张配图可读且格式与扩展名一致，本地引用存在；产品代码与已验收基线一致。文案事实、图文排版及公开资料范围另由人工复核。",
+          "evidence_kind": "architecture",
           "command": [
-            "sh",
-            "-c",
-            "node tests/mvp/check-query-boundaries.mjs && node tests/mvp/check-query-stop-browser.mjs && node tests/mvp/check-evidence-return-browser.mjs && node tests/mvp/check-model-selection.mjs && node tests/mvp/check-history-browser.mjs && node tests/mvp/check-new-conversation-draft.mjs && node tests/mvp/check-conversation-reliability.mjs && node tests/mvp/check-workspace-role-browser.mjs && node tests/mvp/check-workspace-feedback-browser.mjs"
+            "node",
+            "--input-type=module",
+            "-e",
+            "import assert from 'node:assert/strict';\nimport { readFileSync, existsSync } from 'node:fs';\nimport { resolve, dirname } from 'node:path';\nimport { execFileSync } from 'node:child_process';\nimport { micromark } from 'micromark';\nimport { gfm, gfmHtml } from 'micromark-extension-gfm';\nconst docs = ['README.md', 'docs/images/README.md'];\nfor (const file of docs) {\n  const source = readFileSync(file, 'utf8');\n  const html = micromark(source, { allowDangerousHtml: true, extensions: [gfm()], htmlExtensions: [gfmHtml()] });\n  assert(html.includes('<table>'), `${file}: missing rendered table`);\n  if (file === 'README.md') assert(html.includes('href=\"http://127.0.0.1:5173/\"'));\n  assert(html.includes('<h1>'), `${file}: missing heading`);\n  assert.equal((source.match(/<details>/g) || []).length, (source.match(/<\\/details>/g) || []).length);\n  assert(!/sk-[A-Za-z0-9._-]{20,}|\\/Users\\/|\\/var\\/folders\\//.test(source), `${file}: private content`);\n  for (const match of source.matchAll(/\\]\\(([^)]+)\\)/g)) {\n    const target = match[1].split('#')[0];\n    if (target && !/^[a-z]+:/i.test(target)) assert(existsSync(resolve(dirname(file), target)), `${file}: ${target}`);\n  }\n}\nconst readme = readFileSync('README.md', 'utf8');\nconst images = [...readme.matchAll(/!\\[[^\\]]*\\]\\(([^)]+)\\)/g)].map(match => match[1]);\nassert.equal(images.length, 5);\nfor (const file of images) {\n  const bytes = readFileSync(file);\n  if (file.endsWith('.png')) assert.equal(bytes.subarray(0, 8).toString('hex'), '89504e470d0a1a0a');\n  else if (file.endsWith('.jpg')) assert.equal(bytes.subarray(0, 3).toString('hex'), 'ffd8ff');\n  else assert(bytes.toString().includes('<svg'));\n}\nexecFileSync('git', ['diff', '--exit-code', '0a6f5bf1ca442f913519638b26bf00c5545e3c7a', '--', 'apps', 'crates', 'packages', 'tests', 'migrations', 'infra', 'scripts', 'prototype', 'experiments', 'AGENTS.md', 'package.json', 'package-lock.json', 'Cargo.toml', 'Cargo.lock', 'Makefile']);\nconsole.log('README: Markdown parsed, local links and 5 image files valid; application unchanged from verified baseline.');"
           ],
-          "timeout_seconds": 1200
-        },
-        {
-          "id": "ASSETS",
-          "requirements": [
-            "D10",
-            "D12",
-            "C02",
-            "C05",
-            "C08"
-          ],
-          "expected": "现有用户操作、保存回读、角色隔离与失败恢复符合已确认要求。",
-          "evidence_kind": "runtime",
-          "command": [
-            "sh",
-            "-c",
-            "node tests/mvp/check-asset-experience-browser.mjs && node tests/mvp/check-asset-editor-browser.mjs && node tests/mvp/check-asset-mutation-browser.mjs && node tests/mvp/check-asset-dependencies-browser.mjs && node tests/mvp/check-shared-skills.mjs"
-          ],
-          "timeout_seconds": 1200
-        },
-        {
-          "id": "KNOWLEDGE",
-          "requirements": [
-            "D01",
-            "D06",
-            "D13",
-            "C02",
-            "C08"
-          ],
-          "expected": "现有用户操作、保存回读、角色隔离与失败恢复符合已确认要求。",
-          "evidence_kind": "runtime",
-          "command": [
-            "sh",
-            "-c",
-            "node tests/mvp/check-management-buttons.mjs && node tests/mvp/check-semantic-governance-browser.mjs && node tests/mvp/check-semantic-role-boundaries-browser.mjs && node tests/mvp/check-creator-ownership-browser.mjs && node tests/mvp/check-knowledge-experience-browser.mjs && node tests/mvp/check-related-knowledge-browser.mjs && node tests/mvp/check-maintenance-browser.mjs"
-          ],
-          "timeout_seconds": 1200
-        },
-        {
-          "id": "RECOVERY",
-          "requirements": [
-            "D03",
-            "D09",
-            "D10",
-            "D12",
-            "C02",
-            "C04",
-            "C05",
-            "C08"
-          ],
-          "expected": "后台查询不阻塞对话，Markdown与结果滚动稳定，记忆改版/停用与Pi原生Skill沿现有契约。",
-          "evidence_kind": "runtime",
-          "command": [
-            "sh",
-            "-c",
-            "node tests/mvp/check-background-queries-browser.mjs && node tests/mvp/check-dogfood-readability.mjs && node tests/mvp/check-message-markdown.mjs && node tests/mvp/check-memory-provider.mjs && node tests/mvp/check-memory-revisions.mjs && node tests/mvp/check-native-skills.mjs && node tests/mvp/check-query-result-statistics.mjs"
-          ],
-          "timeout_seconds": 1200
-        },
-        {
-          "id": "ENGINEERING",
-          "requirements": [
-            "C02",
-            "C05",
-            "C08"
-          ],
-          "expected": "现有用户操作、保存回读、角色隔离与失败恢复符合已确认要求。",
-          "evidence_kind": "runtime",
-          "command": [
-            "sh",
-            "-c",
-            "make verify-contracts && npm run check:types && npm run build:web && \"$HOME/.cargo/bin/cargo\" fmt --all --check && \"$HOME/.cargo/bin/cargo\" clippy --offline --locked --all-targets -- -D warnings && python3 scripts/check_architecture.py"
-          ],
-          "timeout_seconds": 600
+          "timeout_seconds": 60
         }
       ],
       "verification_inputs": [
-        "apps/web/src",
-        "apps/agent/session",
-        "apps/api/src",
-        "crates/data-agent/src/modules/retrieval",
-        "crates/data-agent/src/modules/runtime",
-        "crates/data-agent/src/modules/assets",
-        "crates/data-agent/src/modules/conversations",
-        "crates/data-agent/src/use_cases",
-        "packages/contracts",
-        "tests/contracts",
-        "tests/runtime",
-        "tests/mvp",
-        "docs/architecture/implementation-design.md",
-        "docs/architecture/implementation-views.md",
-        "docs/architecture/knowledge-modules.md",
-        "docs/architecture/runtime-modules.md",
-        "docs/semantic-retrieval-design.md",
-        "AGENTS.md",
-        "package-lock.json",
         "README.md",
-        "scripts/development.py",
-        "scripts/check_architecture.py",
-        "tests/architecture",
-        "scripts/test_development.py",
-        "crates/data-agent/src/modules/knowledge",
-        "crates/data-agent/src/modules/queries",
-        "docs/reviews/local-dogfood-20261011.md"
+        "docs/images/README.md",
+        "docs/images/data-agent-cover.png",
+        "docs/images/workbench-sql.jpg",
+        "docs/images/semantic-management.jpg",
+        "docs/images/personal-skills.png",
+        "docs/architecture/data-agent-overview.svg",
+        "docs/reviews/local-dogfood-20261011.md",
+        "docs/reviews/local-dogfood-review.json",
+        "docs/research/mem0-extraction-comparison-results.md",
+        "docs/research/memory-adoption-trial.md",
+        "docs/sources/evaluation/qwen-shared-trial.json"
       ],
       "review": {
         "status": "passed",
-        "record": "docs/reviews/local-dogfood-review.json"
+        "record": "docs/reviews/readme-presentation-review.json"
       },
-      "evidence": ".local/delivery/I2-LOCAL-DOGFOOD-result.json"
+      "evidence": ".local/delivery/I2-README-PRESENTATION-result.json"
     }
   }
 }
@@ -237,17 +103,27 @@
 更新：2026-10-11。唯一活动项目目录：`~/work_space/data_agent`。
 
 
-## 当前增量：全功能本地试用与修复（2026-10-11，已完成）
+## 当前增量：README 图文更新与合并（2026-10-11）
+
+- 用户要求更新 README、使用 GPT Image 配图并整理文案，完成后合并分支、提交和推送。只改文档和配图，不调整产品范围。
+- 以 `0a6f5bf` 为业务基线；原 `I2-LOCAL-DOGFOOD` 的五组收据与独立审查保留，绑定原版本。README 改写单列为本次文档交付，不把旧收据视为对新文档的检查。
+- 封面使用内置 GPT Image 生成；工作台与语义页重新截取正式页面，Skill 使用已有浏览器验证截图，全部采用合成资料。生成提示词和来源见[图片说明](images/README.md)。
+- 内容围绕用户操作、语义维护、个人记忆和 Skill；明确 Mem0、Pi、Qwen 与存储分工，保留历史测试题数和适用范围。新表自动发现和增量同步继续后置。
+- 图文验收已完成：Markdown/GFM 表格和启动链接解析、5 张图片格式、本地引用与业务基线不变检查通过；浏览器确认图片全加载、无整页横向溢出，折叠内容可展开。材料检查 327 项通过。文案清理保留技术名词、历史数字及限制条件。
+- [独立文档审查](reviews/readme-presentation-review.json)通过，无剩余发现；`make verify-increment` 文档验收通过，收据 `.local/delivery/I2-README-PRESENTATION-result.json`。只验证本次呈现与基线一致性，未重跑业务测试或真实模型。
+- 待完成 Git 交付：本次图文独立提交，连同功能分支上六个既有提交合并到远端默认分支 `codex/semantic-maintenance-prototype`，再推送并核对。
+
+## 上一增量：全功能本地试用与修复（2026-10-11，已完成）
 
 - 用户要求实际使用全部点击、编辑和现有能力，记录、审计后修复，修后本地复测。沿用dev_co；不增加新功能，不针对mock资料特判。
 - 保留所有既有未提交工作；基线备份 `.local/local-dogfood/before/`。日常路径在当前页面试用，批量维护、破坏性操作和故障注入在隔离本地数据中验证；实际模型沿现有配置，仅用合成资料。
 - 覆盖表与问题证据见[本轮试用记录](reviews/local-dogfood-20261011.md)。先核对工作台/历史/SQL结果、记忆/Skill、语义/纠错/负责人三组操作，再按发现补充有界修复及独立审查。未验证项不得标通过。
-- 本轮未提交推送；同步方案和同步缓冲能力继续暂停。
+- 该轮代码与文档已分为 `2034d5f`、`aaeeba5`、`0a6f5bf` 三批提交并推送功能分支；同步方案和同步缓冲能力继续暂停。
 - 本轮四项通用修复完成：新对话模型设置丢失、选Skill后未发草稿丢失、回执未知时误迁草稿、空会话首问后模型版本未刷新。按用户/空间/会话保存与迁移临时输入，保留服务端版本、原提交身份和后来编辑；均有修前复现及修后浏览器断言。[独立审查](reviews/local-dogfood-review.json)通过，无剩余确定性发现。
 - 最终 `make verify-increment` 五组全部退出0、无超时，237份输入（含独立审查记录）前后指纹一致；收据 `.local/delivery/I2-LOCAL-DOGFOOD-result.json`，总日志 `.local/local-dogfood/final-verification.log`。覆盖28个冻结运行专项及契约、类型、Web构建、Rust格式/静态检查和模块依赖检查；连同前面已通过的预填、索引并发、分析偏好，共31类专项。query-stop的后台立即可发送、手机抽屉正确角色等待，均在最终严格版本通过。
 - 真实Flash、Mem0与现有向量配置完成代表性合成试用：Pi原生读取Skill及附件，召回本人的记忆；同会话SQL先展示再聊天执行，14行结果与独立SQLite参考一致，预览10行并实际下载；停用记忆后该对话不再采用，随后恢复启用。17次已结算真实模型调用包含工具往返与结果解释，不作为17个问题或整体准确率；自动化检查官方模型调用为0，手工记忆/语义操作使用现有embedding配置。
 - 主页面跨用户协作闭环完成：Bob提文档纠错，Carol接受后另行核对并保存；公共Skill建议标记处理后附件保持原文，负责人独立编辑、保存、重新核对后才生效。浏览器证据与SHA见 `.local/local-dogfood/collaboration-evidence.json`。三个主入口、三类角色的操作、保存回读、隔离与可信失败场景覆盖见本轮试用记录。
-- 本地Web/API/Pi/平台mock/Mem0健康检查均为200，Vite使用最新前端；浏览器回到Carol已完成查询的结果，未遗留编辑弹窗。保留原账号、历史及本轮合成试用对象。本轮未提交推送。
+- 本地Web/API/Pi/平台mock/Mem0健康检查均为200，Vite使用最新前端；浏览器回到Carol已完成查询的结果，未遗留编辑弹窗。保留原账号、历史及本轮合成试用对象。提交记录见上文。
 - 保留的边界：真实Datasight和生产容量未验证；真实模型仅代表性流程，未穷举任意输入及并发组合。构建仍有既有单包超过500KB提示，本轮未扩展打包优化、同步缓冲或模型/记忆选型。
 
 ### 验收后的仓库交付（2026-10-11）

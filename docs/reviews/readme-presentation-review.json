@@ -1,0 +1,73 @@
+{
+  "schema": 1,
+  "increment_id": "I2-README-PRESENTATION",
+  "reviewer": "independent /root/product_reliability_review；未参与本轮README或图片编辑",
+  "reviewed_at": "2026-10-11T15:01:11.788764+00:00",
+  "base_head": "0a6f5bf1ca442f913519638b26bf00c5545e3c7a",
+  "conclusion": "passed",
+  "scope_sha256": "b3d1332cc529dd6530c9a94cf93086aa0f14287ecb2e700bc4dcc32357612001",
+  "summary": "本轮README文字与四张新配图的独立文档审查通过，未发现事实错误。角色边界、Mem0/Pi/Qwen及存储分工与既有实现及公开资料一致；31类专项、最终28专项/5组、14行查询和17次模型调用分别核对原分母。产品与已验收基线无差异。本结论仅审查文档呈现，不重作全面业务验收；当前Markdown/排版/增量验收与Git交付由父代理完成。",
+  "findings": [],
+  "facts_checked": [
+    "表和字段沿用最近同步的平台维护人；本空间表维护人有资格创建独立指标/文档，首次人工创建者负责；超级维护者可维护共享语义，引用不传播编辑权。系统维护权与平台读/执行权分开。",
+    "公共Skill明确发布为独立副本，发布人与超级维护者维护；建议处理不自动改正文，个人记忆与聊天不随公共副本公开。",
+    "Pi SDK为唯一Agent循环、会话续接与压缩；Mem0处理个人记忆提取/检索；MySQL为正式内容真源，Qwen 1024维分别进入共享知识及个人记忆Milvus集合，Pi JSONL与Mem0 SQLite职责没有混淆。",
+    "初次21类、补充8类、新增2类合计31个不同运行专项；最终收据含28个不同专项及工程检查，共5组，均退出0、无超时且前后指纹一致。另3项是analysis-preference、index-concurrency、prefill。",
+    "真实试用查询14行与独立SQLite参考逐行一致，12个订单；17次已结算模型调用包含工具往返及结果解释，没有表述为17道独立题或整体准确率。",
+    "历史12/16、Mem0完整场景16/18及分项17/18和24/24、原始接入5/6与SQL7/7，均保留来源报告的版本与分母；真实Qwen小样明确不代表千表召回率。"
+  ],
+  "images_inspected": [
+    {
+      "path": "docs/images/data-agent-cover.png",
+      "observation": "已查看：标题及三类中文标签清楚；仅概念插画，无伪造功能画面或性能数字。README明确标示GPT Image封面，提示词公开。"
+    },
+    {
+      "path": "docs/images/workbench-sql.jpg",
+      "observation": "已查看：Carol合成订单结果、CSV、最终SQL入口与Flash设置；数据与合成参考一致，无凭据、个人路径或内部业务标识。"
+    },
+    {
+      "path": "docs/images/semantic-management.jpg",
+      "observation": "已查看：Carol语义维护者、本人负责范围、demo_order_detail字段语义与维护入口，匹配图注与本轮角色规则。"
+    },
+    {
+      "path": "docs/images/personal-skills.png",
+      "observation": "已查看：正式新增Skill弹窗，三个模板、正文、适用范围、附件展开入口及保存操作；匹配图注。"
+    }
+  ],
+  "baseline_check": "git diff --exit-code 对照0a6f5bf的产品、接口、正式测试、迁移、基础设施、脚本及依赖清单通过；本次无产品变更。",
+  "evidence_sha256": {
+    "README.md": "4a2d34adcc1120f37546d8d66fc349faf144f7e6cbb286e99bba9b1135a1d011",
+    "docs/images/README.md": "f783a18753a5acf4eedec63d63d637a5f29ddd50d0a0a6685678b8fb39ded8d7",
+    "docs/reviews/local-dogfood-20261011.md": "9c7759cf135e90d9c187eab2b3cba403a6a3833a49b6380d47677a1d6db7bcf7",
+    "docs/architecture/README.md": "248ba95117cfccecd48188a49eca537cb8f4f48097214311d39126ae51288d18",
+    "docs/research/mem0-extraction-comparison-results.md": "8d65e2c7f2a1256fd2a27279018b940ae930abd6749e83700c93641331844aa5",
+    "docs/research/memory-adoption-trial.md": "1ab67733f7c396b4712e3ddcc959f85297a602305bac86f39e5c67ad798f2f82",
+    "docs/reviews/mvp-accuracy-20261005.md": "c33ff062b594f850595fa4bbdd4e20c296120a4011ba25d545ea4c01f6f5a958",
+    "docs/sources/evaluation/qwen-shared-trial.json": "8cb3d284676bcbfed0b246f0327786597076fea78d57b0c46dcb24858c1cba62",
+    ".local/delivery/I2-LOCAL-DOGFOOD-result.json": "6d5da8205b4b4627702d2cc929b0ab18fac5746d08bcb67626d523a519f7a75e",
+    ".local/local-dogfood/query-independent-reference.json": "e34201d7182a8f23b27702692e073ffae4d7c12f29c066c03c8f8f17eaaa926f",
+    ".local/local-dogfood/live-tools.json": "c3317498a080a1ed643c68ba8d38f4cdb229d3425ccbc18db965b571d33ee0bd",
+    "docs/images/data-agent-cover.png": "17489440ea909d10686d2ca32b02892ad50abda906d4bf737e7f46b5e4a562df",
+    "docs/images/workbench-sql.jpg": "1f89823af24ffff5349be8ea8f5863c61ca554c824fe028b871e3cfb09e36c0b",
+    "docs/images/semantic-management.jpg": "ae3220d44f35f6e364a3e20d3cb98621f40de667de92eab7eb8eb4f9fc79f1aa",
+    "docs/images/personal-skills.png": "083be0ed596215f3f4a96846dd3734297e82be80addca67682b25de94ad2943f"
+  },
+  "fingerprint_method": {
+    "function": "scripts/check_delivery.py: review_scope(root, read_delivery(root))",
+    "frozen_input_count": 14
+  },
+  "residual_risks": [
+    "本地合成平台和代表性真实模型流程不证明真实Datasight、生产容量或整体准确率，README已保留这些边界。"
+  ],
+  "testing_gaps": [
+    "父代理仍须完成当前冻结文档增量的make verify-increment及合并推送；已直接运行的文档检查和浏览器结果由其记录，本审查不代替最终回执。"
+  ],
+  "independence": {
+    "product_or_readme_edited": false,
+    "models_called": 0,
+    "business_suites_rerun": false,
+    "subagents_delegated": false,
+    "only_written_file": "docs/reviews/readme-presentation-review.json"
+  },
+  "final_presentation_recheck": "启动URL使用显式Markdown链接，避免GFM自动链接包含中文标点。CURRENT现用GFM解析并断言两份文档表格、精确启动href，原本地链接/5图片格式/业务基线检查保持。已逐项补审；四张图片及其他已审证据SHA未变。父代理报告浏览器五图全加载、无整页横溢与折叠区可打开，本审查未重复启动浏览器。"
+}
