@@ -3,7 +3,7 @@
   "workflow": "dev_co",
   "schema": 1,
   "phase": "deliver",
-  "status": "active",
+  "status": "done",
   "goal_revision": 44,
   "environment": "macOS arm64 / Node 26.8.1 / npm 11.19.0 / Rust 1.99.0 / Python 3.14.7 / SQLite 3.53.4 / Colima 0.10.1 / Docker Engine 29.2.1 / Compose 5.3.1 / MySQL 8.4.11 / Milvus 3.0.2",
   "verification": {
@@ -103,7 +103,7 @@
 更新：2026-10-11。唯一活动项目目录：`~/work_space/data_agent`。
 
 
-## 当前增量：README 图文更新与合并（2026-10-11）
+## 当前增量：README 图文更新与合并（2026-10-11，已完成）
 
 - 用户要求更新 README、使用 GPT Image 配图并整理文案，完成后合并分支、提交和推送。只改文档和配图，不调整产品范围。
 - 以 `0a6f5bf` 为业务基线；原 `I2-LOCAL-DOGFOOD` 的五组收据与独立审查保留，绑定原版本。README 改写单列为本次文档交付，不把旧收据视为对新文档的检查。
@@ -111,7 +111,7 @@
 - 内容围绕用户操作、语义维护、个人记忆和 Skill；明确 Mem0、Pi、Qwen 与存储分工，保留历史测试题数和适用范围。新表自动发现和增量同步继续后置。
 - 图文验收已完成：Markdown/GFM 表格和启动链接解析、5 张图片格式、本地引用与业务基线不变检查通过；浏览器确认图片全加载、无整页横向溢出，折叠内容可展开。材料检查 327 项通过。文案清理保留技术名词、历史数字及限制条件。
 - [独立文档审查](reviews/readme-presentation-review.json)通过，无剩余发现；`make verify-increment` 文档验收通过，收据 `.local/delivery/I2-README-PRESENTATION-result.json`。只验证本次呈现与基线一致性，未重跑业务测试或真实模型。
-- 待完成 Git 交付：本次图文独立提交，连同功能分支上六个既有提交合并到远端默认分支 `codex/semantic-maintenance-prototype`，再推送并核对。
+- Git 交付：图文提交 `2196a82` 连同六个既有提交已快进合并至默认主分支 `codex/semantic-maintenance-prototype`；主分支与 `codex/conversation-experience` 一并推送成功。当前检出主分支；本次收尾记录单独提交，保留分批交付历史。
 
 ## 上一增量：全功能本地试用与修复（2026-10-11，已完成）
 
