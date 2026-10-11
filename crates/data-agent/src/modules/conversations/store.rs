@@ -570,6 +570,21 @@ pub async fn pending_ids_in_tx(
         .bind(&locked.id).fetch_all(tx.connection()).await?)
 }
 
+pub async fn has_pending_input_in_tx(
+    tx: &mut AppTx<'_>,
+    locked: &LockedConversation,
+) -> Result<bool> {
+    current(tx, locked)?;
+    // 终态失败已结束本输入；可恢复的中断仍为 pending。
+    let pending: i64 = sqlx::query_scalar(
+        "SELECT EXISTS(SELECT 1 FROM conversation_messages WHERE conversation_id=? AND disposition='pending')",
+    )
+    .bind(&locked.id)
+    .fetch_one(tx.connection())
+    .await?;
+    Ok(pending != 0)
+}
+
 // 模型回看只返回未撤回的用户输入；旧助手、工具正文可能已依赖失效资料。
 pub async fn model_history_in_tx(
     tx: &mut AppTx<'_>,

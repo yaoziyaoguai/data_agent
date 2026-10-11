@@ -132,4 +132,12 @@ export interface ContractTypes {
   ModelCatalog: Boundary.ModelCatalog;
   ConversationModelSelection: Boundary.ConversationModelSelection;
   SaveModelSelection: Boundary.SaveModelSelection;
+  NumericValueCounts: Boundary.NumericValueCounts;
+  ResultColumnStatistics: Boundary.ResultColumnStatistics;
+  ResultStatistics: Boundary.ResultStatistics;
+  RepeatedResultValue: Boundary.RepeatedResultValue;
+  SkillSelectionRemoval: Boundary.SkillSelectionRemoval;
+  SkillRemovalReceipt: Boundary.SkillRemovalReceipt;
+  KnowledgeRetrievalExcerpt: Boundary.KnowledgeRetrievalExcerpt;
+  KnowledgeRetrieval: Boundary.KnowledgeRetrieval;
 }

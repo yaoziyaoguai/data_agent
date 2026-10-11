@@ -45,7 +45,7 @@ const definitions = {
   ],
   get_query: [
     "ReadQueryInput",
-    "读取已有查询的SQL、状态和现有结果页，不创建新查询。本消息刚确认的查询只交付状态；完成本消息所需提交后结束本轮，结果将自动续接交付，不主动轮询。系统结果消息和后续追问可正常读取已有结果。",
+    "读取已有查询的SQL、状态、现有结果页及statistics，不创建或重跑查询。核对计数用statistics而不目测：complete_result覆盖完整结果，page只覆盖当前页；distinct_count不含NULL且按返回文本去重，重复值及次数按repeated_values核对（仅出现超过一次的非NULL值），numeric_counts仅统计原列正/零/负值。本消息刚确认的查询只交付状态；完成本消息所需提交后结束本轮，结果将自动续接交付，不主动轮询。系统结果消息和后续追问可正常读取已有结果。",
   ],
   cancel_query: [
     "ReadQueryInput",

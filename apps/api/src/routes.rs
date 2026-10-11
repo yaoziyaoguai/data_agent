@@ -83,15 +83,15 @@ pub async fn login(AxumState(state): AxumState<State>, headers: HeaderMap) -> im
             state
                 .identities
                 .resolve(token)
-                .map(|context| (token, context.user_id))
+                .map(|context| (token, context.user_id, context.space_id))
         }) {
-        Ok((token, user_id)) => (
+        Ok((token, user_id, space_id)) => (
             StatusCode::OK,
             [(
                 header::SET_COOKIE,
                 format!("data_agent_session={token}; HttpOnly; SameSite=Strict; Path=/"),
             )],
-            Json(json!({"state":"authenticated","user_id":user_id,"model_label":model_label(&state)})),
+            Json(json!({"state":"authenticated","user_id":user_id,"space_id":space_id,"model_label":model_label(&state)})),
         )
             .into_response(),
         Err(e) => failure(e).into_response(),
@@ -312,7 +312,7 @@ pub async fn identity(AxumState(state): AxumState<State>, headers: HeaderMap) ->
     let context = user(&state, &headers).map_err(failure)?;
     success(
         "Identity",
-        json!({"user_id":context.user_id,"model_label":model_label(&state)}),
+        json!({"user_id":context.user_id,"space_id":context.space_id,"model_label":model_label(&state)}),
     )
 }
 pub async fn logout() -> impl IntoResponse {

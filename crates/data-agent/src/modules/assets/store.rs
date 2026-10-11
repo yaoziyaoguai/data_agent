@@ -128,6 +128,49 @@ pub async fn begin_selection_in_tx(
     )
     .await
 }
+pub async fn begin_removal_in_tx(
+    tx: &mut AppTx<'_>,
+    ctx: &AccessContext,
+    cid: &str,
+    input: &Value,
+) -> Result<Option<Value>> {
+    let key = input["operation_id"]
+        .as_str()
+        .ok_or(Error::new("invalid_input"))?;
+    begin_operation(
+        tx,
+        ctx,
+        key,
+        &json!({"action":"remove_skill","conversation_id":cid,"input":input}),
+    )
+    .await
+}
+
+pub async fn remove_selection_in_tx(
+    tx: &mut AppTx<'_>,
+    ctx: &AccessContext,
+    cid: &str,
+    input: &Value,
+) -> Result<Value> {
+    let key = input["operation_id"]
+        .as_str()
+        .ok_or(Error::new("invalid_input"))?;
+    let command = json!({"action":"remove_skill","conversation_id":cid,"input":input});
+    if let Some(receipt) = begin_operation(tx, ctx, key, &command).await? {
+        return Ok(receipt);
+    }
+    // 选择身份在明确重选时变化；旧页面或晚到请求不能移除新的选择。
+    let removed = sqlx::query("DELETE FROM skill_selections WHERE id=? AND owner_id=? AND conversation_id=? AND asset_id=?")
+        .bind(input["selection_id"].as_str()).bind(&ctx.user_id).bind(cid).bind(input["asset_id"].as_str())
+        .execute(tx.connection()).await?;
+    if removed.rows_affected() != 1 {
+        return Err(Error::new("version_conflict"));
+    }
+    let receipt = json!({"operation_id":key,"conversation_id":cid,"asset_id":input["asset_id"],"selection_id":input["selection_id"],"state":"removed"});
+    record_operation(tx, ctx, key, &command, &receipt).await?;
+    Ok(receipt)
+}
+
 pub async fn save_in_tx(tx: &mut AppTx<'_>, ctx: &AccessContext, input: &Value) -> Result<Value> {
     save_authorized_in_tx(tx, ctx, input, false).await
 }
@@ -241,7 +284,7 @@ pub async fn select_in_tx(
         return Err(Error::new("version_conflict"));
     }
     super::skill_files::content(&v, "SKILL.md")?;
-    sqlx::query("INSERT INTO skill_selections(id,owner_id,conversation_id,asset_id,asset_version) VALUES(?,?,?,?,?) ON DUPLICATE KEY UPDATE asset_version=VALUES(asset_version)").bind(id()).bind(&ctx.user_id).bind(cid).bind(asset).bind(epoch(input["version"].as_str().unwrap_or("0"))?).execute(tx.connection()).await?;
+    sqlx::query("INSERT INTO skill_selections(id,owner_id,conversation_id,asset_id,asset_version) VALUES(?,?,?,?,?) ON DUPLICATE KEY UPDATE id=VALUES(id),asset_version=VALUES(asset_version)").bind(id()).bind(&ctx.user_id).bind(cid).bind(asset).bind(epoch(input["version"].as_str().unwrap_or("0"))?).execute(tx.connection()).await?;
     let mut v = v;
     v["selected"] = json!(true);
     record_operation(tx, ctx, key, &command, &v).await?;
@@ -333,10 +376,10 @@ pub async fn selection_page_in_tx(
     cid: &str,
     after: &str,
 ) -> Result<Vec<Value>> {
-    let rows=sqlx::query("SELECT s.asset_id,s.asset_version,p.body,p.owner_id,p.visibility FROM skill_selections s LEFT JOIN personal_assets p ON p.id=s.asset_id AND p.space_id=? AND p.state<>'deleted' AND (p.owner_id=? OR (p.visibility='space' AND p.kind='skill')) WHERE s.owner_id=? AND s.conversation_id=? AND s.asset_id>? ORDER BY s.asset_id LIMIT 51").bind(&ctx.space_id).bind(&ctx.user_id).bind(&ctx.user_id).bind(cid).bind(after).fetch_all(tx.connection()).await?;
+    let rows=sqlx::query("SELECT s.id AS selection_id,s.asset_id,s.asset_version,p.body,p.owner_id,p.visibility FROM skill_selections s LEFT JOIN personal_assets p ON p.id=s.asset_id AND p.space_id=? AND p.state<>'deleted' AND (p.owner_id=? OR (p.visibility='space' AND p.kind='skill')) WHERE s.owner_id=? AND s.conversation_id=? AND s.asset_id>? ORDER BY s.asset_id LIMIT 51").bind(&ctx.space_id).bind(&ctx.user_id).bind(&ctx.user_id).bind(cid).bind(after).fetch_all(tx.connection()).await?;
     Ok(rows.iter().map(|r| {
         let current = r.get::<Option<sqlx::types::Json<Value>>, _>("body").map(|_| body(r)).unwrap_or(Value::Null);
-        json!({"asset_id":r.get::<String,_>("asset_id"),"selected_version":r.get::<u64,_>("asset_version").to_string(),"asset":current})
+        json!({"selection_id":r.get::<String,_>("selection_id"),"asset_id":r.get::<String,_>("asset_id"),"selected_version":r.get::<u64,_>("asset_version").to_string(),"asset":current})
     }).collect())
 }
 async fn require_shared(tx: &mut AppTx<'_>, ctx: &AccessContext, asset: &str) -> Result<Value> {

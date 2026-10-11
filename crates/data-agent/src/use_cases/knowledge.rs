@@ -19,20 +19,13 @@ pub async fn initialize(pool: &MySqlPool) -> Result<()> {
     }
     tx.commit().await
 }
-pub async fn list(
-    pool: &MySqlPool,
-    ctx: &AccessContext,
-    query: Option<&str>,
-    after: Option<&str>,
-    related: Option<&str>,
-    directory: Option<&str>,
-    state: Option<&str>,
-) -> Result<Value> {
-    if (query.is_some() || directory.is_some()) && related.is_some()
-        || state.is_some() && directory.is_none()
-    {
-        return Err(Error::new("invalid_input"));
-    }
+pub async fn list(pool: &MySqlPool, ctx: &AccessContext, input: &Value) -> Result<Value> {
+    contracts::validate("KnowledgeListQuery", input)?;
+    let query = input["q"].as_str();
+    let after = input["after_id"].as_str();
+    let related = input["related_id"].as_str();
+    let directory = input["directory"].as_str();
+    let state = input["state"].as_str();
     let vector = if let Some(query) = query.filter(|_| directory.is_none()) {
         super::knowledge_embeddings::search(pool, ctx, query, None).await
     } else {
@@ -48,9 +41,16 @@ pub async fn list(
         } else {
             None
         };
-        let (values, next) =
-            knowledge::directory_page_in_tx(&mut tx, ctx, after, query, state, ids.as_deref())
-                .await?;
+        let (values, next) = knowledge::directory_page_in_tx(
+            &mut tx,
+            ctx,
+            after,
+            query,
+            state,
+            ids.as_deref(),
+            input["directory_view"] == "grouped",
+        )
+        .await?;
         (values, next, None)
     } else if let Some(query) = query {
         let result = retrieve_in_tx(&mut tx, ctx, query, 30, &vector).await?;
@@ -622,6 +622,18 @@ pub async fn retrieve_in_tx(
         }
         objects.truncate(limit.saturating_sub(additions.len()));
         objects.extend(additions);
+    }
+    let vector_matches: std::collections::HashMap<_, _> = vector
+        .values
+        .iter()
+        .map(|hit| ((hit["id"].clone(), hit["version"].clone()), hit))
+        .collect();
+    for object in &mut objects {
+        if let Some(candidate) =
+            vector_matches.get(&(object["id"].clone(), object["version"].clone()))
+        {
+            retrieval::attach_matches(&ctx.space_id, object, candidate);
+        }
     }
     let index_state = if vector.state == "unconfigured" {
         "unconfigured"

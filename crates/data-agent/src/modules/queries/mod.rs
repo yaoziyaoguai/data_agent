@@ -1,4 +1,6 @@
 pub mod platform;
+mod result_statistics;
+pub use result_statistics::page_statistics;
 mod store;
 pub use store::task_waiting_phase_in_tx;
 pub use store::{

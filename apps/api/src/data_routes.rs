@@ -21,18 +21,9 @@ pub async fn knowledge(
     Query(query): Query<HashMap<String, String>>,
 ) -> ResponseResult {
     let ctx = user(&state, &headers).map_err(failure)?;
-    data_agent::contracts::validate("KnowledgeListQuery", &json!(query)).map_err(failure)?;
-    let v = use_cases::knowledge::list(
-        &state.pool,
-        &ctx,
-        query.get("q").map(String::as_str),
-        query.get("after_id").map(String::as_str),
-        query.get("related_id").map(String::as_str),
-        query.get("directory").map(String::as_str),
-        query.get("state").map(String::as_str),
-    )
-    .await
-    .map_err(failure)?;
+    let v = use_cases::knowledge::list(&state.pool, &ctx, &json!(query))
+        .await
+        .map_err(failure)?;
     success("KnowledgeList", v)
 }
 pub async fn read_document(
@@ -241,6 +232,20 @@ pub async fn select_skill(
     success(
         "Asset",
         use_cases::personal_assets::select(&state.pool, &ctx, &cid, input)
+            .await
+            .map_err(failure)?,
+    )
+}
+pub async fn remove_skill(
+    AxumState(state): AxumState<State>,
+    headers: HeaderMap,
+    Path(cid): Path<String>,
+    Json(input): Json<Value>,
+) -> ResponseResult {
+    let ctx = user(&state, &headers).map_err(failure)?;
+    success(
+        "SkillRemovalReceipt",
+        use_cases::personal_assets::remove_selection(&state.pool, &ctx, &cid, input)
             .await
             .map_err(failure)?,
     )

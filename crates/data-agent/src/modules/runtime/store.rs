@@ -193,6 +193,30 @@ pub(super) async fn save_checkpoint(
     sqlx::query("INSERT INTO pi_checkpoints(recovery_chain_id,checkpoint) VALUES(?,?) ON DUPLICATE KEY UPDATE checkpoint=VALUES(checkpoint),version=version+1").bind(&run.recovery_chain_id).bind(sqlx::types::Json(value)).execute(tx.connection()).await?;
     Ok(())
 }
+pub(super) async fn last_chunk_sequence(tx: &mut AppTx<'_>, run: &LockedRun) -> Result<u64> {
+    tx.assert_snapshot(&run.transaction_id)?;
+    Ok(sqlx::query_scalar::<_, u64>(
+        "SELECT chunk_seq FROM output_chunks WHERE attempt_id=? ORDER BY chunk_seq DESC LIMIT 1",
+    )
+    .bind(&run.attempt_id)
+    .fetch_optional(tx.connection())
+    .await?
+    .unwrap_or(0))
+}
+pub(super) async fn chunk_text(
+    tx: &mut AppTx<'_>,
+    run: &LockedRun,
+    seq: u64,
+) -> Result<Option<String>> {
+    tx.assert_snapshot(&run.transaction_id)?;
+    Ok(
+        sqlx::query_scalar("SELECT body FROM output_chunks WHERE attempt_id=? AND chunk_seq=?")
+            .bind(&run.attempt_id)
+            .bind(seq)
+            .fetch_optional(tx.connection())
+            .await?,
+    )
+}
 pub(super) async fn chunks(tx: &mut AppTx<'_>, run: &LockedRun) -> Result<Vec<(u64, String)>> {
     tx.assert_snapshot(&run.transaction_id)?;
     let rows = sqlx::query(

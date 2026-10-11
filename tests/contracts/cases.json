@@ -424,7 +424,8 @@
     "schema": "Identity",
     "value": {
       "user_id": "alice",
-      "model_label": "本地模拟模型"
+      "model_label": "本地模拟模型",
+      "space_id": "sample-space"
     },
     "valid": true,
     "roundtrip": true
@@ -441,7 +442,8 @@
     "value": {
       "user_id": "alice",
       "unexpected": true,
-      "model_label": "本地模拟模型"
+      "model_label": "本地模拟模型",
+      "space_id": "sample-space"
     },
     "valid": false
   },
@@ -451,7 +453,8 @@
     "value": {
       "state": "authenticated",
       "user_id": "alice",
-      "model_label": "本地模拟模型"
+      "model_label": "本地模拟模型",
+      "space_id": "sample-space"
     },
     "valid": true,
     "roundtrip": true
@@ -469,7 +472,8 @@
       "state": "authenticated",
       "user_id": "alice",
       "unexpected": true,
-      "model_label": "本地模拟模型"
+      "model_label": "本地模拟模型",
+      "space_id": "sample-space"
     },
     "valid": false
   },
@@ -2582,7 +2586,8 @@
     "schema": "Identity",
     "value": {
       "user_id": "alice",
-      "model_label": "DeepSeek V4 Pro"
+      "model_label": "DeepSeek V4 Pro",
+      "space_id": "sample-space"
     },
     "valid": true,
     "roundtrip": true
@@ -2593,7 +2598,8 @@
     "value": {
       "state": "authenticated",
       "user_id": "alice",
-      "model_label": "DeepSeek V4 Pro"
+      "model_label": "DeepSeek V4 Pro",
+      "space_id": "sample-space"
     },
     "valid": true,
     "roundtrip": true
@@ -2878,10 +2884,12 @@
           "name": null,
           "visibility": null,
           "owner_id": null,
-          "availability": "unavailable"
+          "availability": "unavailable",
+          "selection_id": "selection-example"
         }
       ],
-      "next_after_id": null
+      "next_after_id": null,
+      "change_blocked": false
     },
     "valid": true,
     "roundtrip": true
@@ -3400,6 +3408,206 @@
       "id": "synthetic-conversation",
       "title": "同名分析",
       "created_at": "recently"
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "expired result error retains machine code",
+    "schema": "AppError",
+    "value": {
+      "code": "result_expired",
+      "message": "result_expired",
+      "request_id": "expired-query",
+      "retryable": false
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "grouped maintained directory",
+    "schema": "KnowledgeListQuery",
+    "value": {
+      "directory": "maintained",
+      "directory_view": "grouped"
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "grouped view requires a management directory",
+    "schema": "KnowledgeListQuery",
+    "value": {
+      "directory_view": "grouped"
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "result statistics state explicit scope",
+    "schema": "ResultStatistics",
+    "value": {
+      "scope": "page",
+      "row_count": 0,
+      "distinct_comparison": "returned_text",
+      "columns": []
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "result statistics reject missing scope",
+    "schema": "ResultStatistics",
+    "value": {
+      "row_count": 0,
+      "distinct_comparison": "returned_text",
+      "columns": []
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "repeated result values retain exact text and count",
+    "schema": "RepeatedResultValue",
+    "value": {
+      "value": "a  b",
+      "count": 2
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "single occurrence is not a repeated result value",
+    "schema": "RepeatedResultValue",
+    "value": {
+      "value": "A",
+      "count": 1
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "skill removal binds selected identity",
+    "schema": "SkillSelectionRemoval",
+    "value": {
+      "operation_id": "remove-1",
+      "asset_id": "skill-1",
+      "selection_id": "selection-1"
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "skill removal rejects missing selected identity",
+    "schema": "SkillSelectionRemoval",
+    "value": {
+      "operation_id": "remove-1",
+      "asset_id": "skill-1"
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "skill removal cannot claim owner",
+    "schema": "SkillSelectionRemoval",
+    "value": {
+      "operation_id": "remove-1",
+      "asset_id": "skill-1",
+      "selection_id": "selection-1",
+      "owner_id": "bob"
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "skill removal receipt preserves operation identity",
+    "schema": "SkillRemovalReceipt",
+    "value": {
+      "operation_id": "remove-1",
+      "asset_id": "skill-1",
+      "selection_id": "selection-1",
+      "conversation_id": "conversation-1",
+      "state": "removed"
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "knowledge retrieval located current excerpt",
+    "schema": "KnowledgeRetrieval",
+    "value": {
+      "state": "located",
+      "excerpts": [
+        {
+          "entry_id": "body",
+          "path": "body",
+          "offset": 1000,
+          "length": 4,
+          "total_chars": 1004,
+          "text": "合成内容"
+        }
+      ],
+      "note": ""
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "knowledge retrieval old index unlocated",
+    "schema": "KnowledgeRetrieval",
+    "value": {
+      "state": "unlocated",
+      "excerpts": [],
+      "note": "当前索引未保存定位，请按全文入口补读。"
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "knowledge retrieval negative offset rejected",
+    "schema": "KnowledgeRetrievalExcerpt",
+    "value": {
+      "entry_id": "body",
+      "path": "body",
+      "offset": -1,
+      "length": 4,
+      "total_chars": 1004,
+      "text": "合成内容"
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "knowledge retrieval oversized excerpt rejected",
+    "schema": "KnowledgeRetrievalExcerpt",
+    "value": {
+      "entry_id": "body",
+      "path": "body",
+      "offset": 1000,
+      "length": 361,
+      "total_chars": 1004,
+      "text": "合成内容"
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "knowledge retrieval unknown state rejected",
+    "schema": "KnowledgeRetrieval",
+    "value": {
+      "state": "guessed",
+      "excerpts": [],
+      "note": ""
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "identity requires trusted space",
+    "schema": "Identity",
+    "value": {
+      "user_id": "alice",
+      "model_label": "本地模拟模型"
     },
     "valid": false,
     "roundtrip": false

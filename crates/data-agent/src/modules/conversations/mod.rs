@@ -9,8 +9,8 @@ pub use store::{
 };
 pub use store::{
     assert_routed_in_tx, confirmation_blocked_in_tx, delete_in_tx, enqueue_result_input_in_tx,
-    lock_for_cleanup_in_tx, pending_ids_in_tx, recent_messages_in_tx, route_message_in_tx,
-    withdraw_in_tx,
+    has_pending_input_in_tx, lock_for_cleanup_in_tx, pending_ids_in_tx, recent_messages_in_tx,
+    route_message_in_tx, withdraw_in_tx,
 };
 pub use store::{read_model_selection, save_model_selection_in_tx};
 

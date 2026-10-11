@@ -63,16 +63,57 @@ pub async fn select(
 ) -> Result<Value> {
     contracts::validate("SkillSelection", &input)?;
     let mut tx = AppTx::begin(pool).await?;
-    conversations::lock_conversation_in_tx(&mut tx, ctx, cid).await?;
+    let conversation = conversations::lock_conversation_in_tx(&mut tx, ctx, cid).await?;
     let v = if let Some(receipt) = assets::begin_selection_in_tx(&mut tx, ctx, cid, &input).await? {
         receipt
     } else {
+        assert_selection_change_in_tx(&mut tx, &conversation).await?;
         let value = assets::select_in_tx(&mut tx, ctx, cid, &input).await?;
         super::knowledge::check_refs_in_tx(&mut tx, ctx, &value["dependencies"]).await?;
         value
     };
     tx.commit().await?;
     Ok(v)
+}
+
+async fn assert_selection_change_in_tx(
+    tx: &mut AppTx<'_>,
+    conversation: &conversations::LockedConversation,
+) -> Result<()> {
+    if selection_change_blocked_in_tx(tx, conversation).await? {
+        return Err(Error::new("message_pending"));
+    }
+    Ok(())
+}
+
+async fn selection_change_blocked_in_tx(
+    tx: &mut AppTx<'_>,
+    conversation: &conversations::LockedConversation,
+) -> Result<bool> {
+    Ok(
+        conversation.lease_valid
+            || conversations::has_pending_input_in_tx(tx, conversation).await?,
+    )
+}
+
+pub async fn remove_selection(
+    pool: &MySqlPool,
+    ctx: &AccessContext,
+    cid: &str,
+    input: Value,
+) -> Result<Value> {
+    contracts::validate("SkillSelectionRemoval", &input)?;
+    let mut tx = AppTx::begin(pool).await?;
+    let conversation = conversations::lock_conversation_in_tx(&mut tx, ctx, cid).await?;
+    let receipt =
+        if let Some(receipt) = assets::begin_removal_in_tx(&mut tx, ctx, cid, &input).await? {
+            receipt
+        } else {
+            assert_selection_change_in_tx(&mut tx, &conversation).await?;
+            assets::remove_selection_in_tx(&mut tx, ctx, cid, &input).await?
+        };
+    tx.commit().await?;
+    Ok(receipt)
 }
 
 pub async fn publish(
@@ -95,7 +136,8 @@ pub async fn selections(
     after: &str,
 ) -> Result<Value> {
     let mut tx = AppTx::begin(pool).await?;
-    conversations::lock_conversation_in_tx(&mut tx, ctx, cid).await?;
+    let conversation = conversations::lock_conversation_in_tx(&mut tx, ctx, cid).await?;
+    let change_blocked = selection_change_blocked_in_tx(&mut tx, &conversation).await?;
     let mut rows = assets::selection_page_in_tx(&mut tx, ctx, cid, after).await?;
     let next = if rows.len() > 50 {
         rows.truncate(50);
@@ -121,10 +163,12 @@ pub async fn selections(
                 Err(e) => return Err(e),
             }
         };
-        selections.push(json!({"asset_id":row["asset_id"],"selected_version":row["selected_version"],"current_version":asset["version"],"name":asset["name"],"visibility":asset["visibility"],"owner_id":asset["owner_id"],"availability":availability}));
+        selections.push(json!({"selection_id":row["selection_id"],"asset_id":row["asset_id"],"selected_version":row["selected_version"],"current_version":asset["version"],"name":asset["name"],"visibility":asset["visibility"],"owner_id":asset["owner_id"],"availability":availability}));
     }
     tx.commit().await?;
-    Ok(json!({"conversation_id":cid,"selections":selections,"next_after_id":next}))
+    Ok(
+        json!({"conversation_id":cid,"selections":selections,"next_after_id":next,"change_blocked":change_blocked}),
+    )
 }
 pub async fn suggestions(
     pool: &MySqlPool,

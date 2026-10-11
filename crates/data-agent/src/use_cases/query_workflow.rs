@@ -165,11 +165,13 @@ pub async fn results(
         return Err(Error::new("result_unavailable"));
     }
     knowledge_check(pool, ctx, &v["knowledge_refs"]).await?;
-    let result = queries::platform::call(
+    let mut result = queries::platform::call(
         "/results",
         &json!({"query_id":qid,"owner_id":ctx.user_id,"cursor":cursor}),
     )
     .await?;
+    contracts::validate("QueryResults", &result)?;
+    result["statistics"] = queries::page_statistics(&result)?;
     contracts::validate("QueryResults", &result)?;
     Ok(result)
 }

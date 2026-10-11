@@ -26,6 +26,7 @@ import { selectedSkillResources } from "./skills.ts";
 import { resources } from "./resources.ts";
 import { restoreCheckpoint, exportCheckpoint, RECOVERY_NOTICE } from "./checkpoint.ts";
 import { decodeContract } from "../../../packages/contracts/validate.ts";
+import { outputStream } from "./output-stream.ts";
 
 export async function deliver(
   run: RunEnvelope,
@@ -189,29 +190,21 @@ export async function deliver(
     tools: data ? data.tools.map((t) => t.name) : ["update_analysis_task"],
     customTools: data ? data.tools : [tool.definition],
   });
-  let chunk = 0;
   let finalStartChunk = 1;
   let completedAssistant: AssistantMessage | undefined;
-  let pending = Promise.resolve();
+  const output = outputStream((chunk_seq, text) => transport.post("/internal/outputs", "AppendOutput", {
+    ...transport.binding(), chunk_seq, text,
+  }));
   session.subscribe((event) => {
     if (event.type === "message_start" && event.message.role === "assistant")
-      finalStartChunk = chunk + 1;
+      finalStartChunk = output.startMessage();
     if (event.type === "message_end" && event.message.role === "assistant")
       completedAssistant = event.message;
     if (
       event.type === "message_update" &&
       event.assistantMessageEvent.type === "text_delta"
     ) {
-      const delta = event.assistantMessageEvent.delta;
-      const chunk_seq = String(++chunk);
-      pending = pending.then(async () => {
-        await transport.post("/internal/outputs", "AppendOutput", {
-          ...transport.binding(),
-          chunk_seq,
-          text: delta,
-        });
-      });
-      void pending.catch(() => {}); // 先登记拒绝处理；运行结束仍会await并拒绝提交。
+      output.append(event.assistantMessageEvent.delta);
     }
   });
   const abort = () => {
@@ -230,11 +223,11 @@ export async function deliver(
         { expandPromptTemplates: false },
       );
     else await session.prompt(run.text, { expandPromptTemplates: false });
-    await pending;
+    await output.drain();
     if (data && process.env.DATA_AGENT_TEST_COMPACT === "1")
       await session.compact();
     const commitAnswer = async () => {
-      await pending;
+      await output.drain();
       // SDK可移除length等消息以整理上下文；交付必须检查实际最近完成的消息事件。
       const final = completedAssistant;
       if (
@@ -291,5 +284,6 @@ export async function deliver(
   } finally {
     signal.removeEventListener("abort", abort);
     session.dispose();
+    await output.close();
   }
 }

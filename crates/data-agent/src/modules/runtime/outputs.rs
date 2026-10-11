@@ -9,14 +9,17 @@ pub async fn append_output_in_tx(
     seq: u64,
     body: &str,
 ) -> Result<()> {
-    let chunks = store::chunks(tx, run).await?;
-    if let Some((_, previous)) = chunks.iter().find(|(n, _)| *n == seq) {
+    let last = store::last_chunk_sequence(tx, run).await?;
+    if seq <= last {
+        let previous = store::chunk_text(tx, run, seq)
+            .await?
+            .ok_or(Error::new("chunk_gap"))?;
         if previous != body {
             return Err(Error::new("idempotency_conflict"));
         }
         return Ok(());
     }
-    if seq != chunks.len() as u64 + 1 {
+    if seq != last + 1 {
         return Err(Error::new("chunk_gap"));
     }
     store::insert_chunk(tx, run, seq, body).await

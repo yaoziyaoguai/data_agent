@@ -890,6 +890,13 @@
             "schema": {
               "$ref": "./schema.json#/$defs/KnowledgeListQuery/properties/state"
             }
+          },
+          {
+            "name": "directory_view",
+            "in": "query",
+            "schema": {
+              "$ref": "./schema.json#/$defs/KnowledgeListQuery/properties/directory_view"
+            }
           }
         ]
       },
@@ -1571,6 +1578,50 @@
             }
           }
         ]
+      },
+      "delete": {
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schema.json#/$defs/SkillRemovalReceipt"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "应用错误；权限、版本、待归属、未知和服务失败保留独立code",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schema.json#/$defs/AppError"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "./schema.json#/$defs/SkillSelectionRemoval"
+              }
+            }
+          }
+        }
       }
     },
     "/conversations/{id}/queries": {

@@ -1,27 +1,40 @@
 use serde_json::Value;
-// 词法通道始终可用；向量候选必须回源后再由组合层合并。
-pub fn rank(mut objects: Vec<Value>, query: &str, limit: usize) -> Vec<Value> {
+use std::collections::HashMap;
+
+// 词法通道始终可用；正文序列化和词法计分每个对象只做一次。
+fn lexical_score(object: &Value, tokens: &[String]) -> u32 {
+    let name = object["name"].as_str().unwrap_or("").to_lowercase();
+    let all = object.to_string().to_lowercase();
+    tokens
+        .iter()
+        .map(|token| {
+            if name.contains(token) {
+                8
+            } else if all.contains(token) {
+                1
+            } else {
+                0
+            }
+        })
+        .sum()
+}
+
+pub fn rank(objects: Vec<Value>, query: &str, limit: usize) -> Vec<Value> {
     let tokens = tokens(query);
-    let score = |v: &Value| {
-        let name = v["name"].as_str().unwrap_or("").to_lowercase();
-        let all = v.to_string().to_lowercase();
-        tokens
-            .iter()
-            .map(|t| {
-                if name.contains(t) {
-                    8
-                } else if all.contains(t) {
-                    1
-                } else {
-                    0
-                }
-            })
-            .sum::<u32>()
-    };
-    objects.sort_by_key(|v| std::cmp::Reverse(score(v)));
-    objects.retain(|v| score(v) > 0);
-    objects.truncate(limit);
-    objects
+    let mut scored: Vec<_> = objects
+        .into_iter()
+        .map(|object| {
+            let score = lexical_score(&object, &tokens);
+            (object, score)
+        })
+        .filter(|(_, score)| *score > 0)
+        .collect();
+    scored.sort_by_key(|(_, score)| std::cmp::Reverse(*score));
+    scored
+        .into_iter()
+        .take(limit)
+        .map(|(object, _)| object)
+        .collect()
 }
 
 pub fn rank_hybrid(
@@ -30,31 +43,49 @@ pub fn rank_hybrid(
     limit: usize,
     vectors: &[Value],
 ) -> Vec<Value> {
-    let lexical = rank(objects.clone(), query, objects.len());
-    let score = |object: &Value| {
-        let exact = object["id"]
-            .as_str()
-            .is_some_and(|v| v.eq_ignore_ascii_case(query))
-            || object["name"]
+    let tokens = tokens(query);
+    let mut lexical: Vec<_> = objects
+        .iter()
+        .map(|object| (object["id"].clone(), lexical_score(object, &tokens)))
+        .filter(|(_, score)| *score > 0)
+        .collect();
+    lexical.sort_by_key(|(_, score)| std::cmp::Reverse(*score));
+    let mut lexical_ranks = HashMap::new();
+    for (rank, (id, _)) in lexical.into_iter().enumerate() {
+        lexical_ranks.entry(id).or_insert(rank);
+    }
+    let mut vector_ranks = HashMap::new();
+    for (rank, vector) in vectors.iter().enumerate() {
+        vector_ranks
+            .entry((vector["id"].clone(), vector["version"].clone()))
+            .or_insert(rank);
+    }
+    let mut scored: Vec<_> = objects
+        .into_iter()
+        .map(|object| {
+            let exact = object["id"]
                 .as_str()
-                .is_some_and(|v| v.eq_ignore_ascii_case(query));
-        let lexical = lexical
-            .iter()
-            .position(|v| v["id"] == object["id"])
-            .map_or(0., |r| 1. / (20. + r as f64));
-        let vector = vectors
-            .iter()
-            .position(|v| v["id"] == object["id"] && v["version"] == object["version"])
-            .map_or(0., |r| 1. / (20. + r as f64));
-        if exact { 100. } else { lexical + vector }
-    };
-    let mut objects = objects;
-    objects.retain(|v| score(v) > 0.);
-    objects.sort_by(|a, b| {
-        score(b)
-            .total_cmp(&score(a))
+                .is_some_and(|v| v.eq_ignore_ascii_case(query))
+                || object["name"]
+                    .as_str()
+                    .is_some_and(|v| v.eq_ignore_ascii_case(query));
+            let lexical = lexical_ranks
+                .get(&object["id"])
+                .map_or(0., |r| 1. / (20. + *r as f64));
+            let vector = vector_ranks
+                .get(&(object["id"].clone(), object["version"].clone()))
+                .map_or(0., |r| 1. / (20. + *r as f64));
+            let score = if exact { 100. } else { lexical + vector };
+            (object, score)
+        })
+        .filter(|(_, score)| *score > 0.)
+        .collect();
+    scored.sort_by(|(a, a_score), (b, b_score)| {
+        b_score
+            .total_cmp(a_score)
             .then_with(|| a["id"].as_str().cmp(&b["id"].as_str()))
     });
+    let objects: Vec<_> = scored.into_iter().map(|(object, _)| object).collect();
     let mut selected = Vec::new();
     let mut seen = std::collections::HashSet::new();
     if let Some(first) = objects.first() {
@@ -92,6 +123,8 @@ pub fn rank_hybrid(
     }
     selected
 }
+mod excerpts;
+pub use excerpts::attach_matches;
 mod store;
 pub use store::{candidates_in_tx, index_in_tx};
 // 检索先返回短摘录；全文由read_knowledge按当前授权版本读取。
@@ -334,6 +367,55 @@ pub mod vector;
 mod semantic_context_tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn hybrid_ranking_keeps_exact_names_ties_versions_and_kind_diversity() {
+        let object = |id: &str, name: &str, kind: &str| json!({"id":id,"name":name,"kind":kind,"version":"2"});
+        let objects = vec![
+            object("table-b", "needle detail", "table"),
+            object("table-a", "needle archive", "table"),
+            object("field", "needle value", "field"),
+            object("metric", "needle count", "metric"),
+            object("document", "needle rules", "document"),
+            object("relationship", "needle link", "relationship"),
+            object("term", "needle term", "term"),
+            object("exact", "NEEDLE", "document"),
+            object("only-vector", "other domain", "table"),
+            object("obsolete", "outdated unrelated", "table"),
+        ];
+        let vectors = vec![
+            json!({"id":"only-vector","version":"2"}),
+            json!({"id":"obsolete","version":"1"}),
+        ];
+        let ids = |items: Vec<Value>| {
+            items
+                .into_iter()
+                .map(|v| v["id"].as_str().unwrap().to_owned())
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(
+            ids(rank_hybrid(objects.clone(), "needle", 3, &vectors)),
+            ["exact", "only-vector", "table-b"]
+        );
+        assert_eq!(
+            ids(rank_hybrid(objects, "needle", 6, &vectors)),
+            [
+                "exact",
+                "only-vector",
+                "field",
+                "metric",
+                "relationship",
+                "term"
+            ]
+        );
+        // 同分词法结果保持输入顺序；混合通道同分按ID确定次序。
+        let ties = vec![
+            object("z", "needle", "metric"),
+            object("a", "needle", "metric"),
+        ];
+        assert_eq!(ids(rank(ties.clone(), "needle", 2)), ["z", "a"]);
+        assert_eq!(ids(rank_hybrid(ties, "needle", 2, &[])), ["a", "z"]);
+    }
 
     #[test]
     fn asset_search_keeps_exact_name_ahead_of_prefix_matches() {

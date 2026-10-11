@@ -127,7 +127,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         )
         .route(
             "/conversations/{id}/skill-selections",
-            post(data_routes::select_skill).get(data_routes::skill_selections),
+            post(data_routes::select_skill)
+                .get(data_routes::skill_selections)
+                .delete(data_routes::remove_skill),
         )
         .route("/conversations/{id}/queries", get(data_routes::queries))
         .route("/queries/{id}", get(data_routes::query))

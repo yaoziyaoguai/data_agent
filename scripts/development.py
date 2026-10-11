@@ -158,8 +158,13 @@ def main():
             os.chmod(credentials, 0o600)
             json.dump({'alice': secrets.token_hex(32), 'bob': secrets.token_hex(32), 'internal': secrets.token_hex(32)}, output)
     identities = json.loads(credentials.read_text())
-    if set(identities) != {'alice', 'bob', 'internal'} or any(len(v) != 64 for v in identities.values()):
+    if (not isinstance(identities, dict)
+            or not {'alice', 'bob', 'internal'}.issubset(identities)
+            or any(not re.fullmatch(r'[a-z][a-z0-9_-]{0,63}', user) for user in identities)
+            or any(not isinstance(value, str) or len(value) != 64 for value in identities.values())
+            or len(set(identities.values())) != len(identities)):
         raise RuntimeError('本项目开发身份格式不兼容，请核对 identities.json')
+    users = tuple(user for user in identities if user != 'internal')
     database='data_agent'
     model_profile=None
     model_credentials={}
@@ -184,7 +189,7 @@ def main():
     env = dict(os.environ, PI_OFFLINE='1', DATA_AGENT_MODE='development', DATA_AGENT_TOOLSET='data', DATA_AGENT_PLATFORM_URL='http://127.0.0.1:'+str(ports['platform']),
                DATA_AGENT_DATABASE_URL='mysql://data_agent:' + quote(password, safe='') + '@127.0.0.1:13306/'+database,
                DATA_AGENT_SEMANTIC_SUPER_MAINTAINERS=os.environ.get('DATA_AGENT_SEMANTIC_SUPER_MAINTAINERS', json.dumps({'demo': ['alice']})),
-               DATA_AGENT_DEV_IDENTITIES=json.dumps({identities[u]: u for u in ('alice', 'bob')}),
+               DATA_AGENT_DEV_IDENTITIES=json.dumps({identities[user]: user for user in users}),
                DATA_AGENT_INTERNAL_TOKEN=identities['internal'], DATA_AGENT_API_PORT=str(ports['api']),
                DATA_AGENT_BRIDGE_PORT=str(ports['bridge']), DATA_AGENT_API_URL='http://127.0.0.1:' + str(ports['api']),
                DATA_AGENT_BRIDGE_URL='http://127.0.0.1:' + str(ports['bridge']))
@@ -240,13 +245,13 @@ def main():
                 wait_health('http://127.0.0.1:' + str(ports[name]) + '/health', processes, name, private)
         wait_health('http://127.0.0.1:' + str(ports['web']), processes, 'web', private)
         model_label = ('DeepSeek V4 Pro' if model_profile['model_id'] == 'deepseek-v4-pro' else 'DeepSeek Flash') if model_profile else '本地模拟模型'
-        for user in ('alice', 'bob'):
+        for user in users:
             with request(env['DATA_AGENT_API_URL'] + '/session', identities[user]) as response:
-                assert json.load(response) == {'user_id': user,'model_label':model_label}
+                assert json.load(response) == {'user_id': user,'space_id':'demo','model_label':model_label}
         print('工作台：http://127.0.0.1:' + str(ports['web']) + '/', flush=True)
-        print('演示登录凭据：' + str(credentials.relative_to(ROOT)) + ' 中的 alice 或 bob 值；此文件不进入 Git。', flush=True)
+        print('演示登录凭据：' + str(credentials.relative_to(ROOT)) + ' 中的 ' + '、'.join(users) + ' 值；此文件不进入 Git。', flush=True)
         if args.check:
-            print('本地启动、页面与两个开发身份检查通过。', flush=True)
+            print(f'本地启动、页面与{len(users)}个开发身份检查通过。', flush=True)
             return
         print('Ctrl+C 关闭本次启动的应用进程；数据库和会话保留。', flush=True)
         while True:

@@ -80,6 +80,10 @@ pub struct Boundary {
     pub knowledge_list: KnowledgeList,
     pub knowledge_list_query: KnowledgeListQuery,
     pub knowledge_object: KnowledgeObject,
+    #[serde(rename = "KnowledgeRetrieval")]
+    pub knowledge_retrieval: Option<KnowledgeRetrieval>,
+    #[serde(rename = "KnowledgeRetrievalExcerpt")]
+    pub knowledge_retrieval_excerpt: Option<KnowledgeRetrievalExcerpt>,
     pub logout_receipt: LogoutReceipt,
     pub memory_budget_binding: Option<MemoryBudgetBinding>,
     pub memory_candidate: Option<MemoryCandidate>,
@@ -101,6 +105,7 @@ pub struct Boundary {
     pub model_selection: ModelSelection,
     pub model_usage: ModelUsage,
     pub mutation_receipt: MutationReceipt,
+    pub numeric_value_counts: Option<NumericValueCounts>,
     pub operation_receipt: OperationReceipt,
     pub output_receipt: OutputReceipt,
     #[serde(rename = "pi_session_reference")]
@@ -126,6 +131,8 @@ pub struct Boundary {
     pub request_query_input: RequestQueryInput,
     pub reserve_model_call: ReserveModelCall,
     pub result_column: ResultColumn,
+    pub result_column_statistics: Option<ResultColumnStatistics>,
+    pub result_statistics: Option<ResultStatistics>,
     #[serde(rename = "ReviewSemanticCorrection")]
     pub review_semantic_correction: Option<ReviewSemanticCorrection>,
     #[serde(rename = "ReviewSkillSuggestion")]
@@ -152,7 +159,11 @@ pub struct Boundary {
     pub skill_file: Option<SkillFile>,
     #[serde(rename = "SkillReadInput")]
     pub skill_read_input: Option<SkillReadInput>,
+    #[serde(rename = "SkillRemovalReceipt")]
+    pub skill_removal_receipt: Option<SkillRemovalReceipt>,
     pub skill_selection: SkillSelection,
+    #[serde(rename = "SkillSelectionRemoval")]
+    pub skill_selection_removal: Option<SkillSelectionRemoval>,
     #[serde(rename = "SkillSuggestion")]
     pub skill_suggestion: Option<SkillSuggestion>,
     #[serde(rename = "SkillSuggestionList")]
@@ -336,6 +347,8 @@ pub enum Code {
     NotAvailable,
     #[serde(rename = "outcome_unknown")]
     OutcomeUnknown,
+    #[serde(rename = "result_expired")]
+    ResultExpired,
     #[serde(rename = "result_unavailable")]
     ResultUnavailable,
     #[serde(rename = "scope_incomplete")]
@@ -707,6 +720,7 @@ pub struct ConversationSkillSelection {
     pub name: Option<String>,
     pub owner_id: Option<String>,
     pub selected_version: String,
+    pub selection_id: String,
     pub visibility: Option<Visibility>,
 }
 
@@ -724,6 +738,7 @@ pub enum Availability {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConversationSkillSelections {
+    pub change_blocked: bool,
     pub conversation_id: String,
     pub next_after_id: Option<String>,
     pub selections: Vec<ConversationSkillSelection>,
@@ -922,6 +937,7 @@ pub enum HostCheckpointReferenceKind {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Identity {
     pub model_label: ModelLabel,
+    pub space_id: String,
     pub user_id: String,
 }
 
@@ -985,6 +1001,8 @@ pub struct KnowledgeObject {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub prefill_status: Option<PrefillStatus>,
     pub related_ids: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub retrieval: Option<KnowledgeRetrieval>,
     pub source_id: Option<String>,
     pub source_version: String,
     pub state: AssetState,
@@ -1047,6 +1065,30 @@ pub struct PrefillStatus {
     pub attempt_id: String,
     pub error_code: Option<String>,
     pub state: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct KnowledgeRetrieval {
+    pub excerpts: Vec<KnowledgeRetrievalExcerpt>,
+    pub note: String,
+    pub state: KnowledgeRetrievalState,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct KnowledgeRetrievalExcerpt {
+    pub entry_id: String,
+    pub length: i32,
+    pub offset: i64,
+    pub path: String,
+    pub text: String,
+    pub total_chars: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum KnowledgeRetrievalState {
+    Located,
+    Unlocated,
 }
 
 /// 平台移除与人工停用分开；重新出现只能恢复平台导致的停用。
@@ -1140,6 +1182,9 @@ pub struct KnowledgeListQuery {
     /// 管理目录按名称和状态分页；maintained按当前负责人关系筛选，包含停用项。省略时保留现有语义检索。
     #[serde(skip_serializing_if = "Option::is_none")]
     pub directory: Option<Directory>,
+    /// 仅管理目录使用。grouped只分页列出表、指标、整篇文档与术语；字段和关系从所属表打开。省略或flat保留全部对象列表。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub directory_view: Option<DirectoryView>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub q: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -1155,6 +1200,14 @@ pub struct KnowledgeListQuery {
 pub enum Directory {
     All,
     Maintained,
+}
+
+/// 仅管理目录使用。grouped只分页列出表、指标、整篇文档与术语；字段和关系从所属表打开。省略或flat保留全部对象列表。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DirectoryView {
+    Flat,
+    Grouped,
 }
 
 /// 仅用于管理目录；省略时包含启用及停用，始终排除已删除对象。
@@ -1393,6 +1446,13 @@ pub struct MutationReceipt {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NumericValueCounts {
+    pub negative: i64,
+    pub positive: i64,
+    pub zero: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OperationReceipt {
     pub operation_id: String,
 }
@@ -1538,6 +1598,9 @@ pub struct QueryResults {
     pub result_ref: String,
     pub rows: Vec<Vec<Option<String>>>,
     pub source: QueryResultsSource,
+    /// 应用对当前有权结果页计算的统计；历史客户端可省略。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub statistics: Option<ResultStatistics>,
     pub truncated: bool,
 }
 
@@ -1553,6 +1616,51 @@ pub struct ResultColumn {
 #[serde(rename_all = "snake_case")]
 pub enum QueryResultsSource {
     Mock,
+}
+
+/// 应用对当前有权结果页计算的统计；历史客户端可省略。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ResultStatistics {
+    pub columns: Vec<ResultColumnStatistics>,
+    pub distinct_comparison: DistinctComparison,
+    pub row_count: i64,
+    /// 只有从offset=0取得完整且未截断的结果才是complete_result；page不能外推为全部结果。
+    pub scope: Scope,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ResultColumnStatistics {
+    pub column_index: i64,
+    pub column_name: String,
+    /// 不含NULL，按平台返回的原始文本去重；不模拟数据库排序规则。
+    pub distinct_count: i64,
+    pub non_null_count: i64,
+    pub null_count: i64,
+    pub numeric_counts: Option<NumericValueCounts>,
+    /// 本统计范围中出现超过一次的非NULL原始文本及次数；与distinct_count使用相同比较规则，不能推断跨页重复。
+    pub repeated_values: Vec<RepeatedResultValue>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RepeatedResultValue {
+    pub count: i64,
+    pub value: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DistinctComparison {
+    #[serde(rename = "returned_text")]
+    ReturnedText,
+}
+
+/// 只有从offset=0取得完整且未截断的结果才是complete_result；page不能外推为全部结果。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Scope {
+    #[serde(rename = "complete_result")]
+    CompleteResult,
+    Page,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1867,6 +1975,7 @@ pub struct SendModelCall {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SessionReceipt {
     pub model_label: ModelLabel,
+    pub space_id: String,
     pub state: SessionReceiptState,
     pub user_id: String,
 }
@@ -1887,10 +1996,32 @@ pub struct SkillReadInput {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SkillRemovalReceipt {
+    pub asset_id: String,
+    pub conversation_id: String,
+    pub operation_id: String,
+    pub selection_id: String,
+    pub state: SkillRemovalReceiptState,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SkillRemovalReceiptState {
+    Removed,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SkillSelection {
     pub asset_id: String,
     pub operation_id: String,
     pub version: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SkillSelectionRemoval {
+    pub asset_id: String,
+    pub operation_id: String,
+    pub selection_id: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

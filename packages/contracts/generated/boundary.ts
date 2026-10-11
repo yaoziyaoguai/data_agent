@@ -50,6 +50,8 @@ export interface Boundary {
     knowledgeList:                KnowledgeList;
     knowledgeListQuery:           KnowledgeListQuery;
     knowledgeObject:              KnowledgeObject;
+    KnowledgeRetrieval?:          KnowledgeRetrieval;
+    KnowledgeRetrievalExcerpt?:   KnowledgeRetrievalExcerpt;
     logoutReceipt:                LogoutReceipt;
     memoryBudgetBinding?:         MemoryBudgetBinding;
     memoryCandidate?:             MemoryCandidate;
@@ -71,6 +73,7 @@ export interface Boundary {
     modelSelection:               ModelSelection;
     modelUsage:                   ModelUsage;
     mutationReceipt:              MutationReceipt;
+    numericValueCounts?:          NumericValueCounts;
     operationReceipt:             OperationReceipt;
     outputReceipt:                OutputReceipt;
     pi_session_reference:         PiSessionReference;
@@ -92,6 +95,8 @@ export interface Boundary {
     requestQueryInput:            RequestQueryInput;
     reserveModelCall:             ReserveModelCall;
     resultColumn:                 ResultColumn;
+    resultColumnStatistics?:      ResultColumnStatistics;
+    resultStatistics?:            ResultStatistics;
     ReviewSemanticCorrection?:    ReviewSemanticCorrection;
     ReviewSkillSuggestion?:       ReviewSkillSuggestion;
     ReviseSemanticCorrection?:    ReviseSemanticCorrection;
@@ -108,7 +113,9 @@ export interface Boundary {
     sessionReceipt:               SessionReceipt;
     SkillFile?:                   SkillFile;
     SkillReadInput?:              SkillReadInput;
+    SkillRemovalReceipt?:         SkillRemovalReceipt;
     skillSelection:               SkillSelection;
+    SkillSelectionRemoval?:       SkillSelectionRemoval;
     SkillSuggestion?:             SkillSuggestion;
     SkillSuggestionList?:         SkillSuggestionList;
     snapshot:                     Snapshot;
@@ -201,6 +208,7 @@ export interface ConversationSkillSelection {
     name:             null | string;
     owner_id:         null | string;
     selected_version: string;
+    selection_id:     string;
     visibility:       Visibility | null;
 }
 
@@ -209,10 +217,28 @@ export type Availability = "available" | "version_changed" | "disabled" | "depen
 export type Visibility = "personal" | "space";
 
 export interface ConversationSkillSelections {
+    change_blocked:  boolean;
     conversation_id: string;
     next_after_id:   null | string;
     selections:      ConversationSkillSelection[];
 }
+
+export interface KnowledgeRetrieval {
+    excerpts: KnowledgeRetrievalExcerpt[];
+    note:     string;
+    state:    KnowledgeRetrievalState;
+}
+
+export interface KnowledgeRetrievalExcerpt {
+    entry_id:    string;
+    length:      number;
+    offset:      number;
+    path:        string;
+    text:        string;
+    total_chars: number;
+}
+
+export type KnowledgeRetrievalState = "located" | "unlocated";
 
 export interface ProposalDraftCommand {
     base_version: string;
@@ -355,6 +381,22 @@ export interface SkillReadInput {
     path:    string;
 }
 
+export interface SkillRemovalReceipt {
+    asset_id:        string;
+    conversation_id: string;
+    operation_id:    string;
+    selection_id:    string;
+    state:           SkillRemovalReceiptState;
+}
+
+export type SkillRemovalReceiptState = "removed";
+
+export interface SkillSelectionRemoval {
+    asset_id:     string;
+    operation_id: string;
+    selection_id: string;
+}
+
 export interface SkillSuggestion {
     asset_id:      string;
     asset_version: string;
@@ -478,7 +520,7 @@ export interface AppError {
     retryable:  boolean;
 }
 
-export type Code = "budget_exhausted" | "chunk_gap" | "forbidden" | "idempotency_conflict" | "input_already_applied" | "invalid_evidence" | "invalid_input" | "lease_lost" | "message_pending" | "not_available" | "outcome_unknown" | "result_unavailable" | "scope_incomplete" | "selection_required" | "source_unavailable" | "stale_context" | "stale_knowledge" | "unauthenticated" | "unavailable" | "unsupported" | "version_conflict" | "memory_unavailable" | "memory_extraction_empty" | "memory_operation_unknown" | "vector_unconfigured" | "vector_unavailable" | "embedding_unavailable" | "source_interrupted";
+export type Code = "budget_exhausted" | "chunk_gap" | "forbidden" | "idempotency_conflict" | "input_already_applied" | "invalid_evidence" | "invalid_input" | "lease_lost" | "message_pending" | "not_available" | "outcome_unknown" | "result_unavailable" | "scope_incomplete" | "selection_required" | "source_unavailable" | "stale_context" | "stale_knowledge" | "unauthenticated" | "unavailable" | "unsupported" | "version_conflict" | "memory_unavailable" | "memory_extraction_empty" | "memory_operation_unknown" | "vector_unconfigured" | "vector_unavailable" | "embedding_unavailable" | "source_interrupted" | "result_expired";
 
 export interface AppendOutput {
     chunk_seq:   string;
@@ -748,6 +790,7 @@ export type HostCheckpointReferenceKind = "host_checkpoint";
 
 export interface Identity {
     model_label: ModelLabel;
+    space_id:    string;
     user_id:     string;
 }
 
@@ -791,6 +834,7 @@ export interface KnowledgeObject {
     name:            string;
     prefill_status?: PrefillStatus | null;
     related_ids:     string[];
+    retrieval?:      KnowledgeRetrieval;
     source_id:       null | string;
     source_version:  string;
     state:           AssetState;
@@ -877,9 +921,13 @@ export interface KnowledgeListQuery {
     /**
      * 管理目录按名称和状态分页；maintained按当前负责人关系筛选，包含停用项。省略时保留现有语义检索。
      */
-    directory?:  Directory;
-    q?:          string;
-    related_id?: string;
+    directory?: Directory;
+    /**
+     * 仅管理目录使用。grouped只分页列出表、指标、整篇文档与术语；字段和关系从所属表打开。省略或flat保留全部对象列表。
+     */
+    directory_view?: DirectoryView;
+    q?:              string;
+    related_id?:     string;
     /**
      * 仅用于管理目录；省略时包含启用及停用，始终排除已删除对象。
      */
@@ -890,6 +938,11 @@ export interface KnowledgeListQuery {
  * 管理目录按名称和状态分页；maintained按当前负责人关系筛选，包含停用项。省略时保留现有语义检索。
  */
 export type Directory = "all" | "maintained";
+
+/**
+ * 仅管理目录使用。grouped只分页列出表、指标、整篇文档与术语；字段和关系从所属表打开。省略或flat保留全部对象列表。
+ */
+export type DirectoryView = "grouped" | "flat";
 
 /**
  * 仅用于管理目录；省略时包含启用及停用，始终排除已删除对象。
@@ -1051,6 +1104,12 @@ export interface MutationReceipt {
     version:      string;
 }
 
+export interface NumericValueCounts {
+    negative: number;
+    positive: number;
+    zero:     number;
+}
+
 export interface OperationReceipt {
     operation_id: string;
 }
@@ -1158,7 +1217,11 @@ export interface QueryResults {
     result_ref:      string;
     rows:            Array<Array<null | string>>;
     source:          QueryResultsSource;
-    truncated:       boolean;
+    /**
+     * 应用对当前有权结果页计算的统计；历史客户端可省略。
+     */
+    statistics?: ResultStatistics;
+    truncated:   boolean;
 }
 
 export interface ResultColumn {
@@ -1168,6 +1231,47 @@ export interface ResultColumn {
 }
 
 export type QueryResultsSource = "mock";
+
+/**
+ * 应用对当前有权结果页计算的统计；历史客户端可省略。
+ */
+export interface ResultStatistics {
+    columns:             ResultColumnStatistics[];
+    distinct_comparison: DistinctComparison;
+    row_count:           number;
+    /**
+     * 只有从offset=0取得完整且未截断的结果才是complete_result；page不能外推为全部结果。
+     */
+    scope: Scope;
+}
+
+export interface ResultColumnStatistics {
+    column_index: number;
+    column_name:  string;
+    /**
+     * 不含NULL，按平台返回的原始文本去重；不模拟数据库排序规则。
+     */
+    distinct_count: number;
+    non_null_count: number;
+    null_count:     number;
+    numeric_counts: NumericValueCounts | null;
+    /**
+     * 本统计范围中出现超过一次的非NULL原始文本及次数；与distinct_count使用相同比较规则，不能推断跨页重复。
+     */
+    repeated_values: RepeatedResultValue[];
+}
+
+export interface RepeatedResultValue {
+    count: number;
+    value: string;
+}
+
+export type DistinctComparison = "returned_text";
+
+/**
+ * 只有从offset=0取得完整且未截断的结果才是complete_result；page不能外推为全部结果。
+ */
+export type Scope = "page" | "complete_result";
 
 export interface ReadKnowledgeInput {
     entry_id?: string;
@@ -1319,6 +1423,7 @@ export interface SendModelCall {
 
 export interface SessionReceipt {
     model_label: ModelLabel;
+    space_id:    string;
     state:       SessionReceiptState;
     user_id:     string;
 }

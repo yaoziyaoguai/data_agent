@@ -155,10 +155,10 @@ pub async fn search(space: &str, query: &str, vector: Vec<f32>) -> Candidates {
     let search = async {
         let milvus = Milvus::configured()?;
         let identity = milvus.identity().await?;
-        let value=milvus.call("entities/search",json!({"data":[vector],"annsField":"vector","filter":format!("space_id == {} && model == {}",json!(space),json!(embedding::SPEC.version)),"limit":200,"outputFields":["object_id","object_version","kind"],"consistencyLevel":"Strong"})).await?;
+        let value=milvus.call("entities/search",json!({"data":[vector],"annsField":"vector","filter":format!("space_id == {} && model == {}",json!(space),json!(embedding::SPEC.version)),"limit":200,"outputFields":["id","object_id","object_version","kind","entry_id","char_offset","char_length","content_hash"],"consistencyLevel":"Strong"})).await?;
         let items = value.as_array().ok_or(Error::new("vector_unavailable"))?;
-        let mut values = Vec::new();
-        let mut seen = std::collections::HashSet::new();
+        let mut values: Vec<Value> = Vec::new();
+        let mut positions = std::collections::HashMap::new();
         for item in items {
             let id = item["object_id"]
                 .as_str()
@@ -166,9 +166,20 @@ pub async fn search(space: &str, query: &str, vector: Vec<f32>) -> Candidates {
             let version = item["object_version"]
                 .as_u64()
                 .ok_or(Error::new("vector_unavailable"))?;
-            if seen.insert((id.to_owned(), version)) {
-                values.push(json!({"id":id,"version":version.to_string()}));
-            }
+            let position = *positions
+                .entry((id.to_owned(), version))
+                .or_insert_with(|| {
+                    values.push(json!({"id":id,"version":version.to_string(),"matches":[]}));
+                    values.len() - 1
+                });
+            // 保留命中位置，不把索引中的正文直接交给读者；旧条目没有这些字段。
+            values[position]["matches"]
+                .as_array_mut()
+                .expect("matches")
+                .push(json!({
+                "fragment_id":item["id"],"entry_id":item["entry_id"],"offset":item["char_offset"],
+                    "length":item["char_length"],"content_hash":item["content_hash"]
+                }));
         }
         Ok::<_, Error>(Candidates {
             values,
@@ -233,13 +244,33 @@ fn fragments(space: &str, object: &Value) -> (Vec<Value>, bool) {
                 offset,
                 embedding::SPEC.version
             ]));
-            pieces.push(json!({"id":key,"space_id":space,"object_id":object["id"],"object_version":object["version"].as_str().unwrap_or("0").parse::<u64>().unwrap_or(0),"kind":object["kind"],"model":embedding::SPEC.version,"text":text}));
+            pieces.push(json!({"id":key,"space_id":space,"object_id":object["id"],"object_version":object["version"].as_str().unwrap_or("0").parse::<u64>().unwrap_or(0),"kind":object["kind"],"model":embedding::SPEC.version,"entry_id":entry["entry_id"],"char_offset":offset,"char_length":body.chars().count(),"content_hash":fingerprint(&json!(body)),"text":text}));
         }
     }
     if pieces.is_empty() {
         pieces.push(json!({"id":fingerprint(&json!([space,object["id"],object["version"],embedding::SPEC.version])),"space_id":space,"object_id":object["id"],"object_version":object["version"].as_str().unwrap_or("0").parse::<u64>().unwrap_or(0),"kind":object["kind"],"model":embedding::SPEC.version,"text":object["name"]}));
     }
     (pieces, bounded)
+}
+
+// 老索引仅保存片段键；复用同一生成器从当前授权正文还原位置，不触发向量化或写索引。
+pub(super) fn fragment_locations(
+    space: &str,
+    object: &Value,
+) -> std::collections::HashMap<String, Value> {
+    fragments(space, object)
+        .0
+        .into_iter()
+        .map(|piece| {
+            (
+                piece["id"].as_str().expect("fragment id").to_owned(),
+                json!({
+                    "entry_id":piece["entry_id"],"offset":piece["char_offset"],
+                    "length":piece["char_length"],"content_hash":piece["content_hash"]
+                }),
+            )
+        })
+        .collect()
 }
 
 // 不可变版本/片段键使重发可查证；旧任务只能删除比自己更旧的片段，不能覆盖新版。
@@ -255,17 +286,22 @@ where
         let (pieces, bounded) = fragments(space, object);
         for (batch, chunk) in embedding::batches(&pieces)?.into_iter().enumerate() {
             let ids = chunk.iter().map(|v| v["id"].clone()).collect::<Vec<_>>();
-            let existing=milvus.call("entities/query",json!({"filter":format!("id in {}",json!(ids)),"outputFields":["id"],"limit":512,"consistencyLevel":"Strong"})).await?;
-            let present = existing
+            let existing=milvus.call("entities/query",json!({"filter":format!("id in {}",json!(ids)),"outputFields":["id","entry_id","char_offset","char_length","content_hash"],"limit":512,"consistencyLevel":"Strong"})).await?;
+            let present: std::collections::HashMap<_, _> = existing
                 .as_array()
                 .ok_or(Error::new("vector_unavailable"))?
                 .iter()
-                .filter_map(|v| v["id"].as_str())
-                .collect::<std::collections::HashSet<_>>();
-            if chunk
-                .iter()
-                .all(|v| present.contains(v["id"].as_str().unwrap_or("")))
-            {
+                .filter_map(|v| v["id"].as_str().map(|id| (id, v)))
+                .collect();
+            if chunk.iter().all(|piece| {
+                present
+                    .get(piece["id"].as_str().unwrap_or(""))
+                    .is_some_and(|stored| {
+                        ["entry_id", "char_offset", "char_length", "content_hash"]
+                            .iter()
+                            .all(|key| stored[*key] == piece[*key])
+                    })
+            }) {
                 continue;
             }
             let vectors = embed(
