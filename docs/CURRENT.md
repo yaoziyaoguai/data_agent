@@ -3,12 +3,12 @@
   "workflow": "dev_co",
   "schema": 1,
   "phase": "deliver",
-  "status": "done",
-  "goal_revision": 44,
+  "status": "active",
+  "goal_revision": 45,
   "environment": "macOS arm64 / Node 26.8.1 / npm 11.19.0 / Rust 1.99.0 / Python 3.14.7 / SQLite 3.53.4 / Colima 0.10.1 / Docker Engine 29.2.1 / Compose 5.3.1 / MySQL 8.4.11 / Milvus 3.0.2",
   "verification": {
     "level": "targeted",
-    "reason": "README 图文更新与分支交付；仅验证文档、图片和既有证据引用，不重跑业务或真实模型。",
+    "reason": "重新制作 README 封面和四张说明配图，核对实际图文与既有能力；不修改产品或重跑模型业务验收。",
     "freshness": "content",
     "inputs": [
       "AGENTS.md",
@@ -33,10 +33,10 @@
     "schema": 1,
     "registry": "docs/semantic-retrieval-design.md",
     "increment": {
-      "id": "I2-README-PRESENTATION",
+      "id": "I2-README-ILLUSTRATIONS",
       "phase": "I2",
       "status": "complete",
-      "goal": "用生成封面与真实合成页面截图更新 README，说明当前能力和证据边界，完成文档检查后合并推送。",
+      "goal": "重做有辨识度的 README 封面，增加四张配套说明图，完成可读性与事实核对后合并提交推送。",
       "requirements": [
         "C08"
       ],
@@ -47,7 +47,7 @@
         "README.md",
         "docs/CURRENT.md",
         "docs/images",
-        "docs/reviews/readme-presentation-review.json"
+        "docs/reviews/readme-illustrations-review.json"
       ],
       "non_goals": [
         "不修改产品、接口、架构、测试和模型配置，不实现同步缓冲；不以文档验证替代业务验收。"
@@ -63,13 +63,13 @@
           "requirements": [
             "C08"
           ],
-          "expected": "README 可解析，5 张配图可读且格式与扩展名一致，本地引用存在；产品代码与已验收基线一致。文案事实、图文排版及公开资料范围另由人工复核。",
+          "expected": "README 图文可读、9张配图格式与链接有效，概念图与实际截图明确区分，图中标签符合已有角色、语义、查询、记忆和Skill规则；业务代码保持原验收版本。",
           "evidence_kind": "architecture",
           "command": [
             "node",
             "--input-type=module",
             "-e",
-            "import assert from 'node:assert/strict';\nimport { readFileSync, existsSync } from 'node:fs';\nimport { resolve, dirname } from 'node:path';\nimport { execFileSync } from 'node:child_process';\nimport { micromark } from 'micromark';\nimport { gfm, gfmHtml } from 'micromark-extension-gfm';\nconst docs = ['README.md', 'docs/images/README.md'];\nfor (const file of docs) {\n  const source = readFileSync(file, 'utf8');\n  const html = micromark(source, { allowDangerousHtml: true, extensions: [gfm()], htmlExtensions: [gfmHtml()] });\n  assert(html.includes('<table>'), `${file}: missing rendered table`);\n  if (file === 'README.md') assert(html.includes('href=\"http://127.0.0.1:5173/\"'));\n  assert(html.includes('<h1>'), `${file}: missing heading`);\n  assert.equal((source.match(/<details>/g) || []).length, (source.match(/<\\/details>/g) || []).length);\n  assert(!/sk-[A-Za-z0-9._-]{20,}|\\/Users\\/|\\/var\\/folders\\//.test(source), `${file}: private content`);\n  for (const match of source.matchAll(/\\]\\(([^)]+)\\)/g)) {\n    const target = match[1].split('#')[0];\n    if (target && !/^[a-z]+:/i.test(target)) assert(existsSync(resolve(dirname(file), target)), `${file}: ${target}`);\n  }\n}\nconst readme = readFileSync('README.md', 'utf8');\nconst images = [...readme.matchAll(/!\\[[^\\]]*\\]\\(([^)]+)\\)/g)].map(match => match[1]);\nassert.equal(images.length, 5);\nfor (const file of images) {\n  const bytes = readFileSync(file);\n  if (file.endsWith('.png')) assert.equal(bytes.subarray(0, 8).toString('hex'), '89504e470d0a1a0a');\n  else if (file.endsWith('.jpg')) assert.equal(bytes.subarray(0, 3).toString('hex'), 'ffd8ff');\n  else assert(bytes.toString().includes('<svg'));\n}\nexecFileSync('git', ['diff', '--exit-code', '0a6f5bf1ca442f913519638b26bf00c5545e3c7a', '--', 'apps', 'crates', 'packages', 'tests', 'migrations', 'infra', 'scripts', 'prototype', 'experiments', 'AGENTS.md', 'package.json', 'package-lock.json', 'Cargo.toml', 'Cargo.lock', 'Makefile']);\nconsole.log('README: Markdown parsed, local links and 5 image files valid; application unchanged from verified baseline.');"
+            "import assert from 'node:assert/strict';\nimport { readFileSync, existsSync } from 'node:fs';\nimport { resolve, dirname } from 'node:path';\nimport { execFileSync } from 'node:child_process';\nimport { micromark } from 'micromark';\nimport { gfm, gfmHtml } from 'micromark-extension-gfm';\nconst docs = ['README.md', 'docs/images/README.md'];\nfor (const file of docs) {\n  const source = readFileSync(file, 'utf8');\n  const html = micromark(source, { allowDangerousHtml: true, extensions: [gfm()], htmlExtensions: [gfmHtml()] });\n  assert(html.includes('<table>'), `${file}: missing rendered table`);\n  if (file === 'README.md') assert(html.includes('href=\"http://127.0.0.1:5173/\"'));\n  assert(html.includes('<h1>'), `${file}: missing heading`);\n  assert.equal((source.match(/<details>/g) || []).length, (source.match(/<\\/details>/g) || []).length);\n  assert(!/sk-[A-Za-z0-9._-]{20,}|\\/Users\\/|\\/var\\/folders\\//.test(source), `${file}: private content`);\n  for (const match of source.matchAll(/\\]\\(([^)]+)\\)/g)) {\n    const target = match[1].split('#')[0];\n    if (target && !/^[a-z]+:/i.test(target)) assert(existsSync(resolve(dirname(file), target)), `${file}: ${target}`);\n  }\n}\nconst readme = readFileSync('README.md', 'utf8');\nconst images = [...readme.matchAll(/!\\[[^\\]]*\\]\\(([^)]+)\\)/g)].map(match => match[1]);\nassert.equal(images.length, 9);\nfor (const file of images) {\n  const bytes = readFileSync(file);\n  if (file.endsWith('.png')) assert.equal(bytes.subarray(0, 8).toString('hex'), '89504e470d0a1a0a');\n  else if (file.endsWith('.jpg')) assert.equal(bytes.subarray(0, 3).toString('hex'), 'ffd8ff');\n  else assert(bytes.toString().includes('<svg'));\n}\nexecFileSync('git', ['diff', '--exit-code', '0a6f5bf1ca442f913519638b26bf00c5545e3c7a', '--', 'apps', 'crates', 'packages', 'tests', 'migrations', 'infra', 'scripts', 'prototype', 'experiments', 'AGENTS.md', 'package.json', 'package-lock.json', 'Cargo.toml', 'Cargo.lock', 'Makefile']);\nconsole.log('README: Markdown parsed, local links and 9 image files valid; application unchanged from verified baseline.');"
           ],
           "timeout_seconds": 60
         }
@@ -77,7 +77,6 @@
       "verification_inputs": [
         "README.md",
         "docs/images/README.md",
-        "docs/images/data-agent-cover.png",
         "docs/images/workbench-sql.jpg",
         "docs/images/semantic-management.jpg",
         "docs/images/personal-skills.png",
@@ -86,13 +85,18 @@
         "docs/reviews/local-dogfood-review.json",
         "docs/research/mem0-extraction-comparison-results.md",
         "docs/research/memory-adoption-trial.md",
-        "docs/sources/evaluation/qwen-shared-trial.json"
+        "docs/sources/evaluation/qwen-shared-trial.json",
+        "docs/images/data-agent-cover.png",
+        "docs/images/semantic-construction.png",
+        "docs/images/conversation-query-flow.png",
+        "docs/images/knowledge-recall.png",
+        "docs/images/skill-reuse.png"
       ],
       "review": {
         "status": "passed",
-        "record": "docs/reviews/readme-presentation-review.json"
+        "record": "docs/reviews/readme-illustrations-review.json"
       },
-      "evidence": ".local/delivery/I2-README-PRESENTATION-result.json"
+      "evidence": ".local/delivery/I2-README-ILLUSTRATIONS-result.json"
     }
   }
 }
@@ -103,7 +107,17 @@
 更新：2026-10-11。唯一活动项目目录：`~/work_space/data_agent`。
 
 
-## 当前增量：README 图文更新与合并（2026-10-11，已完成）
+## 当前增量：README 视觉重做（2026-10-11）
+
+- 用户认为原封面普通、配图不足，授权重做并提交推送。限定 README、图片来源与交付记录，不改产品行为、接口或模型方案。
+- 方向为深色封面与配套信息插画；用内置 GPT Image 重做封面，增加语义构建、对话查询、知识召回、Skill 复用四张图，原真实页面截图与正式架构保留。README 共展示9张图。
+- 图片只使用公开技术名称与项目合成场景；模型生成图用来解释概念，实际界面仍用截图，准确调用关系以现有架构图为准。
+- 封面和四张说明图已完成。浏览器中9张图片全部加载，918px正文宽度下的标题、标签与箭头可读，无整页横向溢出；五张排版截图保存在 `.local/readme-visuals/`。查询图额外出现的“历史示例”已修正为“文档”。
+- [独立图文审查](reviews/readme-illustrations-review.json)通过，无剩余确定性问题；检查原图、实际排版及语义/查询/召回/Skill边界，保留本轮范围指纹。
+- `make verify-increment` 通过，收据 `.local/delivery/I2-README-ILLUSTRATIONS-result.json`；Markdown、GFM表格、启动链接、本地引用与9张图片格式均通过，19份输入前后指纹一致。业务代码保持原验收版本，本轮未重跑业务测试或真实模型。
+- 图文验收已完成，随后合并到默认主分支 `codex/semantic-maintenance-prototype` 并推送；远端结果以Git回执为准。
+
+## 上一增量：README 图文更新与合并（2026-10-11，已完成）
 
 - 用户要求更新 README、使用 GPT Image 配图并整理文案，完成后合并分支、提交和推送。只改文档和配图，不调整产品范围。
 - 以 `0a6f5bf` 为业务基线；原 `I2-LOCAL-DOGFOOD` 的五组收据与独立审查保留，绑定原版本。README 改写单列为本次文档交付，不把旧收据视为对新文档的检查。

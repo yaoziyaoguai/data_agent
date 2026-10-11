@@ -1,0 +1,62 @@
+{
+  "schema": 1,
+  "increment_id": "I2-README-ILLUSTRATIONS",
+  "reviewer": "independent /root/product_reliability_review；未参与README或图片制作",
+  "reviewed_at": "2026-10-11T15:58:32.029105+00:00",
+  "conclusion": "passed",
+  "scope_sha256": "e7731a0fa9cf525ba87f0139d1f25762e4095b25afd7d07b4caadc3aacbcaf3d",
+  "summary": "本轮README、封面及四张概念图独立审查通过，无剩余确定性问题。逐图核对事实与箭头，并直接复用五张918px正文排版截图检查可读性；查询图“历史示例”的歧义已修正为“文档”。本结论只覆盖图文，不代表重新完成业务验收。",
+  "findings": [],
+  "images_inspected": [
+    {
+      "path": "docs/images/data-agent-cover.png",
+      "sha256": "d456833f5da26b8c7566604f6e71de86297bfb3c40c4309e7d66eb95f27fa7db",
+      "observation": "概念封面标题清晰，无业务性能数字；与真实界面截图明确区分。"
+    },
+    {
+      "path": "docs/images/semantic-construction.png",
+      "sha256": "154a4c95f2d55adde87f2ab7a4f93a391cd0c8cff0997fd70f0f5db444883d23",
+      "observation": "平台资料形成来源事实与模型建议，人工修改独立保存；重新预填保留人工值。"
+    },
+    {
+      "path": "docs/images/conversation-query-flow.png",
+      "sha256": "012cf69efe227fb1e1bc163499f241fb94be7f8d02ac2c83c56d3e5cd799edc9",
+      "observation": "先展示SQL，再由聊天要求执行；修改条件回到前段，后台查询可继续聊天和分别停止，10行预览与CSV下载一致。最终标签已是“文档”。"
+    },
+    {
+      "path": "docs/images/knowledge-recall.png",
+      "sha256": "37f8498f780f5092f4e6399be9a1956c4426ea9851d7de3ad09e605c90e25317",
+      "observation": "共享语义与个人记忆分路召回，合流后回源校验权限、版本、状态；MySQL与独立Milvus集合的职责由图注明确，没有个人记忆公开箭头。"
+    },
+    {
+      "path": "docs/images/skill-reuse.png",
+      "sha256": "923c5441a6ae96b1bca074d9826f63bb42fbda02a52c04a62fbd1188f08b1dde",
+      "observation": "个人方法可直接选用；明确发布才形成独立公共副本，两种Skill均明确选用后由Pi加载，私人记忆和聊天不随发布公开。"
+    }
+  ],
+  "readability_evidence": [
+    ".local/readme-visuals/cover-layout.jpg",
+    ".local/readme-visuals/semantic-layout.jpg",
+    ".local/readme-visuals/query-layout.jpg",
+    ".local/readme-visuals/recall-layout.jpg",
+    ".local/readme-visuals/skill-layout.jpg"
+  ],
+  "readability_result": "918px正文宽度下五图主要标题、业务标签、箭头和图注均可读；未见裁切、遮挡或错字。最终查询图已在原图和更新后的排版截图中复核。",
+  "source_notes": "docs/images/README.md记录实际生成提示词与最终定向文字修正；README将概念图、实际截图和原正式架构图分别说明。",
+  "baseline_check": "git diff --exit-code 0a6f5bf1ca442f913519638b26bf00c5545e3c7a -- apps crates packages tests migrations infra scripts prototype experiments AGENTS.md package.json package-lock.json Cargo.toml Cargo.lock Makefile：退出0。",
+  "evidence_sha256": {
+    "README.md": "247bce1ab72b4d049e9b2f49b4e06bee573ad0223eabf8cef78396c701e3033f",
+    "docs/images/README.md": "df5cf1a227364d82bdf2f88168a52a624caaecbff8436ad29e2ef7c96d90f019"
+  },
+  "residual_risks": [],
+  "testing_gaps": [
+    "最终Markdown/链接/增量验收及Git交付由父代理完成；本次未重跑业务测试或真实模型。"
+  ],
+  "independence": {
+    "product_or_readme_edited": false,
+    "models_called": 0,
+    "business_suites_rerun": false,
+    "subagents_delegated": false,
+    "only_written_file": "docs/reviews/readme-illustrations-review.json"
+  }
+}
