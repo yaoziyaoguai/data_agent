@@ -3,7 +3,7 @@
   "workflow": "dev_co",
   "schema": 1,
   "phase": "deliver",
-  "status": "active",
+  "status": "done",
   "goal_revision": 45,
   "environment": "macOS arm64 / Node 26.8.1 / npm 11.19.0 / Rust 1.99.0 / Python 3.14.7 / SQLite 3.53.4 / Colima 0.10.1 / Docker Engine 29.2.1 / Compose 5.3.1 / MySQL 8.4.11 / Milvus 3.0.2",
   "verification": {
@@ -104,18 +104,18 @@
 
 # Data Agent 当前记录
 
-更新：2026-10-11。唯一活动项目目录：`~/work_space/data_agent`。
+更新：2026-10-12。唯一活动项目目录：`~/work_space/data_agent`。
 
 
-## 当前增量：README 视觉重做（2026-10-11）
+## 当前增量：README 视觉重做（2026-10-11 至 12 日，已完成）
 
 - 用户认为原封面普通、配图不足，授权重做并提交推送。限定 README、图片来源与交付记录，不改产品行为、接口或模型方案。
 - 方向为深色封面与配套信息插画；用内置 GPT Image 重做封面，增加语义构建、对话查询、知识召回、Skill 复用四张图，原真实页面截图与正式架构保留。README 共展示9张图。
 - 图片只使用公开技术名称与项目合成场景；模型生成图用来解释概念，实际界面仍用截图，准确调用关系以现有架构图为准。
 - 封面和四张说明图已完成。浏览器中9张图片全部加载，918px正文宽度下的标题、标签与箭头可读，无整页横向溢出；五张排版截图保存在 `.local/readme-visuals/`。查询图额外出现的“历史示例”已修正为“文档”。
 - [独立图文审查](reviews/readme-illustrations-review.json)通过，无剩余确定性问题；检查原图、实际排版及语义/查询/召回/Skill边界，保留本轮范围指纹。
-- `make verify-increment` 通过，收据 `.local/delivery/I2-README-ILLUSTRATIONS-result.json`；Markdown、GFM表格、启动链接、本地引用与9张图片格式均通过，19份输入前后指纹一致。业务代码保持原验收版本，本轮未重跑业务测试或真实模型。
-- 图文验收已完成，随后合并到默认主分支 `codex/semantic-maintenance-prototype` 并推送；远端结果以Git回执为准。
+- `make verify-increment` 通过，收据 `.local/delivery/I2-README-ILLUSTRATIONS-result.json`；Markdown、GFM表格、启动链接、本地引用与9张图片格式均通过，19份输入前后指纹一致。材料检查332项和交付检查器16项测试通过。业务代码保持原验收版本，本轮未重跑业务测试或真实模型。
+- Git交付：图文提交 `4b4308c` 已快进合并到默认主分支 `codex/semantic-maintenance-prototype`；主分支与 `codex/readme-visuals` 均推送成功。当前检出主分支，本条收尾记录单独提交。
 
 ## 上一增量：README 图文更新与合并（2026-10-11，已完成）
 
