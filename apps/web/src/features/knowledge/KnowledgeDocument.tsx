@@ -8,6 +8,7 @@ import { ProposeCorrection } from "./CorrectionComposer.tsx";
 import { useUnsavedChanges } from "../../shared/UnsavedChanges.tsx";
 import { Tabs } from "../../shared/Tabs.tsx";
 import { semanticError, useStableOperation } from "./semantic-commands.ts";
+import { KnowledgeStatus } from "./KnowledgeStatus.tsx";
 
 // 只有明确共享文档来源的章节合在一起；同名资料仍是不同文档。
 export function documentRepresentatives(objects: KnowledgeObject[]) {
@@ -65,6 +66,7 @@ export function KnowledgeDocument({ object, onSaved, onCorrection, onOpen }: {
   const sourceLinks = [...new Set(document.parts.flatMap(part => part.entries.map(entry => entry.human_override?.source_url).filter((url): url is string => typeof url === "string" && /^https?:\/\//i.test(url))))];
   return <article className="document-reader" aria-label={document.title}>
     <header className="document-heading"><h2>{document.title}</h2><div className="actions">{onOpen && <button onClick={onOpen}>打开文档详情</button>}{document.can_edit && <button onClick={() => setEditing({document, generation: ++editGeneration.current})}>编辑文档</button>}</div></header>
+    <KnowledgeStatus entries={document.parts.flatMap(part => part.entries.filter(entry => entry.entry_id === "body"))}/>
     {error && <p role="alert" className="error">暂时无法刷新文档，以下为已读取的内容。{error}<button onClick={() => setRevision(v => v + 1)}>重新读取文档</button></p>}
     <DocumentReading text={(document.body.startsWith(`# ${document.title}\n`) ? document.body.slice(document.body.indexOf("\n") + 1) : document.body) || "尚未录入正文"}/>
     {sourceLinks.map((url, index) => <p className="quiet" key={url}><a href={url} target="_blank" rel="noopener noreferrer">打开来源链接{sourceLinks.length > 1 ? ` ${index + 1}` : ""} ↗</a>{!document.body.trim() && " · 正文尚未录入，Agent无法据此解释业务。"}</p>)}

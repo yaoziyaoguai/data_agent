@@ -27,12 +27,15 @@ async function login(user) {
 const logout = () => page.getByRole("button", { name: "退出", exact: true }).click();
 const expectRole = label => until(async () => await badge.innerText() === label, "role is " + label);
 const refresh = () => page.evaluate(() => window.dispatchEvent(new Event("focus")));
-async function screenshots(name) {
+async function screenshots(name, expectedRole) {
   for (const width of [1440, 390]) {
     await page.setViewportSize({ width, height: 1000 });
+    if (width === 390) await page.getByRole("button", {name: "展开导航", exact: true}).click();
+    await expectRole(expectedRole);
     assert.ok(await badge.isVisible());
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
     await page.screenshot({ path: `${directory}/${name}-${width}.png`, fullPage: true, animations: "disabled" });
+    if (width === 390) await page.getByRole("dialog", {name: "空间导航"}).getByRole("button", {name: "关闭", exact: true}).click();
   }
   await page.setViewportSize({ width: 1440, height: 1000 });
 }
@@ -65,8 +68,8 @@ try {
   h.sql("INSERT INTO semantic_ownership(space_id,object_id,authority_id,maintainer_id,source,updated_by) VALUES('other-space','foreign-document','foreign-document','bob','creator','test')");
   assert.deepEqual(await ok("/semantic-access", undefined, "bob"), { can_admin: false, can_create: false, highest_role: "user" });
   await page.goto(h.url);
-  await login("bob"); await expectRole("普通用户"); await screenshots("user");
-  await logout(); await login("alice"); await expectRole("超级维护者"); await screenshots("super-maintainer");
+  await login("bob"); await expectRole("普通用户"); await screenshots("user", "普通用户");
+  await logout(); await login("alice"); await expectRole("超级维护者"); await screenshots("super-maintainer", "超级维护者");
   checks.push("普通用户与超级维护者由服务端识别；其他空间的归属不提升当前角色，换用户不沿用旧身份");
 
   const catalog = await fetch(h.env.DATA_AGENT_PLATFORM_URL + "/catalog", {
@@ -83,7 +86,7 @@ try {
   }
   await synchronize("bob");
   assert.deepEqual(await ok("/semantic-access", undefined, "bob"), { can_admin: false, can_create: true, highest_role: "maintainer" });
-  await logout(); await login("bob"); await expectRole("语义维护者"); await screenshots("maintainer");
+  await logout(); await login("bob"); await expectRole("语义维护者"); await screenshots("maintainer", "语义维护者");
   for (const name of ["我的积累", "语义管理", "工作台"]) {
     await page.getByRole("navigation", { name: "主导航" }).getByRole("button", { name: new RegExp(name) }).click();
     await expectRole("语义维护者");

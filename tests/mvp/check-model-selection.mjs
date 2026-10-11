@@ -105,7 +105,7 @@ try {
  await page.getByLabel('模型',{exact:true}).waitFor();await page.getByLabel('模型',{exact:true}).selectOption('deepseek-v4-pro');
  await page.getByLabel('思考强度',{exact:true}).selectOption('high');
  await page.getByLabel('你的数据问题').fill('界面模型选择合成测试');await page.getByRole('button',{name:'发送 ↑',exact:true}).click();
- const uiCid=await until(()=>page.evaluate(()=>localStorage.getItem('data-agent.conversation.alice')),'页面会话建立');await h.finished(uiCid);
+ const uiCid=await until(()=>page.evaluate(()=>localStorage.getItem('data-agent.conversation.["demo","alice"]')),'页面会话建立');await h.finished(uiCid);
  await until(async()=>await page.getByLabel('模型',{exact:true}).inputValue()==='deepseek-v4-pro'&&!await page.getByLabel('模型',{exact:true}).isDisabled(),'首条保存后选项恢复');
  assert.deepEqual((await settings(uiCid)).selection,pro('high'));
  await page.getByLabel('你的数据问题').fill('保留未发送的补充');await page.getByLabel('模型',{exact:true}).selectOption('deepseek-flash');

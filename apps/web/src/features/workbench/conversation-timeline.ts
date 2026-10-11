@@ -46,6 +46,11 @@ export function projectMessages(events: Event[]): ChatMessage[] {
 
 export function mergeSnapshot(previous: Snapshot | null, incoming: Snapshot, older = false): Snapshot {
   if (!previous || previous.conversation_id !== incoming.conversation_id) return { ...incoming, messages: projectMessages(incoming.events) };
+  if (!incoming.events.length) {
+    if (older || (JSON.stringify(previous.tasks) === JSON.stringify(incoming.tasks) &&
+        JSON.stringify(previous.runs) === JSON.stringify(incoming.runs) && previous.has_newer === incoming.has_newer)) return previous;
+    return { ...previous, tasks: incoming.tasks, runs: incoming.runs, has_newer: incoming.has_newer };
+  }
   const bySeq = new Map(previous.events.map(e => [e.event_seq, e]));
   for (const event of incoming.events) bySeq.set(event.event_seq, event);
   const events = [...bySeq.values()].sort((a, b) => BigInt(a.event_seq) < BigInt(b.event_seq) ? -1 : 1);

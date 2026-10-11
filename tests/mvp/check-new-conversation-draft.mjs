@@ -1,0 +1,135 @@
+import assert from 'node:assert/strict';
+import {randomUUID} from 'node:crypto';
+import {mkdir, writeFile} from 'node:fs/promises';
+import {chromium} from 'playwright';
+import {harness, until} from './harness.mjs';
+import {assetInput, ok} from './skill-fixtures.mjs';
+
+const directory = '.local/checks/new-conversation-draft';
+await mkdir(directory, {recursive: true});
+const profile = {provider_id: 'deepseek', model_id: 'deepseek-flash', trial_id: randomUUID(), price_version: '2026-10-04-peak-usd', input_limit: 65536, output_limit: 4096, trial_call_limit: 100, trial_cost_micros: '9999999', request_call_limit: 12, toolset: 'data', payload_bytes_limit: 131072, thinking_level: 'high'};
+const h = await harness({web: true, startWorker: false, profile});
+const browser = await chromium.launch();
+const page = await browser.newPage();
+const errors = [], checks = [];
+page.on('pageerror', error => errors.push(error.message));
+let passed = false;
+const input = page.getByLabel('你的数据问题');
+const model = page.getByLabel('模型', {exact: true});
+const thinking = page.getByLabel('思考强度', {exact: true});
+const navigate = name => page.getByRole('navigation', {name: '主导航'}).getByRole('button', {name, exact: true}).click();
+const login = async user => {
+  await page.getByLabel('演示登录凭据').fill(h.tokens[user]);
+  await page.getByRole('button', {name: '进入工作台 →'}).click();
+  await until(async () => await model.isVisible() && !await model.isDisabled(), '模型设置准备完成');
+};
+try {
+  ok(await h.request('/assets', assetInput({name: '独立的草稿保留方法', body: '先确认时间与单位，再解释结果。'})));
+  await page.goto(h.url);
+  await login('alice');
+  await input.fill('先核对合成仓库的统计时点；此内容尚未发送。');
+  await model.selectOption('deepseek-flash');
+  await thinking.selectOption('off');
+  await navigate('语义管理');
+  await navigate('工作台');
+  await until(async () => await thinking.isVisible() && !await thinking.isDisabled(), '返回工作台准备完成');
+  assert.equal(await input.inputValue(), '先核对合成仓库的统计时点；此内容尚未发送。');
+  assert.equal(await thinking.inputValue(), 'off', '新对话离开再返回保留模型选择');
+  await page.reload();
+  await until(async () => await thinking.isVisible() && !await thinking.isDisabled(), '刷新准备完成');
+  assert.equal(await thinking.inputValue(), 'off');
+  checks.push('未发送的新对话草稿与模型选择在导航、刷新后保留');
+
+  await page.getByRole('button', {name: '＋ 选用分析方法', exact: true}).click();
+  const card = page.locator('.asset-card').filter({hasText: '独立的草稿保留方法'});
+  await card.getByRole('button', {name: '在当前对话选用', exact: true}).click();
+  await page.getByRole('region', {name: '本会话已选 Skill'}).getByText('独立的草稿保留方法', {exact: true}).waitFor();
+  await until(async () => !await thinking.isDisabled(), '选用方法后准备完成');
+  assert.equal(await input.inputValue(), '先核对合成仓库的统计时点；此内容尚未发送。');
+  assert.equal(await thinking.inputValue(), 'off');
+  const cid = await page.evaluate(() => localStorage.getItem('data-agent.conversation.["demo","alice"]'));
+  assert.ok(cid);
+  assert.equal((await h.snapshot(cid)).events.filter(event => event.type === 'message').length, 0);
+  await page.reload();
+  await until(async () => await thinking.isVisible() && !await thinking.isDisabled(), '选用后刷新准备完成');
+  assert.equal(await input.inputValue(), '先核对合成仓库的统计时点；此内容尚未发送。');
+  assert.equal(await thinking.inputValue(), 'off');
+  await page.route('**/api/conversations/*/model-selection', route => route.request().method() === 'POST'
+    ? route.fulfill({status: 503, contentType: 'application/json', body: JSON.stringify({code: 'unavailable', message: 'unavailable', request_id: 'synthetic-draft', retryable: true})})
+    : route.continue());
+  await model.selectOption('deepseek-v4-pro');
+  await page.getByText('模型设置未确认保存，请检查当前选择后重试。', {exact: false}).waitFor();
+  assert.equal(await model.inputValue(), 'deepseek-flash');
+  assert.equal(await thinking.inputValue(), 'off');
+  await page.unroute('**/api/conversations/*/model-selection');
+  await page.getByRole('button', {name: '发送 ↑', exact: true}).click();
+  await until(async () => (await h.snapshot(cid)).events.some(event => event.type === 'message'), '用户发送被保存');
+  const saved = ok(await h.request('/conversations/' + cid + '/model-selection'));
+  assert.deepEqual(saved.selection, {model_id: 'deepseek-flash', thinking_level: 'off'});
+  assert.equal((await h.snapshot(cid)).events.filter(event => event.type === 'message').length, 1);
+  checks.push('选用方法创建会话时保留未发草稿与设置；不自动发送，用户发送后只产生一条消息并采用该设置');
+  await until(async () => !await model.isDisabled(), '首次发言后模型选择可用');
+  await model.selectOption('deepseek-v4-pro');
+  await until(async () => ok(await h.request('/conversations/' + cid + '/model-selection')).selection.model_id === 'deepseek-v4-pro', '空会话首问后第一次切换模型成功');
+  assert.equal(await page.getByText('其他窗口更新了模型设置，已重新读取，请确认后再发送。', {exact: false}).count(), 0);
+  checks.push('选方法建立的空会话首次发言后接回模型版本，首次切换成功，不误报其他窗口修改');
+
+
+  await page.getByRole('button', {name: '新对话', exact: true}).click();
+  await until(async () => !await thinking.isDisabled(), '第二个新对话准备完成');
+  assert.equal(await input.inputValue(), '');
+  await input.fill('只属于 Alice 的另一份未发送草稿');
+  await thinking.selectOption('off');
+  await page.getByRole('button', {name: '退出', exact: true}).click();
+  await login('bob');
+  assert.equal(await input.inputValue(), '');
+  assert.notEqual(await thinking.inputValue(), 'off', '另一用户不得继承个人的未发送设置');
+  await page.getByRole('button', {name: '退出', exact: true}).click();
+  await login('alice');
+  assert.equal(await input.inputValue(), '只属于 Alice 的另一份未发送草稿');
+  assert.equal(await thinking.inputValue(), 'off');
+  checks.push('草稿转移后新对话不复制旧消息；换用户隔离，返回本人可恢复草稿和设置');
+  await page.getByRole('button', {name: '发送 ↑', exact: true}).click();
+  await until(async () => await input.inputValue() === '', '第二份草稿发送成功');
+  await page.getByRole('button', {name: '新对话', exact: true}).click();
+  await until(async () => !await thinking.isDisabled(), '全新对话准备完成');
+  assert.equal(await input.inputValue(), '');
+  assert.equal(await thinking.inputValue(), 'high', '已发送设置属于原会话，新空白对话采用默认设置');
+  checks.push('直接发送新对话后清理已使用的本地设置；保存设置失败不丢失原选择');
+  let dropReceipt = true, uncertainCid;
+  const attempts = [];
+  await page.route('**/api/conversations/*/messages', async route => {
+    if (route.request().method() !== 'POST') return route.continue();
+    attempts.push(route.request().postDataJSON());
+    const response = await route.fetch();
+    assert.equal(response.status(), 200);
+    uncertainCid = new URL(route.request().url()).pathname.split('/').at(-2);
+    if (dropReceipt) { dropReceipt = false; await route.abort('failed'); }
+    else await route.fulfill({response});
+  });
+  await input.fill('仅提交一次的合成对账问题');
+  await page.getByRole('button', {name: '发送 ↑', exact: true}).click();
+  await page.getByRole('button', {name: '重试原消息', exact: true}).waitFor();
+  await input.fill('回执未知时新写的运输核对草稿');
+  const beforeCount = h.sql("SELECT COUNT(*) FROM conversations WHERE owner_id='alice'")[0];
+  await page.getByRole('button', {name: '＋ 选用分析方法', exact: true}).click();
+  await card.getByRole('button', {name: '在当前对话选用', exact: true}).click();
+  await page.getByRole('alert').filter({hasText: '请先返回工作台确认上一条消息的接收状态'}).waitFor();
+  assert.equal(h.sql("SELECT COUNT(*) FROM conversations WHERE owner_id='alice'")[0], beforeCount);
+  assert.equal(h.sql("SELECT COUNT(*) FROM skill_selections WHERE conversation_id='" + uncertainCid + "'")[0], 0);
+  await navigate('工作台');
+  await page.getByRole('button', {name: '重试原消息', exact: true}).click();
+  await until(async () => attempts.length === 2 && await page.evaluate(() => localStorage.getItem('data-agent.pending-message.["demo","alice"]')) === null, '原消息回执核对完成');
+  assert.equal(await input.inputValue(), '回执未知时新写的运输核对草稿');
+  assert.equal((await h.snapshot(uncertainCid)).events.filter(event => event.type === 'message').length, 1);
+  assert.deepEqual(attempts, [attempts[0], attempts[0]]);
+  await page.unroute('**/api/conversations/*/messages');
+  checks.push('新对话消息回执未知时选用方法不创建另一会话或迁走草稿；原身份重试仍仅一条消息，后写内容保留');
+  assert.deepEqual(errors, []);
+  passed = true;
+} finally {
+  if (!passed) await page.screenshot({path: directory + '/failure.png', fullPage: true}).catch(() => {});
+  await writeFile(directory + '/report.json', JSON.stringify({passed, checks, errors, officialRequests: 0}, null, 2));
+  await browser.close(); await h.close();
+  console.log(JSON.stringify({passed, checks, errors, officialRequests: 0}));
+}

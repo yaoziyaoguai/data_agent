@@ -130,7 +130,7 @@ export function QueryCard({
         <details className="running-sql"><summary>查看 SQL 和参数</summary>{sql}</details>
       </> : sql}
       {!!query.knowledge_refs.length && <details className="query-evidence"><summary>查看口径依据</summary><div className="evidence-row">{query.knowledge_refs.map(ref => <KnowledgeReference key={ref.object_id + ref.path} id={ref.object_id} path={ref.path} onOpen={id => onEvidence(id, query.summary, ref.version)}/>)}</div></details>}
-      {query.execution_state === "succeeded" && !result && <p className="quiet">{busy ? "正在读取查询结果…" : <button onClick={() => void load()}>重新读取结果</button>}</p>}
+      {query.execution_state === "succeeded" && !result && error !== "result_expired" && <p className="quiet">{busy ? "正在读取查询结果…" : <button onClick={() => void load()}>重新读取结果</button>}</p>}
       {query.execution_state === "submission_unknown" && !stopping && (
         <p className="quiet">
           正在向查询平台确认状态，你可以继续聊天。

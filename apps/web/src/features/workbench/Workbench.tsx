@@ -4,20 +4,24 @@ import type {
   QueryList,
   HistoryItem,
 } from "../../../../../packages/contracts/generated/boundary.ts";
-import { api } from "../../shared/api.ts";
+import { api, ApiError } from "../../shared/api.ts";
+import { decodeContract } from "../../../../../packages/contracts/validate.ts";
 import { WorkspaceShell, type View } from "../../shared/WorkspaceShell.tsx";
 import { Icon } from "../../shared/Icon.tsx";
 import { Modal } from "../../shared/Modal.tsx";
 import { conversationItems, displayUserMessage, mergeSnapshot } from "./conversation-timeline.ts";
 import { SkillSelections } from "./SkillSelections.tsx";
+import { conversationTitle } from "./conversation-title.ts";
 import { QueryCard } from "./QueryCard.tsx";
 import { AssistantMessage } from "./AssistantMessage.tsx";
 import { ConversationFeed } from "./ConversationFeed.tsx";
 import { ModelSelector } from "./ModelSelector.tsx";
 import { useModelSelection } from "./useModelSelection.ts";
+import { clearPendingSubmission, conversationStorageKey, draftStorageKey, pendingSubmissionKey, readPendingSubmission, settleSubmission, storePendingSubmission, writeDraft, type PendingSubmission } from "./conversation-storage.ts";
 const creationTime = (value?: string) => value ? new Date(value).toLocaleString("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false }) : "";
 export function Workbench({
   user,
+  space,
   modelLabel,
   onLogout,
   onView,
@@ -25,6 +29,7 @@ export function Workbench({
   onEvidence,
 }: {
   user: string;
+  space: string;
   modelLabel: string;
   onLogout: () => void;
   onView: (v: View) => void;
@@ -32,24 +37,29 @@ export function Workbench({
   onEvidence: (id: string, summary?: string, version?: string) => void;
 }) {
   const [cid, setCid] = useState<string | null>(() =>
-    localStorage.getItem("data-agent.conversation." + user),
+    localStorage.getItem(conversationStorageKey(space, user)),
   );
   const [history, setHistory] = useState<HistoryItem[]>([]);
-  const model = useModelSelection(user, cid);
+  const model = useModelSelection(space, user, cid);
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
   const [queries, setQueries] = useState<QueryList>({
     queries: [],
     confirmation_blocked: false,
   });
   const [text, setText] = useState(() =>
-    localStorage.getItem("data-agent.draft." + user + "." + (cid ?? "new")) ?? "",
+    localStorage.getItem(draftStorageKey(space, user, cid)) ?? "",
   );
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
   const [syncUnavailable, setSyncUnavailable] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [historySearch, setHistorySearch] = useState("");
-  const [, setRevision] = useState(0);
+  const [pending, setPending] = useState<PendingSubmission | null>(null);
+  const [pendingError, setPendingError] = useState("");
+  const [unavailableSubmissionDraft, setUnavailableSubmissionDraft] = useState<string | null>(null);
+  const requestRefresh = useRef<() => void>(() => {});
+  const sendingRef = useRef(false);
+  const mounted = useRef(true);
   const snapshotRef = useRef<Snapshot | null>(null);
   const [historyNext, setHistoryNext] = useState<string | null>(null);
   const historyGeneration = useRef(0);
@@ -64,19 +74,48 @@ export function Workbench({
   }, [text]);
   const viewGeneration = useRef(0);
   const activeConversation = useRef(cid);
-  const draftRevision = useRef(0);
   if (activeConversation.current !== cid) {
     activeConversation.current = cid;
     viewGeneration.current += 1;
   }
   const [loadingOlder, setLoadingOlder] = useState(false);
   const draftKey = (id: string | null) =>
-    "data-agent.draft." + user + "." + (id ?? "new");
+    draftStorageKey(space, user, id);
   const changeText = (value: string) => {
-    draftRevision.current += 1;
     setText(value);
-    localStorage.setItem(draftKey(cid), value);
+    writeDraft(space, user, cid, value);
   };
+  useEffect(() => {
+    mounted.current = true;
+    const restore = () => {
+      try { setPending(readPendingSubmission(space, user)); setPendingError(""); }
+      catch { setPendingError("待确认消息的本地记录无法读取。请保留当前草稿后重新打开页面。"); }
+    };
+    restore();
+    const changed = (event: StorageEvent) => { if (event.key === pendingSubmissionKey(space, user)) restore(); };
+    window.addEventListener("storage", changed);
+    return () => { mounted.current = false; window.removeEventListener("storage", changed); };
+  }, [space, user]);
+  useEffect(() => {
+    if (localStorage.getItem(conversationStorageKey(space, user))) return;
+    const legacy = localStorage.getItem("data-agent.conversation." + user);
+    if (!legacy) return;
+    let current = true;
+    const generation = viewGeneration.current;
+    // 旧键没有空间信息，只有服务端确认可读的会话和关联草稿才迁移。
+    void api("Snapshot", "/conversations/" + legacy + "/snapshot").then(() => {
+      if (!current) return;
+      const oldDraft = "data-agent.draft." + user + "." + legacy;
+      const destination = draftKey(legacy);
+      if (localStorage.getItem(destination) === null && localStorage.getItem(oldDraft) !== null) {
+        writeDraft(space, user, legacy, localStorage.getItem(oldDraft) ?? "");
+      }
+      if (viewGeneration.current === generation && !activeConversation.current && !localStorage.getItem(draftKey(null))) setCid(legacy);
+      localStorage.removeItem(oldDraft);
+      if (localStorage.getItem("data-agent.conversation." + user) === legacy) localStorage.removeItem("data-agent.conversation." + user);
+    }).catch(() => {});
+    return () => { current = false; };
+  }, [space, user]);
   const refreshHistory = async (query = historySearch, before?: string) => {
     const generation = ++historyGeneration.current;
     setHistoryBusy(true);
@@ -94,7 +133,7 @@ export function Workbench({
   useEffect(() => {
     const timer = window.setTimeout(() => { void refreshHistory().catch(e => setError(e.message)); }, 150);
     return () => { window.clearTimeout(timer); ++historyGeneration.current; };
-  }, [user, historySearch]);
+  }, [space, user, historySearch]);
   useEffect(() => {
     let current = true;
     snapshotRef.current = null;
@@ -104,77 +143,146 @@ export function Workbench({
     setError("");
     setSyncUnavailable(false);
     setText(localStorage.getItem(draftKey(cid)) ?? "");
-    if (cid) localStorage.setItem("data-agent.conversation." + user, cid);
-    else localStorage.removeItem("data-agent.conversation." + user);
+    if (cid) localStorage.setItem(conversationStorageKey(space, user), cid);
+    else localStorage.removeItem(conversationStorageKey(space, user));
     let refreshing = false;
+    let refreshAgain = false;
+    let quietCycles = 0;
+    let timer: number | undefined;
+    let activeUntil = 0;
+    const schedule = (delay: number) => {
+      window.clearTimeout(timer);
+      if (current && cid && !document.hidden) timer = window.setTimeout(() => void refresh(), delay);
+    };
     const refresh = async () => {
-      if (!cid || refreshing) return;
+      if (!cid || !current || document.hidden) return;
+      if (refreshing) { refreshAgain = true; return; }
       refreshing = true;
+      let active = false;
       try {
         const [s, q] = await Promise.all([
           api("Snapshot", "/conversations/" + cid + "/snapshot" + (snapshotRef.current?.last_event_seq ? "?after_seq=" + snapshotRef.current.last_event_seq : "")),
           api("QueryList", "/conversations/" + cid + "/queries"),
         ]);
         if (current) {
-          snapshotRef.current = mergeSnapshot(snapshotRef.current, s);
+          const previous = snapshotRef.current;
+          snapshotRef.current = mergeSnapshot(previous, s);
           setSnapshot(snapshotRef.current);
-          setQueries(q);
+          setQueries(old => JSON.stringify(old) === JSON.stringify(q) ? old : q);
           setSyncUnavailable(false);
+          active = s.runs.some(run => run.state === "running") || q.queries.some(query => ["queued", "submitting", "submission_unknown", "running"].includes(query.execution_state));
+          quietCycles = active ? 0 : quietCycles + 1;
         }
       } catch {
         if (current) setSyncUnavailable(true);
-      } finally { refreshing = false; }
+        quietCycles++;
+      } finally {
+        refreshing = false;
+        if (refreshAgain) { refreshAgain = false; schedule(0); }
+        else schedule(active || Date.now() < activeUntil ? 700 : quietCycles < 2 ? 1500 : quietCycles < 3 ? 5000 : 15000);
+      }
     };
+    const wake = () => {
+      window.clearTimeout(timer);
+      if (document.hidden) return;
+      quietCycles = 0;
+      activeUntil = Date.now() + 3000;
+      void refresh();
+    };
+    requestRefresh.current = wake;
     void refresh();
-    const timer = setInterval(() => void refresh(), 700);
+    window.addEventListener("focus", wake);
+    document.addEventListener("visibilitychange", wake);
     return () => {
       current = false;
-      clearInterval(timer);
+      window.clearTimeout(timer);
+      window.removeEventListener("focus", wake);
+      document.removeEventListener("visibilitychange", wake);
     };
-  }, [cid, user]);
-  const submit = async () => {
-    if (!text.trim() || sending || !model.ready) return;
+  }, [cid, space, user]);
+  const sendPending = async (submission: PendingSubmission) => {
+    if (sendingRef.current) return;
+    sendingRef.current = true;
     setSending(true);
     setError("");
-    const input = text.trim();
-    const origin = cid;
     const generation = viewGeneration.current;
-    const submittedDraft = text;
-    const submittedRevision = draftRevision.current;
+    let messageAttempted = false;
     try {
-      let conversation = cid;
+      const identity = await api("Identity", "/session");
+      if (identity.user_id !== submission.user || identity.space_id !== submission.space) {
+        throw new Error("登录身份已变化，请重新进入原账号和空间后重试；原消息与草稿仍保留。");
+      }
+      let conversation = submission.conversation_id;
       if (!conversation) {
         conversation = (
           await api("ConversationReceipt", "/conversations", "POST", {
-            operation_id: crypto.randomUUID(),
+            operation_id: submission.creation_operation_id,
           })
         ).conversation_id;
+        submission = { ...submission, conversation_id: conversation };
+        if (readPendingSubmission(space, user)?.input.client_message_id !== submission.input.client_message_id) return;
+        storePendingSubmission(submission);
+        if (mounted.current) setPending(submission);
       }
+      if (!mounted.current) return;
+      messageAttempted = true;
       await api(
         "MessageReceipt",
         "/conversations/" + conversation + "/messages",
         "POST",
-        { client_message_id: crypto.randomUUID(), text: input, ...(model.selection ? { model_selection: model.selection } : {}) },
+        submission.input,
       );
-      if (viewGeneration.current === generation) {
-        const nextDraft = draftRevision.current === submittedRevision
-          ? "" : localStorage.getItem(draftKey(origin)) ?? "";
-        localStorage.setItem(draftKey(conversation), nextDraft);
-        if (!origin) {
-          localStorage.removeItem(draftKey(origin));
-          setCid(conversation);
-        }
+      const nextDraft = settleSubmission(submission, conversation);
+      if (!mounted.current) return;
+      setPending(readPendingSubmission(space, user));
+      if (viewGeneration.current === generation && cid === submission.origin_conversation_id) {
+        if (cid === conversation) model.afterMessageSaved();
+        if (!submission.origin_conversation_id) setCid(conversation);
         setText(nextDraft);
-      } else if (localStorage.getItem(draftKey(origin)) === submittedDraft) {
-        localStorage.removeItem(draftKey(origin));
       }
-      await refreshHistory();
+      requestRefresh.current();
+      void refreshHistory().catch(() => { if (mounted.current) setError("消息已保存，暂时无法更新会话列表。"); });
     } catch (e) {
-      if (viewGeneration.current === generation)
-        setError(e instanceof Error ? e.message : "发送失败");
+      // 参数明确被拒绝时事务未保存消息；网络错误和未知回执必须继续使用原操作身份。
+      const rejected = messageAttempted && e instanceof ApiError && e.code === "invalid_input";
+      const unavailable = messageAttempted && e instanceof ApiError && e.code === "not_available";
+      if (rejected || unavailable) clearPendingSubmission(submission);
+      if (mounted.current) {
+        setPending(readPendingSubmission(space, user));
+        if (unavailable) {
+          // 不可读不等于未保存；原草稿只供查看，不转入新对话或自动重发执行意图。
+          setUnavailableSubmissionDraft(localStorage.getItem(draftKey(submission.origin_conversation_id)) ?? "");
+        }
+        if (viewGeneration.current === generation) setError(unavailable ? "" : rejected
+          ? "消息内容或当前模型设置未被接受，尚未保存。草稿已保留，请修改内容或重新选择模型后发送。"
+          : e instanceof Error && e.message.startsWith("登录身份已变化") ? e.message
+          : "消息的保存回执尚未确认。请重试原消息，正在编辑的草稿会保留。");
+      }
     } finally {
-      setSending(false);
+      sendingRef.current = false;
+      if (mounted.current) setSending(false);
     }
+  };
+  const submit = async () => {
+    if (!text.trim() || sendingRef.current || !model.ready || pendingError) return;
+    try {
+      const existing = readPendingSubmission(space, user);
+      if (existing) { setPending(existing); return; }
+      const submission: PendingSubmission = {
+        schema_version: 1, space, user, origin_conversation_id: cid, conversation_id: cid,
+        creation_operation_id: crypto.randomUUID(),
+        input: { client_message_id: crypto.randomUUID(), text: text.trim(), ...(model.selection ? { model_selection: model.selection } : {}) },
+        draft_text: text, draft_revision: localStorage.getItem(draftKey(cid) + ".revision") ?? "",
+      };
+      try { decodeContract("MessageInput", submission.input); }
+      catch {
+        setError("消息内容或模型设置不符合要求，请缩短内容或重新选择模型后发送。草稿已保留。");
+        return;
+      }
+      storePendingSubmission(submission);
+      setPending(submission);
+      await sendPending(submission);
+    } catch (e) { setError(e instanceof Error ? e.message : "无法保存待发送消息，请保留当前草稿。"); }
   };
   const loadOlder = async () => {
     if (!cid || !snapshot || loadingOlder) return;
@@ -205,7 +313,7 @@ export function Workbench({
         "POST",
         { operation_id: crypto.randomUUID() },
       );
-      setRevision((v) => v + 1);
+      requestRefresh.current();
     } catch (e) {
       setError(e instanceof Error && e.message === "input_already_applied" ? "这条输入已经应用到任务。请补充新消息修订条件，不能撤回已经生效的修改。" : String(e));
     }
@@ -244,7 +352,7 @@ export function Workbench({
         "POST",
         { run_id: currentRun.run_id, lease_epoch: currentRun.lease_epoch },
       );
-      setRevision((v) => v + 1);
+      requestRefresh.current();
     } catch (e) {
       setError(e instanceof Error ? e.message : "停止失败");
     }
@@ -264,7 +372,7 @@ export function Workbench({
             aria-current={cid === item.id ? "true" : undefined}
             onClick={() => setCid(item.id)}
           >
-            <span>{item.title || "会话 " + (history.length - index)}</span>
+            <span title={item.title}>{conversationTitle(item.title) || "会话 " + (history.length - index)}</span>
             {item.created_at && <small><time dateTime={item.created_at}>创建于 {creationTime(item.created_at)}</time></small>}
           </button>
         ))}
@@ -285,7 +393,7 @@ export function Workbench({
       view="workbench"
       onView={onView}
       sidebar={side}
-      title={history.find(item => item.id === cid)?.title || "新对话"}
+      title={conversationTitle(history.find(item => item.id === cid)?.title ?? "") || "新对话"}
       onNewConversation={() => { setCid(null); setText(localStorage.getItem(draftKey(null)) ?? ""); textarea.current?.focus(); }}
     >
       <section
@@ -293,7 +401,7 @@ export function Workbench({
           "conversation " + (!snapshot?.messages.length ? "empty" : "")
         }
       >
-        <ConversationFeed key={user + ":" + (cid ?? "new")} firstEventSeq={snapshot?.first_event_seq}>
+        <ConversationFeed key={"feed:" + user + ":" + (cid ?? "new")} firstEventSeq={snapshot?.first_event_seq}>
         {!snapshot?.messages.length ? (
           <div className="welcome">
             <h1>
@@ -332,7 +440,7 @@ export function Workbench({
             {conversationItems(snapshot, queries.queries).map(item => item.kind === "query" ? (
               <div key={item.key} className="message assistant query-message">
                 <div className="message-label">Data Agent · 查询</div>
-                <QueryCard query={item.query} onRefresh={() => setRevision(v => v + 1)} onEvidence={onEvidence}/>
+                <QueryCard query={item.query} onRefresh={() => requestRefresh.current()} onEvidence={onEvidence}/>
               </div>
             ) : item.kind === "query_notice" ? (
               <div key={item.key} className="query-notice" role="status">
@@ -357,7 +465,7 @@ export function Workbench({
                   )}
                 </div>
                 {m.role === "assistant" ? (
-                  <AssistantMessage text={m.text} />
+                  <AssistantMessage text={m.text} savedSql={queries.queries.map(query => query.sql)} />
                 ) : (
                   <>{display.subject && <small className="reply-subject">针对：{display.subject}</small>}<p>{display.text}</p></>
                 )}
@@ -393,7 +501,14 @@ export function Workbench({
           </div>
         )}
         </ConversationFeed>
-        {cid && <SkillSelections key={user + ":" + cid} cid={cid} onManage={onManageSkills}/> }
+        {cid && <SkillSelections key={"skills:" + space + ":" + user + ":" + cid} cid={cid} onManage={onManageSkills} refreshRevision={snapshot?.runs.map(run => run.run_id + ":" + run.state).join(",")}/> }
+        {pending && !sending && <p className="pending-message" role="status">上一条消息的保存回执尚未确认。重试会发送原内容，保留你正在编辑的草稿。<button onClick={() => void sendPending(pending)}>重试原消息</button></p>}
+        {unavailableSubmissionDraft !== null && <div className="pending-message" role="status">
+          <p>原对话已删除或不可访问，无法继续核对原消息是否已保存。已结束这次重试；请新建对话继续。</p>
+          {unavailableSubmissionDraft && <details><summary>查看原对话保留的草稿</summary><textarea aria-label="原对话保留的草稿" readOnly rows={4} style={{width: "100%"}} value={unavailableSubmissionDraft}/></details>}
+          <button onClick={() => setUnavailableSubmissionDraft(null)}>收起此提示</button>
+        </div>}
+        {pendingError && <p className="error" role="alert">{pendingError}</p>}
         <div className="composer">
           <label className="sr-only" htmlFor="question">
             你的数据问题
@@ -422,7 +537,7 @@ export function Workbench({
             <button
               aria-label={sending ? "保存中…" : "发送 ↑"}
               className="send-button"
-              disabled={sending || !model.ready || !text.trim()}
+              disabled={sending || !!pending || !!pendingError || !model.ready || !text.trim()}
               onClick={() => void submit()}
             >
               {sending ? "…" : <Icon name="up"/>}
@@ -461,7 +576,7 @@ export function Workbench({
               />
             </label>
             <nav className="history-dialog" aria-label="全部会话">
-              {historyItems.map(item => <div className="history-row" key={item.id}><button onClick={() => { setCid(item.id); setShowHistory(false); }}><span>{item.title || "未命名会话"}</span>{item.created_at && <small><time dateTime={item.created_at}>创建于 {creationTime(item.created_at)}</time></small>}</button><button className="history-delete" aria-label={"删除会话 " + (item.title || "未命名会话")} onClick={() => setDeleteId(item.id)}>删除</button></div>)}
+              {historyItems.map(item => <div className="history-row" key={item.id}><button onClick={() => { setCid(item.id); setShowHistory(false); }}><span title={item.title}>{conversationTitle(item.title) || "未命名会话"}</span>{item.created_at && <small><time dateTime={item.created_at}>创建于 {creationTime(item.created_at)}</time></small>}</button><button className="history-delete" aria-label={"删除会话 " + (item.title || "未命名会话")} onClick={() => setDeleteId(item.id)}>删除</button></div>)}
             </nav>
             {!historyItems.length && !historyBusy && <p className="quiet">没有找到符合条件的会话，请调整搜索词。</p>}
             {historyNext && <button disabled={historyBusy} onClick={() => void refreshHistory(historySearch, historyNext).catch(e => setError(e.message))}>加载更多会话</button>}

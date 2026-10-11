@@ -14,6 +14,7 @@ import { useStableOperation } from "./semantic-commands.ts";
 import { KnowledgeDirectory } from "./KnowledgeDirectory.tsx";
 import { SemanticMaintainer } from "./SemanticMaintainer.tsx";
 import { KnowledgeOrigin } from "./KnowledgeOrigin.tsx";
+import { KnowledgeStatus } from "./KnowledgeStatus.tsx";
 import { ApiError, api } from "../../shared/api.ts";
 import { Modal } from "../../shared/Modal.tsx";
 import { MarkdownContent } from "../../shared/MarkdownContent.tsx";
@@ -113,9 +114,7 @@ function EntryEditor({
     <div className="semantic-entry">
       <div className="entry-head">
         <strong>{entry.label}</strong>
-        {entry.review_state === "needs_review" && (
-          <span className="review-mark">依据有变化，请核对</span>
-        )}
+        <KnowledgeStatus entries={[entry]}/>
         {canEdit && !editing && (
           <button onClick={() => {initialEdit.current = JSON.stringify([entry.effective_value, String(entry.human_override?.source_url ?? ""), object.related_ids]);setEditVersion(object.version);setEditUrl(String(entry.human_override?.source_url ?? ""));setEditRelated(object.related_ids);setEditing(true);}}>编辑</button>
         )}

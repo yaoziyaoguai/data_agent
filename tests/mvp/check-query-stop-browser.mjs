@@ -23,8 +23,10 @@ try {
   await page.goto(h.url);
   await page.getByLabel('演示登录凭据').fill(h.tokens.alice);
   await page.getByRole('button',{name:'进入工作台 →',exact:true}).click();
+  await page.getByLabel('你的数据问题').fill('查2026年1月净收入');
+  await until(async()=>await page.getByRole('button',{name:'发送 ↑',exact:true}).isEnabled(),'登录后模型设置准备完成');
   await send('查2026年1月净收入');
-  const cid=await until(()=>page.evaluate(()=>localStorage.getItem('data-agent.conversation.alice')),'会话建立');
+  const cid=await until(()=>page.evaluate(()=>localStorage.getItem('data-agent.conversation.["demo","alice"]')),'会话建立');
   await h.finished(cid);
   const a=(await list(cid))[0];
   await send('执行这条');await h.finished(cid,2);await waitForState(a,'running');

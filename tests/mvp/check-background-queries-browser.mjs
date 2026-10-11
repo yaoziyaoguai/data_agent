@@ -35,7 +35,7 @@ try {
   await page.getByLabel('演示登录凭据').fill(h.tokens.alice);
   await page.getByRole('button',{name:'进入工作台 →'}).click();
   await send('查2026年1月净收入',true);
-  const cid=await until(()=>page.evaluate(()=>localStorage.getItem('data-agent.conversation.alice')),'新对话保存');
+  const cid=await until(()=>page.evaluate(()=>localStorage.getItem('data-agent.conversation.["demo","alice"]')),'新对话保存');
   await h.finished(cid);
   const a=(await list(cid))[0];
   await send('执行这条');await h.finished(cid,2);await running(a);

@@ -69,13 +69,14 @@ try{
  await page.getByLabel('你的数据问题').fill(browserMessage);await page.getByRole('button',{name:'发送 ↑'}).click();
  const browserResult=await until(async()=>{const result=await snapshot(cid);return result.tasks.length===2&&result.runs.filter(r=>r.state==='finished').length===2?result:false;},'React提交到持久结果',15000);
  assert.equal(browserResult.tasks[1].goal===browserMessage||browserResult.tasks[0].goal===browserMessage,true);assert.deepEqual(counts(cid),{tasks:2,tools:2,outputs:2});
- await page.getByText(browserMessage,{exact:true}).last().waitFor();await page.reload();await page.getByRole('region',{name:'已保存的任务'}).waitFor();
- assert.equal(await page.getByText(complete.tasks[0].id,{exact:false}).count(),2);
+ await page.getByText(browserMessage,{exact:true}).last().waitFor();await page.reload();await page.getByText(browserMessage,{exact:true}).last().waitFor();
+ await page.getByText(message.text,{exact:true}).last().waitFor();
+ assert.deepEqual(counts(cid),{tasks:2,tools:2,outputs:2});
  await page.getByRole('button',{name:'新对话',exact:true}).click();
  const newQuestion='建立一个合成客户复购分析目标';await page.getByLabel('你的数据问题').fill(newQuestion);await page.getByRole('button',{name:'发送 ↑'}).click();
- const newCid=await until(()=>page.evaluate(()=>localStorage.getItem('data-agent.conversation.alice')) .then(value=>value&&value!==cid?value:false),'React创建会话');
+ const newCid=await until(()=>page.evaluate(()=>localStorage.getItem('data-agent.conversation.["demo","alice"]')) .then(value=>value&&value!==cid?value:false),'React创建会话');
  const newResult=await finished(newCid);assert.equal(newResult.tasks[0].goal,newQuestion);assert.deepEqual(counts(newCid),{tasks:1,tools:1,outputs:1});
- await page.getByText(newResult.tasks[0].id,{exact:false}).first().waitFor();await page.reload();await page.getByText(newQuestion,{exact:true}).last().waitFor();
+ await page.getByText(newQuestion,{exact:true}).last().waitFor();await page.reload();await page.getByText(newQuestion,{exact:true}).last().waitFor();
  await page.screenshot({path:sandbox+'/workbench-desktop.png',fullPage:true});await page.setViewportSize({width:390,height:844});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);await page.screenshot({path:sandbox+'/workbench-mobile.png',fullPage:true});assert.deepEqual(errors,[]);
  await context.close();await browser.close();browser=undefined;await stop(web);checks.push({name:'React实际提交、Pi工具执行、持久结果、刷新回看和390px布局',passed:true});
  await stop(worker);await stop(bridge);

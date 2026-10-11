@@ -3,6 +3,7 @@ import { KnowledgeReference } from "../../shared/KnowledgeReference.tsx";
 import { api } from "../../shared/api.ts";
 import { useUnsavedChanges } from "../../shared/UnsavedChanges.tsx";
 import { Modal } from "../../shared/Modal.tsx";
+import { CorrectionDiff } from "./CorrectionDiff.tsx";
 import {
   semanticError as message,
   useStableOperation,
@@ -81,13 +82,7 @@ export function ReviewCorrection({
       <p>
         <KnowledgeReference id={correction.object_id} path={correction.entry_id}/>
       </p>
-      <h3>当前正式内容</h3>
-      <pre className="source-body">
-        {
-          current?.entries.find((e) => e.entry_id === correction.entry_id)
-            ?.effective_value
-        }
-      </pre>
+      {current && <CorrectionDiff before={current.entries.find(e => e.entry_id === correction.entry_id)?.effective_value ?? ""} after={action === "apply" ? text : correction.value}/>}
       {action === "apply" && current?.version !== correction.base_version && (
         <p role="alert" className="error">
           正式语义已变化。请提出者核对新版本、修订建议并重新提交。

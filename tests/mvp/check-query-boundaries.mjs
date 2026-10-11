@@ -208,7 +208,7 @@ try {
     const page=await browser.newPage();
     await page.goto(h.url);await page.getByLabel('演示登录凭据').fill(h.tokens.alice);await page.getByRole('button',{name:'进入工作台 →',exact:true}).click();
     await page.getByLabel('你的数据问题').waitFor();
-    await page.evaluate(id=>localStorage.setItem('data-agent.conversation.alice',id),cid);await page.reload();
+    await page.evaluate(id=>localStorage.setItem('data-agent.conversation.["demo","alice"]',id),cid);await page.reload();
     const card=page.locator('#query-'+many.id);
     await card.getByText('已截断',{exact:false}).waitFor();
     assert.equal(await card.locator('tbody tr').count(),10);
@@ -366,7 +366,7 @@ try {
     const page=await historyBrowser.newPage({viewport:{width:1440,height:1000}});
     await page.goto(h.url);await page.getByLabel('演示登录凭据').fill(h.tokens.alice);await page.getByRole('button',{name:'进入工作台 →',exact:true}).click();
     await page.getByLabel('你的数据问题').waitFor();
-    await page.evaluate(id=>localStorage.setItem('data-agent.conversation.alice',id),cid);await page.reload();
+    await page.evaluate(id=>localStorage.setItem('data-agent.conversation.["demo","alice"]',id),cid);await page.reload();
     const previousCard=page.locator('#query-'+previous.id);
     const folded=page.locator('details.previous-query').filter({has:previousCard});
     await folded.waitFor();assert.equal(await folded.evaluate(el=>el.open),false);
@@ -375,7 +375,7 @@ try {
     assert.equal(await previousCard.locator('pre').isVisible(),true);
     assert.equal(await previousCard.evaluate(el=>el===document.activeElement),true);
     checks.push({name:'旧SQL默认折叠，取消通知的查看查询操作展开并聚焦正确SQL',passed:true});
-    await page.evaluate(id=>localStorage.setItem('data-agent.conversation.alice',id),eventCid);await page.reload();
+    await page.evaluate(id=>localStorage.setItem('data-agent.conversation.["demo","alice"]',id),eventCid);await page.reload();
     const older=page.getByRole('button',{name:'加载更早的消息',exact:true});await older.waitFor();
     await page.locator('.conversation-scroll').evaluate(el=>{el.scrollTop=0;});
     const anchor=page.getByText(latest.events[0].payload.text,{exact:true});

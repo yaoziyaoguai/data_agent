@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { Workbench } from "./features/workbench/Workbench.tsx";
+import { adoptNewConversationDraft, conversationStorageKey, readPendingSubmission } from "./features/workbench/conversation-storage.ts";
 import { api } from "./shared/api.ts";
 import "./style.css";
 import { KnowledgePage } from "./features/knowledge/KnowledgePage.tsx";
@@ -19,12 +20,14 @@ function App() {
   const [showEvidence, setShowEvidence] = useState(false);
   const [modelLabel, setModelLabel] = useState("");
   const [user, setUser] = useState<string | null>(null);
+  const [space, setSpace] = useState("");
   const [token, setToken] = useState("");
   const [error, setError] = useState("");
   useEffect(() => {
     void api("Identity", "/session")
       .then((result) => {
         setUser(result.user_id);
+        setSpace(result.space_id);
         setModelLabel(result.model_label);
       })
       .catch(() => {});
@@ -41,14 +44,18 @@ function App() {
   };
   const useSkill = async (asset: Asset) => {
     if (!user) return;
-    let cid = localStorage.getItem("data-agent.conversation." + user);
+    let cid = localStorage.getItem(conversationStorageKey(space, user));
     if (!cid) {
+      if (readPendingSubmission(space, user)?.origin_conversation_id === null) {
+        throw new Error("请先返回工作台确认上一条消息的接收状态，再选用分析方法。");
+      }
       cid = (
         await api("ConversationReceipt", "/conversations", "POST", {
           operation_id: crypto.randomUUID(),
         })
       ).conversation_id;
-      localStorage.setItem("data-agent.conversation." + user, cid);
+      adoptNewConversationDraft(space, user, cid);
+      localStorage.setItem(conversationStorageKey(space, user), cid);
     }
     await api("Asset", "/conversations/" + cid + "/skill-selections", "POST", {
       operation_id: crypto.randomUUID(),
@@ -66,7 +73,9 @@ function App() {
       return (
         <>
           <Workbench
+            key={JSON.stringify([space, user])}
             user={user}
+            space={space}
             modelLabel={modelLabel}
             onLogout={() => guard(logout)}
             onView={navigate}
@@ -131,6 +140,7 @@ function App() {
                 token,
               );
               setUser(result.user_id);
+              setSpace(result.space_id);
               setModelLabel(result.model_label);
               setToken("");
             } catch (e) {

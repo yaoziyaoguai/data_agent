@@ -16,6 +16,7 @@ export function KnowledgeDirectory({ user, scope, current, revision, onSelect, o
 }) {
   const [name, setName] = useState("");
   const [state, setState] = useState("");
+  const [expanded, setExpanded] = useState(false);
   const [objects, setObjects] = useState<KnowledgeObject[]>([]);
   const [after, setAfter] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -25,14 +26,14 @@ export function KnowledgeDirectory({ user, scope, current, revision, onSelect, o
   const guard = useNavigationGuard();
   const fetchPage = async (cursor: string | null, request: number) => {
     setLoading(true); setError("");
-    const params = new URLSearchParams({ directory: scope });
+    const params = new URLSearchParams({ directory: scope, directory_view: expanded ? "flat" : "grouped" });
     if (name.trim()) params.set("q", name.trim());
     if (state) params.set("state", state);
     if (cursor) params.set("after_id", cursor);
     try {
       const page = await api("KnowledgeList", "/knowledge?" + params);
       let values = page.objects;
-      if (!cursor && current && page.next_after_id && !values.some(object => object.id === current)) {
+      if (!cursor && current && !values.some(object => object.id === current)) {
         // 地址可能指向后页；只保留符合当前目录条件、且仍可读的对象。
         try {
           const selected = await api("KnowledgeObject", "/knowledge/" + encodeURIComponent(current));
@@ -54,7 +55,10 @@ export function KnowledgeDirectory({ user, scope, current, revision, onSelect, o
     setObjects([]); setAfter(null); setLoading(true);
     const timer = window.setTimeout(() => void fetchPage(null, request), 150);
     return () => { window.clearTimeout(timer); ++generation.current; };
-  }, [scope, name, state, revision, refresh]);
+  }, [scope, name, state, expanded, revision, refresh]);
+  const grouped = documentRepresentatives(objects);
+  const sections = (["table", "metric", "document", "term", "field", "relationship"] as const)
+    .map(kind => ({kind, objects: grouped.filter(object => object.kind === kind)}));
   return <>
     <div className="directory-filters">
       <label className="form-label">按名称查找<input aria-label="管理目录名称" value={name} onChange={e => { const value = e.target.value; guard(() => { onSelect(null); setName(value); }); }} /></label>
@@ -62,10 +66,12 @@ export function KnowledgeDirectory({ user, scope, current, revision, onSelect, o
         <option value="">全部状态</option><option value="enabled">启用</option><option value="disabled">停用</option>
       </select></label>
       <button disabled={loading} onClick={() => setRefresh(value => value + 1)}>刷新目录</button>
+      <label className="directory-expand"><input type="checkbox" checked={expanded} onChange={e => { const value=e.target.checked; guard(() => { onSelect(null); setExpanded(value); }); }}/>单独查找字段与关联</label>
     </div>
-    {documentRepresentatives(objects).map(o => <button key={o.id} aria-current={o.id === current ? "true" : undefined} onClick={() => onSelect(o)}>
+    {!expanded && <p className="quiet directory-hint">从表内查看字段、加工 SQL 与血缘。</p>}
+    {sections.filter(section => section.objects.length).map(section => <section className="directory-group" key={section.kind} aria-label={knowledgeKindLabels[section.kind]}><h3>{knowledgeKindLabels[section.kind]}</h3>{section.objects.map(o => <button key={o.id} aria-current={o.id === current ? "true" : undefined} onClick={() => onSelect(o)}>
       <span><DocumentName object={o}/></span><KnowledgeOrigin object={o}/><small>{knowledgeKindLabels[o.kind]}{o.state === "disabled" ? " · 已停用" : ""}</small>
-    </button>)}
+    </button>)}</section>)}
     {loading && <p role="status">正在读取目录…</p>}
     {!loading && !error && objects.length === 0 && <p role="status">{scope === "maintained" && !name && !state ? "你目前没有负责的内容。可切换到全部对象查看并提出建议。" : "没有符合当前条件的内容。"}</p>}
     {error && <p role="alert" className="error">{error}<button onClick={() => setRefresh(value => value + 1)}>重试目录</button></p>}

@@ -65,7 +65,7 @@ try{
  await click('复制 SQL');assert.match(await page.evaluate(()=>navigator.clipboard.readText()),/SELECT/i);
  await page.getByLabel('你的数据问题').fill('执行这条');await click('发送 ↑');await click('停止');await until(async()=>await page.getByRole('heading',{name:'已取消',exact:true}).count()===1,'查询取消');
  assert.equal(await page.getByText(/本次对话中的问题/).count(),0);assert.equal(await page.getByRole('button',{name:/继续这个问题|停止这个问题的分析/}).count(),0);
- const cid=await page.evaluate(()=>localStorage.getItem('data-agent.conversation.alice'));
+ const cid=await page.evaluate(()=>localStorage.getItem('data-agent.conversation.["demo","alice"]'));
  const task=(await h.request('/conversations/'+cid+'/snapshot')).value.tasks[0];
  const cancelled=await h.request('/conversations/'+cid+'/tasks/'+task.id+'/cancel',{operation_id:randomUUID(),expected_version:task.condition_version});assert.equal(cancelled.status,200);
  assert.equal((await h.request('/conversations/'+cid+'/snapshot')).value.tasks.find(value=>value.id===task.id).lifecycle,'cancelled');

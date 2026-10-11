@@ -7,6 +7,7 @@ import {
   type CorrectionContent,
 } from "./CorrectionComposer.tsx";
 import { ReviewCorrection } from "./ReviewCorrection.tsx";
+import { CorrectionDiff } from "./CorrectionDiff.tsx";
 import type {
   Proposal,
   SemanticCorrection,
@@ -124,10 +125,7 @@ export function SemanticCorrections({
           <p>{c.reason}</p>
           <details>
             <summary>查看修改与依据</summary>
-            <h4>原内容</h4>
-            <pre className="source-body">{c.original_value}</pre>
-            <h4>建议内容</h4>
-            <pre className="source-body">{c.value}</pre>
+            <CorrectionDiff before={c.original_value} after={c.value}/>
             <ul>
               {c.evidence.map((r, i) => (
                 <li key={i}>
@@ -142,9 +140,7 @@ export function SemanticCorrections({
             </p>
           )}
           {c.applied_version && (
-            <p>
-              由 {c.applied_by} 保存：{c.applied_value}
-            </p>
+            <div><p>已由 {c.applied_by} 核对并保存。</p><details><summary>查看正式保存内容</summary><pre className="source-body">{c.applied_value}</pre></details></div>
           )}
           <div className="actions">
             {c.can_revise && (

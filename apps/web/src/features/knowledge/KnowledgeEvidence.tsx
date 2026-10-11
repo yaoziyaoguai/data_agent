@@ -4,6 +4,7 @@ import { DocumentReading } from "./KnowledgeDocument.tsx";
 import { api } from "../../shared/api.ts";
 import { MarkdownContent } from "../../shared/MarkdownContent.tsx";
 import { knowledgeKindLabels, knowledgeSourceLabel } from "../../shared/knowledge-labels.ts";
+import { KnowledgeStatus } from "./KnowledgeStatus.tsx";
 
 export function KnowledgeEvidence({ id, version, querySummary }: { id: string; version?: string; querySummary?: string }) {
   const [object, setObject] = useState<KnowledgeObject | null>(null);
@@ -23,7 +24,7 @@ export function KnowledgeEvidence({ id, version, querySummary }: { id: string; v
     <p className="eyebrow">{knowledgeKindLabels[object.kind]} · {knowledgeSourceLabel(object)}</p><h2>{object.name}</h2>
     <p className="quiet">负责人：{object.maintenance?.maintainer_id ?? "暂未指定"}{object.state !== "enabled" ? " · 已停用" : ""}</p>
     <h3>{version ? "查询采用的共享口径" : "共享口径"}</h3>
-    {object.entries.filter(entry => !["ddl", "etl"].includes(entry.path)).map(entry => <section key={entry.entry_id}><h4>{entry.label}</h4><MarkdownContent text={entry.effective_value || "尚缺说明"}/>{entry.review_state === "needs_review" && <p className="review-mark">依据有变化，请核对</p>}</section>)}
+    {object.entries.filter(entry => !["ddl", "etl"].includes(entry.path)).map(entry => <section key={entry.entry_id}><h4>{entry.label}</h4><KnowledgeStatus entries={[entry]}/><MarkdownContent text={entry.effective_value || "尚缺说明"}/></section>)}
     {object.kind === "document" && <FullEvidenceDocument key={object.id} id={object.id}/>}
     {querySummary && <section className="evidence-query-conditions"><h3>本次查询条件</h3><p>{querySummary}</p></section>}
   </article>;
