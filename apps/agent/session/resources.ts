@@ -1,9 +1,10 @@
-import { createExtensionRuntime, type ResourceLoader, type Skill } from '@earendil-works/pi-coding-agent';
+import { createExtensionRuntime, type Extension, type ResourceLoader, type Skill } from '@earendil-works/pi-coding-agent';
 
 // 只装配宿主指定的内容；不发现用户目录、扩展、仓库指令或内置文件工具。
-export function resources(context?:string, skills: Skill[] = []): ResourceLoader {
+export function resources(context?:string, skills: Skill[] = [], memoryExtension?: Extension): ResourceLoader {
+  const extensions = { extensions: memoryExtension ? [memoryExtension] : [], errors: [], runtime: createExtensionRuntime() };
   return {
-    getExtensions: () => ({ extensions: [], errors: [], runtime: createExtensionRuntime() }),
+    getExtensions: () => extensions,
     getSkills: () => ({ skills, diagnostics: [] }),
     getPrompts: () => ({ prompts: [], diagnostics: [] }),
     getThemes: () => ({ themes: [], diagnostics: [] }),

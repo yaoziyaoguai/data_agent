@@ -23,13 +23,13 @@
     {
       "file": "data-agent-memory",
       "width": 1920,
-      "height": 1030,
+      "height": 1400,
       "issues": []
     },
     {
       "file": "data-agent-c4-container",
       "width": 1920,
-      "height": 4470,
+      "height": 4840,
       "issues": []
     }
   ],

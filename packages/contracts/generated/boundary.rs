@@ -251,8 +251,10 @@ pub struct ConditionSet {
     pub metric: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub notes: Option<String>,
+    /// 修改区间的不包含终点，按业务时区解析后填写UTC完整时间戳，以Z结尾；整月结束为下一月起点。清空使用unset；未修改则省略。
     #[serde(skip_serializing_if = "Option::is_none")]
     pub time_end: Option<String>,
+    /// 修改区间的包含起点，按业务时区解析后填写UTC完整时间戳，以Z结尾。清空使用unset；未修改则省略。
     #[serde(skip_serializing_if = "Option::is_none")]
     pub time_start: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -302,7 +304,9 @@ pub struct Conditions {
     pub knowledge_refs: Vec<EvidenceRef>,
     pub metric: Option<String>,
     pub notes: String,
+    /// 时间区间的不包含终点。按明确的业务时区解析后转为UTC完整时间戳，以Z结尾；整月结束为下一月起点，不能写本月最后一天。未指定时为null。
     pub time_end: Option<String>,
+    /// 时间区间的包含起点。按明确的业务时区解析后转为UTC完整时间戳，以Z结尾；不能只写日期。未指定时为null。
     pub time_start: Option<String>,
     pub timezone: String,
 }
@@ -1671,6 +1675,8 @@ pub struct ReadCheckpoint {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ReadKnowledgeInput {
+    ///
+    /// 知识条目ID；个人记忆省略时读取正文，scope读取范围，source_text读取来源原话，分别检查content_page/scope_page/source_page并按同一version续读。
     #[serde(skip_serializing_if = "Option::is_none")]
     pub entry_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -1844,6 +1850,9 @@ pub struct ModelAssetPreview {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub scope_page: Option<ContentPage>,
     pub selected: bool,
+    /// 来源原话的独立字符分页。缺省source_text为空但保留总长和补读位置；以entry_id=source_text和同一资产版本读取。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source_page: Option<ContentPage>,
     pub source_text: String,
     pub state: AssetState,
     pub verified: bool,
@@ -1852,6 +1861,7 @@ pub struct ModelAssetPreview {
     pub visibility: Option<Visibility>,
 }
 
+/// 来源原话的独立字符分页。缺省source_text为空但保留总长和补读位置；以entry_id=source_text和同一资产版本读取。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ContentPage {
     pub complete: bool,

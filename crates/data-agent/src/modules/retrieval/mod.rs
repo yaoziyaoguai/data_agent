@@ -202,17 +202,33 @@ pub fn model_page(mut object: Value, offset: usize, limit: usize, entry_id: Opti
         value.remove("can_edit");
     }
     let asset_scope = object.get("scope").is_some() && entry_id == Some("scope");
+    let asset_source = object.get("source_text").is_some() && entry_id == Some("source_text");
+    if let Some(source) = object["source_text"].as_str() {
+        // 缺省只声明来源可补读；原话按同一资产版本独立分页，保留尾部限定。
+        let (value, page) = text_page(
+            source,
+            if asset_source { offset } else { 0 },
+            if asset_source { limit } else { 0 },
+        );
+        object["source_text"] = serde_json::json!(value);
+        object["source_page"] = page;
+    }
     if let Some(body) = object["body"].as_str() {
         let (body, page) = text_page(
             body,
-            if asset_scope { 0 } else { offset },
-            if asset_scope { 0 } else { limit },
+            if asset_scope || asset_source {
+                0
+            } else {
+                offset
+            },
+            if asset_scope || asset_source {
+                0
+            } else {
+                limit
+            },
         );
         object["body"] = serde_json::json!(body);
         object["content_page"] = page;
-        if object.get("source_text").is_some() {
-            object["source_text"] = serde_json::json!("");
-        }
     }
     if let Some(scope) = object["scope"].as_str() {
         let (value, page) = text_page(
@@ -435,6 +451,43 @@ mod semantic_context_tests {
             assert!(!page["next_asset_after"].is_null());
             assert_eq!(page["total"], 21);
         }
+    }
+
+    #[test]
+    fn memory_source_can_be_read_without_losing_trailing_exceptions() {
+        let source = format!(
+            "以后默认按渠道展示。{}但仅限订单分析，退款分析仍按当次要求。",
+            "补充范围🙂".repeat(170)
+        );
+        let asset = json!({"id":"memory","kind":"memory","body":"按渠道展示",
+            "scope":"订单分析","source_text":source,"version":"2"});
+        let preview = model_page(asset.clone(), 0, 600, None);
+        assert_eq!(preview["source_text"], "");
+        assert_eq!(
+            preview["source_page"]["total_chars"],
+            source.chars().count()
+        );
+        assert_eq!(preview["source_page"]["complete"], false);
+        assert_eq!(preview["source_page"]["next_offset"], 0);
+        let mut joined = String::new();
+        let mut offset = 0;
+        loop {
+            let page = model_page(asset.clone(), offset, 101, Some("source_text"));
+            assert_eq!(page["body"], "");
+            assert_eq!(page["version"], "2");
+            joined.push_str(page["source_text"].as_str().unwrap());
+            match page["source_page"]["next_offset"].as_u64() {
+                Some(next) => {
+                    assert!(next as usize > offset);
+                    offset = next as usize;
+                }
+                None => break,
+            }
+        }
+        assert_eq!(joined, source);
+        let empty = model_page(json!({"body":"正文","source_text":""}), 0, 600, None);
+        assert_eq!(empty["source_page"]["complete"], true);
+        assert!(empty["source_page"]["next_offset"].is_null());
     }
 
     #[test]

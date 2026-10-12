@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { writeFile } from 'node:fs/promises';
 import { SessionManager, ModelRuntime } from '@earendil-works/pi-coding-agent';
 import { createAssistantMessageEventStream, getCurrentTools } from '@earendil-works/pi-ai';
@@ -61,7 +61,79 @@ const retry=async(simulateInterruption=true)=>{
   assert.equal(run.resume_same_input,true);assert.equal(run.budget_scope_id,previous.budget_scope_id);assert.equal(run.recovery_chain_id,previous.recovery_chain_id);assert.notEqual(run.lease_epoch,previous.lease_epoch);
   return previous;
 };
+const sqlJson=value=>`CAST(CONVERT(0x${Buffer.from(JSON.stringify(value)).toString('hex')} USING utf8mb4) AS JSON)`;
+const canonical=value=>Array.isArray(value)?value.map(canonical):value&&typeof value==='object'?Object.fromEntries(Object.keys(value).sort().map(key=>[key,canonical(value[key])])):value;
+const legacySeed=async(state='succeeded')=>{
+  const cid=await h.create();await seed(cid,{name:'search_knowledge',arguments:{query:'没有命中的合成关键词'}});
+  const calls=run.checkpoint.entries.at(-1).message.content;
+  const call=calls[0];
+  const input={run_id:run.run_id,lease_epoch:run.lease_epoch,sdk_tool_call_id:call.id,tool_name:call.name,arguments:call.arguments,checkpoint:run.checkpoint};
+  const registered=await h.internal('/internal/data/tool-calls',input);assert.equal(registered.status,200);
+  const committed=state==='succeeded'?await h.internal('/internal/data/tools',input):null;
+  if(committed)assert.equal(committed.status,200);
+  // 只在随机合成数据库中装入旧版接受过的快照；模拟提交后进程退出，SDK还没有toolResult。
+  call.arguments.conditions.time_start='2026-01-01';call.arguments.conditions.time_end='2026-01-31';
+  const receipt=committed?structuredClone(committed.value):state==='rejected'?{operation_id:registered.value.operation_id,tool_name:call.name,data:{error:'invalid_input',hint:'合成旧版明确拒绝。'}}:null;
+  if(committed)receipt.data.conditions=structuredClone(call.arguments.conditions);
+  const fp=createHash('sha256').update(JSON.stringify(canonical({name:call.name,arguments:call.arguments}))).digest('hex');
+  h.sql(`UPDATE tool_calls SET arguments_fingerprint='${fp}',state='${state}',receipt=${receipt?sqlJson(receipt):'NULL'} WHERE operation_id='${registered.value.operation_id}';UPDATE pi_checkpoints SET checkpoint=${sqlJson(run.checkpoint)} WHERE recovery_chain_id='${run.recovery_chain_id}';`);
+  if(committed)h.sql(`UPDATE condition_revisions SET body=${sqlJson(receipt.data.conditions)} WHERE task_id='${receipt.data.task_id}';UPDATE conversation_events SET payload=${sqlJson(receipt.data)} WHERE conversation_id='${cid}' AND event_type='task_changed';`);
+  return {cid,call,receipt,input:{...input,arguments:call.arguments},checkpoint:run.checkpoint};
+};
 try{
+  const legacy=await legacySeed();
+  const legacyIdentity=h.sql(`SELECT JSON_OBJECT('operation',operation_id,'origin',origin_run_id,'fingerprint',arguments_fingerprint,'state',state,'receipt',receipt) FROM tool_calls WHERE operation_id='${legacy.receipt.operation_id}'`)[0];
+  assert.equal(restoreCheckpoint('/synthetic/data-agent',legacy.checkpoint).buildSessionContext().messages.at(-1).role,'assistant');
+  const legacyRun=await retry();
+  const legacyInput={...legacy.input,run_id:run.run_id,lease_epoch:run.lease_epoch};
+  for(const path of ['/internal/data/tool-calls','/internal/data/tools','/internal/data/tool-rejections']){
+    assert.equal((await h.request(path,legacyInput)).status,401);
+    assert.equal((await h.internal(path,{...legacyInput,run_id:legacyRun.run_id,lease_epoch:legacyRun.lease_epoch})).value.code,'lease_lost');
+    assert.equal((await h.internal(path,{...legacyInput,arguments:{...legacyInput.arguments,goal:'改变旧操作载荷'}})).value.code,'idempotency_conflict');
+  }
+  await deliver(run,h.env.DATA_AGENT_API_URL,h.env.DATA_AGENT_INTERNAL_TOKEN,'');h.releaseRun(run.run_id);
+  const legacySaved=h.sql(`SELECT checkpoint FROM pi_checkpoints WHERE recovery_chain_id='${run.recovery_chain_id}'`)[0];
+  const legacyResult=restoreCheckpoint('/synthetic/data-agent',legacySaved).buildSessionContext().messages.find(v=>v.role==='toolResult'&&v.toolCallId==='first-call');
+  assert.equal(legacyResult?.isError,false,'旧版已提交日期参数必须接回成功回执，不能向Pi报告未执行');
+  assert.deepEqual(legacyResult.details,legacy.receipt);
+  assert.deepEqual(h.sql(`SELECT JSON_OBJECT('operation',operation_id,'origin',origin_run_id,'fingerprint',arguments_fingerprint,'state',state,'receipt',receipt) FROM tool_calls WHERE operation_id='${legacy.receipt.operation_id}'`)[0],legacyIdentity);
+  assert.deepEqual(h.sql(`SELECT body FROM condition_revisions WHERE task_id='${legacy.receipt.data.task_id}'`),[legacy.receipt.data.conditions]);
+  assert.equal(h.sql(`SELECT JSON_OBJECT('n',COUNT(*)) FROM conversation_events WHERE conversation_id='${legacy.cid}' AND event_type='task_changed'`)[0].n,1);
+  assert.equal((await h.snapshot(legacy.cid)).tasks.length,1);
+  checks.push({id:'IA04',name:'旧版日期参数在业务提交后无toolResult，升级后沿原身份接回成功回执；历史日期、条件版本与任务副作用不变，身份/代次/异参仍拒绝',passed:true});
+
+  const oldRejection=await legacySeed('rejected');await retry();
+  const rejectionInput={...oldRejection.input,run_id:run.run_id,lease_epoch:run.lease_epoch};
+  assert.deepEqual((await h.internal('/internal/data/tool-rejections',rejectionInput)).value,oldRejection.receipt);
+  assert.deepEqual((await h.internal('/internal/data/tools',rejectionInput)).value,oldRejection.receipt);
+  assert.equal((await h.snapshot(oldRejection.cid)).tasks.length,0);
+  await h.request(`/conversations/${oldRejection.cid}/messages/${run.message_id}/withdraw`,{operation_id:randomUUID()});h.releaseRun(run.run_id);
+  checks.push({id:'IA04',name:'旧契约的明确拒绝从只读rejection入口和执行回放入口接回，不重新执行业务',passed:true});
+
+  const unknown=await legacySeed('registered');await retry();
+  const unknownInput={...unknown.input,run_id:run.run_id,lease_epoch:run.lease_epoch};
+  const chatsBeforeUnknown=chats;
+  for(const path of ['/internal/data/tool-calls','/internal/data/tools'])assert.equal((await h.internal(path,unknownInput)).value.code,'outcome_unknown');
+  await assert.rejects(deliver(run,h.env.DATA_AGENT_API_URL,h.env.DATA_AGENT_INTERNAL_TOKEN,''),/outcome_unknown/);
+  assert.equal(chats,chatsBeforeUnknown,'已登记未知结果不能向Pi伪报未执行');
+  assert.equal(h.sql(`SELECT JSON_OBJECT('state',state,'receipt',receipt) FROM tool_calls WHERE conversation_id='${unknown.cid}'`)[0].state,'registered');
+  assert.equal(h.sql(`SELECT JSON_OBJECT('state',state,'receipt',receipt) FROM tool_calls WHERE conversation_id='${unknown.cid}'`)[0].receipt,null);
+  assert.equal((await h.snapshot(unknown.cid)).tasks.length,0);
+  await h.request(`/conversations/${unknown.cid}/messages/${run.message_id}/withdraw`,{operation_id:randomUUID()});h.releaseRun(run.run_id);
+  checks.push({id:'IA04',name:'旧参数已登记但无回执时保持outcome_unknown与原账本，不制造拒绝或执行副作用，不进入Pi生成',passed:true});
+
+  const newInvalid=await h.create();await seed(newInvalid,{name:'update_analysis_task',arguments:structuredClone(legacy.call.arguments)});
+  const invalidInput={run_id:run.run_id,lease_epoch:run.lease_epoch,sdk_tool_call_id:'second-call',tool_name:'update_analysis_task',arguments:legacy.call.arguments,checkpoint:run.checkpoint};
+  for(const path of ['/internal/data/tool-calls','/internal/data/tools'])assert.equal((await h.internal(path,invalidInput)).value.code,'invalid_input');
+  assert.equal(h.sql(`SELECT JSON_OBJECT('n',COUNT(*)) FROM tool_calls WHERE conversation_id='${newInvalid}'`)[0].n,0);
+  await deliver(run,h.env.DATA_AGENT_API_URL,h.env.DATA_AGENT_INTERNAL_TOKEN,'');h.releaseRun(run.run_id);
+  const invalidSaved=h.sql(`SELECT checkpoint FROM pi_checkpoints WHERE recovery_chain_id='${run.recovery_chain_id}'`)[0];
+  const invalidResult=restoreCheckpoint('/synthetic/data-agent',invalidSaved).buildSessionContext().messages.find(v=>v.role==='toolResult'&&v.toolCallId==='second-call');
+  assert.equal(invalidResult?.isError,true);assert.match(invalidResult.content[0].text,/本次调用未执行/);
+  assert.equal(h.sql(`SELECT JSON_OBJECT('n',COUNT(*)) FROM tool_calls WHERE conversation_id='${newInvalid}'`)[0].n,1);
+  assert.equal((await h.snapshot(newInvalid)).tasks.length,1);
+  checks.push({id:'IA04',name:'旧日期作为新调用仍被Rust拒绝且不登记；恢复向Pi提供可修正toolResult，合法新工具继续完成',passed:true});
+
   const cid=await h.create();await seed(cid,{name:'search_knowledge',arguments:{query:'没有命中的合成关键词'}});
   interrupt=true;await assert.rejects(deliver(run,h.env.DATA_AGENT_API_URL,h.env.DATA_AGENT_INTERNAL_TOKEN,''),/synthetic_process_interruption/);
   const before=h.sql(`SELECT JSON_OBJECT('sdk',sdk_tool_call_id,'operation',operation_id,'origin',origin_run_id,'state',state) FROM tool_calls WHERE conversation_id='${cid}' ORDER BY sdk_tool_call_id`);

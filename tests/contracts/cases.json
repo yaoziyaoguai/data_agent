@@ -1245,6 +1245,123 @@
     "valid": false
   },
   {
+    "name": "task conditions preserve UTC boundaries and the business timezone",
+    "schema": "Conditions",
+    "value": {
+      "time_start": "2025-11-30T16:00:00Z",
+      "time_end": "2025-12-31T16:00:00.123456Z",
+      "timezone": "Asia/Shanghai",
+      "metric": null,
+      "channel": null,
+      "group_by": [],
+      "filters": [],
+      "knowledge_refs": [],
+      "notes": ""
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "task conditions reject date-only boundaries from the interrupted trial",
+    "schema": "Conditions",
+    "value": {
+      "time_start": "2026-01-01",
+      "time_end": "2026-01-31",
+      "timezone": "UTC",
+      "metric": null,
+      "channel": null,
+      "group_by": [],
+      "filters": [],
+      "knowledge_refs": [],
+      "notes": ""
+    },
+    "valid": false
+  },
+  {
+    "name": "task conditions reject nonexistent calendar dates",
+    "schema": "Conditions",
+    "value": {
+      "time_start": "2026-02-30T00:00:00Z",
+      "time_end": null,
+      "timezone": "UTC",
+      "metric": null,
+      "channel": null,
+      "group_by": [],
+      "filters": [],
+      "knowledge_refs": [],
+      "notes": ""
+    },
+    "valid": false
+  },
+  {
+    "name": "time patch accepts a complete UTC boundary",
+    "schema": "ConditionPatch",
+    "value": {
+      "set": {
+        "time_end": "2026-02-01T00:00:00Z"
+      },
+      "unset": []
+    },
+    "valid": true
+  },
+  {
+    "name": "time patch rejects a date-only end",
+    "schema": "ConditionPatch",
+    "value": {
+      "set": {
+        "time_end": "2026-01-31"
+      },
+      "unset": []
+    },
+    "valid": false
+  },
+  {
+    "name": "time patch rejects a timestamp with no timezone",
+    "schema": "ConditionPatch",
+    "value": {
+      "set": {
+        "time_start": "2026-01-01T00:00:00"
+      },
+      "unset": []
+    },
+    "valid": false
+  },
+  {
+    "name": "time patch requires UTC storage even with a business timezone",
+    "schema": "ConditionPatch",
+    "value": {
+      "set": {
+        "time_start": "2026-01-01T00:00:00+08:00",
+        "timezone": "Asia/Shanghai"
+      },
+      "unset": []
+    },
+    "valid": false
+  },
+  {
+    "name": "time patch rejects nonexistent calendar dates",
+    "schema": "ConditionPatch",
+    "value": {
+      "set": {
+        "time_end": "2026-02-30T00:00:00Z"
+      },
+      "unset": []
+    },
+    "valid": false
+  },
+  {
+    "name": "time patch can explicitly clear a boundary",
+    "schema": "ConditionPatch",
+    "value": {
+      "set": {},
+      "unset": [
+        "time_start",
+        "time_end"
+      ]
+    },
+    "valid": true
+  },
+  {
     "name": "explanation task can explicitly leave unspecified conditions unknown",
     "schema": "AnalysisUpdate",
     "value": {
@@ -3608,6 +3725,56 @@
     "value": {
       "user_id": "alice",
       "model_label": "本地模拟模型"
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "memory source page remains explicit",
+    "schema": "ModelAssetPreview",
+    "value": {
+      "id": "memory-source",
+      "kind": "memory",
+      "name": "合成记忆",
+      "body": "",
+      "scope": "本人范围",
+      "version": "2",
+      "state": "enabled",
+      "verified": false,
+      "source_text": "尾部例外",
+      "dependencies": [],
+      "selected": false,
+      "source_page": {
+        "offset": 100,
+        "total_chars": 104,
+        "complete": false,
+        "next_offset": null
+      }
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "negative memory source offset rejected",
+    "schema": "ModelAssetPreview",
+    "value": {
+      "id": "memory-source",
+      "kind": "memory",
+      "name": "合成记忆",
+      "body": "",
+      "scope": "本人范围",
+      "version": "2",
+      "state": "enabled",
+      "verified": false,
+      "source_text": "尾部例外",
+      "dependencies": [],
+      "selected": false,
+      "source_page": {
+        "offset": -1,
+        "total_chars": 104,
+        "complete": false,
+        "next_offset": null
+      }
     },
     "valid": false,
     "roundtrip": false

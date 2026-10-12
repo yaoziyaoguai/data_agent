@@ -14,6 +14,10 @@ for(let i=0;i<24;i++){manager.appendMessage({role:'user',content:[{type:'text',t
 let run,mode,calls=0,compactions=0,checkpoint=exportCheckpoint(manager),passed=false;const payloadBytes=[];
 const provider=createServer(async(req,res)=>{let raw='';req.setEncoding('utf8');for await(const c of req)raw+=c;payloadBytes.push(Buffer.byteLength(raw));assert.ok(Buffer.byteLength(raw)<=65536);calls++;const body=JSON.parse(raw);
  const summary=!body.tools?.length;if(summary)compactions++;
+ const messageText=v=>typeof v.content==='string'?v.content:(v.content??[]).filter(part=>part.type==='text').map(part=>part.text).join('\n');
+ const references=body.messages.filter(v=>messageText(v).startsWith('个人记忆参考：'));
+ if(summary)assert.equal(references.length,0,'原生摘要不接收临时记忆参考');
+ else {assert.equal(references.length,1);assert.equal(references[0].role,'user');assert.match(messageText(references[0]),/合成压缩记忆/);assert.ok(!body.messages.filter(v=>v.role==='system').some(v=>JSON.stringify(v).includes('合成压缩记忆')));}
  let delta;if(summary)delta={role:'assistant',content:'合成历史摘要：同一会话有多个订单分析问题。通过read_conversation找回原文，read_analysis_task补查条件。'};
  else if(mode==='route'){mode='answer';delta={role:'assistant',tool_calls:[{index:0,id:randomUUID(),type:'function',function:{name:'update_analysis_task',arguments:JSON.stringify({action:'route',task_id:null,expected_version:null,goal:'',question:null,options:[]})}}]};}
  else delta={role:'assistant',content:'可以继续这个对话。'};
@@ -21,6 +25,7 @@ const provider=createServer(async(req,res)=>{let raw='';req.setEncoding('utf8');
 const before={DEEPSEEK_API_KEY:process.env.DEEPSEEK_API_KEY,DEEPSEEK_BASE_URL:process.env.DEEPSEEK_BASE_URL,DATA_AGENT_PROVIDER_TEST:process.env.DATA_AGENT_PROVIDER_TEST};Object.assign(process.env,{DEEPSEEK_API_KEY:'synthetic-protocol-key',DEEPSEEK_BASE_URL:'http://127.0.0.1:'+provider.address().port,DATA_AGENT_PROVIDER_TEST:'1'});
 try{
  const cid=await h.create();
+ assert.equal((await h.request('/assets',{operation_id:randomUUID(),id:null,expected_version:null,kind:'memory',name:'合成压缩记忆',body:'合成压缩记忆：金额展示用元',scope:'仅合成订单分析',verified:false,source_text:'本人明确保存',dependencies:[]})).status,200);
  for(let i=0;i<6;i++){
   run=await h.capture(cid,'继续第'+i+'轮：'+ '合成中文业务补充'.repeat(100));await h.pauseWorker();
   if(i===0){

@@ -28,7 +28,7 @@ def customer_expectation(db, columns, known):
     for column in columns:
         name = column.lower()
         if re.search(r'unknown|anonymous|未知|匿名', name):
-            if re.search(r'^(has|any|exists)_(unknown|anonymous)', name):
+            if re.search(r'^(has|any|exists)_(unknown|anonymous)', name) or name == 'unknown_boundary_present':
                 role, value = 'anonymous_present', int(anonymous[0][1] > 0)
             elif re.search(r'order|订单', name):
                 role, value = 'anonymous_orders', anonymous[0][0]

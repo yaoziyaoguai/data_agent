@@ -23,7 +23,7 @@ static VALIDATORS: LazyLock<HashMap<String, jsonschema::Validator>> = LazyLock::
     let source = &*SCHEMA;
     source["$defs"].as_object().expect("contract definitions").keys().map(|name| {
         let schema = serde_json::json!({"$schema":source["$schema"],"$defs":source["$defs"],"$ref":format!("#/$defs/{name}")});
-        (name.clone(), jsonschema::validator_for(&schema).expect("valid contract"))
+        (name.clone(), jsonschema::options().should_validate_formats(true).build(&schema).expect("valid contract"))
     }).collect()
 });
 

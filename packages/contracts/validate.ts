@@ -1,7 +1,9 @@
 import { Ajv2020 } from 'ajv/dist/2020.js';
+import { fullFormats } from 'ajv-formats/dist/formats.js';
 import schema from './schema.json' with { type: 'json' };
 
 const ajv = new Ajv2020({ strict: false, allErrors: true });
+ajv.addFormat('date-time', fullFormats['date-time']);
 const validators = new Map(Object.keys(schema.$defs).map(name => [name, ajv.compile({
   ...schema, $id: undefined, properties: undefined, required: undefined,
   type: undefined, additionalProperties: undefined, $ref: '#/$defs/' + name,

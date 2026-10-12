@@ -1,0 +1,192 @@
+{
+  "schema": 1,
+  "increment_id": "I2-MEMORY-CONTEXT",
+  "reviewer": "独立审查代理；未参与本轮产品代码、契约、测试或图文实现",
+  "reviewed_at": "2026-10-12T15:01:36.371543+00:00",
+  "conclusion": "passed",
+  "summary": "本轮限定记忆修复未发现阻断问题。Pi SDK 1.0.0公开context接口负责非持久参考投影，成功回执按ID撤下启动候选；来源原话通过原受控读取路径独立分页。代码、三项测试增量、两份设计及架构图文的相关声明一致。本结论仅为冻结范围的独立审查通过，不代表统一增量验收或真实模型质量通过。",
+  "scope_sha256": "93fd221c4966be1023725f90228dc365a91d78b02106d3e43aa62475717622a9",
+  "scope_binding": {
+    "method": "scripts/check_delivery.py: read_delivery、validate、review_scope",
+    "independently_recomputed": true,
+    "matches_coordinator_frozen_scope": true,
+    "delta_baseline": ".local/memory-context-repair/before/",
+    "new_files": [
+      "apps/agent/session/memory-context.ts",
+      "tests/mvp/check-memory-context.mjs"
+    ],
+    "reviewed_delta": [
+      "apps/agent/session/resources.ts",
+      "apps/agent/session/deliver.ts",
+      "apps/agent/tools/data-tools.ts",
+      "crates/data-agent/src/modules/retrieval/mod.rs",
+      "packages/contracts/schema.json",
+      "packages/contracts/generated/boundary.ts",
+      "packages/contracts/generated/boundary.rs",
+      "tests/contracts/cases.json",
+      "tests/mvp/check-asset-directory.mjs",
+      "tests/mvp/check-native-compaction.mjs",
+      "docs/CURRENT.md",
+      "docs/semantic-retrieval-design.md",
+      "docs/architecture/implementation-design.md",
+      "docs/architecture/README.md",
+      "docs/architecture/render-c4.cjs",
+      "docs/architecture/data-agent-memory.svg"
+    ],
+    "boundary": "指纹覆盖CURRENT声明的完整verification_inputs；人工审查聚焦上述本轮delta及其直接权限、恢复、SDK接缝，并非对所有指纹文件重新全库审计。前序未提交时间契约、评测及文章变更不计入本轮修复，未读取前序评测原件。"
+  },
+  "findings": [],
+  "checks": [
+    {
+      "id": "PI-PUBLIC-CONTEXT",
+      "requirements": ["D10", "D11", "C05", "C07"],
+      "result": "无阻断",
+      "evidence": [
+        "apps/agent/session/memory-context.ts:9",
+        "apps/agent/session/resources.ts:4",
+        "apps/agent/session/deliver.ts:181",
+        "node_modules/@earendil-works/pi-coding-agent/dist/index.d.ts:8",
+        "node_modules/@earendil-works/pi-coding-agent/dist/core/sdk.js:266",
+        "node_modules/@earendil-works/pi-coding-agent/dist/core/extensions/runner.js:1000",
+        "node_modules/@earendil-works/pi-coding-agent/dist/core/messages.js:89"
+      ],
+      "assessment": "已核对安装版本为1.0.0及Extension、ContextEvent、createSyntheticSourceInfo公开导出。宿主指定ResourceLoader只增加context处理器；Pi负责转换custom到user、系统及工具配置、模型循环和持久会话。实现只克隆本轮候选、构造参考并移除相同customType的重复参考，没有额外检索、压缩器、记忆编排器或自动资源发现。"
+    },
+    {
+      "id": "RECEIPT-AND-RECOVERY",
+      "requirements": ["D10", "D11", "C05"],
+      "result": "无阻断",
+      "evidence": [
+        "apps/agent/tools/data-tools.ts:100",
+        "apps/agent/tools/data-tools.ts:142",
+        "apps/agent/session/deliver.ts:50",
+        "apps/agent/session/deliver.ts:58",
+        "apps/agent/session/memory-context.ts:27",
+        "tests/mvp/check-memory-context.mjs:36"
+      ],
+      "assessment": "正常工具和半轮恢复均经过invokeRecorded；解码成功回执后才通知投影。manage_personal_asset成功结果按ID撤下启动候选，新正文沿工具结果；明确拒绝保留候选，未知且无拒绝回执时抛出并保留候选。投影不修改workspace或authority，不写Pi日志。独立执行的实际Pi循环测试覆盖同轮修订/停用、拒绝、新运行快照替换、空快照和缺失工具结果的半轮恢复。"
+    },
+    {
+      "id": "SOURCE-PAGING-AND-ACCESS",
+      "requirements": ["D10", "D11", "C07"],
+      "result": "无阻断",
+      "evidence": [
+        "crates/data-agent/src/modules/retrieval/mod.rs:149",
+        "crates/data-agent/src/modules/retrieval/mod.rs:198",
+        "crates/data-agent/src/use_cases/data_tools.rs:347",
+        "crates/data-agent/src/modules/assets/store.rs:27",
+        "packages/contracts/schema.json:3567",
+        "tests/mvp/check-asset-directory.mjs:30"
+      ],
+      "assessment": "source_text按entry_id和Unicode字符分页；默认不带原话，保留source_page总长和next_offset=0；来源页不夹带正文，body/scope/source完整性各自表达。既有read_knowledge先检查归属、空间、启用状态、版本和依赖，来源分支未绕开该边界；Skill仍走原选用限制。ModelAssetPreview仅新增可选source_page，生成类型与契约一致。Rust回归含Unicode和尾部例外，访问测试增量含跨用户、停用及旧版本拒绝。"
+    },
+    {
+      "id": "AUTHORITY-AND-COMPACTION",
+      "requirements": ["C05", "D10"],
+      "result": "无阻断",
+      "evidence": [
+        "apps/agent/session/deliver.ts:218",
+        "apps/agent/provider/deepseek.ts:73",
+        "crates/data-agent/src/use_cases/context_authority.rs:131",
+        "crates/data-agent/src/use_cases/context_authority.rs:188",
+        "crates/data-agent/src/use_cases/deliver_run.rs:85",
+        "tests/mvp/check-native-compaction.mjs:15"
+      ],
+      "assessment": "参考字节纳入现有请求大小预估；权限、版本、预算及恢复失效门禁仍由Rust承担，context异常不能作为门禁。新输入失效重建与同输入失效拒绝规则保持。临时投影不持久化，原生压缩用持久分支，后续普通请求再注入当前候选。没有删除既有工具历史、助手复述或摘要。核对的压缩日志为18次本地调用、4次摘要；测试还断言预算预留归零、会话身份及早期依赖保留、失效后reserve拒绝。"
+    },
+    {
+      "id": "DOCUMENTED-BOUNDARIES",
+      "requirements": ["D10", "D11", "C05", "C07"],
+      "result": "无阻断",
+      "evidence": [
+        "docs/semantic-retrieval-design.md:330",
+        "docs/architecture/implementation-design.md:342",
+        "docs/architecture/README.md:75",
+        "docs/architecture/render-c4.cjs:100",
+        "docs/architecture/data-agent-memory.svg",
+        "docs/architecture/diagram-checks.json",
+        "docs/CURRENT.md:271"
+      ],
+      "assessment": "文档如实区分临时投影与历史保留、提取候选与正式资产、来源可读与语义等价、独立审查与统一验收。核对renderer差异，11组件19关系未新增，生成记忆SVG文字对应实现；图形检查报告5个导出视图issues均为空。审查者未重新渲染或独立做视觉排版验收。600字符/20条/16KB为既有启动候选边界，参考包装和真实请求仍受现有payload限制。"
+    }
+  ],
+  "independently_executed": [
+    {
+      "command": ["node", "tests/mvp/check-memory-context.mjs"],
+      "exit_code": 0,
+      "result": "3组实际Pi循环断言通过",
+      "evidence": ".local/checks/memory-context.json",
+      "sha256": "6c3f9826929e600c36a90bba8534ac4d878be1ca088d7488ba360a76dc291b38",
+      "environment": "Node v22.23.1；Pi SDK 1.0.0；模型输出与Rust传输均为确定性合成替身",
+      "official_requests": 0
+    },
+    {
+      "command": "node --input-type=module，审查会话中的纯内存断言",
+      "exit_code": 0,
+      "result": "未知回执与拒绝查询均失败时保留候选；非变更工具返回相同ID不撤候选；带ID的明确拒绝不撤候选。另以同一SessionManager模拟旧system记忆，续接新ResourceLoader后实际system不再含旧记忆，恰有一份临时参考且不持久化。",
+      "evidence": "独立审查会话的命令与完整退出结果；未另写测试或证据文件",
+      "files_written": 0,
+      "official_requests": 0
+    }
+  ],
+  "existing_evidence_checked": [
+    {
+      "path": ".local/memory-context-repair/source-before.log",
+      "sha256": "e61d14c1f2876ffc722b86ad5670bf160c2f0bf8723bf9710e8e98bf450cd93b",
+      "result": "旧实现来源分页反例失败：缺少source_page.total_chars，Null与879不符。"
+    },
+    {
+      "path": ".local/memory-context-repair/context-before.log",
+      "sha256": "081e1bff47d200f4838f22c294ec7ae07c9342d2387af75d5056d64d169498cd",
+      "result": "旧实现反例失败：个人记忆正文仍进入system。"
+    },
+    {
+      "path": ".local/memory-context-repair/source-after.log",
+      "sha256": "9637f5041a84ee1f35a17da76163f86e293a9e689da7644d79759e20f7baf67c",
+      "result": "Rust retrieval::semantic_context_tests为5 passed、0 failed。"
+    },
+    {
+      "path": ".local/memory-context-repair/source-access.log",
+      "sha256": "da295a792abb1fe3d7fb07ffcb3e5b9dd141b084e996c19156e671bfed7cb044",
+      "result": "来源访问、目录及长正文回归4组通过，officialRequests=0；审查者未重跑DB测试。"
+    },
+    {
+      "path": ".local/memory-context-repair/context-after.log",
+      "sha256": "c445d426313227d880cde15ae6064798030090c2778c1f86a721ac1ef28bf4ab",
+      "result": "主线Pi上下文回归3组通过；审查者另独立执行同一脚本。"
+    },
+    {
+      "path": ".local/memory-context-repair/code.log",
+      "sha256": "3617872a03883411e440a973ce93d18585efdee936a134fd0191f7549e7fbd99",
+      "result": "verify-code完整日志包含Rust fmt/clippy、tsc与Vite构建完成；保留输出目录与chunk大小提示。"
+    },
+    {
+      "path": ".local/memory-context-repair/compaction.log",
+      "sha256": "f112e304d2fcde663a39984236aa07a71ea91ad5d83ef0cc0d1e01c56c799985",
+      "result": "原生压缩回归通过：18次本地调用、4次摘要、最大请求64880字节、officialRequests=0。预算预留归零由脚本完成前断言；审查者未重跑。"
+    },
+    {
+      "path": ".local/memory-context-repair/build-contracts.log",
+      "sha256": "7ec037cbf3410cc5894444350e6667fa308ad552213450a76123eebfa8d8c80f",
+      "result": "273条跨语言契约及Rust workspace构建完成；后续Web构建Terminated: 15，因此此日志不能作为make verify-contracts build整体通过证据。Web构建完成另见code.log；统一命令等待主线执行。"
+    },
+    {
+      "path": ".local/memory-context-repair/materials.log",
+      "sha256": "766f229e4f62bebd21be533678560c7b201b093f4bb0302a743d3b33eb152d64",
+      "result": "335项材料静态检查通过；仅证明材料检查，不证明Agent行为或模型接入。"
+    },
+    {
+      "path": "docs/architecture/diagram-checks.json",
+      "sha256": "7cbf065ba743ccf7d9d69ce06cb061c67f02f523f3a28b55e7b59482dc0849b8",
+      "result": "11组件、19关系、5个导出视图issues=[]；仅核对图形产物报告及相关事实。"
+    }
+  ],
+  "limitations": [
+    "make verify-increment及其11组统一验收由主线在审查绑定后执行；本记录未执行或宣称该统一验收通过，也未关闭增量。",
+    "审查者未运行DB测试、全套检查、真实模型、真实平台或付费调用；既有Rust/MySQL及本地侧车测试的结论仅来自核对现有日志和相关断言。",
+    "真实模型能否主动补读完整来源、忠实保留限定或改善召回与答案质量未测；来源分页与字段同源不证明语义保真。",
+    "半轮恢复独立验证的是Node/Pi接回原SDK调用结果的行为；Rust对已失效同输入检查点仍可能拒绝恢复，不能把该替身测试称为所有恢复都成功。",
+    "历史工具结果、助手复述和摘要可能包含记忆正文；本轮只撤下启动候选，不承诺历史擦除。",
+    "日志指纹记录核对时的证据内容，不构成不可篡改证明；范围指纹绑定声明输入，不表示重新审查前序未提交工作。"
+  ]
+}

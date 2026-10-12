@@ -21,7 +21,7 @@ const definitions = {
   ],
   read_knowledge: [
     "ReadKnowledgeInput",
-    "读取语义或已选用个人资产，按entry_id/offset/limit分块获取正文。检查content_page.complete与next_offset，片段不能冒称全文；后续页使用同一version。suggestion.details是分析缺口与多来源依据的JSON文本，按其content_page及相同entry_id/offset继续读；application=pending_review表示人工值优先、建议尚未采用；details中的value及其缺口和依据仅属于该候选建议。正文与建议各自分页。引用来源取每个entry.source_facts中的source_id/version；同一对象的条目可有不同来源，不能把对象顶层来源套给全部条目。",
+    "读取语义或已选用个人资产，按entry_id/offset/limit分块获取正文。检查content_page.complete与next_offset，片段不能冒称全文；后续页使用同一version。个人记忆的范围用entry_id=scope及scope_page，来源原话用entry_id=source_text及source_page独立分页；采用前核对完整范围和原话中的限定、例外，提取正文不能替代来源。suggestion.details是分析缺口与多来源依据的JSON文本，按其content_page及相同entry_id/offset继续读；application=pending_review表示人工值优先、建议尚未采用；details中的value及其缺口和依据仅属于该候选建议。正文与建议各自分页。引用来源取每个entry.source_facts中的source_id/version；同一对象的条目可有不同来源，不能把对象顶层来源套给全部条目。",
   ],
   read_source: [
     "ReadSourceInput",
@@ -83,10 +83,14 @@ function expand(value: unknown): unknown {
   return value;
 }
 export type DataToolName = keyof typeof definitions;
+export class UnregisteredToolCallError extends Error {
+  constructor() { super("invalid_tool_arguments"); }
+}
 export function dataTools(
   transport: RustTransport,
   manager: SessionManager,
   fault: string,
+  acceptReceipt?: (receipt: DataToolOutcome) => void,
 ) {
   const validateArguments = (name: string, args: unknown): void => {
     if (!(name in definitions)) throw new Error("tool_not_allowed");
@@ -98,7 +102,6 @@ export function dataTools(
     sdkId: string,
     args: unknown,
   ): Promise<DataToolOutcome> => {
-    validateArguments(name, args);
     const input = {
       ...transport.binding(),
       sdk_tool_call_id: sdkId,
@@ -110,11 +113,20 @@ export function dataTools(
         transport.run.workspace_context?.authority_snapshot,
       ),
     };
-    await transport.post(
-      "/internal/data/tool-calls",
-      "DataToolInvocation",
-      input,
-    );
+    // 这些形状从未允许登记；检查点或绑定错误不能被当作参数未执行。
+    if (!Object.hasOwn(definitions, name) || !args || typeof args !== "object" || Array.isArray(args))
+      throw new UnregisteredToolCallError();
+    validateContract("DataToolInvocation", input);
+    // 旧参数只能凭Rust账本接回；新参数由登记入口严格检查。
+    try {
+      await transport.post("/internal/data/tool-calls", "DataToolInvocation", input);
+    } catch (error) {
+      if (error instanceof Error && error.message === "invalid_input") {
+        try { validateArguments(name, args); }
+        catch { throw new UnregisteredToolCallError(); }
+      }
+      throw error;
+    }
     if (fault === "before_business_commit") process.exit(73);
     let result: unknown;
     try {
@@ -129,6 +141,7 @@ export function dataTools(
     }
     const receipt = decodeContract<DataToolOutcome>("DataToolOutcome", result);
     if (fault === "after_business_commit") process.exit(74);
+    acceptReceipt?.(receipt);
     return receipt;
   };
   const formatResult = async (name: string, args: unknown, receipt: DataToolOutcome, signal?: AbortSignal) => {
@@ -148,6 +161,7 @@ export function dataTools(
     name, label: name, description,
     parameters: Type.Unsafe(expand(schema.$defs[contract]) as TSchema),
     execute: async (id, args, signal) => {
+      validateArguments(name, args);
       const receipt = await invokeRecorded(name, id, args);
       const result = await formatResult(name, args, receipt, signal);
       if (result.isError) throw new Error(result.content.filter(c => c.type === "text").map(c => c.text).join("\n"));

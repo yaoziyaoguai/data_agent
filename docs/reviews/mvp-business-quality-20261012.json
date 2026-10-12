@@ -1,0 +1,452 @@
+{
+  "review_schema": "business_quality_partial_review/v1",
+  "reviewer": "independent-business-quality-reviewer",
+  "reviewed_at": "2026-10-12",
+  "conclusion": "measurement_incomplete",
+  "code_head": "f482a511d6e5796bb694d199b01914cea2696dbb",
+  "evidence": ".local/quality-20261012/formal-result.json",
+  "evidence_sha256": "f491c1b3cd1424785e3679d136ba1df8ff2417e41d7976685fcb86211fd59b4c",
+  "scope": {
+    "model_id": "deepseek-flash",
+    "thinking_level": "high",
+    "formal_trial_id": "b6ace405-6a2a-42f7-a7a0-240e6b773556",
+    "formal_verified_at": "2026-10-12T09:44:56.914Z",
+    "platform": "合成资料、synthetic-sqlite 查询目标及 mock 平台结果；不是生产数据平台验收",
+    "review_operations": "只读原始资料、题目、runner 和保存证据；仅写本审查 JSON。没有调用模型、数据库、网络、验收 runner 或独立 SQL 核算器，没有补跑场景。",
+    "supplementary_evidence_origin": "S03 补充诊断由主会话在原运行中止后生成，记录其对原隔离数据库的只读查证及保存 SQL 的独立合成核算。本审查仅读取文件，并与原失败快照核对归属。主会话另提供 S01 的内存 SQLite 结构见证：在合成种子上增加一行后运行原 ETL；本审查没有执行该见证，它不属于正式测量或原始种子结果。"
+  },
+  "method": {
+    "policy_reference": "previous-review-method",
+    "grading_unit": "完整场景；任何实质错误或原验收明确要求保留的未知项遗漏，都使已完整运行场景的内容判分为 failed。机器断言通过不能替代内容判分。",
+    "incomplete_case_rule": "未完整运行的场景内容判分为 unverified，同时单列已经证明的流程失败、正确部分和剩余步骤。pending 不作为已测失败或已测通过。",
+    "sources": "原始 schema.sql、etl.sql、business-guide.md 和原有 evaluation 参考；不以产品自己的摘要或上一轮正确回答作为答案。",
+    "prefill_rule": "初次、人工修改和再次建议分别核对；正文、结构字段与证据引用共同审查，不把正文未明说等同于整个产物缺失。再次正确不能抹去初次错误，人工有效值未被覆盖也不能使错误的新建议通过。",
+    "sampling_rule": "小样只作单列观察，不替代正式题、不进入正式 16 题分母；S03 中止后的诊断不补成完整场景通过。",
+    "legacy_audit": "未运行旧 --audit --quality-review。其契约要求全部 16 题机器通过、pending 为空及 measurement_complete，本次不满足；本文件使用适合 partial 的结构。",
+    "legacy_audit_reference": "legacy-audit-preconditions"
+  },
+  "measurement": {
+    "original_case_ids": ["S01", "S02", "S03", "S04", "S05", "B04", "B05", "B05-failure", "B06", "B07", "B08", "P01", "P02", "P03", "P04", "P05"],
+    "selected_case_ids": ["S01", "S02", "S03", "S04", "S05", "B04", "B05", "B05-failure", "B06", "B07", "B08", "P01", "P02", "P03", "P04", "P05"],
+    "pending": ["S04", "S05", "B04", "B05", "B05-failure", "B06", "B07", "B08", "P01", "P02", "P03", "P04", "P05"],
+    "pending_case_status": {
+      "flow_status": "not_run",
+      "content_status": "unverified",
+      "reason": "正式 runner 在 S03 中止，剩余 13 题未执行。"
+    },
+    "summary": {
+      "total": 16,
+      "attempted": 3,
+      "completed": 2,
+      "interrupted": 1,
+      "pending": 13,
+      "recorded_machine_passed": 2,
+      "recorded_machine_failed": 1,
+      "content_outcomes": {"passed": 1, "failed": 1, "unverified": 14},
+      "full_suite_accuracy": null
+    },
+    "article_claim": "本轮原 16 题测量在第 3 题中止：前两题流程完成，独立内容复核为 S01 失败、S02 通过；S03 内容未完成验证，13 题待测。不能据此发布当前版本的 16 题准确率，也不能沿用旧轮次的 12/16 作为本轮成绩。"
+  },
+  "formal_accounting": {
+    "source": ".local/quality-20261012/formal-result.json",
+    "official_requests": 20,
+    "ledger_calls": 20,
+    "receipt_count": 20,
+    "unique_receipt_ids": 20,
+    "receipt_states": {"settled": 20},
+    "receipt_kinds": {"chat": 20},
+    "spent_micros": 102528,
+    "spent_usd": "0.102528",
+    "reserved_micros": 0,
+    "ledger_state": "active",
+    "verification": "逐条核对 /callReceipts：20 个 ID 唯一，全部 state=settled；与 /officialRequests、/ledger/calls 相等。所有 usage 的输入/输出 token 为非负整数且在该 profile 限额内。费用取已保存账本总额，不推算单条价格。",
+    "requests_added_by_this_review": 0
+  },
+  "checks": [
+    {
+      "id": "S01",
+      "flow_status": "completed",
+      "recorded_machine_status": "passed",
+      "recorded_calls": 4,
+      "content_status": "failed",
+      "summary": "核心 0 金额加工解释、非零元成交结论和真实业务缺口基本正确，但把加工规则已经能够确定的行级/整单级关系误列为资料未知；按完整场景规则判内容失败。",
+      "findings": [
+        {
+          "id": "line_zero_order_paid_misclassified_as_unknown",
+          "severity": "material",
+          "evidence_refs": ["s01-unknown-claim"],
+          "independent_refs": ["etl-line-amount", "etl-order-totals", "etl-order-status", "guide-order-grain", "s01-structural-witness"],
+          "supplementary_witness": "主会话提供的独立内存 SQLite 见证在合成 O1001 下增加 line_id=100001 且不给该行付款事件，原 ETL 成功输出 paid_amount_cents=0、order_status=paid，与静态推导一致。此结果属于增添合成行后的结构见证，不能说原种子或正式场景已经观察到该组合。",
+          "reason": "ETL 按订单行 LEFT JOIN 支付汇总并补 0，却按 order_id 汇总所有行后生成整单状态。静态推导即可确定：一张未取消订单的一行有正额付款且未全退，另一行没有合格付款事件，则后一行 paid_amount_cents=0，整单仍可为 paid。该组合与原始约束相容，不需要先查库才能判断是否可能。",
+          "boundary": "这是规则层面的可能性，不宣称当前 seed 必有这种记录。回答后文把具体样例中是否实际存在留待查数是合理的；判失败针对前文将结构可能性称为资料没有说明，不能用后文对实际发生情况的保留来消除这一错误。"
+        }
+      ],
+      "correct_parts": [
+        "成功 charge 按订单与行汇总，状态筛选、快照右开、LEFT JOIN 和 COALESCE 补 0 的主要加工链路正确。",
+        "正确区分累计付款与扣除退款后的净额；上游金额为正、目标金额为整数分且非空，0 不能直接判成零元成交。",
+        "明确样例不支持推断真实平台的零元成交及税费、运费、折扣组成；未沿用上一轮把测试标记当作金额清零原因的错误。"
+      ],
+      "non_finding": "没有仅凭“0 只可能来自没有匹配到汇总行”这句话另加退款-only 反例判失败：在原样例的正事件金额和目标 refunded_amount_cents BETWEEN 0 AND paid_amount_cents 约束下，只有正退款而无付款的行不能形成合法落表快照。",
+      "flow_evidence": ["s01-flow", "s01-final-task"],
+      "content_basis": ["schema-payment-positive", "schema-target-amounts", "etl-line-amount", "guide-sample-limits"]
+    },
+    {
+      "id": "S02",
+      "flow_status": "completed",
+      "recorded_machine_status": "passed",
+      "recorded_calls": 8,
+      "content_status": "passed",
+      "summary": "整月非测试支付行上 COUNT(DISTINCT customer_id)，完整 UTC 月区间、跨天去重、全退客户保留及匿名客户边界均正确；保存的独立结果和平台结果都是 5 名已知客户，七个数据变体全部一致。",
+      "evidence_refs": ["s02-query", "s02-parameters", "s02-answer", "s02-independent", "s02-result", "s02-confirmation-flow"],
+      "independent_refs": ["guide-paying-customers", "q02-reference", "optional-anonymous-count", "schema-payment-positive", "etl-line-amount"],
+      "reason": "SQL 没有按日计数相加，没有用 COALESCE 合并匿名客户，也没有用净额或退款状态排除全退客户。paid_amount_cents > 0 在本合成加工的正额 charge 约束下与已支付行口径一致。回答把 5 明确限定为已识别客户，并如实说明本次没有单独统计匿名支付笔数。",
+      "anonymous_boundary": "原 S02 要求保留未知客户边界，并未要求必须输出匿名订单数。独立 Q02 参考只有已知客户数一列，既有核算器也将匿名计数列设为可选，因此未另算匿名订单不作为内容失败。",
+      "saved_independent_result": {
+        "case_id": "Q02",
+        "rows": [[5]],
+        "expected_rows": [[5]],
+        "variation_count": 7,
+        "variation_status": "all_passed"
+      },
+      "limitation": "本次只复核保存结果和源资料，没有重新执行 SQL；保存平台结果 source=mock，不能外推真实平台表现。"
+    },
+    {
+      "id": "S03",
+      "flow_status": "aborted_on_assertion",
+      "recorded_machine_status": "failed",
+      "content_status": "unverified",
+      "summary": "正式流程因存储条件表示不满足原断言而中止；补充保存 SQL 证据支持完整 1 月范围及 app 修订金额，但剩余确认、执行和结果解释步骤未完成，完整场景仍为 unverified。",
+      "storage_assertion": {
+        "status": "failed",
+        "error": "ERR_ASSERTION",
+        "runner_location": "tests/mvp/run-business-acceptance.mjs:179",
+        "field": "original.time_start",
+        "expected": "2026-01-01T00:00:00Z",
+        "actual": "2026-01-01",
+        "classification": "存储条件标准化/表示契约断言失败；本复核没有诊断具体哪层应负责规范化，不能据此宣布 SQL 金额错误。",
+        "evidence_refs": ["s03-assertion-log", "s03-runner-assertion", "s03-original-conditions", "s03-revised-conditions"],
+        "additional_contract_mismatch": "两版存储 time_end 均为 2026-01-31，runner 期待 2026-02-01T00:00:00Z。因此不宜把全部差异描述为只少一个时间后缀。runner 的 time_end 和 timezone 断言位于失败断言之后，本次未执行到；保存值可静态核对，但其区间表示语义不能代替实际 SQL 参数。"
+      },
+      "observed_partial_behavior": {
+        "status": "supported",
+        "description": "原快照 task_changed 事件与补充诊断的两版条件逐项一致：time_start=2026-01-01、time_end=2026-01-31、timezone=UTC 保持，channel 从 null 改为 app。task ID 不变，条件和 SQL 版本从 1 到 2；旧稿 superseded，新稿 awaiting_confirmation，两稿均 not_submitted。",
+        "evidence_refs": ["s03-original-conditions", "s03-revised-conditions", "s03-pending-task", "s03-diagnostic-old-query", "s03-diagnostic-new-query"]
+      },
+      "saved_sql_semantics": {
+        "status": "supported_by_supplementary_evidence",
+        "source": ".local/quality-20261012/s03-readonly-diagnostic.json",
+        "source_sha256": "b60bea8fd62fcb8d8fb57f3a2f12f846d3858fe53d050c24bf2fa5c47b3ef693",
+        "range_start": "2026-01-01T00:00:00Z",
+        "range_end_exclusive": "2026-02-01T00:00:00Z",
+        "old_query": {"net_revenue_cents": 12400, "independent_status": "passed", "variation_count": 5},
+        "revised_query": {"channel": "app", "net_revenue_cents": 1600, "independent_status": "passed", "variation_count": 5},
+        "assessment": "两稿均用 paid_at >= :start AND paid_at < :end，绑定整月左闭右开 UTC 区间；新稿增加 channel=:channel 且绑定 app，金额仍按 SUM(paid_amount_cents-refunded_amount_cents)。补充核算及各五个变体一致。目前没有 SQL 日期含义或金额实际错误的证据；12400/1600 是补充独立合成核算结果，不是正式场景的确认执行结果。",
+        "independent_refs": ["guide-january-range", "guide-net-revenue"],
+        "evidence_refs": ["s03-diagnostic-old-query", "s03-diagnostic-new-query", "s03-revision-message"]
+      },
+      "not_executed_in_formal_scenario": [
+        "第 179 行后续 time_end、timezone 断言及第 180 行逐项保留条件断言。",
+        "第 181 行对旧 SQL 发起确认并断言 HTTP 409；补充查到 superseded 不能替代此接口行为验证。",
+        "第 182 行 verifyNetScope 的正式场景内独立核算；中止后的补充核算独立列示。",
+        "第 183 行确认并执行新稿、查询结果唤醒及最终解释。",
+        "第 184–185 行平台结果列和金额与独立参考逐项一致的断言。"
+      ],
+      "remaining_steps_reference": "s03-unexecuted-steps",
+      "original_evidence_limit": "正式 S03 检查没有 artifacts，traces 为空；failedCheckpoint.entries 为空，仅保存会话存储引用。原失败快照保存消息和条件事件，但没有两稿完整 SQL。补充文件提供保存 SQL 和核算信息，并与原快照 conversation/task/query IDs 及条件核对一致；未读取会话存储文件或数据库来补证。"
+    }
+  ],
+  "smoke_observation": {
+    "included_in_formal_measurement": "excluded",
+    "evidence": ".local/quality-20261012/smoke-result.json",
+    "evidence_sha256": "b86612d23d1d489d5a6d35739289c2d171dc8ecd0506391b2b03d397521a639d",
+    "trial_id": "48db68c9-dfd0-4f10-aeea-c4e7b23545c5",
+    "selected_case_ids": ["S01", "P01"],
+    "reviewed_case_ids": ["P01"],
+    "accounting": {
+      "official_requests": 7,
+      "ledger_calls": 7,
+      "receipt_count": 7,
+      "unique_receipt_ids": 7,
+      "receipt_states": {"settled": 7},
+      "receipt_kinds": {"chat": 3, "prefill": 4},
+      "spent_micros": 106180,
+      "spent_usd": "0.106180",
+      "reserved_micros": 0,
+      "ledger_state": "active",
+      "verification": "逐条核对该小样 /callReceipts：7 个 ID 唯一且均 settled，数量与 officialRequests、ledger.calls 一致；usage 输入/输出 token 均为非负整数并在 profile 限额内。费用与正式轮单列。"
+    },
+    "P01": {
+      "flow_status": "completed",
+      "recorded_machine_status": "passed",
+      "recorded_calls": 4,
+      "observation_status": "content_error_confirmed",
+      "complete_case_content_status_if_scored": "failed",
+      "repeated_error": {
+        "evidence_refs": ["p01-repeated-primary-key"],
+        "independent_refs": ["schema-target-primary-key", "guide-order-grain"],
+        "reason": "再次建议以 paid_amount_cents 列为主语，称它与 order_id、line_id 一起构成主键，错误地把金额字段纳入主键；括号列出的 (order_id, line_id) 又与这一描述矛盾。原 DDL 的主键只有 order_id、line_id。"
+      },
+      "initial_constraint_coverage": {
+        "integer": "covered：初次 type 条目有效值为 INTEGER，含义也写明整数分。",
+        "non_negative": "covered：初次含义正文明确写 CHECK (paid_amount_cents >= 0)，引用中亦有。",
+        "non_null": "covered_in_cited_evidence：初次含义正文未明确说 NOT NULL，但其 suggestion.evidence[6] 已完整引用 paid_amount_cents INTEGER NOT NULL CHECK (paid_amount_cents >= 0)。不能将初次产物判成完全缺失非空事实。",
+        "evidence_refs": ["p01-initial-type", "p01-initial-nonnegative", "p01-initial-ddl-evidence"],
+        "independent_refs": ["p01-required-metadata", "schema-target-amounts"]
+      },
+      "correct_parts": "初次解释成功 charge、截止时间、先汇总后左连接补零、整数分、付款不扣退款，并保留税费/运费/折扣算法缺口。再次预填后人工有效值及修改标记保留，review_state=needs_review；这些正确部分不能覆盖新建议的主键错误。",
+      "evidence_refs": ["p01-initial-gaps", "p01-preserved-manual-value"],
+      "formal_case_status": "正式 P01 仍为 pending / unverified，不能用此小样替代。"
+    }
+  },
+  "integrity": {
+    "primary_hash_check": "matched",
+    "original_selection_check": "正式 selectedCases 与旧审查原 16 IDs 一致；pending 正好是除 S01、S02、S03 外的 13 题。",
+    "projection_check": "核对 S01/S02/P01 的 artifacts 与原结果完全一致，S01/S02 的消息、任务和工具与原 traces.snapshot/工具一致，S03 的持久消息和任务与原失败快照一致；所用四个拆分文件哈希与各 index 一致。未把流式重复 delta 计为多次回答。",
+    "projection_hashes": {
+      ".local/quality-20261012/formal-result-review/S01.json": "9b884a382984a96fbc582e11a2cd439b696a9ff2a25b3d9b737c33903641de64",
+      ".local/quality-20261012/formal-result-review/S02.json": "e9105ae761936ae39e39546f83ea7dfed3aeac9e19ac62a5643a01dbe8d38386",
+      ".local/quality-20261012/formal-result-review/S03.json": "ae150f7ae4dee3314ca5559b22829c67c588a1e7e5f35fd13b949489dbbb467b",
+      ".local/quality-20261012/smoke-result-review/P01.json": "f2a92b9094e8d5a5318e57ca14249666f80e4a4af6eea0880a943b463e5d821a"
+    },
+    "source_fingerprint_scope": "只核对下列 9 个相关输入；当前文件、HEAD 内容与正式/小样 sourceHashes 均一致，不宣称做了全库源码审计。",
+    "source_fingerprints": {
+      "tests/mvp/run-business-acceptance.mjs": "56790c9c21553f4ac5dfc7ba7226ec432d394058ba3c56462df9e7ee309bdce8",
+      "docs/sources/schema.sql": "49c13a97ad3b53bf161d549d35cc33f741b2d47701c2b744c20883cfedf2b72a",
+      "docs/sources/etl.sql": "42e2f1e7dfbd74bcbd07a0b2a712bd85b73adeb65ba8cf86e29619c07724de56",
+      "docs/sources/business-guide.md": "db322cbb2bb4d7f92e9ca6bc56d0e4ee8cd957354ff1b78c41ece5bee258e610",
+      "docs/sources/evaluation/cases.json": "2adb33f74b3b559374d70af6e2b0489001e3d49e38e26866ef72e1b820f0e0c9",
+      "docs/sources/evaluation/behavior-cases.json": "bc83f98e276d9e63c5a55335b39c02ed29d57f05d947644dd90eacaf1914d29f",
+      "docs/sources/evaluation/prefill-cases.json": "8c42c5df5db32e7425bb02b307697ca323e17c45167e88e469bca822f6b72f7a",
+      "docs/sources/evaluation/queries/q02.sql": "c1b0adc824076ce7f20b9405880320fc99368afe0e04273e24a608bcf88fd11a",
+      "scripts/evaluate_business_sql.py": "e9cdbe77c110d05b282ee7707bb519a8723bbe4fa08af7ab6f0c85ea0a8c11bc"
+    },
+    "supplementary_identity_check": "补充 evidence_sha256 与正式原件一致，conversation_id、task_id、两个 query ID 及两版条件均与正式失败快照事件一致。",
+    "formal_log_sha256": "76e27b4cc363f7769aabcf130c603e5ae8147857985bad16c39160d5fb3dc781"
+  },
+  "references": {
+    "previous-review-method": {
+      "file": "docs/reviews/mvp-business-quality-20261005.json",
+      "pointer": "/method/2",
+      "quote": "判分单位为完整场景。存在实质错误，或遗漏原验收明确要求保留的未知项，整题记 false"
+    },
+    "legacy-audit-preconditions": {
+      "file": "tests/mvp/run-business-acceptance.mjs",
+      "line_start": 57,
+      "line_end": 68,
+      "quote": "assert.equal(saved.evidenceKind,'official');assert.equal(saved.machinePassed,true);"
+    },
+    "s01-unknown-claim": {
+      "file": ".local/quality-20261012/formal-result.json",
+      "pointer": "/checks/0/artifacts/explanation",
+      "quote": "`order_status = 'paid'` 的订单里是否可能出现某行付款为 0，资料没有说明，需要查数确认。"
+    },
+    "s01-structural-witness": {
+      "file": ".local/quality-20261012/s01-structural-witness.json",
+      "pointer": "/result",
+      "value": {"order_id": "O1001", "line_id": 100001, "paid_amount_cents": 0, "order_status": "paid"}
+    },
+    "s01-flow": {
+      "file": "tests/mvp/run-business-acceptance.mjs",
+      "line_start": 162,
+      "line_end": 167,
+      "quote": "assert.equal((await queries(cid)).length,0);"
+    },
+    "s01-final-task": {
+      "file": ".local/quality-20261012/formal-result-review/S01.json",
+      "pointer": "/traces/0/tasks/0/phase",
+      "value": "answered"
+    },
+    "schema-payment-positive": {
+      "file": "docs/sources/schema.sql",
+      "line_start": 23,
+      "line_end": 31,
+      "quote": "amount_cents INTEGER NOT NULL CHECK (amount_cents > 0)"
+    },
+    "schema-target-amounts": {
+      "file": "docs/sources/schema.sql",
+      "line_start": 45,
+      "line_end": 47,
+      "quote": "paid_amount_cents INTEGER NOT NULL CHECK (paid_amount_cents >= 0)"
+    },
+    "schema-target-primary-key": {
+      "file": "docs/sources/schema.sql",
+      "line_start": 39,
+      "line_end": 54,
+      "quote": "PRIMARY KEY (order_id, line_id)"
+    },
+    "etl-line-amount": {
+      "file": "docs/sources/etl.sql",
+      "line_start": 5,
+      "line_end": 28,
+      "quote": "COALESCE(p.paid, 0), COALESCE(p.refunded, 0), p.paid_at"
+    },
+    "etl-order-totals": {
+      "file": "docs/sources/etl.sql",
+      "line_start": 14,
+      "line_end": 18,
+      "quote": "SELECT order_id, SUM(paid) AS paid, SUM(refunded) AS refunded"
+    },
+    "etl-order-status": {
+      "file": "docs/sources/etl.sql",
+      "line_start": 23,
+      "line_end": 30,
+      "quote": "WHEN COALESCE(t.paid, 0) = 0 THEN 'unpaid'"
+    },
+    "guide-order-grain": {
+      "file": "docs/sources/business-guide.md",
+      "line_start": 13,
+      "line_end": 19,
+      "quote": "`demo_order_detail` 的一行是一张订单中的一个商品行。主键是 `(order_id, line_id)`。"
+    },
+    "guide-sample-limits": {
+      "file": "docs/sources/business-guide.md",
+      "line_start": 99,
+      "line_end": 103,
+      "quote": "它不模拟税费、运费、折扣分摊算法"
+    },
+    "s02-query": {
+      "file": ".local/quality-20261012/formal-result.json",
+      "pointer": "/checks/1/artifacts/query/sql",
+      "quote": "SELECT COUNT(DISTINCT customer_id) AS paying_customers"
+    },
+    "s02-parameters": {
+      "file": ".local/quality-20261012/formal-result.json",
+      "pointer": "/checks/1/artifacts/query/parameters",
+      "value": {"start": "2026-01-01T00:00:00Z", "end": "2026-02-01T00:00:00Z"}
+    },
+    "s02-answer": {
+      "file": ".local/quality-20261012/formal-result.json",
+      "pointer": "/checks/1/artifacts/explanation",
+      "quote": "因此这 5 人是已识别客户；匿名支付的笔数不在此指标内，本次未单独统计。"
+    },
+    "s02-independent": {
+      "file": ".local/quality-20261012/formal-result.json",
+      "pointer": "/checks/1/artifacts/independent",
+      "quote": "independent_synthetic_result"
+    },
+    "s02-result": {
+      "file": ".local/quality-20261012/formal-result.json",
+      "pointer": "/checks/1/artifacts/result/rows",
+      "value": [["5"]]
+    },
+    "s02-confirmation-flow": {
+      "file": "tests/mvp/run-business-acceptance.mjs",
+      "line_start": 169,
+      "line_end": 172,
+      "quote": "const sample=await verifySql(cid,'Q02');return {cid,...sample,...await confirm(cid,sample.query)};"
+    },
+    "guide-paying-customers": {
+      "file": "docs/sources/business-guide.md",
+      "line_start": 75,
+      "line_end": 80,
+      "quote": "全额退款客户仍曾成功付款，保留在该指标内"
+    },
+    "q02-reference": {
+      "file": "docs/sources/evaluation/queries/q02.sql",
+      "line_start": 1,
+      "line_end": 4,
+      "quote": "SELECT COUNT(DISTINCT customer_id) AS customer_uv"
+    },
+    "optional-anonymous-count": {
+      "file": "scripts/evaluate_business_sql.py",
+      "line_start": 20,
+      "line_end": 26,
+      "quote": "主指标及可选匿名边界逐列绑定"
+    },
+    "s03-assertion-log": {
+      "file": ".local/quality-20261012/formal.log",
+      "line_start": 11,
+      "line_end": 25,
+      "quote": "actual: '2026-01-01'"
+    },
+    "s03-runner-assertion": {
+      "file": "tests/mvp/run-business-acceptance.mjs",
+      "line_start": 179,
+      "line_end": 179,
+      "quote": "assert.equal(original.time_start,'2026-01-01T00:00:00Z');"
+    },
+    "s03-original-conditions": {
+      "file": ".local/quality-20261012/formal-result-review/S03.json",
+      "pointer": "/failedSnapshot/events/1/payload/conditions",
+      "quote": "2026-01-31"
+    },
+    "s03-revised-conditions": {
+      "file": ".local/quality-20261012/formal-result-review/S03.json",
+      "pointer": "/failedSnapshot/events/5/payload/conditions",
+      "quote": "2026-01-31"
+    },
+    "s03-pending-task": {
+      "file": ".local/quality-20261012/formal-result-review/S03.json",
+      "pointer": "/failedSnapshot/tasks/0/phase",
+      "value": "waiting_confirmation"
+    },
+    "s03-diagnostic-old-query": {
+      "file": ".local/quality-20261012/s03-readonly-diagnostic.json",
+      "pointer": "/queries/0",
+      "quote": "superseded"
+    },
+    "s03-diagnostic-new-query": {
+      "file": ".local/quality-20261012/s03-readonly-diagnostic.json",
+      "pointer": "/queries/1",
+      "quote": "awaiting_confirmation"
+    },
+    "s03-revision-message": {
+      "file": ".local/quality-20261012/formal-result-review/S03.json",
+      "pointer": "/failedSnapshot/messages/3/text",
+      "quote": "修订稿已备好（仍未执行，旧稿作废）。"
+    },
+    "s03-unexecuted-steps": {
+      "file": "tests/mvp/run-business-acceptance.mjs",
+      "line_start": 180,
+      "line_end": 185,
+      "quote": "const completed=await confirm(cid,current);"
+    },
+    "guide-january-range": {
+      "file": "docs/sources/business-guide.md",
+      "line_start": 9,
+      "line_end": 9,
+      "quote": "[2026-01-01T00:00:00Z, 2026-02-01T00:00:00Z)"
+    },
+    "guide-net-revenue": {
+      "file": "docs/sources/business-guide.md",
+      "line_start": 65,
+      "line_end": 73,
+      "quote": "`SUM(paid_amount_cents - refunded_amount_cents)`"
+    },
+    "p01-repeated-primary-key": {
+      "file": ".local/quality-20261012/smoke-result.json",
+      "pointer": "/checks/1/artifacts/repeated/entries/0/suggestion/value",
+      "quote": "与 `order_id`、`line_id` 一起构成主键 `(order_id, line_id)`"
+    },
+    "p01-initial-type": {
+      "file": ".local/quality-20261012/smoke-result.json",
+      "pointer": "/checks/1/artifacts/initial/entries/1/effective_value",
+      "value": "INTEGER"
+    },
+    "p01-initial-nonnegative": {
+      "file": ".local/quality-20261012/smoke-result.json",
+      "pointer": "/checks/1/artifacts/initial/entries/0/suggestion/value",
+      "quote": "目标表 `demo_order_detail` 自身对 `paid_amount_cents` 有 `CHECK (paid_amount_cents >= 0)`"
+    },
+    "p01-initial-ddl-evidence": {
+      "file": ".local/quality-20261012/smoke-result.json",
+      "pointer": "/checks/1/artifacts/initial/entries/0/suggestion/evidence/6/quote",
+      "quote": "paid_amount_cents INTEGER NOT NULL CHECK (paid_amount_cents >= 0)"
+    },
+    "p01-required-metadata": {
+      "file": "docs/sources/evaluation/prefill-cases.json",
+      "pointer": "/cases/0/required_facts/0/text",
+      "quote": "主表字段为非空非负 INTEGER。"
+    },
+    "p01-initial-gaps": {
+      "file": ".local/quality-20261012/smoke-result.json",
+      "pointer": "/checks/1/artifacts/initial/entries/0/suggestion/gaps/0",
+      "quote": "样例不模拟税费、运费、折扣分摊算法、货币兑换"
+    },
+    "p01-preserved-manual-value": {
+      "file": ".local/quality-20261012/smoke-result.json",
+      "pointer": "/checks/1/artifacts/repeated/entries/0/effective_value",
+      "value": "成功付款累计金额（分），已落到订单行；看净收入时需要扣除退款。"
+    }
+  }
+}

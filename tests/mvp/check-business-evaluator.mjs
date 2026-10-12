@@ -16,6 +16,10 @@ for(const columns of [[known,anonymousOrders,anonymousLines],[anonymousLines,kno
  const result=evaluate({case_id:'Q02',sql:'SELECT '+columns.join(',')+' '+where});
  assert.equal(result.passed,true,'主指标和匿名边界逐列核算');assert.equal(result.data_variations.length,7);
 }
+const boundaryPresence=anonymousPresence.replace('has_unknown_customer','unknown_boundary_present');
+assert.equal(evaluate({case_id:'Q02',sql:'SELECT '+known+', '+anonymousLines+', '+boundaryPresence+' '+where}).passed,true,'明确的unknown_boundary_present别名按匿名存在标志核算');
+for(const columns of [known+', 1 AS unknown_boundary_present',known+', COUNT(DISTINCT CASE WHEN customer_id IS NULL THEN order_id END) AS anonymous_lines, '+boundaryPresence,'COUNT(customer_id) AS known_customer_count, '+boundaryPresence,known+', '+anonymousPresence+', '+boundaryPresence])
+ assert.equal(evaluate({case_id:'Q02',sql:'SELECT '+columns+' '+where}).passed,false,'存在标志别名不能绕过常数、粒度、去重或重复角色检查');
 const moneyRatio='SUM(refunded_amount_cents)*1.0/NULLIF(SUM(paid_amount_cents),0) AS refund_amount_ratio';
 for(const columns of [[moneyRatio],['SUM(refunded_amount_cents) AS refunded_amount_cents','SUM(paid_amount_cents) AS paid_amount_cents',moneyRatio],[moneyRatio,'SUM(paid_amount_cents) AS paid_amount_cents']])assert.equal(evaluate({case_id:'Q05',sql:'SELECT '+columns.join(',')+' '+where}).passed,true,'金额比例可附独立核算的分子分母');
 const wrong=[

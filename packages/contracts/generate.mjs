@@ -14,7 +14,8 @@ for (const [lang, file, options] of [
   ['typescript', 'boundary.ts', { 'just-types': 'true' }],
   ['rust', 'boundary.rs', { visibility: 'public', 'derive-debug': 'true', 'density': 'dense' }],
 ]) {
-  const result = await quicktype({ inputData: data, lang, rendererOptions: options });
+  // 边界类型描述JSON原值；时间格式由共享Schema验证，不转换为Date对象。
+  const result = await quicktype({ inputData: data, lang, rendererOptions: options, inferDateTimes: false });
   let content = '// Generated from packages/contracts/schema.json; do not edit.\n' + result.lines.join('\n') + '\n';
   if(lang==='rust') {
     // quicktype将标签分支合为可选字段；按原schema省略缺失分支，保留必填null。

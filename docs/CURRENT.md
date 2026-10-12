@@ -2,30 +2,39 @@
 {
   "workflow": "dev_co",
   "schema": 1,
-  "phase": "deliver",
-  "status": "done",
-  "goal_revision": 45,
+  "phase": "implement",
+  "status": "complete",
+  "goal_revision": 47,
   "environment": "macOS arm64 / Node 26.8.1 / npm 11.19.0 / Rust 1.99.0 / Python 3.14.7 / SQLite 3.53.4 / Colima 0.10.1 / Docker Engine 29.2.1 / Compose 5.3.1 / MySQL 8.4.11 / Milvus 3.0.2",
   "verification": {
     "level": "targeted",
-    "reason": "重新制作 README 封面和四张说明配图，核对实际图文与既有能力；不修改产品或重跑模型业务验收。",
+    "reason": "补齐记忆来源原文的受控分页读取，将启动记忆从system分离到Pi context投影，并在成功修订/停用后撤下旧候选。验证来源、同轮更新、会话恢复、原生压缩与宿主权限，不重新运行真实质量测量。",
     "freshness": "content",
     "inputs": [
-      "AGENTS.md",
-      "docs/CURRENT.md",
-      "README.md",
-      "docs/images/README.md"
+      "apps/agent",
+      "crates/data-agent/src/modules/retrieval",
+      "packages/contracts",
+      "tests/mvp/check-memory-context.mjs",
+      "tests/mvp/check-asset-directory.mjs"
     ],
     "checks": [
       {
-        "id": "current-materials",
-        "argv": [
-          "make",
-          "verify-materials",
-          "verify-delivery"
-        ],
-        "cost": "local",
-        "timeout_seconds": 60
+        "command": "make verify-increment",
+        "status": "passed",
+        "evidence": ".local/delivery/I2-MEMORY-CONTEXT-result.json",
+        "scope": "11组本轮声明验收全部退出0、无超时，执行前后指纹一致；真实Pi/Rust/MySQL与本地替身，官方请求0。"
+      },
+      {
+        "command": "make verify-materials",
+        "status": "passed",
+        "evidence": ".local/memory-context-repair/materials.log",
+        "scope": "335项材料静态检查，不替代业务或模型质量验收。"
+      },
+      {
+        "command": "node docs/architecture/render-c4.cjs",
+        "status": "passed",
+        "evidence": "docs/architecture/diagram-checks.json",
+        "scope": "既有11组件19关系，5个导出视图issues为空；实际记忆图已打开核对。"
       }
     ]
   },
@@ -33,70 +42,242 @@
     "schema": 1,
     "registry": "docs/semantic-retrieval-design.md",
     "increment": {
-      "id": "I2-README-ILLUSTRATIONS",
+      "id": "I2-MEMORY-CONTEXT",
       "phase": "I2",
       "status": "complete",
-      "goal": "重做有辨识度的 README 封面，增加四张配套说明图，完成可读性与事实核对后合并提交推送。",
+      "goal": "保留Mem0提取与Rust正式资产管理，补齐模型端来源原文读取；通过Pi原生context投影本轮有效记忆，成功变更后不重复注入旧版本，并同步架构。",
       "requirements": [
-        "C08"
+        "D10",
+        "D11",
+        "C05",
+        "C07"
       ],
       "modules": [
-        "M12"
+        "M04",
+        "M08",
+        "M09",
+        "M11"
       ],
       "allowed_paths": [
-        "README.md",
+        "apps/agent/session",
+        "apps/agent/tools/data-tools.ts",
+        "crates/data-agent/src/modules/retrieval/mod.rs",
+        "packages/contracts",
+        "tests/contracts/cases.json",
+        "tests/mvp/check-memory-context.mjs",
+        "tests/mvp/check-asset-directory.mjs",
+        "tests/mvp/check-native-compaction.mjs",
         "docs/CURRENT.md",
-        "docs/images",
-        "docs/reviews/readme-illustrations-review.json"
+        "docs/semantic-retrieval-design.md",
+        "docs/architecture",
+        "docs/reviews/memory-context-review.json"
       ],
       "non_goals": [
-        "不修改产品、接口、架构、测试和模型配置，不实现同步缓冲；不以文档验证替代业务验收。"
+        "不更换Mem0提取策略或新增语义等价判定器、偏好分类器、审批流程；不重写召回算法或Agent循环。",
+        "不修复本轮之外的质量题，不重新运行16题、不新增真实付费调用；不更新公开文章、不提交推送或部署。"
       ],
       "invariants": [
-        "所有公开截图使用项目合成资料，生成封面与真实界面明确区分。",
-        "原业务收据与历史准确率保留原版本及分母；功能与数据边界以既有实现和审查记录为据。",
-        "使用现有准确架构图，保留 Mem0、Pi SDK、Qwen 1024 维和各存储职责。"
+        "MySQL仍为正式正文/范围/来源/版本真源，Mem0提供候选与索引；来源读取沿原受控read_knowledge核对归属、有效版本与依赖。",
+        "Pi原生context仅投影非持久参考资料，custom在模型端为user角色，不授予执行权；不触发自动发现、额外检索或第二Agent循环。",
+        "本轮启动快照按运行隔离；成功记忆变更撤下对应旧候选，当前内容以成功工具回执为准，失败不清除候选。原工具历史与原生压缩保留。",
+        "reserve/send的Rust权限、预算、失效及恢复检查保持；新输入遇旧依赖重建，同输入失效仍拒绝，不能靠context异常作为权限门禁。"
       ],
       "acceptance": [
         {
-          "id": "README",
+          "id": "MEM-CODE",
           "requirements": [
-            "C08"
+            "C07"
           ],
-          "expected": "README 图文可读、9张配图格式与链接有效，概念图与实际截图明确区分，图中标签符合已有角色、语义、查询、记忆和Skill规则；业务代码保持原验收版本。",
-          "evidence_kind": "architecture",
+          "expected": "Rust格式/静态检查、TypeScript与Web构建通过。",
+          "evidence_kind": "contract",
+          "command": [
+            "make",
+            "verify-code"
+          ],
+          "timeout_seconds": 240
+        },
+        {
+          "id": "MEM-CONTRACT",
+          "requirements": [
+            "C07"
+          ],
+          "expected": "同源契约保留兼容字段，source_page正反例与全部跨语言契约通过；构建当前API/Worker。",
+          "evidence_kind": "contract",
+          "command": [
+            "make",
+            "verify-contracts",
+            "build"
+          ],
+          "timeout_seconds": 360
+        },
+        {
+          "id": "MEM-SOURCE-PAGE",
+          "requirements": [
+            "D10"
+          ],
+          "expected": "缺省不外发完整原话但标注来源分页；按source_text连续读取可重建含尾部例外的原文，正文与范围分页保持。",
+          "evidence_kind": "contract",
+          "command": [
+            "cargo",
+            "test",
+            "--offline",
+            "--locked",
+            "-p",
+            "data-agent",
+            "--lib",
+            "modules::retrieval::semantic_context_tests"
+          ],
+          "timeout_seconds": 240
+        },
+        {
+          "id": "MEM-SOURCE-ACCESS",
+          "requirements": [
+            "D10",
+            "D11"
+          ],
+          "expected": "受控工具读取来源原文，保留长资产目录和正文分页；跨用户、停用和旧版本来源不能读取。",
+          "evidence_kind": "runtime",
           "command": [
             "node",
-            "--input-type=module",
-            "-e",
-            "import assert from 'node:assert/strict';\nimport { readFileSync, existsSync } from 'node:fs';\nimport { resolve, dirname } from 'node:path';\nimport { execFileSync } from 'node:child_process';\nimport { micromark } from 'micromark';\nimport { gfm, gfmHtml } from 'micromark-extension-gfm';\nconst docs = ['README.md', 'docs/images/README.md'];\nfor (const file of docs) {\n  const source = readFileSync(file, 'utf8');\n  const html = micromark(source, { allowDangerousHtml: true, extensions: [gfm()], htmlExtensions: [gfmHtml()] });\n  assert(html.includes('<table>'), `${file}: missing rendered table`);\n  if (file === 'README.md') assert(html.includes('href=\"http://127.0.0.1:5173/\"'));\n  assert(html.includes('<h1>'), `${file}: missing heading`);\n  assert.equal((source.match(/<details>/g) || []).length, (source.match(/<\\/details>/g) || []).length);\n  assert(!/sk-[A-Za-z0-9._-]{20,}|\\/Users\\/|\\/var\\/folders\\//.test(source), `${file}: private content`);\n  for (const match of source.matchAll(/\\]\\(([^)]+)\\)/g)) {\n    const target = match[1].split('#')[0];\n    if (target && !/^[a-z]+:/i.test(target)) assert(existsSync(resolve(dirname(file), target)), `${file}: ${target}`);\n  }\n}\nconst readme = readFileSync('README.md', 'utf8');\nconst images = [...readme.matchAll(/!\\[[^\\]]*\\]\\(([^)]+)\\)/g)].map(match => match[1]);\nassert.equal(images.length, 9);\nfor (const file of images) {\n  const bytes = readFileSync(file);\n  if (file.endsWith('.png')) assert.equal(bytes.subarray(0, 8).toString('hex'), '89504e470d0a1a0a');\n  else if (file.endsWith('.jpg')) assert.equal(bytes.subarray(0, 3).toString('hex'), 'ffd8ff');\n  else assert(bytes.toString().includes('<svg'));\n}\nexecFileSync('git', ['diff', '--exit-code', '0a6f5bf1ca442f913519638b26bf00c5545e3c7a', '--', 'apps', 'crates', 'packages', 'tests', 'migrations', 'infra', 'scripts', 'prototype', 'experiments', 'AGENTS.md', 'package.json', 'package-lock.json', 'Cargo.toml', 'Cargo.lock', 'Makefile']);\nconsole.log('README: Markdown parsed, local links and 9 image files valid; application unchanged from verified baseline.');"
+            "tests/mvp/check-asset-directory.mjs"
           ],
-          "timeout_seconds": 60
+          "timeout_seconds": 240
+        },
+        {
+          "id": "MEM-PI-CONTEXT",
+          "requirements": [
+            "D10",
+            "D11",
+            "C05"
+          ],
+          "expected": "实际Pi模型输入中记忆仅为一份当前参考，system无记忆正文；成功修订/停用撤旧、拒绝保留、恢复与空快照不沿用旧投影，参考不写入JSONL。",
+          "evidence_kind": "runtime",
+          "command": [
+            "node",
+            "tests/mvp/check-memory-context.mjs"
+          ],
+          "timeout_seconds": 240
+        },
+        {
+          "id": "MEM-PROVIDER",
+          "requirements": [
+            "D11"
+          ],
+          "expected": "现有Mem0侧车替身与真实Rust/MySQL流程保持：提取/重放、回源排序、索引、隔离及预算通过，Python技术回执测试通过。",
+          "evidence_kind": "runtime",
+          "command": [
+            "make",
+            "verify-memory"
+          ],
+          "timeout_seconds": 360
+        },
+        {
+          "id": "MEM-REVISIONS",
+          "requirements": [
+            "D10",
+            "C05"
+          ],
+          "expected": "来源边界、修订/停用、原操作重放及失效检查点拒绝保持。",
+          "evidence_kind": "runtime",
+          "command": [
+            "make",
+            "verify-memory-scope"
+          ],
+          "timeout_seconds": 240
+        },
+        {
+          "id": "MEM-AUTHORITY",
+          "requirements": [
+            "D10",
+            "C05"
+          ],
+          "expected": "知识/个人资产失效后当前运行和恢复仍拒绝发送失效资料。",
+          "evidence_kind": "runtime",
+          "command": [
+            "node",
+            "tests/mvp/check-authority.mjs"
+          ],
+          "timeout_seconds": 240
+        },
+        {
+          "id": "MEM-COMPACTION",
+          "requirements": [
+            "C05"
+          ],
+          "expected": "Pi原生摘要不收临时记忆投影，摘要后普通请求重新注入当前快照；持久依赖、会话身份与原预算仍有效。",
+          "evidence_kind": "runtime",
+          "command": [
+            "node",
+            "tests/mvp/check-native-compaction.mjs"
+          ],
+          "timeout_seconds": 240
+        },
+        {
+          "id": "MEM-RECOVERY",
+          "requirements": [
+            "C05"
+          ],
+          "expected": "旧已登记调用原身份恢复、确定回执接回、未知不误称未执行，既有恢复回归通过。",
+          "evidence_kind": "runtime",
+          "command": [
+            "node",
+            "tests/mvp/check-recovery-continuation.mjs"
+          ],
+          "timeout_seconds": 240
+        },
+        {
+          "id": "MEM-SKILLS",
+          "requirements": [
+            "C07"
+          ],
+          "expected": "自定义ResourceLoader保留Pi原生Skill目录、受控read、恢复、状态和版本拒绝，不发现主机资源。",
+          "evidence_kind": "runtime",
+          "command": [
+            "node",
+            "tests/mvp/check-native-skills.mjs"
+          ],
+          "timeout_seconds": 300
         }
       ],
       "verification_inputs": [
-        "README.md",
-        "docs/images/README.md",
-        "docs/images/workbench-sql.jpg",
-        "docs/images/semantic-management.jpg",
-        "docs/images/personal-skills.png",
-        "docs/architecture/data-agent-overview.svg",
-        "docs/reviews/local-dogfood-20261011.md",
-        "docs/reviews/local-dogfood-review.json",
-        "docs/research/mem0-extraction-comparison-results.md",
-        "docs/research/memory-adoption-trial.md",
-        "docs/sources/evaluation/qwen-shared-trial.json",
-        "docs/images/data-agent-cover.png",
-        "docs/images/semantic-construction.png",
-        "docs/images/conversation-query-flow.png",
-        "docs/images/knowledge-recall.png",
-        "docs/images/skill-reuse.png"
+        "AGENTS.md",
+        "docs/semantic-retrieval-design.md",
+        "docs/architecture/implementation-design.md",
+        "docs/architecture/README.md",
+        "docs/architecture/render-c4.cjs",
+        "docs/architecture/data-agent-memory.svg",
+        "apps/agent",
+        "apps/memory",
+        "crates/data-agent",
+        "packages/contracts",
+        "migrations",
+        "tests/contracts",
+        "tests/memory",
+        "tests/mvp/check-memory-context.mjs",
+        "tests/mvp/check-asset-directory.mjs",
+        "tests/mvp/check-native-compaction.mjs",
+        "tests/mvp/check-memory-provider.mjs",
+        "tests/mvp/check-memory-revisions.mjs",
+        "tests/mvp/check-authority.mjs",
+        "tests/mvp/check-recovery-continuation.mjs",
+        "tests/mvp/check-native-skills.mjs",
+        "tests/mvp/skill-runtime-boundaries.mjs",
+        "tests/mvp/skill-fixtures.mjs",
+        "tests/mvp/harness.mjs",
+        "Makefile",
+        "package.json",
+        "package-lock.json",
+        "Cargo.toml",
+        "Cargo.lock",
+        "tsconfig.json",
+        "rust-toolchain.toml",
+        ".cargo"
       ],
       "review": {
         "status": "passed",
-        "record": "docs/reviews/readme-illustrations-review.json"
+        "record": "docs/reviews/memory-context-review.json"
       },
-      "evidence": ".local/delivery/I2-README-ILLUSTRATIONS-result.json"
+      "evidence": ".local/delivery/I2-MEMORY-CONTEXT-result.json"
     }
   }
 }
@@ -104,7 +285,87 @@
 
 # Data Agent 当前记录
 
-更新：2026-10-12。唯一活动项目目录：`~/work_space/data_agent`。
+更新：2026-10-13。唯一活动项目目录：`~/work_space/data_agent`。
+
+## 当前交付：代码合入主分支（2026-10-13）
+
+- 用户明确要求除博客外的工程内容提交、合入默认分支并推送，最终工作区保持干净。目标为 `origin/codex/semantic-maintenance-prototype`；代码、契约、测试、架构说明与必要验收报告一起交付，替代此前本阶段“不提交推送”的限制。
+- 博客正文及配图已完整移到仓库外的同级 `data_agent_articles/`，14个文件逐一核对SHA-256一致；`docs/articles/` 不纳入Git，新增忽略规则防止误加入。文章发布过程的历史记录随稿件保留；代码仓库只保留实现与验证信息。
+- 本次不再修改产品行为。已有记忆增量11组收据仍与当前代码一致；前序时间契约、旧调用恢复和两处验收器修正补做独立提交审查与必要本地回归，不恢复付费评测或把历史16题未通过项改成通过。
+- 提交前检查已通过：独立审查见 [prior-code-review-20261013.json](reviews/prior-code-review-20261013.json)，15份前序输入指纹相符，273条契约、SQL核算器和12项Node恢复分支通过。主线随后完成生命周期6项、请求时钟2项、聊天执行9项及全部16场景的本地协议检查，均exit0、无超时、官方调用0；收据 `.local/code-commit-20261013/checks.json` 的执行前后源码指纹一致，补齐审查记录中待主线执行的检查。
+- `make verify-materials verify-delivery` 通过，材料与链接检查、交付检查器16项测试通过；记忆增量11组完成收据仍匹配。提交内容中未发现凭据、本机个人绝对路径或博客文件。当前实现、架构和测试继续沿用已确认的18项决定及36项需求映射；本次Git交付的提交号、远端核对与工作区状态另存 `.local/code-commit-20261013/git-result.json`，以实际结果为准。
+
+## 已完成验证：记忆接入真实模型小样（2026-10-12）
+
+- 用户在本轮修复完成后授权真实模型小样，只验证两处修复，不扩大范围；下方实现增量及其指纹收据保持已完成，本节单列后续实测，不把原来的0官方调用记录改成新测量。
+- 沿用DeepSeek Flash/high，真实Pi、Rust/MySQL和既有builtin资产目录，预置从零构造的合成记忆。两条消息各首次运行一次：模型自行停用旧渠道记忆后，核对下一次普通请求不再含该ID候选且回答不沿用旧默认；对摘要遗漏尾部例外的记忆，核对模型自行补读同版来源原话并正确解释适用范围。
+- 总上限16次模型调用/US$0.50，每消息8次，输入65,536/output8,192 tokens、请求体131,072字节。新建专用合成trial和数据库，不占用或修改历史未知账本；配置、题面与期望先保存在 `.local/memory-context-sample/plan.json`。调用/账本未知、超预算或源文件变动时停止，不重发已开始场景；普通行为失败保留。
+- 采集已因认证阻塞停止：首个官方请求返回HTTP401，应用报 `model_auth_failed`，没有模型回答或成功工具回执；停用行为未验证，来源补读场景未运行。只使用当前进程已有环境凭据，没有读取凭据文件，不能推断项目其它凭据均失效。
+- 本次实际发出1次请求，账本 `unknown/usage=null`、已结算估算0、保留预留29,492微美元（US$0.029492）；它不是实际收费。按固定停止条件不重试、不清预留、不换试验补额，测试进程已停止、专用合成数据库保留。直接透传记录了官方请求正文和HTTP状态，没有记录认证头、改产品提示词或模型输出。
+- 离线 `audit.mjs` 核对请求/回执与源码指纹通过，`accounting_complete=false`；原件 `.local/memory-context-sample/result.json` SHA-256 `0ecef1cccc2af75651b636f3bd006bd3955c30fff33a6af2f24fed8f8d707a29`。首个实际请求确认user临时参考与system分离，但不能代称两处真实行为通过；原实现完成收据仍与当前输入一致。报告见 [memory-context-sample-20261012.md](reviews/memory-context-sample-20261012.md)。
+- 用户随后明确提供新的DeepSeek密钥用于替换失效认证，授权继续。仅在续跑测试进程中使用，不落项目配置或证据；原401原件及unknown预留保持，沿同一trial/数据库/原消息恢复，剩余最多15调用，总16调用/US$0.50不变。续跑结果另存 `.local/memory-context-sample/continuation-result.json`；原停用消息未有任何模型输出或业务副作用，不重发消息、不改题面。原“未知即停止”仅对这一已知401保留预留后续行，任何新的未知再次停止。
+- 续跑已完成：原停用消息沿同一message/recovery_chain/budget_scope恢复，新认证后3次成功调用；成功disable回执后实际普通请求不再含旧ID候选，最终答复不沿用web默认。来源场景5次成功调用，模型主动补读5851字符原话；先因裸UUID被拒绝，再自行修正asset-前缀、同version1以limit8192一页读全，正确回答订单收入按渠道、退款按原因、缺字段先说明缺口。两条均正式完成，没有生成/执行SQL或改写来源记忆；不把一页成功称为多页续读。
+- 共9次官方请求（首401＋续8次settled），结算估算US$0.035841，旧unknown预留US$0.029492，总占用US$0.065333，低于16调用/US$0.50。原401未清零，`accounting_complete=false`；测试进程已停止，合成库保留。续件SHA-256 `645ebb3ef1e2863e8c4b606ec90319035f8f63ff313fee521fab677f588dd5b4`，`continuation-audit.json` 已与真实数据库账本、请求/回执及源码指纹核对通过。独立内容审查已完成，两场景均通过，记录 `.local/memory-context-sample/quality-review.json`；逐请求及正式答案核对，不将8次成功调用当作8个场景。新密钥未写入项目配置、脚本、证据或服务日志；材料337项检查通过，原实现完成收据仍有效。
+- 此次不测试真实update/Mem0提取/向量召回，不运行16题、不执行查询、不提交发布；不能据两条小样推断总体准确率。
+
+## 已完成增量：记忆来源与 Pi 上下文（2026-10-12）
+
+- 用户同意按 dev_co 更新相关设计/架构图并修复，要求不扩大、不漂移；暂停核对 SDK 后再次明确使用 Pi 官方接口继续。沿现有 Rust/MySQL/Mem0/Pi 分工，只处理有源码与反例支持的边界。
+- 已确认两处缺口：`model_page` 对所有资产读取清空 `source_text`，模型无法通过现有工具回看提取前原话；同轮修订/停用后 Rust 已更新授权快照，但启动 system 仍重复旧记忆正文。先补可失败的确定性回归，再实现。
+- 接法：记忆由 Pi 原生 `context` handler 每次请求投影为当前参考，不持久写入会话。成功记忆变更撤下启动快照中的对应旧条目，新内容由工具回执提供；失败保留原候选。不删历史工具消息，不另写摘要器；Rust reserve/send 继续执行权限和预算检查。
+- 来源：沿现有 `read_knowledge(entry_id=source_text, version, offset, limit)` 读取本人当前有效记忆的原话；缺省只交来源分页元信息，正文/范围/来源分别标注完整性。原话供核对范围和例外，不把提取或原话自动升格为公共定义。
+- 提取方式保持已有比较后的决定：Mem0对完整消息和宿主核验引用执行infer=True，人工正文索引infer=False；自动body/scope同源，name只取前缀。9类合成情境两次对比的16/18是历史证据，不证明任意语义保真。尚未复现的大记忆池默认召回覆盖不进入本轮实现。
+- 验证只用确定性测试、真实Pi SDK、Rust/MySQL及本地模型/侧车替身；新增官方调用预算为0。来源分页5项、来源访问4组、Pi上下文3组及 `make verify-code` 已完整通过；原生压缩18次本地调用、4次摘要，最大请求64,880字节，预算预留归零。日志保存在 `.local/memory-context-repair/{source-after,source-access,context-after,code,compaction}.log`；先失败反例保留为 `source-before.log` 与 `context-before.log`。
+- 架构图文已同步，复用既有11组件、19关系；5个导出视图的文字/边界/遮挡检查均无问题，已打开实际记忆PNG确认。材料静态检查335项通过。
+- 独立审查已通过，记录见 [memory-context-review.json](reviews/memory-context-review.json)，范围指纹为 `93fd221c4966be1023725f90228dc365a91d78b02106d3e43aa62475717622a9`。审查者独立运行Pi上下文测试及内存边界检查，核对源码、设计与已有日志，未代称运行数据库或真实模型验收。
+- `make verify-increment` 于2026-10-12 15:04:37–15:07:25 UTC完整执行本轮11组声明：全部exit0、无超时、前后指纹一致，收据 `.local/delivery/I2-MEMORY-CONTEXT-result.json`。包括273条跨语言契约、5项来源分页、4组来源访问、3组Pi上下文、12项Python及9组记忆provider、2项来源分句及4组修订、5组authority、原生压缩、9组恢复和8组Skill；Rust fmt/clippy、TypeScript和API/Worker/Web构建通过。相关官方请求为0；新增预算0未使用。
+- 本轮 `I2-MEMORY-CONTEXT` 已完成，保留Mem0提取策略与Rust正式资产职责。后续如需判断真实模型能否主动核对来源或保留全部限定，须另定实测范围和预算；本轮不自动进入真实质量复测、旧增量收尾或文章发布。未提交、推送或部署。
+- 本次实际运行环境为Node22.23.1/npm10.9.8、Rust1.99.0，Mem0测试虚拟环境为Python3.12.10；没有据历史环境字段声称使用Node26。构建保留Vite输出目录与chunk大小提示。本轮未重测真实模型语义保真、召回或16题质量，不能推断真实准确率提高。
+- 实施前相关文件快照保存在 `.local/memory-context-repair/before/`，用于区分上一轮未提交修改与本轮增量。
+
+### 验收与要求变更
+
+- 新增来源可读与Pi上下文更新的回归，原有提取/隔离/修订/压缩/恢复期望保留。没有降低模型内容判分，也没有把真实质量评测换成mock通过率；本轮验证的是接入和状态边界。
+- 新增压缩断言最初只识别HTTP消息的字符串content，实测custom经Pi转换为文本块数组，误判无参考；按SDK `convertToLlm` 与OpenAI消息转换实现同时读取两种文本表示。仍严格断言普通请求一份参考、摘要请求零份，未降低行为期望。原失败日志保留为 `.local/memory-context-repair/compaction-before-check-fix.log`。
+- 上一时间契约/文章增量已按用户“先停下来”暂停：修复与16题采集/公开首篇已完成相应记录，最终完整审计、范围绑定及 `make verify-increment` 未完成，不能标记交付验收complete。旧frontmatter原样保存在上述before目录；旧测量只代表其冻结版本，P03的US$0.049152未知预留保留，本轮不接续旧付费预算或重跑题目。
+
+## 上一增量：时间条件修复与完整质量重测（2026-10-12，已暂停）
+
+- 最新用户要求：不能停在S03失败和13题未运行的报告，应修复后完成质量测量，并继续更新首篇。此前“只测量、不修产品”的范围已被本次要求替代；仍停留在第一篇，不提交或推送。
+- 已复现：原共享Schema接受 `time_start=2026-01-01`、`time_end=2026-01-31`，Node/Rust没有格式约束；设计要求时间带时区，原S03要求UTC月区间。新增契约反例在旧实现上失败，日志 `.local/article-publication/time-contract-before.log`。
+- 修复范围：`Conditions` 与 `ConditionSet` 明确UTC完整时间戳及左闭右开语义，Node/Rust共用 `date-time` 与格式校验；合法null及业务时区独立保存。拒绝不完整日期，不从日期字符串猜测结束日或自动迁移历史记录。保留原S03断言和runner停止机制，避免失败后的个人记忆/共享知识残留污染余题。
+- 已完成验证：旧实现新增日期反例失败；修复后271条Node/Rust契约用例、TypeScript、Rust fmt/clippy及Web构建通过，生命周期6项、请求时钟2项、聊天执行9项及原16题协议检查通过。Web构建保留既有chunk大小提示。实际命令使用Node22.23.1/npm10.9.8、Rust1.99.0、Python3.12.2，未据项目记录假称本次在锁定Node26.8.1上执行。
+- 真实S03独立小样已完整通过：UTC月边界、条件保留、旧稿确认409、新稿执行、1600分与5数据变体及结果解释；10调用、估算US$0.052410，全部结算、预留0。原件 `.local/quality-20261012-repaired/smoke-result.json`，SHA-256 `43ce9f78a59723e03ae88a79010bde46672a25c4cd6369469d6b8d04bd0c0a78`。小样不计正式成绩。
+- 修复后首次完整轮通过S01–S05/B04的机器检查，在B05告知措辞断言处中止：已保存web记忆并说“记为你的长期偏好”，但 `/保存|记住/` 不接受该等价表达。58调用、估算US$0.368563、全部结算，9题未运行。原件 `.local/quality-20261012-repaired/formal-result.json`，SHA-256 `30a018413c20ae1ee68b10e53ad3cfd3ec48edc975be28129f0eaae504196712`，默认历史证据已恢复，B05后续步骤不算通过。
+- 独立审查确认时间契约收紧还影响升级恢复：旧版已提交但缺toolResult的日期参数会在接回原回执前被拒绝，误告知“未执行”。当前修复范围增加既有Pi恢复、受控工具及Rust回执入口；只允许原身份/参数指纹匹配的持久回执接回，新执行仍严格校验，不改历史日期。补旧历史恢复与新非法调用回归，沿用Pi和已有接口。
+- 修复后累计已用68调用、估算US$0.420973；沿用本次修复预算总计224调用/US$5.50，后续独立完整轮最多156调用/US$5.079027，不重置既有账本。真实Flash/high、合成SQLite、词法检索与内置记忆范围保持。此前两次中断原件都保留，不将不同轮的成功题拼接。
+- 恢复补丁已完成：旧成功/拒绝回执按当前身份、租约与原指纹接回，未登记的新非法参数给可修正工具结果，已登记无回执保持 `outcome_unknown`。新增旧历史最小回归先失败后通过；最终9项恢复检查、类型、Rust构建/fmt/clippy通过，真实模型调用0。独立审查12项纯内存分支通过、无新增阻断；`.local/checks/mvp-recovery-continuation.json` 保存数据库回归结果。
+- 恢复修复后的第三轮在S02中止，11调用、US$0.060963，预留0。证据 `.local/quality-20261012-complete/formal-result.json`，SHA-256 `5d86186425ad186f45c5116fbfcd539a72c17e46f2cae726b4327e8b41e9491a`。独立核实SQL数值与7变体正确，验收器漏识别明确存在标志列名 `unknown_boundary_present`，不是人数计算错误；新映射及1正4反测试通过。
+- 连续fail-fast无法完成余题且共享fixture可能污染，因此最新测量预先固定原16题，每题独立干净fixture，各执行一次；失败保留并继续，未知账本/费用/原件异常仍停止。新套件目录 `.local/quality-20261012-isolated/`，最终采集与有界续采结果见下文。模型、原题面、业务期望和产品代码在这套采集期间固定，不能挑选旧轮成功结果，也不对单题补抽。每题完成均核对同一源码指纹、原件SHA及账本，默认历史证据恢复。
+- 修复阶段前三次采集共79调用、US$0.481936；隔离套件扣除后最多145调用、US$5.018064，仍受224调用/US$5.50总上限。隔离脚本离线验证各题一次、普通失败继续、未知停止、损坏原件保留、默认恢复和重复运行拒绝；独立代码复核通过。新报告 `docs/reviews/mvp-accuracy-20261012-repaired.md`，独立内容判分输出 `mvp-business-quality-20261012-isolated.json`；完整含义为16题均尝试并有原件，机器失败整题计false，不要求100%通过才完成测量。
+- 隔离套件在P03的内部复核调用遇到 `model_unknown` 后依协议停止：原始13题已入套件，P03失败原件另已归档，P04/P05尚未尝试。只读数据库确认P03共2调用，其中1份已结算27955微美元、1份issued且usage=null、预留49152微美元；采集进程和测试Worker均已停止。P03原件SHA-256为 `11ff4b7ff993ece3824533c0869eaa2882d68cc2768450eb8b28aeb931afe048`，不改原件、DB、调用ID或未知状态。
+- 用户要求Try again后采用有界后续采集：只首次运行P04/P05，不重试P03；保留原停止manifest/suite，新写continuation与complete-suite结果。已分配204调用、已结算1334624微美元、未知预留49152微美元，因此剩20调用/4116224微美元。预留全额占用原224调用/US$5.50上限；下一题按上一题实际结算递减，新增未知或原件问题再次停止。产品233份输入指纹、模型与题面不变。独立审查认可这种明确标注的方法修订；最终只可说全部场景已尝试，不能声称原协议正常跑完或全部费用已结算。
+- 最终16题均已首次尝试：机器流程13/16，独立完整场景10/16（62.5%）；问答SQL6/8、记忆多任务3/3、预填1/5。未通过为S02验收器覆盖不足、B07跳过澄清、P02错误推论、P03调用未知、P04/P05必需事实遗漏。P04/P05均首次4调用，原先not_run已被真实结果替代；不修改原中断记录。聚合 `.local/quality-20261012-isolated/complete-suite-result.json` SHA-256 `c2f2225f686c44215279ffb7f1fae5884f4935f472213d0b51d1777ae755ca9d`。
+- 最终133调用中132settled、1issued未知，已结算估算US$1.009282，预留US$0.049152；修复阶段212调用、US$1.491218已结算，同笔预留仍占用，总占用US$1.540370，在224调用/US$5.50内。当日含修复前测量共239调用、已结算估算US$1.699926，加US$0.049152预留。费用并未完全结清，不能把费用核对报告的证据完整等同accounting_complete。
+- 原因依据：`docs/architecture/implementation-design.md` 第4.1节、`docs/semantic-retrieval-design.md` 第19.6/20.1节及独立业务资料的UTC月区间。验收期望未放宽，新增对非法格式/日历值及合法null/UTC/业务时区的回归。完成前需独立审查与 `make verify-increment`，真实测量及内容复核另存新报告。
+
+### 本轮验收与要求变更
+
+- B05原告知检查为 `/保存|记住/`，改为 `/保存|记住|记为(?:你|您)的长期偏好/u`。独立审查核对原B05要求和设计第11.3节，以及成功资产回执、`memory_saved`事件和最终答复，确认“记为你的长期偏好”符合原成功告知含义。保留持久资产、渠道独立核算、跨会话复用、修订停用及失败分支断言；没有降低业务标准或改变模型提示。确定性原句在旧检查失败、新检查通过；另3个等价正例与3个无保存告知的反例通过，证据 `.local/quality-20261012-repaired/b05-acknowledgement-check.json`。原失败轮保持失败，后续新轮重新执行完整场景。
+
+- Q02存在标志原先仅支持 `has_`/`any_`/`exists_` 前缀，现在将明确的 `unknown_boundary_present` 映射到相同角色。独立依据为业务指南5.2、Q02参考SQL和原种子及7变体核算，值、列序、去重与匿名粒度标准不变。新增1正例、常数/错误粒度/不去重/重复角色4反例，核算器整体通过。S02旧中断后未执行的确认与解释仍未验证，不改旧成绩。
+- 测量调度由一次共享fixture的fail-fast轮改为预声明16个独立fixture，各题只运行一次；内部完整场景与机器断言保留，失败原件保留后继续下一题。减少题间记忆/知识污染，不改变任何题的通过条件。只读套件审计明确区别全部采集完成、机器通过数与独立内容通过数，所有16题都保留在分母；未能执行完整内部步骤的失败场景计false，说明未验证范围。历史中断轮不拼入这套结果。
+- P03未知费用触发原套件停止后，独立只读查证其预留、确认采集进程已退出，再首次采集原清单中的P04/P05。原BUSINESS-MEASUREMENT审计要求每份回执全部settled；新验收改为保留且唯一核对P03 issued/null及49152微美元预留，后续cap扣除spent+reserved，最终明确 `accounting_complete=false`。这放宽的是“采集必须等全部结算”的操作条件，没有降低任何场景内容/流程标准，不能宣传为费用结清。原审计和停止manifest不变，另建只读完整证据审计，原件不改、题目不重抽；新增未知再次停止。
+
+## 本地角色试用准备（2026-10-12）
+
+- 用户要求部署最新版本，并按角色提供案例，由用户继续 dogfood。本轮为本地运行与试用材料准备，不新增产品能力；上轮交付收据保持原范围。
+- 已从主分支 `f482a51` 重新构建并启动 Web、Rust API、Pi、平台 mock 和 Mem0，五项健康检查均为200。保留已有数据库、三类账号、会话和资产；沿用真实 DeepSeek Flash、Mem0 与 Qwen 向量配置。
+- 角色接口已核对：Bob为普通用户；Carol为语义维护者，负责 `demo_order_detail`；Alice为超级维护者。登录凭证仍在被忽略的 `.local/development/identities.json`，不写入文档或试用手册。
+- 本次模拟平台查询等待设为20秒，便于试用后台查询、继续聊天和手动停止；不据此衡量查询性能。工作台仍为 `http://127.0.0.1:5173/`。
+- 试用手册为 `.local/dogfood-20261012/guide.html`，本地入口 `http://127.0.0.1:8874/guide.html`，仅对该材料目录提供回环访问。68项案例覆盖聊天查询、个人记忆与Skill、语义维护、超级维护、跨用户协作和边界；可复制提问、筛选、记录结果与备注。浏览器核对了展开、复制、筛选、记录刷新保留和排版，交付时全部恢复为未测试。导出按钮已点击，未单独核对浏览器下载文件。
+- 当前合成SQLite与13道独立参考逐项一致；真实Flash已走通共享语义检索、SQL展示、聊天授权执行和结果解释。1月按渠道净收入为app 1600、store 800、web 10000分，合计12400分。仅验证这一代表流程，不将68项清单标为全部通过。
+- 证据：`.local/dogfood-20261012/readiness.json`、`reference-results.json`、`real-query.json`及页面截图；构建日志 `.local/development/dogfood-build-20261012.log`。保留原未发送草稿并恢复模型思考设置。本轮未接入真实Datasight、未验证生产容量，未修改业务代码或提交推送；下一步由用户按手册试用并反馈。
 
 
 ## 当前增量：README 视觉重做（2026-10-11 至 12 日，已完成）

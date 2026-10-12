@@ -9,6 +9,8 @@
 .local/
 # 旧迁移材料已归档到仓库外，继续防止误加入。
 /.migration/
+# 博客稿件和配图在仓库外保存，避免再次误加入代码仓库。
+/docs/articles/
 node_modules/
 target/
 __pycache__/

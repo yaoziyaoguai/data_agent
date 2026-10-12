@@ -1,0 +1,93 @@
+{
+  "schema": 1,
+  "review_date": "2026-10-13",
+  "reviewer": "独立审查代理；未参与前序产品实现或测试修改",
+  "base_commit": "f482a511d6e5796bb694d199b01914cea2696dbb",
+  "conclusion": "passed_with_precommit_checks_pending",
+  "can_commit_with_memory_repair": true,
+  "summary": "限定前序改动未发现阻断缺陷，可与已验收记忆修复合并为工程提交。UTC收紧、旧已登记回执恢复、Q02存在标志别名及B05成功措辞均有原要求依据；未发现根据当前输出降低业务标准。提交前由主线完成已计划的有界回归并核对暂存清单；博客不纳入。此结论不关闭已暂停的旧完整质量增量，也不代表真实质量问题已修复。",
+  "scope": {
+    "reviewed_delta": "HEAD f482a51 至当前工作树的UTC时间契约、旧回执恢复、SQL核算器别名与B05措辞；已审记忆修复只核对集成接缝和既有证据有效性。",
+    "scope_sha256": "04a2e2fa3ab0d10f097250e156a7c6dcf23b0ce9977fc2613c12b0313934ae62",
+    "fingerprint_method": "reviewed_files_sha256对象按键排序、紧凑JSON编码后取SHA-256",
+    "reviewed_files_sha256": {
+      "apps/agent/session/deliver.ts": "6344b0ffd278d83bd6cc55f1b091b401f2c9db016149b80f3af16bf92e3859cd",
+      "apps/agent/tools/data-tools.ts": "d19bd5ee4f5b7bf2aad84dd71ba4974ed4dff6768e7c40044e4bb827762a09e2",
+      "crates/data-agent/src/contracts.rs": "cf3f1b81787ed352d139221f9055c6e802b404463633439675deeef11f952c3e",
+      "crates/data-agent/src/use_cases/data_tools.rs": "b7e12f1572b099c0dfead3a13cc718b6e967df5338ff86024da34f82618e0aec",
+      "packages/contracts/schema.json": "31c8aaf67ce3b0c510be43b57a7f65bd5d7ae3d9e800f013e7b5e6c2de058005",
+      "packages/contracts/generate.mjs": "07a58ad39fb375b98fb28687995de0e3a046ca784a71b5faf477b5977b00db0e",
+      "packages/contracts/validate.ts": "f383d084da4756e75541b179ebc5c4fc305907d308b1a6feaca4db6ebcffe8f9",
+      "packages/contracts/generated/boundary.ts": "0aeacc4a09496bc082f004731cbc1cdb5d34e8c7e69a084f717bdb51385eb7e6",
+      "packages/contracts/generated/boundary.rs": "b41ccf673edaf93a8e7a893a76a8961293cba6ef01c460c7890a8bb32a890f3b",
+      "tests/contracts/cases.json": "7bfcd59abb3529bd81a409d02724563fb3e1a80cb06dcf98584f9097518661e7",
+      "tests/mvp/check-lifecycle.mjs": "7bea553caea8817a175fe9b6aa52506c10ad9b424f17d85537321b508bab5739",
+      "tests/mvp/check-recovery-continuation.mjs": "a870506d2d5dfbe70f9d34a9f08f2cefd566f5d42b4b4835895f76c10eff8be6",
+      "scripts/evaluate_business_sql.py": "6f539ff04e4b66a9f2dd54cb1abbe8d076756bdec24df488b8dbd1ec0f43c3fc",
+      "tests/mvp/check-business-evaluator.mjs": "bb9a8572671347d9826fedd4f6fd48b4b8f5bdbfa3c1389147ca5fd8dc3d6f52",
+      "tests/mvp/run-business-acceptance.mjs": "a84fa47bf74a7c3da46c6c1de954ddd74e4fa4c4e7dffb659195061c88ff61b6"
+    }
+  },
+  "findings": [],
+  "assessments": [
+    {
+      "id": "UTC-CONTRACT",
+      "result": "无阻断；增强约束与断言",
+      "evidence": ["packages/contracts/schema.json:2016", "packages/contracts/schema.json:3831", "packages/contracts/generate.mjs:17", "packages/contracts/validate.ts:6", "crates/data-agent/src/contracts.rs:26", "tests/contracts/cases.json:1248", "tests/mvp/check-lifecycle.mjs:25"],
+      "independent_basis": ["HEAD:docs/architecture/implementation-design.md:112 原要求时间为带时区时间戳、业务时区另存", "HEAD:tests/mvp/run-business-acceptance.mjs:179 原S03要求UTC完整月起点/下一月终点并保留timezone", "docs/sources/business-guide.md:9 固定UTC半开月区间；该文件相对HEAD未改"],
+      "assessment": "Conditions和ConditionSet同时用date-time校验日历合法性并以pattern要求完整UTC Z时间；未知null及unset保留。quicktype关闭日期推断，边界仍是JSON字符串。原S03期望未降低；lifecycle新增非法创建/补丁无副作用检查，并增强end/timezone保留断言。Schema校验格式而非业务时间推断，不承诺自动迁移旧数据或自动判断任意月份边界。"
+    },
+    {
+      "id": "REGISTERED-RECEIPT-RECOVERY",
+      "result": "无阻断；保持原操作身份和未知状态",
+      "evidence": ["apps/agent/session/deliver.ts:62", "apps/agent/tools/data-tools.ts:100", "crates/data-agent/src/use_cases/data_tools.rs:53", "crates/data-agent/src/use_cases/data_tools.rs:84", "crates/data-agent/src/use_cases/data_tools.rs:127", "crates/data-agent/src/use_cases/data_tools.rs:681", "tests/mvp/check-recovery-continuation.mjs:66"],
+      "independent_basis": ["AGENTS.md:57-60 稳定身份、未知先查证、不得盲重做", "HEAD:docs/architecture/implementation-design.md:111 同ID同参数返回原回执且核验当前权限", "HEAD:docs/semantic-retrieval-design.md:914 稳定登记、同参重传和旧代次拒绝"],
+      "assessment": "Rust在当前会话权限/租约和原参数指纹核对后接回旧成功或拒绝回执，新登记仍执行当前参数校验。旧不合规参数若已登记但缺确定回执返回outcome_unknown；invoke不会将该错误写成新的拒绝。只读成功结果仍回源，未放宽为无条件历史重放。Node只将登记阶段的明确参数拒绝转为可修正结果，执行未知、失权、冲突与宿主绑定错误继续抛出。Pi恢复仍沿原SDK调用，无新增循环或旧参数改写。"
+    },
+    {
+      "id": "Q02-ALIAS",
+      "result": "有独立要求依据，未放宽数值标准",
+      "evidence": ["scripts/evaluate_business_sql.py:20", "tests/mvp/check-business-evaluator.mjs:19", "docs/CURRENT.md:349"],
+      "independent_basis": ["docs/sources/business-guide.md:13-17 客户/订单/行粒度区分", "docs/sources/business-guide.md:75-80 整月客户去重、匿名不计已知客户", "docs/sources/evaluation/cases.json:24 与queries/q02.sql 独立主指标；相对HEAD未改", "HEAD:scripts/evaluate_business_sql.py:31 已有anonymous_present角色及独立匿名核算"],
+      "assessment": "只把明确的unknown_boundary_present别名映射到已有anonymous_present角色，预期仍从独立数据计算。新增正例与常数、错粒度、不去重、重复角色4反例；7种数据变化包含无匿名及仅期外/测试匿名。未改变参考数值、列序处理、去重或匿名粒度要求。仍不是任意列名的通用语义识别器。"
+    },
+    {
+      "id": "B05-ACKNOWLEDGEMENT",
+      "result": "措辞匹配放宽有独立依据，完整业务要求未降低",
+      "evidence": ["tests/mvp/run-business-acceptance.mjs:206", "docs/CURRENT.md:347", ".local/quality-20261012-repaired/formal-result.json", ".local/quality-20261012-repaired/b05-acknowledgement-check.json"],
+      "independent_basis": ["docs/sources/evaluation/behavior-cases.json:31-59 要求成功保存后告知偏好/范围及本次例外，不限定固定词语；相对HEAD未改", "HEAD:docs/semantic-retrieval-design.md:309 第11.3节保存后告知记住内容及适用范围"],
+      "assessment": "由/保存|记住/增加精确的记为(?:你|您)的长期偏好。独立读取原失败答案及memory_saved事件，原句明确说今后默认web且本次全部渠道；旧正则拒绝、新正则接受，原失败记录仍为false。原持久资产、独立SQL、跨会话、修订、停用及保存失败分支保留。正则不能单独证明告知语义或保存成功，完整场景仍需回执与内容复核；本轮未将其当成充分条件。"
+    }
+  ],
+  "independently_executed": [
+    {"command": "node packages/contracts/generate.mjs --check && node tests/contracts/check-contracts.mjs", "exit_code": 0, "result": {"passed": 273, "source": "shared JSON Schema", "rust": true, "typescript": true}, "note": "生成器仅check；Rust使用现有validate_contracts二进制，本审查未重新构建，当前源码的成功构建由下述匹配指纹收据支持。"},
+    {"command": "node tests/mvp/check-business-evaluator.mjs", "exit_code": 0, "result": {"passed": true, "referenceCases": 13, "dataVariations": 7, "rejectedCounterexamples": 18, "rejectedMoneyUnitCounterexamples": 20, "rejectedTagCounterexamples": 3, "officialRequests": 0}, "note": "sqlite3 :memory:，不启动数据库服务；已在主线发出避免重复执行通知前完成。新增别名1正4反全部执行，但原脚本汇总计数不单列它们。"},
+    {"command": "node --input-type=module（审查会话内纯内存断言）", "exit_code": 0, "result": "12项通过：旧成功/旧拒绝、只读拒绝接回、登记unknown/lease_lost/idempotency_conflict/upstream_failed传播、新非法参数可修正、合法参数登记失败传播、执行未知无拒绝回执传播、新SDK调用校验前置、宿主绑定错误不伪报模型参数错误。B05原答案旧拒绝/新接受、3正3反通过，原失败状态未改；memory_saved事件存在且范围包含本次例外。", "files_written": 0},
+    {"command": "python3 -I -B（逐文件重算既有验收输入SHA-256）", "exit_code": 0, "result": {"receipt_status": "passed", "input_count": 169, "input_mismatches": [], "commands": 11, "all_exit_zero": true, "any_timeout": false}},
+    {"command": "git diff --check f482a51 -- <15个限定代码/测试/契约文件>", "exit_code": 0, "result": "无空白错误"}
+  ],
+  "existing_evidence_checked": [
+    {"path": ".local/delivery/I2-MEMORY-CONTEXT-result.json", "sha256": "03134dc165fe3a1a71cc6f72967ad74421b0f05bbd3d2d8a56efcca662424ebb", "result": "11组全通过；169份输入与当前文件哈希一致，涵盖当前恢复代码、契约、类型/构建。复用记忆独立审查，不重新审全部记忆实现。"},
+    {"path": ".local/delivery/I2-MEMORY-CONTEXT-1791817477285063000/command-10.log", "sha256": "dd17ac41339647e0d651ddfbf260ac1f2b6be2ba40166cb19c00ba0cf4c182eb", "result": "9组恢复通过；含旧成功/拒绝/未知/新非法及不重复副作用、Pi原生压缩；officialRequests=0。"},
+    {"path": ".local/delivery/I2-MEMORY-CONTEXT-1791817477285063000/command-08.log", "sha256": "87d6fbc71d9e3b7c6371587eb6fa9c579fa0a17d7ab24edbeb0ca5fae646e102", "result": "5组权限回归通过；含业务提交后缺SDK结果但资料失效时拒绝恢复，officialRequests=0。"},
+    {"path": ".local/checks/mvp-lifecycle.json", "sha256": "c0b0ce592ff7c58491fa3b2f9786c4fb324d9fa0a7188b6bfac0804ebb8114cd", "result": "已有6组通过，含非法日期无任务/无新增版本；单独文件缺少完整源码指纹绑定，主线已计划补当次运行。"},
+    {"path": ".local/article-publication/time-contract-before.log", "sha256": "d6fc21c52c52dab97a05e2a9472b1db9a945410b196da6353ec644b3166b6a5f", "result": "日期字符串反例在修前失败，JS实际接受非法旧日期。"},
+    {"path": ".local/article-publication/time-contract-after.log", "sha256": "ad6c69be15eb31fc3e66a4ec53b8e661d3624bf02be534b5322d15ff25b8be6a", "result": "修后生成一致、Rust构建完成、271条Node/Rust契约通过；当前新增记忆用例后本审查复验273条通过。"},
+    {"path": ".local/quality-20261012-repaired/formal-result.json", "sha256": "30a018413c20ae1ee68b10e53ad3cfd3ec48edc975be28129f0eaae504196712", "result": "只读取合成B05最终答复、memory_saved事件及失败状态；未读取凭据或重跑真实场景。"}
+  ],
+  "minimum_remaining_precommit_checks": [
+    {"owner": "主线", "check": "当前check-lifecycle.mjs完整运行并记录结果", "reason": "直接证明新增非法时间创建/修订拒绝且无副作用；已有单独历史JSON不含完整版本绑定，本审查按约定不启动DB。"},
+    {"owner": "主线", "check": "完成已计划的check-request-clock.mjs、check-conversational-query.mjs、run-business-acceptance.mjs --check并核对退出状态", "reason": "对时间条件/恢复相邻链路和原16题协议做有界确认；无需运行付费16题。check-business-evaluator已在本审查通过。"},
+    {"owner": "主线", "check": "提交前核对暂存清单、diff和本记录范围哈希，排除docs/articles及本地私密产物", "reason": "本审查只绑定当前15份前序文件；必要契约生成物、测试和已有工程设计/证据应随工程提交，博客不进仓库。"}
+  ],
+  "limits": {
+    "environment": "Node v22.23.1 / Python 3.12.2；没有假称在锁定Node26运行",
+    "official_model_requests": 0,
+    "database_tests_started": 0,
+    "credential_files_read": 0,
+    "product_test_or_formal_doc_files_modified": 0,
+    "commits_or_pushes": 0,
+    "only_created_artifact": ".local/code-commit-20261013/prior-code-review.json",
+    "out_of_scope": "真实模型准确率、原16题重测/账本结清、博客重写发布、全量记忆重新审查。原时间/文章增量的最终完整审计与统一收尾仍保持暂停，不能以本代码审查宣称该增量全部完成。"
+  }
+}

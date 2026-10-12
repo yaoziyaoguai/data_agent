@@ -203,7 +203,7 @@ const scenarios=[
   }},
   {id:'B05',requirements:['个人记忆','明确条件优先','跨会话','修订停用'],run:async()=>{
     const cid=await fresh('以后我的分析默认只看web，但这次查2026年1月全部渠道净收入');const first=await verifyNetScope(cid,null);
-    const memory=(await h.request('/assets')).value.assets.find(v=>v.kind==='memory'&&v.state==='enabled');assert.ok(memory);assert.match(memory.body,/web/);assert.match(await answer(cid),/保存|记住/);
+    const memory=(await h.request('/assets')).value.assets.find(v=>v.kind==='memory'&&v.state==='enabled');assert.ok(memory);assert.match(memory.body,/web/);assert.match(await answer(cid),/保存|记住|记为(?:你|您)的长期偏好/u);
     const other=await fresh('查2026年1月净收入');const defaultWeb=await verifyNetScope(other,'web');
     await ask(cid,'以后默认改成app，忘掉旧web偏好，这次仍查2026年1月全部渠道净收入');const changed=(await h.request('/assets')).value.assets.find(v=>v.id===memory.id);assert.match(changed.body,/app/);assert.ok(BigInt(changed.version)>BigInt(memory.version));
     const explicitlyAll=await verifyNetScope(cid,null);

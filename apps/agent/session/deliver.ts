@@ -13,9 +13,11 @@ import type {
   RunEnvelope,
   TaskInput,
   Checkpoint,
+  DataToolOutcome,
+  ToolReceipt,
 } from "../../../packages/contracts/generated/boundary.ts";
 import { RustTransport } from "../transport/client.ts";
-import { dataTools } from "../tools/data-tools.ts";
+import { dataTools, UnregisteredToolCallError } from "../tools/data-tools.ts";
 import { taskTool } from "../tools/update-analysis-task.ts";
 import {
   guardedDeepSeekStream,
@@ -24,6 +26,7 @@ import {
 import { mockStream } from "../provider/mock.ts";
 import { selectedSkillResources } from "./skills.ts";
 import { resources } from "./resources.ts";
+import { memoryContext } from "./memory-context.ts";
 import { restoreCheckpoint, exportCheckpoint, RECOVERY_NOTICE } from "./checkpoint.ts";
 import { decodeContract } from "../../../packages/contracts/validate.ts";
 import { outputStream } from "./output-stream.ts";
@@ -44,8 +47,9 @@ export async function deliver(
   }
   const manager = restoreCheckpoint("/synthetic/data-agent", checkpoint);
   const tool = taskTool(transport, manager, fault);
+  const memory = run.workspace_context ? memoryContext(run.workspace_context) : null;
   const data = run.workspace_context
-    ? dataTools(transport, manager, fault)
+    ? dataTools(transport, manager, fault, memory?.acceptReceipt)
     : null;
   // SDK不能直接续接以assistant工具调用结尾的半轮；只接回已登记调用，不重新规划。
   const messages = manager.buildSessionContext().messages;
@@ -55,29 +59,26 @@ export async function deliver(
     const completed = new Set(messages.slice(assistantIndex + 1).filter(message => message.role === "toolResult").map(message => message.toolCallId));
     const calls = last.content.filter((c) => c.type === "toolCall").filter((c) => !completed.has(c.id));
     for (const call of calls) {
-      // SDK正常工具循环会把参数/工具名拒绝作为结果交给模型；恢复也需保持这个行为。
-      // 仅捕获执行前本地校验，登记或提交未知仍抛出并沿原身份恢复。
-      let rejected = false;
+      // 已登记参数可能来自旧契约，先由受控入口核对原回执；只有明确未登记才交Pi修正。
+      let receipt: DataToolOutcome | ToolReceipt;
       try {
-        if (data) data.validateArguments(call.name, call.arguments);
+        if (data) receipt = await data.invokeRecorded(call.name, call.id, call.arguments);
         else {
-          if (call.name !== "update_analysis_task") throw new Error("tool_not_allowed");
-          decodeContract<TaskInput>("TaskInput", call.arguments);
+          let args: TaskInput;
+          try {
+            if (call.name !== "update_analysis_task") throw new Error("tool_not_allowed");
+            args = decodeContract<TaskInput>("TaskInput", call.arguments);
+          } catch { throw new UnregisteredToolCallError(); }
+          receipt = await tool.invokeRecorded(call.id, args);
         }
-      } catch { rejected = true; }
-      if (rejected) {
+      } catch (error) {
+        if (!(error instanceof UnregisteredToolCallError)) throw error;
         manager.appendMessage({ role: "toolResult", toolCallId: call.id, toolName: call.name,
           content: [{ type: "text", text: JSON.stringify({error: "invalid_tool_arguments", message: "工具名或参数不符合当前契约；本次调用未执行，请使用允许的工具和完整参数修正。"}) }],
           isError: true, timestamp: Date.now(),
         });
         continue;
       }
-      const receipt = data
-        ? await data.invokeRecorded(call.name, call.id, call.arguments)
-        : await tool.invokeRecorded(
-            call.id,
-            decodeContract<TaskInput>("TaskInput", call.arguments),
-          );
       const formatted = data && "data" in receipt
         ? await data.formatResult(call.name, call.arguments, receipt, signal)
         : {content: [{type: "text" as const, text: JSON.stringify(receipt)}], details: receipt, isError: false};
@@ -181,11 +182,13 @@ export async function deliver(
       run.workspace_context
         ? JSON.stringify({
             ...run.workspace_context,
+            memories: undefined,
             authority_snapshot: undefined,
             authority_revision: undefined,
           })
         : undefined,
       selectedSkillResources(run.workspace_context?.selected_skills ?? []),
+      memory?.extension,
     ),
     tools: data ? data.tools.map((t) => t.name) : ["update_analysis_task"],
     customTools: data ? data.tools : [tool.definition],
@@ -212,8 +215,8 @@ export async function deliver(
   };
   signal.addEventListener("abort", abort, { once: true });
   try {
-    const visibleContext = run.workspace_context ? JSON.stringify({...run.workspace_context,authority_snapshot:undefined,authority_revision:undefined}) : "";
-    const estimatedBytes = historyBytes + Buffer.byteLength(visibleContext) + Buffer.byteLength(run.text) + Buffer.byteLength(JSON.stringify(data?.tools.map(({name,description,parameters})=>({name,description,parameters})) ?? [])) + 4096;
+    const visibleContext = run.workspace_context ? JSON.stringify({...run.workspace_context,memories:undefined,authority_snapshot:undefined,authority_revision:undefined}) : "";
+    const estimatedBytes = historyBytes + Buffer.byteLength(visibleContext) + (memory?.bytes() ?? 0) + Buffer.byteLength(run.text) + Buffer.byteLength(JSON.stringify(data?.tools.map(({name,description,parameters})=>({name,description,parameters})) ?? [])) + 4096;
     // 空闲提交前调用SDK摘要；活动轮内由Pi的overflow compact-and-retry处理。
     if(data && run.model_profile?.toolset==="data" && history.length>2 && estimatedBytes>(run.model_profile.payload_bytes_limit??65536)-4096) await session.compact();
     if (run.resume_same_input && manager.buildSessionContext().messages.length)

@@ -75,17 +75,25 @@ Worker 负责来源同步、语义预填与复核、索引更新及查询状态�
 
 ## 个人记忆
 
-![Mem0 原始消息提取、Rust 正式保存与个人向量索引](data-agent-memory.svg)
+![Rust 交付有效记忆快照，Pi context 临时参考与受控原话补读](data-agent-memory.svg)
+
+本轮记忆上下文方案（2026-10-12）复用既有 Pi、Rust、Mem0 及调用关系。正式 `body`、`scope`、`source_text`、`version`、权限和预算仍由 Rust / MySQL 管理。
 
 1. Pi 根据对话调用保存或修订记忆的受控工具；Rust 核对原话引用、身份与版本。
-2. Mem0 从原始消息提取候选，候选在正式提交前不能被采用。
-3. Rust 校验并将正式正文、来源、范围、版本和索引待办原子保存到 MySQL。
-4. Worker 提交对应版本的索引待办；Mem0 使用 Milvus 写入或检索个人记忆向量。
-5. 检索命中后回源核对有效版本与归属，才交给 Pi 使用。停用、删除和修订受正式状态约束。
+2. Mem0 对原始消息执行 `infer=True`，保持 `pending → ready` 流程；候选在正式提交前不能被采用。
+3. Rust 校验并将正式正文、来源、范围、版本和索引待办原子保存到 MySQL。Worker 提交对应版本的索引待办，Mem0 使用 Milvus 写入或检索个人记忆向量。
+4. 命中回源核对归属、状态与版本后，Rust 通过既有运行入口向 Pi 交付本轮有效快照。正文 600 字、目录 20 条、全局 16KB 的边界及原有补查机制保持，不加入语义保真分类器或改写召回。
+5. Pi 仍是唯一 Agent 循环。现有自定义 `ResourceLoader` 安装原生 `context` handler，把有效 `memories` 从 system 中分离，在每次普通模型调用前投影一份临时 custom 参考消息。该消息在模型端为 `role=user`，明确标为资料，不授予权限。
 
-自动保存的正文和适用范围取自同一份最终正文，名称只作原文前缀标签。页面人工编辑保留用户明确填写的名称和范围；人工正文建索引时不再经模型改写。
+正常成功的 `update_memory` / `disable_memory` 工具回执，使本轮启动候选中对应 ID 撤下；修订后的新内容由已有成功工具结果提供。拒绝或未知回执保持候选，context 投影不修改 authority。Rust 的 reserve/send 继续 fail-closed；Pi context 钩子会吞异常，不能承担权限或预算门禁。
 
-Mem0 的 SQLite 保存 SDK 历史和技术回执；MySQL 保存正式资产与调用预算。每次提取和 embedding 调用均经 Rust 的逐调用许可和结算。Pi 的上下文管理和个人长期记忆承担不同职责。
+临时 context 投影不写入 Pi JSONL，也不直接进入原生 compaction 输入；压缩后的下一次普通模型调用重新注入本轮仍有效的候选。历史工具结果和助手摘要仍保留，撤下启动候选不等于清除全部历史内容。
+
+需要核对提取前原话时，Pi 通过既有 `read_knowledge(entry_id="source_text", version, offset, limit)` 受控分页读取，沿用原版本、归属与状态校验。缺省读取仅给 `source_page` 完整性元信息，不附完整原话；正文、范围和来源分别标明完整性，资料不足时沿既有工具补读。
+
+自动保存的正文和适用范围取自同一份最终正文，名称只作原文前缀标签。页面人工编辑保留用户明确填写的名称和范围；人工正文建索引时使用 `infer=False`，不再经模型改写。Mem0 的 SQLite 保存 SDK 历史和技术回执；MySQL 保存正式资产与调用预算，每次提取和 embedding 调用均经 Rust 的逐调用许可和结算。
+
+源码导航：[Rust 有效快照](../../crates/data-agent/src/use_cases/personal_memory.rs)、[受控读取与记忆变更](../../crates/data-agent/src/use_cases/data_tools.rs)、[Rust authority 校验](../../crates/data-agent/src/use_cases/context_authority.rs)、[Pi 临时参考投影](../../apps/agent/session/memory-context.ts)、[ResourceLoader](../../apps/agent/session/resources.ts)、[普通与恢复路径装配](../../apps/agent/session/deliver.ts)、[工具成功回执](../../apps/agent/tools/data-tools.ts)、[Mem0 提取与索引](../../apps/memory/service.py)。图形检查仅验证文档产物，业务验证见 [CURRENT](../CURRENT.md)。
 
 ## 组件与存储责任
 

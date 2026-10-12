@@ -489,9 +489,15 @@ export interface ConditionSet {
     knowledge_refs?: EvidenceRef[];
     metric?:         string;
     notes?:          string;
-    time_end?:       string;
-    time_start?:     string;
-    timezone?:       string;
+    /**
+     * 修改区间的不包含终点，按业务时区解析后填写UTC完整时间戳，以Z结尾；整月结束为下一月起点。清空使用unset；未修改则省略。
+     */
+    time_end?: string;
+    /**
+     * 修改区间的包含起点，按业务时区解析后填写UTC完整时间戳，以Z结尾。清空使用unset；未修改则省略。
+     */
+    time_start?: string;
+    timezone?:   string;
 }
 
 export type Channel = "web" | "app" | "store";
@@ -508,9 +514,15 @@ export interface Conditions {
     knowledge_refs: EvidenceRef[];
     metric:         null | string;
     notes:          string;
-    time_end:       null | string;
-    time_start:     null | string;
-    timezone:       string;
+    /**
+     * 时间区间的不包含终点。按明确的业务时区解析后转为UTC完整时间戳，以Z结尾；整月结束为下一月起点，不能写本月最后一天。未指定时为null。
+     */
+    time_end: null | string;
+    /**
+     * 时间区间的包含起点。按明确的业务时区解析后转为UTC完整时间戳，以Z结尾；不能只写日期。未指定时为null。
+     */
+    time_start: null | string;
+    timezone:   string;
 }
 
 export interface AppError {
@@ -1274,6 +1286,10 @@ export type DistinctComparison = "returned_text";
 export type Scope = "page" | "complete_result";
 
 export interface ReadKnowledgeInput {
+    /**
+     *
+     * 知识条目ID；个人记忆省略时读取正文，scope读取范围，source_text读取来源原话，分别检查content_page/scope_page/source_page并按同一version续读。
+     */
     entry_id?: string;
     limit?:    number;
     object_id: string;
@@ -1379,13 +1395,20 @@ export interface ModelAssetPreview {
     scope:         string;
     scope_page?:   ContentPage;
     selected:      boolean;
-    source_text:   string;
-    state:         AssetState;
-    verified:      boolean;
-    version:       string;
-    visibility?:   Visibility;
+    /**
+     * 来源原话的独立字符分页。缺省source_text为空但保留总长和补读位置；以entry_id=source_text和同一资产版本读取。
+     */
+    source_page?: ContentPage;
+    source_text:  string;
+    state:        AssetState;
+    verified:     boolean;
+    version:      string;
+    visibility?:  Visibility;
 }
 
+/**
+ * 来源原话的独立字符分页。缺省source_text为空但保留总长和补读位置；以entry_id=source_text和同一资产版本读取。
+ */
 export interface ContentPage {
     complete:    boolean;
     next_offset: number | null;

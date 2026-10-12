@@ -22,14 +22,22 @@ const finish=async()=>{
 };
 try{
  const cid=await h.create();run=await h.capture(cid,'本消息应用订单条件');await h.pauseWorker();
+ const invalidTime=await update({conditions:{...conditions,time_start:'2026-01-01',time_end:'2026-01-31'}});
+ assert.equal(invalidTime.status,400);assert.equal((await h.snapshot(cid)).tasks.length,0);
+ checks.push({name:'日期字符串不能创建正式任务条件，拒绝后没有任务副作用',passed:true});
  const created=await update({});assert.equal(created.status,200);let task=created.value.data;
+ const invalidTimePatch=await update({action:'revise',task_id:task.task_id,expected_version:task.condition_version,conditions:undefined,condition_patch:{set:{time_end:'2026-01-31'},unset:[]}});
+ assert.equal(invalidTimePatch.status,400);
+ assert.equal((await h.snapshot(cid)).tasks.find(t=>t.id===task.task_id).condition_version,task.condition_version);
+ assert.equal(h.sql(`SELECT JSON_OBJECT('count',COUNT(*)) FROM condition_revisions WHERE task_id='${task.task_id}'`)[0].count,1);
+ checks.push({name:'日期补丁被拒绝且不新增条件版本',passed:true});
  const withdrawn=await h.request(`/conversations/${cid}/messages/${run.message_id}/withdraw`,{operation_id:randomUUID()});
  assert.equal(withdrawn.value.code,'input_already_applied');
  assert.equal(h.sql(`SELECT JSON_OBJECT('state',disposition) FROM conversation_messages WHERE id='${run.message_id}'`)[0].state,'pending');
  checks.push({name:'已生效条件在半轮失败前仍不可撤回，改用新修订',passed:true});
  const revised=await update({action:'revise',task_id:task.task_id,expected_version:task.condition_version,conditions:undefined,condition_patch:{set:{channel:'app'},unset:[]}});
  assert.equal(revised.status,200,JSON.stringify(revised.value));task=revised.value.data;
- assert.equal(task.conditions.channel,'app');assert.equal(task.conditions.time_start,conditions.time_start);assert.deepEqual(task.conditions.filters,conditions.filters);assert.equal(task.conditions.notes,conditions.notes);
+ assert.equal(task.conditions.channel,'app');assert.equal(task.conditions.time_start,conditions.time_start);assert.equal(task.conditions.time_end,conditions.time_end);assert.equal(task.conditions.timezone,conditions.timezone);assert.deepEqual(task.conditions.filters,conditions.filters);assert.equal(task.conditions.notes,conditions.notes);
  const invalid=await update({action:'revise',task_id:task.task_id,expected_version:task.condition_version,condition_patch:{set:{channel:null},unset:[]}});assert.equal(invalid.status,400);
  const unset=await update({action:'revise',task_id:task.task_id,expected_version:task.condition_version,conditions:undefined,condition_patch:{set:{},unset:['channel']}});assert.equal(unset.status,200);task=unset.value.data;assert.equal(task.conditions.channel,null);assert.equal(task.conditions.time_start,conditions.time_start);
  checks.push({name:'宿主合并set/unset，省略旧条件保留，null不能暗中删条件',passed:true});

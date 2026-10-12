@@ -57,7 +57,6 @@ pub async fn recorded_rejection(
 ) -> Result<Value> {
     contracts::validate("DataToolInvocation", &input)?;
     let name = text(&input, "tool_name")?;
-    contracts::validate(input_schema(name)?, &input["arguments"])?;
     let cid = runtime::locate_run(pool, text(&input, "run_id")?).await?;
     let mut tx = AppTx::begin(pool).await?;
     let conv = conversations::lock_conversation_in_tx(&mut tx, ctx, &cid).await?;
@@ -85,7 +84,6 @@ pub async fn recorded_rejection(
 pub async fn register(pool: &MySqlPool, ctx: &AccessContext, input: Value) -> Result<Value> {
     contracts::validate("DataToolInvocation", &input)?;
     let name = text(&input, "tool_name")?;
-    contracts::validate(input_schema(name)?, &input["arguments"])?;
     let cid = runtime::locate_run(pool, text(&input, "run_id")?).await?;
     let mut tx = AppTx::begin(pool).await?;
     let conv = conversations::lock_conversation_in_tx(&mut tx, ctx, &cid).await?;
@@ -103,8 +101,16 @@ pub async fn register(pool: &MySqlPool, ctx: &AccessContext, input: Value) -> Re
         if tool.fingerprint != fp {
             return Err(Error::new("idempotency_conflict"));
         }
+        if contracts::validate(input_schema(name)?, &input["arguments"]).is_err()
+            && !(matches!(tool.state.as_str(), "succeeded" | "rejected") && tool.receipt.is_some())
+        {
+            // 已登记且没有完成回执，不能把升级后的参数拒绝说成从未执行。
+            return Err(Error::new("outcome_unknown"));
+        }
         tool.operation_id
     } else {
+        // 新动作仍按当前契约校验；旧映射只凭原参数指纹接回。
+        contracts::validate(input_schema(name)?, &input["arguments"])?;
         runtime::register_named_tool_in_tx(
             &mut tx,
             &run,
@@ -122,10 +128,10 @@ async fn execute(pool: &MySqlPool, ctx: &AccessContext, input: Value) -> Result<
     contracts::validate("DataToolInvocation", &input)?;
     let name = text(&input, "tool_name")?;
     let args = &input["arguments"];
-    contracts::validate(input_schema(name)?, args)?;
+    let validation = contracts::validate(input_schema(name)?, args);
     let cid = runtime::locate_run(pool, text(&input, "run_id")?).await?;
-    // 已登记的写操作先接回持久回执，平台暂时故障不能触发重复业务。
-    if can_replay_receipt(name) {
+    // 原回执不按新参数契约重判；读取工具仍须回源，未知操作不能变成新拒绝。
+    if can_replay_receipt(name) || validation.is_err() {
         let mut tx = AppTx::begin(pool).await?;
         let conv = conversations::lock_conversation_in_tx(&mut tx, ctx, &cid).await?;
         conversations::assert_turn_in_tx(
@@ -141,13 +147,20 @@ async fn execute(pool: &MySqlPool, ctx: &AccessContext, input: Value) -> Result<
             if tool.fingerprint != fingerprint(&json!({"name":name,"arguments":args})) {
                 return Err(Error::new("idempotency_conflict"));
             }
-            if let Some(receipt) = tool.receipt {
+            if let Some(receipt) = tool.receipt
+                && (tool.state == "rejected"
+                    || (tool.state == "succeeded" && can_replay_receipt(name)))
+            {
                 tx.commit().await?;
                 return replay_receipt(name, receipt);
+            }
+            if validation.is_err() {
+                return Err(Error::new("outcome_unknown"));
             }
         }
         tx.commit().await?;
     }
+    validation?;
     if name == "request_query"
         && let Some(replaced) = args["replaces_query_id"].as_str()
     {

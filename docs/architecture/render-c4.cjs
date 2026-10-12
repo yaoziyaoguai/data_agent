@@ -8,7 +8,7 @@ const nodes = {
   users: { name: '业务用户', type: 'Person', tech: '产品 · 算法 · 分析', lines: ['授权维护者编辑语义'], kind: 'person' },
   web: { name: 'Web 应用', type: 'Container', tech: 'React / TypeScript', lines: ['提问、SQL、结果与历史', '语义管理 · 我的积累'], kind: 'app' },
   api: { name: '业务 API 服务', type: 'Container', tech: 'Rust / Axum', lines: ['系统维护授权、版本与调用预算', '会话、语义与共享方法规则', '查询前另核平台权限与用户确认'], kind: 'app' },
-  pi: { name: 'Agent 运行进程', type: 'Container', tech: 'Node.js / Pi SDK 1.0.0', lines: ['唯一模型与工具循环', '原生 Skill、会话续接与压缩'], kind: 'app' },
+  pi: { name: 'Agent 运行进程', type: 'Container', tech: 'Node.js / Pi SDK 1.0.0', lines: ['唯一模型与工具循环', '原生 context、Skill、续接与压缩'], kind: 'app' },
   journal: { name: 'Pi 原生会话', type: 'Data Store', tech: '私有 JSONL / 同一宿主', lines: ['完整 SDK 会话树与工具历史', '精确 leaf / 授权引用保存在 MySQL'], kind: 'store' },
   worker: { name: '后台任务进程', type: 'Container', tech: 'Rust Worker', lines: ['来源同步、预填与索引更新', '查询跟踪、作业租约与重试'], kind: 'app' },
   mysql: { name: '正式业务记录', type: 'Data Store', tech: 'MySQL 8.4', lines: ['知识、版本、会话与查询状态', '私人记忆、公共方法与预算'], kind: 'store' },
@@ -97,19 +97,34 @@ const views = [
     footer: '表负责人同步自平台；指标与文档由创建者负责。建议接受后编辑保存，详见 F02；语义角色不授予查询权。',
   },
   {
-    id: 'memory', title: '个人记忆的提取与采用', subtitle: 'Mem0 先提取候选；Rust 校验并正式保存后，Worker 提交可检索版本。', height: 1030,
-    boundaryPath: 'M35 225 H1165 V620 H1870 V935 H35 Z',
-    places: { api: [80, 265, 330, 230], memory: [750, 265, 360, 230], models: [1470, 265, 370, 230], worker: [80, 700, 330, 200], mysql: [750, 700, 360, 200], vector: [1470, 700, 370, 200] },
+    id: 'memory', title: '个人记忆的提取与上下文采用', subtitle: 'Rust 交付有效快照；Pi 原生 context 投影临时参考，需要原话时沿既有工具受控补读。', height: 1400,
+    stamp: '2026-10-12 · 记忆上下文方案',
+    boundaryPath: 'M35 145 H1870 V605 H1165 V990 H1870 V1305 H35 Z',
+    boundaryBoxes: [[35, 145, 1835, 460], [35, 605, 1130, 700], [1165, 990, 705, 315]],
+    places: { pi: [80, 185, 330, 200], api: [80, 635, 330, 230], memory: [750, 635, 360, 230], models: [1470, 635, 370, 230], worker: [80, 1070, 330, 200], mysql: [750, 1070, 360, 200], vector: [1470, 1070, 370, 200] },
     edges: [
-      ['remember', [[410, 345], [750, 345]], [580, 308]],
-      ['memory-budget', [[750, 445], [410, 445]], [580, 408]],
-      ['memory-model', [[1110, 365], [1470, 365]], [1290, 328]],
-      ['memory-index', [[1010, 495], [1010, 570], [1655, 570], [1655, 700]], [1350, 548]],
-      ['commit-memory', [[410, 740], [555, 740], [555, 565], [840, 565], [840, 495]], [688, 542]],
-      ['records', [[245, 495], [245, 650], [930, 650], [930, 700]], [816, 628]],
-      ['claim', [[410, 825], [750, 825]], [580, 783]],
+      ['run', [[350, 635], [350, 590], [580, 590], [580, 300], [410, 300]], [580, 430], ['本轮有效记忆快照', 'Rust 核对归属 / 状态 / 版本']],
+      ['tools', [[245, 385], [245, 635]], [245, 493], ['受控修订 / 停用 / 原话补读', 'read_knowledge · source_text']],
+      ['generate', [[410, 245], [1880, 245], [1880, 705], [1840, 705]], [1180, 219], ['普通调用：一份临时 context 参考', 'custom → role=user · 明确标为资料']],
+      ['remember', [[410, 715], [750, 715]], [580, 678]],
+      ['memory-budget', [[750, 815], [410, 815]], [580, 778]],
+      ['memory-model', [[1110, 735], [1470, 735]], [1290, 698]],
+      ['memory-index', [[1010, 865], [1010, 940], [1655, 940], [1655, 1070]], [1350, 918]],
+      ['commit-memory', [[410, 1110], [555, 1110], [555, 935], [840, 935], [840, 865]], [688, 912]],
+      ['records', [[245, 865], [245, 1020], [930, 1020], [930, 1070]], [816, 998]],
+      ['claim', [[410, 1195], [750, 1195]], [580, 1153]],
     ],
-    footer: '正式正文、归属、启停与版本以 MySQL 为准；个人纠错不自动变为公共口径，采用前再次回源核对。',
+    note: [
+      '既有 ResourceLoader 安装 Pi 原生 context handler；有效 memories 从 system 分离。',
+      '成功 update_memory / disable_memory 撤下启动候选对应 ID；新内容由成功工具结果提供。',
+      '拒绝 / 未知回执保持候选；投影不修改 authority。',
+      '投影不写 Pi JSONL，不直接进入原生 compaction；压缩后下次普通调用重新注入。',
+      '历史工具结果与助手摘要仍保留；Rust reserve/send 继续 fail-closed，context 吞异常不作门禁。',
+      '原话按版本 / 归属 / 状态分页补读；缺省只给 source_page，不附完整原话。',
+      '正文 600 字 / 目录 20 条 / 全局 16KB 及补查机制不变。',
+    ],
+    noteAt: [750, 340],
+    footer: 'Rust / MySQL 保存正式正文、范围、原话、版本与权限；Mem0 保持 infer=True 与 pending → ready。个人纠错不自动变为公共口径。',
   },
 ];
 
@@ -154,7 +169,7 @@ function content(v, index) {
     ${text(35, 38, `DATA AGENT  /  C4 CONTAINER  /  ${String(index + 1).padStart(2, '0')}`, 14, 600, '#577395')}
     ${text(35, 82, v.title, 34, 650, '#172e50')}
     ${text(35, 112, v.subtitle, 19, 400, '#607086')}
-    ${text(1885, 38, '2026-10-07 · 当前实现 / 合成平台', 15, 500, '#607086', 'end')}
+    ${text(1885, 38, v.stamp ?? '2026-10-07 · 当前实现 / 合成平台', 15, 500, '#607086', 'end')}
     <g class="boundary" fill="none" stroke="#c0cddd" stroke-width="1.5" stroke-dasharray="7 6">${boundary}</g>
     ${text(bx + 20, by + 23, 'Data Agent · 系统边界（仅显示本视图相关组件）', 14, 500, '#718297')}
     ${v.edges.map(e => edge(e, v.id)).join('')}
@@ -195,6 +210,7 @@ function drawio() {
       const labelWidth = Math.max(...lines.map(line => [...line].reduce((sum, char) => sum + (char.charCodeAt(0) > 255 ? 16 : 8.5), 0))) + 12;
       add(`label-${id}`, lines.join('\n'), 'text;html=0;align=center;fontSize=16;fontColor=#33475e;fillColor=#ffffff;fontFamily=PingFang SC;', [at[0] - labelWidth / 2, at[1] - 18, labelWidth, 44]);
     }
+    if (v.note) v.note.forEach((line, i) => add(`note-${i}`, line, 'text;html=0;align=left;fontSize=17;fontColor=#33475e;fontFamily=PingFang SC;', [v.noteAt[0], v.noteAt[1] + i * 36 - 20, W - v.noteAt[0] - 35, 30]));
     add('footer', v.footer ?? '统一交付。Pi 负责 Agent 循环，Rust 负责业务约束；MySQL 与原生 JSONL 共同保留。', 'text;html=0;align=left;fontSize=17;fontColor=#607086;fontFamily=PingFang SC;', [35, v.height - 52, 1830, 42]);
     return `<diagram id="${v.id}" name="${esc(v.title)}"><mxGraphModel grid="1" gridSize="10" page="1" pageScale="1" pageWidth="${W}" pageHeight="${v.height}"><root>${cells.join('')}</root></mxGraphModel></diagram>`;
   }).join('')}</mxfile>\n`;
