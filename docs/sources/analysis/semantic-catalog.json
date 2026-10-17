@@ -1,0 +1,2746 @@
+{
+  "synthetic": true,
+  "source_files_sha256": {
+    "schema.sql": "49c13a97ad3b53bf161d549d35cc33f741b2d47701c2b744c20883cfedf2b72a",
+    "etl.sql": "91cc7b320f4bd2e968725faf020314df4d71041209ba6ba97397f3d01bc1a594",
+    "business-guide.md": "eff4e716764a70b2c6d62308ef20099977490468c5c584056dfbaffff19b57b3"
+  },
+  "objects": [
+    {
+      "id": "table-dim_customers",
+      "kind": "table",
+      "name": "dim_customers",
+      "version": "1",
+      "state": "enabled",
+      "entries": [
+        {
+          "entry_id": "description",
+          "path": "description",
+          "label": "表含义",
+          "source_facts": {
+            "value": "按唯一 `customer_id` 左连接，补充当前快照的客户地区。匿名购买没有客户 ID；已知客户也可能没有地区。两类未知地区都保留 `NULL`，不能猜成默认地区。此维表没有历史拉链，本样例的地区分析表示当前快照地区，不承诺还原交易时地区。",
+            "quote": "按唯一 `customer_id` 左连接，补充当前快照的客户地区。匿名购买没有客户 ID；已知客户也可能没有地区。两类未知地区都保留 `NULL`，不能猜成默认地区。此维表没有历史拉链，本样例的地区分析表示当前快照地区，不承诺还原交易时地区。",
+            "source_id": "business-guide",
+            "version": "1",
+            "location": "3.3 客户 `dim_customers`",
+            "complete": true,
+            "classification": "authored_definition",
+            "structured_value": {
+              "kind": "table",
+              "grain": "一个已知客户",
+              "unique_keys": [
+                [
+                  "customer_id"
+                ]
+              ],
+              "time_columns": [],
+              "default_filters": [],
+              "constraints": []
+            },
+            "structured_evidence": [
+              {
+                "source_id": "business-guide",
+                "version": "1",
+                "location": "可计算语义定义 / table-dim_customers",
+                "quote": "  {\n    \"object_id\": \"table-dim_customers\",\n    \"entry_id\": \"description\",\n    \"structure\": {\n      \"kind\": \"table\",\n      \"grain\": \"一个已知客户\",\n      \"unique_keys\": [\n        [\n          \"customer_id\"\n        ]\n      ],\n      \"time_columns\": [],\n      \"default_filters\": [],\n      \"constraints\": []\n    }\n  }"
+              }
+            ]
+          },
+          "suggestion": {},
+          "human_override": null,
+          "effective_value": "按唯一 `customer_id` 左连接，补充当前快照的客户地区。匿名购买没有客户 ID；已知客户也可能没有地区。两类未知地区都保留 `NULL`，不能猜成默认地区。此维表没有历史拉链，本样例的地区分析表示当前快照地区，不承诺还原交易时地区。",
+          "review_state": "unverified",
+          "effective_structure": {
+            "kind": "table",
+            "grain": "一个已知客户",
+            "unique_keys": [
+              [
+                "customer_id"
+              ]
+            ],
+            "time_columns": [],
+            "default_filters": [],
+            "constraints": []
+          }
+        },
+        {
+          "entry_id": "ddl",
+          "path": "ddl",
+          "label": "表结构",
+          "source_facts": {
+            "value": "CREATE TABLE dim_customers (\n    customer_id TEXT PRIMARY KEY,\n    customer_name TEXT NOT NULL,\n    region TEXT\n);",
+            "quote": "CREATE TABLE dim_customers (\n    customer_id TEXT PRIMARY KEY,\n    customer_name TEXT NOT NULL,\n    region TEXT\n);",
+            "source_id": "schema",
+            "version": "1",
+            "location": "CREATE TABLE dim_customers",
+            "complete": true,
+            "classification": "source_text"
+          },
+          "suggestion": {},
+          "human_override": null,
+          "effective_value": "CREATE TABLE dim_customers (\n    customer_id TEXT PRIMARY KEY,\n    customer_name TEXT NOT NULL,\n    region TEXT\n);",
+          "review_state": "unverified"
+        },
+        {
+          "entry_id": "etl",
+          "path": "etl",
+          "label": "加工SQL",
+          "source_facts": {
+            "source_id": "schema",
+            "version": "1",
+            "location": "etl",
+            "complete": false,
+            "gap": "当前知识来源未提供该表加工SQL，不能由来源表身份推断它没有加工逻辑"
+          },
+          "suggestion": {},
+          "human_override": null,
+          "effective_value": "",
+          "review_state": "unverified"
+        },
+        {
+          "entry_id": "business_domain",
+          "path": "business_domain",
+          "label": "业务范围",
+          "source_facts": {
+            "value": "合成零售",
+            "quote": "业务域标识：`合成零售`。本说明与其DDL、加工SQL生成的所有合成知识对象都属于该业务域；这是一条明确样例约定，不由表名推断。",
+            "source_id": "business-guide",
+            "version": "1",
+            "location": "第8节 / 业务域",
+            "complete": true,
+            "classification": "authored_definition"
+          },
+          "suggestion": {},
+          "human_override": null,
+          "effective_value": "合成零售",
+          "review_state": "unverified"
+        }
+      ],
+      "related_ids": [],
+      "source_id": "schema",
+      "source_version": "1",
+      "updated_by": "synthetic-import"
+    },
+    {
+      "id": "table-raw_order_lines",
+      "kind": "table",
+      "name": "raw_order_lines",
+      "version": "1",
+      "state": "enabled",
+      "entries": [
+        {
+          "entry_id": "description",
+          "path": "description",
+          "label": "表含义",
+          "source_facts": {
+            "value": "提供订单、行、客户、商品、数量、下单时间、渠道、测试标记和源订单状态。取消订单保留；没有付款的行也保留。主表 `order_date` 由 `ordered_at` 截取 UTC 日期，不能因此把它自动当成收入统计日期。",
+            "quote": "提供订单、行、客户、商品、数量、下单时间、渠道、测试标记和源订单状态。取消订单保留；没有付款的行也保留。主表 `order_date` 由 `ordered_at` 截取 UTC 日期，不能因此把它自动当成收入统计日期。",
+            "source_id": "business-guide",
+            "version": "1",
+            "location": "3.1 订单行 `raw_order_lines`",
+            "complete": true,
+            "classification": "authored_definition",
+            "structured_value": {
+              "kind": "table",
+              "grain": "一张订单中的一个商品行",
+              "unique_keys": [
+                [
+                  "order_id",
+                  "line_id"
+                ]
+              ],
+              "time_columns": [
+                {
+                  "column": "ordered_at",
+                  "role": "order"
+                }
+              ],
+              "default_filters": [],
+              "constraints": []
+            },
+            "structured_evidence": [
+              {
+                "source_id": "business-guide",
+                "version": "1",
+                "location": "可计算语义定义 / table-raw_order_lines",
+                "quote": "  {\n    \"object_id\": \"table-raw_order_lines\",\n    \"entry_id\": \"description\",\n    \"structure\": {\n      \"kind\": \"table\",\n      \"grain\": \"一张订单中的一个商品行\",\n      \"unique_keys\": [\n        [\n          \"order_id\",\n          \"line_id\"\n        ]\n      ],\n      \"time_columns\": [\n        {\n          \"column\": \"ordered_at\",\n          \"role\": \"order\"\n        }\n      ],\n      \"default_filters\": [],\n      \"constraints\": []\n    }\n  }"
+              }
+            ]
+          },
+          "suggestion": {},
+          "human_override": null,
+          "effective_value": "提供订单、行、客户、商品、数量、下单时间、渠道、测试标记和源订单状态。取消订单保留；没有付款的行也保留。主表 `order_date` 由 `ordered_at` 截取 UTC 日期，不能因此把它自动当成收入统计日期。",
+          "review_state": "unverified",
+          "effective_structure": {
+            "kind": "table",
+            "grain": "一张订单中的一个商品行",
+            "unique_keys": [
+              [
+                "order_id",
+                "line_id"
+              ]
+            ],
+            "time_columns": [
+              {
+                "column": "ordered_at",
+                "role": "order"
+              }
+            ],
+            "default_filters": [],
+            "constraints": []
+          }
+        },
+        {
+          "entry_id": "ddl",
+          "path": "ddl",
+          "label": "表结构",
+          "source_facts": {
+            "value": "CREATE TABLE raw_order_lines (\n    order_id TEXT NOT NULL,\n    line_id INTEGER NOT NULL CHECK (line_id > 0),\n    customer_id TEXT REFERENCES dim_customers(customer_id),\n    product_id TEXT NOT NULL,\n    quantity INTEGER NOT NULL CHECK (quantity > 0),\n    ordered_at TEXT NOT NULL,\n    channel TEXT NOT NULL CHECK (channel IN ('web', 'app', 'store')),\n    is_test INTEGER NOT NULL CHECK (is_test IN (0, 1)),\n    source_status TEXT NOT NULL CHECK (source_status IN ('placed', 'cancelled')),\n    PRIMARY KEY (order_id, line_id)\n);",
+            "quote": "CREATE TABLE raw_order_lines (\n    order_id TEXT NOT NULL,\n    line_id INTEGER NOT NULL CHECK (line_id > 0),\n    customer_id TEXT REFERENCES dim_customers(customer_id),\n    product_id TEXT NOT NULL,\n    quantity INTEGER NOT NULL CHECK (quantity > 0),\n    ordered_at TEXT NOT NULL,\n    channel TEXT NOT NULL CHECK (channel IN ('web', 'app', 'store')),\n    is_test INTEGER NOT NULL CHECK (is_test IN (0, 1)),\n    source_status TEXT NOT NULL CHECK (source_status IN ('placed', 'cancelled')),\n    PRIMARY KEY (order_id, line_id)\n);",
+            "source_id": "schema",
+            "version": "1",
+            "location": "CREATE TABLE raw_order_lines",
+            "complete": true,
+            "classification": "source_text"
+          },
+          "suggestion": {},
+          "human_override": null,
+          "effective_value": "CREATE TABLE raw_order_lines (\n    order_id TEXT NOT NULL,\n    line_id INTEGER NOT NULL CHECK (line_id > 0),\n    customer_id TEXT REFERENCES dim_customers(customer_id),\n    product_id TEXT NOT NULL,\n    quantity INTEGER NOT NULL CHECK (quantity > 0),\n    ordered_at TEXT NOT NULL,\n    channel TEXT NOT NULL CHECK (channel IN ('web', 'app', 'store')),\n    is_test INTEGER NOT NULL CHECK (is_test IN (0, 1)),\n    source_status TEXT NOT NULL CHECK (source_status IN ('placed', 'cancelled')),\n    PRIMARY KEY (order_id, line_id)\n);",
+          "review_state": "unverified"
+        },
+        {
+          "entry_id": "etl",
+          "path": "etl",
+          "label": "加工SQL",
+          "source_facts": {
+            "source_id": "schema",
+            "version": "1",
+            "location": "etl",
+            "complete": false,
+            "gap": "当前知识来源未提供该表加工SQL，不能由来源表身份推断它没有加工逻辑"
+          },
+          "suggestion": {},
+          "human_override": null,
+          "effective_value": "",
+          "review_state": "unverified"
+        },
+        {
+          "entry_id": "business_domain",
+          "path": "business_domain",
+          "label": "业务范围",
+          "source_facts": {
+            "value": "合成零售",
+            "quote": "业务域标识：`合成零售`。本说明与其DDL、加工SQL生成的所有合成知识对象都属于该业务域；这是一条明确样例约定，不由表名推断。",
+            "source_id": "business-guide",
+            "version": "1",
+            "location": "第8节 / 业务域",
+            "complete": true,
+            "classification": "authored_definition"
+          },
+          "suggestion": {},
+          "human_override": null,
+          "effective_value": "合成零售",
+          "review_state": "unverified"
+        }
+      ],
+      "related_ids": [],
+      "source_id": "schema",
+      "source_version": "1",
+      "updated_by": "synthetic-import"
+    },
+    {
+      "id": "table-raw_payments",
+      "kind": "table",
+      "name": "raw_payments",
+      "version": "1",
+      "state": "enabled",
+      "entries": [
+        {
+          "entry_id": "description",
+          "path": "description",
+          "label": "表含义",
+          "source_facts": {
+            "value": "一个订单行可能有多次付款或退款。`event_type='charge'` 表示付款，`event_type='refund'` 表示退款。每笔事件已按订单行分摊，金额始终为正数；类型决定它是加付款还是加退款。\n\n加工先筛选快照截止前 `event_status='success'` 的事件，再按 `(order_id, line_id)` 汇总，再与订单行关联。失败和等待中的事件不计金额。直接把事件表关联回订单行后重复累加行金额，会重复计算。\n\n`paid_at` 是这一个订单行首笔成功付款的 UTC 时刻；本样例一行的分次付款都在同一天，且不存在同一 `(order_id, line_id)` 跨月分次付款。同一订单的不同行可以在不同月份首次付款，不能假定它们的 `paid_at` 同月。没有成功付款时，`paid_at` 为 `NULL`，两个金额为 0。",
+            "quote": "一个订单行可能有多次付款或退款。`event_type='charge'` 表示付款，`event_type='refund'` 表示退款。每笔事件已按订单行分摊，金额始终为正数；类型决定它是加付款还是加退款。\n\n加工先筛选快照截止前 `event_status='success'` 的事件，再按 `(order_id, line_id)` 汇总，再与订单行关联。失败和等待中的事件不计金额。直接把事件表关联回订单行后重复累加行金额，会重复计算。\n\n`paid_at` 是这一个订单行首笔成功付款的 UTC 时刻；本样例一行的分次付款都在同一天，且不存在同一 `(order_id, line_id)` 跨月分次付款。同一订单的不同行可以在不同月份首次付款，不能假定它们的 `paid_at` 同月。没有成功付款时，`paid_at` 为 `NULL`，两个金额为 0。",
+            "source_id": "business-guide",
+            "version": "1",
+            "location": "3.2 付款事件 `raw_payments`",
+            "complete": true,
+            "classification": "authored_definition",
+            "structured_value": {
+              "kind": "table",
+              "grain": "一次订单行付款或退款事件",
+              "unique_keys": [
+                [
+                  "payment_event_id"
+                ]
+              ],
+              "time_columns": [
+                {
+                  "column": "event_at",
+                  "role": "event"
+                }
+              ],
+              "default_filters": [],
+              "constraints": []
+            },
+            "structured_evidence": [
+              {
+                "source_id": "business-guide",
+                "version": "1",
+                "location": "可计算语义定义 / table-raw_payments",
+                "quote": "  {\n    \"object_id\": \"table-raw_payments\",\n    \"entry_id\": \"description\",\n    \"structure\": {\n      \"kind\": \"table\",\n      \"grain\": \"一次订单行付款或退款事件\",\n      \"unique_keys\": [\n        [\n          \"payment_event_id\"\n        ]\n      ],\n      \"time_columns\": [\n        {\n          \"column\": \"event_at\",\n          \"role\": \"event\"\n        }\n      ],\n      \"default_filters\": [],\n      \"constraints\": []\n    }\n  }"
+              }
+            ]
+          },
+          "suggestion": {},
+          "human_override": null,
+          "effective_value": "一个订单行可能有多次付款或退款。`event_type='charge'` 表示付款，`event_type='refund'` 表示退款。每笔事件已按订单行分摊，金额始终为正数；类型决定它是加付款还是加退款。\n\n加工先筛选快照截止前 `event_status='success'` 的事件，再按 `(order_id, line_id)` 汇总，再与订单行关联。失败和等待中的事件不计金额。直接把事件表关联回订单行后重复累加行金额，会重复计算。\n\n`paid_at` 是这一个订单行首笔成功付款的 UTC 时刻；本样例一行的分次付款都在同一天，且不存在同一 `(order_id, line_id)` 跨月分次付款。同一订单的不同行可以在不同月份首次付款，不能假定它们的 `paid_at` 同月。没有成功付款时，`paid_at` 为 `NULL`，两个金额为 0。",
+          "review_state": "unverified",
+          "effective_structure": {
+            "kind": "table",
+            "grain": "一次订单行付款或退款事件",
+            "unique_keys": [
+              [
+                "payment_event_id"
+              ]
+            ],
+            "time_columns": [
+              {
+                "column": "event_at",
+                "role": "event"
+              }
+            ],
+            "default_filters": [],
+            "constraints": []
+          }
+        },
+        {
+          "entry_id": "ddl",
+          "path": "ddl",
+          "label": "表结构",
+          "source_facts": {
+            "value": "CREATE TABLE raw_payments (\n    payment_event_id TEXT PRIMARY KEY,\n    order_id TEXT NOT NULL,\n    line_id INTEGER NOT NULL,\n    event_type TEXT NOT NULL CHECK (event_type IN ('charge', 'refund')),\n    amount_cents INTEGER NOT NULL CHECK (amount_cents > 0),\n    event_at TEXT NOT NULL,\n    event_status TEXT NOT NULL CHECK (event_status IN ('success', 'failed', 'pending')),\n    FOREIGN KEY (order_id, line_id) REFERENCES raw_order_lines(order_id, line_id)\n);",
+            "quote": "CREATE TABLE raw_payments (\n    payment_event_id TEXT PRIMARY KEY,\n    order_id TEXT NOT NULL,\n    line_id INTEGER NOT NULL,\n    event_type TEXT NOT NULL CHECK (event_type IN ('charge', 'refund')),\n    amount_cents INTEGER NOT NULL CHECK (amount_cents > 0),\n    event_at TEXT NOT NULL,\n    event_status TEXT NOT NULL CHECK (event_status IN ('success', 'failed', 'pending')),\n    FOREIGN KEY (order_id, line_id) REFERENCES raw_order_lines(order_id, line_id)\n);",
+            "source_id": "schema",
+            "version": "1",
+            "location": "CREATE TABLE raw_payments",
+            "complete": true,
+            "classification": "source_text"
+          },
+          "suggestion": {},
+          "human_override": null,
+          "effective_value": "CREATE TABLE raw_payments (\n    payment_event_id TEXT PRIMARY KEY,\n    order_id TEXT NOT NULL,\n    line_id INTEGER NOT NULL,\n    event_type TEXT NOT NULL CHECK (event_type IN ('charge', 'refund')),\n    amount_cents INTEGER NOT NULL CHECK (amount_cents > 0),\n    event_at TEXT NOT NULL,\n    event_status TEXT NOT NULL CHECK (event_status IN ('success', 'failed', 'pending')),\n    FOREIGN KEY (order_id, line_id) REFERENCES raw_order_lines(order_id, line_id)\n);",
+          "review_state": "unverified"
+        },
+        {
+          "entry_id": "etl",
+          "path": "etl",
+          "label": "加工SQL",
+          "source_facts": {
+            "source_id": "schema",
+            "version": "1",
+            "location": "etl",
+            "complete": false,
+            "gap": "当前知识来源未提供该表加工SQL，不能由来源表身份推断它没有加工逻辑"
+          },
+          "suggestion": {},
+          "human_override": null,
+          "effective_value": "",
+          "review_state": "unverified"
+        },
+        {
+          "entry_id": "business_domain",
+          "path": "business_domain",
+          "label": "业务范围",
+          "source_facts": {
+            "value": "合成零售",
+            "quote": "业务域标识：`合成零售`。本说明与其DDL、加工SQL生成的所有合成知识对象都属于该业务域；这是一条明确样例约定，不由表名推断。",
+            "source_id": "business-guide",
+            "version": "1",
+            "location": "第8节 / 业务域",
+            "complete": true,
+            "classification": "authored_definition"
+          },
+          "suggestion": {},
+          "human_override": null,
+          "effective_value": "合成零售",
+          "review_state": "unverified"
+        }
+      ],
+      "related_ids": [],
+      "source_id": "schema",
+      "source_version": "1",
+      "updated_by": "synthetic-import"
+    },
+    {
+      "id": "table-customer_tags",
+      "kind": "table",
+      "name": "customer_tags",
+      "version": "1",
+      "state": "enabled",
+      "entries": [
+        {
+          "entry_id": "description",
+          "path": "description",
+          "label": "表含义",
+          "source_facts": {
+            "value": "这是查询时可用的附加表，不参加主表加工。同一客户可以有多个标签，关联基数是一对多。筛选“有 VIP 或订阅标签的客户”时用 `EXISTS`，或者先得到去重的客户列表再关联。如果直接连接标签明细，一个同时有两种标签的客户，其订单金额会出现两遍。",
+            "quote": "这是查询时可用的附加表，不参加主表加工。同一客户可以有多个标签，关联基数是一对多。筛选“有 VIP 或订阅标签的客户”时用 `EXISTS`，或者先得到去重的客户列表再关联。如果直接连接标签明细，一个同时有两种标签的客户，其订单金额会出现两遍。",
+            "source_id": "business-guide",
+            "version": "1",
+            "location": "3.4 标签 `customer_tags`",
+            "complete": true,
+            "classification": "authored_definition",
+            "structured_value": {
+              "kind": "table",
+              "grain": "一个客户的一种标签",
+              "unique_keys": [
+                [
+                  "customer_id",
+                  "tag"
+                ]
+              ],
+              "time_columns": [],
+              "default_filters": [],
+              "constraints": []
+            },
+            "structured_evidence": [
+              {
+                "source_id": "business-guide",
+                "version": "1",
+                "location": "可计算语义定义 / table-customer_tags",
+                "quote": "  {\n    \"object_id\": \"table-customer_tags\",\n    \"entry_id\": \"description\",\n    \"structure\": {\n      \"kind\": \"table\",\n      \"grain\": \"一个客户的一种标签\",\n      \"unique_keys\": [\n        [\n          \"customer_id\",\n          \"tag\"\n        ]\n      ],\n      \"time_columns\": [],\n      \"default_filters\": [],\n      \"constraints\": []\n    }\n  }"
+              }
+            ]
+          },
+          "suggestion": {},
+          "human_override": null,
+          "effective_value": "这是查询时可用的附加表，不参加主表加工。同一客户可以有多个标签，关联基数是一对多。筛选“有 VIP 或订阅标签的客户”时用 `EXISTS`，或者先得到去重的客户列表再关联。如果直接连接标签明细，一个同时有两种标签的客户，其订单金额会出现两遍。",
+          "review_state": "unverified",
+          "effective_structure": {
+            "kind": "table",
+            "grain": "一个客户的一种标签",
+            "unique_keys": [
+              [
+                "customer_id",
+                "tag"
+              ]
+            ],
+            "time_columns": [],
+            "default_filters": [],
+            "constraints": []
+          }
+        },
+        {
+          "entry_id": "ddl",
+          "path": "ddl",
+          "label": "表结构",
+          "source_facts": {
+            "value": "CREATE TABLE customer_tags (\n    customer_id TEXT NOT NULL REFERENCES dim_customers(customer_id),\n    tag TEXT NOT NULL,\n    PRIMARY KEY (customer_id, tag)\n);",
+            "quote": "CREATE TABLE customer_tags (\n    customer_id TEXT NOT NULL REFERENCES dim_customers(customer_id),\n    tag TEXT NOT NULL,\n    PRIMARY KEY (customer_id, tag)\n);",
+            "source_id": "schema",
+            "version": "1",
+            "location": "CREATE TABLE customer_tags",
+            "complete": true,
+            "classification": "source_text"
+          },
+          "suggestion": {},
+          "human_override": null,
+          "effective_value": "CREATE TABLE customer_tags (\n    customer_id TEXT NOT NULL REFERENCES dim_customers(customer_id),\n    tag TEXT NOT NULL,\n    PRIMARY KEY (customer_id, tag)\n);",
+          "review_state": "unverified"
+        },
+        {
+          "entry_id": "etl",
+          "path": "etl",
+          "label": "加工SQL",
+          "source_facts": {
+            "source_id": "schema",
+            "version": "1",
+            "location": "etl",
+            "complete": false,
+            "gap": "当前知识来源未提供该表加工SQL，不能由来源表身份推断它没有加工逻辑"
+          },
+          "suggestion": {},
+          "human_override": null,
+          "effective_value": "",
+          "review_state": "unverified"
+        },
+        {
+          "entry_id": "business_domain",
+          "path": "business_domain",
+          "label": "业务范围",
+          "source_facts": {
+            "value": "合成零售",
+            "quote": "业务域标识：`合成零售`。本说明与其DDL、加工SQL生成的所有合成知识对象都属于该业务域；这是一条明确样例约定，不由表名推断。",
+            "source_id": "business-guide",
+            "version": "1",
+            "location": "第8节 / 业务域",
+            "complete": true,
+            "classification": "authored_definition"
+          },
+          "suggestion": {},
+          "human_override": null,
+          "effective_value": "合成零售",
+          "review_state": "unverified"
+        }
+      ],
+      "related_ids": [],
+      "source_id": "schema",
+      "source_version": "1",
+      "updated_by": "synthetic-import"
+    },
+    {
+      "id": "table-demo_order_detail",
+      "kind": "table",
+      "name": "demo_order_detail",
+      "version": "1",
+      "state": "enabled",
+      "entries": [
+        {
+          "entry_id": "description",
+          "path": "description",
+          "label": "表含义",
+          "source_facts": {
+            "value": "`demo_order_detail` 的一行是一张订单中的一个商品行。主键是 `(order_id, line_id)`。同一订单可能有多个商品行，同一客户也会反复下单，所以：\n\n- 订单数用 `COUNT(DISTINCT order_id)`。\n- 已知客户数用 `COUNT(DISTINCT customer_id)`，不把匿名购买强行合并成一个客户。\n- 商品件数用 `SUM(quantity)`；行数、订单数、件数含义不同。\n- `paid_amount_cents` 和 `refunded_amount_cents` 已分摊到行，可以按行相加。\n- 同一订单各行的客户、渠道、下单时间和测试标记在本样例中一致；生成器和验收会核对这一点。",
+            "quote": "`demo_order_detail` 的一行是一张订单中的一个商品行。主键是 `(order_id, line_id)`。同一订单可能有多个商品行，同一客户也会反复下单，所以：\n\n- 订单数用 `COUNT(DISTINCT order_id)`。\n- 已知客户数用 `COUNT(DISTINCT customer_id)`，不把匿名购买强行合并成一个客户。\n- 商品件数用 `SUM(quantity)`；行数、订单数、件数含义不同。\n- `paid_amount_cents` 和 `refunded_amount_cents` 已分摊到行，可以按行相加。\n- 同一订单各行的客户、渠道、下单时间和测试标记在本样例中一致；生成器和验收会核对这一点。",
+            "source_id": "business-guide",
+            "version": "1",
+            "location": "第2节",
+            "complete": true,
+            "classification": "authored_definition",
+            "structured_value": {
+              "kind": "table",
+              "grain": "一张订单中的一个商品行",
+              "unique_keys": [
+                [
+                  "order_id",
+                  "line_id"
+                ]
+              ],
+              "time_columns": [
+                {
+                  "column": "paid_at",
+                  "role": "payment"
+                },
+                {
+                  "column": "order_date",
+                  "role": "order"
+                }
+              ],
+              "default_filters": [],
+              "constraints": []
+            },
+            "structured_evidence": [
+              {
+                "source_id": "business-guide",
+                "version": "1",
+                "location": "可计算语义定义 / table-demo_order_detail",
+                "quote": "  {\n    \"object_id\": \"table-demo_order_detail\",\n    \"entry_id\": \"description\",\n    \"structure\": {\n      \"kind\": \"table\",\n      \"grain\": \"一张订单中的一个商品行\",\n      \"unique_keys\": [\n        [\n          \"order_id\",\n          \"line_id\"\n        ]\n      ],\n      \"time_columns\": [\n        {\n          \"column\": \"paid_at\",\n          \"role\": \"payment\"\n        },\n        {\n          \"column\": \"order_date\",\n          \"role\": \"order\"\n        }\n      ],\n      \"default_filters\": [],\n      \"constraints\": []\n    }\n  }"
+              }
+            ]
+          },
+          "suggestion": {},
+          "human_override": null,
+          "effective_value": "`demo_order_detail` 的一行是一张订单中的一个商品行。主键是 `(order_id, line_id)`。同一订单可能有多个商品行，同一客户也会反复下单，所以：\n\n- 订单数用 `COUNT(DISTINCT order_id)`。\n- 已知客户数用 `COUNT(DISTINCT customer_id)`，不把匿名购买强行合并成一个客户。\n- 商品件数用 `SUM(quantity)`；行数、订单数、件数含义不同。\n- `paid_amount_cents` 和 `refunded_amount_cents` 已分摊到行，可以按行相加。\n- 同一订单各行的客户、渠道、下单时间和测试标记在本样例中一致；生成器和验收会核对这一点。",
+          "review_state": "unverified",
+          "effective_structure": {
+            "kind": "table",
+            "grain": "一张订单中的一个商品行",
+            "unique_keys": [
+              [
+                "order_id",
+                "line_id"
+              ]
+            ],
+            "time_columns": [
+              {
+                "column": "paid_at",
+                "role": "payment"
+              },
+              {
+                "column": "order_date",
+                "role": "order"
+              }
+            ],
+            "default_filters": [],
+            "constraints": []
+          }
+        },
+        {
+          "entry_id": "ddl",
+          "path": "ddl",
+          "label": "表结构",
+          "source_facts": {
+            "value": "CREATE TABLE demo_order_detail (\n    order_id TEXT NOT NULL,\n    line_id INTEGER NOT NULL,\n    customer_id TEXT,\n    product_id TEXT NOT NULL,\n    quantity INTEGER NOT NULL,\n    paid_amount_cents INTEGER NOT NULL CHECK (paid_amount_cents >= 0),\n    refunded_amount_cents INTEGER NOT NULL CHECK (refunded_amount_cents BETWEEN 0 AND paid_amount_cents),\n    paid_at TEXT,\n    order_date TEXT NOT NULL,\n    channel TEXT NOT NULL,\n    region TEXT,\n    is_test INTEGER NOT NULL CHECK (is_test IN (0, 1)),\n    order_status TEXT NOT NULL CHECK (order_status IN ('paid', 'refunded', 'cancelled', 'unpaid')),\n    PRIMARY KEY (order_id, line_id)\n);",
+            "quote": "CREATE TABLE demo_order_detail (\n    order_id TEXT NOT NULL,\n    line_id INTEGER NOT NULL,\n    customer_id TEXT,\n    product_id TEXT NOT NULL,\n    quantity INTEGER NOT NULL,\n    paid_amount_cents INTEGER NOT NULL CHECK (paid_amount_cents >= 0),\n    refunded_amount_cents INTEGER NOT NULL CHECK (refunded_amount_cents BETWEEN 0 AND paid_amount_cents),\n    paid_at TEXT,\n    order_date TEXT NOT NULL,\n    channel TEXT NOT NULL,\n    region TEXT,\n    is_test INTEGER NOT NULL CHECK (is_test IN (0, 1)),\n    order_status TEXT NOT NULL CHECK (order_status IN ('paid', 'refunded', 'cancelled', 'unpaid')),\n    PRIMARY KEY (order_id, line_id)\n);",
+            "source_id": "schema",
+            "version": "1",
+            "location": "CREATE TABLE demo_order_detail",
+            "complete": true,
+            "classification": "source_text"
+          },
+          "suggestion": {},
+          "human_override": null,
+          "effective_value": "CREATE TABLE demo_order_detail (\n    order_id TEXT NOT NULL,\n    line_id INTEGER NOT NULL,\n    customer_id TEXT,\n    product_id TEXT NOT NULL,\n    quantity INTEGER NOT NULL,\n    paid_amount_cents INTEGER NOT NULL CHECK (paid_amount_cents >= 0),\n    refunded_amount_cents INTEGER NOT NULL CHECK (refunded_amount_cents BETWEEN 0 AND paid_amount_cents),\n    paid_at TEXT,\n    order_date TEXT NOT NULL,\n    channel TEXT NOT NULL,\n    region TEXT,\n    is_test INTEGER NOT NULL CHECK (is_test IN (0, 1)),\n    order_status TEXT NOT NULL CHECK (order_status IN ('paid', 'refunded', 'cancelled', 'unpaid')),\n    PRIMARY KEY (order_id, line_id)\n);",
+          "review_state": "unverified"
+        },
+        {
+          "entry_id": "etl",
+          "path": "etl",
+          "label": "加工SQL",
+          "source_facts": {
+            "value": "-- 合成演示快照截止 2026-04-04T00:00:00Z，区间右侧不含截止时点。\n-- 在事务内完整重建，避免将重复运行误算为新增业务记录。\nBEGIN;\nDELETE FROM demo_order_detail;\nWITH line_payments AS (\n    SELECT order_id, line_id,\n           SUM(CASE WHEN event_type = 'charge' THEN amount_cents ELSE 0 END) AS paid,\n           SUM(CASE WHEN event_type = 'refund' THEN amount_cents ELSE 0 END) AS refunded,\n           MIN(CASE WHEN event_type = 'charge' THEN event_at END) AS paid_at\n    FROM raw_payments\n    WHERE event_status = 'success'\n      AND event_at < '2026-04-04T00:00:00Z'\n    GROUP BY order_id, line_id\n), order_totals AS (\n    SELECT order_id, SUM(paid) AS paid, SUM(refunded) AS refunded\n    FROM line_payments\n    GROUP BY order_id\n)\nINSERT INTO demo_order_detail\nSELECT l.order_id, l.line_id, l.customer_id, l.product_id, l.quantity,\n       COALESCE(p.paid, 0), COALESCE(p.refunded, 0), p.paid_at,\n       SUBSTR(l.ordered_at, 1, 10), l.channel, c.region, l.is_test,\n       CASE WHEN l.source_status = 'cancelled' THEN 'cancelled'\n            WHEN COALESCE(t.paid, 0) = 0 THEN 'unpaid'\n            WHEN t.refunded = t.paid THEN 'refunded'\n            ELSE 'paid' END\nFROM raw_order_lines AS l\nLEFT JOIN line_payments AS p ON l.order_id = p.order_id AND l.line_id = p.line_id\nLEFT JOIN order_totals AS t ON l.order_id = t.order_id\nLEFT JOIN dim_customers AS c ON l.customer_id = c.customer_id\nWHERE l.ordered_at < '2026-04-04T00:00:00Z';\nCOMMIT;\n",
+            "quote": "-- 合成演示快照截止 2026-04-04T00:00:00Z，区间右侧不含截止时点。\n-- 在事务内完整重建，避免将重复运行误算为新增业务记录。\nBEGIN;\nDELETE FROM demo_order_detail;\nWITH line_payments AS (\n    SELECT order_id, line_id,\n           SUM(CASE WHEN event_type = 'charge' THEN amount_cents ELSE 0 END) AS paid,\n           SUM(CASE WHEN event_type = 'refund' THEN amount_cents ELSE 0 END) AS refunded,\n           MIN(CASE WHEN event_type = 'charge' THEN event_at END) AS paid_at\n    FROM raw_payments\n    WHERE event_status = 'success'\n      AND event_at < '2026-04-04T00:00:00Z'\n    GROUP BY order_id, line_id\n), order_totals AS (\n    SELECT order_id, SUM(paid) AS paid, SUM(refunded) AS refunded\n    FROM line_payments\n    GROUP BY order_id\n)\nINSERT INTO demo_order_detail\nSELECT l.order_id, l.line_id, l.customer_id, l.product_id, l.quantity,\n       COALESCE(p.paid, 0), COALESCE(p.refunded, 0), p.paid_at,\n       SUBSTR(l.ordered_at, 1, 10), l.channel, c.region, l.is_test,\n       CASE WHEN l.source_status = 'cancelled' THEN 'cancelled'\n            WHEN COALESCE(t.paid, 0) = 0 THEN 'unpaid'\n            WHEN t.refunded = t.paid THEN 'refunded'\n            ELSE 'paid' END\nFROM raw_order_lines AS l\nLEFT JOIN line_payments AS p ON l.order_id = p.order_id AND l.line_id = p.line_id\nLEFT JOIN order_totals AS t ON l.order_id = t.order_id\nLEFT JOIN dim_customers AS c ON l.customer_id = c.customer_id\nWHERE l.ordered_at < '2026-04-04T00:00:00Z';\nCOMMIT;\n",
+            "source_id": "etl",
+            "version": "1",
+            "location": "全文",
+            "complete": true,
+            "classification": "source_text"
+          },
+          "suggestion": {},
+          "human_override": null,
+          "effective_value": "-- 合成演示快照截止 2026-04-04T00:00:00Z，区间右侧不含截止时点。\n-- 在事务内完整重建，避免将重复运行误算为新增业务记录。\nBEGIN;\nDELETE FROM demo_order_detail;\nWITH line_payments AS (\n    SELECT order_id, line_id,\n           SUM(CASE WHEN event_type = 'charge' THEN amount_cents ELSE 0 END) AS paid,\n           SUM(CASE WHEN event_type = 'refund' THEN amount_cents ELSE 0 END) AS refunded,\n           MIN(CASE WHEN event_type = 'charge' THEN event_at END) AS paid_at\n    FROM raw_payments\n    WHERE event_status = 'success'\n      AND event_at < '2026-04-04T00:00:00Z'\n    GROUP BY order_id, line_id\n), order_totals AS (\n    SELECT order_id, SUM(paid) AS paid, SUM(refunded) AS refunded\n    FROM line_payments\n    GROUP BY order_id\n)\nINSERT INTO demo_order_detail\nSELECT l.order_id, l.line_id, l.customer_id, l.product_id, l.quantity,\n       COALESCE(p.paid, 0), COALESCE(p.refunded, 0), p.paid_at,\n       SUBSTR(l.ordered_at, 1, 10), l.channel, c.region, l.is_test,\n       CASE WHEN l.source_status = 'cancelled' THEN 'cancelled'\n            WHEN COALESCE(t.paid, 0) = 0 THEN 'unpaid'\n            WHEN t.refunded = t.paid THEN 'refunded'\n            ELSE 'paid' END\nFROM raw_order_lines AS l\nLEFT JOIN line_payments AS p ON l.order_id = p.order_id AND l.line_id = p.line_id\nLEFT JOIN order_totals AS t ON l.order_id = t.order_id\nLEFT JOIN dim_customers AS c ON l.customer_id = c.customer_id\nWHERE l.ordered_at < '2026-04-04T00:00:00Z';\nCOMMIT;\n",
+          "review_state": "unverified"
+        },
+        {
+          "entry_id": "business_domain",
+          "path": "business_domain",
+          "label": "业务范围",
+          "source_facts": {
+            "value": "合成零售",
+            "quote": "业务域标识：`合成零售`。本说明与其DDL、加工SQL生成的所有合成知识对象都属于该业务域；这是一条明确样例约定，不由表名推断。",
+            "source_id": "business-guide",
+            "version": "1",
+            "location": "第8节 / 业务域",
+            "complete": true,
+            "classification": "authored_definition"
+          },
+          "suggestion": {},
+          "human_override": null,
+          "effective_value": "合成零售",
+          "review_state": "unverified"
+        }
+      ],
+      "related_ids": [],
+      "source_id": "schema",
+      "source_version": "1",
+      "updated_by": "synthetic-import"
+    },
+    {
+      "id": "field-order_id",
+      "kind": "field",
+      "name": "order_id",
+      "version": "1",
+      "state": "enabled",
+      "entries": [
+        {
+          "entry_id": "meaning",
+          "path": "meaning",
+          "label": "字段含义",
+          "source_facts": {
+            "value": "虚构订单标识；订单数应去重",
+            "quote": "| `order_id` | TEXT | 虚构订单标识；订单数应去重 |",
+            "source_id": "business-guide",
+            "version": "1",
+            "location": "第4节 / order_id",
+            "complete": true,
+            "classification": "authored_definition"
+          },
+          "suggestion": {},
+          "human_override": null,
+          "effective_value": "虚构订单标识；订单数应去重",
+          "review_state": "unverified"
+        },
+        {
+          "entry_id": "type",
+          "path": "type",
+          "label": "字段类型",
+          "source_facts": {
+            "value": "order_id TEXT NOT NULL",
+            "quote": "order_id TEXT NOT NULL",
+            "source_id": "schema",
+            "version": "1",
+            "location": "CREATE TABLE demo_order_detail / order_id",
+            "complete": true,
+            "classification": "source_text"
+          },
+          "suggestion": {
+            "value": "TEXT",
+            "method": "ddl_type_derivation",
+            "uncertainty": [],
+            "evidence": [
+              {
+                "source_id": "schema",
+                "version": "1",
+                "location": "CREATE TABLE demo_order_detail / order_id",
+                "quote": "order_id TEXT NOT NULL"
+              }
+            ],
+            "basis": "SQLite table_info 的字段类型与 NOT NULL 约束；未从样本值推断类型或唯一性"
+          },
+          "human_override": null,
+          "effective_value": "TEXT",
+          "review_state": "unverified"
+        },
+        {
+          "entry_id": "business_domain",
+          "path": "business_domain",
+          "label": "业务范围",
+          "source_facts": {
+            "value": "合成零售",
+            "quote": "业务域标识：`合成零售`。本说明与其DDL、加工SQL生成的所有合成知识对象都属于该业务域；这是一条明确样例约定，不由表名推断。",
+            "source_id": "business-guide",
+            "version": "1",
+            "location": "第8节 / 业务域",
+            "complete": true,
+            "classification": "authored_definition"
+          },
+          "suggestion": {},
+          "human_override": null,
+          "effective_value": "合成零售",
+          "review_state": "unverified"
+        }
+      ],
+      "related_ids": [
+        "table-demo_order_detail"
+      ],
+      "source_id": "business-guide",
+      "source_version": "1",
+      "updated_by": "synthetic-import"
+    },
+    {
+      "id": "field-line_id",
+      "kind": "field",
+      "name": "line_id",
+      "version": "1",
+      "state": "enabled",
+      "entries": [
+        {
+          "entry_id": "meaning",
+          "path": "meaning",
+          "label": "字段含义",
+          "source_facts": {
+            "value": "订单内行号，和订单号一起唯一",
+            "quote": "| `line_id` | INTEGER | 订单内行号，和订单号一起唯一 |",
+            "source_id": "business-guide",
+            "version": "1",
+            "location": "第4节 / line_id",
+            "complete": true,
+            "classification": "authored_definition"
+          },
+          "suggestion": {},
+          "human_override": null,
+          "effective_value": "订单内行号，和订单号一起唯一",
+          "review_state": "unverified"
+        },
+        {
+          "entry_id": "type",
+          "path": "type",
+          "label": "字段类型",
+          "source_facts": {
+            "value": "line_id INTEGER NOT NULL",
+            "quote": "line_id INTEGER NOT NULL",
+            "source_id": "schema",
+            "version": "1",
+            "location": "CREATE TABLE demo_order_detail / line_id",
+            "complete": true,
+            "classification": "source_text"
+          },
+          "suggestion": {
+            "value": "INTEGER",
+            "method": "ddl_type_derivation",
+            "uncertainty": [],
+            "evidence": [
+              {
+                "source_id": "schema",
+                "version": "1",
+                "location": "CREATE TABLE demo_order_detail / line_id",
+                "quote": "line_id INTEGER NOT NULL"
+              }
+            ],
+            "basis": "SQLite table_info 的字段类型与 NOT NULL 约束；未从样本值推断类型或唯一性"
+          },
+          "human_override": null,
+          "effective_value": "INTEGER",
+          "review_state": "unverified"
+        },
+        {
+          "entry_id": "business_domain",
+          "path": "business_domain",
+          "label": "业务范围",
+          "source_facts": {
+            "value": "合成零售",
+            "quote": "业务域标识：`合成零售`。本说明与其DDL、加工SQL生成的所有合成知识对象都属于该业务域；这是一条明确样例约定，不由表名推断。",
+            "source_id": "business-guide",
+            "version": "1",
+            "location": "第8节 / 业务域",
+            "complete": true,
+            "classification": "authored_definition"
+          },
+          "suggestion": {},
+          "human_override": null,
+          "effective_value": "合成零售",
+          "review_state": "unverified"
+        }
+      ],
+      "related_ids": [
+        "table-demo_order_detail"
+      ],
+      "source_id": "business-guide",
+      "source_version": "1",
+      "updated_by": "synthetic-import"
+    },
+    {
+      "id": "field-customer_id",
+      "kind": "field",
+      "name": "customer_id",
+      "version": "1",
+      "state": "enabled",
+      "entries": [
+        {
+          "entry_id": "meaning",
+          "path": "meaning",
+          "label": "字段含义",
+          "source_facts": {
+            "value": "已知客户标识；空值表示匿名购买，不能补成一个统一客户参与 UV",
+            "quote": "| `customer_id` | TEXT，可空 | 已知客户标识；空值表示匿名购买，不能补成一个统一客户参与 UV |",
+            "source_id": "business-guide",
+            "version": "1",
+            "location": "第4节 / customer_id",
+            "complete": true,
+            "classification": "authored_definition"
+          },
+          "suggestion": {},
+          "human_override": null,
+          "effective_value": "已知客户标识；空值表示匿名购买，不能补成一个统一客户参与 UV",
+          "review_state": "unverified"
+        },
+        {
+          "entry_id": "type",
+          "path": "type",
+          "label": "字段类型",
+          "source_facts": {
+            "value": "customer_id TEXT",
+            "quote": "customer_id TEXT",
+            "source_id": "schema",
+            "version": "1",
+            "location": "CREATE TABLE demo_order_detail / customer_id",
+            "complete": true,
+            "classification": "source_text"
+          },
+          "suggestion": {
+            "value": "TEXT，可空",
+            "method": "ddl_type_derivation",
+            "uncertainty": [],
+            "evidence": [
+              {
+                "source_id": "schema",
+                "version": "1",
+                "location": "CREATE TABLE demo_order_detail / customer_id",
+                "quote": "customer_id TEXT"
+              }
+            ],
+            "basis": "SQLite table_info 的字段类型与 NOT NULL 约束；未从样本值推断类型或唯一性"
+          },
+          "human_override": null,
+          "effective_value": "TEXT，可空",
+          "review_state": "unverified"
+        },
+        {
+          "entry_id": "business_domain",
+          "path": "business_domain",
+          "label": "业务范围",
+          "source_facts": {
+            "value": "合成零售",
+            "quote": "业务域标识：`合成零售`。本说明与其DDL、加工SQL生成的所有合成知识对象都属于该业务域；这是一条明确样例约定，不由表名推断。",
+            "source_id": "business-guide",
+            "version": "1",
+            "location": "第8节 / 业务域",
+            "complete": true,
+            "classification": "authored_definition"
+          },
+          "suggestion": {},
+          "human_override": null,
+          "effective_value": "合成零售",
+          "review_state": "unverified"
+        }
+      ],
+      "related_ids": [
+        "table-demo_order_detail"
+      ],
+      "source_id": "business-guide",
+      "source_version": "1",
+      "updated_by": "synthetic-import"
+    },
+    {
+      "id": "field-product_id",
+      "kind": "field",
+      "name": "product_id",
+      "version": "1",
+      "state": "enabled",
+      "entries": [
+        {
+          "entry_id": "meaning",
+          "path": "meaning",
+          "label": "字段含义",
+          "source_facts": {
+            "value": "虚构商品标识，不提供商品分类维表",
+            "quote": "| `product_id` | TEXT | 虚构商品标识，不提供商品分类维表 |",
+            "source_id": "business-guide",
+            "version": "1",
+            "location": "第4节 / product_id",
+            "complete": true,
+            "classification": "authored_definition"
+          },
+          "suggestion": {},
+          "human_override": null,
+          "effective_value": "虚构商品标识，不提供商品分类维表",
+          "review_state": "unverified"
+        },
+        {
+          "entry_id": "type",
+          "path": "type",
+          "label": "字段类型",
+          "source_facts": {
+            "value": "product_id TEXT NOT NULL",
+            "quote": "product_id TEXT NOT NULL",
+            "source_id": "schema",
+            "version": "1",
+            "location": "CREATE TABLE demo_order_detail / product_id",
+            "complete": true,
+            "classification": "source_text"
+          },
+          "suggestion": {
+            "value": "TEXT",
+            "method": "ddl_type_derivation",
+            "uncertainty": [],
+            "evidence": [
+              {
+                "source_id": "schema",
+                "version": "1",
+                "location": "CREATE TABLE demo_order_detail / product_id",
+                "quote": "product_id TEXT NOT NULL"
+              }
+            ],
+            "basis": "SQLite table_info 的字段类型与 NOT NULL 约束；未从样本值推断类型或唯一性"
+          },
+          "human_override": null,
+          "effective_value": "TEXT",
+          "review_state": "unverified"
+        },
+        {
+          "entry_id": "business_domain",
+          "path": "business_domain",
+          "label": "业务范围",
+          "source_facts": {
+            "value": "合成零售",
+            "quote": "业务域标识：`合成零售`。本说明与其DDL、加工SQL生成的所有合成知识对象都属于该业务域；这是一条明确样例约定，不由表名推断。",
+            "source_id": "business-guide",
+            "version": "1",
+            "location": "第8节 / 业务域",
+            "complete": true,
+            "classification": "authored_definition"
+          },
+          "suggestion": {},
+          "human_override": null,
+          "effective_value": "合成零售",
+          "review_state": "unverified"
+        }
+      ],
+      "related_ids": [
+        "table-demo_order_detail"
+      ],
+      "source_id": "business-guide",
+      "source_version": "1",
+      "updated_by": "synthetic-import"
+    },
+    {
+      "id": "field-quantity",
+      "kind": "field",
+      "name": "quantity",
+      "version": "1",
+      "state": "enabled",
+      "entries": [
+        {
+          "entry_id": "meaning",
+          "path": "meaning",
+          "label": "字段含义",
+          "source_facts": {
+            "value": "下单件数；没有单独的退货件数，不能推导净售出件数",
+            "quote": "| `quantity` | INTEGER | 下单件数；没有单独的退货件数，不能推导净售出件数 |",
+            "source_id": "business-guide",
+            "version": "1",
+            "location": "第4节 / quantity",
+            "complete": true,
+            "classification": "authored_definition",
+            "structured_value": {
+              "kind": "field",
+              "table": {
+                "object_id": "table-demo_order_detail",
+                "version": "1"
+              },
+              "column": "quantity",
+              "unit": "件"
+            },
+            "structured_evidence": [
+              {
+                "source_id": "business-guide",
+                "version": "1",
+                "location": "可计算语义定义 / field-quantity",
+                "quote": "  {\n    \"object_id\": \"field-quantity\",\n    \"entry_id\": \"meaning\",\n    \"structure\": {\n      \"kind\": \"field\",\n      \"table\": {\n        \"object_id\": \"table-demo_order_detail\",\n        \"version\": \"1\"\n      },\n      \"column\": \"quantity\",\n      \"unit\": \"件\"\n    }\n  }"
+              }
+            ]
+          },
+          "suggestion": {},
+          "human_override": null,
+          "effective_value": "下单件数；没有单独的退货件数，不能推导净售出件数",
+          "review_state": "unverified",
+          "effective_structure": {
+            "kind": "field",
+            "table": {
+              "object_id": "table-demo_order_detail",
+              "version": "1"
+            },
+            "column": "quantity",
+            "unit": "件"
+          }
+        },
+        {
+          "entry_id": "type",
+          "path": "type",
+          "label": "字段类型",
+          "source_facts": {
+            "value": "quantity INTEGER NOT NULL",
+            "quote": "quantity INTEGER NOT NULL",
+            "source_id": "schema",
+            "version": "1",
+            "location": "CREATE TABLE demo_order_detail / quantity",
+            "complete": true,
+            "classification": "source_text"
+          },
+          "suggestion": {
+            "value": "INTEGER",
+            "method": "ddl_type_derivation",
+            "uncertainty": [],
+            "evidence": [
+              {
+                "source_id": "schema",
+                "version": "1",
+                "location": "CREATE TABLE demo_order_detail / quantity",
+                "quote": "quantity INTEGER NOT NULL"
+              }
+            ],
+            "basis": "SQLite table_info 的字段类型与 NOT NULL 约束；未从样本值推断类型或唯一性"
+          },
+          "human_override": null,
+          "effective_value": "INTEGER",
+          "review_state": "unverified"
+        },
+        {
+          "entry_id": "business_domain",
+          "path": "business_domain",
+          "label": "业务范围",
+          "source_facts": {
+            "value": "合成零售",
+            "quote": "业务域标识：`合成零售`。本说明与其DDL、加工SQL生成的所有合成知识对象都属于该业务域；这是一条明确样例约定，不由表名推断。",
+            "source_id": "business-guide",
+            "version": "1",
+            "location": "第8节 / 业务域",
+            "complete": true,
+            "classification": "authored_definition"
+          },
+          "suggestion": {},
+          "human_override": null,
+          "effective_value": "合成零售",
+          "review_state": "unverified"
+        }
+      ],
+      "related_ids": [
+        "table-demo_order_detail"
+      ],
+      "source_id": "business-guide",
+      "source_version": "1",
+      "updated_by": "synthetic-import"
+    },
+    {
+      "id": "field-paid_amount_cents",
+      "kind": "field",
+      "name": "paid_amount_cents",
+      "version": "1",
+      "state": "enabled",
+      "entries": [
+        {
+          "entry_id": "meaning",
+          "path": "meaning",
+          "label": "字段含义",
+          "source_facts": {
+            "value": "成功付款累计金额，已分摊到当前行，整数分",
+            "quote": "| `paid_amount_cents` | INTEGER | 成功付款累计金额，已分摊到当前行，整数分 |",
+            "source_id": "business-guide",
+            "version": "1",
+            "location": "第4节 / paid_amount_cents",
+            "complete": true,
+            "classification": "authored_definition",
+            "structured_value": {
+              "kind": "field",
+              "table": {
+                "object_id": "table-demo_order_detail",
+                "version": "1"
+              },
+              "column": "paid_amount_cents",
+              "unit": "分"
+            },
+            "structured_evidence": [
+              {
+                "source_id": "business-guide",
+                "version": "1",
+                "location": "可计算语义定义 / field-paid_amount_cents",
+                "quote": "  {\n    \"object_id\": \"field-paid_amount_cents\",\n    \"entry_id\": \"meaning\",\n    \"structure\": {\n      \"kind\": \"field\",\n      \"table\": {\n        \"object_id\": \"table-demo_order_detail\",\n        \"version\": \"1\"\n      },\n      \"column\": \"paid_amount_cents\",\n      \"unit\": \"分\"\n    }\n  }"
+              }
+            ]
+          },
+          "suggestion": {},
+          "human_override": null,
+          "effective_value": "成功付款累计金额，已分摊到当前行，整数分",
+          "review_state": "unverified",
+          "effective_structure": {
+            "kind": "field",
+            "table": {
+              "object_id": "table-demo_order_detail",
+              "version": "1"
+            },
+            "column": "paid_amount_cents",
+            "unit": "分"
+          }
+        },
+        {
+          "entry_id": "type",
+          "path": "type",
+          "label": "字段类型",
+          "source_facts": {
+            "value": "paid_amount_cents INTEGER NOT NULL CHECK (paid_amount_cents >= 0)",
+            "quote": "paid_amount_cents INTEGER NOT NULL CHECK (paid_amount_cents >= 0)",
+            "source_id": "schema",
+            "version": "1",
+            "location": "CREATE TABLE demo_order_detail / paid_amount_cents",
+            "complete": true,
+            "classification": "source_text"
+          },
+          "suggestion": {
+            "value": "INTEGER",
+            "method": "ddl_type_derivation",
+            "uncertainty": [],
+            "evidence": [
+              {
+                "source_id": "schema",
+                "version": "1",
+                "location": "CREATE TABLE demo_order_detail / paid_amount_cents",
+                "quote": "paid_amount_cents INTEGER NOT NULL CHECK (paid_amount_cents >= 0)"
+              }
+            ],
+            "basis": "SQLite table_info 的字段类型与 NOT NULL 约束；未从样本值推断类型或唯一性"
+          },
+          "human_override": null,
+          "effective_value": "INTEGER",
+          "review_state": "unverified"
+        },
+        {
+          "entry_id": "business_domain",
+          "path": "business_domain",
+          "label": "业务范围",
+          "source_facts": {
+            "value": "合成零售",
+            "quote": "业务域标识：`合成零售`。本说明与其DDL、加工SQL生成的所有合成知识对象都属于该业务域；这是一条明确样例约定，不由表名推断。",
+            "source_id": "business-guide",
+            "version": "1",
+            "location": "第8节 / 业务域",
+            "complete": true,
+            "classification": "authored_definition"
+          },
+          "suggestion": {},
+          "human_override": null,
+          "effective_value": "合成零售",
+          "review_state": "unverified"
+        }
+      ],
+      "related_ids": [
+        "table-demo_order_detail"
+      ],
+      "source_id": "business-guide",
+      "source_version": "1",
+      "updated_by": "synthetic-import"
+    },
+    {
+      "id": "field-refunded_amount_cents",
+      "kind": "field",
+      "name": "refunded_amount_cents",
+      "version": "1",
+      "state": "enabled",
+      "entries": [
+        {
+          "entry_id": "meaning",
+          "path": "meaning",
+          "label": "字段含义",
+          "source_facts": {
+            "value": "截至快照的成功退款累计金额，已分摊到当前行，整数分",
+            "quote": "| `refunded_amount_cents` | INTEGER | 截至快照的成功退款累计金额，已分摊到当前行，整数分 |",
+            "source_id": "business-guide",
+            "version": "1",
+            "location": "第4节 / refunded_amount_cents",
+            "complete": true,
+            "classification": "authored_definition",
+            "structured_value": {
+              "kind": "field",
+              "table": {
+                "object_id": "table-demo_order_detail",
+                "version": "1"
+              },
+              "column": "refunded_amount_cents",
+              "unit": "分"
+            },
+            "structured_evidence": [
+              {
+                "source_id": "business-guide",
+                "version": "1",
+                "location": "可计算语义定义 / field-refunded_amount_cents",
+                "quote": "  {\n    \"object_id\": \"field-refunded_amount_cents\",\n    \"entry_id\": \"meaning\",\n    \"structure\": {\n      \"kind\": \"field\",\n      \"table\": {\n        \"object_id\": \"table-demo_order_detail\",\n        \"version\": \"1\"\n      },\n      \"column\": \"refunded_amount_cents\",\n      \"unit\": \"分\"\n    }\n  }"
+              }
+            ]
+          },
+          "suggestion": {},
+          "human_override": null,
+          "effective_value": "截至快照的成功退款累计金额，已分摊到当前行，整数分",
+          "review_state": "unverified",
+          "effective_structure": {
+            "kind": "field",
+            "table": {
+              "object_id": "table-demo_order_detail",
+              "version": "1"
+            },
+            "column": "refunded_amount_cents",
+            "unit": "分"
+          }
+        },
+        {
+          "entry_id": "type",
+          "path": "type",
+          "label": "字段类型",
+          "source_facts": {
+            "value": "refunded_amount_cents INTEGER NOT NULL CHECK (refunded_amount_cents BETWEEN 0 AND paid_amount_cents)",
+            "quote": "refunded_amount_cents INTEGER NOT NULL CHECK (refunded_amount_cents BETWEEN 0 AND paid_amount_cents)",
+            "source_id": "schema",
+            "version": "1",
+            "location": "CREATE TABLE demo_order_detail / refunded_amount_cents",
+            "complete": true,
+            "classification": "source_text"
+          },
+          "suggestion": {
+            "value": "INTEGER",
+            "method": "ddl_type_derivation",
+            "uncertainty": [],
+            "evidence": [
+              {
+                "source_id": "schema",
+                "version": "1",
+                "location": "CREATE TABLE demo_order_detail / refunded_amount_cents",
+                "quote": "refunded_amount_cents INTEGER NOT NULL CHECK (refunded_amount_cents BETWEEN 0 AND paid_amount_cents)"
+              }
+            ],
+            "basis": "SQLite table_info 的字段类型与 NOT NULL 约束；未从样本值推断类型或唯一性"
+          },
+          "human_override": null,
+          "effective_value": "INTEGER",
+          "review_state": "unverified"
+        },
+        {
+          "entry_id": "business_domain",
+          "path": "business_domain",
+          "label": "业务范围",
+          "source_facts": {
+            "value": "合成零售",
+            "quote": "业务域标识：`合成零售`。本说明与其DDL、加工SQL生成的所有合成知识对象都属于该业务域；这是一条明确样例约定，不由表名推断。",
+            "source_id": "business-guide",
+            "version": "1",
+            "location": "第8节 / 业务域",
+            "complete": true,
+            "classification": "authored_definition"
+          },
+          "suggestion": {},
+          "human_override": null,
+          "effective_value": "合成零售",
+          "review_state": "unverified"
+        }
+      ],
+      "related_ids": [
+        "table-demo_order_detail"
+      ],
+      "source_id": "business-guide",
+      "source_version": "1",
+      "updated_by": "synthetic-import"
+    },
+    {
+      "id": "field-paid_at",
+      "kind": "field",
+      "name": "paid_at",
+      "version": "1",
+      "state": "enabled",
+      "entries": [
+        {
+          "entry_id": "meaning",
+          "path": "meaning",
+          "label": "字段含义",
+          "source_facts": {
+            "value": "当前行首笔成功付款时刻，UTC；收入和支付客户的默认时间依据",
+            "quote": "| `paid_at` | TEXT，可空 | 当前行首笔成功付款时刻，UTC；收入和支付客户的默认时间依据 |",
+            "source_id": "business-guide",
+            "version": "1",
+            "location": "第4节 / paid_at",
+            "complete": true,
+            "classification": "authored_definition"
+          },
+          "suggestion": {},
+          "human_override": null,
+          "effective_value": "当前行首笔成功付款时刻，UTC；收入和支付客户的默认时间依据",
+          "review_state": "unverified"
+        },
+        {
+          "entry_id": "type",
+          "path": "type",
+          "label": "字段类型",
+          "source_facts": {
+            "value": "paid_at TEXT",
+            "quote": "paid_at TEXT",
+            "source_id": "schema",
+            "version": "1",
+            "location": "CREATE TABLE demo_order_detail / paid_at",
+            "complete": true,
+            "classification": "source_text"
+          },
+          "suggestion": {
+            "value": "TEXT，可空",
+            "method": "ddl_type_derivation",
+            "uncertainty": [],
+            "evidence": [
+              {
+                "source_id": "schema",
+                "version": "1",
+                "location": "CREATE TABLE demo_order_detail / paid_at",
+                "quote": "paid_at TEXT"
+              }
+            ],
+            "basis": "SQLite table_info 的字段类型与 NOT NULL 约束；未从样本值推断类型或唯一性"
+          },
+          "human_override": null,
+          "effective_value": "TEXT，可空",
+          "review_state": "unverified"
+        },
+        {
+          "entry_id": "business_domain",
+          "path": "business_domain",
+          "label": "业务范围",
+          "source_facts": {
+            "value": "合成零售",
+            "quote": "业务域标识：`合成零售`。本说明与其DDL、加工SQL生成的所有合成知识对象都属于该业务域；这是一条明确样例约定，不由表名推断。",
+            "source_id": "business-guide",
+            "version": "1",
+            "location": "第8节 / 业务域",
+            "complete": true,
+            "classification": "authored_definition"
+          },
+          "suggestion": {},
+          "human_override": null,
+          "effective_value": "合成零售",
+          "review_state": "unverified"
+        }
+      ],
+      "related_ids": [
+        "table-demo_order_detail"
+      ],
+      "source_id": "business-guide",
+      "source_version": "1",
+      "updated_by": "synthetic-import"
+    },
+    {
+      "id": "field-order_date",
+      "kind": "field",
+      "name": "order_date",
+      "version": "1",
+      "state": "enabled",
+      "entries": [
+        {
+          "entry_id": "meaning",
+          "path": "meaning",
+          "label": "字段含义",
+          "source_facts": {
+            "value": "UTC 下单日期；用于下单分析，不是支付收入的默认日期",
+            "quote": "| `order_date` | TEXT | UTC 下单日期；用于下单分析，不是支付收入的默认日期 |",
+            "source_id": "business-guide",
+            "version": "1",
+            "location": "第4节 / order_date",
+            "complete": true,
+            "classification": "authored_definition"
+          },
+          "suggestion": {},
+          "human_override": null,
+          "effective_value": "UTC 下单日期；用于下单分析，不是支付收入的默认日期",
+          "review_state": "unverified"
+        },
+        {
+          "entry_id": "type",
+          "path": "type",
+          "label": "字段类型",
+          "source_facts": {
+            "value": "order_date TEXT NOT NULL",
+            "quote": "order_date TEXT NOT NULL",
+            "source_id": "schema",
+            "version": "1",
+            "location": "CREATE TABLE demo_order_detail / order_date",
+            "complete": true,
+            "classification": "source_text"
+          },
+          "suggestion": {
+            "value": "TEXT",
+            "method": "ddl_type_derivation",
+            "uncertainty": [],
+            "evidence": [
+              {
+                "source_id": "schema",
+                "version": "1",
+                "location": "CREATE TABLE demo_order_detail / order_date",
+                "quote": "order_date TEXT NOT NULL"
+              }
+            ],
+            "basis": "SQLite table_info 的字段类型与 NOT NULL 约束；未从样本值推断类型或唯一性"
+          },
+          "human_override": null,
+          "effective_value": "TEXT",
+          "review_state": "unverified"
+        },
+        {
+          "entry_id": "business_domain",
+          "path": "business_domain",
+          "label": "业务范围",
+          "source_facts": {
+            "value": "合成零售",
+            "quote": "业务域标识：`合成零售`。本说明与其DDL、加工SQL生成的所有合成知识对象都属于该业务域；这是一条明确样例约定，不由表名推断。",
+            "source_id": "business-guide",
+            "version": "1",
+            "location": "第8节 / 业务域",
+            "complete": true,
+            "classification": "authored_definition"
+          },
+          "suggestion": {},
+          "human_override": null,
+          "effective_value": "合成零售",
+          "review_state": "unverified"
+        }
+      ],
+      "related_ids": [
+        "table-demo_order_detail"
+      ],
+      "source_id": "business-guide",
+      "source_version": "1",
+      "updated_by": "synthetic-import"
+    },
+    {
+      "id": "field-channel",
+      "kind": "field",
+      "name": "channel",
+      "version": "1",
+      "state": "enabled",
+      "entries": [
+        {
+          "entry_id": "meaning",
+          "path": "meaning",
+          "label": "字段含义",
+          "source_facts": {
+            "value": "`web`=网页、`app`=应用、`store`=门店",
+            "quote": "| `channel` | TEXT | `web`=网页、`app`=应用、`store`=门店 |",
+            "source_id": "business-guide",
+            "version": "1",
+            "location": "第4节 / channel",
+            "complete": true,
+            "classification": "authored_definition"
+          },
+          "suggestion": {},
+          "human_override": null,
+          "effective_value": "`web`=网页、`app`=应用、`store`=门店",
+          "review_state": "unverified"
+        },
+        {
+          "entry_id": "type",
+          "path": "type",
+          "label": "字段类型",
+          "source_facts": {
+            "value": "channel TEXT NOT NULL",
+            "quote": "channel TEXT NOT NULL",
+            "source_id": "schema",
+            "version": "1",
+            "location": "CREATE TABLE demo_order_detail / channel",
+            "complete": true,
+            "classification": "source_text"
+          },
+          "suggestion": {
+            "value": "TEXT",
+            "method": "ddl_type_derivation",
+            "uncertainty": [],
+            "evidence": [
+              {
+                "source_id": "schema",
+                "version": "1",
+                "location": "CREATE TABLE demo_order_detail / channel",
+                "quote": "channel TEXT NOT NULL"
+              }
+            ],
+            "basis": "SQLite table_info 的字段类型与 NOT NULL 约束；未从样本值推断类型或唯一性"
+          },
+          "human_override": null,
+          "effective_value": "TEXT",
+          "review_state": "unverified"
+        },
+        {
+          "entry_id": "business_domain",
+          "path": "business_domain",
+          "label": "业务范围",
+          "source_facts": {
+            "value": "合成零售",
+            "quote": "业务域标识：`合成零售`。本说明与其DDL、加工SQL生成的所有合成知识对象都属于该业务域；这是一条明确样例约定，不由表名推断。",
+            "source_id": "business-guide",
+            "version": "1",
+            "location": "第8节 / 业务域",
+            "complete": true,
+            "classification": "authored_definition"
+          },
+          "suggestion": {},
+          "human_override": null,
+          "effective_value": "合成零售",
+          "review_state": "unverified"
+        }
+      ],
+      "related_ids": [
+        "table-demo_order_detail"
+      ],
+      "source_id": "business-guide",
+      "source_version": "1",
+      "updated_by": "synthetic-import"
+    },
+    {
+      "id": "field-region",
+      "kind": "field",
+      "name": "region",
+      "version": "1",
+      "state": "enabled",
+      "entries": [
+        {
+          "entry_id": "meaning",
+          "path": "meaning",
+          "label": "字段含义",
+          "source_facts": {
+            "value": "当前客户快照地区；空值在展示上可以叫“未知”，存储保留 NULL",
+            "quote": "| `region` | TEXT，可空 | 当前客户快照地区；空值在展示上可以叫“未知”，存储保留 NULL |",
+            "source_id": "business-guide",
+            "version": "1",
+            "location": "第4节 / region",
+            "complete": true,
+            "classification": "authored_definition"
+          },
+          "suggestion": {},
+          "human_override": null,
+          "effective_value": "当前客户快照地区；空值在展示上可以叫“未知”，存储保留 NULL",
+          "review_state": "unverified"
+        },
+        {
+          "entry_id": "type",
+          "path": "type",
+          "label": "字段类型",
+          "source_facts": {
+            "value": "region TEXT",
+            "quote": "region TEXT",
+            "source_id": "schema",
+            "version": "1",
+            "location": "CREATE TABLE demo_order_detail / region",
+            "complete": true,
+            "classification": "source_text"
+          },
+          "suggestion": {
+            "value": "TEXT，可空",
+            "method": "ddl_type_derivation",
+            "uncertainty": [],
+            "evidence": [
+              {
+                "source_id": "schema",
+                "version": "1",
+                "location": "CREATE TABLE demo_order_detail / region",
+                "quote": "region TEXT"
+              }
+            ],
+            "basis": "SQLite table_info 的字段类型与 NOT NULL 约束；未从样本值推断类型或唯一性"
+          },
+          "human_override": null,
+          "effective_value": "TEXT，可空",
+          "review_state": "unverified"
+        },
+        {
+          "entry_id": "business_domain",
+          "path": "business_domain",
+          "label": "业务范围",
+          "source_facts": {
+            "value": "合成零售",
+            "quote": "业务域标识：`合成零售`。本说明与其DDL、加工SQL生成的所有合成知识对象都属于该业务域；这是一条明确样例约定，不由表名推断。",
+            "source_id": "business-guide",
+            "version": "1",
+            "location": "第8节 / 业务域",
+            "complete": true,
+            "classification": "authored_definition"
+          },
+          "suggestion": {},
+          "human_override": null,
+          "effective_value": "合成零售",
+          "review_state": "unverified"
+        }
+      ],
+      "related_ids": [
+        "table-demo_order_detail"
+      ],
+      "source_id": "business-guide",
+      "source_version": "1",
+      "updated_by": "synthetic-import"
+    },
+    {
+      "id": "field-is_test",
+      "kind": "field",
+      "name": "is_test",
+      "version": "1",
+      "state": "enabled",
+      "entries": [
+        {
+          "entry_id": "meaning",
+          "path": "meaning",
+          "label": "字段含义",
+          "source_facts": {
+            "value": "1 为测试交易，0 为普通交易；业务统计默认只取 0，明确查测试交易时可改",
+            "quote": "| `is_test` | INTEGER | 1 为测试交易，0 为普通交易；业务统计默认只取 0，明确查测试交易时可改 |",
+            "source_id": "business-guide",
+            "version": "1",
+            "location": "第4节 / is_test",
+            "complete": true,
+            "classification": "authored_definition"
+          },
+          "suggestion": {},
+          "human_override": null,
+          "effective_value": "1 为测试交易，0 为普通交易；业务统计默认只取 0，明确查测试交易时可改",
+          "review_state": "unverified"
+        },
+        {
+          "entry_id": "type",
+          "path": "type",
+          "label": "字段类型",
+          "source_facts": {
+            "value": "is_test INTEGER NOT NULL CHECK (is_test IN (0, 1))",
+            "quote": "is_test INTEGER NOT NULL CHECK (is_test IN (0, 1))",
+            "source_id": "schema",
+            "version": "1",
+            "location": "CREATE TABLE demo_order_detail / is_test",
+            "complete": true,
+            "classification": "source_text"
+          },
+          "suggestion": {
+            "value": "INTEGER",
+            "method": "ddl_type_derivation",
+            "uncertainty": [],
+            "evidence": [
+              {
+                "source_id": "schema",
+                "version": "1",
+                "location": "CREATE TABLE demo_order_detail / is_test",
+                "quote": "is_test INTEGER NOT NULL CHECK (is_test IN (0, 1))"
+              }
+            ],
+            "basis": "SQLite table_info 的字段类型与 NOT NULL 约束；未从样本值推断类型或唯一性"
+          },
+          "human_override": null,
+          "effective_value": "INTEGER",
+          "review_state": "unverified"
+        },
+        {
+          "entry_id": "business_domain",
+          "path": "business_domain",
+          "label": "业务范围",
+          "source_facts": {
+            "value": "合成零售",
+            "quote": "业务域标识：`合成零售`。本说明与其DDL、加工SQL生成的所有合成知识对象都属于该业务域；这是一条明确样例约定，不由表名推断。",
+            "source_id": "business-guide",
+            "version": "1",
+            "location": "第8节 / 业务域",
+            "complete": true,
+            "classification": "authored_definition"
+          },
+          "suggestion": {},
+          "human_override": null,
+          "effective_value": "合成零售",
+          "review_state": "unverified"
+        }
+      ],
+      "related_ids": [
+        "table-demo_order_detail"
+      ],
+      "source_id": "business-guide",
+      "source_version": "1",
+      "updated_by": "synthetic-import"
+    },
+    {
+      "id": "field-order_status",
+      "kind": "field",
+      "name": "order_status",
+      "version": "1",
+      "state": "enabled",
+      "entries": [
+        {
+          "entry_id": "meaning",
+          "path": "meaning",
+          "label": "字段含义",
+          "source_facts": {
+            "value": "整单状态：`paid`=有付款且未全退，`refunded`=整单全退，`cancelled`=取消，`unpaid`=尚无成功付款",
+            "quote": "| `order_status` | TEXT | 整单状态：`paid`=有付款且未全退，`refunded`=整单全退，`cancelled`=取消，`unpaid`=尚无成功付款 |",
+            "source_id": "business-guide",
+            "version": "1",
+            "location": "第4节 / order_status",
+            "complete": true,
+            "classification": "authored_definition"
+          },
+          "suggestion": {},
+          "human_override": null,
+          "effective_value": "整单状态：`paid`=有付款且未全退，`refunded`=整单全退，`cancelled`=取消，`unpaid`=尚无成功付款",
+          "review_state": "unverified"
+        },
+        {
+          "entry_id": "type",
+          "path": "type",
+          "label": "字段类型",
+          "source_facts": {
+            "value": "order_status TEXT NOT NULL CHECK (order_status IN ('paid', 'refunded', 'cancelled', 'unpaid'))",
+            "quote": "order_status TEXT NOT NULL CHECK (order_status IN ('paid', 'refunded', 'cancelled', 'unpaid'))",
+            "source_id": "schema",
+            "version": "1",
+            "location": "CREATE TABLE demo_order_detail / order_status",
+            "complete": true,
+            "classification": "source_text"
+          },
+          "suggestion": {
+            "value": "TEXT",
+            "method": "ddl_type_derivation",
+            "uncertainty": [],
+            "evidence": [
+              {
+                "source_id": "schema",
+                "version": "1",
+                "location": "CREATE TABLE demo_order_detail / order_status",
+                "quote": "order_status TEXT NOT NULL CHECK (order_status IN ('paid', 'refunded', 'cancelled', 'unpaid'))"
+              }
+            ],
+            "basis": "SQLite table_info 的字段类型与 NOT NULL 约束；未从样本值推断类型或唯一性"
+          },
+          "human_override": null,
+          "effective_value": "TEXT",
+          "review_state": "unverified"
+        },
+        {
+          "entry_id": "business_domain",
+          "path": "business_domain",
+          "label": "业务范围",
+          "source_facts": {
+            "value": "合成零售",
+            "quote": "业务域标识：`合成零售`。本说明与其DDL、加工SQL生成的所有合成知识对象都属于该业务域；这是一条明确样例约定，不由表名推断。",
+            "source_id": "business-guide",
+            "version": "1",
+            "location": "第8节 / 业务域",
+            "complete": true,
+            "classification": "authored_definition"
+          },
+          "suggestion": {},
+          "human_override": null,
+          "effective_value": "合成零售",
+          "review_state": "unverified"
+        }
+      ],
+      "related_ids": [
+        "table-demo_order_detail"
+      ],
+      "source_id": "business-guide",
+      "source_version": "1",
+      "updated_by": "synthetic-import"
+    },
+    {
+      "id": "metric-net_revenue",
+      "kind": "metric",
+      "name": "支付归属净收入",
+      "version": "1",
+      "state": "enabled",
+      "entries": [
+        {
+          "entry_id": "definition",
+          "path": "definition",
+          "label": "指标口径",
+          "source_facts": {
+            "value": "### 5.1 支付归属净收入\n\n- 指标标识：`net_revenue`\n- 别名：净收入 收入 净收\n- 时间：按 `paid_at` 选支付期间，排除测试交易。\n- 计算：`SUM(paid_amount_cents - refunded_amount_cents)`。\n- 单位：分；展示为元时除以 100。\n- 边界：全退订单保留，贡献 0；部分退款扣除实际退款；取消和未付订单没有 `paid_at`，不会计入。\n- 退款按原付款期间归属。例如 1 月付款、2 月退款，在当前快照中会减少 1 月净收入。\n\n这是“截至快照、按付款月归属”的业务指标。若用户问“2 月实际退款流水”或“当月现金净流入”，应按 `raw_payments.event_at` 计算；不能用主表累计退款替代退款发生时间。\n\n计算 SQL（本说明人工制定的合成指标定义；`:start` 和 `:end` 是 UTC 半开区间参数）：\n\n```sql\nSELECT SUM(paid_amount_cents - refunded_amount_cents) AS net_revenue\nFROM demo_order_detail\nWHERE is_test = 0 AND paid_amount_cents > 0\n  AND paid_at >= :start AND paid_at < :end;\n```",
+            "quote": "### 5.1 支付归属净收入\n\n- 指标标识：`net_revenue`\n- 别名：净收入 收入 净收\n- 时间：按 `paid_at` 选支付期间，排除测试交易。\n- 计算：`SUM(paid_amount_cents - refunded_amount_cents)`。\n- 单位：分；展示为元时除以 100。\n- 边界：全退订单保留，贡献 0；部分退款扣除实际退款；取消和未付订单没有 `paid_at`，不会计入。\n- 退款按原付款期间归属。例如 1 月付款、2 月退款，在当前快照中会减少 1 月净收入。\n\n这是“截至快照、按付款月归属”的业务指标。若用户问“2 月实际退款流水”或“当月现金净流入”，应按 `raw_payments.event_at` 计算；不能用主表累计退款替代退款发生时间。\n\n计算 SQL（本说明人工制定的合成指标定义；`:start` 和 `:end` 是 UTC 半开区间参数）：\n\n```sql\nSELECT SUM(paid_amount_cents - refunded_amount_cents) AS net_revenue\nFROM demo_order_detail\nWHERE is_test = 0 AND paid_amount_cents > 0\n  AND paid_at >= :start AND paid_at < :end;\n```",
+            "source_id": "business-guide",
+            "version": "1",
+            "location": "5.1 支付归属净收入",
+            "complete": true,
+            "classification": "authored_definition",
+            "structured_value": {
+              "kind": "metric",
+              "table": {
+                "object_id": "table-demo_order_detail",
+                "version": "1"
+              },
+              "expression": "SUM(paid_amount_cents - refunded_amount_cents)",
+              "input_grain": "订单商品行",
+              "time_column": "paid_at",
+              "unit": "分",
+              "required_filters": [
+                "is_test = 0",
+                "paid_amount_cents > 0"
+              ],
+              "dimensions": [
+                "channel",
+                "region"
+              ]
+            },
+            "structured_evidence": [
+              {
+                "source_id": "business-guide",
+                "version": "1",
+                "location": "可计算语义定义 / metric-net_revenue",
+                "quote": "  {\n    \"object_id\": \"metric-net_revenue\",\n    \"entry_id\": \"definition\",\n    \"structure\": {\n      \"kind\": \"metric\",\n      \"table\": {\n        \"object_id\": \"table-demo_order_detail\",\n        \"version\": \"1\"\n      },\n      \"expression\": \"SUM(paid_amount_cents - refunded_amount_cents)\",\n      \"input_grain\": \"订单商品行\",\n      \"time_column\": \"paid_at\",\n      \"unit\": \"分\",\n      \"required_filters\": [\n        \"is_test = 0\",\n        \"paid_amount_cents > 0\"\n      ],\n      \"dimensions\": [\n        \"channel\",\n        \"region\"\n      ]\n    }\n  }"
+              }
+            ]
+          },
+          "suggestion": {},
+          "human_override": null,
+          "effective_value": "### 5.1 支付归属净收入\n\n- 指标标识：`net_revenue`\n- 别名：净收入 收入 净收\n- 时间：按 `paid_at` 选支付期间，排除测试交易。\n- 计算：`SUM(paid_amount_cents - refunded_amount_cents)`。\n- 单位：分；展示为元时除以 100。\n- 边界：全退订单保留，贡献 0；部分退款扣除实际退款；取消和未付订单没有 `paid_at`，不会计入。\n- 退款按原付款期间归属。例如 1 月付款、2 月退款，在当前快照中会减少 1 月净收入。\n\n这是“截至快照、按付款月归属”的业务指标。若用户问“2 月实际退款流水”或“当月现金净流入”，应按 `raw_payments.event_at` 计算；不能用主表累计退款替代退款发生时间。\n\n计算 SQL（本说明人工制定的合成指标定义；`:start` 和 `:end` 是 UTC 半开区间参数）：\n\n```sql\nSELECT SUM(paid_amount_cents - refunded_amount_cents) AS net_revenue\nFROM demo_order_detail\nWHERE is_test = 0 AND paid_amount_cents > 0\n  AND paid_at >= :start AND paid_at < :end;\n```",
+          "review_state": "unverified",
+          "effective_structure": {
+            "kind": "metric",
+            "table": {
+              "object_id": "table-demo_order_detail",
+              "version": "1"
+            },
+            "expression": "SUM(paid_amount_cents - refunded_amount_cents)",
+            "input_grain": "订单商品行",
+            "time_column": "paid_at",
+            "unit": "分",
+            "required_filters": [
+              "is_test = 0",
+              "paid_amount_cents > 0"
+            ],
+            "dimensions": [
+              "channel",
+              "region"
+            ]
+          }
+        },
+        {
+          "entry_id": "aliases",
+          "path": "aliases",
+          "label": "别名",
+          "source_facts": {
+            "value": "净收入 收入 净收",
+            "quote": "- 别名：净收入 收入 净收",
+            "source_id": "business-guide",
+            "version": "1",
+            "location": "5.1 支付归属净收入",
+            "complete": true,
+            "classification": "authored_definition"
+          },
+          "suggestion": {},
+          "human_override": null,
+          "effective_value": "净收入 收入 净收",
+          "review_state": "unverified"
+        },
+        {
+          "entry_id": "sql",
+          "path": "sql",
+          "label": "计算SQL",
+          "source_facts": {
+            "value": "SELECT SUM(paid_amount_cents - refunded_amount_cents) AS net_revenue\nFROM demo_order_detail\nWHERE is_test = 0 AND paid_amount_cents > 0\n  AND paid_at >= :start AND paid_at < :end;",
+            "quote": "SELECT SUM(paid_amount_cents - refunded_amount_cents) AS net_revenue\nFROM demo_order_detail\nWHERE is_test = 0 AND paid_amount_cents > 0\n  AND paid_at >= :start AND paid_at < :end;",
+            "source_id": "business-guide",
+            "version": "1",
+            "location": "5.1 支付归属净收入",
+            "complete": true,
+            "classification": "authored_definition"
+          },
+          "suggestion": {},
+          "human_override": null,
+          "effective_value": "SELECT SUM(paid_amount_cents - refunded_amount_cents) AS net_revenue\nFROM demo_order_detail\nWHERE is_test = 0 AND paid_amount_cents > 0\n  AND paid_at >= :start AND paid_at < :end;",
+          "review_state": "unverified"
+        },
+        {
+          "entry_id": "business_domain",
+          "path": "business_domain",
+          "label": "业务范围",
+          "source_facts": {
+            "value": "合成零售",
+            "quote": "业务域标识：`合成零售`。本说明与其DDL、加工SQL生成的所有合成知识对象都属于该业务域；这是一条明确样例约定，不由表名推断。",
+            "source_id": "business-guide",
+            "version": "1",
+            "location": "第8节 / 业务域",
+            "complete": true,
+            "classification": "authored_definition"
+          },
+          "suggestion": {},
+          "human_override": null,
+          "effective_value": "合成零售",
+          "review_state": "unverified"
+        }
+      ],
+      "related_ids": [
+        "table-demo_order_detail",
+        "field-paid_at",
+        "field-is_test"
+      ],
+      "source_id": "business-guide",
+      "source_version": "1",
+      "updated_by": "synthetic-import"
+    },
+    {
+      "id": "metric-paying_customers",
+      "kind": "metric",
+      "name": "月支付客户数",
+      "version": "1",
+      "state": "enabled",
+      "entries": [
+        {
+          "entry_id": "definition",
+          "path": "definition",
+          "label": "指标口径",
+          "source_facts": {
+            "value": "### 5.2 月支付客户数\n\n- 指标标识：`paying_customers`\n- 别名：UV 支付客户 月客户\n- 在整个月的已支付、非测试行上执行 `COUNT(DISTINCT customer_id)`。\n- 同一客户多次下单、多行商品只计一次；匿名客户不计已知客户数。\n- 全额退款客户仍曾成功付款，保留在该指标内；如用户要求“未全退客户”，属于不同口径，需要明确。\n- 不能把每天的客户数相加得到月客户数；同一客户可能跨天出现。\n\n计算 SQL（本说明人工制定的合成指标定义，时间参数含义同上）：\n\n```sql\nSELECT COUNT(DISTINCT customer_id) AS paying_customers\nFROM demo_order_detail\nWHERE is_test = 0 AND paid_amount_cents > 0\n  AND paid_at >= :start AND paid_at < :end;\n```",
+            "quote": "### 5.2 月支付客户数\n\n- 指标标识：`paying_customers`\n- 别名：UV 支付客户 月客户\n- 在整个月的已支付、非测试行上执行 `COUNT(DISTINCT customer_id)`。\n- 同一客户多次下单、多行商品只计一次；匿名客户不计已知客户数。\n- 全额退款客户仍曾成功付款，保留在该指标内；如用户要求“未全退客户”，属于不同口径，需要明确。\n- 不能把每天的客户数相加得到月客户数；同一客户可能跨天出现。\n\n计算 SQL（本说明人工制定的合成指标定义，时间参数含义同上）：\n\n```sql\nSELECT COUNT(DISTINCT customer_id) AS paying_customers\nFROM demo_order_detail\nWHERE is_test = 0 AND paid_amount_cents > 0\n  AND paid_at >= :start AND paid_at < :end;\n```",
+            "source_id": "business-guide",
+            "version": "1",
+            "location": "5.2 月支付客户数",
+            "complete": true,
+            "classification": "authored_definition",
+            "structured_value": {
+              "kind": "metric",
+              "table": {
+                "object_id": "table-demo_order_detail",
+                "version": "1"
+              },
+              "expression": "COUNT(DISTINCT customer_id)",
+              "input_grain": "订单商品行",
+              "time_column": "paid_at",
+              "unit": "人",
+              "required_filters": [
+                "is_test = 0",
+                "paid_amount_cents > 0"
+              ],
+              "dimensions": [
+                "channel",
+                "region"
+              ]
+            },
+            "structured_evidence": [
+              {
+                "source_id": "business-guide",
+                "version": "1",
+                "location": "可计算语义定义 / metric-paying_customers",
+                "quote": "  {\n    \"object_id\": \"metric-paying_customers\",\n    \"entry_id\": \"definition\",\n    \"structure\": {\n      \"kind\": \"metric\",\n      \"table\": {\n        \"object_id\": \"table-demo_order_detail\",\n        \"version\": \"1\"\n      },\n      \"expression\": \"COUNT(DISTINCT customer_id)\",\n      \"input_grain\": \"订单商品行\",\n      \"time_column\": \"paid_at\",\n      \"unit\": \"人\",\n      \"required_filters\": [\n        \"is_test = 0\",\n        \"paid_amount_cents > 0\"\n      ],\n      \"dimensions\": [\n        \"channel\",\n        \"region\"\n      ]\n    }\n  }"
+              }
+            ]
+          },
+          "suggestion": {},
+          "human_override": null,
+          "effective_value": "### 5.2 月支付客户数\n\n- 指标标识：`paying_customers`\n- 别名：UV 支付客户 月客户\n- 在整个月的已支付、非测试行上执行 `COUNT(DISTINCT customer_id)`。\n- 同一客户多次下单、多行商品只计一次；匿名客户不计已知客户数。\n- 全额退款客户仍曾成功付款，保留在该指标内；如用户要求“未全退客户”，属于不同口径，需要明确。\n- 不能把每天的客户数相加得到月客户数；同一客户可能跨天出现。\n\n计算 SQL（本说明人工制定的合成指标定义，时间参数含义同上）：\n\n```sql\nSELECT COUNT(DISTINCT customer_id) AS paying_customers\nFROM demo_order_detail\nWHERE is_test = 0 AND paid_amount_cents > 0\n  AND paid_at >= :start AND paid_at < :end;\n```",
+          "review_state": "unverified",
+          "effective_structure": {
+            "kind": "metric",
+            "table": {
+              "object_id": "table-demo_order_detail",
+              "version": "1"
+            },
+            "expression": "COUNT(DISTINCT customer_id)",
+            "input_grain": "订单商品行",
+            "time_column": "paid_at",
+            "unit": "人",
+            "required_filters": [
+              "is_test = 0",
+              "paid_amount_cents > 0"
+            ],
+            "dimensions": [
+              "channel",
+              "region"
+            ]
+          }
+        },
+        {
+          "entry_id": "aliases",
+          "path": "aliases",
+          "label": "别名",
+          "source_facts": {
+            "value": "UV 支付客户 月客户",
+            "quote": "- 别名：UV 支付客户 月客户",
+            "source_id": "business-guide",
+            "version": "1",
+            "location": "5.2 月支付客户数",
+            "complete": true,
+            "classification": "authored_definition"
+          },
+          "suggestion": {},
+          "human_override": null,
+          "effective_value": "UV 支付客户 月客户",
+          "review_state": "unverified"
+        },
+        {
+          "entry_id": "sql",
+          "path": "sql",
+          "label": "计算SQL",
+          "source_facts": {
+            "value": "SELECT COUNT(DISTINCT customer_id) AS paying_customers\nFROM demo_order_detail\nWHERE is_test = 0 AND paid_amount_cents > 0\n  AND paid_at >= :start AND paid_at < :end;",
+            "quote": "SELECT COUNT(DISTINCT customer_id) AS paying_customers\nFROM demo_order_detail\nWHERE is_test = 0 AND paid_amount_cents > 0\n  AND paid_at >= :start AND paid_at < :end;",
+            "source_id": "business-guide",
+            "version": "1",
+            "location": "5.2 月支付客户数",
+            "complete": true,
+            "classification": "authored_definition"
+          },
+          "suggestion": {},
+          "human_override": null,
+          "effective_value": "SELECT COUNT(DISTINCT customer_id) AS paying_customers\nFROM demo_order_detail\nWHERE is_test = 0 AND paid_amount_cents > 0\n  AND paid_at >= :start AND paid_at < :end;",
+          "review_state": "unverified"
+        },
+        {
+          "entry_id": "business_domain",
+          "path": "business_domain",
+          "label": "业务范围",
+          "source_facts": {
+            "value": "合成零售",
+            "quote": "业务域标识：`合成零售`。本说明与其DDL、加工SQL生成的所有合成知识对象都属于该业务域；这是一条明确样例约定，不由表名推断。",
+            "source_id": "business-guide",
+            "version": "1",
+            "location": "第8节 / 业务域",
+            "complete": true,
+            "classification": "authored_definition"
+          },
+          "suggestion": {},
+          "human_override": null,
+          "effective_value": "合成零售",
+          "review_state": "unverified"
+        }
+      ],
+      "related_ids": [
+        "table-demo_order_detail",
+        "field-paid_at",
+        "field-is_test"
+      ],
+      "source_id": "business-guide",
+      "source_version": "1",
+      "updated_by": "synthetic-import"
+    },
+    {
+      "id": "metric-refund_rate",
+      "kind": "metric",
+      "name": "订单退款率",
+      "version": "1",
+      "state": "enabled",
+      "entries": [
+        {
+          "entry_id": "definition",
+          "path": "definition",
+          "label": "指标口径",
+          "source_facts": {
+            "value": "### 5.3 订单退款率\n\n- 指标标识：`refund_rate`\n- 别名：退款率 订单退款比例\n\n这是一个已经命名清楚的示例指标：\n\n- 分母：期间内有成功付款的非测试订单数，按订单去重。\n- 分子：分母中的订单，截至快照至少有一行成功退款。先确定期间付款的订单集合，再检查这些订单的全部行；退款行不必在同一付款月份。\n- 计算：退款订单数 / 已支付订单数；零分母返回 `NULL`，同时说明无已支付订单。\n- 全额和部分退款订单都计分子；匿名订单仍计订单数。\n\n如果用户只说“退款率”，还不能知道他要的是订单退款率、退款金额占支付金额比例，还是退款客户占支付客户比例。Agent 应先查已有会话约定或用户采用的指标；缺少约定时询问分母，用户明确后再生成相应 SQL。不能把名称相似当成已经确认了口径。\n\n计算 SQL（本说明人工制定的合成指标定义，时间参数含义同上）：\n\n```sql\nSELECT COUNT(DISTINCT CASE WHEN EXISTS (\n    SELECT 1 FROM demo_order_detail AS r\n    WHERE r.order_id = demo_order_detail.order_id\n      AND r.is_test = 0 AND r.refunded_amount_cents > 0\n) THEN order_id END) * 1.0 / NULLIF(COUNT(DISTINCT order_id), 0) AS refund_rate\nFROM demo_order_detail\nWHERE is_test = 0 AND paid_amount_cents > 0\n  AND paid_at >= :start AND paid_at < :end;\n```",
+            "quote": "### 5.3 订单退款率\n\n- 指标标识：`refund_rate`\n- 别名：退款率 订单退款比例\n\n这是一个已经命名清楚的示例指标：\n\n- 分母：期间内有成功付款的非测试订单数，按订单去重。\n- 分子：分母中的订单，截至快照至少有一行成功退款。先确定期间付款的订单集合，再检查这些订单的全部行；退款行不必在同一付款月份。\n- 计算：退款订单数 / 已支付订单数；零分母返回 `NULL`，同时说明无已支付订单。\n- 全额和部分退款订单都计分子；匿名订单仍计订单数。\n\n如果用户只说“退款率”，还不能知道他要的是订单退款率、退款金额占支付金额比例，还是退款客户占支付客户比例。Agent 应先查已有会话约定或用户采用的指标；缺少约定时询问分母，用户明确后再生成相应 SQL。不能把名称相似当成已经确认了口径。\n\n计算 SQL（本说明人工制定的合成指标定义，时间参数含义同上）：\n\n```sql\nSELECT COUNT(DISTINCT CASE WHEN EXISTS (\n    SELECT 1 FROM demo_order_detail AS r\n    WHERE r.order_id = demo_order_detail.order_id\n      AND r.is_test = 0 AND r.refunded_amount_cents > 0\n) THEN order_id END) * 1.0 / NULLIF(COUNT(DISTINCT order_id), 0) AS refund_rate\nFROM demo_order_detail\nWHERE is_test = 0 AND paid_amount_cents > 0\n  AND paid_at >= :start AND paid_at < :end;\n```",
+            "source_id": "business-guide",
+            "version": "1",
+            "location": "5.3 订单退款率",
+            "complete": true,
+            "classification": "authored_definition"
+          },
+          "suggestion": {},
+          "human_override": null,
+          "effective_value": "### 5.3 订单退款率\n\n- 指标标识：`refund_rate`\n- 别名：退款率 订单退款比例\n\n这是一个已经命名清楚的示例指标：\n\n- 分母：期间内有成功付款的非测试订单数，按订单去重。\n- 分子：分母中的订单，截至快照至少有一行成功退款。先确定期间付款的订单集合，再检查这些订单的全部行；退款行不必在同一付款月份。\n- 计算：退款订单数 / 已支付订单数；零分母返回 `NULL`，同时说明无已支付订单。\n- 全额和部分退款订单都计分子；匿名订单仍计订单数。\n\n如果用户只说“退款率”，还不能知道他要的是订单退款率、退款金额占支付金额比例，还是退款客户占支付客户比例。Agent 应先查已有会话约定或用户采用的指标；缺少约定时询问分母，用户明确后再生成相应 SQL。不能把名称相似当成已经确认了口径。\n\n计算 SQL（本说明人工制定的合成指标定义，时间参数含义同上）：\n\n```sql\nSELECT COUNT(DISTINCT CASE WHEN EXISTS (\n    SELECT 1 FROM demo_order_detail AS r\n    WHERE r.order_id = demo_order_detail.order_id\n      AND r.is_test = 0 AND r.refunded_amount_cents > 0\n) THEN order_id END) * 1.0 / NULLIF(COUNT(DISTINCT order_id), 0) AS refund_rate\nFROM demo_order_detail\nWHERE is_test = 0 AND paid_amount_cents > 0\n  AND paid_at >= :start AND paid_at < :end;\n```",
+          "review_state": "unverified"
+        },
+        {
+          "entry_id": "aliases",
+          "path": "aliases",
+          "label": "别名",
+          "source_facts": {
+            "value": "退款率 订单退款比例",
+            "quote": "- 别名：退款率 订单退款比例",
+            "source_id": "business-guide",
+            "version": "1",
+            "location": "5.3 订单退款率",
+            "complete": true,
+            "classification": "authored_definition"
+          },
+          "suggestion": {},
+          "human_override": null,
+          "effective_value": "退款率 订单退款比例",
+          "review_state": "unverified"
+        },
+        {
+          "entry_id": "sql",
+          "path": "sql",
+          "label": "计算SQL",
+          "source_facts": {
+            "value": "SELECT COUNT(DISTINCT CASE WHEN EXISTS (\n    SELECT 1 FROM demo_order_detail AS r\n    WHERE r.order_id = demo_order_detail.order_id\n      AND r.is_test = 0 AND r.refunded_amount_cents > 0\n) THEN order_id END) * 1.0 / NULLIF(COUNT(DISTINCT order_id), 0) AS refund_rate\nFROM demo_order_detail\nWHERE is_test = 0 AND paid_amount_cents > 0\n  AND paid_at >= :start AND paid_at < :end;",
+            "quote": "SELECT COUNT(DISTINCT CASE WHEN EXISTS (\n    SELECT 1 FROM demo_order_detail AS r\n    WHERE r.order_id = demo_order_detail.order_id\n      AND r.is_test = 0 AND r.refunded_amount_cents > 0\n) THEN order_id END) * 1.0 / NULLIF(COUNT(DISTINCT order_id), 0) AS refund_rate\nFROM demo_order_detail\nWHERE is_test = 0 AND paid_amount_cents > 0\n  AND paid_at >= :start AND paid_at < :end;",
+            "source_id": "business-guide",
+            "version": "1",
+            "location": "5.3 订单退款率",
+            "complete": true,
+            "classification": "authored_definition"
+          },
+          "suggestion": {},
+          "human_override": null,
+          "effective_value": "SELECT COUNT(DISTINCT CASE WHEN EXISTS (\n    SELECT 1 FROM demo_order_detail AS r\n    WHERE r.order_id = demo_order_detail.order_id\n      AND r.is_test = 0 AND r.refunded_amount_cents > 0\n) THEN order_id END) * 1.0 / NULLIF(COUNT(DISTINCT order_id), 0) AS refund_rate\nFROM demo_order_detail\nWHERE is_test = 0 AND paid_amount_cents > 0\n  AND paid_at >= :start AND paid_at < :end;",
+          "review_state": "unverified"
+        },
+        {
+          "entry_id": "business_domain",
+          "path": "business_domain",
+          "label": "业务范围",
+          "source_facts": {
+            "value": "合成零售",
+            "quote": "业务域标识：`合成零售`。本说明与其DDL、加工SQL生成的所有合成知识对象都属于该业务域；这是一条明确样例约定，不由表名推断。",
+            "source_id": "business-guide",
+            "version": "1",
+            "location": "第8节 / 业务域",
+            "complete": true,
+            "classification": "authored_definition"
+          },
+          "suggestion": {},
+          "human_override": null,
+          "effective_value": "合成零售",
+          "review_state": "unverified"
+        }
+      ],
+      "related_ids": [
+        "table-demo_order_detail",
+        "field-paid_at",
+        "field-is_test"
+      ],
+      "source_id": "business-guide",
+      "source_version": "1",
+      "updated_by": "synthetic-import"
+    },
+    {
+      "id": "document-guide-1",
+      "kind": "document",
+      "name": "1. 本样例回答什么",
+      "version": "1",
+      "state": "enabled",
+      "entries": [
+        {
+          "entry_id": "body",
+          "path": "body",
+          "label": "章节正文",
+          "source_facts": {
+            "value": "演示一家虚构零售商通过网页、应用和门店销售商品。用户可以查看已支付金额、净收入、支付客户数，或按渠道、客户地区分析。核心表 `demo_order_detail` 是订单行明细，供语义维护页面展示字段、指标和依据。资料规模很小；它不能证明在大规模目录里检索也准确。\n\n数据快照截止 **2026-04-04 00:00:00 UTC，不含截止时刻**。付款数据覆盖2026年1月至3月，成功退款事件延伸至2026年4月2日；4月不是完整交易月份。种子数据不随当前日期变化。此处“2026 年 1 月”使用 `[2026-01-01T00:00:00Z, 2026-02-01T00:00:00Z)`，金额单位为整数分。输出给人阅读时可除以 100 得到元，计算和验收保留分，避免浮点金额误差。",
+            "quote": "演示一家虚构零售商通过网页、应用和门店销售商品。用户可以查看已支付金额、净收入、支付客户数，或按渠道、客户地区分析。核心表 `demo_order_detail` 是订单行明细，供语义维护页面展示字段、指标和依据。资料规模很小；它不能证明在大规模目录里检索也准确。\n\n数据快照截止 **2026-04-04 00:00:00 UTC，不含截止时刻**。付款数据覆盖2026年1月至3月，成功退款事件延伸至2026年4月2日；4月不是完整交易月份。种子数据不随当前日期变化。此处“2026 年 1 月”使用 `[2026-01-01T00:00:00Z, 2026-02-01T00:00:00Z)`，金额单位为整数分。输出给人阅读时可除以 100 得到元，计算和验收保留分，避免浮点金额误差。",
+            "source_id": "business-guide",
+            "version": "1",
+            "location": "1. 本样例回答什么",
+            "complete": true,
+            "classification": "authored_definition"
+          },
+          "suggestion": {},
+          "human_override": null,
+          "effective_value": "演示一家虚构零售商通过网页、应用和门店销售商品。用户可以查看已支付金额、净收入、支付客户数，或按渠道、客户地区分析。核心表 `demo_order_detail` 是订单行明细，供语义维护页面展示字段、指标和依据。资料规模很小；它不能证明在大规模目录里检索也准确。\n\n数据快照截止 **2026-04-04 00:00:00 UTC，不含截止时刻**。付款数据覆盖2026年1月至3月，成功退款事件延伸至2026年4月2日；4月不是完整交易月份。种子数据不随当前日期变化。此处“2026 年 1 月”使用 `[2026-01-01T00:00:00Z, 2026-02-01T00:00:00Z)`，金额单位为整数分。输出给人阅读时可除以 100 得到元，计算和验收保留分，避免浮点金额误差。",
+          "review_state": "unverified"
+        },
+        {
+          "entry_id": "business_domain",
+          "path": "business_domain",
+          "label": "业务范围",
+          "source_facts": {
+            "value": "合成零售",
+            "quote": "业务域标识：`合成零售`。本说明与其DDL、加工SQL生成的所有合成知识对象都属于该业务域；这是一条明确样例约定，不由表名推断。",
+            "source_id": "business-guide",
+            "version": "1",
+            "location": "第8节 / 业务域",
+            "complete": true,
+            "classification": "authored_definition"
+          },
+          "suggestion": {},
+          "human_override": null,
+          "effective_value": "合成零售",
+          "review_state": "unverified"
+        }
+      ],
+      "related_ids": [
+        "table-demo_order_detail"
+      ],
+      "source_id": "business-guide",
+      "source_version": "1",
+      "updated_by": "synthetic-import"
+    },
+    {
+      "id": "document-guide-2",
+      "kind": "document",
+      "name": "2. 一行代表什么",
+      "version": "1",
+      "state": "enabled",
+      "entries": [
+        {
+          "entry_id": "body",
+          "path": "body",
+          "label": "章节正文",
+          "source_facts": {
+            "value": "`demo_order_detail` 的一行是一张订单中的一个商品行。主键是 `(order_id, line_id)`。同一订单可能有多个商品行，同一客户也会反复下单，所以：\n\n- 订单数用 `COUNT(DISTINCT order_id)`。\n- 已知客户数用 `COUNT(DISTINCT customer_id)`，不把匿名购买强行合并成一个客户。\n- 商品件数用 `SUM(quantity)`；行数、订单数、件数含义不同。\n- `paid_amount_cents` 和 `refunded_amount_cents` 已分摊到行，可以按行相加。\n- 同一订单各行的客户、渠道、下单时间和测试标记在本样例中一致；生成器和验收会核对这一点。",
+            "quote": "`demo_order_detail` 的一行是一张订单中的一个商品行。主键是 `(order_id, line_id)`。同一订单可能有多个商品行，同一客户也会反复下单，所以：\n\n- 订单数用 `COUNT(DISTINCT order_id)`。\n- 已知客户数用 `COUNT(DISTINCT customer_id)`，不把匿名购买强行合并成一个客户。\n- 商品件数用 `SUM(quantity)`；行数、订单数、件数含义不同。\n- `paid_amount_cents` 和 `refunded_amount_cents` 已分摊到行，可以按行相加。\n- 同一订单各行的客户、渠道、下单时间和测试标记在本样例中一致；生成器和验收会核对这一点。",
+            "source_id": "business-guide",
+            "version": "1",
+            "location": "2. 一行代表什么",
+            "complete": true,
+            "classification": "authored_definition"
+          },
+          "suggestion": {},
+          "human_override": null,
+          "effective_value": "`demo_order_detail` 的一行是一张订单中的一个商品行。主键是 `(order_id, line_id)`。同一订单可能有多个商品行，同一客户也会反复下单，所以：\n\n- 订单数用 `COUNT(DISTINCT order_id)`。\n- 已知客户数用 `COUNT(DISTINCT customer_id)`，不把匿名购买强行合并成一个客户。\n- 商品件数用 `SUM(quantity)`；行数、订单数、件数含义不同。\n- `paid_amount_cents` 和 `refunded_amount_cents` 已分摊到行，可以按行相加。\n- 同一订单各行的客户、渠道、下单时间和测试标记在本样例中一致；生成器和验收会核对这一点。",
+          "review_state": "unverified"
+        },
+        {
+          "entry_id": "business_domain",
+          "path": "business_domain",
+          "label": "业务范围",
+          "source_facts": {
+            "value": "合成零售",
+            "quote": "业务域标识：`合成零售`。本说明与其DDL、加工SQL生成的所有合成知识对象都属于该业务域；这是一条明确样例约定，不由表名推断。",
+            "source_id": "business-guide",
+            "version": "1",
+            "location": "第8节 / 业务域",
+            "complete": true,
+            "classification": "authored_definition"
+          },
+          "suggestion": {},
+          "human_override": null,
+          "effective_value": "合成零售",
+          "review_state": "unverified"
+        }
+      ],
+      "related_ids": [
+        "table-demo_order_detail"
+      ],
+      "source_id": "business-guide",
+      "source_version": "1",
+      "updated_by": "synthetic-import"
+    },
+    {
+      "id": "document-guide-3",
+      "kind": "document",
+      "name": "3. 上游与加工",
+      "version": "1",
+      "state": "enabled",
+      "entries": [
+        {
+          "entry_id": "body",
+          "path": "body",
+          "label": "章节正文",
+          "source_facts": {
+            "value": "### 3.1 订单行 `raw_order_lines`\n\n提供订单、行、客户、商品、数量、下单时间、渠道、测试标记和源订单状态。取消订单保留；没有付款的行也保留。主表 `order_date` 由 `ordered_at` 截取 UTC 日期，不能因此把它自动当成收入统计日期。\n\n### 3.2 付款事件 `raw_payments`\n\n一个订单行可能有多次付款或退款。`event_type='charge'` 表示付款，`event_type='refund'` 表示退款。每笔事件已按订单行分摊，金额始终为正数；类型决定它是加付款还是加退款。\n\n加工先筛选快照截止前 `event_status='success'` 的事件，再按 `(order_id, line_id)` 汇总，再与订单行关联。失败和等待中的事件不计金额。直接把事件表关联回订单行后重复累加行金额，会重复计算。\n\n`paid_at` 是这一个订单行首笔成功付款的 UTC 时刻；本样例一行的分次付款都在同一天，且不存在同一 `(order_id, line_id)` 跨月分次付款。同一订单的不同行可以在不同月份首次付款，不能假定它们的 `paid_at` 同月。没有成功付款时，`paid_at` 为 `NULL`，两个金额为 0。\n\n### 3.3 客户 `dim_customers`\n\n按唯一 `customer_id` 左连接，补充当前快照的客户地区。匿名购买没有客户 ID；已知客户也可能没有地区。两类未知地区都保留 `NULL`，不能猜成默认地区。此维表没有历史拉链，本样例的地区分析表示当前快照地区，不承诺还原交易时地区。\n\n### 3.4 标签 `customer_tags`\n\n这是查询时可用的附加表，不参加主表加工。同一客户可以有多个标签，关联基数是一对多。筛选“有 VIP 或订阅标签的客户”时用 `EXISTS`，或者先得到去重的客户列表再关联。如果直接连接标签明细，一个同时有两种标签的客户，其订单金额会出现两遍。",
+            "quote": "### 3.1 订单行 `raw_order_lines`\n\n提供订单、行、客户、商品、数量、下单时间、渠道、测试标记和源订单状态。取消订单保留；没有付款的行也保留。主表 `order_date` 由 `ordered_at` 截取 UTC 日期，不能因此把它自动当成收入统计日期。\n\n### 3.2 付款事件 `raw_payments`\n\n一个订单行可能有多次付款或退款。`event_type='charge'` 表示付款，`event_type='refund'` 表示退款。每笔事件已按订单行分摊，金额始终为正数；类型决定它是加付款还是加退款。\n\n加工先筛选快照截止前 `event_status='success'` 的事件，再按 `(order_id, line_id)` 汇总，再与订单行关联。失败和等待中的事件不计金额。直接把事件表关联回订单行后重复累加行金额，会重复计算。\n\n`paid_at` 是这一个订单行首笔成功付款的 UTC 时刻；本样例一行的分次付款都在同一天，且不存在同一 `(order_id, line_id)` 跨月分次付款。同一订单的不同行可以在不同月份首次付款，不能假定它们的 `paid_at` 同月。没有成功付款时，`paid_at` 为 `NULL`，两个金额为 0。\n\n### 3.3 客户 `dim_customers`\n\n按唯一 `customer_id` 左连接，补充当前快照的客户地区。匿名购买没有客户 ID；已知客户也可能没有地区。两类未知地区都保留 `NULL`，不能猜成默认地区。此维表没有历史拉链，本样例的地区分析表示当前快照地区，不承诺还原交易时地区。\n\n### 3.4 标签 `customer_tags`\n\n这是查询时可用的附加表，不参加主表加工。同一客户可以有多个标签，关联基数是一对多。筛选“有 VIP 或订阅标签的客户”时用 `EXISTS`，或者先得到去重的客户列表再关联。如果直接连接标签明细，一个同时有两种标签的客户，其订单金额会出现两遍。",
+            "source_id": "business-guide",
+            "version": "1",
+            "location": "3. 上游与加工",
+            "complete": true,
+            "classification": "authored_definition"
+          },
+          "suggestion": {},
+          "human_override": null,
+          "effective_value": "### 3.1 订单行 `raw_order_lines`\n\n提供订单、行、客户、商品、数量、下单时间、渠道、测试标记和源订单状态。取消订单保留；没有付款的行也保留。主表 `order_date` 由 `ordered_at` 截取 UTC 日期，不能因此把它自动当成收入统计日期。\n\n### 3.2 付款事件 `raw_payments`\n\n一个订单行可能有多次付款或退款。`event_type='charge'` 表示付款，`event_type='refund'` 表示退款。每笔事件已按订单行分摊，金额始终为正数；类型决定它是加付款还是加退款。\n\n加工先筛选快照截止前 `event_status='success'` 的事件，再按 `(order_id, line_id)` 汇总，再与订单行关联。失败和等待中的事件不计金额。直接把事件表关联回订单行后重复累加行金额，会重复计算。\n\n`paid_at` 是这一个订单行首笔成功付款的 UTC 时刻；本样例一行的分次付款都在同一天，且不存在同一 `(order_id, line_id)` 跨月分次付款。同一订单的不同行可以在不同月份首次付款，不能假定它们的 `paid_at` 同月。没有成功付款时，`paid_at` 为 `NULL`，两个金额为 0。\n\n### 3.3 客户 `dim_customers`\n\n按唯一 `customer_id` 左连接，补充当前快照的客户地区。匿名购买没有客户 ID；已知客户也可能没有地区。两类未知地区都保留 `NULL`，不能猜成默认地区。此维表没有历史拉链，本样例的地区分析表示当前快照地区，不承诺还原交易时地区。\n\n### 3.4 标签 `customer_tags`\n\n这是查询时可用的附加表，不参加主表加工。同一客户可以有多个标签，关联基数是一对多。筛选“有 VIP 或订阅标签的客户”时用 `EXISTS`，或者先得到去重的客户列表再关联。如果直接连接标签明细，一个同时有两种标签的客户，其订单金额会出现两遍。",
+          "review_state": "unverified"
+        },
+        {
+          "entry_id": "business_domain",
+          "path": "business_domain",
+          "label": "业务范围",
+          "source_facts": {
+            "value": "合成零售",
+            "quote": "业务域标识：`合成零售`。本说明与其DDL、加工SQL生成的所有合成知识对象都属于该业务域；这是一条明确样例约定，不由表名推断。",
+            "source_id": "business-guide",
+            "version": "1",
+            "location": "第8节 / 业务域",
+            "complete": true,
+            "classification": "authored_definition"
+          },
+          "suggestion": {},
+          "human_override": null,
+          "effective_value": "合成零售",
+          "review_state": "unverified"
+        }
+      ],
+      "related_ids": [
+        "table-demo_order_detail"
+      ],
+      "source_id": "business-guide",
+      "source_version": "1",
+      "updated_by": "synthetic-import"
+    },
+    {
+      "id": "document-guide-4",
+      "kind": "document",
+      "name": "4. 字段说明",
+      "version": "1",
+      "state": "enabled",
+      "entries": [
+        {
+          "entry_id": "body",
+          "path": "body",
+          "label": "章节正文",
+          "source_facts": {
+            "value": "| 字段 | 类型 | 业务含义与注意事项 |\n| --- | --- | --- |\n| `order_id` | TEXT | 虚构订单标识；订单数应去重 |\n| `line_id` | INTEGER | 订单内行号，和订单号一起唯一 |\n| `customer_id` | TEXT，可空 | 已知客户标识；空值表示匿名购买，不能补成一个统一客户参与 UV |\n| `product_id` | TEXT | 虚构商品标识，不提供商品分类维表 |\n| `quantity` | INTEGER | 下单件数；没有单独的退货件数，不能推导净售出件数 |\n| `paid_amount_cents` | INTEGER | 成功付款累计金额，已分摊到当前行，整数分 |\n| `refunded_amount_cents` | INTEGER | 截至快照的成功退款累计金额，已分摊到当前行，整数分 |\n| `paid_at` | TEXT，可空 | 当前行首笔成功付款时刻，UTC；收入和支付客户的默认时间依据 |\n| `order_date` | TEXT | UTC 下单日期；用于下单分析，不是支付收入的默认日期 |\n| `channel` | TEXT | `web`=网页、`app`=应用、`store`=门店 |\n| `region` | TEXT，可空 | 当前客户快照地区；空值在展示上可以叫“未知”，存储保留 NULL |\n| `is_test` | INTEGER | 1 为测试交易，0 为普通交易；业务统计默认只取 0，明确查测试交易时可改 |\n| `order_status` | TEXT | 整单状态：`paid`=有付款且未全退，`refunded`=整单全退，`cancelled`=取消，`unpaid`=尚无成功付款 |\n\n`order_status` 是整单状态。同一订单的某行全部退款，整单仍可能只是部分退款。判断一行退款金额应看金额字段，不能把 `order_status='refunded'` 当作“出现过退款”的过滤条件。",
+            "quote": "| 字段 | 类型 | 业务含义与注意事项 |\n| --- | --- | --- |\n| `order_id` | TEXT | 虚构订单标识；订单数应去重 |\n| `line_id` | INTEGER | 订单内行号，和订单号一起唯一 |\n| `customer_id` | TEXT，可空 | 已知客户标识；空值表示匿名购买，不能补成一个统一客户参与 UV |\n| `product_id` | TEXT | 虚构商品标识，不提供商品分类维表 |\n| `quantity` | INTEGER | 下单件数；没有单独的退货件数，不能推导净售出件数 |\n| `paid_amount_cents` | INTEGER | 成功付款累计金额，已分摊到当前行，整数分 |\n| `refunded_amount_cents` | INTEGER | 截至快照的成功退款累计金额，已分摊到当前行，整数分 |\n| `paid_at` | TEXT，可空 | 当前行首笔成功付款时刻，UTC；收入和支付客户的默认时间依据 |\n| `order_date` | TEXT | UTC 下单日期；用于下单分析，不是支付收入的默认日期 |\n| `channel` | TEXT | `web`=网页、`app`=应用、`store`=门店 |\n| `region` | TEXT，可空 | 当前客户快照地区；空值在展示上可以叫“未知”，存储保留 NULL |\n| `is_test` | INTEGER | 1 为测试交易，0 为普通交易；业务统计默认只取 0，明确查测试交易时可改 |\n| `order_status` | TEXT | 整单状态：`paid`=有付款且未全退，`refunded`=整单全退，`cancelled`=取消，`unpaid`=尚无成功付款 |\n\n`order_status` 是整单状态。同一订单的某行全部退款，整单仍可能只是部分退款。判断一行退款金额应看金额字段，不能把 `order_status='refunded'` 当作“出现过退款”的过滤条件。",
+            "source_id": "business-guide",
+            "version": "1",
+            "location": "4. 字段说明",
+            "complete": true,
+            "classification": "authored_definition"
+          },
+          "suggestion": {},
+          "human_override": null,
+          "effective_value": "| 字段 | 类型 | 业务含义与注意事项 |\n| --- | --- | --- |\n| `order_id` | TEXT | 虚构订单标识；订单数应去重 |\n| `line_id` | INTEGER | 订单内行号，和订单号一起唯一 |\n| `customer_id` | TEXT，可空 | 已知客户标识；空值表示匿名购买，不能补成一个统一客户参与 UV |\n| `product_id` | TEXT | 虚构商品标识，不提供商品分类维表 |\n| `quantity` | INTEGER | 下单件数；没有单独的退货件数，不能推导净售出件数 |\n| `paid_amount_cents` | INTEGER | 成功付款累计金额，已分摊到当前行，整数分 |\n| `refunded_amount_cents` | INTEGER | 截至快照的成功退款累计金额，已分摊到当前行，整数分 |\n| `paid_at` | TEXT，可空 | 当前行首笔成功付款时刻，UTC；收入和支付客户的默认时间依据 |\n| `order_date` | TEXT | UTC 下单日期；用于下单分析，不是支付收入的默认日期 |\n| `channel` | TEXT | `web`=网页、`app`=应用、`store`=门店 |\n| `region` | TEXT，可空 | 当前客户快照地区；空值在展示上可以叫“未知”，存储保留 NULL |\n| `is_test` | INTEGER | 1 为测试交易，0 为普通交易；业务统计默认只取 0，明确查测试交易时可改 |\n| `order_status` | TEXT | 整单状态：`paid`=有付款且未全退，`refunded`=整单全退，`cancelled`=取消，`unpaid`=尚无成功付款 |\n\n`order_status` 是整单状态。同一订单的某行全部退款，整单仍可能只是部分退款。判断一行退款金额应看金额字段，不能把 `order_status='refunded'` 当作“出现过退款”的过滤条件。",
+          "review_state": "unverified"
+        },
+        {
+          "entry_id": "business_domain",
+          "path": "business_domain",
+          "label": "业务范围",
+          "source_facts": {
+            "value": "合成零售",
+            "quote": "业务域标识：`合成零售`。本说明与其DDL、加工SQL生成的所有合成知识对象都属于该业务域；这是一条明确样例约定，不由表名推断。",
+            "source_id": "business-guide",
+            "version": "1",
+            "location": "第8节 / 业务域",
+            "complete": true,
+            "classification": "authored_definition"
+          },
+          "suggestion": {},
+          "human_override": null,
+          "effective_value": "合成零售",
+          "review_state": "unverified"
+        }
+      ],
+      "related_ids": [
+        "table-demo_order_detail"
+      ],
+      "source_id": "business-guide",
+      "source_version": "1",
+      "updated_by": "synthetic-import"
+    },
+    {
+      "id": "document-guide-5",
+      "kind": "document",
+      "name": "5. 三个示例指标",
+      "version": "1",
+      "state": "enabled",
+      "entries": [
+        {
+          "entry_id": "body",
+          "path": "body",
+          "label": "章节正文",
+          "source_facts": {
+            "value": "### 5.1 支付归属净收入\n\n- 指标标识：`net_revenue`\n- 别名：净收入 收入 净收\n- 时间：按 `paid_at` 选支付期间，排除测试交易。\n- 计算：`SUM(paid_amount_cents - refunded_amount_cents)`。\n- 单位：分；展示为元时除以 100。\n- 边界：全退订单保留，贡献 0；部分退款扣除实际退款；取消和未付订单没有 `paid_at`，不会计入。\n- 退款按原付款期间归属。例如 1 月付款、2 月退款，在当前快照中会减少 1 月净收入。\n\n这是“截至快照、按付款月归属”的业务指标。若用户问“2 月实际退款流水”或“当月现金净流入”，应按 `raw_payments.event_at` 计算；不能用主表累计退款替代退款发生时间。\n\n计算 SQL（本说明人工制定的合成指标定义；`:start` 和 `:end` 是 UTC 半开区间参数）：\n\n```sql\nSELECT SUM(paid_amount_cents - refunded_amount_cents) AS net_revenue\nFROM demo_order_detail\nWHERE is_test = 0 AND paid_amount_cents > 0\n  AND paid_at >= :start AND paid_at < :end;\n```\n\n### 5.2 月支付客户数\n\n- 指标标识：`paying_customers`\n- 别名：UV 支付客户 月客户\n- 在整个月的已支付、非测试行上执行 `COUNT(DISTINCT customer_id)`。\n- 同一客户多次下单、多行商品只计一次；匿名客户不计已知客户数。\n- 全额退款客户仍曾成功付款，保留在该指标内；如用户要求“未全退客户”，属于不同口径，需要明确。\n- 不能把每天的客户数相加得到月客户数；同一客户可能跨天出现。\n\n计算 SQL（本说明人工制定的合成指标定义，时间参数含义同上）：\n\n```sql\nSELECT COUNT(DISTINCT customer_id) AS paying_customers\nFROM demo_order_detail\nWHERE is_test = 0 AND paid_amount_cents > 0\n  AND paid_at >= :start AND paid_at < :end;\n```\n\n### 5.3 订单退款率\n\n- 指标标识：`refund_rate`\n- 别名：退款率 订单退款比例\n\n这是一个已经命名清楚的示例指标：\n\n- 分母：期间内有成功付款的非测试订单数，按订单去重。\n- 分子：分母中的订单，截至快照至少有一行成功退款。先确定期间付款的订单集合，再检查这些订单的全部行；退款行不必在同一付款月份。\n- 计算：退款订单数 / 已支付订单数；零分母返回 `NULL`，同时说明无已支付订单。\n- 全额和部分退款订单都计分子；匿名订单仍计订单数。\n\n如果用户只说“退款率”，还不能知道他要的是订单退款率、退款金额占支付金额比例，还是退款客户占支付客户比例。Agent 应先查已有会话约定或用户采用的指标；缺少约定时询问分母，用户明确后再生成相应 SQL。不能把名称相似当成已经确认了口径。\n\n计算 SQL（本说明人工制定的合成指标定义，时间参数含义同上）：\n\n```sql\nSELECT COUNT(DISTINCT CASE WHEN EXISTS (\n    SELECT 1 FROM demo_order_detail AS r\n    WHERE r.order_id = demo_order_detail.order_id\n      AND r.is_test = 0 AND r.refunded_amount_cents > 0\n) THEN order_id END) * 1.0 / NULLIF(COUNT(DISTINCT order_id), 0) AS refund_rate\nFROM demo_order_detail\nWHERE is_test = 0 AND paid_amount_cents > 0\n  AND paid_at >= :start AND paid_at < :end;\n```",
+            "quote": "### 5.1 支付归属净收入\n\n- 指标标识：`net_revenue`\n- 别名：净收入 收入 净收\n- 时间：按 `paid_at` 选支付期间，排除测试交易。\n- 计算：`SUM(paid_amount_cents - refunded_amount_cents)`。\n- 单位：分；展示为元时除以 100。\n- 边界：全退订单保留，贡献 0；部分退款扣除实际退款；取消和未付订单没有 `paid_at`，不会计入。\n- 退款按原付款期间归属。例如 1 月付款、2 月退款，在当前快照中会减少 1 月净收入。\n\n这是“截至快照、按付款月归属”的业务指标。若用户问“2 月实际退款流水”或“当月现金净流入”，应按 `raw_payments.event_at` 计算；不能用主表累计退款替代退款发生时间。\n\n计算 SQL（本说明人工制定的合成指标定义；`:start` 和 `:end` 是 UTC 半开区间参数）：\n\n```sql\nSELECT SUM(paid_amount_cents - refunded_amount_cents) AS net_revenue\nFROM demo_order_detail\nWHERE is_test = 0 AND paid_amount_cents > 0\n  AND paid_at >= :start AND paid_at < :end;\n```\n\n### 5.2 月支付客户数\n\n- 指标标识：`paying_customers`\n- 别名：UV 支付客户 月客户\n- 在整个月的已支付、非测试行上执行 `COUNT(DISTINCT customer_id)`。\n- 同一客户多次下单、多行商品只计一次；匿名客户不计已知客户数。\n- 全额退款客户仍曾成功付款，保留在该指标内；如用户要求“未全退客户”，属于不同口径，需要明确。\n- 不能把每天的客户数相加得到月客户数；同一客户可能跨天出现。\n\n计算 SQL（本说明人工制定的合成指标定义，时间参数含义同上）：\n\n```sql\nSELECT COUNT(DISTINCT customer_id) AS paying_customers\nFROM demo_order_detail\nWHERE is_test = 0 AND paid_amount_cents > 0\n  AND paid_at >= :start AND paid_at < :end;\n```\n\n### 5.3 订单退款率\n\n- 指标标识：`refund_rate`\n- 别名：退款率 订单退款比例\n\n这是一个已经命名清楚的示例指标：\n\n- 分母：期间内有成功付款的非测试订单数，按订单去重。\n- 分子：分母中的订单，截至快照至少有一行成功退款。先确定期间付款的订单集合，再检查这些订单的全部行；退款行不必在同一付款月份。\n- 计算：退款订单数 / 已支付订单数；零分母返回 `NULL`，同时说明无已支付订单。\n- 全额和部分退款订单都计分子；匿名订单仍计订单数。\n\n如果用户只说“退款率”，还不能知道他要的是订单退款率、退款金额占支付金额比例，还是退款客户占支付客户比例。Agent 应先查已有会话约定或用户采用的指标；缺少约定时询问分母，用户明确后再生成相应 SQL。不能把名称相似当成已经确认了口径。\n\n计算 SQL（本说明人工制定的合成指标定义，时间参数含义同上）：\n\n```sql\nSELECT COUNT(DISTINCT CASE WHEN EXISTS (\n    SELECT 1 FROM demo_order_detail AS r\n    WHERE r.order_id = demo_order_detail.order_id\n      AND r.is_test = 0 AND r.refunded_amount_cents > 0\n) THEN order_id END) * 1.0 / NULLIF(COUNT(DISTINCT order_id), 0) AS refund_rate\nFROM demo_order_detail\nWHERE is_test = 0 AND paid_amount_cents > 0\n  AND paid_at >= :start AND paid_at < :end;\n```",
+            "source_id": "business-guide",
+            "version": "1",
+            "location": "5. 三个示例指标",
+            "complete": true,
+            "classification": "authored_definition"
+          },
+          "suggestion": {},
+          "human_override": null,
+          "effective_value": "### 5.1 支付归属净收入\n\n- 指标标识：`net_revenue`\n- 别名：净收入 收入 净收\n- 时间：按 `paid_at` 选支付期间，排除测试交易。\n- 计算：`SUM(paid_amount_cents - refunded_amount_cents)`。\n- 单位：分；展示为元时除以 100。\n- 边界：全退订单保留，贡献 0；部分退款扣除实际退款；取消和未付订单没有 `paid_at`，不会计入。\n- 退款按原付款期间归属。例如 1 月付款、2 月退款，在当前快照中会减少 1 月净收入。\n\n这是“截至快照、按付款月归属”的业务指标。若用户问“2 月实际退款流水”或“当月现金净流入”，应按 `raw_payments.event_at` 计算；不能用主表累计退款替代退款发生时间。\n\n计算 SQL（本说明人工制定的合成指标定义；`:start` 和 `:end` 是 UTC 半开区间参数）：\n\n```sql\nSELECT SUM(paid_amount_cents - refunded_amount_cents) AS net_revenue\nFROM demo_order_detail\nWHERE is_test = 0 AND paid_amount_cents > 0\n  AND paid_at >= :start AND paid_at < :end;\n```\n\n### 5.2 月支付客户数\n\n- 指标标识：`paying_customers`\n- 别名：UV 支付客户 月客户\n- 在整个月的已支付、非测试行上执行 `COUNT(DISTINCT customer_id)`。\n- 同一客户多次下单、多行商品只计一次；匿名客户不计已知客户数。\n- 全额退款客户仍曾成功付款，保留在该指标内；如用户要求“未全退客户”，属于不同口径，需要明确。\n- 不能把每天的客户数相加得到月客户数；同一客户可能跨天出现。\n\n计算 SQL（本说明人工制定的合成指标定义，时间参数含义同上）：\n\n```sql\nSELECT COUNT(DISTINCT customer_id) AS paying_customers\nFROM demo_order_detail\nWHERE is_test = 0 AND paid_amount_cents > 0\n  AND paid_at >= :start AND paid_at < :end;\n```\n\n### 5.3 订单退款率\n\n- 指标标识：`refund_rate`\n- 别名：退款率 订单退款比例\n\n这是一个已经命名清楚的示例指标：\n\n- 分母：期间内有成功付款的非测试订单数，按订单去重。\n- 分子：分母中的订单，截至快照至少有一行成功退款。先确定期间付款的订单集合，再检查这些订单的全部行；退款行不必在同一付款月份。\n- 计算：退款订单数 / 已支付订单数；零分母返回 `NULL`，同时说明无已支付订单。\n- 全额和部分退款订单都计分子；匿名订单仍计订单数。\n\n如果用户只说“退款率”，还不能知道他要的是订单退款率、退款金额占支付金额比例，还是退款客户占支付客户比例。Agent 应先查已有会话约定或用户采用的指标；缺少约定时询问分母，用户明确后再生成相应 SQL。不能把名称相似当成已经确认了口径。\n\n计算 SQL（本说明人工制定的合成指标定义，时间参数含义同上）：\n\n```sql\nSELECT COUNT(DISTINCT CASE WHEN EXISTS (\n    SELECT 1 FROM demo_order_detail AS r\n    WHERE r.order_id = demo_order_detail.order_id\n      AND r.is_test = 0 AND r.refunded_amount_cents > 0\n) THEN order_id END) * 1.0 / NULLIF(COUNT(DISTINCT order_id), 0) AS refund_rate\nFROM demo_order_detail\nWHERE is_test = 0 AND paid_amount_cents > 0\n  AND paid_at >= :start AND paid_at < :end;\n```",
+          "review_state": "unverified"
+        },
+        {
+          "entry_id": "business_domain",
+          "path": "business_domain",
+          "label": "业务范围",
+          "source_facts": {
+            "value": "合成零售",
+            "quote": "业务域标识：`合成零售`。本说明与其DDL、加工SQL生成的所有合成知识对象都属于该业务域；这是一条明确样例约定，不由表名推断。",
+            "source_id": "business-guide",
+            "version": "1",
+            "location": "第8节 / 业务域",
+            "complete": true,
+            "classification": "authored_definition"
+          },
+          "suggestion": {},
+          "human_override": null,
+          "effective_value": "合成零售",
+          "review_state": "unverified"
+        }
+      ],
+      "related_ids": [
+        "table-demo_order_detail"
+      ],
+      "source_id": "business-guide",
+      "source_version": "1",
+      "updated_by": "synthetic-import"
+    },
+    {
+      "id": "document-guide-6",
+      "kind": "document",
+      "name": "6. 可填写与可推断的范围",
+      "version": "1",
+      "state": "enabled",
+      "entries": [
+        {
+          "entry_id": "body",
+          "path": "body",
+          "label": "章节正文",
+          "source_facts": {
+            "value": "接口能够直接给出表结构、主键、加工 SQL、血缘和原始注释。SQL 分析可以支持“先汇总支付再连接”“付款状态筛选”“金额空值补 0”等建议。业务解释如收入归属、匿名客户处理、标签用途仍需要本说明这样的依据。页面应分别保存原始事实、模型建议和人工修改，保留出处、版本、修改人和生效范围。\n\n人工可补充、纠正全部语义。人工修改标记表示内容来自人工修订，不自动等于业务结果已验证。涉及结果的指标另记录验收证据。\n\n本说明本身也是人工制定的合成业务来源。指标别名、计算 SQL 和关联解释以本文为唯一规范来源，目录生成器只引用对应原文，不另写一套规则。引用本文说明的是“合成业务定义”，不能标成数据平台已有注释或模型已经验证的业务结论。DDL 类型的确定派生另记录原始声明和派生方法；未提供的来源表加工 SQL 保持未知。",
+            "quote": "接口能够直接给出表结构、主键、加工 SQL、血缘和原始注释。SQL 分析可以支持“先汇总支付再连接”“付款状态筛选”“金额空值补 0”等建议。业务解释如收入归属、匿名客户处理、标签用途仍需要本说明这样的依据。页面应分别保存原始事实、模型建议和人工修改，保留出处、版本、修改人和生效范围。\n\n人工可补充、纠正全部语义。人工修改标记表示内容来自人工修订，不自动等于业务结果已验证。涉及结果的指标另记录验收证据。\n\n本说明本身也是人工制定的合成业务来源。指标别名、计算 SQL 和关联解释以本文为唯一规范来源，目录生成器只引用对应原文，不另写一套规则。引用本文说明的是“合成业务定义”，不能标成数据平台已有注释或模型已经验证的业务结论。DDL 类型的确定派生另记录原始声明和派生方法；未提供的来源表加工 SQL 保持未知。",
+            "source_id": "business-guide",
+            "version": "1",
+            "location": "6. 可填写与可推断的范围",
+            "complete": true,
+            "classification": "authored_definition"
+          },
+          "suggestion": {},
+          "human_override": null,
+          "effective_value": "接口能够直接给出表结构、主键、加工 SQL、血缘和原始注释。SQL 分析可以支持“先汇总支付再连接”“付款状态筛选”“金额空值补 0”等建议。业务解释如收入归属、匿名客户处理、标签用途仍需要本说明这样的依据。页面应分别保存原始事实、模型建议和人工修改，保留出处、版本、修改人和生效范围。\n\n人工可补充、纠正全部语义。人工修改标记表示内容来自人工修订，不自动等于业务结果已验证。涉及结果的指标另记录验收证据。\n\n本说明本身也是人工制定的合成业务来源。指标别名、计算 SQL 和关联解释以本文为唯一规范来源，目录生成器只引用对应原文，不另写一套规则。引用本文说明的是“合成业务定义”，不能标成数据平台已有注释或模型已经验证的业务结论。DDL 类型的确定派生另记录原始声明和派生方法；未提供的来源表加工 SQL 保持未知。",
+          "review_state": "unverified"
+        },
+        {
+          "entry_id": "business_domain",
+          "path": "business_domain",
+          "label": "业务范围",
+          "source_facts": {
+            "value": "合成零售",
+            "quote": "业务域标识：`合成零售`。本说明与其DDL、加工SQL生成的所有合成知识对象都属于该业务域；这是一条明确样例约定，不由表名推断。",
+            "source_id": "business-guide",
+            "version": "1",
+            "location": "第8节 / 业务域",
+            "complete": true,
+            "classification": "authored_definition"
+          },
+          "suggestion": {},
+          "human_override": null,
+          "effective_value": "合成零售",
+          "review_state": "unverified"
+        }
+      ],
+      "related_ids": [
+        "table-demo_order_detail"
+      ],
+      "source_id": "business-guide",
+      "source_version": "1",
+      "updated_by": "synthetic-import"
+    },
+    {
+      "id": "document-guide-7",
+      "kind": "document",
+      "name": "7. 样例覆盖及边界",
+      "version": "1",
+      "state": "enabled",
+      "entries": [
+        {
+          "entry_id": "body",
+          "path": "body",
+          "label": "章节正文",
+          "source_facts": {
+            "value": "样例专门包含：多行订单、多次付款、失败/等待付款、取消未付、测试交易、匿名客户、未知地区、跨月下单支付、跨月退款、部分退款、整单全退、单行全退但整单未全退、跨天重复客户、一对多标签。\n\n它不模拟税费、运费、折扣分摊算法、货币兑换、订单取消后付款、退款超过付款、同一订单行跨月分次付款、客户合并或历史地区变化。这些不是已经支持的能力。真实平台接入时必须重新确认其数据契约和 SQL 方言，不能把这个简化样例当成真实平台规格。",
+            "quote": "样例专门包含：多行订单、多次付款、失败/等待付款、取消未付、测试交易、匿名客户、未知地区、跨月下单支付、跨月退款、部分退款、整单全退、单行全退但整单未全退、跨天重复客户、一对多标签。\n\n它不模拟税费、运费、折扣分摊算法、货币兑换、订单取消后付款、退款超过付款、同一订单行跨月分次付款、客户合并或历史地区变化。这些不是已经支持的能力。真实平台接入时必须重新确认其数据契约和 SQL 方言，不能把这个简化样例当成真实平台规格。",
+            "source_id": "business-guide",
+            "version": "1",
+            "location": "7. 样例覆盖及边界",
+            "complete": true,
+            "classification": "authored_definition"
+          },
+          "suggestion": {},
+          "human_override": null,
+          "effective_value": "样例专门包含：多行订单、多次付款、失败/等待付款、取消未付、测试交易、匿名客户、未知地区、跨月下单支付、跨月退款、部分退款、整单全退、单行全退但整单未全退、跨天重复客户、一对多标签。\n\n它不模拟税费、运费、折扣分摊算法、货币兑换、订单取消后付款、退款超过付款、同一订单行跨月分次付款、客户合并或历史地区变化。这些不是已经支持的能力。真实平台接入时必须重新确认其数据契约和 SQL 方言，不能把这个简化样例当成真实平台规格。",
+          "review_state": "unverified"
+        },
+        {
+          "entry_id": "business_domain",
+          "path": "business_domain",
+          "label": "业务范围",
+          "source_facts": {
+            "value": "合成零售",
+            "quote": "业务域标识：`合成零售`。本说明与其DDL、加工SQL生成的所有合成知识对象都属于该业务域；这是一条明确样例约定，不由表名推断。",
+            "source_id": "business-guide",
+            "version": "1",
+            "location": "第8节 / 业务域",
+            "complete": true,
+            "classification": "authored_definition"
+          },
+          "suggestion": {},
+          "human_override": null,
+          "effective_value": "合成零售",
+          "review_state": "unverified"
+        }
+      ],
+      "related_ids": [
+        "table-demo_order_detail"
+      ],
+      "source_id": "business-guide",
+      "source_version": "1",
+      "updated_by": "synthetic-import"
+    },
+    {
+      "id": "document-guide-8",
+      "kind": "document",
+      "name": "8. 作为 Agent 知识使用",
+      "version": "1",
+      "state": "enabled",
+      "entries": [
+        {
+          "entry_id": "body",
+          "path": "body",
+          "label": "章节正文",
+          "source_facts": {
+            "value": "业务域标识：`合成零售`。本说明与其DDL、加工SQL生成的所有合成知识对象都属于该业务域；这是一条明确样例约定，不由表名推断。\n\n知识输入可以包含本说明、`schema.sql`、`etl.sql` 和明确允许展示的合成种子；实际是否给模型完整行数据仍由应用的数据范围控制。\n\n`evaluation/` 保存独立参考 SQL、预期结果与验收问题，默认不进入索引、提示词或 Skill。离线脚本验证了样例本身，不代表 Agent 已通过检索、澄清、SQL 确认或执行状态验证。\n\n### 可计算语义定义\n\n以下是本合成业务明确制定的结构约定，版本引用对应首次导入的对象。引用变更后需要维护者核对，不能自动把旧约定套到新版本。自然语言和结构一起维护；复杂指标的完整 SQL 仍以上文为准。订单行与标签的直接关联是多对多，与客户到标签的一对多不同。\n\n```semantic-structure\n[\n  {\n    \"object_id\": \"table-demo_order_detail\",\n    \"entry_id\": \"description\",\n    \"structure\": {\n      \"kind\": \"table\",\n      \"grain\": \"一张订单中的一个商品行\",\n      \"unique_keys\": [\n        [\n          \"order_id\",\n          \"line_id\"\n        ]\n      ],\n      \"time_columns\": [\n        {\n          \"column\": \"paid_at\",\n          \"role\": \"payment\"\n        },\n        {\n          \"column\": \"order_date\",\n          \"role\": \"order\"\n        }\n      ],\n      \"default_filters\": [],\n      \"constraints\": []\n    }\n  },\n  {\n    \"object_id\": \"table-raw_order_lines\",\n    \"entry_id\": \"description\",\n    \"structure\": {\n      \"kind\": \"table\",\n      \"grain\": \"一张订单中的一个商品行\",\n      \"unique_keys\": [\n        [\n          \"order_id\",\n          \"line_id\"\n        ]\n      ],\n      \"time_columns\": [\n        {\n          \"column\": \"ordered_at\",\n          \"role\": \"order\"\n        }\n      ],\n      \"default_filters\": [],\n      \"constraints\": []\n    }\n  },\n  {\n    \"object_id\": \"table-raw_payments\",\n    \"entry_id\": \"description\",\n    \"structure\": {\n      \"kind\": \"table\",\n      \"grain\": \"一次订单行付款或退款事件\",\n      \"unique_keys\": [\n        [\n          \"payment_event_id\"\n        ]\n      ],\n      \"time_columns\": [\n        {\n          \"column\": \"event_at\",\n          \"role\": \"event\"\n        }\n      ],\n      \"default_filters\": [],\n      \"constraints\": []\n    }\n  },\n  {\n    \"object_id\": \"table-dim_customers\",\n    \"entry_id\": \"description\",\n    \"structure\": {\n      \"kind\": \"table\",\n      \"grain\": \"一个已知客户\",\n      \"unique_keys\": [\n        [\n          \"customer_id\"\n        ]\n      ],\n      \"time_columns\": [],\n      \"default_filters\": [],\n      \"constraints\": []\n    }\n  },\n  {\n    \"object_id\": \"table-customer_tags\",\n    \"entry_id\": \"description\",\n    \"structure\": {\n      \"kind\": \"table\",\n      \"grain\": \"一个客户的一种标签\",\n      \"unique_keys\": [\n        [\n          \"customer_id\",\n          \"tag\"\n        ]\n      ],\n      \"time_columns\": [],\n      \"default_filters\": [],\n      \"constraints\": []\n    }\n  },\n  {\n    \"object_id\": \"field-paid_amount_cents\",\n    \"entry_id\": \"meaning\",\n    \"structure\": {\n      \"kind\": \"field\",\n      \"table\": {\n        \"object_id\": \"table-demo_order_detail\",\n        \"version\": \"1\"\n      },\n      \"column\": \"paid_amount_cents\",\n      \"unit\": \"分\"\n    }\n  },\n  {\n    \"object_id\": \"field-refunded_amount_cents\",\n    \"entry_id\": \"meaning\",\n    \"structure\": {\n      \"kind\": \"field\",\n      \"table\": {\n        \"object_id\": \"table-demo_order_detail\",\n        \"version\": \"1\"\n      },\n      \"column\": \"refunded_amount_cents\",\n      \"unit\": \"分\"\n    }\n  },\n  {\n    \"object_id\": \"field-quantity\",\n    \"entry_id\": \"meaning\",\n    \"structure\": {\n      \"kind\": \"field\",\n      \"table\": {\n        \"object_id\": \"table-demo_order_detail\",\n        \"version\": \"1\"\n      },\n      \"column\": \"quantity\",\n      \"unit\": \"件\"\n    }\n  },\n  {\n    \"object_id\": \"relationship-payments\",\n    \"entry_id\": \"join\",\n    \"structure\": {\n      \"kind\": \"relationship\",\n      \"left_table\": {\n        \"object_id\": \"table-raw_order_lines\",\n        \"version\": \"1\"\n      },\n      \"right_table\": {\n        \"object_id\": \"table-raw_payments\",\n        \"version\": \"1\"\n      },\n      \"join_keys\": [\n        {\n          \"left_column\": \"order_id\",\n          \"right_column\": \"order_id\"\n        },\n        {\n          \"left_column\": \"line_id\",\n          \"right_column\": \"line_id\"\n        }\n      ],\n      \"cardinality\": \"one_to_many\",\n      \"scope\": \"直接订单行关联原始付款事件；汇总付款事件后关联的形状不同，不能沿用此基数。\"\n    }\n  },\n  {\n    \"object_id\": \"relationship-tags\",\n    \"entry_id\": \"join\",\n    \"structure\": {\n      \"kind\": \"relationship\",\n      \"left_table\": {\n        \"object_id\": \"table-demo_order_detail\",\n        \"version\": \"1\"\n      },\n      \"right_table\": {\n        \"object_id\": \"table-customer_tags\",\n        \"version\": \"1\"\n      },\n      \"join_keys\": [\n        {\n          \"left_column\": \"customer_id\",\n          \"right_column\": \"customer_id\"\n        }\n      ],\n      \"cardinality\": \"many_to_many\",\n      \"scope\": \"订单行与客户标签均可能重复customer_id；仅筛选客户标签时优先EXISTS或去重客户列表。\"\n    }\n  },\n  {\n    \"object_id\": \"metric-net_revenue\",\n    \"entry_id\": \"definition\",\n    \"structure\": {\n      \"kind\": \"metric\",\n      \"table\": {\n        \"object_id\": \"table-demo_order_detail\",\n        \"version\": \"1\"\n      },\n      \"expression\": \"SUM(paid_amount_cents - refunded_amount_cents)\",\n      \"input_grain\": \"订单商品行\",\n      \"time_column\": \"paid_at\",\n      \"unit\": \"分\",\n      \"required_filters\": [\n        \"is_test = 0\",\n        \"paid_amount_cents > 0\"\n      ],\n      \"dimensions\": [\n        \"channel\",\n        \"region\"\n      ]\n    }\n  },\n  {\n    \"object_id\": \"metric-paying_customers\",\n    \"entry_id\": \"definition\",\n    \"structure\": {\n      \"kind\": \"metric\",\n      \"table\": {\n        \"object_id\": \"table-demo_order_detail\",\n        \"version\": \"1\"\n      },\n      \"expression\": \"COUNT(DISTINCT customer_id)\",\n      \"input_grain\": \"订单商品行\",\n      \"time_column\": \"paid_at\",\n      \"unit\": \"人\",\n      \"required_filters\": [\n        \"is_test = 0\",\n        \"paid_amount_cents > 0\"\n      ],\n      \"dimensions\": [\n        \"channel\",\n        \"region\"\n      ]\n    }\n  }\n]\n```",
+            "quote": "业务域标识：`合成零售`。本说明与其DDL、加工SQL生成的所有合成知识对象都属于该业务域；这是一条明确样例约定，不由表名推断。\n\n知识输入可以包含本说明、`schema.sql`、`etl.sql` 和明确允许展示的合成种子；实际是否给模型完整行数据仍由应用的数据范围控制。\n\n`evaluation/` 保存独立参考 SQL、预期结果与验收问题，默认不进入索引、提示词或 Skill。离线脚本验证了样例本身，不代表 Agent 已通过检索、澄清、SQL 确认或执行状态验证。\n\n### 可计算语义定义\n\n以下是本合成业务明确制定的结构约定，版本引用对应首次导入的对象。引用变更后需要维护者核对，不能自动把旧约定套到新版本。自然语言和结构一起维护；复杂指标的完整 SQL 仍以上文为准。订单行与标签的直接关联是多对多，与客户到标签的一对多不同。\n\n```semantic-structure\n[\n  {\n    \"object_id\": \"table-demo_order_detail\",\n    \"entry_id\": \"description\",\n    \"structure\": {\n      \"kind\": \"table\",\n      \"grain\": \"一张订单中的一个商品行\",\n      \"unique_keys\": [\n        [\n          \"order_id\",\n          \"line_id\"\n        ]\n      ],\n      \"time_columns\": [\n        {\n          \"column\": \"paid_at\",\n          \"role\": \"payment\"\n        },\n        {\n          \"column\": \"order_date\",\n          \"role\": \"order\"\n        }\n      ],\n      \"default_filters\": [],\n      \"constraints\": []\n    }\n  },\n  {\n    \"object_id\": \"table-raw_order_lines\",\n    \"entry_id\": \"description\",\n    \"structure\": {\n      \"kind\": \"table\",\n      \"grain\": \"一张订单中的一个商品行\",\n      \"unique_keys\": [\n        [\n          \"order_id\",\n          \"line_id\"\n        ]\n      ],\n      \"time_columns\": [\n        {\n          \"column\": \"ordered_at\",\n          \"role\": \"order\"\n        }\n      ],\n      \"default_filters\": [],\n      \"constraints\": []\n    }\n  },\n  {\n    \"object_id\": \"table-raw_payments\",\n    \"entry_id\": \"description\",\n    \"structure\": {\n      \"kind\": \"table\",\n      \"grain\": \"一次订单行付款或退款事件\",\n      \"unique_keys\": [\n        [\n          \"payment_event_id\"\n        ]\n      ],\n      \"time_columns\": [\n        {\n          \"column\": \"event_at\",\n          \"role\": \"event\"\n        }\n      ],\n      \"default_filters\": [],\n      \"constraints\": []\n    }\n  },\n  {\n    \"object_id\": \"table-dim_customers\",\n    \"entry_id\": \"description\",\n    \"structure\": {\n      \"kind\": \"table\",\n      \"grain\": \"一个已知客户\",\n      \"unique_keys\": [\n        [\n          \"customer_id\"\n        ]\n      ],\n      \"time_columns\": [],\n      \"default_filters\": [],\n      \"constraints\": []\n    }\n  },\n  {\n    \"object_id\": \"table-customer_tags\",\n    \"entry_id\": \"description\",\n    \"structure\": {\n      \"kind\": \"table\",\n      \"grain\": \"一个客户的一种标签\",\n      \"unique_keys\": [\n        [\n          \"customer_id\",\n          \"tag\"\n        ]\n      ],\n      \"time_columns\": [],\n      \"default_filters\": [],\n      \"constraints\": []\n    }\n  },\n  {\n    \"object_id\": \"field-paid_amount_cents\",\n    \"entry_id\": \"meaning\",\n    \"structure\": {\n      \"kind\": \"field\",\n      \"table\": {\n        \"object_id\": \"table-demo_order_detail\",\n        \"version\": \"1\"\n      },\n      \"column\": \"paid_amount_cents\",\n      \"unit\": \"分\"\n    }\n  },\n  {\n    \"object_id\": \"field-refunded_amount_cents\",\n    \"entry_id\": \"meaning\",\n    \"structure\": {\n      \"kind\": \"field\",\n      \"table\": {\n        \"object_id\": \"table-demo_order_detail\",\n        \"version\": \"1\"\n      },\n      \"column\": \"refunded_amount_cents\",\n      \"unit\": \"分\"\n    }\n  },\n  {\n    \"object_id\": \"field-quantity\",\n    \"entry_id\": \"meaning\",\n    \"structure\": {\n      \"kind\": \"field\",\n      \"table\": {\n        \"object_id\": \"table-demo_order_detail\",\n        \"version\": \"1\"\n      },\n      \"column\": \"quantity\",\n      \"unit\": \"件\"\n    }\n  },\n  {\n    \"object_id\": \"relationship-payments\",\n    \"entry_id\": \"join\",\n    \"structure\": {\n      \"kind\": \"relationship\",\n      \"left_table\": {\n        \"object_id\": \"table-raw_order_lines\",\n        \"version\": \"1\"\n      },\n      \"right_table\": {\n        \"object_id\": \"table-raw_payments\",\n        \"version\": \"1\"\n      },\n      \"join_keys\": [\n        {\n          \"left_column\": \"order_id\",\n          \"right_column\": \"order_id\"\n        },\n        {\n          \"left_column\": \"line_id\",\n          \"right_column\": \"line_id\"\n        }\n      ],\n      \"cardinality\": \"one_to_many\",\n      \"scope\": \"直接订单行关联原始付款事件；汇总付款事件后关联的形状不同，不能沿用此基数。\"\n    }\n  },\n  {\n    \"object_id\": \"relationship-tags\",\n    \"entry_id\": \"join\",\n    \"structure\": {\n      \"kind\": \"relationship\",\n      \"left_table\": {\n        \"object_id\": \"table-demo_order_detail\",\n        \"version\": \"1\"\n      },\n      \"right_table\": {\n        \"object_id\": \"table-customer_tags\",\n        \"version\": \"1\"\n      },\n      \"join_keys\": [\n        {\n          \"left_column\": \"customer_id\",\n          \"right_column\": \"customer_id\"\n        }\n      ],\n      \"cardinality\": \"many_to_many\",\n      \"scope\": \"订单行与客户标签均可能重复customer_id；仅筛选客户标签时优先EXISTS或去重客户列表。\"\n    }\n  },\n  {\n    \"object_id\": \"metric-net_revenue\",\n    \"entry_id\": \"definition\",\n    \"structure\": {\n      \"kind\": \"metric\",\n      \"table\": {\n        \"object_id\": \"table-demo_order_detail\",\n        \"version\": \"1\"\n      },\n      \"expression\": \"SUM(paid_amount_cents - refunded_amount_cents)\",\n      \"input_grain\": \"订单商品行\",\n      \"time_column\": \"paid_at\",\n      \"unit\": \"分\",\n      \"required_filters\": [\n        \"is_test = 0\",\n        \"paid_amount_cents > 0\"\n      ],\n      \"dimensions\": [\n        \"channel\",\n        \"region\"\n      ]\n    }\n  },\n  {\n    \"object_id\": \"metric-paying_customers\",\n    \"entry_id\": \"definition\",\n    \"structure\": {\n      \"kind\": \"metric\",\n      \"table\": {\n        \"object_id\": \"table-demo_order_detail\",\n        \"version\": \"1\"\n      },\n      \"expression\": \"COUNT(DISTINCT customer_id)\",\n      \"input_grain\": \"订单商品行\",\n      \"time_column\": \"paid_at\",\n      \"unit\": \"人\",\n      \"required_filters\": [\n        \"is_test = 0\",\n        \"paid_amount_cents > 0\"\n      ],\n      \"dimensions\": [\n        \"channel\",\n        \"region\"\n      ]\n    }\n  }\n]\n```",
+            "source_id": "business-guide",
+            "version": "1",
+            "location": "8. 作为 Agent 知识使用",
+            "complete": true,
+            "classification": "authored_definition"
+          },
+          "suggestion": {},
+          "human_override": null,
+          "effective_value": "业务域标识：`合成零售`。本说明与其DDL、加工SQL生成的所有合成知识对象都属于该业务域；这是一条明确样例约定，不由表名推断。\n\n知识输入可以包含本说明、`schema.sql`、`etl.sql` 和明确允许展示的合成种子；实际是否给模型完整行数据仍由应用的数据范围控制。\n\n`evaluation/` 保存独立参考 SQL、预期结果与验收问题，默认不进入索引、提示词或 Skill。离线脚本验证了样例本身，不代表 Agent 已通过检索、澄清、SQL 确认或执行状态验证。\n\n### 可计算语义定义\n\n以下是本合成业务明确制定的结构约定，版本引用对应首次导入的对象。引用变更后需要维护者核对，不能自动把旧约定套到新版本。自然语言和结构一起维护；复杂指标的完整 SQL 仍以上文为准。订单行与标签的直接关联是多对多，与客户到标签的一对多不同。\n\n```semantic-structure\n[\n  {\n    \"object_id\": \"table-demo_order_detail\",\n    \"entry_id\": \"description\",\n    \"structure\": {\n      \"kind\": \"table\",\n      \"grain\": \"一张订单中的一个商品行\",\n      \"unique_keys\": [\n        [\n          \"order_id\",\n          \"line_id\"\n        ]\n      ],\n      \"time_columns\": [\n        {\n          \"column\": \"paid_at\",\n          \"role\": \"payment\"\n        },\n        {\n          \"column\": \"order_date\",\n          \"role\": \"order\"\n        }\n      ],\n      \"default_filters\": [],\n      \"constraints\": []\n    }\n  },\n  {\n    \"object_id\": \"table-raw_order_lines\",\n    \"entry_id\": \"description\",\n    \"structure\": {\n      \"kind\": \"table\",\n      \"grain\": \"一张订单中的一个商品行\",\n      \"unique_keys\": [\n        [\n          \"order_id\",\n          \"line_id\"\n        ]\n      ],\n      \"time_columns\": [\n        {\n          \"column\": \"ordered_at\",\n          \"role\": \"order\"\n        }\n      ],\n      \"default_filters\": [],\n      \"constraints\": []\n    }\n  },\n  {\n    \"object_id\": \"table-raw_payments\",\n    \"entry_id\": \"description\",\n    \"structure\": {\n      \"kind\": \"table\",\n      \"grain\": \"一次订单行付款或退款事件\",\n      \"unique_keys\": [\n        [\n          \"payment_event_id\"\n        ]\n      ],\n      \"time_columns\": [\n        {\n          \"column\": \"event_at\",\n          \"role\": \"event\"\n        }\n      ],\n      \"default_filters\": [],\n      \"constraints\": []\n    }\n  },\n  {\n    \"object_id\": \"table-dim_customers\",\n    \"entry_id\": \"description\",\n    \"structure\": {\n      \"kind\": \"table\",\n      \"grain\": \"一个已知客户\",\n      \"unique_keys\": [\n        [\n          \"customer_id\"\n        ]\n      ],\n      \"time_columns\": [],\n      \"default_filters\": [],\n      \"constraints\": []\n    }\n  },\n  {\n    \"object_id\": \"table-customer_tags\",\n    \"entry_id\": \"description\",\n    \"structure\": {\n      \"kind\": \"table\",\n      \"grain\": \"一个客户的一种标签\",\n      \"unique_keys\": [\n        [\n          \"customer_id\",\n          \"tag\"\n        ]\n      ],\n      \"time_columns\": [],\n      \"default_filters\": [],\n      \"constraints\": []\n    }\n  },\n  {\n    \"object_id\": \"field-paid_amount_cents\",\n    \"entry_id\": \"meaning\",\n    \"structure\": {\n      \"kind\": \"field\",\n      \"table\": {\n        \"object_id\": \"table-demo_order_detail\",\n        \"version\": \"1\"\n      },\n      \"column\": \"paid_amount_cents\",\n      \"unit\": \"分\"\n    }\n  },\n  {\n    \"object_id\": \"field-refunded_amount_cents\",\n    \"entry_id\": \"meaning\",\n    \"structure\": {\n      \"kind\": \"field\",\n      \"table\": {\n        \"object_id\": \"table-demo_order_detail\",\n        \"version\": \"1\"\n      },\n      \"column\": \"refunded_amount_cents\",\n      \"unit\": \"分\"\n    }\n  },\n  {\n    \"object_id\": \"field-quantity\",\n    \"entry_id\": \"meaning\",\n    \"structure\": {\n      \"kind\": \"field\",\n      \"table\": {\n        \"object_id\": \"table-demo_order_detail\",\n        \"version\": \"1\"\n      },\n      \"column\": \"quantity\",\n      \"unit\": \"件\"\n    }\n  },\n  {\n    \"object_id\": \"relationship-payments\",\n    \"entry_id\": \"join\",\n    \"structure\": {\n      \"kind\": \"relationship\",\n      \"left_table\": {\n        \"object_id\": \"table-raw_order_lines\",\n        \"version\": \"1\"\n      },\n      \"right_table\": {\n        \"object_id\": \"table-raw_payments\",\n        \"version\": \"1\"\n      },\n      \"join_keys\": [\n        {\n          \"left_column\": \"order_id\",\n          \"right_column\": \"order_id\"\n        },\n        {\n          \"left_column\": \"line_id\",\n          \"right_column\": \"line_id\"\n        }\n      ],\n      \"cardinality\": \"one_to_many\",\n      \"scope\": \"直接订单行关联原始付款事件；汇总付款事件后关联的形状不同，不能沿用此基数。\"\n    }\n  },\n  {\n    \"object_id\": \"relationship-tags\",\n    \"entry_id\": \"join\",\n    \"structure\": {\n      \"kind\": \"relationship\",\n      \"left_table\": {\n        \"object_id\": \"table-demo_order_detail\",\n        \"version\": \"1\"\n      },\n      \"right_table\": {\n        \"object_id\": \"table-customer_tags\",\n        \"version\": \"1\"\n      },\n      \"join_keys\": [\n        {\n          \"left_column\": \"customer_id\",\n          \"right_column\": \"customer_id\"\n        }\n      ],\n      \"cardinality\": \"many_to_many\",\n      \"scope\": \"订单行与客户标签均可能重复customer_id；仅筛选客户标签时优先EXISTS或去重客户列表。\"\n    }\n  },\n  {\n    \"object_id\": \"metric-net_revenue\",\n    \"entry_id\": \"definition\",\n    \"structure\": {\n      \"kind\": \"metric\",\n      \"table\": {\n        \"object_id\": \"table-demo_order_detail\",\n        \"version\": \"1\"\n      },\n      \"expression\": \"SUM(paid_amount_cents - refunded_amount_cents)\",\n      \"input_grain\": \"订单商品行\",\n      \"time_column\": \"paid_at\",\n      \"unit\": \"分\",\n      \"required_filters\": [\n        \"is_test = 0\",\n        \"paid_amount_cents > 0\"\n      ],\n      \"dimensions\": [\n        \"channel\",\n        \"region\"\n      ]\n    }\n  },\n  {\n    \"object_id\": \"metric-paying_customers\",\n    \"entry_id\": \"definition\",\n    \"structure\": {\n      \"kind\": \"metric\",\n      \"table\": {\n        \"object_id\": \"table-demo_order_detail\",\n        \"version\": \"1\"\n      },\n      \"expression\": \"COUNT(DISTINCT customer_id)\",\n      \"input_grain\": \"订单商品行\",\n      \"time_column\": \"paid_at\",\n      \"unit\": \"人\",\n      \"required_filters\": [\n        \"is_test = 0\",\n        \"paid_amount_cents > 0\"\n      ],\n      \"dimensions\": [\n        \"channel\",\n        \"region\"\n      ]\n    }\n  }\n]\n```",
+          "review_state": "unverified"
+        },
+        {
+          "entry_id": "business_domain",
+          "path": "business_domain",
+          "label": "业务范围",
+          "source_facts": {
+            "value": "合成零售",
+            "quote": "业务域标识：`合成零售`。本说明与其DDL、加工SQL生成的所有合成知识对象都属于该业务域；这是一条明确样例约定，不由表名推断。",
+            "source_id": "business-guide",
+            "version": "1",
+            "location": "第8节 / 业务域",
+            "complete": true,
+            "classification": "authored_definition"
+          },
+          "suggestion": {},
+          "human_override": null,
+          "effective_value": "合成零售",
+          "review_state": "unverified"
+        }
+      ],
+      "related_ids": [
+        "table-demo_order_detail"
+      ],
+      "source_id": "business-guide",
+      "source_version": "1",
+      "updated_by": "synthetic-import"
+    },
+    {
+      "id": "relationship-tags",
+      "kind": "relationship",
+      "name": "客户标签关联",
+      "version": "1",
+      "state": "enabled",
+      "entries": [
+        {
+          "entry_id": "join",
+          "path": "join",
+          "label": "关联说明",
+          "source_facts": {
+            "value": "这是查询时可用的附加表，不参加主表加工。同一客户可以有多个标签，关联基数是一对多。筛选“有 VIP 或订阅标签的客户”时用 `EXISTS`，或者先得到去重的客户列表再关联。如果直接连接标签明细，一个同时有两种标签的客户，其订单金额会出现两遍。",
+            "quote": "这是查询时可用的附加表，不参加主表加工。同一客户可以有多个标签，关联基数是一对多。筛选“有 VIP 或订阅标签的客户”时用 `EXISTS`，或者先得到去重的客户列表再关联。如果直接连接标签明细，一个同时有两种标签的客户，其订单金额会出现两遍。",
+            "source_id": "business-guide",
+            "version": "1",
+            "location": "3.4 标签 `customer_tags`",
+            "complete": true,
+            "classification": "authored_definition",
+            "structured_value": {
+              "kind": "relationship",
+              "left_table": {
+                "object_id": "table-demo_order_detail",
+                "version": "1"
+              },
+              "right_table": {
+                "object_id": "table-customer_tags",
+                "version": "1"
+              },
+              "join_keys": [
+                {
+                  "left_column": "customer_id",
+                  "right_column": "customer_id"
+                }
+              ],
+              "cardinality": "many_to_many",
+              "scope": "订单行与客户标签均可能重复customer_id；仅筛选客户标签时优先EXISTS或去重客户列表。"
+            },
+            "structured_evidence": [
+              {
+                "source_id": "business-guide",
+                "version": "1",
+                "location": "可计算语义定义 / relationship-tags",
+                "quote": "  {\n    \"object_id\": \"relationship-tags\",\n    \"entry_id\": \"join\",\n    \"structure\": {\n      \"kind\": \"relationship\",\n      \"left_table\": {\n        \"object_id\": \"table-demo_order_detail\",\n        \"version\": \"1\"\n      },\n      \"right_table\": {\n        \"object_id\": \"table-customer_tags\",\n        \"version\": \"1\"\n      },\n      \"join_keys\": [\n        {\n          \"left_column\": \"customer_id\",\n          \"right_column\": \"customer_id\"\n        }\n      ],\n      \"cardinality\": \"many_to_many\",\n      \"scope\": \"订单行与客户标签均可能重复customer_id；仅筛选客户标签时优先EXISTS或去重客户列表。\"\n    }\n  }"
+              }
+            ]
+          },
+          "suggestion": {},
+          "human_override": null,
+          "effective_value": "这是查询时可用的附加表，不参加主表加工。同一客户可以有多个标签，关联基数是一对多。筛选“有 VIP 或订阅标签的客户”时用 `EXISTS`，或者先得到去重的客户列表再关联。如果直接连接标签明细，一个同时有两种标签的客户，其订单金额会出现两遍。",
+          "review_state": "unverified",
+          "effective_structure": {
+            "kind": "relationship",
+            "left_table": {
+              "object_id": "table-demo_order_detail",
+              "version": "1"
+            },
+            "right_table": {
+              "object_id": "table-customer_tags",
+              "version": "1"
+            },
+            "join_keys": [
+              {
+                "left_column": "customer_id",
+                "right_column": "customer_id"
+              }
+            ],
+            "cardinality": "many_to_many",
+            "scope": "订单行与客户标签均可能重复customer_id；仅筛选客户标签时优先EXISTS或去重客户列表。"
+          }
+        },
+        {
+          "entry_id": "business_domain",
+          "path": "business_domain",
+          "label": "业务范围",
+          "source_facts": {
+            "value": "合成零售",
+            "quote": "业务域标识：`合成零售`。本说明与其DDL、加工SQL生成的所有合成知识对象都属于该业务域；这是一条明确样例约定，不由表名推断。",
+            "source_id": "business-guide",
+            "version": "1",
+            "location": "第8节 / 业务域",
+            "complete": true,
+            "classification": "authored_definition"
+          },
+          "suggestion": {},
+          "human_override": null,
+          "effective_value": "合成零售",
+          "review_state": "unverified"
+        }
+      ],
+      "related_ids": [
+        "table-demo_order_detail",
+        "table-customer_tags"
+      ],
+      "source_id": "business-guide",
+      "source_version": "1",
+      "updated_by": "synthetic-import"
+    },
+    {
+      "id": "relationship-payments",
+      "kind": "relationship",
+      "name": "订单行与支付事件",
+      "version": "1",
+      "state": "enabled",
+      "entries": [
+        {
+          "entry_id": "join",
+          "path": "join",
+          "label": "关联说明",
+          "source_facts": {
+            "value": "一个订单行可能有多次付款或退款。`event_type='charge'` 表示付款，`event_type='refund'` 表示退款。每笔事件已按订单行分摊，金额始终为正数；类型决定它是加付款还是加退款。\n\n加工先筛选快照截止前 `event_status='success'` 的事件，再按 `(order_id, line_id)` 汇总，再与订单行关联。失败和等待中的事件不计金额。直接把事件表关联回订单行后重复累加行金额，会重复计算。\n\n`paid_at` 是这一个订单行首笔成功付款的 UTC 时刻；本样例一行的分次付款都在同一天，且不存在同一 `(order_id, line_id)` 跨月分次付款。同一订单的不同行可以在不同月份首次付款，不能假定它们的 `paid_at` 同月。没有成功付款时，`paid_at` 为 `NULL`，两个金额为 0。",
+            "quote": "一个订单行可能有多次付款或退款。`event_type='charge'` 表示付款，`event_type='refund'` 表示退款。每笔事件已按订单行分摊，金额始终为正数；类型决定它是加付款还是加退款。\n\n加工先筛选快照截止前 `event_status='success'` 的事件，再按 `(order_id, line_id)` 汇总，再与订单行关联。失败和等待中的事件不计金额。直接把事件表关联回订单行后重复累加行金额，会重复计算。\n\n`paid_at` 是这一个订单行首笔成功付款的 UTC 时刻；本样例一行的分次付款都在同一天，且不存在同一 `(order_id, line_id)` 跨月分次付款。同一订单的不同行可以在不同月份首次付款，不能假定它们的 `paid_at` 同月。没有成功付款时，`paid_at` 为 `NULL`，两个金额为 0。",
+            "source_id": "business-guide",
+            "version": "1",
+            "location": "3.2 付款事件 `raw_payments`",
+            "complete": true,
+            "classification": "authored_definition",
+            "structured_value": {
+              "kind": "relationship",
+              "left_table": {
+                "object_id": "table-raw_order_lines",
+                "version": "1"
+              },
+              "right_table": {
+                "object_id": "table-raw_payments",
+                "version": "1"
+              },
+              "join_keys": [
+                {
+                  "left_column": "order_id",
+                  "right_column": "order_id"
+                },
+                {
+                  "left_column": "line_id",
+                  "right_column": "line_id"
+                }
+              ],
+              "cardinality": "one_to_many",
+              "scope": "直接订单行关联原始付款事件；汇总付款事件后关联的形状不同，不能沿用此基数。"
+            },
+            "structured_evidence": [
+              {
+                "source_id": "business-guide",
+                "version": "1",
+                "location": "可计算语义定义 / relationship-payments",
+                "quote": "  {\n    \"object_id\": \"relationship-payments\",\n    \"entry_id\": \"join\",\n    \"structure\": {\n      \"kind\": \"relationship\",\n      \"left_table\": {\n        \"object_id\": \"table-raw_order_lines\",\n        \"version\": \"1\"\n      },\n      \"right_table\": {\n        \"object_id\": \"table-raw_payments\",\n        \"version\": \"1\"\n      },\n      \"join_keys\": [\n        {\n          \"left_column\": \"order_id\",\n          \"right_column\": \"order_id\"\n        },\n        {\n          \"left_column\": \"line_id\",\n          \"right_column\": \"line_id\"\n        }\n      ],\n      \"cardinality\": \"one_to_many\",\n      \"scope\": \"直接订单行关联原始付款事件；汇总付款事件后关联的形状不同，不能沿用此基数。\"\n    }\n  }"
+              }
+            ]
+          },
+          "suggestion": {},
+          "human_override": null,
+          "effective_value": "一个订单行可能有多次付款或退款。`event_type='charge'` 表示付款，`event_type='refund'` 表示退款。每笔事件已按订单行分摊，金额始终为正数；类型决定它是加付款还是加退款。\n\n加工先筛选快照截止前 `event_status='success'` 的事件，再按 `(order_id, line_id)` 汇总，再与订单行关联。失败和等待中的事件不计金额。直接把事件表关联回订单行后重复累加行金额，会重复计算。\n\n`paid_at` 是这一个订单行首笔成功付款的 UTC 时刻；本样例一行的分次付款都在同一天，且不存在同一 `(order_id, line_id)` 跨月分次付款。同一订单的不同行可以在不同月份首次付款，不能假定它们的 `paid_at` 同月。没有成功付款时，`paid_at` 为 `NULL`，两个金额为 0。",
+          "review_state": "unverified",
+          "effective_structure": {
+            "kind": "relationship",
+            "left_table": {
+              "object_id": "table-raw_order_lines",
+              "version": "1"
+            },
+            "right_table": {
+              "object_id": "table-raw_payments",
+              "version": "1"
+            },
+            "join_keys": [
+              {
+                "left_column": "order_id",
+                "right_column": "order_id"
+              },
+              {
+                "left_column": "line_id",
+                "right_column": "line_id"
+              }
+            ],
+            "cardinality": "one_to_many",
+            "scope": "直接订单行关联原始付款事件；汇总付款事件后关联的形状不同，不能沿用此基数。"
+          }
+        },
+        {
+          "entry_id": "business_domain",
+          "path": "business_domain",
+          "label": "业务范围",
+          "source_facts": {
+            "value": "合成零售",
+            "quote": "业务域标识：`合成零售`。本说明与其DDL、加工SQL生成的所有合成知识对象都属于该业务域；这是一条明确样例约定，不由表名推断。",
+            "source_id": "business-guide",
+            "version": "1",
+            "location": "第8节 / 业务域",
+            "complete": true,
+            "classification": "authored_definition"
+          },
+          "suggestion": {},
+          "human_override": null,
+          "effective_value": "合成零售",
+          "review_state": "unverified"
+        }
+      ],
+      "related_ids": [
+        "table-raw_order_lines",
+        "table-raw_payments"
+      ],
+      "source_id": "business-guide",
+      "source_version": "1",
+      "updated_by": "synthetic-import"
+    }
+  ]
+}

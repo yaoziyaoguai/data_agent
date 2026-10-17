@@ -64,6 +64,8 @@
 
 ### 5.1 支付归属净收入
 
+- 指标标识：`net_revenue`
+- 别名：净收入 收入 净收
 - 时间：按 `paid_at` 选支付期间，排除测试交易。
 - 计算：`SUM(paid_amount_cents - refunded_amount_cents)`。
 - 单位：分；展示为元时除以 100。
@@ -72,14 +74,37 @@
 
 这是“截至快照、按付款月归属”的业务指标。若用户问“2 月实际退款流水”或“当月现金净流入”，应按 `raw_payments.event_at` 计算；不能用主表累计退款替代退款发生时间。
 
+计算 SQL（本说明人工制定的合成指标定义；`:start` 和 `:end` 是 UTC 半开区间参数）：
+
+```sql
+SELECT SUM(paid_amount_cents - refunded_amount_cents) AS net_revenue
+FROM demo_order_detail
+WHERE is_test = 0 AND paid_amount_cents > 0
+  AND paid_at >= :start AND paid_at < :end;
+```
+
 ### 5.2 月支付客户数
 
+- 指标标识：`paying_customers`
+- 别名：UV 支付客户 月客户
 - 在整个月的已支付、非测试行上执行 `COUNT(DISTINCT customer_id)`。
 - 同一客户多次下单、多行商品只计一次；匿名客户不计已知客户数。
 - 全额退款客户仍曾成功付款，保留在该指标内；如用户要求“未全退客户”，属于不同口径，需要明确。
 - 不能把每天的客户数相加得到月客户数；同一客户可能跨天出现。
 
+计算 SQL（本说明人工制定的合成指标定义，时间参数含义同上）：
+
+```sql
+SELECT COUNT(DISTINCT customer_id) AS paying_customers
+FROM demo_order_detail
+WHERE is_test = 0 AND paid_amount_cents > 0
+  AND paid_at >= :start AND paid_at < :end;
+```
+
 ### 5.3 订单退款率
+
+- 指标标识：`refund_rate`
+- 别名：退款率 订单退款比例
 
 这是一个已经命名清楚的示例指标：
 
@@ -90,11 +115,26 @@
 
 如果用户只说“退款率”，还不能知道他要的是订单退款率、退款金额占支付金额比例，还是退款客户占支付客户比例。Agent 应先查已有会话约定或用户采用的指标；缺少约定时询问分母，用户明确后再生成相应 SQL。不能把名称相似当成已经确认了口径。
 
+计算 SQL（本说明人工制定的合成指标定义，时间参数含义同上）：
+
+```sql
+SELECT COUNT(DISTINCT CASE WHEN EXISTS (
+    SELECT 1 FROM demo_order_detail AS r
+    WHERE r.order_id = demo_order_detail.order_id
+      AND r.is_test = 0 AND r.refunded_amount_cents > 0
+) THEN order_id END) * 1.0 / NULLIF(COUNT(DISTINCT order_id), 0) AS refund_rate
+FROM demo_order_detail
+WHERE is_test = 0 AND paid_amount_cents > 0
+  AND paid_at >= :start AND paid_at < :end;
+```
+
 ## 6. 可填写与可推断的范围
 
 接口能够直接给出表结构、主键、加工 SQL、血缘和原始注释。SQL 分析可以支持“先汇总支付再连接”“付款状态筛选”“金额空值补 0”等建议。业务解释如收入归属、匿名客户处理、标签用途仍需要本说明这样的依据。页面应分别保存原始事实、模型建议和人工修改，保留出处、版本、修改人和生效范围。
 
 人工可补充、纠正全部语义。人工修改标记表示内容来自人工修订，不自动等于业务结果已验证。涉及结果的指标另记录验收证据。
+
+本说明本身也是人工制定的合成业务来源。指标别名、计算 SQL 和关联解释以本文为唯一规范来源，目录生成器只引用对应原文，不另写一套规则。引用本文说明的是“合成业务定义”，不能标成数据平台已有注释或模型已经验证的业务结论。DDL 类型的确定派生另记录原始声明和派生方法；未提供的来源表加工 SQL 保持未知。
 
 ## 7. 样例覆盖及边界
 
@@ -104,6 +144,254 @@
 
 ## 8. 作为 Agent 知识使用
 
+业务域标识：`合成零售`。本说明与其DDL、加工SQL生成的所有合成知识对象都属于该业务域；这是一条明确样例约定，不由表名推断。
+
 知识输入可以包含本说明、`schema.sql`、`etl.sql` 和明确允许展示的合成种子；实际是否给模型完整行数据仍由应用的数据范围控制。
 
 `evaluation/` 保存独立参考 SQL、预期结果与验收问题，默认不进入索引、提示词或 Skill。离线脚本验证了样例本身，不代表 Agent 已通过检索、澄清、SQL 确认或执行状态验证。
+
+### 可计算语义定义
+
+以下是本合成业务明确制定的结构约定，版本引用对应首次导入的对象。引用变更后需要维护者核对，不能自动把旧约定套到新版本。自然语言和结构一起维护；复杂指标的完整 SQL 仍以上文为准。订单行与标签的直接关联是多对多，与客户到标签的一对多不同。
+
+```semantic-structure
+[
+  {
+    "object_id": "table-demo_order_detail",
+    "entry_id": "description",
+    "structure": {
+      "kind": "table",
+      "grain": "一张订单中的一个商品行",
+      "unique_keys": [
+        [
+          "order_id",
+          "line_id"
+        ]
+      ],
+      "time_columns": [
+        {
+          "column": "paid_at",
+          "role": "payment"
+        },
+        {
+          "column": "order_date",
+          "role": "order"
+        }
+      ],
+      "default_filters": [],
+      "constraints": []
+    }
+  },
+  {
+    "object_id": "table-raw_order_lines",
+    "entry_id": "description",
+    "structure": {
+      "kind": "table",
+      "grain": "一张订单中的一个商品行",
+      "unique_keys": [
+        [
+          "order_id",
+          "line_id"
+        ]
+      ],
+      "time_columns": [
+        {
+          "column": "ordered_at",
+          "role": "order"
+        }
+      ],
+      "default_filters": [],
+      "constraints": []
+    }
+  },
+  {
+    "object_id": "table-raw_payments",
+    "entry_id": "description",
+    "structure": {
+      "kind": "table",
+      "grain": "一次订单行付款或退款事件",
+      "unique_keys": [
+        [
+          "payment_event_id"
+        ]
+      ],
+      "time_columns": [
+        {
+          "column": "event_at",
+          "role": "event"
+        }
+      ],
+      "default_filters": [],
+      "constraints": []
+    }
+  },
+  {
+    "object_id": "table-dim_customers",
+    "entry_id": "description",
+    "structure": {
+      "kind": "table",
+      "grain": "一个已知客户",
+      "unique_keys": [
+        [
+          "customer_id"
+        ]
+      ],
+      "time_columns": [],
+      "default_filters": [],
+      "constraints": []
+    }
+  },
+  {
+    "object_id": "table-customer_tags",
+    "entry_id": "description",
+    "structure": {
+      "kind": "table",
+      "grain": "一个客户的一种标签",
+      "unique_keys": [
+        [
+          "customer_id",
+          "tag"
+        ]
+      ],
+      "time_columns": [],
+      "default_filters": [],
+      "constraints": []
+    }
+  },
+  {
+    "object_id": "field-paid_amount_cents",
+    "entry_id": "meaning",
+    "structure": {
+      "kind": "field",
+      "table": {
+        "object_id": "table-demo_order_detail",
+        "version": "1"
+      },
+      "column": "paid_amount_cents",
+      "unit": "分"
+    }
+  },
+  {
+    "object_id": "field-refunded_amount_cents",
+    "entry_id": "meaning",
+    "structure": {
+      "kind": "field",
+      "table": {
+        "object_id": "table-demo_order_detail",
+        "version": "1"
+      },
+      "column": "refunded_amount_cents",
+      "unit": "分"
+    }
+  },
+  {
+    "object_id": "field-quantity",
+    "entry_id": "meaning",
+    "structure": {
+      "kind": "field",
+      "table": {
+        "object_id": "table-demo_order_detail",
+        "version": "1"
+      },
+      "column": "quantity",
+      "unit": "件"
+    }
+  },
+  {
+    "object_id": "relationship-payments",
+    "entry_id": "join",
+    "structure": {
+      "kind": "relationship",
+      "left_table": {
+        "object_id": "table-raw_order_lines",
+        "version": "1"
+      },
+      "right_table": {
+        "object_id": "table-raw_payments",
+        "version": "1"
+      },
+      "join_keys": [
+        {
+          "left_column": "order_id",
+          "right_column": "order_id"
+        },
+        {
+          "left_column": "line_id",
+          "right_column": "line_id"
+        }
+      ],
+      "cardinality": "one_to_many",
+      "scope": "直接订单行关联原始付款事件；汇总付款事件后关联的形状不同，不能沿用此基数。"
+    }
+  },
+  {
+    "object_id": "relationship-tags",
+    "entry_id": "join",
+    "structure": {
+      "kind": "relationship",
+      "left_table": {
+        "object_id": "table-demo_order_detail",
+        "version": "1"
+      },
+      "right_table": {
+        "object_id": "table-customer_tags",
+        "version": "1"
+      },
+      "join_keys": [
+        {
+          "left_column": "customer_id",
+          "right_column": "customer_id"
+        }
+      ],
+      "cardinality": "many_to_many",
+      "scope": "订单行与客户标签均可能重复customer_id；仅筛选客户标签时优先EXISTS或去重客户列表。"
+    }
+  },
+  {
+    "object_id": "metric-net_revenue",
+    "entry_id": "definition",
+    "structure": {
+      "kind": "metric",
+      "table": {
+        "object_id": "table-demo_order_detail",
+        "version": "1"
+      },
+      "expression": "SUM(paid_amount_cents - refunded_amount_cents)",
+      "input_grain": "订单商品行",
+      "time_column": "paid_at",
+      "unit": "分",
+      "required_filters": [
+        "is_test = 0",
+        "paid_amount_cents > 0"
+      ],
+      "dimensions": [
+        "channel",
+        "region"
+      ]
+    }
+  },
+  {
+    "object_id": "metric-paying_customers",
+    "entry_id": "definition",
+    "structure": {
+      "kind": "metric",
+      "table": {
+        "object_id": "table-demo_order_detail",
+        "version": "1"
+      },
+      "expression": "COUNT(DISTINCT customer_id)",
+      "input_grain": "订单商品行",
+      "time_column": "paid_at",
+      "unit": "人",
+      "required_filters": [
+        "is_test = 0",
+        "paid_amount_cents > 0"
+      ],
+      "dimensions": [
+        "channel",
+        "region"
+      ]
+    }
+  }
+]
+```

@@ -1,0 +1,29 @@
+{
+  "note": "独立人工核算。只供验收，不构成模型知识、检索资料、Skill或案例。",
+  "cases": [
+    {
+      "id": "monthly-net",
+      "sql_file": "queries/monthly-net.sql",
+      "columns": ["month", "paid_cents", "refund_cents", "net_cents", "paid_orders", "known_customers"],
+      "rows": [["2026-01",110000,8000,102000,9,7],["2026-02",122000,9000,113000,9,8],["2026-03",143000,9000,134000,9,7]]
+    },
+    {
+      "id": "channel-contribution",
+      "sql_file": "queries/channel-contribution.sql",
+      "columns": ["channel", "previous_net_cents", "current_net_cents", "delta_cents", "total_delta_cents"],
+      "rows": [["app",51000,62000,11000,21000],["store",23000,27000,4000,21000],["web",39000,45000,6000,21000]]
+    },
+    {
+      "id": "tagged-net",
+      "sql_file": "queries/tagged-net.sql",
+      "columns": ["month", "paid_cents", "refund_cents", "net_cents", "known_customers"],
+      "rows": [["2026-01",87500,8000,79500,5],["2026-02",86000,9000,77000,5],["2026-03",93750,6000,87750,5]]
+    },
+    {
+      "id": "refund-timing",
+      "sql_file": "queries/refund-timing.sql",
+      "columns": ["month", "refund_cents", "refund_orders"],
+      "rows": [["2026-01",2000,1],["2026-02",7000,2],["2026-03",11000,4],["2026-04",6000,2]]
+    }
+  ]
+}

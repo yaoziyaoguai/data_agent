@@ -7,6 +7,7 @@ import argparse
 import hashlib
 import json
 import sqlite3
+import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -89,10 +90,33 @@ def verify() -> dict[str, object]:
               AND d.is_test = 0 AND t.tag IN ('vip', 'newsletter')''')
         compare('I10_join_counterexample', bad_join, [[18200]])
         compare('I11_main_field_count', len(rows(connection, 'PRAGMA table_info(demo_order_detail)')), 13)
+
+        # 目录是待测输出；数值预期仍取独立手工参考，生成器不会读取这些答案。
+        catalog_check = subprocess.run(
+            [sys.executable, str(ROOT.parents[1] / 'scripts/build_semantic_catalog.py'), '--check'],
+            capture_output=True, text=True, timeout=30, check=False,
+        )
+        compare('I12_catalog_reproducible', catalog_check.returncode, 0)
+        catalog = json.loads((ROOT / 'semantic-catalog.json').read_text(encoding='utf-8'))
+        metric_queries = {
+            obj['id']: next(entry['effective_value'] for entry in obj['entries'] if entry['path'] == 'sql')
+            for obj in catalog['objects'] if obj['kind'] == 'metric'
+        }
+        reference_cases = {case['id']: case for case in cases}
+        period = {'start': '2026-01-01T00:00:00Z', 'end': '2026-02-01T00:00:00Z'}
+        for metric, reference, column in (
+            ('net_revenue', 'Q01', 2), ('paying_customers', 'Q02', 0), ('refund_rate', 'Q04', 2),
+        ):
+            actual = connection.execute(metric_queries['metric-' + metric], period).fetchone()[0]
+            compare('I13_catalog_' + metric, actual, reference_cases[reference]['expected_rows'][0][column])
+        empty_period = {'start': '2026-03-01T00:00:00Z', 'end': '2026-04-01T00:00:00Z'}
+        compare('I14_catalog_empty_refund_rate',
+                connection.execute(metric_queries['metric-refund_rate'], empty_period).fetchone()[0],
+                reference_cases['Q10']['expected_rows'][0][1])
     finally:
         connection.close()
 
-    source_files = [ROOT / name for name in ('schema.sql', 'seed.sql', 'etl.sql', 'business-guide.md', 'knowledge-manifest.json', 'verify.py')]
+    source_files = [ROOT / name for name in ('schema.sql', 'seed.sql', 'etl.sql', 'business-guide.md', 'knowledge-manifest.json', 'semantic-catalog.json', 'verify.py')]
     source_files.extend(sorted((ROOT / 'evaluation').glob('*.json')))
     source_files.extend(sorted((ROOT / 'evaluation/queries').glob('*.sql')))
     fingerprints = {str(path.relative_to(ROOT)): hashlib.sha256(path.read_bytes()).hexdigest()
@@ -100,7 +124,7 @@ def verify() -> dict[str, object]:
     return {
         'verified_at_utc': datetime.now(timezone.utc).isoformat(),
         'environment': {'python': sys.version.split()[0], 'sqlite': sqlite3.sqlite_version, 'database': 'in_memory'},
-        'scope': '合成数据、SQLite加工、13条参考SQL及11项边界检查；不包含Agent行为或模型接入',
+        'scope': '合成数据、SQLite加工、13条参考SQL、11项边界与5项目录/指标检查；不包含Agent行为或模型接入',
         'status': 'passed' if all(check['passed'] for check in checks) else 'failed',
         'checks_passed': sum(bool(check['passed']) for check in checks),
         'checks_total': len(checks),

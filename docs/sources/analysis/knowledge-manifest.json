@@ -1,0 +1,24 @@
+{
+  "version": 1,
+  "synthetic": true,
+  "sql_dialect": "sqlite3",
+  "snapshot_exclusive": "2026-04-04T00:00:00Z",
+  "knowledge_files": [
+    "schema.sql",
+    "etl.sql",
+    "business-guide.md"
+  ],
+  "optional_synthetic_data_files": [
+    "seed.sql"
+  ],
+  "excluded_from_model_context": [
+    "evaluation/**",
+    "verify.py",
+    "generate.py"
+  ],
+  "note": "仅三份规范知识材料可进入知识输入；种子供平台加载，生成器与独立验收不进入提示词、检索或Skill。",
+  "derived_knowledge_files": [
+    "semantic-catalog.json"
+  ],
+  "derivation": "schema.sql、etl.sql、business-guide.md 的合成结构化预填；不读取 evaluation"
+}
