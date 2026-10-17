@@ -1,0 +1,92 @@
+.semantic-structure {
+  margin: 14px 0;
+  color: #40536e;
+  font-size: 13px;
+}
+.semantic-structure > summary {
+  cursor: pointer;
+  padding: 6px 0;
+}
+.semantic-structure-facts {
+  display: grid;
+  grid-template-columns: 100px minmax(0, 1fr);
+  gap: 10px 16px;
+  margin: 16px 0;
+}
+.semantic-structure-facts dt {
+  font-weight: 500;
+}
+.semantic-structure-facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+.semantic-structure-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 20px;
+}
+.semantic-structure-form .form-label {
+  color: #40536e;
+  font-size: 13px;
+  min-width: 0;
+}
+.semantic-structure-form .form-label small {
+  display: block;
+  margin-top: 7px;
+  color: #52657d;
+  line-height: 1.6;
+}
+.semantic-structure-wide {
+  grid-column: 1 / -1;
+  border: 0;
+  padding: 8px 0 16px;
+  margin: 0;
+  min-width: 0;
+}
+.semantic-structure-wide legend {
+  font-size: 13px;
+}
+.semantic-rule-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: end;
+}
+.semantic-rule-row > button {
+  margin-bottom: 14px;
+}
+.semantic-table-picker {
+  min-width: 0;
+}
+.semantic-table-picker > button {
+  margin: 0 6px 6px 0;
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.semantic-table-picker > button small {
+  display: block;
+  margin-top: 4px;
+  color: #52657d;
+  font-size: 12px;
+}
+@media (max-width: 640px) {
+  .semantic-structure-form {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .semantic-rule-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+  }
+  .semantic-rule-row > button {
+    justify-self: start;
+  }
+  .semantic-structure-facts {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 6px;
+  }
+  .semantic-structure-facts dd {
+    margin-bottom: 10px;
+  }
+}

@@ -3,6 +3,7 @@ import type {
   Snapshot,
   QueryList,
   HistoryItem,
+  AnalysisReportRef,
 } from "../../../../../packages/contracts/generated/boundary.ts";
 import { api, ApiError } from "../../shared/api.ts";
 import { decodeContract } from "../../../../../packages/contracts/validate.ts";
@@ -13,6 +14,7 @@ import { conversationItems, displayUserMessage, mergeSnapshot } from "./conversa
 import { SkillSelections } from "./SkillSelections.tsx";
 import { conversationTitle } from "./conversation-title.ts";
 import { QueryCard } from "./QueryCard.tsx";
+import { AnalysisReport } from "./AnalysisReport.tsx";
 import { AssistantMessage } from "./AssistantMessage.tsx";
 import { ConversationFeed } from "./ConversationFeed.tsx";
 import { ModelSelector } from "./ModelSelector.tsx";
@@ -53,6 +55,8 @@ export function Workbench({
   const [error, setError] = useState("");
   const [syncUnavailable, setSyncUnavailable] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  const [selectedReport, setSelectedReport] = useState<AnalysisReportRef | null>(null);
+  useEffect(() => { setSelectedReport(null); }, [cid, space, user]);
   const [historySearch, setHistorySearch] = useState("");
   const [pending, setPending] = useState<PendingSubmission | null>(null);
   const [pendingError, setPendingError] = useState("");
@@ -453,6 +457,8 @@ export function Workbench({
                   target?.focus({ preventScroll: true });
                 }}>{item.query.execution_state === "succeeded" ? "查看结果" : "查看查询"}</button>
               </div>
+            ) : item.kind === "report" ? (
+              <div key={item.key} className="report-notice" role="status"><span>{item.conditionChanged ? "分析条件已更新，报告需重新整理" : "分析报告已保存"}</span><button className="text-link" onClick={() => setSelectedReport(item.reference)}>查看分析报告</button></div>
             ) : (() => { const m = item.message; const display = displayUserMessage(m.text, snapshot.tasks); return (
               <article
                 key={item.key}
@@ -552,6 +558,22 @@ export function Workbench({
           </p>
         )}
         <p className="footnote">Enter 发送 · Shift + Enter 换行</p>
+        {selectedReport && selectedReport.conversation_id === cid && <AnalysisReport
+          reference={snapshot?.tasks.find(task => task.id === selectedReport.task_id)?.report_ref ?? selectedReport}
+          currentConditionVersion={snapshot?.tasks.find(task => task.id === selectedReport.task_id)?.condition_version}
+          onClose={() => setSelectedReport(null)}
+          onQuery={queryId => {
+            setSelectedReport(null);
+            window.requestAnimationFrame(() => {
+              const target = document.getElementById("query-" + queryId);
+              const previous = target?.closest<HTMLDetailsElement>("details.previous-query");
+              if (previous) previous.open = true;
+              target?.scrollIntoView({ block: "start" });
+              target?.focus({ preventScroll: true });
+            });
+          }}
+          onEvidence={(id, summary, version) => { setSelectedReport(null); window.requestAnimationFrame(() => onEvidence(id, summary, version)); }}
+        />}
         {deleteId && (
           <Modal title="删除这个会话？" onClose={() => setDeleteId(null)}>
             <p>

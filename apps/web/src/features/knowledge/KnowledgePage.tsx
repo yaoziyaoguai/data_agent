@@ -15,6 +15,7 @@ import { KnowledgeDirectory } from "./KnowledgeDirectory.tsx";
 import { SemanticMaintainer } from "./SemanticMaintainer.tsx";
 import { KnowledgeOrigin } from "./KnowledgeOrigin.tsx";
 import { KnowledgeStatus } from "./KnowledgeStatus.tsx";
+import { KnowledgeMaintenanceImpact } from "./KnowledgeMaintenanceImpact.tsx";
 import { ApiError, api } from "../../shared/api.ts";
 import { Modal } from "../../shared/Modal.tsx";
 import { MarkdownContent } from "../../shared/MarkdownContent.tsx";
@@ -22,6 +23,7 @@ import { useUnsavedChanges, useNavigationGuard } from "../../shared/UnsavedChang
 import { Tabs } from "../../shared/Tabs.tsx";
 import type { WorkspaceLocation } from "../../shared/workspace-location.ts";
 import { knowledgeKindLabels } from "../../shared/knowledge-labels.ts";
+import { SemanticStructureEditor, SemanticStructureView, structureDraft, structureEntryId, structureFromDraft } from "./SemanticStructure.tsx";
 function currentObject(previous: KnowledgeObject | undefined, incoming: KnowledgeObject): KnowledgeObject {
   if (!previous) return incoming;
   const oldPreference=previous.analysis_preference;
@@ -51,6 +53,7 @@ function EntryEditor({
   onSaved,
   onSource,
   onCorrection,
+  availableObjects,
 }: {
   object: KnowledgeObject;
   entry: KnowledgeEntry;
@@ -58,6 +61,7 @@ function EntryEditor({
   onSaved: (object: KnowledgeObject) => void;
   onSource: (id: string) => void;
   onCorrection: () => void;
+  availableObjects: KnowledgeObject[];
 }) {
   const operation = useStableOperation();
   const [editing, setEditing] = useState(false);
@@ -66,6 +70,9 @@ function EntryEditor({
   const [busy, setBusy] = useState(false);
   const [editVersion, setEditVersion] = useState(object.version);
   const isDocument = object.kind === "document" && entry.entry_id === "body";
+  const hasStructureEditor = structureEntryId(object) === entry.entry_id;
+  const [structure, setStructure] = useState(() => hasStructureEditor ? structureDraft(object, entry, availableObjects) : null);
+  const [saveStructure, setSaveStructure] = useState(false);
   let displayValue = entry.effective_value;
   if (entry.path === "lineage") {
     try {
@@ -76,7 +83,7 @@ function EntryEditor({
   const [editUrl, setEditUrl] = useState(String(entry.human_override?.source_url ?? ""));
   const [editRelated, setEditRelated] = useState(object.related_ids);
   const initialEdit = useRef("");
-  const confirmClose = useUnsavedChanges(editing && initialEdit.current !== JSON.stringify([value, editUrl, editRelated]), () => { setEditing(false); setValue(entry.effective_value); });
+  const confirmClose = useUnsavedChanges(editing && initialEdit.current !== JSON.stringify([value, editUrl, editRelated, structure, saveStructure]), () => { setEditing(false); setValue(entry.effective_value); });
   useEffect(() => {
     if (!editing) setValue(entry.effective_value);
   }, [object.version, entry.entry_id, editing]);
@@ -84,16 +91,18 @@ function EntryEditor({
     setBusy(true);
     setError("");
     try {
+      const structuredValue = !clear && saveStructure && structure ? structureFromDraft(structure) : null;
       const v = await api(
         "KnowledgeObject",
         "/knowledge/" + object.id,
         "PATCH",
         {
-          operation_id: operation({ object: object.id, entry: entry.entry_id, editVersion, value, clear, editUrl, editRelated }),
+          operation_id: operation({ object: object.id, entry: entry.entry_id, editVersion, value, clear, editUrl, editRelated, structuredValue }),
           expected_version: editVersion,
           entry_id: entry.entry_id,
           value,
           clear_override: clear,
+          ...(hasStructureEditor ? { structured_value: structuredValue } : {}),
           ...(isDocument && !clear ? { source_url: editUrl.trim() || null, related_ids: editRelated } : {}),
         },
       );
@@ -116,7 +125,7 @@ function EntryEditor({
         <strong>{entry.label}</strong>
         <KnowledgeStatus entries={[entry]}/>
         {canEdit && !editing && (
-          <button onClick={() => {initialEdit.current = JSON.stringify([entry.effective_value, String(entry.human_override?.source_url ?? ""), object.related_ids]);setEditVersion(object.version);setEditUrl(String(entry.human_override?.source_url ?? ""));setEditRelated(object.related_ids);setEditing(true);}}>编辑</button>
+          <button onClick={() => {const draft=hasStructureEditor ? structureDraft(object,entry,availableObjects) : null;initialEdit.current = JSON.stringify([entry.effective_value, String(entry.human_override?.source_url ?? ""), object.related_ids,draft,false]);setStructure(draft);setSaveStructure(false);setEditVersion(object.version);setEditUrl(String(entry.human_override?.source_url ?? ""));setEditRelated(object.related_ids);setEditing(true);}}>编辑</button>
         )}
       </div>
       {editing ? (
@@ -136,6 +145,7 @@ function EntryEditor({
             <label className="form-label">来源链接<input aria-label="编辑来源链接" value={editUrl} onChange={e => setEditUrl(e.target.value)} /></label>
             <KnowledgePicker selected={editRelated} disabled={busy} onAdd={object => setEditRelated(old => [...old, object.id])} onRemove={id => setEditRelated(old => old.filter(value => value !== id))}/>
           </>}
+          {hasStructureEditor && structure && <SemanticStructureEditor object={object} draft={structure} confirmed={saveStructure} disabled={busy} hadStructure={Boolean(entry.effective_structure)} onChange={setStructure} onConfirm={setSaveStructure}/>}
           <div className="actions">
             <button
               className="primary"
@@ -168,6 +178,7 @@ function EntryEditor({
           {displayValue || "尚缺说明"}
         </p>
       )}
+      {!editing && hasStructureEditor && <SemanticStructureView value={entry.effective_structure}/>}
       {typeof entry.human_override?.source_url === "string" && /^https?:\/\//i.test(entry.human_override.source_url) && (
         <p className="quiet"><a href={entry.human_override.source_url} target="_blank" rel="noopener noreferrer">打开来源链接 ↗</a>{!entry.effective_value.trim() && " · 正文尚未录入，Agent无法据此解释业务"}</p>
       )}
@@ -535,6 +546,7 @@ export function KnowledgePage({
                 </div>
               </div>
               <SemanticMaintainer object={selected} onSaved={()=>{setDirectoryRevision(value => value + 1);void refresh();}}/>
+              <KnowledgeMaintenanceImpact objectId={selected.id} version={selected.version}/>
               {selected.prefill_status && selected.prefill_status.state !== "succeeded" && <p className="quiet" role="status">{({queued:"正在等待补充语义说明",issued:"正在分析资料，补充说明",budget_unavailable:"自动补充暂不可用，仍可人工维护",superseded:"资料已变化，本次分析未采用",unknown:"分析暂未完成，请稍后查看状态",invalid_prefill:"本次分析未通过检查，已有内容保留"} as Record<string,string>)[selected.prefill_status.state] ?? "分析状态待核对"}</p>}
               {selected.kind === "table" && (
                 <Tabs label="表的语义内容" value={tab} items={["概览", "字段语义", "关联与血缘", "指标 SQL", "业务文档", "变更记录"].map(label => ({value: label, label}))} onChange={next => move(current, next)}/>
@@ -577,11 +589,12 @@ export function KnowledgePage({
                               onCorrection={()=>void refresh()}
                               onSaved={save}
                               onSource={(id) => void showSource(id)}
+                              availableObjects={objects}
                             />
                           ))}
                         </details>
                       ) : (
-                        o.entries.map((e) => ["ddl", "etl"].includes(e.path) ? <details key={e.entry_id} className="technical-source"><summary>{e.label}</summary><EntryEditor object={o} entry={e} canEdit={o.maintenance?.can_edit ?? false} onCorrection={() => void refresh()} onSaved={save} onSource={id => void showSource(id)}/></details> : (
+                        o.entries.map((e) => ["ddl", "etl"].includes(e.path) ? <details key={e.entry_id} className="technical-source"><summary>{e.label}</summary><EntryEditor object={o} entry={e} canEdit={o.maintenance?.can_edit ?? false} onCorrection={() => void refresh()} onSaved={save} onSource={id => void showSource(id)} availableObjects={objects}/></details> : (
                           <EntryEditor
                             key={e.entry_id}
                             object={o}
@@ -590,6 +603,7 @@ export function KnowledgePage({
                               onCorrection={()=>void refresh()}
                             onSaved={save}
                             onSource={(id) => void showSource(id)}
+                            availableObjects={objects}
                           />
                         ))
                       )}

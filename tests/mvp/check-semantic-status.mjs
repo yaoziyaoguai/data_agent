@@ -12,6 +12,8 @@ assert.equal(knowledgeEntryStatus({...base,suggestion:{value:'整理测量定义
 assert.equal(knowledgeEntryStatus({...base,human_override:{value:'人工定义'},review_state:'confirmed'}).kind,'human');
 assert.equal(knowledgeEntryStatus({...base,human_override:{value:'保留定义'},review_state:'needs_review'}).kind,'review');
 assert.equal(knowledgeEntryStatus({...base,review_state:'confirmed'}).kind,'source');
+assert.equal(knowledgeEntryStatus({...base,source_facts:{classification:'authored_definition'},suggestion:{value:'模型重新解释',analysis_state:'validated'}}).kind,'model');
+assert.equal(knowledgeEntryStatus({...base,source_facts:{classification:'authored_definition'}}).kind,'source');
 const output='.local/product-repairs';await mkdir(output,{recursive:true});
 const h=await harness({web:true,startWorker:false});const browser=await chromium.launch();const page=await browser.newPage({viewport:{width:1280,height:820}});let passed=false;const checks=[];
 try {

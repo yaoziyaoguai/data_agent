@@ -1,8 +1,10 @@
-import type { ChatMessage, Event, QueryView, Snapshot } from "../../../../../packages/contracts/generated/boundary.ts";
+import type { AnalysisReportRef, ChatMessage, Event, QueryView, Snapshot } from "../../../../../packages/contracts/generated/boundary.ts";
+import { decodeContract } from "../../../../../packages/contracts/validate.ts";
 
 type ConversationItem =
   | { kind: "message"; key: string; sequence: bigint; message: ChatMessage }
   | { kind: "query"; key: string; sequence: bigint; query: QueryView }
+  | { kind: "report"; key: string; sequence: bigint; reference: AnalysisReportRef; conditionChanged: boolean }
   | { kind: "query_notice"; key: string; sequence: bigint; query: QueryView; text: string };
 
 // 确认后查询留在原位；完成事件单独通知，避免结果晚到时重排正在阅读的对话。
@@ -14,6 +16,21 @@ export function conversationItems(snapshot: Snapshot, queries: QueryView[]): Con
     const completed = snapshot.events.find(event => event.type === "query_result" && event.payload.query_id === query.id);
     const text = completed && ({ succeeded: "查询完成", failed: "查询失败", cancelled: "查询已停止" } as Record<string, string>)[String(completed.payload.state)];
     if (completed && text) items.push({ kind: "query_notice", key: "query-notice:" + query.id, sequence: BigInt(completed.event_seq), query, text });
+  }
+  const reports = new Map<string, AnalysisReportRef>();
+  for (const event of snapshot.events) {
+    if (event.type !== "analysis_report_saved") continue;
+    try {
+      const reference = decodeContract<AnalysisReportRef>("AnalysisReportRef", event.payload);
+      if (reference.conversation_id === snapshot.conversation_id) reports.set(reference.report_id, reference);
+    } catch { /* 无效通知不能生成可用报告入口，正式报告仍以读取接口为准。 */ }
+  }
+  for (const task of snapshot.tasks) if (task.report_ref) reports.set(task.report_ref.report_id, task.report_ref);
+  for (const reference of reports.values()) {
+    const event = snapshot.events.find(event => event.type === "analysis_report_saved" && event.payload.report_id === reference.report_id);
+    const task = snapshot.tasks.find(task => task.id === reference.task_id);
+    items.push({ kind: "report", key: "report:" + reference.report_id, sequence: BigInt(event?.event_seq ?? "0"), reference,
+      conditionChanged: task !== undefined && task.condition_version !== reference.condition_version });
   }
   return items.sort((a, b) => a.sequence < b.sequence ? -1 : a.sequence > b.sequence ? 1 : 0);
 }

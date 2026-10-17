@@ -4,6 +4,7 @@ import { api } from "../../shared/api.ts";
 import { useUnsavedChanges } from "../../shared/UnsavedChanges.tsx";
 import { Modal } from "../../shared/Modal.tsx";
 import { CorrectionDiff } from "./CorrectionDiff.tsx";
+import { KnowledgeMaintenanceImpact } from "./KnowledgeMaintenanceImpact.tsx";
 import {
   semanticError as message,
   useStableOperation,
@@ -88,6 +89,7 @@ export function ReviewCorrection({
           正式语义已变化。请提出者核对新版本、修订建议并重新提交。
         </p>
       )}
+      {action === "apply" && current && <KnowledgeMaintenanceImpact objectId={current.id} version={current.version}/>}
       <label className="form-label">
         {action === "apply" ? "核对后保存的正式内容" : "处理理由"}
         <textarea

@@ -57,7 +57,7 @@ export function KnowledgeDirectory({ user, scope, current, revision, onSelect, o
     return () => { window.clearTimeout(timer); ++generation.current; };
   }, [scope, name, state, expanded, revision, refresh]);
   const grouped = documentRepresentatives(objects);
-  const sections = (["table", "metric", "document", "term", "field", "relationship"] as const)
+  const sections = (["table", "metric", "document", "query_example", "term", "field", "relationship"] as const)
     .map(kind => ({kind, objects: grouped.filter(object => object.kind === kind)}));
   return <>
     <div className="directory-filters">

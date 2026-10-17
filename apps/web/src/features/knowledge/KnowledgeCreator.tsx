@@ -5,6 +5,11 @@ import { KnowledgePicker } from "../../shared/KnowledgePicker.tsx";
 import { useUnsavedChanges } from "../../shared/UnsavedChanges.tsx";
 import { Modal } from "../../shared/Modal.tsx";
 import { semanticError, useStableOperation } from "./semantic-commands.ts";
+import {
+  QueryExampleFields,
+  queryExampleDraft,
+  structureFromDraft,
+} from "./SemanticStructure.tsx";
 
 export function KnowledgeCreator({
   user,
@@ -18,17 +23,33 @@ export function KnowledgeCreator({
   onCreated: (object: KnowledgeObject) => void;
 }) {
   const [formId, setFormId] = useState("");
-  const [kind, setKind] = useState<"metric" | "document" | null>(null);
+  const [kind, setKind] = useState<
+    "metric" | "document" | "query_example" | null
+  >(null);
   const [name, setName] = useState("");
   const [body, setBody] = useState("");
   const [sourceUrl, setSourceUrl] = useState("");
   const [related, setRelated] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const confirmClose = useUnsavedChanges(kind !== null && Boolean(name || body || sourceUrl || JSON.stringify(related) !== JSON.stringify(relatedId ? [relatedId] : [])), () => setKind(null));
+  const [example, setExample] = useState(queryExampleDraft);
+  const [publicConfirmed, setPublicConfirmed] = useState(false);
+  const confirmClose = useUnsavedChanges(
+    kind !== null &&
+      Boolean(
+        name ||
+        body ||
+        sourceUrl ||
+        JSON.stringify(related) !==
+          JSON.stringify(relatedId ? [relatedId] : []) ||
+        JSON.stringify(example) !== JSON.stringify(queryExampleDraft()),
+      ),
+    () => setKind(null),
+  );
   const operation = useStableOperation();
-  const label = kind === "metric" ? "指标" : "文档";
-  const open = (value: "metric" | "document") => {
+  const label =
+    kind === "metric" ? "指标" : kind === "query_example" ? "查询案例" : "文档";
+  const open = (value: "metric" | "document" | "query_example") => {
     setFormId(crypto.randomUUID());
     setKind(value);
     setName("");
@@ -36,19 +57,25 @@ export function KnowledgeCreator({
     setSourceUrl("");
     setRelated(relatedId ? [relatedId] : []);
     setError("");
+    setExample(queryExampleDraft());
+    setPublicConfirmed(false);
   };
   const save = async () => {
     if (busy || !kind || !canCreate) return;
-    const input = {
-      kind,
-      name,
-      body,
-      source_url: sourceUrl.trim() || null,
-      related_ids: related,
-    };
+    if (kind === "query_example" && !publicConfirmed) return;
     setBusy(true);
     setError("");
     try {
+      const input = {
+        kind,
+        name,
+        body,
+        source_url: sourceUrl.trim() || null,
+        related_ids: related,
+        ...(kind === "query_example"
+          ? { structured_value: structureFromDraft(example) }
+          : {}),
+      };
       const value = await api("KnowledgeObject", "/knowledge", "POST", {
         ...input,
         operation_id: operation({ formId, ...input }),
@@ -67,6 +94,9 @@ export function KnowledgeCreator({
       <button disabled={!canCreate} onClick={() => open("metric")}>
         录入指标
       </button>
+      <button disabled={!canCreate} onClick={() => open("query_example")}>
+        录入查询案例
+      </button>
       <button
         className="primary"
         disabled={!canCreate}
@@ -76,7 +106,13 @@ export function KnowledgeCreator({
       </button>
       {kind && (
         <Modal
-          title={kind === "metric" ? "录入指标" : "录入业务文档"}
+          title={
+            kind === "metric"
+              ? "录入指标"
+              : kind === "query_example"
+                ? "录入查询案例"
+                : "录入业务文档"
+          }
           onClose={() => {
             if (!busy) confirmClose(() => setKind(null));
           }}
@@ -96,7 +132,9 @@ export function KnowledgeCreator({
           <label className="form-label">
             {kind === "metric"
               ? "指标口径与计算 SQL"
-              : "正文（支持 Markdown 章节）"}
+              : kind === "query_example"
+                ? "案例说明与适用限制"
+                : "正文（支持 Markdown 章节）"}
             <textarea
               rows={12}
               value={body}
@@ -104,7 +142,39 @@ export function KnowledgeCreator({
               onChange={(e) => setBody(e.target.value)}
             />
           </label>
-          <fieldset disabled={busy}><legend>关联资料（可选）</legend><KnowledgePicker selected={related} disabled={busy} onAdd={object => setRelated(old => [...old, object.id])} onRemove={id => setRelated(old => old.filter(value => value !== id))}/></fieldset>
+          {kind === "query_example" && (
+            <>
+              <QueryExampleFields
+                draft={example}
+                disabled={busy}
+                onChange={setExample}
+              />
+              <label className="checkbox-label">
+                <input
+                  type="checkbox"
+                  checked={publicConfirmed}
+                  disabled={busy}
+                  onChange={(event) => setPublicConfirmed(event.target.checked)}
+                />
+                我已核对这些内容可以在当前空间公开
+              </label>
+              <p className="quiet">
+                请明确选择可公开的案例说明与
+                SQL，核对其中的业务范围、条件和依赖。
+              </p>
+            </>
+          )}
+          <fieldset disabled={busy}>
+            <legend>关联资料（可选）</legend>
+            <KnowledgePicker
+              selected={related}
+              disabled={busy}
+              onAdd={(object) => setRelated((old) => [...old, object.id])}
+              onRemove={(id) =>
+                setRelated((old) => old.filter((value) => value !== id))
+              }
+            />
+          </fieldset>
           <label className="form-label">
             来源链接（可选）
             <input
@@ -124,6 +194,7 @@ export function KnowledgeCreator({
               busy ||
               !canCreate ||
               !name.trim() ||
+              (kind === "query_example" && !publicConfirmed) ||
               (!body.trim() && !sourceUrl.trim())
             }
             onClick={() => void save()}

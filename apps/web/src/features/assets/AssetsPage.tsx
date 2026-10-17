@@ -11,6 +11,7 @@ import { KnowledgeReference } from "../../shared/KnowledgeReference.tsx";
 import { useUnsavedChanges } from "../../shared/UnsavedChanges.tsx";
 import { Tabs } from "../../shared/Tabs.tsx";
 import { SkillExamples } from "./SkillExamples.tsx";
+import { SkillDrafts, type PendingSkillDraft } from "./SkillDrafts.tsx";
 export function AssetsPage({
   user,
   initialTab = "memory",
@@ -22,6 +23,9 @@ export function AssetsPage({
   onUseSkill: (asset: Asset) => Promise<void>;
 }) {
   const [assets, setAssets] = useState<Asset[]>([]);
+  const [loadedUser, setLoadedUser] = useState(user);
+  const [editingDraft, setEditingDraft] = useState<PendingSkillDraft | null>(null);
+  const [draftRefresh, setDraftRefresh] = useState(0);
   const [tab, setTab] = useState<"memory" | "skill" | "shared">(initialTab);
   const [editing, setEditing] = useState<Asset | null | undefined>();
   const [editingKind, setEditingKind] = useState<AssetKind>("memory");
@@ -45,7 +49,7 @@ export function AssetsPage({
   useEffect(() => {
     if (initialTab !== tab) {
       editorSession.current++; publicationSession.current++;
-      setEditing(undefined); setPublishing(null); setSuggesting(null); setSaving(false);
+      setEditing(undefined); setEditingDraft(null); setPublishing(null); setSuggesting(null); setSaving(false);
       setSearch(""); setStatusFilter(""); setTab(initialTab);
     }
   }, [initialTab]);
@@ -72,6 +76,10 @@ export function AssetsPage({
   };
   useEffect(() => {
     pageSession.current++;
+    setLoadedUser(user); setAssets([]); setEditing(undefined); setEditingDraft(null);
+    setPublishing(null); setSuggesting(null); setSaving(false);
+    setName(""); setBody(""); setScope(""); setFiles([]); setDependencies([]);
+    setError(""); setNotice(""); setBackgroundOutcome(""); setListError("");
     void refresh();
     return () => { pageSession.current++; listRequest.current++; editorSession.current++; publicationSession.current++; };
   }, [user]);
@@ -81,6 +89,7 @@ export function AssetsPage({
     return () => clearTimeout(timer);
   }, [assets]);
   const edit = (asset: Asset | null) => {
+    setEditingDraft(null);
     initialEdit.current = JSON.stringify([asset?.name ?? "", asset?.body ?? "", asset?.scope ?? "", asset?.verified ?? false, asset?.files ?? [], asset?.dependencies ?? []]);
     editorSession.current++;
     setSaving(false);
@@ -97,9 +106,17 @@ export function AssetsPage({
     setScope(asset?.scope ?? "");
     setVerified(asset?.verified ?? false);
   };
+  const editDraft = (draft: PendingSkillDraft) => {
+    edit(null);
+    setEditingKind("skill"); setEditingDraft(draft);
+    setName(draft.name); setBody(draft.body); setScope(draft.scope);
+    setFiles(draft.files); setDependencies(draft.dependencies); setVerified(false);
+    initialEdit.current = JSON.stringify([draft.name, draft.body, draft.scope, false, draft.files, draft.dependencies]);
+  };
   const closeEditor = () => {
     editorSession.current++;
     setEditing(undefined);
+    setEditingDraft(null);
     setSaving(false);
   };
   const save = async () => {
@@ -119,6 +136,7 @@ export function AssetsPage({
         verified,
         source_text: editing?.source_text ?? "用户在个人积累页明确保存",
         dependencies,
+        ...(editingDraft ? {draft_id: editingDraft.reference.draft_id} : {}),
       };
       const key = JSON.stringify(input);
       if (saveOperation.current.key !== key) saveOperation.current = {key, id: crypto.randomUUID()};
@@ -128,11 +146,19 @@ export function AssetsPage({
       if (session === editorSession.current) {
         confirmClose.markSaved();
         setEditing(undefined);
+        setEditingDraft(null); setDraftRefresh(value => value + 1);
         changeTab(saved.kind === "memory" ? "memory" : saved.visibility === "space" ? "shared" : "skill");
         setNotice(saved.visibility === "space" ? "公共方法已更新；使用中的会话需要重新选用。" : "已保存到你的个人积累，其他用户无法读取。");
       }
       await refresh();
     } catch (e) {
+      if (page !== pageSession.current) return;
+      if (session === editorSession.current && editingDraft && e instanceof Error && ["not_available", "invalid_evidence", "version_conflict", "stale_knowledge", "result_unavailable", "result_expired"].includes(e.message)) {
+        closeEditor(); setName(""); setBody(""); setScope(""); setFiles([]); setDependencies([]);
+        setDraftRefresh(value => value + 1);
+        setError("这份草稿的条件或来源已变化，未保存为个人 Skill。请在原对话重新准备。");
+        return;
+      }
       if (session === editorSession.current) setError(e instanceof Error && e.message === "skill_line_too_long" ? "方法或附件中有单行内容过长，请分行后保存（每行不超过 50 KiB）。" : e instanceof Error ? e.message : "保存失败");
       else if (page === pageSession.current) setBackgroundOutcome(`《${name}》的保存未收到成功回执，请重新加载列表核对。`);
     } finally { if (session === editorSession.current) setSaving(false); }
@@ -169,6 +195,7 @@ export function AssetsPage({
     }
   };
   const matches = (asset: Asset) => tab === "memory" ? asset.kind === "memory" : asset.kind === "skill" && (tab === "shared" ? asset.visibility === "space" : asset.visibility !== "space");
+  if (loadedUser !== user) return <section className="management assets-page"><h1>我的积累</h1><p role="status">正在载入你的个人积累…</p></section>;
   return (
     <section className="management assets-page">
       <div className="page-heading">
@@ -182,6 +209,7 @@ export function AssetsPage({
         {value:"skill",label:<>我的 Skill <small>{assets.filter(a => a.kind === "skill" && a.visibility !== "space").length}</small></>},
         {value:"shared",label:<>空间公共 Skill <small>{assets.filter(a => a.visibility === "space").length}</small></>},
       ]}/>
+      {tab !== "shared" && <SkillDrafts key={user} user={user} refreshKey={draftRefresh} onEdit={editDraft}/>}
       <div className="asset-filters"><label className="search-box"><input aria-label="搜索资产" placeholder="搜索名称、内容或适用范围" value={search} onChange={event => setSearch(event.target.value)}/></label><select aria-label="资产状态" value={statusFilter} onChange={event => setStatusFilter(event.target.value)}><option value="">全部状态</option><option value="enabled">已启用</option><option value="disabled">已停用</option></select></div>
       {tab === "skill" && <p className="quiet">Skill 是可重复使用的分析方法，选用后为当前对话提供步骤和注意事项。</p>}
       {tab === "shared" && <p className="quiet skill-sharing-note">本空间成员共享的分析方法。负责人维护正文，其他成员可以提出建议；使用时仍需明确选用。</p>}
@@ -266,14 +294,14 @@ export function AssetsPage({
       {editing !== undefined && (
         <Modal
           title={
-            (editing ? "编辑" : "新增") +
+            (editingDraft ? "确认个人 " : editing ? "编辑" : "新增") +
             (editingKind === "memory" ? "个人记忆" : "Skill")
           }
           onClose={() => confirmClose(closeEditor)}
           className="asset-editor-dialog"
-          footer={<><span className="quiet">{editing?.visibility === "space" ? "空间公共方法" : "仅自己可用"}</span><button onClick={() => confirmClose(closeEditor)}>取消</button><button className="primary" disabled={saving || !name.trim() || !body.trim() || !scope.trim()} onClick={() => void save()}>{saving ? "保存中…" : "保存"}</button></>}
+          footer={<><span className="quiet">{editing?.visibility === "space" ? "空间公共方法" : "仅自己可用"}</span><button onClick={() => confirmClose(closeEditor)}>取消</button><button className="primary" disabled={saving || !name.trim() || !body.trim() || !scope.trim()} onClick={() => void save()}>{saving ? "保存中…" : editingDraft ? "保存为个人 Skill" : "保存"}</button></>}
         >
-          {editingKind === "skill" && editing === null && <SkillExamples disabled={saving} hasDraft={Boolean(name || body || scope)} onChoose={example => { setName(example.name); setBody(example.body); setScope(example.scope); setVerified(false); }}/>}
+          {editingKind === "skill" && editing === null && !editingDraft && <SkillExamples disabled={saving} hasDraft={Boolean(name || body || scope)} onChoose={example => { setName(example.name); setBody(example.body); setScope(example.scope); setVerified(false); }}/>}
           <label className="form-label">
             名称 <small aria-hidden="true">必填</small>
             <input disabled={saving} aria-label="名称" value={name} onChange={(e) => { setName(e.target.value); setVerified(false); }} />
