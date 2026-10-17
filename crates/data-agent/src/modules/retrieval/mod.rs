@@ -86,12 +86,14 @@ pub fn rank_hybrid(
             .then_with(|| a["id"].as_str().cmp(&b["id"].as_str()))
     });
     let objects: Vec<_> = scored.into_iter().map(|(object, _)| object).collect();
-    let mut selected = Vec::new();
     let mut seen = std::collections::HashSet::new();
-    if let Some(first) = objects.first() {
-        seen.insert(first["id"].clone());
-        selected.push(first.clone());
-    }
+    // 先保住最相关的三项，类型覆盖只能使用余位，不能挤走同类强命中。
+    let mut selected: Vec<_> = objects
+        .iter()
+        .filter(|object| seen.insert(object["id"].clone()))
+        .take(limit.min(3))
+        .cloned()
+        .collect();
     if limit >= 6 {
         for kind in [
             "table",
@@ -577,6 +579,38 @@ mod semantic_context_tests {
     }
 
     #[test]
+    fn hybrid_ranking_keeps_three_relevant_fields_before_kind_fillers() {
+        let fields = ["amount", "rate", "count"].map(|field| {
+            json!({"id":field,"name":format!("sales refund {field}"),"kind":"field","version":"1"})
+        });
+        let mut objects = fields.to_vec();
+        for kind in [
+            "table",
+            "metric",
+            "query_example",
+            "document",
+            "relationship",
+            "term",
+        ] {
+            objects.push(
+                json!({"id":kind,"name":"unrelated","kind":kind,"version":"1","body":"refund"}),
+            );
+        }
+        for limit in [0, 1, 2, 3, 4, 6, 10] {
+            let ranked = rank_hybrid(objects.clone(), "sales refund", limit, &[]);
+            let protected = limit.min(3);
+            assert_eq!(&ranked[..protected], &fields[..protected], "limit={limit}");
+            assert!(ranked.len() <= limit);
+        }
+        objects.insert(0, fields[0].clone());
+        assert_eq!(
+            &rank_hybrid(objects, "sales refund", 6, &[])[..3],
+            &fields,
+            "同一对象重复候选不能占用受保护的前三位置"
+        );
+    }
+
+    #[test]
     fn hybrid_ranking_keeps_exact_names_ties_versions_and_kind_diversity() {
         let object = |id: &str, name: &str, kind: &str| json!({"id":id,"name":name,"kind":kind,"version":"2"});
         let objects = vec![
@@ -610,10 +644,10 @@ mod semantic_context_tests {
             [
                 "exact",
                 "only-vector",
+                "table-b",
                 "field",
                 "metric",
-                "relationship",
-                "term"
+                "relationship"
             ]
         );
         // 同分词法结果保持输入顺序；混合通道同分按ID确定次序。

@@ -795,6 +795,8 @@ pub async fn retrieve_scoped_in_tx(
     }
     let mut objects = retrieval::rank_hybrid(candidates, query, limit, &vector.values);
     if limit >= 4 {
+        // 关联仅使用前三之外的余位；直接命中不足三项时仍可补足原有两个关联。
+        let addition_limit = 2.min(limit.saturating_sub(objects.len().min(3)));
         let links = objects
             .iter()
             .take(3)
@@ -822,7 +824,7 @@ pub async fn retrieve_scoped_in_tx(
                     additions.push(object);
                 }
             }
-            if additions.len() == 2 {
+            if additions.len() == addition_limit {
                 break;
             }
         }

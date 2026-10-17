@@ -560,6 +560,26 @@ try {
       expected_version: leftDoc.version,
     }),
   );
+  // broad已把leftDoc实际交付给本run；停用后必须先拒绝旧上下文，再验证新轮过滤。
+  const staleRun = await invokeRaw("search_knowledge", {
+    query: "scoped_same_rule",
+    business_domain: leftDomain,
+  });
+  assert.equal(staleRun.status, 409);
+  assert.equal(staleRun.value.code, "stale_context");
+  ok(
+    await h.request(
+      `/conversations/${run.conversation_id}/messages/${run.message_id}/withdraw`,
+      { operation_id: randomUUID() },
+    ),
+  );
+  h.releaseRun(run.run_id);
+  await h.resumeWorker();
+  run = await h.capture(
+    await h.create(),
+    "核对停用过滤与本人可复用提醒的当前目录",
+  );
+  await h.pauseWorker();
   assert.ok(
     !(
       await search({ query: "scoped_same_rule", business_domain: leftDomain })
@@ -575,18 +595,6 @@ try {
   checks.push(
     "旧索引不交付已撤正文，停用对象立即过滤，跨空间关联锚点拒绝且不泄露名称或内容",
   );
-
-  // 停用已采用对象后，独立的个人记忆分页通过新轮入口验证。
-  ok(
-    await h.request(
-      `/conversations/${run.conversation_id}/messages/${run.message_id}/withdraw`,
-      { operation_id: randomUUID() },
-    ),
-  );
-  h.releaseRun(run.run_id);
-  await h.resumeWorker();
-  run = await h.capture(await h.create(), "查阅本人可复用提醒的当前目录");
-  await h.pauseWorker();
 
   const personal = await search({
     query: "scope_personal_marker",
