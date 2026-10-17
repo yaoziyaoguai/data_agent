@@ -1,0 +1,48 @@
+{
+  "schema": 1,
+  "increment_id": "I2-ANALYSIS-EVIDENCE",
+  "reviewer": "独立只读审查代理context_scope_review；未参与增量5源码或测试实现",
+  "reviewed_at": "2026-10-13T13:33:07.224920+00:00",
+  "conclusion": "passed",
+  "summary": "独立核对执行包§7、M06不可变轻量依据、M07连续保存页与窄结果授权、M08原上下文有效性和Pi工具接入。结论绑定本人/空间/会话/任务/条件及成功查询或正式资料；金额逐字核对，部分结果有明确限制，不复制完整结果。新依据8组与实际Pi连续分析4组完整通过，13轮47次本地协议调用、最大108660字节；336跨语言契约、85纯单元及工程/模块/隔离锁检查通过。发现并复核修正了快照、列引用、工具集合、事件与知识采用的边界遗漏。范围内无剩余确定阻断；12组统一增量收据仍待主代理执行。",
+  "scope_sha256": "d18780955de134fdf550b42255f913ebfd42b17cb4d640a008500c59be031b71",
+  "findings": [],
+  "resolved_findings": [
+    "连续月份资料截止2026年4月4日，平台原结果却写死旧2月4日标签；现由每套规范knowledge-manifest的snapshot_exclusive生成并冻结来源，元信息变化不能与旧业务库混用。",
+    "同名结果列曾静默选第一列，可能引用错误数字；现证据列须在平台结果中恰好匹配一次，重复列名要求SQL明确别名，纯反例保留。",
+    "新增冻结元信息使合法旧三文件运行目录无法启动；现只认领原协议固定日期、同核心哈希/冻结文本/平台版本、独立重建业务指纹及血缘相符的旧目录。业务库、账本和原结果保持，改日期或损坏来源仍拒绝；19项源反例通过。",
+    "旧结果失效曾连停止动作也阻断；cancel_query仅略过旧知识/结果有效性，保留当前用户/空间/会话/运行/租约与幂等。新旧取消回执仅五个控制字段，不回传SQL或结果；终态保持与他人拒绝、运行中单条取消分别有验证。",
+    "新增分析工具使data工具从14增至15，provider的固定数量门槛令所有请求失败；现核同源合法工具集合与重复名，请求大小、预算、参数指纹、实际发送和SDK重试限制保持。旧完整15工具协议通过。",
+    "保存事件已入库但Event.type漏analysis_evidence_saved，导致Snapshot回读400；已补同源枚举、生成类型及事件/Snapshot正反例，实际Pi保存后的正常回读通过。",
+    "知识-only依据保存校验了引用却未登记上下文采用；现与证据写入同事务采用查证后的knowledge_refs，并核现有结构依赖。独立无Pi补读、任务refs为空的文档保存反例证明采用，停用后reserve/send与原输入恢复拒绝，恢复匹配同Job的stale_context，新输入排除旧正文和引用。",
+    "capture替身忽略正式dispatch第五参数AbortSignal，取消后旧等待占住同CID；替身现按正式Pi取消协议结束等待。释放前核应用run已经结束并记录归属，保留同CID继续聊天，不改Worker重试或换会话。",
+    "恢复测试错误查询不存在的jobs.error_code；按私有store和Worker拒绝分支核任务failed、同Job的delivery_rejected stale_context与无新派发。空检查点允许SDK必要session头但拒绝旧消息/工具/摘要/leaf；本人安全user历史沿原规则保留。",
+    "跨表协议引用误用relationship-tags.description；依据既有真实资料entry_id=join修正。原SQL和独立核算数字、授权和任务归属标准未变。"
+  ],
+  "evidence": [
+    ".local/checks/analysis-evidence.json",
+    ".local/checks/analysis-continuation.json",
+    ".local/checks/analysis-provider.log",
+    ".local/checks/analysis-code.log",
+    ".local/checks/analysis-contracts.log",
+    ".local/checks/analysis-build.log",
+    ".local/checks/analysis-unit.log",
+    ".local/checks/analysis-source-snapshot.log",
+    ".local/checks/analysis-materials.log",
+    ".local/checks/analysis-execution.log",
+    ".local/checks/analysis-context.log",
+    ".local/checks/analysis-statistics.log",
+    ".local/checks/mvp-b503a3ca9b480b7e/fixture-release.json"
+  ],
+  "scope_binding": {
+    "independently_recomputed": true,
+    "input_files": 62,
+    "acceptance_groups": 12
+  },
+  "limitations": [
+    "统一12组增量收据尚待root运行，本审查不代表报告、经验复用或整个第二版完成。",
+    "连续分析使用实际Pi SDK、Rust/MySQL和合成SQLite；本地协议预定工具策略，47次调用证明续接、工具和状态边界，不证明真实模型自主调查、SQL生成、解释或因果分析准确率。",
+    "程序校验引用、列、数值和有效范围，引用有效仍不证明自然语言结论正确。千表召回效果及真实Datasight逐表ACL不属于本次证据。",
+    "没有新增官方模型、embedding或Mem0付费调用。capture终态记录证明清理未掩盖活动run；该记录captureAborted为空，不单独宣称本次观察到bridge取消信号。"
+  ]
+}

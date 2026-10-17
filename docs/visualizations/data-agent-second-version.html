@@ -1,0 +1,1013 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="shadcn" data-mode="light" data-style="80">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="generator" content="Answer me with HTML 0.4.8">
+<title>第二版，具体改进了什么</title>
+<style>
+html[data-theme="blueprint"], html[data-theme="blueprint"][data-mode="light"] {
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, "JetBrains Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  --radius: 0px;
+  --shadow: none;
+  --bw: 1.5px;
+  --head-font: var(--font-sans);
+  --bg: #f6f6f3;
+  --paper: #ffffff;
+  --ink: #16181d;
+  --ink-2: #4b5260;
+  --ink-3: #8b929e;
+  --line: #1d2026;
+  --line-2: #d6dae1;
+  --fill: #f3f5f8;
+  --accent: #1d5fbf;
+  --accent-bg: #e4ecf8;
+  --ok: #1d5fbf;
+  --ok-bg: #e4ecf8;
+  --err: #c62828;
+  --err-bg: #fbeaea;
+  --warn: #a8620a;
+  --warn-bg: #fdf3e2;
+  --head-bg: #16181d;
+  --head-fg: #ffffff;
+}
+html[data-theme="blueprint"][data-mode="dark"] {
+  --bg: #081322;
+  --paper: #0d1c31;
+  --ink: #e6edf7;
+  --ink-2: #a9b8cc;
+  --ink-3: #6b7f99;
+  --line: #c9d6e8;
+  --line-2: #23385a;
+  --fill: #12253f;
+  --accent: #6ea8ff;
+  --accent-bg: #16305a;
+  --ok: #6ea8ff;
+  --ok-bg: #16305a;
+  --err: #ff7070;
+  --err-bg: #3b1620;
+  --warn: #f0b14a;
+  --warn-bg: #3a2a10;
+  --head-bg: #e6edf7;
+  --head-fg: #081322;
+}
+@media (prefers-color-scheme: dark) {
+html[data-theme="blueprint"][data-mode="auto"] {
+  --bg: #081322;
+  --paper: #0d1c31;
+  --ink: #e6edf7;
+  --ink-2: #a9b8cc;
+  --ink-3: #6b7f99;
+  --line: #c9d6e8;
+  --line-2: #23385a;
+  --fill: #12253f;
+  --accent: #6ea8ff;
+  --accent-bg: #16305a;
+  --ok: #6ea8ff;
+  --ok-bg: #16305a;
+  --err: #ff7070;
+  --err-bg: #3b1620;
+  --warn: #f0b14a;
+  --warn-bg: #3a2a10;
+  --head-bg: #e6edf7;
+  --head-fg: #081322;
+}
+}
+
+html[data-theme="shadcn"], html[data-theme="shadcn"][data-mode="light"] {
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, "JetBrains Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  --radius: 8px;
+  --shadow: 0 1px 2px 0 rgba(0,0,0,0.05);
+  --bw: 1px;
+  --head-font: var(--font-sans);
+  --bg: #fafafa;
+  --paper: #ffffff;
+  --ink: #09090b;
+  --ink-2: #71717a;
+  --ink-3: #a1a1aa;
+  --line: #e4e4e7;
+  --line-2: #f0f0f2;
+  --fill: #f4f4f5;
+  --accent: #2563eb;
+  --accent-bg: #eff6ff;
+  --ok: #16a34a;
+  --ok-bg: #f0fdf4;
+  --err: #dc2626;
+  --err-bg: #fef2f2;
+  --warn: #d97706;
+  --warn-bg: #fffbeb;
+  --head-bg: #18181b;
+  --head-fg: #fafafa;
+}
+html[data-theme="shadcn"][data-mode="dark"] {
+  --bg: #09090b;
+  --paper: #121215;
+  --ink: #fafafa;
+  --ink-2: #a1a1aa;
+  --ink-3: #71717a;
+  --line: #27272a;
+  --line-2: #1c1c1f;
+  --fill: #18181b;
+  --accent: #60a5fa;
+  --accent-bg: #172554;
+  --ok: #4ade80;
+  --ok-bg: #052e16;
+  --err: #f87171;
+  --err-bg: #450a0a;
+  --warn: #fbbf24;
+  --warn-bg: #451a03;
+  --head-bg: #fafafa;
+  --head-fg: #18181b;
+}
+@media (prefers-color-scheme: dark) {
+html[data-theme="shadcn"][data-mode="auto"] {
+  --bg: #09090b;
+  --paper: #121215;
+  --ink: #fafafa;
+  --ink-2: #a1a1aa;
+  --ink-3: #71717a;
+  --line: #27272a;
+  --line-2: #1c1c1f;
+  --fill: #18181b;
+  --accent: #60a5fa;
+  --accent-bg: #172554;
+  --ok: #4ade80;
+  --ok-bg: #052e16;
+  --err: #f87171;
+  --err-bg: #450a0a;
+  --warn: #fbbf24;
+  --warn-bg: #451a03;
+  --head-bg: #fafafa;
+  --head-fg: #18181b;
+}
+}
+
+html[lang="ja"][data-theme][data-mode] {
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic UI", "Yu Gothic", Meiryo, "Noto Sans CJK JP", "Noto Sans JP", "PingFang SC", "Microsoft YaHei", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+html[lang="ja"][data-theme="3b1b"][data-mode] {
+  --v-title-font: "CMU Serif", "Latin Modern Roman", "Iowan Old Style", "Palatino", "Hiragino Mincho ProN", "Yu Mincho", "Noto Serif CJK JP", "Noto Serif JP", "Songti SC", serif;
+}
+
+/* Answer me with HTML base — uses theme variables only, never hard-coded colors (theme tokens: themes/index.js). Exception: the var() fallbacks of diagrams (flow / sequence) equal the blueprint light tokens, guarded by a test. */
+*, *::before, *::after { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  background: var(--bg); color: var(--ink);
+  font-family: var(--font-sans); font-size: 14px; line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+code, pre, kbd { font-family: var(--font-mono); }
+
+/* ── Toolbar ─────────────────────────────── */
+.am-toolbar {
+  position: fixed; top: 12px; right: 12px; z-index: 10; display: flex; gap: 6px;
+}
+.am-btn {
+  font: 12px/1 var(--font-sans); color: var(--ink); background: var(--paper);
+  border: 1px solid var(--line-2); border-radius: var(--radius); padding: 7px 10px; cursor: pointer;
+}
+.am-btn:hover { border-color: var(--ink-3); }
+.am-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* ── Header ───────────────────────────────── */
+.am-head { margin: 0 0 20px; padding-right: 260px; }
+.am-head h1 { margin: 0; font-size: 24px; line-height: 1.25; letter-spacing: -0.01em; }
+.am-sub { margin: 4px 0 0; color: var(--ink-2); }
+.am-head-meta { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 10px; font-size: 12px; color: var(--ink-2); }
+.am-head-meta b { font-family: var(--font-mono); font-weight: 400; color: var(--ink-3); margin-right: 6px; }
+.am-intro { margin-top: 12px; max-width: 80ch; }
+
+/* ── sheet template ────────────────────────── */
+.am-sheet { max-width: 1680px; margin: 0 auto; padding: 32px 28px 40px; }
+.am-frame { position: relative; }
+.am-grid {
+  display: grid; grid-template-columns: repeat(var(--cols, 3), minmax(0, 1fr));
+  gap: 20px; align-items: start;
+}
+.am-ruler { display: none; }
+html[data-theme="blueprint"] .am-frame { border: 1px solid var(--line); padding: 30px; }
+html[data-theme="blueprint"] .am-frame::before {
+  content: ""; position: absolute; inset: 18px; border: 1px solid var(--line); pointer-events: none;
+}
+html[data-theme="blueprint"] .am-ruler {
+  display: flex; position: absolute; font: 10px/1 var(--font-mono); color: var(--ink-3);
+}
+.am-ruler span { flex: 1; display: flex; align-items: center; justify-content: center; }
+.am-ruler--top, .am-ruler--bottom { left: 18px; right: 18px; height: 18px; }
+.am-ruler--top { top: 0; }
+.am-ruler--bottom { bottom: 0; }
+.am-ruler--left, .am-ruler--right { top: 18px; bottom: 18px; width: 18px; flex-direction: column; }
+.am-ruler--left { left: 0; }
+.am-ruler--right { right: 0; }
+.am-ruler--top span + span, .am-ruler--bottom span + span { border-left: 1px solid var(--line); }
+.am-ruler--left span + span, .am-ruler--right span + span { border-top: 1px solid var(--line); }
+
+/* ── Panels ───────────────────────────────── */
+.am-panel {
+  background: var(--paper); border: var(--bw) solid var(--line); border-radius: var(--radius);
+  box-shadow: var(--shadow); min-width: 0; overflow: hidden;
+}
+.am-panel-head {
+  display: flex; align-items: stretch; gap: 0; border-bottom: var(--bw) solid var(--line); min-height: 34px;
+}
+.am-panel-id {
+  display: flex; align-items: center; justify-content: center; min-width: 34px; padding: 0 8px;
+  background: var(--head-bg); color: var(--head-fg); font-weight: 600; font-size: 14px;
+}
+html[data-theme="shadcn"] .am-panel-id { border-radius: 6px; min-width: 24px; height: 24px; margin: 9px 0 9px 14px; font-size: 12px; }
+html[data-theme="shadcn"] .am-panel-head { border-bottom-width: 1px; }
+.am-panel-head h2 { margin: 0; padding: 7px 12px; font-size: 15px; font-weight: 600; flex: 1; display: flex; align-items: center; }
+.am-panel-meta { align-self: center; padding: 0 12px; font: 11px/1.3 var(--font-mono); color: var(--ink-2); text-align: right; }
+.am-panel-body { padding: 14px 16px 16px; }
+.am-panel-body > * + * { margin-top: 12px; }
+
+/* ── Markdown body ───────────────────────── */
+.am-md > :first-child { margin-top: 0; }
+.am-md > :last-child { margin-bottom: 0; }
+.am-md p { margin: 0 0 8px; }
+.am-md ul, .am-md ol { margin: 0 0 8px; padding-left: 20px; }
+.am-md li + li { margin-top: 3px; }
+.am-md h3, .am-md h4 { margin: 14px 0 6px; font-size: 13px; }
+.am-md a { color: var(--accent); }
+.am-md blockquote { margin: 0 0 8px; padding: 2px 12px; border-left: 3px solid var(--line-2); color: var(--ink-2); }
+.am-md :not(pre) > code { font-size: 0.9em; background: var(--fill); padding: 1px 5px; border-radius: 4px; }
+.am-md hr { border: 0; border-top: 1px solid var(--line-2); margin: 12px 0; }
+.am-md table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.am-md th {
+  text-align: left; font: 11px/1.3 var(--font-mono); color: var(--ink-2); font-weight: 400;
+  padding: 6px 10px; border-bottom: 1px solid var(--line-2);
+}
+/* th { text-align: left } outranks the align attribute from Markdown alignment, so restore right and center columns explicitly. */
+.am-md th[align="right"] { text-align: right; }
+.am-md th[align="center"] { text-align: center; }
+.am-md td { padding: 7px 10px; border-bottom: 1px solid var(--line-2); vertical-align: top; }
+.am-md tbody tr:nth-child(even) td { background: var(--fill); }
+.am-table-wrap { overflow-x: auto; }
+.am-code {
+  margin: 0; padding: 12px 14px; background: var(--fill); border: 1px solid var(--line-2);
+  border-radius: var(--radius); overflow-x: auto; font-size: 12.5px; line-height: 1.5;
+}
+
+/* ── Status badges ok / no / warn ──────────────── */
+.am-status { white-space: nowrap; font-weight: 500; }
+.am-status--ok { color: var(--ok); }
+.am-status--no { color: var(--err); }
+.am-status--warn { color: var(--warn); }
+.am-status-icon { display: inline-block; width: 1.1em; font-weight: 700; }
+
+/* ── callout ─────────────────────────────── */
+.am-callout {
+  border: 1px solid var(--line-2); border-left: 3px solid var(--accent); background: var(--accent-bg);
+  padding: 10px 14px; border-radius: var(--radius);
+}
+.am-callout--ok { border-left-color: var(--ok); background: var(--ok-bg); }
+.am-callout--warn { border-left-color: var(--warn); background: var(--warn-bg); }
+.am-callout--err { border-left-color: var(--err); background: var(--err-bg); }
+.am-callout-title { font-weight: 600; margin-bottom: 4px; }
+
+/* ── kv title block ─────────────────────────── */
+.am-kv {
+  display: grid; grid-template-columns: repeat(var(--kv-cols, 2), minmax(0, 1fr)); margin: 0;
+  border-top: var(--bw) solid var(--line); border-left: var(--bw) solid var(--line);
+}
+.am-kv-cell { border-right: var(--bw) solid var(--line); border-bottom: var(--bw) solid var(--line); padding: 6px 10px 8px; min-width: 0; }
+.am-kv-cell--wide { grid-column: 1 / -1; }
+.am-kv dt { font: 11px/1.4 var(--font-mono); color: var(--ink-2); }
+.am-kv dd { margin: 2px 0 0; font-size: 14px; font-weight: 500; overflow-wrap: anywhere; }
+.am-kv-cell--wide dd { font-size: 17px; font-weight: 600; }
+html[data-theme="shadcn"] .am-kv { border-color: var(--line); border-radius: var(--radius); overflow: hidden; }
+
+/* ── timeline ────────────────────────────── */
+.am-timeline { list-style: none; margin: 0; padding: 0; }
+.am-timeline--h { display: grid; grid-template-columns: repeat(var(--n, 1), minmax(0, 1fr)); padding-top: 4px; }
+.am-timeline--h li { position: relative; text-align: center; padding: 0 6px; }
+.am-timeline--h li::before {
+  content: ""; position: absolute; top: 31px; left: 0; right: 0; border-top: var(--bw) solid var(--line);
+}
+.am-timeline--h li:first-child::before { left: 50%; }
+.am-timeline--h li:last-child::before { right: 50%; }
+.am-tl-when { display: block; font-size: 15px; font-weight: 500; height: 24px; }
+.am-tl-dot {
+  position: relative; display: block; width: 11px; height: 11px; margin: 2px auto 8px;
+  border: var(--bw) solid var(--line); border-radius: 50%; background: var(--paper);
+}
+.am-tl-item--hi .am-tl-dot { background: var(--accent); border-color: var(--accent); }
+.am-tl-title { display: block; font-size: 12.5px; font-weight: 500; }
+.am-tl-text { display: block; font-size: 12px; color: var(--ink-2); line-height: 1.45; }
+.am-timeline--v li { position: relative; padding: 0 0 14px 22px; }
+.am-timeline--v li::before { content: ""; position: absolute; left: 5px; top: 6px; bottom: -6px; border-left: var(--bw) solid var(--line-2); }
+.am-timeline--v li:last-child::before { display: none; }
+.am-timeline--v .am-tl-dot { position: absolute; left: 0; top: 4px; margin: 0; }
+.am-timeline--v .am-tl-when { display: inline; height: auto; font: 12px var(--font-mono); color: var(--ink-2); margin-right: 8px; }
+.am-timeline--v .am-tl-title { display: inline; font-size: 14px; }
+.am-timeline--v .am-tl-text { margin-top: 2px; }
+
+/* ── annot sentence notes ──────────────────────── */
+.am-annot + .am-annot { border-top: 1px solid var(--line-2); padding-top: 12px; }
+.am-annot-head { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; font-weight: 600; margin-bottom: 8px; }
+.am-annot-meta { font: 11px var(--font-mono); font-weight: 400; color: var(--ink-2); }
+.am-annot-scroll { overflow-x: auto; }
+.am-annot-line {
+  position: relative; display: inline-block; white-space: pre; font: 14px/1.6 var(--font-mono);
+  padding-bottom: calc(var(--rows, 0) * 17px + 14px);
+}
+.am-annot-line--wrap { display: block; white-space: normal; padding-bottom: 10px; }
+.am-annot-line--wrap .am-seg { white-space: nowrap; }
+.am-seg { position: relative; }
+.am-seg::after {
+  content: ""; position: absolute; left: 1px; right: 1px; top: calc(100% + 1px); height: 5px;
+  border: 1px solid var(--accent); border-top: 0;
+}
+.am-seg-n {
+  position: absolute; left: 0; top: calc(100% + 8px + var(--row, 0) * 17px);
+  font: 11px/16px var(--font-sans); color: var(--accent); white-space: nowrap;
+}
+.am-seg--err { color: var(--err); }
+.am-seg--err::after { border-color: var(--err); }
+.am-seg--err .am-seg-n { color: var(--err); }
+.am-annot-caption { font-size: 12px; color: var(--ink-2); }
+
+/* ── limits bars ───────────────────────── */
+.am-lim + .am-lim { margin-top: 14px; }
+.am-lim-head { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; margin-bottom: 4px; }
+.am-lim-val { font: 12px var(--font-mono); color: var(--accent); white-space: nowrap; }
+.am-lim-track { position: relative; height: 12px; border: 1px solid var(--line-2); background: var(--fill); border-radius: calc(var(--radius) / 2); }
+.am-lim-fill { position: absolute; left: 0; top: 0; bottom: 0; background: var(--accent-bg); border-right: 1px solid var(--accent); }
+.am-lim-mark { position: absolute; top: -4px; bottom: -4px; border-left: 2px solid var(--accent); }
+.am-lim.is-over .am-lim-fill { background: var(--err-bg); border-right-color: var(--err); }
+.am-lim.is-over .am-lim-val { color: var(--err); }
+.am-lim-ticks { position: relative; height: 16px; font: 10px/16px var(--font-mono); color: var(--ink-3); }
+.am-lim-ticks span { position: absolute; transform: translateX(-50%); }
+.am-lim-ticks span:first-child { transform: none; }
+.am-lim-note { font-size: 11px; color: var(--ink-2); margin-left: 6px; }
+
+/* ── tree ─────────────────────────── */
+.am-tree { font-size: 13px; }
+.am-tree-root { display: flex; justify-content: center; position: relative; padding-bottom: 18px; }
+.am-tree-root::after { content: ""; position: absolute; bottom: 0; left: 50%; height: 18px; border-left: var(--bw) solid var(--line); }
+.am-tree-root--solo { padding-bottom: 12px; }
+.am-tree-root--solo::after { display: none; }
+.am-tree-box {
+  border: var(--bw) solid var(--line); background: var(--paper); padding: 6px 14px; text-align: center;
+  border-radius: var(--radius); font-weight: 600;
+}
+.am-tree-box small { display: block; font-weight: 400; color: var(--ink-2); font-size: 12px; }
+.am-tree-box--root { background: var(--accent-bg); font-size: 15px; padding: 8px 28px; }
+.am-tree-cols { display: grid; grid-template-columns: repeat(var(--n, 1), minmax(0, 1fr)); }
+.am-tree-col { position: relative; padding: 18px 8px 0; min-width: 0; }
+.am-tree-col::before { content: ""; position: absolute; top: 0; left: 0; right: 0; border-top: var(--bw) solid var(--line); }
+.am-tree-col:first-child::before { left: 50%; }
+.am-tree-col:last-child::before { right: 50%; }
+.am-tree-col::after { content: ""; position: absolute; top: 0; left: 50%; height: 18px; border-left: var(--bw) solid var(--line); }
+.am-tree-list, .am-tree-list ul { list-style: none; margin: 0; padding: 0; }
+.am-tree-col > .am-tree-list { margin: 8px 0 0 14px; }
+.am-tree-list ul { margin-left: 16px; }
+.am-tree-list li { position: relative; padding: 3px 0 3px 18px; }
+.am-tree-list li::before { content: ""; position: absolute; left: 0; top: 0.95em; width: 12px; border-top: 1px solid var(--ink-3); }
+.am-tree-list li::after { content: ""; position: absolute; left: 0; top: 0; bottom: 0; border-left: 1px solid var(--ink-3); }
+.am-tree-list li:last-child::after { bottom: auto; height: 0.95em; }
+.am-tree-tag { font: 11px var(--font-mono); color: var(--ink-3); margin-right: 4px; }
+.am-tree code { font: 12px var(--font-mono); }
+.am-tree-sub { display: block; font-size: 11.5px; color: var(--ink-2); }
+.am-tree-hi > .am-tree-label { color: var(--accent); font-weight: 600; }
+
+/* ── Diagrams (flow / sequence) ───────────────── */
+.am-diagram { margin: 0; overflow-x: auto; text-align: center; }
+/* Embedded previews can lose html[data-theme]; the fallbacks keep diagrams readable, and defined theme variables still win. */
+.am-diagram svg { max-width: 100%; height: auto; font-family: var(--font-sans, sans-serif); }
+.am-diagram text { fill: var(--ink, #16181d); font-size: 13px; }
+.am-node-shape { fill: var(--paper, #ffffff); stroke: var(--line, #1d2026); stroke-width: var(--bw, 1.5px); }
+.am-node--hi .am-node-shape { fill: var(--accent-bg, #e4ecf8); stroke: var(--accent, #1d5fbf); }
+.am-node--hi text { fill: var(--accent, #1d5fbf); font-weight: 600; }
+.am-edge { fill: none; stroke: var(--ink-2, #4b5260); stroke-width: 1.3; }
+.am-edge--dashed { stroke-dasharray: 5 4; }
+.am-arrow { fill: var(--ink-2, #4b5260); }
+.am-edge-label rect { fill: var(--paper, #ffffff); }
+.am-diagram .am-edge-label text { fill: var(--accent, #1d5fbf); font-size: 11.5px; }
+.am-cluster { fill: var(--fill, #f3f5f8); stroke: var(--line-2, #d6dae1); stroke-width: 1; stroke-dasharray: 4 3; }
+.am-diagram .am-cluster-label { fill: var(--ink-2, #4b5260); font: 11px var(--font-mono, monospace); }
+.am-lifeline { stroke: var(--ink-3, #8b929e); stroke-width: 1; stroke-dasharray: 4 4; }
+.am-actor { fill: var(--paper, #ffffff); stroke: var(--line, #1d2026); stroke-width: var(--bw, 1.5px); }
+.am-note { fill: var(--warn-bg, #fdf3e2); stroke: var(--warn, #a8620a); stroke-width: 1; }
+.am-diagram .am-step { fill: var(--ink-3, #8b929e); font: 10px var(--font-mono, monospace); }
+
+/* ── doc template ────────────────────────── */
+.am-doc { max-width: 1120px; margin: 0 auto; padding: 40px 28px 64px; }
+.am-doc-layout { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 32px; align-items: start; }
+.am-doc-layout--notoc { grid-template-columns: minmax(0, 1fr); max-width: 860px; }
+.am-toc { position: sticky; top: 24px; font-size: 13px; }
+.am-toc a { display: block; color: var(--ink-2); text-decoration: none; padding: 4px 0 4px 10px; border-left: 2px solid var(--line-2); }
+.am-toc a:hover { color: var(--ink); border-left-color: var(--accent); }
+.am-doc-body > .am-panel + .am-panel { margin-top: 20px; }
+
+/* ── Responsive and print ─────────────────────────── */
+@media (max-width: 1100px) {
+  .am-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .am-grid > .am-panel { grid-column: auto !important; }
+  .am-grid > .am-panel.am-span-wide { grid-column: 1 / -1 !important; }
+}
+@media (max-width: 760px) {
+  .am-sheet, .am-doc { padding: 56px 12px 24px; }
+  .am-head { padding-right: 0; }
+  .am-grid { grid-template-columns: minmax(0, 1fr); }
+  .am-grid > .am-panel.am-span-wide { grid-column: auto !important; }
+  html[data-theme="blueprint"] .am-frame { padding: 0; border: 0; }
+  html[data-theme="blueprint"] .am-frame::before, html[data-theme="blueprint"] .am-ruler { display: none; }
+  .am-doc-layout { grid-template-columns: minmax(0, 1fr); }
+  .am-toc { position: static; }
+  .am-timeline--h { grid-template-columns: minmax(0, 1fr); }
+  .am-tree-cols { grid-template-columns: minmax(0, 1fr); }
+  /* Tables and diagrams keep their size: the wrapper scrolls horizontally when they overflow. */
+  .am-md th, .am-md td { min-width: 6em; }
+  .am-diagram svg { max-width: none; }
+}
+.am-colophon { text-align: center; padding: 0 0 28px; font: 11px var(--font-mono); color: var(--ink-3); }
+
+@media print {
+  .am-toolbar { display: none; }
+  body { background: var(--paper); }
+  .am-panel { break-inside: avoid; box-shadow: none; }
+}
+.am-panel--bare { border: 0; background: transparent; box-shadow: none; }
+.am-panel--bare > .am-panel-body { padding: 0; }
+.am-panel--bare .am-kv { background: var(--paper); }
+
+</style>
+</head>
+<body>
+<div class="am-toolbar">
+<button class="am-btn" type="button" data-am="theme" data-labels="{&quot;blueprint&quot;:&quot;主题：图纸&quot;,&quot;shadcn&quot;:&quot;主题：卡片&quot;}">主题：卡片</button>
+<button class="am-btn" type="button" data-am="mode" data-labels="{&quot;auto&quot;:&quot;明暗：跟随系统&quot;,&quot;light&quot;:&quot;明暗：亮&quot;,&quot;dark&quot;:&quot;明暗：暗&quot;}">明暗：亮</button>
+<button class="am-btn" type="button" data-am="copy" data-done="已复制 ✓">复制源稿</button>
+</div>
+<main class="am-doc">
+<header class="am-head"><h1>第二版，具体改进了什么</h1><p class="am-sub">从计算规则、调查依据到能留给下次的分析成果</p><div class="am-head-meta"><span><b>date</b>2026-10-14</span></div><div class="am-intro am-md"><div class="am-md"><p>第二版把语义、查询结果和分析成果连接得更紧。你能核对计算规则、追问结论的依据，并把报告或方法留给下次。</p>
+</div></div></header>
+<div class="am-doc-layout">
+<nav class="am-toc" aria-label="目录"><a href="#panel-A">A · 先说清第一版的起点</a><a href="#panel-B">B · 七项变化，一眼看懂</a><a href="#panel-C">C · 语义构建：让口径能参与计算</a><a href="#panel-D">D · 检索：先找范围，再读完整依据</a><a href="#panel-E">E · 跟着一个问题，看调查与澄清</a><a href="#panel-F">F · 分析结果：结论、数字、报告能对应起来</a><a href="#panel-G">G · 经验保存到哪里，下次怎么使用</a><a href="#panel-H">H · 底座怎样复用，哪些结果已经验证</a></nav><div class="am-doc-body">
+<section class="am-panel" id="panel-A">
+<header class="am-panel-head"><span class="am-panel-id">A</span><h2>先说清第一版的起点</h2></header>
+<div class="am-panel-body"><div class="am-md"><p>第一版已经能找表、解释口径、生成 SQL 和聊天取数。它已有共享语义、个人记忆、Skill 和权限规则。</p>
+<div class="am-table-wrap"><table>
+<thead>
+<tr>
+<th>第一版已有的能力</th>
+<th>用户原来就可以做什么</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>语义录入与预填</td>
+<td>保存表、字段、指标 SQL、关联及长文档；人工修改单独保留</td>
+</tr>
+<tr>
+<td>搜索和补读</td>
+<td>结合名称、关键词和向量找资料，再核对来源与版本</td>
+</tr>
+<tr>
+<td>长期对话与后台查询</td>
+<td>补充条件、多任务续聊、并行查询、单独停止、预览和下载</td>
+</tr>
+<tr>
+<td>个人记忆与 Skill</td>
+<td>使用 Mem0 积累个人经验；明确选用个人或公共 Pi Skill</td>
+</tr>
+<tr>
+<td>澄清与角色权限</td>
+<td>缺信息时提问；由对象负责人维护正式口径</td>
+</tr>
+</tbody></table></div>
+<p>这次继续使用 Rust、Pi SDK、MySQL、Mem0 和 Qwen / Milvus。下面重点讲新能力，以及原有能力加强在哪里。</p>
+<p>比较起点是第二版实施前的代码 <code>6801df7</code>。它包含第一版上线后的协作和交互修复。</p>
+</div></div>
+</section>
+<section class="am-panel" id="panel-B">
+<header class="am-panel-head"><span class="am-panel-id">B</span><h2>七项变化，一眼看懂</h2></header>
+<div class="am-panel-body"><div class="am-md"><div class="am-table-wrap"><table>
+<thead>
+<tr>
+<th>能力</th>
+<th>第一版已有</th>
+<th>第二版的具体变化</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>来源与预填</td>
+<td>来源、模型建议、人工修改分层</td>
+<td>修复漏血缘与资料混版；补齐文档关联；加强人工值保护</td>
+</tr>
+<tr>
+<td>计算口径</td>
+<td>文字、指标 SQL、粒度和关联说明</td>
+<td>增加能检查的结构规则；提示重复累计、时间及单位风险</td>
+</tr>
+<tr>
+<td>检索</td>
+<td>名称、关键词、向量和分页</td>
+<td>按对象种类、相关对象、明确业务域缩窄范围；返回补读位置</td>
+</tr>
+<tr>
+<td>主动澄清</td>
+<td>已有提问、条件合并与续接</td>
+<td>明确先查资料；澄清必须有实际问题；补强回答、换题和恢复验证</td>
+</tr>
+<tr>
+<td>分析依据</td>
+<td>已有多条查询和结果读取</td>
+<td>保存结论、计算说明、条件与来源；登记的数字核对结果单元格</td>
+</tr>
+<tr>
+<td>分析报告</td>
+<td>已有前 10 行预览、图表和 CSV</td>
+<td>新增本人任务报告；绑定依据与聚合图表；保存后可重开、续改</td>
+</tr>
+<tr>
+<td>经验复用</td>
+<td>已有 Mem0、Skill 和纠错建议</td>
+<td>新增公共查询案例、私人方法待确认草稿，以及直接引用的维护提示</td>
+</tr>
+</tbody></table></div>
+<p>主动澄清这项以补强为主。报告、正式查询案例和方法草稿属于新增能力。</p>
+</div></div>
+</section>
+<section class="am-panel" id="panel-C">
+<header class="am-panel-head"><span class="am-panel-id">C</span><h2>语义构建：让口径能参与计算</h2></header>
+<div class="am-panel-body"><div class="am-md"><p>语义可以理解成数据的使用说明。第二版在说明旁增加计算规则，方便 Agent 读取和系统核对。</p>
+</div>
+<div class="am-tree"><div class="am-tree-root am-tree-root--solo"><div class="am-tree-box am-tree-box--root" data-key="语义记录" data-step="0">语义记录<small>三类内容分别保留</small></div></div><ul class="am-tree-list"><li data-key="来源事实" data-step="1"><span class="am-tree-label">来源事实</span><span class="am-tree-sub">平台元数据、DDL、加工 SQL、文档</span></li><li data-key="模型建议" data-step="2"><span class="am-tree-label">模型建议</span><span class="am-tree-sub">推断、引用依据和未确定的缺口</span></li><li data-key="人工修改" data-step="3"><span class="am-tree-label">人工修改</span><span class="am-tree-sub">负责人核对与编辑后的内容</span></li></ul></div>
+<figure class="am-diagram am-flow"><svg viewBox="0 0 199 225" width="199" height="225" role="img" aria-label="流程图：当前有效正文与计算规则、Pi 按规则生成 SQL、Rust 提供业务诊断" xmlns="http://www.w3.org/2000/svg"><defs><marker id="am1-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="am-arrow" d="M0,0 L10,5 L0,10 z"/></marker></defs><g></g><g><g data-step="0"><path class="am-edge" d="M99.5,49 L99.5,60.5 Q99.5,72 99.5,83.5 L99.5,95" marker-end="url(#am1-arrow)"/></g><g data-step="1"><path class="am-edge" d="M99.5,130 L99.5,141.5 Q99.5,153 99.5,164.5 L99.5,176" marker-end="url(#am1-arrow)"/></g></g><g><g class="am-node am-node--rect" data-key="当前有效正文与计算规则" data-step="0"><rect class="am-node-shape" x="14" y="14" width="171" height="35" rx="3"/><text x="99.5" y="31.5" text-anchor="middle" dominant-baseline="central">当前有效正文与计算规则</text></g><g class="am-node am-node--rect" data-key="Pi 按规则生成 SQL" data-step="0"><rect class="am-node-shape" x="28.2" y="95" width="142.7" height="35" rx="3"/><text x="99.5" y="112.5" text-anchor="middle" dominant-baseline="central">Pi 按规则生成 SQL</text></g><g class="am-node am-node--rect" data-key="Rust 提供业务诊断" data-step="1"><rect class="am-node-shape" x="30.8" y="176" width="137.5" height="35" rx="3"/><text x="99.5" y="193.5" text-anchor="middle" dominant-baseline="central">Rust 提供业务诊断</text></g></g></svg></figure>
+<div class="am-md"><p>来源事实、模型建议和人工修改仍分别保存。人工修改后，重新预填会保留人工值。</p>
+<p>引用存在可以证明可追溯，不能证明推断正确。关键口径仍须核对。</p>
+<div class="am-table-wrap"><table>
+<thead>
+<tr>
+<th>规则</th>
+<th>用合成净收入说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>每行代表什么</td>
+<td>一行是一个订单商品行，金额已经分摊到行</td>
+</tr>
+<tr>
+<td>怎样计算</td>
+<td><code>SUM(paid_amount_cents - refunded_amount_cents)</code></td>
+</tr>
+<tr>
+<td>采用哪个时间</td>
+<td>按 <code>paid_at</code> 选择付款期间</td>
+</tr>
+<tr>
+<td>过滤及单位</td>
+<td>排除测试交易与未成功付款；金额单位为分</td>
+</tr>
+<tr>
+<td>怎样关联</td>
+<td>关联客户标签可能重复订单行，须核对重复累计风险</td>
+</tr>
+</tbody></table></div>
+<p>如果说明和计算规则来自不同层，可能出现矛盾。因此，第二版让有效正文和规则采用同一层。</p>
+<p>SQL 诊断会提示能可靠识别的风险。复杂 SQL 的未检查部分会明确标出。</p>
+<p>诊断目前是非阻断提示。它不能保证口径正确，复杂计算仍由 Pi 调查和生成。</p>
+<p>来源改版后，旧规则可作为待核对线索。系统允许继续补查，但不会把失效规则用于正式查询。</p>
+</div></div>
+</section>
+<section class="am-panel" id="panel-D">
+<header class="am-panel-head"><span class="am-panel-id">D</span><h2>检索：先找范围，再读完整依据</h2></header>
+<div class="am-panel-body"><div class="am-md"><p>第一版已经有混合检索。第二版增加了更具体的范围表达，减少一次读入无关资料。</p>
+</div>
+<figure class="am-diagram am-flow"><svg viewBox="0 0 199 519" width="199" height="519" role="img" aria-label="流程图：用户的问题、对象种类、相关对象、明确业务域、名称、关键词、向量找候选、核对权限、状态和版本、相关片段与补读位置、按同一版本补读正文或规则" xmlns="http://www.w3.org/2000/svg"><defs><marker id="am2-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="am-arrow" d="M0,0 L10,5 L0,10 z"/></marker></defs><g></g><g><g data-step="0"><path class="am-edge" d="M99.5,49 L99.5,60.5 Q99.5,72 99.5,83.5 L99.5,95" marker-end="url(#am2-arrow)"/></g><g data-step="1"><path class="am-edge" d="M99.5,147 L99.5,158.5 Q99.5,170 99.5,181.5 L99.5,193" marker-end="url(#am2-arrow)"/></g><g data-step="2"><path class="am-edge" d="M99.5,245 L99.5,256.5 Q99.5,268 99.5,279.5 L99.5,291" marker-end="url(#am2-arrow)"/></g><g data-step="3"><path class="am-edge" d="M99.5,326 L99.5,337.5 Q99.5,349 99.5,360.5 L99.5,372" marker-end="url(#am2-arrow)"/></g><g data-step="4"><path class="am-edge" d="M99.5,407 L99.5,418.5 Q99.5,430 99.5,441.5 L99.5,453" marker-end="url(#am2-arrow)"/></g></g><g><g class="am-node am-node--rect" data-key="用户的问题" data-step="0"><rect class="am-node-shape" x="53" y="14" width="93" height="35" rx="3"/><text x="99.5" y="31.5" text-anchor="middle" dominant-baseline="central">用户的问题</text></g><g class="am-node am-node--rect" data-key="对象种类、相关对象、明确业务域" data-step="0"><rect class="am-node-shape" x="14" y="95" width="171" height="52" rx="3"/><text x="99.5" y="112.5" text-anchor="middle" dominant-baseline="central">对象种类、相关对象、明</text><text x="99.5" y="129.5" text-anchor="middle" dominant-baseline="central">确业务域</text></g><g class="am-node am-node--rect" data-key="名称、关键词、向量找候选" data-step="1"><rect class="am-node-shape" x="14" y="193" width="171" height="52" rx="3"/><text x="99.5" y="210.5" text-anchor="middle" dominant-baseline="central">名称、关键词、向量找候</text><text x="99.5" y="227.5" text-anchor="middle" dominant-baseline="central">选</text></g><g class="am-node am-node--rect" data-key="核对权限、状态和版本" data-step="2"><rect class="am-node-shape" x="20.5" y="291" width="158" height="35" rx="3"/><text x="99.5" y="308.5" text-anchor="middle" dominant-baseline="central">核对权限、状态和版本</text></g><g class="am-node am-node--rect" data-key="相关片段与补读位置" data-step="3"><rect class="am-node-shape" x="27" y="372" width="145" height="35" rx="3"/><text x="99.5" y="389.5" text-anchor="middle" dominant-baseline="central">相关片段与补读位置</text></g><g class="am-node am-node--rect" data-key="按同一版本补读正文或规则" data-step="4"><rect class="am-node-shape" x="14" y="453" width="171" height="52" rx="3"/><text x="99.5" y="470.5" text-anchor="middle" dominant-baseline="central">按同一版本补读正文或规</text><text x="99.5" y="487.5" text-anchor="middle" dominant-baseline="central">则</text></g></g></svg></figure>
+<div class="am-md"><p>例如，问收入口径时，可以先找相关指标和业务文档。需要理解关联时，再补读涉及的表和字段。</p>
+<p>每个对象最多返回三个相关条目。回执有大小上限，省略内容会给出补读位置。</p>
+<p>如果当前范围没有结果，Pi 可以调整范围再查。空结果不能证明整个空间没有资料。</p>
+<p>采用过的资料改版后，系统会检查旧上下文。如果案例引用指标，而指标使用一张表，表改版也会触发核对。压缩摘要不能继续沿用这些过期规则。</p>
+<p>这里改进的是检索范围和材料交付。真实千表召回率、延迟和费用变化还没有新实测。</p>
+</div></div>
+</section>
+<section class="am-panel" id="panel-E">
+<header class="am-panel-head"><span class="am-panel-id">E</span><h2>跟着一个问题，看调查与澄清</h2></header>
+<div class="am-panel-body"><div class="am-md"><p>用户问：为什么 2 月收入比 1 月低？</p>
+<p>资料已有答案时，Pi 直接采用有效口径。影响计算的疑点仍未解决时，Pi 在聊天里问。</p>
+<p>用户可以自由回答，也可以先聊另一件事。原问题继续待回答，无关查询可以继续运行。</p>
+</div>
+<style>.analysis-demo{height:580px}@media(max-width:700px){.analysis-demo{height:920px}}</style>
+<figure style="margin:20px 0">
+<iframe class="analysis-demo" src="data:text/html;base64,PCFkb2N0eXBlIGh0bWw+CjxodG1sIGxhbmc9InpoLUNOIj4KPGhlYWQ+CjxtZXRhIGNoYXJzZXQ9InV0Zi04Ij4KPG1ldGEgbmFtZT0idmlld3BvcnQiIGNvbnRlbnQ9IndpZHRoPWRldmljZS13aWR0aCxpbml0aWFsLXNjYWxlPTEiPgo8dGl0bGU+5pS55Y+Y5p2h5Lu277yM55yLIEFnZW50IOW6lOivpeaAjuagt+e7p+e7rTwvdGl0bGU+CjxzdHlsZT4KOnJvb3R7Zm9udC1mYW1pbHk6LWFwcGxlLXN5c3RlbSxCbGlua01hY1N5c3RlbUZvbnQsIlBpbmdGYW5nIFNDIiwiTWljcm9zb2Z0IFlhSGVpIixzYW5zLXNlcmlmO2NvbG9yOiMxNzJiM2E7YmFja2dyb3VuZDojZjVmOGZhO2NvbG9yLXNjaGVtZTpsaWdodH0KKntib3gtc2l6aW5nOmJvcmRlci1ib3h9Ym9keXttYXJnaW46MDtwYWRkaW5nOjIycHh9aDJ7Zm9udC1zaXplOjIxcHg7bGluZS1oZWlnaHQ6MS40O21hcmdpbjowIDAgOHB4fXB7Zm9udC1zaXplOjE0cHg7bGluZS1oZWlnaHQ6MS43NTttYXJnaW46MCAwIDE2cHg7Y29sb3I6IzQyNTc2Yn0uY29udHJvbHN7ZGlzcGxheTpncmlkO2dyaWQtdGVtcGxhdGUtY29sdW1uczpyZXBlYXQoMyxtaW5tYXgoMCwxZnIpKTtnYXA6MTRweDttYXJnaW46MThweCAwfWxhYmVse2Rpc3BsYXk6YmxvY2s7Zm9udC1zaXplOjE0cHg7Zm9udC13ZWlnaHQ6NjAwfXNlbGVjdHtkaXNwbGF5OmJsb2NrO3dpZHRoOjEwMCU7bWFyZ2luLXRvcDo4cHg7cGFkZGluZzoxMHB4IDhweDtib3JkZXI6MXB4IHNvbGlkICNiYWNiZDY7YmFja2dyb3VuZDp3aGl0ZTtib3JkZXItcmFkaXVzOjZweDtjb2xvcjojMTcyYjNhO2ZvbnQ6aW5oZXJpdDtmb250LXNpemU6MTNweH1zZWxlY3Q6Zm9jdXMtdmlzaWJsZSxidXR0b246Zm9jdXMtdmlzaWJsZXtvdXRsaW5lOjNweCBzb2xpZCAjMjM2YTlhO291dGxpbmUtb2Zmc2V0OjNweH0ucmVzdWx0e2JhY2tncm91bmQ6d2hpdGU7Ym9yZGVyOjFweCBzb2xpZCAjYmFjYmQ2O2JvcmRlci1yYWRpdXM6OHB4O3BhZGRpbmc6MThweH1oM3ttYXJnaW46MCAwIDE0cHg7Zm9udC1zaXplOjE4cHg7Y29sb3I6IzE4NWM4MH1kbHttYXJnaW46MDtkaXNwbGF5OmdyaWQ7Z3JpZC10ZW1wbGF0ZS1jb2x1bW5zOjEwMHB4IDFmcjtnYXA6MTJweCAxNnB4O2xpbmUtaGVpZ2h0OjEuNztmb250LXNpemU6MTRweH1kdHtmb250LXdlaWdodDo2MDB9ZGR7bWFyZ2luOjB9YnV0dG9ue21hcmdpbi10b3A6MTZweDtib3JkZXI6MXB4IHNvbGlkICNiYWNiZDY7YmFja2dyb3VuZDp3aGl0ZTtjb2xvcjojMTcyYjNhO2JvcmRlci1yYWRpdXM6NnB4O3BhZGRpbmc6OHB4IDE0cHg7Zm9udDppbmhlcml0O2ZvbnQtc2l6ZToxM3B4O2N1cnNvcjpwb2ludGVyfS5ub3Rle2ZvbnQtc2l6ZToxMnB4O21hcmdpbjoxNnB4IDAgMDtjb2xvcjojNTk2YjdhfS5yZXN1bHRbZGF0YS1zdGF0ZT0iY2xhcmlmeSJdIGgze2NvbG9yOiM4NzU1MGJ9LnJlc3VsdFtkYXRhLXN0YXRlPSJ1bmF2YWlsYWJsZSJdIGgze2NvbG9yOiM4YzQxNDF9QG1lZGlhKG1heC13aWR0aDo2MDBweCl7Ym9keXtwYWRkaW5nOjE2cHh9LmNvbnRyb2xze2dyaWQtdGVtcGxhdGUtY29sdW1uczoxZnI7Z2FwOjEycHh9aDJ7Zm9udC1zaXplOjE5cHh9ZGx7Z3JpZC10ZW1wbGF0ZS1jb2x1bW5zOjFmcjtnYXA6NHB4fWRke21hcmdpbi1ib3R0b206MTBweH0ucmVzdWx0e3BhZGRpbmc6MTVweH19Cjwvc3R5bGU+CjwvaGVhZD4KPGJvZHk+CjxoMj7kuLrku4DkuYggMiDmnIjmlLblhaXmr5QgMSDmnIjkvY7vvJ88L2gyPgo8cD7lkIjmiJDkuJrliqHnpLrkvovjgILmlLnlj5jkuIvpnaLnmoTmnaHku7bvvIzop4Llr5/osIPmn6XjgIHmiafooYzlkozmiqXlkYrnmoTovrnnlYzjgII8L3A+CjxkaXYgY2xhc3M9ImNvbnRyb2xzIj4KPGxhYmVsIGZvcj0ibWVhbmluZyI+5pS25YWl5Y+j5b6EPHNlbGVjdCBpZD0ibWVhbmluZyI+PG9wdGlvbiB2YWx1ZT0ia25vd24iPui1hOaWmeW3suacieaYjuehruWPo+W+hDwvb3B0aW9uPjxvcHRpb24gdmFsdWU9InVuY2xlYXIiPui1hOaWmeWGsueqge+8jOWPo+W+hOacquehruWumjwvb3B0aW9uPjwvc2VsZWN0PjwvbGFiZWw+CjxsYWJlbCBmb3I9InBlcm1pc3Npb24iPuWHhuWkh+ihpeafpeeahOaWsCBTUUw8c2VsZWN0IGlkPSJwZXJtaXNzaW9uIj48b3B0aW9uIHZhbHVlPSJkcmFmdCI+55So5oi35bCa5pyq6KaB5rGC5omn6KGM5paw56i/PC9vcHRpb24+PG9wdGlvbiB2YWx1ZT0iZXhlY3V0ZSI+55So5oi35piO56Gu6KaB5rGC5omn6KGM6L+Z5Lu95paw56i/PC9vcHRpb24+PC9zZWxlY3Q+PC9sYWJlbD4KPGxhYmVsIGZvcj0icmVzdWx0Ij7lt7LmnInmn6Xor6LnmoTnu5Pmnpw8c2VsZWN0IGlkPSJyZXN1bHQiPjxvcHRpb24gdmFsdWU9IndhaXRpbmciPuWwmuaXoOaIkOWKn+e7k+aenDwvb3B0aW9uPjxvcHRpb24gdmFsdWU9InJlYWR5Ij7lt7LmiJDlip/kuJTlvZPliY3lj6/or7vlj5Y8L29wdGlvbj48b3B0aW9uIHZhbHVlPSJ1bmF2YWlsYWJsZSI+57uT5p6c5bey6L+H5pyf5oiW6K+75Y+W5p2D5bey5pKk5ZuePC9vcHRpb24+PC9zZWxlY3Q+PC9sYWJlbD4KPC9kaXY+CjxkaXYgY2xhc3M9InJlc3VsdCIgaWQ9Im91dGNvbWUiIGRhdGEtc3RhdGU9ImRyYWZ0IiBhcmlhLWxpdmU9InBvbGl0ZSI+CjxoMyBpZD0ic3RhdHVzIj7lhYjlsZXnpLogU1FMIOWSjOiuoeeul+WPo+W+hDwvaDM+CjxkbD48ZHQ+UGkg5oCO5LmI57un57utPC9kdD48ZGQgaWQ9ImFnZW50Ij7or7vlj5bmnInmlYjlj6PlvoTvvIzlh4blpIfmjInmnIjlkozmuKDpgZPmr5TovoPnmoQgU1FM44CCPC9kZD48ZHQ+5paw5p+l6K+iPC9kdD48ZGQgaWQ9InF1ZXJ5Ij7ojYnnqL/lj6/ku6XlsZXnpLrjgILnlKjmiLflsJrmnKropoHmsYLmiafooYzmlrDnqL/vvIzmraTml7bkuI3mj5DkuqTmlrDmn6Xor6LjgII8L2RkPjxkdD7liIbmnpDmiJDmnpw8L2R0PjxkZCBpZD0icmVwb3J0Ij7ov5jmsqHmnInnu5PmnpzjgILlhYjor7TmmI7orqHliJLvvIzmlbDmja7nu5PorrrnrYnlvoXmiJDlip/mn6Xor6LjgII8L2RkPjwvZGw+CjwvZGl2Pgo8YnV0dG9uIHR5cGU9ImJ1dHRvbiIgaWQ9InJlc2V0Ij7mgaLlpI3npLrkvovmnaHku7Y8L2J1dHRvbj4KPHAgY2xhc3M9Im5vdGUiPui/meaYr+acuuWItua8lOekuu+8jOS4jeiwg+eUqOaooeWei+aIluaJp+ihjCBTUUzjgIJQaSDoh6rkuLvlhrPlrprosIPmn6Xot6/lvoTjgILlrp7pmYXmj5DkuqTov5jpobvpgJrov4fmnYPpmZDjgIHlj6ror7vjgIHmnaHku7blkozniYjmnKzmoKHpqozjgILlt7LmnInnu5PmnpzkuI7mlrDmn6Xor6LnmoTmjojmnYPliIbliKvliKTmlq3jgII8L3A+CjxzY3JpcHQ+CmNvbnN0IG1lYW5pbmc9ZG9jdW1lbnQuZ2V0RWxlbWVudEJ5SWQoJ21lYW5pbmcnKTsKY29uc3QgcGVybWlzc2lvbj1kb2N1bWVudC5nZXRFbGVtZW50QnlJZCgncGVybWlzc2lvbicpOwpjb25zdCByZXN1bHQ9ZG9jdW1lbnQuZ2V0RWxlbWVudEJ5SWQoJ3Jlc3VsdCcpOwpmdW5jdGlvbiB1cGRhdGUoKXsKIGxldCBzdGF0ZSxzdGF0dXMsYWdlbnQscXVlcnkscmVwb3J0OwogaWYobWVhbmluZy52YWx1ZT09PSd1bmNsZWFyJyl7CiAgc3RhdGU9J2NsYXJpZnknO3N0YXR1cz0n5YWI6KGl5p+l77yM5YWz6ZSu5Y+j5b6E5LuN5LiN5riF5qWa5pe25o+Q6ZeuJzsKICBhZ2VudD0n5p+l6ZiF5Yay56qB6LWE5paZ44CC6Iul5LuN5LiN6IO956Gu5a6a5pS25YWl5Y+j5b6E77yM5Zyo6IGK5aSp6YeM6K+i6Zeu77yM5bm25L+d5a2Y5b6F5Zue562U6Zeu6aKY44CCJzsKICBxdWVyeT0n5b2T5YmN5p2h5Lu26L+Y5rKh56Gu5a6a44CC5omn6KGM5oSP5Zu+5LiN6IO95pu/5Luj5Y+j5b6E56Gu6K6k44CC55So5oi35Zue562U5ZCO77yM5YWI5L+u6K6i5p2h5Lu25LiOIFNRTOOAgic7CiAgcmVwb3J0PSflt7LmnInml6fnu5PmnpzkuI3og73or7TmmI7lvZPliY3mnKrnoa7lrprnmoTlj6PlvoTjgILlhYjorrDlvZXlt7Lnn6Xkuovlrp7lkozotYTmlpnnvLrlj6PjgIInOwogfWVsc2V7CiAgYWdlbnQ9J+mHh+eUqOW9k+WJjeacieaViOWPo+W+hOOAgue7k+WQiOWPr+ivu+e7k+aenO+8jOWGs+WumuaYr+WQpuihpeafpea4oOmBk+i0oeeMruaIlumAgOasvuW9seWTjeOAgic7CiAgcXVlcnk9cGVybWlzc2lvbi52YWx1ZT09PSdleGVjdXRlJz8n55So5oi35piO56Gu6KaB5rGC5omn6KGM6L+Z5Lu95paw56i/44CCUnVzdCDmoLjlr7nmtojmga/jgIHmnaHku7bjgIFTUUwg54mI5pys5ZKM5p2D6ZmQ5ZCO77yM5p+l6K+i5Zyo5ZCO5Y+w6L+Q6KGM44CCJzon5Y+v5Lul5bGV56S66KGl5p+l55qE5pawIFNRTOOAgueUqOaIt+WwmuacquimgeaxguaJp+ihjOaWsOeov++8jOatpOaXtuS4jeaPkOS6pOaWsOafpeivouOAgic7CiAgaWYocmVzdWx0LnZhbHVlPT09J3JlYWR5Jyl7CiAgIHN0YXRlPSdldmlkZW5jZSc7c3RhdHVzPSfnlKjlj6/or7vlj5bnu5Pmnpzkv53lrZjmnInmnaXmupDnmoTliIbmnpAnOwogICByZXBvcnQ9J+WPr+mHh+eUqOWvueW6lOadoeS7tueahOaIkOWKn+e7k+aenO+8jOS/neWtmOe7k+iuuuS4juS+neaNruOAgumcgOimgeeVmeS4i+aIkOaenOaXtu+8jOWGjeaVtOeQhuWbvuihqOaKpeWRiuOAgua4oOmBk+i0oeeMruWPr+aguOeul++8m+S4muWKoeWboOaenOS7jemcgOimgeabtOWkmuivgeaNruOAgic7CiAgfWVsc2UgaWYocmVzdWx0LnZhbHVlPT09J3VuYXZhaWxhYmxlJyl7CiAgIHN0YXRlPSd1bmF2YWlsYWJsZSc7c3RhdHVzPSfkv53nlZnlpLHmlYjnirbmgIHvvIzph43mlrDmoLjlr7nmnaXmupAnOwogICByZXBvcnQ9J+aKpeWRiuS4jeWbnuaUvuWkseaViOato+aWh+aIluWbvuihqOOAgumHjeaWsOWPluaVsOWFiOWHhuWkh+aWsOiNieeov++8jOWGjee7keWumuacieaViOeahOiBiuWkqeaJp+ihjOaOiOadg+OAgic7CiAgfWVsc2V7CiAgIHN0YXRlPXBlcm1pc3Npb24udmFsdWU9PT0nZXhlY3V0ZSc/J3J1bm5pbmcnOidkcmFmdCc7CiAgIHN0YXR1cz1wZXJtaXNzaW9uLnZhbHVlPT09J2V4ZWN1dGUnPyfmn6Xor6Llj6/lnKjlkI7lj7Dov5DooYzvvIzogYrlpKnnu6fnu60nOiflhYjlsZXnpLogU1FMIOWSjOiuoeeul+WPo+W+hCc7CiAgIHJlcG9ydD0n6L+Y5rKh5pyJ5oiQ5Yqf57uT5p6c44CC5YWI6K+05piO6LCD5p+l6K6h5YiS77yM5pWw5o2u57uT6K66562J5b6F5oiQ5Yqf5p+l6K+i44CCJzsKICB9CiB9CiBkb2N1bWVudC5nZXRFbGVtZW50QnlJZCgnb3V0Y29tZScpLmRhdGFzZXQuc3RhdGU9c3RhdGU7CiBmb3IoY29uc3QgW2lkLHRleHRdIG9mIE9iamVjdC5lbnRyaWVzKHtzdGF0dXMsYWdlbnQscXVlcnkscmVwb3J0fSkpZG9jdW1lbnQuZ2V0RWxlbWVudEJ5SWQoaWQpLnRleHRDb250ZW50PXRleHQ7Cn0KZm9yKGNvbnN0IGNvbnRyb2wgb2YgW21lYW5pbmcscGVybWlzc2lvbixyZXN1bHRdKWNvbnRyb2wuYWRkRXZlbnRMaXN0ZW5lcignY2hhbmdlJyx1cGRhdGUpOwpkb2N1bWVudC5nZXRFbGVtZW50QnlJZCgncmVzZXQnKS5hZGRFdmVudExpc3RlbmVyKCdjbGljaycsKCk9PnttZWFuaW5nLnZhbHVlPSdrbm93bic7cGVybWlzc2lvbi52YWx1ZT0nZHJhZnQnO3Jlc3VsdC52YWx1ZT0nd2FpdGluZyc7dXBkYXRlKCl9KTsKdXBkYXRlKCk7Cjwvc2NyaXB0Pgo8L2JvZHk+CjwvaHRtbD4K" title="改变口径、执行意图和结果状态，观察分析如何继续" sandbox="allow-scripts" style="display:block;width:100%;border:1px solid var(--line-2);border-radius:8px;background:#f5f8fa" referrerpolicy="no-referrer"></iframe>
+<figcaption style="margin-top:10px;color:var(--ink-2);font-size:14px">切换口径、新 SQL 的执行意图和已有结果状态，比较处理方式。</figcaption>
+</figure>
+<div class="am-md"><p>已有成功结果可以继续分析。演示中的执行选项只针对补查的新 SQL。</p>
+<p>每个任务仍一次聚焦一个当前澄清。回答问题本身不会新增 SQL 执行权限。</p>
+<p>Pi 自主选择工具和调查顺序。系统保存条件与状态，核对哪些动作可以执行。</p>
+</div></div>
+</section>
+<section class="am-panel" id="panel-F">
+<header class="am-panel-head"><span class="am-panel-id">F</span><h2>分析结果：结论、数字、报告能对应起来</h2></header>
+<div class="am-panel-body"><div class="am-md"><p>第一版已有查询结果与图表。第二版新增独立的分析依据记录，以及可继续修改的报告。</p>
+</div>
+<figure class="am-diagram am-flow"><svg viewBox="0 0 199 438" width="199" height="438" role="img" aria-label="流程图：成功查询与当前有效资料、分析依据：结论、计算说明、条件、限制、本人任务报告：结论与聚合图表、重开阅读或继续追问、核对当前条件与来源，再保存修订" xmlns="http://www.w3.org/2000/svg"><defs><marker id="am3-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="am-arrow" d="M0,0 L10,5 L0,10 z"/></marker></defs><g></g><g><g data-step="0"><path class="am-edge" d="M99.5,49 L99.5,60.5 Q99.5,72 99.5,83.5 L99.5,95" marker-end="url(#am3-arrow)"/></g><g data-step="1"><path class="am-edge" d="M99.5,147 L99.5,158.5 Q99.5,170 99.5,181.5 L99.5,193" marker-end="url(#am3-arrow)"/></g><g data-step="2"><path class="am-edge" d="M99.5,245 L99.5,256.5 Q99.5,268 99.5,279.5 L99.5,291" marker-end="url(#am3-arrow)"/></g><g data-step="3"><path class="am-edge" d="M99.5,326 L99.5,337.5 Q99.5,349 99.5,360.5 L99.5,372" marker-end="url(#am3-arrow)"/></g></g><g><g class="am-node am-node--rect" data-key="成功查询与当前有效资料" data-step="0"><rect class="am-node-shape" x="14" y="14" width="171" height="35" rx="3"/><text x="99.5" y="31.5" text-anchor="middle" dominant-baseline="central">成功查询与当前有效资料</text></g><g class="am-node am-node--rect" data-key="分析依据：结论、计算说明、条件、限制" data-step="0"><rect class="am-node-shape" x="14" y="95" width="171" height="52" rx="3"/><text x="99.5" y="112.5" text-anchor="middle" dominant-baseline="central">分析依据：结论、计算说</text><text x="99.5" y="129.5" text-anchor="middle" dominant-baseline="central">明、条件、限制</text></g><g class="am-node am-node--rect" data-key="本人任务报告：结论与聚合图表" data-step="1"><rect class="am-node-shape" x="14" y="193" width="171" height="52" rx="3"/><text x="99.5" y="210.5" text-anchor="middle" dominant-baseline="central">本人任务报告：结论与聚</text><text x="99.5" y="227.5" text-anchor="middle" dominant-baseline="central">合图表</text></g><g class="am-node am-node--rect" data-key="重开阅读或继续追问" data-step="2"><rect class="am-node-shape" x="27" y="291" width="145" height="35" rx="3"/><text x="99.5" y="308.5" text-anchor="middle" dominant-baseline="central">重开阅读或继续追问</text></g><g class="am-node am-node--rect" data-key="核对当前条件与来源，再保存修订" data-step="3"><rect class="am-node-shape" x="14" y="372" width="171" height="52" rx="3"/><text x="99.5" y="389.5" text-anchor="middle" dominant-baseline="central">核对当前条件与来源，再</text><text x="99.5" y="406.5" text-anchor="middle" dominant-baseline="central">保存修订</text></g></g></svg></figure>
+<div class="am-md"><p>比如，Pi 想说某渠道对收入变化贡献较大。它可以用查询核算渠道变化，再把结论绑定到对应结果。</p>
+<p>明确登记的数字会核对查询、列、行和单元格值。系统不扫描正文全部数字，也不自动证明业务因果。</p>
+<div class="am-table-wrap"><table>
+<thead>
+<tr>
+<th>第二版新增的报告能力</th>
+<th>用户能看到什么</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>保存与重开</td>
+<td>一项任务保存一份本人报告，结论与依据一起读取</td>
+</tr>
+<tr>
+<td>继续修改</td>
+<td>条件变化后核对新分析，保存新的修订</td>
+</tr>
+<tr>
+<td>聚合图表</td>
+<td>折线图、柱状图绑定已保存的聚合结果</td>
+</tr>
+<tr>
+<td>失效处理</td>
+<td>条件改变、资料失效或结果不可读时，明确显示状态</td>
+</tr>
+</tbody></table></div>
+<p>前 10 行预览和 CSV 下载继续保留。报告绘图读取有界的已保存结果，平台仍最多保存 1,000 行。</p>
+<p>截断结果不能当作完整明细累计。图表也不是完整 BI 编辑器。</p>
+<p>结果过期或读取权撤回后，报告不回放失效正文和图表。重新运行需要新的有效聊天执行授权。</p>
+</div></div>
+</section>
+<section class="am-panel" id="panel-G">
+<header class="am-panel-head"><span class="am-panel-id">G</span><h2>经验保存到哪里，下次怎么使用</h2></header>
+<div class="am-panel-body"><div class="am-md"><p>Mem0 和 Pi 原生 Skill 在第一版就已接入。第二版主要补齐查询案例和从分析生成待确认方法的入口。</p>
+<div class="am-table-wrap"><table>
+<thead>
+<tr>
+<th>内容</th>
+<th>正式保存位置</th>
+<th>下次怎么找到或使用</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>共享语义</td>
+<td>MySQL 的正式知识</td>
+<td>语义检索找到候选，再核对权限与当前版本</td>
+</tr>
+<tr>
+<td>个人记忆</td>
+<td>MySQL 的本人资产</td>
+<td>Mem0 提取和召回偏好、纠错候选；应用回源核验</td>
+</tr>
+<tr>
+<td>公共查询案例〔新增〕</td>
+<td>与共享语义同一知识体系</td>
+<td>检索适用问题、参数、SQL、粒度与依赖，再决定沿用或改写</td>
+</tr>
+<tr>
+<td>本人分析报告〔新增〕</td>
+<td>MySQL 的本人任务记录</td>
+<td>从对应任务重开；Pi 可读取当前修订继续修改</td>
+</tr>
+<tr>
+<td>分析方法草稿〔新增〕</td>
+<td>本人的待确认记录</td>
+<td>编辑确认后成为私人 Pi Skill，再明确选用</td>
+</tr>
+</tbody></table></div>
+<p>共享语义承担团队公共口径。个人记忆保存本人经验，两者的维护规则和召回入口不同。</p>
+<p>语义与个人记忆的向量索引仍用 Qwen / Milvus。索引可以重建，正式内容以 MySQL 为准。</p>
+</div>
+<figure class="am-diagram am-flow"><svg viewBox="0 0 406 404" width="406" height="404" role="img" aria-label="流程图：用户要求整理本次方法、私人待确认草稿、本人编辑并确认保存、私人 Pi Skill、明确选用后供当前对话读取、另行明确发布：形成公共副本" xmlns="http://www.w3.org/2000/svg"><defs><marker id="am4-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="am-arrow" d="M0,0 L10,5 L0,10 z"/></marker></defs><g></g><g><g data-step="0"><path class="am-edge" d="M203,49 L203,60.5 Q203,72 203,83.5 L203,95" marker-end="url(#am4-arrow)"/></g><g data-step="1"><path class="am-edge" d="M203,130 L203,141.5 Q203,153 203,164.5 L203,176" marker-end="url(#am4-arrow)"/></g><g data-step="2"><path class="am-edge" d="M203,211 L203,222.5 Q203,234 203,245.5 L203,257" marker-end="url(#am4-arrow)"/></g><g data-step="3"><path class="am-edge" d="M247.7,292 L277.1,303.5 Q306.5,315 306.5,326.5 L306.5,338" marker-end="url(#am4-arrow)"/></g><g data-step="4"><path class="am-edge am-edge--dashed" d="M158.3,292 L128.9,303.5 Q99.5,315 99.5,326.5 L99.5,338" marker-end="url(#am4-arrow)"/></g></g><g><g class="am-node am-node--rect" data-key="用户要求整理本次方法" data-step="0"><rect class="am-node-shape" x="124" y="14" width="158" height="35" rx="3"/><text x="203" y="31.5" text-anchor="middle" dominant-baseline="central">用户要求整理本次方法</text></g><g class="am-node am-node--rect" data-key="私人待确认草稿" data-step="0"><rect class="am-node-shape" x="143.5" y="95" width="119" height="35" rx="3"/><text x="203" y="112.5" text-anchor="middle" dominant-baseline="central">私人待确认草稿</text></g><g class="am-node am-node--rect" data-key="本人编辑并确认保存" data-step="1"><rect class="am-node-shape" x="130.5" y="176" width="145" height="35" rx="3"/><text x="203" y="193.5" text-anchor="middle" dominant-baseline="central">本人编辑并确认保存</text></g><g class="am-node am-node--rect" data-key="私人 Pi Skill" data-step="2"><rect class="am-node-shape" x="151.3" y="257" width="103.4" height="35" rx="3"/><text x="203" y="274.5" text-anchor="middle" dominant-baseline="central">私人 Pi Skill</text></g><g class="am-node am-node--rect" data-key="明确选用后供当前对话读取" data-step="3"><rect class="am-node-shape" x="221" y="338" width="171" height="52" rx="3"/><text x="306.5" y="355.5" text-anchor="middle" dominant-baseline="central">明确选用后供当前对话读</text><text x="306.5" y="372.5" text-anchor="middle" dominant-baseline="central">取</text></g><g class="am-node am-node--rect" data-key="另行明确发布：形成公共副本" data-step="4"><rect class="am-node-shape" x="14" y="338" width="171" height="52" rx="3"/><text x="99.5" y="355.5" text-anchor="middle" dominant-baseline="central">另行明确发布：形成公共</text><text x="99.5" y="372.5" text-anchor="middle" dominant-baseline="central">副本</text></g></g></svg></figure>
+<div class="am-md"><p>待确认草稿不会进入正式资产目录、索引或已选 Skill。公开发布和选用仍是独立动作。</p>
+<p>公共查询案例由有资格的维护者明确录入。私人聊天、结果和记忆不会自动复制进去。</p>
+<p>来源变化时，可以查看已经登记的直接引用。比如，案例声明按某指标计算，指标改版后就需要重新核对。</p>
+<p>提示保留旧绑定与停用项，方便核对案例和方法。</p>
+<p>维护提示不识别所有文字里的隐含依赖。超级维护者也不能借此查看他人的私人方法。</p>
+</div></div>
+</section>
+<section class="am-panel" id="panel-H">
+<header class="am-panel-head"><span class="am-panel-id">H</span><h2>底座怎样复用，哪些结果已经验证</h2></header>
+<div class="am-panel-body"><div class="am-md"><div class="am-table-wrap"><table>
+<thead>
+<tr>
+<th>部分</th>
+<th>第一版与第二版沿用的责任</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>React</td>
+<td>展示、输入与交互</td>
+</tr>
+<tr>
+<td>Rust</td>
+<td>权限、正式知识、任务、查询、个人资产和版本状态</td>
+</tr>
+<tr>
+<td>Pi SDK</td>
+<td>理解、调查、澄清、工具循环、会话恢复与压缩</td>
+</tr>
+<tr>
+<td>Mem0</td>
+<td>个人记忆提取与候选召回</td>
+</tr>
+<tr>
+<td>MySQL / Qwen / Milvus</td>
+<td>正式记录；向量表示；可重建的检索索引</td>
+</tr>
+<tr>
+<td>数据平台适配器</td>
+<td>当前用合成平台提供资料、权限和查询</td>
+</tr>
+</tbody></table></div>
+<p>第二版把新能力放入既有业务模块。报告归分析任务，公共案例归正式知识，私人方法归个人资产。</p>
+<p>七个增量的本地实现与验收已完成。各项分别通过 12、10、8、9、12、10、12 组统一验收。</p>
+<p>最后 12 组验收的代码与契约指纹一致。它覆盖权限、保存、恢复、原生 Skill、原生压缩、页面和接口。</p>
+<p>这轮官方 DeepSeek、embedding 和 Mem0 服务请求为 0 次。真实 Flash 的预填、提问和自主分析质量仍待小样验证。</p>
+<p>目前还没有接入真实 Datasight。同步缓冲区、公共报告分享、完整 BI 和微服务拆分保留为后续范围。</p>
+<p>本轮实现尚未提交推送，也没有切换常驻服务。这份页面说明第二版本地代码的能力与验证边界。</p>
+</div>
+<details style="margin-top:20px">
+<summary style="cursor:pointer;font-weight:600">查看说明依据</summary>
+<ul style="line-height:1.8;padding-left:22px">
+<li><a href="../CURRENT.md">当前完成状态</a>：本轮完成段和各项验收。</li>
+<li><a href="../analysis-capabilities-execution.md">第二版执行包</a>：第 3–9 节的范围和目标。</li>
+<li><a href="../architecture/implementation-design.md">实现设计</a>：模块责任和接口。</li>
+<li><a href="../sources/business-guide.md">合成业务说明</a>：净收入、粒度、时间和关联约定。</li>
+<li>代码对照起点：<code>6801df7</code>。</li>
+<li>计算规则：<code>crates/data-agent/src/modules/knowledge/structure.rs</code>。</li>
+<li>分析依据与报告：<code>use_cases/analysis_evidence.rs</code>、<code>analysis_reports.rs</code>。</li>
+<li>方法草稿与维护提示：<code>use_cases/skill_drafts.rs</code>、<code>knowledge_impact.rs</code>。</li>
+</ul>
+</details></div>
+</section>
+</div>
+</div>
+</main>
+<footer class="am-colophon">Generated by Answer me with HTML 0.4.8 · 2026-10-14 11:05</footer>
+<textarea id="am-source" hidden readonly aria-hidden="true">---
+template: doc
+theme: shadcn
+mode: light
+style: 80
+lang: zh
+title: 第二版，具体改进了什么
+subtitle: 从计算规则、调查依据到能留给下次的分析成果
+date: 2026-10-14
+---
+
+第二版把语义、查询结果和分析成果连接得更紧。你能核对计算规则、追问结论的依据，并把报告或方法留给下次。
+
+## A 先说清第一版的起点
+
+第一版已经能找表、解释口径、生成 SQL 和聊天取数。它已有共享语义、个人记忆、Skill 和权限规则。
+
+| 第一版已有的能力 | 用户原来就可以做什么 |
+| --- | --- |
+| 语义录入与预填 | 保存表、字段、指标 SQL、关联及长文档；人工修改单独保留 |
+| 搜索和补读 | 结合名称、关键词和向量找资料，再核对来源与版本 |
+| 长期对话与后台查询 | 补充条件、多任务续聊、并行查询、单独停止、预览和下载 |
+| 个人记忆与 Skill | 使用 Mem0 积累个人经验；明确选用个人或公共 Pi Skill |
+| 澄清与角色权限 | 缺信息时提问；由对象负责人维护正式口径 |
+
+这次继续使用 Rust、Pi SDK、MySQL、Mem0 和 Qwen / Milvus。下面重点讲新能力，以及原有能力加强在哪里。
+
+比较起点是第二版实施前的代码 `6801df7`。它包含第一版上线后的协作和交互修复。
+
+## B 七项变化，一眼看懂
+
+| 能力 | 第一版已有 | 第二版的具体变化 |
+| --- | --- | --- |
+| 来源与预填 | 来源、模型建议、人工修改分层 | 修复漏血缘与资料混版；补齐文档关联；加强人工值保护 |
+| 计算口径 | 文字、指标 SQL、粒度和关联说明 | 增加能检查的结构规则；提示重复累计、时间及单位风险 |
+| 检索 | 名称、关键词、向量和分页 | 按对象种类、相关对象、明确业务域缩窄范围；返回补读位置 |
+| 主动澄清 | 已有提问、条件合并与续接 | 明确先查资料；澄清必须有实际问题；补强回答、换题和恢复验证 |
+| 分析依据 | 已有多条查询和结果读取 | 保存结论、计算说明、条件与来源；登记的数字核对结果单元格 |
+| 分析报告 | 已有前 10 行预览、图表和 CSV | 新增本人任务报告；绑定依据与聚合图表；保存后可重开、续改 |
+| 经验复用 | 已有 Mem0、Skill 和纠错建议 | 新增公共查询案例、私人方法待确认草稿，以及直接引用的维护提示 |
+
+主动澄清这项以补强为主。报告、正式查询案例和方法草稿属于新增能力。
+
+## C 语义构建：让口径能参与计算
+
+语义可以理解成数据的使用说明。第二版在说明旁增加计算规则，方便 Agent 读取和系统核对。
+
+```tree list
+语义记录 | 三类内容分别保留
+  来源事实 | 平台元数据、DDL、加工 SQL、文档
+  模型建议 | 推断、引用依据和未确定的缺口
+  人工修改 | 负责人核对与编辑后的内容
+```
+
+```flow TB
+[当前有效正文与计算规则] -&gt; [Pi 按规则生成 SQL]
+[Pi 按规则生成 SQL] -&gt; [Rust 提供业务诊断]
+```
+
+来源事实、模型建议和人工修改仍分别保存。人工修改后，重新预填会保留人工值。
+
+引用存在可以证明可追溯，不能证明推断正确。关键口径仍须核对。
+
+| 规则 | 用合成净收入说明 |
+| --- | --- |
+| 每行代表什么 | 一行是一个订单商品行，金额已经分摊到行 |
+| 怎样计算 | `SUM(paid_amount_cents - refunded_amount_cents)` |
+| 采用哪个时间 | 按 `paid_at` 选择付款期间 |
+| 过滤及单位 | 排除测试交易与未成功付款；金额单位为分 |
+| 怎样关联 | 关联客户标签可能重复订单行，须核对重复累计风险 |
+
+如果说明和计算规则来自不同层，可能出现矛盾。因此，第二版让有效正文和规则采用同一层。
+
+SQL 诊断会提示能可靠识别的风险。复杂 SQL 的未检查部分会明确标出。
+
+诊断目前是非阻断提示。它不能保证口径正确，复杂计算仍由 Pi 调查和生成。
+
+来源改版后，旧规则可作为待核对线索。系统允许继续补查，但不会把失效规则用于正式查询。
+
+## D 检索：先找范围，再读完整依据
+
+第一版已经有混合检索。第二版增加了更具体的范围表达，减少一次读入无关资料。
+
+```flow TB
+[用户的问题] -&gt; [对象种类、相关对象、明确业务域]
+[对象种类、相关对象、明确业务域] -&gt; [名称、关键词、向量找候选]
+[名称、关键词、向量找候选] -&gt; [核对权限、状态和版本]
+[核对权限、状态和版本] -&gt; [相关片段与补读位置]
+[相关片段与补读位置] -&gt; [按同一版本补读正文或规则]
+```
+
+例如，问收入口径时，可以先找相关指标和业务文档。需要理解关联时，再补读涉及的表和字段。
+
+每个对象最多返回三个相关条目。回执有大小上限，省略内容会给出补读位置。
+
+如果当前范围没有结果，Pi 可以调整范围再查。空结果不能证明整个空间没有资料。
+
+采用过的资料改版后，系统会检查旧上下文。如果案例引用指标，而指标使用一张表，表改版也会触发核对。压缩摘要不能继续沿用这些过期规则。
+
+这里改进的是检索范围和材料交付。真实千表召回率、延迟和费用变化还没有新实测。
+
+## E 跟着一个问题，看调查与澄清
+
+用户问：为什么 2 月收入比 1 月低？
+
+资料已有答案时，Pi 直接采用有效口径。影响计算的疑点仍未解决时，Pi 在聊天里问。
+
+用户可以自由回答，也可以先聊另一件事。原问题继续待回答，无关查询可以继续运行。
+
+```html
+&lt;style&gt;.analysis-demo{height:580px}@media(max-width:700px){.analysis-demo{height:920px}}&lt;/style&gt;
+&lt;figure style=&quot;margin:20px 0&quot;&gt;
+&lt;iframe class=&quot;analysis-demo&quot; src=&quot;assets/data-agent-analysis-explainer.html&quot; title=&quot;改变口径、执行意图和结果状态，观察分析如何继续&quot; sandbox=&quot;allow-scripts&quot; style=&quot;display:block;width:100%;border:1px solid var(--line-2);border-radius:8px;background:#f5f8fa&quot;&gt;&lt;/iframe&gt;
+&lt;figcaption style=&quot;margin-top:10px;color:var(--ink-2);font-size:14px&quot;&gt;切换口径、新 SQL 的执行意图和已有结果状态，比较处理方式。&lt;/figcaption&gt;
+&lt;/figure&gt;
+```
+
+已有成功结果可以继续分析。演示中的执行选项只针对补查的新 SQL。
+
+每个任务仍一次聚焦一个当前澄清。回答问题本身不会新增 SQL 执行权限。
+
+Pi 自主选择工具和调查顺序。系统保存条件与状态，核对哪些动作可以执行。
+
+## F 分析结果：结论、数字、报告能对应起来
+
+第一版已有查询结果与图表。第二版新增独立的分析依据记录，以及可继续修改的报告。
+
+```flow TB
+[成功查询与当前有效资料] -&gt; [分析依据：结论、计算说明、条件、限制]
+[分析依据：结论、计算说明、条件、限制] -&gt; [本人任务报告：结论与聚合图表]
+[本人任务报告：结论与聚合图表] -&gt; [重开阅读或继续追问]
+[重开阅读或继续追问] -&gt; [核对当前条件与来源，再保存修订]
+```
+
+比如，Pi 想说某渠道对收入变化贡献较大。它可以用查询核算渠道变化，再把结论绑定到对应结果。
+
+明确登记的数字会核对查询、列、行和单元格值。系统不扫描正文全部数字，也不自动证明业务因果。
+
+| 第二版新增的报告能力 | 用户能看到什么 |
+| --- | --- |
+| 保存与重开 | 一项任务保存一份本人报告，结论与依据一起读取 |
+| 继续修改 | 条件变化后核对新分析，保存新的修订 |
+| 聚合图表 | 折线图、柱状图绑定已保存的聚合结果 |
+| 失效处理 | 条件改变、资料失效或结果不可读时，明确显示状态 |
+
+前 10 行预览和 CSV 下载继续保留。报告绘图读取有界的已保存结果，平台仍最多保存 1,000 行。
+
+截断结果不能当作完整明细累计。图表也不是完整 BI 编辑器。
+
+结果过期或读取权撤回后，报告不回放失效正文和图表。重新运行需要新的有效聊天执行授权。
+
+## G 经验保存到哪里，下次怎么使用
+
+Mem0 和 Pi 原生 Skill 在第一版就已接入。第二版主要补齐查询案例和从分析生成待确认方法的入口。
+
+| 内容 | 正式保存位置 | 下次怎么找到或使用 |
+| --- | --- | --- |
+| 共享语义 | MySQL 的正式知识 | 语义检索找到候选，再核对权限与当前版本 |
+| 个人记忆 | MySQL 的本人资产 | Mem0 提取和召回偏好、纠错候选；应用回源核验 |
+| 公共查询案例〔新增〕 | 与共享语义同一知识体系 | 检索适用问题、参数、SQL、粒度与依赖，再决定沿用或改写 |
+| 本人分析报告〔新增〕 | MySQL 的本人任务记录 | 从对应任务重开；Pi 可读取当前修订继续修改 |
+| 分析方法草稿〔新增〕 | 本人的待确认记录 | 编辑确认后成为私人 Pi Skill，再明确选用 |
+
+共享语义承担团队公共口径。个人记忆保存本人经验，两者的维护规则和召回入口不同。
+
+语义与个人记忆的向量索引仍用 Qwen / Milvus。索引可以重建，正式内容以 MySQL 为准。
+
+```flow TB
+[用户要求整理本次方法] -&gt; [私人待确认草稿]
+[私人待确认草稿] -&gt; [本人编辑并确认保存]
+[本人编辑并确认保存] -&gt; [私人 Pi Skill]
+[私人 Pi Skill] -&gt; [明确选用后供当前对话读取]
+[私人 Pi Skill] --&gt; [另行明确发布：形成公共副本]
+```
+
+待确认草稿不会进入正式资产目录、索引或已选 Skill。公开发布和选用仍是独立动作。
+
+公共查询案例由有资格的维护者明确录入。私人聊天、结果和记忆不会自动复制进去。
+
+来源变化时，可以查看已经登记的直接引用。比如，案例声明按某指标计算，指标改版后就需要重新核对。
+
+提示保留旧绑定与停用项，方便核对案例和方法。
+
+维护提示不识别所有文字里的隐含依赖。超级维护者也不能借此查看他人的私人方法。
+
+## H 底座怎样复用，哪些结果已经验证
+
+| 部分 | 第一版与第二版沿用的责任 |
+| --- | --- |
+| React | 展示、输入与交互 |
+| Rust | 权限、正式知识、任务、查询、个人资产和版本状态 |
+| Pi SDK | 理解、调查、澄清、工具循环、会话恢复与压缩 |
+| Mem0 | 个人记忆提取与候选召回 |
+| MySQL / Qwen / Milvus | 正式记录；向量表示；可重建的检索索引 |
+| 数据平台适配器 | 当前用合成平台提供资料、权限和查询 |
+
+第二版把新能力放入既有业务模块。报告归分析任务，公共案例归正式知识，私人方法归个人资产。
+
+七个增量的本地实现与验收已完成。各项分别通过 12、10、8、9、12、10、12 组统一验收。
+
+最后 12 组验收的代码与契约指纹一致。它覆盖权限、保存、恢复、原生 Skill、原生压缩、页面和接口。
+
+这轮官方 DeepSeek、embedding 和 Mem0 服务请求为 0 次。真实 Flash 的预填、提问和自主分析质量仍待小样验证。
+
+目前还没有接入真实 Datasight。同步缓冲区、公共报告分享、完整 BI 和微服务拆分保留为后续范围。
+
+本轮实现尚未提交推送，也没有切换常驻服务。这份页面说明第二版本地代码的能力与验证边界。
+
+```html
+&lt;details style=&quot;margin-top:20px&quot;&gt;
+&lt;summary style=&quot;cursor:pointer;font-weight:600&quot;&gt;查看说明依据&lt;/summary&gt;
+&lt;ul style=&quot;line-height:1.8;padding-left:22px&quot;&gt;
+&lt;li&gt;&lt;a href=&quot;../CURRENT.md&quot;&gt;当前完成状态&lt;/a&gt;：本轮完成段和各项验收。&lt;/li&gt;
+&lt;li&gt;&lt;a href=&quot;../analysis-capabilities-execution.md&quot;&gt;第二版执行包&lt;/a&gt;：第 3–9 节的范围和目标。&lt;/li&gt;
+&lt;li&gt;&lt;a href=&quot;../architecture/implementation-design.md&quot;&gt;实现设计&lt;/a&gt;：模块责任和接口。&lt;/li&gt;
+&lt;li&gt;&lt;a href=&quot;../sources/business-guide.md&quot;&gt;合成业务说明&lt;/a&gt;：净收入、粒度、时间和关联约定。&lt;/li&gt;
+&lt;li&gt;代码对照起点：&lt;code&gt;6801df7&lt;/code&gt;。&lt;/li&gt;
+&lt;li&gt;计算规则：&lt;code&gt;crates/data-agent/src/modules/knowledge/structure.rs&lt;/code&gt;。&lt;/li&gt;
+&lt;li&gt;分析依据与报告：&lt;code&gt;use_cases/analysis_evidence.rs&lt;/code&gt;、&lt;code&gt;analysis_reports.rs&lt;/code&gt;。&lt;/li&gt;
+&lt;li&gt;方法草稿与维护提示：&lt;code&gt;use_cases/skill_drafts.rs&lt;/code&gt;、&lt;code&gt;knowledge_impact.rs&lt;/code&gt;。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/details&gt;
+```
+</textarea>
+<script>
+(() => {
+  const root = document.documentElement;
+  const cycle = (list, cur) => list[(list.indexOf(cur) + 1) % list.length];
+  const label = (btn, value) => {
+    const map = JSON.parse(btn.dataset.labels || '{}');
+    btn.textContent = map[value] || value;
+  };
+  const bind = (name, attr, values) => {
+    const btn = document.querySelector(`[data-am="${name}"]`);
+    if (!btn) return;
+    label(btn, root.getAttribute(attr));
+    btn.addEventListener('click', () => {
+      const next = cycle(values, root.getAttribute(attr));
+      root.setAttribute(attr, next);
+      label(btn, next);
+    });
+  };
+  bind('theme', 'data-theme', ['blueprint', 'shadcn']);
+  bind('mode', 'data-mode', ['auto', 'light', 'dark']);
+
+  const copyBtn = document.querySelector('[data-am="copy"]');
+  copyBtn?.addEventListener('click', async () => {
+    const nodes = document.querySelectorAll('#am-source');
+    const text = nodes[nodes.length - 1]?.value ?? '';
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      const ta = Object.assign(document.createElement('textarea'), { value: text });
+      document.body.append(ta);
+      ta.select();
+      document.execCommand('copy');
+      ta.remove();
+    }
+    const original = copyBtn.textContent;
+    copyBtn.textContent = copyBtn.dataset.done;
+    setTimeout(() => { copyBtn.textContent = original; }, 1400);
+  });
+})();
+</script>
+</body>
+</html>

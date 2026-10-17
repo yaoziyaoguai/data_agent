@@ -1,0 +1,30 @@
+{
+  "schema": 1,
+  "increment_id": "I2-SOURCE-TRUST",
+  "reviewer": "独立只读审查代理source_ingestion_explorer；未参与产品/测试实现",
+  "reviewed_at": "2026-10-13T08:58:08.331187+00:00",
+  "conclusion": "passed",
+  "summary": "来源快照、目录单独改版、事实身份、人工覆盖与文档关联、真实目标版本绑定均符合首增量。独立审查复核UI身份及人工关联丢失修复，并读取15/10/3/13/9组和状态展示收据；范围内无剩余确定阻断。协议替身不代表真实模型业务准确率。",
+  "scope_sha256": "a7e3be12385b5c25630e216726729bc6b9964d7ac1785ffe719f215f6c18e3f4",
+  "findings": [],
+  "resolved_findings": [
+    "人工业务来源上的有效模型建议曾被误标为样例定义；当前有效层优先并有组合回归。",
+    "正文编辑省略related_ids时曾丢人工关联标记；两写入口保留且真实API回归通过。"
+  ],
+  "evidence": [
+    ".local/checks/mvp-knowledge.json",
+    ".local/checks/mvp-prefill-materials.json",
+    ".local/checks/semantic-source-browser/result.json",
+    ".local/checks/mvp-workflow-reliability.json",
+    ".local/checks/conversational-query.json",
+    ".local/product-repairs/semantic-status.json"
+  ],
+  "scope_binding": {
+    "independently_recomputed": true,
+    "input_files": 145,
+    "acceptance_groups": 12
+  },
+  "limitations": [
+    "尚需统一增量执行收据；真实模型调用0；没有证明后续六项能力已经完成。"
+  ]
+}

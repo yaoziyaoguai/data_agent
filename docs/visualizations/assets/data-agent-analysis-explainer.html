@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>改变条件，看 Agent 应该怎样继续</title>
+<style>
+:root{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;color:#172b3a;background:#f5f8fa;color-scheme:light}
+*{box-sizing:border-box}body{margin:0;padding:22px}h2{font-size:21px;line-height:1.4;margin:0 0 8px}p{font-size:14px;line-height:1.75;margin:0 0 16px;color:#42576b}.controls{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin:18px 0}label{display:block;font-size:14px;font-weight:600}select{display:block;width:100%;margin-top:8px;padding:10px 8px;border:1px solid #bacbd6;background:white;border-radius:6px;color:#172b3a;font:inherit;font-size:13px}select:focus-visible,button:focus-visible{outline:3px solid #236a9a;outline-offset:3px}.result{background:white;border:1px solid #bacbd6;border-radius:8px;padding:18px}h3{margin:0 0 14px;font-size:18px;color:#185c80}dl{margin:0;display:grid;grid-template-columns:100px 1fr;gap:12px 16px;line-height:1.7;font-size:14px}dt{font-weight:600}dd{margin:0}button{margin-top:16px;border:1px solid #bacbd6;background:white;color:#172b3a;border-radius:6px;padding:8px 14px;font:inherit;font-size:13px;cursor:pointer}.note{font-size:12px;margin:16px 0 0;color:#596b7a}.result[data-state="clarify"] h3{color:#87550b}.result[data-state="unavailable"] h3{color:#8c4141}@media(max-width:600px){body{padding:16px}.controls{grid-template-columns:1fr;gap:12px}h2{font-size:19px}dl{grid-template-columns:1fr;gap:4px}dd{margin-bottom:10px}.result{padding:15px}}
+</style>
+</head>
+<body>
+<h2>为什么 2 月收入比 1 月低？</h2>
+<p>合成业务示例。改变下面的条件，观察调查、执行和报告的边界。</p>
+<div class="controls">
+<label for="meaning">收入口径<select id="meaning"><option value="known">资料已有明确口径</option><option value="unclear">资料冲突，口径未确定</option></select></label>
+<label for="permission">准备补查的新 SQL<select id="permission"><option value="draft">用户尚未要求执行新稿</option><option value="execute">用户明确要求执行这份新稿</option></select></label>
+<label for="result">已有查询的结果<select id="result"><option value="waiting">尚无成功结果</option><option value="ready">已成功且当前可读取</option><option value="unavailable">结果已过期或读取权已撤回</option></select></label>
+</div>
+<div class="result" id="outcome" data-state="draft" aria-live="polite">
+<h3 id="status">先展示 SQL 和计算口径</h3>
+<dl><dt>Pi 怎么继续</dt><dd id="agent">读取有效口径，准备按月和渠道比较的 SQL。</dd><dt>新查询</dt><dd id="query">草稿可以展示。用户尚未要求执行新稿，此时不提交新查询。</dd><dt>分析成果</dt><dd id="report">还没有结果。先说明计划，数据结论等待成功查询。</dd></dl>
+</div>
+<button type="button" id="reset">恢复示例条件</button>
+<p class="note">这是机制演示，不调用模型或执行 SQL。Pi 自主决定调查路径。实际提交还须通过权限、只读、条件和版本校验。已有结果与新查询的授权分别判断。</p>
+<script>
+const meaning=document.getElementById('meaning');
+const permission=document.getElementById('permission');
+const result=document.getElementById('result');
+function update(){
+ let state,status,agent,query,report;
+ if(meaning.value==='unclear'){
+  state='clarify';status='先补查，关键口径仍不清楚时提问';
+  agent='查阅冲突资料。若仍不能确定收入口径，在聊天里询问，并保存待回答问题。';
+  query='当前条件还没确定。执行意图不能替代口径确认。用户回答后，先修订条件与 SQL。';
+  report='已有旧结果不能说明当前未确定的口径。先记录已知事实和资料缺口。';
+ }else{
+  agent='采用当前有效口径。结合可读结果，决定是否补查渠道贡献或退款影响。';
+  query=permission.value==='execute'?'用户明确要求执行这份新稿。Rust 核对消息、条件、SQL 版本和权限后，查询在后台运行。':'可以展示补查的新 SQL。用户尚未要求执行新稿，此时不提交新查询。';
+  if(result.value==='ready'){
+   state='evidence';status='用可读取结果保存有来源的分析';
+   report='可采用对应条件的成功结果，保存结论与依据。需要留下成果时，再整理图表报告。渠道贡献可核算；业务因果仍需要更多证据。';
+  }else if(result.value==='unavailable'){
+   state='unavailable';status='保留失效状态，重新核对来源';
+   report='报告不回放失效正文或图表。重新取数先准备新草稿，再绑定有效的聊天执行授权。';
+  }else{
+   state=permission.value==='execute'?'running':'draft';
+   status=permission.value==='execute'?'查询可在后台运行，聊天继续':'先展示 SQL 和计算口径';
+   report='还没有成功结果。先说明调查计划，数据结论等待成功查询。';
+  }
+ }
+ document.getElementById('outcome').dataset.state=state;
+ for(const [id,text] of Object.entries({status,agent,query,report}))document.getElementById(id).textContent=text;
+}
+for(const control of [meaning,permission,result])control.addEventListener('change',update);
+document.getElementById('reset').addEventListener('click',()=>{meaning.value='known';permission.value='draft';result.value='waiting';update()});
+update();
+</script>
+</body>
+</html>

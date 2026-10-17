@@ -1,0 +1,41 @@
+{
+  "schema": 1,
+  "increment_id": "I2-CONTEXT-RETRIEVAL",
+  "reviewer": "独立只读审查代理context_scope_review；未参与增量3源码或测试实现",
+  "reviewed_at": "2026-10-13T11:10:21.011934+00:00",
+  "conclusion": "passed",
+  "summary": "按执行包§5独立核对范围表达、当前有效层与来源、候选上限前过滤、回源隔离、相关片段/补读、24KiB完整回执及个人资产游标。已复核scope11组、excerpts5组及其严格Rust入口、纯71项、307跨语言契约、架构/锁、coverage2组和Pi大上下文2组，范围内无剩余确定阻断。最大完整ToolOutput为23603字节；模型/向量/Mem0均为本地协议替身，真实调用0。",
+  "scope_sha256": "b697f75feb6f1620425ae15aa4ad2c46ffe08c8f047480e40e880e76e0858adc",
+  "findings": [],
+  "resolved_findings": [
+    "范围曾在原始结构上匹配，随后才清除失效依赖；现于排序及关联补充前统一核验结构，再判断范围，并用表改版/新run反例验证。",
+    "合法81–120字符业务域曾被回执元数据截断；现完整保留已应用search_scope，120字符域反例通过。",
+    "Mem0首屏候选曾挤掉目录页资产而推进原游标；现保全原页并追加有界去重候选，真实内部工具分页反例覆盖全页及续页。",
+    "新工具投影曾丢失大结构的显式表依赖；现保留已核验structure_dependencies，实际agent_runs采用清单与改版后model/issue拒绝stale_context均通过。",
+    "MySQL相关JSON_TABLE EXISTS在实际全表查询中漏失域对象；独立隔离诊断比较原结果0与标量子查询结果1，现显式限定外层别名及COUNT子查询，1000异域前置反例通过。",
+    "SearchCoverage曾未声明scope_applied；现同源布尔契约、生成类型及HTTP旧回归匹配。",
+    "晚到旧向量的既有断言曾禁止独立当前词法定位；现以PATCH前独立currentBody字面量核对当前版片段，仍拒绝旧规则、损坏位置及未经授权对象。"
+  ],
+  "evidence": [
+    ".local/checks/retrieval-scope.json",
+    ".local/checks/retrieval-excerpts.json",
+    ".local/checks/mvp-retrieval-coverage.json",
+    ".local/checks/large-tool-context-execution.log",
+    ".local/checks/context-retrieval-unit.log",
+    ".local/checks/context-retrieval-code.log",
+    ".local/checks/context-retrieval-build.log",
+    ".local/checks/context-retrieval-fixture.log",
+    ".local/checks/context-retrieval-materials.log",
+    ".local/checks/scoped-mysql-diagnosis.json"
+  ],
+  "scope_binding": {
+    "independently_recomputed": true,
+    "input_files": 67,
+    "acceptance_groups": 8
+  },
+  "limitations": [
+    "统一8组增量执行收据尚待root运行；本记录不将静态检查或局部协议结果当作整个第二版完成。",
+    "向量关联/业务域仍在回源核验，候选覆盖有界；跨空间合成检查不代表真实Datasight逐表ACL或真实模型召回准确率。",
+    "实际SQL和工具验证使用隔离合成环境；没有新增真实模型、embedding或Mem0服务调用。"
+  ]
+}

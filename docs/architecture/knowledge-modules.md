@@ -590,3 +590,9 @@ M03的事实提取与单次模型适配器位于`modules/ingestion/prefill.rs`�
 ### 会话 Skill 的选用与移除
 
 M09 沿用选择记录的 ID 作为 `selection_id`，每次新的明确选用产生新选择身份。列表返回该身份及 `change_blocked`。移除使用 `operation_id + asset_id + selection_id`；同操作重传接回回执，旧选择不能删除后来的重新选用。选择和移除都在会话锁下检查未处理输入与当前运行：M05 的 `has_pending_input_in_tx` 判断仍为 pending 的输入，包括可恢复中断；有效运行租约也继续阻止变化。交付已明确耗尽、输入和工作已终态 failed 且无有效运行权时，历史失败不再永久阻止变更；不修改其他流程使用的 `pending_ids_in_tx` 语义。独立后台 SQL 本身不阻塞。移除仅作用于本会话选择，保留个人或公共资产、其他会话、已授权查询和原预算。新一轮沿现有权限与上下文有效性检查，通过 Pi 会话接口清除失效采用内容。
+
+### 查询案例与方法复用
+
+M02的`query_example`复用独立知识对象、人工层、版本与负责人规则。依赖及核对记录均使用完整`EvidenceRef`；指标与文档的path不能强改为表DDL。案例摘要只定位，采用前补读正式结构并回源。M09的待确认方法草稿独立存放，用户明确保存后才进入现有个人原生Skill；不进入Mem0，不自动发布或选用。
+
+维护反查由M02的`find_dependents_in_tx`及M09的`find_skill_dependents_in_tx`分别读取各自私有存储，`knowledge_impact::read`组合。它按稳定对象ID保留旧版及停用直接引用，先过滤私人可见性再分页，不做传递遍历、不授予维护权。方法草稿生命周期、同源API及删除边界见[实现设计第15节](implementation-design.md#15-查询案例个人方法草稿与维护影响2026-10-14)。实现验证与缺口只记录在CURRENT。

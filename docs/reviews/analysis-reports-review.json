@@ -1,0 +1,47 @@
+{
+  "schema": 1,
+  "increment_id": "I2-ANALYSIS-REPORTS",
+  "reviewer": "独立只读审查代理context_scope_review；未参与增量6源码、界面或测试实现",
+  "reviewed_at": "2026-10-13T15:36:37.727591+00:00",
+  "conclusion": "passed",
+  "summary": "按执行包§8独立核对本人任务报告、不可变修订、HTTP/Pi共用规则、来源失效和绘图范围。M06仅组装已保存轻量依据，M07按权限回读完整有界保存结果，网络在事务外，最终事务重核条件、报告版本和来源。最新API12组与浏览器6组完整通过；真实并发一成功一version_conflict、旧修订不变。丢失旧上下文且选中依据不在最近5项时，受控读取当前HTTP修订及同版正文页，仅改标题保全选择。406跨语言契约、工程/模块/隔离锁及有界正文页检查通过，桌面和390px截图已查看。无新Agent循环、权限扩展、公共分享或BI编辑器，范围内无剩余确定阻断；最后复合排序修复及3项纯测试已复核：ORDER BY必须绑定实际投影表达式，星号展开不猜位置。原9组完整通过且输入稳定的收据和审查保留；当前54文件/10组范围已重新绑定，统一10组仍待root执行。",
+  "scope_sha256": "606dabf806d13e946aec4610f41921c2aa7fc0ab967f02a818ae8df9f98c3bbf",
+  "findings": [],
+  "resolved_findings": [
+    "报告原仅汇总validated_sources，漏掉不可变依据conditions.knowledge_refs；现条件引用与结论引用去重并入同一来源核验。真实条件-only文档反例正常保存，停用后读仅状态，新POST拒绝，没有篡改已存正文制造测试。",
+    "平台按已返回行推列类型，空结果和保留精度的金额文本可能声明为text；现度量核实际保存的规范十进制单元格，任意文本仍拒绝。空/全NULL不猜为零，精确小数不转浮点；205点、1000截断、空结果和大金额均有实际API证据。",
+    "Pi原只知report_ref和最近5项依据，压缩/重建或HTTP修订后无法保全报告选择；现薄read_analysis_report共用身份、条件和来源规则，给真实标题/选中依据/图表及不超过23KiB的正文页，为封套留余量。后续offset强制version，改版拒绝旧页，实际采用登记原上下文清单。空SDK检查点且原选中依据已不在最近5项的续改反例通过，没有新增查询或启动全文。",
+    "报告版本验证原只覆盖顺序旧版本冲突；已补两个不同操作并发使用同expected_version，必须一成功一冲突，head仅增一版、修订数准确、第一版正文完全不变。最新API12组已实际执行该断言。",
+    "首报告夹具把100行第一页误当205行完整结果；按现有next_cursor/fetched_offset逐页补读，原SQL、205行、1000截断和精确数值预期保持。",
+    "一次Tab必留在dialog的测试预期与独立原生Chromium showModal基线不符；现仅允许BODY且document.hasFocus=false的浏览器工具栏中转，modal须保持，下一同向Tab必须回dialog，背景控件仍禁止获焦。Escape、返回焦点和阅读位置断言保持，没有增加手写焦点框架。",
+    "复合ORDER BY原只核最后列名，把ORDER BY b.month误判为已输出a.month的顺序；独立SQLite反例证明输出顺序不一致。现按实际维度位置要求投影Expr AST等于排序Expr，仅简单SELECT可核，遇星号或带星号的混合投影拒绝猜位置。相同来源通过、同名不同来源拒绝、两类星号拒绝均由最新3项完整cargo测试验证；没有增加语义编译器。"
+  ],
+  "evidence": [
+    ".local/checks/analysis-reports.json",
+    ".local/checks/analysis-reports-run.log",
+    ".local/checks/analysis-reports-browser/result.json",
+    ".local/checks/analysis-reports-browser/desktop.png",
+    ".local/checks/analysis-reports-browser/mobile.png",
+    ".local/checks/analysis-reports-native-dialog.json",
+    ".local/checks/report-read-code.log",
+    ".local/checks/report-final-build.log",
+    ".local/checks/report-pages.log",
+    ".local/checks/report-chart-rust-final.log",
+    ".local/checks/report-final-materials.log",
+    ".local/checks/report-qualified-order-final.log",
+    ".local/checks/report-before-ordering-result.json",
+    ".local/checks/report-before-ordering-review.json"
+  ],
+  "scope_binding": {
+    "independently_recomputed": true,
+    "input_files": 54,
+    "acceptance_groups": 10
+  },
+  "limitations": [
+    "当前统一10组增量执行收据尚待root运行，其中既有依据/执行与当前17工具provider回归将由统一检查验证。原9组收据绑定修复前范围，不能作为新源码10组已经通过的证据。本记录不宣布整个第二版或经验复用增量完成。",
+    "报告API与工具验证使用真实Rust/MySQL、合成SQLite和原生SessionManager空检查点；没有把手动受控工具流程称为真实模型自主生成、续改报告或理解图表的准确率。",
+    "浏览器使用真实成功响应，延迟GET及focus事件为受控触发。权限和来源在读取、唤醒及条件变更边界核验，不证明平台撤权与本地事务原子化，也不保证已打开页面得到实时平台撤权推送。",
+    "图表与文本引用有效不证明业务因果或自然语言结论正确；可用性证据仅覆盖实际桌面/390px与这些合成结果，不代表所有数据规模的性能。",
+    "新增能力没有官方模型、embedding、Mem0付费请求，没有真实Datasight ACL、召回或模型准确率证据。"
+  ]
+}

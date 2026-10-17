@@ -4,119 +4,313 @@
   "schema": 1,
   "phase": "implement",
   "status": "complete",
-  "goal_revision": 47,
-  "environment": "macOS arm64 / Node 26.8.1 / npm 11.19.0 / Rust 1.99.0 / Python 3.14.7 / SQLite 3.53.4 / Colima 0.10.1 / Docker Engine 29.2.1 / Compose 5.3.1 / MySQL 8.4.11 / Milvus 3.0.2",
+  "goal_revision": 56,
+  "environment": "Node26.8.1/npm11.19.0、Rust1.99.0、Python3.14.7/SQLite；Colima MySQL/Milvus；仅隔离数据库与本地协议替身。",
   "verification": {
     "level": "targeted",
-    "reason": "补齐记忆来源原文的受控分页读取，将启动记忆从system分离到Pi context投影，并在成功修订/停用后撤下旧候选。验证来源、同轮更新、会话恢复、原生压缩与宿主权限，不重新运行真实质量测量。",
+    "reason": "I2-KNOWLEDGE-REUSE：查询案例/私人方法草稿/直接维护影响；真实本地宿主与合成材料，不官方模型调用。",
     "freshness": "content",
     "inputs": [
-      "apps/agent",
-      "crates/data-agent/src/modules/retrieval",
       "packages/contracts",
-      "tests/mvp/check-memory-context.mjs",
-      "tests/mvp/check-asset-directory.mjs"
+      "tests/contracts",
+      "crates/data-agent/src/bin/validate_contracts.rs",
+      "crates/data-agent/src/modules/knowledge",
+      "crates/data-agent/src/modules/assets",
+      "crates/data-agent/src/modules/retrieval",
+      "crates/data-agent/src/search_scope.rs",
+      "crates/data-agent/src/use_cases/knowledge.rs",
+      "crates/data-agent/src/use_cases/knowledge_impact.rs",
+      "crates/data-agent/src/use_cases/skill_drafts.rs",
+      "crates/data-agent/src/use_cases/personal_assets.rs",
+      "crates/data-agent/src/use_cases/conversation_lifecycle.rs",
+      "crates/data-agent/src/use_cases/mod.rs",
+      "crates/data-agent/src/use_cases/data_tools.rs",
+      "apps/api/src/main.rs",
+      "apps/api/src/data_routes.rs",
+      "apps/api/src/skill_draft_routes.rs",
+      "apps/api/src/knowledge_impact_routes.rs",
+      "apps/agent/tools/data-tools.ts",
+      "apps/agent/session/resources.ts",
+      "apps/agent/provider/deepseek.ts",
+      "apps/web/src/features/knowledge",
+      "apps/web/src/features/assets",
+      "apps/web/src/shared/knowledge-labels.ts",
+      "migrations/202610130003_skill_drafts.sql",
+      "scripts/check_architecture.py",
+      "tests/mvp/check-knowledge-reuse.mjs",
+      "tests/mvp/check-knowledge-reuse-browser.mjs",
+      "tests/mvp/check-data-provider.mjs",
+      "tests/mvp/check-native-skills.mjs",
+      "tests/mvp/check-shared-skills.mjs",
+      "tests/mvp/check-memory-revisions.mjs",
+      "tests/mvp/check-semantic-governance.mjs",
+      "docs/analysis-capabilities-execution.md",
+      "docs/semantic-retrieval-design.md",
+      "docs/architecture/implementation-design.md",
+      "docs/architecture/knowledge-modules.md",
+      "README.md",
+      "tests/mvp/harness.mjs",
+      "tests/mvp/skill-fixtures.mjs",
+      "tests/mvp/experience-navigation.mjs",
+      "apps/agent/session/checkpoint.ts",
+      "apps/agent/session/skills.ts",
+      "apps/agent/session/deliver.ts",
+      "apps/agent/transport/client.ts",
+      "apps/agent/transport/server.ts",
+      "scripts/check_delivery.py",
+      "crates/data-agent/src/use_cases/context_authority.rs",
+      "tests/mvp/check-context-dependencies.mjs",
+      "tests/mvp/check-semantic-rules.mjs"
     ],
-    "checks": [
-      {
-        "command": "make verify-increment",
-        "status": "passed",
-        "evidence": ".local/delivery/I2-MEMORY-CONTEXT-result.json",
-        "scope": "11组本轮声明验收全部退出0、无超时，执行前后指纹一致；真实Pi/Rust/MySQL与本地替身，官方请求0。"
-      },
-      {
-        "command": "make verify-materials",
-        "status": "passed",
-        "evidence": ".local/memory-context-repair/materials.log",
-        "scope": "335项材料静态检查，不替代业务或模型质量验收。"
-      },
-      {
-        "command": "node docs/architecture/render-c4.cjs",
-        "status": "passed",
-        "evidence": "docs/architecture/diagram-checks.json",
-        "scope": "既有11组件19关系，5个导出视图issues为空；实际记忆图已打开核对。"
-      }
-    ]
+    "checks": []
   },
   "delivery": {
     "schema": 1,
     "registry": "docs/semantic-retrieval-design.md",
     "increment": {
-      "id": "I2-MEMORY-CONTEXT",
+      "id": "I2-KNOWLEDGE-REUSE",
       "phase": "I2",
       "status": "complete",
-      "goal": "保留Mem0提取与Rust正式资产管理，补齐模型端来源原文读取；通过Pi原生context投影本轮有效记忆，成功变更后不重复注入旧版本，并同步架构。",
+      "goal": "把查询案例保存为正式知识、分析方法先准备本人待确认原生Skill草稿，并显示现有显式依赖的直接维护影响。",
       "requirements": [
+        "D01",
         "D10",
         "D11",
-        "C05",
-        "C07"
+        "D12",
+        "D13",
+        "C02",
+        "A08"
       ],
       "modules": [
+        "M01",
+        "M02",
         "M04",
+        "M05",
+        "M06",
         "M08",
         "M09",
-        "M11"
+        "M11",
+        "M12"
       ],
       "allowed_paths": [
-        "apps/agent/session",
-        "apps/agent/tools/data-tools.ts",
-        "crates/data-agent/src/modules/retrieval/mod.rs",
         "packages/contracts",
-        "tests/contracts/cases.json",
-        "tests/mvp/check-memory-context.mjs",
-        "tests/mvp/check-asset-directory.mjs",
-        "tests/mvp/check-native-compaction.mjs",
-        "docs/CURRENT.md",
+        "tests/contracts",
+        "crates/data-agent/src/bin/validate_contracts.rs",
+        "crates/data-agent/src/modules/knowledge",
+        "crates/data-agent/src/modules/assets",
+        "crates/data-agent/src/modules/retrieval",
+        "crates/data-agent/src/search_scope.rs",
+        "crates/data-agent/src/use_cases/knowledge.rs",
+        "crates/data-agent/src/use_cases/knowledge_impact.rs",
+        "crates/data-agent/src/use_cases/skill_drafts.rs",
+        "crates/data-agent/src/use_cases/personal_assets.rs",
+        "crates/data-agent/src/use_cases/conversation_lifecycle.rs",
+        "crates/data-agent/src/use_cases/mod.rs",
+        "crates/data-agent/src/use_cases/data_tools.rs",
+        "apps/api/src/main.rs",
+        "apps/api/src/data_routes.rs",
+        "apps/api/src/skill_draft_routes.rs",
+        "apps/api/src/knowledge_impact_routes.rs",
+        "apps/agent/tools/data-tools.ts",
+        "apps/agent/session/resources.ts",
+        "apps/agent/provider/deepseek.ts",
+        "apps/web/src/features/knowledge",
+        "apps/web/src/features/assets",
+        "apps/web/src/shared/knowledge-labels.ts",
+        "migrations/202610130003_skill_drafts.sql",
+        "scripts/check_architecture.py",
+        "tests/mvp/check-knowledge-reuse.mjs",
+        "tests/mvp/check-knowledge-reuse-browser.mjs",
+        "tests/mvp/check-data-provider.mjs",
+        "tests/mvp/check-native-skills.mjs",
+        "tests/mvp/check-shared-skills.mjs",
+        "tests/mvp/check-memory-revisions.mjs",
+        "tests/mvp/check-semantic-governance.mjs",
+        "docs/analysis-capabilities-execution.md",
         "docs/semantic-retrieval-design.md",
-        "docs/architecture",
-        "docs/reviews/memory-context-review.json"
+        "docs/architecture/implementation-design.md",
+        "docs/architecture/knowledge-modules.md",
+        "README.md",
+        "docs/CURRENT.md",
+        "docs/reviews/knowledge-reuse-review.json",
+        "crates/data-agent/src/use_cases/context_authority.rs",
+        "tests/mvp/check-context-dependencies.mjs",
+        "tests/mvp/check-semantic-rules.mjs"
       ],
       "non_goals": [
-        "不更换Mem0提取策略或新增语义等价判定器、偏好分类器、审批流程；不重写召回算法或Agent循环。",
-        "不修复本轮之外的质量题，不重新运行16题、不新增真实付费调用；不更新公开文章、不提交推送或部署。"
+        "不新建案例服务/关系图谱/记忆框架，不更换Pi/Mem0，不自动公开私聊或自动选Skill。",
+        "不扩展SQL授权、不做同步区，不官方付费调用，不提交推送或更新常驻服务。"
       ],
       "invariants": [
-        "MySQL仍为正式正文/范围/来源/版本真源，Mem0提供候选与索引；来源读取沿原受控read_knowledge核对归属、有效版本与依赖。",
-        "Pi原生context仅投影非持久参考资料，custom在模型端为user角色，不授予执行权；不触发自动发现、额外检索或第二Agent循环。",
-        "本轮启动快照按运行隔离；成功记忆变更撤下对应旧候选，当前内容以成功工具回执为准，失败不清除候选。原工具历史与原生压缩保留。",
-        "reserve/send的Rust权限、预算、失效及恢复检查保持；新输入遇旧依赖重建，同输入失效仍拒绝，不能靠context异常作为权限门禁。"
+        "M02拥有公共查询案例及结构依赖；有资格者明确创建，沿首次人工创建者负责人规则。",
+        "M09拥有本人待确认Skill草稿，确认前不在资产目录/索引/已选资源中；公开发布和选用继续独立明确动作。",
+        "真实来源消息、本人/空间、来源条件/引用、稳定操作ID与幂等均由宿主核验，删除会话清待确认私人内容。",
+        "M02/M09各查自己的直接显式引用，use_cases组合；保留旧版本与停用依赖，SQL前置过滤他人私有Skill，不传播维护权。"
       ],
       "acceptance": [
         {
-          "id": "MEM-CODE",
+          "id": "REUSE-BUILD",
           "requirements": [
-            "C07"
+            "C02"
           ],
-          "expected": "Rust格式/静态检查、TypeScript与Web构建通过。",
+          "expected": "API/Pi/Web同源契约与当前源码可构建。",
           "evidence_kind": "contract",
           "command": [
             "make",
-            "verify-code"
-          ],
-          "timeout_seconds": 240
-        },
-        {
-          "id": "MEM-CONTRACT",
-          "requirements": [
-            "C07"
-          ],
-          "expected": "同源契约保留兼容字段，source_page正反例与全部跨语言契约通过；构建当前API/Worker。",
-          "evidence_kind": "contract",
-          "command": [
-            "make",
-            "verify-contracts",
             "build"
           ],
-          "timeout_seconds": 360
+          "timeout_seconds": 480
         },
         {
-          "id": "MEM-SOURCE-PAGE",
+          "id": "REUSE-WORKFLOW",
+          "requirements": [
+            "D01",
+            "D10",
+            "D11",
+            "D12",
+            "D13",
+            "A08"
+          ],
+          "expected": "有资格人工创建查询案例、完整依赖及失效；本人待确认Skill草稿与确认/删除/幂等；直接维护影响保留旧版及停用且私有范围隔离。",
+          "evidence_kind": "runtime",
+          "command": [
+            "node",
+            "tests/mvp/check-knowledge-reuse.mjs"
+          ],
+          "timeout_seconds": 300
+        },
+        {
+          "id": "REUSE-BROWSER",
+          "requirements": [
+            "D13"
+          ],
+          "expected": "案例录入/编辑、私人方法草稿确认和直接影响提示可在真实页面使用，窄屏与返回、失败重试、迟到响应隔离。",
+          "evidence_kind": "runtime",
+          "command": [
+            "node",
+            "tests/mvp/check-knowledge-reuse-browser.mjs"
+          ],
+          "timeout_seconds": 300
+        },
+        {
+          "id": "REUSE-NATIVE",
+          "requirements": [
+            "D12"
+          ],
+          "expected": "Skill仍为Pi原生读取、需明确选择；新草稿不加入已选目录。",
+          "evidence_kind": "runtime",
+          "command": [
+            "node",
+            "tests/mvp/check-native-skills.mjs"
+          ],
+          "timeout_seconds": 300
+        },
+        {
+          "id": "REUSE-SHARED",
+          "requirements": [
+            "D11",
+            "D12"
+          ],
+          "expected": "公共Skill为独立明确发布副本，角色不扩大他人私人读取。",
+          "evidence_kind": "runtime",
+          "command": [
+            "node",
+            "tests/mvp/check-shared-skills.mjs"
+          ],
+          "timeout_seconds": 300
+        },
+        {
+          "id": "REUSE-MEMORY",
           "requirements": [
             "D10"
           ],
-          "expected": "缺省不外发完整原话但标注来源分页；按source_text连续读取可重建含尾部例外的原文，正文与范围分页保持。",
+          "expected": "记忆仍用原Mem0接缝，个人纠错可修订/停用，临时条件不长期化。",
+          "evidence_kind": "runtime",
+          "command": [
+            "node",
+            "tests/mvp/check-memory-revisions.mjs"
+          ],
+          "timeout_seconds": 300
+        },
+        {
+          "id": "REUSE-GOVERNANCE",
+          "requirements": [
+            "D01",
+            "D11",
+            "A08"
+          ],
+          "expected": "对象负责人/表维护者和建议接受后明确编辑规则保留。",
+          "evidence_kind": "runtime",
+          "command": [
+            "node",
+            "tests/mvp/check-semantic-governance.mjs"
+          ],
+          "timeout_seconds": 300
+        },
+        {
+          "id": "REUSE-PROVIDER",
+          "requirements": [
+            "C02",
+            "D12"
+          ],
+          "expected": "完整同源工具经Pi送本地受控provider，不另造Agent循环。",
+          "evidence_kind": "runtime",
+          "command": [
+            "node",
+            "tests/mvp/check-data-provider.mjs"
+          ],
+          "timeout_seconds": 300
+        },
+        {
+          "id": "REUSE-CODE",
+          "requirements": [
+            "C02"
+          ],
+          "expected": "类型、同源契约与模块私有存储/锁方向符合既定要求。",
           "evidence_kind": "contract",
+          "command": [
+            "make",
+            "verify-code",
+            "verify-contracts",
+            "verify-architecture"
+          ],
+          "timeout_seconds": 480
+        },
+        {
+          "id": "REUSE-CONTEXT",
+          "requirements": [
+            "C02"
+          ],
+          "expected": "上下文按实际交付的依赖保留版本/撤权/恢复保护；不使用已撤下的旧结构阻止补查。",
+          "evidence_kind": "runtime",
+          "command": [
+            "node",
+            "tests/mvp/check-context-dependencies.mjs"
+          ],
+          "timeout_seconds": 300
+        },
+        {
+          "id": "REUSE-RULES",
+          "requirements": [
+            "C02",
+            "D01"
+          ],
+          "expected": "语义结构、SQL诊断与实际读取依赖在上下文格式4下保留原规则，失效规则不采用。",
+          "evidence_kind": "runtime",
+          "command": [
+            "node",
+            "tests/mvp/check-semantic-rules.mjs"
+          ],
+          "timeout_seconds": 300
+        },
+        {
+          "id": "REUSE-PROJECTION",
+          "requirements": [
+            "C02",
+            "D11"
+          ],
+          "expected": "计算结构投影不改变没有entries的私人建议记录；原Proposal响应契约保持有效。",
+          "evidence_kind": "runtime",
           "command": [
             "cargo",
             "test",
@@ -124,160 +318,68 @@
             "--locked",
             "-p",
             "data-agent",
-            "--lib",
-            "modules::retrieval::semantic_context_tests"
+            "proposal_listing_preserves_records_without_entries"
           ],
-          "timeout_seconds": 240
-        },
-        {
-          "id": "MEM-SOURCE-ACCESS",
-          "requirements": [
-            "D10",
-            "D11"
-          ],
-          "expected": "受控工具读取来源原文，保留长资产目录和正文分页；跨用户、停用和旧版本来源不能读取。",
-          "evidence_kind": "runtime",
-          "command": [
-            "node",
-            "tests/mvp/check-asset-directory.mjs"
-          ],
-          "timeout_seconds": 240
-        },
-        {
-          "id": "MEM-PI-CONTEXT",
-          "requirements": [
-            "D10",
-            "D11",
-            "C05"
-          ],
-          "expected": "实际Pi模型输入中记忆仅为一份当前参考，system无记忆正文；成功修订/停用撤旧、拒绝保留、恢复与空快照不沿用旧投影，参考不写入JSONL。",
-          "evidence_kind": "runtime",
-          "command": [
-            "node",
-            "tests/mvp/check-memory-context.mjs"
-          ],
-          "timeout_seconds": 240
-        },
-        {
-          "id": "MEM-PROVIDER",
-          "requirements": [
-            "D11"
-          ],
-          "expected": "现有Mem0侧车替身与真实Rust/MySQL流程保持：提取/重放、回源排序、索引、隔离及预算通过，Python技术回执测试通过。",
-          "evidence_kind": "runtime",
-          "command": [
-            "make",
-            "verify-memory"
-          ],
-          "timeout_seconds": 360
-        },
-        {
-          "id": "MEM-REVISIONS",
-          "requirements": [
-            "D10",
-            "C05"
-          ],
-          "expected": "来源边界、修订/停用、原操作重放及失效检查点拒绝保持。",
-          "evidence_kind": "runtime",
-          "command": [
-            "make",
-            "verify-memory-scope"
-          ],
-          "timeout_seconds": 240
-        },
-        {
-          "id": "MEM-AUTHORITY",
-          "requirements": [
-            "D10",
-            "C05"
-          ],
-          "expected": "知识/个人资产失效后当前运行和恢复仍拒绝发送失效资料。",
-          "evidence_kind": "runtime",
-          "command": [
-            "node",
-            "tests/mvp/check-authority.mjs"
-          ],
-          "timeout_seconds": 240
-        },
-        {
-          "id": "MEM-COMPACTION",
-          "requirements": [
-            "C05"
-          ],
-          "expected": "Pi原生摘要不收临时记忆投影，摘要后普通请求重新注入当前快照；持久依赖、会话身份与原预算仍有效。",
-          "evidence_kind": "runtime",
-          "command": [
-            "node",
-            "tests/mvp/check-native-compaction.mjs"
-          ],
-          "timeout_seconds": 240
-        },
-        {
-          "id": "MEM-RECOVERY",
-          "requirements": [
-            "C05"
-          ],
-          "expected": "旧已登记调用原身份恢复、确定回执接回、未知不误称未执行，既有恢复回归通过。",
-          "evidence_kind": "runtime",
-          "command": [
-            "node",
-            "tests/mvp/check-recovery-continuation.mjs"
-          ],
-          "timeout_seconds": 240
-        },
-        {
-          "id": "MEM-SKILLS",
-          "requirements": [
-            "C07"
-          ],
-          "expected": "自定义ResourceLoader保留Pi原生Skill目录、受控read、恢复、状态和版本拒绝，不发现主机资源。",
-          "evidence_kind": "runtime",
-          "command": [
-            "node",
-            "tests/mvp/check-native-skills.mjs"
-          ],
-          "timeout_seconds": 300
+          "timeout_seconds": 120
         }
       ],
       "verification_inputs": [
-        "AGENTS.md",
+        "packages/contracts",
+        "tests/contracts",
+        "crates/data-agent/src/bin/validate_contracts.rs",
+        "crates/data-agent/src/modules/knowledge",
+        "crates/data-agent/src/modules/assets",
+        "crates/data-agent/src/modules/retrieval",
+        "crates/data-agent/src/search_scope.rs",
+        "crates/data-agent/src/use_cases/knowledge.rs",
+        "crates/data-agent/src/use_cases/knowledge_impact.rs",
+        "crates/data-agent/src/use_cases/skill_drafts.rs",
+        "crates/data-agent/src/use_cases/personal_assets.rs",
+        "crates/data-agent/src/use_cases/conversation_lifecycle.rs",
+        "crates/data-agent/src/use_cases/mod.rs",
+        "crates/data-agent/src/use_cases/data_tools.rs",
+        "apps/api/src/main.rs",
+        "apps/api/src/data_routes.rs",
+        "apps/api/src/skill_draft_routes.rs",
+        "apps/api/src/knowledge_impact_routes.rs",
+        "apps/agent/tools/data-tools.ts",
+        "apps/agent/session/resources.ts",
+        "apps/agent/provider/deepseek.ts",
+        "apps/web/src/features/knowledge",
+        "apps/web/src/features/assets",
+        "apps/web/src/shared/knowledge-labels.ts",
+        "migrations/202610130003_skill_drafts.sql",
+        "scripts/check_architecture.py",
+        "tests/mvp/check-knowledge-reuse.mjs",
+        "tests/mvp/check-knowledge-reuse-browser.mjs",
+        "tests/mvp/check-data-provider.mjs",
+        "tests/mvp/check-native-skills.mjs",
+        "tests/mvp/check-shared-skills.mjs",
+        "tests/mvp/check-memory-revisions.mjs",
+        "tests/mvp/check-semantic-governance.mjs",
+        "docs/analysis-capabilities-execution.md",
         "docs/semantic-retrieval-design.md",
         "docs/architecture/implementation-design.md",
-        "docs/architecture/README.md",
-        "docs/architecture/render-c4.cjs",
-        "docs/architecture/data-agent-memory.svg",
-        "apps/agent",
-        "apps/memory",
-        "crates/data-agent",
-        "packages/contracts",
-        "migrations",
-        "tests/contracts",
-        "tests/memory",
-        "tests/mvp/check-memory-context.mjs",
-        "tests/mvp/check-asset-directory.mjs",
-        "tests/mvp/check-native-compaction.mjs",
-        "tests/mvp/check-memory-provider.mjs",
-        "tests/mvp/check-memory-revisions.mjs",
-        "tests/mvp/check-authority.mjs",
-        "tests/mvp/check-recovery-continuation.mjs",
-        "tests/mvp/check-native-skills.mjs",
-        "tests/mvp/skill-runtime-boundaries.mjs",
-        "tests/mvp/skill-fixtures.mjs",
+        "docs/architecture/knowledge-modules.md",
+        "README.md",
         "tests/mvp/harness.mjs",
-        "Makefile",
-        "package.json",
-        "package-lock.json",
-        "Cargo.toml",
-        "Cargo.lock",
-        "tsconfig.json",
-        "rust-toolchain.toml",
-        ".cargo"
+        "tests/mvp/skill-fixtures.mjs",
+        "tests/mvp/experience-navigation.mjs",
+        "apps/agent/session/checkpoint.ts",
+        "apps/agent/session/skills.ts",
+        "apps/agent/session/deliver.ts",
+        "apps/agent/transport/client.ts",
+        "apps/agent/transport/server.ts",
+        "scripts/check_delivery.py",
+        "crates/data-agent/src/use_cases/context_authority.rs",
+        "tests/mvp/check-context-dependencies.mjs",
+        "tests/mvp/check-semantic-rules.mjs"
       ],
       "review": {
         "status": "passed",
-        "record": "docs/reviews/memory-context-review.json"
+        "record": "docs/reviews/knowledge-reuse-review.json"
       },
-      "evidence": ".local/delivery/I2-MEMORY-CONTEXT-result.json"
+      "evidence": ".local/delivery/I2-KNOWLEDGE-REUSE-result.json"
     }
   }
 }
@@ -285,9 +387,139 @@
 
 # Data Agent 当前记录
 
-更新：2026-10-13。唯一活动项目目录：`~/work_space/data_agent`。
+更新：2026-10-17。唯一活动项目目录：`~/work_space/data_agent`。
 
-## 当前交付：代码合入主分支（2026-10-13）
+## 本次 Git 交付与本地启动（2026-10-17）
+
+- 用户明确授权分析未提交内容、分批提交并推送、保持 Git 工作区干净，然后启动本地服务；本次授权替代上一轮实施阶段“不提交推送或更新常驻服务”的限制。目标分支为 `codex/analysis-capabilities`，沿用当前工作副本。
+- 原有 142 个变更文件按依赖分为合成来源/分析样例 21 个、Agent/后端与业务测试 84 个、前端与浏览器测试 21 个、设计/审查/交付文档 16 个。前三批已分别提交为 `c209277`、`1d509ec`、`f28c017`；源码、契约和测试内容与本轮开始快照一致。
+- 材料检查 353 项、交付检查器 16 项、原样例 29 项、多月份分析样例 16 项、平台来源 19 项及目录生成 9 项均通过。原知识复用增量收据及独立审查与当前内容一致；本次首次复验前 11 组通过，最后一组因当前 shell 的 PATH 缺少 Cargo 而无法启动，未当作通过。失败原件保留在 `.local/code-commit-20261017/verify-increment-before-path-fix.json`，仅补齐本次进程 PATH，未修改验收命令或预期。
+- 原 12 组统一复验于北京时间 16:17:37–16:20:28 完整通过，所有命令 exit0、无超时、前后内容指纹一致；包括 427 条跨语言契约、API/浏览器、原生/公共 Skill、记忆修订、完整治理、Pi/provider、上下文和语义结构检查。收据仍为 `.local/delivery/I2-KNOWLEDGE-REUSE-result.json`，本次归档为 `.local/code-commit-20261017/verified-increment-result.json`。本轮只整理 Git 交付与本地运行，没有修改产品源码或测试。
+- 项目专用 Colima 实例已恢复，MySQL/Milvus 及其依赖健康，沿用原卷和本地配置。React、Rust API/Worker、Pi bridge 和合成平台已按 README 默认的模拟模型、词法检索和 builtin 记忆模式启动；工作台 `http://127.0.0.1:5173/` 与 API/bridge/platform 健康端点均为 HTTP 200，启动器完成三个既有开发身份检查。启动日志和 PID/健康记录在 `.local/code-commit-20261017/local-services.{log,json}`。
+- Git 交付目标为 `origin/codex/analysis-capabilities`，四批提交构成同一交付序列；实际提交号、远端一致性和最终工作区状态见 `.local/code-commit-20261017/git-result.json`。初始内容快照及分批清单保留在同目录。以上仍是合成平台与本地协议证据，新增官方模型调用为 0；历史真实模型测量及待验证范围保持原结论。
+
+## 本轮完成：第二版能力本地实施（2026-10-13 至 14 日）
+
+- 七项本地实现与各自验收已完成：SOURCE-TRUST 12组、SEMANTIC-RULES 10组、CONTEXT-RETRIEVAL 8组、CLARIFICATION 9组、ANALYSIS-EVIDENCE 12组、ANALYSIS-REPORTS 10组、KNOWLEDGE-REUSE最终12组。各项统一收据保留在`.local/delivery/I2-<对应增量>-result.json`；这些是合成平台/本地协议证据，不代表真实模型准确率或真实Datasight接入。
+- 第七项最终统一验收于2026-10-13 17:21:27–17:24:51 UTC（北京时间10月14日）完整完成：12条命令全部exit0、无超时、前后指纹一致。覆盖API14、浏览器8、原生/公共Skill、Mem0修订、完整治理5组、provider、工程/契约/架构、上下文5、语义结构10与建议投影反例。收据`.local/delivery/I2-KNOWLEDGE-REUSE-result.json`；独立审查`docs/reviews/knowledge-reuse-review.json`绑定99文件/12组，scope `908dcbfc03b74676ad14357c93ac0f261a822a476a3e3263cec3630dba326de2`。
+- Pi协议本次实际15条普通模型调用加1次SDK原生turn_prefix摘要=16次，原账本完整计数/预留0，原输出与体积限额保持；没有新建Agent循环或压缩器。正式语义、私人方法、记忆、报告仍按原模块和权限规则维护。
+- 本轮耗时来自七项实施及集成回归修复：撤下规则后的补查/传递依赖、非知识建议被结构投影污染，以及测试遗漏SDK原生摘要请求。原失败收据和诊断全部保留；没有删除原验收、放宽正式采用/权限保护或按固定mock题修改产品策略。
+- 本轮代码在`codex/analysis-capabilities`，保持未提交；没有推送、部署或更新用户常驻服务。官方DeepSeek、embedding、Mem0服务请求0次。真实模型预填、自然澄清、自主分析与方法提取效果仍待执行包§10.3规定的独立小样授权；千表真实召回、真实Datasight及真实权限一致性仍在本轮边界之外。下一动作先确认小样的模型、合成情境和调用上限，不恢复旧无限调用授权。
+
+### 本轮实施与失败修复记录
+
+
+- 已完成 **I2-ANALYSIS-REPORTS / complete**：最后排序修复后10组统一验收完整exit0、无超时、前后指纹一致；收据`.local/delivery/I2-ANALYSIS-REPORTS-result.json`及独立审查`docs/reviews/analysis-reports-review.json`。旧9组收据仅作历史。
+- 已完成 **I2-KNOWLEDGE-REUSE / complete**：执行包§9；公共查询案例复用M02、私人待确认方法草稿归M09，明确保存后继续原生Pi Skill；M02/M09分别查询直接显式引用并组合维护提示。共享Schema单一worker所有，根代理维护综合测试、架构检查、CURRENT，独立审查者不参与实现。
+- 本轮范围核对未发现已证实的产品/架构漂移。预填中合成表DDL/ETL读取分支为基线遗留，目录合成身份映射用于资料关联；新增分析不按固定题输出答案。不能宣称任意表预填或真实Datasight已完成；前六项均是本地合成/协议证据，官方模型调用0。
+- 第七项实现已落：案例沿M02正式结构与完整path依赖；方法草稿M09待确认并沿原AssetSave/原生Skill；维护反查仅直接引用。专项API13组已完整exit0（`.local/checks/knowledge-reuse.json`、`reuse-workflow-expanded.log`），包含真实并发确认、origin/operation持久绑定、实际结果唤醒拒绝、有效pending删除、条件变更与51可见+51隐藏Skill分页；浏览器与统一验收尚待完成，不能关闭增量。
+- 第七项工程检查`make verify-code verify-contracts verify-architecture`完整exit0，427份同源Rust/TS契约、7项架构反例及隔离锁检查通过，日志`reuse-code.log`。浏览器首稿对select可访问标签、正文显示label与案例结构直接checkbox入口有错误定位；按源码/实际页面修定位，独立SQL与保存/权限预期未改，原失败留在`.local/checks/knowledge-reuse-browser/`。
+- 第七项浏览器8组完整exit0（`knowledge-reuse-browser/result.json`、`knowledge-reuse-browser-run.log`），errors及routeErrors为空；真实50+2分页、建议接受/编辑/保存、新版本绑定、390px和原用户迟到响应隔离通过，桌面/mobile截图已查看。源码、API测试、浏览器和文档现已冻结，独立最终审查及9组统一验收待完成。旧版本409未当成功：应用后测试明确等实际新版本GET再读维护影响。
+- 统一9组首次未通过：前6组完整passed，第7治理完整失败，收据输入前后稳定；旧收据/审查保留`reuse-before-context-fix-{result,review}.json`。GOV02单独运行完整通过，停Worker窄反例确认是既有语义结构投影与上下文校验不一致，非模型错或第七案例特殊分支。表1→2后旧metric结构撤下，实际manifest只有metric1/table2，下一合法补读table2仍被raw旧结构的table1检查拦住。证据`invalid-rule-context-reproduction.json`。
+- 修复范围补充C02：校验实际交付依赖，正式查询/任务/依据check_refs保持；允许context_authority及原context-dependencies回归，验收增加第10组。API追加通用反例证明可补读、过期规则仍拒绝采用、实际采用后再改版仍失效。没有删除场景、放宽权限/版本预期或切换成功替身。修复及新指纹独立审查完成前不能关闭。
+- 独立修复设计审查发现案例→指标→表的传递依赖原投影仅交直接引用，不能只删raw复查。沿原150条有界队列返回核验后的完整依赖，再按实际交付清单复查；依赖格式3→4，旧格式继续原SDK新输入重建/同输入拒绝。追加传递依赖撤回反例与原语义结构回归，第七项最终验收11组。`check-context-dependencies`现行格式3→4，`check-semantic-rules`此前格式2→4，独立依据是主程序格式迁移；保留原业务/数字断言和旧格式拒绝，不降低标准。
+- 本次续接核对：最新构建完整exit0；增量7仍active/review=pending，旧9组失败不作完成证据。上下文修复沿现有M08依赖清单与Pi恢复入口，已补模块归属M08/C02；未另造Agent循环。已撤下结构的条目现在明确给出structure_gap，旧规则仍不能正式采用。专项及最终11组验收待最新源码完整运行。
+- 当前稳定源码窄验证完整通过：建议投影1条Rust反例、最新API14/上下文5/语义结构10组、完整治理GOV01–GOV05，以及build/code/427契约/7架构反例和隔离锁。证据reuse-proposal-{projection,final-build-code}.log、reuse-context-final-{api,dependencies,rules}.log、reuse-governance-projection-fixed.log。现冻结全部验收输入，独立审查重新绑定后再执行12组统一检查；不将专项通过提前视作增量完成。
+- 冻结12组统一检查本次仍未完成：前7组完整exit0，第8REUSE-PROVIDER在本地模型替身body.tools.map失败（一次无工具列表请求）；输入前后稳定。旧收据及审查已保留reuse-before-provider-fix-{result,review}.json，review重新pending。先核对Pi实际压缩请求，不关闭原生压缩或改变产品策略，不以7组代12组。
+- 验收与要求变更：provider实际第6个HTTP为Pi1.0.0原生split-turn摘要，system逐字匹配SDK SUMMARIZATION_SYSTEM_PROMPT，2消息且含Conversation/Instructions模板，2048输出与12372字节均在原限制内。旧替身把全部请求当带工具Agent请求，原tools.map失败保留mvp-data-provider-no-tools.json/reuse-provider-diagnostic.log。测试将15条普通Agent策略/6–9–12–15业务断言保持，单独严格识别摘要并将两类实际请求总和核对原持久账本；原24总调用、12请求调用、费用和65536字节限制不变。未关闭Pi压缩，也未改产品或预算。
+- provider修后专项完整exit0：原15条普通Agent调用加1次真实Pi turn_prefix摘要，共16次本地HTTP；持久ledger.calls16/spent960/reserved0，最大65532B≤原65536，摘要12372B/2048/disabled thinking，实际checkpoint存在原生compaction。证据reuse-provider-compaction-fixed.log、mvp-data-provider.json；旧失败/诊断保持。最新全部源码与测试现冻结，独立审查补绑定后重跑原12组，不追加产品能力。
+- 最新窄验证API14组、上下文5组、原语义结构10组完整exit0，证据reuse-context-final-{api,dependencies,rules}.log。完整治理fixture修正后GOV01–04通过，GOV05在GET私人建议列表400失败（不是POST创建）：通用store读取的新增结构投影用可变JSON索引给建议插入entries:null，违反原Proposal响应契约。窄修只读取已存在entries，补建议投影契约反例，原共享/私人隔离断言不变；旧完整失败日志reuse-governance-fixture-fixed.log保留，最新工程/治理待验证。
+- 建议投影修复新增1条窄Rust回归已完整passed，正式增量绑定REUSE-PROJECTION；最终统一验收由11组补为12组。只证明非知识建议的返回字段不被结构投影污染，没有改变任何业务或权限标准。
+- 验收与要求变更：完整治理首次在GOV02前缺有效指标，GOV01已改版/同步表而旧指标仍引用表v1。独立审查确认GOV02原目标是系统角色与平台执行ACL独立，前提需有效口径。测试预备改为Alice经正式GET/PATCH按独立business-guide重新核对指标并绑定当前表版本；原权限、确认、查询与数字断言保持，通用API继续要求旧指标采用返回409 stale_knowledge。原失败、isolated成功和修后完整运行分别保留，不以isolated通过代替完整通过。
+
+
+
+
+- 验收与要求变更：无产品预期变更。首API脚本误用不存在的`POST /conversations/{id}/delete`，按既有OpenAPI改回`DELETE /conversations/{id}`；新增结果唤醒等待误依赖未声明的`source_kind`传输字段，按现有M05持久`client_key=server:query-result:<id>`核对实际来源。原失败日志/结果保留于`.local/checks/reuse-before-delete-route-*`与`reuse-before-notice-binding.*`，没有放宽来源保护、并发或数字预期。
+
+
+- 用户已认可五项方向：语义参与计算、有针对性的检索、深入分析、可继续使用的成果、经验复用；主动澄清贯穿其中。最新要求先保证预填和mock资料足够正确，优先公开合成环境，验证保持轻量。推进以五项通用能力逐项交付，不按一个演示题写特殊逻辑。
+- 用户已于2026-10-13授权从I2-SOURCE-TRUST实施并依次推进全部增量，常规可逆选择自行处理。静态规格、增量顺序、接口归属和验收见 [语义、澄清与分析能力执行包](analysis-capabilities-execution.md)。本节与frontmatter是唯一当前状态，执行包不另记进度。
+- 接手源码基线：`6801df79f3b09d51552df51dc20a44a916773447`，当前分支 `codex/semantic-maintenance-prototype`，规划前工作区干净。已建立本地工作分支`codex/analysis-capabilities`并保留规划文档，开始源码实施。
+- 首增量已完成 **I2-SOURCE-TRUST / complete**：修正现有五表样例的来源版本、目录血缘、派生语义分类和预填输入。已核实目录漏`dim_customers`上游；旧SQLite可能配新磁盘ETL，Rust内置来源又绑定编译时文本；目录生成器混合原文与人工推导；平台对象的关联文档需实际核对。先建反例，再修对应原因。
+- 后续依次推进：语义结构 → 有针对性的检索 → 主动澄清 → 深入分析 → 分析报告 → 经验复用。连续月份样例在深入分析时扩充，复用首增量的一致性检查；当前固定小样和独立参考保留。
+- 本包采用的实施默认：沿用Pi/Mem0；每个任务聚焦一个当前澄清；新SQL仍逐次聊天授权；报告首版归本人/空间并绑定任务；公共查询案例归M02、个人方法归原生Skill；详细接口为待实现设计，不修改当前OpenAPI。
+- 当前增量先做离线与本地协议验证；真实模型调用尚无本轮新增授权，提交推送或发布另按当时用户指令。历史Git交付与付费试验授权已用于原任务，不扩大到第二版；执行阶段真实小样先依据当时授权确定范围，未知回执和原预算保持。
+- 本轮规划材料检查与交付映射检查通过，交付检查器16项测试通过。独立审查发现首增量缺少界面/启动代码指纹与浏览器测试允许路径，现已补齐；记录 `.local/planning/analysis-capabilities/review.json`，最终文档检查及指纹见同目录 `verification.json`。这些证据只覆盖规划，真实模型效果、迁移与新增交互均待实施。
+- 首增量验收命令已绑定；实现与浏览器证据、独立审查及统一增量检查全部通过后才能关闭。`check-semantic-status.mjs`的部分响应替身只证明标签展示，编辑后重预填与同版出处需新窄测试`check-semantic-source-browser.mjs`及API证据；实际浏览器测试已完成并通过。
+- 实现已修正目录漏血缘、混版风险、事实分类与平台文档关联；目录撤项保留人工内容并撤下非人工旧值。独立审查发现来源身份优先级错误，已修正并补组合反例。当前资料29项、来源14项、目录8项检查通过，预填21组、材料10组、浏览器3组及执行授权9组通过；12组统一增量关闭检查通过，收据`.local/delivery/I2-SOURCE-TRUST-result.json`；独立审查`docs/reviews/semantic-source-trust-review.json`通过，未调用真实模型。
+- 旧`I2-MEMORY-CONTEXT`保持历史完成事实和原收据；本次替换活动增量，不把其测试记录改成第二版验证。后续每个增量更新本文件的目标、范围、接口变化、证据与下一步。
+
+- 已完成 **I2-SEMANTIC-RULES / complete**（实施完成，10组统一验收通过）：沿用知识JSON和现有版本存储，结构与正文同层保存。SQL解析采用成熟Rust库薄适配；只给有界非阻断诊断，不把语法通过当口径通过。旧对象可读，缺结构明确。
+
+- 结构增量当前证据：API10、浏览器4（含390px键盘及真实100项分页）、聊天执行9、上下文4和大型检查点5组均通过；Rust/TS/Web、290契约与模块/锁边界通过，纯55项检查已最后落盘通过。M03越界调用已撤回，新的结构依赖有效性与原生Pi检查点规则保持。真实模型调用0，统一收据`.local/delivery/I2-SEMANTIC-RULES-result.json`与独立审查`docs/reviews/semantic-rules-review.json`通过；尚不宣称真实澄清/分析效果。
+
+- 已完成 **I2-CONTEXT-RETRIEVAL / complete**：复用词法/向量融合，范围在候选上限之前过滤，24KiB完整回执限制。业务域复用明确`business_domain`知识条目，只有当前来源事实或人工确认值可作为过滤依据；合成规范显式声明域，不能按表名猜。范围过滤不影响本人资产分页。
+
+- 检索独立审查确认三项边界并修正：范围判断前撤下过期结构关联；回执保留完整合法业务域；Mem0候选补充目录时保留游标前全页资产。目录limit仍控制目录页，首屏可额外交付去重的有界Mem0候选；总体回执继续24KiB，身份和补读入口先保全。71项纯测试已通过，实际数据库与统一验收待最后稳定版本。已用独立MySQL反例确认相关JSON_TABLE的EXISTS被错误semijoin重排，过滤实现改为显式外层别名和标量COUNT子查询；同反例已命中，完整场景待新二进制。旧HTTP搜索回归发现SearchCoverage漏声明scope_applied，已补同源布尔契约，307例跨语言契约、类型/clippy/Web、模块检查与隔离锁检查通过；纯71项通过，来源29项/静态材料342项通过。scope API11组与excerpt5组已完成（仅本地Mem0/向量协议，不代表真实召回质量），完整回执最大23603字节，个人目录每页保全、同版补读与结构依赖改版stale_context均有反例验证；旧覆盖2组及Pi大上下文2组也通过，独立审查`docs/reviews/context-retrieval-review.json`通过，8组统一增量验收完整通过，收据`.local/delivery/I2-CONTEXT-RETRIEVAL-result.json`，前后指纹一致。大回执继续沿Pi原生压缩，超限有限失败、原操作身份不变；真实模型/embedding/Mem0服务调用0。
+
+- 已完成 **I2-CLARIFICATION / complete**：代码核对确认已有patch合并、route保留澄清和恢复规则。实际缺口是clarify允许没有question，及Pi说明/贯穿验证不足；已补同源Schema和M06前置guard，Pi说明保留自主判断。旧生命周期6、阶段6、聊天执行9、Pi协议15次本地调用与恢复9、浏览器聊天4均通过，314跨语言契约及工程/锁检查通过；新增长期会话7组通过，25次Pi本地协议调用全部结算、预留0，最大请求70353字节；API/Worker重启同Pi会话、自由回答merge与执行隔离有实际证据`.local/checks/clarification.json`。独立审查`docs/reviews/clarification-review.json`与9组统一验收完整通过，收据`.local/delivery/I2-CLARIFICATION-result.json`前后指纹一致，不宣称真实自主澄清准确率。
+
+- 已完成 **I2-ANALYSIS-EVIDENCE / complete**：独立连续月份数据集保留旧五表参考；新增受控结论保存与结果分页/覆盖，数字引用按平台数据核对。查询结果依赖进入原上下文有效性机制，避免过期数字从工具历史复用；不另建分析Agent。
+
+- 本项实现及专项验证已完成：M06轻量依据及仅引用回执、M07连续保存页与窄结果授权、Pi受控工具，结果和知识依赖在新轮/恢复与模型边界查证。来源16/原29与平台快照19项、85纯单元、336跨语言契约通过；结果依据8组，真实Pi本地协议4组、13轮/47调用、最大108660字节/131072上限通过。旧provider15工具/15调用、聊天执行9、上下文4与统计4组保持；最终12组统一增量验收全部exit0、无超时、前后指纹一致，收据`.local/delivery/I2-ANALYSIS-EVIDENCE-result.json`；独立审查`docs/reviews/analysis-evidence-review.json`通过。报告和查询案例/Skill草稿仍留后两项，未提交推送或更新常驻服务，官方调用0。
+
+- 当前增量 **I2-ANALYSIS-REPORTS / active**：按执行包第8节开始本人任务报告。保存输入引用1–5个既有evidence_ids，避免重复提交结论；条件变化后完成新分析再保存修订。图表只表达已保存的有界聚合结果，失效不回放正文；不新增顶层导航或公共分享。
+
+- 报告独立审查发现来源汇总漏掉不可变依据中的`conditions.knowledge_refs`：即便结论/查询未重复引用，报告正文仍包含这些条件。已并入原有正式知识核验，停用/改版时只返回失效状态；新增反例验证，不改权限或查询授权。
+
+- 报告审查核实SQLite按已返回行推断列类型，空结果及精确小数文本可能声明为`text`。绘图现允许已保存规范十进制单元格，保留原字符串；空/全NULL只显示暂无数据，不转浮点或改掉精度/空结果验收。
+
+- 报告首次夹具误把`get_query`第一页100行当成205行完整结果，在报告API触达前失败。按既有`next_cursor/fetched_offset`逐页补读，205行、1000截断与原精确数值预期不变；不改SQL或数字，旧失败会话7188及服务日志保留。
+
+- 报告键盘验收原值“一次Tab后焦点必在dialog”与原生Chromium行为不符：独立无产品代码的双按钮showModal基线，末按钮Tab会短暂到浏览器工具栏（BODY、hasFocus=false、:modal=true），再Tab回首按钮。新值禁止背景控件获焦，工具栏中转必须仍modal且失去文档焦点，再次同向Tab须回dialog；Escape返回原入口保持。独立基线`.local/checks/analysis-reports-native-dialog.json`与旧失败原件保留，不给产品加自制焦点框架。
+
+- 报告审查确认Pi在压缩/重建或HTTP修订后只知report_ref，无法可靠保留原标题、选中依据和图表。补薄受控`read_analysis_report`，复用报告同一身份/来源核验，按同修订有界读取JSON正文，完整工具回执≤24KiB；实际读出的资料才登记原上下文清单。不新增Agent框架、启动全文或权限。新增空SDK检查点读当前修订、仅改标题保留旧来源/图表、分页及失效反例。
+
+- 报告当前专项：406跨语言契约、最新API12组、浏览器6组、精确坐标5组与有界正文页1项通过；空检查点读取续改、最近5项之外的选中依据保全、真实并发和同修订分页均有实际证据。原9组统一关闭检查已通过（223579ms、前后指纹一致），后续排序误判修复需要重新绑定审查与新增第10组验收。全部为隔离合成环境，官方调用0。
+
+- 原统一9组通过后，根代理与独立审查者用纯内存SQLite确认跨表同名排序误判：选择`a.month`而按`b.month`排序，仅比末尾名称会错误确认维度顺序。现复合名必须AST等于对应投影；有星号展开不猜列位置，输出别名/序号继续支持。旧passed收据/审查保留`.local/checks/report-before-ordering-{result,review}.json`，本项不提前关闭；纯反例和第10组统一验收重新绑定。这是现有检查的具体错误，不建语义编译器。
+
+### 本轮验收与要求变更
+
+- 增量5空检查点预期按SDK实际契约修正：host封套回源后可含SessionManager必需session头，但无消息/工具/压缩摘要、leaf和旧storage；query_results为空。本人安全user历史沿既有规则保留，旧助手及结果正文仍排除，查询观察仅四个控制字段。旧严格null/无任何历史误把封套和上下文混同；SDK checkpoint接口及既有context-dependencies是独立依据。
+
+- 增量5跨表协议测试把relationship-tags来源路径误写description；按真实目录/指南entry_id=join修正，原SQL及独立核算数字不变。
+
+- 增量5独立审查发现知识-only依据保存未登记所引用知识，已补同事务采用，并沿既有有界check_refs核结构依赖。独立新文档在无Pi补读、任务refs为空时保存，停用后模型发送/恢复拒绝、同CID新输入排除旧结论；未修改查询授权或增加记忆编排。
+
+- 增量5贯穿真实Pi协议发现保存事件已入库但Event.type枚举漏analysis_evidence_saved，导致Snapshot回读400。补同源枚举/生成类型及事件、Snapshot正反例，保留回读200的验收；没有删除保存事件或放宽未知事件校验。
+
+- 增量5真实Pi协议发现provider把data工具数写死14，新增已登记工具后15个导致所有data模型请求在发送前失败。允许范围补provider边界，按同源DataToolInvocation工具枚举核对合法且不重复的工具集合，保留请求体/输入输出/预算与SDK重试限制。旧协议测试固定14预期改为完整同源集合（当前15），不减少工具或放宽调用/费用约束。
+
+- 增量5同聊续接测试被capture替身阻塞：正式取消已生效，但替身dispatch忽略原接口AbortSignal，另一结果run占用bridge后令新消息反复409。按真实Pi deliver的取消接口补替身abort/release结束等待并清监听，保留同CID继续聊的断言；未修改Worker、增加重试或改用新会话。失败日志保留在`.local/checks/mvp-52059aed5aeb64c1/service-logs.json`。
+
+- 增量5平台快照元信息补冻结时兼容旧三文件协议：仅原协议固定日期、同core哈希/冻结文本/平台版本、独立重建的完整业务指纹和血缘全部相符时补元信息；业务库、账本和原结果逐字节保持。日期未知/更改或原库损坏继续拒绝，不清库。19项平台源反例通过，含标准旧目录安全升级与新日期不能认领旧来源。
+
+- 增量5新恢复测试曾查询不存在的background_jobs.error_code。依据jobs私有store与Worker实际拒绝分支，改为任务failed状态、同一消息/Job的delivery_rejected stale_context日志和没有新dispatch，并保持原输入恢复不得重建副作用的预期；失败原件保留`.local/checks/analysis-evidence-first-failure.log`。这属于测试字段错误，不增产品状态或放宽恢复标准。
+
+- 增量5独立审查发现新April4样例结果仍写死旧Feb4快照，允许范围补平台来源测试和规范manifest。复用两份已有snapshot_exclusive，纳入来源冻结并按该值生成原格式结果标签；不从表名、题面或运行时日期猜快照。旧样例标签保持，资料来源改变仍使用新运行目录。
+
+- 增量5上下文清单由格式2升3，补实际交付查询结果的query_id/result_ref依赖。旧格式不能证明数字覆盖，沿原缺清单规则重建，原上下文测试对应格式预期2改3；知识/个人资产、消息与副作用身份、预算和恢复标准不变。任务目录中的依据引用摘要只用于定位，不自动当作已采用结果，避免过期结果在重建后反复污染新上下文。
+
+- 增量4新测试把未执行草稿的budget_scope_id错误当作null；原设计在草稿阶段已绑定请求预算，现按既有执行契约核对confirmation_message_id/confirmation_key均null与not_submitted状态。新测试又误把ExecuteQuery回执字段当query_id，已按现有QueryRequest.id修正；不改变任何执行授权、版本或模型判断要求。
+
+- 新结构分页反例误用has_more，按已定structure_page契约改为complete=false/next_offset=0；省略结构/补读的业务要求不变。新Mem0分页反例先停用了已采用文档导致合法stale_context，现通过正式新输入运行验证资产页，仍独立保留旧运行拒绝。
+
+- 增量3独立夹具最初只更新正式知识/版本而未更新同版词法索引，已补完整夹具保存；额外保留删除索引后的正式知识fallback反例，不能靠补索引掩盖产品漏查。新Unicode纯测试前言长度680导致合法offset恰为600，夹具长度改800，保留原offset>600断言；SQLhelper纯测试不再借不支持MySQL BINARY前缀的sqlparser断言，实际动态SQL由真实MySQL反例和API验证。
+
+- 增量3新增当前正文的词法定位：损坏向量位置仍拒绝，但正文真实匹配时可以通过lexical通道独立定位；旧工具场景不再一概unlocated，保留损坏索引反例与真实偏移断言，并明确通道。
+
+
+- 工程边界检查发现M03直接调用M02投影/规则函数，已撤回：M03只生成候选并检查模型输出形状；M02在正式持久保存时统一投影。预填纯测试现在核对候选保留来源/建议结构但不保留旧正式投影，按既定M02/M03职责修正，未改变正式知识验收。
+
+
+- 新API反例修正GET/PATCH装饰字段比较方式：对失败编辑前后两次GET完整结果比较，仍要求内容与版本完全不变；产品预期未放宽。直接cargo全lib的5项数据库测试缺显式隔离URL，不能记为通过；统一验收将55项纯测试与既有locking/大型checkpoint隔离入口分别绑定。
+
+
+- 新结构引用需进入原有采用/上下文有效性边界。独立审查发现仅诊断核验不足，故增量2增加M08/C02与现有context_authority、knowledge_sources组合入口；不创建新Agent机制。依赖清单格式从1升2，旧清单不能证明覆盖结构引用，按既有缺清单规则重建；原上下文测试唯一对应版本预期1改2，消息身份、预算、恢复要求不变。
+
+
+- 默认mock平台修订由1升为2，依据是补齐血缘及绑定实际来源快照；既有十进制单调版本契约不变，指纹不替代公开版本。同步测试默认平台版本预期相应变为2，内置来源数由3变为4（新增semantic-catalog持久版本），其他业务数值不变。
+- 来源修订暴露查询存储/提交写死目标版本1；本轮增加M07直接入口修复，使草稿和提交绑定平台检查回执的版本。相关路径与C04验收已登记。
+- 内置资料改版测试通过显式platformSourceDirectory使用独立平台来源，仍验证内置源修订；平台同源漂移另由真实SQLite/HTTP反例验证，不能用该测试seam绕过产品检查。
+
+## 已完成交付：代码合入主分支（2026-10-13）
 
 - 用户明确要求除博客外的工程内容提交、合入默认分支并推送，最终工作区保持干净。目标为 `origin/codex/semantic-maintenance-prototype`；代码、契约、测试、架构说明与必要验收报告一起交付，替代此前本阶段“不提交推送”的限制。
 - 博客正文及配图已完整移到仓库外的同级 `data_agent_articles/`，14个文件逐一核对SHA-256一致；`docs/articles/` 不纳入Git，新增忽略规则防止误加入。文章发布过程的历史记录随稿件保留；代码仓库只保留实现与验证信息。

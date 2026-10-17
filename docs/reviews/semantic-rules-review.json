@@ -1,0 +1,32 @@
+{
+  "schema": 1,
+  "increment_id": "I2-SEMANTIC-RULES",
+  "reviewer": "独立只读审查代理source_ingestion_explorer；未参与增量2实现",
+  "reviewed_at": "2026-10-13T10:08:31.931905+00:00",
+  "conclusion": "passed",
+  "summary": "独立按执行包§4核对同层结构、来源/依赖/上下文有效性、M02/M03边界、限定AST诊断和真实表单/分页。已读取API10、浏览器4、聊天9与最新纯55项结果，无剩余确定阻断；真实模型调用0。",
+  "scope_sha256": "34fac4d80bc43256aeda00766a83354d878b9e2a551615a265496ef8fe5c06fd",
+  "findings": [],
+  "resolved_findings": [
+    "新结构的表依赖曾未进入读取/正式引用/保存/上下文有效性，现经既有组合入口与schema2清单核验，旧清单重建。",
+    "表选择器首100项可能被字段/文档挤满，现用分组目录并按游标续页，保留代次保护。",
+    "输入帮助曾混入无障碍标签，现精确标签与aria-describedby分开。",
+    "预填模块曾直接调用知识投影，现只产生候选，正式层由M02决定。",
+    "仅读关联的反例曾混入后续显式SQL引用，现先后清单断言独立证明依赖采用。"
+  ],
+  "evidence": [
+    ".local/checks/semantic-rules.json",
+    ".local/checks/semantic-rules-browser/result.json",
+    ".local/checks/conversational-query.json",
+    ".local/checks/semantic-rules-unit.log",
+    ".local/checks/mvp-context-dependencies.json"
+  ],
+  "scope_binding": {
+    "independently_recomputed": true,
+    "input_files": 90,
+    "acceptance_groups": 10
+  },
+  "limitations": [
+    "统一增量收据尚待执行；协议替身不证明真实模型业务推断或后续五个增量完成。"
+  ]
+}
