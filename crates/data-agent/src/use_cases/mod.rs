@@ -19,10 +19,14 @@ pub mod semantic_prefill;
 
 pub mod conversation_lifecycle;
 
+pub mod analysis_evidence;
+pub mod analysis_reports;
 mod context_authority;
 
 pub mod personal_memory;
 
 mod knowledge_embeddings;
 
+pub mod knowledge_impact;
 pub mod semantic_governance;
+pub mod skill_drafts;

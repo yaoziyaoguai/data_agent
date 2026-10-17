@@ -331,6 +331,38 @@ try {
       });
     }
     if (group === "GOV02") {
+      // GOV01会改版表；按合成业务说明§5.1与附录重新核对指标，不能沿用旧表引用。
+      const currentTable = await read();
+      const metric = await read("metric-net_revenue");
+      const definition =
+        "支付归属净收入：按 paid_at 选支付期间，排除测试交易；SUM(paid_amount_cents - refunded_amount_cents)，单位分，输入粒度为订单商品行。全退订单保留，退款按原付款期间归属。";
+      const metricRule = {
+        kind: "metric",
+        table: { object_id: currentTable.id, version: currentTable.version },
+        expression: "SUM(paid_amount_cents - refunded_amount_cents)",
+        input_grain: "订单商品行",
+        time_column: "paid_at",
+        unit: "分",
+        required_filters: ["is_test = 0", "paid_amount_cents > 0"],
+        dimensions: ["channel", "region"],
+      };
+      await ok(
+        "/knowledge/" + metric.id,
+        {
+          ...command(),
+          expected_version: metric.version,
+          entry_id: "definition",
+          value: definition,
+          structured_value: metricRule,
+        },
+        "alice",
+        "PATCH",
+      );
+      const savedDefinition = (await read(metric.id)).entries.find(
+        (entry) => entry.entry_id === "definition",
+      );
+      assert.equal(savedDefinition.effective_value, definition);
+      assert.deepEqual(savedDefinition.effective_structure, metricRule);
       await h.resumeWorker();
       await writeFile(
         h.directory + "/platform/permissions.json",

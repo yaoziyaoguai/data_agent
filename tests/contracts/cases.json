@@ -3778,5 +3778,4190 @@
     },
     "valid": false,
     "roundtrip": false
+  },
+  {
+    "name": "structured table",
+    "schema": "SemanticStructure",
+    "value": {
+      "kind": "table",
+      "grain": "一行一个购买项",
+      "unique_keys": [
+        [
+          "purchase_id",
+          "item_id"
+        ]
+      ],
+      "time_columns": [
+        {
+          "column": "created_at",
+          "role": "event"
+        }
+      ],
+      "default_filters": [],
+      "constraints": []
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "structured field nullable unit",
+    "schema": "SemanticStructure",
+    "value": {
+      "kind": "field",
+      "table": {
+        "object_id": "purchase-table",
+        "version": "7"
+      },
+      "column": "gross",
+      "unit": null
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "structured relationship",
+    "schema": "SemanticStructure",
+    "value": {
+      "kind": "relationship",
+      "left_table": {
+        "object_id": "purchases",
+        "version": "3"
+      },
+      "right_table": {
+        "object_id": "items",
+        "version": "5"
+      },
+      "join_keys": [
+        {
+          "left_column": "id",
+          "right_column": "purchase_id"
+        }
+      ],
+      "cardinality": "one_to_many",
+      "scope": "当前有效条目"
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "structured metric nullable time unit",
+    "schema": "SemanticStructure",
+    "value": {
+      "kind": "metric",
+      "table": {
+        "object_id": "purchases",
+        "version": "3"
+      },
+      "expression": "SUM(gross) / 100",
+      "input_grain": "购买项",
+      "time_column": null,
+      "unit": null,
+      "required_filters": [],
+      "dimensions": []
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "structure accepts unknown keys gap",
+    "schema": "SemanticStructure",
+    "value": {
+      "kind": "table",
+      "grain": "一行一个购买项",
+      "unique_keys": [],
+      "time_columns": [
+        {
+          "column": "created_at",
+          "role": "event"
+        }
+      ],
+      "default_filters": [],
+      "constraints": []
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "structure rejects missing grain",
+    "schema": "SemanticStructure",
+    "value": {
+      "kind": "table",
+      "unique_keys": [
+        [
+          "purchase_id",
+          "item_id"
+        ]
+      ],
+      "time_columns": [
+        {
+          "column": "created_at",
+          "role": "event"
+        }
+      ],
+      "default_filters": [],
+      "constraints": []
+    },
+    "valid": false
+  },
+  {
+    "name": "structure rejects cross branch field",
+    "schema": "SemanticStructure",
+    "value": {
+      "kind": "table",
+      "grain": "一行一个购买项",
+      "unique_keys": [
+        [
+          "purchase_id",
+          "item_id"
+        ]
+      ],
+      "time_columns": [
+        {
+          "column": "created_at",
+          "role": "event"
+        }
+      ],
+      "default_filters": [],
+      "constraints": [],
+      "unit": "元"
+    },
+    "valid": false
+  },
+  {
+    "name": "structure rejects empty join keys",
+    "schema": "SemanticStructure",
+    "value": {
+      "kind": "relationship",
+      "left_table": {
+        "object_id": "purchases",
+        "version": "3"
+      },
+      "right_table": {
+        "object_id": "items",
+        "version": "5"
+      },
+      "join_keys": [],
+      "cardinality": "one_to_many",
+      "scope": "当前有效条目"
+    },
+    "valid": false
+  },
+  {
+    "name": "structure rejects unknown cardinality",
+    "schema": "SemanticStructure",
+    "value": {
+      "kind": "relationship",
+      "left_table": {
+        "object_id": "purchases",
+        "version": "3"
+      },
+      "right_table": {
+        "object_id": "items",
+        "version": "5"
+      },
+      "join_keys": [
+        {
+          "left_column": "id",
+          "right_column": "purchase_id"
+        }
+      ],
+      "cardinality": "many",
+      "scope": "当前有效条目"
+    },
+    "valid": false
+  },
+  {
+    "name": "structure rejects unknown kind",
+    "schema": "SemanticStructure",
+    "value": {
+      "kind": "document",
+      "grain": "一行一个购买项",
+      "unique_keys": [
+        [
+          "purchase_id",
+          "item_id"
+        ]
+      ],
+      "time_columns": [
+        {
+          "column": "created_at",
+          "role": "event"
+        }
+      ],
+      "default_filters": [],
+      "constraints": []
+    },
+    "valid": false
+  },
+  {
+    "name": "knowledge edit retains tagged structure",
+    "schema": "KnowledgeEdit",
+    "value": {
+      "operation_id": "struct-edit",
+      "expected_version": "2",
+      "entry_id": "meaning",
+      "value": "购买项规则",
+      "structured_value": {
+        "kind": "table",
+        "grain": "一行一个购买项",
+        "unique_keys": [
+          [
+            "purchase_id",
+            "item_id"
+          ]
+        ],
+        "time_columns": [
+          {
+            "column": "created_at",
+            "role": "event"
+          }
+        ],
+        "default_filters": [],
+        "constraints": []
+      }
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "knowledge text edit missing structure remains explicit gap",
+    "schema": "KnowledgeEdit",
+    "value": {
+      "operation_id": "struct-edit",
+      "expected_version": "2",
+      "entry_id": "meaning",
+      "value": "购买项规则",
+      "structured_value": null
+    },
+    "valid": true,
+    "roundtrip": true,
+    "roundtrip_value": {
+      "operation_id": "struct-edit",
+      "expected_version": "2",
+      "entry_id": "meaning",
+      "value": "购买项规则"
+    }
+  },
+  {
+    "name": "semantic report evidence uses object version",
+    "schema": "SemanticCheckReport",
+    "value": {
+      "checks": [
+        {
+          "rule": "aggregate_cardinality",
+          "state": "warning",
+          "evidence_refs": [
+            {
+              "object_id": "rel-purchases",
+              "version": "4"
+            }
+          ],
+          "finding": "关联后的累计有重复风险",
+          "coverage_limit": "只检查直接等值关联"
+        }
+      ],
+      "coverage": {
+        "sql_shape": "supported",
+        "supported_scope": [
+          "直接关联聚合"
+        ],
+        "missing_semantics": [],
+        "unsupported_constructs": []
+      }
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "semantic report rejects invented total pass",
+    "schema": "SemanticCheckReport",
+    "value": {
+      "checks": [
+        {
+          "rule": "aggregate_cardinality",
+          "state": "warning",
+          "evidence_refs": [
+            {
+              "object_id": "rel-purchases",
+              "version": "4"
+            }
+          ],
+          "finding": "关联后的累计有重复风险",
+          "coverage_limit": "只检查直接等值关联"
+        }
+      ],
+      "coverage": {
+        "sql_shape": "supported",
+        "supported_scope": [
+          "直接关联聚合"
+        ],
+        "missing_semantics": [],
+        "unsupported_constructs": []
+      },
+      "semantic_passed": true
+    },
+    "valid": false
+  },
+  {
+    "name": "SQL semantic refs preserve complete evidence",
+    "schema": "SQLInput",
+    "value": {
+      "sql": "SELECT SUM(gross) FROM purchases",
+      "parameters": {},
+      "target_id": "synthetic-sqlite",
+      "knowledge_refs": [
+        {
+          "object_id": "metric-sales",
+          "version": "3",
+          "path": "body"
+        }
+      ]
+    },
+    "valid": true
+  },
+  {
+    "name": "SQL semantic refs missing path still rejected",
+    "schema": "SQLInput",
+    "value": {
+      "sql": "SELECT SUM(gross) FROM purchases",
+      "parameters": {},
+      "target_id": "synthetic-sqlite",
+      "knowledge_refs": [
+        {
+          "object_id": "metric-sales",
+          "version": "3"
+        }
+      ]
+    },
+    "valid": false
+  },
+  {
+    "name": "knowledge structure-only page input",
+    "schema": "ReadKnowledgeInput",
+    "value": {
+      "object_id": "purchases",
+      "version": "3",
+      "entry_id": "meaning",
+      "offset": 0,
+      "limit": 2048,
+      "structure_only": true
+    },
+    "valid": true
+  },
+  {
+    "name": "search scopes preserve old call",
+    "schema": "SearchInput",
+    "value": {
+      "query": "收入"
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "search scopes combine kinds anchor domain",
+    "schema": "SearchInput",
+    "value": {
+      "query": "收入",
+      "kinds": [
+        "metric",
+        "table"
+      ],
+      "related_object_id": "table-purchases",
+      "business_domain": "合成零售"
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "search scopes reject duplicate kinds",
+    "schema": "SearchInput",
+    "value": {
+      "query": "收入",
+      "kinds": [
+        "table",
+        "table"
+      ]
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "search scopes reject empty kinds",
+    "schema": "SearchInput",
+    "value": {
+      "query": "收入",
+      "kinds": []
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "search scopes reject invented kind",
+    "schema": "SearchInput",
+    "value": {
+      "query": "收入",
+      "kinds": [
+        "memory"
+      ]
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "search scopes reject caller identity",
+    "schema": "SearchInput",
+    "value": {
+      "query": "收入",
+      "user_id": "bob"
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "search scopes reject space switch",
+    "schema": "SearchInput",
+    "value": {
+      "query": "收入",
+      "space_id": "elsewhere"
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "search scopes reject unsafe anchor",
+    "schema": "SearchInput",
+    "value": {
+      "query": "收入",
+      "related_object_id": "table-name\" OR true"
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "search scopes reject oversized domain",
+    "schema": "SearchInput",
+    "value": {
+      "query": "收入",
+      "business_domain": "域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域"
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "search scopes reject empty domain",
+    "schema": "SearchInput",
+    "value": {
+      "query": "收入",
+      "business_domain": ""
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "knowledge retrieval channel lexical",
+    "schema": "KnowledgeRetrieval",
+    "value": {
+      "state": "unlocated",
+      "excerpts": [],
+      "note": "按当前位置补查",
+      "channel": "lexical"
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "knowledge retrieval channel vector",
+    "schema": "KnowledgeRetrieval",
+    "value": {
+      "state": "unlocated",
+      "excerpts": [],
+      "note": "按当前位置补查",
+      "channel": "vector"
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "knowledge retrieval channel generated",
+    "schema": "KnowledgeRetrieval",
+    "value": {
+      "state": "unlocated",
+      "excerpts": [],
+      "note": "按当前位置补查",
+      "channel": "generated"
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "search coverage scoped flag accepted",
+    "schema": "SearchCoverage",
+    "value": {
+      "state": "complete",
+      "candidate_limit": 2200,
+      "scope_applied": true
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "search coverage unscoped flag accepted",
+    "schema": "SearchCoverage",
+    "value": {
+      "state": "complete",
+      "candidate_limit": 2200,
+      "scope_applied": false
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "search coverage scope flag rejects string",
+    "schema": "SearchCoverage",
+    "value": {
+      "state": "complete",
+      "candidate_limit": 2200,
+      "scope_applied": "true"
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "search coverage scope flag rejects null",
+    "schema": "SearchCoverage",
+    "value": {
+      "state": "complete",
+      "candidate_limit": 2200,
+      "scope_applied": null
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "clarify requires actual question",
+    "schema": "AnalysisUpdate",
+    "value": {
+      "action": "clarify",
+      "task_id": "task-clarification",
+      "expected_version": "2",
+      "goal": "确认收入口径",
+      "condition_patch": {
+        "set": {},
+        "unset": []
+      },
+      "options": [],
+      "question": "你希望按支付收入还是净收入分析？"
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "clarify rejects omitted question",
+    "schema": "AnalysisUpdate",
+    "value": {
+      "action": "clarify",
+      "task_id": "task-clarification",
+      "expected_version": "2",
+      "goal": "确认收入口径",
+      "condition_patch": {
+        "set": {},
+        "unset": []
+      },
+      "options": []
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "clarify rejects null question",
+    "schema": "AnalysisUpdate",
+    "value": {
+      "action": "clarify",
+      "task_id": "task-clarification",
+      "expected_version": "2",
+      "goal": "确认收入口径",
+      "condition_patch": {
+        "set": {},
+        "unset": []
+      },
+      "options": [],
+      "question": null
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "clarify rejects empty question",
+    "schema": "AnalysisUpdate",
+    "value": {
+      "action": "clarify",
+      "task_id": "task-clarification",
+      "expected_version": "2",
+      "goal": "确认收入口径",
+      "condition_patch": {
+        "set": {},
+        "unset": []
+      },
+      "options": [],
+      "question": ""
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "clarify rejects whitespace question",
+    "schema": "AnalysisUpdate",
+    "value": {
+      "action": "clarify",
+      "task_id": "task-clarification",
+      "expected_version": "2",
+      "goal": "确认收入口径",
+      "condition_patch": {
+        "set": {},
+        "unset": []
+      },
+      "options": [],
+      "question": " \t\n\r "
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "revise can apply answer without another question",
+    "schema": "AnalysisUpdate",
+    "value": {
+      "action": "revise",
+      "task_id": "task-clarification",
+      "expected_version": "2",
+      "goal": "确认收入口径",
+      "condition_patch": {
+        "set": {},
+        "unset": []
+      },
+      "options": []
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "route keeps normal follow-up without question",
+    "schema": "AnalysisUpdate",
+    "value": {
+      "action": "route",
+      "task_id": "task-clarification",
+      "expected_version": "2",
+      "goal": "解释刚才的口径",
+      "options": []
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "analysis evidence saves bounded citations",
+    "schema": "SaveAnalysisEvidenceInput",
+    "value": {
+      "task_id": "task-one",
+      "condition_version": "2",
+      "data_range": "连续两个完整自然月",
+      "findings": [
+        {
+          "text": "本月收入低于上月",
+          "calculation": "比较两期净收入口径",
+          "limitations": [
+            "只说明数据贡献，不证明因果"
+          ],
+          "query_refs": [
+            {
+              "query_id": "query-one",
+              "result_ref": "result-one",
+              "columns": [
+                "period",
+                "net_revenue"
+              ]
+            }
+          ],
+          "knowledge_refs": [
+            {
+              "object_id": "metric-revenue",
+              "version": "3",
+              "path": "sql"
+            }
+          ],
+          "figures": [
+            {
+              "label": "本月净收入",
+              "query_id": "query-one",
+              "column": "net_revenue",
+              "row_index": 0,
+              "value": "125.00"
+            }
+          ]
+        }
+      ]
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "analysis evidence rejects caller identity",
+    "schema": "SaveAnalysisEvidenceInput",
+    "value": {
+      "task_id": "task-one",
+      "condition_version": "2",
+      "data_range": "连续两个完整自然月",
+      "findings": [
+        {
+          "text": "本月收入低于上月",
+          "calculation": "比较两期净收入口径",
+          "limitations": [
+            "只说明数据贡献，不证明因果"
+          ],
+          "query_refs": [
+            {
+              "query_id": "query-one",
+              "result_ref": "result-one",
+              "columns": [
+                "period",
+                "net_revenue"
+              ]
+            }
+          ],
+          "knowledge_refs": [
+            {
+              "object_id": "metric-revenue",
+              "version": "3",
+              "path": "sql"
+            }
+          ],
+          "figures": [
+            {
+              "label": "本月净收入",
+              "query_id": "query-one",
+              "column": "net_revenue",
+              "row_index": 0,
+              "value": "125.00"
+            }
+          ]
+        }
+      ],
+      "owner_id": "other-user"
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "analysis evidence operation is host bound",
+    "schema": "SaveAnalysisEvidenceInput",
+    "value": {
+      "task_id": "task-one",
+      "condition_version": "2",
+      "data_range": "连续两个完整自然月",
+      "findings": [
+        {
+          "text": "本月收入低于上月",
+          "calculation": "比较两期净收入口径",
+          "limitations": [
+            "只说明数据贡献，不证明因果"
+          ],
+          "query_refs": [
+            {
+              "query_id": "query-one",
+              "result_ref": "result-one",
+              "columns": [
+                "period",
+                "net_revenue"
+              ]
+            }
+          ],
+          "knowledge_refs": [
+            {
+              "object_id": "metric-revenue",
+              "version": "3",
+              "path": "sql"
+            }
+          ],
+          "figures": [
+            {
+              "label": "本月净收入",
+              "query_id": "query-one",
+              "column": "net_revenue",
+              "row_index": 0,
+              "value": "125.00"
+            }
+          ]
+        }
+      ],
+      "operation_id": "forged"
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "analysis evidence requires a finding",
+    "schema": "SaveAnalysisEvidenceInput",
+    "value": {
+      "task_id": "task-one",
+      "condition_version": "2",
+      "data_range": "连续两个完整自然月",
+      "findings": []
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "analysis evidence rejects blank range",
+    "schema": "SaveAnalysisEvidenceInput",
+    "value": {
+      "task_id": "task-one",
+      "condition_version": "2",
+      "data_range": " \n ",
+      "findings": [
+        {
+          "text": "本月收入低于上月",
+          "calculation": "比较两期净收入口径",
+          "limitations": [
+            "只说明数据贡献，不证明因果"
+          ],
+          "query_refs": [
+            {
+              "query_id": "query-one",
+              "result_ref": "result-one",
+              "columns": [
+                "period",
+                "net_revenue"
+              ]
+            }
+          ],
+          "knowledge_refs": [
+            {
+              "object_id": "metric-revenue",
+              "version": "3",
+              "path": "sql"
+            }
+          ],
+          "figures": [
+            {
+              "label": "本月净收入",
+              "query_id": "query-one",
+              "column": "net_revenue",
+              "row_index": 0,
+              "value": "125.00"
+            }
+          ]
+        }
+      ]
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "analysis evidence figure is scalar",
+    "schema": "AnalysisFigure",
+    "value": {
+      "label": "本月净收入",
+      "query_id": "query-one",
+      "column": "net_revenue",
+      "row_index": 0,
+      "value": "125.00"
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "analysis evidence figure supports null",
+    "schema": "AnalysisFigure",
+    "value": {
+      "label": "本月净收入",
+      "query_id": "query-one",
+      "column": "net_revenue",
+      "row_index": 0,
+      "value": null
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "analysis evidence figure rejects row outside saved cap",
+    "schema": "AnalysisFigure",
+    "value": {
+      "label": "本月净收入",
+      "query_id": "query-one",
+      "column": "net_revenue",
+      "row_index": 1000,
+      "value": "125.00"
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "analysis evidence rejects nested result row",
+    "schema": "AnalysisFigure",
+    "value": {
+      "label": "本月净收入",
+      "query_id": "query-one",
+      "column": "net_revenue",
+      "row_index": 0,
+      "value": [
+        "125.00"
+      ]
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "analysis evidence ref contains dependencies only",
+    "schema": "AnalysisEvidenceRef",
+    "value": {
+      "evidence_id": "evidence-one",
+      "conversation_id": "conversation-one",
+      "task_id": "task-one",
+      "condition_version": "2",
+      "result_dependencies": [
+        {
+          "query_id": "query-one",
+          "result_ref": "result-one"
+        }
+      ]
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "analysis evidence ref cannot copy body",
+    "schema": "AnalysisEvidenceRef",
+    "value": {
+      "evidence_id": "evidence-one",
+      "conversation_id": "conversation-one",
+      "task_id": "task-one",
+      "condition_version": "2",
+      "result_dependencies": [
+        {
+          "query_id": "query-one",
+          "result_ref": "result-one"
+        }
+      ],
+      "findings": [
+        {
+          "text": "本月收入低于上月",
+          "calculation": "比较两期净收入口径",
+          "limitations": [
+            "只说明数据贡献，不证明因果"
+          ],
+          "query_refs": [
+            {
+              "query_id": "query-one",
+              "result_ref": "result-one",
+              "columns": [
+                "period",
+                "net_revenue"
+              ]
+            }
+          ],
+          "knowledge_refs": [
+            {
+              "object_id": "metric-revenue",
+              "version": "3",
+              "path": "sql"
+            }
+          ],
+          "figures": [
+            {
+              "label": "本月净收入",
+              "query_id": "query-one",
+              "column": "net_revenue",
+              "row_index": 0,
+              "value": "125.00"
+            }
+          ]
+        }
+      ]
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "get query paginates saved result",
+    "schema": "GetQueryInput",
+    "value": {
+      "query_id": "query-one",
+      "cursor": "10"
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "get query keeps null cursor",
+    "schema": "GetQueryInput",
+    "value": {
+      "query_id": "query-one",
+      "cursor": null
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "legacy read query retains existing cursor shape",
+    "schema": "ReadQueryInput",
+    "value": {
+      "query_id": "query-one",
+      "cursor": "10"
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "workspace task context contains only evidence refs",
+    "schema": "WorkspaceTask",
+    "value": {
+      "id": "task-one",
+      "conditions": {},
+      "evidence_refs": [
+        {
+          "evidence_id": "evidence-one",
+          "conversation_id": "conversation-one",
+          "task_id": "task-one",
+          "condition_version": "2",
+          "result_dependencies": [
+            {
+              "query_id": "query-one",
+              "result_ref": "result-one"
+            }
+          ]
+        }
+      ]
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "workspace task refs bounded to five",
+    "schema": "WorkspaceTask",
+    "value": {
+      "evidence_refs": [
+        {
+          "evidence_id": "evidence-one",
+          "conversation_id": "conversation-one",
+          "task_id": "task-one",
+          "condition_version": "2",
+          "result_dependencies": [
+            {
+              "query_id": "query-one",
+              "result_ref": "result-one"
+            }
+          ]
+        },
+        {
+          "evidence_id": "evidence-one",
+          "conversation_id": "conversation-one",
+          "task_id": "task-one",
+          "condition_version": "2",
+          "result_dependencies": [
+            {
+              "query_id": "query-one",
+              "result_ref": "result-one"
+            }
+          ]
+        },
+        {
+          "evidence_id": "evidence-one",
+          "conversation_id": "conversation-one",
+          "task_id": "task-one",
+          "condition_version": "2",
+          "result_dependencies": [
+            {
+              "query_id": "query-one",
+              "result_ref": "result-one"
+            }
+          ]
+        },
+        {
+          "evidence_id": "evidence-one",
+          "conversation_id": "conversation-one",
+          "task_id": "task-one",
+          "condition_version": "2",
+          "result_dependencies": [
+            {
+              "query_id": "query-one",
+              "result_ref": "result-one"
+            }
+          ]
+        },
+        {
+          "evidence_id": "evidence-one",
+          "conversation_id": "conversation-one",
+          "task_id": "task-one",
+          "condition_version": "2",
+          "result_dependencies": [
+            {
+              "query_id": "query-one",
+              "result_ref": "result-one"
+            }
+          ]
+        },
+        {
+          "evidence_id": "evidence-one",
+          "conversation_id": "conversation-one",
+          "task_id": "task-one",
+          "condition_version": "2",
+          "result_dependencies": [
+            {
+              "query_id": "query-one",
+              "result_ref": "result-one"
+            }
+          ]
+        }
+      ]
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "query results disclose saved coverage",
+    "schema": "QueryResults",
+    "value": {
+      "query_id": "query-one",
+      "source": "mock",
+      "columns": [
+        {
+          "name": "net_revenue",
+          "type": "text",
+          "encoding": "string"
+        }
+      ],
+      "rows": [
+        [
+          "125.00"
+        ]
+      ],
+      "result_complete": true,
+      "truncated": false,
+      "data_freshness": "synthetic",
+      "result_ref": "result-one",
+      "next_cursor": null,
+      "fetched_offset": "0",
+      "saved_row_count": 1000,
+      "saved_result_complete": false
+    },
+    "valid": true
+  },
+  {
+    "name": "query saved count cannot exceed cap",
+    "schema": "QueryResults",
+    "value": {
+      "query_id": "query-one",
+      "source": "mock",
+      "columns": [
+        {
+          "name": "net_revenue",
+          "type": "text",
+          "encoding": "string"
+        }
+      ],
+      "rows": [
+        [
+          "125.00"
+        ]
+      ],
+      "result_complete": true,
+      "truncated": false,
+      "data_freshness": "synthetic",
+      "result_ref": "result-one",
+      "next_cursor": null,
+      "fetched_offset": "0",
+      "saved_row_count": 1001
+    },
+    "valid": false
+  },
+  {
+    "name": "query saved coverage rejects string",
+    "schema": "QueryResults",
+    "value": {
+      "query_id": "query-one",
+      "source": "mock",
+      "columns": [
+        {
+          "name": "net_revenue",
+          "type": "text",
+          "encoding": "string"
+        }
+      ],
+      "rows": [
+        [
+          "125.00"
+        ]
+      ],
+      "result_complete": true,
+      "truncated": false,
+      "data_freshness": "synthetic",
+      "result_ref": "result-one",
+      "next_cursor": null,
+      "fetched_offset": "0",
+      "saved_result_complete": "true"
+    },
+    "valid": false
+  },
+  {
+    "name": "analysis evidence saved event carries only a reference",
+    "schema": "Event",
+    "value": {
+      "schema_version": 1,
+      "event_seq": "1",
+      "event_id": "event-evidence",
+      "conversation_id": "conversation-one",
+      "type": "analysis_evidence_saved",
+      "payload": {
+        "evidence_id": "evidence-one",
+        "conversation_id": "conversation-one",
+        "task_id": "task-one",
+        "condition_version": "1",
+        "result_dependencies": [
+          {
+            "query_id": "query-one",
+            "result_ref": "result-one"
+          }
+        ]
+      }
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "unknown analysis event remains rejected",
+    "schema": "Event",
+    "value": {
+      "schema_version": 1,
+      "event_seq": "1",
+      "event_id": "event-evidence",
+      "conversation_id": "conversation-one",
+      "type": "unregistered_analysis_event",
+      "payload": {
+        "evidence_id": "evidence-one",
+        "conversation_id": "conversation-one",
+        "task_id": "task-one",
+        "condition_version": "1",
+        "result_dependencies": [
+          {
+            "query_id": "query-one",
+            "result_ref": "result-one"
+          }
+        ]
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "snapshot reads saved analysis evidence references and event",
+    "schema": "Snapshot",
+    "value": {
+      "conversation_id": "conversation-one",
+      "messages": [],
+      "tasks": [
+        {
+          "id": "task-one",
+          "goal": "核对分析",
+          "condition_version": "1",
+          "evidence_refs": [
+            {
+              "evidence_id": "evidence-one",
+              "conversation_id": "conversation-one",
+              "task_id": "task-one",
+              "condition_version": "1",
+              "result_dependencies": [
+                {
+                  "query_id": "query-one",
+                  "result_ref": "result-one"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "runs": [],
+      "events": [
+        {
+          "schema_version": 1,
+          "event_seq": "1",
+          "event_id": "event-evidence",
+          "conversation_id": "conversation-one",
+          "type": "analysis_evidence_saved",
+          "payload": {
+            "evidence_id": "evidence-one",
+            "conversation_id": "conversation-one",
+            "task_id": "task-one",
+            "condition_version": "1",
+            "result_dependencies": [
+              {
+                "query_id": "query-one",
+                "result_ref": "result-one"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "first analysis report requires explicit null expected version",
+    "schema": "SaveAnalysisReportInput",
+    "value": {
+      "task_id": "task-one",
+      "condition_version": "1",
+      "expected_version": null,
+      "title": "合成收入报告",
+      "evidence_ids": [
+        "evidence-one"
+      ],
+      "charts": [
+        {
+          "kind": "line",
+          "title": "合成月度收入",
+          "query_id": "query-one",
+          "result_ref": "result-one",
+          "dimension_column": "month",
+          "measure_column": "amount"
+        }
+      ]
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "revised analysis report binds expected revision",
+    "schema": "SaveAnalysisReportInput",
+    "value": {
+      "task_id": "task-one",
+      "condition_version": "1",
+      "expected_version": "1",
+      "title": "合成收入报告",
+      "evidence_ids": [
+        "evidence-one"
+      ],
+      "charts": [
+        {
+          "kind": "line",
+          "title": "合成月度收入",
+          "query_id": "query-one",
+          "result_ref": "result-one",
+          "dimension_column": "month",
+          "measure_column": "amount"
+        }
+      ]
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "HTTP report save carries client operation identity",
+    "schema": "SaveAnalysisReport",
+    "value": {
+      "task_id": "task-one",
+      "condition_version": "1",
+      "expected_version": null,
+      "title": "合成收入报告",
+      "evidence_ids": [
+        "evidence-one"
+      ],
+      "charts": [
+        {
+          "kind": "line",
+          "title": "合成月度收入",
+          "query_id": "query-one",
+          "result_ref": "result-one",
+          "dimension_column": "month",
+          "measure_column": "amount"
+        }
+      ],
+      "operation_id": "operation-one"
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "Pi report save cannot declare operation identity",
+    "schema": "SaveAnalysisReportInput",
+    "value": {
+      "task_id": "task-one",
+      "condition_version": "1",
+      "expected_version": null,
+      "title": "合成收入报告",
+      "evidence_ids": [
+        "evidence-one"
+      ],
+      "charts": [
+        {
+          "kind": "line",
+          "title": "合成月度收入",
+          "query_id": "query-one",
+          "result_ref": "result-one",
+          "dimension_column": "month",
+          "measure_column": "amount"
+        }
+      ],
+      "operation_id": "operation-one"
+    },
+    "valid": false
+  },
+  {
+    "name": "report save cannot declare owner identity",
+    "schema": "SaveAnalysisReportInput",
+    "value": {
+      "task_id": "task-one",
+      "condition_version": "1",
+      "expected_version": null,
+      "title": "合成收入报告",
+      "evidence_ids": [
+        "evidence-one"
+      ],
+      "charts": [
+        {
+          "kind": "line",
+          "title": "合成月度收入",
+          "query_id": "query-one",
+          "result_ref": "result-one",
+          "dimension_column": "month",
+          "measure_column": "amount"
+        }
+      ],
+      "owner_id": "user-one"
+    },
+    "valid": false
+  },
+  {
+    "name": "report save cannot replace evidence findings",
+    "schema": "SaveAnalysisReportInput",
+    "value": {
+      "task_id": "task-one",
+      "condition_version": "1",
+      "expected_version": null,
+      "title": "合成收入报告",
+      "evidence_ids": [
+        "evidence-one"
+      ],
+      "charts": [
+        {
+          "kind": "line",
+          "title": "合成月度收入",
+          "query_id": "query-one",
+          "result_ref": "result-one",
+          "dimension_column": "month",
+          "measure_column": "amount"
+        }
+      ],
+      "findings": []
+    },
+    "valid": false
+  },
+  {
+    "name": "report save rejects omitted expected version",
+    "schema": "SaveAnalysisReportInput",
+    "value": {
+      "task_id": "task-one",
+      "condition_version": "1",
+      "title": "合成收入报告",
+      "evidence_ids": [
+        "evidence-one"
+      ],
+      "charts": [
+        {
+          "kind": "line",
+          "title": "合成月度收入",
+          "query_id": "query-one",
+          "result_ref": "result-one",
+          "dimension_column": "month",
+          "measure_column": "amount"
+        }
+      ]
+    },
+    "valid": false
+  },
+  {
+    "name": "report save rejects numeric revision",
+    "schema": "SaveAnalysisReportInput",
+    "value": {
+      "task_id": "task-one",
+      "condition_version": "1",
+      "expected_version": 1,
+      "title": "合成收入报告",
+      "evidence_ids": [
+        "evidence-one"
+      ],
+      "charts": [
+        {
+          "kind": "line",
+          "title": "合成月度收入",
+          "query_id": "query-one",
+          "result_ref": "result-one",
+          "dimension_column": "month",
+          "measure_column": "amount"
+        }
+      ]
+    },
+    "valid": false
+  },
+  {
+    "name": "report save requires evidence",
+    "schema": "SaveAnalysisReportInput",
+    "value": {
+      "task_id": "task-one",
+      "condition_version": "1",
+      "expected_version": null,
+      "title": "合成收入报告",
+      "evidence_ids": [],
+      "charts": [
+        {
+          "kind": "line",
+          "title": "合成月度收入",
+          "query_id": "query-one",
+          "result_ref": "result-one",
+          "dimension_column": "month",
+          "measure_column": "amount"
+        }
+      ]
+    },
+    "valid": false
+  },
+  {
+    "name": "report save rejects duplicate evidence",
+    "schema": "SaveAnalysisReportInput",
+    "value": {
+      "task_id": "task-one",
+      "condition_version": "1",
+      "expected_version": null,
+      "title": "合成收入报告",
+      "evidence_ids": [
+        "evidence-one",
+        "evidence-one"
+      ],
+      "charts": [
+        {
+          "kind": "line",
+          "title": "合成月度收入",
+          "query_id": "query-one",
+          "result_ref": "result-one",
+          "dimension_column": "month",
+          "measure_column": "amount"
+        }
+      ]
+    },
+    "valid": false
+  },
+  {
+    "name": "report save limits evidence to five records",
+    "schema": "SaveAnalysisReportInput",
+    "value": {
+      "task_id": "task-one",
+      "condition_version": "1",
+      "expected_version": null,
+      "title": "合成收入报告",
+      "evidence_ids": [
+        "evidence-0",
+        "evidence-1",
+        "evidence-2",
+        "evidence-3",
+        "evidence-4",
+        "evidence-5"
+      ],
+      "charts": [
+        {
+          "kind": "line",
+          "title": "合成月度收入",
+          "query_id": "query-one",
+          "result_ref": "result-one",
+          "dimension_column": "month",
+          "measure_column": "amount"
+        }
+      ]
+    },
+    "valid": false
+  },
+  {
+    "name": "report save limits charts to six configurations",
+    "schema": "SaveAnalysisReportInput",
+    "value": {
+      "task_id": "task-one",
+      "condition_version": "1",
+      "expected_version": null,
+      "title": "合成收入报告",
+      "evidence_ids": [
+        "evidence-one"
+      ],
+      "charts": [
+        {
+          "kind": "line",
+          "title": "合成月度收入",
+          "query_id": "query-one",
+          "result_ref": "result-one",
+          "dimension_column": "month",
+          "measure_column": "amount"
+        },
+        {
+          "kind": "line",
+          "title": "合成月度收入",
+          "query_id": "query-one",
+          "result_ref": "result-one",
+          "dimension_column": "month",
+          "measure_column": "amount"
+        },
+        {
+          "kind": "line",
+          "title": "合成月度收入",
+          "query_id": "query-one",
+          "result_ref": "result-one",
+          "dimension_column": "month",
+          "measure_column": "amount"
+        },
+        {
+          "kind": "line",
+          "title": "合成月度收入",
+          "query_id": "query-one",
+          "result_ref": "result-one",
+          "dimension_column": "month",
+          "measure_column": "amount"
+        },
+        {
+          "kind": "line",
+          "title": "合成月度收入",
+          "query_id": "query-one",
+          "result_ref": "result-one",
+          "dimension_column": "month",
+          "measure_column": "amount"
+        },
+        {
+          "kind": "line",
+          "title": "合成月度收入",
+          "query_id": "query-one",
+          "result_ref": "result-one",
+          "dimension_column": "month",
+          "measure_column": "amount"
+        },
+        {
+          "kind": "line",
+          "title": "合成月度收入",
+          "query_id": "query-one",
+          "result_ref": "result-one",
+          "dimension_column": "month",
+          "measure_column": "amount"
+        }
+      ]
+    },
+    "valid": false
+  },
+  {
+    "name": "report save title cannot be whitespace",
+    "schema": "SaveAnalysisReportInput",
+    "value": {
+      "task_id": "task-one",
+      "condition_version": "1",
+      "expected_version": null,
+      "title": "  ",
+      "evidence_ids": [
+        "evidence-one"
+      ],
+      "charts": [
+        {
+          "kind": "line",
+          "title": "合成月度收入",
+          "query_id": "query-one",
+          "result_ref": "result-one",
+          "dimension_column": "month",
+          "measure_column": "amount"
+        }
+      ]
+    },
+    "valid": false
+  },
+  {
+    "name": "report chart supports bar configuration",
+    "schema": "AnalysisReportChart",
+    "value": {
+      "kind": "bar",
+      "title": "合成月度收入",
+      "query_id": "query-one",
+      "result_ref": "result-one",
+      "dimension_column": "month",
+      "measure_column": "amount"
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "report chart rejects unimplemented kind",
+    "schema": "AnalysisReportChart",
+    "value": {
+      "kind": "pie",
+      "title": "合成月度收入",
+      "query_id": "query-one",
+      "result_ref": "result-one",
+      "dimension_column": "month",
+      "measure_column": "amount"
+    },
+    "valid": false
+  },
+  {
+    "name": "report chart rejects untyped row snapshot",
+    "schema": "AnalysisReportChart",
+    "value": {
+      "kind": "line",
+      "title": "合成月度收入",
+      "query_id": "query-one",
+      "result_ref": "result-one",
+      "dimension_column": "month",
+      "measure_column": "amount",
+      "rows": [
+        [
+          "private-result"
+        ]
+      ]
+    },
+    "valid": false
+  },
+  {
+    "name": "report reference carries revision only",
+    "schema": "AnalysisReportRef",
+    "value": {
+      "report_id": "report-one",
+      "conversation_id": "conversation-one",
+      "task_id": "task-one",
+      "condition_version": "1",
+      "version": "1"
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "report reference cannot carry findings",
+    "schema": "AnalysisReportRef",
+    "value": {
+      "report_id": "report-one",
+      "conversation_id": "conversation-one",
+      "task_id": "task-one",
+      "condition_version": "1",
+      "version": "1",
+      "findings": [
+        {
+          "text": "合成收入为9007199254740993.01元",
+          "calculation": "读取保存结果amount列",
+          "limitations": [
+            "只说明该合成范围"
+          ],
+          "query_refs": [
+            {
+              "query_id": "query-one",
+              "result_ref": "result-one",
+              "columns": [
+                "month",
+                "amount"
+              ]
+            }
+          ],
+          "knowledge_refs": [],
+          "figures": [
+            {
+              "label": "收入",
+              "query_id": "query-one",
+              "column": "amount",
+              "row_index": 0,
+              "value": "9007199254740993.01"
+            }
+          ]
+        }
+      ]
+    },
+    "valid": false
+  },
+  {
+    "name": "analysis evidence preserves precise figures in generated type",
+    "schema": "AnalysisEvidence",
+    "value": {
+      "schema_version": 1,
+      "data_range": "2026年合成付款订单",
+      "findings": [
+        {
+          "text": "合成收入为9007199254740993.01元",
+          "calculation": "读取保存结果amount列",
+          "limitations": [
+            "只说明该合成范围"
+          ],
+          "query_refs": [
+            {
+              "query_id": "query-one",
+              "result_ref": "result-one",
+              "columns": [
+                "month",
+                "amount"
+              ]
+            }
+          ],
+          "knowledge_refs": [],
+          "figures": [
+            {
+              "label": "收入",
+              "query_id": "query-one",
+              "column": "amount",
+              "row_index": 0,
+              "value": "9007199254740993.01"
+            }
+          ]
+        }
+      ],
+      "conditions": {
+        "time_start": null,
+        "time_end": null,
+        "timezone": "UTC",
+        "metric": null,
+        "channel": null,
+        "group_by": [],
+        "filters": [],
+        "knowledge_refs": [],
+        "notes": ""
+      },
+      "validated_sources": {
+        "result_dependencies": [
+          {
+            "query_id": "query-one",
+            "result_ref": "result-one"
+          }
+        ],
+        "query_coverage": [],
+        "knowledge_refs": []
+      },
+      "reference": {
+        "evidence_id": "evidence-one",
+        "conversation_id": "conversation-one",
+        "task_id": "task-one",
+        "condition_version": "1",
+        "result_dependencies": [
+          {
+            "query_id": "query-one",
+            "result_ref": "result-one"
+          }
+        ]
+      },
+      "source_message_id": "message-one"
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "analysis evidence rejects copied SQL",
+    "schema": "AnalysisEvidence",
+    "value": {
+      "schema_version": 1,
+      "data_range": "2026年合成付款订单",
+      "findings": [
+        {
+          "text": "合成收入为9007199254740993.01元",
+          "calculation": "读取保存结果amount列",
+          "limitations": [
+            "只说明该合成范围"
+          ],
+          "query_refs": [
+            {
+              "query_id": "query-one",
+              "result_ref": "result-one",
+              "columns": [
+                "month",
+                "amount"
+              ]
+            }
+          ],
+          "knowledge_refs": [],
+          "figures": [
+            {
+              "label": "收入",
+              "query_id": "query-one",
+              "column": "amount",
+              "row_index": 0,
+              "value": "9007199254740993.01"
+            }
+          ]
+        }
+      ],
+      "conditions": {
+        "time_start": null,
+        "time_end": null,
+        "timezone": "UTC",
+        "metric": null,
+        "channel": null,
+        "group_by": [],
+        "filters": [],
+        "knowledge_refs": [],
+        "notes": ""
+      },
+      "validated_sources": {
+        "result_dependencies": [
+          {
+            "query_id": "query-one",
+            "result_ref": "result-one"
+          }
+        ],
+        "query_coverage": [],
+        "knowledge_refs": []
+      },
+      "reference": {
+        "evidence_id": "evidence-one",
+        "conversation_id": "conversation-one",
+        "task_id": "task-one",
+        "condition_version": "1",
+        "result_dependencies": [
+          {
+            "query_id": "query-one",
+            "result_ref": "result-one"
+          }
+        ]
+      },
+      "source_message_id": "message-one",
+      "sql": "SELECT 1"
+    },
+    "valid": false
+  },
+  {
+    "name": "analysis report contains preserved evidence and bound charts",
+    "schema": "AnalysisReport",
+    "value": {
+      "schema_version": 1,
+      "reference": {
+        "report_id": "report-one",
+        "conversation_id": "conversation-one",
+        "task_id": "task-one",
+        "condition_version": "1",
+        "version": "1"
+      },
+      "title": "合成收入报告",
+      "charts": [
+        {
+          "kind": "line",
+          "title": "合成月度收入",
+          "query_id": "query-one",
+          "result_ref": "result-one",
+          "dimension_column": "month",
+          "measure_column": "amount"
+        }
+      ],
+      "evidence": [
+        {
+          "schema_version": 1,
+          "data_range": "2026年合成付款订单",
+          "findings": [
+            {
+              "text": "合成收入为9007199254740993.01元",
+              "calculation": "读取保存结果amount列",
+              "limitations": [
+                "只说明该合成范围"
+              ],
+              "query_refs": [
+                {
+                  "query_id": "query-one",
+                  "result_ref": "result-one",
+                  "columns": [
+                    "month",
+                    "amount"
+                  ]
+                }
+              ],
+              "knowledge_refs": [],
+              "figures": [
+                {
+                  "label": "收入",
+                  "query_id": "query-one",
+                  "column": "amount",
+                  "row_index": 0,
+                  "value": "9007199254740993.01"
+                }
+              ]
+            }
+          ],
+          "conditions": {
+            "time_start": null,
+            "time_end": null,
+            "timezone": "UTC",
+            "metric": null,
+            "channel": null,
+            "group_by": [],
+            "filters": [],
+            "knowledge_refs": [],
+            "notes": ""
+          },
+          "validated_sources": {
+            "result_dependencies": [
+              {
+                "query_id": "query-one",
+                "result_ref": "result-one"
+              }
+            ],
+            "query_coverage": [],
+            "knowledge_refs": []
+          },
+          "reference": {
+            "evidence_id": "evidence-one",
+            "conversation_id": "conversation-one",
+            "task_id": "task-one",
+            "condition_version": "1",
+            "result_dependencies": [
+              {
+                "query_id": "query-one",
+                "result_ref": "result-one"
+              }
+            ]
+          },
+          "source_message_id": "message-one"
+        }
+      ],
+      "created_at": "2026-10-13T00:00:00Z"
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "analysis report rejects copied result rows",
+    "schema": "AnalysisReport",
+    "value": {
+      "schema_version": 1,
+      "reference": {
+        "report_id": "report-one",
+        "conversation_id": "conversation-one",
+        "task_id": "task-one",
+        "condition_version": "1",
+        "version": "1"
+      },
+      "title": "合成收入报告",
+      "charts": [
+        {
+          "kind": "line",
+          "title": "合成月度收入",
+          "query_id": "query-one",
+          "result_ref": "result-one",
+          "dimension_column": "month",
+          "measure_column": "amount"
+        }
+      ],
+      "evidence": [
+        {
+          "schema_version": 1,
+          "data_range": "2026年合成付款订单",
+          "findings": [
+            {
+              "text": "合成收入为9007199254740993.01元",
+              "calculation": "读取保存结果amount列",
+              "limitations": [
+                "只说明该合成范围"
+              ],
+              "query_refs": [
+                {
+                  "query_id": "query-one",
+                  "result_ref": "result-one",
+                  "columns": [
+                    "month",
+                    "amount"
+                  ]
+                }
+              ],
+              "knowledge_refs": [],
+              "figures": [
+                {
+                  "label": "收入",
+                  "query_id": "query-one",
+                  "column": "amount",
+                  "row_index": 0,
+                  "value": "9007199254740993.01"
+                }
+              ]
+            }
+          ],
+          "conditions": {
+            "time_start": null,
+            "time_end": null,
+            "timezone": "UTC",
+            "metric": null,
+            "channel": null,
+            "group_by": [],
+            "filters": [],
+            "knowledge_refs": [],
+            "notes": ""
+          },
+          "validated_sources": {
+            "result_dependencies": [
+              {
+                "query_id": "query-one",
+                "result_ref": "result-one"
+              }
+            ],
+            "query_coverage": [],
+            "knowledge_refs": []
+          },
+          "reference": {
+            "evidence_id": "evidence-one",
+            "conversation_id": "conversation-one",
+            "task_id": "task-one",
+            "condition_version": "1",
+            "result_dependencies": [
+              {
+                "query_id": "query-one",
+                "result_ref": "result-one"
+              }
+            ]
+          },
+          "source_message_id": "message-one"
+        }
+      ],
+      "created_at": "2026-10-13T00:00:00Z",
+      "rows": [
+        [
+          "private-result"
+        ]
+      ]
+    },
+    "valid": false
+  },
+  {
+    "name": "available report carries current read results",
+    "schema": "AnalysisReportView",
+    "value": {
+      "status": "available",
+      "reference": {
+        "report_id": "report-one",
+        "conversation_id": "conversation-one",
+        "task_id": "task-one",
+        "condition_version": "1",
+        "version": "1"
+      },
+      "report": {
+        "schema_version": 1,
+        "reference": {
+          "report_id": "report-one",
+          "conversation_id": "conversation-one",
+          "task_id": "task-one",
+          "condition_version": "1",
+          "version": "1"
+        },
+        "title": "合成收入报告",
+        "charts": [
+          {
+            "kind": "line",
+            "title": "合成月度收入",
+            "query_id": "query-one",
+            "result_ref": "result-one",
+            "dimension_column": "month",
+            "measure_column": "amount"
+          }
+        ],
+        "evidence": [
+          {
+            "schema_version": 1,
+            "data_range": "2026年合成付款订单",
+            "findings": [
+              {
+                "text": "合成收入为9007199254740993.01元",
+                "calculation": "读取保存结果amount列",
+                "limitations": [
+                  "只说明该合成范围"
+                ],
+                "query_refs": [
+                  {
+                    "query_id": "query-one",
+                    "result_ref": "result-one",
+                    "columns": [
+                      "month",
+                      "amount"
+                    ]
+                  }
+                ],
+                "knowledge_refs": [],
+                "figures": [
+                  {
+                    "label": "收入",
+                    "query_id": "query-one",
+                    "column": "amount",
+                    "row_index": 0,
+                    "value": "9007199254740993.01"
+                  }
+                ]
+              }
+            ],
+            "conditions": {
+              "time_start": null,
+              "time_end": null,
+              "timezone": "UTC",
+              "metric": null,
+              "channel": null,
+              "group_by": [],
+              "filters": [],
+              "knowledge_refs": [],
+              "notes": ""
+            },
+            "validated_sources": {
+              "result_dependencies": [
+                {
+                  "query_id": "query-one",
+                  "result_ref": "result-one"
+                }
+              ],
+              "query_coverage": [],
+              "knowledge_refs": []
+            },
+            "reference": {
+              "evidence_id": "evidence-one",
+              "conversation_id": "conversation-one",
+              "task_id": "task-one",
+              "condition_version": "1",
+              "result_dependencies": [
+                {
+                  "query_id": "query-one",
+                  "result_ref": "result-one"
+                }
+              ]
+            },
+            "source_message_id": "message-one"
+          }
+        ],
+        "created_at": "2026-10-13T00:00:00Z"
+      },
+      "chart_results": [
+        {
+          "query_id": "query-one",
+          "source": "mock",
+          "columns": [
+            {
+              "name": "month",
+              "type": "string",
+              "encoding": "utf8"
+            },
+            {
+              "name": "amount",
+              "type": "decimal",
+              "encoding": "decimal_string"
+            }
+          ],
+          "rows": [
+            [
+              "2026-01",
+              "9007199254740993.01"
+            ]
+          ],
+          "result_complete": true,
+          "truncated": false,
+          "data_freshness": "synthetic",
+          "result_ref": "result-one",
+          "next_cursor": null,
+          "fetched_offset": "0",
+          "saved_row_count": 1,
+          "saved_result_complete": true
+        }
+      ]
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "available report cannot have null reference",
+    "schema": "AnalysisReportView",
+    "value": {
+      "status": "available",
+      "reference": null,
+      "report": {
+        "schema_version": 1,
+        "reference": {
+          "report_id": "report-one",
+          "conversation_id": "conversation-one",
+          "task_id": "task-one",
+          "condition_version": "1",
+          "version": "1"
+        },
+        "title": "合成收入报告",
+        "charts": [
+          {
+            "kind": "line",
+            "title": "合成月度收入",
+            "query_id": "query-one",
+            "result_ref": "result-one",
+            "dimension_column": "month",
+            "measure_column": "amount"
+          }
+        ],
+        "evidence": [
+          {
+            "schema_version": 1,
+            "data_range": "2026年合成付款订单",
+            "findings": [
+              {
+                "text": "合成收入为9007199254740993.01元",
+                "calculation": "读取保存结果amount列",
+                "limitations": [
+                  "只说明该合成范围"
+                ],
+                "query_refs": [
+                  {
+                    "query_id": "query-one",
+                    "result_ref": "result-one",
+                    "columns": [
+                      "month",
+                      "amount"
+                    ]
+                  }
+                ],
+                "knowledge_refs": [],
+                "figures": [
+                  {
+                    "label": "收入",
+                    "query_id": "query-one",
+                    "column": "amount",
+                    "row_index": 0,
+                    "value": "9007199254740993.01"
+                  }
+                ]
+              }
+            ],
+            "conditions": {
+              "time_start": null,
+              "time_end": null,
+              "timezone": "UTC",
+              "metric": null,
+              "channel": null,
+              "group_by": [],
+              "filters": [],
+              "knowledge_refs": [],
+              "notes": ""
+            },
+            "validated_sources": {
+              "result_dependencies": [
+                {
+                  "query_id": "query-one",
+                  "result_ref": "result-one"
+                }
+              ],
+              "query_coverage": [],
+              "knowledge_refs": []
+            },
+            "reference": {
+              "evidence_id": "evidence-one",
+              "conversation_id": "conversation-one",
+              "task_id": "task-one",
+              "condition_version": "1",
+              "result_dependencies": [
+                {
+                  "query_id": "query-one",
+                  "result_ref": "result-one"
+                }
+              ]
+            },
+            "source_message_id": "message-one"
+          }
+        ],
+        "created_at": "2026-10-13T00:00:00Z"
+      },
+      "chart_results": [
+        {
+          "query_id": "query-one",
+          "source": "mock",
+          "columns": [
+            {
+              "name": "month",
+              "type": "string",
+              "encoding": "utf8"
+            },
+            {
+              "name": "amount",
+              "type": "decimal",
+              "encoding": "decimal_string"
+            }
+          ],
+          "rows": [
+            [
+              "2026-01",
+              "9007199254740993.01"
+            ]
+          ],
+          "result_complete": true,
+          "truncated": false,
+          "data_freshness": "synthetic",
+          "result_ref": "result-one",
+          "next_cursor": null,
+          "fetched_offset": "0",
+          "saved_row_count": 1,
+          "saved_result_complete": true
+        }
+      ]
+    },
+    "valid": false
+  },
+  {
+    "name": "available report requires body",
+    "schema": "AnalysisReportView",
+    "value": {
+      "status": "available",
+      "reference": {
+        "report_id": "report-one",
+        "conversation_id": "conversation-one",
+        "task_id": "task-one",
+        "condition_version": "1",
+        "version": "1"
+      },
+      "chart_results": [
+        {
+          "query_id": "query-one",
+          "source": "mock",
+          "columns": [
+            {
+              "name": "month",
+              "type": "string",
+              "encoding": "utf8"
+            },
+            {
+              "name": "amount",
+              "type": "decimal",
+              "encoding": "decimal_string"
+            }
+          ],
+          "rows": [
+            [
+              "2026-01",
+              "9007199254740993.01"
+            ]
+          ],
+          "result_complete": true,
+          "truncated": false,
+          "data_freshness": "synthetic",
+          "result_ref": "result-one",
+          "next_cursor": null,
+          "fetched_offset": "0",
+          "saved_row_count": 1,
+          "saved_result_complete": true
+        }
+      ]
+    },
+    "valid": false
+  },
+  {
+    "name": "condition_changed report carries reference without private body",
+    "schema": "AnalysisReportView",
+    "value": {
+      "status": "condition_changed",
+      "reference": {
+        "report_id": "report-one",
+        "conversation_id": "conversation-one",
+        "task_id": "task-one",
+        "condition_version": "1",
+        "version": "1"
+      }
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "condition_changed report rejects copied private body",
+    "schema": "AnalysisReportView",
+    "value": {
+      "status": "condition_changed",
+      "reference": {
+        "report_id": "report-one",
+        "conversation_id": "conversation-one",
+        "task_id": "task-one",
+        "condition_version": "1",
+        "version": "1"
+      },
+      "report": {
+        "schema_version": 1,
+        "reference": {
+          "report_id": "report-one",
+          "conversation_id": "conversation-one",
+          "task_id": "task-one",
+          "condition_version": "1",
+          "version": "1"
+        },
+        "title": "合成收入报告",
+        "charts": [
+          {
+            "kind": "line",
+            "title": "合成月度收入",
+            "query_id": "query-one",
+            "result_ref": "result-one",
+            "dimension_column": "month",
+            "measure_column": "amount"
+          }
+        ],
+        "evidence": [
+          {
+            "schema_version": 1,
+            "data_range": "2026年合成付款订单",
+            "findings": [
+              {
+                "text": "合成收入为9007199254740993.01元",
+                "calculation": "读取保存结果amount列",
+                "limitations": [
+                  "只说明该合成范围"
+                ],
+                "query_refs": [
+                  {
+                    "query_id": "query-one",
+                    "result_ref": "result-one",
+                    "columns": [
+                      "month",
+                      "amount"
+                    ]
+                  }
+                ],
+                "knowledge_refs": [],
+                "figures": [
+                  {
+                    "label": "收入",
+                    "query_id": "query-one",
+                    "column": "amount",
+                    "row_index": 0,
+                    "value": "9007199254740993.01"
+                  }
+                ]
+              }
+            ],
+            "conditions": {
+              "time_start": null,
+              "time_end": null,
+              "timezone": "UTC",
+              "metric": null,
+              "channel": null,
+              "group_by": [],
+              "filters": [],
+              "knowledge_refs": [],
+              "notes": ""
+            },
+            "validated_sources": {
+              "result_dependencies": [
+                {
+                  "query_id": "query-one",
+                  "result_ref": "result-one"
+                }
+              ],
+              "query_coverage": [],
+              "knowledge_refs": []
+            },
+            "reference": {
+              "evidence_id": "evidence-one",
+              "conversation_id": "conversation-one",
+              "task_id": "task-one",
+              "condition_version": "1",
+              "result_dependencies": [
+                {
+                  "query_id": "query-one",
+                  "result_ref": "result-one"
+                }
+              ]
+            },
+            "source_message_id": "message-one"
+          }
+        ],
+        "created_at": "2026-10-13T00:00:00Z"
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "condition_changed report rejects copied chart results",
+    "schema": "AnalysisReportView",
+    "value": {
+      "status": "condition_changed",
+      "reference": {
+        "report_id": "report-one",
+        "conversation_id": "conversation-one",
+        "task_id": "task-one",
+        "condition_version": "1",
+        "version": "1"
+      },
+      "chart_results": [
+        {
+          "query_id": "query-one",
+          "source": "mock",
+          "columns": [
+            {
+              "name": "month",
+              "type": "string",
+              "encoding": "utf8"
+            },
+            {
+              "name": "amount",
+              "type": "decimal",
+              "encoding": "decimal_string"
+            }
+          ],
+          "rows": [
+            [
+              "2026-01",
+              "9007199254740993.01"
+            ]
+          ],
+          "result_complete": true,
+          "truncated": false,
+          "data_freshness": "synthetic",
+          "result_ref": "result-one",
+          "next_cursor": null,
+          "fetched_offset": "0",
+          "saved_row_count": 1,
+          "saved_result_complete": true
+        }
+      ]
+    },
+    "valid": false
+  },
+  {
+    "name": "sources_unavailable report carries reference without private body",
+    "schema": "AnalysisReportView",
+    "value": {
+      "status": "sources_unavailable",
+      "reference": {
+        "report_id": "report-one",
+        "conversation_id": "conversation-one",
+        "task_id": "task-one",
+        "condition_version": "1",
+        "version": "1"
+      }
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "sources_unavailable report rejects copied private body",
+    "schema": "AnalysisReportView",
+    "value": {
+      "status": "sources_unavailable",
+      "reference": {
+        "report_id": "report-one",
+        "conversation_id": "conversation-one",
+        "task_id": "task-one",
+        "condition_version": "1",
+        "version": "1"
+      },
+      "report": {
+        "schema_version": 1,
+        "reference": {
+          "report_id": "report-one",
+          "conversation_id": "conversation-one",
+          "task_id": "task-one",
+          "condition_version": "1",
+          "version": "1"
+        },
+        "title": "合成收入报告",
+        "charts": [
+          {
+            "kind": "line",
+            "title": "合成月度收入",
+            "query_id": "query-one",
+            "result_ref": "result-one",
+            "dimension_column": "month",
+            "measure_column": "amount"
+          }
+        ],
+        "evidence": [
+          {
+            "schema_version": 1,
+            "data_range": "2026年合成付款订单",
+            "findings": [
+              {
+                "text": "合成收入为9007199254740993.01元",
+                "calculation": "读取保存结果amount列",
+                "limitations": [
+                  "只说明该合成范围"
+                ],
+                "query_refs": [
+                  {
+                    "query_id": "query-one",
+                    "result_ref": "result-one",
+                    "columns": [
+                      "month",
+                      "amount"
+                    ]
+                  }
+                ],
+                "knowledge_refs": [],
+                "figures": [
+                  {
+                    "label": "收入",
+                    "query_id": "query-one",
+                    "column": "amount",
+                    "row_index": 0,
+                    "value": "9007199254740993.01"
+                  }
+                ]
+              }
+            ],
+            "conditions": {
+              "time_start": null,
+              "time_end": null,
+              "timezone": "UTC",
+              "metric": null,
+              "channel": null,
+              "group_by": [],
+              "filters": [],
+              "knowledge_refs": [],
+              "notes": ""
+            },
+            "validated_sources": {
+              "result_dependencies": [
+                {
+                  "query_id": "query-one",
+                  "result_ref": "result-one"
+                }
+              ],
+              "query_coverage": [],
+              "knowledge_refs": []
+            },
+            "reference": {
+              "evidence_id": "evidence-one",
+              "conversation_id": "conversation-one",
+              "task_id": "task-one",
+              "condition_version": "1",
+              "result_dependencies": [
+                {
+                  "query_id": "query-one",
+                  "result_ref": "result-one"
+                }
+              ]
+            },
+            "source_message_id": "message-one"
+          }
+        ],
+        "created_at": "2026-10-13T00:00:00Z"
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "sources_unavailable report rejects copied chart results",
+    "schema": "AnalysisReportView",
+    "value": {
+      "status": "sources_unavailable",
+      "reference": {
+        "report_id": "report-one",
+        "conversation_id": "conversation-one",
+        "task_id": "task-one",
+        "condition_version": "1",
+        "version": "1"
+      },
+      "chart_results": [
+        {
+          "query_id": "query-one",
+          "source": "mock",
+          "columns": [
+            {
+              "name": "month",
+              "type": "string",
+              "encoding": "utf8"
+            },
+            {
+              "name": "amount",
+              "type": "decimal",
+              "encoding": "decimal_string"
+            }
+          ],
+          "rows": [
+            [
+              "2026-01",
+              "9007199254740993.01"
+            ]
+          ],
+          "result_complete": true,
+          "truncated": false,
+          "data_freshness": "synthetic",
+          "result_ref": "result-one",
+          "next_cursor": null,
+          "fetched_offset": "0",
+          "saved_row_count": 1,
+          "saved_result_complete": true
+        }
+      ]
+    },
+    "valid": false
+  },
+  {
+    "name": "unavailable report can express missing report reference",
+    "schema": "AnalysisReportView",
+    "value": {
+      "status": "sources_unavailable",
+      "reference": null
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "analysis report saved event carries only revision reference",
+    "schema": "Event",
+    "value": {
+      "schema_version": 1,
+      "event_seq": "1",
+      "event_id": "event-report",
+      "conversation_id": "conversation-one",
+      "type": "analysis_report_saved",
+      "payload": {
+        "report_id": "report-one",
+        "conversation_id": "conversation-one",
+        "task_id": "task-one",
+        "condition_version": "1",
+        "version": "1"
+      }
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "analysis report saved event rejects private body",
+    "schema": "Event",
+    "value": {
+      "schema_version": 1,
+      "event_seq": "1",
+      "event_id": "event-report",
+      "conversation_id": "conversation-one",
+      "type": "analysis_report_saved",
+      "payload": {
+        "schema_version": 1,
+        "reference": {
+          "report_id": "report-one",
+          "conversation_id": "conversation-one",
+          "task_id": "task-one",
+          "condition_version": "1",
+          "version": "1"
+        },
+        "title": "合成收入报告",
+        "charts": [
+          {
+            "kind": "line",
+            "title": "合成月度收入",
+            "query_id": "query-one",
+            "result_ref": "result-one",
+            "dimension_column": "month",
+            "measure_column": "amount"
+          }
+        ],
+        "evidence": [
+          {
+            "schema_version": 1,
+            "data_range": "2026年合成付款订单",
+            "findings": [
+              {
+                "text": "合成收入为9007199254740993.01元",
+                "calculation": "读取保存结果amount列",
+                "limitations": [
+                  "只说明该合成范围"
+                ],
+                "query_refs": [
+                  {
+                    "query_id": "query-one",
+                    "result_ref": "result-one",
+                    "columns": [
+                      "month",
+                      "amount"
+                    ]
+                  }
+                ],
+                "knowledge_refs": [],
+                "figures": [
+                  {
+                    "label": "收入",
+                    "query_id": "query-one",
+                    "column": "amount",
+                    "row_index": 0,
+                    "value": "9007199254740993.01"
+                  }
+                ]
+              }
+            ],
+            "conditions": {
+              "time_start": null,
+              "time_end": null,
+              "timezone": "UTC",
+              "metric": null,
+              "channel": null,
+              "group_by": [],
+              "filters": [],
+              "knowledge_refs": [],
+              "notes": ""
+            },
+            "validated_sources": {
+              "result_dependencies": [
+                {
+                  "query_id": "query-one",
+                  "result_ref": "result-one"
+                }
+              ],
+              "query_coverage": [],
+              "knowledge_refs": []
+            },
+            "reference": {
+              "evidence_id": "evidence-one",
+              "conversation_id": "conversation-one",
+              "task_id": "task-one",
+              "condition_version": "1",
+              "result_dependencies": [
+                {
+                  "query_id": "query-one",
+                  "result_ref": "result-one"
+                }
+              ]
+            },
+            "source_message_id": "message-one"
+          }
+        ],
+        "created_at": "2026-10-13T00:00:00Z"
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "analysis report read can start with task identity",
+    "schema": "ReadAnalysisReportInput",
+    "value": {
+      "task_id": "task-read"
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "analysis report read accepts offset zero without version",
+    "schema": "ReadAnalysisReportInput",
+    "value": {
+      "task_id": "task-read",
+      "offset": 0,
+      "limit": 8192
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "analysis report continuation binds exact version",
+    "schema": "ReadAnalysisReportInput",
+    "value": {
+      "task_id": "task-read",
+      "version": "3",
+      "offset": 64,
+      "limit": 128
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "analysis report continuation requires version",
+    "schema": "ReadAnalysisReportInput",
+    "value": {
+      "task_id": "task-read",
+      "offset": 1
+    },
+    "valid": false
+  },
+  {
+    "name": "analysis report read rejects null version",
+    "schema": "ReadAnalysisReportInput",
+    "value": {
+      "task_id": "task-read",
+      "version": null
+    },
+    "valid": false
+  },
+  {
+    "name": "analysis report continuation rejects null version",
+    "schema": "ReadAnalysisReportInput",
+    "value": {
+      "task_id": "task-read",
+      "version": null,
+      "offset": 1
+    },
+    "valid": false
+  },
+  {
+    "name": "analysis report read rejects numeric version",
+    "schema": "ReadAnalysisReportInput",
+    "value": {
+      "task_id": "task-read",
+      "version": 3
+    },
+    "valid": false
+  },
+  {
+    "name": "analysis report read rejects negative offset",
+    "schema": "ReadAnalysisReportInput",
+    "value": {
+      "task_id": "task-read",
+      "offset": -1
+    },
+    "valid": false
+  },
+  {
+    "name": "analysis report read bounds offset",
+    "schema": "ReadAnalysisReportInput",
+    "value": {
+      "task_id": "task-read",
+      "version": "3",
+      "offset": 10000001
+    },
+    "valid": false
+  },
+  {
+    "name": "analysis report read rejects fractional offset",
+    "schema": "ReadAnalysisReportInput",
+    "value": {
+      "task_id": "task-read",
+      "version": "3",
+      "offset": 0.5
+    },
+    "valid": false
+  },
+  {
+    "name": "analysis report read requires positive page limit",
+    "schema": "ReadAnalysisReportInput",
+    "value": {
+      "task_id": "task-read",
+      "limit": 0
+    },
+    "valid": false
+  },
+  {
+    "name": "analysis report read bounds page limit",
+    "schema": "ReadAnalysisReportInput",
+    "value": {
+      "task_id": "task-read",
+      "limit": 8193
+    },
+    "valid": false
+  },
+  {
+    "name": "analysis report read cannot declare owner identity",
+    "schema": "ReadAnalysisReportInput",
+    "value": {
+      "task_id": "task-read",
+      "owner_id": "another-user"
+    },
+    "valid": false
+  },
+  {
+    "name": "analysis report page preserves exact decimal and unicode JSON text",
+    "schema": "AnalysisReportPage",
+    "value": {
+      "status": "available",
+      "reference": {
+        "report_id": "report-read",
+        "conversation_id": "conversation-read",
+        "task_id": "task-read",
+        "condition_version": "2",
+        "version": "3"
+      },
+      "title": "可续改的合成报告",
+      "evidence_ids": [
+        "evidence-read"
+      ],
+      "charts": [
+        {
+          "kind": "line",
+          "title": "合成月度收入",
+          "query_id": "query-read",
+          "result_ref": "result-read",
+          "dimension_column": "month",
+          "measure_column": "amount"
+        }
+      ],
+      "content_text": "{\"amount\":\"9007199254740993.01\",\"label\":\"合成🌏\",\"note\":\"\\\"精确文字\\\"\"}",
+      "content_page": {
+        "offset": 0,
+        "total_chars": 64,
+        "complete": true,
+        "next_offset": null
+      }
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "analysis report page can describe continuation",
+    "schema": "AnalysisReportPage",
+    "value": {
+      "status": "available",
+      "reference": {
+        "report_id": "report-read",
+        "conversation_id": "conversation-read",
+        "task_id": "task-read",
+        "condition_version": "2",
+        "version": "3"
+      },
+      "title": "可续改的合成报告",
+      "evidence_ids": [
+        "evidence-read"
+      ],
+      "charts": [
+        {
+          "kind": "line",
+          "title": "合成月度收入",
+          "query_id": "query-read",
+          "result_ref": "result-read",
+          "dimension_column": "month",
+          "measure_column": "amount"
+        }
+      ],
+      "content_text": "{\"amount\":\"9007199254740993.01\",\"label\":\"合成🌏\",\"note\":\"\\\"精确文字\\\"\"}",
+      "content_page": {
+        "offset": 0,
+        "total_chars": 10000,
+        "complete": false,
+        "next_offset": 64
+      }
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "analysis report page limits exact text to bounded characters",
+    "schema": "AnalysisReportPage",
+    "value": {
+      "status": "available",
+      "reference": {
+        "report_id": "report-read",
+        "conversation_id": "conversation-read",
+        "task_id": "task-read",
+        "condition_version": "2",
+        "version": "3"
+      },
+      "title": "可续改的合成报告",
+      "evidence_ids": [
+        "evidence-read"
+      ],
+      "charts": [
+        {
+          "kind": "line",
+          "title": "合成月度收入",
+          "query_id": "query-read",
+          "result_ref": "result-read",
+          "dimension_column": "month",
+          "measure_column": "amount"
+        }
+      ],
+      "content_text": "🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏🌏",
+      "content_page": {
+        "offset": 0,
+        "total_chars": 64,
+        "complete": true,
+        "next_offset": null
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "analysis report page rejects duplicated selected evidence",
+    "schema": "AnalysisReportPage",
+    "value": {
+      "status": "available",
+      "reference": {
+        "report_id": "report-read",
+        "conversation_id": "conversation-read",
+        "task_id": "task-read",
+        "condition_version": "2",
+        "version": "3"
+      },
+      "title": "可续改的合成报告",
+      "evidence_ids": [
+        "evidence-read",
+        "evidence-read"
+      ],
+      "charts": [
+        {
+          "kind": "line",
+          "title": "合成月度收入",
+          "query_id": "query-read",
+          "result_ref": "result-read",
+          "dimension_column": "month",
+          "measure_column": "amount"
+        }
+      ],
+      "content_text": "{\"amount\":\"9007199254740993.01\",\"label\":\"合成🌏\",\"note\":\"\\\"精确文字\\\"\"}",
+      "content_page": {
+        "offset": 0,
+        "total_chars": 64,
+        "complete": true,
+        "next_offset": null
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "analysis report page limits chart metadata",
+    "schema": "AnalysisReportPage",
+    "value": {
+      "status": "available",
+      "reference": {
+        "report_id": "report-read",
+        "conversation_id": "conversation-read",
+        "task_id": "task-read",
+        "condition_version": "2",
+        "version": "3"
+      },
+      "title": "可续改的合成报告",
+      "evidence_ids": [
+        "evidence-read"
+      ],
+      "charts": [
+        {
+          "kind": "line",
+          "title": "合成月度收入",
+          "query_id": "query-read",
+          "result_ref": "result-read",
+          "dimension_column": "month",
+          "measure_column": "amount"
+        },
+        {
+          "kind": "line",
+          "title": "合成月度收入",
+          "query_id": "query-read",
+          "result_ref": "result-read",
+          "dimension_column": "month",
+          "measure_column": "amount"
+        },
+        {
+          "kind": "line",
+          "title": "合成月度收入",
+          "query_id": "query-read",
+          "result_ref": "result-read",
+          "dimension_column": "month",
+          "measure_column": "amount"
+        },
+        {
+          "kind": "line",
+          "title": "合成月度收入",
+          "query_id": "query-read",
+          "result_ref": "result-read",
+          "dimension_column": "month",
+          "measure_column": "amount"
+        },
+        {
+          "kind": "line",
+          "title": "合成月度收入",
+          "query_id": "query-read",
+          "result_ref": "result-read",
+          "dimension_column": "month",
+          "measure_column": "amount"
+        },
+        {
+          "kind": "line",
+          "title": "合成月度收入",
+          "query_id": "query-read",
+          "result_ref": "result-read",
+          "dimension_column": "month",
+          "measure_column": "amount"
+        },
+        {
+          "kind": "line",
+          "title": "合成月度收入",
+          "query_id": "query-read",
+          "result_ref": "result-read",
+          "dimension_column": "month",
+          "measure_column": "amount"
+        }
+      ],
+      "content_text": "{\"amount\":\"9007199254740993.01\",\"label\":\"合成🌏\",\"note\":\"\\\"精确文字\\\"\"}",
+      "content_page": {
+        "offset": 0,
+        "total_chars": 64,
+        "complete": true,
+        "next_offset": null
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "analysis report page cannot carry result rows",
+    "schema": "AnalysisReportPage",
+    "value": {
+      "status": "available",
+      "reference": {
+        "report_id": "report-read",
+        "conversation_id": "conversation-read",
+        "task_id": "task-read",
+        "condition_version": "2",
+        "version": "3"
+      },
+      "title": "可续改的合成报告",
+      "evidence_ids": [
+        "evidence-read"
+      ],
+      "charts": [
+        {
+          "kind": "line",
+          "title": "合成月度收入",
+          "query_id": "query-read",
+          "result_ref": "result-read",
+          "dimension_column": "month",
+          "measure_column": "amount"
+        }
+      ],
+      "content_text": "{\"amount\":\"9007199254740993.01\",\"label\":\"合成🌏\",\"note\":\"\\\"精确文字\\\"\"}",
+      "content_page": {
+        "offset": 0,
+        "total_chars": 64,
+        "complete": true,
+        "next_offset": null
+      },
+      "rows": [
+        [
+          "private-row"
+        ]
+      ]
+    },
+    "valid": false
+  },
+  {
+    "name": "analysis report page requires continuation metadata",
+    "schema": "AnalysisReportPage",
+    "value": {
+      "status": "available",
+      "reference": {
+        "report_id": "report-read",
+        "conversation_id": "conversation-read",
+        "task_id": "task-read",
+        "condition_version": "2",
+        "version": "3"
+      },
+      "title": "可续改的合成报告",
+      "evidence_ids": [
+        "evidence-read"
+      ],
+      "charts": [
+        {
+          "kind": "line",
+          "title": "合成月度收入",
+          "query_id": "query-read",
+          "result_ref": "result-read",
+          "dimension_column": "month",
+          "measure_column": "amount"
+        }
+      ],
+      "content_text": "{\"amount\":\"9007199254740993.01\",\"label\":\"合成🌏\",\"note\":\"\\\"精确文字\\\"\"}"
+    },
+    "valid": false
+  },
+  {
+    "name": "analysis report read condition_changed withholds private text",
+    "schema": "AnalysisReportPage",
+    "value": {
+      "status": "condition_changed",
+      "reference": {
+        "report_id": "report-read",
+        "conversation_id": "conversation-read",
+        "task_id": "task-read",
+        "condition_version": "2",
+        "version": "3"
+      }
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "analysis report read condition_changed rejects title",
+    "schema": "AnalysisReportPage",
+    "value": {
+      "status": "condition_changed",
+      "reference": {
+        "report_id": "report-read",
+        "conversation_id": "conversation-read",
+        "task_id": "task-read",
+        "condition_version": "2",
+        "version": "3"
+      },
+      "title": "可续改的合成报告"
+    },
+    "valid": false
+  },
+  {
+    "name": "analysis report read condition_changed rejects evidence_ids",
+    "schema": "AnalysisReportPage",
+    "value": {
+      "status": "condition_changed",
+      "reference": {
+        "report_id": "report-read",
+        "conversation_id": "conversation-read",
+        "task_id": "task-read",
+        "condition_version": "2",
+        "version": "3"
+      },
+      "evidence_ids": [
+        "evidence-read"
+      ]
+    },
+    "valid": false
+  },
+  {
+    "name": "analysis report read condition_changed rejects charts",
+    "schema": "AnalysisReportPage",
+    "value": {
+      "status": "condition_changed",
+      "reference": {
+        "report_id": "report-read",
+        "conversation_id": "conversation-read",
+        "task_id": "task-read",
+        "condition_version": "2",
+        "version": "3"
+      },
+      "charts": [
+        {
+          "kind": "line",
+          "title": "合成月度收入",
+          "query_id": "query-read",
+          "result_ref": "result-read",
+          "dimension_column": "month",
+          "measure_column": "amount"
+        }
+      ]
+    },
+    "valid": false
+  },
+  {
+    "name": "analysis report read condition_changed rejects content_text",
+    "schema": "AnalysisReportPage",
+    "value": {
+      "status": "condition_changed",
+      "reference": {
+        "report_id": "report-read",
+        "conversation_id": "conversation-read",
+        "task_id": "task-read",
+        "condition_version": "2",
+        "version": "3"
+      },
+      "content_text": "{\"amount\":\"9007199254740993.01\",\"label\":\"合成🌏\",\"note\":\"\\\"精确文字\\\"\"}"
+    },
+    "valid": false
+  },
+  {
+    "name": "analysis report read condition_changed rejects content_page",
+    "schema": "AnalysisReportPage",
+    "value": {
+      "status": "condition_changed",
+      "reference": {
+        "report_id": "report-read",
+        "conversation_id": "conversation-read",
+        "task_id": "task-read",
+        "condition_version": "2",
+        "version": "3"
+      },
+      "content_page": {
+        "offset": 0,
+        "total_chars": 64,
+        "complete": true,
+        "next_offset": null
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "analysis report read sources_unavailable withholds private text",
+    "schema": "AnalysisReportPage",
+    "value": {
+      "status": "sources_unavailable",
+      "reference": {
+        "report_id": "report-read",
+        "conversation_id": "conversation-read",
+        "task_id": "task-read",
+        "condition_version": "2",
+        "version": "3"
+      }
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "analysis report read sources_unavailable rejects title",
+    "schema": "AnalysisReportPage",
+    "value": {
+      "status": "sources_unavailable",
+      "reference": {
+        "report_id": "report-read",
+        "conversation_id": "conversation-read",
+        "task_id": "task-read",
+        "condition_version": "2",
+        "version": "3"
+      },
+      "title": "可续改的合成报告"
+    },
+    "valid": false
+  },
+  {
+    "name": "analysis report read sources_unavailable rejects evidence_ids",
+    "schema": "AnalysisReportPage",
+    "value": {
+      "status": "sources_unavailable",
+      "reference": {
+        "report_id": "report-read",
+        "conversation_id": "conversation-read",
+        "task_id": "task-read",
+        "condition_version": "2",
+        "version": "3"
+      },
+      "evidence_ids": [
+        "evidence-read"
+      ]
+    },
+    "valid": false
+  },
+  {
+    "name": "analysis report read sources_unavailable rejects charts",
+    "schema": "AnalysisReportPage",
+    "value": {
+      "status": "sources_unavailable",
+      "reference": {
+        "report_id": "report-read",
+        "conversation_id": "conversation-read",
+        "task_id": "task-read",
+        "condition_version": "2",
+        "version": "3"
+      },
+      "charts": [
+        {
+          "kind": "line",
+          "title": "合成月度收入",
+          "query_id": "query-read",
+          "result_ref": "result-read",
+          "dimension_column": "month",
+          "measure_column": "amount"
+        }
+      ]
+    },
+    "valid": false
+  },
+  {
+    "name": "analysis report read sources_unavailable rejects content_text",
+    "schema": "AnalysisReportPage",
+    "value": {
+      "status": "sources_unavailable",
+      "reference": {
+        "report_id": "report-read",
+        "conversation_id": "conversation-read",
+        "task_id": "task-read",
+        "condition_version": "2",
+        "version": "3"
+      },
+      "content_text": "{\"amount\":\"9007199254740993.01\",\"label\":\"合成🌏\",\"note\":\"\\\"精确文字\\\"\"}"
+    },
+    "valid": false
+  },
+  {
+    "name": "analysis report read sources_unavailable rejects content_page",
+    "schema": "AnalysisReportPage",
+    "value": {
+      "status": "sources_unavailable",
+      "reference": {
+        "report_id": "report-read",
+        "conversation_id": "conversation-read",
+        "task_id": "task-read",
+        "condition_version": "2",
+        "version": "3"
+      },
+      "content_page": {
+        "offset": 0,
+        "total_chars": 64,
+        "complete": true,
+        "next_offset": null
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "analysis report read can express no available reference",
+    "schema": "AnalysisReportPage",
+    "value": {
+      "status": "sources_unavailable",
+      "reference": null
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "analysis report read rejects unknown status",
+    "schema": "AnalysisReportPage",
+    "value": {
+      "status": "unverified",
+      "reference": {
+        "report_id": "report-read",
+        "conversation_id": "conversation-read",
+        "task_id": "task-read",
+        "condition_version": "2",
+        "version": "3"
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "analysis report read is a registered DataToolInvocation",
+    "schema": "DataToolInvocation",
+    "value": {
+      "run_id": "run-read",
+      "lease_epoch": "1",
+      "sdk_tool_call_id": "call-read",
+      "tool_name": "read_analysis_report",
+      "arguments": {
+        "task_id": "task-read"
+      },
+      "checkpoint": {
+        "sdk_version": "1.0.0",
+        "entries": [],
+        "leaf_id": null
+      }
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "analysis report read is a registered DataToolOutcome",
+    "schema": "DataToolOutcome",
+    "value": {
+      "operation_id": "operation-read",
+      "tool_name": "read_analysis_report",
+      "data": {
+        "status": "available",
+        "reference": {
+          "report_id": "report-read",
+          "conversation_id": "conversation-read",
+          "task_id": "task-read",
+          "condition_version": "2",
+          "version": "3"
+        },
+        "title": "可续改的合成报告",
+        "evidence_ids": [
+          "evidence-read"
+        ],
+        "charts": [
+          {
+            "kind": "line",
+            "title": "合成月度收入",
+            "query_id": "query-read",
+            "result_ref": "result-read",
+            "dimension_column": "month",
+            "measure_column": "amount"
+          }
+        ],
+        "content_text": "{\"amount\":\"9007199254740993.01\",\"label\":\"合成🌏\",\"note\":\"\\\"精确文字\\\"\"}",
+        "content_page": {
+          "offset": 0,
+          "total_chars": 64,
+          "complete": true,
+          "next_offset": null
+        }
+      }
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "query example with complete path dependencies",
+    "schema": "SemanticStructure",
+    "value": {
+      "kind": "query_example",
+      "applicable_question": "按给定标签统计合成商品行数",
+      "parameters": [
+        {
+          "name": "cohort",
+          "type": "string",
+          "description": "结果标签，不改变数据范围",
+          "required": true
+        }
+      ],
+      "sql": "SELECT :cohort AS cohort, COUNT(*) FROM demo_order_detail",
+      "grain": "单行汇总；商品行数",
+      "dependencies": [
+        {
+          "object_id": "table-demo_order_detail",
+          "version": "1",
+          "path": "ddl"
+        },
+        {
+          "object_id": "metric-lines",
+          "version": "2",
+          "path": "body"
+        }
+      ],
+      "verification": null
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "maintainer query example verification",
+    "schema": "SemanticStructure",
+    "value": {
+      "kind": "query_example",
+      "applicable_question": "按给定标签统计合成商品行数",
+      "parameters": [
+        {
+          "name": "cohort",
+          "type": "string",
+          "description": "结果标签，不改变数据范围",
+          "required": true
+        }
+      ],
+      "sql": "SELECT :cohort AS cohort, COUNT(*) FROM demo_order_detail",
+      "grain": "单行汇总；商品行数",
+      "dependencies": [
+        {
+          "object_id": "table-demo_order_detail",
+          "version": "1",
+          "path": "ddl"
+        },
+        {
+          "object_id": "metric-lines",
+          "version": "2",
+          "path": "body"
+        }
+      ],
+      "verification": {
+        "note": "维护者核对行数与订单数的区分",
+        "evidence_refs": [
+          {
+            "object_id": "doc-grain",
+            "version": "3",
+            "path": "body"
+          }
+        ]
+      }
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "query example unsupported parameter type",
+    "schema": "SemanticStructure",
+    "value": {
+      "kind": "query_example",
+      "applicable_question": "按给定标签统计合成商品行数",
+      "parameters": [
+        {
+          "name": "cohort",
+          "type": "date",
+          "description": "结果标签，不改变数据范围",
+          "required": true
+        }
+      ],
+      "sql": "SELECT :cohort AS cohort, COUNT(*) FROM demo_order_detail",
+      "grain": "单行汇总；商品行数",
+      "dependencies": [
+        {
+          "object_id": "table-demo_order_detail",
+          "version": "1",
+          "path": "ddl"
+        },
+        {
+          "object_id": "metric-lines",
+          "version": "2",
+          "path": "body"
+        }
+      ],
+      "verification": null
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "query example dependency requires path",
+    "schema": "SemanticStructure",
+    "value": {
+      "kind": "query_example",
+      "applicable_question": "按给定标签统计合成商品行数",
+      "parameters": [
+        {
+          "name": "cohort",
+          "type": "string",
+          "description": "结果标签，不改变数据范围",
+          "required": true
+        }
+      ],
+      "sql": "SELECT :cohort AS cohort, COUNT(*) FROM demo_order_detail",
+      "grain": "单行汇总；商品行数",
+      "dependencies": [
+        {
+          "object_id": "table-demo_order_detail",
+          "version": "1"
+        },
+        {
+          "object_id": "metric-lines",
+          "version": "2",
+          "path": "body"
+        }
+      ],
+      "verification": null
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "query example cannot claim model certification",
+    "schema": "SemanticStructure",
+    "value": {
+      "kind": "query_example",
+      "applicable_question": "按给定标签统计合成商品行数",
+      "parameters": [
+        {
+          "name": "cohort",
+          "type": "string",
+          "description": "结果标签，不改变数据范围",
+          "required": true
+        }
+      ],
+      "sql": "SELECT :cohort AS cohort, COUNT(*) FROM demo_order_detail",
+      "grain": "单行汇总；商品行数",
+      "dependencies": [
+        {
+          "object_id": "table-demo_order_detail",
+          "version": "1",
+          "path": "ddl"
+        },
+        {
+          "object_id": "metric-lines",
+          "version": "2",
+          "path": "body"
+        }
+      ],
+      "verification": {
+        "note": "模型自称认证",
+        "certified": true,
+        "evidence_refs": [
+          {
+            "object_id": "table-demo_order_detail",
+            "version": "1",
+            "path": "ddl"
+          }
+        ]
+      }
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "query example verification needs evidence",
+    "schema": "SemanticStructure",
+    "value": {
+      "kind": "query_example",
+      "applicable_question": "按给定标签统计合成商品行数",
+      "parameters": [
+        {
+          "name": "cohort",
+          "type": "string",
+          "description": "结果标签，不改变数据范围",
+          "required": true
+        }
+      ],
+      "sql": "SELECT :cohort AS cohort, COUNT(*) FROM demo_order_detail",
+      "grain": "单行汇总；商品行数",
+      "dependencies": [
+        {
+          "object_id": "table-demo_order_detail",
+          "version": "1",
+          "path": "ddl"
+        },
+        {
+          "object_id": "metric-lines",
+          "version": "2",
+          "path": "body"
+        }
+      ],
+      "verification": {
+        "note": "无依据核对",
+        "evidence_refs": []
+      }
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "query example kind searchable",
+    "schema": "SearchInput",
+    "value": {
+      "query": "商品行数",
+      "kinds": [
+        "query_example"
+      ]
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "query example create",
+    "schema": "KnowledgeCreate",
+    "value": {
+      "operation_id": "create-example",
+      "kind": "query_example",
+      "name": "合成案例",
+      "body": "合成说明",
+      "related_ids": [],
+      "structured_value": {
+        "kind": "query_example",
+        "applicable_question": "按给定标签统计合成商品行数",
+        "parameters": [
+          {
+            "name": "cohort",
+            "type": "string",
+            "description": "结果标签，不改变数据范围",
+            "required": true
+          }
+        ],
+        "sql": "SELECT :cohort AS cohort, COUNT(*) FROM demo_order_detail",
+        "grain": "单行汇总；商品行数",
+        "dependencies": [
+          {
+            "object_id": "table-demo_order_detail",
+            "version": "1",
+            "path": "ddl"
+          },
+          {
+            "object_id": "metric-lines",
+            "version": "2",
+            "path": "body"
+          }
+        ],
+        "verification": null
+      }
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "query example creation requires structure",
+    "schema": "KnowledgeCreate",
+    "value": {
+      "operation_id": "create-example",
+      "kind": "query_example",
+      "name": "合成案例",
+      "body": "合成说明",
+      "related_ids": []
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "prepare skill draft host bound sources",
+    "schema": "PrepareSkillDraftInput",
+    "value": {
+      "task_id": "task-method",
+      "condition_version": "2",
+      "instruction_quote": "请把这次分析保存成我的Skill草稿",
+      "evidence_ids": [
+        "evidence-method"
+      ],
+      "name": "合成方法",
+      "body": "先核对商品行粒度",
+      "scope": "合成订单",
+      "files": []
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "skill draft cannot self report dependencies",
+    "schema": "PrepareSkillDraftInput",
+    "value": {
+      "task_id": "task-method",
+      "condition_version": "2",
+      "instruction_quote": "请把这次分析保存成我的Skill草稿",
+      "evidence_ids": [
+        "evidence-method"
+      ],
+      "name": "合成方法",
+      "body": "先核对商品行粒度",
+      "scope": "合成订单",
+      "files": [],
+      "dependencies": [
+        {
+          "object_id": "table-demo_order_detail",
+          "version": "1",
+          "path": "ddl"
+        }
+      ]
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "pending skill draft contains editable method",
+    "schema": "SkillDraft",
+    "value": {
+      "status": "pending",
+      "reference": {
+        "draft_id": "draft-method",
+        "conversation_id": "conversation-method",
+        "task_id": "task-method",
+        "source_message_id": "message-method",
+        "condition_version": "2"
+      },
+      "name": "合成方法",
+      "body": "核对商品行粒度",
+      "scope": "合成订单",
+      "files": [],
+      "dependencies": [
+        {
+          "object_id": "table-demo_order_detail",
+          "version": "1",
+          "path": "ddl"
+        }
+      ],
+      "evidence_refs": [
+        {
+          "evidence_id": "evidence-method",
+          "conversation_id": "conversation-method",
+          "task_id": "task-method",
+          "condition_version": "2",
+          "result_dependencies": []
+        }
+      ],
+      "created_at": "2026-10-13T00:00:00Z"
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "skill draft confirmed omits private method",
+    "schema": "SkillDraft",
+    "value": {
+      "status": "confirmed",
+      "reference": {
+        "draft_id": "draft-method",
+        "conversation_id": "conversation-method",
+        "task_id": "task-method",
+        "source_message_id": "message-method",
+        "condition_version": "2"
+      },
+      "asset_id": "asset-method"
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "skill draft confirmed rejects private method",
+    "schema": "SkillDraft",
+    "value": {
+      "status": "confirmed",
+      "reference": {
+        "draft_id": "draft-method",
+        "conversation_id": "conversation-method",
+        "task_id": "task-method",
+        "source_message_id": "message-method",
+        "condition_version": "2"
+      },
+      "asset_id": "asset-method",
+      "body": "private content"
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "skill draft condition_changed omits private method",
+    "schema": "SkillDraft",
+    "value": {
+      "status": "condition_changed",
+      "reference": {
+        "draft_id": "draft-method",
+        "conversation_id": "conversation-method",
+        "task_id": "task-method",
+        "source_message_id": "message-method",
+        "condition_version": "2"
+      }
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "skill draft condition_changed rejects private method",
+    "schema": "SkillDraft",
+    "value": {
+      "status": "condition_changed",
+      "reference": {
+        "draft_id": "draft-method",
+        "conversation_id": "conversation-method",
+        "task_id": "task-method",
+        "source_message_id": "message-method",
+        "condition_version": "2"
+      },
+      "body": "private content"
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "skill draft sources_unavailable omits private method",
+    "schema": "SkillDraft",
+    "value": {
+      "status": "sources_unavailable",
+      "reference": {
+        "draft_id": "draft-method",
+        "conversation_id": "conversation-method",
+        "task_id": "task-method",
+        "source_message_id": "message-method",
+        "condition_version": "2"
+      }
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "skill draft sources_unavailable rejects private method",
+    "schema": "SkillDraft",
+    "value": {
+      "status": "sources_unavailable",
+      "reference": {
+        "draft_id": "draft-method",
+        "conversation_id": "conversation-method",
+        "task_id": "task-method",
+        "source_message_id": "message-method",
+        "condition_version": "2"
+      },
+      "body": "private content"
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "skill draft list pagination",
+    "schema": "SkillDraftList",
+    "value": {
+      "drafts": [],
+      "next_after_id": null
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "maintenance impact requires current target version",
+    "schema": "MaintenanceImpactQuery",
+    "value": {
+      "kind": "knowledge",
+      "expected_version": "2",
+      "after_id": "example"
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "maintenance impact has explicit references only",
+    "schema": "MaintenanceImpact",
+    "value": {
+      "target": {
+        "object_id": "doc-grain",
+        "version": "2",
+        "state": "enabled"
+      },
+      "kind": "knowledge",
+      "scope": "direct_explicit_references",
+      "items": [
+        {
+          "id": "query-example",
+          "kind": "query_example",
+          "name": "合成行数案例",
+          "version": "1",
+          "state": "enabled",
+          "visibility": "space",
+          "can_edit": true,
+          "references": [
+            {
+              "dependent_path": "body.dependencies",
+              "relation_kind": "query_example",
+              "referenced_version": "1",
+              "referenced_path": "body",
+              "reference_state": "version_changed"
+            }
+          ],
+          "references_complete": true
+        }
+      ],
+      "next_after_id": null
+    },
+    "valid": true,
+    "roundtrip": true
   }
 ]

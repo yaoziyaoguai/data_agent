@@ -448,7 +448,9 @@
             "conversation_deleted",
             "message_withdrawn",
             "task_cancelled",
-            "memory_disabled"
+            "memory_disabled",
+            "analysis_evidence_saved",
+            "analysis_report_saved"
           ]
         },
         "payload": {
@@ -464,7 +466,28 @@
         "payload"
       ],
       "additionalProperties": false,
-      "title": "Event"
+      "title": "Event",
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "analysis_report_saved"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "properties": {
+              "payload": {
+                "$ref": "#/$defs/AnalysisReportRef"
+              }
+            }
+          }
+        }
+      ]
     },
     "ChatMessage": {
       "type": "object",
@@ -542,6 +565,17 @@
         },
         "phase": {
           "type": "string"
+        },
+        "evidence_refs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/AnalysisEvidenceRef"
+          },
+          "maxItems": 5,
+          "minItems": 0
+        },
+        "report_ref": {
+          "$ref": "#/$defs/AnalysisReportRef"
         }
       },
       "required": [
@@ -1431,15 +1465,54 @@
           "maxLength": 24000
         },
         "source_facts": {
-          "type": "object"
+          "type": "object",
+          "properties": {
+            "structured_value": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/SemanticStructure"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "additionalProperties": true
         },
         "suggestion": {
-          "type": "object"
+          "type": "object",
+          "properties": {
+            "structured_value": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/SemanticStructure"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "additionalProperties": true
         },
         "human_override": {
           "anyOf": [
             {
-              "type": "object"
+              "type": "object",
+              "properties": {
+                "structured_value": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/SemanticStructure"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "additionalProperties": true
             },
             {
               "type": "null"
@@ -1456,6 +1529,16 @@
             "unverified",
             "confirmed",
             "needs_review"
+          ]
+        },
+        "effective_structure": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SemanticStructure"
+            },
+            {
+              "type": "null"
+            }
           ]
         }
       },
@@ -1489,7 +1572,8 @@
             "metric",
             "document",
             "relationship",
-            "term"
+            "term",
+            "query_example"
           ]
         },
         "name": {
@@ -1686,6 +1770,16 @@
             "pattern": "^[A-Za-z0-9_-]+$"
           },
           "maxItems": 100
+        },
+        "structured_value": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SemanticStructure"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "required": [
@@ -1714,7 +1808,8 @@
             "metric",
             "document",
             "relationship",
-            "term"
+            "term",
+            "query_example"
           ]
         },
         "name": {
@@ -1742,6 +1837,16 @@
             "null"
           ],
           "maxLength": 2000
+        },
+        "structured_value": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SemanticStructure"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "required": [
@@ -1752,7 +1857,31 @@
         "related_ids"
       ],
       "additionalProperties": false,
-      "description": "独立对象首次创建时自动归属可信登录者；请求不接受负责人字段，后续调整使用独立管理接口。"
+      "description": "独立对象首次创建时自动归属可信登录者；请求不接受负责人字段，后续调整使用独立管理接口。",
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "query_example"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "required": [
+              "structured_value"
+            ],
+            "properties": {
+              "structured_value": {
+                "$ref": "#/$defs/SemanticStructure"
+              }
+            }
+          }
+        }
+      ]
     },
     "VersionCommand": {
       "title": "VersionCommand",
@@ -1965,6 +2094,12 @@
             "$ref": "#/$defs/SkillFile"
           },
           "maxItems": 12
+        },
+        "draft_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
         }
       },
       "required": [
@@ -1979,7 +2114,29 @@
         "source_text",
         "dependencies"
       ],
-      "additionalProperties": false
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "required": [
+              "draft_id"
+            ]
+          },
+          "then": {
+            "properties": {
+              "kind": {
+                "const": "skill"
+              },
+              "id": {
+                "type": "null"
+              },
+              "expected_version": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      ]
     },
     "SkillSelection": {
       "title": "SkillSelection",
@@ -2377,6 +2534,30 @@
               }
             }
           }
+        },
+        {
+          "if": {
+            "properties": {
+              "action": {
+                "const": "clarify"
+              }
+            },
+            "required": [
+              "action"
+            ]
+          },
+          "then": {
+            "required": [
+              "question"
+            ],
+            "properties": {
+              "question": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "\\S"
+              }
+            }
+          }
         }
       ]
     },
@@ -2398,6 +2579,35 @@
           "type": "string",
           "maxLength": 64,
           "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "kinds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "table",
+              "field",
+              "metric",
+              "document",
+              "relationship",
+              "term",
+              "query_example"
+            ]
+          },
+          "minItems": 1,
+          "maxItems": 7,
+          "uniqueItems": true
+        },
+        "related_object_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "business_domain": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
         }
       },
       "required": [
@@ -2436,6 +2646,9 @@
           "minLength": 1,
           "maxLength": 200,
           "description": "知识条目ID；个人记忆省略时读取正文，scope读取范围，source_text读取来源原话，分别检查content_page/scope_page/source_page并按同一version续读。"
+        },
+        "structure_only": {
+          "type": "boolean"
         }
       },
       "required": [
@@ -2808,7 +3021,11 @@
             "propose_semantic_change",
             "read_conversation",
             "read_analysis_task",
-            "read"
+            "read",
+            "save_analysis_evidence",
+            "save_analysis_report",
+            "read_analysis_report",
+            "prepare_skill_draft"
           ]
         },
         "arguments": {
@@ -2854,7 +3071,11 @@
             "propose_semantic_change",
             "read_conversation",
             "read_analysis_task",
-            "read"
+            "read",
+            "save_analysis_evidence",
+            "save_analysis_report",
+            "read_analysis_report",
+            "prepare_skill_draft"
           ]
         },
         "data": {
@@ -2875,7 +3096,7 @@
         "tasks": {
           "type": "array",
           "items": {
-            "type": "object"
+            "$ref": "#/$defs/WorkspaceTask"
           }
         },
         "recent_messages": {
@@ -3062,6 +3283,10 @@
             "message"
           ],
           "additionalProperties": false
+        },
+        "semantic_checks": {
+          "$ref": "#/$defs/SemanticCheckReport",
+          "description": "草稿工具回执的非阻断诊断；查询读取接口不承诺重现此报告。"
         }
       },
       "required": [
@@ -3213,6 +3438,14 @@
         "statistics": {
           "$ref": "#/$defs/ResultStatistics",
           "description": "应用对当前有权结果页计算的统计；历史客户端可省略。"
+        },
+        "saved_row_count": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "saved_result_complete": {
+          "type": "boolean"
         }
       },
       "required": [
@@ -3413,6 +3646,14 @@
         "target_id": {
           "type": "string",
           "const": "synthetic-sqlite"
+        },
+        "knowledge_refs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/EvidenceRef"
+          },
+          "maxItems": 50,
+          "minItems": 0
         }
       },
       "required": [
@@ -3661,6 +3902,16 @@
                   ],
                   "additionalProperties": false
                 }
+              },
+              "structured_value": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/SemanticStructure"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
               }
             },
             "required": [
@@ -3738,7 +3989,7 @@
             "grouped",
             "flat"
           ],
-          "description": "仅管理目录使用。grouped只分页列出表、指标、整篇文档与术语；字段和关系从所属表打开。省略或flat保留全部对象列表。"
+          "description": "仅管理目录使用。grouped只分页列出表、指标、整篇文档、查询案例与术语；字段和关系从所属表打开。省略或flat保留全部对象列表。"
         }
       },
       "additionalProperties": false,
@@ -3820,6 +4071,9 @@
             "incomplete",
             "unconfigured"
           ]
+        },
+        "scope_applied": {
+          "type": "boolean"
         }
       },
       "required": [
@@ -6108,12 +6362,1979 @@
         "note": {
           "type": "string",
           "maxLength": 300
+        },
+        "channel": {
+          "type": "string",
+          "enum": [
+            "lexical",
+            "vector"
+          ]
         }
       },
       "required": [
         "state",
         "excerpts",
         "note"
+      ],
+      "additionalProperties": false
+    },
+    "SemanticTableRef": {
+      "title": "SemanticTableRef",
+      "type": "object",
+      "properties": {
+        "object_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "version": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]{0,19})$"
+        }
+      },
+      "required": [
+        "object_id",
+        "version"
+      ],
+      "additionalProperties": false
+    },
+    "SemanticColumnRef": {
+      "title": "SemanticColumnRef",
+      "type": "object",
+      "properties": {
+        "object_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "version": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]{0,19})$"
+        },
+        "column": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 240
+        }
+      },
+      "required": [
+        "object_id",
+        "version",
+        "column"
+      ],
+      "additionalProperties": false
+    },
+    "SemanticStructure": {
+      "title": "SemanticStructure",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "table"
+            },
+            "grain": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 2000
+            },
+            "unique_keys": {
+              "type": "array",
+              "items": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 240
+                },
+                "maxItems": 20,
+                "minItems": 1,
+                "uniqueItems": true
+              },
+              "maxItems": 20,
+              "minItems": 0,
+              "uniqueItems": true
+            },
+            "time_columns": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "column": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 240
+                  },
+                  "role": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 120
+                  }
+                },
+                "required": [
+                  "column",
+                  "role"
+                ],
+                "additionalProperties": false
+              },
+              "maxItems": 20,
+              "minItems": 0
+            },
+            "default_filters": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2000
+              },
+              "maxItems": 30,
+              "minItems": 0
+            },
+            "constraints": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2000
+              },
+              "maxItems": 30,
+              "minItems": 0
+            }
+          },
+          "required": [
+            "kind",
+            "grain",
+            "unique_keys",
+            "time_columns",
+            "default_filters",
+            "constraints"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "field"
+            },
+            "table": {
+              "$ref": "#/$defs/SemanticTableRef"
+            },
+            "column": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 240
+            },
+            "unit": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "minLength": 1,
+              "maxLength": 120
+            }
+          },
+          "required": [
+            "kind",
+            "table",
+            "column",
+            "unit"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "relationship"
+            },
+            "left_table": {
+              "$ref": "#/$defs/SemanticTableRef"
+            },
+            "right_table": {
+              "$ref": "#/$defs/SemanticTableRef"
+            },
+            "join_keys": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "left_column": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 240
+                  },
+                  "right_column": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 240
+                  }
+                },
+                "required": [
+                  "left_column",
+                  "right_column"
+                ],
+                "additionalProperties": false
+              },
+              "maxItems": 20,
+              "minItems": 1,
+              "uniqueItems": true
+            },
+            "cardinality": {
+              "type": "string",
+              "enum": [
+                "one_to_one",
+                "one_to_many",
+                "many_to_one",
+                "many_to_many"
+              ]
+            },
+            "scope": {
+              "type": "string",
+              "minLength": 0,
+              "maxLength": 2000
+            }
+          },
+          "required": [
+            "kind",
+            "left_table",
+            "right_table",
+            "join_keys",
+            "cardinality",
+            "scope"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "metric"
+            },
+            "table": {
+              "$ref": "#/$defs/SemanticTableRef"
+            },
+            "expression": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 24000
+            },
+            "input_grain": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 2000
+            },
+            "time_column": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "minLength": 1,
+              "maxLength": 240
+            },
+            "unit": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "minLength": 1,
+              "maxLength": 120
+            },
+            "required_filters": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2000
+              },
+              "maxItems": 30,
+              "minItems": 0
+            },
+            "dimensions": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 240
+              },
+              "maxItems": 30,
+              "minItems": 0,
+              "uniqueItems": true
+            }
+          },
+          "required": [
+            "kind",
+            "table",
+            "expression",
+            "input_grain",
+            "time_column",
+            "unit",
+            "required_filters",
+            "dimensions"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "title": "QueryExampleStructure",
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "query_example"
+            },
+            "applicable_question": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 4000
+            },
+            "parameters": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/QueryExampleParameter"
+              },
+              "minItems": 0,
+              "maxItems": 30
+            },
+            "sql": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 24000
+            },
+            "grain": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 2000
+            },
+            "dependencies": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/EvidenceRef"
+              },
+              "minItems": 1,
+              "maxItems": 50
+            },
+            "verification": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/QueryExampleVerification"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "kind",
+            "applicable_question",
+            "parameters",
+            "sql",
+            "grain",
+            "dependencies",
+            "verification"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "SemanticCheckReport": {
+      "title": "SemanticCheckReport",
+      "type": "object",
+      "properties": {
+        "checks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "rule": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 120
+              },
+              "state": {
+                "type": "string",
+                "enum": [
+                  "checked",
+                  "warning",
+                  "not_checked"
+                ]
+              },
+              "evidence_refs": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/SemanticEvidenceRef"
+                },
+                "maxItems": 50,
+                "minItems": 0
+              },
+              "finding": {
+                "type": "string",
+                "minLength": 0,
+                "maxLength": 4000
+              },
+              "coverage_limit": {
+                "type": "string",
+                "minLength": 0,
+                "maxLength": 4000
+              }
+            },
+            "required": [
+              "rule",
+              "state",
+              "evidence_refs",
+              "finding",
+              "coverage_limit"
+            ],
+            "additionalProperties": false
+          },
+          "maxItems": 50,
+          "minItems": 0
+        },
+        "coverage": {
+          "type": "object",
+          "properties": {
+            "sql_shape": {
+              "type": "string",
+              "enum": [
+                "supported",
+                "unsupported"
+              ]
+            },
+            "supported_scope": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 1000
+              },
+              "maxItems": 30,
+              "minItems": 0
+            },
+            "missing_semantics": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2000
+              },
+              "maxItems": 50,
+              "minItems": 0
+            },
+            "unsupported_constructs": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2000
+              },
+              "maxItems": 30,
+              "minItems": 0
+            }
+          },
+          "required": [
+            "sql_shape",
+            "supported_scope",
+            "missing_semantics",
+            "unsupported_constructs"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "checks",
+        "coverage"
+      ],
+      "additionalProperties": false
+    },
+    "SemanticEvidenceRef": {
+      "title": "SemanticEvidenceRef",
+      "type": "object",
+      "properties": {
+        "object_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "version": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]{0,19})$"
+        }
+      },
+      "required": [
+        "object_id",
+        "version"
+      ],
+      "additionalProperties": false
+    },
+    "AnalysisResultDependency": {
+      "title": "AnalysisResultDependency",
+      "type": "object",
+      "properties": {
+        "query_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "result_ref": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        }
+      },
+      "required": [
+        "query_id",
+        "result_ref"
+      ],
+      "additionalProperties": false
+    },
+    "AnalysisQueryReference": {
+      "title": "AnalysisQueryReference",
+      "type": "object",
+      "properties": {
+        "query_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "result_ref": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "columns": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 240
+          },
+          "maxItems": 30,
+          "minItems": 1
+        }
+      },
+      "required": [
+        "query_id",
+        "result_ref",
+        "columns"
+      ],
+      "additionalProperties": false
+    },
+    "AnalysisFigure": {
+      "title": "AnalysisFigure",
+      "type": "object",
+      "properties": {
+        "label": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 240
+        },
+        "query_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "column": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 240
+        },
+        "row_index": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 999
+        },
+        "value": {
+          "type": [
+            "string",
+            "number",
+            "boolean",
+            "null"
+          ],
+          "maxLength": 2000
+        }
+      },
+      "required": [
+        "label",
+        "query_id",
+        "column",
+        "row_index",
+        "value"
+      ],
+      "additionalProperties": false
+    },
+    "AnalysisFinding": {
+      "title": "AnalysisFinding",
+      "type": "object",
+      "properties": {
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 8000
+        },
+        "calculation": {
+          "type": "string",
+          "minLength": 0,
+          "maxLength": 4000
+        },
+        "limitations": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          },
+          "maxItems": 12,
+          "minItems": 0
+        },
+        "query_refs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/AnalysisQueryReference"
+          },
+          "maxItems": 12,
+          "minItems": 0
+        },
+        "knowledge_refs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/EvidenceRef"
+          },
+          "maxItems": 30,
+          "minItems": 0
+        },
+        "figures": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/AnalysisFigure"
+          },
+          "maxItems": 30,
+          "minItems": 0
+        }
+      },
+      "required": [
+        "text",
+        "calculation",
+        "limitations",
+        "query_refs",
+        "knowledge_refs",
+        "figures"
+      ],
+      "additionalProperties": false
+    },
+    "SaveAnalysisEvidenceInput": {
+      "title": "SaveAnalysisEvidenceInput",
+      "type": "object",
+      "properties": {
+        "task_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "condition_version": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]{0,19})$"
+        },
+        "data_range": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4000,
+          "pattern": "\\S"
+        },
+        "findings": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/AnalysisFinding"
+          },
+          "maxItems": 12,
+          "minItems": 1
+        }
+      },
+      "required": [
+        "task_id",
+        "condition_version",
+        "data_range",
+        "findings"
+      ],
+      "additionalProperties": false
+    },
+    "AnalysisEvidenceRef": {
+      "title": "AnalysisEvidenceRef",
+      "type": "object",
+      "properties": {
+        "evidence_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "conversation_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "task_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "condition_version": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]{0,19})$"
+        },
+        "result_dependencies": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/AnalysisResultDependency"
+          },
+          "maxItems": 120,
+          "minItems": 0
+        }
+      },
+      "required": [
+        "evidence_id",
+        "conversation_id",
+        "task_id",
+        "condition_version",
+        "result_dependencies"
+      ],
+      "additionalProperties": false
+    },
+    "AnalysisQueryCoverage": {
+      "title": "AnalysisQueryCoverage",
+      "type": "object",
+      "properties": {
+        "query_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "result_ref": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "saved_row_count": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "saved_result_complete": {
+          "type": "boolean"
+        },
+        "result_complete": {
+          "type": "boolean"
+        },
+        "received_rows": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000
+        }
+      },
+      "required": [
+        "query_id",
+        "result_ref",
+        "saved_row_count",
+        "saved_result_complete",
+        "result_complete",
+        "received_rows"
+      ],
+      "additionalProperties": false
+    },
+    "AnalysisEvidenceSources": {
+      "title": "AnalysisEvidenceSources",
+      "type": "object",
+      "properties": {
+        "result_dependencies": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/AnalysisResultDependency"
+          },
+          "maxItems": 120,
+          "minItems": 0
+        },
+        "query_coverage": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/AnalysisQueryCoverage"
+          },
+          "maxItems": 120,
+          "minItems": 0
+        },
+        "knowledge_refs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/EvidenceRef"
+          },
+          "maxItems": 120,
+          "minItems": 0
+        }
+      },
+      "required": [
+        "result_dependencies",
+        "query_coverage",
+        "knowledge_refs"
+      ],
+      "additionalProperties": false
+    },
+    "GetQueryInput": {
+      "title": "GetQueryInput",
+      "type": "object",
+      "properties": {
+        "query_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "cursor": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 2000
+        }
+      },
+      "required": [
+        "query_id"
+      ],
+      "additionalProperties": false
+    },
+    "WorkspaceTask": {
+      "title": "WorkspaceTask",
+      "type": "object",
+      "properties": {
+        "evidence_refs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/AnalysisEvidenceRef"
+          },
+          "maxItems": 5,
+          "minItems": 0
+        },
+        "report_ref": {
+          "$ref": "#/$defs/AnalysisReportRef"
+        }
+      },
+      "additionalProperties": true
+    },
+    "AnalysisReportChart": {
+      "title": "AnalysisReportChart",
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "line",
+            "bar"
+          ]
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 240,
+          "pattern": "\\S"
+        },
+        "query_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "result_ref": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "dimension_column": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 240,
+          "pattern": "\\S"
+        },
+        "measure_column": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 240,
+          "pattern": "\\S"
+        }
+      },
+      "required": [
+        "kind",
+        "title",
+        "query_id",
+        "result_ref",
+        "dimension_column",
+        "measure_column"
+      ],
+      "additionalProperties": false
+    },
+    "SaveAnalysisReportInput": {
+      "title": "SaveAnalysisReportInput",
+      "type": "object",
+      "properties": {
+        "task_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "condition_version": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]{0,19})$"
+        },
+        "expected_version": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^(0|[1-9][0-9]{0,19})$"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 240,
+          "pattern": "\\S"
+        },
+        "evidence_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64,
+            "pattern": "^[A-Za-z0-9_-]+$"
+          },
+          "minItems": 1,
+          "maxItems": 5,
+          "uniqueItems": true
+        },
+        "charts": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/AnalysisReportChart"
+          },
+          "minItems": 0,
+          "maxItems": 6
+        }
+      },
+      "required": [
+        "task_id",
+        "condition_version",
+        "expected_version",
+        "title",
+        "evidence_ids",
+        "charts"
+      ],
+      "additionalProperties": false
+    },
+    "SaveAnalysisReport": {
+      "title": "SaveAnalysisReport",
+      "type": "object",
+      "properties": {
+        "operation_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "task_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "condition_version": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]{0,19})$"
+        },
+        "expected_version": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^(0|[1-9][0-9]{0,19})$"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 240,
+          "pattern": "\\S"
+        },
+        "evidence_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64,
+            "pattern": "^[A-Za-z0-9_-]+$"
+          },
+          "minItems": 1,
+          "maxItems": 5,
+          "uniqueItems": true
+        },
+        "charts": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/AnalysisReportChart"
+          },
+          "minItems": 0,
+          "maxItems": 6
+        }
+      },
+      "required": [
+        "operation_id",
+        "task_id",
+        "condition_version",
+        "expected_version",
+        "title",
+        "evidence_ids",
+        "charts"
+      ],
+      "additionalProperties": false
+    },
+    "AnalysisReportRef": {
+      "title": "AnalysisReportRef",
+      "type": "object",
+      "properties": {
+        "report_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "conversation_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "task_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "condition_version": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]{0,19})$"
+        },
+        "version": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]{0,19})$"
+        }
+      },
+      "required": [
+        "report_id",
+        "conversation_id",
+        "task_id",
+        "condition_version",
+        "version"
+      ],
+      "additionalProperties": false
+    },
+    "AnalysisEvidence": {
+      "title": "AnalysisEvidence",
+      "type": "object",
+      "properties": {
+        "schema_version": {
+          "type": "integer",
+          "const": 1
+        },
+        "data_range": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4000,
+          "pattern": "\\S"
+        },
+        "findings": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/AnalysisFinding"
+          },
+          "maxItems": 12,
+          "minItems": 1
+        },
+        "conditions": {
+          "$ref": "#/$defs/Conditions"
+        },
+        "validated_sources": {
+          "$ref": "#/$defs/AnalysisEvidenceSources"
+        },
+        "reference": {
+          "$ref": "#/$defs/AnalysisEvidenceRef"
+        },
+        "source_message_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        }
+      },
+      "required": [
+        "schema_version",
+        "data_range",
+        "findings",
+        "conditions",
+        "validated_sources",
+        "reference",
+        "source_message_id"
+      ],
+      "additionalProperties": false
+    },
+    "AnalysisReport": {
+      "title": "AnalysisReport",
+      "type": "object",
+      "properties": {
+        "schema_version": {
+          "type": "integer",
+          "const": 1
+        },
+        "reference": {
+          "$ref": "#/$defs/AnalysisReportRef"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 240,
+          "pattern": "\\S"
+        },
+        "charts": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/AnalysisReportChart"
+          },
+          "minItems": 0,
+          "maxItems": 6
+        },
+        "evidence": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/AnalysisEvidence"
+          },
+          "minItems": 1,
+          "maxItems": 5
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "schema_version",
+        "reference",
+        "title",
+        "charts",
+        "evidence",
+        "created_at"
+      ],
+      "additionalProperties": false
+    },
+    "AnalysisReportView": {
+      "title": "AnalysisReportView",
+      "oneOf": [
+        {
+          "title": "AvailableAnalysisReport",
+          "type": "object",
+          "properties": {
+            "status": {
+              "type": "string",
+              "const": "available"
+            },
+            "reference": {
+              "$ref": "#/$defs/AnalysisReportRef"
+            },
+            "report": {
+              "$ref": "#/$defs/AnalysisReport"
+            },
+            "chart_results": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/QueryResults"
+              },
+              "minItems": 0,
+              "maxItems": 6
+            }
+          },
+          "required": [
+            "status",
+            "reference",
+            "report",
+            "chart_results"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "title": "condition_changed",
+          "type": "object",
+          "properties": {
+            "status": {
+              "type": "string",
+              "const": "condition_changed"
+            },
+            "reference": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/AnalysisReportRef"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "status",
+            "reference"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "title": "sources_unavailable",
+          "type": "object",
+          "properties": {
+            "status": {
+              "type": "string",
+              "const": "sources_unavailable"
+            },
+            "reference": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/AnalysisReportRef"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "status",
+            "reference"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "ReadAnalysisReportInput": {
+      "title": "ReadAnalysisReportInput",
+      "type": "object",
+      "properties": {
+        "task_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "version": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]{0,19})$"
+        },
+        "offset": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 10000000
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 8192
+        }
+      },
+      "required": [
+        "task_id"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "offset": {
+                "exclusiveMinimum": 0
+              }
+            },
+            "required": [
+              "offset"
+            ]
+          },
+          "then": {
+            "required": [
+              "version"
+            ]
+          }
+        }
+      ]
+    },
+    "AnalysisReportPage": {
+      "title": "AnalysisReportPage",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "status": {
+              "type": "string",
+              "const": "available"
+            },
+            "reference": {
+              "$ref": "#/$defs/AnalysisReportRef"
+            },
+            "title": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 240,
+              "pattern": "\\S"
+            },
+            "evidence_ids": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 64,
+                "pattern": "^[A-Za-z0-9_-]+$"
+              },
+              "minItems": 1,
+              "maxItems": 5,
+              "uniqueItems": true
+            },
+            "charts": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/AnalysisReportChart"
+              },
+              "minItems": 0,
+              "maxItems": 6
+            },
+            "content_text": {
+              "type": "string",
+              "maxLength": 8192
+            },
+            "content_page": {
+              "$ref": "#/$defs/ContentPage"
+            }
+          },
+          "required": [
+            "status",
+            "reference",
+            "title",
+            "evidence_ids",
+            "charts",
+            "content_text",
+            "content_page"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "status": {
+              "type": "string",
+              "const": "condition_changed"
+            },
+            "reference": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/AnalysisReportRef"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "status",
+            "reference"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "status": {
+              "type": "string",
+              "const": "sources_unavailable"
+            },
+            "reference": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/AnalysisReportRef"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "status",
+            "reference"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "QueryExampleParameter": {
+      "title": "QueryExampleParameter",
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "type": {
+          "type": "string",
+          "enum": [
+            "string",
+            "number",
+            "integer",
+            "boolean"
+          ]
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        },
+        "required": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "name",
+        "type",
+        "description",
+        "required"
+      ],
+      "additionalProperties": false
+    },
+    "QueryExampleVerification": {
+      "title": "QueryExampleVerification",
+      "type": "object",
+      "properties": {
+        "note": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4000
+        },
+        "evidence_refs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/EvidenceRef"
+          },
+          "minItems": 1,
+          "maxItems": 50
+        }
+      },
+      "required": [
+        "note",
+        "evidence_refs"
+      ],
+      "additionalProperties": false
+    },
+    "PrepareSkillDraftInput": {
+      "title": "PrepareSkillDraftInput",
+      "type": "object",
+      "properties": {
+        "task_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "condition_version": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]{0,19})$"
+        },
+        "instruction_quote": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 8000
+        },
+        "evidence_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64,
+            "pattern": "^[A-Za-z0-9_-]+$"
+          },
+          "minItems": 1,
+          "maxItems": 5,
+          "uniqueItems": true
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 240
+        },
+        "body": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 40000,
+          "description": "Skill 的正文及生成资源每行最多 51200 UTF-8 字节；超限须分行保存。记忆不受此行限制。"
+        },
+        "scope": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 24000
+        },
+        "files": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SkillFile"
+          },
+          "minItems": 0,
+          "maxItems": 12
+        }
+      },
+      "required": [
+        "task_id",
+        "condition_version",
+        "instruction_quote",
+        "evidence_ids",
+        "name",
+        "body",
+        "scope",
+        "files"
+      ],
+      "additionalProperties": false
+    },
+    "SkillDraftRef": {
+      "title": "SkillDraftRef",
+      "type": "object",
+      "properties": {
+        "draft_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "conversation_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "task_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "source_message_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "condition_version": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]{0,19})$"
+        }
+      },
+      "required": [
+        "draft_id",
+        "conversation_id",
+        "task_id",
+        "source_message_id",
+        "condition_version"
+      ],
+      "additionalProperties": false
+    },
+    "SkillDraft": {
+      "title": "SkillDraft",
+      "oneOf": [
+        {
+          "title": "pending",
+          "type": "object",
+          "properties": {
+            "status": {
+              "type": "string",
+              "const": "pending"
+            },
+            "reference": {
+              "$ref": "#/$defs/SkillDraftRef"
+            },
+            "name": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 240
+            },
+            "body": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 40000,
+              "description": "Skill 的正文及生成资源每行最多 51200 UTF-8 字节；超限须分行保存。记忆不受此行限制。"
+            },
+            "scope": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 24000
+            },
+            "files": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/SkillFile"
+              },
+              "minItems": 0,
+              "maxItems": 12
+            },
+            "dependencies": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/EvidenceRef"
+              },
+              "minItems": 0,
+              "maxItems": 50
+            },
+            "evidence_refs": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/AnalysisEvidenceRef"
+              },
+              "minItems": 1,
+              "maxItems": 5
+            },
+            "created_at": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 80
+            }
+          },
+          "required": [
+            "status",
+            "reference",
+            "name",
+            "body",
+            "scope",
+            "files",
+            "dependencies",
+            "evidence_refs",
+            "created_at"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "title": "confirmed",
+          "type": "object",
+          "properties": {
+            "status": {
+              "type": "string",
+              "const": "confirmed"
+            },
+            "reference": {
+              "$ref": "#/$defs/SkillDraftRef"
+            },
+            "asset_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "pattern": "^[A-Za-z0-9_-]+$"
+            }
+          },
+          "required": [
+            "status",
+            "reference",
+            "asset_id"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "title": "condition_changed",
+          "type": "object",
+          "properties": {
+            "status": {
+              "type": "string",
+              "const": "condition_changed"
+            },
+            "reference": {
+              "$ref": "#/$defs/SkillDraftRef"
+            }
+          },
+          "required": [
+            "status",
+            "reference"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "title": "sources_unavailable",
+          "type": "object",
+          "properties": {
+            "status": {
+              "type": "string",
+              "const": "sources_unavailable"
+            },
+            "reference": {
+              "$ref": "#/$defs/SkillDraftRef"
+            }
+          },
+          "required": [
+            "status",
+            "reference"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "SkillDraftList": {
+      "title": "SkillDraftList",
+      "type": "object",
+      "properties": {
+        "drafts": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SkillDraft"
+          },
+          "minItems": 0,
+          "maxItems": 20
+        },
+        "next_after_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 64
+        }
+      },
+      "required": [
+        "drafts",
+        "next_after_id"
+      ],
+      "additionalProperties": false
+    },
+    "MaintenanceImpactQuery": {
+      "title": "MaintenanceImpactQuery",
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "knowledge",
+            "skill"
+          ]
+        },
+        "expected_version": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]{0,19})$"
+        },
+        "after_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        }
+      },
+      "required": [
+        "kind",
+        "expected_version"
+      ],
+      "additionalProperties": false
+    },
+    "MaintenanceReference": {
+      "title": "MaintenanceReference",
+      "type": "object",
+      "properties": {
+        "dependent_path": {
+          "type": "string",
+          "minLength": 0,
+          "maxLength": 24000
+        },
+        "relation_kind": {
+          "type": "string",
+          "enum": [
+            "structure",
+            "source_material",
+            "query_example",
+            "skill",
+            "related"
+          ]
+        },
+        "referenced_version": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^(0|[1-9][0-9]{0,19})$"
+        },
+        "referenced_path": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 24000
+        },
+        "reference_state": {
+          "type": "string",
+          "enum": [
+            "current",
+            "version_changed",
+            "unavailable",
+            "related"
+          ]
+        }
+      },
+      "required": [
+        "dependent_path",
+        "relation_kind",
+        "referenced_version",
+        "referenced_path",
+        "reference_state"
+      ],
+      "additionalProperties": false
+    },
+    "MaintenanceDependent": {
+      "title": "MaintenanceDependent",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "table",
+            "field",
+            "metric",
+            "document",
+            "relationship",
+            "term",
+            "query_example",
+            "skill"
+          ]
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 24000
+        },
+        "version": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]{0,19})$"
+        },
+        "state": {
+          "type": "string",
+          "enum": [
+            "enabled",
+            "disabled"
+          ]
+        },
+        "visibility": {
+          "type": "string",
+          "enum": [
+            "personal",
+            "space"
+          ]
+        },
+        "can_edit": {
+          "type": "boolean"
+        },
+        "references": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/MaintenanceReference"
+          },
+          "minItems": 1,
+          "maxItems": 50
+        },
+        "references_complete": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "name",
+        "version",
+        "state",
+        "visibility",
+        "can_edit",
+        "references",
+        "references_complete"
+      ],
+      "additionalProperties": false
+    },
+    "MaintenanceImpact": {
+      "title": "MaintenanceImpact",
+      "type": "object",
+      "properties": {
+        "target": {
+          "title": "MaintenanceTarget",
+          "type": "object",
+          "properties": {
+            "object_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "pattern": "^[A-Za-z0-9_-]+$"
+            },
+            "version": {
+              "type": "string",
+              "pattern": "^(0|[1-9][0-9]{0,19})$"
+            },
+            "state": {
+              "type": "string",
+              "enum": [
+                "enabled",
+                "disabled"
+              ]
+            }
+          },
+          "required": [
+            "object_id",
+            "version",
+            "state"
+          ],
+          "additionalProperties": false
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "knowledge",
+            "skill"
+          ]
+        },
+        "scope": {
+          "type": "string",
+          "const": "direct_explicit_references"
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/MaintenanceDependent"
+          },
+          "minItems": 0,
+          "maxItems": 50
+        },
+        "next_after_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 64
+        }
+      },
+      "required": [
+        "target",
+        "kind",
+        "scope",
+        "items",
+        "next_after_id"
       ],
       "additionalProperties": false
     }
@@ -6514,6 +8735,108 @@
     },
     "KnowledgeRetrieval": {
       "$ref": "#/$defs/KnowledgeRetrieval"
+    },
+    "SemanticTableRef": {
+      "$ref": "#/$defs/SemanticTableRef"
+    },
+    "SemanticColumnRef": {
+      "$ref": "#/$defs/SemanticColumnRef"
+    },
+    "SemanticStructure": {
+      "$ref": "#/$defs/SemanticStructure"
+    },
+    "SemanticCheckReport": {
+      "$ref": "#/$defs/SemanticCheckReport"
+    },
+    "SemanticEvidenceRef": {
+      "$ref": "#/$defs/SemanticEvidenceRef"
+    },
+    "AnalysisResultDependency": {
+      "$ref": "#/$defs/AnalysisResultDependency"
+    },
+    "AnalysisQueryReference": {
+      "$ref": "#/$defs/AnalysisQueryReference"
+    },
+    "AnalysisFigure": {
+      "$ref": "#/$defs/AnalysisFigure"
+    },
+    "AnalysisFinding": {
+      "$ref": "#/$defs/AnalysisFinding"
+    },
+    "SaveAnalysisEvidenceInput": {
+      "$ref": "#/$defs/SaveAnalysisEvidenceInput"
+    },
+    "AnalysisEvidenceRef": {
+      "$ref": "#/$defs/AnalysisEvidenceRef"
+    },
+    "AnalysisQueryCoverage": {
+      "$ref": "#/$defs/AnalysisQueryCoverage"
+    },
+    "AnalysisEvidenceSources": {
+      "$ref": "#/$defs/AnalysisEvidenceSources"
+    },
+    "GetQueryInput": {
+      "$ref": "#/$defs/GetQueryInput"
+    },
+    "WorkspaceTask": {
+      "$ref": "#/$defs/WorkspaceTask"
+    },
+    "AnalysisReportChart": {
+      "$ref": "#/$defs/AnalysisReportChart"
+    },
+    "SaveAnalysisReportInput": {
+      "$ref": "#/$defs/SaveAnalysisReportInput"
+    },
+    "SaveAnalysisReport": {
+      "$ref": "#/$defs/SaveAnalysisReport"
+    },
+    "AnalysisReportRef": {
+      "$ref": "#/$defs/AnalysisReportRef"
+    },
+    "AnalysisEvidence": {
+      "$ref": "#/$defs/AnalysisEvidence"
+    },
+    "AnalysisReport": {
+      "$ref": "#/$defs/AnalysisReport"
+    },
+    "AnalysisReportView": {
+      "$ref": "#/$defs/AnalysisReportView"
+    },
+    "ReadAnalysisReportInput": {
+      "$ref": "#/$defs/ReadAnalysisReportInput"
+    },
+    "AnalysisReportPage": {
+      "$ref": "#/$defs/AnalysisReportPage"
+    },
+    "QueryExampleParameter": {
+      "$ref": "#/$defs/QueryExampleParameter"
+    },
+    "QueryExampleVerification": {
+      "$ref": "#/$defs/QueryExampleVerification"
+    },
+    "PrepareSkillDraftInput": {
+      "$ref": "#/$defs/PrepareSkillDraftInput"
+    },
+    "SkillDraftRef": {
+      "$ref": "#/$defs/SkillDraftRef"
+    },
+    "SkillDraft": {
+      "$ref": "#/$defs/SkillDraft"
+    },
+    "SkillDraftList": {
+      "$ref": "#/$defs/SkillDraftList"
+    },
+    "MaintenanceImpactQuery": {
+      "$ref": "#/$defs/MaintenanceImpactQuery"
+    },
+    "MaintenanceReference": {
+      "$ref": "#/$defs/MaintenanceReference"
+    },
+    "MaintenanceDependent": {
+      "$ref": "#/$defs/MaintenanceDependent"
+    },
+    "MaintenanceImpact": {
+      "$ref": "#/$defs/MaintenanceImpact"
     }
   },
   "required": [

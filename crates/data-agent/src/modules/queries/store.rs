@@ -129,7 +129,12 @@ pub async fn save_draft_in_tx(
     .await?;
     let qid = id();
     let passed = report["state"] == "passed";
-    sqlx::query("INSERT INTO query_requests(id,conversation_id,owner_id,task_id,condition_version,draft_version,operation_id,sql_text,parameters,target_id,target_version,summary,knowledge_refs,check_state,confirmation_state,budget_scope_id,error_code,replaces_query_id,error_details) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)").bind(&qid).bind(cid).bind(&ctx.user_id).bind(task).bind(epoch(input["condition_version"].as_str().unwrap_or("0"))?).bind(draft).bind(operation).bind(input["sql"].as_str()).bind(sqlx::types::Json(&input["parameters"])).bind(input["target_id"].as_str()).bind("1").bind(input["summary"].as_str()).bind(sqlx::types::Json(&input["knowledge_refs"])).bind(if passed{"passed"}else{"rejected"}).bind(if passed{"awaiting_confirmation"}else{"rejected"}).bind(budget).bind(if passed{None}else{Some("sql_not_supported")}).bind(replaced).bind(if passed {None} else {report.get("diagnostic").map(sqlx::types::Json)}).execute(tx.connection()).await?;
+    if report["target_id"] != input["target_id"]
+        || report["target_version"].as_str().is_none_or(str::is_empty)
+    {
+        return Err(Error::new("upstream_failed"));
+    }
+    sqlx::query("INSERT INTO query_requests(id,conversation_id,owner_id,task_id,condition_version,draft_version,operation_id,sql_text,parameters,target_id,target_version,summary,knowledge_refs,check_state,confirmation_state,budget_scope_id,error_code,replaces_query_id,error_details) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)").bind(&qid).bind(cid).bind(&ctx.user_id).bind(task).bind(epoch(input["condition_version"].as_str().unwrap_or("0"))?).bind(draft).bind(operation).bind(input["sql"].as_str()).bind(sqlx::types::Json(&input["parameters"])).bind(input["target_id"].as_str()).bind(report["target_version"].as_str()).bind(input["summary"].as_str()).bind(sqlx::types::Json(&input["knowledge_refs"])).bind(if passed{"passed"}else{"rejected"}).bind(if passed{"awaiting_confirmation"}else{"rejected"}).bind(budget).bind(if passed{None}else{Some("sql_not_supported")}).bind(replaced).bind(if passed {None} else {report.get("diagnostic").map(sqlx::types::Json)}).execute(tx.connection()).await?;
     read_in_tx(tx, ctx, &qid).await
 }
 pub struct MessageAuthorization<'a> {
@@ -247,6 +252,7 @@ pub async fn begin_submission_in_tx(
             "lookup"
         });
     }
+    v["target_version"] = json!(row.get::<String, _>("target_version"));
     v["owner_id"] = json!(ctx.user_id);
     v["query_id"] = json!(qid);
     Ok(v)

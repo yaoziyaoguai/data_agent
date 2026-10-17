@@ -91,12 +91,23 @@ try {
   await milvus('entities/upsert',{data:unknown});
   await milvus('entities/delete',{filter:'id in '+JSON.stringify(original.map(value=>value.id))});
   const unknownResult=await invoke('search_knowledge',{query:libraryRule,limit:10});
-  const unknownObject=unknownResult.objects.find(value=>value.id===library.id);
-  assert.equal(unknownObject.retrieval.state,'unlocated');assert.deepEqual(unknownObject.retrieval.excerpts,[]);assert.match(unknownObject.retrieval.note,/本次未自动重建/);
+  const {actual:unknownObject}=assertExcerpt(unknownResult,library,libraryRule);
+  assert.equal(unknownObject.retrieval.channel,'lexical');
   await milvus('entities/delete',{filter:'id in '+JSON.stringify(unknown.map(value=>value.id))});
   await milvus('entities/upsert',{data:original.map(record=>({...record,char_offset:999999}))});
   const malformed=await invoke('search_knowledge',{query:libraryRule,limit:10});
-  assert.equal(malformed.objects.find(value=>value.id===library.id).retrieval.state,'unlocated');
+  const {actual:malformedObject}=assertExcerpt(malformed,library,libraryRule);
+  assert.equal(malformedObject.retrieval.channel,'lexical');
+  // 查询词不存在于正式正文。独立设置本地协议向量命中，不依靠hash向量的语义质量。
+  const noLexicalQuery='nonlexicalneedle';
+  const forcedVector=await fetch(provider.env.DATA_AGENT_EMBEDDING_URL,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({model:'qwen3.7-text-embedding',dimensions:1024,input:[noLexicalQuery]})});
+  assert.equal(forcedVector.status,200);
+  const noLexicalEmbedding=(await forcedVector.json()).data[0].embedding;
+  await milvus('entities/upsert',{data:[{...original[0],char_offset:999999,vector:noLexicalEmbedding}]});
+  const noLexical=await invoke('search_knowledge',{query:noLexicalQuery,limit:10});
+  const noLexicalObject=noLexical.objects.find(value=>value.id===library.id);
+  assert.ok(noLexicalObject);
+  assert.equal(noLexicalObject.retrieval.state,'unlocated');assert.deepEqual(noLexicalObject.retrieval.excerpts,[]);
   await milvus('entities/upsert',{data:legacy});
   const embeddingsBefore=provider.requests.length;
   ok(await h.request('/knowledge-index/rebuilds',{operation_id:randomUUID()}));
@@ -104,13 +115,19 @@ try {
   assert.equal(provider.requests.length,embeddingsBefore,'metadata repair reuses original embedding receipts');
   assert.ok((await records(library.id)).every(value=>value.entry_id==='body'));
   assertExcerpt(await search(libraryRule),library,libraryRule);
-  checks.push('未知旧键与越界位置不伪造片段；明确受控重建补齐元数据，复用原向量回执，没有新增向量化调用');
+  checks.push('未知旧键与越界位置仅由当前正文真实词法匹配补定位，并明确lexical渠道；正文无查询词时保持unlocated；受控重建补齐元数据并复用原向量回执');
 
-  const current=ok(await h.request('/knowledge/'+library.id,{operation_id:randomUUID(),expected_version:library.version,entry_id:'body',value:'珍本资料已更换规则，需要重新核对正式条款。'},'alice','PATCH'));
+  const currentBody='珍本资料已更换规则，需要重新核对正式条款。';
+  const current=ok(await h.request('/knowledge/'+library.id,{operation_id:randomUUID(),expected_version:library.version,entry_id:'body',value:currentBody},'alice','PATCH'));
   const stale=await search(libraryRule);
   assert.ok(!JSON.stringify(stale).includes(libraryRule));
   const currentResult=stale.objects.find(value=>value.id===library.id);
-  if(currentResult){assert.equal(currentResult.version,current.version);assert.equal(currentResult.retrieval,undefined);}
+  if(currentResult){
+    assert.equal(currentResult.version,current.version);
+    // 新正文仍含查询中的“珍本”；新词法命中必须指向当前正文，而非旧向量位置。
+    assert.equal(currentResult.retrieval.channel,'lexical');
+    for(const excerpt of currentResult.retrieval.excerpts)assert.equal(excerpt.text,[...currentBody].slice(excerpt.offset,excerpt.offset+excerpt.length).join(''));
+  }
   ok(await h.request('/knowledge/'+laboratory.id+'/disable',{operation_id:randomUUID(),expected_version:laboratory.version}));
   assert.ok(!(await search(labRule)).objects.some(value=>value.id===laboratory.id));
   ok(await h.request('/knowledge/'+weatherSource.id+'/disable',{operation_id:randomUUID(),expected_version:weatherSource.version}));

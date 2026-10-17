@@ -97,6 +97,7 @@ pub fn rank_hybrid(
             "table",
             "field",
             "metric",
+            "query_example",
             "document",
             "relationship",
             "term",
@@ -124,13 +125,20 @@ pub fn rank_hybrid(
     selected
 }
 mod excerpts;
-pub use excerpts::attach_matches;
+pub use excerpts::{attach_lexical_matches, attach_matches};
+mod search_reply;
+pub use search_reply::{SEARCH_REPLY_LIMIT, bounded_search_reply, search_preview};
 mod store;
-pub use store::{candidates_in_tx, index_in_tx};
+pub use store::{candidates_in_tx, candidates_scoped_in_tx, index_in_tx};
 // 检索先返回短摘录；全文由read_knowledge按当前授权版本读取。
 pub fn preview(mut object: Value) -> Value {
+    if let Some(summary) = query_example_summary(&object) {
+        object["query_example_summary"] = summary;
+    }
+    let mut structure_budget = 4096;
     if let Some(entries) = object.get_mut("entries").and_then(Value::as_array_mut) {
         for entry in entries {
+            bounded_structure(entry, &mut structure_budget);
             let text = entry["effective_value"].as_str().unwrap_or("");
             let limit = if entry["path"] == "sql" { 2048 } else { 600 };
             let complete = text.chars().count() <= limit;
@@ -141,6 +149,99 @@ pub fn preview(mut object: Value) -> Value {
             if !entry["human_override"].is_null() {
                 entry["human_override"] = serde_json::json!({"edited_by":entry["human_override"]["edited_by"],"has_override":true});
             }
+        }
+    }
+    object
+}
+
+fn query_example_summary(object: &Value) -> Option<Value> {
+    if object["kind"] != "query_example" {
+        return None;
+    }
+    let structure = object["entries"]
+        .as_array()?
+        .iter()
+        .map(|entry| &entry["effective_structure"])
+        .find(|structure| structure["kind"] == "query_example")?;
+    let question = structure["applicable_question"].as_str().unwrap_or("");
+    let parameters = structure["parameters"]
+        .as_array()
+        .cloned()
+        .unwrap_or_default();
+    Some(serde_json::json!({
+        "applicable_question":question.chars().take(400).collect::<String>(),
+        "question_complete":question.chars().count()<=400,
+        "parameters":parameters.iter().take(12).map(|parameter| serde_json::json!({
+            "name":parameter["name"],"type":parameter["type"],"required":parameter["required"],
+            "description":parameter["description"].as_str().unwrap_or("").chars().take(120).collect::<String>(),
+            "description_complete":parameter["description"].as_str().is_some_and(|text|text.chars().count()<=120)
+        })).collect::<Vec<_>>(),
+        "parameters_complete":parameters.len()<=12,
+        "verification_recorded":!structure["verification"].is_null(),
+        "note":"适用问题与参数是案例摘要，采用前须用同版read_knowledge读取完整结构并核对依赖。核对记录来自维护者，不授予SQL执行权限。"
+    }))
+}
+
+pub(super) fn query_example_index_text(entry: &Value) -> String {
+    let structure = &entry["effective_structure"];
+    if structure["kind"] != "query_example" {
+        return String::new();
+    }
+    let parameters = structure["parameters"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .map(|parameter| {
+            format!(
+                "{} {} {}",
+                parameter["name"].as_str().unwrap_or(""),
+                parameter["type"].as_str().unwrap_or(""),
+                parameter["description"].as_str().unwrap_or("")
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("；");
+    format!(
+        "适用问题：{}；参数：{}；",
+        structure["applicable_question"].as_str().unwrap_or(""),
+        parameters
+    )
+}
+
+fn bounded_structure(entry: &mut Value, remaining: &mut usize) {
+    let structure = entry["effective_structure"].clone();
+    if structure.is_null() {
+        entry["structure_available"] = serde_json::json!(false);
+        return;
+    }
+    let size = structure.to_string().len();
+    entry["structure_available"] = serde_json::json!(true);
+    if size > *remaining {
+        entry["effective_structure"] = Value::Null;
+        entry["structure_page"] = serde_json::json!({"complete":false,"next_offset":0});
+    } else {
+        *remaining -= size;
+        entry["structure_page"] = serde_json::json!({"complete":true,"next_offset":null});
+    }
+}
+
+// 大结构独立分页；只在完整读取时返回可采用的结构对象，不生成截断JSON。
+pub fn model_structure_page(
+    mut object: Value,
+    offset: usize,
+    limit: usize,
+    entry_id: Option<&str>,
+) -> Value {
+    if let Some(entries) = object.get_mut("entries").and_then(Value::as_array_mut) {
+        if let Some(entry_id) = entry_id {
+            entries.retain(|entry| entry["entry_id"] == entry_id);
+        }
+        let mut remaining = limit;
+        for entry in entries {
+            let structure = entry["effective_structure"].clone();
+            let (text, page) = text_page(&structure.to_string(), offset, remaining);
+            remaining = remaining.saturating_sub(text.chars().count());
+            *entry = serde_json::json!({"entry_id":entry["entry_id"],"path":entry["path"],"label":entry["label"],"review_state":entry["review_state"],"structure_available":!structure.is_null(),"effective_structure":if page["complete"]==true{structure}else{Value::Null},"structure_text":text,"structure_page":page});
         }
     }
     object
@@ -196,6 +297,7 @@ fn suggestion_page(entry: &Value, offset: usize, limit: usize) -> (Value, usize)
 
 // 模型按条目/字符范围读正文；保留来源标识，避免人工和建议的重复正文占满上下文。
 pub fn model_page(mut object: Value, offset: usize, limit: usize, entry_id: Option<&str>) -> Value {
+    let mut structure_budget = 4096;
     if let Some(value) = object.as_object_mut() {
         value.remove("memory_index_state");
         value.remove("files");
@@ -249,6 +351,7 @@ pub fn model_page(mut object: Value, offset: usize, limit: usize, entry_id: Opti
             entries.retain(|e| e["entry_id"] == selected);
         }
         for entry in entries {
+            bounded_structure(entry, &mut structure_budget);
             let (suggestion, size) = suggestion_page(entry, offset, analysis_remaining);
             analysis_remaining = analysis_remaining.saturating_sub(size);
             let (body, page) = text_page(
@@ -327,14 +430,16 @@ pub fn asset_directory(
             next = page.last().map(|v: &Value| v["id"].clone());
             break;
         }
+        let name = item["name"].as_str().unwrap_or("");
+        let name_complete = name.chars().count() <= 160;
         if item["kind"] == "skill" {
             // 目录仅交付元信息；正文由 Pi 原生 read 经受控入口加载。
-            page.push(serde_json::json!({"id":item["id"],"kind":"skill","version":item["version"],"name":item["name"].as_str().unwrap_or("").chars().take(160).collect::<String>(),"scope":item["scope"].as_str().unwrap_or("").chars().take(160).collect::<String>(),"selected":true,"visibility":item["visibility"],"native_path":format!("/skills/{}/{}/SKILL.md",item["id"].as_str().unwrap_or(""),item["version"].as_str().unwrap_or(""))}));
+            page.push(serde_json::json!({"id":item["id"],"kind":"skill","version":item["version"],"name":name.chars().take(160).collect::<String>(),"name_complete":name_complete,"scope":item["scope"].as_str().unwrap_or("").chars().take(160).collect::<String>(),"scope_complete":item["scope"].as_str().is_some_and(|scope|scope.chars().count()<=160),"selected":true,"visibility":item["visibility"],"native_path":format!("/skills/{}/{}/SKILL.md",item["id"].as_str().unwrap_or(""),item["version"].as_str().unwrap_or(""))}));
             continue;
         }
         let (body, content_page) = text_page(item["body"].as_str().unwrap_or(""), 0, 160);
         let (scope, scope_page) = text_page(item["scope"].as_str().unwrap_or(""), 0, 160);
-        page.push(serde_json::json!({"id":item["id"],"object_id":format!("asset-{}",item["id"].as_str().unwrap_or("")),"kind":item["kind"],"version":item["version"],"name":item["name"].as_str().unwrap_or("").chars().take(160).collect::<String>(),"body":body,"content_page":content_page,"scope":scope,"scope_page":scope_page,"verified":item["verified"],"selected":item["selected"]}));
+        page.push(serde_json::json!({"id":item["id"],"object_id":format!("asset-{}",item["id"].as_str().unwrap_or("")),"kind":item["kind"],"version":item["version"],"name":name.chars().take(160).collect::<String>(),"name_complete":name_complete,"body":body,"content_page":content_page,"scope":scope,"scope_page":scope_page,"verified":item["verified"],"selected":item["selected"]}));
     }
     serde_json::json!({"memories":page.iter().filter(|v|v["kind"]=="memory").collect::<Vec<_>>(),"selected_skills":page.iter().filter(|v|v["kind"]=="skill").collect::<Vec<_>>(),"next_asset_after":next,"total":total})
 }
@@ -383,6 +488,39 @@ pub mod vector;
 mod semantic_context_tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn query_example_summary_keeps_questions_parameters_and_a_complete_read_hint() {
+        let object = json!({"id":"example","kind":"query_example","entries":[{
+            "entry_id":"body","path":"body","effective_value":"合成案例说明",
+            "effective_structure":{"kind":"query_example","applicable_question":"需要按指定标签统计商品行数",
+                "parameters":[{"name":"cohort","type":"string","description":"输出标签，不改变范围","required":true}],
+                "sql":"SELECT COUNT(*) FROM purchases","grain":"单行汇总","dependencies":[],"verification":null}
+        }]});
+        let preview = search_preview(object.clone(), "商品行数");
+        assert_eq!(
+            preview["query_example_summary"]["applicable_question"],
+            "需要按指定标签统计商品行数"
+        );
+        assert_eq!(
+            preview["query_example_summary"]["parameters"][0]["description"],
+            "输出标签，不改变范围"
+        );
+        assert_eq!(
+            preview["query_example_summary"]["verification_recorded"],
+            false
+        );
+        assert!(
+            preview["query_example_summary"]["note"]
+                .as_str()
+                .unwrap()
+                .contains("read_knowledge")
+        );
+        let index = query_example_index_text(&object["entries"][0]);
+        assert!(
+            index.contains("需要按指定标签统计商品行数") && index.contains("输出标签，不改变范围")
+        );
+    }
 
     #[test]
     fn hybrid_ranking_keeps_exact_names_ties_versions_and_kind_diversity() {

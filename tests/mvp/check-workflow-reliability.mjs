@@ -11,7 +11,7 @@ const profile = {provider_id:'deepseek',model_id:'deepseek-flash',trial_id:rando
 const h = await harness({capture:true,profile,env:{DATA_AGENT_LEASE_MS:'120000',DATA_AGENT_QUERY_DELAY_SECONDS:'0'}});
 const manager = SessionManager.inMemory('/synthetic/data-agent');
 const checks = [];
-let run, passed = false, platformFixture, releaseValidation, lockHolder;
+let run, passed = false, platformFixture, releaseValidation, lockHolder, targetVersion;
 const conditions = {time_start:'2026-01-01T00:00:00Z',time_end:'2026-02-01T00:00:00Z',timezone:'UTC',metric:'net_revenue',channel:null,group_by:[],filters:[],knowledge_refs:[],notes:''};
 const checkpoint = () => exportCheckpoint(manager,run.workspace_context.authority_revision,run.workspace_context.authority_snapshot);
 const invoke = async (tool_name,args) => {
@@ -52,6 +52,9 @@ const releaseConversation=async()=>{
   const child=lockHolder;lockHolder=undefined;const closed=new Promise(r=>child.once('exit',r));child.stdin.end('COMMIT;\n');assert.equal(await closed,0);
 };
 try {
+  const metadataResponse=await fetch(h.env.DATA_AGENT_PLATFORM_URL+'/validate',{method:'POST',headers:{authorization:'Bearer '+h.env.DATA_AGENT_INTERNAL_TOKEN,'content-type':'application/json'},body:JSON.stringify({sql:'SELECT 1',parameters:{}})});
+  assert.equal(metadataResponse.status,200);targetVersion=(await metadataResponse.json()).target_version;
+  assert.equal(targetVersion,'2','来源快照修订沿已确定的默认版本2');
   const cid=await h.create();await start(cid);
   const task=await update({});
   const wrongRoute={run_id:run.run_id,lease_epoch:run.lease_epoch,sdk_tool_call_id:randomUUID(),tool_name:'update_analysis_task',arguments:{action:'route',task_id:task.task_id,expected_version:task.condition_version,goal:'',question:null,options:[],condition_patch:{set:{channel:'app'},unset:[]}},checkpoint:checkpoint()};
@@ -66,6 +69,7 @@ try {
   const old=await draft(task,'SELECT 1 AS amount');
   const independent=await draft(task,'SELECT 9 AS other_amount');
   const guardCandidate=await draft(task,'SELECT 8 AS other_amount');
+  assert.equal(h.sql(`SELECT JSON_OBJECT('version',target_version) FROM query_requests WHERE id='${guardCandidate.id}'`)[0].version,targetVersion,'持久草稿绑定实际平台检查版');
   await update({action:'route',task_id:task.task_id,expected_version:task.condition_version,replaces_query_id:old.id});
   assert.equal((await read(old)).confirmation_state,'superseded');
   assert.equal((await confirm(old)).value.code,'version_conflict');
@@ -105,7 +109,7 @@ try {
   assert.equal((await h.internal('/internal/data/tool-calls',interleavedInput)).status,200);
   await h.pausePlatform();let validationCount=0,arrivedAtValidation;
   const validationArrived=new Promise(r=>arrivedAtValidation=r),validationHeld=new Promise(r=>releaseValidation=r);
-  platformFixture=createServer(async(req,res)=>{for await(const _part of req){};validationCount++;arrivedAtValidation();await validationHeld;res.writeHead(200,{'content-type':'application/json'});res.end(JSON.stringify({state:'passed',target_id:'synthetic-sqlite',target_version:'1',dialect:'SQLite',read_only:true}));});
+  platformFixture=createServer(async(req,res)=>{for await(const _part of req){};validationCount++;arrivedAtValidation();await validationHeld;res.writeHead(200,{'content-type':'application/json'});res.end(JSON.stringify({state:'passed',target_id:'synthetic-sqlite',target_version:targetVersion,dialect:'SQLite',read_only:true}));});
   await new Promise(r=>platformFixture.listen(Number(new URL(h.env.DATA_AGENT_PLATFORM_URL).port),'127.0.0.1',r));
   const firstRevision=h.internal('/internal/data/tools',interleavedInput);await validationArrived;
   const waitingLocks=await holdConversation(cid);
@@ -125,7 +129,7 @@ try {
   await h.pausePlatform();
   let arrived;
   const reached=new Promise(r=>arrived=r), held=new Promise(r=>releaseValidation=r);
-  platformFixture=createServer(async(req,res)=>{for await(const _part of req){};arrived();await held;res.writeHead(200,{'content-type':'application/json'});res.end(JSON.stringify({state:'passed',target_id:'synthetic-sqlite',target_version:'1',dialect:'SQLite',read_only:true}));});
+  platformFixture=createServer(async(req,res)=>{for await(const _part of req){};arrived();await held;res.writeHead(200,{'content-type':'application/json'});res.end(JSON.stringify({state:'passed',target_id:'synthetic-sqlite',target_version:targetVersion,dialect:'SQLite',read_only:true}));});
   await new Promise(r=>platformFixture.listen(Number(new URL(h.env.DATA_AGENT_PLATFORM_URL).port),'127.0.0.1',r));
   const revision=draft(task,'SELECT 10 AS other_amount',guardCandidate.id);
   await reached;
@@ -151,7 +155,7 @@ try {
   assert.equal((await read(next)).execution_state,'not_submitted');
   assert.equal((await confirm(interruptedFailure)).status,200);
   const platformCall=async(path,body)=>{const r=await fetch(h.env.DATA_AGENT_PLATFORM_URL+path,{method:'POST',headers:{authorization:'Bearer '+h.env.DATA_AGENT_INTERNAL_TOKEN,'content-type':'application/json'},body:JSON.stringify(body)});assert.equal(r.status,200);return r.json();};
-  const platformPacket={query_id:interruptedFailure.id,owner_id:'alice',sql:interruptedFailure.sql,parameters:{},target_id:'synthetic-sqlite',target_version:'1'};
+  const platformPacket={query_id:interruptedFailure.id,owner_id:'alice',sql:interruptedFailure.sql,parameters:{},target_id:'synthetic-sqlite',target_version:h.sql(`SELECT JSON_OBJECT('version',target_version) FROM query_requests WHERE id='${interruptedFailure.id}'`)[0].version};
   await platformCall('/submit',platformPacket);
   assert.equal((await platformCall('/lookup',{query_id:interruptedFailure.id,owner_id:'alice'})).state,'failed');
   // 平台已失败，模拟Worker在保存观察前退出；取消查证应保留失败诊断。
@@ -244,6 +248,16 @@ try {
   await until(async()=>(await read(next)).execution_state==='failed','明确拒绝终态');await h.pauseWorker();
   assert.equal(submits,1);assert.equal(lookups,0);assert.equal((await read(next)).error,'sql_not_supported');await withdrawResults(cid);
   checks.push({id:'IA06',name:'平台检查后明确拒绝提交进入失败，只提交一次',passed:true});
+  await new Promise(r=>platformFixture.close(r));platformFixture=undefined;await h.resumePlatform();
+  await start(cid);await update({action:'route'});const changedTarget=await draft(task,'SELECT 45');await finish();await h.pausePlatform();
+  submits=0;lookups=0;
+  platformFixture=createServer(async(req,res)=>{let raw='';for await(const chunk of req)raw+=chunk;
+    if(req.url==='/submit'){submits++;assert.equal(JSON.parse(raw).target_version,targetVersion,'实际提交沿持久目标版本');}else lookups++;
+    res.writeHead(409,{'content-type':'application/json'});res.end(JSON.stringify({code:'version_conflict'}));});
+  await new Promise(r=>platformFixture.listen(Number(new URL(h.env.DATA_AGENT_PLATFORM_URL).port),'127.0.0.1',r));
+  await confirm(changedTarget);await h.resumeWorker();await until(async()=>(await read(changedTarget)).execution_state==='failed','目标版本变化明确失败');await h.pauseWorker();
+  assert.equal(submits,1);assert.equal(lookups,0);assert.equal((await read(changedTarget)).error,'version_conflict');await withdrawResults(cid);
+  checks.push({id:'SOURCE-TARGET',name:'非1检查版持久保存并原版提交；平台409版本拒绝确定失败，不重复提交或查证未知',passed:true});
   await new Promise(r=>platformFixture.close(r));platformFixture=undefined;await h.resumePlatform();
   await start(cid);await update({action:'route'});const missing=await draft(task,'SELECT 44');await finish();await h.pausePlatform();
   mode='unknown';submits=0;lookups=0;

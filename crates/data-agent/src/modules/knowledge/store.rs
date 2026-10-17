@@ -5,7 +5,9 @@ use crate::{
 use serde_json::{Value, json};
 use sqlx::Row;
 fn body(row: &sqlx::mysql::MySqlRow) -> Value {
-    row.get::<sqlx::types::Json<Value>, _>("body").0
+    let mut value = row.get::<sqlx::types::Json<Value>, _>("body").0;
+    super::structure::project_object(&mut value);
+    value
 }
 async fn begin_operation(
     tx: &mut AppTx<'_>,
@@ -127,7 +129,16 @@ pub async fn save_document_in_tx(
         } else {
             entry["human_override"]["source_url"].clone()
         };
+        let related_override = if order.len() == 1 {
+            input.get("related_ids").cloned()
+        } else {
+            None
+        }
+        .or_else(|| entry["human_override"].get("related_ids").cloned());
         entry["human_override"] = json!({"value":chunks[position],"edited_by":ctx.user_id,"operation_id":key,"source_url":url});
+        if let Some(related) = related_override {
+            entry["human_override"]["related_ids"] = related;
+        }
         entry["effective_value"] = json!(chunks[position]);
         entry["review_state"] = json!("confirmed");
         if !chunks[position].trim().is_empty()
@@ -172,6 +183,11 @@ fn document_chunks(text: &str, count: usize) -> Vec<&str> {
 
 async fn persist(tx: &mut AppTx<'_>, ctx: &AccessContext, v: &Value) -> Result<()> {
     let mut v = v.clone();
+    super::structure::project_object(&mut v);
+    super::structure::validate_single_structure(&v)?;
+    for entry in v["entries"].as_array().into_iter().flatten() {
+        super::structure::validate_shape(&v, entry, &entry["effective_structure"])?;
+    }
     if v.get("created_by").is_none() {
         v["created_by"] = v["updated_by"].clone();
     }
@@ -292,7 +308,11 @@ pub async fn read_in_tx(
         .bind(version)
         .fetch_optional(tx.connection())
         .await?
-        .map(|v| v.0)
+        .map(|v| {
+            let mut value = v.0;
+            super::structure::project_object(&mut value);
+            value
+        })
         .ok_or(Error::new("not_available"));
     }
     Ok(body(&row))
@@ -343,6 +363,28 @@ pub async fn begin_edit_in_tx(
     begin_operation(tx, ctx, key, &json!({"object_id":object,"input":input})).await
 }
 
+pub async fn begin_create_in_tx(
+    tx: &mut AppTx<'_>,
+    ctx: &AccessContext,
+    input: &Value,
+) -> Result<Option<Value>> {
+    let key = input["operation_id"]
+        .as_str()
+        .ok_or(Error::new("invalid_input"))?;
+    let receipt = begin_operation(tx, ctx, key, input).await?;
+    if let Some(value) = &receipt {
+        read_in_tx(
+            tx,
+            ctx,
+            value["id"].as_str().ok_or(Error::new("invalid_input"))?,
+            None,
+            false,
+        )
+        .await?;
+    }
+    Ok(receipt)
+}
+
 pub async fn begin_reanalysis_in_tx(
     tx: &mut AppTx<'_>,
     ctx: &AccessContext,
@@ -382,6 +424,23 @@ pub async fn save_edit_in_tx(
         input["expected_version"].as_str().unwrap_or(""),
     )
     .await?;
+    if input["clear_override"] != true {
+        if !input["structured_value"].is_null()
+            && input["value"]
+                .as_str()
+                .is_none_or(|value| value.trim().is_empty())
+        {
+            return Err(Error::new("invalid_input"));
+        }
+        super::structure::validate_edit_in_tx(
+            tx,
+            ctx,
+            &v,
+            input["entry_id"].as_str().unwrap_or(""),
+            &input["structured_value"],
+        )
+        .await?;
+    }
     if input.get("source_url").is_some() || input.get("related_ids").is_some() {
         if v["kind"] != "document" || input["entry_id"] != "body" || input["clear_override"] == true
         {
@@ -413,7 +472,15 @@ pub async fn save_edit_in_tx(
             .get("source_url")
             .cloned()
             .unwrap_or_else(|| entry["human_override"]["source_url"].clone());
+        let related_override = input
+            .get("related_ids")
+            .cloned()
+            .or_else(|| entry["human_override"].get("related_ids").cloned());
         entry["human_override"] = json!({"value":input["value"],"edited_by":ctx.user_id,"operation_id":key,"source_url":source_url});
+        entry["human_override"]["structured_value"] = input["structured_value"].clone();
+        if let Some(related) = related_override {
+            entry["human_override"]["related_ids"] = related;
+        }
         entry["effective_value"] = input["value"].clone();
         entry["review_state"] = json!("confirmed");
         if entry["entry_id"] == "body"
@@ -425,6 +492,8 @@ pub async fn save_edit_in_tx(
             entry["source_facts"]["gap"] = json!("人工录入，尚无平台来源");
         }
     }
+    super::structure::project_object(&mut v);
+    super::structure::mark_other_rules_for_review(&mut v, input["entry_id"].as_str().unwrap_or(""));
     next(&mut v, ctx);
     persist(tx, ctx, &v).await?;
     record(tx, ctx, key, &command, &v).await?;
@@ -449,7 +518,16 @@ pub async fn create_in_tx(tx: &mut AppTx<'_>, ctx: &AccessContext, input: &Value
     } else {
         "人工录入，尚无平台来源"
     };
-    let v = json!({"id":id(),"kind":input["kind"],"name":input["name"],"version":"1","state":"enabled","entries":[{"entry_id":"body","path":"body","label":"正文","source_facts":{"complete":false,"gap":gap},"suggestion":{},"human_override":{"value":input["body"],"edited_by":ctx.user_id,"source_url":input["source_url"]},"effective_value":input["body"],"review_state":"confirmed"}],"related_ids":input["related_ids"],"source_id":null,"source_version":"0","updated_by":ctx.user_id,"created_by":ctx.user_id});
+    let mut v = json!({"id":id(),"kind":input["kind"],"name":input["name"],"version":"1","state":"enabled","entries":[{"entry_id":"body","path":"body","label":"正文","source_facts":{"complete":false,"gap":gap},"suggestion":{},"human_override":{"value":input["body"],"structured_value":input["structured_value"],"edited_by":ctx.user_id,"source_url":input["source_url"]},"effective_value":input["body"],"review_state":"confirmed"}],"related_ids":input["related_ids"],"source_id":null,"source_version":"0","updated_by":ctx.user_id,"created_by":ctx.user_id});
+    if !input["structured_value"].is_null()
+        && input["body"]
+            .as_str()
+            .is_none_or(|value| value.trim().is_empty())
+    {
+        return Err(Error::new("invalid_input"));
+    }
+    super::structure::validate_edit_in_tx(tx, ctx, &v, "body", &input["structured_value"]).await?;
+    super::structure::project_object(&mut v);
     persist(tx, ctx, &v).await?;
     record(tx, ctx, key, input, &v).await?;
     Ok(v)
@@ -509,6 +587,20 @@ pub async fn reanalyze_in_tx(
             return Err(error);
         }
     };
+    // 来源撤下的条目不能继续当有效来源；人工内容保留并明确需要重新核对。
+    let candidates = candidate["entries"]
+        .as_array()
+        .ok_or(Error::new("invalid_input"))?;
+    v["entries"]
+        .as_array_mut()
+        .ok_or(Error::new("invalid_input"))?
+        .retain(|entry| {
+            !entry["human_override"].is_null()
+                || candidates
+                    .iter()
+                    .any(|new| new["entry_id"] == entry["entry_id"])
+        });
+    let mut manual_relations = None;
     for entry in v["entries"]
         .as_array_mut()
         .ok_or(Error::new("invalid_input"))?
@@ -525,6 +617,13 @@ pub async fn reanalyze_in_tx(
             } else {
                 entry["review_state"] = json!("needs_review");
             }
+        } else {
+            entry["source_facts"] = json!({"source_id":candidate["source_id"],"version":source_version.to_string(),"complete":false,"gap":"来源已撤下此条目，保留人工内容待复核"});
+            entry["suggestion"] = json!({});
+            entry["review_state"] = json!("needs_review");
+        }
+        if entry["human_override"]["related_ids"].is_array() {
+            manual_relations = Some(entry["human_override"]["related_ids"].clone());
         }
     }
     for entry in candidate["entries"]
@@ -545,8 +644,10 @@ pub async fn reanalyze_in_tx(
         v["state"] = json!("enabled");
     }
     v["name"] = candidate["name"].clone();
-    v["related_ids"] = candidate["related_ids"].clone();
+    v["related_ids"] = manual_relations.unwrap_or_else(|| candidate["related_ids"].clone());
     v["source_version"] = json!(source_version.to_string());
+    super::structure::project_object(&mut v);
+    super::structure::validate_single_structure(&v)?;
     next(&mut v, ctx);
     persist(tx, ctx, &v).await?;
     record(tx, ctx, key, &command, &v).await?;
@@ -849,6 +950,23 @@ pub async fn matching_in_tx(
     query: &str,
     tokens: &[String],
 ) -> Result<Vec<Value>> {
+    matching_scoped_in_tx(
+        tx,
+        ctx,
+        query,
+        tokens,
+        &crate::search_scope::KnowledgeSearchScope::default(),
+    )
+    .await
+}
+
+pub async fn matching_scoped_in_tx(
+    tx: &mut AppTx<'_>,
+    ctx: &AccessContext,
+    query: &str,
+    tokens: &[String],
+    scope: &crate::search_scope::KnowledgeSearchScope,
+) -> Result<Vec<Value>> {
     if tokens.is_empty() {
         return Ok(vec![]);
     }
@@ -860,10 +978,10 @@ pub async fn matching_in_tx(
             break;
         }
         let mut sql = sqlx::QueryBuilder::<sqlx::MySql>::new(
-            "SELECT id FROM knowledge_objects FORCE INDEX(PRIMARY) WHERE space_id=",
+            "SELECT k.id FROM knowledge_objects AS k FORCE INDEX(PRIMARY) WHERE k.space_id=",
         );
         sql.push_bind(&ctx.space_id)
-            .push(" AND state='enabled' AND (INSTR(LOWER(name),")
+            .push(" AND k.state='enabled' AND (INSTR(LOWER(k.name),")
             .push_bind(query.to_lowercase())
             .push(")>0)=")
             .push_bind(exact)
@@ -871,11 +989,14 @@ pub async fn matching_in_tx(
         let mut parts = sql.separated(" OR ");
         for token in tokens.iter().take(24) {
             parts
-                .push("INSTR(LOWER(CAST(body AS CHAR)),")
+                .push("INSTR(LOWER(CAST(k.body AS CHAR)),")
                 .push_bind_unseparated(token)
                 .push_unseparated(")>0");
         }
-        sql.push(") ORDER BY id LIMIT ").push_bind(remaining as u32);
+        sql.push(")");
+        scope.push_constraints(&mut sql, "k.id", "k.kind", "k.body");
+        sql.push(" ORDER BY k.id LIMIT ")
+            .push_bind(remaining as u32);
         rows.extend(
             sql.build_query_scalar::<String>()
                 .fetch_all(tx.connection())

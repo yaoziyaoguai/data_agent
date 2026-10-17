@@ -236,6 +236,29 @@ pub fn synthetic_alias(namespace: &str, table: &str) -> Option<String> {
     }
 }
 
+// 合成包中的明确来源别名映射到平台稳定身份，只补资料关联，不传播维护权。
+pub fn link_synthetic_documents(space: &str, object: &mut Value) {
+    if object["kind"] != "document" {
+        return;
+    }
+    let Some(related) = object["related_ids"].as_array_mut() else {
+        return;
+    };
+    let aliases = related.clone();
+    for alias in aliases {
+        let Some(table) = alias.as_str().and_then(|id| id.strip_prefix("table-")) else {
+            continue;
+        };
+        if synthetic_alias("synthetic-sqlite", table).as_deref() != alias.as_str() {
+            continue;
+        }
+        let platform = json!(table_object_id(space, "synthetic-sqlite", table));
+        if !related.contains(&platform) {
+            related.push(platform);
+        }
+    }
+}
+
 pub fn retired_synthetic_alias(space: &str, namespace: &str, source: &str) -> Option<String> {
     [
         "demo_order_detail",

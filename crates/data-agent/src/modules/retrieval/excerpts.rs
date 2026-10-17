@@ -53,6 +53,7 @@ pub fn attach_matches(space: &str, object: &mut Value, candidate: &Value) {
     }
     let located = !selected.is_empty();
     object["retrieval"] = json!({
+        "channel":"vector",
         "state":if located {"located"} else {"unlocated"},
         "excerpts":selected,
         "note":if located {
@@ -61,6 +62,75 @@ pub fn attach_matches(space: &str, object: &mut Value, candidate: &Value) {
             "向量命中缺少可核验的位置，目录开头不是命中片段。请用本对象id/version通过read_knowledge补读全文；需受控重建索引后才能补齐位置，本次未自动重建。"
         }
     });
+}
+
+/// 词法定位只使用当前有效正文；索引没有位置时也不能把目录开头冒称命中。
+pub fn attach_lexical_matches(object: &mut Value, query: &str) {
+    if object["retrieval"]["excerpts"]
+        .as_array()
+        .is_some_and(|items| !items.is_empty())
+    {
+        return;
+    }
+    let tokens = super::tokens(query);
+    let mut excerpts = Vec::new();
+    for entry in object["entries"].as_array().into_iter().flatten() {
+        let Some(text) = entry["effective_value"].as_str() else {
+            continue;
+        };
+        let Some((offset, score)) = lexical_location(text, &tokens) else {
+            continue;
+        };
+        let total = text.chars().count();
+        let start = offset.saturating_sub(80);
+        let text = text.chars().skip(start).take(360).collect::<String>();
+        excerpts.push((
+            score,
+            json!({"entry_id":entry["entry_id"],"path":entry["path"],
+            "offset":start,"length":text.chars().count(),"total_chars":total,"text":text}),
+        ));
+    }
+    excerpts.sort_by(|(a_score, a), (b_score, b)| {
+        b_score
+            .cmp(a_score)
+            .then_with(|| a["entry_id"].as_str().cmp(&b["entry_id"].as_str()))
+    });
+    let selected = excerpts
+        .into_iter()
+        .take(3)
+        .map(|(_, excerpt)| excerpt)
+        .collect::<Vec<_>>();
+    if selected.is_empty() {
+        if object.get("retrieval").is_none() {
+            object["retrieval"] = json!({"channel":"lexical","state":"unlocated","excerpts":[],
+                "note":"当前正文未定位到词法片段。目录命中或无片段结果不证明资料不存在；请按对象id/version用read_knowledge补读，或调整检索范围。"});
+        }
+        return;
+    }
+    object["retrieval"] = json!({"channel":"lexical","state":"located","excerpts":selected,
+        "note":"词法片段来自当前有权读取的有效正文，Unicode字符位置可核对。仅覆盖命中范围；请用对象id/version和entry_id通过read_knowledge补读完整条目及例外。"});
+}
+
+fn lexical_location(text: &str, tokens: &[String]) -> Option<(usize, usize)> {
+    // 大小写转换可能展开字符，保存转换后字节到原Unicode字符的映射。
+    let mut lowered = String::new();
+    let mut positions = Vec::new();
+    for (offset, ch) in text.chars().enumerate() {
+        for lower in ch.to_lowercase() {
+            positions.extend(std::iter::repeat_n(offset, lower.len_utf8()));
+            lowered.push(lower);
+        }
+    }
+    let mut hits = Vec::new();
+    for token in tokens {
+        if let Some(byte) = lowered.find(token) {
+            hits.push((positions[byte], token.chars().count()));
+        }
+    }
+    hits.sort_by(|(a_offset, a_len), (b_offset, b_len)| {
+        b_len.cmp(a_len).then_with(|| a_offset.cmp(b_offset))
+    });
+    hits.first().map(|(offset, _)| (*offset, hits.len()))
 }
 
 fn checked_excerpt(object: &Value, hit: &Value) -> Option<Value> {
@@ -186,5 +256,61 @@ mod tests {
         let mut other_space = base;
         attach_matches("other", &mut other_space, &candidate);
         assert_eq!(other_space["retrieval"]["state"], "unlocated");
+    }
+
+    #[test]
+    fn lexical_tail_matches_use_original_unicode_offsets_after_case_expansion() {
+        let prefix = "前言🌏İ".repeat(200);
+        let body = format!(
+            "{prefix}RULE仅适用于校准设备，其他设备按各自规范。{}",
+            "补充资料".repeat(100)
+        );
+        let mut object = json!({"id":"manual","version":"9","entries":[
+            {"entry_id":"history","path":"history","effective_value":"资料编制历史"},
+            {"entry_id":"rule","path":"rule","effective_value":body}]});
+        attach_lexical_matches(&mut object, "RULE");
+        assert_eq!(object["retrieval"]["channel"], "lexical");
+        assert_eq!(object["retrieval"]["state"], "located");
+        crate::contracts::validate("KnowledgeRetrieval", &object["retrieval"]).unwrap();
+        let excerpt = &object["retrieval"]["excerpts"][0];
+        let start = excerpt["offset"].as_u64().unwrap() as usize;
+        let length = excerpt["length"].as_u64().unwrap() as usize;
+        assert!(start > 600);
+        assert_eq!(
+            excerpt["text"],
+            body.chars().skip(start).take(length).collect::<String>()
+        );
+        assert!(excerpt["text"].as_str().unwrap().contains("RULE仅适用于"));
+        assert_eq!(excerpt["entry_id"], "rule");
+    }
+
+    #[test]
+    fn lexical_positions_ignore_non_effective_facts_and_preserve_vector_locations() {
+        let mut object = json!({"id":"manual","version":"1","entries":[
+            {"entry_id":"body","path":"body","effective_value":"当前适用规则", "source_facts":{"quote":"撤销词条"},
+                "suggestion":{"value":"候选词条"}}]});
+        attach_lexical_matches(&mut object, "撤销词条");
+        assert_eq!(object["retrieval"]["state"], "unlocated");
+        let candidate =
+            json!({"id":"manual","version":"1","matches":[hit("body",0,"当前适用规则")]});
+        attach_matches("demo", &mut object, &candidate);
+        let vector = object["retrieval"].clone();
+        attach_lexical_matches(&mut object, "规则");
+        assert_eq!(object["retrieval"], vector);
+        assert_eq!(object["retrieval"]["channel"], "vector");
+    }
+
+    #[test]
+    fn lexical_excerpts_keep_at_most_three_relevant_entries() {
+        let mut object = json!({"entries":(0..12).map(|index|json!({"entry_id":format!("e{index}"),"path":"meaning",
+            "effective_value":if index%2==0{"设备规则：仅限室内使用。"}else{"登记信息"}})).collect::<Vec<_>>()});
+        attach_lexical_matches(&mut object, "设备规则");
+        let excerpts = object["retrieval"]["excerpts"].as_array().unwrap();
+        assert_eq!(excerpts.len(), 3);
+        assert!(
+            excerpts
+                .iter()
+                .all(|excerpt| excerpt["text"].as_str().unwrap().contains("设备规则"))
+        );
     }
 }

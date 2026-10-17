@@ -1,6 +1,6 @@
 use crate::{
     contracts,
-    modules::{analysis, conversations, jobs, queries, runtime},
+    modules::{analysis, assets, conversations, jobs, queries, runtime},
     persistence::AppTx,
     types::{AccessContext, Error, Result, id},
 };
@@ -166,6 +166,9 @@ pub async fn delete(
             queries::cancel_in_tx(&mut tx, ctx, query["id"].as_str().unwrap_or("")).await?;
         }
         conversations::delete_in_tx(&mut tx, &conv).await?;
+        assets::skill_drafts::delete_conversation_drafts_in_tx(&mut tx, ctx, cid).await?;
+        analysis::delete_conversation_reports_in_tx(&mut tx, ctx, cid).await?;
+        analysis::delete_conversation_evidence_in_tx(&mut tx, ctx, cid).await?;
         for message in messages {
             jobs::cancel_message_job_in_tx(&mut tx, &message).await?;
         }

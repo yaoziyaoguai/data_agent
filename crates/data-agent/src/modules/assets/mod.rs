@@ -1,7 +1,10 @@
+mod maintenance_impact;
 pub mod memory_index;
 pub mod memory_provider;
+pub mod skill_drafts;
 pub mod skill_files;
 mod store;
+pub use maintenance_impact::find_skill_dependents_in_tx;
 pub use store::{
     begin_removal_in_tx, begin_save_in_tx, begin_selection_in_tx, can_edit,
     change_state_authorized_in_tx, change_state_in_tx, list_in_tx, publish_in_tx, read_in_tx,

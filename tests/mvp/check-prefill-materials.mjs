@@ -22,6 +22,22 @@ const table=(id,version='1',upstream=[])=>({id,name:id,platform_version:version,
 try{
  h=await harness({capture:true,env:{DATA_AGENT_LEASE_MS:'120000',DATA_AGENT_PREFILL_PROFILE:JSON.stringify(profile),DATA_AGENT_PREFILL_TEST:'1',DATA_AGENT_PREFILL_URL:'http://127.0.0.1:'+provider.address().port}});
  await h.pauseWorker();
+ const initialSync=await h.request('/source-syncs',{operation_id:randomUUID()});assert.equal(initialSync.status,200,JSON.stringify(initialSync.value));
+ const platformObjects=h.sql("SELECT body FROM knowledge_objects WHERE source_id LIKE 'catalog-%'");
+ const platformTarget=platformObjects.find(o=>o.kind==='table'&&o.name==='demo_order_detail');assert.ok(platformTarget);assert.notEqual(platformTarget.id,'table-demo_order_detail');
+ const platformRead=(await h.request('/knowledge/'+platformTarget.id)).value;
+ assert.equal((await h.request('/knowledge/'+platformTarget.id+'/reanalyze',{operation_id:randomUUID(),expected_version:platformRead.version})).status,200);
+ const platformInput=h.sql(`SELECT input_json FROM prefill_attempts WHERE object_id='${platformTarget.id}' ORDER BY created_at DESC LIMIT 1`)[0];
+ const expectedUpstreams=['raw_order_lines','raw_payments','dim_customers'];
+ for(const name of expectedUpstreams){
+  const upstreamObject=platformObjects.find(o=>o.kind==='table'&&o.name===name);assert.ok(upstreamObject);
+  const source=platformInput.sources.find(s=>s.source_id===upstreamObject.source_id);assert.ok(source,`${name} 直接上游资料缺失`);assert.ok(source.body.includes('CREATE TABLE '+name));
+ }
+ const guideDocuments=h.sql("SELECT body FROM knowledge_objects WHERE kind='document' AND source_id='business-guide'");
+ assert.ok(guideDocuments.length>0);
+ assert.ok(guideDocuments.some(document=>document.related_ids.includes(platformTarget.id)),'业务文档应关联平台稳定身份');
+ assert.ok(guideDocuments.some(document=>platformInput.sources.some(source=>source.source_id==='document-'+document.id&&source.version===document.version&&source.body.trim())),'平台对象的预填材料应实际含业务文档');
+ checks.push('实际合成平台稳定身份的预填输入包含业务文档，以及订单行、支付、客户三个上游DDL');
  // 下游位于首个目录页，上游在末页；其余表只是分页填充。
  const rows=[table('derived_values','1',['raw_values']),...Array.from({length:49},(_,i)=>table('filler_'+i)),table('raw_values')];
  const sync=async()=>{await writeFile(h.directory+'/platform/catalog.json',JSON.stringify({source_namespace:'prefill-materials',authoritative:true,tables:rows}));const r=await h.request('/source-syncs',{operation_id:randomUUID()});assert.equal(r.status,200,JSON.stringify(r.value));};

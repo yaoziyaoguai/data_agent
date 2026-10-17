@@ -13,6 +13,7 @@ pub async fn reserve(
     input: ReserveModelCall,
 ) -> Result<Value> {
     let cid = runtime::locate_run(pool, &input.run_id).await?;
+    let checked = super::context_authority::check_run_results(pool, context, &input.run_id).await?;
     let mut tx = AppTx::begin(pool).await?;
     let conversation = conversations::lock_conversation_in_tx(&mut tx, context, &cid).await?;
     conversations::assert_turn_in_tx(
@@ -26,6 +27,7 @@ pub async fn reserve(
         return Err(Error::new("lease_lost"));
     }
     super::context_authority::assert_run_in_tx(&mut tx, context, &cid, &input.run_id).await?;
+    super::context_authority::assert_checked_run_in_tx(&mut tx, &input.run_id, &checked).await?;
     let receipt = runtime::reserve_model_call_in_tx(&mut tx, &run, &input).await?;
     tx.commit().await?;
     Ok(receipt)
@@ -36,6 +38,7 @@ pub async fn send(
     input: SendModelCall,
 ) -> Result<Value> {
     let cid = runtime::locate_run(pool, &input.run_id).await?;
+    let checked = super::context_authority::check_run_results(pool, context, &input.run_id).await?;
     let mut tx = AppTx::begin(pool).await?;
     let conversation = conversations::lock_conversation_in_tx(&mut tx, context, &cid).await?;
     conversations::assert_turn_in_tx(
@@ -49,6 +52,7 @@ pub async fn send(
         return Err(Error::new("lease_lost"));
     }
     super::context_authority::assert_run_in_tx(&mut tx, context, &cid, &input.run_id).await?;
+    super::context_authority::assert_checked_run_in_tx(&mut tx, &input.run_id, &checked).await?;
     let receipt = runtime::send_model_call_in_tx(&mut tx, &run, &input).await?;
     tx.commit().await?;
     Ok(receipt)

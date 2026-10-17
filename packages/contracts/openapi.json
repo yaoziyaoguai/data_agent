@@ -2964,6 +2964,254 @@
           }
         ]
       }
+    },
+    "/conversations/{id}/tasks/{task_id}/report": {
+      "get": {
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schema.json#/$defs/AnalysisReportView"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "应用错误；权限、版本、幂等冲突与失效保留独立含义",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schema.json#/$defs/AppError"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "pattern": "^[A-Za-z0-9_-]+$"
+            }
+          },
+          {
+            "name": "task_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "pattern": "^[A-Za-z0-9_-]+$"
+            }
+          }
+        ]
+      },
+      "post": {
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schema.json#/$defs/AnalysisReportRef"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "应用错误；权限、版本、幂等冲突与失效保留独立含义",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schema.json#/$defs/AppError"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "pattern": "^[A-Za-z0-9_-]+$"
+            }
+          },
+          {
+            "name": "task_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "pattern": "^[A-Za-z0-9_-]+$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "./schema.json#/$defs/SaveAnalysisReport"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/assets/skill-drafts": {
+      "get": {
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schema.json#/$defs/SkillDraftList"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "应用错误；权限、版本、待归属、未知和服务失败保留独立code",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schema.json#/$defs/AppError"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "after_id",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "pattern": "^[A-Za-z0-9_-]+$"
+            }
+          }
+        ]
+      }
+    },
+    "/assets/skill-drafts/{draft_id}": {
+      "get": {
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schema.json#/$defs/SkillDraft"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "应用错误；权限、版本、待归属、未知和服务失败保留独立code",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schema.json#/$defs/AppError"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "draft_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "pattern": "^[A-Za-z0-9_-]+$"
+            }
+          }
+        ]
+      }
+    },
+    "/knowledge/{id}/maintenance-impact": {
+      "get": {
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schema.json#/$defs/MaintenanceImpact"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "应用错误；权限、版本、待归属、未知和服务失败保留独立code",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schema.json#/$defs/AppError"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "pattern": "^[A-Za-z0-9_-]+$"
+            }
+          },
+          {
+            "name": "kind",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "$ref": "./schema.json#/$defs/MaintenanceImpactQuery/properties/kind"
+            }
+          },
+          {
+            "name": "expected_version",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "$ref": "./schema.json#/$defs/MaintenanceImpactQuery/properties/expected_version"
+            }
+          },
+          {
+            "name": "after_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$ref": "./schema.json#/$defs/MaintenanceImpactQuery/properties/after_id"
+            }
+          }
+        ]
+      }
     }
   }
 }

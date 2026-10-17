@@ -29,7 +29,7 @@ const directory='.local/checks/prefill-sources-'+randomUUID();await mkdir(direct
 const profile={provider_id:'deepseek',model_id:'deepseek-flash',trial_id:randomUUID(),price_version:'2026-10-04-peak-usd',input_limit:32768,output_limit:2048,trial_call_limit:22,trial_cost_micros:'300000',request_call_limit:9,toolset:'data',payload_bytes_limit:65536};
 let h;
 try{
- h=await harness({env:{DATA_AGENT_SYNTHETIC_SOURCE_DIRECTORY:process.cwd()+'/'+directory}});await h.pauseWorker();
+ h=await harness({platformSourceDirectory:process.cwd()+'/docs/sources',env:{DATA_AGENT_SYNTHETIC_SOURCE_DIRECTORY:process.cwd()+'/'+directory}});await h.pauseWorker();
  let schema=await readFile(directory+'/schema.sql','utf8');schema=schema.replace('paid_amount_cents INTEGER NOT NULL','paid_amount_cents TEXT NOT NULL');await writeFile(directory+'/schema.sql',schema);
  assert.equal((await h.request('/source-syncs',{operation_id:randomUUID()})).status,200);
  const table=(await h.request('/knowledge/table-demo_order_detail')).value;const field=(await h.request('/knowledge/field-paid_amount_cents')).value;
@@ -42,7 +42,7 @@ try{
   {DATA_AGENT_PREFILL_PROFILE:JSON.stringify(profile),DATA_AGENT_PREFILL_URL:'https://example.invalid/chat/completions'},
   {DATA_AGENT_PREFILL_PROFILE:JSON.stringify({...profile,payload_bytes_limit:1024}),DATA_AGENT_PREFILL_TEST:'1',DATA_AGENT_PREFILL_URL:'http://127.0.0.1:'+provider.address().port},
  ]){
-  h=await harness({env:{DATA_AGENT_SYNTHETIC_SOURCE_DIRECTORY:process.cwd()+'/'+directory,...invalidEnv}});
+  h=await harness({platformSourceDirectory:process.cwd()+'/docs/sources',env:{DATA_AGENT_SYNTHETIC_SOURCE_DIRECTORY:process.cwd()+'/'+directory,...invalidEnv}});
   const old=(await h.request('/knowledge/field-paid_amount_cents')).value;
   assert.equal((await h.request('/knowledge/field-paid_amount_cents/reanalyze',{operation_id:randomUUID(),expected_version:old.version})).status,200);
   await until(async()=>(await h.request('/knowledge/field-paid_amount_cents')).value.prefill_status?.state==='invalid_prefill','prefill preflight rejected');
@@ -51,7 +51,7 @@ try{
   await h.close();h=null;
  }
  checks.push({name:'错误profile、URL、过大payload在发送前明确失败，不占预算且0HTTP',passed:true});
- h=await harness({env:{DATA_AGENT_SYNTHETIC_SOURCE_DIRECTORY:process.cwd()+'/'+directory,DATA_AGENT_PREFILL_PROFILE:JSON.stringify(profile),DATA_AGENT_PREFILL_TEST:'1',DATA_AGENT_PREFILL_URL:'http://127.0.0.1:'+provider.address().port}});
+ h=await harness({platformSourceDirectory:process.cwd()+'/docs/sources',env:{DATA_AGENT_SYNTHETIC_SOURCE_DIRECTORY:process.cwd()+'/'+directory,DATA_AGENT_PREFILL_PROFILE:JSON.stringify(profile),DATA_AGENT_PREFILL_TEST:'1',DATA_AGENT_PREFILL_URL:'http://127.0.0.1:'+provider.address().port}});
  const object='field-paid_amount_cents';
  const reanalyze=async()=>{const old=(await h.request('/knowledge/'+object)).value;const command={operation_id:randomUUID(),expected_version:old.version};const r=await h.request('/knowledge/'+object+'/reanalyze',command);assert.equal(r.status,200);const replay=await h.request('/knowledge/'+object+'/reanalyze',command);assert.equal(replay.status,200);assert.equal(replay.value.version,r.value.version);return r.value;};
  const wait=async(state)=>until(async()=>{const v=(await h.request('/knowledge/'+object)).value;return v.prefill_status?.state===state?v:false;},'prefill '+state);
@@ -103,7 +103,7 @@ try{
  for(const [level,output] of [['low',8192],['high',8192],['low',16384],['high',32768]]){
   expectedThinking=level;expectedOutput=output;
   const nativeProfile={...profile,trial_id:randomUUID(),thinking_level:level,output_limit:output,trial_call_limit:2};
-  h=await harness({env:{DATA_AGENT_SYNTHETIC_SOURCE_DIRECTORY:process.cwd()+'/'+directory,DATA_AGENT_PREFILL_PROFILE:JSON.stringify(nativeProfile),DATA_AGENT_PREFILL_TEST:'1',DATA_AGENT_PREFILL_URL:'http://127.0.0.1:'+provider.address().port}});
+  h=await harness({platformSourceDirectory:process.cwd()+'/docs/sources',env:{DATA_AGENT_SYNTHETIC_SOURCE_DIRECTORY:process.cwd()+'/'+directory,DATA_AGENT_PREFILL_PROFILE:JSON.stringify(nativeProfile),DATA_AGENT_PREFILL_TEST:'1',DATA_AGENT_PREFILL_URL:'http://127.0.0.1:'+provider.address().port}});
   const beforeCalls=calls;
   const old=(await h.request('/knowledge/'+object)).value;
   assert.equal((await h.request('/knowledge/'+object+'/reanalyze',{operation_id:randomUUID(),expected_version:old.version})).status,200);

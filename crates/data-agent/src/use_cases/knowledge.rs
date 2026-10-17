@@ -2,6 +2,7 @@ use crate::{
     contracts,
     modules::{access, assets, ingestion, knowledge, retrieval},
     persistence::AppTx,
+    search_scope::KnowledgeSearchScope,
     types::{AccessContext, Error, Result, epoch, id},
 };
 use serde_json::{Value, json};
@@ -61,6 +62,16 @@ pub async fn list(pool: &MySqlPool, ctx: &AccessContext, input: &Value) -> Resul
     };
     let mut values = values;
     for value in &mut values {
+        // 工具采用元信息由检索工具保留；维护HTTP沿用正式对象契约。
+        if let Some(object) = value.as_object_mut() {
+            object.remove("structure_dependencies");
+            object.remove("structure_coverage");
+        }
+        for entry in value["entries"].as_array_mut().into_iter().flatten() {
+            if let Some(entry) = entry.as_object_mut() {
+                entry.remove("structure_gap");
+            }
+        }
         value["maintenance"] =
             access::maintenance_snapshot_in_tx(&mut tx, ctx, value["id"].as_str().unwrap_or(""))
                 .await?;
@@ -127,7 +138,13 @@ pub async fn edit(
     }
     let mut v = match action {
         "create" => {
-            let v = knowledge::create_in_tx(&mut tx, ctx, &input).await?;
+            let v =
+                if let Some(receipt) = knowledge::begin_create_in_tx(&mut tx, ctx, &input).await? {
+                    receipt
+                } else {
+                    check_input_structure_sources_in_tx(&mut tx, ctx, &input).await?;
+                    knowledge::create_in_tx(&mut tx, ctx, &input).await?
+                };
             if v["kind"] == "table" || v["kind"] == "field" {
                 super::semantic_governance::register_object_in_tx(&mut tx, ctx, &v).await?;
             } else {
@@ -143,6 +160,9 @@ pub async fn edit(
             {
                 receipt
             } else {
+                if input["clear_override"] != true {
+                    check_input_structure_sources_in_tx(&mut tx, ctx, &input).await?;
+                }
                 let mut source_value = None;
                 if input["clear_override"] == true {
                     let old = knowledge::read_in_tx(&mut tx, ctx, object, None, true).await?;
@@ -322,20 +342,30 @@ async fn sync_catalog(pool: &MySqlPool, ctx: &AccessContext) -> Result<()> {
     let catalog = current_catalog_in_tx(tx, ctx).await?;
     let objects = knowledge::list_in_tx(tx, ctx, false).await?;
     knowledge::seed_in_tx(tx, ctx, &catalog).await?;
-    for (source, source_version) in &changed {
-        for object in objects.iter().filter(|o| depends_on_source(o, source)) {
-            if let Some(candidate) = catalog["objects"]
+    for object in &objects {
+        if changed
+            .iter()
+            .any(|(source, _)| source == "semantic-catalog" || depends_on_source(object, source))
+            && let Some(candidate) = catalog["objects"]
                 .as_array()
                 .and_then(|a| a.iter().find(|c| c["id"] == object["id"]))
-            {
-                let latest =
-                    knowledge::read_in_tx(tx, ctx, object["id"].as_str().unwrap_or(""), None, true)
-                        .await?;
-                let root_version = epoch(candidate["source_version"].as_str().unwrap_or("0"))?;
-                let updated=knowledge::reanalyze_in_tx(tx,ctx,object["id"].as_str().unwrap_or(""),&json!({"operation_id":format!("sync-{}-{}-{}",object["id"].as_str().unwrap_or(""),source,source_version),"expected_version":latest["version"]}),root_version,candidate).await?;
-                let sources = sources_in_tx(tx, ctx).await?;
-                super::prefill_materials::queue_in_tx(tx, ctx, &updated, sources).await?;
-            }
+        {
+            let latest =
+                knowledge::read_in_tx(tx, ctx, object["id"].as_str().unwrap_or(""), None, true)
+                    .await?;
+            let root_version = epoch(candidate["source_version"].as_str().unwrap_or("0"))?;
+            let operation = crate::types::fingerprint(&json!(["sync", object["id"], changed]));
+            let updated = knowledge::reanalyze_in_tx(
+                tx,
+                ctx,
+                object["id"].as_str().unwrap_or(""),
+                &json!({"operation_id":operation,"expected_version":latest["version"]}),
+                root_version,
+                candidate,
+            )
+            .await?;
+            let sources = sources_in_tx(tx, ctx).await?;
+            super::prefill_materials::queue_in_tx(tx, ctx, &updated, sources).await?;
         }
     }
     transaction.commit().await
@@ -369,13 +399,47 @@ pub async fn source_head(pool: &MySqlPool, ctx: &AccessContext, source: &str) ->
 }
 
 pub async fn check_refs_in_tx(tx: &mut AppTx<'_>, ctx: &AccessContext, refs: &Value) -> Result<()> {
-    knowledge::check_refs_in_tx(tx, ctx, refs).await?;
-    for r in refs.as_array().ok_or(Error::new("invalid_input"))? {
+    checked_refs_in_tx(tx, ctx, refs).await.map(|_| ())
+}
+
+// 交付案例时保留实际核验过的传递依赖，后续上下文只校验这些明确引用。
+async fn checked_refs_in_tx(
+    tx: &mut AppTx<'_>,
+    ctx: &AccessContext,
+    refs: &Value,
+) -> Result<Vec<Value>> {
+    let mut pending = refs.as_array().ok_or(Error::new("invalid_input"))?.clone();
+    let mut checked = std::collections::HashSet::new();
+    let mut references = Vec::new();
+    let mut index = 0;
+    while index < pending.len() {
+        if pending.len() > 150 {
+            return Err(Error::new("invalid_input"));
+        }
+        let r = pending[index].clone();
+        index += 1;
+        let key = crate::types::fingerprint(&r);
+        if !checked.insert(key) {
+            continue;
+        }
+        knowledge::check_refs_in_tx(tx, ctx, &json!([r.clone()])).await?;
         let v = knowledge::read_in_tx(tx, ctx, r["object_id"].as_str().unwrap_or(""), None, false)
             .await?;
         assert_source_in_tx(tx, ctx, &v).await?;
+        pending.extend(knowledge::structure_dependencies(&v));
+        references.push(r);
     }
-    Ok(())
+    Ok(references)
+}
+
+async fn check_input_structure_sources_in_tx(
+    tx: &mut AppTx<'_>,
+    ctx: &AccessContext,
+    input: &Value,
+) -> Result<()> {
+    let object = json!({"entries":[{"effective_structure":input["structured_value"]}]});
+    let dependencies = knowledge::structure_dependencies(&object);
+    check_refs_in_tx(tx, ctx, &json!(dependencies)).await
 }
 pub async fn assert_source_in_tx(tx: &mut AppTx<'_>, ctx: &AccessContext, v: &Value) -> Result<()> {
     super::knowledge_sources::assert_in_tx(tx, ctx, v).await
@@ -510,7 +574,16 @@ async fn sources_in_tx(tx: &mut AppTx<'_>, ctx: &AccessContext) -> Result<Vec<Va
     Ok(sources)
 }
 async fn current_catalog_in_tx(tx: &mut AppTx<'_>, ctx: &AccessContext) -> Result<Value> {
-    let mut catalog = ingestion::synthetic_catalog()?;
+    // 使用本次已落库的目录快照，避免同步中再次读取磁盘换成另一版候选。
+    let catalog_version =
+        ingestion::source_version_in_tx(tx, &ctx.space_id, "semantic-catalog").await?;
+    let snapshot =
+        ingestion::read_source_in_tx(tx, ctx, "semantic-catalog", catalog_version).await?;
+    let mut catalog: Value = serde_json::from_str(snapshot["body"].as_str().unwrap_or(""))
+        .map_err(|_| Error::new("invalid_input"))?;
+    if catalog["synthetic"] != true {
+        return Err(Error::new("invalid_input"));
+    }
     let sources = sources_in_tx(tx, ctx).await?;
     for object in catalog["objects"]
         .as_array_mut()
@@ -523,8 +596,111 @@ async fn current_catalog_in_tx(tx: &mut AppTx<'_>, ctx: &AccessContext) -> Resul
             object["source_version"] = source["version"].clone();
         }
         ingestion::prefill::refresh_facts(object, &sources);
+        ingestion::catalog::link_synthetic_documents(&ctx.space_id, object);
     }
     Ok(catalog)
+}
+
+pub(super) async fn semantic_object_in_tx(
+    tx: &mut AppTx<'_>,
+    ctx: &AccessContext,
+    mut object: Value,
+) -> Result<Value> {
+    if object["kind"] == "query_example" {
+        let dependencies = knowledge::structure_dependencies(&object);
+        if dependencies.is_empty() {
+            object["structure_dependencies"] = json!([]);
+            object["structure_coverage"] = json!({"state":"missing_semantics","notes":["查询案例尚无有效结构与依赖，仅可读取说明，须重新核对后采用。"]});
+            return Ok(object);
+        }
+        match checked_refs_in_tx(tx, ctx, &json!(dependencies)).await {
+            Ok(checked_dependencies) => {
+                object["structure_dependencies"] = json!(checked_dependencies);
+                object["structure_coverage"] = json!({"state":"complete","notes":[]});
+            }
+            Err(error) if matches!(error.code, "stale_knowledge" | "not_available") => {
+                for entry in object["entries"].as_array_mut().into_iter().flatten() {
+                    entry["effective_structure"] = Value::Null;
+                    entry["structure_gap"] =
+                        json!("查询案例的依赖已变化或不可用，须由负责人重新核对。");
+                }
+                object["structure_dependencies"] = json!([]);
+                object["structure_coverage"] = json!({"state":"missing_semantics","notes":["查询案例的依赖已变化或不可用，当前案例不能采用。"]});
+            }
+            Err(error) => return Err(error),
+        }
+        return Ok(object);
+    }
+    if !object["entries"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .any(|entry| !entry["effective_structure"].is_null())
+    {
+        return Ok(object);
+    }
+    let path = object["entries"]
+        .as_array()
+        .and_then(|entries| entries.first())
+        .and_then(|entry| entry["path"].as_str())
+        .unwrap_or("");
+    let snapshot = knowledge::semantic_snapshot_in_tx(
+        tx,
+        ctx,
+        &json!([{
+            "object_id":object["id"],"version":object["version"],"path":path
+        }]),
+    )
+    .await?;
+    let checked = snapshot["objects"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .find(|value| value["id"] == object["id"]);
+    let mut valid_tables = std::collections::HashSet::new();
+    for table in snapshot["objects"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter(|value| value["kind"] == "table")
+    {
+        match assert_source_in_tx(tx, ctx, table).await {
+            Ok(()) => {
+                valid_tables.insert((table["id"].clone(), table["version"].clone()));
+            }
+            Err(error) if matches!(error.code, "stale_knowledge" | "not_available") => (),
+            Err(error) => return Err(error),
+        }
+    }
+    for entry in object["entries"].as_array_mut().into_iter().flatten() {
+        let had_structure = !entry["effective_structure"].is_null();
+        entry["effective_structure"] = checked
+            .and_then(|value| value["entries"].as_array())
+            .and_then(|entries| {
+                entries
+                    .iter()
+                    .find(|candidate| candidate["entry_id"] == entry["entry_id"])
+            })
+            .map(|candidate| candidate["effective_structure"].clone())
+            .unwrap_or(Value::Null);
+        if had_structure && entry["effective_structure"].is_null() {
+            entry["structure_gap"] = json!("部分计算规则缺少当前有效绑定，须核对后采用。");
+        }
+        let wrapper = json!({"entries":[entry.clone()]});
+        if knowledge::structure_dependencies(&wrapper)
+            .iter()
+            .any(|reference| {
+                !valid_tables
+                    .contains(&(reference["object_id"].clone(), reference["version"].clone()))
+            })
+        {
+            entry["effective_structure"] = Value::Null;
+            entry["structure_gap"] = json!("引用的表资料已变化，须重新核对计算规则。");
+        }
+    }
+    object["structure_dependencies"] = json!(knowledge::structure_dependencies(&object));
+    object["structure_coverage"] = snapshot["coverage"].clone();
+    Ok(object)
 }
 
 pub struct KnowledgeSearch {
@@ -538,8 +714,32 @@ pub async fn retrieve_in_tx(
     limit: usize,
     vector: &retrieval::vector::Candidates,
 ) -> Result<KnowledgeSearch> {
-    let indexed = retrieval::candidates_in_tx(tx, &ctx.space_id, query).await?;
-    let current = knowledge::matching_in_tx(tx, ctx, query, &retrieval::tokens(query)).await?;
+    retrieve_scoped_in_tx(
+        tx,
+        ctx,
+        query,
+        limit,
+        vector,
+        &KnowledgeSearchScope::default(),
+    )
+    .await
+}
+
+pub async fn retrieve_scoped_in_tx(
+    tx: &mut AppTx<'_>,
+    ctx: &AccessContext,
+    query: &str,
+    limit: usize,
+    vector: &retrieval::vector::Candidates,
+    scope: &KnowledgeSearchScope,
+) -> Result<KnowledgeSearch> {
+    if let Some(anchor) = &scope.anchor {
+        let object = knowledge::read_in_tx(tx, ctx, anchor, None, false).await?;
+        assert_source_in_tx(tx, ctx, &object).await?;
+    }
+    let indexed = retrieval::candidates_scoped_in_tx(tx, &ctx.space_id, query, scope).await?;
+    let current =
+        knowledge::matching_scoped_in_tx(tx, ctx, query, &retrieval::tokens(query), scope).await?;
     let mut candidates = Vec::new();
     let mut seen = std::collections::HashSet::new();
     let limited = current.len() > 1000 || indexed.len() > 1000;
@@ -586,8 +786,11 @@ pub async fn retrieve_in_tx(
                 .as_str()
                 .is_none_or(|version| object["version"] == version)
         {
-            seen.insert(id.to_owned());
-            candidates.push(object.clone());
+            let object = semantic_object_in_tx(tx, ctx, object.clone()).await?;
+            if scope.matches(&object) {
+                seen.insert(id.to_owned());
+                candidates.push(object);
+            }
         }
     }
     let mut objects = retrieval::rank_hybrid(candidates, query, limit, &vector.values);
@@ -614,7 +817,10 @@ pub async fn retrieve_in_tx(
             if let Ok(object) = knowledge::read_in_tx(tx, ctx, &linked, None, false).await
                 && assert_source_in_tx(tx, ctx, &object).await.is_ok()
             {
-                additions.push(object);
+                let object = semantic_object_in_tx(tx, ctx, object).await?;
+                if scope.matches(&object) {
+                    additions.push(object);
+                }
             }
             if additions.len() == 2 {
                 break;
@@ -634,6 +840,7 @@ pub async fn retrieve_in_tx(
         {
             retrieval::attach_matches(&ctx.space_id, object, candidate);
         }
+        retrieval::attach_lexical_matches(object, query);
     }
     let index_state = if vector.state == "unconfigured" {
         "unconfigured"
@@ -643,6 +850,6 @@ pub async fn retrieve_in_tx(
     };
     Ok(KnowledgeSearch {
         objects,
-        coverage: json!({"state":if limited{"candidate_limit"}else if vector.bounded||index_state=="incomplete"{"bounded"}else{"complete"},"candidate_limit":2200,"vector_state":vector.state,"index_state":index_state}),
+        coverage: json!({"state":if limited{"candidate_limit"}else if vector.bounded||index_state=="incomplete"{"bounded"}else{"complete"},"candidate_limit":2200,"vector_state":vector.state,"index_state":index_state,"scope_applied":!scope.kinds.is_empty()||scope.anchor.is_some()||scope.domain.is_some()}),
     })
 }

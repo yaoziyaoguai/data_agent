@@ -1,7 +1,9 @@
 mod data_routes;
+mod knowledge_impact_routes;
 mod model_routes;
 mod routes;
 mod semantic_routes;
+mod skill_draft_routes;
 use axum::{
     Router,
     routing::{get, post},
@@ -64,6 +66,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             post(data_routes::cancel_task),
         )
         .route(
+            "/conversations/{id}/tasks/{task}/report",
+            get(data_routes::analysis_report).post(data_routes::save_analysis_report),
+        )
+        .route(
             "/conversations/{id}/messages/{message}/withdraw",
             post(data_routes::withdraw),
         )
@@ -98,6 +104,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             get(data_routes::read_document).patch(data_routes::edit_document),
         )
         .route(
+            "/knowledge/{id}/maintenance-impact",
+            get(knowledge_impact_routes::read),
+        )
+        .route(
             "/knowledge/{id}/{action}",
             post(data_routes::knowledge_action),
         )
@@ -114,6 +124,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route(
             "/assets",
             get(data_routes::assets).post(data_routes::save_asset),
+        )
+        .route("/assets/skill-drafts", get(skill_draft_routes::list))
+        .route(
+            "/assets/skill-drafts/{draft_id}",
+            get(skill_draft_routes::read),
         )
         .route("/assets/{id}/{action}", post(data_routes::asset_action))
         .route("/assets/{id}/publish", post(data_routes::publish_skill))

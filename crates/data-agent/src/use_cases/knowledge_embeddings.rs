@@ -206,6 +206,23 @@ pub async fn search(
     query: &str,
     input: Option<&Value>,
 ) -> vector::Candidates {
+    search_scoped(
+        pool,
+        ctx,
+        query,
+        input,
+        &crate::search_scope::KnowledgeSearchScope::default(),
+    )
+    .await
+}
+
+pub async fn search_scoped(
+    pool: &MySqlPool,
+    ctx: &AccessContext,
+    query: &str,
+    input: Option<&Value>,
+    scope: &crate::search_scope::KnowledgeSearchScope,
+) -> vector::Candidates {
     if !vector::enabled()
         || query == "*"
         || input.is_some_and(|i| i["arguments"]["asset_after"].is_string())
@@ -214,7 +231,9 @@ pub async fn search(
     }
     let binding = input.map_or(Binding::Browse, Binding::Tool);
     match embed(pool, ctx, binding, vec![query.chars().take(1600).collect()]).await {
-        Ok(mut vectors) => vector::search(&ctx.space_id, query, vectors.remove(0)).await,
+        Ok(mut vectors) => {
+            vector::search_scoped(&ctx.space_id, query, vectors.remove(0), scope).await
+        }
         Err(error) => {
             eprintln!("knowledge_embedding_failure code={}", error.code);
             vector::Candidates {

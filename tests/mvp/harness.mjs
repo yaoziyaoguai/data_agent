@@ -112,6 +112,11 @@ export async function harness(options = {}) {
     DATA_AGENT_QUERY_DELAY_SECONDS: "1",
     ...options.env,
   };
+  if (options.sourceDirectory) {
+    assert.ok(!options.platformSourceDirectory || options.platformSourceDirectory === options.sourceDirectory,
+      'sourceDirectory必须同时指定API、预填Worker与平台的同一资料包');
+    env.DATA_AGENT_SYNTHETIC_SOURCE_DIRECTORY = options.sourceDirectory;
+  }
   for (const k of [
     "DEEPSEEK_API_KEY",
     "DEEPSEEK_BASE_URL",
@@ -129,10 +134,10 @@ export async function harness(options = {}) {
   }
   const children = [];
   const logs = [];
-  const start = (name, cmd, args = []) => {
+  const start = (name, cmd, args = [], overrides = {}) => {
     const child = spawn(cmd, args, {
       cwd: root,
-      env,
+      env: {...env, ...overrides},
       stdio: ["ignore", "pipe", "pipe"],
     });
     children.push(child);
@@ -207,6 +212,7 @@ export async function harness(options = {}) {
     }, "Pi round " + count);
   let worker, bridge, platform, apiProcess;
   const captured = [];
+  const captureAborted = [];
   const release = [];
   try {
     platform = start("platform", "python3", [
@@ -215,7 +221,7 @@ export async function harness(options = {}) {
       directory + "/platform",
       "--port",
       String(platformPort),
-    ]);
+    ], options.platformSourceDirectory ? {DATA_AGENT_SYNTHETIC_SOURCE_DIRECTORY:options.platformSourceDirectory} : {});
     await health(platformPort);
     apiProcess = start("api", "target/debug/data-agent-api");
     await health(apiPort);
@@ -223,9 +229,20 @@ export async function harness(options = {}) {
       bridge = createDeliveryServer(
         env.DATA_AGENT_API_URL,
         internal,
-        options.deliveryDispatch ?? (async (run) => {
+        options.deliveryDispatch ?? (async (run, _apiUrl, _token, _fault, signal) => {
           captured.push(run);
-          await new Promise((r) => release.push(r));
+          // 替身沿用正式Pi的取消协议，否则被取消的旧run会一直占住同对话的bridge。
+          await new Promise((resolve) => {
+            const complete = () => {
+              if (signal?.aborted && !captureAborted.includes(run.run_id))
+                captureAborted.push(run.run_id);
+              signal?.removeEventListener("abort", complete);
+              resolve();
+            };
+            release.push(complete);
+            if (signal?.aborted) complete();
+            else signal?.addEventListener("abort", complete, { once: true });
+          });
         }),
       );
       await new Promise((r) => bridge.listen(bridgePort, "127.0.0.1", r));
@@ -267,6 +284,7 @@ export async function harness(options = {}) {
     logs,
     directory,
     captured,
+    captureAborted,
     releaseRun(runId) {
       const index = captured.findIndex((r) => r.run_id === runId);
       if (index >= 0) release[index]?.();
@@ -305,7 +323,7 @@ export async function harness(options = {}) {
         directory + "/platform",
         "--port",
         String(platformPort),
-      ]);
+      ], options.platformSourceDirectory ? {DATA_AGENT_SYNTHETIC_SOURCE_DIRECTORY:options.platformSourceDirectory} : {});
       await health(platformPort);
     },
     async pauseWorker() {

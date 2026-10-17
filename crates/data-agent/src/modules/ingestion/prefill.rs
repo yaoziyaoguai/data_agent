@@ -35,6 +35,11 @@ pub(super) fn timing() -> Result<(std::time::Duration, u64)> {
 pub fn refresh_facts(object: &mut Value, sources: &[Value]) {
     let object_id = object["id"].as_str().unwrap_or("").to_owned();
     for entry in object["entries"].as_array_mut().into_iter().flatten() {
+        // 采集候选只提供来源与建议；正式有效层由知识模块在保存时决定。
+        entry
+            .as_object_mut()
+            .expect("知识条目")
+            .remove("effective_structure");
         let source_id = entry["source_facts"]["source_id"]
             .as_str()
             .unwrap_or("")
@@ -65,19 +70,54 @@ pub fn refresh_facts(object: &mut Value, sources: &[Value]) {
                 .map(|line| line.trim().trim_end_matches(',').to_owned())
         } else if path == "etl" && object_id == "table-demo_order_detail" {
             Some(body.to_owned())
+        } else if path == "business_domain" {
+            entry["source_facts"]["quote"]
+                .as_str()
+                .filter(|quote| !quote.is_empty() && body.contains(*quote))
+                .map(str::to_owned)
         } else if body.contains(old) && !old.is_empty() {
             Some(old.to_owned())
         } else {
             None
         };
-        let baseline = match source_id.as_str() {
-            "schema" => include_str!("../../../../../docs/sources/schema.sql"),
-            "etl" => include_str!("../../../../../docs/sources/etl.sql"),
-            "business-guide" => include_str!("../../../../../docs/sources/business-guide.md"),
-            _ => "",
-        };
-        // 合成目录中的已编写建议只有原资料仍完整存在时保留；删改原规则后不能换版本标签继续使用。
-        let imported = !baseline.is_empty() && body.contains(baseline);
+        // 预编写的合成解释仅在所有明确依据仍存在时保留，不能靠整份旧文件包含关系自证。
+        let imported = entry["suggestion"]["evidence"]
+            .as_array()
+            .is_some_and(|refs| {
+                !refs.is_empty()
+                    && refs.iter().all(|reference| {
+                        let quote = reference["quote"].as_str().unwrap_or("");
+                        !quote.is_empty()
+                            && sources.iter().any(|current| {
+                                current["source_id"] == reference["source_id"]
+                                    && current["body"].as_str().unwrap_or("").contains(quote)
+                            })
+                    })
+            });
+        if imported {
+            for reference in entry["suggestion"]["evidence"]
+                .as_array_mut()
+                .into_iter()
+                .flatten()
+            {
+                if let Some(current) = sources
+                    .iter()
+                    .find(|current| current["source_id"] == reference["source_id"])
+                {
+                    reference["version"] = current["version"].clone();
+                }
+            }
+        }
+        let classification = entry["source_facts"]["classification"]
+            .as_str()
+            .unwrap_or(if source_id == "business-guide" {
+                "authored_definition"
+            } else {
+                "source_text"
+            })
+            .to_owned();
+        let manual = !entry["human_override"].is_null();
+        let structured = source_structure(entry, sources);
         if let Some(quote) = quoted {
             let value = if path == "type" {
                 let datatype = quote.split_whitespace().nth(1).unwrap_or("");
@@ -89,31 +129,72 @@ pub fn refresh_facts(object: &mut Value, sources: &[Value]) {
                         "，可空"
                     }
                 )
+            } else if path == "business_domain" {
+                entry["source_facts"]["value"]
+                    .as_str()
+                    .unwrap_or("")
+                    .to_owned()
             } else {
                 quote.clone()
             };
-            entry["source_facts"] = json!({"source_id":source_id,"version":source["version"],"location":path,"quote":quote,"complete":true});
-            if matches!(path.as_str(), "ddl" | "etl" | "type") || !imported {
+            entry["source_facts"] = json!({"value":if path=="business_domain"{&value}else{&quote},"source_id":source_id,"version":source["version"],"location":path,"quote":quote,"classification":classification,"complete":true});
+            if path == "type" {
+                entry["suggestion"] = json!({"value":value,"method":"ddl_type_derivation","evidence":[{"source_id":source_id,"version":source["version"],"location":path,"quote":quote}]});
+            } else {
+                entry["suggestion"] = json!({});
+            }
+            if !manual {
                 entry["effective_value"] = json!(value);
-                entry["suggestion"] =
-                    json!({"value":value,"analysis_state":"source_fact","basis":"当前来源原文"});
             }
         } else {
-            entry["source_facts"] = json!({"source_id":source_id,"version":source["version"],"location":path,"complete":false,"gap":"当前来源中没有可直接引用的对应解释，等待模型分析或人工补充"});
+            entry["source_facts"] = json!({"source_id":source_id,"version":source["version"],"location":path,"classification":classification,"complete":false,"gap":"当前来源中没有可直接引用的对应解释，等待模型分析或人工补充"});
             if !imported {
-                entry["effective_value"] = json!("");
+                if !manual {
+                    entry["effective_value"] = json!("");
+                }
                 entry["suggestion"] =
                     json!({"value":"","analysis_state":"queued","gap":"来源改版后需重新分析"});
             }
         }
         entry["source_facts"]["version"] = source["version"].clone();
+        if let Some((value, evidence)) = structured {
+            entry["source_facts"]["structured_value"] = value;
+            entry["source_facts"]["structured_evidence"] = evidence;
+        }
     }
+}
+
+fn source_structure(entry: &Value, sources: &[Value]) -> Option<(Value, Value)> {
+    let structure = entry["source_facts"].get("structured_value")?.clone();
+    if structure.is_null() {
+        return None;
+    }
+    let mut evidence = entry["source_facts"]["structured_evidence"]
+        .as_array()?
+        .clone();
+    if evidence.is_empty() {
+        return None;
+    }
+    for reference in &mut evidence {
+        let quote = reference["quote"].as_str()?;
+        if quote.is_empty() {
+            return None;
+        }
+        let source = sources.iter().find(|source| {
+            source["source_id"] == reference["source_id"]
+                && source["body"]
+                    .as_str()
+                    .is_some_and(|body| body.contains(quote))
+        })?;
+        reference["version"] = source["version"].clone();
+    }
+    Some((structure, json!(evidence)))
 }
 
 fn is_semantic_entry(entry: &Value) -> bool {
     !matches!(
         entry["path"].as_str(),
-        Some("ddl" | "etl" | "type" | "lineage")
+        Some("ddl" | "etl" | "type" | "lineage" | "business_domain")
     )
 }
 
@@ -130,6 +211,22 @@ pub fn validate_result(input: &Value, output: &Value) -> Result<Value> {
         return Err(Error::new("invalid_prefill"));
     }
     let mut candidate = input["object"].clone();
+    for entry in candidate["entries"].as_array_mut().into_iter().flatten() {
+        entry
+            .as_object_mut()
+            .expect("知识条目")
+            .remove("effective_structure");
+    }
+    if output["entries"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter(|entry| !entry["structured_value"].is_null())
+        .count()
+        > 1
+    {
+        return Err(Error::new("invalid_prefill"));
+    }
     let mut seen = std::collections::HashSet::new();
     for result in output["entries"]
         .as_array()
@@ -141,11 +238,33 @@ pub fn validate_result(input: &Value, output: &Value) -> Result<Value> {
         if !expected.contains(entry_id) || !seen.insert(entry_id.to_owned()) {
             return Err(Error::new("invalid_prefill"));
         }
+        if !result["structured_value"].is_null()
+            && result["value"]
+                .as_str()
+                .is_none_or(|value| value.trim().is_empty())
+        {
+            return Err(Error::new("invalid_prefill"));
+        }
+        // 有内容的建议必须指向至少一份来源；无依据只能留缺口。
+        if !result["value"].as_str().unwrap_or("").trim().is_empty()
+            && result["evidence"]
+                .as_array()
+                .is_none_or(|refs| refs.is_empty())
+        {
+            return Err(Error::new("invalid_prefill"));
+        }
         let gaps = result["gaps"].as_array().expect("validated gaps");
         if gaps
             .iter()
             .any(|gap| gap.as_str().unwrap_or("").trim().is_empty())
             || (result["value"].as_str().unwrap_or("").trim().is_empty() && gaps.is_empty())
+        {
+            return Err(Error::new("invalid_prefill"));
+        }
+        let structure = &result["structured_value"];
+        if !structure.is_null()
+            && (structure["kind"] != candidate["kind"]
+                || serde_json::to_vec(structure).map_or(true, |bytes| bytes.len() > 8192))
         {
             return Err(Error::new("invalid_prefill"));
         }
@@ -176,6 +295,7 @@ pub fn validate_result(input: &Value, output: &Value) -> Result<Value> {
         }
         // 完整覆盖待分析条目；无资料可以留空并说明缺口，不能沿用旧建议伪装分析成功。
         entry["suggestion"] = json!({"value":result["value"],"evidence":result["evidence"],"gaps":result["gaps"],"material_coverage":input["coverage"],"material_refs":input["sources"].as_array().into_iter().flatten().map(|s|json!({"source_id":s["source_id"],"version":s["version"]})).collect::<Vec<_>>(),"analysis_state":"validated","validated":"引用和格式已核对，业务含义尚未人工确认"});
+        entry["suggestion"]["structured_value"] = result["structured_value"].clone();
         entry["effective_value"] = result["value"].clone();
     }
     if seen != expected {
@@ -186,6 +306,16 @@ pub fn validate_result(input: &Value, output: &Value) -> Result<Value> {
 
 pub struct PreparedPrefill {
     request: reqwest::RequestBuilder,
+}
+
+fn prefill_parameters() -> Result<Value> {
+    let mut parameters = crate::contracts::schema_definition("PrefillResult")?.clone();
+    // 发送单一工具Schema时附带它实际引用的定义，避免向模型发送未解析的本地引用。
+    parameters["$defs"] = json!({
+        "SemanticStructure":crate::contracts::schema_definition("SemanticStructure")?,
+        "SemanticTableRef":crate::contracts::schema_definition("SemanticTableRef")?,
+    });
+    Ok(parameters)
 }
 
 // URL、凭据和请求大小在预留额度前校验；该函数不发送网络请求。
@@ -280,6 +410,7 @@ fn prepare_stage(
         "程序保证、文档约定、样例覆盖和未知分别说明；约束注明所属表，区分上游约束加投影的保证与目标表自身约束。未模拟/未支持只说明该业务场景的适用性未验证，技术取值、加工分支或写入拒绝仍按现有DDL/SQL解释，不能改写成这些技术规则无依据。未知不证明存在或不存在，未定义业务概念不能建立到技术记录的确定或条件必然对应。逐项保留原文明确列出的本条目相关限制，分别写出事项名称，不能只列部分、仅藏在引用中或用更宽泛的词代替多项；简洁不能省略这些边界。\n",
         "区分语句失败、事务未提交与整个事务回滚。只有BEGIN/COMMIT不能证明错误后自动ROLLBACK、前面的DELETE已撤销或旧数据已恢复；没有SQL方言、冲突策略或执行器错误处理依据时，只说明具体语句或目标约束拒绝写入，不补出事务恢复保证。\n",
         "判断缺口前核对全部输入及其确定组合：主键加直接关联可确定唯一性，已有中文含义、类型、来源、取值、使用场景、指标公式、默认过滤不能写成未提供。gaps只列读完全部相关sources后确实无法确定的内容，每项说清缺少的是业务定义、场景验证还是技术规则。未模拟场景仅写业务适用性未验证，不能称已明确的取值或约束处理未知；声称技术处理无依据前，必须确认相关完整SQL/DDL没有给出该规则。原文相关限制须在value或gaps逐项明确，不能用另一个层面的未知替代。不能要求增加未要求的展示规范或其他条目的规则。value、gaps、引用及同一说明前后不得冲突；谨慎不能否认可推导事实，未知不能补成事实。\n",
+        "structured_value是可选计算结构。同一对象最多在一个语义条目中提供，kind须与对象一致，正文和结构采用同份依据。表引用的object_id/version必须来自已给知识对象引用，不能用source_id替代或猜测版本；无法确定时省略结构并说明缺口。\n",
         "通过submit_semantic_prefill提交一次完整结果，不输出说明文字。严格符合工具Schema：逐个覆盖列出的语义entry_id，不遗漏/重复，不生成ddl/etl/type条目；value是说明字符串，gaps为非空白字符串数组，无缺口为[]，evidence为非空引用数组。无法解释时value可为空，但填写真实缺口及已查资料引用。每条quote逐字取自对应source_id/version的body，保留原文换行，不用省略号或拼接原文。"
     );
     let instructions = format!(
@@ -298,7 +429,7 @@ fn prepare_stage(
         .is_some_and(|v| !matches!(v, crate::contracts::generated::ThinkingLevel::Off));
     // 原生工具携带同源结构约束；这里只接收建议，不执行模型声明的业务副作用。
     // DeepSeek思考模式只允许auto，关闭思考时才可指定唯一提交工具。
-    let mut request = json!({"model":profile.model_id,"thinking":{"type":if thinking{"enabled"}else{"disabled"}},"stream":false,"max_tokens":profile.output_limit,"tools":[{"type":"function","function":{"name":"submit_semantic_prefill","description":"提交所有待分析语义条目的说明、实际缺口及逐字来源引用。","parameters":crate::contracts::schema_definition("PrefillResult")?}}],"tool_choice":if thinking{json!("auto")}else{json!({"type":"function","function":{"name":"submit_semantic_prefill"}})},"messages":[{"role":"system","content":instructions},{"role":"user","content":serde_json::to_string(&material).map_err(|_|Error::new("invalid_input"))?}]});
+    let mut request = json!({"model":profile.model_id,"thinking":{"type":if thinking{"enabled"}else{"disabled"}},"stream":false,"max_tokens":profile.output_limit,"tools":[{"type":"function","function":{"name":"submit_semantic_prefill","description":"提交所有待分析语义条目的说明、实际缺口及逐字来源引用。","parameters":prefill_parameters()?}}],"tool_choice":if thinking{json!("auto")}else{json!({"type":"function","function":{"name":"submit_semantic_prefill"}})},"messages":[{"role":"system","content":instructions},{"role":"user","content":serde_json::to_string(&material).map_err(|_|Error::new("invalid_input"))?}]});
     if let Some(level) = profile.thinking_level.as_ref()
         && !matches!(level, crate::contracts::generated::ThinkingLevel::Off)
     {
@@ -382,6 +513,32 @@ fn decode_response(content: &str, finish_reason: Option<&str>) -> Value {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn business_domain_keeps_the_explicit_declaration_and_does_not_guess_from_words() {
+        let quote = "业务域标识：`合成零售`。全部合成对象属于本域。";
+        let base = json!({"id":"any-table","entries":[{"path":"business_domain","source_facts":{
+            "source_id":"business-guide","version":"1","value":"合成零售","quote":quote,
+            "classification":"authored_definition","complete":true
+        },"effective_value":"合成零售","suggestion":{},"human_override":null}]});
+        let mut present = base.clone();
+        refresh_facts(
+            &mut present,
+            &[json!({"source_id":"business-guide","version":"2","body":quote})],
+        );
+        assert_eq!(present["entries"][0]["effective_value"], "合成零售");
+        assert_eq!(present["entries"][0]["source_facts"]["quote"], quote);
+        assert_eq!(present["entries"][0]["source_facts"]["version"], "2");
+        let mut missing = base;
+        refresh_facts(
+            &mut missing,
+            &[
+                json!({"source_id":"business-guide","version":"2","body":"仅提及合成零售，但域指定已撤下。"}),
+            ],
+        );
+        assert_eq!(missing["entries"][0]["source_facts"]["complete"], false);
+        assert_eq!(missing["entries"][0]["effective_value"], "");
+    }
 
     #[test]
     fn malformed_and_truncated_responses_keep_diagnostics_without_becoming_valid() {
@@ -470,5 +627,49 @@ mod tests {
         assert_eq!(candidate["entries"][0]["suggestion"]["value"], "INTEGER");
         assert_eq!(candidate["entries"][1]["suggestion"]["value"], "新含义");
         assert_eq!(candidate["entries"][2]["suggestion"]["value"], "新边界");
+    }
+    #[test]
+    fn source_structure_needs_its_own_current_quote() {
+        let structure = json!({"kind":"table","grain":"一行一个订单","unique_keys":[],"time_columns":[],"default_filters":[],"constraints":[]});
+        let quote = structure.to_string();
+        let entry = json!({"source_facts":{"structured_value":structure,"structured_evidence":[{"source_id":"guide","version":"1","quote":quote,"location":"rules"}]}});
+        let source = json!({"source_id":"guide","version":"9","body":format!("规则：{quote}")});
+        let (value, evidence) = source_structure(&entry, &[source]).expect("明确结构出处仍在");
+        assert_eq!(value, structure);
+        assert_eq!(evidence[0]["version"], "9");
+        assert!(
+            source_structure(
+                &entry,
+                &[json!({"source_id":"guide","version":"10","body":"已移除旧计算规则"})]
+            )
+            .is_none()
+        );
+    }
+    #[test]
+    fn prefill_keeps_structural_candidates_without_claiming_formal_projection() {
+        let mut original = input();
+        original["object"]["kind"] = json!("table");
+        original["object"]["entries"][1]["source_facts"]["structured_value"] = json!({"kind":"table","grain":"旧规则","unique_keys":[],"time_columns":[],"default_filters":[],"constraints":[]});
+        original["object"]["entries"][1]["effective_structure"] =
+            original["object"]["entries"][1]["source_facts"]["structured_value"].clone();
+        let result = json!({"entries":[entry("meaning","新含义",json!([])),entry("boundary","新边界",json!([]))]});
+        let candidate = validate_result(&original, &result).expect("新建议完整");
+        assert!(candidate["entries"][1].get("effective_structure").is_none());
+        assert_eq!(
+            candidate["entries"][1]["source_facts"]["structured_value"],
+            original["object"]["entries"][1]["source_facts"]["structured_value"]
+        );
+        assert!(candidate["entries"][1]["suggestion"]["structured_value"].is_null());
+    }
+    #[test]
+    fn provider_tool_schema_resolves_nested_structural_references() {
+        let schema = prefill_parameters().unwrap();
+        let validator = jsonschema::validator_for(&schema).expect("外发的独立Schema可解析");
+        let structure = json!({"kind":"field","table":{"object_id":"purchases","version":"2"},"column":"gross","unit":null});
+        let result = json!({"entries":[{"entry_id":"unit","value":"金额单位尚未定义","structured_value":structure,"gaps":[],"evidence":[{"source_id":"guide","version":"2","quote":"金额","location":"L1"}]}]});
+        assert!(validator.is_valid(&result));
+        let mut bad = result;
+        bad["entries"][0]["structured_value"]["table"]["version"] = json!("not-a-version");
+        assert!(!validator.is_valid(&bad));
     }
 }

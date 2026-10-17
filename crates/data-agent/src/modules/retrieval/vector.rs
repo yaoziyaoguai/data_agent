@@ -149,13 +149,36 @@ impl Candidates {
 }
 
 pub async fn search(space: &str, query: &str, vector: Vec<f32>) -> Candidates {
+    search_scoped(
+        space,
+        query,
+        vector,
+        &crate::search_scope::KnowledgeSearchScope::default(),
+    )
+    .await
+}
+
+pub async fn search_scoped(
+    space: &str,
+    query: &str,
+    vector: Vec<f32>,
+    scope: &crate::search_scope::KnowledgeSearchScope,
+) -> Candidates {
     if !enabled() {
         return Candidates::lexical();
     }
     let search = async {
         let milvus = Milvus::configured()?;
         let identity = milvus.identity().await?;
-        let value=milvus.call("entities/search",json!({"data":[vector],"annsField":"vector","filter":format!("space_id == {} && model == {}",json!(space),json!(embedding::SPEC.version)),"limit":200,"outputFields":["id","object_id","object_version","kind","entry_id","char_offset","char_length","content_hash"],"consistencyLevel":"Strong"})).await?;
+        let mut filter = format!(
+            "space_id == {} && model == {}",
+            json!(space),
+            json!(embedding::SPEC.version)
+        );
+        if !scope.kinds.is_empty() {
+            filter.push_str(&format!(" && kind in {}", json!(scope.kinds)));
+        }
+        let value=milvus.call("entities/search",json!({"data":[vector],"annsField":"vector","filter":filter,"limit":200,"outputFields":["id","object_id","object_version","kind","entry_id","char_offset","char_length","content_hash"],"consistencyLevel":"Strong"})).await?;
         let items = value.as_array().ok_or(Error::new("vector_unavailable"))?;
         let mut values: Vec<Value> = Vec::new();
         let mut positions = std::collections::HashMap::new();
@@ -184,7 +207,11 @@ pub async fn search(space: &str, query: &str, vector: Vec<f32>) -> Candidates {
         Ok::<_, Error>(Candidates {
             values,
             state: "available",
-            bounded: items.is_empty() || items.len() == 200 || query.chars().count() > 1600,
+            bounded: items.is_empty()
+                || items.len() == 200
+                || query.chars().count() > 1600
+                || scope.anchor.is_some()
+                || scope.domain.is_some(),
             target: Some(identity),
         })
     };
@@ -230,9 +257,10 @@ fn fragments(space: &str, object: &Value) -> (Vec<Value>, bool) {
             }
             let body = chars.iter().skip(offset).take(360).collect::<String>();
             let text = format!(
-                "{} {} {}：{}",
+                "{} {} {} {}：{}",
                 object["name"].as_str().unwrap_or(""),
                 object["kind"].as_str().unwrap_or(""),
+                super::query_example_index_text(entry),
                 entry["label"].as_str().unwrap_or(""),
                 body
             );

@@ -253,6 +253,11 @@ pub async fn sync_sources_in_tx(tx: &mut AppTx<'_>, space: &str) -> Result<Vec<(
         ("schema", super::source_body("schema.sql")?),
         ("etl", super::source_body("etl.sql")?),
         ("business-guide", super::source_body("business-guide.md")?),
+        // 目录是维护过的合成语义输入，单独改版也必须推进已有对象。
+        (
+            "semantic-catalog",
+            super::source_body("semantic-catalog.json")?,
+        ),
     ];
     let mut changed = Vec::new();
     for (source, body) in sources {

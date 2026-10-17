@@ -372,6 +372,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2 0.10.9",
+ "sqlparser",
  "sqlx",
  "tokio",
  "uuid",
@@ -1929,6 +1930,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3763264f6b73151db08c50ff20d7d8a0b8796e021cdea7ceedad07b80155fa0e"
 dependencies = [
  "lock_api",
+]
+
+[[package]]
+name = "sqlparser"
+version = "0.59.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4591acadbcf52f0af60eafbb2c003232b2b4cd8de5f0e9437cb8b1b59046cc0f"
+dependencies = [
+ "log",
 ]
 
 [[package]]

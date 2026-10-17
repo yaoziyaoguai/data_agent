@@ -42,6 +42,14 @@ pub struct LockedTasks {
     conversation_id: String,
     transaction_id: String,
 }
+impl LockedTasks {
+    pub(super) fn assert_transaction(&self, tx: &AppTx<'_>) -> Result<()> {
+        tx.assert_snapshot(&self.transaction_id)
+    }
+    pub(super) fn conversation_id(&self) -> &str {
+        &self.conversation_id
+    }
+}
 pub async fn lock_tasks_in_tx(tx: &mut AppTx<'_>, cid: &str) -> Result<LockedTasks> {
     tx.lock_rank(4)?;
     sqlx::query("SELECT id FROM analysis_tasks WHERE conversation_id=? ORDER BY id FOR UPDATE")
@@ -70,7 +78,18 @@ pub async fn read_tasks_in_tx(tx: &mut AppTx<'_>, cid: &str) -> Result<Vec<Value
         .bind(cid)
         .fetch_all(tx.connection())
         .await?;
-    Ok(rows.iter().map(|r|json!({"id":r.get::<String,_>("id"),"goal":r.get::<String,_>("goal"),"condition_version":r.get::<u64,_>("condition_version").to_string(),"lifecycle":r.get::<String,_>("lifecycle"),"phase":r.get::<String,_>("phase")})).collect())
+    let mut result = Vec::new();
+    for row in rows {
+        let task = row.get::<String, _>("id");
+        let version = row.get::<u64, _>("condition_version");
+        let refs = super::evidence::refs_in_tx(tx, cid, &task, version).await?;
+        let mut snapshot = json!({"id":task,"goal":row.get::<String,_>("goal"),"condition_version":version.to_string(),"lifecycle":row.get::<String,_>("lifecycle"),"phase":row.get::<String,_>("phase"),"evidence_refs":refs});
+        if let Some(reference) = super::report::report_ref_in_tx(tx, cid, &task).await? {
+            snapshot["report_ref"] = reference;
+        }
+        result.push(snapshot);
+    }
+    Ok(result)
 }
 
 pub async fn context_in_tx(tx: &mut AppTx<'_>, cid: &str) -> Result<Vec<Value>> {
@@ -78,8 +97,15 @@ pub async fn context_in_tx(tx: &mut AppTx<'_>, cid: &str) -> Result<Vec<Value>> 
     let mut result = Vec::new();
     for r in rows {
         let task = r.get::<String, _>("id");
+        let refs =
+            super::evidence::refs_in_tx(tx, cid, &task, r.get::<u64, _>("condition_version"))
+                .await?;
         let clarification=sqlx::query("SELECT id,question,options FROM clarifications WHERE task_id=? AND state='open' ORDER BY id LIMIT 1").bind(&task).fetch_optional(tx.connection()).await?;
-        result.push(json!({"id":task,"goal":r.get::<String,_>("goal"),"condition_version":r.get::<u64,_>("condition_version").to_string(),"lifecycle":r.get::<String,_>("lifecycle"),"phase":r.get::<String,_>("phase"),"conditions":r.get::<Option<sqlx::types::Json<Value>>,_>("body").map(|v|v.0),"clarification":clarification.map(|v|json!({"id":v.get::<String,_>("id"),"question":v.get::<String,_>("question"),"options":v.get::<sqlx::types::Json<Value>,_>("options").0}))}));
+        let mut snapshot = json!({"id":task,"goal":r.get::<String,_>("goal"),"condition_version":r.get::<u64,_>("condition_version").to_string(),"lifecycle":r.get::<String,_>("lifecycle"),"phase":r.get::<String,_>("phase"),"conditions":r.get::<Option<sqlx::types::Json<Value>>,_>("body").map(|v|v.0),"clarification":clarification.map(|v|json!({"id":v.get::<String,_>("id"),"question":v.get::<String,_>("question"),"options":v.get::<sqlx::types::Json<Value>,_>("options").0})),"evidence_refs":refs});
+        if let Some(reference) = super::report::report_ref_in_tx(tx, cid, &task).await? {
+            snapshot["report_ref"] = reference;
+        }
+        result.push(snapshot);
     }
     Ok(result)
 }
@@ -91,6 +117,13 @@ pub async fn apply_update_in_tx(
     input: &Value,
 ) -> Result<Value> {
     tx.assert_snapshot(&tasks.transaction_id)?;
+    if input["action"] == "clarify"
+        && input["question"]
+            .as_str()
+            .is_none_or(|question| question.trim().is_empty())
+    {
+        return Err(Error::new("invalid_input"));
+    }
     if input["action"] == "route" {
         if let Some(task) = input["task_id"].as_str() {
             let current = read_task_in_tx(tx, &tasks.conversation_id, task).await?;

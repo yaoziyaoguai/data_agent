@@ -49,6 +49,12 @@ pub fn requirements(v: &Value) -> Result<Vec<(String, u64)>> {
                     .into_iter()
                     .flatten(),
             )
+            .chain(
+                entry["source_facts"]["structured_evidence"]
+                    .as_array()
+                    .into_iter()
+                    .flatten(),
+            )
         {
             let source = evidence["source_id"]
                 .as_str()

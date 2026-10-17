@@ -165,15 +165,89 @@ pub async fn results(
         return Err(Error::new("result_unavailable"));
     }
     knowledge_check(pool, ctx, &v["knowledge_refs"]).await?;
-    let mut result = queries::platform::call(
-        "/results",
+    let mut result = queries::platform::saved_result_page(
         &json!({"query_id":qid,"owner_id":ctx.user_id,"cursor":cursor}),
     )
     .await?;
     contracts::validate("QueryResults", &result)?;
+    if result["query_id"] != qid || result["result_ref"] != v["result_ref"] {
+        return Err(Error::new("result_unavailable"));
+    }
     result["statistics"] = queries::page_statistics(&result)?;
     contracts::validate("QueryResults", &result)?;
     Ok(result)
+}
+
+pub async fn result_authority(
+    pool: &MySqlPool,
+    ctx: &AccessContext,
+    qid: &str,
+    result_ref: &str,
+) -> Result<()> {
+    let query = read(pool, ctx, qid).await?;
+    if query["execution_state"] != "succeeded" || query["result_ref"].as_str() != Some(result_ref) {
+        return Err(Error::new("result_unavailable"));
+    }
+    knowledge_check(pool, ctx, &query["knowledge_refs"]).await?;
+    queries::platform::result_authority(qid, &ctx.user_id, result_ref).await
+}
+
+/// 读取已保存页不会创建新查询；每一页复用正常结果读取的当前授权与依据检查。
+pub async fn collect_saved_results(
+    pool: &MySqlPool,
+    ctx: &AccessContext,
+    qid: &str,
+) -> Result<Value> {
+    let mut pages = Vec::new();
+    let mut cursor = None;
+    let mut received_bytes = 0_usize;
+    for _ in 0..queries::SAVED_RESULT_MAX_PAGES {
+        let page = results(pool, ctx, qid, cursor.as_deref()).await?;
+        if page["fetched_offset"].as_str() != Some(cursor.as_deref().unwrap_or("0"))
+            || pages.first().is_some_and(|first: &Value| {
+                [
+                    "columns",
+                    "result_ref",
+                    "source",
+                    "data_freshness",
+                    "saved_row_count",
+                    "saved_result_complete",
+                    "truncated",
+                ]
+                .iter()
+                .any(|key| page[*key] != first[*key])
+            })
+        {
+            return Err(Error::new("result_unavailable"));
+        }
+        received_bytes = received_bytes
+            .checked_add(
+                serde_json::to_vec(&page)
+                    .map_err(|_| Error::new("result_unavailable"))?
+                    .len(),
+            )
+            .ok_or(Error::new("request_too_large"))?;
+        if received_bytes > queries::SAVED_RESULT_LIMIT {
+            return Err(Error::new("request_too_large"));
+        }
+        cursor = queries::saved_result_next_cursor(&page)?;
+        pages.push(page);
+        if cursor.is_none() {
+            let result = queries::merge_saved_result_pages(qid, &pages)?;
+            contracts::validate("QueryResults", &result)?;
+            result_authority(
+                pool,
+                ctx,
+                qid,
+                result["result_ref"]
+                    .as_str()
+                    .ok_or(Error::new("result_unavailable"))?,
+            )
+            .await?;
+            return Ok(result);
+        }
+    }
+    Err(Error::new("request_too_large"))
 }
 async fn knowledge_check(pool: &MySqlPool, ctx: &AccessContext, refs: &Value) -> Result<()> {
     let mut tx = AppTx::begin(pool).await?;
@@ -210,7 +284,7 @@ pub async fn process_due(pool: &MySqlPool, worker: &str) -> Result<bool> {
             _ => "/lookup",
         };
         let payload = if action == "submit" {
-            json!({"query_id":qid,"owner_id":ctx.user_id,"sql":packet["sql"],"parameters":packet["parameters"],"target_id":packet["target_id"],"target_version":"1"})
+            json!({"query_id":qid,"owner_id":ctx.user_id,"sql":packet["sql"],"parameters":packet["parameters"],"target_id":packet["target_id"],"target_version":packet["target_version"]})
         } else {
             json!({"query_id":qid,"owner_id":ctx.user_id})
         };
@@ -227,6 +301,8 @@ pub async fn process_due(pool: &MySqlPool, worker: &str) -> Result<bool> {
                             | "invalid_input"
                             | "forbidden"
                             | "idempotency_conflict"
+                            | "version_conflict"
+                            | "source_version_conflict"
                     ) =>
             {
                 json!({"state":"failed","error":e.code})

@@ -4,6 +4,9 @@ import { streamSimple as sdkStream } from '@earendil-works/pi-ai/api/openai-comp
 import type { FinalizeModelCall, ModelCallReceipt, ModelProfile } from '../../../packages/contracts/generated/boundary.ts';
 import { decodeContract } from '../../../packages/contracts/validate.ts';
 import { RustTransport } from '../transport/client.ts';
+import contractSchema from '../../../packages/contracts/schema.json' with { type: 'json' };
+
+const dataToolNames = new Set<string>(contractSchema.$defs.DataToolInvocation.properties.tool_name.enum);
 
 export interface DeepSeekConnection {
   apiKey: string;
@@ -94,7 +97,11 @@ export function guardedDeepSeekStream(transport: RustTransport, profile: ModelPr
             const payload = JSON.parse(JSON.stringify({ ...value, model: profile.model_id, max_tokens: profile.output_limit,
               thinking: { type: profile.thinking_level && profile.thinking_level !== 'off' ? 'enabled' : 'disabled' }, stream_options: { include_usage: true } }));
             // 保守预估门槛；服务端工具模板未公开，实际usage才是用量事实。
-            if (!Array.isArray(payload.messages) || (profile.toolset!=='data' && payload.messages.length > 8) || (payload.tools!==undefined && !Array.isArray(payload.tools)) || (profile.toolset!=='data' && payload.tools?.length !== 1) || (profile.toolset==='data' && (payload.tools?.length??0)>14)) throw new Error('provider_payload_invalid');
+            if (!Array.isArray(payload.messages) || (profile.toolset!=='data' && payload.messages.length > 8) || (payload.tools!==undefined && !Array.isArray(payload.tools)) || (profile.toolset!=='data' && payload.tools?.length !== 1)) throw new Error('provider_payload_invalid');
+            if (profile.toolset === 'data' && payload.tools !== undefined) {
+              const names = payload.tools.map((tool: { function?: { name?: unknown } }) => tool?.function?.name);
+              if (names.length > dataToolNames.size || new Set(names).size !== names.length || names.some((name: unknown) => typeof name !== 'string' || !dataToolNames.has(name))) throw new Error('provider_payload_invalid');
+            }
             if (Buffer.byteLength(JSON.stringify(payload), 'utf8') > (profile.payload_bytes_limit??2048)) throw new Error(profile.toolset==='data' ? 'request_too_large: model_input_limit' : 'model_input_limit');
             parameters_fingerprint = createHash('sha256').update(JSON.stringify(payload)).digest('hex');
             try {

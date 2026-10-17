@@ -1,6 +1,19 @@
 // Generated from packages/contracts/schema.json; do not edit.
 export interface Boundary {
+    AnalysisEvidence?:            AnalysisEvidence;
+    AnalysisEvidenceRef?:         AnalysisEvidenceRef;
+    AnalysisEvidenceSources?:     AnalysisEvidenceSources;
+    AnalysisFigure?:              AnalysisFigure;
+    AnalysisFinding?:             AnalysisFinding;
     AnalysisPreferenceCommand?:   AnalysisPreferenceCommand;
+    AnalysisQueryCoverage?:       AnalysisQueryCoverage;
+    AnalysisQueryReference?:      AnalysisQueryReference;
+    AnalysisReport?:              AnalysisReport;
+    AnalysisReportChart?:         AnalysisReportChart;
+    AnalysisReportPage?:          AnalysisReportPage;
+    AnalysisReportRef?:           AnalysisReportRef;
+    AnalysisReportView?:          AnalysisReportView;
+    AnalysisResultDependency?:    AnalysisResultDependency;
     analysisUpdate:               AnalysisUpdate;
     appendOutput:                 AppendOutput;
     appError:                     AppError;
@@ -37,6 +50,7 @@ export interface Boundary {
     finalizeModelCall:            FinalizeModelCall;
     finishReceipt:                FinishReceipt;
     finishRun:                    FinishRun;
+    GetQueryInput?:               GetQueryInput;
     history:                      History;
     historyItem:                  HistoryItem;
     historyQuery:                 HistoryQuery;
@@ -53,6 +67,10 @@ export interface Boundary {
     KnowledgeRetrieval?:          KnowledgeRetrieval;
     KnowledgeRetrievalExcerpt?:   KnowledgeRetrievalExcerpt;
     logoutReceipt:                LogoutReceipt;
+    MaintenanceDependent?:        MaintenanceDependent;
+    MaintenanceImpact?:           MaintenanceImpact;
+    MaintenanceImpactQuery?:      MaintenanceImpactQuery;
+    MaintenanceReference?:        MaintenanceReference;
     memoryBudgetBinding?:         MemoryBudgetBinding;
     memoryCandidate?:             MemoryCandidate;
     memoryExtractionReceipt?:     MemoryExtractionReceipt;
@@ -78,16 +96,20 @@ export interface Boundary {
     outputReceipt:                OutputReceipt;
     pi_session_reference:         PiSessionReference;
     prefillResult:                PrefillResult;
+    PrepareSkillDraftInput?:      PrepareSkillDraftInput;
     proposal:                     Proposal;
     ProposalDraftCommand?:        ProposalDraftCommand;
     proposalInput:                ProposalInput;
     proposalList:                 ProposalList;
     PublishSkill?:                PublishSkill;
     queryCancellation?:           QueryCancellation;
+    QueryExampleParameter?:       QueryExampleParameter;
+    QueryExampleVerification?:    QueryExampleVerification;
     queryList:                    QueryList;
     queryResults:                 QueryResults;
     queryView:                    QueryView;
     read_checkpoint:              ReadCheckpoint;
+    ReadAnalysisReportInput?:     ReadAnalysisReportInput;
     readKnowledgeInput:           ReadKnowledgeInput;
     readQueryInput:               ReadQueryInput;
     readSourceInput:              ReadSourceInput;
@@ -102,15 +124,26 @@ export interface Boundary {
     ReviseSemanticCorrection?:    ReviseSemanticCorrection;
     runEnvelope:                  RunEnvelope;
     runSnapshot:                  RunSnapshot;
+    SaveAnalysisEvidenceInput?:   SaveAnalysisEvidenceInput;
+    SaveAnalysisReport?:          SaveAnalysisReport;
+    SaveAnalysisReportInput?:     SaveAnalysisReportInput;
     saveModelSelection:           SaveModelSelection;
     searchInput:                  SearchInput;
     SemanticAccess?:              SemanticAccess;
+    SemanticCheckReport?:         SemanticCheckReport;
+    SemanticColumnRef?:           SemanticColumnRef;
     SemanticCorrection?:          SemanticCorrection;
     SemanticCorrectionList?:      SemanticCorrectionList;
+    SemanticEvidenceRef?:         SemanticEvidenceRef;
     SemanticMaintenance?:         SemanticMaintenance;
     SemanticMemberList?:          SemanticMemberList;
+    SemanticStructure?:           SemanticStructure;
+    SemanticTableRef?:            SemanticTableRef;
     sendModelCall:                SendModelCall;
     sessionReceipt:               SessionReceipt;
+    SkillDraft?:                  SkillDraft;
+    SkillDraftList?:              SkillDraftList;
+    SkillDraftRef?:               SkillDraftRef;
     SkillFile?:                   SkillFile;
     SkillReadInput?:              SkillReadInput;
     SkillRemovalReceipt?:         SkillRemovalReceipt;
@@ -132,6 +165,103 @@ export interface Boundary {
     toolReceipt:                  ToolReceipt;
     versionCommand:               VersionCommand;
     workspaceContext:             WorkspaceContext;
+    WorkspaceTask?:               WorkspaceTask;
+}
+
+export interface AnalysisEvidence {
+    conditions:        Conditions;
+    data_range:        string;
+    findings:          [AnalysisFinding, ...AnalysisFinding[]];
+    reference:         AnalysisEvidenceRef;
+    schema_version:    number;
+    source_message_id: string;
+    validated_sources: AnalysisEvidenceSources;
+}
+
+/**
+ * 新建任务必须完整给出；未指定的可空标量用JSON null，列表用[]，notes用空字符串，timezone按宿主业务时区。
+ */
+export interface Conditions {
+    channel:        ConditionsChannel | null;
+    filters:        string[];
+    group_by:       string[];
+    knowledge_refs: EvidenceRef[];
+    metric:         null | string;
+    notes:          string;
+    /**
+     * 时间区间的不包含终点。按明确的业务时区解析后转为UTC完整时间戳，以Z结尾；整月结束为下一月起点，不能写本月最后一天。未指定时为null。
+     */
+    time_end: null | string;
+    /**
+     * 时间区间的包含起点。按明确的业务时区解析后转为UTC完整时间戳，以Z结尾；不能只写日期。未指定时为null。
+     */
+    time_start: null | string;
+    timezone:   string;
+}
+
+export type ConditionsChannel = "web" | "app" | "store";
+
+export interface EvidenceRef {
+    /**
+     * read_knowledge或search_knowledge返回的知识对象id；不是read_source返回的source_id。
+     */
+    object_id: string;
+    /**
+     * 该知识对象entries中的path，必须确实存在于对应version。
+     */
+    path:    string;
+    version: string;
+}
+
+export interface AnalysisFinding {
+    calculation:    string;
+    figures:        AnalysisFigure[];
+    knowledge_refs: EvidenceRef[];
+    limitations:    string[];
+    query_refs:     AnalysisQueryReference[];
+    text:           string;
+}
+
+export interface AnalysisFigure {
+    column:    string;
+    label:     string;
+    query_id:  string;
+    row_index: number;
+    value:     boolean | number | null | string;
+}
+
+export interface AnalysisQueryReference {
+    columns:    [string, ...string[]];
+    query_id:   string;
+    result_ref: string;
+}
+
+export interface AnalysisEvidenceRef {
+    condition_version:   string;
+    conversation_id:     string;
+    evidence_id:         string;
+    result_dependencies: AnalysisResultDependency[];
+    task_id:             string;
+}
+
+export interface AnalysisResultDependency {
+    query_id:   string;
+    result_ref: string;
+}
+
+export interface AnalysisEvidenceSources {
+    knowledge_refs:      EvidenceRef[];
+    query_coverage:      AnalysisQueryCoverage[];
+    result_dependencies: AnalysisResultDependency[];
+}
+
+export interface AnalysisQueryCoverage {
+    query_id:              string;
+    received_rows:         number;
+    result_complete:       boolean;
+    result_ref:            string;
+    saved_result_complete: boolean;
+    saved_row_count:       number;
 }
 
 export interface AnalysisPreferenceCommand {
@@ -139,6 +269,149 @@ export interface AnalysisPreferenceCommand {
     operation_id:     string;
     preferred:        boolean;
 }
+
+export interface AnalysisReport {
+    charts:         AnalysisReportChart[];
+    created_at:     string;
+    evidence:       [AnalysisEvidence, ...AnalysisEvidence[]];
+    reference:      AnalysisReportRef;
+    schema_version: number;
+    title:          string;
+}
+
+export interface AnalysisReportChart {
+    dimension_column: string;
+    kind:             AnalysisReportChartKind;
+    measure_column:   string;
+    query_id:         string;
+    result_ref:       string;
+    title:            string;
+}
+
+export type AnalysisReportChartKind = "line" | "bar";
+
+export interface AnalysisReportRef {
+    condition_version: string;
+    conversation_id:   string;
+    report_id:         string;
+    task_id:           string;
+    version:           string;
+}
+
+export type AnalysisReportPage = {
+    status: "available";
+    reference: AnalysisReportRef;
+    title: string;
+    evidence_ids: [string, ...string[]];
+    charts: AnalysisReportChart[];
+    content_text: string;
+    content_page: ContentPage;
+} | {
+    status: "condition_changed";
+    reference: AnalysisReportRef | null;
+} | {
+    status: "sources_unavailable";
+    reference: AnalysisReportRef | null;
+};
+
+/**
+ * 来源原话的独立字符分页。缺省source_text为空但保留总长和补读位置；以entry_id=source_text和同一资产版本读取。
+ */
+export interface ContentPage {
+    complete:    boolean;
+    next_offset: number | null;
+    offset:      number;
+    total_chars: number;
+}
+
+export type AnalysisReportPageStatus = "available" | "condition_changed" | "sources_unavailable";
+
+export type AnalysisReportView = {
+    status: "available";
+    reference: AnalysisReportRef;
+    report: AnalysisReport;
+    chart_results: QueryResults[];
+} | {
+    status: "condition_changed";
+    reference: AnalysisReportRef | null;
+} | {
+    status: "sources_unavailable";
+    reference: AnalysisReportRef | null;
+};
+
+export interface QueryResults {
+    columns:                ResultColumn[];
+    data_freshness:         string;
+    fetched_offset:         string;
+    next_cursor:            null | string;
+    query_id:               string;
+    result_complete:        boolean;
+    result_ref:             string;
+    rows:                   Array<Array<null | string>>;
+    saved_result_complete?: boolean;
+    saved_row_count?:       number;
+    source:                 QueryResultsSource;
+    /**
+     * 应用对当前有权结果页计算的统计；历史客户端可省略。
+     */
+    statistics?: ResultStatistics;
+    truncated:   boolean;
+}
+
+export interface ResultColumn {
+    encoding: string;
+    name:     string;
+    type:     string;
+}
+
+export type QueryResultsSource = "mock";
+
+/**
+ * 应用对当前有权结果页计算的统计；历史客户端可省略。
+ */
+export interface ResultStatistics {
+    columns:             ResultColumnStatistics[];
+    distinct_comparison: DistinctComparison;
+    row_count:           number;
+    /**
+     * 只有从offset=0取得完整且未截断的结果才是complete_result；page不能外推为全部结果。
+     */
+    scope: ResultStatisticsScope;
+}
+
+export interface ResultColumnStatistics {
+    column_index: number;
+    column_name:  string;
+    /**
+     * 不含NULL，按平台返回的原始文本去重；不模拟数据库排序规则。
+     */
+    distinct_count: number;
+    non_null_count: number;
+    null_count:     number;
+    numeric_counts: NumericValueCounts | null;
+    /**
+     * 本统计范围中出现超过一次的非NULL原始文本及次数；与distinct_count使用相同比较规则，不能推断跨页重复。
+     */
+    repeated_values: RepeatedResultValue[];
+}
+
+export interface NumericValueCounts {
+    negative: number;
+    positive: number;
+    zero:     number;
+}
+
+export interface RepeatedResultValue {
+    count: number;
+    value: string;
+}
+
+export type DistinctComparison = "returned_text";
+
+/**
+ * 只有从offset=0取得完整且未截断的结果才是complete_result；page不能外推为全部结果。
+ */
+export type ResultStatisticsScope = "page" | "complete_result";
 
 export interface ApplySemanticCorrection {
     expected_revision: string;
@@ -223,11 +496,19 @@ export interface ConversationSkillSelections {
     selections:      ConversationSkillSelection[];
 }
 
+export interface GetQueryInput {
+    cursor?:  null | string;
+    query_id: string;
+}
+
 export interface KnowledgeRetrieval {
+    channel?: KnowledgeRetrievalChannel;
     excerpts: KnowledgeRetrievalExcerpt[];
     note:     string;
     state:    KnowledgeRetrievalState;
 }
+
+export type KnowledgeRetrievalChannel = "lexical" | "vector";
 
 export interface KnowledgeRetrievalExcerpt {
     entry_id:    string;
@@ -240,6 +521,83 @@ export interface KnowledgeRetrievalExcerpt {
 
 export type KnowledgeRetrievalState = "located" | "unlocated";
 
+export interface MaintenanceDependent {
+    can_edit:            boolean;
+    id:                  string;
+    kind:                MaintenanceDependentKind;
+    name:                string;
+    references:          [MaintenanceReference, ...MaintenanceReference[]];
+    references_complete: boolean;
+    state:               MaintenanceDependentState;
+    version:             string;
+    visibility:          Visibility;
+}
+
+export type MaintenanceDependentKind = "table" | "field" | "metric" | "document" | "relationship" | "term" | "query_example" | "skill";
+
+export interface MaintenanceReference {
+    dependent_path:     string;
+    reference_state:    ReferenceState;
+    referenced_path:    null | string;
+    referenced_version: null | string;
+    relation_kind:      RelationKind;
+}
+
+export type ReferenceState = "current" | "version_changed" | "unavailable" | "related";
+
+export type RelationKind = "structure" | "source_material" | "query_example" | "skill" | "related";
+
+/**
+ * 仅用于管理目录；省略时包含启用及停用，始终排除已删除对象。
+ */
+export type MaintenanceDependentState = "enabled" | "disabled";
+
+export interface MaintenanceImpact {
+    items:         MaintenanceDependent[];
+    kind:          MaintenanceImpactKind;
+    next_after_id: null | string;
+    scope:         MaintenanceImpactScope;
+    target:        MaintenanceTarget;
+}
+
+export type MaintenanceImpactKind = "knowledge" | "skill";
+
+export type MaintenanceImpactScope = "direct_explicit_references";
+
+export interface MaintenanceTarget {
+    object_id: string;
+    state:     MaintenanceDependentState;
+    version:   string;
+}
+
+export interface MaintenanceImpactQuery {
+    after_id?:        string;
+    expected_version: string;
+    kind:             MaintenanceImpactKind;
+}
+
+export interface PrepareSkillDraftInput {
+    /**
+     * Skill 的正文及生成资源每行最多 51200 UTF-8 字节；超限须分行保存。记忆不受此行限制。
+     */
+    body:              string;
+    condition_version: string;
+    evidence_ids:      [string, ...string[]];
+    files:             SkillFile[];
+    instruction_quote: string;
+    name:              string;
+    scope:             string;
+    task_id:           string;
+}
+
+export interface SkillFile {
+    /**
+     * UTF-8 文本；每行最多 51200 字节，业务边界校验并返回 skill_line_too_long。
+     */
+    content: string;
+    path:    string;
+}
+
 export interface ProposalDraftCommand {
     base_version: string;
     entry_id:     string;
@@ -250,22 +608,31 @@ export interface ProposalDraftCommand {
     value:        string;
 }
 
-export interface EvidenceRef {
-    /**
-     * read_knowledge或search_knowledge返回的知识对象id；不是read_source返回的source_id。
-     */
-    object_id: string;
-    /**
-     * 该知识对象entries中的path，必须确实存在于对应version。
-     */
-    path:    string;
-    version: string;
-}
-
 export interface PublishSkill {
     expected_version: string;
     operation_id:     string;
     share_confirmed:  boolean;
+}
+
+export interface QueryExampleParameter {
+    description: string;
+    name:        string;
+    required:    boolean;
+    type:        QueryExampleParameterType;
+}
+
+export type QueryExampleParameterType = "string" | "number" | "integer" | "boolean";
+
+export interface QueryExampleVerification {
+    evidence_refs: [EvidenceRef, ...EvidenceRef[]];
+    note:          string;
+}
+
+export interface ReadAnalysisReportInput {
+    limit?:   number;
+    offset?:  number;
+    task_id:  string;
+    version?: string;
 }
 
 export interface ReviewSemanticCorrection {
@@ -298,6 +665,32 @@ export interface ReviseSemanticCorrection {
     value:             string;
 }
 
+export interface SaveAnalysisEvidenceInput {
+    condition_version: string;
+    data_range:        string;
+    findings:          [AnalysisFinding, ...AnalysisFinding[]];
+    task_id:           string;
+}
+
+export interface SaveAnalysisReport {
+    charts:            AnalysisReportChart[];
+    condition_version: string;
+    evidence_ids:      [string, ...string[]];
+    expected_version:  null | string;
+    operation_id:      string;
+    task_id:           string;
+    title:             string;
+}
+
+export interface SaveAnalysisReportInput {
+    charts:            AnalysisReportChart[];
+    condition_version: string;
+    evidence_ids:      [string, ...string[]];
+    expected_version:  null | string;
+    task_id:           string;
+    title:             string;
+}
+
 export interface SemanticAccess {
     can_admin: boolean;
     /**
@@ -314,6 +707,44 @@ export interface SemanticAccess {
  * 当前空间用于展示的最高语义角色。超级维护者优先；负责表或独立语义对象则为维护者；其余为普通用户。该摘要不授予权限，独立对象负责人不一定有创建资格。
  */
 export type HighestRole = "user" | "maintainer" | "super_maintainer";
+
+/**
+ * 草稿工具回执的非阻断诊断；查询读取接口不承诺重现此报告。
+ */
+export interface SemanticCheckReport {
+    checks:   Check[];
+    coverage: Coverage;
+}
+
+export interface Check {
+    coverage_limit: string;
+    evidence_refs:  SemanticEvidenceRef[];
+    finding:        string;
+    rule:           string;
+    state:          CheckState;
+}
+
+export interface SemanticEvidenceRef {
+    object_id: string;
+    version:   string;
+}
+
+export type CheckState = "checked" | "warning" | "not_checked";
+
+export interface Coverage {
+    missing_semantics:      string[];
+    sql_shape:              SQLShape;
+    supported_scope:        string[];
+    unsupported_constructs: string[];
+}
+
+export type SQLShape = "supported" | "unsupported";
+
+export interface SemanticColumnRef {
+    column:    string;
+    object_id: string;
+    version:   string;
+}
 
 export interface SemanticCorrection {
     /**
@@ -367,12 +798,98 @@ export interface SemanticMemberList {
     user_ids: string[];
 }
 
-export interface SkillFile {
-    /**
-     * UTF-8 文本；每行最多 51200 字节，业务边界校验并返回 skill_line_too_long。
-     */
-    content: string;
-    path:    string;
+export type SemanticStructure = {
+    kind: "table";
+    grain: string;
+    unique_keys: Array<[string, ...string[]]>;
+    time_columns: TimeColumn[];
+    default_filters: string[];
+    constraints: string[];
+} | {
+    kind: "field";
+    table: SemanticTableRef;
+    column: string;
+    unit: null | string;
+} | {
+    kind: "relationship";
+    left_table: SemanticTableRef;
+    right_table: SemanticTableRef;
+    join_keys: [JoinKey, ...JoinKey[]];
+    cardinality: Cardinality;
+    scope: string;
+} | {
+    kind: "metric";
+    table: SemanticTableRef;
+    expression: string;
+    input_grain: string;
+    time_column: null | string;
+    unit: null | string;
+    required_filters: string[];
+    dimensions: string[];
+} | {
+    kind: "query_example";
+    applicable_question: string;
+    parameters: QueryExampleParameter[];
+    sql: string;
+    grain: string;
+    dependencies: [EvidenceRef, ...EvidenceRef[]];
+    verification: QueryExampleVerification | null;
+};
+
+export type Cardinality = "one_to_one" | "one_to_many" | "many_to_one" | "many_to_many";
+
+export interface JoinKey {
+    left_column:  string;
+    right_column: string;
+}
+
+export type SemanticStructureKind = "table" | "field" | "relationship" | "metric" | "query_example";
+
+export interface SemanticTableRef {
+    object_id: string;
+    version:   string;
+}
+
+export interface TimeColumn {
+    column: string;
+    role:   string;
+}
+
+export type SkillDraft = {
+    status: "pending";
+    reference: SkillDraftRef;
+    name: string;
+    body: string;
+    scope: string;
+    files: SkillFile[];
+    dependencies: EvidenceRef[];
+    evidence_refs: [AnalysisEvidenceRef, ...AnalysisEvidenceRef[]];
+    created_at: string;
+} | {
+    status: "confirmed";
+    reference: SkillDraftRef;
+    asset_id: string;
+} | {
+    status: "condition_changed";
+    reference: SkillDraftRef;
+} | {
+    status: "sources_unavailable";
+    reference: SkillDraftRef;
+};
+
+export interface SkillDraftRef {
+    condition_version: string;
+    conversation_id:   string;
+    draft_id:          string;
+    source_message_id: string;
+    task_id:           string;
+}
+
+export type SkillDraftStatus = "pending" | "confirmed" | "condition_changed" | "sources_unavailable";
+
+export interface SkillDraftList {
+    drafts:        SkillDraft[];
+    next_after_id: null | string;
 }
 
 export interface SkillReadInput {
@@ -440,6 +957,12 @@ export interface TableAnalysisPreference {
     version:   string;
 }
 
+export interface WorkspaceTask {
+    evidence_refs?: AnalysisEvidenceRef[];
+    report_ref?:    AnalysisReportRef;
+    [property: string]: unknown;
+}
+
 export interface AnalysisUpdate {
     action: AnalysisUpdateAction;
     /**
@@ -483,7 +1006,7 @@ export interface ConditionPatch {
 }
 
 export interface ConditionSet {
-    channel?:        Channel;
+    channel?:        ConditionsChannel;
     filters?:        string[];
     group_by?:       string[];
     knowledge_refs?: EvidenceRef[];
@@ -500,30 +1023,7 @@ export interface ConditionSet {
     timezone?:   string;
 }
 
-export type Channel = "web" | "app" | "store";
-
 export type Unset = "time_start" | "time_end" | "metric" | "channel" | "group_by" | "filters" | "knowledge_refs" | "notes";
-
-/**
- * 新建任务必须完整给出；未指定的可空标量用JSON null，列表用[]，notes用空字符串，timezone按宿主业务时区。
- */
-export interface Conditions {
-    channel:        Channel | null;
-    filters:        string[];
-    group_by:       string[];
-    knowledge_refs: EvidenceRef[];
-    metric:         null | string;
-    notes:          string;
-    /**
-     * 时间区间的不包含终点。按明确的业务时区解析后转为UTC完整时间戳，以Z结尾；整月结束为下一月起点，不能写本月最后一天。未指定时为null。
-     */
-    time_end: null | string;
-    /**
-     * 时间区间的包含起点。按明确的业务时区解析后转为UTC完整时间戳，以Z结尾；不能只写日期。未指定时为null。
-     */
-    time_start: null | string;
-    timezone:   string;
-}
 
 export interface AppError {
     code:       Code;
@@ -576,6 +1076,7 @@ export interface AssetSave {
      */
     body:             string;
     dependencies:     EvidenceRef[];
+    draft_id?:        string;
     expected_version: null | string;
     files?:           SkillFile[];
     id:               null | string;
@@ -709,7 +1210,7 @@ export interface DataToolInvocation {
     tool_name:        ToolName;
 }
 
-export type ToolName = "search_knowledge" | "read_knowledge" | "read_source" | "validate_sql" | "request_query" | "execute_query" | "update_analysis_task" | "get_query" | "cancel_query" | "manage_personal_asset" | "propose_semantic_change" | "read_conversation" | "read_analysis_task" | "read";
+export type ToolName = "search_knowledge" | "read_knowledge" | "read_source" | "validate_sql" | "request_query" | "execute_query" | "update_analysis_task" | "get_query" | "cancel_query" | "manage_personal_asset" | "propose_semantic_change" | "read_conversation" | "read_analysis_task" | "read" | "save_analysis_evidence" | "save_analysis_report" | "read_analysis_report" | "prepare_skill_draft";
 
 export interface DataToolOutcome {
     data:         { [key: string]: unknown };
@@ -732,7 +1233,7 @@ export interface Event {
     type:            EventType;
 }
 
-export type EventType = "message" | "assistant_delta" | "assistant_committed" | "assistant_replaced" | "tool_result" | "run_failed" | "run_cancelled" | "query_changed" | "query_result" | "memory_saved" | "task_changed" | "conversation_deleted" | "message_withdrawn" | "task_cancelled" | "memory_disabled";
+export type EventType = "message" | "assistant_delta" | "assistant_committed" | "assistant_replaced" | "tool_result" | "run_failed" | "run_cancelled" | "query_changed" | "query_result" | "memory_saved" | "task_changed" | "conversation_deleted" | "message_withdrawn" | "task_cancelled" | "memory_disabled" | "analysis_evidence_saved" | "analysis_report_saved";
 
 export interface ExecuteQueryInput {
     condition_version: string;
@@ -812,15 +1313,18 @@ export type ModelLabel = "本地模拟模型" | "DeepSeek Flash" | "DeepSeek V4 
  * 独立对象首次创建时自动归属可信登录者；请求不接受负责人字段，后续调整使用独立管理接口。
  */
 export interface KnowledgeCreate {
-    body:         string;
-    kind:         KnowledgeCreateKind;
-    name:         string;
-    operation_id: string;
-    related_ids:  string[];
-    source_url?:  null | string;
+    body:              string;
+    kind:              KindElement;
+    name:              string;
+    operation_id:      string;
+    related_ids:       string[];
+    source_url?:       null | string;
+    structured_value?: QueryExampleStructure | null;
 }
 
-export type KnowledgeCreateKind = "table" | "field" | "metric" | "document" | "relationship" | "term";
+export type KindElement = "table" | "field" | "metric" | "document" | "relationship" | "term" | "query_example";
+
+export type QueryExampleStructure = SemanticStructure;
 
 /**
  * 将同一来源的业务文档按自然章节组合阅读；parts保留原引用身份，编辑时一次提交全部章节。
@@ -841,7 +1345,7 @@ export interface KnowledgeObject {
     document_order?: number;
     entries:         KnowledgeEntry[];
     id:              string;
-    kind:            KnowledgeCreateKind;
+    kind:            KindElement;
     maintenance?:    SemanticMaintenance;
     name:            string;
     prefill_status?: PrefillStatus | null;
@@ -859,17 +1363,33 @@ export interface KnowledgeObject {
 }
 
 export interface KnowledgeEntry {
-    effective_value: string;
-    entry_id:        string;
-    human_override:  { [key: string]: unknown } | null;
-    label:           string;
-    path:            string;
-    review_state:    ReviewState;
-    source_facts:    { [key: string]: unknown };
-    suggestion:      { [key: string]: unknown };
+    effective_structure?: QueryExampleStructure | null;
+    effective_value:      string;
+    entry_id:             string;
+    human_override:       null | HumanOverride;
+    label:                string;
+    path:                 string;
+    review_state:         ReviewState;
+    source_facts:         SourceFacts;
+    suggestion:           Suggestion;
+}
+
+export interface HumanOverride {
+    structured_value?: QueryExampleStructure | null;
+    [property: string]: unknown;
 }
 
 export type ReviewState = "unverified" | "confirmed" | "needs_review";
+
+export interface SourceFacts {
+    structured_value?: QueryExampleStructure | null;
+    [property: string]: unknown;
+}
+
+export interface Suggestion {
+    structured_value?: QueryExampleStructure | null;
+    [property: string]: unknown;
+}
 
 export interface PrefillStatus {
     attempt_id: string;
@@ -899,13 +1419,14 @@ export interface Part {
 }
 
 export interface KnowledgeEdit {
-    clear_override?:  boolean;
-    entry_id:         string;
-    expected_version: string;
-    operation_id:     string;
-    related_ids?:     string[];
-    source_url?:      null | string;
-    value:            string;
+    clear_override?:   boolean;
+    entry_id:          string;
+    expected_version:  string;
+    operation_id:      string;
+    related_ids?:      string[];
+    source_url?:       null | string;
+    structured_value?: QueryExampleStructure | null;
+    value:             string;
 }
 
 export interface KnowledgeList {
@@ -918,6 +1439,7 @@ export interface KnowledgeList {
 export interface SearchCoverage {
     candidate_limit: number;
     index_state?:    IndexState;
+    scope_applied?:  boolean;
     state:           SearchCoverageState;
     vector_state?:   VectorState;
 }
@@ -935,7 +1457,7 @@ export interface KnowledgeListQuery {
      */
     directory?: Directory;
     /**
-     * 仅管理目录使用。grouped只分页列出表、指标、整篇文档与术语；字段和关系从所属表打开。省略或flat保留全部对象列表。
+     * 仅管理目录使用。grouped只分页列出表、指标、整篇文档、查询案例与术语；字段和关系从所属表打开。省略或flat保留全部对象列表。
      */
     directory_view?: DirectoryView;
     q?:              string;
@@ -943,7 +1465,7 @@ export interface KnowledgeListQuery {
     /**
      * 仅用于管理目录；省略时包含启用及停用，始终排除已删除对象。
      */
-    state?: KnowledgeListQueryState;
+    state?: MaintenanceDependentState;
 }
 
 /**
@@ -952,14 +1474,9 @@ export interface KnowledgeListQuery {
 export type Directory = "all" | "maintained";
 
 /**
- * 仅管理目录使用。grouped只分页列出表、指标、整篇文档与术语；字段和关系从所属表打开。省略或flat保留全部对象列表。
+ * 仅管理目录使用。grouped只分页列出表、指标、整篇文档、查询案例与术语；字段和关系从所属表打开。省略或flat保留全部对象列表。
  */
 export type DirectoryView = "grouped" | "flat";
-
-/**
- * 仅用于管理目录；省略时包含启用及停用，始终排除已删除对象。
- */
-export type KnowledgeListQueryState = "enabled" | "disabled";
 
 export interface LogoutReceipt {
     state: LogoutReceiptState;
@@ -1116,12 +1633,6 @@ export interface MutationReceipt {
     version:      string;
 }
 
-export interface NumericValueCounts {
-    negative: number;
-    positive: number;
-    zero:     number;
-}
-
 export interface OperationReceipt {
     operation_id: string;
 }
@@ -1143,10 +1654,11 @@ export interface PrefillResult {
 }
 
 export interface Entry {
-    entry_id: string;
-    evidence: [Evidence, ...Evidence[]];
-    gaps:     string[];
-    value:    string;
+    entry_id:          string;
+    evidence:          [Evidence, ...Evidence[]];
+    gaps:              string[];
+    structured_value?: QueryExampleStructure | null;
+    value:             string;
 }
 
 export interface Evidence {
@@ -1208,10 +1720,14 @@ export interface QueryView {
     parameters:         { [key: string]: unknown };
     replaces_query_id?: null | string;
     result_ref:         null | string;
-    sql:                string;
-    summary:            string;
-    target_id:          string;
-    task_id:            string;
+    /**
+     * 草稿工具回执的非阻断诊断；查询读取接口不承诺重现此报告。
+     */
+    semantic_checks?: SemanticCheckReport;
+    sql:              string;
+    summary:          string;
+    target_id:        string;
+    task_id:          string;
 }
 
 export interface ErrorDetails {
@@ -1219,82 +1735,17 @@ export interface ErrorDetails {
     message: string;
 }
 
-export interface QueryResults {
-    columns:         ResultColumn[];
-    data_freshness:  string;
-    fetched_offset:  string;
-    next_cursor:     null | string;
-    query_id:        string;
-    result_complete: boolean;
-    result_ref:      string;
-    rows:            Array<Array<null | string>>;
-    source:          QueryResultsSource;
-    /**
-     * 应用对当前有权结果页计算的统计；历史客户端可省略。
-     */
-    statistics?: ResultStatistics;
-    truncated:   boolean;
-}
-
-export interface ResultColumn {
-    encoding: string;
-    name:     string;
-    type:     string;
-}
-
-export type QueryResultsSource = "mock";
-
-/**
- * 应用对当前有权结果页计算的统计；历史客户端可省略。
- */
-export interface ResultStatistics {
-    columns:             ResultColumnStatistics[];
-    distinct_comparison: DistinctComparison;
-    row_count:           number;
-    /**
-     * 只有从offset=0取得完整且未截断的结果才是complete_result；page不能外推为全部结果。
-     */
-    scope: Scope;
-}
-
-export interface ResultColumnStatistics {
-    column_index: number;
-    column_name:  string;
-    /**
-     * 不含NULL，按平台返回的原始文本去重；不模拟数据库排序规则。
-     */
-    distinct_count: number;
-    non_null_count: number;
-    null_count:     number;
-    numeric_counts: NumericValueCounts | null;
-    /**
-     * 本统计范围中出现超过一次的非NULL原始文本及次数；与distinct_count使用相同比较规则，不能推断跨页重复。
-     */
-    repeated_values: RepeatedResultValue[];
-}
-
-export interface RepeatedResultValue {
-    count: number;
-    value: string;
-}
-
-export type DistinctComparison = "returned_text";
-
-/**
- * 只有从offset=0取得完整且未截断的结果才是complete_result；page不能外推为全部结果。
- */
-export type Scope = "page" | "complete_result";
-
 export interface ReadKnowledgeInput {
     /**
      *
      * 知识条目ID；个人记忆省略时读取正文，scope读取范围，source_text读取来源原话，分别检查content_page/scope_page/source_page并按同一version续读。
      */
-    entry_id?: string;
-    limit?:    number;
-    object_id: string;
-    offset?:   number;
-    version?:  null | string;
+    entry_id?:       string;
+    limit?:          number;
+    object_id:       string;
+    offset?:         number;
+    structure_only?: boolean;
+    version?:        null | string;
 }
 
 export interface ReadQueryInput {
@@ -1375,7 +1826,7 @@ export interface WorkspaceContext {
     recent_messages:    ChatMessage[];
     request_clock?:     RequestClock;
     selected_skills:    ModelAssetPreview[];
-    tasks:              { [key: string]: unknown }[];
+    tasks:              WorkspaceTask[];
 }
 
 export interface AssetCounts {
@@ -1406,16 +1857,6 @@ export interface ModelAssetPreview {
     visibility?:  Visibility;
 }
 
-/**
- * 来源原话的独立字符分页。缺省source_text为空但保留总长和补读位置；以entry_id=source_text和同一资产版本读取。
- */
-export interface ContentPage {
-    complete:    boolean;
-    next_offset: number | null;
-    offset:      number;
-    total_chars: number;
-}
-
 export type MemoryRetrieval = "mem0_authoritative" | "directory_fallback";
 
 export interface RunSnapshot {
@@ -1432,9 +1873,12 @@ export interface SaveModelSelection {
 }
 
 export interface SearchInput {
-    asset_after?: string;
-    limit?:       number;
-    query:        string;
+    asset_after?:       string;
+    business_domain?:   string;
+    kinds?:             [KindElement, ...KindElement[]];
+    limit?:             number;
+    query:              string;
+    related_object_id?: string;
 }
 
 export interface SendModelCall {
@@ -1473,10 +1917,12 @@ export interface Snapshot {
 
 export interface TaskSnapshot {
     condition_version: string;
+    evidence_refs?:    AnalysisEvidenceRef[];
     goal:              string;
     id:                string;
     lifecycle?:        string;
     phase?:            string;
+    report_ref?:       AnalysisReportRef;
 }
 
 export interface SourceDocument {
@@ -1488,9 +1934,10 @@ export interface SourceDocument {
 }
 
 export interface SQLInput {
-    parameters: { [key: string]: unknown };
-    sql:        string;
-    target_id:  TargetID;
+    knowledge_refs?: EvidenceRef[];
+    parameters:      { [key: string]: unknown };
+    sql:             string;
+    target_id:       TargetID;
 }
 
 export interface TaskInput {

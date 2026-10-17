@@ -17,6 +17,29 @@ pub async fn start_delivery(
         space_id: location.space_id,
         request_id: id(),
     };
+    // 先释放业务锁再查平台结果授权；正式领取时重核所采用的依赖清单。
+    let mut preflight = AppTx::begin(pool).await?;
+    let owner =
+        conversations::lock_conversation_in_tx(&mut preflight, &context, &job.conversation_id)
+            .await?;
+    let input = conversations::read_message_in_tx(&mut preflight, &owner, &job.message_id).await?;
+    let previous = if let Some(value) =
+        runtime::read_checkpoint_in_tx(&mut preflight, &input.recovery_chain_id).await?
+    {
+        Some(value)
+    } else {
+        runtime::read_conversation_checkpoint_in_tx(&mut preflight, &owner.id).await?
+    };
+    preflight.commit().await?;
+    let checked = super::context_authority::check_results(
+        pool,
+        &context,
+        &previous
+            .as_ref()
+            .map(|v| v["authority_snapshot"].clone())
+            .unwrap_or_else(super::context_authority::empty),
+    )
+    .await?;
     let mut tx = AppTx::begin(pool).await?;
     let conversation =
         conversations::lock_conversation_in_tx(&mut tx, &context, &job.conversation_id).await?;
@@ -83,13 +106,15 @@ pub async fn start_delivery(
                 runtime::read_conversation_checkpoint_in_tx(&mut tx, &conversation.id).await?;
         }
         let invalidated = if let Some(previous) = &checkpoint {
-            super::context_authority::needs_reset_in_tx(
-                &mut tx,
-                &context,
-                &conversation.id,
-                &previous["authority_snapshot"],
-            )
-            .await?
+            checked.assert_snapshot(&previous["authority_snapshot"])?;
+            checked.invalidated
+                || super::context_authority::needs_reset_in_tx(
+                    &mut tx,
+                    &context,
+                    &conversation.id,
+                    &previous["authority_snapshot"],
+                )
+                .await?
         } else {
             false
         };
@@ -170,6 +195,7 @@ pub async fn read_delivery_checkpoint(
     lease: &str,
 ) -> Result<Value> {
     let cid = runtime::locate_run(pool, run_id).await?;
+    let checked = super::context_authority::check_run_results(pool, context, run_id).await?;
     let mut tx = AppTx::begin(pool).await?;
     let conversation = conversations::lock_conversation_in_tx(&mut tx, context, &cid).await?;
     conversations::assert_turn_in_tx(&tx, &conversation, run_id, epoch(lease)?)?;
@@ -178,6 +204,7 @@ pub async fn read_delivery_checkpoint(
         return Err(Error::new("lease_lost"));
     }
     super::context_authority::assert_run_in_tx(&mut tx, context, &cid, run_id).await?;
+    super::context_authority::assert_checked_run_in_tx(&mut tx, run_id, &checked).await?;
     let checkpoint = runtime::read_delivery_checkpoint_in_tx(&mut tx, &run).await?;
     tx.commit().await?;
     Ok(checkpoint)
@@ -219,6 +246,11 @@ pub async fn model_attempt(
     settle: bool,
 ) -> Result<Value> {
     let cid = runtime::locate_run(pool, run_id).await?;
+    let checked = if settle {
+        None
+    } else {
+        Some(super::context_authority::check_run_results(pool, context, run_id).await?)
+    };
     let mut tx = AppTx::begin(pool).await?;
     let conversation = conversations::lock_conversation_in_tx(&mut tx, context, &cid).await?;
     conversations::assert_turn_in_tx(&tx, &conversation, run_id, epoch(lease)?)?;
@@ -228,6 +260,12 @@ pub async fn model_attempt(
     } else {
         access::authorize_model("local_mock")?;
         super::context_authority::assert_run_in_tx(&mut tx, context, &cid, run_id).await?;
+        super::context_authority::assert_checked_run_in_tx(
+            &mut tx,
+            run_id,
+            checked.as_ref().expect("issuance preflight"),
+        )
+        .await?;
         runtime::issue_model_call_in_tx(&mut tx, &run, attempt).await?;
     }
     tx.commit().await?;

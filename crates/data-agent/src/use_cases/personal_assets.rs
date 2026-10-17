@@ -18,6 +18,9 @@ pub async fn list(pool: &MySqlPool, ctx: &AccessContext) -> Result<Value> {
 }
 pub async fn save(pool: &MySqlPool, ctx: &AccessContext, input: Value) -> Result<Value> {
     contracts::validate("AssetSave", &input)?;
+    if input.get("draft_id").is_some() {
+        return super::skill_drafts::confirm(pool, ctx, &input).await;
+    }
     let mut tx = AppTx::begin(pool).await?;
     let v = if let Some(receipt) = assets::begin_save_in_tx(&mut tx, ctx, &input).await? {
         receipt

@@ -7,22 +7,44 @@ pub async fn index_in_tx(tx: &mut AppTx<'_>, space: &str, object: &Value) -> Res
 }
 
 pub async fn candidates_in_tx(tx: &mut AppTx<'_>, space: &str, query: &str) -> Result<Vec<Value>> {
+    candidates_scoped_in_tx(
+        tx,
+        space,
+        query,
+        &crate::search_scope::KnowledgeSearchScope::default(),
+    )
+    .await
+}
+
+pub async fn candidates_scoped_in_tx(
+    tx: &mut AppTx<'_>,
+    space: &str,
+    query: &str,
+    scope: &crate::search_scope::KnowledgeSearchScope,
+) -> Result<Vec<Value>> {
     let tokens = super::tokens(query);
     if tokens.is_empty() {
         return Ok(vec![]);
     }
     let mut sql = sqlx::QueryBuilder::<sqlx::MySql>::new(
-        "SELECT object_id FROM retrieval_documents FORCE INDEX(PRIMARY) WHERE space_id=",
+        "SELECT r.object_id FROM retrieval_documents AS r FORCE INDEX(PRIMARY) WHERE r.space_id=",
     );
     sql.push_bind(space).push(" AND (");
     let mut clauses = sql.separated(" OR ");
     for token in tokens.into_iter().take(24) {
         clauses
-            .push("INSTR(LOWER(CAST(body AS CHAR)),")
+            .push("INSTR(LOWER(CAST(r.body AS CHAR)),")
             .push_bind_unseparated(token)
             .push_unseparated(")>0");
     }
-    sql.push(") ORDER BY object_id LIMIT 1001");
+    sql.push(")");
+    scope.push_constraints(
+        &mut sql,
+        "r.object_id",
+        "JSON_UNQUOTE(JSON_EXTRACT(r.body,'$.kind'))",
+        "r.body",
+    );
+    sql.push(" ORDER BY r.object_id LIMIT 1001");
     let rows: Vec<String> = sql.build_query_scalar().fetch_all(tx.connection()).await?;
     Ok(rows
         .into_iter()

@@ -37,10 +37,16 @@ try{
  checks.push('跨轮保留Pi检查点的早期读取依赖；无关改版不重建，旧已读资料撤回仍阻止模型发送');
  assert.equal((await h.request('/conversations/'+cid+'/messages/'+run.message_id+'/withdraw',{operation_id:randomUUID()})).status,200);h.releaseRun(run.run_id);
  h.sql(`UPDATE pi_checkpoints SET checkpoint=JSON_REMOVE(checkpoint,'$.authority_snapshot.dependency_schema') WHERE recovery_chain_id IN (SELECT recovery_chain_id FROM conversation_messages WHERE conversation_id='${cid}')`);
- await h.resumeWorker();run=await h.capture(cid,'重新调查新问题');await h.pauseWorker();assert.equal(run.checkpoint,null);assert.equal(run.workspace_context.authority_snapshot.dependency_schema,1);assert.equal((await issue()).status,200);
+ await h.resumeWorker();run=await h.capture(cid,'重新调查新问题');await h.pauseWorker();assert.equal(run.checkpoint,null);assert.equal(run.workspace_context.authority_snapshot.dependency_schema,4);assert.equal((await issue()).status,200);
  checks.push('旧检查点没有完整依赖清单时新输入重建，不把缺失清单当空依赖通过');
  await finish();await h.resumeWorker();run=await h.capture(cid,'重建后的下一轮继续');await h.pauseWorker();
  assert.ok(run.checkpoint);assert.ok(!JSON.stringify(run.workspace_context.recent_messages).includes('旧资料结论-A'));assert.ok(run.workspace_context.recent_messages.every(v=>v.role==='user'));assert.ok(!run.workspace_context.authority_snapshot.knowledge.some(v=>v[0]==='table-demo_order_detail'));
  checks.push('重建完成后的后续轮次也不会从短历史重新混入旧助手结论，助手历史沿用Pi检查点');
+ await finish();
+ const legacy=await h.create();await h.resumeWorker();run=await h.capture(legacy,'保存当前有效的上下文');await h.pauseWorker();await finish();
+ h.sql(`UPDATE pi_checkpoints SET checkpoint=JSON_SET(checkpoint,'$.authority_snapshot.dependency_schema',3) WHERE recovery_chain_id IN (SELECT recovery_chain_id FROM conversation_messages WHERE conversation_id='${legacy}')`);
+ await h.resumeWorker();run=await h.capture(legacy,'格式迁移后继续调查');await h.pauseWorker();
+ assert.equal(run.checkpoint,null);assert.equal(run.workspace_context.authority_snapshot.dependency_schema,4);assert.equal((await issue()).status,200);
+ checks.push('资料未改版但旧格式3可能遗漏案例传递依赖，新输入仍按SDK重建为格式4');
  passed=true;console.log(JSON.stringify({passed,checks,officialRequests:0}));
 }finally{await writeFile('.local/checks/mvp-context-dependencies.json',JSON.stringify({passed,checks,officialRequests:0},null,2));await h.close();}

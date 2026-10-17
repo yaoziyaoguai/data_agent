@@ -18,8 +18,34 @@ use std::collections::HashMap;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Boundary {
+    #[serde(rename = "AnalysisEvidence")]
+    pub analysis_evidence: Option<AnalysisEvidence>,
+    #[serde(rename = "AnalysisEvidenceRef")]
+    pub analysis_evidence_ref: Option<AnalysisEvidenceRef>,
+    #[serde(rename = "AnalysisEvidenceSources")]
+    pub analysis_evidence_sources: Option<AnalysisEvidenceSources>,
+    #[serde(rename = "AnalysisFigure")]
+    pub analysis_figure: Option<AnalysisFigure>,
+    #[serde(rename = "AnalysisFinding")]
+    pub analysis_finding: Option<AnalysisFinding>,
     #[serde(rename = "AnalysisPreferenceCommand")]
     pub analysis_preference_command: Option<AnalysisPreferenceCommand>,
+    #[serde(rename = "AnalysisQueryCoverage")]
+    pub analysis_query_coverage: Option<AnalysisQueryCoverage>,
+    #[serde(rename = "AnalysisQueryReference")]
+    pub analysis_query_reference: Option<AnalysisQueryReference>,
+    #[serde(rename = "AnalysisReport")]
+    pub analysis_report: Option<AnalysisReport>,
+    #[serde(rename = "AnalysisReportChart")]
+    pub analysis_report_chart: Option<AnalysisReportChart>,
+    #[serde(rename = "AnalysisReportPage")]
+    pub analysis_report_page: Option<AnalysisReportPage>,
+    #[serde(rename = "AnalysisReportRef")]
+    pub analysis_report_ref: Option<AnalysisReportRef>,
+    #[serde(rename = "AnalysisReportView")]
+    pub analysis_report_view: Option<AnalysisReportView>,
+    #[serde(rename = "AnalysisResultDependency")]
+    pub analysis_result_dependency: Option<AnalysisResultDependency>,
     pub analysis_update: AnalysisUpdate,
     pub append_output: AppendOutput,
     pub app_error: AppError,
@@ -66,6 +92,8 @@ pub struct Boundary {
     pub finalize_model_call: FinalizeModelCall,
     pub finish_receipt: FinishReceipt,
     pub finish_run: FinishRun,
+    #[serde(rename = "GetQueryInput")]
+    pub get_query_input: Option<GetQueryInput>,
     pub history: History,
     pub history_item: HistoryItem,
     pub history_query: HistoryQuery,
@@ -85,6 +113,14 @@ pub struct Boundary {
     #[serde(rename = "KnowledgeRetrievalExcerpt")]
     pub knowledge_retrieval_excerpt: Option<KnowledgeRetrievalExcerpt>,
     pub logout_receipt: LogoutReceipt,
+    #[serde(rename = "MaintenanceDependent")]
+    pub maintenance_dependent: Option<MaintenanceDependent>,
+    #[serde(rename = "MaintenanceImpact")]
+    pub maintenance_impact: Option<MaintenanceImpact>,
+    #[serde(rename = "MaintenanceImpactQuery")]
+    pub maintenance_impact_query: Option<MaintenanceImpactQuery>,
+    #[serde(rename = "MaintenanceReference")]
+    pub maintenance_reference: Option<MaintenanceReference>,
     pub memory_budget_binding: Option<MemoryBudgetBinding>,
     pub memory_candidate: Option<MemoryCandidate>,
     pub memory_extraction_receipt: Option<MemoryExtractionReceipt>,
@@ -111,6 +147,8 @@ pub struct Boundary {
     #[serde(rename = "pi_session_reference")]
     pub pi_session_reference: PiSessionReference,
     pub prefill_result: PrefillResult,
+    #[serde(rename = "PrepareSkillDraftInput")]
+    pub prepare_skill_draft_input: Option<PrepareSkillDraftInput>,
     pub proposal: Proposal,
     #[serde(rename = "ProposalDraftCommand")]
     pub proposal_draft_command: Option<ProposalDraftCommand>,
@@ -119,11 +157,17 @@ pub struct Boundary {
     #[serde(rename = "PublishSkill")]
     pub publish_skill: Option<PublishSkill>,
     pub query_cancellation: Option<QueryCancellation>,
+    #[serde(rename = "QueryExampleParameter")]
+    pub query_example_parameter: Option<QueryExampleParameter>,
+    #[serde(rename = "QueryExampleVerification")]
+    pub query_example_verification: Option<QueryExampleVerification>,
     pub query_list: QueryList,
     pub query_results: QueryResults,
     pub query_view: QueryView,
     #[serde(rename = "read_checkpoint")]
     pub read_checkpoint: ReadCheckpoint,
+    #[serde(rename = "ReadAnalysisReportInput")]
+    pub read_analysis_report_input: Option<ReadAnalysisReportInput>,
     pub read_knowledge_input: ReadKnowledgeInput,
     pub read_query_input: ReadQueryInput,
     pub read_source_input: ReadSourceInput,
@@ -141,20 +185,42 @@ pub struct Boundary {
     pub revise_semantic_correction: Option<ReviseSemanticCorrection>,
     pub run_envelope: RunEnvelope,
     pub run_snapshot: RunSnapshot,
+    #[serde(rename = "SaveAnalysisEvidenceInput")]
+    pub save_analysis_evidence_input: Option<SaveAnalysisEvidenceInput>,
+    #[serde(rename = "SaveAnalysisReport")]
+    pub save_analysis_report: Option<SaveAnalysisReport>,
+    #[serde(rename = "SaveAnalysisReportInput")]
+    pub save_analysis_report_input: Option<SaveAnalysisReportInput>,
     pub save_model_selection: SaveModelSelection,
     pub search_input: SearchInput,
     #[serde(rename = "SemanticAccess")]
     pub semantic_access: Option<SemanticAccess>,
+    #[serde(rename = "SemanticCheckReport")]
+    pub semantic_check_report: Option<SemanticCheckReport>,
+    #[serde(rename = "SemanticColumnRef")]
+    pub semantic_column_ref: Option<SemanticColumnRef>,
     #[serde(rename = "SemanticCorrection")]
     pub semantic_correction: Option<SemanticCorrection>,
     #[serde(rename = "SemanticCorrectionList")]
     pub semantic_correction_list: Option<SemanticCorrectionList>,
+    #[serde(rename = "SemanticEvidenceRef")]
+    pub semantic_evidence_ref: Option<SemanticEvidenceRef>,
     #[serde(rename = "SemanticMaintenance")]
     pub semantic_maintenance: Option<SemanticMaintenance>,
     #[serde(rename = "SemanticMemberList")]
     pub semantic_member_list: Option<SemanticMemberList>,
+    #[serde(rename = "SemanticStructure")]
+    pub semantic_structure: Option<SemanticStructure>,
+    #[serde(rename = "SemanticTableRef")]
+    pub semantic_table_ref: Option<SemanticTableRef>,
     pub send_model_call: SendModelCall,
     pub session_receipt: SessionReceipt,
+    #[serde(rename = "SkillDraft")]
+    pub skill_draft: Option<SkillDraft>,
+    #[serde(rename = "SkillDraftList")]
+    pub skill_draft_list: Option<SkillDraftList>,
+    #[serde(rename = "SkillDraftRef")]
+    pub skill_draft_ref: Option<SkillDraftRef>,
     #[serde(rename = "SkillFile")]
     pub skill_file: Option<SkillFile>,
     #[serde(rename = "SkillReadInput")]
@@ -185,6 +251,118 @@ pub struct Boundary {
     pub tool_receipt: ToolReceipt,
     pub version_command: VersionCommand,
     pub workspace_context: WorkspaceContext,
+    #[serde(rename = "WorkspaceTask")]
+    pub workspace_task: Option<WorkspaceTask>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AnalysisEvidence {
+    pub conditions: Conditions,
+    pub data_range: String,
+    pub findings: Vec<AnalysisFinding>,
+    pub reference: AnalysisEvidenceRef,
+    pub schema_version: i64,
+    pub source_message_id: String,
+    pub validated_sources: AnalysisEvidenceSources,
+}
+
+/// 新建任务必须完整给出；未指定的可空标量用JSON null，列表用[]，notes用空字符串，timezone按宿主业务时区。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Conditions {
+    pub channel: Option<ConditionsChannel>,
+    pub filters: Vec<String>,
+    pub group_by: Vec<String>,
+    pub knowledge_refs: Vec<EvidenceRef>,
+    pub metric: Option<String>,
+    pub notes: String,
+    /// 时间区间的不包含终点。按明确的业务时区解析后转为UTC完整时间戳，以Z结尾；整月结束为下一月起点，不能写本月最后一天。未指定时为null。
+    pub time_end: Option<String>,
+    /// 时间区间的包含起点。按明确的业务时区解析后转为UTC完整时间戳，以Z结尾；不能只写日期。未指定时为null。
+    pub time_start: Option<String>,
+    pub timezone: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ConditionsChannel {
+    App,
+    Store,
+    Web,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EvidenceRef {
+    /// read_knowledge或search_knowledge返回的知识对象id；不是read_source返回的source_id。
+    pub object_id: String,
+    /// 该知识对象entries中的path，必须确实存在于对应version。
+    pub path: String,
+    pub version: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AnalysisFinding {
+    pub calculation: String,
+    pub figures: Vec<AnalysisFigure>,
+    pub knowledge_refs: Vec<EvidenceRef>,
+    pub limitations: Vec<String>,
+    pub query_refs: Vec<AnalysisQueryReference>,
+    pub text: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AnalysisFigure {
+    pub column: String,
+    pub label: String,
+    pub query_id: String,
+    pub row_index: i32,
+    pub value: Option<Value>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum Value {
+    Bool(bool),
+    Double(f64),
+    PurpleString(String),
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AnalysisQueryReference {
+    pub columns: Vec<String>,
+    pub query_id: String,
+    pub result_ref: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AnalysisEvidenceRef {
+    pub condition_version: String,
+    pub conversation_id: String,
+    pub evidence_id: String,
+    pub result_dependencies: Vec<AnalysisResultDependency>,
+    pub task_id: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AnalysisResultDependency {
+    pub query_id: String,
+    pub result_ref: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AnalysisEvidenceSources {
+    pub knowledge_refs: Vec<EvidenceRef>,
+    pub query_coverage: Vec<AnalysisQueryCoverage>,
+    pub result_dependencies: Vec<AnalysisResultDependency>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AnalysisQueryCoverage {
+    pub query_id: String,
+    pub received_rows: i32,
+    pub result_complete: bool,
+    pub result_ref: String,
+    pub saved_result_complete: bool,
+    pub saved_row_count: i32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -192,6 +370,189 @@ pub struct AnalysisPreferenceCommand {
     pub expected_version: String,
     pub operation_id: String,
     pub preferred: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AnalysisReport {
+    pub charts: Vec<AnalysisReportChart>,
+    pub created_at: String,
+    pub evidence: Vec<AnalysisEvidence>,
+    pub reference: AnalysisReportRef,
+    pub schema_version: i64,
+    pub title: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AnalysisReportChart {
+    pub dimension_column: String,
+    pub kind: AnalysisReportChartKind,
+    pub measure_column: String,
+    pub query_id: String,
+    pub result_ref: String,
+    pub title: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AnalysisReportChartKind {
+    Bar,
+    Line,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AnalysisReportRef {
+    pub condition_version: String,
+    pub conversation_id: String,
+    pub report_id: String,
+    pub task_id: String,
+    pub version: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "status", deny_unknown_fields)]
+pub enum AnalysisReportPage {
+    #[serde(rename = "available")]
+    Available {
+        reference: AnalysisReportRef,
+        title: String,
+        evidence_ids: Vec<String>,
+        charts: Vec<AnalysisReportChart>,
+        content_text: String,
+        content_page: ContentPage,
+    },
+    #[serde(rename = "condition_changed")]
+    ConditionChanged {
+        reference: Option<AnalysisReportRef>,
+    },
+    #[serde(rename = "sources_unavailable")]
+    SourcesUnavailable {
+        reference: Option<AnalysisReportRef>,
+    },
+}
+
+/// 来源原话的独立字符分页。缺省source_text为空但保留总长和补读位置；以entry_id=source_text和同一资产版本读取。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ContentPage {
+    pub complete: bool,
+    pub next_offset: Option<i64>,
+    pub offset: i64,
+    pub total_chars: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AnalysisReportPageStatus {
+    Available,
+    #[serde(rename = "condition_changed")]
+    ConditionChanged,
+    #[serde(rename = "sources_unavailable")]
+    SourcesUnavailable,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "status", deny_unknown_fields)]
+pub enum AnalysisReportView {
+    #[serde(rename = "available")]
+    Available {
+        reference: AnalysisReportRef,
+        report: AnalysisReport,
+        chart_results: Vec<QueryResults>,
+    },
+    #[serde(rename = "condition_changed")]
+    ConditionChanged {
+        reference: Option<AnalysisReportRef>,
+    },
+    #[serde(rename = "sources_unavailable")]
+    SourcesUnavailable {
+        reference: Option<AnalysisReportRef>,
+    },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct QueryResults {
+    pub columns: Vec<ResultColumn>,
+    pub data_freshness: String,
+    pub fetched_offset: String,
+    pub next_cursor: Option<String>,
+    pub query_id: String,
+    pub result_complete: bool,
+    pub result_ref: String,
+    pub rows: Vec<Vec<Option<String>>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub saved_result_complete: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub saved_row_count: Option<i32>,
+    pub source: QueryResultsSource,
+    /// 应用对当前有权结果页计算的统计；历史客户端可省略。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub statistics: Option<ResultStatistics>,
+    pub truncated: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ResultColumn {
+    pub encoding: String,
+    pub name: String,
+    #[serde(rename = "type")]
+    pub result_column_type: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum QueryResultsSource {
+    Mock,
+}
+
+/// 应用对当前有权结果页计算的统计；历史客户端可省略。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ResultStatistics {
+    pub columns: Vec<ResultColumnStatistics>,
+    pub distinct_comparison: DistinctComparison,
+    pub row_count: i64,
+    /// 只有从offset=0取得完整且未截断的结果才是complete_result；page不能外推为全部结果。
+    pub scope: ResultStatisticsScope,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ResultColumnStatistics {
+    pub column_index: i64,
+    pub column_name: String,
+    /// 不含NULL，按平台返回的原始文本去重；不模拟数据库排序规则。
+    pub distinct_count: i64,
+    pub non_null_count: i64,
+    pub null_count: i64,
+    pub numeric_counts: Option<NumericValueCounts>,
+    /// 本统计范围中出现超过一次的非NULL原始文本及次数；与distinct_count使用相同比较规则，不能推断跨页重复。
+    pub repeated_values: Vec<RepeatedResultValue>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NumericValueCounts {
+    pub negative: i64,
+    pub positive: i64,
+    pub zero: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RepeatedResultValue {
+    pub count: i64,
+    pub value: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DistinctComparison {
+    #[serde(rename = "returned_text")]
+    ReturnedText,
+}
+
+/// 只有从offset=0取得完整且未截断的结果才是complete_result；page不能外推为全部结果。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ResultStatisticsScope {
+    #[serde(rename = "complete_result")]
+    CompleteResult,
+    Page,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -240,7 +601,7 @@ pub struct ConditionPatch {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConditionSet {
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub channel: Option<Channel>,
+    pub channel: Option<ConditionsChannel>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub filters: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -263,23 +624,6 @@ pub struct ConditionSet {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum Channel {
-    App,
-    Store,
-    Web,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct EvidenceRef {
-    /// read_knowledge或search_knowledge返回的知识对象id；不是read_source返回的source_id。
-    pub object_id: String,
-    /// 该知识对象entries中的path，必须确实存在于对应version。
-    pub path: String,
-    pub version: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
 pub enum Unset {
     Channel,
     Filters,
@@ -293,22 +637,6 @@ pub enum Unset {
     TimeEnd,
     #[serde(rename = "time_start")]
     TimeStart,
-}
-
-/// 新建任务必须完整给出；未指定的可空标量用JSON null，列表用[]，notes用空字符串，timezone按宿主业务时区。
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Conditions {
-    pub channel: Option<Channel>,
-    pub filters: Vec<String>,
-    pub group_by: Vec<String>,
-    pub knowledge_refs: Vec<EvidenceRef>,
-    pub metric: Option<String>,
-    pub notes: String,
-    /// 时间区间的不包含终点。按明确的业务时区解析后转为UTC完整时间戳，以Z结尾；整月结束为下一月起点，不能写本月最后一天。未指定时为null。
-    pub time_end: Option<String>,
-    /// 时间区间的包含起点。按明确的业务时区解析后转为UTC完整时间戳，以Z结尾；不能只写日期。未指定时为null。
-    pub time_start: Option<String>,
-    pub timezone: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -474,6 +802,8 @@ pub struct AssetSave {
     /// Skill 的正文及生成资源每行最多 51200 UTF-8 字节；超限须分行保存。记忆不受此行限制。
     pub body: String,
     pub dependencies: Vec<EvidenceRef>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub draft_id: Option<String>,
     pub expected_version: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub files: Option<Vec<SkillFile>>,
@@ -774,9 +1104,13 @@ pub enum ToolName {
     GetQuery,
     #[serde(rename = "manage_personal_asset")]
     ManagePersonalAsset,
+    #[serde(rename = "prepare_skill_draft")]
+    PrepareSkillDraft,
     #[serde(rename = "propose_semantic_change")]
     ProposeSemanticChange,
     Read,
+    #[serde(rename = "read_analysis_report")]
+    ReadAnalysisReport,
     #[serde(rename = "read_analysis_task")]
     ReadAnalysisTask,
     #[serde(rename = "read_conversation")]
@@ -787,6 +1121,10 @@ pub enum ToolName {
     ReadSource,
     #[serde(rename = "request_query")]
     RequestQuery,
+    #[serde(rename = "save_analysis_evidence")]
+    SaveAnalysisEvidence,
+    #[serde(rename = "save_analysis_report")]
+    SaveAnalysisReport,
     #[serde(rename = "search_knowledge")]
     SearchKnowledge,
     #[serde(rename = "update_analysis_task")]
@@ -823,6 +1161,10 @@ pub struct Event {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum EventType {
+    #[serde(rename = "analysis_evidence_saved")]
+    AnalysisEvidenceSaved,
+    #[serde(rename = "analysis_report_saved")]
+    AnalysisReportSaved,
     #[serde(rename = "assistant_committed")]
     AssistantCommitted,
     #[serde(rename = "assistant_delta")]
@@ -903,6 +1245,13 @@ pub struct FinishRun {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GetQueryInput {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cursor: Option<String>,
+    pub query_id: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct History {
     pub conversations: Vec<HistoryItem>,
     pub next_before_id: Option<String>,
@@ -959,23 +1308,96 @@ pub enum ModelLabel {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct KnowledgeCreate {
     pub body: String,
-    pub kind: KnowledgeCreateKind,
+    pub kind: KindElement,
     pub name: String,
     pub operation_id: String,
     pub related_ids: Vec<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub source_url: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub structured_value: Option<QueryExampleStructure>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum KnowledgeCreateKind {
+pub enum KindElement {
     Document,
     Field,
     Metric,
+    #[serde(rename = "query_example")]
+    QueryExample,
     Relationship,
     Table,
     Term,
+}
+
+pub type QueryExampleStructure = SemanticStructure;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Cardinality {
+    #[serde(rename = "many_to_many")]
+    ManyToMany,
+    #[serde(rename = "many_to_one")]
+    ManyToOne,
+    #[serde(rename = "one_to_many")]
+    OneToMany,
+    #[serde(rename = "one_to_one")]
+    OneToOne,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct JoinKey {
+    pub left_column: String,
+    pub right_column: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SemanticStructureKind {
+    Field,
+    Metric,
+    #[serde(rename = "query_example")]
+    QueryExample,
+    Relationship,
+    Table,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SemanticTableRef {
+    pub object_id: String,
+    pub version: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct QueryExampleParameter {
+    pub description: String,
+    pub name: String,
+    pub required: bool,
+    #[serde(rename = "type")]
+    pub query_example_parameter_type: QueryExampleParameterType,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum QueryExampleParameterType {
+    Boolean,
+    Integer,
+    Number,
+    #[serde(rename = "string")]
+    TypeString,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TimeColumn {
+    pub column: String,
+    pub role: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct QueryExampleVerification {
+    pub evidence_refs: Vec<EvidenceRef>,
+    pub note: String,
 }
 
 /// 将同一来源的业务文档按自然章节组合阅读；parts保留原引用身份，编辑时一次提交全部章节。
@@ -998,7 +1420,7 @@ pub struct KnowledgeObject {
     pub document_order: Option<i32>,
     pub entries: Vec<KnowledgeEntry>,
     pub id: String,
-    pub kind: KnowledgeCreateKind,
+    pub kind: KindElement,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub maintenance: Option<SemanticMaintenance>,
     pub name: String,
@@ -1026,14 +1448,21 @@ pub struct TableAnalysisPreference {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct KnowledgeEntry {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub effective_structure: Option<QueryExampleStructure>,
     pub effective_value: String,
     pub entry_id: String,
-    pub human_override: Option<HashMap<String, Option<serde_json::Value>>>,
+    pub human_override: Option<HumanOverride>,
     pub label: String,
     pub path: String,
     pub review_state: ReviewState,
-    pub source_facts: HashMap<String, Option<serde_json::Value>>,
-    pub suggestion: HashMap<String, Option<serde_json::Value>>,
+    pub source_facts: SourceFacts,
+    pub suggestion: Suggestion,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HumanOverride {
+    pub structured_value: Option<QueryExampleStructure>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1043,6 +1472,16 @@ pub enum ReviewState {
     #[serde(rename = "needs_review")]
     NeedsReview,
     Unverified,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SourceFacts {
+    pub structured_value: Option<QueryExampleStructure>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Suggestion {
+    pub structured_value: Option<QueryExampleStructure>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1073,9 +1512,18 @@ pub struct PrefillStatus {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct KnowledgeRetrieval {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub channel: Option<KnowledgeRetrievalChannel>,
     pub excerpts: Vec<KnowledgeRetrievalExcerpt>,
     pub note: String,
     pub state: KnowledgeRetrievalState,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum KnowledgeRetrievalChannel {
+    Lexical,
+    Vector,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1132,6 +1580,8 @@ pub struct KnowledgeEdit {
     pub related_ids: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub source_url: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub structured_value: Option<QueryExampleStructure>,
     pub value: String,
 }
 
@@ -1149,6 +1599,8 @@ pub struct SearchCoverage {
     pub candidate_limit: i64,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub index_state: Option<IndexState>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub scope_applied: Option<bool>,
     pub state: SearchCoverageState,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub vector_state: Option<VectorState>,
@@ -1186,7 +1638,7 @@ pub struct KnowledgeListQuery {
     /// 管理目录按名称和状态分页；maintained按当前负责人关系筛选，包含停用项。省略时保留现有语义检索。
     #[serde(skip_serializing_if = "Option::is_none")]
     pub directory: Option<Directory>,
-    /// 仅管理目录使用。grouped只分页列出表、指标、整篇文档与术语；字段和关系从所属表打开。省略或flat保留全部对象列表。
+    /// 仅管理目录使用。grouped只分页列出表、指标、整篇文档、查询案例与术语；字段和关系从所属表打开。省略或flat保留全部对象列表。
     #[serde(skip_serializing_if = "Option::is_none")]
     pub directory_view: Option<DirectoryView>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -1195,7 +1647,7 @@ pub struct KnowledgeListQuery {
     pub related_id: Option<String>,
     /// 仅用于管理目录；省略时包含启用及停用，始终排除已删除对象。
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub state: Option<KnowledgeListQueryState>,
+    pub state: Option<MaintenanceDependentState>,
 }
 
 /// 管理目录按名称和状态分页；maintained按当前负责人关系筛选，包含停用项。省略时保留现有语义检索。
@@ -1206,7 +1658,7 @@ pub enum Directory {
     Maintained,
 }
 
-/// 仅管理目录使用。grouped只分页列出表、指标、整篇文档与术语；字段和关系从所属表打开。省略或flat保留全部对象列表。
+/// 仅管理目录使用。grouped只分页列出表、指标、整篇文档、查询案例与术语；字段和关系从所属表打开。省略或flat保留全部对象列表。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum DirectoryView {
@@ -1217,7 +1669,7 @@ pub enum DirectoryView {
 /// 仅用于管理目录；省略时包含启用及停用，始终排除已删除对象。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum KnowledgeListQueryState {
+pub enum MaintenanceDependentState {
     Disabled,
     Enabled,
 }
@@ -1232,6 +1684,102 @@ pub struct LogoutReceipt {
 pub enum LogoutReceiptState {
     #[serde(rename = "logged_out")]
     LoggedOut,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MaintenanceDependent {
+    pub can_edit: bool,
+    pub id: String,
+    pub kind: MaintenanceDependentKind,
+    pub name: String,
+    pub references: Vec<MaintenanceReference>,
+    pub references_complete: bool,
+    pub state: MaintenanceDependentState,
+    pub version: String,
+    pub visibility: Visibility,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum MaintenanceDependentKind {
+    Document,
+    Field,
+    Metric,
+    #[serde(rename = "query_example")]
+    QueryExample,
+    Relationship,
+    Skill,
+    Table,
+    Term,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MaintenanceReference {
+    pub dependent_path: String,
+    pub reference_state: ReferenceState,
+    pub referenced_path: Option<String>,
+    pub referenced_version: Option<String>,
+    pub relation_kind: RelationKind,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ReferenceState {
+    Current,
+    Related,
+    Unavailable,
+    #[serde(rename = "version_changed")]
+    VersionChanged,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RelationKind {
+    #[serde(rename = "query_example")]
+    QueryExample,
+    Related,
+    Skill,
+    #[serde(rename = "source_material")]
+    SourceMaterial,
+    Structure,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MaintenanceImpact {
+    pub items: Vec<MaintenanceDependent>,
+    pub kind: MaintenanceImpactKind,
+    pub next_after_id: Option<String>,
+    pub scope: MaintenanceImpactScope,
+    pub target: MaintenanceTarget,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum MaintenanceImpactKind {
+    Knowledge,
+    Skill,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum MaintenanceImpactScope {
+    #[serde(rename = "direct_explicit_references")]
+    DirectExplicitReferences,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MaintenanceTarget {
+    pub object_id: String,
+    pub state: MaintenanceDependentState,
+    pub version: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MaintenanceImpactQuery {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub after_id: Option<String>,
+    pub expected_version: String,
+    pub kind: MaintenanceImpactKind,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1450,13 +1998,6 @@ pub struct MutationReceipt {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct NumericValueCounts {
-    pub negative: i64,
-    pub positive: i64,
-    pub zero: i64,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OperationReceipt {
     pub operation_id: String,
 }
@@ -1490,6 +2031,7 @@ pub struct Entry {
     pub entry_id: String,
     pub evidence: Vec<Evidence>,
     pub gaps: Vec<String>,
+    pub structured_value: Option<QueryExampleStructure>,
     pub value: String,
 }
 
@@ -1499,6 +2041,19 @@ pub struct Evidence {
     pub quote: String,
     pub source_id: String,
     pub version: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PrepareSkillDraftInput {
+    /// Skill 的正文及生成资源每行最多 51200 UTF-8 字节；超限须分行保存。记忆不受此行限制。
+    pub body: String,
+    pub condition_version: String,
+    pub evidence_ids: Vec<String>,
+    pub files: Vec<SkillFile>,
+    pub instruction_quote: String,
+    pub name: String,
+    pub scope: String,
+    pub task_id: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1579,6 +2134,9 @@ pub struct QueryView {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub replaces_query_id: Option<String>,
     pub result_ref: Option<String>,
+    /// 草稿工具回执的非阻断诊断；查询读取接口不承诺重现此报告。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub semantic_checks: Option<SemanticCheckReport>,
     pub sql: String,
     pub summary: String,
     pub target_id: String,
@@ -1591,80 +2149,61 @@ pub struct ErrorDetails {
     pub message: String,
 }
 
+/// 草稿工具回执的非阻断诊断；查询读取接口不承诺重现此报告。
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct QueryResults {
-    pub columns: Vec<ResultColumn>,
-    pub data_freshness: String,
-    pub fetched_offset: String,
-    pub next_cursor: Option<String>,
-    pub query_id: String,
-    pub result_complete: bool,
-    pub result_ref: String,
-    pub rows: Vec<Vec<Option<String>>>,
-    pub source: QueryResultsSource,
-    /// 应用对当前有权结果页计算的统计；历史客户端可省略。
+pub struct SemanticCheckReport {
+    pub checks: Vec<Check>,
+    pub coverage: Coverage,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Check {
+    pub coverage_limit: String,
+    pub evidence_refs: Vec<SemanticEvidenceRef>,
+    pub finding: String,
+    pub rule: String,
+    pub state: CheckState,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SemanticEvidenceRef {
+    pub object_id: String,
+    pub version: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CheckState {
+    Checked,
+    #[serde(rename = "not_checked")]
+    NotChecked,
+    Warning,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Coverage {
+    pub missing_semantics: Vec<String>,
+    pub sql_shape: SqlShape,
+    pub supported_scope: Vec<String>,
+    pub unsupported_constructs: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SqlShape {
+    Supported,
+    Unsupported,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ReadAnalysisReportInput {
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub statistics: Option<ResultStatistics>,
-    pub truncated: bool,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ResultColumn {
-    pub encoding: String,
-    pub name: String,
-    #[serde(rename = "type")]
-    pub result_column_type: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum QueryResultsSource {
-    Mock,
-}
-
-/// 应用对当前有权结果页计算的统计；历史客户端可省略。
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ResultStatistics {
-    pub columns: Vec<ResultColumnStatistics>,
-    pub distinct_comparison: DistinctComparison,
-    pub row_count: i64,
-    /// 只有从offset=0取得完整且未截断的结果才是complete_result；page不能外推为全部结果。
-    pub scope: Scope,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ResultColumnStatistics {
-    pub column_index: i64,
-    pub column_name: String,
-    /// 不含NULL，按平台返回的原始文本去重；不模拟数据库排序规则。
-    pub distinct_count: i64,
-    pub non_null_count: i64,
-    pub null_count: i64,
-    pub numeric_counts: Option<NumericValueCounts>,
-    /// 本统计范围中出现超过一次的非NULL原始文本及次数；与distinct_count使用相同比较规则，不能推断跨页重复。
-    pub repeated_values: Vec<RepeatedResultValue>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct RepeatedResultValue {
-    pub count: i64,
-    pub value: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum DistinctComparison {
-    #[serde(rename = "returned_text")]
-    ReturnedText,
-}
-
-/// 只有从offset=0取得完整且未截断的结果才是complete_result；page不能外推为全部结果。
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum Scope {
-    #[serde(rename = "complete_result")]
-    CompleteResult,
-    Page,
+    pub limit: Option<i32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub offset: Option<i32>,
+    pub task_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub version: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1684,6 +2223,8 @@ pub struct ReadKnowledgeInput {
     pub object_id: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub offset: Option<i32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub structure_only: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub version: Option<String>,
 }
@@ -1824,7 +2365,7 @@ pub struct WorkspaceContext {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub request_clock: Option<RequestClock>,
     pub selected_skills: Vec<ModelAssetPreview>,
-    pub tasks: Vec<HashMap<String, Option<serde_json::Value>>>,
+    pub tasks: Vec<WorkspaceTask>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1861,15 +2402,6 @@ pub struct ModelAssetPreview {
     pub visibility: Option<Visibility>,
 }
 
-/// 来源原话的独立字符分页。缺省source_text为空但保留总长和补读位置；以entry_id=source_text和同一资产版本读取。
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ContentPage {
-    pub complete: bool,
-    pub next_offset: Option<i64>,
-    pub offset: i64,
-    pub total_chars: i64,
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum MemoryRetrieval {
@@ -1877,6 +2409,14 @@ pub enum MemoryRetrieval {
     DirectoryFallback,
     #[serde(rename = "mem0_authoritative")]
     Mem0Authoritative,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WorkspaceTask {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub evidence_refs: Option<Vec<AnalysisEvidenceRef>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub report_ref: Option<AnalysisReportRef>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1897,6 +2437,35 @@ pub enum RunSnapshotState {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SaveAnalysisEvidenceInput {
+    pub condition_version: String,
+    pub data_range: String,
+    pub findings: Vec<AnalysisFinding>,
+    pub task_id: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SaveAnalysisReport {
+    pub charts: Vec<AnalysisReportChart>,
+    pub condition_version: String,
+    pub evidence_ids: Vec<String>,
+    pub expected_version: Option<String>,
+    pub operation_id: String,
+    pub task_id: String,
+    pub title: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SaveAnalysisReportInput {
+    pub charts: Vec<AnalysisReportChart>,
+    pub condition_version: String,
+    pub evidence_ids: Vec<String>,
+    pub expected_version: Option<String>,
+    pub task_id: String,
+    pub title: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SaveModelSelection {
     pub expected_version: String,
     pub selection: ModelSelection,
@@ -1907,8 +2476,14 @@ pub struct SearchInput {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub asset_after: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub business_domain: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub kinds: Option<Vec<KindElement>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub limit: Option<i32>,
     pub query: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub related_object_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1928,6 +2503,13 @@ pub enum HighestRole {
     #[serde(rename = "super_maintainer")]
     SuperMaintainer,
     User,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SemanticColumnRef {
+    pub column: String,
+    pub object_id: String,
+    pub version: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1975,6 +2557,52 @@ pub struct SemanticMemberList {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "kind", deny_unknown_fields)]
+pub enum SemanticStructure {
+    #[serde(rename = "table")]
+    Table {
+        grain: String,
+        unique_keys: Vec<Vec<String>>,
+        time_columns: Vec<TimeColumn>,
+        default_filters: Vec<String>,
+        constraints: Vec<String>,
+    },
+    #[serde(rename = "field")]
+    Field {
+        table: SemanticTableRef,
+        column: String,
+        unit: Option<String>,
+    },
+    #[serde(rename = "relationship")]
+    Relationship {
+        left_table: SemanticTableRef,
+        right_table: SemanticTableRef,
+        join_keys: Vec<JoinKey>,
+        cardinality: Cardinality,
+        scope: String,
+    },
+    #[serde(rename = "metric")]
+    Metric {
+        table: SemanticTableRef,
+        expression: String,
+        input_grain: String,
+        time_column: Option<String>,
+        unit: Option<String>,
+        required_filters: Vec<String>,
+        dimensions: Vec<String>,
+    },
+    #[serde(rename = "query_example")]
+    QueryExample {
+        applicable_question: String,
+        parameters: Vec<QueryExampleParameter>,
+        sql: String,
+        grain: String,
+        dependencies: Vec<EvidenceRef>,
+        verification: Option<QueryExampleVerification>,
+    },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SendModelCall {
     pub call_attempt_id: String,
     pub lease_epoch: String,
@@ -1994,6 +2622,57 @@ pub struct SessionReceipt {
 #[serde(rename_all = "snake_case")]
 pub enum SessionReceiptState {
     Authenticated,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "status", deny_unknown_fields)]
+pub enum SkillDraft {
+    #[serde(rename = "pending")]
+    Pending {
+        reference: SkillDraftRef,
+        name: String,
+        body: String,
+        scope: String,
+        files: Vec<SkillFile>,
+        dependencies: Vec<EvidenceRef>,
+        evidence_refs: Vec<AnalysisEvidenceRef>,
+        created_at: String,
+    },
+    #[serde(rename = "confirmed")]
+    Confirmed {
+        reference: SkillDraftRef,
+        asset_id: String,
+    },
+    #[serde(rename = "condition_changed")]
+    ConditionChanged { reference: SkillDraftRef },
+    #[serde(rename = "sources_unavailable")]
+    SourcesUnavailable { reference: SkillDraftRef },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SkillDraftRef {
+    pub condition_version: String,
+    pub conversation_id: String,
+    pub draft_id: String,
+    pub source_message_id: String,
+    pub task_id: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SkillDraftStatus {
+    #[serde(rename = "condition_changed")]
+    ConditionChanged,
+    Confirmed,
+    Pending,
+    #[serde(rename = "sources_unavailable")]
+    SourcesUnavailable,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SkillDraftList {
+    pub drafts: Vec<SkillDraft>,
+    pub next_after_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -2081,12 +2760,16 @@ pub struct Snapshot {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TaskSnapshot {
     pub condition_version: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub evidence_refs: Option<Vec<AnalysisEvidenceRef>>,
     pub goal: String,
     pub id: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub lifecycle: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub phase: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub report_ref: Option<AnalysisReportRef>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -2100,6 +2783,7 @@ pub struct SourceDocument {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SqlInput {
+    pub knowledge_refs: Option<Vec<EvidenceRef>>,
     pub parameters: HashMap<String, Option<serde_json::Value>>,
     pub sql: String,
     pub target_id: TargetId,

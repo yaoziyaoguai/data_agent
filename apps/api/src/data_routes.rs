@@ -15,6 +15,33 @@ use data_agent::{
 use serde_json::{Value, json};
 use std::collections::HashMap;
 type ResponseResult = Result<Json<Value>, (StatusCode, Json<Value>)>;
+pub async fn analysis_report(
+    AxumState(state): AxumState<State>,
+    headers: HeaderMap,
+    Path((cid, task)): Path<(String, String)>,
+) -> ResponseResult {
+    let ctx = user(&state, &headers).map_err(failure)?;
+    success(
+        "AnalysisReportView",
+        use_cases::analysis_reports::read(&state.pool, &ctx, &cid, &task)
+            .await
+            .map_err(failure)?,
+    )
+}
+pub async fn save_analysis_report(
+    AxumState(state): AxumState<State>,
+    headers: HeaderMap,
+    Path((cid, task)): Path<(String, String)>,
+    Json(input): Json<Value>,
+) -> ResponseResult {
+    let ctx = user(&state, &headers).map_err(failure)?;
+    success(
+        "AnalysisReportRef",
+        use_cases::analysis_reports::save(&state.pool, &ctx, &cid, &task, input)
+            .await
+            .map_err(failure)?,
+    )
+}
 pub async fn knowledge(
     AxumState(state): AxumState<State>,
     headers: HeaderMap,
