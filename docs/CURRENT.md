@@ -3,7 +3,7 @@
   "workflow": "dev_co",
   "schema": 1,
   "phase": "verify",
-  "status": "active",
+  "status": "complete",
   "goal_revision": 58,
   "environment": "Node26.8.1/npm11.19.0、Rust1.99.0、Python3.14.7/SQLite；Colima MySQL/Milvus；仅隔离数据库与本地协议替身。",
   "verification": {
@@ -63,7 +63,7 @@
     "increment": {
       "id": "I2-REQUEST-POLICY",
       "phase": "I2",
-      "status": "active",
+      "status": "complete",
       "goal": "每条正常用户消息共用24次模型调用，连续临时失败3次停止，复用Pi重试、单次超时和取消；正常配置无强制试验总费用/到期，旧试验不补额；分批提交推送并更新原本地模拟服务。",
       "requirements": [
         "C01",
@@ -350,7 +350,7 @@
 
 验收与要求变更：原“所有模型错误均不重试”仅对历史I0小样保留；data模式明确临时HTTP429（排除quota/billing）及500/502/503/504允许最多2次原生重试，模型连接失败/单次超时同样允许新attempt；拒绝认证、缺失/无效用量、取消及未知宿主许可/结算重试。每个失败尝试仍保留未知费用和调用次数。旧64KiB测试不放宽；正常profile示例使用已有128KiB档。
 
-实现与独立审查已完成；冻结版本12组统一验收全部通过，进入已授权的分批提交、串行推送与原本地服务更新。当前活动状态仅保留到交付核验完成。
+本增量修复、独立审查、12组统一验收、两批实现推送及原本地服务更新均已完成；本次交付记录单独提交，最终Git核验保存在本地交付证据中。
 
 专项发现与修正：新错误码最初遗漏AppError枚举，已补同源契约；独立审查指出transient_error与unknown费用不能捆绑，已允许原outcome收到可靠usage后幂等结算，且不清失败计数。最初80ms超时夹具只观察到两次fetch，未仅据计数断言根因；改为500ms排除宿主许可往返占用，以验证provider不响应，生产90秒未改，三次失败预期保持。原失败日志保留在`.local/checks/request-policy-{first,second}.log`。独立审查另外确认并修正：HTTP200后的SSE断流通过SDK原生分类识别为临时网络错误；失败状态按实际调用序号重算最近有效outcome，晚到旧失败补计，晚到旧成功不能清新失败，未有outcome的预留不能重置计数。reserve/send均检查持久失败上限。
 
@@ -368,6 +368,8 @@
 第三轮统一验收前11组全部通过，最后POLICY-STARTUP在页面就绪后的首个身份检查超时；失败收据与审查归档为`.local/checks/request-policy-before-startup-timeout.json`、`request-policy-review-before-startup-timeout.json`。独立重现仍在原2秒限制超时；仅诊断性延长观测窗口测出首次/session耗时2.499秒、第二次0.009秒，日志为`request-policy-startup-diagnostic.log`与`request-policy-startup-timing.log`。源码确认API健康端点先于首次业务请求触发全量LazyLock契约编译。窄修复将原校验器初始化移到API监听前，不改变校验规则、原2秒请求/25秒健康等待或启动断言；新增审查范围仅API入口、共用契约初始化及对应架构说明。诊断延长窗口不计验收通过。修后原`make verify-startup`完整exit0（10项Python、原2秒身份检查、正式浏览器聊天与6次本机模型协议/预填、人工值保护），日志`.local/checks/request-policy-startup-ready-fixed.log`；独立审查认可在监听前强制原LazyLock初始化，不新增校验缓存、网络或改变规则。实现再次冻结，等待更新审查范围后完整12组复验。
 
 完成证据：北京时间2026-10-17 23:22:15–23:31:58，第四轮`make verify-increment`的12组全部exit0、无超时，前后内容指纹完全一致；收据为`.local/delivery/I2-REQUEST-POLICY-result.json`，原始日志目录`.local/delivery/I2-REQUEST-POLICY-1792250535840342000/`。包括436条跨语言契约、14项请求策略、旧trial兼容、Pi/进程恢复、原64KiB压缩、大工具组、真实SDK序列化、模型切换、聊天执行授权和正式启动。独立审查记录`docs/reviews/request-policy-review.json`在最终复验前形成，其统一验收pending仅表示审查时状态；最终执行由本收据证明。材料静态检查353项通过。本轮仅合成数据、本机协议和浏览器，官方/付费模型请求0，真实模型质量、缓存收益与真实平台接入未验收。
+
+交付结果：上下文修复`b98a48f`与请求策略/重试及启动修复`a7ca197`已串行推送到`origin/codex/analysis-capabilities`。原启动器经核对后正常停止，使用当前构建和原`mock/builtin/lexical`模式重启；工作台`http://127.0.0.1:5173/`以及API、Pi bridge、合成平台健康端点均HTTP200，Worker持续运行，三个既有开发身份检查通过。原数据库、卷、Pi会话和身份文件保留，身份文件大小/修改时间未变；没有启用真实模型或新增付费请求。服务记录及日志为`.local/request-policy-delivery/local-services.{json,log}`，原服务日志归档在同目录`previous-logs/`；最终提交/远端/工作树核验记录为`git-delivery.json`。新正常模型配置示例为`infra/model-profile.example.json`，其128KiB与24次设置未替换本地模拟模式或历史trial配置。
 
 ## Agent 上下文优化：七项修复与验证（2026-10-17）
 
