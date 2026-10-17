@@ -112,7 +112,7 @@ M05提供`recent_task_ids_in_tx`只读投影：按未撤回消息的实际事件
 
 Pi工具的`AnalysisUpdate`沿用同源JSON Schema：新建任务须带完整`conditions`，新建可省略尚未分配的`task_id/expected_version`（保留接受JSON null），已有任务必须给真实ID与当前版本；未指定标量保留null、列表保留空数组。已有任务版本使用工具回执中的数字字符串。没有需要用户补充的歧义时省略`question`并传`options=[]`（仍接受JSON null）。`knowledge_refs`引用知识对象的`id/version/path`，来源读取的`source_id`不能充当知识对象ID。校验失败仍作为Pi工具错误交模型修正，不由宿主猜测任务条件。
 
-已有任务的`revise/clarify`须带`condition_patch`及当前版本；空白问题和字符串`null/undefined`不能生成澄清。正式输出取Pi最后一条助手消息，通过`FinishRun.final_start_chunk_seq`绑定其已保存片段；省略该字段的旧请求从片段1核对。Rust始终核对全部片段连续、起点范围和正式文本相等，调查过程仍作为事件保留。
+已有任务的`revise/clarify`须带`condition_patch`及当前版本；空白问题和字符串`null/undefined`不能生成澄清。正式输出取Pi最后一条助手消息，通过`FinishRun.final_start_chunk_seq`绑定其已保存片段；省略该字段的旧请求从片段1核对。Rust始终核对全部片段连续、起点范围和正式文本相等，调查过程仍作为事件保留。Pi系统规则要求所有工具之后的最后回复独立完成本条请求：分析兼保存须保留结论、关键数字、必要依据与限制及真实保存结果，不能仅确认保存；纯保存、草稿及提交仍可简短确认。工具可能推翻前文，因此宿主不拼接调查文字，也不靠文本长度或固定“已保存”词句判断完整性；协议测试证明交付与恢复路径，真实模型是否遵循仍需质量验证。
 
 `route`只登记消息归属，禁止附带`conditions/condition_patch`或澄清问题。修改渠道、时间、指标等条件使用`revise`，获得新的条件版本并失效旧待确认草稿；只有条件保持不变而改写SQL时，`route`可带`replaces_query_id`声明修订。错误动作与参数组合在共享契约边界拒绝，不能成功返回后静默丢掉修改。
 

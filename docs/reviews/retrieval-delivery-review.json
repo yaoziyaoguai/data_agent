@@ -1,0 +1,317 @@
+{
+  "schema": 1,
+  "increment_id": "I2-RETRIEVAL-DELIVERY",
+  "reviewer": "独立审查代理copilot_review_scope；未参与本增量源码、契约或测试实现，仅核对原要求、代码、独立预期、既有实际日志并编写本审查记录。前期排序边界曾由只读子审查复核；最终审查未新增面板或子代理。",
+  "reviewed_at": "2026-10-17T17:19:27.003616+00:00",
+  "conclusion": "passed",
+  "summary": "按CURRENT活动增量核对三项建议和限定范围。排序保护limit允许的前三个唯一融合候选，类型仅用余位；关联容量按实际受保护前缀计算，保留limit=4前三及稀疏候选原两关联。融合分数、精确匹配、版本/来源/权限与24KiB回执规则不变。最终输出保持Pi最后助手消息及原片段起点，新增规则要求独立完整终稿并保留纯保存/草稿/提交短答例外；该项仅提示预防，协议已复现模型忽略规则时仍只保存短确认，不能宣称程序强制修复。名称优先和candidate_limit为已有保护，1200对象验证边界，不改预算或计分。旧排序失败、初稿400和提示增长引起的64KiB预算耗尽均保留；精简后原压力24调用/10摘要/65478B通过。首轮统一前3组完整通过，含最新去重和宽查询反例，第4组因已读对象停用后仍要求旧run搜索成功而失败；前后指纹稳定，失败收据/审查已归档。独立核对既有observe/extend/assert及实际两文档回执，精确409/stale_context符合原保护；仅修测试先断言旧run拒绝，再前移原新run入口验证停用过滤、跨空间404和个人隔离。修后范围11项专项完整通过、最大23603B。当前60文件代码审查无确定阻断，最新9组统一仍pending，不能拼接前3组和修后专项关闭增量。",
+  "scope_sha256": "5feea4c452066e5331cd4ea5b64160f7c3f92fcc79d865e9a1011508f2053257",
+  "findings": [],
+  "resolved_findings": [
+    "排序原先仅保首名，六类弱命中可挤掉第二、第三强字段。独立预期来自名称含两个问题词的三个字段与仅正文含单词的弱对象；旧单测limit=6和旧真实search_knowledge反例均失败。现在先选前三唯一对象，再补类型；limit=0/1/2/3/4/6/10及重复对象反例保留。",
+    "原组合层固定补两关联再截尾，limit=4会截掉第三强命中。现在addition_limit=min(2,limit-min(objects.len(),3))；三条以上直接命中时仅用余位，少于三条时不无故减少原两关联。新API测试覆盖limit=4保护及两直接命中补成四条。",
+    "初版新增最终回复规则使原64KiB压力出现24调用/11摘要后model_budget_exhausted。保留失败日志和JSON，不放宽原24总trial、12单请求、64KiB或历史规模。精简原重复表达和SQL展示句，保留已有查询卡片/执行/单位/范围/版本规则，资源较a53d859增加10字节；原压力完整通过。",
+    "merge_candidates表格原称保留各类型，与前三优先冲突；已改为去重、前三优先及余位类型补充，并明确类型/关联不保证齐全。",
+    "验收流程修正：首轮统一RETRIEVAL-SCOPE在同run已通过broad实际收到leftDoc/rightDoc后停用leftDoc，原断言仍要求搜索200，实际409/stale_context。独立核对data_tools成功回执后extend_run→observe保存对象版本，后续执行前assert_run→validate回源只读enabled对象；停用使旧依赖无效。context_authority.rs、data_tools.rs、knowledge/store.rs与a53d859逐字一致；此依据证明既有保护，未声称旧版本另行实跑复现。新测试精确断言409及stale_context，再前移原withdraw/release/新run块，继续原停用过滤、跨空间404/无泄漏及个人资产分页隔离。未改产品或放宽成任意错误。"
+  ],
+  "advice_disposition": [
+    {
+      "topic": "前三相关资料被类型和关联挤出",
+      "status": "implemented_with_targeted_evidence",
+      "remaining": "最新去重反例已随首轮统一前三组通过；测试流程修正后的最终全范围仍待完整重跑。"
+    },
+    {
+      "topic": "工具后短确认覆盖前文",
+      "status": "prompt_prevention_only",
+      "remaining": "保留最后消息作为正式输出，避免工具已推翻文字被拼回；模型忽略提示仍可丢前文，已在协议反例复现。没有语义完整性程序保证或真实模型遵循率证据。"
+    },
+    {
+      "topic": "大候选ID截断",
+      "status": "existing_protection_verified",
+      "remaining": "首轮统一宽查询记录目标未返回并如实candidate_limit；测试不把遗漏固定为正确结果。名称优先不保证任意多词问题全量召回，当前全范围待重跑。"
+    }
+  ],
+  "requirement_review": [
+    {
+      "requirements": [
+        "C06",
+        "A06"
+      ],
+      "topic": "融合优先级、类型余位与唯一对象",
+      "files": [
+        "crates/data-agent/src/modules/retrieval/mod.rs",
+        "tests/mvp/check-retrieval-ranking.mjs",
+        "docs/architecture/knowledge-modules.md"
+      ],
+      "assessment": "复用原lexical/vector排名和精确名称分数。前三按ID去重后再受limit限制，后续沿原类型顺序补位；未新增检索算法或模型。原六条预期依已确认前三优先调整，仍核对精确匹配、向量版本和同分稳定性；新预期不是由实现输出反写。"
+    },
+    {
+      "requirements": [
+        "C02",
+        "C06",
+        "A06"
+      ],
+      "topic": "关联补位及正式回源",
+      "files": [
+        "crates/data-agent/src/use_cases/knowledge.rs",
+        "crates/data-agent/src/use_cases/knowledge_sources.rs",
+        "crates/data-agent/src/search_scope.rs",
+        "tests/mvp/check-retrieval-ranking.mjs",
+        "tests/mvp/check-retrieval-scope.mjs",
+        "tests/mvp/check-retrieval-excerpts.mjs"
+      ],
+      "assessment": "仅改rank后关联容量，仍从原前三读取最多八关联、最多纳入两条；已有对象去重、read_in_tx、来源版本检查、semantic_object及scope匹配不变。truncate保留受保护前缀，limit=4只补一条；两直接命中仍可补两条。原范围/权限/来源/版本/片段与24KiB回执回归绑定统一执行，不扩大M02私有存储访问。"
+    },
+    {
+      "requirements": [
+        "C06",
+        "A06",
+        "C02"
+      ],
+      "topic": "候选上限与名称优先的真实能力",
+      "files": [
+        "crates/data-agent/src/modules/knowledge/store.rs",
+        "crates/data-agent/src/modules/retrieval/store.rs",
+        "crates/data-agent/src/use_cases/knowledge.rs",
+        "apps/agent/tools/data-tools.ts",
+        "tests/mvp/check-retrieval-ranking.mjs",
+        "tests/mvp/check-retrieval-coverage.mjs"
+      ],
+      "assessment": "M02先完整查询字符串名称子串匹配、再正文匹配，组内ID排序；M04派生索引仍ID排序。各取1001以识别超过1000，正式回源各取1000，coverage明确candidate_limit，不暴露过滤数量。1200弱对象和未索引尾部目标证明名称优先通道；多词宽查询覆盖状态另有新反例待统一执行。原过期前1000/空结果保护及补查测试保持，不声称全库相关性排序或未知对象必召回。"
+    },
+    {
+      "requirements": [
+        "D13",
+        "C01",
+        "C05"
+      ],
+      "topic": "独立完整最终回复与原正式输出契约",
+      "files": [
+        "apps/agent/session/resources.ts",
+        "apps/agent/session/deliver.ts",
+        "apps/agent/session/output-stream.ts",
+        "crates/data-agent/src/use_cases/finish_run.rs",
+        "apps/web/src/features/workbench/conversation-timeline.ts",
+        "tests/mvp/check-final-answer.mjs",
+        "docs/architecture/runtime-modules.md"
+      ],
+      "assessment": "精简规则仍要求最后回复独立答完请求；分析兼保存包含核实结论、数字、依据、限制和真实保存结果，纯保存/草稿/提交可简短确认。工具前暂定结论不是正式答案，既有last assistant与final_start_chunk_seq机制、Rust连续片段/文本相等校验及Web committed替换均未改。新测试以12次纯本机协议驱动真实Pi、工具保存、数据库、浏览器两次刷新及同一session历史；独立合成12345分/123.45元来自事先创建的资料，不声称真实查询。短末条反例明确仍丢前文，测试只证明工程交付路径，非模型理解或质量。"
+    },
+    {
+      "requirements": [
+        "C01",
+        "C05"
+      ],
+      "topic": "Pi复用、会话续接与原预算压力",
+      "files": [
+        "apps/agent/session/resources.ts",
+        "apps/agent/session/deliver.ts",
+        "apps/agent/session/checkpoint.ts",
+        "apps/agent/provider/deepseek.ts",
+        "tests/mvp/check-final-answer.mjs",
+        "tests/mvp/check-data-provider.mjs",
+        "tests/mvp/check-native-compaction.mjs"
+      ],
+      "assessment": "未新增循环、摘要器、长度/关键字启发式或每轮额外补正调用。原native压缩测试未改，24轮历史、近16KiB合法工作区、6轮续接、280短消息、原session及撤权保护保持。先前增长364字节耗尽的是旧夹具总trial24，不是新正常每消息24政策。合并规则后原测试24调用/10摘要通过，最大65478B距65536仅58B，不能外推任意历史容量。新最终回复专项采用已有128KiB档，不替代原64KiB回归。"
+    },
+    {
+      "requirements": [
+        "C07"
+      ],
+      "topic": "范围、命名、契约与证据",
+      "files": [
+        "docs/CURRENT.md",
+        "docs/semantic-retrieval-design.md",
+        "docs/architecture/knowledge-modules.md",
+        "docs/architecture/runtime-modules.md",
+        "packages/contracts/schema.json",
+        "scripts/check_delivery.py"
+      ],
+      "assessment": "源码修改限检索排序/关联容量与系统规则，命名表达职责，没有新框架或跨模块私有写入。跨语言契约未改；CURRENT保存前后预期依据、原失败、提示预防限制和模型证据界限。按D13/C01/C02/C05/C06/C07/A06绑定九组，不将本地增量等同整条需求或I3真实平台完成。"
+    },
+    {
+      "requirements": [
+        "C02",
+        "C05",
+        "C06"
+      ],
+      "topic": "已读知识停用后的旧上下文拒绝与新轮检索",
+      "files": [
+        "tests/mvp/check-retrieval-scope.mjs",
+        "crates/data-agent/src/use_cases/context_authority.rs",
+        "crates/data-agent/src/use_cases/data_tools.rs",
+        "crates/data-agent/src/modules/knowledge/store.rs",
+        "docs/CURRENT.md"
+      ],
+      "assessment": "broad先精确断言收到leftDoc/rightDoc；返回对象的entries/id/version由observe递归收集，extend_run在同工具事务持久扩展，检索下一次业务执行之前assert_run核对全部已读依赖。current_objects仅返回同空间enabled对象，停用后旧run返回409/stale_context符合既有要求；不能用过滤新结果代替旧上下文失效。仅测试流程变更：先精确旧run拒绝，再沿原撤回与新run入口检查200过滤及foreign锚点404、无名称/正文泄漏；之后个人资产目录仍在该新run，Alice/Bob隔离与分页断言保持。修后原范围专项11项通过、完整回执最大23603B。"
+    }
+  ],
+  "evidence": [
+    ".local/checks/retrieval-ranking-before-unit.log",
+    ".local/checks/retrieval-ranking-before-api.log",
+    ".local/checks/retrieval-ranking-before-api-fixed.log",
+    ".local/checks/retrieval-unit.log",
+    ".local/checks/retrieval-ranking-after.log",
+    ".local/checks/final-answer-first.log",
+    ".local/checks/retrieval-delivery-compaction.log",
+    ".local/checks/retrieval-delivery-compaction-before-trim.json",
+    ".local/checks/retrieval-delivery-compaction-trimmed.log",
+    ".local/checks/retrieval-delivery-before-scope-fix.json",
+    ".local/checks/retrieval-delivery-review-before-scope-fix.json",
+    ".local/delivery/I2-RETRIEVAL-DELIVERY-1792256851548253000/command-03.log",
+    ".local/delivery/I2-RETRIEVAL-DELIVERY-1792256851548253000/command-04.log",
+    ".local/checks/retrieval-delivery-scope-fixed.log"
+  ],
+  "evidence_sha256": {
+    ".local/checks/retrieval-ranking-before-unit.log": "8e5bce142e345e96655aa2ff9461eb6bc68233dadd5e572153fe1fbf925ccd16",
+    ".local/checks/retrieval-ranking-before-api.log": "27ea8dfb9075b448b45f7fc6fba8371bdff212f0ac0728669d62fd8697697692",
+    ".local/checks/retrieval-ranking-before-api-fixed.log": "e00f3d61042113e8a9811ac5815b4c815746ca1ea02f27c7a55562fd6ccb5313",
+    ".local/checks/retrieval-unit.log": "7ad7c76033e88a2a3a83801ffe01b197ff597d8c969dab2b1a3620985b5a7b1d",
+    ".local/checks/retrieval-ranking-after.log": "60073427186a9f96415164a40123898661ac5a0e4b53e214388a8e0a356b9937",
+    ".local/checks/final-answer-first.log": "0c5d00f85808136e074b86b278d2f2d043d661aa920f6e3385af8872baa67dbb",
+    ".local/checks/retrieval-delivery-compaction.log": "c6e8d894566056daa6f4cf7718a7907f12cc3278e6080e97048b40151926fb84",
+    ".local/checks/retrieval-delivery-compaction-before-trim.json": "818e22e4e74dae703013f64c20c2140cfb28f21e3e00f0a89cc35325f9204820",
+    ".local/checks/retrieval-delivery-compaction-trimmed.log": "3911f81952b4ce863b97cd0ea93ec4e6f1e0066751e885126949bffd24694b10",
+    ".local/checks/retrieval-delivery-before-scope-fix.json": "57c486e71394397ecab9a81092039d113aaa57e6272df364023889dc0b96e4d5",
+    ".local/checks/retrieval-delivery-review-before-scope-fix.json": "da01fea5641bf92da3c39e927687227410a7d80540b91fe0796e610fe4f18b08",
+    ".local/delivery/I2-RETRIEVAL-DELIVERY-1792256851548253000/command-03.log": "7cdbfd03f63e2e93d29392a1c27b21ea69bd89f0f5b0c5b59ec18be49bbb817a",
+    ".local/delivery/I2-RETRIEVAL-DELIVERY-1792256851548253000/command-04.log": "dd9a674ee2a67c013d20a37664df0de0d809b8e8482b1c7417671452ad4a902b",
+    ".local/checks/retrieval-delivery-scope-fixed.log": "521ea22ab4ef240ad0b54f539cc3d5da6c6c2a9ab388bd109f3aec322e802a0a"
+  },
+  "scope_binding": {
+    "independently_recomputed": true,
+    "baseline_commit": "a53d859",
+    "input_files": 60,
+    "acceptance_groups": 9,
+    "current_source_sha256": {
+      "crates/data-agent/src/modules/retrieval/mod.rs": "28b86b5570223ca748afdaaa26542ca1da24334b287cab6f20cf6ce2893cd1f0",
+      "crates/data-agent/src/use_cases/knowledge.rs": "d32f2b5f48641044ee5be684d13b83cbfd5df4f2b3797e0a0b93902ef7ec0dc8",
+      "apps/agent/session/resources.ts": "5d724661210306cd822f0c3ccdc07a2367ecabdf7981d0ad9965a373ddb26fb7",
+      "tests/mvp/check-retrieval-ranking.mjs": "60d650e87cbf051287ad87f7739eebde83fbe58abf5a32b5d17eb38518c12671",
+      "tests/mvp/check-final-answer.mjs": "f1ae8300059a38aedec25d9a68d7815b8649e51a7f8d58e97dfb32552df05384",
+      "crates/data-agent/src/use_cases/context_authority.rs": "191850ea609baab9354e01f928e5593b897c9206c897d6ecb963f5ee70ffdb00",
+      "crates/data-agent/src/use_cases/data_tools.rs": "970e06d513dcf189fdd1d453c6c2265f32474ae55294a6cb8fda6d163e4a76de",
+      "tests/mvp/check-retrieval-scope.mjs": "0686c6331eefd6758ad58b16cadb832ef07fe834e90354746c506e482eb3ebe2"
+    }
+  },
+  "verification_update": {
+    "old_ranking_unit": {
+      "log": ".local/checks/retrieval-ranking-before-unit.log",
+      "status": "failed",
+      "reason": "limit=6前三出现弱table/metric，未保留三个强字段"
+    },
+    "initial_http_fixture": {
+      "log": ".local/checks/retrieval-ranking-before-api.log",
+      "status": "failed",
+      "reason": "向固定HTTP查询错误传limit，400；改用已有search_knowledge工具契约，独立期望不变"
+    },
+    "old_ranking_tool": {
+      "log": ".local/checks/retrieval-ranking-before-api-fixed.log",
+      "status": "failed",
+      "reason": "真实首次工具回执前三仍是一个强字段和两个弱类型"
+    },
+    "targeted_unit": {
+      "log": ".local/checks/retrieval-unit.log",
+      "status": "passed",
+      "tests": 25,
+      "version_limit": "形成于最后重复候选去重反例追加之前，不等于最新冻结版单元已全部执行",
+      "superseded_by": "首轮统一RETRIEVAL-UNIT完整通过最新去重反例；当前全范围仍须重跑"
+    },
+    "targeted_ranking": {
+      "log": ".local/checks/retrieval-ranking-after.log",
+      "status": "passed",
+      "checks": 4,
+      "official_requests": 0,
+      "version_limit": "形成于新宽查询覆盖观察追加之前；最终五项待统一执行",
+      "superseded_by": "首轮统一RETRIEVAL-RANKING五项通过，包含后加宽查询；当前全范围仍须重跑"
+    },
+    "targeted_final_answer": {
+      "log": ".local/checks/final-answer-first.log",
+      "status": "passed",
+      "checks": 4,
+      "local_protocol_calls": 12,
+      "official_requests": 0,
+      "version_limit": "最终规则压缩及相应实际system断言更新之前；最新版本待统一执行"
+    },
+    "pre_trim_compaction": {
+      "log": ".local/checks/retrieval-delivery-compaction.log",
+      "result": ".local/checks/retrieval-delivery-compaction-before-trim.json",
+      "status": "failed",
+      "model_error": "model_budget_exhausted",
+      "calls": 24,
+      "compactions": 11,
+      "official_requests": 0
+    },
+    "trimmed_original_compaction": {
+      "log": ".local/checks/retrieval-delivery-compaction-trimmed.log",
+      "status": "passed",
+      "calls": 24,
+      "compactions": 10,
+      "max_payload_bytes": 65478,
+      "payload_limit_bytes": 65536,
+      "short_history_messages": 280,
+      "official_requests": 0,
+      "version_limit": "最终精简规则与原压力测试；随后排序去重与宽查询测试未改变此路径，仍须随冻结范围统一执行"
+    },
+    "frozen_unified_acceptance": "pending",
+    "required_receipt": ".local/delivery/I2-RETRIEVAL-DELIVERY-result.json",
+    "acceptance_ids": [
+      "RETRIEVAL-BUILD",
+      "RETRIEVAL-UNIT",
+      "RETRIEVAL-RANKING",
+      "RETRIEVAL-SCOPE",
+      "RETRIEVAL-COVERAGE",
+      "RETRIEVAL-EXCERPTS",
+      "ANSWER-DELIVERY",
+      "ANSWER-REGRESSION",
+      "ANSWER-COMPACTION"
+    ],
+    "first_unified": {
+      "receipt": ".local/checks/retrieval-delivery-before-scope-fix.json",
+      "review_archive": ".local/checks/retrieval-delivery-review-before-scope-fix.json",
+      "status": "failed",
+      "inputs_stable": true,
+      "passed_groups": [
+        "RETRIEVAL-BUILD",
+        "RETRIEVAL-UNIT",
+        "RETRIEVAL-RANKING"
+      ],
+      "failed_group": "RETRIEVAL-SCOPE",
+      "failed_log": ".local/delivery/I2-RETRIEVAL-DELIVERY-1792256851548253000/command-04.log",
+      "exit_code": 1,
+      "timed_out": false,
+      "reason": "已实际读到leftDoc后停用，原测试要求旧run搜索200，与既有上下文失效保护冲突；实际精确409/stale_context。",
+      "ranking_observations": {
+        "broadQueryIncludedTarget": false
+      }
+    },
+    "scope_test_alignment": {
+      "changed_previously_bound_files": [
+        "tests/mvp/check-retrieval-scope.mjs"
+      ],
+      "additional_bound_files": [
+        "crates/data-agent/src/use_cases/context_authority.rs",
+        "crates/data-agent/src/use_cases/data_tools.rs"
+      ],
+      "product_sources_changed": false,
+      "old_expectation": "同run已观察leftDoc后停用，search仍200且过滤该对象",
+      "new_expectation": "旧run search精确409/stale_context；经原撤回/新run入口后200过滤、foreign404/无泄漏、个人目录隔离保持",
+      "independent_basis": "成功检索回执observe/extend记录实际对象版本；业务工具执行前assert_run验证enabled当前对象。三份相关产品文件与基线a53d859逐字一致，未重跑旧版本。",
+      "log": ".local/checks/retrieval-delivery-scope-fixed.log",
+      "status": "passed",
+      "checks": 11,
+      "max_reply_bytes": 23603,
+      "reply_limit_bytes": 24576,
+      "official_requests": 0,
+      "frozen_unified_acceptance": "pending"
+    }
+  },
+  "limitations": [
+    "passed仅指当前独立代码审查通过、可以进入统一验收。60份输入和9组最新冻结执行尚待重跑；首轮前3组与范围修后专项不能拼接关闭增量，需完整退出0、无超时且前后指纹一致的当前收据。",
+    "第二项仅新增提示预防。模型忽略规则时末条已保存仍覆盖前文，该反例已经复现并保留；没有通过文本启发式、额外模型调用或拼接过程伪装为强制修复。真实模型遵循率及业务正确率未验证。",
+    "测试使用从零合成数据、本机协议与浏览器，官方模型调用0。1200对象不证明真实业务召回率、生产延迟、任意规模或真实Datasight权限接入；candidate_limit只如实表达覆盖不足。",
+    "原64KiB压力最大65478B，仅余58B且用满旧trial24次，证明该合成场景可完成，不是容量保证。初版11摘要预算耗尽保留；没有增加原测试预算或放宽用量、历史、撤权断言。",
+    "本审查者只读取源码/日志并计算指纹；没有重跑共享数据库、构建或模型，也未修改源码、测试或CURRENT。仅创建本审查记录；普通本地记录不是不可篡改保证。",
+    "范围测试修订依据是本轮实际已交付对象与基线已有保护；没有宣称另跑旧版本已重现相同失败，也没有把该409作为产品放宽的理由。旧失败收据原样保留。"
+  ]
+}
