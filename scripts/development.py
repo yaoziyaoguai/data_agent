@@ -68,6 +68,14 @@ def read_model_credentials(source):
     return values
 
 
+def model_database(configuration):
+    database = configuration['database']
+    normal = configuration['profile'].get('budget_mode') == 'request'
+    if not (re.fullmatch(r'data_agent_trial_[a-f0-9]+', database) or (normal and database == 'data_agent')):
+        raise RuntimeError('模型数据库配置无效')
+    return database
+
+
 def request(url, token=None, body=None):
     headers = {'Content-Type': 'application/json'}
     if token:
@@ -170,9 +178,7 @@ def main():
     model_credentials={}
     if args.model in ('deepseek','protocol-test'):
         trial=json.loads((args.model_profile or (ROOT / '.local/model-trial/configuration.json')).read_text())
-        database=trial['database']
-        if not re.fullmatch(r'data_agent_trial_[a-f0-9]+',database):
-            raise RuntimeError('真实小样数据库配置无效')
+        database=model_database(trial)
         model_profile=trial['profile']
         if args.model == 'protocol-test':
             from urllib.parse import urlparse

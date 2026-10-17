@@ -428,3 +428,11 @@ flowchart TD
 沿用`model_call_attempts`与`model_trials`，增加purpose（agent/memory_extraction/memory_embedding）、稳定operation及trial/price_version，不建第二份总账。提取与搜索绑定原run的budget_scope；后台人工编辑与重建使用明确维护profile。每次实际LLM/embedding请求各计一次。发送许可一次性；收到usage先结算，再检查内容；未知保留预留，SDK批量失败的逐条降级不得继续发送。迟到结算只处理原调用，不能授予新发送权。
 
 DeepSeek提取固定Flash、4096输出上限、关闭思考；Agent仍沿用自己的profile。百炼原价¥0.5/百万输入token，预算按US$0.10/百万token保守折算，固定`2026-10-05-qwen-cny-usd-ceiling`；报告列用量和估算，不冒称账单或实时汇率。实际超上限熔断原trial。Mem0网络边界有总超时，超时后仅按同一operation接回一次持久结果；仍不可核实时明确未知，不能声称已保存。
+
+### 正常请求预算与原生重试
+
+正常模拟输入和`ModelProfile.budget_mode=request`每条消息24次，原scope贯穿摘要、重试、恢复和结果唤醒。新正常账本允许累计次数/金额/到期为空；显式配置的累计门槛仍校验，旧trial全部原值及一小时有效期不变。迁移不重置任何计数或未知预留，同一账本配置指纹仍不可变。
+
+M11启用Pi1.0.0原生retry，maxRetries=2，普通与摘要均复用；HTTP SDK层maxRetries=0。固定错误码只对明确临时provider失败开放重试；429的quota/billing由SDK分类排除，调用者取消与单次超时分开。缺少可靠usage、宿主许可未知或结算不确认停止。每次重试重新申请许可且扣原额度，不重放业务副作用。取消信号只中止本次请求，保留未知预留、不新增或清零模型失败；进程中断后的恢复仍沿原scope，真实用户取消由Rust运行终态拒绝续发。
+
+M08在budget_scopes保存连续失败，在model_call_attempts保存scope调用序号和outcome。outcome区分模型结果与费用settled/unknown；同attempt结算幂等，按最近三次实际调用顺序重算，旧run晚到成功不清较新失败、晚到失败也不漏计。第三次失败后reserve/send都拒绝继续；成功仅清失败计数，不退已使用次数或未知预留。Pi仍是唯一执行循环，宿主只执行预算边界。单次模型90秒与工具HTTP超时、运行租约/取消保持；Worker不再由次数推导额外整轮截止。

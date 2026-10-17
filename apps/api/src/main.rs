@@ -20,6 +20,7 @@ pub struct State {
 }
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    data_agent::contracts::initialize_validators();
     let state = State {
         pool: persistence::connect(&env::var("DATA_AGENT_DATABASE_URL")?).await?,
         identities: DevelopmentIdentity::from_config(

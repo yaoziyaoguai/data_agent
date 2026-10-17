@@ -47,13 +47,14 @@ try{
  const input={run_id:cancel.run.run_id,lease_epoch:cancel.run.lease_epoch};
  assert.equal((await h.request('/conversations/'+cancel.cid+'/cancel-run',input,{user:'bob'})).status,404);
  assert.equal((await h.request('/conversations/'+cancel.cid+'/cancel-run',{...input,lease_epoch:'0'})).status,409);
+ assert.equal((await h.request('/session')).value.model_label,'DeepSeek Flash');
  const web=await h.web();const browser=await chromium.launch({headless:true});
  try{
-  const page=await browser.newPage();await page.addInitScript(cid=>localStorage.setItem('data-agent.conversation.alice',cid),cancel.cid);
+  const page=await browser.newPage();await page.addInitScript(cid=>localStorage.setItem('data-agent.conversation.["demo","alice"]',cid),cancel.cid);
   await page.goto(web.url);await page.getByLabel('演示登录凭据').fill(web.alice);await page.getByRole('button',{name:'进入工作台 →'}).click();
-  await page.locator('.badge').getByText('DeepSeek Flash',{exact:true}).waitFor();cancelRequestedAt=Date.now();await page.getByRole('button',{name:'停止生成'}).click();
+  await page.getByText('验证取消合成请求。',{exact:true}).waitFor();await page.getByRole('button',{name:'停止生成',exact:true}).waitFor();cancelRequestedAt=Date.now();await page.getByRole('button',{name:'停止生成',exact:true}).click();
   await until(()=>completedAt&&connection.closedAt,'cancel aborts provider connection',1500);assert.ok(completedAt-cancelRequestedAt<1500);assert.ok(connection.closedAt-cancelRequestedAt<1500);
-  await page.getByText('本次生成已停止，已保存的任务仍可查看。',{exact:true}).waitFor();await page.reload();await page.getByText('本次生成已停止，已保存的任务仍可查看。',{exact:true}).waitFor();
+  await page.getByText('本次生成已停止，已保存的消息仍可查看。',{exact:true}).waitFor();await page.reload();await page.getByText('本次生成已停止，已保存的消息仍可查看。',{exact:true}).waitFor();
  }finally{await browser.close();}
  const cancelled=await h.request('/conversations/'+cancel.cid+'/cancel-run',input);assert.equal(cancelled.value.state,'cancelled');assert.deepEqual(await cancel.result,{ok:false});
  assert.deepEqual((await h.request('/conversations/'+cancel.cid+'/cancel-run',input)).value,cancelled.value);
@@ -62,7 +63,7 @@ try{
  const unknown=h.query(`SELECT JSON_OBJECT('state',state) FROM model_call_attempts WHERE run_id='${cancel.run.run_id}'`)[0];assert.equal(unknown.state,'unknown');
  const late=await h.request('/internal/outputs',{run_id:input.run_id,lease_epoch:input.lease_epoch,chunk_seq:'1',text:'晚到输出'},{internal:true});assert.equal(late.status,409);
  mode='tool';const other=await h.run('建立第二个合成任务。',deliver);assert.deepEqual(await other.result,{ok:true});assert.equal((await h.snapshot(other.cid)).runs[0].state,'finished');
- checks.push({cancellationMs:completedAt-cancelRequestedAt,socketCloseMs:connection.closedAt-cancelRequestedAt,name:'React读取模型标签、停止生成并刷新保留；幂等终态、用户/代次隔离，其他会话继续',passed:true});
+ checks.push({cancellationMs:completedAt-cancelRequestedAt,socketCloseMs:connection.closedAt-cancelRequestedAt,name:'Identity模型标签、React原会话停止生成并刷新保留；幂等终态、用户/代次隔离，其他会话继续',passed:true});
  // 不可靠usage不能被SDK默认的零用量冒充；错误响应不能反射秘密。
  const checkpoints=h.query("SELECT JSON_OBJECT('checkpoint',checkpoint) FROM pi_checkpoints");assert.ok(checkpoints.length>0);
  for(const result of [h.getLogs(),nodeErrors,JSON.stringify(checkpoints),JSON.stringify(await h.snapshot(cancel.cid)),JSON.stringify(await h.snapshot(success.cid))])assert.ok(!result.includes(key));

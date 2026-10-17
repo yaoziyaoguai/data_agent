@@ -3,25 +3,43 @@
   "workflow": "dev_co",
   "schema": 1,
   "phase": "verify",
-  "status": "complete",
-  "goal_revision": 57,
+  "status": "active",
+  "goal_revision": 58,
   "environment": "Node26.8.1/npm11.19.0、Rust1.99.0、Python3.14.7/SQLite；Colima MySQL/Milvus；仅隔离数据库与本地协议替身。",
   "verification": {
     "level": "targeted",
-    "reason": "I2-AGENT-CONTEXT：原五项审计与新增容量/任务选择问题；本地合成协议与宿主验证，官方模型调用0。",
+    "reason": "I2-REQUEST-POLICY：用户确认24次总调用、连续失败3次、单次超时/取消；历史付费试验保持，0正式调用。",
     "freshness": "content",
     "inputs": [
-      "apps/agent/session",
-      "apps/agent/tools/data-tools.ts",
       "apps/agent/provider/deepseek.ts",
+      "apps/agent/session/deliver.ts",
+      "apps/worker/src/main.rs",
+      "crates/data-agent/src/modules/runtime",
+      "packages/contracts",
+      "tests/contracts",
+      "migrations/202610040001_model_calls.sql",
+      "migrations/202610170001_request_budgets.sql",
+      "scripts/development.py",
+      "scripts/test_development.py",
+      "infra/model-profile.example.json",
+      "tests/runtime/check-request-policy.mjs",
+      "tests/runtime/check-model-provider.mjs",
+      "tests/runtime/check-model-admission.mjs",
+      "apps/agent/session",
+      "apps/agent/transport",
+      "apps/agent/tools",
+      "crates/data-agent/src/use_cases",
+      "crates/data-agent/src/modules/jobs",
       "crates/data-agent/src/modules/conversations",
-      "crates/data-agent/src/modules/retrieval/mod.rs",
-      "crates/data-agent/src/use_cases/deliver_run.rs",
-      "tests/mvp/check-long-conversation.mjs",
-      "tests/mvp/check-memory-context.mjs",
-      "tests/mvp/check-request-context.mjs",
+      "tests/mvp/harness.mjs",
+      "tests/runtime/model-harness.mjs",
       "tests/mvp/check-native-compaction.mjs",
+      "tests/mvp/check-large-tool-context.mjs",
       "tests/mvp/check-data-provider.mjs",
+      "tests/mvp/check-request-context.mjs",
+      "tests/mvp/check-model-selection.mjs",
+      "tests/mvp/check-conversational-query.mjs",
+      "tests/mvp/check-recovery-continuation.mjs",
       "docs/architecture/implementation-design.md",
       "docs/architecture/runtime-modules.md",
       "package.json",
@@ -29,29 +47,13 @@
       "Cargo.toml",
       "Cargo.lock",
       "Makefile",
-      "packages/contracts",
-      "tests/contracts",
       "scripts/check_delivery.py",
       "scripts/check_architecture.py",
       "tests/architecture",
-      "tests/mvp/harness.mjs",
-      "tests/mvp/skill-fixtures.mjs",
-      "apps/agent/transport",
-      "apps/agent/provider",
-      "crates/data-agent/src/use_cases/context_authority.rs",
-      "crates/data-agent/src/use_cases/personal_memory.rs",
-      "crates/data-agent/src/use_cases/data_tools.rs",
-      "crates/data-agent/src/modules/analysis",
-      "crates/data-agent/src/modules/runtime",
-      "tests/mvp/check-large-tool-context.mjs",
-      "tests/mvp/check-clarification.mjs",
-      "tests/mvp/check-recovery-continuation.mjs",
-      "tests/mvp/check-context-dependencies.mjs",
-      "tests/mvp/check-memory-revisions.mjs",
-      "tests/mvp/check-native-skills.mjs",
-      "tests/mvp/check-request-clock.mjs",
-      "tests/mvp/check-conversational-query.mjs",
-      "tests/mvp/check-asset-directory.mjs"
+      "tests/mvp/check-model-startup.mjs",
+      "apps/web",
+      "apps/api/src/main.rs",
+      "crates/data-agent/src/contracts.rs"
     ],
     "checks": []
   },
@@ -59,65 +61,84 @@
     "schema": 1,
     "registry": "docs/semantic-retrieval-design.md",
     "increment": {
-      "id": "I2-AGENT-CONTEXT",
+      "id": "I2-REQUEST-POLICY",
       "phase": "I2",
-      "status": "complete",
-      "goal": "完成原五项Agent上下文审计与新增载荷低估/任务选择问题，保证原生多轮压缩、当前上下文、任务归属与业务硬边界。",
+      "status": "active",
+      "goal": "每条正常用户消息共用24次模型调用，连续临时失败3次停止，复用Pi重试、单次超时和取消；正常配置无强制试验总费用/到期，旧试验不补额；分批提交推送并更新原本地模拟服务。",
       "requirements": [
         "C01",
-        "C02",
-        "C03",
         "C04",
         "C05",
         "C07"
       ],
       "modules": [
-        "M05",
-        "M06",
         "M08",
+        "M10",
         "M11"
       ],
       "allowed_paths": [
-        "apps/agent/session",
-        "apps/agent/tools/data-tools.ts",
         "apps/agent/provider/deepseek.ts",
-        "crates/data-agent/src/modules/conversations",
-        "crates/data-agent/src/modules/retrieval/mod.rs",
-        "crates/data-agent/src/use_cases/deliver_run.rs",
-        "tests/mvp/check-long-conversation.mjs",
-        "tests/mvp/check-memory-context.mjs",
-        "tests/mvp/check-request-context.mjs",
-        "tests/mvp/check-native-compaction.mjs",
-        "tests/mvp/check-data-provider.mjs",
+        "apps/agent/session/deliver.ts",
+        "apps/worker/src/main.rs",
+        "crates/data-agent/src/modules/runtime",
+        "packages/contracts",
+        "tests/contracts",
+        "migrations/202610170001_request_budgets.sql",
+        "scripts/development.py",
+        "scripts/test_development.py",
+        "infra/model-profile.example.json",
+        "tests/runtime/check-request-policy.mjs",
+        "tests/runtime/check-model-provider.mjs",
+        "tests/runtime/check-model-admission.mjs",
+        "docs/CURRENT.md",
+        "docs/development.md",
         "docs/architecture/implementation-design.md",
         "docs/architecture/runtime-modules.md",
-        "docs/CURRENT.md",
-        "docs/reviews/agent-context-review.json",
-        "tests/mvp/check-asset-directory.mjs",
-        "docs/semantic-retrieval-design.md"
+        "docs/semantic-retrieval-design.md",
+        "docs/reviews/request-policy-review.json",
+        "tests/mvp/check-model-startup.mjs",
+        "apps/api/src/main.rs",
+        "crates/data-agent/src/contracts.rs"
       ],
       "non_goals": [
-        "不新增用量仪表盘或缓存统计，不扩大限额，不调用付费模型；真实模型质量和缓存收益另行验证。",
-        "不新增Agent循环、压缩器或调度框架，不改变执行授权、检索排序和持久任务数据；本轮不提交推送或更新常驻服务。"
+        "不调用付费模型、不放开已有trial、不更换本地数据库/身份/模拟模式。",
+        "不新增Agent循环、统计系统或自动重做未知SQL；不扩大字节上限至当前128KiB以上。"
       ],
       "invariants": [
-        "Pi1.0.0负责唯一循环、检查点和有界compact-and-retry；保留完整最近工具组及原SDK调用身份。",
-        "实际完整provider请求在网络与预算预留前受原字节上限检查；每次摘要/续答仍计原预算。",
-        "宿主继续校验权限、依赖失效、当前消息/任务/条件/SQL版本；不从自然语言推断授权。",
-        "工作区仅为可补读候选，已知目标优先；通用行为集中，工具仍保留参数/版本/授权/前置依赖。"
+        "重试、摘要和恢复沿原消息/scope；每次真实模型调用单独许可计数，未知预留不释放。",
+        "Pi1.0.0原生retry最多2次；宿主持久失败上限不因恢复重置；业务权限/版本/SQL授权保持。",
+        "新正常profile与旧有限trial显式区分；历史profile不被静默迁移或改额度。"
       ],
       "verification_inputs": [
-        "apps/agent/session",
-        "apps/agent/tools/data-tools.ts",
         "apps/agent/provider/deepseek.ts",
+        "apps/agent/session/deliver.ts",
+        "apps/worker/src/main.rs",
+        "crates/data-agent/src/modules/runtime",
+        "packages/contracts",
+        "tests/contracts",
+        "migrations/202610040001_model_calls.sql",
+        "migrations/202610170001_request_budgets.sql",
+        "scripts/development.py",
+        "scripts/test_development.py",
+        "infra/model-profile.example.json",
+        "tests/runtime/check-request-policy.mjs",
+        "tests/runtime/check-model-provider.mjs",
+        "tests/runtime/check-model-admission.mjs",
+        "apps/agent/session",
+        "apps/agent/transport",
+        "apps/agent/tools",
+        "crates/data-agent/src/use_cases",
+        "crates/data-agent/src/modules/jobs",
         "crates/data-agent/src/modules/conversations",
-        "crates/data-agent/src/modules/retrieval/mod.rs",
-        "crates/data-agent/src/use_cases/deliver_run.rs",
-        "tests/mvp/check-long-conversation.mjs",
-        "tests/mvp/check-memory-context.mjs",
-        "tests/mvp/check-request-context.mjs",
+        "tests/mvp/harness.mjs",
+        "tests/runtime/model-harness.mjs",
         "tests/mvp/check-native-compaction.mjs",
+        "tests/mvp/check-large-tool-context.mjs",
         "tests/mvp/check-data-provider.mjs",
+        "tests/mvp/check-request-context.mjs",
+        "tests/mvp/check-model-selection.mjs",
+        "tests/mvp/check-conversational-query.mjs",
+        "tests/mvp/check-recovery-continuation.mjs",
         "docs/architecture/implementation-design.md",
         "docs/architecture/runtime-modules.md",
         "package.json",
@@ -125,52 +146,36 @@
         "Cargo.toml",
         "Cargo.lock",
         "Makefile",
-        "packages/contracts",
-        "tests/contracts",
         "scripts/check_delivery.py",
         "scripts/check_architecture.py",
         "tests/architecture",
-        "tests/mvp/harness.mjs",
-        "tests/mvp/skill-fixtures.mjs",
-        "apps/agent/transport",
-        "apps/agent/provider",
-        "crates/data-agent/src/use_cases/context_authority.rs",
-        "crates/data-agent/src/use_cases/personal_memory.rs",
-        "crates/data-agent/src/use_cases/data_tools.rs",
-        "crates/data-agent/src/modules/analysis",
-        "crates/data-agent/src/modules/runtime",
-        "tests/mvp/check-large-tool-context.mjs",
-        "tests/mvp/check-clarification.mjs",
-        "tests/mvp/check-recovery-continuation.mjs",
-        "tests/mvp/check-context-dependencies.mjs",
-        "tests/mvp/check-memory-revisions.mjs",
-        "tests/mvp/check-native-skills.mjs",
-        "tests/mvp/check-request-clock.mjs",
-        "tests/mvp/check-conversational-query.mjs",
-        "tests/mvp/check-asset-directory.mjs"
+        "tests/mvp/check-model-startup.mjs",
+        "apps/web",
+        "apps/api/src/main.rs",
+        "crates/data-agent/src/contracts.rs"
       ],
       "acceptance": [
         {
-          "id": "CONTEXT-BUILD",
+          "id": "POLICY-BUILD",
           "requirements": [
             "C07"
           ],
-          "expected": "当前API/Worker与Web可构建。",
+          "expected": "当前API/Worker/Web构建通过。",
           "evidence_kind": "contract",
           "command": [
             "make",
             "build"
           ],
-          "timeout_seconds": 480
+          "timeout_seconds": 600
         },
         {
-          "id": "CONTEXT-ENGINEERING",
+          "id": "POLICY-ENGINEERING",
           "requirements": [
             "C01",
-            "C02",
+            "C05",
             "C07"
           ],
-          "expected": "Rust/TS、同源契约及模块/事务边界检查通过。",
+          "expected": "代码、同源契约、迁移/模块/锁边界通过。",
           "evidence_kind": "contract",
           "command": [
             "make",
@@ -178,229 +183,156 @@
             "verify-contracts",
             "verify-architecture"
           ],
-          "timeout_seconds": 480
+          "timeout_seconds": 600
         },
         {
-          "id": "CONTEXT-BOUNDS",
-          "requirements": [
-            "C02",
-            "C03"
-          ],
-          "expected": "工作区裁剪保留优先任务、标明不完整，不改变权限快照。",
-          "evidence_kind": "runtime",
-          "command": [
-            "cargo",
-            "test",
-            "--offline",
-            "--locked",
-            "-p",
-            "data-agent",
-            "--lib",
-            "modules::retrieval::semantic_context_tests"
-          ],
-          "timeout_seconds": 300
-        },
-        {
-          "id": "CONTEXT-REQUEST",
-          "requirements": [
-            "C01",
-            "C05"
-          ],
-          "expected": "实际SDK完整载荷在网络/预留前检查，64KiB边缘和溢出沿Pi原生有界恢复；静态系统提示与动态资料分离。",
-          "evidence_kind": "runtime",
-          "command": [
-            "node",
-            "tests/mvp/check-request-context.mjs"
-          ],
-          "timeout_seconds": 300
-        },
-        {
-          "id": "CONTEXT-PROJECTION",
-          "requirements": [
-            "C01",
-            "C02"
-          ],
-          "expected": "动态工作区与记忆位于历史之后、当前输入之前，不写入原生历史；成功回执撤旧、恢复和新输入不累积。",
-          "evidence_kind": "runtime",
-          "command": [
-            "node",
-            "tests/mvp/check-memory-context.mjs"
-          ],
-          "timeout_seconds": 300
-        },
-        {
-          "id": "CONTEXT-PROVIDER",
+          "id": "POLICY-POLICY",
           "requirements": [
             "C01",
             "C04",
             "C05"
           ],
-          "expected": "真实Pi/本地provider协议保留路由、只读SQL、授权及每次调用账本。",
+          "expected": "正常消息总24次、连续临时失败3次停止，成功清零、摘要/恢复共享原预算，取消/未知/永久失败不重试；正常预算无试验到期，旧trial保持。",
           "evidence_kind": "runtime",
           "command": [
             "node",
-            "tests/mvp/check-data-provider.mjs"
+            "tests/runtime/check-request-policy.mjs"
           ],
-          "timeout_seconds": 300
+          "timeout_seconds": 600
         },
         {
-          "id": "CONTEXT-COMPACTION",
+          "id": "POLICY-PROVIDER",
+          "requirements": [
+            "C05",
+            "C07"
+          ],
+          "expected": "历史trial许可、并发、未知、取消、鉴权和预算不补额。",
+          "evidence_kind": "runtime",
+          "command": [
+            "make",
+            "verify-model-provider"
+          ],
+          "timeout_seconds": 600
+        },
+        {
+          "id": "POLICY-RECOVERY",
           "requirements": [
             "C01",
-            "C02",
             "C05"
           ],
-          "expected": "长/短历史原生压缩续接、依赖失效拒绝、所有真实HTTP仍在原限额及预算内。",
+          "expected": "原Pi续接、稳定操作、运行恢复及原scope保持。",
+          "evidence_kind": "runtime",
+          "command": [
+            "make",
+            "verify-runtime-flow",
+            "verify-recovery"
+          ],
+          "timeout_seconds": 600
+        },
+        {
+          "id": "POLICY-COMPACTION",
+          "requirements": [
+            "C01",
+            "C05"
+          ],
+          "expected": "原64KiB压力测试仍通过，所有实际摘要计原预算。",
           "evidence_kind": "runtime",
           "command": [
             "node",
             "tests/mvp/check-native-compaction.mjs"
           ],
-          "timeout_seconds": 300
+          "timeout_seconds": 600
         },
         {
-          "id": "CONTEXT-TOOL-GROUP",
+          "id": "POLICY-TOOL-GROUP",
           "requirements": [
             "C01",
             "C05"
           ],
-          "expected": "可压缩工具组逐字保留且不重复读取；最小完整工具组仍超限时有界失败并保留原操作/预算。",
+          "expected": "完整工具组及不可再压缩时有限失败保持。",
           "evidence_kind": "runtime",
           "command": [
             "node",
             "tests/mvp/check-large-tool-context.mjs"
           ],
-          "timeout_seconds": 300
+          "timeout_seconds": 600
         },
         {
-          "id": "CONTEXT-LONG",
+          "id": "POLICY-DATA",
           "requirements": [
-            "C03",
+            "C01",
+            "C04",
             "C05"
           ],
-          "expected": "超过24任务优先当前归属及最近任务；省略目标和完整历史可分页补读，恢复归属保持。",
+          "expected": "正常数据工具及原授权流程保持。",
           "evidence_kind": "runtime",
           "command": [
             "node",
-            "tests/mvp/check-long-conversation.mjs"
+            "tests/mvp/check-data-provider.mjs"
           ],
-          "timeout_seconds": 300
+          "timeout_seconds": 600
         },
         {
-          "id": "CONTEXT-CLARIFICATION",
-          "requirements": [
-            "C03",
-            "C04"
-          ],
-          "expected": "自由回答、解释选项、话题切换、含糊归属、补读与恢复仍按现有业务规则。",
-          "evidence_kind": "runtime",
-          "command": [
-            "node",
-            "tests/mvp/check-clarification.mjs"
-          ],
-          "timeout_seconds": 300
-        },
-        {
-          "id": "CONTEXT-RECOVERY",
+          "id": "POLICY-CONTEXT",
           "requirements": [
             "C01",
             "C05"
           ],
-          "expected": "半轮检查点恢复只接回原登记操作，继续同一Pi会话。",
+          "expected": "上下文投影与请求体准确守卫保持。",
           "evidence_kind": "runtime",
           "command": [
             "node",
-            "tests/mvp/check-recovery-continuation.mjs"
+            "tests/mvp/check-request-context.mjs"
           ],
-          "timeout_seconds": 300
+          "timeout_seconds": 600
         },
         {
-          "id": "CONTEXT-AUTHORITY",
-          "requirements": [
-            "C02"
-          ],
-          "expected": "启动候选和已用依赖精确登记，失效后重建或拒绝恢复，不重注旧资料。",
-          "evidence_kind": "runtime",
-          "command": [
-            "node",
-            "tests/mvp/check-context-dependencies.mjs"
-          ],
-          "timeout_seconds": 300
-        },
-        {
-          "id": "CONTEXT-MEMORY",
-          "requirements": [
-            "C02"
-          ],
-          "expected": "记忆纠错/停用保留原范围及宿主权威。",
-          "evidence_kind": "runtime",
-          "command": [
-            "node",
-            "tests/mvp/check-memory-revisions.mjs"
-          ],
-          "timeout_seconds": 300
-        },
-        {
-          "id": "CONTEXT-SKILLS",
-          "requirements": [
-            "C01",
-            "C02"
-          ],
-          "expected": "已选Skill沿Pi原生目录与受控读取、恢复及失效。",
-          "evidence_kind": "runtime",
-          "command": [
-            "node",
-            "tests/mvp/check-native-skills.mjs"
-          ],
-          "timeout_seconds": 300
-        },
-        {
-          "id": "CONTEXT-CLOCK",
+          "id": "POLICY-SELECTION",
           "requirements": [
             "C04",
             "C05"
           ],
-          "expected": "恢复与结果唤醒仍用原请求时钟。",
+          "expected": "会话换模型不转移原预算。",
           "evidence_kind": "runtime",
           "command": [
             "node",
-            "tests/mvp/check-request-clock.mjs"
+            "tests/mvp/check-model-selection.mjs"
           ],
-          "timeout_seconds": 300
+          "timeout_seconds": 600
         },
         {
-          "id": "CONTEXT-EXECUTION",
+          "id": "POLICY-EXECUTION",
           "requirements": [
-            "C03",
-            "C04"
+            "C04",
+            "C05"
           ],
-          "expected": "明确执行、否定、修改及版本/当前消息绑定保持。",
+          "expected": "聊天执行授权、只读与版本规则保持。",
           "evidence_kind": "runtime",
           "command": [
             "node",
             "tests/mvp/check-conversational-query.mjs"
           ],
-          "timeout_seconds": 300
+          "timeout_seconds": 600
         },
         {
-          "id": "CONTEXT-ASSETS",
+          "id": "POLICY-STARTUP",
           "requirements": [
-            "C02"
+            "C07"
           ],
-          "expected": "有界候选不影响个人资产完整目录及同版补读。",
+          "expected": "原启动器模拟/模型协议启动、Python配置检查通过，无付费调用。",
           "evidence_kind": "runtime",
           "command": [
-            "node",
-            "tests/mvp/check-asset-directory.mjs"
+            "make",
+            "verify-startup"
           ],
-          "timeout_seconds": 300
+          "timeout_seconds": 600
         }
       ],
       "review": {
         "status": "passed",
-        "record": "docs/reviews/agent-context-review.json"
+        "record": "docs/reviews/request-policy-review.json"
       },
-      "evidence": ".local/delivery/I2-AGENT-CONTEXT-result.json"
+      "evidence": ".local/delivery/I2-REQUEST-POLICY-result.json"
     }
   }
 }
@@ -410,9 +342,36 @@
 
 更新：2026-10-17。唯一活动项目目录：`~/work_space/data_agent`。
 
+## 当前增量：每消息调用与临时故障重试（2026-10-17）
+
+用户确认：正常消息最多24次模型调用，首次失败加最多2次原生重试，连续失败3次停止；保留单次超时和用户取消，不默认叠加单消息费用/总时长限制。新正常配置解除历史trial的一小时/累计调用/费用门槛，旧有限试验明确保留；每次重试、摘要、恢复与查询结果唤醒仍消耗原请求预算，未知预留不释放。该决定替代上一增量“不扩大限额/不提交推送/不更新服务”的实施边界，不改变其已完成修复及历史验证。
+
+当前基线：上下文增量17组已通过，收据与代码指纹已复验一致，作为独立提交`b98a48f`保存；当前仅此新增量活动。现有服务为mock/builtin/lexical模式，使用原开发数据库及端口，更新后继续该模式。付费模型调用0。新实现采用Pi1.0.0原生retry（普通与摘要均支持），底层SDK HTTP重试保持关闭，Rust为每次真实请求许可、计数并持久保存连续失败。默认模拟消息12次调整为24次；历史显式profile保持原配置。
+
+验收与要求变更：原“所有模型错误均不重试”仅对历史I0小样保留；data模式明确临时HTTP429（排除quota/billing）及500/502/503/504允许最多2次原生重试，模型连接失败/单次超时同样允许新attempt；拒绝认证、缺失/无效用量、取消及未知宿主许可/结算重试。每个失败尝试仍保留未知费用和调用次数。旧64KiB测试不放宽；正常profile示例使用已有128KiB档。
+
+实现与独立审查已完成；冻结版本12组统一验收全部通过，进入已授权的分批提交、串行推送与原本地服务更新。当前活动状态仅保留到交付核验完成。
+
+专项发现与修正：新错误码最初遗漏AppError枚举，已补同源契约；独立审查指出transient_error与unknown费用不能捆绑，已允许原outcome收到可靠usage后幂等结算，且不清失败计数。最初80ms超时夹具只观察到两次fetch，未仅据计数断言根因；改为500ms排除宿主许可往返占用，以验证provider不响应，生产90秒未改，三次失败预期保持。原失败日志保留在`.local/checks/request-policy-{first,second}.log`。独立审查另外确认并修正：HTTP200后的SSE断流通过SDK原生分类识别为临时网络错误；失败状态按实际调用序号重算最近有效outcome，晚到旧失败补计，晚到旧成功不能清新失败，未有outcome的预留不能重置计数。reserve/send均检查持久失败上限。
+
+验收夹具修正：新增摘要重试测试首次使用64KiB/24轮历史时在触发目标摘要重试前就被真实载荷守卫拒绝，记录为`request-policy-third.log`。该专项改用已有正常128KiB档与16轮历史，先完成普通tool+answer，再用既有测试hook执行Pi原生compact并注入两次503，验证总共5次请求均计原scope。原独立64KiB/24轮历史压力测试保持，继续绑定POLICY-COMPACTION，没有用新夹具替换。新增旧schema迁移夹具第一次因USE语句与SQL开头注释之间缺少换行失败，记录为`request-policy-fourth.log`；仅补换行，迁移保留原额度/已用/预留/到期/指纹的断言不变。启动器纯配置测试由已有`make verify-startup`执行。
+
+专项第五次14项完整通过，日志`.local/checks/request-policy-fifth.log`，共60次本机协议请求、官方模型0。启动器10条Python单测通过。审查补充了正式回答精确匹配及重复结算后累计账本完全相等断言；回答断言初稿误用content字段导致失败，已按既有SnapshotMessage契约改为text，未改变正文预期，失败日志为`request-policy-final.log`。当前冻结版的完整结论待12组统一收据，不拼接旧专项宣布通过。
+
+
+首轮统一验收前3组通过（含436条契约及加强后的14项策略检查），第4组停在历史provider浏览器测试的`.badge`定位超时。完整失败收据与原审查归档为`.local/checks/request-policy-before-browser-fix.json`和`request-policy-review-before-browser-fix.json`，没有算作完整通过。
+
+验收与要求变更：`git show HEAD`和历史提交`5ca7c2d`、`aaeeba5`确认，工作台在本轮之前已移除顶栏badge并采用空间/用户会话键；旧键仍有迁移兼容，不能据本次超时宣称它失效。历史I0 profile不提供模型目录，故provider测试保持原task profile、2048B、6次及关闭重试的边界，通过Identity核对DeepSeek Flash，并等待原用户消息与停止按钮验证真实会话取消；新键只用于确定当前测试会话。data启动测试通过真实模型下拉框检查选中ID与Flash/Pro标签。旧预填测试的VERSION标题和成功提示也已被既有界面移除，现核对同一正式HTTP版本增长与succeeded，再在“变更记录”确认该版本已渲染；通过“查看依据与修改记录”核对Alice人工覆盖。取消提示由旧“已保存的任务”按既有界面改为“已保存的消息”，仍要求取消后与刷新后精确显示，首次定位修正后的失败保留在`request-policy-legacy-provider.log`。原1500ms取消、幂等、后台身份、预填调用数/费用及人工保护预期保持，不修改产品界面或服务实现。修正后provider专项完整通过（13次回环请求，取消123ms、断开连接66ms），正式启动专项也通过（2次聊天+4次预填，已用624微美元、预留0；仅本地合成计费）。日志分别为`.local/checks/request-policy-legacy-provider-fixed.log`和`request-policy-startup-fixed.log`。冻结版12组须完整重跑。
+
+第二轮统一验收前9组通过，第10组原有模型切换恢复测试发现本轮实现回归：模拟进程交接的AbortSignal被记录为permanent_error，使原scope提前达到失败阈值，恢复后遭model_retry_exhausted。保持原恢复预期与测试不变；provider取消现在只返回aborted并保留unknown预留，不写模型outcome，因此不增加或清零原失败计数。实际用户取消仍由Rust运行状态阻止发送。新增窄断言覆盖两次503后取消发送中请求，计数仍2、outcome为空且不自动重试。失败收据/审查归档为`.local/checks/request-policy-before-cancel-fix.json`与`request-policy-review-before-cancel-fix.json`，不能把前9组旧通过拼接到本次修正。修后14项策略专项与原模型切换/恢复专项完整exit0，日志为`request-policy-cancel-policy.log`及`request-policy-selection-recovery.log`；bridge类型检查通过。独立无DB探针确认run/options取消均aborted且无outcome，真实timeout仍为transient_error且由Pi重试。当前产品源码再冻结，重新执行12组统一验收。
+
+第三轮统一验收前11组全部通过，最后POLICY-STARTUP在页面就绪后的首个身份检查超时；失败收据与审查归档为`.local/checks/request-policy-before-startup-timeout.json`、`request-policy-review-before-startup-timeout.json`。独立重现仍在原2秒限制超时；仅诊断性延长观测窗口测出首次/session耗时2.499秒、第二次0.009秒，日志为`request-policy-startup-diagnostic.log`与`request-policy-startup-timing.log`。源码确认API健康端点先于首次业务请求触发全量LazyLock契约编译。窄修复将原校验器初始化移到API监听前，不改变校验规则、原2秒请求/25秒健康等待或启动断言；新增审查范围仅API入口、共用契约初始化及对应架构说明。诊断延长窗口不计验收通过。修后原`make verify-startup`完整exit0（10项Python、原2秒身份检查、正式浏览器聊天与6次本机模型协议/预填、人工值保护），日志`.local/checks/request-policy-startup-ready-fixed.log`；独立审查认可在监听前强制原LazyLock初始化，不新增校验缓存、网络或改变规则。实现再次冻结，等待更新审查范围后完整12组复验。
+
+完成证据：北京时间2026-10-17 23:22:15–23:31:58，第四轮`make verify-increment`的12组全部exit0、无超时，前后内容指纹完全一致；收据为`.local/delivery/I2-REQUEST-POLICY-result.json`，原始日志目录`.local/delivery/I2-REQUEST-POLICY-1792250535840342000/`。包括436条跨语言契约、14项请求策略、旧trial兼容、Pi/进程恢复、原64KiB压缩、大工具组、真实SDK序列化、模型切换、聊天执行授权和正式启动。独立审查记录`docs/reviews/request-policy-review.json`在最终复验前形成，其统一验收pending仅表示审查时状态；最终执行由本收据证明。材料静态检查353项通过。本轮仅合成数据、本机协议和浏览器，官方/付费模型请求0，真实模型质量、缓存收益与真实平台接入未验收。
+
 ## Agent 上下文优化：七项修复与验证（2026-10-17）
 
-- 当前增量 `I2-AGENT-CONTEXT / complete`，七项均已落地，独立审查与17组冻结版本统一验收通过。最终状态、审查与执行收据以本文件frontmatter为准。上一知识复用增量的完成事实与收据保留在下文。
+- 上一增量 `I2-AGENT-CONTEXT / complete`，七项均已落地，独立审查与17组冻结版本统一验收通过，历史收据为 `.local/delivery/I2-AGENT-CONTEXT-result.json`。当前frontmatter描述新的请求策略增量，知识复用增量的完成事实与收据保留在下文。
 - 原五条外部审查意见与本地/Oracle新增发现统一保留。优先保障回答依据、多轮任务连续性和实现清晰度；用量仪表盘、p50/p95、缓存收益统计不是实施前置条件。动态上下文与稳定规则分离、压缩后依据保留均已纳入本轮实现与验收；真实缓存与质量收益仍未测量。
 - 审计基线为 `e951ff58`。本地离线请求序列化与 SDK 错误识别探针、一次隔离的 provider 协议复验均完成；Oracle完成一次4/5强度独立咨询。工程协议证据不代表真实模型质量或生产缓存收益。
 

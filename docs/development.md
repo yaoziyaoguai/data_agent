@@ -103,7 +103,7 @@ make vm-stop
 | `make verify-recovery` | 三个真实进程退出点、新run/原operation恢复、一份副作用、旧代次拒绝 |
 | `make verify-architecture` | 导入/SQL归属及故意反例、真实MySQL当前读取/事务快照/锁序/并发 |
 
-测试只创建和删除自己随机命名的临时数据库，使用本项目新生成的开发密码；日志与截图在忽略的`.local/checks/`。本地模拟provider调用也向Rust预留/结算调用预算，每个模拟输入最多12次模型调用，跨恢复run保留；实际交付最多4次，会话忙等待不计入次数。生产认证与真实 Datasight 仍需接入验证；真实模型验收遵守单独的持久试验额度。
+测试只创建和删除自己随机命名的临时数据库，使用本项目新生成的开发密码；日志与截图在忽略的`.local/checks/`。本地模拟provider调用也向Rust预留/结算调用预算，每个模拟输入最多24次模型调用，跨恢复run保留；实际交付最多4次，会话忙等待不计入次数。生产认证与真实 Datasight 仍需接入验证；真实模型验收遵守单独的持久试验额度。
 
 ### 完整业务验证
 
@@ -197,6 +197,16 @@ make verify-model-trial
 
 官方依据：[Chat Completions参数](https://api-docs.deepseek.com/api/create-chat-completion)、[定价](https://api-docs.deepseek.com/quick_start/pricing)、[用量与离线分词说明](https://api-docs.deepseek.com/quick_start/token_usage)。历史I0及当前profile的价格版本固定为2026-10-04高峰USD；实际用量以返回usage为准。
 
+### 正常消息的调用与重试规则
+
+正常模拟消息以及显式`budget_mode=request`的数据profile，每条用户消息最多24次模型调用；调查、原生摘要、重试、恢复和结果解释共用原scope。默认不设整个任务的总时长或费用截止。每次聊天模型请求仍有90秒超时，用户可随时取消，Worker持续续租。
+
+Pi1.0.0负责普通调用及摘要的原生重试：首次失败加最多2次重试，连续失败3次停止，成功清零。HTTP SDK层保持零重试；每次Pi重试申请新的宿主许可。Rust按原scope持久保存结果和序号，重启不重置，旧成功回执不能清掉较新失败。明确临时429/500/502/503/504、模型请求超时或连接失败可重试；认证、参数、计费配额、取消、缺失/无效用量、未知宿主许可和结算不确认直接停止。未知费用预留继续保留，不冒充零费用。取消不记为模型失败，也不清掉已有连续失败；进程中断恢复沿原预算，明确取消的运行不能继续。
+
+`infra/model-profile.example.json`为正常配置模板，使用已有128KiB请求体档和持久数据库`data_agent`。复制到本地忽略目录后可交给`--model-profile`；启动器不会自动替换现有配置。`trial_id`沿用既有账本身份字段名，正常模式下仍固定且不可通过重启改配置。正常模式可省略累计`trial_call_limit`和`trial_cost_micros`；管理员显式填写时仍校验相应累计上限。
+
+未声明`budget_mode`或指定`trial`时，历史有限试验的次数、金额与一小时到期保持，重启不能延长。迁移仅允许新正常账本的上限/到期为空，不修改任何旧记录。已有显式小额profile的单请求额度保持；不能把本规则用于给旧试验补额。单次模型超时、一次性发送许可有效期、运行租约均保留，各有不同用途。默认`make dev`继续使用mock/builtin/lexical，不调用真实模型。
+
 ### 完整多工具模型验收
 
 `node tests/mvp/run-deepseek-workflow.mjs --check`以回环OpenAI协议和真实Pi/Rust/MySQL检验“调查→SQL→条件补丁修订→显式确认API→查询→解释”和P01–P05原始来源预填/人工保护的共用账本，不会读取.env或访问官方端点。该脚本保留原客户端确认入口；正式Web的聊天执行验证见下方“聊天生成、修订和执行 SQL”。正式`--run`沿用CURRENT记录的有效授权；超出材料或端点授权范围时需新的决定。配置、原数据库和报告持续保存在忽略的`.local/model-workflow/`，拒绝重置已经分配过的额度。新试验配置与旧I0小样完全独立，不挪用/恢复到期额度；授权状态见CURRENT。
@@ -266,7 +276,7 @@ python3 scripts/development.py --model deepseek \
   --memory-configuration .local/memory/configuration.json
 ```
 
-模型profile必须是已准备的试用数据库和有限持久预算；沿用第6节的实际授权，不因换启动目录补额。新profile必须明确数据库、trial_id、调用/费用上限。提取至少需要4096输出容量，个人记忆所有模型调用都计入原请求或维护profile。端口默认8791，`--port-offset`同时偏移全部服务。启动顺序为平台→API→Mem0→Pi→Worker→Web；启动失败应查本次运行目录日志，不能把侧车缺失冒充成功。
+模型profile必须明确数据库、持久预算身份和模式；旧trial沿用第6节的实际授权，不因换启动目录补额。正常request配置见“正常消息的调用与重试规则”；新配置不自动授权模型付费。提取至少需要4096输出容量，个人记忆所有模型调用都计入原请求或维护profile。端口默认8791，`--port-offset`同时偏移全部服务。启动顺序为平台→API→Mem0→Pi→Worker→Web；启动失败应查本次运行目录日志，不能把侧车缺失冒充成功。
 
 | 数据 | 位置与责任 |
 | --- | --- |

@@ -710,7 +710,8 @@
             "vector_unavailable",
             "embedding_unavailable",
             "source_interrupted",
-            "result_expired"
+            "result_expired",
+            "model_retry_exhausted"
           ]
         },
         "message": {
@@ -1092,6 +1093,14 @@
             "max"
           ],
           "description": "通过Pi/DeepSeek原生思考模式；省略为off。思考tokens计入同一输出上限与用量。"
+        },
+        "budget_mode": {
+          "type": "string",
+          "enum": [
+            "trial",
+            "request"
+          ],
+          "description": "省略沿用有限trial；request为正常持续使用，每消息24次，累计费用/试用期限不默认拦截。"
         }
       },
       "required": [
@@ -1100,9 +1109,7 @@
         "trial_id",
         "price_version",
         "input_limit",
-        "output_limit",
-        "trial_call_limit",
-        "trial_cost_micros"
+        "output_limit"
       ],
       "additionalProperties": false,
       "allOf": [
@@ -1183,6 +1190,38 @@
                 "const": "2026-10-04-peak-usd"
               }
             }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "budget_mode": {
+                "const": "request"
+              }
+            },
+            "required": [
+              "budget_mode"
+            ]
+          },
+          "then": {
+            "properties": {
+              "toolset": {
+                "const": "data"
+              },
+              "request_call_limit": {
+                "const": 24
+              }
+            },
+            "required": [
+              "toolset",
+              "request_call_limit"
+            ]
+          },
+          "else": {
+            "required": [
+              "trial_call_limit",
+              "trial_cost_micros"
+            ]
           }
         }
       ]
@@ -1335,6 +1374,15 @@
               "type": "null"
             }
           ]
+        },
+        "outcome": {
+          "type": "string",
+          "enum": [
+            "success",
+            "transient_error",
+            "permanent_error"
+          ],
+          "description": "受控provider给出的调用结果；与是否取得可靠用量分开。连续临时失败在原请求范围持久计数。"
         }
       },
       "required": [
@@ -1344,7 +1392,28 @@
         "parameters_fingerprint",
         "usage"
       ],
-      "additionalProperties": false
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "outcome": {
+                "const": "success"
+              }
+            },
+            "required": [
+              "outcome"
+            ]
+          },
+          "then": {
+            "properties": {
+              "usage": {
+                "$ref": "#/$defs/ModelUsage"
+              }
+            }
+          }
+        }
+      ]
     },
     "ModelCallReceipt": {
       "title": "ModelCallReceipt",

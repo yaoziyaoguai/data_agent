@@ -123,15 +123,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         .map_err(|e| e.code)?;
                         client
                             .post(format!("{url}/resume-and-deliver"))
-                            // 单次思考和工具循环共用有限运行期限，期间持续续租。
-                            .timeout(Duration::from_secs(
-                                envelope["model_profile"]["request_call_limit"]
-                                    .as_u64()
-                                    .unwrap_or(6)
-                                    .min(24)
-                                    * 90
-                                    + 60,
-                            ))
+                            // Pi每次调用有超时；宿主按原请求限次并持续续租，不另设整轮截止。
                             .bearer_auth(&token)
                             .json(&dispatch_envelope)
                             .send()

@@ -4,12 +4,23 @@ from pathlib import Path
 import tempfile
 import unittest
 
-from development import read_model_credentials, memory_configuration, embedding_configuration, with_local_proxy_bypass, wait_health, available_ports
+from development import read_model_credentials, model_database, memory_configuration, embedding_configuration, with_local_proxy_bypass, wait_health, available_ports
 from unittest.mock import patch, Mock
 import json
 
 
 class ModelCredentialsTest(unittest.TestCase):
+    def test_model_database_keeps_trial_scope_and_explicit_normal_mode(self):
+        self.assertEqual(model_database({'database': 'data_agent', 'profile': {'budget_mode': 'request'}}), 'data_agent')
+        for profile in ({}, {'budget_mode': 'trial'}, {'budget_mode': 'request'}):
+            self.assertEqual(model_database({'database': 'data_agent_trial_abc123', 'profile': profile}), 'data_agent_trial_abc123')
+        for profile in ({}, {'budget_mode': 'trial'}):
+            with self.assertRaisesRegex(RuntimeError, '数据库配置无效'):
+                model_database({'database': 'data_agent', 'profile': profile})
+        for database in ('another_project', 'data_agent_trial_ab;DROP DATABASE data_agent', 'data_agent_trial_xyz'):
+            with self.assertRaisesRegex(RuntimeError, '数据库配置无效'):
+                model_database({'database': database, 'profile': {'budget_mode': 'request'}})
+
     def test_memory_state_is_stable_per_database_and_target(self):
         with tempfile.TemporaryDirectory() as directory, patch('development.ROOT', Path(directory)):
             source = Path(directory) / 'memory.json'

@@ -170,7 +170,8 @@ export async function deliver(
       reserveTokens: 2048,
       keepRecentTokens: run.model_profile?.toolset === "data" ? keepRecentTokens : 4000,
     },
-    retry: { enabled: false },
+    // 连续失败三次 = 首次请求 + 两次Pi原生重试；HTTP SDK层保持零重试。
+    retry: { enabled: run.model_profile?.toolset === "data", maxRetries: 2, baseDelayMs: 500, maxAgentDelayMs: 2000 },
   });
   const { session } = await createAgentSession({
     cwd: "/synthetic/data-agent",
@@ -249,7 +250,7 @@ export async function deliver(
         final?.role === "assistant" &&
         (final.stopReason === "error" || final.stopReason === "aborted")
       ) {
-        const safeCodes = new Set(["model_timeout", "model_auth_failed", "model_rate_limited", "model_request_failed", "model_budget_exhausted", "model_usage_unknown", "model_usage_invalid", "model_input_limit", "model_limits_exceeded", "model_finalize_unconfirmed", "request_too_large: model_input_limit", "run_cancelled"]);
+        const safeCodes = new Set(["model_timeout", "model_auth_failed", "model_rate_limited", "model_service_unavailable", "model_network_error", "model_quota_exhausted", "model_retry_exhausted", "model_request_failed", "model_budget_exhausted", "model_usage_unknown", "model_usage_invalid", "model_input_limit", "model_limits_exceeded", "model_finalize_unconfirmed", "request_too_large: model_input_limit", "run_cancelled"]);
         const code = safeCodes.has(final.errorMessage ?? "") ? final.errorMessage : "model_run_failed";
         throw Object.assign(new Error("model_run_failed"), { code });
       }

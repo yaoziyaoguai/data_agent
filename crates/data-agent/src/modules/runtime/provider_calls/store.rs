@@ -117,16 +117,24 @@ pub async fn issue_in_tx(
     }
     tx.lock_rank(7)?;
     let trial = sqlx::query(
-        "SELECT *,expires_at>UTC_TIMESTAMP(3) AS valid FROM model_trials WHERE id=? FOR UPDATE",
+        "SELECT *,(expires_at IS NULL OR expires_at>UTC_TIMESTAMP(3)) AS valid FROM model_trials WHERE id=? FOR UPDATE",
     )
     .bind(&budget.trial_id)
     .fetch_one(tx.connection())
     .await?;
     if trial.get::<i64, _>("valid") == 0
         || trial.get::<String, _>("state") != "active"
-        || trial.get::<u32, _>("allocated_calls") >= trial.get::<u32, _>("call_limit")
-        || trial.get::<u64, _>("spent_micros") + trial.get::<u64, _>("reserved_micros") + reserved
-            > trial.get::<u64, _>("cost_limit_micros")
+        || trial
+            .get::<Option<u32>, _>("call_limit")
+            .is_some_and(|limit| trial.get::<u32, _>("allocated_calls") >= limit)
+        || trial
+            .get::<Option<u64>, _>("cost_limit_micros")
+            .is_some_and(|limit| {
+                trial.get::<u64, _>("spent_micros")
+                    + trial.get::<u64, _>("reserved_micros")
+                    + reserved
+                    > limit
+            })
     {
         return Err(Error::new("budget_exhausted"));
     }

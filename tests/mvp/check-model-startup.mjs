@@ -40,20 +40,21 @@ try{
   const response=await route.fetch();await new Promise(r=>setTimeout(r,500));await route.fulfill({response});
  });
  await page.goto(webUrl);await page.getByLabel('演示登录凭据').fill(tokens.alice);await page.getByRole('button',{name:'进入工作台 →',exact:true}).click();
- await page.locator('.badge').getByText(profile.model_id==='deepseek-v4-pro'?'DeepSeek V4 Pro':'DeepSeek Flash',{exact:true}).waitFor();
+ const modelSelect=page.getByLabel('模型',{exact:true});await modelSelect.waitFor();assert.equal(await modelSelect.inputValue(),profile.model_id);assert.equal(await modelSelect.locator('option:checked').innerText(),profile.model_id==='deepseek-v4-pro'?'Pro':'Flash');
  await page.getByLabel('你的数据问题').fill('验证正式启动聊天接线');await page.getByRole('button',{name:'发送 ↑',exact:true}).click();await page.getByText('正式启动聊天回环已完成。',{exact:true}).waitFor();
  const reanalyze=async()=>{
   const responsePromise=page.waitForResponse(r=>new URL(r.url()).pathname==='/api/knowledge/table-demo_order_detail/reanalyze'&&r.request().method()==='POST');
   await page.getByRole('button',{name:'重新预填',exact:true}).click();
   const response=await responsePromise;assert.equal(response.status(),200);const accepted=await response.json();
-  await until(async()=>{
-   const heading=await page.locator('.object-heading .eyebrow').innerText();const version=heading.match(/VERSION (\d+)/)?.[1];
-   return version&&BigInt(version)>BigInt(accepted.version)&&await page.getByText(/本次模型建议已保存/).isVisible();
+  const completed=await until(async()=>{
+   const response=await page.request.get(webUrl+'/api/knowledge/table-demo_order_detail');assert.equal(response.status(),200);const value=await response.json();
+   return BigInt(value.version)>BigInt(accepted.version)&&value.prefill_status?.state==='succeeded'?value:false;
   },'current prefill applied');
+  await page.getByRole('tab',{name:'变更记录',exact:true}).click();await page.getByText(new RegExp('^当前版本 '+completed.version+' · 最新修改者 ')).waitFor();await page.getByRole('tab',{name:'概览',exact:true}).click();
  };
- await page.getByRole('button',{name:/语义管理/}).click();await reanalyze();
- const firstEntry=page.locator('.semantic-entry').first();await firstEntry.getByRole('button',{name:'编辑',exact:true}).click();await firstEntry.locator('textarea').fill('正式启动下人工保护值');await firstEntry.getByRole('button',{name:'保存修改',exact:true}).click();await firstEntry.locator('.entry-value').getByText('正式启动下人工保护值',{exact:true}).waitFor();assert.equal(await firstEntry.locator('textarea').count(),0);assert.ok(await firstEntry.getByText('人工修改',{exact:true}).isVisible());
- await reanalyze();assert.equal(await firstEntry.locator('.entry-value').innerText(),'正式启动下人工保护值');assert.ok(await firstEntry.getByText('人工修改',{exact:true}).isVisible());
+ await page.getByRole('button',{name:/语义管理/}).click();await page.getByRole('navigation',{name:'语义对象'}).getByRole('button',{name:/^demo_order_detail /}).click();await reanalyze();
+ const firstEntry=page.locator('.semantic-entry').first();await firstEntry.getByRole('button',{name:'编辑',exact:true}).click();await firstEntry.locator('textarea').fill('正式启动下人工保护值');await firstEntry.getByRole('button',{name:'保存修改',exact:true}).click();await firstEntry.locator('.entry-value').getByText('正式启动下人工保护值',{exact:true}).waitFor();assert.equal(await firstEntry.locator('textarea').count(),0);await firstEntry.getByText('查看依据与修改记录',{exact:true}).click();assert.ok(await firstEntry.getByText('由 alice 修改',{exact:true}).isVisible());
+ await reanalyze();assert.equal(await firstEntry.locator('.entry-value').innerText(),'正式启动下人工保护值');await firstEntry.getByText('查看依据与修改记录',{exact:true}).click();assert.ok(await firstEntry.getByText('由 alice 修改',{exact:true}).isVisible());
  const ledger=h.sql(`SELECT JSON_OBJECT('calls',allocated_calls,'spent',spent_micros,'reserved',reserved_micros) FROM model_trials WHERE id='${profile.trial_id}'`)[0];assert.equal(ledger.calls,calls.length);assert.deepEqual(calls,['chat','chat','prefill','prefill','prefill','prefill']);assert.equal(ledger.reserved,0);assert.equal(ledger.spent,profile.model_id==='deepseek-v4-pro'?2258:624);assert.equal(errors.length,0);assert.equal(h.sql("SELECT JSON_OBJECT('n',COUNT(*)) FROM model_trials WHERE id='old-trial-id'")[0].n,0);
  checks.push({name:'正式development.py启动方式与页面完成聊天/初次/再次模型预填，人工值保护；Pi和Worker共用原trial账本，0官方调用',passed:true});passed=true;
  console.log(JSON.stringify({passed,checks,calls,ledger,officialRequests:0}));
@@ -61,7 +62,7 @@ try{
  await writeFile('.local/checks/mvp-model-startup-launcher-error.log',output,{mode:0o600});
  if(page){
   const entries=await page.locator('.semantic-entry').evaluateAll(nodes=>nodes.map(node=>({heading:node.querySelector('.entry-head')?.textContent,paragraphs:[...node.querySelectorAll(':scope > p')].map(p=>({className:p.className,text:p.textContent})),editing:!!node.querySelector('textarea')})));
-  await writeFile('.local/checks/mvp-model-startup-failure-view.json',JSON.stringify({entries,selected:await page.locator('.object-heading h2').innerText(),calls,mutations,alerts:await page.getByRole('alert').allTextContents(),maintenance:await page.getByRole('status').allTextContents()},null,2),{mode:0o600});
+  await writeFile('.local/checks/mvp-model-startup-failure-view.json',JSON.stringify({entries,selected:await page.locator('.object-heading h2').allTextContents(),calls,mutations,alerts:await page.getByRole('alert').allTextContents(),maintenance:await page.getByRole('status').allTextContents()},null,2),{mode:0o600});
   await page.screenshot({path:'.local/checks/mvp-model-startup-failure-view.png',fullPage:true});
  }
  throw error;

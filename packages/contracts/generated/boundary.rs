@@ -675,6 +675,8 @@ pub enum Code {
     MemoryUnavailable,
     #[serde(rename = "message_pending")]
     MessagePending,
+    #[serde(rename = "model_retry_exhausted")]
+    ModelRetryExhausted,
     #[serde(rename = "not_available")]
     NotAvailable,
     #[serde(rename = "outcome_unknown")]
@@ -1208,9 +1210,23 @@ pub struct ExecuteQueryInput {
 pub struct FinalizeModelCall {
     pub call_attempt_id: String,
     pub lease_epoch: String,
+    /// 受控provider给出的调用结果；与是否取得可靠用量分开。连续临时失败在原请求范围持久计数。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub outcome: Option<Outcome>,
     pub parameters_fingerprint: String,
     pub run_id: String,
     pub usage: Option<ModelUsage>,
+}
+
+/// 受控provider给出的调用结果；与是否取得可靠用量分开。连续临时失败在原请求范围持久计数。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Outcome {
+    #[serde(rename = "permanent_error")]
+    PermanentError,
+    Success,
+    #[serde(rename = "transient_error")]
+    TransientError,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1945,6 +1961,9 @@ pub struct ThinkingOption {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ModelProfile {
+    /// 省略沿用有限trial；request为正常持续使用，每消息24次，累计费用/试用期限不默认拦截。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub budget_mode: Option<BudgetMode>,
     pub input_limit: i64,
     pub model_id: String,
     pub output_limit: i64,
@@ -1959,9 +1978,19 @@ pub struct ModelProfile {
     pub thinking_level: Option<ThinkingLevel>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub toolset: Option<Toolset>,
-    pub trial_call_limit: i32,
-    pub trial_cost_micros: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub trial_call_limit: Option<i32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub trial_cost_micros: Option<String>,
     pub trial_id: String,
+}
+
+/// 省略沿用有限trial；request为正常持续使用，每消息24次，累计费用/试用期限不默认拦截。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum BudgetMode {
+    Request,
+    Trial,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

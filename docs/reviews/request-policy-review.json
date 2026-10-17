@@ -1,0 +1,424 @@
+{
+  "schema": 1,
+  "increment_id": "I2-REQUEST-POLICY",
+  "reviewer": "独立审查代理copilot_review_scope；未参与本增量产品源码、契约或测试实现，仅核对原要求、实际代码、锁定SDK和合成证据并编写本记录",
+  "reviewed_at": "2026-10-17T15:21:32.659767+00:00",
+  "conclusion": "passed",
+  "summary": "按CURRENT的24次总调用、连续临时失败3次、单次超时/取消和旧trial不补额要求完成独立审查。Pi仍承担唯一循环、普通及摘要重试；Rust持久计数、原scope许可和未知预留保持。已修复unknown临时失败补usage、200 SSE断流重试、迟到旧失败补计，以及进程交接取消误记永久失败而阻断恢复。首轮统一前3组通过、第4组历史UI定位失败；按HEAD既有界面修正测试后provider和启动专项通过。第二轮前9组通过、第10组原模型选择恢复用例发现取消实现回归；保持原测试，修后14项策略与6组模型选择专项通过。第三轮前11组全部通过，最后启动组在首个GET /session的原2秒限制超时；前后指纹一致，失败收据均保留。独立源码核对identity→success→validate首次触发全量LazyLock编译，而health已提前返回；诊断首次2.499秒、第二次0.009秒支持此原因。新修复只在API监听前强制原校验器初始化，不改契约、请求时限或验收预期。原make verify-startup完整通过，包含10项Python、mock两身份原2秒检查和正式浏览器2次聊天/4次预填。当前153份输入代码审查无剩余确定阻断；最新12组统一验收仍待完整重跑，不能拼接前三轮或专项关闭增量。",
+  "scope_sha256": "c1999edcb22a9b8de79b2cf8b68a6966bc5a51d33bb1f446b468d84654ab9755",
+  "findings": [],
+  "resolved_findings": [
+    "P1：原FinalizeModelCall将transient_error限制为usage:null，而已记录outcome又不可变，导致unknown后永远不能补可靠usage。已移除该限制；同一outcome补结算不重复计失败。冻结测试追加首次补结算后的allocated/reserved/spent与重放后完全相等断言，待统一执行。",
+    "P2：原provider仅在响应头前将连接失败识别为网络临时错误，200 SSE中断误记permanent_error。已使用锁定SDK的只读错误分类映射固定model_network_error；完整响应缺usage仍直接停止。审查者纯内存transport和本机SSE复现旧缺陷，并验证修复后断流可重试、完整响应缺usage和429 quota不可重试。没有访问外部模型。",
+    "P2：原model_outcome_sequence忽略所有旧结果，晚到旧transient_error会少计连续失败。现按scope调用序号倒排最近三个有outcome的结果重算；NULL不当作成功，重复结算不二次增加，晚到旧成功不清较新失败。新反例含更晚reserved占位及晚到第三次失败，验证reserve/send均拒绝继续。",
+    "证据加强：断流用例原只查调用数与账本，不能直接证明半截输出未正式提交。现检查snapshot恰好一条committed assistant且text精确等于成功正文。初稿content字段错误的失败日志保留，修正来自既有返回契约，未放宽正文预期。",
+    "历史UI夹具修正：首轮统一第4组等待已在HEAD移除的badge超时。旧I0 task profile没有模型目录，故保持原profile并在Identity核对模型名，以原用户消息和停止按钮定位同一会话；data启动用例在真实select核模型ID及Flash/Pro标签。会话初始化采用当前space/user键，旧键迁移代码保持，不能把旧键称为已证失效。停止提示按HEAD完整文字由任务改为消息，首次及刷新后均精确匹配。语义预填原VERSION标题和成功提示已移除，现真实POST后GET核版本增长与succeeded，再核变更记录渲染同版；在依据details核alice人工修改和原值保留，显式选择原demo_order_detail。原取消1500ms、幂等、调用数/费用及人工保护边界不变；错误文案专项失败日志保留。",
+    "P1：第二轮统一模型选择/恢复场景发现进程交接AbortSignal被记为permanent_error，将原scope连续失败直接推至3，正常恢复遭model_retry_exhausted。provider在run或SDK signal取消时不写outcome、stopReason/reason均返回aborted，Pi不重试；调用次数和unknown费用预留不退，也不增加或清零已有失败。真正用户取消仍由Rust cancel_run事务更新run、消息和job状态，reserve/send及start_delivery拒绝已取消业务。原模型选择测试未改。新增首次发送取消后0次失败、一次503后退避取消保留1次、两次503后SDK取消发送保留2次及outcome NULL的反例；14项策略和原模型选择6组专项通过，最新完整统一仍待运行。",
+    "P2：第三轮统一最后POLICY-STARTUP首个GET /session在2秒超时，独立重现与诊断显示首次2.499秒、第二次0.009秒。API health原先先于mock首次Identity校验返回ready，随后validate才编译所有VALIDATORS。现contracts::initialize_validators仅LazyLock::force原缓存，main在数据库连接、配置及监听前调用；编译失败按原expect中止启动，不提前报告ready。原2秒请求、25秒健康等待及身份/浏览器断言未变。诊断临时延长窗口不计验收。修后原make verify-startup完整退出0；健康ready发生在初始化之后，本轮实测3.28秒，两个身份检查及原聊天/预填/人工值保护通过。"
+  ],
+  "requirement_review": [
+    {
+      "requirements": [
+        "C01",
+        "C05"
+      ],
+      "topic": "Pi原生循环、摘要与重试边界",
+      "files": [
+        "apps/agent/session/deliver.ts",
+        "apps/agent/provider/deepseek.ts",
+        "package.json",
+        "tests/runtime/check-request-policy.mjs"
+      ],
+      "assessment": "核对锁定Pi1.0.0 AgentSession普通retry和completeSummarization的retryAssistantCall；首次加两次重试等于三次失败。未复制Agent或摘要循环。底层HTTP maxRetries=0，每次Pi重试使用新attempt并领取原scope许可。摘要夹具使用真实Pi compact hook，明确前2次普通、后3次摘要且总5次计原scope。"
+    },
+    {
+      "requirements": [
+        "C05",
+        "C07"
+      ],
+      "topic": "错误分类、取消、未知许可与结算",
+      "files": [
+        "apps/agent/provider/deepseek.ts",
+        "tests/runtime/check-request-policy.mjs",
+        "tests/runtime/check-model-provider.mjs",
+        "tests/runtime/check-model-admission.mjs"
+      ],
+      "assessment": "run及SDK options取消与单次timeout分别识别。临时429/指定5xx、超时、网络与SSE中断使用固定码；429 quota/billing经SDK优先排除。确定性认证/参数、完整响应缺usage、无效usage、未知宿主许可及结算不确认不盲重试。已发调用未知仍保留预留，可靠usage可幂等补结算；模型失败与费用状态分开。"
+    },
+    {
+      "requirements": [
+        "C05"
+      ],
+      "topic": "24次和持久连续失败",
+      "files": [
+        "crates/data-agent/src/modules/runtime/budgets.rs",
+        "crates/data-agent/src/modules/runtime/model_calls/store.rs",
+        "crates/data-agent/src/use_cases/model_calls.rs",
+        "migrations/202610170001_request_budgets.sql",
+        "tests/runtime/check-request-policy.mjs"
+      ],
+      "assessment": "正常request由契约固定24，mock默认24，旧显式请求额度保持。attempt、scope、trial沿现有事务顺序更新；reserve和send检查原scope持久失败值。成功清失败但不退已用；按最近有效outcome重算，迟到结果、预留占位、重复结算及两次失败后新run恢复均有针对性反例。结算允许取消后原调用收尾，不授予新发送或业务写权限。"
+    },
+    {
+      "requirements": [
+        "C05",
+        "C07"
+      ],
+      "topic": "正常request与历史trial兼容",
+      "files": [
+        "packages/contracts/schema.json",
+        "packages/contracts/generated/boundary.rs",
+        "packages/contracts/generated/boundary.ts",
+        "crates/data-agent/src/modules/runtime/model_calls/store.rs",
+        "crates/data-agent/src/modules/runtime/provider_calls/store.rs",
+        "migrations/202610040001_model_calls.sql",
+        "migrations/202610170001_request_budgets.sql",
+        "infra/model-profile.example.json"
+      ],
+      "assessment": "request需要data工具集和request_call_limit=24，累计次数/金额可省略且无一小时到期；显式累计限额仍守。旧模式仍要求原trial字段并保留一小时。新增Option skip_none不改变旧profile序列化键值，configure_budget重复启动不更新原行。隔离旧schema夹具逐字段比较ALTER前后的额度、已用、预留、费用、状态、到期、指纹和旧scope。该DDL实证不冒充整套真实历史数据库升级验收。"
+    },
+    {
+      "requirements": [
+        "C04",
+        "C05",
+        "C07"
+      ],
+      "topic": "宿主运行与原业务边界",
+      "files": [
+        "apps/worker/src/main.rs",
+        "scripts/development.py",
+        "scripts/test_development.py",
+        "tests/mvp/check-conversational-query.mjs",
+        "tests/mvp/check-model-selection.mjs",
+        "tests/mvp/check-native-compaction.mjs",
+        "tests/mvp/check-large-tool-context.mjs"
+      ],
+      "assessment": "Worker移除按次数推导的整轮截止，连接超时、续租、取消和模型单次90秒保留。启动器只允许显式request使用data_agent主库，旧trial仍限定试验库，纯配置正反例覆盖。执行授权、只读/版本、模型选择和原64KiB压缩/完整工具组的既有测试仍绑定统一验收，没有用新128KiB摘要夹具替换原压力标准。"
+    },
+    {
+      "requirements": [
+        "C01",
+        "C07"
+      ],
+      "topic": "范围、命名与证据",
+      "files": [
+        "docs/CURRENT.md",
+        "docs/semantic-retrieval-design.md",
+        "docs/architecture/implementation-design.md",
+        "docs/architecture/runtime-modules.md",
+        "docs/development.md"
+      ],
+      "assessment": "修改集中在既有runtime/provider及启动配置边界；新增scope_call_sequence、outcome和budget_mode表达职责，未以阶段编号命名实现，也未引入额外规划器。CURRENT记录用户改变的运行规则、失败日志和夹具修正依据。按C01/C04/C05/C07核对12组验收，不把本增量完成扩为整条要求或真实平台/模型质量通过。"
+    },
+    {
+      "requirements": [
+        "C05",
+        "C07"
+      ],
+      "topic": "历史浏览器测试与当前正式界面对齐",
+      "files": [
+        "tests/runtime/check-model-provider.mjs",
+        "tests/mvp/check-model-startup.mjs",
+        "apps/web/src/shared/WorkspaceShell.tsx",
+        "apps/web/src/shared/api.ts",
+        "apps/web/src/features/workbench/ModelSelector.tsx",
+        "apps/web/src/features/workbench/Workbench.tsx",
+        "apps/web/src/features/workbench/conversation-storage.ts",
+        "apps/web/src/features/workbench/useModelSelection.ts",
+        "apps/web/src/features/knowledge/KnowledgePage.tsx"
+      ],
+      "assessment": "独立以git show HEAD和现行组件确认失效定位先于本增量。I0未改为data或放大预算；模型label证据来自Identity，取消来自真实React同一会话且刷新保持。data模型下拉与选中标签、真实预填HTTP完成及可见当前版本、details人工修改者均分别核对。page.request沿浏览器已登录session cookie；未用mock替代页面或后台行为。在历史浏览器对齐阶段，与首轮receipt共有输入比较仅provider测试变化；新增绑定Web及startup，该阶段未修改产品实现。随后第二轮验收发现的取消恢复回归及产品修复另行记录。"
+    },
+    {
+      "requirements": [
+        "C01",
+        "C04",
+        "C05",
+        "C07"
+      ],
+      "topic": "进程交接取消、真正用户取消与原请求恢复",
+      "files": [
+        "apps/agent/provider/deepseek.ts",
+        "crates/data-agent/src/use_cases/cancel_run.rs",
+        "crates/data-agent/src/use_cases/model_calls.rs",
+        "crates/data-agent/src/use_cases/deliver_run.rs",
+        "tests/runtime/check-request-policy.mjs",
+        "tests/mvp/check-model-selection.mjs"
+      ],
+      "assessment": "取消属于宿主控制，不等于模型永久错误。run和SDK options.signal取消均返回aborted且不写outcome，不增加也不清空已有连续失败；已发调用仍占用原scope次数和未知预留。真实timeout仍为model_timeout/transient_error并交Pi原生重试。Rust真正用户取消在同事务撤回消息并取消run/job、释放租约，reserve/send核有效turn和running状态，start_delivery拒绝非pending消息，省略outcome不恢复已由业务取消的run。原模型选择恢复用例源码指纹与第二轮失败收据一致；修后同一原测试6组、36次本机HTTP通过。独立纯内存transport探针与新取消计数反例相互印证，不以专项替代完整12组验收。"
+    },
+    {
+      "requirements": [
+        "C05",
+        "C07"
+      ],
+      "topic": "API就绪与首次契约校验初始化",
+      "files": [
+        "apps/api/src/main.rs",
+        "apps/api/src/routes.rs",
+        "crates/data-agent/src/contracts.rs",
+        "packages/contracts/schema.json",
+        "crates/data-agent/Cargo.toml",
+        "scripts/development.py",
+        "tests/mvp/check-model-startup.mjs",
+        "Makefile",
+        "docs/architecture/implementation-design.md"
+      ],
+      "assessment": "独立核对GET /session的identity经success验证Identity；POST login不是此慢路径。无model profile的mock不会在启动时decode ModelProfile，原health直接返回ok而VALIDATORS全量LazyLock尚未初始化。新initialize_validators复用原缓存及校验选项，API main首先执行，位于数据库/配置副作用及监听之前。schema编译嵌入、309个引用均为本地#引用，jsonschema关闭默认features；此初始化不引入网络或凭据读取，也不改变request/trial规则与配置指纹。原初始化expect失败会在监听前终止。原请求2秒、健康25秒和验收断言保持；修后完整启动专项证明当前本地流程通过，不将3.28秒外推为生产保证。"
+    }
+  ],
+  "evidence": [
+    ".local/checks/request-policy-fifth.log",
+    ".local/checks/request-policy-final.log",
+    ".local/checks/request-policy-launcher.log",
+    ".local/checks/request-policy-before-browser-fix.json",
+    ".local/checks/request-policy-review-before-browser-fix.json",
+    ".local/delivery/I2-REQUEST-POLICY-1792247691178100000/command-03.log",
+    ".local/delivery/I2-REQUEST-POLICY-1792247691178100000/command-04.log",
+    ".local/checks/request-policy-legacy-provider.log",
+    ".local/checks/request-policy-legacy-provider-fixed.log",
+    ".local/checks/request-policy-startup-fixed.log",
+    ".local/checks/request-policy-before-cancel-fix.json",
+    ".local/checks/request-policy-review-before-cancel-fix.json",
+    ".local/delivery/I2-REQUEST-POLICY-1792248458855513000/command-10.log",
+    ".local/checks/request-policy-cancel-policy.log",
+    ".local/checks/request-policy-selection-recovery.log",
+    ".local/checks/request-policy-before-startup-timeout.json",
+    ".local/checks/request-policy-review-before-startup-timeout.json",
+    ".local/delivery/I2-REQUEST-POLICY-1792249496787148000/command-12.log",
+    ".local/checks/request-policy-startup-diagnostic.log",
+    ".local/checks/request-policy-startup-timing.log",
+    ".local/checks/request-policy-startup-ready-fixed.log"
+  ],
+  "evidence_sha256": {
+    ".local/checks/request-policy-fifth.log": "47123ea615ee53ff7f930cc95eddffeb3938965d389fa1f742a92311daee219f",
+    ".local/checks/request-policy-final.log": "cd9f492cab2223703d47ffca05e194d1816106406bd95d56161ae4229ac02954",
+    ".local/checks/request-policy-launcher.log": "80c3c1862a9ee2fb52e990bbf38442be0e8778d29c048dab4cfc959a6b6d17fe",
+    ".local/checks/request-policy-before-browser-fix.json": "2709c59959a0e2fd2898ef7fc1774defc1ea075ad7635ba26b7115242f1e2a5c",
+    ".local/checks/request-policy-review-before-browser-fix.json": "2bfc43cb3c522d510b57a5a7690758ab88f532c78c511182a8c5905d20b3a5a6",
+    ".local/delivery/I2-REQUEST-POLICY-1792247691178100000/command-03.log": "47123ea615ee53ff7f930cc95eddffeb3938965d389fa1f742a92311daee219f",
+    ".local/delivery/I2-REQUEST-POLICY-1792247691178100000/command-04.log": "15e443c5d1efd11c6d45ad9e6f23d3f8732fefa5afb0d9133c682b361718426f",
+    ".local/checks/request-policy-legacy-provider.log": "ba2d9befcab87f7150324fadd5ca1b79cdbef4f4c2489323e258c564bf150fd3",
+    ".local/checks/request-policy-legacy-provider-fixed.log": "56807d6c800e84e0429ab17461c03b65f5bc7bcce5300523ccf6460e8763a3f2",
+    ".local/checks/request-policy-startup-fixed.log": "88d35bdad4d98aba40c708a7db1d5aa61222ada4a3c1e09989512c95e73ff0a3",
+    ".local/checks/request-policy-before-cancel-fix.json": "c17aea26ed585df4be46f37d370cde9e244f82dca37199691af7b5ec419c0de8",
+    ".local/checks/request-policy-review-before-cancel-fix.json": "ee32c57ca3092f98b73423fa4cdd5dd451f61390a91a78dd73d018b97ee6e5d1",
+    ".local/delivery/I2-REQUEST-POLICY-1792248458855513000/command-10.log": "076eec0d2dd9b867af307fd5ce501ce496f78153ae8ff11a53ed938ac9653e09",
+    ".local/checks/request-policy-cancel-policy.log": "05cc4f2ecdcdf281660575cf584f62047e1b7970df734f2e5d057f0539b7c76d",
+    ".local/checks/request-policy-selection-recovery.log": "be6bc5a3be0634e1d7215874eaeaaa938727b18415856a556917447c871184e4",
+    ".local/checks/request-policy-before-startup-timeout.json": "46f78af7eb947027219e3627ab6a18677e58b25c55c3d8ad1ff8013faac9c67a",
+    ".local/checks/request-policy-review-before-startup-timeout.json": "d950ec42f59a707e9d57dfd8238c2a14f39ca7d55dac4d624dd1790f55cf5c09",
+    ".local/delivery/I2-REQUEST-POLICY-1792249496787148000/command-12.log": "3234431da3741953ad6eaee32b0ecb7fdfcdcdc7df9b7f96e18bc7fd0b5a6156",
+    ".local/checks/request-policy-startup-diagnostic.log": "3115a158dac72350484447531d8689ed978f4d64baefb9592ddf3c855febf5c3",
+    ".local/checks/request-policy-startup-timing.log": "c876b48f79fd677a0a01c85c24e91179dba7148b3bdd266193ddc54ffa5a6237",
+    ".local/checks/request-policy-startup-ready-fixed.log": "deef24caed43bc1558415b91898a9a4a6a4872d7df765b69340b6d2694f4c010"
+  },
+  "scope_binding": {
+    "independently_recomputed": true,
+    "input_files": 153,
+    "acceptance_groups": 12
+  },
+  "verification_update": {
+    "pre_final_targeted_policy": {
+      "log": ".local/checks/request-policy-fifth.log",
+      "checks": 14,
+      "local_protocol_requests": 60,
+      "official_requests": 0,
+      "status": "passed",
+      "version_limit": "随后加强两条断言，非当前冻结版完整通过证据"
+    },
+    "last_targeted_policy": {
+      "log": ".local/checks/request-policy-final.log",
+      "status": "failed",
+      "reason": "正式回答断言误用content字段；冻结版已依据既有text契约修正，正文期望不变",
+      "superseded_by": "首轮统一POLICY-POLICY完整通过加强后的14项；当前全范围仍须重跑"
+    },
+    "python_configuration": {
+      "log": ".local/checks/request-policy-launcher.log",
+      "tests": 10,
+      "status": "passed"
+    },
+    "frozen_unified_acceptance": "pending",
+    "required_receipt": ".local/delivery/I2-REQUEST-POLICY-result.json",
+    "first_unified": {
+      "receipt": ".local/checks/request-policy-before-browser-fix.json",
+      "status": "failed",
+      "inputs_stable": true,
+      "passed_groups": [
+        "POLICY-BUILD",
+        "POLICY-ENGINEERING",
+        "POLICY-POLICY"
+      ],
+      "failed_group": "POLICY-PROVIDER",
+      "cause": "历史badge locator超时；未算作完整验收通过"
+    },
+    "browser_alignment": {
+      "changed_previously_bound_files": [
+        "tests/runtime/check-model-provider.mjs"
+      ],
+      "additional_changed_test": "tests/mvp/check-model-startup.mjs",
+      "product_sources_changed": false,
+      "provider": {
+        "log": ".local/checks/request-policy-legacy-provider-fixed.log",
+        "checks": 13,
+        "local_requests": 13,
+        "cancellation_ms": 123,
+        "socket_close_ms": 66,
+        "status": "passed"
+      },
+      "startup": {
+        "log": ".local/checks/request-policy-startup-fixed.log",
+        "chat_calls": 2,
+        "prefill_calls": 4,
+        "allocated_calls": 6,
+        "spent_micros": 624,
+        "reserved_micros": 0,
+        "official_requests": 0,
+        "status": "passed"
+      },
+      "stage_limit": "仅指首轮失败后的历史UI测试对齐阶段；后续取消回归另有产品源码修复。"
+    },
+    "second_unified": {
+      "receipt": ".local/checks/request-policy-before-cancel-fix.json",
+      "review_archive": ".local/checks/request-policy-review-before-cancel-fix.json",
+      "status": "failed",
+      "inputs_stable": true,
+      "passed_groups": [
+        "POLICY-BUILD",
+        "POLICY-ENGINEERING",
+        "POLICY-POLICY",
+        "POLICY-PROVIDER",
+        "POLICY-RECOVERY",
+        "POLICY-COMPACTION",
+        "POLICY-TOOL-GROUP",
+        "POLICY-DATA",
+        "POLICY-CONTEXT"
+      ],
+      "failed_group": "POLICY-SELECTION",
+      "failed_log": ".local/delivery/I2-REQUEST-POLICY-1792248458855513000/command-10.log",
+      "cause": "本轮provider将用于进程交接的取消记作permanent_error，原scope熔断导致原模型选择恢复用例失败；真实实现回归，非历史测试问题。",
+      "timed_out": false
+    },
+    "cancel_recovery_fix": {
+      "changed_bound_files": [
+        "apps/agent/provider/deepseek.ts",
+        "tests/runtime/check-request-policy.mjs",
+        "docs/architecture/implementation-design.md",
+        "docs/architecture/runtime-modules.md"
+      ],
+      "original_model_selection_test_unchanged": true,
+      "policy": {
+        "log": ".local/checks/request-policy-cancel-policy.log",
+        "checks": 14,
+        "status": "passed",
+        "completion": "串行执行session16733完整退出0；日志逐项14项通过"
+      },
+      "selection": {
+        "log": ".local/checks/request-policy-selection-recovery.log",
+        "checks": 6,
+        "local_protocol_requests": 36,
+        "official_requests": 0,
+        "status": "passed",
+        "completion": "原测试串行执行session16733完整退出0"
+      },
+      "independent_memory_transport_probes": {
+        "run_cancel": {
+          "stop_reason": "aborted",
+          "error": "run_cancelled",
+          "outcome": null,
+          "retry": false,
+          "status": "passed"
+        },
+        "sdk_signal_cancel": {
+          "stop_reason": "aborted",
+          "error": "run_cancelled",
+          "outcome": null,
+          "retry": false,
+          "status": "passed"
+        },
+        "timeout": {
+          "stop_reason": "error",
+          "error": "model_timeout",
+          "outcome": "transient_error",
+          "retry": true,
+          "status": "passed"
+        },
+        "limitation": "审查者此前在本机执行的纯内存transport探针；无共享数据库、外部模型或凭据。"
+      },
+      "frozen_unified_acceptance": "pending"
+    },
+    "third_unified": {
+      "receipt": ".local/checks/request-policy-before-startup-timeout.json",
+      "review_archive": ".local/checks/request-policy-review-before-startup-timeout.json",
+      "status": "failed",
+      "inputs_stable": true,
+      "passed_groups": [
+        "POLICY-BUILD",
+        "POLICY-ENGINEERING",
+        "POLICY-POLICY",
+        "POLICY-PROVIDER",
+        "POLICY-RECOVERY",
+        "POLICY-COMPACTION",
+        "POLICY-TOOL-GROUP",
+        "POLICY-DATA",
+        "POLICY-CONTEXT",
+        "POLICY-SELECTION",
+        "POLICY-EXECUTION"
+      ],
+      "failed_group": "POLICY-STARTUP",
+      "failed_log": ".local/delivery/I2-REQUEST-POLICY-1792249496787148000/command-12.log",
+      "exit_code": 2,
+      "runner_timed_out": false,
+      "cause": "mock健康检查已ready，首个GET /session触发全量校验器编译超过原2秒请求限制；不是整组runner超时。"
+    },
+    "startup_readiness_fix": {
+      "changed_previously_bound_files": [
+        "docs/architecture/implementation-design.md"
+      ],
+      "additional_bound_product_files": [
+        "apps/api/src/main.rs",
+        "crates/data-agent/src/contracts.rs"
+      ],
+      "acceptance_commands_and_expectations_unchanged": true,
+      "diagnostics": {
+        "default_timeout_log": ".local/checks/request-policy-startup-diagnostic.log",
+        "timing_log": ".local/checks/request-policy-startup-timing.log",
+        "first_session_seconds": 2.499,
+        "second_session_seconds": 0.009,
+        "limitation": "仅临时延长观测窗口定位原因，不作为验收通过；诊断修改没有进入产品或验收命令。"
+      },
+      "original_startup_acceptance": {
+        "command": [
+          "make",
+          "verify-startup"
+        ],
+        "log": ".local/checks/request-policy-startup-ready-fixed.log",
+        "status": "passed",
+        "exit_code": 0,
+        "completion": "exec session36541完整结束；日志包含全部原验收步骤",
+        "python_tests": 10,
+        "request_timeout_seconds": 2,
+        "health_wait_seconds": 25,
+        "mock_identity_checks": 2,
+        "mock_api_ready_seconds": 3.28,
+        "chat_calls": 2,
+        "prefill_calls": 4,
+        "allocated_calls": 6,
+        "spent_micros": 624,
+        "reserved_micros": 0,
+        "official_requests": 0
+      },
+      "independent_review": "审查者核对实际初始化/路由/健康路径和两个源文件补丁；子审查者独立核对schema本地引用、依赖features及配置副作用。仅静态读取，未重建或操作数据库。",
+      "frozen_unified_acceptance": "pending"
+    }
+  },
+  "limitations": [
+    "本记录的passed仅指当前代码审查通过并可进入统一复验。153份输入、12组的最新冻结统一验收尚待重跑；首轮前3组、第二轮前9组、第三轮前11组和修后专项均不能拼接关闭增量。必须取得完整退出0、无超时、前后内容指纹一致的当前收据。",
+    "摘要重试专项采用已有128KiB档与16轮历史，以既有hook触发真实Pi compact；它不证明64KiB容量或任意历史可压缩。原独立64KiB压力测试及大工具组测试保持并单独列入统一验收。",
+    "旧schema夹具证明本次DDL保持合成旧记录字段；旧profile序列化稳定性另由源码审查。没有针对实际私有生产数据库执行升级、修改真实额度或访问凭据。新request主库选择由纯配置测试证明，不冒称已启用付费模型常驻服务。",
+    "本轮仅本机协议替身、合成数据与既有本地测试；官方模型请求为0。不能由此声称真实模型质量、付费成本改善、真实Datasight权限接入或生产容量通过。",
+    "审查者未修改产品源码、契约或测试，未运行共享数据库/构建；仅创建本审查记录。独立记录为普通本地证据，不是不可篡改保证。",
+    "provider取消专项实测123ms、连接关闭66ms仅代表该本地合成轮次；没有放宽原1500ms门槛，不代表生产时延保证。正式启动专项为Flash本机协议、2次聊天与4次预填；未据此宣称Pro真实调用或新request付费常驻服务已验证。",
+    "首次身份请求2.499秒/0.009秒来自诊断观测；只有修后原make verify-startup以原2秒请求和25秒健康等待完整执行才计为启动专项通过。3.28秒就绪为本轮本机合成环境测量，不保证生产启动时延或真实外部服务可用性。"
+  ]
+}

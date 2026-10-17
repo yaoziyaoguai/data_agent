@@ -1032,7 +1032,7 @@ export interface AppError {
     retryable:  boolean;
 }
 
-export type Code = "budget_exhausted" | "chunk_gap" | "forbidden" | "idempotency_conflict" | "input_already_applied" | "invalid_evidence" | "invalid_input" | "lease_lost" | "message_pending" | "not_available" | "outcome_unknown" | "result_unavailable" | "scope_incomplete" | "selection_required" | "source_unavailable" | "stale_context" | "stale_knowledge" | "unauthenticated" | "unavailable" | "unsupported" | "version_conflict" | "memory_unavailable" | "memory_extraction_empty" | "memory_operation_unknown" | "vector_unconfigured" | "vector_unavailable" | "embedding_unavailable" | "source_interrupted" | "result_expired";
+export type Code = "budget_exhausted" | "chunk_gap" | "forbidden" | "idempotency_conflict" | "input_already_applied" | "invalid_evidence" | "invalid_input" | "lease_lost" | "message_pending" | "not_available" | "outcome_unknown" | "result_unavailable" | "scope_incomplete" | "selection_required" | "source_unavailable" | "stale_context" | "stale_knowledge" | "unauthenticated" | "unavailable" | "unsupported" | "version_conflict" | "memory_unavailable" | "memory_extraction_empty" | "memory_operation_unknown" | "vector_unconfigured" | "vector_unavailable" | "embedding_unavailable" | "source_interrupted" | "result_expired" | "model_retry_exhausted";
 
 export interface AppendOutput {
     chunk_seq:   string;
@@ -1243,12 +1243,21 @@ export interface ExecuteQueryInput {
 }
 
 export interface FinalizeModelCall {
-    call_attempt_id:        string;
-    lease_epoch:            string;
+    call_attempt_id: string;
+    lease_epoch:     string;
+    /**
+     * 受控provider给出的调用结果；与是否取得可靠用量分开。连续临时失败在原请求范围持久计数。
+     */
+    outcome?:               Outcome;
     parameters_fingerprint: string;
     run_id:                 string;
     usage:                  ModelUsage | null;
 }
+
+/**
+ * 受控provider给出的调用结果；与是否取得可靠用量分开。连续临时失败在原请求范围持久计数。
+ */
+export type Outcome = "success" | "transient_error" | "permanent_error";
 
 export interface ModelUsage {
     elapsed_ms:    number;
@@ -1599,6 +1608,10 @@ export interface ThinkingOption {
 }
 
 export interface ModelProfile {
+    /**
+     * 省略沿用有限trial；request为正常持续使用，每消息24次，累计费用/试用期限不默认拦截。
+     */
+    budget_mode?:         BudgetMode;
     input_limit:          number;
     model_id:             string;
     output_limit:         number;
@@ -1609,12 +1622,17 @@ export interface ModelProfile {
     /**
      * 通过Pi/DeepSeek原生思考模式；省略为off。思考tokens计入同一输出上限与用量。
      */
-    thinking_level?:   ThinkingLevel;
-    toolset?:          Toolset;
-    trial_call_limit:  number;
-    trial_cost_micros: string;
-    trial_id:          string;
+    thinking_level?:    ThinkingLevel;
+    toolset?:           Toolset;
+    trial_call_limit?:  number;
+    trial_cost_micros?: string;
+    trial_id:           string;
 }
+
+/**
+ * 省略沿用有限trial；request为正常持续使用，每消息24次，累计费用/试用期限不默认拦截。
+ */
+export type BudgetMode = "trial" | "request";
 
 export type ProviderID = "deepseek";
 

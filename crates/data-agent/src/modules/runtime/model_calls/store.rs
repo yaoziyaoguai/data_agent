@@ -27,7 +27,7 @@ pub(super) async fn reserve_maintenance_in_tx(
     profile: &crate::contracts::generated::ModelProfile,
 ) -> Result<()> {
     let trial = sqlx::query(
-        "SELECT *,expires_at>UTC_TIMESTAMP(3) AS valid FROM model_trials WHERE id=? FOR UPDATE",
+        "SELECT *,(expires_at IS NULL OR expires_at>UTC_TIMESTAMP(3)) AS valid FROM model_trials WHERE id=? FOR UPDATE",
     )
     .bind(&profile.trial_id)
     .fetch_one(tx.connection())
@@ -39,11 +39,17 @@ pub(super) async fn reserve_maintenance_in_tx(
     )?;
     if trial.get::<i64, _>("valid") == 0
         || trial.get::<String, _>("state") != "active"
-        || trial.get::<u32, _>("allocated_calls") >= trial.get::<u32, _>("call_limit")
-        || trial.get::<u64, _>("spent_micros")
-            + trial.get::<u64, _>("reserved_micros")
-            + reservation
-            > trial.get::<u64, _>("cost_limit_micros")
+        || trial
+            .get::<Option<u32>, _>("call_limit")
+            .is_some_and(|limit| trial.get::<u32, _>("allocated_calls") >= limit)
+        || trial
+            .get::<Option<u64>, _>("cost_limit_micros")
+            .is_some_and(|limit| {
+                trial.get::<u64, _>("spent_micros")
+                    + trial.get::<u64, _>("reserved_micros")
+                    + reservation
+                    > limit
+            })
     {
         return Err(Error::new("budget_exhausted"));
     }
@@ -95,8 +101,13 @@ pub(super) async fn configure_trial(
         pool,
         &serde_json::to_value(profile).map_err(|_| Error::new("invalid_input"))?,
         &profile.trial_id,
-        profile.trial_call_limit as u32,
-        &profile.trial_cost_micros,
+        profile.trial_call_limit.map(|limit| limit as u32),
+        profile.trial_cost_micros.as_deref(),
+        (!matches!(
+            profile.budget_mode,
+            Some(crate::contracts::generated::BudgetMode::Request)
+        ))
+        .then_some(3600),
     )
     .await
 }
@@ -108,8 +119,9 @@ pub(super) async fn configure_embedding_trial(
         pool,
         &serde_json::to_value(profile).map_err(|_| Error::new("invalid_input"))?,
         &profile.trial_id,
-        profile.call_limit as u32,
-        &profile.cost_limit_micros,
+        Some(profile.call_limit as u32),
+        Some(&profile.cost_limit_micros),
+        Some(3600),
     )
     .await
 }
@@ -117,13 +129,14 @@ async fn configure_budget(
     pool: &MySqlPool,
     configuration: &Value,
     trial_id: &str,
-    call_limit: u32,
-    cost_limit: &str,
+    call_limit: Option<u32>,
+    cost_limit: Option<&str>,
+    duration_seconds: Option<u32>,
 ) -> Result<()> {
     let fp = crate::types::fingerprint(configuration);
     let mut tx = AppTx::begin(pool).await?;
-    sqlx::query("INSERT INTO model_trials(id,configuration_fingerprint,call_limit,cost_limit_micros,expires_at) VALUES(?,?,?,?,TIMESTAMPADD(SECOND,3600,UTC_TIMESTAMP(3))) ON DUPLICATE KEY UPDATE id=id")
-        .bind(trial_id).bind(&fp).bind(call_limit).bind(crate::types::epoch(cost_limit)?).execute(tx.connection()).await?;
+    sqlx::query("INSERT INTO model_trials(id,configuration_fingerprint,call_limit,cost_limit_micros,expires_at) VALUES(?,?,?,?,TIMESTAMPADD(SECOND,?,UTC_TIMESTAMP(3))) ON DUPLICATE KEY UPDATE id=id")
+        .bind(trial_id).bind(&fp).bind(call_limit).bind(cost_limit.map(crate::types::epoch).transpose()?).bind(duration_seconds).execute(tx.connection()).await?;
     let current: String = sqlx::query_scalar(
         "SELECT configuration_fingerprint FROM model_trials WHERE id=? FOR UPDATE",
     )
@@ -200,20 +213,34 @@ pub(super) async fn reserve_model_call(
     if scope.get::<u32, _>("issued_calls") >= scope.get::<u32, _>("call_limit") {
         return Err(Error::new("budget_exhausted"));
     }
+    if scope.get::<u8, _>("model_failure_streak") >= 3 {
+        return Err(Error::new("model_retry_exhausted"));
+    }
+    sqlx::query("UPDATE model_call_attempts SET scope_call_sequence=? WHERE id=?")
+        .bind(scope.get::<u32, _>("issued_calls") + 1)
+        .bind(&input.call_attempt_id)
+        .execute(tx.connection())
+        .await?;
     tx.lock_rank(7)?;
     let trial = sqlx::query(
-        "SELECT *,expires_at>UTC_TIMESTAMP(3) AS valid FROM model_trials WHERE id=? FOR UPDATE",
+        "SELECT *,(expires_at IS NULL OR expires_at>UTC_TIMESTAMP(3)) AS valid FROM model_trials WHERE id=? FOR UPDATE",
     )
     .bind(&profile.trial_id)
     .fetch_one(tx.connection())
     .await?;
     if trial.get::<i64, _>("valid") == 0
         || trial.get::<String, _>("state") != "active"
-        || trial.get::<u32, _>("allocated_calls") >= trial.get::<u32, _>("call_limit")
-        || trial.get::<u64, _>("spent_micros")
-            + trial.get::<u64, _>("reserved_micros")
-            + reservation
-            > trial.get::<u64, _>("cost_limit_micros")
+        || trial
+            .get::<Option<u32>, _>("call_limit")
+            .is_some_and(|limit| trial.get::<u32, _>("allocated_calls") >= limit)
+        || trial
+            .get::<Option<u64>, _>("cost_limit_micros")
+            .is_some_and(|limit| {
+                trial.get::<u64, _>("spent_micros")
+                    + trial.get::<u64, _>("reserved_micros")
+                    + reservation
+                    > limit
+            })
     {
         return Err(Error::new("budget_exhausted"));
     }
@@ -251,9 +278,17 @@ pub(super) async fn send_model_call(
     let profile = read_budget_profile_in_tx(tx, &run.budget_scope_id)
         .await?
         .ok_or(Error::new("not_available"))?;
+    let failures: u8 =
+        sqlx::query_scalar("SELECT model_failure_streak FROM budget_scopes WHERE id=? FOR UPDATE")
+            .bind(&run.budget_scope_id)
+            .fetch_one(tx.connection())
+            .await?;
+    if failures >= 3 {
+        return Err(Error::new("model_retry_exhausted"));
+    }
     tx.lock_rank(7)?;
     let trial = sqlx::query(
-        "SELECT state,expires_at>UTC_TIMESTAMP(3) AS valid FROM model_trials WHERE id=? FOR UPDATE",
+        "SELECT state,(expires_at IS NULL OR expires_at>UTC_TIMESTAMP(3)) AS valid FROM model_trials WHERE id=? FOR UPDATE",
     )
     .bind(&profile.trial_id)
     .fetch_one(tx.connection())
@@ -288,6 +323,15 @@ pub(super) async fn finalize_model_call(
         return Err(Error::new("idempotency_conflict"));
     }
     let state: String = row.get("state");
+    let recorded_outcome = row.get::<Option<String>, _>("outcome");
+    let outcome = input.outcome.as_ref().map(|outcome| match outcome {
+        crate::contracts::generated::Outcome::Success => "success",
+        crate::contracts::generated::Outcome::TransientError => "transient_error",
+        crate::contracts::generated::Outcome::PermanentError => "permanent_error",
+    });
+    if recorded_outcome.is_some() && recorded_outcome.as_deref() != outcome {
+        return Err(Error::new("idempotency_conflict"));
+    }
     let usage = input
         .usage
         .as_ref()
@@ -306,6 +350,35 @@ pub(super) async fn finalize_model_call(
     }
     if state != "issued" && state != "unknown" {
         return Err(Error::new("version_conflict"));
+    }
+    // 依实际调用顺序重算最近结果；晚到失败不能漏计，晚到成功也不能清掉新失败。
+    if recorded_outcome.is_none()
+        && let Some(outcome) = outcome
+    {
+        sqlx::query("UPDATE model_call_attempts SET outcome=? WHERE id=?")
+            .bind(outcome)
+            .bind(&input.call_attempt_id)
+            .execute(tx.connection())
+            .await?;
+        let recent = sqlx::query("SELECT outcome FROM model_call_attempts WHERE budget_scope_id=? AND scope_call_sequence IS NOT NULL AND outcome IS NOT NULL ORDER BY scope_call_sequence DESC LIMIT 3 FOR UPDATE")
+            .bind(&run.budget_scope_id).fetch_all(tx.connection()).await?;
+        let mut failures = 0_u8;
+        for call in recent {
+            match call.get::<Option<String>, _>("outcome").as_deref() {
+                Some("transient_error") => failures += 1,
+                Some("permanent_error") => {
+                    failures = 3;
+                    break;
+                }
+                _ => break,
+            }
+        }
+        tx.lock_rank(6)?;
+        sqlx::query("UPDATE budget_scopes SET model_failure_streak=? WHERE id=?")
+            .bind(failures)
+            .bind(&run.budget_scope_id)
+            .execute(tx.connection())
+            .await?;
     }
     let Some(usage) = input.usage.as_ref() else {
         sqlx::query("UPDATE model_call_attempts SET state='unknown' WHERE id=?")

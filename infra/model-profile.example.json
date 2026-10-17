@@ -1,0 +1,16 @@
+{
+  "database": "data_agent",
+  "profile": {
+    "provider_id": "deepseek",
+    "model_id": "deepseek-flash",
+    "trial_id": "local-data-agent",
+    "price_version": "2026-10-04-peak-usd",
+    "budget_mode": "request",
+    "input_limit": 65536,
+    "output_limit": 8192,
+    "request_call_limit": 24,
+    "toolset": "data",
+    "payload_bytes_limit": 131072,
+    "thinking_level": "off"
+  }
+}

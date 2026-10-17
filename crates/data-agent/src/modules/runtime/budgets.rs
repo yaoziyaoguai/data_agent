@@ -12,7 +12,7 @@ pub async fn open_budget_scope_in_tx(
         message,
         profile
             .map(|p| p.request_call_limit.unwrap_or(6) as u32)
-            .unwrap_or(12),
+            .unwrap_or(24),
         profile,
     )
     .await

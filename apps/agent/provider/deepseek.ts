@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { createAssistantMessageEventStream, type Api, type Model, type SimpleStreamOptions, type TranscriptContext } from '@earendil-works/pi-ai';
 import { streamSimple as sdkStream } from '@earendil-works/pi-ai/api/openai-completions';
+import { isRetryableAssistantError } from '@earendil-works/pi-ai/compat';
 import type { FinalizeModelCall, ModelCallReceipt, ModelProfile } from '../../../packages/contracts/generated/boundary.ts';
 import { decodeContract } from '../../../packages/contracts/validate.ts';
 import { RustTransport } from '../transport/client.ts';
@@ -27,7 +28,7 @@ export function connectionFromEnvironment(): DeepSeekConnection {
   return { apiKey, baseUrl, protocolTest };
 }
 
-// 使用SDK原生协议，每次实际fetch领取一次宿主许可，关闭SDK两层隐式重试。
+// 使用SDK原生协议；HTTP层不重试，Pi会话每次重试重新领取宿主许可。
 export function guardedDeepSeekStream(transport: RustTransport, profile: ModelProfile, connection: DeepSeekConnection, runSignal: AbortSignal) {
   const timeoutMs = connection.protocolTest ? Number(process.env.DATA_AGENT_MODEL_TIMEOUT_MS ?? 90000) : 90000;
   if (!Number.isInteger(timeoutMs) || timeoutMs < 50 || timeoutMs > 90000) throw new Error('provider_configuration_invalid');
@@ -44,15 +45,23 @@ export function guardedDeepSeekStream(transport: RustTransport, profile: ModelPr
       let admissionError: string | undefined;
       let rawUsage: { input_tokens: number; output_tokens: number } | undefined;
       let settlement: FinalizeModelCall | undefined;
+      let outcome: FinalizeModelCall['outcome'];
       const binding = () => ({ ...transport.binding(), call_attempt_id, parameters_fingerprint });
-      const signal = AbortSignal.any([runSignal, AbortSignal.timeout(timeoutMs), ...(options?.signal ? [options.signal] : [])]);
-      const errorCode = () => admissionError ?? (runSignal.aborted ? 'run_cancelled' : signal.aborted ? 'model_timeout' :
-        status === 401 || status === 403 ? 'model_auth_failed' : status === 429 ? 'model_rate_limited' : 'model_request_failed');
+      const timeout = AbortSignal.timeout(timeoutMs);
+      const signal = AbortSignal.any([runSignal, timeout, ...(options?.signal ? [options.signal] : [])]);
+      const cancelled = () => runSignal.aborted || options?.signal?.aborted;
+      const errorCode = () => admissionError ?? (cancelled() ? 'run_cancelled' : timeout.aborted ? 'model_timeout' :
+        status === 401 || status === 403 ? 'model_auth_failed' : status === 429 ? 'model_rate_limited' :
+        [500, 502, 503, 504].includes(status) ? 'model_service_unavailable' :
+        sent && status === 0 ? 'model_network_error' : 'model_request_failed');
+      const retryable = (code: string) => profile.toolset === 'data' &&
+        ['model_timeout', 'model_rate_limited', 'model_service_unavailable', 'model_network_error'].includes(code);
 
       async function finalize(): Promise<boolean> {
         if (!reserved || !sent || finalized) return finalized;
         // 回执丢失重送原结算，不能因重算耗时改变幂等内容。
-        settlement ??= { ...binding(), usage: rawUsage ? { ...rawUsage, elapsed_ms: Date.now() - started } : null };
+        settlement ??= { ...binding(), usage: rawUsage ? { ...rawUsage, elapsed_ms: Date.now() - started } : null,
+          ...(outcome ? { outcome } : {}) };
         for (let attempt = 0; attempt < 2; attempt++) {
           try {
             const receipt = decodeContract<ModelCallReceipt>('ModelCallReceipt',
@@ -110,6 +119,7 @@ export function guardedDeepSeekStream(transport: RustTransport, profile: ModelPr
               });
             } catch (error) {
               if (error instanceof Error && error.message === 'budget_exhausted') admissionError = 'model_budget_exhausted';
+              else if (error instanceof Error && error.message === 'model_retry_exhausted') admissionError = 'model_retry_exhausted';
               throw error;
             }
             reserved = true;
@@ -122,25 +132,40 @@ export function guardedDeepSeekStream(transport: RustTransport, profile: ModelPr
             const usage = event.message.usage;
             const input = usage.input + usage.cacheRead + usage.cacheWrite;
             if (input !== rawUsage.input_tokens || usage.output !== rawUsage.output_tokens) throw new Error('model_usage_invalid');
+            outcome = input > profile.input_limit || usage.output > profile.output_limit ? 'permanent_error' : 'success';
             if (!(await finalize())) throw new Error('model_finalize_unconfirmed');
             if (input > profile.input_limit || usage.output > profile.output_limit) throw new Error('model_limits_exceeded');
             stream.push(event);
           } else if (event.type === 'error') {
-            event.error.errorMessage = event.error.errorMessage?.includes('request_too_large: model_input_limit') ? 'request_too_large: model_input_limit' : event.error.errorMessage === 'model_input_limit' ? 'model_input_limit' : errorCode();
-            await finalize();
+            let code = event.error.errorMessage?.includes('request_too_large: model_input_limit') ? 'request_too_large: model_input_limit' : event.error.errorMessage === 'model_input_limit' ? 'model_input_limit' : errorCode();
+            // 429中的账户额度/billing拒绝不能伪装成临时限流；原始错误仅用于SDK分类，不外传。
+            if (status === 429 && !isRetryableAssistantError({ ...event.error, stopReason: 'error' })) code = 'model_quota_exhausted';
+            if (code === 'model_request_failed' && sent && status === 200 && !rawUsage &&
+                isRetryableAssistantError({ ...event.error, stopReason: 'error' })) code = 'model_network_error';
+            if (retryable(code) && rawUsage) code = 'model_usage_unknown';
+            const canRetry = retryable(code) && !rawUsage;
+            // 取消也可能来自进程交接；只终止当前调用，不把原请求熔断。
+            outcome = cancelled() ? undefined : canRetry ? 'transient_error' : 'permanent_error';
+            if (reserved && sent && !(await finalize())) code = 'model_finalize_unconfirmed';
+            // Pi用固定错误码识别临时故障；主动取消与未知结算不得触发原生重试。
+            event.error.errorMessage = code;
+            event.error.stopReason = cancelled() ? 'aborted' : 'error';
+            event.reason = cancelled() ? 'aborted' : 'error';
             stream.push(event);
           } else {
             stream.push(event);
           }
         }
       } catch (error) {
+        if (!cancelled()) outcome ??= 'permanent_error';
         await finalize();
+        const reason = cancelled() ? 'aborted' as const : 'error' as const;
         const safeCodes = ['model_usage_unknown', 'model_usage_invalid', 'model_input_limit', 'model_limits_exceeded', 'model_finalize_unconfirmed', 'request_too_large: model_input_limit'];
         const message = { role: 'assistant' as const, content: [], api: model.api, provider: model.provider, model: model.id,
-          stopReason: 'error' as const, timestamp: Date.now(),
+          stopReason: reason, timestamp: Date.now(),
           errorMessage: error instanceof Error && safeCodes.includes(error.message) ? error.message : errorCode(),
           usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } } };
-        stream.push({ type: 'error', reason: 'error', error: message });
+        stream.push({ type: 'error', reason, error: message });
       } finally {
         await finalize();
         if (reserved && sent && !finalized) console.error('model_finalize_unconfirmed run=' + transport.run.run_id + ' attempt=' + call_attempt_id);

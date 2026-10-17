@@ -7963,5 +7963,158 @@
     },
     "valid": true,
     "roundtrip": true
+  },
+  {
+    "name": "request budget without trial cap or deadline",
+    "schema": "ModelProfile",
+    "value": {
+      "provider_id": "deepseek",
+      "model_id": "deepseek-flash",
+      "trial_id": "local-data-agent",
+      "price_version": "2026-10-04-peak-usd",
+      "budget_mode": "request",
+      "input_limit": 65536,
+      "output_limit": 8192,
+      "request_call_limit": 24,
+      "toolset": "data",
+      "payload_bytes_limit": 131072,
+      "thinking_level": "off"
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "request budget remains exactly 24 calls",
+    "schema": "ModelProfile",
+    "value": {
+      "provider_id": "deepseek",
+      "model_id": "deepseek-flash",
+      "trial_id": "local-data-agent",
+      "price_version": "2026-10-04-peak-usd",
+      "budget_mode": "request",
+      "input_limit": 65536,
+      "output_limit": 8192,
+      "request_call_limit": 25,
+      "toolset": "data",
+      "payload_bytes_limit": 131072,
+      "thinking_level": "off"
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "request budget cannot lower the normal message allowance",
+    "schema": "ModelProfile",
+    "value": {
+      "provider_id": "deepseek",
+      "model_id": "deepseek-flash",
+      "trial_id": "local-data-agent",
+      "price_version": "2026-10-04-peak-usd",
+      "budget_mode": "request",
+      "input_limit": 65536,
+      "output_limit": 8192,
+      "request_call_limit": 12,
+      "toolset": "data",
+      "payload_bytes_limit": 131072,
+      "thinking_level": "off"
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "legacy trial still requires total limits",
+    "schema": "ModelProfile",
+    "value": {
+      "provider_id": "deepseek",
+      "model_id": "deepseek-flash",
+      "trial_id": "local-data-agent",
+      "price_version": "2026-10-04-peak-usd",
+      "input_limit": 65536,
+      "output_limit": 8192,
+      "request_call_limit": 24,
+      "toolset": "data",
+      "payload_bytes_limit": 131072,
+      "thinking_level": "off"
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "request budget may explicitly cap total cost",
+    "schema": "ModelProfile",
+    "value": {
+      "provider_id": "deepseek",
+      "model_id": "deepseek-flash",
+      "trial_id": "local-data-agent",
+      "price_version": "2026-10-04-peak-usd",
+      "budget_mode": "request",
+      "input_limit": 65536,
+      "output_limit": 8192,
+      "request_call_limit": 24,
+      "toolset": "data",
+      "payload_bytes_limit": 131072,
+      "thinking_level": "off",
+      "trial_cost_micros": "1000000"
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "transient model failure with unknown usage",
+    "schema": "FinalizeModelCall",
+    "value": {
+      "run_id": "run-1",
+      "lease_epoch": "1",
+      "call_attempt_id": "call-1",
+      "parameters_fingerprint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "usage": null,
+      "outcome": "transient_error"
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "model success requires reliable usage",
+    "schema": "FinalizeModelCall",
+    "value": {
+      "run_id": "run-1",
+      "lease_epoch": "1",
+      "call_attempt_id": "call-1",
+      "parameters_fingerprint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "usage": null,
+      "outcome": "success"
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "transient failure may later receive reliable usage",
+    "schema": "FinalizeModelCall",
+    "value": {
+      "run_id": "run-1",
+      "lease_epoch": "1",
+      "call_attempt_id": "call-1",
+      "parameters_fingerprint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "usage": {
+        "input_tokens": 1,
+        "output_tokens": 1,
+        "elapsed_ms": 1
+      },
+      "outcome": "transient_error"
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "persistent model retry exhaustion error",
+    "schema": "AppError",
+    "value": {
+      "code": "model_retry_exhausted",
+      "message": "result_expired",
+      "request_id": "expired-query",
+      "retryable": false
+    },
+    "valid": true,
+    "roundtrip": true
   }
 ]

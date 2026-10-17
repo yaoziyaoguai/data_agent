@@ -27,6 +27,11 @@ static VALIDATORS: LazyLock<HashMap<String, jsonschema::Validator>> = LazyLock::
     }).collect()
 });
 
+// 在监听前编译契约，避免第一个业务请求承担全部初始化耗时。
+pub fn initialize_validators() {
+    LazyLock::force(&VALIDATORS);
+}
+
 pub fn validate(name: &str, value: &Value) -> Result<()> {
     if !VALIDATORS.get(name).is_some_and(|v| v.is_valid(value)) {
         return Err(Error::new("invalid_input"));
