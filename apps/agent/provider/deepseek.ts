@@ -96,7 +96,7 @@ export function guardedDeepSeekStream(transport: RustTransport, profile: ModelPr
             if (!value || typeof value !== 'object') throw new Error('provider_payload_invalid');
             const payload = JSON.parse(JSON.stringify({ ...value, model: profile.model_id, max_tokens: profile.output_limit,
               thinking: { type: profile.thinking_level && profile.thinking_level !== 'off' ? 'enabled' : 'disabled' }, stream_options: { include_usage: true } }));
-            // 保守预估门槛；服务端工具模板未公开，实际usage才是用量事实。
+            // 用SDK实际序列化的完整载荷在预留/发送前检查；超限交回Pi原生有界压缩。
             if (!Array.isArray(payload.messages) || (profile.toolset!=='data' && payload.messages.length > 8) || (payload.tools!==undefined && !Array.isArray(payload.tools)) || (profile.toolset!=='data' && payload.tools?.length !== 1)) throw new Error('provider_payload_invalid');
             if (profile.toolset === 'data' && payload.tools !== undefined) {
               const names = payload.tools.map((tool: { function?: { name?: unknown } }) => tool?.function?.name);

@@ -35,7 +35,13 @@ try{
    assert.equal((await h.internal('/internal/data/tool-calls',input)).status,200);const result=await h.internal('/internal/data/tools',input);assert.equal(result.status,200);
    manager.appendMessage({role:'toolResult',toolCallId:sdk,toolName:'read_knowledge',content:[{type:'text',text:JSON.stringify(result.value.data)}],isError:false,timestamp:Date.now()});checkpoint=exportCheckpoint(manager);
   }
-  run.checkpoint=checkpoint;run.workspace_context.tasks=[{id:'large-context-task',goal:'合成宿主任务'.repeat(1000)}];mode='route';await deliver(run,h.env.DATA_AGENT_API_URL,h.env.DATA_AGENT_INTERNAL_TOKEN,'');
+  run.checkpoint=checkpoint;
+  // 宿主工作区上限16KB、goal最多240字；用接近上限的合法条件测试，而不是绕过裁剪的18KB目标。
+  run.workspace_context.tasks=[{id:'large-context-task',goal:'合成宿主任务',condition_version:'1',lifecycle:'active',phase:'investigating',conditions:{time_start:null,time_end:null,timezone:'UTC',metric:null,channel:null,group_by:[],filters:[],knowledge_refs:[],notes:''}}];
+  const visibleBytes=()=>Buffer.byteLength(JSON.stringify({...run.workspace_context,authority_snapshot:undefined,authority_revision:undefined}));
+  while(visibleBytes()<15500)run.workspace_context.tasks[0].conditions.notes+='合成宿主条件';
+  assert.ok(visibleBytes()>=15500&&visibleBytes()<=16000);
+  mode='route';await deliver(run,h.env.DATA_AGENT_API_URL,h.env.DATA_AGENT_INTERNAL_TOKEN,'');
   checkpoint=h.sql(`SELECT JSON_OBJECT('checkpoint',checkpoint) FROM pi_checkpoints WHERE recovery_chain_id='${run.recovery_chain_id}'`)[0].checkpoint;
   h.releaseRun(run.run_id);await h.resumeWorker();
  }

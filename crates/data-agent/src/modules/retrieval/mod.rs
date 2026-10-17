@@ -445,39 +445,62 @@ pub fn asset_directory(
 }
 
 pub fn bound_workspace(context: &mut Value) {
+    // authority只用于宿主校验，不进入模型；Mem0补充候选时也使用同一可见预算。
+    let oversized = |value: &Value| {
+        let mut visible = value.clone();
+        if let Some(fields) = visible.as_object_mut() {
+            fields.remove("authority_snapshot");
+            fields.remove("authority_revision");
+        }
+        visible.to_string().len() > 16000
+    };
+    let input_tasks = context["input_task_ids"]
+        .as_array()
+        .cloned()
+        .unwrap_or_default();
+    context["recent_messages"] = serde_json::json!([]);
     if let Some(tasks) = context["tasks"].as_array_mut() {
         for task in tasks {
-            if let Some(goal) = task["goal"].as_str() {
+            if let Some(goal) = task["goal"].as_str()
+                && goal.chars().count() > 240
+            {
                 task["goal"] = serde_json::json!(goal.chars().take(240).collect::<String>());
+                task["context_complete"] = serde_json::json!(false);
             }
         }
     }
-    if let Some(messages) = context["recent_messages"].as_array_mut() {
-        for message in messages {
-            if let Some(text) = message["text"].as_str() {
-                message["text"] = serde_json::json!(text.chars().take(300).collect::<String>());
-            }
-        }
-    }
-    for index in 0..context["tasks"].as_array().map_or(0, Vec::len) {
-        if context.to_string().len() <= 16000 {
+    // 候选已按当前归属、最近消息排序，从低优先级端裁剪，先保全当前任务的条件/问题。
+    let task_count = context["tasks"].as_array().map_or(0, Vec::len);
+    for index in (0..task_count).rev() {
+        if !oversized(context) {
             break;
         }
-        context["tasks"][index]["conditions"] = Value::Null;
-        context["tasks"][index]["clarification"] = Value::Null;
-        context["tasks"][index]["context_complete"] = serde_json::json!(false);
-    }
-    for key in ["recent_messages", "memories", "selected_skills", "tasks"] {
-        while context.to_string().len() > 16000
-            && context[key].as_array().is_some_and(|a| !a.is_empty())
-        {
-            let items = context[key].as_array_mut().expect("context array");
-            if key == "memories" {
-                items.pop();
-            } else {
-                items.remove(0);
-            }
+        let task = &mut context["tasks"][index];
+        if !input_tasks.contains(&task["id"]) {
+            task["conditions"] = Value::Null;
+            task["clarification"] = Value::Null;
+            task["context_complete"] = serde_json::json!(false);
         }
+    }
+    for key in ["memories", "selected_skills", "query_observations", "tasks"] {
+        while oversized(context) {
+            let Some(items) = context[key].as_array_mut() else {
+                break;
+            };
+            let index = items
+                .iter()
+                .rposition(|item| key != "tasks" || !input_tasks.contains(&item["id"]));
+            let Some(index) = index else { break };
+            items.remove(index);
+        }
+    }
+    for index in (0..context["tasks"].as_array().map_or(0, Vec::len)).rev() {
+        if !oversized(context) {
+            break;
+        }
+        let task = &mut context["tasks"][index];
+        // 当前任务本身过大时保留身份/版本和状态，正文由受控工具补读。
+        *task = serde_json::json!({"id":task["id"],"condition_version":task["condition_version"],"lifecycle":task["lifecycle"],"phase":task["phase"],"context_complete":false});
     }
 }
 
@@ -488,6 +511,37 @@ pub mod vector;
 mod semantic_context_tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn workspace_trims_old_candidates_before_current_task_and_keeps_authority_private() {
+        let current = json!({"id":"current","goal":"合成当前目标","condition_version":"3","lifecycle":"active","phase":"waiting_clarification","conditions":{"notes":"当前条件".repeat(600)},"clarification":{"question":"当前问题？"}});
+        let mut workspace = json!({"tasks":[current.clone(),{"id":"old","conditions":{"notes":"旧条件".repeat(1600)},"clarification":{"question":"旧问题？"}}],"input_task_ids":["current"],"memories":[],"selected_skills":[],"query_observations":[],"recent_messages":[],"authority_snapshot":{"private":"宿主校验".repeat(10000)}});
+        let authority = workspace["authority_snapshot"].clone();
+        bound_workspace(&mut workspace);
+        assert_eq!(workspace["tasks"][0], current);
+        assert_eq!(workspace["tasks"][1]["context_complete"], false);
+        assert_eq!(workspace["tasks"][1]["conditions"], Value::Null);
+        assert_eq!(workspace["authority_snapshot"], authority);
+        workspace
+            .as_object_mut()
+            .unwrap()
+            .remove("authority_snapshot");
+        assert!(workspace.to_string().len() <= 16000);
+    }
+
+    #[test]
+    fn oversized_current_task_keeps_identity_and_an_explicit_read_hint() {
+        let mut workspace = json!({"tasks":[{"id":"current","goal":"长目标".repeat(300),"condition_version":"3","lifecycle":"active","phase":"waiting_clarification","conditions":{"notes":"当前条件".repeat(3000)},"clarification":{"question":"当前问题？"}}],"input_task_ids":["current"],"memories":[{"id":"optional","body":"记忆".repeat(2000)}],"selected_skills":[],"query_observations":[],"recent_messages":[]});
+        bound_workspace(&mut workspace);
+        assert!(workspace.to_string().len() <= 16000);
+        assert_eq!(workspace["input_task_ids"], json!(["current"]));
+        assert_eq!(workspace["tasks"].as_array().unwrap().len(), 1);
+        assert_eq!(
+            workspace["tasks"][0],
+            json!({"id":"current","condition_version":"3","lifecycle":"active","phase":"waiting_clarification","context_complete":false})
+        );
+        assert!(workspace["memories"].as_array().unwrap().is_empty());
+    }
 
     #[test]
     fn query_example_summary_keeps_questions_parameters_and_a_complete_read_hint() {

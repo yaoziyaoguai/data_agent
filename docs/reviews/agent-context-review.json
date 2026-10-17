@@ -1,0 +1,139 @@
+{
+  "schema": 1,
+  "increment_id": "I2-AGENT-CONTEXT",
+  "reviewer": "独立审查代理copilot_review_scope；未参与本增量产品源码或测试实现，只核对要求、代码、SDK与合成验证证据并编写本记录",
+  "reviewed_at": "2026-10-17T13:06:52.614055+00:00",
+  "conclusion": "passed",
+  "summary": "按CURRENT原五项审计与新增载荷预检、任务候选两项要求独立核对冻结diff、真实业务回执和Pi1.0.0公开接口。动态上下文通过原生context投影，当前回执优先、同版route保留条件；消息历史、工具组、压缩、恢复与重试仍由Pi维护。预检补完整提示和转义开销，公开SettingsManager只调整启发式尾部目标，SDK最终序列化payload仍在原预算预留/发送前检查。任务按已知输入归属及真实消息序选择，低优先级候选先裁，必要时保留身份和不完整标记。新增测试预期来自既有宿主边界，未放宽权限、执行授权、操作身份或预算。旧system检查点测试最初只种marker而无最终请求负断言，已补真实SDK序列化并验证零网络。首轮17组统一验收前16组完整通过、最后资产目录失败且前后指纹一致。独立诊断确认旧夹具把完整目录已观察的资产称为unused，混淆上下文失效和对象读取错误；现分离未观察停用对象404、已观察改版旧run的409/stale_context、有效新会话旧版本409/stale_knowledge，并核真实持久依赖。资产专项通过，唯一其他差异为本轮重命名标题的文档锚点。产品源码未再改变，当前范围无剩余确定阻断；新冻结范围17组仍须整体重跑，不能拼接旧16组与新专项宣布通过。",
+  "scope_sha256": "887fcd00291d1acd74c542706b85f7225d9ecf507eaa86a594cf50b69604f005",
+  "findings": [],
+  "resolved_findings": [
+    "旧system检查点夹具最初只种入动态marker，当前时钟不在system的断言不能证明旧正文已从模型请求消失。最终check-memory-context对4次实际Pi context调用锁定SDK streamSimple/onPayload，明确断言整个payload无旧marker、捕获成功且网络尝试0；原会话审计历史保持，不为通过测试删除历史。最新专项已通过。",
+    "原native-compaction夹具把启动工作区直接覆盖为约18KB的单goal，超出原Rust16000字节及goal240字投影边界。改为15500至16000字节完整合成Conditions，notes仍在既有8000字符上限内；24轮历史、6轮续聊、280条短消息、trial24/request12/64KiB、撤权与账本断言均保留。初稿仅notes的条件形状已补齐必需字段。",
+    "长会话旧夹具随机选遗漏目标后要求出现在单一主task_id字段，可能选中同条消息的非主目标。现用有主归属的早期消息验证历史定位；非主目标继续通过27项完整任务目录与read_analysis_task单独验证，未删除多目标场景。",
+    "固定保留目标、无可压缩内容和摘要预算失败均保留原证据。最终仅对SDK两条明确无工作可做错误窄处理；实际摘要失败仍传播。公开applyOverrides调整保留目标，不裁消息或工具组。记忆参考头仅删除系统已具备的重复原则，原场景在原24次总预算内完成，没有提高上限或缩短工具正文。",
+    "资产目录原夹具完整search后选择仅启动候选外的memory并称unused，停用后却期待404。目录回执早已由data_tools::extend_run及context_authority::observe记录ID/版本，工具入口先核旧上下文，故409/stale_context符合既定失效规则。修正仅测试：目录读完后另建未观察资产再停用，断言返回ID及真实agent_runs.authority_snapshot均无该资产，再精确核404/not_available；已读omitted改版后旧run的正文和来源均精确核409/stale_context；正常withdraw结束旧输入，新的不同conversation/null-checkpoint运行不含旧版依赖，旧版本正文及来源均精确核409/stale_knowledge。原全文、Unicode来源尾部例外、27项目录无重漏、跨用户及未选Skill拒绝均保留，无删除authority或放宽为任意失败。独立依据为既定实际交付依赖/失效上下文规则及未改动的工具前置校验次序，专项完整通过。",
+    "本轮架构标题改为Pi工作区与个人记忆上下文接入后，系统设计第335行仍指旧标题锚点。仅更新到新锚点，链接目标与实际标题一致，无产品契约变化。"
+  ],
+  "requirement_review": [
+    {
+      "topic": "稳定规则与动态工作区分离、近期消息去重",
+      "files": [
+        "apps/agent/session/resources.ts",
+        "apps/agent/session/workspace-context.ts",
+        "apps/agent/session/deliver.ts",
+        "tests/mvp/check-memory-context.mjs",
+        "tests/mvp/check-request-context.mjs"
+      ],
+      "assessment": "核对context事件在请求时临时投影；普通轮位于恢复历史之后、当前输入及其工具组之前；split-turn沿SDK保留工具组前注入。authority不进入模型，custom投影不写Pi日志；两条文字相同的真实消息仍保留。最新SDK载荷负断言证明旧system动态marker不重新进入实际请求。"
+    },
+    {
+      "topic": "成功回执与恢复",
+      "files": [
+        "apps/agent/session/workspace-context.ts",
+        "apps/agent/tools/data-tools.ts",
+        "apps/agent/session/deliver.ts",
+        "crates/data-agent/src/modules/analysis/store.rs",
+        "tests/mvp/check-recovery-continuation.mjs"
+      ],
+      "assessment": "核对真实route只回ID/版本、revise回完整合并条件。投影同版route保留候选，改版/补读/记忆成功操作才撤旧；失败不撤。正常执行和半轮接回共用invokeRecorded，原SDK调用与宿主操作身份保持。恢复、撤权和预算的最终回归由17组实际执行补齐。"
+    },
+    {
+      "topic": "预检、原生压缩和完整工具组",
+      "files": [
+        "apps/agent/session/request-size.ts",
+        "apps/agent/session/deliver.ts",
+        "apps/agent/provider/deepseek.ts",
+        "tests/mvp/check-request-context.mjs",
+        "tests/mvp/check-native-compaction.mjs",
+        "tests/mvp/check-large-tool-context.mjs"
+      ],
+      "assessment": "独立核对Pi公开SettingsManager.applyOverrides、context与compact实现。预检计完整system/history/tools/references/input及二次JSON转义；按剩余字节选择尾部目标仅为启发式。原provider最终payload守卫保留。最新64KiB样本24实际调用含10摘要、最大65467B；较早专项证明两份8192字工具正文逐字保留和六份正文最小组超128KiB有限失败，原身份不重复。"
+    },
+    {
+      "topic": "任务候选与16KB裁剪",
+      "files": [
+        "crates/data-agent/src/modules/conversations/store.rs",
+        "crates/data-agent/src/use_cases/deliver_run.rs",
+        "crates/data-agent/src/modules/retrieval/mod.rs",
+        "tests/mvp/check-long-conversation.mjs"
+      ],
+      "assessment": "归属优先不解释用户意图，其余次序来自未撤回用户消息event_seq，UUID仅稳定破同消息并列。裁剪先撤低优先级正文/候选，已知当前目标必要时保留ID/版本/状态/context_complete=false；goal截短也标不完整。宿主authority不占模型可见预算，正式数据和补读工具不改。27任务/恢复及8项语义上下文单测已有专项证据。"
+    },
+    {
+      "topic": "提示去重与独立调用合批",
+      "files": [
+        "apps/agent/session/resources.ts",
+        "apps/agent/tools/data-tools.ts",
+        "tests/mvp/check-large-tool-context.mjs",
+        "tests/mvp/check-clarification.mjs",
+        "tests/mvp/check-conversational-query.mjs"
+      ],
+      "assessment": "自由回答、解释选项、换题、含糊归属、补读、否定和执行授权原则仍在系统资源；工具保留参数/版本/前置条件。同批登记加独立读取由原大工具组场景实际覆盖，依赖新ID/版本/授权的动作仍等待回执；未新增Agent循环或宿主规则路由。"
+    },
+    {
+      "topic": "资产目录依赖与错误分支隔离",
+      "files": [
+        "tests/mvp/check-asset-directory.mjs",
+        "crates/data-agent/src/use_cases/context_authority.rs",
+        "crates/data-agent/src/use_cases/data_tools.rs",
+        "docs/semantic-retrieval-design.md"
+      ],
+      "assessment": "完整目录返回也属于真实交付；启动候选外不等于未观察。旧run失效拒绝先于单对象读取，stale_context与stale_knowledge必须分别在失效旧上下文和有效新上下文验证。本次只修夹具前提及精确断言，未修改权限、对象版本或authority实现。"
+    }
+  ],
+  "evidence": [
+    ".local/checks/context-native-reference.log",
+    ".local/checks/context-projection-final.log",
+    ".local/checks/context-request-final.log",
+    ".local/checks/context-large-final.log",
+    ".local/checks/context-provider-final.log",
+    ".local/checks/context-long-recovery.log",
+    ".local/checks/context-unit.log",
+    ".local/checks/context-engineering-final.log",
+    ".local/checks/context-asset-final.log",
+    ".local/checks/context-asset-diagnostic.log",
+    ".local/checks/context-increment-before-asset-fix.json",
+    ".local/checks/context-review-before-asset-fix.json"
+  ],
+  "evidence_sha256": {
+    ".local/checks/context-native-reference.log": "29761a8d7275fc68a9c2a250edadf32a96888e4465544d3457031ed2e349061b",
+    ".local/checks/context-projection-final.log": "01d1dad22a9b84024f1f113083433c03deb4292ab6364ee6a146b27a144e2f86",
+    ".local/checks/context-request-final.log": "39738c2f87d13dc2e59b1ad6a4842f81cc61dfb6760345094c0bafd2d605edc9",
+    ".local/checks/context-large-final.log": "90d9d72526028bd7db78235e61d7e95a1e7ae2c4244a81a2d19a9c9bcf42e4d6",
+    ".local/checks/context-provider-final.log": "03c325cc11c2d427fa5c32df83478c91527a1fcdbb87a587ca783508a5c6d3cf",
+    ".local/checks/context-long-recovery.log": "90264ef0cefe0ec7cf448fc1ebbdec82c1507f5704c39e9da514b4dd80a31387",
+    ".local/checks/context-unit.log": "7e5688186baef3311515b71228cdd0f0cda566ea7ace71b4b44811f9e9c78aea",
+    ".local/checks/context-engineering-final.log": "dde97560b8bbff790e0c860c552286d0cdde6a0cad5180ce3ae37c10b080140a",
+    ".local/checks/context-asset-final.log": "da295a792abb1fe3d7fb07ffcb3e5b9dd141b084e996c19156e671bfed7cb044",
+    ".local/checks/context-asset-diagnostic.log": "285907b406daa11c50145f73e052dc21253b0674661fcb46b9d1248c3454ae10",
+    ".local/checks/context-increment-before-asset-fix.json": "e3c1640394dcbb8ec81e3c1a7da718526c1fb6d5c682351bd2de5b56f0dd3c64",
+    ".local/checks/context-review-before-asset-fix.json": "0cbd0849a6cb262d80866481734ba0e665d2963feeccca2ae4c66c03c531ee55"
+  },
+  "scope_binding": {
+    "independently_recomputed": true,
+    "input_files": 76,
+    "acceptance_groups": 17
+  },
+  "limitations": [
+    "新冻结范围17组统一验收尚待重跑。首轮前16组通过、最后资产目录失败的完整收据与旧审查已归档，失败不算通过；新资产专项不能与旧16组拼接关闭增量。本记录仅允许进入统一复验，后续绑定输入或决定变化仍须重核。",
+    "首次统一验收已在前次冻结范围真实执行17组，前16组完整通过且整个执行前后指纹一致。本次独立比较确认变化文件仅为资产测试和系统设计锚点，另有CURRENT范围/依据记录更新；产品源码未再改。资产专项已通过，但当前范围最终通过结论仍由新的17组统一收据给出。历史专项日志及版本限制保留，不以日志名字含final代替同版验证。",
+    "最大65467B距64KiB仅69B，压力场景用满24次总调用。它证明该合成输入在原限额内完成，不证明任意16000字节工作区或历史都可压缩成功，也不代表调用次数、成本、缓存命中或p50/p95已优化。最小完整上下文仍超限时允许原有有限失败。",
+    "保留目标使用Pi字符/4估算及JSON转义余量，不是精确token或硬字节预算。未来SDK协议和其他消息形状仍由实际payload门槛兜底；没有对摘要内容保真、旧依据全部保留或真实模型不再补读作保证。",
+    "模型输出为确定性本地协议替身，数据为合成材料，官方模型及付费请求0。真实模型的自主澄清、正确工具选择、SQL/解释准确率及真实Datasight权限或容量均未由本轮验证证明。",
+    "审查者未运行付费服务，未读取凭据或修改产品源码/测试；仅阅读实际代码、锁定SDK和对应本地合成结果。审查记录是普通本地证据，不是不可篡改保证。"
+  ],
+  "verification_update": {
+    "prior_unified_receipt": ".local/checks/context-increment-before-asset-fix.json",
+    "prior_inputs_stable": true,
+    "prior_passed_groups": 16,
+    "prior_failed_group": "CONTEXT-ASSETS",
+    "changed_input_files_since_prior_execution": [
+      "docs/semantic-retrieval-design.md",
+      "tests/mvp/check-asset-directory.mjs"
+    ],
+    "product_sources_changed": false,
+    "new_asset_targeted_check": "passed",
+    "new_frozen_unified_acceptance": "pending"
+  }
+}

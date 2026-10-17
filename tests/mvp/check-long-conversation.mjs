@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { writeFile } from 'node:fs/promises';
 import { SessionManager } from '@earendil-works/pi-coding-agent';
 import { exportCheckpoint } from '../../apps/agent/session/checkpoint.ts';
-import { harness } from './harness.mjs';
+import { harness, until } from './harness.mjs';
 const h=await harness({capture:true,env:{DATA_AGENT_LEASE_MS:'120000'}});
 const manager=SessionManager.inMemory('/synthetic/data-agent');
 const conditions={time_start:'2026-01-01T00:00:00Z',time_end:'2026-02-01T00:00:00Z',timezone:'UTC',metric:'net_revenue',channel:null,group_by:[],filters:['is_test=0'],knowledge_refs:[],notes:''};
@@ -25,7 +25,10 @@ try{
  }
  run=await h.capture(cid,'继续先前的订单任务');await h.pauseWorker();
  assert.equal(run.workspace_context.tasks.length,24);
- const omitted=tasks.find(t=>!run.workspace_context.tasks.some(v=>v.id===t.task_id));assert.ok(omitted);
+ assert.deepEqual(run.workspace_context.recent_messages,[],'原话只通过Pi历史或完整历史工具交付');
+ assert.deepEqual(run.workspace_context.tasks.map(t=>t.id),tasks.slice(-24).reverse().map(t=>t.task_id),'候选顺序必须来自实际消息顺序，而不是UUID');
+ // 同一消息的另一目标在后面的task_directory单独核对；此处选有主归属的早期消息。
+ const omitted=tasks.slice(1).find(t=>!run.workspace_context.tasks.some(v=>v.id===t.task_id));assert.ok(omitted);
  const history=await invoke('read_conversation',{after_seq:'0'});
  const message=history.events.find(e=>e.payload.task_id===omitted.task_id);assert.ok(message);
  let after='0',ids=[],events=[];
@@ -39,6 +42,21 @@ try{
  let taskAfter,all=[];do{const page=await invoke('read_conversation',{after_seq:'0',task_directory:true,...(taskAfter?{task_after:taskAfter}:{})});all.push(...page.tasks);taskAfter=page.next_task_after;}while(taskAfter);
  assert.equal(all.length,27);assert.equal(new Set(all.map(t=>t.id)).size,27);assert.ok(all.some(t=>t.id===tasks[0].task_id));
  const first=await invoke('read_analysis_task',{task_id:tasks[0].task_id});assert.equal(first.goal,'同一消息的第一个独立目标');
- assert.ok(all.every(t=>!('conditions' in t)));passed=true;
- console.log(JSON.stringify({passed,checks:[{name:'超过24任务后，从未撤回历史的宿主task_id找回上下文外的早期任务及当前条件',passed:true}],officialRequests:0}));
+ assert.ok(all.every(t=>!('conditions' in t)));
+ const notes='合成当前任务的必要条件'.repeat(300);
+ const revision=await invoke('update_analysis_task',{action:'revise',goal:'',task_id:first.id,expected_version:first.condition_version,condition_patch:{set:{notes},unset:[]},options:[]});
+ const previous=run,capturedCount=h.captured.length;
+ h.releaseRun(previous.run_id);
+ h.sql(`UPDATE agent_runs SET state='interrupted' WHERE id='${previous.run_id}';UPDATE conversations SET lease_owner=NULL,lease_until=NULL WHERE id='${cid}';UPDATE background_jobs SET state='queued',lease_owner=NULL,lease_until=NULL WHERE message_id='${previous.message_id}';`);
+ await h.resumeWorker();run=await until(()=>h.captured.slice(capturedCount).find(v=>v.message_id===previous.message_id),'恢复已归属的早期任务');await h.pauseWorker();
+ assert.equal(run.resume_same_input,true);
+ assert.deepEqual(run.workspace_context.input_task_ids,[first.id]);
+ assert.equal(run.workspace_context.tasks[0].id,first.id,'当前已归属的早期任务必须进入候选首位');
+ assert.equal(run.workspace_context.tasks[0].condition_version,revision.condition_version);
+ assert.equal(run.workspace_context.tasks[0].conditions.notes,notes,'候选超额时不能先裁掉当前条件');
+ assert.deepEqual(run.workspace_context.recent_messages,[]);
+ assert.equal(run.budget_scope_id,previous.budget_scope_id);
+ assert.equal((await invoke('read_analysis_task',{task_id:first.id})).conditions.notes,notes);
+ passed=true;
+ console.log(JSON.stringify({passed,checks:[{name:'超过24任务按消息顺序选候选；早期任务可分页补读，恢复已归属目标优先并保全条件',passed:true}],officialRequests:0}));
 }finally{await writeFile('.local/checks/mvp-long-conversation.json',JSON.stringify({passed,taskCount:tasks.length},null,2));await h.close();}

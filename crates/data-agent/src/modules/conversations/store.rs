@@ -415,19 +415,14 @@ pub async fn confirmation_blocked_in_tx(tx: &mut AppTx<'_>, cid: &str) -> Result
     let count:i64=sqlx::query_scalar("SELECT COUNT(*) FROM conversation_messages WHERE conversation_id=? AND routing_state='pending' AND disposition IN ('pending','failed')").bind(cid).fetch_one(tx.connection()).await?;
     Ok(count > 0)
 }
-pub async fn recent_messages_in_tx(
+// 消息序号表达真实交互次序；随机任务ID仅作同一消息内的稳定排序。
+pub async fn recent_task_ids_in_tx(
     tx: &mut AppTx<'_>,
     locked: &LockedConversation,
-) -> Result<Vec<Value>> {
+) -> Result<Vec<String>> {
     current(tx, locked)?;
-    let rows = sqlx::query("SELECT payload,event_type FROM conversation_events WHERE conversation_id=? AND event_type IN ('message','assistant_committed') AND (event_type<>'message' OR JSON_UNQUOTE(JSON_EXTRACT(payload,'$.message_id')) NOT IN (SELECT id FROM conversation_messages WHERE disposition='withdrawn')) ORDER BY event_seq DESC LIMIT 16")
-        .bind(&locked.id).fetch_all(tx.connection()).await?;
-    Ok(rows.iter().rev().map(|r| {
-        let payload = r.get::<sqlx::types::Json<Value>, _>("payload").0;
-        let mut message = json!({"role":if r.get::<String,_>("event_type")=="message"{"user"}else{"assistant"},"text":payload["text"],"attempt_id":null,"committed":true});
-        if let Some(clock)=payload.get("request_clock") { message["request_clock"]=clock.clone(); }
-        message
-    }).collect())
+    Ok(sqlx::query_scalar("SELECT COALESCE(b.task_id,m.routed_task_id) AS task_id FROM conversation_messages m JOIN conversation_events e ON e.conversation_id=m.conversation_id AND e.event_type='message' AND JSON_UNQUOTE(JSON_EXTRACT(e.payload,'$.message_id'))=m.id LEFT JOIN conversation_message_tasks b ON b.message_id=m.id WHERE m.conversation_id=? AND m.disposition<>'withdrawn' AND COALESCE(b.task_id,m.routed_task_id) IS NOT NULL GROUP BY COALESCE(b.task_id,m.routed_task_id) ORDER BY MAX(e.event_seq) DESC,task_id")
+        .bind(&locked.id).fetch_all(tx.connection()).await?)
 }
 pub async fn delete_in_tx(tx: &mut AppTx<'_>, locked: &LockedConversation) -> Result<()> {
     current(tx, locked)?;

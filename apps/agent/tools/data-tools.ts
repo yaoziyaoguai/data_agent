@@ -41,7 +41,7 @@ const definitions = {
   ],
   update_analysis_task: [
     "AnalysisUpdate",
-    "登记本消息归属，每条用户消息都须调用，即使只解释含义或询问澄清也不能跳过。create新任务只需action、goal、完整conditions和options，省略尚不存在的task_id/expected_version；已有任务则必须给真实ID和当前版本。未指定的时间/指标/渠道用null，数组用[]，notes用空字符串，timezone取宿主业务时区。无需用户澄清时省略question、options=[]；有真实歧义时先以create或clarify保存question和options，再提问等待用户。knowledge_refs只用已读知识对象的id/version/path，read_source的source_id不是object_id。改变时间、渠道、指标、分组等条件必须action=revise，带condition_patch={set:{要改的字段:新值},unset:[]}（要清空时列入unset）；工具合并并返回新版本，旧稿失效。已有任务clarify也带condition_patch；条件不变时用{set:{},unset:[]}，不能额外添加顶层knowledge_refs。clarify必须保存一个实际问题，说明疑点与影响，选项只是参考，有依据才推荐。自由回答使用原任务revise，仅修改回答涉及的条件；解释选项用route保留问题，换独立话题归属其他任务。需要时read_analysis_task补读当前条件/问题，指代含糊先问归属；未回答不代表同意，回答本身不新增执行授权。task_id/expected_version沿用工具回执。route只登记归属，禁止conditions和condition_patch，不能修改条件。只有条件完全不变而改写SQL时，route带replaces_query_id原子失效目标旧稿；普通追问route不带替代ID。",
+    "登记本消息归属并返回当前task_id/condition_version。create新任务只需action、goal、完整conditions和options，省略尚不存在的task_id/expected_version；已有任务则必须给真实ID和当前版本。未指定的时间/指标/渠道用null，数组用[]，notes用空字符串，timezone取宿主业务时区。不澄清时省略question且options=[]；clarify必须提供实际非空question，options为参考选项。knowledge_refs只用已读知识对象的id/version/path，read_source的source_id不是object_id。改变时间、渠道、指标、分组等条件必须action=revise，带condition_patch={set:{要改的字段:新值},unset:[]}（要清空时列入unset）；工具合并并返回新版本，旧稿失效。已有任务clarify也带condition_patch；条件不变时用{set:{},unset:[]}，不能额外添加顶层knowledge_refs。task_id/expected_version沿用工具回执。route只登记归属，禁止conditions和condition_patch，不能修改条件。只有条件完全不变而改写SQL时，route带replaces_query_id原子失效目标旧稿；普通追问route不带替代ID。",
   ],
   get_query: [
     "GetQueryInput",

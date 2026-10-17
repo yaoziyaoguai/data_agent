@@ -26,10 +26,11 @@ import {
 import { mockStream } from "../provider/mock.ts";
 import { selectedSkillResources } from "./skills.ts";
 import { resources } from "./resources.ts";
-import { memoryContext } from "./memory-context.ts";
+import { workspaceContext } from "./workspace-context.ts";
 import { restoreCheckpoint, exportCheckpoint, RECOVERY_NOTICE } from "./checkpoint.ts";
 import { decodeContract } from "../../../packages/contracts/validate.ts";
 import { outputStream } from "./output-stream.ts";
+import { estimateRequestBytes } from "./request-size.ts";
 
 export async function deliver(
   run: RunEnvelope,
@@ -47,9 +48,9 @@ export async function deliver(
   }
   const manager = restoreCheckpoint("/synthetic/data-agent", checkpoint);
   const tool = taskTool(transport, manager, fault);
-  const memory = run.workspace_context ? memoryContext(run.workspace_context) : null;
+  const workspace = run.workspace_context ? workspaceContext(run.workspace_context) : null;
   const data = run.workspace_context
-    ? dataTools(transport, manager, fault, memory?.acceptReceipt)
+    ? dataTools(transport, manager, fault, workspace?.acceptReceipt)
     : null;
   // SDK不能直接续接以assistant工具调用结尾的半轮；只接回已登记调用，不重新规划。
   const messages = manager.buildSessionContext().messages;
@@ -179,16 +180,9 @@ export async function deliver(
     settingsManager: settings,
     sessionManager: manager,
     resourceLoader: resources(
-      run.workspace_context
-        ? JSON.stringify({
-            ...run.workspace_context,
-            memories: undefined,
-            authority_snapshot: undefined,
-            authority_revision: undefined,
-          })
-        : undefined,
+      !!data,
       selectedSkillResources(run.workspace_context?.selected_skills ?? []),
-      memory?.extension,
+      workspace?.extension,
     ),
     tools: data ? data.tools.map((t) => t.name) : ["update_analysis_task"],
     customTools: data ? data.tools : [tool.definition],
@@ -215,10 +209,28 @@ export async function deliver(
   };
   signal.addEventListener("abort", abort, { once: true });
   try {
-    const visibleContext = run.workspace_context ? JSON.stringify({...run.workspace_context,memories:undefined,authority_snapshot:undefined,authority_revision:undefined}) : "";
-    const estimatedBytes = historyBytes + Buffer.byteLength(visibleContext) + (memory?.bytes() ?? 0) + Buffer.byteLength(run.text) + Buffer.byteLength(JSON.stringify(data?.tools.map(({name,description,parameters})=>({name,description,parameters})) ?? [])) + 4096;
-    // 空闲提交前调用SDK摘要；活动轮内由Pi的overflow compact-and-retry处理。
-    if(data && run.model_profile?.toolset==="data" && history.length>2 && estimatedBytes>(run.model_profile.payload_bytes_limit??65536)-4096) await session.compact();
+    if (data && run.model_profile?.toolset === "data") {
+      const payloadLimit = run.model_profile.payload_bytes_limit ?? 65536;
+      const availableBytes = payloadLimit -
+        estimateRequestBytes(session.systemPrompt, [], data.tools, workspace?.contents() ?? [], run.text);
+      // Pi按字符/4估算token；结合JSON转义余量选择尾部目标，只是启发式，不是硬字节保证。
+      const requestKeepRecentTokens = Math.min(keepRecentTokens, Math.max(128, Math.floor(availableBytes / 24)));
+      const requestCompaction = {compaction: {keepRecentTokens: requestKeepRecentTokens}};
+      // 大历史先保留较多尾部，避免初始摘要请求自身超限；小历史从预检起就使用本轮目标。
+      if (estimateRequestBytes("", history, [], [], "") <= payloadLimit - 4096)
+        settings.applyOverrides(requestCompaction);
+      // 完整提示/资料/历史先作保守预检；实际载荷仍由provider在预留/发送前检查。
+      if (history.length > 2 && estimateRequestBytes(session.systemPrompt, history, data.tools, workspace?.contents() ?? [], run.text) > payloadLimit - 4096) {
+        try {
+          await session.compact();
+        } catch (error) {
+          // Pi1.0.0未公开canCompact；这两个无摘要可做的结果交给最终载荷检查，其余失败照常传播。
+          if (!(error instanceof Error) || !["Already compacted", "Nothing to compact (session too small)"].includes(error.message))
+            throw error;
+        }
+      }
+      settings.applyOverrides(requestCompaction);
+    }
     if (run.resume_same_input && manager.buildSessionContext().messages.length)
       // prompt先刷新Pi当前资源；恢复通知不改变宿主输入、任务、操作或预算身份。
       await session.prompt(

@@ -77,9 +77,22 @@ pub async fn start_delivery(
     let resume_same_input = checkpoint.is_some();
     let mut workspace_context = None;
     if std::env::var("DATA_AGENT_TOOLSET").as_deref() == Ok("data") {
-        let tasks = crate::modules::analysis::context_in_tx(&mut tx, &conversation.id).await?;
+        let mut tasks = crate::modules::analysis::context_in_tx(&mut tx, &conversation.id).await?;
         let input_task_ids =
             conversations::message_task_ids_in_tx(&mut tx, &conversation, &message.id).await?;
+        let recent_tasks = conversations::recent_task_ids_in_tx(&mut tx, &conversation).await?;
+        let mut priorities = std::collections::HashMap::new();
+        for task in input_task_ids.iter().chain(&recent_tasks) {
+            let next = priorities.len();
+            priorities.entry(task.as_str()).or_insert(next);
+        }
+        tasks.sort_by_key(|task| {
+            let id = task["id"].as_str().unwrap_or("");
+            (
+                priorities.get(id).copied().unwrap_or(usize::MAX),
+                id.to_owned(),
+            )
+        });
         let memories = crate::modules::assets::list_in_tx(&mut tx, &context, true)
             .await?
             .into_iter()
@@ -129,17 +142,8 @@ pub async fn start_delivery(
             .as_ref()
             .map(|v| v["authority_snapshot"].clone())
             .unwrap_or_else(super::context_authority::empty);
-        let recent = if invalidated || checkpoint.is_none() {
-            vec![]
-        } else {
-            // 助手历史由Pi检查点恢复；重新混入无依赖标识的旧回答会绕过上轮重建。
-            conversations::recent_messages_in_tx(&mut tx, &conversation)
-                .await?
-                .into_iter()
-                .filter(|v| v["role"] == "user")
-                .collect()
-        };
-        let mut visible = json!({"request_clock":message.request_clock,"tasks":tasks.iter().rev().take(24).map(|t|if invalidated{json!({"id":t["id"],"condition_version":t["condition_version"],"lifecycle":t["lifecycle"],"phase":t["phase"],"note":"依据已失效，请重新调查"})}else{t.clone()}).collect::<Vec<_>>(),"recent_messages":recent,"selected_skills":selected,"memories":memories,"query_observations":crate::modules::queries::list_in_tx(&mut tx,&conversation.id).await?.iter().rev().take(12).map(|q|json!({"id":q["id"],"task_id":q["task_id"],"condition_version":q["condition_version"],"execution_state":q["execution_state"]})).collect::<Vec<_>>(),"asset_counts":asset_counts});
+        // 历史只由Pi恢复；完整原话可经read_conversation分页补读，不再注入300字副本。
+        let mut visible = json!({"request_clock":message.request_clock,"input_task_ids":input_task_ids,"tasks":tasks.iter().take(24.max(input_task_ids.len())).map(|t|if invalidated{json!({"id":t["id"],"condition_version":t["condition_version"],"lifecycle":t["lifecycle"],"phase":t["phase"],"context_complete":false,"note":"依据已失效，请重新调查"})}else{t.clone()}).collect::<Vec<_>>(),"recent_messages":[],"selected_skills":selected,"memories":memories,"query_observations":crate::modules::queries::list_in_tx(&mut tx,&conversation.id).await?.iter().rev().take(12).map(|q|json!({"id":q["id"],"task_id":q["task_id"],"condition_version":q["condition_version"],"execution_state":q["execution_state"]})).collect::<Vec<_>>(),"asset_counts":asset_counts});
         // 已失效任务只交付状态，不能把旧口径经初始工作区再次送入模型。
         for task in visible["tasks"].as_array_mut().into_iter().flatten() {
             if task["conditions"]["knowledge_refs"].is_array() {
@@ -152,7 +156,7 @@ pub async fn start_delivery(
                 {
                     Ok(()) => (),
                     Err(error) if matches!(error.code, "stale_knowledge" | "not_available") => {
-                        *task = json!({"id":task["id"],"condition_version":task["condition_version"],"lifecycle":task["lifecycle"],"phase":task["phase"],"note":"依据已失效，请重新调查"});
+                        *task = json!({"id":task["id"],"condition_version":task["condition_version"],"lifecycle":task["lifecycle"],"phase":task["phase"],"context_complete":false,"note":"依据已失效，请重新调查"});
                     }
                     Err(error) => return Err(error),
                 }
@@ -163,7 +167,6 @@ pub async fn start_delivery(
         runtime::save_authority_in_tx(&mut tx, &run_id, &snapshot).await?;
         visible["authority_revision"] = json!(fingerprint(&snapshot));
         visible["authority_snapshot"] = snapshot;
-        visible["input_task_ids"] = json!(input_task_ids);
         workspace_context = Some(visible);
     }
     if let Some(previous) = replaces {
