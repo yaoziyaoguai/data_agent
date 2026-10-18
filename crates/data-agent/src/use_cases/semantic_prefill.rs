@@ -135,8 +135,27 @@ pub async fn process_due(pool: &MySqlPool) -> Result<bool> {
         tx.commit().await?;
         return Ok(true);
     }
+    // 在既有两阶段边界同版补料；失败不能退回旧前缀并宣称完成复核。
+    let review_input =
+        match super::prefill_materials::review_in_tx(&mut tx, &ctx, &job["input"], &draft).await {
+            Ok(input) => input,
+            Err(error) => {
+                ingestion::finish_prefill_in_tx(
+                    &mut tx,
+                    attempt,
+                    error_state(&error),
+                    &json!({"analysis":draft}),
+                    Some(error.code),
+                )
+                .await?;
+                tx.commit().await?;
+                return Ok(true);
+            }
+        };
     // 只有合法且仍适用的草稿进入复核；失败不得把第一轮当成成功建议应用。
-    if let Err(error) = ingestion::record_prefill_draft_in_tx(&mut tx, attempt, &draft).await {
+    if let Err(error) =
+        ingestion::record_prefill_draft_in_tx(&mut tx, attempt, &draft, &review_input).await
+    {
         ingestion::finish_prefill_in_tx(
             &mut tx,
             attempt,
@@ -149,7 +168,7 @@ pub async fn process_due(pool: &MySqlPool) -> Result<bool> {
         return Ok(true);
     }
     tx.commit().await?;
-    let review = match ingestion::prefill::prepare_review(&job["input"], &profile, &draft) {
+    let review = match ingestion::prefill::prepare_review(&review_input, &profile, &draft) {
         Ok(review) => review,
         Err(error) => {
             let mut tx = AppTx::begin(pool).await?;
@@ -157,7 +176,7 @@ pub async fn process_due(pool: &MySqlPool) -> Result<bool> {
                 &mut tx,
                 attempt,
                 error_state(&error),
-                &json!({"analysis":draft}),
+                &json!({"analysis":draft,"review_input":review_input}),
                 Some(error.code),
             )
             .await?;
@@ -180,7 +199,7 @@ pub async fn process_due(pool: &MySqlPool) -> Result<bool> {
             &mut tx,
             attempt,
             error_state(&error),
-            &json!({"analysis":draft}),
+            &json!({"analysis":draft,"review_input":review_input}),
             Some(error.code),
         )
         .await?;
@@ -197,7 +216,7 @@ pub async fn process_due(pool: &MySqlPool) -> Result<bool> {
                 &mut tx,
                 attempt,
                 "unknown",
-                &json!({"analysis":draft}),
+                &json!({"analysis":draft,"review_input":review_input}),
                 Some(error.code),
             )
             .await?;
@@ -205,11 +224,11 @@ pub async fn process_due(pool: &MySqlPool) -> Result<bool> {
             return Ok(true);
         }
     };
-    let history = json!({"analysis":draft,"review":output});
+    let history = json!({"analysis":draft,"review_input":review_input,"review":output});
     let settled = runtime::settle_maintenance_in_tx(&mut tx, &review_call, &profile, &usage).await;
     tx.commit().await?;
     let mut tx = AppTx::begin(pool).await?;
-    let candidate = ingestion::prefill::validate_result(&job["input"], &output);
+    let candidate = ingestion::prefill::validate_result(&review_input, &output);
     let valid = settled.and(candidate);
     let valid = match valid {
         Ok(candidate) => match check_current_in_tx(&mut tx, &ctx, &job).await {

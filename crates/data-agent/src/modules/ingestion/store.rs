@@ -531,11 +531,12 @@ pub async fn record_prefill_draft_in_tx(
     tx: &mut AppTx<'_>,
     attempt: &str,
     draft: &Value,
+    review_input: &Value,
 ) -> Result<()> {
     assert_prefill_active_in_tx(tx, attempt).await?;
     // 复核仍属于同一次预填；保留分析草稿，更新当前领取的有效期，不重领或自动重发。
     sqlx::query("UPDATE prefill_attempts SET result_json=?,issued_until=TIMESTAMPADD(SECOND,?,UTC_TIMESTAMP(3)) WHERE id=?")
-        .bind(sqlx::types::Json(serde_json::json!({"analysis":draft})))
+        .bind(sqlx::types::Json(serde_json::json!({"analysis":draft,"review_input":review_input})))
         .bind(super::prefill::timing()?.1)
         .bind(attempt).execute(tx.connection()).await?;
     Ok(())
@@ -611,7 +612,7 @@ pub async fn retire_catalog_source_in_tx(
     Ok(())
 }
 
-// 目录采集结束后，首次模型请求前冻结完整材料；此后两个阶段使用同一份输入。
+// 目录采集结束后冻结首阶段材料及来源版本；复核可在同版范围内补充原文。
 pub async fn freeze_prefill_input_in_tx(
     tx: &mut AppTx<'_>,
     attempt: &str,
