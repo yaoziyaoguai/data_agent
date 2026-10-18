@@ -114,6 +114,8 @@ Pi工具的`AnalysisUpdate`沿用同源JSON Schema：新建任务须带完整`co
 
 已有任务的`revise/clarify`须带`condition_patch`及当前版本；空白问题和字符串`null/undefined`不能生成澄清。正式输出取Pi最后一条助手消息，通过`FinishRun.final_start_chunk_seq`绑定其已保存片段；省略该字段的旧请求从片段1核对。Rust始终核对全部片段连续、起点范围和正式文本相等，调查过程仍作为事件保留。Pi系统规则要求所有工具之后的最后回复独立完成本条请求：分析兼保存须保留结论、关键数字、必要依据与限制及真实保存结果，不能仅确认保存；纯保存、草稿及提交仍可简短确认。工具可能推翻前文，因此宿主不拼接调查文字，也不靠文本长度或固定“已保存”词句判断完整性；协议测试证明交付与恢复路径，真实模型是否遵循仍需质量验证。
 
+普通条件修订不自动解决澄清。已有任务的 `revise/clarify` 可携 `resolved_clarification_ids`，只解决本消息明确回答的开放问题；服务端核对当前任务版本、同会话同任务与开放状态，任一错误使整次修订回滚。未指定问题继续开放，即使其创建条件版本较早；当前条件版本过期的回答仍拒绝。任务目录给出最早未决 `clarification`；`read_analysis_task` 按 `clarification_after/next_clarification_after` 每页返回最多8条 `open_clarifications`，更新回执额外返回本次 `opened_clarification`，支持先回答后出现的问题。还有问题时阶段保持 `waiting_clarification`。同事务可回答旧问题并创建新问题；不授予SQL执行权。
+
 `route`只登记消息归属，禁止附带`conditions/condition_patch`或澄清问题。修改渠道、时间、指标等条件使用`revise`，获得新的条件版本并失效旧待确认草稿；只有条件保持不变而改写SQL时，`route`可带`replaces_query_id`声明修订。错误动作与参数组合在共享契约边界拒绝，不能成功返回后静默丢掉修改。
 
 | 状态维度 | 初始状态设计 | 规则 |
@@ -184,6 +186,9 @@ flowchart TD
 结果由现有终态通知续接解释。`is_confirmation_message_in_tx`核对查询与来源消息；组合层在外部结果读取前及最终事务调用它。`get_query`对新确认查询的来源消息只返回状态，成功时`results=null`及等待交付提示，避免执行轮和结果轮重复作答；同消息恢复沿用此边界。系统结果消息、后续真实用户消息和Web结果读取继续正常取数，不改平台终态。
 
 M07 `page_statistics` 对已经授权读取的结果页做确定性列统计，由原 `QueryResults.statistics` 随 HTTP 及 Pi `get_query` 交付，不新增工具或执行 SQL。记录当前行数、每列非空/空值数、按原始返回文本去重的数量，以及出现超过一次的非空值与次数（`repeated_values`）；重复值按文本排序，同样只覆盖当前统计范围。已声明数值类型且所有非空值可解析时提供正/零/负计数，直接核对十进制文本，保留大整数和极小数。仅 `offset=0`、无后页、未截断且平台声明完整时标为 `complete_result`，其余为 `page`；跨页去重不能相加。该统计不推断业务主键、单位或净额，也不替代数据库排序规则。模型据此解释对应列，缺少统计的计算不靠目测补值。`result_expired` 属于共用 AppError，页面明确告知结果过期并保留原 SQL，不自动重跑。
+
+Pi `get_query` 的默认 `view=rows` 在已鉴权的固定保存结果上按序列化字节选行，结果投影最多23KiB；`next_cursor` 是整个保存结果的绝对行偏移，统计重新对应实际交付行。HTTP结果页及证据核验继续沿原路径。`view=statistics` 独立读取当前平台页统计，不夹带明细；`view=cell` 按绝对行号与列号读取精确单元格。极宽单行、单元格或统计无法一次交付时，返回原JSON的 `content_text/content_page`；使用相同查询、view及行列/游标参数，按Unicode字符 `content_offset` 补读，完整重组后才能采用。片段不伪装成NULL或完整值，统计不跨页冒称全量。每次补读都重新核对所有权、来源和result_ref；它不重跑SQL。平台保存页仍受原512KiB接收上限约束，此适配不声称支持超过平台上限的结果。
+
 
 
 | 状态维度 | 初始状态设计 | 规则 |

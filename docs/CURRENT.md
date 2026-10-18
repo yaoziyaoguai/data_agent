@@ -4,58 +4,68 @@
   "schema": 1,
   "phase": "verify",
   "status": "complete",
-  "goal_revision": 59,
+  "goal_revision": 60,
   "environment": "Node26.8.1/npm11.19.0、Rust1.99.0、Python3.14.7/SQLite；Colima MySQL/Milvus；仅隔离数据库与本地协议替身。",
   "verification": {
     "level": "targeted",
-    "reason": "核实并修复检索前三被类型/关联挤出及最终回答规则缺失；1200候选边界核验；仅本地合成与Pi协议，0付费调用。",
+    "reason": "修复Oracle与本地交叉审计四项能力缺口；合成正式入口/本机Pi协议验证，不执行付费模型。",
     "freshness": "content",
     "inputs": [
+      "crates/data-agent/src/modules/analysis",
+      "crates/data-agent/src/modules/queries",
       "crates/data-agent/src/modules/retrieval",
-      "crates/data-agent/src/modules/knowledge",
+      "crates/data-agent/src/modules/knowledge/store.rs",
+      "crates/data-agent/src/modules/ingestion/prefill.rs",
+      "crates/data-agent/src/modules/ingestion/store.rs",
+      "crates/data-agent/src/use_cases/data_tools.rs",
+      "crates/data-agent/src/use_cases/query_workflow.rs",
       "crates/data-agent/src/use_cases/knowledge.rs",
-      "crates/data-agent/src/use_cases/knowledge_sources.rs",
-      "crates/data-agent/src/use_cases/finish_run.rs",
-      "crates/data-agent/src/search_scope.rs",
-      "apps/agent/session",
-      "apps/agent/tools",
-      "apps/agent/provider",
-      "apps/web/src/features/workbench/conversation-timeline.ts",
+      "crates/data-agent/src/use_cases/prefill_materials.rs",
+      "crates/data-agent/src/use_cases/semantic_prefill.rs",
+      "apps/agent/tools/data-tools.ts",
+      "apps/agent/session/resources.ts",
+      "apps/agent/provider/mock.ts",
       "packages/contracts",
-      "tests/mvp/harness.mjs",
-      "tests/mvp/check-retrieval-ranking.mjs",
-      "tests/mvp/check-final-answer.mjs",
-      "tests/mvp/check-retrieval-scope.mjs",
-      "tests/mvp/check-retrieval-coverage.mjs",
-      "tests/mvp/check-retrieval-excerpts.mjs",
-      "tests/mvp/check-data-provider.mjs",
-      "tests/mvp/check-native-compaction.mjs",
-      "tests/mvp/check-conversation-timeline.mjs",
-      "docs/architecture/knowledge-modules.md",
-      "docs/architecture/runtime-modules.md",
+      "crates/data-agent/src/contracts.rs",
+      "tests/contracts",
+      "tests/mvp",
+      "docs/architecture",
+      "docs/semantic-retrieval-design.md",
+      "docs/reviews/agent-effectiveness-review.json",
+      "docs/CURRENT.md",
+      "apps/platform-mock/server.py",
       "Cargo.toml",
       "Cargo.lock",
       "package.json",
       "package-lock.json",
       "Makefile",
       "scripts/check_delivery.py",
-      "crates/data-agent/src/use_cases/context_authority.rs",
-      "crates/data-agent/src/use_cases/data_tools.rs"
+      "crates/data-agent/src/use_cases/context_authority.rs"
     ],
-    "checks": []
+    "checks": [
+      "四项正式入口专项通过：澄清10组、结果读取7组、检索8组、预填11组；全部为本地合成。",
+      "构建/静态/同源契约445项/架构/原结果统计/provider回归通过；隔离MySQL内全部117个库单测通过。",
+      "原64KiB压力24调用/10摘要/最大65209字节通过，预填请求最大54555字节；真实模型调用0。",
+      "统一九组冻结验收以delivery.increment.status与收据为准，当前专项结论不替代统一收据。"
+    ]
   },
   "delivery": {
     "schema": 1,
     "registry": "docs/semantic-retrieval-design.md",
     "increment": {
-      "id": "I2-RETRIEVAL-DELIVERY",
+      "id": "I2-AGENT-EFFECTIVENESS",
       "phase": "I2",
       "status": "complete",
-      "goal": "修复相关资料首次回执被类型和关联挤出；明确工具后的完整终稿规则并验证持久化/刷新/续接；核实大候选覆盖保护。",
+      "goal": "修复无关修订误关闭澄清、单结果页不可读、候选前缀偏置及预填复核缺料四项问题。",
       "requirements": [
-        "D13",
+        "D02",
+        "D05",
+        "D08",
+        "D14",
         "C01",
         "C02",
+        "C03",
+        "C04",
         "C05",
         "C06",
         "C07",
@@ -63,73 +73,89 @@
       ],
       "modules": [
         "M02",
+        "M03",
         "M04",
         "M05",
+        "M06",
+        "M07",
         "M08",
         "M10",
-        "M11",
-        "M12"
+        "M11"
       ],
       "allowed_paths": [
-        "crates/data-agent/src/modules/retrieval/mod.rs",
+        "crates/data-agent/src/modules/analysis",
+        "crates/data-agent/src/modules/queries",
+        "crates/data-agent/src/modules/retrieval",
+        "crates/data-agent/src/modules/knowledge/store.rs",
+        "crates/data-agent/src/modules/ingestion/prefill.rs",
+        "crates/data-agent/src/modules/ingestion/store.rs",
+        "crates/data-agent/src/use_cases/data_tools.rs",
+        "crates/data-agent/src/use_cases/query_workflow.rs",
         "crates/data-agent/src/use_cases/knowledge.rs",
+        "crates/data-agent/src/use_cases/prefill_materials.rs",
+        "crates/data-agent/src/use_cases/semantic_prefill.rs",
+        "apps/agent/tools/data-tools.ts",
         "apps/agent/session/resources.ts",
-        "tests/mvp/check-retrieval-ranking.mjs",
-        "tests/mvp/check-final-answer.mjs",
-        "docs/architecture/knowledge-modules.md",
-        "docs/architecture/runtime-modules.md",
-        "docs/reviews/retrieval-delivery-review.json",
+        "apps/agent/provider/mock.ts",
+        "packages/contracts",
+        "crates/data-agent/src/contracts.rs",
+        "tests/contracts",
+        "tests/mvp",
+        "docs/architecture",
+        "docs/semantic-retrieval-design.md",
+        "docs/reviews/agent-effectiveness-review.json",
         "docs/CURRENT.md",
-        "tests/mvp/check-retrieval-scope.mjs"
+        "crates/data-agent/src/use_cases/context_authority.rs"
       ],
       "non_goals": [
-        "不更换检索算法/模型，不扩大1000候选、24KiB回执、模型payload或24次调用预算。",
-        "不添加回答语义启发式、额外模型补正循环或统计平台；不调用真实/付费模型。"
+        "不新建Agent循环/压缩器，不扩大24次调用或连续失败3次政策，不叠加模型复核或统计平台。",
+        "不把提示遵循或历史模型成绩当当前质量；本轮不调用真实付费模型。"
       ],
       "invariants": [
-        "类型和关联补位只能使用融合前三之外的位置；原权限/版本/来源/范围回查保持。",
-        "正式输出沿最后一条助手消息及原片段起点，不拼入调查文字或已被工具推翻的结论；Pi保持唯一Agent循环。",
-        "candidate_limit和补读入口保持；协议模型只证明工程路径，不证明真实模型自主选择/完整性或业务召回率。"
+        "权限/来源/条件版本/真实消息执行授权/幂等/预算与人工覆盖保护保持。",
+        "普通条件修订保留未答澄清，明确解决指定问题后按实际未决事实推进。",
+        "结果读取不重跑SQL、不修改精确数据；分页范围和引用真实。",
+        "候选工作量仍有界；预填仍为两次维护模型调用，补料区间不得拼造原文。"
       ],
       "verification_inputs": [
+        "crates/data-agent/src/modules/analysis",
+        "crates/data-agent/src/modules/queries",
         "crates/data-agent/src/modules/retrieval",
-        "crates/data-agent/src/modules/knowledge",
+        "crates/data-agent/src/modules/knowledge/store.rs",
+        "crates/data-agent/src/modules/ingestion/prefill.rs",
+        "crates/data-agent/src/modules/ingestion/store.rs",
+        "crates/data-agent/src/use_cases/data_tools.rs",
+        "crates/data-agent/src/use_cases/query_workflow.rs",
         "crates/data-agent/src/use_cases/knowledge.rs",
-        "crates/data-agent/src/use_cases/knowledge_sources.rs",
-        "crates/data-agent/src/use_cases/finish_run.rs",
-        "crates/data-agent/src/search_scope.rs",
-        "apps/agent/session",
-        "apps/agent/tools",
-        "apps/agent/provider",
-        "apps/web/src/features/workbench/conversation-timeline.ts",
+        "crates/data-agent/src/use_cases/prefill_materials.rs",
+        "crates/data-agent/src/use_cases/semantic_prefill.rs",
+        "apps/agent/tools/data-tools.ts",
+        "apps/agent/session/resources.ts",
+        "apps/agent/provider/mock.ts",
         "packages/contracts",
-        "tests/mvp/harness.mjs",
-        "tests/mvp/check-retrieval-ranking.mjs",
-        "tests/mvp/check-final-answer.mjs",
-        "tests/mvp/check-retrieval-scope.mjs",
-        "tests/mvp/check-retrieval-coverage.mjs",
-        "tests/mvp/check-retrieval-excerpts.mjs",
-        "tests/mvp/check-data-provider.mjs",
-        "tests/mvp/check-native-compaction.mjs",
-        "tests/mvp/check-conversation-timeline.mjs",
-        "docs/architecture/knowledge-modules.md",
-        "docs/architecture/runtime-modules.md",
+        "crates/data-agent/src/contracts.rs",
+        "tests/contracts",
+        "tests/mvp",
+        "docs/architecture",
+        "docs/semantic-retrieval-design.md",
+        "docs/reviews/agent-effectiveness-review.json",
+        "docs/CURRENT.md",
+        "apps/platform-mock/server.py",
         "Cargo.toml",
         "Cargo.lock",
         "package.json",
         "package-lock.json",
         "Makefile",
         "scripts/check_delivery.py",
-        "crates/data-agent/src/use_cases/context_authority.rs",
-        "crates/data-agent/src/use_cases/data_tools.rs"
+        "crates/data-agent/src/use_cases/context_authority.rs"
       ],
       "acceptance": [
         {
-          "id": "RETRIEVAL-BUILD",
+          "id": "EFFECT-BUILD",
           "requirements": [
             "C07"
           ],
-          "expected": "Rust API/Worker与Web构建、同源契约、类型、格式和模块边界检查通过。",
+          "expected": "构建、同源契约、类型、格式、模块边界通过。",
           "evidence_kind": "contract",
           "command": [
             "make",
@@ -138,129 +164,136 @@
             "verify-contracts",
             "verify-architecture"
           ],
-          "timeout_seconds": 600
+          "timeout_seconds": 900
         },
         {
-          "id": "RETRIEVAL-UNIT",
+          "id": "EFFECT-CLARIFICATION",
           "requirements": [
-            "C06"
+            "C03",
+            "C04",
+            "C05",
+            "D08"
           ],
-          "expected": "融合排序先保留前三；精确命中、向量版本、同分确定性及原片段/回执边界保持。",
+          "expected": "正式入口：无关修订保留未答问题；显式回答仅关闭指定问题；旧版/幂等/归属/正常执行保持。",
           "evidence_kind": "runtime",
           "command": [
-            "sh",
-            "-c",
-            "\"${CARGO:-$HOME/.cargo/bin/cargo}\" test --offline --locked -p data-agent --lib modules::retrieval"
+            "node",
+            "tests/mvp/check-clarification.mjs"
           ],
-          "timeout_seconds": 600
+          "timeout_seconds": 900
         },
         {
-          "id": "RETRIEVAL-RANKING",
+          "id": "EFFECT-RESULT-READ",
+          "requirements": [
+            "D02",
+            "D14",
+            "C01",
+            "C02"
+          ],
+          "expected": "宽结果按字节续读、单元格补读和独立统计；同查询只执行一次，引用/绝对行号/完整性/权限保持。",
+          "evidence_kind": "runtime",
+          "command": [
+            "node",
+            "tests/mvp/check-query-result-reading.mjs"
+          ],
+          "timeout_seconds": 900
+        },
+        {
+          "id": "EFFECT-RESULT-REGRESSION",
+          "requirements": [
+            "D02",
+            "D14",
+            "C02",
+            "C05"
+          ],
+          "expected": "原结果统计与空/部分/精确值行为保持。",
+          "evidence_kind": "runtime",
+          "command": [
+            "node",
+            "tests/mvp/check-query-result-statistics.mjs"
+          ],
+          "timeout_seconds": 900
+        },
+        {
+          "id": "EFFECT-CANDIDATES",
           "requirements": [
             "C06",
             "A06",
             "C02"
           ],
-          "expected": "三个同表强字段与六类弱命中、关联补位竞争时，首次工具回执保留前三；1200候选名称优先及覆盖不足明确。",
+          "expected": "长查询首中尾词与重复词经生产候选路径；前三名、名称/范围/上限保护保持。",
           "evidence_kind": "runtime",
           "command": [
             "node",
             "tests/mvp/check-retrieval-ranking.mjs"
           ],
-          "timeout_seconds": 600
+          "timeout_seconds": 900
         },
         {
-          "id": "RETRIEVAL-SCOPE",
+          "id": "EFFECT-PREFILL",
           "requirements": [
-            "C02",
-            "C06",
-            "A06"
-          ],
-          "expected": "范围在候选上限之前过滤，回源权限/版本、正文分页和24KiB回执保持。",
-          "evidence_kind": "runtime",
-          "command": [
-            "node",
-            "tests/mvp/check-retrieval-scope.mjs"
-          ],
-          "timeout_seconds": 600
-        },
-        {
-          "id": "RETRIEVAL-COVERAGE",
-          "requirements": [
-            "C06",
-            "A06"
-          ],
-          "expected": "过期候选占满仍显式candidate_limit，不泄漏过滤数量，精确补查可定位后方有效对象。",
-          "evidence_kind": "runtime",
-          "command": [
-            "node",
-            "tests/mvp/check-retrieval-coverage.mjs"
-          ],
-          "timeout_seconds": 600
-        },
-        {
-          "id": "RETRIEVAL-EXCERPTS",
-          "requirements": [
+            "D05",
             "C02",
             "C06"
           ],
-          "expected": "命中片段来自当前授权正文，来源和版本核对保持。",
+          "expected": "实际两阶段输入有界同版补料，旧/新引文位置真实，多字节边界正确，缺口/人工值/来源变化保持。",
           "evidence_kind": "runtime",
           "command": [
             "node",
-            "tests/mvp/check-retrieval-excerpts.mjs"
+            "tests/mvp/check-prefill-materials.mjs"
           ],
-          "timeout_seconds": 600
+          "timeout_seconds": 900
         },
         {
-          "id": "ANSWER-DELIVERY",
+          "id": "EFFECT-UNIT",
           "requirements": [
-            "D13",
-            "C01",
-            "C05"
+            "C03",
+            "D14",
+            "C06",
+            "D05"
           ],
-          "expected": "最终回答规范实际送入Pi；正文与保存工具后提供完整终稿，正式保存、刷新与原会话续接保留结论数字；修订后不拼入错误过程。仅协议证据，不代表真实模型遵循率。",
+          "expected": "全部Rust库单测在原隔离MySQL及已完成模拟Pi运行夹具内通过，不跳过数据库与检查点场景。",
           "evidence_kind": "runtime",
           "command": [
             "node",
-            "tests/mvp/check-final-answer.mjs"
+            "tests/mvp/check-agent-library.mjs"
           ],
-          "timeout_seconds": 600
+          "timeout_seconds": 900
         },
         {
-          "id": "ANSWER-REGRESSION",
+          "id": "EFFECT-PROVIDER",
           "requirements": [
             "C01",
             "C05"
           ],
-          "expected": "正式输出仍取最后完整助手消息，length/未归属的原生修正、检查点和原预算保持。",
+          "expected": "Pi工具与交付协议、失败和原预算保持。",
           "evidence_kind": "runtime",
           "command": [
             "node",
             "tests/mvp/check-data-provider.mjs"
           ],
-          "timeout_seconds": 600
+          "timeout_seconds": 900
         },
         {
-          "id": "ANSWER-COMPACTION",
+          "id": "EFFECT-COMPACTION",
           "requirements": [
             "C01",
             "C05"
           ],
-          "expected": "原64KiB压力、原生Pi压缩/续接和权限失效保持，不放宽payload或调用次数。",
+          "expected": "原64KiB压力和原生压缩/续接，原预算及断言不放宽。",
           "evidence_kind": "runtime",
           "command": [
             "node",
             "tests/mvp/check-native-compaction.mjs"
           ],
-          "timeout_seconds": 600
+          "timeout_seconds": 900
         }
       ],
       "review": {
         "status": "passed",
-        "record": "docs/reviews/retrieval-delivery-review.json"
+        "record": "docs/reviews/agent-effectiveness-review.json"
       },
-      "evidence": ".local/delivery/I2-RETRIEVAL-DELIVERY-result.json"
+      "evidence": ".local/delivery/I2-AGENT-EFFECTIVENESS-result.json"
     }
   }
 }
@@ -269,6 +302,32 @@
 # Data Agent 当前记录
 
 更新：2026-10-18。唯一活动项目目录：`~/work_space/data_agent`。
+
+
+## 当前增量：Agent效果边界修复（2026-10-18）
+
+用户在最高档Oracle与本地交叉审计后授权四项一起修复。基线b62d8ef，开工工作树干净。范围与验收见上方I2-AGENT-EFFECTIVENESS；审计事实区分源码/契约/离线反例与未验证的真实模型效果。已有前三名排序、上下文分离、Pi压缩恢复及24次/连续失败3次政策保持。
+
+实现与边界：
+
+- M06普通修订保留未答问题，revise/clarify仅用真实resolved_clarification_ids解决指定项。任务目录仍给最早问题；read_analysis_task按8条分页公开全部未决问题ID，update回执给opened_clarification。当前版本、同任务/会话、开放状态、失败回滚及原幂等保护保留。
+- M07在原已授权保存结果上提供按字节行页、独立统计及绝对行列单元格读取；超长内容按原JSON和Unicode位置续读。每个results投影不超过23KiB，原HTTP/证据路径和512KiB平台页上限保持。校验平台绝对起点、后页连续性及完整标记。所有新视图和JSON片段登记到原context_authority依赖并集，结果失效后旧正文/压缩摘要不能继续外发。
+- M04先去重，24项以内全保留，超过时按含首尾的均匀位置取24项；M02/M04共用同一选择，完整问句仍参与评分。query_terms_complete=false明确bounded；不承诺任意长句全部词召回，不扩大1000候选上限。
+- M03在现有分析与复核之间同版补读连续后续范围，同时保留草稿引文上下文。每阶段正文总预算仍24576字节，非相邻片段不拼接。visible与seen分别表达本轮/累计覆盖；最终逐字引文校验使用review_input并持久保存。默认大目录的外发草稿重复引文作无损索引化，完整原稿保持；未加第三次模型调用。
+
+验证证据：旧澄清正式入口仅改日期即关闭问题的反例已红（`.local/checks/clarification-before-fix.log`）；检索首中尾反例在旧binary尾词漏召回（`.local/copilot-review/retrieval-candidates-red.json`）。当前澄清10组含同会话重启续答/反序答题/9题分页通过（`.local/checks/clarification.json`），检索8组含独立索引召回/完整问句评分/原前三与1200候选边界通过（`.local/checks/retrieval-ranking.json`）。结果读取初次集成将152053B平台页分为15行页，超长Unicode/转义JSON重组、NULL和用户隔离通过；最大完整工具回执20221B，SQL/result_ref/原提交次数不变（`.local/checks/query-result-reading.json`）。最终7组结果验收完整通过：首次统计/单元格/片段分别登记run与Pi检查点依赖，有效时许可预留成功，结果过期后同run下一许可返回stale_context且不新增预留；最终同名JSON及`query-result-reading-authority-green.log`取代早期五组。
+
+预填14单测与11组正式入口通过（`.local/checks/prefill-unit-run.log`、`mvp-prefill-materials.json`）：固定两次调用读取新尾部、保留首部引文、未同时可见中段仍为incomplete；最终新引用和review_input持久保存、人工值保护保持。默认目录第二阶段实际54555B；相同请求展开重复草稿引文为68100B，原payload_limit失败保留在`prefill-materials-before-dedup.log`。同源原生工具Schema缺少三个传递定义的既有问题通过HEAD核实并在本次补齐；不是用mock跳过Schema校验。
+
+验收与要求变更：原“revise自动结束旧问题”违反C03，回答调用改为显式真实问题ID；独立审查发现只给首个问题ID妨碍回答后问，已补公开分页，测试不从SQL偷取调用ID。预填旧测试按全局请求序号误比较不同对象，改为同target匹配两阶段；改版后旧run预期读取新知识违反已有C02/C05，现先精确断言stale_context，再取消旧run并以有效新run读取。问题仍需开放、版本冲突、人工值和隔离断言未放宽。
+
+独立审查另发现新结果投影需要核对平台游标，已复用saved_result_next_cursor并补错误起点/断页/假完整反例；主代理追踪压缩恢复时发现新视图缺少rows导致结果依赖漏登记，已在原context_authority补符合契约的新视图识别，保留“未读取的依据目录不能新增结果依赖”断言。授权边界是同一结果读取目标的一部分，允许范围增加该组合层文件，不改业务权限规则。
+
+新增参数和说明使原64KiB压力多一次以上摘要并耗尽24次trial，失败记录保留在`.local/checks/effectiveness-compaction-first.log`、`effectiveness-compaction-trimmed.log`、`effectiveness-compaction-trimmed2.log`。只精简工具说明/参数描述中与系统规则重复部分；执行授权、完整答案、个人资产和报告边界保持。原压力最终通过24调用/10摘要、最大65209B（`effectiveness-compaction-final.log`），原64KiB、24总trial、12次单请求、24轮历史和近16KB工作区均未放宽。预填同样通过无损引文去重保留64KiB门槛。
+
+全库单测首次直接cargo运行有112项通过、5项因缺少显式隔离MySQL/已完成运行夹具而失败（`effectiveness-all-unit.log`）；验收命令改为复用原harness与builtin Pi生成已完成种子运行的`check-agent-library.mjs`，再执行原全部cargo --lib测试，不跳过任何测试或改变预期。修正后117项全部通过（`effectiveness-all-unit-isolated.log`）；445项同源契约、静态/构建、架构锁检查、原结果统计及provider16次本机调用也通过。结果过期检查沿既有合成profile/capture模式只预留许可，无send及外部模型请求，避免将默认mock的空profile当成有效provider许可。
+
+独立审查记录：`docs/reviews/agent-effectiveness-review.json`。实现者交叉核对非本人部分，发现闭环和指纹由记录列明。最终九组完整验收以`.local/delivery/I2-AGENT-EFFECTIVENESS-result.json`为准；增量status仅在当前指纹全部通过后置complete，不能拼接早期专项结果代替。仅本机Pi/平台/模型协议替身和合成资料，真实/付费模型调用0；未证明真实模型遵循率或任意大库质量。本轮未提交推送或更新常驻本地服务。
 
 ## 最近完成增量：检索优先级与最终回答（2026-10-18）
 

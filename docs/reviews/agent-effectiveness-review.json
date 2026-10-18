@@ -1,0 +1,343 @@
+{
+  "schema": 1,
+  "increment_id": "I2-AGENT-EFFECTIVENESS",
+  "baseline": "b62d8ef",
+  "reviewer": "按实现归属交叉审查：fix_prefill_materials 独立审查澄清；fix_clarification 独立审查检索、结果读取、context_authority 及相关提示；fix_retrieval_terms 独立审查预填和根代理新增的隔离库单测入口，并汇总本记录。汇总者实现了检索及结果读取集成测试，不对这两部分自报独立通过；其结论来自 fix_clarification 的只读复核。",
+  "conclusion": "passed",
+  "summary": "四项授权修复均有实现、合成反例或正式入口证据；当前冻结代码的交叉审查没有未关闭的确定阻断。澄清只显式解决真实问题ID，公开分页消除后建问题不可定位；结果提供有界行页、统计及单元格/JSON续片并登记上下文依赖，失效结果在下一模型预留前拒绝；检索共享全句范围的有界候选词选择，完整原句计分且如实标记覆盖不足；预填仍固定两次调用，同版补读并保留独立引文片段，最终校验实际复核材料。新增Schema与说明造成的容量问题通过规则去重及无损草稿引文去重解决，没有提高原64KiB压力或调用上限。专项通过不等于已完成统一交付：审查冻结时九组 make verify-increment 尚未运行，增量应保持 active，最终收据必须在同一指纹下全部通过。",
+  "scope_sha256": "b2f10fc166fdaa19acbbb1e1dbcadefa3dcd538d8f1eba28470d277637c63e3e",
+  "ownership": [
+    {
+      "area": "澄清状态与公开问题分页",
+      "implementer": "fix_clarification；公共契约及说明由根代理维护",
+      "independent_reviewer": "fix_prefill_materials",
+      "result": "静态发现已关闭；正式入口10组通过"
+    },
+    {
+      "area": "候选词覆盖选择",
+      "implementer": "fix_retrieval_terms；公共契约由根代理维护",
+      "independent_reviewer": "fix_clarification",
+      "result": "无阻断；2项词项单测及正式入口8组通过"
+    },
+    {
+      "area": "结果分片读取与失效依赖",
+      "implementer": "根代理；集成测试由fix_retrieval_terms实现",
+      "independent_reviewer": "fix_clarification",
+      "result": "平台游标发现关闭；新视图依赖与最终7组集成已只读复核"
+    },
+    {
+      "area": "预填补料及引文校验",
+      "implementer": "fix_prefill_materials",
+      "independent_reviewer": "fix_retrieval_terms",
+      "result": "无剩余阻断；14项专项单测及正式入口11组通过"
+    },
+    {
+      "area": "隔离MySQL全库单测入口",
+      "implementer": "根代理",
+      "independent_reviewer": "fix_retrieval_terms",
+      "result": "仅补原测试明确要求的隔离库与完成态种子；无过滤的117项库单测通过"
+    }
+  ],
+  "requirement_review": [
+    {
+      "requirements": [
+        "C03",
+        "C04",
+        "C05",
+        "D08"
+      ],
+      "topic": "未答澄清与逐项回答",
+      "reviewer": "fix_prefill_materials",
+      "files": [
+        "crates/data-agent/src/modules/analysis/store.rs",
+        "crates/data-agent/src/modules/analysis/mod.rs",
+        "crates/data-agent/src/use_cases/data_tools.rs",
+        "tests/mvp/check-clarification.mjs"
+      ],
+      "assessment": "普通日期等条件修订不再结束旧问题。resolved_clarification_ids 逐项校验当前版本、同任务归属及开放状态；任一失败整笔回滚，成功幂等回放仍先取原回执。新问题回执给 opened_clarification，read_analysis_task 按8条公开全部开放问题并核对游标归属，使后问可先答；默认工作区仍只有最早问题。任务阶段由剩余开放问题决定。自由回答不增加执行授权、旧草稿拒绝、同会话另一任务查询与重启后续接均保留正式入口断言。"
+    },
+    {
+      "requirements": [
+        "D02",
+        "D14",
+        "C01",
+        "C02",
+        "C05"
+      ],
+      "topic": "精确结果续读、平台范围与上下文授权",
+      "reviewer": "fix_clarification",
+      "files": [
+        "crates/data-agent/src/modules/queries/result_reading.rs",
+        "crates/data-agent/src/modules/queries/result_statistics.rs",
+        "crates/data-agent/src/use_cases/query_workflow.rs",
+        "crates/data-agent/src/use_cases/context_authority.rs",
+        "tests/mvp/check-query-result-reading.mjs",
+        "tests/mvp/check-query-result-statistics.mjs"
+      ],
+      "assessment": "复用既有保存结果与权限读取，未重跑SQL。23KiB投影按完整序列化结果约束；大行、长单元格和长统计以原JSON按Unicode码点续片，完成后可精确恢复中文、emoji、转义、NULL及数值字符串。统计表达实际源页范围，单元格使用绝对行列。平台起点必须等于请求游标，复用saved_result_next_cursor核对后页连续性和完整标记。context_authority保留原rows分支，对契约有效的新视图登记同一query/result_ref；单纯目录引用或无效投影不能伪造已读依赖。三个不同查询分别以statistics、JSON首片、NULL cell首次读取，测试核对真实run及checkpoint累积依赖；有效reserve后使平台结果过期，下一reserve精确stale_context且无新调用预留。"
+    },
+    {
+      "requirements": [
+        "C06",
+        "A06",
+        "C02"
+      ],
+      "topic": "有界候选词的全句覆盖与真实检索边界",
+      "reviewer": "fix_clarification",
+      "files": [
+        "crates/data-agent/src/modules/retrieval/mod.rs",
+        "crates/data-agent/src/modules/retrieval/store.rs",
+        "crates/data-agent/src/modules/knowledge/store.rs",
+        "crates/data-agent/src/use_cases/knowledge.rs",
+        "tests/mvp/check-retrieval-ranking.mjs"
+      ],
+      "assessment": "一个candidate_terms选择同时用于M02正式词法存储与M04派生索引，去重后24项内全保留，超限按含首尾的均匀位置取24项；SQL仍有24词及1001候选探测上限，正式回源上限未放宽。完整问句参与原评分，前三强候选保护及稀疏关联补位不变。query_terms_complete=false返回bounded，实际候选溢出仍优先candidate_limit。旧binary在首/中/尾反例中仅尾词漏召回；修后有无索引均通过，独立索引别名还能证明未选入候选集的词仍参与正文评分。1200对象宽查询仍可能遗漏末尾强对象，测试如实保留覆盖不足，不把均匀抽样宣称全词或全库召回保证。"
+    },
+    {
+      "requirements": [
+        "D05",
+        "C02",
+        "C06"
+      ],
+      "topic": "固定两阶段的同版补料及可核对引用",
+      "reviewer": "fix_retrieval_terms",
+      "files": [
+        "crates/data-agent/src/use_cases/prefill_materials.rs",
+        "crates/data-agent/src/use_cases/semantic_prefill.rs",
+        "crates/data-agent/src/modules/ingestion/prefill.rs",
+        "crates/data-agent/src/modules/ingestion/store.rs",
+        "tests/mvp/check-prefill-materials.mjs"
+      ],
+      "assessment": "分析阶段仍限制24576 UTF-8字节、32个血缘来源、32份文档及深度8。复核只重读已固定来源ID的相同版本，继续使用knowledge_sources和check_current的权限/版本检查。保留短来源及草稿引用附近的连续原文区间，再以剩余容量续读缺失前缀后的区段；非相邻片段分别放body或supporting_excerpts，不拼接为可引用原文。visible_byte_ranges表达本轮实际材料，seen_byte_ranges仅表达累计交付；二者不能互相冒充。引用保留耗尽容量时明确supplement_capacity。最终validate_result依据持久化的review_input，引用必须逐字位于单个当前片段，拒绝省略区间或跨片段拼造。原人工覆盖、来源变化拒绝、运行幂等与两次维护调用身份保持，失败不采用初稿。"
+    },
+    {
+      "requirements": [
+        "D05",
+        "C01",
+        "C05",
+        "C07"
+      ],
+      "topic": "完整Schema与复核草稿的无损容量调整",
+      "reviewer": "fix_retrieval_terms",
+      "files": [
+        "crates/data-agent/src/modules/ingestion/prefill.rs",
+        "tests/mvp/check-prefill-materials.mjs",
+        "packages/contracts/schema.json"
+      ],
+      "assessment": "维护原生工具Schema补齐QueryExampleParameter、EvidenceRef和QueryExampleVerification的传递定义，引用解析单测覆盖；没有依赖替身接受残缺Schema来宣布通过。新增范围元数据和完整Schema使默认目录原第二阶段出现payload_limit，现仅将外发review_draft的重复相同引文去重为目录和索引，持久原稿不变；roundtrip单测证明结构相等。实际同一默认目录请求54555字节，展开相同重复引用为68100字节，原65536门槛未提高，也未增加模型调用。"
+    },
+    {
+      "requirements": [
+        "C01",
+        "C05",
+        "C07"
+      ],
+      "topic": "Pi复用、提示去重与原生压缩压力",
+      "reviewer": "fix_clarification",
+      "files": [
+        "apps/agent/tools/data-tools.ts",
+        "apps/agent/session/resources.ts",
+        "apps/agent/provider/mock.ts",
+        "tests/mvp/check-native-compaction.mjs",
+        "tests/mvp/check-data-provider.mjs"
+      ],
+      "assessment": "新能力通过现有受控工具和结果投影提供，未新增Agent循环、规划器、压缩器或模型复核。去重后的系统原则仍要求当前原话执行授权、完整最终回答、显式选用Skill及报告/个人资产边界；工具保留参数、分页和前置依赖。原64KiB压力、24总trial、12次单请求及历史规模没有放宽，最终24次调用/10次Pi摘要/最大65209字节通过。provider专项15次普通+1次原生摘要、账本reserved=0通过。本机协议仅证明接入及续接，不能推出真实模型会自动续读或稳定遵守新参数。"
+    },
+    {
+      "requirements": [
+        "C07",
+        "C03",
+        "D14",
+        "C06",
+        "D05"
+      ],
+      "topic": "同源边界、独立验收与全库测试夹具",
+      "reviewer": "fix_retrieval_terms汇总交叉结论；单测入口为本人独立复核",
+      "files": [
+        "packages/contracts/schema.json",
+        "packages/contracts/generated",
+        "crates/data-agent/src/contracts.rs",
+        "tests/contracts",
+        "tests/mvp/check-agent-library.mjs",
+        "docs/CURRENT.md",
+        "docs/architecture",
+        "scripts/check_delivery.py"
+      ],
+      "assessment": "新增工具字段来自共用Schema并更新生成类型及跨语言边界样本，专项445条契约通过。直接cargo --lib有5项因缺少显式隔离数据库/完成态seed失败，不能计通过。新增20行左右wrapper仅复用原harness创建隔离库，通过原builtin deliver完成一轮，再无过滤执行同一cargo --lib；源码中四项锁测试和一项checkpoint测试明确要求这些前提。没有skip/ignore或改变断言，实际117 passed、0 failed、0 ignored。CURRENT保留测试设置修正依据、原失败及真实模型限制；冻结后仍须执行绑定的九组统一检查。"
+    }
+  ],
+  "findings": [],
+  "resolved_findings": [
+    {
+      "finding": "多问题模型只暴露最早问题ID，后建问题无法通过正式工具被单独回答。",
+      "discovered_by": "fix_prefill_materials独立审查",
+      "resolution": "更新回执增加opened_clarification，受控read_analysis_task按8条分页公开所有开放ID并检查同任务游标；测试从正式接口取ID、先答第二题并覆盖9题分页。",
+      "status": "closed"
+    },
+    {
+      "finding": "新结果读取投影未核对平台起点与连续页，可能把错位页标作请求范围。",
+      "discovered_by": "fix_clarification独立审查",
+      "resolution": "校验fetched_offset并复用saved_result_next_cursor，补错误起点、断页、缺行和假完整单测；审查者复核关闭。",
+      "status": "closed"
+    },
+    {
+      "finding": "统计/单元格/JSON片段不含rows，原context_authority无法为其登记结果依赖。",
+      "discovered_by": "根代理沿结果有效性边界追踪；fix_clarification独立复核",
+      "resolution": "接受完整AgentQueryResults契约下的新投影，保留原rows及目录不能新增已读依赖规则。首次三种投影分别检查run/checkpoint，过期后reserve拒绝，最终7组正式入口通过。",
+      "status": "closed"
+    },
+    {
+      "finding": "新增Schema和工具说明会使原64KiB场景超限或多摘要耗尽原trial。",
+      "discovered_by": "实际预填与原生压缩专项",
+      "resolution": "预填草稿引文无损去重；工具/系统提示仅移除重复描述。完整材料、权限、原64KiB与调用预算保持，实际预填54555B、原压缩65209B通过。",
+      "status": "closed"
+    },
+    {
+      "finding": "预填旧测试以全局请求序号比较不同目标，且改版后仍期待旧上下文成功读取新知识。",
+      "discovered_by": "预填实施与独立审查",
+      "resolution": "按同一target匹配两阶段；精确断言旧run stale_context，再取消旧run并创建有效新run继续读取。未删来源变化、人工保护或隔离断言。",
+      "status": "closed"
+    },
+    {
+      "finding": "新增结果授权测试默认capture运行的model_profile为空，不能成功预留有效模型调用。",
+      "discovered_by": "最终结果读取专项",
+      "resolution": "沿既有check-analysis-evidence的capture-only合成profile建立隔离账本，trial/request各2；不调用send/provider。有效预留先成功后再测过期拒绝，未把404当通过；fix_clarification只读复核。",
+      "status": "closed"
+    },
+    {
+      "finding": "直接运行全部库单测缺少原测试明确要求的隔离MySQL和完成态seed，5项失败。",
+      "discovered_by": "根代理全库验证",
+      "resolution": "测试wrapper建立原fixture后执行相同无过滤库测试，117项全部通过；由未实现wrapper的fix_retrieval_terms核对测试源码前提与实际日志。",
+      "status": "closed"
+    }
+  ],
+  "evidence": [
+    {
+      "path": ".local/checks/clarification-before-fix.log",
+      "role": "旧实现正式入口反例",
+      "sha256": "518d954258eb53a64df43ccff441efc0b5e1ef3343c4105e6eac25e5a533cc5a"
+    },
+    {
+      "path": ".local/checks/clarification-after-fix.log",
+      "role": "澄清10组、25次本机协议、最大82863B；真实模型0",
+      "sha256": "d28b316018937fd14e4f5720d34372f3acc4a248906ef896570bc06106884648"
+    },
+    {
+      "path": ".local/checks/clarification.json",
+      "role": "澄清最终专项结果",
+      "sha256": "256b236c12cd17d2a0457d3a5608b517468c4f486ff4c45914bc497fda7e60bb"
+    },
+    {
+      "path": ".local/copilot-review/retrieval-candidates-red.json",
+      "role": "旧binary首中尾反例；文件明确标记格式化等价测试哈希而非实际执行字节哈希",
+      "sha256": "6678320ece456a0d599b628cb67b65b388df2efaf4de211530c0597327b10e3e"
+    },
+    {
+      "path": ".local/copilot-review/retrieval-candidates-unit.log",
+      "role": "候选选择2项单测",
+      "sha256": "071227ed7e651e38add12a8bf4c2b87c43bd6ebd8d4410630c00b770074775d0"
+    },
+    {
+      "path": ".local/checks/retrieval-ranking.json",
+      "role": "检索正式入口8组",
+      "sha256": "bc6027350b738fa5267bcb6705f990e6f4e0fe6f5d67965ad1e33fc3b4bef555"
+    },
+    {
+      "path": ".local/copilot-review/query-result-reading-authority-missing-profile.log",
+      "role": "新增测试缺隔离模型profile的原失败",
+      "sha256": "43f6041f0622a05c20def881c481969d7d74133851c14e73c431036b2cc79229"
+    },
+    {
+      "path": ".local/copilot-review/query-result-reading-authority-green.log",
+      "role": "结果读取最终7组完整运行exit0",
+      "sha256": "9ba202b8bd9cafe1eb0b94b25288033ad66c9005312f62da4f0adca808e1d5b2"
+    },
+    {
+      "path": ".local/checks/query-result-reading.json",
+      "role": "152053B→15行页；最大results19371B/回执20221B；20内容续片；新依赖/失效拒绝",
+      "sha256": "593429cd966e7e858593c20a1e6040203fcfe09fab797e5abc209aca0da1f604"
+    },
+    {
+      "path": ".local/checks/effectiveness-statistics.log",
+      "role": "原统计3项单测与4组正式入口回归",
+      "sha256": "5d3164f57ef4a3e737695de2d18afe4237151e2ae2ae63a877a11342163fc38d"
+    },
+    {
+      "path": ".local/checks/prefill-unit-run.log",
+      "role": "预填14项专项单测",
+      "sha256": "ee06162d29deb33880304998de24e4bb8c3b367035d267633e0591c278c55855"
+    },
+    {
+      "path": ".local/checks/prefill-materials-before-dedup.log",
+      "role": "无损去重前默认目录payload_limit",
+      "sha256": "c70d4e46996fca98f73cc1a62fabec7c7ee8a0b1351bc0b6b1c9390461080427"
+    },
+    {
+      "path": ".local/checks/prefill-materials-run.log",
+      "role": "预填最终11组、23次本机维护协议",
+      "sha256": "675a6d0168e9d4756b65eba1d492addfff7542a597c00b923c52e6242fcc74dd"
+    },
+    {
+      "path": ".local/checks/mvp-prefill-materials.json",
+      "role": "两阶段补料、引文/覆盖/持久化/人工保护及真实载荷证据",
+      "sha256": "a535f9f2340145827e1bc4d7bb59458752c8df654bfecfd72cdcae81f8149f1f"
+    },
+    {
+      "path": ".local/checks/effectiveness-all-unit.log",
+      "role": "未配置隔离DB/seed时112通过5失败，未当作通过",
+      "sha256": "ed826bfe7e5855d748c0294eca66d5b0be57e124ca3a618cf9040cb5dc1fcb29"
+    },
+    {
+      "path": ".local/checks/effectiveness-all-unit-isolated.log",
+      "role": "原117项库单测全部通过、无skip/ignore",
+      "sha256": "9925be52380119f2b08de62bfd95f7779d0ee2b5561c4df3e5e1ceb9a46468b6"
+    },
+    {
+      "path": ".local/checks/effectiveness-compaction-final.log",
+      "role": "原64KiB/24trial压力24调用10摘要、最大65209B、280条短历史",
+      "sha256": "88f52393ecc16ec793096cce0baf1f00439e44fc8de43b32fe45ee311bb73ecb"
+    },
+    {
+      "path": ".local/checks/effectiveness-provider.log",
+      "role": "真实Pi本机provider协议16调用，账本预留归零",
+      "sha256": "cb71965d1a46891b09a5e67217993439944270923209aeef7d5ae0e578c97e36"
+    },
+    {
+      "path": ".local/checks/effectiveness-code-contracts-final.log",
+      "role": "代码检查及445条跨语言契约",
+      "sha256": "75cb03d92912537919a73f652cd877307d908b3cd3b2aac1f5aa69098417e086"
+    },
+    {
+      "path": ".local/checks/effectiveness-build-authority.log",
+      "role": "含最终authority修改的应用构建",
+      "sha256": "cd6ef547cceae06818f9a49f767c742f8c941063b9c8affb74220f2fcfdc4e95"
+    },
+    {
+      "path": ".local/checks/effectiveness-architecture.log",
+      "role": "架构/模块边界专项",
+      "sha256": "82826fa96f482a72ac9680bc16350aa6bb3429ab1984a150917e41a7d4ce6efe"
+    }
+  ],
+  "unified_verification": {
+    "status_at_review": "not_started",
+    "command": "make verify-increment",
+    "required_command_groups": 9,
+    "expected_receipt": ".local/delivery/I2-AGENT-EFFECTIVENESS-result.json",
+    "condition": "必须九组全部成功、无超时且当前输入指纹一致，不能拼接本记录所列专项关闭增量。审查结论passed仅表示当前范围交叉审查通过。"
+  },
+  "limitations": [
+    "本轮仅使用从零合成资料、隔离MySQL/SQLite、本地Pi及provider协议替身；真实/付费模型调用0。未证明真实模型理解质量、提示遵循率或自主分页行为。",
+    "超过24个唯一词时仍只选择24项；超过1000候选仍有覆盖不足。测试不证明任意长问句或任意大库的召回保证。",
+    "预填仍固定两个阶段，不能读完任意长资料；累计曾交付不等于当前复核可见，未保留的旧原文不得作为复核当前依据。",
+    "结果统计沿平台原页范围，读取不会恢复平台未保存的数据；23KiB投影限制不代表任意复杂任务可在一条消息预算内读完。",
+    "64KiB压力最大65209B且用满24次旧trial预算，只证明该固定合成场景，不外推生产任意长历史。",
+    "本记录的scope包含声明的依赖文件；216份指纹输入用于失效检测，不宣称逐行重审整个仓库、所有历史需求或真实平台接入。",
+    "统一九组验收在记录时尚未执行；本记录不宣称提交、推送、部署或常驻本地服务已更新。"
+  ],
+  "reviewed_at": "2026-10-18T06:23:04.025851+00:00",
+  "scope": {
+    "input_files": 216,
+    "contract_sha256": "a6905bf8b039c2c8e83b90a42d900830df0f97db7a90280abc502403b465f116",
+    "decisions_sha256": "c6456f454f3efb5763440301d1ea3298c518024f0fede2cb6be7dd86fa103e3b"
+  }
+}
