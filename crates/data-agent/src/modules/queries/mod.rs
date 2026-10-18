@@ -1,3 +1,5 @@
+mod result_reading;
+pub use result_reading::agent_result_page;
 pub mod platform;
 mod result_statistics;
 pub use result_statistics::page_statistics;

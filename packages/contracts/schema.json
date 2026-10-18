@@ -2398,6 +2398,18 @@
           "minLength": 1,
           "maxLength": 64,
           "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "resolved_clarification_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64,
+            "pattern": "^[A-Za-z0-9_-]+$"
+          },
+          "uniqueItems": true,
+          "maxItems": 8,
+          "description": "本消息已回答的真实问题ID；省略或[]保留全部未答问题，仅已有任务revise/clarify可用。"
         }
       },
       "required": [
@@ -2624,6 +2636,31 @@
                 "type": "string",
                 "minLength": 1,
                 "pattern": "\\S"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "resolved_clarification_ids"
+            ]
+          },
+          "then": {
+            "required": [
+              "task_id",
+              "expected_version"
+            ],
+            "properties": {
+              "action": {
+                "enum": [
+                  "revise",
+                  "clarify"
+                ]
+              },
+              "task_id": {
+                "type": "string",
+                "minLength": 1
               }
             }
           }
@@ -3740,6 +3777,13 @@
           "type": "string",
           "minLength": 1,
           "maxLength": 64
+        },
+        "clarification_after": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$",
+          "description": "按回执next_clarification_after继续读取未决问题；省略从第一页开始。"
         }
       },
       "required": [
@@ -4143,6 +4187,10 @@
         },
         "scope_applied": {
           "type": "boolean"
+        },
+        "query_terms_complete": {
+          "type": "boolean",
+          "description": "候选谓词是否覆盖全部去重检索词项；false时应改写或拆分查询，不能据空结果断言没有资料。"
         }
       },
       "required": [
@@ -7273,12 +7321,77 @@
             "null"
           ],
           "maxLength": 2000
+        },
+        "view": {
+          "type": "string",
+          "enum": [
+            "rows",
+            "statistics",
+            "cell"
+          ],
+          "description": "rows默认；statistics独立统计；cell按绝对行列读值。"
+        },
+        "row_index": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 999
+        },
+        "column_index": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "content_offset": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4194304,
+          "description": "超长JSON片段续读的Unicode字符偏移。"
         }
       },
       "required": [
         "query_id"
       ],
-      "additionalProperties": false
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "view": {
+                "const": "cell"
+              }
+            },
+            "required": [
+              "view"
+            ]
+          },
+          "then": {
+            "required": [
+              "row_index",
+              "column_index"
+            ],
+            "not": {
+              "required": [
+                "cursor"
+              ]
+            }
+          },
+          "else": {
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "row_index"
+                  ]
+                },
+                {
+                  "required": [
+                    "column_index"
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ]
     },
     "WorkspaceTask": {
       "title": "WorkspaceTask",
@@ -8406,6 +8519,202 @@
         "next_after_id"
       ],
       "additionalProperties": false
+    },
+    "QueryResultContent": {
+      "title": "QueryResultContent",
+      "type": "object",
+      "properties": {
+        "query_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "result_ref": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "view": {
+          "type": "string",
+          "enum": [
+            "rows",
+            "statistics",
+            "cell"
+          ]
+        },
+        "content_format": {
+          "const": "json",
+          "type": "string"
+        },
+        "content_text": {
+          "type": "string"
+        },
+        "content_page": {
+          "title": "QueryResultContentRange",
+          "type": "object",
+          "properties": {
+            "offset": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "total_chars": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "complete": {
+              "type": "boolean"
+            },
+            "next_offset": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 0
+            }
+          },
+          "required": [
+            "offset",
+            "total_chars",
+            "complete",
+            "next_offset"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "query_id",
+        "result_ref",
+        "view",
+        "content_format",
+        "content_text",
+        "content_page"
+      ],
+      "additionalProperties": false
+    },
+    "QueryResultStatisticsRead": {
+      "title": "QueryResultStatisticsRead",
+      "type": "object",
+      "properties": {
+        "query_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "result_ref": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "view": {
+          "type": "string",
+          "const": "statistics"
+        },
+        "fetched_offset": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]{0,19})$"
+        },
+        "next_cursor": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "saved_row_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "saved_result_complete": {
+          "type": "boolean"
+        },
+        "truncated": {
+          "type": "boolean"
+        },
+        "statistics": {
+          "$ref": "#/$defs/ResultStatistics"
+        }
+      },
+      "required": [
+        "query_id",
+        "result_ref",
+        "view",
+        "fetched_offset",
+        "next_cursor",
+        "saved_row_count",
+        "saved_result_complete",
+        "truncated",
+        "statistics"
+      ],
+      "additionalProperties": false
+    },
+    "QueryResultCellRead": {
+      "title": "QueryResultCellRead",
+      "type": "object",
+      "properties": {
+        "query_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "result_ref": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "view": {
+          "type": "string",
+          "const": "cell"
+        },
+        "row_index": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "column_index": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "column": {
+          "$ref": "#/$defs/ResultColumn"
+        },
+        "value": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "query_id",
+        "result_ref",
+        "view",
+        "row_index",
+        "column_index",
+        "column",
+        "value"
+      ],
+      "additionalProperties": false
+    },
+    "AgentQueryResults": {
+      "title": "AgentQueryResults",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/QueryResults"
+        },
+        {
+          "$ref": "#/$defs/QueryResultStatisticsRead"
+        },
+        {
+          "$ref": "#/$defs/QueryResultCellRead"
+        },
+        {
+          "$ref": "#/$defs/QueryResultContent"
+        }
+      ]
     }
   },
   "properties": {
@@ -8906,6 +9215,18 @@
     },
     "MaintenanceImpact": {
       "$ref": "#/$defs/MaintenanceImpact"
+    },
+    "QueryResultContent": {
+      "$ref": "#/$defs/QueryResultContent"
+    },
+    "QueryResultStatisticsRead": {
+      "$ref": "#/$defs/QueryResultStatisticsRead"
+    },
+    "QueryResultCellRead": {
+      "$ref": "#/$defs/QueryResultCellRead"
+    },
+    "AgentQueryResults": {
+      "$ref": "#/$defs/AgentQueryResults"
     }
   },
   "required": [

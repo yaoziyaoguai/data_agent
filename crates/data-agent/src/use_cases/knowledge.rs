@@ -737,9 +737,10 @@ pub async fn retrieve_scoped_in_tx(
         let object = knowledge::read_in_tx(tx, ctx, anchor, None, false).await?;
         assert_source_in_tx(tx, ctx, &object).await?;
     }
-    let indexed = retrieval::candidates_scoped_in_tx(tx, &ctx.space_id, query, scope).await?;
-    let current =
-        knowledge::matching_scoped_in_tx(tx, ctx, query, &retrieval::tokens(query), scope).await?;
+    let terms = retrieval::candidate_terms(query);
+    let indexed =
+        retrieval::candidates_scoped_in_tx(tx, &ctx.space_id, &terms.values, scope).await?;
+    let current = knowledge::matching_scoped_in_tx(tx, ctx, query, &terms.values, scope).await?;
     let mut candidates = Vec::new();
     let mut seen = std::collections::HashSet::new();
     let limited = current.len() > 1000 || indexed.len() > 1000;
@@ -852,6 +853,6 @@ pub async fn retrieve_scoped_in_tx(
     };
     Ok(KnowledgeSearch {
         objects,
-        coverage: json!({"state":if limited{"candidate_limit"}else if vector.bounded||index_state=="incomplete"{"bounded"}else{"complete"},"candidate_limit":2200,"vector_state":vector.state,"index_state":index_state,"scope_applied":!scope.kinds.is_empty()||scope.anchor.is_some()||scope.domain.is_some()}),
+        coverage: json!({"state":if limited{"candidate_limit"}else if !terms.complete||vector.bounded||index_state=="incomplete"{"bounded"}else{"complete"},"candidate_limit":2200,"query_terms_complete":terms.complete,"vector_state":vector.state,"index_state":index_state,"scope_applied":!scope.kinds.is_empty()||scope.anchor.is_some()||scope.domain.is_some()}),
     })
 }

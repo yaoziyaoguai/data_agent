@@ -146,6 +146,82 @@ try {
   );
   checks.push("只有两个直接命中时仍用两个余位补关联，不降低原有稀疏候选召回");
 
+  // 用同一真实工具入口覆盖未建索引的正式正文，以及已索引的目标。
+  // 关键业务词可以在自然问句首、中、尾，不能只查看前24个派生词项。
+  const termTargets = [false, true].map((indexed) =>
+    object(
+      "terms-refund-" + (indexed ? "indexed" : "current"),
+      "metric",
+      "退款率",
+      "Synthetic standalone fixture.",
+    ),
+  );
+  termTargets.forEach((value, index) => insert(value, index === 1));
+  const termQueries = {
+    start:
+      "退款率请先按照当前可见的业务资料帮我认真核对一下这张表在最近一个统计周期内的口径",
+    middle:
+      "请先按照当前可见的业务资料退款率帮我认真核对一下这张表在最近一个统计周期内的口径",
+    end: "请先按照当前可见的业务资料帮我认真核对一下这张表在最近一个统计周期内的退款率",
+  };
+  observations.queryTermPositions = {};
+  for (const [position, query] of Object.entries(termQueries)) {
+    const found = await search(query);
+    observations.queryTermPositions[position] = termTargets.every((target) =>
+      found.objects.some((item) => item.id === target.id),
+    );
+    assert.ok(
+      observations.queryTermPositions[position],
+      `${position}: ${JSON.stringify(found.objects.map((item) => item.id))}`,
+    );
+  }
+  checks.push(
+    "长中文问句首中尾业务词均经正式工具候选路径召回，有无索引结果一致",
+  );
+
+  // 索引词项可以带别名；回源正文仍由完整问句计分，不能把评分也裁成24项。
+  const indexAlias = object(
+    "terms-index-alias",
+    "metric",
+    "qtoken45",
+    "独立合成索引别名资料。",
+  );
+  insert(indexAlias);
+  const aliasBody = Buffer.from(
+    JSON.stringify({ ...indexAlias, name: "qtoken47" }),
+  ).toString("hex");
+  h.sql(
+    `UPDATE retrieval_documents SET body=CAST(CONVERT(0x${aliasBody} USING utf8mb4) AS JSON) WHERE object_id='${indexAlias.id}'`,
+  );
+  const indexedTerms = await search(
+    Array.from(
+      { length: 48 },
+      (_, i) => "qtoken" + String(i).padStart(2, "0"),
+    ).join(" "),
+  );
+  assert.ok(indexedTerms.objects.some((item) => item.id === indexAlias.id));
+  assert.equal(indexedTerms.search_coverage.query_terms_complete, false);
+  assert.equal(indexedTerms.search_coverage.state, "bounded");
+  checks.push(
+    "索引独立召回尾部别名后，完整问句中的未选词仍参与正式正文计分；回执明示词项覆盖受限",
+  );
+
+  const repeated = await search("unusedprefix ".repeat(30) + "退款率");
+  assert.ok(
+    termTargets.every((target) =>
+      repeated.objects.some((item) => item.id === target.id),
+    ),
+  );
+  assert.equal(repeated.search_coverage.query_terms_complete, true);
+  for (const query of ["退款率", "refundcase sales"]) {
+    const short = await search(query);
+    assert.equal(short.search_coverage.query_terms_complete, true);
+    assert.equal(short.search_coverage.state, "complete");
+  }
+  checks.push(
+    "重复词先去重不耗尽候选词预算，短查询完整覆盖且原评分与前三保护不变",
+  );
+
   // 所有资料从零合成。1200个弱正文命中按ID排在前，唯一名称强匹配在末尾。
   const weak = object(
     "scale-placeholder",

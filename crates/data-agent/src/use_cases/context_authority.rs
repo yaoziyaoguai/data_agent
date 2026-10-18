@@ -24,7 +24,13 @@ fn add(snapshot: &mut Value, kind: &str, id: &Value, version: &Value) {
 // 只观察宿主已裁剪、确实交付的结构化资料。字符串中的ID不被当作引用。
 // 对同一Pi会话取并集：压缩摘要可能仍包含早先资料，不能因最新页没出现就删掉依赖。
 pub fn observe(snapshot: &mut Value, data: &Value) {
-    if data["result_ref"].is_string() && data["rows"].is_array() && data["query_id"].is_string() {
+    // 单元格、统计和JSON片段同样已向模型交付结果，压缩后仍需重新鉴权。
+    let projected_result = matches!(data["view"].as_str(), Some("rows" | "statistics" | "cell"))
+        && crate::contracts::validate("AgentQueryResults", data).is_ok();
+    if data["result_ref"].is_string()
+        && data["query_id"].is_string()
+        && (data["rows"].is_array() || projected_result)
+    {
         add(
             snapshot,
             "query_results",
@@ -380,6 +386,26 @@ mod tests {
             &json!({"results":{"query_id":"q","result_ref":"ref","rows":[["1"]]}}),
         );
         assert_eq!(snapshot["query_results"], json!([["q", "ref"]]));
+    }
+    #[test]
+    fn delivered_result_views_and_fragments_keep_result_authority() {
+        let base = json!({"query_id":"q","result_ref":"ref","source":"mock","columns":[{"name":"v","type":"text","encoding":"text"}],"rows":[["x".repeat(30000)]],"result_complete":true,"truncated":false,"data_freshness":"synthetic","next_cursor":null,"fetched_offset":"0","saved_row_count":1,"saved_result_complete":true,"statistics":{"scope":"complete_result","row_count":1,"distinct_comparison":"returned_text","columns":[]}});
+        for input in [
+            json!({}),
+            json!({"view":"statistics"}),
+            json!({"view":"cell","row_index":0,"column_index":0}),
+        ] {
+            let page = queries::agent_result_page(&base, &input).unwrap();
+            let mut snapshot = empty();
+            observe(&mut snapshot, &json!({"results":page}));
+            assert_eq!(snapshot["query_results"], json!([["q", "ref"]]));
+        }
+        let mut snapshot = empty();
+        observe(
+            &mut snapshot,
+            &json!({"query_id":"unread","result_ref":"ref","view":"cell"}),
+        );
+        assert_eq!(snapshot["query_results"], json!([]));
     }
     #[test]
     fn dependencies_cover_delivered_objects_and_keep_earlier_pages() {

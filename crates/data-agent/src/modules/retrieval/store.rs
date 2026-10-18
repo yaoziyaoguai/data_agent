@@ -7,10 +7,11 @@ pub async fn index_in_tx(tx: &mut AppTx<'_>, space: &str, object: &Value) -> Res
 }
 
 pub async fn candidates_in_tx(tx: &mut AppTx<'_>, space: &str, query: &str) -> Result<Vec<Value>> {
+    let terms = super::candidate_terms(query);
     candidates_scoped_in_tx(
         tx,
         space,
-        query,
+        &terms.values,
         &crate::search_scope::KnowledgeSearchScope::default(),
     )
     .await
@@ -19,11 +20,10 @@ pub async fn candidates_in_tx(tx: &mut AppTx<'_>, space: &str, query: &str) -> R
 pub async fn candidates_scoped_in_tx(
     tx: &mut AppTx<'_>,
     space: &str,
-    query: &str,
+    terms: &[String],
     scope: &crate::search_scope::KnowledgeSearchScope,
 ) -> Result<Vec<Value>> {
-    let tokens = super::tokens(query);
-    if tokens.is_empty() {
+    if terms.is_empty() {
         return Ok(vec![]);
     }
     let mut sql = sqlx::QueryBuilder::<sqlx::MySql>::new(
@@ -31,7 +31,7 @@ pub async fn candidates_scoped_in_tx(
     );
     sql.push_bind(space).push(" AND (");
     let mut clauses = sql.separated(" OR ");
-    for token in tokens.into_iter().take(24) {
+    for token in terms.iter().take(24) {
         clauses
             .push("INSTR(LOWER(CAST(r.body AS CHAR)),")
             .push_bind_unseparated(token)

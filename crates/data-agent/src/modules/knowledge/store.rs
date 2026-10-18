@@ -948,13 +948,13 @@ pub async fn matching_in_tx(
     tx: &mut AppTx<'_>,
     ctx: &AccessContext,
     query: &str,
-    tokens: &[String],
+    terms: &[String],
 ) -> Result<Vec<Value>> {
     matching_scoped_in_tx(
         tx,
         ctx,
         query,
-        tokens,
+        terms,
         &crate::search_scope::KnowledgeSearchScope::default(),
     )
     .await
@@ -964,10 +964,10 @@ pub async fn matching_scoped_in_tx(
     tx: &mut AppTx<'_>,
     ctx: &AccessContext,
     query: &str,
-    tokens: &[String],
+    terms: &[String],
     scope: &crate::search_scope::KnowledgeSearchScope,
 ) -> Result<Vec<Value>> {
-    if tokens.is_empty() {
+    if terms.is_empty() {
         return Ok(vec![]);
     }
     let mut rows: Vec<String> = Vec::new();
@@ -987,7 +987,8 @@ pub async fn matching_scoped_in_tx(
             .push_bind(exact)
             .push(" AND (");
         let mut parts = sql.separated(" OR ");
-        for token in tokens.iter().take(24) {
+        // 组合层传入与索引通道相同的去重分布词项；此处仅保持SQL绑定数量上限。
+        for token in terms.iter().take(24) {
             parts
                 .push("INSTR(LOWER(CAST(k.body AS CHAR)),")
                 .push_bind_unseparated(token)

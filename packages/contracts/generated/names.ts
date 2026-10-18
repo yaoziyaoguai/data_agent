@@ -174,4 +174,8 @@ export interface ContractTypes {
   MaintenanceReference: Boundary.MaintenanceReference;
   MaintenanceDependent: Boundary.MaintenanceDependent;
   MaintenanceImpact: Boundary.MaintenanceImpact;
+  QueryResultContent: Boundary.QueryResultContent;
+  QueryResultStatisticsRead: Boundary.QueryResultStatisticsRead;
+  QueryResultCellRead: Boundary.QueryResultCellRead;
+  AgentQueryResults: Boundary.AgentQueryResults;
 }

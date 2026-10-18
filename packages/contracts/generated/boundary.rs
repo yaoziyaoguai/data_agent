@@ -18,6 +18,8 @@ use std::collections::HashMap;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Boundary {
+    #[serde(rename = "AgentQueryResults")]
+    pub agent_query_results: Option<AgentQueryResults>,
     #[serde(rename = "AnalysisEvidence")]
     pub analysis_evidence: Option<AnalysisEvidence>,
     #[serde(rename = "AnalysisEvidenceRef")]
@@ -162,7 +164,13 @@ pub struct Boundary {
     #[serde(rename = "QueryExampleVerification")]
     pub query_example_verification: Option<QueryExampleVerification>,
     pub query_list: QueryList,
+    #[serde(rename = "QueryResultCellRead")]
+    pub query_result_cell_read: Option<QueryResultCellRead>,
+    #[serde(rename = "QueryResultContent")]
+    pub query_result_content: Option<QueryResultContent>,
     pub query_results: QueryResults,
+    #[serde(rename = "QueryResultStatisticsRead")]
+    pub query_result_statistics_read: Option<QueryResultStatisticsRead>,
     pub query_view: QueryView,
     #[serde(rename = "read_checkpoint")]
     pub read_checkpoint: ReadCheckpoint,
@@ -253,6 +261,121 @@ pub struct Boundary {
     pub workspace_context: WorkspaceContext,
     #[serde(rename = "WorkspaceTask")]
     pub workspace_task: Option<WorkspaceTask>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AgentQueryResults {
+    pub columns: Option<Vec<ResultColumn>>,
+    pub data_freshness: Option<String>,
+    pub fetched_offset: Option<String>,
+    pub next_cursor: Option<String>,
+    pub query_id: String,
+    pub result_complete: Option<bool>,
+    pub result_ref: String,
+    pub rows: Option<Vec<Vec<Option<String>>>>,
+    pub saved_result_complete: Option<bool>,
+    pub saved_row_count: Option<i64>,
+    pub source: Option<AgentQueryResultsSource>,
+    /// 应用对当前有权结果页计算的统计；历史客户端可省略。
+    pub statistics: Option<ResultStatistics>,
+    pub truncated: Option<bool>,
+    pub view: Option<AgentQueryResultsView>,
+    pub column: Option<ResultColumn>,
+    pub column_index: Option<i64>,
+    pub row_index: Option<i64>,
+    pub value: Option<String>,
+    pub content_format: Option<ContentFormat>,
+    pub content_page: Option<QueryResultContentRange>,
+    pub content_text: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ResultColumn {
+    pub encoding: String,
+    pub name: String,
+    #[serde(rename = "type")]
+    pub result_column_type: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ContentFormat {
+    Json,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct QueryResultContentRange {
+    pub complete: bool,
+    pub next_offset: Option<i64>,
+    pub offset: i64,
+    pub total_chars: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AgentQueryResultsSource {
+    Mock,
+}
+
+/// 应用对当前有权结果页计算的统计；历史客户端可省略。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ResultStatistics {
+    pub columns: Vec<ResultColumnStatistics>,
+    pub distinct_comparison: DistinctComparison,
+    pub row_count: i64,
+    /// 只有从offset=0取得完整且未截断的结果才是complete_result；page不能外推为全部结果。
+    pub scope: ResultStatisticsScope,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ResultColumnStatistics {
+    pub column_index: i64,
+    pub column_name: String,
+    /// 不含NULL，按平台返回的原始文本去重；不模拟数据库排序规则。
+    pub distinct_count: i64,
+    pub non_null_count: i64,
+    pub null_count: i64,
+    pub numeric_counts: Option<NumericValueCounts>,
+    /// 本统计范围中出现超过一次的非NULL原始文本及次数；与distinct_count使用相同比较规则，不能推断跨页重复。
+    pub repeated_values: Vec<RepeatedResultValue>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NumericValueCounts {
+    pub negative: i64,
+    pub positive: i64,
+    pub zero: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RepeatedResultValue {
+    pub count: i64,
+    pub value: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DistinctComparison {
+    #[serde(rename = "returned_text")]
+    ReturnedText,
+}
+
+/// 只有从offset=0取得完整且未截断的结果才是complete_result；page不能外推为全部结果。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ResultStatisticsScope {
+    #[serde(rename = "complete_result")]
+    CompleteResult,
+    Page,
+}
+
+/// rows默认；statistics独立统计；cell按绝对行列读值。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AgentQueryResultsView {
+    Cell,
+    Rows,
+    Statistics,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -482,77 +605,11 @@ pub struct QueryResults {
     pub saved_result_complete: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub saved_row_count: Option<i32>,
-    pub source: QueryResultsSource,
+    pub source: AgentQueryResultsSource,
     /// 应用对当前有权结果页计算的统计；历史客户端可省略。
     #[serde(skip_serializing_if = "Option::is_none")]
     pub statistics: Option<ResultStatistics>,
     pub truncated: bool,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ResultColumn {
-    pub encoding: String,
-    pub name: String,
-    #[serde(rename = "type")]
-    pub result_column_type: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum QueryResultsSource {
-    Mock,
-}
-
-/// 应用对当前有权结果页计算的统计；历史客户端可省略。
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ResultStatistics {
-    pub columns: Vec<ResultColumnStatistics>,
-    pub distinct_comparison: DistinctComparison,
-    pub row_count: i64,
-    /// 只有从offset=0取得完整且未截断的结果才是complete_result；page不能外推为全部结果。
-    pub scope: ResultStatisticsScope,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ResultColumnStatistics {
-    pub column_index: i64,
-    pub column_name: String,
-    /// 不含NULL，按平台返回的原始文本去重；不模拟数据库排序规则。
-    pub distinct_count: i64,
-    pub non_null_count: i64,
-    pub null_count: i64,
-    pub numeric_counts: Option<NumericValueCounts>,
-    /// 本统计范围中出现超过一次的非NULL原始文本及次数；与distinct_count使用相同比较规则，不能推断跨页重复。
-    pub repeated_values: Vec<RepeatedResultValue>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct NumericValueCounts {
-    pub negative: i64,
-    pub positive: i64,
-    pub zero: i64,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct RepeatedResultValue {
-    pub count: i64,
-    pub value: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum DistinctComparison {
-    #[serde(rename = "returned_text")]
-    ReturnedText,
-}
-
-/// 只有从offset=0取得完整且未截断的结果才是complete_result；page不能外推为全部结果。
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum ResultStatisticsScope {
-    #[serde(rename = "complete_result")]
-    CompleteResult,
-    Page,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -576,6 +633,9 @@ pub struct AnalysisUpdate {
     pub question: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub replaces_query_id: Option<String>,
+    /// 本消息已回答的真实问题ID；省略或[]保留全部未答问题，仅已有任务revise/clarify可用。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub resolved_clarification_ids: Option<Vec<String>>,
     /// 新建任务省略此字段（也接受JSON null）；已有任务用工具回执中的真实ID，不能填字符串null。
     #[serde(skip_serializing_if = "Option::is_none")]
     pub task_id: Option<String>,
@@ -1263,8 +1323,18 @@ pub struct FinishRun {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GetQueryInput {
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub column_index: Option<i64>,
+    /// 超长JSON片段续读的Unicode字符偏移。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub content_offset: Option<i32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub cursor: Option<String>,
     pub query_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub row_index: Option<i32>,
+    /// rows默认；statistics独立统计；cell按绝对行列读值。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub view: Option<AgentQueryResultsView>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1615,6 +1685,9 @@ pub struct SearchCoverage {
     pub candidate_limit: i64,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub index_state: Option<IndexState>,
+    /// 候选谓词是否覆盖全部去重检索词项；false时应改写或拆分查询，不能据空结果断言没有资料。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub query_terms_complete: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub scope_applied: Option<bool>,
     pub state: SearchCoverageState,
@@ -2225,6 +2298,52 @@ pub enum SqlShape {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct QueryResultCellRead {
+    pub column: ResultColumn,
+    pub column_index: i64,
+    pub query_id: String,
+    pub result_ref: String,
+    pub row_index: i64,
+    pub value: Option<String>,
+    pub view: QueryResultCellReadView,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum QueryResultCellReadView {
+    Cell,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct QueryResultContent {
+    pub content_format: ContentFormat,
+    pub content_page: QueryResultContentRange,
+    pub content_text: String,
+    pub query_id: String,
+    pub result_ref: String,
+    pub view: AgentQueryResultsView,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct QueryResultStatisticsRead {
+    pub fetched_offset: String,
+    pub next_cursor: Option<String>,
+    pub query_id: String,
+    pub result_ref: String,
+    pub saved_result_complete: bool,
+    pub saved_row_count: i64,
+    pub statistics: ResultStatistics,
+    pub truncated: bool,
+    pub view: QueryResultStatisticsReadView,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum QueryResultStatisticsReadView {
+    Statistics,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ReadAnalysisReportInput {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub limit: Option<i32>,
@@ -2278,6 +2397,9 @@ pub struct ReadSourceInput {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ReadTaskInput {
+    /// 按回执next_clarification_after继续读取未决问题；省略从第一页开始。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub clarification_after: Option<String>,
     pub task_id: String,
 }
 

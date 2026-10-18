@@ -391,6 +391,30 @@ pub fn tokens(query: &str) -> Vec<String> {
     tokens
 }
 
+pub struct CandidateTerms {
+    pub values: Vec<String>,
+    pub complete: bool,
+}
+
+// 只裁候选查找词，不裁后续评分。重复词不消耗预算，长问句覆盖首尾和中间位置。
+pub fn candidate_terms(query: &str) -> CandidateTerms {
+    const LIMIT: usize = 24;
+    let mut seen = std::collections::HashSet::new();
+    let unique: Vec<_> = tokens(query)
+        .into_iter()
+        .filter(|token| seen.insert(token.clone()))
+        .collect();
+    let complete = unique.len() <= LIMIT;
+    let values = if complete {
+        unique
+    } else {
+        (0..LIMIT)
+            .map(|position| unique[position * (unique.len() - 1) / (LIMIT - 1)].clone())
+            .collect()
+    };
+    CandidateTerms { values, complete }
+}
+
 // 目录按稳定ID分页；检索检查全体有效资产，启动候选裁剪不影响可发现性。
 pub fn asset_directory(
     mut items: Vec<Value>,
@@ -513,6 +537,62 @@ pub mod vector;
 mod semantic_context_tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn candidate_terms_keep_all_distinct_terms_within_budget() {
+        for query in ["", "_ ,", "退款率", "Revenue refund_rate"] {
+            let selected = candidate_terms(query);
+            let expected = tokens(query)
+                .into_iter()
+                .collect::<std::collections::HashSet<_>>();
+            assert!(selected.complete);
+            assert_eq!(
+                selected
+                    .values
+                    .iter()
+                    .cloned()
+                    .collect::<std::collections::HashSet<_>>(),
+                expected
+            );
+        }
+        let repeated = candidate_terms(&format!("{}退款率", "unusedprefix ".repeat(30)));
+        assert!(repeated.complete);
+        assert_eq!(repeated.values, ["unusedprefix", "退款率", "退款", "款率"]);
+        let boundary = (0..24).map(|n| format!("word{n}")).collect::<Vec<_>>();
+        let selected = candidate_terms(&boundary.join(" "));
+        assert!(selected.complete);
+        assert_eq!(selected.values, boundary);
+    }
+
+    #[test]
+    fn candidate_terms_cover_long_queries_without_narrowing_score() {
+        for query in [
+            "退款率请先按照当前可见的业务资料帮我认真核对一下这张表在最近一个统计周期内的口径",
+            "请先按照当前可见的业务资料退款率帮我认真核对一下这张表在最近一个统计周期内的口径",
+            "请先按照当前可见的业务资料帮我认真核对一下这张表在最近一个统计周期内的退款率",
+        ] {
+            let selected = candidate_terms(query);
+            assert!(!selected.complete);
+            assert_eq!(selected.values.len(), 24);
+            assert!(
+                selected.values.iter().any(|term| "退款率".contains(term)),
+                "{query}"
+            );
+        }
+        let query = (0..48)
+            .map(|n| format!("qtoken{n:02}"))
+            .collect::<Vec<_>>()
+            .join(" ");
+        let selected = candidate_terms(&query);
+        assert!(!selected.complete);
+        assert_eq!(selected.values.len(), 24);
+        assert_eq!(selected.values.first().unwrap(), "qtoken00");
+        assert_eq!(selected.values.last().unwrap(), "qtoken47");
+        assert!(!selected.values.iter().any(|term| term == "qtoken45"));
+        let object = json!({"id":"tail","name":"qtoken45"});
+        assert_eq!(lexical_score(&object, &selected.values), 0);
+        assert_eq!(rank(vec![object.clone()], &query, 1), [object]);
+    }
 
     #[test]
     fn workspace_trims_old_candidates_before_current_task_and_keeps_authority_private() {

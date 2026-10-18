@@ -8116,5 +8116,133 @@
     },
     "valid": true,
     "roundtrip": true
+  },
+  {
+    "name": "explicit clarification resolution",
+    "schema": "AnalysisUpdate",
+    "value": {
+      "action": "revise",
+      "task_id": "task-1",
+      "expected_version": "2",
+      "goal": "",
+      "options": [],
+      "condition_patch": {
+        "set": {},
+        "unset": []
+      },
+      "resolved_clarification_ids": [
+        "question-1"
+      ]
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "duplicate clarification resolution rejected",
+    "schema": "AnalysisUpdate",
+    "value": {
+      "action": "revise",
+      "task_id": "task-1",
+      "expected_version": "2",
+      "goal": "",
+      "options": [],
+      "condition_patch": {
+        "set": {},
+        "unset": []
+      },
+      "resolved_clarification_ids": [
+        "q1",
+        "q1"
+      ]
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "routing cannot resolve clarification",
+    "schema": "AnalysisUpdate",
+    "value": {
+      "action": "route",
+      "task_id": "task-1",
+      "expected_version": "2",
+      "goal": "",
+      "options": [],
+      "condition_patch": {
+        "set": {},
+        "unset": []
+      },
+      "resolved_clarification_ids": [
+        "q1"
+      ]
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "query result cell read",
+    "schema": "GetQueryInput",
+    "value": {
+      "query_id": "q1",
+      "view": "cell",
+      "row_index": 1,
+      "column_index": 0,
+      "content_offset": 4096
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "cell requires row and column",
+    "schema": "GetQueryInput",
+    "value": {
+      "query_id": "q1",
+      "view": "cell"
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "cell does not mix page cursor",
+    "schema": "GetQueryInput",
+    "value": {
+      "query_id": "q1",
+      "view": "cell",
+      "row_index": 1,
+      "column_index": 0,
+      "cursor": "0"
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "statistics continuation",
+    "schema": "GetQueryInput",
+    "value": {
+      "query_id": "q1",
+      "view": "statistics",
+      "content_offset": 4096
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "negative content offset",
+    "schema": "GetQueryInput",
+    "value": {
+      "query_id": "q1",
+      "content_offset": -1
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "rows cannot silently ignore cell selector",
+    "schema": "GetQueryInput",
+    "value": {
+      "query_id": "q1",
+      "row_index": 0
+    },
+    "valid": false,
+    "roundtrip": false
   }
 ]

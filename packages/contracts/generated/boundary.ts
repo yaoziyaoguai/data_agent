@@ -1,5 +1,6 @@
 // Generated from packages/contracts/schema.json; do not edit.
 export interface Boundary {
+    AgentQueryResults?:           AgentQueryResults;
     AnalysisEvidence?:            AnalysisEvidence;
     AnalysisEvidenceRef?:         AnalysisEvidenceRef;
     AnalysisEvidenceSources?:     AnalysisEvidenceSources;
@@ -106,7 +107,10 @@ export interface Boundary {
     QueryExampleParameter?:       QueryExampleParameter;
     QueryExampleVerification?:    QueryExampleVerification;
     queryList:                    QueryList;
+    QueryResultCellRead?:         QueryResultCellRead;
+    QueryResultContent?:          QueryResultContent;
     queryResults:                 QueryResults;
+    QueryResultStatisticsRead?:   QueryResultStatisticsRead;
     queryView:                    QueryView;
     read_checkpoint:              ReadCheckpoint;
     ReadAnalysisReportInput?:     ReadAnalysisReportInput;
@@ -167,6 +171,102 @@ export interface Boundary {
     workspaceContext:             WorkspaceContext;
     WorkspaceTask?:               WorkspaceTask;
 }
+
+export interface AgentQueryResults {
+    columns?:               ResultColumn[];
+    data_freshness?:        string;
+    fetched_offset?:        string;
+    next_cursor?:           null | string;
+    query_id:               string;
+    result_complete?:       boolean;
+    result_ref:             string;
+    rows?:                  Array<Array<null | string>>;
+    saved_result_complete?: boolean;
+    saved_row_count?:       number;
+    source?:                AgentQueryResultsSource;
+    /**
+     * 应用对当前有权结果页计算的统计；历史客户端可省略。
+     */
+    statistics?:     ResultStatistics;
+    truncated?:      boolean;
+    view?:           AgentQueryResultsView;
+    column?:         ResultColumn;
+    column_index?:   number;
+    row_index?:      number;
+    value?:          null | string;
+    content_format?: ContentFormat;
+    content_page?:   QueryResultContentRange;
+    content_text?:   string;
+}
+
+export interface ResultColumn {
+    encoding: string;
+    name:     string;
+    type:     string;
+}
+
+export type ContentFormat = "json";
+
+export interface QueryResultContentRange {
+    complete:    boolean;
+    next_offset: number | null;
+    offset:      number;
+    total_chars: number;
+}
+
+export type AgentQueryResultsSource = "mock";
+
+/**
+ * 应用对当前有权结果页计算的统计；历史客户端可省略。
+ */
+export interface ResultStatistics {
+    columns:             ResultColumnStatistics[];
+    distinct_comparison: DistinctComparison;
+    row_count:           number;
+    /**
+     * 只有从offset=0取得完整且未截断的结果才是complete_result；page不能外推为全部结果。
+     */
+    scope: ResultStatisticsScope;
+}
+
+export interface ResultColumnStatistics {
+    column_index: number;
+    column_name:  string;
+    /**
+     * 不含NULL，按平台返回的原始文本去重；不模拟数据库排序规则。
+     */
+    distinct_count: number;
+    non_null_count: number;
+    null_count:     number;
+    numeric_counts: NumericValueCounts | null;
+    /**
+     * 本统计范围中出现超过一次的非NULL原始文本及次数；与distinct_count使用相同比较规则，不能推断跨页重复。
+     */
+    repeated_values: RepeatedResultValue[];
+}
+
+export interface NumericValueCounts {
+    negative: number;
+    positive: number;
+    zero:     number;
+}
+
+export interface RepeatedResultValue {
+    count: number;
+    value: string;
+}
+
+export type DistinctComparison = "returned_text";
+
+/**
+ * 只有从offset=0取得完整且未截断的结果才是complete_result；page不能外推为全部结果。
+ */
+export type ResultStatisticsScope = "page" | "complete_result";
+
+/**
+ * rows默认；statistics独立统计；cell按绝对行列读值。
+ */
+export type AgentQueryResultsView = "statistics" | "cell" | "rows";
 
 export interface AnalysisEvidence {
     conditions:        Conditions;
@@ -350,68 +450,13 @@ export interface QueryResults {
     rows:                   Array<Array<null | string>>;
     saved_result_complete?: boolean;
     saved_row_count?:       number;
-    source:                 QueryResultsSource;
+    source:                 AgentQueryResultsSource;
     /**
      * 应用对当前有权结果页计算的统计；历史客户端可省略。
      */
     statistics?: ResultStatistics;
     truncated:   boolean;
 }
-
-export interface ResultColumn {
-    encoding: string;
-    name:     string;
-    type:     string;
-}
-
-export type QueryResultsSource = "mock";
-
-/**
- * 应用对当前有权结果页计算的统计；历史客户端可省略。
- */
-export interface ResultStatistics {
-    columns:             ResultColumnStatistics[];
-    distinct_comparison: DistinctComparison;
-    row_count:           number;
-    /**
-     * 只有从offset=0取得完整且未截断的结果才是complete_result；page不能外推为全部结果。
-     */
-    scope: ResultStatisticsScope;
-}
-
-export interface ResultColumnStatistics {
-    column_index: number;
-    column_name:  string;
-    /**
-     * 不含NULL，按平台返回的原始文本去重；不模拟数据库排序规则。
-     */
-    distinct_count: number;
-    non_null_count: number;
-    null_count:     number;
-    numeric_counts: NumericValueCounts | null;
-    /**
-     * 本统计范围中出现超过一次的非NULL原始文本及次数；与distinct_count使用相同比较规则，不能推断跨页重复。
-     */
-    repeated_values: RepeatedResultValue[];
-}
-
-export interface NumericValueCounts {
-    negative: number;
-    positive: number;
-    zero:     number;
-}
-
-export interface RepeatedResultValue {
-    count: number;
-    value: string;
-}
-
-export type DistinctComparison = "returned_text";
-
-/**
- * 只有从offset=0取得完整且未截断的结果才是complete_result；page不能外推为全部结果。
- */
-export type ResultStatisticsScope = "page" | "complete_result";
 
 export interface ApplySemanticCorrection {
     expected_revision: string;
@@ -497,8 +542,18 @@ export interface ConversationSkillSelections {
 }
 
 export interface GetQueryInput {
-    cursor?:  null | string;
-    query_id: string;
+    column_index?: number;
+    /**
+     * 超长JSON片段续读的Unicode字符偏移。
+     */
+    content_offset?: number;
+    cursor?:         null | string;
+    query_id:        string;
+    row_index?:      number;
+    /**
+     * rows默认；statistics独立统计；cell按绝对行列读值。
+     */
+    view?: AgentQueryResultsView;
 }
 
 export interface KnowledgeRetrieval {
@@ -627,6 +682,41 @@ export interface QueryExampleVerification {
     evidence_refs: [EvidenceRef, ...EvidenceRef[]];
     note:          string;
 }
+
+export interface QueryResultCellRead {
+    column:       ResultColumn;
+    column_index: number;
+    query_id:     string;
+    result_ref:   string;
+    row_index:    number;
+    value:        null | string;
+    view:         QueryResultCellReadView;
+}
+
+export type QueryResultCellReadView = "cell";
+
+export interface QueryResultContent {
+    content_format: ContentFormat;
+    content_page:   QueryResultContentRange;
+    content_text:   string;
+    query_id:       string;
+    result_ref:     string;
+    view:           AgentQueryResultsView;
+}
+
+export interface QueryResultStatisticsRead {
+    fetched_offset:        string;
+    next_cursor:           null | string;
+    query_id:              string;
+    result_ref:            string;
+    saved_result_complete: boolean;
+    saved_row_count:       number;
+    statistics:            ResultStatistics;
+    truncated:             boolean;
+    view:                  QueryResultStatisticsReadView;
+}
+
+export type QueryResultStatisticsReadView = "statistics";
 
 export interface ReadAnalysisReportInput {
     limit?:   number;
@@ -988,6 +1078,10 @@ export interface AnalysisUpdate {
      */
     question?:          null | string;
     replaces_query_id?: null | string;
+    /**
+     * 本消息已回答的真实问题ID；省略或[]保留全部未答问题，仅已有任务revise/clarify可用。
+     */
+    resolved_clarification_ids?: string[];
     /**
      * 新建任务省略此字段（也接受JSON null）；已有任务用工具回执中的真实ID，不能填字符串null。
      */
@@ -1448,9 +1542,13 @@ export interface KnowledgeList {
 export interface SearchCoverage {
     candidate_limit: number;
     index_state?:    IndexState;
-    scope_applied?:  boolean;
-    state:           SearchCoverageState;
-    vector_state?:   VectorState;
+    /**
+     * 候选谓词是否覆盖全部去重检索词项；false时应改写或拆分查询，不能据空结果断言没有资料。
+     */
+    query_terms_complete?: boolean;
+    scope_applied?:        boolean;
+    state:                 SearchCoverageState;
+    vector_state?:         VectorState;
 }
 
 export type IndexState = "current" | "incomplete" | "unconfigured";
@@ -1782,7 +1880,11 @@ export interface ReadSourceInput {
 }
 
 export interface ReadTaskInput {
-    task_id: string;
+    /**
+     * 按回执next_clarification_after继续读取未决问题；省略从第一页开始。
+     */
+    clarification_after?: string;
+    task_id:              string;
 }
 
 export interface ReadCheckpoint {

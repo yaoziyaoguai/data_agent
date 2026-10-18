@@ -178,6 +178,23 @@ pub async fn results(
     Ok(result)
 }
 
+/// Agent读取投影沿用完整结果页的鉴权、来源和版本检查。
+pub async fn agent_results(
+    pool: &MySqlPool,
+    ctx: &AccessContext,
+    qid: &str,
+    input: &Value,
+) -> Result<Value> {
+    let cell_cursor = input["row_index"].as_u64().map(|row| row.to_string());
+    let cursor = if input["view"] == "cell" {
+        cell_cursor.as_deref()
+    } else {
+        input["cursor"].as_str()
+    };
+    let result = results(pool, ctx, qid, cursor).await?;
+    queries::agent_result_page(&result, input)
+}
+
 pub async fn result_authority(
     pool: &MySqlPool,
     ctx: &AccessContext,

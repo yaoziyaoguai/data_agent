@@ -53,10 +53,10 @@ const begin = async (cid, text) => {
   manager = SessionManager.inMemory("/synthetic/data-agent");
   return run;
 };
-const invokeRaw = async (name, args) => {
+const invokeRaw = async (name, args, sdk = randomUUID()) => {
   const input = {
     ...binding(),
-    sdk_tool_call_id: randomUUID(),
+    sdk_tool_call_id: sdk,
     tool_name: name,
     arguments: args,
     checkpoint: checkpoint(),
@@ -334,7 +334,11 @@ try {
     options,
   });
   assert.equal(openQuestions(guardedTask).length, 1);
-  const savedQuestion = openQuestions(guardedTask)[0];
+  const savedQuestion = {
+    ...guardedTask.opened_clarification,
+    version: guardedTask.condition_version,
+  };
+  assert.deepEqual(openQuestions(guardedTask), [savedQuestion]);
   const invalidExisting = await invokeRaw("update_analysis_task", {
     action: "clarify",
     task_id: guardedTask.task_id,
@@ -366,9 +370,204 @@ try {
   );
   noAuthorization(guardedDraft);
   await finishManual();
+  await begin(guardCid, "时间改成二月，分母暂不决定。");
+  guardedTask = await invoke("update_analysis_task", {
+    action: "revise",
+    task_id: guardedTask.task_id,
+    expected_version: guardedTask.condition_version,
+    goal: "",
+    condition_patch: {
+      set: {
+        time_start: "2026-02-01T00:00:00Z",
+        time_end: "2026-03-01T00:00:00Z",
+      },
+      unset: [],
+    },
+    options: [],
+  });
+  assert.deepEqual(
+    openQuestions(guardedTask),
+    [savedQuestion],
+    "仅修改日期不能解决尚未回答的分母问题",
+  );
+  assert.equal((await taskIn(guardCid, guardedTask)).phase, "waiting_clarification");
+  assert.equal(
+    (await invokeRaw("request_query", draftArgs(guardedTask, "SELECT 3 AS verification_value"))).value.code,
+    "version_conflict",
+  );
+  assert.equal(guardedTask.clarification.id, savedQuestion.id);
+  await finishManual();
   checks.push(
     "clarify缺失/null/空白/伪null问题在新建及已有任务中均拒绝，没有新增任务、条件版本或开放问题；等待与旧稿不能执行",
   );
+  checks.push(
+    "用户仅修改日期时新增条件版本，保留原未答问题与等待阶段；按新版本提交SQL仍被拒绝",
+  );
+
+  await begin(guardCid, "地区口径也需要确认；分母尚未选择。");
+  const beforeSecondQuestion = guardedTask;
+  guardedTask = await invoke("update_analysis_task", {
+    action: "clarify",
+    task_id: guardedTask.task_id,
+    expected_version: guardedTask.condition_version,
+    goal: "",
+    condition_patch: { set: {}, unset: [] },
+    question: "地区采用下单时的历史地区，还是当前地区？",
+    options: ["下单时地区", "当前地区"],
+  });
+  const bothQuestions = openQuestions(guardedTask);
+  assert.equal(bothQuestions.length, 2);
+  assert.ok(bothQuestions.some((value) => value.id === savedQuestion.id));
+  const secondQuestion = {
+    ...guardedTask.opened_clarification,
+    version: guardedTask.condition_version,
+  };
+  assert.equal(guardedTask.clarification.id, savedQuestion.id);
+  const visibleQuestions = await invoke("read_analysis_task", { task_id: guardedTask.task_id });
+  assert.deepEqual(
+    visibleQuestions.open_clarifications.map((value) => value.id).sort(),
+    [savedQuestion.id, secondQuestion.id].sort(),
+  );
+  assert.equal(visibleQuestions.next_clarification_after, null);
+  await finishManual("分母与地区口径仍待回答，可以先决定任意一个问题。");
+  await begin(guardCid, "地区按当前地区；分母暂不决定。");
+  const otherTask = await invoke("update_analysis_task", {
+    action: "clarify",
+    goal: "另一任务的独立问题",
+    conditions,
+    question: "另一任务需要哪个渠道？",
+    options: ["web", "app"],
+  });
+  const otherQuestion = {
+    ...otherTask.opened_clarification,
+    version: otherTask.condition_version,
+  };
+  const answerArgs = (ids) => ({
+    action: "revise",
+    task_id: guardedTask.task_id,
+    expected_version: guardedTask.condition_version,
+    goal: "",
+    condition_patch: { set: { metric: "refund_amount_rate" }, unset: [] },
+    resolved_clarification_ids: ids,
+    options: [],
+  });
+  const beforeAnswers = revisions(guardedTask);
+  for (const ids of [[randomUUID()], [otherQuestion.id], [savedQuestion.id, otherQuestion.id]]) {
+    const rejected = await invokeRaw("update_analysis_task", answerArgs(ids));
+    assert.equal(rejected.value.code, "not_available");
+    assert.equal(revisions(guardedTask), beforeAnswers);
+    assert.deepEqual(openQuestions(guardedTask), bothQuestions);
+    assert.deepEqual(openQuestions(otherTask), [otherQuestion]);
+  }
+  const duplicate = await invokeRaw("update_analysis_task", answerArgs([savedQuestion.id, savedQuestion.id]));
+  assert.equal(duplicate.status, 400);
+  const stale = await invokeRaw("update_analysis_task", {
+    ...answerArgs([savedQuestion.id]),
+    expected_version: beforeSecondQuestion.condition_version,
+  });
+  assert.equal(stale.value.code, "version_conflict");
+  assert.equal(revisions(guardedTask), beforeAnswers);
+  assert.deepEqual(openQuestions(guardedTask), bothQuestions);
+
+  const answerableSecond = visibleQuestions.open_clarifications.find((value) => value.id === secondQuestion.id);
+  const firstAnswer = {
+    ...answerArgs([answerableSecond.id]),
+    condition_patch: { set: { notes: "用户明确接受当前地区口径。" }, unset: [] },
+  };
+  const answerSdk = randomUUID();
+  const answerReceipt = ok(await invokeRaw("update_analysis_task", firstAnswer, answerSdk));
+  guardedTask = answerReceipt.data;
+  assert.equal(guardedTask.phase, "waiting_clarification");
+  assert.equal(guardedTask.clarification.id, savedQuestion.id);
+  assert.deepEqual(openQuestions(guardedTask), [savedQuestion]);
+  const replay = ok(await invokeRaw("update_analysis_task", firstAnswer, answerSdk));
+  assert.deepEqual(replay, answerReceipt);
+  assert.equal(revisions(guardedTask), beforeAnswers + 1);
+  const resolvedAgain = await invokeRaw("update_analysis_task", answerArgs([secondQuestion.id]));
+  assert.equal(resolvedAgain.value.code, "version_conflict");
+  assert.equal(revisions(guardedTask), beforeAnswers + 1);
+  assert.deepEqual(openQuestions(guardedTask), [savedQuestion]);
+  assert.equal(
+    (await invokeRaw("request_query", draftArgs(guardedTask, "SELECT 4 AS verification_value"))).value.code,
+    "version_conflict",
+  );
+  await finishManual("地区口径已保存，分母问题仍待决定，尚未生成或执行SQL。");
+
+  await begin(guardCid, "采用金额分母；省级和市级的区别请说明一下，暂不决定。");
+  guardedTask = await invoke("update_analysis_task", {
+    ...answerArgs([savedQuestion.id]),
+    action: "clarify",
+    question: "地区汇总采用省级还是市级？",
+    options: ["省级", "市级"],
+  });
+  const remainingQuestion = guardedTask.opened_clarification;
+  assert.equal(openQuestions(guardedTask).length, 1);
+  assert.notEqual(remainingQuestion.id, secondQuestion.id);
+  assert.equal(guardedTask.clarification.id, remainingQuestion.id);
+  assert.equal(guardedTask.phase, "waiting_clarification");
+  await finishManual("当前地区口径已保存；请补充采用省级还是市级。");
+
+  await begin(guardCid, "采用省级，先给SQL，不要执行。");
+  guardedTask = await invoke("update_analysis_task", {
+    ...answerArgs([remainingQuestion.id]),
+    condition_patch: { set: { group_by: ["province"] }, unset: [] },
+  });
+  assert.equal(guardedTask.phase, "investigating");
+  assert.equal(guardedTask.clarification, null);
+  assert.deepEqual(openQuestions(guardedTask), []);
+  assert.deepEqual(openQuestions(otherTask), [otherQuestion]);
+  const answerDraft = await invoke("request_query", draftArgs(guardedTask, "SELECT 5 AS verification_value"));
+  assert.equal(answerDraft.execution_state, "not_submitted");
+  noAuthorization(answerDraft);
+  await finishManual("已按当前地区、省级与金额口径生成草稿；尚未执行。");
+  checks.push(
+    "多个问题通过工具回执/read均可读，先答后问仍保留首问；旧版、未知、跨任务、重复ID拒绝且整笔回滚；已提交回答重传取原回执；回答同时追问只保留新问题，最后回答后可生成SQL且不自动执行",
+  );
+
+  const pageCid = await h.create();
+  await begin(pageCid, "请保存九个独立待确认项，暂不回答。");
+  let pageTask;
+  const pageQuestions = [];
+  for (let index = 0; index < 9; index++) {
+    pageTask = await invoke("update_analysis_task", {
+      action: "clarify",
+      ...(pageTask ? {
+        task_id: pageTask.task_id,
+        expected_version: pageTask.condition_version,
+        condition_patch: { set: {}, unset: [] },
+      } : { conditions }),
+      goal: "分页读取待确认项",
+      question: `合成独立待确认项${index + 1}采用哪个范围？`,
+      options: ["范围一", "范围二"],
+    });
+    pageQuestions.push(pageTask.opened_clarification);
+  }
+  const pageOne = await invoke("read_analysis_task", { task_id: pageTask.task_id });
+  assert.equal(pageOne.open_clarifications.length, 8);
+  assert.equal(pageOne.next_clarification_after, pageOne.open_clarifications.at(-1).id);
+  const pageTwo = await invoke("read_analysis_task", {
+    task_id: pageTask.task_id,
+    clarification_after: pageOne.next_clarification_after,
+  });
+  assert.equal(pageTwo.open_clarifications.length, 1);
+  assert.equal(pageTwo.next_clarification_after, null);
+  assert.deepEqual(
+    [...pageOne.open_clarifications, ...pageTwo.open_clarifications].map((value) => value.id),
+    pageQuestions.map((value) => value.id).sort(),
+  );
+  const invalidPage = await invokeRaw("read_analysis_task", {
+    task_id: pageTask.task_id,
+    clarification_after: otherQuestion.id,
+  });
+  assert.equal(invalidPage.value.code, "not_available");
+  await finishManual("九个问题均已保存，暂不生成SQL。");
+  await begin(pageCid, "先继续阅读这些问题。");
+  const workspaceTask = run.workspace_context.tasks.find((value) => value.id === pageTask.task_id);
+  assert.equal(workspaceTask.clarification.id, pageQuestions[0].id);
+  assert.equal(workspaceTask.open_clarifications, undefined);
+  await invoke("update_analysis_task", routeArgs(pageTask));
+  await finishManual("待答问题可以通过分页继续读取，仍未自动接受任何选项。");
+  checks.push("未决问题正式读取每页最多8项，游标覆盖全部真实ID且拒绝跨任务；初始工作区仍仅带最早一题");
 
   const cid = await h.create();
   const table = ok(await h.request("/knowledge/table-demo_order_detail"));
@@ -486,7 +685,10 @@ try {
     ),
   ]);
   assert.equal((await taskIn(cid, waitingTask)).phase, "waiting_clarification");
-  const waitingQuestion = openQuestions(waitingTask)[0];
+  const waitingQuestion = {
+    ...waitingTask.opened_clarification,
+    version: waitingTask.condition_version,
+  };
   assert.equal(waitingQuestion.question, question);
   assert.deepEqual(waitingQuestion.options, options);
   assert.equal(openQuestions(waitingTask).length, 1);
@@ -629,6 +831,7 @@ try {
           set: { metric: "refund_amount_rate", channel: "app" },
           unset: [],
         },
+        resolved_clarification_ids: [waitingQuestion.id],
         options: [],
       },
       (body) => {

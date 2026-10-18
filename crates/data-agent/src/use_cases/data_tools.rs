@@ -281,9 +281,7 @@ async fn execute(pool: &MySqlPool, ctx: &AccessContext, input: Value) -> Result<
                 if defer_results {
                     None
                 } else {
-                    match super::query_workflow::results(pool, ctx, qid, args["cursor"].as_str())
-                        .await
-                    {
+                    match super::query_workflow::agent_results(pool, ctx, qid, args).await {
                         Ok(v) => Some(v),
                         Err(e) => Some(json!({"error":e.code})),
                     }
@@ -536,7 +534,13 @@ async fn execute(pool: &MySqlPool, ctx: &AccessContext, input: Value) -> Result<
             )
         }
         "read_analysis_task" => {
-            let task = analysis::read_task_in_tx(&mut tx, &cid, text(args, "task_id")?).await?;
+            let task = analysis::read_task_with_clarifications_in_tx(
+                &mut tx,
+                &cid,
+                text(args, "task_id")?,
+                args["clarification_after"].as_str(),
+            )
+            .await?;
             super::knowledge::check_refs_in_tx(&mut tx, ctx, &task["conditions"]["knowledge_refs"])
                 .await?;
             task
