@@ -1,0 +1,185 @@
+{
+  "sdk_version": "1.0.0",
+  "entries": [
+    {
+      "type": "session",
+      "version": 3,
+      "id": "01a1501c-2711-7085-8db6-8df1151c3dc0",
+      "timestamp": "2026-10-18T17:43:04.722Z",
+      "cwd": "/synthetic/data-agent"
+    },
+    {
+      "type": "message",
+      "id": "f9276944",
+      "parentId": null,
+      "timestamp": "2026-10-18T17:43:04.727Z",
+      "message": {
+        "role": "user",
+        "content": "合成净收入任务：金额为分，排除测试订单，仅存草稿。",
+        "timestamp": 1790812800000
+      }
+    },
+    {
+      "type": "message",
+      "id": "10b0f265",
+      "parentId": "f9276944",
+      "timestamp": "2026-10-18T17:43:04.728Z",
+      "message": {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "thinking",
+            "thinking": "仅供合成旧会话恢复测试的思考块。"
+          },
+          {
+            "type": "toolCall",
+            "id": "synthetic-legacy-propose",
+            "name": "propose_sql",
+            "arguments": {
+              "sql": "SELECT 7000 AS net_revenue_cents",
+              "explanation": "合成草稿，未执行"
+            }
+          }
+        ],
+        "api": "openai-completions",
+        "provider": "controlled_deepseek",
+        "model": "deepseek-flash",
+        "usage": {
+          "input": 0,
+          "output": 0,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "totalTokens": 0,
+          "cost": {
+            "input": 0,
+            "output": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "total": 0
+          }
+        },
+        "stopReason": "toolUse",
+        "timestamp": 1790812800000
+      }
+    },
+    {
+      "type": "message",
+      "id": "46adbb3e",
+      "parentId": "10b0f265",
+      "timestamp": "2026-10-18T17:43:04.728Z",
+      "message": {
+        "role": "toolResult",
+        "toolCallId": "synthetic-legacy-propose",
+        "toolName": "propose_sql",
+        "content": [
+          {
+            "type": "text",
+            "text": "{\"query_id\":\"synthetic-legacy-query\",\"state\":\"draft\",\"sql\":\"SELECT 7000 AS net_revenue_cents\"}"
+          }
+        ],
+        "isError": false,
+        "timestamp": 1790812800000
+      }
+    },
+    {
+      "type": "message",
+      "id": "2cb93679",
+      "parentId": "46adbb3e",
+      "timestamp": "2026-10-18T17:43:04.728Z",
+      "message": {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "text",
+            "text": "已准备合成草稿，尚未执行。"
+          }
+        ],
+        "api": "openai-completions",
+        "provider": "controlled_deepseek",
+        "model": "deepseek-flash",
+        "usage": {
+          "input": 0,
+          "output": 0,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "totalTokens": 0,
+          "cost": {
+            "input": 0,
+            "output": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "total": 0
+          }
+        },
+        "stopReason": "stop",
+        "timestamp": 1790812800000
+      }
+    },
+    {
+      "type": "message",
+      "id": "611cb299",
+      "parentId": "2cb93679",
+      "timestamp": "2026-10-18T17:43:04.728Z",
+      "message": {
+        "role": "user",
+        "content": "时间改为2026年一月，仍先不执行。",
+        "timestamp": 1790812800000
+      }
+    },
+    {
+      "type": "message",
+      "id": "d740e015",
+      "parentId": "611cb299",
+      "timestamp": "2026-10-18T17:43:04.728Z",
+      "message": {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "text",
+            "text": "合成草稿按一月调整，仍未执行。"
+          }
+        ],
+        "api": "openai-completions",
+        "provider": "controlled_deepseek",
+        "model": "deepseek-flash",
+        "usage": {
+          "input": 0,
+          "output": 0,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "totalTokens": 0,
+          "cost": {
+            "input": 0,
+            "output": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "total": 0
+          }
+        },
+        "stopReason": "stop",
+        "timestamp": 1790812800000
+      }
+    },
+    {
+      "type": "compaction",
+      "id": "7585fa01",
+      "parentId": "d740e015",
+      "timestamp": "2026-10-18T17:43:04.728Z",
+      "summary": "合成净收入任务：金额为分，排除测试订单；SQL草稿未执行。",
+      "firstKeptEntryId": "611cb299",
+      "tokensBefore": 4000
+    },
+    {
+      "type": "message",
+      "id": "4a801e69",
+      "parentId": "7585fa01",
+      "timestamp": "2026-10-18T17:43:04.728Z",
+      "message": {
+        "role": "user",
+        "content": "未由宿主确认的合成尾部分支",
+        "timestamp": 1790812800000
+      }
+    }
+  ],
+  "leaf_id": "7585fa01"
+}

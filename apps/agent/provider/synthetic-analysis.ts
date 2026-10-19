@@ -13,12 +13,11 @@ export function syntheticAction(
   context: TranscriptContext,
 ): SyntheticAction {
   const messages = context.messages.filter(message => !isRecoveryNotice(message));
-  const lastUser = messages.findLastIndex((v) => v.role === "user");
-  const user = messages[lastUser];
-  const input =
-    typeof user?.content === "string"
-      ? user.content
-      : (user?.content?.find((v) => v.type === "text")?.text ?? run.text);
+  // 宿主参考会被Pi投影为user；合成模型按真实输入定位工具组，不能把参考当新问题。
+  const input = run.text;
+  const lastUser = messages.findLastIndex((message) => message.role === "user" &&
+    (typeof message.content === "string" ? message.content : message.content
+      .filter(part => part.type === "text").map(part => part.text).join("")) === input);
   const tools = messages
     .slice(lastUser + 1)
     .filter((m) => m.role === "toolResult")

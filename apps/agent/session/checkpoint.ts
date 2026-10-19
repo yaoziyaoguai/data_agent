@@ -1,4 +1,4 @@
-import { SessionManager } from '@earendil-works/pi-coding-agent';
+import { SessionManager, VERSION } from '@earendil-works/pi-coding-agent';
 import type { Checkpoint } from '../../../packages/contracts/generated/boundary.ts';
 import { validateContract } from '../../../packages/contracts/validate.ts';
 import { createStoredSession, importStoredSession, openStoredSession, storedReference } from './journal.ts';
@@ -12,10 +12,11 @@ export function isRecoveryNotice(message: { role: string; content?: unknown }): 
 }
 
 export function exportCheckpoint(manager: SessionManager, authority?:string|null, authoritySnapshot?:Record<string,unknown>|null): Checkpoint {
+  if (VERSION !== '1.3.0') throw new Error('checkpoint_sdk_version_unsupported');
   const header = manager.getHeader();
   if (!header) throw new Error('missing session header');
   const storage=storedReference(manager);
-  return { ...(authority?{authority_revision:authority}:{}), ...(authoritySnapshot?{authority_snapshot:authoritySnapshot}:{}), ...(storage?{storage}:{}), sdk_version: '1.0.0', entries: storage?[]:JSON.parse(JSON.stringify([header, ...manager.getEntries()])), leaf_id: manager.getLeafId() };
+  return { ...(authority?{authority_revision:authority}:{}), ...(authoritySnapshot?{authority_snapshot:authoritySnapshot}:{}), ...(storage?{storage}:{}), sdk_version: VERSION, entries: storage?[]:JSON.parse(JSON.stringify([header, ...manager.getEntries()])), leaf_id: manager.getLeafId() };
 }
 export function restoreCheckpoint(cwd: string, checkpoint: Checkpoint | null): SessionManager {
   if (!checkpoint) return createStoredSession(cwd);

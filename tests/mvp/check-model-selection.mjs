@@ -4,6 +4,7 @@ import {randomUUID} from 'node:crypto';
 import {mkdir,writeFile} from 'node:fs/promises';
 import {chromium} from 'playwright';
 import {deliver} from '../../apps/agent/session/deliver.ts';
+import {restoreCheckpoint} from '../../apps/agent/session/checkpoint.ts';
 import {harness,until} from './harness.mjs';
 
 const directory='.local/checks/model-selection';await mkdir(directory,{recursive:true});
@@ -65,9 +66,15 @@ try {
  assert.equal(first.model,'deepseek-flash');assert.equal(first.reasoning_effort,'low');
  const second=bodies.find(body=>content(body.messages.findLast(m=>m.role==='user'))==='继续前面的合成口令');
  assert.equal(second.model,'deepseek-v4-pro');assert.equal(second.reasoning_effort,'max');assert.ok(second.messages.some(m=>content(m)==='记住合成口令 teal'));
- // Pi原生跨模型转换会将非加密思考转为文本；同模型工具续调必须保留reasoning_content。
- assert.ok(second.messages.some(m=>m.role==='assistant'&&content(m).includes('Synthetic reasoning')));
- const sessions=h.sql(`SELECT JSON_OBJECT('session',JSON_UNQUOTE(COALESCE(JSON_EXTRACT(checkpoint,'$.storage.session_id'),JSON_EXTRACT(checkpoint,'$.entries[0].id')))) FROM pi_checkpoints WHERE recovery_chain_id IN (SELECT recovery_chain_id FROM agent_runs WHERE conversation_id='${cid}')`);assert.equal(sessions.length,2);assert.ok(sessions.every(r=>typeof r.session==='string'&&r.session.length));assert.equal(new Set(sessions.map(r=>r.session)).size,1);
+ // Pi1.3跨模型不传旧思考；公开回答/工具和原生历史保留，同模型续调仍保留reasoning_content。
+ assert.ok(!JSON.stringify(second.messages).includes('Synthetic reasoning'));
+ assert.ok(second.messages.some(m=>m.role==='assistant'&&content(m).includes('合成回复：记住合成口令 teal')));
+ assert.ok(second.messages.some(m=>m.role==='assistant'&&m.tool_calls?.some(call=>call.function.name==='update_analysis_task')));
+ assert.ok(second.messages.some(m=>m.role==='tool'));
+ const checkpoints=h.sql(`SELECT JSON_OBJECT('checkpoint',checkpoint) FROM pi_checkpoints WHERE recovery_chain_id IN (SELECT recovery_chain_id FROM agent_runs WHERE conversation_id='${cid}')`);
+ const sessions=checkpoints.map(row=>restoreCheckpoint('/synthetic/data-agent',row.checkpoint));
+ assert.equal(sessions.length,2);assert.ok(sessions.every(session=>session.getSessionId().length));assert.equal(new Set(sessions.map(session=>session.getSessionId())).size,1);
+ assert.ok(sessions.every(session=>session.getBranch().some(entry=>entry.type==='message'&&entry.message.role==='assistant'&&entry.message.content.some(part=>part.type==='thinking'&&part.thinking.includes('Synthetic reasoning')))));
  let count=2;
  for(const [index,choice] of [flash('off'),flash('low'),flash('high'),flash('max'),pro('off'),pro('high'),pro('max')].entries()){
   const text='档位协议验证 '+index,start=bodies.length;ok(await send(cid,text,choice));await h.finished(cid,++count);

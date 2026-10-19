@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import {VERSION as PI_SDK_VERSION} from '@earendil-works/pi-coding-agent';
 import {spawn,execFileSync} from 'node:child_process';
 import {readFile,mkdir,writeFile} from 'node:fs/promises';
 import {randomBytes,randomUUID} from 'node:crypto';
@@ -123,7 +124,7 @@ try{
  await stop(worker);checks.push({name:'真实交付连续失败后明确终止，页面可读失败状态',passed:true});
  }
  const mode=process.argv.includes('--flow')?'flow':process.argv.includes('--recovery')?'recovery':'all';
- const report={passed:true,checks,provider:'local_mock',piSdk:'1.0.0',mysql:'real local MySQL',limits:'不证明DeepSeek或真实平台能力',logs};await writeFile(sandbox+'/runtime-'+mode+'.json',JSON.stringify(report,null,2)+'\n');console.log(JSON.stringify({passed:true,checks}));
+ const report={passed:true,checks,provider:'local_mock',piSdk:PI_SDK_VERSION,mysql:'real local MySQL',limits:'不证明DeepSeek或真实平台能力',logs};await writeFile(sandbox+'/runtime-'+mode+'.json',JSON.stringify(report,null,2)+'\n');console.log(JSON.stringify({passed:true,checks}));
 }
 }catch(error){await writeFile(sandbox+'/runtime-failure.json',JSON.stringify({error:String(error),checks,logs},null,2));throw error;}
 finally{if(browser)await browser.close();for(const child of processes.reverse())await stop(child);sql('DROP DATABASE IF EXISTS '+database+';');}

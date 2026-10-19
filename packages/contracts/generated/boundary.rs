@@ -1039,6 +1039,8 @@ pub struct Checkpoint {
 pub enum SdkVersion {
     #[serde(rename = "1.0.0")]
     The100,
+    #[serde(rename = "1.3.0")]
+    The130,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

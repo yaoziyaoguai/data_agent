@@ -8244,5 +8244,43 @@
     },
     "valid": false,
     "roundtrip": false
+  },
+  {
+    "name": "Pi 1.3.0 inline checkpoint",
+    "schema": "Checkpoint",
+    "value": {
+      "sdk_version": "1.3.0",
+      "entries": [],
+      "leaf_id": null
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "Pi 1.3.0 native checkpoint reference",
+    "schema": "Checkpoint",
+    "value": {
+      "sdk_version": "1.3.0",
+      "entries": [],
+      "leaf_id": null,
+      "storage": {
+        "kind": "pi_session",
+        "file": "synthetic-session.jsonl",
+        "session_id": "synthetic-session"
+      }
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "unverified Pi SDK minor version",
+    "schema": "Checkpoint",
+    "value": {
+      "sdk_version": "1.2.0",
+      "entries": [],
+      "leaf_id": null
+    },
+    "valid": false,
+    "roundtrip": false
   }
 ]

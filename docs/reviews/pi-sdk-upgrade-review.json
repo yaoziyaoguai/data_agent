@@ -1,0 +1,510 @@
+{
+  "schema": 1,
+  "increment_id": "I2-PI-SDK-UPGRADE",
+  "baseline": "5fe5260 + 本轮before快照中已完成但未提交的Dogfood修复",
+  "reviewer": "correctness",
+  "reviewer_identity": "review_dogfood_repairs：未参与本次SDK升级实现，仅写本审查记录",
+  "conclusion": "passed",
+  "summary": "SDK升级与有界补审通过，未发现未关闭的确定性阻断。本次仅测试/CURRENT变化：将跨模型旧思考转正文的过期断言按官方1.3.0 #10995修正为不发送旧思考，并新增公开回答、工具和持久原生历史保留检查；原七档、权限/预算、浏览器及恢复断言保持。第二次14组前5通过、第6失败、后8未执行；修后专项已通过，但当前最终指纹仍须完整执行14组，不能拼接结果关闭。",
+  "scope_sha256": "b1a82c280896a31de15bc147f4bcc51a09d884fcbc099304dcdacdde49009977",
+  "scope": {
+    "input_files": 253,
+    "contract_sha256": "c38f483f02839e6961351f7d0e2220ef6cb216a5de6fea6a8f4f83894ef67ad5",
+    "decisions_sha256": "c6456f454f3efb5763440301d1ea3298c518024f0fede2cb6be7dd86fa103e3b"
+  },
+  "reviewed_at": "2026-10-18T18:39:25.048756+00:00",
+  "requirements": [
+    {
+      "ids": [
+        "C01",
+        "C07"
+      ],
+      "topic": "同版精确锁定与来源一致",
+      "files": [
+        "package.json",
+        "package-lock.json"
+      ],
+      "assessment": "三个直接Pi包固定1.3.0，当前锁文件全部7个Pi包及Pi间依赖均精确1.3.0，未留下嵌套旧Pi。独立重算三份tgz SHA512同时匹配保留的npm元数据和lock，并逐文件比对实际安装内容，837/26/1276份均一致。其余直接运行/开发依赖与before相同，npm ci完成；未新增额外工具或供应商。"
+    },
+    {
+      "ids": [
+        "C04",
+        "C05",
+        "C07"
+      ],
+      "topic": "检查点版本、身份及分支",
+      "files": [
+        "apps/agent/session/checkpoint.ts",
+        "apps/agent/session/journal.ts",
+        "packages/contracts/schema.json",
+        "packages/contracts/generated/boundary.ts",
+        "packages/contracts/generated/boundary.rs",
+        "tests/runtime/fixtures/pi-session-1.0.0.json"
+      ],
+      "assessment": "Schema仅接受1.0.0/1.3.0；新导出读取公开VERSION并拒绝未验证的运行版本。恢复仍用原JSONL校验、open/import、branch/resetLeaf，未改session、leaf、SDK工具ID或宿主operation映射。旧SDK合成v3夹具逐条比对原entry、摘要和草稿标记，并排除leaf后的未确认尾部；新导出仍引用原session。独立实际调用验证器确认两已知版本接受，1.2.0/2.0.0/1.3.1在访问journal前拒绝。448契约中原445例逐项未改。"
+    },
+    {
+      "ids": [
+        "C01",
+        "C03",
+        "C04",
+        "C05"
+      ],
+      "topic": "上游行为与非镜像回归",
+      "files": [
+        "tests/runtime/check-pi-sdk.mjs"
+      ],
+      "assessment": "回归直接调用真实serializeConversation、normalizeContext/streamSimple及Agent，合成fetch只提供响应，不实现解析/模型转换。完整残缺JSON先产生错误工具结果，旧部分value不执行，修正后才执行一次；同模型思考仍保留，切模型实际请求不含旧思考，摘要保留条件/正文/工具结果而省思考。旧1.0.0对照同版和恢复通过、上述3项失败，新1.3.0五项全部通过，符合上游CHANGELOG及已安装源码，未写应用解析补丁。"
+    },
+    {
+      "ids": [
+        "C01",
+        "C03",
+        "C05",
+        "C06"
+      ],
+      "topic": "1.2启动/忙状态与triggerTurn",
+      "files": [
+        "apps/agent/session/deliver.ts",
+        "apps/agent/session/workspace-context.ts",
+        "tests/mvp/check-data-provider.mjs"
+      ],
+      "assessment": "本轮deliver仅改过期版本注释。宿主扩展只监听context，不读取before_agent_start的prompt联合字段。已await的prompt经SDK_startRun/finally等待agent_settled，忙标记清除后，原sendCustomMessage(triggerTurn:true)可启动custom轮；共享原run/message/预算。新增实跑的原provider专项验证message_pending持续拒绝只反馈一次、归属修正成功、model_output_limit重写完整回答，16次本机协议及预留0通过。取消/未知仍走原失败路径，不新增循环。"
+    },
+    {
+      "ids": [
+        "C01",
+        "C06",
+        "C07",
+        "C08"
+      ],
+      "topic": "工具/资源边界、长期恢复及既有改动",
+      "files": [
+        "apps/agent/session/resources.ts",
+        "apps/agent/session/deliver.ts",
+        "tests/runtime/check-model-provider.mjs",
+        "tests/runtime/check-runtime.mjs",
+        "tests/runtime/run-deepseek-trial.mjs",
+        "docs/architecture/render-c4.cjs",
+        "docs/architecture/implementation-design.md",
+        "docs/development.md",
+        "README.md"
+      ],
+      "assessment": "createAgentSession仍显式传完整工具名集合与自定义ResourceLoader；新SDK将此列表作为allowedToolNames，恢复工具不会扩成默认工具，资源仍无自动发现。工作区context、SDK唯一循环、权限/预算不变；报告读实际VERSION，文档/图标签同步。40轮/10摘要/627748B日志恢复、5个损坏文件拒绝通过；原64KiB压力24调用/10摘要/最大65337B且完整载荷序列与升级前相同。旧Dogfood八份代码/测试diff与before-working-tree.patch逐字一致，旧独立review SHA不变。29图/12模块的来源重建及渲染日志通过。"
+    },
+    {
+      "ids": [
+        "C07",
+        "C08"
+      ],
+      "topic": "文档门禁的原有图册识别规则修正",
+      "files": [
+        "docs/architecture/check-implementation.py",
+        "docs/architecture/implementation-design.md",
+        "docs/CURRENT.md"
+      ],
+      "assessment": "原checker错误要求四份文档全部Mermaid图编号，且预期只含28图；独立读取HEAD确认总设计已有无编号说明图、implementation-views已有正式V04。修正仅在图收集阶段排除总设计，与renderer原有三个来源完全一致；三个来源仍严格assert编号，原28图全保留并新增已存在V04为29图。四份文档的链接/空白、12模块、图来源SHA和依赖无环检查保持。原失败保留，审查者实际运行原命令完整退出0（12模块/29图/28链接/15条依赖边）。"
+    },
+    {
+      "ids": [
+        "C01",
+        "C03",
+        "C05"
+      ],
+      "topic": "合成模型使用真实宿主输入恢复工具组",
+      "files": [
+        "apps/agent/provider/synthetic-analysis.ts",
+        "tests/mvp/check-session.mjs",
+        "apps/agent/provider/mock.ts"
+      ],
+      "assessment": "唯一新增代码差异是input取宿主run.text，并按同文本真实user定位之后的工具结果；文本块先完整拼接。Pi投影的参考不再替代问题或切掉已接回工具组；找不到原文时lastUser=-1仍保留全部可见工具组。其后所有合成策略原文不变，仅mockStream的数据合成分支调用，真实DeepSeek、授权和循环未改。首次失败收据与当前输入指纹只差该文件/CURRENT；隔离1.0.0依赖/旧checkpoint、deliver、原契约与before逐字一致。当前、隔离副本及失败前收据的check-session SHA相同，旧版复现同错，修后两SDK原2组均通过。审查者直接调用生产纯函数验证6种边界通过，未启动服务或调用模型。"
+    },
+    {
+      "ids": [
+        "C01",
+        "C05",
+        "C08"
+      ],
+      "topic": "模型切换验收对应SDK原生思考隔离",
+      "files": [
+        "tests/mvp/check-model-selection.mjs",
+        "docs/CURRENT.md"
+      ],
+      "assessment": "旧断言要求首次Pro请求的assistant正文含Flash思考，与本轮已采用的官方#10995及既有sdk-before/after实际对照相反。修正为整个首次Pro请求无旧思考，同时要求Flash公开回答、update_analysis_task调用及工具回执仍存在；从真实持久checkpoint恢复SessionManager，保留同session并在两条原生branch中找到原思考块，未靠清空历史通过。原七档HTTP/同模型reasoning_content及其后所有并发、权限/预算、后台、浏览器、恢复断言逐字保持。首次失败前测试SHA与before一致；当前相对第二次收据的输入仅测试/CURRENT变化，无新增产品修改。修后原专项6组/36请求/errors=[]，协议摘要覆盖全部7种组合。"
+    }
+  ],
+  "findings": [],
+  "independent_checks": {
+    "tgz_integrity_and_installed_file_bytes": {
+      "pi-ai": 837,
+      "pi-agent-core": 26,
+      "pi-coding-agent": 1276
+    },
+    "pi_packages_exact_version": "7个均为1.3.0，Pi间依赖精确同版",
+    "original_contract_cases_preserved": 445,
+    "new_contract_cases": 3,
+    "unknown_versions_rejected_before_journal_access": [
+      "1.2.0",
+      "2.0.0",
+      "1.3.1"
+    ],
+    "old_dogfood_product_and_test_diffs_preserved": 8,
+    "old_dogfood_review_sha256": "deff6540f3213b6765cd13f9bc66ea66790b8a7a474e15d66662ba1c982569f2",
+    "compaction_payload_sequence_matches_before": true,
+    "git_diff_check": "passed",
+    "diagram_source_check": {
+      "command": "python3 docs/architecture/check-implementation.py",
+      "exit_code": 0,
+      "modules": 12,
+      "diagrams": 29,
+      "local_links": 28,
+      "dependency_edges": 15,
+      "baseline_unnumbered_supplement_and_V04_verified": true
+    },
+    "acceptance_declaration_correction": {
+      "business_groups": 14,
+      "removed_material_group": "PI-DOCS",
+      "all_prior_remaining_ids_preserved": true,
+      "all_timeout_seconds": 900,
+      "complete_validation_on_memory_copy": "passed",
+      "material_command_still_rejected_with_architecture_kind": true,
+      "gate_source_unchanged": true,
+      "no_acceptance_commands_executed_by_reviewer": true
+    },
+    "synthetic_input_repair": {
+      "fingerprint_changes_since_failed_run": [
+        "apps/agent/provider/synthetic-analysis.ts",
+        "docs/CURRENT.md"
+      ],
+      "baseline_Pi_version": "1.0.0",
+      "baseline_dependencies_checkpoint_deliver_contracts_match_before": true,
+      "unchanged_test_sha256": "0de460d3df3bf776877a913078c19278e661f53deac9d69cb37921952051ecfb",
+      "mock_rules_after_tool_group_selection_unchanged": true,
+      "pure_function_boundaries": [
+        "reference-after-tools-keeps-original-task",
+        "reference-before-real-input",
+        "missing-original-user-keeps-visible-tools",
+        "new-input-excludes-prior-tool-group",
+        "split-text-matches-last-real-input",
+        "host-input-selects-greeting"
+      ],
+      "pure_function_check_result": "6 passed; modelCalls=0; serviceStarts=0",
+      "observation_scope": "补审合成输入修复时相对第一次失败收据的观察；本次后续仅另改模型切换测试及CURRENT。"
+    },
+    "model_selection_assertion_update": {
+      "fingerprint_changes_since_second_failed_run": [
+        "docs/CURRENT.md",
+        "tests/mvp/check-model-selection.mjs"
+      ],
+      "baseline_test_matches_second_receipt": true,
+      "all_text_after_seven_mode_loop_marker_unchanged": true,
+      "model_selection_specialty": {
+        "checks": 6,
+        "providerRequests": 36,
+        "errors": [],
+        "officialRequests": 0,
+        "all_seven_model_combinations_present": true
+      },
+      "public_answer_tools_native_history_checks_added": true,
+      "product_code_unchanged_in_this_followup": true
+    }
+  },
+  "evidence": [
+    {
+      "path": ".local/pi-sdk-upgrade-20261019/before-working-tree.patch",
+      "sha256": "8c7c02208b77bd7d1a6d612aaaeeb0d9247a4b3e039cc2b48869e1c5b0a3d2e2"
+    },
+    {
+      "path": ".local/pi-sdk-upgrade-20261019/before/package.json",
+      "sha256": "aea6ebd6073f8ec9dbcb435e0bc28d61a42194f15403c73d2e1fe0b7ef2d761b"
+    },
+    {
+      "path": ".local/pi-sdk-upgrade-20261019/before/package-lock.json",
+      "sha256": "3616eeaeb9a56d82ffd4fd6b766600d55c4d3600bfe68d3ed5f6a63fd2402f02"
+    },
+    {
+      "path": ".local/pi-sdk-upgrade-20261019/pi-ai-1.3.0-metadata.json",
+      "sha256": "fcf4eebc2423b169249b958f77975830f3ce958c0dedaae5766d423ffccdd94c"
+    },
+    {
+      "path": ".local/pi-sdk-upgrade-20261019/pi-agent-core-1.3.0-metadata.json",
+      "sha256": "67e719af126698c885ee221673ddbf5e2b7218194a8f1e4e159468d6daf5bf2f"
+    },
+    {
+      "path": ".local/pi-sdk-upgrade-20261019/pi-coding-agent-1.3.0-metadata.json",
+      "sha256": "08c62afdf5be399502764a6634b0b8382b892248ddb1a0f029907a298dba445f"
+    },
+    {
+      "path": ".local/pi-sdk-upgrade-20261019/pi-ai-1.3.0.tgz",
+      "sha256": "5343e1639bf343bdc3344df3ad6c31c05a50b68bad07ac6bce10890d4b6b8a61"
+    },
+    {
+      "path": ".local/pi-sdk-upgrade-20261019/pi-agent-core-1.3.0.tgz",
+      "sha256": "f71b0980f547db437d7c7e66cc7eb024fa6f6fafb6838c356f6de462a0ad041a"
+    },
+    {
+      "path": ".local/pi-sdk-upgrade-20261019/pi-coding-agent-1.3.0.tgz",
+      "sha256": "ae2785e870b81a8c8e1d44510a57b5ee0bfc9e974679ac2faaada4aabee3d3c0"
+    },
+    {
+      "path": ".local/pi-sdk-upgrade-20261019/sdk-before.json",
+      "sha256": "53c39361dc0365fa43a0ca20f8db3e24b5d7aefcfb9a511fa7e59ce29a6a4d74"
+    },
+    {
+      "path": ".local/pi-sdk-upgrade-20261019/sdk-after.json",
+      "sha256": "82c28bf03103eece9c2db120575a90fc5d24ce10f26a342643ef76413382fea8"
+    },
+    {
+      "path": ".local/pi-sdk-upgrade-20261019/sdk-final.log",
+      "sha256": "0998d987a11b2d0e714bb1e953eae58546a303f6759ce16524e54dcd935848eb"
+    },
+    {
+      "path": ".local/pi-sdk-upgrade-20261019/npm-ci.log",
+      "sha256": "1ca7833fd2550eecc95818e20a13b0a0594df738a6f77f3901c940b0d73673fe"
+    },
+    {
+      "path": ".local/pi-sdk-upgrade-20261019/engineering.log",
+      "sha256": "8720a995dc58888bae6f97ddc67ddbbf5e5baf05dc2f2f6b29fc3602fa7d8ba4"
+    },
+    {
+      "path": ".local/pi-sdk-upgrade-20261019/bridge-final.log",
+      "sha256": "c25ad5d036093e4dceaad6286f06a0d0fbc848167fe9f441da5835423ab8a909"
+    },
+    {
+      "path": ".local/pi-sdk-upgrade-20261019/compaction-after.json",
+      "sha256": "557a50ccee2a794a97f989f92076f63f6e7421e7ef8b2c3831bfd9d1c9e642ae"
+    },
+    {
+      "path": ".local/pi-sdk-upgrade-20261019/data-provider.log",
+      "sha256": "f1bdb6024eecf5b46b0084f0001c291dd56490e18957a728858a64bedb69fa8c"
+    },
+    {
+      "path": ".local/pi-sdk-upgrade-20261019/data-provider-after.json",
+      "sha256": "b4b11e046844469132fdf085f34f177259b9ae3718df88309f8c0bb41e8e9c57"
+    },
+    {
+      "path": ".local/pi-sdk-upgrade-20261019/material-checks.log",
+      "sha256": "5239fd802e009e9098a1ef84cb2aed84b16ae115404554d0ccb966cc207b7a7e"
+    },
+    {
+      "path": ".local/pi-sdk-upgrade-20261019/c4-render.log",
+      "sha256": "7cbf065ba743ccf7d9d69ce06cb061c67f02f523f3a28b55e7b59482dc0849b8"
+    },
+    {
+      "path": ".local/pi-sdk-upgrade-20261019/atlas-render.log",
+      "sha256": "24506a96bd26bc29ef51a6b1bca0477f75af1afa3c61a05b5d997b0e4a003e57"
+    },
+    {
+      "path": ".local/pi-sdk-upgrade-20261019/diagram-check-baseline.json",
+      "sha256": "16021e5b72ae66e4195e136e684236e984a442b5d51bb93dbcb9f4a0f0c4018e"
+    },
+    {
+      "path": ".local/pi-sdk-upgrade-20261019/diagram-source-check.log",
+      "sha256": "ada85049dcce66254f7973c777a869a67ca60b22571ee5ebf4b5ecc663dda059"
+    },
+    {
+      "path": ".local/pi-sdk-upgrade-20261019/diagram-source-check-final.log",
+      "sha256": "92d0b2fb224675454fcd1fd9e7e78c8e4787c9fe8f7eb3245d8720d3c1238d82"
+    },
+    {
+      "path": ".local/pi-sdk-upgrade-20261019/unified-declaration-before.log",
+      "sha256": "967d58f3fefc2d0734c65fc5ad1122de0a43f165b047ee26bbba774b3204f75a"
+    },
+    {
+      "path": ".local/pi-sdk-upgrade-20261019/before/apps/agent/provider/synthetic-analysis.ts",
+      "sha256": "c83e2b0d3084644b5b1ff7b91c2324dd6b734eef9b3ac13970ac8d1421639647"
+    },
+    {
+      "path": ".local/pi-sdk-upgrade-20261019/unified-first-runtime.json",
+      "sha256": "58eb076b91f7df2b9b187825aaccb8ee62bafc7f0c0e68c73422a61fcbf95fb9"
+    },
+    {
+      "path": ".local/pi-sdk-upgrade-20261019/unified-first-runtime.log",
+      "sha256": "caff63c4a28f3a1638525b52c1084aea63dc0187fe1973cfb28b7bfa2682d0dd"
+    },
+    {
+      "path": ".local/pi-sdk-upgrade-20261019/session-before.log",
+      "sha256": "1316f1802df82befc2da667a49c04a7338f14cc32637d2312c6b19f8578f3838"
+    },
+    {
+      "path": ".local/pi-sdk-upgrade-20261019/session-before-diagnostic.log",
+      "sha256": "81ccc123dc5e2918df1fa65d5c9dcc0c47d4ded697f00009a7bdea568d015225"
+    },
+    {
+      "path": ".local/pi-sdk-upgrade-20261019/session-after.log",
+      "sha256": "31e79414b9e9b4405459511b4750ee9dd281f38effcd7e2398bf0c7a978bd369"
+    },
+    {
+      "path": ".local/pi-sdk-upgrade-20261019/session-after.json",
+      "sha256": "f27f20b569ff091b49aefd4e79d2b9866cb51e88e492d40bac69f4b5a0614aac"
+    },
+    {
+      "path": ".local/pi-sdk-upgrade-20261019/session-before-with-fix.log",
+      "sha256": "31e79414b9e9b4405459511b4750ee9dd281f38effcd7e2398bf0c7a978bd369"
+    },
+    {
+      "path": ".local/pi-sdk-upgrade-20261019/session-comparison.json",
+      "sha256": "e54babc53d84039edaeb6e18f6c6cc85b6e00fb0aa8b851ab7e4df6176fff398"
+    },
+    {
+      "path": ".local/pi-sdk-upgrade-20261019/types-final.log",
+      "sha256": "f50fe1624c26efd634a1d99eca879f67e3b5cd1acf5f9e6642de5a0f1687cd94"
+    },
+    {
+      "path": ".local/pi-sdk-upgrade-20261019/mixed-continuation.log",
+      "sha256": "63870e7b2371115f2091a7fbba3fe1c7cf40c9c73580617ebbc1249c9efb0cde"
+    },
+    {
+      "path": ".local/pi-sdk-upgrade-20261019/large-tool-context.log",
+      "sha256": "1e2b69c35fa612b0ded5ba3a4504ea9ada05cceb326ea6b5c30e94306747e319"
+    },
+    {
+      "path": ".local/pi-sdk-upgrade-20261019/before/tests/mvp/check-model-selection.mjs",
+      "sha256": "1d8c87eab9402eac2d9748d876508fe9ceb0b0e91f185ef5e23d865ee872046d"
+    },
+    {
+      "path": ".local/pi-sdk-upgrade-20261019/unified-second-runtime.json",
+      "sha256": "6995acedfa585984860e95b709865db14e0a9e1de2e64ae86c8dc58f0fb7cea4"
+    },
+    {
+      "path": ".local/pi-sdk-upgrade-20261019/unified-second-runtime.log",
+      "sha256": "caff63c4a28f3a1638525b52c1084aea63dc0187fe1973cfb28b7bfa2682d0dd"
+    },
+    {
+      "path": ".local/pi-sdk-upgrade-20261019/model-selection-final.log",
+      "sha256": "be6bc5a3be0634e1d7215874eaeaaa938727b18415856a556917447c871184e4"
+    },
+    {
+      "path": ".local/pi-sdk-upgrade-20261019/model-selection-after.json",
+      "sha256": "9d76acc31a505be13e7ac05c7c77a2c9007e1f8ec1b35526afc27dd8d2bcb0f2"
+    },
+    {
+      "path": ".local/pi-sdk-upgrade-20261019/model-selection-protocol-summary.json",
+      "sha256": "bd392fa89f87302c918857b88e05346859f28c76ead3cf384557944daa39a67e"
+    },
+    {
+      "path": ".local/pi-sdk-upgrade-20261019/request-context.log",
+      "sha256": "603e4b5c2375eaaad63b41208f4c345cd10c9e135d9f2d0ba77d937b311bf89f"
+    },
+    {
+      "path": ".local/pi-sdk-upgrade-20261019/context-dependencies.log",
+      "sha256": "b5dede339251815a22aba848bfe7228fcc44590793ff93a7789963c72d01f2e1"
+    },
+    {
+      "path": ".local/pi-sdk-upgrade-20261019/bridge-cancellation.log",
+      "sha256": "054de7c614674c5e0062746365769ecb85e9ff114ecb888b6287355b5e772f47"
+    },
+    {
+      "path": ".local/pi-sdk-upgrade-20261019/background-browser.log",
+      "sha256": "d53fa067aae0e119b03254654fba86789a860efae6049e688000b985574eecfd"
+    }
+  ],
+  "unified_verification": {
+    "status_at_review": "not_completed_after_model_switch_assertion_update",
+    "command": "make verify-increment",
+    "required_command_groups": 14,
+    "acceptance_ids": [
+      "PI-BUILD",
+      "PI-SDK",
+      "PI-JOURNAL",
+      "PI-PROVIDER",
+      "PI-SESSION",
+      "PI-MODELS",
+      "PI-COMPACTION",
+      "PI-CONTEXT",
+      "PI-AUTHORITY",
+      "PI-CONTINUATION",
+      "PI-CANCELLATION",
+      "PI-BROWSER",
+      "PI-DATA",
+      "PI-LARGE-TOOL"
+    ],
+    "expected_receipt": ".local/delivery/I2-PI-SDK-UPGRADE-result.json",
+    "condition": "当前最终指纹须重新完整执行全部14组，退出0、无超时且前后指纹一致；第二次前5组成功与其余专项不能拼接关闭。",
+    "previous_attempt": {
+      "phase": "acceptance_execution",
+      "status": "failed",
+      "passed_command_groups": 5,
+      "failed_group": "PI-MODELS",
+      "failed_command_exit_code": 1,
+      "timed_out": false,
+      "receipt": ".local/pi-sdk-upgrade-20261019/unified-second-runtime.json",
+      "log": ".local/pi-sdk-upgrade-20261019/unified-second-runtime.log",
+      "remaining_groups_not_executed": 8
+    },
+    "prior_declaration_attempt": {
+      "phase": "declaration_validation",
+      "exit_code": 2,
+      "acceptance_command_groups_executed": 0,
+      "log": ".local/pi-sdk-upgrade-20261019/unified-declaration-before.log",
+      "reason": "现有MATERIAL_COMMANDS拒绝PI-DOCS材料检查作为业务完成验收；未改gate或用包装脚本绕过。"
+    },
+    "prior_runtime_attempts": [
+      {
+        "phase": "acceptance_execution",
+        "status": "failed",
+        "passed_command_groups": 4,
+        "failed_group": "PI-SESSION",
+        "failed_command_exit_code": 1,
+        "timed_out": false,
+        "receipt": ".local/pi-sdk-upgrade-20261019/unified-first-runtime.json",
+        "log": ".local/pi-sdk-upgrade-20261019/unified-first-runtime.log",
+        "remaining_groups_not_executed": 9
+      }
+    ]
+  },
+  "residual_risks": [
+    "本轮没有真实/付费模型调用；合成响应只证明SDK与接入行为，不能证明DeepSeek质量或所有提供者/输入都无缺陷。",
+    "1.0.0夹具验证SDK条目和上下文恢复，不单独认证真实平台查询状态；宿主权限、预算、取消及副作用恢复仍须由绑定的14组回归覆盖。",
+    "新1.3.0检查点不保证旧API/Worker可读取；回退须与依赖、契约和运行进程配套，不能仅改版本标签。"
+  ],
+  "testing_gaps": [
+    "第二次14组前5组通过、第6组旧模型切换断言失败，其后8组未执行。修后模型选择及其他剩余组专项已通过，当前最终指纹仍须完整重新执行14组；本审查不代替收据。"
+  ],
+  "limitations": [
+    "审查仅比较本次before快照后的SDK升级新增变化，不重新认证全部历史功能或旧120项试用；范围指纹253份输入用于失效检测，不表示逐行重审全部依赖。",
+    "审查者未启动/重启服务、调用模型或Oracle、提交推送；只写本JSON。专项日志为主代理已执行证据，另做的包/契约/旧diff/验证器检查均为只读。",
+    "所有路径使用项目相对路径。包来源以保留npm元数据/完整性及安装字节一致性核对；图册结论限来源与渲染日志，不宣称完成视觉设计审查。",
+    "合成模型的固定演示策略只用于协议/产品验证；本修复不能作为真实模型意图理解、执行授权判断或质量提升证据。"
+  ],
+  "resolved_findings": [
+    {
+      "issue": "新绑定的PI-DOCS命令首次执行失败：旧checker的图册来源与28图预期早于HEAD现状。",
+      "resolution": "按现有renderer三来源收集编号图，保留原严格检查并纳入HEAD既有V04；不是删除图或降低产品验收。CURRENT记录原值、新值和独立依据，修后命令由主代理及审查者分别完整执行通过。",
+      "status": "closed"
+    },
+    {
+      "issue": "初次统一验收声明将PI-DOCS材料命令绑定业务完成收据，被现有门禁在执行验收前拒绝。",
+      "resolution": "只从CURRENT业务验收列表移出该命令并保留独立文档专项；14组工程/Agent命令、断言与超时不变，C01/C03–C08仍全部绑定。审查者确认scripts/check_delivery.py相对HEAD未变，内存声明验证接受14组并继续拒绝同一材料命令，即使evidence_kind=architecture。",
+      "status": "closed"
+    },
+    {
+      "issue": "PI-SESSION第5组失败：原合成模型选到最后的个人记忆参考user投影，丢失先前search/update结果，未接回原任务SQL。",
+      "resolution": "旧1.0.0隔离复现同错并保留诊断；仅修合成模型的宿主输入与当前工具组定位，不改测试预期或真实provider。相同SHA的原测试在1.0.0/1.3.0均完整通过，额外纯函数6边界通过。",
+      "status": "closed"
+    },
+    {
+      "issue": "第二次统一验收第6组仍断言跨模型旧思考转成assistant正文，验证的是旧1.0行为，和已明确采用的1.3.0改进相反。",
+      "resolution": "依据保留的官方1.3.0 CHANGELOG #10995和原SDK红绿对照修正该断言；加强公开回答/工具/持久session及原思考历史保留，其他原断言不变。修后6组/36次本机协议完整通过。",
+      "status": "closed"
+    }
+  ],
+  "documentation_verification": {
+    "id": "PI-DOCS",
+    "classification": "separate_documentation_specialty",
+    "command": [
+      "python3",
+      "docs/architecture/check-implementation.py"
+    ],
+    "status": "passed",
+    "reviewer_rerun_exit_code": 0,
+    "evidence": ".local/pi-sdk-upgrade-20261019/diagram-source-check-final.log",
+    "result": {
+      "modules": 12,
+      "diagrams": 29,
+      "local_links": 28,
+      "dependency_edges": 15
+    },
+    "receipt_boundary": "材料/图册检查不进入业务完成命令组；已完成的执行与独立复核证据继续保留。"
+  }
+}

@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import {VERSION as PI_SDK_VERSION} from '@earendil-works/pi-coding-agent';
 import {createServer} from 'node:http';
 import {mkdir,writeFile} from 'node:fs/promises';
 import {randomUUID} from 'node:crypto';
@@ -127,5 +128,5 @@ try{
 
 
 
- await mkdir('.local/checks',{recursive:true});await writeFile('.local/checks/model-provider.json',JSON.stringify({passed:true,provider:'loopback protocol fixture',piSdk:'1.0.0',mysql:'real local MySQL',officialRequests:0,network,checks},null,2)+'\n');console.log(JSON.stringify({passed:true,network,checks}));
+ await mkdir('.local/checks',{recursive:true});await writeFile('.local/checks/model-provider.json',JSON.stringify({passed:true,provider:'loopback protocol fixture',piSdk:PI_SDK_VERSION,mysql:'real local MySQL',officialRequests:0,network,checks},null,2)+'\n');console.log(JSON.stringify({passed:true,network,checks}));
 }finally{process.stderr.write=stderrWrite;await h.close();provider.closeAllConnections();await new Promise(r=>provider.close(r));}

@@ -2,13 +2,14 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 const { chromium } = require('playwright');
+const piVersion = require('../../package.json').dependencies['@earendil-works/pi-coding-agent'];
 
 // 总览与三张详图共用 11 个组件和 19 条关系，职责与当前合成平台实现一致。
 const nodes = {
   users: { name: '业务用户', type: 'Person', tech: '产品 · 算法 · 分析', lines: ['授权维护者编辑语义'], kind: 'person' },
   web: { name: 'Web 应用', type: 'Container', tech: 'React / TypeScript', lines: ['提问、SQL、结果与历史', '语义管理 · 我的积累'], kind: 'app' },
   api: { name: '业务 API 服务', type: 'Container', tech: 'Rust / Axum', lines: ['系统维护授权、版本与调用预算', '会话、语义与共享方法规则', '查询前另核平台权限与用户确认'], kind: 'app' },
-  pi: { name: 'Agent 运行进程', type: 'Container', tech: 'Node.js / Pi SDK 1.0.0', lines: ['唯一模型与工具循环', '原生 context、Skill、续接与压缩'], kind: 'app' },
+  pi: { name: 'Agent 运行进程', type: 'Container', tech: `Node.js / Pi SDK ${piVersion}`, lines: ['唯一模型与工具循环', '原生 context、Skill、续接与压缩'], kind: 'app' },
   journal: { name: 'Pi 原生会话', type: 'Data Store', tech: '私有 JSONL / 同一宿主', lines: ['完整 SDK 会话树与工具历史', '精确 leaf / 授权引用保存在 MySQL'], kind: 'store' },
   worker: { name: '后台任务进程', type: 'Container', tech: 'Rust Worker', lines: ['来源同步、预填与索引更新', '查询跟踪、作业租约与重试'], kind: 'app' },
   mysql: { name: '正式业务记录', type: 'Data Store', tech: 'MySQL 8.4', lines: ['知识、版本、会话与查询状态', '私人记忆、公共方法与预算'], kind: 'store' },

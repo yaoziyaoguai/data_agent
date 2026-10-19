@@ -1247,7 +1247,7 @@ export interface Checkpoint {
     storage?:            CheckpointReference;
 }
 
-export type SDKVersion = "1.0.0";
+export type SDKVersion = "1.0.0" | "1.3.0";
 
 export interface CheckpointReference {
     file?:        string;

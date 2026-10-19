@@ -225,7 +225,7 @@ export async function deliver(
         try {
           await session.compact();
         } catch (error) {
-          // Pi1.0.0未公开canCompact；这两个无摘要可做的结果交给最终载荷检查，其余失败照常传播。
+          // Pi未公开canCompact；这两个无摘要可做的结果交给最终载荷检查，其余失败照常传播。
           if (!(error instanceof Error) || !["Already compacted", "Nothing to compact (session too small)"].includes(error.message))
             throw error;
         }

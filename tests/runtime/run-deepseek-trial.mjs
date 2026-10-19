@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import {VERSION as PI_SDK_VERSION} from '@earendil-works/pi-coding-agent';
 import {readFile,writeFile,mkdir,stat} from 'node:fs/promises';
 import {randomBytes,randomUUID,createHash} from 'node:crypto';
 import {modelHarness,trialProfile} from './model-harness.mjs';
@@ -33,7 +34,7 @@ else if(process.argv.includes('--run')){
   const attempts=h.query(`SELECT JSON_OBJECT('id',id,'state',state,'input_tokens_upper',input_tokens_upper,'output_tokens_max',output_tokens_max,'actual_micros',actual_micros,'usage',usage_json) FROM model_call_attempts WHERE run_id='${result.run.run_id}' ORDER BY id`);
   const ledger=h.query(`SELECT JSON_OBJECT('allocated_calls',allocated_calls,'reserved_micros',reserved_micros,'spent_micros',spent_micros,'state',state) FROM model_trials WHERE id='${config.profile.trial_id}'`)[0];
   let passed=outcome.ok&&snapshot.tasks.length===1&&snapshot.runs[0].state==='finished'&&attempts.length>=2&&attempts.every(a=>a.state==='settled'&&a.usage.input_tokens<=4096&&a.usage.output_tokens<=1024)&&ledger.allocated_calls<=6&&ledger.reserved_micros===0&&ledger.spent_micros<=50000;
-  const report={passed,provider:'https://api.deepseek.com',model:'deepseek-flash',thinking:'disabled',piSdk:'1.0.0',material:'synthetic only',requestBodyByteLimit:2048,inputBudgetEstimate:4096,inputLimitMethod:'conservative estimate plus actual usage verification',outputLimit:1024,callLimit:6,costLimitMicros:50000,priceVersion:config.profile.price_version,conversation_id:result.cid,attempts,ledger,tasks:snapshot.tasks,answer:snapshot.messages.filter(m=>m.role==='assistant'&&m.committed).map(m=>m.text),sourceHashes:await hashes(),verifiedAt:new Date().toISOString()};
+  const report={passed,provider:'https://api.deepseek.com',model:'deepseek-flash',thinking:'disabled',piSdk:PI_SDK_VERSION,material:'synthetic only',requestBodyByteLimit:2048,inputBudgetEstimate:4096,inputLimitMethod:'conservative estimate plus actual usage verification',outputLimit:1024,callLimit:6,costLimitMicros:50000,priceVersion:config.profile.price_version,conversation_id:result.cid,attempts,ledger,tasks:snapshot.tasks,answer:snapshot.messages.filter(m=>m.role==='assistant'&&m.committed).map(m=>m.text),sourceHashes:await hashes(),verifiedAt:new Date().toISOString()};
   assert.ok(!JSON.stringify(report).includes(entries.DEEPSEEK_API_KEY));assert.ok(!h.getLogs().includes(entries.DEEPSEEK_API_KEY));await writeFile(reportPath,JSON.stringify(report,null,2)+'\n',{mode:0o600});
   if(!passed){await h.request('/conversations/'+result.cid+'/cancel-run',{run_id:result.run.run_id,lease_epoch:result.run.lease_epoch});throw new Error('official_trial_incomplete: saved private usage and outcome; no automatic retry');}
   console.log(JSON.stringify({passed,calls:ledger.allocated_calls,costUpperMicros:ledger.spent_micros,usage:attempts.map(a=>a.usage),toolTasks:snapshot.tasks.length,evidence:reportPath}));
