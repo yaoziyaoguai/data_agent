@@ -3,68 +3,49 @@
   "workflow": "dev_co",
   "schema": 1,
   "phase": "verify",
-  "goal_revision": 62,
-  "environment": "Node26.8.1/npm11.19.0、Rust1.99.0、Python3.14.7/SQLite；Colima MySQL/Milvus；仅隔离数据库与本地协议替身。",
+  "goal_revision": 63,
+  "environment": "项目原Colima MySQL/Milvus；真实Flash/off、Mem0、词法检索，原试用数据库/账号/账本，端口偏移22000。",
   "verification": {
     "level": "targeted",
-    "reason": "三个Pi直接包及间接包统一稳定1.3.0；新旧对照、旧检查点、448条契约、桥接与64KiB压力已通过，最终以14组统一验收收据为准。",
+    "reason": "本轮仅Git交付、恢复既有本地服务和状态文档；产品代码已由8b8f01a对应14组完整验收，本轮检查实际健康端点和SDK兼容。",
     "freshness": "content",
     "checks": [
-      "官方包完整性核对、同版精确锁定和npm ci --engine-strict --ignore-scripts完整退出0；其他直接依赖未变。",
-      "旧1.0.0固定反例中摘要、跨模型思考及残缺工具参数三项失败；同一断言在1.3.0通过，旧检查点身份及未确认分支保持。",
-      "448条同源契约、构建、类型、格式、Clippy与架构通过；桥接40轮/10次摘要/627748B原生会话恢复通过。",
-      "原64KiB/24次压力通过，24调用/10次摘要/最大65337B，载荷序列与升级前完全相同，未放宽断言。",
-      "C4版本标注来自package.json，图册重建29图、12模块、无页面错误/手机溢出；最终14组及独立审查收据为关闭条件。",
-      "未新增真实provider调用；不以协议回归宣称新SDK真实模型质量，不改变既有未覆盖/unknown记录。",
-      "会话专项先在1.0.0复现同错，修正仅合成模型的本轮输入选择后，两版本同一未改测试均通过；真实provider策略未变，完整14组待重新执行。",
-      "新版跨模型思考断言按官方语义更新并加强正文/工具/持久历史保留；模型选择6组/36本机请求、上下文/依赖、真实bridge取消和后台浏览器全部专项通过，完整14组仍须在最终审查后重跑。"
+      "0958b69试用修复及8b8f01a SDK升级已推送origin/codex/analysis-capabilities；无新增业务修改。",
+      "make build verify-startup完整退出0，10项启动器单测、默认启动及真实SDK本机协议聊天/预填通过，官方调用0。",
+      "首次启动漏带旧合成资料目录而被来源校验拒绝；原库、快照及版本一致，恢复原docs/sources/analysis配置后启动成功。",
+      "五个实际服务HTTP200、Worker及其他五个子进程存活，启动器两账号身份检查通过；原配置与身份SHA保持。",
+      "源码SDK14组属于冻结实施版本；不拼接为120项全部通过，不把本地就绪视为新版真实模型质量证明。"
     ],
     "inputs": [
+      "docs/CURRENT.md",
       "package.json",
       "package-lock.json",
-      "apps/agent/session/checkpoint.ts",
-      "apps/agent/session/deliver.ts",
+      "Makefile",
+      "scripts/development.py",
+      "scripts/test_development.py",
+      "apps/agent",
+      "apps/web/src",
+      "crates/data-agent/src",
+      "apps/api/src",
+      "apps/worker/src",
+      "packages/contracts",
       "tests/runtime/check-pi-sdk.mjs",
       "tests/runtime/fixtures/pi-session-1.0.0.json",
-      "tests/runtime/check-model-provider.mjs",
-      "tests/runtime/check-runtime.mjs",
-      "tests/runtime/run-deepseek-trial.mjs",
-      "README.md",
-      "docs/development.md",
-      "docs/architecture/implementation-design.md",
-      "docs/CURRENT.md",
-      "docs/reviews/pi-sdk-upgrade-review.json",
-      "apps/agent",
-      "tests/runtime",
-      "tests/mvp",
-      "packages/contracts",
-      "crates/data-agent/src/contracts.rs",
-      "crates/data-agent/src/modules/runtime",
-      "crates/data-agent/src/use_cases",
-      "Cargo.toml",
-      "Cargo.lock",
-      "Makefile",
-      "scripts/check_delivery.py",
-      "tests/contracts",
-      "docs/architecture"
+      "docs/reviews/local-dogfood-delivery-review.json"
     ]
   },
   "delivery": {
     "schema": 1,
     "registry": "docs/semantic-retrieval-design.md",
     "increment": {
-      "id": "I2-PI-SDK-UPGRADE",
+      "id": "I2-LOCAL-DOGFOOD-DELIVERY",
       "phase": "I2",
       "status": "complete",
-      "goal": "将Pi SDK统一升级到官方稳定1.3.0，利用工具参数完整性、模型切换和摘要改进，保持长期会话、恢复、取消、授权及预算能力。",
+      "goal": "按用户本轮授权分批提交推送既有修复，恢复原真实Flash试用环境并核对本地就绪；不改变已验收产品行为。",
       "requirements": [
         "C01",
-        "C03",
-        "C04",
         "C05",
-        "C06",
-        "C07",
-        "C08"
+        "C07"
       ],
       "modules": [
         "M08",
@@ -72,285 +53,73 @@
         "M12"
       ],
       "allowed_paths": [
-        "package.json",
-        "package-lock.json",
-        "apps/agent/session/checkpoint.ts",
-        "apps/agent/session/deliver.ts",
-        "tests/runtime/check-pi-sdk.mjs",
-        "tests/runtime/fixtures/pi-session-1.0.0.json",
-        "tests/runtime/check-model-provider.mjs",
-        "tests/runtime/check-runtime.mjs",
-        "tests/runtime/run-deepseek-trial.mjs",
-        "README.md",
-        "docs/development.md",
-        "docs/architecture/implementation-design.md",
         "docs/CURRENT.md",
-        "docs/reviews/pi-sdk-upgrade-review.json",
-        "packages/contracts/schema.json",
-        "packages/contracts/generated/boundary.ts",
-        "packages/contracts/generated/boundary.rs",
-        "tests/contracts/cases.json",
-        "docs/architecture",
-        "docs/semantic-retrieval-design.md",
-        "apps/agent/provider/synthetic-analysis.ts",
-        "tests/mvp/check-model-selection.mjs"
+        "docs/reviews/local-dogfood-delivery-review.json"
       ],
       "non_goals": [
-        "不启用MCP/codemode、私人资源自动发现、新模型供应商或新Agent循环。",
-        "不提高调用/重试/载荷限制，不修改旧未知回执，不承诺零bug或真实模型质量提升。",
-        "不提交推送，不重启用户主服务，不新增付费试用。"
+        "不修改业务代码、契约、试用答案或扩大功能。",
+        "不新建或重置数据库、模型账本、旧unknown与Pi会话。",
+        "不自动执行新的真实模型试用；真实输出质量由后续用户dogfood继续验证。"
       ],
       "invariants": [
-        "Pi仍是唯一循环与压缩/重试框架，受控工具和Rust授权/预算/幂等边界保持。",
-        "旧1.0.0会话与检查点可恢复，原session/leaf/tool ID和已执行状态不被重写。",
-        "新导出检查点如实记录实际SDK版本；测试期望来自既有要求与上游修复边界。",
-        "保留上一增量全部未提交改动；失败或超时不能关闭增量。"
+        "SDK与试用修复保持8b8f01a已验收代码，原14组收据绑定其冻结版本。",
+        "真实环境沿原profile、runtime、合成资料目录、Mem0及词法检索恢复，24次请求上限和连续失败3次规则保持。",
+        "配置及身份内容不外发、不进入Git；首次启动失败留证且不能被记为成功。"
       ],
       "verification_inputs": [
+        "docs/CURRENT.md",
         "package.json",
         "package-lock.json",
-        "apps/agent/session/checkpoint.ts",
-        "apps/agent/session/deliver.ts",
+        "Makefile",
+        "scripts/development.py",
+        "scripts/test_development.py",
+        "apps/agent",
+        "apps/web/src",
+        "crates/data-agent/src",
+        "apps/api/src",
+        "apps/worker/src",
+        "packages/contracts",
         "tests/runtime/check-pi-sdk.mjs",
         "tests/runtime/fixtures/pi-session-1.0.0.json",
-        "tests/runtime/check-model-provider.mjs",
-        "tests/runtime/check-runtime.mjs",
-        "tests/runtime/run-deepseek-trial.mjs",
-        "README.md",
-        "docs/development.md",
-        "docs/architecture/implementation-design.md",
-        "docs/CURRENT.md",
-        "docs/reviews/pi-sdk-upgrade-review.json",
-        "apps/agent",
-        "tests/runtime",
-        "tests/mvp",
-        "packages/contracts",
-        "crates/data-agent/src/contracts.rs",
-        "crates/data-agent/src/modules/runtime",
-        "crates/data-agent/src/use_cases",
-        "Cargo.toml",
-        "Cargo.lock",
-        "Makefile",
-        "scripts/check_delivery.py",
-        "tests/contracts",
-        "docs/architecture"
+        "docs/reviews/local-dogfood-delivery-review.json"
       ],
       "acceptance": [
         {
-          "id": "PI-BUILD",
-          "requirements": [
-            "C07"
-          ],
-          "expected": "固定依赖可安装且类型、构建、契约和架构检查通过。",
-          "evidence_kind": "contract",
-          "command": [
-            "make",
-            "build",
-            "verify-code",
-            "verify-contracts",
-            "verify-architecture"
-          ],
-          "timeout_seconds": 900
-        },
-        {
-          "id": "PI-SDK",
+          "id": "LOCAL-READY",
           "requirements": [
             "C01",
-            "C03",
-            "C04",
             "C05"
           ],
-          "expected": "SDK新行为拒绝残缺工具参数、保护模型切换和摘要内容；1.0.0检查点保留原session/leaf/tool ID及未执行草稿状态。",
+          "expected": "真实试用Web、API、Pi Bridge、平台mock和Mem0五个实际端点均HTTP200；不发起模型调用。",
+          "evidence_kind": "runtime",
+          "command": [
+            "python3",
+            "-c",
+            "import json, urllib.request\nopener=urllib.request.build_opener(urllib.request.ProxyHandler({}))\nurls={'web':'http://127.0.0.1:27173/','api':'http://127.0.0.1:30780/health','bridge':'http://127.0.0.1:30781/health','platform':'http://127.0.0.1:30790/health','memory':'http://127.0.0.1:30791/health'}\nstatuses={}\nfor name,url in urls.items():\n    with opener.open(url,timeout=3) as response:\n        statuses[name]=response.status\nassert all(status==200 for status in statuses.values()), statuses\nprint(json.dumps({'passed':True,'http':statuses,'officialRequests':0}))\n"
+          ],
+          "timeout_seconds": 30
+        },
+        {
+          "id": "LOCAL-SDK",
+          "requirements": [
+            "C01",
+            "C05",
+            "C07"
+          ],
+          "expected": "当前安装的Pi为同版1.3.0，三项上游改进和旧1.0.0检查点兼容仍通过。",
           "evidence_kind": "runtime",
           "command": [
             "node",
             "tests/runtime/check-pi-sdk.mjs"
           ],
           "timeout_seconds": 900
-        },
-        {
-          "id": "PI-JOURNAL",
-          "requirements": [
-            "C01",
-            "C05"
-          ],
-          "expected": "原传输与长期原生JSONL恢复、分支、错误文件和旧inline迁移保持。",
-          "evidence_kind": "runtime",
-          "command": [
-            "npm",
-            "run",
-            "check:bridge"
-          ],
-          "timeout_seconds": 900
-        },
-        {
-          "id": "PI-PROVIDER",
-          "requirements": [
-            "C01",
-            "C04",
-            "C05"
-          ],
-          "expected": "真实SDK的本机协议、取消、未知回执、结算、有限重试和逐次许可保持。",
-          "evidence_kind": "runtime",
-          "command": [
-            "make",
-            "verify-model-provider"
-          ],
-          "timeout_seconds": 900
-        },
-        {
-          "id": "PI-SESSION",
-          "requirements": [
-            "C01",
-            "C03",
-            "C05"
-          ],
-          "expected": "同会话多任务续接、原工具回执及半轮恢复保持。",
-          "evidence_kind": "runtime",
-          "command": [
-            "node",
-            "tests/mvp/check-session.mjs"
-          ],
-          "timeout_seconds": 900
-        },
-        {
-          "id": "PI-MODELS",
-          "requirements": [
-            "C01",
-            "C05",
-            "C08"
-          ],
-          "expected": "原Flash/Pro七档、历史恢复、切换及后台查询保持，不重置预算。",
-          "evidence_kind": "runtime",
-          "command": [
-            "node",
-            "tests/mvp/check-model-selection.mjs"
-          ],
-          "timeout_seconds": 900
-        },
-        {
-          "id": "PI-COMPACTION",
-          "requirements": [
-            "C01",
-            "C05",
-            "C06"
-          ],
-          "expected": "原64KiB/24次压力、中文多轮、上下文依赖及压缩后撤回保持，不放宽断言。",
-          "evidence_kind": "runtime",
-          "command": [
-            "node",
-            "tests/mvp/check-native-compaction.mjs"
-          ],
-          "timeout_seconds": 900
-        },
-        {
-          "id": "PI-CONTEXT",
-          "requirements": [
-            "C01",
-            "C06"
-          ],
-          "expected": "工作区/记忆投影、固定前缀及恢复后的上下文位置保持。",
-          "evidence_kind": "runtime",
-          "command": [
-            "node",
-            "tests/mvp/check-request-context.mjs"
-          ],
-          "timeout_seconds": 900
-        },
-        {
-          "id": "PI-AUTHORITY",
-          "requirements": [
-            "C05",
-            "C06"
-          ],
-          "expected": "旧正文/压缩摘要的权限与版本失效在发送前仍被拒绝。",
-          "evidence_kind": "runtime",
-          "command": [
-            "node",
-            "tests/mvp/check-context-dependencies.mjs"
-          ],
-          "timeout_seconds": 900
-        },
-        {
-          "id": "PI-CONTINUATION",
-          "requirements": [
-            "C01",
-            "C03",
-            "C05"
-          ],
-          "expected": "混合任务及停止后的Pi续接保持，不重复业务副作用。",
-          "evidence_kind": "runtime",
-          "command": [
-            "node",
-            "tests/mvp/check-mixed-task-pi-continuation.mjs"
-          ],
-          "timeout_seconds": 900
-        },
-        {
-          "id": "PI-CANCELLATION",
-          "requirements": [
-            "C01",
-            "C04",
-            "C05"
-          ],
-          "expected": "取消实际bridge调用及晚到回执保持原身份，不变成功。",
-          "evidence_kind": "runtime",
-          "command": [
-            "node",
-            "tests/mvp/check-mixed-task-bridge-cancellation.mjs"
-          ],
-          "timeout_seconds": 900
-        },
-        {
-          "id": "PI-BROWSER",
-          "requirements": [
-            "C01",
-            "C08"
-          ],
-          "expected": "后台查询、API/Worker重启、取消、短视口及输入框稳定保持。",
-          "evidence_kind": "runtime",
-          "command": [
-            "node",
-            "tests/mvp/check-background-queries-browser.mjs"
-          ],
-          "timeout_seconds": 900
-        },
-        {
-          "id": "PI-DATA",
-          "requirements": [
-            "C01",
-            "C03",
-            "C05"
-          ],
-          "expected": "18个受控工具、最终回答及摘要协议保持，不加载额外工具。",
-          "evidence_kind": "runtime",
-          "command": [
-            "node",
-            "tests/mvp/check-data-provider.mjs"
-          ],
-          "timeout_seconds": 900
-        },
-        {
-          "id": "PI-LARGE-TOOL",
-          "requirements": [
-            "C01",
-            "C05",
-            "C06"
-          ],
-          "expected": "大工具正文和分页仍可用，原字节/权限/原生压缩边界保持。",
-          "evidence_kind": "runtime",
-          "command": [
-            "node",
-            "tests/mvp/check-large-tool-context.mjs"
-          ],
-          "timeout_seconds": 900
         }
       ],
       "review": {
         "status": "passed",
-        "record": "docs/reviews/pi-sdk-upgrade-review.json"
+        "record": "docs/reviews/local-dogfood-delivery-review.json"
       },
-      "evidence": ".local/delivery/I2-PI-SDK-UPGRADE-result.json"
+      "evidence": ".local/delivery/I2-LOCAL-DOGFOOD-DELIVERY-result.json"
     }
   }
 }
@@ -361,7 +130,19 @@
 更新：2026-10-19。唯一活动项目目录：`~/work_space/data_agent`。
 
 
-## 当前增量：Pi SDK稳定版升级（2026-10-19）
+## 当前交付：提交推送与本地真实试用恢复（2026-10-19）
+
+用户本轮明确授权提交、推送和更新本地服务，替代此前实施阶段“不提交推送或重启”的范围限制；没有需要先讨论才能修复的阻塞项。沿用分支`codex/analysis-capabilities`。`0958b69`提交Dogfood范围/口径/单位、执行反馈和输入框修复及文档，`8b8f01a`提交Pi稳定1.3.0及配套兼容，两批均已推送`origin`。本轮不修改上述产品代码。
+
+实现证据保留：SDK的14组全部退出0、无超时、前后输入一致，收据`.local/delivery/I2-PI-SDK-UPGRADE-result.json`绑定`8b8f01a`中的冻结CURRENT；该完整记录另存`.local/local-dogfood-delivery-20261019/sdk-complete-CURRENT.md`。新交付元数据不冒称旧收据仍绑定修改后的CURRENT。Dogfood原6组收据及真实定向证据保持。新运行检查只证明本次本地就绪与SDK兼容。
+
+本地更新：项目专用Colima实例、MySQL/Milvus及原卷恢复健康，`make build verify-startup`完整退出0，10项启动器单测、默认工作台启动、正式SDK本机协议聊天/初次再次预填与人工保护通过。恢复的是最近其他Agent已使用的真实Flash/off、Mem0、词法检索环境，沿用原profile、数据库、身份、runtime、合成分析资料和端口；工作台为`http://127.0.0.1:27173/`，与默认模拟工作台端口5173区分。登录沿原试用环境的Alice/Bob，凭据只保存在其忽略目录。
+
+首次恢复漏带`DATA_AGENT_SYNTHETIC_SOURCE_DIRECTORY`，平台按原规则拒绝来源冲突；不是业务库损坏。独立只读核对确认原manifest、冻结来源、实际业务库和平台版本均匹配`docs/sources/analysis`，仅补回这个既有环境配置后启动成功，没有重建业务库或改写查询账本。第一次失败日志及核对记录均保留。Web/API/Pi/平台/Mem0五个实际端点均HTTP200，Worker持续运行，原两个账号检查通过；profile、身份与原Mem0配置内容SHA不变。记录为`.local/local-dogfood-delivery-20261019/local-services.json`及同目录日志，均不进入Git。
+
+本次就绪检查未自动发送新的真实模型问题。用户后续手工dogfood沿原正常请求账本，保持每消息24次及连续临时失败3次停止；没有通过重启增加旧额度或重做unknown。尚缺B14第二条查询、C19原39行案例执行、C22补录后回读，以及模型文字一致性和新版真实模型质量；这些是后续试用覆盖/质量缺口，不因本地就绪被标为通过。真实Datasight、生产身份和容量仍未接入验证。
+
+## 历史增量：Pi SDK稳定版升级（2026-10-19）
 
 用户要求核对版本，采用较高稳定版并保持现有能力。开工仍在`codex/analysis-capabilities`、HEAD `5fe5260`，上一Dogfood修复已完整验收但未提交，本轮保留其全部改动。沿用dev_co与本记录，提交推送、常驻服务重启和新增付费执行不在本轮范围。
 

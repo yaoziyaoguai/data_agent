@@ -1,0 +1,146 @@
+{
+  "schema": 1,
+  "increment_id": "I2-LOCAL-DOGFOOD-DELIVERY",
+  "reviewer": "correctness",
+  "reviewer_identity": "review_dogfood_repairs：独立复核本次本地交付，仅写本记录",
+  "conclusion": "passed",
+  "summary": "本次交付记录与实际就绪证据相符，无未关闭的确定性阻断。当前产品保持8b8f01a，Git差异仅CURRENT；首次漏带旧资料目录的来源冲突按失败保留，恢复沿原profile/runtime和合成分析目录。独立检查五个实际端点均HTTP200，六个应用子进程含Worker存活。旧SDK14组完整收据绑定其冻结CURRENT，并未冒充绑定新交付记录；本轮两组统一验收仍待主代理随后实际执行。",
+  "scope_sha256": "fb446b678333180dc046bef2f82543ab867c9baab2db9ed1a5f3bb8c9e8a13fa",
+  "scope": {
+    "input_files": 187,
+    "contract_sha256": "b07ce5bac7e61769766758084bc98421bfc5a4fc1d33cac935f9c244930c02cd",
+    "decisions_sha256": "c6456f454f3efb5763440301d1ea3298c518024f0fede2cb6be7dd86fa103e3b"
+  },
+  "reviewed_at": "2026-10-19T02:51:24.402017+00:00",
+  "requirements": [
+    {
+      "ids": [
+        "C01",
+        "C07"
+      ],
+      "assessment": "提交历史包含0958b69 Dogfood修复和8b8f01a SDK升级；HEAD和本地origin/codex/analysis-capabilities跟踪引用均为8b8f01a。当前只修改CURRENT，未改变产品/契约/测试或旧审查。声明原有两处不存在的crates输入路径已改为实际apps/api/src及apps/worker/src，全部范围输入可读，未扩大业务范围。"
+    },
+    {
+      "ids": [
+        "C01",
+        "C05"
+      ],
+      "assessment": "启动失败日志显示平台SourceVersionConflict后提前退出，未记作就绪。source-diagnosis明确原manifest/冻结快照/实际业务库逻辑与平台版本匹配analysis来源，而非默认来源；平台既有来源校验会拒绝不匹配资料，已有manifest分支不重建业务库。第二次命令沿原profile/runtime、Mem0和lexical，只补回原资料目录；配置/身份保留记录一致，审查者核对三份原文件大小及mtime不变，未读取凭据正文。"
+    },
+    {
+      "ids": [
+        "C01",
+        "C05",
+        "C07"
+      ],
+      "assessment": "build-startup日志保留10项启动器测试、默认本地启动和本机协议聊天/预填成功，官方调用0。实际恢复记录为Flash/off、Mem0、lexical、每请求24次，smoke模型请求0；原连续失败和账本规则无代码修改。独立无认证HTTP GET验证27173 Web及30780/30781/30790/30791四个健康端点均200，六个子进程存活；两账号身份检查只引用启动记录，不读取或公开身份内容。"
+    },
+    {
+      "ids": [
+        "C01",
+        "C05",
+        "C07"
+      ],
+      "assessment": "旧SDK收据14组均退出0、无超时、before/after指纹相同。sdk-complete-CURRENT归档与8b8f01a中的CURRENT逐字相等，按检查器规范归一化后也匹配旧收据的CURRENT摘要；新CURRENT未声称旧收据仍绑定本轮修改。当前两组只验证实际健康及已安装SDK兼容，不重跑历史审计，也不证明真实模型质量或120项全部通过。"
+    }
+  ],
+  "findings": [],
+  "resolved_findings": [
+    {
+      "issue": "初始verification.inputs与delivery.verification_inputs含两个不存在的crates路径，无法生成范围指纹。",
+      "resolution": "主代理仅将两处声明改为现有apps/api/src、apps/worker/src；范围指纹及本记录verify_review验证通过。",
+      "status": "closed"
+    }
+  ],
+  "observations": {
+    "implementation_head": "8b8f01a5eaa21434e9910ce372d689ee4bd757ae",
+    "git_diff_before_review_record": [
+      "docs/CURRENT.md"
+    ],
+    "health_http_status": {
+      "web": 200,
+      "api": 200,
+      "bridge": 200,
+      "platform": 200,
+      "memory": 200
+    },
+    "alive_child_processes": 6,
+    "configuration_identity_and_memory_file_size_mtime_unchanged": true,
+    "recorded_file_preservation_flags_all_true": true,
+    "credential_contents_read": false,
+    "SDK_receipt": {
+      "groups": 14,
+      "passed": true,
+      "timed_out": false,
+      "before_after_equal": true,
+      "frozen_CURRENT_matches_commit_and_receipt_digest": true
+    },
+    "official_model_requests_by_reviewer": 0
+  },
+  "evidence": [
+    {
+      "path": ".local/local-dogfood-delivery-20261019/build-startup.log",
+      "sha256": "a57152b7cd15fed833dd27583a47c7d90d457eb3ad7387200de14c8602878d3c"
+    },
+    {
+      "path": ".local/local-dogfood-delivery-20261019/source-diagnosis.json",
+      "sha256": "3b2c25567f92bc157a5f5677ec2324493ad1bcde600f7bb23ced03dc4257c016"
+    },
+    {
+      "path": ".local/local-dogfood-delivery-20261019/preserved-before.json",
+      "sha256": "5b0bea141d5579bd876eaad453bc7f943daccc40220957b78731309d2ef1f1a6"
+    },
+    {
+      "path": ".local/local-dogfood-delivery-20261019/local-services.json",
+      "sha256": "6b85b5934a70c4672e4574c591e8ef9b822172fefba57d7a48f18b568f4670d7"
+    },
+    {
+      "path": ".local/local-dogfood-delivery-20261019/local-services.log",
+      "sha256": "37cf4e42332e88949693e1320c132894c71cf8201fcc35fb2d6c53d247881ca0"
+    },
+    {
+      "path": ".local/local-dogfood-delivery-20261019/local-services-first-attempt.log",
+      "sha256": "b878a797b7f01633a9ea422343ac2966a28acdb1ded990129b487eee9763bdf3"
+    },
+    {
+      "path": ".local/local-dogfood-delivery-20261019/platform-first-attempt.log",
+      "sha256": "9e08ebb54b5e0081b83f32625738a89ff87e7146fbb86d8d6e48ed1208a5c01a"
+    },
+    {
+      "path": ".local/local-dogfood-delivery-20261019/release-inputs.json",
+      "sha256": "556e11137c60130db1318b9809ceb0b63741f0758c3d3813a82008cfddf77278"
+    },
+    {
+      "path": ".local/local-dogfood-delivery-20261019/sdk-complete-CURRENT.md",
+      "sha256": "4728cefc3145b8614beb24ebaac37c8b546a660356689f30b983811653c5fd02"
+    },
+    {
+      "path": ".local/delivery/I2-PI-SDK-UPGRADE-result.json",
+      "sha256": "6a361ec84e016c77bc4dd3c64632848b0e4dfc247d1a2abdc7d3f0badf78c4d4"
+    },
+    {
+      "path": ".local/delivery/I2-DOGFOOD-REPAIRS-result.json",
+      "sha256": "056d44007c92ece7cafcc563970b082a6787e8e28f11f291c3789db564f660f4"
+    }
+  ],
+  "unified_verification": {
+    "status_at_review": "not_started",
+    "command": "make verify-increment",
+    "required_command_groups": 2,
+    "acceptance_ids": [
+      "LOCAL-READY",
+      "LOCAL-SDK"
+    ],
+    "expected_receipt": ".local/delivery/I2-LOCAL-DOGFOOD-DELIVERY-result.json",
+    "condition": "主代理在本记录冻结后实际完成两组，退出0、无超时且指纹一致；本审查和独立健康观察不代替正式收据。"
+  },
+  "residual_risks": [],
+  "testing_gaps": [
+    "本轮两组统一验收尚待实际执行；不将旧SDK14组或启动专项拼接成新交付收据。"
+  ],
+  "limitations": [
+    "健康检查只是当前进程就绪，不证明新的真实模型问答质量、真实Datasight或生产容量；既有试用覆盖和unknown缺口不因此关闭。",
+    "未启动/停止服务、运行付费模型、读取凭据正文、执行Git写操作或重跑整套测试；配置内容保留依据为既有记录及未变文件元数据，不冒称独立读取核算了凭据内容。",
+    "原SDK14组的收据与冻结版本继续作为历史证据；本记录只审当前文档交付与恢复就绪，不重新审计历史实现。"
+  ]
+}
