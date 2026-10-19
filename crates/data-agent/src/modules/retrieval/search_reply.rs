@@ -63,7 +63,7 @@ pub fn bounded_search_reply(data: Value) -> Value {
         "search_scope":data["search_scope"],
         "memory_retrieval":bounded_metadata(&data["memory_retrieval"],0),
         "retrieval_mode":bounded_metadata(&data["retrieval_mode"],0),
-        "note":"片段与目录只覆盖当前回执范围。此范围未找到资料时，空结果不能证明不存在；按同版对象补读或调整范围。资产游标只用于个人资产目录。",
+        "note":"片段与目录只覆盖当前回执范围。此范围未找到资料时，空结果不能证明不存在；可在用户限定范围内改写或同版补读，扩大用户明确范围须先征得同意。资产游标只用于个人资产目录。",
         "reply_coverage":{"state":"bounded","byte_limit":SEARCH_REPLY_LIMIT,"content_limit":CONTENT_LIMIT,
             "returned_object_count":0,"omitted_objects":objects.iter().map(object_ref).collect::<Vec<_>>(),
             "note":"state只说明该次目录交付，正文和空间覆盖另看分页/检索范围。对象与资产可按同版标识补读；省略引用均为当前有权对象。"}});

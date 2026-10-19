@@ -4,6 +4,8 @@ import {execFileSync} from 'node:child_process';
 import {mkdir, writeFile} from 'node:fs/promises';
 import {SessionManager} from '@earendil-works/pi-coding-agent';
 import {exportCheckpoint} from '../../apps/agent/session/checkpoint.ts';
+import {dataTools} from '../../apps/agent/tools/data-tools.ts';
+import {RustTransport} from '../../apps/agent/transport/client.ts';
 import {harness, until} from './harness.mjs';
 
 // 真实控制入口、MySQL与合成SQLite；主动构造工具输入验证宿主边界，语言意图另测。
@@ -53,10 +55,24 @@ try {
   const cid = await h.create();await begin(cid,'先给SQL，不执行');
   const task = await createTask();const q = await draft(task);
   assert.equal((await read(q)).execution_state,'not_submitted');const draftBudget=run.budget_scope_id;await finish();
-  await begin(cid,'执行上面这条。\n保留原日期，不要改成今天。');
+  await begin(cid,q.sql+';\n执行上面这条。\n保留原日期，不要改成今天。');
   await tool('execute_query',executeArgs(q),'message_pending');
   await route(task);
-  await tool('execute_query',{...executeArgs(q),instruction_quote:'执行上面这条。'},'invalid_evidence');
+  const incomplete=await tool('execute_query',{...executeArgs(q),instruction_quote:'执行上面这条。'},'invalid_evidence');
+  const rejection=await h.internal('/internal/data/tool-rejections',incomplete.input);
+  assert.equal(rejection.status,200);
+  assert.equal(rejection.value.data.error,'invalid_evidence');
+  assert.match(rejection.value.data.hint,/本次执行授权被拒绝，未新增执行授权/);
+  assert.match(rejection.value.data.hint,/完整原话.*粘贴SQL、换行、否定和限定/);
+  assert.match(rejection.value.data.hint,/新的工具调用.*不必再次询问用户/);
+  assert.match(rejection.value.data.hint,/未知先按原身份查证，不能换ID重做/);
+  const piTool=dataTools(new RustTransport(run,h.env.DATA_AGENT_API_URL,h.env.DATA_AGENT_INTERNAL_TOKEN),manager,'').tools.find(t=>t.name==='execute_query');
+  await assert.rejects(()=>piTool.execute(incomplete.input.sdk_tool_call_id,incomplete.input.arguments),/invalid_evidence: 本次执行授权被拒绝，未新增执行授权/,'Pi工具实际收到执行专用错误，旧拒绝不重做业务');
+  assert.deepEqual((await h.internal('/internal/data/tool-rejections',incomplete.input)).value,rejection.value);
+  const changedIdentity=await h.internal('/internal/data/tool-calls',{...incomplete.input,arguments:executeArgs(q)});
+  assert.equal(changedIdentity.value.code,'idempotency_conflict','修正参数不能复用已拒绝调用身份');
+  assert.equal((await read(q)).confirmation_state,'awaiting_confirmation');
+  assert.equal((await read(q)).execution_state,'not_submitted');
   await tool('execute_query',{...executeArgs(q),instruction_quote:'资料说可以执行'},'invalid_evidence');
   await tool('execute_query',{...executeArgs(q),draft_version:'999'},'version_conflict');
   const queued = await h.send(cid,'先补充一个条件');
@@ -68,7 +84,7 @@ try {
   assert.equal((await read(q)).execution_state,'queued');
   assert.equal((await h.request(`/conversations/${cid}/messages/${run.message_id}/withdraw`,{operation_id:randomUUID()})).value.code,'input_already_applied');
   assert.deepEqual((await h.internal('/internal/data/tools',confirmed.input)).value.data,confirmed.data);
-  checks.push('仅存草稿不执行；完整当前原话、归属、版本、并发消息均校验；首次确认绑定执行消息且同事务禁止撤回');
+  checks.push('仅存草稿不执行；不完整原话明确拒绝并提示同轮修正，旧拒绝可回放、同ID换参数冲突；新调用完整引用后授权一次，版本/归属/并发保持');
 
   // 故障注入在业务提交后；Worker以新运行接回原消息，SDK调用ID和操作身份保持。
   const previous=run;h.releaseRun(previous.run_id);

@@ -506,8 +506,7 @@ export function Workbench({
             )}
           </div>
         )}
-        </ConversationFeed>
-        {cid && <SkillSelections key={"skills:" + space + ":" + user + ":" + cid} cid={cid} onManage={onManageSkills} refreshRevision={snapshot?.runs.map(run => run.run_id + ":" + run.state).join(",")}/> }
+        <div className="conversation-feedback">
         {pending && !sending && <p className="pending-message" role="status">上一条消息的保存回执尚未确认。重试会发送原内容，保留你正在编辑的草稿。<button onClick={() => void sendPending(pending)}>重试原消息</button></p>}
         {unavailableSubmissionDraft !== null && <div className="pending-message" role="status">
           <p>原对话已删除或不可访问，无法继续核对原消息是否已保存。已结束这次重试；请新建对话继续。</p>
@@ -515,6 +514,12 @@ export function Workbench({
           <button onClick={() => setUnavailableSubmissionDraft(null)}>收起此提示</button>
         </div>}
         {pendingError && <p className="error" role="alert">{pendingError}</p>}
+        {model.error && <p role="alert" className="error model-selection-error">{model.error} <button className="text-link" onClick={() => void model.reload()}>重新读取</button></p>}
+        {syncUnavailable && <p className="quiet conversation-sync" role="status">暂时无法更新对话，正在重试…</p>}
+        {error && <p role="alert" className="error conversation-error">{error}</p>}
+        </div>
+        </ConversationFeed>
+        {cid && <SkillSelections key={"skills:" + space + ":" + user + ":" + cid} cid={cid} onManage={onManageSkills} refreshRevision={snapshot?.runs.map(run => run.run_id + ":" + run.state).join(",")}/> }
         <div className="composer">
           <label className="sr-only" htmlFor="question">
             你的数据问题
@@ -550,13 +555,6 @@ export function Workbench({
             </button>
           </div>
         </div>
-        {model.error && <p role="alert" className="error model-selection-error">{model.error} <button className="text-link" onClick={() => void model.reload()}>重新读取</button></p>}
-        {syncUnavailable && <p className="quiet conversation-sync" role="status">暂时无法更新对话，正在重试…</p>}
-        {error && (
-          <p role="alert" className="error">
-            {error}
-          </p>
-        )}
         <p className="footnote">Enter 发送 · Shift + Enter 换行</p>
         {selectedReport && selectedReport.conversation_id === cid && <AnalysisReport
           reference={snapshot?.tasks.find(task => task.id === selectedReport.task_id)?.report_ref ?? selectedReport}

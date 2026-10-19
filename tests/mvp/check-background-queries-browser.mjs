@@ -12,7 +12,7 @@ await mkdir(directory,{recursive:true});
 const h=await harness({web:true,env:{DATA_AGENT_QUERY_DELAY_SECONDS:'3600'}});
 const browser=await chromium.launch();
 const page=await browser.newPage({viewport:{width:1440,height:1000}});
-const checks=[],errors=[];let passed=false;
+const checks=[],errors=[],positions=[];let passed=false;
 page.on('pageerror',e=>errors.push(e.message));
 const query=async id=>(await h.request('/queries/'+id)).value;
 const list=async cid=>(await h.request('/conversations/'+cid+'/queries')).value.queries;
@@ -82,6 +82,7 @@ try {
   assert.equal(await page.getByLabel('你的数据问题').inputValue(),'这个草稿不能被查询完成清掉');
   assert.equal(await page.getByLabel('你的数据问题').evaluate(el=>el===document.activeElement),true);
   const after=await page.getByLabel('你的数据问题').boundingBox();
+  positions.push({scenario:'query-completed',before:before.y,after:after.y});
   assert.ok(Math.abs(after.y-before.y)<3,'查询完成不能把正在输入的框挤出原位置');
   assert.deepEqual(await page.locator('.query-card').evaluateAll(nodes=>nodes.map(n=>n.id)),originalOrder);
   checks.push('后提交的B先完成，独立参考支付客户数5正确；A仍运行，通知唯一，组件顺序/草稿/输入焦点及视口位置保持');
@@ -136,21 +137,38 @@ try {
     await page.screenshot({path:directory+'/short-'+height+'.png',fullPage:true});
   }
   checks.push('390×420和390×320短视口保留可滚动消息区与可达的输入/发送按钮');
+  await page.setViewportSize({width:1440,height:1000});
+  const input=page.getByLabel('你的数据问题');
+  await input.fill('同步状态变化时保留草稿');await input.focus();
+  const healthy=await input.boundingBox();
   await page.route('**/snapshot*',route=>route.fulfill({status:502,contentType:'application/json',body:'{'}));
   await page.locator('.conversation-sync').waitFor();
+  const disconnected=await input.boundingBox();
+  positions.push({scenario:'sync-failed',before:healthy.y,after:disconnected.y});
+  assert.ok(Math.abs(disconnected.y-healthy.y)<3,'同步失败提示不能挤动输入框');
+  assert.equal(await input.evaluate(el=>el===document.activeElement),true);
+  assert.equal(await input.inputValue(),'同步状态变化时保留草稿');
   await page.route('**/messages',route=>route.abort('failed'));
   await send('保留这条尚未发送成功的补充');
-  const operationError=page.locator('.conversation > .error');await operationError.waitFor();
+  const operationError=page.locator('.conversation-error');await operationError.waitFor();
   const failureText=await operationError.innerText();
+  const sendFailed=await input.boundingBox();
+  positions.push({scenario:'send-failed',before:healthy.y,after:sendFailed.y});
+  assert.ok(Math.abs(sendFailed.y-healthy.y)<3,'发送失败提示不能挤动输入框');
+  await input.focus();
   await page.unroute('**/snapshot*');
   await page.locator('.conversation-sync').waitFor({state:'detached'});
+  const recovered=await input.boundingBox();
+  positions.push({scenario:'sync-recovered',before:sendFailed.y,after:recovered.y});
+  assert.ok(Math.abs(recovered.y-sendFailed.y)<3,'同步恢复不能挤动输入框');
+  assert.equal(await input.evaluate(el=>el===document.activeElement),true);
   assert.equal(await operationError.innerText(),failureText,'读取恢复不能清掉发送失败提示');
   assert.equal(await page.getByLabel('你的数据问题').inputValue(),'保留这条尚未发送成功的补充');
   await page.unroute('**/messages');
-  checks.push('临时读取失败恢复后提示消失，发送失败提示及未发送草稿仍保留');
+  checks.push('同步失败/恢复与发送失败提示保持输入框位置；恢复不清掉发送错误、草稿和焦点');
   assert.deepEqual(errors,[]);passed=true;
 } finally {
   if(!passed)await page.screenshot({path:directory+'/failure.png',fullPage:true}).catch(()=>{});
-  await writeFile(directory+'/report.json',JSON.stringify({passed,checks,errors,officialRequests:0,environment:'Pi SDK + synthetic model + MySQL + executable synthetic SQLite'},null,2));
+  await writeFile(directory+'/report.json',JSON.stringify({passed,checks,errors,positions,officialRequests:0,environment:'Pi SDK + synthetic model + MySQL + executable synthetic SQLite'},null,2));
   await browser.close();await h.close();console.log(JSON.stringify({passed,checks,errors,officialRequests:0}));
 }

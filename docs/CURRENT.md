@@ -3,65 +3,70 @@
   "workflow": "dev_co",
   "schema": 1,
   "phase": "verify",
-  "status": "complete",
-  "goal_revision": 60,
+  "goal_revision": 61,
   "environment": "Node26.8.1/npm11.19.0、Rust1.99.0、Python3.14.7/SQLite；Colima MySQL/Milvus；仅隔离数据库与本地协议替身。",
   "verification": {
     "level": "targeted",
-    "reason": "修复Oracle与本地交叉审计四项能力缺口；合成正式入口/本机Pi协议验证，不执行付费模型。",
+    "reason": "五项支持原因已修复；同源工程/正式入口/浏览器与少量Flash分开验证，保留未覆盖和模型文字缺口。",
     "freshness": "content",
+    "checks": [
+      "构建/类型/格式/445项同源契约/架构锁序通过；正式查询授权9组、检索范围11组、后台浏览器7组通过。",
+      "原64KiB/24调用压力通过：24次、10次Pi摘要、最大65337B；provider 16次协议、账本reserved=0；真实模型质量另列。",
+      "Flash定向原范围、明确扩大、歧义问答、分/元输出与粘贴SQL变体有实际轨迹；新增52次结算，原4条unknown身份与预留不变。",
+      "1204表/2408新增对象的同断言诊断副本完整退出0，8组通过，首次745.45s；无索引产品修改，旧总命令900s强杀不能代表阶段超时。",
+      "最终统一6组冻结验收以delivery.increment.status及收据为准，专项和历史试用不能替代。"
+    ],
     "inputs": [
-      "crates/data-agent/src/modules/analysis",
-      "crates/data-agent/src/modules/queries",
-      "crates/data-agent/src/modules/retrieval",
-      "crates/data-agent/src/modules/knowledge/store.rs",
-      "crates/data-agent/src/modules/ingestion/prefill.rs",
-      "crates/data-agent/src/modules/ingestion/store.rs",
-      "crates/data-agent/src/use_cases/data_tools.rs",
-      "crates/data-agent/src/use_cases/query_workflow.rs",
-      "crates/data-agent/src/use_cases/knowledge.rs",
-      "crates/data-agent/src/use_cases/prefill_materials.rs",
-      "crates/data-agent/src/use_cases/semantic_prefill.rs",
-      "apps/agent/tools/data-tools.ts",
       "apps/agent/session/resources.ts",
-      "apps/agent/provider/mock.ts",
+      "apps/agent/tools/data-tools.ts",
+      "apps/web/src/features/workbench/Workbench.tsx",
+      "apps/web/src/style.css",
+      "crates/data-agent/src/use_cases/data_tools.rs",
+      "crates/data-agent/src/modules/retrieval/search_reply.rs",
+      "tests/mvp/check-background-queries-browser.mjs",
+      "tests/mvp/check-conversational-query.mjs",
+      "tests/mvp/check-retrieval-scope.mjs",
+      "docs/CURRENT.md",
+      "docs/architecture/implementation-design.md",
+      "docs/architecture/runtime-modules.md",
+      "docs/architecture/implementation-views.md",
+      "docs/semantic-retrieval-design.md",
+      "docs/reviews/dogfood-repair-review.json",
+      "tests/mvp/harness.mjs",
+      "apps/agent/session",
+      "apps/agent/provider",
+      "apps/agent/transport",
+      "crates/data-agent/src/use_cases/query_workflow.rs",
+      "crates/data-agent/src/modules/queries",
+      "crates/data-agent/src/modules/runtime",
+      "crates/data-agent/src/modules/analysis",
       "packages/contracts",
       "crates/data-agent/src/contracts.rs",
       "tests/contracts",
-      "tests/mvp",
-      "docs/architecture",
-      "docs/semantic-retrieval-design.md",
-      "docs/reviews/agent-effectiveness-review.json",
-      "docs/CURRENT.md",
-      "apps/platform-mock/server.py",
       "Cargo.toml",
       "Cargo.lock",
       "package.json",
       "package-lock.json",
       "Makefile",
       "scripts/check_delivery.py",
-      "crates/data-agent/src/use_cases/context_authority.rs"
-    ],
-    "checks": [
-      "四项正式入口专项通过：澄清10组、结果读取7组、检索8组、预填11组；全部为本地合成。",
-      "构建/静态/同源契约445项/架构/原结果统计/provider回归通过；隔离MySQL内全部117个库单测通过。",
-      "原64KiB压力24调用/10摘要/最大65209字节通过，预填请求最大54555字节；真实模型调用0。",
-      "统一九组冻结验收以delivery.increment.status与收据为准，当前专项结论不替代统一收据。"
+      "README.md",
+      "docs/development.md",
+      "docs/reviews/dogfood-20261019.md",
+      "tests/mvp/check-data-provider.mjs",
+      "tests/mvp/check-native-compaction.mjs",
+      "tests/mvp/check-hybrid-retrieval.mjs"
     ]
   },
   "delivery": {
     "schema": 1,
     "registry": "docs/semantic-retrieval-design.md",
     "increment": {
-      "id": "I2-AGENT-EFFECTIVENESS",
+      "id": "I2-DOGFOOD-REPAIRS",
       "phase": "I2",
       "status": "complete",
-      "goal": "修复无关修订误关闭澄清、单结果页不可读、候选前缀偏置及预填复核缺料四项问题。",
+      "goal": "修复试用暴露的输入框位移、检索范围指引冲突、歧义/金额单位遵循缺口及执行引用失败反馈；核实未覆盖与受阻场景。",
       "requirements": [
-        "D02",
-        "D05",
-        "D08",
-        "D14",
+        "D09",
         "C01",
         "C02",
         "C03",
@@ -69,93 +74,95 @@
         "C05",
         "C06",
         "C07",
-        "A06"
+        "C08"
       ],
       "modules": [
-        "M02",
-        "M03",
         "M04",
         "M05",
         "M06",
         "M07",
         "M08",
-        "M10",
-        "M11"
+        "M11",
+        "M12"
       ],
       "allowed_paths": [
-        "crates/data-agent/src/modules/analysis",
-        "crates/data-agent/src/modules/queries",
-        "crates/data-agent/src/modules/retrieval",
-        "crates/data-agent/src/modules/knowledge/store.rs",
-        "crates/data-agent/src/modules/ingestion/prefill.rs",
-        "crates/data-agent/src/modules/ingestion/store.rs",
-        "crates/data-agent/src/use_cases/data_tools.rs",
-        "crates/data-agent/src/use_cases/query_workflow.rs",
-        "crates/data-agent/src/use_cases/knowledge.rs",
-        "crates/data-agent/src/use_cases/prefill_materials.rs",
-        "crates/data-agent/src/use_cases/semantic_prefill.rs",
-        "apps/agent/tools/data-tools.ts",
         "apps/agent/session/resources.ts",
-        "apps/agent/provider/mock.ts",
-        "packages/contracts",
-        "crates/data-agent/src/contracts.rs",
-        "tests/contracts",
-        "tests/mvp",
-        "docs/architecture",
-        "docs/semantic-retrieval-design.md",
-        "docs/reviews/agent-effectiveness-review.json",
+        "apps/agent/tools/data-tools.ts",
+        "apps/web/src/features/workbench/Workbench.tsx",
+        "apps/web/src/style.css",
+        "crates/data-agent/src/use_cases/data_tools.rs",
+        "crates/data-agent/src/modules/retrieval/search_reply.rs",
+        "tests/mvp/check-background-queries-browser.mjs",
+        "tests/mvp/check-conversational-query.mjs",
+        "tests/mvp/check-retrieval-scope.mjs",
         "docs/CURRENT.md",
-        "crates/data-agent/src/use_cases/context_authority.rs"
+        "docs/architecture/implementation-design.md",
+        "docs/architecture/runtime-modules.md",
+        "docs/architecture/implementation-views.md",
+        "docs/semantic-retrieval-design.md",
+        "docs/reviews/dogfood-repair-review.json",
+        "README.md",
+        "docs/development.md",
+        "docs/reviews/dogfood-20261019.md"
       ],
       "non_goals": [
-        "不新建Agent循环/压缩器，不扩大24次调用或连续失败3次政策，不叠加模型复核或统计平台。",
-        "不把提示遵循或历史模型成绩当当前质量；本轮不调用真实付费模型。"
+        "不重跑120项，不把部分/超时当作通过；不释放unknown预留，不更换原未知操作ID。",
+        "不新增意图分类器、Agent循环、硬业务域权限或通用统计平台，不放宽24次/连续失败3次及64KiB压力。",
+        "不借文档同步重写无关模块，不提交推送或更新用户常驻服务；获准Flash定向试用沿原数据库/trial/预算。"
       ],
       "invariants": [
-        "权限/来源/条件版本/真实消息执行授权/幂等/预算与人工覆盖保护保持。",
-        "普通条件修订保留未答澄清，明确解决指定问题后按实际未决事实推进。",
-        "结果读取不重跑SQL、不修改精确数据；分页范围和引用真实。",
-        "候选工作量仍有界；预填仍为两次维护模型调用，补料区间不得拼造原文。"
+        "Rust的身份/权限/有效性/真实消息完整引用/版本/幂等/预算保持；模型判断与硬权限明确区分。",
+        "用户限定的调查范围、单位及已采用口径优先；资料只作业务依据，不能授予操作权。",
+        "已有明确口径不重复澄清，模糊别名或多个可行口径不自动确认为用户选择。",
+        "UI保持草稿、焦点、历史位置及可达错误提示，不隐藏失败。"
       ],
       "verification_inputs": [
-        "crates/data-agent/src/modules/analysis",
-        "crates/data-agent/src/modules/queries",
-        "crates/data-agent/src/modules/retrieval",
-        "crates/data-agent/src/modules/knowledge/store.rs",
-        "crates/data-agent/src/modules/ingestion/prefill.rs",
-        "crates/data-agent/src/modules/ingestion/store.rs",
-        "crates/data-agent/src/use_cases/data_tools.rs",
-        "crates/data-agent/src/use_cases/query_workflow.rs",
-        "crates/data-agent/src/use_cases/knowledge.rs",
-        "crates/data-agent/src/use_cases/prefill_materials.rs",
-        "crates/data-agent/src/use_cases/semantic_prefill.rs",
-        "apps/agent/tools/data-tools.ts",
         "apps/agent/session/resources.ts",
-        "apps/agent/provider/mock.ts",
+        "apps/agent/tools/data-tools.ts",
+        "apps/web/src/features/workbench/Workbench.tsx",
+        "apps/web/src/style.css",
+        "crates/data-agent/src/use_cases/data_tools.rs",
+        "crates/data-agent/src/modules/retrieval/search_reply.rs",
+        "tests/mvp/check-background-queries-browser.mjs",
+        "tests/mvp/check-conversational-query.mjs",
+        "tests/mvp/check-retrieval-scope.mjs",
+        "docs/CURRENT.md",
+        "docs/architecture/implementation-design.md",
+        "docs/architecture/runtime-modules.md",
+        "docs/architecture/implementation-views.md",
+        "docs/semantic-retrieval-design.md",
+        "docs/reviews/dogfood-repair-review.json",
+        "tests/mvp/harness.mjs",
+        "apps/agent/session",
+        "apps/agent/provider",
+        "apps/agent/transport",
+        "crates/data-agent/src/use_cases/query_workflow.rs",
+        "crates/data-agent/src/modules/queries",
+        "crates/data-agent/src/modules/runtime",
+        "crates/data-agent/src/modules/analysis",
         "packages/contracts",
         "crates/data-agent/src/contracts.rs",
         "tests/contracts",
-        "tests/mvp",
-        "docs/architecture",
-        "docs/semantic-retrieval-design.md",
-        "docs/reviews/agent-effectiveness-review.json",
-        "docs/CURRENT.md",
-        "apps/platform-mock/server.py",
         "Cargo.toml",
         "Cargo.lock",
         "package.json",
         "package-lock.json",
         "Makefile",
         "scripts/check_delivery.py",
-        "crates/data-agent/src/use_cases/context_authority.rs"
+        "README.md",
+        "docs/development.md",
+        "docs/reviews/dogfood-20261019.md",
+        "tests/mvp/check-data-provider.mjs",
+        "tests/mvp/check-native-compaction.mjs",
+        "tests/mvp/check-hybrid-retrieval.mjs"
       ],
       "acceptance": [
         {
-          "id": "EFFECT-BUILD",
+          "id": "DOGFOOD-BUILD",
           "requirements": [
             "C07"
           ],
-          "expected": "构建、同源契约、类型、格式、模块边界通过。",
+          "expected": "构建、类型、格式、契约与模块边界通过。",
           "evidence_kind": "contract",
           "command": [
             "make",
@@ -167,106 +174,54 @@
           "timeout_seconds": 900
         },
         {
-          "id": "EFFECT-CLARIFICATION",
+          "id": "DOGFOOD-COMPOSER",
           "requirements": [
-            "C03",
+            "D09",
+            "C08"
+          ],
+          "expected": "后台查询、API重启恢复、同步失败恢复及发送失败不移动聚焦输入框，不丢草稿/焦点/历史阅读位置；短视口可达。",
+          "evidence_kind": "runtime",
+          "command": [
+            "node",
+            "tests/mvp/check-background-queries-browser.mjs"
+          ],
+          "timeout_seconds": 900
+        },
+        {
+          "id": "DOGFOOD-AUTHORIZATION",
+          "requirements": [
             "C04",
-            "C05",
-            "D08"
-          ],
-          "expected": "正式入口：无关修订保留未答问题；显式回答仅关闭指定问题；旧版/幂等/归属/正常执行保持。",
-          "evidence_kind": "runtime",
-          "command": [
-            "node",
-            "tests/mvp/check-clarification.mjs"
-          ],
-          "timeout_seconds": 900
-        },
-        {
-          "id": "EFFECT-RESULT-READ",
-          "requirements": [
-            "D02",
-            "D14",
-            "C01",
-            "C02"
-          ],
-          "expected": "宽结果按字节续读、单元格补读和独立统计；同查询只执行一次，引用/绝对行号/完整性/权限保持。",
-          "evidence_kind": "runtime",
-          "command": [
-            "node",
-            "tests/mvp/check-query-result-reading.mjs"
-          ],
-          "timeout_seconds": 900
-        },
-        {
-          "id": "EFFECT-RESULT-REGRESSION",
-          "requirements": [
-            "D02",
-            "D14",
-            "C02",
             "C05"
           ],
-          "expected": "原结果统计与空/部分/精确值行为保持。",
+          "expected": "不完整当前原话拒绝并给出可执行的修正说明；原SDK调用拒绝回放不变，新调用完整原话仅授权一次，系统结果/未知/权限/版本校验保持。",
           "evidence_kind": "runtime",
           "command": [
             "node",
-            "tests/mvp/check-query-result-statistics.mjs"
+            "tests/mvp/check-conversational-query.mjs"
           ],
           "timeout_seconds": 900
         },
         {
-          "id": "EFFECT-CANDIDATES",
+          "id": "DOGFOOD-SCOPE",
           "requirements": [
-            "C06",
-            "A06",
-            "C02"
-          ],
-          "expected": "长查询首中尾词与重复词经生产候选路径；前三名、名称/范围/上限保护保持。",
-          "evidence_kind": "runtime",
-          "command": [
-            "node",
-            "tests/mvp/check-retrieval-ranking.mjs"
-          ],
-          "timeout_seconds": 900
-        },
-        {
-          "id": "EFFECT-PREFILL",
-          "requirements": [
-            "D05",
             "C02",
             "C06"
           ],
-          "expected": "实际两阶段输入有界同版补料，旧/新引文位置真实，多字节边界正确，缺口/人工值/来源变化保持。",
+          "expected": "既有业务域和权限过滤保持；工具回执不鼓励擅自扩大用户明确范围，窄范围和获准宽范围均可用。",
           "evidence_kind": "runtime",
           "command": [
             "node",
-            "tests/mvp/check-prefill-materials.mjs"
+            "tests/mvp/check-retrieval-scope.mjs"
           ],
           "timeout_seconds": 900
         },
         {
-          "id": "EFFECT-UNIT",
-          "requirements": [
-            "C03",
-            "D14",
-            "C06",
-            "D05"
-          ],
-          "expected": "全部Rust库单测在原隔离MySQL及已完成模拟Pi运行夹具内通过，不跳过数据库与检查点场景。",
-          "evidence_kind": "runtime",
-          "command": [
-            "node",
-            "tests/mvp/check-agent-library.mjs"
-          ],
-          "timeout_seconds": 900
-        },
-        {
-          "id": "EFFECT-PROVIDER",
+          "id": "DOGFOOD-PROVIDER",
           "requirements": [
             "C01",
-            "C05"
+            "C03"
           ],
-          "expected": "Pi工具与交付协议、失败和原预算保持。",
+          "expected": "Pi真实接入协议、工具错误与最终输出继续可用；原64KiB压力与调用预算不放宽。提示更新与真实模型质量分开报告。",
           "evidence_kind": "runtime",
           "command": [
             "node",
@@ -275,12 +230,12 @@
           "timeout_seconds": 900
         },
         {
-          "id": "EFFECT-COMPACTION",
+          "id": "DOGFOOD-COMPACTION",
           "requirements": [
             "C01",
             "C05"
           ],
-          "expected": "原64KiB压力和原生压缩/续接，原预算及断言不放宽。",
+          "expected": "原64KiB/24次压力夹具全部通过，提示更新不突破载荷上限、压缩与调用预算。",
           "evidence_kind": "runtime",
           "command": [
             "node",
@@ -291,9 +246,9 @@
       ],
       "review": {
         "status": "passed",
-        "record": "docs/reviews/agent-effectiveness-review.json"
+        "record": "docs/reviews/dogfood-repair-review.json"
       },
-      "evidence": ".local/delivery/I2-AGENT-EFFECTIVENESS-result.json"
+      "evidence": ".local/delivery/I2-DOGFOOD-REPAIRS-result.json"
     }
   }
 }
@@ -301,10 +256,34 @@
 
 # Data Agent 当前记录
 
-更新：2026-10-18。唯一活动项目目录：`~/work_space/data_agent`。
+更新：2026-10-19。唯一活动项目目录：`~/work_space/data_agent`。
 
 
-## 当前增量：Agent效果边界修复（2026-10-18）
+## 当前增量：Dogfood证据审计与修复（2026-10-19）
+
+基线`5fe5260`，分支`codex/analysis-capabilities`，开工工作树干净。用户要求本地及最高档oracle-web核对后修复并同步文档；提交、推送与用户常驻服务升级不在本轮新授权中。沿用此前获准Flash做少量定向试用，同一trial与数据库不重置。
+
+裁决与实现见[试用交叉审计](reviews/dogfood-20261019.md)：B24是用户调查范围被扩大，权限过滤本身没有失效证据；B07以唯一命名指标替用户选择分母；B10是单位/精度歧义和输出不符，70元不等于金额算错100倍；B20从原Pi轨迹确认漏引粘贴SQL；B22复现43.19px位移并定位为输入框下方同步提示在API恢复后消失。
+
+- 系统与工具指引统一用户范围、实际`search_scope`及每次`business_domain`参数；未限定的定位过滤仍可自主调整，用户同意后可扩大。模糊别名或唯一命名不是用户采用，已有明确口径直接沿用；金额单位与精度分开，本次明确条件优先。
+- Rust完整消息/版本/权限/幂等/预算校验保持。执行`invalid_evidence`回执给出专用修正指引；只修已明确拒绝的漏引原话，先核对同一草稿状态，以新工具身份修正。旧调用参数不可改，已提交接回状态、unknown沿原身份查证。Node不自动代填引用或重发。
+- Workbench临时反馈进入对话滚动区；同步失败/恢复、发送失败及查询完成的4组位置采样均852.421875→852.421875，草稿、焦点、历史位置、通知与单查询身份保留。原<3px断言未放宽。
+
+证据：本机`.local/dogfood-audit-20261019/`保存旧码位移反例、首版提示失败、原/新工具轨迹、完整检查日志与Oracle证据；公开审计不含凭据/原始对话。Oracle实际`Power, item 5 of 5 (slider ARIA)`、提交及回答均核对，所拥有Chrome PID已退出、临时Profile已清理。建议按本地来源/轨迹交叉验证，没有把外部意见当作实现验收。
+
+专项通过：后台浏览器7组、对话授权9组（含实际Node工具收到新提示）、检索范围11组、provider本机协议16调用、原64KiB压力24调用/10摘要/最大65337B，445条契约及构建/静态/架构通过。提示首版导致原压力夹具预算耗尽，精简等价重复表述后通过；失败日志保留，没有提高调用/载荷上限。最终6组统一验收及审查以`delivery.increment`的状态与收据为准。
+
+Flash定向证据：原B24三次检索保留航空域，随后用户明确允许的检索只用合成零售域；B07先保存澄清而不生成默认SQL，自由回答后沿原任务修订，未执行；B10原句按分生成，授权后实际7000分，元显示变体保持未执行且不改长期偏好；B20粘贴变体完整引用原话，平台仅一次提交，三渠道51000/39000/23000分。B20变体不含旧三轮前史，且该样本没有触发新hint，不能作为真实模型同轮错误自修证明。新增52次结算约0.32美元；原4条unknown身份/预留保持，无新增unknown，无在途运行。
+
+E19同规模、同断言的诊断副本完整退出0，首次建索引及两次丢库重建和其余8组通过；首次745.45秒，后续两段各自仍在900秒内。旧驱动在整条命令900.11秒强杀，未留下阶段日志，原结果仍保留为未完成；没有改检索排序、扩大阶段超时或缩小表数。当前证明协议索引/恢复，不能代表千表真实模型语义质量或生产低延迟。
+
+覆盖与质量缺口：B14双查询第二项、C19原39行案例执行、C22补录后回读仍未补齐；M18原unknown不重做。真实元显示变体SQL正确，但文字一处把`is_test=0`误称测试订单，作为模型文字一致性缺口保留，不能计整段业务解释通过。单个样本成功不代表稳定遵循率；本轮不增加模型复核层或关键词补丁。
+
+文档同步：README更新最新证据入口及分析成果能力；开发指南补复测、原账本与长专项规则；系统设计与模块契约明确范围/歧义/单位/执行修正和反馈布局，修正旧文档“普通修订关闭问题”的过期描述。本机120项手册沿原HTML版式更新环境/角色核对说明，原案例/独立答案/本地记录键保持；1440/390宽度、120项筛选及无横向溢出通过，STE零警告。历史手册验证收据不改写。
+
+验收与要求变更：没有修改业务预期或独立答案；B22保留<3px，增加同步失败/恢复及发送失败反例；B20保留`invalid_evidence`码和拒绝边界，增验提示、Node实际回执、原身份异参冲突与新调用正常授权。E19诊断只增加进度记录，原900秒阶段上限保持。上述未覆盖项不因本轮完成而被宣称全部完成。
+
+## 历史增量：Agent效果边界修复（2026-10-18）
 
 用户在最高档Oracle与本地交叉审计后授权四项一起修复。基线b62d8ef，开工工作树干净。范围与验收见上方I2-AGENT-EFFECTIVENESS；审计事实区分源码/契约/离线反例与未验证的真实模型效果。已有前三名排序、上下文分离、Pi压缩恢复及24次/连续失败3次政策保持。
 

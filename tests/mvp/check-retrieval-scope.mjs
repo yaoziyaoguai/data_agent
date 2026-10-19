@@ -488,6 +488,8 @@ try {
   });
   assert.deepEqual(narrow.objects, []);
   assert.match(narrow.note, /空结果不能证明不存在/);
+  assert.match(narrow.note, /用户限定范围内/);
+  assert.match(narrow.note, /扩大用户明确范围须先征得同意/);
   const broad = await search({
     query: "scoped_same_rule",
     kinds: ["document"],

@@ -435,7 +435,7 @@ async fn execute(pool: &MySqlPool, ctx: &AccessContext, input: Value) -> Result<
                 page["memories"] = json!(merged);
             }
             retrieval::bounded_search_reply(
-                json!({"objects":search.objects.into_iter().map(|object|retrieval::search_preview(object,text(args,"query").unwrap_or(""))).collect::<Vec<_>>(),"search_coverage":search.coverage,"search_scope":{"kinds":scope.kinds,"related_object_id":scope.anchor,"business_domain":scope.domain},"personal_memories":page["memories"],"selected_skills":page["selected_skills"],"next_asset_after":page["next_asset_after"],"asset_total":page["total"],"asset_cursor_invalid":page["cursor_invalid"]==true,"memory_retrieval":memory_retrieval,"retrieval_mode":if vector.state=="available"{"hybrid_authoritative"}else{"lexical_authoritative"},"note":"命中已回源。search_scope是本次检索范围；空结果只表示此范围未找到资料，不证明全空间不存在。search_coverage.state=candidate_limit或bounded表示只检查了有界候选或部分索引，空结果不能证明不存在；请调整范围或按已知ID读取。reply_coverage与omitted_objects说明回执裁剪，正文按同版entry_id/offset补读。个人记忆是查证线索；Skill仅列出本会话已选当前版本。query=*可分页查看本人有效资产目录，按next_asset_after继续；记忆正文用read_knowledge，Skill用read按行续读。"}),
+                json!({"objects":search.objects.into_iter().map(|object|retrieval::search_preview(object,text(args,"query").unwrap_or(""))).collect::<Vec<_>>(),"search_coverage":search.coverage,"search_scope":{"kinds":scope.kinds,"related_object_id":scope.anchor,"business_domain":scope.domain},"personal_memories":page["memories"],"selected_skills":page["selected_skills"],"next_asset_after":page["next_asset_after"],"asset_total":page["total"],"asset_cursor_invalid":page["cursor_invalid"]==true,"memory_retrieval":memory_retrieval,"retrieval_mode":if vector.state=="available"{"hybrid_authoritative"}else{"lexical_authoritative"},"note":"命中已回源。search_scope是本次检索范围；空结果只表示此范围未找到资料，不证明全空间不存在。search_coverage.state=candidate_limit或bounded表示只检查了有界候选或部分索引，空结果不能证明不存在；可在用户限定范围内改写或按已知ID读取，扩大用户明确范围须先征得同意。reply_coverage与omitted_objects说明回执裁剪，正文按同版entry_id/offset补读。个人记忆是查证线索；Skill仅列出本会话已选当前版本。query=*可分页查看本人有效资产目录，按next_asset_after继续；记忆正文用read_knowledge，Skill用read按行续读。"}),
             )
         }
         "read_knowledge" => {
@@ -959,7 +959,19 @@ pub async fn invoke(pool: &MySqlPool, ctx: &AccessContext, input: Value) -> Resu
                 return replay_receipt(text(&input, "tool_name")?, receipt.clone());
             }
             if tool.state == "registered" {
-                let receipt = json!({"operation_id":tool.operation_id,"tool_name":input["tool_name"],"data":{"error":error.code,"hint":if error.code=="scope_incomplete"{"instruction_quote必须逐字包含完整指令起点（例如‘请记住：’），不能只引用冒号后的偏好。请对照本条用户原话修正引用；若含仅本次或不要保存，不得写入长期记忆。"}else if error.code=="skill_line_too_long"{"此Skill有单行超过50KiB，请让维护者在网页中分行后保存，再重新选用；本次未读取正文。"}else{"本次操作没有成功保存；请按错误原因处理，不能告知已记住。"}}});
+                let hint = match (input["tool_name"].as_str(), error.code) {
+                    (Some("execute_query"), "invalid_evidence") => {
+                        "本次执行授权被拒绝，未新增执行授权。instruction_quote须逐字包含本轮真实用户完整原话，包括粘贴SQL、换行、否定和限定；系统结果唤醒不能授权。先核对查询当前SQL、参数、状态和版本；若只是漏引原话且本轮仍有有效执行要求，可用新的工具调用修正，不必再次询问用户；不得修改已登记调用参数或另建查询。已提交查询只接回状态，未知先按原身份查证，不能换ID重做。任务、版本、权限与预算检查保持。"
+                    }
+                    (_, "scope_incomplete") => {
+                        "instruction_quote必须逐字包含完整指令起点（例如‘请记住：’），不能只引用冒号后的偏好。请对照本条用户原话修正引用；若含仅本次或不要保存，不得写入长期记忆。"
+                    }
+                    (_, "skill_line_too_long") => {
+                        "此Skill有单行超过50KiB，请让维护者在网页中分行后保存，再重新选用；本次未读取正文。"
+                    }
+                    _ => "本次操作未取得成功回执；请按错误原因核对，不得声称已执行或已保存。",
+                };
+                let receipt = json!({"operation_id":tool.operation_id,"tool_name":input["tool_name"],"data":{"error":error.code,"hint":hint}});
                 runtime::reject_tool_in_tx(&mut tx, &tool, &receipt).await?;
             }
         }

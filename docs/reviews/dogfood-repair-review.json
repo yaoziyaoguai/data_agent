@@ -1,0 +1,305 @@
+{
+  "schema": 1,
+  "increment_id": "I2-DOGFOOD-REPAIRS",
+  "baseline": "5fe5260",
+  "reviewer": "correctness",
+  "reviewer_identity": "review_dogfood_repairs：本轮未参与产品、测试或文档实现的独立审查者",
+  "conclusion": "passed",
+  "summary": "当前冻结差异的独立审查通过，无未关闭的确定性阻断。已核对原要求、模块契约、真实轨迹、专项日志，并独立重算合成SQL、平台提交数及账本。模型质量和覆盖缺口保留；本记录不代替主代理随后实际运行的六组统一验收。",
+  "scope_sha256": "9854997eaf7ffd68e2d0a84306d917bf8ca573da0ca02898d76b1347a33ad1ae",
+  "reviewed_at": "2026-10-18T17:26:47.334755+00:00",
+  "scope": {
+    "input_files": 77,
+    "contract_sha256": "1f9d559142dab9222b04f773f192de14d52b09e52e3daad83551e6b37fa68d4d",
+    "decisions_sha256": "c6456f454f3efb5763440301d1ea3298c518024f0fede2cb6be7dd86fa103e3b",
+    "boundary": "逐行核对本轮改动与关键调用链；范围指纹用于失效检测，不宣称逐行重审全部依赖或整个MVP。"
+  },
+  "review_method": [
+    "只读核对AGENTS/CURRENT、D09/C01–C08及M04–M08/M11/M12契约；追踪完整消息授权、拒绝回放、事务、Pi工具和消息滚动路径。",
+    "独立执行git diff --check、内存SQLite重算及原平台账只读核对；审查者只写本记录，未改产品/测试/CURRENT，未启动服务、调用模型或外部咨询。"
+  ],
+  "requirements": [
+    {
+      "requirements": [
+        "C02",
+        "C06"
+      ],
+      "cases": [
+        "B24"
+      ],
+      "assessment": "提示、参数说明及普通/裁剪回执统一用户范围：每次传business_domain、核对search_scope，获准后才扩大；未限定过滤仍可自主调整。权限实现未变，范围并未冒称硬权限。首版Flash撤域失败保留，最终3次查空保留域，随后只查获准域；原范围专项11组通过。"
+    },
+    {
+      "requirements": [
+        "C01",
+        "C03"
+      ],
+      "cases": [
+        "B07"
+      ],
+      "assessment": "唯一命名指标/别名不能代用户选择分子、分母或时间归属；已采用口径可沿用。真实样本先持久澄清且无SQL，自由回答后同任务条件2→3，草稿未提交。沿用原澄清状态与Pi循环。"
+    },
+    {
+      "requirements": [
+        "C03",
+        "C04"
+      ],
+      "cases": [
+        "B10"
+      ],
+      "assessment": "单位和精度分开，本次明确条件优先；原“保留分”歧义保留，不宣称金额错100倍。实际7000分与独立重算相符；元变体计算70.0且新稿未提交。is_test=0的一处文字错误保留为质量缺口。"
+    },
+    {
+      "requirements": [
+        "C04",
+        "C05"
+      ],
+      "cases": [
+        "B20",
+        "M18"
+      ],
+      "assessment": "仅execute_query+invalid_evidence新增提示；不自动补引或重试。原完整消息、归属、版本、权限、预算和事务不变。最终9组验证Node实际hint、旧拒绝回放、同ID异参冲突、新调用授权及恢复一次提交。真实变体完整原话匹配，平台只读账为1条提交。unknown仍沿原身份查证。"
+    },
+    {
+      "requirements": [
+        "D09",
+        "C08"
+      ],
+      "cases": [
+        "B22"
+      ],
+      "assessment": "旧43.1875px位移来自composer下方同步提示消失。临时反馈移入原滚动区，发送/任务规则和错误重试保留。原<3px断言未放宽；四组均852.421875→852.421875。7组专项同时检查草稿/焦点、查询归属、历史位置、重启和短视口。"
+    },
+    {
+      "requirements": [
+        "C01",
+        "C05",
+        "C07"
+      ],
+      "cases": [
+        "Pi原生压缩与provider回归"
+      ],
+      "assessment": "只改既有提示/回执，无新循环、规划器、压缩器或SQL特例。128KiB常规、24次/连续临时失败3次及原64KiB夹具未改。首版超预算保留；最终压力24调用/10原生摘要/最大65337B，provider本机协议16调用且预留0。"
+    },
+    {
+      "requirements": [
+        "C06",
+        "C07"
+      ],
+      "cases": [
+        "E19",
+        "B14",
+        "C19",
+        "C22"
+      ],
+      "assessment": "E19诊断副本仅改导入/进度/产物位置；原1204表/2408新对象、断言和每阶段900秒上限保持，8组完成并清理集合，首次745.45秒。旧外层900秒强杀仍未完成。B14/C19/C22覆盖缺口和M18 unknown保持，120项分类不转成整体准确率。"
+    }
+  ],
+  "files": {
+    "product_changes": [
+      "apps/agent/session/resources.ts",
+      "apps/agent/tools/data-tools.ts",
+      "apps/web/src/features/workbench/Workbench.tsx",
+      "crates/data-agent/src/use_cases/data_tools.rs",
+      "crates/data-agent/src/modules/retrieval/search_reply.rs"
+    ],
+    "acceptance_changes": [
+      "tests/mvp/check-background-queries-browser.mjs",
+      "tests/mvp/check-conversational-query.mjs",
+      "tests/mvp/check-retrieval-scope.mjs"
+    ],
+    "documentation": [
+      "README.md",
+      "docs/CURRENT.md",
+      "docs/semantic-retrieval-design.md",
+      "docs/architecture/implementation-design.md",
+      "docs/architecture/runtime-modules.md",
+      "docs/architecture/implementation-views.md",
+      "docs/development.md",
+      "docs/reviews/dogfood-20261019.md"
+    ],
+    "naming_and_ownership": "新增名称conversation-feedback/conversation-error和局部hint对应展示/错误职责；没有以增量编号命名实现，没有循环依赖、跨模块裸SQL或私有存储越界。"
+  },
+  "findings": [],
+  "independent_observations": {
+    "synthetic_sql_recomputation": {
+      "environment": "Python sqlite3 :memory:，从原docs/sources/analysis/schema.sql、seed.sql、etl.sql构造",
+      "B10_cents": [
+        [
+          "7000"
+        ]
+      ],
+      "B10_yuan_unexecuted_draft": [
+        [
+          70.0
+        ]
+      ],
+      "B20_cents": [
+        [
+          "app",
+          "51000"
+        ],
+        [
+          "store",
+          "23000"
+        ],
+        [
+          "web",
+          "39000"
+        ]
+      ]
+    },
+    "B20_readonly_platform_submissions": 1,
+    "composer_positions": [
+      {
+        "scenario": "query-completed",
+        "before": 852.421875,
+        "after": 852.421875
+      },
+      {
+        "scenario": "sync-failed",
+        "before": 852.421875,
+        "after": 852.421875
+      },
+      {
+        "scenario": "send-failed",
+        "before": 852.421875,
+        "after": 852.421875
+      },
+      {
+        "scenario": "sync-recovered",
+        "before": 852.421875,
+        "after": 852.421875
+      }
+    ],
+    "ledger_recalculation": {
+      "new_settled_agent_calls": 52,
+      "cost_delta_micros": 321261,
+      "old_unknown_count": 4,
+      "old_unknown_identities_and_reservations_unchanged": true,
+      "remaining_running_or_queued": false
+    },
+    "git_diff_check": "passed"
+  },
+  "evidence": [
+    {
+      "path": ".local/dogfood-agent-20261018-154126/continuation-20261018-211144/case-matrix.json",
+      "sha256": "b74b83e5b66f0f4d197a0a7e16c150393c3a33929041c56432115234342ef006"
+    },
+    {
+      "path": ".local/dogfood-audit-20261019/background-before/layout.json",
+      "sha256": "9e20b30549469888df114550e170cc3cdeaa0cf013e50739a446d993ad28166c"
+    },
+    {
+      "path": ".local/dogfood-audit-20261019/background-after-report.json",
+      "sha256": "f7d1f1be22e2af57ebb202d9ac5898a629a823618d44584c125655f6335c3473"
+    },
+    {
+      "path": ".local/dogfood-audit-20261019/conversational-query-final-feedback.log",
+      "sha256": "3f6185eec8020a9dc32ce5e78f03a7e55b9bcd6b710bd8d246e03e369f31c27d"
+    },
+    {
+      "path": ".local/dogfood-audit-20261019/retrieval-scope.log",
+      "sha256": "3829e19bd7c2f3545dc9b2d04c0d11949d06836c1c0b187aaae0582e477b5484"
+    },
+    {
+      "path": ".local/dogfood-audit-20261019/native-compaction-final.log",
+      "sha256": "c6f43430361cd62eda9dfcfa1b2ff0b632412a2722e12cf088d1b2654ba9ae76"
+    },
+    {
+      "path": ".local/dogfood-audit-20261019/data-provider-final.log",
+      "sha256": "f1bdb6024eecf5b46b0084f0001c291dd56490e18957a728858a64bedb69fa8c"
+    },
+    {
+      "path": ".local/dogfood-audit-20261019/engineering.log",
+      "sha256": "76b91c063214afc582ce4f086cd313af9b09f61ded66d0a280f595f7b709749d"
+    },
+    {
+      "path": ".local/dogfood-audit-20261019/B24-after-trace.json",
+      "sha256": "6d3fa7bbe3188aa96f0dc60d0b7247c41d1cfe6e208de8cc9e24fc97918b4886"
+    },
+    {
+      "path": ".local/dogfood-audit-20261019/B24-final-trace.json",
+      "sha256": "c5e25478949b4e121856ece96aba29f51096f4e0bb6eac3c8ba1d21561f19805"
+    },
+    {
+      "path": ".local/dogfood-audit-20261019/B24-expanded-trace.json",
+      "sha256": "c2a535d3a0f171e713f5ef85b72f523ee87b4eedc9aab1ca23f609a87303448a"
+    },
+    {
+      "path": ".local/dogfood-audit-20261019/B07-after.json",
+      "sha256": "164de968a3050114292ffcbab556e3bc8b10e08d2070e2ce8987efe62b159f0e"
+    },
+    {
+      "path": ".local/dogfood-audit-20261019/B07-resolved.json",
+      "sha256": "dd4bbe6a9692285f4e9204892476c4b174e97e763bec31db165816b0ca9f3ddc"
+    },
+    {
+      "path": ".local/dogfood-audit-20261019/B10-final-result.json",
+      "sha256": "b2d24a9a03c91c2decc92a20e33d1b26df6eead159e91ea9120408bea5c2594c"
+    },
+    {
+      "path": ".local/dogfood-audit-20261019/B10-yuan.json",
+      "sha256": "2613af4d6fb5ac28d438d7cb37535f601f771ab486b0305a4e4ffff748b7cea2"
+    },
+    {
+      "path": ".local/dogfood-audit-20261019/B20-before-trace.json",
+      "sha256": "7a2e71835658dc571c34b21ed760eb4d4d60e233cd88ede64c3963acdd200d9a"
+    },
+    {
+      "path": ".local/dogfood-audit-20261019/B20-after-trace.json",
+      "sha256": "c2664c0981f848c31824ed9bb11eb8e6ce2b7f56e8c82b9c2540668eb3cb9ba0"
+    },
+    {
+      "path": ".local/dogfood-audit-20261019/runtime-before.json",
+      "sha256": "47086c40f2081873a7767bdfd0e62ae1cde7910c575eefcef0cebef73b022d9d"
+    },
+    {
+      "path": ".local/dogfood-audit-20261019/runtime-after.json",
+      "sha256": "fe9d21b88f1c6c0035175ec1518c3a99396b48c896f312ff15a3b40860b2a295"
+    },
+    {
+      "path": ".local/dogfood-audit-20261019/hybrid-diagnostic.mjs",
+      "sha256": "f6767e7625d2ab9c7fc5addf2cd6824cca6aa0a8da8b6ec478a2e8795931699e"
+    },
+    {
+      "path": ".local/dogfood-audit-20261019/hybrid-result.json",
+      "sha256": "f8ecca38fef48389e553c0efd4d8c90ac2c92a6bf378bf3d7cafb75f4f41eca5"
+    },
+    {
+      "path": ".local/dogfood-audit-20261019/oracle-evidence.json",
+      "sha256": "8237b766fc66812354f18fd93c30c2d592637c686b0a7e1d13e846466ebc7eca"
+    }
+  ],
+  "residual_risks": [
+    "业务范围、歧义与单位理解仍依赖真实模型；提示和这次样本不能保证所有自然语言、长历史及恢复场景稳定遵循，也没有新增硬业务域权限。",
+    "真实元显示变体SQL保持is_test=0，但一句说明误叫测试订单；原报告明确保留为模型文字一致性缺口，单位专项不能计整段解释全部正确。",
+    "64KiB压力样本最大65337B且用满24次原trial调用预算，只证明冻结夹具；没有据此外推任意历史、工具序列或生产余量。"
+  ],
+  "testing_gaps": [
+    "主代理尚未执行本次冻结审查后的统一六组验收；必须全部成功、无超时且指纹一致才能关闭增量。",
+    "B20真实变体不含原三轮前史，首次即引用完整原话，未实际触发新hint；真实模型同轮自修仍未证明，当前由正式API/Pi工具受控反例证明反馈和身份边界。",
+    "B14双查询的第二项、C19原39行案例执行、C22补录正文后回读未补齐；M18旧unknown不允许换ID重做，因此原能力结果仍不能判断通过。",
+    "未重新执行全部120项；未建立多样本稳定遵循率，千表专项仅证明合成协议索引/恢复，未证明千表真实模型语义质量或生产延迟。"
+  ],
+  "unified_verification": {
+    "status_at_review": "not_started",
+    "command": "make verify-increment",
+    "required_command_groups": 6,
+    "acceptance_ids": [
+      "DOGFOOD-BUILD",
+      "DOGFOOD-COMPOSER",
+      "DOGFOOD-AUTHORIZATION",
+      "DOGFOOD-SCOPE",
+      "DOGFOOD-PROVIDER",
+      "DOGFOOD-COMPACTION"
+    ],
+    "expected_receipt": ".local/delivery/I2-DOGFOOD-REPAIRS-result.json",
+    "condition": "本记录冻结后由主代理实际运行六组；审查passed不代替运行收据，失败、超时或指纹变化不能关闭增量。"
+  },
+  "limitations": [
+    "六组统一验收尚未执行；审查passed只认证当前范围核对，必须随后全部成功、无超时且指纹一致。",
+    "专项运行证据由此前实际执行产生；审查者额外独立重算，未重跑全120项或真实模型。仅合成平台/资料，不证明真实Datasight、稳定遵循率、千表语义质量或生产延迟。",
+    "只公开相对路径和指纹，不公开原对话、凭据、个人绝对路径或私人Oracle链接。Oracle实际Power 5/5意见不代替运行验收；scope是普通本地失效检测，非不可篡改认证。"
+  ]
+}
