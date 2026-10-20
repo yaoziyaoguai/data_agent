@@ -1,6 +1,6 @@
 # README 图片来源
 
-这些图片用于[项目首页](../../README.md)。本轮共展示9张图：1张封面、4张概念说明图、3张实际页面截图和1张正式架构图。
+这些图片用于[项目首页](../../README.md)。本轮共展示10张图：1张封面、4张概念说明图、4张实际页面截图和1张正式架构图。
 
 ## 视觉方向
 
@@ -20,6 +20,7 @@
 | [workbench-sql.jpg](workbench-sql.jpg) | 2026-10-11，本地正式工作台截图，展示合成订单结果、CSV 下载、最终 SQL 与模型选择 |
 | [semantic-management.jpg](semantic-management.jpg) | 2026-10-11，本地正式语义管理页截图，合成维护者 Carol 按本人负责范围查看表与字段 |
 | [personal-skills.png](personal-skills.png) | 现有资产体验浏览器检查的 1440 × 1000 截图，展示分析模板、正文、适用范围、附件与保存操作 |
+| [model-configuration.png](model-configuration.png) | 2026-10-20，本地正式模型配置页，合成管理员 Alice 查看首次导入的服务与模型；只有密钥已设置状态，无凭据值 |
 | [data-agent-overview.svg](../architecture/data-agent-overview.svg) | 现有正式架构总览；另有[可编辑 draw.io](../architecture/data-agent-c4-container.drawio) |
 
 工作台和语义截图按浏览器实际返回的 JPEG 格式保存，未重新绘制界面。旧截图保留为历史资料；旧封面与旧版图片说明可从 Git 历史查看。浏览器业务试用范围见[本地试用记录](../reviews/local-dogfood-20261011.md)。

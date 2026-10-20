@@ -74,6 +74,10 @@ Data Agent 的语义角色与 Datasight 的查询、取数和 SQL 执行权限�
 
 每条用户消息最多调用模型 24 次，连续临时失败 3 次停止；恢复、摘要和后台结果解释沿用原消息的额度。三种协议已通过本地合成端点测试，真实供应商兼容性与回答质量仍需分别验证。配置步骤和主密钥保管见[开发说明](docs/development.md)，配置版本的流转见[模型配置时序图](docs/architecture/module-diagrams/V06.svg)。
 
+![超级管理员模型配置页面，服务连接和可选模型分开维护](docs/images/model-configuration.png)
+
+*合成空间的实际管理页。凭据保存后只显示是否已设置，普通用户没有管理入口。*
+
 ### 持续对话与结果查看
 
 历史在工作台侧栏，同一对话可持续多轮、多项分析。新对话选用 Skill 或切换页面时保留未发草稿和模型选择；发送回执未确认时，按原消息重试，保留后来输入的内容。手机导航、资料和长表格各自滚动，返回对话可继续输入。空闲页面减少刷新，返回时重新核对状态。
@@ -273,6 +277,7 @@ make verify-shared-embedding verify-memory
 | 想了解 | 从这里开始 |
 | --- | --- |
 | 当前状态、有效决定、剩余事项 | [CURRENT](docs/CURRENT.md) |
+| 六篇图文工程实践与固定提交源码 | [Data Agent 工程实践系列](https://wangjinkun333.me/blog/series/data-agent-engineering)：整体设计、知识与个人积累、查询恢复、工程维护、来源追踪、多模型接入 |
 | 交给 Coding Agent 做全功能与复杂任务试用 | [2026-10-19 Dogfood 包](docs/dogfood/2026-10-19/README.md)：160项、执行Prompt、独立参考与接续记录 |
 | 最新试用问题、修复与验证边界 | [一般性根因复核](docs/reviews/dogfood-root-causes-20261020.md)；此前[试用交叉审计](docs/reviews/dogfood-20261019.md)与[本地试用报告](docs/reviews/local-dogfood-20261011.md)保留各自时点的结论 |
 | 系统方案和需求边界 | [系统设计](docs/semantic-retrieval-design.md) |

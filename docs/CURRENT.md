@@ -4,7 +4,7 @@
   "schema": 1,
   "phase": "release_closeout",
   "goal_revision": 76,
-  "environment": "用户同意作为阶段试用版收尾，授权更新文档与图、分批提交推送、恢复本地服务及发表系列文章。模型配置已验收；真实模型语义缺口继续保留。",
+  "environment": "阶段试用版收尾：业务与架构文档已分批推送，本地服务已更新，六篇工程文章已发表并核对公开页面。模型配置已验收；真实模型语义缺口继续保留。",
   "verification": {
     "level": "increment",
     "reason": "保留原失败；新增通用业务、协议及浏览器回归，并独立核对修复与边界。",
@@ -169,7 +169,7 @@
 
 # Data Agent 当前记录
 
-## 当前收尾：阶段试用版与工程文章（2026-10-20）
+## 收尾完成：阶段试用版与工程文章（2026-10-20）
 
 用户接受阶段试用版定位，要求同步仓库文档和架构图、分批提交推送、更新本地服务，并润色、配图和发表系列文章。此授权取代上一节模型配置增量中“不提交推送或更新常驻服务”的本轮操作限制；不增加产品功能，不把原可靠性验收改为通过，不追加模型质量抽样。
 
@@ -184,6 +184,14 @@
 文档与图已完成：README 补齐模型管理入口和阶段边界，C4 图源/导出、31 张实现图、第二版讲解与历史页面提示同步。`make build`、`make verify-delivery verify-materials`、架构文档检查通过；375 项准备材料检查、213 个文档链接通过，图册无页面异常或移动端溢出。独立审查 `.local/release-closeout-20261020/documentation-review.json` 通过，两处过度保证措辞已修正。代码与对应契约、测试、迁移及实施文档已提交为 `a166e95`。
 
 本地更新先备份原业务库，沿原运行目录、身份、模型 profile 和 `docs/sources/analysis` 合成快照启动。初次遗漏原来源目录触发平台一致性拒绝，核对原启动记录和来源指纹后已恢复，未重建业务库或更换身份。健康与浏览器结果在收尾目录分别记录，不发送新增付费试用消息。
+
+交付结果：业务提交 `a166e95` 和文档/图提交 `3b6df0b` 已推送到 `origin/codex/analysis-capabilities`。本地工作台 `http://127.0.0.1:27173/` 已运行最新业务代码，API、Pi 桥、合成平台、Mem0 和 Web 均返回健康状态 200；管理员模型配置接口 200、普通用户 403，桌面与 390px 窄屏检查通过，原登录身份指纹保持。收据为 `.local/release-closeout-20261020/service-health.json`、`service-final-health.json`，完整库备份仅保留本机。最后一批文档补入模型管理实际截图、图片来源及系列入口，不改变运行代码。
+
+六篇[工程实践系列](https://wangjinkun333.me/blog/series/data-agent-engineering)已公开：旧四篇直接更新正文、代码引用与相关机制图，保留原 slug 与发布日期，没有追加版本说明；新增[生成内容的来源追踪与失效处理](https://wangjinkun333.me/blog/data-agent-engineering-content-authority)和[基于 Pi SDK 的多模型接入与恢复一致性](https://wangjinkun333.me/blog/data-agent-engineering-model-runtime)。源码固定到公开提交 `3b6df0b`；新增或替换 11 张技术图及 1 张实际管理截图。独立事实审查通过，纠正了候选截断先后顺序、排序数量保护与字节裁剪混同等过度表述。正文明确大范围检索仍可能因候选上限遗漏相关对象，不能由前三项保护推断全文完整交付。
+
+发布后的公开 API 与页面均已核对：文章 ID 27–32 按 1–6 排序，合集更新未改变文章正文；六篇共 26 处正文图片在桌面与 390px 手机视口均成功加载，无页面异常或横向溢出。104 个正文源码链接均使用固定提交；图像、页面及系列已目视复核。私有稿件、审查、发布回执和截图在 `.local/release-closeout-20261020/articles/`，主要证据为 `legacy-factual-review.json`、`series-update-receipt.json`、`public-browser-check.json`。这些发布与工程检查不关闭上方列出的真实模型语义缺口。
+
+最后文档批次的 `make verify-delivery verify-materials` 通过：16 项交付检查器测试、376 项材料静态检查、214 个文档链接；`git diff --check` 通过。结果保存在 `.local/release-closeout-20261020/final-document-check.log`。本批只更新 README、图片及当前记录，沿已完成业务构建与增量验收，不重复付费模型试验。
 
 ## 已完成：超级管理员模型配置（2026-10-20）
 
