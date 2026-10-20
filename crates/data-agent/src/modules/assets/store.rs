@@ -4,6 +4,204 @@ use crate::{
 };
 use serde_json::{Value, json};
 use sqlx::Row;
+pub const TEXT_FIELDS: [&str; 5] = ["name", "body", "scope", "files", "source_text"];
+
+fn empty_text(value: &Value) -> bool {
+    value.is_null()
+        || value.as_str().is_some_and(str::is_empty)
+        || value.as_array().is_some_and(Vec::is_empty)
+}
+
+async fn assert_asset_scope_in_tx(
+    tx: &mut AppTx<'_>,
+    ctx: &AccessContext,
+    asset: &str,
+) -> Result<()> {
+    let allowed: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM personal_assets WHERE id=? AND space_id=? AND (owner_id=? OR (visibility='space' AND kind='skill'))")
+        .bind(asset).bind(&ctx.space_id).bind(&ctx.user_id).fetch_one(tx.connection()).await?;
+    if allowed != 1 {
+        return Err(Error::new("not_available"));
+    }
+    Ok(())
+}
+
+async fn stored_authorities(
+    tx: &mut AppTx<'_>,
+    asset: &str,
+    version: u64,
+) -> Result<Option<Value>> {
+    Ok(sqlx::query_scalar::<_, Option<sqlx::types::Json<Value>>>(
+        "SELECT field_authorities FROM personal_asset_versions WHERE asset_id=? AND version=?",
+    )
+    .bind(asset)
+    .bind(version)
+    .fetch_optional(tx.connection())
+    .await?
+    .ok_or(Error::new("not_available"))?
+    .map(|v| v.0))
+}
+
+pub async fn read_field_authorities_in_tx(
+    tx: &mut AppTx<'_>,
+    ctx: &AccessContext,
+    asset: &str,
+    version: &Value,
+) -> Result<Value> {
+    assert_asset_scope_in_tx(tx, ctx, asset).await?;
+    stored_authorities(tx, asset, epoch(version.as_str().unwrap_or("0"))?)
+        .await?
+        .ok_or(Error::new("stale_context"))
+}
+
+/// 仅返回M09自己的历史操作身份；调用方由运行模块查明哪些身份由工具产生。
+pub async fn legacy_operation_ids_in_tx(
+    tx: &mut AppTx<'_>,
+    ctx: &AccessContext,
+    asset: &str,
+    version: &Value,
+) -> Result<Option<Vec<String>>> {
+    assert_asset_scope_in_tx(tx, ctx, asset).await?;
+    legacy_operation_ids(tx, asset, epoch(version.as_str().unwrap_or("0"))?, 0).await
+}
+
+async fn legacy_operation_ids(
+    tx: &mut AppTx<'_>,
+    asset: &str,
+    version: u64,
+    depth: usize,
+) -> Result<Option<Vec<String>>> {
+    if depth > 8 {
+        return Err(Error::new("stale_context"));
+    }
+    if stored_authorities(tx, asset, version).await?.is_some() {
+        return Ok(None);
+    }
+    let mut operations: Vec<String> = sqlx::query_scalar("SELECT operation_id FROM asset_operations WHERE JSON_UNQUOTE(JSON_EXTRACT(receipt,'$.id'))=?")
+        .bind(asset).fetch_all(tx.connection()).await?;
+    if let Some(row) = sqlx::query(
+        "SELECT source_asset_id,source_version FROM skill_publications WHERE public_asset_id=?",
+    )
+    .bind(asset)
+    .fetch_optional(tx.connection())
+    .await?
+        && let Some(source) = Box::pin(legacy_operation_ids(
+            tx,
+            &row.get::<String, _>("source_asset_id"),
+            row.get("source_version"),
+            depth + 1,
+        ))
+        .await?
+    {
+        operations.extend(source);
+    }
+    operations.sort();
+    operations.dedup();
+    Ok(Some(operations))
+}
+
+/// 用显式的工具来源证据物化旧字段归属；同文/启停/发布沿旧来源，未知仍保留null。
+pub async fn materialize_field_authorities_in_tx(
+    tx: &mut AppTx<'_>,
+    ctx: &AccessContext,
+    asset: &str,
+    version: &Value,
+    model_operations: &[String],
+) -> Result<()> {
+    assert_asset_scope_in_tx(tx, ctx, asset).await?;
+    let version = epoch(version.as_str().unwrap_or("0"))?;
+    let fields = version_authorities(tx, asset, version, model_operations, 0).await?;
+    sqlx::query("UPDATE personal_asset_versions SET field_authorities=? WHERE asset_id=? AND version=? AND field_authorities IS NULL")
+        .bind(sqlx::types::Json(&fields)).bind(asset).bind(version).execute(tx.connection()).await?;
+    sqlx::query("UPDATE personal_assets SET field_authorities=? WHERE id=? AND version=? AND field_authorities IS NULL")
+        .bind(sqlx::types::Json(&fields)).bind(asset).bind(version).execute(tx.connection()).await?;
+    Ok(())
+}
+
+async fn version_authorities(
+    tx: &mut AppTx<'_>,
+    asset: &str,
+    version: u64,
+    model_operations: &[String],
+    depth: usize,
+) -> Result<Value> {
+    if depth > 8 {
+        return Err(Error::new("stale_context"));
+    }
+    if let Some(authority) = stored_authorities(tx, asset, version).await? {
+        return Ok(authority);
+    }
+    let rows = sqlx::query("SELECT version,body,field_authorities FROM personal_asset_versions WHERE asset_id=? AND version<=? ORDER BY version")
+        .bind(asset).bind(version).fetch_all(tx.connection()).await?;
+    let latest = rows.last().ok_or(Error::new("not_available"))?;
+    if latest.get::<u64, _>("version") != version {
+        return Err(Error::new("not_available"));
+    }
+    let operations = sqlx::query("SELECT operation_id,JSON_UNQUOTE(JSON_EXTRACT(receipt,'$.version')) AS version FROM asset_operations WHERE JSON_UNQUOTE(JSON_EXTRACT(receipt,'$.id'))=?")
+        .bind(asset).fetch_all(tx.connection()).await?;
+    let confirmed: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM skill_drafts WHERE asset_id=?")
+        .bind(asset)
+        .fetch_one(tx.connection())
+        .await?;
+    let publication = sqlx::query(
+        "SELECT source_asset_id,source_version FROM skill_publications WHERE public_asset_id=?",
+    )
+    .bind(asset)
+    .fetch_optional(tx.connection())
+    .await?;
+    let published_sources = if let Some(row) = publication {
+        Some(
+            Box::pin(version_authorities(
+                tx,
+                &row.get::<String, _>("source_asset_id"),
+                row.get("source_version"),
+                model_operations,
+                depth + 1,
+            ))
+            .await?,
+        )
+    } else {
+        None
+    };
+    let mut sources = json!({});
+    let mut previous: Option<Value> = None;
+    for row in rows {
+        let body = row.get::<sqlx::types::Json<Value>, _>("body").0;
+        if let Some(known) = row.get::<Option<sqlx::types::Json<Value>>, _>("field_authorities") {
+            sources = known.0;
+        } else {
+            let version = row.get::<u64, _>("version");
+            let version_operations = operations
+                .iter()
+                .filter(|operation| {
+                    operation.get::<Option<String>, _>("version").as_deref()
+                        == Some(version.to_string().as_str())
+                })
+                .collect::<Vec<_>>();
+            let human = !version_operations.is_empty()
+                && version_operations.iter().all(|operation| {
+                    !model_operations.contains(&operation.get::<String, _>("operation_id"))
+                });
+            for field in TEXT_FIELDS {
+                if previous
+                    .as_ref()
+                    .is_none_or(|old| old[field] != body[field])
+                {
+                    sources[field] = if empty_text(&body[field]) {
+                        json!({"origin":"user"})
+                    } else if version == 1 && published_sources.is_some() {
+                        published_sources.as_ref().expect("published sources")[field].clone()
+                    } else if human && !(version == 1 && confirmed > 0) {
+                        json!({"origin":"user"})
+                    } else {
+                        Value::Null
+                    };
+                }
+            }
+        }
+        previous = Some(body);
+    }
+    Ok(sources)
+}
 fn body(r: &sqlx::mysql::MySqlRow) -> Value {
     let mut v = r.get::<sqlx::types::Json<Value>, _>("body").0;
     v["owner_id"] = json!(r.get::<String, _>("owner_id"));
@@ -59,6 +257,7 @@ async fn persist(
     key: &str,
     input: &Value,
     value: &Value,
+    authorities: &Value,
 ) -> Result<()> {
     sqlx::query("INSERT INTO personal_assets(id,owner_id,space_id,version,kind,state,body,visibility) VALUES(?,?,?,?,?,?,?,?) ON DUPLICATE KEY UPDATE version=VALUES(version),state=VALUES(state),body=VALUES(body)").bind(value["id"].as_str()).bind(value["owner_id"].as_str().unwrap_or(&ctx.user_id)).bind(&ctx.space_id).bind(epoch(value["version"].as_str().unwrap_or("0"))?).bind(value["kind"].as_str()).bind(value["state"].as_str()).bind(sqlx::types::Json(value)).bind(value["visibility"].as_str().unwrap_or("personal")).execute(tx.connection()).await?;
     sqlx::query("INSERT INTO personal_asset_versions(asset_id,version,body) VALUES(?,?,?)")
@@ -67,6 +266,19 @@ async fn persist(
         .bind(sqlx::types::Json(value))
         .execute(tx.connection())
         .await?;
+    sqlx::query("UPDATE personal_assets SET field_authorities=? WHERE id=?")
+        .bind(sqlx::types::Json(authorities))
+        .bind(value["id"].as_str())
+        .execute(tx.connection())
+        .await?;
+    sqlx::query(
+        "UPDATE personal_asset_versions SET field_authorities=? WHERE asset_id=? AND version=?",
+    )
+    .bind(sqlx::types::Json(authorities))
+    .bind(value["id"].as_str())
+    .bind(epoch(value["version"].as_str().unwrap_or("0"))?)
+    .execute(tx.connection())
+    .await?;
     record_operation(tx, ctx, key, input, value).await
 }
 async fn record_operation(
@@ -180,10 +392,43 @@ pub async fn save_authorized_in_tx(
     input: &Value,
     can_admin: bool,
 ) -> Result<Value> {
+    save_with_authority_in_tx(tx, ctx, input, can_admin, None).await
+}
+
+pub async fn save_with_authority_in_tx(
+    tx: &mut AppTx<'_>,
+    ctx: &AccessContext,
+    input: &Value,
+    can_admin: bool,
+    generated: Option<&Value>,
+) -> Result<Value> {
+    save_with_sources_in_tx(tx, ctx, input, can_admin, generated, None).await
+}
+
+pub async fn save_draft_in_tx(
+    tx: &mut AppTx<'_>,
+    ctx: &AccessContext,
+    input: &Value,
+    original: &Value,
+    authority: &Value,
+) -> Result<Value> {
+    save_with_sources_in_tx(tx, ctx, input, false, Some(authority), Some(original)).await
+}
+
+async fn save_with_sources_in_tx(
+    tx: &mut AppTx<'_>,
+    ctx: &AccessContext,
+    input: &Value,
+    can_admin: bool,
+    generated: Option<&Value>,
+    original: Option<&Value>,
+) -> Result<Value> {
     let key = input["operation_id"].as_str().unwrap_or("");
     if let Some(v) = begin_operation(tx, ctx, key, input).await? {
         return Ok(v);
     }
+    let mut previous = None;
+    let mut authorities = json!({});
     let (asset, version, state, owner, visibility, files) =
         if let Some(asset) = input["id"].as_str() {
             let old = locked(
@@ -197,6 +442,8 @@ pub async fn save_authorized_in_tx(
             if old["kind"] != input["kind"] {
                 return Err(Error::new("invalid_input"));
             }
+            authorities = read_field_authorities_in_tx(tx, ctx, asset, &old["version"]).await?;
+            previous = Some(old.clone());
             (
                 asset.to_string(),
                 epoch(old["version"].as_str().unwrap_or("0"))? + 1,
@@ -226,7 +473,20 @@ pub async fn save_authorized_in_tx(
     if v["kind"] == "skill" {
         super::skill_files::content(&v, "SKILL.md")?;
     }
-    persist(tx, ctx, key, input, &v).await?;
+    for field in TEXT_FIELDS {
+        if previous.as_ref().is_none_or(|old| old[field] != v[field]) {
+            authorities[field] = match generated {
+                Some(authority)
+                    if !empty_text(&v[field])
+                        && original.is_none_or(|draft| draft[field] == v[field]) =>
+                {
+                    json!({"origin":"generated","authority":authority})
+                }
+                _ => json!({"origin":"user"}),
+            };
+        }
+    }
+    persist(tx, ctx, key, input, &v, &authorities).await?;
     Ok(v)
 }
 pub async fn change_state_in_tx(
@@ -258,11 +518,12 @@ pub async fn change_state_authorized_in_tx(
         input["expected_version"].as_str().unwrap_or(""),
     )
     .await?;
+    let authorities = read_field_authorities_in_tx(tx, ctx, asset, &v["version"]).await?;
     require_edit(ctx, &v, can_admin)?;
     v["state"] = json!(state);
     v["selected"] = json!(false);
     v["version"] = json!((epoch(v["version"].as_str().unwrap_or("0"))? + 1).to_string());
-    persist(tx, ctx, key, &command, &v).await?;
+    persist(tx, ctx, key, &command, &v, &authorities).await?;
     Ok(v)
 }
 pub async fn select_in_tx(
@@ -361,12 +622,14 @@ pub async fn publish_in_tx(
     }
     super::skill_files::content(&value, "SKILL.md")?;
     let source_version = epoch(value["version"].as_str().unwrap_or("0"))?;
+    let mut authorities = read_field_authorities_in_tx(tx, ctx, asset, &value["version"]).await?;
     value["id"] = json!(id());
     value["version"] = json!("1");
     value["visibility"] = json!("space");
     value["source_text"] = json!("");
+    authorities["source_text"] = json!({"origin":"user"});
     value["selected"] = json!(false);
-    persist(tx, ctx, key, &command, &value).await?;
+    persist(tx, ctx, key, &command, &value, &authorities).await?;
     sqlx::query("INSERT INTO skill_publications(source_asset_id,public_asset_id,source_version,space_id) VALUES(?,?,?,?)").bind(asset).bind(value["id"].as_str()).bind(source_version).bind(&ctx.space_id).execute(tx.connection()).await?;
     Ok(value)
 }

@@ -424,6 +424,36 @@ pub async fn save_edit_in_tx(
         input["expected_version"].as_str().unwrap_or(""),
     )
     .await?;
+    if input["entry_id"] == "business_domain"
+        && !v["entries"].as_array().is_some_and(|entries| {
+            entries
+                .iter()
+                .any(|entry| entry["entry_id"] == "business_domain")
+        })
+    {
+        if input["clear_override"] == true
+            || v["entries"].as_array().is_some_and(|entries| {
+                entries.len() >= 200
+                    || entries
+                        .iter()
+                        .any(|entry| entry["path"] == "business_domain")
+            })
+        {
+            return Err(Error::new("invalid_input"));
+        }
+        v["entries"]
+            .as_array_mut()
+            .ok_or(Error::new("invalid_input"))?
+            .push(business_domain_entry());
+    }
+    if v["entries"].as_array().is_some_and(|entries| {
+        entries.iter().any(|entry| {
+            entry["entry_id"] == input["entry_id"] && entry["path"] == "business_domain"
+        })
+    }) && input["clear_override"] != true
+    {
+        validate_business_domain(&input["value"])?;
+    }
     if input["clear_override"] != true {
         if !input["structured_value"].is_null()
             && input["value"]
@@ -519,6 +549,15 @@ pub async fn create_in_tx(tx: &mut AppTx<'_>, ctx: &AccessContext, input: &Value
         "人工录入，尚无平台来源"
     };
     let mut v = json!({"id":id(),"kind":input["kind"],"name":input["name"],"version":"1","state":"enabled","entries":[{"entry_id":"body","path":"body","label":"正文","source_facts":{"complete":false,"gap":gap},"suggestion":{},"human_override":{"value":input["body"],"structured_value":input["structured_value"],"edited_by":ctx.user_id,"source_url":input["source_url"]},"effective_value":input["body"],"review_state":"confirmed"}],"related_ids":input["related_ids"],"source_id":null,"source_version":"0","updated_by":ctx.user_id,"created_by":ctx.user_id});
+    if let Some(domain) = input.get("business_domain") {
+        validate_business_domain(domain)?;
+        let mut entry = business_domain_entry();
+        entry["human_override"] =
+            json!({"value":domain,"edited_by":ctx.user_id,"operation_id":key});
+        entry["effective_value"] = domain.clone();
+        entry["review_state"] = json!("confirmed");
+        v["entries"].as_array_mut().unwrap().push(entry);
+    }
     if !input["structured_value"].is_null()
         && input["body"]
             .as_str()
@@ -531,6 +570,21 @@ pub async fn create_in_tx(tx: &mut AppTx<'_>, ctx: &AccessContext, input: &Value
     persist(tx, ctx, &v).await?;
     record(tx, ctx, key, input, &v).await?;
     Ok(v)
+}
+
+fn validate_business_domain(value: &Value) -> Result<()> {
+    let domain = value.as_str().ok_or(Error::new("invalid_input"))?;
+    if domain.chars().count() > 240 || domain.trim() != domain {
+        return Err(Error::new("invalid_input"));
+    }
+    Ok(())
+}
+
+fn business_domain_entry() -> Value {
+    // 只新增可人工维护的归属槽位，不从关联对象推断，也不伪造平台来源。
+    json!({"entry_id":"business_domain","path":"business_domain","label":"业务域",
+        "source_facts":{"complete":false,"value":"","gap":"尚未提供业务域来源"},
+        "suggestion":{},"human_override":null,"effective_value":"","review_state":"unverified"})
 }
 pub async fn change_state_in_tx(
     tx: &mut AppTx<'_>,

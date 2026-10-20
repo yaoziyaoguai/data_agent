@@ -38,7 +38,7 @@ export function conversationItems(snapshot: Snapshot, queries: QueryView[]): Con
 export function displayUserMessage(text: string, tasks: Snapshot["tasks"]): { text: string; subject?: string } {
   const prefix = /^\[task:([A-Za-z0-9_-]+)\]\s*/.exec(text);
   const task = prefix && tasks.find(task => task.id === prefix[1]);
-  return task && prefix ? { text: text.slice(prefix[0].length), subject: task.goal } : { text };
+  return task && prefix ? { text: text.slice(prefix[0].length), subject: task.text_unavailable ? "任务目标暂不可用" : task.goal } : { text };
 }
 
 // 展示投影覆盖所有已加载页。完整回答替代同次流式片段，恢复回答隐藏旧尝试。

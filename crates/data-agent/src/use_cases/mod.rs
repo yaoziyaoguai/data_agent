@@ -14,6 +14,7 @@ pub(crate) mod knowledge_sources;
 pub mod model_calls;
 pub mod personal_assets;
 pub(crate) mod prefill_materials;
+mod query_semantics;
 pub mod query_workflow;
 pub mod semantic_prefill;
 
@@ -30,3 +31,5 @@ mod knowledge_embeddings;
 pub mod knowledge_impact;
 pub mod semantic_governance;
 pub mod skill_drafts;
+
+pub mod model_configuration;

@@ -21,10 +21,8 @@ export function useModelSelection(space: string, user: string, conversationId: s
       ]);
       if (request === generation.current) {
         const draft = readModelDraft(space, user, conversationId);
-        const available = draft && catalog.models.some(model => model.id === draft.model_id &&
-          model.thinking_options.some(option => option.value === draft.thinking_level));
         if (settings.selection) localStorage.removeItem(key);
-        setState({ key, catalog, settings: settings.selection || !available ? settings : { ...settings, selection: draft } });
+        setState({ key, catalog, settings: settings.selection || !draft ? settings : { ...settings, selection: draft } });
       }
     } catch {
       if (request === generation.current) {
@@ -39,6 +37,11 @@ export function useModelSelection(space: string, user: string, conversationId: s
     void reload();
     return () => { ++generation.current; };
   }, [reload]);
+  useEffect(() => {
+    const refresh = () => { if(!busy) void reload(); };
+    window.addEventListener('focus',refresh);
+    return ()=>window.removeEventListener('focus',refresh);
+  },[busy,reload]);
   const current = state?.key === key ? state : null;
   const selection = current?.settings.selection ?? current?.catalog.default_selection ?? null;
   const change = async (choice: ModelSelection) => {
@@ -82,5 +85,7 @@ export function useModelSelection(space: string, user: string, conversationId: s
     // 选用方法创建的空会话在首问时才保存模型；只刷新未被后续选择替代的初始设置。
     if (current?.settings.version === "0" && !busy && observedGeneration === generation.current) void reload();
   };
-  return { selection, models: current?.catalog.models ?? [], busy, error, ready: !!current && !busy, change, reload, afterMessageSaved };
+  const valid = selection ? current?.catalog.models.some(model=>model.id===selection.model_id&&model.thinking_options.some(option=>option.value===selection.thinking_level)) : !current?.catalog.requires_model;
+  const availabilityError = current&&!valid ? (selection ? '当前模型或思考档位已不可用，请选择一个可用模型后再发送。' : '尚未设置默认模型，请选择模型；没有可选模型时，请联系超级管理员配置。') : '';
+  return { selection, models: current?.catalog.models ?? [], busy, error: error || availabilityError, ready: !!current && !busy && !!valid, change, reload, afterMessageSaved };
 }

@@ -20,7 +20,9 @@ pub(crate) fn failure(error: Error) -> (StatusCode, Json<Value>) {
         request_id, error.code
     );
     let status = match error.code {
-        "invalid_input" | "skill_line_too_long" => StatusCode::BAD_REQUEST,
+        "invalid_input" | "skill_line_too_long" | "invalid_model_endpoint" => {
+            StatusCode::BAD_REQUEST
+        }
         "forbidden" => StatusCode::FORBIDDEN,
         "unauthenticated" => StatusCode::UNAUTHORIZED,
         "not_available" => StatusCode::NOT_FOUND,

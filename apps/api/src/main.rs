@@ -47,6 +47,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let router = Router::new()
         .route("/health", get(|| async { "ok" }))
         .route("/models", get(model_routes::catalog))
+        .route("/model-configuration/access", get(model_routes::access))
+        .route("/model-configuration", get(model_routes::configuration))
+        .route("/model-services", post(model_routes::service))
+        .route("/model-definitions", post(model_routes::definition))
+        .route(
+            "/model-configuration/default",
+            post(model_routes::default_model),
+        )
+        .route("/internal/model/connection", post(model_routes::connection))
         .route(
             "/conversations/{cid}/model-selection",
             get(model_routes::read).post(model_routes::save),

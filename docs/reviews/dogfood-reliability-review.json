@@ -1,0 +1,709 @@
+{
+  "schema": 1,
+  "increment_id": "I2-AGENT-RELIABILITY",
+  "reviewer": "cross-review-aggregate",
+  "reviewer_identity": "repair_execution_recovery 汇总各模块非实施者审查；本人的执行与任务来源实现采用 repair_knowledge_authoring 的独立记录，不把自测计为独立审查。",
+  "conclusion": "changes_required",
+  "summary": "原工程与追加工具契约修复已有分项验证；Pro/high原两流程7句已完成，独立澄清样本通过，但仍有无计算来源的派生数字与无依据解释。新确认同批宿主工具共享来源清单自冲突，已用Pi原生顺序执行修复并通过限定独立审查、本地SDK与真实Rust回归；整体保持changes_required。",
+  "reviewed_at": "2026-10-20T03:25:23.846991+00:00",
+  "implementation_baseline": "c9d0ced",
+  "current_state_record": "docs/CURRENT.md",
+  "root_cause_reference": "docs/reviews/dogfood-root-causes-20261020.md",
+  "review_method": [
+    "从原需求、原失败及合成反例核对代码、契约和运行结果；原 Dogfood 账本不反写。",
+    "共享文件按职责而非整个文件划分实施者和审查者；下表只覆盖所列业务操作，不冒称每位审查者审过全部改动。",
+    "独立代码审查、审查他人运行证据和审查者亲自执行分别由本地原记录标明；交叉审查不自动成为独立运行。",
+    "本汇总为工程证据与未关闭质量问题的公开索引；不是 make verify-increment 的通过收据，不伪造门禁结论。"
+  ],
+  "module_reviews": [
+    {
+      "area": "执行、恢复、任务目标/条件/问题及查询正文来源",
+      "implementers": [
+        "repair_execution_recovery"
+      ],
+      "independent_reviewers": [
+        "repair_knowledge_authoring"
+      ],
+      "requirements": [
+        "C01",
+        "C02",
+        "C03",
+        "C04",
+        "C05",
+        "C07"
+      ],
+      "engineering_assessment": "passed_for_reviewed_scope",
+      "coverage": [
+        "旧版、等待澄清、取消和未知分别表达；拒绝恢复保留原 query、operation、budget 身份。",
+        "宿主实际已交付来源进入持久正文；同文、清引用和无关修订不能洗来源。系统结果消息不能冒充真人原话。",
+        "完整来源在 SQL 外发、旧稿失效及首次 submit 前校验；来源失效隐藏正文但保留取消和查证入口。",
+        "依赖格式 5 检查点与七类来源闭包；旧格式同输入恢复不换身份重做未知副作用，新输入使用 Pi 重建。"
+      ],
+      "review_records": [
+        ".local/checks/reliability-cross-review-knowledge.json"
+      ],
+      "runtime_evidence": [
+        ".local/checks/execution-recovery-runtime-evidence.json",
+        ".local/checks/reliability-schema-recovery-review.json"
+      ]
+    },
+    {
+      "area": "历史依据、多来源报告与报告字段来源",
+      "implementers": [
+        "repair_report_sources"
+      ],
+      "independent_reviewers": [
+        "repair_knowledge_authoring",
+        "repair_execution_recovery",
+        "root"
+      ],
+      "requirements": [
+        "C01",
+        "C02",
+        "C04",
+        "C05"
+      ],
+      "engineering_assessment": "passed_for_reviewed_scope",
+      "coverage": [
+        "同一本人会话可组合有效历史任务/版本依据；报告容器当前版本与来源原身份分开，未放松跨用户/空间/会话约束。",
+        "依据 finding、报告标题和图表标题绑定实际来源；任一不可读来源使正文隐藏，人工实际改文与配置调整分别处理。",
+        "逐源保留原条件、query/result_ref，结果授权事务外预检后事务内再核；报告界面分别呈现来源条件。"
+      ],
+      "review_records": [
+        ".local/checks/reliability-cross-review-knowledge.json",
+        ".local/checks/reliability-cross-review-execution.json",
+        ".local/checks/reliability-root-review-knowledge-ui.json"
+      ],
+      "runtime_evidence": [
+        ".local/checks/report-text-authority.json",
+        ".local/checks/analysis-evidence.json",
+        ".local/checks/analysis-reports.json",
+        ".local/checks/analysis-reports-browser/result.json",
+        ".local/checks/report-reading-position/report.json"
+      ]
+    },
+    {
+      "area": "知识业务域与资料选择器分页",
+      "implementers": [
+        "repair_knowledge_authoring"
+      ],
+      "independent_reviewers": [
+        "repair_execution_recovery",
+        "root"
+      ],
+      "requirements": [
+        "C02",
+        "C06",
+        "C08"
+      ],
+      "engineering_assessment": "passed_for_reviewed_scope",
+      "coverage": [
+        "业务域由维护者显式录入及修订，包含文档章节；不继承关联表业务域或维护权。",
+        "按真实游标追加、去重及保留选择，失败可重试，换搜索条件后丢弃旧响应；实际后页条目可选。"
+      ],
+      "review_records": [
+        ".local/checks/reliability-cross-review-execution.json",
+        ".local/checks/reliability-root-review-knowledge-ui.json"
+      ],
+      "runtime_evidence": [
+        ".local/checks/business-domain-authoring.json",
+        ".local/checks/knowledge-authoring-browser/report.json"
+      ]
+    },
+    {
+      "area": "资产、Skill、旧来源物化及 Mem0 清理",
+      "implementers": [
+        "repair_knowledge_authoring"
+      ],
+      "independent_reviewers": [
+        "repair_execution_recovery"
+      ],
+      "requirements": [
+        "C02",
+        "C05",
+        "C06",
+        "C07"
+      ],
+      "engineering_assessment": "passed_for_reviewed_scope",
+      "coverage": [
+        "资产模块只返回本模块历史操作身份，运行模块辨别工具操作，由用例组合来源物化；不跨模块读取私有账本。",
+        "旧来源按字段和真实操作证据恢复，无法证明的生成字段隐藏；只回填同版本 NULL，不覆盖已知来源。",
+        "读记忆 v1 后改 v2 去除自身版本依赖，保留真实上游；同文、启停及发布副本继续继承来源。",
+        "HTTP 成功保存/修订/删除可接回原回执，未知操作不复活资产；Mem0 停用/删除清理沿原作业身份，不因正文失效阻止清理。"
+      ],
+      "review_records": [
+        ".local/checks/reliability-cross-review-asset-materialization.json"
+      ],
+      "runtime_evidence": [
+        ".local/checks/asset-authority-runtime-evidence.json"
+      ]
+    },
+    {
+      "area": "Node 规则、工具投影、工作区更新与同源契约",
+      "implementers": [
+        "root"
+      ],
+      "independent_reviewers": [
+        "repair_report_sources",
+        "repair_knowledge_authoring",
+        "repair_execution_recovery"
+      ],
+      "requirements": [
+        "C01",
+        "C02",
+        "C03",
+        "C04",
+        "C07"
+      ],
+      "engineering_assessment": "passed_for_reviewed_scope",
+      "coverage": [
+        "错误回执保留完整 recovery；get_query 按嵌套 query 真实状态撤下旧启动观察，工具结果仍进入 Pi。",
+        "实际工具 Schema 保留业务 title；批量澄清互斥、空值、版本及正式答案断言保留；测试投影正负例与类型来自同源契约。",
+        "口径与未知的文字规则不宣称语义真值已由宿主验证；提示修订没有新增 Agent 循环或自然语言执行状态分类器。"
+      ],
+      "review_records": [
+        ".local/checks/reliability-cross-review-report.json",
+        ".local/checks/reliability-cross-review-knowledge.json",
+        ".local/checks/reliability-cross-review-execution.json"
+      ],
+      "runtime_evidence": [
+        ".local/checks/reliability-tool-projection-review.json",
+        ".local/checks/tool-schema.json",
+        ".local/checks/reliability-cross-review-query-state.json"
+      ]
+    },
+    {
+      "area": "口径声明守卫、查询控制视图与资产重写界面",
+      "implementers": [
+        "root"
+      ],
+      "independent_reviewers": [
+        "repair_execution_recovery",
+        "repair_knowledge_authoring"
+      ],
+      "requirements": [
+        "C01",
+        "C03",
+        "C04",
+        "C05",
+        "C08"
+      ],
+      "engineering_assessment": "passed_for_reviewed_scope",
+      "coverage": [
+        "声明未决口径在旧稿失效和编译前拒绝；explicit_user 必须完整真实本轮原话，省略兼容不等于采用或授权。",
+        "来源失效撤下 SQL、参数、结果、依据及打开的 SQL 窗口；迟到结果不能重新显示，停止失败仍可见且能重试。",
+        "失效资产重写保留身份和版本、从空正文及附件开始；禁止选用/发布失效内容，保留停用/删除及完整人工重写。"
+      ],
+      "review_records": [
+        ".local/checks/reliability-cross-review-root-query.json",
+        ".local/checks/reliability-cross-review-knowledge.json"
+      ],
+      "runtime_evidence": [
+        ".local/checks/query-source-browser/report.json",
+        ".local/checks/asset-source-browser/report.json",
+        ".local/checks/query-semantics.json"
+      ]
+    },
+    {
+      "area": "多题启动预览与分页补读",
+      "implementers": [
+        "repair_report_sources"
+      ],
+      "independent_reviewers": [
+        "repair_execution_recovery"
+      ],
+      "requirements": [
+        "C01",
+        "C03",
+        "C04"
+      ],
+      "engineering_assessment": "passed_for_reviewed_scope",
+      "coverage": [
+        "启动仅预览首题，另有开放题时明确 has_more_clarifications/context_complete；更新回执同样说明范围。",
+        "正式读取按 8 条分页和真实游标表达范围，随后逐题来源保护继续生效；读完不自动接受选项。",
+        "旧 binary 精确失败；最终新 binary 实际 Pi 请求含 9 题省略信号，8+1 补读后 9 题仍开放。"
+      ],
+      "review_records": [
+        ".local/checks/reliability-cross-review-clarification-preview.json"
+      ],
+      "runtime_evidence": [
+        ".local/checks/reliability-clarification-preview-before.log",
+        ".local/checks/reliability-remaining-1792429638045055000/command-01.log",
+        ".local/checks/clarification.json"
+      ]
+    }
+  ],
+  "engineering_verification": {
+    "completed_specialists": [
+      {
+        "scope": "查询/任务/来源与语义规则边界",
+        "groups": 35,
+        "passed": true,
+        "officialRequests": 0,
+        "index": ".local/checks/execution-recovery-runtime-evidence.json"
+      },
+      {
+        "scope": "资产/Skill/Mem0清理",
+        "groups": 11,
+        "passed": true,
+        "officialRequests": 0,
+        "index": ".local/checks/asset-authority-runtime-evidence.json"
+      },
+      {
+        "scope": "多题预览最终 REL-CLARIFY",
+        "groups": 12,
+        "passed": true,
+        "officialRequests": 0,
+        "protocol_calls": 33,
+        "index": ".local/checks/reliability-cross-review-clarification-preview.json"
+      }
+    ],
+    "final_queue": {
+      "status": "passed",
+      "planned_acceptance_groups": 17,
+      "report": ".local/checks/reliability-remaining-1792429638045055000/report.json",
+      "completed_at_review_snapshot": [
+        {
+          "acceptance_ids": [
+            "REL-CLARIFY"
+          ],
+          "exit_code": 0,
+          "timed_out": false,
+          "log": ".local/checks/reliability-remaining-1792429638045055000/command-01.log"
+        },
+        {
+          "acceptance_ids": [
+            "REL-EXECUTE"
+          ],
+          "exit_code": 0,
+          "timed_out": false,
+          "log": ".local/checks/reliability-remaining-1792429638045055000/command-02.log"
+        },
+        {
+          "acceptance_ids": [
+            "REL-REPORT-UI"
+          ],
+          "exit_code": 0,
+          "timed_out": false,
+          "log": ".local/checks/reliability-remaining-1792429638045055000/command-03.log"
+        },
+        {
+          "acceptance_ids": [
+            "REL-DOMAIN"
+          ],
+          "exit_code": 0,
+          "timed_out": false,
+          "log": ".local/checks/reliability-remaining-1792429638045055000/command-04.log"
+        },
+        {
+          "acceptance_ids": [
+            "REL-PICKER"
+          ],
+          "exit_code": 0,
+          "timed_out": false,
+          "log": ".local/checks/reliability-remaining-1792429638045055000/command-05.log"
+        },
+        {
+          "acceptance_ids": [
+            "REL-FINAL"
+          ],
+          "exit_code": 0,
+          "timed_out": false,
+          "log": ".local/checks/reliability-remaining-1792429638045055000/command-06.log"
+        },
+        {
+          "acceptance_ids": [
+            "REL-PROVIDER"
+          ],
+          "exit_code": 0,
+          "timed_out": false,
+          "log": ".local/checks/reliability-remaining-1792429638045055000/command-07.log"
+        },
+        {
+          "acceptance_ids": [
+            "REL-COMPACT"
+          ],
+          "exit_code": 0,
+          "timed_out": false,
+          "log": ".local/checks/reliability-remaining-1792429638045055000/command-08.log"
+        },
+        {
+          "acceptance_ids": [
+            "REL-SEMANTIC-CHOICE"
+          ],
+          "exit_code": 0,
+          "timed_out": false,
+          "log": ".local/checks/reliability-remaining-1792429638045055000/command-09.log"
+        },
+        {
+          "acceptance_ids": [
+            "REL-READING"
+          ],
+          "exit_code": 0,
+          "timed_out": false,
+          "log": ".local/checks/reliability-remaining-1792429638045055000/command-10.log"
+        },
+        {
+          "acceptance_ids": [
+            "REL-RECOVERY"
+          ],
+          "exit_code": 0,
+          "timed_out": false,
+          "log": ".local/checks/reliability-remaining-1792429638045055000/command-11.log"
+        },
+        {
+          "acceptance_ids": [
+            "REL-ROLE-SYNC"
+          ],
+          "exit_code": 0,
+          "timed_out": false,
+          "log": ".local/checks/reliability-remaining-1792429638045055000/command-12.log"
+        },
+        {
+          "acceptance_ids": [
+            "REL-ROLE-MEMBERS"
+          ],
+          "exit_code": 0,
+          "timed_out": false,
+          "log": ".local/checks/reliability-remaining-1792429638045055000/command-13.log"
+        },
+        {
+          "acceptance_ids": [
+            "REL-ROLE-DIRECTORY"
+          ],
+          "exit_code": 0,
+          "timed_out": false,
+          "log": ".local/checks/reliability-remaining-1792429638045055000/command-14.log"
+        },
+        {
+          "acceptance_ids": [
+            "REL-CONTRACT-ARCHITECTURE"
+          ],
+          "exit_code": 0,
+          "timed_out": false,
+          "log": ".local/checks/reliability-remaining-1792429638045055000/command-15.log"
+        },
+        {
+          "acceptance_ids": [
+            "context-dependencies"
+          ],
+          "exit_code": 0,
+          "timed_out": false,
+          "log": ".local/checks/reliability-remaining-1792429638045055000/command-16.log"
+        },
+        {
+          "acceptance_ids": [
+            "library-with-isolated-fixture"
+          ],
+          "exit_code": 0,
+          "timed_out": false,
+          "log": ".local/checks/reliability-remaining-1792429638045055000/command-17.log"
+        }
+      ],
+      "limitation": "17组工程命令完整执行且范围指纹不变；不代表真实模型语义通过或正式增量关闭。",
+      "scope_unchanged": true
+    },
+    "environment": "隔离 MySQL、真实 Rust、Pi SDK、本地受控 provider 协议、合成 SQLite 平台与浏览器；工程专项 0 次官方模型请求。",
+    "limits": [
+      "各运行绑定其实际测试与二进制指纹；新增澄清预览由后续新 binary 专项证明，不把更早二进制证据当作已包含该变化。",
+      "REL-CLARIFY 使用已有 131072 字节协议配置，最大 86113 字节；64KiB 限制由独立载荷/原生压缩专项验证。"
+    ],
+    "additional_checks": {
+      "shared_contract_cases": 488,
+      "rust_library_tests": 128,
+      "code": "fmt/clippy/types/Web build passed",
+      "tool_projection": "18 tools passed",
+      "request_body_guard": "passed; oversized request stopped before network and budget admission",
+      "native_compaction": "28 local calls across the existing multi-message fixture, 14 native compactions, max 65373 bytes; per-request limits retained",
+      "official_model_requests_for_engineering_checks": 0,
+      "materials": 367,
+      "declaration_checker_tests": 16
+    },
+    "followup_scope": {
+      "status": "passed_for_engineering_scope",
+      "reason": "真实high轨迹证实未改goal被强制重传，以及执行同目标被要求重复route。",
+      "items": [
+        "本消息无任务关联时，执行指定查询同事务登记归属及确认；拒绝不新增关联，其他消息阻塞及既有目标约束保持。",
+        "已有任务省略goal保留原目标与来源，创建仍必填。",
+        "去掉固定规则/工具/goal说明的重复内容，保持64KiB及全部结构约束，原长短历史与原生压缩场景重新通过。"
+      ],
+      "real_provider_verification": false,
+      "checks": {
+        "shared_contract_cases": 514,
+        "clarification_groups": 13,
+        "conversational_query_groups": 12,
+        "independent_atomicity_unknown_groups": 2,
+        "tool_projection_tools": 18,
+        "code": "fmt/clippy/types/Web build passed",
+        "request_body_guard": "passed before network and budget admission",
+        "locking": "passed",
+        "native_compaction": {
+          "calls": 29,
+          "compactions": 15,
+          "max_payload_bytes": 65185,
+          "message_call_limit": 12,
+          "official_requests": 0
+        }
+      },
+      "records": [
+        ".local/checks/reliability-analysis-update-goal-verification.json",
+        ".local/checks/execution-auto-route-evidence.json",
+        ".local/checks/execution-association-independent-review.json",
+        ".local/checks/execution-association-atomicity-review.json",
+        ".local/checks/reliability-static-context-review.json"
+      ],
+      "logs": [
+        ".local/checks/reliability-followup-code-contracts.log",
+        ".local/checks/reliability-followup-tool-schema.log",
+        ".local/checks/reliability-followup-request-context.log",
+        ".local/checks/reliability-followup-native-compaction.log",
+        ".local/checks/reliability-followup-locking.log"
+      ],
+      "scope_limits": [
+        "执行与澄清专项绑定实现完成时的源码/binary；随后只有重复文字去重，结构约束未改变，去重另有独立审查及最终契约/原生压缩/锁序验证。",
+        "REL-CLARIFY沿既有131072字节协议配置，最新最大86837字节；64KiB由独立载荷和原生压缩专项验证。",
+        "原生压缩比上一组工程记录多一次；不宣称成本下降或任意固定输入均可容纳。",
+        "没有新增官方模型请求；之前high样本发生在两项接口修复之前，不是最终代码的真实模型验收。"
+      ]
+    }
+  },
+  "open_findings": [
+    {
+      "ids": [
+        "ISS-01",
+        "ISS-02"
+      ],
+      "status": "unresolved_real_model_quality",
+      "issue": "真实模型仍会自动选择歧义口径，重复或复合提问，遗漏持久登记，部分候选含义发生漂移。",
+      "established": "多题预览漏提示已证实并修复；宿主持久状态与授权边界已单独验证。",
+      "unknown": "尚无证据认定预览缺口是全部语义失败的唯一根因，也不能归咎为模型能力的唯一限制。",
+      "evidence": [
+        ".local/checks/reliability-flash-samples/report.json",
+        ".local/checks/reliability-flash-independent-questions/report.json"
+      ],
+      "latest_high_evidence": "当前原B07自主识别歧义并持久等待，无SQL；复购首轮仍把可独立组合的分子/分母合为一题，部分回答后关闭复合ID再新增分子题。未决事项和候选保持，无新增授权；独立可答及完整答完才关闭的约定仍未满足。",
+      "latest_pro_evidence": "同题两轮本次正确独立登记分子/分母，仅关闭已答分母ID，其余ID、正文与选项保持开放；0 SQL/0执行。只证明这个样本，不把Flash原失败撤销。"
+    },
+    {
+      "ids": [
+        "ISS-10",
+        "ISS-12"
+      ],
+      "status": "unresolved_real_model_quality",
+      "issue": "真实模型仍从未定义规则补推结论，或在 SQL 没有输出派生值时于文字补算并作无依据解释。",
+      "established": "保留真实失败；NULL 分组独立反例说明原解释不成立，完整原提示已有相关限制。",
+      "unknown": "已核对当前Flash/high和Pro/high关键正式请求，排除本次规则漏给、结果删列及累计预算中止；无法据单样本确定所有未来输入的模型行为，旧历史样本的证据边界保持。",
+      "evidence": [
+        ".local/checks/reliability-flash-grounding/report.json",
+        ".local/checks/reliability-flash-contribution-complete/report.json",
+        ".local/checks/reliability-semantic-root-audit.json"
+      ],
+      "latest_high_evidence": "当前原5轮完成实际查询与正式解释，SQL已返回差额和比例，金额正确且没有补算缺失环比。原生成SQL合计占比硬编码100，零总差额/空数据独立反例错误；快照内退款仍被描述为可能再次影响当前结果，并无依据断言不是单一渠道异常拉动。",
+      "latest_pro_evidence": "完整5轮及两次查询结果唤醒已完成。趋势回复补无SQL来源差值；贡献SQL未返回比例，正式答复补出100/52.4/28.6/19.0%；快照成熟度与过滤方向解释仍错误。实际主请求有完整系统限制，SQL/结果未被接入层删列；零分母比例未覆盖。"
+    },
+    {
+      "ids": [
+        "OUTPUT-INTERNAL-IDS"
+      ],
+      "status": "low_priority_output_quality",
+      "issue": "普通业务答复仍暴露内部任务/查询ID和条件版本，实际系统规则已交付。",
+      "evidence": [
+        ".local/checks/reliability-high-clarification-semantic-review.json",
+        ".local/checks/reliability-flash-high-contribution-continuation/report.json"
+      ]
+    }
+  ],
+  "next_decision": {
+    "status": "pro_same_input_completed_semantic_gaps_open",
+    "authorization": "当前已授权Flash/high验证不设累计调用和费用上限，每次用户交互保持24次及连续临时失败3次。",
+    "observed": {
+      "calls": 41,
+      "spent_micros": 302471,
+      "reserved_micros": 0,
+      "max_calls_per_scope": 7,
+      "scope_count": 8
+    },
+    "scope": "获准Pro/high原两流程7句已完成；新并发缺口的本地修复及分项验证已完成，默认模型与常驻服务保持。",
+    "evidence": ".local/checks/reliability-request-budget-verification.json",
+    "remaining": "Pro独立澄清本次改善，但无计算来源的派生数字、生成SQL零分母边界及无依据解释未全部解决。并行工具自冲突是独立的接入根因，修复不能替代语义验收。",
+    "proposed_followup": {
+      "status": "superseded_by_user_correction",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "thinking": "high",
+      "total_call_limit": 48,
+      "total_cost_limit_micros": 500000,
+      "scope": [
+        "固定原输入：独立问题→部分回答→保留未决决定",
+        "原完整趋势→贡献SQL→精确查询结果唤醒→正式解释"
+      ],
+      "constraints": [
+        "不重写旧失败、不延续旧trial或给旧查询转移预算",
+        "任一总限达到停止；每消息24次、连续临时失败3次仍保持",
+        "每轮成功/失败都记录实际请求、错误码、精确query_id与账本；不以脚本流程完成替代语义通过"
+      ]
+    },
+    "current_authorization": {
+      "date": "2026-10-20",
+      "budget_mode": "request",
+      "aggregate_call_limit": null,
+      "aggregate_cost_limit": null,
+      "request_call_limit": 24,
+      "consecutive_transient_failures": 3,
+      "model": "deepseek-flash",
+      "thinking": "high",
+      "scope": "继续当前修复增量的剩余真实模型验证及有证据支持的修复；旧trial/失败记录保持，默认服务不变。"
+    },
+    "historical_limited_trial": {
+      "authorization": "一次Flash/high，最多24次调用及0.50美元；用户已明确允许。",
+      "observed": {
+        "calls": 24,
+        "native_compactions": 2,
+        "spent_micros": 175317,
+        "reserved_micros": 0
+      },
+      "scope": "保持原trial上限、默认模型及用户常驻服务；不追加付费抽样。",
+      "evidence": ".local/checks/reliability-flash-high-comparison/high-review.json"
+    },
+    "prepared_model_comparison": {
+      "status": "completed_changes_required",
+      "model": "deepseek-v4-pro",
+      "thinking": "high",
+      "script": ".local/checks/run-reliability-pro-high-comparison.mjs",
+      "script_sha256": "9b6a9387ed40f68ac490082852c137b42333d454406d4c1aeba1e1c1a3d5a08b",
+      "scope": "原独立澄清2句与趋势贡献5句逐字同题；同一资料/工具/current code，不改默认服务。",
+      "budget_mode": "request",
+      "request_call_limit": 24,
+      "consecutive_transient_failures": 3,
+      "aggregate_limits": null,
+      "reason": "用户明确同意Pro/high原两流程对照，保持request24/连续临时失败3及无测试累计限额，默认服务不变。",
+      "prompted_at": "2026-10-20T02:44:39.939984+00:00",
+      "authorized_at": "2026-10-20T03:00:38.982201+00:00",
+      "completed_at": "2026-10-20T03:21:42.567275+00:00",
+      "observed": {
+        "calls": 35,
+        "spent_micros": 1177848,
+        "reserved_micros": 0,
+        "max_calls_per_scope": 8,
+        "scope_count": 7
+      },
+      "evidence": [
+        ".local/checks/reliability-pro-high-comparison/report.json",
+        ".local/checks/reliability-pro-high-continuation/report.json",
+        ".local/checks/reliability-pro-high-comparison/clarification-review.json",
+        ".local/checks/reliability-pro-high-comparison/trend-contribution-review.json"
+      ],
+      "runner_correction": "原第4轮同时保留编译拒绝稿和修正版，not_submitted不足以定位可执行新稿；原失败保留，沿同一数据库/trial/会话/平台目录按passed+awaiting_confirmation筛选，只续原未发送第5句。",
+      "limitations": [
+        "源代码在整个付费对照中冻结；之后的sequential修复另做本地验证，不冒称真实Pro修复后通过。",
+        "原材料存在分/元展示张力，但不解释缺少SQL比例和差值；未改资料、原输入或独立答案。",
+        "自由聊天正文没有逐数字结构化来源校验；figures核验不覆盖全部正文，也不证明业务因果。"
+      ],
+      "verification": ".local/checks/reliability-pro-comparison-verification.json"
+    }
+  },
+  "invariants": [
+    "权限、真实用户原话、任务/条件/SQL版本、确认、幂等及预算继续由 Rust 和平台边界检查；未答不代表同意。",
+    "unknown 按原 query/operation/origin 身份先查证；不换 ID、会话或预算重做未知副作用。",
+    "Pi SDK 是唯一 Agent 循环；沿原生会话、恢复及压缩机制，不引入第二规划器、自然语言授权分类器或无界复核。",
+    "保留每消息 24 次及连续临时失败 3 次停止规则；工程夹具的累计试验预算不改生产或原试用配置。",
+    "验收变更在 CURRENT 说明独立依据；原失败、错误版本、越权、未答、未知和并发负例保留，不改独立答案换取通过。",
+    "代码、契约、测试与公开记录仅使用合成资料；本记录不含凭据、个人绝对路径或原始私人对话。"
+  ],
+  "local_review_evidence": [
+    {
+      "path": ".local/checks/reliability-cross-review-execution.json",
+      "sha256": "611a3bf09e93b3251f3c6ee0df902762efcb72a90357205ee2f812637e4a9115"
+    },
+    {
+      "path": ".local/checks/reliability-cross-review-report.json",
+      "sha256": "4730b736d714b704d3b2f39111f0b3f5eaa16c613103c00f4b2f10b89b550d4c"
+    },
+    {
+      "path": ".local/checks/reliability-cross-review-knowledge.json",
+      "sha256": "75bcfc9eee654151e6d13489d20cb9cae11ad4ebef200a14af626062b37afc3d"
+    },
+    {
+      "path": ".local/checks/reliability-cross-review-root-query.json",
+      "sha256": "7b93d1046251fc8f79b2958f211fc128f0ecc313f03310b0128b580889344444"
+    },
+    {
+      "path": ".local/checks/reliability-cross-review-asset-materialization.json",
+      "sha256": "331aebcbe821b3e259a421d44949fac60b2218ce5bb671e3d20975ae902a2d35"
+    },
+    {
+      "path": ".local/checks/reliability-cross-review-clarification-preview.json",
+      "sha256": "df3f30fdfce9c6e34f86a5abaa9900c6c7639868c97c574e19ad9be7767d8ea5"
+    },
+    {
+      "path": ".local/checks/reliability-root-review-knowledge-ui.json",
+      "sha256": "1e2297c91a67b276ae7c21ec90b67774b77cec0a95ed6a96ee3379b50299ff6b"
+    }
+  ],
+  "gate_status": {
+    "increment_closed": false,
+    "verify_increment_pass_claimed": false,
+    "review_pass_claimed": false,
+    "reason": "工具顺序执行的本地SDK、真实Rust边界及限定审查通过；真实模型语义缺口未关闭，整体审查changes_required。",
+    "command": "make verify-increment",
+    "exit_code": 2,
+    "error": "缺少已通过的审查记录",
+    "log": ".local/checks/reliability-sequential-increment.log"
+  },
+  "scope_sha256": "24653c103213d03c8fc7475aa362d65a296376119ef87f5ba32bfd917409089f",
+  "followup_reviewed_at": "2026-10-20T00:01:49.444349+00:00",
+  "real_model_followup": {
+    "profile": "DeepSeek Flash/high; budget_mode=request",
+    "evidence": [
+      ".local/checks/reliability-flash-high-remaining/report.json",
+      ".local/checks/reliability-flash-high-contribution-continuation/report.json",
+      ".local/checks/reliability-request-budget-verification.json",
+      ".local/checks/reliability-high-clarification-semantic-review.json",
+      ".local/checks/reliability-flash-high-remaining/trend-contribution-review.json",
+      ".local/checks/reliability-flash-high-remaining/contribution-boundary-probe.json"
+    ],
+    "observed": {
+      "calls": 41,
+      "spent_micros": 302471,
+      "reserved_micros": 0,
+      "max_calls_per_scope": 7,
+      "scope_count": 8
+    },
+    "passed_for_samples": [
+      "原B07自主澄清、没有草稿或执行",
+      "部分回答未丢其余决定，无SQL或执行授权",
+      "原5轮趋势→贡献链完成两条查询与精确结果唤醒；实际金额/比例对应SQL结果",
+      "request累计调用/费用/到期均NULL，摘要与结果唤醒沿原scope"
+    ],
+    "fixture_correction": "全会话唯一草稿不是原产品要求；第3轮合法保存补算草稿，按第4轮新增查询差集精确定位贡献稿。保留旧机械失败，同库同会话只续未发出的第5句。",
+    "limitations": [
+      "单次固定high样本不证明所有模型输出都正确。",
+      "未修改产品或默认服务，不手工改生成SQL伪装为通用修复。"
+    ]
+  },
+  "tool_serialization_followup": {
+    "status": "passed_for_engineering_scope",
+    "requirements": [
+      "C03",
+      "C04",
+      "C05"
+    ],
+    "cause": "同一模型响应的宿主工具并行取得旧run依赖清单，前一成功读取扩展共享清单，后一最终snapshot严格核验为stale_context。真实回执和源码支持该路径，实际DB交错未直接记录；原生SDK受控边界已确定复现。",
+    "fix": "dataTools与基础taskTool声明Pi1.3原生executionMode=sequential；不放宽Rust assert_snapshot，不换操作身份/预算，不增加模型轮次。",
+    "before": ".local/checks/reliability-tool-serialization-before-v2.json",
+    "after": ".local/checks/tool-serialization.json",
+    "independent_review": ".local/checks/reliability-tool-serialization-review.json",
+    "scope_limits": [
+      "回归使用真实SDK但execute为内存宿主接缝；不能冒称完整MySQL竞态复现。",
+      "实际Rust结果读取、越权与过期模型预留拒绝沿既有回归单独验证。"
+    ],
+    "verification": ".local/checks/reliability-sequential-verification.json",
+    "review_sha256": "888fcbfb0a8358f0ce7e0ec2299fbb6f48872118f49e2a1a036655599e87207b",
+    "native_compaction": {
+      "calls": 29,
+      "compactions": 15,
+      "max_payload_bytes": 65188,
+      "officialRequests": 0
+    }
+  }
+}

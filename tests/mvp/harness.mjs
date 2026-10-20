@@ -93,6 +93,7 @@ export async function harness(options = {}) {
     DATA_AGENT_TOOLSET: "data",
     DATA_AGENT_SEMANTIC_SUPER_MAINTAINERS: JSON.stringify({demo: ["alice"]}),
     DATA_AGENT_DIAGNOSTICS: "1",
+    DATA_AGENT_MODEL_KEY_FILE: directory + "/model-configuration.key",
     DATA_AGENT_DATABASE_URL:
       "mysql://data_agent:" +
       encodeURIComponent(password) +

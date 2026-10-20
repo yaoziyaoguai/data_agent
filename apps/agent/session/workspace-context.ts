@@ -47,8 +47,11 @@ export function workspaceContext(workspace: WorkspaceContext) {
       if (receipt.tool_name === 'update_analysis_task')
         // route不改条件且回执不带正文，仍保留同版候选；修订成功才撤下旧版。
         facts.tasks = facts.tasks.filter(task => task.id !== receipt.data.task_id || task.condition_version === receipt.data.condition_version);
-      if (['request_query', 'get_query', 'execute_query', 'cancel_query'].includes(receipt.tool_name))
-        facts.query_observations = facts.query_observations.filter(query => query.id !== receipt.data.id);
+      if (['request_query', 'get_query', 'execute_query', 'cancel_query'].includes(receipt.tool_name)) {
+        const query = receipt.tool_name === 'get_query' ? receipt.data.query : receipt.data;
+        if (query && typeof query === 'object' && !Array.isArray(query) && 'id' in query)
+          facts.query_observations = facts.query_observations.filter(observation => observation.id !== query.id);
+      }
       if (receipt.tool_name === 'manage_personal_asset')
         // 成功回执已包含新正文，不用模型提交的候选字段重建，也不改变authority。
         memories = memories.filter(memory => memory.id !== receipt.data.id);

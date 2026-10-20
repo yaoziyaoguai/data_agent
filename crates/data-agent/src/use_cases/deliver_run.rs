@@ -40,6 +40,20 @@ pub async fn start_delivery(
             .unwrap_or_else(super::context_authority::empty),
     )
     .await?;
+    let mut text_results = super::context_authority::check_task_text_results(
+        pool,
+        &context,
+        &job.conversation_id,
+        Some(&checked),
+    )
+    .await?;
+    let asset_results = super::context_authority::check_available_asset_results(
+        pool,
+        &context,
+        &job.conversation_id,
+    )
+    .await?;
+    text_results.include_checked(&asset_results);
     let mut tx = AppTx::begin(pool).await?;
     let conversation =
         conversations::lock_conversation_in_tx(&mut tx, &context, &job.conversation_id).await?;
@@ -49,11 +63,16 @@ pub async fn start_delivery(
         return Err(Error::new("version_conflict"));
     }
     let profile = runtime::read_budget_profile_in_tx(&mut tx, &message.budget_scope_id).await?;
-    access::authorize_model(if profile.is_some() {
-        "deepseek"
+    if let Some(configured) = profile.as_ref().filter(|p| p.configured_model.is_some()) {
+        runtime::model_configuration::assert_active_in_tx(&mut tx, &context.space_id, configured)
+            .await?;
     } else {
-        "local_mock"
-    })?;
+        access::authorize_model(if profile.is_some() {
+            "deepseek"
+        } else {
+            "local_mock"
+        })?;
+    }
     context.request_id = message.request_id.clone();
     let run_id = id();
     let lease_epoch =
@@ -98,11 +117,24 @@ pub async fn start_delivery(
             .into_iter()
             .filter(|v| v["kind"] == "memory")
             .collect();
-        let mut memories =
-            super::knowledge::valid_assets_in_tx(&mut tx, &context, memories).await?;
+        let mut memories = super::knowledge::valid_assets_in_tx(
+            &mut tx,
+            &context,
+            memories,
+            &conversation.id,
+            &text_results,
+        )
+        .await?;
         let selected =
             crate::modules::assets::selected_in_tx(&mut tx, &context, &conversation.id).await?;
-        let selected = super::knowledge::valid_assets_in_tx(&mut tx, &context, selected).await?;
+        let selected = super::knowledge::valid_assets_in_tx(
+            &mut tx,
+            &context,
+            selected,
+            &conversation.id,
+            &text_results,
+        )
+        .await?;
         let asset_counts = json!({"memories":memories.len(),"selected_skills":selected.len()});
         memories.truncate(20);
         let memories = memories
@@ -145,24 +177,37 @@ pub async fn start_delivery(
         // 历史只由Pi恢复；完整原话可经read_conversation分页补读，不再注入300字副本。
         let mut visible = json!({"request_clock":message.request_clock,"input_task_ids":input_task_ids,"tasks":tasks.iter().take(24.max(input_task_ids.len())).map(|t|if invalidated{json!({"id":t["id"],"condition_version":t["condition_version"],"lifecycle":t["lifecycle"],"phase":t["phase"],"context_complete":false,"note":"依据已失效，请重新调查"})}else{t.clone()}).collect::<Vec<_>>(),"recent_messages":[],"selected_skills":selected,"memories":memories,"query_observations":crate::modules::queries::list_in_tx(&mut tx,&conversation.id).await?.iter().rev().take(12).map(|q|json!({"id":q["id"],"task_id":q["task_id"],"condition_version":q["condition_version"],"execution_state":q["execution_state"]})).collect::<Vec<_>>(),"asset_counts":asset_counts});
         // 已失效任务只交付状态，不能把旧口径经初始工作区再次送入模型。
+        let mut task_text_dependencies = std::collections::HashMap::new();
         for task in visible["tasks"].as_array_mut().into_iter().flatten() {
-            if task["conditions"]["knowledge_refs"].is_array() {
-                match super::knowledge::check_refs_in_tx(
-                    &mut tx,
-                    &context,
-                    &task["conditions"]["knowledge_refs"],
-                )
-                .await
-                {
-                    Ok(()) => (),
-                    Err(error) if matches!(error.code, "stale_knowledge" | "not_available") => {
-                        *task = json!({"id":task["id"],"condition_version":task["condition_version"],"lifecycle":task["lifecycle"],"phase":task["phase"],"context_complete":false,"note":"依据已失效，请重新调查"});
-                    }
-                    Err(error) => return Err(error),
-                }
-            }
+            let refs = super::context_authority::protect_task_context_in_tx(
+                &mut tx,
+                &context,
+                &conversation.id,
+                task,
+                &text_results,
+            )
+            .await?;
+            task_text_dependencies.insert(task["id"].as_str().unwrap_or("").to_owned(), refs);
         }
         crate::modules::retrieval::bound_workspace(&mut visible);
+        for task in visible["tasks"].as_array().into_iter().flatten() {
+            if (task["goal"].is_string()
+                || task["clarification"].is_object()
+                || task["conditions"].is_object())
+                && let Some(refs) = task_text_dependencies.get(task["id"].as_str().unwrap_or(""))
+            {
+                super::context_authority::merge(&mut snapshot, refs)?;
+            }
+        }
+        let asset_authority = super::context_authority::asset_text_dependencies_in_tx(
+            &mut tx,
+            &context,
+            &conversation.id,
+            &visible,
+            &text_results,
+        )
+        .await?;
+        super::context_authority::merge(&mut snapshot, &asset_authority)?;
         super::context_authority::observe(&mut snapshot, &visible);
         runtime::save_authority_in_tx(&mut tx, &run_id, &snapshot).await?;
         visible["authority_revision"] = json!(fingerprint(&snapshot));
@@ -290,8 +335,18 @@ pub async fn renew_delivery(
     tx.commit().await
 }
 
-// 重试耗尽通过各模块入口原子保存，不让页面永久停留在运行中。
-pub async fn fail_exhausted(pool: &MySqlPool, job: &jobs::ClaimedJob) -> Result<()> {
+fn delivery_failure_code(code: &str) -> Value {
+    if code == "retry_exhausted" {
+        return json!(code);
+    }
+    // 只交付同源契约允许的错误码，不能把内部异常内容送进用户事件。
+    let public_code = serde_json::from_value::<crate::contracts::generated::Code>(json!(code))
+        .unwrap_or(crate::contracts::generated::Code::Unavailable);
+    json!(public_code)
+}
+
+// 原子保存交付终止原因；安全拒绝与真实重试耗尽不能混为一种失败。
+pub async fn fail_delivery(pool: &MySqlPool, job: &jobs::ClaimedJob, code: &str) -> Result<()> {
     let location = conversations::locate_conversation(pool, &job.conversation_id).await?;
     let context = AccessContext {
         user_id: location.owner_id,
@@ -312,10 +367,32 @@ pub async fn fail_exhausted(pool: &MySqlPool, job: &jobs::ClaimedJob) -> Result<
         &conversation,
         &id(),
         "run_failed",
-        json!({"message_id":job.message_id,"code":"retry_exhausted"}),
+        json!({"message_id":job.message_id,"code":delivery_failure_code(code)}),
     )
     .await?;
     runtime::fail_message_runs_in_tx(&mut tx, &job.message_id).await?;
     jobs::fail_in_tx(&mut tx, job).await?;
     tx.commit().await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn delivery_failure_preserves_public_reasons_and_hides_internal_details() {
+        for code in [
+            "stale_context",
+            "forbidden",
+            "budget_exhausted",
+            "unavailable",
+            "retry_exhausted",
+        ] {
+            assert_eq!(delivery_failure_code(code), json!(code));
+        }
+        assert_eq!(
+            delivery_failure_code("internal_database_detail: synthetic"),
+            json!("unavailable")
+        );
+    }
 }

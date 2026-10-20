@@ -15,6 +15,7 @@ import { KnowledgeDirectory } from "./KnowledgeDirectory.tsx";
 import { SemanticMaintainer } from "./SemanticMaintainer.tsx";
 import { KnowledgeOrigin } from "./KnowledgeOrigin.tsx";
 import { KnowledgeStatus } from "./KnowledgeStatus.tsx";
+import { KnowledgeBusinessDomain } from "./KnowledgeBusinessDomain.tsx";
 import { KnowledgeMaintenanceImpact } from "./KnowledgeMaintenanceImpact.tsx";
 import { ApiError, api } from "../../shared/api.ts";
 import { Modal } from "../../shared/Modal.tsx";
@@ -580,7 +581,8 @@ export function KnowledgePage({
                           <summary>
                             <strong>{o.name.split(".").at(-1)}</strong><span>{o.entries.find(e => e.path === "meaning")?.effective_value || "尚缺说明"}</span><span className="field-detail-label">查看</span>
                           </summary>
-                          {o.entries.map((e) => (
+                          <KnowledgeBusinessDomain object={o} onSaved={save} onCorrection={() => void refresh()} onSource={id => void showSource(id)}/>
+                          {o.entries.filter(e => e.path !== "business_domain").map((e) => (
                             <EntryEditor
                               key={e.entry_id}
                               object={o}
@@ -594,7 +596,7 @@ export function KnowledgePage({
                           ))}
                         </details>
                       ) : (
-                        o.entries.map((e) => ["ddl", "etl"].includes(e.path) ? <details key={e.entry_id} className="technical-source"><summary>{e.label}</summary><EntryEditor object={o} entry={e} canEdit={o.maintenance?.can_edit ?? false} onCorrection={() => void refresh()} onSaved={save} onSource={id => void showSource(id)} availableObjects={objects}/></details> : (
+                        <><KnowledgeBusinessDomain object={o} onSaved={save} onCorrection={() => void refresh()} onSource={id => void showSource(id)}/>{o.entries.filter(e => e.path !== "business_domain").map((e) => ["ddl", "etl"].includes(e.path) ? <details key={e.entry_id} className="technical-source"><summary>{e.label}</summary><EntryEditor object={o} entry={e} canEdit={o.maintenance?.can_edit ?? false} onCorrection={() => void refresh()} onSaved={save} onSource={id => void showSource(id)} availableObjects={objects}/></details> : (
                           <EntryEditor
                             key={e.entry_id}
                             object={o}
@@ -605,7 +607,7 @@ export function KnowledgePage({
                             onSource={(id) => void showSource(id)}
                             availableObjects={objects}
                           />
-                        ))
+                        ))}</>
                       )}
                     </article>
                   ))}

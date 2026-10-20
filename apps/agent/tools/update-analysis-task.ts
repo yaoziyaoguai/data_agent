@@ -18,6 +18,7 @@ export function taskTool(transport: RustTransport, manager: SessionManager, faul
   };
   const definition: ToolDefinition = {
     name: 'update_analysis_task', label: '建立分析任务', description: '为当前用户的当前会话建立分析任务。',
+    executionMode: 'sequential',
     parameters: Type.Unsafe<TaskInput>(schema.$defs.TaskInput),
     execute: async (sdkId, args) => {
       validateContract('TaskInput', args);

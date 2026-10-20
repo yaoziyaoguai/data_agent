@@ -18,6 +18,7 @@ pub struct StoredDraft {
     pub state: String,
     pub body: Option<Value>,
     pub asset_id: Option<String>,
+    pub text_authority: Option<Value>,
 }
 
 impl StoredDraft {
@@ -52,6 +53,9 @@ fn stored(row: &sqlx::mysql::MySqlRow) -> StoredDraft {
             .get::<Option<sqlx::types::Json<Value>>, _>("body")
             .map(|body| body.0),
         asset_id: row.get("asset_id"),
+        text_authority: row
+            .get::<Option<sqlx::types::Json<Value>>, _>("text_authority")
+            .map(|v| v.0),
     }
 }
 
@@ -73,7 +77,7 @@ pub async fn read_in_tx(
     ctx: &AccessContext,
     draft: &str,
 ) -> Result<StoredDraft> {
-    let row = sqlx::query("SELECT reference,state,body,asset_id FROM skill_drafts WHERE id=? AND owner_id=? AND space_id=? FOR UPDATE")
+    let row = sqlx::query("SELECT reference,state,body,asset_id,text_authority FROM skill_drafts WHERE id=? AND owner_id=? AND space_id=? FOR UPDATE")
         .bind(draft).bind(&ctx.user_id).bind(&ctx.space_id).fetch_optional(tx.connection()).await?
         .ok_or(Error::new("not_available"))?;
     Ok(stored(&row))
@@ -101,6 +105,7 @@ pub async fn prepare_in_tx(
     input: &Value,
     dependencies: &Value,
     evidence_refs: &Value,
+    text_authority: &Value,
 ) -> Result<Value> {
     contracts::validate("PrepareSkillDraftInput", input)?;
     let reference = json!({"draft_id":id(),"conversation_id":origin.conversation_id,
@@ -123,6 +128,7 @@ pub async fn prepare_in_tx(
         state: "pending".into(),
         body: Some(body.clone()),
         asset_id: None,
+        text_authority: Some(text_authority.clone()),
     }
     .view()?;
     super::super::skill_files::validate(&json!("skill"), &input["files"])?;
@@ -130,11 +136,11 @@ pub async fn prepare_in_tx(
         &json!({"id":reference["draft_id"],"name":input["name"],"scope":input["scope"],"body":input["body"],"files":input["files"],"dependencies":dependencies}),
         "SKILL.md",
     )?;
-    sqlx::query("INSERT INTO skill_drafts(id,owner_id,space_id,conversation_id,source_message_id,origin_run_id,operation_id,fingerprint,reference,state,body) VALUES(?,?,?,?,?,?,?,?,?,'pending',?) ON DUPLICATE KEY UPDATE operation_id=VALUES(operation_id)")
+    sqlx::query("INSERT INTO skill_drafts(id,owner_id,space_id,conversation_id,source_message_id,origin_run_id,operation_id,fingerprint,reference,state,body,text_authority) VALUES(?,?,?,?,?,?,?,?,?,'pending',?,?) ON DUPLICATE KEY UPDATE operation_id=VALUES(operation_id)")
         .bind(reference["draft_id"].as_str()).bind(&ctx.user_id).bind(&ctx.space_id)
         .bind(origin.conversation_id).bind(origin.source_message_id).bind(origin.origin_run_id)
         .bind(origin.operation_id).bind(&command).bind(sqlx::types::Json(&reference))
-        .bind(sqlx::types::Json(&body)).execute(tx.connection()).await?;
+        .bind(sqlx::types::Json(&body)).bind(sqlx::types::Json(text_authority)).execute(tx.connection()).await?;
     let row = sqlx::query("SELECT fingerprint,reference FROM skill_drafts WHERE owner_id=? AND space_id=? AND operation_id=? FOR UPDATE")
         .bind(&ctx.user_id).bind(&ctx.space_id).bind(origin.operation_id).fetch_one(tx.connection()).await?;
     if row.get::<String, _>("fingerprint") != command {

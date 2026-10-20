@@ -111,11 +111,13 @@ try {
           evidence[0].evidence_id,
           evidence[1].evidence_id,
           evidence[4].evidence_id,
+          fixture.foreignEvidence.evidence_id,
         ],
         charts: [
           chart(0),
           chart(1, { title: "205个合成分类点" }),
           chart(4, { kind: "bar", title: "精确金额对照" }),
+          { kind: "bar", title: "独立任务来源对照", query_id: fixture.foreignQuery.id, result_ref: fixture.foreignEvidence.result_dependencies[0].result_ref, dimension_column: "category", measure_column: "amount" },
         ],
       }),
     ),
@@ -169,6 +171,12 @@ try {
     "9007199254740993.01",
   );
   await dialog().getByRole("heading", { name: title, exact: true }).waitFor();
+  assert.equal(await dialog().locator(".report-source").count(), 4);
+  const independentSource = dialog().getByRole("region", { name: "来源 4", exact: true });
+  await independentSource.getByText("应用", { exact: true }).waitFor();
+  await independentSource.getByText("category", { exact: true }).waitFor();
+  assert.equal(await dialog().getByRole("region", { name: "来源 1", exact: true }).getByText("应用", { exact: true }).count(), 0);
+  await dialog().getByRole("figure", { name: /独立任务来源对照/ }).getByText("来源 4", { exact: true }).waitFor();
   const exactFigure = dialog().getByRole("figure", { name: /精确金额对照/ });
   await exactFigure
     .getByRole("listitem")
@@ -216,7 +224,7 @@ try {
     "这个补充尚未发送",
   );
   checks.push(
-    "真实聊天报告入口读到完整205点与原精确金额；正文不堆版本/技术ID；滚动、Tab圈与Escape返回保持原焦点和草稿",
+    "真实聊天报告入口读到完整205点与原精确金额；跨任务来源各自显示条件且图表关联正确来源，正文不堆版本/技术ID；滚动、Tab圈与Escape返回保持原焦点和草稿",
   );
 
   await page.setViewportSize({ width: 390, height: 844 });

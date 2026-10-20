@@ -1,6 +1,6 @@
 use crate::{
     contracts,
-    modules::{analysis, queries},
+    modules::{analysis, conversations, queries},
     persistence::AppTx,
     types::{AccessContext, Error, Result, epoch},
 };
@@ -15,6 +15,7 @@ pub async fn validate_sources(
     cid: &str,
     message_id: &str,
     input: &Value,
+    checked_text: &mut super::context_authority::CheckedTextResults,
 ) -> Result<Value> {
     contracts::validate("SaveAnalysisEvidenceInput", input)?;
     if serde_json::to_vec(input)
@@ -25,7 +26,40 @@ pub async fn validate_sources(
         return Err(Error::new("request_too_large"));
     }
     let mut references = BTreeMap::<String, Value>::new();
-    let mut knowledge_refs = Vec::<Value>::new();
+    let mut tx = AppTx::begin(pool).await?;
+    conversations::lock_conversation_in_tx(&mut tx, ctx, cid).await?;
+    let conditions = analysis::read_evidence_conditions_in_tx(
+        &mut tx,
+        ctx,
+        cid,
+        input["task_id"].as_str().expect("validated task"),
+        epoch(
+            input["condition_version"]
+                .as_str()
+                .expect("validated version"),
+        )?,
+    )
+    .await?;
+    super::context_authority::validate_condition_text_in_tx(
+        &mut tx,
+        ctx,
+        cid,
+        input["task_id"].as_str().expect("validated task"),
+        epoch(
+            input["condition_version"]
+                .as_str()
+                .expect("validated version"),
+        )?,
+        &conditions,
+        checked_text,
+    )
+    .await?;
+    super::knowledge::check_refs_in_tx(&mut tx, ctx, &conditions["knowledge_refs"]).await?;
+    tx.commit().await?;
+    let mut knowledge_refs = conditions["knowledge_refs"]
+        .as_array()
+        .expect("validated conditions")
+        .clone();
     for finding in input["findings"].as_array().expect("validated findings") {
         for reference in finding["query_refs"]
             .as_array()
@@ -68,7 +102,11 @@ pub async fn validate_sources(
         let mut tx = AppTx::begin(pool).await?;
         let just_submitted =
             queries::is_confirmation_message_in_tx(&mut tx, ctx, qid, message_id).await?;
+        let query_authority = queries::text_authority_in_tx(&mut tx, ctx, qid).await?;
         tx.commit().await?;
+        checked_text
+            .include_authorities(pool, ctx, &[query_authority])
+            .await?;
         if just_submitted {
             return Err(Error::new("invalid_evidence"));
         }
@@ -90,7 +128,12 @@ pub async fn validate_sources(
     Ok(sources)
 }
 
-fn assert_query(query: &Value, cid: &str, input: &Value, reference: &Value) -> Result<()> {
+pub(super) fn assert_query(
+    query: &Value,
+    cid: &str,
+    input: &Value,
+    reference: &Value,
+) -> Result<()> {
     if query["conversation_id"] != cid
         || query["task_id"] != input["task_id"]
         || query["condition_version"] != input["condition_version"]
@@ -163,18 +206,30 @@ fn validate_finding(finding: &Value, results: &BTreeMap<String, Value>) -> Resul
     Ok(())
 }
 
+pub struct EvidenceWrite<'a> {
+    pub operation_id: &'a str,
+    pub message_id: &'a str,
+    pub run_id: &'a str,
+}
+
 pub async fn save_in_tx(
     tx: &mut AppTx<'_>,
     ctx: &AccessContext,
     cid: &str,
-    operation: &str,
-    message_id: &str,
+    write: EvidenceWrite<'_>,
     input: &Value,
     sources: &Value,
+    checked_text: &super::context_authority::CheckedTextResults,
 ) -> Result<Value> {
+    let EvidenceWrite {
+        operation_id: operation,
+        message_id,
+        run_id,
+    } = write;
     let tasks = analysis::lock_tasks_in_tx(tx, cid).await?;
-    analysis::assert_current_in_tx(
+    let conditions = analysis::read_evidence_conditions_in_tx(
         tx,
+        ctx,
         cid,
         input["task_id"]
             .as_str()
@@ -186,6 +241,24 @@ pub async fn save_in_tx(
         )?,
     )
     .await?;
+    let condition_authority = super::context_authority::validate_condition_text_in_tx(
+        tx,
+        ctx,
+        cid,
+        input["task_id"]
+            .as_str()
+            .ok_or(Error::new("invalid_input"))?,
+        epoch(
+            input["condition_version"]
+                .as_str()
+                .ok_or(Error::new("invalid_input"))?,
+        )?,
+        &conditions,
+        checked_text,
+    )
+    .await?;
+    super::context_authority::merge_run_in_tx(tx, run_id, &condition_authority).await?;
+    super::knowledge::check_refs_in_tx(tx, ctx, &conditions["knowledge_refs"]).await?;
     for reference in sources["result_dependencies"]
         .as_array()
         .ok_or(Error::new("invalid_evidence"))?
@@ -212,9 +285,42 @@ pub async fn save_in_tx(
             return Err(Error::new("invalid_evidence"));
         }
         super::knowledge::check_refs_in_tx(tx, ctx, &query["knowledge_refs"]).await?;
+        let query_authority = super::query_workflow::validate_text_in_tx(
+            tx,
+            ctx,
+            cid,
+            reference["query_id"]
+                .as_str()
+                .ok_or(Error::new("invalid_evidence"))?,
+            checked_text,
+        )
+        .await?;
+        // 引用成功结果也继承生成该查询时的来源，不能只留下结果自身的可读权限。
+        super::context_authority::merge_run_in_tx(tx, run_id, &query_authority).await?;
     }
     super::knowledge::check_refs_in_tx(tx, ctx, &sources["knowledge_refs"]).await?;
-    analysis::save_evidence_in_tx(tx, &tasks, ctx, operation, message_id, input, sources).await
+    super::context_authority::extend_run_in_tx(tx, run_id, sources).await?;
+    super::context_authority::extend_result_dependencies_in_tx(
+        tx,
+        run_id,
+        &sources["result_dependencies"],
+    )
+    .await?;
+    let authority =
+        super::context_authority::generated_text_authority_in_tx(tx, run_id, sources).await?;
+    analysis::save_evidence_in_tx(
+        tx,
+        &tasks,
+        ctx,
+        operation,
+        message_id,
+        input,
+        analysis::EvidenceSaveSources {
+            references: sources,
+            text_authority: &authority,
+        },
+    )
+    .await
 }
 
 #[cfg(test)]

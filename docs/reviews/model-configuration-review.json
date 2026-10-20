@@ -1,0 +1,279 @@
+{
+  "schema": 1,
+  "increment_id": "I2-MODEL-CONFIGURATION",
+  "reviewer": "model_configuration_review",
+  "reviewer_identity": "独立非实施审查代理；未修改产品、契约或测试，仅维护本审查记录并复制五份明确选定的非秘密界面证据。",
+  "reviewed_at": "2026-10-20T04:46:00.663092+00:00",
+  "conclusion": "passed",
+  "summary": "本增量的空间超级管理员模型配置、凭据保护、版本冻结、Pi原生三协议与既有恢复/预算边界通过独立审查，未留下已证实的阻断。审查发现的初始凭据冻结、原服务停用、推理能力、跨服务签名、Anthropic能力、输出cap和SDK隐式行为问题均已修复并有针对性验证；收尾补齐实际管理错误的同源契约及窄屏布局。当前结论仅针对I2-MODEL-CONFIGURATION，不关闭既有I2-AGENT-RELIABILITY真实语义缺口。正式四组verify-increment仍须主代理在本记录冻结后执行。",
+  "scope_sha256": "1b59e53adf729f5cba0c8efadbc7551485c5406a1c86ff21fea6dbe9d4da9009",
+  "scope": {
+    "input_files": 407,
+    "contract_sha256": "44568ed9d8d60b116d230cd45799ca5efe82cd99834b52c6eab6bdf11b3eb65f",
+    "decisions_sha256": "c6456f454f3efb5763440301d1ea3298c518024f0fede2cb6be7dd86fa103e3b",
+    "reviewed_areas": [
+      "M08 model_configuration模块及私有store/secrets、服务和模型修订迁移、model_calls/provider_calls计价边界",
+      "M01空间管理身份；管理HTTP用例及内部运行连接；消息接收/模型选择/交付/预留/发送/结算冻结与停用边界",
+      "Pi configured/controlled/endpoint/usage薄适配、原DeepSeek兼容、会话恢复与不透明SDK工具身份",
+      "管理页、公开模型选择及导航；同源Schema/OpenAPI/生成边界；启动器凭据传递；对应文档与合成验证"
+    ],
+    "boundary": "范围指纹绑定CURRENT声明的全部输入；本审查集中于模型配置增量及受影响回归，不将同一工作树内此前可靠性修改重新宣称为全部通过。"
+  },
+  "requirements": [
+    {
+      "ids": [
+        "C01"
+      ],
+      "assessment": "Pi 1.3.0继续承担唯一会话、工具循环、协议解析、取消和原生压缩。三个原生协议使用同一受控许可/用量薄适配，未新增规划器或自行重写历史。配置目录可接入非内置Model ID；SDK目录只提供明确兼容能力，隐式fallback和额外工具注入被关闭。"
+    },
+    {
+      "ids": [
+        "C03",
+        "C05"
+      ],
+      "assessment": "消息接收冻结服务/模型修订、实际模型/档位、费率与限制；恢复、摘要及查询结果唤醒沿原消息和预算。停用原服务或模型阻止后续发送，已发出调用仍可结算；旧逻辑模型改绑不能绕过原服务停用。Responses复合SDK工具ID原样保存并沿原operation恢复。"
+    },
+    {
+      "ids": [
+        "C05"
+      ],
+      "assessment": "每消息24次、连续临时失败3次规则及原幂等/租约保持。服务凭据AES-256-GCM加密且AAD绑定空间/服务/版本；重放指纹使用主密钥HMAC。公开目录无地址/密钥，管理GET只返回设置状态，内部连接须鉴权并绑定有效run。凭据丢失、未知用量、输出cap越界均失败关闭。"
+    },
+    {
+      "ids": [
+        "C08"
+      ],
+      "assessment": "超级管理员页面可配置服务、实际Model ID、能力、价格、启停和默认；普通用户直接导航及API均被拒绝。浏览器验证真实错误提示、编辑草稿保留、密钥不回填和价格单位转换；独立目视1440与390宽度的列表和编辑截图，原窄屏重叠已修复。公开资料和协议响应均为合成。"
+    }
+  ],
+  "findings": [],
+  "resolved_findings": [
+    {
+      "issue": "首次导入Flash/Pro的新消息继续走legacy环境适配，未冻结密钥；legacy原模型改绑后错误检查新服务。",
+      "resolution": "所有新消息统一冻结configured_model，初始API进程凭据加密封存于服务版本1；历史无版本引用的消息保留明确legacy兼容，并检查原deployment-deepseek服务。Rust用例覆盖种子轮换、跨空间隔离与改绑后原服务停用。",
+      "status": "closed"
+    },
+    {
+      "issue": "将思考选择off等同模型无推理能力，可能漏发明确关闭参数；已知不支持档位可能静默映射。",
+      "resolution": "独立reasoning_supported与thinking_level，保留已知SDK能力并显式映射off；已知不支持选择拒绝。真实SDK载荷覆盖OpenAI none及DeepSeek/Anthropic关闭参数。",
+      "status": "closed"
+    },
+    {
+      "issue": "所有接入共享provider身份，同Model ID跨服务/账户可能重放旧推理签名。",
+      "resolution": "runtime_provider绑定空间/服务/修订，让Pi原生处理不同服务历史。独立零网络探针复现旧别名保留签名，修后测试验证跨服务/版本移除签名，同服务保持。另按SDK源码确认ModelRuntime注册表为实例字段，两个会话不会共享transport/signal闭包。",
+      "status": "closed"
+    },
+    {
+      "issue": "未知Anthropic模型的xhigh/max在预算模式静默退成high；复制已知Claude兼容项会添加宿主未许可的占位工具或fallback模型。",
+      "resolution": "显式配置budget/adaptive，预算模式拒绝xhigh/max并校验输出空间；配置适配关闭supportsMidConvoToolChanges、supportsMidConvoEffort和allowedFallbackModels。已知Claude opus/fable的真实SDK载荷及完整工具回合验证无额外工具/模型回退。",
+      "status": "closed"
+    },
+    {
+      "issue": "原生Responses会把小于16的输出上限抬高，Anthropic也可能为思考预算调整输出。",
+      "resolution": "Rust拒绝Responses小于16及不可能的Anthropic预算；实际序列化载荷在预留前再次核对输出cap及思考预算，不允许SDK扩大冻结限制。零网络负例确认未领取许可。model_output_limit作为安全错误码贯通。",
+      "status": "closed"
+    },
+    {
+      "issue": "Responses原生call_id|item_id不符合旧SDK工具标识契约。",
+      "resolution": "仅SDK工具标识扩为最长512字符的无空白不透明文本，数据库迁移使用区分大小写VARCHAR(512)；不截断、不重新分配operation。真实工具回合与中断恢复保持原ID、模型、密钥、消息和预算，unknown调用仍保留。",
+      "status": "closed"
+    },
+    {
+      "issue": "四个管理错误码未进入AppError同源枚举，Web解码丢失具体拒绝原因。",
+      "resolution": "补齐invalid_model_endpoint、model_credential_required、model_secret_unavailable、model_unavailable并生成边界。真实API拒绝验证AppError，浏览器验证非法地址和改地址未重输Key的具体提示与草稿保留；新建表单required仍保留。",
+      "status": "closed"
+    },
+    {
+      "issue": "全局header固定高度导致模型管理页窄屏说明文字与下一标题重叠、添加按钮换行。",
+      "resolution": "局部重置高度/字号/边距并固定按钮不收缩；浏览器布局断言与独立目视列表和编辑截图确认修正。",
+      "status": "closed"
+    }
+  ],
+  "independent_checks": [
+    {
+      "check": "node tests/runtime/check-configured-provider.mjs",
+      "execution": "审查者独立执行两次，末次覆盖已修复协议能力；随后又完整读取主代理最终日志。",
+      "result": "passed；每次9次本地协议请求、0次官方请求。含三协议可靠usage/缺失usage/503、SDK不隐式HTTP重发、off/high/adaptive、跨服务签名与输出cap守卫。"
+    },
+    {
+      "check": "Undici真实lookup连接路径的混合DNS结果负例",
+      "execution": "审查者终端零外网探针，用node内建模块mock让dns.lookup返回一个公网和一个回环地址。",
+      "result": "provider_endpoint_rejected；lookupCalls=1，没有发往外部端点的请求。不是仅核对IP分类函数。"
+    },
+    {
+      "check": "本地HTTP重定向负例",
+      "execution": "审查者独立本地服务返回302到另一路径。",
+      "result": "fetch拒绝重定向，服务只收到1次请求。"
+    },
+    {
+      "check": "ModelRuntime同名provider注册隔离",
+      "execution": "只读核对锁定SDK model-runtime.js实例Map、createModels的新ModelsImpl、provider-composer闭包与sdk.js注入路径；再核对deliver每次新建runtime。",
+      "result": "实例隔离；同服务并发会话不会相互覆盖许可transport或signal。0网络/数据库调用。"
+    },
+    {
+      "check": "澄清夹具新增原生摘要分支",
+      "execution": "独立核对失败报告、SDK compaction.js的普通摘要与generateTurnPrefixSummary两条路径及最终测试断言。",
+      "result": "修订符合SDK已存在的无tools摘要行为；必须摘要system标识且匹配两种原生封装，不消费业务plan步骤。原业务断言、24次/131072B边界和ledger.calls==calls/reserved==0不变。35次调用含2次摘要的最终完整报告通过，不冒称真实摘要质量。"
+    },
+    {
+      "check": "界面截图与错误状态",
+      "execution": "独立目视最终desktop/mobile及两张editor截图，核对浏览器创建/更新/冲突/拒绝/草稿保留代码与报告。",
+      "result": "未见残余重叠或横向溢出；普通用户无管理入口且直接导航后被拒绝。"
+    }
+  ],
+  "reviewed_execution_evidence": [
+    {
+      "check": "必需契约、代码和架构",
+      "execution": "主代理执行，审查者完整读取最终日志。",
+      "result": "531条Rust/TypeScript共享契约、fmt/clippy、TypeScript、Web构建、架构与7项架构测试、锁序通过。"
+    },
+    {
+      "check": "完整管理配置",
+      "execution": "主代理串行执行真实Rust/MySQL/Pi/浏览器合成夹具，审查者核对测试断言、最终报告与截图。",
+      "result": "9组通过；13次本地请求、0次官方请求；含三协议工具回合、内置Claude、权限/加密/并发/重启/停用和Responses恢复。"
+    },
+    {
+      "check": "既有模型选择与恢复",
+      "execution": "主代理串行执行，审查者完整读取结果并核对保留的断言。",
+      "result": "6组通过；36次本地请求、0次官方请求；7种Flash/Pro组合、并发选择/发送、后台原模型和未知调用恢复保持。"
+    },
+    {
+      "check": "Pi原生压缩及历史兼容",
+      "execution": "主代理串行执行，审查者完整读取结果。",
+      "result": "原生压缩29次调用/15次摘要，最大65188B，64KiB内；撤权负例、同会话恢复与预算保持。SDK兼容、40轮10摘要检查点日志及桥接取消/隔离也通过。"
+    },
+    {
+      "check": "旧provider、启动接线、正式答复与澄清",
+      "execution": "主代理串行执行，最终进程均完整退出0；审查者读取完整日志。",
+      "result": "旧provider13次本地请求；正式启动聊天及预填6次、预留0；启动器10单测；澄清13组/9轮/35次含2摘要；最终答复4组/12次通过。0次官方模型请求。"
+    }
+  ],
+  "evidence": [
+    {
+      "path": ".local/checks/model-configuration-required.log",
+      "sha256": "7137604dea1649bea7fa5f121775318b7c3a7bb2c562245972d70d6fcaedd215"
+    },
+    {
+      "path": ".local/checks/model-configuration-runtime.log",
+      "sha256": "ca6bad06acb39a946e4edaf12daa8ae8ce422c5541024bef8fdbf2a5802b81d0"
+    },
+    {
+      "path": ".local/checks/model-configuration-selection.log",
+      "sha256": "be6bc5a3be0634e1d7215874eaeaaa938727b18415856a556917447c871184e4"
+    },
+    {
+      "path": ".local/checks/model-configuration-provider.log",
+      "sha256": "7ce61300df4b7cb755fd8d644677a65878463d520fe7dd1a1352a84ef162ec46"
+    },
+    {
+      "path": ".local/checks/model-configuration-compaction.log",
+      "sha256": "d6eda7c73e57ae5130486bbf4045318e9603d8e6c262a1075456acb45f42e6bb"
+    },
+    {
+      "path": ".local/checks/model-configuration-legacy-provider.log",
+      "sha256": "3d583357b427a126a92c1f051648f90dbb16d8790360a7585a0b97f87560a6ba"
+    },
+    {
+      "path": ".local/checks/model-configuration-startup.log",
+      "sha256": "88d35bdad4d98aba40c708a7db1d5aa61222ada4a3c1e09989512c95e73ff0a3"
+    },
+    {
+      "path": ".local/checks/model-configuration-startup-unit.log",
+      "sha256": "2cbd612cd1c4b30c875334ddf5d781ca1a3db6985ba3f612a43d6535ba5c5ede"
+    },
+    {
+      "path": ".local/checks/model-configuration-sdk.log",
+      "sha256": "0998d987a11b2d0e714bb1e953eae58546a303f6759ce16524e54dcd935848eb"
+    },
+    {
+      "path": ".local/checks/model-configuration-admission.log",
+      "sha256": "3a5bd698ba9b7e8424876a0f5b96aa03aa5a11348f13a17f636adb0fa630a123"
+    },
+    {
+      "path": ".local/checks/model-configuration-bridge.log",
+      "sha256": "c25ad5d036093e4dceaad6286f06a0d0fbc848167fe9f441da5835423ab8a909"
+    },
+    {
+      "path": ".local/checks/model-configuration-clarification.log",
+      "sha256": "804d2d69ac9dcf716731a4233abb867084c584767396178f3c1b73efab62073d"
+    },
+    {
+      "path": ".local/checks/model-configuration-final-answer.log",
+      "sha256": "0c5d00f85808136e074b86b278d2f2d043d661aa920f6e3385af8872baa67dbb"
+    },
+    {
+      "path": ".local/checks/model-configuration-docs-final.log",
+      "sha256": "7f8d2b2e3e9eeb852c0282f68c57c94cc997922398b093b492373a3a83c49f7e"
+    },
+    {
+      "path": ".local/checks/model-configuration-reviewed/report.json",
+      "sha256": "eff64ab11c30cf8f3fe26b67fff4fb3d7b580fcd55aa0cc1b0656ee859cfc5c6"
+    },
+    {
+      "path": ".local/checks/model-configuration-reviewed/desktop.png",
+      "sha256": "1a92367a1fa88fed3633a1f02ad27a223d770ad3cd19f76abe15134694aa2bb0"
+    },
+    {
+      "path": ".local/checks/model-configuration-reviewed/mobile.png",
+      "sha256": "85b90e8509ae25a05d18d239e97d0225e3b9549b5783e25edbc0e42c67aa59b5"
+    },
+    {
+      "path": ".local/checks/model-configuration-reviewed/desktop-editor.png",
+      "sha256": "428d893fc4a5d7be2496548e9be3a06f74cb59a6a260600ce9bedd4025d7b102"
+    },
+    {
+      "path": ".local/checks/model-configuration-reviewed/mobile-editor.png",
+      "sha256": "48661d84b193a3add3ad7940107b27cfc2fd84e26f18492159248fafc148fa00"
+    },
+    {
+      "path": ".local/checks/model-configuration/app-error-before.json",
+      "sha256": "6bf92a86d6aaf1cc1d156f164d4e7eefd558c8ca474455510330f7bfcc3fc14c"
+    },
+    {
+      "path": ".local/checks/model-configuration/clarification-before.json",
+      "sha256": "5759b2def0d8958b26a83107e62ace40ed7546a1b63f814cf7542a8e0dda3094"
+    },
+    {
+      "path": ".local/checks/model-configuration/clarification-before.log",
+      "sha256": "4dd05618684baa398e06b41a317dc9fcfc307ac29ce65a9237cb4d1aa5968df1"
+    },
+    {
+      "path": ".local/checks/model-configuration/clarification-split-prefix-before.log",
+      "sha256": "11dcf2c36d510ad53a24e0be59791d8c4294bf4b4564d03f5fba9cc911a5bacd"
+    },
+    {
+      "path": ".local/checks/model-configuration/browser-required-before.log",
+      "sha256": "212b8e7beaa7daa833ca1cf2cb120e81630ec11330fd881b57684e842c1facfc"
+    },
+    {
+      "path": ".local/checks/model-configuration/browser-required-before.txt",
+      "sha256": "b35214dca93f3006a18bd8b6af59ad67d9beac09ed11c322b14cc795d2ff1197"
+    }
+  ],
+  "unified_verification": {
+    "status_at_review": "not_started",
+    "command": "make verify-increment",
+    "required_command_groups": 4,
+    "acceptance_ids": [
+      "MODEL-CONFIG-CONTRACT",
+      "MODEL-CONFIG-BEHAVIOR",
+      "MODEL-CONFIG-COMPATIBILITY",
+      "MODEL-CONFIG-PROTOCOL"
+    ],
+    "expected_receipt": ".local/delivery/I2-MODEL-CONFIGURATION-result.json",
+    "condition": "主代理在本审查冻结后执行全部四组，退出0、无超时、前后输入指纹一致；分项日志和本审查不能代替正式收据。"
+  },
+  "residual_risks": [],
+  "testing_gaps": [
+    "没有新增官方付费供应商调用；真实端点能力、鉴权配置和真实模型回答质量尚未由本增量验收。",
+    "正式四组统一验收待主代理随后执行；不能在收据完成前据本审查关闭增量。"
+  ],
+  "limitations": [
+    "当前演示身份和业务资料为合成。模型服务启用表示管理员批准该连接用于现有合成空间，不代表真实企业资料类别/结果字段的端点出域政策已实现。",
+    "支持当前Pi三种原生协议与管理员声明的模型能力；保存不会向供应商发付费验证请求。供应商独有新协议仍需代码适配，且仅允许公网HTTPS连接。",
+    "历史无配置版本引用的消息只能使用当时已有环境适配，无法追溯恢复从未保存的旧密钥；新消息已统一冻结。主密钥需与数据库一起安全备份，当前不提供在线主密钥轮换。",
+    "Mem0、embedding和独立预填仍按部署配置；本页仅配置聊天模型。",
+    "I2-AGENT-RELIABILITY关于真实模型复合澄清、数字/SQL零分母和解释忠实性的剩余问题仍未解决。协议夹具通过不证明自主模型能力，也不保证任意第三方模型的最终正文语义完整。",
+    "审查者未运行MySQL夹具以避免与主代理争用，数据库/浏览器结果来自已完整审读的主代理执行证据；独立运行限定纯SDK协议和有界网络守卫探针。未读实际用户凭据，未提交推送或更新常驻服务。"
+  ]
+}

@@ -5,6 +5,31 @@ use crate::{
 use serde_json::{Value, json};
 use sqlx::{MySqlPool, Row};
 
+/// 持久工具身份由运行模块负责；其他业务模块不读取工具账本。
+pub async fn recorded_tool_operations_in_tx(
+    tx: &mut AppTx<'_>,
+    operations: &[String],
+) -> Result<Vec<String>> {
+    let mut recorded = Vec::new();
+    for chunk in operations.chunks(256) {
+        let mut query = sqlx::QueryBuilder::<sqlx::MySql>::new(
+            "SELECT operation_id FROM tool_calls WHERE operation_id IN (",
+        );
+        let mut separated = query.separated(",");
+        for operation in chunk {
+            separated.push_bind(operation);
+        }
+        separated.push_unseparated(")");
+        recorded.extend(
+            query
+                .build_query_scalar::<String>()
+                .fetch_all(tx.connection())
+                .await?,
+        );
+    }
+    Ok(recorded)
+}
+
 pub async fn delivery_task_refs_in_tx(tx: &mut AppTx<'_>, run: &LockedRun) -> Result<Vec<Value>> {
     let receipts: Vec<sqlx::types::Json<Value>> = sqlx::query_scalar("SELECT t.receipt FROM tool_calls t JOIN agent_runs r ON r.id=t.origin_run_id WHERE r.recovery_chain_id=? AND t.state='succeeded' AND t.tool_name='update_analysis_task' AND t.receipt IS NOT NULL")
         .bind(&run.recovery_chain_id).fetch_all(tx.connection()).await?;

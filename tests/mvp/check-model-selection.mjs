@@ -143,7 +143,7 @@ try {
 
 async function verifyRecovery(){
  const previous=Object.fromEntries(['DEEPSEEK_API_KEY','DEEPSEEK_BASE_URL','DATA_AGENT_PROVIDER_TEST'].map(k=>[k,process.env[k]]));
- const recovery=await harness({capture:true,profile,env:{DATA_AGENT_LEASE_MS:'120000'}});
+ const recovery=await harness({capture:true,profile,protocolProviderUrl:'http://127.0.0.1:'+provider.address().port,env:{DATA_AGENT_LEASE_MS:'120000'}});
  const abort=new AbortController();let pending;
  try{
   process.env.DEEPSEEK_API_KEY='synthetic-protocol-key';process.env.DEEPSEEK_BASE_URL='http://127.0.0.1:'+provider.address().port;process.env.DATA_AGENT_PROVIDER_TEST='1';

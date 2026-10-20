@@ -43,6 +43,9 @@ async fn checked_binding(
     }
     let message = conversations::read_message_in_tx(&mut tx, &conv, &run.message_id).await?;
     if input["tool_name"] == "manage_personal_asset" {
+        if !message.user_supplied {
+            return Err(Error::new("scope_incomplete"));
+        }
         let args = &input["arguments"];
         assets::memory_source(
             &message.body,
@@ -192,8 +195,37 @@ pub async fn process_index(pool: &MySqlPool) -> Result<()> {
     let Some(job) = assets::memory_index::claim(pool).await? else {
         return Ok(());
     };
+    let mut index_asset = job["asset"].clone();
+    if index_asset["state"] == "enabled" {
+        let ctx = AccessContext {
+            user_id: job["owner_id"].as_str().unwrap_or("").to_owned(),
+            space_id: job["space_id"].as_str().unwrap_or("").to_owned(),
+            request_id: job["id"].as_str().unwrap_or("").to_owned(),
+        };
+        match super::personal_assets::read(pool, &ctx, index_asset["id"].as_str().unwrap_or(""))
+            .await
+        {
+            Ok(asset)
+                if asset["text_unavailable"] != true
+                    && asset["version"] == index_asset["version"] => {}
+            Ok(_) => {
+                return assets::memory_index::complete(pool, &job, Some("stale_context")).await;
+            }
+            Err(error) => {
+                return assets::memory_index::complete(pool, &job, Some(error.code)).await;
+            }
+        }
+    } else {
+        // 清除索引仅需稳定资产身份/版本/状态，失效或已删除正文不能阻断止损，也不能外发。
+        index_asset["name"] = json!("已停用记忆");
+        index_asset["scope"] = json!("已停用记忆");
+        index_asset["body"] = json!("");
+        index_asset["source_text"] = json!("");
+        index_asset["files"] = json!([]);
+        index_asset["dependencies"] = json!([]);
+    }
     let budget = json!({"kind":"index","id":job["id"],"epoch":job["epoch"],"sdk_tool_call_id":null,"operation_id":job["id"]});
-    let result=assets::memory_provider::call("/index","MemoryIndexRequest","MemoryIndexReceipt",&json!({"operation_id":job["id"],"owner_id":job["owner_id"],"space_id":job["space_id"],"asset":job["asset"],"extraction_operation_id":job["extraction_operation_id"],"budget":budget})).await;
+    let result=assets::memory_provider::call("/index","MemoryIndexRequest","MemoryIndexReceipt",&json!({"operation_id":job["id"],"owner_id":job["owner_id"],"space_id":job["space_id"],"asset":index_asset,"extraction_operation_id":job["extraction_operation_id"],"budget":budget})).await;
     if let Err(error) = &result {
         eprintln!("memory_index_failure job={} code={}", job["id"], error.code);
     }
@@ -204,6 +236,21 @@ pub async fn process_index(pool: &MySqlPool) -> Result<()> {
 pub async fn model_call(pool: &MySqlPool, input: Value) -> Result<Value> {
     contracts::validate("MemoryModelCall", &input)?;
     let binding = &input["budget"];
+    let checked_asset = if input["action"] != "finalize" && binding["kind"] == "index" {
+        let mut tx = AppTx::begin(pool).await?;
+        let job =
+            assets::memory_index::read_job_in_tx(&mut tx, binding["id"].as_str().unwrap_or(""))
+                .await?;
+        tx.commit().await?;
+        let ctx = AccessContext {
+            user_id: job["owner_id"].as_str().unwrap_or("").to_owned(),
+            space_id: job["space_id"].as_str().unwrap_or("").to_owned(),
+            request_id: binding["operation_id"].as_str().unwrap_or("").to_owned(),
+        };
+        Some(super::personal_assets::checked_assets(pool, &ctx, &[job["asset"].clone()]).await?)
+    } else {
+        None
+    };
     let mut tx = AppTx::begin(pool).await?;
     if input["action"] == "finalize" {
         let receipt = runtime::provider_calls::finish_in_tx(&mut tx, &input).await?;
@@ -274,7 +321,14 @@ pub async fn model_call(pool: &MySqlPool, input: Value) -> Result<Value> {
         {
             return Err(Error::new("version_conflict"));
         }
-        super::knowledge::check_refs_in_tx(&mut tx, &ctx, &asset["dependencies"]).await?;
+        super::personal_assets::text_authority_in_tx(
+            &mut tx,
+            &ctx,
+            "",
+            &asset,
+            checked_asset.as_ref().ok_or(Error::new("stale_context"))?,
+        )
+        .await?;
         let scope = job["budget_scope_id"].as_str().map(str::to_owned);
         let profile = if let Some(scope) = &scope {
             runtime::read_budget_profile_in_tx(&mut tx, scope)
@@ -302,12 +356,20 @@ pub async fn prepare_workspace(
         return Ok(());
     }
     let mut tx = AppTx::begin(pool).await?;
-    let items = assets::list_in_tx(&mut tx, ctx, true)
+    let items: Vec<Value> = assets::list_in_tx(&mut tx, ctx, true)
         .await?
         .into_iter()
         .filter(|v| v["kind"] == "memory")
         .collect();
-    let items = super::knowledge::valid_assets_in_tx(&mut tx, ctx, items).await?;
+    tx.commit().await?;
+    let checked_text = super::personal_assets::checked_assets(pool, ctx, &items).await?;
+    let mut tx = AppTx::begin(pool).await?;
+    let cid = envelope["conversation_id"]
+        .as_str()
+        .unwrap_or("")
+        .to_owned();
+    let items =
+        super::knowledge::valid_assets_in_tx(&mut tx, ctx, items, &cid, &checked_text).await?;
     tx.commit().await?;
     if items.is_empty() {
         return Ok(());
@@ -319,8 +381,11 @@ pub async fn prepare_workspace(
         return Ok(());
     };
     let mut tx = AppTx::begin(pool).await?;
-    let cid = envelope["conversation_id"].as_str().unwrap_or("");
-    let conv = conversations::lock_conversation_in_tx(&mut tx, ctx, cid).await?;
+    let cid = envelope["conversation_id"]
+        .as_str()
+        .unwrap_or("")
+        .to_owned();
+    let conv = conversations::lock_conversation_in_tx(&mut tx, ctx, &cid).await?;
     let run_id = envelope["run_id"].as_str().unwrap_or("").to_owned();
     conversations::assert_turn_in_tx(
         &tx,
@@ -328,13 +393,14 @@ pub async fn prepare_workspace(
         &run_id,
         epoch(envelope["lease_epoch"].as_str().unwrap_or("0"))?,
     )?;
-    super::context_authority::assert_run_in_tx(&mut tx, ctx, cid, &run_id).await?;
+    super::context_authority::assert_run_in_tx(&mut tx, ctx, &cid, &run_id).await?;
     let current = assets::list_in_tx(&mut tx, ctx, true)
         .await?
         .into_iter()
         .filter(|v| v["kind"] == "memory")
         .collect();
-    let current = super::knowledge::valid_assets_in_tx(&mut tx, ctx, current).await?;
+    let current =
+        super::knowledge::valid_assets_in_tx(&mut tx, ctx, current, &cid, &checked_text).await?;
     let mut ranked = Vec::new();
     for candidate in result["candidates"].as_array().into_iter().flatten() {
         if let Some(asset) = current
@@ -360,6 +426,26 @@ pub async fn prepare_workspace(
     envelope["workspace_context"]["memory_retrieval"] = json!("mem0_authoritative");
     crate::modules::retrieval::bound_workspace(&mut envelope["workspace_context"]);
     let mut snapshot = envelope["workspace_context"]["authority_snapshot"].clone();
+    for preview in envelope["workspace_context"]["memories"]
+        .as_array()
+        .into_iter()
+        .flatten()
+    {
+        if let Some(asset) = current
+            .iter()
+            .find(|asset| asset["id"] == preview["id"] && asset["version"] == preview["version"])
+        {
+            let authority = super::personal_assets::text_authority_in_tx(
+                &mut tx,
+                ctx,
+                &cid,
+                asset,
+                &checked_text,
+            )
+            .await?;
+            super::context_authority::merge(&mut snapshot, &authority)?;
+        }
+    }
     super::context_authority::observe(&mut snapshot, &envelope["workspace_context"]);
     runtime::save_authority_in_tx(&mut tx, &run_id, &snapshot).await?;
     envelope["workspace_context"]["authority_revision"] = json!(fingerprint(&snapshot));

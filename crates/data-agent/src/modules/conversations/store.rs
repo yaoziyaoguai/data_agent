@@ -35,6 +35,7 @@ pub struct Message {
     pub id: String,
     pub conversation_id: String,
     pub body: String,
+    pub user_supplied: bool,
     pub recovery_chain_id: String,
     pub budget_scope_id: String,
     pub disposition: String,
@@ -83,6 +84,25 @@ pub async fn lock_conversation_in_tx(
         return Err(Error::new("not_available"));
     }
     Ok(locked)
+}
+
+pub async fn assert_readable_in_tx(
+    tx: &mut AppTx<'_>,
+    context: &AccessContext,
+    cid: &str,
+) -> Result<()> {
+    let available: bool = sqlx::query_scalar(
+        "SELECT EXISTS(SELECT 1 FROM conversations WHERE id=? AND owner_id=? AND space_id=? AND deleted=FALSE)",
+    )
+    .bind(cid)
+    .bind(&context.user_id)
+    .bind(&context.space_id)
+    .fetch_one(tx.connection())
+    .await?;
+    if !available {
+        return Err(Error::new("not_available"));
+    }
+    Ok(())
 }
 pub async fn lock_for_cleanup_in_tx(
     tx: &mut AppTx<'_>,
@@ -179,6 +199,7 @@ pub async fn find_message_in_tx(
 }
 fn message_from_row(row: &sqlx::mysql::MySqlRow) -> Message {
     Message {
+        user_supplied: !row.get::<String, _>("client_key").starts_with("server:"),
         id: row.get("id"),
         conversation_id: row.get("conversation_id"),
         body: row.get("body"),
@@ -228,6 +249,7 @@ pub async fn accept_message_in_tx(
         id: id(),
         conversation_id: locked.id.clone(),
         body: body.into(),
+        user_supplied: !key.starts_with("server:"),
         recovery_chain_id: id(),
         budget_scope_id: id(),
         disposition: "pending".into(),
@@ -415,6 +437,17 @@ pub async fn confirmation_blocked_in_tx(tx: &mut AppTx<'_>, cid: &str) -> Result
     let count:i64=sqlx::query_scalar("SELECT COUNT(*) FROM conversation_messages WHERE conversation_id=? AND routing_state='pending' AND disposition IN ('pending','failed')").bind(cid).fetch_one(tx.connection()).await?;
     Ok(count > 0)
 }
+/// 聊天执行已核对本条真实输入；其他尚未归属的输入仍阻止确认。
+pub async fn other_input_blocks_confirmation_in_tx(
+    tx: &mut AppTx<'_>,
+    locked: &LockedConversation,
+    message: &str,
+) -> Result<bool> {
+    current(tx, locked)?;
+    let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM conversation_messages WHERE conversation_id=? AND id<>? AND routing_state='pending' AND disposition IN ('pending','failed')")
+        .bind(&locked.id).bind(message).fetch_one(tx.connection()).await?;
+    Ok(count > 0)
+}
 // 消息序号表达真实交互次序；随机任务ID仅作同一消息内的稳定排序。
 pub async fn recent_task_ids_in_tx(
     tx: &mut AppTx<'_>,
@@ -462,6 +495,7 @@ pub async fn enqueue_result_input_in_tx(
         id: id(),
         conversation_id: locked.id.clone(),
         body: text.into(),
+        user_supplied: false,
         recovery_chain_id: id(),
         budget_scope_id: budget.into(),
         disposition: "pending".into(),

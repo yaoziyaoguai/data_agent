@@ -6,10 +6,94 @@ use crate::{
 };
 use serde_json::{Value, json};
 use sqlx::MySqlPool;
+pub async fn check_text_results(
+    pool: &MySqlPool,
+    ctx: &AccessContext,
+    cid: &str,
+    qid: Option<&str>,
+) -> Result<super::context_authority::CheckedTextResults> {
+    let mut tx = AppTx::begin(pool).await?;
+    let authorities = queries::text_authorities_in_tx(&mut tx, ctx, cid, qid).await?;
+    tx.commit().await?;
+    let mut checked = super::context_authority::CheckedTextResults::default();
+    checked.include_authorities(pool, ctx, &authorities).await?;
+    Ok(checked)
+}
+
+pub async fn validate_text_in_tx(
+    tx: &mut AppTx<'_>,
+    ctx: &AccessContext,
+    cid: &str,
+    qid: &str,
+    checked: &super::context_authority::CheckedTextResults,
+) -> Result<Value> {
+    let query = queries::read_in_tx(tx, ctx, qid).await?;
+    if query["conversation_id"] != cid {
+        return Err(Error::new("not_available"));
+    }
+    conversations::assert_readable_in_tx(tx, ctx, cid).await?;
+    let authority = queries::text_authority_in_tx(tx, ctx, qid).await?;
+    super::context_authority::validate_text_in_tx(tx, ctx, cid, &authority, checked).await?;
+    Ok(authority)
+}
+
+pub fn control_projection(mut query: Value) -> Value {
+    for key in [
+        "sql",
+        "parameters",
+        "summary",
+        "knowledge_refs",
+        "error_details",
+        "semantic_checks",
+    ] {
+        query.as_object_mut().expect("query").remove(key);
+    }
+    query["text_unavailable"] = json!(true);
+    query
+}
+
+pub async fn protect_text_in_tx(
+    tx: &mut AppTx<'_>,
+    ctx: &AccessContext,
+    cid: &str,
+    query: &mut Value,
+    checked: &super::context_authority::CheckedTextResults,
+) -> Result<Value> {
+    match validate_text_in_tx(
+        tx,
+        ctx,
+        cid,
+        query["id"].as_str().ok_or(Error::new("invalid_input"))?,
+        checked,
+    )
+    .await
+    {
+        Ok(authority) => Ok(authority),
+        Err(error)
+            if matches!(
+                error.code,
+                "stale_context"
+                    | "stale_knowledge"
+                    | "not_available"
+                    | "forbidden"
+                    | "invalid_input"
+            ) =>
+        {
+            *query = control_projection(query.clone());
+            Ok(super::context_authority::empty())
+        }
+        Err(error) => Err(error),
+    }
+}
+
 pub async fn list(pool: &MySqlPool, ctx: &AccessContext, cid: &str) -> Result<Value> {
+    let checked = check_text_results(pool, ctx, cid, None).await?;
     let mut tx = AppTx::begin(pool).await?;
     conversations::lock_conversation_in_tx(&mut tx, ctx, cid).await?;
-    let queries = queries::list_in_tx(&mut tx, cid).await?;
+    let mut queries = queries::list_in_tx(&mut tx, cid).await?;
+    for query in &mut queries {
+        protect_text_in_tx(&mut tx, ctx, cid, query, &checked).await?;
+    }
     let blocked = conversations::confirmation_blocked_in_tx(&mut tx, cid).await?;
     tx.commit().await?;
     Ok(json!({"queries":queries,"confirmation_blocked":blocked}))
@@ -17,9 +101,11 @@ pub async fn list(pool: &MySqlPool, ctx: &AccessContext, cid: &str) -> Result<Va
 pub async fn read(pool: &MySqlPool, ctx: &AccessContext, qid: &str) -> Result<Value> {
     let location = queries::locate(pool, qid).await?;
     access::authorize_owner(ctx, &location.owner_id, &location.space_id)?;
+    let checked = check_text_results(pool, ctx, &location.conversation_id, Some(qid)).await?;
     let mut tx = AppTx::begin(pool).await?;
     conversations::lock_conversation_in_tx(&mut tx, ctx, &location.conversation_id).await?;
-    let v = queries::read_in_tx(&mut tx, ctx, qid).await?;
+    let mut v = queries::read_in_tx(&mut tx, ctx, qid).await?;
+    protect_text_in_tx(&mut tx, ctx, &location.conversation_id, &mut v, &checked).await?;
     tx.commit().await?;
     Ok(v)
 }
@@ -32,10 +118,11 @@ pub async fn confirm(
     contracts::validate("ConfirmQuery", &input)?;
     let location = queries::locate(pool, qid).await?;
     access::authorize_owner(ctx, &location.owner_id, &location.space_id)?;
+    let checked = check_text_results(pool, ctx, &location.conversation_id, Some(qid)).await?;
     let mut tx = AppTx::begin(pool).await?;
     let conv =
         conversations::lock_conversation_in_tx(&mut tx, ctx, &location.conversation_id).await?;
-    let v = confirm_bound_in_tx(&mut tx, ctx, &conv, qid, &input, None).await?;
+    let v = confirm_bound_in_tx(&mut tx, ctx, &conv, qid, &input, None, &checked).await?;
     tx.commit().await?;
     Ok(v)
 }
@@ -47,10 +134,12 @@ pub async fn execute_from_message_in_tx(
     run: &runtime::LockedRun,
     operation: &str,
     input: &Value,
+    checked: &super::context_authority::CheckedTextResults,
 ) -> Result<Value> {
     let message = conversations::read_message_in_tx(tx, conv, &run.message_id).await?;
     // Pi解释执行意图；宿主只接受当前真实用户完整原话，不接受资料或结果唤醒授权。
     if message.disposition != "pending"
+        || !message.user_supplied
         || input["instruction_quote"].as_str().map(str::trim) != Some(message.body.trim())
         || conversations::result_query_for_message_in_tx(tx, &conv.id, &message.id)
             .await?
@@ -58,13 +147,14 @@ pub async fn execute_from_message_in_tx(
     {
         return Err(Error::new("invalid_evidence"));
     }
-    conversations::assert_routed_in_tx(tx, conv, &message.id).await?;
     let qid = input["query_id"]
         .as_str()
         .ok_or(Error::new("invalid_input"))?;
     let query = queries::read_in_tx(tx, ctx, qid).await?;
     let tasks = conversations::message_task_ids_in_tx(tx, conv, &message.id).await?;
-    if query["conversation_id"] != conv.id || !tasks.iter().any(|task| query["task_id"] == *task) {
+    if query["conversation_id"] != conv.id
+        || (!tasks.is_empty() && !tasks.iter().any(|task| query["task_id"] == *task))
+    {
         return Err(Error::new("not_available"));
     }
     super::context_authority::assert_run_in_tx(tx, ctx, &conv.id, &run.id).await?;
@@ -79,13 +169,18 @@ pub async fn execute_from_message_in_tx(
             message_id: &message.id,
             budget_scope_id: &run.budget_scope_id,
         }),
+        checked,
     )
     .await?;
-    if query["confirmation_state"] != "confirmed" {
-        // 确认与消息生效原子提交，不能撤回已授予查询执行权的输入。
-        conversations::route_message_in_tx(tx, conv, &message.id, query["task_id"].as_str(), true)
-            .await?;
-    }
+    // 只在确认成功后登记；拒绝不遗留新归属。旧查询重放不让本条输入承担旧授权。
+    conversations::route_message_in_tx(
+        tx,
+        conv,
+        &message.id,
+        query["task_id"].as_str(),
+        query["confirmation_state"] != "confirmed",
+    )
+    .await?;
     Ok(confirmed)
 }
 
@@ -96,12 +191,19 @@ async fn confirm_bound_in_tx(
     qid: &str,
     input: &Value,
     authorization: Option<queries::MessageAuthorization<'_>>,
+    checked: &super::context_authority::CheckedTextResults,
 ) -> Result<Value> {
-    let blocked = conversations::confirmation_blocked_in_tx(tx, &conv.id).await?;
+    let blocked = if let Some(message) = &authorization {
+        // 本条消息由上层核对真实原话和目标；其他输入的暂停不能随之解除。
+        conversations::other_input_blocks_confirmation_in_tx(tx, conv, message.message_id).await?
+    } else {
+        conversations::confirmation_blocked_in_tx(tx, &conv.id).await?
+    };
     analysis::lock_tasks_in_tx(tx, &conv.id).await?;
     let v = queries::read_in_tx(tx, ctx, qid).await?;
     let first_confirmation = v["confirmation_state"] != "confirmed";
     if first_confirmation {
+        validate_text_in_tx(tx, ctx, &conv.id, qid, checked).await?;
         analysis::assert_current_in_tx(
             tx,
             &conv.id,
@@ -111,7 +213,8 @@ async fn confirm_bound_in_tx(
         .await?;
         super::knowledge::check_refs_in_tx(tx, ctx, &v["knowledge_refs"]).await?;
     }
-    let v = queries::confirm_in_tx(tx, ctx, qid, input, blocked, authorization).await?;
+    let mut v = queries::confirm_in_tx(tx, ctx, qid, input, blocked, authorization).await?;
+    protect_text_in_tx(tx, ctx, &conv.id, &mut v, checked).await?;
     if first_confirmation {
         conversations::append_event_in_tx(
         tx,
@@ -139,7 +242,7 @@ pub async fn cancel(pool: &MySqlPool, ctx: &AccessContext, qid: &str) -> Result<
         conversations::lock_conversation_in_tx(&mut tx, ctx, &location.conversation_id).await?;
     let v = cancel_in_tx(&mut tx, ctx, &conv, qid).await?;
     tx.commit().await?;
-    Ok(v)
+    Ok(control_projection(v))
 }
 pub(super) async fn cancel_in_tx(
     tx: &mut AppTx<'_>,
@@ -161,6 +264,9 @@ pub async fn results(
     cursor: Option<&str>,
 ) -> Result<Value> {
     let v = read(pool, ctx, qid).await?;
+    if v["text_unavailable"] == true {
+        return Err(Error::new("stale_context"));
+    }
     if v["execution_state"] != "succeeded" {
         return Err(Error::new("result_unavailable"));
     }
@@ -201,11 +307,36 @@ pub async fn result_authority(
     qid: &str,
     result_ref: &str,
 ) -> Result<()> {
-    let query = read(pool, ctx, qid).await?;
+    let location = queries::locate(pool, qid).await?;
+    let checked = check_text_results(pool, ctx, &location.conversation_id, Some(qid)).await?;
+    let mut tx = AppTx::begin(pool).await?;
+    validate_text_in_tx(&mut tx, ctx, &location.conversation_id, qid, &checked).await?;
+    tx.commit().await?;
+    result_state_authority(pool, ctx, qid, result_ref).await
+}
+
+/// 仅供完整来源快照的结果预检；不交付查询正文，不递归调用正文授权 read。
+pub(super) async fn result_state_authority(
+    pool: &MySqlPool,
+    ctx: &AccessContext,
+    qid: &str,
+    result_ref: &str,
+) -> Result<()> {
+    let mut tx = AppTx::begin(pool).await?;
+    let query = queries::read_in_tx(&mut tx, ctx, qid).await?;
+    conversations::assert_readable_in_tx(
+        &mut tx,
+        ctx,
+        query["conversation_id"]
+            .as_str()
+            .ok_or(Error::new("not_available"))?,
+    )
+    .await?;
     if query["execution_state"] != "succeeded" || query["result_ref"].as_str() != Some(result_ref) {
         return Err(Error::new("result_unavailable"));
     }
-    knowledge_check(pool, ctx, &query["knowledge_refs"]).await?;
+    super::knowledge::check_refs_in_tx(&mut tx, ctx, &query["knowledge_refs"]).await?;
+    tx.commit().await?;
     queries::platform::result_authority(qid, &ctx.user_id, result_ref).await
 }
 
@@ -281,19 +412,51 @@ pub async fn process_due(pool: &MySqlPool, worker: &str) -> Result<bool> {
         request_id: id(),
     };
     let cid = job["conversation_id"].as_str().unwrap_or("");
+    let qid = job["query_id"].as_str().unwrap_or("");
+    let mut preflight = AppTx::begin(pool).await?;
+    let pending = queries::read_in_tx(&mut preflight, &ctx, qid).await?;
+    preflight.commit().await?;
+    // unknown 只查证、取消只发送控制操作；不能因旧正文失效而重新提交或中止查证。
+    let checked = if pending["execution_state"] == "queued" && pending["cancel_state"] == "none" {
+        Some(check_text_results(pool, &ctx, cid, Some(qid)).await?)
+    } else {
+        None
+    };
     let mut tx = AppTx::begin(pool).await?;
     let conv = conversations::lock_for_cleanup_in_tx(&mut tx, &ctx, cid).await?;
     analysis::lock_tasks_in_tx(&mut tx, cid).await?;
-    let query = queries::read_in_tx(&mut tx, &ctx, job["query_id"].as_str().unwrap_or("")).await?;
-    let authorized = super::knowledge::check_refs_in_tx(&mut tx, &ctx, &query["knowledge_refs"])
-        .await
-        .is_ok();
+    let query = queries::read_in_tx(&mut tx, &ctx, qid).await?;
+    let authorization_error = if query["execution_state"] == "queued"
+        && query["cancel_state"] == "none"
+    {
+        match checked.as_ref() {
+            Some(checked) => match validate_text_in_tx(&mut tx, &ctx, cid, qid, checked).await {
+                Ok(_) => None,
+                Err(error)
+                    if matches!(
+                        error.code,
+                        "stale_context"
+                            | "stale_knowledge"
+                            | "not_available"
+                            | "forbidden"
+                            | "invalid_input"
+                    ) =>
+                {
+                    Some(error.code)
+                }
+                Err(error) => return Err(error),
+            },
+            None => Some("stale_context"),
+        }
+    } else {
+        None
+    };
     let packet = queries::begin_submission_in_tx(&mut tx, &ctx, &job).await?;
     tx.commit().await?;
     let qid = job["query_id"].as_str().unwrap_or("");
     let action = packet["action"].as_str().unwrap_or("lookup");
-    let observation = if action == "submit" && !authorized {
-        json!({"state":"failed","error":"stale_knowledge"})
+    let observation = if action == "submit" && authorization_error.is_some() {
+        json!({"state":"failed","error":authorization_error})
     } else {
         let path = match action {
             "submit" => "/submit",

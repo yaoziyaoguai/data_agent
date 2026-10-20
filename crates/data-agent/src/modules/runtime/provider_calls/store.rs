@@ -14,10 +14,12 @@ pub struct ProviderBudget {
 }
 impl ProviderBudget {
     pub fn from_model_profile(scope_id: Option<String>, profile: ModelProfile) -> Result<Self> {
-        if !matches!(
-            profile.model_id.as_str(),
-            "deepseek-flash" | "deepseek-v4-pro"
-        ) {
+        if profile.configured_model.is_none()
+            && !matches!(
+                profile.model_id.as_str(),
+                "deepseek-flash" | "deepseek-v4-pro"
+            )
+        {
             return Err(Error::new("invalid_input"));
         }
         Ok(Self {

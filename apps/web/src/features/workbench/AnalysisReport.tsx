@@ -45,7 +45,6 @@ export function AnalysisReport({ reference, currentConditionVersion, onClose, on
   }, [reference.report_id, reference.version, reference.conversation_id, reference.task_id, reference.condition_version, currentConditionVersion, retry]);
   const available = !changed && view?.status === "available" && view.reference.report_id === reference.report_id
     && view.reference.condition_version === reference.condition_version && BigInt(view.reference.version) >= BigInt(reference.version) ? view : null;
-  const ranges = available ? [...new Set(available.report.evidence.map(evidence => evidence.data_range))] : [];
   return <Modal title="分析报告" className="analysis-report-dialog" closeLabel="返回对话" onClose={onClose}
     footer={<button className="primary" onClick={onClose}>返回对话</button>}>
     {changed || view?.status === "condition_changed" ? <div className="report-state" role="status"><h3>分析条件已更新</h3><p>这份报告采用的是此前条件。请返回对话，核对新的分析结果后再整理报告。</p></div>
@@ -54,10 +53,14 @@ export function AnalysisReport({ reference, currentConditionVersion, onClose, on
           : error ? <div className="report-state" role="alert"><p>{error}</p><button onClick={() => setRetry(value => value + 1)}>重新读取报告</button></div>
             : available ? <article className="analysis-report-body">
               <header className="report-heading"><h3>{available.report.title}</h3><p>整理于 <time dateTime={available.report.created_at}>{new Date(available.report.created_at).toLocaleString("zh-CN", { hour12: false })}</time></p></header>
-              <section className="report-scope" aria-label="分析范围"><h4>分析范围</h4>{ranges.map(range => <p key={range}>{range}</p>)}<ReportConditions conditions={available.report.evidence[0].conditions} /></section>
-              <section aria-label="分析结论" className="report-findings"><h4>主要结论</h4>{available.report.evidence.flatMap(evidence => evidence.findings.map((finding, index) =>
+              <section className="report-scope" aria-label="分析范围"><h4>分析范围与来源条件</h4>{available.report.evidence.map((evidence, index) =>
+                <section key={evidence.reference.evidence_id} id={"report-source-" + evidence.reference.evidence_id} className="report-source" aria-label={"来源 " + (index + 1)}>
+                  <h5>来源 {index + 1}</h5><p>{evidence.data_range}</p><ReportConditions conditions={evidence.conditions} />
+                  <details className="report-evidence"><summary>核对来源归属</summary><dl className="report-conditions"><div><dt>分析任务</dt><dd>{evidence.reference.task_id}</dd></div><div><dt>条件版本</dt><dd>{evidence.reference.condition_version}</dd></div></dl></details>
+                </section>)}</section>
+              <section aria-label="分析结论" className="report-findings"><h4>主要结论</h4>{available.report.evidence.flatMap((evidence, sourceIndex) => evidence.findings.map((finding, index) =>
                 <section key={evidence.reference.evidence_id + ":" + index} className="report-finding">
-                  <MarkdownContent text={finding.text} />
+                  <p className="report-source-label">采用来源 {sourceIndex + 1} 的条件</p><MarkdownContent text={finding.text} />
                   {!!finding.figures.length && <dl className="report-figures">{finding.figures.map((figure, figureIndex) => <div key={figureIndex}><dt>{figure.label}</dt><dd>{figure.value === null ? "暂无数值" : String(figure.value)}</dd></div>)}</dl>}
                   {!!finding.limitations.length && <div className="report-limits"><strong>解读范围</strong><ul>{finding.limitations.map((limit, limitIndex) => <li key={limitIndex}>{limit}</li>)}</ul></div>}
                   {(finding.calculation || finding.query_refs.length || finding.knowledge_refs.length) && <details className="report-evidence"><summary>核对计算与口径依据</summary>
@@ -68,7 +71,8 @@ export function AnalysisReport({ reference, currentConditionVersion, onClose, on
                 </section>))}</section>
               {!!available.report.charts.length && <section className="report-charts" aria-label="分析图表"><h4>图表与数据</h4>{available.report.charts.map((chart, index) => {
                 const result = available.chart_results.find(result => result.query_id === chart.query_id && result.result_ref === chart.result_ref);
-                return result ? <ReportChart key={index} chart={chart} result={result} /> : <p key={index} className="report-state" role="status">该图表的数据暂不可用，请返回对话核对。</p>;
+                const sourceLabels = available.report.evidence.flatMap((evidence, sourceIndex) => evidence.findings.some(finding => finding.query_refs.some(query => query.query_id === chart.query_id && query.result_ref === chart.result_ref)) ? ["来源 " + (sourceIndex + 1)] : []);
+                return result ? <ReportChart key={index} chart={chart} result={result} sourceLabels={sourceLabels} /> : <p key={index} className="report-state" role="status">该图表的数据暂不可用，请返回对话核对。</p>;
               })}</section>}
             </article> : null}
   </Modal>;
@@ -92,7 +96,7 @@ function ReportConditions({ conditions }: { conditions: Conditions }) {
   </dl>;
 }
 
-function ReportChart({ chart, result }: { chart: AnalysisReportChart; result: QueryResults }) {
+function ReportChart({ chart, result, sourceLabels }: { chart: AnalysisReportChart; result: QueryResults; sourceLabels: string[] }) {
   const titleId = useId();
   const dimension = result.columns.findIndex(column => column.name === chart.dimension_column);
   const measure = result.columns.findIndex(column => column.name === chart.measure_column);
@@ -107,7 +111,7 @@ function ReportChart({ chart, result }: { chart: AnalysisReportChart; result: Qu
     else segments.at(-1)?.push((index + 0.5) * width / result.rows.length + "," + (160 - position * 140));
   });
   return <figure className="report-chart" aria-labelledby={titleId}>
-    <figcaption id={titleId}>{chart.title}<small>{chart.dimension_column} · {chart.measure_column}（字段原值）</small></figcaption>
+    <figcaption id={titleId}>{chart.title}<small>{sourceLabels.join("、")}</small><small>{chart.dimension_column} · {chart.measure_column}（字段原值）</small></figcaption>
     {partial && <p className="result-limit">图表仅覆盖平台已保存的 {result.saved_row_count ?? result.rows.length} 条结果，原查询结果不完整，不能据此推算全量。</p>}
     {!result.rows.length ? <p className="report-chart-empty">查询成功，当前条件下暂无记录。</p> : !scale ? <p className="report-chart-empty">当前数值为空或不能安全绘图，原值可在下方表格中核对。</p>
       : chart.kind === "bar" ? <div className="report-chart-scroll" tabIndex={0} role="region" aria-label={chart.title + "，全部分类与精确数值"}><div className="report-bars" role="list">{result.rows.map((row, index) => {

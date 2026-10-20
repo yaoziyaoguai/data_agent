@@ -1,6 +1,6 @@
 use crate::{
     contracts,
-    modules::{access, assets, ingestion, knowledge, retrieval},
+    modules::{access, ingestion, knowledge, retrieval},
     persistence::AppTx,
     search_scope::KnowledgeSearchScope,
     types::{AccessContext, Error, Result, epoch, id},
@@ -374,22 +374,21 @@ pub async fn valid_assets_in_tx(
     tx: &mut AppTx<'_>,
     ctx: &AccessContext,
     items: Vec<Value>,
+    cid: &str,
+    checked: &super::context_authority::CheckedTextResults,
 ) -> Result<Vec<Value>> {
     let mut valid = Vec::new();
     for item in items {
-        match check_refs_in_tx(tx, ctx, &item["dependencies"]).await {
-            Ok(()) => valid.push(item),
-            Err(error) if matches!(error.code, "stale_knowledge" | "not_available") => (),
+        match super::personal_assets::text_authority_in_tx(tx, ctx, cid, &item, checked).await {
+            Ok(_) => valid.push(item),
+            Err(error) if super::personal_assets::unavailable_text(&error) => (),
             Err(error) => return Err(error),
         }
     }
     Ok(valid)
 }
 pub async fn read_asset(pool: &MySqlPool, ctx: &AccessContext, asset: &str) -> Result<Value> {
-    let mut tx = AppTx::begin(pool).await?;
-    let v = assets::read_in_tx(&mut tx, ctx, asset, false).await?;
-    tx.commit().await?;
-    Ok(v)
+    super::personal_assets::read(pool, ctx, asset).await
 }
 pub async fn source_head(pool: &MySqlPool, ctx: &AccessContext, source: &str) -> Result<Value> {
     let mut tx = AppTx::begin(pool).await?;

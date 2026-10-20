@@ -43,11 +43,17 @@ pub async fn read_page(
     before: Option<u64>,
     after: Option<u64>,
 ) -> Result<Value> {
+    let checked =
+        super::context_authority::check_task_text_results(pool, context, cid, None).await?;
     let mut tx = AppTx::begin(pool).await?;
     let conversation = conversations::lock_conversation_in_tx(&mut tx, context, cid).await?;
     let mut events = conversations::event_page_in_tx(&mut tx, &conversation, before, after).await?;
     let last = conversations::last_event_seq_in_tx(&mut tx, &conversation).await?;
-    let tasks = analysis::read_tasks_in_tx(&mut tx, cid).await?;
+    let mut tasks = analysis::read_tasks_in_tx(&mut tx, cid).await?;
+    for task in &mut tasks {
+        super::context_authority::protect_task_context_in_tx(&mut tx, context, cid, task, &checked)
+            .await?;
+    }
     let runs = runtime::read_runs_in_tx(&mut tx, cid).await?;
     let attempts: Vec<String> = events
         .iter()

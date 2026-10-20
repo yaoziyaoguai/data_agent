@@ -36,6 +36,34 @@ fn text<'a>(input: &'a Value, key: &str) -> Result<&'a str> {
 fn cancellation_state(query: &Value) -> Value {
     json!({"id":query["id"],"task_id":query["task_id"],"condition_version":query["condition_version"],"execution_state":query["execution_state"],"cancel_state":query["cancel_state"]})
 }
+async fn request_condition_authority_in_tx(
+    tx: &mut AppTx<'_>,
+    ctx: &AccessContext,
+    cid: &str,
+    args: &Value,
+    checked: &super::context_authority::CheckedTextResults,
+) -> Result<Value> {
+    super::knowledge::check_refs_in_tx(tx, ctx, &args["knowledge_refs"]).await?;
+    analysis::lock_tasks_in_tx(tx, cid).await?;
+    let task = text(args, "task_id")?;
+    let version = epoch(text(args, "condition_version")?)?;
+    analysis::assert_current_in_tx(tx, cid, task, version).await?;
+    if conversations::confirmation_blocked_in_tx(tx, cid).await? {
+        return Err(Error::new("message_pending"));
+    }
+    let conditions = analysis::read_evidence_conditions_in_tx(tx, ctx, cid, task, version).await?;
+    super::context_authority::validate_condition_text_in_tx(
+        tx,
+        ctx,
+        cid,
+        task,
+        version,
+        &conditions,
+        checked,
+    )
+    .await
+}
+
 async fn semantic_diagnostics_in_tx(
     tx: &mut AppTx<'_>,
     ctx: &AccessContext,
@@ -73,12 +101,80 @@ fn replay_receipt(name: &str, mut receipt: Value) -> Result<Value> {
     }
     Ok(receipt)
 }
+async fn protect_update_result_in_tx(
+    tx: &mut AppTx<'_>,
+    ctx: &AccessContext,
+    cid: &str,
+    run_id: &str,
+    result: &mut Value,
+    text_results: &super::context_authority::CheckedTextResults,
+) -> Result<()> {
+    let refs =
+        super::context_authority::protect_task_context_in_tx(tx, ctx, cid, result, text_results)
+            .await?;
+    super::context_authority::merge_run_in_tx(tx, run_id, &refs).await?;
+    Ok(())
+}
+async fn replay_receipt_in_tx(
+    tx: &mut AppTx<'_>,
+    ctx: &AccessContext,
+    cid: &str,
+    run_id: &str,
+    name: &str,
+    receipt: Value,
+    text_results: &super::context_authority::CheckedTextResults,
+) -> Result<Value> {
+    let mut receipt = replay_receipt(name, receipt)?;
+    if matches!(name, "request_query" | "execute_query") && receipt["data"]["id"].is_string() {
+        let authority = super::query_workflow::protect_text_in_tx(
+            tx,
+            ctx,
+            cid,
+            &mut receipt["data"],
+            text_results,
+        )
+        .await?;
+        super::context_authority::merge_run_in_tx(tx, run_id, &authority).await?;
+    }
+    if name == "update_analysis_task" {
+        protect_update_result_in_tx(tx, ctx, cid, run_id, &mut receipt["data"], text_results)
+            .await?;
+        super::context_authority::extend_run_in_tx(tx, run_id, &receipt["data"]).await?;
+    }
+    if name == "manage_personal_asset" && receipt["data"]["kind"] == "memory" {
+        let data = &receipt["data"];
+        let current = match assets::read_in_tx(tx, ctx, text(data, "id")?, false).await {
+            Ok(current) => current,
+            Err(error) if super::personal_assets::unavailable_text(&error) => {
+                receipt["data"] =
+                    json!({"id":data["id"],"version":data["version"],"text_unavailable":true});
+                return Ok(receipt);
+            }
+            Err(error) => return Err(error),
+        };
+        let authority = if current["version"] == data["version"] && current["state"] == "enabled" {
+            super::personal_assets::text_authority_in_tx(tx, ctx, cid, &current, text_results).await
+        } else {
+            Err(Error::new("stale_context"))
+        };
+        match authority {
+            Ok(authority) => {
+                super::context_authority::merge_run_in_tx(tx, run_id, &authority).await?;
+                super::context_authority::extend_run_in_tx(tx, run_id, &receipt["data"]).await?;
+            }
+            Err(error) if super::personal_assets::unavailable_text(&error) => {
+                receipt["data"] = json!({"id":data["id"],"version":data["version"],"state":current["state"],"text_unavailable":true});
+            }
+            Err(error) => return Err(error),
+        }
+    }
+    Ok(receipt)
+}
 fn can_replay_receipt(name: &str) -> bool {
     matches!(
         name,
         "request_query"
             | "execute_query"
-            | "validate_sql"
             | "update_analysis_task"
             | "manage_personal_asset"
             | "propose_semantic_change"
@@ -168,6 +264,40 @@ async fn execute(pool: &MySqlPool, ctx: &AccessContext, input: Value) -> Result<
     let args = &input["arguments"];
     let validation = contracts::validate(input_schema(name)?, args);
     let cid = runtime::locate_run(pool, text(&input, "run_id")?).await?;
+    let mut text_results = if matches!(
+        name,
+        "update_analysis_task"
+            | "read_analysis_task"
+            | "read_conversation"
+            | "save_analysis_evidence"
+            | "save_analysis_report"
+            | "read_analysis_report"
+            | "prepare_skill_draft"
+            | "request_query"
+            | "get_query"
+            | "execute_query"
+    ) {
+        super::context_authority::check_task_text_results(pool, ctx, &cid, None).await?
+    } else {
+        super::context_authority::CheckedTextResults::default()
+    };
+    if matches!(name, "request_query" | "get_query" | "execute_query") {
+        let mut tx = AppTx::begin(pool).await?;
+        let authorities =
+            queries::text_authorities_in_tx(&mut tx, ctx, &cid, args["query_id"].as_str()).await?;
+        tx.commit().await?;
+        text_results
+            .include_authorities(pool, ctx, &authorities)
+            .await?;
+    }
+    if matches!(
+        name,
+        "search_knowledge" | "read_knowledge" | "read" | "manage_personal_asset"
+    ) {
+        let checked =
+            super::context_authority::check_available_asset_results(pool, ctx, &cid).await?;
+        text_results.include_checked(&checked);
+    }
     // 原回执不按新参数契约重判；读取工具仍须回源，未知操作不能变成新拒绝。
     if can_replay_receipt(name) || validation.is_err() {
         let mut tx = AppTx::begin(pool).await?;
@@ -189,19 +319,38 @@ async fn execute(pool: &MySqlPool, ctx: &AccessContext, input: Value) -> Result<
                 && (tool.state == "rejected"
                     || (tool.state == "succeeded" && can_replay_receipt(name)))
             {
+                let receipt =
+                    replay_receipt_in_tx(&mut tx, ctx, &cid, &run.id, name, receipt, &text_results)
+                        .await?;
                 tx.commit().await?;
-                return replay_receipt(name, receipt);
+                return Ok(receipt);
             }
             if validation.is_err() {
                 return Err(Error::new("outcome_unknown"));
             }
         }
+        if name == "request_query" && validation.is_ok() {
+            let message =
+                conversations::read_message_in_tx(&mut tx, &conv, &run.message_id).await?;
+            super::query_semantics::validate_resolution(
+                args,
+                &message.body,
+                message.user_supplied,
+            )?;
+        }
         tx.commit().await?;
     }
     validation?;
-    if name == "request_query"
-        && let Some(replaced) = args["replaces_query_id"].as_str()
-    {
+    // 停止动作只返回控制状态；旧结果失效不能剥夺当前用户停止本人查询的能力。
+    let checked = if name == "cancel_query" {
+        None
+    } else {
+        Some(super::context_authority::check_run_results(pool, ctx, text(&input, "run_id")?).await?)
+    };
+    if let Some(checked) = &checked {
+        text_results.include_run(checked);
+    }
+    if matches!(name, "request_query" | "validate_sql") {
         let mut tx = AppTx::begin(pool).await?;
         let conv = conversations::lock_conversation_in_tx(&mut tx, ctx, &cid).await?;
         conversations::assert_turn_in_tx(
@@ -211,51 +360,56 @@ async fn execute(pool: &MySqlPool, ctx: &AccessContext, input: Value) -> Result<
             epoch(text(&input, "lease_epoch")?)?,
         )?;
         let run = runtime::lock_run_in_tx(&mut tx, text(&input, "run_id")?, &cid).await?;
+        if run.state != "running" {
+            return Err(Error::new("lease_lost"));
+        }
+        super::context_authority::assert_checked_run_in_tx(
+            &mut tx,
+            &run.id,
+            checked.as_ref().expect("query check"),
+        )
+        .await?;
+        super::context_authority::assert_run_in_tx(&mut tx, ctx, &cid, &run.id).await?;
         let tool = runtime::lock_tool_call_in_tx(&mut tx, &run, text(&input, "sdk_tool_call_id")?)
             .await?
             .ok_or(Error::new("version_conflict"))?;
         if tool.fingerprint != fingerprint(&json!({"name":name,"arguments":args})) {
             return Err(Error::new("idempotency_conflict"));
         }
-        if let Some(receipt) = tool.receipt {
+        if let Some(receipt) = tool.receipt
+            && name == "request_query"
+        {
+            let receipt =
+                replay_receipt_in_tx(&mut tx, ctx, &cid, &run.id, name, receipt, &text_results)
+                    .await?;
             tx.commit().await?;
-            return replay_receipt(name, receipt);
+            return Ok(receipt);
         }
-        analysis::lock_tasks_in_tx(&mut tx, &cid).await?;
-        analysis::assert_current_in_tx(
-            &mut tx,
-            &cid,
-            text(args, "task_id")?,
-            epoch(text(args, "condition_version")?)?,
-        )
-        .await?;
-        super::knowledge::check_refs_in_tx(&mut tx, ctx, &args["knowledge_refs"]).await?;
-        // 在外部编译检查前失效明确被纠正的旧稿；检查失败也不能恢复旧确认权。
-        queries::begin_revision_in_tx(
-            &mut tx,
-            ctx,
-            &cid,
-            text(args, "task_id")?,
-            args["target_id"].as_str(),
-            replaced,
-        )
-        .await?;
-        conversations::route_message_in_tx(
-            &mut tx,
-            &conv,
-            &run.message_id,
-            args["task_id"].as_str(),
-            true,
-        )
-        .await?;
+        if name == "request_query" {
+            request_condition_authority_in_tx(&mut tx, ctx, &cid, args, &text_results).await?;
+            if let Some(replaced) = args["replaces_query_id"].as_str() {
+                // 有效修订在外部编译前失效旧稿；失效来源不能先改变旧稿或向平台发送SQL。
+                queries::begin_revision_in_tx(
+                    &mut tx,
+                    ctx,
+                    &cid,
+                    text(args, "task_id")?,
+                    args["target_id"].as_str(),
+                    replaced,
+                )
+                .await?;
+                conversations::route_message_in_tx(
+                    &mut tx,
+                    &conv,
+                    &run.message_id,
+                    args["task_id"].as_str(),
+                    true,
+                )
+                .await?;
+            }
+        }
         tx.commit().await?;
     }
-    // 停止动作只返回控制状态；旧结果失效不能剥夺当前用户停止本人查询的能力。
-    let checked = if name == "cancel_query" {
-        None
-    } else {
-        Some(super::context_authority::check_run_results(pool, ctx, text(&input, "run_id")?).await?)
-    };
     // 模型检查和结果读取在业务事务外；写入时重新校验运行及当前权限。
     let external = match name {
         "validate_sql" | "request_query" => {
@@ -297,15 +451,18 @@ async fn execute(pool: &MySqlPool, ctx: &AccessContext, input: Value) -> Result<
                 &cid,
                 &runtime::locate_run_message(pool, text(&input, "run_id")?).await?,
                 args,
+                &mut text_results,
             )
             .await?,
         ),
-        "save_analysis_report" => {
-            Some(super::analysis_reports::validate_sources(pool, ctx, &cid, args).await?)
-        }
-        "read_analysis_report" => {
-            Some(super::analysis_reports::read_for_agent(pool, ctx, &cid, args).await?)
-        }
+        "save_analysis_report" => Some(
+            super::analysis_reports::validate_sources(pool, ctx, &cid, args, &mut text_results)
+                .await?,
+        ),
+        "read_analysis_report" => Some(
+            super::analysis_reports::read_for_agent(pool, ctx, &cid, args, &mut text_results)
+                .await?,
+        ),
         "prepare_skill_draft" => Some(
             super::skill_drafts::validate_sources(
                 pool,
@@ -313,6 +470,7 @@ async fn execute(pool: &MySqlPool, ctx: &AccessContext, input: Value) -> Result<
                 &cid,
                 &runtime::locate_run_message(pool, text(&input, "run_id")?).await?,
                 args,
+                &mut text_results,
             )
             .await?,
         ),
@@ -373,10 +531,21 @@ async fn execute(pool: &MySqlPool, ctx: &AccessContext, input: Value) -> Result<
                     | "read_conversation"
                     | "read_analysis_task"
                     | "read_analysis_report"
+                    | "validate_sql"
             ))
     {
+        let receipt = replay_receipt_in_tx(
+            &mut tx,
+            ctx,
+            &cid,
+            &run.id,
+            name,
+            receipt.clone(),
+            &text_results,
+        )
+        .await?;
         tx.commit().await?;
-        return replay_receipt(name, receipt.clone());
+        return Ok(receipt);
     }
     let data = match name {
         "search_knowledge" => {
@@ -394,9 +563,14 @@ async fn execute(pool: &MySqlPool, ctx: &AccessContext, input: Value) -> Result<
                 .into_iter()
                 .filter(|v| v["kind"] == "memory")
                 .collect();
-            let mut items = super::knowledge::valid_assets_in_tx(&mut tx, ctx, memories).await?;
+            let mut items =
+                super::knowledge::valid_assets_in_tx(&mut tx, ctx, memories, &cid, &text_results)
+                    .await?;
             let selected = assets::selected_in_tx(&mut tx, ctx, &cid).await?;
-            items.extend(super::knowledge::valid_assets_in_tx(&mut tx, ctx, selected).await?);
+            items.extend(
+                super::knowledge::valid_assets_in_tx(&mut tx, ctx, selected, &cid, &text_results)
+                    .await?,
+            );
             let mut page = retrieval::asset_directory(
                 items.clone(),
                 text(args, "query")?,
@@ -512,6 +686,7 @@ async fn execute(pool: &MySqlPool, ctx: &AccessContext, input: Value) -> Result<
                 &cid,
                 &run.id,
                 text(args, "path")?,
+                &text_results,
             )
             .await?
         }
@@ -534,20 +709,45 @@ async fn execute(pool: &MySqlPool, ctx: &AccessContext, input: Value) -> Result<
             )
         }
         "read_analysis_task" => {
-            let task = analysis::read_task_with_clarifications_in_tx(
+            let mut task = analysis::read_task_with_clarifications_in_tx(
                 &mut tx,
                 &cid,
                 text(args, "task_id")?,
                 args["clarification_after"].as_str(),
+                args["condition_version"].as_str().map(epoch).transpose()?,
             )
             .await?;
-            super::knowledge::check_refs_in_tx(&mut tx, ctx, &task["conditions"]["knowledge_refs"])
-                .await?;
+            let refs = super::context_authority::protect_task_context_in_tx(
+                &mut tx,
+                ctx,
+                &cid,
+                &mut task,
+                &text_results,
+            )
+            .await?;
+            super::context_authority::merge_run_in_tx(&mut tx, &run.id, &refs).await?;
             task
         }
         "read_conversation" => {
             if args["task_directory"] == true {
-                analysis::task_directory_in_tx(&mut tx, &cid, args["task_after"].as_str()).await?
+                let mut directory =
+                    analysis::task_directory_in_tx(&mut tx, &cid, args["task_after"].as_str())
+                        .await?;
+                for task in directory["tasks"]
+                    .as_array_mut()
+                    .ok_or(Error::new("invalid_input"))?
+                {
+                    let refs = super::context_authority::protect_task_context_in_tx(
+                        &mut tx,
+                        ctx,
+                        &cid,
+                        task,
+                        &text_results,
+                    )
+                    .await?;
+                    super::context_authority::merge_run_in_tx(&mut tx, &run.id, &refs).await?;
+                }
+                directory
             } else if let Some(message_id) = args["message_id"].as_str() {
                 let message = conversations::read_message_in_tx(&mut tx, &conv, message_id).await?;
                 if message.disposition == "withdrawn" {
@@ -592,13 +792,30 @@ async fn execute(pool: &MySqlPool, ctx: &AccessContext, input: Value) -> Result<
             result
         }
         "update_analysis_task" => {
+            let text_authority =
+                super::context_authority::generated_text_authority_in_tx(&mut tx, &run.id, args)
+                    .await?;
+            let message =
+                conversations::read_message_in_tx(&mut tx, &conv, &run.message_id).await?;
+            // 只豁免真实用户完整原话；结果唤醒消息和模型自报引用不能授予独立来源。
+            let goal_authority =
+                if message.user_supplied && args["goal"].as_str() == Some(message.body.as_str()) {
+                    super::context_authority::empty()
+                } else {
+                    text_authority.clone()
+                };
             let tasks = analysis::lock_tasks_in_tx(&mut tx, &cid).await?;
-            let result = analysis::apply_update_in_tx(
+            let mut result = analysis::apply_update_in_tx(
                 &mut tx,
                 &tasks,
                 &ctx.user_id,
                 &tool.operation_id,
                 args,
+                &analysis::TaskTextAuthority {
+                    generated: text_authority,
+                    goal: goal_authority,
+                    cleared: super::context_authority::empty(),
+                },
             )
             .await?;
             if result["conditions"].is_object() {
@@ -609,6 +826,8 @@ async fn execute(pool: &MySqlPool, ctx: &AccessContext, input: Value) -> Result<
                 )
                 .await?;
             }
+            protect_update_result_in_tx(&mut tx, ctx, &cid, &run.id, &mut result, &text_results)
+                .await?;
             if (args["action"] == "revise" || args["action"] == "clarify")
                 && let Some(task) = result["task_id"].as_str()
             {
@@ -647,18 +866,12 @@ async fn execute(pool: &MySqlPool, ctx: &AccessContext, input: Value) -> Result<
             result
         }
         "request_query" => {
-            super::knowledge::check_refs_in_tx(&mut tx, ctx, &args["knowledge_refs"]).await?;
-            analysis::lock_tasks_in_tx(&mut tx, &cid).await?;
-            analysis::assert_current_in_tx(
-                &mut tx,
-                &cid,
-                text(args, "task_id")?,
-                epoch(text(args, "condition_version")?)?,
-            )
-            .await?;
-            if conversations::confirmation_blocked_in_tx(&mut tx, &cid).await? {
-                return Err(Error::new("message_pending"));
-            }
+            let condition_authority =
+                request_condition_authority_in_tx(&mut tx, ctx, &cid, args, &text_results).await?;
+            let mut text_authority =
+                super::context_authority::generated_text_authority_in_tx(&mut tx, &run.id, args)
+                    .await?;
+            super::context_authority::merge(&mut text_authority, &condition_authority)?;
             let report = semantic_diagnostics_in_tx(&mut tx, ctx, args).await?;
             let mut result = queries::save_draft_in_tx(
                 &mut tx,
@@ -667,9 +880,13 @@ async fn execute(pool: &MySqlPool, ctx: &AccessContext, input: Value) -> Result<
                 &run.budget_scope_id,
                 &tool.operation_id,
                 args,
-                external.as_ref().ok_or(Error::new("unavailable"))?,
+                queries::DraftValidation {
+                    platform_report: external.as_ref().ok_or(Error::new("unavailable"))?,
+                    text_authority: &text_authority,
+                },
             )
             .await?;
+            super::context_authority::merge_run_in_tx(&mut tx, &run.id, &text_authority).await?;
             result["semantic_checks"] = report;
             analysis::set_phase_in_tx(
                 &mut tx,
@@ -683,12 +900,22 @@ async fn execute(pool: &MySqlPool, ctx: &AccessContext, input: Value) -> Result<
         }
         "get_query" => {
             let qid = text(args, "query_id")?;
-            let q = queries::read_in_tx(&mut tx, ctx, qid).await?;
+            let mut q = queries::read_in_tx(&mut tx, ctx, qid).await?;
             if q["conversation_id"] != cid {
                 return Err(Error::new("not_available"));
             }
-            super::knowledge::check_refs_in_tx(&mut tx, ctx, &q["knowledge_refs"]).await?;
-            if q["execution_state"] == "succeeded"
+            let authority = super::query_workflow::protect_text_in_tx(
+                &mut tx,
+                ctx,
+                &cid,
+                &mut q,
+                &text_results,
+            )
+            .await?;
+            super::context_authority::merge_run_in_tx(&mut tx, &run.id, &authority).await?;
+            if q["text_unavailable"] == true {
+                json!({"query":q,"results":null,"hint":"查询正文来源已失效或缺少完整记录；只返回原状态，可停止查询，不能据此确认执行或恢复旧正文。"})
+            } else if q["execution_state"] == "succeeded"
                 && queries::is_confirmation_message_in_tx(&mut tx, ctx, qid, &run.message_id)
                     .await?
             {
@@ -700,22 +927,20 @@ async fn execute(pool: &MySqlPool, ctx: &AccessContext, input: Value) -> Result<
         }
         "save_analysis_evidence" => {
             conversations::assert_routed_in_tx(&mut tx, &conv, &run.message_id).await?;
-            if !conversations::message_task_ids_in_tx(&mut tx, &conv, &run.message_id)
-                .await?
-                .iter()
-                .any(|task| args["task_id"] == *task)
-            {
-                return Err(Error::new("invalid_evidence"));
-            }
+            // 依据绑定来源任务；当前消息可归属报告容器，历史来源身份由依据用例独立核对。
             let sources = external.as_ref().ok_or(Error::new("invalid_evidence"))?;
             let receipt = super::analysis_evidence::save_in_tx(
                 &mut tx,
                 ctx,
                 &cid,
-                &tool.operation_id,
-                &run.message_id,
+                super::analysis_evidence::EvidenceWrite {
+                    operation_id: &tool.operation_id,
+                    message_id: &run.message_id,
+                    run_id: &run.id,
+                },
                 args,
                 sources,
+                &text_results,
             )
             .await?;
             super::context_authority::extend_run_in_tx(
@@ -736,7 +961,16 @@ async fn execute(pool: &MySqlPool, ctx: &AccessContext, input: Value) -> Result<
         }
         "read_analysis_report" => {
             let checked = external.as_ref().ok_or(Error::new("invalid_evidence"))?;
-            super::analysis_reports::assert_page_in_tx(&mut tx, ctx, &cid, args, checked).await?;
+            let text_authority = super::analysis_reports::assert_page_in_tx(
+                &mut tx,
+                ctx,
+                &cid,
+                args,
+                checked,
+                &text_results,
+            )
+            .await?;
+            super::context_authority::merge_run_in_tx(&mut tx, &run.id, &text_authority).await?;
             if checked["page"]["status"] == "available" {
                 super::context_authority::extend_run_in_tx(
                     &mut tx,
@@ -767,10 +1001,14 @@ async fn execute(pool: &MySqlPool, ctx: &AccessContext, input: Value) -> Result<
                 &mut tx,
                 ctx,
                 &cid,
-                &tool.operation_id,
-                &run.message_id,
+                super::analysis_reports::ReportWrite {
+                    operation_id: &tool.operation_id,
+                    message_id: &run.message_id,
+                    model_run_id: Some(&run.id),
+                },
                 args,
                 evidence,
+                &text_results,
             )
             .await?;
             let adopted = super::analysis_reports::sources(evidence)?;
@@ -797,15 +1035,26 @@ async fn execute(pool: &MySqlPool, ctx: &AccessContext, input: Value) -> Result<
             receipt
         }
         "execute_query" => {
-            super::query_workflow::execute_from_message_in_tx(
+            let mut query = super::query_workflow::execute_from_message_in_tx(
                 &mut tx,
                 ctx,
                 &conv,
                 &run,
                 &tool.operation_id,
                 args,
+                &text_results,
             )
-            .await?
+            .await?;
+            let authority = super::query_workflow::protect_text_in_tx(
+                &mut tx,
+                ctx,
+                &cid,
+                &mut query,
+                &text_results,
+            )
+            .await?;
+            super::context_authority::merge_run_in_tx(&mut tx, &run.id, &authority).await?;
+            query
         }
         "prepare_skill_draft" => {
             super::skill_drafts::prepare_in_tx(
@@ -815,7 +1064,10 @@ async fn execute(pool: &MySqlPool, ctx: &AccessContext, input: Value) -> Result<
                 &run,
                 &tool,
                 args,
-                external.as_ref().ok_or(Error::new("invalid_evidence"))?,
+                super::skill_drafts::CheckedDraftSources {
+                    evidence: external.as_ref().ok_or(Error::new("invalid_evidence"))?,
+                    text_results: &text_results,
+                },
             )
             .await?
         }
@@ -834,6 +1086,9 @@ async fn execute(pool: &MySqlPool, ctx: &AccessContext, input: Value) -> Result<
             let message =
                 conversations::read_message_in_tx(&mut tx, &conv, &run.message_id).await?;
             let action = text(args, "action")?;
+            if !message.user_supplied {
+                return Err(Error::new("scope_incomplete"));
+            }
             let source_text = if action == "disable_memory" {
                 None
             } else {
@@ -857,6 +1112,9 @@ async fn execute(pool: &MySqlPool, ctx: &AccessContext, input: Value) -> Result<
             } else {
                 None
             };
+            if let Some(asset) = &old {
+                super::personal_assets::ensure_field_authorities_in_tx(&mut tx, ctx, asset).await?;
+            }
             let value = if action == "disable_memory" {
                 assets::change_state_in_tx(&mut tx, ctx, text(args, "asset_id")?,
                     &json!({"operation_id":tool.operation_id,"expected_version":args["expected_version"]}), "disabled").await?
@@ -866,7 +1124,31 @@ async fn execute(pool: &MySqlPool, ctx: &AccessContext, input: Value) -> Result<
                 // 同一份提取保留完整限定，名称只作标签，避免另一次概括引入不同指标。
                 let name: String = body.chars().take(40).collect();
                 let save = json!({"operation_id":tool.operation_id,"id":args["asset_id"],"expected_version":args["expected_version"],"kind":"memory","name":name,"body":body,"scope":body,"verified":false,"source_text":source_text,"dependencies":args["dependencies"]});
-                assets::save_in_tx(&mut tx, ctx, &save).await?
+                let mut authority = super::context_authority::generated_text_authority_in_tx(
+                    &mut tx, &run.id, args,
+                )
+                .await?;
+                if let Some(old) = &old {
+                    for source in
+                        super::personal_assets::authorities_in_tx(&mut tx, ctx, old).await?
+                    {
+                        super::context_authority::merge(&mut authority, &source)?;
+                    }
+                    for kind in ["memories", "skills", "source_skills"] {
+                        authority[kind]
+                            .as_array_mut()
+                            .expect("authority")
+                            .retain(|reference| reference[0] != old["id"]);
+                    }
+                }
+                assets::save_with_authority_in_tx(
+                    &mut tx,
+                    ctx,
+                    &save,
+                    false,
+                    extracted_memory.is_none().then_some(&authority),
+                )
+                .await?
             };
             super::personal_memory::queue_in_tx(
                 &mut tx,
@@ -886,14 +1168,27 @@ async fn execute(pool: &MySqlPool, ctx: &AccessContext, input: Value) -> Result<
             }
             conversations::append_event_in_tx(&mut tx, &conv, &id(),
                 if action == "disable_memory" { "memory_disabled" } else { "memory_saved" },
-                json!({"asset_id":value["id"],"version":value["version"],"scope":value["scope"],"action":action})).await?;
-            retrieval::model_page(value, 0, 4096, None)
+                json!({"asset_id":value["id"],"version":value["version"],"state":value["state"],"action":action})).await?;
+            if action == "disable_memory" {
+                json!({"id":value["id"],"version":value["version"],"state":value["state"]})
+            } else {
+                retrieval::model_page(value, 0, 4096, None)
+            }
         }
         "propose_semantic_change" => {
             knowledge::propose_in_tx(&mut tx, ctx, &tool.operation_id, args).await?
         }
         _ => return Err(Error::new("unsupported")),
     };
+    let asset_authority = super::context_authority::asset_text_dependencies_in_tx(
+        &mut tx,
+        ctx,
+        &cid,
+        &data,
+        &text_results,
+    )
+    .await?;
+    super::context_authority::merge_run_in_tx(&mut tx, &run.id, &asset_authority).await?;
     super::context_authority::extend_run_in_tx(&mut tx, &run.id, &data).await?;
     if name == "save_analysis_evidence" {
         super::context_authority::extend_result_dependencies_in_tx(
@@ -912,6 +1207,112 @@ async fn execute(pool: &MySqlPool, ctx: &AccessContext, input: Value) -> Result<
     Ok(receipt)
 }
 
+async fn rejection_data_in_tx(
+    tx: &mut AppTx<'_>,
+    ctx: &AccessContext,
+    conv: &conversations::LockedConversation,
+    run: &runtime::LockedRun,
+    input: &Value,
+    error: &Error,
+) -> Result<Value> {
+    let mut data = json!({"error":error.code,"outcome":"rejected"});
+    let name = input["tool_name"].as_str().unwrap_or("");
+    let mut hint = match (name, error.code) {
+        ("execute_query", "invalid_evidence") => {
+            "本次执行授权被拒绝，未新增执行授权。instruction_quote须逐字包含本轮真实用户完整原话，包括粘贴SQL、换行、否定和限定；系统结果唤醒不能授权。先核对查询当前SQL、参数、状态和版本；若只是漏引原话且本轮仍有有效执行要求，可用新的工具调用修正，不必再次询问用户；不得修改已登记调用参数或另建查询。已提交查询只接回状态，未知先按原身份查证，不能换ID重做。任务、版本、权限与预算检查保持。"
+        }
+        (_, "waiting_clarification") => {
+            "任务条件版本正确，但仍有未回答问题，本次未生成或执行查询。先用read_analysis_task读取开放问题；只有本轮原话确实回答了某项，才用revise及resolved_clarification_ids合并该回答。解释选项或未回答不等于接受，其他问题必须保留。解决全部阻塞后，可在原话明确授权仍覆盖当前SQL时继续，不必重复请求同一授权。"
+        }
+        (_, "clarification_required") => {
+            "已声明的口径仍有未决差异，本次未编译、保存或替换查询。先用update_analysis_task的clarify把独立问题登记到任务；只有用户真实回答后再修订条件并解决对应问题。与waiting_clarification不同，这些差异尚未登记，不能把自己的假设当作用户采用。"
+        }
+        (_, "task_inactive") => {
+            "任务已取消或归档，本次未推进任务或执行查询。请读取当前任务状态并说明原因；不能重开旧任务、另建查询或改变操作身份来绕过停用。新分析必须有真实用户新目标。"
+        }
+        (_, "clarification_not_open") => {
+            "引用的问题已不再开放，本次更新未生效。用read_analysis_task核对当前条件与开放问题，只登记本轮实际回答且仍开放的问题；已完成操作按原调用身份接回，不要重复解决旧问题。"
+        }
+        (_, "version_conflict") => {
+            "所引用的版本或对象状态不再匹配，本次未取得成功回执。先读取recovery中的任务或查询，核对当前条件、草稿、替换关系和状态，再决定是否需要修订；不能只把版本数字改成最新值重试。已提交或未知的查询先按原身份查证，不能另建查询重复执行。"
+        }
+        (_, "scope_incomplete") => {
+            "instruction_quote必须逐字包含完整指令起点（例如‘请记住：’），不能只引用冒号后的偏好。请对照本条用户原话修正引用；若含仅本次或不要保存，不得写入长期记忆。"
+        }
+        (_, "skill_line_too_long") => {
+            "此Skill有单行超过50KiB，请让维护者在网页中分行后保存，再重新选用；本次未读取正文。"
+        }
+        _ => "本次操作未取得成功回执；请按错误原因核对，不得声称已执行或已保存。",
+    };
+    let mut recovery = json!({});
+    if error.code == "message_pending" {
+        let routed = match conversations::assert_routed_in_tx(tx, conv, &run.message_id).await {
+            Ok(()) => true,
+            Err(error) if error.code == "message_pending" => false,
+            Err(error) => return Err(error),
+        };
+        let other_input = name == "execute_query"
+            && conversations::other_input_blocks_confirmation_in_tx(tx, conv, &run.message_id)
+                .await?;
+        recovery["reason"] = json!(if routed || other_input {
+            "other_message_unrouted"
+        } else {
+            "current_message_unrouted"
+        });
+        hint = if routed || other_input {
+            "会话另有待归属输入，执行暂缓，本次未新增执行授权或任务归属。不能用当前消息替另一条消息登记，也不能自动撤回其他输入或循环重试；先完成本条消息的归属与说明，再结束本轮，让待处理消息按真实原话更新条件，之后重新核对查询和执行要求。"
+        } else {
+            "当前真实用户消息尚未登记任务归属，本次未新增执行授权。先用update_analysis_task登记本轮归属：仅说明或执行既有SQL用route，修改条件用revise，独立目标用create；涉及多个独立任务须分别登记。成功后重新核对任务、查询和完整用户原话；若原话明确要求执行且范围仍匹配，使用新的execute_query调用继续，不必再次询问同一授权。登记本身不授予执行权，其他待处理消息仍可阻塞执行。"
+        };
+    }
+    if matches!(
+        error.code,
+        "message_pending"
+            | "waiting_clarification"
+            | "clarification_required"
+            | "task_inactive"
+            | "clarification_not_open"
+            | "version_conflict"
+            | "invalid_evidence"
+    ) {
+        let args = &input["arguments"];
+        let mut task = args["task_id"].as_str().map(str::to_owned);
+        if let Some(query_id) = args["query_id"].as_str() {
+            match queries::read_in_tx(tx, ctx, query_id).await {
+                Ok(query) if query["conversation_id"] == conv.id => {
+                    task = query["task_id"].as_str().map(str::to_owned);
+                    recovery["query"] = json!({
+                        "query_id":query["id"],"task_id":query["task_id"],
+                        "condition_version":query["condition_version"],"draft_version":query["draft_version"],
+                        "confirmation_state":query["confirmation_state"],"execution_state":query["execution_state"],
+                        "cancel_state":query["cancel_state"],
+                        "read_tool":{"name":"get_query","arguments":{"query_id":query["id"]}}
+                    });
+                }
+                Ok(_) => {}
+                Err(error) if error.code == "not_available" => {}
+                Err(error) => return Err(error),
+            }
+        }
+        if let Some(task) = task {
+            match analysis::recovery_state_in_tx(tx, &conv.id, &task).await {
+                Ok(state) => recovery["task"] = state,
+                Err(error) if error.code == "not_available" => {}
+                Err(error) => return Err(error),
+            }
+        }
+    }
+    if name == "execute_query" {
+        // 只描述本调用的拒绝；查询可能早已由其他成功调用提交，状态见recovery。
+        data["new_execution_authorized"] = json!(false);
+    }
+    data["hint"] = json!(hint);
+    if recovery.as_object().is_some_and(|value| !value.is_empty()) {
+        data["recovery"] = recovery;
+    }
+    Ok(data)
+}
+
 pub async fn invoke(pool: &MySqlPool, ctx: &AccessContext, input: Value) -> Result<Value> {
     let result = execute(pool, ctx, input.clone()).await;
     if let Err(error) = &result
@@ -927,7 +1328,12 @@ pub async fn invoke(pool: &MySqlPool, ctx: &AccessContext, input: Value) -> Resu
                 | "memory_extraction_empty"
                 | "memory_operation_unknown"
                 | "stale_knowledge"
+                | "stale_context"
                 | "version_conflict"
+                | "waiting_clarification"
+                | "clarification_required"
+                | "task_inactive"
+                | "clarification_not_open"
                 | "invalid_evidence"
                 | "message_pending"
                 | "unsupported"
@@ -936,6 +1342,42 @@ pub async fn invoke(pool: &MySqlPool, ctx: &AccessContext, input: Value) -> Resu
         )
     {
         let cid = runtime::locate_run(pool, text(&input, "run_id")?).await?;
+        // 目标正文失效可以明确拒绝；运行本身已失权时仍交给原恢复链重建。
+        let checked_run = if error.code == "stale_context" {
+            Some(
+                super::context_authority::check_run_results(pool, ctx, text(&input, "run_id")?)
+                    .await?,
+            )
+        } else {
+            None
+        };
+        let mut text_results = if input["tool_name"] == "update_analysis_task" {
+            super::context_authority::check_task_text_results(pool, ctx, &cid, None).await?
+        } else {
+            super::context_authority::CheckedTextResults::default()
+        };
+        if matches!(
+            input["tool_name"].as_str(),
+            Some("request_query" | "execute_query")
+        ) {
+            let mut tx = AppTx::begin(pool).await?;
+            let authorities = queries::text_authorities_in_tx(
+                &mut tx,
+                ctx,
+                &cid,
+                input["arguments"]["query_id"].as_str(),
+            )
+            .await?;
+            tx.commit().await?;
+            text_results
+                .include_authorities(pool, ctx, &authorities)
+                .await?;
+        }
+        if input["tool_name"] == "manage_personal_asset" {
+            let checked =
+                super::context_authority::check_available_asset_results(pool, ctx, &cid).await?;
+            text_results.include_checked(&checked);
+        }
         let mut tx = AppTx::begin(pool).await?;
         let conv = conversations::lock_conversation_in_tx(&mut tx, ctx, &cid).await?;
         conversations::assert_turn_in_tx(
@@ -945,6 +1387,10 @@ pub async fn invoke(pool: &MySqlPool, ctx: &AccessContext, input: Value) -> Resu
             epoch(text(&input, "lease_epoch")?)?,
         )?;
         let run = runtime::lock_run_in_tx(&mut tx, text(&input, "run_id")?, &cid).await?;
+        if let Some(checked) = &checked_run {
+            super::context_authority::assert_checked_run_in_tx(&mut tx, &run.id, checked).await?;
+            super::context_authority::assert_run_in_tx(&mut tx, ctx, &cid, &run.id).await?;
+        }
         if let Some(tool) =
             runtime::lock_tool_call_in_tx(&mut tx, &run, text(&input, "sdk_tool_call_id")?).await?
             && tool.fingerprint
@@ -955,23 +1401,22 @@ pub async fn invoke(pool: &MySqlPool, ctx: &AccessContext, input: Value) -> Resu
                 && let Some(receipt) = &tool.receipt
             {
                 // 已提交操作接回原结果；只读工具必须保留本次回源核验失败。
+                let receipt = replay_receipt_in_tx(
+                    &mut tx,
+                    ctx,
+                    &cid,
+                    &run.id,
+                    text(&input, "tool_name")?,
+                    receipt.clone(),
+                    &text_results,
+                )
+                .await?;
                 tx.commit().await?;
-                return replay_receipt(text(&input, "tool_name")?, receipt.clone());
+                return Ok(receipt);
             }
             if tool.state == "registered" {
-                let hint = match (input["tool_name"].as_str(), error.code) {
-                    (Some("execute_query"), "invalid_evidence") => {
-                        "本次执行授权被拒绝，未新增执行授权。instruction_quote须逐字包含本轮真实用户完整原话，包括粘贴SQL、换行、否定和限定；系统结果唤醒不能授权。先核对查询当前SQL、参数、状态和版本；若只是漏引原话且本轮仍有有效执行要求，可用新的工具调用修正，不必再次询问用户；不得修改已登记调用参数或另建查询。已提交查询只接回状态，未知先按原身份查证，不能换ID重做。任务、版本、权限与预算检查保持。"
-                    }
-                    (_, "scope_incomplete") => {
-                        "instruction_quote必须逐字包含完整指令起点（例如‘请记住：’），不能只引用冒号后的偏好。请对照本条用户原话修正引用；若含仅本次或不要保存，不得写入长期记忆。"
-                    }
-                    (_, "skill_line_too_long") => {
-                        "此Skill有单行超过50KiB，请让维护者在网页中分行后保存，再重新选用；本次未读取正文。"
-                    }
-                    _ => "本次操作未取得成功回执；请按错误原因核对，不得声称已执行或已保存。",
-                };
-                let receipt = json!({"operation_id":tool.operation_id,"tool_name":input["tool_name"],"data":{"error":error.code,"hint":hint}});
+                let data = rejection_data_in_tx(&mut tx, ctx, &conv, &run, &input, error).await?;
+                let receipt = json!({"operation_id":tool.operation_id,"tool_name":input["tool_name"],"data":data});
                 runtime::reject_tool_in_tx(&mut tx, &tool, &receipt).await?;
             }
         }

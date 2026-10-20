@@ -6,7 +6,7 @@ export type WorkspaceLocation = { view: View; object: string | null; tab: string
 function readLocation(): WorkspaceLocation {
   const [page, search = ""] = window.location.hash.slice(1).split("?");
   const params = new URLSearchParams(search);
-  const view = page === "knowledge" || page === "assets" ? page : "workbench";
+  const view = page === "knowledge" || page === "assets" || page === "models" ? page : "workbench";
   const scope = params.get("scope");
   const asset = params.get("tab");
   return { view, object: params.get("object"), tab: params.get("tab") || "概览", scope: scope === "all" || scope === "maintained" ? scope : "tables", assetsTab: asset === "skill" || asset === "shared" ? asset : "memory" };

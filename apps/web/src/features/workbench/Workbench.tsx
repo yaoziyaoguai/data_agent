@@ -448,14 +448,14 @@ export function Workbench({
               </div>
             ) : item.kind === "query_notice" ? (
               <div key={item.key} className="query-notice" role="status">
-                <span>{item.text} · {item.query.summary}</span>
+                <span>{item.text} · {item.query.text_unavailable ? "来源不可用" : item.query.summary}</span>
                 <button className="text-link" onClick={() => {
                   const target = document.getElementById("query-" + item.query.id);
                   const previous = target?.closest<HTMLDetailsElement>("details.previous-query");
                   if (previous) previous.open = true;
                   target?.scrollIntoView({ block: "start" });
                   target?.focus({ preventScroll: true });
-                }}>{item.query.execution_state === "succeeded" ? "查看结果" : "查看查询"}</button>
+                }}>{item.query.text_unavailable ? "查看状态" : item.query.execution_state === "succeeded" ? "查看结果" : "查看查询"}</button>
               </div>
             ) : item.kind === "report" ? (
               <div key={item.key} className="report-notice" role="status"><span>{item.conditionChanged ? "分析条件已更新，报告需重新整理" : "分析报告已保存"}</span><button className="text-link" onClick={() => setSelectedReport(item.reference)}>查看分析报告</button></div>
@@ -471,7 +471,7 @@ export function Workbench({
                   )}
                 </div>
                 {m.role === "assistant" ? (
-                  <AssistantMessage text={m.text} savedSql={queries.queries.map(query => query.sql)} />
+                  <AssistantMessage text={m.text} savedSql={queries.queries.flatMap(query => query.sql ? [query.sql] : [])} />
                 ) : (
                   <>{display.subject && <small className="reply-subject">针对：{display.subject}</small>}<p>{display.text}</p></>
                 )}

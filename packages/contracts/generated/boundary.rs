@@ -76,6 +76,7 @@ pub struct Boundary {
     #[serde(rename = "checkpoint_reference")]
     pub checkpoint_reference: CheckpointReference,
     pub conditions: Conditions,
+    pub configured_model: ConfiguredModel,
     pub confirm_query: ConfirmQuery,
     pub conversation_model_selection: ConversationModelSelection,
     pub conversation_read_input: ConversationReadInput,
@@ -137,10 +138,15 @@ pub struct Boundary {
     pub model_attempt: ModelAttempt,
     pub model_call_receipt: ModelCallReceipt,
     pub model_catalog: ModelCatalog,
+    pub model_configuration: ModelConfiguration,
+    pub model_configuration_access: ModelConfigurationAccess,
+    pub model_connection: ModelConnection,
+    pub model_definition: ModelDefinition,
     pub model_option: ModelOption,
     pub model_profile: ModelProfile,
     pub model_receipt: ModelReceipt,
     pub model_selection: ModelSelection,
+    pub model_service: ModelService,
     pub model_usage: ModelUsage,
     pub mutation_receipt: MutationReceipt,
     pub numeric_value_counts: Option<NumericValueCounts>,
@@ -177,6 +183,7 @@ pub struct Boundary {
     #[serde(rename = "ReadAnalysisReportInput")]
     pub read_analysis_report_input: Option<ReadAnalysisReportInput>,
     pub read_knowledge_input: ReadKnowledgeInput,
+    pub read_model_connection: ReadModelConnection,
     pub read_query_input: ReadQueryInput,
     pub read_source_input: ReadSourceInput,
     pub read_task_input: Option<ReadTaskInput>,
@@ -199,7 +206,10 @@ pub struct Boundary {
     pub save_analysis_report: Option<SaveAnalysisReport>,
     #[serde(rename = "SaveAnalysisReportInput")]
     pub save_analysis_report_input: Option<SaveAnalysisReportInput>,
+    pub save_default_model: SaveDefaultModel,
+    pub save_model_definition: SaveModelDefinition,
     pub save_model_selection: SaveModelSelection,
+    pub save_model_service: SaveModelService,
     pub search_input: SearchInput,
     #[serde(rename = "SemanticAccess")]
     pub semantic_access: Option<SemanticAccess>,
@@ -615,6 +625,9 @@ pub struct QueryResults {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AnalysisUpdate {
     pub action: AnalysisUpdateAction,
+    /// 同一任务需分别回答的独立问题，各生成独立ID；与非空question互斥，不同目标分别建任务。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub clarifications: Option<Vec<ClarificationRequest>>,
     ///
     /// 修改已存任务条件时必填，action用revise或clarify；set指定新值，unset必须提供（不清空时为[]）。route禁止携带condition_patch，因为route只登记归属。
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -625,7 +638,8 @@ pub struct AnalysisUpdate {
     /// 新建任务省略此字段（也接受JSON null）；已有任务必须提供工具回执中的当前版本数字字符串。
     #[serde(skip_serializing_if = "Option::is_none")]
     pub expected_version: Option<String>,
-    pub goal: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub goal: Option<String>,
     /// 澄清问题的候选答案；question=null时传[]。
     pub options: Vec<String>,
     /// 需要用户补充的实际问题；无需澄清时省略（也接受JSON null），不能填字符串null、空文本或用户原问题。
@@ -648,6 +662,14 @@ pub enum AnalysisUpdateAction {
     Create,
     Revise,
     Route,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ClarificationRequest {
+    /// 此独立问题的候选答案；允许自由回答。
+    pub options: Vec<String>,
+    /// 此独立问题的必填正文；无需新增问题时省略整个clarifications列表。
+    pub question: String,
 }
 
 ///
@@ -714,6 +736,10 @@ pub enum Code {
     BudgetExhausted,
     #[serde(rename = "chunk_gap")]
     ChunkGap,
+    #[serde(rename = "clarification_not_open")]
+    ClarificationNotOpen,
+    #[serde(rename = "clarification_required")]
+    ClarificationRequired,
     #[serde(rename = "embedding_unavailable")]
     EmbeddingUnavailable,
     Forbidden,
@@ -725,6 +751,8 @@ pub enum Code {
     InvalidEvidence,
     #[serde(rename = "invalid_input")]
     InvalidInput,
+    #[serde(rename = "invalid_model_endpoint")]
+    InvalidModelEndpoint,
     #[serde(rename = "lease_lost")]
     LeaseLost,
     #[serde(rename = "memory_extraction_empty")]
@@ -735,8 +763,14 @@ pub enum Code {
     MemoryUnavailable,
     #[serde(rename = "message_pending")]
     MessagePending,
+    #[serde(rename = "model_credential_required")]
+    ModelCredentialRequired,
     #[serde(rename = "model_retry_exhausted")]
     ModelRetryExhausted,
+    #[serde(rename = "model_secret_unavailable")]
+    ModelSecretUnavailable,
+    #[serde(rename = "model_unavailable")]
+    ModelUnavailable,
     #[serde(rename = "not_available")]
     NotAvailable,
     #[serde(rename = "outcome_unknown")]
@@ -757,6 +791,8 @@ pub enum Code {
     StaleContext,
     #[serde(rename = "stale_knowledge")]
     StaleKnowledge,
+    #[serde(rename = "task_inactive")]
+    TaskInactive,
     Unauthenticated,
     Unavailable,
     Unsupported,
@@ -766,6 +802,8 @@ pub enum Code {
     VectorUnconfigured,
     #[serde(rename = "version_conflict")]
     VersionConflict,
+    #[serde(rename = "waiting_clarification")]
+    WaitingClarification,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -803,6 +841,9 @@ pub struct Asset {
     pub selected: bool,
     pub source_text: String,
     pub state: AssetState,
+    /// 来源失效或缺少可核验来源时仅供管理，正文、附件与引用已隐藏，不能选用或发布。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub text_unavailable: Option<bool>,
     pub verified: bool,
     pub version: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -1064,6 +1105,38 @@ pub enum CheckpointReferenceKind {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ConfiguredModel {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub anthropic_thinking_mode: Option<AnthropicThinkingMode>,
+    pub api: Api,
+    pub id: String,
+    pub input_rate: String,
+    pub output_rate: String,
+    pub reasoning_supported: bool,
+    pub service_id: String,
+    pub service_version: String,
+    pub version: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AnthropicThinkingMode {
+    Adaptive,
+    Budget,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum Api {
+    #[serde(rename = "anthropic-messages")]
+    AnthropicMessages,
+    #[serde(rename = "openai-completions")]
+    OpenaiCompletions,
+    #[serde(rename = "openai-responses")]
+    OpenaiResponses,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConfirmQuery {
     pub condition_version: String,
     pub draft_version: String,
@@ -1082,14 +1155,16 @@ pub struct ModelSelection {
     pub thinking_level: ThinkingLevel,
 }
 
-/// 通过Pi/DeepSeek原生思考模式；省略为off。思考tokens计入同一输出上限与用量。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ThinkingLevel {
     High,
     Low,
     Max,
+    Medium,
+    Minimal,
     Off,
+    Xhigh,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1396,6 +1471,9 @@ pub enum ModelLabel {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct KnowledgeCreate {
     pub body: String,
+    /// 对象自身的显式业务域；省略或空值表示未分类，不从关联对象继承。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub business_domain: Option<String>,
     pub kind: KindElement,
     pub name: String,
     pub operation_id: String,
@@ -1879,7 +1957,7 @@ pub struct MemoryBudgetBinding {
     pub id: String,
     pub kind: MemoryBudgetBindingKind,
     pub operation_id: String,
-    pub sdk_tool_call_id: Option<String>,
+    pub sdk_tool_call_id: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -2019,6 +2097,8 @@ pub enum ModelCallReceiptState {
 pub struct ModelCatalog {
     pub default_selection: Option<ModelSelection>,
     pub models: Vec<ModelOption>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub requires_model: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -2035,20 +2115,84 @@ pub struct ThinkingOption {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ModelConfiguration {
+    pub default_model_id: Option<String>,
+    pub models: Vec<ModelDefinition>,
+    pub services: Vec<ModelService>,
+    pub version: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ModelDefinition {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub anthropic_thinking_mode: Option<AnthropicThinkingMode>,
+    pub default_thinking: ThinkingLevel,
+    pub enabled: bool,
+    pub id: String,
+    pub input_limit: i32,
+    pub input_rate: String,
+    pub label: String,
+    pub model_id: String,
+    pub output_limit: i32,
+    pub output_rate: String,
+    pub payload_bytes_limit: i32,
+    pub reasoning_supported: bool,
+    pub service_id: String,
+    pub thinking_levels: Vec<ThinkingLevel>,
+    pub version: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ModelService {
+    pub api: Api,
+    pub base_url: String,
+    pub credential_configured: bool,
+    pub enabled: bool,
+    pub id: String,
+    pub name: String,
+    pub provider_id: ProviderId,
+    pub version: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ProviderId {
+    Anthropic,
+    Compatible,
+    Deepseek,
+    Openai,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ModelConfigurationAccess {
+    pub can_manage_models: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ModelConnection {
+    pub api: Api,
+    pub api_key: String,
+    pub base_url: String,
+    pub provider_id: String,
+    pub runtime_provider: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ModelProfile {
     /// 省略沿用有限trial；request为正常持续使用，每消息24次，累计费用/试用期限不默认拦截。
     #[serde(skip_serializing_if = "Option::is_none")]
     pub budget_mode: Option<BudgetMode>,
-    pub input_limit: i64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub configured_model: Option<ConfiguredModel>,
+    pub input_limit: i32,
     pub model_id: String,
-    pub output_limit: i64,
+    pub output_limit: i32,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub payload_bytes_limit: Option<i32>,
     pub price_version: String,
-    pub provider_id: ProviderId,
+    pub provider_id: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub request_call_limit: Option<i32>,
-    /// 通过Pi/DeepSeek原生思考模式；省略为off。思考tokens计入同一输出上限与用量。
     #[serde(skip_serializing_if = "Option::is_none")]
     pub thinking_level: Option<ThinkingLevel>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -2066,12 +2210,6 @@ pub struct ModelProfile {
 pub enum BudgetMode {
     Request,
     Trial,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum ProviderId {
-    Deepseek,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -2233,18 +2371,25 @@ pub struct QueryView {
     pub error_details: Option<ErrorDetails>,
     pub execution_state: String,
     pub id: String,
-    pub knowledge_refs: Vec<EvidenceRef>,
-    pub parameters: HashMap<String, Option<serde_json::Value>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub knowledge_refs: Option<Vec<EvidenceRef>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub parameters: Option<HashMap<String, Option<serde_json::Value>>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub replaces_query_id: Option<String>,
     pub result_ref: Option<String>,
     /// 草稿工具回执的非阻断诊断；查询读取接口不承诺重现此报告。
     #[serde(skip_serializing_if = "Option::is_none")]
     pub semantic_checks: Option<SemanticCheckReport>,
-    pub sql: String,
-    pub summary: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sql: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub summary: Option<String>,
     pub target_id: String,
     pub task_id: String,
+    /// 正文来源失效或无法核实时只返回查询身份和控制状态；SQL、参数、说明、依据及诊断正文均不可返回。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub text_unavailable: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -2380,6 +2525,12 @@ pub struct ReadKnowledgeInput {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ReadModelConnection {
+    pub lease_epoch: String,
+    pub run_id: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ReadQueryInput {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cursor: Option<String>,
@@ -2402,6 +2553,9 @@ pub struct ReadTaskInput {
     /// 按回执next_clarification_after继续读取未决问题；省略从第一页开始。
     #[serde(skip_serializing_if = "Option::is_none")]
     pub clarification_after: Option<String>,
+    /// 省略读取当前条件；指定时读取该任务真实历史快照及其依据，不授予执行权。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub condition_version: Option<String>,
     pub task_id: String,
 }
 
@@ -2412,10 +2566,37 @@ pub struct RequestQueryInput {
     pub parameters: HashMap<String, Option<serde_json::Value>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub replaces_query_id: Option<String>,
+    /// 保存前填写口径决策；省略仅兼容旧调用，不表示用户已确认。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub semantic_resolution: Option<QuerySemanticResolution>,
     pub sql: String,
     pub summary: String,
     pub target_id: TargetId,
     pub task_id: String,
+}
+
+/// 保存前填写口径决策；省略仅兼容旧调用，不表示用户已确认。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct QuerySemanticResolution {
+    /// 真实用户明确选择、确无实质歧义、或仍需澄清；资料支持某公式不等于用户选择它。
+    pub basis: Basis,
+    /// 本稿采用的指标、分子/分母、时间等关键口径及选择依据；不能把自己刚写入任务的假设当作用户采用。
+    pub interpretation: String,
+    /// 仍会改变答案且未获选择的分子、分母、时间归属等差异；有差异必须先澄清，不能默认写稿。
+    pub unresolved_differences: Vec<String>,
+    /// explicit_user逐字填写本条真实用户完整原话，保留否定、前提、例外和换行，不截取子串；其余为null。
+    pub user_quote: Option<String>,
+}
+
+/// 真实用户明确选择、确无实质歧义、或仍需澄清；资料支持某公式不等于用户选择它。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Basis {
+    #[serde(rename = "explicit_user")]
+    ExplicitUser,
+    #[serde(rename = "needs_clarification")]
+    NeedsClarification,
+    Unambiguous,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -2428,9 +2609,9 @@ pub enum TargetId {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ReserveModelCall {
     pub call_attempt_id: String,
-    pub input_tokens_upper: i64,
+    pub input_tokens_upper: i32,
     pub lease_epoch: String,
-    pub output_tokens_max: i64,
+    pub output_tokens_max: i32,
     pub parameters_fingerprint: String,
     pub run_id: String,
 }
@@ -2619,9 +2800,48 @@ pub struct SaveAnalysisReportInput {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SaveDefaultModel {
+    pub expected_version: String,
+    pub model_id: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SaveModelDefinition {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub anthropic_thinking_mode: Option<AnthropicThinkingMode>,
+    pub default_thinking: ThinkingLevel,
+    pub enabled: bool,
+    pub expected_version: String,
+    pub id: String,
+    pub input_limit: i32,
+    pub input_rate: String,
+    pub label: String,
+    pub model_id: String,
+    pub output_limit: i32,
+    pub output_rate: String,
+    pub payload_bytes_limit: i32,
+    pub reasoning_supported: bool,
+    pub service_id: String,
+    pub thinking_levels: Vec<ThinkingLevel>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SaveModelSelection {
     pub expected_version: String,
     pub selection: ModelSelection,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SaveModelService {
+    pub api: Api,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub api_key: Option<String>,
+    pub base_url: String,
+    pub enabled: bool,
+    pub expected_version: String,
+    pub id: String,
+    pub name: String,
+    pub provider_id: ProviderId,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -2915,14 +3135,19 @@ pub struct TaskSnapshot {
     pub condition_version: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub evidence_refs: Option<Vec<AnalysisEvidenceRef>>,
-    pub goal: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub goal: Option<String>,
     pub id: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub lifecycle: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub note: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub phase: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub report_ref: Option<AnalysisReportRef>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub text_unavailable: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

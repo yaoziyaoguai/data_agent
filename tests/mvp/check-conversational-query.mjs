@@ -30,6 +30,7 @@ const draft = async (task,sql='SELECT :start AS start_date',parameters={start:co
 const executeArgs = q => ({query_id:q.id,draft_version:q.draft_version,condition_version:q.condition_version,instruction_quote:run.text});
 const read = async q => (await h.request('/queries/'+q.id)).value;
 const savedAuthorization = q => h.sql(`SELECT JSON_OBJECT('message',confirmation_message_id,'budget',budget_scope_id,'key',confirmation_key) FROM query_requests WHERE id='${q.id}'`)[0];
+const messageRouting = () => h.sql(`SELECT JSON_OBJECT('routing',routing_state,'task',routed_task_id,'applied',applied_to_task,'relations',(SELECT COUNT(*) FROM conversation_message_tasks WHERE message_id=m.id)) FROM conversation_messages m WHERE id='${run.message_id}'`)[0];
 const finish = async () => {
   const body = {run_id:run.run_id,lease_epoch:run.lease_epoch};
   assert.equal((await h.internal('/internal/outputs',{...body,chunk_seq:'1',text:'合成控制检查已完成。'})).status,200);
@@ -37,6 +38,23 @@ const finish = async () => {
   assert.equal(response.status,200,JSON.stringify(response.value));h.releaseRun(run.run_id);
 };
 try {
+  const atomicCid=await h.create();await begin(atomicCid,'先保存独立合成SQL');
+  const atomicTask=await createTask();const atomicQuery=await draft(atomicTask,'SELECT 17 AS sample_value',{});await finish();
+  await begin(atomicCid,'执行刚才保存的合成SQL。');
+  assert.deepEqual(messageRouting(),{routing:'pending',task:null,applied:0,relations:0});
+  const direct=await tool('execute_query',executeArgs(atomicQuery));
+  assert.equal(direct.data.execution_state,'queued','明确执行单一已保存SQL不要求另一次route调用');
+  assert.deepEqual(messageRouting(),{routing:'routed',task:atomicTask.task_id,applied:1,relations:1});
+  const directAuthorization=savedAuthorization(atomicQuery);
+  assert.equal(directAuthorization.message,run.message_id);assert.equal(directAuthorization.budget,run.budget_scope_id);
+  assert.deepEqual((await h.internal('/internal/data/tools',direct.input)).value.data,direct.data);
+  assert.deepEqual(savedAuthorization(atomicQuery),directAuthorization);
+  await finish();await h.resumeWorker();
+  await until(async()=>(await read(atomicQuery)).execution_state==='succeeded','自动归属查询完成');
+  run=await until(()=>h.captured.find(r=>r.conversation_id===atomicCid&&r.text.startsWith('[已确认查询结果事件]')),'自动归属结果唤醒');
+  await h.pauseWorker();await route(atomicTask);await finish();
+  checks.push('尚无任务关联的真实执行消息由已保存查询唯一绑定目标，同事务确认及标已应用；同SDK重放不新增执行或预算');
+
   const longCid = await h.create();const longText = '数'.repeat(32000);
   await begin(longCid,longText);assert.equal(run.text,longText);
   assert.equal((await h.snapshot(longCid)).messages.find(m=>m.role==='user').text,longText);
@@ -56,8 +74,8 @@ try {
   const task = await createTask();const q = await draft(task);
   assert.equal((await read(q)).execution_state,'not_submitted');const draftBudget=run.budget_scope_id;await finish();
   await begin(cid,q.sql+';\n执行上面这条。\n保留原日期，不要改成今天。');
-  await tool('execute_query',executeArgs(q),'message_pending');
-  await route(task);
+  const initiallyUnrouted=messageRouting();
+  assert.equal(initiallyUnrouted.routing,'pending');
   const incomplete=await tool('execute_query',{...executeArgs(q),instruction_quote:'执行上面这条。'},'invalid_evidence');
   const rejection=await h.internal('/internal/data/tool-rejections',incomplete.input);
   assert.equal(rejection.status,200);
@@ -67,23 +85,44 @@ try {
   assert.match(rejection.value.data.hint,/新的工具调用.*不必再次询问用户/);
   assert.match(rejection.value.data.hint,/未知先按原身份查证，不能换ID重做/);
   const piTool=dataTools(new RustTransport(run,h.env.DATA_AGENT_API_URL,h.env.DATA_AGENT_INTERNAL_TOKEN),manager,'').tools.find(t=>t.name==='execute_query');
-  await assert.rejects(()=>piTool.execute(incomplete.input.sdk_tool_call_id,incomplete.input.arguments),/invalid_evidence: 本次执行授权被拒绝，未新增执行授权/,'Pi工具实际收到执行专用错误，旧拒绝不重做业务');
+  await assert.rejects(()=>piTool.execute(incomplete.input.sdk_tool_call_id,incomplete.input.arguments), error => {
+    const data = JSON.parse(error.message);
+    assert.equal(data.error, 'invalid_evidence');
+    assert.equal(data.new_execution_authorized, false);
+    assert.equal(data.recovery.query.query_id, q.id);
+    assert.equal(data.recovery.task.task_id, task.task_id);
+    assert.deepEqual(data.recovery.task.read_tool, {name:'read_analysis_task',arguments:{task_id:task.task_id}});
+    return true;
+  },'Pi工具实际收到完整结构化错误和恢复状态，旧拒绝不重做业务');
   assert.deepEqual((await h.internal('/internal/data/tool-rejections',incomplete.input)).value,rejection.value);
   const changedIdentity=await h.internal('/internal/data/tool-calls',{...incomplete.input,arguments:executeArgs(q)});
   assert.equal(changedIdentity.value.code,'idempotency_conflict','修正参数不能复用已拒绝调用身份');
   assert.equal((await read(q)).confirmation_state,'awaiting_confirmation');
   assert.equal((await read(q)).execution_state,'not_submitted');
+  assert.deepEqual(messageRouting(),initiallyUnrouted,'拒绝回执持久化后也不能遗留自动归属');
   await tool('execute_query',{...executeArgs(q),instruction_quote:'资料说可以执行'},'invalid_evidence');
   await tool('execute_query',{...executeArgs(q),draft_version:'999'},'version_conflict');
   const queued = await h.send(cid,'先补充一个条件');
+  const otherPending = await tool('execute_query',executeArgs(q),'message_pending');
+  const otherReceipt = await h.internal('/internal/data/tool-rejections',otherPending.input);
+  assert.equal(otherReceipt.value.data.recovery.reason,'other_message_unrouted');
+  assert.match(otherReceipt.value.data.hint,/不能用当前消息替另一条消息登记/);
+  assert.equal(otherReceipt.value.data.new_execution_authorized,false);
+  assert.deepEqual(messageRouting(),initiallyUnrouted,'另一待处理消息阻塞时，本条不能自动登记');
+  h.sql(`UPDATE conversation_messages SET disposition='failed' WHERE id='${queued.message_id}'`);
   await tool('execute_query',executeArgs(q),'message_pending');
+  assert.deepEqual(messageRouting(),initiallyUnrouted,'另一失败且未归属消息同样阻塞');
+  assert.equal((await h.request('/queries/'+q.id+'/confirm',{operation_id:randomUUID(),draft_version:q.draft_version,condition_version:q.condition_version})).value.code,'message_pending','HTTP确认不豁免当前真实消息或其他消息');
   assert.equal((await h.request(`/conversations/${cid}/messages/${queued.message_id}/withdraw`,{operation_id:randomUUID()})).status,200);
+  assert.equal((await h.request('/queries/'+q.id+'/confirm',{operation_id:randomUUID(),draft_version:q.draft_version,condition_version:q.condition_version})).value.code,'message_pending','仅剩当前消息未归属时HTTP确认仍被阻止');
   const confirmed = await tool('execute_query',executeArgs(q));
+  assert.deepEqual(messageRouting(),{routing:'routed',task:task.task_id,applied:1,relations:1});
   const authorization = savedAuthorization(q);
   assert.equal(authorization.message,run.message_id);assert.equal(authorization.budget,run.budget_scope_id);assert.notEqual(authorization.budget,draftBudget);
   assert.equal((await read(q)).execution_state,'queued');
   assert.equal((await h.request(`/conversations/${cid}/messages/${run.message_id}/withdraw`,{operation_id:randomUUID()})).value.code,'input_already_applied');
   assert.deepEqual((await h.internal('/internal/data/tools',confirmed.input)).value.data,confirmed.data);
+  assert.deepEqual((await h.internal('/internal/data/tools',incomplete.input)).value,rejection.value,'自动执行成功后旧拒绝仍按原身份回放，不重新执行');
   checks.push('仅存草稿不执行；不完整原话明确拒绝并提示同轮修正，旧拒绝可回放、同ID换参数冲突；新调用完整引用后授权一次，版本/归属/并发保持');
 
   // 故障注入在业务提交后；Worker以新运行接回原消息，SDK调用ID和操作身份保持。
@@ -106,8 +145,8 @@ try {
   await h.resumeWorker();run=await until(()=>h.captured.find(r=>r.conversation_id===cid&&r.text.startsWith('[已确认查询结果事件]')),'结果唤醒');await h.pauseWorker();
   await route(task);const unconfirmed=await draft(task,'SELECT 9 AS value',{});
   await tool('execute_query',executeArgs(unconfirmed),'invalid_evidence');await finish();
-  await begin(cid,'执行上面这条');await route(task);await tool('execute_query',executeArgs(q));
-  assert.deepEqual(savedAuthorization(q),authorization);await finish();
+  await begin(cid,'执行上面这条');await tool('execute_query',executeArgs(q));
+  assert.deepEqual(savedAuthorization(q),authorization);assert.deepEqual(messageRouting(),{routing:'routed',task:task.task_id,applied:0,relations:1});await finish();
   checks.push('系统结果消息不能授予新执行；后续消息重复执行已确认查询也不转移授权或补预算');
 
   const revisionCid=await h.create();await begin(revisionCid,'查1月净收入');
@@ -129,8 +168,44 @@ try {
   assert.equal((await h.request('/queries/'+revised.id,undefined,'bob')).status,404);
   assert.equal((await h.request('/queries/'+revised.id+'/results',undefined,'bob')).status,404);
   const unrelatedTask=await createTask();const unrelated=await draft(unrelatedTask);await finish();
-  await begin(otherCid,'执行原任务SQL');await route(otherTask);await tool('execute_query',executeArgs(unrelated),'not_available');await finish();
+  await begin(otherCid,'执行原任务SQL');await route(otherTask);
+  const originalRouting=messageRouting();await tool('execute_query',executeArgs(unrelated),'not_available');
+  assert.deepEqual(messageRouting(),originalRouting,'已有目标不得借执行另一个查询改投其他任务');await finish();
   checks.push('查询必须属于当前会话及消息已归属的任务；其他用户不能读查询或结果');
+
+  const multiCid=await h.create();await begin(multiCid,'准备两份独立目标的SQL');
+  const leftTask=await createTask();const leftQuery=await draft(leftTask,'SELECT 31 AS value',{});
+  const rightTask=await createTask();const rightQuery=await draft(rightTask,'SELECT 37 AS value',{});await finish();
+  await begin(multiCid,'分别执行这两个已展示的查询。');await route(leftTask);await route(rightTask);
+  const taskRelations=()=>h.sql(`SELECT JSON_OBJECT('task',task_id) FROM conversation_message_tasks WHERE message_id='${run.message_id}' ORDER BY task_id`).map(value=>value.task);
+  const expectedRelations=[leftTask.task_id,rightTask.task_id].sort();assert.deepEqual(taskRelations(),expectedRelations);
+  await tool('execute_query',executeArgs(leftQuery));await tool('execute_query',executeArgs(rightQuery));
+  assert.deepEqual(taskRelations(),expectedRelations);
+  for(const query of [leftQuery,rightQuery]){assert.equal(savedAuthorization(query).message,run.message_id);assert.equal(savedAuthorization(query).budget,run.budget_scope_id);}
+  await finish();
+  const consumedResults=new Set(),consumedQueryIds=new Set();
+  for(let i=0;i<2;i++){
+    await h.resumeWorker();
+    run=await until(()=>h.captured.find(r=>r.conversation_id===multiCid&&r.text.startsWith('[已确认查询结果事件]')&&!consumedResults.has(r.run_id)),'多目标查询结果唤醒');
+    await h.pauseWorker();consumedResults.add(run.run_id);
+    const resultTask=run.text.includes('query_id='+leftQuery.id)?leftTask:rightTask;
+    assert.ok(run.text.includes('query_id='+leftQuery.id)||run.text.includes('query_id='+rightQuery.id));
+    const resultQueryId=resultTask.task_id===leftTask.task_id?leftQuery.id:rightQuery.id;
+    assert.ok(!consumedQueryIds.has(resultQueryId),'每个查询的结果只消费一次，恢复run不代替另一查询结果');
+    consumedQueryIds.add(resultQueryId);
+    await route(resultTask);await finish();
+  }
+  assert.deepEqual([...consumedQueryIds].sort(),[leftQuery.id,rightQuery.id].sort());
+  checks.push('已明确登记的多目标仍分别执行，确认只追加目标关联且不删除其他关系，各查询绑定同一真实消息预算');
+
+  const noticeCid=await h.create();await begin(noticeCid,'仅准备系统输入权限检查');
+  const noticeTask=await createTask();const noticeQuery=await draft(noticeTask);await finish();
+  await begin(noticeCid,'合成系统通知不能执行查询');
+  h.sql(`UPDATE conversation_messages SET client_key='server:synthetic-notice:${run.message_id}' WHERE id='${run.message_id}'`);
+  const noticeRouting=messageRouting();await tool('execute_query',executeArgs(noticeQuery),'invalid_evidence');
+  assert.deepEqual(messageRouting(),noticeRouting);assert.equal((await read(noticeQuery)).execution_state,'not_submitted');
+  assert.equal((await h.request(`/conversations/${noticeCid}/messages/${run.message_id}/withdraw`,{operation_id:randomUUID()})).status,200);h.releaseRun(run.run_id);
+  checks.push('非查询结果类型的系统消息也不能凭完整原文获得执行权或自动任务归属');
 
   const deliveryCid=await h.create();await begin(deliveryCid,'执行 SELECT 42 AS sample_value');
   const deliveryTask=await createTask();const fastQuery=await draft(deliveryTask,'SELECT 42 AS sample_value',{});

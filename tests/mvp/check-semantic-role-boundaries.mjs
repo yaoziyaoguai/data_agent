@@ -88,15 +88,16 @@ try {
     body: JSON.stringify({ limit: 50 }),
   }).then(r => r.json());
   const saveCatalog = tables => writeFile(h.directory + "/platform/catalog.json", JSON.stringify({ source_namespace: catalog.source_namespace, tables }));
+  const nextSourceVersion = (table, steps = 1n) => (BigInt(table.platform_version) + steps).toString();
   const snapshot = () => h.sql("SELECT JSON_OBJECT('id',object_id,'owner',maintainer_id,'version',CAST(version AS CHAR)) FROM semantic_ownership WHERE source='datasight' AND authority_id=object_id ORDER BY object_id");
   const setBob = async () => {
-    const tables = catalog.tables.map(t => ({ ...t, platform_version: "2", maintainer_id: "bob" }));
+    const tables = catalog.tables.map(t => ({ ...t, platform_version: nextSourceVersion(t), maintainer_id: "bob" }));
     await saveCatalog(tables); await ok("/source-syncs", command()); return tables;
   };
   if (selected === "sync") {
     const original = snapshot();
     const tables = structuredClone(catalog.tables);
-    tables[0].platform_version = "2";
+    tables[0].platform_version = nextSourceVersion(catalog.tables[0]);
     tables[0].maintainer_id = "bob";
     tables[1].comment = "同版本冲突的合成注释";
     await saveCatalog(tables);
@@ -122,7 +123,10 @@ try {
     await h.resumePlatform();
     checks.push("分页未完整结束时负责人保持上一成功快照");
 
-    for (const t of tables) { t.platform_version = "3"; t.maintainer_id = "bob"; }
+    for (const [index, t] of tables.entries()) {
+      t.platform_version = nextSourceVersion(catalog.tables[index], 2n);
+      t.maintainer_id = "bob";
+    }
     await saveCatalog(tables);
     h.sql("\nDELIMITER $$\nCREATE TRIGGER reject_completed_role_sync BEFORE UPDATE ON catalog_imports FOR EACH ROW BEGIN IF NEW.state='succeeded' THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='synthetic completion failure'; END IF; END$$\nDELIMITER ;\n");
     try {

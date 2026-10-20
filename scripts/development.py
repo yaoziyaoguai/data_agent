@@ -246,7 +246,7 @@ def main():
             log = (private / (name + '.log')).open('w')
             logs.append(log)
             print(f'startup service={name} stage=spawn log={log.name}', flush=True)
-            processes.append((name, subprocess.Popen(argv, cwd=ROOT, env={**env,**(model_credentials if name in ('bridge','worker','memory') else {})}, stdout=log, stderr=log)))
+            processes.append((name, subprocess.Popen(argv, cwd=ROOT, env={**env,**(model_credentials if name in ('api','bridge','worker','memory') else {})}, stdout=log, stderr=log)))
             if name in ('api', 'bridge','platform','memory'):
                 wait_health('http://127.0.0.1:' + str(ports[name]) + '/health', processes, name, private)
         wait_health('http://127.0.0.1:' + str(ports['web']), processes, 'web', private)

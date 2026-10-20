@@ -138,7 +138,7 @@ try {
   checks.push('非阻断诊断进入草稿工具回执；没有用户执行意图即无提交，正式草稿仍拒绝旧引用');
 
   const authority=h.sql(`SELECT authority_snapshot FROM agent_runs WHERE id='${run.run_id}'`)[0];
-  assert.equal(authority.dependency_schema,4);
+  assert.equal(authority.dependency_schema,5);
   assert.ok(authority.knowledge.some(reference=>reference[0]===lines.id&&reference[1]===lines.version));
   const beforeChange=await h.internal('/internal/model/issue',{run_id:run.run_id,lease_epoch:run.lease_epoch,call_attempt_id:randomUUID()});
   assert.equal(beforeChange.status,200,JSON.stringify(beforeChange.value));

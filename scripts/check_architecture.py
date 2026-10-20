@@ -8,7 +8,7 @@ import sys
 OWNERS={
  'conversations':{'conversations','conversation_messages','conversation_events','conversation_message_tasks'},
  'analysis':{'analysis_tasks','condition_revisions','clarifications','task_lifecycle_operations','analysis_evidence','analysis_evidence_operations','analysis_reports','analysis_report_revisions','analysis_report_operations'},
- 'runtime':{'agent_runs','pi_checkpoints','tool_calls','assistant_outputs','output_chunks','budget_scopes','model_call_attempts','model_trials','maintenance_model_calls'},
+ 'runtime':{'agent_runs','pi_checkpoints','tool_calls','assistant_outputs','output_chunks','budget_scopes','model_call_attempts','model_trials','maintenance_model_calls','model_space_settings','model_services','model_service_versions','model_definitions','model_definition_versions'},
  'jobs':{'background_jobs'},'access':{'semantic_ownership','semantic_owner_operations'},
  'queries':{'query_requests'},'knowledge':{'knowledge_objects','knowledge_versions','knowledge_operations','semantic_change_proposals','knowledge_index_jobs','knowledge_index_rebuilds','semantic_corrections','semantic_correction_operations'},
  'ingestion':{'source_heads', 'source_sync_locks','source_snapshots','prefill_attempts','catalog_imports','catalog_platform_heads','catalog_table_snapshots','catalog_namespace_heads','table_analysis_preferences','analysis_preference_operations'},'assets':{'skill_publications','skill_suggestions','skill_drafts','personal_memory_index_jobs','personal_assets','personal_asset_versions','asset_operations','skill_selections','asset_adoptions'},'retrieval':{'retrieval_documents'},

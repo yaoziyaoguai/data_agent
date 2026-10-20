@@ -12,6 +12,13 @@ fn model_cost(
     input: u64,
     output: u64,
 ) -> Result<u64> {
+    if let Some(configuration) = &profile.configured_model {
+        let input_rate = crate::types::epoch(&configuration.input_rate)? as u128;
+        let output_rate = crate::types::epoch(&configuration.output_rate)? as u128;
+        let cost =
+            ((input as u128) * input_rate + (output as u128) * output_rate).div_ceil(1_000_000);
+        return u64::try_from(cost).map_err(|_| Error::new("invalid_input"));
+    }
     let (input_rate, output_rate) =
         match (profile.model_id.as_str(), profile.price_version.as_str()) {
             ("deepseek-flash", "2026-10-04-peak-usd") => (30, 120),

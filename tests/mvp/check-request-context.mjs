@@ -23,10 +23,22 @@ const assistant=content=>({role:'assistant',content,api:model.api,provider:model
 const input='继续核对合成条件中的否定与例外，不要执行SQL。';
 const makeWorkspace=day=>({tasks:[{id:'synthetic-task',goal:'合成目标',condition_version:'1',conditions:{notes:'条件\\引号"与\n换行'}}],recent_messages:[],selected_skills:[],memories:[{id:'memory-a',version:'1',kind:'memory',body:'合成参考；本次明确条件优先'}],query_observations:[],input_task_ids:[],request_clock:{reference_time_utc:`2026-10-${day}T00:00:00Z`,business_timezone:'Asia/Shanghai'},authority_revision:'synthetic',authority_snapshot:{private:'不能进入模型'}});
 const bytes=value=>Buffer.byteLength(JSON.stringify(value));
+const makeHistory=repeat=>Array.from({length:4},(_,i)=>i%2===0?{role:'user',content:'合成'.repeat(repeat),timestamp:2+i}:assistant([{type:'text',text:'合成'.repeat(repeat)}]));
+const legacyBytes=(history,workspace,projection)=>bytes(history.map(({role,content})=>({role,content})))+bytes({...workspace,memories:undefined,authority_revision:undefined,authority_snapshot:undefined})+Buffer.byteLength(projection.contents()[1])+Buffer.byteLength(input)+bytes(tools.map(({name,description,parameters})=>({name,description,parameters})))+4096;
+// 用旧预检允许的边界构造历史；不依赖新估算器或SDK实际输出反写通过预期。
+// 固定900/950次重复会随工具说明与Schema变大而越过旧阈值，漏掉原本存在的低估区间。
+const boundaryWorkspace=makeWorkspace('16'),boundaryProjection=workspaceContext(boundaryWorkspace);
+const oneRepeatBytes=legacyBytes(makeHistory(1),boundaryWorkspace,boundaryProjection);
+const repeatBytes=legacyBytes(makeHistory(2),boundaryWorkspace,boundaryProjection)-oneRepeatBytes;
+assert.ok(repeatBytes>0);
+const boundaryRepeat=1+Math.floor((65536-4096-oneRepeatBytes)/repeatBytes);
+assert.ok(boundaryRepeat>0,'完整工具集应留出可复现旧预检漏报的历史空间');
+assert.ok(legacyBytes(makeHistory(boundaryRepeat),boundaryWorkspace,boundaryProjection)<=65536-4096);
+assert.ok(legacyBytes(makeHistory(boundaryRepeat+1),boundaryWorkspace,boundaryProjection)>65536-4096);
 const measurements=[];
 let falseNegative, previousHead;
-for(const repeat of [0,100,900,950]){
-  const history=Array.from({length:4},(_,i)=>i%2===0?{role:'user',content:'合成'.repeat(repeat),timestamp:2+i}:assistant([{type:'text',text:'合成'.repeat(repeat)}]));
+for(const repeat of new Set([0,100,900,950,boundaryRepeat])){
+  const history=makeHistory(repeat);
   for(const day of ['16','17']){
     const workspace=makeWorkspace(day), projection=workspaceContext(workspace);
     const {messages}=await projection.extension.handlers.get('context')[0]({messages:[...history,{role:'user',content:input,timestamp:10}]});
@@ -47,7 +59,7 @@ for(const repeat of [0,100,900,950]){
     assert.equal(payload.messages.filter(message=>(typeof message.content==='string'?message.content:(message.content??[]).map(part=>part.text??'').join('\n')).startsWith('当前宿主事实：')).length,1);
     const estimate=estimateRequestBytes(systemPrompt,convertToLlm(history),tools,projection.contents(),input);
     assert.ok(estimate>=bytes(payload),'保守预检必须覆盖实际SDK载荷、系统提示、工具与转义');
-    const legacyEstimate=bytes(history.map(({role,content})=>({role,content})))+bytes({...workspace,memories:undefined,authority_revision:undefined,authority_snapshot:undefined})+Buffer.byteLength(projection.contents()[1])+Buffer.byteLength(input)+bytes(tools.map(({name,description,parameters})=>({name,description,parameters})))+4096;
+    const legacyEstimate=legacyBytes(history,workspace,projection);
     measurements.push({repeat,day,estimate,legacyEstimate,actual:bytes(payload)});
     if(legacyEstimate<=65536-4096&&bytes(payload)>65536){
       assert.ok(estimate>65536-4096,'旧预检漏报的真实载荷现在必须提前触发原生compact');
@@ -63,7 +75,35 @@ assert.equal(events.at(-1).type,'error');
 assert.equal(events.at(-1).error.errorMessage,'request_too_large: model_input_limit');
 assert.equal(hostCalls,0,'超限请求不能预留或发送');
 assert.equal(networkAttempts,0);
+// 新回执来自同一查询但read工具有嵌套边界；旧启动快照不得继续与真实回执冲突。
+const formatting = dataTools({}, null, '');
+const queryStates = ['not_submitted', 'queued', 'running', 'succeeded', 'submission_unknown'];
+for (const state of queryStates) {
+  for (const name of ['get_query', 'request_query']) {
+    const initial = makeWorkspace('19');
+    initial.query_observations = [{id: 'query-a', execution_state: 'not_submitted'}, {id: 'query-b', execution_state: 'running'}];
+    const projection = workspaceContext(initial);
+    const query = {id: 'query-a', execution_state: state};
+    const receipt = {tool_name: name, data: name === 'get_query' ? {query} : query};
+    projection.acceptReceipt(receipt);
+    const projected = await projection.extension.handlers.get('context')[0]({messages: [{role: 'user', content: input, timestamp: 10}]});
+    const facts = JSON.parse(projected.messages.find(m => m.customType === 'data_agent_workspace').content.split('\n').slice(1).join('\n'));
+    assert.deepEqual(facts.query_observations.map(q => q.id), ['query-b'], '已读取查询撤下旧状态，其他查询保持');
+    const formatted = JSON.parse((await formatting.formatResult(name, {}, receipt)).content[0].text);
+    assert.ok(formatted.status_note);
+    assert.deepEqual(name === 'get_query' ? formatted.query : {id: formatted.id, execution_state: formatted.execution_state}, query);
+    if (state === 'not_submitted') assert.match(formatted.status_note, /未提交/);
+    if (state === 'submission_unknown') assert.match(formatted.status_note, /未知/);
+  }
+}
+const rejection = {tool_name: 'execute_query', data: {error: 'version_conflict', hint: '先读取当前状态', recovery: {reason: 'version_conflict', read_tool: 'get_query', new_execution_authorized: false}}};
+const rejected = await formatting.formatResult('execute_query', {}, rejection);
+assert.equal(rejected.isError, true);
+assert.deepEqual(JSON.parse(rejected.content[0].text), rejection.data, '恢复字段实际进入模型文本，不只留在SDK details');
 await mkdir('.local/checks',{recursive:true});
-const result={passed:true,measurements,networkAttempts,hostCalls,officialRequests:0};
+const result={passed:true,measurements,boundaryRepeat,repeatBytes,
+  systemPromptBytes:Buffer.byteLength(systemPrompt),
+  toolBytes:bytes(tools.map(({name,description,parameters})=>({name,description,parameters}))),
+  networkAttempts,hostCalls,officialRequests:0};
 await writeFile('.local/checks/request-context.json',JSON.stringify(result,null,2));
 console.log(JSON.stringify(result));

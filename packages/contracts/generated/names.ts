@@ -178,4 +178,16 @@ export interface ContractTypes {
   QueryResultStatisticsRead: Boundary.QueryResultStatisticsRead;
   QueryResultCellRead: Boundary.QueryResultCellRead;
   AgentQueryResults: Boundary.AgentQueryResults;
+  ClarificationRequest: Boundary.ClarificationRequest;
+  QuerySemanticResolution: Boundary.QuerySemanticResolution;
+  ConfiguredModel: Boundary.ConfiguredModel;
+  SaveModelService: Boundary.SaveModelService;
+  ModelService: Boundary.ModelService;
+  SaveModelDefinition: Boundary.SaveModelDefinition;
+  ModelDefinition: Boundary.ModelDefinition;
+  ModelConfigurationAccess: Boundary.ModelConfigurationAccess;
+  ModelConfiguration: Boundary.ModelConfiguration;
+  SaveDefaultModel: Boundary.SaveDefaultModel;
+  ReadModelConnection: Boundary.ReadModelConnection;
+  ModelConnection: Boundary.ModelConnection;
 }

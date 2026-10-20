@@ -5,6 +5,7 @@ import { adoptNewConversationDraft, conversationStorageKey, readPendingSubmissio
 import { api } from "./shared/api.ts";
 import "./style.css";
 import { KnowledgePage } from "./features/knowledge/KnowledgePage.tsx";
+import { ModelConfigurationPage } from "./features/models/ModelConfigurationPage.tsx";
 import { AssetsPage } from "./features/assets/AssetsPage.tsx";
 import { WorkspaceShell, type View } from "./shared/WorkspaceShell.tsx";
 import { UnsavedChangesProvider, useNavigationGuard } from "./shared/UnsavedChanges.tsx";
@@ -109,7 +110,7 @@ function App() {
         view={view}
         onView={navigate}
       >
-        {view === "knowledge" ? (
+        {view === "models" ? <ModelConfigurationPage key={JSON.stringify([space,user])}/> : view === "knowledge" ? (
           <KnowledgePage user={user} initialObject={object} initialTab={location.tab} initialScope={location.scope} onLocation={(patch, replace) => changeLocation(patch, replace)} />
         ) : (
           <AssetsPage user={user} initialTab={assetsEntry} onTab={assetsTab => changeLocation({assetsTab})} onUseSkill={useSkill} />

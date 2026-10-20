@@ -1,4 +1,4 @@
-use super::super::store::{LockedTasks, assert_current_in_tx};
+use super::super::store::LockedTasks;
 use crate::{
     contracts,
     persistence::AppTx,
@@ -8,6 +8,44 @@ use serde_json::{Value, json};
 use sqlx::Row;
 
 const MAX_EVIDENCE_BYTES: usize = 128 * 1024;
+
+pub struct EvidenceSaveSources<'a> {
+    pub references: &'a Value,
+    pub text_authority: &'a Value,
+}
+
+/// 来源条件沿原任务版本读取；任务后来修订或取消不改写已经成功查询的含义。
+/// 调用方先经会话模块校验当前空间与本人访问，再核对资料和结果的当前可用性。
+pub async fn read_evidence_conditions_in_tx(
+    tx: &mut AppTx<'_>,
+    ctx: &AccessContext,
+    cid: &str,
+    task: &str,
+    version: u64,
+) -> Result<Value> {
+    let own = sqlx::query(
+        "SELECT id FROM analysis_tasks WHERE id=? AND conversation_id=? AND owner_id=?",
+    )
+    .bind(task)
+    .bind(cid)
+    .bind(&ctx.user_id)
+    .fetch_optional(tx.connection())
+    .await?;
+    if own.is_none() {
+        return Err(Error::new("not_available"));
+    }
+    let conditions = sqlx::query_scalar::<_, sqlx::types::Json<Value>>(
+        "SELECT body FROM condition_revisions WHERE task_id=? AND version=?",
+    )
+    .bind(task)
+    .bind(version)
+    .fetch_optional(tx.connection())
+    .await?
+    .ok_or(Error::new("invalid_evidence"))?
+    .0;
+    contracts::validate("Conditions", &conditions)?;
+    Ok(conditions)
+}
 
 fn evidence_body(input: &Value, conditions: Value, sources: &Value) -> Result<Value> {
     contracts::validate("SaveAnalysisEvidenceInput", input)?;
@@ -31,8 +69,12 @@ pub async fn save_evidence_in_tx(
     operation: &str,
     message_id: &str,
     input: &Value,
-    validated_sources: &Value,
+    sources: EvidenceSaveSources<'_>,
 ) -> Result<Value> {
+    let EvidenceSaveSources {
+        references: validated_sources,
+        text_authority,
+    } = sources;
     tasks.assert_transaction(tx)?;
     if operation.is_empty()
         || operation.len() > 64
@@ -64,34 +106,14 @@ pub async fn save_evidence_in_tx(
         .as_str()
         .ok_or(Error::new("invalid_input"))?;
     let version = epoch(input["condition_version"].as_str().unwrap_or(""))?;
-    let own = sqlx::query(
-        "SELECT id FROM analysis_tasks WHERE id=? AND conversation_id=? AND owner_id=?",
-    )
-    .bind(task)
-    .bind(cid)
-    .bind(&ctx.user_id)
-    .fetch_optional(tx.connection())
-    .await?;
-    if own.is_none() {
-        return Err(Error::new("not_available"));
-    }
-    assert_current_in_tx(tx, cid, task, version).await?;
-    let conditions = sqlx::query_scalar::<_, sqlx::types::Json<Value>>(
-        "SELECT body FROM condition_revisions WHERE task_id=? AND version=?",
-    )
-    .bind(task)
-    .bind(version)
-    .fetch_optional(tx.connection())
-    .await?
-    .ok_or(Error::new("version_conflict"))?
-    .0;
+    let conditions = read_evidence_conditions_in_tx(tx, ctx, cid, task, version).await?;
     let body = evidence_body(input, conditions, validated_sources)?;
     let evidence_id = id();
     let reference = json!({"evidence_id":evidence_id,"conversation_id":cid,"task_id":task,"condition_version":version.to_string(),"result_dependencies":validated_sources["result_dependencies"]});
     contracts::validate("AnalysisEvidenceRef", &reference)?;
-    sqlx::query("INSERT INTO analysis_evidence(id,owner_id,space_id,conversation_id,task_id,condition_version,source_message_id,body,reference) VALUES(?,?,?,?,?,?,?,?,?)")
+    sqlx::query("INSERT INTO analysis_evidence(id,owner_id,space_id,conversation_id,task_id,condition_version,source_message_id,body,reference,text_authority) VALUES(?,?,?,?,?,?,?,?,?,?)")
         .bind(&evidence_id).bind(&ctx.user_id).bind(&ctx.space_id).bind(cid).bind(task).bind(version).bind(message_id)
-        .bind(sqlx::types::Json(&body)).bind(sqlx::types::Json(&reference)).execute(tx.connection()).await?;
+        .bind(sqlx::types::Json(&body)).bind(sqlx::types::Json(&reference)).bind(sqlx::types::Json(text_authority)).execute(tx.connection()).await?;
     sqlx::query("UPDATE analysis_evidence_operations SET receipt=? WHERE owner_id=? AND operation_id=? AND fingerprint=?")
         .bind(sqlx::types::Json(&reference)).bind(&ctx.user_id).bind(operation).bind(&command_fingerprint).execute(tx.connection()).await?;
     Ok(reference)
@@ -109,6 +131,24 @@ pub async fn read_evidence_in_tx(
     body["reference"] = reference;
     body["source_message_id"] = json!(row.get::<String, _>("source_message_id"));
     Ok(body)
+}
+
+pub async fn read_evidence_authority_in_tx(
+    tx: &mut AppTx<'_>,
+    ctx: &AccessContext,
+    evidence: &str,
+) -> Result<Value> {
+    Ok(sqlx::query_scalar::<_, Option<sqlx::types::Json<Value>>>(
+        "SELECT text_authority FROM analysis_evidence WHERE id=? AND owner_id=? AND space_id=?",
+    )
+    .bind(evidence)
+    .bind(&ctx.user_id)
+    .bind(&ctx.space_id)
+    .fetch_optional(tx.connection())
+    .await?
+    .ok_or(Error::new("not_available"))?
+    .map(|value| value.0)
+    .unwrap_or(Value::Null))
 }
 
 pub(in crate::modules::analysis) async fn refs_in_tx(

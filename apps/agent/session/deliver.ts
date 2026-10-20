@@ -23,6 +23,7 @@ import {
   guardedDeepSeekStream,
   connectionFromEnvironment,
 } from "../provider/deepseek.ts";
+import { configuredModel } from "../provider/configured.ts";
 import { mockStream } from "../provider/mock.ts";
 import { selectedSkillResources } from "./skills.ts";
 import { resources } from "./resources.ts";
@@ -105,7 +106,9 @@ export async function deliver(
     allowModelNetwork: false,
   });
   let model;
-  if (run.model_profile) {
+  if (run.model_profile?.configured_model) {
+    model = await configuredModel(runtime,transport,run.model_profile,signal);
+  } else if (run.model_profile) {
     const connection = connectionFromEnvironment();
     const catalog = runtime.getModel("deepseek", run.model_profile.model_id);
     if (!catalog) throw new Error("provider_model_unavailable");
@@ -250,7 +253,7 @@ export async function deliver(
         final?.role === "assistant" &&
         (final.stopReason === "error" || final.stopReason === "aborted")
       ) {
-        const safeCodes = new Set(["model_timeout", "model_auth_failed", "model_rate_limited", "model_service_unavailable", "model_network_error", "model_quota_exhausted", "model_retry_exhausted", "model_request_failed", "model_budget_exhausted", "model_usage_unknown", "model_usage_invalid", "model_input_limit", "model_limits_exceeded", "model_finalize_unconfirmed", "request_too_large: model_input_limit", "run_cancelled"]);
+        const safeCodes = new Set(["model_timeout", "model_auth_failed", "model_rate_limited", "model_service_unavailable", "model_network_error", "model_quota_exhausted", "model_retry_exhausted", "model_request_failed", "model_budget_exhausted", "model_usage_unknown", "model_usage_invalid", "model_input_limit", "model_output_limit", "model_limits_exceeded", "model_finalize_unconfirmed", "model_unavailable", "stale_context", "request_too_large: model_input_limit", "run_cancelled"]);
         const code = safeCodes.has(final.errorMessage ?? "") ? final.errorMessage : "model_run_failed";
         throw Object.assign(new Error("model_run_failed"), { code });
       }

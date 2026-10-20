@@ -79,6 +79,7 @@ pub async fn invoke_tool(
         &context.user_id,
         &tool.operation_id,
         &input.arguments.goal,
+        None,
     )
     .await?;
     runtime::record_tool_receipt_in_tx(&mut tx, &tool, &receipt).await?;

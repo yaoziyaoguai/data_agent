@@ -8,7 +8,7 @@ const responses:Record<string,string> = {
   '/internal/tool-calls':'OperationReceipt', '/internal/data/tool-calls':'OperationReceipt','/internal/data/tools':'DataToolOutcome', '/internal/tools':'ToolOutcome',
   '/internal/data/tool-rejections':'DataToolOutcome',
   '/internal/outputs':'OutputReceipt','/internal/finish':'FinishReceipt',
-  '/internal/model/reserve':'ModelCallReceipt','/internal/model/send':'ModelCallReceipt','/internal/model/finalize':'ModelCallReceipt',
+  '/internal/model/connection':'ModelConnection','/internal/model/reserve':'ModelCallReceipt','/internal/model/send':'ModelCallReceipt','/internal/model/finalize':'ModelCallReceipt',
   '/internal/model/issue':'ModelReceipt','/internal/model/settle':'ModelReceipt',
   '/internal/checkpoints/read':'Checkpoint',
 };

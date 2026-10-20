@@ -1,8 +1,9 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
+import { api } from "./api.ts";
 import { WorkspaceRole } from "./WorkspaceRole.tsx";
 import { Modal } from "./Modal.tsx";
 import { Icon } from "./Icon.tsx";
-export type View = "workbench" | "assets" | "knowledge";
+export type View = "workbench" | "assets" | "knowledge" | "models";
 export function WorkspaceShell({ user, view, onView, onLogout, sidebar, children, title, onNewConversation }: {
   user: string;
   modelLabel: string;
@@ -14,6 +15,12 @@ export function WorkspaceShell({ user, view, onView, onLogout, sidebar, children
   title?: string;
   onNewConversation?: () => void;
 }) {
+  const [access,setAccess] = useState<{user:string;allowed:boolean}|null>(null);
+  useEffect(() => {
+    let active=true;
+    void api("ModelConfigurationAccess","/model-configuration/access").then(value=>{if(active)setAccess({user,allowed:value.can_manage_models});}).catch(()=>{if(active)setAccess(null);});
+    return ()=>{active=false;};
+  },[user,view]);
   const [menuOpen, setMenuOpen] = useState(false);
   const navigate = (destination: View) => { setMenuOpen(false); onView(destination); };
   const navigation = <>
@@ -22,6 +29,7 @@ export function WorkspaceShell({ user, view, onView, onLogout, sidebar, children
     {onNewConversation && <button className="new-conversation" onClick={() => { setMenuOpen(false); onNewConversation(); }}><Icon name="plus"/>新对话</button>}
     <nav className="primary-nav" aria-label="主导航">
       {([["workbench", "工作台", "chat"], ["assets", "我的积累", "bookmark"], ["knowledge", "语义管理", "layers"]] as const).map(([value, label, icon]) => <button key={value} aria-current={view === value ? "page" : undefined} onClick={() => navigate(value)}><Icon name={icon}/><span>{label}</span></button>)}
+      {access?.user===user&&access.allowed&&<button aria-current={view==='models'?'page':undefined} onClick={()=>navigate('models')}><Icon name="layers"/><span>模型配置</span></button>}
     </nav>
     {sidebar}
     <div className="identity"><span className="avatar">{user.slice(0, 1).toUpperCase()}</span><div className="identity-details"><strong>{user}</strong><WorkspaceRole key={user + ":" + view}/></div><button onClick={onLogout}>退出</button></div>
@@ -30,7 +38,7 @@ export function WorkspaceShell({ user, view, onView, onLogout, sidebar, children
     <a className="skip-link" href="#main-content" onClick={event => { event.preventDefault(); document.getElementById("main-content")?.focus(); }}>跳到主要内容</a>
     <aside className="sidebar">{navigation}</aside>
     <main id="main-content" tabIndex={-1}>
-      <header className="workspace-header"><div className="workspace-breadcrumb"><button className="mobile-menu" aria-label="展开导航" onClick={() => setMenuOpen(true)}><Icon name="menu"/></button><span>{view === "workbench" ? "工作台" : view === "assets" ? "我的积累" : "语义管理"}</span><span className="breadcrumb-detail">/ {title || "合成零售空间"}</span></div></header>
+      <header className="workspace-header"><div className="workspace-breadcrumb"><button className="mobile-menu" aria-label="展开导航" onClick={() => setMenuOpen(true)}><Icon name="menu"/></button><span>{view === "workbench" ? "工作台" : view === "assets" ? "我的积累" : view === "models" ? "模型配置" : "语义管理"}</span><span className="breadcrumb-detail">/ {title || "合成零售空间"}</span></div></header>
       {children}
     </main>
     {menuOpen && <Modal title="空间导航" className="navigation-dialog" onClose={() => setMenuOpen(false)}>{navigation}</Modal>}

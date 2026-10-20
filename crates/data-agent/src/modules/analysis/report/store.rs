@@ -44,6 +44,11 @@ pub async fn report_receipt_in_tx(
     Ok((!receipt.is_null()).then_some(receipt))
 }
 
+pub struct ReportSaveSources<'a> {
+    pub evidence: &'a [Value],
+    pub title_authorities: &'a Value,
+}
+
 fn report_body(
     input: &Value,
     reference: &Value,
@@ -68,13 +73,7 @@ fn report_body(
             return Err(Error::new("invalid_evidence"));
         };
         contracts::validate("AnalysisEvidence", item)?;
-        if item["reference"]["conversation_id"] != reference["conversation_id"]
-            || item["reference"]["task_id"] != input["task_id"]
-            || item["reference"]["condition_version"] != input["condition_version"]
-            || evidence
-                .first()
-                .is_some_and(|previous: &Value| previous["conditions"] != item["conditions"])
-        {
+        if item["reference"]["conversation_id"] != reference["conversation_id"] {
             return Err(Error::new("invalid_evidence"));
         }
         evidence.push((*item).clone());
@@ -125,8 +124,12 @@ pub async fn save_report_in_tx(
     operation: &str,
     message_id: &str,
     input: &Value,
-    validated_evidence: &[Value],
+    sources: ReportSaveSources<'_>,
 ) -> Result<Value> {
+    let ReportSaveSources {
+        evidence: validated_evidence,
+        title_authorities: text_authorities,
+    } = sources;
     tasks.assert_transaction(tx)?;
     if !valid_id(operation) || !valid_id(message_id) {
         return Err(Error::new("invalid_input"));
@@ -212,8 +215,8 @@ pub async fn save_report_in_tx(
             return Err(Error::new("invalid_evidence"));
         }
     }
-    sqlx::query("INSERT INTO analysis_report_revisions(report_id,version,condition_version,source_message_id,body) VALUES(?,?,?,?,?)")
-        .bind(&report_id).bind(version).bind(condition_version).bind(message_id).bind(sqlx::types::Json(&body)).execute(tx.connection()).await?;
+    sqlx::query("INSERT INTO analysis_report_revisions(report_id,version,condition_version,source_message_id,body,text_authorities) VALUES(?,?,?,?,?,?)")
+        .bind(&report_id).bind(version).bind(condition_version).bind(message_id).bind(sqlx::types::Json(&body)).bind(sqlx::types::Json(text_authorities)).execute(tx.connection()).await?;
     if let Some(current) = current_version {
         let updated = sqlx::query("UPDATE analysis_reports SET version=?,reference=?,updated_at=UTC_TIMESTAMP(3) WHERE id=? AND version=?")
             .bind(version).bind(sqlx::types::Json(&reference)).bind(&report_id).bind(current).execute(tx.connection()).await?;
@@ -250,6 +253,22 @@ pub async fn report_ref_in_tx(tx: &mut AppTx<'_>, cid: &str, task: &str) -> Resu
     .fetch_optional(tx.connection())
     .await?
     .map(|reference| reference.0))
+}
+
+pub async fn read_report_authorities_in_tx(
+    tx: &mut AppTx<'_>,
+    ctx: &AccessContext,
+    reference: &Value,
+) -> Result<Value> {
+    Ok(sqlx::query_scalar::<_, Option<sqlx::types::Json<Value>>>(
+        "SELECT r.text_authorities FROM analysis_reports h JOIN analysis_report_revisions r ON r.report_id=h.id WHERE h.owner_id=? AND h.space_id=? AND h.conversation_id=? AND h.id=? AND r.version=?",
+    )
+    .bind(&ctx.user_id).bind(&ctx.space_id)
+    .bind(reference["conversation_id"].as_str().ok_or(Error::new("invalid_input"))?)
+    .bind(reference["report_id"].as_str().ok_or(Error::new("invalid_input"))?)
+    .bind(epoch(reference["version"].as_str().ok_or(Error::new("invalid_input"))?)?)
+    .fetch_optional(tx.connection()).await?.ok_or(Error::new("not_available"))?
+    .map(|value| value.0).unwrap_or(Value::Null))
 }
 
 pub async fn delete_conversation_reports_in_tx(
@@ -317,13 +336,8 @@ mod tests {
     }
 
     #[test]
-    fn report_requires_selected_evidence_from_one_task_and_condition() {
-        for path in [
-            "task_id",
-            "condition_version",
-            "conversation_id",
-            "evidence_id",
-        ] {
+    fn report_requires_selected_evidence_from_the_same_conversation() {
+        for path in ["conversation_id", "evidence_id"] {
             let mut evidence = evidence();
             evidence["reference"][path] = json!("other");
             assert!(
@@ -331,6 +345,27 @@ mod tests {
             );
         }
         assert!(report_body(&input(), &reference(), "2026-10-13T00:00:00Z", &[]).is_err());
+    }
+
+    #[test]
+    fn report_preserves_each_sources_task_conditions_and_exact_values() {
+        let original = evidence();
+        let mut other = evidence();
+        other["reference"]["evidence_id"] = json!("other-evidence");
+        other["reference"]["task_id"] = json!("other-task");
+        other["reference"]["condition_version"] = json!("3");
+        other["conditions"]["filters"] = json!(["is_test=0"]);
+        let mut input = input();
+        input["evidence_ids"] = json!(["evidence-one", "other-evidence"]);
+        let report = report_body(
+            &input,
+            &reference(),
+            "2026-10-19T00:00:00Z",
+            &[original.clone(), other.clone()],
+        )
+        .unwrap();
+        assert_eq!(report["evidence"], json!([original, other]));
+        assert_eq!(report["reference"], reference());
     }
 
     #[test]

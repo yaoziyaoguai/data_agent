@@ -28,6 +28,10 @@ pub async fn reserve(
     }
     super::context_authority::assert_run_in_tx(&mut tx, context, &cid, &input.run_id).await?;
     super::context_authority::assert_checked_run_in_tx(&mut tx, &input.run_id, &checked).await?;
+    let profile = runtime::read_budget_profile_in_tx(&mut tx, &run.budget_scope_id)
+        .await?
+        .ok_or(Error::new("model_unavailable"))?;
+    runtime::model_configuration::assert_active_in_tx(&mut tx, &context.space_id, &profile).await?;
     let receipt = runtime::reserve_model_call_in_tx(&mut tx, &run, &input).await?;
     tx.commit().await?;
     Ok(receipt)
@@ -53,6 +57,10 @@ pub async fn send(
     }
     super::context_authority::assert_run_in_tx(&mut tx, context, &cid, &input.run_id).await?;
     super::context_authority::assert_checked_run_in_tx(&mut tx, &input.run_id, &checked).await?;
+    let profile = runtime::read_budget_profile_in_tx(&mut tx, &run.budget_scope_id)
+        .await?
+        .ok_or(Error::new("model_unavailable"))?;
+    runtime::model_configuration::assert_active_in_tx(&mut tx, &context.space_id, &profile).await?;
     let receipt = runtime::send_model_call_in_tx(&mut tx, &run, &input).await?;
     tx.commit().await?;
     Ok(receipt)

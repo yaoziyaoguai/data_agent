@@ -23,8 +23,8 @@ const provider=createServer(async(req,res)=>{
  res.writeHead(200,{'content-type':'text/event-stream'});res.write('data: '+JSON.stringify({id:'loopback',choices:[{index:0,delta,finish_reason:routed?'stop':'tool_calls'}]})+'\n\n');res.write('data: '+JSON.stringify({choices:[],usage:{prompt_tokens:100,completion_tokens:25,total_tokens:125}})+'\n\n');res.end('data: [DONE]\n\n');
 });await new Promise(r=>provider.listen(0,'127.0.0.1',r));
 try{
- h=await harness({database,profile,keep:true});await h.close();
- launcher=spawn('python3',['scripts/development.py','--model','protocol-test','--model-profile',path,'--model-url','http://127.0.0.1:'+provider.address().port,'--port-offset',String(portOffset),'--runtime-dir',runtimeDir],{cwd:process.cwd(),env:{...process.env,DATA_AGENT_PREFILL_PROFILE:JSON.stringify({...profile,trial_id:'old-trial-id'}),DATA_AGENT_PREFILL_URL:'http://127.0.0.1:1/wrong',DATA_AGENT_PREFILL_TEST:'0'},stdio:['ignore','pipe','pipe']});launcher.stdout.on('data',d=>output+=d);launcher.stderr.on('data',d=>output+=d);
+ h=await harness({database,profile,keep:true,protocolProviderUrl:'http://127.0.0.1:'+provider.address().port});await h.close();
+ launcher=spawn('python3',['scripts/development.py','--model','protocol-test','--model-profile',path,'--model-url','http://127.0.0.1:'+provider.address().port,'--port-offset',String(portOffset),'--runtime-dir',runtimeDir],{cwd:process.cwd(),env:{...process.env,DATA_AGENT_MODEL_KEY_FILE:h.env.DATA_AGENT_MODEL_KEY_FILE,DATA_AGENT_PREFILL_PROFILE:JSON.stringify({...profile,trial_id:'old-trial-id'}),DATA_AGENT_PREFILL_URL:'http://127.0.0.1:1/wrong',DATA_AGENT_PREFILL_TEST:'0'},stdio:['ignore','pipe','pipe']});launcher.stdout.on('data',d=>output+=d);launcher.stderr.on('data',d=>output+=d);
  await until(async()=>{if(launcher.exitCode!==null)throw new Error('formal_launcher_exited');try{return(await fetch(webUrl)).ok;}catch{return false;}},'formal startup');
  const tokens=JSON.parse(await readFile(runtimeDir+'/identities.json','utf8'));
  browser=await chromium.launch();page=await browser.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));
@@ -40,7 +40,7 @@ try{
   const response=await route.fetch();await new Promise(r=>setTimeout(r,500));await route.fulfill({response});
  });
  await page.goto(webUrl);await page.getByLabel('演示登录凭据').fill(tokens.alice);await page.getByRole('button',{name:'进入工作台 →',exact:true}).click();
- const modelSelect=page.getByLabel('模型',{exact:true});await modelSelect.waitFor();assert.equal(await modelSelect.inputValue(),profile.model_id);assert.equal(await modelSelect.locator('option:checked').innerText(),profile.model_id==='deepseek-v4-pro'?'Pro':'Flash');
+ const modelSelect=page.getByLabel('模型',{exact:true});await modelSelect.waitFor();assert.equal(await modelSelect.inputValue(),profile.model_id);assert.equal(await modelSelect.locator('option:checked').innerText(),profile.model_id==='deepseek-v4-pro'?'DeepSeek Pro':'DeepSeek Flash');
  await page.getByLabel('你的数据问题').fill('验证正式启动聊天接线');await page.getByRole('button',{name:'发送 ↑',exact:true}).click();await page.getByText('正式启动聊天回环已完成。',{exact:true}).waitFor();
  const reanalyze=async()=>{
   const responsePromise=page.waitForResponse(r=>new URL(r.url()).pathname==='/api/knowledge/table-demo_order_detail/reanalyze'&&r.request().method()==='POST');

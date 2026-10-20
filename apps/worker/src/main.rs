@@ -101,7 +101,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     loop {
         if let Some(job) = jobs::claim_due(&pool, &worker_id, ttl_ms).await? {
             if job.attempts >= 4 {
-                deliver_run::fail_exhausted(&pool, &job).await?;
+                deliver_run::fail_delivery(&pool, &job, "retry_exhausted").await?;
                 eprintln!("delivery_failed job={} code=retry_exhausted", job.id);
                 continue;
             }
@@ -156,7 +156,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     if error.code == "lease_lost" {
                         jobs::defer(&pool, &job).await?;
                     } else {
-                        deliver_run::fail_exhausted(&pool, &job).await?;
+                        deliver_run::fail_delivery(&pool, &job, error.code).await?;
                     }
                 }
             }

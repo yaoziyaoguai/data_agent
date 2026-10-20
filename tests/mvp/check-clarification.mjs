@@ -21,19 +21,17 @@ const profile = {
   toolset: "data",
   payload_bytes_limit: 131072,
 };
-const h = await harness({
-  capture: true,
-  profile,
-  env: { DATA_AGENT_LEASE_MS: "120000", DATA_AGENT_QUERY_DELAY_SECONDS: "0.1" },
-});
+
 let run,
   manager,
   plan,
   protocolFailure,
   passed = false,
-  calls = 0;
+  calls = 0,
+  compactions = 0;
 const checks = [],
   payloadBytes = [],
+  summaryRequests = [],
   rounds = [];
 const ok = (response) => {
   assert.equal(response.status, 200, JSON.stringify(response.value));
@@ -116,7 +114,6 @@ const routeArgs = (task) => ({
   action: "route",
   task_id: task.task_id,
   expected_version: task.condition_version,
-  goal: "",
   options: [],
 });
 const draftArgs = (task, sql, parameters = {}, refs = [], replaces = null) => ({
@@ -164,14 +161,19 @@ const provider = createServer(async (request, response) => {
     assert.ok(Buffer.byteLength(raw) <= profile.payload_bytes_limit);
     assert.equal(body.max_tokens, profile.output_limit);
     assert.deepEqual(body.thinking, { type: "disabled" });
-    assert.ok(
-      body.tools.some((tool) => tool.function.name === "read_analysis_task"),
-    );
-    assert.ok(
-      plan && plan.index < plan.steps.length,
-      "协议计划外的模型请求不能制造成功",
-    );
-    const step = plan.steps[plan.index++];
+    let step;
+    if (!body.tools?.length) {
+      // 长会话允许Pi原生摘要；单独计费且不消费业务脚本，不取消压缩来迎合夹具。
+      assert.match(body.messages.find(message => message.role === "system")?.content ?? "", /context summarization assistant/);
+      assert.match(JSON.stringify(body.messages), /<conversation>|# Conversation/);
+      compactions++;
+      summaryRequests.push(body);
+      step = {text: "合成会话包含退款率与渠道两个独立任务。退款率的分母问题等待回答，渠道查询按自身授权执行。通过read_analysis_task核对完整条件及开放问题，read_conversation补读原话；用户回答不增加执行授权。"};
+    } else {
+      assert.ok(body.tools.some((tool) => tool.function.name === "read_analysis_task"));
+      assert.ok(plan && plan.index < plan.steps.length, "协议计划外的模型请求不能制造成功");
+      step = plan.steps[plan.index++];
+    }
     if (step.observe) await step.observe(body);
     const args = typeof step.args === "function" ? step.args(body) : step.args;
     calls++;
@@ -233,6 +235,12 @@ const previous = {
   DEEPSEEK_BASE_URL: process.env.DEEPSEEK_BASE_URL,
   DATA_AGENT_PROVIDER_TEST: process.env.DATA_AGENT_PROVIDER_TEST,
 };
+const h = await harness({
+  capture: true,
+  profile,
+  protocolProviderUrl: "http://127.0.0.1:" + provider.address().port,
+  env: { DATA_AGENT_LEASE_MS: "120000", DATA_AGENT_QUERY_DELAY_SECONDS: "0.1" },
+});
 process.env.DEEPSEEK_API_KEY = "synthetic-protocol-key";
 process.env.DEEPSEEK_BASE_URL = "http://127.0.0.1:" + provider.address().port;
 process.env.DATA_AGENT_PROVIDER_TEST = "1";
@@ -358,7 +366,7 @@ try {
         draftArgs(guardedTask, "SELECT 2 AS verification_value"),
       )
     ).value.code,
-    "version_conflict",
+    "waiting_clarification",
   );
   assert.equal(
     (await invokeRaw("execute_query", executeArgs(guardedDraft))).value.code,
@@ -393,7 +401,7 @@ try {
   assert.equal((await taskIn(guardCid, guardedTask)).phase, "waiting_clarification");
   assert.equal(
     (await invokeRaw("request_query", draftArgs(guardedTask, "SELECT 3 AS verification_value"))).value.code,
-    "version_conflict",
+    "waiting_clarification",
   );
   assert.equal(guardedTask.clarification.id, savedQuestion.id);
   await finishManual();
@@ -484,12 +492,12 @@ try {
   assert.deepEqual(replay, answerReceipt);
   assert.equal(revisions(guardedTask), beforeAnswers + 1);
   const resolvedAgain = await invokeRaw("update_analysis_task", answerArgs([secondQuestion.id]));
-  assert.equal(resolvedAgain.value.code, "version_conflict");
+  assert.equal(resolvedAgain.value.code, "clarification_not_open");
   assert.equal(revisions(guardedTask), beforeAnswers + 1);
   assert.deepEqual(openQuestions(guardedTask), [savedQuestion]);
   assert.equal(
     (await invokeRaw("request_query", draftArgs(guardedTask, "SELECT 4 AS verification_value"))).value.code,
-    "version_conflict",
+    "waiting_clarification",
   );
   await finishManual("地区口径已保存，分母问题仍待决定，尚未生成或执行SQL。");
 
@@ -524,6 +532,154 @@ try {
     "多个问题通过工具回执/read均可读，先答后问仍保留首问；旧版、未知、跨任务、重复ID拒绝且整笔回滚；已提交回答重传取原回执；回答同时追问只保留新问题，最后回答后可生成SQL且不自动执行",
   );
 
+  const goalCid = await h.create();
+  await begin(goalCid, "建立合成分析任务并调查资料；此次不取数。\n只修改明确提供的条件。");
+  for (const action of ["create", "revise", "clarify"]) {
+    for (const task_id of [undefined, null]) {
+      const rejected = await invokeRaw("update_analysis_task", {
+        action, conditions, options: [],
+        ...(task_id === undefined ? {} : { task_id }),
+        ...(action === "clarify" ? { clarifications: [{ question: "采用哪个合成口径？", options: [] }] } : {}),
+      });
+      assert.equal(rejected.status, 400, "所有创建分支仍必须给出目标");
+      assert.equal((await h.snapshot(goalCid)).tasks.length, 0);
+    }
+  }
+  let goalTask = await invoke("update_analysis_task", {
+    action: "create", goal: "保持原有分析目标", conditions, options: [],
+  });
+  const storedGoal = () => h.sql(`SELECT JSON_OBJECT('goal',goal,'condition_version',goal_condition_version,'authority',goal_authority) FROM analysis_tasks WHERE id='${goalTask.task_id}'`)[0];
+  const originalGoal = storedGoal();
+  const goalSource = ok(await h.request("/knowledge", {
+    operation_id: randomUUID(), kind: "document", name: "目标来源的合成说明", body: "此合成资料用于核对新目标来源，不应覆盖未修改的旧目标来源。", related_ids: [],
+  }));
+  await invoke("read_knowledge", { object_id: goalSource.id, version: goalSource.version, entry_id: "body", offset: 0, limit: 4096 });
+  for (const invalid of [
+    { action: "revise", task_id: goalTask.task_id, expected_version: goalTask.condition_version, options: [] },
+    { action: "revise", task_id: goalTask.task_id, condition_patch: { set: {}, unset: [] }, options: [] },
+    { action: "clarify", task_id: goalTask.task_id, expected_version: goalTask.condition_version, condition_patch: { set: {}, unset: [] }, options: [] },
+    { ...routeArgs(goalTask), condition_patch: { set: {}, unset: [] } },
+  ]) {
+    assert.equal((await invokeRaw("update_analysis_task", invalid)).status, 400);
+    assert.equal(revisions(goalTask), 1);
+    assert.deepEqual(storedGoal(), originalGoal, "省略goal不放宽补丁、版本或澄清约束");
+  }
+  goalTask = await invoke("update_analysis_task", {
+    action: "revise", task_id: goalTask.task_id, expected_version: goalTask.condition_version,
+    condition_patch: { set: { notes: "只补充条件，不改目标" }, unset: [] }, options: [],
+  });
+  assert.deepEqual(storedGoal(), originalGoal, "已有revise省略goal保持原正文、创建版本和来源");
+  goalTask = await invoke("update_analysis_task", {
+    action: "clarify", task_id: goalTask.task_id, expected_version: goalTask.condition_version,
+    condition_patch: { set: {}, unset: [] }, options: [], clarifications: [{ question: "另一个合成条件采用哪个范围？", options: ["全部", "指定范围"] }],
+  });
+  assert.deepEqual(storedGoal(), originalGoal, "已有clarify省略goal不把新问题来源写进旧目标");
+  await invoke("update_analysis_task", routeArgs(goalTask));
+  assert.deepEqual(storedGoal(), originalGoal, "route省略goal只登记归属");
+  assert.equal(revisions(goalTask), 3);
+  goalTask = await invoke("update_analysis_task", {
+    action: "revise", task_id: goalTask.task_id, expected_version: goalTask.condition_version,
+    goal: originalGoal.goal, condition_patch: { set: {}, unset: [] }, options: [],
+  });
+  assert.deepEqual(storedGoal(), originalGoal, "显式重传同文仍保留原来源");
+  goalTask = await invoke("update_analysis_task", {
+    action: "revise", task_id: goalTask.task_id, expected_version: goalTask.condition_version,
+    goal: "根据已读合成资料修订后的新目标", condition_patch: { set: {}, unset: [] }, options: [],
+  });
+  const rewrittenGoal = storedGoal();
+  assert.equal(rewrittenGoal.goal, "根据已读合成资料修订后的新目标");
+  assert.equal(rewrittenGoal.condition_version, Number(goalTask.condition_version));
+  assert.notDeepEqual(rewrittenGoal.authority, originalGoal.authority, "真实改写仍按已有规则绑定当前资料来源");
+  assert.equal(openQuestions(goalTask).length, 1, "省略或改写目标均不自动解决未答问题");
+  await finishManual("已补充条件并保留未答问题，没有执行查询。");
+  checks.push("创建含兼容分支必须有目标；已有revise/clarify/route省略goal保留目标正文、版本与来源，补丁/版本/澄清约束不放宽，显式改写仍重绑来源");
+
+  const batchCid = await h.create();
+  await begin(batchCid, "同一个联合分析需要确认分母和地区；两个问题分别回答。");
+  const questions = [
+    { question: "采用订单数还是金额作分母？", options: ["订单数", "金额"] },
+    { question: "地区取发生时还是当前归属？", options: ["发生时", "当前"] },
+  ];
+  let batchTask = await invoke("update_analysis_task", {
+    action: "clarify", goal: "联合分析的独立条件", conditions, options: [], clarifications: questions,
+  });
+  const opened = batchTask.opened_clarifications;
+  assert.equal(opened.length, 2);
+  assert.notEqual(opened[0].id, opened[1].id);
+  assert.equal(batchTask.clarification.id, opened[0].id, "恢复摘要保留同批问题的输入顺序");
+  assert.deepEqual(opened.map(({ question, options }) => ({ question, options })), questions);
+  assert.equal(revisions(batchTask), 1, "一批问题随同一条件版本原子登记");
+  const blockedSdk = randomUUID();
+  const blockedArgs = draftArgs(batchTask, "SELECT 7 AS verification_value");
+  assert.equal((await invokeRaw("request_query", blockedArgs, blockedSdk)).value.code, "waiting_clarification");
+  const blockedReceipt = ok(await h.internal("/internal/data/tool-rejections", {
+    ...binding(), sdk_tool_call_id: blockedSdk, tool_name: "request_query", arguments: blockedArgs, checkpoint: checkpoint(),
+  }));
+  assert.equal(blockedReceipt.data.recovery.task.condition_version, batchTask.condition_version);
+  assert.deepEqual(blockedReceipt.data.recovery.task.open_clarification_ids.sort(), opened.map(item => item.id).sort());
+  assert.deepEqual(blockedReceipt.data.recovery.task.read_tool, { name: "read_analysis_task", arguments: { task_id: batchTask.task_id } });
+  assert.equal(blockedReceipt.data.recovery.task.conditions, undefined, "拒绝回执不复制条件和知识正文");
+  await finishManual("两个问题分别保留，先回答任意一个。");
+  await begin(batchCid, "先用当前地区，分母之后回答。");
+  const batchPreview = run.workspace_context.tasks.find((value) => value.id === batchTask.task_id);
+  assert.equal(batchPreview.clarification.id, opened[0].id);
+  assert.equal(batchPreview.has_more_clarifications, true, "首题预览须说明还有其他未答问题");
+  assert.equal(batchPreview.context_complete, false, "省略问题的启动快照不能冒称完整");
+  assert.equal(batchPreview.open_clarifications, undefined, "启动快照不扩充为问题全集");
+  assert.equal(batchTask.has_more_clarifications, true, "更新回执也标明首题不是未答问题全集");
+  batchTask = await invoke("update_analysis_task", {
+    action: "revise", task_id: batchTask.task_id, expected_version: batchTask.condition_version,
+    goal: "", condition_patch: { set: { notes: "地区采用当前归属" }, unset: [] },
+    options: [], resolved_clarification_ids: [opened[1].id],
+  });
+  assert.equal(batchTask.phase, "waiting_clarification");
+  assert.equal(batchTask.has_more_clarifications, false);
+  assert.deepEqual(openQuestions(batchTask).map(item => item.id), [opened[0].id]);
+  const historical = await invoke("read_analysis_task", { task_id: batchTask.task_id, condition_version: "1" });
+  assert.equal(historical.condition_version, "1");
+  assert.equal(historical.current_condition_version, "2");
+  assert.equal(historical.is_historical, true);
+  assert.deepEqual(historical.conditions, conditions);
+  assert.equal(historical.phase, "waiting_clarification");
+  assert.deepEqual(historical.current_open_clarification_ids, [opened[0].id]);
+  assert.equal(historical.open_clarifications, undefined);
+  assert.equal(historical.clarification, undefined);
+  assert.equal(historical.goal, undefined, "没有持久化目标历史，不能返回当前目标冒称原目标");
+  assert.equal((await invokeRaw("read_analysis_task", { task_id: batchTask.task_id, condition_version: "99" })).value.code, "not_available");
+  assert.equal((await invokeRaw("read_analysis_task", { task_id: guardedTask.task_id, condition_version: "1" })).value.code, "not_available");
+  assert.equal((await invokeRaw("request_query", { ...draftArgs(batchTask, "SELECT 7 AS verification_value"), condition_version: "1" })).value.code, "version_conflict");
+  assert.equal((await invokeRaw("request_query", draftArgs(batchTask, "SELECT 7 AS verification_value"))).value.code, "waiting_clarification");
+  for (const invalid of [
+    { clarifications: questions, question: "不能并存单问题" },
+    { clarifications: [{ question: "有效", options: [] }, { question: " ", options: [] }] },
+    { clarifications: Array(9).fill(questions[0]) },
+  ]) {
+    assert.equal((await invokeRaw("update_analysis_task", {
+      action: "clarify", task_id: batchTask.task_id, expected_version: batchTask.condition_version,
+      goal: "", condition_patch: { set: {}, unset: [] }, options: [], ...invalid,
+    })).status, 400);
+    assert.equal(revisions(batchTask), 2);
+    assert.deepEqual(openQuestions(batchTask).map(item => item.id), [opened[0].id]);
+  }
+  await finishManual("地区已保存，分母未回答，保持等待。");
+  ok(await h.request(`/conversations/${batchCid}/tasks/${batchTask.task_id}/cancel`, {
+    operation_id: randomUUID(), expected_version: batchTask.condition_version,
+  }));
+  await begin(batchCid, "查看已取消任务的状态。");
+  const cancelledPreview = run.workspace_context.tasks.find((value) => value.id === batchTask.task_id);
+  assert.equal(cancelledPreview.has_more_clarifications, false);
+  assert.notEqual(cancelledPreview.context_complete, false);
+  const cancelledHistorical = await invoke("read_analysis_task", { task_id: batchTask.task_id, condition_version: "1" });
+  assert.equal(cancelledHistorical.lifecycle, "cancelled");
+  assert.equal(cancelledHistorical.is_historical, true);
+  assert.deepEqual(cancelledHistorical.conditions, conditions);
+  assert.equal((await invokeRaw("update_analysis_task", routeArgs(batchTask))).value.code, "task_inactive");
+  assert.equal((await invokeRaw("request_query", draftArgs(batchTask, "SELECT 7 AS verification_value"))).value.code, "task_inactive");
+  assert.equal((await invokeRaw("request_query", { ...draftArgs(batchTask, "SELECT 7 AS verification_value"), condition_version: "1" })).value.code, "version_conflict");
+  await invoke("update_analysis_task", { action: "route", goal: "", options: [] });
+  await finishManual("任务已经取消，没有恢复执行。");
+  checks.push("独立问题同版本原子登记、逆序回答保留残留问题；错误码区分旧版/等待/取消；拒绝回执给当前控制状态和读取入口，非法批次无部分写入");
+
   const pageCid = await h.create();
   await begin(pageCid, "请保存九个独立待确认项，暂不回答。");
   let pageTask;
@@ -544,6 +700,7 @@ try {
   }
   const pageOne = await invoke("read_analysis_task", { task_id: pageTask.task_id });
   assert.equal(pageOne.open_clarifications.length, 8);
+  assert.equal(pageOne.context_complete, undefined, "正式读取以问题分页游标表达范围，不继承启动预览标记");
   assert.equal(pageOne.next_clarification_after, pageOne.open_clarifications.at(-1).id);
   const pageTwo = await invoke("read_analysis_task", {
     task_id: pageTask.task_id,
@@ -565,9 +722,76 @@ try {
   const workspaceTask = run.workspace_context.tasks.find((value) => value.id === pageTask.task_id);
   assert.equal(workspaceTask.clarification.id, pageQuestions[0].id);
   assert.equal(workspaceTask.open_clarifications, undefined);
-  await invoke("update_analysis_task", routeArgs(pageTask));
-  await finishManual("待答问题可以通过分页继续读取，仍未自动接受任何选项。");
-  checks.push("未决问题正式读取每页最多8项，游标覆盖全部真实ID且拒绝跨任务；初始工作区仍仅带最早一题");
+  assert.equal(workspaceTask.has_more_clarifications, true);
+  assert.equal(workspaceTask.context_complete, false);
+  await completeRound("问题预览省略信号到达模型并能分页补齐", [
+    toolStep("read_analysis_task", { task_id: pageTask.task_id }, body => {
+      const content = body.messages.map(message => typeof message.content === "string"
+        ? message.content : (message.content ?? []).map(part => part.text ?? "").join("\n"));
+      const facts = JSON.parse(content.find(value => value.startsWith("当前宿主事实：")).split("\n").slice(1).join("\n"));
+      const task = facts.tasks.find(value => value.id === pageTask.task_id);
+      assert.equal(task.has_more_clarifications, true);
+      assert.equal(task.context_complete, false);
+      assert.equal(task.clarification.id, pageQuestions[0].id);
+      assert.equal(task.open_clarifications, undefined);
+    }),
+    toolStep("read_analysis_task", body => {
+      const current = lastReply(body);
+      assert.deepEqual(current.open_clarifications, pageOne.open_clarifications);
+      assert.equal(current.context_complete, undefined);
+      assert.equal(current.next_clarification_after, pageOne.next_clarification_after);
+      return { task_id: pageTask.task_id, clarification_after: current.next_clarification_after };
+    }),
+    toolStep("update_analysis_task", routeArgs(pageTask), body => {
+      assert.deepEqual(lastReply(body).open_clarifications, pageTwo.open_clarifications);
+      assert.equal(lastReply(body).next_clarification_after, null);
+    }),
+    finalStep("待答问题已按页读完，仍未自动接受任何选项。"),
+  ]);
+  assert.deepEqual(openQuestions(pageTask).map(value => value.id), pageQuestions.map(value => value.id).sort());
+  checks.push("未决问题正式读取每页最多8项，游标覆盖全部真实ID且拒绝跨任务；初始工作区只带首题并标明省略，真实Pi请求收到信号后能分页补齐且不自动关题");
+
+  const recoveryCid = await h.create();
+  await begin(recoveryCid, "先保存SQL，不执行。");
+  const recoveryTask = await invoke("update_analysis_task", { action: "create", goal: "验证受控拒绝的可恢复执行", conditions, options: [] });
+  const recoveryQuery = await invoke("request_query", draftArgs(recoveryTask, "SELECT 23 AS verification_value"));
+  await finishManual("草稿已保存，尚未执行。");
+  await begin(recoveryCid, "执行已经保存的这条SQL。");
+  await completeRound("模型收到受控拒绝及恢复快照后继续原授权执行", [
+    toolStep("execute_query", { ...executeArgs(recoveryQuery), draft_version: String(Number(recoveryQuery.draft_version) + 1) }),
+    toolStep("get_query", { query_id: recoveryQuery.id }, body => {
+      const rejected = lastReply(body);
+      assert.equal(rejected.error, "version_conflict");
+      assert.equal(rejected.outcome, "rejected");
+      assert.equal(rejected.new_execution_authorized, false);
+      assert.equal(rejected.recovery.query.query_id, recoveryQuery.id);
+      assert.equal(rejected.recovery.query.execution_state, "not_submitted");
+      assert.deepEqual(rejected.recovery.query.read_tool, { name: "get_query", arguments: { query_id: recoveryQuery.id } });
+      assert.equal(rejected.recovery.task.task_id, recoveryTask.task_id);
+      assert.deepEqual(rejected.recovery.task.read_tool, { name: "read_analysis_task", arguments: { task_id: recoveryTask.task_id } });
+      assert.equal(rejected.recovery.task.conditions, undefined);
+    }),
+    toolStep("execute_query", body => {
+      const current = lastReply(body).query;
+      assert.equal(current.id, recoveryQuery.id);
+      assert.equal(current.draft_version, recoveryQuery.draft_version);
+      assert.equal(current.execution_state, "not_submitted");
+      return executeArgs(current);
+    }),
+    finalStep("执行请求已获授权并排队，尚无完成结果。", body => {
+      const submitted = lastReply(body);
+      assert.equal(submitted.id, recoveryQuery.id);
+      assert.equal(submitted.execution_state, "queued");
+    }),
+  ]);
+  assert.equal((await readQuery(recoveryQuery)).execution_state, "queued");
+  await h.resumeWorker();
+  run = await until(() => h.captured.find(value => value.conversation_id === recoveryCid && value.text.startsWith("[已确认查询结果事件]")), "恢复检查的真实结果交付");
+  await h.pauseWorker();
+  manager = SessionManager.inMemory("/synthetic/data-agent");
+  await invoke("update_analysis_task", routeArgs(recoveryTask));
+  await finishManual("平台已返回结果，本次恢复验证结束。");
+  checks.push("真实Pi下一次provider请求含版本拒绝recovery和未授权标记；模型读当前草稿后沿同完整原话直接execute，原子归属并排队，未另建查询或虚报完成");
 
   const cid = await h.create();
   const table = ok(await h.request("/knowledge/table-demo_order_detail"));
@@ -932,6 +1156,7 @@ try {
       passed,
       checks,
       calls,
+      compactions,
       maxPayloadBytes: Math.max(...payloadBytes),
       officialRequests: 0,
       mode: "real Pi/local OpenAI protocol, real Rust/MySQL/synthetic SQLite",
@@ -949,6 +1174,7 @@ try {
         passed,
         checks,
         calls,
+        compactions,
         payloadBytes,
         rounds,
         officialRequests: 0,
@@ -959,6 +1185,7 @@ try {
       2,
     ) + "\n",
   );
+  await writeFile(".local/checks/clarification-summary-requests.json", JSON.stringify(summaryRequests, null, 2) + "\n");
   if (run) h.releaseRun(run.run_id);
   await new Promise((resolve) => provider.close(resolve));
   await h.close();

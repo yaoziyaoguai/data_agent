@@ -28,6 +28,7 @@ export function KnowledgeCreator({
   >(null);
   const [name, setName] = useState("");
   const [body, setBody] = useState("");
+  const [businessDomain, setBusinessDomain] = useState("");
   const [sourceUrl, setSourceUrl] = useState("");
   const [related, setRelated] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
@@ -39,6 +40,7 @@ export function KnowledgeCreator({
       Boolean(
         name ||
         body ||
+        businessDomain ||
         sourceUrl ||
         JSON.stringify(related) !==
           JSON.stringify(relatedId ? [relatedId] : []) ||
@@ -54,6 +56,7 @@ export function KnowledgeCreator({
     setKind(value);
     setName("");
     setBody("");
+    setBusinessDomain("");
     setSourceUrl("");
     setRelated(relatedId ? [relatedId] : []);
     setError("");
@@ -70,6 +73,7 @@ export function KnowledgeCreator({
         kind,
         name,
         body,
+        business_domain: businessDomain.trim(),
         source_url: sourceUrl.trim() || null,
         related_ids: related,
         ...(kind === "query_example"
@@ -129,6 +133,17 @@ export function KnowledgeCreator({
               onChange={(e) => setName(e.target.value)}
             />
           </label>
+          <label className="form-label">
+            业务域（可选）
+            <input
+              value={businessDomain}
+              maxLength={240}
+              disabled={busy}
+              onChange={(e) => setBusinessDomain(e.target.value)}
+              placeholder="填写已确认的业务域"
+            />
+          </label>
+          <p className="quiet">业务域由你明确指定。未填写的资料不会进入限定业务域的检索，关联资料不会自动带入归属。</p>
           <label className="form-label">
             {kind === "metric"
               ? "指标口径与计算 SQL"

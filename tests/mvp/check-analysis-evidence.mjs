@@ -490,7 +490,16 @@ try {
     condition_patch: { set: { channel: "app" }, unset: [] },
     options: [],
   });
-  await rejectEvidence(baseline, "version_conflict");
+  const historical = ok((await rawTool("save_analysis_evidence", baseline)).response).data;
+  assert.equal(historical.condition_version, task.condition_version);
+  assert.deepEqual(h.sql(`SELECT body FROM analysis_evidence WHERE id='${historical.evidence_id}'`)[0].conditions, conditions);
+  const historicalTask = await tool("read_analysis_task", { task_id: task.task_id, condition_version: task.condition_version });
+  assert.equal(historicalTask.condition_version, task.condition_version);
+  assert.equal(historicalTask.current_condition_version, revised.condition_version);
+  assert.equal(historicalTask.is_historical, true);
+  assert.deepEqual(historicalTask.conditions, conditions);
+  assert.ok(historicalTask.evidence_refs.some(item => item.evidence_id === historical.evidence_id));
+  await rejectEvidence({ ...baseline, condition_version: "9999" });
   await rejectEvidence({
     ...baseline,
     condition_version: revised.condition_version,
@@ -531,7 +540,7 @@ try {
   run = aliceRun;
   manager = aliceManager;
   checks.push(
-    "资料-only观察也核对正式版本，跨用户无法读原会话/结果；改条件后的当前任务不挂旧证据，旧稿不能改标新条件",
+    "资料-only观察也核对正式版本，跨用户无法读原会话/结果；改条件后可按真实历史版本保存来源快照，当前任务摘要不挂旧证据；未知历史版本与旧查询改标新条件均拒绝",
   );
 
   const attempt = modelBinding();

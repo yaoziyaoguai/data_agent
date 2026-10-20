@@ -69,7 +69,10 @@
       "type": "object",
       "properties": {
         "sdk_version": {
-          "enum": ["1.0.0", "1.3.0"],
+          "enum": [
+            "1.0.0",
+            "1.3.0"
+          ],
           "type": "string"
         },
         "entries": {
@@ -252,8 +255,8 @@
         "sdk_tool_call_id": {
           "type": "string",
           "minLength": 1,
-          "maxLength": 64,
-          "pattern": "^[A-Za-z0-9_-]+$"
+          "maxLength": 512,
+          "pattern": "^[^\\s\\x00-\\x1f\\x7f]+$"
         },
         "arguments": {
           "$ref": "#/$defs/TaskInput"
@@ -576,15 +579,51 @@
         },
         "report_ref": {
           "$ref": "#/$defs/AnalysisReportRef"
+        },
+        "text_unavailable": {
+          "type": "boolean"
+        },
+        "note": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
         }
       },
       "required": [
         "id",
-        "goal",
         "condition_version"
       ],
       "additionalProperties": false,
-      "title": "TaskSnapshot"
+      "title": "TaskSnapshot",
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "text_unavailable": {
+                "const": true
+              }
+            },
+            "required": [
+              "text_unavailable"
+            ]
+          },
+          "then": {
+            "required": [
+              "note"
+            ],
+            "not": {
+              "required": [
+                "goal"
+              ]
+            }
+          },
+          "else": {
+            "required": [
+              "goal"
+            ]
+          }
+        }
+      ]
     },
     "RunSnapshot": {
       "type": "object",
@@ -711,7 +750,15 @@
             "embedding_unavailable",
             "source_interrupted",
             "result_expired",
-            "model_retry_exhausted"
+            "model_retry_exhausted",
+            "model_unavailable",
+            "invalid_model_endpoint",
+            "model_credential_required",
+            "model_secret_unavailable",
+            "task_inactive",
+            "waiting_clarification",
+            "clarification_not_open",
+            "clarification_required"
           ]
         },
         "message": {
@@ -1022,11 +1069,14 @@
       "properties": {
         "provider_id": {
           "type": "string",
-          "const": "deepseek"
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9_.:-]+$"
         },
         "model_id": {
           "type": "string",
-          "pattern": "^(deepseek-flash|deepseek-v4-pro)$"
+          "minLength": 1,
+          "maxLength": 200
         },
         "trial_id": {
           "type": "string",
@@ -1036,27 +1086,19 @@
         },
         "price_version": {
           "type": "string",
-          "pattern": "^(2026-10-04-peak-usd|2026-10-05-pro-peak-usd)$"
+          "minLength": 1,
+          "maxLength": 200,
+          "pattern": "^[A-Za-z0-9_.:-]+$"
         },
         "input_limit": {
           "type": "integer",
-          "enum": [
-            4096,
-            16384,
-            32768,
-            65536
-          ]
+          "minimum": 1024,
+          "maximum": 2000000
         },
         "output_limit": {
           "type": "integer",
-          "enum": [
-            1024,
-            2048,
-            4096,
-            8192,
-            16384,
-            32768
-          ]
+          "minimum": 1,
+          "maximum": 131072
         },
         "trial_call_limit": {
           "type": "integer",
@@ -1082,17 +1124,19 @@
         "payload_bytes_limit": {
           "type": "integer",
           "minimum": 2048,
-          "maximum": 131072
+          "maximum": 8388608
         },
         "thinking_level": {
           "type": "string",
           "enum": [
             "off",
+            "minimal",
             "low",
+            "medium",
             "high",
+            "xhigh",
             "max"
-          ],
-          "description": "通过Pi/DeepSeek原生思考模式；省略为off。思考tokens计入同一输出上限与用量。"
+          ]
         },
         "budget_mode": {
           "type": "string",
@@ -1101,6 +1145,9 @@
             "request"
           ],
           "description": "省略沿用有限trial；request为正常持续使用，每消息24次，累计费用/试用期限不默认拦截。"
+        },
+        "configured_model": {
+          "$ref": "#/$defs/ConfiguredModel"
         }
       },
       "required": [
@@ -1115,81 +1162,220 @@
       "allOf": [
         {
           "if": {
+            "required": [
+              "configured_model"
+            ]
+          },
+          "then": {
             "properties": {
               "toolset": {
                 "const": "data"
               }
             },
             "required": [
-              "toolset"
-            ]
-          },
-          "then": {
-            "required": [
+              "toolset",
               "request_call_limit",
               "payload_bytes_limit"
             ]
           },
           "else": {
             "properties": {
+              "provider_id": {
+                "type": "string",
+                "const": "deepseek"
+              },
+              "model_id": {
+                "type": "string",
+                "pattern": "^(deepseek-flash|deepseek-v4-pro)$"
+              },
+              "trial_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 64,
+                "pattern": "^[A-Za-z0-9_-]+$"
+              },
+              "price_version": {
+                "type": "string",
+                "pattern": "^(2026-10-04-peak-usd|2026-10-05-pro-peak-usd)$"
+              },
               "input_limit": {
-                "const": 4096
+                "type": "integer",
+                "enum": [
+                  4096,
+                  16384,
+                  32768,
+                  65536
+                ]
               },
               "output_limit": {
-                "const": 1024
+                "type": "integer",
+                "enum": [
+                  1024,
+                  2048,
+                  4096,
+                  8192,
+                  16384,
+                  32768
+                ]
               },
               "trial_call_limit": {
-                "maximum": 6
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 200
               },
               "trial_cost_micros": {
-                "const": "50000"
-              },
-              "payload_bytes_limit": {
-                "const": 2048
+                "type": "string",
+                "pattern": "^[1-9][0-9]{0,6}$"
               },
               "request_call_limit": {
-                "maximum": 6
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 24
+              },
+              "toolset": {
+                "type": "string",
+                "enum": [
+                  "task",
+                  "data"
+                ]
+              },
+              "payload_bytes_limit": {
+                "type": "integer",
+                "minimum": 2048,
+                "maximum": 131072
               },
               "thinking_level": {
-                "const": "off"
-              },
-              "model_id": {
-                "const": "deepseek-flash"
-              }
-            }
-          }
-        },
-        {
-          "if": {
-            "properties": {
-              "model_id": {
-                "const": "deepseek-v4-pro"
-              }
-            },
-            "required": [
-              "model_id"
-            ]
-          },
-          "then": {
-            "properties": {
-              "price_version": {
-                "const": "2026-10-05-pro-peak-usd"
-              },
-              "thinking_level": {
+                "type": "string",
                 "enum": [
                   "off",
+                  "low",
                   "high",
                   "max"
-                ]
+                ],
+                "description": "通过Pi/DeepSeek原生思考模式；省略为off。思考tokens计入同一输出上限与用量。"
+              },
+              "budget_mode": {
+                "type": "string",
+                "enum": [
+                  "trial",
+                  "request"
+                ],
+                "description": "省略沿用有限trial；request为正常持续使用，每消息24次，累计费用/试用期限不默认拦截。"
               }
-            }
-          },
-          "else": {
-            "properties": {
-              "price_version": {
-                "const": "2026-10-04-peak-usd"
+            },
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "toolset": {
+                      "const": "data"
+                    }
+                  },
+                  "required": [
+                    "toolset"
+                  ]
+                },
+                "then": {
+                  "required": [
+                    "request_call_limit",
+                    "payload_bytes_limit"
+                  ]
+                },
+                "else": {
+                  "properties": {
+                    "input_limit": {
+                      "const": 4096
+                    },
+                    "output_limit": {
+                      "const": 1024
+                    },
+                    "trial_call_limit": {
+                      "maximum": 6
+                    },
+                    "trial_cost_micros": {
+                      "const": "50000"
+                    },
+                    "payload_bytes_limit": {
+                      "const": 2048
+                    },
+                    "request_call_limit": {
+                      "maximum": 6
+                    },
+                    "thinking_level": {
+                      "const": "off"
+                    },
+                    "model_id": {
+                      "const": "deepseek-flash"
+                    }
+                  }
+                }
+              },
+              {
+                "if": {
+                  "properties": {
+                    "model_id": {
+                      "const": "deepseek-v4-pro"
+                    }
+                  },
+                  "required": [
+                    "model_id"
+                  ]
+                },
+                "then": {
+                  "properties": {
+                    "price_version": {
+                      "const": "2026-10-05-pro-peak-usd"
+                    },
+                    "thinking_level": {
+                      "enum": [
+                        "off",
+                        "high",
+                        "max"
+                      ]
+                    }
+                  }
+                },
+                "else": {
+                  "properties": {
+                    "price_version": {
+                      "const": "2026-10-04-peak-usd"
+                    }
+                  }
+                }
+              },
+              {
+                "if": {
+                  "properties": {
+                    "budget_mode": {
+                      "const": "request"
+                    }
+                  },
+                  "required": [
+                    "budget_mode"
+                  ]
+                },
+                "then": {
+                  "properties": {
+                    "toolset": {
+                      "const": "data"
+                    },
+                    "request_call_limit": {
+                      "const": 24
+                    }
+                  },
+                  "required": [
+                    "toolset",
+                    "request_call_limit"
+                  ]
+                },
+                "else": {
+                  "required": [
+                    "trial_call_limit",
+                    "trial_cost_micros"
+                  ]
+                }
               }
-            }
+            ]
           }
         },
         {
@@ -1252,23 +1438,13 @@
         },
         "input_tokens_upper": {
           "type": "integer",
-          "enum": [
-            4096,
-            16384,
-            32768,
-            65536
-          ]
+          "minimum": 1024,
+          "maximum": 2000000
         },
         "output_tokens_max": {
           "type": "integer",
-          "enum": [
-            1024,
-            2048,
-            4096,
-            8192,
-            16384,
-            32768
-          ]
+          "minimum": 1,
+          "maximum": 131072
         }
       },
       "required": [
@@ -1321,7 +1497,7 @@
         "input_tokens": {
           "type": "integer",
           "minimum": 0,
-          "maximum": 1000000
+          "maximum": 100000000
         },
         "output_tokens": {
           "type": "integer",
@@ -1916,6 +2092,11 @@
               "type": "null"
             }
           ]
+        },
+        "business_domain": {
+          "type": "string",
+          "maxLength": 240,
+          "description": "对象自身的显式业务域；省略或空值表示未分类，不从关联对象继承。"
         }
       },
       "required": [
@@ -2064,6 +2245,10 @@
         },
         "can_edit": {
           "type": "boolean"
+        },
+        "text_unavailable": {
+          "type": "boolean",
+          "description": "来源失效或缺少可核验来源时仅供管理，正文、附件与引用已隐藏，不能选用或发布。"
         }
       },
       "required": [
@@ -2079,7 +2264,43 @@
         "dependencies",
         "selected"
       ],
-      "additionalProperties": false
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "text_unavailable": {
+                "const": true
+              }
+            },
+            "required": [
+              "text_unavailable"
+            ]
+          },
+          "then": {
+            "properties": {
+              "name": {
+                "const": "来源不可用，正文已隐藏"
+              },
+              "scope": {
+                "const": "来源不可用，正文已隐藏"
+              },
+              "body": {
+                "const": ""
+              },
+              "source_text": {
+                "const": ""
+              },
+              "dependencies": {
+                "maxItems": 0
+              },
+              "files": {
+                "maxItems": 0
+              }
+            }
+          }
+        }
+      ]
     },
     "AssetList": {
       "title": "AssetList",
@@ -2410,11 +2631,18 @@
           "uniqueItems": true,
           "maxItems": 8,
           "description": "本消息已回答的真实问题ID；省略或[]保留全部未答问题，仅已有任务revise/clarify可用。"
+        },
+        "clarifications": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ClarificationRequest"
+          },
+          "maxItems": 8,
+          "description": "同一任务需分别回答的独立问题，各生成独立ID；与非空question互斥，不同目标分别建任务。"
         }
       },
       "required": [
         "action",
-        "goal",
         "options"
       ],
       "additionalProperties": false,
@@ -2477,9 +2705,13 @@
           },
           "then": {
             "required": [
+              "goal",
               "conditions"
             ],
             "properties": {
+              "goal": {
+                "minLength": 1
+              },
               "task_id": {
                 "type": "null"
               },
@@ -2546,6 +2778,9 @@
                 "type": "null"
               },
               "options": {
+                "maxItems": 0
+              },
+              "clarifications": {
                 "maxItems": 0
               }
             }
@@ -2628,16 +2863,28 @@
             ]
           },
           "then": {
-            "required": [
-              "question"
-            ],
-            "properties": {
-              "question": {
-                "type": "string",
-                "minLength": 1,
-                "pattern": "\\S"
+            "anyOf": [
+              {
+                "required": [
+                  "question"
+                ],
+                "properties": {
+                  "question": {
+                    "type": "string"
+                  }
+                }
+              },
+              {
+                "required": [
+                  "clarifications"
+                ],
+                "properties": {
+                  "clarifications": {
+                    "minItems": 1
+                  }
+                }
               }
-            }
+            ]
           }
         },
         {
@@ -2661,6 +2908,25 @@
               "task_id": {
                 "type": "string",
                 "minLength": 1
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "question"
+            ],
+            "properties": {
+              "question": {
+                "type": "string"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "clarifications": {
+                "maxItems": 0
               }
             }
           }
@@ -2798,6 +3064,10 @@
       "title": "RequestQueryInput",
       "type": "object",
       "properties": {
+        "semantic_resolution": {
+          "$ref": "#/$defs/QuerySemanticResolution",
+          "description": "保存前填写口径决策；省略仅兼容旧调用，不表示用户已确认。"
+        },
         "task_id": {
           "type": "string",
           "minLength": 1,
@@ -3108,8 +3378,8 @@
         "sdk_tool_call_id": {
           "type": "string",
           "minLength": 1,
-          "maxLength": 64,
-          "pattern": "^[A-Za-z0-9_-]+$"
+          "maxLength": 512,
+          "pattern": "^[^\\s\\x00-\\x1f\\x7f]+$"
         },
         "tool_name": {
           "type": "string",
@@ -3393,6 +3663,10 @@
         "semantic_checks": {
           "$ref": "#/$defs/SemanticCheckReport",
           "description": "草稿工具回执的非阻断诊断；查询读取接口不承诺重现此报告。"
+        },
+        "text_unavailable": {
+          "type": "boolean",
+          "description": "正文来源失效或无法核实时只返回查询身份和控制状态；SQL、参数、说明、依据及诊断正文均不可返回。"
         }
       },
       "required": [
@@ -3401,11 +3675,7 @@
         "task_id",
         "condition_version",
         "draft_version",
-        "sql",
-        "parameters",
         "target_id",
-        "summary",
-        "knowledge_refs",
         "confirmation_state",
         "execution_state",
         "cancel_state",
@@ -3413,7 +3683,65 @@
         "check_state",
         "error"
       ],
-      "additionalProperties": false
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "text_unavailable": {
+                "const": true
+              }
+            },
+            "required": [
+              "text_unavailable"
+            ]
+          },
+          "then": {
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "sql"
+                  ]
+                },
+                {
+                  "required": [
+                    "parameters"
+                  ]
+                },
+                {
+                  "required": [
+                    "summary"
+                  ]
+                },
+                {
+                  "required": [
+                    "knowledge_refs"
+                  ]
+                },
+                {
+                  "required": [
+                    "error_details"
+                  ]
+                },
+                {
+                  "required": [
+                    "semantic_checks"
+                  ]
+                }
+              ]
+            }
+          },
+          "else": {
+            "required": [
+              "sql",
+              "parameters",
+              "summary",
+              "knowledge_refs"
+            ]
+          }
+        }
+      ]
     },
     "QueryList": {
       "title": "QueryList",
@@ -3784,6 +4112,11 @@
           "maxLength": 64,
           "pattern": "^[A-Za-z0-9_-]+$",
           "description": "按回执next_clarification_after继续读取未决问题；省略从第一页开始。"
+        },
+        "condition_version": {
+          "type": "string",
+          "pattern": "^[1-9][0-9]*$",
+          "description": "省略读取当前条件；指定时读取该任务真实历史快照及其依据，不授予执行权。"
         }
       },
       "required": [
@@ -4668,17 +5001,10 @@
           "pattern": "^(0|[1-9][0-9]{0,19})$"
         },
         "sdk_tool_call_id": {
-          "anyOf": [
-            {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 64,
-              "pattern": "^[A-Za-z0-9_-]+$"
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512,
+          "pattern": "^[^\\s\\x00-\\x1f\\x7f]+$"
         },
         "operation_id": {
           "type": "string",
@@ -6052,14 +6378,19 @@
       "properties": {
         "model_id": {
           "type": "string",
-          "pattern": "^(deepseek-flash|deepseek-v4-pro)$"
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9_.:-]+$"
         },
         "thinking_level": {
           "type": "string",
           "enum": [
             "off",
+            "minimal",
             "low",
+            "medium",
             "high",
+            "xhigh",
             "max"
           ]
         }
@@ -6068,32 +6399,7 @@
         "model_id",
         "thinking_level"
       ],
-      "additionalProperties": false,
-      "allOf": [
-        {
-          "if": {
-            "properties": {
-              "model_id": {
-                "const": "deepseek-v4-pro"
-              }
-            },
-            "required": [
-              "model_id"
-            ]
-          },
-          "then": {
-            "properties": {
-              "thinking_level": {
-                "enum": [
-                  "off",
-                  "high",
-                  "max"
-                ]
-              }
-            }
-          }
-        }
-      ]
+      "additionalProperties": false
     },
     "ThinkingOption": {
       "title": "ThinkingOption",
@@ -6103,8 +6409,11 @@
           "type": "string",
           "enum": [
             "off",
+            "minimal",
             "low",
+            "medium",
             "high",
+            "xhigh",
             "max"
           ]
         },
@@ -6161,6 +6470,9 @@
           "items": {
             "$ref": "#/$defs/ModelOption"
           }
+        },
+        "requires_model": {
+          "type": "boolean"
         }
       },
       "required": [
@@ -8715,6 +9027,652 @@
           "$ref": "#/$defs/QueryResultContent"
         }
       ]
+    },
+    "ClarificationRequest": {
+      "title": "ClarificationRequest",
+      "type": "object",
+      "properties": {
+        "question": {
+          "type": "string",
+          "maxLength": 4000,
+          "description": "此独立问题的必填正文；无需新增问题时省略整个clarifications列表。",
+          "minLength": 1,
+          "not": {
+            "enum": [
+              "null",
+              "undefined"
+            ]
+          },
+          "pattern": "\\S"
+        },
+        "options": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 24000
+          },
+          "maxItems": 8,
+          "description": "此独立问题的候选答案；允许自由回答。"
+        }
+      },
+      "required": [
+        "question",
+        "options"
+      ],
+      "additionalProperties": false
+    },
+    "QuerySemanticResolution": {
+      "title": "QuerySemanticResolution",
+      "type": "object",
+      "properties": {
+        "interpretation": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1600,
+          "pattern": "\\S",
+          "description": "本稿采用的指标、分子/分母、时间等关键口径及选择依据；不能把自己刚写入任务的假设当作用户采用。"
+        },
+        "basis": {
+          "type": "string",
+          "enum": [
+            "explicit_user",
+            "unambiguous",
+            "needs_clarification"
+          ],
+          "description": "真实用户明确选择、确无实质歧义、或仍需澄清；资料支持某公式不等于用户选择它。"
+        },
+        "user_quote": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1,
+          "maxLength": 24000,
+          "description": "explicit_user逐字填写本条真实用户完整原话，保留否定、前提、例外和换行，不截取子串；其余为null。"
+        },
+        "unresolved_differences": {
+          "type": "array",
+          "maxItems": 8,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 800
+          },
+          "description": "仍会改变答案且未获选择的分子、分母、时间归属等差异；有差异必须先澄清，不能默认写稿。"
+        }
+      },
+      "required": [
+        "interpretation",
+        "basis",
+        "user_quote",
+        "unresolved_differences"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "basis": {
+                "const": "explicit_user"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "user_quote": {
+                "type": "string",
+                "pattern": "\\S"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "user_quote": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "ConfiguredModel": {
+      "title": "ConfiguredModel",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9_.:-]+$"
+        },
+        "version": {
+          "type": "string",
+          "pattern": "^[0-9]+$"
+        },
+        "service_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9_.:-]+$"
+        },
+        "service_version": {
+          "type": "string",
+          "pattern": "^[0-9]+$"
+        },
+        "api": {
+          "type": "string",
+          "enum": [
+            "openai-completions",
+            "openai-responses",
+            "anthropic-messages"
+          ]
+        },
+        "input_rate": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]{0,11})$"
+        },
+        "output_rate": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]{0,11})$"
+        },
+        "reasoning_supported": {
+          "type": "boolean"
+        },
+        "anthropic_thinking_mode": {
+          "type": "string",
+          "enum": [
+            "budget",
+            "adaptive"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "version",
+        "service_id",
+        "service_version",
+        "api",
+        "input_rate",
+        "output_rate",
+        "reasoning_supported"
+      ],
+      "additionalProperties": false
+    },
+    "SaveModelService": {
+      "title": "SaveModelService",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9_.:-]+$"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "provider_id": {
+          "type": "string",
+          "enum": [
+            "deepseek",
+            "openai",
+            "anthropic",
+            "compatible"
+          ]
+        },
+        "api": {
+          "type": "string",
+          "enum": [
+            "openai-completions",
+            "openai-responses",
+            "anthropic-messages"
+          ]
+        },
+        "base_url": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2048
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "expected_version": {
+          "type": "string",
+          "pattern": "^[0-9]+$"
+        },
+        "api_key": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 8192
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "provider_id",
+        "api",
+        "base_url",
+        "enabled",
+        "expected_version"
+      ],
+      "additionalProperties": false
+    },
+    "ModelService": {
+      "title": "ModelService",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9_.:-]+$"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "provider_id": {
+          "type": "string",
+          "enum": [
+            "deepseek",
+            "openai",
+            "anthropic",
+            "compatible"
+          ]
+        },
+        "api": {
+          "type": "string",
+          "enum": [
+            "openai-completions",
+            "openai-responses",
+            "anthropic-messages"
+          ]
+        },
+        "base_url": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2048
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "version": {
+          "type": "string",
+          "pattern": "^[0-9]+$"
+        },
+        "credential_configured": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "provider_id",
+        "api",
+        "base_url",
+        "enabled",
+        "version",
+        "credential_configured"
+      ],
+      "additionalProperties": false
+    },
+    "SaveModelDefinition": {
+      "title": "SaveModelDefinition",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9_.:-]+$"
+        },
+        "service_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9_.:-]+$"
+        },
+        "model_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "thinking_levels": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 7,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "enum": [
+              "off",
+              "minimal",
+              "low",
+              "medium",
+              "high",
+              "xhigh",
+              "max"
+            ]
+          }
+        },
+        "default_thinking": {
+          "type": "string",
+          "enum": [
+            "off",
+            "minimal",
+            "low",
+            "medium",
+            "high",
+            "xhigh",
+            "max"
+          ]
+        },
+        "input_limit": {
+          "type": "integer",
+          "minimum": 1024,
+          "maximum": 2000000
+        },
+        "output_limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 131072
+        },
+        "payload_bytes_limit": {
+          "type": "integer",
+          "minimum": 2048,
+          "maximum": 8388608
+        },
+        "input_rate": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]{0,11})$"
+        },
+        "output_rate": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]{0,11})$"
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "expected_version": {
+          "type": "string",
+          "pattern": "^[0-9]+$"
+        },
+        "anthropic_thinking_mode": {
+          "type": "string",
+          "enum": [
+            "budget",
+            "adaptive"
+          ]
+        },
+        "reasoning_supported": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "id",
+        "service_id",
+        "model_id",
+        "label",
+        "thinking_levels",
+        "default_thinking",
+        "input_limit",
+        "output_limit",
+        "payload_bytes_limit",
+        "input_rate",
+        "output_rate",
+        "enabled",
+        "expected_version",
+        "reasoning_supported"
+      ],
+      "additionalProperties": false
+    },
+    "ModelDefinition": {
+      "title": "ModelDefinition",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9_.:-]+$"
+        },
+        "service_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9_.:-]+$"
+        },
+        "model_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "thinking_levels": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 7,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "enum": [
+              "off",
+              "minimal",
+              "low",
+              "medium",
+              "high",
+              "xhigh",
+              "max"
+            ]
+          }
+        },
+        "default_thinking": {
+          "type": "string",
+          "enum": [
+            "off",
+            "minimal",
+            "low",
+            "medium",
+            "high",
+            "xhigh",
+            "max"
+          ]
+        },
+        "input_limit": {
+          "type": "integer",
+          "minimum": 1024,
+          "maximum": 2000000
+        },
+        "output_limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 131072
+        },
+        "payload_bytes_limit": {
+          "type": "integer",
+          "minimum": 2048,
+          "maximum": 8388608
+        },
+        "input_rate": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]{0,11})$"
+        },
+        "output_rate": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]{0,11})$"
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "version": {
+          "type": "string",
+          "pattern": "^[0-9]+$"
+        },
+        "anthropic_thinking_mode": {
+          "type": "string",
+          "enum": [
+            "budget",
+            "adaptive"
+          ]
+        },
+        "reasoning_supported": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "id",
+        "service_id",
+        "model_id",
+        "label",
+        "thinking_levels",
+        "default_thinking",
+        "input_limit",
+        "output_limit",
+        "payload_bytes_limit",
+        "input_rate",
+        "output_rate",
+        "enabled",
+        "version",
+        "reasoning_supported"
+      ],
+      "additionalProperties": false
+    },
+    "ModelConfigurationAccess": {
+      "title": "ModelConfigurationAccess",
+      "type": "object",
+      "properties": {
+        "can_manage_models": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "can_manage_models"
+      ],
+      "additionalProperties": false
+    },
+    "ModelConfiguration": {
+      "title": "ModelConfiguration",
+      "type": "object",
+      "properties": {
+        "version": {
+          "type": "string",
+          "pattern": "^[0-9]+$"
+        },
+        "default_model_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "services": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ModelService"
+          }
+        },
+        "models": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ModelDefinition"
+          }
+        }
+      },
+      "required": [
+        "version",
+        "default_model_id",
+        "services",
+        "models"
+      ],
+      "additionalProperties": false
+    },
+    "SaveDefaultModel": {
+      "title": "SaveDefaultModel",
+      "type": "object",
+      "properties": {
+        "expected_version": {
+          "type": "string",
+          "pattern": "^[0-9]+$"
+        },
+        "model_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9_.:-]+$"
+        }
+      },
+      "required": [
+        "expected_version",
+        "model_id"
+      ],
+      "additionalProperties": false
+    },
+    "ReadModelConnection": {
+      "title": "ReadModelConnection",
+      "type": "object",
+      "properties": {
+        "run_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "lease_epoch": {
+          "type": "string",
+          "pattern": "^[0-9]+$"
+        }
+      },
+      "required": [
+        "run_id",
+        "lease_epoch"
+      ],
+      "additionalProperties": false
+    },
+    "ModelConnection": {
+      "title": "ModelConnection",
+      "type": "object",
+      "properties": {
+        "base_url": {
+          "type": "string"
+        },
+        "api_key": {
+          "type": "string",
+          "minLength": 1
+        },
+        "api": {
+          "type": "string",
+          "enum": [
+            "openai-completions",
+            "openai-responses",
+            "anthropic-messages"
+          ]
+        },
+        "provider_id": {
+          "type": "string"
+        },
+        "runtime_provider": {
+          "type": "string",
+          "pattern": "^configured_[a-f0-9]{64}$"
+        }
+      },
+      "required": [
+        "base_url",
+        "api_key",
+        "api",
+        "provider_id",
+        "runtime_provider"
+      ],
+      "additionalProperties": false
     }
   },
   "properties": {
@@ -9227,6 +10185,36 @@
     },
     "AgentQueryResults": {
       "$ref": "#/$defs/AgentQueryResults"
+    },
+    "configuredModel": {
+      "$ref": "#/$defs/ConfiguredModel"
+    },
+    "saveModelService": {
+      "$ref": "#/$defs/SaveModelService"
+    },
+    "modelService": {
+      "$ref": "#/$defs/ModelService"
+    },
+    "saveModelDefinition": {
+      "$ref": "#/$defs/SaveModelDefinition"
+    },
+    "modelDefinition": {
+      "$ref": "#/$defs/ModelDefinition"
+    },
+    "modelConfigurationAccess": {
+      "$ref": "#/$defs/ModelConfigurationAccess"
+    },
+    "modelConfiguration": {
+      "$ref": "#/$defs/ModelConfiguration"
+    },
+    "saveDefaultModel": {
+      "$ref": "#/$defs/SaveDefaultModel"
+    },
+    "readModelConnection": {
+      "$ref": "#/$defs/ReadModelConnection"
+    },
+    "modelConnection": {
+      "$ref": "#/$defs/ModelConnection"
     }
   },
   "required": [
@@ -9314,7 +10302,17 @@
     "modelOption",
     "modelCatalog",
     "conversationModelSelection",
-    "saveModelSelection"
+    "saveModelSelection",
+    "configuredModel",
+    "saveModelService",
+    "modelService",
+    "saveModelDefinition",
+    "modelDefinition",
+    "modelConfigurationAccess",
+    "modelConfiguration",
+    "saveDefaultModel",
+    "readModelConnection",
+    "modelConnection"
   ],
   "additionalProperties": false
 }

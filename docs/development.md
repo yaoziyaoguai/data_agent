@@ -141,7 +141,7 @@ python3 scripts/development.py --model deepseek \
   --embedding-profile .local/embedding/profile.json
 ```
 
-`ModelProfile`管理Flash/Pro以及同一聊天请求内的共享/个人向量调用；独立 `EmbeddingProfile`（trial_id、call_limit、cost_limit_micros）管理共享索引与页面搜索，沿用持久账本和一小时试用期限。重启不重置额度。默认 `make dev` 使用模拟模型与词法检索，不读取模型凭据、不调用百炼；`--retrieval lexical`可在真实模型模式显式使用词法通道。
+`ModelProfile`冻结聊天模型配置并关联同一请求内的共享/个人向量调用预算；独立 `EmbeddingProfile`（trial_id、call_limit、cost_limit_micros）管理共享索引与页面搜索，沿用持久账本和一小时试用期限。重启不重置额度。默认 `make dev` 使用词法检索，不读取部署 `.env` 或调用百炼；未建立空间模型配置时聊天使用模拟模型，已有真实模型配置继续生效；`--retrieval lexical`可在真实模型模式显式使用词法通道。
 
 **从旧共享索引迁移：**保留原MySQL，以新启动配置运行；Worker按当前知识版本自动重建1024维集合。旧384维集合不会混用或自动删除，个人索引也不改变。成功向量与usage原子保存在MySQL，相同版本重建复用回执；回执未知不自动重发，集合变化也不为旧作业更换预算。新维护配置只供尚未绑定预算的新对象版本使用。现有目标维度错误时明确拒绝，页面与工具显示向量不可用并保留词法检索。
 
@@ -184,11 +184,29 @@ python3 scripts/development.py --model deepseek \
 
 `allowed_paths` 供分工和审查使用，不是系统写入权限。当前脚本与记录由同一工作区持有者可编辑，不能防止恶意篡改，也不能自动证明一段测试的断言足够；预期是否符合用户原意由需求对照和独立审查负责。没有安装会话Hook或CI保护，不能称为已经自动拦截所有coding agent。
 
+## 通过管理页接入聊天模型
+
+超级维护者登录后，主导航显示“模型配置”；角色仍来自`DATA_AGENT_SEMANTIC_SUPER_MAINTAINERS`的当前空间可信名单。普通用户只看到工作台里的可选模型。
+
+1. 添加服务：选择供应商类别、Pi原生协议，填写API基础地址和API Key。兼容服务可以使用非内置Model ID，无需修改源码。Chat Completions与Responses的基础地址通常以`/v1`结尾；Anthropic填写服务根地址，SDK会添加`/v1/messages`。
+2. 添加模型：选择所属服务，填写实际Model ID、展示名、是否支持思考、开放的思考档位、上下文/输出/请求体上限、价格。支持思考的模型即使只开放off，也要勾选思考能力，以便SDK显式关闭。Anthropic按模型文档选择预算或自适应方式；预算模式最高high且思考时输出至少2048，xhigh/max必须支持adaptive。Responses输出至少16。页面价格单位是美元/百万tokens；按未命中缓存输入价填写。服务实际能力仍以供应商为准，不因填写更大上限获得额外能力。
+3. 启用模型并“设为默认”。新对话使用此默认值；已有对话保留自己的选择。保存配置不会调用供应商或产生模型费用，随后发送消息会使用配置的服务。
+
+仅接受公网HTTPS地址，禁止URL内凭据、查询参数和内网地址；重定向关闭。测试模式的回环HTTP例外只用于本地合成协议夹具。密钥保存后不回填，编辑留空保留；变更地址、供应商或协议须重新输入密钥。启停可恢复，没有删除历史修订入口。
+
+API首次加密配置时在`DATA_AGENT_MODEL_KEY_FILE`创建32字节主密钥，默认`.local/model-configuration.key`，Unix权限0600。该文件不进Git；备份/迁移数据库时也须安全备份/迁移同一密钥，多API实例须使用同一文件内容。已有密文而文件缺失、权限不当或解密失败会报错，不会生成替代密钥掩盖丢失。不应手工覆盖；当前不提供在线主密钥轮换。
+
+启动DeepSeek profile在空间首次初始化时提供兼容Flash/Pro目录，并将当时API进程收到的密钥加密封存为服务版本1；若未提供则显示缺少密钥，需要管理员补录。之后编辑页面不会重写环境文件，重启也不会覆盖持久配置。原消息保留原连接修订与模型费率，停用则阻止后续模型请求；密钥轮换/地址编辑本身只作用于新消息，需要立即阻止旧请求时先停用服务。升级前已经接收且没有配置版本引用的历史消息仍使用原DeepSeek环境适配，不能追溯恢复当时未保存的密钥；停用原部署服务可阻止这些旧消息发送，不受当前逻辑模型改绑影响。新消息全部使用版本引用。默认单消息24次、连续临时失败3次规则不变。Mem0和向量服务仍用下方部署配置。
+
+每个空间/服务修订有独立Pi运行身份，切换账户或服务时保留公开历史和工具回执，但不发送旧连接的推理签名。关闭SDK隐式模型回退与额外工具注入，实际输出上限在领取发送许可前再核对，SDK不能扩大管理员设定的上限。
+
+本地无费用验证：`node tests/runtime/check-configured-provider.mjs`和`node tests/mvp/check-model-configuration.mjs`。后者需要已构建服务与隔离MySQL，包含真实Pi三协议工具回合、跨空间边界和浏览器操作；只调用合成供应商，不能代替真实供应商和模型质量验收。
+
 ## 6. 真实模型小样与取消
 
 I0-02仅验证受控任务工具和模型协议，不生成或执行数据平台SQL。工作台的模型标签取自服务端；“停止生成”只停止指定run，保留已保存任务，不代替后续任务/查询取消操作。
 
-- `.env`保存在本机，权限0600，Git忽略。I0小样密钥只传给Node/Pi进程。完整语义预填另由Worker进行受预算约束的单次维护调用；密钥仅交给承担模型调用的进程，API和前端不接收密钥。
+- `.env`保存在本机，权限0600，Git忽略。I0小样密钥只传给Node/Pi进程。完整语义预填另由Worker进行受预算约束的单次维护调用；当前模型管理功能也将API纳入凭据边界：API保存加密凭据，内部鉴权接口只给有效运行返回冻结版本。前端仅在管理员填写时提交密钥，读取不回填。
 - 历史I0小样固定官方`https://api.deepseek.com`、`deepseek-flash`、思考关闭、全部合成材料；完整业务profile另支持原生off/low/high。思考tokens与正式输出共享配置上限和持久用量。
 - 原试验最多6次请求，每次输出最多1024 tokens，总预算US$0.05。每次按4096输入和官方高峰未命中价格预留，未知用量保留金额与次数；API重启、run恢复和新会话均不能给试验补额。
 - API不提供输入硬截断；用户批准请求体最多2048 UTF-8字节、短文本及一个工具，并逐次核对actual usage。输入超4096或输出超1024会保存真实用量、熔断试验；不把预估称为服务端硬限制。
@@ -217,7 +235,7 @@ Pi1.3.0负责普通调用及摘要的原生重试：首次失败加最多2次重
 
 `infra/model-profile.example.json`为正常配置模板，使用已有128KiB请求体档和持久数据库`data_agent`。复制到本地忽略目录后可交给`--model-profile`；启动器不会自动替换现有配置。`trial_id`沿用既有账本身份字段名，正常模式下仍固定且不可通过重启改配置。正常模式可省略累计`trial_call_limit`和`trial_cost_micros`；管理员显式填写时仍校验相应累计上限。
 
-未声明`budget_mode`或指定`trial`时，历史有限试验的次数、金额与一小时到期保持，重启不能延长。迁移仅允许新正常账本的上限/到期为空，不修改任何旧记录。已有显式小额profile的单请求额度保持；不能把本规则用于给旧试验补额。单次模型超时、一次性发送许可有效期、运行租约均保留，各有不同用途。默认`make dev`继续使用mock/builtin/lexical，不调用真实模型。
+未声明`budget_mode`或指定`trial`时，历史有限试验的次数、金额与一小时到期保持，重启不能延长。迁移仅允许新正常账本的上限/到期为空，不修改任何旧记录。已有显式小额profile的单请求额度保持；不能把本规则用于给旧试验补额。单次模型超时、一次性发送许可有效期、运行租约均保留，各有不同用途。未建立真实模型服务配置时，默认`make dev`使用mock/builtin/lexical；已有空间配置会被保留，启用的真实聊天模型按其接入配置调用。
 
 ### 完整多工具模型验收
 
@@ -236,13 +254,13 @@ python3 scripts/development.py --model deepseek --model-profile .local/model-wor
 
 本机已有工作台时，启动验收会选用独立端口和`.local/checks`运行目录。也可以显式传`--port-offset 18000 --runtime-dir .local/checks/my-startup`，保留现有工作台、身份及平台账本。
 
-持久试验配置的 `profile.model_id` 和 `thinking_level` 决定新对话默认值，通常为Flash/off；`.env`只提供本地凭据和端点。数据工作台可按对话选择Flash（off/low/high/max）或Pro（off/high/max），页面分别显示关闭、轻度、深度、最高。锁定Pi 1.3.0支持这些原生档位，见[官方思考模式](https://api-docs.deepseek.com/zh-cn/guides/thinking_mode/)。Flash 配对 `2026-10-04-peak-usd`，Pro 配对 `2026-10-05-pro-peak-usd`；服务端按所选模型固定价格，按原trial与每请求额度计账，切换不增加或重置额度。价格依据[官方价格页](https://api-docs.deepseek.com/quick_start/pricing)，以高峰未命中价保守计账。I0 task配置仍仅支持原Flash/off限制。
+未建立空间模型配置时，持久试验配置的 `profile.model_id` 和 `thinking_level` 提供首次导入的默认值，通常为Flash/off；`.env`只提供本地凭据和端点。数据工作台可按对话选择Flash（off/low/high/max）或Pro（off/high/max），页面分别显示关闭、轻度、深度、最高。锁定Pi 1.3.0支持这些原生档位，见[官方思考模式](https://api-docs.deepseek.com/zh-cn/guides/thinking_mode/)。Flash 配对 `2026-10-04-peak-usd`，Pro 配对 `2026-10-05-pro-peak-usd`；服务端按所选模型固定价格，按原trial与每请求额度计账，切换不增加或重置额度。价格依据[官方价格页](https://api-docs.deepseek.com/quick_start/pricing)，以高峰未命中价保守计账。I0 task配置仍仅支持原Flash/off限制。
 
-输入框选择即时保存到已有对话，新对话在首次发送时保存；每条消息携带当时的选择，原消息的重试、恢复和查询结果解释沿用已持久配置。刷新保留选择，切换模型不丢草稿；不兼容的档位回到关闭，保存失败回读并提示。Mem0抽取和百炼向量仍沿原辅助模型配置，继承原请求预算，不随聊天模型切换。`GET /models`读取可用目录，`GET/POST /conversations/{id}/model-selection`读取或按 `expected_version` 保存本人设置；客户端不能设置价格、限额、密钥或端点。
+输入框选择即时保存到已有对话，新对话在首次发送时保存；每条消息携带当时的选择，原消息的重试、恢复和查询结果解释沿用已持久配置。刷新保留选择，切换模型不丢草稿；主动切换模型时保留仍受支持的档位，否则使用该模型列出的首档；既有选择被管理员停用或移除档位时保留原选择并阻止发送，要求用户重新选择。保存失败回读并提示。Mem0抽取和百炼向量仍沿原辅助模型配置，继承原请求预算，不随聊天模型切换。`GET /models`读取可用目录，`GET/POST /conversations/{id}/model-selection`读取或按 `expected_version` 保存本人设置；普通聊天客户端不能设置价格、限额、密钥或端点；专用管理接口仅对超级管理员开放。
 
 定向检查 `node tests/mvp/check-model-selection.mjs` 使用真实Pi SDK、本地HTTP协议替身、隔离MySQL、合成SQLite及浏览器，覆盖七档、历史、并发、恢复、后台查询和页面保存失败；它不调用官方模型，真实服务试用另记CURRENT。
 
-启动器只从0600的`.env`读取三个`DEEPSEEK_*`配置字段，并清除继承的预填配置。聊天与语义预填使用同一profile、端点和持久trial账本；Worker与Pi Bridge分别收到调用所需密钥，API和前端不接收。旧预填环境变量不会把维护调用记到另一份预算。`--model protocol-test --model-profile <本地配置> --model-url http://127.0.0.1:<端口>`仅用于隔离回环验收，不读取`.env`。
+启动器只从0600的`.env`读取三个`DEEPSEEK_*`配置字段，并清除继承的预填配置。部署初始聊天与语义预填共用profile、端点和持久trial账本；管理页配置只改变聊天接入，维护预填继续使用部署配置。API收到首次导入所需密钥，Worker与Pi Bridge分别收到旧适配及维护调用所需密钥；前端不会读取部署密钥。旧预填环境变量不会把维护调用记到另一份预算。`--model protocol-test --model-profile <本地配置> --model-url http://127.0.0.1:<端口>`仅用于隔离回环验收，不读取`.env`。
 
 `make verify-startup`同时检查默认启动和正式模型路径的回环接线、页面预填与人工保护；不调用官方模型。MySQL集成目标须串行运行，测试期间不得重建它们使用的共享API/Worker二进制。
 

@@ -1,0 +1,83 @@
+import assert from 'node:assert/strict';
+import {randomUUID} from 'node:crypto';
+import {execFileSync} from 'node:child_process';
+import {mkdir,writeFile} from 'node:fs/promises';
+import {chromium} from 'playwright';
+import {SessionManager} from '@earendil-works/pi-coding-agent';
+import {exportCheckpoint} from '../../apps/agent/session/checkpoint.ts';
+import {harness,until} from './harness.mjs';
+
+const directory='.local/checks/query-source-browser';
+await mkdir(directory,{recursive:true});
+const h=await harness({web:true,capture:true,startWorker:false,env:{DATA_AGENT_LEASE_MS:'120000',DATA_AGENT_QUERY_DELAY_SECONDS:'3600'}});
+const browser=await chromium.launch();
+const page=await browser.newPage({viewport:{width:1440,height:1000}});
+const ok=r=>{assert.equal(r.status,200,JSON.stringify(r));return r.value;};
+const marker='SYNTHETIC_REVOKED_QUERY_CONTENT';
+const checks=[],errors=[];let passed=false,run,releaseResult;
+page.on('pageerror',e=>errors.push(e.message));
+const read=q=>h.request('/queries/'+q.id).then(ok);
+const card=q=>page.locator('#query-'+q.id);
+try {
+  const source=ok(await h.request('/knowledge',{operation_id:randomUUID(),kind:'document',name:'查询正文来源',body:marker,related_ids:[]}));
+  const cid=await h.create();await h.resumeWorker();run=await h.capture(cid,'准备三个独立的合成查询。');await h.pauseWorker();
+  const manager=SessionManager.inMemory('/synthetic/data-agent');
+  const cp=()=>exportCheckpoint(manager,run.workspace_context.authority_revision,run.workspace_context.authority_snapshot);
+  const tool=async(name,args)=>{const input={run_id:run.run_id,lease_epoch:run.lease_epoch,sdk_tool_call_id:randomUUID(),tool_name:name,arguments:args,checkpoint:cp()};ok(await h.internal('/internal/data/tool-calls',input));return ok(await h.internal('/internal/data/tools',input)).data;};
+  const task=await tool('update_analysis_task',{action:'create',goal:'独立合成查询',conditions:{time_start:null,time_end:null,timezone:'UTC',metric:null,channel:null,group_by:[],filters:[],knowledge_refs:[],notes:''},options:[]});
+  await tool('read_knowledge',{object_id:source.id});
+  const queries=[];
+  for(let index=0;index<3;index++) queries.push(await tool('request_query',{task_id:task.task_id,condition_version:task.condition_version,sql:'SELECT :label AS label',parameters:{label:marker+'_'+index},target_id:'synthetic-sqlite',summary:marker+'_'+index,knowledge_refs:[],replaces_query_id:null}));
+  const text='合成查询已准备。';ok(await h.internal('/internal/outputs',{run_id:run.run_id,lease_epoch:run.lease_epoch,chunk_seq:'1',text}));ok(await h.internal('/internal/finish',{run_id:run.run_id,lease_epoch:run.lease_epoch,commit_id:run.output_id,final_text:text,checkpoint:cp()}));h.releaseRun(run.run_id);
+  for(const query of queries)ok(await h.request('/queries/'+query.id+'/confirm',{operation_id:randomUUID(),draft_version:query.draft_version,condition_version:query.condition_version}));
+  await h.resumeWorker();
+  await until(async()=>(await Promise.all(queries.map(read))).every(q=>q.execution_state==='running'),'三个合成查询进入运行');
+  for(const query of queries.slice(0,2))execFileSync('python3',['-c','import sqlite3,sys\nwith sqlite3.connect(sys.argv[1]) as db: db.execute("UPDATE submissions SET ready_at=0 WHERE id=?",(sys.argv[2],))',h.directory+'/platform/submissions.sqlite',query.id]);
+  await until(async()=>(await Promise.all(queries.slice(0,2).map(read))).every(q=>q.execution_state==='succeeded'),'前两条查询完成');
+  await h.pauseWorker();
+  const [loaded,delayed,running]=queries;
+  let pendingResult=false;
+  const delayedResponse=new Promise(resolve=>{releaseResult=resolve;});
+  // 保存撤权前的真实HTTP响应，再迟到交付，验证客户端不会让旧结果复活。
+  await page.route('**/queries/'+delayed.id+'/results',async route=>{const response=await route.fetch();pendingResult=true;await delayedResponse;await route.fulfill({response});});
+  await page.goto(h.url);
+  await page.evaluate(cid=>localStorage.setItem('data-agent.conversation.["demo","alice"]',cid),cid);
+  await page.getByLabel('演示登录凭据').fill(h.tokens.alice);
+  await page.getByRole('button',{name:'进入工作台 →',exact:true}).click();
+  await card(loaded).getByRole('cell',{name:marker+'_0',exact:true}).waitFor();
+  await until(()=>pendingResult,'第二条结果响应已取得但尚未交付');
+  await card(loaded).getByRole('button',{name:'最终 SQL',exact:true}).click();
+  await page.getByRole('dialog').waitFor();
+  assert.ok((await page.getByRole('dialog').textContent()).includes(marker));
+  ok(await h.request('/knowledge/'+source.id+'/disable',{operation_id:randomUUID(),expected_version:source.version}));
+  await page.evaluate(()=>window.dispatchEvent(new Event('focus')));
+  for(const query of queries)await card(query).getByText(/查询来源已失效或无法核验/).waitFor();
+  assert.equal(await page.getByRole('dialog').count(),0);
+  for(const query of queries){assert.equal((await card(query).textContent()).includes(marker),false);assert.equal(await card(query).locator('pre,table').count(),0);assert.equal(await card(query).getByRole('button',{name:'复制 SQL',exact:true}).count(),0);}
+  checks.push('失效来源撤下已有SQL、参数、结果、依据及打开的SQL窗口，保留控制状态');
+  releaseResult();await page.unrouteAll({behavior:'wait'});
+  await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+  assert.equal((await card(delayed).textContent()).includes(marker),false);assert.equal(await card(delayed).locator('table').count(),0);
+  checks.push('撤权前读取、撤权后迟到的真实成功结果不能重新显示');
+  await page.setViewportSize({width:390,height:844});
+  await page.route('**/queries/'+running.id+'/cancel',route=>route.abort(),{times:1});
+  await card(running).getByRole('button',{name:'停止',exact:true}).click();
+  await card(running).getByRole('alert').waitFor();
+  assert.notEqual((await read(running)).cancel_state,'requested');
+  checks.push('来源失效不隐藏停止失败，用户仍能看到错误并重试');
+  await card(running).getByRole('button',{name:'停止',exact:true}).click();
+  assert.equal((await read(running)).cancel_state,'requested');
+  await h.resumeWorker();await until(async()=>(await read(running)).execution_state==='cancelled','失效来源不阻止停止原查询');await h.pauseWorker();
+  await page.reload();await card(running).getByRole('heading',{name:'已取消',exact:true}).waitFor();
+  for(const query of queries){await card(query).getByText(/查询来源已失效或无法核验/).waitFor();assert.equal((await card(query).textContent()).includes(marker),false);}
+  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
+  await page.screenshot({path:directory+'/hidden-mobile.png',fullPage:true});
+  checks.push('来源失效的运行查询仍能停止，刷新和窄屏保留状态且不恢复正文');
+  assert.deepEqual(errors,[]);passed=true;
+} finally {
+  releaseResult?.();
+  if(!passed)await page.screenshot({path:directory+'/failure.png',fullPage:true}).catch(()=>{});
+  await writeFile(directory+'/report.json',JSON.stringify({passed,checks,errors,officialRequests:0},null,2));
+  await browser.close();for(const captured of h.captured)h.releaseRun(captured.run_id);await h.close();
+}
+console.log(JSON.stringify({passed,checks,officialRequests:0}));

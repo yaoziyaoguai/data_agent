@@ -25,6 +25,7 @@ pub async fn receive_message(
     input: MessageInput,
     profile: Option<&crate::contracts::generated::ModelProfile>,
 ) -> Result<Value> {
+    super::model_configuration::initialize(pool, context, profile).await?;
     let mut tx = AppTx::begin(pool).await?;
     let locked = conversations::lock_conversation_in_tx(&mut tx, context, cid).await?;
     let mut payload = json!({"text":input.text});
@@ -44,23 +45,23 @@ pub async fn receive_message(
         .model_selection
         .as_ref()
         .or(locked.model_selection.as_ref());
-    let effective_profile = runtime::selected_profile(profile, selection)?;
-    if locked.model_selection.is_none() {
-        let initial = selection
-            .map(serde_json::to_value)
-            .transpose()
-            .map_err(|_| crate::types::Error::new("invalid_input"))?
-            .unwrap_or_else(|| runtime::model_catalog(profile)["default_selection"].clone());
-        if !initial.is_null() {
-            let initial = crate::contracts::decode("ModelSelection", initial)?;
-            conversations::save_model_selection_in_tx(
-                &mut tx,
-                &locked,
-                locked.model_selection_version,
-                &initial,
-            )
-            .await?;
-        }
+    let (effective_profile, initial) = runtime::model_configuration::selection_in_tx(
+        &mut tx,
+        &context.space_id,
+        profile,
+        selection,
+    )
+    .await?;
+    if locked.model_selection.is_none()
+        && let Some(initial) = initial
+    {
+        conversations::save_model_selection_in_tx(
+            &mut tx,
+            &locked,
+            locked.model_selection_version,
+            &initial,
+        )
+        .await?;
     }
     let message = conversations::accept_message_in_tx(
         &mut tx,

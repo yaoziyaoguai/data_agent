@@ -8,6 +8,7 @@ import { Modal } from "../../shared/Modal.tsx";
 import { QueryResultsView } from "./QueryResultsView.tsx";
 import { KnowledgeReference } from "../../shared/KnowledgeReference.tsx";
 function status(q: QueryView) {
+  if (q.text_unavailable && q.execution_state === "not_submitted") return "查询来源不可用";
   return (
     (
       {
@@ -43,12 +44,18 @@ export function QueryCard({
   const [showSql, setShowSql] = useState(false);
   const [copied, setCopied] = useState(false);
   const resultGeneration = useRef(0);
+  const refresh = useRef(onRefresh);
+  refresh.current = onRefresh;
+  const readable = query.text_unavailable !== true;
+  const parameters = query.parameters ?? {};
+  const references = query.knowledge_refs ?? [];
   const copy = async () => {
-    const parameters = Object.keys(query.parameters).length
-      ? "\n\n-- 绑定参数（执行时需一并提供）\n" + JSON.stringify(query.parameters, null, 2).split("\n").map(line => "-- " + line).join("\n")
+    if (!readable || !query.sql) return;
+    const parameterText = Object.keys(parameters).length
+      ? "\n\n-- 绑定参数（执行时需一并提供）\n" + JSON.stringify(parameters, null, 2).split("\n").map(line => "-- " + line).join("\n")
       : "";
     try {
-      await navigator.clipboard.writeText(query.sql + parameters);
+      await navigator.clipboard.writeText(query.sql + parameterText);
       setCopied(true);
     } catch {
       setError("复制失败，请选中 SQL 和参数后复制。");
@@ -56,6 +63,7 @@ export function QueryCard({
   };
   const cancel = async () => {
     setBusy(true);
+    setError("");
     try {
       await api("QueryView", "/queries/" + query.id + "/cancel", "POST", {
         operation_id: crypto.randomUUID(),
@@ -68,6 +76,7 @@ export function QueryCard({
     }
   };
   const load = useCallback(async () => {
+    if (!readable) return;
     const generation = ++resultGeneration.current;
     setBusy(true);
     setError("");
@@ -82,31 +91,37 @@ export function QueryCard({
       if (generation === resultGeneration.current) {
         setResult(null);
         setError(e instanceof Error ? e.message : "结果读取失败");
+        refresh.current();
       }
     } finally {
       if (generation === resultGeneration.current) setBusy(false);
     }
-  }, [query.id]);
+  }, [query.id, readable]);
   useEffect(() => {
-    if (query.execution_state === "succeeded") void load();
+    setResult(null);
+    setShowSql(false);
+    setCopied(false);
+    setError("");
+    setBusy(false);
+    if (readable && query.execution_state === "succeeded") void load();
     return () => { ++resultGeneration.current; };
-  }, [load, query.execution_state]);
+  }, [load, readable, query.execution_state, query.result_ref]);
   const running = ["queued", "submitting", "running", "submission_unknown"].includes(query.execution_state);
   const stopping = running && query.cancel_state === "requested";
   const queryError = query.error === "outcome_unknown"
     ? stopping ? "暂时无法确认是否已停止，系统会继续核对。" : "暂时无法确认查询状态，系统会继续核对。"
     : query.error_details?.message ?? query.error;
-  const sql = (
+  const sql = readable ? (
     <div className="query-sql">
       <div className="query-sql-toolbar"><span>{query.execution_state === "succeeded" ? "实际执行的 SQL" : "SQL"}</span><button onClick={() => void copy()} aria-label="复制 SQL" title="复制 SQL 及绑定参数">{copied ? "已复制" : "复制 SQL"}</button></div>
       <pre><code>{query.sql}</code></pre>
-      {Object.keys(query.parameters).length > 0 && <dl className="parameters" aria-label="绑定参数">
-        {Object.entries(query.parameters).map(([key, value]) => (
+      {Object.keys(parameters).length > 0 && <dl className="parameters" aria-label="绑定参数">
+        {Object.entries(parameters).map(([key, value]) => (
           <div key={key}><dt>{key}</dt><dd>{value === null ? "NULL" : typeof value === "object" ? JSON.stringify(value) : String(value)}</dd></div>
         ))}
       </dl>}
     </div>
-  );
+  ) : null;
   const content = (
     <section
       id={"query-" + query.id}
@@ -116,21 +131,22 @@ export function QueryCard({
         (running ? "query-running " : "") +
         (query.confirmation_state === "superseded" ? "superseded" : "")
       }
-      aria-label={"查询：" + query.summary}
+      aria-label={"查询：" + (readable ? query.summary : "来源不可用")}
     >
       <div className="card-heading">
         <h3>{stopping ? "正在停止查询" : status(query)}</h3>
         {running && <button className="text-link" disabled={busy || query.cancel_state === "requested"} onClick={() => void cancel()}>{query.cancel_state === "requested" ? "正在停止…" : "停止"}</button>}
       </div>
-      {query.execution_state !== "succeeded" && <p className="query-summary">{query.summary}</p>}
-      {result && <QueryResultsView result={result} onShowSql={() => setShowSql(true)}/>}
-      {query.execution_state === "succeeded" && <details className="query-conditions"><summary>本次查询条件</summary><p className="query-summary">{query.summary}</p></details>}
+      {!readable && <p className="query-summary" role="status">查询来源已失效或无法核验，SQL、参数和结果已隐藏。查询状态仍会更新，运行中的查询仍可停止。</p>}
+      {readable && query.execution_state !== "succeeded" && <p className="query-summary">{query.summary}</p>}
+      {readable && result && <QueryResultsView result={result} onShowSql={() => setShowSql(true)}/>}
+      {readable && query.execution_state === "succeeded" && <details className="query-conditions"><summary>本次查询条件</summary><p className="query-summary">{query.summary}</p></details>}
       {running ? <>
         <p className="quiet">{stopping ? "已发出停止请求，正在等待查询平台确认。你可以继续聊天。" : "正在后台运行，可以继续聊天或发起其他查询。"}</p>
-        <details className="running-sql"><summary>查看 SQL 和参数</summary>{sql}</details>
+        {readable && <details className="running-sql"><summary>查看 SQL 和参数</summary>{sql}</details>}
       </> : sql}
-      {!!query.knowledge_refs.length && <details className="query-evidence"><summary>查看口径依据</summary><div className="evidence-row">{query.knowledge_refs.map(ref => <KnowledgeReference key={ref.object_id + ref.path} id={ref.object_id} path={ref.path} onOpen={id => onEvidence(id, query.summary, ref.version)}/>)}</div></details>}
-      {query.execution_state === "succeeded" && !result && error !== "result_expired" && <p className="quiet">{busy ? "正在读取查询结果…" : <button onClick={() => void load()}>重新读取结果</button>}</p>}
+      {readable && !!references.length && <details className="query-evidence"><summary>查看口径依据</summary><div className="evidence-row">{references.map(ref => <KnowledgeReference key={ref.object_id + ref.path} id={ref.object_id} path={ref.path} onOpen={id => onEvidence(id, query.summary, ref.version)}/>)}</div></details>}
+      {readable && query.execution_state === "succeeded" && !result && error !== "result_expired" && <p className="quiet">{busy ? "正在读取查询结果…" : <button onClick={() => void load()}>重新读取结果</button>}</p>}
       {query.execution_state === "submission_unknown" && !stopping && (
         <p className="quiet">
           正在向查询平台确认状态，你可以继续聊天。
@@ -144,7 +160,7 @@ export function QueryCard({
             : error}
         </p>
       )}
-      {showSql && <Modal title="最终执行的 SQL" onClose={() => setShowSql(false)} footer={<button className="primary" onClick={() => setShowSql(false)}>返回结果</button>}>{sql}{error && <p role="alert" className="error">{error}</p>}</Modal>}
+      {readable && showSql && <Modal title="最终执行的 SQL" onClose={() => setShowSql(false)} footer={<button className="primary" onClick={() => setShowSql(false)}>返回结果</button>}>{sql}{error && <p role="alert" className="error">{error}</p>}</Modal>}
     </section>
   );
   return query.confirmation_state === "superseded" ? <details className="previous-query"><summary>此前的 SQL · 已被修改</summary>{content}</details> : content;

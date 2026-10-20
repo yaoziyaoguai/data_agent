@@ -1,8 +1,8 @@
 mod budgets;
 mod checkpoints;
 mod model_calls;
-mod model_selection;
-pub use model_selection::{model_catalog, selected_profile};
+pub mod model_configuration;
+
 mod outputs;
 pub mod provider_calls;
 mod runs;
@@ -23,7 +23,7 @@ pub use runs::{
 };
 pub use store::{
     LockedRun, LockedTool, RunStart, fail_message_runs_in_tx, locate_run, locate_run_message,
-    read_budget_profile_in_tx, read_runs_in_tx, reject_tool_in_tx,
+    read_budget_profile_in_tx, read_runs_in_tx, recorded_tool_operations_in_tx, reject_tool_in_tx,
 };
 pub use tool_ledger::{lock_tool_call_in_tx, record_tool_receipt_in_tx, register_tool_call_in_tx};
 

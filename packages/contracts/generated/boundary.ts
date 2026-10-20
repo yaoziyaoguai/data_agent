@@ -35,6 +35,7 @@ export interface Boundary {
     checkpoint:                   Checkpoint;
     checkpoint_reference:         CheckpointReference;
     conditions:                   Conditions;
+    configuredModel:              ConfiguredModel;
     confirmQuery:                 ConfirmQuery;
     conversationModelSelection:   ConversationModelSelection;
     conversationReadInput:        ConversationReadInput;
@@ -86,10 +87,15 @@ export interface Boundary {
     modelAttempt:                 ModelAttempt;
     modelCallReceipt:             ModelCallReceipt;
     modelCatalog:                 ModelCatalog;
+    modelConfiguration:           ModelConfiguration;
+    modelConfigurationAccess:     ModelConfigurationAccess;
+    modelConnection:              ModelConnection;
+    modelDefinition:              ModelDefinition;
     modelOption:                  ModelOption;
     modelProfile:                 ModelProfile;
     modelReceipt:                 ModelReceipt;
     modelSelection:               ModelSelection;
+    modelService:                 ModelService;
     modelUsage:                   ModelUsage;
     mutationReceipt:              MutationReceipt;
     numericValueCounts?:          NumericValueCounts;
@@ -115,6 +121,7 @@ export interface Boundary {
     read_checkpoint:              ReadCheckpoint;
     ReadAnalysisReportInput?:     ReadAnalysisReportInput;
     readKnowledgeInput:           ReadKnowledgeInput;
+    readModelConnection:          ReadModelConnection;
     readQueryInput:               ReadQueryInput;
     readSourceInput:              ReadSourceInput;
     readTaskInput?:               ReadTaskInput;
@@ -131,7 +138,10 @@ export interface Boundary {
     SaveAnalysisEvidenceInput?:   SaveAnalysisEvidenceInput;
     SaveAnalysisReport?:          SaveAnalysisReport;
     SaveAnalysisReportInput?:     SaveAnalysisReportInput;
+    saveDefaultModel:             SaveDefaultModel;
+    saveModelDefinition:          SaveModelDefinition;
     saveModelSelection:           SaveModelSelection;
+    saveModelService:             SaveModelService;
     searchInput:                  SearchInput;
     SemanticAccess?:              SemanticAccess;
     SemanticCheckReport?:         SemanticCheckReport;
@@ -1056,6 +1066,10 @@ export interface WorkspaceTask {
 export interface AnalysisUpdate {
     action: AnalysisUpdateAction;
     /**
+     * 同一任务需分别回答的独立问题，各生成独立ID；与非空question互斥，不同目标分别建任务。
+     */
+    clarifications?: ClarificationRequest[];
+    /**
      *
      * 修改已存任务条件时必填，action用revise或clarify；set指定新值，unset必须提供（不清空时为[]）。route禁止携带condition_patch，因为route只登记归属。
      */
@@ -1068,7 +1082,7 @@ export interface AnalysisUpdate {
      * 新建任务省略此字段（也接受JSON null）；已有任务必须提供工具回执中的当前版本数字字符串。
      */
     expected_version?: null | string;
-    goal:              string;
+    goal?:             string;
     /**
      * 澄清问题的候选答案；question=null时传[]。
      */
@@ -1089,6 +1103,17 @@ export interface AnalysisUpdate {
 }
 
 export type AnalysisUpdateAction = "create" | "revise" | "clarify" | "route";
+
+export interface ClarificationRequest {
+    /**
+     * 此独立问题的候选答案；允许自由回答。
+     */
+    options: string[];
+    /**
+     * 此独立问题的必填正文；无需新增问题时省略整个clarifications列表。
+     */
+    question: string;
+}
 
 /**
  *
@@ -1126,7 +1151,7 @@ export interface AppError {
     retryable:  boolean;
 }
 
-export type Code = "budget_exhausted" | "chunk_gap" | "forbidden" | "idempotency_conflict" | "input_already_applied" | "invalid_evidence" | "invalid_input" | "lease_lost" | "message_pending" | "not_available" | "outcome_unknown" | "result_unavailable" | "scope_incomplete" | "selection_required" | "source_unavailable" | "stale_context" | "stale_knowledge" | "unauthenticated" | "unavailable" | "unsupported" | "version_conflict" | "memory_unavailable" | "memory_extraction_empty" | "memory_operation_unknown" | "vector_unconfigured" | "vector_unavailable" | "embedding_unavailable" | "source_interrupted" | "result_expired" | "model_retry_exhausted";
+export type Code = "budget_exhausted" | "chunk_gap" | "forbidden" | "idempotency_conflict" | "input_already_applied" | "invalid_evidence" | "invalid_input" | "lease_lost" | "message_pending" | "not_available" | "outcome_unknown" | "result_unavailable" | "scope_incomplete" | "selection_required" | "source_unavailable" | "stale_context" | "stale_knowledge" | "unauthenticated" | "unavailable" | "unsupported" | "version_conflict" | "memory_unavailable" | "memory_extraction_empty" | "memory_operation_unknown" | "vector_unconfigured" | "vector_unavailable" | "embedding_unavailable" | "source_interrupted" | "result_expired" | "model_retry_exhausted" | "model_unavailable" | "invalid_model_endpoint" | "model_credential_required" | "model_secret_unavailable" | "task_inactive" | "waiting_clarification" | "clarification_not_open" | "clarification_required";
 
 export interface AppendOutput {
     chunk_seq:   string;
@@ -1149,9 +1174,13 @@ export interface Asset {
     selected:            boolean;
     source_text:         string;
     state:               AssetState;
-    verified:            boolean;
-    version:             string;
-    visibility?:         Visibility;
+    /**
+     * 来源失效或缺少可核验来源时仅供管理，正文、附件与引用已隐藏，不能选用或发布。
+     */
+    text_unavailable?: boolean;
+    verified:          boolean;
+    version:           string;
+    visibility?:       Visibility;
 }
 
 export type AssetKind = "memory" | "skill";
@@ -1258,6 +1287,22 @@ export interface CheckpointReference {
 
 export type CheckpointReferenceKind = "pi_session" | "host_checkpoint";
 
+export interface ConfiguredModel {
+    anthropic_thinking_mode?: AnthropicThinkingMode;
+    api:                      API;
+    id:                       string;
+    input_rate:               string;
+    output_rate:              string;
+    reasoning_supported:      boolean;
+    service_id:               string;
+    service_version:          string;
+    version:                  string;
+}
+
+export type AnthropicThinkingMode = "budget" | "adaptive";
+
+export type API = "openai-completions" | "openai-responses" | "anthropic-messages";
+
 export interface ConfirmQuery {
     condition_version: string;
     draft_version:     string;
@@ -1274,10 +1319,7 @@ export interface ModelSelection {
     thinking_level: ThinkingLevel;
 }
 
-/**
- * 通过Pi/DeepSeek原生思考模式；省略为off。思考tokens计入同一输出上限与用量。
- */
-export type ThinkingLevel = "off" | "low" | "high" | "max";
+export type ThinkingLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
 
 export interface ConversationReadInput {
     after_seq:       string;
@@ -1416,7 +1458,11 @@ export type ModelLabel = "本地模拟模型" | "DeepSeek Flash" | "DeepSeek V4 
  * 独立对象首次创建时自动归属可信登录者；请求不接受负责人字段，后续调整使用独立管理接口。
  */
 export interface KnowledgeCreate {
-    body:              string;
+    body: string;
+    /**
+     * 对象自身的显式业务域；省略或空值表示未分类，不从关联对象继承。
+     */
+    business_domain?:  string;
     kind:              KindElement;
     name:              string;
     operation_id:      string;
@@ -1596,7 +1642,7 @@ export interface MemoryBudgetBinding {
     id:               string;
     kind:             MemoryBudgetBindingKind;
     operation_id:     string;
-    sdk_tool_call_id: null | string;
+    sdk_tool_call_id: string;
 }
 
 export type MemoryBudgetBindingKind = "run" | "index";
@@ -1692,6 +1738,7 @@ export type ModelCallReceiptState = "reserved" | "issued" | "settled" | "unknown
 export interface ModelCatalog {
     default_selection: ModelSelection | null;
     models:            ModelOption[];
+    requires_model?:   boolean;
 }
 
 export interface ModelOption {
@@ -1705,34 +1752,80 @@ export interface ThinkingOption {
     value: ThinkingLevel;
 }
 
+export interface ModelConfiguration {
+    default_model_id: null | string;
+    models:           ModelDefinition[];
+    services:         ModelService[];
+    version:          string;
+}
+
+export interface ModelDefinition {
+    anthropic_thinking_mode?: AnthropicThinkingMode;
+    default_thinking:         ThinkingLevel;
+    enabled:                  boolean;
+    id:                       string;
+    input_limit:              number;
+    input_rate:               string;
+    label:                    string;
+    model_id:                 string;
+    output_limit:             number;
+    output_rate:              string;
+    payload_bytes_limit:      number;
+    reasoning_supported:      boolean;
+    service_id:               string;
+    thinking_levels:          [ThinkingLevel, ...ThinkingLevel[]];
+    version:                  string;
+}
+
+export interface ModelService {
+    api:                   API;
+    base_url:              string;
+    credential_configured: boolean;
+    enabled:               boolean;
+    id:                    string;
+    name:                  string;
+    provider_id:           ProviderID;
+    version:               string;
+}
+
+export type ProviderID = "deepseek" | "openai" | "anthropic" | "compatible";
+
+export interface ModelConfigurationAccess {
+    can_manage_models: boolean;
+}
+
+export interface ModelConnection {
+    api:              API;
+    api_key:          string;
+    base_url:         string;
+    provider_id:      string;
+    runtime_provider: string;
+}
+
 export interface ModelProfile {
     /**
      * 省略沿用有限trial；request为正常持续使用，每消息24次，累计费用/试用期限不默认拦截。
      */
     budget_mode?:         BudgetMode;
+    configured_model?:    ConfiguredModel;
     input_limit:          number;
     model_id:             string;
     output_limit:         number;
     payload_bytes_limit?: number;
     price_version:        string;
-    provider_id:          ProviderID;
+    provider_id:          string;
     request_call_limit?:  number;
-    /**
-     * 通过Pi/DeepSeek原生思考模式；省略为off。思考tokens计入同一输出上限与用量。
-     */
-    thinking_level?:    ThinkingLevel;
-    toolset?:           Toolset;
-    trial_call_limit?:  number;
-    trial_cost_micros?: string;
-    trial_id:           string;
+    thinking_level?:      ThinkingLevel;
+    toolset?:             Toolset;
+    trial_call_limit?:    number;
+    trial_cost_micros?:   string;
+    trial_id:             string;
 }
 
 /**
  * 省略沿用有限trial；request为正常持续使用，每消息24次，累计费用/试用期限不默认拦截。
  */
 export type BudgetMode = "trial" | "request";
-
-export type ProviderID = "deepseek";
 
 export type Toolset = "task" | "data";
 
@@ -1832,18 +1925,22 @@ export interface QueryView {
     error_details?:     ErrorDetails | null;
     execution_state:    string;
     id:                 string;
-    knowledge_refs:     EvidenceRef[];
-    parameters:         { [key: string]: unknown };
+    knowledge_refs?:    EvidenceRef[];
+    parameters?:        { [key: string]: unknown };
     replaces_query_id?: null | string;
     result_ref:         null | string;
     /**
      * 草稿工具回执的非阻断诊断；查询读取接口不承诺重现此报告。
      */
     semantic_checks?: SemanticCheckReport;
-    sql:              string;
-    summary:          string;
+    sql?:             string;
+    summary?:         string;
     target_id:        string;
     task_id:          string;
+    /**
+     * 正文来源失效或无法核实时只返回查询身份和控制状态；SQL、参数、说明、依据及诊断正文均不可返回。
+     */
+    text_unavailable?: boolean;
 }
 
 export interface ErrorDetails {
@@ -1862,6 +1959,11 @@ export interface ReadKnowledgeInput {
     offset?:         number;
     structure_only?: boolean;
     version?:        null | string;
+}
+
+export interface ReadModelConnection {
+    lease_epoch: string;
+    run_id:      string;
 }
 
 export interface ReadQueryInput {
@@ -1884,7 +1986,11 @@ export interface ReadTaskInput {
      * 按回执next_clarification_after继续读取未决问题；省略从第一页开始。
      */
     clarification_after?: string;
-    task_id:              string;
+    /**
+     * 省略读取当前条件；指定时读取该任务真实历史快照及其依据，不授予执行权。
+     */
+    condition_version?: string;
+    task_id:            string;
 }
 
 export interface ReadCheckpoint {
@@ -1897,11 +2003,42 @@ export interface RequestQueryInput {
     knowledge_refs:     EvidenceRef[];
     parameters:         { [key: string]: unknown };
     replaces_query_id?: null | string;
-    sql:                string;
-    summary:            string;
-    target_id:          TargetID;
-    task_id:            string;
+    /**
+     * 保存前填写口径决策；省略仅兼容旧调用，不表示用户已确认。
+     */
+    semantic_resolution?: QuerySemanticResolution;
+    sql:                  string;
+    summary:              string;
+    target_id:            TargetID;
+    task_id:              string;
 }
+
+/**
+ * 保存前填写口径决策；省略仅兼容旧调用，不表示用户已确认。
+ */
+export interface QuerySemanticResolution {
+    /**
+     * 真实用户明确选择、确无实质歧义、或仍需澄清；资料支持某公式不等于用户选择它。
+     */
+    basis: Basis;
+    /**
+     * 本稿采用的指标、分子/分母、时间等关键口径及选择依据；不能把自己刚写入任务的假设当作用户采用。
+     */
+    interpretation: string;
+    /**
+     * 仍会改变答案且未获选择的分子、分母、时间归属等差异；有差异必须先澄清，不能默认写稿。
+     */
+    unresolved_differences: string[];
+    /**
+     * explicit_user逐字填写本条真实用户完整原话，保留否定、前提、例外和换行，不截取子串；其余为null。
+     */
+    user_quote: null | string;
+}
+
+/**
+ * 真实用户明确选择、确无实质歧义、或仍需澄清；资料支持某公式不等于用户选择它。
+ */
+export type Basis = "explicit_user" | "unambiguous" | "needs_clarification";
 
 export type TargetID = "synthetic-sqlite";
 
@@ -1987,9 +2124,43 @@ export interface RunSnapshot {
 
 export type RunSnapshotState = "running" | "interrupted" | "finished" | "failed" | "cancelled";
 
+export interface SaveDefaultModel {
+    expected_version: string;
+    model_id:         string;
+}
+
+export interface SaveModelDefinition {
+    anthropic_thinking_mode?: AnthropicThinkingMode;
+    default_thinking:         ThinkingLevel;
+    enabled:                  boolean;
+    expected_version:         string;
+    id:                       string;
+    input_limit:              number;
+    input_rate:               string;
+    label:                    string;
+    model_id:                 string;
+    output_limit:             number;
+    output_rate:              string;
+    payload_bytes_limit:      number;
+    reasoning_supported:      boolean;
+    service_id:               string;
+    thinking_levels:          [ThinkingLevel, ...ThinkingLevel[]];
+}
+
 export interface SaveModelSelection {
     expected_version: string;
     selection:        ModelSelection;
+}
+
+export interface SaveModelService {
+    api:              API;
+    api_key?:         string;
+    base_url:         string;
+    enabled:          boolean;
+    expected_version: string;
+    id:               string;
+    name:             string;
+    provider_id:      ProviderID;
 }
 
 export interface SearchInput {
@@ -2038,11 +2209,13 @@ export interface Snapshot {
 export interface TaskSnapshot {
     condition_version: string;
     evidence_refs?:    AnalysisEvidenceRef[];
-    goal:              string;
+    goal?:             string;
     id:                string;
     lifecycle?:        string;
+    note?:             string;
     phase?:            string;
     report_ref?:       AnalysisReportRef;
+    text_unavailable?: boolean;
 }
 
 export interface SourceDocument {

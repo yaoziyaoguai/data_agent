@@ -55,6 +55,34 @@ pub async fn read_in_tx(tx: &mut AppTx<'_>, ctx: &AccessContext, qid: &str) -> R
         .ok_or(Error::new("not_available"))?;
     Ok(view(&r))
 }
+pub async fn text_authority_in_tx(
+    tx: &mut AppTx<'_>,
+    ctx: &AccessContext,
+    qid: &str,
+) -> Result<Value> {
+    Ok(sqlx::query_scalar::<_, Option<sqlx::types::Json<Value>>>(
+        "SELECT text_authority FROM query_requests WHERE id=? AND owner_id=?",
+    )
+    .bind(qid)
+    .bind(&ctx.user_id)
+    .fetch_optional(tx.connection())
+    .await?
+    .ok_or(Error::new("not_available"))?
+    .map(|value| value.0)
+    .unwrap_or(Value::Null))
+}
+
+pub async fn text_authorities_in_tx(
+    tx: &mut AppTx<'_>,
+    ctx: &AccessContext,
+    cid: &str,
+    qid: Option<&str>,
+) -> Result<Vec<Value>> {
+    Ok(sqlx::query_scalar::<_, Option<sqlx::types::Json<Value>>>(
+        "SELECT text_authority FROM query_requests WHERE conversation_id=? AND owner_id=? AND (? IS NULL OR id=?)",
+    ).bind(cid).bind(&ctx.user_id).bind(qid).bind(qid).fetch_all(tx.connection()).await?.into_iter().map(|value|value.map(|value|value.0).unwrap_or(Value::Null)).collect())
+}
+
 pub async fn is_confirmation_message_in_tx(
     tx: &mut AppTx<'_>,
     ctx: &AccessContext,
@@ -106,6 +134,11 @@ pub async fn begin_revision_in_tx(
             .bind(replaced).execute(tx.connection()).await?;
     Ok(())
 }
+pub struct DraftValidation<'a> {
+    pub platform_report: &'a Value,
+    pub text_authority: &'a Value,
+}
+
 pub async fn save_draft_in_tx(
     tx: &mut AppTx<'_>,
     ctx: &AccessContext,
@@ -113,8 +146,12 @@ pub async fn save_draft_in_tx(
     budget: &str,
     operation: &str,
     input: &Value,
-    report: &Value,
+    validation: DraftValidation<'_>,
 ) -> Result<Value> {
+    let DraftValidation {
+        platform_report: report,
+        text_authority,
+    } = validation;
     tx.lock_rank(5)?;
     let task = input["task_id"].as_str().unwrap_or("");
     let replaced = input["replaces_query_id"].as_str();
@@ -134,7 +171,7 @@ pub async fn save_draft_in_tx(
     {
         return Err(Error::new("upstream_failed"));
     }
-    sqlx::query("INSERT INTO query_requests(id,conversation_id,owner_id,task_id,condition_version,draft_version,operation_id,sql_text,parameters,target_id,target_version,summary,knowledge_refs,check_state,confirmation_state,budget_scope_id,error_code,replaces_query_id,error_details) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)").bind(&qid).bind(cid).bind(&ctx.user_id).bind(task).bind(epoch(input["condition_version"].as_str().unwrap_or("0"))?).bind(draft).bind(operation).bind(input["sql"].as_str()).bind(sqlx::types::Json(&input["parameters"])).bind(input["target_id"].as_str()).bind(report["target_version"].as_str()).bind(input["summary"].as_str()).bind(sqlx::types::Json(&input["knowledge_refs"])).bind(if passed{"passed"}else{"rejected"}).bind(if passed{"awaiting_confirmation"}else{"rejected"}).bind(budget).bind(if passed{None}else{Some("sql_not_supported")}).bind(replaced).bind(if passed {None} else {report.get("diagnostic").map(sqlx::types::Json)}).execute(tx.connection()).await?;
+    sqlx::query("INSERT INTO query_requests(id,conversation_id,owner_id,task_id,condition_version,draft_version,operation_id,sql_text,parameters,target_id,target_version,summary,knowledge_refs,check_state,confirmation_state,budget_scope_id,error_code,replaces_query_id,error_details,text_authority) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)").bind(&qid).bind(cid).bind(&ctx.user_id).bind(task).bind(epoch(input["condition_version"].as_str().unwrap_or("0"))?).bind(draft).bind(operation).bind(input["sql"].as_str()).bind(sqlx::types::Json(&input["parameters"])).bind(input["target_id"].as_str()).bind(report["target_version"].as_str()).bind(input["summary"].as_str()).bind(sqlx::types::Json(&input["knowledge_refs"])).bind(if passed{"passed"}else{"rejected"}).bind(if passed{"awaiting_confirmation"}else{"rejected"}).bind(budget).bind(if passed{None}else{Some("sql_not_supported")}).bind(replaced).bind(if passed {None} else {report.get("diagnostic").map(sqlx::types::Json)}).bind(sqlx::types::Json(text_authority)).execute(tx.connection()).await?;
     read_in_tx(tx, ctx, &qid).await
 }
 pub struct MessageAuthorization<'a> {

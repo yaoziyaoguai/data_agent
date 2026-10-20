@@ -128,7 +128,7 @@ export async function createReportFixture(options = {}) {
     const otherTask = await invoke("update_analysis_task", {
       action: "create",
       goal: "另一独立分析",
-      conditions,
+      conditions: { ...conditions, channel: "app", group_by: ["category"], notes: "独立任务的应用渠道条件，不能覆盖月度趋势条件。" },
       options: [],
     });
     const draft = (target, sql) =>
@@ -498,7 +498,6 @@ async function checkReports() {
       { charts: [chart(0, { measure_column: "missing_amount" })] },
       { charts: [chart(0, { result_ref: "fabricated-result" })] },
       { charts: [chart(0, { measure_column: "month" })] },
-      { evidence_ids: [fixture.foreignEvidence.evidence_id], charts: [] },
       {
         charts: [
           chart(0, {
@@ -521,7 +520,7 @@ async function checkReports() {
       "cancelled",
     );
     checks.push(
-      "不存在或文本度量列、伪造结果、未选来源、另一任务及取消查询均不能成为图表/报告依据；拒绝不会生成修订",
+      "不存在或文本度量列、伪造结果、未选来源及取消查询均不能成为图表/报告依据；拒绝不会生成修订",
     );
 
     reference = ok(
@@ -684,10 +683,15 @@ async function checkReports() {
       (
         await h.request(
           reportPath(),
-          saveInput({ expected_version: reference.version }),
+          saveInput({ expected_version: reference.version, condition_version: "1" }),
         )
       ).status >= 400,
     );
+    const historical = await fixture.saveResultEvidence(
+      { ...fixture.task, condition_version: "1" }, queries[4], fixture.results[4],
+    );
+    assert.equal(historical.condition_version, "1");
+    assert.deepEqual(h.sql(`SELECT body FROM analysis_evidence WHERE id='${historical.evidence_id}'`)[0].conditions, fixture.conditions);
     const newQuery = await fixture.draft(
       fixture.task,
       "SELECT '新条件' AS category,42 AS amount",
@@ -702,8 +706,10 @@ async function checkReports() {
         saveInput({
           expected_version: reference.version,
           title: "新条件完成后的报告",
-          evidence_ids: [replacement.evidence.evidence_id],
+          evidence_ids: [historical.evidence_id, fixture.foreignEvidence.evidence_id, replacement.evidence.evidence_id],
           charts: [
+            chart(4, { kind: "bar" }),
+            { kind: "bar", title: "另一任务原查询", query_id: fixture.foreignQuery.id, result_ref: fixture.foreignEvidence.result_dependencies[0].result_ref, dimension_column: "category", measure_column: "amount" },
             {
               kind: "bar",
               title: "新条件合成比较",
@@ -721,9 +727,42 @@ async function checkReports() {
       (await read()).reference.condition_version,
       fixture.task.condition_version,
     );
+    const composite = await read();
+    assert.equal(composite.report.evidence.length, 3);
+    assert.deepEqual(composite.report.evidence.map(item => [item.reference.task_id, item.reference.condition_version]), [
+      [fixture.task.task_id, "1"], [fixture.otherTask.task_id, "1"], [fixture.task.task_id, fixture.task.condition_version],
+    ]);
+    assert.equal(composite.report.evidence[0].conditions.channel, null);
+    assert.equal(composite.report.evidence[2].conditions.channel, "app");
+    assert.equal(composite.chart_results.find(result => result.query_id === queries[4].id).rows[0][1], "9007199254740993.01");
+    assert.equal(composite.chart_results.find(result => result.query_id === fixture.foreignQuery.id).rows[0][1], "99");
+    reference = ok(await h.request(reportPath(), saveInput({
+      expected_version: reference.version, title: "跨任务与历史条件对比，仅修改标题",
+      evidence_ids: composite.report.evidence.map(item => item.reference.evidence_id), charts: composite.report.charts,
+    })));
+    assert.deepEqual((await read()).report.evidence, composite.report.evidence);
+    assert.deepEqual((await read()).report.charts, composite.report.charts);
+    ok(await h.request(`/conversations/${cid}/tasks/${fixture.otherTask.task_id}/cancel`, { operation_id: randomUUID(), expected_version: fixture.otherTask.condition_version }));
+    assert.equal((await read()).status, "available");
+    assert.equal((await fixture.readQuery(fixture.foreignQuery)).execution_state, "succeeded");
     checks.push(
-      "修改条件立即使旧报告只显示condition_changed；旧依据不能改标签复用，获得新条件结果和依据后再建立新修订",
+      "报告容器继续绑定当前条件；同会话多任务及历史条件来源分别保留task/version/条件快照和精确值，仅改标题保留全部来源及图表，不改挂旧查询",
     );
+    fixture.alterExpiry(queries[4], Date.now() / 1000 - 1);
+    unavailable(await read(), "sources_unavailable");
+    fixture.alterExpiry(queries[4], Date.now() / 1000 + 86400);
+    assert.equal((await read()).status, "available");
+    checks.push("组合报告中历史来源过期也整份隐藏，其他仍有效来源不能掩盖旧来源失效");
+    // 仅隔离夹具：模拟某来源记录不再属于当前本人/空间，检验已存报告副本也不能绕过归属。
+    for (const [column, hidden, original] of [["owner_id", "bob", "alice"], ["space_id", "another-space", "demo"]]) {
+      h.sql(`UPDATE analysis_evidence SET ${column}='${hidden}' WHERE id='${historical.evidence_id}'`);
+      unavailable(await read(), "sources_unavailable");
+      const denied = await h.request(reportPath(), saveInput({ expected_version: reference.version, evidence_ids: [historical.evidence_id], charts: [] }));
+      assert.equal(denied.status, 404);
+      h.sql(`UPDATE analysis_evidence SET ${column}='${original}' WHERE id='${historical.evidence_id}'`);
+      assert.equal((await read()).status, "available");
+    }
+    checks.push("隔离归属夹具验证：任一来源属于另一用户或空间时报告整份隐藏且新引用404，恢复夹具后来源身份和修订不变");
 
     fixture.alterExpiry(newQuery, Date.now() / 1000 - 1);
     unavailable(await read(), "sources_unavailable");
@@ -928,6 +967,18 @@ async function checkReports() {
     checks.push(
       "两条真实并发保存使用相同expected_version时恰好一成功一version_conflict；head只增一版，原不可变正文保留",
     );
+    const otherCid = await h.create();
+    await fixture.begin(otherCid, "在另一会话整理同一正式文档。");
+    const detachedTask = await fixture.invoke("update_analysis_task", { action: "create", goal: "另一会话私人说明", conditions: fixture.conditions, options: [] });
+    const detachedEvidence = await fixture.invoke("save_analysis_evidence", {
+      task_id: detachedTask.task_id, condition_version: detachedTask.condition_version, data_range: "另一会话的私人资料说明",
+      findings: [{ text: "仅用于另一会话", calculation: "采用公开文档", limitations: [], query_refs: [], figures: [], knowledge_refs: [{ object_id: document.id, version: document.version, path: "body" }] }],
+    });
+    await fixture.finish();
+    const crossConversation = await h.request(conditionPath, { ...conditionInput, operation_id: randomUUID(), expected_version: conditionReport.version, evidence_ids: [detachedEvidence.evidence_id] });
+    assert.equal(crossConversation.value.code, "invalid_evidence");
+    assert.equal(ok(await h.request(conditionPath)).reference.version, conditionReport.version);
+    checks.push("同一用户的另一会话依据不能拼入报告；拒绝不创建新修订，跨用户读写仍为404");
     ok(
       await h.request(`/knowledge/${conditionDocument.id}/disable`, {
         operation_id: randomUUID(),

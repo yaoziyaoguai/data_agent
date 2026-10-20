@@ -110,6 +110,15 @@ pub use store::{
     maintenance_snapshot_in_tx, register_creator_in_tx, register_in_tx, sync_maintainer_in_tx,
 };
 
+// 模型接入配置是独立管理操作，显式使用本空间可信超级管理员身份。
+pub fn authorize_model_configuration(ctx: &AccessContext) -> Result<()> {
+    if is_super_maintainer(ctx)? {
+        Ok(())
+    } else {
+        Err(Error::new("forbidden"))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

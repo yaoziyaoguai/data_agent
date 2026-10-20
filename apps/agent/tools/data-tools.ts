@@ -33,15 +33,15 @@ const definitions = {
   ],
   request_query: [
     "RequestQueryInput",
-    "保存完整SQL、参数、目标、口径和依据，供用户查看。修改已有SQL时replaces_query_id必须指向被修订的查询ID，旧待执行稿会失效；独立新查询传null。此工具只保存草稿。semantic_checks是本稿生成时的非阻断业务诊断，需区分警告、未检查和平台结果；它不授予执行权。",
+    "仅保存已确定口径的SQL。先填写semantic_resolution再写SQL：资料给出明确公式但用户问题仍可能指实质不同解释时，basis=needs_clarification并列unresolved_differences，改用clarify等待选择，不能默认写稿。explicit_user逐字引用本条用户完整原话，保留否定和限定，自己刚写入任务不算采用。修改已有SQL时replaces_query_id必须指向被修订的查询ID，旧待执行稿会失效；独立新查询传null。此工具只保存草稿。semantic_checks是本稿生成时的非阻断业务诊断，需区分警告、未检查和平台结果；它不授予执行权。",
   ],
   execute_query: [
     "ExecuteQueryInput",
-    "执行指定SQL前先登记消息归属并核对当前版本；修改后执行须使用新草稿。instruction_quote逐字填写当前用户完整原话，保留否定、限定、换行及粘贴内容。执行意图与澄清规则见系统指令；宿主绑定真实消息、任务、最终SQL和条件版本。重复调用接回原查询，不再次执行；明确重新运行先新建查询。",
+    "提交用户明确要求执行的SQL。instruction_quote逐字填写当前用户完整原话，保留否定、限定、换行及粘贴内容。本消息尚无任务关联时，原子登记查询所属任务并确认；已有归属须包含目标，多目标先分别登记。失败不新增关联或授权，其他待处理消息仍可阻塞。授权、版本与澄清规则见系统指令。重复调用接回原查询，不再次执行或转移预算；明确重新运行先新建查询。",
   ],
   update_analysis_task: [
     "AnalysisUpdate",
-    "登记消息归属，返回task_id/condition_version。create按Schema给完整conditions；未指定标量用null，数组[]，notes空串，timezone取宿主。已有任务沿用回执ID/当前版本；revise/clarify必带condition_patch={set:{改动字段:新值},unset:[清空字段]}，无改动用空set/空unset，旧稿随修订失效。knowledge_refs放在条件中，仅用已读对象id/version/path，source_id不是object_id。不提问时省略question且options=[]；clarify给实际非空问题。回答问题须传真实resolved_clarification_ids，省略/[]保留全部未答问题；opened_clarification为本次新问题，clarification为最早未答问题。route只登记归属，禁止条件与补丁；仅改SQL时携replaces_query_id原子失效旧稿，普通追问不带。",
+    "登记消息归属，返回task_id/condition_version。create提供goal和完整conditions；未指定标量用null，数组[]，notes空串，timezone取宿主。已有任务沿用回执ID/当前版本，goal省略即保留原目标及来源；revise/clarify必带condition_patch={set:{改动字段:新值},unset:[清空字段]}，无改动用空set/空unset，旧稿随修订失效。knowledge_refs仅放已读对象id/version/path，source_id不是object_id。提问使用clarifications数组，每项只含一个可独立回答的决定；分子、分母、观察期等可以分别回答时分别登记，不能把另一个决定塞进问题正文或选项。省略顶层question并令options=[]；question仅兼容单题且与数组互斥。不提问时两者均省略。回答传resolved_clarification_ids，只关闭完整答完的原问题；opened_clarifications为新问题全集，clarification仅最早未答项；has_more_clarifications=true时用read_analysis_task补齐其余未答问题。route只登记归属，禁止条件与补丁；仅改SQL时携replaces_query_id失效旧稿，普通追问不带。",
   ],
   get_query: [
     "GetQueryInput",
@@ -53,11 +53,11 @@ const definitions = {
   ],
   save_analysis_evidence: [
     "SaveAnalysisEvidenceInput",
-    "保存当前任务条件下的结论和依据。findings填写结论、计算说明、限制、资料和query_refs；figures绑定query_id、列、整个保存结果从0起的row_index及精确value，金额保留字符串。仅接受同任务同条件的成功查询与真实result_ref；分页用get_query补读，空/部分结果注明limitations与data_range。宿主核对引用和数值，不证明文本因果；新查询仍须逐条聊天授权。回执只给evidence_id和已核验依赖。",
+    "按真实task_id/condition_version保存结论和依据，允许有效历史条件。findings填写结论、计算说明、限制、资料和query_refs；figures绑定query_id、列、整个保存结果从0起的row_index及精确value，金额保留字符串。单份依据的查询必须属于其原任务原条件且成功，使用真实result_ref；分页用get_query补读，空/部分结果注明limitations与data_range。宿主核对引用和数值，不证明文本因果；新查询仍须逐条聊天授权。回执只给evidence_id和已核验依赖。",
   ],
   save_analysis_report: [
     "SaveAnalysisReportInput",
-    "将当前任务已有evidence_ids组成本人报告；改结论先存新依据。expected_version首次null，修订用report_ref.version。charts绑定成功查询result_ref与唯一列名，measure_column非空值须规范十进制文本并保留精度；空/全NULL显示暂无数据。line须SQL按dimension_column排序，维度唯一非空；bar维度也须唯一。使用完整已保存聚合结果，超限注明，不把部分明细当全量。标题简洁，不复制聊天、SQL或完整结果；工具仅返回引用，展示和执行边界遵循系统规则。",
+    "将本人同会话的有效evidence_ids组装到当前任务/条件的报告；来源可跨任务/条件，原身份保持，任一来源失效整份隐藏；改结论先存新依据。expected_version首次null，修订用report_ref.version。charts绑定成功查询result_ref与唯一列名，measure_column非空值须规范十进制文本并保留精度；空/全NULL显示暂无数据。line须SQL按dimension_column排序，维度唯一非空；bar维度也须唯一。使用完整已保存聚合结果，超限注明，不把部分明细当全量。标题简洁，不复制聊天、SQL或完整结果；工具仅返回引用，展示和执行边界遵循系统规则。",
   ],
   read_analysis_report: [
     "ReadAnalysisReportInput",
@@ -77,7 +77,7 @@ const definitions = {
   ],
   read_analysis_task: [
     "ReadTaskInput",
-    "读取指定任务的当前条件和未决问题；open_clarifications列出问题真实ID，按next_clarification_after传clarification_after续页。用于长期对话中的早期任务；权限与依据再次回源校验。",
+    "读取任务条件和依据引用，省略condition_version取当前，指定则取真实历史快照；current_condition_version/lifecycle/phase始终表示当前控制状态，历史仅给current_open_clarification_ids，不带当前目标或问题正文，不授执行权。当前有效问题见open_clarifications，按next_clarification_after传clarification_after续页；text_unavailable或unavailable_clarification_ids表示来源失效的正文已隐藏，不可从旧历史补回。",
   ],
   read_conversation: [
     "ConversationReadInput",
@@ -93,7 +93,7 @@ function expand(value: unknown): unknown {
         schema.$defs[record.$ref.slice(8) as keyof typeof schema.$defs],
       );
     return Object.fromEntries(
-      Object.entries(record).map(([key, value]) => [key, expand(value)]),
+      Object.entries(record).filter(([key, value]) => key !== "title" || typeof value !== "string").map(([key, value]) => [key, expand(value)]),
     );
   }
   return value;
@@ -161,7 +161,7 @@ export function dataTools(
     return receipt;
   };
   const formatResult = async (name: string, args: unknown, receipt: DataToolOutcome, signal?: AbortSignal) => {
-    if (receipt.data.error) return {content: [{type: "text" as const, text: [receipt.data.error, receipt.data.hint].filter(Boolean).join(": ")}], details: receipt, isError: true};
+    if (receipt.data.error) return {content: [{type: "text" as const, text: JSON.stringify(receipt.data)}], details: receipt, isError: true};
     if (name === "read") {
       try {
         const result = await formatSkillRead(receipt, decodeContract<SkillReadInput>("SkillReadInput", args), signal);
@@ -170,11 +170,27 @@ export function dataTools(
         return {content: [{type: "text" as const, text: error instanceof Error ? error.message : "skill_read_failed"}], details: undefined, isError: true};
       }
     }
-    return {content: [{type: "text" as const, text: JSON.stringify(receipt.data)}], details: receipt, isError: false};
+    const statusNotes: Record<string, string> = {
+      not_submitted: "SQL未提交执行；保存草稿不等于执行。",
+      queued: "执行请求已获授权并排队，尚无完成结果。",
+      submitting: "正在提交，尚未获得平台完成结果。",
+      submission_unknown: "提交回执未知，沿原查询身份查证，不能另建查询重做。",
+      running: "平台查询仍在运行，尚无完成结果。",
+      succeeded: "平台确认查询成功；结论还须核对实际结果和原条件。",
+      failed: "查询失败，不能当作空结果或执行成功。",
+      cancelled: "查询已取消，不能当作完成结果。",
+    };
+    const query = name === "get_query" ? receipt.data.query : receipt.data;
+    const status = query && typeof query === "object" && !Array.isArray(query) && "execution_state" in query ? query.execution_state : undefined;
+    const statusNote = typeof status === "string" ? statusNotes[status] : undefined;
+    return {content: [{type: "text" as const, text: JSON.stringify(statusNote
+      ? {status_note: statusNote, ...receipt.data} : receipt.data)}], details: receipt, isError: false};
   };
   const tools: ToolDefinition[] = Object.entries(definitions).map(([name, [contract, description]]) => ({
     ...(name === "read" ? {promptSnippet: nativeSkillRead.promptSnippet, promptGuidelines: nativeSkillRead.promptGuidelines} : {}),
     name, label: name, description,
+    // 工具共享运行来源清单，按顺序核验并扩展，避免同批调用相互制造过期快照。
+    executionMode: "sequential",
     parameters: Type.Unsafe(expand(schema.$defs[contract]) as TSchema),
     execute: async (id, args, signal) => {
       validateArguments(name, args);

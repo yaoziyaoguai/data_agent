@@ -780,7 +780,7 @@
     }
   },
   {
-    "name": "ReserveModelCall 拒绝 input_tokens_upper4097",
+    "name": "ReserveModelCall 拒绝超出配置输入上限",
     "schema": "ReserveModelCall",
     "valid": false,
     "value": {
@@ -788,12 +788,12 @@
       "lease_epoch": "1",
       "call_attempt_id": "call-test",
       "parameters_fingerprint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-      "input_tokens_upper": 4097,
+      "input_tokens_upper": 2000001,
       "output_tokens_max": 1024
     }
   },
   {
-    "name": "ReserveModelCall 拒绝 output_tokens_max1025",
+    "name": "ReserveModelCall 拒绝非整数输出上限",
     "schema": "ReserveModelCall",
     "valid": false,
     "value": {
@@ -802,7 +802,7 @@
       "call_attempt_id": "call-test",
       "parameters_fingerprint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
       "input_tokens_upper": 4096,
-      "output_tokens_max": 1025
+      "output_tokens_max": 1024.5
     }
   },
   {
@@ -2224,7 +2224,7 @@
     "roundtrip": true
   },
   {
-    "name": "ReserveModelCall rejects native 16385 output limit",
+    "name": "ReserveModelCall accepts bounded configurable output limit",
     "schema": "ReserveModelCall",
     "value": {
       "run_id": "run-test",
@@ -2234,7 +2234,7 @@
       "input_tokens_upper": 4096,
       "output_tokens_max": 16385
     },
-    "valid": false
+    "valid": true
   },
   {
     "name": "取消工具仅返回控制字段",
@@ -2316,7 +2316,7 @@
     "roundtrip": true
   },
   {
-    "name": "ReserveModelCall rejects native 32769 output limit",
+    "name": "ReserveModelCall rejects output beyond configurable safety bound",
     "schema": "ReserveModelCall",
     "value": {
       "run_id": "run-test",
@@ -2324,7 +2324,7 @@
       "call_attempt_id": "call-test",
       "parameters_fingerprint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
       "input_tokens_upper": 4096,
-      "output_tokens_max": 32769
+      "output_tokens_max": 131073
     },
     "valid": false
   },
@@ -3365,23 +3365,23 @@
     "roundtrip": true
   },
   {
-    "name": "model selection rejects Pro low",
+    "name": "model selection accepts catalog-resolved Pro low",
     "schema": "ModelSelection",
     "value": {
       "model_id": "deepseek-v4-pro",
       "thinking_level": "low"
     },
-    "valid": false,
+    "valid": true,
     "roundtrip": false
   },
   {
-    "name": "model selection rejects unknown model",
+    "name": "model selection accepts catalog-resolved unknown model",
     "schema": "ModelSelection",
     "value": {
       "model_id": "unknown",
       "thinking_level": "off"
     },
-    "valid": false,
+    "valid": true,
     "roundtrip": false
   },
   {
@@ -8282,5 +8282,1623 @@
     },
     "valid": false,
     "roundtrip": false
+  },
+  {
+    "name": "independent clarification questions",
+    "schema": "AnalysisUpdate",
+    "value": {
+      "action": "clarify",
+      "task_id": "task-clarification",
+      "expected_version": "2",
+      "goal": "确认收入口径",
+      "condition_patch": {
+        "set": {},
+        "unset": []
+      },
+      "options": [],
+      "clarifications": [
+        {
+          "question": "采用哪一种统计对象？",
+          "options": [
+            "客户",
+            "订单"
+          ]
+        },
+        {
+          "question": "采用哪个时间归属？",
+          "options": [
+            "支付时间",
+            "退款时间"
+          ]
+        }
+      ]
+    },
+    "valid": true
+  },
+  {
+    "name": "legacy question and questions cannot both be set",
+    "schema": "AnalysisUpdate",
+    "value": {
+      "action": "clarify",
+      "task_id": "task-clarification",
+      "expected_version": "2",
+      "goal": "确认收入口径",
+      "condition_patch": {
+        "set": {},
+        "unset": []
+      },
+      "options": [],
+      "clarifications": [
+        {
+          "question": "采用哪一种统计对象？",
+          "options": [
+            "客户",
+            "订单"
+          ]
+        },
+        {
+          "question": "采用哪个时间归属？",
+          "options": [
+            "支付时间",
+            "退款时间"
+          ]
+        }
+      ],
+      "question": "合并问题"
+    },
+    "valid": false
+  },
+  {
+    "name": "clarify requires at least one question",
+    "schema": "AnalysisUpdate",
+    "value": {
+      "action": "clarify",
+      "task_id": "task-clarification",
+      "expected_version": "2",
+      "goal": "确认收入口径",
+      "condition_patch": {
+        "set": {},
+        "unset": []
+      },
+      "options": [],
+      "clarifications": []
+    },
+    "valid": false
+  },
+  {
+    "name": "blank independent question rejected",
+    "schema": "AnalysisUpdate",
+    "value": {
+      "action": "clarify",
+      "task_id": "task-clarification",
+      "expected_version": "2",
+      "goal": "确认收入口径",
+      "condition_patch": {
+        "set": {},
+        "unset": []
+      },
+      "options": [],
+      "clarifications": [
+        {
+          "question": "  ",
+          "options": []
+        }
+      ]
+    },
+    "valid": false
+  },
+  {
+    "name": "independent question option shape checked",
+    "schema": "AnalysisUpdate",
+    "value": {
+      "action": "clarify",
+      "task_id": "task-clarification",
+      "expected_version": "2",
+      "goal": "确认收入口径",
+      "condition_patch": {
+        "set": {},
+        "unset": []
+      },
+      "options": [],
+      "clarifications": [
+        {
+          "question": "范围？",
+          "options": [
+            ""
+          ]
+        }
+      ]
+    },
+    "valid": false
+  },
+  {
+    "name": "clarification batch bounded",
+    "schema": "AnalysisUpdate",
+    "value": {
+      "action": "clarify",
+      "task_id": "task-clarification",
+      "expected_version": "2",
+      "goal": "确认收入口径",
+      "condition_patch": {
+        "set": {},
+        "unset": []
+      },
+      "options": [],
+      "clarifications": [
+        {
+          "question": "采用哪一种统计对象？",
+          "options": [
+            "客户",
+            "订单"
+          ]
+        },
+        {
+          "question": "采用哪个时间归属？",
+          "options": [
+            "支付时间",
+            "退款时间"
+          ]
+        },
+        {
+          "question": "采用哪一种统计对象？",
+          "options": [
+            "客户",
+            "订单"
+          ]
+        },
+        {
+          "question": "采用哪个时间归属？",
+          "options": [
+            "支付时间",
+            "退款时间"
+          ]
+        },
+        {
+          "question": "采用哪一种统计对象？",
+          "options": [
+            "客户",
+            "订单"
+          ]
+        },
+        {
+          "question": "采用哪个时间归属？",
+          "options": [
+            "支付时间",
+            "退款时间"
+          ]
+        },
+        {
+          "question": "采用哪一种统计对象？",
+          "options": [
+            "客户",
+            "订单"
+          ]
+        },
+        {
+          "question": "采用哪个时间归属？",
+          "options": [
+            "支付时间",
+            "退款时间"
+          ]
+        },
+        {
+          "question": "采用哪一种统计对象？",
+          "options": [
+            "客户",
+            "订单"
+          ]
+        },
+        {
+          "question": "采用哪个时间归属？",
+          "options": [
+            "支付时间",
+            "退款时间"
+          ]
+        }
+      ]
+    },
+    "valid": false
+  },
+  {
+    "name": "route cannot add independent question",
+    "schema": "AnalysisUpdate",
+    "value": {
+      "action": "route",
+      "goal": "",
+      "options": [],
+      "task_id": "task-clarification",
+      "expected_version": "2",
+      "clarifications": [
+        {
+          "question": "采用哪一种统计对象？",
+          "options": [
+            "客户",
+            "订单"
+          ]
+        },
+        {
+          "question": "采用哪个时间归属？",
+          "options": [
+            "支付时间",
+            "退款时间"
+          ]
+        }
+      ]
+    },
+    "valid": false
+  },
+  {
+    "name": "explicit business domain on manual knowledge",
+    "schema": "KnowledgeCreate",
+    "value": {
+      "operation_id": "manual-domain",
+      "kind": "document",
+      "name": "合成资料",
+      "body": "合成正文",
+      "related_ids": [],
+      "business_domain": "合成制造"
+    },
+    "valid": true
+  },
+  {
+    "name": "explicit unclassified manual knowledge",
+    "schema": "KnowledgeCreate",
+    "value": {
+      "operation_id": "manual-domain",
+      "kind": "document",
+      "name": "合成资料",
+      "body": "合成正文",
+      "related_ids": [],
+      "business_domain": ""
+    },
+    "valid": true
+  },
+  {
+    "name": "manual business domain bounded",
+    "schema": "KnowledgeCreate",
+    "value": {
+      "operation_id": "manual-domain",
+      "kind": "document",
+      "name": "合成资料",
+      "body": "合成正文",
+      "related_ids": [],
+      "business_domain": "域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域域"
+    },
+    "valid": false
+  },
+  {
+    "name": "read explicit historical task conditions",
+    "schema": "ReadTaskInput",
+    "value": {
+      "task_id": "task-one",
+      "condition_version": "1"
+    },
+    "valid": true
+  },
+  {
+    "name": "invalid historical version rejected",
+    "schema": "ReadTaskInput",
+    "value": {
+      "task_id": "task-one",
+      "condition_version": "0"
+    },
+    "valid": false
+  },
+  {
+    "name": "distinct analysis error task_inactive",
+    "schema": "AppError",
+    "value": {
+      "code": "task_inactive",
+      "message": "task_inactive",
+      "request_id": "test",
+      "retryable": false
+    },
+    "valid": true
+  },
+  {
+    "name": "distinct analysis error waiting_clarification",
+    "schema": "AppError",
+    "value": {
+      "code": "waiting_clarification",
+      "message": "waiting_clarification",
+      "request_id": "test",
+      "retryable": false
+    },
+    "valid": true
+  },
+  {
+    "name": "distinct analysis error clarification_not_open",
+    "schema": "AppError",
+    "value": {
+      "code": "clarification_not_open",
+      "message": "clarification_not_open",
+      "request_id": "test",
+      "retryable": false
+    },
+    "valid": true
+  },
+  {
+    "name": "explicit semantic decision",
+    "schema": "QuerySemanticResolution",
+    "value": {
+      "interpretation": "按订单计数，时间归属为支付日",
+      "basis": "explicit_user",
+      "user_quote": "按订单数计算",
+      "unresolved_differences": []
+    },
+    "valid": true
+  },
+  {
+    "name": "undecided semantic decision is representable",
+    "schema": "QuerySemanticResolution",
+    "value": {
+      "interpretation": "按订单计数，时间归属为支付日",
+      "basis": "needs_clarification",
+      "user_quote": null,
+      "unresolved_differences": [
+        "分母尚未选择"
+      ]
+    },
+    "valid": true
+  },
+  {
+    "name": "explicit decision needs quote",
+    "schema": "QuerySemanticResolution",
+    "value": {
+      "interpretation": "按订单计数，时间归属为支付日",
+      "basis": "explicit_user",
+      "user_quote": null,
+      "unresolved_differences": []
+    },
+    "valid": false
+  },
+  {
+    "name": "unambiguous cannot forge user evidence",
+    "schema": "QuerySemanticResolution",
+    "value": {
+      "interpretation": "按订单计数，时间归属为支付日",
+      "basis": "unambiguous",
+      "user_quote": "按订单数计算",
+      "unresolved_differences": []
+    },
+    "valid": false
+  },
+  {
+    "name": "decision text cannot be blank",
+    "schema": "QuerySemanticResolution",
+    "value": {
+      "interpretation": "  ",
+      "basis": "explicit_user",
+      "user_quote": "按订单数计算",
+      "unresolved_differences": []
+    },
+    "valid": false
+  },
+  {
+    "name": "unresolved choices are bounded",
+    "schema": "QuerySemanticResolution",
+    "value": {
+      "interpretation": "按订单计数，时间归属为支付日",
+      "basis": "explicit_user",
+      "user_quote": "按订单数计算",
+      "unresolved_differences": [
+        "差异",
+        "差异",
+        "差异",
+        "差异",
+        "差异",
+        "差异",
+        "差异",
+        "差异",
+        "差异"
+      ]
+    },
+    "valid": false
+  },
+  {
+    "name": "query available body remains complete",
+    "schema": "QueryView",
+    "value": {
+      "id": "query-source",
+      "conversation_id": "conversation-source",
+      "task_id": "task-source",
+      "condition_version": "1",
+      "draft_version": "1",
+      "target_id": "synthetic-sqlite",
+      "confirmation_state": "confirmed",
+      "execution_state": "running",
+      "cancel_state": "none",
+      "result_ref": null,
+      "check_state": "passed",
+      "error": null,
+      "sql": "SELECT 1",
+      "parameters": {},
+      "summary": "合成查询",
+      "knowledge_refs": []
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "query unavailable control state",
+    "schema": "QueryView",
+    "value": {
+      "id": "query-source",
+      "conversation_id": "conversation-source",
+      "task_id": "task-source",
+      "condition_version": "1",
+      "draft_version": "1",
+      "target_id": "synthetic-sqlite",
+      "confirmation_state": "confirmed",
+      "execution_state": "running",
+      "cancel_state": "none",
+      "result_ref": null,
+      "check_state": "passed",
+      "error": null,
+      "text_unavailable": true
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "query missing body without unavailable marker",
+    "schema": "QueryView",
+    "value": {
+      "id": "query-source",
+      "conversation_id": "conversation-source",
+      "task_id": "task-source",
+      "condition_version": "1",
+      "draft_version": "1",
+      "target_id": "synthetic-sqlite",
+      "confirmation_state": "confirmed",
+      "execution_state": "running",
+      "cancel_state": "none",
+      "result_ref": null,
+      "check_state": "passed",
+      "error": null
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "query false marker cannot hide missing body",
+    "schema": "QueryView",
+    "value": {
+      "id": "query-source",
+      "conversation_id": "conversation-source",
+      "task_id": "task-source",
+      "condition_version": "1",
+      "draft_version": "1",
+      "target_id": "synthetic-sqlite",
+      "confirmation_state": "confirmed",
+      "execution_state": "running",
+      "cancel_state": "none",
+      "result_ref": null,
+      "check_state": "passed",
+      "error": null,
+      "text_unavailable": false
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "query unavailable cannot carry sql",
+    "schema": "QueryView",
+    "value": {
+      "id": "query-source",
+      "conversation_id": "conversation-source",
+      "task_id": "task-source",
+      "condition_version": "1",
+      "draft_version": "1",
+      "target_id": "synthetic-sqlite",
+      "confirmation_state": "confirmed",
+      "execution_state": "running",
+      "cancel_state": "none",
+      "result_ref": null,
+      "check_state": "passed",
+      "error": null,
+      "text_unavailable": true,
+      "sql": "SELECT 1"
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "query unavailable cannot carry parameters",
+    "schema": "QueryView",
+    "value": {
+      "id": "query-source",
+      "conversation_id": "conversation-source",
+      "task_id": "task-source",
+      "condition_version": "1",
+      "draft_version": "1",
+      "target_id": "synthetic-sqlite",
+      "confirmation_state": "confirmed",
+      "execution_state": "running",
+      "cancel_state": "none",
+      "result_ref": null,
+      "check_state": "passed",
+      "error": null,
+      "text_unavailable": true,
+      "parameters": {
+        "secret": "synthetic"
+      }
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "query unavailable cannot carry summary",
+    "schema": "QueryView",
+    "value": {
+      "id": "query-source",
+      "conversation_id": "conversation-source",
+      "task_id": "task-source",
+      "condition_version": "1",
+      "draft_version": "1",
+      "target_id": "synthetic-sqlite",
+      "confirmation_state": "confirmed",
+      "execution_state": "running",
+      "cancel_state": "none",
+      "result_ref": null,
+      "check_state": "passed",
+      "error": null,
+      "text_unavailable": true,
+      "summary": "合成正文"
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "query unavailable cannot carry knowledge_refs",
+    "schema": "QueryView",
+    "value": {
+      "id": "query-source",
+      "conversation_id": "conversation-source",
+      "task_id": "task-source",
+      "condition_version": "1",
+      "draft_version": "1",
+      "target_id": "synthetic-sqlite",
+      "confirmation_state": "confirmed",
+      "execution_state": "running",
+      "cancel_state": "none",
+      "result_ref": null,
+      "check_state": "passed",
+      "error": null,
+      "text_unavailable": true,
+      "knowledge_refs": []
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "query unavailable cannot carry error_details",
+    "schema": "QueryView",
+    "value": {
+      "id": "query-source",
+      "conversation_id": "conversation-source",
+      "task_id": "task-source",
+      "condition_version": "1",
+      "draft_version": "1",
+      "target_id": "synthetic-sqlite",
+      "confirmation_state": "confirmed",
+      "execution_state": "running",
+      "cancel_state": "none",
+      "result_ref": null,
+      "check_state": "passed",
+      "error": null,
+      "text_unavailable": true,
+      "error_details": {
+        "code": "test",
+        "message": "合成诊断"
+      }
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "unavailable asset retains controls without source text",
+    "schema": "Asset",
+    "value": {
+      "id": "asset-hidden",
+      "kind": "memory",
+      "name": "来源不可用，正文已隐藏",
+      "body": "",
+      "scope": "来源不可用，正文已隐藏",
+      "version": "1",
+      "state": "enabled",
+      "verified": false,
+      "source_text": "",
+      "dependencies": [],
+      "selected": false,
+      "files": [],
+      "text_unavailable": true
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "unavailable asset cannot carry original body",
+    "schema": "Asset",
+    "value": {
+      "id": "asset-hidden",
+      "kind": "memory",
+      "name": "来源不可用，正文已隐藏",
+      "body": "SYNTHETIC_PRIVATE_SOURCE",
+      "scope": "来源不可用，正文已隐藏",
+      "version": "1",
+      "state": "enabled",
+      "verified": false,
+      "source_text": "",
+      "dependencies": [],
+      "selected": false,
+      "files": [],
+      "text_unavailable": true
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "unavailable asset cannot carry original name",
+    "schema": "Asset",
+    "value": {
+      "id": "asset-hidden",
+      "kind": "memory",
+      "name": "SYNTHETIC_PRIVATE_SOURCE",
+      "body": "",
+      "scope": "来源不可用，正文已隐藏",
+      "version": "1",
+      "state": "enabled",
+      "verified": false,
+      "source_text": "",
+      "dependencies": [],
+      "selected": false,
+      "files": [],
+      "text_unavailable": true
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "unavailable asset cannot carry original scope",
+    "schema": "Asset",
+    "value": {
+      "id": "asset-hidden",
+      "kind": "memory",
+      "name": "来源不可用，正文已隐藏",
+      "body": "",
+      "scope": "SYNTHETIC_PRIVATE_SOURCE",
+      "version": "1",
+      "state": "enabled",
+      "verified": false,
+      "source_text": "",
+      "dependencies": [],
+      "selected": false,
+      "files": [],
+      "text_unavailable": true
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "unavailable asset cannot carry original source_text",
+    "schema": "Asset",
+    "value": {
+      "id": "asset-hidden",
+      "kind": "memory",
+      "name": "来源不可用，正文已隐藏",
+      "body": "",
+      "scope": "来源不可用，正文已隐藏",
+      "version": "1",
+      "state": "enabled",
+      "verified": false,
+      "source_text": "SYNTHETIC_PRIVATE_SOURCE",
+      "dependencies": [],
+      "selected": false,
+      "files": [],
+      "text_unavailable": true
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "current task with available goal",
+    "schema": "TaskSnapshot",
+    "value": {
+      "id": "task-hidden",
+      "condition_version": "2",
+      "lifecycle": "active",
+      "phase": "waiting_clarification",
+      "evidence_refs": [],
+      "goal": "解释本次资料"
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "current task hides unavailable goal",
+    "schema": "TaskSnapshot",
+    "value": {
+      "id": "task-hidden",
+      "condition_version": "2",
+      "lifecycle": "active",
+      "phase": "waiting_clarification",
+      "evidence_refs": [],
+      "text_unavailable": true,
+      "note": "来源不可用，目标已隐藏"
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "hidden current task cannot include goal",
+    "schema": "TaskSnapshot",
+    "value": {
+      "id": "task-hidden",
+      "condition_version": "2",
+      "lifecycle": "active",
+      "phase": "waiting_clarification",
+      "evidence_refs": [],
+      "text_unavailable": true,
+      "note": "已隐藏",
+      "goal": "失效来源正文"
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "current task needs goal or explicit hidden state",
+    "schema": "TaskSnapshot",
+    "value": {
+      "id": "task-hidden",
+      "condition_version": "2",
+      "lifecycle": "active",
+      "phase": "waiting_clarification",
+      "evidence_refs": []
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "hidden current task needs explanation",
+    "schema": "TaskSnapshot",
+    "value": {
+      "id": "task-hidden",
+      "condition_version": "2",
+      "lifecycle": "active",
+      "phase": "waiting_clarification",
+      "evidence_refs": [],
+      "text_unavailable": true
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "existing revise can omit goal without replacing task text",
+    "schema": "AnalysisUpdate",
+    "value": {
+      "action": "revise",
+      "task_id": "task-1",
+      "expected_version": "1",
+      "options": [],
+      "condition_patch": {
+        "set": {},
+        "unset": []
+      }
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "omitted goal does not waive revise expected_version",
+    "schema": "AnalysisUpdate",
+    "value": {
+      "action": "revise",
+      "task_id": "task-1",
+      "options": [],
+      "condition_patch": {
+        "set": {},
+        "unset": []
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "omitted goal does not waive revise condition_patch",
+    "schema": "AnalysisUpdate",
+    "value": {
+      "action": "revise",
+      "task_id": "task-1",
+      "expected_version": "1",
+      "options": []
+    },
+    "valid": false
+  },
+  {
+    "name": "existing clarify can omit goal without replacing task text",
+    "schema": "AnalysisUpdate",
+    "value": {
+      "action": "clarify",
+      "task_id": "task-1",
+      "expected_version": "1",
+      "options": [],
+      "condition_patch": {
+        "set": {},
+        "unset": []
+      },
+      "clarifications": [
+        {
+          "question": "采用哪个合成口径？",
+          "options": [
+            "订单",
+            "金额"
+          ]
+        }
+      ]
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "omitted goal does not waive clarify expected_version",
+    "schema": "AnalysisUpdate",
+    "value": {
+      "action": "clarify",
+      "task_id": "task-1",
+      "options": [],
+      "condition_patch": {
+        "set": {},
+        "unset": []
+      },
+      "clarifications": [
+        {
+          "question": "采用哪个合成口径？",
+          "options": [
+            "订单",
+            "金额"
+          ]
+        }
+      ]
+    },
+    "valid": false
+  },
+  {
+    "name": "omitted goal does not waive clarify condition_patch",
+    "schema": "AnalysisUpdate",
+    "value": {
+      "action": "clarify",
+      "task_id": "task-1",
+      "expected_version": "1",
+      "options": [],
+      "clarifications": [
+        {
+          "question": "采用哪个合成口径？",
+          "options": [
+            "订单",
+            "金额"
+          ]
+        }
+      ]
+    },
+    "valid": false
+  },
+  {
+    "name": "omitted goal does not waive clarification question",
+    "schema": "AnalysisUpdate",
+    "value": {
+      "action": "clarify",
+      "task_id": "task-1",
+      "expected_version": "1",
+      "options": [],
+      "condition_patch": {
+        "set": {},
+        "unset": []
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "existing route can omit goal without replacing task text",
+    "schema": "AnalysisUpdate",
+    "value": {
+      "action": "route",
+      "task_id": "task-1",
+      "expected_version": "1",
+      "options": []
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "omitted goal does not waive route expected_version",
+    "schema": "AnalysisUpdate",
+    "value": {
+      "action": "route",
+      "task_id": "task-1",
+      "options": []
+    },
+    "valid": false
+  },
+  {
+    "name": "route without task does not require an unused goal",
+    "schema": "AnalysisUpdate",
+    "value": {
+      "action": "route",
+      "options": []
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "create creation with omitted task still requires goal",
+    "schema": "AnalysisUpdate",
+    "value": {
+      "action": "create",
+      "conditions": {
+        "time_start": null,
+        "time_end": null,
+        "timezone": "UTC",
+        "metric": null,
+        "channel": null,
+        "group_by": [],
+        "filters": [],
+        "knowledge_refs": [],
+        "notes": ""
+      },
+      "options": []
+    },
+    "valid": false
+  },
+  {
+    "name": "create creation with null task still requires goal",
+    "schema": "AnalysisUpdate",
+    "value": {
+      "action": "create",
+      "conditions": {
+        "time_start": null,
+        "time_end": null,
+        "timezone": "UTC",
+        "metric": null,
+        "channel": null,
+        "group_by": [],
+        "filters": [],
+        "knowledge_refs": [],
+        "notes": ""
+      },
+      "options": [],
+      "task_id": null
+    },
+    "valid": false
+  },
+  {
+    "name": "create creation rejects empty goal",
+    "schema": "AnalysisUpdate",
+    "value": {
+      "action": "create",
+      "goal": "",
+      "conditions": {
+        "time_start": null,
+        "time_end": null,
+        "timezone": "UTC",
+        "metric": null,
+        "channel": null,
+        "group_by": [],
+        "filters": [],
+        "knowledge_refs": [],
+        "notes": ""
+      },
+      "options": []
+    },
+    "valid": false
+  },
+  {
+    "name": "create creation rejects null goal",
+    "schema": "AnalysisUpdate",
+    "value": {
+      "action": "create",
+      "goal": null,
+      "conditions": {
+        "time_start": null,
+        "time_end": null,
+        "timezone": "UTC",
+        "metric": null,
+        "channel": null,
+        "group_by": [],
+        "filters": [],
+        "knowledge_refs": [],
+        "notes": ""
+      },
+      "options": []
+    },
+    "valid": false
+  },
+  {
+    "name": "revise creation with omitted task still requires goal",
+    "schema": "AnalysisUpdate",
+    "value": {
+      "action": "revise",
+      "conditions": {
+        "time_start": null,
+        "time_end": null,
+        "timezone": "UTC",
+        "metric": null,
+        "channel": null,
+        "group_by": [],
+        "filters": [],
+        "knowledge_refs": [],
+        "notes": ""
+      },
+      "options": []
+    },
+    "valid": false
+  },
+  {
+    "name": "revise creation with null task still requires goal",
+    "schema": "AnalysisUpdate",
+    "value": {
+      "action": "revise",
+      "conditions": {
+        "time_start": null,
+        "time_end": null,
+        "timezone": "UTC",
+        "metric": null,
+        "channel": null,
+        "group_by": [],
+        "filters": [],
+        "knowledge_refs": [],
+        "notes": ""
+      },
+      "options": [],
+      "task_id": null
+    },
+    "valid": false
+  },
+  {
+    "name": "revise creation rejects empty goal",
+    "schema": "AnalysisUpdate",
+    "value": {
+      "action": "revise",
+      "goal": "",
+      "conditions": {
+        "time_start": null,
+        "time_end": null,
+        "timezone": "UTC",
+        "metric": null,
+        "channel": null,
+        "group_by": [],
+        "filters": [],
+        "knowledge_refs": [],
+        "notes": ""
+      },
+      "options": []
+    },
+    "valid": false
+  },
+  {
+    "name": "revise creation rejects null goal",
+    "schema": "AnalysisUpdate",
+    "value": {
+      "action": "revise",
+      "goal": null,
+      "conditions": {
+        "time_start": null,
+        "time_end": null,
+        "timezone": "UTC",
+        "metric": null,
+        "channel": null,
+        "group_by": [],
+        "filters": [],
+        "knowledge_refs": [],
+        "notes": ""
+      },
+      "options": []
+    },
+    "valid": false
+  },
+  {
+    "name": "clarify creation with omitted task still requires goal",
+    "schema": "AnalysisUpdate",
+    "value": {
+      "action": "clarify",
+      "conditions": {
+        "time_start": null,
+        "time_end": null,
+        "timezone": "UTC",
+        "metric": null,
+        "channel": null,
+        "group_by": [],
+        "filters": [],
+        "knowledge_refs": [],
+        "notes": ""
+      },
+      "options": [],
+      "clarifications": [
+        {
+          "question": "采用哪个合成口径？",
+          "options": []
+        }
+      ]
+    },
+    "valid": false
+  },
+  {
+    "name": "clarify creation with null task still requires goal",
+    "schema": "AnalysisUpdate",
+    "value": {
+      "action": "clarify",
+      "conditions": {
+        "time_start": null,
+        "time_end": null,
+        "timezone": "UTC",
+        "metric": null,
+        "channel": null,
+        "group_by": [],
+        "filters": [],
+        "knowledge_refs": [],
+        "notes": ""
+      },
+      "options": [],
+      "task_id": null,
+      "clarifications": [
+        {
+          "question": "采用哪个合成口径？",
+          "options": []
+        }
+      ]
+    },
+    "valid": false
+  },
+  {
+    "name": "clarify creation rejects empty goal",
+    "schema": "AnalysisUpdate",
+    "value": {
+      "action": "clarify",
+      "goal": "",
+      "conditions": {
+        "time_start": null,
+        "time_end": null,
+        "timezone": "UTC",
+        "metric": null,
+        "channel": null,
+        "group_by": [],
+        "filters": [],
+        "knowledge_refs": [],
+        "notes": ""
+      },
+      "options": [],
+      "clarifications": [
+        {
+          "question": "采用哪个合成口径？",
+          "options": []
+        }
+      ]
+    },
+    "valid": false
+  },
+  {
+    "name": "clarify creation rejects null goal",
+    "schema": "AnalysisUpdate",
+    "value": {
+      "action": "clarify",
+      "goal": null,
+      "conditions": {
+        "time_start": null,
+        "time_end": null,
+        "timezone": "UTC",
+        "metric": null,
+        "channel": null,
+        "group_by": [],
+        "filters": [],
+        "knowledge_refs": [],
+        "notes": ""
+      },
+      "options": [],
+      "clarifications": [
+        {
+          "question": "采用哪个合成口径？",
+          "options": []
+        }
+      ]
+    },
+    "valid": false
+  },
+  {
+    "name": "existing revise accepts empty retained goal",
+    "schema": "AnalysisUpdate",
+    "value": {
+      "action": "revise",
+      "task_id": "task-1",
+      "expected_version": "1",
+      "options": [],
+      "goal": "",
+      "condition_patch": {
+        "set": {},
+        "unset": []
+      }
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "existing revise accepts explicit replacement goal",
+    "schema": "AnalysisUpdate",
+    "value": {
+      "action": "revise",
+      "task_id": "task-1",
+      "expected_version": "1",
+      "options": [],
+      "goal": "显式改写的目标",
+      "condition_patch": {
+        "set": {},
+        "unset": []
+      }
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "omitted goal does not allow route condition changes",
+    "schema": "AnalysisUpdate",
+    "value": {
+      "action": "route",
+      "task_id": "task-1",
+      "expected_version": "1",
+      "options": [],
+      "condition_patch": {
+        "set": {
+          "notes": "不能通过route修订"
+        },
+        "unset": []
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "existing revise goal cannot be null",
+    "schema": "AnalysisUpdate",
+    "value": {
+      "action": "revise",
+      "task_id": "task-1",
+      "expected_version": "1",
+      "options": [],
+      "goal": null,
+      "condition_patch": {
+        "set": {},
+        "unset": []
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "SaveModelService configurable model roundtrip",
+    "schema": "SaveModelService",
+    "value": {
+      "id": "synthetic-service",
+      "name": "合成服务",
+      "provider_id": "compatible",
+      "api": "openai-responses",
+      "base_url": "https://example.com/v1",
+      "enabled": true,
+      "expected_version": "0",
+      "api_key": "synthetic-only"
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "SaveModelService rejects extra fields",
+    "schema": "SaveModelService",
+    "value": {
+      "id": "synthetic-service",
+      "name": "合成服务",
+      "provider_id": "compatible",
+      "api": "openai-responses",
+      "base_url": "https://example.com/v1",
+      "enabled": true,
+      "expected_version": "0",
+      "api_key": "synthetic-only",
+      "unexpected": "invalid"
+    },
+    "valid": false
+  },
+  {
+    "name": "SaveModelDefinition configurable model roundtrip",
+    "schema": "SaveModelDefinition",
+    "value": {
+      "id": "synthetic-model",
+      "service_id": "synthetic-service",
+      "model_id": "not-in-sdk/analyst",
+      "label": "合成模型",
+      "thinking_levels": [
+        "off",
+        "medium"
+      ],
+      "default_thinking": "off",
+      "input_limit": 128000,
+      "output_limit": 16000,
+      "payload_bytes_limit": 262144,
+      "input_rate": "1000000",
+      "output_rate": "4000000",
+      "enabled": true,
+      "expected_version": "0",
+      "reasoning_supported": true
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "SaveModelDefinition rejects extra fields",
+    "schema": "SaveModelDefinition",
+    "value": {
+      "id": "synthetic-model",
+      "service_id": "synthetic-service",
+      "model_id": "not-in-sdk/analyst",
+      "label": "合成模型",
+      "thinking_levels": [
+        "off",
+        "medium"
+      ],
+      "default_thinking": "off",
+      "input_limit": 128000,
+      "output_limit": 16000,
+      "payload_bytes_limit": 262144,
+      "input_rate": "1000000",
+      "output_rate": "4000000",
+      "enabled": true,
+      "expected_version": "0",
+      "unexpected": "invalid",
+      "reasoning_supported": true
+    },
+    "valid": false
+  },
+  {
+    "name": "ModelProfile configurable model roundtrip",
+    "schema": "ModelProfile",
+    "value": {
+      "provider_id": "compatible",
+      "model_id": "not-in-sdk/analyst",
+      "trial_id": "synthetic-config",
+      "price_version": "configured:synthetic-model:1",
+      "input_limit": 128000,
+      "output_limit": 16000,
+      "payload_bytes_limit": 262144,
+      "thinking_level": "medium",
+      "budget_mode": "request",
+      "request_call_limit": 24,
+      "toolset": "data",
+      "configured_model": {
+        "id": "synthetic-model",
+        "version": "1",
+        "service_id": "synthetic-service",
+        "service_version": "1",
+        "api": "openai-responses",
+        "input_rate": "1000000",
+        "output_rate": "4000000",
+        "reasoning_supported": true
+      }
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "ModelProfile rejects extra fields",
+    "schema": "ModelProfile",
+    "value": {
+      "provider_id": "compatible",
+      "model_id": "not-in-sdk/analyst",
+      "trial_id": "synthetic-config",
+      "price_version": "configured:synthetic-model:1",
+      "input_limit": 128000,
+      "output_limit": 16000,
+      "payload_bytes_limit": 262144,
+      "thinking_level": "medium",
+      "budget_mode": "request",
+      "request_call_limit": 24,
+      "toolset": "data",
+      "configured_model": {
+        "id": "synthetic-model",
+        "version": "1",
+        "service_id": "synthetic-service",
+        "service_version": "1",
+        "api": "openai-responses",
+        "input_rate": "1000000",
+        "output_rate": "4000000",
+        "reasoning_supported": true
+      },
+      "unexpected": "invalid"
+    },
+    "valid": false
+  },
+  {
+    "name": "ModelService never exposes API key",
+    "schema": "ModelService",
+    "value": {
+      "id": "synthetic-service",
+      "name": "合成服务",
+      "provider_id": "compatible",
+      "api": "openai-responses",
+      "base_url": "https://example.com/v1",
+      "enabled": true,
+      "version": "1",
+      "credential_configured": true,
+      "api_key": "synthetic-only"
+    },
+    "valid": false
+  },
+  {
+    "name": "Configured ModelProfile cannot raise per-message calls",
+    "schema": "ModelProfile",
+    "value": {
+      "provider_id": "compatible",
+      "model_id": "not-in-sdk/analyst",
+      "trial_id": "synthetic-config",
+      "price_version": "configured:synthetic-model:1",
+      "input_limit": 128000,
+      "output_limit": 16000,
+      "payload_bytes_limit": 262144,
+      "thinking_level": "medium",
+      "budget_mode": "request",
+      "request_call_limit": 48,
+      "toolset": "data",
+      "configured_model": {
+        "id": "synthetic-model",
+        "version": "1",
+        "service_id": "synthetic-service",
+        "service_version": "1",
+        "api": "openai-responses",
+        "input_rate": "1000000",
+        "output_rate": "4000000",
+        "reasoning_supported": true
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "ModelProfile cannot use arbitrary provider without managed reference",
+    "schema": "ModelProfile",
+    "value": {
+      "provider_id": "compatible",
+      "model_id": "not-in-sdk/analyst",
+      "trial_id": "synthetic-config",
+      "price_version": "configured:synthetic-model:1",
+      "input_limit": 128000,
+      "output_limit": 16000,
+      "payload_bytes_limit": 262144,
+      "thinking_level": "medium",
+      "budget_mode": "request",
+      "request_call_limit": 24,
+      "toolset": "data"
+    },
+    "valid": false
+  },
+  {
+    "name": "ModelDefinition rejects duplicate thinking levels",
+    "schema": "SaveModelDefinition",
+    "value": {
+      "id": "synthetic-model",
+      "service_id": "synthetic-service",
+      "model_id": "not-in-sdk/analyst",
+      "label": "合成模型",
+      "thinking_levels": [
+        "off",
+        "off"
+      ],
+      "default_thinking": "off",
+      "input_limit": 128000,
+      "output_limit": 16000,
+      "payload_bytes_limit": 262144,
+      "input_rate": "1000000",
+      "output_rate": "4000000",
+      "enabled": true,
+      "expected_version": "0",
+      "reasoning_supported": true
+    },
+    "valid": false
+  },
+  {
+    "name": "Pi Responses composite tool ID preserves full identity",
+    "schema": "DataToolInvocation",
+    "valid": true,
+    "value": {
+      "run_id": "run-read",
+      "lease_epoch": "1",
+      "sdk_tool_call_id": "call_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|fc_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "tool_name": "read_analysis_report",
+      "arguments": {
+        "task_id": "task-read"
+      },
+      "checkpoint": {
+        "sdk_version": "1.0.0",
+        "entries": [],
+        "leaf_id": null
+      }
+    },
+    "roundtrip": true
+  },
+  {
+    "name": "Pi tool ID rejects control characters",
+    "schema": "DataToolInvocation",
+    "valid": false,
+    "value": {
+      "run_id": "run-read",
+      "lease_epoch": "1",
+      "sdk_tool_call_id": "call\nforbidden",
+      "tool_name": "read_analysis_report",
+      "arguments": {
+        "task_id": "task-read"
+      },
+      "checkpoint": {
+        "sdk_version": "1.0.0",
+        "entries": [],
+        "leaf_id": null
+      }
+    }
+  },
+  {
+    "name": "Pi tool ID retains bounded length",
+    "schema": "DataToolInvocation",
+    "valid": false,
+    "value": {
+      "run_id": "run-read",
+      "lease_epoch": "1",
+      "sdk_tool_call_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "tool_name": "read_analysis_report",
+      "arguments": {
+        "task_id": "task-read"
+      },
+      "checkpoint": {
+        "sdk_version": "1.0.0",
+        "entries": [],
+        "leaf_id": null
+      }
+    }
+  },
+  {
+    "name": "model configuration error preserves invalid_model_endpoint",
+    "schema": "AppError",
+    "value": {
+      "code": "invalid_model_endpoint",
+      "message": "invalid_model_endpoint",
+      "request_id": "synthetic-config-request",
+      "retryable": false
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "model configuration error preserves model_credential_required",
+    "schema": "AppError",
+    "value": {
+      "code": "model_credential_required",
+      "message": "model_credential_required",
+      "request_id": "synthetic-config-request",
+      "retryable": false
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "model configuration error preserves model_secret_unavailable",
+    "schema": "AppError",
+    "value": {
+      "code": "model_secret_unavailable",
+      "message": "model_secret_unavailable",
+      "request_id": "synthetic-config-request",
+      "retryable": false
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "model configuration error preserves model_unavailable",
+    "schema": "AppError",
+    "value": {
+      "code": "model_unavailable",
+      "message": "model_unavailable",
+      "request_id": "synthetic-config-request",
+      "retryable": false
+    },
+    "valid": true,
+    "roundtrip": true
   }
 ]

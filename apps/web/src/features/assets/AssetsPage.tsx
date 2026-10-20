@@ -89,22 +89,24 @@ export function AssetsPage({
     return () => clearTimeout(timer);
   }, [assets]);
   const edit = (asset: Asset | null) => {
+    // 隐藏投影仅用于管理；占位名称和空附件不能被当作原内容再次保存。
+    const content = asset?.text_unavailable ? null : asset;
     setEditingDraft(null);
-    initialEdit.current = JSON.stringify([asset?.name ?? "", asset?.body ?? "", asset?.scope ?? "", asset?.verified ?? false, asset?.files ?? [], asset?.dependencies ?? []]);
+    initialEdit.current = JSON.stringify([content?.name ?? "", content?.body ?? "", content?.scope ?? "", content?.verified ?? false, content?.files ?? [], content?.dependencies ?? []]);
     editorSession.current++;
     setSaving(false);
     saveOperation.current = {key: "", id: ""};
     setError("");
     setNotice("");
     setBackgroundOutcome("");
-    setFiles(asset?.files ?? []);
-    setDependencies(asset?.dependencies ?? []);
+    setFiles(content?.files ?? []);
+    setDependencies(content?.dependencies ?? []);
     setEditingKind(asset?.kind ?? (tab === "memory" ? "memory" : "skill"));
     setEditing(asset);
-    setName(asset?.name ?? "");
-    setBody(asset?.body ?? "");
-    setScope(asset?.scope ?? "");
-    setVerified(asset?.verified ?? false);
+    setName(content?.name ?? "");
+    setBody(content?.body ?? "");
+    setScope(content?.scope ?? "");
+    setVerified(content?.verified ?? false);
   };
   const editDraft = (draft: PendingSkillDraft) => {
     edit(null);
@@ -134,7 +136,7 @@ export function AssetsPage({
         body,
         scope,
         verified,
-        source_text: editing?.source_text ?? "用户在个人积累页明确保存",
+        source_text: editing?.text_unavailable ? "用户在个人积累页重新编写并保存" : editing?.source_text ?? "用户在个人积累页明确保存",
         dependencies,
         ...(editingDraft ? {draft_id: editingDraft.reference.draft_id} : {}),
       };
@@ -153,7 +155,7 @@ export function AssetsPage({
       await refresh();
     } catch (e) {
       if (page !== pageSession.current) return;
-      if (session === editorSession.current && editingDraft && e instanceof Error && ["not_available", "invalid_evidence", "version_conflict", "stale_knowledge", "result_unavailable", "result_expired"].includes(e.message)) {
+      if (session === editorSession.current && editingDraft && e instanceof Error && ["not_available", "invalid_evidence", "version_conflict", "stale_knowledge", "stale_context", "result_unavailable", "result_expired"].includes(e.message)) {
         closeEditor(); setName(""); setBody(""); setScope(""); setFiles([]); setDependencies([]);
         setDraftRefresh(value => value + 1);
         setError("这份草稿的条件或来源已变化，未保存为个人 Skill。请在原对话重新准备。");
@@ -225,9 +227,10 @@ export function AssetsPage({
             >
               <div className="asset-main"><h2 title={asset.name}>{asset.name}</h2><p className="asset-body asset-excerpt">{asset.body.replace(/^#+\s*/gm, "")}</p></div>
               <div className="asset-scope"><p title={asset.scope}>{asset.scope}</p></div>
-              <div className="asset-state"><span className="status-pill">{asset.state === "enabled" ? "已启用" : "已停用"}</span><small>{asset.verified ? "已核对" : "待核对"}</small></div>
-              <div className="actions asset-primary-actions">{asset.can_edit && <button onClick={() => edit(asset)}>编辑</button>}{asset.kind === "skill" && asset.state === "enabled" && <button className="primary" onClick={() => void onUseSkill(asset).catch(e => setError(e.message))}>在当前对话选用</button>}</div>
-              <details className="asset-full-content"><summary>查看完整{asset.kind === "memory" ? "记忆" : "方法"}</summary><MarkdownContent text={asset.body}/><p><strong>适用范围：</strong>{asset.scope}</p>
+              <div className="asset-state"><span className="status-pill">{asset.state === "enabled" ? "已启用" : "已停用"}</span><small>{asset.text_unavailable ? "暂不可用" : asset.verified ? "已核对" : "待核对"}</small></div>
+              {asset.text_unavailable && <p role="status" className="quiet">来源已失效或无法核验，当前内容不能采用。你仍可停用、删除或重新编写。</p>}
+              <div className="actions asset-primary-actions">{asset.can_edit && <button onClick={() => edit(asset)}>{asset.text_unavailable ? "重写内容" : "编辑"}</button>}{asset.kind === "skill" && asset.state === "enabled" && !asset.text_unavailable && <button className="primary" onClick={() => void onUseSkill(asset).catch(e => setError(e.message))}>在当前对话选用</button>}</div>
+              <details className="asset-full-content"><summary>{asset.text_unavailable ? "管理这条记录" : "查看完整" + (asset.kind === "memory" ? "记忆" : "方法")}</summary>{!asset.text_unavailable && <><MarkdownContent text={asset.body}/><p><strong>适用范围：</strong>{asset.scope}</p></>}
               {asset.kind === "skill" && <p className="quiet skill-owner">{asset.visibility === "space" ? "空间公共" : "个人"} · 负责人 {asset.owner_id ?? user}</p>}
               {asset.memory_index_state && asset.memory_index_state !== "indexed" && (
                 <p className="asset-index-state" role="status">
@@ -256,8 +259,8 @@ export function AssetsPage({
                 <button onClick={() => void state(asset, "delete")}>
                   删除
                 </button></>}
-                {asset.kind === "skill" && asset.visibility !== "space" && asset.state === "enabled" && <button onClick={() => publish(asset)}>发布到空间</button>}
-                {asset.visibility === "space" && <button onClick={() => setSuggesting(asset)}>修改建议</button>}
+                {asset.kind === "skill" && asset.visibility !== "space" && asset.state === "enabled" && !asset.text_unavailable && <button onClick={() => publish(asset)}>发布到空间</button>}
+                {asset.visibility === "space" && !asset.text_unavailable && <button onClick={() => setSuggesting(asset)}>修改建议</button>}
 
               </div></details>
             </article>
@@ -294,13 +297,14 @@ export function AssetsPage({
       {editing !== undefined && (
         <Modal
           title={
-            (editingDraft ? "确认个人 " : editing ? "编辑" : "新增") +
+            (editingDraft ? "确认个人 " : editing?.text_unavailable ? "重写" : editing ? "编辑" : "新增") +
             (editingKind === "memory" ? "个人记忆" : "Skill")
           }
           onClose={() => confirmClose(closeEditor)}
           className="asset-editor-dialog"
           footer={<><span className="quiet">{editing?.visibility === "space" ? "空间公共方法" : "仅自己可用"}</span><button onClick={() => confirmClose(closeEditor)}>取消</button><button className="primary" disabled={saving || !name.trim() || !body.trim() || !scope.trim()} onClick={() => void save()}>{saving ? "保存中…" : editingDraft ? "保存为个人 Skill" : "保存"}</button></>}
         >
+          {editing?.text_unavailable && <p className="notice">旧内容和附件因来源不可用而隐藏。请重新填写名称、完整内容、范围及所需附件；保存会用本次填写的内容替换旧版本。</p>}
           {editingKind === "skill" && editing === null && !editingDraft && <SkillExamples disabled={saving} hasDraft={Boolean(name || body || scope)} onChoose={example => { setName(example.name); setBody(example.body); setScope(example.scope); setVerified(false); }}/>}
           <label className="form-label">
             名称 <small aria-hidden="true">必填</small>

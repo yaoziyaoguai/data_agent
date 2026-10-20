@@ -10,21 +10,22 @@ export function ModelSelector({ models, selection, disabled, onChange }: {
   onChange: (selection: ModelSelection) => void;
 }) {
   const [showInfo, setShowInfo] = useState(false);
-  if (!models.length || !selection) return null;
-  const model = models.find(item => item.id === selection.model_id);
+  if (!models.length && !selection) return null;
+  const model = models.find(item => item.id === selection?.model_id);
   return <div className="composer-models" aria-label="本次提问的模型设置">
-    <select aria-label="模型" title="从下一条发送的消息开始使用" disabled={disabled} value={selection.model_id} onChange={e => {
+    <select aria-label="模型" title="从下一条发送的消息开始使用" disabled={disabled} value={selection?.model_id ?? ""} onChange={e => {
       const next = models.find(item => item.id === e.target.value);
       if (!next) return;
-      const level = next.thinking_options.find(item => item.value === selection.thinking_level)?.value ?? next.thinking_options[0].value;
+      const level = next.thinking_options.find(item => item.value === selection?.thinking_level)?.value ?? next.thinking_options[0].value;
       onChange({ model_id: next.id, thinking_level: level });
     }}>
-      {models.map(item => <option key={item.id} value={item.id}>{item.label.replace(/^DeepSeek\s*/i, "")}</option>)}
+      {!model && <option value={selection?.model_id ?? ""} disabled>{selection ? "当前模型已不可用" : "选择模型"}</option>}
+      {models.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}
     </select>
     <label>思考
-      <select aria-label="思考强度" title="较高强度可能需要更多时间和用量" disabled={disabled} value={selection.thinking_level} onChange={e => {
+      <select aria-label="思考强度" title="较高强度可能需要更多时间和用量" disabled={disabled} value={selection?.thinking_level} onChange={e => {
         const option = model?.thinking_options.find(item => item.value === e.target.value);
-        if (option) onChange({ ...selection, thinking_level: option.value });
+        if (option && selection) onChange({ ...selection, thinking_level: option.value });
       }}>
         {model?.thinking_options.map(item => <option key={item.value} value={item.value}>{item.label}</option>)}
       </select>

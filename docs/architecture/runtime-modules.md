@@ -104,6 +104,8 @@ M05提供`recent_task_ids_in_tx`只读投影：按未撤回消息的实际事件
 
 `execute_query` 的 `instruction_quote` 仍须逐字包含本轮真实用户完整原话，包括粘贴SQL、换行、否定与限定。`invalid_evidence` 的执行工具拒绝回执说明本次未执行及如何核对原话；仅当漏引原话且本轮已有明确执行要求时，Pi可用新的工具调用修正，无需要求用户重复授权。旧拒绝回执可回放，同一SDK调用不能更换参数；系统结果唤醒、失效版本、权限失败或未知回执不能借此重做或增加执行权。服务端不自动补引原话，也不替Pi判断自然语言授权。
 
+当前消息尚无任务关联时，执行指定查询的组合用例可从该查询取得唯一目标，并在确认成功的同一事务中写入消息关联和已应用标记，不再要求先单独 `route`。已有任务关联必须包含该查询目标，多目标仍须分别明确登记；其他待归属或处理失败的消息继续阻塞。确认拒绝不产生新增关联；已确认查询只接回原状态并关联当前消息，不将其标为新授权，也不改变原预算。HTTP确认入口仍检查全部阻塞消息。
+
 ## 3. M06 `analysis`：分析目标、条件与澄清
 
 **负责：**任务身份、不可变条件修订、条件来源、缺口、可恢复澄清和任务交互阶段。`update_analysis_task` 的不同动作由组合层分别调用本模块和 M05/M07，不在模块内调用兄弟模块。
@@ -119,6 +121,8 @@ Pi工具的`AnalysisUpdate`沿用同源JSON Schema：新建任务须带完整`co
 普通条件修订不自动解决澄清。已有任务的 `revise/clarify` 可携 `resolved_clarification_ids`，只解决本消息明确回答的开放问题；服务端核对当前任务版本、同会话同任务与开放状态，任一错误使整次修订回滚。未指定问题继续开放，即使其创建条件版本较早；当前条件版本过期的回答仍拒绝。任务目录给出最早未决 `clarification`；`read_analysis_task` 按 `clarification_after/next_clarification_after` 每页返回最多8条 `open_clarifications`，更新回执额外返回本次 `opened_clarification`，支持先回答后出现的问题。还有问题时阶段保持 `waiting_clarification`。同事务可回答旧问题并创建新问题；不授予SQL执行权。
 
 `route`只登记消息归属，禁止附带`conditions/condition_patch`或澄清问题。修改渠道、时间、指标等条件使用`revise`，获得新的条件版本并失效旧待确认草稿；只有条件保持不变而改写SQL时，`route`可带`replaces_query_id`声明修订。错误动作与参数组合在共享契约边界拒绝，不能成功返回后静默丢掉修改。
+
+新建任务必须给出非空 `goal`；已有任务的 `revise/clarify/route` 可省略目标，保持原目标正文、目标来源及其条件版本。显式修订为不同目标时才更新相应来源；省略目标不影响条件补丁、起点版本或澄清 ID 的校验。
 
 | 状态维度 | 初始状态设计 | 规则 |
 | --- | --- | --- |
@@ -282,11 +286,11 @@ flowchart TD
 
 ## 5. M08 `runtime`：运行、检查点、工具、输出与预算
 
-**负责：**运行绑定与恢复记录、工具调用账本、输出尝试及片段、模型调用许可与原范围预算。Node/M11 负责唯一 SDK 循环，M08 只执行约束与持久化，不另设规划器。
+**负责：**运行绑定与恢复记录、工具调用账本、输出尝试及片段、模型调用许可与原范围预算，以及当前空间的模型服务、凭据和模型定义版本。Node/M11 负责唯一 SDK 循环，M08 只执行约束与持久化，不另设规划器。
 
 **边界：**不根据文本承诺修改任务/查询，不重放已成功业务副作用，不自行给新运行补额度。Pi 检查点不是条件、确认或长期记忆的替代品。
 
-**私有数据：**`agent_runs`、`pi_checkpoints`、`tool_calls`、`assistant_outputs`/尝试/片段、`budget_scopes`、`model_call_attempts`。当前检查点含 SDK 格式版本、原 session、私有 JSONL 文件名、精确 leaf 和 authority；完整原生树由 M11 保存。旧 inline 在交付事务绑定不可变副本及指纹，受当前运行权校验后只读迁移；凭据不在其中。
+**私有数据：**`agent_runs`、`pi_checkpoints`、`tool_calls`、`assistant_outputs`/尝试/片段、`budget_scopes`、`model_call_attempts`、`model_space_settings`、`model_services`/`model_service_versions`、`model_definitions`/`model_definition_versions`。模型配置接口、加密与冻结规则见[实现设计第16节](implementation-design.md#16-模型接入配置2026-10-20)。当前检查点含 SDK 格式版本、原 session、私有 JSONL 文件名、精确 leaf 和 authority；完整原生树由 M11 保存。旧 inline 在交付事务绑定不可变副本及指纹，受当前运行权校验后只读迁移；凭据不在其中。
 
 `recovery_chain_id` 绑定一次逻辑交付、原输入/预算和 `output_id`，重启或替换执行创建新 `run_id` 时继承；新用户操作/新结果交付另建恢复链。工具业务唯一键为 `(conversation_id, operation_id)`；恢复映射另以 `(conversation_id, recovery_chain_id, sdk_tool_call_id)` 唯一，指向同一稳定操作，保存工具名/参数指纹、`origin_run_id` 与接回记录。去重不按 SQL/参数永久生效；相同参数的新操作可以正常执行，已提交调用恢复不能换链或操作身份。
 
@@ -328,7 +332,7 @@ flowchart TD
 
 `append_output` 组合用例在一事务保存 M08 片段和 M05 流式事件，提交后才投递；事件携带输出/尝试/片段 ID。模型消费推进 `input_seq`，SSE 按 `event_seq` 读取；输出/展示事件不重新成为 Agent 输入。
 
-M08 `model_selection`提供可信目录与`selected_profile`：Flash支持off/low/high/max，Pro支持off/high/max，配对各自已有价格版本；原I0 task配置继续限Flash/off。启动配置保持试验指纹；数据工作台按消息选择模型时只派生模型、档位与对应价格，继承原trial、输入/输出及请求/总额度，不重新配置试验。`receive_message`先查幂等回执，再依次取本条显式选择、M05已存选择、启动默认值，将有效`ModelProfile`冻结到M08 `budget_scopes`。未带选择的旧客户端消息保持原指纹；显式选择是新消息指纹的一部分。Pi从锁定SDK目录加载模型，并通过原生`createAgentSession`和`thinkingLevel`续接同一会话。恢复、消息重放和查询结果通知沿原scope取配置；切换不改变已运行回复与查询。
+M08 `model_configuration`提供按空间维护的可信目录与`selected_profile`；部署导入的Flash/Pro保留原档位和价格版本，原I0 task配置继续限Flash/off。`receive_message`先查幂等回执，再依次取本条显式选择、M05已存选择、空间默认模型，将服务及模型修订、协议、能力、限制和费率冻结到M08 `budget_scopes.model_profile`。继承原trial和请求/总预算，不重新配置试验。未带选择的旧客户端消息保持原指纹；显式选择是新消息指纹的一部分。Pi使用锁定SDK的原生协议与模型能力信息，通过`createAgentSession`和`thinkingLevel`续接同一会话。恢复、消息重放和查询结果通知沿原scope取配置；切换不改变已运行回复与查询。配置权限、加密和停用边界见[实现设计第16节](implementation-design.md#16-模型接入配置2026-10-20)。
 
 维护预填仍沿启动模型；Mem0抽取和百炼向量仍用各自配置及原辅助计价，仅继承请求预算引用。聊天与维护按各自模型的高峰缓存未命中价保守计账，不声称等于服务商实际折扣账单。
 
