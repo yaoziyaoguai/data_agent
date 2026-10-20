@@ -1,0 +1,332 @@
+{
+  "source_directory": "docs/sources/analysis",
+  "snapshot_exclusive": "2026-04-04T00:00:00Z",
+  "note": "只供人工核对，不能进入模型知识、Skill、查询案例。",
+  "checks": {
+    "counts": {
+      "sql": "SELECT COUNT(*),COUNT(DISTINCT order_id),SUM(quantity) FROM demo_order_detail WHERE is_test=0",
+      "rows": [
+        [
+          38,
+          29,
+          47
+        ]
+      ]
+    },
+    "january_channels": {
+      "sql": "SELECT channel,SUM(paid_amount_cents-refunded_amount_cents) FROM demo_order_detail WHERE is_test=0 AND paid_amount_cents>0 AND paid_at>='2026-01-01T00:00:00Z' AND paid_at<'2026-02-01T00:00:00Z' GROUP BY channel ORDER BY channel",
+      "rows": [
+        [
+          "app",
+          28000
+        ],
+        [
+          "store",
+          19000
+        ],
+        [
+          "web",
+          55000
+        ]
+      ]
+    },
+    "january_daily_customers": {
+      "sql": "SELECT SUM(n) FROM(SELECT date(paid_at),COUNT(DISTINCT customer_id) n FROM demo_order_detail WHERE is_test=0 AND paid_amount_cents>0 AND paid_at>='2026-01-01T00:00:00Z' AND paid_at<'2026-02-01T00:00:00Z' GROUP BY date(paid_at))",
+      "rows": [
+        [
+          7
+        ]
+      ]
+    },
+    "january_refund_rate": {
+      "sql": "WITH paid_orders AS(SELECT DISTINCT order_id FROM demo_order_detail WHERE is_test=0 AND paid_amount_cents>0 AND paid_at>='2026-01-01T00:00:00Z' AND paid_at<'2026-02-01T00:00:00Z') SELECT COUNT(*),SUM(EXISTS(SELECT 1 FROM demo_order_detail d WHERE d.order_id=p.order_id AND d.is_test=0 AND d.refunded_amount_cents>0)) FROM paid_orders p",
+      "rows": [
+        [
+          9,
+          3
+        ]
+      ]
+    },
+    "january_payment_refunds": {
+      "sql": "SELECT SUM(paid_amount_cents),SUM(refunded_amount_cents) FROM demo_order_detail WHERE is_test=0 AND paid_amount_cents>0 AND paid_at>='2026-01-01T00:00:00Z' AND paid_at<'2026-02-01T00:00:00Z'",
+      "rows": [
+        [
+          110000,
+          8000
+        ]
+      ]
+    },
+    "may_rows": {
+      "sql": "SELECT COUNT(*) FROM demo_order_detail WHERE is_test=0 AND paid_at>='2026-05-01T00:00:00Z' AND paid_at<'2026-06-01T00:00:00Z'",
+      "rows": [
+        [
+          0
+        ]
+      ]
+    },
+    "cross_join_rows": {
+      "sql": "SELECT COUNT(*) FROM demo_order_detail a CROSS JOIN demo_order_detail b CROSS JOIN demo_order_detail c",
+      "rows": [
+        [
+          59319
+        ]
+      ]
+    },
+    "quarter_customers": {
+      "sql": "SELECT COUNT(DISTINCT customer_id) FROM demo_order_detail WHERE is_test=0 AND paid_amount_cents>0 AND paid_at>='2026-01-01T00:00:00Z' AND paid_at<'2026-04-01T00:00:00Z'",
+      "rows": [
+        [
+          8
+        ]
+      ]
+    },
+    "monthly-net": {
+      "sql": "SELECT SUBSTR(paid_at,1,7) AS month,\n       SUM(paid_amount_cents) AS paid_cents,\n       SUM(refunded_amount_cents) AS refund_cents,\n       SUM(paid_amount_cents-refunded_amount_cents) AS net_cents,\n       COUNT(DISTINCT order_id) AS paid_orders,\n       COUNT(DISTINCT customer_id) AS known_customers\nFROM demo_order_detail\nWHERE is_test=0 AND paid_amount_cents>0\n  AND paid_at >= '2026-01-01T00:00:00Z' AND paid_at < '2026-04-01T00:00:00Z'\nGROUP BY SUBSTR(paid_at,1,7) ORDER BY month;\n",
+      "columns": [
+        "month",
+        "paid_cents",
+        "refund_cents",
+        "net_cents",
+        "paid_orders",
+        "known_customers"
+      ],
+      "rows": [
+        [
+          "2026-01",
+          110000,
+          8000,
+          102000,
+          9,
+          7
+        ],
+        [
+          "2026-02",
+          122000,
+          9000,
+          113000,
+          9,
+          8
+        ],
+        [
+          "2026-03",
+          143000,
+          9000,
+          134000,
+          9,
+          7
+        ]
+      ]
+    },
+    "channel-contribution": {
+      "sql": "WITH channel_months AS (\n  SELECT channel,SUBSTR(paid_at,1,7) AS month,\n         SUM(paid_amount_cents-refunded_amount_cents) AS net_cents\n  FROM demo_order_detail\n  WHERE is_test=0 AND paid_amount_cents>0\n    AND paid_at >= '2026-02-01T00:00:00Z' AND paid_at < '2026-04-01T00:00:00Z'\n  GROUP BY channel,SUBSTR(paid_at,1,7)\n), changes AS (\n  SELECT channel,\n         SUM(CASE WHEN month='2026-02' THEN net_cents ELSE 0 END) AS previous_net_cents,\n         SUM(CASE WHEN month='2026-03' THEN net_cents ELSE 0 END) AS current_net_cents\n  FROM channel_months GROUP BY channel\n)\nSELECT channel,previous_net_cents,current_net_cents,\n       current_net_cents-previous_net_cents AS delta_cents,\n       SUM(current_net_cents-previous_net_cents) OVER () AS total_delta_cents\nFROM changes ORDER BY channel;\n",
+      "columns": [
+        "channel",
+        "previous_net_cents",
+        "current_net_cents",
+        "delta_cents",
+        "total_delta_cents"
+      ],
+      "rows": [
+        [
+          "app",
+          51000,
+          62000,
+          11000,
+          21000
+        ],
+        [
+          "store",
+          23000,
+          27000,
+          4000,
+          21000
+        ],
+        [
+          "web",
+          39000,
+          45000,
+          6000,
+          21000
+        ]
+      ]
+    },
+    "tagged-net": {
+      "sql": "SELECT SUBSTR(d.paid_at,1,7) AS month,\n       SUM(d.paid_amount_cents) AS paid_cents,\n       SUM(d.refunded_amount_cents) AS refund_cents,\n       SUM(d.paid_amount_cents-d.refunded_amount_cents) AS net_cents,\n       COUNT(DISTINCT d.customer_id) AS known_customers\nFROM demo_order_detail d\nWHERE d.is_test=0 AND d.paid_amount_cents>0\n  AND d.paid_at >= '2026-01-01T00:00:00Z' AND d.paid_at < '2026-04-01T00:00:00Z'\n  AND EXISTS (SELECT 1 FROM customer_tags t WHERE t.customer_id=d.customer_id AND t.tag IN ('vip','newsletter'))\nGROUP BY SUBSTR(d.paid_at,1,7) ORDER BY month;\n",
+      "columns": [
+        "month",
+        "paid_cents",
+        "refund_cents",
+        "net_cents",
+        "known_customers"
+      ],
+      "rows": [
+        [
+          "2026-01",
+          87500,
+          8000,
+          79500,
+          5
+        ],
+        [
+          "2026-02",
+          86000,
+          9000,
+          77000,
+          5
+        ],
+        [
+          "2026-03",
+          93750,
+          6000,
+          87750,
+          5
+        ]
+      ]
+    },
+    "refund-timing": {
+      "sql": "SELECT SUBSTR(p.event_at,1,7) AS month,\n       SUM(p.amount_cents) AS refund_cents,\n       COUNT(DISTINCT l.order_id) AS refund_orders\nFROM raw_order_lines l JOIN raw_payments p\n  ON l.order_id=p.order_id AND l.line_id=p.line_id\nWHERE l.is_test=0 AND p.event_status='success' AND p.event_type='refund'\n  AND p.event_at >= '2026-01-01T00:00:00Z' AND p.event_at < '2026-04-04T00:00:00Z'\nGROUP BY SUBSTR(p.event_at,1,7) ORDER BY month;\n",
+      "columns": [
+        "month",
+        "refund_cents",
+        "refund_orders"
+      ],
+      "rows": [
+        [
+          "2026-01",
+          2000,
+          1
+        ],
+        [
+          "2026-02",
+          7000,
+          2
+        ],
+        [
+          "2026-03",
+          11000,
+          4
+        ],
+        [
+          "2026-04",
+          6000,
+          2
+        ]
+      ]
+    },
+    "counts_all": {
+      "sql": "SELECT COUNT(*) FROM demo_order_detail",
+      "rows": [
+        [
+          39
+        ]
+      ]
+    },
+    "monthly_channels": {
+      "sql": "SELECT strftime('%Y-%m',paid_at) AS month,channel,SUM(paid_amount_cents-refunded_amount_cents) AS net_cents FROM demo_order_detail WHERE is_test=0 AND paid_amount_cents>0 AND paid_at>='2026-01-01T00:00:00Z' AND paid_at<'2026-04-01T00:00:00Z' GROUP BY month,channel ORDER BY month,channel",
+      "rows": [
+        [
+          "2026-01",
+          "app",
+          28000
+        ],
+        [
+          "2026-01",
+          "store",
+          19000
+        ],
+        [
+          "2026-01",
+          "web",
+          55000
+        ],
+        [
+          "2026-02",
+          "app",
+          51000
+        ],
+        [
+          "2026-02",
+          "store",
+          23000
+        ],
+        [
+          "2026-02",
+          "web",
+          39000
+        ],
+        [
+          "2026-03",
+          "app",
+          62000
+        ],
+        [
+          "2026-03",
+          "store",
+          27000
+        ],
+        [
+          "2026-03",
+          "web",
+          45000
+        ]
+      ]
+    },
+    "all_non_test_sums": {
+      "sql": "SELECT SUM(paid_amount_cents),SUM(refunded_amount_cents),SUM(paid_amount_cents-refunded_amount_cents) FROM demo_order_detail WHERE is_test=0",
+      "rows": [
+        [
+          375000,
+          26000,
+          349000
+        ]
+      ]
+    },
+    "quarter_net": {
+      "sql": "SELECT SUM(paid_amount_cents-refunded_amount_cents) FROM demo_order_detail WHERE is_test=0 AND paid_amount_cents>0 AND paid_at>='2026-01-01T00:00:00Z' AND paid_at<'2026-04-01T00:00:00Z'",
+      "rows": [
+        [
+          349000
+        ]
+      ]
+    },
+    "cumulative_net": {
+      "sql": "WITH monthly AS (SELECT strftime('%Y-%m',paid_at) AS month,SUM(paid_amount_cents-refunded_amount_cents) AS net_cents FROM demo_order_detail WHERE is_test=0 AND paid_amount_cents>0 AND paid_at>='2026-01-01T00:00:00Z' AND paid_at<'2026-04-01T00:00:00Z' GROUP BY month) SELECT month,net_cents,SUM(net_cents) OVER (ORDER BY month) AS cumulative_cents FROM monthly ORDER BY month",
+      "rows": [
+        [
+          "2026-01",
+          102000,
+          102000
+        ],
+        [
+          "2026-02",
+          113000,
+          215000
+        ],
+        [
+          "2026-03",
+          134000,
+          349000
+        ]
+      ]
+    },
+    "non_test_channel_rows": {
+      "sql": "SELECT channel,COUNT(*) AS row_count FROM demo_order_detail WHERE is_test=0 GROUP BY channel ORDER BY channel",
+      "rows": [
+        [
+          "app",
+          12
+        ],
+        [
+          "store",
+          13
+        ],
+        [
+          "web",
+          13
+        ]
+      ],
+      "basis": "冻结合成源独立执行，不是Agent输出"
+    }
+  },
+  "purpose": "操作者/独立复核专用；不得进入产品Agent提示、知识、记忆、Skill、公共案例或预填材料。"
+}

@@ -1,0 +1,553 @@
+{
+  "schema": 1,
+  "areas": [
+    {
+      "id": "F01",
+      "title": "身份、最高角色、私人隔离",
+      "case_ids": [
+        "B01",
+        "M06",
+        "A06",
+        "B41",
+        "X09",
+        "E14",
+        "Z08",
+        "Z16"
+      ],
+      "kind": "current_capability"
+    },
+    {
+      "id": "F02",
+      "title": "表、字段、DDL、加工SQL与血缘阅读",
+      "case_ids": [
+        "B02",
+        "C01",
+        "C09"
+      ],
+      "kind": "current_capability"
+    },
+    {
+      "id": "F03",
+      "title": "共享语义召回、限定范围、扩大检索、全文补读",
+      "case_ids": [
+        "B23",
+        "B24",
+        "B25",
+        "C11",
+        "C22",
+        "E18",
+        "R01",
+        "Z16"
+      ],
+      "kind": "current_capability"
+    },
+    {
+      "id": "F04",
+      "title": "先展示SQL、复制、补充修订、粘贴SQL",
+      "case_ids": [
+        "B03",
+        "B04",
+        "B06",
+        "B20"
+      ],
+      "kind": "current_capability"
+    },
+    {
+      "id": "F05",
+      "title": "聊天执行授权、多个目标澄清、只读与幂等",
+      "case_ids": [
+        "B05",
+        "B14",
+        "B33",
+        "E01",
+        "E15",
+        "R04",
+        "R06",
+        "R07",
+        "Z05",
+        "Z13"
+      ],
+      "kind": "current_capability"
+    },
+    {
+      "id": "F06",
+      "title": "长对话、多任务、主动澄清、自由回答、刷新续答与请求时钟",
+      "case_ids": [
+        "B07",
+        "B17",
+        "B29",
+        "B30",
+        "B31",
+        "B32",
+        "E17",
+        "R02",
+        "R09",
+        "R10",
+        "Z06"
+      ],
+      "kind": "current_capability"
+    },
+    {
+      "id": "F07",
+      "title": "日期归属、金额单位、退款、去重、未知资料",
+      "case_ids": [
+        "B07",
+        "B08",
+        "B09",
+        "B10",
+        "B11",
+        "B12",
+        "B26",
+        "B27",
+        "B28",
+        "R02",
+        "R03",
+        "Z02",
+        "Z03",
+        "Z04"
+      ],
+      "kind": "current_capability"
+    },
+    {
+      "id": "F08",
+      "title": "后台执行、单独停止、结果通知、恢复",
+      "case_ids": [
+        "B05",
+        "B14",
+        "B15",
+        "B22",
+        "E04",
+        "E06",
+        "E07",
+        "E16",
+        "R05",
+        "R06",
+        "R22",
+        "Z05"
+      ],
+      "kind": "current_capability"
+    },
+    {
+      "id": "F09",
+      "title": "结果10行预览、完整保存结果下载、截断、图表",
+      "case_ids": [
+        "B13",
+        "B19",
+        "E03",
+        "R13",
+        "R14",
+        "R15"
+      ],
+      "kind": "current_capability"
+    },
+    {
+      "id": "F10",
+      "title": "Flash/Pro与思考强度、配置保存",
+      "case_ids": [
+        "B18",
+        "B21",
+        "R20",
+        "Z15"
+      ],
+      "kind": "current_capability"
+    },
+    {
+      "id": "F11",
+      "title": "趋势、贡献、原因边界与数字依据",
+      "case_ids": [
+        "B34",
+        "B35",
+        "B36",
+        "E18",
+        "R18",
+        "Z01"
+      ],
+      "kind": "current_capability"
+    },
+    {
+      "id": "F12",
+      "title": "本人报告、图表、局部修订、失效、回到计算查询",
+      "case_ids": [
+        "B37",
+        "B38",
+        "B39",
+        "B40",
+        "B41",
+        "E13",
+        "Z09",
+        "Z13"
+      ],
+      "kind": "current_capability"
+    },
+    {
+      "id": "F13",
+      "title": "个人记忆录入、编辑、纠错、临时条件",
+      "case_ids": [
+        "M01",
+        "M02",
+        "M04",
+        "M14",
+        "M15",
+        "Z07",
+        "Z11"
+      ],
+      "kind": "current_capability"
+    },
+    {
+      "id": "F14",
+      "title": "Mem0记忆召回、适用范围、停用、删除、隔离",
+      "case_ids": [
+        "M03",
+        "M05",
+        "M06",
+        "M07",
+        "M15",
+        "E14",
+        "Z11"
+      ],
+      "kind": "current_capability"
+    },
+    {
+      "id": "F15",
+      "title": "Pi原生Skill：模板、正文、附件、明确选择、版本与依赖",
+      "case_ids": [
+        "M08",
+        "M09",
+        "M10",
+        "M12",
+        "M13",
+        "M18",
+        "E17",
+        "Z07",
+        "Z10"
+      ],
+      "kind": "current_capability"
+    },
+    {
+      "id": "F16",
+      "title": "公共Skill副本、建议、维护、重新选用",
+      "case_ids": [
+        "M11",
+        "X05",
+        "X06",
+        "A08",
+        "Z10"
+      ],
+      "kind": "current_capability"
+    },
+    {
+      "id": "F17",
+      "title": "方法草稿、确认、失效、删除来源",
+      "case_ids": [
+        "M16",
+        "M17",
+        "M18",
+        "M19",
+        "M20",
+        "Z01"
+      ],
+      "kind": "current_capability"
+    },
+    {
+      "id": "F18",
+      "title": "表/字段/指标/关联的文字与计算结构维护",
+      "case_ids": [
+        "C02",
+        "C07",
+        "C14",
+        "C15",
+        "C16"
+      ],
+      "kind": "current_capability"
+    },
+    {
+      "id": "F19",
+      "title": "来源预填、人工保护、清除覆盖、常用表、同步",
+      "case_ids": [
+        "C03",
+        "C04",
+        "C13",
+        "A04",
+        "R17"
+      ],
+      "kind": "current_capability"
+    },
+    {
+      "id": "F20",
+      "title": "业务文档整篇创建、编辑、长文、来源链接",
+      "case_ids": [
+        "C06",
+        "C08",
+        "C11",
+        "C22",
+        "R08",
+        "Z12"
+      ],
+      "kind": "current_capability"
+    },
+    {
+      "id": "F21",
+      "title": "公共查询案例：参数、依赖、公开、核对、采用",
+      "case_ids": [
+        "C17",
+        "C18",
+        "C19",
+        "C20",
+        "R07",
+        "Z13"
+      ],
+      "kind": "current_capability"
+    },
+    {
+      "id": "F22",
+      "title": "对象启停、版本、并发冲突、直接维护影响",
+      "case_ids": [
+        "C09",
+        "C10",
+        "C12",
+        "C21",
+        "A07",
+        "E11",
+        "Z09"
+      ],
+      "kind": "current_capability"
+    },
+    {
+      "id": "F23",
+      "title": "纠错草稿、明确共享、接受后另存、驳回/重提/旧建议",
+      "case_ids": [
+        "X01",
+        "X02",
+        "X03",
+        "X04",
+        "X07",
+        "X08",
+        "Z08"
+      ],
+      "kind": "current_capability"
+    },
+    {
+      "id": "F24",
+      "title": "负责人范围、转交、创建资格、平台授权分离",
+      "case_ids": [
+        "C05",
+        "C08",
+        "A01",
+        "A02",
+        "A03",
+        "X09",
+        "X10",
+        "E12",
+        "Z16"
+      ],
+      "kind": "current_capability"
+    },
+    {
+      "id": "F25",
+      "title": "检索索引维护与分页",
+      "case_ids": [
+        "A05",
+        "E11",
+        "E18",
+        "E19"
+      ],
+      "kind": "current_capability"
+    },
+    {
+      "id": "F26",
+      "title": "导航、输入草稿、阅读位置、横滚、键盘与窄屏",
+      "case_ids": [
+        "B16",
+        "B19",
+        "B21",
+        "B22",
+        "E05",
+        "E08",
+        "E10",
+        "R05",
+        "Z14"
+      ],
+      "kind": "current_capability"
+    },
+    {
+      "id": "F27",
+      "title": "失败表达、保存回执未知、平台过期、恢复与跨空间",
+      "case_ids": [
+        "E02",
+        "E07",
+        "E09",
+        "E12",
+        "E13",
+        "E14",
+        "E15",
+        "E16",
+        "E17",
+        "E19",
+        "R16",
+        "R19",
+        "R21",
+        "R22",
+        "R23",
+        "R24"
+      ],
+      "kind": "current_capability"
+    },
+    {
+      "id": "F28",
+      "title": "开放澄清分页与指定问题解决",
+      "case_ids": [
+        "R09",
+        "R10",
+        "Z06"
+      ],
+      "kind": "current_capability"
+    },
+    {
+      "id": "F29",
+      "title": "保存结果超10行补读与JSON片段",
+      "case_ids": [
+        "R13",
+        "R14",
+        "Z09"
+      ],
+      "kind": "current_capability"
+    },
+    {
+      "id": "F30",
+      "title": "结果统计与绝对单元格",
+      "case_ids": [
+        "R14",
+        "R15"
+      ],
+      "kind": "current_capability"
+    },
+    {
+      "id": "F31",
+      "title": "新结果视图的上下文依赖",
+      "case_ids": [
+        "R16",
+        "Z09"
+      ],
+      "kind": "current_capability"
+    },
+    {
+      "id": "F32",
+      "title": "相关性前三保护与关联补位",
+      "case_ids": [
+        "R11"
+      ],
+      "kind": "current_capability"
+    },
+    {
+      "id": "F33",
+      "title": "1000候选和24检索词覆盖边界",
+      "case_ids": [
+        "R12"
+      ],
+      "kind": "current_capability"
+    },
+    {
+      "id": "F34",
+      "title": "预填复核补材料与有界引文",
+      "case_ids": [
+        "R17",
+        "Z12"
+      ],
+      "kind": "current_capability"
+    },
+    {
+      "id": "F35",
+      "title": "工具后最终完整回答持久化",
+      "case_ids": [
+        "R18",
+        "Z01"
+      ],
+      "kind": "current_capability"
+    },
+    {
+      "id": "F36",
+      "title": "旧Pi检查点兼容和真实版本",
+      "case_ids": [
+        "R19"
+      ],
+      "kind": "current_capability"
+    },
+    {
+      "id": "F37",
+      "title": "模型切换公开历史和思考隔离",
+      "case_ids": [
+        "R20",
+        "Z15"
+      ],
+      "kind": "current_capability"
+    },
+    {
+      "id": "F38",
+      "title": "原生压缩、长工具与失效重建",
+      "case_ids": [
+        "R21",
+        "Z12"
+      ],
+      "kind": "current_capability"
+    },
+    {
+      "id": "F39",
+      "title": "混合任务取消与Bridge恢复",
+      "case_ids": [
+        "R22",
+        "Z05"
+      ],
+      "kind": "current_capability"
+    },
+    {
+      "id": "F40",
+      "title": "每消息24次及连续3次临时失败",
+      "case_ids": [
+        "R23",
+        "R24"
+      ],
+      "kind": "current_capability"
+    },
+    {
+      "id": "F41",
+      "title": "完整工具参数损坏时的完整性",
+      "case_ids": [
+        "R24"
+      ],
+      "kind": "current_capability"
+    },
+    {
+      "id": "F42",
+      "title": "B14/C19/C22历史覆盖缺口补齐",
+      "case_ids": [
+        "R06",
+        "R07",
+        "R08"
+      ],
+      "kind": "current_capability"
+    },
+    {
+      "id": "F43",
+      "title": "跨能力完整任务与困难问题",
+      "case_ids": [
+        "Z01",
+        "Z02",
+        "Z03",
+        "Z04",
+        "Z05",
+        "Z06",
+        "Z07",
+        "Z08",
+        "Z09",
+        "Z10",
+        "Z11",
+        "Z12",
+        "Z13",
+        "Z14",
+        "Z15",
+        "Z16"
+      ],
+      "kind": "composite_workflow"
+    }
+  ]
+}

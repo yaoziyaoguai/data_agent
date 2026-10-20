@@ -1,125 +1,167 @@
 ---
 {
-  "workflow": "dev_co",
+  "workflow": "development",
   "schema": 1,
-  "phase": "verify",
-  "goal_revision": 63,
-  "environment": "项目原Colima MySQL/Milvus；真实Flash/off、Mem0、词法检索，原试用数据库/账号/账本，端口偏移22000。",
+  "phase": "release_closeout",
+  "goal_revision": 76,
+  "environment": "用户同意作为阶段试用版收尾，授权更新文档与图、分批提交推送、恢复本地服务及发表系列文章。模型配置已验收；真实模型语义缺口继续保留。",
   "verification": {
-    "level": "targeted",
-    "reason": "本轮仅Git交付、恢复既有本地服务和状态文档；产品代码已由8b8f01a对应14组完整验收，本轮检查实际健康端点和SDK兼容。",
+    "level": "increment",
+    "reason": "保留原失败；新增通用业务、协议及浏览器回归，并独立核对修复与边界。",
     "freshness": "content",
-    "checks": [
-      "0958b69试用修复及8b8f01a SDK升级已推送origin/codex/analysis-capabilities；无新增业务修改。",
-      "make build verify-startup完整退出0，10项启动器单测、默认启动及真实SDK本机协议聊天/预填通过，官方调用0。",
-      "首次启动漏带旧合成资料目录而被来源校验拒绝；原库、快照及版本一致，恢复原docs/sources/analysis配置后启动成功。",
-      "五个实际服务HTTP200、Worker及其他五个子进程存活，启动器两账号身份检查通过；原配置与身份SHA保持。",
-      "源码SDK14组属于冻结实施版本；不拼接为120项全部通过，不把本地就绪视为新版真实模型质量证明。"
-    ],
+    "checks": [],
     "inputs": [
-      "docs/CURRENT.md",
+      "apps/agent",
+      "apps/api",
+      "apps/web/src",
+      "crates/data-agent",
+      "packages/contracts",
+      "tests",
+      "migrations",
+      "scripts",
       "package.json",
       "package-lock.json",
-      "Makefile",
-      "scripts/development.py",
-      "scripts/test_development.py",
-      "apps/agent",
-      "apps/web/src",
-      "crates/data-agent/src",
-      "apps/api/src",
-      "apps/worker/src",
-      "packages/contracts",
-      "tests/runtime/check-pi-sdk.mjs",
-      "tests/runtime/fixtures/pi-session-1.0.0.json",
-      "docs/reviews/local-dogfood-delivery-review.json"
+      "Cargo.lock",
+      "docs/architecture/implementation-design.md",
+      "docs/development.md"
     ]
   },
   "delivery": {
     "schema": 1,
     "registry": "docs/semantic-retrieval-design.md",
     "increment": {
-      "id": "I2-LOCAL-DOGFOOD-DELIVERY",
+      "id": "I2-MODEL-CONFIGURATION",
       "phase": "I2",
       "status": "complete",
-      "goal": "按用户本轮授权分批提交推送既有修复，恢复原真实Flash试用环境并核对本地就绪；不改变已验收产品行为。",
+      "goal": "超级管理员通过页面持久配置模型服务、凭据和具体模型；Pi原生多协议接入，普通用户只选已启用模型。",
       "requirements": [
         "C01",
+        "C03",
         "C05",
-        "C07"
+        "C08"
       ],
       "modules": [
+        "M01",
+        "M05",
         "M08",
+        "M10",
         "M11",
         "M12"
       ],
       "allowed_paths": [
-        "docs/CURRENT.md",
-        "docs/reviews/local-dogfood-delivery-review.json"
-      ],
-      "non_goals": [
-        "不修改业务代码、契约、试用答案或扩大功能。",
-        "不新建或重置数据库、模型账本、旧unknown与Pi会话。",
-        "不自动执行新的真实模型试用；真实输出质量由后续用户dogfood继续验证。"
-      ],
-      "invariants": [
-        "SDK与试用修复保持8b8f01a已验收代码，原14组收据绑定其冻结版本。",
-        "真实环境沿原profile、runtime、合成资料目录、Mem0及词法检索恢复，24次请求上限和连续失败3次规则保持。",
-        "配置及身份内容不外发、不进入Git；首次启动失败留证且不能被记为成功。"
-      ],
-      "verification_inputs": [
-        "docs/CURRENT.md",
+        "apps/agent",
+        "apps/api",
+        "apps/web",
+        "crates/data-agent",
+        "packages/contracts",
+        "tests",
+        "migrations",
+        "scripts",
         "package.json",
         "package-lock.json",
-        "Makefile",
-        "scripts/development.py",
-        "scripts/test_development.py",
+        "Cargo.lock",
+        "docs/CURRENT.md",
+        "docs/architecture",
+        "docs/semantic-retrieval-design.md",
+        "docs/reviews",
+        "README.md",
+        "docs/development.md"
+      ],
+      "non_goals": [
+        "不提交推送或更新常驻服务；不新增付费调用。",
+        "不另建Agent循环、自动模型路由、预填/embedding供应商管理或修改未解决的真实语义问题。"
+      ],
+      "invariants": [
+        "每条消息24次和连续临时失败3次；恢复、摘要及结果唤醒沿原消息模型配置与预算。",
+        "仅当前空间超级管理员读写服务及模型配置；凭据加密保存，不进入公开目录、日志、检查点或消息。",
+        "Pi负责三种原生协议的请求、流式与工具解析；同批宿主工具顺序执行保持。",
+        "配置修订只影响新消息；停用阻止新发送，不自动换模型，不重做未知副作用。"
+      ],
+      "verification_inputs": [
         "apps/agent",
+        "apps/api",
         "apps/web/src",
-        "crates/data-agent/src",
-        "apps/api/src",
-        "apps/worker/src",
+        "crates/data-agent",
         "packages/contracts",
-        "tests/runtime/check-pi-sdk.mjs",
-        "tests/runtime/fixtures/pi-session-1.0.0.json",
-        "docs/reviews/local-dogfood-delivery-review.json"
+        "tests",
+        "migrations",
+        "scripts",
+        "package.json",
+        "package-lock.json",
+        "Cargo.lock",
+        "docs/architecture/implementation-design.md",
+        "docs/development.md"
       ],
       "acceptance": [
         {
-          "id": "LOCAL-READY",
+          "id": "MODEL-CONFIG-CONTRACT",
           "requirements": [
             "C01",
-            "C05"
+            "C03",
+            "C05",
+            "C08"
           ],
-          "expected": "真实试用Web、API、Pi Bridge、平台mock和Mem0五个实际端点均HTTP200；不发起模型调用。",
-          "evidence_kind": "runtime",
+          "expected": "同源契约、类型、Rust和架构边界通过。",
+          "evidence_kind": "contract",
           "command": [
-            "python3",
-            "-c",
-            "import json, urllib.request\nopener=urllib.request.build_opener(urllib.request.ProxyHandler({}))\nurls={'web':'http://127.0.0.1:27173/','api':'http://127.0.0.1:30780/health','bridge':'http://127.0.0.1:30781/health','platform':'http://127.0.0.1:30790/health','memory':'http://127.0.0.1:30791/health'}\nstatuses={}\nfor name,url in urls.items():\n    with opener.open(url,timeout=3) as response:\n        statuses[name]=response.status\nassert all(status==200 for status in statuses.values()), statuses\nprint(json.dumps({'passed':True,'http':statuses,'officialRequests':0}))\n"
+            "make",
+            "verify-contracts",
+            "verify-code",
+            "verify-architecture"
           ],
-          "timeout_seconds": 30
+          "timeout_seconds": 1200
         },
         {
-          "id": "LOCAL-SDK",
+          "id": "MODEL-CONFIG-BEHAVIOR",
           "requirements": [
             "C01",
+            "C03",
             "C05",
-            "C07"
+            "C08"
           ],
-          "expected": "当前安装的Pi为同版1.3.0，三项上游改进和旧1.0.0检查点兼容仍通过。",
+          "expected": "超级管理员创建编辑接入，普通用户拒绝；密钥保密、版本冲突、停用、冻结配置、不同协议真实Pi工具回合及浏览器流程通过。",
           "evidence_kind": "runtime",
           "command": [
             "node",
-            "tests/runtime/check-pi-sdk.mjs"
+            "tests/mvp/check-model-configuration.mjs"
+          ],
+          "timeout_seconds": 1200
+        },
+        {
+          "id": "MODEL-CONFIG-COMPATIBILITY",
+          "requirements": [
+            "C01",
+            "C03"
+          ],
+          "expected": "原Flash/Pro选择、恢复及后台结果沿原模型与预算。",
+          "evidence_kind": "runtime",
+          "command": [
+            "node",
+            "tests/mvp/check-model-selection.mjs"
           ],
           "timeout_seconds": 900
+        },
+        {
+          "id": "MODEL-CONFIG-PROTOCOL",
+          "requirements": [
+            "C01",
+            "C03",
+            "C05"
+          ],
+          "expected": "三种Pi原生协议可靠用量/缺失用量/临时失败与受控端点负例通过，SDK不隐式重发。",
+          "evidence_kind": "runtime",
+          "command": [
+            "node",
+            "tests/runtime/check-configured-provider.mjs"
+          ],
+          "timeout_seconds": 120
         }
       ],
       "review": {
         "status": "passed",
-        "record": "docs/reviews/local-dogfood-delivery-review.json"
+        "record": "docs/reviews/model-configuration-review.json"
       },
-      "evidence": ".local/delivery/I2-LOCAL-DOGFOOD-DELIVERY-result.json"
+      "evidence": ".local/delivery/I2-MODEL-CONFIGURATION-result.json"
     }
   }
 }
@@ -127,10 +169,171 @@
 
 # Data Agent 当前记录
 
-更新：2026-10-19。唯一活动项目目录：`~/work_space/data_agent`。
+## 当前收尾：阶段试用版与工程文章（2026-10-20）
+
+用户接受阶段试用版定位，要求同步仓库文档和架构图、分批提交推送、更新本地服务，并润色、配图和发表系列文章。此授权取代上一节模型配置增量中“不提交推送或更新常驻服务”的本轮操作限制；不增加产品功能，不把原可靠性验收改为通过，不追加模型质量抽样。
+
+收尾范围：README、当前架构总览及模块图源/导出、第二版讲解与历史页面版本提示，保持已完成业务代码及契约；需求关联沿模型配置 C01/C03/C05/C08，以及既有可靠性修复的对应要求。四组模型配置正式验收和原工程回归继续按各自版本引用。文档检查、图片渲染、服务启动和文章公开读取分别取证，不代替真实模型或真实 Datasight 验收。
+
+本版保留三类已知质量缺口：独立澄清仍可能合并并过早关闭；回答可能补写没有受控计算来源的数字或无依据解释；生成 SQL 的零总变化/空数据比例边界仍可能错误。普通答复暴露内部标识为较低优先级问题。用户可继续 dogfood，重要口径、SQL 和结论仍需核对。I2-AGENT-RELIABILITY 保持未关闭，详见原独立审查；I2-MODEL-CONFIGURATION 的 complete 仅对应模型配置增量。
+
+发布文稿以生成内容的来源追踪、Pi 多模型配置与恢复一致性为主题，按用户最新决定直接更新旧四篇正文、源码和配图，不追加版本说明；历史验证仅作为标明时点的证据。公开材料只用合成例子和已审阅代码，不发布私有日志、凭据、实际对话或本机路径。文章稿与发布回执沿既有忽略目录保存，仓库保存通用架构文档及图源。
+
+可观察收尾结果：当前图与已实现边界一致；Git 提交推送后工作树干净；原本地工作台的数据、身份和模型设置保持，服务健康并能打开模型配置；网站两篇新文图像可见、源码链接固定且系列顺序正确。执行进度与证据在本节追加。
+
+文档与图已完成：README 补齐模型管理入口和阶段边界，C4 图源/导出、31 张实现图、第二版讲解与历史页面提示同步。`make build`、`make verify-delivery verify-materials`、架构文档检查通过；375 项准备材料检查、213 个文档链接通过，图册无页面异常或移动端溢出。独立审查 `.local/release-closeout-20261020/documentation-review.json` 通过，两处过度保证措辞已修正。代码与对应契约、测试、迁移及实施文档已提交为 `a166e95`。
+
+本地更新先备份原业务库，沿原运行目录、身份、模型 profile 和 `docs/sources/analysis` 合成快照启动。初次遗漏原来源目录触发平台一致性拒绝，核对原启动记录和来源指纹后已恢复，未重建业务库或更换身份。健康与浏览器结果在收尾目录分别记录，不发送新增付费试用消息。
+
+## 已完成：超级管理员模型配置（2026-10-20）
+
+用户确认实现根本的模型接入配置，不仅管理已接入模型的可选列表。沿用dev_co；当前分支`codex/analysis-capabilities`，保留全部既有未提交工作。上一增量I2-AGENT-RELIABILITY仍有真实模型语义缺口，保持未完成；原验收与证据见下方历史记录和`docs/reviews/dogfood-reliability-review.json`，本轮不将它算作通过。
+
+本轮按当前空间隔离，现有可信超级维护者身份显式获得模型配置管理操作；普通用户仅获取启用模型的公开展示信息。管理页支持服务名称/供应商/协议/地址/API Key及模型ID/展示名/思考档位/上下文和输出限制/计价信息/启停/默认。首批协议为Pi1.3原生OpenAI Chat Completions、OpenAI Responses、Anthropic Messages；兼容端点可配置非内置Model ID。密钥由后端加密，读取只返已设置状态；配置版本与消息模型快照分开，旧消息沿原版本，停用阻断以后发送但不撤销已在途请求。固定模型协议才需要代码适配，不接受浏览器任意代码/请求头或Agent自行改模型。
+
+契约调整：内部ReserveModelCall原固定输出枚举（例如32769被拒绝）改为与管理员可配置范围一致的有界整数；宿主仍要求与本消息冻结上限完全相等。旧非法32769契约用例改为超出131072的131073负例，并新增配置档位/24次约束/密钥不出管理响应的用例。ModelSelection中的未知逻辑ID/Pro-low形状不再由JSON Schema写死，实际目录和旧profile继续在宿主业务边界拒绝不支持的选择，原对应契约正反例已调整；此变更服务于用户已确认的多模型能力配置，不放宽旧ModelProfile分支或消息许可校验。
+
+实际Responses工具回合暴露旧边界假设：Pi原生工具ID是`call_id|item_id`，原64字符字母数字Schema拒绝，导致工具未落账、交付message_pending。将内部工具ID单独作为最长512字符的无空白不透明标识保存，工具账本扩容并使用区分大小写的排序；保留完整SDK身份而不截断/重编码，既有operation_id与重放规则不变。新增复合ID契约、原生协议工具回合和恢复验收。
+
+成功标准：页面创建一个非DeepSeek模型后可立即选用，在真实Pi会话经本地协议服务完成工具回合；跨用户拒绝、密钥不泄露、并发编辑不覆盖、停用不回落mock/另一模型、恢复仍保留原模型和预算。使用合成端点及隔离数据库，无付费调用。以ring现有锁定版本提供凭据加密、undici现有锁定版本提供受控DNS连接（提升为直接依赖），不复制密码算法或模型流解析器。
+
+工程检查：当前531条同源契约、Rust fmt/clippy、TypeScript、Web构建和架构/锁序检查通过（`.local/checks/model-configuration-required.log`）；新管理配置完整流程通过，包含实际三协议Pi工具回合、权限/密钥/版本边界和浏览器操作，共13次本地请求、0官方请求（`.local/checks/model-configuration-runtime.log`）。独立审查确认并修复种子Flash/Pro配置与密钥未冻结、legacy改绑后检查错服务、off与推理能力混淆、跨账户签名复用、Anthropic档位降级、SDK扩大输出cap等问题。独立审查与四组正式验收已通过，完成收据见本节收尾记录。
+
+审查修复进展：上述边界已实现，模型配置显式保存reasoning_supported，Anthropic显式区分budget/adaptive；Pi目录中的Claude原生隐式工具占位和fallback同时关闭，保留受控业务工具与冻结模型身份。目录模型off/high、未知模型adaptive档位、跨服务/密钥修订签名隔离和实际输出cap已通过零网络载荷验证；三协议缓存usage、缺失usage和503分类共9次本地请求通过。Rust跨空间与seed密钥轮换/逻辑模型改绑/原服务停用测试通过；完整管理页面流程通过。目视截图发现本页继承全局header固定高度导致窄屏重叠，局部重置后已修复；下拉框补明确可访问名称。Responses原生复合工具ID的取消恢复专项通过，原消息、预算、密钥、模型和operation身份均保持。独立审查已确认Pi ModelRuntime注册表按实例隔离，同服务并发会话不共享运行许可闭包。
+
+验收装配说明：capture夹具改为先启动合成协议服务，再把同一合成端点与凭据传给API，避免新密钥封存边界仍依赖测试主进程环境；启动夹具共用自身隔离主密钥。界面模型标签从旧Flash/Pro简称改为完整的管理员展示名，启动断言对应改为DeepSeek Flash/Pro。恢复夹具固定“工具回执→取消→恢复→回答”脚本，避免把宿主恢复提示误作另一个新问题；原严格operation不变断言保留，并追加原function_call_output实际交付校验。原浏览器标签与测试装配失败分别保留在`.local/checks/model-configuration/browser-label-before.json`、`model-configuration/recovery-environment-before.json`和`model-configuration-recovery-fixture-before.log`，不能以这些失败推断产品幂等失效。上述装配修改后的完整回归和最终验收均已通过。
 
 
-## 当前交付：提交推送与本地真实试用恢复（2026-10-19）
+错误边界收尾：已复现管理接口实际返回的四个错误码被Web的AppError验证拒绝（`invalid_model_endpoint`、`model_credential_required`、`model_secret_unavailable`、`model_unavailable`），原失败保留为`.local/checks/model-configuration/app-error-before.json`。同源Schema补齐错误码及Rust/TypeScript往返验证，完整管理流程新增实际拒绝的契约检查及浏览器地址/缺密钥提示、草稿保留和价格换算断言。实际输出cap拒绝保留`model_output_limit`安全码到交付日志，不改变发送拒绝或补正规则。 新建表单的HTML必填校验本来会拦下空Key，初版新增浏览器断言错误地等待服务端拒绝；失败保留于`.local/checks/model-configuration/browser-required-before.log`及`.txt`。改用真实“编辑服务地址但未重新提供Key”流程验证后端拒绝与具体提示；新建缺Key的直接API负例仍保留，未移除页面必填约束。
+
+兼容回归中，原澄清夹具在第九轮之前遇到无工具请求并失败；原报告/日志保留为`.local/checks/model-configuration/clarification-before.json`与`clarification-before.log`。夹具原先把每个模型请求都当作业务工具回合，未覆盖Pi原生摘要。新增只接受SDK摘要标识及conversation封装的独立响应分支，保留原业务脚本和全部断言，摘要计入原账本且不消费业务步骤；不关闭压缩或扩大请求上限。随后实际请求证实Pi还使用`generateTurnPrefixSummary`的`# Conversation`格式；按锁定SDK源码支持普通摘要和轮次前缀摘要两种封装，system标识仍必需。中间失败保留为`.local/checks/model-configuration/clarification-split-prefix-before.log`，未更改业务预期。完整澄清回归已通过：13组、9轮、35次本地调用（含2次Pi原生摘要），最大请求80673B，原消息账本结清；0官方请求。证据为`.local/checks/model-configuration-clarification.log`及`clarification-summary-requests.json`，独立审查已核对夹具未放宽业务标准。
+
+本轮回归完成：原模型选择36次本地请求、原生压缩29次请求/15次摘要/最大65188B、正式启动6次、旧provider13次、最终回答12次均通过；对应`.local/checks/model-configuration-{selection,compaction,startup,legacy-provider,final-answer}.log`。新三协议能力与用量守卫9次本地请求、Pi桥接/检查点40轮、10项启动器单测，以及16项增量检查器和373项材料检查也通过。桌面/窄屏页面及编辑弹窗已目视核对。以上均为合成协议/平台验证，本轮没有官方模型调用；真实供应商和模型质量不在此证据范围。独立审查记录`docs/reviews/model-configuration-review.json`结论passed；随后`make verify-increment`实际执行四组验收全部exit0，前后范围指纹相同，收据为`.local/delivery/I2-MODEL-CONFIGURATION-result.json`。I2-MODEL-CONFIGURATION关闭；旧I2-AGENT-RELIABILITY及真实模型语义缺口仍保持未完成。本轮未提交推送，也未更新27173常驻服务。
+
+更新：2026-10-20。唯一活动项目目录：`~/work_space/data_agent`。
+
+## 当前修复：一般性根因与完整闭环（2026-10-20）
+
+最新用户要求重新独立核对全部问题并完成修复，已取代前一轮只读/不修产品的范围。沿用dev_co；基线`c9d0ced`、分支`codex/analysis-capabilities`，原README/试用包/CURRENT改动保留。当前修复范围以上方增量为准，原160项结果不反写。
+
+2026-10-20最新更正：用户明确测试不设累计调用次数和累计费用上限，每次用户交互仍按原设置。本轮剩余真实模型验收采用既有`budget_mode=request`，每消息24次、连续临时失败3次停止；摘要、重试、恢复及查询结果唤醒共用对应原消息额度。省略累计trial次数/费用字段，沿既有正常模式不设累计到期；无需修改产品预算实现，也不放宽单请求/权限/版本/幂等规则。继续使用Flash/high及合成资料，完成独立问题/部分回答与原完整趋势→贡献→正式解释两条流程，先保存实际请求和失败，再据证据修复；不为取得成功无限重复同一失败。旧有限trial及失败账本保留，新验证使用独立正常模式账本，不给旧查询转移预算。该决定取代此前48/128次及费用上限的建议，不包含提交推送、更新常驻服务或修改默认模型。
+
+历史授权（已用完）：用户曾同意一次DeepSeek Flash/high定向对照，合计最多24次实际模型调用、500000微美元，使用同一持久trial，保留预留及失败，不换trial补额、不改默认模型。先核对未定义规则、独立目标与逆序部分回答，有余量时再跑贡献草稿→明确执行→精确query_id结果唤醒短链；短链不能冒称原完整趋势到贡献流程复验。隔离合成环境保存实际provider请求及有序工具参数，排除凭据；该授权替代下文历史“等待费用答复”的状态。工程源码保持已验证版本，试验后按实际证据继续处理语义缺口。
+
+高档对照已到上限停止：24次实际调用（含Pi原生摘要）、账本175317微美元、预留0；实际载荷确认`thinking=enabled/reasoning_effort=high`。未定义规则样本保留未知，贡献草稿含差额/合计/比例；独立目标仍混合分母和分子提问，部分回答后关闭复合题再新增分子题，未丢未决事项且未写SQL，但问题记录不符合独立可答契约。贡献执行已排队，整次trial上限耗尽，未完成平台结果/自动解释，不能把SQL改善视作ISS-12通过。原始报告`.local/checks/reliability-flash-high-comparison/report.json`及请求保留；默认模型和原服务不变，不追加付费抽样。
+
+新证实的一般性编排缺口：`execute_query`已明确指向同一本人的具体查询、版本和完整本轮原话，却仍要求单独`route`重复声明同一目标，真实high执行为此经历拒绝→route→重试。实施范围仅在本消息尚无任务关联时，将该目标关联与确认放同一事务；已有归属必须包含目标，多目标先分别登记，保留route到A后不能直接执行B的负例，复用现有业务规则；任一拒绝不能残留新增关联，其他pending/failed消息、澄清、来源、版本、原预算和unknown身份保持。系统设计第15/19.5/19.6节及Node工具说明同步；不是从自然语言自动猜测目标，也不增加执行授权。此处替代旧测试对“仅因本条未route而拒绝”的期待，新增直接执行与失败回滚/其他消息阻塞负例；原否定、外部资料、系统输入、版本、未知和并发边界保留。后续仅本地工程验证与独立审查，不重跑已用满trial。
+
+第二处契约缺口：实际high的已有任务revise因省略goal被参数校验拒绝，补传原目标后才成功。analysis存储本已支持省略/空目标时保留原目标和authority；当前将同源Schema改为仅新建任务分支强制goal，已有任务可省略，补创建缺失拒绝、修订/澄清/归属保留目标与来源的验证，不改变条件补丁、版本和问题ID规则。旧必填拒绝和原始high请求保留，不把这项易用性修复等同于复合问题语义已解决。 恢复夹具同步：原check-clarification以本消息未route触发message_pending，新契约下该输入应成功；改用过期草稿版本触发version_conflict，仍经真实Pi接收完整拒绝回执、get_query读取当前版本后执行同一查询，不删恢复流程或放宽授权。静态载荷透传样本同步错误类型。
+
+本轮追加修复的工程验证已完成：514条Rust/TypeScript同源契约、fmt/clippy/types/Web构建、18工具Schema、发送前体积守卫及锁序检查通过；澄清专项13组/9轮/33次本地协议请求、聊天执行专项12组完整exit0。独立审查亲自注入最终回执落账失败，确认授权、任务阶段、事件及归属整笔回滚；已确认unknown重复调用保留原身份/预算/尝试，不重新执行。证据分别为`.local/checks/reliability-analysis-update-goal-verification.json`、`execution-auto-route-evidence.json`、`execution-association-independent-review.json`及`execution-association-atomicity-review.json`，均0官方模型请求。新夹具的空库计数顺序和未消费结果回合造成的失败已保留并修正测试生命周期，原安全预期不变。
+
+64KiB补测曾真实失败：新增重复说明令固定请求增加766B，Pi已识别overflow并完成原生摘要，但仅剩摘要和当前工具组时，含固定工具/规则/启动事实的请求仍达65634B。原失败和逐请求诊断为`.local/checks/reliability-followup-native-compaction-before.log`与`compaction-payload-trace.jsonl`。将执行归属详则保留在工具说明、授权原则保留在系统提示，删除重复goal描述，固定开销减少529B；没有改Schema约束、64KiB、用户输入、工具结果、压缩实现或次数限制。原完整fixture复跑通过：29次本地调用、15次Pi原生摘要、最大65185B，七条消息各保持原12次上限且账本全结算；不是摘要效率提升，也不保证任意固定输入都能放进64KiB。独立记录为`.local/checks/reliability-static-context-review.json`，日志为`.local/checks/reliability-followup-native-compaction.log`。后续代码/契约/载荷/锁序检查均在这次去重后完成。
+
+当前真实验证已补齐：`.local/checks/reliability-flash-high-remaining/report.json`及`reliability-flash-high-contribution-continuation/report.json`保存相同当前源码、同一正常模式trial下的独立问题两轮、原趋势→贡献五轮和原B07普通歧义一轮。41次实际调用全部结算、302471微美元、预留0；8个真人消息scope最高7/24，结果唤醒共用原执行scope，累计调用/费用/到期上限实际均为NULL。新构建、声明及16条检查器测试通过；默认模型和27173常驻服务未变。汇总为`.local/checks/reliability-request-budget-verification.json`。
+
+当前剩余：本次普通歧义题自主澄清且没有SQL；部分回答也未丢未决决定或新增授权。但复购首轮仍将可独立组合的分子/分母合为一题，次轮仅答分母便将旧复合ID标resolved再建分子题，不符合独立可答与完整回答才关闭的约定。原完整贡献链实际金额/比例和SQL输出一致，没有自行补算缺失环比；原生成SQL合计占比却固定100.0，零总增量与空数据的SQLite内存反例均错误。正式解释还混淆已计入快照的退款与未来快照变化，并无依据判断“不是单一渠道异常拉动”；普通答复仍暴露内部ID/版本。实际provider请求和工具回执已保存，不能归因于本次规则漏给、累计预算中止或结果未交付；也不据此声称已排除全部接入/模型因素。独立审读为`.local/checks/reliability-high-clarification-semantic-review.json`及`reliability-flash-high-remaining/trend-contribution-review.json`。增量保持active、整体审查changes_required、完成证据null。
+
+验收包装器修正：原观察“部分回答后开放问题数减一”失败，实质是关闭复合题后另建未答分子题；原问题状态不准确仍作为缺陷，但数量不能证明丢条件。贡献第3轮自主保存未执行的环比补算稿，第4轮后有两份待执行稿，原“全会话唯一草稿、总查询数为2”的机械假设阻断第5条。产品允许额外调查及独立草稿；保留该失败，按第4轮与第3轮查询差集定位唯一新贡献稿，在原数据库、trial、会话和平台目录续发尚未发送的第5条，并等待精确query_id结果唤醒；原补算稿仍未执行。没有重跑前四轮或修改原SQL来取巧通过。生成SQL的零分母反例另存`contribution-boundary-probe.json`，0模型/0MySQL。
+
+本次Pro对照授权（执行已完成）：用户明确允许DeepSeek Pro/high同题对照，使用已准备并审查的`.local/checks/run-reliability-pro-high-comparison.mjs`，仅含原独立澄清2句与趋势贡献5句。对照使用独立数据库和正常request账本，保留原输入、资料、工具及每消息24次/连续临时失败3次规则，不设测试累计调用/费用门槛，不改默认模型或常驻服务；这份明确授权替代此前等待Pro选择的状态。完整保存实际请求与失败，独立审读澄清、SQL边界和正式解释；不盲目重复抽样。原48次/0.50美元与128次/5美元建议已被用户更正取代；未提交推送。
+
+Pro/high原两条流程7句已完成：累计35次实际调用、1177848微美元、预留0。主报告保留编译拒绝稿导致包装器误判“新草稿不唯一”的失败；沿原数据库、trial、会话和平台目录仅续发未发送第5句，以编译通过且待确认的新稿定位，未重抽样。两轮独立澄清本次保持独立ID、只关闭已回答分母，未回答问题原样开放；原趋势与贡献正式答复仍出现SQL/宿主统计未返回的差值、比例和单位换算，以及无依据的快照解释，不能据此宣布全部模型质量修复。原报告及续跑分别为`.local/checks/reliability-pro-high-comparison/report.json`和`reliability-pro-high-continuation/report.json`；完整独立审读为该目录的clarification-review.json（仅两轮样本通过）和trend-contribution-review.json（changes_required）；实际关键主请求均保留数字来源与依据限制，未发生结果删列。
+
+新确认接入缺口与本次范围：Pro结果唤醒同一响应同时读取同一query的rows与statistics，前者成功扩展共享run的query_results，后者持有先前快照并被严格核验为stale_context；正常Worker收尾，非暂停测试伪象。实际回执和源码自冲突路径一致，日志未保存精确事务交错；本地真实Pi customTools受控边界回归已确定复现并发重叠。仅给宿主工具声明Pi1.3原生executionMode=sequential并修正“Pi可能并行”的说明，不加调度器、不改变assert_snapshot或操作/预算身份。基础建任务工具统一相同边界约定，不宣称在其路径复现同一错误。允许同一模型响应合批，工具耗时由并发最大值变求和；不新增模型轮次，不限制不同会话或后台查询。验收绑定REL-TOOL-SERIALIZATION/REL-RESULT-READING，原失败和真实语义缺口保持；付费同题对照已完成，本次修复只做本地工程验证。
+
+新增顺序执行修复验证完成：旧定义下4项真实Pi SDK回归均失败，新定义下4项通过且独立重跑一致；同批rows/statistics、读写混批、基础任务写入、取消后不启动后续工具均覆盖。真实Rust/MySQL结果读取7项、上下文依赖5项、任务宿主来源6组、TypeScript、18工具实际Schema、请求体守卫、Pi兼容回归均完整exit0。原64KiB压缩专项仍为29次本地调用/15次原生摘要，最大65188B，撤权负例保持，0官方模型请求。限定审查为`.local/checks/reliability-tool-serialization-review.json`；完整分项日志和源码指纹由`.local/checks/reliability-sequential-verification.json`汇总。受控SDK执行接缝与真实Rust边界分别证明，不冒称完整MySQL并发重放；取消只保证未开始的后续工具不进入，不宣称当前HTTP立即停止或已提交业务回滚。
+
+当前准确结论与下一步：已证实接入/事务修复的上述分项通过；Pro澄清仅本次两轮样本改善，数字来源、生成SQL零分母/空结果及解释忠实性仍是未关闭的真实质量问题。关键正式请求已经交付完整系统限制及实际结果，当前没有第二个可证实的小范围接入根因。不得把更贵模型、手工改个例SQL、删掉样例资料或增加提示文字当成已解决；应在具体可验证的回答来源方案下继续处理，涉及收紧自由回答输出方式时明确产品取舍。现有聊天正文不具备逐数字结构化校验，figures保护不能扩称整段回答保证；整体仍active/changes_required/evidence=null。`make verify-increment`本次exit2，因未有整体通过审查而未执行统一验收，日志`reliability-sequential-increment.log`保留。声明/16条检查器测试/369项资料检查通过；没有提交、推送或更新默认服务。
+
+执行与澄清：分开真实版本冲突、等待澄清及非活动任务；提供已鉴权的状态/恢复回执，明确拒绝允许修正后续做，unknown保持原身份。独立目标分别建任务，同一目标内独立问题有各自ID；只解决实际已回答项。模型答复不能反向授予执行权。
+
+依据与报告：核对原文支持范围、实际计算列与执行状态；不以重复提示文字代替行为验证。历史依据可显式读取并保存原task/condition_version快照，报告容器可组合同一本人会话的多来源；每份来源仍独立校验原条件、查询和依赖，任一来源失效整份隐藏。该能力补齐由本轮“全部修复”的授权覆盖，不删除原版本守卫。
+
+知识与界面：手工创建/编辑显式业务域，所有对象和文档片段可维护；不继承关联域。资料选择器提供后页、去重、错误重试及异步回执隔离。另核实Z05阅读位置疑点。工程版本推进和脆弱提示短语断言同步修正，保留真实冲突负例与正式答复持久化验证。
+
+验收与要求变更：历史依据原测试“旧来源不能保存到新容器”拆为“旧容器版本仍拒绝；显式原来源版本在权限/依赖有效时允许”；依据为组合报告的用户目标，原来源身份和失效政策不变。负责人同步fixture从固定2/3改为各来源实际版本+1/+2，仍验证同版本改内容冲突；最终答复测试取消无关措辞精确匹配，以原正式内容/刷新行为为准。澄清测试三处正确版本但等待问题从version_conflict改为waiting_clarification，重复解决从version_conflict改为clarification_not_open；拒绝行为保持，依据为实际状态而非模型措辞。原失败记录保留，新增工程检查与真实模型质量分别报告。
+
+新增根因复核：get_query的query嵌套回执没有撤下工作区旧查询快照，现按真实结构更新并给明确状态释义。拒绝回执完整recovery透传至模型。历史读取混入当前问题，以及当前条件移除引用后旧问题正文失去校验，均已建立独立反例；已按问题创建条件版本和目标来源版本覆盖启动、读取、目录及工具成功/重放回执。新goal只在实际文本改变时重绑，legacy NULL来源保守核验全部旧依赖；重新调查后实际改写可建立精确来源。模型实际工具schema注释裁剪曾误删业务title字段，已修正并新增实际投影契约测试。
+
+真实Flash/off首个有效定向样本仍自动采用歧义口径，失败证据`.local/checks/reliability-flash-samples/report.json`保留，不算修复通过。补充可选semantic_resolution作为向后兼容的口径决策：模型说明解释、依据和未决差异；宿主拒绝已声明未决或伪造本轮用户引用，并在任何旧稿失效前拒绝。此字段不授予执行权，旧调用可省略；真实引用不证明语义充分，仍需真实样本验证，不新增第二模型循环。
+
+验收变更补记：原native-compaction协议fixture的trial_call_limit=24覆盖7条用户消息，原每消息request_call_limit=12；此前恰好24调用已用满，新增工具契约导致累计摘要请求耗尽，不能推断单消息违反产品24次。经独立审查，将仅此模拟试验累计上限改48，逐request新增issued_calls<=12、合计与provider调用/试验账本一致且预留0的断言。64KiB、完整工具、24轮初始历史、6轮续接、280条短历史和撤权负例不变；正式配置与原试用账本不变。实际调用/摘要增量如实报告，不声称原24次效率保持。
+
+真实模型追查补记：`reliability-flash-semantic/report.json`确认双SQL直接分别授权提交、未定义公式留缺口、指定资料未找到保持范围，但歧义问题仍只文字提问而未登记；原失败保留。把持久澄清规则归拢到交付前核对后，`reliability-flash-clarification/report.json`的原问题→解释不采用→明确采用存稿三轮，以及独立目标/逆序仅答分母两个回合的控制行为均通过（20次、121185微美元、预留0）。逐句审读仍发现未调查即过度澄清、候选下单/付款含义漂移，以及从未定义状态关系推禁止性结论，不能把控制状态通过说成全部语义质量通过。`reliability-real-sample-audit.json`保存追加审读，后续仍按一般规则修复，不针对样例编答案。
+
+贡献计算原五条消息复跑实际SQL已含总差额与贡献比例，执行结果为app 11000/52.38%、web 6000/28.57%、store 4000/19.05%，来源为合成平台实际查询。首个探针提前清理了尚未启动完成的结果唤醒，`reliability-flash-contribution/report.json`的passed标志只能说明前五次观察，不能证明最终解释完整；审读记录已明确降级为partial并计入未结算预留。探针需等待明确对应query_id的结果唤醒及dispatch结束，不扩充产品等待或预算。
+
+新增兼容根因：HEAD依赖格式原已为4，新任务正文来源校验不能继续接纳旧4检查点；正在升为5并验证新消息重建、同一未完成输入安全拒绝，保持原操作和预算，不换身份重做unknown。Worker对该拒绝误记retry_exhausted也同步核对准确错误分类。
+
+验收夹具修正：`check-request-context`保留原0/100/900/950四档，增加由旧估算公式及原61440提前压缩阈值推导的最大历史边界。新工具体积使原900档已被旧检查判超限，原固定档跳过低估窗口；新样本旧估算61429B、真实Pi请求69737B、新估算77451B，仍证明64KiB真实守卫在发送与预算前拒绝，网络/宿主调用0。未用新估算器或实际输出反写通过预期。
+
+追加独立反例：`.local/checks/reliability-task-text-unattributed-source-before.json`证明当前正文保护还依赖模型填写condition refs，遗漏时知识和记忆内容可在撤权重建后的第二轮再次出现。用户输入不含来源标记，逐字用户目标是合法对照。修复采用既有schema5 authority格式，在任务目标/问题写入时由宿主自动绑定已观察完整依赖，覆盖知识/来源/记忆/Skill/查询结果；仅真人完整本条输入的逐字目标可免无关来源；旧无完整来源正文持续隐藏，原数据/状态/操作保留，实际合法改写可恢复。该修复正在实现，并同步覆盖condition_patch中notes/metric/filters等固定字段及报告带出的历史条件，不能换字段洗掉来源；独立审查已改changes_required，旧passed记录不能关闭本增量。
+
+再次独立复核确认同一来源遗漏延伸到依据正文、报告标题、SQL说明/参数，以及builtin记忆与Skill草稿：资料先被宿主记录为已读，模型却可把正文保存到refs为空或只列另一有效资料的对象；原来源停用后，另轮/新会话再读取仍会回流。新反例为`.local/checks/reliability-{evidence-authority-finding,query-source,memory-source}-before.json`；第一份memory探针误用了不合法参数，修正探针后才实证，原失败保留。正在统一以私有持久来源字段保存宿主完整依赖，并分别覆盖读取、列表、重放、确认、派生和复制；查询失效只投影控制状态，取消/unknown查证保留。直接Skill选用与派生正文的来源Skill分开核验，后者不强迫接收会话再次选用原Skill；来源查询按本人及原结果身份鉴权，不能因跨会话复用放宽权限。schema5尚未发布到用户常驻服务，本轮统一完善并重新验收。
+
+口径引用护栏补查：新增的semantic_resolution曾只验证user_quote是本轮用户文本的子串，可能把“不要按订单数计算”裁成“按订单数计算”。改为与宿主绑定的真实用户完整消息一致，保留否定、前提和例外；结果唤醒不属于真人选择。对应正例由短分句改为完整原话，新增短分句/否定截取/系统输入负例；旧无此可选字段的调用继续兼容，且完整引用仍不证明模型对语义的理解正确。
+
+真实质量未关闭：六段提示合并后未定义正向规则的反例改善，但独立问题仍有过度澄清、复合候选/重复新题、未保存的额外提问及默认采用说法；完整贡献链29次Flash/off、178600微美元、预留0，已正确等待原query_id的结果唤醒，SQL差额与合计正确，但SQL缺占比、文字仍说“约一半”，趋势阶段仍自行补环比与合计。`.local/checks/reliability-flash-{grounding,independent-questions,contribution-complete}/report.json`保留这些真实失败，不能因工程回归或脚本流程passed而称语义修复完。已停止重复off抽样；后续一次Flash/high的24调用/0.50美元对照已获准并完成，结果及剩余缺口以上方最新记录为准，默认配置未改。
+
+重新交叉审查补充：跨会话查询来源必须核对原会话空间/删除状态及其私有来源闭包；request_query外部编译和旧稿失效前先核完整来源；当前会话仍有效时，旧对象正文失效属于可收尾的明确拒绝，不能遗留prepared工具。当前HTTP任务快照同步隐藏失效目标，记忆控制事件只发送标识和状态；系统结果消息不能授权保存、修改或停用记忆。资产索引检查另发现删除/停用控制被正文校验阻断的回归，正在修复并验证索引清除，无新增付费调用。
+
+根因总览见 [本轮独立复核](reviews/dogfood-root-causes-20261020.md)，逐项保留原发现、共用原因及真实模型未关闭项。统一构建、488条Rust/TypeScript同源契约、fmt/clippy/types/Web构建已通过；首次clippy暴露的新增超参通过具名写入身份和已核验来源结构收敛，没有关闭lint。
+
+浏览器补证：查询正文失效后撤下SQL/参数/已载和迟到结果，停止失败可见并能重试，停止/刷新/窄屏通过；生成Skill失效后隐藏、可管理、空表单完整重写再启用/刷新通过，均为真实Rust与浏览器加合成平台、0官方模型请求。资产浏览器首两次失败来自驱动盲点：复用同一记录时details仍已展开，脚本再次点击反而折叠；已复用现有expandAsset检查实际状态，原失败日志保留，未放宽业务断言。
+
+架构回查发现旧资产来源判别曾从assets/store直接JOIN runtime私有tool_calls，检查器正确拒绝；已改为personal_assets用例组合两个模块的公开接口，按精确资产版本只补NULL来源元数据，不改检查器或扩大表访问白名单。统一构建、架构检查与7条架构测试通过；资产7组、Skill3组、Mem0清理1组、查询8组、宿主任务6组、结果任务2组及任务正文9组专项均完整通过。资产新增“读v1再改v2不自依赖且保留上游”及删除后的同操作HTTP回执重放验证；真实模型质量仍单独保持未关闭。
+
+重新审读真实失败轨迹又发现多题启动快照只交首题、却未标明还有未答题。新增二题续接断言在修前binary以has_more_clarifications缺失精确失败；现复用首题预览加省略标记，正式读取沿既有8题分页，更新回执同步注明首题不是全集，不增加问卷流程或自动关闭问题。最终新构建的实际Pi九题补读及剩余工程回归已完整通过；资料来源失效的context_complete标记仍由后续保护设置。NULL分组反例及残余语义证据限制见`.local/checks/reliability-semantic-root-audit.json`。
+
+最终工程回归完成：`.local/checks/reliability-remaining-1792429638045055000/report.json`的17组命令全部exit0、无超时，运行前后范围指纹一致；覆盖澄清、聊天执行、报告UI、业务域、资料分页、正式答复、provider、Pi原生压缩、口径守卫、阅读位置、重启恢复、负责人同步/成员/目录、架构锁序、上下文依赖及完整库测试。正式隔离fixture入口`check-agent-library.mjs`的128项Rust测试全部通过；此前直接cargo test因缺DB/seed而失败的5项在此入口得到完整验证，原失败日志保留。488条同源契约、最终fmt/clippy/types/Web构建、18工具Schema及请求体发送前守卫通过；64KiB压力场景28次本地协议调用/14次Pi原生摘要，最大65373B，各请求预算不变，不声称摘要效率与早期夹具相同。以上工程回归0官方模型请求，不代表真实模型正确率。
+
+[公开交叉审查](reviews/dogfood-reliability-review.json)逐项列非实施审查者及运行证据，工程分项通过、整体仍为changes_required；真实模型的ISS-01/02/10/12及其因果区分保留未关闭。后续Flash/high对照已在获准的24次上限停止，实际请求和有序工具参数已保留。旧off运行缺完整请求、新high也只有有限样本，不能声称残余失败唯一来自模型能力或思考档位。
+
+最终声明与材料检查在追加修复后通过（369项材料检查、16条声明检查器测试）；最新`make verify-increment`仍实际返回“缺少已通过的审查记录”，因为整体审查待真实语义闭环，没有把分项工程通过改写成整体passed。最新门禁日志为`.local/checks/reliability-followup-increment.log`，此前日志保留，增量active、review pending、正式完成证据null。
+
+已证实工程根因修复及工程回归完成，真实语义验收尚未完成；没有提交推送、服务更新或整体通过结论。已证实根因入口为`.local/dogfood-runs/flash-r1/INDEPENDENT_TRIAGE.md`，其“只读/待讨论”描述是此前时点，以上方最新决定为准。
+
+## 历史复核：flash-r1发现及修复必要性（2026-10-19）
+
+用户本轮要求确认试用发现、区分哪些需要修复，尚未启动修复增量。复核报告、相关原始工具轨迹、持久状态、源码与设计；独立重算160项为138 pass/14 fail/5 partial/1环境阻塞/2授权阻塞，未重跑全套或把计数当模型准确率。结论与证据入口为`.local/dogfood-runs/flash-r1/INDEPENDENT_TRIAGE.md`，不改原results/attempts或失败状态。
+
+优先修执行回执真实性（ISS-06）、明确拒绝后的恢复及错误分类（ISS-03/04/07）、多目标与澄清归属（ISS-02）；口径/未定义规则/SQL计算忠实性（ISS-01/10/12）、指定资料定位与手工对象显式业务域闭环（ISS-11）、KnowledgePicker后页入口（E11）也保留在修复清单。Z02所传版本正确，实际waiting_clarification被统一报version_conflict；Z16目标没有自身业务域，按当前显式域规则被过滤，不能据此判精确名称排序有错。原始轨迹还更正R13的get_query发生轮次与Z02拒绝次数。
+
+ISS-08/09是合理组合报告需求与现有单任务/当前条件契约的能力差距，守卫拒绝正确；推荐显式保留每组task/条件/查询身份的多来源报告，需另定契约和来源失效政策，不能删版本/权限检查。ISS-05属于工程夹具版本及提示短语断言漂移，需修测试再补行为证据。Pro/向量阻塞、Z09缺图分支、依赖改版后旧报告隐藏不直接算代码缺陷。本轮未修改产品或测试、未新增付费请求、未提交推送、未操作服务，仅保存复核记录与本入口。
+
+## 当前执行：flash-r1 全功能 Dogfood（已完成本轮执行与结论收尾，保留缺陷）
+
+用户再次要求继续试用，本轮按原授权持续补测并完成结论收尾。最终账本为138 pass、14 fail、5 partial、1 blocked_environment、2 blocked_authorization、0 not_run、0 inconclusive；以`.local/dogfood-runs/flash-r1/results.json`为准。Z08/Z10、原四项待定、登录重登、记忆跨会话召回、字段/指标/关联结构、旧建议同ID修订保存、running状态刷新恢复、窄屏与迟到回执等已实测补齐；六组浏览器及索引并发/千表混合检索共八组原专项完整exit0。报告为本轮`REPORT.md`，覆盖矩阵`COVERAGE.md`，逐项审计`evidence/final-ledger-audit.json`；43主题均有证据不等于所有子分支通过。
+
+问题记录已核对实际工具参数与源码：ISS-08实际为跨任务依据组合被报告守卫拒绝；ISS-09实际为条件版本1/2结果被合并保存，不能归因为未读rows视图；更正页为`issues/ISS-08-AUDIT.md`及`ISS-09-AUDIT.md`。Z01不完整双图报告由pass更正fail。新增ISS-10（长文补写未定义分子，Z12整体fail）、ISS-11（原句读错指定文档，明确ID变体防护另计）、ISS-12（贡献SQL未算比例而回复补算）；B35完整前置链重跑发现比例仍缺，保留失败不反复试到通过。
+
+恢复会话的操作失误已记录：case-z13-retry 保存案例时空结构表单覆盖丢失版本4结构条目，Z13R2 模型按正文+DDL 重写不受影响，C20 已重建结构（版本5）。前序误停原 27173 服务的恢复证据保持 `evidence/live-restoration.json`；本轮未再触碰原服务，五健康入口 200。
+
+E19原千表专项完整通过（1593.19秒；1204表/2408对象，首次索引561.45秒、两次丢collection重建；各阶段900秒不变），与当前同轮双空间scope专项分开支撑工程pass；协议hash向量、真实MySQL/Milvus，不是千表真实中文模型质量。五个partial具体为B18非off/Pro发送未授权、E11同一多选选择器跨页保留缺直接证据且控件无续页入口、E12/R18原工程夹具/提示短语漂移本轮不改测试、Z09原报告无图分支。A05当前UI词法环境vector_unconfigured仍blocked；R20/Z15真实Pro未授权仍blocked。没有产品/测试代码修复、Git提交或推送。
+
+收尾补证：Z13已恢复marker参数结构与当前依赖后完整跑原五消息，原39行执行因message_pending未恢复，过滤38行及私人报告成功；报告如实记原案无数值，Carol读取Bob报告404，案例改版后report.status=sources_unavailable且旧正文清空。执行回执另存`evidence/final-execution-recovery-traces.json`。运行快照2026-10-19T11:15Z：六健康200、合成源SHA一致、active_run=0、unknown/unsettled模型调用=0、预留0、原请求最大21/24且无超限；本轮隔离trial累计约7.0048美元（不含原27173或历史库），权限恢复、原unknown不清理重放。`make verify-delivery`声明及16条检查器测试通过，未运行null业务命令，delivery保持active/review pending，不能把评测已收尾等同业务通过。
+
+独立只读审查`evidence/independent-review.json`指出Z12、C20、E11、Z10四处过度判分：Z12整体改fail，E11改partial；C20同一案例取消后回读不变已补，Z10同一副本selected1/current2过期提示与重新选用、撤回平台权后真实forbidden已补，均保留具体直接证据。只读审查不冒称不可篡改验收；本轮失败不会靠改预期或移除用例变通过。后续应另立修复增量优先处理执行回执真实性、多任务归属、拒绝后恢复与跨任务/版本报告。
+
+独立复核已确认上述四项处理及最终160项计数一致，无仍需纠正的具体发现；复核范围不包含重新审查E19或全部160项，记录已保存。本轮执行与报告已收尾，服务保留供继续试用；业务delivery保持active表示失败/缺口未修复，不表示仍有试用脚本在后台运行。
+
+
+## 已完成资料准备：新版全功能Dogfood包（2026-10-19）
+
+用户要求制作新试用包交给其他Coding Agent，覆盖全部现有功能、Agent能力及复杂问题。本轮是资料准备，不是开发评测系统或执行评测；未修改产品、启动/停止既有服务、发起真实模型调用或提交推送。开工分支`codex/analysis-capabilities`、代码基线`c9d0ced`，工作区干净。
+
+资料入口为[新版试用包](dogfood/2026-10-19/README.md)及[可复制执行Prompt](dogfood/2026-10-19/AGENT_PROMPT.md)。共160项：旧120项、R01–R24定向回归、Z01–Z16复杂连续任务；43个覆盖主题见coverage。原120项冻结副本及SHA保留，只将DF1014命名前缀规范为run_prefix，原操作/SQL/日期/数值/expect逐字段核对不变。新增场景补充长结果分页/统计/单元格和依赖、开放澄清、相关性前三/候选上限、预填补读、最终答复、SDK1.3旧检查点/思考隔离/参数完整性、24/3及混合任务恢复。
+
+包内提供START、环境/角色与隔离说明、逐项JSON/Markdown、独立评分和18条参考SQL、合成输入fixture、160项全not_run结果模板、问题与HANDOFF模板；HTML可筛选、按run记笔记和导出。当前执行状态只在本记录；包内manifest是资料版本，模板不是已执行成绩。使用build.py按ID/分组读本批可降低其他Agent上下文，不必一次加载全书。
+
+准备证据：[资料校验](dogfood/2026-10-19/PREPARATION.md)。160唯一ID和43覆盖主题、依赖/脚本路径、原120项保留、6源指纹、18独立内存SQL及生成物一致性均通过；Playwright1440/390、筛选、命名笔记重开和160项导出通过，已查看两张截图，最终控制台0错误/警告。原始日志、截图、导出和无秘密本机环境引用保留`.local/dogfood-package-20261019/`，总核对记录为该目录`verification.json`；传递包为`DataAgent-Dogfood-20261019.zip`。ZIP只装材料和合成源，不含凭据、有效配置正文、原对话或业务数据库。
+
+本机快照仍为`http://127.0.0.1:27173/`、Flash/off、Mem0、词法；五个健康端点只读核对200。只有Alice/Bob启动证据，不能预设Carol角色/归属、Pro费用、混合向量、千表或第二空间已经准备。完整维护/角色/故障试用转本轮获准的隔离环境，保留当前用户服务。执行Prompt明确已有正常请求规则、权限和有限trial区别；文件本身不授权当前Agent花费，只有用户在执行会话明确采用后才按其范围执行。
+
+历史缺口B14第二查询、C19原39行执行、C22补录回读分别由R06/R07/R08加强，原案例不改写；M18旧unknown不重做。真实模型文字一致性、当前SDK实际语言质量和未接入能力仍未证明。下一动作由用户将执行Prompt交给其他Agent，先代表样本再按依赖分批；逐项保留pass/fail/partial/blocked/inconclusive/not_run，真实模型与工程证据分开。交付增量planned表示试用待执行，不表示本轮资料还没做好；null命令尚不具备自动业务关闭条件。
+
+## 历史交付：提交推送与本地真实试用恢复（2026-10-19）
 
 用户本轮明确授权提交、推送和更新本地服务，替代此前实施阶段“不提交推送或重启”的范围限制；没有需要先讨论才能修复的阻塞项。沿用分支`codex/analysis-capabilities`。`0958b69`提交Dogfood范围/口径/单位、执行反馈和输入框修复及文档，`8b8f01a`提交Pi稳定1.3.0及配套兼容，两批均已推送`origin`。本轮不修改上述产品代码。
 
@@ -2344,3 +2547,581 @@ I2本地合成MVP已经完成，Pi是唯一Agent循环。最终十项验收通�
 - 未参与实现者完成48组合内容、预算、三文件证据修正及最终范围审查。`docs/reviews/memory-extraction-comparison-review.json`结论passed，scope SHA c466fb650f3cd4e5e47c5c0985f613d4815bac4c7d85df10f176f698c46ebd1a。
 - `make verify-increment`六条命令均完整退出0，执行期间契约/输入/审查指纹不变；收据 `.local/delivery/I2-MEMORY-EXTRACTION-result.json`。包括Rust来源边界、评分、提交隔离、真实测量证据核验、既有知识工作流和代码质量。内容质量按16/18对16/18报告，未将验收命令通过当成100%正确。
 - CURRENT将本增量标记complete；旧I2-MVP、旧两轮记忆实验结果和未知预留保持历史原值。本轮完成用户授权的方案、局部修复、真实比较和独立复核；未接Mem0生产、未提交推送或部署。后续提高引用错误反馈和更大真实记忆池验证仅为建议，尚未启动。
+
+
+## 前一可靠性增量声明（未关闭，2026-10-20）
+
+```json
+{
+  "id": "I2-AGENT-RELIABILITY",
+  "phase": "I2",
+  "status": "active",
+  "goal": "修复flash-r1证实的执行/恢复、澄清归属、依据忠实性、知识维护/分页及历史多来源报告问题；沿持久正文到再次采用的完整路径修复宿主来源遗漏，保持原失败并独立验证一般性行为。 同批宿主工具复用Pi原生顺序执行，避免共享run来源清单自身冲突。",
+  "requirements": [
+    "C01",
+    "C02",
+    "C03",
+    "C04",
+    "C05",
+    "C06",
+    "C07",
+    "C08"
+  ],
+  "modules": [
+    "M01",
+    "M02",
+    "M03",
+    "M04",
+    "M05",
+    "M06",
+    "M07",
+    "M08",
+    "M09",
+    "M10",
+    "M11",
+    "M12"
+  ],
+  "allowed_paths": [
+    "apps/agent",
+    "apps/web",
+    "crates/data-agent",
+    "packages/contracts",
+    "tests/mvp",
+    "tests/contracts",
+    "tests/runtime",
+    "docs/CURRENT.md",
+    "docs/architecture",
+    "docs/semantic-retrieval-design.md",
+    "docs/reviews",
+    "README.md",
+    "migrations",
+    "apps/worker"
+  ],
+  "non_goals": [
+    "不修改原试用结果、独立答案或放宽断言以换取通过；不引入模型规划器、自然语言执行授权分类器或额外无界模型复核循环。",
+    "不提交推送或更新用户常驻服务；不扩充原trial预算、不重做unknown；Pro/向量/真实平台未验证不算产品缺陷或通过。"
+  ],
+  "invariants": [
+    "Pi1.3负责唯一Agent循环、恢复和压缩；每消息24次、连续临时失败3次；所有调用沿原持久预算。",
+    "权限、用户真实原话、任务/条件/SQL版本、幂等和未知回执由Rust校验；未答问题不自动同意。",
+    "历史来源保留原task/version/条件，报告容器与来源归属分离；同一本人会话可组合，任何来源失效仍整份隐藏。",
+    "手工业务域显式维护，不从关联表继承，不因查不到资料扩大用户范围；全部验证资料从零合成。",
+    "同一响应可合批发出独立工具；宿主工具按Pi原生sequential执行，不放宽authority快照校验；不同会话及后台查询继续独立。"
+  ],
+  "verification_inputs": [
+    "docs/CURRENT.md",
+    "README.md",
+    "apps/agent",
+    "apps/web/src",
+    "crates/data-agent/src",
+    "packages/contracts",
+    "tests/mvp",
+    "tests/contracts",
+    "tests/runtime",
+    "docs/architecture/implementation-design.md",
+    "migrations",
+    "apps/worker"
+  ],
+  "acceptance": [
+    {
+      "id": "REL-CONTRACT",
+      "requirements": [
+        "C01",
+        "C02",
+        "C03",
+        "C04",
+        "C05",
+        "C06",
+        "C07",
+        "C08"
+      ],
+      "expected": "同源契约正负例、类型、Rust规则和架构边界通过。",
+      "evidence_kind": "contract",
+      "command": [
+        "make",
+        "verify-contracts",
+        "verify-code",
+        "verify-architecture"
+      ],
+      "timeout_seconds": 1200
+    },
+    {
+      "id": "REL-CLARIFY",
+      "requirements": [
+        "C01",
+        "C03",
+        "C04"
+      ],
+      "expected": "独立澄清只解决指定ID；多题启动和更新回执明确首题预览不完整，实际Pi经既有分页补齐；已有任务省略goal保留原目标及来源，创建仍必填；等待/失效/版本准确区分，历史条件读取不授执行。",
+      "evidence_kind": "runtime",
+      "command": [
+        "node",
+        "tests/mvp/check-clarification.mjs"
+      ],
+      "timeout_seconds": 900
+    },
+    {
+      "id": "REL-EXECUTE",
+      "requirements": [
+        "C01",
+        "C03",
+        "C04"
+      ],
+      "expected": "未归属消息明确执行单一既有SQL时同事务登记目标和确认；拒绝不残留归属，既有目标限制、其他消息阻塞、多任务、重放、unknown和权限保持；真实Pi收到可操作恢复信息。",
+      "evidence_kind": "runtime",
+      "command": [
+        "node",
+        "tests/mvp/check-conversational-query.mjs"
+      ],
+      "timeout_seconds": 900
+    },
+    {
+      "id": "REL-EVIDENCE",
+      "requirements": [
+        "C02",
+        "C04",
+        "C05"
+      ],
+      "expected": "历史依据绑定原版本/查询/快照，错误来源与越权拒绝。",
+      "evidence_kind": "runtime",
+      "command": [
+        "node",
+        "tests/mvp/check-analysis-evidence.mjs"
+      ],
+      "timeout_seconds": 900
+    },
+    {
+      "id": "REL-REPORT",
+      "requirements": [
+        "C01",
+        "C02",
+        "C04",
+        "C05"
+      ],
+      "expected": "跨任务和版本组合报告逐源核验，任一来源失效整份隐藏，旧容器版本拒绝。",
+      "evidence_kind": "runtime",
+      "command": [
+        "node",
+        "tests/mvp/check-analysis-reports.mjs"
+      ],
+      "timeout_seconds": 900
+    },
+    {
+      "id": "REL-REPORT-UI",
+      "requirements": [
+        "C01",
+        "C04",
+        "C08"
+      ],
+      "expected": "报告来源条件和图表对应、刷新/窄屏/迟到回执/撤权保持。",
+      "evidence_kind": "runtime",
+      "command": [
+        "node",
+        "tests/mvp/check-analysis-reports-browser.mjs"
+      ],
+      "timeout_seconds": 900
+    },
+    {
+      "id": "REL-DOMAIN",
+      "requirements": [
+        "C02",
+        "C06",
+        "C07"
+      ],
+      "expected": "手工业务域创建编辑权限、版本、人工保护、显式空域与检索范围闭环。",
+      "evidence_kind": "runtime",
+      "command": [
+        "node",
+        "tests/mvp/check-business-domain-authoring.mjs"
+      ],
+      "timeout_seconds": 900
+    },
+    {
+      "id": "REL-PICKER",
+      "requirements": [
+        "C02",
+        "C06",
+        "C08"
+      ],
+      "expected": "真实后页选择与已选保留、去重、错误重试和迟到回执隔离。",
+      "evidence_kind": "runtime",
+      "command": [
+        "node",
+        "tests/mvp/check-knowledge-authoring-browser.mjs"
+      ],
+      "timeout_seconds": 900
+    },
+    {
+      "id": "REL-FINAL",
+      "requirements": [
+        "C01",
+        "C04"
+      ],
+      "expected": "正式答复独立完整、过程不成为正式结论；刷新及持久化一致。",
+      "evidence_kind": "runtime",
+      "command": [
+        "node",
+        "tests/mvp/check-final-answer.mjs"
+      ],
+      "timeout_seconds": 900
+    },
+    {
+      "id": "REL-PROVIDER",
+      "requirements": [
+        "C01",
+        "C03",
+        "C04"
+      ],
+      "expected": "受控provider真实收到工具事实和恢复提示；预算和持久会话行为保持。",
+      "evidence_kind": "runtime",
+      "command": [
+        "node",
+        "tests/mvp/check-data-provider.mjs"
+      ],
+      "timeout_seconds": 900
+    },
+    {
+      "id": "REL-COMPACT",
+      "requirements": [
+        "C01",
+        "C02",
+        "C03",
+        "C04",
+        "C05"
+      ],
+      "expected": "Pi原生轮内压缩/恢复、64KiB压力与原24次限制保持。",
+      "evidence_kind": "runtime",
+      "command": [
+        "node",
+        "tests/mvp/check-native-compaction.mjs"
+      ],
+      "timeout_seconds": 900
+    },
+    {
+      "id": "REL-TEXT-AUTHORITY",
+      "requirements": [
+        "C01",
+        "C02",
+        "C03"
+      ],
+      "expected": "当前/历史条件、未答问题与目标正文按真实来源绑定，撤权不经读/启动/目录/成功回执再泄露；合法新目标保持可见。",
+      "evidence_kind": "runtime",
+      "command": [
+        "node",
+        "tests/mvp/check-task-text-authority.mjs"
+      ],
+      "timeout_seconds": 900
+    },
+    {
+      "id": "REL-TOOL-SCHEMA",
+      "requirements": [
+        "C03",
+        "C04"
+      ],
+      "expected": "模型实际工具schema保留业务title字段，与同源正负例一致，不只检查源schema。",
+      "evidence_kind": "runtime",
+      "command": [
+        "node",
+        "tests/mvp/check-tool-schema.mjs"
+      ],
+      "timeout_seconds": 900
+    },
+    {
+      "id": "REL-CONTEXT",
+      "requirements": [
+        "C01",
+        "C02",
+        "C03",
+        "C04"
+      ],
+      "expected": "嵌套查询回执撤下过时启动状态，真实状态与完整恢复数据进入模型，稳定前缀与载荷预检保留。",
+      "evidence_kind": "runtime",
+      "command": [
+        "node",
+        "tests/mvp/check-request-context.mjs"
+      ],
+      "timeout_seconds": 900
+    },
+    {
+      "id": "REL-SEMANTIC-CHOICE",
+      "requirements": [
+        "C03",
+        "C04"
+      ],
+      "expected": "声明未决口径拒绝保存且旧稿不失效；真实原话、明确口径、旧参数兼容与幂等边界。",
+      "evidence_kind": "runtime",
+      "command": [
+        "node",
+        "tests/mvp/check-query-semantics.mjs"
+      ],
+      "timeout_seconds": 900
+    },
+    {
+      "id": "REL-READING",
+      "requirements": [
+        "C01",
+        "C08"
+      ],
+      "expected": "历史阅读时异步报告保存保持锚点/焦点/草稿，底部跟随和延迟报告读取返回保持。",
+      "evidence_kind": "runtime",
+      "command": [
+        "node",
+        "tests/mvp/check-report-reading-position-browser.mjs"
+      ],
+      "timeout_seconds": 900
+    },
+    {
+      "id": "REL-RECOVERY",
+      "requirements": [
+        "C01",
+        "C03",
+        "C04"
+      ],
+      "expected": "原Pi会话半轮恢复、unknown身份、取消混合任务和原预算保持。",
+      "evidence_kind": "runtime",
+      "command": [
+        "node",
+        "tests/mvp/check-recovery-continuation.mjs"
+      ],
+      "timeout_seconds": 900
+    },
+    {
+      "id": "REL-ROLE-SYNC",
+      "requirements": [
+        "C02",
+        "C06",
+        "C07"
+      ],
+      "expected": "真实来源版本推进及原同版本冲突负例保持；角色、目录和负责人规则一致。",
+      "evidence_kind": "runtime",
+      "command": [
+        "node",
+        "tests/mvp/check-semantic-role-boundaries.mjs",
+        "--case",
+        "sync"
+      ],
+      "timeout_seconds": 900
+    },
+    {
+      "id": "REL-ROLE-MEMBERS",
+      "requirements": [
+        "C02",
+        "C06",
+        "C07"
+      ],
+      "expected": "真实来源版本推进及原同版本冲突负例保持；角色、目录和负责人规则一致。",
+      "evidence_kind": "runtime",
+      "command": [
+        "node",
+        "tests/mvp/check-semantic-role-boundaries.mjs",
+        "--case",
+        "members"
+      ],
+      "timeout_seconds": 900
+    },
+    {
+      "id": "REL-ROLE-DIRECTORY",
+      "requirements": [
+        "C02",
+        "C06",
+        "C07"
+      ],
+      "expected": "真实来源版本推进及原同版本冲突负例保持；角色、目录和负责人规则一致。",
+      "evidence_kind": "runtime",
+      "command": [
+        "node",
+        "tests/mvp/check-semantic-role-boundaries.mjs",
+        "--case",
+        "directory"
+      ],
+      "timeout_seconds": 900
+    },
+    {
+      "id": "REL-HOST-SOURCES",
+      "requirements": [
+        "C01",
+        "C04",
+        "C05"
+      ],
+      "expected": "宿主完整记录实际来源；清引用、同文、无关改写与连续重建不洗来源，合法字段改写和真人原话保留。",
+      "evidence_kind": "runtime",
+      "command": [
+        "node",
+        "tests/mvp/check-task-host-authority.mjs"
+      ],
+      "timeout_seconds": 900
+    },
+    {
+      "id": "REL-QUERY-SOURCE-UI",
+      "requirements": [
+        "C01",
+        "C04",
+        "C05",
+        "C08"
+      ],
+      "expected": "查询来源失效隐藏SQL/参数/已载结果，旧结果迟到不复活；停止与刷新状态继续可用。",
+      "evidence_kind": "runtime",
+      "command": [
+        "node",
+        "tests/mvp/check-query-source-browser.mjs"
+      ],
+      "timeout_seconds": 900
+    },
+    {
+      "id": "REL-QUERY-SOURCES",
+      "requirements": [
+        "C01",
+        "C03",
+        "C04",
+        "C05"
+      ],
+      "expected": "查询正文完整来源覆盖读/列表/重放/首次提交；失效拒绝前不发送SQL或失效旧稿，unknown查证和取消保持。",
+      "evidence_kind": "runtime",
+      "command": [
+        "node",
+        "tests/mvp/check-query-text-authority.mjs"
+      ],
+      "timeout_seconds": 900
+    },
+    {
+      "id": "REL-REPORT-SOURCES",
+      "requirements": [
+        "C01",
+        "C02",
+        "C04",
+        "C05"
+      ],
+      "expected": "证据正文/报告标题按宿主完整来源保存；原条件、query来源闭包和真正人工重写共同核验。",
+      "evidence_kind": "runtime",
+      "command": [
+        "node",
+        "tests/mvp/check-report-text-authority.mjs"
+      ],
+      "timeout_seconds": 900
+    },
+    {
+      "id": "REL-ASSET-SOURCES",
+      "requirements": [
+        "C02",
+        "C03",
+        "C05"
+      ],
+      "expected": "生成记忆及资产保留完整字段来源；跨会话、旧NULL、同文/局部修改不洗来源，手工合法编辑可恢复。",
+      "evidence_kind": "runtime",
+      "command": [
+        "node",
+        "tests/mvp/check-asset-text-authority.mjs"
+      ],
+      "timeout_seconds": 900
+    },
+    {
+      "id": "REL-SKILL-SOURCES",
+      "requirements": [
+        "C02",
+        "C03",
+        "C05"
+      ],
+      "expected": "Skill草稿确认、选用、读取和公开副本保留完整来源；来源失效与原私密权限继续生效。",
+      "evidence_kind": "runtime",
+      "command": [
+        "node",
+        "tests/mvp/check-skill-text-authority.mjs"
+      ],
+      "timeout_seconds": 900
+    },
+    {
+      "id": "REL-ASSET-SOURCE-UI",
+      "requirements": [
+        "C05",
+        "C08"
+      ],
+      "expected": "来源失效资产仍可管理；空表单明确重写，完整新正文恢复且刷新/窄屏不带回旧来源。",
+      "evidence_kind": "runtime",
+      "command": [
+        "node",
+        "tests/mvp/check-asset-source-browser.mjs"
+      ],
+      "timeout_seconds": 900
+    },
+    {
+      "id": "REL-ASSET-DEPENDENCY-UI",
+      "requirements": [
+        "C05",
+        "C08"
+      ],
+      "expected": "人工资产仍能核对更新或明确移除失效依赖，权限/旧选择及取消编辑行为保持。",
+      "evidence_kind": "runtime",
+      "command": [
+        "node",
+        "tests/mvp/check-asset-dependencies-browser.mjs"
+      ],
+      "timeout_seconds": 900
+    },
+    {
+      "id": "REL-MEMORY-CLEANUP",
+      "requirements": [
+        "C03",
+        "C05"
+      ],
+      "expected": "有来源正文才可发送索引；停用/删除沿原作业身份发送无正文清除，临时失败重试不新增embedding且不换副作用身份。",
+      "evidence_kind": "runtime",
+      "command": [
+        "node",
+        "tests/mvp/check-memory-source-cleanup.mjs"
+      ],
+      "timeout_seconds": 900
+    },
+    {
+      "id": "REL-TASK-RESULT-SOURCES",
+      "requirements": [
+        "C01",
+        "C03",
+        "C04",
+        "C05"
+      ],
+      "expected": "真实查询结果唤醒派生目标和条件保留结果出处；跨轮/重建/平台未知与撤权不返旧正文，不以系统输入豁免来源。",
+      "evidence_kind": "runtime",
+      "command": [
+        "node",
+        "tests/mvp/check-task-result-authority.mjs"
+      ],
+      "timeout_seconds": 900
+    },
+    {
+      "id": "REL-TOOL-SERIALIZATION",
+      "requirements": [
+        "C03",
+        "C04",
+        "C05"
+      ],
+      "expected": "真实Pi customTools按模型批内顺序完成结果/统计及混合读写工具，不产生自身stale_context、不重复副作用；原生取消阻止后续工具进入。受控边界接缝与真实Rust验证分别记录。",
+      "evidence_kind": "runtime",
+      "command": [
+        "node",
+        "tests/runtime/check-tool-serialization.mjs"
+      ],
+      "timeout_seconds": 120
+    },
+    {
+      "id": "REL-RESULT-READING",
+      "requirements": [
+        "C03",
+        "C04",
+        "C05"
+      ],
+      "expected": "实际Rust结果与统计读取正确登记原run依赖，跨用户读取仍拒绝，已读结果过期仍拒绝模型预留，不重跑平台查询。",
+      "evidence_kind": "runtime",
+      "command": [
+        "node",
+        "tests/mvp/check-query-result-reading.mjs"
+      ],
+      "timeout_seconds": 900
+    }
+  ],
+  "review": {
+    "status": "pending",
+    "record": "docs/reviews/dogfood-reliability-review.json"
+  },
+  "evidence": null
+}
+```

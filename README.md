@@ -8,7 +8,7 @@ Data Agent 是面向产品、算法、数据分析和数据开发的工作台。
 
 [快速开始](#快速开始) · [功能预览](#功能预览) · [软件架构](#软件架构) · [验证与边界](#验证与边界) · [文档导航](#文档导航)
 
-> 合成平台 MVP 已完成，后续语义协作和交互修复已通过本地验证。最近一次试用覆盖三个主入口和三类角色，包含真实 DeepSeek Flash、Mem0 与合成查询。真实 Datasight、正式认证和同事使用验收仍待接入。进度与证据见 [CURRENT](docs/CURRENT.md)。
+> 当前按阶段试用版交付。分析依据、组合报告、来源失效保护及超级管理员模型配置已完成相应工程验证；真实模型仍有复合澄清、无来源派生数字、无依据解释和零总变化比例等质量缺口，可靠性增量未整体关闭。试用包含真实 DeepSeek Flash / Pro、Mem0 与合成查询；真实 Datasight、正式认证和同事使用验收仍待接入。进度与证据见 [CURRENT](docs/CURRENT.md)。
 
 封面与四张概念说明图由 GPT Image 生成；功能截图来自实际运行页面，均使用合成资料。[图片来源与生成提示词](docs/images/README.md)。
 
@@ -64,7 +64,17 @@ Data Agent 的语义角色与 Datasight 的查询、取数和 SQL 执行权限�
 
 *正式工作台中的合成订单查询。结果先展示，SQL 可展开；查询运行期间仍可继续聊天。*
 
-输入框工具栏可选 DeepSeek Flash / Pro 和该模型支持的思考强度，选择随对话保存，从下一条消息生效。生成中的回复与后台查询的结果解释继续使用原请求配置。
+输入框工具栏可选管理员启用的模型和对应思考强度；DeepSeek 部署首次导入 Flash / Pro。选择随对话保存，从下一条消息生效。生成中的回复与后台查询的结果解释继续使用原请求配置。
+
+### 超级管理员配置模型接入
+
+当前空间的超级管理员可以在“模型配置”中维护服务地址、API Key、协议和具体模型，再设置模型的思考档位、输入输出限制、价格、启停和默认项。普通用户只看到已启用的可选模型；管理权限由服务端校验。
+
+聊天模型通过 Pi SDK 的 OpenAI Chat Completions、OpenAI Responses、Anthropic Messages 三种原生协议接入。密钥在后端加密保存，页面只显示是否已设置。每条消息保存当时的配置版本；后续修改影响新消息，停用会阻止后续发送，系统不会自动换用其他模型。预填、Mem0 和 embedding 继续使用部署配置。
+
+每条用户消息最多调用模型 24 次，连续临时失败 3 次停止；恢复、摘要和后台结果解释沿用原消息的额度。三种协议已通过本地合成端点测试，真实供应商兼容性与回答质量仍需分别验证。配置步骤和主密钥保管见[开发说明](docs/development.md)，配置版本的流转见[模型配置时序图](docs/architecture/module-diagrams/V06.svg)。
+
+### 持续对话与结果查看
 
 历史在工作台侧栏，同一对话可持续多轮、多项分析。新对话选用 Skill 或切换页面时保留未发草稿和模型选择；发送回执未确认时，按原消息重试，保留后来输入的内容。手机导航、资料和长表格各自滚动，返回对话可继续输入。空闲页面减少刷新，返回时重新核对状态。
 
@@ -146,7 +156,7 @@ flowchart LR
 
 个人记忆继续由Mem0提取和检索，正式内容仍以MySQL为准。查询案例是共享知识，报告属于本人任务，待确认方法属于本人；这几类内容分别保存。私人分析不会自动成为公共案例或公共方法，引用关系也不会授予维护权。
 
-图表使用有界的已保存结果，保留精确金额和截断说明；查询结果过期、撤权或资料失效后，报告只显示状态。待确认方法的来源失效或会话删除后，草稿正文清理。已经明确保存的独立个人Skill沿原规则保留，采用时继续核对知识依赖。
+图表使用有界的已保存结果，保留精确金额和截断说明。同一会话的组合报告可引用 1–5 份分析依据，各自保留原查询与条件身份；任一来源失效时整份报告只显示状态。待确认方法的来源失效或会话删除后，草稿正文清理。已保存的个人 Skill 保留资产记录，生成正文继续携带来源约束；清空引用或原文重传不能解除这些约束，人工独立改写另按保存规则处理。
 
 接口和边界见[第二版执行包](docs/analysis-capabilities-execution.md)及[实现设计](docs/architecture/implementation-design.md)。最新完成状态与验证范围见[CURRENT](docs/CURRENT.md)；本轮新增能力的本地协议测试不代表真实模型的自主分析准确率。
 
@@ -154,7 +164,7 @@ flowchart LR
 
 React 负责交互，Rust 负责业务约束，Pi SDK 负责唯一的 Agent 循环，Mem0 负责个人记忆提取与检索。API 和 Worker 复用同一个 Rust 业务库，按职责分进程、统一交付。
 
-![定稿架构总览：React、Rust、Pi SDK、Mem0、Flash、百炼 Qwen、MySQL 与 Milvus](docs/architecture/data-agent-overview.svg)
+![架构总览：React、Rust、Pi SDK、可配置聊天模型、Mem0、百炼 Qwen、MySQL 与 Milvus](docs/architecture/data-agent-overview.svg)
 
 *[完整架构说明](docs/architecture/README.md)包含三张详图及存储职责，保留 11 个组件、19 条调用关系。正式架构图使用可编辑 SVG / draw.io。*
 
@@ -167,7 +177,7 @@ React 负责交互，Rust 负责业务约束，Pi SDK 负责唯一的 Agent 循�
 | 正式业务记录 | MySQL 8.4 | 语义、文档、资产、会话引用、SQL、状态、预算与版本 |
 | 会话与技术回执 | Pi JSONL / Mem0 SQLite | 原生 SDK 会话历史；记忆组件的幂等回执与 SDK 历史 |
 | 检索索引 | Milvus 3.0 | 可重建的共享知识和个人记忆索引，保留 Zilliz 适配方向 |
-| 模型 | DeepSeek Flash / Pro、百炼 Qwen | 聊天可选择 Flash / Pro；共享语义与个人记忆使用 Qwen 1024 维向量 |
+| 模型 | Pi 原生多协议；部署辅助模型 | 超级管理员配置聊天服务与模型，首次导入 DeepSeek Flash / Pro；共享语义与个人记忆使用 Qwen 1024 维向量 |
 | 数据平台适配器 | 当前为合成 SQLite 平台 | 元数据、血缘、节点 SQL、权限、只读查询及结果 |
 
 语义层把业务含义对应到数据结构。Agent 取得有出处、有版本的表、字段、指标、SQL 与文档。共享知识和个人记忆的向量索引都能重建；正式内容以 MySQL 为准，采用前重新核对权限和状态。
@@ -198,11 +208,15 @@ Ctrl+C 关闭应用进程，数据库与会话保留；结束后可用 `make inf
 | 真实 Flash + Mem0 | 先 `make setup-memory`，再按[模型配置](docs/development.md#6-真实模型小样与取消)和[记忆配置](docs/development.md#7-mem0个人记忆)启动；需要模型及 embedding 凭据、生成模型 profile 和共享向量维护 profile |
 | 纯交互原型 | `make prototype`，打开 `http://127.0.0.1:8765/`；使用浏览器本地存储，不执行 SQL、不调用模型 |
 
+超级维护者可从主导航“模型配置”添加服务地址、API Key和具体Model ID，管理能力、启停和新对话默认值。支持Pi原生Chat Completions、Responses、Anthropic Messages，兼容服务不要求Model ID已在SDK目录中；普通用户仅选择已启用模型。配置加密保存，修改影响新消息，旧消息与恢复沿原版本；停用阻止后续请求。操作与主密钥备份见[接入聊天模型](docs/development.md#通过管理页接入聊天模型)。
+
 本地服务只监听回环地址。`.env.example` 和 `apps/memory/config.example.json` 提供配置格式；凭据、运行数据库、会话和日志保存在被 Git 忽略的本地目录。启动方式、端口、恢复及索引重建见[开发指南](docs/development.md)。
 
 ## 验证与边界
 
 ### 已有证据
+
+2026-10-19新版160项`flash-r1`已逐项处理，保留真实Flash、UI与工程专项各自证据及失败，不折算成模型准确率。2026-10-20的[一般性根因复核](docs/reviews/dogfood-root-causes-20261020.md)记录执行恢复、完整来源、澄清、知识维护及多来源报告修复，并单独保留高思考档对照中尚未闭环的语义问题。当前结果、未全通过原因和本机报告入口统一见[CURRENT](docs/CURRENT.md)；原始对话、账户与运行账本保留忽略目录，未公开上传。
 
 2026-10-18至19日按120项手册继续试用，使用连续月份合成资料与真实DeepSeek Flash。交接报告已逐项定级；本轮核对重点是限定范围、歧义澄清、金额单位、粘贴SQL执行及后台反馈，修复与证据边界见[试用交叉审计](docs/reviews/dogfood-20261019.md)。部分场景和未知回执仍有缺口，不将手册项数当整体准确率。
 
@@ -259,7 +273,8 @@ make verify-shared-embedding verify-memory
 | 想了解 | 从这里开始 |
 | --- | --- |
 | 当前状态、有效决定、剩余事项 | [CURRENT](docs/CURRENT.md) |
-| 最新试用问题、修复与验证边界 | [试用交叉审计](docs/reviews/dogfood-20261019.md)；历史点击与故障恢复见[本地试用报告](docs/reviews/local-dogfood-20261011.md) |
+| 交给 Coding Agent 做全功能与复杂任务试用 | [2026-10-19 Dogfood 包](docs/dogfood/2026-10-19/README.md)：160项、执行Prompt、独立参考与接续记录 |
+| 最新试用问题、修复与验证边界 | [一般性根因复核](docs/reviews/dogfood-root-causes-20261020.md)；此前[试用交叉审计](docs/reviews/dogfood-20261019.md)与[本地试用报告](docs/reviews/local-dogfood-20261011.md)保留各自时点的结论 |
 | 系统方案和需求边界 | [系统设计](docs/semantic-retrieval-design.md) |
 | 软件架构与调用关系 | [架构说明](docs/architecture/README.md) |
 | 语义、个人记忆与两类召回 | [图文讲解](docs/visualizations/data-agent-knowledge-and-memory.html)，含最新语义权限与纠错流程 |
@@ -287,6 +302,6 @@ experiments/        独立记忆对比实验
 
 表、SQL、数据、业务文档和案例均为从零构造的合成材料。独立验收答案与 Agent 知识输入分开；密钥、私有会话及原始试用日志不进入 Git。
 
-首次准备会下载依赖和镜像；不再下载本地 embedding 权重。真实模型模式会向配置的 DeepSeek / 百炼端点发送允许的模型输入；Mem0 遥测在本项目适配器中关闭。默认模拟模式不发起付费模型调用。
+首次准备会下载依赖和镜像；不再下载本地 embedding 权重。真实模型调用会向管理员配置的聊天端点或部署配置的辅助服务端点发送允许的模型输入；Mem0 遥测在本项目适配器中关闭。未配置真实模型服务的默认模拟模式不发起付费调用。
 
 本仓库尚未指定开源许可证；公开可见与授予开源使用许可是两件事。各依赖的许可证以其自身声明为准。

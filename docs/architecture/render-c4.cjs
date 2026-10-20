@@ -7,15 +7,15 @@ const piVersion = require('../../package.json').dependencies['@earendil-works/pi
 // 总览与三张详图共用 11 个组件和 19 条关系，职责与当前合成平台实现一致。
 const nodes = {
   users: { name: '业务用户', type: 'Person', tech: '产品 · 算法 · 分析', lines: ['授权维护者编辑语义'], kind: 'person' },
-  web: { name: 'Web 应用', type: 'Container', tech: 'React / TypeScript', lines: ['提问、SQL、结果与历史', '语义管理 · 我的积累'], kind: 'app' },
+  web: { name: 'Web 应用', type: 'Container', tech: 'React / TypeScript', lines: ['提问、SQL、报告与历史', '语义管理 · 我的积累', '超级管理员模型配置'], kind: 'app' },
   api: { name: '业务 API 服务', type: 'Container', tech: 'Rust / Axum', lines: ['系统维护授权、版本与调用预算', '会话、语义与共享方法规则', '查询前另核平台权限与用户确认'], kind: 'app' },
   pi: { name: 'Agent 运行进程', type: 'Container', tech: `Node.js / Pi SDK ${piVersion}`, lines: ['唯一模型与工具循环', '原生 context、Skill、续接与压缩'], kind: 'app' },
   journal: { name: 'Pi 原生会话', type: 'Data Store', tech: '私有 JSONL / 同一宿主', lines: ['完整 SDK 会话树与工具历史', '精确 leaf / 授权引用保存在 MySQL'], kind: 'store' },
   worker: { name: '后台任务进程', type: 'Container', tech: 'Rust Worker', lines: ['来源同步、预填与索引更新', '查询跟踪、作业租约与重试'], kind: 'app' },
-  mysql: { name: '正式业务记录', type: 'Data Store', tech: 'MySQL 8.4', lines: ['知识、版本、会话与查询状态', '私人记忆、公共方法与预算'], kind: 'store' },
+  mysql: { name: '正式业务记录', type: 'Data Store', tech: 'MySQL 8.4', lines: ['知识、来源、任务、查询与报告', '资产、预算与加密模型配置'], kind: 'store' },
   vector: { name: '检索索引', type: 'Data Store', tech: 'Milvus 3.0 / 可接 Zilliz', lines: ['共享知识与个人记忆分别索引', '携带归属和版本，可从正式记录重建'], kind: 'store' },
   memory: { name: 'Mem0 个人记忆', type: 'Container', tech: 'Python / Mem0 OSS 2.2.1', lines: ['从原始消息提取候选、检索记忆', 'SQLite 保存 SDK 历史与技术回执'], kind: 'app' },
-  models: { name: '模型能力', type: 'Model APIs', tech: 'DeepSeek Flash · 百炼 Qwen', lines: ['理解、生成与提取：DeepSeek Flash', '向量：qwen3.7-text-embedding', '共享知识与个人记忆分开建索引'], kind: 'integration' },
+  models: { name: '模型能力', type: 'Model APIs', tech: 'Pi 原生协议 / 百炼 Qwen', lines: ['聊天：空间模型配置', '预填与记忆提取：部署配置', '向量：Qwen 1024 维'], kind: 'integration' },
   platform: { name: '数据平台 / 查询引擎', type: 'External Software System', tech: '当前：可执行合成平台 / SQLite', lines: ['元数据、血缘、节点与加工 SQL', '独立数据权限、执行与结果', 'Datasight 后续经适配器接入'], kind: 'integration' },
 };
 
@@ -43,7 +43,7 @@ const relations = {
 
 const views = [
   {
-    id: 'overview', title: 'Data Agent · 定稿架构总览', subtitle: 'Pi SDK 负责 Agent；Mem0 负责个人记忆；Rust 负责业务约束与正式状态。', height: 1490,
+    id: 'overview', title: 'Data Agent · 阶段试用版架构', subtitle: 'Pi SDK 运行 Agent；Rust 保存来源、版本与模型配置；Mem0 提取个人记忆。', height: 1490,
     boundaryPath: 'M275 175 H1200 V570 H1870 V1350 H460 V960 H275 Z',
     boundaryBoxes: [[275, 175, 925, 785], [460, 570, 1410, 780]],
     places: { users: [35, 265, 215, 170], web: [330, 250, 300, 200], api: [780, 235, 350, 230], models: [1480, 235, 370, 230], worker: [330, 665, 330, 200], pi: [780, 665, 350, 200], memory: [1350, 665, 390, 230], platform: [35, 1080, 370, 230], mysql: [510, 1110, 350, 190], journal: [985, 1110, 350, 190], vector: [1460, 1110, 390, 200] },
@@ -99,7 +99,7 @@ const views = [
   },
   {
     id: 'memory', title: '个人记忆的提取与上下文采用', subtitle: 'Rust 交付有效快照；Pi 原生 context 投影临时参考，需要原话时沿既有工具受控补读。', height: 1400,
-    stamp: '2026-10-12 · 记忆上下文方案',
+    stamp: '2026-10-20 · 当前合成平台实现',
     boundaryPath: 'M35 145 H1870 V605 H1165 V990 H1870 V1305 H35 Z',
     boundaryBoxes: [[35, 145, 1835, 460], [35, 605, 1130, 700], [1165, 990, 705, 315]],
     places: { pi: [80, 185, 330, 200], api: [80, 635, 330, 230], memory: [750, 635, 360, 230], models: [1470, 635, 370, 230], worker: [80, 1070, 330, 200], mysql: [750, 1070, 360, 200], vector: [1470, 1070, 370, 200] },
@@ -170,7 +170,7 @@ function content(v, index) {
     ${text(35, 38, `DATA AGENT  /  C4 CONTAINER  /  ${String(index + 1).padStart(2, '0')}`, 14, 600, '#577395')}
     ${text(35, 82, v.title, 34, 650, '#172e50')}
     ${text(35, 112, v.subtitle, 19, 400, '#607086')}
-    ${text(1885, 38, v.stamp ?? '2026-10-07 · 当前实现 / 合成平台', 15, 500, '#607086', 'end')}
+    ${text(1885, 38, v.stamp ?? '2026-10-20 · 当前实现 / 合成平台', 15, 500, '#607086', 'end')}
     <g class="boundary" fill="none" stroke="#c0cddd" stroke-width="1.5" stroke-dasharray="7 6">${boundary}</g>
     ${text(bx + 20, by + 23, 'Data Agent · 系统边界（仅显示本视图相关组件）', 14, 500, '#718297')}
     ${v.edges.map(e => edge(e, v.id)).join('')}

@@ -5,7 +5,7 @@
     <text x="35" y="38" font-size="14" font-weight="600" fill="#577395" text-anchor="start" >DATA AGENT  /  C4 CONTAINER  /  02</text>
     <text x="35" y="82" font-size="34" font-weight="650" fill="#172e50" text-anchor="start" >工作台与 Agent</text>
     <text x="35" y="112" font-size="19" font-weight="400" fill="#607086" text-anchor="start" >同一对话持续多轮；Pi 负责调查，Rust 保存可核对的业务状态。</text>
-    <text x="1885" y="38" font-size="15" font-weight="500" fill="#607086" text-anchor="end" >2026-10-07 · 当前实现 / 合成平台</text>
+    <text x="1885" y="38" font-size="15" font-weight="500" fill="#607086" text-anchor="end" >2026-10-20 · 当前实现 / 合成平台</text>
     <g class="boundary" fill="none" stroke="#c0cddd" stroke-width="1.5" stroke-dasharray="7 6"><rect x="275" y="130" width="1200" height="665" rx="16"/></g>
     <text x="295" y="153" font-size="14" font-weight="500" fill="#718297" text-anchor="start" >Data Agent · 系统边界（仅显示本视图相关组件）</text>
     <g class="relationship" data-edge="use" data-source="users" data-target="web"><path d="M250 355 L310 355" fill="none" stroke="white" stroke-width="8"/><path d="M250 355 L310 355" fill="none" stroke="#718297" stroke-width="2" stroke-linejoin="round" marker-end="url(#arrow-runtime)"/></g><g class="relationship" data-edge="web-api" data-source="web" data-target="api"><path d="M570 355 L670 355" fill="none" stroke="white" stroke-width="8"/><path d="M570 355 L670 355" fill="none" stroke="#718297" stroke-width="2" stroke-linejoin="round" marker-end="url(#arrow-runtime)"/></g><g class="relationship" data-edge="run" data-source="api" data-target="pi"><path d="M900 235 L900 180 L1190 180 L1190 250" fill="none" stroke="white" stroke-width="8"/><path d="M900 235 L900 180 L1190 180 L1190 250" fill="none" stroke="#718297" stroke-width="2" stroke-linejoin="round" marker-end="url(#arrow-runtime)"/></g><g class="relationship" data-edge="tools" data-source="pi" data-target="api"><path d="M1110 395 L1000 395" fill="none" stroke="white" stroke-width="8"/><path d="M1110 395 L1000 395" fill="none" stroke="#718297" stroke-width="2" stroke-linejoin="round" marker-end="url(#arrow-runtime)"/></g><g class="relationship" data-edge="generate" data-source="pi" data-target="models"><path d="M1430 355 L1545 355" fill="none" stroke="white" stroke-width="8"/><path d="M1430 355 L1545 355" fill="none" stroke="#718297" stroke-width="2" stroke-linejoin="round" marker-end="url(#arrow-runtime)"/></g><g class="relationship" data-edge="records" data-source="api" data-target="mysql"><path d="M835 465 L835 585" fill="none" stroke="white" stroke-width="8"/><path d="M835 465 L835 585" fill="none" stroke="#718297" stroke-width="2" stroke-linejoin="round" marker-end="url(#arrow-runtime)"/></g><g class="relationship" data-edge="session-store" data-source="pi" data-target="journal"><path d="M1280 450 L1280 585" fill="none" stroke="white" stroke-width="8"/><path d="M1280 450 L1280 585" fill="none" stroke="#718297" stroke-width="2" stroke-linejoin="round" marker-end="url(#arrow-runtime)"/></g>
@@ -22,7 +22,7 @@
     <text x="332" y="278" font-size="14" font-weight="500" fill="#53677d" text-anchor="start" >Container</text>
     <text x="332" y="312" font-size="25" font-weight="650" fill="#172e50" text-anchor="start" >Web 应用</text>
     <text x="332" y="340" font-size="16" font-weight="500" fill="#53677d" text-anchor="start" >React / TypeScript</text>
-    <text x="332" y="378" font-size="18" font-weight="400" fill="#172e50" text-anchor="start" >提问、SQL、结果与历史</text><text x="332" y="406" font-size="18" font-weight="400" fill="#172e50" text-anchor="start" >语义管理 · 我的积累</text>
+    <text x="332" y="378" font-size="18" font-weight="400" fill="#172e50" text-anchor="start" >提问、SQL、报告与历史</text><text x="332" y="406" font-size="18" font-weight="400" fill="#172e50" text-anchor="start" >语义管理 · 我的积累</text><text x="332" y="434" font-size="18" font-weight="400" fill="#172e50" text-anchor="start" >超级管理员模型配置</text>
   </g><g class="node" data-node="api">
     <rect class="node-box" x="670" y="235" width="330" height="230" rx="10" fill="#f1f6ff" stroke="#3866ac" stroke-width="1.4"/>
     <path d="M688 235 H982" stroke="#3866ac" stroke-width="4"/>
@@ -42,15 +42,15 @@
     <path d="M1563 250 H1867" stroke="#9a8050" stroke-width="4"/>
     <text x="1567" y="278" font-size="14" font-weight="500" fill="#53677d" text-anchor="start" >Model APIs</text>
     <text x="1567" y="312" font-size="25" font-weight="650" fill="#4b402c" text-anchor="start" >模型能力</text>
-    <text x="1567" y="340" font-size="16" font-weight="500" fill="#53677d" text-anchor="start" >DeepSeek Flash · 百炼 Qwen</text>
-    <text x="1567" y="378" font-size="18" font-weight="400" fill="#4b402c" text-anchor="start" >理解、生成与提取：DeepSeek Flash</text><text x="1567" y="406" font-size="18" font-weight="400" fill="#4b402c" text-anchor="start" >向量：qwen3.7-text-embedding</text><text x="1567" y="434" font-size="18" font-weight="400" fill="#4b402c" text-anchor="start" >共享知识与个人记忆分开建索引</text>
+    <text x="1567" y="340" font-size="16" font-weight="500" fill="#53677d" text-anchor="start" >Pi 原生协议 / 百炼 Qwen</text>
+    <text x="1567" y="378" font-size="18" font-weight="400" fill="#4b402c" text-anchor="start" >聊天：空间模型配置</text><text x="1567" y="406" font-size="18" font-weight="400" fill="#4b402c" text-anchor="start" >预填与记忆提取：部署配置</text><text x="1567" y="434" font-size="18" font-weight="400" fill="#4b402c" text-anchor="start" >向量：Qwen 1024 维</text>
   </g><g class="node" data-node="mysql">
     <rect class="node-box" x="670" y="585" width="330" height="185" rx="10" fill="#eef7f3" stroke="#438471" stroke-width="1.4"/>
     <path d="M688 585 H982" stroke="#438471" stroke-width="4"/>
     <text x="692" y="613" font-size="14" font-weight="500" fill="#53677d" text-anchor="start" >Data Store</text>
     <text x="692" y="647" font-size="25" font-weight="650" fill="#173e34" text-anchor="start" >正式业务记录</text>
     <text x="692" y="675" font-size="16" font-weight="500" fill="#53677d" text-anchor="start" >MySQL 8.4</text>
-    <text x="692" y="713" font-size="18" font-weight="400" fill="#173e34" text-anchor="start" >知识、版本、会话与查询状态</text><text x="692" y="741" font-size="18" font-weight="400" fill="#173e34" text-anchor="start" >私人记忆、公共方法与预算</text>
+    <text x="692" y="713" font-size="18" font-weight="400" fill="#173e34" text-anchor="start" >知识、来源、任务、查询与报告</text><text x="692" y="741" font-size="18" font-weight="400" fill="#173e34" text-anchor="start" >资产、预算与加密模型配置</text>
   </g><g class="node" data-node="journal">
     <rect class="node-box" x="1110" y="585" width="345" height="185" rx="10" fill="#eef7f3" stroke="#438471" stroke-width="1.4"/>
     <path d="M1128 585 H1437" stroke="#438471" stroke-width="4"/>

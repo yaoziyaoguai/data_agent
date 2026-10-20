@@ -41,7 +41,7 @@ for name, text in documents.items():
         graph_sources[graph_id] = match[1]
 expected_modules = [f'M{i:02}' for i in range(1, 13)]
 assert sorted(modules) == expected_modules, modules
-expected_graphs = {f'{prefix}{i:02}' for prefix, count in [('V', 4), ('F', 13), ('S', 12)] for i in range(1, count + 1)}
+expected_graphs = {f'{prefix}{i:02}' for prefix, count in [('V', 6), ('F', 13), ('S', 12)] for i in range(1, count + 1)}
 assert set(graph_sources) == expected_graphs, set(graph_sources) ^ expected_graphs
 
 # V02 使用显式节点与依赖边，检测声明出的图中是否有循环。

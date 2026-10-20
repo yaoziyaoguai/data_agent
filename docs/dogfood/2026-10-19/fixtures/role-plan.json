@@ -1,0 +1,24 @@
+{
+  "synthetic": true,
+  "scope": "Only a fresh authorized isolated test environment; never overwrite the user's live identities or ownership.",
+  "space": "demo",
+  "roles": {
+    "alice": "semantic_super_maintainer",
+    "bob": "ordinary_member",
+    "carol": "platform_table_maintainer",
+    "dora": "optional_second_non_super_owner_for_X10"
+  },
+  "table_maintainers": {
+    "demo_order_detail": "carol",
+    "raw_order_lines": "alice",
+    "raw_payments": "alice",
+    "dim_customers": "alice",
+    "customer_tags": "alice"
+  },
+  "notes": [
+    "This is a setup specification, not the identity or platform catalog wire format.",
+    "Use existing launcher and controlled source-sync interfaces; validate actual roles and ownership online.",
+    "Do not generate or embed credential values in this package.",
+    "Semantic roles do not confer data-platform read or SQL execution permission."
+  ]
+}
