@@ -193,6 +193,8 @@
 
 最后文档批次的 `make verify-delivery verify-materials` 通过：16 项交付检查器测试、376 项材料静态检查、214 个文档链接；`git diff --check` 通过。结果保存在 `.local/release-closeout-20261020/final-document-check.log`。本批只更新 README、图片及当前记录，沿已完成业务构建与增量验收，不重复付费模型试验。
 
+主分支归并：用户要求合并后再推送。已核对 GitHub 默认分支为 `codex/semantic-maintenance-prototype`，仓库没有 `main` 或 `master`；以该现有默认分支接收 `codex/analysis-capabilities`。本地从 `6801df7` 快进到 `c340954`，完整保留 19 个提交，无冲突，合并后的文件树与已验收版本相同。本次主分支交付仅在其上追加这段记录，不改变业务代码；原本地服务继续运行相同代码。推送与远端一致性收据保存在 `.local/release-closeout-20261020/default-branch-merge.json`。
+
 ## 已完成：超级管理员模型配置（2026-10-20）
 
 用户确认实现根本的模型接入配置，不仅管理已接入模型的可选列表。沿用dev_co；当前分支`codex/analysis-capabilities`，保留全部既有未提交工作。上一增量I2-AGENT-RELIABILITY仍有真实模型语义缺口，保持未完成；原验收与证据见下方历史记录和`docs/reviews/dogfood-reliability-review.json`，本轮不将它算作通过。
