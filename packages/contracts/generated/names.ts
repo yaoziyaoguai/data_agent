@@ -190,4 +190,7 @@ export interface ContractTypes {
   SaveDefaultModel: Boundary.SaveDefaultModel;
   ReadModelConnection: Boundary.ReadModelConnection;
   ModelConnection: Boundary.ModelConnection;
+  AnalysisAnswerSource: Boundary.AnalysisAnswerSource;
+  AnalysisAnswerValue: Boundary.AnalysisAnswerValue;
+  PresentAnalysisAnswerInput: Boundary.PresentAnalysisAnswerInput;
 }

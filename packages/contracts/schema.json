@@ -338,6 +338,12 @@
           "type": "string",
           "pattern": "^[1-9][0-9]{0,19}$",
           "description": "Pi最后助手消息的首个已保存片段序号；省略时沿用从1起的完整文本校验。"
+        },
+        "answer_sdk_tool_call_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512,
+          "description": "使用present_analysis_answer成功回执交付时绑定该SDK调用，正文须与宿主生成值一致。"
         }
       },
       "required": [
@@ -453,7 +459,8 @@
             "task_cancelled",
             "memory_disabled",
             "analysis_evidence_saved",
-            "analysis_report_saved"
+            "analysis_report_saved",
+            "skill_draft_prepared"
           ]
         },
         "payload": {
@@ -486,6 +493,25 @@
             "properties": {
               "payload": {
                 "$ref": "#/$defs/AnalysisReportRef"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "skill_draft_prepared"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "properties": {
+              "payload": {
+                "$ref": "#/$defs/SkillDraftRef"
               }
             }
           }
@@ -2555,7 +2581,8 @@
             "create",
             "revise",
             "clarify",
-            "route"
+            "route",
+            "split"
           ]
         },
         "task_id": {
@@ -2639,6 +2666,18 @@
           },
           "maxItems": 8,
           "description": "同一任务需分别回答的独立问题，各生成独立ID；与非空question互斥，不同目标分别建任务。"
+        },
+        "moved_clarification_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64,
+            "pattern": "^[A-Za-z0-9_-]+$"
+          },
+          "uniqueItems": true,
+          "maxItems": 8,
+          "description": "split迁移到新独立目标的原开放问题ID，保留问题正文与来源，其余原目标问题不动。"
         }
       },
       "required": [
@@ -2927,6 +2966,78 @@
             "properties": {
               "clarifications": {
                 "maxItems": 0
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "action": {
+                "const": "split"
+              }
+            },
+            "required": [
+              "action"
+            ]
+          },
+          "then": {
+            "required": [
+              "task_id",
+              "expected_version",
+              "goal",
+              "conditions",
+              "moved_clarification_ids"
+            ],
+            "properties": {
+              "task_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "goal": {
+                "minLength": 1
+              },
+              "question": {
+                "type": "null"
+              },
+              "options": {
+                "maxItems": 0
+              },
+              "clarifications": {
+                "maxItems": 0
+              }
+            },
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "condition_patch"
+                  ]
+                },
+                {
+                  "required": [
+                    "replaces_query_id"
+                  ]
+                },
+                {
+                  "required": [
+                    "resolved_clarification_ids"
+                  ]
+                }
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "moved_clarification_ids"
+            ]
+          },
+          "then": {
+            "properties": {
+              "action": {
+                "const": "split"
               }
             }
           }
@@ -3401,7 +3512,8 @@
             "save_analysis_evidence",
             "save_analysis_report",
             "read_analysis_report",
-            "prepare_skill_draft"
+            "prepare_skill_draft",
+            "present_analysis_answer"
           ]
         },
         "arguments": {
@@ -3451,7 +3563,8 @@
             "save_analysis_evidence",
             "save_analysis_report",
             "read_analysis_report",
-            "prepare_skill_draft"
+            "prepare_skill_draft",
+            "present_analysis_answer"
           ]
         },
         "data": {
@@ -3544,6 +3657,30 @@
             "mem0_authoritative",
             "directory_fallback"
           ]
+        },
+        "result_notification": {
+          "type": "object",
+          "properties": {
+            "query_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "pattern": "^[A-Za-z0-9_-]+$"
+            },
+            "execution_state": {
+              "enum": [
+                "succeeded",
+                "failed",
+                "cancelled"
+              ]
+            }
+          },
+          "required": [
+            "query_id",
+            "execution_state"
+          ],
+          "additionalProperties": false,
+          "description": "宿主查询终态通知身份；普通用户消息省略，不从文字前缀推断成功。"
         }
       },
       "required": [
@@ -5001,10 +5138,14 @@
           "pattern": "^(0|[1-9][0-9]{0,19})$"
         },
         "sdk_tool_call_id": {
-          "type": "string",
+          "type": [
+            "string",
+            "null"
+          ],
           "minLength": 1,
           "maxLength": 512,
-          "pattern": "^[^\\s\\x00-\\x1f\\x7f]+$"
+          "pattern": "^[^\\s\\x00-\\x1f\\x7f]+$",
+          "description": "run工具绑定真实SDK调用ID；run启动检索与index作业为null，其operation/租约/用途由宿主核对。"
         },
         "operation_id": {
           "type": "string",
@@ -5020,7 +5161,28 @@
         "sdk_tool_call_id",
         "operation_id"
       ],
-      "additionalProperties": false
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "index"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "sdk_tool_call_id": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      ]
     },
     "MemoryExtractionRequest": {
       "title": "MemoryExtractionRequest",
@@ -6362,15 +6524,81 @@
           "type": "string",
           "minLength": 1,
           "maxLength": 32000
+        },
+        "queries": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 12,
+          "items": {
+            "type": "object",
+            "properties": {
+              "query_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 64,
+                "pattern": "^[A-Za-z0-9_-]+$"
+              },
+              "draft_version": {
+                "type": "string",
+                "pattern": "^(0|[1-9][0-9]{0,19})$"
+              },
+              "condition_version": {
+                "type": "string",
+                "pattern": "^(0|[1-9][0-9]{0,19})$"
+              }
+            },
+            "required": [
+              "query_id",
+              "draft_version",
+              "condition_version"
+            ],
+            "additionalProperties": false
+          },
+          "description": "同一用户消息明确授权的完整查询集合，一次确认；不能与单条query_id/draft_version/condition_version同时传。"
         }
       },
       "required": [
-        "query_id",
-        "draft_version",
-        "condition_version",
         "instruction_quote"
       ],
-      "additionalProperties": false
+      "additionalProperties": false,
+      "oneOf": [
+        {
+          "required": [
+            "query_id",
+            "draft_version",
+            "condition_version"
+          ],
+          "not": {
+            "required": [
+              "queries"
+            ]
+          }
+        },
+        {
+          "required": [
+            "queries"
+          ],
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "query_id"
+                ]
+              },
+              {
+                "required": [
+                  "draft_version"
+                ]
+              },
+              {
+                "required": [
+                  "condition_version"
+                ]
+              }
+            ]
+          }
+        }
+      ]
     },
     "ModelSelection": {
       "title": "ModelSelection",
@@ -9673,6 +9901,196 @@
         "runtime_provider"
       ],
       "additionalProperties": false
+    },
+    "AnalysisAnswerSource": {
+      "title": "AnalysisAnswerSource",
+      "type": "object",
+      "properties": {
+        "query_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "result_ref": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "columns": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 240
+          },
+          "maxItems": 30,
+          "minItems": 1
+        }
+      },
+      "required": [
+        "query_id",
+        "result_ref",
+        "columns"
+      ],
+      "additionalProperties": false
+    },
+    "AnalysisAnswerValue": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[a-z][a-z_]*$",
+          "maxLength": 60
+        },
+        "query_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "kind": {
+          "enum": [
+            "cell",
+            "statistic",
+            "parameter",
+            "metadata"
+          ]
+        },
+        "column": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 240
+        },
+        "row_index": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 999
+        },
+        "statistic": {
+          "enum": [
+            "row_count",
+            "non_null_count",
+            "null_count",
+            "distinct_count",
+            "positive",
+            "zero",
+            "negative"
+          ]
+        },
+        "parameter": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 240
+        },
+        "metadata": {
+          "enum": [
+            "data_freshness",
+            "saved_row_count"
+          ]
+        }
+      },
+      "required": [
+        "name",
+        "query_id",
+        "kind"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "cell"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "column",
+              "row_index"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "statistic"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "statistic"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "parameter"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "parameter"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "metadata"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "metadata"
+            ]
+          }
+        }
+      ],
+      "title": "AnalysisAnswerValue"
+    },
+    "PresentAnalysisAnswerInput": {
+      "type": "object",
+      "properties": {
+        "template": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 6000,
+          "description": "解释模板，数字/日期/单位换算结果全部用{{name}}引用values；不在模板中写数字或SQL代码块。定性解释必须有依据，不写未经证实的因果。",
+          "pattern": "^[^0-9０-９]*$"
+        },
+        "sources": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/AnalysisAnswerSource"
+          },
+          "minItems": 1,
+          "maxItems": 8
+        },
+        "values": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/AnalysisAnswerValue"
+          },
+          "maxItems": 60
+        }
+      },
+      "required": [
+        "template",
+        "sources",
+        "values"
+      ],
+      "additionalProperties": false,
+      "title": "PresentAnalysisAnswerInput"
     }
   },
   "properties": {
@@ -10215,6 +10633,15 @@
     },
     "modelConnection": {
       "$ref": "#/$defs/ModelConnection"
+    },
+    "AnalysisAnswerSource": {
+      "$ref": "#/$defs/AnalysisAnswerSource"
+    },
+    "AnalysisAnswerValue": {
+      "$ref": "#/$defs/AnalysisAnswerValue"
+    },
+    "PresentAnalysisAnswerInput": {
+      "$ref": "#/$defs/PresentAnalysisAnswerInput"
     }
   },
   "required": [

@@ -22,11 +22,7 @@ const profile = {
   toolset: "data",
   payload_bytes_limit: 65536,
 };
-const h = await harness({
-  capture: true,
-  profile,
-  env: { DATA_AGENT_LEASE_MS: "120000" },
-});
+let h;
 let passed = false;
 let calls = 0;
 let agentCalls = 0;
@@ -247,7 +243,7 @@ const provider = createServer(async (req, res) => {
       options: [],
     };
   }
-  if (!summary && agentCalls === 15)
+  if (!summary && agentCalls === 15) {
     assert.ok(
       body.messages.some((m) =>
         JSON.stringify(m.content).includes(
@@ -255,6 +251,7 @@ const provider = createServer(async (req, res) => {
         ),
       ),
     );
+  }
   const delta = name
     ? {
         role: "assistant",
@@ -309,7 +306,12 @@ const provider = createServer(async (req, res) => {
       JSON.stringify({
         id: "synthetic",
         choices: [],
-        usage: { prompt_tokens: 100, completion_tokens: 25, total_tokens: 125 },
+        // 只有真正达到输出cap的length才交宿主补正；低于cap的length由Pi原生压缩续跑。
+        usage: {
+          prompt_tokens: 100,
+          completion_tokens: !summary && agentCalls === 14 ? 2048 : 25,
+          total_tokens: !summary && agentCalls === 14 ? 2148 : 125,
+        },
       }) +
       "\n\n",
   );
@@ -325,6 +327,13 @@ process.env.DEEPSEEK_API_KEY = "synthetic-protocol-key";
 process.env.DEEPSEEK_BASE_URL = "http://127.0.0.1:" + provider.address().port;
 process.env.DATA_AGENT_PROVIDER_TEST = "1";
 try {
+  // API在接收消息时冻结连接及凭据，必须和Pi使用同一个本地协议替身。
+  h = await harness({
+    capture: true,
+    profile,
+    protocolProviderUrl: process.env.DEEPSEEK_BASE_URL,
+    env: { DATA_AGENT_LEASE_MS: "120000" },
+  });
   document = (
     await h.request("/knowledge", {
       operation_id: randomUUID(),
@@ -370,6 +379,7 @@ try {
         e.type === "assistant_delta" &&
         e.payload.text.includes("正在读取资料的过程文字。"),
     ),
+    "普通调查回合保留原流式体验，不扩大结果核验的暂缓范围",
   );
   assert.equal(snapshot.tasks.length, 1);
   const q = (await h.request("/conversations/" + cid + "/queries")).value
@@ -391,6 +401,14 @@ try {
     restoreCheckpoint("/synthetic/data-agent", compactedCheckpoint)
       .getBranch()
       .some((entry) => entry.type === "compaction"),
+  );
+  assert.ok(
+    restoreCheckpoint("/synthetic/data-agent", compactedCheckpoint)
+      .getBranch()
+      .some((entry) => entry.message?.role === "assistant" &&
+        entry.message.content.some((part) => part.type === "text" &&
+          part.text.includes("正在读取资料的过程文字。"))),
+    "普通调查与结果核验均保留Pi历史中的实际消息",
   );
   h.releaseRun(run.run_id);
   await h.resumeWorker();
@@ -585,5 +603,5 @@ try {
       2,
     ),
   );
-  await h.close();
+  if (h) await h.close();
 }

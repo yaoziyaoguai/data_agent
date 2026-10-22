@@ -60,6 +60,20 @@ const stopCapturedInput=async()=>{
 try{
  h=await harness({capture:true,profile,env:{DATA_AGENT_MEMORY_URL:'http://127.0.0.1:'+server.address().port}});
  const cid=await h.create();run=await h.capture(cid,'请记住：以后金额用元展示。现在不查数据。');
+ const contextBinding={kind:'run',id:run.run_id,epoch:run.lease_epoch,sdk_tool_call_id:null,operation_id:'context-'+run.message_id};
+ const contextCall={action:'issue',budget:contextBinding,call_attempt_id:randomUUID(),purpose:'memory_embedding',parameters_fingerprint:'a'.repeat(64),input_tokens_upper:100,output_tokens_max:0,usage:null};
+ for(const input of [
+  {...contextCall,call_attempt_id:randomUUID(),budget:{...contextBinding,operation_id:'context-other-message'}},
+  {...contextCall,call_attempt_id:randomUUID(),purpose:'memory_extraction',output_tokens_max:4096},
+  {...contextCall,call_attempt_id:randomUUID(),budget:{...contextBinding,sdk_tool_call_id:'unregistered-tool'}},
+ ]){
+  const refused=await h.internal('/internal/memory/model-calls',input);
+  assert.equal(refused.status,404,JSON.stringify(refused.value));
+  assert.equal(h.sql(`SELECT JSON_OBJECT('n',COUNT(*)) FROM model_call_attempts WHERE id='${input.call_attempt_id}'`)[0].n,0);
+ }
+ const invalidIndex=await h.internal('/internal/memory/model-calls',{...contextCall,budget:{kind:'index',id:randomUUID(),epoch:'1',sdk_tool_call_id:'invented-sdk-id',operation_id:randomUUID()}});
+ assert.equal(invalidIndex.status,400);assert.equal(invalidIndex.value.code,'invalid_input');
+ checks.push('无SDK的启动检索只接受当前消息的context身份及embedding用途；未注册工具和伪造索引SDK身份拒绝且不发许可');
  const invalid=await invoke('manage_personal_asset',{action:'save_memory',...details,instruction_quote:'以后金额用元展示。'});
  assert.equal(invalid.result.value.code,'scope_incomplete');assert.equal(prepareCount,0);
  const rejected=await h.internal('/internal/data/tool-rejections',invalid.input);assert.match(rejected.value.data.hint,/instruction_quote/);
@@ -70,10 +84,17 @@ try{
  assert.equal(requests.find(v=>v.path==='/extract').input.message,run.text);
  assert.equal((await h.internal('/internal/data/tools',saved.input)).value.data.id,asset.id);assert.equal(prepareCount,1);
  await until(async()=>(await h.request('/assets')).value.assets.find(v=>v.id===asset.id)?.memory_index_state==='indexed','index retry reaches ready');
+ const indexRequest=requests.find(v=>v.path==='/index'&&v.input.asset.id===asset.id).input;
+ assert.equal(indexRequest.budget.kind,'index');assert.equal(indexRequest.budget.sdk_tool_call_id,null);
+ assert.equal(indexRequest.budget.id,indexRequest.operation_id);assert.equal(indexRequest.budget.operation_id,indexRequest.operation_id);
+ const indexJob=h.sql(`SELECT JSON_OBJECT('id',id,'scope',budget_scope_id,'extraction',extraction_operation_id) FROM personal_memory_index_jobs WHERE id='${indexRequest.operation_id}'`)[0];
+ assert.equal(indexJob.scope,run.budget_scope_id);assert.equal(indexJob.extraction,requests.find(v=>v.path==='/extract').input.operation_id);
  assert.equal(calls,2);assert.equal(h.sql(`SELECT JSON_OBJECT('n',COUNT(*)) FROM personal_asset_versions WHERE asset_id='${asset.id}'`)[0].n,1);
  checks.push('原文预检查先于提取，Mem0正文正式保存，首提取响应丢失接回原结果，重复工具不重复提取/资产；索引暂时失败可重试');
  const found=await invoke('search_knowledge',{query:'金额习惯',limit:10});
  assert.equal(found.result.status,200,JSON.stringify(found.result.value));assert.equal(found.result.value.data.memory_retrieval,'mem0_authoritative');assert.ok(found.result.value.data.personal_memories.some(v=>v.id===asset.id));
+ const toolSearch=requests.find(v=>v.path==='/search'&&v.input.query==='金额习惯').input;
+ assert.equal(toolSearch.budget.sdk_tool_call_id,found.input.sdk_tool_call_id);assert.equal(toolSearch.budget.id,run.run_id);
  assert.ok(h.sql(`SELECT JSON_OBJECT('scope',budget_scope_id,'state',state,'purpose',purpose) FROM model_call_attempts WHERE purpose LIKE 'memory_%'`).every(v=>v.state==='settled'&&v.scope===run.budget_scope_id));
  checks.push('Mem0检索命中回源；提取与embedding每次许可/结算归原请求，重复许可禁止发送');
  const manual={operation_id:randomUUID(),id:asset.id,expected_version:asset.version,kind:'memory',...details,body:'以后收入按万元展示',source_text:'用户在页面修改'};
@@ -112,6 +133,10 @@ try{
  run=await h.capture(await h.create(),'位于目录第25条的月度检查');
  assert.ok(run.workspace_context.memories.length>0&&run.workspace_context.memories.length<=20);assert.equal(run.workspace_context.memories[0].id,preferredCandidate);
  assert.equal(run.workspace_context.memory_retrieval,'mem0_authoritative');
+ const contextSearch=requests.find(v=>v.path==='/search'&&v.input.operation_id==='context-'+run.message_id).input;
+ assert.equal(contextSearch.budget.sdk_tool_call_id,null);assert.equal(contextSearch.budget.kind,'run');assert.equal(contextSearch.budget.id,run.run_id);
+ const contextCalls=h.sql(`SELECT JSON_OBJECT('scope',budget_scope_id,'purpose',purpose,'state',state) FROM model_call_attempts WHERE operation_id='${contextSearch.operation_id}'`);
+ assert.equal(contextCalls.length,1);assert.deepEqual(contextCalls[0],{scope:run.budget_scope_id,purpose:'memory_embedding',state:'settled'});
  await h.restartApi();assert.equal((await h.request('/assets')).value.assets.length,25);
  for(const asset of many)await h.request('/assets/'+asset.id+'/delete',{operation_id:randomUUID(),expected_version:asset.version});
  checks.push('25条记忆先检索再截断，目录末项可成为启动首项；实际RunEnvelope契约和API重启通过');

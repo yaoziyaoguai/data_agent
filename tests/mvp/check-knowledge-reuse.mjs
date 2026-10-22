@@ -97,6 +97,129 @@ export async function createReuseFixture(options = {}) {
   } catch (error) { await h.close(); throw error; }
 }
 
+async function checkHistoricalMethodSources(fixture, checks) {
+  const { h } = fixture;
+  const cid = await h.create();
+  const conditions = { time_start: "2026-01-01T00:00:00Z", time_end: "2026-04-01T00:00:00Z",
+    timezone: "UTC", metric: null, channel: null, group_by: [], filters: [], knowledge_refs: [], notes: "合成固定结果" };
+  const route = task => fixture.invoke("update_analysis_task", { action: "route", task_id: task.task_id,
+    expected_version: task.condition_version, options: [] });
+  const queryEvidence = async (task, sql, column, expected) => {
+    const query = await fixture.invoke("request_query", { task_id: task.task_id,
+      condition_version: task.condition_version, sql, parameters: {}, target_id: "synthetic-sqlite",
+      summary: "用于验证方法来源的合成固定结果", knowledge_refs: [], replaces_query_id: null });
+    await fixture.finish();
+    ok(await h.request(`/queries/${query.id}/confirm`, { ...command(),
+      draft_version: query.draft_version, condition_version: query.condition_version }));
+    const before = h.captured.length;
+    await h.resumeWorker();
+    const done = await until(async () => {
+      const current = ok(await h.request(`/queries/${query.id}`));
+      assert.notEqual(current.execution_state, "failed");
+      return current.execution_state === "succeeded" ? current : false;
+    }, "historical method query succeeds");
+    const wake = await until(() => h.captured.slice(before).find(run => run.conversation_id === cid),
+      "historical method query wake");
+    await h.pauseWorker();
+    fixture.attach(wake);
+    await route(task);
+    const evidence = await fixture.invoke("save_analysis_evidence", {
+      task_id: task.task_id, condition_version: task.condition_version, data_range: "固定合成结果",
+      findings: [{ text: "记录本次固定结果，供方法来源核对。", calculation: "读取查询实际列。", limitations: [],
+        query_refs: [{ query_id: query.id, result_ref: done.result_ref, columns: [column] }], knowledge_refs: [],
+        figures: [{ label: column, query_id: query.id, column, row_index: 0, value: expected }] }],
+    });
+    await fixture.finish();
+    return { evidence, query: done };
+  };
+
+  await fixture.begin(cid, "先准备季度趋势的固定合成查询，随后确认执行。");
+  const first = await fixture.invoke("update_analysis_task", { action: "create", goal: "季度趋势与渠道贡献",
+    conditions, options: [] });
+  const trend = await queryEvidence(first, "SELECT 102000 AS trend_cents", "trend_cents", "102000");
+  await fixture.begin(cid, "继续核对二月与三月渠道贡献的固定合成查询。");
+  const current = await fixture.invoke("update_analysis_task", { action: "revise", task_id: first.task_id,
+    expected_version: first.condition_version,
+    condition_patch: { set: { time_start: "2026-02-01T00:00:00Z", group_by: ["channel"] }, unset: [] }, options: [] });
+  const contribution = await queryEvidence(current, "SELECT 11000 AS delta_cents", "delta_cents", "11000");
+  const doc = ok(await h.request("/knowledge", { ...command(), kind: "document", name: "跨阶段方法核对原则",
+    body: "先看趋势，再核对渠道贡献，保持各步骤原始范围。", related_ids: [] }));
+  const instruction = "请把季度趋势、渠道贡献及独立核对原则一起整理成我的方法草稿，保存前让我核对。";
+  await fixture.begin(cid, instruction);
+  await route(current);
+  const independent = await fixture.invoke("update_analysis_task", { action: "create", goal: "独立资料核对",
+    conditions: { ...conditions, knowledge_refs: [reference(doc)] }, options: [] });
+  const principle = await fixture.invoke("save_analysis_evidence", { task_id: independent.task_id,
+    condition_version: independent.condition_version, data_range: "独立核对资料",
+    findings: [{ text: "核对各步骤原始范围。",
+      calculation: "读取资料约定。", limitations: [], query_refs: [], knowledge_refs: [reference(doc)], figures: [] }] });
+  const input = { task_id: current.task_id, condition_version: current.condition_version, instruction_quote: instruction,
+    evidence_ids: [trend.evidence.evidence_id, contribution.evidence.evidence_id, principle.evidence_id],
+    name: "季度趋势与渠道贡献方法", body: "先查看季度趋势，再按二月和三月核对渠道贡献，并查阅独立核对原则。",
+    scope: "各步骤保留其原时间范围，不自动执行新查询。", files: [] };
+  const refs = [];
+  for (let i = 0; i < 3; i++) refs.push(await fixture.invoke("prepare_skill_draft", input));
+  await fixture.finish();
+  const drafts = [];
+  for (const ref of refs) drafts.push(ok(await h.request(`/assets/skill-drafts/${ref.draft_id}`)));
+  const expectedSources = [
+    { evidence_id: trend.evidence.evidence_id, task_id: first.task_id, condition_version: first.condition_version },
+    { evidence_id: contribution.evidence.evidence_id, task_id: current.task_id, condition_version: current.condition_version },
+    { evidence_id: principle.evidence_id, task_id: independent.task_id, condition_version: independent.condition_version },
+  ];
+  for (const draft of drafts) {
+    assert.equal(draft.status, "pending");
+    assert.equal(draft.reference.task_id, current.task_id);
+    assert.equal(draft.reference.condition_version, current.condition_version);
+    assert.deepEqual(draft.evidence_refs.map(({ evidence_id, task_id, condition_version }) =>
+      ({ evidence_id, task_id, condition_version })), expectedSources);
+    assert.deepEqual(draft.evidence_refs[0].result_dependencies,
+      [{ query_id: trend.query.id, result_ref: trend.query.result_ref }]);
+    assert.deepEqual(draft.evidence_refs[1].result_dependencies,
+      [{ query_id: contribution.query.id, result_ref: contribution.query.result_ref }]);
+  }
+  assert.deepEqual(ok(await h.request(`/assets/skill-drafts/${refs[0].draft_id}`)).evidence_refs, drafts[0].evidence_refs);
+  const saved = ok(await h.request("/assets", assetInput({ draft_id: refs[0].draft_id, name: input.name,
+    body: input.body, scope: input.scope, dependencies: drafts[0].dependencies, files: input.files })));
+  assert.equal(saved.body, input.body);
+  assert.equal(ok(await h.request(`/assets/skill-drafts/${refs[0].draft_id}`)).status, "confirmed");
+  checks.push("方法草稿可组合同任务v1趋势、v2贡献与另一任务资料；刷新和确认保留全部原task/version/result引用");
+
+  // 来源属于别的会话时，即使是本人可读资料，也不能混入本次方法。
+  const foreignCid = await h.create();
+  await fixture.begin(foreignCid, "整理另一会话的资料核对结论。");
+  const foreignTask = await fixture.invoke("update_analysis_task", { action: "create", goal: "另一会话资料",
+    conditions: { ...conditions, knowledge_refs: [reference(doc)] }, options: [] });
+  const foreignEvidence = await fixture.invoke("save_analysis_evidence", { task_id: foreignTask.task_id,
+    condition_version: foreignTask.condition_version, data_range: "另一会话",
+    findings: [{ text: "仅另一会话的资料结论。", calculation: "读取资料。", limitations: [],
+      query_refs: [], knowledge_refs: [reference(doc)], figures: [] }] });
+  await fixture.finish();
+  await fixture.begin(cid, instruction);
+  await route(current);
+  const rejected = await fixture.invokeRaw("prepare_skill_draft", { ...input,
+    evidence_ids: [trend.evidence.evidence_id, foreignEvidence.evidence_id] });
+  assert.equal(rejected.status, 409);
+  assert.equal(rejected.value.code, "invalid_evidence");
+  await fixture.finish();
+
+  await writeFile(h.directory + "/platform/permissions.json", JSON.stringify({ denied_query_users: ["alice"] }));
+  const unavailable = ok(await h.request(`/assets/skill-drafts/${refs[1].draft_id}`));
+  assert.equal(unavailable.status, "sources_unavailable");
+  assert.equal(Object.hasOwn(unavailable, "body"), false);
+  const hidden = ok(await h.request("/assets")).assets.find(asset => asset.id === saved.id);
+  assert.equal(hidden.text_unavailable, true);
+  assert.equal(JSON.stringify(hidden).includes(input.body), false);
+  await writeFile(h.directory + "/platform/permissions.json", "{}");
+  await fixture.begin(cid, "修改方法当前任务的范围说明。");
+  await fixture.invoke("update_analysis_task", { action: "revise", task_id: current.task_id,
+    expected_version: current.condition_version,
+    condition_patch: { set: { notes: "调整后的范围" }, unset: [] }, options: [] });
+  await fixture.finish();
+  assert.equal(ok(await h.request(`/assets/skill-drafts/${refs[2].draft_id}`)).status, "condition_changed");
+  checks.push("跨会话来源仍拒绝；任一历史查询撤权使待确认及已保存方法隐藏，草稿当前归属变化仍使其失效");
+}
+
 async function checkReuse() {
   let fixture, passed = false;
   const checks = [];
@@ -385,6 +508,7 @@ async function checkReuse() {
     assert.equal(adoptedVersionChanged.status, 409); assert.equal(adoptedVersionChanged.value.code, "stale_context");
     assert.equal(changedAgain.version, (BigInt(changedTable.version) + 1n).toString());
     checks.push("已撤下旧结构的线索允许补查，正式采用旧指标仍拒绝；案例→指标→表完整依赖进入实际清单，表改版仍使旧上下文失效");
+    await checkHistoricalMethodSources(fixture, checks);
     passed = true;
   } finally {
     await writeFile(".local/checks/knowledge-reuse.json", JSON.stringify({ passed, checks,

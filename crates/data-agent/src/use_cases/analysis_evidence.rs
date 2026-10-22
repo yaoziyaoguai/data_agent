@@ -17,6 +17,19 @@ pub async fn validate_sources(
     input: &Value,
     checked_text: &mut super::context_authority::CheckedTextResults,
 ) -> Result<Value> {
+    validate_sources_and_results(pool, ctx, cid, message_id, input, checked_text)
+        .await
+        .map(|(sources, _)| sources)
+}
+
+pub(super) async fn validate_sources_and_results(
+    pool: &MySqlPool,
+    ctx: &AccessContext,
+    cid: &str,
+    message_id: &str,
+    input: &Value,
+    checked_text: &mut super::context_authority::CheckedTextResults,
+) -> Result<(Value, BTreeMap<String, Value>)> {
     contracts::validate("SaveAnalysisEvidenceInput", input)?;
     if serde_json::to_vec(input)
         .map_err(|_| Error::new("invalid_input"))?
@@ -125,7 +138,7 @@ pub async fn validate_sources(
     let sources = json!({"result_dependencies":references.iter().map(|(qid,r)|json!({"query_id":qid,"result_ref":r["result_ref"]})).collect::<Vec<_>>(),
         "query_coverage":query_coverage,"knowledge_refs":knowledge_refs});
     contracts::validate("AnalysisEvidenceSources", &sources)?;
-    Ok(sources)
+    Ok((sources, results))
 }
 
 pub(super) fn assert_query(

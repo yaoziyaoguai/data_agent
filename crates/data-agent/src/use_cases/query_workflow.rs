@@ -147,44 +147,85 @@ pub async fn execute_from_message_in_tx(
     {
         return Err(Error::new("invalid_evidence"));
     }
-    let qid = input["query_id"]
-        .as_str()
-        .ok_or(Error::new("invalid_input"))?;
-    let query = queries::read_in_tx(tx, ctx, qid).await?;
+    let batch = input.get("queries").and_then(Value::as_array);
+    let requested: Vec<&Value> = batch
+        .map(|queries| queries.iter().collect())
+        .unwrap_or_else(|| vec![input]);
     let tasks = conversations::message_task_ids_in_tx(tx, conv, &message.id).await?;
-    if query["conversation_id"] != conv.id
-        || (!tasks.is_empty() && !tasks.iter().any(|task| query["task_id"] == *task))
-    {
-        return Err(Error::new("not_available"));
+    let mut ids = std::collections::BTreeSet::new();
+    let mut queries = Vec::with_capacity(requested.len());
+    for item in &requested {
+        let qid = item["query_id"]
+            .as_str()
+            .ok_or(Error::new("invalid_input"))?;
+        if !ids.insert(qid) {
+            return Err(Error::new("invalid_input"));
+        }
+        let query = queries::read_in_tx(tx, ctx, qid).await?;
+        // 批量入口的完整查询集合明确本次目标；旧单条入口保留已登记目标边界。
+        if query["conversation_id"] != conv.id
+            || (batch.is_none()
+                && !tasks.is_empty()
+                && !tasks.iter().any(|task| query["task_id"] == *task))
+        {
+            return Err(Error::new("not_available"));
+        }
+        queries.push(query);
     }
     super::context_authority::assert_run_in_tx(tx, ctx, &conv.id, &run.id).await?;
-    let confirmation = json!({"operation_id":operation,"draft_version":input["draft_version"],"condition_version":input["condition_version"]});
-    let confirmed = confirm_bound_in_tx(
-        tx,
-        ctx,
-        conv,
-        qid,
-        &confirmation,
-        Some(queries::MessageAuthorization {
-            message_id: &message.id,
-            budget_scope_id: &run.budget_scope_id,
-        }),
-        checked,
-    )
-    .await?;
-    // 只在确认成功后登记；拒绝不遗留新归属。旧查询重放不让本条输入承担旧授权。
-    conversations::route_message_in_tx(
-        tx,
-        conv,
-        &message.id,
-        query["task_id"].as_str(),
-        query["confirmation_state"] != "confirmed",
-    )
-    .await?;
-    Ok(confirmed)
+    // 整批共用任务锁与事务；后续项失败会回滚前面确认，不让首项的路由改变准入范围。
+    analysis::lock_tasks_in_tx(tx, &conv.id).await?;
+    let mut confirmed = Vec::with_capacity(queries.len());
+    for (item, query) in requested.iter().zip(&queries) {
+        let confirmation = json!({"operation_id":operation,"draft_version":item["draft_version"],"condition_version":item["condition_version"]});
+        confirmed.push(
+            confirm_locked_in_tx(
+                tx,
+                ctx,
+                conv,
+                query["id"].as_str().ok_or(Error::new("invalid_input"))?,
+                &confirmation,
+                Some(queries::MessageAuthorization {
+                    message_id: &message.id,
+                    budget_scope_id: &run.budget_scope_id,
+                }),
+                checked,
+            )
+            .await?,
+        );
+    }
+    // 整批确认后才登记；已确认项重放不让本条输入承担旧授权和预算。
+    for query in &queries {
+        conversations::route_message_in_tx(
+            tx,
+            conv,
+            &message.id,
+            query["task_id"].as_str(),
+            query["confirmation_state"] != "confirmed",
+        )
+        .await?;
+    }
+    if batch.is_some() {
+        Ok(json!({"queries":confirmed}))
+    } else {
+        confirmed.pop().ok_or(Error::new("invalid_input"))
+    }
 }
 
 async fn confirm_bound_in_tx(
+    tx: &mut AppTx<'_>,
+    ctx: &AccessContext,
+    conv: &conversations::LockedConversation,
+    qid: &str,
+    input: &Value,
+    authorization: Option<queries::MessageAuthorization<'_>>,
+    checked: &super::context_authority::CheckedTextResults,
+) -> Result<Value> {
+    analysis::lock_tasks_in_tx(tx, &conv.id).await?;
+    confirm_locked_in_tx(tx, ctx, conv, qid, input, authorization, checked).await
+}
+
+async fn confirm_locked_in_tx(
     tx: &mut AppTx<'_>,
     ctx: &AccessContext,
     conv: &conversations::LockedConversation,
@@ -199,7 +240,6 @@ async fn confirm_bound_in_tx(
     } else {
         conversations::confirmation_blocked_in_tx(tx, &conv.id).await?
     };
-    analysis::lock_tasks_in_tx(tx, &conv.id).await?;
     let v = queries::read_in_tx(tx, ctx, qid).await?;
     let first_confirmation = v["confirmation_state"] != "confirmed";
     if first_confirmation {

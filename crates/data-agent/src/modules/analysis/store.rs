@@ -140,6 +140,114 @@ fn empty_condition(value: &Value) -> bool {
         || value.as_array().is_some_and(Vec::is_empty)
 }
 
+async fn split_task_in_tx(
+    tx: &mut AppTx<'_>,
+    tasks: &LockedTasks,
+    owner: &str,
+    operation: &str,
+    input: &Value,
+    authority: &TaskTextAuthority,
+) -> Result<Value> {
+    let source = input["task_id"]
+        .as_str()
+        .ok_or(Error::new("invalid_input"))?;
+    let row = sqlx::query("SELECT condition_version,lifecycle,phase,goal,goal_authority FROM analysis_tasks WHERE id=? AND conversation_id=? AND owner_id=?")
+        .bind(source).bind(&tasks.conversation_id).bind(owner)
+        .fetch_optional(tx.connection()).await?.ok_or(Error::new("not_available"))?;
+    let version = row.get::<u64, _>("condition_version");
+    assert_task_state(
+        version,
+        epoch(input["expected_version"].as_str().unwrap_or(""))?,
+        &row.get::<String, _>("lifecycle"),
+        "",
+        false,
+    )?;
+    let conditions = &input["conditions"];
+    crate::contracts::validate("Conditions", conditions)?;
+    let goal = input["goal"]
+        .as_str()
+        .filter(|goal| !goal.trim().is_empty())
+        .ok_or(Error::new("invalid_input"))?;
+    let previous = sqlx::query(
+        "SELECT body,field_authorities FROM condition_revisions WHERE task_id=? AND version=?",
+    )
+    .bind(source)
+    .bind(version)
+    .fetch_one(tx.connection())
+    .await?;
+    let original = previous.get::<sqlx::types::Json<Value>, _>("body").0;
+    let original_authorities = previous
+        .get::<Option<sqlx::types::Json<Value>>, _>("field_authorities")
+        .map(|value| value.0)
+        .unwrap_or(Value::Null);
+    let mut field_authorities = json!({});
+    for (key, value) in conditions.as_object().expect("validated conditions") {
+        // 拆分复制已知条件时保留原来源；新目标不能通过同文复制解除旧资料约束。
+        field_authorities[key] = if empty_condition(value) {
+            authority.cleared.clone()
+        } else if original[key] == *value {
+            original_authorities[key].clone()
+        } else {
+            authority.generated.clone()
+        };
+    }
+    let goal_authority = if row.get::<String, _>("goal") == goal {
+        row.get::<Option<sqlx::types::Json<Value>>, _>("goal_authority")
+            .map(|value| value.0)
+            .unwrap_or(Value::Null)
+    } else {
+        authority.goal.clone()
+    };
+    let created =
+        create_task_in_tx(tx, tasks, owner, operation, goal, Some(&goal_authority)).await?;
+    let target = created["task_id"].as_str().expect("created task");
+    sqlx::query(
+        "INSERT INTO condition_revisions(task_id,version,body,field_authorities) VALUES(?,1,?,?)",
+    )
+    .bind(target)
+    .bind(sqlx::types::Json(conditions))
+    .bind(sqlx::types::Json(&field_authorities))
+    .execute(tx.connection())
+    .await?;
+    let moved = input["moved_clarification_ids"]
+        .as_array()
+        .ok_or(Error::new("invalid_input"))?;
+    for clarification in moved {
+        let question = clarification.as_str().ok_or(Error::new("invalid_input"))?;
+        // 仅迁移指定开放题的归属；ID、问题、选项和生成来源原样保留，既有查询不迁移。
+        let updated = sqlx::query("UPDATE clarifications SET task_id=?,condition_version=1 WHERE id=? AND conversation_id=? AND task_id=? AND state='open'")
+            .bind(target).bind(question).bind(&tasks.conversation_id).bind(source)
+            .execute(tx.connection()).await?;
+        if updated.rows_affected() != 1 {
+            return Err(Error::new("clarification_not_open"));
+        }
+    }
+    let (clarification, has_more_clarifications) = clarification_preview_in_tx(tx, target).await?;
+    let phase = if clarification.is_some() {
+        "waiting_clarification"
+    } else {
+        "investigating"
+    };
+    let (remaining, _) = clarification_preview_in_tx(tx, source).await?;
+    let previous_phase = row.get::<String, _>("phase");
+    let source_phase = if remaining.is_some() {
+        "waiting_clarification"
+    } else if previous_phase == "waiting_clarification" {
+        "investigating"
+    } else {
+        &previous_phase
+    };
+    set_phase_in_tx(tx, target, 1, phase).await?;
+    set_phase_in_tx(tx, source, version, source_phase).await?;
+    Ok(
+        json!({"task_id":target,"condition_version":"1","state":"active","phase":phase,
+        "conditions":conditions,"question":null,"options":[],"clarification":clarification,
+        "has_more_clarifications":has_more_clarifications,"opened_clarification":null,"opened_clarifications":[],
+        "source_task_id":source,"source_condition_version":version.to_string(),"source_phase":source_phase,
+        "moved_clarification_ids":moved}),
+    )
+}
+
 pub async fn apply_update_in_tx(
     tx: &mut AppTx<'_>,
     tasks: &LockedTasks,
@@ -150,6 +258,12 @@ pub async fn apply_update_in_tx(
 ) -> Result<Value> {
     tx.assert_snapshot(&tasks.transaction_id)?;
     let questions = clarification_inputs(input)?;
+    if input["action"] == "split" {
+        if !questions.is_empty() {
+            return Err(Error::new("invalid_input"));
+        }
+        return split_task_in_tx(tx, tasks, owner, operation, input, authority).await;
+    }
     if input["action"] == "clarify" && questions.is_empty() {
         return Err(Error::new("invalid_input"));
     }

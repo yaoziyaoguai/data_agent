@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useState, useRef } from "react";
+import { useEffect, useLayoutEffect, useState, useRef, useMemo } from "react";
 import type {
   Snapshot,
   QueryList,
@@ -16,6 +16,7 @@ import { conversationTitle } from "./conversation-title.ts";
 import { QueryCard } from "./QueryCard.tsx";
 import { AnalysisReport } from "./AnalysisReport.tsx";
 import { AssistantMessage } from "./AssistantMessage.tsx";
+import { objectReferenceLabels } from "./object-reference-labels.ts";
 import { ConversationFeed } from "./ConversationFeed.tsx";
 import { ModelSelector } from "./ModelSelector.tsx";
 import { useModelSelection } from "./useModelSelection.ts";
@@ -44,10 +45,15 @@ export function Workbench({
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const model = useModelSelection(space, user, cid);
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
+  const technicalIdsKey = "data-agent.technical-identifiers." + JSON.stringify([space, user]);
+  const [showTechnicalIds, setShowTechnicalIds] = useState(() => localStorage.getItem(technicalIdsKey) === "true");
+  useEffect(() => { setShowTechnicalIds(localStorage.getItem(technicalIdsKey) === "true"); }, [technicalIdsKey]);
   const [queries, setQueries] = useState<QueryList>({
     queries: [],
     confirmation_blocked: false,
   });
+  const objectReferences = useMemo(() => objectReferenceLabels(snapshot, queries.queries), [snapshot, queries.queries]);
+  const savedSql = useMemo(() => queries.queries.flatMap(query => query.sql ? [query.sql] : []), [queries.queries]);
   const [text, setText] = useState(() =>
     localStorage.getItem(draftStorageKey(space, user, cid)) ?? "",
   );
@@ -436,6 +442,13 @@ export function Workbench({
           </div>
         ) : (
           <div className="messages" aria-live="polite">
+            {Object.keys(objectReferences).length > 0 && (
+              <button type="button" className="text-link" aria-pressed={showTechnicalIds} onClick={() => {
+                const next = !showTechnicalIds;
+                setShowTechnicalIds(next);
+                localStorage.setItem(technicalIdsKey, String(next));
+              }}>{showTechnicalIds ? "隐藏技术标识" : "显示技术标识"}</button>
+            )}
             {canLoadOlder && (
               <button className="history-all" onClick={() => void loadOlder()}>
                 加载更早的消息
@@ -471,7 +484,7 @@ export function Workbench({
                   )}
                 </div>
                 {m.role === "assistant" ? (
-                  <AssistantMessage text={m.text} savedSql={queries.queries.flatMap(query => query.sql ? [query.sql] : [])} />
+                  <AssistantMessage text={m.text} savedSql={savedSql} objectReferences={showTechnicalIds ? undefined : objectReferences} />
                 ) : (
                   <>{display.subject && <small className="reply-subject">针对：{display.subject}</small>}<p>{display.text}</p></>
                 )}

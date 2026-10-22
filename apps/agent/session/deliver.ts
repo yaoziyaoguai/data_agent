@@ -53,6 +53,7 @@ export async function deliver(
   const data = run.workspace_context
     ? dataTools(transport, manager, fault, workspace?.acceptReceipt)
     : null;
+  const deferResultAnswer = Boolean(data && run.workspace_context?.result_notification?.execution_state === "succeeded");
   // SDK不能直接续接以assistant工具调用结尾的半轮；只接回已登记调用，不重新规划。
   const messages = manager.buildSessionContext().messages;
   const assistantIndex = messages.findLastIndex(message => message.role === "assistant");
@@ -197,7 +198,7 @@ export async function deliver(
     ...transport.binding(), chunk_seq, text,
   }));
   session.subscribe((event) => {
-    if (event.type === "message_start" && event.message.role === "assistant")
+    if (event.type === "message_start" && event.message.role === "assistant" && !deferResultAnswer)
       finalStartChunk = output.startMessage();
     if (event.type === "message_end" && event.message.role === "assistant")
       completedAssistant = event.message;
@@ -205,7 +206,7 @@ export async function deliver(
       event.type === "message_update" &&
       event.assistantMessageEvent.type === "text_delta"
     ) {
-      output.append(event.assistantMessageEvent.delta);
+      if (!deferResultAnswer && !data?.answer()) output.append(event.assistantMessageEvent.delta);
     }
   });
   const abort = () => {
@@ -245,7 +246,7 @@ export async function deliver(
     await output.drain();
     if (data && process.env.DATA_AGENT_TEST_COMPACT === "1")
       await session.compact();
-    const commitAnswer = async () => {
+    const commitAnswer = async (): Promise<void> => {
       await output.drain();
       // SDK可移除length等消息以整理上下文；交付必须检查实际最近完成的消息事件。
       const final = completedAssistant;
@@ -260,17 +261,34 @@ export async function deliver(
       if (signal.aborted) throw new Error("run_cancelled");
       if (final?.role === "assistant" && final.stopReason === "length")
         throw new Error("model_output_limit");
+      // 先处理真实模型失败/截断，再要求成功结果的来源正文；失败通知正常解释状态。
+      const notification = run.workspace_context?.result_notification;
+      if (data && notification?.execution_state === "succeeded" && !data.resultUnavailable(notification.query_id) && !data.answer()) {
+        await session.sendCustomMessage({customType: "data_agent_answer_sources", display: false,
+          content: "本轮是查询结果解释。请先核对get_query实际结果，完成必要操作后使用present_analysis_answer交付完整说明；数字、日期、行数通过values绑定，未返回的派生值不补算。不要重复执行查询。", details: {message_id: run.message_id}}, {triggerTurn: true});
+        if (!data.answer() && !data.resultUnavailable(notification.query_id)) throw new Error("answer_sources_required");
+        return commitAnswer();
+      }
       // Pi工具调查可以有多条助手消息；正式回答只取本轮最后一条，过程仍留在事件中。
-      const finalText = final?.role === "assistant"
+      const grounded = data?.answer();
+      const finalText = grounded?.text ?? (final?.role === "assistant"
         ? final.content.filter(part=>part.type==="text").map(part=>part.text).join("")
-        : "";
+        : "");
       if (!finalText) throw new Error("no final output");
+      if (grounded) {
+        finalStartChunk = output.startMessage();
+      } else if (deferResultAnswer) {
+        finalStartChunk = output.startMessage();
+        output.append(finalText);
+        await output.drain();
+      }
       if (fault === "before_checkpoint_commit") process.exit(75);
       await transport.post("/internal/finish", "FinishRun", {
         ...transport.binding(),
         commit_id: run.output_id,
         final_text: finalText,
         final_start_chunk_seq: String(finalStartChunk),
+        ...(grounded ? {answer_sdk_tool_call_id: grounded.sdkId} : {}),
         checkpoint: exportCheckpoint(
           manager,
           run.workspace_context?.authority_revision,

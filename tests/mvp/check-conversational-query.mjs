@@ -28,6 +28,7 @@ const createTask = async () => (await tool('update_analysis_task',{action:'creat
 const route = async task => tool('update_analysis_task',{action:'route',goal:'',task_id:task.task_id,expected_version:task.condition_version,options:[]});
 const draft = async (task,sql='SELECT :start AS start_date',parameters={start:conditions.time_start},replaces=null) => (await tool('request_query',{task_id:task.task_id,condition_version:task.condition_version,sql,parameters,target_id:'synthetic-sqlite',summary:'合成样例查询，参数为绝对日期',knowledge_refs:[],replaces_query_id:replaces})).data;
 const executeArgs = q => ({query_id:q.id,draft_version:q.draft_version,condition_version:q.condition_version,instruction_quote:run.text});
+const executeBatchArgs = queries => ({queries:queries.map(({id,draft_version,condition_version})=>({query_id:id,draft_version,condition_version})),instruction_quote:run.text});
 const read = async q => (await h.request('/queries/'+q.id)).value;
 const savedAuthorization = q => h.sql(`SELECT JSON_OBJECT('message',confirmation_message_id,'budget',budget_scope_id,'key',confirmation_key) FROM query_requests WHERE id='${q.id}'`)[0];
 const messageRouting = () => h.sql(`SELECT JSON_OBJECT('routing',routing_state,'task',routed_task_id,'applied',applied_to_task,'relations',(SELECT COUNT(*) FROM conversation_message_tasks WHERE message_id=m.id)) FROM conversation_messages m WHERE id='${run.message_id}'`)[0];
@@ -173,15 +174,44 @@ try {
   assert.deepEqual(messageRouting(),originalRouting,'已有目标不得借执行另一个查询改投其他任务');await finish();
   checks.push('查询必须属于当前会话及消息已归属的任务；其他用户不能读查询或结果');
 
-  const multiCid=await h.create();await begin(multiCid,'准备两份独立目标的SQL');
+  const multiCid=await h.create();await begin(multiCid,'准备三份独立目标的SQL');
   const leftTask=await createTask();const leftQuery=await draft(leftTask,'SELECT 31 AS value',{});
-  const rightTask=await createTask();const rightQuery=await draft(rightTask,'SELECT 37 AS value',{});await finish();
-  await begin(multiCid,'分别执行这两个已展示的查询。');await route(leftTask);await route(rightTask);
+  const rightTask=await createTask();const rightQuery=await draft(rightTask,'SELECT 37 AS value',{});
+  const excludedTask=await createTask();const excludedQuery=await draft(excludedTask,'SELECT 43 AS value',{});await finish();
+  await begin(multiCid,'只执行前两份已经展示的SQL；第三份不执行，不要再重复要求确认。');
   const taskRelations=()=>h.sql(`SELECT JSON_OBJECT('task',task_id) FROM conversation_message_tasks WHERE message_id='${run.message_id}' ORDER BY task_id`).map(value=>value.task);
-  const expectedRelations=[leftTask.task_id,rightTask.task_id].sort();assert.deepEqual(taskRelations(),expectedRelations);
-  await tool('execute_query',executeArgs(leftQuery));await tool('execute_query',executeArgs(rightQuery));
+  const expectedRelations=[leftTask.task_id,rightTask.task_id].sort();
+  const batchArgs=executeBatchArgs([leftQuery,rightQuery]);
+  const beforeBatch=messageRouting();assert.equal(beforeBatch.routing,'pending');
+  const invalidVersion=structuredClone(batchArgs);invalidVersion.queries[1].draft_version='999';
+  const failedBatch=await tool('execute_query',invalidVersion,'version_conflict');
+  const batchRejection=await h.internal('/internal/data/tool-rejections',failedBatch.input);
+  assert.equal(batchRejection.value.data.new_execution_authorized,false);
+  assert.match(batchRejection.value.data.hint,/批量确认整体未生效/);
+  assert.deepEqual(batchRejection.value.data.recovery.queries.map(query=>query.query_id),[leftQuery.id,rightQuery.id]);
+  assert.ok(batchRejection.value.data.recovery.queries.every(query=>query.execution_state==='not_submitted'));
+  assert.deepEqual(messageRouting(),beforeBatch,'第二项版本失效必须回滚第一项确认及消息归属');
+  for(const query of [leftQuery,rightQuery]){
+    assert.equal((await read(query)).execution_state,'not_submitted');
+    assert.equal(savedAuthorization(query).message,null);
+  }
+  const duplicate=executeBatchArgs([leftQuery,leftQuery]);duplicate.queries[1].draft_version='999';
+  await tool('execute_query',duplicate,'invalid_input');
+  assert.deepEqual(messageRouting(),beforeBatch,'同query不同版本不得重复列入同一授权集合');
+  await tool('execute_query',executeBatchArgs([leftQuery,unconfirmed]),'not_available');
+  await tool('execute_query',{...batchArgs,instruction_quote:'执行前两份'},'invalid_evidence');
+  assert.deepEqual(messageRouting(),beforeBatch,'跨会话查询和不完整原话均不得留下半批确认');
+  const batch=await tool('execute_query',batchArgs);
+  assert.deepEqual(batch.data.queries.map(query=>query.id),[leftQuery.id,rightQuery.id]);
+  assert.ok(batch.data.queries.every(query=>query.execution_state==='queued'));
   assert.deepEqual(taskRelations(),expectedRelations);
-  for(const query of [leftQuery,rightQuery]){assert.equal(savedAuthorization(query).message,run.message_id);assert.equal(savedAuthorization(query).budget,run.budget_scope_id);}
+  const batchAuthorizations=[leftQuery,rightQuery].map(savedAuthorization);
+  for(const authorization of batchAuthorizations){assert.equal(authorization.message,run.message_id);assert.equal(authorization.budget,run.budget_scope_id);assert.equal(authorization.key,batchAuthorizations[0].key);}
+  assert.equal((await read(excludedQuery)).execution_state,'not_submitted');
+  assert.deepEqual((await h.internal('/internal/data/tools',batch.input)).value.data,batch.data);
+  await h.restartApi();
+  assert.deepEqual((await h.internal('/internal/data/tools',batch.input)).value.data,batch.data,'API重启后接回整批原回执');
+  assert.deepEqual([leftQuery,rightQuery].map(savedAuthorization),batchAuthorizations);
   await finish();
   const consumedResults=new Set(),consumedQueryIds=new Set();
   for(let i=0;i<2;i++){
@@ -196,7 +226,13 @@ try {
     await route(resultTask);await finish();
   }
   assert.deepEqual([...consumedQueryIds].sort(),[leftQuery.id,rightQuery.id].sort());
-  checks.push('已明确登记的多目标仍分别执行，确认只追加目标关联且不删除其他关系，各查询绑定同一真实消息预算');
+  assert.equal((await read(excludedQuery)).execution_state,'not_submitted');
+  await begin(multiCid,'查看前两项已授权查询的状态，不重新运行。');
+  const replayBatch=await tool('execute_query',executeBatchArgs([leftQuery,rightQuery]));
+  assert.ok(replayBatch.data.queries.every(query=>query.execution_state==='succeeded'));
+  assert.deepEqual([leftQuery,rightQuery].map(savedAuthorization),batchAuthorizations,'后续消息重放不能成为旧查询的新授权来源或预算');
+  assert.equal(messageRouting().applied,0);await finish();
+  checks.push('单条完整原话批量确认两个独立任务，无需预先route；第三项始终未执行，全部绑定原消息/预算；后项失效、重复query、跨会话和缺失原话均不留下半批确认；API重启和后续消息重放接回原授权');
 
   const noticeCid=await h.create();await begin(noticeCid,'仅准备系统输入权限检查');
   const noticeTask=await createTask();const noticeQuery=await draft(noticeTask);await finish();

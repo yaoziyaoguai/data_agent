@@ -20,6 +20,10 @@ use std::collections::HashMap;
 pub struct Boundary {
     #[serde(rename = "AgentQueryResults")]
     pub agent_query_results: Option<AgentQueryResults>,
+    #[serde(rename = "AnalysisAnswerSource")]
+    pub analysis_answer_source: Option<AnalysisAnswerSource>,
+    #[serde(rename = "AnalysisAnswerValue")]
+    pub analysis_answer_value: Option<AnalysisAnswerValue>,
     #[serde(rename = "AnalysisEvidence")]
     pub analysis_evidence: Option<AnalysisEvidence>,
     #[serde(rename = "AnalysisEvidenceRef")]
@@ -157,6 +161,8 @@ pub struct Boundary {
     pub prefill_result: PrefillResult,
     #[serde(rename = "PrepareSkillDraftInput")]
     pub prepare_skill_draft_input: Option<PrepareSkillDraftInput>,
+    #[serde(rename = "PresentAnalysisAnswerInput")]
+    pub present_analysis_answer_input: Option<PresentAnalysisAnswerInput>,
     pub proposal: Proposal,
     #[serde(rename = "ProposalDraftCommand")]
     pub proposal_draft_command: Option<ProposalDraftCommand>,
@@ -386,6 +392,64 @@ pub enum AgentQueryResultsView {
     Cell,
     Rows,
     Statistics,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AnalysisAnswerSource {
+    pub columns: Vec<String>,
+    pub query_id: String,
+    pub result_ref: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AnalysisAnswerValue {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub column: Option<String>,
+    pub kind: AnalysisAnswerValueKind,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub metadata: Option<Metadata>,
+    pub name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub parameter: Option<String>,
+    pub query_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub row_index: Option<i32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub statistic: Option<Statistic>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AnalysisAnswerValueKind {
+    Cell,
+    Metadata,
+    Parameter,
+    Statistic,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Metadata {
+    #[serde(rename = "data_freshness")]
+    DataFreshness,
+    #[serde(rename = "saved_row_count")]
+    SavedRowCount,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Statistic {
+    #[serde(rename = "distinct_count")]
+    DistinctCount,
+    Negative,
+    #[serde(rename = "non_null_count")]
+    NonNullCount,
+    #[serde(rename = "null_count")]
+    NullCount,
+    Positive,
+    #[serde(rename = "row_count")]
+    RowCount,
+    Zero,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -640,6 +704,9 @@ pub struct AnalysisUpdate {
     pub expected_version: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub goal: Option<String>,
+    /// split迁移到新独立目标的原开放问题ID，保留问题正文与来源，其余原目标问题不动。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub moved_clarification_ids: Option<Vec<String>>,
     /// 澄清问题的候选答案；question=null时传[]。
     pub options: Vec<String>,
     /// 需要用户补充的实际问题；无需澄清时省略（也接受JSON null），不能填字符串null、空文本或用户原问题。
@@ -662,6 +729,7 @@ pub enum AnalysisUpdateAction {
     Create,
     Revise,
     Route,
+    Split,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1245,6 +1313,8 @@ pub enum ToolName {
     ManagePersonalAsset,
     #[serde(rename = "prepare_skill_draft")]
     PrepareSkillDraft,
+    #[serde(rename = "present_analysis_answer")]
+    PresentAnalysisAnswer,
     #[serde(rename = "propose_semantic_change")]
     ProposeSemanticChange,
     Read,
@@ -1327,6 +1397,8 @@ pub enum EventType {
     RunCancelled,
     #[serde(rename = "run_failed")]
     RunFailed,
+    #[serde(rename = "skill_draft_prepared")]
+    SkillDraftPrepared,
     #[serde(rename = "task_cancelled")]
     TaskCancelled,
     #[serde(rename = "task_changed")]
@@ -1337,9 +1409,22 @@ pub enum EventType {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ExecuteQueryInput {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub condition_version: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub draft_version: Option<String>,
+    pub instruction_quote: String,
+    /// 同一用户消息明确授权的完整查询集合，一次确认；不能与单条query_id/draft_version/condition_version同时传。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub queries: Option<Vec<Query>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub query_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Query {
     pub condition_version: String,
     pub draft_version: String,
-    pub instruction_quote: String,
     pub query_id: String,
 }
 
@@ -1387,6 +1472,9 @@ pub enum FinishReceiptState {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FinishRun {
+    /// 使用present_analysis_answer成功回执交付时绑定该SDK调用，正文须与宿主生成值一致。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub answer_sdk_tool_call_id: Option<String>,
     pub checkpoint: Checkpoint,
     pub commit_id: String,
     /// Pi最后助手消息的首个已保存片段序号；省略时沿用从1起的完整文本校验。
@@ -1957,7 +2045,8 @@ pub struct MemoryBudgetBinding {
     pub id: String,
     pub kind: MemoryBudgetBindingKind,
     pub operation_id: String,
-    pub sdk_tool_call_id: String,
+    /// run工具绑定真实SDK调用ID；run启动检索与index作业为null，其operation/租约/用途由宿主核对。
+    pub sdk_tool_call_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -2296,6 +2385,14 @@ pub struct PrepareSkillDraftInput {
     pub name: String,
     pub scope: String,
     pub task_id: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PresentAnalysisAnswerInput {
+    pub sources: Vec<AnalysisAnswerSource>,
+    /// 解释模板，数字/日期/单位换算结果全部用{{name}}引用values；不在模板中写数字或SQL代码块。定性解释必须有依据，不写未经证实的因果。
+    pub template: String,
+    pub values: Vec<AnalysisAnswerValue>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -2698,6 +2795,9 @@ pub struct WorkspaceContext {
     pub recent_messages: Vec<ChatMessage>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub request_clock: Option<RequestClock>,
+    /// 宿主查询终态通知身份；普通用户消息省略，不从文字前缀推断成功。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub result_notification: Option<ResultNotification>,
     pub selected_skills: Vec<ModelAssetPreview>,
     pub tasks: Vec<WorkspaceTask>,
 }
@@ -2743,6 +2843,21 @@ pub enum MemoryRetrieval {
     DirectoryFallback,
     #[serde(rename = "mem0_authoritative")]
     Mem0Authoritative,
+}
+
+/// 宿主查询终态通知身份；普通用户消息省略，不从文字前缀推断成功。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ResultNotification {
+    pub execution_state: ExecutionState,
+    pub query_id: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ExecutionState {
+    Cancelled,
+    Failed,
+    Succeeded,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

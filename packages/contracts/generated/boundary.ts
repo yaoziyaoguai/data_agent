@@ -1,6 +1,8 @@
 // Generated from packages/contracts/schema.json; do not edit.
 export interface Boundary {
     AgentQueryResults?:           AgentQueryResults;
+    AnalysisAnswerSource?:        AnalysisAnswerSource;
+    AnalysisAnswerValue?:         AnalysisAnswerValue;
     AnalysisEvidence?:            AnalysisEvidence;
     AnalysisEvidenceRef?:         AnalysisEvidenceRef;
     AnalysisEvidenceSources?:     AnalysisEvidenceSources;
@@ -104,6 +106,7 @@ export interface Boundary {
     pi_session_reference:         PiSessionReference;
     prefillResult:                PrefillResult;
     PrepareSkillDraftInput?:      PrepareSkillDraftInput;
+    PresentAnalysisAnswerInput?:  PresentAnalysisAnswerInput;
     proposal:                     Proposal;
     ProposalDraftCommand?:        ProposalDraftCommand;
     proposalInput:                ProposalInput;
@@ -277,6 +280,29 @@ export type ResultStatisticsScope = "page" | "complete_result";
  * rows默认；statistics独立统计；cell按绝对行列读值。
  */
 export type AgentQueryResultsView = "statistics" | "cell" | "rows";
+
+export interface AnalysisAnswerSource {
+    columns:    [string, ...string[]];
+    query_id:   string;
+    result_ref: string;
+}
+
+export interface AnalysisAnswerValue {
+    column?:    string;
+    kind:       AnalysisAnswerValueKind;
+    metadata?:  Metadata;
+    name:       string;
+    parameter?: string;
+    query_id:   string;
+    row_index?: number;
+    statistic?: Statistic;
+}
+
+export type AnalysisAnswerValueKind = "cell" | "statistic" | "parameter" | "metadata";
+
+export type Metadata = "data_freshness" | "saved_row_count";
+
+export type Statistic = "row_count" | "non_null_count" | "null_count" | "distinct_count" | "positive" | "zero" | "negative";
 
 export interface AnalysisEvidence {
     conditions:        Conditions;
@@ -661,6 +687,15 @@ export interface SkillFile {
      */
     content: string;
     path:    string;
+}
+
+export interface PresentAnalysisAnswerInput {
+    sources: [AnalysisAnswerSource, ...AnalysisAnswerSource[]];
+    /**
+     * 解释模板，数字/日期/单位换算结果全部用{{name}}引用values；不在模板中写数字或SQL代码块。定性解释必须有依据，不写未经证实的因果。
+     */
+    template: string;
+    values:   AnalysisAnswerValue[];
 }
 
 export interface ProposalDraftCommand {
@@ -1084,6 +1119,10 @@ export interface AnalysisUpdate {
     expected_version?: null | string;
     goal?:             string;
     /**
+     * split迁移到新独立目标的原开放问题ID，保留问题正文与来源，其余原目标问题不动。
+     */
+    moved_clarification_ids?: string[];
+    /**
      * 澄清问题的候选答案；question=null时传[]。
      */
     options: string[];
@@ -1102,7 +1141,7 @@ export interface AnalysisUpdate {
     task_id?: null | string;
 }
 
-export type AnalysisUpdateAction = "create" | "revise" | "clarify" | "route";
+export type AnalysisUpdateAction = "create" | "revise" | "clarify" | "route" | "split";
 
 export interface ClarificationRequest {
     /**
@@ -1346,7 +1385,7 @@ export interface DataToolInvocation {
     tool_name:        ToolName;
 }
 
-export type ToolName = "search_knowledge" | "read_knowledge" | "read_source" | "validate_sql" | "request_query" | "execute_query" | "update_analysis_task" | "get_query" | "cancel_query" | "manage_personal_asset" | "propose_semantic_change" | "read_conversation" | "read_analysis_task" | "read" | "save_analysis_evidence" | "save_analysis_report" | "read_analysis_report" | "prepare_skill_draft";
+export type ToolName = "search_knowledge" | "read_knowledge" | "read_source" | "validate_sql" | "request_query" | "execute_query" | "update_analysis_task" | "get_query" | "cancel_query" | "manage_personal_asset" | "propose_semantic_change" | "read_conversation" | "read_analysis_task" | "read" | "save_analysis_evidence" | "save_analysis_report" | "read_analysis_report" | "prepare_skill_draft" | "present_analysis_answer";
 
 export interface DataToolOutcome {
     data:         { [key: string]: unknown };
@@ -1369,12 +1408,22 @@ export interface Event {
     type:            EventType;
 }
 
-export type EventType = "message" | "assistant_delta" | "assistant_committed" | "assistant_replaced" | "tool_result" | "run_failed" | "run_cancelled" | "query_changed" | "query_result" | "memory_saved" | "task_changed" | "conversation_deleted" | "message_withdrawn" | "task_cancelled" | "memory_disabled" | "analysis_evidence_saved" | "analysis_report_saved";
+export type EventType = "message" | "assistant_delta" | "assistant_committed" | "assistant_replaced" | "tool_result" | "run_failed" | "run_cancelled" | "query_changed" | "query_result" | "memory_saved" | "task_changed" | "conversation_deleted" | "message_withdrawn" | "task_cancelled" | "memory_disabled" | "analysis_evidence_saved" | "analysis_report_saved" | "skill_draft_prepared";
 
 export interface ExecuteQueryInput {
+    condition_version?: string;
+    draft_version?:     string;
+    instruction_quote:  string;
+    /**
+     * 同一用户消息明确授权的完整查询集合，一次确认；不能与单条query_id/draft_version/condition_version同时传。
+     */
+    queries?:  [Query, ...Query[]];
+    query_id?: string;
+}
+
+export interface Query {
     condition_version: string;
     draft_version:     string;
-    instruction_quote: string;
     query_id:          string;
 }
 
@@ -1409,8 +1458,12 @@ export interface FinishReceipt {
 export type FinishReceiptState = "finished";
 
 export interface FinishRun {
-    checkpoint: Checkpoint;
-    commit_id:  string;
+    /**
+     * 使用present_analysis_answer成功回执交付时绑定该SDK调用，正文须与宿主生成值一致。
+     */
+    answer_sdk_tool_call_id?: string;
+    checkpoint:               Checkpoint;
+    commit_id:                string;
     /**
      * Pi最后助手消息的首个已保存片段序号；省略时沿用从1起的完整文本校验。
      */
@@ -1638,11 +1691,14 @@ export interface LogoutReceipt {
 export type LogoutReceiptState = "logged_out";
 
 export interface MemoryBudgetBinding {
-    epoch:            string;
-    id:               string;
-    kind:             MemoryBudgetBindingKind;
-    operation_id:     string;
-    sdk_tool_call_id: string;
+    epoch:        string;
+    id:           string;
+    kind:         MemoryBudgetBindingKind;
+    operation_id: string;
+    /**
+     * run工具绑定真实SDK调用ID；run启动检索与index作业为null，其operation/租约/用途由宿主核对。
+     */
+    sdk_tool_call_id: null | string;
 }
 
 export type MemoryBudgetBindingKind = "run" | "index";
@@ -2082,8 +2138,12 @@ export interface WorkspaceContext {
     query_observations: { [key: string]: unknown }[];
     recent_messages:    ChatMessage[];
     request_clock?:     RequestClock;
-    selected_skills:    ModelAssetPreview[];
-    tasks:              WorkspaceTask[];
+    /**
+     * 宿主查询终态通知身份；普通用户消息省略，不从文字前缀推断成功。
+     */
+    result_notification?: ResultNotification;
+    selected_skills:      ModelAssetPreview[];
+    tasks:                WorkspaceTask[];
 }
 
 export interface AssetCounts {
@@ -2115,6 +2175,16 @@ export interface ModelAssetPreview {
 }
 
 export type MemoryRetrieval = "mem0_authoritative" | "directory_fallback";
+
+/**
+ * 宿主查询终态通知身份；普通用户消息省略，不从文字前缀推断成功。
+ */
+export interface ResultNotification {
+    execution_state: ExecutionState;
+    query_id:        string;
+}
+
+export type ExecutionState = "succeeded" | "failed" | "cancelled";
 
 export interface RunSnapshot {
     lease_epoch: string;

@@ -46,8 +46,12 @@ export function workspaceContext(workspace: WorkspaceContext) {
         facts.tasks = facts.tasks.filter(task => task.id !== receipt.data.id);
       if (receipt.tool_name === 'update_analysis_task')
         // route不改条件且回执不带正文，仍保留同版候选；修订成功才撤下旧版。
-        facts.tasks = facts.tasks.filter(task => task.id !== receipt.data.task_id || task.condition_version === receipt.data.condition_version);
+        facts.tasks = facts.tasks.filter(task => task.id !== receipt.data.source_task_id && (task.id !== receipt.data.task_id || task.condition_version === receipt.data.condition_version));
       if (['request_query', 'get_query', 'execute_query', 'cancel_query'].includes(receipt.tool_name)) {
+        if (Array.isArray(receipt.data.queries)) {
+          const ids = new Set<unknown>(receipt.data.queries.map(query => query?.id));
+          facts.query_observations = facts.query_observations.filter(observation => !ids.has(observation.id));
+        }
         const query = receipt.tool_name === 'get_query' ? receipt.data.query : receipt.data;
         if (query && typeof query === 'object' && !Array.isArray(query) && 'id' in query)
           facts.query_observations = facts.query_observations.filter(observation => observation.id !== query.id);

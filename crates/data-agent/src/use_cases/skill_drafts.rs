@@ -49,8 +49,6 @@ async fn evidence_in_tx(
     tx: &mut AppTx<'_>,
     ctx: &AccessContext,
     cid: &str,
-    task: &str,
-    version: &Value,
     requested: &Value,
     saved_refs: bool,
 ) -> Result<Value> {
@@ -63,11 +61,7 @@ async fn evidence_in_tx(
         };
         let current = analysis::read_evidence_in_tx(tx, ctx, evidence_id).await?;
         let reference = &current["reference"];
-        if reference["conversation_id"] != cid
-            || reference["task_id"] != task
-            || reference["condition_version"] != *version
-            || (saved_refs && reference != requested)
-        {
+        if reference["conversation_id"] != cid || (saved_refs && reference != requested) {
             return Err(Error::new("invalid_evidence"));
         }
         evidence.push(current);
@@ -85,20 +79,16 @@ async fn evidence_in_tx(
         return Err(Error::new("payload_limit"));
     }
     super::knowledge::check_refs_in_tx(tx, ctx, &sources["knowledge_refs"]).await?;
-    for reference in sources["result_dependencies"]
-        .as_array()
-        .expect("checked sources")
-    {
-        let query = queries::read_in_tx(tx, ctx, text(reference, "query_id")?).await?;
-        if query["conversation_id"] != cid
-            || query["task_id"] != task
-            || query["condition_version"] != *version
-            || query["execution_state"] != "succeeded"
-            || query["result_ref"] != reference["result_ref"]
+    // 草稿归属保持当前版本；历史依据及查询分别按自己的原归属核对，不能改标为草稿条件。
+    for item in evidence.as_array().expect("checked evidence") {
+        for dependency in item["validated_sources"]["result_dependencies"]
+            .as_array()
+            .ok_or(Error::new("invalid_evidence"))?
         {
-            return Err(Error::new("invalid_evidence"));
+            let query = queries::read_in_tx(tx, ctx, text(dependency, "query_id")?).await?;
+            super::analysis_evidence::assert_query(&query, cid, &item["reference"], dependency)?;
+            super::knowledge::check_refs_in_tx(tx, ctx, &query["knowledge_refs"]).await?;
         }
-        super::knowledge::check_refs_in_tx(tx, ctx, &query["knowledge_refs"]).await?;
     }
     Ok(evidence)
 }
@@ -145,16 +135,7 @@ pub async fn validate_sources(
         epoch(text(input, "condition_version")?)?,
     )
     .await?;
-    let evidence = evidence_in_tx(
-        &mut tx,
-        ctx,
-        cid,
-        text(input, "task_id")?,
-        &input["condition_version"],
-        &input["evidence_ids"],
-        false,
-    )
-    .await?;
+    let evidence = evidence_in_tx(&mut tx, ctx, cid, &input["evidence_ids"], false).await?;
     let authorities =
         super::analysis_reports::evidence_authorities_in_tx(&mut tx, ctx, cid, &evidence).await?;
     tx.commit().await?;
@@ -200,16 +181,7 @@ pub async fn prepare_in_tx(
         epoch(text(input, "condition_version")?)?,
     )
     .await?;
-    let evidence = evidence_in_tx(
-        tx,
-        ctx,
-        &conversation.id,
-        text(input, "task_id")?,
-        &input["condition_version"],
-        &input["evidence_ids"],
-        false,
-    )
-    .await?;
+    let evidence = evidence_in_tx(tx, ctx, &conversation.id, &input["evidence_ids"], false).await?;
     if evidence != *checked.evidence {
         return Err(Error::new("invalid_evidence"));
     }
@@ -283,16 +255,7 @@ async fn check_pending_in_tx(
         return Err(Error::new("version_conflict"));
     }
     let body = draft.body.as_ref().ok_or(Error::new("invalid_input"))?;
-    let evidence = evidence_in_tx(
-        tx,
-        ctx,
-        &conversation.id,
-        text(reference, "task_id")?,
-        &reference["condition_version"],
-        &body["evidence_refs"],
-        true,
-    )
-    .await?;
+    let evidence = evidence_in_tx(tx, ctx, &conversation.id, &body["evidence_refs"], true).await?;
     if super::analysis_reports::sources(&evidence)?["knowledge_refs"] != body["dependencies"] {
         return Err(Error::new("invalid_evidence"));
     }

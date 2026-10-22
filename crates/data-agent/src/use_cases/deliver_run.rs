@@ -176,6 +176,14 @@ pub async fn start_delivery(
             .unwrap_or_else(super::context_authority::empty);
         // 历史只由Pi恢复；完整原话可经read_conversation分页补读，不再注入300字副本。
         let mut visible = json!({"request_clock":message.request_clock,"input_task_ids":input_task_ids,"tasks":tasks.iter().take(24.max(input_task_ids.len())).map(|t|if invalidated{json!({"id":t["id"],"condition_version":t["condition_version"],"lifecycle":t["lifecycle"],"phase":t["phase"],"context_complete":false,"note":"依据已失效，请重新调查"})}else{t.clone()}).collect::<Vec<_>>(),"recent_messages":[],"selected_skills":selected,"memories":memories,"query_observations":crate::modules::queries::list_in_tx(&mut tx,&conversation.id).await?.iter().rev().take(12).map(|q|json!({"id":q["id"],"task_id":q["task_id"],"condition_version":q["condition_version"],"execution_state":q["execution_state"]})).collect::<Vec<_>>(),"asset_counts":asset_counts});
+        if let Some(qid) =
+            conversations::result_query_for_message_in_tx(&mut tx, &conversation.id, &message.id)
+                .await?
+        {
+            let query = crate::modules::queries::read_in_tx(&mut tx, &context, &qid).await?;
+            visible["result_notification"] =
+                json!({"query_id":qid,"execution_state":query["execution_state"]});
+        }
         // 已失效任务只交付状态，不能把旧口径经初始工作区再次送入模型。
         let mut task_text_dependencies = std::collections::HashMap::new();
         for task in visible["tasks"].as_array_mut().into_iter().flatten() {

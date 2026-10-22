@@ -1008,9 +1008,20 @@ try {
   await completeRound("结果归属独立任务", [
     toolStep("update_analysis_task", routeArgs(unrelatedTask)),
     toolStep("get_query", { query_id: unrelatedDraft.id }),
-    finalStep("渠道查询结果已返回，退款率的分母问题仍待回答。", (body) => {
-      assert.equal(lastReply(body).query.execution_state, "succeeded");
-      assert.equal(lastReply(body).results.rows.length, 1);
+    toolStep("present_analysis_answer", body => {
+      const result = lastReply(body);
+      assert.equal(result.query.execution_state, "succeeded");
+      assert.equal(result.results.rows.length, 1);
+      // 合成种子一月有已支付非测试的web/app/store；答案引用实际结果，不在正文补写数字。
+      assert.deepEqual(result.results.rows, [["3"]]);
+      return {
+        template: "渠道查询结果已返回，渠道数量为{{channel_count}}，退款率的分母问题仍待回答。",
+        sources: [{ query_id: unrelatedDraft.id, result_ref: result.results.result_ref, columns: ["channel_count"] }],
+        values: [{ name: "channel_count", query_id: unrelatedDraft.id, kind: "cell", column: "channel_count", row_index: 0 }],
+      };
+    }),
+    finalStep("渠道查询结果已返回，渠道数量为3，退款率的分母问题仍待回答。", body => {
+      assert.equal(lastReply(body).answer_text, "渠道查询结果已返回，渠道数量为3，退款率的分母问题仍待回答。");
     }),
   ]);
   assert.deepEqual(openQuestions(waitingTask), [waitingQuestion]);

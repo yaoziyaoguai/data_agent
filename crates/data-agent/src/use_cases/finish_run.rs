@@ -7,6 +7,20 @@ use crate::{
 use serde_json::{Value, json};
 use sqlx::MySqlPool;
 
+fn completed_receipt(
+    run: &runtime::LockedRun,
+    input: &FinishRun,
+    fp: &str,
+) -> Result<Option<Value>> {
+    if let Some(commit) = &run.commit_id {
+        if commit != &input.commit_id || run.commit_fingerprint.as_deref() != Some(fp) {
+            return Err(Error::new("idempotency_conflict"));
+        }
+        return Ok(Some(json!({"state":"finished","output_id":run.output_id})));
+    }
+    Ok(None)
+}
+
 pub async fn append_output(
     pool: &MySqlPool,
     context: &AccessContext,
@@ -38,16 +52,29 @@ pub async fn finish_run(
 ) -> Result<Value> {
     let cid = runtime::locate_run(pool, &input.run_id).await?;
     let mut tx = AppTx::begin(pool).await?;
-    let conversation = conversations::lock_conversation_in_tx(&mut tx, context, &cid).await?;
-    let run = runtime::lock_run_in_tx(&mut tx, &input.run_id, &cid).await?;
+    let mut conversation = conversations::lock_conversation_in_tx(&mut tx, context, &cid).await?;
+    let mut run = runtime::lock_run_in_tx(&mut tx, &input.run_id, &cid).await?;
     let fp = fingerprint(&serde_json::to_value(&input).expect("finish input"));
-    if let Some(commit) = &run.commit_id {
-        if commit != &input.commit_id || run.commit_fingerprint.as_deref() != Some(&fp) {
-            return Err(Error::new("idempotency_conflict"));
-        }
+    if let Some(receipt) = completed_receipt(&run, &input, &fp)? {
         tx.commit().await?;
-        return Ok(json!({"state":"finished","output_id":run.output_id}));
+        return Ok(receipt);
     }
+    let checked_answer = if input.answer_sdk_tool_call_id.is_some() {
+        // 已提交只接回事实；未提交的来源答案在事务外回源，再锁定原运行提交。
+        tx.commit().await?;
+        let checked =
+            super::context_authority::check_run_results(pool, context, &input.run_id).await?;
+        tx = AppTx::begin(pool).await?;
+        conversation = conversations::lock_conversation_in_tx(&mut tx, context, &cid).await?;
+        run = runtime::lock_run_in_tx(&mut tx, &input.run_id, &cid).await?;
+        if let Some(receipt) = completed_receipt(&run, &input, &fp)? {
+            tx.commit().await?;
+            return Ok(receipt);
+        }
+        Some(checked)
+    } else {
+        None
+    };
     conversations::assert_turn_in_tx(
         &tx,
         &conversation,
@@ -57,12 +84,37 @@ pub async fn finish_run(
     if std::env::var("DATA_AGENT_TOOLSET").as_deref() == Ok("data") {
         conversations::assert_routed_in_tx(&mut tx, &conversation, &run.message_id).await?;
     }
+    if let Some(sdk_id) = &input.answer_sdk_tool_call_id {
+        super::context_authority::assert_checked_run_in_tx(
+            &mut tx,
+            &run.id,
+            checked_answer.as_ref().expect("checked answer"),
+        )
+        .await?;
+        let tool = runtime::lock_tool_call_in_tx(&mut tx, &run, sdk_id)
+            .await?
+            .ok_or(Error::new("invalid_evidence"))?;
+        let receipt = tool
+            .receipt
+            .as_ref()
+            .ok_or(Error::new("invalid_evidence"))?;
+        if receipt["tool_name"] != "present_analysis_answer"
+            || receipt["data"]["answer_text"] != input.final_text
+        {
+            return Err(Error::new("invalid_evidence"));
+        }
+        super::context_authority::assert_run_in_tx(&mut tx, context, &cid, &run.id).await?;
+    }
     let final_start = input
         .final_start_chunk_seq
         .as_deref()
         .map(epoch)
         .transpose()?
         .unwrap_or(1);
+    if input.answer_sdk_tool_call_id.is_some() {
+        // 来源答案校验与正文提交同事务，不先广播未经最终核验的assistant_delta。
+        runtime::append_output_in_tx(&mut tx, &run, final_start, &input.final_text).await?;
+    }
     let persisted = runtime::read_output_text_in_tx(&mut tx, &run, final_start).await?;
     if persisted != input.final_text {
         return Err(Error::new("chunk_gap"));

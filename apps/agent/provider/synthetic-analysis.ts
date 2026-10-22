@@ -111,9 +111,22 @@ export function syntheticAction(
       return {
         text: `查询状态为 ${result.query.execution_state}，尚无可解释的结果。`,
       };
-    return {
-      text: `查询已完成：${result.query.summary}\n\n${r.columns.map((c: RecordValue) => c.name).join("、")}：${r.rows.map((row: unknown[]) => row.map((v) => v ?? "NULL").join(" / ")).join("；") || "无符合条件的行"}。来源为可执行合成数据；${r.result_complete ? "本页已取完整查询结果" : "当前为部分结果，不能代表全量"}。金额字段单位为分，退款归属以本次SQL和业务口径为准。分组差异不能直接证明原因。`,
-    };
+    if (has("present_analysis_answer")) return {text: "结果已按实际来源交付。"};
+    const columns = r.columns.slice(0, 10) as RecordValue[];
+    const values: RecordValue[] = [];
+    const rows = (r.rows as unknown[][]).slice(0, 5).map((_row, rowIndex) =>
+      columns.map((column, columnIndex) => {
+        const index = rowIndex * columns.length + columnIndex;
+        const name = "cell_" + String.fromCharCode(97 + Math.floor(index / 26)) + String.fromCharCode(97 + index % 26);
+        values.push({name, kind: "cell", query_id: qid, column: column.name, row_index: rowIndex});
+        return "{{" + name + "}}";
+      }).join(" / "));
+    return {tool: "present_analysis_answer", args: {
+      sources: [{query_id: qid, result_ref: r.result_ref, columns: columns.map(column => column.name)}], values,
+      template: "查询已完成。以下为实际结果预览，字段顺序及单位见查询卡片：\n\n" +
+        (rows.map(row => "- " + row).join("\n") || "没有符合条件的行。") +
+        "\n\n这里只展示部分预览；完整范围和下载以查询卡片为准。当前是固定合成演示，不代表真实模型的自主分析能力。",
+    }};
   }
   if (
     /(你好|谢谢|早上好|hi\b)/i.test(input) &&

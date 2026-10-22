@@ -9900,5 +9900,191 @@
     },
     "valid": true,
     "roundtrip": true
+  },
+  {
+    "name": "记忆启动检索没有SDK调用身份",
+    "schema": "MemoryBudgetBinding",
+    "value": {
+      "kind": "run",
+      "id": "run",
+      "epoch": "1",
+      "sdk_tool_call_id": null,
+      "operation_id": "context-message"
+    },
+    "valid": true
+  },
+  {
+    "name": "记忆后台索引绑定作业身份",
+    "schema": "MemoryBudgetBinding",
+    "value": {
+      "kind": "index",
+      "id": "job",
+      "epoch": "1",
+      "sdk_tool_call_id": null,
+      "operation_id": "job"
+    },
+    "valid": true
+  },
+  {
+    "name": "记忆后台索引不能伪装工具调用",
+    "schema": "MemoryBudgetBinding",
+    "value": {
+      "kind": "index",
+      "id": "run",
+      "epoch": "1",
+      "sdk_tool_call_id": "sdk",
+      "operation_id": "context-message"
+    },
+    "valid": false
+  },
+  {
+    "name": "同一消息批量确认查询",
+    "schema": "ExecuteQueryInput",
+    "value": {
+      "queries": [
+        {
+          "query_id": "query-a",
+          "draft_version": "1",
+          "condition_version": "2"
+        },
+        {
+          "query_id": "query-c",
+          "draft_version": "1",
+          "condition_version": "2"
+        }
+      ],
+      "instruction_quote": "只执行A和C，B不执行"
+    },
+    "valid": true
+  },
+  {
+    "name": "批量查询不混用单条字段",
+    "schema": "ExecuteQueryInput",
+    "value": {
+      "queries": [
+        {
+          "query_id": "query-a",
+          "draft_version": "1",
+          "condition_version": "2"
+        }
+      ],
+      "query_id": "query-a",
+      "draft_version": "1",
+      "condition_version": "2",
+      "instruction_quote": "执行"
+    },
+    "valid": false
+  },
+  {
+    "name": "批量查询集合不能为空",
+    "schema": "ExecuteQueryInput",
+    "value": {
+      "queries": [],
+      "instruction_quote": "执行"
+    },
+    "valid": false
+  },
+  {
+    "name": "定量说明绑定实际单元格",
+    "schema": "PresentAnalysisAnswerInput",
+    "value": {
+      "template": "净收入{{amount}}分。",
+      "sources": [
+        {
+          "query_id": "query",
+          "result_ref": "result",
+          "columns": [
+            "amount"
+          ]
+        }
+      ],
+      "values": [
+        {
+          "name": "amount",
+          "kind": "cell",
+          "query_id": "query",
+          "row_index": 0,
+          "column": "amount"
+        }
+      ]
+    },
+    "valid": true
+  },
+  {
+    "name": "定量说明不接受直接补算数字",
+    "schema": "PresentAnalysisAnswerInput",
+    "value": {
+      "template": "增长10.8%",
+      "sources": [
+        {
+          "query_id": "query",
+          "result_ref": "result",
+          "columns": [
+            "amount"
+          ]
+        }
+      ],
+      "values": [
+        {
+          "name": "amount",
+          "kind": "cell",
+          "query_id": "query",
+          "row_index": 0,
+          "column": "amount"
+        }
+      ]
+    },
+    "valid": false
+  },
+  {
+    "name": "定量说明不接受全角数字绕过",
+    "schema": "PresentAnalysisAnswerInput",
+    "value": {
+      "template": "增长１０%",
+      "sources": [
+        {
+          "query_id": "query",
+          "result_ref": "result",
+          "columns": [
+            "amount"
+          ]
+        }
+      ],
+      "values": [
+        {
+          "name": "amount",
+          "kind": "cell",
+          "query_id": "query",
+          "row_index": 0,
+          "column": "amount"
+        }
+      ]
+    },
+    "valid": false
+  },
+  {
+    "name": "定量说明不接受任意算式",
+    "schema": "PresentAnalysisAnswerInput",
+    "value": {
+      "template": "净收入{{amount}}分。",
+      "sources": [
+        {
+          "query_id": "query",
+          "result_ref": "result",
+          "columns": [
+            "amount"
+          ]
+        }
+      ],
+      "values": [
+        {
+          "name": "amount",
+          "kind": "expression",
+          "query_id": "query",
+          "expression": "sum(amount)"
+        }
+      ]
+    },
+    "valid": false
   }
 ]

@@ -37,11 +37,11 @@ const definitions = {
   ],
   execute_query: [
     "ExecuteQueryInput",
-    "提交用户明确要求执行的SQL。instruction_quote逐字填写当前用户完整原话，保留否定、限定、换行及粘贴内容。本消息尚无任务关联时，原子登记查询所属任务并确认；已有归属须包含目标，多目标先分别登记。失败不新增关联或授权，其他待处理消息仍可阻塞。授权、版本与澄清规则见系统指令。重复调用接回原查询，不再次执行或转移预算；明确重新运行先新建查询。",
+    "提交用户明确要求执行的SQL。instruction_quote逐字填写当前用户完整原话，保留否定、限定、换行及粘贴内容。单条可用query_id/draft_version/condition_version；多条必须一次传queries数组列出本消息明确授权的完整集合，不混用两种形状，也不先route。整批核验与确认同事务；任一项拒绝时本批没有新增确认。已确认项仅接回原状态。失败不新增关联或授权，其他待处理消息仍可阻塞。授权、版本与澄清规则见系统指令。重复调用接回原查询，不再次执行或转移预算；明确重新运行先新建查询。",
   ],
   update_analysis_task: [
     "AnalysisUpdate",
-    "登记消息归属，返回task_id/condition_version。create提供goal和完整conditions；未指定标量用null，数组[]，notes空串，timezone取宿主。已有任务沿用回执ID/当前版本，goal省略即保留原目标及来源；revise/clarify必带condition_patch={set:{改动字段:新值},unset:[清空字段]}，无改动用空set/空unset，旧稿随修订失效。knowledge_refs仅放已读对象id/version/path，source_id不是object_id。提问使用clarifications数组，每项只含一个可独立回答的决定；分子、分母、观察期等可以分别回答时分别登记，不能把另一个决定塞进问题正文或选项。省略顶层question并令options=[]；question仅兼容单题且与数组互斥。不提问时两者均省略。回答传resolved_clarification_ids，只关闭完整答完的原问题；opened_clarifications为新问题全集，clarification仅最早未答项；has_more_clarifications=true时用read_analysis_task补齐其余未答问题。route只登记归属，禁止条件与补丁；仅改SQL时携replaces_query_id失效旧稿，普通追问不带。",
+    "登记消息归属，返回task_id/condition_version。独立条件从联合任务分离时用split：task_id/expected_version指原任务，goal/conditions写新目标，moved_clarification_ids迁移该目标仍开放的问题；其他原问题和原查询归属不变。split不带condition_patch或resolved_clarification_ids。create提供goal和完整conditions；未指定标量用null，数组[]，notes空串，timezone取宿主。已有任务沿用回执ID/当前版本，goal省略即保留原目标及来源；revise/clarify必带condition_patch={set:{改动字段:新值},unset:[清空字段]}，无改动用空set/空unset，旧稿随修订失效。knowledge_refs仅放已读对象id/version/path，source_id不是object_id。提问使用clarifications数组，每项只含一个可独立回答的决定；分子、分母、观察期等可以分别回答时分别登记，不能把另一个决定塞进问题正文或选项。省略顶层question并令options=[]；question仅兼容单题且与数组互斥。不提问时两者均省略。回答传resolved_clarification_ids，只关闭完整答完的原问题；opened_clarifications为新问题全集，clarification仅最早未答项；has_more_clarifications=true时用read_analysis_task补齐其余未答问题。route只登记归属，禁止条件与补丁；仅改SQL时携replaces_query_id失效旧稿，普通追问不带。",
   ],
   get_query: [
     "GetQueryInput",
@@ -54,6 +54,10 @@ const definitions = {
   save_analysis_evidence: [
     "SaveAnalysisEvidenceInput",
     "按真实task_id/condition_version保存结论和依据，允许有效历史条件。findings填写结论、计算说明、限制、资料和query_refs；figures绑定query_id、列、整个保存结果从0起的row_index及精确value，金额保留字符串。单份依据的查询必须属于其原任务原条件且成功，使用真实result_ref；分页用get_query补读，空/部分结果注明limitations与data_range。宿主核对引用和数值，不证明文本因果；新查询仍须逐条聊天授权。回执只给evidence_id和已核验依赖。",
+  ],
+  present_analysis_answer: [
+    "PresentAnalysisAnswerInput",
+    "交付带来源的定量结果说明，不保存报告也不执行SQL。sources逐条给query_id/result_ref/实际列名columns；values用唯一小写name绑定cell(列和绝对row_index)、statistic(行数/列计数)、parameter(原查询参数)或metadata(data_freshness/saved_row_count)。template用{{name}}插入宿主原值，文字部分不写阿拉伯数字、全角数字或SQL代码块；日期、金额、行数也用绑定。没有返回的差值/环比/合计不能自行换算或用中文数字绕过，应说明缺口并另给草稿。先完成本轮保存等动作，最后调用；成功回执answer_text是正式答案，随后不再改写。只保证绑定值来源，不证明因果解释；普通概念解释和纯保存确认仍可正常回答。",
   ],
   save_analysis_report: [
     "SaveAnalysisReportInput",
@@ -69,7 +73,7 @@ const definitions = {
   ],
   prepare_skill_draft: [
     "PrepareSkillDraftInput",
-    "基于当前任务当前条件的evidence_ids准备本人待确认Skill草稿。instruction_quote逐字填写当前用户完整原话；name/body/scope/files描述可复用方法、范围与例外，依赖由依据推导。成功仅给草稿引用，告知到我的积累核对保存；正文、发布和选用边界遵循系统规则。",
+    "基于本人同会话有效evidence_ids准备待确认Skill草稿。来源可跨任务和历史条件，各自保留原身份；task_id/condition_version是本次草稿归属。不得为绕过错误删掉仍在正文使用的来源。instruction_quote逐字填写当前用户完整原话；name/body/scope/files描述可复用方法、范围与例外，依赖由依据推导。成功仅给草稿引用，告知到我的积累核对保存；正文、发布和选用边界遵循系统规则。",
   ],
   propose_semantic_change: [
     "ProposalInput",
@@ -108,6 +112,8 @@ export function dataTools(
   fault: string,
   acceptReceipt?: (receipt: DataToolOutcome) => void,
 ) {
+  let answer: {text: string; sdkId: string} | undefined;
+  const unavailableQueries = new Set<string>();
   const validateArguments = (name: string, args: unknown): void => {
     if (!(name in definitions)) throw new Error("tool_not_allowed");
     const [contract] = definitions[name as DataToolName];
@@ -118,6 +124,7 @@ export function dataTools(
     sdkId: string,
     args: unknown,
   ): Promise<DataToolOutcome> => {
+    answer = undefined;
     const input = {
       ...transport.binding(),
       sdk_tool_call_id: sdkId,
@@ -158,6 +165,18 @@ export function dataTools(
     const receipt = decodeContract<DataToolOutcome>("DataToolOutcome", result);
     if (fault === "after_business_commit") process.exit(74);
     acceptReceipt?.(receipt);
+    if (name === "get_query" && args && typeof args === "object" && "query_id" in args && typeof args.query_id === "string") {
+      const results = receipt.data.results;
+      const query = receipt.data.query;
+      const failure = receipt.data.error ?? (results && typeof results === "object" && "error" in results ? results.error : undefined);
+      const hidden = query && typeof query === "object" && "text_unavailable" in query && query.text_unavailable === true;
+      if (["result_expired", "result_unavailable", "not_available", "forbidden", "stale_knowledge"].includes(String(failure)) || hidden)
+        unavailableQueries.add(args.query_id);
+      else if (results && !failure) unavailableQueries.delete(args.query_id);
+    }
+    if (!receipt.data.error && name === "present_analysis_answer" && typeof receipt.data.answer_text === "string")
+      answer = {text: receipt.data.answer_text, sdkId};
+    else if (!receipt.data.error && name !== "present_analysis_answer") answer = undefined;
     return receipt;
   };
   const formatResult = async (name: string, args: unknown, receipt: DataToolOutcome, signal?: AbortSignal) => {
@@ -180,11 +199,22 @@ export function dataTools(
       failed: "查询失败，不能当作空结果或执行成功。",
       cancelled: "查询已取消，不能当作完成结果。",
     };
+    if (name === "execute_query" && Array.isArray(receipt.data.queries)) {
+      return {content: [{type: "text" as const, text: JSON.stringify({
+        ...receipt.data, status_note: "本批每项状态分别以queries回执为准；已确认项沿原消息和预算，不重复提交。",
+      })}], details: receipt, isError: false};
+    }
     const query = name === "get_query" ? receipt.data.query : receipt.data;
     const status = query && typeof query === "object" && !Array.isArray(query) && "execution_state" in query ? query.execution_state : undefined;
     const statusNote = typeof status === "string" ? statusNotes[status] : undefined;
-    return {content: [{type: "text" as const, text: JSON.stringify(statusNote
-      ? {status_note: statusNote, ...receipt.data} : receipt.data)}], details: receipt, isError: false};
+    const displayName = query && typeof query === "object" && "summary" in query && typeof query.summary === "string"
+      ? query.summary : typeof receipt.data.goal === "string" ? receipt.data.goal
+      : typeof receipt.data.name === "string" ? receipt.data.name
+      : args && typeof args === "object" && "goal" in args && typeof args.goal === "string" ? args.goal : undefined;
+    return {content: [{type: "text" as const, text: JSON.stringify({
+      ...(statusNote ? {status_note: statusNote} : {}),
+      ...(displayName ? {display_name: displayName} : {}), ...receipt.data,
+    })}], details: receipt, isError: false};
   };
   const tools: ToolDefinition[] = Object.entries(definitions).map(([name, [contract, description]]) => ({
     ...(name === "read" ? {promptSnippet: nativeSkillRead.promptSnippet, promptGuidelines: nativeSkillRead.promptGuidelines} : {}),
@@ -193,6 +223,7 @@ export function dataTools(
     executionMode: "sequential",
     parameters: Type.Unsafe(expand(schema.$defs[contract]) as TSchema),
     execute: async (id, args, signal) => {
+      answer = undefined;
       validateArguments(name, args);
       const receipt = await invokeRecorded(name, id, args);
       const result = await formatResult(name, args, receipt, signal);
@@ -200,5 +231,6 @@ export function dataTools(
       return result;
     },
   }));
-  return { tools, invokeRecorded, validateArguments, formatResult };
+  return { tools, invokeRecorded, validateArguments, formatResult, answer: () => answer,
+    resultUnavailable: (queryId: string) => unavailableQueries.has(queryId) };
 }

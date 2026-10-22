@@ -20,6 +20,7 @@ pub mod semantic_prefill;
 
 pub mod conversation_lifecycle;
 
+pub mod analysis_answers;
 pub mod analysis_evidence;
 pub mod analysis_reports;
 mod context_authority;

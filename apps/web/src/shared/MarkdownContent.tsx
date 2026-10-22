@@ -1,6 +1,7 @@
 import { createContext, memo, useContext, useMemo } from "react";
 import Markdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { remarkObjectReferences, type ObjectReferenceLabels } from "./markdown-object-references.ts";
 
 const ResultDisplay = createContext<{ savedSql: string[]; compactResults: boolean }>({ savedSql: [], compactResults: false });
 
@@ -27,7 +28,8 @@ const components: Components = {
 };
 const plugins = [remarkGfm];
 
-export const MarkdownContent = memo(function MarkdownContent({ text, className = "", savedSql = [], compactResults = false }: { text: string; className?: string; savedSql?: string[]; compactResults?: boolean }) {
+export const MarkdownContent = memo(function MarkdownContent({ text, className = "", savedSql = [], compactResults = false, objectReferences }: { text: string; className?: string; savedSql?: string[]; compactResults?: boolean; objectReferences?: ObjectReferenceLabels }) {
   const display = useMemo(() => ({ savedSql, compactResults }), [savedSql, compactResults]);
-  return <div className={"markdown-content " + className}><ResultDisplay.Provider value={display}><Markdown remarkPlugins={plugins} skipHtml components={components}>{text}</Markdown></ResultDisplay.Provider></div>;
+  const remarkPlugins = useMemo(() => objectReferences ? [...plugins, remarkObjectReferences(objectReferences)] : plugins, [objectReferences]);
+  return <div className={"markdown-content " + className}><ResultDisplay.Provider value={display}><Markdown remarkPlugins={remarkPlugins} skipHtml components={components}>{text}</Markdown></ResultDisplay.Provider></div>;
 });
