@@ -1,0 +1,66 @@
+{
+  "schema": 1,
+  "kind": "supplemental_patch_review",
+  "reviewer": "cockpit_integration_research",
+  "reviewer_identity": "独立只读核对模拟兼容补丁及README；未负责产品实现或测试编写，仅维护本补充审查记录。",
+  "reviewed_at": "2026-10-22T02:41:39.284293+00:00",
+  "baseline_commit": "2cdfdb014c549d7fb3573e1c31b44aaa65e00145",
+  "conclusion": "passed",
+  "summary": "默认固定mock成功结果分支使用现有present_analysis_answer工具交付精确原值，保留失败/不可读分支和模拟声明；README准确描述上一轮修复及边界。未新增工具、业务计算或Agent循环。",
+  "scope_files": {
+    "apps/agent/provider/synthetic-analysis.ts": "1d26c991a76d743babc58c8066444b64e44ae14085a765300920b5caaf98b128",
+    "tests/mvp/check-synthetic-result-answer.mjs": "c986a6e67a7b00ffe87db411611315a7fb2c7ad59432ce2a0d992900c79c6ea8",
+    "README.md": "aceca815af601ec0e1cb5e8ae2f9ea73b2f43161a9157bc2b1ba1c1e2881b3a2"
+  },
+  "scope_sha256": "0adc890da2ecd4b54911ecad3035fa9a239cbbcf1a3a03039229b5465773cbfc",
+  "supporting_contract": {
+    "path": "packages/contracts/schema.json",
+    "sha256": "d2bb273c1c8d160aca2f248f8b7244b85bdb2b8bb5fb72396c2e43a78b761da8",
+    "checks": "当前工具枚举19项；PresentAnalysisAnswerInput允许最多60值，本补丁最多50值、10列、5行。"
+  },
+  "findings": [],
+  "reviewed_behaviors": [
+    "成功结果先读取实际query/results，再调用present_analysis_answer；没有自行补算。",
+    "最多5行10列，50个cell绑定；name仅用小写字母与下划线，模板不直接写入数字。",
+    "绑定行索引对应默认结果首屏，列名取实际返回结果；字段顺序及完整范围由查询卡片展示。",
+    "空结果以空values交付，仍明确固定合成演示。",
+    "成功答案工具后结束模拟响应，正式文本沿宿主答案回执交付。",
+    "现有失败、取消、结果不可读分支保留；本次没有再次扩工具集。",
+    "README覆盖批量授权、来源交付、目标分离、跨来源方法、技术标识，并保留真实模型语义与因果边界。"
+  ],
+  "independent_probe": {
+    "method": "通过Node直接调用正式syntheticAction和validateContract，不替换其实现，不发网络请求。",
+    "cases": [
+      {
+        "input": "7行12列",
+        "expected": "最多50个绑定、10列、row_index不超过4且共享契约合法",
+        "passed": true
+      },
+      {
+        "input": "空结果",
+        "expected": "values为空且共享契约合法",
+        "passed": true
+      },
+      {
+        "input": "已经存在成功present_analysis_answer回执",
+        "expected": "返回结束文本，不重复调用答案工具",
+        "passed": true
+      }
+    ],
+    "network_requests": 0,
+    "official_requests": 0
+  },
+  "integration_evidence": {
+    "path": ".local/checks/synthetic-result-answer.json",
+    "sha256": "b43e1d9b9694158ef4a61dca59357f9c851367ab196fbb7c8da6665c86497507",
+    "passed": true,
+    "checks": 2,
+    "official_requests": 0,
+    "scope": "ROOT运行的默认mock两消息实际Pi/Rust/MySQL/合成SQLite链；本审查核对已保存收据与测试断言。"
+  },
+  "limitations": [
+    "这是模拟兼容及README的小范围补充审查，不改写旧13组验收记录或其指纹。",
+    "不把固定mock策略当作真实模型自主规划、分析正确率或新座舱资料包验收。",
+    "当前座舱增量尚在实施，整体仍需后续独立审查与对应验证。"
+  ]
+}

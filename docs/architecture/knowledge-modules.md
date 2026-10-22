@@ -423,6 +423,8 @@ flowchart TD
 | `POST /internal/memory/model-calls` | `MemoryModelCall`：issue/finalize、调用ID、用途、上限、usage | 内部token；M08逐调用许可和结算；run或索引作业还原原预算 |
 | 现有`GET /assets` | Asset新增可选`memory_index_state` | queued/issued/indexed/failed/superseded，正式保存与索引完成分开显示 |
 
+`MemoryBudgetBinding`保留`kind=run/index`，准确区分三种身份：真实工具调用使用已登记的`run + sdk_tool_call_id + operation_id`；启动记忆检索没有SDK调用，使用`run + sdk_tool_call_id=null + context-{message_id}`且仅允许embedding；后台索引使用`job + lease_epoch + sdk_tool_call_id=null`并沿原预算。宿主分别核对真实工具、当前消息或持久作业，不能用伪造SDK ID填补合法空值。请求失败可回退正式资产目录，精确名称召回不等于Mem0索引或语义排序成功。
+
 以上Schema位于`packages/contracts/schema.json`；Rust入口记在OpenAPI。侧车路由只监听回环并使用内部token，浏览器不能传用户ID调用。`personal_memory`用例组合M09、M08和有效性校验；`memory_provider`薄接缝转换HTTP，不复制SDK算法。
 
 `personal_memory_index_jobs`私属M09，与资产同事务写入；Worker在独立循环按目标集合领取，租约180秒、最多3次。只有明确暂时不可用可重试同任务；未知保留，不换ID补额。领取后的新embedding许可再次核对正式启用版本和依赖，结算不要求旧运行仍有效。资产先保存、索引后提交；UI暴露进度与失败。
@@ -601,5 +603,7 @@ M09 沿用选择记录的 ID 作为 `selection_id`，每次新的明确选用产
 ### 查询案例与方法复用
 
 M02的`query_example`复用独立知识对象、人工层、版本与负责人规则。依赖及核对记录均使用完整`EvidenceRef`；指标与文档的path不能强改为表DDL。案例摘要只定位，采用前补读正式结构并回源。M09的待确认方法草稿独立存放，用户明确保存后才进入现有个人原生Skill；不进入Mem0，不自动发布或选用。
+
+方法草稿保持当前归属任务及条件版本，但证据来源可跨本人同会话的任务和历史条件。每份证据保留原条件、查询引用及完整来源；准备、读取、确认都复用逐来源有效性检查，来源撤权或失效不能因历史引用重新可读。当前草稿归属改变仍按`condition_changed`处理，用户确认和显式选用规则不变。
 
 维护反查由M02的`find_dependents_in_tx`及M09的`find_skill_dependents_in_tx`分别读取各自私有存储，`knowledge_impact::read`组合。它按稳定对象ID保留旧版及停用直接引用，先过滤私人可见性再分页，不做传递遍历、不授予维护权。方法草稿生命周期、同源API及删除边界见[实现设计第15节](implementation-design.md#15-查询案例个人方法草稿与维护影响2026-10-14)。实现验证与缺口只记录在CURRENT。

@@ -401,11 +401,16 @@
         },
         {
           "kind": "document_rule",
-          "text": "字段虽然出现在订单行表中，含义是整单状态；某一行全退不代表整单全退。",
+          "text": "取消分支按当前行判断，其余分支采用订单级金额；未声明同订单源行状态一致，不能保证所有行最终状态相同。某一行全退不代表整单全退。",
           "sources": [
             {
               "file": "business-guide.md",
-              "quote": "`order_status` 是整单状态。同一订单的某行全部退款，整单仍可能只是部分退款。",
+              "quote": "同一订单的非取消行共享金额判定，但只要行级取消状态不同，最终状态就可能不同。DDL 和本说明没有规定同订单的 `source_status` 必须一致；不能从订单级汇总推导所有行状态相同。",
+              "section": "4. 字段说明"
+            },
+            {
+              "file": "business-guide.md",
+              "quote": "同一订单的某行全部退款，整单仍可能只是部分退款。",
               "section": "4. 字段说明"
             }
           ]
@@ -443,7 +448,8 @@
         "order_status 是单行退款状态",
         "paid 表示没有发生过任何退款",
         "只筛选 refunded 就能得到所有退款订单",
-        "某行全退必然使同一订单所有行都变成 refunded"
+        "某行全退必然使同一订单所有行都变成 refunded",
+        "同一订单的所有行必然取相同的 order_status"
       ],
       "manual_override": {
         "field": "description",

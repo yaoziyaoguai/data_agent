@@ -2,9 +2,9 @@
 {
   "workflow": "development",
   "schema": 1,
-  "phase": "release_closeout",
-  "goal_revision": 76,
-  "environment": "阶段试用版收尾：业务与架构文档已分批推送，本地服务已更新，六篇工程文章已发表并核对公开页面。模型配置已验收；真实模型语义缺口继续保留。",
+  "phase": "implementation",
+  "goal_revision": 78,
+  "environment": "提交上一轮修复；准备唯一默认数字座舱合成资料与递进Dogfood包，完成后交接给其他agent，不运行新真实Dogfood。",
   "verification": {
     "level": "increment",
     "reason": "保留原失败；新增通用业务、协议及浏览器回归，并独立核对修复与边界。",
@@ -30,144 +30,175 @@
     "schema": 1,
     "registry": "docs/semantic-retrieval-design.md",
     "increment": {
-      "id": "I2-MODEL-CONFIGURATION",
+      "id": "I2-COCKPIT-DOGFOOD",
       "phase": "I2",
-      "status": "complete",
-      "goal": "超级管理员通过页面持久配置模型服务、凭据和具体模型；Pi原生多协议接入，普通用户只选已启用模型。",
+      "status": "active",
+      "goal": "公开的数字座舱合成资料（至少20表10文档，计划28表14文档）与100项从易到难Dogfood交接；默认mock实际加载新资料并可执行。",
       "requirements": [
+        "D04",
+        "D06",
+        "D07",
         "C01",
-        "C03",
-        "C05",
+        "C06",
+        "C07",
         "C08"
       ],
       "modules": [
         "M01",
-        "M05",
+        "M02",
+        "M03",
+        "M04",
+        "M07",
         "M08",
-        "M10",
         "M11",
         "M12"
       ],
       "allowed_paths": [
-        "apps/agent",
-        "apps/api",
-        "apps/web",
+        "apps",
         "crates/data-agent",
         "packages/contracts",
-        "tests",
-        "migrations",
         "scripts",
-        "package.json",
-        "package-lock.json",
-        "Cargo.lock",
-        "docs/CURRENT.md",
-        "docs/architecture",
-        "docs/semantic-retrieval-design.md",
-        "docs/reviews",
+        "tests",
+        "docs",
         "README.md",
-        "docs/development.md"
+        "Makefile"
       ],
       "non_goals": [
-        "不提交推送或更新常驻服务；不新增付费调用。",
-        "不另建Agent循环、自动模型路由、预填/embedding供应商管理或修改未解决的真实语义问题。"
+        "不读取或复用任何公司私有表、SQL、数据、术语、业务文档；只从通用数字座舱概念独立构造。",
+        "不运行新资料的真实模型Dogfood或付费预填，不新增通用数据集切换/插件框架。",
+        "不扩大查询授权、模型调用上限或产品业务范围；旧零售只保留必要测试夹具，不维护日常双演示。"
       ],
       "invariants": [
-        "每条消息24次和连续临时失败3次；恢复、摘要及结果唤醒沿原消息模型配置与预算。",
-        "仅当前空间超级管理员读写服务及模型配置；凭据加密保存，不进入公开目录、日志、检查点或消息。",
-        "Pi负责三种原生协议的请求、流式与工具解析；同批宿主工具顺序执行保持。",
-        "配置修订只影响新消息；停用阻止新发送，不自动换模型，不重做未知副作用。"
+        "至少20张实际SQLite表、10份实际业务文档，字段语义/单位/空值/主外键/时间和指标一致。",
+        "生成器/seed/独立oracle与Dogfood评分不进入知识允许列表。",
+        "API、Worker、平台和mock模型采用同一资料包与来源指纹；旧查询不指向新数据。",
+        "Pi仍是唯一Agent循环，mock固定演示明确标注，不能冒称真实模型能力。"
       ],
       "verification_inputs": [
-        "apps/agent",
-        "apps/api",
-        "apps/web/src",
+        "apps",
         "crates/data-agent",
         "packages/contracts",
-        "tests",
-        "migrations",
         "scripts",
-        "package.json",
-        "package-lock.json",
-        "Cargo.lock",
+        "tests",
+        "docs/sources",
+        "docs/dogfood/cockpit",
         "docs/architecture/implementation-design.md",
-        "docs/development.md"
+        "docs/development.md",
+        "README.md",
+        "Makefile"
       ],
       "acceptance": [
         {
-          "id": "MODEL-CONFIG-CONTRACT",
+          "id": "COCKPIT-SOURCES",
+          "requirements": [
+            "D04",
+            "D06",
+            "C01",
+            "C06",
+            "C07"
+          ],
+          "expected": "28表/14业务文档及丰富字段，种子可复现、PK/FK/时间/派生一致、知识引用可回源、无oracle泄漏。",
+          "evidence_kind": "runtime",
+          "command": [
+            "python3",
+            "docs/sources/cockpit/verify.py"
+          ],
+          "timeout_seconds": 300
+        },
+        {
+          "id": "COCKPIT-DOGFOOD",
           "requirements": [
             "C01",
-            "C03",
-            "C05",
+            "C06",
             "C08"
           ],
-          "expected": "同源契约、类型、Rust和架构边界通过。",
+          "expected": "100项递进案例完整覆盖、独立SQL可执行与口径一致，记录全部not_run，操作与评分隔离。",
+          "evidence_kind": "runtime",
+          "command": [
+            "python3",
+            "docs/dogfood/cockpit/verify.py"
+          ],
+          "timeout_seconds": 300
+        },
+        {
+          "id": "COCKPIT-RUNTIME",
+          "requirements": [
+            "D07",
+            "C01",
+            "C06",
+            "C07",
+            "C08"
+          ],
+          "expected": "新资料真实API/Worker/合成平台加载、完整目录/来源/派生血缘读取和固定mock演示；0官方调用。",
+          "evidence_kind": "runtime",
+          "command": [
+            "node",
+            "tests/mvp/check-cockpit-source.mjs"
+          ],
+          "timeout_seconds": 900
+        },
+        {
+          "id": "COCKPIT-ENGINEERING",
+          "requirements": [
+            "D04",
+            "D06",
+            "D07",
+            "C01",
+            "C06",
+            "C07",
+            "C08"
+          ],
+          "expected": "契约、代码、架构和文档链接检查通过，旧测试夹具不混入新默认库。",
           "evidence_kind": "contract",
           "command": [
             "make",
             "verify-contracts",
             "verify-code",
-            "verify-architecture"
+            "verify-architecture",
+            "verify-materials"
           ],
           "timeout_seconds": 1200
-        },
-        {
-          "id": "MODEL-CONFIG-BEHAVIOR",
-          "requirements": [
-            "C01",
-            "C03",
-            "C05",
-            "C08"
-          ],
-          "expected": "超级管理员创建编辑接入，普通用户拒绝；密钥保密、版本冲突、停用、冻结配置、不同协议真实Pi工具回合及浏览器流程通过。",
-          "evidence_kind": "runtime",
-          "command": [
-            "node",
-            "tests/mvp/check-model-configuration.mjs"
-          ],
-          "timeout_seconds": 1200
-        },
-        {
-          "id": "MODEL-CONFIG-COMPATIBILITY",
-          "requirements": [
-            "C01",
-            "C03"
-          ],
-          "expected": "原Flash/Pro选择、恢复及后台结果沿原模型与预算。",
-          "evidence_kind": "runtime",
-          "command": [
-            "node",
-            "tests/mvp/check-model-selection.mjs"
-          ],
-          "timeout_seconds": 900
-        },
-        {
-          "id": "MODEL-CONFIG-PROTOCOL",
-          "requirements": [
-            "C01",
-            "C03",
-            "C05"
-          ],
-          "expected": "三种Pi原生协议可靠用量/缺失用量/临时失败与受控端点负例通过，SDK不隐式重发。",
-          "evidence_kind": "runtime",
-          "command": [
-            "node",
-            "tests/runtime/check-configured-provider.mjs"
-          ],
-          "timeout_seconds": 120
         }
       ],
       "review": {
-        "status": "passed",
-        "record": "docs/reviews/model-configuration-review.json"
+        "status": "pending",
+        "record": "docs/reviews/cockpit-dogfood-review.json"
       },
-      "evidence": ".local/delivery/I2-MODEL-CONFIGURATION-result.json"
+      "evidence": null
     }
   }
 }
 ---
 
 # Data Agent 当前记录
+
+## 数字座舱合成资料与Dogfood交接（2026-10-22）
+
+用户授权先提交/推送上一轮修复、同步README/文档/必要图片并更新服务，再把默认mock换成丰富数字座舱合成资料，至少20张表和10份文档；重新准备大量递进Dogfood，最后停下交给其他agent试用。计划28表、至少300字段、14份独立文档、100项案例。新增内容完全从零构造，不读取或改名复制公司资料，也不以个人记忆里的专属字段/口径作为输入。
+
+用户进一步明确旧零售可直接删除，不做双数据集产品、兼容迁移或旧演示维护。日常入口/语义/演示/新用例以座舱为唯一默认；仅保留现有回归确实依赖的最小零售夹具并明确选择。使用新运行目录/库切换，无需把旧查询改标成新数据。新的知识允许列表仅包含DDL、ETL及业务定义；独立数值参考、生成器和评分不进入模型输入。本轮只验证资料自洽和固定mock接入，不执行新的真实Agent Dogfood。
+
+上一轮13组增量验收与18条真实模型消息的版本证据继续保存于`.local/delivery/I2-AGENT-RELIABILITY-REPAIRS-result.json`和`.local/dogfood-runs/repairs-20261022/`。准备新包时核对默认模拟策略也要采用已实现的来源答案交付，这项兼容会补本地固定演示验证，不扩成模型规划器。当前进度/有效决定只维护本记录。
+
+
+## 第二版 Dogfood 根因修复（2026-10-22）
+
+用户同意按已复核根因实施全部修复，要求避免无关的防御编程和反复尝试。使用 dev_co、contract-first 与适用 Rust 惯例；以本记录作为唯一当前计划。基线 `2cdfdb0`，工作分支 `codex/agent-reliability-repairs`。原始证据与根因复核保留在 `.local/dogfood-runs/v2-20261021/`。本轮先修记忆共享契约和批量执行，再完成受控数字交付、语义前提/候选SQL、跨版本方法草稿、独立条件与业务引用展示。
+
+有效解释：C 在历史消息中已明确获用户授权，本次证实漏执行和后续授权来源错误绑定，未据此宣称任意越权执行；联合比较可共用任务，目标独立变化时须分离条件；31/31仅证明资料齐全可读，不证明内部无矛盾。正常语义写清现有ETL行为和缺失前提，保留独立冲突夹具。正式定量内容采用已核对来源再展示，解释和进度仍保留自然表达；不以正则删除所有数字或UUID。
+
+验收与要求变更：批量执行新增完整查询集合的同事务确认，单项旧接口保留兼容；批内任一新项校验失败则不新增本批确认，实际平台执行仍逐项。允许方法草稿引用本人同会话的有效历史依据，各自保留原任务/条件，草稿本身当前归属和人工确认不变。相关旧用例仅在上述已获同意的行为变化范围内更新，并保留原反例。新测试覆盖合法无SDK调用身份；不得通过伪造ID或整体关闭身份校验修复记忆。
+
+验收预期修订：默认来源P05原“order_status是整单状态”改为“行级取消优先、其余分支按订单金额汇总”，依据既有ETL和新增独立反例；保留人工错误覆盖样本，新增禁止无条件保证同单状态一致。原澄清协议夹具结果解释新增一次真实present_analysis_answer绑定channel_count=3；原业务、恢复及压缩断言保持。用户进一步要求不扩大影响范围，已撤销初版“全部数据回合暂缓正文”的做法：仅成功查询结果解释暂缓核验，普通调查、概念解释与纯保存恢复原流式行为。data-provider原调查assistant_delta断言保留，并额外核对Pi历史，初版记录作为已替代方案保留。截断fixture原合成usage.output=25与SDK1.3低于cap时原生压缩行为冲突，HEAD原代码对照仍失败；仅将该故意触顶样本改为output=2048，独立依据为SDK isRecoverableLength，保留输出cap/完整重写/单次补交及预算断言。provider启动顺序与凭据装配同样经HEAD对照确认过时，改用已有protocolProviderUrl，不改产品密钥逻辑。
+
+验证：先跑相关本地契约/业务回归及独立代码审查，再沿已授权真实DeepSeek配置做代表用例，保留单消息调用限制，测试不设累计额度；先代表场景后扩展，失败有新证据才重试。工程进度：记忆10组、批量执行12组、跨来源方法草稿16组及文本来源3组、任务拆分5组、定量答案5组、答案状态6组、失败/取消/不可读通知3组通过；真实Pi澄清13组及64KiB工具交付通过。Python记忆14项、独立语义3项和两套样例验证通过。独立审查指出的失败通知、提前发布、旧答案覆盖失败、完成回执幂等四处问题已修正并补回归。当前验证新代码的隔离站点33173/API36780，运行记录`.local/dogfood-runs/repairs-20261022/`；真实Flash/high趋势两条消息完成，官方完整扩展复验仍运行。最终已完成独立复审及`make verify-increment`全部13组命令，541项同源契约、代码/构建/架构与对应业务回归通过；完成证据为`.local/delivery/I2-AGENT-RELIABILITY-REPAIRS-result.json`，独立记录为`docs/reviews/agent-reliability-repairs-review.json`。
+
+
+### 本轮收尾证据（2026-10-22）
+
+真实Flash/high共18条用户消息：趋势、贡献、双来源报告与方法草稿完成；A/C同句明确授权均成功且绑定同一原消息/预算，B保持未提交；二月收入和一季度客户数分别出稿，其他问题保留；语义首答正确区分混合行/整单规则及SQLite语句失败；新记忆indexed并跨会话召回。完整结果在`.local/dogfood-runs/repairs-20261022/REPORT.md`和`results.json`。H01热更新中断观察后只恢复查看并补未发送的报告要求；ROUTE有一次租约失效后沿原消息恢复，诱因未确认，保留29492微美元的未发送预留，未篡改账本。不能将这些过程写成全程无异常，也不以样本推导所有语义永远正确。
+
+本地原工作台27173已按原数据库/身份/模型配置加载修复版，五项健康200；原失败记忆作业保持ID/资产版本/提取操作/预算，从failed恢复indexed（attempts 1→2）。原3个agent unknown、2个memory embedding unknown未重放或清理。来源答案只保证绑定值，不证明因果。普通回合原流式已保留；当前有权内部引用通过业务名显示，可切换技术标识，未知业务UUID/SQL/存储原文不改。新增skill_draft_prepared仅携带同源SkillDraftRef供展示，不扩执行权。收尾未提交、未推送；当前增量完成不把整个MVP或全部真实平台要求标成完成。
 
 ## README 配图更新（2026-10-20）
 

@@ -1,0 +1,264 @@
+{
+  "schema": 1,
+  "increment_id": "I2-AGENT-RELIABILITY-REPAIRS",
+  "reviewer": "review_reliability_increment",
+  "reviewer_identity": "独立非实施correctness审查代理；未修改产品、契约、测试或验收预期，仅编写本审查记录。",
+  "reviewed_at": "2026-10-22T00:56:16.414417+00:00",
+  "conclusion": "passed",
+  "summary": "本增量的记忆合法调用契约、批量查询确认与原消息预算、历史来源方法草稿、任务条件分离、定量来源交付及业务引用展示通过独立工程审查。五项审查问题已修复。按用户最新范围要求进一步核对：仅宿主成功查询结果解释暂缓，普通调查、概念说明和操作确认保留原流式行为；主动采用来源答案后由该宿主回执正式交付。当前无已证实阻断；本结论不替代随后重新执行verify-increment，不宣称模型语义或整个MVP全部通过。",
+  "scope_sha256": "ea3aeceb7d859a70ecf365416966281f41d40fb92417f7ee49b86318e17199ab",
+  "scope": {
+    "input_files": 465,
+    "contract_sha256": "7bde89aac4b3f1ecea8386d685d327a25e28d2220e852f33fe00c8339ae20b0c",
+    "decisions_sha256": "c6456f454f3efb5763440301d1ea3298c518024f0fede2cb6be7dd86fa103e3b",
+    "reviewed_areas": [
+      "MemoryBudgetBinding与run工具、run上下文、index后台作业的实际消费者和同源契约",
+      "query_workflow批量同事务确认、任务归属、原授权/预算、工具重放与拒绝回执",
+      "skill_drafts跨任务和历史条件来源及prepare/read/confirm有效性；analysis split条件/问题来源保留与阶段重算",
+      "analysis_answers精确值绑定、复用结果核验、Pi工具状态、通知分支、FinishRun核验后发布和幂等",
+      "Markdown已知对象引用映射、代码和未知业务编号保留、技术显示开关及持久正文不变",
+      "语义资料/独立反例/预填预期纠正、受影响协议夹具及架构文档"
+    ],
+    "boundary": "范围指纹绑定当前增量声明的输入。本次审查确认工程修复与相关已保存本地证据；官方扩展试用及最终统一验收尚由主代理收尾。"
+  },
+  "requirements": [
+    {
+      "ids": [
+        "C01",
+        "C05",
+        "C07"
+      ],
+      "assessment": "Pi继续负责模型工具循环、会话和原生压缩。新定量呈现为受控业务工具，失败交付仍复用Pi继续机制；没有第二个规划器。24次/原请求预算与操作身份保持。"
+    },
+    {
+      "ids": [
+        "C03",
+        "C04",
+        "C05"
+      ],
+      "assessment": "批量确认不依赖预先route；整批确认同事务，平台执行逐查询。split保留原任务条件/查询归属，迁移指定开放问题并保留ID和文本来源，原任务阶段按实际剩余状态确定。"
+    },
+    {
+      "ids": [
+        "D02",
+        "D03",
+        "D12"
+      ],
+      "assessment": "方法草稿归属与各份历史来源分别保存，来源仍经同会话/原条件/实际query/result_ref及权限回源；当前归属变化和删除规则保留。"
+    },
+    {
+      "ids": [
+        "D10",
+        "D11",
+        "C07"
+      ],
+      "assessment": "合法无SDK的索引与启动检索在共享Schema中恢复表达；既有宿主operation/epoch/purpose验证继续有效，不伪造SDK身份或批量重放unknown。"
+    },
+    {
+      "ids": [
+        "C01",
+        "C08"
+      ],
+      "assessment": "定量绑定值来自真实结果、参数或统计，正文在来源复核后提交；失败/取消/不可读通知可正常说明状态。已知内部引用显示为业务名，未知业务UUID、SQL、链接地址和技术原文保留。"
+    }
+  ],
+  "findings": [],
+  "resolved_findings": [
+    {
+      "id": "REPAIR-REVIEW-01",
+      "issue": "所有结果通知强制成功来源答案，失败/取消/不可读无法正常交付。",
+      "resolution": "宿主提供真实result_notification状态，只有成功且该查询可读时要求来源答案；失败、取消和不可读由真实Pi协议回归验证。",
+      "evidence": [
+        "tests/mvp/check-result-notification-answers.mjs",
+        ".local/checks/agent-reliability-repairs/result-notification-answers.json"
+      ],
+      "status": "closed"
+    },
+    {
+      "id": "REPAIR-REVIEW-02",
+      "issue": "grounded正文在finish核验之前通过assistant_delta公开。",
+      "resolution": "Node不向outputs预发grounded正文；finish完成来源与回执核验后同事务保存chunk及正式事件。拒绝/撤权测试核对snapshot/events无该正文。",
+      "evidence": [
+        "crates/data-agent/src/use_cases/finish_run.rs",
+        "tests/mvp/check-grounded-answers.mjs",
+        ".local/checks/agent-reliability-repairs/grounded-answers.json"
+      ],
+      "status": "closed"
+    },
+    {
+      "id": "REPAIR-REVIEW-03",
+      "issue": "后续工具失败未清除已选答案，覆盖模型说明失败的最终文本。",
+      "resolution": "任何新工具尝试、校验前错误及恢复调用都先清除旧答案，只有成功present再设新答案。",
+      "evidence": [
+        "tests/runtime/check-answer-state.mjs",
+        ".local/checks/agent-reliability-repairs/answer-state.json"
+      ],
+      "status": "closed"
+    },
+    {
+      "id": "REPAIR-REVIEW-04",
+      "issue": "已提交finish的重传先访问外部来源，无法稳定接回已完成事实。",
+      "resolution": "先校验并返回已存在同指纹提交；只有未提交答案事务外查证，重新加锁后再次检查幂等。撤权后同payload重放返回finished且无正文。",
+      "evidence": [
+        "crates/data-agent/src/use_cases/finish_run.rs",
+        ".local/checks/agent-reliability-repairs/grounded-answers.json"
+      ],
+      "status": "closed"
+    },
+    {
+      "id": "REPAIR-REVIEW-05",
+      "issue": "不可读全局sticky布尔使旧查询失败豁免当前成功查询的来源要求。",
+      "resolution": "不可读状态按query_id保存，成功重读该查询后清除；未定位来源的present失败不扩大豁免范围。",
+      "evidence": [
+        "apps/agent/tools/data-tools.ts",
+        "tests/runtime/check-answer-state.mjs"
+      ],
+      "status": "closed"
+    }
+  ],
+  "independent_checks": [
+    {
+      "check": "node tests/runtime/check-answer-state.mjs",
+      "execution": "审查者独立执行最终6组；真实dataTools封装、受控传输。",
+      "result": "exit0；6组通过，networkAttempts=0，officialRequests=0。"
+    },
+    {
+      "check": "不可读状态按查询隔离的零网络探针",
+      "execution": "审查者使用真实dataTools依次读取过期old、成功current、恢复old。",
+      "result": "修前独立复现跨查询sticky污染；修后current不受影响、恢复old清除自身标记。"
+    },
+    {
+      "check": "npm run check:types 与 git diff --check",
+      "execution": "审查者在当前UI实现后独立执行。",
+      "result": "exit0。"
+    },
+    {
+      "check": "UI正文和技术模式",
+      "execution": "独立阅读Markdown AST转换及正式工作台接入、浏览器断言和最终桌面截图。",
+      "result": "已知身份转换、未知UUID与SQL保留、同名区分、刷新及原文开关与证据一致；截图未见阻断展示错误。"
+    }
+  ],
+  "reviewed_execution_evidence": [
+    {
+      "check": "MEM",
+      "result": "10组真实Rust/MySQL与本地Mem0协议回归通过，41次本地替身调用，0官方请求。"
+    },
+    {
+      "check": "EXEC",
+      "result": "12组本地真实控制入口通过；包含批量未预route、整批失败回滚、原消息预算及重传。"
+    },
+    {
+      "check": "DRAFT",
+      "result": "knowledge-reuse 16组和skill-text-authority 3组通过，含跨条件/跨任务来源与撤权隐藏。"
+    },
+    {
+      "check": "ROUTE",
+      "result": "task-splitting 5组通过；clarification 13组/36本地请求/2次Pi摘要通过，原问题与恢复断言保持。"
+    },
+    {
+      "check": "定量交付",
+      "result": "grounded 5组、通知3组/9本地模型协议调用通过；已核对失败正文不发布与完成回执幂等断言。"
+    },
+    {
+      "check": "UI引用",
+      "result": "最终5组浏览器/AST检查通过，包含实际SkillDraftRef同源事件，无页面错误，0官方请求。"
+    },
+    {
+      "check": "协议夹具更正",
+      "result": "已读HEAD对照与最终17本地调用/2摘要的收据；凭据装配及故意触顶usage预期变更有独立SDK依据，不把未知请求兜底为成功。"
+    },
+    {
+      "check": "语义材料",
+      "result": "现有ETL和种子数字未改；默认P05预期改为代码实际支持的行级取消优先，独立语义反例和人工错误覆盖仍保留。"
+    },
+    {
+      "check": "普通数据会话流式行为恢复",
+      "result": "data-provider恢复原调查assistant_delta断言并保留Pi历史断言，17次本地请求/2次原生摘要/19工具、最大65080B通过；0官方请求。成功结果的来源答案发布边界没有扩大到普通调查与操作确认。"
+    }
+  ],
+  "evidence": [
+    {
+      "path": ".local/checks/agent-reliability-repairs/grounded-answers.json",
+      "sha256": "44db1c11c098fd32f5ea3e0c75cbf9c841bed5ab041a14527c6ce3d4035c7dba"
+    },
+    {
+      "path": ".local/checks/agent-reliability-repairs/result-notification-answers.json",
+      "sha256": "3968ae6557f5017b995c2b31917dc757704f315525c587cb92991e7849b5cd54"
+    },
+    {
+      "path": ".local/checks/agent-reliability-repairs/answer-state.json",
+      "sha256": "cd54737e02bb652444bd90e40a68aa50f28fcdb3999d8397993407dcfdc54900"
+    },
+    {
+      "path": ".local/checks/agent-reliability-repairs/conversational-query.json",
+      "sha256": "e157ef9e767809b8fbfcffb298d6e337e38140e23c2a6f4ceda74033bd512c93"
+    },
+    {
+      "path": ".local/checks/memory-provider.json",
+      "sha256": "b5c62656d0cf246fbf7a475a6fb6f009940b2f12ace1440bcc02aa8afbbd14c4"
+    },
+    {
+      "path": ".local/checks/task-splitting.json",
+      "sha256": "56522dc525349f71c593a10b9021378de3a1860ddf28720d70472fd218539d33"
+    },
+    {
+      "path": ".local/checks/knowledge-reuse.json",
+      "sha256": "389459d1bf0ba04bc2c1bc01b5baed293b61af166fdd7d807894c72bf759f306"
+    },
+    {
+      "path": ".local/checks/skill-text-authority.json",
+      "sha256": "61caef99e5627d29c3d09c112afdc0168a8b59f1d25c07d9b8b3ebffb2f970f9"
+    },
+    {
+      "path": ".local/checks/object-references-browser.json",
+      "sha256": "d58df0ddb4a3b4c373cd07279142057f8da3e5d4b8014025f53a123a3cc8e677"
+    },
+    {
+      "path": ".local/checks/reliability-task-clarification.log",
+      "sha256": "a549f52c6c874ab8b5e9f716e582d92e2d184f27cc30d180be2813dc7bb61339"
+    },
+    {
+      "path": ".local/checks/agent-reliability-repairs/data-provider-fixture-audit.json",
+      "sha256": "1b2ece6b86e3b13fc42b3f69e2db8ed9c7807dca20f4d90fbee092869b20e0c9"
+    },
+    {
+      "path": ".local/checks/analysis-semantic-repair.json",
+      "sha256": "b28973b938d36a97605de6c3d903df9ee9f8f6dce71c61bef045e091314fe1e9"
+    },
+    {
+      "path": ".local/checks/agent-reliability-repairs/data-provider-streaming-restored.log",
+      "sha256": "279301b2374f70d38c15474eee854b56477f55524750d5c158f72075d4ec1765"
+    }
+  ],
+  "residual_risks": [
+    "自然语言授权集合和目标拆分仍由模型理解；结构化绑定防止已接受身份在后续漂移，不证明首次理解永远正确。",
+    "来源工具验证绑定值与来源；不能自动证明中文定量描述、业务口径或因果。普通概念/纯保存答复没有被全局数字扫描替代。",
+    "界面只转换当前有权且可唯一定位的宿主引用；未知业务ID及技术模式会保留原文。",
+    "旧失败索引作业的精确运行层恢复、官方模型扩展试用审读和最终verify-increment仍由主代理收尾；本审查不以历史或本地替身冒充其结果。"
+  ],
+  "official_model_validation": "未由审查者执行官方调用；只核对工程与本地证据。主代理的官方试用结论应另按其实际版本、输入与结果报告。",
+  "scope_followups": [
+    {
+      "date": "2026-10-22",
+      "reason": "用户要求避免把定量核验扩大为全部数据会话的正文暂缓。",
+      "changed_files": [
+        "apps/agent/session/deliver.ts",
+        "tests/mvp/check-data-provider.mjs",
+        "docs/architecture/runtime-modules.md",
+        "docs/semantic-retrieval-design.md",
+        "docs/development.md",
+        "docs/CURRENT.md"
+      ],
+      "review": "只复核这次小范围收窄及定向结果，未重复全量审查。deferResultAnswer仅取宿主result_notification.execution_state=succeeded；普通assistant_delta及message_start恢复；grounded正文仍在finish核验后同事务发布。原失败/取消/不可读分支和错误处理保持。",
+      "verification": {
+        "path": ".local/checks/agent-reliability-repairs/data-provider-streaming-restored.log",
+        "passed": true,
+        "calls": 17,
+        "summaryCalls": 2,
+        "maxPayloadBytes": 65080,
+        "officialRequests": 0
+      },
+      "qualification": "早期data-provider-fixture-audit关于全部数据回合不发过程片段的观察仅为已替代方案证据；凭据装配和触顶usage对照仍有效。最终统一verify-increment需在这次变更后重新完成。"
+    }
+  ]
+}

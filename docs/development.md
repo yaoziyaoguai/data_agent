@@ -419,4 +419,10 @@ node tests/mvp/check-asset-editor-browser.mjs
 
 服务端`execute_query`绑定当前真实用户消息及SQL/条件版本，首次确认后消息不可撤回；权限、只读、知识有效性、并发阻塞和稳定操作身份继续校验。历史HTTP确认接口保留供显式客户端使用，Web已移除按钮入口。新迁移`202610090001_query_message_authorization.sql`绑定执行消息，`202610090002_message_body_capacity.sql`与`202610090003_sql_text_capacity.sql`分别支持32,000字符消息和24,000字符SQL的多字节存储，由API启动时执行；更新后需重建并重启API、Worker和Pi进程。现有构建若未检测到新增迁移文件，先执行`touch crates/data-agent/src/persistence/mod.rs`再重建，使嵌入迁移重新编译。
 
+多份已展示SQL可在同一用户消息中明确授权，Pi通过`execute_query.queries`一次提交完整集合；本地确认同事务，平台执行分别跟踪。模型收到的query ID只用于工具调用，用户仍使用业务名称和自然指代。目标开始独立变更时可用任务`split`迁移指定开放题；方法草稿允许引用同会话不同任务/历史条件的有效依据，当前草稿条件变更仍会失效。
+
+成功且结果可读的结果解释通过`present_analysis_answer`引用实际单元格、统计、参数及快照元数据。数据回合会先展示工具进度与结果卡片，来源答案在finish事务重新核验并正式保存后显示；失败、取消、结果不可用、普通概念或纯保存不强制套模板。绑定检查不证明所有自然语言推理正确，真实模型质量仍以本轮报告为准。
+
+记忆回归同时检查真实工具SDK身份、无SDK的启动检索和后台索引三种绑定。`memory_index_state=failed`与正文保存成功分别报告；目录回退能找到名字不代表语义索引可用。旧失败/unknown不能笼统重置，只有已核实未发送的具体作业才沿原身份和预算恢复。
+
 定向验证：`node tests/mvp/check-conversational-query.mjs`、`node tests/mvp/check-conversation-experience-browser.mjs`。真实Flash试用使用`node tests/mvp/run-conversational-query-trial.mjs --run`，会调用模型，只发送合成资料并保存独立账本和记录；普通验证不自动调用。

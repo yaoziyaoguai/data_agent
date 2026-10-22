@@ -201,8 +201,8 @@ AppError = { code, message, retryable, request_id, resource_ref? }
 
 - Rust → Node：`resume_and_deliver`、`cancel_run`。恢复载荷包含 SDK 格式版本、头/条目/活动分支、目标事件和允许的工具；条目在集成边界转换，业务模块不解析 SDK 内部对象。
 - Node → Rust：`invoke_tool`、`append_output`、`finish_run`，以及模型调用的预留、发出许可、结算接口。内部请求绑定有效运行和租约；内网并不等于无须认证。
-- 工具按业务意图提供，沿用既有名称：`search_knowledge`、`read_knowledge`、`read_source`、`validate_sql`、`request_query`、`execute_query`、`update_analysis_task`、`get_query`、`cancel_query`、`manage_personal_asset`、`propose_semantic_change`。个人资产候选由搜索返回，正文读取经资产模块校验；Skill正文只有已有用户选择才可正式加载。禁止给模型暴露通用数据库写入或可自报用户/确认状态的入口。`execute_query`必须经Rust绑定当前真实用户消息。
-- `request_query`只产生待执行草稿。Pi通过`execute_query`交付当前用户明确执行意图，参数为查询ID、草稿/条件版本、完整`instruction_quote`；Rust核对消息来源、知识、版本和阻塞，本消息尚无任务关联时在同一确认事务中登记到该查询任务，无需先重复`route`；已有归属必须包含目标，多目标先分别登记。失败不能留下新增归属或授权，其他未处理消息保持阻塞，已有多任务关联不被替换。执行意图来自用户，模型输出中的“已确认”不能改变状态。
+- 工具按业务意图提供，沿用既有名称：`search_knowledge`、`read_knowledge`、`read_source`、`validate_sql`、`request_query`、`execute_query`、`update_analysis_task`、`get_query`、`present_analysis_answer`、`cancel_query`、`manage_personal_asset`、`propose_semantic_change`。个人资产候选由搜索返回，正文读取经资产模块校验；Skill正文只有已有用户选择才可正式加载。禁止给模型暴露通用数据库写入或可自报用户/确认状态的入口。`execute_query`必须经Rust绑定当前真实用户消息。
+- `request_query`只产生待执行草稿。`execute_query`接受完整`instruction_quote`和`queries`集合，每项绑定查询ID、草稿及条件版本；一次最多12项，不得重复查询。Rust在同一事务核对全部新确认并登记任务归属，任一项失败不留下本批新增确认；平台仍逐查询执行，不承诺外部批量原子性。单条`query_id/draft_version/condition_version`输入保留兼容及原归属检查，与`queries`互斥。批量入口不要求模型先分别`route`，其他未处理消息仍可阻塞。首次确认绑定原消息和原预算，已确认项重放不改绑；自然语言是否确实授权仍由Pi理解，不能把真实原话匹配视为语义证明。
 - 当前消息的执行动作完成后，Pi结束本轮，由既有结果通知续接解释。M07通过`is_confirmation_message_in_tx`识别确认来源；`get_query`在读取外部结果前及最终事务核对，对该来源消息保留真实成功状态、返回空结果与等待交付提示。同消息恢复不提前取得结果，系统结果消息及后续追问不受影响；不新增结果调度器或去重状态。
 - 查询取消的HTTP和Pi入口共用`query_workflow::cancel_in_tx`。本地可结束的未提交/排队查询在同事务记录终态事件并更新等待阶段，重复取消只返回原状态；已提交查询继续向平台请求取消并查证。终态事件格式、稳定查询身份和平台结果解释入口保持。
 - M12将同一会话的查询作为独立组件显示，按已加载的确认事件定位；确认事件尚在未加载的历史页时暂置顶部，补页后恢复真实位置。`query_result`事件生成可定位原查询的终态通知，按查询身份去重。消息区独立滚动、输入区持续可用。表格/图表只预览前10行；CSV仍由M07按原查询权限逐页读取，预览不修改SQL、结果分页或下载范围。该展示调整不改变M05会话串行租约或M07后台查询接口。
@@ -220,7 +220,8 @@ AppError = { code, message, retryable, request_id, resource_ref? }
 | `validate_sql` | `validate_sql` | M01/M07，检查能力和完整 SQL，无执行副作用 |
 | `request_query` | `request_query` | M05/M06/M07/M08，保存绑定条件的待确认请求 |
 | `execute_query` | `execute_from_message_in_tx` | M05/M06/M07/M08，核对当前真实消息并复用确认事务；同事务标记消息已应用 |
-| `update_analysis_task` | `apply_analysis_update` | M05/M06/M07/M08，保存归属、条件或澄清 |
+| `update_analysis_task` | `apply_analysis_update` | M05/M06/M07/M08，保存归属、条件或澄清；`split`建立独立目标并迁移指定开放题 |
+| `present_analysis_answer` | `analysis_answers::prepare / check_in_tx` | M05/M06/M07/M08，核对来源并填充精确值，正式交付绑定成功工具回执 |
 | `get_query` | `read_query` / `read_results` | M01/M07，读取当前授权范围及明确范围的结果统计；不重复提交 |
 | `cancel_query` | `cancel_query` | M07/M08/M10，只登记该查询取消与查证 |
 | `manage_personal_asset` | `save_asset` / `change_asset_state` | M01/M09/M10；用户的明确范围与 Skill 保存决定仍须核验 |
@@ -431,7 +432,9 @@ M02正式知识与M04词法索引各自在候选上限之前应用范围；向�
 
 ## 12. 澄清与多任务续接（2026-10-13）
 
-M06继续用 `AnalysisUpdate` 的 `create/revise/clarify/route`；`clarify`必须给出非空`question`或`clarifications`列表，两者互斥；列表最多8个独立问题，各有独立ID，不能借空澄清关闭旧问题。独立目标分别建任务，同一目标的多个独立缺口可同批提出，条件修订只合并明确set/unset字段；仅以 `resolved_clarification_ids` 解决本次实际回答的开放问题，普通修订保留其他未答问题。`read_analysis_task` 每页返回最多8条开放问题与真实ID，可按游标补齐。普通route不改条件，也不关闭问题；其他任务的更新不影响原问题。
+M06使用 `AnalysisUpdate` 的 `create/revise/clarify/route/split`；`clarify`必须给出非空`question`或`clarifications`列表，两者互斥；列表最多8个独立问题，各有独立ID，不能借空澄清关闭旧问题。独立目标分别建任务，同一目标的多个独立缺口可同批提出，条件修订只合并明确set/unset字段；仅以 `resolved_clarification_ids` 解决本次实际回答的开放问题，普通修订保留其他未答问题。`read_analysis_task` 每页返回最多8条开放问题与真实ID，可按游标补齐。普通route不改条件，也不关闭问题；其他任务的更新不影响原问题。
+
+联合分析可以共用任务；用户开始只修订、澄清或执行其中一个目标时，`split`从原任务当前版本创建独立目标。输入保留原`task_id/expected_version`，给出新目标的完整`goal/conditions`和`moved_clarification_ids`；指定开放题保留原ID、问题、选项与来源，仅迁移归属。原任务条件及旧查询不迁移、不改版，剩余开放题继续有效。复制的相同条件保留原来源，新内容继承本轮已核对来源；拆分不授予执行权。验收看局部条件与未答事项是否独立，不要求三个指标机械对应三个任务。
 
 启动任务快照只预览最早未答问题；还有其他未答问题时标明 `has_more_clarifications=true` 与 `context_complete=false`，由 `read_analysis_task` 按 `next_clarification_after` 补读。更新回执同样以 `has_more_clarifications` 区分首题与问题全集；正式分页读取按当前页和游标表达范围，不继承启动预览标记，后续正文来源保护仍照常执行。
 
@@ -454,6 +457,10 @@ Pi先查资料，仍有关键疑点时说明影响、给有据的参考选项并
 M05记录真实消息归属，M07按原规则失效受影响草稿；等待澄清和旧条件不能执行。服务端优先区分`version_conflict`、`task_inactive`和`waiting_clarification`，解决非开放问题返回`clarification_not_open`。已鉴权工具拒绝回执提供有界任务/查询状态与恢复方向，无SQL或资料正文；Node完整透传到Pi。仅明确拒绝可修正后继续原动作，未知回执仍按原操作查证。答案、未答、推荐或换话题本身不新增执行授权。长期会话、半轮工具恢复和压缩继续使用原Pi会话和宿主操作身份。相关离线流程与真实模型效果分开报告，完成证据只在CURRENT维护。
 
 ## 13. 分析依据与结果有效性（2026-10-13）
+
+正式定量说明使用`present_analysis_answer`：`template`组织文字，`values`按名字引用`cell`、`statistic`、`parameter`或`metadata`，`sources`绑定真实查询与`result_ref`。单元格按精确字符串读取，统计在完整已保存页合并后重新计算；参数引用原执行条件，元数据限实际快照和保存行数。模板内的阿拉伯/全角数字须通过占位值提供，宿主不执行算术、不全局删除聊天数字或UUID，部分结果自动附范围说明。来源检查沿用现有权限、历史条件与结果有效性，正式正文绑定本轮成功SDK工具回执；该机制只验证绑定值和来源，不保证中文定量描述、指标语义或业务因果正确。
+
+Node仅在成功查询结果解释回合暂缓助手正文，普通调查、概念解释和操作确认保持原流式体验，工具事件即时展示。只有成功且结果仍可读的结果通知要求通过该工具交付说明；失败、取消、结果不可用及普通概念解释、澄清、纯保存可自然回答。来源答案在finish事务重新核验来源和SDK回执，连同正文与正式事件原子提交，不先广播答案正文。Pi继续负责调查、工具选择和循环；本工具不触发新SQL，缺少派生值时另给补算草稿，执行仍按原规则。最终持久正文与展示正文保持一致，不把先前未经核对的过程文字拼成正式答案。
 
 Pi通过`save_analysis_evidence`保存绑定真实原任务及条件版本的轻量结论；条件修订后仍可显式保存有效历史成功结果，不把旧结果改标为当前条件。M06拥有不可变正文、当时条件和命令回执，M07拥有查询及平台结果；`use_cases/analysis_evidence.rs`组合两者，不访问模块私有表。回执和任务摘要只包含引用，完整结果、SQL和参数不复制进依据存储。
 
@@ -530,7 +537,7 @@ Pi按需通过`read_analysis_report`读取当前报告的标题、选中依据�
 | 按需详情 | `GET /assets/skill-drafts/{draft_id}` / `SkillDraft`状态联合 |
 | 用户确认 | 原`POST /assets` / `AssetSave`增加可选`draft_id`；只允许首次创建个人Skill |
 
-准备绑定当前完整真实用户消息、本人/空间、任务、条件版本、已保存分析依据和宿主持久操作身份。结果唤醒不能冒充用户来源。公开知识依赖由依据推导，最多50条；`skill_drafts.text_authority`另存准备正文时宿主交付的完整来源与证据来源并集。即使任务和依据先建立，之后才读到个人记忆、Skill或资料，草稿正文仍受这些来源约束。准备、读取和确认都核对证据、原条件及草稿完整来源；结果授权在事务外查证，然后回锁重核。旧NULL来源不可按空依赖确认。
+准备绑定当前完整真实用户消息、本人/空间、草稿当前任务和条件版本、已保存分析依据与宿主持久操作身份。每份依据可来自本人同会话的不同任务或历史条件，各自保留原任务、条件快照和查询结果身份；复用报告的逐来源检查，不能将旧结果改标为草稿当前条件。草稿归属条件改变仍使待确认草稿失效。结果唤醒不能冒充用户来源。公开知识依赖由依据推导，最多50条；`skill_drafts.text_authority`另存准备正文时宿主交付的完整来源与证据来源并集。即使任务和依据先建立，之后才读到个人记忆、Skill或资料，草稿正文仍受这些来源约束。准备、读取和确认都核对证据、原条件及草稿完整来源；结果授权在事务外查证，然后回锁重核。旧NULL来源不可按空依赖确认。
 
 `pending`才返回编辑正文；`condition_changed`、`sources_unavailable`和`confirmed`仅返回引用与状态（确认另附正式资产ID）。失效时清理未确认正文。确认复用资产幂等入口，在同一事务保存正式个人Skill、更新草稿状态并清正文。不同操作并发确认不得创建两份资产。来源会话删除清所有未确认正文，已明确保存的独立资产沿原规则保留。
 
