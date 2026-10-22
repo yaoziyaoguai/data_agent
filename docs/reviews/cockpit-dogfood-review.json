@@ -1,0 +1,192 @@
+{
+  "schema": 1,
+  "increment_id": "I2-COCKPIT-DOGFOOD",
+  "reviewer": "cockpit_independent_review",
+  "reviewer_identity": "独立非实施审查代理；未修改产品、资料、生成器、用例或验收预期，仅编写私有独立探针与本审查记录。",
+  "reviewed_at": "2026-10-22T04:06:17.741593+00:00",
+  "conclusion": "passed",
+  "summary": "本增量的公开座舱语音资料、默认mock接入与100项递进试用准备通过独立审查。五组审查/截图发现均已修复并核对；资料具备28张实际表、421字段、14份业务文档和可执行独立参考，知识与评分材料隔离。结论仅覆盖资料与固定工程接入，不代表100项真实模型Dogfood已执行，不替代最终verify-increment、Git推送或真实平台验收。",
+  "scope_sha256": "897e58265c7c3d14f832f144e354e488f551c1b980f80cd3a08df042306f7abb",
+  "scope": {
+    "input_files": 544,
+    "contract_sha256": "9020cd772059db42c51caaedfa05b203ca78550c5a49d32f347523ea10c261f9",
+    "decisions_sha256": "c6456f454f3efb5763440301d1ea3298c518024f0fede2cb6be7dd86fa103e3b",
+    "reviewed_areas": [
+      "语音领域规范、可复现SQL生成、28表421字段54外键和三张派生表",
+      "14份允许业务文档、26指标、543对象目录、来源字节与逐字引文",
+      "100项七级案例、依赖顺序、52独立SQL、冻结数值、评分与not_run模板",
+      "平台当前结构只读白名单和逐目标ETL；Rust多文档加载、表限定字段与人工定义刷新",
+      "固定mock仅复用Pi现有受控工具；默认独立持久库和语音入口",
+      "README、开发/架构文档及四张真实合成页面截图"
+    ],
+    "boundary": "范围指纹绑定CURRENT本增量声明的输入，包括docs/images。既有同源契约、权限、预算、Pi循环和业务状态机未改变；旧零售仅用于既有回归。"
+  },
+  "requirements": [
+    {
+      "ids": [
+        "D04",
+        "D06",
+        "D07"
+      ],
+      "assessment": "来源包和业务文档完整导入，表限定字段类型与人工定义正文/结构可用，API/Worker/平台同源启动；不宣称预填模型已替全部语义做正确性证明。"
+    },
+    {
+      "ids": [
+        "C01",
+        "C07"
+      ],
+      "assessment": "Pi仍为唯一循环，固定mock有明确模拟标识，实际定义读取、SQL草稿、用户授权、SQLite执行与来源答案工具通路已验证。单消息24次与连续临时失败3次规则保持。"
+    },
+    {
+      "ids": [
+        "C06",
+        "C08"
+      ],
+      "assessment": "资料覆盖完整语音链路并提供递进案例和可复核来源；UI默认和截图已切换。28表准备不替代千表真实召回、真实模型质量或真实平台验收。"
+    }
+  ],
+  "resolved_findings": [
+    {
+      "id": "VOICE-REVIEW-1",
+      "problem": "日mart SQL截断任意半日时间，定义却声称精确半开区间；反例原返回8/15而明细为9/18。",
+      "resolution": "12个日mart指标明确仅UTC整日，HAVING拒绝非整日和反向区间，非整日回明细；独立执行确认不再返回错误统计。"
+    },
+    {
+      "id": "VOICE-REVIEW-2",
+      "problem": "有标签意图一致率漏写eligible分母限制。",
+      "resolution": "定义明确completed/clarification_pending/rejected/failed/unknown，排除cancelled/no_speech；缺预测仍保留标签分母。"
+    },
+    {
+      "id": "VOICE-REVIEW-3",
+      "problem": "S09缺选中排名参考；J09误把未存储的TTS chunk数作为可统计目标。",
+      "resolution": "S09追加asr_selection参考；J09按实际TTS尝试与播放片段提问并明确chunk缺口，不为补题增加新表。"
+    },
+    {
+      "id": "VOICE-REVIEW-4",
+      "problem": "复杂题原无多段播放/独立晚到回执见证，参考未覆盖动作区间和完整观测窗。",
+      "resolution": "现有表内补真实合成见证，14轮多段播放、6条独立晚到回执；参考区分首音前和完整观测窗，包含动作与播放。独立Python区间并集逐行核对407条；首音前重叠实际为0，未将首音后播放重叠误作首播原因。"
+    },
+    {
+      "id": "VOICE-REVIEW-5",
+      "problem": "JSON原文转义的多行人工定义被refresh_facts误清空，空suggestion遮蔽结构；字段目录首屏挤掉表。",
+      "resolution": "当前采集candidate的authored_definition沿仍有效的原quote/value映射刷新，结构依据单独验证，人工层保留；目录采用既有grouped接口。12项单测与543对象正文/结构实际导入比对、UI首屏及重拍截图通过。"
+    }
+  ],
+  "independent_checks": [
+    {
+      "method": "原始行Python重算，不读取产品ETL公式",
+      "daily_groups": 724,
+      "daily_metric_cells": 18100,
+      "cross_table_turn_identities": 8286,
+      "labeled_without_asr_prediction": 116,
+      "labeled_without_nlu_prediction": 105,
+      "result": "passed"
+    },
+    {
+      "method": "独立Python区间排序/并集，与参考SQL逐行核对",
+      "overlap_rows": 407,
+      "before_first_audio_overlap_rows": 0,
+      "multi_playback_turns": 14,
+      "late_receipt_rows": 6,
+      "result": "passed"
+    },
+    {
+      "method": "逐源正文与SHA核对、知识允许列表审查",
+      "sources": 17,
+      "excluded": [
+        "seed.sql",
+        "domain-spec.json",
+        "generate.py",
+        "Dogfood包及reference/expected-results"
+      ],
+      "result": "passed"
+    },
+    {
+      "method": "旧两套零售目录静态兼容核对",
+      "authored_entries_per_fixture": 68,
+      "result": "均已有source_facts.value且等于原effective_value，未因本次人工定义刷新改变正常含义"
+    },
+    {
+      "method": "直接查看四张最终截图并核对来源收据",
+      "result": "工作台/月度报告数值一致；语义含义与计算规则已显示；个人方法为语音分析且注明非整日回明细。图片没有凭据和公司数据。"
+    }
+  ],
+  "evidence": [
+    {
+      "path": ".local/checks/cockpit-independent-probe.json",
+      "sha256": "e5aefb74d18fd8560703f89540f52cec7aab51b92e2588f2302bd9fd4ea6b6a7",
+      "assessment": "独立18,100单元格、8,286身份及17来源核对；旧时点探针单独保留。"
+    },
+    {
+      "path": ".local/checks/cockpit-independent-complexity.json",
+      "sha256": "08a31922e55f86ddf4ca23cf9aa22fc0403b0e0ee708aeddf017c73039b02a2f",
+      "assessment": "四组审查发现的独立修复复验。"
+    },
+    {
+      "path": ".local/checks/cockpit-runtime.json",
+      "sha256": "7892a01c53468023b8280ce3433435f4fe8d540bf7baec40cb6fc50103be0faa",
+      "assessment": "主代理实际Rust/Pi/SQLite/浏览器6组，包含543对象完整人工定义及结构比对；0官方请求。"
+    },
+    {
+      "path": ".local/checks/cockpit-ingestion-unit.log",
+      "sha256": "f93fc5d04d32bea89e1cb7e8d72407bb0e6285352674174baea77768a5535992",
+      "assessment": "12项ingestion单测通过，含原quote失效、人工层保护和多行定义。"
+    },
+    {
+      "path": ".local/checks/cockpit-sources.log",
+      "sha256": "14180628195c6432035eb75bae1ce72c036c9cde52fdd17ab7ae444b587557df",
+      "assessment": "可复现31,055种子行/33,304总行；19数据不变量、26指标76次范围核对通过。"
+    },
+    {
+      "path": ".local/checks/cockpit-dogfood.log",
+      "sha256": "aba0b0b7a0a633a06fdce068c445f4a9c9271b62d426bd5ef3aa137599443d58",
+      "assessment": "100项not_run、52SQL实际合成平台执行，66页/1900保存行与独立参考一致；0模型请求。"
+    },
+    {
+      "path": ".local/checks/cockpit-engineering.log",
+      "sha256": "fe271ed79ff0ab85ca044f7959cf98810363e8a4965d44e8c2d6a388e425106f",
+      "assessment": "541同源契约、fmt/Clippy/types/build、架构与387材料检查/224链接通过；保留构建体积提示。"
+    },
+    {
+      "path": ".local/checks/cockpit-platform-legacy.log",
+      "sha256": "ec2dbafee16c2258f9eb106949fec55e12357194f80c13d0cdca40cdb63970d5",
+      "assessment": "19项既有平台来源回归通过。"
+    },
+    {
+      "path": ".local/checks/cockpit-legacy-browser.log",
+      "sha256": "0e5987f7c2616ca6fcea6f5055e23b0de538dfa9e0a978b93b833a64294c773b",
+      "assessment": "旧工作台9组通过，包含人工编辑、迟到轮询和手机页面。"
+    },
+    {
+      "path": ".local/checks/cockpit-asset-browser.log",
+      "sha256": "de5819a28585336f2794a12971e9b1a1eb26e4e2477dda19640da689f0637f1a",
+      "assessment": "旧资产页2组通过；示例文案更新但原交互断言保留。"
+    },
+    {
+      "path": ".local/cockpit-readme-figures/capture-result.json",
+      "sha256": "13436b9c62548ba185944650d2b64d9baacfed719963eecee05e16f641f69a7e",
+      "assessment": "四张最终图片的实际应用流程与资料指纹；受控工具选择，不代表真实模型。"
+    }
+  ],
+  "findings": [],
+  "observations": [
+    {
+      "severity": "non_blocking_scope_limit",
+      "topic": "词法检索耗时",
+      "detail": "CURRENT保留syn_voice_turn两次搜索12.495/15.116秒、HTTP200且首位目标正确的观察；本增量没有性能优化或延迟验收，不宣称已解决。"
+    }
+  ],
+  "limitations": [
+    "新100项真实模型Dogfood全部not_run；固定mock与参考SQL不能冒充模型自主调查。",
+    "没有原始音频，不能据合成标签宣称真实声学识别、听感或生产正确率。",
+    "生成器只读取公开合成规范，审查未读取公司资料；不以未知私有信息比对或保证与世界上所有资料绝无相似。",
+    "提交、默认分支合并、推送及最终统一验收由ROOT完成，本审查不证明这些后续动作已发生。",
+    "私有本地证据不上传；新克隆仓库可运行公开验证源码，但不能据此获得未发布的历史日志。"
+  ],
+  "acceptance_declaration_adjustment": {
+    "previous_scope_sha256": "d2ef2fac76a3ed044372c763b9e08cd3539c13ce9924b0713d073611a085b412",
+    "change": "COCKPIT-ENGINEERING仅移除verify-materials；保留verify-contracts、verify-code、verify-architecture。材料检查独立记录为收尾证据。",
+    "reason": "交付检查器禁止将材料静态检查作为业务完成验收命令。",
+    "assessment": "没有删除或放宽业务/契约/代码/架构测试；既有387项材料检查和224链接通过证据仍保留。代码、资料和截图没有变化，重新绑定声明指纹。"
+  }
+}

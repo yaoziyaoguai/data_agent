@@ -93,7 +93,9 @@ make vm-stop
 
 ## 4. 正式工作台与增量检查
 
-`make dev` 构建Rust和React，并启动API（8780）、Pi Bridge（8781）、Worker及Vite（5173）。全部仅监听回环地址；端口已占用时失败，不关闭其他进程。用`.local/development/identities.json`中的alice或bob值登录，文件由启动器生成并设为0600。已有身份文件保留；Ctrl+C仅关闭当前应用进程，MySQL会话数据保留。`make verify-startup`验证同一启动器后自行停止。
+`make dev` 构建Rust和React，并启动API（8780）、Pi Bridge（8781）、Worker及Vite（5173）。全部仅监听回环地址；端口已占用时失败，不关闭其他进程。用`.local/development-cockpit/identities.json`中的alice或bob值登录，文件由启动器生成并设为0600。已有身份文件保留；Ctrl+C仅关闭当前应用进程，MySQL会话数据保留。`make verify-startup`验证同一启动器后自行停止。
+
+默认来源为`docs/sources/cockpit`，日常运行目录为`.local/development-cockpit`。mock启动器按运行目录建立稳定的独立MySQL库，并写出不含凭据的`environment.json`；API、Worker和平台共同加载这份资料。换运行目录会得到另一隔离环境，重启同一目录保留会话。旧零售只用于已有回归测试，测试显式选择旧来源，不与新日常库混用。
 
 本地身份文件可添加开发账号（例如 `carol`），使用独立生成的64字符随机凭据；重启启动器后生效。`internal` 仅供服务间调用，不注册为登录账号。新增身份本身不授予语义维护权：在本地 Datasight mock 的 `catalog.json` 中指定样例表的 `maintainer_id`，由超级维护者调用 `/source-syncs` 同步后，表负责人才能编辑相应语义。这样可同时保留超级维护者、表语义维护者和普通用户进行试用。
 
@@ -165,7 +167,9 @@ python3 scripts/development.py --model deepseek \
 
 ### 定向试用与问题复核
 
-使用120项手册时，API、Worker与平台统一指定`DATA_AGENT_SYNTHETIC_SOURCE_DIRECTORY=docs/sources/analysis`。该资料是连续月份样例，与默认旧样例分开；不能混用另一运行目录的参考数字。角色在实际环境重新核对，凭据只取相应运行目录的`identities.json`，不要放进报告或模型提示。
+当前使用[座舱语音100项试用包](dogfood/cockpit/README.md)，按准备说明检查资料与服务，真实模型试用另按用户授权执行。`make verify-cockpit`只检查数据、语义、用例和固定mock接入，不代跑100项真实试用。
+
+重放历史120项手册时，API、Worker与平台统一指定`DATA_AGENT_SYNTHETIC_SOURCE_DIRECTORY=docs/sources/analysis`。该资料是历史连续月份零售夹具，与当前座舱语音默认资料分开；不能混用另一运行目录的参考数字。角色在实际环境重新核对，凭据只取相应运行目录的`identities.json`，不要放进报告或模型提示。
 
 优先按[试用交叉审计](reviews/dogfood-20261019.md)复测限定域查空/明确扩大、歧义先澄清/已采用口径直接继续、整数分/元两位，以及含粘贴SQL的修改后执行。模型行为查看实际工具参数、回执与持久回复，不能只看回复是否声称遵守范围。执行被明确拒绝后可在原请求仍有效时修正工具参数；unknown则沿原身份查证，保留预留，不能换ID重做。
 
@@ -400,16 +404,18 @@ node tests/mvp/check-asset-editor-browser.mjs
 - **业务文档**：打开一篇完整文档，使用“编辑文档”修改全文，包括标题、序言和章节。一次保存核对全体版本；发生冲突保留草稿。全文读取不截断，单次保存上限10万字符，超限在编辑时提示并保留草稿。旧的后台分段引用继续有效地参与权限和版本检查。
 - **我的积累**：新增Skill可从三个示例开始，再改写内容和适用范围。文本附件使用英文名称（例如 `report.md`），目录前缀由页面补齐；保存之后仍需明确选用。字段变化会撤销旧核对标记。
 
-可执行合成平台包含 `demo_order_detail`、`raw_order_lines`、`raw_payments`、`dim_customers`、`customer_tags` 五张表。语义目录中不同来源的记录数不等于实际表数。没有把同名但来源不同的对象自动合并；千表与真实 Datasight 仍需单独接入验收。
+默认可执行合成平台包含28张`syn_`语音链路表，详见[资料说明](sources/cockpit/README.md)。历史零售五表仅供已有回归。语义目录中不同来源的记录数不等于实际表数。没有把同名但来源不同的对象自动合并；千表与真实 Datasight 仍需单独接入验收。
 
 本轮针对性验证入口：`check-message-markdown.mjs`、`check-conversation-experience-browser.mjs`、`check-knowledge-experience-browser.mjs`、`check-asset-experience-browser.mjs`。`check-experience-regressions.mjs`复跑原资产、语义协作与管理按钮的受影响流程；命令均位于 `tests/mvp`，使用隔离数据，不修改试用库。完成状态与结果只以 [CURRENT](CURRENT.md) 的本增量记录为准。
 
 ## 聊天生成、修订和执行 SQL
 
-1. 提问“查2026年1月净收入”，查看SQL和参数，当前不会取数。
-2. 发送“仅看app渠道”，SQL更新，仍不执行。
-3. 发送“执行上面这条”，查询完成后自动显示结果与实际执行SQL；合成样例为1600分。
-4. 也可发送“改成2月，再执行”，同条消息完成修订及执行；“只改成2月”则只展示新稿。
+以下为真实模型的交互方式；默认mock只演示达成率草稿、执行及两个说明入口。
+
+1. 提问“查2026年9月语音任务达成率”，查看SQL和参数，当前不会取数。
+2. 发送“按车型分组”，SQL更新，仍不执行。
+3. 发送“执行上面这条”，查询完成后自动显示结果与实际执行SQL，达成数、分母和百分比分列。
+4. 也可发送“改成8月，再执行”，同条消息完成修订及执行；“只改成8月”则只展示新稿。
 
 可以粘贴自己的SQL及参数要求执行，也可直接引用上文。代码框右上复制包含SQL和以JSON注释标明的绑定参数；这些值由Agent读取，外部客户端需自行绑定。指代不明时Agent先问清楚。运行中“停止”只作用于该查询，取消完成以平台回执为准。
 

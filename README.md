@@ -40,9 +40,9 @@ Data Agent 是面向产品、算法、数据分析和数据开发的工作台。
 
 Data Agent 的语义角色与 Datasight 的查询、取数和 SQL 执行权限分别校验。流程与接口见[语义维护设计](docs/semantic-retrieval-design.md#117-跨用户纠错与共享语义维护)。
 
-![当前语义管理页面：按表浏览合成订单资料，查看业务含义、结构化规则与维护入口](docs/images/semantic-management.jpg)
+![当前语义管理页面：按表浏览合成语音链路资料，查看业务含义、结构化规则与维护入口](docs/images/semantic-management.jpg)
 
-*合成管理员 Alice 按表浏览订单资料；对象负责人和可执行的维护操作由服务端返回。业务文档按整篇阅读和编辑，拆分检索由后台处理。*
+*合成管理员 Alice 按表浏览语音链路资料；对象负责人和可执行的维护操作由服务端返回。业务文档按整篇阅读和编辑，拆分检索由后台处理。*
 
 ### 从问题到结果，始终可以补充和纠正
 
@@ -52,7 +52,7 @@ Data Agent 的语义角色与 Datasight 的查询、取数和 SQL 执行权限�
 
 1. 提问与澄清：Agent 检索表、字段、指标和业务文档；缺少必要信息时主动询问。
 2. 查看 SQL：展示 SQL、参数和口径依据，可以复制，也可以继续补充条件。
-3. 聊天取数：说“执行这条”或“改成 2 月，再执行”。Pi 理解意图，服务端校验权限、只读和版本，并将这条用户消息与最终 SQL 绑定。只修改条件不会执行。同一句明确授权的多条既有 SQL 可一起确认，分别运行，并保持原消息和预算归属。
+3. 聊天取数：说“执行这条”或“改成 8 月，再执行”。Pi 理解意图，服务端校验权限、只读和版本，并将这条用户消息与最终 SQL 绑定。只修改条件不会执行。同一句明确授权的多条既有 SQL 可一起确认，分别运行，并保持原消息和预算归属。
 4. 后台查询：执行中的查询留在对话里，可以单独停止；输入框持续可用，同一对话可以发起多条 SQL。完成后在对话通知，点击“查看结果”回到对应查询。
 5. 预览与下载：表格及图表预览前 10 行，最终 SQL 和参数可查看、复制；“下载 CSV”取得该查询已保存的结果。当前合成平台最多保存 1,000 行，超出时提示截断。
 
@@ -62,11 +62,11 @@ Data Agent 的语义角色与 Datasight 的查询、取数和 SQL 执行权限�
 
 ![工作台中的查询结果、CSV 下载和最终 SQL](docs/images/workbench-sql.jpg)
 
-*正式工作台中的合成订单查询。结果先展示，SQL 可展开；查询运行期间仍可继续聊天。*
+*正式工作台中的合成语音任务达成率查询。结果先展示，SQL 可展开；查询运行期间仍可继续聊天。*
 
-![本人分析报告中的月度净收入、精确数值、解读范围与查询来源](docs/images/analysis-report.png)
+![本人分析报告中的语音任务达成率、精确数值、解读范围与查询来源](docs/images/analysis-report.png)
 
-*同一份已保存结果用于文字与图表，金额单位为分。报告保留来源条件、计算引用与限制说明，可随时返回对话继续核对。*
+*同一份已保存结果用于文字与图表，百分比由查询计算。报告保留来源条件、计算引用与限制说明，可随时返回对话继续核对。*
 
 输入框工具栏可选管理员启用的模型和对应思考强度；DeepSeek 部署首次导入 Flash / Pro。选择随对话保存，从下一条消息生效。生成中的回复与后台查询的结果解释继续使用原请求配置。
 
@@ -204,11 +204,11 @@ make infra-up
 make dev
 ```
 
-打开 [http://127.0.0.1:5173/](http://127.0.0.1:5173/)，用启动器生成的 `.local/development/identities.json` 中 `alice` 或 `bob` 的值登录。该文件只保存在本机；Alice 用于超级维护者试用，Bob 用于普通用户试用。表维护者账号需按[开发指南](docs/development.md)配置 mock 表归属并同步。
+打开 [http://127.0.0.1:5173/](http://127.0.0.1:5173/)，用启动器生成的 `.local/development-cockpit/identities.json` 中 `alice` 或 `bob` 的值登录。该文件只保存在本机；Alice 用于超级维护者试用，Bob 用于普通用户试用。表维护者账号需按[开发指南](docs/development.md)配置 mock 表归属并同步。
 
 Ctrl+C 关闭应用进程，数据库与会话保留；结束后可用 `make infra-down` 停止基础服务，或用 `make vm-stop` 停止项目虚拟机。
 
-默认使用本地模拟模型和词法检索，无需模型密钥，不调用付费向量接口。可以先问“查 2026 年 1 月净收入”，查看 SQL 后说“执行这条”，或补充“改成 2 月，只看 app，再执行”。模拟模式只支持合成场景演示；自由提问需要切换真实模型。
+默认使用本地模拟模型和词法检索，无需模型密钥，不调用付费向量接口。默认资料为座舱语音交互链路，可以先问“查2026年9月语音任务达成率”，查看 SQL 后说“执行这条”；也可问“ASR耗时怎样统计”或“语音交互链路有哪些表”。模拟模型只支持这些固定演示及达成率按天、按车型分组；多轮修订和自由调查需要切换真实模型。
 
 | 运行方式 | 入口与说明 |
 | --- | --- |
@@ -219,6 +219,14 @@ Ctrl+C 关闭应用进程，数据库与会话保留；结束后可用 `make inf
 超级维护者可从主导航“模型配置”添加服务地址、API Key和具体Model ID，管理能力、启停和新对话默认值。支持Pi原生Chat Completions、Responses、Anthropic Messages，兼容服务不要求Model ID已在SDK目录中；普通用户仅选择已启用模型。配置加密保存，修改影响新消息，旧消息与恢复沿原版本；停用阻止后续请求。操作与主密钥备份见[接入聊天模型](docs/development.md#通过管理页接入聊天模型)。
 
 本地服务只监听回环地址。`.env.example` 和 `apps/memory/config.example.json` 提供配置格式；凭据、运行数据库、会话和日志保存在被 Git 忽略的本地目录。启动方式、端口、恢复及索引重建见[开发指南](docs/development.md)。
+
+## 座舱语音试用资料
+
+默认合成资料覆盖唤醒与入口、VAD、ASR尝试与候选、意图与槽位、多轮对话、技能路由、动作回执、TTS、播报打断、用户反馈和网络重试：28张实际表、421个字段、26项指标和14份业务文档。车型、软件版本和运行策略是分析维度；导航、媒体、空调只是语音指令的执行目标。全部从零构造，没有原始音频或公司资料。
+
+业务数据覆盖2026年7月至9月，快照截止2026年10月4日。标签只覆盖部分轮次，识别准确率、标签覆盖率、任务达成率和播报完成率分别定义；每个字段注明粒度、单位和空值含义。知识清单只提供结构、加工SQL和业务定义，生成参数、种子和独立参考不进入知识输入。
+
+[资料说明](docs/sources/cockpit/README.md) · [100项递进试用](docs/dogfood/cockpit/README.md) · [交给其他Agent的Prompt](docs/dogfood/cockpit/AGENT_PROMPT.md)。资料和固定mock接入检查不代表真实模型试用通过；新清单初始均为`not_run`。
 
 ## 验证与边界
 
@@ -282,7 +290,7 @@ make verify-shared-embedding verify-memory
 | --- | --- |
 | 当前状态、有效决定、剩余事项 | [CURRENT](docs/CURRENT.md) |
 | 六篇图文工程实践与固定提交源码 | [Data Agent 工程实践系列](https://wangjinkun333.me/blog/series/data-agent-engineering)：整体设计、知识与个人积累、查询恢复、工程维护、来源追踪、多模型接入 |
-| 交给 Coding Agent 做全功能与复杂任务试用 | [2026-10-19 Dogfood 包](docs/dogfood/2026-10-19/README.md)：160项、执行Prompt、独立参考与接续记录 |
+| 交给 Coding Agent 做语音链路及产品能力试用 | [座舱语音 Dogfood 包](docs/dogfood/cockpit/README.md)：100项、7级递进、执行 Prompt 与独立参考；旧[160项包](docs/dogfood/2026-10-19/README.md)保留为历史回归 |
 | 最新试用问题、修复与验证边界 | [一般性根因复核](docs/reviews/dogfood-root-causes-20261020.md)；此前[试用交叉审计](docs/reviews/dogfood-20261019.md)与[本地试用报告](docs/reviews/local-dogfood-20261011.md)保留各自时点的结论 |
 | 系统方案和需求边界 | [系统设计](docs/semantic-retrieval-design.md) |
 | 软件架构与调用关系 | [架构说明](docs/architecture/README.md) |
@@ -290,7 +298,7 @@ make verify-shared-embedding verify-memory
 | 模块接口、存储归属与流程 | [实现设计](docs/architecture/implementation-design.md)、[知识模块](docs/architecture/knowledge-modules.md)、[运行模块](docs/architecture/runtime-modules.md) |
 | HTTP、工具和事件契约 | [OpenAPI 3.1](packages/contracts/openapi.json)、[共用 JSON Schema](packages/contracts/schema.json) |
 | 安装、配置、检查与恢复 | [开发指南](docs/development.md)、[基础设施](infra/README.md) |
-| 合成业务及独立参考答案 | [样例资料](docs/sources/README.md) |
+| 当前合成业务、字段与口径 | [座舱语音资料](docs/sources/cockpit/README.md)；旧[零售回归夹具](docs/sources/README.md)仅供已有测试 |
 | 个人记忆接入与选型依据 | [Mem0 接入报告](docs/research/memory-adoption-trial.md)、[比较实验](experiments/mem0-comparison/README.md) |
 | Skill 依赖修复、保存反馈与验收 | [操作说明](docs/development.md#资产维护与结果核对)、[维护契约](docs/dogfood-repair-execution.md#11-资产维护补充修复)、[审计对照](docs/research/asset-maintenance-audit-20261008.md) |
 | 工程规则和防漂移约定 | [AGENTS.md](AGENTS.md) |

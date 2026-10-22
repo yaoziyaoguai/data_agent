@@ -2,12 +2,12 @@
 {
   "workflow": "development",
   "schema": 1,
-  "phase": "implementation",
-  "goal_revision": 78,
-  "environment": "提交上一轮修复；准备唯一默认数字座舱合成资料与递进Dogfood包，完成后交接给其他agent，不运行新真实Dogfood。",
+  "phase": "handoff",
+  "goal_revision": 79,
+  "environment": "座舱语音资料、100项递进Dogfood、默认mock接入及README截图完成；本地27173使用新资料，停止新增试用并交接。",
   "verification": {
     "level": "increment",
-    "reason": "保留原失败；新增通用业务、协议及浏览器回归，并独立核对修复与边界。",
+    "reason": "核对合成语音数据、语义定义、独立参考和实际API/Pi/平台/UI接入；固定mock不替代真实模型质量试用。",
     "freshness": "content",
     "checks": [],
     "inputs": [
@@ -32,8 +32,8 @@
     "increment": {
       "id": "I2-COCKPIT-DOGFOOD",
       "phase": "I2",
-      "status": "active",
-      "goal": "公开的数字座舱合成资料（至少20表10文档，计划28表14文档）与100项从易到难Dogfood交接；默认mock实际加载新资料并可执行。",
+      "status": "complete",
+      "goal": "公开的数字座舱语音交互链路合成资料（至少20表10文档，计划28表14文档）与100项递进Dogfood；默认mock加载新资料，资料准备完成后停止，不代跑真实试用。",
       "requirements": [
         "D04",
         "D06",
@@ -85,7 +85,8 @@
         "docs/architecture/implementation-design.md",
         "docs/development.md",
         "README.md",
-        "Makefile"
+        "Makefile",
+        "docs/images"
       ],
       "acceptance": [
         {
@@ -129,7 +130,7 @@
             "C07",
             "C08"
           ],
-          "expected": "新资料真实API/Worker/合成平台加载、完整目录/来源/派生血缘读取和固定mock演示；0官方调用。",
+          "expected": "真实API/Worker/合成平台导入543语义对象及17来源，完整保留全部人工正文和结构；28表/421字段/3加工节点与固定Pi草稿授权结果链、实际语义首屏通过，0官方调用。",
           "evidence_kind": "runtime",
           "command": [
             "node",
@@ -148,23 +149,22 @@
             "C07",
             "C08"
           ],
-          "expected": "契约、代码、架构和文档链接检查通过，旧测试夹具不混入新默认库。",
+          "expected": "契约、代码与架构检查通过，旧测试夹具不混入新默认库；材料链接检查另列收尾证据，不作为业务完成替代。",
           "evidence_kind": "contract",
           "command": [
             "make",
             "verify-contracts",
             "verify-code",
-            "verify-architecture",
-            "verify-materials"
+            "verify-architecture"
           ],
           "timeout_seconds": 1200
         }
       ],
       "review": {
-        "status": "pending",
+        "status": "passed",
         "record": "docs/reviews/cockpit-dogfood-review.json"
       },
-      "evidence": null
+      "evidence": ".local/delivery/I2-COCKPIT-DOGFOOD-result.json"
     }
   }
 }
@@ -174,11 +174,24 @@
 
 ## 数字座舱合成资料与Dogfood交接（2026-10-22）
 
-用户授权先提交/推送上一轮修复、同步README/文档/必要图片并更新服务，再把默认mock换成丰富数字座舱合成资料，至少20张表和10份文档；重新准备大量递进Dogfood，最后停下交给其他agent试用。计划28表、至少300字段、14份独立文档、100项案例。新增内容完全从零构造，不读取或改名复制公司资料，也不以个人记忆里的专属字段/口径作为输入。
+用户授权先提交/推送上一轮修复、同步README/文档/必要图片并更新服务，再把默认mock换成丰富数字座舱合成资料，至少20张表和10份文档；重新准备大量递进Dogfood，最后停下交给其他agent试用。计划28表、至少300字段、14份独立文档、100项案例。用户进一步明确聚焦座舱语音交互链路：唤醒/VAD/ASR/NLU与槽位/多轮对话/技能路由/动作执行回执/TTS播报/打断/反馈/端云重试；车型、版本和网络仅作背景维度。不需要原始音频。初版泛座舱（独立导航、媒体、OTA大盘）草案已作废，未进入正式资料包。需要的交互文本也完全合成，不复用真实对话。新增内容完全从零构造，不读取或改名复制公司资料，也不以个人记忆里的专属字段/口径作为输入。
 
 用户进一步明确旧零售可直接删除，不做双数据集产品、兼容迁移或旧演示维护。日常入口/语义/演示/新用例以座舱为唯一默认；仅保留现有回归确实依赖的最小零售夹具并明确选择。使用新运行目录/库切换，无需把旧查询改标成新数据。新的知识允许列表仅包含DDL、ETL及业务定义；独立数值参考、生成器和评分不进入模型输入。本轮只验证资料自洽和固定mock接入，不执行新的真实Agent Dogfood。
 
-上一轮13组增量验收与18条真实模型消息的版本证据继续保存于`.local/delivery/I2-AGENT-RELIABILITY-REPAIRS-result.json`和`.local/dogfood-runs/repairs-20261022/`。准备新包时核对默认模拟策略也要采用已实现的来源答案交付，这项兼容会补本地固定演示验证，不扩成模型规划器。当前进度/有效决定只维护本记录。
+上一轮业务修复与文档分别提交为`78262bf`、`8610110`，已快进合入默认分支`codex/semantic-maintenance-prototype`并推送。补充默认mock结果来源工具兼容的实际Pi/Rust/SQLite两消息检查通过（0官方调用），独立记录为`docs/reviews/mock-answer-compatibility-review.json`。上一轮13组增量验收与18条真实模型消息的版本证据继续保存于`.local/delivery/I2-AGENT-RELIABILITY-REPAIRS-result.json`和`.local/dogfood-runs/repairs-20261022/`。准备新包时核对默认模拟策略也要采用已实现的来源答案交付，这项兼容会补本地固定演示验证，不扩成模型规划器。当前进度/有效决定只维护本记录。
+
+资料最终为28张表、421字段、54外键、26指标、14业务文档；31,055行种子，经三个日汇总加工后33,304行。独立审查复算18,100个日指标单元格和8,286处跨表身份，核对通过。100项分L0–L6七级，含52条独立SQL参考，所有试用记录保持not_run；来源准备检查不替代真实Agent试用。
+
+接入和资料审查发现并修正：ETL字面控制字符造成Python/Rust来源正文不一致；日表SQL对半日区间静默截断；意图标签分母说明漏eligible；复杂题缺少实际重叠/多段播放/迟到回执见证；人工定义由JSON原文整理成多行正文时刷新被误清空；首屏字段挤占表目录。修复保持原引用、权限、Pi循环和单消息24次限制。9月已有407轮TTS/播放重叠、14轮多段播报、6轮父轮次及时而回执晚到。日表只支持UTC整日，非整日须回明细，参考区分首音前与完整观测窗口。
+
+验收与要求变更：统一验收器禁止把verify-materials计作业务完成，故该检查从工程验收组合移到独立收尾证据，已实际通过，未删除任何业务断言或降低要求。旧UI回归的示例名称改为语音链路概览；延迟轮询拦截URL同步为既有grouped目录接口，保持原迟到响应/人工保存断言。新试用S09补排名参考，J09改为实际可观测的TTS尝试/播放片段并明确无chunk计数，X03参考补动作及实际播报范围；没有放宽正确性或用mock替换真实模型验收。12项ingestion单元、543对象全部人工正文与结构实际导入比对及固定Pi/SQLite/UI六组验证通过。最终统一验收、独立审查、截图和Git/服务交付结果在本节收尾记录。
+
+收尾验证：来源聚合检查包含19项数据不变量及26指标76次范围检查；试用包52条独立SQL通过实际合成平台编译/执行/分页，66页1900保存行与参考一致，11项由原始记录另算。541同源契约、Rust/TypeScript/构建/架构/材料检查通过；旧工作台9组和资产页2组回归通过。README四张截图重拍为新语音资料的正式界面，模型配置图与通用架构图核对后沿用。所有截图均受控工具、实际SQL与来源答案，0付费调用。
+
+本地默认环境为`.local/development-cockpit`，工作台27173/API30780/Bridge30781/平台30790，mock/builtin/lexical，API与页面健康通过；旧零售服务已停止。检索观察：同题`syn_voice_turn`两次词法搜索HTTP200、30候选且首位目标正确，耗时12.495秒（常驻）/15.116秒（隔离），只记录为下一轮性能试用观察，不声称完成性能优化。新100项真实模型试用仍全部not_run。私有环境交接为`.local/cockpit-dogfood/HANDOFF.md`。
+
+最终四组`make verify-increment`全部通过，收据`.local/delivery/I2-COCKPIT-DOGFOOD-result.json`绑定本次实际文件；独立审查`docs/reviews/cockpit-dogfood-review.json`通过。资料与用例提交`d5bce9b`，接入修复提交`1785dcd`，README/图片/文档和当前记录单独提交。交付沿既定规则先快进合入默认分支`codex/semantic-maintenance-prototype`再推送；Git与本地服务最终核对回执保存于`.local/cockpit-dogfood/`。本轮到资料与环境交接为止，100项结果不预填通过。
+
 
 
 ## 第二版 Dogfood 根因修复（2026-10-22）
