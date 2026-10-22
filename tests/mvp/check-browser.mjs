@@ -10,6 +10,7 @@ const context = await browser.newContext({
   acceptDownloads: true,
 });
 const page = await context.newPage();
+page.setDefaultTimeout(30000);
 const checks = [];
 const errors = [];
 page.on("pageerror", (e) => errors.push(e.message));
@@ -117,7 +118,7 @@ try {
   let oldKnowledgeArrived;
   const oldKnowledgeReady = new Promise(r => { oldKnowledgeArrived = r; });
   const oldKnowledgeDelay = new Promise(r => { releaseOldKnowledge = r; });
-  await page.route(/\/api\/knowledge$/, async route => {
+  await page.route(/\/api\/knowledge\?directory=all&directory_view=grouped$/, async route => {
     const response = await route.fetch();
     oldKnowledgeArrived();
     await oldKnowledgeDelay;
@@ -153,7 +154,7 @@ try {
   await navigateWorkspace(page,"我的积累");
   await page.getByRole("tab", { name: /我的 Skill/ }).click();
   await page.getByRole("button", { name: "新增个人 Skill", exact: true }).click();
-  await page.getByRole('button', {name: '使用收入概览示例', exact: true}).click();
+  await page.getByRole('button', {name: '使用语音链路概览示例', exact: true}).click();
   await page.getByLabel("名称", { exact: true }).fill("渠道分析方法");
   await page.getByLabel("适用范围与例外").fill("订单收入分析");
   await page.getByRole("button", { name: "保存", exact: true }).click();
@@ -197,6 +198,12 @@ try {
   assert.deepEqual(errors, []);
   passed = true;
   console.log(JSON.stringify({ passed, checks, officialRequests: 0 }));
+} catch (error) {
+  if (!page.isClosed()) {
+    await screenshot("browser-failure");
+    await writeFile(".local/checks/mvp-browser-failure.txt", await page.locator('body').innerText());
+  }
+  throw error;
 } finally {
   await writeFile(
     ".local/checks/mvp-browser.json",

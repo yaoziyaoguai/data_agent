@@ -1,6 +1,7 @@
 // 合成模型的固定演示策略，仅用于可重复的本地协议/产品验证；真实provider由Pi自主规划。
 import type { TranscriptContext } from "@earendil-works/pi-ai";
 import { isRecoveryNotice } from "../session/checkpoint.ts";
+import { cockpitAction } from "./synthetic-cockpit.ts";
 import type {
   Conditions,
   RunEnvelope,
@@ -12,6 +13,8 @@ export function syntheticAction(
   run: RunEnvelope,
   context: TranscriptContext,
 ): SyntheticAction {
+  if (process.env.DATA_AGENT_DEMO_PROFILE === "cockpit_voice" && !run.text.startsWith("[已确认查询结果事件]"))
+    return cockpitAction(run, context);
   const messages = context.messages.filter(message => !isRecoveryNotice(message));
   // 宿主参考会被Pi投影为user；合成模型按真实输入定位工具组，不能把参考当新问题。
   const input = run.text;

@@ -226,7 +226,7 @@ export function KnowledgePage({
 }) {
   const [objects, setObjects] = useState<KnowledgeObject[]>([]);
   const [current, setCurrent] = useState(
-    initialObject ?? "table-demo_order_detail",
+    initialObject ?? "",
   );
   const [tab, setTab] = useState(initialTab);
   const directoryElement = useRef<HTMLElement>(null);
@@ -274,7 +274,7 @@ export function KnowledgePage({
   const refresh = async () => {
     const generation = ++refreshGeneration.current;
     const [knowledge, proposals, visible, access] = await Promise.all([
-      api("KnowledgeList", "/knowledge"),
+      api("KnowledgeList", "/knowledge?directory=all&directory_view=grouped"),
       api("ProposalList", "/knowledge-proposals"),
       Promise.all(visibleObjectIds.current.map(id => api("KnowledgeObject", "/knowledge/" + id))),
       api("SemanticAccess","/semantic-access"),
@@ -283,6 +283,7 @@ export function KnowledgePage({
     if (!directoryInitialized.current) {
       directoryInitialized.current = true;
       setNextAfter(knowledge.next_after_id);
+      if (initialScope === "tables") setCurrent(previous => previous || knowledge.objects.find(object => object.kind === "table")?.id || "");
     }
     setObjects((old) => { const byId = new Map(old.map(o => [o.id,o])); for (const v of [...knowledge.objects, ...visible]) byId.set(v.id, currentObject(byId.get(v.id),v)); return [...byId.values()]; });
     setProposals(proposals.proposals);
@@ -294,7 +295,7 @@ export function KnowledgePage({
     return () => { ++refreshGeneration.current; };
   }, [user]);
   useEffect(() => {
-    if (initialObject !== undefined) setCurrent(initialObject ?? (initialScope === "tables" ? "table-demo_order_detail" : ""));
+    if (initialObject !== undefined) setCurrent(initialObject ?? "");
     setTab(["概览", "字段语义", "关联与血缘", "指标 SQL", "业务文档", "变更记录"].includes(initialTab) ? initialTab : "概览");
     setDirectoryScope(initialScope);
   }, [initialObject, initialTab, initialScope]);
@@ -348,7 +349,7 @@ export function KnowledgePage({
   const loadMore = async () => {
     if(!nextAfter || loadingMore) return;
     setLoadingMore(true);
-    try { const page=await api("KnowledgeList","/knowledge?after_id="+encodeURIComponent(nextAfter)); setNextAfter(page.next_after_id); setObjects(old => { const byId = new Map(old.map(o => [o.id,o])); for (const v of page.objects) byId.set(v.id,currentObject(byId.get(v.id),v)); return [...byId.values()]; }); }
+    try { const page=await api("KnowledgeList","/knowledge?directory=all&directory_view=grouped&after_id="+encodeURIComponent(nextAfter)); setNextAfter(page.next_after_id); setObjects(old => { const byId = new Map(old.map(o => [o.id,o])); for (const v of page.objects) byId.set(v.id,currentObject(byId.get(v.id),v)); return [...byId.values()]; }); }
     catch(e){setError(String(e));} finally{setLoadingMore(false);}
   };
   const selected = objects.find((o) => o.id === current);

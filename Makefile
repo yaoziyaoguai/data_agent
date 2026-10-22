@@ -25,6 +25,7 @@ verify-increment:
 
 verify-fixture:
 	$(PYTHON) docs/sources/verify.py
+	$(PYTHON) docs/sources/cockpit/verify.py
 
 verify-node:
 	$(NPM) run check:node
@@ -239,3 +240,9 @@ verify-semantic-governance:
 	node tests/mvp/check-semantic-governance-browser.mjs
 	node tests/mvp/check-creator-ownership-browser.mjs
 	node tests/mvp/check-semantic-role-boundaries-browser.mjs
+
+.PHONY: verify-cockpit
+verify-cockpit:
+	$(PYTHON) docs/sources/cockpit/verify.py
+	$(PYTHON) docs/dogfood/cockpit/verify.py
+	node tests/mvp/check-cockpit-source.mjs

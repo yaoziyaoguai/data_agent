@@ -25,7 +25,7 @@ export function WorkspaceShell({ user, view, onView, onLogout, sidebar, children
   const navigate = (destination: View) => { setMenuOpen(false); onView(destination); };
   const navigation = <>
     <a className="brand" href="#workbench" onClick={event => { event.preventDefault(); navigate("workbench"); }}>◈ <strong>Data Agent</strong></a>
-    <p className="space-name">合成零售空间</p>
+    <p className="space-name">合成座舱语音空间</p>
     {onNewConversation && <button className="new-conversation" onClick={() => { setMenuOpen(false); onNewConversation(); }}><Icon name="plus"/>新对话</button>}
     <nav className="primary-nav" aria-label="主导航">
       {([["workbench", "工作台", "chat"], ["assets", "我的积累", "bookmark"], ["knowledge", "语义管理", "layers"]] as const).map(([value, label, icon]) => <button key={value} aria-current={view === value ? "page" : undefined} onClick={() => navigate(value)}><Icon name={icon}/><span>{label}</span></button>)}
@@ -38,7 +38,7 @@ export function WorkspaceShell({ user, view, onView, onLogout, sidebar, children
     <a className="skip-link" href="#main-content" onClick={event => { event.preventDefault(); document.getElementById("main-content")?.focus(); }}>跳到主要内容</a>
     <aside className="sidebar">{navigation}</aside>
     <main id="main-content" tabIndex={-1}>
-      <header className="workspace-header"><div className="workspace-breadcrumb"><button className="mobile-menu" aria-label="展开导航" onClick={() => setMenuOpen(true)}><Icon name="menu"/></button><span>{view === "workbench" ? "工作台" : view === "assets" ? "我的积累" : view === "models" ? "模型配置" : "语义管理"}</span><span className="breadcrumb-detail">/ {title || "合成零售空间"}</span></div></header>
+      <header className="workspace-header"><div className="workspace-breadcrumb"><button className="mobile-menu" aria-label="展开导航" onClick={() => setMenuOpen(true)}><Icon name="menu"/></button><span>{view === "workbench" ? "工作台" : view === "assets" ? "我的积累" : view === "models" ? "模型配置" : "语义管理"}</span><span className="breadcrumb-detail">/ {title || "合成座舱语音空间"}</span></div></header>
       {children}
     </main>
     {menuOpen && <Modal title="空间导航" className="navigation-dialog" onClose={() => setMenuOpen(false)}>{navigation}</Modal>}

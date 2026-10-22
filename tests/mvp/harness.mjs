@@ -90,6 +90,8 @@ export async function harness(options = {}) {
     ...process.env,
     PI_OFFLINE: "1",
     DATA_AGENT_MODE: "development",
+    DATA_AGENT_SYNTHETIC_SOURCE_DIRECTORY: options.sourceDirectory ?? root + "/docs/sources",
+    DATA_AGENT_DEMO_PROFILE: options.sourceDirectory ? JSON.parse(await readFile(options.sourceDirectory + "/knowledge-manifest.json", "utf8")).demo_profile ?? "retail" : "retail",
     DATA_AGENT_TOOLSET: "data",
     DATA_AGENT_SEMANTIC_SUPER_MAINTAINERS: JSON.stringify({demo: ["alice"]}),
     DATA_AGENT_DIAGNOSTICS: "1",

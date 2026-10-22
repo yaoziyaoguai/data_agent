@@ -6,6 +6,7 @@ import hmac
 import json
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import os
+import re
 from pathlib import Path
 import sqlite3
 import tempfile
@@ -13,8 +14,7 @@ import threading
 import time
 
 ROOT = Path(__file__).resolve().parents[2]
-ALLOWED_TABLES = {'demo_order_detail','raw_order_lines','raw_payments','dim_customers','customer_tags'}
-ALLOWED_FUNCTIONS = {'sum','count','min','max','avg','coalesce','nullif','round','strftime','date','datetime','substr','lower','upper','abs','length','row_number','rank','dense_rank','lag','lead','total','ifnull','cast'}
+ALLOWED_FUNCTIONS = {'sum','count','min','max','avg','coalesce','nullif','round','strftime','date','datetime','substr','lower','upper','replace','char','abs','length','row_number','rank','dense_rank','lag','lead','total','ifnull','cast'}
 LOCK = threading.Lock()
 BUSINESS_SOURCE_FILES = ('schema.sql', 'seed.sql', 'etl.sql')
 SOURCE_FILES = BUSINESS_SOURCE_FILES + ('knowledge-manifest.json',)
@@ -54,17 +54,19 @@ def database_fingerprint(db):
 def build_business(db, documents):
     for name in ('schema.sql', 'seed.sql'):
         db.executescript(documents[name])
-    reads = set()
+    reads, writes = set(), set()
     def record_read(action, first, _second, _database, _trigger):
         if action == sqlite3.SQLITE_READ:
             reads.add(first)
+        if action == sqlite3.SQLITE_INSERT:
+            writes.add(first)
         return sqlite3.SQLITE_OK
     db.set_authorizer(record_read)
     try:
         db.executescript(documents['etl.sql'])
     finally:
         db.set_authorizer(None)
-    return sorted(reads - {'demo_order_detail'})
+    return sorted(reads - writes)
 
 def sql_diagnostic(error):
     code = getattr(error, 'sqlite_errorname', 'sql_error')
@@ -75,9 +77,9 @@ def sql_diagnostic(error):
         code, message = 'parameter_out_of_range', '整数参数超出 SQLite 有符号 64 位范围。'
     return {'code': code, 'message': message[:1000]}
 
-def authorizer(action, first, second, _database, _trigger):
+def authorizer(action, first, second, _database, _trigger, *, tables):
     if action == sqlite3.SQLITE_READ:
-        return sqlite3.SQLITE_OK if first in ALLOWED_TABLES else sqlite3.SQLITE_DENY
+        return sqlite3.SQLITE_OK if first in tables else sqlite3.SQLITE_DENY
     if action == sqlite3.SQLITE_FUNCTION:
         return sqlite3.SQLITE_OK if (second or '').lower() in ALLOWED_FUNCTIONS else sqlite3.SQLITE_DENY
     return sqlite3.SQLITE_OK if action in (sqlite3.SQLITE_SELECT, sqlite3.SQLITE_RECURSIVE) else sqlite3.SQLITE_DENY
@@ -106,6 +108,23 @@ class Platform:
                 or self.platform_version.startswith('0') or len(self.platform_version) > 16):
             raise ValueError('invalid synthetic platform version')
         self.prepare_sources()
+        with sqlite3.connect(f'file:{self.business}?mode=ro', uri=True) as db:
+            self.allowed_tables = {row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")}
+        self.etl_nodes = {}
+        for node in metadata.get('etl_nodes', []):
+            target, upstream, sql = node['target_table'], node['upstream_tables'], node['sql']
+            if (target not in self.allowed_tables or target in self.etl_nodes
+                    or not set(upstream) <= self.allowed_tables
+                    or not sql.strip() or sql.strip() not in self.documents['etl.sql']
+                    or not re.search(r'\bINSERT\s+INTO\s+' + re.escape(target) + r'\b', sql, re.I)):
+                raise ValueError('invalid ETL source node')
+            self.etl_nodes[target] = {'id':'build-' + target.replace('_','-'), 'sql':sql, 'upstream_ids':upstream}
+        if not self.etl_nodes:
+            # 旧回归夹具只有一个加工目标；日常多目标包显式提供每表的真实加工节点。
+            targets = set(re.findall(r'\bINSERT\s+INTO\s+(\w+)', self.documents['etl.sql'], re.I))
+            if len(targets) == 1:
+                target = next(iter(targets))
+                self.etl_nodes[target] = {'id':'build-' + target.replace('_','-'), 'sql':self.documents['etl.sql'], 'upstream_ids':self.upstream_ids}
         with sqlite3.connect(self.ledger) as db:
             db.execute('CREATE TABLE IF NOT EXISTS submissions(id TEXT PRIMARY KEY,owner TEXT,fp TEXT,payload TEXT,state TEXT,result TEXT,ready_at REAL,expires_at REAL,cancel TEXT DEFAULT "none")')
             if 'diagnostic' not in {column[1] for column in db.execute('PRAGMA table_info(submissions)')}:
@@ -208,7 +227,7 @@ class Platform:
             with sqlite3.connect(f'file:{self.business}?mode=ro',uri=True) as db:
                 for name,ddl in db.execute("SELECT name,sql FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name"):
                     columns=[{'id':column[1],'name':column[1],'data_type':column[2] or 'TEXT','nullable':not bool(column[3] or column[5]),'comment':''} for column in db.execute('PRAGMA table_info("'+name.replace('"','""')+'")')]
-                    node={'id':'build-demo-order-detail','sql':self.documents['etl.sql'],'upstream_ids':self.upstream_ids} if name=='demo_order_detail' else None
+                    node=self.etl_nodes.get(name)
                     tables.append({'id':name,'name':name,'platform_version':self.platform_version,'maintainer_id':'alice','comment':'','ddl':ddl,'columns':columns,'node':node})
             catalog={'source_namespace':'synthetic-sqlite','tables':tables}
         snapshot=hashlib.sha256(json.dumps({'catalog':catalog,'source_fingerprint':self.source_fingerprint},sort_keys=True,ensure_ascii=False).encode()).hexdigest()
@@ -227,7 +246,7 @@ class Platform:
             return {'state':'rejected','reason':'invalid_input'}
         try:
             with sqlite3.connect(f'file:{self.business}?mode=ro',uri=True) as db:
-                db.set_authorizer(authorizer)
+                db.set_authorizer(lambda *args: authorizer(*args, tables=self.allowed_tables))
                 db.execute('EXPLAIN '+sql,params).fetchall()
             return {'state':'passed','reason':None,'target_id':'synthetic-sqlite','target_version':self.platform_version,'dialect':'SQLite','read_only':True}
         except (sqlite3.Error,ValueError,TypeError,OverflowError) as error:
@@ -273,7 +292,7 @@ class Platform:
                 args=json.loads(row['payload']); deadline=time.monotonic()+3
                 try:
                     with sqlite3.connect(f'file:{self.business}?mode=ro',uri=True) as source:
-                        source.set_authorizer(authorizer)
+                        source.set_authorizer(lambda *args: authorizer(*args, tables=self.allowed_tables))
                         source.set_progress_handler(lambda: int(time.monotonic()>deadline),1000)
                         cursor=source.execute(args['sql'],args.get('parameters',{}))
                         rows=cursor.fetchmany(1001); truncated=len(rows)>1000; rows=rows[:1000]

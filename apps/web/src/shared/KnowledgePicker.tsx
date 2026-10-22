@@ -42,7 +42,7 @@ export function KnowledgePicker({ selected, onAdd, onRemove, disabled = false }:
   }, [query]);
   return <div className="knowledge-picker">
     {selected.length > 0 && <ul>{selected.map(id => <li key={id}><KnowledgeReference id={id}/><button type="button" disabled={disabled} aria-label="移除关联资料" onClick={() => onRemove(id)}>移除</button></li>)}</ul>}
-    <label className="form-label">查找表、字段或业务资料<input value={query} disabled={disabled} placeholder="输入名称，例如：净收入" onChange={e => { ++generation.current; setQuery(e.target.value); }}/></label>
+    <label className="form-label">查找表、字段或业务资料<input value={query} disabled={disabled} placeholder="输入名称，例如：语音任务达成率" onChange={e => { ++generation.current; setQuery(e.target.value); }}/></label>
     {loading && <p role="status">正在查找…</p>}{error && <p role="alert">{error}</p>}
     {!loading && query.trim() && !items.length && !error && <p className="quiet">没有匹配的资料，请换一个名称。</p>}
     <div className="knowledge-picker-results">{items.filter(item => !selected.includes(item.id)).map(item => <button type="button" key={item.id} disabled={disabled} onClick={() => onAdd(item)}>{item.name}<small>{knowledgeKindLabels[item.kind]}</small></button>)}</div>

@@ -249,28 +249,19 @@ pub async fn sync_sources_in_tx(tx: &mut AppTx<'_>, space: &str) -> Result<Vec<(
         .iter()
         .map(|r| (r.get("id"), r.get("version")))
         .collect();
-    let sources = [
-        ("schema", super::source_body("schema.sql")?),
-        ("etl", super::source_body("etl.sql")?),
-        ("business-guide", super::source_body("business-guide.md")?),
-        // 目录是维护过的合成语义输入，单独改版也必须推进已有对象。
-        (
-            "semantic-catalog",
-            super::source_body("semantic-catalog.json")?,
-        ),
-    ];
+    let sources = super::synthetic_sources()?;
     let mut changed = Vec::new();
     for (source, body) in sources {
         let fp = fingerprint(&json!(body));
         let old = sqlx::query(
             "SELECT version,fingerprint FROM source_heads WHERE id=? AND space_id=? FOR UPDATE",
         )
-        .bind(source)
+        .bind(&source)
         .bind(space)
         .fetch_optional(tx.connection())
         .await?;
         let actual = old.as_ref().map_or(0, |r| r.get::<u64, _>("version"));
-        if actual != expected.get(source).copied().unwrap_or(0) {
+        if actual != expected.get(&source).copied().unwrap_or(0) {
             return Err(Error::new("version_conflict"));
         }
         if old
@@ -281,13 +272,13 @@ pub async fn sync_sources_in_tx(tx: &mut AppTx<'_>, space: &str) -> Result<Vec<(
         }
         let version = old.map_or(1, |r| r.get::<u64, _>("version") + 1);
         sqlx::query("INSERT INTO source_snapshots(source_id,version,body) VALUES(?,?,?)")
-            .bind(source)
+            .bind(&source)
             .bind(version)
             .bind(&body)
             .execute(tx.connection())
             .await?;
-        sqlx::query("INSERT INTO source_heads(id,space_id,version,fingerprint) VALUES(?,?,?,?) ON DUPLICATE KEY UPDATE version=VALUES(version),fingerprint=VALUES(fingerprint)").bind(source).bind(space).bind(version).bind(fp).execute(tx.connection()).await?;
-        changed.push((source.into(), version));
+        sqlx::query("INSERT INTO source_heads(id,space_id,version,fingerprint) VALUES(?,?,?,?) ON DUPLICATE KEY UPDATE version=VALUES(version),fingerprint=VALUES(fingerprint)").bind(&source).bind(space).bind(version).bind(fp).execute(tx.connection()).await?;
+        changed.push((source, version));
     }
     Ok(changed)
 }

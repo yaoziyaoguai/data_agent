@@ -34,6 +34,20 @@ pub(super) fn timing() -> Result<(std::time::Duration, u64)> {
 // 结构事实从当前原文重新提取；模型推导只放suggestion，不冒充平台注释。
 pub fn refresh_facts(object: &mut Value, sources: &[Value]) {
     let object_id = object["id"].as_str().unwrap_or("").to_owned();
+    let field_table = object["related_ids"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|id| id.as_str().and_then(|id| id.strip_prefix("table-")))
+        .next()
+        .map(str::to_owned);
+    let field_column = object["name"]
+        .as_str()
+        .unwrap_or(object_id.trim_start_matches("field-"))
+        .rsplit('.')
+        .next()
+        .unwrap_or("")
+        .to_owned();
     for entry in object["entries"].as_array_mut().into_iter().flatten() {
         // 采集候选只提供来源与建议；正式有效层由知识模块在保存时决定。
         entry
@@ -50,6 +64,7 @@ pub fn refresh_facts(object: &mut Value, sources: &[Value]) {
         let body = source["body"].as_str().unwrap_or("");
         let path = entry["path"].as_str().unwrap_or("").to_owned();
         let old = entry["effective_value"].as_str().unwrap_or("");
+        let authored = entry["source_facts"]["classification"] == "authored_definition";
         let quoted = if path == "ddl" {
             let table = object_id.as_str().trim_start_matches("table-");
             body.find(&format!("CREATE TABLE {table} ("))
@@ -59,18 +74,36 @@ pub fn refresh_facts(object: &mut Value, sources: &[Value]) {
                         .map(|end| body[start..start + end + 1].to_owned())
                 })
         } else if path == "type" {
-            let field = object_id.as_str().trim_start_matches("field-");
+            let field = entry["source_facts"]["column"]
+                .as_str()
+                .unwrap_or(&field_column);
+            let table_name = entry["source_facts"]["table"]
+                .as_str()
+                .or(field_table.as_deref())
+                .unwrap_or("");
             let table = body
-                .find("CREATE TABLE demo_order_detail (")
-                .map(|start| &body[start..])
+                .find(&format!("CREATE TABLE {table_name} ("))
+                .map(|start| body[start..].split(';').next().unwrap_or(""))
                 .unwrap_or("");
             table
                 .lines()
                 .find(|line| line.trim_start().starts_with(&format!("{field} ")))
                 .map(|line| line.trim().trim_end_matches(',').to_owned())
-        } else if path == "etl" && object_id == "table-demo_order_detail" {
-            Some(body.to_owned())
-        } else if path == "business_domain" {
+        } else if path == "etl" {
+            let table = object_id.trim_start_matches("table-");
+            let marker = format!("-- target: {table}\n");
+            if let Some((_, node)) = body.split_once(&marker) {
+                node.split_once("-- end-target")
+                    .map(|(sql, _)| sql.trim().to_owned())
+            } else if body.contains(&format!("INSERT INTO {table}")) && !body.contains("-- target:")
+            {
+                Some(body.to_owned())
+            } else {
+                None
+            }
+        } else if path == "business_domain" || authored {
+            // 人工定义的值可由结构化原文整理而成，不必等于逐字引文。
+            // 只保留当前采集候选声明的值/引文映射；引文失效仍清空，人工覆盖另层保护。
             entry["source_facts"]["quote"]
                 .as_str()
                 .filter(|quote| !quote.is_empty() && body.contains(*quote))
@@ -129,7 +162,7 @@ pub fn refresh_facts(object: &mut Value, sources: &[Value]) {
                         "，可空"
                     }
                 )
-            } else if path == "business_domain" {
+            } else if path == "business_domain" || authored {
                 entry["source_facts"]["value"]
                     .as_str()
                     .unwrap_or("")
@@ -137,7 +170,7 @@ pub fn refresh_facts(object: &mut Value, sources: &[Value]) {
             } else {
                 quote.clone()
             };
-            entry["source_facts"] = json!({"value":if path=="business_domain"{&value}else{&quote},"source_id":source_id,"version":source["version"],"location":path,"quote":quote,"classification":classification,"complete":true});
+            entry["source_facts"] = json!({"value":if path=="business_domain" || authored{&value}else{&quote},"source_id":source_id,"version":source["version"],"location":path,"quote":quote,"classification":classification,"complete":true});
             if path == "type" {
                 entry["suggestion"] = json!({"value":value,"method":"ddl_type_derivation","evidence":[{"source_id":source_id,"version":source["version"],"location":path,"quote":quote}]});
             } else {
@@ -592,6 +625,37 @@ mod tests {
         );
         assert_eq!(missing["entries"][0]["source_facts"]["complete"], false);
         assert_eq!(missing["entries"][0]["effective_value"], "");
+    }
+
+    #[test]
+    fn authored_multiline_value_survives_escaped_source_and_expires_with_its_quote() {
+        let value = "分子：成功轮次\n分母：合格轮次";
+        let quote = json!({"description":value}).to_string();
+        let base = json!({"id":"metric-example","entries":[{"path":"definition",
+            "source_facts":{"source_id":"rules","version":"1","value":value,"quote":quote,
+            "classification":"authored_definition"},"suggestion":{},"effective_value":value,"human_override":null}]});
+        let mut current = base.clone();
+        refresh_facts(
+            &mut current,
+            &[json!({"source_id":"rules","version":"2","body":quote})],
+        );
+        assert_eq!(current["entries"][0]["effective_value"], value);
+        assert_eq!(current["entries"][0]["source_facts"]["value"], value);
+        assert_eq!(current["entries"][0]["suggestion"], json!({}));
+        let mut removed = base.clone();
+        refresh_facts(
+            &mut removed,
+            &[json!({"source_id":"rules","version":"3","body":"新定义不再包含旧映射"})],
+        );
+        assert_eq!(removed["entries"][0]["effective_value"], "");
+        let mut manual = base;
+        manual["entries"][0]["human_override"] = json!({"value":"人工当前解释"});
+        manual["entries"][0]["effective_value"] = json!("人工当前解释");
+        refresh_facts(
+            &mut manual,
+            &[json!({"source_id":"rules","version":"3","body":"新定义"})],
+        );
+        assert_eq!(manual["entries"][0]["effective_value"], "人工当前解释");
     }
 
     #[test]

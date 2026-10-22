@@ -218,18 +218,25 @@ pub async fn fetch_page(cursor: Option<&str>, snapshot: Option<&str>) -> Result<
     Ok(value)
 }
 
-// 固定合成资料与模拟平台五张表的一一映射；真实目录不得按显示名称传播权限。
+fn synthetic_tables() -> Vec<String> {
+    super::synthetic_catalog()
+        .ok()
+        .and_then(|catalog| catalog["objects"].as_array().cloned())
+        .unwrap_or_default()
+        .iter()
+        .filter(|object| object["kind"] == "table")
+        .filter_map(|object| {
+            object["id"]
+                .as_str()
+                .and_then(|id| id.strip_prefix("table-"))
+                .map(str::to_owned)
+        })
+        .collect()
+}
+
+// 仅当前合成目录中的明确表身份映射；真实目录不得按显示名称传播权限。
 pub fn synthetic_alias(namespace: &str, table: &str) -> Option<String> {
-    if namespace == "synthetic-sqlite"
-        && matches!(
-            table,
-            "demo_order_detail"
-                | "raw_order_lines"
-                | "raw_payments"
-                | "dim_customers"
-                | "customer_tags"
-        )
-    {
+    if namespace == "synthetic-sqlite" && synthetic_tables().iter().any(|name| name == table) {
         Some(format!("table-{table}"))
     } else {
         None
@@ -237,7 +244,11 @@ pub fn synthetic_alias(namespace: &str, table: &str) -> Option<String> {
 }
 
 // 合成包中的明确来源别名映射到平台稳定身份，只补资料关联，不传播维护权。
-pub fn link_synthetic_documents(space: &str, object: &mut Value) {
+pub fn link_synthetic_documents(
+    space: &str,
+    object: &mut Value,
+    table_aliases: &std::collections::HashSet<String>,
+) {
     if object["kind"] != "document" {
         return;
     }
@@ -249,7 +260,7 @@ pub fn link_synthetic_documents(space: &str, object: &mut Value) {
         let Some(table) = alias.as_str().and_then(|id| id.strip_prefix("table-")) else {
             continue;
         };
-        if synthetic_alias("synthetic-sqlite", table).as_deref() != alias.as_str() {
+        if !table_aliases.contains(alias.as_str().unwrap_or("")) {
             continue;
         }
         let platform = json!(table_object_id(space, "synthetic-sqlite", table));
@@ -260,14 +271,8 @@ pub fn link_synthetic_documents(space: &str, object: &mut Value) {
 }
 
 pub fn retired_synthetic_alias(space: &str, namespace: &str, source: &str) -> Option<String> {
-    [
-        "demo_order_detail",
-        "raw_order_lines",
-        "raw_payments",
-        "dim_customers",
-        "customer_tags",
-    ]
-    .iter()
-    .find(|table| source_id(space, namespace, table) == source)
-    .and_then(|table| synthetic_alias(namespace, table))
+    synthetic_tables()
+        .iter()
+        .find(|table| source_id(space, namespace, table) == source)
+        .and_then(|table| synthetic_alias(namespace, table))
 }

@@ -17,7 +17,7 @@ import urllib.request
 from urllib.parse import quote
 
 ROOT = Path(__file__).resolve().parents[1]
-PRIVATE = ROOT / '.local' / 'development'
+PRIVATE = ROOT / '.local' / 'development-cockpit'
 PORTS = {'api': 8780, 'bridge': 8781, 'web': 5173, 'platform':8790, 'memory':8791}
 
 
@@ -73,6 +73,23 @@ def model_database(configuration):
     normal = configuration['profile'].get('budget_mode') == 'request'
     if not (re.fullmatch(r'data_agent_trial_[a-f0-9]+', database) or (normal and database == 'data_agent')):
         raise RuntimeError('模型数据库配置无效')
+    return database
+
+
+def prepare_mock_database(runtime_directory):
+    # 每个运行目录有独立持久演示库；换资料不会把旧查询挂到另一份结果上。
+    database = 'data_agent_trial_' + hashlib.sha256(str(runtime_directory).encode()).hexdigest()[:16]
+    container = subprocess.check_output([
+        'docker', '--context', 'colima-data-agent', 'ps',
+        '--filter', 'label=com.docker.compose.project=data-agent',
+        '--filter', 'label=com.docker.compose.service=mysql', '--format', '{{.ID}}',
+    ], text=True).strip()
+    if not re.fullmatch(r'[a-f0-9]+', container):
+        raise RuntimeError('请先运行 make infra-up')
+    subprocess.run(['docker', '--context', 'colima-data-agent', 'exec', '-i', container,
+                    'mysql', '--defaults-extra-file=/run/secrets/mysql_root_client'],
+                   input=f'CREATE DATABASE IF NOT EXISTS {database}; GRANT ALL ON {database}.* TO data_agent;',
+                   text=True, capture_output=True, check=True)
     return database
 
 
@@ -173,7 +190,9 @@ def main():
             or len(set(identities.values())) != len(identities)):
         raise RuntimeError('本项目开发身份格式不兼容，请核对 identities.json')
     users = tuple(user for user in identities if user != 'internal')
-    database='data_agent'
+    source_directory = Path(os.environ.get('DATA_AGENT_SYNTHETIC_SOURCE_DIRECTORY', ROOT / 'docs/sources/cockpit')).resolve()
+    source_manifest = json.loads((source_directory / 'knowledge-manifest.json').read_text())
+    database=prepare_mock_database(private) if args.model=='mock' else 'data_agent'
     model_profile=None
     model_credentials={}
     if args.model in ('deepseek','protocol-test'):
@@ -193,12 +212,15 @@ def main():
             # 持久试验配置是本次模型选择的依据；.env仅保留本地默认值。
             model_credentials['DEEPSEEK_MODEL'] = model_profile['model_id']
     env = dict(os.environ, PI_OFFLINE='1', DATA_AGENT_MODE='development', DATA_AGENT_TOOLSET='data', DATA_AGENT_PLATFORM_URL='http://127.0.0.1:'+str(ports['platform']),
+               DATA_AGENT_SYNTHETIC_SOURCE_DIRECTORY=str(source_directory),
+               DATA_AGENT_DEMO_PROFILE=source_manifest.get('demo_profile', 'retail'),
                DATA_AGENT_DATABASE_URL='mysql://data_agent:' + quote(password, safe='') + '@127.0.0.1:13306/'+database,
                DATA_AGENT_SEMANTIC_SUPER_MAINTAINERS=os.environ.get('DATA_AGENT_SEMANTIC_SUPER_MAINTAINERS', json.dumps({'demo': ['alice']})),
                DATA_AGENT_DEV_IDENTITIES=json.dumps({identities[user]: user for user in users}),
                DATA_AGENT_INTERNAL_TOKEN=identities['internal'], DATA_AGENT_API_PORT=str(ports['api']),
                DATA_AGENT_BRIDGE_PORT=str(ports['bridge']), DATA_AGENT_API_URL='http://127.0.0.1:' + str(ports['api']),
                DATA_AGENT_BRIDGE_URL='http://127.0.0.1:' + str(ports['bridge']))
+    (private / 'environment.json').write_text(json.dumps({'database':database,'source_directory':str(source_directory.relative_to(ROOT)) if source_directory.is_relative_to(ROOT) else str(source_directory),'ports':ports,'model_mode':args.model},ensure_ascii=False,indent=2)+'\n')
     env = with_local_proxy_bypass(env)
     # 故障注入只属于测试命令，不随日常演示环境继承。
     for option in ('DATA_AGENT_FAULT', 'DATA_AGENT_MOCK_DELAY_MS', 'DATA_AGENT_LEASE_MS', 'DATA_AGENT_MODEL_PROFILE', 'DATA_AGENT_PROVIDER_TEST', 'DATA_AGENT_MODEL_TIMEOUT_MS', 'DATA_AGENT_PREFILL_TIMEOUT_MS', 'DATA_AGENT_PREFILL_PROFILE', 'DATA_AGENT_PREFILL_URL', 'DATA_AGENT_PREFILL_TEST', 'DEEPSEEK_API_KEY', 'DEEPSEEK_BASE_URL', 'DEEPSEEK_MODEL'):

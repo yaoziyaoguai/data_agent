@@ -426,9 +426,9 @@ export function Workbench({
             </p>
             <div className="example-grid">
               {[
-                "查2026年1月净收入",
-                "2026年1月退款率是多少",
-                "支付客户数如何计算",
+                "查2026年9月语音任务达成率",
+                "ASR耗时怎样统计",
+                "语音交互链路有哪些表",
               ].map((q) => (
                 <button
                   key={q}

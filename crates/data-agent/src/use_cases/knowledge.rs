@@ -566,7 +566,15 @@ fn depends_on_source(object: &Value, source: &str) -> bool {
 }
 async fn sources_in_tx(tx: &mut AppTx<'_>, ctx: &AccessContext) -> Result<Vec<Value>> {
     let mut sources = Vec::new();
-    for name in ["schema", "etl", "business-guide"] {
+    let version = ingestion::source_version_in_tx(tx, &ctx.space_id, "semantic-catalog").await?;
+    let snapshot = ingestion::read_source_in_tx(tx, ctx, "semantic-catalog", version).await?;
+    let catalog: Value = serde_json::from_str(snapshot["body"].as_str().unwrap_or(""))
+        .map_err(|_| Error::new("invalid_input"))?;
+    let mut ids = std::collections::BTreeSet::from(["schema", "etl", "business-guide"]);
+    for source in catalog["source_bundle"].as_array().into_iter().flatten() {
+        ids.insert(source["id"].as_str().ok_or(Error::new("invalid_input"))?);
+    }
+    for name in ids {
         let version = ingestion::source_version_in_tx(tx, &ctx.space_id, name).await?;
         sources.push(ingestion::read_source_in_tx(tx, ctx, name, version).await?);
     }
@@ -584,6 +592,14 @@ async fn current_catalog_in_tx(tx: &mut AppTx<'_>, ctx: &AccessContext) -> Resul
         return Err(Error::new("invalid_input"));
     }
     let sources = sources_in_tx(tx, ctx).await?;
+    // 沿同一已落库快照建立别名集合；逐文档重读磁盘会混版并重复解析整份目录。
+    let table_aliases = catalog["objects"]
+        .as_array()
+        .ok_or(Error::new("invalid_input"))?
+        .iter()
+        .filter(|object| object["kind"] == "table")
+        .filter_map(|object| object["id"].as_str().map(str::to_owned))
+        .collect();
     for object in catalog["objects"]
         .as_array_mut()
         .ok_or(Error::new("invalid_input"))?
@@ -595,7 +611,7 @@ async fn current_catalog_in_tx(tx: &mut AppTx<'_>, ctx: &AccessContext) -> Resul
             object["source_version"] = source["version"].clone();
         }
         ingestion::prefill::refresh_facts(object, &sources);
-        ingestion::catalog::link_synthetic_documents(&ctx.space_id, object);
+        ingestion::catalog::link_synthetic_documents(&ctx.space_id, object, &table_aliases);
     }
     Ok(catalog)
 }
