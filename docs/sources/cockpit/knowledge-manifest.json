@@ -1,0 +1,127 @@
+{
+  "synthetic": true,
+  "business_domain": "cockpit_voice",
+  "primary_table": "syn_voice_turn",
+  "demo_profile": "cockpit_voice",
+  "activity_start_inclusive": "2026-07-01T00:00:00Z",
+  "activity_end_exclusive": "2026-10-01T00:00:00Z",
+  "snapshot_exclusive": "2026-10-04T00:00:00Z",
+  "knowledge_files": [
+    "schema.sql",
+    "etl.sql",
+    "business-guide.md",
+    "documents/overview.md",
+    "documents/identity-and-version.md",
+    "documents/wake-activation.md",
+    "documents/vad-segmentation.md",
+    "documents/asr-candidates.md",
+    "documents/nlu-intents-slots.md",
+    "documents/dialogue-context.md",
+    "documents/skill-routing.md",
+    "documents/action-receipts.md",
+    "documents/tts-playback.md",
+    "documents/feedback-outcome.md",
+    "documents/network-retries.md",
+    "documents/time-quality.md",
+    "documents/metrics-analysis.md"
+  ],
+  "source_ids": {
+    "schema.sql": "schema",
+    "etl.sql": "etl",
+    "business-guide.md": "business-guide",
+    "documents/overview.md": "cockpit-overview",
+    "documents/identity-and-version.md": "cockpit-identity-and-version",
+    "documents/wake-activation.md": "cockpit-wake-activation",
+    "documents/vad-segmentation.md": "cockpit-vad-segmentation",
+    "documents/asr-candidates.md": "cockpit-asr-candidates",
+    "documents/nlu-intents-slots.md": "cockpit-nlu-intents-slots",
+    "documents/dialogue-context.md": "cockpit-dialogue-context",
+    "documents/skill-routing.md": "cockpit-skill-routing",
+    "documents/action-receipts.md": "cockpit-action-receipts",
+    "documents/tts-playback.md": "cockpit-tts-playback",
+    "documents/feedback-outcome.md": "cockpit-feedback-outcome",
+    "documents/network-retries.md": "cockpit-network-retries",
+    "documents/time-quality.md": "cockpit-time-quality",
+    "documents/metrics-analysis.md": "cockpit-metrics-analysis"
+  },
+  "excluded_knowledge": [
+    "seed.sql",
+    "domain-spec.json",
+    "generate.py",
+    "verify.py",
+    "verify_data.py",
+    "build_catalog.py",
+    "evaluation/",
+    "docs/dogfood/cockpit/"
+  ],
+  "etl_nodes": [
+    {
+      "target_table": "syn_daily_voice_experience",
+      "upstream_tables": [
+        "syn_asr_hypothesis",
+        "syn_interruption_event",
+        "syn_nlu_attempt",
+        "syn_turn_feedback",
+        "syn_vehicle",
+        "syn_voice_session",
+        "syn_voice_turn",
+        "syn_wakeup_attempt"
+      ],
+      "sql": "DELETE FROM syn_daily_voice_experience;\nINSERT INTO syn_daily_voice_experience\nWITH valid_sessions AS (\n  SELECT s.* FROM syn_voice_session s JOIN syn_vehicle v ON v.vehicle_id=s.vehicle_id\n  WHERE v.telemetry_consent=1 AND v.is_lab_unit=0 AND s.is_complete=1 AND s.quality_state='valid'\n    AND s.started_at < '2026-10-04T00:00:00Z' AND s.ended_at < '2026-10-04T00:00:00Z' AND s.received_at < '2026-10-04T00:00:00Z'\n), valid_turns AS (\n  SELECT t.*,s.vehicle_id,s.build_id FROM syn_voice_turn t JOIN valid_sessions s ON s.session_id=t.session_id\n  WHERE t.quality_state='valid' AND t.started_at < '2026-10-04T00:00:00Z' AND t.finished_at < '2026-10-04T00:00:00Z' AND t.received_at < '2026-10-04T00:00:00Z'\n),\nselected_asr AS (SELECT turn_id,normalized_text FROM syn_asr_hypothesis WHERE selected_for_nlu=1 AND is_final=1 AND received_at < '2026-10-04T00:00:00Z'),\nselected_nlu AS (SELECT turn_id,predicted_intent_id FROM syn_nlu_attempt WHERE selected_for_dialogue=1 AND received_at < '2026-10-04T00:00:00Z'),\nfeedback AS (SELECT turn_id,COUNT(*) n,SUM(rating='positive') positive FROM syn_turn_feedback WHERE quality_state='valid' AND is_explicit=1 AND collected_at < '2026-10-04T00:00:00Z' AND received_at < '2026-10-04T00:00:00Z' GROUP BY turn_id),\ninterruptions AS (SELECT interrupted_turn_id turn_id,COUNT(*) n FROM syn_interruption_event WHERE occurred_at < '2026-10-04T00:00:00Z' AND received_at < '2026-10-04T00:00:00Z' GROUP BY interrupted_turn_id),\nturns AS (\n SELECT substr(t.started_at,1,10) d,t.vehicle_id,t.build_id,\n COUNT(*) turn_count,SUM(t.final_outcome NOT IN ('cancelled','no_speech')) eligible,\n SUM(t.final_outcome='completed') completed,SUM(t.final_outcome='clarification_pending') clarification,\n SUM(t.final_outcome='failed') failed,SUM(t.final_outcome='unknown') unknown_count,\n SUM(t.final_outcome='cancelled') cancelled,SUM(t.final_outcome='no_speech') no_speech,SUM(t.final_outcome='rejected') rejected,\n SUM(CASE WHEN t.final_outcome='completed' THEN t.task_latency_ms ELSE 0 END) latency_sum,\n SUM(t.final_outcome='completed') latency_n,COALESCE(SUM(t.first_audio_latency_ms),0) audio_sum,COUNT(t.first_audio_latency_ms) audio_n,\n SUM(t.final_outcome NOT IN ('cancelled','no_speech') AND t.reference_text IS NOT NULL) asr_labels,\n SUM(CASE WHEN t.final_outcome NOT IN ('cancelled','no_speech') AND t.reference_text IS NOT NULL AND a.normalized_text=lower(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(t.reference_text,' ',''),'　',''),char(9),''),char(13),''),char(10),''),'。',''),'！',''),'？',''),'!',''),'?',''),'，',''),',',''),'．',''),'.','')) THEN 1 ELSE 0 END) asr_matches,\n SUM(t.final_outcome NOT IN ('cancelled','no_speech') AND t.reference_intent_id IS NOT NULL) intent_labels,\n SUM(CASE WHEN t.final_outcome NOT IN ('cancelled','no_speech') AND t.reference_intent_id IS NOT NULL AND n.predicted_intent_id=t.reference_intent_id THEN 1 ELSE 0 END) intent_matches,\n SUM(COALESCE(f.n,0)) feedback_n,SUM(COALESCE(f.positive,0)) positive_n,SUM(COALESCE(i.n,0)) interruptions\n FROM valid_turns t LEFT JOIN selected_asr a ON a.turn_id=t.turn_id LEFT JOIN selected_nlu n ON n.turn_id=t.turn_id\n LEFT JOIN feedback f ON f.turn_id=t.turn_id LEFT JOIN interruptions i ON i.turn_id=t.turn_id\n GROUP BY d,t.vehicle_id,t.build_id\n), sessions AS (SELECT substr(started_at,1,10) d,vehicle_id,build_id,COUNT(*) n FROM valid_sessions GROUP BY d,vehicle_id,build_id),\nwakes AS (\n SELECT substr(w.started_at,1,10) d,w.vehicle_id,w.build_id,COUNT(*) n,SUM(w.accepted) accepted,\n COUNT(w.reference_is_intended) labeled,SUM(w.reference_is_intended=0 AND w.accepted=1) false_accept\n FROM syn_wakeup_attempt w JOIN syn_vehicle v ON v.vehicle_id=w.vehicle_id\n WHERE v.telemetry_consent=1 AND v.is_lab_unit=0 AND w.quality_state='valid' AND w.started_at < '2026-10-04T00:00:00Z' AND w.received_at < '2026-10-04T00:00:00Z'\n GROUP BY d,w.vehicle_id,w.build_id\n), keys AS (SELECT d,vehicle_id,build_id FROM turns UNION SELECT d,vehicle_id,build_id FROM sessions UNION SELECT d,vehicle_id,build_id FROM wakes)\nSELECT k.d,k.vehicle_id,k.build_id,COALESCE(s.n,0),COALESCE(w.n,0),COALESCE(w.accepted,0),COALESCE(w.labeled,0),COALESCE(w.false_accept,0),\n COALESCE(t.turn_count,0),COALESCE(t.eligible,0),COALESCE(t.completed,0),COALESCE(t.clarification,0),COALESCE(t.failed,0),COALESCE(t.unknown_count,0),COALESCE(t.cancelled,0),COALESCE(t.no_speech,0),COALESCE(t.rejected,0),\n COALESCE(t.latency_sum,0),COALESCE(t.latency_n,0),COALESCE(t.audio_sum,0),COALESCE(t.audio_n,0),COALESCE(t.asr_labels,0),COALESCE(t.asr_matches,0),COALESCE(t.intent_labels,0),COALESCE(t.intent_matches,0),COALESCE(t.feedback_n,0),COALESCE(t.positive_n,0),COALESCE(t.interruptions,0),'2026-10-04T00:00:00Z'\nFROM keys k LEFT JOIN turns t ON t.d=k.d AND t.vehicle_id=k.vehicle_id AND t.build_id=k.build_id\nLEFT JOIN sessions s ON s.d=k.d AND s.vehicle_id=k.vehicle_id AND s.build_id=k.build_id\nLEFT JOIN wakes w ON w.d=k.d AND w.vehicle_id=k.vehicle_id AND w.build_id=k.build_id;",
+      "source_id": "etl",
+      "location": "target: syn_daily_voice_experience"
+    },
+    {
+      "target_table": "syn_daily_stage_latency",
+      "upstream_tables": [
+        "syn_action_invocation",
+        "syn_action_result",
+        "syn_asr_attempt",
+        "syn_nlu_attempt",
+        "syn_skill_route",
+        "syn_tts_request",
+        "syn_vehicle",
+        "syn_voice_session",
+        "syn_voice_turn"
+      ],
+      "sql": "DELETE FROM syn_daily_stage_latency;\nINSERT INTO syn_daily_stage_latency\nWITH valid_sessions AS (\n  SELECT s.* FROM syn_voice_session s JOIN syn_vehicle v ON v.vehicle_id=s.vehicle_id\n  WHERE v.telemetry_consent=1 AND v.is_lab_unit=0 AND s.is_complete=1 AND s.quality_state='valid'\n    AND s.started_at < '2026-10-04T00:00:00Z' AND s.ended_at < '2026-10-04T00:00:00Z' AND s.received_at < '2026-10-04T00:00:00Z'\n), valid_turns AS (\n  SELECT t.*,s.vehicle_id,s.build_id FROM syn_voice_turn t JOIN valid_sessions s ON s.session_id=t.session_id\n  WHERE t.quality_state='valid' AND t.started_at < '2026-10-04T00:00:00Z' AND t.finished_at < '2026-10-04T00:00:00Z' AND t.received_at < '2026-10-04T00:00:00Z'\n), latest_result AS (\n SELECT r.*,ROW_NUMBER() OVER(PARTITION BY invocation_id ORDER BY observation_no DESC) rn\n FROM syn_action_result r WHERE r.received_at < '2026-10-04T00:00:00Z'\n), attempts AS (\n SELECT a.turn_id,'asr' stage,a.endpoint_kind,a.outcome,a.wall_ms latency,a.queued_ms queued FROM syn_asr_attempt a WHERE a.received_at < '2026-10-04T00:00:00Z'\n UNION ALL SELECT a.turn_id,'nlu',a.endpoint_kind,a.outcome,a.wall_ms,a.queued_ms FROM syn_nlu_attempt a WHERE a.received_at < '2026-10-04T00:00:00Z'\n UNION ALL SELECT a.turn_id,'route',CASE WHEN a.route_kind='cloud' THEN 'cloud' ELSE 'edge' END,CASE WHEN a.outcome='selected' THEN 'succeeded' ELSE a.outcome END,a.wall_ms,0 FROM syn_skill_route a WHERE a.received_at < '2026-10-04T00:00:00Z'\n UNION ALL SELECT a.turn_id,'action',CASE WHEN a.transport_kind='simulated_cloud' THEN 'cloud' ELSE 'edge' END,\n CASE WHEN a.acceptance_state='rejected' THEN 'rejected' ELSE COALESCE(r.return_state,'unknown') END,\n CASE WHEN r.return_state IN ('succeeded','failed','cancelled') THEN r.observed_offset_ms-a.submitted_offset_ms ELSE NULL END,0\n FROM syn_action_invocation a LEFT JOIN latest_result r ON r.invocation_id=a.invocation_id AND r.rn=1 WHERE a.received_at < '2026-10-04T00:00:00Z'\n UNION ALL SELECT a.turn_id,'tts',a.endpoint_kind,a.outcome,a.wall_ms,0 FROM syn_tts_request a WHERE a.received_at < '2026-10-04T00:00:00Z'\n)\nSELECT substr(t.started_at,1,10),a.stage,a.endpoint_kind,t.build_id,COUNT(*),COUNT(DISTINCT a.turn_id),\n SUM(a.outcome='succeeded'),SUM(a.outcome='failed'),SUM(a.outcome='timeout'),SUM(a.outcome='cancelled'),SUM(a.outcome='unknown'),SUM(a.outcome='ambiguous'),SUM(a.outcome='rejected'),\n COALESCE(SUM(a.latency),0),COUNT(a.latency),MIN(a.latency),MAX(a.latency),SUM(a.queued),'2026-10-04T00:00:00Z'\nFROM attempts a JOIN valid_turns t ON t.turn_id=a.turn_id GROUP BY substr(t.started_at,1,10),a.stage,a.endpoint_kind,t.build_id;",
+      "source_id": "etl",
+      "location": "target: syn_daily_stage_latency"
+    },
+    {
+      "target_table": "syn_daily_intent_outcome",
+      "upstream_tables": [
+        "syn_action_invocation",
+        "syn_action_result",
+        "syn_intent_catalog",
+        "syn_nlu_attempt",
+        "syn_turn_feedback",
+        "syn_vehicle",
+        "syn_voice_session",
+        "syn_voice_turn"
+      ],
+      "sql": "DELETE FROM syn_daily_intent_outcome;\nINSERT INTO syn_daily_intent_outcome\nWITH valid_sessions AS (\n  SELECT s.* FROM syn_voice_session s JOIN syn_vehicle v ON v.vehicle_id=s.vehicle_id\n  WHERE v.telemetry_consent=1 AND v.is_lab_unit=0 AND s.is_complete=1 AND s.quality_state='valid'\n    AND s.started_at < '2026-10-04T00:00:00Z' AND s.ended_at < '2026-10-04T00:00:00Z' AND s.received_at < '2026-10-04T00:00:00Z'\n), valid_turns AS (\n  SELECT t.*,s.vehicle_id,s.build_id FROM syn_voice_turn t JOIN valid_sessions s ON s.session_id=t.session_id\n  WHERE t.quality_state='valid' AND t.started_at < '2026-10-04T00:00:00Z' AND t.finished_at < '2026-10-04T00:00:00Z' AND t.received_at < '2026-10-04T00:00:00Z'\n), selected AS (\n SELECT n.turn_id,n.predicted_intent_id intent_id FROM syn_nlu_attempt n WHERE n.selected_for_dialogue=1 AND n.predicted_intent_id IS NOT NULL AND n.received_at < '2026-10-04T00:00:00Z'\n), actions AS (\n SELECT a.turn_id,COUNT(DISTINCT a.operation_key) n,COUNT(DISTINCT CASE WHEN r.effect_state='confirmed' THEN a.operation_key ELSE NULL END) confirmed\n FROM syn_action_invocation a LEFT JOIN syn_action_result r ON r.operation_key=a.operation_key AND r.received_at < '2026-10-04T00:00:00Z'\n WHERE a.received_at < '2026-10-04T00:00:00Z' GROUP BY a.turn_id\n), feedback AS (SELECT turn_id,COUNT(*) n,SUM(rating='positive') positive FROM syn_turn_feedback WHERE quality_state='valid' AND is_explicit=1 AND collected_at < '2026-10-04T00:00:00Z' AND received_at < '2026-10-04T00:00:00Z' GROUP BY turn_id)\nSELECT substr(t.started_at,1,10),n.intent_id,i.capability_id,t.build_id,COUNT(*),\n SUM(t.final_outcome='completed'),SUM(t.final_outcome='clarification_pending'),SUM(t.final_outcome='rejected'),SUM(t.final_outcome='failed'),SUM(t.final_outcome='cancelled'),SUM(t.final_outcome='unknown'),SUM(t.final_outcome='no_speech'),\n SUM(COALESCE(a.n,0)),SUM(COALESCE(a.confirmed,0)),SUM(COALESCE(f.n,0)),SUM(COALESCE(f.positive,0)),'2026-10-04T00:00:00Z'\nFROM valid_turns t JOIN selected n ON n.turn_id=t.turn_id JOIN syn_intent_catalog i ON i.intent_id=n.intent_id\nLEFT JOIN actions a ON a.turn_id=t.turn_id LEFT JOIN feedback f ON f.turn_id=t.turn_id\nGROUP BY substr(t.started_at,1,10),n.intent_id,i.capability_id,t.build_id;",
+      "source_id": "etl",
+      "location": "target: syn_daily_intent_outcome"
+    }
+  ],
+  "knowledge_files_sha256": {
+    "schema.sql": "14d1141763011a2327efe2efd35991bf019d11e95892cdc90a29ad41d5f7cc27",
+    "etl.sql": "0eacec503e46a112586d0c4b4d22b231691a1b4b7af460ee6a5441b0c6bba1f2",
+    "business-guide.md": "3ceadfd6ec41c5453c8b91dcb57cff9081f564c7fd0159e6ab78c80e82375708",
+    "documents/overview.md": "4031de5a399ee02107f852c4218b5e16c6b35023f70baa335e3c98ac997ba934",
+    "documents/identity-and-version.md": "db4c0c86194f39c9bf1c7022ece82dd337289ba891598f0d2030c9b6ab461bf7",
+    "documents/wake-activation.md": "865ea0e83ef1275baa4729ffdbe328b006b21b58791665765a842619d93f6dfd",
+    "documents/vad-segmentation.md": "807db4e4052d070578f61e75daaa18ec62d31824cf942af94209676a8100672a",
+    "documents/asr-candidates.md": "b9c92d3239c394ae8f38549c19a4a588b1e729d0741e129c6b26a6f59aba70e0",
+    "documents/nlu-intents-slots.md": "5455d11b864479e18371089bfcf0c775d9f1faa6a6842623f1a3ddeda0d48e5a",
+    "documents/dialogue-context.md": "d861de4e5e716414d333b29b642705ba8f21693ad8a156cd7d6e8f1cc1343691",
+    "documents/skill-routing.md": "5f34b80e68de5c549289a9c89d2a263981dc04554d1c88e28ca6bc930e0bd6cc",
+    "documents/action-receipts.md": "ab6d99dd5a2a71cd1944e3ad300add886ec2d489f171b186f14aa705d84669f8",
+    "documents/tts-playback.md": "13257373deee1b273fbb3b70f719cd126f93a6bc310b16ae3de38180ff527810",
+    "documents/feedback-outcome.md": "4eaeac52d7e684b659811f003374593148ba0c76755ea55f908039d410fe7f1c",
+    "documents/network-retries.md": "e6b080d0b2661d6d038cd81cf9ac819a4cde4398b7fdcf981ea665e7cf114050",
+    "documents/time-quality.md": "14f9226cd69e3e7f2bbbdd02a32d1907754b4083eaa6d13a4307660ba5e1eef9",
+    "documents/metrics-analysis.md": "e53fd767a2f7a777ab01c7d40f30387bd6c6b0e0515b3dbd66e8c0621553bcb0"
+  }
+}

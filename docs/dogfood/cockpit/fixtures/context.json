@@ -1,0 +1,11 @@
+{
+  "schema": 1,
+  "run_prefix": "由操作者替换为本轮唯一前缀",
+  "primary_locale": "en-US",
+  "absolute_start": "2026-09-01T00:00:00Z",
+  "absolute_end_exclusive": "2026-10-01T00:00:00Z",
+  "snapshot_exclusive": "2026-10-04T00:00:00Z",
+  "relative_dates": "按宿主实际request_clock展开，不能固定冒充九月",
+  "actors": {"bob": "普通分析者，实际角色以当前服务为准", "carol": "语义维护者，实际对象归属需核对", "admin": "超级维护者，身份从本地交接读取"},
+  "credentials": "不在公开包中保存；沿已授权本地配置"
+}

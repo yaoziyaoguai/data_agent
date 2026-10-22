@@ -1,0 +1,4855 @@
+{
+  "schema_version": 1,
+  "status": "frozen",
+  "synthetic": true,
+  "domain": "公开合成座舱语音交互链路",
+  "sql_dialect": "sqlite3",
+  "source_policy": {
+    "creation": "完全从零构造，只用通用语音交互概念，不读取或改名复用任何公司私有资料。",
+    "excluded": "无原始/合成音频文件、音频路径、VIN、真实GPS、真实账号、品牌、公司术语、堆栈、内部链接。",
+    "labels": "reference_text/reference_intent_id/reference_is_intended仅人工合成标签；没有标签为NULL，不以预测代替真值。只在标签子集分析一致率，并报告覆盖率。",
+    "evaluation_boundary": "seed、generator、domain-spec和evaluation不进入模型知识；知识为DDL/ETL/业务说明，独立oracle与用例预期不进入检索。"
+  },
+  "time": {
+    "activity_start_inclusive": "2026-07-01T00:00:00Z",
+    "activity_end_exclusive": "2026-10-01T00:00:00Z",
+    "snapshot_exclusive": "2026-10-04T00:00:00Z",
+    "timezone": "UTC",
+    "timestamp_format": "YYYY-MM-DDTHH:MM:SSZ",
+    "duration_precision": "墙钟日志按秒截断；短操作使用相对turn起点的单调毫秒偏移和耗时。不得从秒级字符串相减还原精确毫秒。会话长区间按整秒精确。",
+    "default_period": "用户轮次按voice_turn.started_at归属UTC日期；阶段按所属turn归属，不按重试/收到时间改期。入口拒绝无session时按wakeup.started_at。",
+    "received_clock_rule": "turn.started_at为整秒锚点。阶段offset_ms相对该锚点；received_at至少晚于对应事实完成时点1秒，不保证不同阶段日志接收顺序。"
+  },
+  "generation": {
+    "seed": 20261022,
+    "vehicles": 36,
+    "models": 3,
+    "builds": 4,
+    "capabilities": 7,
+    "row_target": "25000-60000",
+    "seed_sql_target_bytes_max": 10000000,
+    "deterministic": true
+  },
+  "visibility_rules": [
+    "默认非实验且telemetry_consent=1的车辆；会话valid且is_complete=1。",
+    "轮次及子事实业务时点和received_at均早于快照；quality_state存在时要求valid。",
+    "阶段归属采用turn_date；跨午夜阶段不改本轮归属。",
+    "任务达成eligible包括completed/clarification_pending/rejected/failed/unknown，不包括cancelled/no_speech。",
+    "转写/意图准确性分母必须人工标签非空，缺预测仍计入有标签eligible分母。",
+    "比例分母为0返回NULL；无样本P95/均值为NULL；P95采用最近秩原始样本。",
+    "button或continuous会话允许没有wakeup_attempt；唤醒记录不是全部会话的必选前置。"
+  ],
+  "tables": [
+    {
+      "name": "syn_vehicle_model",
+      "label": "合成座舱设备型号",
+      "group": "dimensions",
+      "grain": "一个虚构座舱设备规格",
+      "primary_key": [
+        "model_id"
+      ],
+      "unique_keys": [],
+      "columns": [
+        {
+          "name": "model_id",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "合成规格标识，不编码品牌。"
+        },
+        {
+          "name": "model_name",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "虚构型号名。"
+        },
+        {
+          "name": "hardware_family",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "抽象硬件族。"
+        },
+        {
+          "name": "microphone_zone_count",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "模拟拾音区域数量；无原始音频。",
+          "unit": "count",
+          "minimum": 0
+        },
+        {
+          "name": "speaker_zone_count",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "可播报音区数量。",
+          "unit": "count",
+          "minimum": 0
+        },
+        {
+          "name": "memory_capacity_mib",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "规格内存。",
+          "unit": "MiB",
+          "minimum": 1
+        },
+        {
+          "name": "edge_compute_tier",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "合成端侧算力档位。",
+          "enum": [
+            "basic",
+            "standard",
+            "extended"
+          ]
+        },
+        {
+          "name": "supports_barge_in",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "规格是否支持播报打断。",
+          "unit": "boolean",
+          "enum": [
+            0,
+            1
+          ]
+        },
+        {
+          "name": "supports_offline_asr",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "规格是否支持离线识别。",
+          "unit": "boolean",
+          "enum": [
+            0,
+            1
+          ]
+        },
+        {
+          "name": "supported_locales",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "逗号分隔的公开locale标签。"
+        },
+        {
+          "name": "introduced_date",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "规格加入本包的UTC日期。",
+          "unit": "UTC date"
+        },
+        {
+          "name": "is_simulated",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "固定1，表明人工合成。",
+          "unit": "boolean",
+          "enum": [
+            0,
+            1
+          ]
+        }
+      ],
+      "checks": [
+        "is_simulated=1"
+      ],
+      "description": "仅为语音链路分析提供硬件分层，不代表真实设备、厂商或性能测量。",
+      "time_basis": "维度按快照读取；事实按各自文档时点与接收截止核对。"
+    },
+    {
+      "name": "syn_software_build",
+      "label": "合成软件构建",
+      "group": "dimensions",
+      "grain": "一个语音运行环境的软件构建",
+      "primary_key": [
+        "build_id"
+      ],
+      "unique_keys": [],
+      "columns": [
+        {
+          "name": "build_id",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "构建主键。"
+        },
+        {
+          "name": "build_label",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "从零命名的合成版本。"
+        },
+        {
+          "name": "released_at",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "最早允许运行此构建的时点。",
+          "unit": "UTC RFC3339 second"
+        },
+        {
+          "name": "base_build_id",
+          "type": "TEXT",
+          "nullable": true,
+          "meaning": "基线构建；首版为NULL。",
+          "references": {
+            "table": "syn_software_build",
+            "column": "build_id"
+          }
+        },
+        {
+          "name": "release_track",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "合成发布轨道。",
+          "enum": [
+            "lab",
+            "trial"
+          ]
+        },
+        {
+          "name": "protocol_revision",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "日志/协议代次。",
+          "minimum": 1
+        },
+        {
+          "name": "dialogue_engine_revision",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "合成对话引擎代次。",
+          "minimum": 1
+        },
+        {
+          "name": "routing_revision",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "合成技能路由代次。",
+          "minimum": 1
+        },
+        {
+          "name": "default_locale",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "默认公开locale。",
+          "enum": [
+            "zh-CN",
+            "en-US"
+          ]
+        },
+        {
+          "name": "allows_cloud_fallback",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "构建是否允许端云回退；具体请求以policy为准。",
+          "unit": "boolean",
+          "enum": [
+            0,
+            1
+          ]
+        },
+        {
+          "name": "is_withdrawn",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "快照时是否停止新部署，不删除历史会话。",
+          "unit": "boolean",
+          "enum": [
+            0,
+            1
+          ]
+        },
+        {
+          "name": "withdrawn_at",
+          "type": "TEXT",
+          "nullable": true,
+          "meaning": "撤回时点，未撤回为NULL。",
+          "unit": "UTC RFC3339 second"
+        }
+      ],
+      "checks": [
+        "(is_withdrawn=0 AND withdrawn_at IS NULL) OR (is_withdrawn=1 AND withdrawn_at IS NOT NULL)"
+      ],
+      "description": "build是会话冻结维度，不从车辆当前build重写历史。该包不含OTA业务表。",
+      "time_basis": "维度按快照读取；事实按各自文档时点与接收截止核对。"
+    },
+    {
+      "name": "syn_vehicle",
+      "label": "合成语音设备",
+      "group": "dimensions",
+      "grain": "一辆无真实身份信息的合成车辆",
+      "primary_key": [
+        "vehicle_id"
+      ],
+      "unique_keys": [],
+      "columns": [
+        {
+          "name": "vehicle_id",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "合成设备号，不是VIN。"
+        },
+        {
+          "name": "model_id",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "设备规格。",
+          "references": {
+            "table": "syn_vehicle_model",
+            "column": "model_id"
+          }
+        },
+        {
+          "name": "fleet_group",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "虚构分组。",
+          "enum": [
+            "group_a",
+            "group_b",
+            "group_c"
+          ]
+        },
+        {
+          "name": "region_code",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "抽象区域，不表示真实地点。",
+          "enum": [
+            "zone_n",
+            "zone_s",
+            "zone_e",
+            "zone_w"
+          ]
+        },
+        {
+          "name": "enrolled_at",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "加入观察的时点。",
+          "unit": "UTC RFC3339 second"
+        },
+        {
+          "name": "first_activated_at",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "最早可产生有效语音会话的时点。",
+          "unit": "UTC RFC3339 second"
+        },
+        {
+          "name": "current_build_id",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "快照末的构建；只用于库存观察，不代表历史。",
+          "references": {
+            "table": "syn_software_build",
+            "column": "build_id"
+          }
+        },
+        {
+          "name": "telemetry_consent",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "合成遥测允许标记；为0不生成有效交互事实。",
+          "unit": "boolean",
+          "enum": [
+            0,
+            1
+          ]
+        },
+        {
+          "name": "is_lab_unit",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "实验设备；默认运营指标排除。",
+          "unit": "boolean",
+          "enum": [
+            0,
+            1
+          ]
+        },
+        {
+          "name": "business_timezone",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "本包固定UTC。",
+          "enum": [
+            "UTC"
+          ]
+        },
+        {
+          "name": "default_locale",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "设备默认locale。",
+          "enum": [
+            "zh-CN",
+            "en-US"
+          ]
+        },
+        {
+          "name": "retired_at",
+          "type": "TEXT",
+          "nullable": true,
+          "meaning": "退出观察时点，未退出NULL。",
+          "unit": "UTC RFC3339 second"
+        },
+        {
+          "name": "identity_policy",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "固定合成身份声明。",
+          "enum": [
+            "synthetic_only"
+          ]
+        }
+      ],
+      "checks": [
+        "first_activated_at >= enrolled_at",
+        "retired_at IS NULL OR retired_at > first_activated_at"
+      ],
+      "description": "默认体验指标限定telemetry_consent=1且is_lab_unit=0。没有VIN、账号、手机号、GPS或公司标识。",
+      "time_basis": "维度按快照读取；事实按各自文档时点与接收截止核对。"
+    },
+    {
+      "name": "syn_voice_capability",
+      "label": "语音能力组",
+      "group": "dimensions",
+      "grain": "一个通用座舱语音能力组",
+      "primary_key": [
+        "capability_id"
+      ],
+      "unique_keys": [],
+      "columns": [
+        {
+          "name": "capability_id",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "能力组标识。"
+        },
+        {
+          "name": "capability_name",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "通用业务名称。"
+        },
+        {
+          "name": "domain_code",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "能力域。",
+          "enum": [
+            "climate",
+            "media",
+            "navigation",
+            "vehicle_status",
+            "system_settings",
+            "assistant_help",
+            "communication"
+          ]
+        },
+        {
+          "name": "execution_kind",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "本地动作、信息读取或模拟外部动作。",
+          "enum": [
+            "local_action",
+            "read_only",
+            "simulated_remote"
+          ]
+        },
+        {
+          "name": "requires_network",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "配置上的网络需求，不是某次失败的成因证据。",
+          "unit": "boolean",
+          "enum": [
+            0,
+            1
+          ]
+        },
+        {
+          "name": "supports_context",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "是否可利用先前轮次补槽。",
+          "unit": "boolean",
+          "enum": [
+            0,
+            1
+          ]
+        },
+        {
+          "name": "supports_cancel",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "是否允许用户取消。",
+          "unit": "boolean",
+          "enum": [
+            0,
+            1
+          ]
+        },
+        {
+          "name": "supports_clarification",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "是否可询问缺失信息。",
+          "unit": "boolean",
+          "enum": [
+            0,
+            1
+          ]
+        },
+        {
+          "name": "latency_budget_ms",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "能力标称任务处理预算。",
+          "unit": "ms",
+          "minimum": 0
+        },
+        {
+          "name": "seat_scope",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "允许发起音区。",
+          "enum": [
+            "driver",
+            "front",
+            "all"
+          ]
+        },
+        {
+          "name": "capability_state",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "快照时能力状态。",
+          "enum": [
+            "active",
+            "deprecated"
+          ]
+        },
+        {
+          "name": "scope_note",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "能力边界，只保留通用合成动作。"
+        }
+      ],
+      "checks": [],
+      "description": "空调、媒体、导航等只作为语音意图目标，不建立独立业务运营大盘。",
+      "time_basis": "维度按快照读取；事实按各自文档时点与接收截止核对。"
+    },
+    {
+      "name": "syn_intent_catalog",
+      "label": "意图与必填槽位",
+      "group": "dimensions",
+      "grain": "一个语音意图定义",
+      "primary_key": [
+        "intent_id"
+      ],
+      "unique_keys": [],
+      "columns": [
+        {
+          "name": "intent_id",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "稳定意图标识。"
+        },
+        {
+          "name": "capability_id",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "所属能力组。",
+          "references": {
+            "table": "syn_voice_capability",
+            "column": "capability_id"
+          }
+        },
+        {
+          "name": "intent_name",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "面向人的意图名称。"
+        },
+        {
+          "name": "action_name",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "对应的合成动作名；纯对话意图使用none。"
+        },
+        {
+          "name": "required_slot_names",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "逗号分隔的必填槽位名，无则空串。"
+        },
+        {
+          "name": "optional_slot_names",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "逗号分隔的可选槽位名。"
+        },
+        {
+          "name": "slot_validation_rule",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "人工制定的合成参数规则，如温度范围；不推断未写的限制。"
+        },
+        {
+          "name": "may_use_context",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "是否可从先前有效轮次取得缺失槽位。",
+          "unit": "boolean",
+          "enum": [
+            0,
+            1
+          ]
+        },
+        {
+          "name": "requires_effect_receipt",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "任务完成是否要求实际效果回执。",
+          "unit": "boolean",
+          "enum": [
+            0,
+            1
+          ]
+        },
+        {
+          "name": "confirmation_mode",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "该合成意图是否需额外确认。",
+          "enum": [
+            "none",
+            "clarify_missing"
+          ]
+        },
+        {
+          "name": "intent_state",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "定义状态。",
+          "enum": [
+            "active",
+            "deprecated"
+          ]
+        },
+        {
+          "name": "example_command",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "从零构造的通用例句，不来自真实用户。"
+        }
+      ],
+      "checks": [],
+      "description": "意图定义不是模型预测。人工合成reference_intent_id与预测predicted_intent_id分开保存，准确率只对有标签子集报告。",
+      "time_basis": "维度按快照读取；事实按各自文档时点与接收截止核对。"
+    },
+    {
+      "name": "syn_recognizer_model",
+      "label": "识别与理解模型",
+      "group": "dimensions",
+      "grain": "一个合成ASR或NLU模型配置",
+      "primary_key": [
+        "recognizer_id"
+      ],
+      "unique_keys": [],
+      "columns": [
+        {
+          "name": "recognizer_id",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "合成处理模型标识。"
+        },
+        {
+          "name": "recognizer_name",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "虚构配置名，不使用真实供应商。"
+        },
+        {
+          "name": "component",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "处理环节。",
+          "enum": [
+            "asr",
+            "nlu"
+          ]
+        },
+        {
+          "name": "endpoint_kind",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "运行位置。",
+          "enum": [
+            "edge",
+            "cloud"
+          ]
+        },
+        {
+          "name": "model_revision",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "合成模型代次。"
+        },
+        {
+          "name": "locale",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "适用locale。",
+          "enum": [
+            "zh-CN",
+            "en-US"
+          ]
+        },
+        {
+          "name": "available_from",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "配置可用起点。",
+          "unit": "UTC RFC3339 second"
+        },
+        {
+          "name": "available_until",
+          "type": "TEXT",
+          "nullable": true,
+          "meaning": "配置截止时点，无截止NULL。",
+          "unit": "UTC RFC3339 second"
+        },
+        {
+          "name": "timeout_ms",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "本配置默认超时。",
+          "unit": "ms",
+          "minimum": 0
+        },
+        {
+          "name": "supports_streaming",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "是否支持流式处理。",
+          "unit": "boolean",
+          "enum": [
+            0,
+            1
+          ]
+        },
+        {
+          "name": "supports_context_bias",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "是否可利用已知上下文。",
+          "unit": "boolean",
+          "enum": [
+            0,
+            1
+          ]
+        },
+        {
+          "name": "training_origin",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "固定说明，不暗示使用真实训练资料。",
+          "enum": [
+            "synthetic_profile_only"
+          ]
+        }
+      ],
+      "checks": [],
+      "description": "这里只模拟端云配置和输出日志，不宣称这些配置是可执行识别模型，也不据此评估真实声学性能。",
+      "time_basis": "维度按快照读取；事实按各自文档时点与接收截止核对。"
+    },
+    {
+      "name": "syn_runtime_policy",
+      "label": "交互运行策略",
+      "group": "dimensions",
+      "grain": "一个在会话中冻结的运行策略",
+      "primary_key": [
+        "policy_id"
+      ],
+      "unique_keys": [],
+      "columns": [
+        {
+          "name": "policy_id",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "策略标识。"
+        },
+        {
+          "name": "policy_name",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "合成策略名称。"
+        },
+        {
+          "name": "valid_from",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "生效起点。",
+          "unit": "UTC RFC3339 second"
+        },
+        {
+          "name": "valid_until",
+          "type": "TEXT",
+          "nullable": true,
+          "meaning": "失效起点，NULL表示无已知结束。",
+          "unit": "UTC RFC3339 second"
+        },
+        {
+          "name": "endpoint_preference",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "ASR/NLU识别理解的端云偏好，不改变能力动作的执行位置。",
+          "enum": [
+            "edge_only",
+            "cloud_preferred",
+            "adaptive"
+          ]
+        },
+        {
+          "name": "asr_max_attempts",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "每轮ASR尝试上限。",
+          "minimum": 1,
+          "maximum": 3
+        },
+        {
+          "name": "nlu_max_attempts",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "每轮NLU尝试上限。",
+          "minimum": 1,
+          "maximum": 3
+        },
+        {
+          "name": "action_max_attempts",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "同operation的传输尝试上限。",
+          "minimum": 1,
+          "maximum": 3
+        },
+        {
+          "name": "clarification_max_turns",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "同一目标允许的合成澄清轮数。",
+          "minimum": 1,
+          "maximum": 4
+        },
+        {
+          "name": "turn_timeout_ms",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "本策略端到端处理期限。",
+          "unit": "ms",
+          "minimum": 0
+        },
+        {
+          "name": "allow_barge_in",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "允许播报被新输入打断。",
+          "unit": "boolean",
+          "enum": [
+            0,
+            1
+          ]
+        },
+        {
+          "name": "allow_context_carry",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "允许使用同会话前文补槽。",
+          "unit": "boolean",
+          "enum": [
+            0,
+            1
+          ]
+        },
+        {
+          "name": "late_response_policy",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "旧请求晚回执处理方式。",
+          "enum": [
+            "discard",
+            "accept_if_pending"
+          ]
+        },
+        {
+          "name": "cloud_rtt_threshold_ms",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "选择云处理时采用的模拟RTT阈值。",
+          "unit": "ms",
+          "minimum": 0
+        },
+        {
+          "name": "fallback_policy",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "云失败后是否允许端侧回退。",
+          "enum": [
+            "edge_fallback",
+            "none"
+          ]
+        },
+        {
+          "name": "deduplicate_actions",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "必须按operation_key接回重复动作回执。",
+          "unit": "boolean",
+          "enum": [
+            0,
+            1
+          ]
+        }
+      ],
+      "checks": [],
+      "description": "策略冻结在voice_session中。上限是配置，不是实际尝试次数；回退或重试不能凭空证明用户目标成功。",
+      "time_basis": "维度按快照读取；事实按各自文档时点与接收截止核对。"
+    },
+    {
+      "name": "syn_voice_session",
+      "label": "语音交互会话",
+      "group": "sessions",
+      "grain": "一次连续的多轮座舱语音会话",
+      "primary_key": [
+        "session_id"
+      ],
+      "unique_keys": [],
+      "columns": [
+        {
+          "name": "session_id",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "会话主键。"
+        },
+        {
+          "name": "vehicle_id",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "所属合成车辆。",
+          "references": {
+            "table": "syn_vehicle",
+            "column": "vehicle_id"
+          }
+        },
+        {
+          "name": "build_id",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "开始时冻结的build。",
+          "references": {
+            "table": "syn_software_build",
+            "column": "build_id"
+          }
+        },
+        {
+          "name": "policy_id",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "本会话冻结策略。",
+          "references": {
+            "table": "syn_runtime_policy",
+            "column": "policy_id"
+          }
+        },
+        {
+          "name": "started_at",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "会话起点。",
+          "unit": "UTC RFC3339 second"
+        },
+        {
+          "name": "ended_at",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "会话终点。",
+          "unit": "UTC RFC3339 second"
+        },
+        {
+          "name": "duration_ms",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "会话墙钟整秒区间的精确毫秒长度。",
+          "unit": "ms",
+          "minimum": 0
+        },
+        {
+          "name": "entry_kind",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "进入方式。",
+          "enum": [
+            "wake_word",
+            "button",
+            "continuous"
+          ]
+        },
+        {
+          "name": "locale",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "会话locale。",
+          "enum": [
+            "zh-CN",
+            "en-US"
+          ]
+        },
+        {
+          "name": "seat_zone",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "主要发起音区。",
+          "enum": [
+            "driver",
+            "front_passenger",
+            "rear"
+          ]
+        },
+        {
+          "name": "motion_state",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "当时行驶状态分类。",
+          "enum": [
+            "parked",
+            "moving"
+          ]
+        },
+        {
+          "name": "network_at_start",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "起点网络状态，不代替后续网络观测。",
+          "enum": [
+            "online",
+            "offline"
+          ]
+        },
+        {
+          "name": "end_reason",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "会话结束原因。",
+          "enum": [
+            "idle",
+            "user_cancel",
+            "session_timeout",
+            "system_end"
+          ]
+        },
+        {
+          "name": "is_complete",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "是否收到完整会话尾记录。",
+          "unit": "boolean",
+          "enum": [
+            0,
+            1
+          ]
+        },
+        {
+          "name": "received_at",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "该规范记录进入快照的接收时间；received_at必须早于snapshot_exclusive才可用于快照统计。",
+          "unit": "UTC RFC3339 second"
+        },
+        {
+          "name": "quality_state",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "记录质量；默认指标仅采用valid，invalid保留用于质量排查。",
+          "enum": [
+            "valid",
+            "invalid"
+          ]
+        }
+      ],
+      "checks": [
+        "ended_at > started_at"
+      ],
+      "description": "同会话可多轮澄清、打断或换目标。会话数、turn数与各阶段attempt数分别统计。",
+      "time_basis": "维度按快照读取；事实按各自文档时点与接收截止核对。"
+    },
+    {
+      "name": "syn_wakeup_attempt",
+      "label": "语音入口触发尝试",
+      "group": "activation",
+      "grain": "一次唤醒或按键入口触发观测",
+      "primary_key": [
+        "wakeup_id"
+      ],
+      "unique_keys": [],
+      "columns": [
+        {
+          "name": "wakeup_id",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "入口尝试主键。"
+        },
+        {
+          "name": "vehicle_id",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "设备。",
+          "references": {
+            "table": "syn_vehicle",
+            "column": "vehicle_id"
+          }
+        },
+        {
+          "name": "build_id",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "触发时build。",
+          "references": {
+            "table": "syn_software_build",
+            "column": "build_id"
+          }
+        },
+        {
+          "name": "session_id",
+          "type": "TEXT",
+          "nullable": true,
+          "meaning": "接受后关联会话；拒绝/漏唤醒时NULL。",
+          "references": {
+            "table": "syn_voice_session",
+            "column": "session_id"
+          }
+        },
+        {
+          "name": "started_at",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "触发观测时点。",
+          "unit": "UTC RFC3339 second"
+        },
+        {
+          "name": "trigger_kind",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "触发入口。",
+          "enum": [
+            "wake_word",
+            "button",
+            "continuous"
+          ]
+        },
+        {
+          "name": "seat_zone",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "触发音区。",
+          "enum": [
+            "driver",
+            "front_passenger",
+            "rear"
+          ]
+        },
+        {
+          "name": "candidate_detected",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "检测器是否产生候选。",
+          "unit": "boolean",
+          "enum": [
+            0,
+            1
+          ]
+        },
+        {
+          "name": "accepted",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "是否接受候选并进入会话。",
+          "unit": "boolean",
+          "enum": [
+            0,
+            1
+          ]
+        },
+        {
+          "name": "reject_reason",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "未接受的分类。",
+          "enum": [
+            "none",
+            "not_detected",
+            "false_trigger",
+            "debounce",
+            "policy"
+          ]
+        },
+        {
+          "name": "confidence_permille",
+          "type": "INTEGER",
+          "nullable": true,
+          "meaning": "合成候选置信度千分数，未检测为NULL。",
+          "unit": "permille",
+          "minimum": 0,
+          "maximum": 1000
+        },
+        {
+          "name": "reference_is_intended",
+          "type": "INTEGER",
+          "nullable": true,
+          "meaning": "人工合成是否为有效唤醒标签；无标签NULL。",
+          "unit": "boolean",
+          "enum": [
+            0,
+            1
+          ]
+        },
+        {
+          "name": "label_origin",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "标签来源，仅人工合成或无标签。",
+          "enum": [
+            "synthetic_authored",
+            "none"
+          ]
+        },
+        {
+          "name": "decision_ms",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "触发到入口决策的单调耗时。",
+          "unit": "ms",
+          "minimum": 0
+        },
+        {
+          "name": "received_at",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "该规范记录进入快照的接收时间；received_at必须早于snapshot_exclusive才可用于快照统计。",
+          "unit": "UTC RFC3339 second"
+        },
+        {
+          "name": "quality_state",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "记录质量；默认指标仅采用valid，invalid保留用于质量排查。",
+          "enum": [
+            "valid",
+            "invalid"
+          ]
+        }
+      ],
+      "checks": [
+        "(accepted=1 AND candidate_detected=1 AND session_id IS NOT NULL AND reject_reason='none') OR (accepted=0 AND session_id IS NULL AND reject_reason<>'none')"
+      ],
+      "description": "没有音频或真实唤醒词。准确性分析只覆盖reference_is_intended非空子集，不能把accepted当真值。",
+      "time_basis": "维度按快照读取；事实按各自文档时点与接收截止核对。"
+    },
+    {
+      "name": "syn_voice_turn",
+      "label": "用户交互轮次",
+      "group": "dialogue",
+      "grain": "同会话的一条用户输入及任务终态记录",
+      "primary_key": [
+        "turn_id"
+      ],
+      "unique_keys": [
+        [
+          "session_id",
+          "turn_no"
+        ]
+      ],
+      "columns": [
+        {
+          "name": "turn_id",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "轮次主键。"
+        },
+        {
+          "name": "session_id",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "所属多轮会话。",
+          "references": {
+            "table": "syn_voice_session",
+            "column": "session_id"
+          }
+        },
+        {
+          "name": "turn_no",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "同会话从1递增轮号。",
+          "minimum": 1
+        },
+        {
+          "name": "parent_turn_id",
+          "type": "TEXT",
+          "nullable": true,
+          "meaning": "需要沿用或取消的前一目标轮次，独立新目标NULL。",
+          "references": {
+            "table": "syn_voice_turn",
+            "column": "turn_id"
+          }
+        },
+        {
+          "name": "started_at",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "本轮输入开始时点；turn_date按其UTC日期。",
+          "unit": "UTC RFC3339 second"
+        },
+        {
+          "name": "finished_at",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "本轮任务处理结束时点。",
+          "unit": "UTC RFC3339 second"
+        },
+        {
+          "name": "input_kind",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "输入形态。",
+          "enum": [
+            "command",
+            "follow_up",
+            "cancel",
+            "silence"
+          ]
+        },
+        {
+          "name": "reference_text",
+          "type": "TEXT",
+          "nullable": true,
+          "meaning": "人工从零构造的转写参考；无标签NULL，不是模型预测或真实录音转写。"
+        },
+        {
+          "name": "reference_intent_id",
+          "type": "TEXT",
+          "nullable": true,
+          "meaning": "人工合成意图标签；无标签NULL。",
+          "references": {
+            "table": "syn_intent_catalog",
+            "column": "intent_id"
+          }
+        },
+        {
+          "name": "label_origin",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "人工标签来源，至少一个参考非空才为synthetic_authored。",
+          "enum": [
+            "synthetic_authored",
+            "none"
+          ]
+        },
+        {
+          "name": "locale",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "本轮locale。",
+          "enum": [
+            "zh-CN",
+            "en-US"
+          ]
+        },
+        {
+          "name": "seat_zone",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "输入音区。",
+          "enum": [
+            "driver",
+            "front_passenger",
+            "rear"
+          ]
+        },
+        {
+          "name": "input_ms",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "合成输入持续时长；无原始音频。",
+          "unit": "ms",
+          "minimum": 0
+        },
+        {
+          "name": "terminal_offset_ms",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "从轮次起点到任务终态的单调偏移。",
+          "unit": "ms",
+          "minimum": 0
+        },
+        {
+          "name": "task_latency_ms",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "输入结束到任务终态的耗时，不含用户输入时长。",
+          "unit": "ms",
+          "minimum": 0
+        },
+        {
+          "name": "first_audio_latency_ms",
+          "type": "INTEGER",
+          "nullable": true,
+          "meaning": "输入结束到首个可听播报的耗时；没有首音为NULL。",
+          "unit": "ms",
+          "minimum": 0
+        },
+        {
+          "name": "final_outcome",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "任务执行终态；completed不代表意图一定识别正确或用户满意。",
+          "enum": [
+            "completed",
+            "clarification_pending",
+            "rejected",
+            "cancelled",
+            "no_speech",
+            "failed",
+            "unknown"
+          ]
+        },
+        {
+          "name": "final_response_text",
+          "type": "TEXT",
+          "nullable": true,
+          "meaning": "从零构造的系统已组织答复文本；无答复NULL，不保证TTS或实际播放成功。"
+        },
+        {
+          "name": "received_at",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "该规范记录进入快照的接收时间；received_at必须早于snapshot_exclusive才可用于快照统计。",
+          "unit": "UTC RFC3339 second"
+        },
+        {
+          "name": "quality_state",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "记录质量；默认指标仅采用valid，invalid保留用于质量排查。",
+          "enum": [
+            "valid",
+            "invalid"
+          ]
+        }
+      ],
+      "checks": [
+        "finished_at >= started_at",
+        "terminal_offset_ms >= input_ms",
+        "task_latency_ms = terminal_offset_ms - input_ms"
+      ],
+      "description": "任务达成率eligible为completed/clarification_pending/rejected/failed/unknown，排除cancelled/no_speech。识别一致性只用标签子集；completed、播报成功与满意不是同一指标。",
+      "time_basis": "维度按快照读取；事实按各自文档时点与接收截止核对。"
+    },
+    {
+      "name": "syn_frontend_segment",
+      "label": "前端VAD分段",
+      "group": "frontend",
+      "grain": "一轮输入中的一个模拟语音/静音/噪声片段",
+      "primary_key": [
+        "segment_id"
+      ],
+      "unique_keys": [
+        [
+          "turn_id",
+          "segment_no"
+        ]
+      ],
+      "columns": [
+        {
+          "name": "segment_id",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "片段主键。"
+        },
+        {
+          "name": "turn_id",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "所属轮次。",
+          "references": {
+            "table": "syn_voice_turn",
+            "column": "turn_id"
+          }
+        },
+        {
+          "name": "segment_no",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "同轮片段序号。",
+          "minimum": 1
+        },
+        {
+          "name": "segment_kind",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "人工合成片段类别，不来自实际音频。",
+          "enum": [
+            "speech",
+            "silence",
+            "noise"
+          ]
+        },
+        {
+          "name": "start_offset_ms",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "相对turn起点的片段起始偏移。",
+          "unit": "ms",
+          "minimum": 0
+        },
+        {
+          "name": "end_offset_ms",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "片段终止偏移，排他。",
+          "unit": "ms",
+          "minimum": 0
+        },
+        {
+          "name": "duration_ms",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "end_offset_ms-start_offset_ms。",
+          "unit": "ms",
+          "minimum": 0
+        },
+        {
+          "name": "speech_detected",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "模拟VAD是否判为语音。",
+          "unit": "boolean",
+          "enum": [
+            0,
+            1
+          ]
+        },
+        {
+          "name": "endpoint_reason",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "前端结束该片段的原因。",
+          "enum": [
+            "speech_end",
+            "silence_threshold",
+            "input_end",
+            "manual_stop"
+          ]
+        },
+        {
+          "name": "clipped_ms",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "该片段被截去的时长，不超过duration_ms。",
+          "unit": "ms",
+          "minimum": 0
+        },
+        {
+          "name": "feature_frame_count",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "模拟特征帧计数，仅作日志字段，不生成音频。",
+          "unit": "count",
+          "minimum": 0
+        },
+        {
+          "name": "noise_bucket",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "合成环境档位。",
+          "enum": [
+            "quiet",
+            "moderate",
+            "noisy"
+          ]
+        },
+        {
+          "name": "received_at",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "该规范记录进入快照的接收时间；received_at必须早于snapshot_exclusive才可用于快照统计。",
+          "unit": "UTC RFC3339 second"
+        },
+        {
+          "name": "quality_state",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "记录质量；默认指标仅采用valid，invalid保留用于质量排查。",
+          "enum": [
+            "valid",
+            "invalid"
+          ]
+        }
+      ],
+      "checks": [
+        "end_offset_ms > start_offset_ms",
+        "duration_ms=end_offset_ms-start_offset_ms",
+        "clipped_ms <= duration_ms"
+      ],
+      "description": "片段同轮不重叠且连续覆盖input_ms。片段数不等于用户轮数，不能由模拟VAD标签声称真实声学能力。",
+      "time_basis": "维度按快照读取；事实按各自文档时点与接收截止核对。"
+    },
+    {
+      "name": "syn_asr_attempt",
+      "label": "ASR处理尝试",
+      "group": "asr",
+      "grain": "一轮输入的一次端侧或云侧识别尝试",
+      "primary_key": [
+        "asr_attempt_id"
+      ],
+      "unique_keys": [
+        [
+          "turn_id",
+          "attempt_no"
+        ]
+      ],
+      "columns": [
+        {
+          "name": "asr_attempt_id",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "ASR尝试主键。"
+        },
+        {
+          "name": "turn_id",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "所属轮次。",
+          "references": {
+            "table": "syn_voice_turn",
+            "column": "turn_id"
+          }
+        },
+        {
+          "name": "attempt_no",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "同轮ASR从1递增尝试号。",
+          "minimum": 1
+        },
+        {
+          "name": "recognizer_id",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "component=asr的合成配置。",
+          "references": {
+            "table": "syn_recognizer_model",
+            "column": "recognizer_id"
+          }
+        },
+        {
+          "name": "endpoint_kind",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "实际端云位置。",
+          "enum": [
+            "edge",
+            "cloud"
+          ]
+        },
+        {
+          "name": "start_offset_ms",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "相对turn起点的处理开始偏移。",
+          "unit": "ms",
+          "minimum": 0
+        },
+        {
+          "name": "finish_offset_ms",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "处理结束偏移。",
+          "unit": "ms",
+          "minimum": 0
+        },
+        {
+          "name": "wall_ms",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "finish_offset_ms-start_offset_ms。",
+          "unit": "ms",
+          "minimum": 0
+        },
+        {
+          "name": "queued_ms",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "wall_ms中的排队部分。",
+          "unit": "ms",
+          "minimum": 0
+        },
+        {
+          "name": "outcome",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "识别尝试结果。",
+          "enum": [
+            "succeeded",
+            "failed",
+            "timeout",
+            "cancelled"
+          ]
+        },
+        {
+          "name": "fallback_reason",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "启用该次尝试的原因。",
+          "enum": [
+            "none",
+            "cloud_timeout",
+            "network_unavailable",
+            "model_failure"
+          ]
+        },
+        {
+          "name": "timeout_ms",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "本次生效超时配置。",
+          "unit": "ms",
+          "minimum": 0
+        },
+        {
+          "name": "is_streaming",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "是否模拟流式识别。",
+          "unit": "boolean",
+          "enum": [
+            0,
+            1
+          ]
+        },
+        {
+          "name": "partial_result_count",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "模拟中间转写次数，不作为最终候选数。",
+          "unit": "count",
+          "minimum": 0
+        },
+        {
+          "name": "error_code",
+          "type": "TEXT",
+          "nullable": true,
+          "meaning": "SYN前缀模拟错误，无错误NULL。"
+        },
+        {
+          "name": "received_at",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "该规范记录进入快照的接收时间；received_at必须早于snapshot_exclusive才可用于快照统计。",
+          "unit": "UTC RFC3339 second"
+        }
+      ],
+      "checks": [
+        "finish_offset_ms >= start_offset_ms",
+        "wall_ms=finish_offset_ms-start_offset_ms",
+        "queued_ms<=wall_ms"
+      ],
+      "description": "ASR成功只表示产生候选；最终采用哪一条见asr_hypothesis.selected_for_nlu。失败重试次数不能替代用户输入量。",
+      "time_basis": "维度按快照读取；事实按各自文档时点与接收截止核对。"
+    },
+    {
+      "name": "syn_asr_hypothesis",
+      "label": "ASR候选及最终选择",
+      "group": "asr",
+      "grain": "一次成功ASR尝试的一条候选转写",
+      "primary_key": [
+        "hypothesis_id"
+      ],
+      "unique_keys": [
+        [
+          "asr_attempt_id",
+          "candidate_rank"
+        ]
+      ],
+      "columns": [
+        {
+          "name": "hypothesis_id",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "候选主键。"
+        },
+        {
+          "name": "asr_attempt_id",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "所属ASR尝试。",
+          "references": {
+            "table": "syn_asr_attempt",
+            "column": "asr_attempt_id"
+          }
+        },
+        {
+          "name": "turn_id",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "冗余轮次引用，必须与ASR尝试一致。",
+          "references": {
+            "table": "syn_voice_turn",
+            "column": "turn_id"
+          }
+        },
+        {
+          "name": "candidate_rank",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "该尝试内从1递增候选排名。",
+          "minimum": 1
+        },
+        {
+          "name": "hypothesis_text",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "人工构造的模拟识别文本，不来自公司用户。"
+        },
+        {
+          "name": "normalized_text",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "统一空白及公开数字格式后的文本，规范由文档定义。"
+        },
+        {
+          "name": "confidence_permille",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "合成置信度。",
+          "unit": "permille",
+          "minimum": 0,
+          "maximum": 1000
+        },
+        {
+          "name": "is_final",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "是否该尝试的最终候选，非partial流式片段。",
+          "unit": "boolean",
+          "enum": [
+            0,
+            1
+          ]
+        },
+        {
+          "name": "selected_for_nlu",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "同轮至多一条最终被NLU采用的候选，不必rank=1。",
+          "unit": "boolean",
+          "enum": [
+            0,
+            1
+          ]
+        },
+        {
+          "name": "selection_reason",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "选择原因的日志标签，不证明选对。",
+          "enum": [
+            "rank",
+            "context_bias",
+            "fallback",
+            "not_selected"
+          ]
+        },
+        {
+          "name": "locale",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "候选locale。",
+          "enum": [
+            "zh-CN",
+            "en-US"
+          ]
+        },
+        {
+          "name": "received_at",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "该规范记录进入快照的接收时间；received_at必须早于snapshot_exclusive才可用于快照统计。",
+          "unit": "UTC RFC3339 second"
+        }
+      ],
+      "checks": [],
+      "description": "不能把最高置信候选当人工真值。转写一致率需reference_text非空并采用同一归一化；无标签不进入正确率分母。",
+      "time_basis": "维度按快照读取；事实按各自文档时点与接收截止核对。"
+    },
+    {
+      "name": "syn_nlu_attempt",
+      "label": "意图理解尝试",
+      "group": "nlu",
+      "grain": "一轮的一次意图/槽位解析",
+      "primary_key": [
+        "nlu_attempt_id"
+      ],
+      "unique_keys": [
+        [
+          "turn_id",
+          "attempt_no"
+        ]
+      ],
+      "columns": [
+        {
+          "name": "nlu_attempt_id",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "NLU尝试主键。"
+        },
+        {
+          "name": "turn_id",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "所属轮次。",
+          "references": {
+            "table": "syn_voice_turn",
+            "column": "turn_id"
+          }
+        },
+        {
+          "name": "hypothesis_id",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "实际解析的转写候选。",
+          "references": {
+            "table": "syn_asr_hypothesis",
+            "column": "hypothesis_id"
+          }
+        },
+        {
+          "name": "attempt_no",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "同轮NLU尝试序号。",
+          "minimum": 1
+        },
+        {
+          "name": "recognizer_id",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "component=nlu的合成配置。",
+          "references": {
+            "table": "syn_recognizer_model",
+            "column": "recognizer_id"
+          }
+        },
+        {
+          "name": "endpoint_kind",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "实际端云位置。",
+          "enum": [
+            "edge",
+            "cloud"
+          ]
+        },
+        {
+          "name": "start_offset_ms",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "相对turn起点的开始偏移。",
+          "unit": "ms",
+          "minimum": 0
+        },
+        {
+          "name": "finish_offset_ms",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "结束偏移。",
+          "unit": "ms",
+          "minimum": 0
+        },
+        {
+          "name": "wall_ms",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "finish-start单调耗时。",
+          "unit": "ms",
+          "minimum": 0
+        },
+        {
+          "name": "queued_ms",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "包含在wall_ms内的等待时长。",
+          "unit": "ms",
+          "minimum": 0
+        },
+        {
+          "name": "outcome",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "理解尝试状态。",
+          "enum": [
+            "succeeded",
+            "ambiguous",
+            "failed",
+            "timeout",
+            "cancelled"
+          ]
+        },
+        {
+          "name": "predicted_intent_id",
+          "type": "TEXT",
+          "nullable": true,
+          "meaning": "模型预测意图；未得出或歧义时可NULL，不是真值。",
+          "references": {
+            "table": "syn_intent_catalog",
+            "column": "intent_id"
+          }
+        },
+        {
+          "name": "confidence_permille",
+          "type": "INTEGER",
+          "nullable": true,
+          "meaning": "预测置信度，无预测NULL。",
+          "unit": "permille",
+          "minimum": 0,
+          "maximum": 1000
+        },
+        {
+          "name": "missing_required_slots",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "必填且未解决槽位数，须与slot_value一致。",
+          "unit": "count",
+          "minimum": 0
+        },
+        {
+          "name": "context_used",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "是否使用前文补充解析。",
+          "unit": "boolean",
+          "enum": [
+            0,
+            1
+          ]
+        },
+        {
+          "name": "selected_for_dialogue",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "同轮至多一条交给对话管理的结果。",
+          "unit": "boolean",
+          "enum": [
+            0,
+            1
+          ]
+        },
+        {
+          "name": "error_code",
+          "type": "TEXT",
+          "nullable": true,
+          "meaning": "模拟错误，无错误NULL。"
+        },
+        {
+          "name": "received_at",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "该规范记录进入快照的接收时间；received_at必须早于snapshot_exclusive才可用于快照统计。",
+          "unit": "UTC RFC3339 second"
+        }
+      ],
+      "checks": [
+        "finish_offset_ms >= start_offset_ms",
+        "wall_ms=finish_offset_ms-start_offset_ms",
+        "queued_ms<=wall_ms"
+      ],
+      "description": "解析成功仍可缺少必填槽位；对话澄清不是工具执行成功。意图一致率对reference_intent_id非空子集核对，不能拿预测当真值。",
+      "time_basis": "维度按快照读取；事实按各自文档时点与接收截止核对。"
+    },
+    {
+      "name": "syn_slot_value",
+      "label": "槽位提取与补全",
+      "group": "nlu",
+      "grain": "一次NLU尝试中的一个已声明槽位",
+      "primary_key": [
+        "slot_id"
+      ],
+      "unique_keys": [
+        [
+          "nlu_attempt_id",
+          "slot_name"
+        ]
+      ],
+      "columns": [
+        {
+          "name": "slot_id",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "槽位记录主键。"
+        },
+        {
+          "name": "nlu_attempt_id",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "所属理解尝试。",
+          "references": {
+            "table": "syn_nlu_attempt",
+            "column": "nlu_attempt_id"
+          }
+        },
+        {
+          "name": "turn_id",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "须与NLU所属轮次一致。",
+          "references": {
+            "table": "syn_voice_turn",
+            "column": "turn_id"
+          }
+        },
+        {
+          "name": "slot_name",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "槽位名，来自意图定义。"
+        },
+        {
+          "name": "raw_value",
+          "type": "TEXT",
+          "nullable": true,
+          "meaning": "合成输入中提取的原值；缺失NULL。"
+        },
+        {
+          "name": "normalized_value",
+          "type": "TEXT",
+          "nullable": true,
+          "meaning": "归一化文本值；未解决NULL。"
+        },
+        {
+          "name": "value_kind",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "归一化值类型。",
+          "enum": [
+            "text",
+            "decimal",
+            "boolean"
+          ]
+        },
+        {
+          "name": "value_unit",
+          "type": "TEXT",
+          "nullable": true,
+          "meaning": "单位，如degree_c；无单位NULL。"
+        },
+        {
+          "name": "resolution_source",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "槽位取值出处，missing不能冒充用户采用。",
+          "enum": [
+            "utterance",
+            "context",
+            "default",
+            "missing"
+          ]
+        },
+        {
+          "name": "confidence_permille",
+          "type": "INTEGER",
+          "nullable": true,
+          "meaning": "合成置信度；无取值NULL。",
+          "unit": "permille",
+          "minimum": 0,
+          "maximum": 1000
+        },
+        {
+          "name": "is_required",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "是否本意图必填槽位。",
+          "unit": "boolean",
+          "enum": [
+            0,
+            1
+          ]
+        },
+        {
+          "name": "is_resolved",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "是否已有可用取值；不等于范围校验一定成功。",
+          "unit": "boolean",
+          "enum": [
+            0,
+            1
+          ]
+        },
+        {
+          "name": "validation_state",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "槽位规则校验结果。",
+          "enum": [
+            "valid",
+            "missing",
+            "out_of_range",
+            "ambiguous"
+          ]
+        },
+        {
+          "name": "source_turn_id",
+          "type": "TEXT",
+          "nullable": true,
+          "meaning": "来自上下文时的真实源轮次，其他NULL。",
+          "references": {
+            "table": "syn_voice_turn",
+            "column": "turn_id"
+          }
+        },
+        {
+          "name": "received_at",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "该规范记录进入快照的接收时间；received_at必须早于snapshot_exclusive才可用于快照统计。",
+          "unit": "UTC RFC3339 second"
+        }
+      ],
+      "checks": [],
+      "description": "上下文补槽必须保留source_turn_id；NULL、空串和未解决分别解释。不能把未回答的必填值用默认值悄悄补上。",
+      "time_basis": "维度按快照读取；事实按各自文档时点与接收截止核对。"
+    },
+    {
+      "name": "syn_dialogue_transition",
+      "label": "对话状态变化",
+      "group": "dialogue",
+      "grain": "一轮内的一次对话状态迁移",
+      "primary_key": [
+        "transition_id"
+      ],
+      "unique_keys": [
+        [
+          "turn_id",
+          "transition_no"
+        ]
+      ],
+      "columns": [
+        {
+          "name": "transition_id",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "状态迁移主键。"
+        },
+        {
+          "name": "turn_id",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "所属轮次。",
+          "references": {
+            "table": "syn_voice_turn",
+            "column": "turn_id"
+          }
+        },
+        {
+          "name": "transition_no",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "同轮迁移顺序。",
+          "minimum": 1
+        },
+        {
+          "name": "from_state",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "迁移前状态。",
+          "enum": [
+            "listening",
+            "understanding",
+            "awaiting_slot",
+            "ready",
+            "executing",
+            "completed",
+            "cancelled",
+            "failed",
+            "unknown",
+            "rejected",
+            "no_speech"
+          ]
+        },
+        {
+          "name": "to_state",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "迁移后状态。",
+          "enum": [
+            "listening",
+            "understanding",
+            "awaiting_slot",
+            "ready",
+            "executing",
+            "completed",
+            "cancelled",
+            "failed",
+            "unknown",
+            "rejected",
+            "no_speech"
+          ]
+        },
+        {
+          "name": "reason",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "迁移原因。",
+          "enum": [
+            "parsed",
+            "missing_slot",
+            "slot_filled",
+            "user_cancel",
+            "new_goal",
+            "action_receipt",
+            "timeout",
+            "policy_rejected",
+            "silence"
+          ]
+        },
+        {
+          "name": "offset_ms",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "相对轮次起点的迁移时间。",
+          "unit": "ms",
+          "minimum": 0
+        },
+        {
+          "name": "context_turn_id",
+          "type": "TEXT",
+          "nullable": true,
+          "meaning": "被沿用或取消的原目标轮次，独立目标NULL。",
+          "references": {
+            "table": "syn_voice_turn",
+            "column": "turn_id"
+          }
+        },
+        {
+          "name": "clarification_slot",
+          "type": "TEXT",
+          "nullable": true,
+          "meaning": "本次追问的槽位名，无追问NULL。"
+        },
+        {
+          "name": "clarification_text",
+          "type": "TEXT",
+          "nullable": true,
+          "meaning": "从零构造的澄清文本，无追问NULL。"
+        },
+        {
+          "name": "user_decision",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "本次是否真实提供/取消/未回答。",
+          "enum": [
+            "provided",
+            "cancelled",
+            "unanswered",
+            "not_required"
+          ]
+        },
+        {
+          "name": "context_preserved",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "是否保留原目标的已知约束。",
+          "unit": "boolean",
+          "enum": [
+            0,
+            1
+          ]
+        },
+        {
+          "name": "received_at",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "该规范记录进入快照的接收时间；received_at必须早于snapshot_exclusive才可用于快照统计。",
+          "unit": "UTC RFC3339 second"
+        }
+      ],
+      "checks": [],
+      "description": "一个会话可多目标；状态迁移记录不能替代用户原话。澄清回答、取消和新目标分别保留，不能把未回答当同意。",
+      "time_basis": "维度按快照读取；事实按各自文档时点与接收截止核对。"
+    },
+    {
+      "name": "syn_skill_route",
+      "label": "能力路由尝试",
+      "group": "routing",
+      "grain": "一轮理解结果的一次技能路由",
+      "primary_key": [
+        "route_id"
+      ],
+      "unique_keys": [
+        [
+          "turn_id",
+          "attempt_no"
+        ]
+      ],
+      "columns": [
+        {
+          "name": "route_id",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "路由尝试主键。"
+        },
+        {
+          "name": "turn_id",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "所属轮次。",
+          "references": {
+            "table": "syn_voice_turn",
+            "column": "turn_id"
+          }
+        },
+        {
+          "name": "nlu_attempt_id",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "依据的NLU结果。",
+          "references": {
+            "table": "syn_nlu_attempt",
+            "column": "nlu_attempt_id"
+          }
+        },
+        {
+          "name": "attempt_no",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "同轮路由尝试顺序。",
+          "minimum": 1
+        },
+        {
+          "name": "capability_id",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "拟采用能力组。",
+          "references": {
+            "table": "syn_voice_capability",
+            "column": "capability_id"
+          }
+        },
+        {
+          "name": "intent_id",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "拟执行意图。",
+          "references": {
+            "table": "syn_intent_catalog",
+            "column": "intent_id"
+          }
+        },
+        {
+          "name": "skill_code",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "虚构技能实现编码，不是实际产品服务名。"
+        },
+        {
+          "name": "route_kind",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "本地、云端或回退路由。",
+          "enum": [
+            "local",
+            "cloud",
+            "fallback"
+          ]
+        },
+        {
+          "name": "start_offset_ms",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "路由开始偏移。",
+          "unit": "ms",
+          "minimum": 0
+        },
+        {
+          "name": "finish_offset_ms",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "结束偏移。",
+          "unit": "ms",
+          "minimum": 0
+        },
+        {
+          "name": "wall_ms",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "路由耗时。",
+          "unit": "ms",
+          "minimum": 0
+        },
+        {
+          "name": "outcome",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "路由结果。",
+          "enum": [
+            "selected",
+            "rejected",
+            "failed"
+          ]
+        },
+        {
+          "name": "is_final_route",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "同轮至多一个最终选中的路由。",
+          "unit": "boolean",
+          "enum": [
+            0,
+            1
+          ]
+        },
+        {
+          "name": "reject_reason",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "拒绝原因；未拒绝为none。",
+          "enum": [
+            "none",
+            "unsupported",
+            "missing_slot",
+            "policy",
+            "unavailable"
+          ]
+        },
+        {
+          "name": "received_at",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "该规范记录进入快照的接收时间；received_at必须早于snapshot_exclusive才可用于快照统计。",
+          "unit": "UTC RFC3339 second"
+        }
+      ],
+      "checks": [
+        "finish_offset_ms >= start_offset_ms",
+        "wall_ms=finish_offset_ms-start_offset_ms"
+      ],
+      "description": "路由selected只说明找到处理入口，不表示动作执行或效果确认。",
+      "time_basis": "维度按快照读取；事实按各自文档时点与接收截止核对。"
+    },
+    {
+      "name": "syn_action_invocation",
+      "label": "动作提交尝试",
+      "group": "actions",
+      "grain": "一个稳定operation的一次传输提交尝试",
+      "primary_key": [
+        "invocation_id"
+      ],
+      "unique_keys": [
+        [
+          "operation_key",
+          "attempt_no"
+        ]
+      ],
+      "columns": [
+        {
+          "name": "invocation_id",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "提交尝试主键。"
+        },
+        {
+          "name": "turn_id",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "所属轮次。",
+          "references": {
+            "table": "syn_voice_turn",
+            "column": "turn_id"
+          }
+        },
+        {
+          "name": "route_id",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "采用的最终路由。",
+          "references": {
+            "table": "syn_skill_route",
+            "column": "route_id"
+          }
+        },
+        {
+          "name": "operation_key",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "同一逻辑动作稳定身份，重试必须沿用。"
+        },
+        {
+          "name": "attempt_no",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "同operation的传输尝试号。",
+          "minimum": 1
+        },
+        {
+          "name": "action_name",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "合成动作名，对应意图定义。"
+        },
+        {
+          "name": "argument_name",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "主要参数名，若无参数为none。"
+        },
+        {
+          "name": "argument_value",
+          "type": "TEXT",
+          "nullable": true,
+          "meaning": "从合成槽位得到的主要参数，无参数NULL。"
+        },
+        {
+          "name": "argument_unit",
+          "type": "TEXT",
+          "nullable": true,
+          "meaning": "参数单位，无则NULL。"
+        },
+        {
+          "name": "submitted_offset_ms",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "相对turn起点的提交时间。",
+          "unit": "ms",
+          "minimum": 0
+        },
+        {
+          "name": "deadline_offset_ms",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "本次提交允许的截止偏移。",
+          "unit": "ms",
+          "minimum": 0
+        },
+        {
+          "name": "transport_kind",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "模拟调用协议类型。",
+          "enum": [
+            "local_bus",
+            "simulated_cloud"
+          ]
+        },
+        {
+          "name": "acceptance_state",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "提交是否被接收；unknown不是未执行。",
+          "enum": [
+            "accepted",
+            "rejected",
+            "unknown"
+          ]
+        },
+        {
+          "name": "idempotency_supported",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "本包操作固定支持按operation_key查证。",
+          "unit": "boolean",
+          "enum": [
+            0,
+            1
+          ]
+        },
+        {
+          "name": "timeout_ms",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "当前提交超时配置。",
+          "unit": "ms",
+          "minimum": 0
+        },
+        {
+          "name": "received_at",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "该规范记录进入快照的接收时间；received_at必须早于snapshot_exclusive才可用于快照统计。",
+          "unit": "UTC RFC3339 second"
+        }
+      ],
+      "checks": [
+        "deadline_offset_ms >= submitted_offset_ms",
+        "idempotency_supported=1"
+      ],
+      "description": "提交成功、执行成功与效果确认是三层状态。重试传输不新增逻辑动作，unknown不能凭空重建operation。",
+      "time_basis": "维度按快照读取；事实按各自文档时点与接收截止核对。"
+    },
+    {
+      "name": "syn_action_result",
+      "label": "动作执行与效果回执",
+      "group": "actions",
+      "grain": "一次提交对应的一条结果观测，可先unknown后明确",
+      "primary_key": [
+        "result_id"
+      ],
+      "unique_keys": [
+        [
+          "invocation_id",
+          "observation_no"
+        ]
+      ],
+      "columns": [
+        {
+          "name": "result_id",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "回执观测主键。"
+        },
+        {
+          "name": "invocation_id",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "所属提交尝试。",
+          "references": {
+            "table": "syn_action_invocation",
+            "column": "invocation_id"
+          }
+        },
+        {
+          "name": "turn_id",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "所属轮次，须与提交一致。",
+          "references": {
+            "table": "syn_voice_turn",
+            "column": "turn_id"
+          }
+        },
+        {
+          "name": "operation_key",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "稳定逻辑操作身份，须与提交一致。"
+        },
+        {
+          "name": "observation_no",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "同invocation的递增观测号。",
+          "minimum": 1
+        },
+        {
+          "name": "observed_offset_ms",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "相对轮次起点的观测时间。",
+          "unit": "ms",
+          "minimum": 0
+        },
+        {
+          "name": "return_state",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "执行回执状态。",
+          "enum": [
+            "succeeded",
+            "failed",
+            "cancelled",
+            "unknown"
+          ]
+        },
+        {
+          "name": "effect_state",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "效果是否被确认，不能仅由接收成功推断。",
+          "enum": [
+            "confirmed",
+            "not_observed",
+            "unknown"
+          ]
+        },
+        {
+          "name": "effect_instance_id",
+          "type": "TEXT",
+          "nullable": true,
+          "meaning": "已确认效果的合成实例号；重放沿同一号，未确认NULL。"
+        },
+        {
+          "name": "result_value",
+          "type": "TEXT",
+          "nullable": true,
+          "meaning": "合成效果值，无明确效果NULL。"
+        },
+        {
+          "name": "result_unit",
+          "type": "TEXT",
+          "nullable": true,
+          "meaning": "效果单位，无则NULL。"
+        },
+        {
+          "name": "error_code",
+          "type": "TEXT",
+          "nullable": true,
+          "meaning": "模拟错误分类，正常NULL。"
+        },
+        {
+          "name": "replayed_receipt",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "是否接回已知结果而非重复执行。",
+          "unit": "boolean",
+          "enum": [
+            0,
+            1
+          ]
+        },
+        {
+          "name": "server_elapsed_ms",
+          "type": "INTEGER",
+          "nullable": true,
+          "meaning": "有明确回执时的服务处理时长；unknown可NULL。",
+          "unit": "ms",
+          "minimum": 0
+        },
+        {
+          "name": "received_at",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "该规范记录进入快照的接收时间；received_at必须早于snapshot_exclusive才可用于快照统计。",
+          "unit": "UTC RFC3339 second"
+        }
+      ],
+      "checks": [
+        "effect_state<>'confirmed' OR (return_state='succeeded' AND effect_instance_id IS NOT NULL)"
+      ],
+      "description": "同operation可以有重复回执，但只对应一个效果实例。效果confirmed要求succeeded；成功回执不能因后来的轮询被改写成unknown。",
+      "time_basis": "维度按快照读取；事实按各自文档时点与接收截止核对。"
+    },
+    {
+      "name": "syn_tts_request",
+      "label": "播报合成请求",
+      "group": "speech_output",
+      "grain": "一轮中的一次模拟文本合成请求",
+      "primary_key": [
+        "tts_id"
+      ],
+      "unique_keys": [
+        [
+          "turn_id",
+          "attempt_no"
+        ]
+      ],
+      "columns": [
+        {
+          "name": "tts_id",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "TTS请求主键。"
+        },
+        {
+          "name": "turn_id",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "所属轮次。",
+          "references": {
+            "table": "syn_voice_turn",
+            "column": "turn_id"
+          }
+        },
+        {
+          "name": "action_result_id",
+          "type": "TEXT",
+          "nullable": true,
+          "meaning": "回答动作结果时的依据回执；澄清/错误提示可NULL。",
+          "references": {
+            "table": "syn_action_result",
+            "column": "result_id"
+          }
+        },
+        {
+          "name": "attempt_no",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "同轮TTS尝试号。",
+          "minimum": 1
+        },
+        {
+          "name": "response_kind",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "系统答复类型。",
+          "enum": [
+            "answer",
+            "clarification",
+            "error",
+            "status"
+          ]
+        },
+        {
+          "name": "response_text",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "从零构造的系统文本，不来自真实用户或公司。"
+        },
+        {
+          "name": "voice_profile",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "虚构发声配置，不对应真实人物。",
+          "enum": [
+            "synthetic_voice_a",
+            "synthetic_voice_b"
+          ]
+        },
+        {
+          "name": "endpoint_kind",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "合成位置。",
+          "enum": [
+            "edge",
+            "cloud"
+          ]
+        },
+        {
+          "name": "start_offset_ms",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "请求开始偏移。",
+          "unit": "ms",
+          "minimum": 0
+        },
+        {
+          "name": "first_chunk_offset_ms",
+          "type": "INTEGER",
+          "nullable": true,
+          "meaning": "首次可播数据偏移，未产出NULL。",
+          "unit": "ms",
+          "minimum": 0
+        },
+        {
+          "name": "finish_offset_ms",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "请求结束偏移。",
+          "unit": "ms",
+          "minimum": 0
+        },
+        {
+          "name": "wall_ms",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "TTS处理耗时。",
+          "unit": "ms",
+          "minimum": 0
+        },
+        {
+          "name": "simulated_audio_ms",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "模拟语音持续时长；没有音频文件。",
+          "unit": "ms",
+          "minimum": 0
+        },
+        {
+          "name": "outcome",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "合成结果。",
+          "enum": [
+            "succeeded",
+            "failed",
+            "timeout",
+            "cancelled"
+          ]
+        },
+        {
+          "name": "error_code",
+          "type": "TEXT",
+          "nullable": true,
+          "meaning": "模拟错误，无错误NULL。"
+        },
+        {
+          "name": "received_at",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "该规范记录进入快照的接收时间；received_at必须早于snapshot_exclusive才可用于快照统计。",
+          "unit": "UTC RFC3339 second"
+        }
+      ],
+      "checks": [
+        "finish_offset_ms>=start_offset_ms",
+        "wall_ms=finish_offset_ms-start_offset_ms"
+      ],
+      "description": "TTS成功不等于已经播出，也不证明任务执行正确；不保存原始或合成音频。",
+      "time_basis": "维度按快照读取；事实按各自文档时点与接收截止核对。"
+    },
+    {
+      "name": "syn_playback_segment",
+      "label": "播报播放片段",
+      "group": "speech_output",
+      "grain": "一次TTS结果的一段实际模拟播放",
+      "primary_key": [
+        "playback_id"
+      ],
+      "unique_keys": [
+        [
+          "tts_id",
+          "segment_no"
+        ]
+      ],
+      "columns": [
+        {
+          "name": "playback_id",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "播放片段主键。"
+        },
+        {
+          "name": "tts_id",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "所属TTS请求。",
+          "references": {
+            "table": "syn_tts_request",
+            "column": "tts_id"
+          }
+        },
+        {
+          "name": "turn_id",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "所属轮次。",
+          "references": {
+            "table": "syn_voice_turn",
+            "column": "turn_id"
+          }
+        },
+        {
+          "name": "segment_no",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "同TTS中的播放片段号。",
+          "minimum": 1
+        },
+        {
+          "name": "output_zone",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "播放音区。",
+          "enum": [
+            "driver",
+            "front",
+            "all"
+          ]
+        },
+        {
+          "name": "start_offset_ms",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "首个可听播放相对turn起点的偏移。",
+          "unit": "ms",
+          "minimum": 0
+        },
+        {
+          "name": "finish_offset_ms",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "本片段结束偏移。",
+          "unit": "ms",
+          "minimum": 0
+        },
+        {
+          "name": "planned_ms",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "该片段原计划播放时长。",
+          "unit": "ms",
+          "minimum": 0
+        },
+        {
+          "name": "played_ms",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "实际可听时长。",
+          "unit": "ms",
+          "minimum": 0
+        },
+        {
+          "name": "buffering_ms",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "播放中的模拟等待时长。",
+          "unit": "ms",
+          "minimum": 0
+        },
+        {
+          "name": "end_reason",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "结束原因。",
+          "enum": [
+            "completed",
+            "barge_in",
+            "user_stop",
+            "device_error"
+          ]
+        },
+        {
+          "name": "completion_state",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "片段播放是否完整。",
+          "enum": [
+            "complete",
+            "interrupted",
+            "failed"
+          ]
+        },
+        {
+          "name": "volume_pct",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "合成音量百分比。",
+          "unit": "percent",
+          "minimum": 0,
+          "maximum": 100
+        },
+        {
+          "name": "received_at",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "该规范记录进入快照的接收时间；received_at必须早于snapshot_exclusive才可用于快照统计。",
+          "unit": "UTC RFC3339 second"
+        }
+      ],
+      "checks": [
+        "finish_offset_ms >= start_offset_ms",
+        "played_ms <= planned_ms",
+        "finish_offset_ms-start_offset_ms=played_ms+buffering_ms"
+      ],
+      "description": "片段播放中断不自动使已经确认的动作失败。首音指标读取实际播放开始，不能用TTS请求开始替代。",
+      "time_basis": "维度按快照读取；事实按各自文档时点与接收截止核对。"
+    },
+    {
+      "name": "syn_interruption_event",
+      "label": "播报打断事件",
+      "group": "dialogue",
+      "grain": "对某条播放片段的一次打断观测",
+      "primary_key": [
+        "interruption_id"
+      ],
+      "unique_keys": [],
+      "columns": [
+        {
+          "name": "interruption_id",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "打断主键。"
+        },
+        {
+          "name": "session_id",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "所属会话。",
+          "references": {
+            "table": "syn_voice_session",
+            "column": "session_id"
+          }
+        },
+        {
+          "name": "interrupted_turn_id",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "被打断播报的轮次。",
+          "references": {
+            "table": "syn_voice_turn",
+            "column": "turn_id"
+          }
+        },
+        {
+          "name": "playback_id",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "被打断的播放片段。",
+          "references": {
+            "table": "syn_playback_segment",
+            "column": "playback_id"
+          }
+        },
+        {
+          "name": "triggering_turn_id",
+          "type": "TEXT",
+          "nullable": true,
+          "meaning": "新输入触发时的后继轮次；手动停止可NULL。",
+          "references": {
+            "table": "syn_voice_turn",
+            "column": "turn_id"
+          }
+        },
+        {
+          "name": "occurred_at",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "打断发生时点。",
+          "unit": "UTC RFC3339 second"
+        },
+        {
+          "name": "trigger_kind",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "打断触发方式。",
+          "enum": [
+            "new_utterance",
+            "button_stop",
+            "policy"
+          ]
+        },
+        {
+          "name": "offset_in_playback_ms",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "从该播放片段开始到打断的偏移。",
+          "unit": "ms",
+          "minimum": 0
+        },
+        {
+          "name": "stop_latency_ms",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "发出停止请求到播放停止的模拟耗时。",
+          "unit": "ms",
+          "minimum": 0
+        },
+        {
+          "name": "stop_confirmed",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "播放停止是否收到确认。",
+          "unit": "boolean",
+          "enum": [
+            0,
+            1
+          ]
+        },
+        {
+          "name": "action_was_already_confirmed",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "打断时原动作是否已确认；不能因为打断撤销该事实。",
+          "unit": "boolean",
+          "enum": [
+            0,
+            1
+          ]
+        },
+        {
+          "name": "context_policy",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "对原目标上下文的处理。",
+          "enum": [
+            "carry",
+            "replace",
+            "clear"
+          ]
+        },
+        {
+          "name": "received_at",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "该规范记录进入快照的接收时间；received_at必须早于snapshot_exclusive才可用于快照统计。",
+          "unit": "UTC RFC3339 second"
+        }
+      ],
+      "checks": [],
+      "description": "打断是播放层事件，与用户取消动作不同。新的输入可以沿用、替换或清除原目标，不能跨会话串指代。",
+      "time_basis": "维度按快照读取；事实按各自文档时点与接收截止核对。"
+    },
+    {
+      "name": "syn_turn_feedback",
+      "label": "交互反馈",
+      "group": "feedback",
+      "grain": "一条用户轮次的一份可选合成明确反馈",
+      "primary_key": [
+        "feedback_id"
+      ],
+      "unique_keys": [
+        [
+          "turn_id"
+        ]
+      ],
+      "columns": [
+        {
+          "name": "feedback_id",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "反馈主键。"
+        },
+        {
+          "name": "turn_id",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "被评价的轮次。",
+          "references": {
+            "table": "syn_voice_turn",
+            "column": "turn_id"
+          }
+        },
+        {
+          "name": "collected_at",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "反馈发生时点。",
+          "unit": "UTC RFC3339 second"
+        },
+        {
+          "name": "rating",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "明确评价，不反馈不等于满意。",
+          "enum": [
+            "positive",
+            "neutral",
+            "negative"
+          ]
+        },
+        {
+          "name": "reason_category",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "合成反馈分类。",
+          "enum": [
+            "correct",
+            "wrong_action",
+            "slow",
+            "no_response",
+            "stopped",
+            "unclear"
+          ]
+        },
+        {
+          "name": "feedback_source",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "固定人工合成标签，不是真实调研。",
+          "enum": [
+            "synthetic_authored"
+          ]
+        },
+        {
+          "name": "is_explicit",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "固定1；不存在隐式满意推断。",
+          "unit": "boolean",
+          "enum": [
+            0,
+            1
+          ]
+        },
+        {
+          "name": "comment_text",
+          "type": "TEXT",
+          "nullable": true,
+          "meaning": "可选从零构造的简短评语，无则NULL。"
+        },
+        {
+          "name": "rating_scale_revision",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "反馈量表代次。",
+          "minimum": 1
+        },
+        {
+          "name": "received_at",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "该规范记录进入快照的接收时间；received_at必须早于snapshot_exclusive才可用于快照统计。",
+          "unit": "UTC RFC3339 second"
+        },
+        {
+          "name": "quality_state",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "记录质量；默认指标仅采用valid，invalid保留用于质量排查。",
+          "enum": [
+            "valid",
+            "invalid"
+          ]
+        }
+      ],
+      "checks": [
+        "is_explicit=1"
+      ],
+      "description": "满意率只在有可见明确反馈的子集中报告覆盖率。任务执行成功也可能获得负面反馈。",
+      "time_basis": "维度按快照读取；事实按各自文档时点与接收截止核对。"
+    },
+    {
+      "name": "syn_network_observation",
+      "label": "语音链路网络观测",
+      "group": "network",
+      "grain": "一个会话内的网络状态采样",
+      "primary_key": [
+        "network_id"
+      ],
+      "unique_keys": [],
+      "columns": [
+        {
+          "name": "network_id",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "网络观测主键。"
+        },
+        {
+          "name": "session_id",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "所属会话。",
+          "references": {
+            "table": "syn_voice_session",
+            "column": "session_id"
+          }
+        },
+        {
+          "name": "turn_id",
+          "type": "TEXT",
+          "nullable": true,
+          "meaning": "能关联的轮次，无则NULL。",
+          "references": {
+            "table": "syn_voice_turn",
+            "column": "turn_id"
+          }
+        },
+        {
+          "name": "observed_at",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "观测时间。",
+          "unit": "UTC RFC3339 second"
+        },
+        {
+          "name": "transport",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "传输类型。",
+          "enum": [
+            "cellular",
+            "wifi",
+            "none"
+          ]
+        },
+        {
+          "name": "reachability",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "模拟可达性。",
+          "enum": [
+            "online",
+            "offline",
+            "degraded"
+          ]
+        },
+        {
+          "name": "rtt_ms",
+          "type": "INTEGER",
+          "nullable": true,
+          "meaning": "有测量时的RTT，无测量NULL。",
+          "unit": "ms",
+          "minimum": 0
+        },
+        {
+          "name": "loss_permille",
+          "type": "INTEGER",
+          "nullable": true,
+          "meaning": "模拟丢包千分数，无有效测量NULL。",
+          "unit": "permille",
+          "minimum": 0,
+          "maximum": 1000
+        },
+        {
+          "name": "signal_bucket",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "抽象信号档位。",
+          "enum": [
+            "weak",
+            "fair",
+            "good",
+            "not_applicable"
+          ]
+        },
+        {
+          "name": "endpoint_scope",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "观测目标范围，不含真实域名/IP。",
+          "enum": [
+            "voice_cloud",
+            "general"
+          ]
+        },
+        {
+          "name": "network_label",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "合成网络标签，不是SSID或运营商。"
+        },
+        {
+          "name": "received_at",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "该规范记录进入快照的接收时间；received_at必须早于snapshot_exclusive才可用于快照统计。",
+          "unit": "UTC RFC3339 second"
+        },
+        {
+          "name": "quality_state",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "记录质量；默认指标仅采用valid，invalid保留用于质量排查。",
+          "enum": [
+            "valid",
+            "invalid"
+          ]
+        }
+      ],
+      "checks": [],
+      "description": "网络采样与ASR尝试不是一一关系；时间邻近和相关不证明超时必由网络导致。",
+      "time_basis": "维度按快照读取；事实按各自文档时点与接收截止核对。"
+    },
+    {
+      "name": "syn_error_event",
+      "label": "交互链路错误事件",
+      "group": "diagnostics",
+      "grain": "一条可定位到轮次/阶段的合成错误观测",
+      "primary_key": [
+        "error_id"
+      ],
+      "unique_keys": [],
+      "columns": [
+        {
+          "name": "error_id",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "错误事件主键。"
+        },
+        {
+          "name": "session_id",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "所属会话。",
+          "references": {
+            "table": "syn_voice_session",
+            "column": "session_id"
+          }
+        },
+        {
+          "name": "turn_id",
+          "type": "TEXT",
+          "nullable": true,
+          "meaning": "所属轮次；只有会话级错误时NULL。",
+          "references": {
+            "table": "syn_voice_turn",
+            "column": "turn_id"
+          }
+        },
+        {
+          "name": "stage",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "发生阶段。",
+          "enum": [
+            "wakeup",
+            "frontend",
+            "asr",
+            "nlu",
+            "dialogue",
+            "route",
+            "action",
+            "tts",
+            "playback",
+            "network"
+          ]
+        },
+        {
+          "name": "related_record_id",
+          "type": "TEXT",
+          "nullable": true,
+          "meaning": "该阶段对应的合成记录ID；由stage确定表，不能跨阶段随意关联。"
+        },
+        {
+          "name": "occurred_at",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "错误发生时点。",
+          "unit": "UTC RFC3339 second"
+        },
+        {
+          "name": "error_code",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "从零定义的SYN错误码，不是真实厂商DTC。"
+        },
+        {
+          "name": "severity",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "体验影响分级，不是安全评级。",
+          "enum": [
+            "info",
+            "warning",
+            "error"
+          ]
+        },
+        {
+          "name": "retryable",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "当时是否允许重试；不保证后来已重试。",
+          "unit": "boolean",
+          "enum": [
+            0,
+            1
+          ]
+        },
+        {
+          "name": "recovery_action",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "观测到的恢复动作。",
+          "enum": [
+            "none",
+            "retry",
+            "edge_fallback",
+            "clarify",
+            "query_receipt",
+            "stop_playback"
+          ]
+        },
+        {
+          "name": "recovery_state",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "恢复状态，unknown不能写成成功。",
+          "enum": [
+            "not_started",
+            "succeeded",
+            "failed",
+            "unknown"
+          ]
+        },
+        {
+          "name": "detail_text",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "从零构造的错误说明，不包含栈、密钥、URL或公司名称。"
+        },
+        {
+          "name": "received_at",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "该规范记录进入快照的接收时间；received_at必须早于snapshot_exclusive才可用于快照统计。",
+          "unit": "UTC RFC3339 second"
+        },
+        {
+          "name": "quality_state",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "记录质量；默认指标仅采用valid，invalid保留用于质量排查。",
+          "enum": [
+            "valid",
+            "invalid"
+          ]
+        }
+      ],
+      "checks": [],
+      "description": "错误事件可重复反映同一个失败尝试，错误数不能当失败用户轮数；归因必须核对阶段状态与时间。",
+      "time_basis": "维度按快照读取；事实按各自文档时点与接收截止核对。"
+    },
+    {
+      "name": "syn_daily_voice_experience",
+      "label": "语音交互日体验汇总",
+      "group": "marts",
+      "grain": "一个UTC活动日、车辆及各事实冻结build的并列计数",
+      "primary_key": [
+        "activity_date",
+        "vehicle_id",
+        "build_id"
+      ],
+      "unique_keys": [],
+      "columns": [
+        {
+          "name": "activity_date",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "UTC活动日期：轮次按started_at；唤醒按自身started_at；会话数按session.started_at。",
+          "unit": "UTC date"
+        },
+        {
+          "name": "vehicle_id",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "车辆维度。",
+          "references": {
+            "table": "syn_vehicle",
+            "column": "vehicle_id"
+          }
+        },
+        {
+          "name": "build_id",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "事件当时冻结build。",
+          "references": {
+            "table": "syn_software_build",
+            "column": "build_id"
+          }
+        },
+        {
+          "name": "session_count",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "当日开始的有效完整语音会话数。",
+          "unit": "count",
+          "minimum": 0
+        },
+        {
+          "name": "wakeup_attempt_count",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "当日可见valid入口尝试数。",
+          "unit": "count",
+          "minimum": 0
+        },
+        {
+          "name": "wakeup_accepted_count",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "被接受的入口数。",
+          "unit": "count",
+          "minimum": 0
+        },
+        {
+          "name": "wakeup_labeled_count",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "有人工有效唤醒标签的尝试数。",
+          "unit": "count",
+          "minimum": 0
+        },
+        {
+          "name": "wakeup_false_accept_count",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "标签为非有效唤醒但被接受的次数。",
+          "unit": "count",
+          "minimum": 0
+        },
+        {
+          "name": "turn_count",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "当日开始的有效轮次数。",
+          "unit": "count",
+          "minimum": 0
+        },
+        {
+          "name": "eligible_turn_count",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "completed/clarification_pending/rejected/failed/unknown轮次数。",
+          "unit": "count",
+          "minimum": 0
+        },
+        {
+          "name": "task_completed_count",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "final_outcome=completed的轮次数，不代表标签正确或满意。",
+          "unit": "count",
+          "minimum": 0
+        },
+        {
+          "name": "clarification_count",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "final_outcome=clarification_pending的轮次数。",
+          "unit": "count",
+          "minimum": 0
+        },
+        {
+          "name": "failed_turn_count",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "final_outcome=failed次数。",
+          "unit": "count",
+          "minimum": 0
+        },
+        {
+          "name": "unknown_turn_count",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "final_outcome=unknown次数。",
+          "unit": "count",
+          "minimum": 0
+        },
+        {
+          "name": "cancelled_turn_count",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "cancelled次数，排除eligible。",
+          "unit": "count",
+          "minimum": 0
+        },
+        {
+          "name": "no_speech_turn_count",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "no_speech次数，排除eligible。",
+          "unit": "count",
+          "minimum": 0
+        },
+        {
+          "name": "rejected_turn_count",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "rejected次数，进入eligible。",
+          "unit": "count",
+          "minimum": 0
+        },
+        {
+          "name": "completed_latency_sum_ms",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "completed轮次task_latency_ms合计。",
+          "unit": "ms",
+          "minimum": 0
+        },
+        {
+          "name": "completed_latency_samples",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "completed且任务时延非空的样本数。",
+          "unit": "count",
+          "minimum": 0
+        },
+        {
+          "name": "first_audio_latency_sum_ms",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "实际有首音的非空时延合计。",
+          "unit": "ms",
+          "minimum": 0
+        },
+        {
+          "name": "first_audio_samples",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "实际有首音的样本数，不等于completed数。",
+          "unit": "count",
+          "minimum": 0
+        },
+        {
+          "name": "asr_labeled_turn_count",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "eligible且reference_text非空的轮次数，含无预测的失败轮。",
+          "unit": "count",
+          "minimum": 0
+        },
+        {
+          "name": "asr_exact_match_count",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "上述标签轮中最终选中归一化文本与参考归一化完全一致数。",
+          "unit": "count",
+          "minimum": 0
+        },
+        {
+          "name": "intent_labeled_turn_count",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "eligible且reference_intent_id非空的轮次数，含没有预测的失败轮。",
+          "unit": "count",
+          "minimum": 0
+        },
+        {
+          "name": "intent_match_count",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "上述标签轮中最终采用预测意图与人工标签相等数。",
+          "unit": "count",
+          "minimum": 0
+        },
+        {
+          "name": "feedback_count",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "当日轮次获得可见valid明确反馈的数目。",
+          "unit": "count",
+          "minimum": 0
+        },
+        {
+          "name": "positive_feedback_count",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "其中positive反馈数。",
+          "unit": "count",
+          "minimum": 0
+        },
+        {
+          "name": "playback_interruption_count",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "当日轮次的实际播放打断事件数。",
+          "unit": "count",
+          "minimum": 0
+        },
+        {
+          "name": "snapshot_exclusive",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "本次汇总的排他快照上界。",
+          "unit": "UTC RFC3339 second"
+        }
+      ],
+      "checks": [
+        "wakeup_accepted_count<=wakeup_attempt_count",
+        "wakeup_false_accept_count<=wakeup_labeled_count",
+        "eligible_turn_count=task_completed_count+clarification_count+failed_turn_count+unknown_turn_count+rejected_turn_count",
+        "turn_count=eligible_turn_count+cancelled_turn_count+no_speech_turn_count",
+        "asr_exact_match_count<=asr_labeled_turn_count",
+        "intent_match_count<=intent_labeled_turn_count",
+        "positive_feedback_count<=feedback_count"
+      ],
+      "description": "不同事实分别按所属轮次或独立入口日期聚合，不能将attempt/候选/槽位直接联接后重复SUM。轮次跨午夜按本轮开始日，阶段后续日期不能改归属。",
+      "time_basis": "activity_date按各指标明确的起点；轮次及阶段按turn.started_at日期。"
+    },
+    {
+      "name": "syn_daily_stage_latency",
+      "label": "语音阶段日尝试汇总",
+      "group": "marts",
+      "grain": "一个轮次归属日、阶段、端云位置与build的统计",
+      "primary_key": [
+        "turn_date",
+        "stage",
+        "endpoint_kind",
+        "build_id"
+      ],
+      "unique_keys": [],
+      "columns": [
+        {
+          "name": "turn_date",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "voice_turn.started_at的UTC日期。",
+          "unit": "UTC date"
+        },
+        {
+          "name": "stage",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "可比的处理尝试阶段，VAD输入时长不混入。",
+          "enum": [
+            "asr",
+            "nlu",
+            "route",
+            "action",
+            "tts"
+          ]
+        },
+        {
+          "name": "endpoint_kind",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "实际处理位置。",
+          "enum": [
+            "edge",
+            "cloud"
+          ]
+        },
+        {
+          "name": "build_id",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "轮次会话冻结build。",
+          "references": {
+            "table": "syn_software_build",
+            "column": "build_id"
+          }
+        },
+        {
+          "name": "attempt_count",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "该阶段所有可见尝试数。",
+          "unit": "count",
+          "minimum": 0
+        },
+        {
+          "name": "distinct_turn_count",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "这些尝试对应的去重轮次数。",
+          "unit": "count",
+          "minimum": 0
+        },
+        {
+          "name": "succeeded_attempt_count",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "成功尝试数；route selected按成功记，action只看明确成功回执。",
+          "unit": "count",
+          "minimum": 0
+        },
+        {
+          "name": "failed_attempt_count",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "明确失败尝试数。",
+          "unit": "count",
+          "minimum": 0
+        },
+        {
+          "name": "timeout_attempt_count",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "超时尝试数。",
+          "unit": "count",
+          "minimum": 0
+        },
+        {
+          "name": "cancelled_attempt_count",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "取消尝试数。",
+          "unit": "count",
+          "minimum": 0
+        },
+        {
+          "name": "unknown_attempt_count",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "动作回执未知等未定状态数。",
+          "unit": "count",
+          "minimum": 0
+        },
+        {
+          "name": "ambiguous_attempt_count",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "NLU歧义次数，不能算技术失败。",
+          "minimum": 0,
+          "unit": "count"
+        },
+        {
+          "name": "rejected_attempt_count",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "路由/动作被策略或前提拒绝的次数，不与执行失败混同。",
+          "minimum": 0,
+          "unit": "count"
+        },
+        {
+          "name": "latency_sum_ms",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "ASR/NLU/route/TTS用wall_ms；action用提交到最新明确回执的offset差；非空样本合计，不把unknown填0。",
+          "unit": "ms",
+          "minimum": 0
+        },
+        {
+          "name": "latency_samples",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "非空耗时样本数。",
+          "unit": "count",
+          "minimum": 0
+        },
+        {
+          "name": "latency_min_ms",
+          "type": "INTEGER",
+          "nullable": true,
+          "meaning": "非空耗时最小值，无样本NULL。",
+          "unit": "ms",
+          "minimum": 0
+        },
+        {
+          "name": "latency_max_ms",
+          "type": "INTEGER",
+          "nullable": true,
+          "meaning": "非空耗时最大值，无样本NULL。",
+          "unit": "ms",
+          "minimum": 0
+        },
+        {
+          "name": "queued_sum_ms",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "存在排队字段的ASR/NLU排队耗时合计，其他阶段0。",
+          "unit": "ms",
+          "minimum": 0
+        },
+        {
+          "name": "snapshot_exclusive",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "快照排他上界。",
+          "unit": "UTC RFC3339 second"
+        }
+      ],
+      "checks": [
+        "attempt_count=succeeded_attempt_count+failed_attempt_count+timeout_attempt_count+cancelled_attempt_count+unknown_attempt_count+ambiguous_attempt_count+rejected_attempt_count",
+        "distinct_turn_count<=attempt_count",
+        "latency_samples<=attempt_count"
+      ],
+      "description": "用于尝试负载和耗时均值，不能把attempt成功率当请求成功率；P95必须读取原始符合条件样本，不平均分组P95。",
+      "time_basis": "所有阶段按所属turn的started_at归属日。"
+    },
+    {
+      "name": "syn_daily_intent_outcome",
+      "label": "已选意图日结果汇总",
+      "group": "marts",
+      "grain": "一个轮次归属日、最终预测意图与build的统计",
+      "primary_key": [
+        "turn_date",
+        "intent_id",
+        "build_id"
+      ],
+      "unique_keys": [],
+      "columns": [
+        {
+          "name": "turn_date",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "voice_turn.started_at的UTC日期。",
+          "unit": "UTC date"
+        },
+        {
+          "name": "intent_id",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "最终被对话管理采用的预测意图，不是人工标签。",
+          "references": {
+            "table": "syn_intent_catalog",
+            "column": "intent_id"
+          }
+        },
+        {
+          "name": "capability_id",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "预测意图所属能力。",
+          "references": {
+            "table": "syn_voice_capability",
+            "column": "capability_id"
+          }
+        },
+        {
+          "name": "build_id",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "会话冻结build。",
+          "references": {
+            "table": "syn_software_build",
+            "column": "build_id"
+          }
+        },
+        {
+          "name": "selected_turn_count",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "有该最终预测意图的轮次数。",
+          "unit": "count",
+          "minimum": 0
+        },
+        {
+          "name": "task_completed_count",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "其中任务completed数。",
+          "unit": "count",
+          "minimum": 0
+        },
+        {
+          "name": "clarification_count",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "其中需要澄清数。",
+          "unit": "count",
+          "minimum": 0
+        },
+        {
+          "name": "rejected_count",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "其中被拒绝数。",
+          "unit": "count",
+          "minimum": 0
+        },
+        {
+          "name": "failed_count",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "其中失败数。",
+          "unit": "count",
+          "minimum": 0
+        },
+        {
+          "name": "cancelled_count",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "其中取消数。",
+          "unit": "count",
+          "minimum": 0
+        },
+        {
+          "name": "unknown_count",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "其中结果未知数。",
+          "unit": "count",
+          "minimum": 0
+        },
+        {
+          "name": "no_speech_count",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "一般为0，保留最终状态分桶完整性。",
+          "unit": "count",
+          "minimum": 0
+        },
+        {
+          "name": "logical_action_count",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "关联的去重operation_key数，不把重试当新动作。",
+          "unit": "count",
+          "minimum": 0
+        },
+        {
+          "name": "confirmed_effect_count",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "其中有可见confirmed效果的去重operation_key数。",
+          "unit": "count",
+          "minimum": 0
+        },
+        {
+          "name": "feedback_count",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "可见明确反馈数。",
+          "unit": "count",
+          "minimum": 0
+        },
+        {
+          "name": "positive_feedback_count",
+          "type": "INTEGER",
+          "nullable": false,
+          "meaning": "positive数。",
+          "unit": "count",
+          "minimum": 0
+        },
+        {
+          "name": "snapshot_exclusive",
+          "type": "TEXT",
+          "nullable": false,
+          "meaning": "快照排他上界。",
+          "unit": "UTC RFC3339 second"
+        }
+      ],
+      "checks": [
+        "selected_turn_count=task_completed_count+clarification_count+rejected_count+failed_count+cancelled_count+unknown_count+no_speech_count",
+        "confirmed_effect_count<=logical_action_count",
+        "positive_feedback_count<=feedback_count"
+      ],
+      "description": "仅包含已有最终预测意图的轮次，不能把该表行数当全部语音输入，也不能单用它评估意图准确率（无预测的标签轮仍应进入正确率分母）。",
+      "time_basis": "turn_date；分类维度是最终预测意图。"
+    }
+  ],
+  "documents": [
+    {
+      "id": "doc-overview",
+      "file": "documents/overview.md",
+      "title": "合成范围与隐私来源",
+      "purpose": "无音频、真实用户、品牌、VIN、真实地理或公司术语；只分析人工合成交互日志。"
+    },
+    {
+      "id": "doc-identity-and-version",
+      "file": "documents/identity-and-version.md",
+      "title": "身份、版本与能力",
+      "purpose": "设备/会话/build/策略/识别模型/能力/意图的边界及历史冻结。"
+    },
+    {
+      "id": "doc-wake-activation",
+      "file": "documents/wake-activation.md",
+      "title": "唤醒与入口决策",
+      "purpose": "候选、接受、人工标签子集、错误接受、按键/连续入口。"
+    },
+    {
+      "id": "doc-vad-segmentation",
+      "file": "documents/vad-segmentation.md",
+      "title": "前端分段与输入结束",
+      "purpose": "模拟VAD片段、输入时长、截断、静音，不声称声学准确率。"
+    },
+    {
+      "id": "doc-asr-candidates",
+      "file": "documents/asr-candidates.md",
+      "title": "端云识别与候选选择",
+      "purpose": "attempt、候选rank、最终采用、参考文本标签、归一化与覆盖率。"
+    },
+    {
+      "id": "doc-nlu-intents-slots",
+      "file": "documents/nlu-intents-slots.md",
+      "title": "意图、槽位与归一化",
+      "purpose": "预测与reference分开，缺槽/歧义/越界、上下文来源，不拿预测当真值。"
+    },
+    {
+      "id": "doc-dialogue-context",
+      "file": "documents/dialogue-context.md",
+      "title": "多轮、澄清、否定与换目标",
+      "purpose": "parent_turn、状态迁移、未回答不默认、取消与打断分离。"
+    },
+    {
+      "id": "doc-skill-routing",
+      "file": "documents/skill-routing.md",
+      "title": "能力与技能路由",
+      "purpose": "route selected不是执行成功，端云回退和最终路由。"
+    },
+    {
+      "id": "doc-action-receipts",
+      "file": "documents/action-receipts.md",
+      "title": "动作提交、效果与幂等",
+      "purpose": "accepted/succeeded/effect confirmed分层；unknown先查证；重放不新增动作。"
+    },
+    {
+      "id": "doc-tts-playback",
+      "file": "documents/tts-playback.md",
+      "title": "合成播报、首音与打断",
+      "purpose": "TTS成功、播放完成、任务完成分别；首音时点来自playback。"
+    },
+    {
+      "id": "doc-feedback-outcome",
+      "file": "documents/feedback-outcome.md",
+      "title": "任务终态与用户反馈",
+      "purpose": "completed不保证识别正确或满意；反馈覆盖率与正评率。"
+    },
+    {
+      "id": "doc-network-retries",
+      "file": "documents/network-retries.md",
+      "title": "网络、重试与失败归因",
+      "purpose": "网络采样不是因果；同轮多attempt与回退；首成功/最终状态。"
+    },
+    {
+      "id": "doc-time-quality",
+      "file": "documents/time-quality.md",
+      "title": "时间、质量与快照",
+      "purpose": "UTC秒日志、单调ms、跨午夜、received_at、质量过滤和标签缺失。"
+    },
+    {
+      "id": "doc-metrics-analysis",
+      "file": "documents/metrics-analysis.md",
+      "title": "指标公式与分析口径",
+      "purpose": "轮次/attempt/候选/逻辑动作分母、加权、原始样本P95、比较限制。"
+    }
+  ],
+  "metrics": [
+    {
+      "id": "active_voice_vehicles",
+      "name": "语音活跃车辆数",
+      "aliases": [
+        "语音活跃设备"
+      ],
+      "tables": [
+        "syn_voice_turn",
+        "syn_voice_session",
+        "syn_vehicle"
+      ],
+      "numerator": "COUNT(DISTINCT vehicle_id)",
+      "denominator": null,
+      "unit": "vehicle",
+      "empty_or_zero_rule": "比率分母为0返回NULL；计数无符合记录返回0；均值/P95无样本返回NULL。",
+      "scope": "非实验且遥测授权车辆；有效完整会话及valid轮次；业务时点和received_at均早于排他快照；按turn.started_at UTC半开区间。",
+      "limitations": "跨日期/build去重不能直接相加。"
+    },
+    {
+      "id": "valid_voice_turns",
+      "name": "有效语音交互轮次",
+      "aliases": [
+        "语音轮次数"
+      ],
+      "tables": [
+        "syn_voice_turn"
+      ],
+      "numerator": "COUNT(*)",
+      "denominator": null,
+      "unit": "turn",
+      "empty_or_zero_rule": "比率分母为0返回NULL；计数无符合记录返回0；均值/P95无样本返回NULL。",
+      "scope": "非实验且遥测授权车辆；有效完整会话及valid轮次；业务时点和received_at均早于排他快照；按turn.started_at UTC半开区间。",
+      "limitations": "不把阶段attempt/候选/槽位当新用户请求。"
+    },
+    {
+      "id": "wakeup_acceptance_rate",
+      "name": "入口接受率",
+      "aliases": [
+        "唤醒接受率"
+      ],
+      "tables": [
+        "syn_wakeup_attempt"
+      ],
+      "numerator": "accepted=1次数",
+      "denominator": "全部可见valid入口次数",
+      "unit": "ratio",
+      "empty_or_zero_rule": "比率分母为0返回NULL；计数无符合记录返回0；均值/P95无样本返回NULL。",
+      "scope": "按wakeup.started_at，默认非实验授权车辆。",
+      "limitations": "不是唤醒正确率；按键与唤醒词应分组。"
+    },
+    {
+      "id": "wakeup_false_accept_rate",
+      "name": "有标签入口错误接受率",
+      "aliases": [
+        "合成误接受率"
+      ],
+      "tables": [
+        "syn_wakeup_attempt"
+      ],
+      "numerator": "reference_is_intended=0且accepted=1次数",
+      "denominator": "reference_is_intended=0次数",
+      "unit": "ratio",
+      "empty_or_zero_rule": "比率分母为0返回NULL；计数无符合记录返回0；均值/P95无样本返回NULL。",
+      "scope": "只取人工合成标签非空的valid入口。",
+      "limitations": "不代表真实音频误唤醒率；必须报告标签覆盖率。"
+    },
+    {
+      "id": "wakeup_label_coverage",
+      "name": "入口标签覆盖率",
+      "aliases": [
+        "唤醒标签覆盖率"
+      ],
+      "tables": [
+        "syn_wakeup_attempt"
+      ],
+      "numerator": "reference_is_intended非空次数",
+      "denominator": "全部可见valid入口次数",
+      "unit": "ratio",
+      "empty_or_zero_rule": "比率分母为0返回NULL；计数无符合记录返回0；均值/P95无样本返回NULL。",
+      "scope": "按wakeup.started_at。",
+      "limitations": "无标签不能被当作负标签。"
+    },
+    {
+      "id": "task_completion_rate",
+      "name": "语音任务达成率",
+      "aliases": [
+        "语音任务成功率"
+      ],
+      "tables": [
+        "syn_voice_turn",
+        "syn_daily_voice_experience"
+      ],
+      "numerator": "task_completed_count",
+      "denominator": "eligible_turn_count",
+      "unit": "ratio",
+      "empty_or_zero_rule": "比率分母为0返回NULL；计数无符合记录返回0；均值/P95无样本返回NULL。",
+      "scope": "非实验且遥测授权车辆；有效完整会话及valid轮次；业务时点和received_at均早于排他快照；按turn.started_at UTC半开区间。 eligible=completed/clarification_pending/rejected/failed/unknown，排除cancelled/no_speech。 当前日表SQL仅接受:start与:end均为UTC整日边界的半开区间；小时或其他非整日范围必须从原始事实按同口径重算，不能截去时分秒。",
+      "limitations": "是执行链终态，不证明意图正确、播报成功或用户满意。 日表SQL以HAVING核对整日参数，不合要求时不返回统计行，不把它解释成零样本。"
+    },
+    {
+      "id": "clarification_rate",
+      "name": "请求澄清比例",
+      "aliases": [
+        "缺槽澄清率"
+      ],
+      "tables": [
+        "syn_voice_turn",
+        "syn_daily_voice_experience"
+      ],
+      "numerator": "clarification_count",
+      "denominator": "eligible_turn_count",
+      "unit": "ratio",
+      "empty_or_zero_rule": "比率分母为0返回NULL；计数无符合记录返回0；均值/P95无样本返回NULL。",
+      "scope": "非实验且遥测授权车辆；有效完整会话及valid轮次；业务时点和received_at均早于排他快照；按turn.started_at UTC半开区间。 当前日表SQL仅接受:start与:end均为UTC整日边界的半开区间；小时或其他非整日范围必须从原始事实按同口径重算，不能截去时分秒。",
+      "limitations": "澄清不是技术失败，但本轮尚未完成目标。 日表SQL以HAVING核对整日参数，不合要求时不返回统计行，不把它解释成零样本。"
+    },
+    {
+      "id": "asr_exact_match_rate",
+      "name": "有标签转写一致率",
+      "aliases": [
+        "合成转写一致率"
+      ],
+      "tables": [
+        "syn_voice_turn",
+        "syn_asr_hypothesis",
+        "syn_daily_voice_experience"
+      ],
+      "numerator": "asr_exact_match_count",
+      "denominator": "asr_labeled_turn_count",
+      "unit": "ratio",
+      "empty_or_zero_rule": "比率分母为0返回NULL；计数无符合记录返回0；均值/P95无样本返回NULL。",
+      "scope": "非实验且遥测授权车辆；有效完整会话及valid轮次；业务时点和received_at均早于排他快照；按turn.started_at UTC半开区间。 eligible且reference_text非空，未生成最终预测也保留在分母。 当前日表SQL仅接受:start与:end均为UTC整日边界的半开区间；小时或其他非整日范围必须从原始事实按同口径重算，不能截去时分秒。",
+      "limitations": "本包只定义人工合成标签子集的规范化逐字一致，未定义CER/WER，不代表真实声学准确率。 日表SQL以HAVING核对整日参数，不合要求时不返回统计行，不把它解释成零样本。"
+    },
+    {
+      "id": "asr_label_coverage",
+      "name": "转写标签覆盖率",
+      "aliases": [
+        "ASR标签覆盖率"
+      ],
+      "tables": [
+        "syn_daily_voice_experience"
+      ],
+      "numerator": "asr_labeled_turn_count",
+      "denominator": "eligible_turn_count",
+      "unit": "ratio",
+      "empty_or_zero_rule": "比率分母为0返回NULL；计数无符合记录返回0；均值/P95无样本返回NULL。",
+      "scope": "非实验且遥测授权车辆；有效完整会话及valid轮次；业务时点和received_at均早于排他快照；按turn.started_at UTC半开区间。 当前日表SQL仅接受:start与:end均为UTC整日边界的半开区间；小时或其他非整日范围必须从原始事实按同口径重算，不能截去时分秒。",
+      "limitations": "预测不能填充缺失人工标签。 日表SQL以HAVING核对整日参数，不合要求时不返回统计行，不把它解释成零样本。"
+    },
+    {
+      "id": "intent_match_rate",
+      "name": "有标签意图一致率",
+      "aliases": [
+        "合成意图准确率"
+      ],
+      "tables": [
+        "syn_voice_turn",
+        "syn_nlu_attempt",
+        "syn_daily_voice_experience"
+      ],
+      "numerator": "intent_match_count",
+      "denominator": "reference_intent_id非空的eligible轮次数",
+      "unit": "ratio",
+      "empty_or_zero_rule": "比率分母为0返回NULL；计数无符合记录返回0；均值/P95无样本返回NULL。",
+      "scope": "非实验且遥测授权车辆；有效完整会话及valid轮次；业务时点和received_at均早于排他快照；按turn.started_at UTC半开区间。 reference_intent_id非空，未预测也保留在分母。 当前日表SQL仅接受:start与:end均为UTC整日边界的半开区间；小时或其他非整日范围必须从原始事实按同口径重算，不能截去时分秒。 eligible仅含completed、clarification_pending、rejected、failed、unknown；排除cancelled与no_speech。",
+      "limitations": "只比较最终采用意图，不把最高置信或第一个成功结果当最终结果。 日表SQL以HAVING核对整日参数，不合要求时不返回统计行，不把它解释成零样本。"
+    },
+    {
+      "id": "intent_label_coverage",
+      "name": "意图标签覆盖率",
+      "aliases": [
+        "NLU标签覆盖率"
+      ],
+      "tables": [
+        "syn_daily_voice_experience"
+      ],
+      "numerator": "intent_labeled_turn_count",
+      "denominator": "eligible_turn_count",
+      "unit": "ratio",
+      "empty_or_zero_rule": "比率分母为0返回NULL；计数无符合记录返回0；均值/P95无样本返回NULL。",
+      "scope": "非实验且遥测授权车辆；有效完整会话及valid轮次；业务时点和received_at均早于排他快照；按turn.started_at UTC半开区间。 当前日表SQL仅接受:start与:end均为UTC整日边界的半开区间；小时或其他非整日范围必须从原始事实按同口径重算，不能截去时分秒。",
+      "limitations": "没有标签的轮次不进入一致率。 日表SQL以HAVING核对整日参数，不合要求时不返回统计行，不把它解释成零样本。"
+    },
+    {
+      "id": "asr_retry_turn_rate",
+      "name": "ASR重试轮次占比",
+      "aliases": [
+        "识别重试率"
+      ],
+      "tables": [
+        "syn_asr_attempt",
+        "syn_voice_turn"
+      ],
+      "numerator": "存在attempt_no>1的去重turn数",
+      "denominator": "有ASR尝试的去重turn数",
+      "unit": "ratio",
+      "empty_or_zero_rule": "比率分母为0返回NULL；计数无符合记录返回0；均值/P95无样本返回NULL。",
+      "scope": "非实验且遥测授权车辆；有效完整会话及valid轮次；业务时点和received_at均早于排他快照；按turn.started_at UTC半开区间。",
+      "limitations": "一次轮次多次重试只计一次分子。"
+    },
+    {
+      "id": "edge_fallback_turn_rate",
+      "name": "端侧回退轮次占比",
+      "aliases": [
+        "端云回退率"
+      ],
+      "tables": [
+        "syn_asr_attempt",
+        "syn_voice_turn"
+      ],
+      "numerator": "出现fallback_reason非none且endpoint=edge的去重turn数",
+      "denominator": "有ASR尝试的去重turn数",
+      "unit": "ratio",
+      "empty_or_zero_rule": "比率分母为0返回NULL；计数无符合记录返回0；均值/P95无样本返回NULL。",
+      "scope": "非实验且遥测授权车辆；有效完整会话及valid轮次；业务时点和received_at均早于排他快照；按turn.started_at UTC半开区间。",
+      "limitations": "回退发生不等于回退成功，仍核对final_outcome。"
+    },
+    {
+      "id": "completed_task_mean_ms",
+      "name": "已达成任务平均响应耗时",
+      "aliases": [
+        "任务平均响应耗时"
+      ],
+      "tables": [
+        "syn_daily_voice_experience"
+      ],
+      "numerator": "SUM(completed_latency_sum_ms)",
+      "denominator": "SUM(completed_latency_samples)",
+      "unit": "ms",
+      "empty_or_zero_rule": "比率分母为0返回NULL；计数无符合记录返回0；均值/P95无样本返回NULL。",
+      "scope": "非实验且遥测授权车辆；有效完整会话及valid轮次；业务时点和received_at均早于排他快照；按turn.started_at UTC半开区间。 只取completed。 当前日表SQL仅接受:start与:end均为UTC整日边界的半开区间；小时或其他非整日范围必须从原始事实按同口径重算，不能截去时分秒。",
+      "limitations": "从用户输入结束计，不包含input_ms；不能平均分组均值。 日表SQL以HAVING核对整日参数，不合要求时不返回统计行，不把它解释成零样本。"
+    },
+    {
+      "id": "completed_task_p95_ms",
+      "name": "已达成任务P95耗时",
+      "aliases": [
+        "任务响应P95"
+      ],
+      "tables": [
+        "syn_voice_turn"
+      ],
+      "numerator": "原始completed task_latency_ms最近秩ceil(0.95*N)值",
+      "denominator": null,
+      "unit": "ms",
+      "empty_or_zero_rule": "比率分母为0返回NULL；计数无符合记录返回0；均值/P95无样本返回NULL。",
+      "scope": "非实验且遥测授权车辆；有效完整会话及valid轮次；业务时点和received_at均早于排他快照；按turn.started_at UTC半开区间。 只取completed且非空样本。",
+      "limitations": "原始样本最近秩，不平均组P95，不用阶段时长相加代替。"
+    },
+    {
+      "id": "first_audio_p95_ms",
+      "name": "有首音轮次P95时延",
+      "aliases": [
+        "首音P95"
+      ],
+      "tables": [
+        "syn_voice_turn",
+        "syn_playback_segment"
+      ],
+      "numerator": "原始first_audio_latency_ms最近秩ceil(0.95*N)值",
+      "denominator": null,
+      "unit": "ms",
+      "empty_or_zero_rule": "比率分母为0返回NULL；计数无符合记录返回0；均值/P95无样本返回NULL。",
+      "scope": "非实验且遥测授权车辆；有效完整会话及valid轮次；业务时点和received_at均早于排他快照；按turn.started_at UTC半开区间。 仅实际有首音者，另报告首音覆盖率。",
+      "limitations": "首音来自playback开始，不是TTS请求开始或首包；澄清提示也可有首音。"
+    },
+    {
+      "id": "first_audio_coverage",
+      "name": "首音覆盖率",
+      "aliases": [
+        "有播报轮次占比"
+      ],
+      "tables": [
+        "syn_daily_voice_experience"
+      ],
+      "numerator": "first_audio_samples",
+      "denominator": "turn_count",
+      "unit": "ratio",
+      "empty_or_zero_rule": "比率分母为0返回NULL；计数无符合记录返回0；均值/P95无样本返回NULL。",
+      "scope": "非实验且遥测授权车辆；有效完整会话及valid轮次；业务时点和received_at均早于排他快照；按turn.started_at UTC半开区间。 当前日表SQL仅接受:start与:end均为UTC整日边界的半开区间；小时或其他非整日范围必须从原始事实按同口径重算，不能截去时分秒。",
+      "limitations": "无首音不能填0混入时延分布。 日表SQL以HAVING核对整日参数，不合要求时不返回统计行，不把它解释成零样本。"
+    },
+    {
+      "id": "stage_attempt_success_rate",
+      "name": "阶段尝试成功率",
+      "aliases": [
+        "阶段成功率"
+      ],
+      "tables": [
+        "syn_daily_stage_latency"
+      ],
+      "numerator": "succeeded_attempt_count",
+      "denominator": "attempt_count",
+      "unit": "ratio",
+      "empty_or_zero_rule": "比率分母为0返回NULL；计数无符合记录返回0；均值/P95无样本返回NULL。",
+      "scope": "非实验且遥测授权车辆；有效完整会话及valid轮次；业务时点和received_at均早于排他快照；按turn.started_at UTC半开区间。 必须限定stage并分端云。 当前日表SQL仅接受:start与:end均为UTC整日边界的半开区间；小时或其他非整日范围必须从原始事实按同口径重算，不能截去时分秒。",
+      "limitations": "含timeout/cancelled/unknown在attempt分母；不是用户任务成功率。 日表SQL以HAVING核对整日参数，不合要求时不返回统计行，不把它解释成零样本。"
+    },
+    {
+      "id": "stage_mean_ms",
+      "name": "阶段尝试平均耗时",
+      "aliases": [
+        "阶段平均耗时"
+      ],
+      "tables": [
+        "syn_daily_stage_latency"
+      ],
+      "numerator": "SUM(latency_sum_ms)",
+      "denominator": "SUM(latency_samples)",
+      "unit": "ms",
+      "empty_or_zero_rule": "比率分母为0返回NULL；计数无符合记录返回0；均值/P95无样本返回NULL。",
+      "scope": "非实验且遥测授权车辆；有效完整会话及valid轮次；业务时点和received_at均早于排他快照；按turn.started_at UTC半开区间。 按stage/endpoint解释。 当前日表SQL仅接受:start与:end均为UTC整日边界的半开区间；小时或其他非整日范围必须从原始事实按同口径重算，不能截去时分秒。",
+      "limitations": "只对非空耗时样本，未知耗时不填0。 日表SQL以HAVING核对整日参数，不合要求时不返回统计行，不把它解释成零样本。"
+    },
+    {
+      "id": "logical_effect_confirmation_rate",
+      "name": "逻辑动作效果确认率",
+      "aliases": [
+        "效果确认率"
+      ],
+      "tables": [
+        "syn_action_invocation",
+        "syn_action_result"
+      ],
+      "numerator": "有最新明确confirmed效果的去重operation_key数",
+      "denominator": "去重operation_key数",
+      "unit": "ratio",
+      "empty_or_zero_rule": "比率分母为0返回NULL；计数无符合记录返回0；均值/P95无样本返回NULL。",
+      "scope": "非实验且遥测授权车辆；有效完整会话及valid轮次；业务时点和received_at均早于排他快照；按turn.started_at UTC半开区间。",
+      "limitations": "重复回执和传输重试不增加动作数；accepted不等于效果确认。"
+    },
+    {
+      "id": "unknown_action_rate",
+      "name": "逻辑动作结果未知占比",
+      "aliases": [
+        "动作未知率"
+      ],
+      "tables": [
+        "syn_action_invocation",
+        "syn_action_result"
+      ],
+      "numerator": "最新可见状态unknown或尚无回执的operation_key数",
+      "denominator": "全部operation_key数",
+      "unit": "ratio",
+      "empty_or_zero_rule": "比率分母为0返回NULL；计数无符合记录返回0；均值/P95无样本返回NULL。",
+      "scope": "非实验且遥测授权车辆；有效完整会话及valid轮次；业务时点和received_at均早于排他快照；按turn.started_at UTC半开区间。",
+      "limitations": "不能把unknown改成失败或重做新动作。"
+    },
+    {
+      "id": "tts_success_rate",
+      "name": "TTS尝试成功率",
+      "aliases": [
+        "播报合成成功率"
+      ],
+      "tables": [
+        "syn_tts_request"
+      ],
+      "numerator": "outcome=succeeded次数",
+      "denominator": "所有TTS尝试次数",
+      "unit": "ratio",
+      "empty_or_zero_rule": "比率分母为0返回NULL；计数无符合记录返回0；均值/P95无样本返回NULL。",
+      "scope": "非实验且遥测授权车辆；有效完整会话及valid轮次；业务时点和received_at均早于排他快照；按turn.started_at UTC半开区间。",
+      "limitations": "不等于实际播放完成或任务达成。"
+    },
+    {
+      "id": "playback_completion_rate",
+      "name": "播报片段完成率",
+      "aliases": [
+        "播报完成率"
+      ],
+      "tables": [
+        "syn_playback_segment"
+      ],
+      "numerator": "completion_state=complete片段数",
+      "denominator": "全部播放片段数",
+      "unit": "ratio",
+      "empty_or_zero_rule": "比率分母为0返回NULL；计数无符合记录返回0；均值/P95无样本返回NULL。",
+      "scope": "非实验且遥测授权车辆；有效完整会话及valid轮次；业务时点和received_at均早于排他快照；按turn.started_at UTC半开区间。",
+      "limitations": "用户打断单独列出，不直接算作原动作失败。"
+    },
+    {
+      "id": "feedback_coverage",
+      "name": "明确反馈覆盖率",
+      "aliases": [
+        "反馈覆盖率"
+      ],
+      "tables": [
+        "syn_daily_voice_experience"
+      ],
+      "numerator": "feedback_count",
+      "denominator": "turn_count",
+      "unit": "ratio",
+      "empty_or_zero_rule": "比率分母为0返回NULL；计数无符合记录返回0；均值/P95无样本返回NULL。",
+      "scope": "非实验且遥测授权车辆；有效完整会话及valid轮次；业务时点和received_at均早于排他快照；按turn.started_at UTC半开区间。 当前日表SQL仅接受:start与:end均为UTC整日边界的半开区间；小时或其他非整日范围必须从原始事实按同口径重算，不能截去时分秒。",
+      "limitations": "没有反馈不是满意或不满意。 日表SQL以HAVING核对整日参数，不合要求时不返回统计行，不把它解释成零样本。"
+    },
+    {
+      "id": "positive_feedback_rate",
+      "name": "有反馈轮次正评率",
+      "aliases": [
+        "合成正评率"
+      ],
+      "tables": [
+        "syn_daily_voice_experience"
+      ],
+      "numerator": "positive_feedback_count",
+      "denominator": "feedback_count",
+      "unit": "ratio",
+      "empty_or_zero_rule": "比率分母为0返回NULL；计数无符合记录返回0；均值/P95无样本返回NULL。",
+      "scope": "非实验且遥测授权车辆；有效完整会话及valid轮次；业务时点和received_at均早于排他快照；按turn.started_at UTC半开区间。 当前日表SQL仅接受:start与:end均为UTC整日边界的半开区间；小时或其他非整日范围必须从原始事实按同口径重算，不能截去时分秒。",
+      "limitations": "仅人工合成反馈子集，必须同时报告覆盖率。 日表SQL以HAVING核对整日参数，不合要求时不返回统计行，不把它解释成零样本。"
+    },
+    {
+      "id": "interrupted_playback_rate",
+      "name": "播报片段被打断比例",
+      "aliases": [
+        "播报打断率"
+      ],
+      "tables": [
+        "syn_playback_segment"
+      ],
+      "numerator": "completion_state=interrupted片段数",
+      "denominator": "全部播放片段数",
+      "unit": "ratio",
+      "empty_or_zero_rule": "比率分母为0返回NULL；计数无符合记录返回0；均值/P95无样本返回NULL。",
+      "scope": "非实验且遥测授权车辆；有效完整会话及valid轮次；业务时点和received_at均早于排他快照；按turn.started_at UTC半开区间。",
+      "limitations": "新输入打断、按钮停止和设备错误分别解释。"
+    }
+  ],
+  "boundary_requirements": [
+    "无标签与标签覆盖不足",
+    "有效唤醒误接受/漏接受",
+    "静音输入与主动取消",
+    "ASR云超时后端侧回退成功",
+    "同ASR多候选最终选择不一定rank1",
+    "NLU首次歧义后最终采用结果",
+    "必填槽位缺失与上下文补槽保留source_turn",
+    "澄清未回答、否定、换目标、取消分别",
+    "动作提交unknown后查证；重复回执同效果实例",
+    "TTS失败但动作效果已确认",
+    "用户打断播报但原动作已完成",
+    "执行链成功但合成参考不一致/负面反馈",
+    "跨午夜/晚到/质量无效记录",
+    "无事件车辆、未来无数据和零分母",
+    "阶段/候选/槽位连接造成行数放大",
+    "没有真实音频时不能声称声学CER/WER或真实质量"
+  ],
+  "invariants": [
+    "所有PK/声明唯一键无重复，所有非空FK可解析。",
+    "会话不得使用未发布build；历史build不由车辆current_build重标。",
+    "偏移/耗时非负，finish-start=wall；秒墙钟与相对毫秒截断一致。",
+    "前端片段同轮连续无重叠且合计input_ms。",
+    "每轮至多一条selected_for_nlu候选、selected_for_dialogue解析和最终selected路由。",
+    "槽位未解决数与missing_required_slots一致；context槽位有同会话真实source_turn。",
+    "逻辑动作重试沿同operation_key；confirmed回执为succeeded，重复回执不新增effect_instance。",
+    "任务完成、TTS完成、播放完成及反馈分别保存，不能互相替代。",
+    "日汇总独立预聚合后组合，避免attempt/候选/槽位乘法。",
+    "人工标签与预测分离，无标签不会生成伪真值。"
+  ],
+  "counts": {
+    "tables": 28,
+    "fields": 421,
+    "documents": 14,
+    "metrics": 26
+  },
+  "text_normalization": {
+    "name": "synthetic_exact_text",
+    "steps": [
+      "按Unicode码点处理文本。",
+      "移除ASCII空格、全角空格、TAB、CR、LF及句末/句中字符集合：。！？!?，,．.。",
+      "仅将ASCII A-Z转为小写，其他字符保持。"
+    ],
+    "not_performed": [
+      "不做中文数词到阿拉伯数字转换",
+      "不做同义词、词形或语义等价判断",
+      "不算CER/WER",
+      "不从预测补出缺失reference标签"
+    ],
+    "purpose": "只表示人工合成标签子集的规范化逐字一致，非真实音频或语言理解准确率。"
+  }
+}

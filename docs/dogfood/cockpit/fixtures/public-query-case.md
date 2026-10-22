@@ -1,0 +1,7 @@
+# {{run_prefix}}ASR最终尝试分布
+
+这是独立公开的合成查询案例。目标是按实际端侧/云侧统计有效轮次中最终ASR尝试的成功率，不代表转写准确率。
+
+使用syn_voice_turn、syn_voice_session、syn_vehicle及syn_asr_attempt。按turn.started_at选择UTC半开区间；车辆授权且非实验、会话完整有效、轮次valid，业务完成和received均早于快照。每轮按最大可见attempt_no选择最后尝试；只统计有ASR尝试的轮次，最终取消、失败、超时保留在分母，仅succeeded算成功。
+
+参数：start、end_exclusive、snapshot_exclusive。先按上述条件筛轮次和尝试，再用ROW_NUMBER按turn_id分区及attempt_no降序选择一行，最后按endpoint_kind聚合COUNT与succeeded计数，分母0返回NULL。候选表不参与成功率分母。该案例只提供查询方法，不授予执行授权。
