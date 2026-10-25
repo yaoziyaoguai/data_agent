@@ -444,7 +444,7 @@ html[data-theme="shadcn"] .am-kv { border-color: var(--line); border-radius: var
 <button class="am-btn" type="button" data-am="copy" data-done="已复制 ✓">复制源稿</button>
 </div>
 <main class="am-doc">
-<header class="am-head"><h1>Data Agent：语义、记忆与召回</h1><p class="am-sub">从一张表的解释，到一次有依据的查询。</p><div class="am-head-meta"><span><b>source</b>2026-10-06 · 语义协作增量 · Datasight mock</span></div><div class="am-intro am-md"><div class="am-md"><p><strong>共享语义回答“数据是什么、应该怎样算”。个人记忆回答“这个用户长期有什么偏好和纠错”。Pi 会话上下文回答“这段对话已经聊到哪里”。</strong></p>
+<header class="am-head"><h1>Data Agent：语义、记忆与召回</h1><p class="am-sub"><strong>当前实现与迁移对照：</strong>下文保留旧词法检索、128片段上限及跳过DDL/ETL的实现说明；2026-10-23目标已改为原文独立索引、中文BM25＋dense、分批覆盖全文及内容支持交付，尚未实施。最新模块、接口与流程见<a href="../architecture/implementation-atlas.html">设计图册</a>和<a href="../architecture/implementation-design.md#17-语义检索与上下文的实施合同2026-10-23">实施合同</a>。</p><p class="am-sub">从一张表的解释，到一次有依据的查询。</p><div class="am-head-meta"><span><b>source</b>2026-10-06 · 语义协作增量 · Datasight mock</span></div><div class="am-intro am-md"><div class="am-md"><p><strong>共享语义回答“数据是什么、应该怎样算”。个人记忆回答“这个用户长期有什么偏好和纠错”。Pi 会话上下文回答“这段对话已经聊到哪里”。</strong></p>
 <p>“召回”就是从存储中找出本次可能需要的材料。找到之后，还要读原文、核对有效性，再决定怎样用。</p>
 </div></div></header>
 <div class="am-doc-layout">

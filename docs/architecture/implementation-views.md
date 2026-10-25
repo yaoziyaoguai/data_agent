@@ -1,5 +1,7 @@
 # 实施架构与模块流程
 
+2026-10-23设计更新，待实现：V01/V03/V04、F11及知识模块图纳入当前内容、默认自动整理、混合检索、任务采用事实与Pi容量接入。字段、迁移和参数统一见[实现设计第17节](implementation-design.md#17-语义检索与上下文的实施合同2026-10-23)。图示目标不等于当前程序已具备；其余已实现主流程继续沿用。
+
 本文件把[系统设计](../semantic-retrieval-design.md)第 17–20 节展开为组件、依赖和调用视图；包含实现约束和当前接入边界。当前进度只见 [CURRENT](../CURRENT.md)。模块是代码职责边界，统一交付；Rust 业务代码位于一个 `crates/data-agent` 库内。
 
 2026-10-20 核对：语义维护属于 Data Agent 内部权限，Datasight 资料读取与 SQL 查询执行独立校验。逐表负责人、超级维护者及跨用户建议处理已接入合成环境，流程见 [S01 / F01、S02 / F02](knowledge-modules.md)。V05/V06 补充生成正文来源和空间模型配置；真实身份、真实平台及模型语义质量按 CURRENT 单独记录。
@@ -30,7 +32,7 @@ flowchart TB
   end
   Knowledge & Flow & Assets -->|各自 store| DB[(MySQL)]
   Access -->|本地策略与映射| DB
-  Adapters --> Vector[(Milvus / Zilliz)]
+  Adapters --> Vector[(Milvus / Zilliz<br/>公共BM25与dense 个人Mem0独立集合)]
   Adapters --> Platform["数据平台 / mock"]
   Adapters --> Identity["可信身份来源"]
   Adapters -->|受控分析与复核| Model["模型端点"]
@@ -97,8 +99,10 @@ sequenceDiagram
   R->>D: M10 作业租约、M05 会话租约、M08 运行
   R->>P: resume_and_deliver / 代次 / 允许上下文
   loop Pi 按问题调查，受调用预算约束
-    P->>R: 受控工具 / 宿主绑定 operation_id
-    R-->>P: 校验身份、资料范围与版本后的结果
+    P->>R: search/read / task_ref / 宿主operation_id
+    R->>D: 短事务核对运行、任务来源限制和条件版本
+    Note over R,D: 锁外召回、批量回源；提交回执前重核版本
+    R-->>P: 定义、必要支持、原文定位与未交付部分
   end
   Note over R,P: 同批宿主工具顺序执行；模型仍可在一次响应中提出多个工具调用
   opt 缺信息或目标不明
@@ -112,7 +116,7 @@ sequenceDiagram
     Note over R,P: 按相同领取与恢复流程继续
   end
   P->>R: request_query / SQL、参数、条件与目标版本
-  R->>D: 保存检查结果、草稿和待确认请求
+  R->>D: 保存草稿、本题语义决策、条件与待确认请求
   P->>R: finish_run / 等待确认
   R->>D: 提交输出、检查点和进度；释放会话租约
   R-->>W: 展示已保存 SQL 与取数说明
@@ -176,6 +180,7 @@ sequenceDiagram
 | `enqueue_in_tx` | AppTx、稳定 job_key、类型、对象/版本、到期时间、预算引用 | 作业 ID / 原记录 | 参数冲突、非法类型 | 同业务变更原子登记；同键同载荷去重 |
 | `claim_due` | Worker ID、可处理类型、领取上限、当前时间 | 到期作业、租约代次 | 存储失败 | 原子领取；过期可接管，代次递增 |
 | `renew_lease` | 作业 ID、领取者、代次、续租时间 | 新到期时间 | 旧代次、租约失效 | 只延长当前持有者租约 |
+| `renew_claim` | 已领取作业、原owner/epoch、TTL | 领取租约续期 | 已过期、换代、取消 | 运行建立前的来源预检期间续租；不锁会话、不创建新身份 |
 | `settle_in_tx` | AppTx、作业/代次、完成或有限重试决定、错误 | 作业状态 / 原回执 | 旧代次、状态冲突 | 完成、待重试或失败；不修改业务表 |
 
 ### S10 模块内部结构
@@ -196,6 +201,8 @@ flowchart TB
 flowchart LR
   A["业务事务登记作业"] --> B["到期后原子领取"]
   B --> C["Worker 调用具名用例"]
+  B --> Lease["准备期间续job租约<br/>运行建立后续会话与job"]
+  Lease -.原owner和代次.-> C
   C --> D{"执行结果"}
   D -->|已知成功| E["业务记录与作业完成原子保存"]
   D -->|可重试且有额度| F["保存重试次数与下次时间"]
@@ -222,6 +229,10 @@ flowchart LR
 | `append_output` → Rust | output_id、attempt_id、chunk_seq、代次、片段 | 接收进度 / 缺口 | 旧代次、片段冲突 | 保存可重连片段；不代表最终提交 |
 | `finish_run` → Rust | 最终输出、恢复包、消费进度、代次 | 原提交 / 已提交 | 旧代次、缺片、持久化失败 | Rust 原子提交并释放 M05 租约；不伪造查询终态 |
 | `cancel_run` | 运行 ID、代次 | 已接收 / 当前模型状态 | 运行不存在、旧代次 | 停止模型；平台取消由 M07 单独处理 |
+
+目标工具合同2保留公共检索之外的个人记忆正文/范围/原话、资产分页、已选Skill descriptor及Pi原生read。旧合同1操作沿原形状及身份恢复，同一Pi会话的新消息可进入合同2。必要支持按最终可见内容计算，Rust最终裁剪同时维护游标与承载位置，v2桥接无损包装，详见实现设计17.5；目前尚未实现。
+
+v2的invoke_tool内部传输由M11附response_budget（正文JSON字节上限、估算token额度、投影指纹），同批多工具共享余量；Rust取自身硬上限与提示的小值并冻结成功回执，Node不二次剪正文，恢复空间不足沿Pi原生压缩。该提示不进模型参数、不改变operation_id。活动任务切换与限制收紧同样触发派发前投影核验；不同范围任务的已完成答案只保留宿主交付引用，finish_run按各任务校验后确定性组合，普通解释不强制改为查询结果答案。字段及兼容规则统一见实现设计17.4–17.5。
 
 ### S11 模块内部结构
 
@@ -253,14 +264,19 @@ flowchart LR
   A["校验运行交付"] --> Storage{"检查点存储形式"}
   Storage -->|小引用| Open["校验文件 / 原 session / 精确 leaf"]
   Storage -->|旧 inline 绑定| Read["只读获取不可变副本<br/>核对指纹并一次性迁入 JSONL"]
-  Open & Read --> B["沿保存 leaf 恢复 SDK 与原工具回执"]
-  B --> C["每次模型请求申请并消费许可"]
+  Open & Read --> B["沿保存 leaf 恢复 SDK 与原工具回执<br/>合同1/2兼容 保留资产能力"]
+  B --> Capacity["按总窗口 输入 输出 字节设置Pi<br/>正常历史原生压缩 保留任务引用"]
+  Capacity --> Scope["每次派发前核验活动任务与来源限制<br/>任务切换也重投影 历史用途分开"]
+  Scope --> C["每次普通或摘要请求申请并消费原许可"]
   C --> D["Pi 模型与工具循环"]
-  D -->|调用工具| E["Rust 受控工具 / 原 operation_id"]
-  E --> C
+  D -->|调用工具| Budget["M11分配同批回执余量<br/>宿主response_budget不进模型参数"]
+  Budget --> E["Rust 受控工具 / 原 operation_id"]
+  E --> Visible["校验Rust最终投影并无损包装<br/>正文 支持 游标与承载位置一致"]
+  Visible --> Native["原生阈值检查<br/>大回执按定位续读"]
+  Native --> Scope
   D -->|输出| F["带序号追加片段"]
   F --> Sync["SDK 会话文件 fsync<br/>导出精确 leaf 小引用"]
-  Sync --> G["finish_run 原子提交正文与引用"]
+  Sync --> G["finish_run 按任务核验交付引用<br/>确定性组合 原子提交正文与引用"]
   Open & Read -->|缺失 / 损坏 / 指纹不符| H["停止新调用，报告真实状态"]
   C -->|拒绝 / 未知| H
   D -->|取消 / 中断| H
@@ -361,7 +377,9 @@ sequenceDiagram
   U->>W: 编辑全文并保存
   W->>C: Markdown / 全部片段版本 / operation_id
   C->>A: 校验全部片段的维护权
-  C->>K: 同事务校验版本并保存正文、顺序、索引任务
+  C->>K: 同事务保存当前正文、修订、依赖索引
+  C->>K: 登记索引及受影响语义整理待办
+  Note over C,K: 新原文立即可读；后台按依赖分页整理，不主动提醒旧分析
   alt 任一项冲突或失败
     C-->>W: 拒绝，全文回滚
     W-->>U: 保留草稿，提示核对

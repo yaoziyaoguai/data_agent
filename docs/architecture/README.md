@@ -44,11 +44,13 @@
 
 ## 共享语义与查询
 
+2026-10-23目标设计已更新，尚未实现：MySQL保存当前原文、陈述及类型关系；Milvus承担中文BM25/dense，Mem0个人集合保持。类型配额取消，按相关性选择后批量取定义与必要支持；原文修订和位置用于定点续读。字段、容量与迁移见[实现设计第17节](implementation-design.md#17-语义检索与上下文的实施合同2026-10-23)。模块图册展示这一目标，下面的容器图继续展示现有部署边界。
+
 ![来源同步、语义预填、检索索引与平台查询](data-agent-knowledge.svg)
 
 **语义层保存业务含义及其依据。** 元数据、DDL、血缘、调度节点和加工 SQL 提供基础事实，模型分析提出补充建议，数据开发维护人工值。表、字段、指标、计算 SQL 和长篇业务文档共同组成可检索的知识。
 
-Worker 负责来源同步、语义预填与复核、索引更新及查询状态跟踪。共享检索结合精确名称、关键词和百炼 Qwen 向量；先保住最相关的前三项，类型覆盖与关联补充使用余位。候选返回后，再从 MySQL 核对权限、状态、版本和正式内容。同一知识版本保持原维护预算，集合更换不重新授权调用。
+来源同步由HTTP入口以202返回同步ID，Worker沿现有队列分批读取、比较和保存，页面读取各项实际进度；同步完成不等于整理或索引就绪，不增加定时任务。当前检索仍采用词法/向量及前三保护后的类型补位；目标改为各路先做权限和明确来源过滤、无类型配额融合、排序后批量回源。同一知识版本保持原维护预算，集合更换不重新授权调用；文档编辑还须登记依赖语义重新整理。来源同步的最新验收范围见CURRENT。
 
 查询通过平台适配器提交和查证。当前适配器使用可实际执行只读 SQL 的合成 SQLite 平台；真实平台的接口、权限和终态语义仍需接入验证。
 
@@ -75,7 +77,7 @@ Worker 负责来源同步、语义预填与复核、索引更新及查询状态�
 
 ![纠错建议由负责人处理，接受后编辑并保存才生效](module-diagrams/F02.svg)
 
-这两张图展开当前语义协作边界。代码、OpenAPI、迁移和页面按本轮增量实现，验收见 CURRENT；真实身份和 Datasight ACL 仍待接入。数据归属见[知识模块](knowledge-modules.md#34-数据与接口边界)，实际路径见[接口说明](implementation-design.md#421-语义协作接口)。
+S01展开现有权限边界；F02保留已实现的建议流程，同时纳入待实现的有效层依赖、当前正文及依赖重新整理目标。不能把整张F02当作已实现；实际验收见CURRENT，真实身份和Datasight ACL仍待接入。数据归属见[知识模块](knowledge-modules.md#34-数据与接口边界)，实际路径见[接口说明](implementation-design.md#421-语义协作接口)。
 
 ## 个人记忆
 
@@ -89,7 +91,7 @@ Worker 负责来源同步、语义预填与复核、索引更新及查询状态�
 4. 命中回源核对归属、状态与版本后，Rust 通过既有运行入口向 Pi 交付本轮有效快照。正文 600 字、目录 20 条、全局 16KB 的边界及原有补查机制保持，不加入语义保真分类器或改写召回。
 5. Pi 仍是唯一 Agent 循环。现有自定义 `ResourceLoader` 安装原生 `context` handler，把有效 `memories` 从 system 中分离，在每次普通模型调用前投影一份临时 custom 参考消息。该消息在模型端为 `role=user`，明确标为资料，不授予权限。
 
-正常成功的 `update_memory` / `disable_memory` 工具回执，使本轮启动候选中对应 ID 撤下；修订后的新内容由已有成功工具结果提供。拒绝或未知回执保持候选，context 投影不修改 authority。Rust 的 reserve/send 继续 fail-closed；Pi context 钩子会吞异常，不能承担权限或预算门禁。
+正常成功的 `manage_personal_asset` 工具回执，使本轮启动候选中对应 ID 撤下；修订后的新内容由已有成功工具结果提供。拒绝或未知回执保持候选，context 投影不修改 authority。Rust 的 reserve/send 继续 fail-closed；Pi context 钩子会吞异常，不能承担权限或预算门禁。
 
 临时 context 投影不写入 Pi JSONL，也不直接进入原生 compaction 输入；压缩后的下一次普通模型调用重新注入本轮仍有效的候选。历史工具结果和助手摘要仍保留，撤下启动候选不等于清除全部历史内容。
 
@@ -97,7 +99,7 @@ Worker 负责来源同步、语义预填与复核、索引更新及查询状态�
 
 自动保存的正文和适用范围取自同一份最终正文，名称只作原文前缀标签。页面人工编辑保留用户明确填写的名称和范围；人工正文建索引时使用 `infer=False`，不再经模型改写。Mem0 的 SQLite 保存 SDK 历史和技术回执；MySQL 保存正式资产与调用预算，每次提取和 embedding 调用均经 Rust 的逐调用许可和结算。
 
-源码导航：[Rust 有效快照](../../crates/data-agent/src/use_cases/personal_memory.rs)、[受控读取与记忆变更](../../crates/data-agent/src/use_cases/data_tools.rs)、[Rust authority 校验](../../crates/data-agent/src/use_cases/context_authority.rs)、[Pi 临时参考投影](../../apps/agent/session/memory-context.ts)、[ResourceLoader](../../apps/agent/session/resources.ts)、[普通与恢复路径装配](../../apps/agent/session/deliver.ts)、[工具成功回执](../../apps/agent/tools/data-tools.ts)、[Mem0 提取与索引](../../apps/memory/service.py)。图形检查仅验证文档产物，业务验证见 [CURRENT](../CURRENT.md)。
+源码导航：[Rust 有效快照](../../crates/data-agent/src/use_cases/personal_memory.rs)、[受控读取与记忆变更](../../crates/data-agent/src/use_cases/data_tools.rs)、[Rust authority 校验](../../crates/data-agent/src/use_cases/context_authority.rs)、[Pi 临时参考投影](../../apps/agent/session/workspace-context.ts)、[ResourceLoader](../../apps/agent/session/resources.ts)、[普通与恢复路径装配](../../apps/agent/session/deliver.ts)、[工具成功回执](../../apps/agent/tools/data-tools.ts)、[Mem0 提取与索引](../../apps/memory/service.py)。图形检查仅验证文档产物，业务验证见 [CURRENT](../CURRENT.md)。
 
 ## 组件与存储责任
 
@@ -107,7 +109,7 @@ Worker 负责来源同步、语义预填与复核、索引更新及查询状态�
 | Web 应用 | React / TypeScript | 工作台、语义管理、个人积累；仅超级管理员可见的模型配置 |
 | 业务 API | Rust / Axum | 身份、权限、正式状态、版本、确认、受控工具和预算 |
 | Agent 运行进程 | Node.js / Pi SDK 1.3.0 | 唯一 Agent 循环、会话续接与原生压缩 |
-| 后台任务进程 | Rust Worker | 同步、预填、索引、查询跟踪与持久任务 |
+| 后台任务进程 | Rust Worker | 当前预填、索引、查询跟踪与持久任务；目标另接后台分批来源同步 |
 | 个人记忆适配进程 | Python / Mem0 OSS 2.2.1 | 原始消息提取、个人记忆检索；SQLite 保存技术状态 |
 | 正式业务记录 | MySQL 8.4 | 正式知识、个人资产、来源、应用状态、预算、加密模型配置及版本 |
 | Pi 原生会话 | 私有 JSONL | SDK 原始历史与压缩摘要；MySQL 引用精确 leaf |
