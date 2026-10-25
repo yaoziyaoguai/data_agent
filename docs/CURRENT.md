@@ -2,175 +2,864 @@
 {
   "workflow": "development",
   "schema": 1,
-  "phase": "handoff",
-  "goal_revision": 79,
-  "environment": "座舱语音资料、100项递进Dogfood、默认mock接入及README截图完成；本地27173使用新资料，停止新增试用并交接。",
+  "phase": "implementation",
+  "goal_revision": 102,
+  "environment": "2026-10-25：01–03已有各自关闭时的验收与独立审查；当前正式增量仍为04任务上下文，05已有部分实现但未关闭。分支codex/semantic-maintenance-prototype，改造起点fed8276，最新提交以git log为准。用户本轮授权分批提交并推送现有工作，再交给其他coding agent接续；本轮不实施剩余功能、不付费调用、不部署或更新日常服务。数据库harness串行且使用隔离合成库；compose模板为MySQL 2GiB/缓冲池256MiB，运行资源以实际检查为准，本轮不重设。",
   "verification": {
-    "level": "increment",
-    "reason": "核对合成语音数据、语义定义、独立参考和实际API/Pi/平台/UI接入；固定mock不替代真实模型质量试用。",
+    "level": "partial",
+    "reason": "代码检查点63603a6：make verify-code/verify-contracts通过（577条Rust/TypeScript合同）；API与Worker分别重新构建成功。make verify-materials/verify-delivery及检查器单测通过只证明静态材料和记录。python3 scripts/check_architecture.py实际退出1、17条违规，保留为接续首要有界修复项。04仍active，05完整E2E未完成，未执行verify-increment或关闭04/05，未调用付费模型或更新服务。",
     "freshness": "content",
     "checks": [],
     "inputs": [
-      "apps/agent",
-      "apps/api",
-      "apps/web/src",
-      "crates/data-agent",
-      "packages/contracts",
-      "tests",
-      "migrations",
-      "scripts",
-      "package.json",
-      "package-lock.json",
-      "Cargo.lock",
+      "docs/execution/semantic-runtime/task-context.md",
       "docs/architecture/implementation-design.md",
-      "docs/development.md"
+      "packages/contracts",
+      "crates/data-agent/src/modules/analysis",
+      "crates/data-agent/src/modules/queries",
+      "crates/data-agent/src/modules/conversations"
     ]
   },
   "delivery": {
     "schema": 1,
     "registry": "docs/semantic-retrieval-design.md",
     "increment": {
-      "id": "I2-COCKPIT-DOGFOOD",
+      "id": "I2-TASK-CONTEXT",
       "phase": "I2",
-      "status": "complete",
-      "goal": "公开的数字座舱语音交互链路合成资料（至少20表10文档，计划28表14文档）与100项递进Dogfood；默认mock加载新资料，资料准备完成后停止，不代跑真实试用。",
+      "status": "active",
+      "goal": "按04任务上下文执行包实现任务条件、来源范围与历史分析：Conditions/ConditionPatch/QuerySemanticResolution/QueryView同源扩展与持久修订、source_limits/time_roles/semantic_resolution采纳来源、active_task_ref归属与轮内Pi重投影、history_display/current_use分途与historical_analyses受控投影；完成合同与验收后依次推进05–09。",
       "requirements": [
-        "D04",
-        "D06",
-        "D07",
+        "D02",
+        "D03",
+        "D08",
+        "D09",
+        "D13",
+        "D15",
         "C01",
-        "C06",
+        "C02",
+        "C03",
+        "C04",
+        "C05",
         "C07",
-        "C08"
+        "A01",
+        "A02",
+        "A04"
       ],
       "modules": [
-        "M01",
-        "M02",
-        "M03",
-        "M04",
+        "M05",
+        "M06",
         "M07",
         "M08",
+        "M09",
         "M11",
         "M12"
       ],
       "allowed_paths": [
-        "apps",
-        "crates/data-agent",
+        "crates/data-agent/src/modules/analysis",
+        "crates/data-agent/src/modules/queries",
+        "crates/data-agent/src/modules/runtime",
+        "crates/data-agent/src/modules/conversations",
+        "crates/data-agent/src/modules/knowledge",
+        "crates/data-agent/src/modules/jobs",
+        "crates/data-agent/src/use_cases",
+        "crates/data-agent/src/types",
+        "crates/data-agent/src/bin/validate_contracts.rs",
+        "apps/api",
+        "apps/worker",
+        "apps/web/src/features",
         "packages/contracts",
-        "scripts",
+        "migrations",
         "tests",
+        "scripts",
         "docs",
-        "README.md",
-        "Makefile"
+        "Makefile",
+        "README.md"
       ],
       "non_goals": [
-        "不读取或复用任何公司私有表、SQL、数据、术语、业务文档；只从通用数字座舱概念独立构造。",
-        "不运行新资料的真实模型Dogfood或付费预填，不新增通用数据集切换/插件框架。",
-        "不扩大查询授权、模型调用上限或产品业务范围；旧零售只保留必要测试夹具，不维护日常双演示。"
+        "多任务最终组合交付归07，本包只完成活动任务投影边界与finalize_current_answer。",
+        "不建旧语义全文库、不监听旧分析变化/提醒/自动重算，不新增永久结果缓存。",
+        "不新增交付账本、规划器、子会话或模型汇总调用；自然语言解释仍由模型完成。",
+        "不付费调用、不部署或更新日常服务；本轮仅获授权分批提交和推送现有工作，后续远端写入按接续会话实际授权。"
       ],
       "invariants": [
-        "至少20张实际SQLite表、10份实际业务文档，字段语义/单位/空值/主外键/时间和指标一致。",
-        "生成器/seed/独立oracle与Dogfood评分不进入知识允许列表。",
-        "API、Worker、平台和mock模型采用同一资料包与来源指纹；旧查询不指向新数据。",
-        "Pi仍是唯一Agent循环，mock固定演示明确标注，不能冒称真实模型能力。"
+        "限制/口径/截点跟稳定来源身份与条件版本走；set替换、unset清空、省略继承；旧缺字段不当解除限制，旧channel保留解码。",
+        "explicit_user由宿主绑定本轮真实消息核对原话；继承只复制同任务已验证条件版本的采纳身份；采纳口径不授予SQL执行权。",
+        "一次取证派发只绑一个active_task_ref；来源限制不同不并集；轮内收紧在下一次普通或摘要派发前Pi原生重投影，不能安全续接沿stale_context。",
+        "history_display与current_use由具体用例指定；历史投影不充当新草稿当前EvidenceRef；authority新格式显式空数组、dependency_schema=5保留解码。",
+        "沿原operation_id/回执/预算/会话身份与幂等；Pi唯一Agent、每消息24次、连续临时失败3次。"
       ],
       "verification_inputs": [
-        "apps",
+        "apps/api",
+        "apps/worker",
+        "apps/web",
         "crates/data-agent",
         "packages/contracts",
-        "scripts",
+        "migrations",
         "tests",
-        "docs/sources",
-        "docs/dogfood/cockpit",
+        "scripts",
         "docs/architecture/implementation-design.md",
-        "docs/development.md",
-        "README.md",
-        "Makefile",
-        "docs/images"
+        "Makefile"
       ],
       "acceptance": [
         {
-          "id": "COCKPIT-SOURCES",
+          "id": "TASK-CONDITIONS",
           "requirements": [
-            "D04",
-            "D06",
-            "C01",
-            "C06",
-            "C07"
+            "D02",
+            "D03",
+            "D15",
+            "C03",
+            "C04"
           ],
-          "expected": "28表/14业务文档及丰富字段，种子可复现、PK/FK/时间/派生一致、知识引用可回源、无oracle泄漏。",
-          "evidence_kind": "runtime",
+          "expected": "同源扩展Conditions/ConditionPatch/QuerySemanticResolution/QueryView及持久修订；set替换/unset清空/省略继承；旧channel可解码新任务用通用filters；time_roles三分且截点带时区/批次带批次值；explicit_user宿主核实采纳、继承复制原身份；旧查询决策缺证据返回null不猜回填。",
+          "evidence_kind": "contract",
           "command": [
-            "python3",
-            "docs/sources/cockpit/verify.py"
-          ],
-          "timeout_seconds": 300
-        },
-        {
-          "id": "COCKPIT-DOGFOOD",
-          "requirements": [
-            "C01",
-            "C06",
-            "C08"
-          ],
-          "expected": "100项递进案例完整覆盖、独立SQL可执行与口径一致，记录全部not_run，操作与评分隔离。",
-          "evidence_kind": "runtime",
-          "command": [
-            "python3",
-            "docs/dogfood/cockpit/verify.py"
-          ],
-          "timeout_seconds": 300
-        },
-        {
-          "id": "COCKPIT-RUNTIME",
-          "requirements": [
-            "D07",
-            "C01",
-            "C06",
-            "C07",
-            "C08"
-          ],
-          "expected": "真实API/Worker/合成平台导入543语义对象及17来源，完整保留全部人工正文和结构；28表/421字段/3加工节点与固定Pi草稿授权结果链、实际语义首屏通过，0官方调用。",
-          "evidence_kind": "runtime",
-          "command": [
-            "node",
-            "tests/mvp/check-cockpit-source.mjs"
+            "make",
+            "verify-task-conditions"
           ],
           "timeout_seconds": 900
         },
         {
-          "id": "COCKPIT-ENGINEERING",
+          "id": "TASK-SCOPE",
           "requirements": [
-            "D04",
-            "D06",
-            "D07",
+            "D08",
+            "D09",
             "C01",
-            "C06",
+            "C02",
+            "C05",
             "C07",
-            "C08"
+            "A01",
+            "A02"
           ],
-          "expected": "契约、代码与架构检查通过，旧测试夹具不混入新默认库；材料链接检查另列收尾证据，不作为业务完成替代。",
-          "evidence_kind": "contract",
-          "command": [
-            "make",
-            "verify-contracts",
-            "verify-code",
-            "verify-architecture"
+          "expected": "source_limits稳定SourceKey非空允许集及宿主绑定origin_message_ids；缺task_ref不绕过限制、多任务不并集、不明确返回task_context_required；轮内收紧在下一次普通或摘要派发前经Pi原生接口重投影，不能安全续接明确stale_context；取消单任务不影响其他任务；幂等回执与旧代次拒写保持。",
+          "evidence_kind": "runtime",
+          "command": null,
+          "timeout_seconds": 1200
+        },
+        {
+          "id": "TASK-HISTORY",
+          "requirements": [
+            "D13",
+            "A04",
+            "C02",
+            "C07"
           ],
+          "expected": "history_display/current_use分用途核验；普通语义改版不隐藏已存SQL/条件/决策/结论/报告；撤权/删除/停用只限实际派生内容、结果过期只影响依赖重建部分不整份消失；historical_analyses[]受控投影含原记录引用/指纹/来源，新格式空数组显式携带、schema5保留解码；混合摘要沿保守重建。",
+          "evidence_kind": "runtime",
+          "command": null,
           "timeout_seconds": 1200
         }
       ],
       "review": {
-        "status": "passed",
-        "record": "docs/reviews/cockpit-dogfood-review.json"
+        "status": "pending",
+        "record": null
       },
-      "evidence": ".local/delivery/I2-COCKPIT-DOGFOOD-result.json"
+      "evidence": null
     }
-  }
+  },
+  "reason": "2026-10-25保存可接续的分支检查点并修正交接：正式完成到03；04保持active，补齐并验收后再收口05，随后按执行包连续推进06–09。设计文档、共享实现/测试及状态说明分批提交，提交不是业务完成收据。"
 }
 ---
 
+## 本轮分批提交与接续校准（2026-10-25，最新入口）
+
+用户本轮要求先分批提交、推送已有工作，再给接续prompt。此轮只核对、基础验证和保存进度；不继续实现04/05、不关闭增量、不更新日常服务。基线 `fed8276` 是本次改造起点，不是接续时应恢复的HEAD。以当前分支最新提交为起点，保留已有全部实现与设计。
+
+| 执行包 | 本轮核实的状态 |
+| --- | --- |
+| 01运行与容量、02来源同步 | 已有关闭时验收和独立审查，后续受影响回归仍需随改动执行 |
+| 03语义整理 | 已关闭；收据 `.local/delivery/I2-SEMANTIC-PREPARATION-result.json` 于2026-10-25 06:58（北京时间）结束，三组验收成功；审查 `docs/reviews/semantic-preparation-closure-review-20261025.json` 为passed |
+| 04任务上下文 | 当前唯一active增量；条件、来源限制部分消费端、time_roles和采纳来源已实现并有局部记录；TASK-SCOPE/TASK-HISTORY尚无命令，整包未关闭 |
+| 05混合检索 | BM25/dense/RRF、原文索引消费者与摘录回源等代码已写；真实Milvus小样探针通过，完整应用E2E未完成；没有05关闭审查和收据 |
+| 06–09 | 尚未正式进入；按执行包前置依赖继续 |
+
+### 接续顺序与明确缺口
+
+0. **先修复当前架构检查失败。** 本轮实际执行 `python3 scripts/check_architecture.py` 退出1，17条报告见 `.local/checks/checkpoint-20261025-architecture.log`：`ingestion/preparation.rs`、`knowledge/dependency_index.rs` 的存储位置，`ingestion/store.rs` 的表归属，`knowledge/store.rs` 到jobs的兄弟模块依赖，以及多个 `use_cases` 直接访问SQL。其中有测试夹具SQL，须与生产路径分开判定；不能批量加白名单或关检查冒充修复。按既有owner公开接口和私有store整理真实越界，必要时为已确认表补归属并覆盖检查器反例，不新增业务功能。纳入当前增量的有界维护范围；修复后跑架构检查与受影响行为测试，不撤销01–03的历史收据也不借它们豁免当前失败。
+1. **先完成04，不跳过。** 补齐持久 `active_task_ref` 与消息全部任务分离、旧缺来源限制字段的兼容判断、轮内切任务/收紧来源后下一次普通或摘要派发前的Pi原生重投影、`history_display/current_use` 分途、`historical_analyses[]`及authority兼容/摘要来源继承。结果、报告、Skill等剩余通道也按任务范围核验。逐项按 `task-context.md` 写行为反例；保留旧授权、预算与恢复身份。绑定TASK-SCOPE/TASK-HISTORY，完成独立审查与 `make verify-increment` 后关闭04。
+2. **保留并继续05。** `hybrid-retrieval.md` 切片6要求权限、端点和source_limits在每路召回前生效；切片8要求先批量元数据、再读取选中的内容。这两项不能因公开v2工具归06就顺延掉05的底层合同。补齐并验证全九切片及“必须覆盖”表，尤其长原文尾部、允许集多批、raw/knowledge共同排序、真实回源与规模证据；已经写出的代码不等于所有反例已通过。
+3. **先重建，再验收。** 核对时API/Worker约16:20构建，但 `retrieval/mod.rs` 在16:21、`knowledge_sources.rs` 在16:29修改；旧mtime证明已失效。本轮已按最终源码分别重建成功（API 17:32:59、Worker 17:33:04，北京时间）；接续修改源码后仍须重建并核对结果，再串行跑05电池，见下方17:00历史交接的命令列表。不能把那5项未通过的DB门控测试计入“全绿”，正式入口为 `check-agent-library.mjs`。
+4. 04/05各自实现、验收与独立审查关闭后，依次推进06证据交付、07答案组合、08兼容升级、09整体验收；阶段间无需重新立项。
+
+### 本次验证和保存边界
+
+- **已通过**：`make verify-code verify-contracts`（fmt、全target Clippy `-D warnings`、TypeScript、Web构建、同源生成及577条Rust/TypeScript契约）；日志 `.local/checks/checkpoint-20261025-code-contracts.log`。首跑fmt失败已保留为 `checkpoint-20261025-code-contracts-initial.log`，本轮仅对 `knowledge_sources.rs` 做rustfmt排版，没有改变业务逻辑。
+- **已通过**：API与Worker独立构建，日志 `.local/checks/checkpoint-20261025-services-build.log`；仅更新测试二进制，未重启日常服务。
+- **静态记录通过**：`make verify-materials verify-delivery`、16项交付检查器单测、7项架构检查器单测。记录检查不执行业务验收；构建有既有Web体积提示，不宣称零构建提示。
+- **架构检查未通过**：`python3 scripts/check_architecture.py` 17条报告、退出1，精确结果见 `checkpoint-20261025-architecture.log`；初轮组合日志 `checkpoint-20261025-records-architecture.log` 最后的单测成功退出不能覆盖此前架构检查失败。检查器单测通过不代表当前源码满足架构规则。
+- **未运行**：完整数据库/Milvus E2E电池、付费模型、真实平台验收及 `make verify-increment`；不生成04/05关闭收据。
+- **已分批保存**：`98b8b36` 保存设计/架构图/执行包，`63603a6` 保存相互依赖的实现、迁移、契约、测试及历史审查；本状态说明作为后续单独交接提交。接续从包含本节的最新提交开始。推送目标仅 `origin/codex/semantic-maintenance-prototype`，最终本地/远端提交以Git核对，不合并主分支。
+- `.local/checks/milvus-hybrid-capabilities.json` 只证明真实Milvus能力小样；`.local/checks/mvp-hybrid-retrieval.json` 当前为 `passed:false, checks:[]`，没有完整场景成功证据。环境挂起可解释一次未完成，不能据此推定所有未验收代码正确或未来失败均来自环境。
+- 历史 `.local` 日志/收据留在本机且不纳入Git；远端克隆缺这些文件时应标证据不可用，不能重造通过收据。仓库内保留原独立审查文件，不改写审查者结论。
+- 分批以依赖完整为准：设计与执行包、相互依赖的实现/迁移/契约/测试、当前状态与交接。01–05共享入口已经交织，不伪造按阶段独立构建的历史。只推送当前开发分支，不合并主分支或发布。
+
+## 语义整理增量（2026-10-24–25，已完整关闭）
+
+以下保留03实施期间的历史过程，按后续“03关闭清单”已于2026-10-25关闭。早期切片中“尚未实现/未验证”的表述只代表当时状态；当前增量与下一步以本文最前面的最新入口为准，不能用旧包审查指纹关闭新包。
+
+01/02已关闭。01归档声明与收据为 `.local/delivery/runtime-capacity-closed-declaration.json`、`.local/delivery/I2-RUNTIME-CAPACITY-result.json`，四组最终验收于2026-10-24T02:09:29Z结束；02为 `.local/delivery/source-sync-closed-declaration.json`、`.local/delivery/I2-SOURCE-SYNC-result.json`，四组最终验收于2026-10-24T03:33:38Z结束。对应独立审查见 `docs/reviews/runtime-capacity-closure-review-20261024.json`、`docs/reviews/source-sync-closure-review-20261024.json`。这是各自关闭时的证据，后续受影响回归仍按实际改动执行。
+
+### 已落地的当前切片及入口
+
+- 同源合同：`packages/contracts/schema.json` 新增 `SemanticReference`、`SemanticSupport`、`SemanticStatement`、`SemanticRelation`、`PreparedSupport`、`PreparedStatement`、`PreparedRelation`、`SourcePreparationResult` 等，生成文件与 `tests/contracts/cases.json` 同步。来源引用、支持内容及内嵌范围有类型；成果每批最多32个陈述、64个关系。新增合同不表示后台整理已运行。
+- 知识保存：`modules/knowledge/preparation/{mod,store}.rs` 与 `knowledge::apply_preparation_in_tx`，按稳定顺序锁目标版本、复用知识操作账本、宿主生成稳定陈述/支持/关系ID及 `model_inference` 来源，保护人工有效正文，检查内嵌支持与字段切片逐字相等；陈述/关系/旧知识版本/原索引待办同事务。迁移 `202610240002_semantic_preparation.sql` **目前只有** `knowledge_statements`、`knowledge_relations`，没有依赖或准备进度表；完整来源/方法/相关依赖/领取代次复核还需由后续准备流程接通。
+- 确定性分段：`modules/retrieval/source_segments.rs`，公开 `segment_source` 与 `segment_source_with_limit`；默认64段，显式批大小1–64，游标跨批大小可续接。Unicode字符定位、2400字符单段上限、160字符重叠、背景≤256且独立引用；表格、围栏代码和SQL/CTE边界有反例。SQL复用锁定的 `sqlparser` 词法器；不支持的方言回退原文分段，不宣称通用SQL语义解析完备。旧 `vector::fragments()` 和 `document_chunks` 未替换。
+- 直接依赖规则：`modules/knowledge/dependencies.rs` 的 `project_effective` 和 `inherit_human_edit` 分开有效层、required及全部实际贡献；按明确结构路径或可信旧→新Unicode范围保留贡献。映射非空、越界、溢出和不等值会拒绝；**可靠映射的生成、唯一性及完整性仍由后续宿主负责**，当前未接持久化和业务消费者。
+- 预填共用传输：`modules/ingestion/prefill.rs` 提取 `prepare_submission`、`submission_parameters`、`decode_completion_for`，复用端点/凭据校验、冻结配置、超时、同源Schema递归引用及回执解析；原预填仍用 `submit_semantic_prefill`。尚无来源整理调用方，不把共用函数当成新后台功能。
+
+以上实现位于 `crates/data-agent/src/` 下；其他导航沿执行包，不新建第二份当前计划。两位实现子代理已停止写入，后续共享Schema、迁移和组合入口继续由单一owner顺序整合。
+
+### 当前验证与已知缺口
+
+交接复验已完成；以下已实际通过，范围限于当前切片及受影响的旧预填回归：
+
+- `cargo build --offline --locked -p data-agent-api -p data-agent-worker`：`.local/checks/semantic-handoff-services-build.log`。契约校验二进制另见 `semantic-handoff-build.log`。
+- 同源生成检查与550条Rust/TypeScript契约样例：`semantic-handoff-contract-generation.log`、`semantic-handoff-contracts.log`；TypeScript检查 `semantic-handoff-types.log`。
+- 分段6项、直接依赖6项、原预填11项纯Rust测试：`semantic-handoff-segments-unit.log`、`semantic-handoff-dependencies-unit.log`、`semantic-handoff-prefill-unit.log`。
+- 模块/SQL归属检查及7项架构检查器测试：`semantic-handoff-architecture.log`。
+- Rust格式只读检查与全target Clippy `-D warnings`：`semantic-handoff-fmt.log`、`semantic-handoff-clippy.log`。
+- 当前知识保存真实隔离MySQL两项验证通过：`.local/checks/semantic-handoff-preparation-storage.log`、`semantic-preparation-storage.log`；验证人工正文保护、宿主origin、支持内容和远处定位保留、同批重放不新增版本，以及未整理旧对象仍符合返回契约。
+- 原 `node tests/mvp/check-prefill.mjs` 全部21项通过：`semantic-handoff-prefill-protocol-green.log`、`mvp-prefill.json`，本地协议请求30次，官方请求0。覆盖人工编辑竞争、固定分析/复核、失败/unknown不重发、预算结算与不同思考/输出配置。本轮使用真实隔离MySQL和本地合成provider；不是付费模型质量验收。上述数据库检查执行时容器仍为临时2GiB，随后已恢复1GiB；不宣称本轮集成结果证明1GiB连续压力稳定。
+- `make verify-delivery`及16项检查器测试通过（`semantic-handoff-delivery.log`）；`git diff --check`通过。前者明确只证明active声明及需求覆盖合法，没有执行03绑定验收；本次未运行03的 `verify-increment`，未生成整包完成收据。
+
+TDD证据沿 `.local/checks/semantic-statement-contract-{red,green}.log`、`preparation-statement-red.log`、`source-segments-{sql,batch-limit}-{red,green}.log`、`effective-dependencies-{range,invalid-range}-{red,green}.log`。非法范围最早一轮被公共prefill借用类型编译错误挡住，不算业务RED；后续已修编译并取得真实反例和GREEN。不要按文件名推定所有尝试都通过。
+
+收尾回归修复：原 `check-prefill.mjs` 首次读取旧表对象失败（`semantic-handoff-prefill-protocol.log`）。新投影对缺失 `semantic_relations` 使用可变JSON索引，悄悄添加null，违反可选数组响应契约；已新增公开知识读接口反例（`semantic-handoff-legacy-object-red.log`），改为 `get_mut` 仅遍历已有数组，不把缺失关系补成null，当前两项真实MySQL测试GREEN。该修复针对旧对象的一般读取问题，未降低原断言。
+
+**已修复的一项已知风险（2026-10-24接手后）：** `dependencies.rs::unchanged_structure_value` 原对空集合用 `any`、对 null 一律返回false；旧来源映射为unknown时，仅重写text却原样保留 `{"excluded":[]}` 或含 null 成员的结构会错误把 `complete=false` 翻成true。已先补行为反例（`.local/checks/structure-unknown-red.log`，`{"excluded":[]}` 与 `{"note":null}` 两类均RED），改为 `retains_structure_content`：深相等即保留（空集合成员与 null 成员值都是内容），顶层 null 表示条目没有结构、由调用方排除不算继承；修复后全部8项GREEN（`.local/checks/structure-unknown-green.log`），含“确实没有结构时重写正文可变complete”的正例。
+
+### 来源级准备消费（2026-10-24接手后新增，端到端已通）
+
+接通“03尚未完成”第1条的现有 `prepare_source` schema2作业消费链路，命名与实现均表达业务含义：
+
+- 迁移 `202610240003_source_preparations.sql`：按 `(source_id,revision,method_version)` 记录输入/依赖指纹、游标、覆盖进度、未解释项、冻结批次、在途调用状态与租约；状态机含 `analysis/review/unknown` 在途与 `ready/partial/failed` 终态。曾有的 `batches_ready` 布尔累计列在验收前移除：中间批次合法报告 `partial` 会把累计值永久压成false，导致覆盖完成且无未解释项的来源永远到不了ready；ready判定收敛为“覆盖完成且未解释项为空”，避免与 `unresolved` 重复表达。
+- `modules/ingestion/preparation.rs`：稳定调用身份（`batch_sequence` 仅开新批递增，恢复沿用原ID，已知失败重开批才是新逻辑调用）；冻结批次与对象清单截断（表对象优先、上限40并如实标注）；成果校验由宿主执行——引用必须落在单个冻结片段/背景区间、目标对象/版本/条目路径必须来自冻结清单、全部引用绑定正在整理的来源与修订。
+- `use_cases/source_preparation.rs` 消费者：维护profile缺失或非法时作业保持真实pending（`budget_unavailable/invalid_input` 直接返回，不伪失败）；过期在途调用转 `unknown` 终态且不换ID重发；分析/复核各一次调用、锁外执行、心跳续租；payload超限按半数拆批（下限2400字符）；应用与推进同事务，核对领取代次、来源修订与依赖指纹（批次期间依赖变化则丢弃本批成果重新开批）；成果经 `knowledge::apply_preparation_in_tx` 落地陈述/关系/支持。`apps/worker` 增加对应消费循环（100ms间隔，TOOLSET=data）。
+- `modules/retrieval/source_segments.rs` 新增 `prefix_by_char_budget`：按字符预算截取本批前缀并返回续接游标，至少保留一个片段；游标绑定修订且严格前进有专项单测（续接分批与整源分段片段ID一致并读到尾部）。
+
+验证（真实隔离MySQL + 本地合成协议provider，官方请求0）：
+
+- 新端到端 `node tests/mvp/check-source-preparation.mjs` 三阶段全过（`.local/checks/source-preparation-check.log`，19次调用；已注册进 `make verify-knowledge-workflow`）：长正文分批整理到ready、首尾标记均进入分批材料、批次起点不重复、陈述/关系/支持引用全部绑定来源修订并全程结算（账目calls=HTTP次数、reserved归零）；在途分析进程中断后过期标 `unknown` 终态、作业failed、账上仅保留一次issued调用且预留不释放、不自动重发；来源新修订触发重新整理、新成果引用新修订、旧修订记录保留。
+- `crates/data-agent/tests/semantic_preparation.rs` 新增来源准备状态机集成测试（真实隔离MySQL，3/3通过）：无在途才可开批（重复开批 `version_conflict`）、租约内登记复核（重复登记 `lease_lost`）、未解释项非空保持 `partial`、覆盖完成且未解释项清空才 `ready`（早前批次partial不永久压制ready，即上述列移除的反例）、过期转 `unknown`、失败终态。
+- 单元与质量门：preparation 4项、dependencies 8项纯测试全绿；`tests/source_segments.rs` 7项通过；`cargo fmt --all --check` 与 `cargo clippy --offline --locked --all-targets -- -D warnings` 通过；`cargo build --offline --locked -p data-agent-api -p data-agent-worker` 通过。
+
+**验收发现的实现缺陷与修复记录：** 首次端到端验收中事件来源覆盖完成（51段、未解释项空、作业finished）却停在 `partial`，检查保留库后定位为上述 `batches_ready` 累计语义错误，属本切片新代码缺陷，已修复并重跑通过；非既有缺陷，无回归面。
+
+**受影响旧检查的隔离变更（按“验收与要求变更”纪律记录）：** 消费者接通后，凡配置维护profile并同步目录的旧检查会收到 `submit_semantic_preparation` 请求并改变其账目断言。处理方式为在这些检查的同步点后、Worker恢复前追加 `DELETE FROM background_jobs WHERE kind='prepare_source'`（沿用既有 `prefill_attempts` 队列清理模式）：原值=这些检查原样消费全部后台作业；新值=prepare_source作业在对象级预填检查中保持不入队消费，来源整理链路由新检查单独验收；原因=两类链路账目断言互斥；影响=对象级预填断言与calls基线不变（check-prefill 21项、calls=30 基线保持）。已改文件：`check-prefill.mjs`、`check-prefill-materials.mjs`、`check-analysis-preference.mjs`、`check-semantic-source-browser.mjs`、`run-catalog-semantic-sample.mjs`（后者为付费运行器，本轮未执行）。`check-semantic-source-browser.mjs` 另有两点：其一，同步后需清理同步期自动入队的对象预填（`DELETE FROM prefill_attempts WHERE state='queued'`，与check-prefill同模式），否则Worker先消费自动预填，`sent[0].sources` 与重预填冻结输入不一致（已用API直连复现确认冻结与实际发送顺序本身稳定一致，差异来自多份attempt）；其二，该检查原断言复核材料与分析逐字节相同，与分析期截断进入同版续读的现行合同冲突（check-prefill的body_range/续读窗口注释与check-prefill-materials的复核补料均按现行合同验收）——原值=`assert.deepEqual(sent[1].sources,sent[0].sources)`；新值=同版冻结断言（来源/版本序列相同、total_bytes一致、复核区间为同版有效窗口、已全量交付来源逐字节相同）；原因=旧断言早于续读特性且从未在当前树通过；影响=该检查恢复通过（3项、calls=2，`.local/checks/check-semantic-source-browser-recheck.log`），保留的固定不变量仍是“复核不得改换来源版本”。
+
+**旧能力回归现状（2026-10-24接手后实测）：** 通过：`check-prefill`（21项、calls=30基线）、`check-prefill-materials`、`check-analysis-preference`（22次调用全结算）、`check-semantic-source-browser`（3项、calls=2）、`check-source-sync`、`check-source-sync-heartbeat`、`check-source-sync-recovery`（无profile时prepare作业保持真实pending，消费链路不启动）。**既有失败（非本切片引入，证据在案）：** `check-model-startup` 在首次重预填即返回 `code=unsupported`（`.local/checks/check-model-startup-recheck.log`、`mvp-model-startup-launcher-error.log`）；该检查上一次通过记录为2026-10-17（当时期望4次调用），早于语义整理全部未提交改动；其复现路径（development.py正式启动 + cockpit演示资料 + 语义对象重预填）不经过本切片任何代码。该失败阻塞03整包的旧能力回归项，需在03收尾前定位修复（疑似语义目录对象在cockpit资料包下的重预填候选查找问题）。
+
+### 文档保存原子登记语义准备（2026-10-24新增，端到端已通）
+
+落实执行包“保存当前原文原子登记raw索引和语义准备；保存派生陈述只登记knowledge索引，不推进原文修订、不反触发原文重整；两作业互不等待”：
+
+- `use_cases/knowledge_documents.rs::register_document_preparation_in_tx`：单文档（`source_id`为空、状态enabled）在创建（`use_cases/knowledge.rs` 保存分发统一挂接）与改版（`/knowledge/{id}/document` 保存循环按版本推进的片段）同事务登记 `raw_source_index` + `prepare_source`（`UNIQUE(kind,resource_id,resource_version)` 保证幂等）；空正文、文档分册（source_id非空的成册文档）与停用对象不登记。通用条目PATCH也会推进文档版本并同样登记；停用/删除不登记。`raw_source_index` 无消费者，保持真实queued待办（05接），与整理互不等待。
+- 消费者 `use_cases/source_preparation.rs` 识别 `document-` 来源：当前版本与空间取自文档对象（不在 `source_heads`）；正文沿 `knowledge_sources::read_in_tx` 按修订从 `knowledge_versions` 冻结读取；`SourceKey kind=document` + Markdown 分段；`knowledge::source_objects_in_tx` 按 `document-` 别名定位文档对象自身条目（文档对象 `source_id` 为空，原SQL按source_id匹配不到）。
+- `knowledge/preparation/store.rs::apply_preparation_in_tx` 对文档目标不调用 `next()`：派生陈述只进建议与登记表，同修订重写 `knowledge_versions`/`knowledge_index_jobs` 行（人工正文、版本、确认状态不变），引用继续绑定当次修订可回读；目录来源目标行为不变（仍推进对象版本）。此为本切片核心语义修复：若沿用目录对象的推进版本逻辑，第一批应用就会把文档版本推过被整理修订，后续批次被“已有更新修订”误判终止且引用立即过期。
+- 消费者顺序修正：来源当前修订检查提前到读取正文/建行之前。原顺序对已过修订的文档作业会先按旧修订读正文，触发 `stale_knowledge` 把作业误判failed；提前后按“新作业随新修订入队”settle，与平台来源语义一致。
+
+验证（真实隔离MySQL + 本地合成协议provider，官方请求0）：
+
+- 新端到端 `node tests/mvp/check-document-preparation.mjs` 两阶段全过（calls=6；已注册进 `make verify-knowledge-workflow`）：创建响应返回即见两条queued作业（原子登记）、空正文不登记、整理到ready后raw待办仍queued互不等待；材料携带文档对象与正文条目、成果登记为建议陈述（origin=model_inference、引用绑定document来源与当次修订）、人工正文与review_state原样、整理不推进修订、账目calls=HTTP且reserved归零；正文改版与元数据改版均按新修订重新登记并整理、成果绑定新修订、人工正文保持保存值、完成后无新调用。
+- 旧能力回归（本切片后实测通过）：`check-source-preparation`（3项、calls=19）、`check-prefill`（21项、calls=30）、`check-semantic-source-browser`（3项、calls=2）、`check-prefill-materials`（11项、calls=23）、`check-prefill-concurrency`（calls=4）、`check-maintenance-replay`、`check-completion-gaps`；`crates/data-agent/tests/semantic_preparation.rs` 3/3（Rust集成测试直连用13306端口与专用合成库，需 `DATA_AGENT_SEMANTIC_SUPER_MAINTAINERS` 的只有model_configuration测试）；`cargo fmt`/`clippy -D warnings`/构建通过。
+- **受影响旧检查的隔离变更（续前节纪律）：** `check-prefill-materials` 会创建/改版文档且配置维护profile，其合成provider只实现对象级预填协议，收到文档整理材料会崩溃（已真实复现）。原值=该检查此前不产生文档整理作业；新值=新增 `isolatePreparation()`（同一DELETE语句）挂在四处文档创建/改版点之后（Worker暂停或阻塞窗口内，无领取竞态）；原因=本检查验收对象级预填材料，文档整理由check-document-preparation单独验收；影响=该检查11项断言与calls基线不变。
+- **既有失败补记（非本切片引入）：** `cargo test -p data-agent --test model_configuration` 在当前树失败（带 `DATA_AGENT_SEMANTIC_SUPER_MAINTAINERS` 环境后停在 `connection_in_tx` → `model_credential_required`，第148行断言块在HEAD已存在，未提交diff仅加容量字段；失败路径只涉及model_services/密钥文件，与本切片五文件无调用交集；CURRENT 431行的通过记录属容量切片当时状态）。该测试裸跑还需SUPER_MAINTAINERS环境且不在任何Makefile目标中，属容量切片未收口的验证缺口，留待相应切片复跑修复，不阻塞本切片。
+- 付费运行器 `run-catalog-semantic-sample.mjs` 会创建文档且配置profile：未来 `--run` 时文档会自动进入整理并产生额外维护调用（设计内行为）；本轮无运行授权未执行，仅记录。
+
+### 依赖索引写入路径（2026-10-24新增，03第3条第一增量）
+
+落实17.3“新增knowledge_dependencies”的存储与写入：迁移 `202610240004_knowledge_dependencies.sql`（键含owner/版本/条目/层/purpose/role/目标身份与修订及路径；反向索引 `(space_id,target_kind,target_id,owner_id)`、有效层读取索引 `(owner_id,owner_version,effective,purpose)`；`target_fingerprint` 列预留为空，后续增量按“相关内容指纹”填充）。`modules/knowledge/dependency_index.rs`：`rows_for_object` 从对象正文各层生成依赖行——来源事实原始出处与结构化证据（source_fact层）、模型建议material_refs/evidence（model_suggestion层）、各层陈述的原文引用（citation）与必要知识支持（knowledge引用含条目路径），全部purpose=required（v1忠实沿用现行requirements()口径，related用途随消费者接线增量引入）；`effective` 沿语义投影优先级（人工确认>模型建议>来源事实；文档条目固定建议层），只有有效层行参与语义有效性。`knowledge::persist` 同事务重建该(owner,version)的依赖行（DELETE+INSERT，历史版本行保留）；旧内容无可映射来源不生成行，读取侧须按unknown处理不得猜空。
+
+验证：`crates/data-agent/tests/knowledge_dependencies.rs` 1/1通过（真实隔离MySQL）——无来源内容不登记；整理成果的建议陈述在人工正文有效时登记为非有效行（反向索引可查、effective=false）；人工清除覆盖采纳建议后引用与知识支持成为有效必要依赖；人工完全替换后当前版本无有效必要依赖、旧修订行按版本保留。`semantic_preparation.rs` 3/3、`check-prefill` 21项、fmt/clippy/构建通过。
+
+### 依赖传递游走与消费者接线（2026-10-24新增，03第3条第二增量）
+
+传递游走：`dependency_index.rs` 新增 `knowledge_dependency_states`（迁移已并入 `202610240004`：每(owner,version)一行 `complete|unknown`，`rows_for_object` 同时产出整对象映射状态——有效层存在无映射来源的自动内容即unknown，人工内容与已映射内容为complete；缺行按unknown处理，不猜空）与 `walk_required_in_tx`：从根(owner,version)逐层批量读有效必要行；来源目标（platform对source_heads、document/knowledge对knowledge_objects enabled当前版）核对登记修订即止、知识目标匹配后下钻；已见(owner,version)集合防环（A→B→A终止）；文档派生陈述引用自身文档是常态，自引行不参与游走（否则文档改版后重整理读取永久stale、维护环死锁）；结论分stale（登记修订≠当前修订，来源消失时当前修订为空）与unknown（无状态行/unknown状态的链路成员）。动态SQL仅拼"?"占位符并以绑定传值（`AssertSqlSafe`，与runtime/store.rs既有用法一致）。`dependents_in_tx` 分页按(owner,version)**对**取页（见下节审查修复），limit为每页对数上限。`effective_required_in_tx` 为单次批量元组IN往返（游走被持锁事务调用，不逐owner展开）。
+
+消费者接线（单点）：`knowledge_sources::assert_in_tx` 在原requirements()+versions_in_tx不动点判定后追加游走——stale即报 `stale_knowledge`（立即，不等扇出作业），unknown本轮不硬失败（实际贡献根与权限门后续接入；旧数据无状态行保持可读）。`assert_source_in_tx` 包装器使其自动覆盖：工具按ID读（read_knowledge/read_source）、交付引用核验、索引worker有效集、语义快照表、搜索提交前重核、嵌入绑定、上下文权威重核、治理核验、SQL草稿诊断（失效对象剔除+coverage note，维持建议性）。检索过滤路径（requirements+versions的过滤语义）未动。
+
+修复（本分支早期增量引入的真实缺陷）：`preparation::project_object` 用 `object["entries"].as_array_mut()`（IndexMut缺键补null）会把proposal行污染出 `"entries":null`，`GET /knowledge-proposals` 全量400（Proposal契约additionalProperties:false）；改 `get_mut` 后GOV05恢复。`check-prefill-materials` 的provider增加文档准备材料分支（按submit_semantic_preparation真实契约回应空ready成果、不进预填记账）：worker多执行通道会在隔离DELETE前领取文档prepare作业（约50%复现），这是harness竞态不是产品缺陷。
+
+独立审查与修复（增量完成后adversarial审查，19代理/15候选/2条confirmed，均已修）：其一（medium）`dependents_in_tx` 行级(owner,version)复合游标在同对多行（不同entry_path/role指向同一目标）时会把并列行截断在页界后整组跳过——改为先 `SELECT DISTINCT` 取(owner,version)对页（游标仍是复合键）、再按对元组IN整批取回页内全部行（保留目标过滤：同一对还有指向其他目标的行），并列行结构上不会被游标越过；测试补登一行构造同对并列，断言整对同页、跨页推进不丢行。其二（low）`effective_required_in_tx` 逐owner查询在持锁事务路径（交付前重核等）放大往返——改为单次批量元组IN。验证过程暴露第三处真实缺陷：`placeholders()` 多列单项时 `join("),(")` 无分隔符可插、退化为 `(a,b) IN (?,?)`，MySQL按两标量列表报1241"Operand should contain 2 column(s)"（旧调用点靠模板双层括号碰巧掩盖，单层包裹的新调用点必炸）——已改为逐元组自带括号、调用方统一只包一层外括号，游走状态批量查询一并归一。
+
+验证（真实隔离MySQL、串行）：`knowledge_dependencies.rs` 2/2（传递游走：A(support→B)→B(citation→文档D)干净；D改版从A立即stale(登记1/当前2)；从D自身新版本游走干净（自引跳过）；E1↔E2互指终版终止；删索引行模拟迁移前数据→unknown链不当空链；并列行整对同页、跨页推进不丢行）每次新库连跑3次稳定；`semantic_preparation.rs` 3/3（审查修复后复跑）；mvp通过：check-document-preparation、check-source-preparation、check-context-dependencies、check-boundaries、check-prefill、check-prefill-materials（3连跑）、check-maintenance-replay、check-asset-dependencies-browser、check-semantic-governance（全量及GOV01-05分组）。fmt/clippy(-D warnings)/api+worker重建通过。测试文件内用跨runtime互斥串行（tokio测试各建runtime，共享连接池会在首个runtime销毁后坏连接）；测试库每次运行用新库（断言含按目标行数计数，旧库残留行会污染）。
+
+**本增量未做（03第3条剩余）**：检索过滤路径是否改走索引（当前requirements+versions维持）；依赖键相关内容指纹填充（target_fingerprint仍空）；unknown在current_use的硬门（本轮只暴露不阻断，硬门按17.3.2放在04声明allowed_sources的消费者侧）。人工四类编辑/相关必要用途反例由第四增量完成。
+
+### 实际贡献根查询（2026-10-24新增，03第3条第三增量）
+
+执行包第8条/合同17.3.2：`dependency_index.rs` 新增公开查询 `contribution_roots_in_tx(tx, roots≤200)`——返回每个根对象有效内容实际依赖的**来源身份闭包**（(kind,id)，kind∈platform|document，与SourceKey身份一致，去重升序），供权限/模型端点/用户明确来源限制在组合层构造允许集后核验。与失效游走的语义差别：贡献是按登记修订的历史事实，不与当前修订核对（来源改版或扇出滞后不改变"谁贡献过"）；知识支持按登记修订下钻、自指支持不算外部贡献；文档派生陈述引用自身文档即以该文档为根（A原文以A为来源）；只看有效行——人工完全替换后的旧source标签留在非有效层不进闭包；读全部用途的有效行（`effective_dependencies_in_tx(tx, owners, purpose: Option<&str>)`，effective_required_in_tx退化为Some("required")包装），不能只取required。链路成员（含根自身）无状态行或unknown时闭包不可证明：`unknown`成员如实返回且sources只是已知部分，调用方必须按不通过处理（合同禁止空集合放行）；可证空根（人工替换后）与unknown根明确区分，空根是否放行由声明了allowed_sources的消费者决定。实现为先按(owner,version)节点批量展开整图（复用抽出的`complete_members_in_tx`状态批查），再逐根在内存图上BFS取闭包，批量根一次查询摊平图展开。related_ids只是候选（关联不是贡献），不登记贡献行；个人资产来源由组合层沿既有`personal_assets::authorities_in_tx`（generated字段authority）合并，不在知识对象索引里。
+
+验证（真实隔离MySQL、串行）：`knowledge_dependencies.rs` 3/3 新库连跑3次稳定——新增贡献根测试：A(引用锚点+支持B)→B(引用指南D)批量取根A={锚点,D}/B={D}；related用途有效平台来源行（直接SQL补登）计入闭包；文档自引以自身为根；人工完全替换后闭包可证为空（旧标签不计入）；B状态置unknown但依赖行保留（部分映射对象真实形态，区别于测试2的缺行形态）时B不可展开、其行不计入任何闭包、A只余已知部分并如实报unknown成员、B自身作根报unknown而非空根；B人工推进后A仍按登记修订闭包（钉住"历史事实不核对当前版本"的知识边语义）；互指支持环双根取闭包终止。多元素闭包断言精确排序vec（钉住去重升序契约），多根结果按owner_id查找不依赖输入顺序回显。fmt/clippy(-D warnings)/api+worker重建通过。
+
+独立审查与修复（adversarial审查，8代理，5条confirmed全部为测试覆盖缺口、实现零缺陷，均已修）：知识边"按登记修订"历史语义此前未钉住（全测试registered==current，当前版本核对类回归测不出）→补B推进后断言闭包不变；mapping_state='unknown'且依赖行仍在的正常写路径形态未测（此前只测缺行，值过滤被重构成存在性判断测不出）→UPDATE置unknown保留行并断言行不计入闭包；精确集合/去重升序契约与owner查找断言；互指环用例。
+
+### 人工四种编辑的来源保持与失效边界（2026-10-24新增，03第3条第四增量）
+
+执行包第3条反例表的人工四类编辑语义落地（store 层四种编辑方式到依赖索引与回源判定的行为）：
+
+- 同文携带（仅确认/同文重存）：`rows_for_object` 对有效层为 human_override 的条目，若人工文本与 suggestion.value 或 source_facts.value 逐字相同（trim 比较），则同文层（model_suggestion/source_fact）的来源按非有效行登记并计入闭包与游走——人工确认采纳建议不丢出处。
+- assert 门控：`assert_in_tx` 对映射完备对象（`knowledge_dependency_states`=complete）以索引游走为唯一判定，legacy `requirements()` 正文判定只服务无索引状态的历史对象；人工完全替换后的旧建议引用不再阻断（反例表"真正替换的有效值不被废弃建议阻断"）。旧对象缺状态行按 unknown 不硬失败，保持可读。
+- 替换边界：见下节"局部替换的陈述级来源保留"——2026-10-25接手后已按合同补齐未替换部分的真实来源保留，条目粒度等价完全替换的旧描述作废。
+- related 用途：指向目标的有效 related 行不参与口径失效判定（游走只走 required），但计入实际贡献根闭包（第三增量语义）。
+
+验证（真实隔离MySQL、串行）：`knowledge_dependencies.rs` 4/4 新库通过——新测试 human_edit_kinds_separate_replacement_from_retained_sources 以 business_domain 双条目术语对象走完整链：apply 整理成果 → 采纳清除 body → 清除 domain（建议层恢复为有效必要依赖）→ 人工完全替换 body（walk stale 恰为 domain→文档、有效必要依赖恰为 domain 建议层；body 旧建议来源被替换释放）；同文确认 domain 后有效必要依赖变为 (business_domain, human_override, 指南)（同文确认按人工层承载建议出处）；人工改写 domain 后 `assert_source_in_tx` 通过、walk 干净；补登 related 有效行后 assert 仍通过（related 不参与失效）。mvp 检查 8 项通过；`check-semantic-governance` 卡死为环境问题非本轮缺陷（诊断证据：netext 即 Microsoft Defender 网络过滤扩展满载 97% CPU，worker 栈采样显示所有任务堵在 sqlx pool acquire 的 idle ping TLS 读、MySQL processlist 全空闲即服务端无查询，`if true ||` 临时切回 legacy 判定同样卡死排除本轮改动；静默窗口重跑记录见后）。
+
+### 中断切片验证与人工局部替换补齐（2026-10-25接手后）
+
+上一实施者在 22:26–22:38 留下的"代码已写、验证待确认"切片本轮完成验证：检索过滤改走有效依赖索引（`use_cases/knowledge.rs` 映射完备对象按 `complete_members_in_tx`+`walk_required_in_tx` 判定，unknown 链路成员报告不阻断，无索引旧对象沿用 legacy 判定）、`fill_target_fingerprints_in_tx` 内容指纹填充及游走中"修订推进但相关内容逐字相同不算失效、指纹缺失或正文读不到保守失效"的比较。修复两处 cargo fmt 格式与三处 clippy 违规（collapsible_if×2、cloned_ref_to_slice_refs）。`knowledge_dependencies.rs` 当时 6 项全部通过（新隔离库），受影响回归 7 组通过：`semantic_preparation.rs` 3/3、`check-context-dependencies`、`check-source-preparation`(19)、`check-document-preparation`(6)、`check-retrieval-coverage`、`check-knowledge-workflow`(16)、`check-prefill`(21、calls=30 基线)。
+
+**局部替换的陈述级来源保留（按已确认合同修正记录与实现的差异）**：CURRENT 旧文字"完全替换与局部替换在条目粒度等价"与执行包03"人工完全替换、局部替换、仅确认、同文重存分别保留真实贡献"及17.3.2"未替换部分保留真实来源"冲突，不能因保存接口整条提交就把局部修改判成全部替换。落地：`rows_for_object` 对有效层为 human_override 且与自动层非同文的条目，逐条判断建议/事实层陈述——陈述完整文本（text＋scope_text，与建议层 value 拼接形态一致）trim 后逐字留在人工值中即未替换部分，其 citations/supports 按人工层登记为有效行（`statement_retained_verbatim`+`collect_statement_sources`）；只保留半句、改写或删掉不携带旧出处（保守）；条目级引用（source_id/material_refs 等）仍只在同文确认时保留（无结构化映射可细分）。已有纯函数 `inherit_human_edit` 的规则与本接线粒度一致（TextRange 贡献映射对应陈述级保留），持久化路径现在使用相同语义。新测试 partial_edit_keeps_sources_only_for_verbatim_retained_statements（RED→GREEN）：两次 apply 分别登记陈述甲（引指南）与乙（引补充说明），人工局部编辑保留甲逐字、改写乙——甲出处按 human_override 层成为有效必要依赖、乙不携带；指南改版后 stale 恰为 body→指南（未替换部分受检、补充说明未变不误伤）；改写为只剩乙的半句后有效依赖为空、已改版指南不阻断独立口径。
+
+### 结构依赖、示例输出关联与准备状态（2026-10-25接手后）
+
+执行包03第5条与17.2/17.3"结构依赖统一生成"、"示例输出关联"落地：
+
+- `packages/contracts` 新增 `ComputedMetric`（metric_ref/output_name/expression）；`QueryExampleStructure` 新增可选 `computed_metrics`（0–20 项；缺省兼容旧数据，null 无效）。契约样例 +3（553 通过）：合法输出声明、缺 output_name 无效、null 无效而缺省合法。`computed_metrics` 只声明 SQL 实际输出哪个口径，过滤用指标仍留在 dependencies 语义里（不互相冒充）。
+- `rows_for_object` 补结构知识引用登记：query_example 条目的 `effective_structure.dependencies[]`（EvidenceRef）按 structure 角色登记为有效必要知识依赖；`computed_metrics[].metric_ref` 按 output_metric 角色登记。结构与正文同层（`project_entry` 的层判定），人工层承载的结构同样登记，不借用底层结构。新测试 structure_dependencies_and_computed_metrics_register_knowledge_targets（RED→GREEN）：示例结构依赖表说明、输出声明指向指标——三类角色行齐备且被引对象（表说明或指标）任一改版后游走立即 stale。
+- 对象级准备状态暴露：`ingestion::preparation_status_in_tx`（M03）按对象当前来源查 `source_preparations` 最新方法版本行；无准备记录时回退到 `background_jobs` 的 prepare_source 真实排队态（作业表无 error_code 列，排队态错误码为 null，错误只随实际准备进度出现）；人工独立对象（无来源）返回 null。`KnowledgeObject` 契约新增 `preparation_status`（source_id/revision/state/error_code），list 与单读两处投影接线，`KnowledgePage` 详情增加准备状态文案（ready 不打扰）。`check-document-preparation` 扩展断言：空正文 null、排队期回退作业态且预填状态不冒充、完成后 ready、revision 绑定当次修订；calls=6 基线不变。
+
+验证：`knowledge_dependencies.rs` 8/8（新库连跑多次稳定）、`make verify-code`（含 TS 类型与 clippy -D warnings）、`verify-contracts` 553、`check-knowledge-workflow`(15)、`check-source-preparation`(19)、`check-document-preparation`(6)、`make verify-contracts` 前后均过。注：一次 API 调试中 GET /knowledge/{id} 返回 503（42S22 Unknown column）系准备状态查询误选 background_jobs 不存在的 error_code 列，已改为排队态不查错误码。
+
+### 多Worker专项与应用恢复（2026-10-25接手后，三阶段同轮通过并已注册）
+
+新窄检查 `tests/mvp/check-source-preparation-concurrency.mjs`（已注册进 `verify-knowledge-workflow` 与 `verify-source-preparation`）：阶段一四个文档作业由三个 Worker（harness 主 Worker+两个 spawn）并发领取，断言全部 ready、账目 calls===HTTP 次数且恰为 8（四文档各一分析一复核）、无重复消费；阶段二独占 Worker 在分析在途中被 SIGKILL，存活 Worker 以新代次领取（epoch≥2）、过期在途转 unknown 终态、作业按 unknown 终态 failed 不无限重试、账上仅一次 issued 且预留不释放、两秒内无新调用（租约360s不能自然过期，与来源整理检查同法显式改写 issued_until/lease_until 制造过期，领取与判定路径仍是真实的）；阶段三复核成果已在应用前落库（applying）的 Worker 被杀——存活 Worker 从已提交成果恢复应用到 ready 且**零新增模型调用**。2026-10-25连续多轮全绿（含死锁窗口内恢复的实锤轮）。
+
+该专项暴露并修复了两个真实缺陷：
+
+- **多Worker并发apply在近空 `knowledge_statements` 上的间隙锁死锁**（INNODB STATUS 实锤：两个 apply 事务各持 supremum 间隙 X 锁又要在其前插入，SQLSTATE 40001/错误1213，InnoDB 小表并发插入的经典形态，随表增长消失）。死锁本身按既有纪律是可重试瞬态（`Error::from` 把 1213 归 transient，200ms defer 重排）；检查只禁止数据级 `storage_decode`，死锁打印允许出现、恢复由终态/调用数/账目断言保证。
+- **应用事务回滚后重试无法推进**（真正的缺陷）：复核输出只存在于内存，apply 回滚后行停留在 `call_state='review'` 且 issued 窗口360s有效——重试者按"在途不接手"busy 自旋到窗口耗尽转 unknown，期间无进展。修复：新增 `stage_apply_in_tx`，复核成果在应用前落库（pending_draft 复用为复核输出载体，行转 `call_state='applying'`、issued 窗口清除——成果自此确定，unknown 语义只保留给结果未知的 analysis/review）；消费者领取到 applying 行时从已提交输出恢复应用（重校验合同、依赖漂移/版本冲突照常重开批），不重发模型调用、账目不新增；`reset_batch_in_tx` 状态集与 `complete_batch_in_tx` 完成条件同步纳入 applying。apply 段重构为共享的 `apply_and_advance`（`PendingBatch` 收拢批次四元组），正常路径与恢复路径同一实现。
+
+回归：`check-source-preparation`(5) 、`check-document-preparation`、`knowledge_dependencies` 10/10（合成库每轮重置后单轮判定；测试内 process_due 改为排空式循环与 worker 节奏等价，修掉了 schema2 作业 dispatch_seq 平键下领取近似随机的偶发误领）、`source_segments` 7/7、`check-semantic-governance`(5)、`check-model-startup`（retail 资料包固定修复后通过，409 根因是 API 启动 initialize 用进程资料包重写 semantic-catalog，混用 cockpit 默认使种子对象在目录中 reanalyze unsupported）。
+
+### 独立审查与修复（2026-10-25，未参与实现的审查者对抗关闭审查）
+
+审查者在新合成库与本地协议provider上复跑了三组绑定验收（全部实测通过）后给出 failed：两项阻塞、一项非阻塞，均已修复并复验：
+
+1. **扇出修复链对"准备failed+作业failed"断裂（阻塞）**：`reopen_preparation_in_tx` 复位 failed 准备行后，`requeue_finished_source_in_tx` 只翻 finished 作业——failed 作业无任何路径回 queued，复位后的准备行停在 pending 永不重整。修复：作业侧重排队函数更名 `requeue_terminal_source_in_tx`，finished 与 failed 都翻回 queued（清租约、重置尝试）；准备行侧 `reopen_preparation_in_tx` 排除 `model_unknown` 终态（结果不确定的回执预算预留保留、不自动重整，返回 Busy 不复位）——unknown 与已结算失败的区分按 error_code 落在准备行，不靠作业侧兜底。反例回归 `tests/source_fanout_failed_recovery.rs`（2项：已结算失败复位后作业真重排；unknown 终态行与作业原状不动）。
+2. **applying 重构后状态机测试未跟上（阻塞）**：`complete_batch_in_tx` 要求 `call_state='applying'`，`tests/semantic_preparation.rs` 两处仍是 stage_draft→complete_batch 直连，新合成库确定性 lease_lost（3项中2项挂），mvp 包装检查（内嵌跑该测试）随之 passed=false。修复：测试补 `stage_apply_in_tx` 步骤，3/3 与 mvp 包装复跑通过。
+3. **过期边界竞态误标（非阻塞，一并修）**：过期清扫与领取读取之间 issued_until 恰好越界的行呈 analysis/review+lease_valid=false——busy 分支（要求lease_valid）跳过、unknown 分支不命中，落进 begin_batch 撞 version_conflict 把 unknown 场景误标成版本冲突失败。修复：读取侧对"在途+窗口已过"形态按与过期清扫同一语义的 model_unknown 终态处理。
+
+修复后复验全绿：fmt 干净、clippy --all-targets 0告警、双二进制重建；`source_fanout_failed_recovery` 2/2、`semantic_preparation` 3/3、`check-semantic-preparation`（包装）通过、`knowledge_dependencies` 10/10（新鲜合成库）、`check-source-preparation`(5)、`check-source-preparation-concurrency`（三阶段）、`check-document-preparation` 通过。审查记录 `docs/reviews/semantic-preparation-closure-review-20261025.json`（审查者复核修复后更新为最终结论）。
+
+### 来源变更扇出（2026-10-25接手后，登记与消费两侧已接线）
+
+执行包03第7条"保存内容与反向依赖同事务，既有作业分页处理大扇出，不拉长保存事务"落地为轻量登记+Worker展开两层：
+
+- **登记侧（保存事务内）**：`dependency_index::has_dependents_in_tx` 走 `idx_dependency_dependents` 一次存在性查询（有效行、按目标身份：知识对象 target_kind='knowledge'，文档 target_kind='document'）；`knowledge/store.rs::persist` 尾部在有有效依赖者时登记 `source_fanout` 作业（文档资源带 `document-` 前缀，与 prepare_source 资源身份一致），`(kind,resource,version)` 唯一键幂等；创建首版无依赖行自然不产生作业，种子导入同理。persist 是全部保存路径（create/save_edit/apply_preparation/文档保存）的单一收口，新路径不会漏登记。
+- **消费侧（新 `use_cases/source_fanout.rs`，Worker 已接入循环）**：领取 `source_fanout`（固定 30s 租约，纯 SQL 不依赖预填/维护配置、不调模型）→ 作业不带 space，从依赖行反查目标所在空间（目标被删后仍能定位依赖者）→ `dependents_in_tx` 按 (owner,version) 分页（每页100）→ 每页把依赖者收敛到当前版本后组内一次 `walk_required_in_tx`，stale 归属按 owner 区分——**只对真正失效的依赖者**收集其有效材料来源（document/platform 目标），按来源当前修订重开：`reopen_preparation_in_tx` 只复位 ready/failed 且无在途调用的准备行（pending/partial 进行中的整理在自身批次推进中按当前内容重登指纹、unknown 回执的预算预留不动），`requeue_terminal_source_in_tx` 把 finished 与 failed 作业都翻回 queued（清租约、重置尝试；MySQL UPDATE 赋值从左到右生效，state 放最后赋值防条件读到已更新值；model_unknown 终态作业不重排，见下方审查修复记录）；Busy（在途/进行中/unknown）不重排队；缺头（退休）来源跳过；扇出作业本身终态且不重复。
+- **语义边界**：扇出是修复路径不是可见性路径——current_use/检索过滤经传递游走立即看到变化（既有测试），不等扇出；unknown 链不触发重整（与检索侧"unknown不当空链"一致）；重整后的再草稿质量（模型能否看到被改对象的新内容）依赖04/05的上下文/混合检索喂给整理，03 只保证队列链接与真重开判定就位。
+- 测试：`saving_a_depended_object_registers_a_lightweight_fanout_job`（登记反例：独立改版不登记、被依赖改版同事务一条 queued 绑新版本）、`fanout_reopens_preparation_only_for_stale_dependents`（消费反例：三来源分别为可重开/在途/缺头，只有可重开被复位重排且不重复、在途 analysis 不被抢占、缺头不产生作业、扇出终态、二轮消费不重复；C 的三条材料来源按"整理成果出处只绑定被整理来源"合同分三次 apply 构造，clear_override 后建议层生效）。`knowledge_dependencies.rs` 10/10 两次连跑稳定；受影响回归：`check-source-preparation`(19)、`check-document-preparation`(6)、`check-semantic-preparation`、`check-knowledge-workflow`、`check-retrieval-coverage`、`check-context-dependencies`、`check-prefill`(21) 均过（满载下个别脚本首跑 until 超时、同脚本重跑即过，与既有环境记录一致）。
+
+
+
+### 03关闭清单（全部完成，2026-10-25收口）
+
+1. ~~来源级 `source_preparations`、完整作业冻结输入、批次覆盖/游标/进度和错误；接通现有 `prepare_source` schema2作业，按原维护预算及稳定调用身份分批分析/复核，恢复不重发未知付费调用。~~ **2026-10-24接手后已完成并通过端到端验收**（见上节“来源级准备消费”）；“完整输入覆盖不等于语义ready”由未解释项判定落实。~~多Worker并发领取与恢复竞态的专项反例~~ **2026-10-25三阶段同轮通过并注册 Makefile**（见“多Worker专项与应用恢复”节，连带修复 apply 回滚后重试无法推进的缺陷）。
+2. 自动来源整理与原对象级预填统一；成果应用核对来源修订、方法、目标知识版本、必要依赖内容指纹及领取代次。~~用户文档保存原子登记raw索引及prepare；原文与整理独立。~~ **2026-10-24接手后文档原子登记已完成并通过端到端验收**（见上节“文档保存原子登记语义准备”）；`raw_source_index`新消费者由05接，当前真实pending，旧消费者不得误领。~~与对象级预填的预算/身份统一~~ **2026-10-25实质完成**：两侧共享同一维护配置/试算账本/调用身份纪律（整理与预填都走 maintenance_profile+configure_trial+reserve/settle）；统一前真实存在的缺口是"批次在途时对象被人工编辑/预填落建议推进版本"撞 apply `version_conflict` 被当永久失败、以及文档改版产生新修订后旧修订作业早停无终态——已修：版本冲突按当前版本重开批（check-source-preparation 阶段4b 端到端验收：重开批携带对象新版本、窗口内恰4次调用、账目如实）、旧修订标 superseded 终态（不冒充ready也不冒充处理中，UI 有对应文案）、apply 回滚后从已落库成果恢复（见"多Worker专项与应用恢复"节）。
+3. 依赖持久化、反向索引、批量传递查询/去重/防环、实际贡献根；立即接入v1/current_use、按ID读和新SQL草稿验证，不能等v2。人工四类编辑、unknown、相关/必要用途以及明确来源限制需完整反例。**2026-10-24接手后写入路径、传递游走/消费者接线、实际贡献根查询与人工四种编辑语义均已完成**（见“依赖索引写入路径”“依赖传递游走与消费者接线”“实际贡献根查询”与“人工四种编辑的来源保持与失效边界”四节：表+同事务生成+反向/有效层读取API+传递游走防环+assert_in_tx单点接线覆盖按ID读/SQL草稿诊断+来源身份闭包公开查询+同文携带/替换释放/采纳恢复/related不参与失效）；unknown按“报告不阻断”落地，硬门按17.3.2放在声明allowed_sources的消费者侧（04接线）；剩余检索过滤改走索引、内容指纹与条目内陈述级重绑定（04）见“未做”清单。
+4. 可靠出处重绑定（04）、来源变更扇出、`computed_metrics`、准备状态UI及本包剩余反例。~~扇出/computed_metrics/准备状态~~ **2026-10-25接手后已完成**（见"结构依赖、示例输出关联与准备状态"与"来源变更扇出"两节）；出处重绑定按执行包归04。embedding真实token上限拆分与容量驱动批大小由实际消费者落实。
+5. 完成执行包规定的旧能力回归、三组绑定验收、未参与相应实现者的独立审查，再执行 `make verify-delivery`、`make verify-increment`。三组 command 已登记（frontmatter + Makefile：`verify-source-segments`/`verify-source-preparation`/`verify-effective-dependencies`）并于2026-10-25依次执行全部通过（segments 7/7；preparation 三检查同轮通过；effective-dependencies 含 knowledge_dependencies 10/10 新鲜合成库单轮判定）；审查者独立复跑三组同样全过。`make verify-delivery` 通过。独立审查（未参与实现的审查者）首轮 failed（两项阻塞一项非阻塞，见"独立审查与修复"节），修复并全量复验后由审查者复核更新 `docs/reviews/semantic-preparation-closure-review-20261025.json`，回填 review 字段后执行 `make verify-increment` 收口。**2026-10-25 收口完成**：review 字段回填（scope指纹 `1eabb18e…` 与审查记录一致）→ `make verify-delivery` 通过 → `make verify-increment` 三组验收同轮全绿（收据 `.local/delivery/I2-SEMANTIC-PREPARATION-result.json`：segments 5.5s / preparation 207s / dependencies 55s，执行期间契约无漂移）→ status 翻 complete、evidence 回填收据路径 → 复核"complete 收据与当前契约及输入一致" → 关闭声明 `.local/delivery/semantic-preparation-closed-declaration.json`。
+
+### 04任务上下文开工（2026-10-25，I2-TASK-CONTEXT active）
+
+增量 `I2-TASK-CONTEXT` 已在 frontmatter 登记（需求 D02/D03/D08/D09/D13/D15、C01–C05/C07、A01/A02/A04；验收组 TASK-CONDITIONS/TASK-SCOPE/TASK-HISTORY 的 command 待 Makefile 目标建立后回填）。按 `docs/execution/semantic-runtime/task-context.md` 九切片推进，TDD、业务命名测试：
+
+1. Conditions/ConditionPatch/QuerySemanticResolution/QueryView 同源扩展与持久修订（set替换/unset清空/省略继承、旧channel解码、通用filters）；
+2. source_limits 稳定SourceKey允许集+宿主绑定 origin_message_ids、time_roles 三分；
+3. explicit_user 采纳宿主核实与继承复制原身份；
+4. input_task_ids 与持久 active_task_ref 分离、来源不并集、task_context_required；
+5. 轮内收紧在下一次普通/摘要派发前 Pi 原生重投影（不能安全续接沿 stale_context）；
+6. history_display/current_use 分途与已存报告保留；
+7. historical_analyses[] 受控投影（authority 递增格式、schema5 保留解码、空数组显式）；
+8. 摘要继承真实输入用途与来源、混合摘要保守重建。
+
+现有检查按执行包扩展：`check-request-context`、`check-query-semantics`、`check-task-{text,host,result}-authority`、`check-query-text-authority`、`check-report-text-authority`、`check-authority`、`check-context-dependencies`、`check-history-browser`、`check-analysis-reports(-browser)`，配合 `make verify-query-workflow`；新增反例不能全局取消"stale拒绝"断言，历史展示放宽与新采用/撤权拒绝分正反例。
+
+
+### 04：source_limits消费侧硬门接线（2026-10-25完成，接续切片1）
+
+按17.3.2把声明allowed_sources的判定接到消费侧，判定原语用03预置的 `knowledge::dependency_index::contribution_roots_in_tx`（本切片是其首个生产消费者）。新增 `use_cases/source_limits.rs`：
+
+- **判定**：对象可交付当且仅当 `unknown=∅ ∧ sources≠∅ ∧ sources⊆allowed`——空根独立人工内容不放行、闭包经停unknown fail-closed、传递根须全符合（部分允许不放行）；允许文档按稳定来源身份整体可读（限制跟身份走，实际读取仍核对当前修订）。Rust单测钉死判定矩阵（文档直通/空根/部分根/unknown/无根五类）。
+- **任务解析**：读取类工具按 `message_task_ids_in_tx`→各任务当前条件body取source_limits（缺失与显式null都不构成声明）；恰好绑定一个任务且其声明→设门；多任务且任一声明→`task_context_required`（不取并集）；未声明→不设门。
+- **request_query的门跟草稿所属任务走**（对抗审查发现并修复）：条件授权内部按 `args.task_id` 当前条件解析（`resolve_for_task_in_tx`），消息绑定另一无限制任务不能绕过受限任务的草稿硬拒，也不误伤无限制任务；语义诊断在同一arm复用该门。
+- **五缝**：read_source（来源身份成员先行判定）、read_knowledge（对象与个人资产按贡献根判定）、search_knowledge（候选批量一次闭包查询过滤，回执带 `source_limits{allowed_sources,filtered_candidates}` 与 `memory_retrieval=excluded_by_source_limits`，个人记忆不作为线索交付，受限空结果与candidate_limit可区分；bounded_search_reply透传）、validate_sql（范围外引用退化为覆盖缺口note）、request_query（正式草稿硬拒绝）。
+- **错误码**：`source_not_allowed`/`task_context_required` 进AppError合同（boundary.ts/rs再生成），并补进 `invoke()` 拒绝回执持久化名单（缺此两码时拒绝不落回执、tool-rejections 404且模型侧重试）。
+
+验证：`make verify-task-conditions` 全绿（合同567 + tool-schema + query-semantics 8 + task-text-authority 12 + check-source-limits 六场景：全量允许/部分允许/文档限制与解除/多任务歧义/无门回归/跨任务草稿门）。回归：knowledge_dependencies 10/10（data_agent_dep_check残留固定fixture主键需先DROP重建再单轮判定，非代码回归）、check-context-dependencies、check-retrieval-coverage、check-query-workflow 8项、fmt/clippy -D warnings/check:types。对抗审查工作流（20 agent、4维度+逐项反驳）：5项确认全部修复——request_query消息绑定集绕过（上述修复）、unknown fail-closed无测试、检索过滤正对照缺失、受限内request_query正向缺失、filtered_candidates未断言；11项经反驳排除（含owner_version匹配、文档旧修订直通、预路由读取等，理由存审查journal）。
+
+范围边界：active_task_ref持久化与轮内重投影（切片3-5）、get_query/read_analysis_report/present_analysis_answer等结果与报告通道（切片6）、skill read（后续切片）本轮不设门；轮内已声明限制后的旧成功回执重放沿原投影语义。
+### 04：time_roles消费语义接线（2026-10-25完成，接续切片2）
+
+按执行包切片3把时间口径三分接到消费侧：`event_time`（采用的时间字段含义，value可空，实际区间沿time_start/time_end）/`observation_cutoff`（观察截点，RFC3339带时区值）/`data_batch`（批次值非空），三者经条件 `time_roles` 声明（Conditions可选字段、ConditionSet整体替换minItems 1、清空用unset、省略继承），Schema层 `$defs.TimeRole/TimeBasis` + QueryView.time_basis + AnalysisAnswerValue.kind += observation_cutoff/data_batch（新增可选 `field_ref` 消歧同名多角色），boundary.ts/rs再生成。
+
+- **投影快照**：`request_query` 保存草稿时从 `args.task_id` 当前条件投影 `time_basis` 快照列（migration 202610250002，JSON NULL，仿semantic_resolution先例；模型不可自带）。投影只在time_roles非空时发生并经 `contracts::validate("TimeBasis")` 硬校验；条件授权路径改为返回 `(authority, conditions)` 元组，投影与source_limits门同源同纪律（跟草稿所属任务当前条件走，不跟消息绑定集）。任务后来改版/解除不改写已存草稿快照；旧草稿保持NULL不猜回填。
+- **答案绑定fail-closed**：render新增两kind只读该查询 `time_basis.time_roles`——按role匹配、binding.field_ref存在时再按角色field_ref对齐、候选须恰一个且value非空，否则 `invalid_evidence`；未声明草稿不能绑定，request_clock与平台data_freshness不冒充用户截点/批次。Rust单测钉死：声明命中、同名多角色消歧、缺field_ref歧义拒绝、未声明拒绝。
+- **文案与渲染**：data-tools.ts present_analysis_answer 与 resources.ts 时间规则句同步（声明经time_roles登记、草稿保存时快照、field_ref对齐、request_clock/data_freshness只是参考信息、未声明留缺口先请用户声明）；QueryCard 以一行展示声明快照（观察截点/数据批次/时间字段，值→field_ref→描述回退），与data_freshness不同源不混淆。
+
+验证：`make verify-task-conditions` 全绿（合同574 + tool-schema + query-semantics + task-text-authority + check-source-limits + 新增 check-time-roles 三场景：快照投影与解除不改写/答案绑定声明值与field_ref消歧/未声明草稿拒绝绑定）。回归：verify-query-workflow 6套、check-grounded-answers、check-context-dependencies、check-retrieval-coverage、knowledge_dependencies 10/10（清洁库）、fmt/clippy/tsc。对抗审查工作流（7 agent、4维度+逐项反驳）：compat/consistency/regression三维度零确认；bypass确认1项（3/3支持，minor）——**time_roles声明无逐字段用户来源门**：模型可经condition_patch自编observation_cutoff并经草稿快照以声明身份进入正式答案。处置：该成因与time_start/time_end/metric等全部条件字段同构（条件体由模型维护、经卡片展示与执行确认程序性缓解），执行包把来源绑定纪律分别划给切片2（source_limits origin_message_ids）与切片4（semantic_resolution explicit_user），切片3对time_roles无采纳门要求；列为候选加固项（可在07答案定稿或专项provenance切片统一处理），不在本切片擅自扩权。与既有面相比仍是净改善：截点/批次从不可审计的散文/参数变为持久化、带版本、卡片可见的声明。
+
+范围边界：执行侧时间谓词钳制（check_metric_time等）、检索过滤、active_task_ref持久化与轮内重投影（切片4-5）、历史投影与摘要继承（切片6-8）不在本切片。
+
+### 04切片4残余：条件层口径决策与草稿一致性（2026-10-25完成，本轮收尾切片）
+
+落实计划切片4两条残余并补 create 采纳纪律。`query_semantics.rs` 重构为三个入口：`validate_resolution`（草稿自带决策，本轮绑定纪律不变）；`validate_condition_resolution`（条件层：未决状态【needs_clarification或unresolved非空】允许如实记录——此前 revise 直接拒绝、create 完全不核对；explicit_user 要么 adoption_message_id==本轮消息且 user_quote==本轮完整原话，要么与任务当前条件已验证声明【inherited】逐字相等；unambiguous 不得携带采纳身份）；`draft_resolution`（草稿与目标条件版本对齐：条件声明未决→clarification_required；已决→省略继承该决策【含原采纳身份】、携带须与声明 deep-equal 否则 invalid_input；未声明→草稿自带决策按本轮绑定独立成立）。
+
+接线（data_tools.rs）：预检块（原:412）request_query 分支先读任务当前声明调 `draft_resolution`——**必须先于 begin_revision 失效旧稿**（曾移入 arm 导致被拒修订尝试先 supersede 旧稿的回归，复验发现后修回）；arm 内以授权返回的 conditions 权威复算并经 `DraftValidation.semantic_resolution` 持久化（store.rs INSERT 绑定改自此，不再直接取模型参数）。update_analysis_task 预检分支判定与 `apply_update_in_tx` 一致（对抗审查修复）：create、task_id 缺省的等同create、split 都按完整 conditions 核对（split 的 inherited 取原任务当前声明，复制原采纳决策成立；等同create 无源任务 inherited=None，伪造拒绝），防止"revise+task_id:null+condition_patch"经补丁分支漏掉 conditions 里的采纳声明（审查确认的绕过，major）。`declared_resolution_in_tx` 整列读 body 防 JSON 路径 NULL 解码失败。文案对齐（审查确认 minor）：request_query 工具描述改为"条件已声明决策时省略即继承、携带须逐字一致、否则先修订条件"，schema RequestQueryInput.semantic_resolution 描述同步。
+
+验证：check-query-semantics 14项全绿（原8项 + needs_clarification记录进条件并按版本阻断【含另称明确】/省略修订继承未决【不能用省略变unambiguous】/已决版本省略继承与不一致硬拒/本轮采纳写入条件+次轮逐字复制成立与改写拒绝+草稿继承原身份/等同create按完整条件核对+split复制原采纳成立/adoption_message_id宿主绑定：模型省略身份时条件与草稿均回填本轮真实消息）；`make verify-task-conditions` 全绿（577合同+tool-schema+query-semantics+task-text-authority+source-limits+time-roles）、check-task-splitting 回归、verify-query-workflow 6套、grounded-answers、fmt/clippy/tsc、lib单测155过（5失败为环境门控MySQL锁定/checkpoint测试，与改动前同集）。对抗审查工作流（18 agent、3维度+逐项反驳）：4项确认——等同create绕过（major，已修复如上+补E2E）、split复制被误拒（major，已修复+补E2E）、request_query文案与新纪律相反（minor，已修复）、**adoption_message_id 对真实模型不可达（major，切片1以来既有，确认后本轮已修复，见下段）**；1项反驳排除（unset洗白：unset是显式动作且unset后为显式null，草稿自带决策仍需本轮绑定）。
+
+**遗留缺陷已修复（adoption_message_id 宿主绑定，goal_revision 99）**：此前 explicit_user 要求模型填写本轮真实消息ID，但该ID从未暴露给模型（E2E 全绿仅因测试注入 run.message_id，生产路径不可达、继承无生产种子）。修复落地：① schema QuerySemanticResolution 的 explicit_user 分支 adoption_message_id 放宽为 anyOf [string\\S, null]（null=新采纳待宿主绑定），合同案例554改造为类型约束案例（非字符串非null仍拒）、新增574-576三案例（省略合法/复制合法/空白拒绝），共577案例；② 草稿层 `draft_resolution` 新增 bind 闭包：持久化前把 explicit_user 且 null 身份回填本轮 message_id，关键时序为先绑定再与声明比较（曾因先比较后绑定把省略携带误判 invalid_input，E2E 抓出后修正，并补单测时序案例）；③ 条件层 `validate_condition_resolution` 同步：null 或恰好等于本轮ID都算新采纳（走本轮原话核对），其余ID走复制继承逐字核对；④ update_analysis_task 预检通过后构造规范化 args 克隆（bound_args）经 apply_update_in_tx 持久化——apply 层指纹=fingerprint(args)，回填是纯函数，同消息重试指纹一致、跨消息重试正确拒绝；⑤ E2E 新增宿主绑定场景（模型全程不知道消息ID：revise 省略→条件回填本轮ID、request_query 省略→草稿回填本轮ID），split 断言改与任务当前声明比对。继承路径语义不变：已回填身份逐字复制成立、改写或凭空旧ID拒绝。验证：check-query-semantics 14项全绿、make verify-task-conditions 全绿（577合同）、verify-query-workflow 6套、grounded-answers、task-splitting、fmt/clippy/tsc、lib单测155过（5环境门控与改动前同集）。
+
+### 05混合检索进行中（切片1验证完成；本地实现就绪，E2E待环境窗口）
+
+切片1（真实REST能力验证）已完成：`tests/hybrid/probe-milvus-hybrid.mjs` 对专用测试集合（结束即删）验证 Milvus v3.0.2 REST 的 chinese 分析器（Jieba）、BM25 函数/sparse、1024维 dense 与标量过滤全部可用，证据 `.local/checks/milvus-hybrid-capabilities.json`（含否定区分：『未付款』原文排在『已付款』前；别名检索；dense+filter；run_analyzer 实际词项）。**关键请求形状**：REST v2 顶层 enableAnalyzer/analyzerParams 不被解析，analyzer 配置必须放 `elementTypeParams`（enable_analyzer/analyzer_params）；BM25 函数不接受 params(k1/b)；run_analyzer 路径是 `/v2/vectordb/common/run_analyzer`。
+
+本地实现（已完成、二进制已重建，E2E 因环境阻塞待跑）：
+- **集合代次**（vector.rs）：显式 schema（chinese 分析器+BM25 函数+SPARSE_INVERTED_INDEX+1024维 dense+enableDynamicField）；`resolve_generation` 检测配置名集合形状——旧形状（仅dense）不能原地升级，自动落到 `配置名_h1` 新代次集合（不存在则创建），旧集合不删不改、零写入（统一切换按08）；配置名不存在时直接在配置名建新形状（测试随机集合名零改动兼容）。`identity` 指纹含实际集合名与 collectionID，target 变化经既有 epoch 机制触发全量重排。`generation` 形状判定=fields 是否含 sparse。
+- **BM25+dense 双通道检索**（vector.rs `run_batch`）：两路同批并发（annsField=vector/sparse，同 filter 同 outputFields），候选携带原始分数（distance）；任一路失败按整体不可用降级。`Candidates` 新增 `lexical` 字段（BM25 有序命中）；`retrieve_scoped_in_tx` 把 BM25 命中并入候选并经 `current_objects_in_tx` 回源。
+- **RRF k=60**（mod.rs rank_hybrid）：BM25/dense 同权 1/(60+rank)，精确ID仍 100 分优先；BM25 命中非空时词法通道用 BM25 排名（不再退回内存子串计分），为空时（降级路径）保留内存计分。新增单测 bm25_channel_ranks_without_memory_scoring_and_rrf_uses_k60。
+- **首批限额与不足再扩**（切片7）：每路首批 max(50,5×limit).min(200)（limit 贯通 SearchInput.limit 1-30 与 HTTP 固定30）；两路合计命中对象数 < 2×limit 时扩一轮至 200 并按通道合并去重（批间分数同集合同 metric 可比）；合计候选 1000 上界如实报 bounded。
+- **候选先相关性排序**（store.rs）：MySQL 候选通道改 GROUP BY+SUM(INSTR 命中数) DESC 排序（原先 ID 序 LIMIT 1001 是执行包禁止的模式）；达到 1000 上限如实报 candidate_limit。
+- **index_lag 如实报告**（excerpts.rs+schema）：带完整位置但 content_hash 与当前正文不符的命中不再静默丢弃——部分滞后时报 state=index_lag（KnowledgeRetrieval.state 枚举新增，577 合同含双侧验证全绿）并保留可回源片段；全部滞后保持 unlocated。新增单测 stale_index_hits_report_index_lag_instead_of_silent_drop。
+- check-hybrid-retrieval.mjs 扩两场景：旧形状集合占用配置名→自动落 _h1（旧集合零写入且保留）；BM25 否定区分（未付款规则文档先于已付款召回，查询含独占含义词拉开分差）。
+- harness.mjs 加子进程 exit 日志（诊断孤儿进程）。
+
+**环境阻塞（重要，非代码问题）**：check-hybrid-retrieval 在同步阶段（pages_committed=2 后）API 挂死。诊断链：MySQL processlist 完全空闲（无活动 SQL）→ 对照组（无 vector env）同样挂 → 清理跨会话孤儿进程（约20个 platform-mock/api/worker 残留，运行12-26小时）后仍复现 → 根因=宿主 Defender netext 网络过滤间歇满载（load watcher 记录 15:27-15:41 netext 65-99% 反复尖峰，与 [[host-load-breaks-lease-tests]] 同模式）：API/worker 经 colima NAT 连 MySQL 的 TCP 请求挂起，请求未达数据库。catalog-import E2E 同期仍全绿（窗口运气）。已设 netext 安静窗口监控（连续~2.5分钟 quiet），窗口开启即跑 make verify-hybrid-retrieval 及相关电池。**不能用此期间的挂死推断代码回归。**
+
+切片2/3本地实现完成（本轮，二进制16:20重建；E2E 仍待窗口）：
+- **raw_source_index 消费者**（use_cases/raw_source_index.rs，worker TOOLSET=data 新增循环）：claim_source_work(kind='raw_source_index'/schema2)→document- 来源查 knowledge_objects、平台查 source_heads→已被取代修订（current>revision）直接结算不花嵌入预算→正文未完成保持 running 让租约到期重试（不打失败）→SourceKey/SourceFormat（document=Markdown 否则 Sql）→确定性切块游标循环至结束→`vector::apply_source_excerpts`（幂等键绑定 SourceKey/修订/locator/切块版本/embedding SPEC）→`drop_source_excerpts(revision)` 清更旧修订→settle。嵌入走 `Binding::RawIndex(source, revision, texts_fingerprint)`：操作身份按批次文本指纹绑定，跳批/换序不共用身份，重试经共享嵌入缓存回放不重复计费。错误分类沿用整理消费者（lease_lost→OK；瞬态且 attempts<2→begin_attempt+defer；否则 fail）。预算缺失时作业保持真实 pending（与整理消费者同口径）。
+- **摘录写入形状修正**：pieces 的 object_version 按数值存（与知识通道同纪律，升版过滤才能数值比较）；新增 source_kind 字段（document/platform，回源重建 SourceKey 用）。
+- **知识检索排除摘录**（vector.rs）：scope.kinds 为空时 filter 加 `kind != "source_excerpt"`——同集合承载两类目标，raw 通道单独按 `kind == "source_excerpt"` 检索，v1 知识检索不冒充。
+- **raw 双通道召回**（search_scoped 内嵌，与知识通道共用同一次会话/同批纪律/2秒预算/单次嵌入）：excerpt_rows 只带 citation 身份+通道原始分数；`rrf_merge_rows`（mod.rs）BM25/dense 同权 1/(60+rank) 按摘录 id 融合（同文不同位置=不同 id 保留）；RawCandidates{hits,state,bounded} 挂进 Candidates.raw。新增单测 excerpt_rows_rrf_merges_channels_and_keeps_positions_distinct。
+- **门控回源**（knowledge_sources.rs `recall_excerpts_in_tx`，05由门控集成测试驱动，06接公开v2 hits）：SourceLimits 门在回源前按来源身份成员判定（不查库、receipt只报计数）；选中≤30才读正文、每来源只读一次当前修订；`verify_and_merge` 逐窗口核验（修订一致+当前正文切片hash相符，修订数值/字符串两种形状都收）后相交有界合并≤2400（超限相交窗口保持独立，不链式合并成全文）；过期/不符命中计 index_lag 舍弃不冒充；返回 hits(citation/source_length/text/score)+lagged+filtered+state。新增单测两例（相交合并+滞后计数；2400上限保独立）。
+- **门控集成测试**（lib 内 gated_raw_source_round_trip_recalls_revision_and_reports_lag，沿用 conversations 门控模式）：隔离库+专用集合（data_agent_test_/da_app_ 前缀守卫防误写共享集合，缺环境跳过不冒充通过）：切块→替身向量写入→真实 Milvus 双通道召回→回源文本与当前正文逐字核对→门控过滤计数→升版后全滞后如实报告。check-hybrid-retrieval.mjs 新增 worker 路径场景（raw_source_index 消费者把文档+平台原文入代次索引、作业如实收尾、v1 不冒充）并驱动该 Rust 门控测试。
+- 验证：lib 161 过+5 已知 DB 门控同集；clippy/fmt 全绿；worker/api 二进制分开重建（16:20，mtime 已核对）；合同 577 双侧全绿。
+
+剩余：切片6 权限/来源限制每路前置的 raw 部分（recall 已就位，invoke_tool 交付层接线归06）、切片8 元信息批量化核对（归属06 v2通道）；E2E 全电池（verify-hybrid-retrieval 含新三场景、verify-shared-embedding、check-retrieval-excerpts、retrieval 相关回归、check-agent-library 含门控5项）待安静窗口。
+
+
+### 交接（2026-10-25 17:00，用户要求交接）
+
+> 历史交接，已由本文顶部“本轮分批提交与接续校准”修正：保留以下命令与代码导航，但“先等环境→05收口→06”的顺序漏掉04，16:20二进制也未覆盖16:29源码。环境归因是此前诊断记录，不构成未验收代码的通过证据。
+
+**当前断点**：05切片1-3代码全部完成并本地验证（lib 161过+5已知DB门控同集、clippy/fmt全绿、合同577双侧、二进制16:20分开重建核对mtime）；E2E电池未跑——被宿主Defender netext间歇满载阻塞（15:27起，watch日志实锤，MySQL经colima NAT挂起且processlist空闲，非代码回归；详见上文环境阻塞小节）。用户指示交接停在这里。
+
+**接手第一件事（安静窗口判定）**：看 `tail /tmp/data-agent-load-watch.log`（watcher进程可能已不在，必要时重起：20秒采样load5与netext，连续8个quiet=1≈2.5分钟即窗口）。窗口内**串行**跑以下电池（数据库harness串行纪律；每条跑完看输出再跑下一条）：
+
+```bash
+unset DEEPSEEK_API_KEY DEEPSEEK_BASE_URL DEEPSEEK_MODEL DATA_AGENT_MODEL_PROFILE DATA_AGENT_MODEL_FAULT
+export PATH="/opt/homebrew/opt/node@26/bin:$HOME/.cargo/bin:$PATH"
+make verify-hybrid-retrieval          # 05核心：含4个新场景+内嵌Rust门控集成测试
+node tests/mvp/check-retrieval-excerpts.mjs
+node tests/mvp/check-retrieval-ranking.mjs
+node tests/mvp/check-retrieval-scope.mjs
+node tests/mvp/check-retrieval-coverage.mjs
+node tests/mvp/check-index-concurrency.mjs
+node tests/mvp/check-context-dependencies.mjs
+make verify-shared-embedding
+node tests/mvp/check-agent-library.mjs
+```
+
+**电池全绿后**：05对抗审查工作流（ultracode默认；维度：与hybrid-retrieval.md切片1-9及必须覆盖表逐条对照、正确性、成本纪律、测试覆盖）→ CURRENT.md收口05 → 06证据交付（evidence-delivery.md；recall_excerpts_in_tx已备好v2 hits内部通路，search_knowledge v2的raw/knowledge hits+coverage、tool_contract_version=2、read_knowledge v2）→ 07 → 08 → 09。
+
+**本包改动清单（相对HEAD fed8276的05增量）**：vector.rs（代次_h1/双通道/search_scoped内嵌raw通道+kind排除/source_kind字段/数值object_version/apply_source_excerpts/drop_source_excerpts）、retrieval/mod.rs（RRF_K pub(crate)、rrf_merge_rows、rank_hybrid）、store.rs（候选相关性排序）、excerpts.rs（index_lag）、knowledge_embeddings.rs（Binding::RawIndex按批次文本指纹、maintenance_profile pub(crate)、Candidates.raw贯通）、use_cases/raw_source_index.rs（消费者）、knowledge_sources.rs（recall_excerpts_in_tx/verify_and_merge+单测+门控集成测试）、source_limits.rs（gate_from_contract）、worker/main.rs（raw index循环）、schema.json（index_lag枚举，已regenerate）、tests/mvp/check-hybrid-retrieval.mjs（4新场景）、tests/hybrid/probe-milvus-hybrid.mjs（切片1证据）、docs/CURRENT.md。注意：工作树还含01-04的未提交改动（208文件），git状态见git status；不reset不覆盖。
+
+**已知坑（都在记忆与本文件）**：cargo多-p静默跳过（分开build+查mtime）；CURRENT.md严禁split("---")；Rust测试子shell要unset DEEPSEEK变量；Docker用--context colima-data-agent；不读真实凭据不拿主库当测试库；netext风暴期不能用挂死推断代码回归。
+
+### 接续顺序与环境
+先读本节及frontmatter，再读 `docs/execution/semantic-runtime/{README,AGENT_PROMPT,coverage-and-validation,task-context}.md` 和实现设计17.4、17.8。03已完整关闭（见"03关闭清单"）；04任务上下文按九切片TDD推进（Conditions/ConditionPatch/QuerySemanticResolution同源扩展→source_limits/time_roles/采纳→active_task_ref与轮内重投影→历史投影与摘要继承），验收command随Makefile目标建立登记，完成后依次05混合检索、06证据交付、07答案定稿、08兼容升级、09整体验收。无需每包再请用户批准；不能伪造独立审查，有实际授权或无法满足合同的阻塞时记录确切缺口。
+
+- 分支 `codex/semantic-maintenance-prototype`，HEAD `fed8276`；全部历史和本轮修改仍未提交，不reset、不覆盖、不切回基线。
+- 数据库harness串行；Rust改动后先构建API/Worker，不能在运行harness时重建其二进制。测试子shell先清除 `DEEPSEEK_API_KEY DEEPSEEK_BASE_URL DEEPSEEK_MODEL DATA_AGENT_MODEL_PROFILE DATA_AGENT_MODEL_FAULT`，再把本机cargo目录加到PATH；不读取或打印真实凭据。
+- 使用 `.node-version` 固定的Node 26.8.1和npm 11.19.0；不要直接依赖登录shell中的Node 22。收尾前半段曾使用Node 22.23.1，后续已切回固定版本并重跑共享契约/类型及集成验证；`semantic-handoff-node-version.log`记录实际版本。公共语义投影的RED由Rust/MySQL反例确认，不归咎于Node版本。
+- Docker显式用 `colima-data-agent`。专用MySQL已恢复原Memory=1,073,741,824、MemorySwap=2,147,483,648，容器running、OOM=false、`SELECT 1`通过，见 `.local/checks/semantic-handoff-mysql-restored.log`；不改compose或日常应用服务。本次harness已退出清理。时序失败先取实际锁/租约/宿主/容器证据，不预设都由Defender或资源造成。
+- 一表一份完整生产SQL；Pi唯一Agent/压缩/恢复，每消息24次、连续临时失败3次；模型/摘要/恢复均沿原预算与操作身份。不新增多生产者、定时同步或新Agent框架。
+- 大对象正文重复仅列入下文候选优化，本轮用户要求“先记下来”，不纳入续做必做范围。真实模型/embedding未执行，合成协议和真实隔离MySQL不证明真实模型质量。
+- 本次无付费调用、commit/push、部署或更新日常服务；下一实施者也不能从旧授权推定这类操作已获许可。
+
+## 来源同步增量（2026-10-24，已完成）
+
+本节保存02关闭时状态；当前03进展见上节。01已通过独立审查、四组最终验收及关闭记录检查；静态声明归档`.local/delivery/runtime-capacity-closed-declaration.json`。02按`docs/execution/semantic-runtime/source-sync.md`及实现设计17.2/17.3/17.3.1/17.8完成。
+
+当前切片：SourceKey/SourceCitation/SourceLocator/SourceExcerpt已同源生成；`knowledge_sources::read_citation_in_tx`按当前修订和Unicode code point切片，旧位置返回stale_source，旧全文入口仍可读保留快照。SQL词法比较保留字符串、hint与注释语义；方言不明的井号、双斜线、方括号等回退原文，比较方法为sql_tokens_v2。后台同步复用M10现有队列，页内来源/成员/待办/游标同事务，最终应用负责人及退休规则；prepare_source/raw_source_index暂按schema2保留pending，旧消费者不领取。
+
+已验证：`.local/checks/source-excerpt-green.log`覆盖当前正文、排版复用、平台观测独立、内容变化及定点旧修订拒绝；`sql-comment-review-green.log`覆盖独立审查补出的井号注释/CR/引用标识符反例。`source-sync-recovery-first.log`覆盖分页退出恢复、后页失败及旧成功回执。原回归`source-sync-role-regression.log`（3组）、`source-sync-maintenance-regression.log`（6组）、`source-sync-knowledge-regression.log`（15组）通过；legacy错误事务先提交再返回后，`source-sync-catalog-regression-green.log`完整12组通过。UI真实组件合成HTTP与实连Web/API/Worker/MySQL报告分别为`source-sync-browser/report.json`及`source-sync-browser-integration/report.json`，未接通的整理/索引明确显示pending。
+
+最终关闭：独立审查`docs/reviews/source-sync-closure-review-20261024.json`通过；`make verify-increment`完整通过四组绑定命令，收据`.local/delivery/I2-SOURCE-SYNC-result.json`，2026-10-24T03:33:38Z结束。包括8MiB完整写入/回读、超限拒绝、101页、心跳与恢复、旧状态升级、原目录/维护/并发回归及真实浏览器。证据为合成平台/本地协议与真实隔离MySQL，无官方付费请求；容器临时2GiB的环境差异见下文。02可关闭，接续03。
+
+验收与要求变更：POST /source-syncs按已定17.3.1从同步200迁移为202+GET进度，旧已成功命令仍返回原200回执；旧业务测试须显式等待进度终态，不能把202当完成或删除旧业务断言。新作业仅M10一份租约，旧前台fetching截止时间只处理legacy批次。允许未接入prepare_source/raw_source_index真实pending（schema2，旧消费者不领取）；不宣称语义准备/索引已就绪。Schema已取消SQL/DDL字符和字段条数旧限制，真实字节传输及四组绑定验收已完成，见本节最终关闭证据。
+
+来源比较与回归夹具补充：按17.3.1，内容变化与平台观测版本分离，同一平台版本的真实内容变化也推进来源修订；平台更旧版本仍按原规则stale_source拒绝。原semantic-role回滚测试用“同平台版本改注释”触发version_conflict已不符合该合同，改为第二表明确更旧platform_version触发stale_source，保留整批负责人/创建资格不变化断言；独立依据是HEAD原store.rs的lower-version拒绝路径。旧同步测试采用真实source_sync-only Worker（仅development合成验收环境开关）推进同一个队列/事务，普通Worker原暂停状态保留，避免预填并行消费污染既有预算/队列断言；它不是模拟同步完成。
+
+### 来源同步独立审查与复验补充
+
+- 外部键：默认MySQL排序规则会把大小写不同的namespace/external_id混为一条current。迁移将来源键及同范围代次键改为`utf8mb4_0900_bin`，upsert前校验稳定键对应原source_id；`source-upgrade-stable-keys-green.log`覆盖大小写隔离和改名不换ID。
+- 方法升级：保留正文的metadata可能仍是旧观测；回填改为优先保留current的observed_metadata，不回退平台版本和负责人。`source-upgrade-comparison-upgrade-green.log`验证方法回填及纯排版重比不推进修订/待办。
+- 回填恢复与竞争：`source-upgrade-legacy-backfill-green.log`和`source-upgrade-concurrent-write-green.log`分别验证33份来源中断恢复、旧回填与实时更新竞争。初次回填测试的大IN锁被MySQL优化为全扫描并锁住全部来源，已以performance_schema证据确认；测试改为逐主键等值锁，17/33中断点及全部身份/正文断言不变，未改产品行为。
+- 心跳：旧select分支内联await续租时，暂停同任务里持job行锁的页提交；真实RED见`source-sync-heartbeat-red.log`。现两个future持续被poll；`source-sync-heartbeat-green.log`在7.474秒完成两页，真实锁等待1、epoch=2、attempts=0，没有延长租约或重复取页。测试由另一审查者独立核对。
+- 异步错误：原超限原因在批次终态丢失，`source-sync-error-details-red.log`证实。Schema新增可空error_message，错误与终态同事务持久保存，旧回执仍按error_code显示；UI文字及旧回退浏览器通过`source-sync-browser-details-green.log`（7组）；`source-sync-error-details-green.log`证实API重新读取仍保留实际大小及上限。
+- 共享代码/契约检查`source-sync-reviewed-code.log`通过，547条同源样例通过。四组Make命令已绑定并真实执行；最终审查和增量收据见本节关闭证据。
+- 最后回归：`source-sync-final-regression.log`含架构/锁序、目录12组、分析优先级6组及检索覆盖2组；`source-sync-prefill-concurrency.log`证明两Worker共trial的四次调用全部结算且无重发；`source-sync-space-browser-green.log`覆盖真实Web/API/Worker/MySQL及跨空间批次404/无进度泄露。101页及末页回源见`source-storage-pages-green.log`，303对象完整保存。
+
+### 待优化项：完整来源的表示与体积（2026-10-24，用户要求先记录）
+
+8 MiB是单来源完整JSON的接收上限，本轮近上限材料是合成压力测试，不代表普通平台表的实际大小，也不是每次模型输入量。已查实`ingestion/catalog.rs::source_text`先放完整元数据JSON，再展开DDL、生产SQL、字段说明；内容重复导致存储和后续处理体积放大，旧知识条目也有正文重复。后续评估规范来源表示、正文去重和按修订/片段读取，同时保留完整资料、稳定定位及旧引用含义。用户当前要求“先记下来”，本条是候选优化，不因此扩展02范围、不降低完整资料验收、不直接重写已有正文或定位。后续03/05/06既定分段整理与检索照常实施；表示去重若影响定位，须单独明确迁移方式。
+
+实际压力验证补充：201字段/长SQL与8MiB来源写入和完整回读已执行；连续组合复核时MySQL的1GiB容器发生OOM（exit137后自动恢复），不能据此前半段通过宣布整组通过。独立fresh boundary复验在同1GiB下通过，8MiB紧凑JSON形成16,777,378字节正文；内存峰值仍贴近1GiB、发生821次触顶回收，匿名内存最高约804MB。证据为`.local/checks/source-storage-container-events.log`、`source-storage-first-run-durable-evidence.log`及`source-storage-fresh-boundary.log`、`source-storage-fresh-boundary-memory-summary.json`。目前只能确认资源压力和正文放大，未证明内存泄漏。为后续验收曾临时将专用MySQL容器Memory由1,073,741,824调为2,147,483,648，MemorySwap仍2,147,483,648；仍串行。03交接收尾已恢复原设置并确认可连接，见本页最新一节；未修改部署文件或日常应用服务。
+
+## 运行与容量审计修复（2026-10-24，已完成）
+
+当前授权为按九阶段执行包连续实现、相称验证与相关文档；不包括付费调用、提交推送、部署或更新日常服务。沿用dev_co、TDD和contract-first。01已按当前代码重新完成独立审查与四组绑定验收；下述旧等待/未执行记录仅保留诊断过程。
+
+- 已确认代码问题：`personal_assets::select`持会话锁调用外部结果来源检查；先补真实HTTP/MySQL锁反例，再分为短事务核幂等/状态、锁外检查、短事务重核保存，保留成功重放不重新激活的合同。
+- 01合同缺口留在本增量完成：不可行容量提供数值可行范围；固定开销token估算与Pi口径一致且保留独立字节门槛；新增Rust单测接入实际Make目标。Rust/TS用同源向量约束公式，Node按实际SDK上下文负责运行时复核。
+- 租约失败仍需区分启动准备、真实DB往返与检索期间续租；CPU样本并非持续99–100%，不能据此认定唯一环境原因。保留TTL后原owner/epoch、到期时间推进、无重复副作用、版本变更拒绝等断言；不靠等待CPU窗口或暂停Defender收尾。
+- `verify-increment`先要求有效passed审查，才执行命令；必须在修复后实际独立复审，再运行验收，不能按旧交接倒置顺序或复用旧指纹。
+- harness仅清理本次创建的资源；异常退出清理按可信失败路径补证，不批量删除历史测试资源。
+- 本次接续开始时未运行新产品测试；旧报告仅作定位线索。完成01后切换当前增量进入来源同步。
+
+### 最终关闭证据
+
+`make verify-increment`于2026-10-24完整通过四组绑定验收：容量与Pi接入、检索/选择锁和续租、Worker故障恢复、旧配置及检查点恢复；所有命令exit0、未超时，验收前后指纹一致。收据为`.local/delivery/I2-RUNTIME-CAPACITY-result.json`，完整命令日志位置由该收据记录；独立审查为`docs/reviews/runtime-capacity-closure-review-20261024.json`，原三项发现全部关闭。长调查最新窄验收为14总调用=12工具+1摘要+1答案、80.686秒；最终gate再次覆盖实际账本。真实MySQL/API/Worker/Pi，模型与平台为本地合成协议；官方付费调用0。未提交、未推送、未更新日常服务。
+
+01关闭只证明本包列出的行为。来源同步、语义整理、任务与历史、混合检索、依据交付、多任务答案、升级及整体dogfood仍按02–09连续实施；8MiB真实供应商接收与600秒等待、真实模型能力等按执行包分层记录，不借本地证据宣称通过。
+
+### 本轮反例与修复证据
+
+- 审查补齐的依赖来源反例：命中关系的结构依赖表仍为原知识版本，但其原文头在锁外等待时推进；修复前下一次模型派发报`stale_context`并终止本轮，证据`retrieval-dependency-source-red.log/.json`及对应服务日志。最终检索提交改为复用`check_refs_in_tx`核验依赖的来源及传递依赖；`retrieval-dependency-source-green.log`三场通过（原两场保留，9次本地协议请求），当前回执直接`stale_knowledge`且同run可完成。不是已证实外发泄露，后续模型派发原本会拦截。
+- 长调查夹具修正：原计数把摘要算入普通轮次，工具/答案计数位于不同递增侧；现在摘要、12次工具和1次答案分支独立，并核对真实`tool_calls`账本为1次route和11次read。保留5.2秒单请求延迟、超过60秒、单run及原预算断言，没有降低业务预期。最终动态结果待下述验收。
+- 最新共享合同/代码/架构检查通过，见`runtime-closure-code.log`；本次未修改模型限制、平台权限或引入新的Agent机制。
+
+- 独立审查发现成功选择重放直接返回完整资产，会绕过当前正文来源权限；`selection-replay-authority-red.log`已复现查询结果过期后仍返旧正文。修复为commit后复用`project_receipt`隐藏失效正文，保留原操作成功和选择身份；并将锁外检查失败延后到最终幂等重核后处理。移除本轮误设的“重放零外部检查”断言，保留原人工正文/显式依赖改版重放合同，新增正文过期隐藏负控。
+
+- Skill选择：真实MySQL锁探针先失败（`skill-selection-locks-red.log`，1205锁等待），拆短事务后4场通过（`startup-lease-green.log`）；原`maintenance-replay-selection.log`6组回归通过。平台等待中可并发收消息；保存重核busy、版本和来源，原成功重放不重做选择，正文仍核验当前来源。
+- 启动期租约：新反例`startup-lease-red.log`证明平台来源校验等待3.2秒时原2400ms job租约已失效；新增`jobs::renew_claim`由`start_delivery`准备期间续原owner/epoch，运行建立后交正常会话续租，反例转绿。首次试验8秒超过平台自身5秒超时，已校正为3.2秒以独立验证租约；不修改平台超时、TTL或产品断言。
+- 原慢检索：`retrieval-lease-audit.log`按2400ms租约/8000ms人工检索延迟两场通过，两个run各只调用3次，本地真实存储和协议模型、官方请求0。后续启动修复影响由最终gate再覆盖，不宣称整套已通过。
+- 容量：同源样例`tests/contracts/capacity-vectors.json`绑定Rust/TS推导及数值可行范围；`capacity-ranges-rust.log`5项通过，Node容量检查通过。API复用`AppError.message`，未新增通用错误协议；管理页数值范围浏览器断言待最终gate。固定开销改用Pi `estimateTokens`，中文同长度与字节差异反例通过。Rust无消费的运行时估算副本删除，真实运行时复核仍由Node执行。
+- 测试资源：`harness-cleanup-red.log`先证明SIGTERM遗留专用库；统一幂等close后`harness-cleanup-green.log`证明SIGTERM/SIGINT清理自身库和子进程并保留非零退出。仅回收本测试RED遗留资源，未批量清库。信号清理不保证SIGKILL/系统崩溃。
+- 当前代码/合同/架构检查通过：`runtime-audit-code.log`；12模块31图重新生成及核验通过：`runtime-architecture-render.log`。M10图补启动与运行租约衔接；容量说明与代码接口同步。独立复审进行中，最终四组验收及verify-increment尚未执行，01继续active。
+
+## 运行与容量此前实施记录（2026-10-24，历史，未关闭）
+
+接手会话完成剩余回归、四组绑定验收与两处夹具重校准，随后三个独立headless审查者（均未参与实现）分别复核容量合同与Pi接线、Worker存储恢复与慢检索租约、测试修正与证据一致性，三维全部passed、无major发现；待`make verify-delivery`/`verify-increment`通过后关闭01。下方10-23交接记录保留为历史。
+
+### 本轮修复（接手后）
+
+- `check-workflow-reliability`未归属修订（`message_pending`/`current_message_unrouted`）与等待未传播早期失败已修复，`check-answer-phase`同批通过。
+- 知识回归20项全部通过并绑定最终代码（早段4项+final-regression 8项+修复后单独2项+final-resumed2 6项）：mixed-task-cancellation、pi-continuation、bridge-cancellation、lifecycle早段通过；prefill三件套、boundaries、authority、asset-directory、context-dependencies、long-conversation由`.local/checks/`下final-regression runner重跑；prefill-timeouts与maintenance-replay修复后单独通过；其余6项由final-resumed2通过。
+- `check-prefill`完整判据修正：来源标complete必须从0字节起交付全文（start_byte=0且end_byte=total_bytes且source_complete），续读窗口成因断言保留在check-prefill-materials。
+- prefill租约与HTTP超时解耦：timing()测试模式租约固定6秒，覆盖材料收集、两次调用与结算全链路；过期路径由测试显式改写issued_until制造，测试超时参数回滚原值。原失败根因是2000ms超时映射3秒租约短于两阶段处理链路，claim过期扫描抢先标unknown。
+- `personal_assets::select`重放幂等：同参重传只接回原回执，正文可读校验与文本权威投影仅对新选择执行（对齐save路径结构）；check-maintenance-replay、check-boundaries回归通过。
+- `check-request-policy`超时夹具500→2000ms：slow端点任何超时值都触发本场景；短窗口在1GiB容器上截断请求体送达，使network计数漏记半截请求。场景语义不变。
+- `check-worker-run-deadline`断言对齐容量合同：max_tokens改为1..=8192区间断言（Pi按窗口余量收缩每轮输出预算）、摘要请求结构化计数（toolCalls=12、answerCalls=1、summaryCalls≤2、settled=calls）、等待窗口95→130秒。
+- `check-worker-storage-recovery`一次容器抖动超时按原二进制重跑通过。
+
+### 验收夹具重校准（验收与要求变更）
+
+1. `check-native-compaction`门槛65536→81920。原值校准于固定开销≈45KB时代（c9d0ced实测最大65185B、余量351B）；`a166e95`新增正式答复工具、更丰富工具契约与记忆参考注入使固定开销增至≈54.7KB，近16KB合法工作区的最小请求实测70713B，无历史也结构性超过64KB，Pi压缩无法恢复（stash对照证明非本轮未提交改动引入；生产profile已由同一提交校准为128KiB）。按原比值65536/45056≈1.45重推取80KB：24轮历史、近16KB工作区、全部断言结构不变（逐请求≤门槛、压缩≥1、每消息≤12次、账本全结算），仍低于生产128KiB保持压力属性；重跑22次调用/8次摘要/最大76408B，请求序列与旧通过运行同构（前缀53285/25285/3676一致）。64KB门槛的拒绝行为由`check-request-context`继续覆盖，其边界已随工具体积动态重推导。
+2. `check-large-tool-context`接线迁移到模型配置系统。该测试最后通过于10月17日（`.local/checks/context-large-final.log`），仍早于模型配置引入提交`a166e95`（10-20）；原靠测试进程DEEPSEEK_*环境变量走legacy provider路径，现所有传入profile的会话经managed选择走configured路径（API侧种子服务密封凭据，deliver经`/internal/model/connection`取回）。provider服务器创建前置并改传`protocolProviderUrl`使API种子合成凭据；本进程保留`DATA_AGENT_PROVIDER_TEST`标记（configured路径凭它放行loopback端点，configured.ts既有设计），删除已失效的进程环境变量搬运。两场景重跑通过：非超限载荷[107710,52895,1309,119619]均≤128KiB，超限场景按合同有限失败、0正式答复、超限请求未发送。
+
+### 四组绑定验收（全部通过）
+
+- `verify-runtime-capacity`、`verify-retrieval-lease`、`verify-worker-storage-recovery`：早段通过，覆盖容量推导、受控provider、慢检索租约、Worker恢复四场。
+- `verify-compatible-restore`：本轮通过，六项全绿（native-compaction、recovery-continuation、large-tool-context、session、checkpoint-storage、task-text-authority），日志`.local/checks/verify-compatible-restore-final2.log`。
+
+### verify-increment 执行记录（2026-10-24 04:11起，环境阻塞中）
+
+- 首次执行（收据目录`I2-RUNTIME-CAPACITY-1792786296280145000`）：第一组verify-runtime-capacity通过（335s），第二组verify-retrieval-lease失败——服务日志证实run因`delivery_lease_lost`以epoch 2–7换代重启、8秒慢检索被重做，25秒until窗口内无法完成。前后指纹一致（`after==before`），排除代码变更。
+- 环境诊断：MySQL容器内存920MiB/1GiB；10个历史harness泄漏的孤儿data-agent-api/worker进程（PPID=1，00:26–02:23启动）占连接；数据字典含199个schema（约192个泄漏的`data_agent_trial_*`/`data_agent_test_*`测试库，~8500表）；宿主load从约04:04起抬升（04:19达12.04），主因Microsoft Defender（wda）每5–30秒CPU爆发至60–100%，colima VM仅4 vCPU承载MySQL/Milvus/MinIO/etcd，事务时序余量耗尽。02:20–03:38四组与六项检查均通过、04:15后五连败，分界与宿主负载抬升吻合；同一二进制与源码。
+- 已执行清理：杀全部孤儿进程；按CURRENT既有授权（"仅处理核对过归属的专用测试资源"）删除192个泄漏测试库（保留主库与两个专用诊断库`data_agent_test_9e38ff1964cad2ae`/`ce7b38898475b81a`）；两次`docker restart data-agent-mysql-1`（内存回落342MiB，数据在卷上）。清理后load 5–8时仍失败（第5次：9个run换代churn），确认宿主CPU/IO爆发是决定性因素，MySQL膨胀为叠加因素。
+- 结论与等待：这是外部环境阻塞（用户安全软件活动不可控）。挂有负载监视器等待持续安静窗口（连续2分钟load<5且wda<40%），触发后先单独跑`verify-retrieval-lease`确认，再完整执行`make verify-increment`生成收据。失败尝试日志均保留在`.local/delivery/`各收据目录与`.local/checks/verify-retrieval-lease-recovery*.log`。
+
+### 独立审查结果（2026-10-24，三维passed，但其一维度动态证据已失效）
+
+- 审查记录：`docs/reviews/runtime-capacity-implementation-review-20261024.json`（三个独立headless审查者，均未参与实现，主实施者不代签；各自只读核对代码、测试预期与`.local/checks`运行证据）。
+- 审查中已修复的声明精度问题：知识回归计数口径（18→20并标注构成）、`check-large-tool-context`最后通过日期（10月13日→10月17日，`.local/checks/context-large-final.log`）、本文件frontmatter environment过期状态。
+- 审查遗留（关闭01后立即处理；均为改进项，不属于本增量声明的10项需求验收缺口）：
+  1. 17.7要求不可行配置给出输入/输出的可行范围；现UI/API只有方向性文案，拒绝行为本身正确。按TDD补数值可行域计算。
+  2. Rust侧`assert_runtime`仅单测使用、运行时固定开销F复核只在Node侧生效；TS/Rust公式为两处手工实现，防漂移依赖两侧测试硬编码同一组向量。评估共享向量源或生产接线。
+  3. worker/types/deliver_run新增单测未接入任何Makefile target（对应行为已有端到端证据，断言经静态核对）。
+  4. `deliver.ts`固定开销F注释表述不精确：F按UTF-8字节/4而Pi按字符/4，CJK下F偏高2–3倍，方向保守（只提前拒绝不放行超限）。
+
+### verify-increment 执行与失败根因（2026-10-24 04:11–05:55，三段受控复现定案）
+
+- 首次执行（收据目录`I2-RUNTIME-CAPACITY-1792786296280145000`）：verify-runtime-capacity通过，verify-retrieval-lease失败。后续多次重跑失败签名一致：`delivery_rejected lease_lost`或`delivery_lease_lost`→run换代churn→probe断言失败（`owner`为null或换新run）。
+- **根因（环境网络延迟击穿租约链，非代码回归）**：worker↔MySQL经colima docker NAT；宿主Microsoft Defender网络过滤扩展（`com.microsoft.wdav.netext`，root进程）在04:00后进入持续满载（监控显示测试40秒窗口内99-100% CPU不回落），MySQL响应延迟2.4–6.6秒。复现证据链：general_log显示`start_delivery`的preflight事务（`lock_conversation`后）悬空2.96秒（`innodb_trx`：`rows_locked=1`、`trx_query`空——事务持锁但无执行语句）；同窗口栈采样（`sample`）显示worker全部runtime线程park、无任务执行；恢复后`begin_attempt`发现job lease（TTL 2400ms）已过期→`lease_lost`。02:44最后一次通过轮worker日志仅1行run_started、零churn（`.local/checks/mvp-604fe48d883c7ae0`）；失败轮第一步全部是start_delivery的lease_lost，发生在bridge派发之前，与02:44–03:26落地的容量接线批次（agent/bridge/schema层）无机制关联——此前记录的"02:52批次引入真实回归"结论作废，系环境爆发期与改动落地时间重合造成的误判。05:14"安静窗口"失败的反例由判定缺陷解释：当时负载采样未持续覆盖netext的真实满载状态。
+- 审查影响（仍然成立）：审查者B依赖的`mvp-slow-retrieval-lease.json`（02:44通过）与04:11后的实际状态之间隔着环境变化；`delivery.increment.review.status`保持pending直到`make verify-increment`在畅通网络窗口真实通过。
+- 环境清理（卫生操作，与根因无关）：杀10个孤儿进程；按既有授权删除192个泄漏测试库（保留主库与两个专用诊断库）；MySQL两次重启（342MiB）。
+- 暴露的工程脆弱点（记为02的有界维护项，非本轮验收必修）：`start_delivery`的preflight以`FOR UPDATE`持锁跨网络往返，环境延迟时悬空持锁会挡住probe、心跳renew与其他run的启动，放大停顿影响（生产TTL 15s下风险低）；后续评估缩小preflight锁粒度。
+- 下一步：等待或请求netext安静窗口，重跑`make verify-increment`（需要四组验收在网络畅通下真实通过）；通过后关闭01。诊断证据：`.local/checks/lease-repro-run{,2,3}.log`、`lease-trx-poll.log`、`worker-stack-samples/`、`env-during-test.log`。
+
+## 停止实施与最终交接（2026-10-23，01未关闭）
+
+用户因额度不足要求停止本轮实施，改由其他coding agent接手；本次只核实进程、证据和文档并给出交接prompt。**01「运行与容量」尚未验收完成，02–09未实施；不得按下方历史记录中的“已完成代码”或旧passed文件宣布交付。** 接手入口为[本次交接提示](execution/semantic-runtime/handoff-2026-10-23-runtime-capacity.md)及[九阶段执行包](execution/semantic-runtime/README.md)，当前状态仍只在本文件维护。
+
+### 工作树、停止状态与证据有效性
+
+- 重新核实分支为`codex/semantic-maintenance-prototype`，HEAD为`fed8276577748c1f77c49c7c8ca2317408129ec3`。原设计、图、文档和产品修改全部保留、均未提交；未commit/push、付费调用、部署或更新日常服务。
+- 查询测试负责人已确认harness退出。知识串行runner已结束，`check-boundaries`及`check-lifecycle`退出码0；`check-mixed-task-cancellation`按停止要求收到SIGTERM，之后17个脚本未运行。结果及中断进程清单在`.local/checks/knowledge-remaining-suite-skill-lifecycle-fixed/`。收尾时核实清单中的四个PID均不存在，未发现该runner或本轮API/Worker/合成平台进程仍运行；没有为收尾新启动测试。
+- 专用库`data_agent_test_9e38ff1964cad2ae`（查询失败账本）与`data_agent_test_ce7b38898475b81a`（中断的知识测试）仍存在，作为诊断证据保留；对应`.local/checks/mvp-*`目录也保留。没有批量删库、停止共享MySQL或改动日常服务。接手者如需清理，仅处理核对过归属的专用测试资源。
+- 旧审查文件[运行与容量独立审查](reviews/runtime-capacity-implementation-review-20261023.json)保留原作者结论，但其范围指纹早于后续合成调用方、测试和Makefile修改，不能用于关闭当前增量。`delivery.increment.review.status`已改回`pending`；最终由未负责相应实现的审查者有界复核并刷新指纹，主实施者不得代签。
+- `.local/checks/mvp-workflow-reliability.json`是旧passed报告，本轮失败没有覆盖它，**不得作为本轮通过证据**。以实际执行日志、退出码、输入版本和本节状态为准。
+
+### 已完成的实现与验证
+
+- 01主要实现已在工作树：同源容量合同与Rust/TS公式、Pi原生压缩容量接线、provider实际输出cap和冻结超时、完整载荷预检及overflow分类、慢检索锁外执行与最终重核、Worker临时存储恢复及错误码透传、管理UI容量声明。具体入口及先前反例见下方接续复核历史；不重新实现这些代码。
+- 继承的构建/回归证据包括`verify-contracts`544项、`verify-code`、`verify-architecture`、修复后的`verify-runtime-flow`/`verify-recovery`、`verify-model-provider`及model-admission。最终代码检查日志为`.local/checks/runtime-capacity-final-code.log`；这些命令发生在后续部分修正之前，不能充当当前全范围验收。
+- 新profile真实Pi压缩检查已证明三轮同会话、24份工具正文、split-turn与原预算身份，见`.local/checks/mvp-configured-compaction.json`。SDK事件探针见`.local/checks/sdk-event-order.json`，只证明07所需接入顺序及`output.drain()`落盘边界，**没有提前实现答案定稿**。
+- 合成调用方`apps/agent/provider/synthetic-analysis.ts`已修复：按真实问题ID关闭用户已回答的分母澄清；搜索未给完整SQL时，同ID/版本调用`read_knowledge`并按Unicode位置连续补页；失败、跨版或缺页保留缺口。原两句真实Pi/Worker/Bridge流程及`check-query-workflow.mjs`原8组通过。证据：`.local/checks/refund-clarification-diagnosis-before.json`、`refund-clarification-diagnosis-after.json`及`runtime-capacity-query-regressions-after-readback.log`（均在`.local/checks/`）。
+- 新增`tests/runtime/check-synthetic-knowledge-reading.mjs`的7项零网络检查通过，已接入`verify-query-workflow`；输入和SQL期望独立构造。证据`.local/checks/synthetic-knowledge-reading.json`，实现及测试已由独立capacity审查者静态核对。
+- `check-knowledge-workflow.mjs`原15场景及新增旧引用负控完整通过，日志`.local/checks/knowledge-workflow-verified-preconditions-final.log`，报告`.local/checks/mvp-knowledge.json`。知识规则未放宽；夹具先修复指标仍依赖旧表版本的前提，再验证原查询与停用行为。
+- `check-query-boundaries.mjs`原10组、`check-request-clock.mjs`2组通过，见`.local/checks/runtime-capacity-query-boundaries-and-remaining.log`。浏览器夹具只移除与业务无关的10秒结果TTL；专门过期测试、产品超时、UI等待和原业务断言保留。
+- `check-boundaries.mjs`修正Skill选择时机后7组通过，`check-lifecycle.mjs`6组通过，均使用真实本地存储及合成平台、零官方模型请求。日志和脚本SHA256在`.local/checks/knowledge-remaining-suite-skill-lifecycle-fixed/result.json`及同目录逐文件日志。前者的夹具改动已获独立静态审查。
+
+### 接手后先处理的失败与剩余验证
+
+1. **`check-workflow-reliability.mjs`失败已定位，尚未修。** 约128行新`start(cid)`后直接调用`request_query`修订，没有先用`update_analysis_task`归属本轮消息；持久回执是`message_pending`，`recovery.reason=current_message_unrouted`。它在平台验证屏障前已被拒，但测试先等`reached`，未及时处理`revision`的拒绝，进程提前退出且`finally`未完成。修复时保留未归属请求被拒负控；正式route到原任务后继续原“外部验证等待期间旧稿已不可执行”的竞争断言；等待必须能传播早期失败并清理。文件本轮尚未修改。证据为上述查询日志和保留的专用查询库，不能笼统归因于Skill或新检索实现。
+2. 单跑修复后的`check-workflow-reliability.mjs`及未运行的`check-answer-phase.mjs`。无新变更影响时，不为定位同一失败重复已过的查询工作流、浏览器及request-clock。
+3. 知识Node回归从中断的`check-mixed-task-cancellation.mjs`恢复，再按Makefile执行后17项；这18项均未获得本轮完整通过。`verify-knowledge-workflow`内prefill/assets/retrieval三组Rust单测也要核实证据，缺当前有效结果则补跑。不要把整个target标成通过。
+4. 慢检索、Worker四场、模型管理UI和兼容恢复仍需最终稳定代码上的四组绑定验收；已有窄报告不代替最终gate，尤其claim/defer注入分支最后改动后的完整动态结果仍待验。现有测试文件和Makefile接线均已存在，不再按旧交接“新写”。四组为`verify-runtime-capacity`、`verify-retrieval-lease`、`verify-worker-storage-recovery`、`verify-compatible-restore`。
+5. 修正引入的类型/合同/架构影响按范围补检；取得有效独立审查记录，再执行`make verify-delivery`与`make verify-increment`。后者会实际执行绑定验收；尚未在本轮完成，失败或指纹过期不能关闭01。之后按九阶段包连续推进02–09。
+
+### 验收前提修正与执行限制
+
+- 知识夹具：保留改名场景，正常查询前经正式同步恢复与独立DDL一致的物理表名；由负责人按`docs/sources/business-guide.md`第5.1节和结构附录重核指标、绑定当前表版本；旧引用仍精确拒绝`409 stale_knowledge`且不推进版本。停用负控改用停用前确实可读、未提交的查询，按既有`check-query-text-authority`合同断言`409 stale_context`及未提交状态，替代原已受停用记忆影响的查询和404预期。
+- 浏览器夹具：10秒结果TTL与最长15秒闲置轮询竞争；同次API日志存在`result_expired`，但没有精确绑定目标query的浏览器抓包。此脚本不测试过期，沿合成平台默认86400秒；不要把推断写成完整网络取证。依据`.local/checks/query-boundaries-expiry-diagnosis.json`。
+- Skill夹具：待处理消息期间选择本就返回`409 message_pending`，原测试忽略回执导致之后`selection_required`。现在明确检查拒绝、结束输入、空闲选择，再新run读取；停用后的旧run/new run分别验证原合同。依据`.local/checks/boundaries-selected-skill-diagnostic.json`及既有`check-skill-removal`。这些都是有独立要求依据的前提修正，没有降低产品规则。
+- 后续新增逻辑使用`tdd`逐条失败测试→最小实现→相称回归；继承代码不追溯宣称TDD。共享Schema/迁移/组合入口/Pi入口由单一owner顺序整合；实现与测试命名不用阶段或模块编号。Pi唯一Agent/压缩/恢复，24次模型调用和连续临时失败3次保持。
+- 本机MySQL容器仅1GiB且已有OOM证据，数据库harness必须串行，不使用`make -j`并跑这些target。Docker使用`colima-data-agent`；Rust改动后先重建API/Worker，harness使用`target/debug`。执行验证前清除真实provider相关环境变量，优先复用harness；不读取或打印`.env`、凭据及真实业务资料。
+- 真实模型、真实平台、Milvus/embedding和8MiB/600秒供应商实测仍按后续包及授权单独验证；本轮合成/本地证据不能冒充这些能力通过。收尾未启动产品测试。交接轻量核验通过：CURRENT JSON状态、两份交接材料新增部分的4个本地链接、已通过的boundary/lifecycle脚本与记录SHA256一致、旧审查范围指纹确已失效、`git diff --check`；原审查文件未改签。
+
+## 运行与容量接续复核过程（2026-10-23，历史；以顶部交接为准）
+
+- 已使用 `dev_co` 接续；主实施者保留共享合同、容量接线与组合边界，三路子代理分别补慢检索、Worker存储恢复和独立容量反例。01尚未关闭，02–09沿既定顺序继续；未提交、推送、付费调用或更新日常服务。
+- 接续复核发现并修正：legacy摘要cap被全输出上限覆盖；legacy压缩前后keepRecent覆盖顺序；底层Undici默认300秒截断600秒配置；ReserveModelCall和ModelUsage旧上限未随模型合同扩展；Rust预留仍强制实际cap等于整档上限；Worker与run_failed事件错误分类丢失。正在补新profile原生压缩、边界保留超额和Worker终态持久化证据。
+- 容量派发使用完整协议JSON作字符估算与UTF-8硬字节检查；摘要同样检查自身输入，超限在预留/发送前交Pi原生溢出恢复。`session_before_compact`只计算Pi实际保留尾部超过K的开销，不生成摘要或另造循环。真实token由供应商usage报告；估算不是精确分词。
+- `node tests/runtime/check-capacity-boundaries.mjs` 已通过5项本地协议检查，官方请求0：legacy真实Pi摘要小cap/low思考、393216预留合同、摘要输入超限零发送、中文转义字节门槛、实际dispatcher等待与取消。此证据不代表600秒真实供应商等待或8MiB接收验收。
+- `node tests/mvp/check-slow-retrieval-lease.mjs` 串行同参数通过：2400ms租约，两个实际慢检索9743/11355ms，四次独立MySQL FOR UPDATE探针成功；同run续租，停用对象拒绝stale_knowledge且无正文。报告 `.local/checks/mvp-slow-retrieval-lease.json`。首次并行测试搜索前失租证据保留，不记通过；已据此补派发前沿原身份续租、首心跳立即执行及SQL实时租期检查，需再复验。
+- Worker恢复首次两场claim/context/renew与defer通过，第三场揭示错误码落库变unavailable，已修同源合同；增加unknown账本占额与原ID晚到结算反例，完整复跑尚未完成。
+- 验收与要求变更：`ReserveModelCall`旧负控131073改为393217，并新增393216正控；独立依据为已确认实现合同17.7的393216可表达上限，运行仍不得超过各端点/冻结profile。`SaveModelDefinition`既有roundtrip补齐新保存合同要求的context_window/request_timeout_ms/capability_source；旧ModelProfile缺字段正控保留。ModelUsage新增600001ms结算与393216/393217边界，适配600秒调用及结束开销，不放宽实际冻结超时。
+- 测试接线修正：`check-request-policy.mjs` 原本只给测试Node进程配置本地provider，没有把本地端点传给API harness，触发model_credential_required；现为两边提供同一protocolProviderUrl，不改业务断言/期望，也不改成纯mock。该文件接续首跑失败尚未重跑完成。
+- 允许路径补充assets只读版本重核、types存储错误分类与Makefile；这是01锁外重核/worker恢复/验收入口所需，不扩张产品功能。
+
+- 接续实际补证：容量边界现6项通过（包含供应商400/413溢出分类）；新配置真实Pi split-turn压缩、3轮同会话、24份工具正文与两类固定开销拒绝通过，报告`.local/checks/mvp-configured-compaction.json`。Worker原四场报告的busy路径不足由新单场替代，`.local/checks/mvp-worker-storage-recovery-busy.json`及服务日志证明实际409后回退持久化临时失败、原身份重派和同PID继续处理；不是全套重新运行。
+- SDK接入探针`check-sdk-event-order.mjs`已通过：真实Pi的完整assistant message_end先于工具execute，工具边界能定位原SDK journal条目；公开事件订阅并不等待输出落盘，必须await既有output.drain后取得完整连续片段。混批、length与输出失败负控通过。仅为07接入证据，未提前实现答案定稿。
+- 广回归`verify-contracts`544项、`verify-code`及`verify-architecture`通过。`verify-runtime-flow`发现HEAD已有legacy入口缺goal_authority：原用户目标被投影隐藏；现仅对本run绑定真实用户完整原话记录独立来源，其余仍未知，不批量放行NULL。原流程和未知来源负控将继续验证。
+- 管理页不再按provider统一猜1M：新增型号总窗口留空，只有已核对的`deepseek-flash`显式预填；其他型号由管理员声明。测试修正：新增断言曾错误假定保存按钮禁用；实际表单以required/valueMissing阻止提交。改为点击后验证缺值、配置未保存，再填写并保留原成功断言；产品校验未因测试调整。
+- 四项验收已绑定实际Make命令，独立审查尚待最终回归后固定范围；01仍未关闭，不以新增测试文件或已绑定命令宣称通过。
+
+- 后续回归进展：修复legacy入口后原`verify-runtime-flow`与三个真实进程退出点的`verify-recovery`通过，`verify-model-provider`及发送准入检查通过。MySQL曾触发1GiB容器OOM重启导致一次中断，内核证据保留于`.local/checks/mysql-memory-diagnostic.log`，恢复健康后重跑通过，不计该中断为产品通过。
+- 尚未闭合的回归：`check-query-workflow`澄清续接缺查询，已定位HEAD中的模拟调用方没有发送resolved_clarification_ids，与现行业务合同不符；只修模拟调用方按真实问题ID关闭被回答项，不修改真实规则或预期。`check-knowledge-workflow`已由真实工具账本定位：search成功，update_analysis_task采用仍依赖表v1的指标时被拒绝，而测试前半段已把表推进v9。最终检索重核不是该失败原因，正式版本校验保留；后半段正常记忆查询须先由负责人依据独立业务定义重新核对指标。证据`.local/checks/knowledge-first-turn-diagnostic.json`。其前面已完成的检查不代表全文件通过。独立审查记录当前只证明已审代码范围，新增修正后重新绑定指纹。
+- 验收前提修正：知识工作流原前提为表改版后仍用旧指标进行正常记忆查询；修正为负责人按独立`docs/sources/business-guide.md`第5.1节和结构附录，经正式GET/PATCH核对并保存当前表引用。补充旧表引用返回409/stale_knowledge、失败不推进指标版本的负控；原web/app数值、记忆/Skill、权限和停用等业务断言保留。此修正不放宽正式规则，不替换模型或存储证据层级。
+- 同一夹具的目录改名子场景保留；进入后续正常查询前恢复与DDL一致的物理表名，避免把已验证的名称冲突带入结构规则保存。旧SQL拒绝子场景原用已经停用个人记忆的旧查询，且期待404；按已有`check-query-text-authority.mjs`的独立合同，改用停用知识前仍可读、待确认且未提交的查询，精确验证停用后409/stale_context及未提交状态。此处修正对象前提与错误分类观察，不放宽拒绝执行要求；动态结果及独立审查待完成。
+- 后续新增实现采用已安装`tdd`技能的逐条业务测试→观察失败→最小实现流程，复用执行包已确认的接口和验收要求；交接前已有代码及接续验证不追溯宣称为先测后写。跨语言边界继续使用`contract-first`和仓库同源Schema。
+- 查询澄清第二阻塞已用原两句对话和真实Pi工具账本复现：澄清ID已成功解决，但搜索仅返回definition/aliases并明确entries_complete=false，SQL条目未进入相关片段；搜索正文也有160字符预览限制。模拟调用方仍从预览提取完整SELECT/FROM，未调用同版补读，因而没有生成查询。证据`.local/checks/refund-clarification-diagnosis-before.json`。按既有read_knowledge条目及正文分页合同修模拟调用方；不扩大搜索回执、不修改Rust规则、不手填退款答案，原测试继续验收。
+- 知识工作流单文件已完整exit0，15个原场景及新增前提/版本负控通过，零官方模型请求；报告`.local/checks/mvp-knowledge.json`、日志`.local/checks/knowledge-workflow-verified-preconditions-final.log`。测试改动由未参与编写的capacity审查者静态复核通过；尚未执行其余知识广回归或最终四组增量验收，不将单文件通过写成01完成。
+- 模拟调用方补读后，原两句真实Pi复现及`check-query-workflow`原8组全部通过，日志`.local/checks/runtime-capacity-query-regressions-after-readback.log`；补读的7项无网络反例保留到`tests/runtime/check-synthetic-knowledge-reading.mjs`并注册查询回归。随后`check-query-boundaries`在已完成查询的浏览器结果面板等待超时；该失败与未执行的后3个文件仍记未通过/未运行，正在按实际界面和结果读取证据定位，不盲目重跑全套。
+- 查询边界浏览器夹具修正：原测试设结果TTL=10秒，却由浏览器外HTTP确认，页面闲置轮询最长15秒；实际平台已产出5行，存在首次读取前到期的竞争，同次运行API记录result_expired，但旧日志不能将该错误精确绑定到目标查询。该脚本没有过期行为断言，改为沿合成平台正常默认86400秒，保留所有结果数值/分页/UI断言；专门过期测试保持。依据和限制见`.local/checks/query-boundaries-expiry-diagnosis.json`，不修改产品超时或延长浏览器等待来掩盖失败。待原文件复跑，不把推断写成已抓包确认。
+- 知识广回归首个`check-boundaries`失败已取证：测试未检查Skill选择回执，待处理输入内select已按HEAD既有准入返回409/message_pending；后续read因此正确返回selection_required，而非成功。证据`.local/checks/boundaries-selected-skill-diagnostic.json`及既有`check-skill-removal`负控。修正夹具按真实会话顺序：保留忙碌选择拒绝，结束未选用探针后在空闲状态选择，核对成功回执，再以新run验证读取；停用旧run与新run分别按各自错误校验。产品准入及版本/authority规则不改，剩余广回归尚未完成。
+- 查询边界原脚本在正常TTL下10组全部通过，包含25/5/0行结果、CSV、手机图表/滚动、失败/未知取消与历史分页，日志`.local/checks/runtime-capacity-query-boundaries-and-remaining.log`；该结果关闭此脚本的失败，后3个查询检查仍在执行。新增7项分页测试和Skill夹具均有capacity独立静态审查，不冒充未完成的动态结果。
+
+
+
 # Data Agent 当前记录
+
+## 运行与容量首次交接记录（2026-10-23，历史）
+
+以下保留首次交接时的实现和证据；其中“未完成”“新写测试”等清单已有部分完成，当前状态及接手顺序以顶部「停止实施与最终交接」为准，不据本节重新创建已有测试。
+
+按[九阶段执行包](execution/semantic-runtime/README.md)首包（详见[运行与容量](execution/semantic-runtime/runtime-capacity.md)）实施，本节为当前唯一进行中增量；下方各历史节中"planned/未开始产品实现"的表述以本节为准。分支`codex/semantic-maintenance-prototype`，基线`fed8276`，全部改动未提交，保留原有未提交设计/图/文档。中断原因：用户改由其他coding agent接手；无未决外部操作（零付费调用、零提交/推送/部署，无后台sync/任务/查询/索引在途）。
+
+**实际变化（全部已构建通过：cargo clippy -D warnings、cargo test容量单测、tsc、npm run contracts:generate、build:web）：**
+
+- 容量合同与推导：`packages/contracts/schema.json`新增`context_window`/`request_timeout_ms`/`capability_source`（`output_limit`上限放宽至393216，`AppError`加`model_capacity_invalid`）并重新生成；新增同公式实现`crates/data-agent/src/modules/runtime/model_configuration/capacity.rs`（`plan`/`assert_runtime`）与`packages/contracts/capacity.ts`（`deriveCapacityPlan`/`planForProfile`/`assertRuntimeOverhead`/`effectiveOutputCap`）。保存路径`model_configuration::validate_model`接入容量校验（`mod.rs`），`store.rs`选择时复制新字段。
+- Pi交付容量接线：`apps/agent/session/deliver.ts`按profile推导容量计划——compaction注册`reserveTokens=R`/`keepRecentTokens=K`，发送前按固定开销F复核（`model_input_limit`），legacy profile（缺`context_window`）保持原2048启发式路径。
+- Provider实际cap与超时：`apps/agent/provider/controlled.ts`实际输出cap=min(SDK当次maxTokens, 冻结output_limit, 已知端点上限)（`effectiveOutputCap`），金额预留`output_tokens_max`按该cap；冻结`request_timeout_ms`（50..600000ms，缺省90000）；`configured.ts`注册`contextWindow=profile.context_window??input_limit`并传`endpointOutputLimit`。
+- 慢检索锁外执行：`use_cases/knowledge.rs`新增`search_stage_outside_lock`（自开短读事务：召回/批量读/记忆/资产目录，不持会话行锁）与`assert_search_fresh_in_tx`（短事务重核搜索对象id+版本+启用、结构依赖版本、逐对象来源核验、资产版本，不匹配返回`stale_knowledge`）；`use_cases/data_tools.rs`的`search_knowledge`改为三段式，测试钩子`DATA_AGENT_TEST_RETRIEVAL_DELAY_MS`（`knowledge/store.rs`与`assets/store.rs`新增`current_versions_in_tx`）。
+- Worker错误分类与恢复：`apps/worker/src/main.rs`区分临时存储故障（`unavailable`→记录并继续）与定性失败（`lease_lost`等→`fail_delivery`或取消通知）；桥接HTTP失败码经JSON body解析（`provider_configuration_invalid`等定性码立即失败交付）；心跳续租临时失败不判失租；测试钩子`DATA_AGENT_TEST_STORAGE_FAULT`（claim/context/renew/defer/fail各注入一次，日志`storage_fault_injected`）。上下文读取临时失败回队`jobs::defer`，靠会话租约到期自然重派。
+- 桥接错误码透传：`apps/agent/transport/server.ts`失败码白名单扩至全部契约码，500响应改为JSON body `{code}`。
+- 管理UI：`apps/web/src/features/models/ModelConfigurationPage.tsx`新增容量字段（总窗口/最大输入/最大输出/请求体MiB/超时秒/来源）、DeepSeek初值与长输出档预填、字段级容量问题提示、`model_capacity_invalid`解释；`apps/api/src/routes.rs`新错误码映射400。
+
+**已跑命令与证据（全部本轮真实结果）：**
+
+- `cargo test -p data-agent --lib modules::runtime::model_configuration::capacity`：5个单测通过（DeepSeek初值R=120000/T=880000/K=65536/H=20000/S1=65536/S2=60000；长输出档T=848928；两反例；运行时开销严格余量边界）。
+- `node tests/runtime/check-capacity-derivation.mjs`（新增）：通过，证据`.local/checks/capacity-derivation.json`（TS侧同向量）。
+- `node tests/runtime/check-configured-provider.mjs`（已扩展）：通过，新增容量接线检查（冻结/环境超时600s内可用、超范围构造即拒；摘要cap按本次maxTokens=5000收敛预留与payload；端点上限8000压低常规轮）。
+- `node tests/mvp/check-model-configuration.mjs`（已扩展）：通过，9项检查含容量反例/缺字段/超上限拒绝、DeepSeek初值与长输出档保存并冻结新字段、浏览器UI、Responses检查点恢复。
+- `cargo build --offline --locked -p data-agent-api -p data-agent-worker`：成功（harness使用target/debug二进制，改Rust后必须重建）。
+- 旧配置合同测试`crates/data-agent/tests/model_configuration.rs`：通过（旧profile改绑保存须补齐容量声明，行为不回归）。
+
+**未完成（下一agent从中断点继续）：**
+
+1. 新写`tests/mvp/check-slow-retrieval-lease.mjs`：harness env `DATA_AGENT_TEST_RETRIEVAL_DELAY_MS≈8000`+短`DATA_AGENT_LEASE_MS`；真实bridge模式（capture:false）让worker心跳续租（间隔ttl/3，`apps/worker/src/main.rs`）；检索延迟期间用独立mysql连接`SELECT ... FOR UPDATE`探测conversations行不被持有（配`SET SESSION innodb_lock_wait_timeout=1`区分阻塞与空闲）；断言检索时长>租约TTL仍完成；并发停用知识对象→`stale_knowledge`拒绝、不混正文；未并发停用的新鲜搜索成功。工具调用模式参考`tests/mvp/check-native-compaction.mjs`（`/internal/data/tool-calls`+`/internal/data/tools`）；search参数`query/limit/asset_after/kinds`（SearchInput）。
+2. 新写`tests/mvp/check-worker-storage-recovery.mjs`：harness env `DATA_AGENT_TEST_STORAGE_FAULT=claim,context,renew`+短租约加速重派；断言消息最终完成、worker进程存活、无重复副作用。
+3. Makefile注册（建议：`verify-model-provider`加`check-capacity-derivation`与`check-configured-provider`已有扩展；两份新mvp检查按语义挂`verify-mvp-regression`或新target）。
+4. 回归：`make verify-contracts verify-code verify-architecture verify-runtime-flow verify-recovery verify-model-provider verify-query-workflow verify-knowledge-workflow`（检索路径已改必须跑）；`check-request-policy`、`check-native-compaction`（legacy必须仍过）、`check-recovery-continuation`、`check-large-tool-context`、`check-session`、`check-worker-run-deadline`。
+5. 验收命令绑定：PI-CAPACITY（容量向量+provider接线+模型配置已过；压缩续接补"带context_window的中型配置档案跑原生压缩延续"证据或说明legacy已覆盖）、RETRIEVAL-LEASE、WORKER-RECOVERY、COMPATIBLE-RESTORE（旧profile/检查点续接回归即`check-native-compaction`+`check-recovery-continuation`）→`make verify-delivery`→`make verify-increment`，独立审查JSON按`scripts/check_delivery.py`格式。
+6. 本包关闭后按README顺序继续02–09阶段。
+
+**环境事实（本地实测）：**
+
+- cargo需`export PATH="$HOME/.cargo/bin:$PATH"`；docker需`--context colima-data-agent`（默认socket已不存在）。
+- 建测试库：`docker --context colima-data-agent exec data-agent-mysql-1 sh -c "mysql --defaults-extra-file=/run/secrets/mysql_root_client -e 'CREATE DATABASE X; GRANT ALL ON X.* TO "data_agent"@"%";'"`；data_agent用户无建库权限。
+- 单独跑cargo集成测试需`DATA_AGENT_SEMANTIC_SUPER_MAINTAINERS`环境且真实`DEEPSEEK_API_KEY`可能泄入输出——优先用tests/mvp/harness.mjs（其env会删除该变量）。本轮一次独立测试输出出现过本机真实密钥，值未记录在任何文件；建议用户自行评估是否轮换。
+- mvp harness跑`target/debug/data-agent-api|worker`，Rust改动后先`cargo build`再跑检查，否则用的是旧二进制。
+
+## 编码执行包交付（2026-10-23，待实施）
+
+用户要求把已定方案交给其他coding agent连续实现。本轮按dev_co的持续交接、contract-first的共享合同方法，参考纵向切片与小步重构，完成[九阶段执行包](execution/semantic-runtime/README.md)、[完整启动prompt](execution/semantic-runtime/AGENT_PROMPT.md)及[全要求覆盖/验收](execution/semantic-runtime/coverage-and-validation.md)。这些文件是静态实施规格；当前进度仍只在本记录。未新建Issue或另一套当前计划。
+
+**顺序与切换：**运行与容量→完整来源同步→语义整理/依赖→任务条件/历史用途→混合检索→v2取证交付→多任务答案→旧状态升级→两链dogfood。03准备新writer但暂保必要旧兼容写；08先运行兼容统一版本，再按消费者就绪条件切新公共内容保留策略、新公共索引目标，最后启用新消息v2。旧操作/回执/预算保持。各阶段内有实际代码入口、同源合同、迁移/恢复边界、独立反例、已有与待补测试及交接条件；09复用语音座舱100项与独立参考，真实证据分层。
+
+**交叉验证：**主代理独立生成九包，Oracle另从公开合同/审计材料生成十二包建议，完整答复已逐项处置；两路只读审查核对源码入口及36项D/C/A映射并复核修订。采纳延后latest-only切换、索引先于v2、比较方法升级、准备冻结输入/提交核验、旧字段缺失与null区分、真实Pi事件顺序等。源码没有source_latest实现名，已改为盘点实际快照/版本消费者。自然答定稿不猜调查文字。详见[执行包交叉验证](execution/semantic-runtime/cross-validation.md)。Oracle首次提交前失败后，经用户明确允许重试，最高Power5/5实际确认并完成，临时浏览器和profile均清理；没有把它说成审过最终所有文件或跑过产品。
+
+**用户补充约束：**M01/M02、包号和阶段号只作文档映射，不进入实现目录、类型、函数、变量、数据库或测试名称；使用业务/技术职责名称。包入口、prompt和审查已固定，未要求机械全仓重命名。
+
+**本轮范围及缺口：**只新增执行材料、更新README/开发导航及本记录；保留所有原设计/图修改。未改产品代码、Schema、配置、测试预期或数据，未commit/push/部署/启动用户服务/执行付费产品测试。架构不变，故本轮不重复生成31张架构图，执行包附阶段依赖图。产品SDK事件小样、迁移、真实Milvus/embedding、8MiB/600秒及多轮效果留在明确实施包验收，不能由文档检查替代。
+
+**验收与要求变更：**没有删原场景、放宽断言或将真实测试替换成mock；只细化范围与工程顺序。首个增量I2-RUNTIME-CAPACITY保持planned，命令仍null、独立业务审查pending。交付前文档检查结果见上方verification；这些不关闭业务增量。
+
+## 最终技能专项审计（2026-10-23，设计修订、未实施）
+
+用户同意使用已核对的技能审查最终方案。实际应用domain-modeling、codebase-design、contract-first、mysql，dev_co保持范围与唯一当前记录；三名只读审查者分别核对语义链、运行合同、存储事务，主代理核对锁定Pi源码及公开技术文档并修改设计。具体发现、依据和复核见[原审计报告第10节](reviews/predevelopment-closure-audit-20261023.md#10-最终技能专项审计与交接修订)，不另建当前计划。
+
+**本轮完成的设计修正：**
+
+- M03持久保存同步批次的已见成员、已接受修订、保留子对象及待生效负责人；unchanged也登记，与页/待办/游标同事务，重启后不误退休或漏换负责人。
+- 明确只用指定来源时，独立人工知识不能凭空贡献来源或旧source_id放行；文档自身原文、无额外限制的人工知识和用户任务条件保持原行为。
+- v2内部工具调用由M11提供response_budget，Rust统一裁剪；同批共享余量，提示不进模型参数、不改变业务幂等或费用额度，恢复接回原回执再用Pi处理空间。
+- 消息全部任务归属与active_task_ref分开。不同来源限制的任务沿route切换并重投影，各任务答案通过原回执/输出保存，finish_run按answer_parts分别核验、组合展示。普通答案在切换前显式定稿，不从message_end猜完成；不新增工具、交付账本、子会话、汇总模型或强制保存报告。
+
+**范围与取舍：**保持十二模块、MySQL/Milvus/Mem0、Pi唯一Agent、手动同步、一表一份生产SQL、当前原文保留策略及24次/连续临时失败3次。允许修改既有设计、模块文档和生成图、审计报告、README/开发说明及本记录；未改产品代码、Schema、数据、配置或测试预期，未提交/推送/启动服务。未发现新的必须由用户决定的产品方向。Oracle沿用上一轮证据，本轮没有再次咨询，也不将其结论冒充覆盖本次补改。
+
+**技术核对与验证缺口：**Pi原生阈值/两段摘要公式与锁定1.3源码一致；Milvus官方v3.0.x文档支持Jieba search、BM25和前过滤，不能代替本机REST/规模验收。Pi目录输出384000与供应商API393216是不同能力来源，默认65536/131072不受影响；实际启用仍依端点、冻结配置及SDK当次cap。产品验收仍待实施：分页重启、任务切换与中断恢复、容量传递、中文检索、大允许集成本、真实8MiB/600秒和多轮效果。
+
+**验收与要求变更：**只补原要求的工程交接和反例，未删除场景、放宽断言或替换真实验收。新增反例已映射实现设计17.9的相应后续增量；I2-RUNTIME-CAPACITY仍planned，原验收命令为null，不在本轮关闭业务增量。文档/图/链接检查通过：31图无页面错误，手机无整体横向溢出；12模块/41链接/15边，准备材料424项/248链接，planned声明及16项检查器自测通过；另查12份Markdown的380个本地链接/锚点。git diff --check、产品目录无差异及公开个人路径检查通过。独立审查者已对各自修订有界复核，未留下本轮已确认但未处理的设计缺口。
+
+## 开发前设计收口（2026-10-23，审计完成、未实施）
+
+本轮沿dev_co设计阶段、contract-first和oracle-web核对两条主链；只改文档、图源及审计证据，不改产品代码、Schema、配置或数据，不提交、推送、启动服务或运行产品试验。代码基线`fed8276`，下一实现增量`I2-RUNTIME-CAPACITY`仍planned。原审计及逐项讨论见[开发前审计报告](reviews/predevelopment-closure-audit-20261023.md)，正式目标统一在[实现设计第17节](architecture/implementation-design.md#17-语义检索与上下文的实施合同2026-10-23)。
+
+**最新已定行为：**维护者手动发起全量比较，后台分批保存，随后自动整理和更新索引；暂不增加定时同步。首次空库和后续更新同一路径。上游提供授权范围内完整资料，一表一份完整当前生产SQL，只同步/比较/解释文本，不执行；原A1逐资料失败状态体系建议撤回，只保留普通同步失败及未完成不推断删除。
+
+本轮将A2–A7从讨论落到正式合同：
+
+- SQL用方言词法比较，只改无意义格式则保留已存正文、修订和定位；平台观测/负责人独立更新。真实内容、必要依赖或准备方法变化才重新整理，索引重建复用成果；未变但缺准备仍补队列。此前“追随最新排版并重定位”建议不采用。
+- 原文与有效知识分别建索引；原文不等模型整理。问答用混合检索、相关片段和定点补读，不因未知或未整理而强制全文。
+- 工具合同2保留个人记忆正文/范围/原话、目录分页、structure_only、已选Skill descriptor与Pi原生read；同一Pi会话兼容旧调用，不改原副作用身份/预算。
+- 普通语义改版不隐藏已完成分析保存的SQL、条件、结果摘要、结论和报告；历史展示与新分析采用分别检查。撤权/停用/删除仍限制相应内容，平台原始结果沿有效期，不监听/提醒/自动重算。
+- 依赖按条目、有效内容层及required/related用途记录；人工实际替换与未改部分分开，业务依赖和实际外发来源不混用。
+- 必要支持以最终回执实际内容判断；只有引用不能标delivered，裁剪后同步降级并给补读位置。unknown和支持分页结束不冒称无例外，也不建立交付账本或强制全文。
+
+工程补充包括：手动同步202返回和进度GET、M03/M10各自状态owner；大资料按字节/后台分页处理，不能截断后称完整；时间角色区分字段含义与截点/批次值。原文、知识、准备及索引版本分开。容量与候选数均为待验初值，真实端点8MiB、Pi两段摘要、Milvus中文前过滤和千表性能仍须在对应实施增量验证。
+
+**本轮审计目标与允许范围：**正式目标覆盖两条主链、接口消费者不丢能力、已定取舍一致、现状与未实现目标清楚。允许修改系统/实现设计、模块图源及生成图册、README、开发指南、旧讲解页的状态提示、原审计报告与本记录；不扩大产品功能或删除历史证据。暂无新的产品方向要用户决定；Oracle第二轮同样未发现必须由用户再次决定的产品事项。
+
+**验证状态：**31张图已重新生成，页面错误0、手机无整体横向溢出；桌面/手机截图已查看。架构检查12模块/31图/41链接/15边通过；准备材料416项/244链接、planned增量声明和git diff --check通过。另核对12份Markdown的368个本地链接/锚点无错误，公开文档无个人绝对路径，产品目录差异为空。新的Oracle咨询已实际完成，附件前后确认Power 5/5，完整答复逐项核对，临时Chrome和profile已清理。Oracle四处合同意见已采纳修订，并由主代理按反例再核对；不宣称Oracle再次审过全部最终改文或运行业务。具体证据、答复哈希及处置见审计报告第9节。
+
+**复审最后补齐：**相关内容未变与出处位置更新分开，可靠映射才换新引用；历史分析进入Pi由宿主标用途并保留authority，不能给旧摘要整体豁免；公共/支持/资产分页均不越过未交付项，Rust统一最终裁剪、Node无损包装；同步重试沿原身份，终态失败原命令不重跑，全部保存/冲突收口后才完成并应用退休。另补namespace身份及间接必要依赖/实际来源允许集，F03/F04/F07/F11已对应更新。保留原十二模块与存储选型，不增加新Agent、图服务、定时同步或资料交付账本。
+
+**验收与要求变更：**只细化已确认目标，不改测试断言、删除场景或用mock替代真实验收。首个实现增量顺序仍为运行恢复/Pi容量，然后来源与任务合同、混合检索与依据交付、两链真实多轮；planned验收命令仍为空，设计不等于业务完成。
+
+## 工程设计收口历史（2026-10-23，后续决定以上方为准）
+
+**最新范围决定：**一张表对应一份完整的当前生产SQL；多个独立作业写同表暂不考虑，不为它增加数组、关系表、适配分支或兼容兜底。撤回之前将多生产者列为主要缺口的判断，沿现有CatalogTable.node入口；大SQL完整保存、按变化整理和依赖保持继续做。指标可有多份查询示例，与生产SQL分开。实现设计、模块图和讨论稿验收已同步。本次范围精简后已重新生成31张图，架构、材料、增量声明与git diff --check均通过；这些仍是设计检查，不代表产品实现。
+
+以下保留早期收口过程；其中“待讨论/待收口”已由上方当前决定及实现设计第17节替代。
+
+**当时仍待收口：**用户补充要求从空语义层首次全量同步平台资料，并明确后续更新。稳定身份、分页完整性、内容复用和人工保护已有依据；还需把资料缺失/读取失败/截断、权威范围与删除、同步/整理/索引分开回执及触发方式收成完整接口合同。前述“准备全部明确”的判断已收窄，不把mock接口视为可以省略这些语义。本轮只落实多生产者暂不做，未新增定时任务或改同步实现。
+
+用户同意继续工程设计。本轮使用dev_co保持既有目标与当前记录，使用contract-first核对调用者、字段、兼容和失败语义；没有把讨论授权扩大成产品实现。现有十二个模块和Rust/Node/React主体保留，公共语义采用**MySQL当前内容与类型关系＋Milvus中文BM25/dense＋Rust批量取证＋Pi原生Agent**；Mem0和个人/公共Skill不迁移。
+
+- 正式合同见[实现设计第17节](architecture/implementation-design.md#17-语义检索与上下文的实施合同2026-10-23)：明确来源/知识/索引身份、定点位置、必要支持、文档依赖更新、一表一份完整生产SQL、任务范围/时间角色/采纳口径及SQL读回。
+- 工具沿search_knowledge/read_knowledge/read_source深化；补批量读取、正文与支持分别续读、搜索cursor、各通道前过滤与RRF融合，无类型配额。来源限制、召回线索和分析目标不混用。
+- 存储按owner列出当前正文、单表完整SQL、陈述/关系/依赖和准备进度的键与索引；分批回填当前数据，旧任务/SQL/操作身份保留，存量历史首轮不删，索引重建复用有效整理成果。
+- 模型总窗口/输入/输出tokens与JSON字节分开；Pi参数由能力推导，校验两段原生摘要后的空间。DeepSeek首轮目标为1,000,000总tokens、900,000输入、65,536输出、8MiB、单次600秒，均为待实现/待验初值；旧消息限额不重写。24次/连续临时失败3次不变。
+- [系统设计](semantic-retrieval-design.md)、[知识模块](architecture/knowledge-modules.md)、[运行模块](architecture/runtime-modules.md)、[跨模块图](architecture/implementation-views.md)、[README](../README.md)与[开发文档](development.md)同步目标。C4容器图与功能截图继续描述现有部署；更新的模块图显式注明目标尚未实施。
+
+**独立审查：**只读审查者对照当前Schema、Rust和锁定Pi1.3源码核对，发现并在设计中修正：跨轮明确口径采纳身份、旧profile缺字段解码、搜索/必要支持续读输入、两段摘要容量及轮内限制投影。修订后有界复核通过。记录见[工程设计审查](reviews/semantic-engineering-design-review-20261023.md)。这是设计审查，实际代码/Schema、迁移和产品行为仍未验证。
+
+**验证状态：**31张模块/流程SVG及离线图册已重新生成，渲染无页面错误，桌面/手机视图已检查，手机页面无整体横向溢出。架构检查覆盖12模块、31图、37个链接和15条声明依赖边；材料检查411项通过；verify-delivery确认下一增量声明有效但业务未验证，其16项检查器自测通过。补充检查11份本轮Markdown的340个本地链接/锚点，发现并修正架构README遗留的memory-context.ts失效链接为workspace-context.ts；git diff --check通过。未运行产品测试、真实模型、数据库或性能实验；没有读取凭据、修改产品代码/配置/数据、启动服务、提交或推送。
+
+**下一实现增量：**上方delivery已切到planned的I2-RUNTIME-CAPACITY，先修运行故障与Pi容量；验收命令尚未实现，因此command=null，审查/运行证据均待取得。之后是来源与任务合同、混合检索与依据交付、两条主链真实多轮复验，范围见实现设计17.9。运行修复已有实施依据；来源与同步增量须先补齐上述合同，不据此宣称全部准备已完成；真实端点载荷、长输出时延与千表性能须在实施阶段取证。上一I2-COCKPIT-DOGFOOD完成记录保留在下方历史交付节，不代表这轮改造通过。
+
+**验收与要求变更：**按最新范围，将“同表两份生产SQL独立更新”设计场景改为“单表完整大SQL的变更与复用”，撤回新增production_sources/production_targets要求；依据为用户明确暂不考虑多生产者，影响限于后续来源合同，本轮不改任何测试断言。D04按最新决定从“普通表按需”改为默认自动整理；A05允许冲突只保留元数据；A06取消类型配额。系统设计21节映射已同步。未删除旧业务场景或将真实模型验收改为mock；本轮没有改测试断言。暂不做全历史全文库、持续语义变化监听/提醒、自动重算、长期双索引、Neo4j、通用DSL或新Agent。
+
+## 语义存储与检索架构讨论（2026-10-22，未实施）
+
+以下保留讨论过程和推荐修正，包含当时的未完成说明。当前工程设计及下一增量以本页顶部为准；后续Milvus方案替代历史Neo4j推荐。
+
+**当前阅读定位：**旧的模块/接口/数据归属基线仍在[实现设计](architecture/implementation-design.md)，并有对应代码。本轮主要细化资料准备、知识与检索、依据交付、Pi容量接入，以及Dogfood暴露的相关运行故障；没有推倒重建产品。最新存储推荐为MySQL当前知识与关系＋Milvus混合检索＋Pi＋现有Mem0，检索Interface目前推荐沿既有搜索/读取操作深化。整体保留项、接口比较见[讨论稿第15节](reviews/semantic-architecture-discussion-20261022.md#15-原架构保留范围与接口方案复核2026-10-23)；两条主链的实际交接、断点、责任与验收见[第16节](reviews/semantic-architecture-discussion-20261022.md#16-两条主链的交接核对2026-10-23)。下方历史Neo4j推荐已被后续交叉审计替代。
+
+当前用户要求先汇总座舱 Dogfood 问题、核实根因，并把同步、任意写法文档、图向量检索、排序和 Pi 上下文链路设计清楚，继续讨论后再实施；不开展新实验。讨论时delivery仍记录上一资料交付增量；2026-10-23工程收口后已改为下一实现增量planned，不能据此声称改造完成。代码基线 `fed8276`，本轮仅新增讨论文档并更新本记录，没有改产品代码、配置或数据，没有新增模型/数据库实验、提交或推送。
+
+最新明确决定：表、目标表加工 SQL 和语义只维护当前有效内容；同步比较指纹，未变复用、变化只更新受影响语义，不默认保留每版全文。保留稳定 ID、当前修订标记和依赖指纹用于识别变化，不等于建设历史库；既有任务、查询及操作身份不在此范围删除。细粒度同步可以后做，但依赖结构需先确定。调度 SQL 强关联其写入目标；其中观察到的 JOIN 不是全部可用关联，图中没有边也不禁止有依据的新 JOIN。用户文档可以无可靠标题、混写多表多字段及跨段规则，不要求模板或逐段人工标注；整篇对象关联只能作为细粒度理解线索，不能套给所有段落。
+
+完整讨论稿为 [语义存储、文档处理与 Agent 检索架构讨论](reviews/semantic-architecture-discussion-20261022.md)。包含 F1–F9 的逐项复核、遗漏的上下文和工程问题、试用器缺陷，以及新发现的文档覆盖/增量/依赖/排序风险。F2 零召回、F9 共用预算为缺陷的结论已撤回；F1 仅展示拼接重复，不能解释 Agent 上下文膨胀。原始审计证据保留在 `.local/dogfood-runs/voice-cockpit-20261022/AUDIT.md`。
+
+推荐而未决定实施：MySQL 保存当前正式文字与人工语义；Neo4j 作为公共语义图、全文与向量检索首选候选；原文始终可搜索/回读，自动图关系不成为资料可用的前提；Pi 保持唯一 Agent 与原生压缩，Mem0/Skill 沿用既有分工。修正先前所有正文必须搬到对象存储的建议，二进制原文件/附件才按需求使用对象存储。本轮没有对照性能或真实模型质量结论，不修改现有生效系统设计；下一步是讨论数据组织与交付接口，暂不安装、迁移或实现。
+
+后续讨论明确：多轮指代、条件继承与查询表达优先交给现有模型/Pi，应用提供任务事实及可用依据，不增设独立问题重写模型。用户要求充分利用模型输入/输出/总窗口并给充足阈值空间，正常历史累积应自动压缩续接，不能要求用户手动处理。这里128 KiB是请求体字节上限；最低128 tokens是另一项近期原文保留目标，二者不可混淆。本轮未调整任何运行配置。
+
+新增只读核查：官方当前Flash标称1M窗口/最大393216输出，仓库默认65536输入/8192输出/128 KiB载荷；Pi1.3接入将input_limit当作contextWindow，压缩reserve固定2048、keepRecent仅256/2048并可降至128；provider还覆盖SDK给摘要选择的maxTokens。Pi已能识别request_too_large并原生压缩重试，不能再写成没有溢出恢复。现有模型管理允许更大配置，但仅改配置无法修复上述接入差异。工具种类已基本完整，主要缺口是强制补读整条长文、回执容量与必要依据组织。源码机制及官方能力不等于已读取当前部署值或验证大请求。
+
+讨论稿第6–7节已补多轮语义、工具审计和自动续接要求，第11节审计剩余未决边界。2026-10-23逐项讨论已确认第一项：资料录入后默认自动整理并用于调查，明确事实和依据充分的推导可直接用于回答、生成SQL和有依据的JOIN，不逐段审批、不仅因模型推导而要求确认；模型优先自行补查，仅对影响结果且仍无法消除的歧义询问。当前任务采用口径不自动发布为公共定义，执行授权沿用原规则。用户明确要求不要过度保守。
+
+第二项来源冲突也已获用户同意：按用户的问题与资料适用范围选择依据，Agent优先自行消解对象、版本和口径差异；不设置某类来源无条件优先的顺序。只有实质影响结果且无法判断的冲突才询问，保留不受影响的工作，必要时展示不同SQL草稿及差异，不因发现冲突中断整个任务；本次分析选择不自动修订公共语义。
+
+第三项分析范围与证据范围已获用户同意：限定分析对象不自动限制支撑资料，Agent可自主查阅有权限且与本题必要相关的定义、维表和关联依据；用户明确限定资料来源时遵守限制，确需扩大才询问。模型推测的业务域通常作召回/排序线索，不能隐式排除必要资料；补查不扩展用户要求的分析目标。
+
+第四项依据充分与范围控制已获用户同意：模型围绕当前问题判断，关键依据够用即交付，仅针对实质缺口补查；不强制通读全文、穷尽资料、整库扩搜或自行增加分析目标，不另造固定调查流程/置信度门槛。非关键缺口可说明并交付，关键缺口补查未解再具体澄清，用户要草稿时可明确假设保留进度。用户强调不要无脑扩展范围。
+
+第五、六项最终取舍：正常异步索引保留，相关索引未就绪时原文按正常路径可读，其他对象更新不触发全局切换。用户最终明确将语义变化跟踪与提醒记入“暂不做”：分析完成后保留当时结果，不持续关注索引/语义更新，不每轮扫描历史依赖，不主动提示是否按新口径重做，不自动修订任务或重算。此前“发现相关变化后提醒用户选择”的建议已撤回。用户再次分析时沿正常检索读取当时有效资料。
+
+明确接受的限制：旧结果不会因后续定义变化自动得到通知；索引更新可暂时影响召回，已有校验仍可拒绝失效操作。不建持续监听、独立影响分类器、专门提醒/重算、双套索引、全局切换、新消息总线、补偿框架或全历史库。已有版本、权限、来源有效性和执行校验保留。讨论稿第11节已单列暂不做清单，第1、4.4、5.7、10节同步，不将这些取舍重新计作本轮实现或验收缺口。
+
+六项行为讨论已收拢，后续重点回到正常路径的模型/Pi容量、语义组织和公共检索工程方案。完整容量默认值、具体数据库版本及部署资源仍待落实；不把设计选择当部署授权，不将已定或明确暂缓事项重新询问。继续先讨论，产品代码、配置和数据保持未改，没有新增模型/数据库实验、提交或推送。
+
+2026-10-23公共检索只读补查：Neo4j当前原生向量SEARCH可索引内过滤，全文SEARCH不支持内部WHERE，中文分析器具体选用与质量尚未验证；旧Hybrid封装限制不能当作数据库全部能力。仓库公共与个人Mem0默认共用Milvus不同collection，公共迁走仍不能停Milvus/etcd/MinIO。本机16GiB、Colima配额6GiB、现有四服务内存上限合计5.25GiB，非实测占用。Mem0虽支持Qdrant，但本项目有Milvus专用接入，迁移有工程和验证成本。
+
+随后用户明确本机仅用于验证，未来部署到资源更丰富的云端，要求据此确定方案。本轮设计选择收敛为：MySQL保存当前正式内容/状态；Neo4j统一公共图、全文与向量检索；Mem0保持现有Milvus；Pi仍为唯一Agent、Skill沿现有按需加载。公共迁移验证完成后不长期双维护Milvus公共向量；个人Milvus及其etcd/MinIO继续保留。撤回因本机资源而倾向迁Mem0至Qdrant的建议，不扩展本轮为个人记忆迁移。云端按职责安排资源，本地以同技术路径小规模验证。讨论稿第1、3、9、11节已同步；这是确定的设计方案，不等于已实施、已获性能验证或允许现在启动迁移/部署。
+
+**2026-10-23交叉审计后的最新推荐（替代上一段Neo4j选型，仍未实施）：** 用户要求自审、Oracle Web及大型公司公开实现研究。已完成一次Oracle最高档咨询，实际滑块为`Power, item 5 of 5 (slider ARIA)`，完整答复已取得，所拥有Chrome与临时Profile已清理。本地资料与答复为`.local/research/semantic-final-review-20261023/`；公开证据、采纳与分歧写入[讨论稿第13节](reviews/semantic-architecture-discussion-20261022.md#13-外部实现与独立审计交叉核对2026-10-23)。Oracle未读源码，相关建议由本地及独立审查再次核对。
+
+Oracle建议不新增Neo4j。再次核对Milvus当前v3.0.x官方BM25、Jieba、混合检索及前过滤文档，仓库v3.0.2镜像配置、REST公共接入及当前关系查询后，接受这一方向：**MySQL保存当前正式内容、有出处的语义陈述和带索引的类型关系；Milvus承担公共BM25＋dense检索；Rust批量取证与补齐条件；Pi唯一Agent；Mem0个人集合保持。** 需要语义关系不能直接推出需要专用图库；已有慢查询是JSON扫描、重复装配和事务问题，尚无结构化关系查询瓶颈证据。Neo4j可实现所需能力，但当前额外关系投影、中文/身份分析器适配及运维成本缺乏对应收益证据，因此撤回前一轮首选推荐，不把这次修正说成用户已经批准实现。也不因云端资源充足预建备用图库。
+
+设计同时修正：输入装得下不足以证明整篇一次抽取完整；按信息密度及输出量分组，原文覆盖和语义处理状态分开。条件与例外挂到完整且有适用范围的陈述，已知必要条件随定义交付。复用现有粒度、表达式、JOIN与query_example结构，补来源、跨表/值映射和未知基数。SQL按稳定生产来源保存当前版本，写目标和适用范围是当前属性/关系；重建索引复用当前解释，影响不确定时按单文档/SQL重整。公共索引必须实质改造BM25、中文、范围和片段覆盖，不是改一个配置开关；不迁Mem0、不建长期双索引、不增加另一Agent或压缩器。六项已确认行为和暂不做清单不变。
+
+后续用户补充：指标通常还带获取指标的SQL示例，不能只设计自然语言解释和计算公式。讨论稿第6.5节明确复用既有query_example，关联指标、适用问题、参数、粒度、依赖和验证说明；支持一个指标多份示例及一份SQL多个指标，文档内示例保留原文出处而不要求重复录入。检索指标后应可按本题条件找到并读取相关示例的完整计算逻辑，不能丢掉CTE、去重和分母条件。生产SQL与指标查询SQL分别表达；示例是生成参考，不替代适用性判断或原执行授权，没有示例也不阻止有依据的SQL生成。这是讨论补充，未实现指标到示例的新增交付逻辑。
+
+随后按用户要求实际读取并应用`domain-modeling`与`codebase-design`技能，分别进行术语/关系/合成反例核查和Module/Interface/Seam职责核查，并由两个独立只读子代理对照现有契约和代码。成果在讨论稿第3.2、4.1、6.5、9.2、13.6及新增第14节，不新建CONTEXT/ADR或第二份当前计划，没有再次外发Oracle咨询。
+
+本轮补清：指标口径、不同SQL实现与本题条件分开；示例计算的输出指标不同于普通dependencies；生产SQL的稳定来源身份不包含可变适用范围；源修订、知识版本和索引块身份不能互换。当前26个合成指标已有计算SQL，query_example已有依赖但无输出指标角色，平台导入仍单node，不把推荐设计写成已实现。既有取舍保持，没有新增必须由用户决定的产品规则。
+
+模块分工修正：具名检索用例组合M04候选、M02知识/已知支持关系、M03来源及M01范围校验；M04不跨模块读私表，Rust不裁决模糊口径或另起模型调查。当前business_domain/anchor会硬过滤，未来工具合同须区分明确来源限制与相关性线索，不能只改prompt或静默改变原字段含义。读取回执区分正文完整、已知必要支持交付和召回覆盖，不用一个complete标志声称业务依据充分。原文与派生成果的owner保持，索引重建复用语义；本轮只做文档与静态核查。
+
+用户随后担心原架构是否缺少模块/Interface设计并需要重做。本轮实际使用`improve-codebase-architecture`，只读核对已有模块、HTTP/Pi契约、私有store与具名用例，生成临时HTML候选图；再对已同意继续讨论的检索/读取Interface使用`design-an-interface`并行比较A搜索/引用读取、B逐关系导航、C按任务组织资料。当前推荐A，吸收明确关系与支持状态，保留Pi调查判断；不新增任务专用资料工具或图导航必经流程。`ubiquitous-language`补统一术语，`decision-mapping`沿本记录保存下方紧凑决策依赖，不另建当前计划。本次未再次Oracle外发或开展产品实验。
+
+**两条主链核对结果（2026-10-23）：**已逐段追踪“资料更新→整理→索引→检索→依据交付”和“用户消息→任务条件→取证→SQL→执行→结果→续接”。同步幂等、人工覆盖保护、异步索引、任务条件修订、执行与结果版本绑定、Pi持久会话均有实现，可保留主体。新补清的断点：文档编辑只给文档排索引，没有给依赖语义排重新整理，而读取会拒绝旧文档依赖；更新调度与有效性检查的依赖集合不一致；Conditions还带旧零售channel枚举，来源限制/业务快照角色缺统一表达；QuerySemanticResolution在入口校验，但查询记录不保存/返回完整决策，后续依赖历史或自由文本恢复。它们属于具体实现或Interface缺口，不据此断言每次回答均错误。
+
+讨论稿第16节补两张链路图、逐交接owner/输入输出/问题/调整表、七项合同和十一项验收场景。当时将多生产SQL列为新增要求，现已按用户决定撤回；当前内容为主、默认自动整理等决定保留；带假设SQL可供讨论，正式可确认稿仍按原规则，不新增草稿状态体系。继续保留24次/连续临时失败3次及已明确不做的变化监听提醒。模型/Pi容量和检索事务、worker退出、错误传播保持优先；本轮未再次Oracle咨询、分派子代理或运行产品实验，没有实施或冻结Schema。
+
+### 当前决策依赖图（仅架构讨论）
+
+#### #1：原有产品与模块主干是否保留
+
+Blocked by: 无。Type: Discuss。Answer: 已核对有设计与代码依据；保留主体，近期调整集中在资料/检索/上下文和具体运行故障，不能由静态核查宣称全架构无缺陷。
+
+#### #2：检索与读取采用哪种Interface形状
+
+Blocked by: #1。Type: Discuss。Answer: 三案已比较，当前推荐沿现有search/read提供定义、已知支持及定点续读；方案及取舍在讨论稿15.3，具体同源字段尚未冻结。
+
+#### #3：准备成果、语义关系与工具引用如何落到现有owner
+
+Blocked by: #2。Type: Discuss。Answer: 两条主链已追踪，owner和七项接口合同建议见讨论稿16.1–16.3；补正常文档变更后的依赖整理、必要支持交付、跨工具范围连续性及本题采用事实。仍需具体同源字段/兼容、依赖存储与查询、分块和批量容量设计，不能标作Schema已完成。不重开历史库、变更提醒或来源绝对优先等议题。
+
+#### #4：如何分批迁移与证明改进
+
+Blocked by: #2、#3。Type: Discuss。Answer: 实施顺序建议为运行故障与Pi容量→来源/准备/任务合同→公共混合索引与批量取证→两链真实多轮验收；十一项可观察场景见讨论稿16.5，尚未执行。具体迁移、配置数值及正式合同/图同步未完成。已证实工程故障可先修，不以全部新结构完成为前置；当前不运行原型、模型或性能实验。
+
+本次仅更新讨论稿及CURRENT；git差异检查、两份文档围栏/尾部空白/公开路径及114个本地链接目标检查通过，未做图的渲染检查。文档检查不等于产品验收：未运行新产品测试、Dogfood或性能实验，未改代码配置数据，未提交推送或部署。下一步细化同源合同、迁移与容量方案；本轮没有新增必须由用户决定的产品原则，也没有实施授权，不拿文档审计代替功能完成。
 
 ## 数字座舱合成资料与Dogfood交接（2026-10-22）
 
@@ -550,7 +1239,6 @@ E19同规模、同断言的诊断副本完整退出0，首次建索引及两次�
 - 审计基线为 `e951ff58`。本地离线请求序列化与 SDK 错误识别探针、一次隔离的 provider 协议复验均完成；Oracle完成一次4/5强度独立咨询。工程协议证据不代表真实模型质量或生产缓存收益。
 
 | 来源与问题 | 实施结果 | 对应验证与结论边界 |
-| --- | --- | --- |
 | 原1：易变工作区进入系统提示，可能影响跨轮前缀 | 固定规则保留在system；时钟、任务、查询及记忆改由Pi原生context临时投影到历史之后、当前输入之前。成功回执撤下旧候选，同版route保留完整条件。 | `check-request-context`用真实SDK序列化证明跨轮时钟变化不改system；`check-memory-context`覆盖普通续聊、旧system检查点、同轮修订和半轮恢复。参考不写Pi树，不重复积累；真实provider缓存命中和费用收益未测。 |
 | 原2：资源提示与工具说明重复澄清/归属规则 | 通用原则集中到resources，工具保留action、参数、ID/版本及前置依赖；记忆参考头去掉系统已包含的优先级/补读叙述。 | 澄清、消息归属及聊天执行回归绑定统一验收。自由回答、选项解释、换题、含糊归属与否定授权原则仍保留；本地协议不证明自然模型理解效果。 |
 | 原3：长任务超限、压缩后丢依据或反复补读 | 原错误识别假设被反证；实际修复了固定尾部目标在小剩余容量下无法进一步压缩的问题。用Pi公开设置按容量约束保留目标，继续使用原生压缩及有限重试，完整工具组不裁剪。 | 原64KiB/24次trial/12次单请求预算下，24轮中文历史+6轮续聊+280条短历史通过，24次实际调用含10次摘要、最大65,467B。大工具组逐字保留，原操作不重复；最小组超128KiB时有限失败、无正式答案。不能承诺任意历史均可压缩、旧依据全保留或真实模型不再补读。 |
