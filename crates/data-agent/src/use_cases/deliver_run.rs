@@ -11,6 +11,31 @@ pub async fn start_delivery(
     job: &jobs::ClaimedJob,
     ttl_ms: u32,
 ) -> Result<Value> {
+    // 外部来源预检也可能超过TTL；领取后即续job，建立run后再交给正常会话心跳。
+    // 两个future同时推进，不能在持锁的准备future旁串行等待续租而阻止它提交。
+    let heartbeat = async {
+        let mut interval =
+            tokio::time::interval(std::time::Duration::from_millis(u64::from(ttl_ms) / 3));
+        loop {
+            interval.tick().await;
+            if let Err(error) = jobs::renew_claim(pool, job, ttl_ms).await {
+                if !error.is_transient_storage() {
+                    return Err(error);
+                }
+                eprintln!(
+                    "delivery_prepare_renew_transient job={} code={}",
+                    job.id, error.code
+                );
+            }
+        }
+    };
+    tokio::select! {
+        result = prepare_delivery(pool, job, ttl_ms) => result,
+        result = heartbeat => result,
+    }
+}
+
+async fn prepare_delivery(pool: &MySqlPool, job: &jobs::ClaimedJob, ttl_ms: u32) -> Result<Value> {
     let location = conversations::locate_conversation(pool, &job.conversation_id).await?;
     let mut context = AccessContext {
         user_id: location.owner_id,
@@ -237,6 +262,8 @@ pub async fn start_delivery(
         checkpoint = Some(runtime::bind_delivery_checkpoint_in_tx(&mut tx, &run_id, &value).await?);
     }
     tx.commit().await?;
+    // 准备上下文可能消耗领取时的租约。派发前沿同一运行核对并续租，不能带着即将过期的job进入Pi。
+    renew_delivery(pool, &context, &run_id, lease_epoch, ttl_ms).await?;
     eprintln!(
         "run_started request={} conversation={} run={} epoch={}",
         context.request_id, conversation.id, run_id, lease_epoch
@@ -395,6 +422,11 @@ mod tests {
             "budget_exhausted",
             "unavailable",
             "retry_exhausted",
+            "provider_configuration_invalid",
+            "model_input_limit",
+            "model_retry_exhausted",
+            "model_usage_unknown",
+            "model_auth_failed",
         ] {
             assert_eq!(delivery_failure_code(code), json!(code));
         }

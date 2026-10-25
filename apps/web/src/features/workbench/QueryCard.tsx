@@ -49,6 +49,14 @@ export function QueryCard({
   const readable = query.text_unavailable !== true;
   const parameters = query.parameters ?? {};
   const references = query.knowledge_refs ?? [];
+  // 用户声明的时间口径快照（与平台data_freshness不同源）：截点/批次是声明值，不是平台观测。
+  const roleLabel: Record<string, string> = { event_time: "时间字段", observation_cutoff: "观察截点", data_batch: "数据批次" };
+  const timeBasis = readable
+    ? (query.time_basis?.time_roles ?? []).map(role => {
+        const value = role.value ?? role.field_ref ?? role.description;
+        return `${roleLabel[role.role] ?? role.role} ${value}`;
+      }).join(" · ")
+    : "";
   const copy = async () => {
     if (!readable || !query.sql) return;
     const parameterText = Object.keys(parameters).length
@@ -139,6 +147,7 @@ export function QueryCard({
       </div>
       {!readable && <p className="query-summary" role="status">查询来源已失效或无法核验，SQL、参数和结果已隐藏。查询状态仍会更新，运行中的查询仍可停止。</p>}
       {readable && query.execution_state !== "succeeded" && <p className="query-summary">{query.summary}</p>}
+      {timeBasis && <p className="quiet query-time-basis">{timeBasis}</p>}
       {readable && result && <QueryResultsView result={result} onShowSql={() => setShowSql(true)}/>}
       {readable && query.execution_state === "succeeded" && <details className="query-conditions"><summary>本次查询条件</summary><p className="query-summary">{query.summary}</p></details>}
       {running ? <>

@@ -78,6 +78,8 @@ pub async fn list(pool: &MySqlPool, ctx: &AccessContext, input: &Value) -> Resul
         value["prefill_status"] =
             ingestion::prefill_status_in_tx(&mut tx, ctx, value["id"].as_str().unwrap_or(""))
                 .await?;
+        value["preparation_status"] =
+            ingestion::preparation_status_in_tx(&mut tx, ctx, value).await?;
         if let Some(preference) =
             ingestion::read_analysis_preference_in_tx(&mut tx, ctx, value).await?
         {
@@ -99,6 +101,7 @@ pub async fn read(
     let mut v = knowledge::read_in_tx(&mut tx, ctx, object, version, true).await?;
     if version.is_none() {
         v["prefill_status"] = ingestion::prefill_status_in_tx(&mut tx, ctx, object).await?;
+        v["preparation_status"] = ingestion::preparation_status_in_tx(&mut tx, ctx, &v).await?;
         if let Some(preference) =
             ingestion::read_analysis_preference_in_tx(&mut tx, ctx, &v).await?
         {
@@ -263,6 +266,8 @@ pub async fn edit(
         }
         _ => return Err(Error::new("invalid_input")),
     };
+    // 保存文档原文（创建或改版）即原子登记raw索引与语义准备；两作业互不等待。
+    super::knowledge_documents::register_document_preparation_in_tx(&mut tx, &v).await?;
     super::semantic_governance::decorate_in_tx(&mut tx, ctx, &mut v).await?;
     contracts::validate("KnowledgeObject", &v)?;
     tx.commit().await?;
@@ -278,6 +283,18 @@ pub async fn source(
     let v = super::knowledge_sources::read_in_tx(&mut tx, ctx, source, Some(version)).await?;
     tx.commit().await?;
     Ok(v)
+}
+
+pub async fn source_excerpt(
+    pool: &MySqlPool,
+    ctx: &AccessContext,
+    citation: Value,
+) -> Result<Value> {
+    let citation = contracts::decode("SourceCitation", citation)?;
+    let mut tx = AppTx::begin(pool).await?;
+    let excerpt = super::knowledge_sources::read_citation_in_tx(&mut tx, ctx, citation).await?;
+    tx.commit().await?;
+    Ok(json!(excerpt))
 }
 
 pub async fn set_table_analysis_preference(
@@ -322,11 +339,10 @@ pub async fn proposals(pool: &MySqlPool, ctx: &AccessContext) -> Result<Value> {
 }
 pub async fn sync(pool: &MySqlPool, ctx: &AccessContext, key: &str) -> Result<Value> {
     access::authorize_maintainer(ctx)?;
-    sync_catalog(pool, ctx).await?;
     super::catalog_import::sync(pool, ctx, key).await
 }
 
-async fn sync_catalog(pool: &MySqlPool, ctx: &AccessContext) -> Result<()> {
+pub(crate) async fn sync_catalog(pool: &MySqlPool, ctx: &AccessContext) -> Result<()> {
     // 空授权登记不授予维护权；单独提交，避免提前固定随后来源同步的旧快照。
     let mut registration = AppTx::begin(pool).await?;
     super::semantic_governance::register_catalog_in_tx(
@@ -740,6 +756,119 @@ pub async fn retrieve_in_tx(
     .await
 }
 
+// 锁外检索阶段：召回、语义对象与资产目录在自己的短读事务中完成，不持会话/运行锁。
+// 慢读取期间宿主心跳可正常续租；提交前由 assert_search_fresh_in_tx 重核版本。
+pub struct ScopedSearchStage {
+    pub search: KnowledgeSearch,
+    pub items: Vec<Value>,
+    pub page: Value,
+}
+
+pub struct ScopedSearchRequest<'a> {
+    pub query: &'a str,
+    pub limit: usize,
+    pub vector: &'a retrieval::vector::Candidates,
+    pub scope: &'a KnowledgeSearchScope,
+    pub asset_after: Option<&'a str>,
+    pub cid: &'a str,
+    pub text_results: &'a super::context_authority::CheckedTextResults,
+}
+
+pub async fn search_stage_outside_lock(
+    pool: &MySqlPool,
+    ctx: &AccessContext,
+    request: &ScopedSearchRequest<'_>,
+) -> Result<ScopedSearchStage> {
+    let mut tx = AppTx::begin(pool).await?;
+    let search = retrieve_scoped_in_tx(
+        &mut tx,
+        ctx,
+        request.query,
+        request.limit,
+        request.vector,
+        request.scope,
+    )
+    .await?;
+    let memories = crate::modules::assets::list_in_tx(&mut tx, ctx, true)
+        .await?
+        .into_iter()
+        .filter(|v| v["kind"] == "memory")
+        .collect();
+    let mut items =
+        valid_assets_in_tx(&mut tx, ctx, memories, request.cid, request.text_results).await?;
+    let selected = crate::modules::assets::selected_in_tx(&mut tx, ctx, request.cid).await?;
+    items.extend(
+        valid_assets_in_tx(&mut tx, ctx, selected, request.cid, request.text_results).await?,
+    );
+    let page = retrieval::asset_directory(
+        items.clone(),
+        request.query,
+        request.asset_after,
+        request.limit,
+    );
+    tx.commit().await?;
+    Ok(ScopedSearchStage {
+        search,
+        items,
+        page,
+    })
+}
+
+// 提交前重核：检索命中的对象、其结构依赖和目录资产仍为当前有效版本且来源未变。
+// 锁外期间发生更新或撤权时拒绝交付，不让一份回执混入两个时刻的正文。
+pub async fn assert_search_fresh_in_tx(
+    tx: &mut AppTx<'_>,
+    ctx: &AccessContext,
+    stage: &ScopedSearchStage,
+) -> Result<()> {
+    let mut object_ids = Vec::new();
+    for object in &stage.search.objects {
+        object_ids.push(
+            object["id"]
+                .as_str()
+                .ok_or(Error::new("invalid_input"))?
+                .to_owned(),
+        );
+    }
+    object_ids.sort();
+    object_ids.dedup();
+    let current = knowledge::current_versions_in_tx(tx, ctx, &object_ids).await?;
+    for object in &stage.search.objects {
+        let id = object["id"].as_str().ok_or(Error::new("invalid_input"))?;
+        let version = object["version"].as_str().unwrap_or("");
+        if !current
+            .get(&(id.to_owned(), version.to_owned()))
+            .copied()
+            .unwrap_or(false)
+        {
+            return Err(Error::new("stale_knowledge"));
+        }
+        if let Some(dependencies) = object.get("structure_dependencies") {
+            // 依赖对象版本未变时，其原文仍可能已更新；复用含传递来源的校验。
+            check_refs_in_tx(tx, ctx, dependencies).await?;
+        }
+        assert_source_in_tx(tx, ctx, object).await?;
+    }
+    let asset_ids = stage
+        .items
+        .iter()
+        .filter_map(|asset| asset["id"].as_str().map(str::to_owned))
+        .collect::<Vec<_>>();
+    let assets = crate::modules::assets::current_versions_in_tx(tx, ctx, &asset_ids).await?;
+    for asset in &stage.items {
+        let id = asset["id"].as_str().ok_or(Error::new("invalid_input"))?;
+        let version = asset["version"].as_str().unwrap_or("");
+        if !assets
+            .get(&(id.to_owned(), version.to_owned()))
+            .copied()
+            .unwrap_or(false)
+        {
+            return Err(Error::new("stale_knowledge"));
+        }
+    }
+    Ok(())
+}
+
 pub async fn retrieve_scoped_in_tx(
     tx: &mut AppTx<'_>,
     ctx: &AccessContext,
@@ -758,12 +887,14 @@ pub async fn retrieve_scoped_in_tx(
     let current = knowledge::matching_scoped_in_tx(tx, ctx, query, &terms.values, scope).await?;
     let mut candidates = Vec::new();
     let mut seen = std::collections::HashSet::new();
-    let limited = current.len() > 1000 || indexed.len() > 1000;
+    // 候选通道各自1000上限；达到上限说明词命中集未覆盖完，如实报告candidate_limit。
+    let limited = current.len() > 1000 || indexed.len() >= 1000;
     let all = current
         .into_iter()
         .take(1000)
         .chain(indexed.into_iter().take(1000))
         .chain(vector.values.iter().cloned())
+        .chain(vector.lexical.iter().cloned())
         .collect::<Vec<_>>();
     let ids = all
         .iter()
@@ -772,10 +903,66 @@ pub async fn retrieve_scoped_in_tx(
         .into_iter()
         .collect::<Vec<_>>();
     let values = knowledge::current_objects_in_tx(tx, ctx, &ids).await?;
+    // 过滤走依赖索引：映射完备的对象按有效层游走判定失效——人工真正替换后的
+    // 废弃建议/事实引用不再误滤，整理派生陈述绑定的来源修订真正受检，知识支持
+    // 链上的改版即时可见。无索引状态的旧对象沿用legacy正文判定；unknown链路
+    // 成员按“报告不阻断”保留在候选中。
+    let owners: Vec<(String, u64)> = values
+        .iter()
+        .filter_map(|value| {
+            Some((
+                value["id"].as_str()?.to_owned(),
+                value["version"].as_str()?.parse::<u64>().ok()?,
+            ))
+        })
+        .collect();
+    let mut complete = std::collections::HashSet::new();
+    for chunk in owners.chunks(200) {
+        complete.extend(knowledge::dependency_index::complete_members_in_tx(tx, chunk).await?);
+    }
+    let indexed = |object: &Value| -> bool {
+        object["id"].as_str().is_some_and(|id| {
+            object["version"]
+                .as_str()
+                .and_then(|version| version.parse::<u64>().ok())
+                .is_some_and(|version| complete.contains(&(id.to_owned(), version)))
+        })
+    };
+    let mut stale_owners = std::collections::HashSet::new();
+    for chunk in owners.chunks(200) {
+        let roots: Vec<_> = chunk
+            .iter()
+            .filter(|owner| complete.contains(*owner))
+            .cloned()
+            .collect();
+        if roots.is_empty() {
+            continue;
+        }
+        let verdict =
+            knowledge::dependency_index::walk_required_in_tx(tx, &ctx.space_id, &roots).await?;
+        if verdict.stale.is_empty() {
+            continue;
+        }
+        // stale条目的owner可能是链路中间成员而非候选根；组内有stale时逐根重走
+        // 定位归属（检索场景stale是少数，干净组无需逐根往返）。
+        for root in roots {
+            let single = knowledge::dependency_index::walk_required_in_tx(
+                tx,
+                &ctx.space_id,
+                std::slice::from_ref(&root),
+            )
+            .await?;
+            if !single.stale.is_empty() {
+                stale_owners.insert(root.0);
+            }
+        }
+    }
     let mut sources = std::collections::HashSet::new();
     for value in &values {
-        for (source, _) in super::knowledge_sources::requirements(value)? {
-            sources.insert(source);
+        if !indexed(value) {
+            for (source, _) in super::knowledge_sources::requirements(value)? {
+                sources.insert(source);
+            }
         }
     }
     let versions =
@@ -795,9 +982,14 @@ pub async fn retrieve_scoped_in_tx(
         let Some(object) = by_id.get(id) else {
             continue;
         };
-        if super::knowledge_sources::requirements(object)?
-            .iter()
-            .all(|(id, version)| versions.get(id) == Some(version))
+        let fresh = if indexed(object) {
+            !stale_owners.contains(id)
+        } else {
+            super::knowledge_sources::requirements(object)?
+                .iter()
+                .all(|(id, version)| versions.get(id) == Some(version))
+        };
+        if fresh
             && candidate["version"]
                 .as_str()
                 .is_none_or(|version| object["version"] == version)
@@ -809,7 +1001,8 @@ pub async fn retrieve_scoped_in_tx(
             }
         }
     }
-    let mut objects = retrieval::rank_hybrid(candidates, query, limit, &vector.values);
+    let mut objects =
+        retrieval::rank_hybrid(candidates, query, limit, &vector.lexical, &vector.values);
     if limit >= 4 {
         // 关联仅使用前三之外的余位；直接命中不足三项时仍可补足原有两个关联。
         let addition_limit = 2.min(limit.saturating_sub(objects.len().min(3)));

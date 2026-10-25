@@ -127,6 +127,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         )
         .route("/sources/{id}", get(data_routes::source))
         .route("/source-syncs", post(data_routes::sync))
+        .route("/source-syncs/{sync}", get(data_routes::sync_progress))
         .route(
             "/knowledge-index/rebuilds",
             post(data_routes::rebuild_index),

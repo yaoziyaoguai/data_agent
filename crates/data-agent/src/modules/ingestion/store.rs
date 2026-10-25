@@ -5,35 +5,45 @@ use crate::{
 use serde_json::{Value, json};
 use sqlx::Row;
 
+fn catalog_read(row: &sqlx::mysql::MySqlRow) -> Value {
+    json!({"id":row.get::<String,_>("id"),"space_id":row.get::<String,_>("space_id"),"owner_id":row.get::<String,_>("owner_id"),
+        "operation_id":row.get::<String,_>("operation_id"),"baseline":row.get::<sqlx::types::Json<Value>,_>("baseline").0,
+        "namespace_baseline":row.get::<Option<sqlx::types::Json<Value>>,_>("namespace_baseline").map(|v|v.0).unwrap_or(json!({})),
+        "status":row.get::<String,_>("state"),"background":row.get::<bool,_>("background"),
+        "receipt":row.get::<Option<sqlx::types::Json<Value>>,_>("receipt").map(|v|v.0),"error_code":row.get::<Option<String>,_>("error_code"),
+        "error_message":row.get::<Option<String>,_>("error_message"),
+        "cursor":row.get::<Option<String>,_>("cursor_value"),"snapshot_id":row.get::<Option<String>,_>("snapshot_id"),
+        "namespace":row.get::<Option<String>,_>("source_namespace"),"authoritative":row.get::<Option<bool>,_>("authoritative"),
+        "processed_sources":row.get::<u64,_>("processed_sources"),"pages_committed":row.get::<u64,_>("pages_committed"),
+        "directory_complete":row.get::<bool,_>("directory_complete")})
+}
+pub async fn catalog_read_in_tx(tx: &mut AppTx<'_>, id: &str) -> Result<Value> {
+    let row = sqlx::query("SELECT * FROM catalog_imports WHERE id=?")
+        .bind(id)
+        .fetch_optional(tx.connection())
+        .await?
+        .ok_or(Error::new("not_available"))?;
+    Ok(catalog_read(&row))
+}
 pub async fn begin_catalog_read_in_tx(
     tx: &mut AppTx<'_>,
     ctx: &AccessContext,
     operation: &str,
 ) -> Result<Value> {
     sqlx::query("INSERT INTO source_sync_locks(space_id) VALUES(?) ON DUPLICATE KEY UPDATE space_id=VALUES(space_id)").bind(&ctx.space_id).execute(tx.connection()).await?;
-    sqlx::query("UPDATE catalog_imports SET state='failed',error_code='source_interrupted' WHERE space_id=? AND state='fetching' AND lease_until<UTC_TIMESTAMP(3)").bind(&ctx.space_id).execute(tx.connection()).await?;
-    if let Some(row)=sqlx::query("SELECT id,state,receipt,error_code FROM catalog_imports WHERE space_id=? AND owner_id=? AND operation_id=? FOR UPDATE")
-        .bind(&ctx.space_id).bind(&ctx.user_id).bind(operation).fetch_optional(tx.connection()).await? {
-        return match row.get::<String,_>("state").as_str() {
-            "succeeded"=>Ok(json!({"receipt":row.get::<sqlx::types::Json<Value>,_>("receipt").0})),
-            "failed"=>Ok(json!({"error_code":row.get::<Option<String>,_>("error_code").unwrap_or_else(||"source_unavailable".into())})),
-            _=>Ok(json!({"error_code":"version_conflict"})),
-        };
-    }
-    let rows = sqlx::query(
-        "SELECT id,version FROM source_heads WHERE space_id=? ORDER BY id LIMIT 20001 FOR UPDATE",
-    )
-    .bind(&ctx.space_id)
-    .fetch_all(tx.connection())
-    .await?;
-    if rows.len() > 20000 {
-        return Err(Error::new("candidate_limit"));
-    }
+    // 旧前台采集没有可恢复游标；新批次只认M10租约，不受旧截止时间误伤。
+    sqlx::query("UPDATE catalog_imports SET state='failed',error_code='source_interrupted' WHERE space_id=? AND background=0 AND state='fetching' AND lease_until<UTC_TIMESTAMP(3)").bind(&ctx.space_id).execute(tx.connection()).await?;
+    if let Some(row) = sqlx::query("SELECT * FROM catalog_imports WHERE space_id=? AND owner_id=? AND operation_id=? FOR UPDATE")
+        .bind(&ctx.space_id).bind(&ctx.user_id).bind(operation).fetch_optional(tx.connection()).await? { return Ok(catalog_read(&row)); }
+    let rows =
+        sqlx::query("SELECT id,version FROM source_heads WHERE space_id=? ORDER BY id FOR UPDATE")
+            .bind(&ctx.space_id)
+            .fetch_all(tx.connection())
+            .await?;
     let baseline: serde_json::Map<String, Value> = rows
         .iter()
         .map(|r| (r.get::<String, _>("id"), json!(r.get::<u64, _>("version"))))
         .collect();
-    let id = crate::types::id();
     let rows = sqlx::query(
         "SELECT namespace,generation FROM catalog_namespace_heads WHERE space_id=? FOR UPDATE",
     )
@@ -49,11 +59,13 @@ pub async fn begin_catalog_read_in_tx(
             )
         })
         .collect();
-    sqlx::query("INSERT INTO catalog_imports(id,space_id,owner_id,operation_id,baseline,namespace_baseline,state,lease_until) VALUES(?,?,?,?,?,?,'fetching',TIMESTAMPADD(MINUTE,15,UTC_TIMESTAMP(3)))")
-        .bind(&id).bind(&ctx.space_id).bind(&ctx.user_id).bind(operation).bind(sqlx::types::Json(&baseline)).bind(sqlx::types::Json(&namespaces)).execute(tx.connection()).await?;
-    Ok(json!({"id":id,"baseline":baseline,"namespace_baseline":namespaces}))
+    let id = crate::types::id();
+    sqlx::query("INSERT INTO catalog_imports(id,space_id,owner_id,operation_id,baseline,namespace_baseline,state,background) VALUES(?,?,?,?,?,?,'queued',1)")
+        .bind(&id).bind(&ctx.space_id).bind(&ctx.user_id).bind(operation).bind(sqlx::types::Json(baseline)).bind(sqlx::types::Json(namespaces)).execute(tx.connection()).await?;
+    let mut read = catalog_read_in_tx(tx, &id).await?;
+    read["created"] = json!(true);
+    Ok(read)
 }
-
 pub async fn check_catalog_read_in_tx(
     tx: &mut AppTx<'_>,
     ctx: &AccessContext,
@@ -64,7 +76,7 @@ pub async fn check_catalog_read_in_tx(
         .bind(&ctx.space_id)
         .fetch_one(tx.connection())
         .await?;
-    let active:i64=sqlx::query_scalar("SELECT COUNT(*) FROM catalog_imports WHERE id=? AND space_id=? AND state='fetching' AND lease_until>UTC_TIMESTAMP(3)").bind(read["id"].as_str()).bind(&ctx.space_id).fetch_one(tx.connection()).await?;
+    let active:i64=sqlx::query_scalar("SELECT COUNT(*) FROM catalog_imports WHERE id=? AND space_id=? AND background=1 AND state IN ('queued','running')").bind(read["id"].as_str()).bind(&ctx.space_id).fetch_one(tx.connection()).await?;
     if active != 1 {
         return Err(Error::new("source_interrupted"));
     }
@@ -117,29 +129,55 @@ pub async fn save_catalog_table_in_tx(
     .fetch_optional(tx.connection())
     .await?;
     let body = super::catalog::source_text(table);
-    let fp = fingerprint(&json!(body));
+    let (fp, _) = super::catalog_content::comparison(table);
     if previous.is_some_and(|v| platform_version < v) {
         return Err(Error::new("stale_source"));
     }
-    if old
-        .as_ref()
-        .is_some_and(|r| r.get::<String, _>("fingerprint") == fp)
-    {
-        return Ok((actual, false));
-    }
+    // 比较方法升级时也用同一方法计算两份内容，不拿新旧算法hash判业务变化。
+    let retained: Option<sqlx::types::Json<Value>> = sqlx::query_scalar(
+        "SELECT body FROM catalog_table_snapshots WHERE source_id=? AND version=?",
+    )
+    .bind(&source)
+    .bind(actual)
+    .fetch_optional(tx.connection())
+    .await?;
     let retired: Option<bool> =
         sqlx::query_scalar("SELECT retired FROM catalog_platform_heads WHERE source_id=?")
             .bind(&source)
             .fetch_optional(tx.connection())
             .await?;
-    if previous == Some(platform_version) && retired != Some(true) {
-        return Err(Error::new("version_conflict"));
+    if retired != Some(true)
+        && retained
+            .as_ref()
+            .is_some_and(|value| super::catalog_content::fingerprint(&value.0) == fp)
+    {
+        sqlx::query("UPDATE catalog_platform_heads SET platform_version=? WHERE source_id=?")
+            .bind(platform_version)
+            .bind(&source)
+            .execute(tx.connection())
+            .await?;
+        let stored: String =
+            sqlx::query_scalar("SELECT body FROM source_snapshots WHERE source_id=? AND version=?")
+                .bind(&source)
+                .bind(actual)
+                .fetch_one(tx.connection())
+                .await?;
+        write_current_in_tx(
+            tx,
+            &ctx.space_id,
+            &source,
+            namespace,
+            (actual, &stored, &retained.unwrap().0),
+            table,
+        )
+        .await?;
+        return Ok((actual, false));
     }
     let version = actual + 1;
     sqlx::query("INSERT INTO source_snapshots(source_id,version,body) VALUES(?,?,?)")
         .bind(&source)
         .bind(version)
-        .bind(body)
+        .bind(&body)
         .execute(tx.connection())
         .await?;
     sqlx::query("INSERT INTO source_heads(id,space_id,version,fingerprint) VALUES(?,?,?,?) ON DUPLICATE KEY UPDATE version=VALUES(version),fingerprint=VALUES(fingerprint)")
@@ -153,6 +191,15 @@ pub async fn save_catalog_table_in_tx(
     .bind(namespace)
     .bind(sqlx::types::Json(table))
     .execute(tx.connection())
+    .await?;
+    write_current_in_tx(
+        tx,
+        &ctx.space_id,
+        &source,
+        namespace,
+        (version, &body, table),
+        table,
+    )
     .await?;
     Ok((version, true))
 }
@@ -214,27 +261,80 @@ pub async fn finish_catalog_read_in_tx(
     tx: &mut AppTx<'_>,
     read: &Value,
     receipt: Option<&Value>,
-    error: Option<&str>,
+    error: Option<&Error>,
 ) -> Result<()> {
-    if receipt.is_some() {
-        let active:i64=sqlx::query_scalar("SELECT COUNT(*) FROM catalog_imports WHERE id=? AND state='fetching' AND lease_until>UTC_TIMESTAMP(3) FOR UPDATE").bind(read["id"].as_str()).fetch_one(tx.connection()).await?;
-        if active != 1 {
-            return Err(Error::new("source_interrupted"));
-        }
+    let updated = sqlx::query("UPDATE catalog_imports SET state=?,receipt=?,error_code=?,error_message=? WHERE id=? AND background=1 AND state IN ('queued','running')")
+        .bind(if receipt.is_some() {"completed"} else {"failed"}).bind(receipt.map(sqlx::types::Json))
+        .bind(error.map(|error|error.code)).bind(error.and_then(|error|error.message.as_deref()))
+        .bind(read["id"].as_str()).execute(tx.connection()).await?;
+    if updated.rows_affected() != 1 {
+        return Err(Error::new("source_interrupted"));
     }
-    sqlx::query(
-        "UPDATE catalog_imports SET state=?,receipt=?,error_code=? WHERE id=? AND state='fetching'",
+    Ok(())
+}
+pub async fn start_catalog_page_in_tx(tx: &mut AppTx<'_>, read: &Value) -> Result<()> {
+    let updated = sqlx::query("UPDATE catalog_imports SET state='running' WHERE id=? AND background=1 AND state IN ('queued','running')")
+        .bind(read["id"].as_str()).execute(tx.connection()).await?;
+    if updated.rows_affected() != 1 {
+        return Err(Error::new("source_interrupted"));
+    }
+    Ok(())
+}
+pub async fn catalog_members_in_tx(tx: &mut AppTx<'_>, sync: &str) -> Result<Vec<Value>> {
+    let rows=sqlx::query("SELECT source_id,platform_table_id,accepted_revision,retained_objects,pending_maintainers FROM catalog_sync_members WHERE sync_id=? ORDER BY source_id")
+        .bind(sync).fetch_all(tx.connection()).await?;
+    Ok(rows.iter().map(|r|json!({"source_id":r.get::<String,_>("source_id"),"platform_table_id":r.get::<String,_>("platform_table_id"),"revision":r.get::<u64,_>("accepted_revision"),
+        "objects":r.get::<sqlx::types::Json<Value>,_>("retained_objects").0,"maintainers":r.get::<sqlx::types::Json<Value>,_>("pending_maintainers").0})).collect())
+}
+pub async fn save_catalog_member_in_tx(
+    tx: &mut AppTx<'_>,
+    sync: &str,
+    member: &Value,
+) -> Result<()> {
+    let exists: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM catalog_sync_members WHERE sync_id=? AND source_id=?",
     )
-    .bind(if receipt.is_some() {
-        "succeeded"
-    } else {
-        "failed"
-    })
-    .bind(receipt.map(sqlx::types::Json))
-    .bind(error)
-    .bind(read["id"].as_str())
-    .execute(tx.connection())
+    .bind(sync)
+    .bind(member["source_id"].as_str())
+    .fetch_one(tx.connection())
     .await?;
+    if exists > 0 {
+        return Err(Error::new("source_incomplete"));
+    }
+    sqlx::query("INSERT INTO catalog_sync_members(sync_id,source_id,platform_table_id,accepted_revision,retained_objects,pending_maintainers) VALUES(?,?,?,?,?,?)")
+        .bind(sync).bind(member["source_id"].as_str()).bind(member["platform_table_id"].as_str()).bind(member["revision"].as_u64())
+        .bind(sqlx::types::Json(&member["objects"])).bind(sqlx::types::Json(&member["maintainers"])).execute(tx.connection()).await?;
+    Ok(())
+}
+pub async fn commit_catalog_page_in_tx(
+    tx: &mut AppTx<'_>,
+    read: &Value,
+    page: &Value,
+) -> Result<()> {
+    let cursor_key = fingerprint(&page["next_cursor"]);
+    if !page["complete"].as_bool().unwrap_or(false) {
+        let seen: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM catalog_sync_pages WHERE sync_id=? AND cursor_key=?",
+        )
+        .bind(read["id"].as_str())
+        .bind(&cursor_key)
+        .fetch_one(tx.connection())
+        .await?;
+        if seen > 0 {
+            return Err(Error::new("source_incomplete"));
+        }
+        sqlx::query("INSERT INTO catalog_sync_pages(sync_id,cursor_key) VALUES(?,?)")
+            .bind(read["id"].as_str())
+            .bind(cursor_key)
+            .execute(tx.connection())
+            .await?;
+    }
+    let updated=sqlx::query("UPDATE catalog_imports SET cursor_value=?,snapshot_id=?,source_namespace=?,authoritative=?,processed_sources=processed_sources+?,pages_committed=pages_committed+1,directory_complete=? WHERE id=? AND state='running' AND pages_committed=?")
+        .bind(page["next_cursor"].as_str()).bind(page["snapshot_id"].as_str()).bind(page["source_namespace"].as_str()).bind(page["authoritative"].as_bool())
+        .bind(page["tables"].as_array().map_or(0,Vec::len) as u64).bind(page["complete"].as_bool()).bind(read["id"].as_str()).bind(read["pages_committed"].as_u64()).execute(tx.connection()).await?;
+    if updated.rows_affected() != 1 {
+        return Err(Error::new("version_conflict"));
+    }
     Ok(())
 }
 pub async fn sync_sources_in_tx(tx: &mut AppTx<'_>, space: &str) -> Result<Vec<(String, u64)>> {
@@ -330,6 +430,19 @@ pub async fn read_source_in_tx(
     version: u64,
 ) -> Result<Value> {
     let current = source_version_in_tx(tx, &ctx.space_id, id).await?;
+    if let Some(row) = sqlx::query(
+        "SELECT body,complete FROM source_current WHERE source_id=? AND space_id=? AND revision=?",
+    )
+    .bind(id)
+    .bind(&ctx.space_id)
+    .bind(version)
+    .fetch_optional(tx.connection())
+    .await?
+    {
+        return Ok(
+            json!({"source_id":id,"version":version.to_string(),"current_version":current.to_string(),"body":row.get::<String,_>("body"),"complete":row.get::<bool,_>("complete")}),
+        );
+    }
     let row =
         sqlx::query("SELECT body,complete FROM source_snapshots WHERE source_id=? AND version=?")
             .bind(id)
@@ -483,10 +596,58 @@ pub async fn prefill_status_in_tx(
     let row=sqlx::query("SELECT id,state,error_code FROM prefill_attempts WHERE space_id=? AND object_id=? ORDER BY created_at DESC,id DESC LIMIT 1").bind(&ctx.space_id).bind(object).fetch_optional(tx.connection()).await?;
     Ok(row.map(|r|json!({"attempt_id":r.get::<String,_>("id"),"state":r.get::<String,_>("state"),"error_code":r.get::<Option<String>,_>("error_code")})).unwrap_or(Value::Null))
 }
+
+// 对象当前来源的语义整理状态：与对象级预填分开表达，两作业互不冒充。
+// 人工独立对象（无来源）返回null；有来源先取最新方法版本的实际进度，
+// 尚无准备记录时回退到待办作业的真实排队状态，不猜进度。
+pub async fn preparation_status_in_tx(
+    tx: &mut AppTx<'_>,
+    ctx: &AccessContext,
+    object: &Value,
+) -> Result<Value> {
+    let Some((source, revision)) = preparation_source_of(object) else {
+        return Ok(Value::Null);
+    };
+    let row = sqlx::query("SELECT semantic_status,error_code FROM source_preparations WHERE source_id=? AND revision=? AND space_id=? ORDER BY method_version DESC LIMIT 1")
+        .bind(&source)
+        .bind(revision)
+        .bind(&ctx.space_id)
+        .fetch_optional(tx.connection())
+        .await?;
+    if let Some(record) = row {
+        return Ok(json!({"source_id":source,"revision":revision.to_string(),
+            "state":record.get::<String,_>("semantic_status"),
+            "error_code":record.get::<Option<String>,_>("error_code")}));
+    }
+    let job = sqlx::query("SELECT state FROM background_jobs WHERE kind='prepare_source' AND resource_id=? AND resource_version=? ORDER BY dispatch_seq DESC LIMIT 1")
+        .bind(&source)
+        .bind(revision)
+        .fetch_optional(tx.connection())
+        .await?;
+    // 排队作业还没有准备记录，也没有整理错误；错误码只随实际准备进度出现。
+    Ok(job
+        .map(|record| {
+            json!({"source_id":source,"revision":revision.to_string(),
+                "state":record.get::<String,_>("state"),"error_code":null})
+        })
+        .unwrap_or(Value::Null))
+}
+
+// 对象的整理来源身份：单文档以自身为来源，目录对象沿主来源；人工独立对象无来源。
+fn preparation_source_of(object: &Value) -> Option<(String, u64)> {
+    if object["kind"] == "document" && object["source_id"].is_null() {
+        let id = object["id"].as_str()?;
+        let revision = object["version"].as_str()?.parse::<u64>().ok()?;
+        return Some((format!("document-{id}"), revision));
+    }
+    let source = object["source_id"].as_str()?;
+    let revision = object["source_version"].as_str()?.parse::<u64>().ok()?;
+    Some((source.to_owned(), revision))
+}
 pub async fn claim_prefill_in_tx(tx: &mut AppTx<'_>, space: &str) -> Result<Option<Value>> {
     sqlx::query("UPDATE prefill_attempts SET state='unknown',error_code='model_unknown' WHERE space_id=? AND state='issued' AND issued_until<UTC_TIMESTAMP(3)").bind(space).execute(tx.connection()).await?;
     // 同次目录的后续页可能才包含上游；采集终止前不开始模型分析。
-    let row = sqlx::query("SELECT * FROM prefill_attempts p WHERE space_id=? AND state='queued' AND (JSON_EXTRACT(input_json,'$.catalog_import_id') IS NULL OR EXISTS(SELECT 1 FROM catalog_imports c WHERE c.id=JSON_UNQUOTE(JSON_EXTRACT(p.input_json,'$.catalog_import_id')) AND (c.state<>'fetching' OR c.lease_until<UTC_TIMESTAMP(3)))) ORDER BY priority DESC,created_at,id LIMIT 1 FOR UPDATE SKIP LOCKED").bind(space).fetch_optional(tx.connection()).await?;
+    let row = sqlx::query("SELECT * FROM prefill_attempts p WHERE space_id=? AND state='queued' AND (JSON_EXTRACT(input_json,'$.catalog_import_id') IS NULL OR EXISTS(SELECT 1 FROM catalog_imports c WHERE c.id=JSON_UNQUOTE(JSON_EXTRACT(p.input_json,'$.catalog_import_id')) AND ((c.background=1 AND c.state IN ('completed','failed')) OR (c.background=0 AND (c.state<>'fetching' OR c.lease_until<UTC_TIMESTAMP(3)))))) ORDER BY priority DESC,created_at,id LIMIT 1 FOR UPDATE SKIP LOCKED").bind(space).fetch_optional(tx.connection()).await?;
     let Some(row) = row else { return Ok(None) };
     let id: String = row.get("id");
     // 已开始的请求在重启后保持未知，不自动重发模型请求。
@@ -613,4 +774,88 @@ pub async fn freeze_prefill_input_in_tx(
     sqlx::query("UPDATE prefill_attempts SET input_json=?,input_fingerprint=? WHERE id=? AND JSON_EXTRACT(input_json,'$.coverage') IS NULL")
         .bind(sqlx::types::Json(input)).bind(fingerprint(input)).bind(attempt).execute(tx.connection()).await?;
     Ok(())
+}
+
+async fn write_current_in_tx(
+    tx: &mut AppTx<'_>,
+    space: &str,
+    source: &str,
+    namespace: &str,
+    content: (u64, &str, &Value),
+    observed: &Value,
+) -> Result<()> {
+    let (version, body, retained) = content;
+    let (fp, parsed) = super::catalog_content::comparison(retained);
+    let identity: Option<String> = sqlx::query_scalar("SELECT source_id FROM source_current WHERE space_id=? AND adapter_id='datasight' AND source_kind='table' AND namespace=? AND external_id=? FOR UPDATE")
+        .bind(space).bind(namespace).bind(retained["id"].as_str()).fetch_optional(tx.connection()).await?;
+    if identity.as_deref().is_some_and(|id| id != source) {
+        return Err(Error::new("version_conflict"));
+    }
+    sqlx::query("INSERT INTO source_current(source_id,space_id,adapter_id,source_kind,namespace,external_id,revision,body,metadata,content_fingerprint,explanation_fingerprint,comparison_method,parsed,observed_metadata) VALUES(?,?,'datasight','table',?,?,?,?,?,?,?,?,?,?) ON DUPLICATE KEY UPDATE revision=VALUES(revision),body=VALUES(body),metadata=VALUES(metadata),content_fingerprint=VALUES(content_fingerprint),explanation_fingerprint=VALUES(explanation_fingerprint),comparison_method=VALUES(comparison_method),parsed=VALUES(parsed),observed_metadata=VALUES(observed_metadata)")
+        .bind(source).bind(space).bind(namespace).bind(retained["id"].as_str()).bind(version).bind(body).bind(sqlx::types::Json(retained))
+        .bind(&fp).bind(&fp).bind(super::catalog_content::METHOD).bind(parsed)
+        .bind(sqlx::types::Json(json!({"platform_version":observed["platform_version"],"maintainer_id":observed["maintainer_id"]}))).execute(tx.connection()).await?;
+    Ok(())
+}
+// 每批在当前头的锁内回填；并发实时写先完成时只复制该头，不回写先前读到的旧正文。
+pub async fn backfill_current_in_tx(tx: &mut AppTx<'_>) -> Result<usize> {
+    let rows=sqlx::query("SELECT h.id,h.space_id,h.version,c.observed_metadata FROM source_heads h LEFT JOIN source_current c ON c.source_id=h.id WHERE c.source_id IS NULL OR c.revision<>h.version OR c.comparison_method NOT IN ('sql_tokens_v2','raw_v1') ORDER BY h.id LIMIT 16 FOR UPDATE SKIP LOCKED").fetch_all(tx.connection()).await?;
+    for row in &rows {
+        let source: String = row.get("id");
+        let space: String = row.get("space_id");
+        let version: u64 = row.get("version");
+        let snapshot = sqlx::query(
+            "SELECT body,complete FROM source_snapshots WHERE source_id=? AND version=?",
+        )
+        .bind(&source)
+        .bind(version)
+        .fetch_one(tx.connection())
+        .await?;
+        let body: String = snapshot.get("body");
+        let catalog = sqlx::query(
+            "SELECT namespace,body FROM catalog_table_snapshots WHERE source_id=? AND version=?",
+        )
+        .bind(&source)
+        .bind(version)
+        .fetch_optional(tx.connection())
+        .await?;
+        if let Some(catalog) = catalog {
+            let retained = catalog.get::<sqlx::types::Json<Value>, _>("body").0;
+            // 回填升级比较方法，不把保留原文里的旧观测覆盖到已经更新的观测值。
+            let observed = row
+                .get::<Option<sqlx::types::Json<Value>>, _>("observed_metadata")
+                .map(|value| value.0)
+                .unwrap_or_else(|| retained.clone());
+            write_current_in_tx(
+                tx,
+                &space,
+                &source,
+                &catalog.get::<String, _>("namespace"),
+                (version, &body, &retained),
+                &observed,
+            )
+            .await?;
+        } else {
+            let fp = fingerprint(&json!(&body));
+            // 旧合成来源沿原身份；退休来源仍沿已登记的平台外部键。
+            let platform = sqlx::query(
+                "SELECT namespace,platform_table_id FROM catalog_platform_heads WHERE source_id=?",
+            )
+            .bind(&source)
+            .fetch_optional(tx.connection())
+            .await?;
+            let (adapter, namespace, external) = platform
+                .map(|r| {
+                    (
+                        "datasight",
+                        r.get::<String, _>("namespace"),
+                        r.get::<String, _>("platform_table_id"),
+                    )
+                })
+                .unwrap_or(("synthetic", "fixtures".into(), source.clone()));
+            sqlx::query("INSERT INTO source_current(source_id,space_id,adapter_id,source_kind,namespace,external_id,revision,body,complete,metadata,content_fingerprint,explanation_fingerprint,comparison_method,parsed,observed_metadata) VALUES(?,?,?,'table',?,?,?,?,?,JSON_OBJECT(),?,?,'raw_v1',0,JSON_OBJECT()) ON DUPLICATE KEY UPDATE revision=VALUES(revision),body=VALUES(body),complete=VALUES(complete),metadata=VALUES(metadata),content_fingerprint=VALUES(content_fingerprint),explanation_fingerprint=VALUES(explanation_fingerprint),comparison_method=VALUES(comparison_method),parsed=VALUES(parsed)")
+                .bind(&source).bind(space).bind(adapter).bind(namespace).bind(external).bind(version).bind(body).bind(snapshot.get::<bool,_>("complete")).bind(&fp).bind(&fp).execute(tx.connection()).await?;
+        }
+    }
+    Ok(rows.len())
 }

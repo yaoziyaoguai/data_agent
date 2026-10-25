@@ -2,12 +2,12 @@ import {createServer} from 'node:http';
 import {randomUUID} from 'node:crypto';
 // 合成供应商只负责协议回执，真实Pi负责工具调用、续接与终态。
 export async function modelProtocolFixture() {
-  const requests=[],errors=[];let status=200,withUsage=true,holdResult=false,releaseResult,answerNext=false;
+  const requests=[],errors=[];let status=200,statusMessage='synthetic temporary error',withUsage=true,holdResult=false,releaseResult,answerNext=false;
   const server=createServer(async(req,res)=>{
     try {
       let raw='';for await(const part of req)raw+=part;
       const body=JSON.parse(raw);requests.push({path:req.url,body,key:req.headers['x-api-key']??req.headers.authorization});
-      if(status!==200){res.writeHead(status,{'content-type':'application/json'}).end(JSON.stringify({error:{type:'server_error',message:'synthetic temporary error'}}));return;}
+      if(status!==200){res.writeHead(status,{'content-type':'application/json'}).end(JSON.stringify({error:{type:'server_error',message:statusMessage}}));return;}
       const path=new URL(req.url,'http://synthetic').pathname;
       const api=path.endsWith('/responses')?'responses':path.endsWith('/v1/messages')?'anthropic':'completions';
       const inputs=body.messages??body.input;
@@ -44,5 +44,5 @@ export async function modelProtocolFixture() {
     }catch(error){errors.push(error.message);res.writeHead(500).end();}
   });
   await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
-  return {url:'http://127.0.0.1:'+server.address().port,requests,errors,setStatus(value){status=value;},setUsage(value){withUsage=value;},holdAfterTool(){holdResult=true;},answerNext(){answerNext=true;},blocked(){return !!releaseResult;},release(){releaseResult?.();releaseResult=undefined;},async close(){releaseResult?.();server.closeAllConnections();await new Promise(resolve=>server.close(resolve));}};
+  return {url:'http://127.0.0.1:'+server.address().port,requests,errors,setStatus(value,message='synthetic temporary error'){status=value;statusMessage=message;},setUsage(value){withUsage=value;},holdAfterTool(){holdResult=true;},answerNext(){answerNext=true;},blocked(){return !!releaseResult;},release(){releaseResult?.();releaseResult=undefined;},async close(){releaseResult?.();server.closeAllConnections();await new Promise(resolve=>server.close(resolve));}};
 }

@@ -16,7 +16,7 @@ const ok=r=>{assert.equal(r.status,200,JSON.stringify(r.value));return r.value;}
 const rejected=(response,status,code)=>{assert.equal(response.status,status);assert.equal(response.value.code,code);validateContract('AppError',response.value);};
 const config=async()=>ok(await h.request('/model-configuration'));
 const service=id=>({id,name:'合成服务 '+id,provider_id:'compatible',api:id,base_url:provider.url+'/gateway/v1',enabled:true,expected_version:'0',api_key:'synthetic-key-'+id});
-const model=id=>({id,service_id:id,model_id:'synthetic/'+id,label:'合成模型 '+id,thinking_levels:['off','high'],reasoning_supported:true,default_thinking:'off',input_limit:128000,output_limit:16000,payload_bytes_limit:262144,input_rate:'1000000',output_rate:'4000000',enabled:true,expected_version:'0'});
+const model=id=>({id,service_id:id,model_id:'synthetic/'+id,label:'合成模型 '+id,thinking_levels:['off','high'],reasoning_supported:true,default_thinking:'off',context_window:160000,input_limit:128000,output_limit:16000,payload_bytes_limit:262144,request_timeout_ms:90000,capability_source:'admin_declared',input_rate:'1000000',output_rate:'4000000',enabled:true,expected_version:'0'});
 const edit=(value)=>{const {version,credential_configured,...body}=value;return {...body,expected_version:version};};
 const send=(cid,text,id)=>h.request('/conversations/'+cid+'/messages',{client_message_id:randomUUID(),text,...(id?{model_selection:{model_id:id,thinking_level:'off'}}:{})});
 const checks=[],errors=[];let passed=false,browser,page,closed=false;
@@ -49,7 +49,20 @@ try {
  assert.equal((await h.request('/model-definitions',{...model('tiny'),service_id:'openai-responses',output_limit:1})).status,400);
  assert.equal((await h.request('/model-definitions',{...model('budget-max'),service_id:'anthropic-messages',thinking_levels:['high','max']})).status,400);
  assert.equal((await h.request('/model-definitions',{...model('budget-small'),service_id:'anthropic-messages',output_limit:1024})).status,400);
- checks.push('并发编辑只有一个成功、旧版本拒绝；非法端点、缺失服务和档位不一致拒绝');
+ // 容量反例：I=O=65536时两段摘要与近期保留放不进触发线，明确按容量错误拒绝。
+ const infeasible=await h.request('/model-definitions',{...model('capacity-infeasible'),service_id:'openai-completions',context_window:131072,input_limit:65536,output_limit:65536});
+ rejected(infeasible,400,'model_capacity_invalid');
+ assert.match(infeasible.value.message,/输入范围 无可行值/);
+ assert.match(infeasible.value.message,/输出范围 1–21503 tokens/);
+ // 新字段缺失（SaveModelDefinition契约必填）与输出超出393216拒绝。
+ assert.equal((await h.request('/model-definitions',(({context_window,...rest})=>rest)(model('capacity-missing')))).status,400);
+ assert.equal((await h.request('/model-definitions',{...model('capacity-oversized'),service_id:'openai-completions',output_limit:393217})).status,400);
+ // 已核对DeepSeek初值（1M窗口、600秒、8MiB）与长输出档通过同一容量校验并冻结进profile。
+ for(const [id,output] of [['capacity-deepseek',65536],['capacity-deepseek-long',131072]]){
+  const saved=ok(await h.request('/model-definitions',{...model(id),service_id:'openai-completions',context_window:1000000,input_limit:900000,output_limit:output,payload_bytes_limit:8388608,request_timeout_ms:600000,capability_source:'admin_declared'}));
+  const stored=saved.models.find(m=>m.id===id);assert.equal(stored.context_window,1000000);assert.equal(stored.request_timeout_ms,600000);assert.equal(stored.capability_source,'admin_declared');
+ }
+ checks.push('并发编辑只有一个成功、旧版本拒绝；非法端点、缺失服务和档位不一致拒绝；容量反例/缺字段/超上限拒绝，DeepSeek初值与长输出档保存并冻结新字段');
  // 接收消息后修订服务密钥和模型标识，原消息仍使用历史版本。
  const cid=await h.create();const first=ok(await send(cid,'原版本消息','openai-completions'));
  const snapshot=h.sql(`SELECT JSON_OBJECT('profile',model_profile) FROM budget_scopes WHERE message_id='${first.message_id}'`)[0].profile;
@@ -85,13 +98,33 @@ try {
    const cs=(await config()).services.find(s=>s.id==='openai-responses');rejected(await h.request('/model-services',{...edit(cs),name:'missing master'}),409,'model_secret_unavailable');
  } finally {await rename(keyFile+'.saved',keyFile);}
  checks.push('缺失主密钥失败关闭，不自动替换或丢失已有凭据');
+ ok(await h.request('/model-services',{...service('deepseek-capacity'),provider_id:'deepseek',api:'openai-completions',name:'容量核对服务'}));
  browser=await chromium.launch();page=await browser.newPage({viewport:{width:1440,height:1000}});page.on('pageerror',e=>errors.push(e.message));
  await page.goto(h.url);await page.getByLabel('演示登录凭据').fill(h.tokens.alice);await page.getByRole('button',{name:'进入工作台 →',exact:true}).click();await page.getByRole('button',{name:'模型配置',exact:true}).click();
  await page.getByRole('button',{name:'添加服务',exact:true}).click();await page.getByLabel('服务名称',{exact:true}).fill('浏览器合成服务');await page.getByLabel('服务地址',{exact:true}).fill('http://169.254.169.254/latest');await page.getByLabel('API Key',{exact:true}).fill('synthetic-browser-key');await page.getByRole('button',{name:'保存配置',exact:true}).click();await page.getByRole('alert').filter({hasText:'服务地址需要 HTTPS'}).waitFor();assert.equal(await page.getByLabel('服务名称',{exact:true}).inputValue(),'浏览器合成服务');
  await page.getByLabel('服务地址',{exact:true}).fill(provider.url+'/browser/v1');await page.getByRole('button',{name:'保存配置',exact:true}).click();await page.getByRole('dialog').waitFor({state:'hidden'});
  await page.getByRole('button',{name:'编辑服务 浏览器合成服务',exact:true}).click();assert.equal(await page.getByLabel('API Key',{exact:true}).inputValue(),'');await page.getByLabel('服务地址',{exact:true}).fill(provider.url+'/browser-revised/v1');await page.getByRole('button',{name:'保存配置',exact:true}).click();await page.getByRole('alert').filter({hasText:'需要重新提供 API Key'}).waitFor();assert.equal(await page.getByLabel('服务地址',{exact:true}).inputValue(),provider.url+'/browser-revised/v1');
  await page.getByLabel('API Key',{exact:true}).fill('synthetic-browser-key');await page.getByRole('button',{name:'保存配置',exact:true}).click();await page.getByRole('dialog').waitFor({state:'hidden'});
- await page.getByRole('button',{name:'添加模型',exact:true}).click();await page.getByLabel('所属服务',{exact:true}).selectOption({label:'浏览器合成服务'});await page.getByLabel('Model ID',{exact:true}).fill('synthetic/browser-model');await page.getByLabel('展示名称',{exact:true}).fill('浏览器合成模型');await page.getByLabel('输入价格',{exact:true}).fill('1.25');await page.getByLabel('输出价格',{exact:true}).fill('5');await page.getByRole('button',{name:'保存配置',exact:true}).click();await page.getByRole('dialog').waitFor({state:'hidden'});
+ await page.getByRole('button',{name:'添加模型',exact:true}).click();
+ assert.equal(await page.getByLabel('总上下文 tokens',{exact:true}).inputValue(),'');
+ await page.getByLabel('所属服务',{exact:true}).selectOption({label:'容量核对服务'});
+ await page.getByLabel('Model ID',{exact:true}).fill('deepseek-unknown');
+ assert.equal(await page.getByRole('button',{name:'填入 DeepSeek Flash 已核对初值（1M 窗口）',exact:true}).count(),0);
+ assert.equal(await page.getByLabel('总上下文 tokens',{exact:true}).inputValue(),'');
+ await page.getByLabel('Model ID',{exact:true}).fill('deepseek-flash');
+ await page.getByRole('button',{name:'填入 DeepSeek Flash 已核对初值（1M 窗口）',exact:true}).click();
+ assert.equal(await page.getByLabel('总上下文 tokens',{exact:true}).inputValue(),'1000000');
+ await page.getByLabel('展示名称',{exact:true}).fill('容量范围合成反例');
+ await page.getByLabel('最大输入 tokens',{exact:true}).fill('65536');
+ await page.getByRole('button',{name:'保存配置',exact:true}).click();
+ await page.getByRole('alert').filter({hasText:'194763–934464 tokens'}).waitFor();
+ assert.ok((await page.getByRole('alert').allTextContents()).some(text=>text.includes('1–21503 tokens')));
+ await page.screenshot({path:directory+'/capacity-ranges.png',fullPage:true});
+ await page.getByRole('button',{name:'取消',exact:true}).click();await page.getByRole('button',{name:'放弃修改',exact:true}).click();
+ await page.getByRole('button',{name:'添加模型',exact:true}).click();
+ assert.equal(await page.getByLabel('总上下文 tokens',{exact:true}).inputValue(),'');
+ await page.getByLabel('所属服务',{exact:true}).selectOption({label:'浏览器合成服务'});await page.getByLabel('Model ID',{exact:true}).fill('synthetic/browser-model');await page.getByLabel('展示名称',{exact:true}).fill('浏览器合成模型');await page.getByLabel('输入价格',{exact:true}).fill('1.25');await page.getByLabel('输出价格',{exact:true}).fill('5');await page.getByRole('button',{name:'保存配置',exact:true}).click();assert.ok(await page.getByLabel('总上下文 tokens',{exact:true}).evaluate(input=>input.validity.valueMissing));assert.equal((await config()).models.some(m=>m.model_id==='synthetic/browser-model'),false);await page.getByLabel('总上下文 tokens',{exact:true}).fill('160000');await page.getByRole('button',{name:'保存配置',exact:true}).click();await page.getByRole('dialog').waitFor({state:'hidden'});
+ checks.push('未知型号不猜总窗口且缺失时禁止保存；仅已核实的DeepSeek Flash可显式预填1M');
  const browserModel=(await config()).models.find(m=>m.label==='浏览器合成模型');assert.equal(browserModel.input_rate,'1250000');assert.equal(browserModel.output_rate,'5000000');
  await page.locator('article').filter({has:page.getByRole('heading',{name:'浏览器合成模型',exact:false})}).getByRole('button',{name:'设为默认',exact:true}).click();
  await until(async()=>{const c=await config();return c.models.find(m=>m.id===c.default_model_id)?.label==='浏览器合成模型';},'浏览器设为默认');

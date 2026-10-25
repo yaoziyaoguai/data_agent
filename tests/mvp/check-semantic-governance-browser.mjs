@@ -1,3 +1,4 @@
+import {synchronizeSources} from './source-sync.mjs';
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { writeFile, mkdir } from "node:fs/promises";
@@ -51,10 +52,7 @@ try {
       })),
     }),
   );
-  assert.equal(
-    (await h.request("/source-syncs", { operation_id: randomUUID() })).status,
-    200,
-  );
+  assert.equal((await synchronizeSources(h)).value.status, 'completed');
   const original = (await h.request("/knowledge/" + table)).value;
   await login("bob");
   await page

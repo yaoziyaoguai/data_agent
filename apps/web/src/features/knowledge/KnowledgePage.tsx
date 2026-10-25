@@ -17,7 +17,8 @@ import { KnowledgeOrigin } from "./KnowledgeOrigin.tsx";
 import { KnowledgeStatus } from "./KnowledgeStatus.tsx";
 import { KnowledgeBusinessDomain } from "./KnowledgeBusinessDomain.tsx";
 import { KnowledgeMaintenanceImpact } from "./KnowledgeMaintenanceImpact.tsx";
-import { ApiError, api } from "../../shared/api.ts";
+import { SourceSynchronizationStatus, useSourceSynchronization } from "./SourceSynchronization.tsx";
+import { api } from "../../shared/api.ts";
 import { Modal } from "../../shared/Modal.tsx";
 import { MarkdownContent } from "../../shared/MarkdownContent.tsx";
 import { useUnsavedChanges, useNavigationGuard } from "../../shared/UnsavedChanges.tsx";
@@ -257,7 +258,6 @@ export function KnowledgePage({
   const [matches, setMatches] = useState<KnowledgeObject[]>([]);
   const [searchLimited, setSearchLimited] = useState(false);
   const [vectorUnavailable,setVectorUnavailable]=useState(false);
-  const [syncing,setSyncing]=useState(false);
   const [rebuilding,setRebuilding]=useState(false);
   const [maintenanceNotice,setMaintenanceNotice]=useState("");
   const [savingPreference,setSavingPreference]=useState(false);
@@ -290,6 +290,10 @@ export function KnowledgePage({
     setCanAdmin(access.can_admin);
     setCanCreate(access.can_create);
   };
+  const sourceSync = useSourceSynchronization(user, canAdmin, () => {
+    setDirectoryRevision(value => value + 1);
+    void refresh().catch(e => setError(e.message));
+  });
   useEffect(() => {
     void refresh().catch((e) => setError(e.message));
     return () => { ++refreshGeneration.current; };
@@ -365,17 +369,6 @@ export function KnowledgePage({
       setMaintenanceNotice(value.preferred?"已设为常用表，当前表及字段优先分析。其他表仍可按需预填。":"已取消常用设置，已有语义保留。来源改版仍会自动重分析。");
       await refresh();
     }catch(e){setError(e instanceof Error?e.message:"常用范围保存失败");}finally{setSavingPreference(false);}
-  };
-  const synchronize=async()=>{
-    if(syncing)return;
-    setSyncing(true);setError("");setMaintenanceNotice("");
-    try{await api("MutationReceipt","/source-syncs","POST",{operation_id:crypto.randomUUID()});await refresh();setMaintenanceNotice("来源同步完成；语义分析按维护配置继续处理，人工修改保留。");}
-    catch(e){
-      const message = e instanceof ApiError && e.code === "version_conflict" ? "来源同步发生版本冲突。请刷新查看当前状态，核对平台来源版本后重试。"
-        : e instanceof ApiError && e.code === "forbidden" ? "当前账号无权同步来源，请联系本系统超级维护者。"
-        : "来源同步未完成，请查看当前状态后重试。";
-      setError(message + (e instanceof ApiError ? ` 错误码：${e.code}；诊断编号：${e.requestId}` : ''));
-    }finally{setSyncing(false);}
   };
   const rebuild=async()=>{
     if(rebuilding)return;
@@ -461,10 +454,10 @@ export function KnowledgePage({
         <div className="actions">
           <details className="maintenance-menu"><summary>维护操作</summary><div className="actions">
           <button
-            onClick={()=>void synchronize()}
-            disabled={!canAdmin || syncing}
+            onClick={()=>{setMaintenanceNotice("");void sourceSync.synchronize();}}
+            disabled={!canAdmin || sourceSync.busy}
           >
-            {syncing?"同步中…":"同步来源"}
+            {sourceSync.label}
           </button>
           {canAdmin && <button onClick={()=>void rebuild()} disabled={rebuilding}>{rebuilding?"正在排队…":"重建检索索引"}</button>}</div></details>
           <KnowledgeCreator user={user} canCreate={canCreate} relatedId={current} onCreated={v => {
@@ -494,6 +487,7 @@ export function KnowledgePage({
       {directoryScope === "tables" && searchLimited && <p className="quiet" role="status">候选较多，本次只核对了部分匹配对象。请补充具体名称或业务范围；当前结果不能说明其他对象不存在。</p>}
       {directoryScope === "tables" && vectorUnavailable && <p className="quiet" role="status">语义检索暂不可用，当前使用名称和关键词查找。可稍后重试；检索结果仍按当前知识版本核对。</p>}
       {maintenanceNotice && <p className="quiet" role="status">{maintenanceNotice}</p>}
+      {canAdmin && <SourceSynchronizationStatus sync={sourceSync}/>}
       <div className="knowledge-layout">
         <nav ref={directoryElement} aria-label="语义对象" className={"object-list" + (directoryScope !== "tables" ? " management-directory" : "")}>
           {directoryScope !== "tables" ? <KnowledgeDirectory key={createdObjectId} user={user} scope={directoryScope} current={current} revision={directoryRevision} onSelect={selectObject} onPage={showDirectoryPage}/> : <>{(query ? matches.map(o=>objects.find(current=>current.id===o.id)??o) : tables
@@ -550,6 +544,7 @@ export function KnowledgePage({
               <SemanticMaintainer object={selected} onSaved={()=>{setDirectoryRevision(value => value + 1);void refresh();}}/>
               <KnowledgeMaintenanceImpact objectId={selected.id} version={selected.version}/>
               {selected.prefill_status && selected.prefill_status.state !== "succeeded" && <p className="quiet" role="status">{({queued:"正在等待补充语义说明",issued:"正在分析资料，补充说明",budget_unavailable:"自动补充暂不可用，仍可人工维护",superseded:"资料已变化，本次分析未采用",unknown:"分析暂未完成，请稍后查看状态",invalid_prefill:"本次分析未通过检查，已有内容保留"} as Record<string,string>)[selected.prefill_status.state] ?? "分析状态待核对"}</p>}
+              {selected.preparation_status && <p className="quiet" role="status">{({queued:"正在排队整理来源原文",running:"正在分批整理来源原文",analysis:"正在分析来源批次",review:"正在复核来源批次",partial:"来源整理完成但存在未解释内容",failed:"来源整理失败，已有内容保留",superseded:"已被新修订的整理取代",unknown:"来源整理结果不确定，等待复核"} as Record<string,string>)[selected.preparation_status.state] ?? "来源整理状态待核对"}</p>}
               {selected.kind === "table" && (
                 <Tabs label="表的语义内容" value={tab} items={["概览", "字段语义", "关联与血缘", "指标 SQL", "业务文档", "变更记录"].map(label => ({value: label, label}))} onChange={next => move(current, next)}/>
               )}

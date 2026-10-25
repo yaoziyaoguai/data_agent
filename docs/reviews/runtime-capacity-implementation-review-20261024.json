@@ -1,0 +1,254 @@
+{
+  "schema": 1,
+  "review_date": "2026-10-24",
+  "increment": "I2-RUNTIME-CAPACITY",
+  "base_commit": "fed8276",
+  "reviewer": "独立汇总者将三位互相独立、均未参与实现的审查者的headless会话审查结果（.local/checks/review-20261024/result-a/b/c.json）汇总为本记录：容量合同与Pi接线、Worker存储恢复与慢检索租约、测试修正与证据一致性三个维度各由一名独立审查者完成；主实施者未参与任何审查判断；汇总者仅做汇总与结构化，未改判任何审查结论。",
+  "conclusion": "passed",
+  "summary": "三位互相独立、均未参与实现的审查者在各自headless会话中完成 I2-RUNTIME-CAPACITY 增量的三个维度只读审查并全部返回passed：容量合同与Pi接线维度逐项比对TS/Rust/17.7公式与锁定Pi 1.3.0原生源码、守卫顺序、预算与重试身份及legacy兼容；Worker存储恢复与慢检索租约维度核对临时故障分类、原身份/预算/副作用保留、锁外检索与提交前重核、租约守卫，并核对四份worker服务日志与验收JSON；测试修正与证据一致性维度判定七项测试修为夹具修正而非掩盖，并逐条核对CURRENT.md声明与日志/代码/时间戳。三个维度均无major发现；未解决项为2条minor与10条note，已全部如实记入findings；另有3条声明精度发现（2 minor、1 note）由主实施者在汇总前按审查证据修复（日期、计数口径、environment状态），移入resolved_findings。本passed仅表示静态审查与既有日志核对通过；最终动态验收由主流程执行 make verify-increment，完成前不得关闭增量或宣称业务交付。",
+  "scope_sha256": "2c3e29cb2234b289ec4be8f9112c0739db434d3f426afef15af316c0a323ed86",
+  "fingerprint_method": "scripts.check_delivery.review_scope(root, read_delivery(root))；绑定CURRENT声明的合同与verification_inputs，排除review指针和本记录，不代表对全部输入文件逐行重新审计。指纹于写入本记录前计算。",
+  "review_basis": [
+    ".local/checks/review-20261024/result-a.json、result-b.json、result-c.json：三位独立审查者的完整结论、证据与发现，本记录的直接输入",
+    "docs/reviews/runtime-capacity-implementation-review-20261023.json：仅参考字段结构，本记录不继承其结论",
+    "AGENTS.md：模块归属、稳定操作身份、独立审查、来源保护约定",
+    "docs/architecture/implementation-design.md：第17.7节模型容量与Pi原生压缩、第17.9节增量验收",
+    "docs/execution/semantic-runtime/runtime-capacity.md 与 coverage-and-validation.md：允许范围、非目标与证据边界",
+    "锁定Pi 1.3.0安装源码（容量维度审查者核对compaction/overflow接线）",
+    "docs/CURRENT.md：本增量声明，测试修正维度逐行核对"
+  ],
+  "independence": [
+    {
+      "scope": "容量公式（TS/Rust双侧与17.7逐项比对）、Pi原生压缩接线、effectiveOutputCap、预算/重试/幂等身份、字节与token守卫顺序、溢出分类与compact-and-retry、legacy兼容、超时冻结、管理UI",
+      "implementation_owner": "主实施者（未参与审查）",
+      "reviewer": "容量合同与Pi接线",
+      "result": "passed",
+      "note": "独立headless会话审查"
+    },
+    {
+      "scope": "Worker临时存储故障分类与恢复、原身份/预算/副作用保留、慢检索锁外执行与提交前重核、租约续期守卫、测试真实性与声明一致性核对",
+      "implementation_owner": "主实施者（未参与审查）",
+      "reviewer": "Worker存储恢复与慢检索租约",
+      "result": "passed",
+      "note": "独立headless会话审查"
+    },
+    {
+      "scope": "本轮七项测试修正的真实性与夹具属性、CURRENT.md声明与日志/代码/时间戳/计数的逐条一致性",
+      "implementation_owner": "主实施者（未参与审查）",
+      "reviewer": "测试修正与证据一致性",
+      "result": "passed",
+      "note": "独立headless会话审查"
+    }
+  ],
+  "assessments": [
+    {
+      "area": "容量合同与Pi接线",
+      "result": "passed",
+      "evidence": [
+        "公式逐项一致：TS capacity.ts:31-40 与 Rust capacity.rs:21-33 均为 B=min(I,C−O)、H0=min(65536,max(16384,ceil(C/50)))、H=min(H0,max(1024,⌊B/8⌋))、B>2H（body<=2H拒绝）、R=C−B+H、T=B−H、K=min(65536,⌊T/4⌋)、S1=min(⌊4R/5⌋,O)、S2=min(⌊R/2⌋,O)、S1+S2+K<T（含F的assertRuntimeOverhead同样严格<）；O>C时TS负B与Rust saturating_sub(0)同样以reserve_exceeds_history拒绝；C、I均被schema限在1024..2,000,000，两侧输入域等价且R*4无溢出；两侧测试向量数值完全一致并同在make verify-runtime-capacity运行（Makefile:105-114）",
+        "Pi原生接线与17.7吻合（锁定包源码核对）：shouldCompact为contextTokens>contextWindow−reserveTokens（compaction.js:173-176）；S1=min(⌊0.8R⌋,model.maxTokens)（:512）、S2=min(⌊0.5R⌋,model.maxTokens)（:727）；Pi注册contextWindow=C、maxTokens=O（configured.ts:102-103、deliver.ts:149-154）；compaction注册reserveTokens=historyReserve、keepRecentTokens=K（deliver.ts:189-194）",
+        "effectiveOutputCap=min(冻结O, SDK本次maxTokens??∞, 端点上限??∞)实现于capacity.ts:66-76并用于payload与金额预留（controlled.ts:195-199、312）；Rust reserve校验output_tokens_max∈(0,O]且按实际值计预留（model_calls/store.rs:205-215）；摘要请求按本次cap收敛（check-configured-provider.mjs:44-58断言预留与payload均为5000而非16000；check-capacity-boundaries.mjs:76-88断言legacy摘要cap=⌊0.8×2048⌋=1638）",
+        "24次/3次/零重试/原身份均在代码成立：budget_scopes.call_limit←request_call_limit（base_profile=24，budgets.rs:14，schema对configured强制必填且≤24），超限在reserve与issue拒绝（store.rs:221、store.rs:346）；model_failure_streak≥3在reserve与send拒绝（store.rs:224、294），streak由最近≤3个按序outcome重算且permanent置3（store.rs:371-388），与Pi retry.maxRetries=2（1+2次）对齐（deliver.ts:201）；maxRetries:0（controlled.ts:210）且sent标志阻止同流二次fetch（:155）；每次重试沿同一run_id/budget_scope（client.ts:37），call_attempt_id+fingerprint做幂等reserve/结算（store.rs:168-193、326-357），finalize重送同一settlement至多两次",
+        "字节守卫先于发送与预留：onPayload内字节守卫（controlled.ts:278-287）→token估算守卫（:288-300）→/internal/model/reserve（:304-334），fetchWithPermit才取发送许可并HTTP（:169-186）；pi-ai三个协议均在发请求前调用onPayload（openai-completions.js:188、anthropic-messages.js:442、openai-responses.js:139）；check-capacity-boundaries断言超限时posts与供应商请求数均为0",
+        "溢出分类与有界compact-and-retry：预检字节/token超限及供应商400/413均归一为request_too_large: model_input_limit（controlled.ts:282-299、377-383），无usage时outcome=transient_error（:406）；Pi经/request_too_large/i溢出模式识别（overflow.js:38）并做单次compact-and-retry（_overflowRecoveryAttempted，agent-session.js:2416-2440），普通400不伪装溢出（测试:153-158）",
+        "legacy兼容：planForProfile缺context_window返回null（capacity.ts:45-52）；deliver.ts legacy分支reserveTokens=2048与keepRecent启发式与基线逐字一致（git diff核对），deepseek contextWindow改为context_window??input_limit对legacy等价，超时request_timeout_ms??90000对legacy等价，受控路径其余守卫未变",
+        "超时冻结：profile.request_timeout_ms∈[1000,600000]（schema），运行时接受[50,600000]并对越界构造即拒（controlled.ts:44-48，测试覆盖700000/env 600001拒绝）；历史缺字段90000；undici headersTimeout/bodyTimeout=0避免300秒默认截断（endpoint.ts:57-59）；usage.elapsed_ms上限升至660000",
+        "session_before_compact接线类型核对：SDK事件含preparation.firstKeptEntryId（types.d.ts:600、compaction.d.ts:118-121），ProjectedSessionEntry含sourceEntry.id与messages；扩展runner吞异常（runner.js:813-838），故handler只记录retainedOverhead=max(0,保留tokens−K)并在模型派发边界check（guardedModelStream:189）执行——摘要请求本身在发送前受同一check与I/C−O约束（check-capacity-boundaries:104-122断言超限摘要不领许可不发送）"
+      ],
+      "assessment": "只读审查：未运行测试套件、未修改文件；测试断言与代码的对应关系经源码核对（含锁定Pi 1.3.0安装源码）。endpoint.ts的protocolTest路径改为统一走undici dispatcher后，经实验确认net.connect对IP字面量绕过自定义lookup，127.0.0.1本地协议测试仍可用；非test模式仅允许域名且DNS全解析结果须公网（含6to4/Teredo/文档段拒绝），无新增绕过。存量问题（reserved未send时预留行靠30秒许可过期、未显式释放金额）为基线行为，不在本增量范围。"
+    },
+    {
+      "area": "Worker存储恢复与慢检索租约",
+      "result": "passed",
+      "evidence": [
+        "worker主循环对claim/context/renew/defer/defer_lease/fail六类临时存储故障均只记日志并continue或短重试（apps/worker/src/main.rs:250-268,279-307,370-386,393-408,95-135），transient分类仅限Io/Tls/PoolTimedOut/MySQL 08xxx/1205/1213（crates/data-agent/src/types/mod.rs:45-60），业务unavailable不带标志位（单测main.rs:457-461）",
+        ".local/checks/mvp-c216bdeefe58599d等四份service-logs.json实证：storage_fault_injected各阶段触发后worker_claim_transient/worker_context_transient/delivery_renew_transient/worker_defer_transient/worker_fail_transient分支全部走通且同一进程继续处理后续消息；测试用ps断言同PID且harness启动真实target/debug/data-agent-worker",
+        "错误码透传：is_terminal_dispatch_failure+public_dispatch_code（main.rs:44-93）与delivery_failure_code（deliver_run.rs:348-356）保留合同码，全部终态码存在于packages/contracts/schema.json；服务日志delivery_failed code=provider_configuration_invalid与model_finalize_unconfirmed，测试断言事件含原码且不含retry_exhausted",
+        "原身份与预算：defer_unaccepted_in_tx只回退本次尝试不动账本（jobs/store.rs:105-111）；check-worker-storage-recovery.mjs:176-203断言恢复run同scope/chain、旧epoch reserve返回lease_lost、budget limit=24且issued=2/0/1、unknown场景issued占额保留且原ID重放finalize两次不新增调用；busy场景tool_calls与condition_revisions各仅1条",
+        "慢检索租约：search_stage_outside_lock独立短读事务先提交（knowledge.rs:761-800），延迟在事务外（data_tools.rs:583-591）；最终事务锁序conversation(rank1)→run(rank2)→tool与基线fed8276一致（data_tools.rs:592-601对比git show基线）；mvp-slow-retrieval-lease.json显示1秒锁等待FOR UPDATE探针97-102ms拿到会话行、epoch不变、expires推进5035/3001ms、单run完成",
+        "版本竞争：assert_search_fresh_in_tx按(id,version)+enabled重核对象/结构依赖/资产并重验来源（knowledge.rs:803-870，current_versions_in_tx为knowledge/store.rs:1094与assets/store.rs:225新增）；停用场景回执rejected且error=stale_knowledge，正文标记不进回执与消息（测试149-179行+JSON证据）；renew_lease_in_tx/renew_turn_in_tx新增epoch+state+未过期守卫并检查rows_affected（jobs/store.rs:76-82，conversations/store.rs:306-310）",
+        "声明一致：verify-retrieval-lease-final.log(02:21)、verify-worker-storage-recovery-final2.log(02:43)通过且晚于全部产品源码/测试修改时间（最新21:57，仅docs/CURRENT.md 03:40更晚）；verify-worker-storage-recovery-final.log保留失败记录，与CURRENT.md 211行容器抖动重跑表述吻合；Makefile四个verify target接线与CURRENT.md 220行四组验收声明对应"
+      ],
+      "assessment": "只读审查：未修改文件、未运行测试套件、无git写操作；结论基于git diff fed8276静态核对与.local/checks既有产物（含四份worker服务日志、两份验收JSON、三份verify日志）。未发现major；六条note中前两条为设计边界（重核窗口、谓词宽度），不构成对声明行为的反例。检查了反例方向：取消消息的job由cancel_message_job_in_tx直接置cancelled不会陷入claim循环；fail_delivery对非pending消息幂等返回Ok使record_delivery_failure重试安全；select!首分支在请求未就绪时立即执行心跳首个tick实现派发前即时续租。"
+    },
+    {
+      "area": "测试修正与证据一致性",
+      "result": "passed",
+      "evidence": [
+        "旧通过日志reliability-followup-native-compaction.log(10-20 07:57，早于本轮)：passed、29调用/15摘要、最大65185B、前缀53285/25285/3676，与声明一致",
+        "node .local/checks/measure-fixed-overhead-diff.mjs独立复测：c9d0ced system 11515+tools 32732=44247B→当前 12627+41245=53872B，增量含新增present_analysis_answer+2776B、update_analysis_task+2378B、request_query+1578B、execute_query+1007B，与「正式答复工具+更丰富契约」归因吻合",
+        "mvp-native-compaction.json(10-24 03:34)：passed、22调用/8摘要/最大76408B、全部≤81920，无历史近16KB最小请求70713B出现在实测序列——三项数字与声明逐字一致；76408>65536证明门槛若不变必失败，压缩仍被真实触发",
+        "生产128KiB核实：model_configuration/store.rs:380 base_profile payload_bytes_limit=131072，且a166e95版该文件已是131072（「同提交校准」属实）；工作区裁剪retrieval/mod.rs:473 bound_workspace以visible>16000裁剪，测试构造15500-16000B",
+        "check-native-compaction.mjs diff仅门槛常量65536→81920+注释：逐请求≤门槛(含摘要请求)、compactions≥1、每消息call_limit=12且issued总和=calls、账本reserved=0、7消息共享预算等断言全部保留；64KB拒绝由check-request-context继续覆盖（request_too_large断言+boundaryRepeat按运行时repeatBytes动态推导，非硬编码）",
+        "check-large-tool-context.mjs diff仅接线迁移：两场景checks断言原文未动；tests/mvp/harness.mjs本轮零改动且fed8276已支持protocolProviderUrl(133行)；configured.ts经/internal/model/connection取凭据(24行)与protocolTest由DATA_AGENT_PROVIDER_TEST闸门(86行)均为既有代码，本轮diff未触及；a166e95=10-20晚于该文件最后修改ba9b912=10-06；final2日志中该测试passed:true，非超限载荷[107710,52895,1309,119619]均≤131072",
+        "check-request-policy：slow分支为`if(action==='slow')return`永不响应，任意超时值触发同一场景；断言3次尝试/failures=3未变，仅500→2000ms夹具修正，语义论证成立",
+        "check-worker-run-deadline：窗口95000→130000ms与最多15次调用×5200ms=78s+开销自洽；thinking/reasoning_effort精确断言保留",
+        "prefill.rs:TEST_LEASE_SECONDS=6仅在DATA_AGENT_PREFILL_TEST=1且URL为127.0.0.1回环时生效，否则固定300s/360s（生产不受影响）；store.rs claim_prefill_in_tx先将过期issued标unknown再领取，与「claim过期扫描抢先标unknown」根因描述一致；tests/mvp/check-prefill-timeouts.mjs与fed8276无diff（超时参数确为原值500/2000/5000），过期路径经显式改写issued_until(61行)制造；mvp-prefill-timeouts.json(10-24 01:23)各mode passed",
+        "check-prefill.mjs判据：complete=true必须start_byte=0且end=total且source_complete；complete=false维度（首轮截断、续读窗口、源不完整）由check-prefill-materials.mjs:126-167覆盖（body_limit缺口、续读byte_range、incomplete态）",
+        "personal_assets.rs select：read/text_unavailable/checked_assets/text_authority_in_tx整体移入新选择分支，重放仅接回begin_selection_in_tx(=begin_operation按operation_id+input幂等)原回执，与save函数`if let Some(receipt)=begin_save_in_tx`结构同构；mvp-maintenance-replay.json passed且第3项明确覆盖「原选择重传接回成功回执、不重复或重新激活；新操作仍校验依赖并回滚」",
+        "verify-compatible-restore-final2.log(10-24 03:38)：恰好6条node命令且与声明六项名单一致（native-compaction/recovery-continuation/large-tool-context/session/checkpoint-storage/task-text-authority），6×passed:true、0×passed:false",
+        "知识runner三件：final-resumed诚实记录maintenance-replay exitCode1后中止（对应select幂等bug）；final-resumed2 6/6 exitCode0、passed:true、notRun空；final-regression 8/8 exitCode0、passed:true；scope注明'post-fix regression: prefill lease decoupling and skill selection replay idempotency'"
+      ],
+      "assessment": "审查全程只读（sed/cat/grep/git diff/git show/stat及node测量脚本），未改文件、未跑测试套件、无git写操作。七项修改均判定为修一般原因的夹具修正或对齐冻结合同：无删场景、无以mock替换真实路径（provider仍是本地真实HTTP服务器收真实SDK请求）、无断言结构削弱；两处门槛/窗口调整均有独立可复算的推导依据且保持低于生产限值。两处minor均为声明文本精度问题（日期、计数口径），不影响结论。注意本轮证据为仓库内日志/JSON，未现场重跑复核数值本身的真伪（除固定开销测量脚本外）。"
+    }
+  ],
+  "resolved_findings": [
+    {
+      "severity": "note",
+      "source": "Worker存储恢复与慢检索租约",
+      "description": "docs/CURRENT.md frontmatter environment 仍描述10-23停止状态（本轮测试进程已退出等），与顶部10-24完成节存在时间差；文档以顶部为准的约定缓解了误导",
+      "location": "docs/CURRENT.md:7",
+      "resolution": "environment已更新为2026-10-24当前状态（01完成实现/回归/四组验收/三维独立审查，待verify-delivery/verify-increment关闭）",
+      "resolved_by": "主实施者按审查发现修复（机械可验证：日志时间戳/runner计数/字段内容），修复先于本记录写入，由主实施者事后移入本节并在summary注明"
+    },
+    {
+      "severity": "minor",
+      "source": "测试修正与证据一致性",
+      "description": "声明「该测试最后通过于10月13日」与 .local/checks/context-large-final.log（10月17日20:38，passed:true，输出格式与该测试一致）不符；无论哪个日期均早于模型配置引入提交a166e95(10-20)，论点本身不受影响，但日期表述不精确",
+      "location": "docs/CURRENT.md:198（「01运行与容量完成」节·夹具重校准第2条）",
+      "resolution": "CURRENT.md日期声明已修正为10月17日并附日志路径与a166e95提交日期依据；.local/checks/context-large-final.log（10-17 20:38，两场景passed:true）保留为证据",
+      "resolved_by": "主实施者按审查发现修复（机械可验证：日志时间戳/runner计数/字段内容），修复先于本记录写入，由主实施者事后移入本节并在summary注明"
+    },
+    {
+      "severity": "minor",
+      "source": "测试修正与证据一致性",
+      "description": "声明「知识回归18项全部通过」与同段逐项枚举计数不符：早段4项+final-regression 8项+单独通过2项+final-resumed2 6项=20；runner证据本身自洽且诚实记录了失败，仅headline计数口径对不上",
+      "location": "docs/CURRENT.md:198（同节·本轮修复第2条）",
+      "resolution": "CURRENT.md计数已修正为20项并标注构成（早段4+final-regression 8+修复后单独2+final-resumed2 6），与各runner日志（8/8、6/6）逐一对上",
+      "resolved_by": "主实施者按审查发现修复（机械可验证：日志时间戳/runner计数/字段内容），修复先于本记录写入，由主实施者事后移入本节并在summary注明"
+    }
+  ],
+  "findings": [
+    {
+      "severity": "minor",
+      "source": "容量合同与Pi接线",
+      "description": "Rust侧assert_runtime仅被单测使用，无任何生产调用方；运行时固定开销F复核只在Node侧（sessionCapacity→assertRuntimeOverhead）生效。同源防漂移依赖两侧测试文件各自硬编码同一组向量（capacity.rs tests 与 check-capacity-derivation.mjs），无机械共享向量源，公式本体仍是两处手工实现。",
+      "location": "crates/data-agent/src/modules/runtime/model_configuration/capacity.rs:55-67"
+    },
+    {
+      "severity": "minor",
+      "source": "容量合同与Pi接线",
+      "description": "17.7要求不可行配置\"给出输入/输出的可行范围\"，UI与API只给方向性文案（调低输出/提高总上下文），未计算数值可行域；拒绝行为本身正确（model_capacity_invalid→400，不靠反复摘要）。",
+      "location": "apps/web/src/features/models/ModelConfigurationPage.tsx:83-96"
+    },
+    {
+      "severity": "note",
+      "source": "容量合同与Pi接线",
+      "description": "sessionCapacity固定开销F按UTF-8字节/4（estimateRequestBytes→/4），而Pi estimateTokens与controlled.ts估算按字符/4；CJK内容下F偏高约2-3倍，方向保守（只可能提前拒绝，不会放行超限），但注释\"Pi按字符/4估算token的同一启发式\"表述不精确。",
+      "location": "apps/agent/session/deliver.ts:122-124"
+    },
+    {
+      "severity": "note",
+      "source": "容量合同与Pi接线",
+      "description": "legacy缺省字节门槛不一致：provider守卫用payload_bytes_limit??2048，deliver预检用??65536；两者均为基线存量行为，本增量未变更，configured profile由schema强制必填该字段故不受影响。",
+      "location": "apps/agent/provider/controlled.ts:280"
+    },
+    {
+      "severity": "note",
+      "source": "Worker存储恢复与慢检索租约",
+      "description": "提交前版本重核用非锁定一致性读（MySQL默认REPEATABLE READ读视图），从读视图建立到回执提交存在毫秒级残余窗口，期间提交的停用/改版可能漏过；设计目标是关闭秒级锁外检索窗口的混排，该目标已由代码与测试证实，残余窗口不违反声明",
+      "location": "crates/data-agent/src/use_cases/knowledge.rs:828"
+    },
+    {
+      "severity": "note",
+      "source": "Worker存储恢复与慢检索租约",
+      "description": "assets::current_versions_in_tx 的可见性谓词（owner OR visibility='space'，不限kind='skill'）比目录读取 list_in_tx 宽；因资产任何变更都会推进version且条目本身来自已过滤目录，实际不可利用，但严格说重核未复用原谓词",
+      "location": "crates/data-agent/src/modules/assets/store.rs:225"
+    },
+    {
+      "severity": "note",
+      "source": "Worker存储恢复与慢检索租约",
+      "description": "生产路径内置env门控的验收注入钩子（DATA_AGENT_TEST_STORAGE_FAULT、DATA_AGENT_TEST_RETRIEVAL_DELAY_MS）；未设置时无行为差异，属可接受的故障注入方式，但确为生产代码中的测试钩子",
+      "location": "apps/worker/src/main.rs:11"
+    },
+    {
+      "severity": "note",
+      "source": "Worker存储恢复与慢检索租约",
+      "description": "非终态未知错误码（unexpected_error/bridge_unavailable等）只在worker stderr留痕（delivery_interrupted status/code），重试耗尽后用户可见码为retry_exhausted；与单测及声明的设计分类一致，不算吞错，但原码不落库",
+      "location": "apps/worker/src/main.rs:349"
+    },
+    {
+      "severity": "note",
+      "source": "Worker存储恢复与慢检索租约",
+      "description": "新增的worker/types/deliver_run单元测试未接入任何Makefile target（仅capacity模块有过滤的cargo test），未见执行记录；断言经静态核对与代码清单一致，且对应行为已有端到端动态证据",
+      "location": "apps/worker/src/main.rs:424"
+    },
+    {
+      "severity": "note",
+      "source": "测试修正与证据一致性",
+      "description": "「请求序列与旧通过运行同构」实际仅前缀[53285,25285,3676]一致（声明已如实标注前缀）；旧29调用/15摘要→新22调用/8摘要，序列形状因固定开销变化而变，不构成掩盖",
+      "location": "tests/mvp/check-native-compaction.mjs"
+    },
+    {
+      "severity": "note",
+      "source": "测试修正与证据一致性",
+      "description": "固定开销口径：测量脚本实测system+tools为44247B(c9d0ced)→53872B(当前)；声明的≈45KB/54.7KB在计入请求级附加（记忆参考消息等，按实测70713B−16000B工作区≈54.7KB反推）后自洽，80KB=比值1.45×54.7KB取整成立",
+      "location": ".local/checks/measure-fixed-overhead-diff.mjs"
+    },
+    {
+      "severity": "note",
+      "source": "测试修正与证据一致性",
+      "description": "worker-run-deadline以summaryCalls≤2+settled===calls替代原calls===13精确等值，属随新压缩行为的有界放宽而非降断言：每笔调用仍须settled、runs=1、seconds>60保留，区间1..=8192与capacity.ts effectiveOutputCap=min(profile上限,SDK请求,端点上限)一致",
+      "location": "tests/mvp/check-worker-run-deadline.mjs"
+    }
+  ],
+  "observed_evidence": [
+    {
+      "path": ".local/checks/verify-retrieval-lease-final.log",
+      "result": "Worker维度审查者核对：02:21通过，晚于全部产品源码/测试文件修改时间（最新21:57），绑定当前工作树"
+    },
+    {
+      "path": ".local/checks/verify-worker-storage-recovery-final2.log",
+      "result": "02:43通过；四组验收日志均晚于源码修改时间；verify-worker-storage-recovery-final.log保留容器抖动失败记录，与CURRENT.md 211行重跑表述吻合"
+    },
+    {
+      "path": ".local/checks/mvp-slow-retrieval-lease.json",
+      "result": "1秒锁等待FOR UPDATE探针97-102ms取得会话行、epoch不变、expires推进5035/3001ms、单run完成、停用竞争回执rejected/stale_knowledge且正文标记不进回执与消息"
+    },
+    {
+      "path": ".local/checks/mvp-c216bdeefe58599d/service-logs.json",
+      "result": "storage_fault_injected后worker_claim/context/renew/defer/fail各transient分支走通且同PID继续处理后续消息（四份worker服务日志之一，审查者逐份核对）"
+    },
+    {
+      "path": ".local/checks/mvp-native-compaction.json",
+      "result": "10-24 03:34 passed，22调用/8摘要/最大76408B≤81920，压缩真实触发，三项数字与声明逐字一致（测试修正维度核对）"
+    },
+    {
+      "path": ".local/checks/reliability-followup-native-compaction.log",
+      "result": "10-20 07:57旧通过基线：29调用/15摘要/最大65185B/前缀53285/25285/3676，作为本轮门槛调整的对照"
+    },
+    {
+      "path": ".local/checks/measure-fixed-overhead-diff.mjs",
+      "result": "测试修正维度审查者用该脚本独立复测固定开销：c9d0ced 44247B→当前53872B，与声明≈45KB/54.7KB口径自洽"
+    },
+    {
+      "path": ".local/checks/verify-compatible-restore-final2.log",
+      "result": "恰好6条node命令与声明六项名单一致，6×passed:true、0×passed:false（10-24 03:38）"
+    }
+  ],
+  "dynamic_validation": {
+    "status": "not_executed_by_this_review",
+    "owner": "主流程",
+    "required_commands": [
+      [
+        "make",
+        "verify-increment"
+      ]
+    ],
+    "note": "本记录为三位审查者静态源码/合同核对与仓库内既有日志、JSON证据的只读核对汇总；审查者未运行测试套件或验收命令，历史日志仅核对未重跑。最终动态验收以主流程 make verify-increment 的完整exit0与当前指纹收据为准，未完成前不得关闭增量或宣称业务交付。"
+  },
+  "limits": {
+    "official_provider_calls_for_this_review": 0,
+    "harnesses_started_for_final_review": 0,
+    "services_updated": false,
+    "commits_or_pushes": false,
+    "method": "三位独立审查者静态源码/合同核对+仓库内既有日志与JSON证据只读核对；本记录为汇总，汇总者未逐项重验各审查结论的技术内容，未替审查者改判",
+    "dynamic_acceptance": "由主流程执行 make verify-increment；本记录不执行验收命令，也不以历史专项通过替代最终运行结果",
+    "not_proven": [
+      "真实模型回答质量与真实平台权限接入",
+      "云端600秒请求及8MiB网关接收能力",
+      "审查者结论中的数值性断言未经现场重跑复核（测试修正维度除固定开销测量脚本外亦未重跑，该维度已如实声明）"
+    ],
+    "files_modified": "仅本记录 docs/reviews/runtime-capacity-implementation-review-20261024.json"
+  }
+}

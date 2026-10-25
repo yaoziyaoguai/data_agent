@@ -16,6 +16,7 @@ export async function configuredModel(
   transport: RustTransport,
   profile: ModelProfile,
   signal: AbortSignal,
+  checkCapacity?: () => void,
 ) {
   const connection = decodeContract<ModelConnection>(
     "ModelConnection",
@@ -83,8 +84,10 @@ export async function configuredModel(
         apiKey: connection.api_key,
         baseUrl: connection.base_url,
         protocolTest: process.env.DATA_AGENT_PROVIDER_TEST === "1",
+        endpointOutputLimit: known?.maxTokens,
       },
       signal,
+      checkCapacity,
     ),
     models: [
       {
@@ -95,7 +98,8 @@ export async function configuredModel(
         reasoning:
           known?.reasoning ?? profile.configured_model.reasoning_supported,
         thinkingLevelMap,
-        contextWindow: profile.input_limit,
+        // Pi按总窗口规划与压缩；历史profile缺context_window沿用原input_limit接入。
+        contextWindow: profile.context_window ?? profile.input_limit,
         maxTokens: profile.output_limit,
         cost: {
           input: Number(profile.configured_model.input_rate) / 1e6,

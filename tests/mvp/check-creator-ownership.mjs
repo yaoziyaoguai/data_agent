@@ -1,3 +1,4 @@
+import {synchronizeSources} from './source-sync.mjs';
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { readFile, writeFile, mkdir } from "node:fs/promises";
@@ -79,7 +80,7 @@ try {
         })),
       }),
     );
-    await ok("/source-syncs", command());
+    assert.equal((await synchronizeSources(h)).value.status, 'completed');
   }
   await synchronize("bob");
   assert.deepEqual(await ok("/semantic-access", undefined, "bob"), {

@@ -1,5 +1,7 @@
 pub mod catalog;
+mod catalog_content;
 pub mod prefill;
+pub mod preparation;
 pub use store::{
     begin_catalog_read_in_tx, catalog_candidate_in_tx, catalog_upstream_in_tx,
     check_catalog_read_in_tx, complete_catalog_namespace_in_tx, finish_catalog_read_in_tx,
@@ -8,9 +10,9 @@ pub use store::{
 mod store;
 pub use store::{
     assert_prefill_active_in_tx, check_prefill_sources_in_tx, claim_prefill_in_tx,
-    effective_versions_in_tx, finish_prefill_in_tx, prefill_status_in_tx, queue_prefill_in_tx,
-    read_source_in_tx, record_prefill_draft_in_tx, source_version_in_tx, source_versions_in_tx,
-    sync_sources_in_tx,
+    effective_versions_in_tx, finish_prefill_in_tx, prefill_status_in_tx, preparation_status_in_tx,
+    queue_prefill_in_tx, read_source_in_tx, record_prefill_draft_in_tx, source_version_in_tx,
+    source_versions_in_tx, sync_sources_in_tx,
 };
 pub use store::{read_analysis_preference_in_tx, save_analysis_preference_in_tx};
 pub fn source_body(name: &str) -> crate::types::Result<String> {
@@ -83,6 +85,11 @@ pub fn synthetic_sources() -> crate::types::Result<Vec<(String, String)>> {
 pub use store::{missing_catalog_sources_in_tx, retire_catalog_source_in_tx};
 
 pub use store::freeze_prefill_input_in_tx;
+
+pub use store::{
+    backfill_current_in_tx, catalog_members_in_tx, catalog_read_in_tx, commit_catalog_page_in_tx,
+    save_catalog_member_in_tx, start_catalog_page_in_tx,
+};
 
 #[cfg(test)]
 mod tests {

@@ -1,3 +1,4 @@
+import {synchronizeSources} from './source-sync.mjs';
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { spawn, execFileSync } from "node:child_process";
@@ -82,7 +83,7 @@ async function checkPermissionSnapshotDuringAssignment() {
 }
 let server;
 try {
-  await ok("/source-syncs", command());
+  assert.equal((await synchronizeSources(h)).value.status,'completed');
   const catalog = await fetch(h.env.DATA_AGENT_PLATFORM_URL + "/catalog", {
     method: "POST", headers: { authorization: "Bearer " + h.env.DATA_AGENT_INTERNAL_TOKEN, "content-type": "application/json" },
     body: JSON.stringify({ limit: 50 }),
@@ -92,17 +93,21 @@ try {
   const snapshot = () => h.sql("SELECT JSON_OBJECT('id',object_id,'owner',maintainer_id,'version',CAST(version AS CHAR)) FROM semantic_ownership WHERE source='datasight' AND authority_id=object_id ORDER BY object_id");
   const setBob = async () => {
     const tables = catalog.tables.map(t => ({ ...t, platform_version: nextSourceVersion(t), maintainer_id: "bob" }));
-    await saveCatalog(tables); await ok("/source-syncs", command()); return tables;
+    await saveCatalog(tables); assert.equal((await synchronizeSources(h)).value.status,'completed'); return tables;
   };
   if (selected === "sync") {
     const original = snapshot();
     const tables = structuredClone(catalog.tables);
     tables[0].platform_version = nextSourceVersion(catalog.tables[0]);
     tables[0].maintainer_id = "bob";
-    tables[1].comment = "同版本冲突的合成注释";
+    // 内容变化独立于平台观测版本；用确实过期的观测版本制造后续表冲突。
+    assert.ok(BigInt(catalog.tables[1].platform_version) > 1n);
+    tables[1].platform_version = (BigInt(catalog.tables[1].platform_version) - 1n).toString();
+    tables[1].comment = "陈旧平台快照的合成注释";
     await saveCatalog(tables);
-    const failed = await h.request("/source-syncs", command());
-    assert.equal(failed.status, 409); assert.equal(failed.value.code, "version_conflict");
+    const failed = await synchronizeSources(h);
+    assert.equal(failed.status, 200); assert.equal(failed.value.status, "failed");
+    assert.equal(failed.value.error_code, "stale_source");
     assert.deepEqual(snapshot(), original);
     assert.equal((await ok("/semantic-access", undefined, "bob")).can_create, false);
     assert.equal((await h.request("/knowledge", { ...command(), kind: "document", name: "拒绝未完成同步授权", body: "合成", related_ids: [] }, "bob")).status, 403);
@@ -117,7 +122,9 @@ try {
       res.end(JSON.stringify({ schema_version: 1, source_namespace: catalog.source_namespace, snapshot_id: "incomplete-role-snapshot", tables: first ? [tables[0]] : [], next_cursor: first ? "next" : "broken", complete: false, authoritative: true }));
     });
     await new Promise(r => server.listen(Number(new URL(h.env.DATA_AGENT_PLATFORM_URL).port), "127.0.0.1", r));
-    assert.notEqual((await h.request("/source-syncs", command())).status, 200);
+    const incomplete = await synchronizeSources(h);
+    assert.equal(incomplete.value.status, "failed");
+    assert.equal(incomplete.value.error_code, "source_incomplete");
     assert.deepEqual(snapshot(), original);
     server.closeAllConnections(); await new Promise(r => server.close(r)); server = undefined;
     await h.resumePlatform();
@@ -128,15 +135,17 @@ try {
       t.maintainer_id = "bob";
     }
     await saveCatalog(tables);
-    h.sql("\nDELIMITER $$\nCREATE TRIGGER reject_completed_role_sync BEFORE UPDATE ON catalog_imports FOR EACH ROW BEGIN IF NEW.state='succeeded' THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='synthetic completion failure'; END IF; END$$\nDELIMITER ;\n");
+    h.sql("\nDELIMITER $$\nCREATE TRIGGER reject_completed_role_sync BEFORE UPDATE ON catalog_imports FOR EACH ROW BEGIN IF NEW.state='completed' THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='synthetic completion failure'; END IF; END$$\nDELIMITER ;\n");
     try {
-      assert.equal((await h.request("/source-syncs", command())).status, 503);
+      const rejected = await synchronizeSources(h);
+      assert.equal(rejected.value.status, "failed");
+      assert.equal(rejected.value.error_code, "unavailable");
       assert.deepEqual(snapshot(), original);
     } finally { h.sql("DROP TRIGGER reject_completed_role_sync"); }
-    await ok("/source-syncs", command());
+    assert.equal((await synchronizeSources(h)).value.status,'completed');
     assert.equal((await ok("/semantic-access", undefined, "bob")).can_create, true);
     assert.ok(snapshot().every(o => o.owner === "bob"));
-    await saveCatalog([]); await ok("/source-syncs", command());
+    await saveCatalog([]); assert.equal((await synchronizeSources(h)).value.status,'completed');
     assert.ok(snapshot().every(o => o.owner === null));
     assert.equal((await ok("/semantic-access", undefined, "bob")).can_create, false);
     checks.push("成功回执与授权原子提交；最终事务失败可安全重试，完整空目录统一撤权");

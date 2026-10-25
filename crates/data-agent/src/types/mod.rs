@@ -1,15 +1,37 @@
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 
+mod source_locator;
+
 pub type Result<T> = std::result::Result<T, Error>;
 
 #[derive(Debug)]
 pub struct Error {
     pub code: &'static str,
+    pub message: Option<String>,
+    transient_storage: bool,
 }
 impl Error {
     pub fn new(code: &'static str) -> Self {
-        Self { code }
+        Self {
+            code,
+            message: None,
+            transient_storage: false,
+        }
+    }
+    pub fn transient_storage() -> Self {
+        Self {
+            code: "unavailable",
+            message: None,
+            transient_storage: true,
+        }
+    }
+    pub fn is_transient_storage(&self) -> bool {
+        self.transient_storage
+    }
+    pub fn with_message(mut self, message: String) -> Self {
+        self.message = Some(message);
+        self
     }
 }
 impl From<sqlx::Error> for Error {
@@ -29,7 +51,23 @@ impl From<sqlx::Error> for Error {
                 std::mem::discriminant(&error)
             );
         }
-        Self::new("unavailable")
+        // 只在连接/锁竞争可恢复时由worker重试；SQL、迁移和解码错误不能伪装成临时断库。
+        let transient = match &error {
+            sqlx::Error::Io(_) | sqlx::Error::Tls(_) | sqlx::Error::PoolTimedOut => true,
+            sqlx::Error::Database(database) => {
+                let state = database.code();
+                state.as_deref().is_some_and(|code| code.starts_with("08"))
+                    || database
+                        .try_downcast_ref::<sqlx::mysql::MySqlDatabaseError>()
+                        .is_some_and(|error| matches!(error.number(), 1205 | 1213))
+            }
+            _ => false,
+        };
+        Self {
+            code: "unavailable",
+            message: None,
+            transient_storage: transient,
+        }
     }
 }
 impl std::fmt::Display for Error {
@@ -62,4 +100,29 @@ pub struct RunLocation {
     pub conversation_id: String,
     pub owner_id: String,
     pub space_id: String,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Error;
+
+    #[test]
+    fn storage_retry_classification_keeps_permanent_and_business_failures_distinct() {
+        assert!(Error::from(sqlx::Error::PoolTimedOut).is_transient_storage());
+        assert!(
+            Error::from(sqlx::Error::Io(std::io::Error::from(
+                std::io::ErrorKind::ConnectionReset,
+            )))
+            .is_transient_storage()
+        );
+        for failure in [
+            sqlx::Error::RowNotFound,
+            sqlx::Error::ColumnNotFound("synthetic".into()),
+        ] {
+            let error = Error::from(failure);
+            assert_eq!(error.code, "unavailable");
+            assert!(!error.is_transient_storage());
+        }
+        assert!(!Error::new("unavailable").is_transient_storage());
+    }
 }

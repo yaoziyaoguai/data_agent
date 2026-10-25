@@ -1,3 +1,4 @@
+import {synchronizeSources} from './source-sync.mjs';
 // 已获授权的真实模型代表验证；材料全部从零构造，独立结论不进入模型输入。
 import assert from 'node:assert/strict';
 import {execFileSync} from 'node:child_process';
@@ -47,7 +48,9 @@ try {
   h.env.DEEPSEEK_API_KEY = credentials.DEEPSEEK_API_KEY;
   delete h.env.DATA_AGENT_PREFILL_TEST;
   await writeFile(h.directory+'/platform/catalog.json', JSON.stringify({source_namespace:'semantic-sample',authoritative:true,tables:rows}));
-  assert.equal((await h.request('/source-syncs',{operation_id:randomUUID()})).status,200);
+  assert.equal((await synchronizeSources(h)).value.status, 'completed');
+  // 保持本运行器的付费范围不变：来源整理消费链路由check-source-preparation用本地provider验收。
+  h.sql("DELETE FROM background_jobs WHERE kind='prepare_source'");
   const objects=h.sql("SELECT body FROM knowledge_objects WHERE source_id LIKE 'catalog-%'");
   const target=objects.find(o=>o.name==='sales_day_channel');
   const upstream=objects.find(o=>o.name==='raw_sales_events');

@@ -267,28 +267,35 @@ pub async fn select(
     input: Value,
 ) -> Result<Value> {
     contracts::validate("SkillSelection", &input)?;
-    let item = read(
-        pool,
+    let mut tx = AppTx::begin(pool).await?;
+    let conversation = conversations::lock_conversation_in_tx(&mut tx, ctx, cid).await?;
+    if let Some(receipt) = assets::selection_receipt_in_tx(&mut tx, ctx, cid, &input).await? {
+        tx.commit().await?;
+        return project_receipt(pool, ctx, receipt).await;
+    }
+    assert_selection_change_in_tx(&mut tx, &conversation).await?;
+    let item = assets::read_in_tx(
+        &mut tx,
         ctx,
         input["asset_id"]
             .as_str()
             .ok_or(Error::new("invalid_input"))?,
+        true,
     )
     .await?;
-    if item["text_unavailable"] == true {
-        return Err(Error::new("stale_context"));
-    }
-    let checked = checked_assets(pool, ctx, &[item]).await?;
+    tx.commit().await?;
+    let checked = checked_assets(pool, ctx, &[item]).await;
+
+    // 网络校验不占会话锁；回来后重核幂等、忙闲、版本和来源再原子保存。
     let mut tx = AppTx::begin(pool).await?;
     let conversation = conversations::lock_conversation_in_tx(&mut tx, ctx, cid).await?;
-    let v = if let Some(receipt) = assets::begin_selection_in_tx(&mut tx, ctx, cid, &input).await? {
-        receipt
-    } else {
-        assert_selection_change_in_tx(&mut tx, &conversation).await?;
-        let value = assets::select_in_tx(&mut tx, ctx, cid, &input).await?;
-        super::knowledge::check_refs_in_tx(&mut tx, ctx, &value["dependencies"]).await?;
-        value
-    };
+    if let Some(receipt) = assets::begin_selection_in_tx(&mut tx, ctx, cid, &input).await? {
+        tx.commit().await?;
+        return project_receipt(pool, ctx, receipt).await;
+    }
+    let checked = checked?;
+    assert_selection_change_in_tx(&mut tx, &conversation).await?;
+    let v = assets::select_in_tx(&mut tx, ctx, cid, &input).await?;
     text_authority_in_tx(&mut tx, ctx, cid, &v, &checked).await?;
     tx.commit().await?;
     Ok(v)

@@ -1,3 +1,4 @@
+import {synchronizeSources} from './source-sync.mjs';
 import {navigateWorkspace, discardEditor, logoutWorkspace} from './experience-navigation.mjs';
 import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
@@ -58,7 +59,7 @@ try {
   checks.push('Bob空负责目录及无结果筛选不保留Alice表详情');
   const catalog=await fetch(h.env.DATA_AGENT_PLATFORM_URL+'/catalog',{method:'POST',headers:{authorization:'Bearer '+h.env.DATA_AGENT_INTERNAL_TOKEN,'content-type':'application/json'},body:JSON.stringify({limit:50})}).then(r=>r.json());
   await writeFile(h.directory+'/platform/catalog.json',JSON.stringify({source_namespace:catalog.source_namespace,tables:catalog.tables.map(table=>({...table,maintainer_id:'bob'}))}));
-  ok(await h.request('/source-syncs',{operation_id:randomUUID()}));
+  assert.equal((await synchronizeSources(h)).value.status, 'completed');
   await page.getByLabel('管理目录名称').fill('demo_order_detail');await page.getByRole('button',{name:'刷新目录',exact:true}).click();
   const list=page.getByRole('navigation',{name:'语义对象'});await list.getByRole('button').filter({has:page.getByText('demo_order_detail',{exact:true})}).first().click();
   const entry=page.locator('.semantic-entry').first();await entry.getByRole('button',{name:'编辑',exact:true}).click();await entry.locator('textarea').fill('Bob负责的合成表说明。');await entry.getByRole('button',{name:'保存修改',exact:true}).click();await entry.locator('.entry-value').filter({hasText:/^Bob负责的合成表说明。$/}).waitFor();

@@ -1,3 +1,4 @@
+import {synchronizeSources} from './source-sync.mjs';
 import assert from 'node:assert/strict';
 import {createServer} from 'node:http';
 import {randomUUID} from 'node:crypto';
@@ -26,7 +27,9 @@ const configure=(id,input,user='alice')=>h.request('/knowledge/'+id+'/analysis-p
 const counts=()=>h.sql("SELECT JSON_OBJECT('n',COUNT(*)) FROM prefill_attempts")[0].n;
 const sync=async tables=>{
  await writeFile(h.directory+'/platform/catalog.json',JSON.stringify({source_namespace:'synthetic-analysis-preference',authoritative:true,tables}));
- assert.equal((await h.request('/source-syncs',{operation_id:randomUUID()})).status,200);
+ assert.equal((await synchronizeSources(h)).value.status, 'completed');
+ // 本检查只验证维护范围与预填调度；来源整理消费链路由check-source-preparation单独验收。
+ h.sql("DELETE FROM background_jobs WHERE kind='prepare_source'");
 };
 const wait=async(id,state)=>until(async()=>{const r=await get(id);return r.value.prefill_status?.state===state?r.value:false;},'维护范围 '+state,40000);
 try{

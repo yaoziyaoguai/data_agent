@@ -92,6 +92,8 @@ pub struct Boundary {
     pub create_conversation: CreateConversation,
     pub data_tool_invocation: DataToolInvocation,
     pub data_tool_outcome: DataToolOutcome,
+    #[serde(rename = "EmbeddedSupportLocation")]
+    pub embedded_support_location: Option<EmbeddedSupportLocation>,
     pub embedding_profile: EmbeddingProfile,
     pub event: Event,
     pub evidence_ref: EvidenceRef,
@@ -159,6 +161,12 @@ pub struct Boundary {
     #[serde(rename = "pi_session_reference")]
     pub pi_session_reference: PiSessionReference,
     pub prefill_result: PrefillResult,
+    #[serde(rename = "PreparedRelation")]
+    pub prepared_relation: Option<PreparedRelation>,
+    #[serde(rename = "PreparedStatement")]
+    pub prepared_statement: Option<PreparedStatement>,
+    #[serde(rename = "PreparedSupport")]
+    pub prepared_support: Option<PreparedSupport>,
     #[serde(rename = "PrepareSkillDraftInput")]
     pub prepare_skill_draft_input: Option<PrepareSkillDraftInput>,
     #[serde(rename = "PresentAnalysisAnswerInput")]
@@ -233,8 +241,16 @@ pub struct Boundary {
     pub semantic_maintenance: Option<SemanticMaintenance>,
     #[serde(rename = "SemanticMemberList")]
     pub semantic_member_list: Option<SemanticMemberList>,
+    #[serde(rename = "SemanticReference")]
+    pub semantic_reference: Option<SemanticReference>,
+    #[serde(rename = "SemanticRelation")]
+    pub semantic_relation: Option<SemanticRelation>,
+    #[serde(rename = "SemanticStatement")]
+    pub semantic_statement: Option<SemanticStatement>,
     #[serde(rename = "SemanticStructure")]
     pub semantic_structure: Option<SemanticStructure>,
+    #[serde(rename = "SemanticSupport")]
+    pub semantic_support: Option<SemanticSupport>,
     #[serde(rename = "SemanticTableRef")]
     pub semantic_table_ref: Option<SemanticTableRef>,
     pub send_model_call: SendModelCall,
@@ -259,7 +275,20 @@ pub struct Boundary {
     #[serde(rename = "SkillSuggestionList")]
     pub skill_suggestion_list: Option<SkillSuggestionList>,
     pub snapshot: Snapshot,
+    pub source_citation: SourceCitation,
     pub source_document: SourceDocument,
+    #[serde(rename = "SourceExcerpt")]
+    pub source_excerpt: Option<SourceExcerpt>,
+    pub source_key: SourceKey,
+    pub source_locator: SourceLocator,
+    #[serde(rename = "SourcePreparationResult")]
+    pub source_preparation_result: Option<SourcePreparationResult>,
+    #[serde(rename = "SourceSyncAccepted")]
+    pub source_sync_accepted: Option<SourceSyncAccepted>,
+    #[serde(rename = "SourceSyncProgress")]
+    pub source_sync_progress: Option<SourceSyncProgress>,
+    #[serde(rename = "SourceWorkProgress")]
+    pub source_work_progress: Option<SourceWorkProgress>,
     pub sql_input: SqlInput,
     #[serde(rename = "SubmitSemanticCorrection")]
     pub submit_semantic_correction: Option<SubmitSemanticCorrection>,
@@ -405,6 +434,10 @@ pub struct AnalysisAnswerSource {
 pub struct AnalysisAnswerValue {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub column: Option<String>,
+    /// observation_cutoff/data_batch在同名角色多条时按field_ref对齐声明；缺省要求该角色唯一。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub field_ref: Option<String>,
+    /// observation_cutoff/data_batch绑定草稿时间基准中用户声明的角色值；未声明时不可绑定。
     pub kind: AnalysisAnswerValueKind,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub metadata: Option<Metadata>,
@@ -418,11 +451,16 @@ pub struct AnalysisAnswerValue {
     pub statistic: Option<Statistic>,
 }
 
+/// observation_cutoff/data_batch绑定草稿时间基准中用户声明的角色值；未声明时不可绑定。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum AnalysisAnswerValueKind {
     Cell,
+    #[serde(rename = "data_batch")]
+    DataBatch,
     Metadata,
+    #[serde(rename = "observation_cutoff")]
+    ObservationCutoff,
     Parameter,
     Statistic,
 }
@@ -472,8 +510,17 @@ pub struct Conditions {
     pub knowledge_refs: Vec<EvidenceRef>,
     pub metric: Option<String>,
     pub notes: String,
+    /// 本题口径决策、依据及采纳来源；null表示尚未作出决定，不自动按无歧义处理。字段缺失表示旧版本未记录。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub semantic_resolution: Option<QuerySemanticResolution>,
+    /// null表示本题显式未声明额外来源限制；字段缺失表示旧条件版本未记录新式限制，不能证明用户从未限制。撤销必须显式unset并来自真实用户修改。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source_limits: Option<SourceLimits>,
     /// 时间区间的不包含终点。按明确的业务时区解析后转为UTC完整时间戳，以Z结尾；整月结束为下一月起点，不能写本月最后一天。未指定时为null。
     pub time_end: Option<String>,
+    /// 时间口径角色；统计起止仍沿time_start/time_end，request_clock和平台data_freshness不冒充用户截点。字段缺失表示旧版本未记录。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub time_roles: Option<Vec<TimeRole>>,
     /// 时间区间的包含起点。按明确的业务时区解析后转为UTC完整时间戳，以Z结尾；不能只写日期。未指定时为null。
     pub time_start: Option<String>,
     pub timezone: String,
@@ -494,6 +541,89 @@ pub struct EvidenceRef {
     /// 该知识对象entries中的path，必须确实存在于对应version。
     pub path: String,
     pub version: String,
+}
+
+/// 保存口径决策及采纳来源；清空使用unset。
+///
+///
+/// 与任务当前条件声明对齐：条件已声明决策时省略即继承；携带须与声明逐字一致；条件未声明时按本轮真实用户原话记录explicit_user或如实记录needs_clarification。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct QuerySemanticResolution {
+    ///
+    /// explicit_user：null=本轮新采纳，由宿主核对user_quote为本轮完整原话后绑定真实消息身份；非空=复制继承原已验证决策的消息身份，不接受模型自由填写。其余basis为null。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub adoption_message_id: Option<String>,
+    /// 真实用户明确选择、确无实质歧义、或仍需澄清；资料支持某公式不等于用户选择它。
+    pub basis: Basis,
+    /// 支撑该口径决策的依据引用；旧调用缺失按空数组解码。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub evidence_refs: Option<Vec<EvidenceRef>>,
+    /// 本稿采用的指标、分子/分母、时间等关键口径及选择依据；不能把自己刚写入任务的假设当作用户采用。
+    pub interpretation: String,
+    /// 仍会改变答案且未获选择的分子、分母、时间归属等差异；有差异必须先澄清，不能默认写稿。
+    pub unresolved_differences: Vec<String>,
+    /// explicit_user逐字填写本条真实用户完整原话，保留否定、前提、例外和换行，不截取子串；其余为null。
+    pub user_quote: Option<String>,
+}
+
+/// 真实用户明确选择、确无实质歧义、或仍需澄清；资料支持某公式不等于用户选择它。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Basis {
+    #[serde(rename = "explicit_user")]
+    ExplicitUser,
+    #[serde(rename = "needs_clarification")]
+    NeedsClarification,
+    Unambiguous,
+}
+
+/// 设置来源限制；撤销使用unset source_limits，不接受设为空集。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SourceLimits {
+    /// 非空允许集；限制跟稳定来源身份走，实际读取仍核对当前修订。
+    pub allowed_sources: Vec<SourceKey>,
+    /// 由宿主绑定的真实消息身份；不接受模型自由填写。
+    pub origin_message_ids: Vec<String>,
+}
+
+/// 来源的稳定身份；不包含修订号，也不使用索引chunk ID。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SourceKey {
+    pub id: String,
+    pub kind: SourceKeyKind,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SourceKeyKind {
+    Document,
+    Platform,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TimeRole {
+    /// 业务含义说明。
+    pub description: String,
+    /// 支撑该时间口径的依据；可空数组。
+    pub evidence_refs: Vec<EvidenceRef>,
+    /// 采用的时间字段引用；可空。
+    pub field_ref: Option<String>,
+    /// 采用的时间字段含义、观察截点或数据批次；三者不混用。
+    pub role: TimeRoleRole,
+    /// observation_cutoff必须为带时区的时间值，data_batch必须为批次值；event_time可空（实际区间沿time_start/time_end）。
+    pub value: Option<String>,
+}
+
+/// 采用的时间字段含义、观察截点或数据批次；三者不混用。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TimeRoleRole {
+    #[serde(rename = "data_batch")]
+    DataBatch,
+    #[serde(rename = "event_time")]
+    EventTime,
+    #[serde(rename = "observation_cutoff")]
+    ObservationCutoff,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -762,9 +892,18 @@ pub struct ConditionSet {
     pub metric: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub notes: Option<String>,
+    /// 保存口径决策及采纳来源；清空使用unset。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub semantic_resolution: Option<QuerySemanticResolution>,
+    /// 设置来源限制；撤销使用unset source_limits，不接受设为空集。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source_limits: Option<SourceLimits>,
     /// 修改区间的不包含终点，按业务时区解析后填写UTC完整时间戳，以Z结尾；整月结束为下一月起点。清空使用unset；未修改则省略。
     #[serde(skip_serializing_if = "Option::is_none")]
     pub time_end: Option<String>,
+    /// 整体替换时间口径角色；清空使用unset。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub time_roles: Option<Vec<TimeRole>>,
     /// 修改区间的包含起点，按业务时区解析后填写UTC完整时间戳，以Z结尾。清空使用unset；未修改则省略。
     #[serde(skip_serializing_if = "Option::is_none")]
     pub time_start: Option<String>,
@@ -783,8 +922,14 @@ pub enum Unset {
     KnowledgeRefs,
     Metric,
     Notes,
+    #[serde(rename = "semantic_resolution")]
+    SemanticResolution,
+    #[serde(rename = "source_limits")]
+    SourceLimits,
     #[serde(rename = "time_end")]
     TimeEnd,
+    #[serde(rename = "time_roles")]
+    TimeRoles,
     #[serde(rename = "time_start")]
     TimeStart,
 }
@@ -800,8 +945,12 @@ pub struct AppError {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Code {
+    #[serde(rename = "answer_sources_required")]
+    AnswerSourcesRequired,
     #[serde(rename = "budget_exhausted")]
     BudgetExhausted,
+    #[serde(rename = "checkpoint_conflict")]
+    CheckpointConflict,
     #[serde(rename = "chunk_gap")]
     ChunkGap,
     #[serde(rename = "clarification_not_open")]
@@ -821,6 +970,12 @@ pub enum Code {
     InvalidInput,
     #[serde(rename = "invalid_model_endpoint")]
     InvalidModelEndpoint,
+    #[serde(rename = "invalid_skill_receipt")]
+    InvalidSkillReceipt,
+    #[serde(rename = "invalid_skill_resource")]
+    InvalidSkillResource,
+    #[serde(rename = "invalid_tool_arguments")]
+    InvalidToolArguments,
     #[serde(rename = "lease_lost")]
     LeaseLost,
     #[serde(rename = "memory_extraction_empty")]
@@ -831,34 +986,88 @@ pub enum Code {
     MemoryUnavailable,
     #[serde(rename = "message_pending")]
     MessagePending,
+    #[serde(rename = "model_auth_failed")]
+    ModelAuthFailed,
+    #[serde(rename = "model_budget_exhausted")]
+    ModelBudgetExhausted,
+    #[serde(rename = "model_capacity_invalid")]
+    ModelCapacityInvalid,
     #[serde(rename = "model_credential_required")]
     ModelCredentialRequired,
+    #[serde(rename = "model_finalize_unconfirmed")]
+    ModelFinalizeUnconfirmed,
+    #[serde(rename = "model_input_limit")]
+    ModelInputLimit,
+    #[serde(rename = "model_limits_exceeded")]
+    ModelLimitsExceeded,
+    #[serde(rename = "model_network_error")]
+    ModelNetworkError,
+    #[serde(rename = "model_output_limit")]
+    ModelOutputLimit,
+    #[serde(rename = "model_quota_exhausted")]
+    ModelQuotaExhausted,
+    #[serde(rename = "model_rate_limited")]
+    ModelRateLimited,
+    #[serde(rename = "model_receipt_unknown")]
+    ModelReceiptUnknown,
+    #[serde(rename = "model_request_failed")]
+    ModelRequestFailed,
     #[serde(rename = "model_retry_exhausted")]
     ModelRetryExhausted,
+    #[serde(rename = "model_run_failed")]
+    ModelRunFailed,
     #[serde(rename = "model_secret_unavailable")]
     ModelSecretUnavailable,
+    #[serde(rename = "model_service_unavailable")]
+    ModelServiceUnavailable,
+    #[serde(rename = "model_timeout")]
+    ModelTimeout,
     #[serde(rename = "model_unavailable")]
     ModelUnavailable,
+    #[serde(rename = "model_usage_invalid")]
+    ModelUsageInvalid,
+    #[serde(rename = "model_usage_unknown")]
+    ModelUsageUnknown,
+    #[serde(rename = "no_final_output")]
+    NoFinalOutput,
     #[serde(rename = "not_available")]
     NotAvailable,
     #[serde(rename = "outcome_unknown")]
     OutcomeUnknown,
+    #[serde(rename = "provider_configuration_invalid")]
+    ProviderConfigurationInvalid,
+    #[serde(rename = "provider_model_unavailable")]
+    ProviderModelUnavailable,
+    #[serde(rename = "provider_parameters_changed")]
+    ProviderParametersChanged,
+    #[serde(rename = "provider_payload_invalid")]
+    ProviderPayloadInvalid,
+    #[serde(rename = "provider_transport_rejected")]
+    ProviderTransportRejected,
+    #[serde(rename = "request_too_large: model_input_limit")]
+    RequestTooLargeModelInputLimit,
     #[serde(rename = "result_expired")]
     ResultExpired,
     #[serde(rename = "result_unavailable")]
     ResultUnavailable,
+    #[serde(rename = "run_cancelled")]
+    RunCancelled,
     #[serde(rename = "scope_incomplete")]
     ScopeIncomplete,
     #[serde(rename = "selection_required")]
     SelectionRequired,
     #[serde(rename = "source_interrupted")]
     SourceInterrupted,
+    #[serde(rename = "source_not_allowed")]
+    SourceNotAllowed,
     #[serde(rename = "source_unavailable")]
     SourceUnavailable,
     #[serde(rename = "stale_context")]
     StaleContext,
     #[serde(rename = "stale_knowledge")]
     StaleKnowledge,
+    #[serde(rename = "task_context_required")]
+    TaskContextRequired,
     #[serde(rename = "task_inactive")]
     TaskInactive,
     Unauthenticated,
@@ -1106,7 +1315,7 @@ pub struct ChatMessage {
     pub output_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub request_clock: Option<RequestClock>,
-    pub role: Role,
+    pub role: ChatMessageRole,
     pub text: String,
 }
 
@@ -1126,7 +1335,7 @@ pub enum BusinessTimezone {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum Role {
+pub enum ChatMessageRole {
     Assistant,
     User,
 }
@@ -1347,6 +1556,29 @@ pub struct DataToolOutcome {
     pub data: HashMap<String, Option<serde_json::Value>>,
     pub operation_id: String,
     pub tool_name: ToolName,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EmbeddedSupportLocation {
+    pub field: Field,
+    pub locator: SourceLocator,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Field {
+    #[serde(rename = "scope_text")]
+    ScopeText,
+    Text,
+}
+
+/// offset及length固定使用Unicode code point；heading_path仅作定位提示。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SourceLocator {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub heading_path: Option<Vec<String>>,
+    pub length: i64,
+    pub offset: i64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1601,6 +1833,15 @@ pub enum Cardinality {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ComputedMetric {
+    /// 输出该口径的表达式或列计算说明。
+    pub expression: String,
+    pub metric_ref: EvidenceRef,
+    /// 该SQL实际输出的口径名；与过滤中用到的指标分开表达。
+    pub output_name: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct JoinKey {
     pub left_column: String,
     pub right_column: String,
@@ -1680,9 +1921,14 @@ pub struct KnowledgeObject {
     pub name: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub prefill_status: Option<PrefillStatus>,
+    /// 当前来源的语义整理状态；与对象级预填分开表达，两作业互不冒充。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub preparation_status: Option<PreparationStatus>,
     pub related_ids: Vec<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub retrieval: Option<KnowledgeRetrieval>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub semantic_relations: Option<Vec<SemanticRelation>>,
     pub source_id: Option<String>,
     pub source_version: String,
     pub state: AssetState,
@@ -1711,6 +1957,8 @@ pub struct KnowledgeEntry {
     pub path: String,
     pub review_state: ReviewState,
     pub source_facts: SourceFacts,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub statements: Option<Vec<SemanticStatement>>,
     pub suggestion: Suggestion,
 }
 
@@ -1731,6 +1979,69 @@ pub enum ReviewState {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SourceFacts {
     pub structured_value: Option<QueryExampleStructure>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SemanticStatement {
+    pub citations: Vec<SourceCitation>,
+    pub object_ref: EvidenceRef,
+    pub origin: Origin,
+    pub scope_text: String,
+    pub statement_id: String,
+    pub supports: Vec<SemanticSupport>,
+    pub text: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SourceCitation {
+    pub locator: SourceLocator,
+    pub revision: String,
+    pub source: SourceKey,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Origin {
+    Human,
+    #[serde(rename = "model_inference")]
+    ModelInference,
+    #[serde(rename = "source_fact")]
+    SourceFact,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SemanticSupport {
+    pub content: Option<String>,
+    pub embedded_in: Option<EmbeddedSupportLocation>,
+    pub reference: SemanticReference,
+    pub role: PreparedSupportRole,
+    pub support_id: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SemanticReference {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub citation: Option<SourceCitation>,
+    pub kind: SemanticReferenceKind,
+    #[serde(rename = "ref")]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub semantic_reference_ref: Option<EvidenceRef>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SemanticReferenceKind {
+    Knowledge,
+    Source,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PreparedSupportRole {
+    #[serde(rename = "calculation_dependency")]
+    CalculationDependency,
+    Exception,
+    Prerequisite,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1765,6 +2076,14 @@ pub struct PrefillStatus {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PreparationStatus {
+    pub error_code: Option<String>,
+    pub revision: String,
+    pub source_id: String,
+    pub state: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct KnowledgeRetrieval {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub channel: Option<KnowledgeRetrievalChannel>,
@@ -1793,8 +2112,34 @@ pub struct KnowledgeRetrievalExcerpt {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum KnowledgeRetrievalState {
+    #[serde(rename = "index_lag")]
+    IndexLag,
     Located,
     Unlocated,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SemanticRelation {
+    pub citations: Vec<SourceCitation>,
+    pub origin: Origin,
+    pub predicate: Predicate,
+    pub relation_id: String,
+    pub scope_text: String,
+    pub subject: EvidenceRef,
+    pub target: SemanticReference,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Predicate {
+    Computes,
+    #[serde(rename = "derived_from")]
+    DerivedFrom,
+    Exception,
+    Explains,
+    Joins,
+    Related,
+    Requires,
 }
 
 /// 平台移除与人工停用分开；重新出现只能恢复平台导致的停用。
@@ -2215,6 +2560,12 @@ pub struct ModelConfiguration {
 pub struct ModelDefinition {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub anthropic_thinking_mode: Option<AnthropicThinkingMode>,
+    /// 窗口能力来源：SDK目录或管理员声明；目录外型号不猜窗口。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub capability_source: Option<CapabilitySource>,
+    /// 总上下文tokens；与输入/输出策略分开表达。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub context_window: Option<i32>,
     pub default_thinking: ThinkingLevel,
     pub enabled: bool,
     pub id: String,
@@ -2226,9 +2577,22 @@ pub struct ModelDefinition {
     pub output_rate: String,
     pub payload_bytes_limit: i32,
     pub reasoning_supported: bool,
+    /// 单次provider请求超时毫秒，随模型修订冻结；历史缺字段按90000处理。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub request_timeout_ms: Option<i32>,
     pub service_id: String,
     pub thinking_levels: Vec<ThinkingLevel>,
     pub version: String,
+}
+
+/// 窗口能力来源：SDK目录或管理员声明；目录外型号不猜窗口。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CapabilitySource {
+    #[serde(rename = "admin_declared")]
+    AdminDeclared,
+    #[serde(rename = "sdk_catalog")]
+    SdkCatalog,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -2271,8 +2635,14 @@ pub struct ModelProfile {
     /// 省略沿用有限trial；request为正常持续使用，每消息24次，累计费用/试用期限不默认拦截。
     #[serde(skip_serializing_if = "Option::is_none")]
     pub budget_mode: Option<BudgetMode>,
+    /// 窗口能力来源：SDK目录或管理员声明；目录外型号不猜窗口。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub capability_source: Option<CapabilitySource>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub configured_model: Option<ConfiguredModel>,
+    /// 总上下文tokens；与输入/输出策略分开表达。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub context_window: Option<i32>,
     pub input_limit: i32,
     pub model_id: String,
     pub output_limit: i32,
@@ -2282,6 +2652,9 @@ pub struct ModelProfile {
     pub provider_id: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub request_call_limit: Option<i32>,
+    /// 单次provider请求超时毫秒，随模型修订冻结；历史缺字段按90000处理。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub request_timeout_ms: Option<i32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub thinking_level: Option<ThinkingLevel>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -2388,6 +2761,35 @@ pub struct PrepareSkillDraftInput {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PreparedRelation {
+    pub citations: Vec<SourceCitation>,
+    pub key: String,
+    pub predicate: Predicate,
+    pub scope_text: String,
+    pub subject: EvidenceRef,
+    pub target: SemanticReference,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PreparedStatement {
+    pub citations: Vec<SourceCitation>,
+    pub key: String,
+    pub scope_text: String,
+    pub supports: Vec<PreparedSupport>,
+    pub target: EvidenceRef,
+    pub text: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PreparedSupport {
+    pub content: Option<String>,
+    pub embedded_in: Option<EmbeddedSupportLocation>,
+    pub key: String,
+    pub reference: SemanticReference,
+    pub role: PreparedSupportRole,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PresentAnalysisAnswerInput {
     pub sources: Vec<AnalysisAnswerSource>,
     /// 解释模板，数字/日期/单位换算结果全部用{{name}}引用values；不在模板中写数字或SQL代码块。定性解释必须有依据，不写未经证实的因果。
@@ -2478,6 +2880,9 @@ pub struct QueryView {
     /// 草稿工具回执的非阻断诊断；查询读取接口不承诺重现此报告。
     #[serde(skip_serializing_if = "Option::is_none")]
     pub semantic_checks: Option<SemanticCheckReport>,
+    /// 保存草稿时的口径决策及依据；旧记录返回null，不从自由文本或模型历史猜回填。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub semantic_resolution: Option<QuerySemanticResolution>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub sql: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -2487,6 +2892,9 @@ pub struct QueryView {
     /// 正文来源失效或无法核实时只返回查询身份和控制状态；SQL、参数、说明、依据及诊断正文均不可返回。
     #[serde(skip_serializing_if = "Option::is_none")]
     pub text_unavailable: Option<bool>,
+    /// 保存草稿时任务条件声明的时间基准；旧草稿返回null。观察截点与批次是用户声明，不得以request_clock或平台data_freshness冒充。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub time_basis: Option<TimeBasis>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -2539,6 +2947,15 @@ pub struct Coverage {
 pub enum SqlShape {
     Supported,
     Unsupported,
+}
+
+/// 草稿保存时从任务当前条件投影的时间基准；统计起止沿time_start/time_end，观察截点/批次只在time_roles中声明。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TimeBasis {
+    pub time_end: Option<String>,
+    pub time_roles: Vec<TimeRole>,
+    pub time_start: Option<String>,
+    pub timezone: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -2663,37 +3080,14 @@ pub struct RequestQueryInput {
     pub parameters: HashMap<String, Option<serde_json::Value>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub replaces_query_id: Option<String>,
-    /// 保存前填写口径决策；省略仅兼容旧调用，不表示用户已确认。
+    ///
+    /// 与任务当前条件声明对齐：条件已声明决策时省略即继承；携带须与声明逐字一致；条件未声明时按本轮真实用户原话记录explicit_user或如实记录needs_clarification。
     #[serde(skip_serializing_if = "Option::is_none")]
     pub semantic_resolution: Option<QuerySemanticResolution>,
     pub sql: String,
     pub summary: String,
     pub target_id: TargetId,
     pub task_id: String,
-}
-
-/// 保存前填写口径决策；省略仅兼容旧调用，不表示用户已确认。
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct QuerySemanticResolution {
-    /// 真实用户明确选择、确无实质歧义、或仍需澄清；资料支持某公式不等于用户选择它。
-    pub basis: Basis,
-    /// 本稿采用的指标、分子/分母、时间等关键口径及选择依据；不能把自己刚写入任务的假设当作用户采用。
-    pub interpretation: String,
-    /// 仍会改变答案且未获选择的分子、分母、时间归属等差异；有差异必须先澄清，不能默认写稿。
-    pub unresolved_differences: Vec<String>,
-    /// explicit_user逐字填写本条真实用户完整原话，保留否定、前提、例外和换行，不截取子串；其余为null。
-    pub user_quote: Option<String>,
-}
-
-/// 真实用户明确选择、确无实质歧义、或仍需澄清；资料支持某公式不等于用户选择它。
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum Basis {
-    #[serde(rename = "explicit_user")]
-    ExplicitUser,
-    #[serde(rename = "needs_clarification")]
-    NeedsClarification,
-    Unambiguous,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -2924,6 +3318,10 @@ pub struct SaveDefaultModel {
 pub struct SaveModelDefinition {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub anthropic_thinking_mode: Option<AnthropicThinkingMode>,
+    /// 窗口能力来源：SDK目录或管理员声明；目录外型号不猜窗口。
+    pub capability_source: CapabilitySource,
+    /// 总上下文tokens；与输入/输出策略分开表达。
+    pub context_window: i32,
     pub default_thinking: ThinkingLevel,
     pub enabled: bool,
     pub expected_version: String,
@@ -2936,6 +3334,8 @@ pub struct SaveModelDefinition {
     pub output_rate: String,
     pub payload_bytes_limit: i32,
     pub reasoning_supported: bool,
+    /// 单次provider请求超时毫秒，随模型修订冻结；历史缺字段按90000处理。
+    pub request_timeout_ms: i32,
     pub service_id: String,
     pub thinking_levels: Vec<ThinkingLevel>,
 }
@@ -3084,6 +3484,8 @@ pub enum SemanticStructure {
         applicable_question: String,
         parameters: Vec<QueryExampleParameter>,
         sql: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        computed_metrics: Option<Vec<ComputedMetric>>,
         grain: String,
         dependencies: Vec<EvidenceRef>,
         verification: Option<QueryExampleVerification>,
@@ -3272,6 +3674,78 @@ pub struct SourceDocument {
     pub current_version: String,
     pub source_id: String,
     pub version: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SourceExcerpt {
+    pub citation: SourceCitation,
+    pub content: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SourcePreparationResult {
+    pub relations: Vec<PreparedRelation>,
+    pub semantic_status: SemanticStatus,
+    pub statements: Vec<PreparedStatement>,
+    pub unresolved: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SemanticStatus {
+    Partial,
+    Ready,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SourceSyncAccepted {
+    pub status: SourceSyncAcceptedStatus,
+    pub status_url: String,
+    pub sync_id: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SourceSyncAcceptedStatus {
+    Completed,
+    Failed,
+    Queued,
+    Running,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SourceSyncProgress {
+    pub error_code: Option<String>,
+    /// 已持久化的可展示失败说明，例如来源的实际大小和上限；旧批次可缺省。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error_message: Option<String>,
+    pub knowledge_index: SourceWorkProgress,
+    pub pages_committed: i64,
+    pub preparation: SourceWorkProgress,
+    pub processed_sources: i64,
+    pub raw_index: SourceWorkProgress,
+    pub status: SourceSyncAcceptedStatus,
+    pub status_url: String,
+    pub sync_id: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SourceWorkProgress {
+    pub completed: i64,
+    pub failed: i64,
+    pub status: SourceWorkProgressStatus,
+    pub total: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SourceWorkProgressStatus {
+    Completed,
+    Failed,
+    #[serde(rename = "not_required")]
+    NotRequired,
+    Pending,
+    Running,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

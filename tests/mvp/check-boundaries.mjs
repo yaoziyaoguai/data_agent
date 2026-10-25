@@ -95,16 +95,36 @@ try {
     (await invoke("read_knowledge", readArgs)).result.value.code,
     "selection_required",
   );
-  await h.request("/conversations/" + cid + "/skill-selections", {
+  const selection = {
     operation_id: randomUUID(),
     asset_id: skill.id,
     version: skill.version,
-  });
+  };
+  const pendingSelection = await h.request("/conversations/" + cid + "/skill-selections", selection);
+  assert.equal(pendingSelection.status, 409);
+  assert.equal(pendingSelection.value.code, "message_pending");
+  // 选用只在空闲会话发生；不能忽略待处理输入的拒绝并假定已选成功。
+  await finish();
+  h.releaseRun(run.run_id);
+  assert.equal((await h.request("/conversations/" + cid + "/skill-selections", selection)).status, 200);
+  await h.resumeWorker();
+  run = await h.capture(cid, "仅本次读取已选方法，不要记住");
+  await h.pauseWorker();
   assert.equal((await invoke("read_knowledge", readArgs)).result.status, 200);
-  await h.request("/assets/" + skill.id + "/disable", {
+  const disabledSkill = await h.request("/assets/" + skill.id + "/disable", {
     operation_id: randomUUID(),
     expected_version: skill.version,
   });
+  assert.equal(disabledSkill.status, 200);
+  assert.equal((await invoke("read_knowledge", readArgs)).result.value.code, "stale_context");
+  // 停用会使已采用它的运行失效；撤回旧输入后，新运行仍不能读到停用正文。
+  assert.equal((await h.request("/conversations/" + cid + "/messages/" + run.message_id + "/withdraw", {
+    operation_id: randomUUID(),
+  })).status, 200);
+  h.releaseRun(run.run_id);
+  await h.resumeWorker();
+  run = await h.capture(cid, "仅本次继续边界检查，不要记住");
+  await h.pauseWorker();
   assert.equal((await invoke("read_knowledge", readArgs)).result.status, 404);
   check("工具侧拒绝未选用/停用Skill，选用当前版本才可读正文");
   const rejected = (

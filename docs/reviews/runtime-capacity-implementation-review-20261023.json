@@ -1,0 +1,204 @@
+{
+  "schema": 1,
+  "review_date": "2026-10-23",
+  "increment": "I2-RUNTIME-CAPACITY",
+  "base_commit": "fed8276577748c1f77c49c7c8ca2317408129ec3",
+  "reviewer": "slow_retrieval_verification 汇总；capacity_contract_review 与 slow_retrieval_verification 交叉独立审查，未由相应实现者批准自己的代码或测试",
+  "conclusion": "passed",
+  "summary": "本增量已稳定产品代码和测试经交叉审查，已确认问题均有针对性修正，未发现剩余代码审查阻断。慢检索锁外执行及最终读取时点核验、Worker错误分类与恢复、冻结容量和Pi原生压缩、legacy完整用户原话来源修复符合已确认合同。此passed仅表示声明范围的代码及测试审查通过；最终统一动态验收由主流程执行，验收未完成前不得关闭增量或宣称业务交付。",
+  "scope_sha256": "11498809f53788bf7a3d5f1dc977a094a4d5665b675d60ba2342eddf150b6c84",
+  "fingerprint_method": "scripts.check_delivery.review_scope(root, read_delivery(root))；绑定CURRENT声明的合同与verification_inputs，排除review指针和本记录，不代表对全部输入文件逐行重新审计。",
+  "review_basis": [
+    "AGENTS.md：模块归属、稳定操作身份、独立审查、来源保护、Pi优先复用与命名约定",
+    "docs/architecture/implementation-design.md：第17.7节模型容量与Pi原生压缩、第17.9节增量验收",
+    "docs/execution/semantic-runtime/runtime-capacity.md：允许范围、非目标、三段检索、Worker恢复及SDK接入探针",
+    "docs/execution/semantic-runtime/coverage-and-validation.md：需求覆盖与证据边界",
+    "锁定Pi 1.3.0安装源码：coding-agent compaction.js的0.8R/0.5R摘要cap与原生保留边界；agent-core agent-loop.js的完整消息、工具执行及length处理"
+  ],
+  "independence": [
+    {
+      "scope": "模型容量公式、同源Schema、provider实际cap/超时/溢出、Pi原生压缩和legacy接入、管理UI",
+      "implementation_owner": "主实施者与接续前已有实现者",
+      "reviewer": "capacity_contract_review",
+      "result": "passed",
+      "note": "该审查者未负责相应产品实现；其自行编写的容量测试另由slow_retrieval_verification审查。"
+    },
+    {
+      "scope": "Worker恢复及错误分类、Rust实际输出cap预留、检索三段式、租约更新、legacy invoke_tool原话来源修复",
+      "implementation_owner": "主实施者与接续前已有实现者",
+      "reviewer": "slow_retrieval_verification",
+      "result": "passed"
+    },
+    {
+      "scope": "tests/mvp/check-slow-retrieval-lease.mjs",
+      "implementation_owner": "slow_retrieval_verification",
+      "reviewer": "capacity_contract_review",
+      "result": "passed",
+      "note": "作者对自己执行结果的说明不充当测试独立审查。"
+    },
+    {
+      "scope": "tests/mvp/check-worker-storage-recovery.mjs",
+      "implementation_owner": "worker_recovery_verification",
+      "reviewer": "slow_retrieval_verification、capacity_contract_review",
+      "result": "passed",
+      "note": "已复核defer分支隔离、claim/defer注入经过真实Err处理分支及对应精准日志断言；最新源码动态复跑由主流程承担。"
+    },
+    {
+      "scope": "tests/runtime/check-capacity-boundaries.mjs、tests/mvp/check-configured-compaction.mjs、tests/runtime/check-sdk-event-order.mjs、tests/runtime/model-protocol-fixture.mjs相关扩展",
+      "implementation_owner": "capacity_contract_review",
+      "reviewer": "slow_retrieval_verification",
+      "result": "passed",
+      "note": "依据正式公式、冻结限额与锁定SDK行为核对预期，未依据项目当前输出降低验收要求。"
+    }
+  ],
+  "assessments": [
+    {
+      "area": "容量与Pi复用",
+      "result": "passed",
+      "evidence": [
+        "packages/contracts/capacity.ts",
+        "packages/contracts/schema.json",
+        "crates/data-agent/src/modules/runtime/model_configuration/capacity.rs",
+        "apps/agent/session/capacity.ts",
+        "apps/agent/session/deliver.ts",
+        "apps/agent/provider/controlled.ts",
+        "apps/agent/provider/configured.ts",
+        "apps/agent/provider/endpoint.ts",
+        "apps/web/src/features/models/ModelConfigurationPage.tsx"
+      ],
+      "assessment": "新配置区分总窗口、输入、输出和UTF-8字节，按17.7公式及实际固定/保留超额校验；实际SDK摘要cap和reasoning保留，输出预留允许更小cap但不得超冻结上限。上下文整理、摘要、恢复仍由Pi执行。新超时随修订冻结，legacy限额不被重写，目录外型号不虚构1M窗口。"
+    },
+    {
+      "area": "锁外检索与最终核验",
+      "result": "passed",
+      "evidence": [
+        "crates/data-agent/src/use_cases/data_tools.rs",
+        "crates/data-agent/src/use_cases/knowledge.rs",
+        "crates/data-agent/src/modules/knowledge/store.rs",
+        "crates/data-agent/src/modules/assets/store.rs",
+        "crates/data-agent/src/use_cases/context_authority.rs"
+      ],
+      "assessment": "慢读取在会话锁外，最终事务重核运行、版本与权限；实际交付资产另沿asset_text_dependencies_in_tx及个人资产/知识引用链检查完整依赖。采用已确认的最终事务读取时点有效语义，未添加直到网络返回都禁止变更的额外锁。"
+    },
+    {
+      "area": "Worker、租约与模型账本",
+      "result": "passed",
+      "evidence": [
+        "apps/worker/src/main.rs",
+        "crates/data-agent/src/types/mod.rs",
+        "crates/data-agent/src/use_cases/deliver_run.rs",
+        "crates/data-agent/src/modules/jobs/store.rs",
+        "crates/data-agent/src/modules/conversations/store.rs",
+        "crates/data-agent/src/modules/runtime/model_calls/store.rs",
+        "apps/agent/transport/server.ts"
+      ],
+      "assessment": "临时存储故障不与普通业务unavailable混同；确定provider错误保持原分类并终结当前交付，收尾存储重试不重新派发。未知结算保留原调用/预算占用，晚到原ID结算可重放。续租检查当前owner、epoch和有效期，不复活已过期租约。"
+    },
+    {
+      "area": "legacy任务文字来源",
+      "result": "passed",
+      "evidence": [
+        "crates/data-agent/src/use_cases/invoke_tool.rs",
+        "crates/data-agent/src/use_cases/data_tools.rs",
+        "tests/runtime/check-runtime.mjs",
+        "tests/mvp/check-task-text-authority.mjs"
+      ],
+      "assessment": "存量legacy入口创建新任务时遗漏来源导致Snapshot隐藏goal。修正只豁免本run绑定的真实完整用户原话，与数据工具现有规则一致；模型改写、系统输入和历史NULL来源未放宽，原flow目标正文断言及历史NULL负控保留。"
+    },
+    {
+      "area": "测试断言与SDK后续接入",
+      "result": "passed",
+      "evidence": [
+        "tests/runtime/check-capacity-boundaries.mjs",
+        "tests/mvp/check-configured-compaction.mjs",
+        "tests/runtime/check-sdk-event-order.mjs",
+        "tests/mvp/check-slow-retrieval-lease.mjs",
+        "tests/mvp/check-worker-storage-recovery.mjs"
+      ],
+      "assessment": "容量测试核对独立公式及真实协议payload；split-turn场景逐字保留近期24条工具正文、三轮同session和原操作身份；SDK探针用显式写入闸门检查drain等待及混批/length/失败边界，仅证明后续定稿接入可行，不实现或宣称答案定稿已交付。慢检索与Worker故障断言检查真实租约、数据锁及持久状态，不以注入日志单独冒充恢复。"
+    }
+  ],
+  "resolved_findings": [
+    "legacy摘要cap被整档上限覆盖、摘要reasoning被覆盖和legacy keepRecent覆盖顺序已修正。",
+    "底层HTTP默认超时早于冻结600秒配置、Rust预留和共享usage旧上限未对应新能力已修正。",
+    "供应商上下文拒绝分类及Worker公开错误码丢失、暂态收尾处理已修正。",
+    "busy测试defer故障曾被启动失租路径提前消费，现拆分defer_lease并精确检查409回退。",
+    "claim/defer故障注入曾直接绕过实际Err处理，现统一进入相同错误处理分支；claim增加精确日志断言。",
+    "管理UI曾将未知DeepSeek型号套用1M初值，现只为已核实型号提供已知容量初值。",
+    "legacy任务新写入来源为NULL导致合法用户原话被隐藏，已按严格完整原话条件修复。"
+  ],
+  "findings": [],
+  "observed_evidence": [
+    {
+      "path": ".local/checks/mvp-slow-retrieval-lease.json",
+      "result": "串行原参数两场通过：8秒延迟跨2.4秒TTL、独立锁探针、单run续租、并发停用拒绝且无正文；后续租约修正的完整动态复验由主流程执行。"
+    },
+    {
+      "path": ".local/checks/mvp-worker-storage-recovery.json",
+      "result": "原四场报告中claim/context/renew、配置终态、未知结算证据已核对；旧busy注入路径证明不足，不单独作为其验收依据。"
+    },
+    {
+      "path": ".local/checks/mvp-worker-storage-recovery-busy.json",
+      "result": "独立selected_case报告证明实际gateway409及defer故障、原scope24、epoch恢复和同PID后续消息；不是完整四场重跑。"
+    },
+    {
+      "path": ".local/checks/mvp-9e7f54c6db650088/service-logs.json",
+      "result": "已只读核对run_started→phase=defer→delivery_defer_transient→下一epoch恢复；defer_lease未消费故障。"
+    },
+    {
+      "path": ".local/checks/mvp-configured-compaction.json",
+      "result": "实际Pi历史摘要cap35000、split-turn cap28192，三轮续接、旧工具身份及两类不可容纳拒绝通过；8次本地协议请求。"
+    },
+    {
+      "path": ".local/checks/sdk-event-order.json",
+      "result": "四组真实Pi事件与输出队列探针通过；使用临时文件输出适配器，无MySQL业务提交声明。"
+    },
+    {
+      "path": ".local/checks/runtime-capacity-regressions.log",
+      "result": "保留原--flow目标正文undefined失败；已从完整调用链定位legacy来源遗漏，不将旧失败报告改为通过。"
+    }
+  ],
+  "dynamic_validation": {
+    "status": "pending_final_increment_run",
+    "owner": "主流程",
+    "required_commands": [
+      [
+        "make",
+        "verify-runtime-capacity"
+      ],
+      [
+        "make",
+        "verify-retrieval-lease"
+      ],
+      [
+        "make",
+        "verify-worker-storage-recovery"
+      ],
+      [
+        "make",
+        "verify-compatible-restore"
+      ]
+    ],
+    "remaining": [
+      "在当前稳定源码上完成CURRENT绑定四组实际验收及相称广回归。",
+      "确认legacy --flow与task-text-authority负控仍通过。",
+      "verify-increment取得完整exit0和当前指纹收据后，才可关闭本增量；任何失败保留并修复，变更审查范围后重新绑定指纹。"
+    ],
+    "note": "本JSON不执行验收命令、不把历史专项通过替代最终运行结果。"
+  },
+  "limits": {
+    "official_provider_calls_for_this_review": 0,
+    "harnesses_started_for_final_review": 0,
+    "services_updated": false,
+    "commits_or_pushes": false,
+    "environment": "现有证据使用真实本地MySQL/API/Worker/Pi与合成平台、本地协议模型；SDK事件探针使用临时文件存储适配器。",
+    "not_proven": [
+      "真实模型回答质量与真实平台权限接入",
+      "云端600秒请求及8MiB网关接收能力",
+      "后续八个执行包或全部MVP完成",
+      "第07包答案显式定稿与Rust业务提交"
+    ],
+    "historical_failures": "慢检索首次并行短TTL失租、旧busy证据不足及legacy flow失败均保留，不改写原失败状态。",
+    "review_scope": "范围指纹绑定的是声明验收输入；审查结论限于本记录列明的增量改动及必要接缝，不冒称全仓所有代码已逐行审查。"
+  }
+}

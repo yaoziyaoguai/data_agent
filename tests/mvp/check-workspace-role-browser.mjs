@@ -1,3 +1,4 @@
+import {synchronizeSources} from './source-sync.mjs';
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
@@ -82,7 +83,7 @@ try {
       source_namespace: catalog.source_namespace,
       tables: catalog.tables.map(table => ({ ...table, platform_version: String(++version), maintainer_id: owner })),
     }));
-    await ok("/source-syncs", command());
+    assert.equal((await synchronizeSources(h)).value.status, 'completed');
   }
   await synchronize("bob");
   assert.deepEqual(await ok("/semantic-access", undefined, "bob"), { can_admin: false, can_create: true, highest_role: "maintainer" });

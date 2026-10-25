@@ -13,6 +13,13 @@ fn main() {
             let valid = contracts::validate(name, &value).is_ok();
             let roundtrip = if valid {
                 match name {
+                    "SourcePreparationResult" => serde_json::to_value(contracts::decode::<SourcePreparationResult>(name,value).expect("generated type")).expect("serialize"),
+                    "SemanticStatement" => serde_json::to_value(contracts::decode::<SemanticStatement>(name,value).expect("generated type")).expect("serialize"),
+                    "SourceKey" => serde_json::to_value(contracts::decode::<SourceKey>(name,value).expect("generated type")).expect("serialize"),
+                    "SourceLocator" => serde_json::to_value(contracts::decode::<SourceLocator>(name,value).expect("generated type")).expect("serialize"),
+                    "SourceCitation" => serde_json::to_value(contracts::decode::<SourceCitation>(name,value).expect("generated type")).expect("serialize"),
+                    "SourceExcerpt" => serde_json::to_value(contracts::decode::<SourceExcerpt>(name,value).expect("generated type")).expect("serialize"),
+
                     "PrepareSkillDraftInput" => serde_json::to_value(contracts::decode::<PrepareSkillDraftInput>(name,value).expect("generated type")).expect("serialize"),
                     "SkillDraftRef" => serde_json::to_value(contracts::decode::<SkillDraftRef>(name,value).expect("generated type")).expect("serialize"),
                     "SkillDraft" => serde_json::to_value(contracts::decode::<SkillDraft>(name,value).expect("generated type")).expect("serialize"),

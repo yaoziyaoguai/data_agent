@@ -1,4 +1,4 @@
-use serde_json::Value;
+use serde_json::{Value, json};
 use std::collections::HashMap;
 
 // 词法通道始终可用；正文序列化和词法计分每个对象只做一次。
@@ -37,18 +37,59 @@ pub fn rank(objects: Vec<Value>, query: &str, limit: usize) -> Vec<Value> {
         .collect()
 }
 
+// 执行包05初值：BM25/dense同权RRF k=60，精确ID优先。lexical_hits是BM25通道的
+// 有序命中（可用时）；为空（向量服务不可用的降级路径）时退回内存子串计分。
+pub(crate) const RRF_K: f64 = 60.;
+
+// 原文摘录的通道融合：通道序即相关性序（Milvus按通道metric返回有序命中，扩批
+// 合并保持主批在前），BM25/dense同权1/(60+rank)按摘录id累加。摘录没有精确ID
+// 优先概念（键即身份）；同文不同位置是不同id，保留为独立命中。
+pub(crate) fn rrf_merge_rows(dense: &[Value], lexical: &[Value]) -> Vec<Value> {
+    fn accumulate(rows: &[Value], entries: &mut Vec<(String, Value, f64)>) {
+        for (rank, row) in rows.iter().enumerate() {
+            let Some(id) = row["id"].as_str() else {
+                continue;
+            };
+            let contribution = 1. / (RRF_K + rank as f64);
+            match entries.iter_mut().find(|(seen, _, _)| seen == id) {
+                Some((_, _, score)) => *score += contribution,
+                None => entries.push((id.to_owned(), row.clone(), contribution)),
+            }
+        }
+    }
+    let mut entries: Vec<(String, Value, f64)> = Vec::new();
+    accumulate(lexical, &mut entries);
+    accumulate(dense, &mut entries);
+    entries.sort_by(|(a_id, _, a), (b_id, _, b)| b.total_cmp(a).then_with(|| a_id.cmp(b_id)));
+    entries
+        .into_iter()
+        .map(|(_, mut row, score)| {
+            row["score"] = json!(score);
+            row
+        })
+        .collect()
+}
+
 pub fn rank_hybrid(
     objects: Vec<Value>,
     query: &str,
     limit: usize,
+    lexical_hits: &[Value],
     vectors: &[Value],
 ) -> Vec<Value> {
     let tokens = tokens(query);
-    let mut lexical: Vec<_> = objects
-        .iter()
-        .map(|object| (object["id"].clone(), lexical_score(object, &tokens)))
-        .filter(|(_, score)| *score > 0)
-        .collect();
+    let mut lexical: Vec<_> = if lexical_hits.is_empty() {
+        objects
+            .iter()
+            .map(|object| (object["id"].clone(), lexical_score(object, &tokens)))
+            .filter(|(_, score)| *score > 0)
+            .collect()
+    } else {
+        lexical_hits
+            .iter()
+            .map(|hit| (hit["id"].clone(), 1))
+            .collect()
+    };
     lexical.sort_by_key(|(_, score)| std::cmp::Reverse(*score));
     let mut lexical_ranks = HashMap::new();
     for (rank, (id, _)) in lexical.into_iter().enumerate() {
@@ -71,10 +112,10 @@ pub fn rank_hybrid(
                     .is_some_and(|v| v.eq_ignore_ascii_case(query));
             let lexical = lexical_ranks
                 .get(&object["id"])
-                .map_or(0., |r| 1. / (20. + *r as f64));
+                .map_or(0., |r| 1. / (RRF_K + *r as f64));
             let vector = vector_ranks
                 .get(&(object["id"].clone(), object["version"].clone()))
-                .map_or(0., |r| 1. / (20. + *r as f64));
+                .map_or(0., |r| 1. / (RRF_K + *r as f64));
             let score = if exact { 100. } else { lexical + vector };
             (object, score)
         })
@@ -127,6 +168,7 @@ pub fn rank_hybrid(
     selected
 }
 mod excerpts;
+pub mod source_segments;
 pub use excerpts::{attach_lexical_matches, attach_matches};
 mod search_reply;
 pub use search_reply::{SEARCH_REPLY_LIMIT, bounded_search_reply, search_preview};
@@ -677,14 +719,14 @@ mod semantic_context_tests {
             );
         }
         for limit in [0, 1, 2, 3, 4, 6, 10] {
-            let ranked = rank_hybrid(objects.clone(), "sales refund", limit, &[]);
+            let ranked = rank_hybrid(objects.clone(), "sales refund", limit, &[], &[]);
             let protected = limit.min(3);
             assert_eq!(&ranked[..protected], &fields[..protected], "limit={limit}");
             assert!(ranked.len() <= limit);
         }
         objects.insert(0, fields[0].clone());
         assert_eq!(
-            &rank_hybrid(objects, "sales refund", 6, &[])[..3],
+            &rank_hybrid(objects, "sales refund", 6, &[], &[])[..3],
             &fields,
             "同一对象重复候选不能占用受保护的前三位置"
         );
@@ -716,11 +758,11 @@ mod semantic_context_tests {
                 .collect::<Vec<_>>()
         };
         assert_eq!(
-            ids(rank_hybrid(objects.clone(), "needle", 3, &vectors)),
+            ids(rank_hybrid(objects.clone(), "needle", 3, &[], &vectors)),
             ["exact", "only-vector", "table-b"]
         );
         assert_eq!(
-            ids(rank_hybrid(objects, "needle", 6, &vectors)),
+            ids(rank_hybrid(objects, "needle", 6, &[], &vectors)),
             [
                 "exact",
                 "only-vector",
@@ -736,7 +778,65 @@ mod semantic_context_tests {
             object("a", "needle", "metric"),
         ];
         assert_eq!(ids(rank(ties.clone(), "needle", 2)), ["z", "a"]);
-        assert_eq!(ids(rank_hybrid(ties, "needle", 2, &[])), ["a", "z"]);
+        assert_eq!(ids(rank_hybrid(ties, "needle", 2, &[], &[])), ["a", "z"]);
+    }
+
+    #[test]
+    fn bm25_channel_ranks_without_memory_scoring_and_rrf_uses_k60() {
+        // BM25通道可用时：命中按外部顺序参与RRF，未命中对象不得再靠内存子串计分混入。
+        let object = |id: &str, name: &str, kind: &str| json!({"id":id,"name":name,"kind":kind,"version":"1"});
+        let objects = vec![
+            object("bm-hit", "语义无关但BM25命中", "table"),
+            object("substring", "needle 子串", "table"),
+            object("both", "needle 双通道", "table"),
+        ];
+        let lexical_hits = vec![
+            json!({"id":"bm-hit","version":"1"}),
+            json!({"id":"both","version":"1"}),
+        ];
+        let dense = vec![json!({"id":"both","version":"1"})];
+        // RRF k=60：both = 2/(60+1)，bm-hit = 1/(60+1)；substring无BM25命中被内存回退
+        // 排除。精确名仍优先。
+        let ranked = rank_hybrid(objects, "查询", 3, &lexical_hits, &dense);
+        let ids: Vec<_> = ranked
+            .iter()
+            .map(|v| v["id"].as_str().unwrap().to_owned())
+            .collect();
+        assert_eq!(ids, ["both", "bm-hit"]);
+        let exact = rank_hybrid(
+            vec![
+                object("needle", "别名正文", "table"),
+                object("dense-only", "别名无关", "table"),
+            ],
+            "needle",
+            2,
+            &lexical_hits,
+            &dense,
+        );
+        assert_eq!(exact[0]["id"], "needle");
+    }
+
+    #[test]
+    fn excerpt_rows_rrf_merges_channels_and_keeps_positions_distinct() {
+        // 通道序即相关性序：双通道摘录 2/(60+1) 压过单通道首位 1/(60+1)；
+        // 同文不同位置（不同id）都保留，不会被来源id去重。
+        let row = |id: &str, source: &str, offset: u64| {
+            json!({"id":id,"source_kind":"platform","source_id":source,"revision":3,
+                "offset":offset,"length":120,"content_hash":"h"})
+        };
+        let lexical = vec![row("lex-only", "src", 0), row("both", "src", 120)];
+        let dense = vec![row("both", "src", 120), row("dense-only", "src", 960)];
+        let merged = rrf_merge_rows(&dense, &lexical);
+        let ids: Vec<_> = merged
+            .iter()
+            .map(|v| v["id"].as_str().unwrap().to_owned())
+            .collect();
+        assert_eq!(ids, ["both", "lex-only", "dense-only"]);
+        assert!(merged[0]["score"].as_f64().unwrap() > merged[1]["score"].as_f64().unwrap());
+        assert_eq!(merged.len(), 3);
+        // 一路为空时另一路独立成序，不产生额外加权。
+        let single = rrf_merge_rows(&[row("a", "src", 0), row("b", "src", 480)], &[]);
+        assert_eq!(single.len(), 2);
     }
 
     #[test]

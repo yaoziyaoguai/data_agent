@@ -172,6 +172,14 @@ pub fn objects(
     Ok(values)
 }
 
+const SOURCE_JSON_BYTES_LIMIT: usize = 8 * 1024 * 1024;
+const CATALOG_PAGE_BYTES_LIMIT: usize = 16 * 1024 * 1024;
+
+fn payload_limit(kind: &str, actual: u64, limit: usize) -> Error {
+    Error::new("payload_limit")
+        .with_message(format!("目录{kind}为{actual}字节，超过{limit}字节上限。"))
+}
+
 pub async fn fetch_page(cursor: Option<&str>, snapshot: Option<&str>) -> Result<Value> {
     let url =
         std::env::var("DATA_AGENT_PLATFORM_URL").map_err(|_| Error::new("source_unavailable"))?;
@@ -185,7 +193,7 @@ pub async fn fetch_page(cursor: Option<&str>, snapshot: Option<&str>) -> Result<
     }
     let token =
         std::env::var("DATA_AGENT_INTERNAL_TOKEN").map_err(|_| Error::new("source_unavailable"))?;
-    let response = reqwest::Client::builder()
+    let mut response = reqwest::Client::builder()
         .no_proxy()
         .redirect(reqwest::redirect::Policy::none())
         .timeout(std::time::Duration::from_secs(10))
@@ -200,21 +208,55 @@ pub async fn fetch_page(cursor: Option<&str>, snapshot: Option<&str>) -> Result<
         .send()
         .await
         .map_err(|_| Error::new("source_unavailable"))?;
-    if !response.status().is_success() {
+    let status = response.status();
+    if !status.is_success() && status != reqwest::StatusCode::PAYLOAD_TOO_LARGE {
         return Err(Error::new("source_unavailable"));
     }
-    if response.content_length().is_some_and(|v| v > 8_000_000) {
-        return Err(Error::new("payload_limit"));
+    if let Some(length) = response.content_length()
+        && length > CATALOG_PAGE_BYTES_LIMIT as u64
+    {
+        return Err(payload_limit("响应", length, CATALOG_PAGE_BYTES_LIMIT));
     }
-    let bytes = response
-        .bytes()
+    // Content-Length可能缺失；逐块核对实际响应字节，JSON排版空白也计入传输上限。
+    let mut bytes = Vec::new();
+    while let Some(chunk) = response
+        .chunk()
         .await
-        .map_err(|_| Error::new("source_unavailable"))?;
-    if bytes.len() > 8_000_000 {
-        return Err(Error::new("payload_limit"));
+        .map_err(|_| Error::new("source_unavailable"))?
+    {
+        let size = bytes.len().saturating_add(chunk.len());
+        if size > CATALOG_PAGE_BYTES_LIMIT {
+            return Err(payload_limit("响应", size as u64, CATALOG_PAGE_BYTES_LIMIT));
+        }
+        bytes.extend_from_slice(&chunk);
     }
     let value: Value = serde_json::from_slice(&bytes).map_err(|_| Error::new("invalid_input"))?;
+    if status == reqwest::StatusCode::PAYLOAD_TOO_LARGE {
+        return Err(if value["code"] == "payload_limit" {
+            Error::new("payload_limit").with_message(
+                value["message"]
+                    .as_str()
+                    .unwrap_or("平台目录超过资料传输上限。")
+                    .chars()
+                    .take(512)
+                    .collect(),
+            )
+        } else {
+            Error::new("source_unavailable")
+        });
+    }
     contracts::validate("CatalogPage", &value)?;
+    for table in value["tables"]
+        .as_array()
+        .expect("validated catalog tables")
+    {
+        let size = serde_json::to_vec(table)
+            .map_err(|_| Error::new("invalid_input"))?
+            .len();
+        if size > SOURCE_JSON_BYTES_LIMIT {
+            return Err(payload_limit("来源", size as u64, SOURCE_JSON_BYTES_LIMIT));
+        }
+    }
     Ok(value)
 }
 

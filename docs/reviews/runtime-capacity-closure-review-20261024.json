@@ -1,0 +1,237 @@
+{
+  "schema": 1,
+  "review_date": "2026-10-24",
+  "increment": "I2-RUNTIME-CAPACITY",
+  "base_commit": "fed8276577748c1f77c49c7c8ca2317408129ec3",
+  "reviewer": "独立审查子代理 runtime_closure_review；未参与本增量产品代码、契约或测试的实现，仅进行源码与要求核对、既有日志只读核对和无外部副作用的内存检查。本审查者唯一写入为本 JSON 记录。",
+  "conclusion": "passed",
+  "summary": "对 I2-RUNTIME-CAPACITY 的当前允许范围完成独立审查，核对容量与 Pi 原生接线、Worker 恢复与租约、慢检索提交边界、Skill 选择幂等和正文来源权限、测试接线及证据含义。审查发现的三项问题均已由主实施者修复，并经本审查者有界复查关闭：选择重放绕过当前正文来源权限、长调查夹具混算摘要与业务轮次、检索提交漏核结构依赖自己的来源。未留下本轮已确认的阻塞发现。passed 表示当前静态审查及下列专项证据核对通过，不表示本轮四组绑定验收已完成；主流程仍须实际执行 make verify-increment 并取得匹配当前范围的完整成功收据，之前 01 保持 active。",
+  "scope_sha256": "dd29b98d73e113adea3f9a2a6c32939e57b76867a43c5ac21d9149401af172a2",
+  "fingerprint": {
+    "method": "scripts/check_delivery.py 的 review_scope(root, read_delivery(root))；写入前现场计算，写入后再次核对并调用 verify_review。",
+    "contract_sha256": "45fd5d9c3cf93a4d64d4be3deea0fd0c58984a657324423257aaea98ab379248",
+    "decisions_sha256": "c6456f454f3efb5763440301d1ea3298c518024f0fede2cb6be7dd86fa103e3b",
+    "input_file_count": 377,
+    "meaning": "绑定 CURRENT 的增量合同、已确认决定、registry、AGENTS 及声明的 verification_inputs；排除审查指针和本记录。范围摘要不代表对 377 个文件逐行重新审计。"
+  },
+  "review_basis": [
+    "AGENTS.md：职责边界、来源保护、稳定操作身份、Pi 复用、独立审查与增量关闭规则",
+    "docs/CURRENT.md：当前 I2-RUNTIME-CAPACITY 声明及最新反例、修复与验收变更说明；历史完成说法不覆盖最新 active 状态",
+    "docs/execution/semantic-runtime/runtime-capacity.md：允许范围、不变量和必须证明的行为",
+    "docs/architecture/implementation-design.md：模块接口及第 17.7 节容量与 Pi 原生压缩合同",
+    "docs/semantic-retrieval-design.md：D03/D07/D08/D09、C01/C02/C05/C07、A02/A10 的原始要求与阶段映射",
+    "锁定的 @earendil-works/pi-coding-agent 1.3.0 安装源码：compaction、agent-session、会话与压缩设置接口",
+    "scripts/check_delivery.py：review_scope、verify_review 及最终增量验收顺序"
+  ],
+  "requirement_coverage": [
+    {
+      "requirements": ["D03", "C01"],
+      "reviewed_behavior": "沿用同一 Pi 会话、原生压缩与检查点恢复；容量配置和固定开销预检不另建摘要器或 Agent 循环。旧 profile 与未完成消息保留原冻结限制。"
+    },
+    {
+      "requirements": ["D07", "C07"],
+      "reviewed_behavior": "Rust、Node/Pi、Worker 的职责与错误边界保持；容量字段同源生成和运行时校验，Rust/TS 公式消费共享向量，新增测试已接入实际 Make 目标。"
+    },
+    {
+      "requirements": ["D08", "C05"],
+      "reviewed_behavior": "Worker 对已分类临时存储错误有界恢复，启动准备与正常运行续租衔接；取消、容量、额度与未知错误保持区别，原运行与操作身份不因恢复补额或重复副作用。"
+    },
+    {
+      "requirements": ["D09", "A10"],
+      "reviewed_behavior": "慢检索和 Skill 选择的外部来源检查移出会话锁；最终短事务按原锁接口重核运行、状态、版本和实际依赖来源，同一会话仍串行。"
+    },
+    {
+      "requirements": ["C02", "A02"],
+      "reviewed_behavior": "成功操作接回原回执不重做选择；回执正文仍按当前来源权限投影。旧来源失效不能经成功重放恢复正文，人工正文的显式依赖变更不被误作重执行原操作的理由。"
+    }
+  ],
+  "assessments": [
+    {
+      "area": "容量合同与边界",
+      "result": "passed",
+      "code": [
+        "packages/contracts/capacity.ts",
+        "crates/data-agent/src/modules/runtime/model_configuration/capacity.rs",
+        "tests/contracts/capacity-vectors.json",
+        "apps/api/src/routes.rs",
+        "apps/web/src/features/models/ModelConfigurationPage.tsx"
+      ],
+      "detail": "逐项核对 B/H/R/T/K/S1/S2 公式、严格不等式、可行数值范围及 schema 输入域。1M/900000/65536 得到 R=120000、T=880000、K=65536；I=O=65536 的反例拒绝。Rust/TS 共用容量向量；API 复用既有错误 message，UI 展示数值范围。管理页完整浏览器验收仍属于最终 gate。"
+    },
+    {
+      "area": "Pi、provider 与请求预算",
+      "result": "passed",
+      "code": [
+        "apps/agent/session/capacity.ts",
+        "apps/agent/session/deliver.ts",
+        "apps/agent/session/request-size.ts",
+        "apps/agent/session/resources.ts",
+        "apps/agent/provider/controlled.ts",
+        "apps/agent/provider/configured.ts",
+        "apps/agent/provider/endpoint.ts",
+        "apps/agent/transport/server.ts"
+      ],
+      "detail": "固定开销 F 使用 Pi estimateTokens 的字符估算，完整 JSON UTF-8 字节限制独立检查；普通及摘要实际输出 cap 取 SDK、冻结 profile 和已知端点的较小值并用于 reserve。摘要输入也受守卫。SettingsManager、SessionManager、native compact 与 session_before_compact 用于设置和保留消息边界，没有复制第二套 Agent 循环或压缩器。超时配置沿 AbortSignal 和 Undici 边界传递；本地协议证据不代表真实 600 秒端点能力。"
+    },
+    {
+      "area": "Worker、租约与失败分类",
+      "result": "passed",
+      "code": [
+        "apps/worker/src/main.rs",
+        "crates/data-agent/src/use_cases/deliver_run.rs",
+        "crates/data-agent/src/modules/jobs/mod.rs",
+        "crates/data-agent/src/modules/jobs/store.rs",
+        "crates/data-agent/src/modules/conversations/store.rs",
+        "crates/data-agent/src/types/mod.rs"
+      ],
+      "detail": "核对存储临时错误的分类与有限重试、终态收尾、未知与取消区别。新增准备阶段 job 心跳续原 owner/epoch，renew_claim 保留状态、原代次与未过期守卫；run 建立后交回原会话心跳，未用新运行掩盖失效。相关 Rust 单测与实际恢复脚本已接入 verify-worker-storage-recovery，最终整组运行待主流程。"
+    },
+    {
+      "area": "慢工作、幂等和来源有效性",
+      "result": "passed",
+      "code": [
+        "crates/data-agent/src/use_cases/data_tools.rs",
+        "crates/data-agent/src/use_cases/invoke_tool.rs",
+        "crates/data-agent/src/use_cases/knowledge.rs",
+        "crates/data-agent/src/use_cases/personal_assets.rs",
+        "crates/data-agent/src/modules/assets/store.rs"
+      ],
+      "detail": "核对登记/锁外读取/最终短事务三段边界与稳定操作身份。检索提交重核顶层版本、结构依赖及传递来源；Skill 选择最终优先接回已成功回执，再传播锁外校验错误，避免并发成功被外部失败覆盖。回执正文在事务提交后按当前来源投影，不重新激活或重复选择。"
+    },
+    {
+      "area": "测试与退出清理",
+      "result": "passed",
+      "code": [
+        "tests/mvp/check-skill-selection-locks.mjs",
+        "tests/mvp/check-slow-retrieval-lease.mjs",
+        "tests/mvp/check-worker-run-deadline.mjs",
+        "tests/mvp/harness.mjs",
+        "tests/runtime/check-harness-cleanup.mjs",
+        "Makefile"
+      ],
+      "detail": "锁探针使用独立 MySQL 客户端及真实 FOR UPDATE；保留原 TTL、等待时长、代次、无重复与无混合正文断言。长运行摘要分支不消耗普通轮次，增加实际工具账本 1 次 route 和 11 次 read。SIGTERM/SIGINT 清理仅覆盖本次测试拥有的资源并保留非零退出；不据此推断 SIGKILL、系统崩溃或初始化完成前都能清理。"
+    }
+  ],
+  "resolved_findings": [
+    {
+      "id": "selection-replay-text-authority",
+      "priority": 1,
+      "location": "crates/data-agent/src/use_cases/personal_assets.rs::select",
+      "problem": "两个成功选择回执分支直接返回完整历史 Asset，绕过当前来源权限；来源查询结果过期后仍可经同操作重放取得旧正文。",
+      "resolution": "两条回执分支均先提交事务，再复用 project_receipt 核原版本字段来源并投影；失效时隐藏正文等来源内容，保留控制身份。checked_assets 的错误延后到最终幂等回执重核之后传播。",
+      "verification": "已逐分支核对代码。RED 在 text_unavailable 断言得到 undefined；GREEN 五场通过，过期 mock 返回 result_expired 后正文和 files 为空、id 不变、选择行仍为 1。既有 maintenance-replay 六场保持通过。",
+      "evidence": [
+        ".local/checks/selection-replay-authority-red.log",
+        ".local/checks/selection-replay-authority-green.log",
+        ".local/checks/maintenance-replay-selection.log"
+      ],
+      "acceptance_change": "移除本轮误设的成功重放零外部来源检查断言，恢复架构既有的控制回执与正文权限分开校验合同；未放宽人工正文/显式依赖改版后的幂等要求。",
+      "status": "resolved"
+    },
+    {
+      "id": "long-run-summary-counts",
+      "priority": 2,
+      "location": "tests/mvp/check-worker-run-deadline.mjs",
+      "problem": "原 fixture 将摘要计入普通 calls，并在递增前后分别计数和选择响应；无摘要时第 13 次答案被计成工具，早期摘要会错误获得 tool_call。历史偶然通过不能证明固定 12 次工具及 1 次答案。",
+      "resolution": "摘要、工具和答复分支独立；摘要返回合法文本且不推进工具轮次，普通调用前 12 次返回工具，之后返回答案。新增真实 tool_calls 账本数量、状态和工具名称断言。",
+      "verification": "独立内存检查直接抽取当前 fixture 的实际分支，在 0 摘要、摘要插入第 0/5/12 位及 2 摘要的五种安排下均得到 12 工具和 1 答案，摘要无 tool_call。主流程 GREEN 为 80.686 秒、14 总调用=12 工具+1 摘要+1 答案、单 run、实际工具账本和全部模型账本结算通过。",
+      "evidence": [
+        "tests/mvp/check-worker-run-deadline.mjs",
+        ".local/checks/worker-deadline-counts-green.log"
+      ],
+      "acceptance_change": "修正 fixture 计数和响应错误；保留 5.2 秒请求延迟、超过 60 秒、同 run、摘要不超过 2 次、原预算与全部结算，未降低业务预期。",
+      "status": "resolved"
+    },
+    {
+      "id": "retrieval-structural-source-freshness",
+      "priority": 2,
+      "location": "crates/data-agent/src/use_cases/knowledge.rs::assert_search_fresh_in_tx",
+      "problem": "最终提交只核结构依赖对象的版本/状态，来源核验仅作用于顶层命中；依赖对象自己的原文改版而知识版本未变时，会先保存 succeeded 的旧结构回执，下一次模型发送才以 stale_context 终止运行。",
+      "resolution": "最终提交对实际 structure_dependencies 复用 check_refs_in_tx；其内部逐依赖核版本和来源，并展开传递结构依赖。来源冲突现在在搜索边界返回 stale_knowledge。",
+      "verification": "新增 relationship 单命中 limit=1 反例，在 stage_ready 且回执仍为 registered 时只推进依赖表 source_head。RED 服务日志明确 bridge/worker stale_context，租约仍有效；GREEN 保留原两场并新增来源改版场，三场各只一 run、两条工具记录，冲突回执 rejected/stale_knowledge 且正文标记不进回执或消息。",
+      "evidence": [
+        ".local/checks/retrieval-dependency-source-red.log",
+        ".local/checks/retrieval-dependency-source-red.json",
+        ".local/checks/mvp-dbd1a52a4346c551/service-logs.json",
+        ".local/checks/retrieval-dependency-source-green.log"
+      ],
+      "impact_boundary": "此项为搜索提交边界与失败恢复缺陷；后续 context_authority/model_calls 已会拦截失效来源，未将其描述为已证实的模型外发泄露。",
+      "status": "resolved"
+    }
+  ],
+  "unresolved_findings": [],
+  "observed_evidence": [
+    {
+      "path": ".local/checks/runtime-closure-code.log",
+      "kind": "主流程执行，审查者完整只读核对",
+      "result": "544 个共享合同正反例通过；cargo fmt、clippy、TypeScript、Web build 完成；模块依赖/SQL位置/表归属检查、7 个架构测试及 runtime locking 通过。"
+    },
+    {
+      "path": ".local/checks/retrieval-dependency-source-green.log",
+      "kind": "主流程执行的本地 API/Pi bridge/Worker/MySQL 与协议模型专项",
+      "result": "原 2400ms 租约及 8000ms 锁外延迟，三场实际搜索约 8630/8618/8304ms；锁探针成功，租约分别推进 3240/3233/3237ms，各 1 run/2 tools；共 9 次本地协议请求，官方请求 0。"
+    },
+    {
+      "path": ".local/checks/worker-deadline-counts-green.log",
+      "kind": "主流程执行，审查者核对当前 fixture 与结果",
+      "result": "80.686 秒、单 run、14 次模型调用=12 次工具+1 次原生摘要+1 次答复，工具与模型账本检查通过；官方请求 0。"
+    },
+    {
+      "path": ".local/checks/selection-replay-authority-green.log",
+      "kind": "主流程执行的本地 HTTP/MySQL 并发与来源反例",
+      "result": "五场通过：锁外来源等待、并发幂等、启动跨 TTL 续租、消息/资产变更重核、过期来源的重放正文隐藏。对应 RED 已核对。"
+    },
+    {
+      "path": ".local/checks/startup-lease-red.log",
+      "kind": "修复前反例，不能作为当前验收",
+      "result": "平台来源校验等待 3.2 秒后，2400ms 启动 job 租约 valid=false，epoch=1、attempts=0；证明准备阶段确有租约空档。对应修复后行为已由选择 GREEN 覆盖。"
+    },
+    {
+      "path": ".local/checks/maintenance-replay-selection.log",
+      "kind": "主流程专项回归，审查者只读核对",
+      "result": "六场通过，包含依赖改版/停用后人工 memory/Skill 原成功回执仍幂等接回，新操作继续校验并回滚。"
+    },
+    {
+      "path": ".local/checks/capacity-ranges-rust.log",
+      "kind": "主流程专项单测，最终 Make 组仍待执行",
+      "result": "五项 Rust 容量测试通过，包含共享向量与数值可行范围。已静态核对与 TypeScript 共享 JSON 输入及最终 Make 接线。"
+    },
+    {
+      "path": ".local/checks/harness-cleanup-green.log",
+      "kind": "主流程本地信号清理专项",
+      "result": "启动完成后的 SIGTERM/SIGINT 分别保留 143/130 退出并清理自身测试库与子进程；不扩展为 SIGKILL 或初始化前资源的保证。"
+    },
+    {
+      "path": ".local/checks/runtime-architecture-render.log",
+      "kind": "主流程文档与渲染验证",
+      "result": "12 模块、31 图完成核验，无页面错误或移动端整体横向溢出；该证据仅证明文档和渲染，不证明产品行为。"
+    }
+  ],
+  "dynamic_validation": {
+    "status": "final_bound_acceptance_pending",
+    "owner": "主流程",
+    "required_entrypoint": ["make", "verify-increment"],
+    "bound_command_groups": [
+      ["make", "verify-runtime-capacity"],
+      ["make", "verify-retrieval-lease"],
+      ["make", "verify-worker-storage-recovery"],
+      ["make", "verify-compatible-restore"]
+    ],
+    "note": "本审查者未启动数据库 harness 或运行四组验收。上述专项日志分别证明对应行为；历史四组通过记录及旧审查指纹不替代本轮最终执行。make verify-increment 仍需实际完成全部绑定命令并生成匹配当前内容的成功收据，失败、超时或过期均不能关闭增量。"
+  },
+  "limits": {
+    "official_provider_calls_by_reviewer": 0,
+    "database_harnesses_started_by_reviewer": 0,
+    "product_or_test_edits_by_reviewer": false,
+    "commits_or_pushes": false,
+    "services_updated_by_reviewer": false,
+    "files_written_by_reviewer": ["docs/reviews/runtime-capacity-closure-review-20261024.json"],
+    "not_proven": [
+      "真实模型回答质量、完整 MVP 和真实平台权限接入",
+      "真实云端首事件等待 600 秒与 8MiB 网关接收能力；该项留待后续获准样本",
+      "未执行的本轮四组最终验收、管理页完整浏览器验收和最终增量收据",
+      "同一 D/C/A 要求在本增量范围以外的其余阶段实现"
+    ],
+    "superseded_evidence": "此前 runtime-capacity-implementation-review 记录仅用于历史定位和格式参考，本结论未继承其 passed，也未将其中遗漏的发现保留为当前通过依据。"
+  }
+}

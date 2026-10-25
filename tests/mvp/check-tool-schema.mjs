@@ -18,6 +18,7 @@ const contracts = {
   get_query: "GetQueryInput",
   cancel_query: "ReadQueryInput",
   save_analysis_evidence: "SaveAnalysisEvidenceInput",
+  present_analysis_answer: "PresentAnalysisAnswerInput",
   save_analysis_report: "SaveAnalysisReportInput",
   read_analysis_report: "ReadAnalysisReportInput",
   manage_personal_asset: "AssetToolInput",

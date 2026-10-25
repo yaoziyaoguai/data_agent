@@ -27,7 +27,7 @@ pub async fn candidates_scoped_in_tx(
         return Ok(vec![]);
     }
     let mut sql = sqlx::QueryBuilder::<sqlx::MySql>::new(
-        "SELECT r.object_id FROM retrieval_documents AS r FORCE INDEX(PRIMARY) WHERE r.space_id=",
+        "SELECT r.object_id, SUM(INSTR(LOWER(CAST(r.body AS CHAR)),?)>0) AS term_hits FROM retrieval_documents AS r FORCE INDEX(PRIMARY) WHERE r.space_id=",
     );
     sql.push_bind(space).push(" AND (");
     let mut clauses = sql.separated(" OR ");
@@ -44,10 +44,11 @@ pub async fn candidates_scoped_in_tx(
         "JSON_UNQUOTE(JSON_EXTRACT(r.body,'$.kind'))",
         "r.body",
     );
-    sql.push(" ORDER BY r.object_id LIMIT 1001");
-    let rows: Vec<String> = sql.build_query_scalar().fetch_all(tx.connection()).await?;
+    // 候选先按词命中相关性排序，再按ID稳定去尾；禁止数据库ID序take(1000)再评分。
+    sql.push(" GROUP BY r.object_id ORDER BY term_hits DESC, r.object_id LIMIT 1000");
+    let rows: Vec<(String, i64)> = sql.build_query_as().fetch_all(tx.connection()).await?;
     Ok(rows
         .into_iter()
-        .map(|id| serde_json::json!({"id":id}))
+        .map(|(id, hits)| serde_json::json!({"id":id,"term_hits":hits}))
         .collect())
 }

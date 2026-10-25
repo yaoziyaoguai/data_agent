@@ -2324,7 +2324,7 @@
       "call_attempt_id": "call-test",
       "parameters_fingerprint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
       "input_tokens_upper": 4096,
-      "output_tokens_max": 131073
+      "output_tokens_max": 393217
     },
     "valid": false
   },
@@ -9621,7 +9621,10 @@
       "output_rate": "4000000",
       "enabled": true,
       "expected_version": "0",
-      "reasoning_supported": true
+      "reasoning_supported": true,
+      "context_window": 160000,
+      "request_timeout_ms": 90000,
+      "capability_source": "admin_declared"
     },
     "valid": true,
     "roundtrip": true
@@ -10086,5 +10089,722 @@
       ]
     },
     "valid": false
+  },
+  {
+    "name": "ReserveModelCall accepts configured maximum output",
+    "schema": "ReserveModelCall",
+    "value": {
+      "run_id": "run-test",
+      "lease_epoch": "1",
+      "call_attempt_id": "call-test",
+      "parameters_fingerprint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "input_tokens_upper": 4096,
+      "output_tokens_max": 393216
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "ModelUsage accepts configured maximum output and long request settlement",
+    "schema": "ModelUsage",
+    "valid": true,
+    "roundtrip": true,
+    "value": {
+      "input_tokens": 900000,
+      "output_tokens": 393216,
+      "elapsed_ms": 600001
+    }
+  },
+  {
+    "name": "ModelUsage rejects output above configured maximum",
+    "schema": "ModelUsage",
+    "valid": false,
+    "value": {
+      "input_tokens": 1,
+      "output_tokens": 393217,
+      "elapsed_ms": 1
+    }
+  },
+  {
+    "name": "source citation binds revision and Unicode position",
+    "schema": "SourceCitation",
+    "value": {
+      "source": {
+        "kind": "platform",
+        "id": "source-example"
+      },
+      "revision": "7",
+      "locator": {
+        "offset": 1,
+        "length": 4,
+        "heading_path": [
+          "字段解释"
+        ]
+      }
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "source locator rejects alternative byte units",
+    "schema": "SourceLocator",
+    "value": {
+      "offset": 1,
+      "length": 4,
+      "unit": "bytes"
+    },
+    "valid": false
+  },
+  {
+    "name": "source excerpt carries revision and unicode location",
+    "schema": "SourceExcerpt",
+    "value": {
+      "citation": {
+        "source": {
+          "kind": "document",
+          "id": "voice-glossary"
+        },
+        "revision": "4",
+        "locator": {
+          "offset": 3,
+          "length": 4
+        }
+      },
+      "content": "语🧪é"
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "semantic statement keeps exact source and embedded exception",
+    "schema": "SemanticStatement",
+    "value": {
+      "statement_id": "statement-voice-rate",
+      "object_ref": {
+        "object_id": "metric-voice-rate",
+        "version": "3",
+        "path": "definition"
+      },
+      "text": "识别率分母排除取消请求。",
+      "scope_text": "仅正式座舱语音链路；首次有效识别。",
+      "origin": "model_inference",
+      "citations": [
+        {
+          "source": {
+            "kind": "document",
+            "id": "voice-guide"
+          },
+          "revision": "2",
+          "locator": {
+            "offset": 160000,
+            "length": 12
+          }
+        }
+      ],
+      "supports": [
+        {
+          "support_id": "support-cancel",
+          "role": "exception",
+          "reference": {
+            "kind": "source",
+            "citation": {
+              "source": {
+                "kind": "document",
+                "id": "voice-guide"
+              },
+              "revision": "2",
+              "locator": {
+                "offset": 160000,
+                "length": 12
+              }
+            }
+          },
+          "content": "识别率分母排除取消请求。",
+          "embedded_in": {
+            "field": "text",
+            "locator": {
+              "offset": 0,
+              "length": 12
+            }
+          }
+        }
+      ]
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "prepared batch carries target and exact evidence",
+    "schema": "SourcePreparationResult",
+    "value": {
+      "statements": [
+        {
+          "text": "识别率分母排除取消请求。",
+          "scope_text": "仅正式座舱语音链路；首次有效识别。",
+          "citations": [
+            {
+              "source": {
+                "kind": "document",
+                "id": "voice-guide"
+              },
+              "revision": "2",
+              "locator": {
+                "offset": 160000,
+                "length": 12
+              }
+            }
+          ],
+          "supports": [
+            {
+              "role": "exception",
+              "reference": {
+                "kind": "source",
+                "citation": {
+                  "source": {
+                    "kind": "document",
+                    "id": "voice-guide"
+                  },
+                  "revision": "2",
+                  "locator": {
+                    "offset": 160000,
+                    "length": 12
+                  }
+                }
+              },
+              "content": "识别率分母排除取消请求。",
+              "embedded_in": {
+                "field": "text",
+                "locator": {
+                  "offset": 0,
+                  "length": 12
+                }
+              },
+              "key": "cancelled-requests"
+            }
+          ],
+          "key": "recognition-rate",
+          "target": {
+            "object_id": "metric-voice-rate",
+            "version": "3",
+            "path": "definition"
+          }
+        }
+      ],
+      "relations": [],
+      "unresolved": [],
+      "semantic_status": "ready"
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "model cannot declare human origin in preparation",
+    "schema": "SourcePreparationResult",
+    "value": {
+      "statements": [
+        {
+          "text": "识别率分母排除取消请求。",
+          "scope_text": "仅正式座舱语音链路；首次有效识别。",
+          "citations": [
+            {
+              "source": {
+                "kind": "document",
+                "id": "voice-guide"
+              },
+              "revision": "2",
+              "locator": {
+                "offset": 160000,
+                "length": 12
+              }
+            }
+          ],
+          "supports": [
+            {
+              "role": "exception",
+              "reference": {
+                "kind": "source",
+                "citation": {
+                  "source": {
+                    "kind": "document",
+                    "id": "voice-guide"
+                  },
+                  "revision": "2",
+                  "locator": {
+                    "offset": 160000,
+                    "length": 12
+                  }
+                }
+              },
+              "content": "识别率分母排除取消请求。",
+              "embedded_in": {
+                "field": "text",
+                "locator": {
+                  "offset": 0,
+                  "length": 12
+                }
+              },
+              "key": "cancelled-requests"
+            }
+          ],
+          "key": "recognition-rate",
+          "target": {
+            "object_id": "metric-voice-rate",
+            "version": "3",
+            "path": "definition"
+          },
+          "origin": "human"
+        }
+      ],
+      "relations": [],
+      "unresolved": [],
+      "semantic_status": "ready"
+    },
+    "valid": false
+  },
+  {
+    "name": "query example computed metrics declare actual sql outputs",
+    "schema": "SemanticStructure",
+    "valid": true,
+    "roundtrip": true,
+    "value": {
+      "kind": "query_example",
+      "applicable_question": "按门店汇总合成退款金额",
+      "parameters": [],
+      "sql": "SELECT store_id, SUM(refund_amount) AS refund_total FROM demo_refund_detail GROUP BY store_id",
+      "grain": "每门店一行；退款金额汇总",
+      "dependencies": [
+        {
+          "object_id": "table-demo_refund_detail",
+          "version": "3",
+          "path": "ddl"
+        },
+        {
+          "object_id": "metric-refund-amount",
+          "version": "1",
+          "path": "body"
+        }
+      ],
+      "computed_metrics": [
+        {
+          "metric_ref": {
+            "object_id": "metric-refund-amount",
+            "version": "1",
+            "path": "body"
+          },
+          "output_name": "refund_total",
+          "expression": "SUM(refund_amount) 按门店汇总"
+        }
+      ],
+      "verification": null
+    }
+  },
+  {
+    "name": "query example computed metric without output name is invalid",
+    "schema": "SemanticStructure",
+    "valid": false,
+    "value": {
+      "kind": "query_example",
+      "applicable_question": "按门店汇总合成退款金额",
+      "parameters": [],
+      "sql": "SELECT store_id, SUM(refund_amount) AS refund_total FROM demo_refund_detail GROUP BY store_id",
+      "grain": "每门店一行；退款金额汇总",
+      "dependencies": [
+        {
+          "object_id": "table-demo_refund_detail",
+          "version": "3",
+          "path": "ddl"
+        }
+      ],
+      "computed_metrics": [
+        {
+          "metric_ref": {
+            "object_id": "metric-refund-amount",
+            "version": "1",
+            "path": "body"
+          },
+          "expression": "SUM(refund_amount) 按门店汇总"
+        }
+      ],
+      "verification": null
+    }
+  },
+  {
+    "name": "query example computed metrics null is invalid while omission stays valid",
+    "schema": "SemanticStructure",
+    "valid": false,
+    "value": {
+      "kind": "query_example",
+      "applicable_question": "按标签统计合成商品行数",
+      "parameters": [],
+      "sql": "SELECT COUNT(*) FROM demo_order_detail",
+      "grain": "单行汇总；商品行数",
+      "dependencies": [
+        {
+          "object_id": "table-demo_order_detail",
+          "version": "1",
+          "path": "ddl"
+        }
+      ],
+      "computed_metrics": null,
+      "verification": null
+    }
+  },
+  {
+    "name": "explicit decision carries host-bound adoption identity",
+    "schema": "QuerySemanticResolution",
+    "value": {
+      "interpretation": "按订单计数，时间归属为支付日",
+      "basis": "explicit_user",
+      "user_quote": "按订单数算，时间用支付日。",
+      "unresolved_differences": [],
+      "adoption_message_id": "00000000-0000-0000-0000-000000000001"
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "explicit decision adoption identity must be a string or null",
+    "schema": "QuerySemanticResolution",
+    "value": {
+      "interpretation": "按订单计数，时间归属为支付日",
+      "basis": "explicit_user",
+      "user_quote": "按订单数算，时间用支付日。",
+      "unresolved_differences": [],
+      "adoption_message_id": 123
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "unambiguous decision carries no adoption identity",
+    "schema": "QuerySemanticResolution",
+    "value": {
+      "interpretation": "按订单计数",
+      "basis": "unambiguous",
+      "user_quote": null,
+      "unresolved_differences": [],
+      "adoption_message_id": null
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "unambiguous decision cannot claim adoption identity",
+    "schema": "QuerySemanticResolution",
+    "value": {
+      "interpretation": "按订单计数",
+      "basis": "unambiguous",
+      "user_quote": null,
+      "unresolved_differences": [],
+      "adoption_message_id": "00000000-0000-0000-0000-000000000001"
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "source limits require non-empty allowed set",
+    "schema": "SourceLimits",
+    "value": {
+      "allowed_sources": [
+        {
+          "kind": "document",
+          "id": "doc-1"
+        }
+      ],
+      "origin_message_ids": [
+        "00000000-0000-0000-0000-000000000002"
+      ]
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "empty allowed set is not a restriction",
+    "schema": "SourceLimits",
+    "value": {
+      "allowed_sources": [],
+      "origin_message_ids": [
+        "00000000-0000-0000-0000-000000000002"
+      ]
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "source limits need host-bound origin messages",
+    "schema": "SourceLimits",
+    "value": {
+      "allowed_sources": [
+        {
+          "kind": "platform",
+          "id": "orders"
+        }
+      ]
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "observation cutoff carries timezone value",
+    "schema": "TimeRole",
+    "value": {
+      "role": "observation_cutoff",
+      "description": "数据观察截点",
+      "field_ref": null,
+      "value": "2026-10-01T00:00:00+08:00",
+      "evidence_refs": []
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "observation cutoff without timezone is ambiguous",
+    "schema": "TimeRole",
+    "value": {
+      "role": "observation_cutoff",
+      "description": "数据观察截点",
+      "field_ref": null,
+      "value": "2026-10-01T00:00:00",
+      "evidence_refs": []
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "observation cutoff cannot be blank",
+    "schema": "TimeRole",
+    "value": {
+      "role": "observation_cutoff",
+      "description": "数据观察截点",
+      "field_ref": null,
+      "value": null,
+      "evidence_refs": []
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "data batch carries batch value",
+    "schema": "TimeRole",
+    "value": {
+      "role": "data_batch",
+      "description": "月度批次",
+      "field_ref": null,
+      "value": "2026-09-batch-2",
+      "evidence_refs": []
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "data batch cannot omit its value",
+    "schema": "TimeRole",
+    "value": {
+      "role": "data_batch",
+      "description": "月度批次",
+      "field_ref": null,
+      "value": null,
+      "evidence_refs": []
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "event time may omit value while keeping interval fields",
+    "schema": "TimeRole",
+    "value": {
+      "role": "event_time",
+      "description": "按支付完成时间统计",
+      "field_ref": "orders.completed_at",
+      "value": null,
+      "evidence_refs": []
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "time role kinds are fixed",
+    "schema": "TimeRole",
+    "value": {
+      "role": "request_clock",
+      "description": "请求时钟",
+      "field_ref": null,
+      "value": null,
+      "evidence_refs": []
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "query carries the projected time basis",
+    "schema": "QueryView",
+    "valid": true,
+    "roundtrip": true,
+    "value": {
+      "id": "query-source",
+      "conversation_id": "conversation-source",
+      "task_id": "task-source",
+      "condition_version": "1",
+      "draft_version": "1",
+      "target_id": "synthetic-sqlite",
+      "confirmation_state": "awaiting_confirmation",
+      "execution_state": "not_submitted",
+      "cancel_state": "none",
+      "result_ref": null,
+      "check_state": "passed",
+      "error": null,
+      "sql": "SELECT 1",
+      "parameters": {},
+      "summary": "合成查询",
+      "knowledge_refs": [],
+      "time_basis": {
+        "time_start": null,
+        "time_end": null,
+        "timezone": "UTC",
+        "time_roles": [
+          {
+            "role": "observation_cutoff",
+            "description": "按用户口径",
+            "field_ref": null,
+            "value": "2026-10-01T00:00:00+08:00",
+            "evidence_refs": []
+          }
+        ]
+      }
+    }
+  },
+  {
+    "name": "query time basis stays optional for old drafts",
+    "schema": "QueryView",
+    "valid": true,
+    "roundtrip": true,
+    "value": {
+      "id": "query-source",
+      "conversation_id": "conversation-source",
+      "task_id": "task-source",
+      "condition_version": "1",
+      "draft_version": "1",
+      "target_id": "synthetic-sqlite",
+      "confirmation_state": "awaiting_confirmation",
+      "execution_state": "not_submitted",
+      "cancel_state": "none",
+      "result_ref": null,
+      "check_state": "passed",
+      "error": null,
+      "sql": "SELECT 1",
+      "parameters": {},
+      "summary": "合成查询",
+      "knowledge_refs": [],
+      "time_basis": null
+    }
+  },
+  {
+    "name": "observation cutoff must carry a timezone offset",
+    "schema": "TimeRole",
+    "valid": false,
+    "roundtrip": false,
+    "value": {
+      "role": "observation_cutoff",
+      "description": "按用户口径",
+      "field_ref": null,
+      "value": "2026-10-01T00:00:00",
+      "evidence_refs": []
+    }
+  },
+  {
+    "name": "data batch value cannot be blank",
+    "schema": "TimeRole",
+    "valid": false,
+    "roundtrip": false,
+    "value": {
+      "role": "data_batch",
+      "description": "上游批次",
+      "field_ref": "batch_id",
+      "value": " ",
+      "evidence_refs": []
+    }
+  },
+  {
+    "name": "condition set registers declared time roles",
+    "schema": "ConditionSet",
+    "valid": true,
+    "roundtrip": true,
+    "value": {
+      "timezone": "UTC",
+      "time_roles": [
+        {
+          "role": "data_batch",
+          "description": "上游批次",
+          "field_ref": "batch_id",
+          "value": "2026-09",
+          "evidence_refs": []
+        }
+      ]
+    }
+  },
+  {
+    "name": "answer binding selects a declared cutoff by field ref",
+    "schema": "AnalysisAnswerValue",
+    "valid": true,
+    "roundtrip": true,
+    "value": {
+      "name": "cutoff",
+      "query_id": "query-source",
+      "kind": "observation_cutoff",
+      "field_ref": "etl_cutoff"
+    }
+  },
+  {
+    "name": "answer binding kind cannot be an invented time role",
+    "schema": "AnalysisAnswerValue",
+    "valid": false,
+    "roundtrip": false,
+    "value": {
+      "name": "clock",
+      "query_id": "query-source",
+      "kind": "event_time"
+    }
+  },
+  {
+    "name": "explicit user adoption may omit host-bound identity",
+    "schema": "QuerySemanticResolution",
+    "value": {
+      "interpretation": "按用户明确的单位统计",
+      "basis": "explicit_user",
+      "user_quote": "按元统计",
+      "unresolved_differences": [],
+      "adoption_message_id": null,
+      "evidence_refs": []
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "explicit user adoption copies a verified identity",
+    "schema": "QuerySemanticResolution",
+    "value": {
+      "interpretation": "按用户明确的单位统计",
+      "basis": "explicit_user",
+      "user_quote": "按元统计",
+      "unresolved_differences": [],
+      "adoption_message_id": "m-verified-1",
+      "evidence_refs": []
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "blank adoption identity is not a copy",
+    "schema": "QuerySemanticResolution",
+    "value": {
+      "interpretation": "按用户明确的单位统计",
+      "basis": "explicit_user",
+      "user_quote": "按元统计",
+      "unresolved_differences": [],
+      "adoption_message_id": " ",
+      "evidence_refs": []
+    },
+    "valid": false,
+    "roundtrip": false
   }
 ]

@@ -1,3 +1,4 @@
+import {synchronizeSources} from './source-sync.mjs';
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
@@ -12,7 +13,7 @@ const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
 let passed = false;
 const checks = [];
 try {
-  const sync = await h.request("/source-syncs", { operation_id: randomUUID() });
+  const sync = await synchronizeSources(h);assert.equal(sync.value.status,'completed');
   assert.equal(sync.status, 200, JSON.stringify(sync.value));
   const target = h.sql(
     "SELECT body FROM knowledge_objects WHERE kind='table' AND name='demo_order_detail' AND source_id LIKE 'catalog-%'",
@@ -237,10 +238,7 @@ try {
       ],
     }),
   );
-  assert.equal(
-    (await h.request("/source-syncs", { operation_id: randomUUID() })).status,
-    200,
-  );
+  assert.equal((await synchronizeSources(h)).value.status, 'completed');
   const ungrouped = (
     await h.request("/knowledge?directory=all&state=enabled&q=selection_scope")
   ).value;

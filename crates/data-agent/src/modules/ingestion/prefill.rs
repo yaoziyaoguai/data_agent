@@ -4,8 +4,9 @@ use serde_json::{Value, json};
 // 维护允许较长的完整结构输出；阶段领取额外留出结算和版本复核时间。
 pub const REQUEST_TIMEOUT_SECONDS: u64 = 300;
 pub const PHASE_LEASE_SECONDS: u64 = REQUEST_TIMEOUT_SECONDS + 60;
+pub const TEST_LEASE_SECONDS: u64 = 6;
 
-pub(super) fn timing() -> Result<(std::time::Duration, u64)> {
+pub fn timing() -> Result<(std::time::Duration, u64)> {
     let timeout = std::time::Duration::from_secs(REQUEST_TIMEOUT_SECONDS);
     let Some(raw) = std::env::var("DATA_AGENT_PREFILL_TIMEOUT_MS").ok() else {
         return Ok((timeout, PHASE_LEASE_SECONDS));
@@ -25,9 +26,11 @@ pub(super) fn timing() -> Result<(std::time::Duration, u64)> {
     if !(50..=5000).contains(&milliseconds) {
         return Err(Error::new("invalid_input"));
     }
+    // 租约覆盖材料收集、两次调用与结算的整段处理，与HTTP超时值无关；短超时回环
+    // 测试同样保持足够租约，过期路径由测试显式改写issued_until制造。
     Ok((
         std::time::Duration::from_millis(milliseconds),
-        milliseconds.div_ceil(1000) + 1,
+        TEST_LEASE_SECONDS,
     ))
 }
 
@@ -342,18 +345,60 @@ pub fn validate_result(input: &Value, output: &Value) -> Result<Value> {
 
 pub struct PreparedPrefill {
     request: reqwest::RequestBuilder,
+    submission_tool: &'static str,
+}
+
+// 预填与来源整理共用的维护模型配置：同一冻结profile、端点授权与预算账本。
+pub fn maintenance_profile() -> Result<crate::contracts::generated::ModelProfile> {
+    let raw = std::env::var("DATA_AGENT_PREFILL_PROFILE")
+        .map_err(|_| Error::new("budget_unavailable"))?;
+    let configuration = serde_json::from_str(&raw).map_err(|_| Error::new("invalid_input"))?;
+    crate::contracts::decode::<crate::contracts::generated::ModelProfile>(
+        "ModelProfile",
+        configuration,
+    )
 }
 
 fn prefill_parameters() -> Result<Value> {
-    let mut parameters = crate::contracts::schema_definition("PrefillResult")?.clone();
-    // 发送单一工具Schema时附带它实际引用的定义，避免向模型发送未解析的本地引用。
-    parameters["$defs"] = json!({
-        "SemanticStructure":crate::contracts::schema_definition("SemanticStructure")?,
-        "SemanticTableRef":crate::contracts::schema_definition("SemanticTableRef")?,
-        "QueryExampleParameter":crate::contracts::schema_definition("QueryExampleParameter")?,
-        "EvidenceRef":crate::contracts::schema_definition("EvidenceRef")?,
-        "QueryExampleVerification":crate::contracts::schema_definition("QueryExampleVerification")?,
-    });
+    submission_parameters("PrefillResult")
+}
+
+pub fn submission_parameters(name: &str) -> Result<Value> {
+    fn references(value: &Value, names: &mut Vec<String>) {
+        match value {
+            Value::Object(fields) => {
+                if let Some(name) = fields
+                    .get("$ref")
+                    .and_then(Value::as_str)
+                    .and_then(|v| v.strip_prefix("#/$defs/"))
+                {
+                    names.push(name.to_owned());
+                }
+                for value in fields.values() {
+                    references(value, names);
+                }
+            }
+            Value::Array(items) => {
+                for value in items {
+                    references(value, names);
+                }
+            }
+            _ => {}
+        }
+    }
+    let mut parameters = crate::contracts::schema_definition(name)?.clone();
+    let mut pending = Vec::new();
+    let mut definitions = serde_json::Map::new();
+    references(&parameters, &mut pending);
+    while let Some(name) = pending.pop() {
+        if definitions.contains_key(&name) {
+            continue;
+        }
+        let definition = crate::contracts::schema_definition(&name)?.clone();
+        references(&definition, &mut pending);
+        definitions.insert(name, definition);
+    }
+    parameters["$defs"] = Value::Object(definitions);
     Ok(parameters)
 }
 
@@ -410,20 +455,6 @@ fn prepare_stage(
     profile: &crate::contracts::generated::ModelProfile,
     draft: Option<&Value>,
 ) -> Result<PreparedPrefill> {
-    let url =
-        std::env::var("DATA_AGENT_PREFILL_URL").map_err(|_| Error::new("budget_unavailable"))?;
-    let parsed = reqwest::Url::parse(&url).map_err(|_| Error::new("invalid_input"))?;
-    let local = std::env::var("DATA_AGENT_PREFILL_TEST").as_deref() == Ok("1")
-        && parsed.scheme() == "http"
-        && parsed.host_str() == Some("127.0.0.1");
-    if !local && (parsed.scheme() != "https" || parsed.host_str() != Some("api.deepseek.com")) {
-        return Err(Error::new("invalid_input"));
-    }
-    let key = if local {
-        "synthetic-protocol-key".to_owned()
-    } else {
-        std::env::var("DEEPSEEK_API_KEY").map_err(|_| Error::new("budget_unavailable"))?
-    };
     let object = &input["object"];
     let entries: Vec<_> = object["entries"].as_array().into_iter().flatten().filter(|entry| is_semantic_entry(entry)).map(|entry| {
         json!({"entry_id":entry["entry_id"],"path":entry["path"],"label":entry["label"]})
@@ -510,13 +541,44 @@ fn prepare_stage(
     } else {
         instructions
     };
+    prepare_submission(
+        profile,
+        &instructions,
+        &material,
+        "submit_semantic_prefill",
+        prefill_parameters()?,
+    )
+}
+
+// 预填与来源整理共用端点验证、冻结配置、超时、容量及回执解析。
+pub fn prepare_submission(
+    profile: &crate::contracts::generated::ModelProfile,
+    instructions: &str,
+    material: &Value,
+    submission_tool: &'static str,
+    parameters: Value,
+) -> Result<PreparedPrefill> {
+    let url =
+        std::env::var("DATA_AGENT_PREFILL_URL").map_err(|_| Error::new("budget_unavailable"))?;
+    let parsed = reqwest::Url::parse(&url).map_err(|_| Error::new("invalid_input"))?;
+    let local = std::env::var("DATA_AGENT_PREFILL_TEST").as_deref() == Ok("1")
+        && parsed.scheme() == "http"
+        && parsed.host_str() == Some("127.0.0.1");
+    if !local && (parsed.scheme() != "https" || parsed.host_str() != Some("api.deepseek.com")) {
+        return Err(Error::new("invalid_input"));
+    }
+    let key = if local {
+        "synthetic-protocol-key".to_owned()
+    } else {
+        std::env::var("DEEPSEEK_API_KEY").map_err(|_| Error::new("budget_unavailable"))?
+    };
     let thinking = profile
         .thinking_level
         .as_ref()
         .is_some_and(|v| !matches!(v, crate::contracts::generated::ThinkingLevel::Off));
     // 原生工具携带同源结构约束；这里只接收建议，不执行模型声明的业务副作用。
     // DeepSeek思考模式只允许auto，关闭思考时才可指定唯一提交工具。
-    let mut request = json!({"model":profile.model_id,"thinking":{"type":if thinking{"enabled"}else{"disabled"}},"stream":false,"max_tokens":profile.output_limit,"tools":[{"type":"function","function":{"name":"submit_semantic_prefill","description":"提交所有待分析语义条目的说明、实际缺口及逐字来源引用。","parameters":prefill_parameters()?}}],"tool_choice":if thinking{json!("auto")}else{json!({"type":"function","function":{"name":"submit_semantic_prefill"}})},"messages":[{"role":"system","content":instructions},{"role":"user","content":serde_json::to_string(&material).map_err(|_|Error::new("invalid_input"))?}]});
+    let mut request = json!({"model":profile.model_id,"thinking":{"type":if thinking{"enabled"}else{"disabled"}},"stream":false,"max_tokens":profile.output_limit,"tools":[{"type":"function","function":{"name":submission_tool,"description":"提交所有待分析语义条目的说明、实际缺口及逐字来源引用。","parameters":parameters}}],"tool_choice":if thinking{json!("auto")}else{json!({"type":"function","function":{"name":submission_tool}})},"messages":[{"role":"system","content":instructions},{"role":"user","content":serde_json::to_string(&material).map_err(|_|Error::new("invalid_input"))?}]});
     if let Some(level) = profile.thinking_level.as_ref()
         && !matches!(level, crate::contracts::generated::ThinkingLevel::Off)
     {
@@ -539,7 +601,10 @@ fn prepare_stage(
         .post(url)
         .bearer_auth(key)
         .json(&request);
-    Ok(PreparedPrefill { request })
+    Ok(PreparedPrefill {
+        request,
+        submission_tool,
+    })
 }
 
 impl PreparedPrefill {
@@ -557,12 +622,17 @@ impl PreparedPrefill {
             .await
             .map_err(|_| Error::new("model_unknown"))?;
         let usage = data["usage"].clone();
-        let output = decode_completion(&data["choices"][0]);
+        let output = decode_completion_for(&data["choices"][0], self.submission_tool);
         Ok((output, usage))
     }
 }
 
+#[cfg(test)]
 fn decode_completion(choice: &Value) -> Value {
+    decode_completion_for(choice, "submit_semantic_prefill")
+}
+
+fn decode_completion_for(choice: &Value, submission_tool: &str) -> Value {
     let calls = choice["message"]["tool_calls"].as_array();
     let finish_reason = choice["finish_reason"].as_str();
     let content = calls
@@ -575,7 +645,7 @@ fn decode_completion(choice: &Value) -> Value {
     if let Some(calls) = calls
         && calls.len() == 1
         && calls[0]["type"] == "function"
-        && calls[0]["function"]["name"] == "submit_semantic_prefill"
+        && calls[0]["function"]["name"] == submission_tool
         && finish_reason == Some("tool_calls")
     {
         return decode_response(content, finish_reason);

@@ -10,7 +10,6 @@ import {harness} from './harness.mjs';
 const checks=[];
 for(const oversized of [false,true]){
 const profile={provider_id:'deepseek',model_id:'deepseek-flash',trial_id:randomUUID(),price_version:'2026-10-04-peak-usd',input_limit:32768,output_limit:8192,trial_call_limit:24,trial_cost_micros:'300000',request_call_limit:12,toolset:'data',payload_bytes_limit:131072,thinking_level:'high'};
-const h=await harness({capture:true,profile,env:{DATA_AGENT_LEASE_MS:'120000'}});
 let step=0,summaries=0,run;const ids=[],bodies=[],payloadBytes=[];
 const sdkIds=()=>['context-task',...ids.map((_,index)=>'context-read-'+index)];
 const verifyResults=(tools,calls)=>{
@@ -48,8 +47,10 @@ const provider=createServer(async(req,res)=>{
   res.write('data: '+JSON.stringify({id:'large-context',choices:[{index:0,delta,finish_reason:tool?'tool_calls':'stop'}]})+'\n\n');
   res.write('data: '+JSON.stringify({choices:[],usage:{prompt_tokens:1000,completion_tokens:100,total_tokens:1100}})+'\n\n');res.end('data: [DONE]\n\n');
 });await new Promise(resolve=>provider.listen(0,'127.0.0.1',resolve));
-const keys=['DEEPSEEK_API_KEY','DEEPSEEK_BASE_URL','DATA_AGENT_PROVIDER_TEST'];const previous=Object.fromEntries(keys.map(key=>[key,process.env[key]]));
-Object.assign(process.env,{DEEPSEEK_API_KEY:'synthetic-protocol-key',DEEPSEEK_BASE_URL:'http://127.0.0.1:'+provider.address().port,DATA_AGENT_PROVIDER_TEST:'1'});
+// 模型配置由API侧种子服务持有合成凭据，deliver经/internal/model/connection取回连接；不靠测试进程环境变量。
+const h=await harness({capture:true,profile,protocolProviderUrl:'http://127.0.0.1:'+provider.address().port,env:{DATA_AGENT_LEASE_MS:'120000'}});
+// 合成凭据与端点由API侧种子持有；协议测试标记由本进程读取（configured路径凭它放行loopback端点）。
+const previousProviderTest=process.env.DATA_AGENT_PROVIDER_TEST;process.env.DATA_AGENT_PROVIDER_TEST='1';
 try{
   for(let index=0;index<(oversized?6:2);index++){
     const full=('合成长文内容'+String.fromCharCode(0x4e00+index)).repeat(2000);bodies.push(full.slice(0,8192));
@@ -91,7 +92,7 @@ try{
   assert.ok(attempts.every(a=>a.run===run.run_id&&a.scope===run.budget_scope_id&&a.chain===run.recovery_chain_id&&a.state==='settled'));
   checks.push({name:oversized?'六份8192字正文原生压缩后仍超128KiB：有限失败、0正式答复、完整工具组与原身份保留、超限请求未发送':'两份8192字正文真实溢出后原生压缩续答：逐字正文及SDK配对完整、一次续答、原操作不重复',payloadBytes,summaries,calls:ledger.calls,settledAttempts:attempts.length});
 }finally{
-  for(const[key,value]of Object.entries(previous)){if(value===undefined)delete process.env[key];else process.env[key]=value;}
+  if(previousProviderTest===undefined)delete process.env.DATA_AGENT_PROVIDER_TEST;else process.env.DATA_AGENT_PROVIDER_TEST=previousProviderTest;
   await h.close();await new Promise(resolve=>provider.close(resolve));
 }
 }

@@ -22,6 +22,17 @@ SOURCE_FILES = BUSINESS_SOURCE_FILES + ('knowledge-manifest.json',)
 PLATFORM_SOURCE_VERSION = '2'
 # 旧三文件协议只有这一固定快照；迁移不能借新元信息改写其历史含义。
 LEGACY_SNAPSHOT_EXCLUSIVE = '2026-02-04T00:00:00Z'
+SOURCE_JSON_BYTES_LIMIT = 8 * 1024 * 1024
+CATALOG_PAGE_BYTES_LIMIT = 16 * 1024 * 1024
+
+
+def json_bytes(value):
+    return json.dumps(value, ensure_ascii=False, separators=(',', ':')).encode('utf-8')
+
+
+class CatalogPayloadLimit(ValueError):
+    def __init__(self, scope, actual, limit):
+        super().__init__(f'目录{scope}为{actual}字节，超过{limit}字节上限。')
 
 
 class SourceVersionConflict(RuntimeError):
@@ -236,9 +247,23 @@ class Platform:
         if cursor is None: offset=0
         elif isinstance(cursor,str) and cursor.startswith(snapshot+':') and cursor[len(snapshot)+1:].isdigit(): offset=int(cursor[len(snapshot)+1:])
         else: raise ValueError('invalid_input')
-        tables=catalog['tables']; page=tables[offset:offset+limit]; end=offset+len(page)
+        tables=catalog['tables']
         if offset>len(tables): raise ValueError('invalid_input')
-        return {'schema_version':1,'source_namespace':catalog['source_namespace'],'snapshot_id':snapshot,'tables':page,'next_cursor':snapshot+':'+str(end) if end<len(tables) else None,'complete':end==len(tables),'authoritative':catalog.get('authoritative',True)}
+        def reply(entries):
+            end=offset+len(entries)
+            return {'schema_version':1,'source_namespace':catalog['source_namespace'],'snapshot_id':snapshot,'tables':entries,'next_cursor':snapshot+':'+str(end) if end<len(tables) else None,'complete':end==len(tables),'authoritative':catalog.get('authoritative',True)}
+        page=[]
+        for table in tables[offset:offset+limit]:
+            size=len(json_bytes(table))
+            if size>SOURCE_JSON_BYTES_LIMIT:
+                raise CatalogPayloadLimit('来源',size,SOURCE_JSON_BYTES_LIMIT)
+            candidate=page+[table]
+            size=len(json_bytes(reply(candidate)))
+            if size>CATALOG_PAGE_BYTES_LIMIT:
+                if not page: raise CatalogPayloadLimit('页',size,CATALOG_PAGE_BYTES_LIMIT)
+                break
+            page=candidate
+        return reply(page)
     def compile(self, payload):
         self.require_sources()
         sql=payload.get('sql',''); params=payload.get('parameters',{})
@@ -319,7 +344,7 @@ class Platform:
 class Handler(BaseHTTPRequestHandler):
     def log_message(self,*_args): pass
     def send(self,status,value):
-        body=json.dumps(value,ensure_ascii=False).encode(); self.send_response(status); self.send_header('Content-Type','application/json'); self.send_header('Content-Length',str(len(body))); self.end_headers(); self.wfile.write(body)
+        body=json_bytes(value); self.send_response(status); self.send_header('Content-Type','application/json'); self.send_header('Content-Length',str(len(body))); self.end_headers(); self.wfile.write(body)
     def do_GET(self):
         self.send(200,{'state':'healthy','source':'mock'}) if self.path=='/health' else self.send(404,{'code':'not_available'})
     def do_POST(self):
@@ -329,6 +354,7 @@ class Handler(BaseHTTPRequestHandler):
             if size<2 or size>131072: raise ValueError('invalid_input')
             data=json.loads(self.rfile.read(size)); result=self.server.platform.operate(self.path,data); self.send(200,result)
         except SourceVersionConflict as error: self.send(409,{'code':'version_conflict','message':str(error)})
+        except CatalogPayloadLimit as error: self.send(413,{'code':'payload_limit','message':str(error)})
         except ValueError as e: self.send(409,{'code':str(e) if str(e) in {'forbidden','invalid_input','sql_not_supported','idempotency_conflict','outcome_unknown','not_available','result_expired','result_unavailable','version_conflict'} else 'invalid_input'})
         except (sqlite3.Error,OSError): self.send(503,{'code':'upstream_failed'})
 

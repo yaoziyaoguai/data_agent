@@ -1,3 +1,4 @@
+import {synchronizeSources} from './source-sync.mjs';
 import {navigateWorkspace, logoutWorkspace} from './experience-navigation.mjs';
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
@@ -48,10 +49,7 @@ try {
         })),
       }),
     );
-    assert.equal(
-      (await h.request("/source-syncs", { operation_id: randomUUID() })).status,
-      200,
-    );
+    assert.equal((await synchronizeSources(h)).value.status, 'completed');
   };
   await sync();
   await login("bob");

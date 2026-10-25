@@ -41,7 +41,7 @@ async fn configuration_is_scoped_and_frozen_service_remains_authoritative() {
             .unwrap()
             .is_empty()
     );
-    let model = json!({"id":"shared-model","service_id":"shared-id","model_id":"synthetic/model","label":"Synthetic model","thinking_levels":["off"],"reasoning_supported":false,"default_thinking":"off","input_limit":128000,"output_limit":16000,"payload_bytes_limit":262144,"input_rate":"1000000","output_rate":"4000000","enabled":true,"expected_version":"0"});
+    let model = json!({"id":"shared-model","service_id":"shared-id","model_id":"synthetic/model","label":"Synthetic model","thinking_levels":["off"],"reasoning_supported":false,"default_thinking":"off","context_window":160000,"input_limit":128000,"output_limit":16000,"payload_bytes_limit":262144,"request_timeout_ms":90000,"capability_source":"admin_declared","input_rate":"1000000","output_rate":"4000000","enabled":true,"expected_version":"0"});
     assert_eq!(
         save(b.clone(), "model", model.clone())
             .await
@@ -188,6 +188,10 @@ async fn configuration_is_scoped_and_frozen_service_remains_authoritative() {
     rebound.as_object_mut().unwrap().remove("version");
     rebound["expected_version"] = json!("1");
     rebound["service_id"] = json!("shared-id");
+    // 旧配置改绑保存须按新契约补齐容量声明；沿用原I/O能力作为管理员补全后的声明值。
+    rebound["context_window"] = json!(65536);
+    rebound["request_timeout_ms"] = json!(90000);
+    rebound["capability_source"] = json!("admin_declared");
     save(seeded.clone(), "model", rebound).await.unwrap();
     deployment["expected_version"] = json!("2");
     deployment["enabled"] = json!(false);

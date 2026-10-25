@@ -168,6 +168,29 @@ pub async fn source(
     Query(query): Query<HashMap<String, String>>,
 ) -> ResponseResult {
     let ctx = user(&state, &headers).map_err(failure)?;
+    if query.contains_key("offset") || query.contains_key("length") {
+        let position = |name: &str| {
+            query
+                .get(name)
+                .and_then(|value| value.parse::<u64>().ok())
+                .ok_or_else(|| failure(Error::new("invalid_input")))
+        };
+        let revision = query
+            .get("version")
+            .ok_or_else(|| failure(Error::new("invalid_input")))?;
+        let (kind, id) = source
+            .strip_prefix("document-")
+            .map(|id| ("document", id))
+            .unwrap_or(("platform", &source));
+        let citation = json!({"source":{"kind":kind,"id":id},"revision":revision,
+            "locator":{"offset":position("offset")?,"length":position("length")?}});
+        return success(
+            "SourceExcerpt",
+            use_cases::knowledge::source_excerpt(&state.pool, &ctx, citation)
+                .await
+                .map_err(failure)?,
+        );
+    }
     let v = if let Some(v) = query.get("version") {
         use_cases::knowledge::source(&state.pool, &ctx, &source, epoch(v).map_err(failure)?).await
     } else {
@@ -180,18 +203,34 @@ pub async fn sync(
     AxumState(state): AxumState<State>,
     headers: HeaderMap,
     Json(input): Json<Value>,
-) -> ResponseResult {
+) -> Result<axum::response::Response, (StatusCode, Json<Value>)> {
     let ctx = user(&state, &headers).map_err(failure)?;
     data_agent::contracts::validate("CreateConversation", &input).map_err(failure)?;
+    let result = use_cases::knowledge::sync(
+        &state.pool,
+        &ctx,
+        input["operation_id"].as_str().unwrap_or(""),
+    )
+    .await
+    .map_err(failure)?;
+    let (status, schema) = if result.get("sync_id").is_some() {
+        (StatusCode::ACCEPTED, "SourceSyncAccepted")
+    } else {
+        (StatusCode::OK, "MutationReceipt")
+    };
+    Ok((status, success(schema, result)?).into_response())
+}
+pub async fn sync_progress(
+    AxumState(state): AxumState<State>,
+    headers: HeaderMap,
+    Path(sync): Path<String>,
+) -> ResponseResult {
+    let ctx = user(&state, &headers).map_err(failure)?;
     success(
-        "MutationReceipt",
-        use_cases::knowledge::sync(
-            &state.pool,
-            &ctx,
-            input["operation_id"].as_str().unwrap_or(""),
-        )
-        .await
-        .map_err(failure)?,
+        "SourceSyncProgress",
+        use_cases::catalog_import::progress(&state.pool, &ctx, &sync)
+            .await
+            .map_err(failure)?,
     )
 }
 pub async fn rebuild_index(

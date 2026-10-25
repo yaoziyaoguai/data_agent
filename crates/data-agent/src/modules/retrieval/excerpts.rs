@@ -8,11 +8,15 @@ pub fn attach_matches(space: &str, object: &mut Value, candidate: &Value) {
     }
     let mut excerpts = Vec::new();
     let mut legacy_locations = None;
+    // 带完整位置但回源核验失败=索引滞后于当前正文：如实报告，不冒充命中也不静默丢弃。
+    let mut lagged_hits = 0u32;
     for hit in candidate["matches"].as_array().into_iter().flatten() {
-        let hit = if ["entry_id", "offset", "length", "content_hash"]
+        let located_hit = ["entry_id", "offset", "length", "content_hash"]
             .iter()
-            .all(|key| hit[*key].is_null())
-        {
+            .any(|key| !hit[*key].is_null());
+        let hit = if located_hit {
+            hit
+        } else {
             let locations = legacy_locations
                 .get_or_insert_with(|| super::vector::fragment_locations(space, object));
             let Some(location) = hit["fragment_id"].as_str().and_then(|id| locations.get(id))
@@ -20,10 +24,11 @@ pub fn attach_matches(space: &str, object: &mut Value, candidate: &Value) {
                 continue;
             };
             location
-        } else {
-            hit
         };
         let Some(excerpt) = checked_excerpt(object, hit) else {
+            if located_hit {
+                lagged_hits += 1;
+            }
             continue;
         };
         if !excerpts.contains(&excerpt) {
@@ -52,12 +57,17 @@ pub fn attach_matches(space: &str, object: &mut Value, candidate: &Value) {
         }
     }
     let located = !selected.is_empty();
+    let lagged = located && lagged_hits > 0;
     object["retrieval"] = json!({
         "channel":"vector",
-        "state":if located {"located"} else {"unlocated"},
+        "state":if located { if lagged {"index_lag"} else {"located"} } else { "unlocated" },
         "excerpts":selected,
         "note":if located {
-            "片段来自当前有权读取的正式正文，只覆盖命中范围。使用本对象id/version与片段entry_id，通过read_knowledge从offset=0分页读取完整条目，再核对结论。"
+            if lagged {
+                "片段来自当前有权读取的正式正文，只覆盖命中范围；另有索引命中与当前正文不一致，已按index_lag舍弃，须read_knowledge核对最新原文。"
+            } else {
+                "片段来自当前有权读取的正式正文，只覆盖命中范围。使用本对象id/version与片段entry_id，通过read_knowledge从offset=0分页读取完整条目，再核对结论。"
+            }
         } else {
             "向量命中缺少可核验的位置，目录开头不是命中片段。请用本对象id/version通过read_knowledge补读全文；需受控重建索引后才能补齐位置，本次未自动重建。"
         }
@@ -256,6 +266,33 @@ mod tests {
         let mut other_space = base;
         attach_matches("other", &mut other_space, &candidate);
         assert_eq!(other_space["retrieval"]["state"], "unlocated");
+    }
+
+    #[test]
+    fn stale_index_hits_report_index_lag_instead_of_silent_drop() {
+        // 索引记录的位置与hash来自旧正文：一条仍可回源、一条已过期——命中保留可回源
+        // 片段并如实报告index_lag，不让滞后命中冒充当前原文，也不静默丢弃。
+        let prefix = "背景资料".repeat(80);
+        let mut object = json!({"id":"manual","version":"5","entries":[
+            {"entry_id":"rule","path":"rule","effective_value":format!("{prefix}超过校准期限必须停用。")},
+            {"entry_id":"old","path":"old","effective_value":"已修订的旧条目"}]});
+        let candidate = json!({"id":"manual","version":"5","matches":[
+            hit("rule", prefix.chars().count(), "超过校准期限必须停用。"),
+            {"entry_id":"old","offset":0,"length":8,"content_hash":"stale-hash"}]});
+        attach_matches("demo", &mut object, &candidate);
+        assert_eq!(object["retrieval"]["state"], "index_lag");
+        assert_eq!(object["retrieval"]["excerpts"].as_array().unwrap().len(), 1);
+        crate::contracts::validate("KnowledgeRetrieval", &object["retrieval"]).unwrap();
+        // 全部命中滞后时保持unlocated（无可回源片段，不编造位置）。
+        let mut object2 = json!({"id":"manual","version":"5","entries":[
+            {"entry_id":"old","path":"old","effective_value":"已修订的旧条目"}]});
+        attach_matches(
+            "demo",
+            &mut object2,
+            &json!({"id":"manual","version":"5","matches":[
+            {"entry_id":"old","offset":0,"length":8,"content_hash":"stale-hash"}]}),
+        );
+        assert_eq!(object2["retrieval"]["state"], "unlocated");
     }
 
     #[test]

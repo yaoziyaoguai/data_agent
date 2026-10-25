@@ -1,3 +1,4 @@
+import {synchronizeSources} from './source-sync.mjs';
 import assert from 'node:assert/strict';
 import {readFile,writeFile,mkdir,stat} from 'node:fs/promises';
 import {createHash,randomBytes,randomUUID} from 'node:crypto';
@@ -56,7 +57,7 @@ if(process.argv.includes('--audit')){
   report.representative=representative[0];
   const tables=[...targets.map(([id,text])=>table(id,text)),...topics.map((text,i)=>table('synthetic_distractor_'+i,text))];
   await writeFile(h.directory+'/platform/catalog.json',JSON.stringify({source_namespace:'synthetic-shared-sample',authoritative:true,tables}));
-  assert.equal((await h.request('/source-syncs',{operation_id:randomUUID()})).status,200);
+  assert.equal((await synchronizeSources(h)).value.status, 'completed');
   await h.resumeWorker();
   await until(async()=>{
    const rows=h.sql("SELECT JSON_OBJECT('state',vector_state,'error',vector_error) FROM knowledge_index_jobs WHERE vector_state<>'indexed'");

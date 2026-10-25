@@ -14,10 +14,11 @@ use sqlx::MySqlPool;
 pub enum Binding<'a> {
     Tool(&'a Value),
     Index(&'a Value, usize),
+    RawIndex(&'a str, u64, String),
     Browse,
 }
 
-fn maintenance_profile() -> Result<Option<Value>> {
+pub(crate) fn maintenance_profile() -> Result<Option<Value>> {
     let Some(raw) = std::env::var("DATA_AGENT_EMBEDDING_PROFILE").ok() else {
         return Ok(None);
     };
@@ -82,6 +83,30 @@ async fn authorize_in_tx(
                     profile,
                 )?,
                 tool.operation_id,
+            ))
+        }
+        Binding::RawIndex(source, revision, texts_fingerprint) => {
+            // 原文索引不依赖知识对象；预算与幂等身份按来源修订+批次文本指纹绑定：
+            // 同修订同批重试指纹一致（回放共享缓存不重发计费），切块顺序变化或
+            // 幂等跳批也不会让不同文本共用同一操作身份。
+            let raw = maintenance_profile()?.ok_or(Error::new("budget_unavailable"))?;
+            let profile: EmbeddingProfile = contracts::decode("EmbeddingProfile", raw)?;
+            let operation = fingerprint(&json!([
+                "raw-source-index",
+                ctx.space_id,
+                source,
+                revision,
+                embedding::SPEC.version,
+                texts_fingerprint
+            ]));
+            Ok((
+                runtime::provider_calls::ProviderBudget {
+                    scope_id: None,
+                    trial_id: profile.trial_id,
+                    input_limit: embedding::SPEC.input_bytes_limit as u64,
+                    output_limit: 0,
+                },
+                operation,
             ))
         }
         Binding::Index(job, batch) => {
@@ -223,6 +248,10 @@ pub async fn search_scoped(
     input: Option<&Value>,
     scope: &crate::search_scope::KnowledgeSearchScope,
 ) -> vector::Candidates {
+    // 每路首批max(50,5*limit)跟请求limit走：工具调用带SearchInput.limit。
+    let limit = input
+        .and_then(|i| i["arguments"]["limit"].as_u64().or(i["limit"].as_u64()))
+        .map_or(30, |limit| limit.clamp(1, 30) as usize);
     if !vector::enabled()
         || query == "*"
         || input.is_some_and(|i| i["arguments"]["asset_after"].is_string())
@@ -232,12 +261,14 @@ pub async fn search_scoped(
     let binding = input.map_or(Binding::Browse, Binding::Tool);
     match embed(pool, ctx, binding, vec![query.chars().take(1600).collect()]).await {
         Ok(mut vectors) => {
-            vector::search_scoped(&ctx.space_id, query, vectors.remove(0), scope).await
+            vector::search_scoped(&ctx.space_id, query, vectors.remove(0), scope, limit).await
         }
         Err(error) => {
             eprintln!("knowledge_embedding_failure code={}", error.code);
             vector::Candidates {
                 values: vec![],
+                lexical: vec![],
+                raw: vector::RawCandidates::empty("unavailable", true),
                 state: "unavailable",
                 bounded: true,
                 target: None,

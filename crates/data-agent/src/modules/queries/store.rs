@@ -24,7 +24,7 @@ pub async fn task_waiting_phase_in_tx(
     })
 }
 fn view(r: &sqlx::mysql::MySqlRow) -> Value {
-    json!({"id":r.get::<String,_>("id"),"conversation_id":r.get::<String,_>("conversation_id"),"task_id":r.get::<String,_>("task_id"),"condition_version":r.get::<u64,_>("condition_version").to_string(),"draft_version":r.get::<u64,_>("draft_version").to_string(),"sql":r.get::<String,_>("sql_text"),"parameters":r.get::<sqlx::types::Json<Value>,_>("parameters").0,"target_id":r.get::<String,_>("target_id"),"summary":r.get::<String,_>("summary"),"knowledge_refs":r.get::<sqlx::types::Json<Value>,_>("knowledge_refs").0,"confirmation_state":r.get::<String,_>("confirmation_state"),"execution_state":r.get::<String,_>("execution_state"),"cancel_state":r.get::<String,_>("cancel_state"),"result_ref":r.get::<Option<String>,_>("result_ref"),"check_state":r.get::<String,_>("check_state"),"error":r.get::<Option<String>,_>("error_code"),"replaces_query_id":r.get::<Option<String>,_>("replaces_query_id"),"error_details":r.get::<Option<sqlx::types::Json<Value>>,_>("error_details").map(|v|v.0)})
+    json!({"id":r.get::<String,_>("id"),"conversation_id":r.get::<String,_>("conversation_id"),"task_id":r.get::<String,_>("task_id"),"condition_version":r.get::<u64,_>("condition_version").to_string(),"draft_version":r.get::<u64,_>("draft_version").to_string(),"sql":r.get::<String,_>("sql_text"),"parameters":r.get::<sqlx::types::Json<Value>,_>("parameters").0,"target_id":r.get::<String,_>("target_id"),"summary":r.get::<String,_>("summary"),"knowledge_refs":r.get::<sqlx::types::Json<Value>,_>("knowledge_refs").0,"confirmation_state":r.get::<String,_>("confirmation_state"),"execution_state":r.get::<String,_>("execution_state"),"cancel_state":r.get::<String,_>("cancel_state"),"result_ref":r.get::<Option<String>,_>("result_ref"),"check_state":r.get::<String,_>("check_state"),"error":r.get::<Option<String>,_>("error_code"),"replaces_query_id":r.get::<Option<String>,_>("replaces_query_id"),"error_details":r.get::<Option<sqlx::types::Json<Value>>,_>("error_details").map(|v|v.0),"semantic_resolution":r.get::<Option<sqlx::types::Json<Value>>,_>("semantic_resolution").map(|v|v.0).unwrap_or(Value::Null),"time_basis":r.get::<Option<sqlx::types::Json<Value>>,_>("time_basis").map(|v|v.0).unwrap_or(Value::Null)})
 }
 pub async fn locate(pool: &MySqlPool, qid: &str) -> Result<RunLocation> {
     let r = sqlx::query("SELECT conversation_id,owner_id FROM query_requests WHERE id=?")
@@ -137,6 +137,9 @@ pub async fn begin_revision_in_tx(
 pub struct DraftValidation<'a> {
     pub platform_report: &'a Value,
     pub text_authority: &'a Value,
+    pub time_basis: Option<&'a Value>,
+    // 与目标条件版本对齐后的口径决策：由授权路径按条件声明继承或核对，不直接取模型参数。
+    pub semantic_resolution: Option<&'a Value>,
 }
 
 pub async fn save_draft_in_tx(
@@ -151,6 +154,8 @@ pub async fn save_draft_in_tx(
     let DraftValidation {
         platform_report: report,
         text_authority,
+        time_basis,
+        semantic_resolution,
     } = validation;
     tx.lock_rank(5)?;
     let task = input["task_id"].as_str().unwrap_or("");
@@ -171,7 +176,7 @@ pub async fn save_draft_in_tx(
     {
         return Err(Error::new("upstream_failed"));
     }
-    sqlx::query("INSERT INTO query_requests(id,conversation_id,owner_id,task_id,condition_version,draft_version,operation_id,sql_text,parameters,target_id,target_version,summary,knowledge_refs,check_state,confirmation_state,budget_scope_id,error_code,replaces_query_id,error_details,text_authority) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)").bind(&qid).bind(cid).bind(&ctx.user_id).bind(task).bind(epoch(input["condition_version"].as_str().unwrap_or("0"))?).bind(draft).bind(operation).bind(input["sql"].as_str()).bind(sqlx::types::Json(&input["parameters"])).bind(input["target_id"].as_str()).bind(report["target_version"].as_str()).bind(input["summary"].as_str()).bind(sqlx::types::Json(&input["knowledge_refs"])).bind(if passed{"passed"}else{"rejected"}).bind(if passed{"awaiting_confirmation"}else{"rejected"}).bind(budget).bind(if passed{None}else{Some("sql_not_supported")}).bind(replaced).bind(if passed {None} else {report.get("diagnostic").map(sqlx::types::Json)}).bind(sqlx::types::Json(text_authority)).execute(tx.connection()).await?;
+    sqlx::query("INSERT INTO query_requests(id,conversation_id,owner_id,task_id,condition_version,draft_version,operation_id,sql_text,parameters,target_id,target_version,summary,knowledge_refs,check_state,confirmation_state,budget_scope_id,error_code,replaces_query_id,error_details,text_authority,semantic_resolution,time_basis) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)").bind(&qid).bind(cid).bind(&ctx.user_id).bind(task).bind(epoch(input["condition_version"].as_str().unwrap_or("0"))?).bind(draft).bind(operation).bind(input["sql"].as_str()).bind(sqlx::types::Json(&input["parameters"])).bind(input["target_id"].as_str()).bind(report["target_version"].as_str()).bind(input["summary"].as_str()).bind(sqlx::types::Json(&input["knowledge_refs"])).bind(if passed{"passed"}else{"rejected"}).bind(if passed{"awaiting_confirmation"}else{"rejected"}).bind(budget).bind(if passed{None}else{Some("sql_not_supported")}).bind(replaced).bind(if passed {None} else {report.get("diagnostic").map(sqlx::types::Json)}).bind(sqlx::types::Json(text_authority)).bind(semantic_resolution.filter(|v| !v.is_null()).map(sqlx::types::Json)).bind(time_basis.filter(|v| !v.is_null()).map(sqlx::types::Json)).execute(tx.connection()).await?;
     read_in_tx(tx, ctx, &qid).await
 }
 pub struct MessageAuthorization<'a> {

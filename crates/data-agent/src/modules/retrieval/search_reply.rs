@@ -70,6 +70,10 @@ pub fn bounded_search_reply(data: Value) -> Value {
     if bytes(&reply) > CONTENT_LIMIT {
         return json!({"error":"request_too_large","hint":"当前资产与引用目录无法完整交付，请减小limit后重试。未推进资产游标。"});
     }
+    // 来源限制是独立于检索范围的允许层；受限过滤时回执必须可与candidate_limit空结果区分。
+    if data["source_limits"].is_object() {
+        reply["source_limits"] = data["source_limits"].clone();
+    }
     let mut bounded = objects.iter().any(|object| {
         object.get("name_complete") == Some(&json!(false))
             || object.get("entries_complete") == Some(&json!(false))

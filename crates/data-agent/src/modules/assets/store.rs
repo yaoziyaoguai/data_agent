@@ -222,6 +222,39 @@ pub async fn list_in_tx(
     let rows=sqlx::query("SELECT p.body,p.owner_id,p.visibility,(SELECT j.state FROM personal_memory_index_jobs j WHERE j.asset_id=p.id AND j.asset_version=p.version AND j.owner_id=p.owner_id AND j.space_id=p.space_id AND j.index_target=? LIMIT 1) AS index_state FROM personal_assets p WHERE (owner_id=? OR (visibility='space' AND kind='skill')) AND space_id=? AND state<>'deleted' AND (?=0 OR state='enabled') ORDER BY id").bind(super::memory_provider::index_target()).bind(&ctx.user_id).bind(&ctx.space_id).bind(active).fetch_all(tx.connection()).await?;
     Ok(rows.iter().map(body).collect())
 }
+pub async fn current_versions_in_tx(
+    tx: &mut AppTx<'_>,
+    ctx: &AccessContext,
+    ids: &[String],
+) -> Result<std::collections::HashMap<(String, String), bool>> {
+    // 锁外读取资产目录后，提交前按(id,version)核对仍是当前有效版本。
+    let mut result = std::collections::HashMap::new();
+    for chunk in ids.chunks(500) {
+        let mut query = sqlx::QueryBuilder::<sqlx::MySql>::new(
+            "SELECT JSON_UNQUOTE(JSON_EXTRACT(body,'$.id')) AS asset_id, JSON_UNQUOTE(JSON_EXTRACT(body,'$.version')) AS asset_version, state FROM personal_assets WHERE space_id=",
+        );
+        query.push_bind(&ctx.space_id).push(" AND (owner_id=");
+        query
+            .push_bind(&ctx.user_id)
+            .push(" OR visibility='space') AND id IN (");
+        let mut keys = query.separated(",");
+        for id in chunk {
+            keys.push_bind(id);
+        }
+        query.push(")");
+        for row in query.build().fetch_all(tx.connection()).await? {
+            result.insert(
+                (
+                    row.get::<String, _>("asset_id"),
+                    row.get::<String, _>("asset_version"),
+                ),
+                row.get::<String, _>("state") == "enabled",
+            );
+        }
+    }
+    Ok(result)
+}
+
 pub async fn read_in_tx(
     tx: &mut AppTx<'_>,
     ctx: &AccessContext,
@@ -339,6 +372,24 @@ pub async fn begin_selection_in_tx(
         &json!({"action":"select_skill","conversation_id":cid,"input":input}),
     )
     .await
+}
+// 外部来源检查前只取已完成回执；不提交没有业务结果的操作占位。
+pub async fn selection_receipt_in_tx(
+    tx: &mut AppTx<'_>,
+    ctx: &AccessContext,
+    cid: &str,
+    input: &Value,
+) -> Result<Option<Value>> {
+    let row = sqlx::query("SELECT fingerprint,receipt FROM asset_operations WHERE owner_id=? AND space_id=? AND operation_id=?")
+        .bind(&ctx.user_id).bind(&ctx.space_id).bind(input["operation_id"].as_str())
+        .fetch_optional(tx.connection()).await?;
+    let Some(row) = row else { return Ok(None) };
+    let command = json!({"action":"select_skill","conversation_id":cid,"input":input});
+    if row.get::<String, _>("fingerprint") != fingerprint(&command) {
+        return Err(Error::new("idempotency_conflict"));
+    }
+    let receipt = row.get::<sqlx::types::Json<Value>, _>("receipt").0;
+    Ok((!receipt.is_null()).then_some(receipt))
 }
 pub async fn begin_removal_in_tx(
     tx: &mut AppTx<'_>,

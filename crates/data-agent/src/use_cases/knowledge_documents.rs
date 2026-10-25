@@ -1,6 +1,6 @@
 use crate::{
     contracts,
-    modules::{access, knowledge},
+    modules::{access, jobs, knowledge},
     persistence::AppTx,
     types::{AccessContext, Error, Result, epoch},
 };
@@ -134,7 +134,53 @@ pub async fn edit(
         .map(|part| part["id"].as_str().unwrap_or("").to_owned())
         .collect::<Vec<_>>();
     let saved = knowledge::save_document_in_tx(&mut tx, ctx, object, &input, &order).await?;
+    // 保存推进了文档修订：原子登记该修订的raw索引与语义准备，两作业互不等待。
+    for part in &saved {
+        let expected = input["parts"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .find(|submitted| submitted["id"] == part["id"])
+            .and_then(|submitted| submitted["expected_version"].as_str())
+            .unwrap_or("");
+        if part["version"].as_str() != Some(expected) {
+            register_document_preparation_in_tx(&mut tx, part).await?;
+        }
+    }
     let result = present(&mut tx, ctx, saved).await?;
     tx.commit().await?;
     Ok(result)
+}
+
+// 保存当前原文即原子登记raw索引与语义准备；空正文没有可整理内容，
+// 文档分册与停用对象不属于单文档原文，不在此登记。
+pub async fn register_document_preparation_in_tx(
+    tx: &mut AppTx<'_>,
+    document: &Value,
+) -> Result<()> {
+    if document["kind"] != "document"
+        || !document["source_id"].is_null()
+        || document["state"] != "enabled"
+    {
+        return Ok(());
+    }
+    let body = document["entries"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .find(|entry| entry["entry_id"] == "body")
+        .and_then(|entry| entry["effective_value"].as_str())
+        .unwrap_or("");
+    if body.trim().is_empty() {
+        return Ok(());
+    }
+    let id = document["id"].as_str().ok_or(Error::new("invalid_input"))?;
+    let version = document["version"]
+        .as_str()
+        .and_then(|value| value.parse::<u64>().ok())
+        .ok_or(Error::new("invalid_input"))?;
+    let source = format!("document-{id}");
+    jobs::enqueue_source_in_tx(tx, "raw_source_index", &source, version).await?;
+    jobs::enqueue_source_in_tx(tx, "prepare_source", &source, version).await?;
+    Ok(())
 }

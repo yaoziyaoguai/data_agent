@@ -1,3 +1,4 @@
+import {synchronizeSources} from './source-sync.mjs';
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { readFile, writeFile, mkdir, copyFile } from "node:fs/promises";
@@ -26,11 +27,12 @@ const command = (version) => ({
 });
 try {
   await h.pauseWorker();
-  h.sql("DELETE FROM knowledge_index_jobs;DELETE FROM knowledge_versions;DELETE FROM knowledge_objects;DELETE FROM source_heads;DELETE FROM source_snapshots;");
+  h.sql("DELETE FROM knowledge_index_jobs;DELETE FROM knowledge_versions;DELETE FROM knowledge_objects;DELETE FROM source_current;DELETE FROM source_heads;DELETE FROM source_snapshots;");
   const importCommands=[1,2].map(()=>({operation_id:randomUUID()}));
-  const imports=await Promise.all(importCommands.map(command=>h.request('/source-syncs',command)));
-  assert.ok(imports.some(v=>v.status===200),JSON.stringify(imports));
-  assert.ok(imports.every(v=>v.status===200||v.status===409&&v.value.code==='version_conflict'),JSON.stringify(imports));
+  await h.resumeSourceSyncWorker(2);
+  const imports=await Promise.all(importCommands.map(command=>synchronizeSources(h,command.operation_id)));
+  assert.ok(imports.some(v=>v.value.status==='completed'),JSON.stringify(imports));
+  assert.ok(imports.every(v=>v.status===200&&(v.value.status==='completed'||v.value.status==='failed'&&v.value.error_code==='version_conflict')),JSON.stringify(imports));
   const expectedTables=['customer_tags','demo_order_detail','dim_customers','raw_order_lines','raw_payments'];
   const platformHeads=h.sql("SELECT JSON_OBJECT('id',source_id,'table_id',platform_table_id,'version',platform_version) FROM catalog_platform_heads ORDER BY platform_table_id");
   assert.deepEqual(platformHeads.map(v=>v.table_id),expectedTables);
@@ -45,15 +47,16 @@ try {
   const initialJobs=h.sql("SELECT JSON_OBJECT('id',id,'object_id',object_id,'version',expected_version) FROM prefill_attempts ORDER BY id");
   for(const [index,command] of importCommands.entries()){
     const state=h.sql(`SELECT JSON_OBJECT('state',state,'error',error_code,'receipt',receipt,'baseline',baseline,'namespace',namespace_baseline) FROM catalog_imports WHERE operation_id='${command.operation_id}'`)[0];
-    if(imports[index].status===200){assert.equal(state.state,'succeeded');assert.deepEqual(state.receipt,imports[index].value);}
+    if(imports[index].value.status==='completed'){assert.equal(state.state,'completed');assert.deepEqual(state.receipt,{sync_id:imports[index].value.sync_id,status:'completed'});}
     else{assert.equal(state.state,'failed');assert.equal(state.error,'version_conflict');}
     const replay=await h.request('/source-syncs',command);
-    assert.equal(replay.status,imports[index].status);
-    if(replay.status===200)assert.deepEqual(replay.value,imports[index].value);
-    else{assert.equal(replay.value.code,'version_conflict');assert.equal(replay.value.retryable,false);}
+    assert.equal(replay.status,202);
+    assert.equal(replay.value.sync_id,imports[index].value.sync_id);
+    assert.equal(replay.value.status,imports[index].value.status);
+    assert.deepEqual((await synchronizeSources(h,command.operation_id)).value,imports[index].value);
     assert.deepEqual(h.sql(`SELECT JSON_OBJECT('state',state,'error',error_code,'receipt',receipt,'baseline',baseline,'namespace',namespace_baseline) FROM catalog_imports WHERE operation_id='${command.operation_id}'`)[0],state);
   }
-  assert.equal((await h.request('/source-syncs',{operation_id:randomUUID()})).status,200);
+  assert.equal((await synchronizeSources(h)).value.status, 'completed');
   assert.deepEqual(snapshots(),initialSnapshots);
   assert.deepEqual(h.sql("SELECT JSON_OBJECT('id',id,'version',version,'state',state,'body',body) FROM knowledge_objects ORDER BY id"),initialObjects);
   assert.deepEqual(h.sql("SELECT JSON_OBJECT('id',id,'object_id',object_id,'version',expected_version) FROM prefill_attempts ORDER BY id"),initialJobs);
@@ -132,7 +135,7 @@ try {
   catalogOnlyObject.name = "demo_order_detail · 合成订单商品行";
   await writeFile(dir + "/semantic-catalog.json", JSON.stringify(catalogOnly));
   const beforeCatalogVersion = filled.value.version;
-  assert.equal((await h.request('/source-syncs', { operation_id: randomUUID() })).status, 200);
+  assert.equal((await synchronizeSources(h)).value.status, 'completed');
   table = (await h.request('/knowledge/' + id)).value;
   assert.equal(BigInt(table.version), BigInt(beforeCatalogVersion) + 1n);
   assert.equal(table.entries.find(entry => entry.entry_id === 'description').effective_value, input.value);
@@ -141,7 +144,7 @@ try {
   assert.deepEqual(h.sql("SELECT JSON_OBJECT('id',source_id,'version',version) FROM source_snapshots WHERE source_id IN ('schema','etl','business-guide') ORDER BY source_id"), ['business-guide', 'etl', 'schema'].map(id => ({ id, version: 1 })));
   const afterCatalog = table;
   const catalogJobs = h.sql("SELECT JSON_OBJECT('id',id,'object_id',object_id,'version',expected_version) FROM prefill_attempts ORDER BY id");
-  assert.equal((await h.request('/source-syncs', { operation_id: randomUUID() })).status, 200);
+  assert.equal((await synchronizeSources(h)).value.status, 'completed');
   assert.deepEqual((await h.request('/knowledge/' + id)).value, afterCatalog);
   assert.deepEqual(h.sql("SELECT JSON_OBJECT('id',id,'object_id',object_id,'version',expected_version) FROM prefill_attempts ORDER BY id"), catalogJobs);
   check('仅semantic-catalog改版刷新已有候选且保留人工值，原始来源不升版；重复同步不增加对象版本或预填作业');
@@ -157,9 +160,9 @@ try {
   candidate.entries.find((e) => e.entry_id === "description").effective_value =
     "来源新版候选值";
   await writeFile(dir + "/semantic-catalog.json", JSON.stringify(catalog));
-  const concurrentSync=await Promise.all([1,2].map(()=>h.request('/source-syncs',{operation_id:randomUUID()})));
-  assert.ok(concurrentSync.some(v=>v.status===200),JSON.stringify(concurrentSync));
-  assert.ok(concurrentSync.every(v=>v.status===200||v.status===409&&v.value.code==='version_conflict'),JSON.stringify(concurrentSync));
+  const concurrentSync=await Promise.all([1,2].map(()=>synchronizeSources(h)));
+  assert.ok(concurrentSync.some(v=>v.value.status==='completed'),JSON.stringify(concurrentSync));
+  assert.ok(concurrentSync.every(v=>v.status===200&&(v.value.status==='completed'||v.value.status==='failed'&&v.value.error_code==='version_conflict')),JSON.stringify(concurrentSync));
   table = (await h.request("/knowledge/" + id)).value;
   assert.equal(BigInt(table.version),BigInt(filled.value.version)+1n);
   assert.deepEqual(h.sql("SELECT JSON_OBJECT('version',version) FROM source_snapshots WHERE source_id='schema' ORDER BY version"),[{version:1},{version:2}]);
@@ -190,10 +193,7 @@ try {
       dir + "/" + file,
       (await readFile(dir + "/" + file, "utf8")) + "\n-- 合成来源单独改版\n",
     );
-    assert.equal(
-      (await h.request("/source-syncs", { operation_id: randomUUID() })).status,
-      200,
-    );
+    assert.equal((await synchronizeSources(h)).value.status, 'completed');
     table = (await h.request("/knowledge/" + id)).value;
     assert.ok(BigInt(table.version) > BigInt(oldVersion));
     assert.equal(
@@ -217,7 +217,7 @@ try {
   removedCatalog.objects.find(object => object.id === id).entries = removedCatalog.objects.find(object => object.id === id).entries.filter(entry => entry.entry_id !== "description");
   removedCatalog.objects.find(object => object.id === metricId).entries = removedCatalog.objects.find(object => object.id === metricId).entries.filter(entry => entry.entry_id !== "aliases");
   await writeFile(dir + "/semantic-catalog.json", JSON.stringify(removedCatalog));
-  assert.equal((await h.request("/source-syncs", { operation_id: randomUUID() })).status, 200);
+  assert.equal((await synchronizeSources(h)).value.status, 'completed');
   table = (await h.request("/knowledge/" + id)).value;
   const retainedDescription = table.entries.find(entry => entry.entry_id === "description");
   assert.equal(BigInt(table.version), BigInt(beforeRemoval.version) + 1n);
@@ -263,7 +263,7 @@ try {
   const guideCatalog = JSON.parse(await readFile(dir + "/semantic-catalog.json", "utf8"));
   guideCatalog.objects.find(object => object.id === guideId).name += " · 目录修订";
   await writeFile(dir + "/semantic-catalog.json", JSON.stringify(guideCatalog));
-  assert.equal((await h.request("/source-syncs", { operation_id: randomUUID() })).status, 200);
+  assert.equal((await synchronizeSources(h)).value.status, 'completed');
   const guideAfterRefresh = (await h.request("/knowledge/" + guideId)).value;
   assert.equal(BigInt(guideAfterRefresh.version), BigInt(guideAfterBodyEdit.version) + 1n);
   assert.deepEqual(guideAfterRefresh.related_ids, manualRelated);
@@ -271,6 +271,46 @@ try {
   assert.equal(guideAfterRefresh.entries[0].effective_value, guideAfterBodyEdit.entries[0].effective_value);
   table = (await h.request("/knowledge/" + id)).value;
   check("文档显式指定关联后，条目和整篇正文编辑省略related_ids均保留人工标记，目录重分析不覆盖关联或正文");
+  // 改名同步的断言已完成；正常查询前恢复与独立DDL一致的物理表名。
+  guideCatalog.objects.find(object => object.id === id).name = "demo_order_detail";
+  await writeFile(dir + "/semantic-catalog.json", JSON.stringify(guideCatalog));
+  assert.equal((await synchronizeSources(h)).value.status, 'completed');
+  table = (await h.request("/knowledge/" + id)).value;
+  assert.equal(table.name, "demo_order_detail");
+  assert.match(table.entries.find(entry => entry.path === "ddl").effective_value, /CREATE TABLE demo_order_detail\s*\(/);
+  // 前面的来源同步已改版表；依据 business-guide §5.1 与结构附录重新核对，不能直接采用旧表引用。
+  const metric = (await h.request("/knowledge/" + metricId)).value;
+  const metricDefinition =
+    "支付归属净收入：按 paid_at 选支付期间，排除测试交易；SUM(paid_amount_cents - refunded_amount_cents)，单位分，输入粒度为订单商品行。全退订单保留，退款按原付款期间归属。";
+  const metricRule = {
+    kind: "metric",
+    table: { object_id: table.id, version: table.version },
+    expression: "SUM(paid_amount_cents - refunded_amount_cents)",
+    input_grain: "订单商品行",
+    time_column: "paid_at",
+    unit: "分",
+    required_filters: ["is_test = 0", "paid_amount_cents > 0"],
+    dimensions: ["channel", "region"],
+  };
+  assert.notEqual(table.version, "1");
+  const staleMetric = await h.request("/knowledge/" + metricId, {
+    ...command(metric.version), entry_id: "definition", value: metricDefinition,
+    structured_value: { ...metricRule, table: { object_id: table.id, version: "1" } },
+    clear_override: false,
+  }, "alice", "PATCH");
+  assert.equal(staleMetric.status, 409, JSON.stringify(staleMetric.value));
+  assert.equal(staleMetric.value.code, "stale_knowledge");
+  assert.deepEqual((await h.request("/knowledge/" + metricId)).value, metric);
+  const confirmedMetric = await h.request("/knowledge/" + metricId, {
+    ...command(metric.version), entry_id: "definition", value: metricDefinition,
+    structured_value: metricRule, clear_override: false,
+  }, "alice", "PATCH");
+  assert.equal(confirmedMetric.status, 200, JSON.stringify(confirmedMetric.value));
+  const confirmedDefinition = (await h.request("/knowledge/" + metricId)).value.entries
+    .find(entry => entry.entry_id === "definition");
+  assert.equal(confirmedDefinition.effective_value, metricDefinition);
+  assert.deepEqual(confirmedDefinition.effective_structure, metricRule);
+  assert.equal(confirmedDefinition.review_state, "confirmed");
   await h.resumeWorker();
   const long =
     "章节信息\n".repeat(700) +
@@ -429,23 +469,38 @@ try {
   ).value;
   assert.equal(changed.version, "2");
   check("Skill显式选择、用户隔离、版本变更需重新选择");
+  // 首个查询的个人记忆已经停用；选没有该记忆来源的查询，单独验证知识停用的影响。
+  const stale = (await h.request("/conversations/" + other + "/queries")).value
+    .queries[0];
+  const readable = await h.request("/queries/" + stale.id);
+  assert.equal(readable.status, 200);
+  assert.notEqual(readable.value.text_unavailable, true);
+  assert.match(readable.value.sql, /demo_order_detail/);
+  assert.equal(readable.value.confirmation_state, "awaiting_confirmation");
+  assert.equal(readable.value.execution_state, "not_submitted");
+  const currentMetric = (await h.request("/knowledge/" + metricId)).value;
+  assert.deepEqual(currentMetric.entries.find(entry => entry.entry_id === "definition")
+    .effective_structure.table, { object_id: id, version: table.version });
+  const queryAuthority = h.sql(`SELECT text_authority FROM query_requests WHERE id='${stale.id}'`)[0];
+  assert.ok(queryAuthority.knowledge.some(([objectId, version]) => objectId === id && version === table.version));
+  assert.deepEqual(queryAuthority.memories, []);
+  const queryState = () => h.sql(`SELECT JSON_OBJECT('confirmation',confirmation_state,'execution',execution_state,'key',confirmation_key,'lease',lease_epoch) FROM query_requests WHERE id='${stale.id}'`)[0];
+  const beforeDisable = queryState();
+  assert.equal(beforeDisable.key, null);
+  assert.equal(beforeDisable.lease, 0);
   assert.equal(
     (await h.request("/knowledge/" + id + "/disable", command(table.version)))
       .status,
     200,
   );
-  const stale = (await h.request("/conversations/" + cid + "/queries")).value
-    .queries[0];
-  assert.equal(
-    (
-      await h.request("/queries/" + stale.id + "/confirm", {
-        operation_id: randomUUID(),
-        draft_version: stale.draft_version,
-        condition_version: stale.condition_version,
-      })
-    ).status,
-    404,
-  );
+  const refusedConfirmation = await h.request("/queries/" + stale.id + "/confirm", {
+    operation_id: randomUUID(),
+    draft_version: stale.draft_version,
+    condition_version: stale.condition_version,
+  });
+  assert.equal(refusedConfirmation.status, 409, JSON.stringify(refusedConfirmation.value));
+  assert.equal(refusedConfirmation.value.code, "stale_context");
+  assert.deepEqual(queryState(), beforeDisable);
   check("知识停用后旧SQL不能确认");
   console.log(JSON.stringify({ passed: true, checks, officialRequests: 0 }));
 } finally {

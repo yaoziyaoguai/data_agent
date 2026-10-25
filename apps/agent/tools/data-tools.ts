@@ -33,7 +33,7 @@ const definitions = {
   ],
   request_query: [
     "RequestQueryInput",
-    "仅保存已确定口径的SQL。先填写semantic_resolution再写SQL：资料给出明确公式但用户问题仍可能指实质不同解释时，basis=needs_clarification并列unresolved_differences，改用clarify等待选择，不能默认写稿。explicit_user逐字引用本条用户完整原话，保留否定和限定，自己刚写入任务不算采用。修改已有SQL时replaces_query_id必须指向被修订的查询ID，旧待执行稿会失效；独立新查询传null。此工具只保存草稿。semantic_checks是本稿生成时的非阻断业务诊断，需区分警告、未检查和平台结果；它不授予执行权。",
+    "仅保存已确定口径的SQL。semantic_resolution与任务当前条件对齐：条件已声明决策时省略即继承该决策，携带则必须与read_analysis_task返回的声明逐字一致，否则先update_analysis_task修订条件；条件未声明且资料给出明确公式但用户问题仍可能指实质不同解释时，basis=needs_clarification并列unresolved_differences，改用clarify等待选择，不能默认写稿。explicit_user逐字引用本条用户完整原话，保留否定和限定，自己刚写入任务不算采用。修改已有SQL时replaces_query_id必须指向被修订的查询ID，旧待执行稿会失效；独立新查询传null。此工具只保存草稿。semantic_checks是本稿生成时的非阻断业务诊断，需区分警告、未检查和平台结果；它不授予执行权。",
   ],
   execute_query: [
     "ExecuteQueryInput",
@@ -57,7 +57,7 @@ const definitions = {
   ],
   present_analysis_answer: [
     "PresentAnalysisAnswerInput",
-    "交付带来源的定量结果说明，不保存报告也不执行SQL。sources逐条给query_id/result_ref/实际列名columns；values用唯一小写name绑定cell(列和绝对row_index)、statistic(行数/列计数)、parameter(原查询参数)或metadata(data_freshness/saved_row_count)。template用{{name}}插入宿主原值，文字部分不写阿拉伯数字、全角数字或SQL代码块；日期、金额、行数也用绑定。没有返回的差值/环比/合计不能自行换算或用中文数字绕过，应说明缺口并另给草稿。先完成本轮保存等动作，最后调用；成功回执answer_text是正式答案，随后不再改写。只保证绑定值来源，不证明因果解释；普通概念解释和纯保存确认仍可正常回答。",
+    "交付带来源的定量结果说明，不保存报告也不执行SQL。sources逐条给query_id/result_ref/实际列名columns；values用唯一小写name绑定cell(列和绝对row_index)、statistic(行数/列计数)、parameter(原查询参数)、metadata(data_freshness/saved_row_count)或observation_cutoff/data_batch(草稿保存的用户声明观察截点/数据批次，多条同名角色用field_ref对齐)。template用{{name}}插入宿主原值，文字部分不写阿拉伯数字、全角数字或SQL代码块；日期、金额、行数也用绑定。没有返回的差值/环比/合计不能自行换算或用中文数字绕过，应说明缺口并另给草稿。先完成本轮保存等动作，最后调用；成功回执answer_text是正式答案，随后不再改写。只保证绑定值来源，不证明因果解释；普通概念解释和纯保存确认仍可正常回答。",
   ],
   save_analysis_report: [
     "SaveAnalysisReportInput",

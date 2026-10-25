@@ -11,7 +11,6 @@ const h = await harness({
   env: {
     DATA_AGENT_LEASE_MS: "120000",
     DATA_AGENT_QUERY_DELAY_SECONDS: "0.1",
-    DATA_AGENT_RESULT_TTL_SECONDS: "10",
   },
 });
 const manager = SessionManager.inMemory("/synthetic/data-agent");

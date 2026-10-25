@@ -53,6 +53,34 @@ fn render(input: &Value, sources: &BTreeMap<String, (Value, Value)>) -> Result<S
                 .get(text(binding, "metadata")?)
                 .ok_or(Error::new("invalid_evidence"))?
                 .clone(),
+            "observation_cutoff" | "data_batch" => {
+                // 截点/批次只绑定草稿快照里用户声明的角色值：未声明、角色不唯一或值为空
+                // 都拒绝，不能以request_clock或平台data_freshness冒充用户口径。
+                let kind = text(binding, "kind")?;
+                let candidates: Vec<_> = query["time_basis"]["time_roles"]
+                    .as_array()
+                    .ok_or(Error::new("invalid_evidence"))?
+                    .iter()
+                    .filter(|role| role["role"].as_str() == Some(kind))
+                    .filter(|role| {
+                        binding
+                            .get("field_ref")
+                            .and_then(Value::as_str)
+                            .is_none_or(|field| role["field_ref"].as_str() == Some(field))
+                    })
+                    .collect();
+                if candidates.len() != 1 {
+                    return Err(Error::new("invalid_evidence"));
+                }
+                let value = candidates[0]
+                    .get("value")
+                    .cloned()
+                    .ok_or(Error::new("invalid_evidence"))?;
+                if value.is_null() {
+                    return Err(Error::new("invalid_evidence"));
+                }
+                value
+            }
             "statistic" => {
                 let statistic = text(binding, "statistic")?;
                 let statistics = &result["statistics"];
@@ -241,6 +269,36 @@ mod tests {
             render(&input, &sources()).unwrap(),
             "从2026-01-01起，金额9007199254740993；另一项NULL（空值），共2行。"
         );
+    }
+    #[test]
+    fn binds_declared_cutoff_and_batch_only_from_time_basis() {
+        let undeclared = sources();
+        let mut declared = sources();
+        declared.get_mut("query").unwrap().0["time_basis"] = json!({
+        "time_start": null, "time_end": null, "timezone": "UTC",
+        "time_roles": [
+            {"role":"observation_cutoff","description":"按用户口径","field_ref":null,
+             "value":"2026-10-01T00:00:00+08:00","evidence_refs":[]},
+            {"role":"data_batch","description":"上游批次","field_ref":"batch_id",
+             "value":"2026-09","evidence_refs":[]},
+            {"role":"data_batch","description":"对账批次","field_ref":"recon_id",
+             "value":"2026-09-R","evidence_refs":[]},
+        ]});
+        let input = json!({"template":"截至{{cutoff}}，批次{{batch}}。", "values":[
+            {"name":"cutoff","query_id":"query","kind":"observation_cutoff"},
+            {"name":"batch","query_id":"query","kind":"data_batch","field_ref":"recon_id"}]});
+        assert_eq!(
+            render(&input, &declared).unwrap(),
+            "截至2026-10-01T00:00:00+08:00，批次2026-09-R。"
+        );
+        // 同名角色多条而不带field_ref：归属不明，拒绝而不是任选一条。
+        let ambiguous = json!({"template":"批次{{batch}}。", "values":[
+            {"name":"batch","query_id":"query","kind":"data_batch"}]});
+        assert!(render(&ambiguous, &declared).is_err());
+        // 未声明时间基准的旧草稿：截点/批次不可绑定，不能以时钟或平台新鲜度冒充。
+        let cutoff = json!({"template":"截至{{cutoff}}。", "values":[
+            {"name":"cutoff","query_id":"query","kind":"observation_cutoff"}]});
+        assert!(render(&cutoff, &undeclared).is_err());
     }
     #[test]
     fn rejects_unbound_numbers_and_missing_source_cells() {

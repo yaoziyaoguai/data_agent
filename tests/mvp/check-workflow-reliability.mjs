@@ -127,18 +127,32 @@ try {
 
   await start(cid);
   await h.pausePlatform();
-  let arrived;
+  let arrived,barrierRequests=0;
   const reached=new Promise(r=>arrived=r), held=new Promise(r=>releaseValidation=r);
-  platformFixture=createServer(async(req,res)=>{for await(const _part of req){};arrived();await held;res.writeHead(200,{'content-type':'application/json'});res.end(JSON.stringify({state:'passed',target_id:'synthetic-sqlite',target_version:targetVersion,dialect:'SQLite',read_only:true}));});
+  platformFixture=createServer(async(req,res)=>{for await(const _part of req){};barrierRequests++;arrived();await held;res.writeHead(200,{'content-type':'application/json'});res.end(JSON.stringify({state:'passed',target_id:'synthetic-sqlite',target_version:targetVersion,dialect:'SQLite',read_only:true}));});
   await new Promise(r=>platformFixture.listen(Number(new URL(h.env.DATA_AGENT_PLATFORM_URL).port),'127.0.0.1',r));
+  const unroutedInput={run_id:run.run_id,lease_epoch:run.lease_epoch,sdk_tool_call_id:randomUUID(),tool_name:'request_query',arguments:{task_id:task.task_id,condition_version:task.condition_version,sql:'SELECT 10 AS other_amount',parameters:{},target_id:'synthetic-sqlite',replaces_query_id:guardCandidate.id,summary:'未归属修订',knowledge_refs:[]},checkpoint:checkpoint()};
+  assert.equal((await h.internal('/internal/data/tool-calls',unroutedInput)).status,200);
+  const unrouted=await h.internal('/internal/data/tools',unroutedInput);
+  assert.equal(unrouted.status,409);
+  assert.equal(unrouted.value.code,'message_pending');
+  const unroutedReceipt=await h.internal('/internal/data/tool-rejections',unroutedInput);
+  assert.equal(unroutedReceipt.status,200);
+  assert.equal(unroutedReceipt.value.data.error,'message_pending');
+  assert.equal(unroutedReceipt.value.data.recovery.reason,'current_message_unrouted');
+  assert.match(unroutedReceipt.value.data.hint,/先用update_analysis_task登记本轮归属/);
+  assert.equal(barrierRequests,0,'未归属修订不进入平台验证');
+  assert.equal(h.sql(`SELECT JSON_OBJECT('n',COUNT(*)) FROM query_requests WHERE replaces_query_id='${guardCandidate.id}'`)[0].n,0,'拒绝未创建修订草稿');
+  await update({action:'route'});
   const revision=draft(task,'SELECT 10 AS other_amount',guardCandidate.id);
-  await reached;
+  // 平台屏障与修订结果先到先得：修订在到达屏障前失败时立即传播，避免悬挂等待导致清理未完成。
+  await Promise.race([reached,revision.then(v=>{throw new Error('修订未经平台验证即成功: '+JSON.stringify(v));})]);
   assert.equal((await confirm(guardCandidate)).value.code,'version_conflict');
   releaseValidation();const guarded=await revision;await finish();
   await new Promise(r=>platformFixture.close(r));platformFixture=undefined;await h.resumePlatform();
   assert.equal((await confirm(guarded)).status,200);
   await h.resumeWorker();await until(async()=>(await read(guarded)).execution_state==='succeeded','原已确认查询收尾');await h.pauseWorker();await withdrawResults(cid);
-  checks.push({id:'IA01',name:'新消息直接修订在外部校验等待期间已失效旧稿，不存在校验前可执行窗口',passed:true});
+  checks.push({id:'IA01',name:'当前消息未归属时修订先拒绝并指引归属，不触达平台也无修订副作用；归属后修订在外部校验等待期间已失效旧稿，不存在校验前可执行窗口',passed:true});
 
   await start(cid);await update({action:'route'});
   const next=await draft(task,'SELECT 11 AS other_amount',guarded.id);
@@ -191,11 +205,16 @@ try {
   assert.equal((await h.request('/queries/'+terminal.id+'/cancel',{operation_id:randomUUID()})).status,200);
   assert.equal((await h.request('/knowledge/'+doc.id+'/disable',{operation_id:randomUUID(),expected_version:edited.value.version})).status,200);
   await start(cid);
-  const rejectedInput={run_id:run.run_id,lease_epoch:run.lease_epoch,sdk_tool_call_id:randomUUID(),tool_name:'get_query',arguments:{query_id:based.id},checkpoint:checkpoint()};
-  assert.equal((await h.internal('/internal/data/tool-calls',rejectedInput)).status,200);
-  const rejected=await h.internal('/internal/data/tools',rejectedInput);assert.ok(rejected.status>=400);assert.ok(!JSON.stringify(rejected.value).includes('SELECT 7'));
-  const durableRejection=await h.internal('/internal/data/tool-rejections',rejectedInput);assert.equal(durableRejection.status,200);assert.equal(durableRejection.value.data.error,rejected.value.code);
-  assert.equal((await h.internal('/internal/data/tool-rejections',{...rejectedInput,arguments:{query_id:terminal.id}})).value.code,'idempotency_conflict');
+  const basedInput={run_id:run.run_id,lease_epoch:run.lease_epoch,sdk_tool_call_id:randomUUID(),tool_name:'get_query',arguments:{query_id:based.id},checkpoint:checkpoint()};
+  assert.equal((await h.internal('/internal/data/tool-calls',basedInput)).status,200);
+  const basedView=await h.internal('/internal/data/tools',basedInput);
+  assert.equal(basedView.status,200);
+  assert.equal(basedView.value.data.query.text_unavailable,true);
+  for(const key of ['sql','parameters','summary','knowledge_refs','error_details','semantic_checks'])assert.equal(basedView.value.data.query[key],undefined);
+  assert.ok(!JSON.stringify(basedView.value).includes('SELECT 7'));
+  assert.match(basedView.value.data.hint,/不能据此确认执行或恢复旧正文/);
+  assert.equal((await h.internal('/internal/data/tool-rejections',basedInput)).value.code,'not_available','成功读取无持久拒绝回执');
+  assert.equal((await h.internal('/internal/data/tool-rejections',{...basedInput,arguments:{query_id:terminal.id}})).value.code,'idempotency_conflict');
   for(const query of [based,terminal]){
     const cancellationInput={run_id:run.run_id,lease_epoch:run.lease_epoch,sdk_tool_call_id:randomUUID(),tool_name:'cancel_query',arguments:{query_id:query.id},checkpoint:checkpoint()};
     assert.equal((await h.internal('/internal/data/tool-calls',cancellationInput)).status,200);
@@ -216,7 +235,7 @@ try {
     }
   }
   await finish();
-  checks.push({id:'IA03',name:'失效依据经get_query不能读回正文，cancel_query对待执行及终态都仅返回控制状态并允许收尾',passed:true});
+  checks.push({id:'IA03',name:'失效依据经get_query仅返回控制状态与失效提示、正文字段全部剥除；cancel_query对待执行及终态都仅返回控制状态并允许收尾',passed:true});
 
   const asset=async name=>(await h.request('/assets',{operation_id:randomUUID(),id:null,expected_version:null,kind:'skill',name,body:'合成分析方法',scope:'订单分析',verified:false,source_text:'本人保存',dependencies:[]})).value;
   const a=await asset('分析方法A'),b=await asset('分析方法B'),other=await h.create();

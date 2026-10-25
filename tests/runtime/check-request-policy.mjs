@@ -12,7 +12,6 @@ import { harness, until } from '../mvp/harness.mjs';
 const profile = { provider_id: 'deepseek', model_id: 'deepseek-flash', trial_id: randomUUID(),
   price_version: '2026-10-04-peak-usd', budget_mode: 'request', input_limit: 65536,
   output_limit: 2048, request_call_limit: 24, toolset: 'data', payload_bytes_limit: 131072 };
-const h = await harness({ capture: true, profile, env: { DATA_AGENT_LEASE_MS: '120000' } });
 let actions = [], network = [], passed = false;
 const checks = [];
 const provider = createServer(async (req, res) => {
@@ -40,6 +39,8 @@ const provider = createServer(async (req, res) => {
 });
 await new Promise(resolve => provider.listen(0, '127.0.0.1', resolve));
 const connection = { apiKey: 'synthetic-protocol-key', baseUrl: 'http://127.0.0.1:' + provider.address().port, protocolTest: true };
+// API的冻结连接也必须指向同一本地协议端点；仅改测试进程的环境不能为API配置凭据。
+const h = await harness({ capture: true, profile, protocolProviderUrl: connection.baseUrl, env: { DATA_AGENT_LEASE_MS: '120000' } });
 const previous = Object.fromEntries(['DEEPSEEK_API_KEY', 'DEEPSEEK_BASE_URL', 'DATA_AGENT_PROVIDER_TEST', 'DATA_AGENT_MODEL_TIMEOUT_MS', 'DATA_AGENT_TEST_COMPACT'].map(key => [key, process.env[key]]));
 Object.assign(process.env, { DEEPSEEK_API_KEY: connection.apiKey, DEEPSEEK_BASE_URL: connection.baseUrl, DATA_AGENT_PROVIDER_TEST: '1', DATA_AGENT_MODEL_TIMEOUT_MS: '3000' });
 const model = { id: 'deepseek-flash', name: 'synthetic', api: 'openai-completions', provider: 'controlled_deepseek',
@@ -163,7 +164,9 @@ try {
   }
   check('认证/参数/配额/缺失用量均只尝试一次，停止而非自动重试');
 
-  run = await begin(); actions = ['slow', 'slow', 'slow', 'answer']; process.env.DATA_AGENT_MODEL_TIMEOUT_MS = '500';
+  // 超时窗口需覆盖reserve/send往返与请求体送达(1GiB测试容器上慢)；slow永不响应，
+  // 任何超时值都会触发本场景，过短窗口会在送达中途切断，让network计数器漏记半截请求。
+  run = await begin(); actions = ['slow', 'slow', 'slow', 'answer']; process.env.DATA_AGENT_MODEL_TIMEOUT_MS = '2000';
   const timeoutStart = network.length; await assert.rejects(execute(run));
   assert.equal(network.length - timeoutStart, 3); assert.equal(ledger(run).failures, 3); await close(run);
   process.env.DATA_AGENT_MODEL_TIMEOUT_MS = '3000'; check('单次请求超时沿原额度最多三次，未知预留不释放');

@@ -1,3 +1,4 @@
+import {synchronizeSources} from './source-sync.mjs';
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
@@ -29,7 +30,7 @@ try {
   }).then(r => r.json());
   await writeFile(h.directory + "/platform/catalog.json", JSON.stringify({ source_namespace: catalog.source_namespace,
     tables: catalog.tables.map(t => ({ ...t, maintainer_id: "bob" })) }));
-  assert.equal((await h.request("/source-syncs", { operation_id: randomUUID() })).status, 200);
+  assert.equal((await synchronizeSources(h)).value.status, 'completed');
   await login("bob");
   for (const kind of ["文档", "指标"]) {
     const name = "合成停用恢复" + kind;

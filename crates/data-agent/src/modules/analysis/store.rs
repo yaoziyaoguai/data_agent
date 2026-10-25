@@ -355,7 +355,7 @@ pub async fn apply_update_in_tx(
             }
             field_authorities[key] = authority.cleared.clone();
             conditions[key] = match key {
-                "group_by" | "filters" | "knowledge_refs" => json!([]),
+                "group_by" | "filters" | "knowledge_refs" | "time_roles" => json!([]),
                 "notes" => json!(""),
                 _ => Value::Null,
             };

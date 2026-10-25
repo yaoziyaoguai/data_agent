@@ -9,7 +9,7 @@ import {
 import { streamSimple as completions } from "@earendil-works/pi-ai/api/openai-completions";
 import { streamSimple as responses } from "@earendil-works/pi-ai/api/openai-responses";
 import { streamSimple as anthropic } from "@earendil-works/pi-ai/api/anthropic-messages";
-import { isRetryableAssistantError } from "@earendil-works/pi-ai/compat";
+import { isContextOverflow, isRetryableAssistantError } from "@earendil-works/pi-ai/compat";
 import type {
   FinalizeModelCall,
   ModelCallReceipt,
@@ -20,6 +20,7 @@ import { RustTransport } from "../transport/client.ts";
 import contractSchema from "../../../packages/contracts/schema.json" with { type: "json" };
 import { providerEndpoint } from "./endpoint.ts";
 import { providerUsage } from "./usage.ts";
+import { effectiveOutputCap, planForProfile } from "../../../packages/contracts/capacity.ts";
 const dataToolNames = new Set<string>(
   contractSchema.$defs.DataToolInvocation.properties.tool_name.enum,
 );
@@ -28,6 +29,8 @@ export interface ModelConnection {
   baseUrl: string;
   protocolTest: boolean;
   api: "openai-completions" | "openai-responses" | "anthropic-messages";
+  /** SDK目录已知端点输出上限；目录外型号缺省，由冻结profile与实际cap约束。 */
+  endpointOutputLimit?: number;
 }
 // 使用SDK原生协议；HTTP层不重试，Pi会话每次重试重新领取宿主许可。
 export function guardedModelStream(
@@ -35,11 +38,13 @@ export function guardedModelStream(
   profile: ModelProfile,
   connection: ModelConnection,
   runSignal: AbortSignal,
+  checkCapacity?: () => void,
 ) {
+  // 超时随模型修订冻结；历史profile缺字段维持90秒，新大窗口配置可达600秒。
   const timeoutMs = connection.protocolTest
-    ? Number(process.env.DATA_AGENT_MODEL_TIMEOUT_MS ?? 90000)
-    : 90000;
-  if (!Number.isInteger(timeoutMs) || timeoutMs < 50 || timeoutMs > 90000)
+    ? Number(process.env.DATA_AGENT_MODEL_TIMEOUT_MS ?? profile.request_timeout_ms ?? 90000)
+    : (profile.request_timeout_ms ?? 90000);
+  if (!Number.isInteger(timeoutMs) || timeoutMs < 50 || timeoutMs > 600000)
     throw new Error("provider_configuration_invalid");
   return (
     model: Model<Api>,
@@ -181,18 +186,27 @@ export function guardedModelStream(
       };
 
       try {
+        checkCapacity?.();
         endpoint = providerEndpoint(
           connection.baseUrl,
           connection.protocolTest,
         );
+        // 实际输出cap=min(SDK本次maxTokens, 冻结输出上限, 已知端点上限)；SDK未给才用profile上限。
+        const outputCap = effectiveOutputCap(
+          profile.output_limit,
+          options?.maxTokens,
+          connection.endpointOutputLimit,
+        );
         const streamOptions: SimpleStreamOptions = {
           ...options,
           apiKey: connection.apiKey,
-          maxTokens: profile.output_limit,
+          maxTokens: outputCap,
+          // 尊重调用方（含Pi摘要）的reasoning选择，不擅自覆盖或关闭。
           reasoning:
-            profile.thinking_level && profile.thinking_level !== "off"
+            options ? options.reasoning :
+            (profile.thinking_level && profile.thinking_level !== "off"
               ? profile.thinking_level
-              : undefined,
+              : undefined),
           maxRetries: 0,
           timeoutMs,
           signal,
@@ -209,28 +223,28 @@ export function guardedModelStream(
             if (!profile.configured_model)
               Object.assign(payload, {
                 model: profile.model_id,
-                max_tokens: profile.output_limit,
+                max_tokens: outputCap,
                 thinking: {
                   type:
-                    profile.thinking_level && profile.thinking_level !== "off"
+                    streamOptions.reasoning
                       ? "enabled"
                       : "disabled",
                 },
                 stream_options: { include_usage: true },
               });
-            const outputCap =
+            const requestedOutputCap =
               connection.api === "openai-responses"
                 ? payload.max_output_tokens
                 : (payload.max_tokens ?? payload.max_completion_tokens);
             if (
-              !Number.isInteger(outputCap) ||
-              outputCap < 1 ||
-              outputCap > profile.output_limit ||
+              !Number.isInteger(requestedOutputCap) ||
+              requestedOutputCap < 1 ||
+              requestedOutputCap > outputCap ||
               (payload.thinking?.type === "enabled" &&
                 connection.api === "anthropic-messages" &&
                 (!Number.isInteger(payload.thinking.budget_tokens) ||
                   payload.thinking.budget_tokens < 1024 ||
-                  payload.thinking.budget_tokens >= outputCap))
+                  payload.thinking.budget_tokens >= requestedOutputCap))
             )
               throw new Error("model_output_limit");
             const messages =
@@ -264,12 +278,26 @@ export function guardedModelStream(
             if (
               Buffer.byteLength(JSON.stringify(payload), "utf8") >
               (profile.payload_bytes_limit ?? 2048)
-            )
+            ) {
               throw new Error(
                 profile.toolset === "data"
                   ? "request_too_large: model_input_limit"
                   : "model_input_limit",
               );
+            }
+            const capacity = planForProfile(profile);
+            if (typeof capacity === "string")
+              throw new Error("model_input_limit");
+            if (capacity) {
+              // 使用完整协议投影的字符估算（不是精确分词）；工具、临时上下文和转义均在其中。
+              // 正常请求在预留线前交Pi原生compact-and-retry；摘要本身仍受I与C约束。
+              const estimatedInput = Math.ceil(JSON.stringify(payload).length / 4);
+              const inputCap = payload.tools?.length
+                ? capacity.trigger
+                : Math.min(profile.input_limit, capacity.contextWindow - requestedOutputCap);
+              if (estimatedInput > inputCap)
+                throw new Error("request_too_large: model_input_limit");
+            }
             parameters_fingerprint = createHash("sha256")
               .update(JSON.stringify(payload))
               .digest("hex");
@@ -280,7 +308,8 @@ export function guardedModelStream(
                 {
                   ...binding(),
                   input_tokens_upper: profile.input_limit,
-                  output_tokens_max: profile.output_limit,
+                  // 金额预留按本次实际输出cap；摘要请求不被按全额预留，也不放大约束。
+                  output_tokens_max: outputCap,
                 },
               );
             } catch (error) {
@@ -345,9 +374,7 @@ export function guardedModelStream(
               throw new Error("model_limits_exceeded");
             stream.push(event);
           } else if (event.type === "error") {
-            let code = event.error.errorMessage?.includes(
-              "request_too_large: model_input_limit",
-            )
+            let code = isContextOverflow(event.error, model.contextWindow)
               ? "request_too_large: model_input_limit"
               : event.error.errorMessage === "model_input_limit"
                 ? "model_input_limit"
@@ -376,7 +403,7 @@ export function guardedModelStream(
             // 取消也可能来自进程交接；只终止当前调用，不把原请求熔断。
             outcome = cancelled()
               ? undefined
-              : canRetry
+              : canRetry || (code === "request_too_large: model_input_limit" && !rawUsage)
                 ? "transient_error"
                 : "permanent_error";
             if (reserved && sent && !(await finalize()))

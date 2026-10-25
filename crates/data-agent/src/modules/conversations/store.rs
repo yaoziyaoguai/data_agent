@@ -303,7 +303,11 @@ pub async fn renew_turn_in_tx(
     ttl_ms: u32,
 ) -> Result<()> {
     assert_turn_in_tx(tx, locked, run_id, epoch)?;
-    sqlx::query("UPDATE conversations SET lease_until=TIMESTAMPADD(MICROSECOND,?,UTC_TIMESTAMP(3)) WHERE id=?").bind(ttl_ms*1000).bind(&locked.id).execute(tx.connection()).await?;
+    let changed = sqlx::query("UPDATE conversations SET lease_until=TIMESTAMPADD(MICROSECOND,?,UTC_TIMESTAMP(3)) WHERE id=? AND lease_owner=? AND lease_epoch=? AND lease_until>UTC_TIMESTAMP(3)")
+        .bind(ttl_ms*1000).bind(&locked.id).bind(run_id).bind(epoch).execute(tx.connection()).await?;
+    if changed.rows_affected() != 1 {
+        return Err(Error::new("lease_lost"));
+    }
     Ok(())
 }
 pub async fn release_turn_in_tx(

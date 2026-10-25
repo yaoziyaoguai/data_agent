@@ -47,6 +47,7 @@ export interface Boundary {
     createConversation:           CreateConversation;
     dataToolInvocation:           DataToolInvocation;
     dataToolOutcome:              DataToolOutcome;
+    EmbeddedSupportLocation?:     EmbeddedSupportLocation;
     embeddingProfile:             EmbeddingProfile;
     event:                        Event;
     evidenceRef:                  EvidenceRef;
@@ -105,6 +106,9 @@ export interface Boundary {
     outputReceipt:                OutputReceipt;
     pi_session_reference:         PiSessionReference;
     prefillResult:                PrefillResult;
+    PreparedRelation?:            PreparedRelation;
+    PreparedStatement?:           PreparedStatement;
+    PreparedSupport?:             PreparedSupport;
     PrepareSkillDraftInput?:      PrepareSkillDraftInput;
     PresentAnalysisAnswerInput?:  PresentAnalysisAnswerInput;
     proposal:                     Proposal;
@@ -154,7 +158,11 @@ export interface Boundary {
     SemanticEvidenceRef?:         SemanticEvidenceRef;
     SemanticMaintenance?:         SemanticMaintenance;
     SemanticMemberList?:          SemanticMemberList;
+    SemanticReference?:           SemanticReference;
+    SemanticRelation?:            SemanticRelation;
+    SemanticStatement?:           SemanticStatement;
     SemanticStructure?:           SemanticStructure;
+    SemanticSupport?:             SemanticSupport;
     SemanticTableRef?:            SemanticTableRef;
     sendModelCall:                SendModelCall;
     sessionReceipt:               SessionReceipt;
@@ -169,7 +177,15 @@ export interface Boundary {
     SkillSuggestion?:             SkillSuggestion;
     SkillSuggestionList?:         SkillSuggestionList;
     snapshot:                     Snapshot;
+    sourceCitation:               SourceCitation;
     sourceDocument:               SourceDocument;
+    SourceExcerpt?:               SourceExcerpt;
+    sourceKey:                    SourceKey;
+    sourceLocator:                SourceLocator;
+    SourcePreparationResult?:     SourcePreparationResult;
+    SourceSyncAccepted?:          SourceSyncAccepted;
+    SourceSyncProgress?:          SourceSyncProgress;
+    SourceWorkProgress?:          SourceWorkProgress;
     sqlInput:                     SQLInput;
     SubmitSemanticCorrection?:    SubmitSemanticCorrection;
     SuggestSkill?:                SuggestSkill;
@@ -288,7 +304,14 @@ export interface AnalysisAnswerSource {
 }
 
 export interface AnalysisAnswerValue {
-    column?:    string;
+    column?: string;
+    /**
+     * observation_cutoff/data_batch在同名角色多条时按field_ref对齐声明；缺省要求该角色唯一。
+     */
+    field_ref?: string;
+    /**
+     * observation_cutoff/data_batch绑定草稿时间基准中用户声明的角色值；未声明时不可绑定。
+     */
     kind:       AnalysisAnswerValueKind;
     metadata?:  Metadata;
     name:       string;
@@ -298,7 +321,10 @@ export interface AnalysisAnswerValue {
     statistic?: Statistic;
 }
 
-export type AnalysisAnswerValueKind = "cell" | "statistic" | "parameter" | "metadata";
+/**
+ * observation_cutoff/data_batch绑定草稿时间基准中用户声明的角色值；未声明时不可绑定。
+ */
+export type AnalysisAnswerValueKind = "cell" | "statistic" | "parameter" | "metadata" | "observation_cutoff" | "data_batch";
 
 export type Metadata = "data_freshness" | "saved_row_count";
 
@@ -325,9 +351,21 @@ export interface Conditions {
     metric:         null | string;
     notes:          string;
     /**
+     * 本题口径决策、依据及采纳来源；null表示尚未作出决定，不自动按无歧义处理。字段缺失表示旧版本未记录。
+     */
+    semantic_resolution?: QuerySemanticResolution | null;
+    /**
+     * null表示本题显式未声明额外来源限制；字段缺失表示旧条件版本未记录新式限制，不能证明用户从未限制。撤销必须显式unset并来自真实用户修改。
+     */
+    source_limits?: SourceLimits | null;
+    /**
      * 时间区间的不包含终点。按明确的业务时区解析后转为UTC完整时间戳，以Z结尾；整月结束为下一月起点，不能写本月最后一天。未指定时为null。
      */
     time_end: null | string;
+    /**
+     * 时间口径角色；统计起止仍沿time_start/time_end，request_clock和平台data_freshness不冒充用户截点。字段缺失表示旧版本未记录。
+     */
+    time_roles?: TimeRole[];
     /**
      * 时间区间的包含起点。按明确的业务时区解析后转为UTC完整时间戳，以Z结尾；不能只写日期。未指定时为null。
      */
@@ -348,6 +386,97 @@ export interface EvidenceRef {
     path:    string;
     version: string;
 }
+
+/**
+ * 保存口径决策及采纳来源；清空使用unset。
+ *
+ *
+ * 与任务当前条件声明对齐：条件已声明决策时省略即继承；携带须与声明逐字一致；条件未声明时按本轮真实用户原话记录explicit_user或如实记录needs_clarification。
+ */
+export interface QuerySemanticResolution {
+    /**
+     *
+     * explicit_user：null=本轮新采纳，由宿主核对user_quote为本轮完整原话后绑定真实消息身份；非空=复制继承原已验证决策的消息身份，不接受模型自由填写。其余basis为null。
+     */
+    adoption_message_id?: null | string;
+    /**
+     * 真实用户明确选择、确无实质歧义、或仍需澄清；资料支持某公式不等于用户选择它。
+     */
+    basis: Basis;
+    /**
+     * 支撑该口径决策的依据引用；旧调用缺失按空数组解码。
+     */
+    evidence_refs?: EvidenceRef[];
+    /**
+     * 本稿采用的指标、分子/分母、时间等关键口径及选择依据；不能把自己刚写入任务的假设当作用户采用。
+     */
+    interpretation: string;
+    /**
+     * 仍会改变答案且未获选择的分子、分母、时间归属等差异；有差异必须先澄清，不能默认写稿。
+     */
+    unresolved_differences: string[];
+    /**
+     * explicit_user逐字填写本条真实用户完整原话，保留否定、前提、例外和换行，不截取子串；其余为null。
+     */
+    user_quote: null | string;
+}
+
+/**
+ * 真实用户明确选择、确无实质歧义、或仍需澄清；资料支持某公式不等于用户选择它。
+ */
+export type Basis = "explicit_user" | "unambiguous" | "needs_clarification";
+
+/**
+ * 设置来源限制；撤销使用unset source_limits，不接受设为空集。
+ */
+export interface SourceLimits {
+    /**
+     * 非空允许集；限制跟稳定来源身份走，实际读取仍核对当前修订。
+     */
+    allowed_sources: [SourceKey, ...SourceKey[]];
+    /**
+     * 由宿主绑定的真实消息身份；不接受模型自由填写。
+     */
+    origin_message_ids: string[];
+}
+
+/**
+ * 来源的稳定身份；不包含修订号，也不使用索引chunk ID。
+ */
+export interface SourceKey {
+    id:   string;
+    kind: SourceKeyKind;
+}
+
+export type SourceKeyKind = "platform" | "document";
+
+export interface TimeRole {
+    /**
+     * 业务含义说明。
+     */
+    description: string;
+    /**
+     * 支撑该时间口径的依据；可空数组。
+     */
+    evidence_refs: EvidenceRef[];
+    /**
+     * 采用的时间字段引用；可空。
+     */
+    field_ref: null | string;
+    /**
+     * 采用的时间字段含义、观察截点或数据批次；三者不混用。
+     */
+    role: TimeRoleRole;
+    /**
+     * observation_cutoff必须为带时区的时间值，data_batch必须为批次值；event_time可空（实际区间沿time_start/time_end）。
+     */
+    value: null | string;
+}
+
+/**
+ * 采用的时间字段含义、观察截点或数据批次；三者不混用。
+ */
+export type TimeRoleRole = "event_time" | "observation_cutoff" | "data_batch";
 
 export interface AnalysisFinding {
     calculation:    string;
@@ -577,6 +706,22 @@ export interface ConversationSkillSelections {
     selections:      ConversationSkillSelection[];
 }
 
+export interface EmbeddedSupportLocation {
+    field:   Field;
+    locator: SourceLocator;
+}
+
+export type Field = "text" | "scope_text";
+
+/**
+ * offset及length固定使用Unicode code point；heading_path仅作定位提示。
+ */
+export interface SourceLocator {
+    heading_path?: string[];
+    length:        number;
+    offset:        number;
+}
+
 export interface GetQueryInput {
     column_index?: number;
     /**
@@ -610,7 +755,7 @@ export interface KnowledgeRetrievalExcerpt {
     total_chars: number;
 }
 
-export type KnowledgeRetrievalState = "located" | "unlocated";
+export type KnowledgeRetrievalState = "located" | "unlocated" | "index_lag";
 
 export interface MaintenanceDependent {
     can_edit:            boolean;
@@ -688,6 +833,50 @@ export interface SkillFile {
     content: string;
     path:    string;
 }
+
+export interface PreparedRelation {
+    citations:  [SourceCitation, ...SourceCitation[]];
+    key:        string;
+    predicate:  Predicate;
+    scope_text: string;
+    subject:    EvidenceRef;
+    target:     SemanticReference;
+}
+
+export interface SourceCitation {
+    locator:  SourceLocator;
+    revision: string;
+    source:   SourceKey;
+}
+
+export type Predicate = "explains" | "requires" | "exception" | "computes" | "derived_from" | "joins" | "related";
+
+export interface SemanticReference {
+    citation?: SourceCitation;
+    kind:      SemanticReferenceKind;
+    ref?:      EvidenceRef;
+}
+
+export type SemanticReferenceKind = "source" | "knowledge";
+
+export interface PreparedStatement {
+    citations:  [SourceCitation, ...SourceCitation[]];
+    key:        string;
+    scope_text: string;
+    supports:   PreparedSupport[];
+    target:     EvidenceRef;
+    text:       string;
+}
+
+export interface PreparedSupport {
+    content:     null | string;
+    embedded_in: EmbeddedSupportLocation | null;
+    key:         string;
+    reference:   SemanticReference;
+    role:        PreparedSupportRole;
+}
+
+export type PreparedSupportRole = "prerequisite" | "exception" | "calculation_dependency";
 
 export interface PresentAnalysisAnswerInput {
     sources: [AnalysisAnswerSource, ...AnalysisAnswerSource[]];
@@ -933,6 +1122,36 @@ export interface SemanticMemberList {
     user_ids: string[];
 }
 
+export interface SemanticRelation {
+    citations:   SourceCitation[];
+    origin:      Origin;
+    predicate:   Predicate;
+    relation_id: string;
+    scope_text:  string;
+    subject:     EvidenceRef;
+    target:      SemanticReference;
+}
+
+export type Origin = "source_fact" | "model_inference" | "human";
+
+export interface SemanticStatement {
+    citations:    SourceCitation[];
+    object_ref:   EvidenceRef;
+    origin:       Origin;
+    scope_text:   string;
+    statement_id: string;
+    supports:     SemanticSupport[];
+    text:         string;
+}
+
+export interface SemanticSupport {
+    content:     null | string;
+    embedded_in: EmbeddedSupportLocation | null;
+    reference:   SemanticReference;
+    role:        PreparedSupportRole;
+    support_id:  string;
+}
+
 export type SemanticStructure = {
     kind: "table";
     grain: string;
@@ -966,12 +1185,25 @@ export type SemanticStructure = {
     applicable_question: string;
     parameters: QueryExampleParameter[];
     sql: string;
+    computed_metrics?: ComputedMetric[];
     grain: string;
     dependencies: [EvidenceRef, ...EvidenceRef[]];
     verification: QueryExampleVerification | null;
 };
 
 export type Cardinality = "one_to_one" | "one_to_many" | "many_to_one" | "many_to_many";
+
+export interface ComputedMetric {
+    /**
+     * 输出该口径的表达式或列计算说明。
+     */
+    expression: string;
+    metric_ref: EvidenceRef;
+    /**
+     * 该SQL实际输出的口径名；与过滤中用到的指标分开表达。
+     */
+    output_name: string;
+}
 
 export interface JoinKey {
     left_column:  string;
@@ -1067,6 +1299,53 @@ export interface SkillSuggestionList {
     next_after_id: null | string;
     suggestions:   SkillSuggestion[];
 }
+
+export interface SourceExcerpt {
+    citation: SourceCitation;
+    content:  string;
+}
+
+export interface SourcePreparationResult {
+    relations:       PreparedRelation[];
+    semantic_status: SemanticStatus;
+    statements:      PreparedStatement[];
+    unresolved:      string[];
+}
+
+export type SemanticStatus = "partial" | "ready";
+
+export interface SourceSyncAccepted {
+    status:     SourceSyncAcceptedStatus;
+    status_url: string;
+    sync_id:    string;
+}
+
+export type SourceSyncAcceptedStatus = "queued" | "running" | "completed" | "failed";
+
+export interface SourceSyncProgress {
+    error_code: null | string;
+    /**
+     * 已持久化的可展示失败说明，例如来源的实际大小和上限；旧批次可缺省。
+     */
+    error_message?:    null | string;
+    knowledge_index:   SourceWorkProgress;
+    pages_committed:   number;
+    preparation:       SourceWorkProgress;
+    processed_sources: number;
+    raw_index:         SourceWorkProgress;
+    status:            SourceSyncAcceptedStatus;
+    status_url:        string;
+    sync_id:           string;
+}
+
+export interface SourceWorkProgress {
+    completed: number;
+    failed:    number;
+    status:    SourceWorkProgressStatus;
+    total:     number;
+}
+
+export type SourceWorkProgressStatus = "pending" | "running" | "completed" | "failed" | "not_required";
 
 export interface SubmitSemanticCorrection {
     base_version:    string;
@@ -1171,9 +1450,21 @@ export interface ConditionSet {
     metric?:         string;
     notes?:          string;
     /**
+     * 保存口径决策及采纳来源；清空使用unset。
+     */
+    semantic_resolution?: QuerySemanticResolution;
+    /**
+     * 设置来源限制；撤销使用unset source_limits，不接受设为空集。
+     */
+    source_limits?: SourceLimits;
+    /**
      * 修改区间的不包含终点，按业务时区解析后填写UTC完整时间戳，以Z结尾；整月结束为下一月起点。清空使用unset；未修改则省略。
      */
     time_end?: string;
+    /**
+     * 整体替换时间口径角色；清空使用unset。
+     */
+    time_roles?: [TimeRole, ...TimeRole[]];
     /**
      * 修改区间的包含起点，按业务时区解析后填写UTC完整时间戳，以Z结尾。清空使用unset；未修改则省略。
      */
@@ -1181,7 +1472,7 @@ export interface ConditionSet {
     timezone?:   string;
 }
 
-export type Unset = "time_start" | "time_end" | "metric" | "channel" | "group_by" | "filters" | "knowledge_refs" | "notes";
+export type Unset = "time_start" | "time_end" | "metric" | "channel" | "group_by" | "filters" | "knowledge_refs" | "notes" | "source_limits" | "time_roles" | "semantic_resolution";
 
 export interface AppError {
     code:       Code;
@@ -1190,7 +1481,7 @@ export interface AppError {
     retryable:  boolean;
 }
 
-export type Code = "budget_exhausted" | "chunk_gap" | "forbidden" | "idempotency_conflict" | "input_already_applied" | "invalid_evidence" | "invalid_input" | "lease_lost" | "message_pending" | "not_available" | "outcome_unknown" | "result_unavailable" | "scope_incomplete" | "selection_required" | "source_unavailable" | "stale_context" | "stale_knowledge" | "unauthenticated" | "unavailable" | "unsupported" | "version_conflict" | "memory_unavailable" | "memory_extraction_empty" | "memory_operation_unknown" | "vector_unconfigured" | "vector_unavailable" | "embedding_unavailable" | "source_interrupted" | "result_expired" | "model_retry_exhausted" | "model_unavailable" | "invalid_model_endpoint" | "model_credential_required" | "model_secret_unavailable" | "task_inactive" | "waiting_clarification" | "clarification_not_open" | "clarification_required";
+export type Code = "budget_exhausted" | "chunk_gap" | "forbidden" | "idempotency_conflict" | "input_already_applied" | "invalid_evidence" | "invalid_input" | "lease_lost" | "message_pending" | "not_available" | "outcome_unknown" | "result_unavailable" | "scope_incomplete" | "selection_required" | "source_not_allowed" | "source_unavailable" | "stale_context" | "stale_knowledge" | "task_context_required" | "unauthenticated" | "unavailable" | "unsupported" | "version_conflict" | "memory_unavailable" | "memory_extraction_empty" | "memory_operation_unknown" | "vector_unconfigured" | "vector_unavailable" | "embedding_unavailable" | "source_interrupted" | "result_expired" | "model_retry_exhausted" | "model_unavailable" | "invalid_model_endpoint" | "model_credential_required" | "model_secret_unavailable" | "model_capacity_invalid" | "task_inactive" | "waiting_clarification" | "clarification_not_open" | "clarification_required" | "provider_configuration_invalid" | "provider_model_unavailable" | "invalid_skill_resource" | "invalid_skill_receipt" | "model_run_failed" | "model_request_failed" | "model_input_limit" | "model_output_limit" | "request_too_large: model_input_limit" | "model_budget_exhausted" | "model_timeout" | "model_auth_failed" | "model_rate_limited" | "model_quota_exhausted" | "model_service_unavailable" | "model_network_error" | "model_usage_unknown" | "model_usage_invalid" | "model_limits_exceeded" | "model_finalize_unconfirmed" | "model_receipt_unknown" | "provider_transport_rejected" | "provider_parameters_changed" | "provider_payload_invalid" | "run_cancelled" | "checkpoint_conflict" | "answer_sources_required" | "no_final_output" | "invalid_tool_arguments";
 
 export interface AppendOutput {
     chunk_seq:   string;
@@ -1293,7 +1584,7 @@ export interface ChatMessage {
     message_id?:    null | string;
     output_id?:     null | string;
     request_clock?: RequestClock;
-    role:           Role;
+    role:           ChatMessageRole;
     text:           string;
 }
 
@@ -1304,7 +1595,7 @@ export interface RequestClock {
 
 export type BusinessTimezone = "UTC" | "Asia/Shanghai";
 
-export type Role = "user" | "assistant";
+export type ChatMessageRole = "user" | "assistant";
 
 export interface Checkpoint {
     authority_revision?: null | string;
@@ -1551,11 +1842,16 @@ export interface KnowledgeObject {
     maintenance?:    SemanticMaintenance;
     name:            string;
     prefill_status?: PrefillStatus | null;
-    related_ids:     string[];
-    retrieval?:      KnowledgeRetrieval;
-    source_id:       null | string;
-    source_version:  string;
-    state:           AssetState;
+    /**
+     * 当前来源的语义整理状态；与对象级预填分开表达，两作业互不冒充。
+     */
+    preparation_status?: PreparationStatus | null;
+    related_ids:         string[];
+    retrieval?:          KnowledgeRetrieval;
+    semantic_relations?: SemanticRelation[];
+    source_id:           null | string;
+    source_version:      string;
+    state:               AssetState;
     /**
      * 平台移除与人工停用分开；重新出现只能恢复平台导致的停用。
      */
@@ -1573,6 +1869,7 @@ export interface KnowledgeEntry {
     path:                 string;
     review_state:         ReviewState;
     source_facts:         SourceFacts;
+    statements?:          SemanticStatement[];
     suggestion:           Suggestion;
 }
 
@@ -1596,6 +1893,13 @@ export interface Suggestion {
 export interface PrefillStatus {
     attempt_id: string;
     error_code: null | string;
+    state:      string;
+}
+
+export interface PreparationStatus {
+    error_code: null | string;
+    revision:   string;
+    source_id:  string;
     state:      string;
 }
 
@@ -1817,21 +2121,38 @@ export interface ModelConfiguration {
 
 export interface ModelDefinition {
     anthropic_thinking_mode?: AnthropicThinkingMode;
-    default_thinking:         ThinkingLevel;
-    enabled:                  boolean;
-    id:                       string;
-    input_limit:              number;
-    input_rate:               string;
-    label:                    string;
-    model_id:                 string;
-    output_limit:             number;
-    output_rate:              string;
-    payload_bytes_limit:      number;
-    reasoning_supported:      boolean;
-    service_id:               string;
-    thinking_levels:          [ThinkingLevel, ...ThinkingLevel[]];
-    version:                  string;
+    /**
+     * 窗口能力来源：SDK目录或管理员声明；目录外型号不猜窗口。
+     */
+    capability_source?: CapabilitySource;
+    /**
+     * 总上下文tokens；与输入/输出策略分开表达。
+     */
+    context_window?:     number;
+    default_thinking:    ThinkingLevel;
+    enabled:             boolean;
+    id:                  string;
+    input_limit:         number;
+    input_rate:          string;
+    label:               string;
+    model_id:            string;
+    output_limit:        number;
+    output_rate:         string;
+    payload_bytes_limit: number;
+    reasoning_supported: boolean;
+    /**
+     * 单次provider请求超时毫秒，随模型修订冻结；历史缺字段按90000处理。
+     */
+    request_timeout_ms?: number;
+    service_id:          string;
+    thinking_levels:     [ThinkingLevel, ...ThinkingLevel[]];
+    version:             string;
 }
+
+/**
+ * 窗口能力来源：SDK目录或管理员声明；目录外型号不猜窗口。
+ */
+export type CapabilitySource = "sdk_catalog" | "admin_declared";
 
 export interface ModelService {
     api:                   API;
@@ -1862,8 +2183,16 @@ export interface ModelProfile {
     /**
      * 省略沿用有限trial；request为正常持续使用，每消息24次，累计费用/试用期限不默认拦截。
      */
-    budget_mode?:         BudgetMode;
-    configured_model?:    ConfiguredModel;
+    budget_mode?: BudgetMode;
+    /**
+     * 窗口能力来源：SDK目录或管理员声明；目录外型号不猜窗口。
+     */
+    capability_source?: CapabilitySource;
+    configured_model?:  ConfiguredModel;
+    /**
+     * 总上下文tokens；与输入/输出策略分开表达。
+     */
+    context_window?:      number;
     input_limit:          number;
     model_id:             string;
     output_limit:         number;
@@ -1871,11 +2200,15 @@ export interface ModelProfile {
     price_version:        string;
     provider_id:          string;
     request_call_limit?:  number;
-    thinking_level?:      ThinkingLevel;
-    toolset?:             Toolset;
-    trial_call_limit?:    number;
-    trial_cost_micros?:   string;
-    trial_id:             string;
+    /**
+     * 单次provider请求超时毫秒，随模型修订冻结；历史缺字段按90000处理。
+     */
+    request_timeout_ms?: number;
+    thinking_level?:     ThinkingLevel;
+    toolset?:            Toolset;
+    trial_call_limit?:   number;
+    trial_cost_micros?:  string;
+    trial_id:            string;
 }
 
 /**
@@ -1989,19 +2322,37 @@ export interface QueryView {
      * 草稿工具回执的非阻断诊断；查询读取接口不承诺重现此报告。
      */
     semantic_checks?: SemanticCheckReport;
-    sql?:             string;
-    summary?:         string;
-    target_id:        string;
-    task_id:          string;
+    /**
+     * 保存草稿时的口径决策及依据；旧记录返回null，不从自由文本或模型历史猜回填。
+     */
+    semantic_resolution?: QuerySemanticResolution | null;
+    sql?:                 string;
+    summary?:             string;
+    target_id:            string;
+    task_id:              string;
     /**
      * 正文来源失效或无法核实时只返回查询身份和控制状态；SQL、参数、说明、依据及诊断正文均不可返回。
      */
     text_unavailable?: boolean;
+    /**
+     * 保存草稿时任务条件声明的时间基准；旧草稿返回null。观察截点与批次是用户声明，不得以request_clock或平台data_freshness冒充。
+     */
+    time_basis?: TimeBasis | null;
 }
 
 export interface ErrorDetails {
     code:    string;
     message: string;
+}
+
+/**
+ * 草稿保存时从任务当前条件投影的时间基准；统计起止沿time_start/time_end，观察截点/批次只在time_roles中声明。
+ */
+export interface TimeBasis {
+    time_end:   null | string;
+    time_roles: TimeRole[];
+    time_start: null | string;
+    timezone:   null | string;
 }
 
 export interface ReadKnowledgeInput {
@@ -2060,7 +2411,8 @@ export interface RequestQueryInput {
     parameters:         { [key: string]: unknown };
     replaces_query_id?: null | string;
     /**
-     * 保存前填写口径决策；省略仅兼容旧调用，不表示用户已确认。
+     *
+     * 与任务当前条件声明对齐：条件已声明决策时省略即继承；携带须与声明逐字一致；条件未声明时按本轮真实用户原话记录explicit_user或如实记录needs_clarification。
      */
     semantic_resolution?: QuerySemanticResolution;
     sql:                  string;
@@ -2068,33 +2420,6 @@ export interface RequestQueryInput {
     target_id:            TargetID;
     task_id:              string;
 }
-
-/**
- * 保存前填写口径决策；省略仅兼容旧调用，不表示用户已确认。
- */
-export interface QuerySemanticResolution {
-    /**
-     * 真实用户明确选择、确无实质歧义、或仍需澄清；资料支持某公式不等于用户选择它。
-     */
-    basis: Basis;
-    /**
-     * 本稿采用的指标、分子/分母、时间等关键口径及选择依据；不能把自己刚写入任务的假设当作用户采用。
-     */
-    interpretation: string;
-    /**
-     * 仍会改变答案且未获选择的分子、分母、时间归属等差异；有差异必须先澄清，不能默认写稿。
-     */
-    unresolved_differences: string[];
-    /**
-     * explicit_user逐字填写本条真实用户完整原话，保留否定、前提、例外和换行，不截取子串；其余为null。
-     */
-    user_quote: null | string;
-}
-
-/**
- * 真实用户明确选择、确无实质歧义、或仍需澄清；资料支持某公式不等于用户选择它。
- */
-export type Basis = "explicit_user" | "unambiguous" | "needs_clarification";
 
 export type TargetID = "synthetic-sqlite";
 
@@ -2201,20 +2526,32 @@ export interface SaveDefaultModel {
 
 export interface SaveModelDefinition {
     anthropic_thinking_mode?: AnthropicThinkingMode;
-    default_thinking:         ThinkingLevel;
-    enabled:                  boolean;
-    expected_version:         string;
-    id:                       string;
-    input_limit:              number;
-    input_rate:               string;
-    label:                    string;
-    model_id:                 string;
-    output_limit:             number;
-    output_rate:              string;
-    payload_bytes_limit:      number;
-    reasoning_supported:      boolean;
-    service_id:               string;
-    thinking_levels:          [ThinkingLevel, ...ThinkingLevel[]];
+    /**
+     * 窗口能力来源：SDK目录或管理员声明；目录外型号不猜窗口。
+     */
+    capability_source: CapabilitySource;
+    /**
+     * 总上下文tokens；与输入/输出策略分开表达。
+     */
+    context_window:      number;
+    default_thinking:    ThinkingLevel;
+    enabled:             boolean;
+    expected_version:    string;
+    id:                  string;
+    input_limit:         number;
+    input_rate:          string;
+    label:               string;
+    model_id:            string;
+    output_limit:        number;
+    output_rate:         string;
+    payload_bytes_limit: number;
+    reasoning_supported: boolean;
+    /**
+     * 单次provider请求超时毫秒，随模型修订冻结；历史缺字段按90000处理。
+     */
+    request_timeout_ms: number;
+    service_id:         string;
+    thinking_levels:    [ThinkingLevel, ...ThinkingLevel[]];
 }
 
 export interface SaveModelSelection {

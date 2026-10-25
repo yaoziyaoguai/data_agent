@@ -203,7 +203,8 @@ pub(super) async fn reserve_model_call(
     let profile: crate::contracts::generated::ModelProfile =
         crate::contracts::decode("ModelProfile", value.0)?;
     if input.input_tokens_upper != profile.input_limit
-        || input.output_tokens_max != profile.output_limit
+        || input.output_tokens_max == 0
+        || input.output_tokens_max > profile.output_limit
     {
         return Err(Error::new("invalid_input"));
     }

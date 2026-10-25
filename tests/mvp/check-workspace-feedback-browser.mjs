@@ -1,3 +1,4 @@
+import {synchronizeSources} from './source-sync.mjs';
 import {discardEditor, expandAsset} from './experience-navigation.mjs';
 import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
@@ -13,7 +14,7 @@ const navigate=name=>page.getByRole('navigation',{name:'主导航'}).getByRole('
 const login=async user=>{await page.goto(h.url);await page.getByLabel('演示登录凭据').fill(h.tokens[user]);await page.getByRole('button',{name:'进入工作台 →'}).click();};
 const tab=name=>page.getByRole('tab',{name:new RegExp('^'+name)}).click();
 try {
- ok(await h.request('/source-syncs',{operation_id:randomUUID()}));
+ assert.equal((await synchronizeSources(h)).value.status, 'completed');
  const catalog=await fetch(h.env.DATA_AGENT_PLATFORM_URL+'/catalog',{method:'POST',headers:{authorization:'Bearer '+h.env.DATA_AGENT_INTERNAL_TOKEN,'content-type':'application/json'},body:JSON.stringify({limit:50})}).then(r=>r.json());
  const ownership=h.sql("SELECT JSON_OBJECT('id',object_id,'owner',maintainer_id,'version',CAST(version AS CHAR)) FROM semantic_ownership ORDER BY object_id");
  await writeFile(h.directory+'/platform/catalog.json',JSON.stringify({source_namespace:catalog.source_namespace,tables:catalog.tables.map(t=>({...t,maintainer_id:'bob'}))}));

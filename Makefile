@@ -102,6 +102,41 @@ verify-model-provider:
 	node tests/runtime/check-model-provider.mjs
 	node tests/runtime/check-model-admission.mjs
 
+.PHONY: verify-runtime-capacity verify-retrieval-lease verify-worker-storage-recovery verify-compatible-restore
+verify-runtime-capacity:
+	$(CARGO) build --offline --locked -p data-agent-api -p data-agent-worker
+	$(CARGO) test --offline --locked -p data-agent --lib modules::runtime::model_configuration::capacity
+	node tests/runtime/check-capacity-derivation.mjs
+	node tests/runtime/check-capacity-boundaries.mjs
+	node tests/runtime/check-configured-provider.mjs
+	node tests/runtime/check-sdk-event-order.mjs
+	node tests/runtime/check-request-policy.mjs
+	node tests/mvp/check-model-configuration.mjs
+	node tests/mvp/check-configured-compaction.mjs
+
+verify-retrieval-lease:
+	$(CARGO) build --offline --locked -p data-agent-api -p data-agent-worker
+	node tests/mvp/check-skill-selection-locks.mjs
+	node tests/mvp/check-slow-retrieval-lease.mjs
+
+verify-worker-storage-recovery:
+	$(CARGO) build --offline --locked -p data-agent-api -p data-agent-worker
+	node tests/runtime/check-harness-cleanup.mjs
+	$(CARGO) test --offline --locked -p data-agent-worker
+	$(CARGO) test --offline --locked -p data-agent --lib types::tests
+	$(CARGO) test --offline --locked -p data-agent --lib use_cases::deliver_run::tests
+	node tests/mvp/check-worker-storage-recovery.mjs
+	node tests/mvp/check-worker-run-deadline.mjs
+
+verify-compatible-restore:
+	$(CARGO) build --offline --locked -p data-agent-api -p data-agent-worker
+	node tests/mvp/check-native-compaction.mjs
+	node tests/mvp/check-recovery-continuation.mjs
+	node tests/mvp/check-large-tool-context.mjs
+	node tests/mvp/check-session.mjs
+	node tests/mvp/check-checkpoint-storage.mjs
+	node tests/mvp/check-task-text-authority.mjs
+
 # 只审计已完成的官方小样，不再次付费。执行获准小样须显式运行--run命令。
 verify-model-trial:
 	$(CARGO) build --offline --locked -p data-agent-api -p data-agent-worker
@@ -109,9 +144,36 @@ verify-model-trial:
 
 verify-runtime-regression: verify-runtime-flow verify-recovery verify-architecture
 
+# 03语义整理三组验收：分段合同、整理运行链路、有效依赖语义。
+.PHONY: verify-source-segments verify-source-preparation verify-effective-dependencies
+verify-source-segments:
+	$(CARGO) test --offline --locked -p data-agent --test source_segments
+
+verify-source-preparation:
+	$(CARGO) build --offline --locked -p data-agent-api -p data-agent-worker
+	node tests/mvp/check-source-preparation.mjs
+	node tests/mvp/check-source-preparation-concurrency.mjs
+	node tests/mvp/check-document-preparation.mjs
+
+verify-effective-dependencies:
+	$(CARGO) test --offline --locked -p data-agent --test knowledge_dependencies
+	node tests/mvp/check-context-dependencies.mjs
+	node tests/mvp/check-retrieval-coverage.mjs
+
+verify-task-conditions:
+	$(CARGO) build --offline --locked -p data-agent-api -p data-agent-worker
+	$(CARGO) build --offline --locked -p data-agent --bin validate_contracts
+	node tests/contracts/check-contracts.mjs
+	node tests/mvp/check-tool-schema.mjs
+	node tests/mvp/check-query-semantics.mjs
+	node tests/mvp/check-task-text-authority.mjs
+	node tests/mvp/check-source-limits.mjs
+	node tests/mvp/check-time-roles.mjs
+
 .PHONY: verify-query-workflow verify-knowledge-workflow verify-mvp-browser verify-mvp-regression
 verify-query-workflow:
 	$(CARGO) build --offline --locked -p data-agent-api -p data-agent-worker
+	node tests/runtime/check-synthetic-knowledge-reading.mjs
 	node tests/mvp/check-query-workflow.mjs
 	node tests/mvp/check-query-boundaries.mjs
 	node tests/mvp/check-request-clock.mjs
@@ -137,6 +199,9 @@ verify-knowledge-workflow:
 	node tests/mvp/check-prefill-materials.mjs
 	node tests/mvp/check-prefill-concurrency.mjs
 	node tests/mvp/check-prefill-timeouts.mjs
+	node tests/mvp/check-source-preparation.mjs
+	node tests/mvp/check-source-preparation-concurrency.mjs
+	node tests/mvp/check-document-preparation.mjs
 	node tests/mvp/check-maintenance-replay.mjs
 	node tests/mvp/check-memory-revisions.mjs
 	node tests/mvp/check-completion-gaps.mjs
@@ -191,6 +256,36 @@ verify-catalog-workflow:
 	node tests/mvp/check-catalog-import.mjs
 	node tests/mvp/check-analysis-preference.mjs
 	node tests/mvp/check-retrieval-coverage.mjs
+
+.PHONY: verify-source-content verify-source-sync verify-source-upgrade verify-source-ui
+verify-source-content:
+	$(CARGO) build --offline --locked -p data-agent-api -p data-agent-worker
+	$(CARGO) test --offline --locked -p data-agent --lib modules::ingestion::catalog_content
+	$(CARGO) test --offline --locked -p data-agent --lib types::source_locator
+	node tests/runtime/check-catalog-transport.mjs
+	node tests/mvp/check-source-content.mjs
+	node tests/mvp/check-source-storage.mjs --case representation
+	node tests/mvp/check-source-storage.mjs --case boundary
+
+verify-source-sync:
+	$(CARGO) build --offline --locked -p data-agent-api -p data-agent-worker
+	node tests/mvp/check-source-sync.mjs
+	node tests/mvp/check-source-sync-recovery.mjs
+	node tests/mvp/check-source-sync-heartbeat.mjs
+	node tests/mvp/check-source-storage.mjs --case pages
+	node tests/mvp/check-catalog-import.mjs
+	node tests/mvp/check-maintenance-replay.mjs
+	node tests/mvp/check-prefill-concurrency.mjs
+	node tests/mvp/check-semantic-role-boundaries.mjs --case sync
+
+verify-source-upgrade:
+	$(CARGO) build --offline --locked -p data-agent-api -p data-agent-worker
+	node tests/mvp/check-source-upgrade.mjs
+
+verify-source-ui:
+	$(CARGO) build --offline --locked -p data-agent-api -p data-agent-worker
+	node tests/runtime/check-source-sync-browser.mjs
+	node tests/mvp/check-source-sync-browser.mjs
 
 .PHONY: verify-official-business
 verify-official-business:

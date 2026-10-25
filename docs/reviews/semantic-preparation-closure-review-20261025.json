@@ -1,0 +1,278 @@
+{
+  "schema": 1,
+  "review_date": "2026-10-25",
+  "increment": "I2-SEMANTIC-PREPARATION",
+  "base_commit": "fed8276577748c1f77c49c7c8ca2317408129ec3",
+  "reviewer": "独立关闭审查子代理（semantic_preparation_closure_review）：未参与本增量任何实现、契约或测试编写；按主线程指派对03增量做两轮对抗关闭审查。第一轮发现两项阻塞、一项非阻塞并给出反例（crates/data-agent/tests/semantic_review_counterexamples.rs，修复后由实现侧改写为业务命名回归 source_fanout_failed_recovery.rs，原反例文件已删）；主线程修复后本轮逐项复核代码并亲自复跑全部相关验收，结论更新为 passed。审查者写入：本记录与 .local/checks/semrev-closure-20261025.log；未改产品代码、未提交推送、未动 docs/CURRENT.md frontmatter 与 .local/delivery/。两轮动态验证均用自有新合成库与本地合成协议provider，官方付费请求0。",
+  "conclusion": "passed",
+  "summary": "两轮审查合并结论。第一轮在新合成库实测三组绑定验收全部通过，但发现两项阻塞：其一（产品修复链断裂）扇出对“准备failed+作业failed”的来源执行reopen却无消费者可领取——requeue只翻finished作业，行被改成pending后永不重整，违反17.3.1“依赖已变→缺有效成果仍排整理”；其二（已记录证据不可复现）applying重构把complete_batch收紧为call_state='applying'并新增stage_apply_in_tx，但semantic_preparation.rs状态机测试未同步，确定性失败2/3且check-semantic-preparation passed=false，CURRENT相关3/3记载失效。另报一项非阻塞过期读取竞态。主线程修复（requeue_terminal_source_in_tx纳入failed、reopen按error_code排除model_unknown终态保住unknown预留不重发、状态机测试补stage_apply、读取侧新增“在途+窗口已过→model_unknown”分支）后，本轮逐行复核修复代码并亲自复跑：source_fanout_failed_recovery 2/2（含unknown终态不动的反例）、semantic_preparation 3/3、check-semantic-preparation passed=true、knowledge_dependencies 10/10（新库）、check-source-preparation 五阶段（含unknown不重发与版本竞态重开批）、fmt/clippy(-D warnings)/双二进制重建全绿。三组绑定验收在本审查者两轮运行中均实测通过；实现主干（分批冻结/游标/预算/unknown纪律/版本竞态重开批/applying恢复/superseded、依赖索引+传递游走+贡献根+人工四类编辑+检索过滤改索引+内容指纹、结构依赖/computed_metrics/准备状态、文档原子登记与两作业互不等待、多Worker专项、扇出登记与消费）与要求、合同、测试一致，此前审查修复均核实仍在。修复后无剩余本轮阻塞发现；此结论不代表 make verify-increment 已执行，最终gate与收据仍由主线程完成。",
+  "scope_sha256": "1eabb18e5fa22e8cf85108aeb0e4b8d9fbb636edc8569dd0ddad8a96ca013779",
+  "fingerprint": {
+    "method": "scope_sha256 按 scripts/check_delivery.py 的 review_scope 口径：在 review.record 回填为 docs/reviews/semantic-preparation-closure-review-20261025.json 的等价状态下，对修复后当前工作树（CURRENT.md 正文含“独立审查与修复（2026-10-25）”节）调用 fingerprint(root, delivery, for_review=True) 现场计算（排除本记录与review指针）。主线程回填时只允许改 review 字段（已在归一化中排除）；若同时改动 CURRENT.md 正文或 verification_inputs，本摘要过期须重审。另附实现主线文件清单摘要（任务指派口径）：36个文件（新增 source_fanout_failed_recovery.rs）按路径排序、逐文件拼接 path+sha256+换行后取sha256=4a0d8ca2a260104562f9b263c5e2603b84b5b55a2086b1092039be944fc53db8。",
+    "contract_sha256": "f3f18946db6fbee5afcb658e60f733ddcc0ad3482e452c4d5db4ba0050eb8df9",
+    "decisions_sha256": "c6456f454f3efb5763440301d1ea3298c518024f0fede2cb6be7dd86fa103e3b",
+    "input_file_count": 403,
+    "mainline_files": [
+      "apps/api/src/data_routes.rs", "apps/api/src/main.rs", "apps/api/src/routes.rs",
+      "apps/web/src/features/knowledge/KnowledgePage.tsx", "apps/worker/src/main.rs",
+      "crates/data-agent/src/modules/ingestion/catalog.rs", "crates/data-agent/src/modules/ingestion/mod.rs",
+      "crates/data-agent/src/modules/ingestion/preparation.rs", "crates/data-agent/src/modules/ingestion/prefill.rs",
+      "crates/data-agent/src/modules/ingestion/store.rs",
+      "crates/data-agent/src/modules/knowledge/dependency_index.rs", "crates/data-agent/src/modules/knowledge/mod.rs",
+      "crates/data-agent/src/modules/knowledge/store.rs",
+      "crates/data-agent/src/modules/retrieval/source_segments.rs",
+      "crates/data-agent/src/use_cases/knowledge.rs", "crates/data-agent/src/use_cases/knowledge_documents.rs",
+      "crates/data-agent/src/use_cases/knowledge_sources.rs", "crates/data-agent/src/use_cases/mod.rs",
+      "crates/data-agent/src/use_cases/source_fanout.rs", "crates/data-agent/src/use_cases/source_preparation.rs",
+      "crates/data-agent/tests/knowledge_dependencies.rs", "crates/data-agent/tests/semantic_preparation.rs",
+      "crates/data-agent/tests/source_fanout_failed_recovery.rs", "crates/data-agent/tests/source_segments.rs",
+      "Makefile",
+      "migrations/202610240002_semantic_preparation.sql", "migrations/202610240003_source_preparations.sql",
+      "migrations/202610240004_knowledge_dependencies.sql",
+      "packages/contracts/generated/boundary.rs", "packages/contracts/generated/boundary.ts",
+      "packages/contracts/generated/names.ts", "packages/contracts/openapi.json", "packages/contracts/schema.json",
+      "tests/mvp/check-document-preparation.mjs", "tests/mvp/check-source-preparation-concurrency.mjs",
+      "tests/mvp/check-source-preparation.mjs"
+    ],
+    "meaning": "绑定 CURRENT 增量合同（除status/evidence/review）、已确认决定、registry、AGENTS 及声明的 verification_inputs；403个输入文件不表示逐行重审，逐行核对限于上述36个主线文件及jobs/store.rs、knowledge/preparation/*、dependencies.rs等直接关联实现（含修复轮变更）。"
+  },
+  "review_basis": [
+    "docs/CURRENT.md：goal_revision 95，I2-SEMANTIC-PREPARATION active；03各节（来源级准备消费、文档保存原子登记、依赖索引写入路径、依赖传递游走与消费者接线、实际贡献根查询、人工四种编辑、结构依赖/computed_metrics/准备状态、多Worker专项与应用恢复、来源变更扇出、独立审查与修复2026-10-25）",
+    "docs/execution/semantic-runtime/semantic-preparation.md（03执行包10条与反例表）",
+    "docs/architecture/implementation-design.md：17.2/17.3/17.3.1/17.3.2/17.6/17.6.1",
+    "docs/semantic-retrieval-design.md：D04/D05/D06/D07、C02/C06/C07、A05/A07/A09",
+    "Makefile：verify-source-segments / verify-source-preparation / verify-effective-dependencies",
+    "docs/reviews/source-sync-closure-review-20261024.json、runtime-capacity-closure-review-20261024.json（记录格式与01/02关闭基线）"
+  ],
+  "requirement_coverage": [
+    {
+      "requirements": ["D06", "C06", "C07"],
+      "result": "确定性分段合同达成：1200/2400/160、背景≤256独立引用、Unicode字符定位、SQL锁定的sqlparser词法边界与方言回退、无128块上限；游标绑定binding（来源+修订+正文哈希+分段版本）且跨批大小续接、prefix按字符预算截取至少一片段且游标严格前进。7项单测通过（含第129块后尾部覆盖、续接片段ID一致），修复轮复跑通过。",
+      "code": [
+        "crates/data-agent/src/modules/retrieval/source_segments.rs",
+        "crates/data-agent/tests/source_segments.rs"
+      ]
+    },
+    {
+      "requirements": ["D04", "D05", "D06", "D07", "A05", "A07", "A09"],
+      "result": "来源级准备消费达成：prepare_source schema2作业由worker消费，(source_id,revision,method_version)进度行、冻结批次（对象清单截断40如实标注）、分析/复核各一次调用锁外执行+心跳续租+原预算结算、成果宿主校验（引用落在单冻结片段/背景、目标对象/版本/条目来自清单、全部绑定当次修订）、payload超限半数拆批、应用与推进同事务核对领取代次+输入指纹+依赖指纹、版本冲突按当前版本重开批、旧修订superseded终态、过期在途转unknown不换ID重发（账上仅一次issued且预留不释放；含修复轮新增的“在途+窗口已过”读取侧分支，与过期清扫同语义，不再误标version_conflict）、applying成果落库后崩溃恢复零新增调用。ready=覆盖完成且unresolved为空（跨批合并、上限200），未解释项非空保持partial。反例表“开头定义/末尾例外不能截头后ready”由首尾标记断言覆盖。维护profile缺失保持真实pending不伪失败。",
+      "code": [
+        "crates/data-agent/src/modules/ingestion/preparation.rs",
+        "crates/data-agent/src/use_cases/source_preparation.rs",
+        "apps/worker/src/main.rs",
+        "migrations/202610240003_source_preparations.sql",
+        "crates/data-agent/tests/semantic_preparation.rs",
+        "tests/mvp/check-source-preparation.mjs",
+        "tests/mvp/check-source-preparation-concurrency.mjs"
+      ]
+    },
+    {
+      "requirements": ["D05", "C02"],
+      "result": "文档保存原子登记达成：单文档创建/改版/通用PATCH同事务登记raw_source_index+prepare_source（唯一键幂等），空正文/分册/停用不登记；文档目标apply不推进原文修订（同修订重写登记行），人工正文与review_state保持；raw待办与整理互不等待（整理ready后raw仍queued）；preparation_status排队期回退真实作业态不冒充、无来源返回null，list与单读两处投影，UI含superseded/unknown文案。消费者对document-来源按对象当前版本+Markdown分段、正文按修订冻结读取。",
+      "code": [
+        "crates/data-agent/src/use_cases/knowledge_documents.rs",
+        "crates/data-agent/src/modules/knowledge/preparation/store.rs",
+        "crates/data-agent/src/modules/ingestion/store.rs",
+        "crates/data-agent/src/use_cases/knowledge.rs",
+        "apps/web/src/features/knowledge/KnowledgePage.tsx",
+        "tests/mvp/check-document-preparation.mjs"
+      ]
+    },
+    {
+      "requirements": ["D05", "C02", "C06", "C07", "A09"],
+      "result": "依赖索引与传递语义达成：同事务DELETE+INSERT按(owner,version)重建、历史版本行保留；rows_for_object覆盖来源事实原始出处/结构化证据、建议材料引用、各层陈述citation与knowledge支持、query_example结构依赖与computed_metrics输出声明（均绑定目标修订）；有效层沿投影优先级（文档固定建议层），同文确认/逐字保留陈述按人工层承载出处，真替换旧层行保留但不有效；knowledge_dependency_states缺行或unknown不当空集（游走报告unknown、检索过滤报告不阻断、贡献根如实返回unknown成员）；walk_required防环、来源目标核对当前修订即止、知识目标下钻、自引跳过、修订推进按相关内容指纹比较（逐字相同不算失效、指纹缺失/正文读不到保守失效）；contribution_roots按登记修订取来源身份闭包（含related有效行、文档自引以自身为根、人工替换后可证空、unknown成员不冒充通过）；assert_in_tx/assert_source_in_tx单点接线（映射完备对象以游走为唯一判定，人工真替换不被废弃建议阻断，旧对象沿用legacy可读）；检索过滤改走索引并有逐根归属重走。动态SQL仅拼?占位符（AssertSqlSafe）。",
+      "code": [
+        "crates/data-agent/src/modules/knowledge/dependency_index.rs",
+        "crates/data-agent/src/modules/knowledge/store.rs",
+        "crates/data-agent/src/modules/knowledge/dependencies.rs",
+        "crates/data-agent/src/use_cases/knowledge_sources.rs",
+        "crates/data-agent/src/use_cases/knowledge.rs",
+        "migrations/202610240004_knowledge_dependencies.sql",
+        "crates/data-agent/tests/knowledge_dependencies.rs",
+        "tests/mvp/check-context-dependencies.mjs",
+        "tests/mvp/check-retrieval-coverage.mjs"
+      ]
+    },
+    {
+      "requirements": ["D04", "D07", "A07"],
+      "result": "来源变更扇出达成（含修复轮）：登记侧在knowledge::persist单一收口按有效依赖存在性同事务登记source_fanout（文档document-前缀、唯一键幂等、首版无依赖自然不登记）；消费侧30s租约纯SQL不调模型、按空间→(owner,version)对分页（每页100）→收敛当前版本→组内一次游走→仅对真正失效依赖者的有效document/platform材料来源按当前修订重开；修复后终态链闭合——reopen按error_code排除model_unknown终态（unknown预留保留、返回Busy不重排），已结算失败（ready/非unknown failed且无在途）复位且其finished/failed作业经requeue_terminal_source_in_tx真重排（清租约重置尝试）；Busy（在途/进行中/unknown）不抢占、缺头跳过、扇出终态且重复消费无副作用；unknown链不触发重整与检索侧口径一致。平台来源改版不经fanout登记，其重整由同步流程对新修订直接enqueue prepare_source，链条闭合。",
+      "code": [
+        "crates/data-agent/src/use_cases/source_fanout.rs",
+        "crates/data-agent/src/modules/knowledge/store.rs",
+        "crates/data-agent/src/modules/ingestion/preparation.rs",
+        "crates/data-agent/src/modules/jobs/store.rs",
+        "crates/data-agent/tests/knowledge_dependencies.rs",
+        "crates/data-agent/tests/source_fanout_failed_recovery.rs"
+      ]
+    }
+  ],
+  "resolved_findings": [
+    {
+      "id": "fanout-reopen-dead-for-failed-preparations",
+      "priority": 1,
+      "status": "resolved",
+      "detail": "【第一轮发现，priority 1阻塞】扇出修复链对“准备failed+作业failed”的来源断裂：reopen_preparation_in_tx复位semantic_status IN ('ready','failed')的准备行后只调requeue（当时仅翻finished作业），(kind,resource_id,resource_version)唯一键使failed作业走ON DUPLICATE UPDATE分支且不命中、保持failed不可领取，行被改成pending后永不重整——违反17.3.1“依赖已变→缺有效成果仍排整理”，且与本增量“不留在pending冒充处理中”纪律冲突。审查者以反例测试实证（作业保持failed、准备行=pending/call_state=NULL）。修复：jobs/store.rs:174-192 重排队函数更名requeue_terminal_source_in_tx，三个IF条件扩为state IN ('finished','failed')（attempts清零、租约清空、翻回queued）；ingestion/preparation.rs reopen_preparation_in_tx WHERE增加(semantic_status='ready' OR error_code IS NULL OR error_code<>'model_unknown')——model_unknown终态返回Busy不复位、其作业不重排（unknown回执预留保留、不自动重整），unknown与已结算失败的区分按error_code落在准备行，不靠作业侧兜底，正对应审查者提示的“naive放宽会重发unknown调用”风险。修复后由审查者亲自复跑：source_fanout_failed_recovery 2/2（已结算model_error失败复位后作业=queued；model_unknown终态行failed/model_unknown与作业failed原状不动），knowledge_dependencies 10/10（新库，含原ready+finished/在途/缺头消费反例）。",
+      "evidence": [
+        "crates/data-agent/src/modules/jobs/store.rs:174-192",
+        "crates/data-agent/src/modules/ingestion/preparation.rs（reopen_preparation_in_tx）",
+        "crates/data-agent/src/use_cases/source_fanout.rs:126-139",
+        "crates/data-agent/tests/source_fanout_failed_recovery.rs（2/2，审查者新库复跑）",
+        ".local/checks/semrev-closure-20261025.log"
+      ]
+    },
+    {
+      "id": "semantic-preparation-state-machine-test-stale-after-applying-refactor",
+      "priority": 2,
+      "status": "resolved",
+      "detail": "【第一轮发现，priority 2阻塞】applying重构（complete_batch_in_tx收紧WHERE call_state='applying'并新增stage_apply_in_tx）未同步semantic_preparation.rs状态机测试：stage_draft→complete_batch直连确定性panic（lease_lost），3项中2项通过，包装检查check-semantic-preparation passed=false，CURRENT多处3/3记载失效且扇出节回归清单与当前树不符。修复：测试两处（semantic_preparation.rs:202、:234）补stage_apply_in_tx(json!({\"statements\":[]}))。修复后由审查者亲自复跑：semantic_preparation 3/3（新库）、check-semantic-preparation.mjs passed=true；CURRENT已新增“独立审查与修复（2026-10-25）”节如实记载。",
+      "evidence": [
+        "crates/data-agent/tests/semantic_preparation.rs:201-235",
+        ".local/checks/semantic-preparation.json（passed:true，审查者复跑覆盖）",
+        ".local/checks/semrev-closure-20261025.log"
+      ]
+    },
+    {
+      "id": "expire-race-misleads-unknown-as-version-conflict",
+      "priority": 3,
+      "status": "resolved",
+      "detail": "【第一轮发现，非阻塞】process_due的过期清扫与行读取之间issued_until恰越界时，行呈analysis/review+lease_valid=false：busy分支（要求lease_valid）跳过、unknown分支不命中，落进begin_batch撞version_conflict，把结果不确定的在途调用误标为已知失败。修复：use_cases/source_preparation.rs在busy与unknown分支之间新增“analysis/review且lease_valid!=true→model_unknown终态”分支，与过期清扫同一语义（process_due错误处理器经fail_preparation_in_tx落同一failed/model_unknown终态）。审查者代码复核确认分支语义一致；check-source-preparation阶段二unknown路径端到端复跑通过（过期改写后由新分支或清扫接管，均到failed/model_unknown且不重发）。",
+      "evidence": [
+        "crates/data-agent/src/use_cases/source_preparation.rs:239-246",
+        ".local/checks/mvp-source-preparation.json（阶段二，审查者修复后复跑）"
+      ]
+    },
+    {
+      "id": "batches-ready-accumulation",
+      "priority": 2,
+      "status": "resolved",
+      "detail": "batches_ready布尔累计列已随迁移删除；ready判定=末批游标为空且合并后unresolved为空（merge_unresolved跨批去重上限200，早期批次未解释项不会被末批清空）。实测ready/partial状态机随端到端与集成测试通过（修复轮semantic_preparation 3/3复含该状态机）。",
+      "evidence": [
+        "migrations/202610240003_source_preparations.sql",
+        "crates/data-agent/src/modules/ingestion/preparation.rs",
+        "tests/mvp/check-source-preparation.mjs"
+      ]
+    },
+    {
+      "id": "dependents-pagination-pair-loss",
+      "priority": 2,
+      "status": "resolved",
+      "detail": "dependents_in_tx先SELECT DISTINCT按(owner,version)对取页（复合游标）、再按对元组IN整批取回页内全部行（保留目标过滤）；同对并列行不会被页界截断。knowledge_dependencies 10/10含并列行整对同页断言（修复轮新库复跑通过）。",
+      "evidence": [
+        "crates/data-agent/src/modules/knowledge/dependency_index.rs",
+        "crates/data-agent/tests/knowledge_dependencies.rs"
+      ]
+    },
+    {
+      "id": "placeholders-tuple-syntax",
+      "priority": 2,
+      "status": "resolved",
+      "detail": "placeholders()多列时逐元组自带括号，调用方统一一层外括号；(a,b) IN (?,?)退化为两标量列表的1241错误在结构上排除。",
+      "evidence": ["crates/data-agent/src/modules/knowledge/dependency_index.rs"]
+    },
+    {
+      "id": "unchanged-structure-unknown-flip",
+      "priority": 2,
+      "status": "resolved",
+      "detail": "retains_structure_content深相等即保留（空集合/null成员值都是内容）、顶层null由调用方排除；形如 {\"excluded\":[]} 或含null成员的结构不再把complete=false翻成true。函数与依赖单测在当前树核实。",
+      "evidence": ["crates/data-agent/src/modules/knowledge/dependencies.rs"]
+    },
+    {
+      "id": "apply-rollback-retry-stuck",
+      "priority": 1,
+      "status": "resolved",
+      "detail": "stage_apply_in_tx把复核成果应用前落库（call_state=applying、issued窗口清除），领取到applying行重校验后恢复应用，不重发模型调用；reset_batch/complete_batch状态集同步纳入applying；apply段共用apply_and_advance。多Worker专项阶段三（SIGKILL后存活Worker零新增调用恢复到ready）第一轮实测通过（calls=11）。",
+      "evidence": [
+        "crates/data-agent/src/modules/ingestion/preparation.rs",
+        "crates/data-agent/src/use_cases/source_preparation.rs",
+        "tests/mvp/check-source-preparation-concurrency.mjs"
+      ]
+    },
+    {
+      "id": "proposal-entries-null-pollution",
+      "priority": 2,
+      "status": "resolved",
+      "detail": "preparation::project_object对entries用get_mut，缺失键保持缺失，不再给proposal行补entries:null（Proposal契约additionalProperties:false）。",
+      "evidence": ["crates/data-agent/src/modules/knowledge/preparation/mod.rs"]
+    }
+  ],
+  "unresolved_findings": [],
+  "observed_evidence": [
+    {
+      "path": ".local/checks/semrev-closure-20261025.log",
+      "kind": "审查者两轮动态验证汇总（命令、结果、环境纪律、指纹）",
+      "result": "第一轮：三组绑定验收全过、semantic_preparation 2/3失败、反例RED两轮。修复轮：source_fanout_failed_recovery 2/2、semantic_preparation 3/3、check-semantic-preparation通过、knowledge_dependencies 10/10（新库）、check-source-preparation五阶段、fmt/clippy/构建全绿。",
+      "sha256_at_review": "9234e1a1d61333c7dd2ceec6323fd760cab0514e0bd0108146afaf9bdc9e2742"
+    },
+    {
+      "path": ".local/checks/mvp-source-preparation.json",
+      "kind": "审查者运行 check-source-preparation.mjs（自有harness库+本地协议provider，修复后复跑）",
+      "result": "passed=true，5 checks，calls=27，officialRequests=0：长文分批到ready、首尾标记入批、批次起点不重复、引用绑定修订、账目结算；unknown不重发且预留保留（走新边界分支后语义不变）；新修订重整且旧记录保留；在途文档改版由新修订接管、旧修订superseded；指纹不变的版本竞态重开批恰4次调用。与修复前运行内容逐字节一致（哈希相同）。",
+      "sha256_at_review": "66b44a4ac0764daf66172596848ec7d283a36f2c807d190e17fdd56fbc8f3d4f"
+    },
+    {
+      "path": ".local/checks/mvp-source-preparation-concurrency.json",
+      "kind": "审查者第一轮运行 check-source-preparation-concurrency.mjs（三真实Worker进程、SIGKILL；修复未触及该链路行为，主线程修复后亦复跑通过）",
+      "result": "passed=true，calls=11：四文档并发领取全部ready且账目calls=HTTP=8；SIGKILL后新代次领取、过期在途转unknown终态、作业failed不无限重试、预留不释放、两秒无新调用；applying成果恢复零新增调用到ready。",
+      "sha256_at_review": "3fe51b5ee7ce243edf21cf68a06f4cbe35e9c15bd9209cc17cb58097d2ca1567"
+    },
+    {
+      "path": ".local/checks/mvp-document-preparation.json",
+      "kind": "审查者第一轮运行 check-document-preparation.mjs（修复未触及该链路行为，主线程修复后亦复跑通过）",
+      "result": "passed=true，calls=6：创建响应即见两条queued作业、空正文不登记、整理到ready后raw仍queued；成果为建议陈述绑定文档来源与修订、人工正文/review_state/版本不变；改版与元数据改版按新修订重登并整理。",
+      "sha256_at_review": "3062baac9afff98bcab6433a17bf2582a0f1a6607016c57cafb0ee41310fe469"
+    },
+    {
+      "path": ".local/checks/semantic-preparation.json",
+      "kind": "审查者修复后复跑 check-semantic-preparation.mjs（内嵌 semantic_preparation 状态机集成测试）",
+      "result": "passed=true（第一轮曾为passed:false：状态机测试2/3确定性失败；补stage_apply步骤后3/3）。",
+      "sha256_at_review": "5426485a8f241eeb35f056a59c10bbe0195a7eaa61cfa1b9e17735a6727db018"
+    },
+    {
+      "path": "crates/data-agent/tests/source_fanout_failed_recovery.rs",
+      "kind": "修复回归测试（由审查者反例 semantic_review_counterexamples.rs 改写为业务命名，原文件已删；审查者修复后新库亲自复跑2/2）",
+      "result": "已结算failed（model_error）被扇出复位后作业=queued（修复链闭合）；model_unknown终态行/错误码/作业原状不动（unknown预留保留、不自动重整）。",
+      "sha256_at_review": "67e1d902579eee7c9d8413c88a628aa3fe409fe02b348c37e7ba492172b44518"
+    }
+  ],
+  "dynamic_validation": {
+    "status": "reviewer_ran_bound_groups",
+    "owner": "独立审查者",
+    "required_entrypoint": ["make", "verify-increment"],
+    "bound_command_groups": [
+      ["cargo", "test", "--offline", "--locked", "-p", "data-agent", "--test", "source_segments"],
+      ["make", "verify-source-preparation"],
+      ["make", "verify-effective-dependencies"]
+    ],
+    "note": "审查者按分组等价命令逐项实际执行（非make包装，成分一致）：第一轮segments 7/7、preparation组三mvp全过、effective组10/10+两mvp全过；修复轮复跑source_fanout_failed_recovery 2/2、semantic_preparation 3/3、check-semantic-preparation、knowledge_dependencies 10/10（新库）、check-source-preparation五阶段、fmt/clippy(-D warnings)/双二进制。官方付费请求0。审查者未执行make verify-delivery/verify-increment，最终gate与收据由主线程在回填review后完成。"
+  },
+  "limits": {
+    "official_provider_calls_by_reviewer": 0,
+    "database_harnesses_started_by_reviewer": "自有合成库 data_agent_semrev_20261025（每轮DROP+CREATE，两轮用后DROP）+ mvp harness自建data_agent_test_*库；未触碰data_agent主库与data_agent_dep_check",
+    "product_or_contract_edits_by_reviewer": false,
+    "test_edits_by_reviewer": [
+      "第一轮新增反例 crates/data-agent/tests/semantic_review_counterexamples.rs（已由实现侧改写为 tests/source_fanout_failed_recovery.rs 并删除原文件，修复轮由审查者亲自复跑确认）"
+    ],
+    "finalization_files_written_by_reviewer": [
+      "docs/reviews/semantic-preparation-closure-review-20261025.json",
+      ".local/checks/semrev-closure-20261025.log"
+    ],
+    "overwritten_check_artifacts": [
+      ".local/checks/mvp-source-preparation.json",
+      ".local/checks/mvp-source-preparation-concurrency.json",
+      ".local/checks/mvp-document-preparation.json",
+      ".local/checks/semantic-preparation.json（均为审查者运行覆盖；mvp-source-preparation.json修复前后逐字节一致，semantic-preparation.json终值为修复后passed:true）"
+    ],
+    "commits_or_pushes": false,
+    "services_updated_by_reviewer": false,
+    "environment": "真实隔离MySQL(13306,colima-data-agent显式context)、本地合成协议provider、Node 26.8.1。两轮审查窗口内未见Defender netext满载导致的时序抖动；第一轮两处失败与修复轮全部通过均为确定性结果。1GiB容器连续压力、真实模型质量不在本轮证明范围。",
+    "not_proven": [
+      "04–09（出处重绑定、任务上下文、混合检索、证据交付、答案定稿、兼容升级、整体dogfood）不在本包范围，其缺失不构成本结论依据",
+      "verify-contracts/cases 553条、make verify-knowledge-workflow全组、check-prefill族（calls=30基线）、check-model-startup、GOV分组等旧能力回归未由审查者复跑（接受CURRENT记载，仅逐行核对了check-prefill.mjs的隔离改动与文档描述一致：新增prepare_source队列DELETE沿用既有隔离模式，complete来源断言为收紧而非放宽）；主线程修复轮自称复跑的check-source-preparation-concurrency/check-document-preparation未由审查者重复执行（第一轮已实测通过且修复未触及该两条链路的行为）",
+      "make verify-delivery / verify-increment 未执行（review回填后由主线程执行）",
+      "真实付费模型、真实平台接入、8MiB连续压力与embedding真实token上限拆分（由后续消费者落实）",
+      "scope_sha256依赖主线程回填时仅改review字段；若回填同时改动CURRENT.md正文（含“来源变更扇出”节仍留有的修复前历史描述，已被“独立审查与修复（2026-10-25）”节明确取代）或verification_inputs，指纹过期须重审"
+    ],
+    "known_environment_noise_excluded": "并发apply近空表InnoDB间隙锁死锁（1213/40001）按既有纪律为可重试瞬态；两轮运行未出现由此导致的终态错误，不计为实现缺陷。"
+  },
+  "test_expectations": "三组绑定验收与frontmatter声明一致（Makefile 148-161行实测核对）。测试断言总体未被弱化：check-source-preparation四阶段含在途竞态钩子与账目对账；并发检查以真实三Worker+SIGKILL验证unknown不重发与applying零重发恢复；knowledge_dependencies 10项覆盖人工四类编辑、传递/防环/指纹容忍、贡献根unknown成员、结构依赖/computed_metrics、扇出登记与消费反例；修复轮新增source_fanout_failed_recovery把审查反例固化为终态failed真重排与unknown不动两条回归。第一轮两处测试侧缺口（状态机未跟上applying、fanout消费缺failed+failed形态）均已闭合。check-prefill族的对象级隔离改动（prepare_source队列DELETE）与文档记载一致且未放宽预填断言。"
+}

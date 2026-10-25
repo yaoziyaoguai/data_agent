@@ -12,6 +12,14 @@ const conditions={time_start:null,time_end:null,timezone:'UTC',metric:null,chann
 const provider=createServer(async(req,res)=>{
   try{
     let raw='';req.setEncoding('utf8');for await(const part of req)raw+=part;
+    if(!JSON.parse(raw).tools?.length){
+      // Pi原生压缩的摘要请求不带工具定义，独立于续接交付断言；返回简短摘要后压缩继续。
+      res.writeHead(200,{'content-type':'text/event-stream'});
+      res.write('data: '+JSON.stringify({id:'synthetic-cancel-bridge',choices:[{index:0,delta:{role:'assistant',content:'早期上下文摘要：用户要求分别解释合成金额与时间，两项独立目标，金额目标已取消，时间目标继续。'},finish_reason:'stop'}]})+'\n\n');
+      res.write('data: '+JSON.stringify({choices:[],usage:{prompt_tokens:100,completion_tokens:30,total_tokens:130}})+'\n\n');
+      res.end('data: [DONE]\n\n');
+      return;
+    }
     calls++;
     let action;
     if(phase==='original'){
@@ -82,7 +90,8 @@ try{
   assert.ok(runs.every(run=>run.message_id===identity.message_id&&run.chain===identity.chain&&run.scope===identity.scope));
   assert.ok(runs.every(run=>['cancelled','finished','interrupted'].includes(run.state)));
   const attempts=h.sql("SELECT JSON_OBJECT('state',state,'scope',budget_scope_id) FROM model_call_attempts");
-  assert.equal(attempts.length,6);assert.equal(calls,6);
+  // 每轮6次交付请求+1次Pi原生压缩摘要请求（续接会话超过载荷阈值先压缩），均沿原预算记账。
+  assert.equal(attempts.length,7);assert.equal(calls,6);
   assert.equal(attempts.filter(attempt=>attempt.state==='unknown').length,1);
   assert.ok(attempts.every(attempt=>attempt.scope===identity.scope));
   assert.equal(h.sql("SELECT JSON_OBJECT('n',COUNT(*)) FROM tool_calls WHERE tool_name='update_analysis_task' AND state='succeeded'")[0].n,3);

@@ -31,7 +31,12 @@ import { workspaceContext } from "./workspace-context.ts";
 import { restoreCheckpoint, exportCheckpoint, RECOVERY_NOTICE } from "./checkpoint.ts";
 import { decodeContract } from "../../../packages/contracts/validate.ts";
 import { outputStream } from "./output-stream.ts";
-import { estimateRequestBytes } from "./request-size.ts";
+import { estimateFixedContextTokens, estimateRequestBytes } from "./request-size.ts";
+import { sessionCapacity } from "./capacity.ts";
+import {
+  type CapacityPlan,
+  planForProfile,
+} from "../../../packages/contracts/capacity.ts";
 
 export async function deliver(
   run: RunEnvelope,
@@ -106,9 +111,20 @@ export async function deliver(
     refreshOnCreate: false,
     allowModelNetwork: false,
   });
+  // 新冻结profile按17.7公式推导；推导失败说明冻结配置未经保存校验，明确拒绝。
+  const capacityPlan: CapacityPlan | null = (() => {
+    const planned = run.model_profile ? planForProfile(run.model_profile) : null;
+    if (planned === null) return null;
+    if (typeof planned === "string") throw new Error("provider_configuration_invalid");
+    return planned;
+  })();
+  let systemPrompt = "";
+  const capacity = capacityPlan && data ? sessionCapacity(capacityPlan, manager, () =>
+    estimateFixedContextTokens(systemPrompt, data.tools, workspace?.contents() ?? [], run.text),
+  ) : null;
   let model;
   if (run.model_profile?.configured_model) {
-    model = await configuredModel(runtime,transport,run.model_profile,signal);
+    model = await configuredModel(runtime,transport,run.model_profile,signal,capacity?.check);
   } else if (run.model_profile) {
     const connection = connectionFromEnvironment();
     const catalog = runtime.getModel("deepseek", run.model_profile.model_id);
@@ -122,6 +138,7 @@ export async function deliver(
         run.model_profile,
         connection,
         signal,
+        capacity?.check,
       ),
       models: [
         {
@@ -133,7 +150,7 @@ export async function deliver(
           // 实际模型窗口保留；本地字节门槛通过Pi原生压缩衔接。
           contextWindow:
             run.model_profile.toolset === "data"
-              ? run.model_profile.input_limit
+              ? (run.model_profile.context_window ?? run.model_profile.input_limit)
               : catalog.contextWindow,
         },
       ],
@@ -169,11 +186,17 @@ export async function deliver(
   const keepRecentTokens = history.length && historyBytes / history.length > 600 ? 2048 : 256;
   const settings = SettingsManager.inMemory({
     defaultTools: [],
-    compaction: {
-      enabled: !!data,
-      reserveTokens: 2048,
-      keepRecentTokens: run.model_profile?.toolset === "data" ? keepRecentTokens : 4000,
-    },
+    compaction: capacityPlan
+      ? {
+          enabled: !!data,
+          reserveTokens: capacityPlan.historyReserve,
+          keepRecentTokens: capacityPlan.keepRecent,
+        }
+      : {
+          enabled: !!data,
+          reserveTokens: 2048,
+          keepRecentTokens: run.model_profile?.toolset === "data" ? keepRecentTokens : 4000,
+        },
     // 连续失败三次 = 首次请求 + 两次Pi原生重试；HTTP SDK层保持零重试。
     retry: { enabled: run.model_profile?.toolset === "data", maxRetries: 2, baseDelayMs: 500, maxAgentDelayMs: 2000 },
   });
@@ -187,11 +210,12 @@ export async function deliver(
     resourceLoader: resources(
       !!data,
       selectedSkillResources(run.workspace_context?.selected_skills ?? []),
-      workspace?.extension,
+      [workspace?.extension, capacity?.extension].filter((extension) => extension !== undefined),
     ),
     tools: data ? data.tools.map((t) => t.name) : ["update_analysis_task"],
     customTools: data ? data.tools : [tool.definition],
   });
+  systemPrompt = session.systemPrompt;
   let finalStartChunk = 1;
   let completedAssistant: AssistantMessage | undefined;
   const output = outputStream((chunk_seq, text) => transport.post("/internal/outputs", "AppendOutput", {
@@ -216,25 +240,34 @@ export async function deliver(
   try {
     if (data && run.model_profile?.toolset === "data") {
       const payloadLimit = run.model_profile.payload_bytes_limit ?? 65536;
-      const availableBytes = payloadLimit -
-        estimateRequestBytes(session.systemPrompt, [], data.tools, workspace?.contents() ?? [], run.text);
-      // Pi按字符/4估算token；结合JSON转义余量选择尾部目标，只是启发式，不是硬字节保证。
-      const requestKeepRecentTokens = Math.min(keepRecentTokens, Math.max(128, Math.floor(availableBytes / 24)));
-      const requestCompaction = {compaction: {keepRecentTokens: requestKeepRecentTokens}};
-      // 大历史先保留较多尾部，避免初始摘要请求自身超限；小历史从预检起就使用本轮目标。
-      if (estimateRequestBytes("", history, [], [], "") <= payloadLimit - 4096)
-        settings.applyOverrides(requestCompaction);
+      let legacyKeepRecentTokens: number | undefined;
+      if (capacityPlan) {
+        // 装不下固定部分的容量配置直接拒绝，不靠反复摘要解决。
+        capacity?.check();
+      } else {
+        const availableBytes = payloadLimit -
+          estimateRequestBytes(session.systemPrompt, [], data.tools, workspace?.contents() ?? [], run.text);
+        // Pi按字符/4估算token；结合JSON转义余量选择尾部目标，只是启发式，不是硬字节保证。
+        const requestKeepRecentTokens = Math.min(keepRecentTokens, Math.max(128, Math.floor(availableBytes / 24)));
+        legacyKeepRecentTokens = requestKeepRecentTokens;
+        const requestCompaction = {compaction: {keepRecentTokens: requestKeepRecentTokens}};
+        // 大历史先保留较多尾部，避免初始摘要请求自身超限；小历史从预检起就使用本轮目标。
+        if (estimateRequestBytes("", history, [], [], "") <= payloadLimit - 4096)
+          settings.applyOverrides(requestCompaction);
+      }
       // 完整提示/资料/历史先作保守预检；实际载荷仍由provider在预留/发送前检查。
       if (history.length > 2 && estimateRequestBytes(session.systemPrompt, history, data.tools, workspace?.contents() ?? [], run.text) > payloadLimit - 4096) {
         try {
           await session.compact();
         } catch (error) {
+          capacity?.check();
           // Pi未公开canCompact；这两个无摘要可做的结果交给最终载荷检查，其余失败照常传播。
           if (!(error instanceof Error) || !["Already compacted", "Nothing to compact (session too small)"].includes(error.message))
             throw error;
         }
       }
-      settings.applyOverrides(requestCompaction);
+      if (legacyKeepRecentTokens !== undefined)
+        settings.applyOverrides({compaction: {keepRecentTokens: legacyKeepRecentTokens}});
     }
     if (run.resume_same_input && manager.buildSessionContext().messages.length)
       // prompt先刷新Pi当前资源；恢复通知不改变宿主输入、任务、操作或预算身份。

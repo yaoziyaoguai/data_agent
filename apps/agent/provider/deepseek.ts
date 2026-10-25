@@ -31,11 +31,13 @@ export function guardedDeepSeekStream(
   profile: ModelProfile,
   connection: DeepSeekConnection,
   signal: AbortSignal,
+  checkCapacity?: () => void,
 ) {
   return guardedModelStream(
     transport,
     profile,
     { ...connection, api: "openai-completions" },
     signal,
+    checkCapacity,
   );
 }

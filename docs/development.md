@@ -4,6 +4,20 @@
 
 **语义权限的当前边界：**表负责人通过 `/source-syncs` 从 Datasight mock 目录的 `maintainer_id` 同步；按平台 `namespace + id` 匹配，不按同名表推断。字段继承所属表；本空间表维护人均可创建独立指标、文档等，首次保存者自动负责，超级维护者可调整归属。`DATA_AGENT_SEMANTIC_SUPER_MAINTAINERS` 是可信启动 JSON 配置，例如 `{"demo":["alice"]}`；未配置不授予超级角色。开发启动脚本显式配置 Alice，正式身份接入仍未实现。此角色只管理共享语义，不扩大平台查询权或个人资产范围。
 
+**2026-10-23实施中：**[工程合同第17节](architecture/implementation-design.md#17-语义检索与上下文的实施合同2026-10-23)按[九阶段执行包](execution/semantic-runtime/README.md)逐步落地。当前运行与容量代码已区分总窗口tokens、输入/输出tokens、请求体字节和单次请求超时：管理员保存新的模型修订时校验容量，Pi原生摘要与普通请求使用当次实际输出cap，旧冻结profile仍沿用原限额。已核实DeepSeek型号的新配置初值为总窗口1,000,000、输入900,000、输出65,536、请求体8MiB和600秒；不能将此值套到其他型号。实际验证状态见CURRENT，当前未更新日常服务，真实供应商600秒与8MiB验收尚未执行。
+
+慢检索在会话锁外完成后，以最终短事务的一致性读时点核对知识/来源/资产；时点之前已提交的变化拒绝旧回执，时点之后的变化由下一次模型派发的上下文核验处理，不追踪每次语义修改并通知用户。Worker保留错误分类，暂态存储错误可恢复；明确模型失败和未知回执停止自动派发，未知占额保留，晚到回执沿原ID结算。单次临时终态写入失败已用短重试验证，持续断库叠加进程丢失没有被这组测试覆盖。
+
+来源同步已接入后台队列：新命令 `POST /source-syncs` 返回202及 `sync_id/status/status_url`，页面通过 `GET /source-syncs/{sync_id}` 查看保存、整理、原文索引和知识索引各自进度。同步完成不代表后三项完成。来源整理消费者已完成本地验收；原文索引消费者和混合检索代码已接入，完整应用链路仍待验收。旧成功命令仍返回原200回执。任务条件已部分实现，活动任务与历史分析等仍有缺口；v2工具续读和答案组合尚未切换，迁移顺序见同文17.8，实际验收见CURRENT。
+
+完整来源按JSON的UTF-8字节计量，单来源8MiB、单页16MiB；过大时批次明确失败并显示实际大小与上限，已保存的旧内容不被截断覆盖。后台同步没有100页完成门槛。`make verify-source-content verify-source-sync verify-source-upgrade verify-source-ui`分别覆盖完整存取与位置、分页及故障恢复、旧来源回填、进度界面；数据库验收串行运行，使用隔离合成库。极限样本的资源开销与临时环境调整见CURRENT，这些限制不等于每次模型输入量。
+
+`GET /sources/{id}?version=<revision>&offset=<offset>&length=<length>` 返回 `SourceExcerpt`，位置单位为Unicode code point。三个参数须齐备，旧修订返回 `stale_source`，不会用旧位置截取新正文；无位置参数的全文入口保留旧快照兼容读取。文档URL的 `document-` 别名在入口转成 `SourceKey {kind:document,id}`，不写进文档真实ID。
+
+M03批次成员、游标及待生效负责人已持久保存。内部response_budget、活动任务投影与answer_parts交付引用仍是待实现合同；实施时须同批更新宿主、Pi工具桥及恢复验证，不能只改提示词或最后一段答案的拼接，详见[审计第10节](reviews/predevelopment-closure-audit-20261023.md#10-最终技能专项审计与交接修订)。
+
+连续实施使用[九阶段执行包](execution/semantic-runtime/README.md)及[验收映射](execution/semantic-runtime/coverage-and-validation.md)。按当前增量推进；兼容统一版本先运行，再切新公共写入/索引，最后启用新消息v2。执行包不表示这些迁移或服务更新已经完成。
+
 ## 1. 固定的运行时与依赖
 
 | 部分 | 固定版本与依据 |
@@ -101,6 +115,10 @@ make vm-stop
 
 | 命令 | 当前验证行为 |
 | --- | --- |
+| `make verify-runtime-capacity` | 容量公式、实际provider与摘要输入、模型配置UI、新配置原生压缩、SDK工具事件与输出队列边界；本地协议替身不代表真实模型质量 |
+| `make verify-retrieval-lease` | 真实MySQL慢读取续租、会话行锁探针和并发停用拒绝 |
+| `make verify-worker-storage-recovery` | 临时存储失败、原scope恢复、错误码落库、未知模型回执晚到结算和长运行续租 |
+| `make verify-compatible-restore` | legacy压缩、检查点、会话与原操作续接、任务文字来源保护 |
 | `make verify-code` | Rust fmt/Clippy、TypeScript类型检查、正式React构建 |
 | `make verify-contracts` | 同源产物一致、Rust/JS正反例与序列化往返 |
 | `make verify-runtime-flow` | 真实页面提交、Pi受控工具、持久结果、身份隔离、刷新、双Worker串行和失败终态 |
@@ -153,7 +171,7 @@ python3 scripts/development.py --model deepseek \
 
 `make verify-hybrid-retrieval`在独立数据库和临时Milvus collection中导入1204张合成表，验证中文检索、精确名称、实际写入回执丢失、旧版过滤、个人资产隔离、服务降级，以及保留MySQL后的索引重建。实际结果统一见CURRENT，测试规模本身不构成通过证据。
 
-目录分页必须保持namespace、snapshot_id及authoritative一致；仅完整权威目录允许停用缺席对象。采集起点固定来源头与范围代次，完成即使内容未变也推进范围代次，晚到旧快照不能执行删除。15分钟后中断的采集明确失败，原operation不换基线自动重试，新同步重新读取。聊天模型单调用90秒；语义维护每阶段模型调用300秒、领取360秒，分析与复核各一次；Worker整轮按原请求调用上限推导期限并持续续租。
+目录分页必须保持namespace、snapshot_id及authoritative一致；仅完整权威目录允许停用缺席对象。采集起点固定来源头与范围代次，完成即使内容未变也推进范围代次，晚到旧快照不能执行删除。新后台批次只认现有作业租约：每页网络读取在事务外，保存内容、成员、待办及游标同事务；中断沿原批次和已提交游标重领。终态失败保留前页内容，不切换整批负责人，不退休缺席对象；原命令重传仍回该失败批次。旧前台fetching记录继续保留原15分钟中断判断。语义维护的旧分析/复核路径仍沿原维护许可；聊天请求超时按冻结模型配置，Worker整轮按原请求调用上限推导期限并持续续租。
 
 预填把同源`PrefillResult`作为原生`submit_semantic_prefill`工具的参数Schema，只列待分析的语义条目。思考模式使用auto工具选择，off指定唯一提交工具；服务只接受一次完整同名工具参数，按当前来源继续验证后才保存建议。工具只提交建议，不执行业务副作用。服务端要求完整覆盖，拒绝空结果、漏条目和来源事实条目。没有业务资料时可以留空说明，但必须记录明确缺口及已查材料引用。`verify-knowledge-workflow`同时运行这些纯Rust反例与实际Worker拒绝/人工保护流程。
 
@@ -195,6 +213,8 @@ python3 scripts/development.py --model deepseek \
 1. 添加服务：选择供应商类别、Pi原生协议，填写API基础地址和API Key。兼容服务可以使用非内置Model ID，无需修改源码。Chat Completions与Responses的基础地址通常以`/v1`结尾；Anthropic填写服务根地址，SDK会添加`/v1/messages`。
 2. 添加模型：选择所属服务，填写实际Model ID、展示名、是否支持思考、开放的思考档位、上下文/输出/请求体上限、价格。支持思考的模型即使只开放off，也要勾选思考能力，以便SDK显式关闭。Anthropic按模型文档选择预算或自适应方式；预算模式最高high且思考时输出至少2048，xhigh/max必须支持adaptive。Responses输出至少16。页面价格单位是美元/百万tokens；按未命中缓存输入价填写。服务实际能力仍以供应商为准，不因填写更大上限获得额外能力。
 3. 启用模型并“设为默认”。新对话使用此默认值；已有对话保留自己的选择。保存配置不会调用供应商或产生模型费用，随后发送消息会使用配置的服务。
+
+新增模型的总上下文留空，须按具体型号已核实能力填写。当前仅 `deepseek-flash` 提供显式1M窗口预填；供应商相同不代表所有型号窗口相同。旧消息继续使用原冻结配置。容量组合须同时容纳输入、输出、Pi两段摘要和近期保留，保存时与运行时分别核验。
 
 仅接受公网HTTPS地址，禁止URL内凭据、查询参数和内网地址；重定向关闭。测试模式的回环HTTP例外只用于本地合成协议夹具。密钥保存后不回填，编辑留空保留；变更地址、供应商或协议须重新输入密钥。启停可恢复，没有删除历史修订入口。
 

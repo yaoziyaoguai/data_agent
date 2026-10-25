@@ -16,7 +16,11 @@ pub mod personal_assets;
 pub(crate) mod prefill_materials;
 mod query_semantics;
 pub mod query_workflow;
+pub mod raw_source_index;
 pub mod semantic_prefill;
+pub mod source_fanout;
+mod source_limits;
+pub mod source_preparation;
 
 pub mod conversation_lifecycle;
 

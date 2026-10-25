@@ -1216,7 +1216,14 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "./schema.json#/$defs/SourceDocument"
+                  "oneOf": [
+                    {
+                      "$ref": "./schema.json#/$defs/SourceDocument"
+                    },
+                    {
+                      "$ref": "./schema.json#/$defs/SourceExcerpt"
+                    }
+                  ]
                 }
               }
             }
@@ -1248,6 +1255,26 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "description": "与version及另一定位参数一起提供，单位Unicode code point；旧修订返回stale_source。",
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "length",
+            "in": "query",
+            "required": false,
+            "description": "与version及另一定位参数一起提供，单位Unicode code point；旧修订返回stale_source。",
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
           }
         ]
       }
@@ -1256,7 +1283,7 @@
       "post": {
         "responses": {
           "200": {
-            "description": "成功",
+            "description": "旧已完成命令原回执，仅兼容读取，不新增作业",
             "content": {
               "application/json": {
                 "schema": {
@@ -1271,6 +1298,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "./schema.json#/$defs/AppError"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "批次已登记；同命令仍返回同一批次",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schema.json#/$defs/SourceSyncAccepted"
                 }
               }
             }
@@ -3367,6 +3404,42 @@
             "application/json": {
               "schema": {
                 "$ref": "./schema.json#/$defs/SaveDefaultModel"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/source-syncs/{sync_id}": {
+      "get": {
+        "parameters": [
+          {
+            "name": "sync_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "同步保存、准备与两类索引分别报告",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schema.json#/$defs/SourceSyncProgress"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "应用错误；权限、版本、待归属、未知和服务失败保留独立code",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schema.json#/$defs/AppError"
+                }
               }
             }
           }

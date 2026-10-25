@@ -1,3 +1,4 @@
+import {synchronizeSources} from './source-sync.mjs';
 import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
 import {mkdir,writeFile} from 'node:fs/promises';
@@ -84,7 +85,7 @@ try {
 
   const catalog=await fetch(h.env.DATA_AGENT_PLATFORM_URL+'/catalog',{method:'POST',headers:{authorization:'Bearer '+h.env.DATA_AGENT_INTERNAL_TOKEN,'content-type':'application/json'},body:JSON.stringify({limit:50})}).then(r=>r.json());
   await writeFile(h.directory+'/platform/catalog.json',JSON.stringify({source_namespace:catalog.source_namespace,tables:catalog.tables.map(t=>({...t,maintainer_id:t.id==='demo_order_detail'?'carol':'alice'}))}));
-  ok(await h.request('/source-syncs',{operation_id:randomUUID()}));
+  assert.equal((await synchronizeSources(h)).value.status, 'completed');
   const before='# 合成订单说明\n\n金额单位为分。\nis_test 为测试标记。\n订单由订单号和行号定位。';
   const after=before.replace('is_test 为测试标记。','is_test 为测试标记：0 为正式交易，1 为测试交易。');
   const doc=ok(await h.request('/knowledge',{operation_id:randomUUID(),kind:'document',name:'合成订单说明',body:before,related_ids:['table-demo_order_detail']},'carol'));

@@ -1,3 +1,4 @@
+import {synchronizeSources} from './source-sync.mjs';
 import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
 import {readFile, writeFile} from 'node:fs/promises';
@@ -38,7 +39,7 @@ const platform = async (path, input) => {
   return response.json();
 };
 try {
-  ok(await h.request('/source-syncs', {operation_id: randomUUID()}));
+  assert.equal((await synchronizeSources(h)).value.status, 'completed');
   await h.pauseWorker();
   const objects = h.sql("SELECT JSON_OBJECT('id',id,'kind',kind,'name',name) FROM knowledge_objects WHERE state='enabled' AND source_id NOT LIKE 'catalog-%'");
   for (const [kind, count] of Object.entries({table: 28, field: 421, metric: 26, document: 14, relationship: 54}))

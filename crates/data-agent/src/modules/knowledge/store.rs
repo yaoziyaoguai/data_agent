@@ -1,4 +1,5 @@
 use crate::{
+    modules::jobs,
     persistence::AppTx,
     types::{AccessContext, Error, Result, epoch, fingerprint, id},
 };
@@ -7,9 +8,10 @@ use sqlx::Row;
 fn body(row: &sqlx::mysql::MySqlRow) -> Value {
     let mut value = row.get::<sqlx::types::Json<Value>, _>("body").0;
     super::structure::project_object(&mut value);
+    super::preparation::project_object(&mut value);
     value
 }
-async fn begin_operation(
+pub(super) async fn begin_operation(
     tx: &mut AppTx<'_>,
     ctx: &AccessContext,
     key: &str,
@@ -36,7 +38,7 @@ async fn begin_operation(
     }
     Ok(None)
 }
-async fn record(
+pub(super) async fn record(
     tx: &mut AppTx<'_>,
     ctx: &AccessContext,
     key: &str,
@@ -181,9 +183,10 @@ fn document_chunks(text: &str, count: usize) -> Vec<&str> {
     chunks
 }
 
-async fn persist(tx: &mut AppTx<'_>, ctx: &AccessContext, v: &Value) -> Result<()> {
+pub(super) async fn persist(tx: &mut AppTx<'_>, ctx: &AccessContext, v: &Value) -> Result<()> {
     let mut v = v.clone();
     super::structure::project_object(&mut v);
+    super::preparation::project_object(&mut v);
     super::structure::validate_single_structure(&v)?;
     for entry in v["entries"].as_array().into_iter().flatten() {
         super::structure::validate_shape(&v, entry, &entry["effective_structure"])?;
@@ -198,6 +201,32 @@ async fn persist(tx: &mut AppTx<'_>, ctx: &AccessContext, v: &Value) -> Result<(
         .bind(epoch(v["version"].as_str().unwrap_or("0"))?)
         .execute(tx.connection())
         .await?;
+    super::preparation::persist_in_tx(tx, ctx, &v).await?;
+    super::dependency_index::persist_in_tx(tx, ctx, &v).await?;
+    // 来源扇出：被有效依赖的对象每次落库登记轻量作业，由Worker按页发现依赖者并
+    // 为其来源排队重整；(kind,resource,version)唯一键幂等，内容未变的链条在消费
+    // 侧按指纹终止。创建首版没有依赖行，判定自然为空，不产生作业。文档对象以
+    // document-前缀登记，与prepare_source资源身份一致。
+    if super::dependency_index::has_dependents_in_tx(
+        tx,
+        ctx,
+        v["kind"].as_str().unwrap_or(""),
+        v["id"].as_str().unwrap_or(""),
+    )
+    .await?
+    {
+        let fanout_resource = match v["kind"].as_str() {
+            Some("document") => format!("document-{}", v["id"].as_str().unwrap_or("")),
+            _ => v["id"].as_str().unwrap_or("").to_owned(),
+        };
+        jobs::enqueue_source_in_tx(
+            tx,
+            "source_fanout",
+            &fanout_resource,
+            epoch(v["version"].as_str().unwrap_or("0"))?,
+        )
+        .await?;
+    }
     sqlx::query("INSERT INTO knowledge_versions(object_id,version,body) VALUES(?,?,?)")
         .bind(v["id"].as_str())
         .bind(epoch(v["version"].as_str().unwrap_or("0"))?)
@@ -332,7 +361,7 @@ pub async fn is_deleted_in_tx(
     .await?
     .is_some_and(|state| state == "deleted"))
 }
-async fn locked(
+pub(super) async fn locked(
     tx: &mut AppTx<'_>,
     ctx: &AccessContext,
     object: &str,
@@ -345,7 +374,7 @@ async fn locked(
     }
     Ok(v)
 }
-fn next(v: &mut Value, ctx: &AccessContext) {
+pub(super) fn next(v: &mut Value, ctx: &AccessContext) {
     v["version"] = json!(
         (epoch(v["version"].as_str().unwrap_or("0")).expect("saved version") + 1).to_string()
     );
@@ -1091,6 +1120,36 @@ pub async fn current_objects_in_tx(
     Ok(values)
 }
 
+pub async fn current_versions_in_tx(
+    tx: &mut AppTx<'_>,
+    ctx: &AccessContext,
+    ids: &[String],
+) -> Result<std::collections::HashMap<(String, String), bool>> {
+    // 检索在锁外读取后，提交前按(id,version)核对对象是否仍为当前有效版本。
+    let mut result = std::collections::HashMap::new();
+    for chunk in ids.chunks(500) {
+        let mut query = sqlx::QueryBuilder::<sqlx::MySql>::new(
+            "SELECT JSON_UNQUOTE(JSON_EXTRACT(body,'$.id')) AS object_id, JSON_UNQUOTE(JSON_EXTRACT(body,'$.version')) AS object_version, state FROM knowledge_objects WHERE space_id=",
+        );
+        query.push_bind(&ctx.space_id).push(" AND id IN (");
+        let mut keys = query.separated(",");
+        for id in chunk {
+            keys.push_bind(id);
+        }
+        query.push(")");
+        for row in query.build().fetch_all(tx.connection()).await? {
+            result.insert(
+                (
+                    row.get::<String, _>("object_id"),
+                    row.get::<String, _>("object_version"),
+                ),
+                row.get::<String, _>("state") == "enabled",
+            );
+        }
+    }
+    Ok(result)
+}
+
 pub async fn retire_source_objects_in_tx(
     tx: &mut AppTx<'_>,
     ctx: &AccessContext,
@@ -1178,4 +1237,64 @@ pub async fn source_tables_in_tx(
     source: &str,
 ) -> Result<Vec<String>> {
     Ok(sqlx::query_scalar("SELECT id FROM knowledge_objects WHERE space_id=? AND kind='table' AND source_id=? ORDER BY id").bind(&ctx.space_id).bind(source).fetch_all(tx.connection()).await?)
+}
+
+// 来源整理的目标对象清单：仅启用对象，条目只取身份与路径，不携带正文。
+pub async fn source_objects_in_tx(
+    tx: &mut AppTx<'_>,
+    ctx: &AccessContext,
+    source: &str,
+) -> Result<Vec<Value>> {
+    // 文档对象自身不带source_id，按document-别名定位，供来源整理瞄准其条目。
+    let rows = if let Some(document) = source.strip_prefix("document-") {
+        sqlx::query("SELECT id,kind,version,name,body FROM knowledge_objects WHERE space_id=? AND id=? AND state='enabled'")
+            .bind(&ctx.space_id)
+            .bind(document)
+            .fetch_all(tx.connection())
+            .await?
+    } else {
+        sqlx::query("SELECT id,kind,version,name,body FROM knowledge_objects WHERE space_id=? AND source_id=? AND state='enabled' ORDER BY kind,id")
+            .bind(&ctx.space_id)
+            .bind(source)
+            .fetch_all(tx.connection())
+            .await?
+    };
+    Ok(rows
+        .iter()
+        .map(|row| {
+            let body = row.get::<sqlx::types::Json<Value>, _>("body").0;
+            json!({
+                "id": row.get::<String,_>("id"),
+                "kind": row.get::<String,_>("kind"),
+                "version": row.get::<u64,_>("version").to_string(),
+                "name": row.get::<String,_>("name"),
+                "entries": body["entries"].as_array().into_iter().flatten().map(|entry|
+                    json!({"entry_id":entry["entry_id"],"path":entry["path"],"label":entry["label"]})).collect::<Vec<_>>(),
+            })
+        })
+        .collect())
+}
+
+pub async fn index_progress_in_tx(
+    tx: &mut AppTx<'_>,
+    ctx: &AccessContext,
+    objects: &[String],
+) -> Result<Value> {
+    let (mut total, mut complete, mut failed) = (0u64, 0u64, 0u64);
+    for id in objects {
+        let row=sqlx::query("SELECT j.state,j.vector_state FROM knowledge_objects k LEFT JOIN knowledge_index_jobs j ON j.object_id=k.id AND j.version=k.version WHERE k.id=? AND k.space_id=? AND k.state='enabled'").bind(id).bind(&ctx.space_id).fetch_optional(tx.connection()).await?;
+        let Some(row) = row else { continue };
+        total += 1;
+        let state = row.get::<Option<String>, _>("state");
+        let vector = row.get::<Option<String>, _>("vector_state");
+        if state.as_deref() == Some("indexed") && vector.as_deref() == Some("indexed") {
+            complete += 1;
+        }
+        if vector.as_deref() == Some("failed") {
+            failed += 1;
+        }
+    }
+    Ok(
+        json!({"status":if total==0{"not_required"}else if failed>0{"failed"}else if complete==total{"completed"}else{"pending"},"total":total,"completed":complete,"failed":failed}),
+    )
 }

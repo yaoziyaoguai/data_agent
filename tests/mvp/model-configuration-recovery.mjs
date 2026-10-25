@@ -12,7 +12,7 @@ export async function checkConfiguredRecovery(provider) {
   try {
     const service={id:'responses',name:'Synthetic recovery',provider_id:'compatible',api:'openai-responses',base_url:provider.url+'/recovery/v1',api_key:'synthetic-original-key',enabled:true,expected_version:'0'};
     ok(await h.request('/model-services',service));
-    const definition={id:'responses-model',service_id:service.id,model_id:'synthetic/recovery-responses',label:'Synthetic recovery model',thinking_levels:['off'],reasoning_supported:false,default_thinking:'off',input_limit:128000,output_limit:16000,payload_bytes_limit:262144,input_rate:'0',output_rate:'0',enabled:true,expected_version:'0'};
+    const definition={id:'responses-model',service_id:service.id,model_id:'synthetic/recovery-responses',label:'Synthetic recovery model',thinking_levels:['off'],reasoning_supported:false,default_thinking:'off',context_window:160000,input_limit:128000,output_limit:16000,payload_bytes_limit:262144,request_timeout_ms:90000,capability_source:'admin_declared',input_rate:'0',output_rate:'0',enabled:true,expected_version:'0'};
     const configuration=ok(await h.request('/model-definitions',definition));
     ok(await h.request('/model-configuration/default',{model_id:definition.id,expected_version:configuration.version}));
     const cid=await h.create();const original=await h.capture(cid,'恢复Responses工具检查点');await h.pauseWorker();

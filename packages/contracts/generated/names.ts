@@ -49,6 +49,8 @@ export interface ContractTypes {
   AssetSave: Boundary.AssetSave;
   SkillSelection: Boundary.SkillSelection;
   Conditions: Boundary.Conditions;
+  SourceLimits: Boundary.SourceLimits;
+  TimeRole: Boundary.TimeRole;
   AnalysisUpdate: Boundary.AnalysisUpdate;
   SearchInput: Boundary.SearchInput;
   ReadKnowledgeInput: Boundary.ReadKnowledgeInput;
@@ -193,4 +195,22 @@ export interface ContractTypes {
   AnalysisAnswerSource: Boundary.AnalysisAnswerSource;
   AnalysisAnswerValue: Boundary.AnalysisAnswerValue;
   PresentAnalysisAnswerInput: Boundary.PresentAnalysisAnswerInput;
+  SourceKey: Boundary.SourceKey;
+  SourceLocator: Boundary.SourceLocator;
+  SourceCitation: Boundary.SourceCitation;
+  SourceSyncAccepted: Boundary.SourceSyncAccepted;
+  SourceWorkProgress: Boundary.SourceWorkProgress;
+  SourceSyncProgress: Boundary.SourceSyncProgress;
+  SourceExcerpt: Boundary.SourceExcerpt;
+  SemanticReference: Boundary.SemanticReference;
+  EmbeddedSupportLocation: Boundary.EmbeddedSupportLocation;
+  SemanticSupport: Boundary.SemanticSupport;
+  SemanticStatement: Boundary.SemanticStatement;
+  SemanticRelation: Boundary.SemanticRelation;
+  PreparedSupport: Boundary.PreparedSupport;
+  PreparedStatement: Boundary.PreparedStatement;
+  PreparedRelation: Boundary.PreparedRelation;
+  SourcePreparationResult: Boundary.SourcePreparationResult;
+  ComputedMetric: Boundary.ComputedMetric;
+  TimeBasis: Boundary.TimeBasis;
 }

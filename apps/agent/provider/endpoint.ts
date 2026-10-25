@@ -54,6 +54,9 @@ export function providerEndpoint(baseUrl: string, protocolTest: boolean) {
     throw new Error("provider_configuration_invalid");
   // 每次新连接在DNS结果处拒绝非公网地址；只将已验证地址交给连接器，阻止DNS重绑定。
   const dispatcher = new Agent({
+    // 由冻结profile的AbortSignal统一控制整次请求，避免底层300秒默认值提前截断。
+    headersTimeout: 0,
+    bodyTimeout: 0,
     connect: {
       lookup: (hostname, options, callback) => {
         void lookup(hostname, { all: true })
@@ -83,7 +86,6 @@ export function providerEndpoint(baseUrl: string, protocolTest: boolean) {
   });
   return {
     fetch: (async (input, init) => {
-      if (test) return fetch(input, { ...init, redirect: "error" });
       return (await httpFetch(
         input instanceof Request ? input.url : String(input),
         {

@@ -24,6 +24,40 @@ try {
   provider.setUsage(true);provider.setStatus(503);result=await call();assert.equal(result.posts.at(-1).value.outcome,'transient_error');assert.equal(result.events.at(-1).error.errorMessage,'model_service_unavailable');assert.equal(result.posts.filter(p=>p.path.endsWith('/send')).length,1);provider.setStatus(200);
   checks.push(api+'：实际SDK流、缓存用量、缺usage失败关闭、503临时分类与SDK不额外重发');
  }
+ // 容量接线：冻结超时按修订校验，摘要请求按本次maxTokens收敛，端点上限压低实际输出cap。
+ {
+  const capacityProfile={provider_id:'compatible',model_id:'synthetic/capacity',trial_id:'synthetic',price_version:'configured:model:2',input_limit:128000,output_limit:16000,payload_bytes_limit:262144,request_call_limit:24,budget_mode:'request',toolset:'data',thinking_level:'off',configured_model:{id:'model',version:'1',service_id:'service',service_version:'1',api:'openai-completions',input_rate:'0',output_rate:'0'}};
+  const capacityModel={id:capacityProfile.model_id,name:'Synthetic',api:'openai-completions',provider:'compatible',baseUrl:provider.url+'/gateway/v1',input:['text'],reasoning:false,contextWindow:128000,maxTokens:16000,cost:{input:0,output:0,cacheRead:0,cacheWrite:0}};
+  const syntheticTransport=()=>{const posts=[];return{posts,transport:{run:{run_id:'synthetic'},binding:()=>({run_id:'synthetic',lease_epoch:'1'}),post:async(path,name,value)=>{posts.push({path,value});return{state:path.endsWith('/finalize')?(value.usage?'settled':'unknown'):path.endsWith('/send')?'issued':'reserved',send_allowed:path.endsWith('/send')};}}};};
+  async function capacityRun(connection,options){
+    const t=syntheticTransport();const events=[];for await(const event of guardedModelStream(t.transport,capacityProfile,connection,new AbortController().signal)(capacityModel,{messages:[{role:'user',content:'Synthetic request',timestamp:1}]},options))events.push(event);
+    return{posts:t.posts,events};
+  }
+  const localConnection={api:'openai-completions',apiKey:'synthetic-only',baseUrl:capacityModel.baseUrl,protocolTest:true};
+  const frozenConnection={...localConnection,protocolTest:false};
+  // 构造期即按冻结/环境超时校验：600s在范围内，700s与protocolTest环境600001都拒绝。
+  assert.doesNotThrow(()=>guardedModelStream(syntheticTransport().transport,{...capacityProfile,request_timeout_ms:600000},frozenConnection,new AbortController().signal));
+  assert.throws(()=>guardedModelStream(syntheticTransport().transport,{...capacityProfile,request_timeout_ms:700000},frozenConnection,new AbortController().signal),/provider_configuration_invalid/);
+  process.env.DATA_AGENT_MODEL_TIMEOUT_MS='600001';
+  try{assert.throws(()=>guardedModelStream(syntheticTransport().transport,capacityProfile,localConnection,new AbortController().signal),/provider_configuration_invalid/);}finally{delete process.env.DATA_AGENT_MODEL_TIMEOUT_MS;}
+  provider.setUsage(true);
+  const reserveOf=posts=>posts.find(p=>p.path.endsWith('/reserve')).value.output_tokens_max;
+  // 摘要请求按本次maxTokens收敛：金额预留与实际payload都是5000，不按冻结上限16000放大。
+  const summaryCall=await capacityRun(localConnection,{maxTokens:5000});
+  assert.equal(summaryCall.events.at(-1).type,'done',JSON.stringify(summaryCall.events.at(-1)));
+  assert.equal(reserveOf(summaryCall.posts),5000);
+  assert.equal(provider.requests.at(-1).body.max_tokens??provider.requests.at(-1).body.max_completion_tokens,5000);
+  // 已知端点上限压低实际输出cap；SDK未显式给maxTokens的常规轮同样被压到端点上限。
+  const cappedCall=await capacityRun({...localConnection,endpointOutputLimit:8000},{maxTokens:9000});
+  assert.equal(cappedCall.events.at(-1).type,'done');
+  assert.equal(reserveOf(cappedCall.posts),8000);
+  assert.equal(provider.requests.at(-1).body.max_tokens??provider.requests.at(-1).body.max_completion_tokens,8000);
+  const plainCall=await capacityRun({...localConnection,endpointOutputLimit:8000});
+  assert.equal(plainCall.events.at(-1).type,'done');
+  assert.equal(reserveOf(plainCall.posts),8000);
+  assert.equal(provider.requests.at(-1).body.max_tokens??provider.requests.at(-1).body.max_completion_tokens,8000);
+  checks.push('容量接线：冻结/环境超时600s内可用、超范围构造即拒；摘要cap按本次maxTokens=5000收敛预留与payload；端点上限8000压低常规轮与显式请求');
+ }
  const usage=providerUsage('anthropic-messages');usage.accept({type:'message_start',message:{usage:{input_tokens:30,cache_read_input_tokens:20,cache_creation_input_tokens:10}}});usage.accept({type:'message_delta',usage:{input_tokens:40,cache_creation_input_tokens:20,output_tokens:8}});assert.deepEqual(usage.read(),{input_tokens:80,output_tokens:8});
  assert.deepEqual(provider.errors,[]);console.log(JSON.stringify({passed:true,checks,requests:provider.requests.length,officialRequests:0}));
 }finally{await provider.close();}

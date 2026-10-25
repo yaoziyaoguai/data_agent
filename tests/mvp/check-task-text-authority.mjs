@@ -117,6 +117,51 @@ try {
   await h.pauseWorker();
   assert.equal(exhaustedSnapshot.events.find(event=>event.type==='run_failed').payload.code,'retry_exhausted');
   checks.push('真实交付尝试耗尽仍记录retry_exhausted，与首次权限/上下文拒绝区分');
+
+  // 04切片1：source_limits/time_roles/semantic_resolution的条件修订语义。
+  // set替换、unset清空、省略继承；旧任务缺新字段不被压成显式null。
+  const sliceCid=await h.create();
+  const limitMessage='只用文档A，观察截点为2026-10-01，口径采用我说的这条。';
+  await begin(sliceCid,limitMessage);
+  const limitDoc=ok(await h.request('/knowledge',{operation_id:randomUUID(),kind:'document',name:'来源限制合成资料',body:'文档A正文',related_ids:[]}));
+  const limitedTask=ok(await tool('update_analysis_task',{action:'create',goal:'带来源限制的统计任务',conditions,options:[]})).data;
+  const sliceMessage=run.message_id;
+  const limited=ok(await tool('update_analysis_task',{action:'revise',task_id:limitedTask.task_id,expected_version:limitedTask.condition_version,goal:'',condition_patch:{set:{
+    source_limits:{allowed_sources:[{kind:'document',id:limitDoc.id}],origin_message_ids:[sliceMessage]},
+    time_roles:[{role:'observation_cutoff',description:'数据观察截点',field_ref:null,value:'2026-10-01T00:00:00+08:00',evidence_refs:[]}],
+    semantic_resolution:{interpretation:'按用户明确的口径统计',basis:'explicit_user',user_quote:limitMessage,unresolved_differences:[],adoption_message_id:sliceMessage},
+  },unset:[]},options:[]})).data;
+  assert.equal(Number(limited.condition_version),Number(limitedTask.condition_version)+1);
+  // “改十月”只改统计区间：其余字段省略继承，来源限制/时间角色/口径决策全保留。
+  const october=ok(await tool('update_analysis_task',{action:'revise',task_id:limitedTask.task_id,expected_version:limited.condition_version,goal:'',condition_patch:{set:{time_start:'2026-10-01T00:00:00Z',time_end:'2026-11-01T00:00:00Z'},unset:[]},options:[]})).data;
+  const afterChange=ok(await tool('read_analysis_task',{task_id:limitedTask.task_id})).data;
+  assert.equal(afterChange.conditions.time_start,'2026-10-01T00:00:00Z');
+  assert.deepEqual(afterChange.conditions.source_limits,{allowed_sources:[{kind:'document',id:limitDoc.id}],origin_message_ids:[sliceMessage]},'来源限制省略继承，改区间不撤限制');
+  assert.equal(afterChange.conditions.time_roles[0].value,'2026-10-01T00:00:00+08:00','观察截点带时区保留');
+  assert.equal(afterChange.conditions.semantic_resolution.adoption_message_id,sliceMessage,'口径决策与采纳身份保留');
+  assert.equal(Number(afterChange.condition_version),Number(limited.condition_version)+1,'普通修订推进条件版本');
+  checks.push('“只用文档A→改十月”只改统计区间；来源限制、时间角色与口径决策省略继承');
+  // 显式unset才撤限制：撤后为显式null，未unset字段不受影响。
+  const lifted=ok(await tool('update_analysis_task',{action:'revise',task_id:limitedTask.task_id,expected_version:october.condition_version,goal:'',condition_patch:{set:{},unset:['source_limits']},options:[]})).data;
+  const afterLift=ok(await tool('read_analysis_task',{task_id:limitedTask.task_id})).data;
+  assert.equal(afterLift.conditions.source_limits,null,'显式unset后为null：本题明确未限制');
+  assert.equal(afterLift.conditions.time_roles.length,1,'未unset的时间角色保留');
+  assert.equal(afterLift.conditions.semantic_resolution.adoption_message_id,sliceMessage,'未unset的口径决策保留');
+  checks.push('显式unset才撤销来源限制；未unset字段不受影响');
+  await finish();
+
+  // 旧channel任务续接：channel保留解码，新字段缺失与显式null区分不混同。
+  const legacyCid=await h.create();await begin(legacyCid,'旧格式任务只带channel。');
+  const legacyTask=ok(await tool('update_analysis_task',{action:'create',goal:'旧channel任务',conditions:{...conditions,channel:'web'},options:[]})).data;
+  const legacyRevised=ok(await tool('update_analysis_task',{action:'revise',task_id:legacyTask.task_id,expected_version:legacyTask.condition_version,goal:'',condition_patch:{set:{time_start:'2026-09-01T00:00:00Z'},unset:[]},options:[]})).data;
+  const legacyView=ok(await tool('read_analysis_task',{task_id:legacyTask.task_id})).data;
+  assert.equal(legacyView.conditions.channel,'web','旧channel保留解码');
+  assert.equal(legacyView.conditions.source_limits,undefined,'旧任务缺失新字段不被压成显式null');
+  assert.equal(legacyView.conditions.time_roles,undefined);
+  assert.equal(legacyView.conditions.semantic_resolution,undefined);
+  assert.equal(Number(h.sql(`SELECT JSON_OBJECT('has_limits',JSON_CONTAINS_PATH(body,'one','$.source_limits'),'has_roles',JSON_CONTAINS_PATH(body,'one','$.time_roles')) FROM condition_revisions WHERE task_id='${legacyTask.task_id}' AND version=${legacyRevised.condition_version}`)[0].has_limits),0,'存储层保留缺失与显式null的区别');
+  checks.push('旧channel任务续接：channel保留解码，字段缺失不冒充显式null');
+  await finish();
   const result={passed:true,checks,officialRequests:0};
   await writeFile('.local/checks/task-text-authority.json',JSON.stringify(result,null,2));
   console.log(JSON.stringify(result));

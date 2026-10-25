@@ -1,0 +1,274 @@
+{
+  "schema": 1,
+  "review_date": "2026-10-24",
+  "increment": "I2-SOURCE-SYNC",
+  "base_commit": "fed8276577748c1f77c49c7c8ca2317408129ec3",
+  "reviewer": "独立审查子代理 runtime_closure_review；未实现本包产品或契约，仅编写 tests/mvp/check-source-sync-heartbeat.mjs 反例。该测试由未参与其实现的 capacity_contract_review 独立核对，主线程已确认并记入 CURRENT；不以自评代替独立审查。最终收尾仅写本记录，未运行数据库或最终gate。",
+  "conclusion": "passed",
+  "summary": "当前冻结范围的源码、原要求、测试预期及专项证据核对通过。SQL比较、外部键排序规则、回填观测回退、心跳自等待、异步错误详情丢失均已修复并有GREEN；跨空间进度缺口已补证，无剩余本轮产品阻塞发现。此结论不代表四组最终验收通过，主流程仍须执行make verify-increment。保留1GiB连续压力OOM及正文放大限制，不能由fresh单场成功推断连续稳定。",
+  "scope_sha256": "10636e5bde4361fd3f5c2e788f730fed3f5165f7772e355cc717ff407c405982",
+  "fingerprint": {
+    "method": "使用 scripts/check_delivery.py 的 fingerprint(root, read_delivery(root), for_review=True) 与 review_scope；写入前现场计算，写入后重算并调用 verify_review。",
+    "contract_sha256": "3473adbf5c2876daa95536f8795ae413c4090f573ff5ec5619a0d95a27fa1d7d",
+    "decisions_sha256": "c6456f454f3efb5763440301d1ea3298c518024f0fede2cb6be7dd86fa103e3b",
+    "input_file_count": 385,
+    "meaning": "绑定 CURRENT 增量合同、已确认决定、registry、AGENTS 及声明的 verification_inputs；排除审查指针和本记录。该摘要不表示对全部输入文件逐行重新审计，专项日志亦不替代最终运行收据。"
+  },
+  "review_basis": [
+    "AGENTS.md",
+    "docs/CURRENT.md：goal_revision 93，I2-SOURCE-SYNC active",
+    "docs/execution/semantic-runtime/source-sync.md",
+    "docs/architecture/implementation-design.md：17.2/17.3/17.3.1/17.8",
+    "docs/semantic-retrieval-design.md：本包D/C/A原要求",
+    "Makefile；scripts/check_delivery.py"
+  ],
+  "requirement_coverage": [
+    {
+      "requirements": [
+        "D01",
+        "C02"
+      ],
+      "result": "负责人仅完整成功后应用；沿既有维护权限及当前空间校验进度。跨空间404且不泄露进度。",
+      "code": [
+        "crates/data-agent/src/use_cases/catalog_import.rs",
+        "apps/api/src/routes.rs",
+        "tests/mvp/check-source-sync-browser.mjs"
+      ]
+    },
+    {
+      "requirements": [
+        "D04",
+        "D05",
+        "D06"
+      ],
+      "result": "完整SQL/字段保存、内容与观测分离、unchanged保留正文/修订/位置及人工层；当前引用按修订和Unicode code point读取，历史全文入口保留。",
+      "code": [
+        "crates/data-agent/src/modules/ingestion/catalog_content.rs",
+        "crates/data-agent/src/modules/ingestion/store.rs",
+        "crates/data-agent/src/use_cases/knowledge_sources.rs"
+      ]
+    },
+    {
+      "requirements": [
+        "D07",
+        "D08",
+        "C05"
+      ],
+      "result": "202登记、后台原批次/游标恢复；页内容/成员/待办/游标同事务；持久成员驱动最终收口，失败不暗重做，legacy成功不补job。新schema未接消费者保持pending，旧消费者不误领；未增加Agent循环或压缩器。",
+      "code": [
+        "crates/data-agent/src/use_cases/catalog_import.rs",
+        "crates/data-agent/src/modules/jobs/store.rs",
+        "apps/worker/src/main.rs"
+      ]
+    },
+    {
+      "requirements": [
+        "C07"
+      ],
+      "result": "同源来源/进度/错误契约及运行时校验；完整对象按真实UTF-8字节接收，超限不截断成功；UI保留未知POST命令ID，GET重试及迟到结果有生命周期/身份守卫。",
+      "code": [
+        "packages/contracts/schema.json",
+        "packages/contracts/openapi.json",
+        "apps/web/src/features/knowledge/SourceSynchronization.tsx",
+        "crates/data-agent/tests/catalog_transport.rs"
+      ]
+    },
+    {
+      "requirements": [
+        "A05",
+        "A07"
+      ],
+      "result": "精确外部唯一键及source_id校验；改名稳定身份。最终scope generation、成员revision CAS及缺席来源重查阻止旧同步回退；回填核当前头，方法升级同算法重比。",
+      "code": [
+        "migrations/202610240001_source_current_and_sync.sql",
+        "crates/data-agent/src/modules/ingestion/store.rs",
+        "tests/mvp/check-source-upgrade.mjs"
+      ]
+    },
+    {
+      "requirements": [
+        "A09",
+        "A10"
+      ],
+      "result": "新增表仍由私有store负责，跨模块由use_cases组合；每页锁外读取，成功/失败收尾同事务受M10 owner/epoch守卫；续租与页提交同时poll避免自等待。",
+      "code": [
+        "crates/data-agent/src/use_cases/catalog_import.rs",
+        "crates/data-agent/src/modules/jobs/store.rs",
+        "apps/worker/src/main.rs"
+      ]
+    }
+  ],
+  "resolved_findings": [
+    {
+      "id": "sql-comparison-ambiguous-lexing",
+      "priority": 2,
+      "status": "resolved",
+      "detail": "方言歧义、Word内井号改为原文回退；字符串按真实Token识别并覆盖CR/LF，修正引用标识符误判。sql_tokens_v2永久反例通过。",
+      "evidence": [
+        ".local/checks/sql-content-review-red.log",
+        ".local/checks/sql-content-review-green.log",
+        ".local/checks/sql-comment-review-green.log"
+      ]
+    },
+    {
+      "id": "source-external-key-collation",
+      "priority": 1,
+      "status": "resolved",
+      "detail": "ai_ci与稳定ID大小写语义不一致会混写。来源键及范围namespace改utf8mb4_0900_bin且写前核source_id；大小写隔离和改名保留身份通过。",
+      "evidence": [
+        ".local/checks/source-upgrade-stable-keys-red.log",
+        ".local/checks/source-upgrade-stable-keys-green.log"
+      ]
+    },
+    {
+      "id": "comparison-backfill-observed-metadata",
+      "priority": 2,
+      "status": "resolved",
+      "detail": "方法回填优先保留current.observed_metadata，避免旧快照回退v9/bob；后续v10排版更新仍不增正文/知识修订或待办。",
+      "evidence": [
+        ".local/checks/source-upgrade-comparison-upgrade-red.log",
+        ".local/checks/source-upgrade-comparison-upgrade-green.log"
+      ]
+    },
+    {
+      "id": "source-sync-heartbeat-self-wait",
+      "priority": 2,
+      "status": "resolved",
+      "detail": "tick分支内await续租会暂停持job锁的页提交；改独立heartbeat future与apply_page同时poll。真实3秒锁等待、TTL6000ms：RED 15.201秒仍running；GREEN 7474ms、epoch2/attempts0、两页无重复、未接任务pending、零模型调用。测试由capacity_contract_review独立复核。",
+      "evidence": [
+        "tests/mvp/check-source-sync-heartbeat.mjs",
+        ".local/checks/source-sync-heartbeat-red.log",
+        ".local/checks/source-sync-heartbeat-green.log"
+      ]
+    },
+    {
+      "id": "source-sync-durable-error-details",
+      "priority": 2,
+      "status": "resolved",
+      "detail": "主实施者反例证明超限原因丢失。error_message与失败终态同事务持久化，重新GET保留大小/上限；UI文本显示且旧回执回退error_code。上游详情限512个Unicode字符，不公开SQL内部错误正文。",
+      "evidence": [
+        ".local/checks/source-sync-error-details-red.log",
+        ".local/checks/source-sync-error-details-green.log",
+        ".local/checks/source-sync-browser-details-green.log"
+      ]
+    },
+    {
+      "id": "source-sync-cross-space-acceptance-gap",
+      "priority": 2,
+      "status": "resolved",
+      "detail": "属于验收缺口，未证实产品越权。补foreign-space已完成批次：当前空间管理员同ID读取404/not_available且无processed_sources/raw_index；真实集成四组通过。",
+      "evidence": [
+        "tests/mvp/check-source-sync-browser.mjs",
+        ".local/checks/source-sync-space-browser-green.log"
+      ]
+    }
+  ],
+  "unresolved_findings": [],
+  "observed_evidence": [
+    {
+      "path": ".local/checks/source-sync-reviewed-code.log",
+      "kind": "主流程执行，审查者只读核对",
+      "result": "cargo fmt、clippy all targets、TypeScript和Web build完成；547条同源合同正反例通过。",
+      "sha256_at_review": "36353e981935229599013a52426d5e29d00b7cc06f650f9bf4ada84488183d11"
+    },
+    {
+      "path": ".local/checks/source-excerpt-green.log",
+      "kind": "本地真实存储/API与合成平台专项",
+      "result": "当前正文读取、纯排版保留、观测元数据独立、真实内容升版和旧位置stale_source通过。",
+      "sha256_at_review": "5d046b0b4eaf8b5df062ad55442e96607e0fad1f8b67416daced76988020a5e6"
+    },
+    {
+      "path": ".local/checks/source-sync-recovery-first.log",
+      "kind": "本地API/Worker/MySQL恢复专项",
+      "result": "unchanged第一页负责人待生效，退出后从原游标恢复；子对象保留且不重排待办。后页失败保留已提交内容、不应用负责人或退休；legacy原回执无新job。",
+      "sha256_at_review": "8b9166623f645a194087de669392c593fdd1127b079fcf6a3b7e680dbe6dc0cb"
+    },
+    {
+      "path": ".local/checks/source-upgrade-green.log",
+      "kind": "一次完整升级运行；非拼接专项",
+      "result": "selected=null、passed=true；稳定键、33份旧来源中断恢复、比较方法升级、回填/实时写竞争四场均通过。",
+      "sha256_at_review": "714c2e9295847757168d4ea2e25ab33f8f06920a4aaed3ff92c534936448c150"
+    },
+    {
+      "path": ".local/checks/source-storage-pages-green.log",
+      "kind": "真实API/Worker/MySQL与合成101页平台",
+      "result": "101页、101来源、303对象；完整持久成员、末页长度/hash、全文回读、字段尾部与SQL excerpt通过，cleanupErrors为空。",
+      "sha256_at_review": "8257dc1d0b1de2adf0d00fe288b47f919ed360f9e7f2223fb54d83f685109393"
+    },
+    {
+      "path": ".local/checks/source-storage-fresh-boundary.log",
+      "kind": "fresh 1GiB MySQL单场边界复验",
+      "result": "8,388,608字节JSON完整保存，正文16,777,378字节；8,388,609字节失败且保留原内容、修订和待办。不能代表连续组合稳定。",
+      "sha256_at_review": "2ecae27f96a5ec7040db482a16be4db98d3f014aeea1893c0b09df2a4cddc90e"
+    },
+    {
+      "path": ".local/checks/source-sync-final-regression.log",
+      "kind": "本轮共享回归",
+      "result": "模块依赖/SQL owner、7个架构测试及runtime locking通过；目录12组、分析优先级6组、检索覆盖2组通过，22次本地模型协议调用全部结算。",
+      "sha256_at_review": "88dff34d4b8e98f2d70ae31b161c1b9fc00f7811d64de049d8270da8c7e78b6a"
+    },
+    {
+      "path": ".local/checks/source-sync-prefill-concurrency.log",
+      "kind": "两Worker共trial的本地协议回归",
+      "result": "4次本地协议调用全部结算且无重发；不代表官方模型能力。",
+      "sha256_at_review": "2a54e128d5c43eea37d89aaac7433325c992521387a7d0bacdc5cbd05f27ca16"
+    }
+  ],
+  "dynamic_validation": {
+    "status": "final_bound_acceptance_pending",
+    "owner": "主流程",
+    "required_entrypoint": [
+      "make",
+      "verify-increment"
+    ],
+    "bound_command_groups": [
+      [
+        "make",
+        "verify-source-content"
+      ],
+      [
+        "make",
+        "verify-source-sync"
+      ],
+      [
+        "make",
+        "verify-source-upgrade"
+      ],
+      [
+        "make",
+        "verify-source-ui"
+      ]
+    ],
+    "note": "主流程实际运行四组命令并取得前后指纹一致的完整成功收据；verify-delivery和专项日志不能代替最终gate，失败、超时或过期不能关闭02。"
+  },
+  "limits": {
+    "official_provider_calls_by_reviewer": 0,
+    "database_harnesses_started_by_reviewer": 0,
+    "product_or_contract_edits_by_reviewer": false,
+    "test_edits_by_reviewer": [
+      "tests/mvp/check-source-sync-heartbeat.mjs"
+    ],
+    "finalization_files_written_by_reviewer": [
+      "docs/reviews/source-sync-closure-review-20261024.json"
+    ],
+    "commits_or_pushes": false,
+    "services_updated_by_reviewer": false,
+    "environment": "真实本地API/Worker/MySQL、合成平台及必要本地协议模型，官方请求0。1GiB连续组合出现OOM/exit137；fresh边界单场退出0但峰值贴近1GiB、匿名内存约804MB。8MiB输入形成16,777,378字节正文；未证明内存泄漏。后续验收临时2GiB且串行，主流程收尾恢复原设置，部署文件未改。",
+    "deferred_optimization": "source_text含元数据JSON及DDL/SQL/字段展开，8MiB输入在本场景形成约16MiB正文；完整来源表示与去重仅按用户要求登记候选优化，不在本包改写正文或定位。",
+    "not_proven": [
+      "四组最终绑定验收、最终增量收据和02关闭，均仍待主流程完成",
+      "原1GiB配置连续大来源运行稳定性，或已诊断/修复内存泄漏",
+      "真实平台接入、真实模型质量和整个MVP通过",
+      "尚未实现的prepare_source/raw_source_index处理器或可用语义搜索",
+      "后续03–09及本增量切片之外的D/C/A完整要求"
+    ],
+    "environment_evidence": [
+      ".local/checks/source-storage-container-events.log",
+      ".local/checks/source-storage-first-run-durable-evidence.log",
+      ".local/checks/source-storage-fresh-boundary.log",
+      ".local/checks/source-storage-fresh-boundary-memory-summary.json",
+      ".local/checks/source-storage-boundary.json"
+    ]
+  },
+  "test_expectations": "202测试显式等待终态，保留原业务断言；角色回滚按已定内容/观测分离合同改用更旧platform_version触发stale_source；回填大IN锁改逐主键锁以避免全扫描锁，17/33中断点及身份/正文预期不变。来源传输/存储测试核独立输入hash、全文、末尾字段及SQL excerpt；201字段、长SQL、101页、8MiB来源及16MiB页边界均有实际接线，最终四组仍须执行。"
+}

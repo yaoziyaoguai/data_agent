@@ -1,9 +1,11 @@
+mod capacity;
 mod secrets;
 mod store;
 use crate::{
     contracts::{self, generated::ModelProfile},
     types::{Error, Result},
 };
+pub use capacity::{CapacityPlan, plan};
 use serde_json::{Value, json};
 use sqlx::MySqlPool;
 pub use store::{
@@ -94,6 +96,18 @@ pub fn validate_model(value: &Value) -> Result<()> {
         .any(|field| value[*field].as_str().unwrap_or("").trim().is_empty())
     {
         return Err(Error::new("invalid_input"));
+    }
+    // 新修订必须声明总窗口、请求超时和能力来源；缺字段按契约在解码层拒绝。
+    let (context_window, input_limit, output_limit) = (
+        value["context_window"].as_u64(),
+        value["input_limit"].as_u64().unwrap_or(0),
+        value["output_limit"].as_u64().unwrap_or(0),
+    );
+    if let (Some(context), input, output) = (context_window, input_limit, output_limit) {
+        capacity::plan(context, input, output).map_err(|_| {
+            Error::new("model_capacity_invalid")
+                .with_message(capacity::range_message(context, input, output))
+        })?;
     }
     if !value["thinking_levels"]
         .as_array()

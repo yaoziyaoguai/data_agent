@@ -6,14 +6,37 @@ import type {
   SaveModelDefinition,
   SaveModelService,
 } from "../../../../../packages/contracts/generated/boundary.ts";
+import { deriveCapacityPlan, capacityRangeMessage } from "../../../../../packages/contracts/capacity.ts";
 import { api } from "../../shared/api.ts";
 import { Modal } from "../../shared/Modal.tsx";
 import { useUnsavedChanges } from "../../shared/UnsavedChanges.tsx";
 import "./model-configuration.css";
 
+// 旧配置缺新容量字段时允许编辑中为空；提交前由必填与容量校验补齐。
+type ModelDraft = Omit<
+  SaveModelDefinition,
+  "context_window" | "request_timeout_ms" | "capability_source"
+> &
+  Partial<
+    Pick<
+      SaveModelDefinition,
+      "context_window" | "request_timeout_ms" | "capability_source"
+    >
+  >;
 type Editor =
   | { kind: "service"; draft: SaveModelService; original: string }
-  | { kind: "model"; draft: SaveModelDefinition; original: string };
+  | { kind: "model"; draft: ModelDraft; original: string };
+
+// DeepSeek已核对1M窗口的待验初值（实现设计17.7）；其他型号按已核实文档声明，不默认1M。
+const deepseekInitialValues = {
+  context_window: 1000000,
+  input_limit: 900000,
+  output_limit: 65536,
+  payload_bytes_limit: 8388608,
+  request_timeout_ms: 600000,
+  capability_source: "admin_declared" as const,
+};
+const deepseekLongOutput = { output_limit: 131072 };
 const levels: SaveModelDefinition["thinking_levels"] = [
   "off",
   "minimal",
@@ -41,9 +64,42 @@ function serviceDraft(value: ModelService): SaveModelService {
   const { version, credential_configured, ...draft } = value;
   return { ...draft, expected_version: version };
 }
-function modelDraft(value: ModelDefinition): SaveModelDefinition {
+function modelDraft(value: ModelDefinition): ModelDraft {
   const { version, ...draft } = value;
   return { ...draft, expected_version: version };
+}
+
+function initialCapacity() {
+  // 未选定具体型号时不推测总窗口；其余字段是可编辑的请求策略初值。
+  return {
+    input_limit: 65536,
+    output_limit: 8192,
+    payload_bytes_limit: 131072,
+    request_timeout_ms: 90000,
+    capability_source: "admin_declared" as const,
+  };
+}
+
+// 提交前按同一容量公式预检并给出字段级原因；服务端仍按合同拒绝。
+function capacityProblem(draft: ModelDraft): string {
+  if (
+    draft.context_window === undefined ||
+    draft.request_timeout_ms === undefined ||
+    draft.capability_source === undefined
+  )
+    return "请填写总上下文、请求超时和能力来源。";
+  const plan = deriveCapacityPlan(
+    draft.context_window,
+    draft.input_limit,
+    draft.output_limit,
+  );
+  if (plan === "reserve_exceeds_history")
+    return "历史与工具预留空间不足。" + capacityRangeMessage(draft.context_window, draft.input_limit, draft.output_limit);
+  if (plan === "summary_space_insufficient")
+    return "当前组合放不下两段摘要和近期保留。" + capacityRangeMessage(draft.context_window, draft.input_limit, draft.output_limit);
+  if (plan === "invalid_field")
+    return "请检查总上下文、最大输入与最大输出的数值范围。";
+  return "";
 }
 function explanation(error: unknown) {
   const code = error instanceof Error ? error.message : "";
@@ -61,6 +117,8 @@ function explanation(error: unknown) {
         model_secret_unavailable:
           "无法读取密钥存储，请联系服务维护者检查主密钥文件。",
         model_unavailable: "模型或关联服务已停用，请重新读取配置。",
+        model_capacity_invalid:
+          "容量组合不可行：总上下文、最大输入与最大输出的组合放不下历史、工具预留和两段摘要。请调整总上下文或最大输出。",
       } as Record<string, string>
     )[code] ?? "未确认保存成功，请保留输入后重试。"
   );
@@ -114,7 +172,7 @@ export function ModelConfigurationPage() {
     setNotice("");
   }
   function editModel(value?: ModelDefinition) {
-    const draft: SaveModelDefinition = value
+    const draft: ModelDraft = value
       ? modelDraft(value)
       : {
           id: crypto.randomUUID(),
@@ -124,9 +182,7 @@ export function ModelConfigurationPage() {
           thinking_levels: ["off"],
           reasoning_supported: false,
           default_thinking: "off",
-          input_limit: 65536,
-          output_limit: 8192,
-          payload_bytes_limit: 131072,
+          ...initialCapacity(),
           input_rate: "0",
           output_rate: "0",
           enabled: true,
@@ -300,7 +356,12 @@ export function ModelConfigurationPage() {
                       {model.thinking_levels
                         .map((level) => levelLabel[level])
                         .join("、")}{" "}
-                      · 上下文 {model.input_limit.toLocaleString()} tokens
+                      · 总上下文{" "}
+                      {(model.context_window ?? model.input_limit).toLocaleString()}{" "}
+                      tokens
+                      {model.context_window
+                        ? ` · 最大输出 ${model.output_limit.toLocaleString()} tokens · 超时 ${Math.round(model.request_timeout_ms! / 1000)} 秒`
+                        : " · 旧配置（未声明总窗口）"}
                     </p>
                   </div>
                   <div className="configuration-actions">
@@ -396,14 +457,21 @@ export function ModelConfigurationPage() {
             id="model-configuration-form"
             onSubmit={(event) => {
               event.preventDefault();
-              if (!busy)
-                void save(
-                  editor.kind === "service"
-                    ? "/model-services"
-                    : "/model-definitions",
-                  editor.draft,
-                  true,
-                );
+              if (busy) return;
+              if (editor.kind === "model") {
+                const problem = capacityProblem(editor.draft);
+                if (problem) {
+                  setError(problem);
+                  return;
+                }
+              }
+              void save(
+                editor.kind === "service"
+                  ? "/model-services"
+                  : "/model-definitions",
+                editor.draft,
+                true,
+              );
             }}
           >
             {editor.kind === "service" ? (
@@ -573,13 +641,13 @@ function ModelFields({
   services,
   change,
 }: {
-  draft: SaveModelDefinition;
+  draft: ModelDraft;
   services: ModelService[];
-  change: (draft: SaveModelDefinition) => void;
+  change: (draft: ModelDraft) => void;
 }) {
-  const protocol = services.find(
-    (service) => service.id === draft.service_id,
-  )?.api;
+  const service = services.find((service) => service.id === draft.service_id);
+  const protocol = service?.api;
+  const providerId = service?.provider_id ?? "compatible";
   const budgetThinking =
     protocol === "anthropic-messages" &&
     draft.anthropic_thinking_mode !== "adaptive";
@@ -737,39 +805,154 @@ function ModelFields({
       <p className="configuration-help">
         按供应商能力填写；接入未知 Model ID 不会验证供应商是否实际支持所选档位。
       </p>
-      <div className="configuration-grid">
-        {(
-          [
-            ["input_limit", "上下文上限（tokens）", 1024, 2000000],
-            ["output_limit", "输出上限（tokens）", 1, 131072],
-            ["payload_bytes_limit", "请求体上限（字节）", 2048, 8388608],
-          ] as const
-        ).map(([key, label, min, max]) => (
-          <label key={key}>
-            {label}
+      <fieldset>
+        <legend>容量与限额</legend>
+        <p className="configuration-help">
+          按供应商已核实文档填写；目录外型号不猜窗口。字段含义：总上下文
+          tokens（模型总窗口）、最大输入 tokens（请求输入策略）、最大输出
+          tokens（含思考的单次输出）、请求体 MiB（完整 JSON 字节）、请求超时秒。
+        </p>
+        {providerId === "deepseek" && draft.model_id === "deepseek-flash" && (
+          <div className="configuration-grid">
+            <button
+              type="button"
+              onClick={() =>
+                change({ ...draft, ...deepseekInitialValues })
+              }
+            >
+              填入 DeepSeek Flash 已核对初值（1M 窗口）
+            </button>
+            <button
+              type="button"
+              onClick={() =>
+                change({
+                  ...draft,
+                  ...deepseekInitialValues,
+                  ...deepseekLongOutput,
+                })
+              }
+            >
+              长输出档（输出 131072）
+            </button>
+          </div>
+        )}
+        {draft.context_window === undefined && (
+          <p className="configuration-help">
+            尚未声明总上下文；保存前需按此型号已核实的能力填写。历史消息仍按原配置执行。
+          </p>
+        )}
+        <div className="configuration-grid">
+          {(
+            [
+              ["context_window", "总上下文 tokens", 1024, 2000000, 1],
+              ["input_limit", "最大输入 tokens", 1024, 2000000, 1],
+              [
+                "output_limit",
+                "最大输出 tokens",
+                1,
+                393216,
+                protocol === "openai-responses"
+                  ? 16
+                  : budgetThinking &&
+                      draft.thinking_levels.some((level) => level !== "off")
+                    ? 2048
+                    : 1,
+              ],
+            ] as const
+          ).map(([key, label, min, max, fieldMin]) => (
+            <label key={key}>
+              {label}
+              <input
+                type="number"
+                required
+                min={Math.max(min, fieldMin)}
+                max={max}
+                step={1}
+                value={draft[key] ?? ""}
+                onChange={(e) =>
+                  change({
+                    ...draft,
+                    [key]:
+                      e.target.value === "" ? undefined : Number(e.target.value),
+                  })
+                }
+              />
+            </label>
+          ))}
+        </div>
+        <div className="configuration-grid">
+          <label>
+            请求体 MiB
             <input
               type="number"
               required
-              min={
-                key === "output_limit"
-                  ? protocol === "openai-responses"
-                    ? 16
-                    : budgetThinking &&
-                        draft.thinking_levels.some((level) => level !== "off")
-                      ? 2048
-                      : min
-                  : min
+              min={2048 / 1048576}
+              max={8}
+              step={1 / 1048576}
+              value={
+                draft.payload_bytes_limit === undefined
+                  ? ""
+                  : draft.payload_bytes_limit / 1048576
               }
-              max={max}
-              step={1}
-              value={draft[key]}
               onChange={(e) =>
-                change({ ...draft, [key]: Number(e.target.value) })
+                change({
+                  ...draft,
+                  payload_bytes_limit:
+                    e.target.value === ""
+                      ? draft.payload_bytes_limit
+                      : Math.round(Number(e.target.value) * 1048576),
+                })
               }
             />
           </label>
-        ))}
-      </div>
+          <label>
+            请求超时秒
+            <input
+              type="number"
+              required
+              min={1}
+              max={600}
+              step={1}
+              value={
+                draft.request_timeout_ms === undefined
+                  ? ""
+                  : draft.request_timeout_ms / 1000
+              }
+              onChange={(e) =>
+                change({
+                  ...draft,
+                  request_timeout_ms:
+                    e.target.value === ""
+                      ? undefined
+                      : Math.round(Number(e.target.value) * 1000),
+                })
+              }
+            />
+          </label>
+          <label>
+            能力来源
+            <select
+              aria-label="能力来源"
+              required
+              value={draft.capability_source ?? ""}
+              onChange={(e) => {
+                const value = e.target.value;
+                if (value === "sdk_catalog" || value === "admin_declared")
+                  change({
+                    ...draft,
+                    capability_source: value,
+                  });
+              }}
+            >
+              <option value="" disabled>
+                请选择
+              </option>
+              <option value="sdk_catalog">SDK 目录</option>
+              <option value="admin_declared">管理员声明</option>
+            </select>
+          </label>
+        </div>
+      </fieldset>
       <fieldset>
         <legend>计价信息</legend>
         <p className="configuration-help">

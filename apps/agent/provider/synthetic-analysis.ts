@@ -78,6 +78,8 @@ export function syntheticAction(
   if (previous && !previous.conditions && !has("read_analysis_task")) return { tool:"read_analysis_task", args:{task_id:previous.id} };
   const old = latest("read_analysis_task")?.conditions ?? previous?.conditions;
   const conditions: Conditions = { ...empty, ...(old ?? {}) };
+  const openClarifications: RecordValue[] = latest("read_analysis_task")?.open_clarifications
+    ?? (previous?.clarification ? [previous.clarification] : []);
   const update = (
     action: string,
     question: string | null = null,
@@ -94,6 +96,13 @@ export function syntheticAction(
         set: Object.fromEntries(Object.entries(conditions).filter(([key, value]) => value !== null && JSON.stringify(value) !== JSON.stringify(old?.[key]))),
         unset: Object.entries(conditions).filter(([key, value]) => value === null && old?.[key] != null).map(([key]) => key),
       }} : {}),
+      // 模拟策略只解决已明确选定分母的原问题，普通条件修订不能关闭其他澄清。
+      ...(action === "revise" && old?.metric === "refund_ambiguous"
+        && ["refund_rate", "refund_amount_rate", "refund_customer_rate"].includes(conditions.metric ?? "")
+        ? { resolved_clarification_ids: openClarifications
+            .filter(item => item.question === "退款率希望按什么分母计算？" && typeof item.id === "string")
+            .map(item => item.id) }
+        : {}),
       question,
       options,
     },
@@ -300,9 +309,34 @@ export function syntheticAction(
       text: "本地模拟模型仅支持合成零售的净收入、支付客户数、退款率及字段解释。可换用已配置真实模型处理更广的问题；工具和用户确认规则保持一致。",
     };
   if (!has("request_query")) {
-    let expression = metric?.entries
-      .find((e: RecordValue) => e.path === "sql")
-      ?.effective_value?.match(/SELECT ([\s\S]*?)\nFROM/)?.[1];
+    const previewSql = metric?.entries.find((entry: RecordValue) => entry.path === "sql");
+    let metricSql = previewSql?.effective_value;
+    const sqlReads = tools.filter(tool => tool.name === "read_knowledge");
+    // 搜索只保证命中片段；固定演示也必须同版补读完整SQL，不能把省略当成没有定义。
+    if (metric && (sqlReads.length || !previewSql || previewSql.content_page?.complete === false)) {
+      let offset = 0;
+      let total: number | undefined;
+      metricSql = "";
+      for (const read of sqlReads) {
+        const entry = read.data.entries?.find((item: RecordValue) => item.path === "sql");
+        const page = entry?.content_page;
+        if (read.data.id !== metric.id || read.data.version !== metric.version
+          || typeof entry?.effective_value !== "string" || page?.offset !== offset
+          || (total !== undefined && page.total_chars !== total)) {
+          return {text: "指标SQL补读未能取得同一版本的完整正文，保留调查缺口，没有生成查询。"};
+        }
+        total = page.total_chars;
+        metricSql += entry.effective_value;
+        offset += [...entry.effective_value].length;
+        if (page.next_offset !== (offset === total ? null : offset)) {
+          return {text: "指标SQL分页不连续，保留调查缺口，没有生成查询。"};
+        }
+      }
+      if (total === undefined || offset < total) return {tool: "read_knowledge", args: {
+        object_id: metric.id, version: metric.version, entry_id: previewSql?.entry_id ?? "sql", offset, limit: 4096,
+      }};
+    }
+    let expression = metricSql?.match(/SELECT ([\s\S]*?)\nFROM/)?.[1];
     if (conditions.metric === "refund_amount_rate")
       expression =
         "SUM(refunded_amount_cents) * 1.0 / NULLIF(SUM(paid_amount_cents), 0) AS refund_amount_rate";

@@ -353,8 +353,17 @@ pub async fn selection_in_tx(
         json!(format!("configured:{id}:{version}"))
     };
     profile["thinking_level"] = thinking;
-    for field in ["input_limit", "output_limit", "payload_bytes_limit"] {
-        profile[field] = model[field].clone();
+    for field in [
+        "input_limit",
+        "output_limit",
+        "payload_bytes_limit",
+        "context_window",
+        "request_timeout_ms",
+        "capability_source",
+    ] {
+        if model.get(field).is_some() {
+            profile[field] = model[field].clone();
+        }
     }
     profile["toolset"] = json!("data");
     profile["configured_model"] = json!({"id":id,"version":version.to_string(),"service_id":model["service_id"],"service_version":service_version.to_string(),"api":service["api"],"input_rate":model["input_rate"],"output_rate":model["output_rate"],"reasoning_supported":model["reasoning_supported"]});

@@ -46,23 +46,64 @@ fn query_recovery(query: &Value) -> Value {
         "read_tool":{"name":"get_query","arguments":{"query_id":query["id"]}}
     })
 }
+// 读任务当前条件声明的口径决策（整列读body在Rust提取：JSON路径表达式遇NULL会解码失败）。
+// 任务尚不可读时返回None，由后续授权路径给出明确错误。
+async fn declared_resolution_in_tx(
+    tx: &mut AppTx<'_>,
+    cid: &str,
+    task: Option<&str>,
+) -> Result<Option<Value>> {
+    let Some(task) = task else {
+        return Ok(None);
+    };
+    Ok(sqlx::query_scalar::<_, Option<sqlx::types::Json<Value>>>(
+        "SELECT c.body FROM condition_revisions c \
+             JOIN analysis_tasks t ON t.id=c.task_id AND t.condition_version=c.version \
+             WHERE t.conversation_id=? AND t.id=?",
+    )
+    .bind(cid)
+    .bind(task)
+    .fetch_optional(tx.connection())
+    .await?
+    .flatten()
+    .map(|body| body.0)
+    .and_then(|body| body.get("semantic_resolution").cloned())
+    .filter(|value| value.is_object()))
+}
+
 async fn request_condition_authority_in_tx(
     tx: &mut AppTx<'_>,
     ctx: &AccessContext,
     cid: &str,
     args: &Value,
     checked: &super::context_authority::CheckedTextResults,
-) -> Result<Value> {
+) -> Result<(Value, Value)> {
     super::knowledge::check_refs_in_tx(tx, ctx, &args["knowledge_refs"]).await?;
     analysis::lock_tasks_in_tx(tx, cid).await?;
     let task = text(args, "task_id")?;
     let version = epoch(text(args, "condition_version")?)?;
     analysis::assert_current_in_tx(tx, cid, task, version).await?;
+    // 正式草稿保存用严格引用校验：范围外对象是硬错误，不像只读诊断那样退化为覆盖缺口。
+    // 门跟草稿所属任务的当前条件走，不按消息绑定集（绑定集可能只含另一个无限制任务）。
+    let draft_gate = super::source_limits::resolve_for_task_in_tx(tx, cid, task).await?;
+    if let Some(gate) = &draft_gate {
+        for reference in args["knowledge_refs"].as_array().into_iter().flatten() {
+            let object = knowledge::read_in_tx(
+                tx,
+                ctx,
+                reference["object_id"].as_str().unwrap_or(""),
+                reference["version"].as_str().map(epoch).transpose()?,
+                false,
+            )
+            .await?;
+            gate.assert_object_in_tx(tx, &object).await?;
+        }
+    }
     if conversations::confirmation_blocked_in_tx(tx, cid).await? {
         return Err(Error::new("message_pending"));
     }
     let conditions = analysis::read_evidence_conditions_in_tx(tx, ctx, cid, task, version).await?;
-    super::context_authority::validate_condition_text_in_tx(
+    let authority = super::context_authority::validate_condition_text_in_tx(
         tx,
         ctx,
         cid,
@@ -71,13 +112,35 @@ async fn request_condition_authority_in_tx(
         &conditions,
         checked,
     )
-    .await
+    .await?;
+    Ok((authority, conditions))
+}
+
+// 时间基准从任务当前条件投影成草稿快照：观察截点/批次跟草稿走，任务后来改版不改写
+// 已保存草稿的含义。只在time_roles非空时投影；未声明的草稿保存NULL，答案侧
+// 不得以request_clock或平台data_freshness冒充截点/批次。
+fn time_basis_of(conditions: &Value) -> Result<Option<Value>> {
+    let Some(roles) = conditions.get("time_roles").and_then(Value::as_array) else {
+        return Ok(None);
+    };
+    if roles.is_empty() {
+        return Ok(None);
+    }
+    let basis = json!({
+        "time_start": conditions.get("time_start").cloned().unwrap_or(Value::Null),
+        "time_end": conditions.get("time_end").cloned().unwrap_or(Value::Null),
+        "timezone": conditions.get("timezone").cloned().unwrap_or(Value::Null),
+        "time_roles": roles,
+    });
+    contracts::validate("TimeBasis", &basis)?;
+    Ok(Some(basis))
 }
 
 async fn semantic_diagnostics_in_tx(
     tx: &mut AppTx<'_>,
     ctx: &AccessContext,
     args: &Value,
+    gate: Option<&super::source_limits::SourceGate>,
 ) -> Result<Value> {
     let refs = args
         .get("knowledge_refs")
@@ -88,7 +151,23 @@ async fn semantic_diagnostics_in_tx(
     let objects = snapshot["objects"].as_array().cloned().unwrap_or_default();
     for object in objects {
         match super::knowledge::assert_source_in_tx(tx, ctx, &object).await {
-            Ok(()) => valid.push(object),
+            Ok(()) => {
+                // 只读诊断把范围外对象记为覆盖缺口；正式保存路径在条件授权处已硬拒绝。
+                let within_limits = match gate {
+                    Some(gate) => gate.allows_object_in_tx(tx, &object).await?,
+                    None => true,
+                };
+                if within_limits {
+                    valid.push(object);
+                } else {
+                    snapshot["coverage"]["notes"]
+                        .as_array_mut()
+                        .ok_or(Error::new("invalid_input"))?
+                        .push(json!(
+                            "部分参考知识不在本题声明的来源允许范围内，本次未用于检查。"
+                        ));
+                }
+            }
             Err(error) if matches!(error.code, "stale_knowledge" | "not_available") => {
                 snapshot["coverage"]["notes"]
                     .as_array_mut()
@@ -296,6 +375,10 @@ async fn execute(pool: &MySqlPool, ctx: &AccessContext, input: Value) -> Result<
     contracts::validate("DataToolInvocation", &input)?;
     let name = text(&input, "tool_name")?;
     let args = &input["arguments"];
+    // 采纳身份宿主绑定：条件写入路径验证通过后，把省略的adoption_message_id
+    // 回填为本轮真实消息身份的完整args克隆；arm持久化用它，apply层幂等指纹
+    // 基于回填后的值，同消息重试指纹一致。
+    let mut bound_args: Option<Value> = None;
     let validation = contracts::validate(input_schema(name)?, args);
     let cid = runtime::locate_run(pool, text(&input, "run_id")?).await?;
     // 答案回放也要查证原结果，不能通过已有成功回执恢复已撤权的正文。
@@ -376,14 +459,76 @@ async fn execute(pool: &MySqlPool, ctx: &AccessContext, input: Value) -> Result<
                 return Err(Error::new("outcome_unknown"));
             }
         }
-        if name == "request_query" && validation.is_ok() {
+        if matches!(name, "request_query" | "update_analysis_task") && validation.is_ok() {
             let message =
                 conversations::read_message_in_tx(&mut tx, &conv, &run.message_id).await?;
-            super::query_semantics::validate_resolution(
-                args,
-                &message.body,
-                message.user_supplied,
-            )?;
+            if name == "request_query" {
+                // 先于修订失效旧稿拦截未决/不一致草稿：被拒的修订尝试不能使旧稿失效。
+                // arm内以授权后的条件体权威复算同一判定。
+                let declared =
+                    declared_resolution_in_tx(&mut tx, &cid, args["task_id"].as_str()).await?;
+                super::query_semantics::draft_resolution(
+                    args.get("semantic_resolution"),
+                    declared.as_ref(),
+                    &message.body,
+                    message.user_supplied,
+                    &run.message_id,
+                )?;
+            } else {
+                // create完整条件与revise补丁同一采纳纪律：explicit_user绑定本轮真实消息
+                // 或逐字复制同任务已验证原身份；未决状态允许如实记录，随后按条件版本
+                // 阻断草稿保存（needs_clarification不能用省略变unambiguous）。
+                // 分支判定与apply_update一致：create、task_id缺省的等同create及split都
+                // 经完整conditions写入（split复制原任务条件，inherited取原任务声明），
+                // 不看condition_patch是否携带，防止补丁分支漏掉conditions里的采纳声明。
+                let action = args["action"].as_str().unwrap_or("");
+                let conditions_path =
+                    action == "create" || action == "split" || args["task_id"].is_null();
+                let (resolution, task) = if conditions_path {
+                    (
+                        args["conditions"]
+                            .get("semantic_resolution")
+                            .filter(|value| !value.is_null()),
+                        if action == "split" {
+                            args["task_id"].as_str()
+                        } else {
+                            None
+                        },
+                    )
+                } else {
+                    (
+                        args["condition_patch"]["set"]
+                            .get("semantic_resolution")
+                            .filter(|value| !value.is_null()),
+                        args["task_id"].as_str(),
+                    )
+                };
+                if let Some(resolution) = resolution {
+                    let inherited = declared_resolution_in_tx(&mut tx, &cid, task).await?;
+                    super::query_semantics::validate_condition_resolution(
+                        resolution,
+                        &message.body,
+                        message.user_supplied,
+                        &run.message_id,
+                        inherited.as_ref(),
+                    )?;
+                    // 新采纳省略身份：回填本轮真实消息ID后交给持久化，模型无需
+                    // 也无从知道消息ID；验证已核对引用确为本轮完整原话。
+                    if resolution["basis"] == "explicit_user"
+                        && resolution["adoption_message_id"].is_null()
+                    {
+                        let mut bound = args.clone();
+                        let target = if conditions_path {
+                            &mut bound["conditions"]["semantic_resolution"]
+                        } else {
+                            &mut bound["condition_patch"]["set"]["semantic_resolution"]
+                        };
+                        *target = resolution.clone();
+                        target["adoption_message_id"] = json!(run.message_id);
+                        bound_args = Some(bound);
+                    }
+                }
+            }
         }
         tx.commit().await?;
     }
@@ -433,6 +578,7 @@ async fn execute(pool: &MySqlPool, ctx: &AccessContext, input: Value) -> Result<
             return Ok(receipt);
         }
         if name == "request_query" {
+            // 预检只核条件授权；来源门在条件授权内部按草稿所属任务解析。
             request_condition_authority_in_tx(&mut tx, ctx, &cid, args, &text_results).await?;
             if let Some(replaced) = args["replaces_query_id"].as_str() {
                 // 有效修订在外部编译前失效旧稿；失效来源不能先改变旧稿或向平台发送SQL。
@@ -535,7 +681,7 @@ async fn execute(pool: &MySqlPool, ctx: &AccessContext, input: Value) -> Result<
         _ => None,
     };
     let extracted_memory = super::personal_memory::extract(pool, ctx, &input).await?;
-    let (memory_candidates, memory_retrieval) =
+    let (memory_candidates, mut memory_retrieval) =
         super::personal_memory::search(pool, ctx, &input).await;
     let scope = if name == "search_knowledge" {
         KnowledgeSearchScope::from_input(args)?
@@ -560,6 +706,35 @@ async fn execute(pool: &MySqlPool, ctx: &AccessContext, input: Value) -> Result<
     } else {
         retrieval::vector::Candidates::lexical()
     };
+    let mut search_stage = if name == "search_knowledge" {
+        Some(
+            super::knowledge::search_stage_outside_lock(
+                pool,
+                ctx,
+                &super::knowledge::ScopedSearchRequest {
+                    query: text(args, "query")?,
+                    limit: args["limit"].as_u64().unwrap_or(10) as usize,
+                    vector: &vector,
+                    scope: &scope,
+                    asset_after: args["asset_after"].as_str(),
+                    cid: &cid,
+                    text_results: &text_results,
+                },
+            )
+            .await?,
+        )
+    } else {
+        None
+    };
+    // 合成验收在召回完成后延迟，验证锁外续租以及提交前的版本竞争。
+    if search_stage.is_some()
+        && let Ok(delay) = std::env::var("DATA_AGENT_TEST_RETRIEVAL_DELAY_MS")
+        && let Ok(ms) = delay.parse::<u64>()
+        && ms > 0
+    {
+        eprintln!("test_retrieval_stage_ready run={}", text(&input, "run_id")?);
+        tokio::time::sleep(std::time::Duration::from_millis(ms)).await;
+    }
     let mut tx = AppTx::begin(pool).await?;
     let conv = conversations::lock_conversation_in_tx(&mut tx, ctx, &cid).await?;
     let run = runtime::lock_run_in_tx(&mut tx, text(&input, "run_id")?, &cid).await?;
@@ -605,37 +780,39 @@ async fn execute(pool: &MySqlPool, ctx: &AccessContext, input: Value) -> Result<
         tx.commit().await?;
         return Ok(receipt);
     }
+    // 本题声明的来源允许集在执行事务内重查：allowed_sources跟任务条件走，
+    // 不取自run快照，修订后下一轮读取立即生效。request_query的门在条件授权处
+    // 按草稿所属任务解析（args.task_id显式指明，不经消息绑定集），不在此解析。
+    let source_gate = if matches!(
+        name,
+        "search_knowledge" | "read_knowledge" | "read_source" | "validate_sql"
+    ) {
+        super::source_limits::resolve_in_tx(&mut tx, &conv, &run.message_id).await?
+    } else {
+        None
+    };
     let data = match name {
         "search_knowledge" => {
-            let search = super::knowledge::retrieve_scoped_in_tx(
-                &mut tx,
-                ctx,
-                text(args, "query")?,
-                args["limit"].as_u64().unwrap_or(10) as usize,
-                &vector,
-                &scope,
-            )
-            .await?;
-            let memories = assets::list_in_tx(&mut tx, ctx, true)
-                .await?
-                .into_iter()
-                .filter(|v| v["kind"] == "memory")
-                .collect();
-            let mut items =
-                super::knowledge::valid_assets_in_tx(&mut tx, ctx, memories, &cid, &text_results)
-                    .await?;
-            let selected = assets::selected_in_tx(&mut tx, ctx, &cid).await?;
-            items.extend(
-                super::knowledge::valid_assets_in_tx(&mut tx, ctx, selected, &cid, &text_results)
-                    .await?,
-            );
-            let mut page = retrieval::asset_directory(
-                items.clone(),
-                text(args, "query")?,
-                args["asset_after"].as_str(),
-                args["limit"].as_u64().unwrap_or(10) as usize,
-            );
-            if !memory_candidates.is_empty() {
+            // 召回与目录已在锁外短读事务完成；提交前重核对象、依赖与资产版本。
+            let stage = search_stage.take().ok_or(Error::new("unavailable"))?;
+            super::knowledge::assert_search_fresh_in_tx(&mut tx, ctx, &stage).await?;
+            let mut search = stage.search;
+            let items = stage.items;
+            let mut page = stage.page;
+            // 受限检索只交付允许来源实际贡献的命中；个人记忆不作为查证线索交付。
+            // 过滤事实进入回执的source_limits块，与candidate_limit空结果可区分。
+            let mut limits_receipt = None;
+            if let Some(gate) = &source_gate {
+                let (kept, filtered) = gate.filter_objects_in_tx(&mut tx, &search.objects).await?;
+                let allowed_objects = kept
+                    .into_iter()
+                    .map(|index| search.objects[index].clone())
+                    .collect::<Vec<_>>();
+                search.objects = allowed_objects;
+                limits_receipt = Some(gate.receipt(filtered));
+                page["memories"] = json!([]);
+                memory_retrieval = "excluded_by_source_limits";
+            } else if !memory_candidates.is_empty() {
                 let mut merged = Vec::new();
                 for hit in &memory_candidates {
                     if let Some(asset) = items.iter().find(|asset| {
@@ -666,9 +843,11 @@ async fn execute(pool: &MySqlPool, ctx: &AccessContext, input: Value) -> Result<
                 // 召回候选可补充目录，但不能挤掉游标已经越过的当页资产。
                 page["memories"] = json!(merged);
             }
-            retrieval::bounded_search_reply(
-                json!({"objects":search.objects.into_iter().map(|object|retrieval::search_preview(object,text(args,"query").unwrap_or(""))).collect::<Vec<_>>(),"search_coverage":search.coverage,"search_scope":{"kinds":scope.kinds,"related_object_id":scope.anchor,"business_domain":scope.domain},"personal_memories":page["memories"],"selected_skills":page["selected_skills"],"next_asset_after":page["next_asset_after"],"asset_total":page["total"],"asset_cursor_invalid":page["cursor_invalid"]==true,"memory_retrieval":memory_retrieval,"retrieval_mode":if vector.state=="available"{"hybrid_authoritative"}else{"lexical_authoritative"},"note":"命中已回源。search_scope是本次检索范围；空结果只表示此范围未找到资料，不证明全空间不存在。search_coverage.state=candidate_limit或bounded表示只检查了有界候选或部分索引，空结果不能证明不存在；可在用户限定范围内改写或按已知ID读取，扩大用户明确范围须先征得同意。reply_coverage与omitted_objects说明回执裁剪，正文按同版entry_id/offset补读。个人记忆是查证线索；Skill仅列出本会话已选当前版本。query=*可分页查看本人有效资产目录，按next_asset_after继续；记忆正文用read_knowledge，Skill用read按行续读。"}),
-            )
+            let mut reply = json!({"objects":search.objects.into_iter().map(|object|retrieval::search_preview(object,text(args,"query").unwrap_or(""))).collect::<Vec<_>>(),"search_coverage":search.coverage,"search_scope":{"kinds":scope.kinds,"related_object_id":scope.anchor,"business_domain":scope.domain},"personal_memories":page["memories"],"selected_skills":page["selected_skills"],"next_asset_after":page["next_asset_after"],"asset_total":page["total"],"asset_cursor_invalid":page["cursor_invalid"]==true,"memory_retrieval":memory_retrieval,"retrieval_mode":if vector.state=="available"{"hybrid_authoritative"}else{"lexical_authoritative"},"note":"命中已回源。search_scope是本次检索范围；空结果只表示此范围未找到资料，不证明全空间不存在。search_coverage.state=candidate_limit或bounded表示只检查了有界候选或部分索引，空结果不能证明不存在；可在用户限定范围内改写或按已知ID读取，扩大用户明确范围须先征得同意。reply_coverage与omitted_objects说明回执裁剪，正文按同版entry_id/offset补读。个人记忆是查证线索；Skill仅列出本会话已选当前版本。query=*可分页查看本人有效资产目录，按next_asset_after继续；记忆正文用read_knowledge，Skill用read按行续读。"});
+            if let Some(limits) = limits_receipt {
+                reply["source_limits"] = limits;
+            }
+            retrieval::bounded_search_reply(reply)
         }
         "read_knowledge" => {
             let object = text(args, "object_id")?;
@@ -683,6 +862,10 @@ async fn execute(pool: &MySqlPool, ctx: &AccessContext, input: Value) -> Result<
                     return Err(Error::new("stale_knowledge"));
                 }
                 super::knowledge::check_refs_in_tx(&mut tx, ctx, &asset["dependencies"]).await?;
+                // 个人资产同样按贡献根判定：无可核验允许来源的资产不能作为依据交付。
+                if let Some(gate) = &source_gate {
+                    gate.assert_object_in_tx(&mut tx, &asset).await?;
+                }
                 if asset["kind"] == "skill"
                     && !assets::selected_in_tx(&mut tx, ctx, &cid)
                         .await?
@@ -712,6 +895,9 @@ async fn execute(pool: &MySqlPool, ctx: &AccessContext, input: Value) -> Result<
                 )
                 .await?;
                 super::knowledge::assert_source_in_tx(&mut tx, ctx, &v).await?;
+                if let Some(gate) = &source_gate {
+                    gate.assert_object_in_tx(&mut tx, &v).await?;
+                }
                 if let Some(entry_id) = args["entry_id"].as_str()
                     && !v["entries"]
                         .as_array()
@@ -749,6 +935,10 @@ async fn execute(pool: &MySqlPool, ctx: &AccessContext, input: Value) -> Result<
             .await?
         }
         "read_source" => {
+            // 来源身份先行判定：范围外来源不读正文，避免先加载再拒绝。
+            if let Some(gate) = &source_gate {
+                gate.assert_source_arg(text(args, "source_id")?)?;
+            }
             let source = super::knowledge_sources::read_in_tx(
                 &mut tx,
                 ctx,
@@ -846,7 +1036,8 @@ async fn execute(pool: &MySqlPool, ctx: &AccessContext, input: Value) -> Result<
         }
         "validate_sql" => {
             let mut result = external.clone().ok_or(Error::new("unavailable"))?;
-            result["semantic_checks"] = semantic_diagnostics_in_tx(&mut tx, ctx, args).await?;
+            result["semantic_checks"] =
+                semantic_diagnostics_in_tx(&mut tx, ctx, args, source_gate.as_ref()).await?;
             result
         }
         "update_analysis_task" => {
@@ -868,7 +1059,7 @@ async fn execute(pool: &MySqlPool, ctx: &AccessContext, input: Value) -> Result<
                 &tasks,
                 &ctx.user_id,
                 &tool.operation_id,
-                args,
+                bound_args.as_ref().unwrap_or(args),
                 &analysis::TaskTextAuthority {
                     generated: text_authority,
                     goal: goal_authority,
@@ -939,13 +1130,31 @@ async fn execute(pool: &MySqlPool, ctx: &AccessContext, input: Value) -> Result<
             result
         }
         "request_query" => {
-            let condition_authority =
+            // 门跟草稿所属任务走：条件授权内部按args.task_id当前条件解析并硬拒范围外引用；
+            // 时间基准与口径决策同源：条件体由授权路径一并返回。
+            let (condition_authority, conditions) =
                 request_condition_authority_in_tx(&mut tx, ctx, &cid, args, &text_results).await?;
+            let message =
+                conversations::read_message_in_tx(&mut tx, &conv, &run.message_id).await?;
+            // 草稿决策与目标条件版本对齐：条件声明未决阻断；已决须一致（省略继承）；
+            // 未声明时草稿自带决策按本轮真实消息绑定纪律独立成立。
+            let semantic_resolution = super::query_semantics::draft_resolution(
+                args.get("semantic_resolution"),
+                conditions.get("semantic_resolution"),
+                &message.body,
+                message.user_supplied,
+                &run.message_id,
+            )?;
             let mut text_authority =
                 super::context_authority::generated_text_authority_in_tx(&mut tx, &run.id, args)
                     .await?;
             super::context_authority::merge(&mut text_authority, &condition_authority)?;
-            let report = semantic_diagnostics_in_tx(&mut tx, ctx, args).await?;
+            let draft_gate =
+                super::source_limits::resolve_for_task_in_tx(&mut tx, &cid, text(args, "task_id")?)
+                    .await?;
+            let report =
+                semantic_diagnostics_in_tx(&mut tx, ctx, args, draft_gate.as_ref()).await?;
+            let time_basis = time_basis_of(&conditions)?;
             let mut result = queries::save_draft_in_tx(
                 &mut tx,
                 ctx,
@@ -956,6 +1165,8 @@ async fn execute(pool: &MySqlPool, ctx: &AccessContext, input: Value) -> Result<
                 queries::DraftValidation {
                     platform_report: external.as_ref().ok_or(Error::new("unavailable"))?,
                     text_authority: &text_authority,
+                    time_basis: time_basis.as_ref(),
+                    semantic_resolution: semantic_resolution.as_ref(),
                 },
             )
             .await?;
@@ -1446,6 +1657,8 @@ pub async fn invoke(pool: &MySqlPool, ctx: &AccessContext, input: Value) -> Resu
                 | "clarification_not_open"
                 | "invalid_evidence"
                 | "message_pending"
+                | "source_not_allowed"
+                | "task_context_required"
                 | "unsupported"
                 | "sql_not_supported"
                 | "unavailable"

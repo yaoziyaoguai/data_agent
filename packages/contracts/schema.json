@@ -761,9 +761,11 @@
             "result_unavailable",
             "scope_incomplete",
             "selection_required",
+            "source_not_allowed",
             "source_unavailable",
             "stale_context",
             "stale_knowledge",
+            "task_context_required",
             "unauthenticated",
             "unavailable",
             "unsupported",
@@ -781,10 +783,40 @@
             "invalid_model_endpoint",
             "model_credential_required",
             "model_secret_unavailable",
+            "model_capacity_invalid",
             "task_inactive",
             "waiting_clarification",
             "clarification_not_open",
-            "clarification_required"
+            "clarification_required",
+            "provider_configuration_invalid",
+            "provider_model_unavailable",
+            "invalid_skill_resource",
+            "invalid_skill_receipt",
+            "model_run_failed",
+            "model_request_failed",
+            "model_input_limit",
+            "model_output_limit",
+            "request_too_large: model_input_limit",
+            "model_budget_exhausted",
+            "model_timeout",
+            "model_auth_failed",
+            "model_rate_limited",
+            "model_quota_exhausted",
+            "model_service_unavailable",
+            "model_network_error",
+            "model_usage_unknown",
+            "model_usage_invalid",
+            "model_limits_exceeded",
+            "model_finalize_unconfirmed",
+            "model_receipt_unknown",
+            "provider_transport_rejected",
+            "provider_parameters_changed",
+            "provider_payload_invalid",
+            "run_cancelled",
+            "checkpoint_conflict",
+            "answer_sources_required",
+            "no_final_output",
+            "invalid_tool_arguments"
           ]
         },
         "message": {
@@ -1124,7 +1156,7 @@
         "output_limit": {
           "type": "integer",
           "minimum": 1,
-          "maximum": 131072
+          "maximum": 393216
         },
         "trial_call_limit": {
           "type": "integer",
@@ -1174,6 +1206,26 @@
         },
         "configured_model": {
           "$ref": "#/$defs/ConfiguredModel"
+        },
+        "context_window": {
+          "type": "integer",
+          "minimum": 1024,
+          "maximum": 2000000,
+          "description": "总上下文tokens；与输入/输出策略分开表达。"
+        },
+        "request_timeout_ms": {
+          "type": "integer",
+          "minimum": 1000,
+          "maximum": 600000,
+          "description": "单次provider请求超时毫秒，随模型修订冻结；历史缺字段按90000处理。"
+        },
+        "capability_source": {
+          "type": "string",
+          "enum": [
+            "sdk_catalog",
+            "admin_declared"
+          ],
+          "description": "窗口能力来源：SDK目录或管理员声明；目录外型号不猜窗口。"
         }
       },
       "required": [
@@ -1470,7 +1522,7 @@
         "output_tokens_max": {
           "type": "integer",
           "minimum": 1,
-          "maximum": 131072
+          "maximum": 393216
         }
       },
       "required": [
@@ -1528,12 +1580,12 @@
         "output_tokens": {
           "type": "integer",
           "minimum": 0,
-          "maximum": 384000
+          "maximum": 393216
         },
         "elapsed_ms": {
           "type": "integer",
           "minimum": 0,
-          "maximum": 120000
+          "maximum": 660000
         }
       },
       "required": [
@@ -1791,8 +1843,7 @@
           ]
         },
         "effective_value": {
-          "type": "string",
-          "maxLength": 100000
+          "type": "string"
         },
         "review_state": {
           "type": "string",
@@ -1811,6 +1862,12 @@
               "type": "null"
             }
           ]
+        },
+        "statements": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SemanticStatement"
+          }
         }
       },
       "required": [
@@ -1920,6 +1977,38 @@
           ],
           "additionalProperties": false
         },
+        "preparation_status": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "source_id": {
+              "type": "string"
+            },
+            "revision": {
+              "type": "string",
+              "pattern": "^(0|[1-9][0-9]{0,19})$"
+            },
+            "state": {
+              "type": "string"
+            },
+            "error_code": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "source_id",
+            "revision",
+            "state",
+            "error_code"
+          ],
+          "additionalProperties": false,
+          "description": "当前来源的语义整理状态；与对象级预填分开表达，两作业互不冒充。"
+        },
         "state_origin": {
           "type": "string",
           "enum": [
@@ -1945,6 +2034,12 @@
         },
         "retrieval": {
           "$ref": "#/$defs/KnowledgeRetrieval"
+        },
+        "semantic_relations": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SemanticRelation"
+          }
         }
       },
       "required": [
@@ -2556,6 +2651,36 @@
         "notes": {
           "type": "string",
           "maxLength": 8000
+        },
+        "source_limits": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SourceLimits"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "null表示本题显式未声明额外来源限制；字段缺失表示旧条件版本未记录新式限制，不能证明用户从未限制。撤销必须显式unset并来自真实用户修改。"
+        },
+        "time_roles": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/TimeRole"
+          },
+          "maxItems": 12,
+          "description": "时间口径角色；统计起止仍沿time_start/time_end，request_clock和平台data_freshness不冒充用户截点。字段缺失表示旧版本未记录。"
+        },
+        "semantic_resolution": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/QuerySemanticResolution"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "本题口径决策、依据及采纳来源；null表示尚未作出决定，不自动按无歧义处理。字段缺失表示旧版本未记录。"
         }
       },
       "required": [
@@ -2570,6 +2695,125 @@
         "notes"
       ],
       "additionalProperties": false
+    },
+    "SourceLimits": {
+      "title": "SourceLimits",
+      "type": "object",
+      "properties": {
+        "allowed_sources": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SourceKey"
+          },
+          "minItems": 1,
+          "maxItems": 50,
+          "description": "非空允许集；限制跟稳定来源身份走，实际读取仍核对当前修订。"
+        },
+        "origin_message_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "maxItems": 20,
+          "description": "由宿主绑定的真实消息身份；不接受模型自由填写。"
+        }
+      },
+      "required": [
+        "allowed_sources",
+        "origin_message_ids"
+      ],
+      "additionalProperties": false
+    },
+    "TimeRole": {
+      "title": "TimeRole",
+      "type": "object",
+      "properties": {
+        "role": {
+          "type": "string",
+          "enum": [
+            "event_time",
+            "observation_cutoff",
+            "data_batch"
+          ],
+          "description": "采用的时间字段含义、观察截点或数据批次；三者不混用。"
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 800,
+          "description": "业务含义说明。"
+        },
+        "field_ref": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 200,
+          "description": "采用的时间字段引用；可空。"
+        },
+        "value": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 64,
+          "description": "observation_cutoff必须为带时区的时间值，data_batch必须为批次值；event_time可空（实际区间沿time_start/time_end）。"
+        },
+        "evidence_refs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/EvidenceRef"
+          },
+          "maxItems": 20,
+          "description": "支撑该时间口径的依据；可空数组。"
+        }
+      },
+      "required": [
+        "role",
+        "description",
+        "field_ref",
+        "value",
+        "evidence_refs"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "role": {
+                "const": "observation_cutoff"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "value": {
+                "type": "string",
+                "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{1,6})?(Z|[+-][0-9]{2}:[0-9]{2})$"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "role": {
+                "const": "data_batch"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "value": {
+                "type": "string",
+                "pattern": "\\S"
+              }
+            }
+          }
+        }
+      ]
     },
     "AnalysisUpdate": {
       "title": "AnalysisUpdate",
@@ -3177,7 +3421,7 @@
       "properties": {
         "semantic_resolution": {
           "$ref": "#/$defs/QuerySemanticResolution",
-          "description": "保存前填写口径决策；省略仅兼容旧调用，不表示用户已确认。"
+          "description": "与任务当前条件声明对齐：条件已声明决策时省略即继承；携带须与声明逐字一致；条件未声明时按本轮真实用户原话记录explicit_user或如实记录needs_clarification。"
         },
         "task_id": {
           "type": "string",
@@ -3801,9 +4045,31 @@
           "$ref": "#/$defs/SemanticCheckReport",
           "description": "草稿工具回执的非阻断诊断；查询读取接口不承诺重现此报告。"
         },
+        "semantic_resolution": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/QuerySemanticResolution"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "保存草稿时的口径决策及依据；旧记录返回null，不从自由文本或模型历史猜回填。"
+        },
         "text_unavailable": {
           "type": "boolean",
           "description": "正文来源失效或无法核实时只返回查询身份和控制状态；SQL、参数、说明、依据及诊断正文均不可返回。"
+        },
+        "time_basis": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TimeBasis"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "保存草稿时任务条件声明的时间基准；旧草稿返回null。观察截点与批次是用户声明，不得以request_clock或平台data_freshness冒充。"
         }
       },
       "required": [
@@ -4280,7 +4546,10 @@
               "group_by",
               "filters",
               "knowledge_refs",
-              "notes"
+              "notes",
+              "source_limits",
+              "time_roles",
+              "semantic_resolution"
             ]
           },
           "uniqueItems": true
@@ -4729,6 +4998,23 @@
         "notes": {
           "type": "string",
           "maxLength": 8000
+        },
+        "source_limits": {
+          "$ref": "#/$defs/SourceLimits",
+          "description": "设置来源限制；撤销使用unset source_limits，不接受设为空集。"
+        },
+        "time_roles": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/TimeRole"
+          },
+          "minItems": 1,
+          "maxItems": 12,
+          "description": "整体替换时间口径角色；清空使用unset。"
+        },
+        "semantic_resolution": {
+          "$ref": "#/$defs/QuerySemanticResolution",
+          "description": "保存口径决策及采纳来源；清空使用unset。"
         }
       },
       "additionalProperties": false,
@@ -4757,8 +5043,7 @@
           "type": "boolean"
         },
         "comment": {
-          "type": "string",
-          "maxLength": 4000
+          "type": "string"
         }
       },
       "required": [
@@ -4780,12 +5065,10 @@
           "maxLength": 256
         },
         "sql": {
-          "type": "string",
-          "maxLength": 40000
+          "type": "string"
         },
         "upstream_ids": {
           "type": "array",
-          "maxItems": 100,
           "uniqueItems": true,
           "items": {
             "type": "string",
@@ -4820,17 +5103,14 @@
           "pattern": "^[1-9][0-9]{0,15}$"
         },
         "comment": {
-          "type": "string",
-          "maxLength": 4000
+          "type": "string"
         },
         "ddl": {
-          "type": "string",
-          "maxLength": 40000
+          "type": "string"
         },
         "columns": {
           "type": "array",
           "minItems": 1,
-          "maxItems": 200,
           "items": {
             "$ref": "#/$defs/CatalogColumn"
           }
@@ -7006,7 +7286,8 @@
           "type": "string",
           "enum": [
             "located",
-            "unlocated"
+            "unlocated",
+            "index_lag"
           ]
         },
         "excerpts": {
@@ -7357,6 +7638,14 @@
               "type": "string",
               "minLength": 1,
               "maxLength": 24000
+            },
+            "computed_metrics": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/ComputedMetric"
+              },
+              "minItems": 0,
+              "maxItems": 20
             },
             "grain": {
               "type": "string",
@@ -9328,6 +9617,23 @@
             "maxLength": 800
           },
           "description": "仍会改变答案且未获选择的分子、分母、时间归属等差异；有差异必须先澄清，不能默认写稿。"
+        },
+        "evidence_refs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/EvidenceRef"
+          },
+          "maxItems": 50,
+          "description": "支撑该口径决策的依据引用；旧调用缺失按空数组解码。"
+        },
+        "adoption_message_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1,
+          "maxLength": 64,
+          "description": "explicit_user：null=本轮新采纳，由宿主核对user_quote为本轮完整原话后绑定真实消息身份；非空=复制继承原已验证决策的消息身份，不接受模型自由填写。其余basis为null。"
         }
       },
       "required": [
@@ -9351,12 +9657,27 @@
               "user_quote": {
                 "type": "string",
                 "pattern": "\\S"
+              },
+              "adoption_message_id": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "pattern": "\\S"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "null表示待宿主绑定的新采纳；非空必须是已验证的原采纳身份。"
               }
             }
           },
           "else": {
             "properties": {
               "user_quote": {
+                "type": "null"
+              },
+              "adoption_message_id": {
                 "type": "null"
               }
             }
@@ -9612,7 +9933,7 @@
         "output_limit": {
           "type": "integer",
           "minimum": 1,
-          "maximum": 131072
+          "maximum": 393216
         },
         "payload_bytes_limit": {
           "type": "integer",
@@ -9643,6 +9964,26 @@
         },
         "reasoning_supported": {
           "type": "boolean"
+        },
+        "context_window": {
+          "type": "integer",
+          "minimum": 1024,
+          "maximum": 2000000,
+          "description": "总上下文tokens；与输入/输出策略分开表达。"
+        },
+        "request_timeout_ms": {
+          "type": "integer",
+          "minimum": 1000,
+          "maximum": 600000,
+          "description": "单次provider请求超时毫秒，随模型修订冻结；历史缺字段按90000处理。"
+        },
+        "capability_source": {
+          "type": "string",
+          "enum": [
+            "sdk_catalog",
+            "admin_declared"
+          ],
+          "description": "窗口能力来源：SDK目录或管理员声明；目录外型号不猜窗口。"
         }
       },
       "required": [
@@ -9659,7 +10000,10 @@
         "output_rate",
         "enabled",
         "expected_version",
-        "reasoning_supported"
+        "reasoning_supported",
+        "context_window",
+        "request_timeout_ms",
+        "capability_source"
       ],
       "additionalProperties": false
     },
@@ -9727,7 +10071,7 @@
         "output_limit": {
           "type": "integer",
           "minimum": 1,
-          "maximum": 131072
+          "maximum": 393216
         },
         "payload_bytes_limit": {
           "type": "integer",
@@ -9758,6 +10102,26 @@
         },
         "reasoning_supported": {
           "type": "boolean"
+        },
+        "context_window": {
+          "type": "integer",
+          "minimum": 1024,
+          "maximum": 2000000,
+          "description": "总上下文tokens；与输入/输出策略分开表达。"
+        },
+        "request_timeout_ms": {
+          "type": "integer",
+          "minimum": 1000,
+          "maximum": 600000,
+          "description": "单次provider请求超时毫秒，随模型修订冻结；历史缺字段按90000处理。"
+        },
+        "capability_source": {
+          "type": "string",
+          "enum": [
+            "sdk_catalog",
+            "admin_declared"
+          ],
+          "description": "窗口能力来源：SDK目录或管理员声明；目录外型号不猜窗口。"
         }
       },
       "required": [
@@ -9955,8 +10319,11 @@
             "cell",
             "statistic",
             "parameter",
-            "metadata"
-          ]
+            "metadata",
+            "observation_cutoff",
+            "data_batch"
+          ],
+          "description": "observation_cutoff/data_batch绑定草稿时间基准中用户声明的角色值；未声明时不可绑定。"
         },
         "column": {
           "type": "string",
@@ -9989,6 +10356,11 @@
             "data_freshness",
             "saved_row_count"
           ]
+        },
+        "field_ref": {
+          "type": "string",
+          "maxLength": 200,
+          "description": "observation_cutoff/data_batch在同名角色多条时按field_ref对齐声明；缺省要求该角色唯一。"
         }
       },
       "required": [
@@ -10091,6 +10463,702 @@
       ],
       "additionalProperties": false,
       "title": "PresentAnalysisAnswerInput"
+    },
+    "SourceKey": {
+      "title": "SourceKey",
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "platform",
+            "document"
+          ]
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        }
+      },
+      "required": [
+        "kind",
+        "id"
+      ],
+      "additionalProperties": false,
+      "description": "来源的稳定身份；不包含修订号，也不使用索引chunk ID。"
+    },
+    "SourceLocator": {
+      "title": "SourceLocator",
+      "type": "object",
+      "properties": {
+        "offset": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "length": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "heading_path": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "offset",
+        "length"
+      ],
+      "additionalProperties": false,
+      "description": "offset及length固定使用Unicode code point；heading_path仅作定位提示。"
+    },
+    "SourceCitation": {
+      "title": "SourceCitation",
+      "type": "object",
+      "properties": {
+        "source": {
+          "$ref": "#/$defs/SourceKey"
+        },
+        "revision": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]{0,19})$"
+        },
+        "locator": {
+          "$ref": "#/$defs/SourceLocator"
+        }
+      },
+      "required": [
+        "source",
+        "revision",
+        "locator"
+      ],
+      "additionalProperties": false
+    },
+    "SourceSyncAccepted": {
+      "title": "SourceSyncAccepted",
+      "type": "object",
+      "properties": {
+        "sync_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "queued",
+            "running",
+            "completed",
+            "failed"
+          ]
+        },
+        "status_url": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "sync_id",
+        "status",
+        "status_url"
+      ],
+      "additionalProperties": false
+    },
+    "SourceWorkProgress": {
+      "title": "SourceWorkProgress",
+      "type": "object",
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": [
+            "pending",
+            "running",
+            "completed",
+            "failed",
+            "not_required"
+          ]
+        },
+        "total": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "completed": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "failed": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "status",
+        "total",
+        "completed",
+        "failed"
+      ],
+      "additionalProperties": false
+    },
+    "SourceSyncProgress": {
+      "title": "SourceSyncProgress",
+      "type": "object",
+      "properties": {
+        "sync_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "queued",
+            "running",
+            "completed",
+            "failed"
+          ]
+        },
+        "status_url": {
+          "type": "string"
+        },
+        "processed_sources": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "pages_committed": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "error_code": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "preparation": {
+          "$ref": "#/$defs/SourceWorkProgress"
+        },
+        "raw_index": {
+          "$ref": "#/$defs/SourceWorkProgress"
+        },
+        "knowledge_index": {
+          "$ref": "#/$defs/SourceWorkProgress"
+        },
+        "error_message": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 1024,
+          "description": "已持久化的可展示失败说明，例如来源的实际大小和上限；旧批次可缺省。"
+        }
+      },
+      "required": [
+        "sync_id",
+        "status",
+        "status_url",
+        "processed_sources",
+        "pages_committed",
+        "error_code",
+        "preparation",
+        "raw_index",
+        "knowledge_index"
+      ],
+      "additionalProperties": false
+    },
+    "SourceExcerpt": {
+      "title": "SourceExcerpt",
+      "type": "object",
+      "properties": {
+        "citation": {
+          "$ref": "#/$defs/SourceCitation"
+        },
+        "content": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "citation",
+        "content"
+      ],
+      "additionalProperties": false
+    },
+    "SemanticReference": {
+      "title": "SemanticReference",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "source"
+            },
+            "citation": {
+              "$ref": "#/$defs/SourceCitation"
+            }
+          },
+          "required": [
+            "kind",
+            "citation"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "knowledge"
+            },
+            "ref": {
+              "$ref": "#/$defs/EvidenceRef"
+            }
+          },
+          "required": [
+            "kind",
+            "ref"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "EmbeddedSupportLocation": {
+      "title": "EmbeddedSupportLocation",
+      "type": "object",
+      "properties": {
+        "field": {
+          "type": "string",
+          "enum": [
+            "text",
+            "scope_text"
+          ]
+        },
+        "locator": {
+          "$ref": "#/$defs/SourceLocator"
+        }
+      },
+      "required": [
+        "field",
+        "locator"
+      ],
+      "additionalProperties": false
+    },
+    "SemanticSupport": {
+      "title": "SemanticSupport",
+      "type": "object",
+      "properties": {
+        "support_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "role": {
+          "type": "string",
+          "enum": [
+            "prerequisite",
+            "exception",
+            "calculation_dependency"
+          ]
+        },
+        "reference": {
+          "$ref": "#/$defs/SemanticReference"
+        },
+        "content": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "embedded_in": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/EmbeddedSupportLocation"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "support_id",
+        "role",
+        "reference",
+        "content",
+        "embedded_in"
+      ],
+      "additionalProperties": false
+    },
+    "SemanticStatement": {
+      "title": "SemanticStatement",
+      "type": "object",
+      "properties": {
+        "statement_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "object_ref": {
+          "$ref": "#/$defs/EvidenceRef"
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1
+        },
+        "scope_text": {
+          "type": "string"
+        },
+        "origin": {
+          "type": "string",
+          "enum": [
+            "source_fact",
+            "model_inference",
+            "human"
+          ]
+        },
+        "citations": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SourceCitation"
+          }
+        },
+        "supports": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SemanticSupport"
+          }
+        }
+      },
+      "required": [
+        "statement_id",
+        "object_ref",
+        "text",
+        "scope_text",
+        "origin",
+        "citations",
+        "supports"
+      ],
+      "additionalProperties": false
+    },
+    "SemanticRelation": {
+      "title": "SemanticRelation",
+      "type": "object",
+      "properties": {
+        "relation_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "subject": {
+          "$ref": "#/$defs/EvidenceRef"
+        },
+        "predicate": {
+          "type": "string",
+          "enum": [
+            "explains",
+            "requires",
+            "exception",
+            "computes",
+            "derived_from",
+            "joins",
+            "related"
+          ]
+        },
+        "target": {
+          "$ref": "#/$defs/SemanticReference"
+        },
+        "scope_text": {
+          "type": "string"
+        },
+        "citations": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SourceCitation"
+          }
+        },
+        "origin": {
+          "type": "string",
+          "enum": [
+            "source_fact",
+            "model_inference",
+            "human"
+          ]
+        }
+      },
+      "required": [
+        "relation_id",
+        "subject",
+        "predicate",
+        "target",
+        "scope_text",
+        "citations",
+        "origin"
+      ],
+      "additionalProperties": false
+    },
+    "PreparedSupport": {
+      "title": "PreparedSupport",
+      "type": "object",
+      "properties": {
+        "key": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "role": {
+          "type": "string",
+          "enum": [
+            "prerequisite",
+            "exception",
+            "calculation_dependency"
+          ]
+        },
+        "reference": {
+          "$ref": "#/$defs/SemanticReference"
+        },
+        "content": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "embedded_in": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/EmbeddedSupportLocation"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "key",
+        "role",
+        "reference",
+        "content",
+        "embedded_in"
+      ],
+      "additionalProperties": false
+    },
+    "PreparedStatement": {
+      "title": "PreparedStatement",
+      "type": "object",
+      "properties": {
+        "key": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "target": {
+          "$ref": "#/$defs/EvidenceRef"
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1
+        },
+        "scope_text": {
+          "type": "string"
+        },
+        "citations": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 50,
+          "items": {
+            "$ref": "#/$defs/SourceCitation"
+          }
+        },
+        "supports": {
+          "type": "array",
+          "maxItems": 50,
+          "items": {
+            "$ref": "#/$defs/PreparedSupport"
+          }
+        }
+      },
+      "required": [
+        "key",
+        "target",
+        "text",
+        "scope_text",
+        "citations",
+        "supports"
+      ],
+      "additionalProperties": false
+    },
+    "PreparedRelation": {
+      "title": "PreparedRelation",
+      "type": "object",
+      "properties": {
+        "key": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "subject": {
+          "$ref": "#/$defs/EvidenceRef"
+        },
+        "predicate": {
+          "type": "string",
+          "enum": [
+            "explains",
+            "requires",
+            "exception",
+            "computes",
+            "derived_from",
+            "joins",
+            "related"
+          ]
+        },
+        "target": {
+          "$ref": "#/$defs/SemanticReference"
+        },
+        "scope_text": {
+          "type": "string"
+        },
+        "citations": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 50,
+          "items": {
+            "$ref": "#/$defs/SourceCitation"
+          }
+        }
+      },
+      "required": [
+        "key",
+        "subject",
+        "predicate",
+        "target",
+        "scope_text",
+        "citations"
+      ],
+      "additionalProperties": false
+    },
+    "SourcePreparationResult": {
+      "title": "SourcePreparationResult",
+      "type": "object",
+      "properties": {
+        "statements": {
+          "type": "array",
+          "maxItems": 32,
+          "items": {
+            "$ref": "#/$defs/PreparedStatement"
+          }
+        },
+        "relations": {
+          "type": "array",
+          "maxItems": 64,
+          "items": {
+            "$ref": "#/$defs/PreparedRelation"
+          }
+        },
+        "unresolved": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4000
+          },
+          "maxItems": 100
+        },
+        "semantic_status": {
+          "type": "string",
+          "enum": [
+            "partial",
+            "ready"
+          ]
+        }
+      },
+      "required": [
+        "statements",
+        "relations",
+        "unresolved",
+        "semantic_status"
+      ],
+      "additionalProperties": false
+    },
+    "ComputedMetric": {
+      "title": "ComputedMetric",
+      "type": "object",
+      "properties": {
+        "metric_ref": {
+          "$ref": "#/$defs/EvidenceRef"
+        },
+        "output_name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "description": "该SQL实际输出的口径名；与过滤中用到的指标分开表达。"
+        },
+        "expression": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000,
+          "description": "输出该口径的表达式或列计算说明。"
+        }
+      },
+      "required": [
+        "metric_ref",
+        "output_name",
+        "expression"
+      ],
+      "additionalProperties": false
+    },
+    "TimeBasis": {
+      "title": "TimeBasis",
+      "type": "object",
+      "description": "草稿保存时从任务当前条件投影的时间基准；统计起止沿time_start/time_end，观察截点/批次只在time_roles中声明。",
+      "properties": {
+        "time_start": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "time_end": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "timezone": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "time_roles": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/TimeRole"
+          },
+          "maxItems": 20
+        }
+      },
+      "required": [
+        "time_start",
+        "time_end",
+        "timezone",
+        "time_roles"
+      ],
+      "additionalProperties": false
     }
   },
   "properties": {
@@ -10642,6 +11710,54 @@
     },
     "PresentAnalysisAnswerInput": {
       "$ref": "#/$defs/PresentAnalysisAnswerInput"
+    },
+    "sourceKey": {
+      "$ref": "#/$defs/SourceKey"
+    },
+    "sourceLocator": {
+      "$ref": "#/$defs/SourceLocator"
+    },
+    "sourceCitation": {
+      "$ref": "#/$defs/SourceCitation"
+    },
+    "SourceSyncAccepted": {
+      "$ref": "#/$defs/SourceSyncAccepted"
+    },
+    "SourceSyncProgress": {
+      "$ref": "#/$defs/SourceSyncProgress"
+    },
+    "SourceWorkProgress": {
+      "$ref": "#/$defs/SourceWorkProgress"
+    },
+    "SourceExcerpt": {
+      "$ref": "#/$defs/SourceExcerpt"
+    },
+    "SemanticReference": {
+      "$ref": "#/$defs/SemanticReference"
+    },
+    "EmbeddedSupportLocation": {
+      "$ref": "#/$defs/EmbeddedSupportLocation"
+    },
+    "SemanticSupport": {
+      "$ref": "#/$defs/SemanticSupport"
+    },
+    "SemanticStatement": {
+      "$ref": "#/$defs/SemanticStatement"
+    },
+    "SemanticRelation": {
+      "$ref": "#/$defs/SemanticRelation"
+    },
+    "PreparedSupport": {
+      "$ref": "#/$defs/PreparedSupport"
+    },
+    "PreparedStatement": {
+      "$ref": "#/$defs/PreparedStatement"
+    },
+    "PreparedRelation": {
+      "$ref": "#/$defs/PreparedRelation"
+    },
+    "SourcePreparationResult": {
+      "$ref": "#/$defs/SourcePreparationResult"
     }
   },
   "required": [
@@ -10739,7 +11855,10 @@
     "modelConfiguration",
     "saveDefaultModel",
     "readModelConnection",
-    "modelConnection"
+    "modelConnection",
+    "sourceKey",
+    "sourceLocator",
+    "sourceCitation"
   ],
   "additionalProperties": false
 }

@@ -632,6 +632,11 @@ header strong {
   line-height: 1.9;
   overflow-wrap: anywhere;
 }
+.query-time-basis {
+  font-size: 12px;
+  line-height: 1.9;
+  overflow-wrap: anywhere;
+}
 .query-card details {
   margin: 16px 0;
 }

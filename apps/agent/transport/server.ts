@@ -4,7 +4,21 @@ import type { RunEnvelope, CancelRun } from '../../../packages/contracts/generat
 import type { deliver } from '../session/deliver.ts';
 
 function failureCode(error: unknown): string {
-  const allowed = new Set(['model_unavailable', 'model_secret_unavailable', 'provider_configuration_invalid', 'provider_model_unavailable', 'invalid_skill_resource', 'model_run_failed', 'model_request_failed', 'model_input_limit', 'model_output_limit', 'model_budget_exhausted', 'stale_context', 'checkpoint_conflict', 'invalid_skill_receipt']);
+  // 只放行同源契约可解释的分类；超时/限流/重试耗尽/用量未知/取消等原义不被吞并成unexpected。
+  const allowed = new Set([
+    'model_unavailable', 'model_secret_unavailable', 'model_credential_required',
+    'provider_configuration_invalid', 'provider_model_unavailable', 'model_capacity_invalid',
+    'invalid_skill_resource', 'invalid_skill_receipt', 'model_run_failed',
+    'model_request_failed', 'model_input_limit', 'model_output_limit',
+    'request_too_large: model_input_limit', 'model_budget_exhausted',
+    'model_timeout', 'model_auth_failed', 'model_rate_limited', 'model_quota_exhausted',
+    'model_service_unavailable', 'model_network_error', 'model_retry_exhausted',
+    'model_usage_unknown', 'model_usage_invalid', 'model_limits_exceeded',
+    'model_finalize_unconfirmed', 'model_receipt_unknown', 'provider_transport_rejected',
+    'provider_parameters_changed', 'provider_payload_invalid',
+    'run_cancelled', 'stale_context', 'checkpoint_conflict', 'budget_exhausted',
+    'answer_sources_required', 'no_final_output', 'invalid_tool_arguments', 'unavailable',
+  ]);
   if (!(error instanceof Error)) return 'unexpected_error';
   const code = (error as Error & {code?: unknown}).code;
   if (typeof code === 'string' && allowed.has(code)) return code;
@@ -31,7 +45,9 @@ export function createDeliveryServer(apiUrl:string,token:string,dispatch:typeof 
       if(active.has(run.conversation_id)){response.writeHead(409).end();return;}
       const controller=new AbortController();active.set(run.conversation_id,{run,controller});acquired=true;
       await dispatch(run,apiUrl,token,fault,controller.signal);response.writeHead(200).end('finished');
-    }catch(error){if(process.env.DATA_AGENT_DIAGNOSTICS==='1'&&!run?.model_profile)console.error('bridge_diagnostic '+(error instanceof Error?error.message.replaceAll(token,'[redacted]'):'unknown'));console.error('bridge_failed run='+ (run?.run_id??'invalid')+' code='+failureCode(error));response.writeHead(500).end('delivery_failed');}
+    }catch(error){if(process.env.DATA_AGENT_DIAGNOSTICS==='1'&&!run?.model_profile)console.error('bridge_diagnostic '+(error instanceof Error?error.message.replaceAll(token,'[redacted]'):'unknown'));console.error('bridge_failed run='+ (run?.run_id??'invalid')+' code='+failureCode(error));
+      // 失败码随响应体返回，worker据此区分确定性配置失败与可重试中断。
+      response.writeHead(500,{'content-type':'application/json'}).end(JSON.stringify({code:failureCode(error)}));}
     finally{if(acquired&&run)active.delete(run.conversation_id);}
   });
 }

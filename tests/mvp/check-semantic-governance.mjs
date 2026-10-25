@@ -1,3 +1,4 @@
+import {synchronizeSources} from './source-sync.mjs';
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { createServer } from "node:http";
@@ -17,6 +18,7 @@ const quoted = (v) => "'" + String(v).replaceAll("'", "''") + "'";
 const command = () => ({ operation_id: randomUUID() });
 async function ok(path, body, user = "alice", method = body ? "POST" : "GET") {
   const r = await h.request(path, body, user, method);
+  assert.equal(r.status, 200, JSON.stringify({ path, ...r }));
   assert.equal(r.status, 200, JSON.stringify({ path, ...r }));
   return r.value;
 }
@@ -105,10 +107,11 @@ async function synchronize(owner = "bob") {
     h.directory + "/platform/catalog.json",
     JSON.stringify({ source_namespace: catalog.source_namespace, tables }),
   );
-  await ok("/source-syncs", command());
+  assert.equal((await synchronizeSources(h)).value.status,'completed');
 }
 
 async function checkConcurrentRemoval() {
+  await h.resumeSourceSyncWorker(2);
   await h.pausePlatform();
   let responses = [];
   const server = createServer(async (req, res) => {
@@ -154,17 +157,17 @@ async function checkConcurrentRemoval() {
       });
       // 两次采集先取得各自基线，再同时收到“移除”与“保留改派”的权威快照。
       const results = await Promise.all(
-        [1, 2].map(() => h.request("/source-syncs", command())),
+        [1, 2].map(() => synchronizeSources(h)),
       );
       assert.ok(
-        results.some((r) => r.status === 200),
+        results.some((r) => r.value.status === "completed"),
         JSON.stringify(results),
       );
       assert.ok(
         results.every(
           (r) =>
-            r.status === 200 ||
-            (r.status === 409 && r.value.code === "version_conflict"),
+            r.status === 200 && (r.value.status === "completed" ||
+            (r.value.status === "failed" && r.value.error_code === "version_conflict")),
         ),
         JSON.stringify(results),
       );
@@ -282,7 +285,7 @@ try {
           tables: [...catalog.tables, ...collisions],
         }),
       );
-      await ok("/source-syncs", command());
+      assert.equal((await synchronizeSources(h)).value.status,'completed');
       const imported = (platformId, namespace = catalog.source_namespace) =>
         h.sql(
           `SELECT JSON_OBJECT('id',k.id) FROM knowledge_objects k JOIN catalog_platform_heads c ON c.source_id=k.source_id WHERE k.kind='table' AND c.platform_table_id=${quoted(platformId)} AND c.namespace=${quoted(namespace)}`,
@@ -307,7 +310,7 @@ try {
           tables: [{ ...template, maintainer_id: "carol" }],
         }),
       );
-      await ok("/source-syncs", command());
+      assert.equal((await synchronizeSources(h)).value.status,'completed');
       assert.equal(
         (
           await read(

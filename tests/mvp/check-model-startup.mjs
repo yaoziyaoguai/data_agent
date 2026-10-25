@@ -24,7 +24,10 @@ const provider=createServer(async(req,res)=>{
 });await new Promise(r=>provider.listen(0,'127.0.0.1',r));
 try{
  h=await harness({database,profile,keep:true,protocolProviderUrl:'http://127.0.0.1:'+provider.address().port});await h.close();
- launcher=spawn('python3',['scripts/development.py','--model','protocol-test','--model-profile',path,'--model-url','http://127.0.0.1:'+provider.address().port,'--port-offset',String(portOffset),'--runtime-dir',runtimeDir],{cwd:process.cwd(),env:{...process.env,DATA_AGENT_MODEL_KEY_FILE:h.env.DATA_AGENT_MODEL_KEY_FILE,DATA_AGENT_PREFILL_PROFILE:JSON.stringify({...profile,trial_id:'old-trial-id'}),DATA_AGENT_PREFILL_URL:'http://127.0.0.1:1/wrong',DATA_AGENT_PREFILL_TEST:'0'},stdio:['ignore','pipe','pipe']});launcher.stdout.on('data',d=>output+=d);launcher.stderr.on('data',d=>output+=d);
+ // 本检查验证正式启动接线，不验证特定演示资料：launcher固定与种子同一份retail
+ // 资料包（API启动的initialize会用进程资料包重写目录，混用cockpit默认会使
+ // demo_order_detail在当前目录中找不到而reanalyze 409）；cockpit资料由专项dogfood覆盖。
+ launcher=spawn('python3',['scripts/development.py','--model','protocol-test','--model-profile',path,'--model-url','http://127.0.0.1:'+provider.address().port,'--port-offset',String(portOffset),'--runtime-dir',runtimeDir],{cwd:process.cwd(),env:{...process.env,DATA_AGENT_SYNTHETIC_SOURCE_DIRECTORY:new URL('../../docs/sources',import.meta.url).pathname,DATA_AGENT_MODEL_KEY_FILE:h.env.DATA_AGENT_MODEL_KEY_FILE,DATA_AGENT_PREFILL_PROFILE:JSON.stringify({...profile,trial_id:'old-trial-id'}),DATA_AGENT_PREFILL_URL:'http://127.0.0.1:1/wrong',DATA_AGENT_PREFILL_TEST:'0'},stdio:['ignore','pipe','pipe']});launcher.stdout.on('data',d=>output+=d);launcher.stderr.on('data',d=>output+=d);
  await until(async()=>{if(launcher.exitCode!==null)throw new Error('formal_launcher_exited');try{return(await fetch(webUrl)).ok;}catch{return false;}},'formal startup');
  const tokens=JSON.parse(await readFile(runtimeDir+'/identities.json','utf8'));
  browser=await chromium.launch();page=await browser.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));

@@ -6,12 +6,16 @@ import {SessionManager} from '@earendil-works/pi-coding-agent';
 import {exportCheckpoint,restoreCheckpoint} from '../../apps/agent/session/checkpoint.ts';
 import {deliver} from '../../apps/agent/session/deliver.ts';
 import {harness} from './harness.mjs';
-const profile={provider_id:'deepseek',model_id:'deepseek-flash',trial_id:randomUUID(),price_version:'2026-10-04-peak-usd',input_limit:32768,output_limit:2048,trial_call_limit:48,trial_cost_micros:'300000',request_call_limit:12,toolset:'data',payload_bytes_limit:65536};
+// 门槛随工具契约增长重校准：64KB校准于固定开销≈45KB时代（最大请求65185B、余量351B）；
+// 现固定开销≈54.7KB（新增正式答复工具、更丰富契约与记忆参考），近16KB合法工作区无历史
+// 请求已≈70.7KB，结构性超过64KB。按原比值1.45重推取80KB：24轮历史与场景不变，仍经字节
+// 预检强制Pi原生压缩，仍低于生产128KB保持压力属性；64KB拒绝行为由check-request-context覆盖。
+const profile={provider_id:'deepseek',model_id:'deepseek-flash',trial_id:randomUUID(),price_version:'2026-10-04-peak-usd',input_limit:32768,output_limit:2048,trial_call_limit:48,trial_cost_micros:'300000',request_call_limit:12,toolset:'data',payload_bytes_limit:81920};
 const manager=SessionManager.inMemory('/synthetic/data-agent');
 const usage={input:0,output:0,cacheRead:0,cacheWrite:0,totalTokens:0,cost:{input:0,output:0,cacheRead:0,cacheWrite:0,total:0}};
 for(let i=0;i<24;i++){manager.appendMessage({role:'user',content:[{type:'text',text:'合成语义说明'.repeat(167)}],timestamp:Date.now()});manager.appendMessage({role:'assistant',content:[{type:'text',text:'已记录。'}],api:'openai-completions',provider:'local_mock',model:'task_demo',stopReason:'stop',usage,timestamp:Date.now()});}
 let run,mode,calls=0,compactions=0,checkpoint=exportCheckpoint(manager),passed=false;const payloadBytes=[];
-const provider=createServer(async(req,res)=>{let raw='';req.setEncoding('utf8');for await(const c of req)raw+=c;payloadBytes.push(Buffer.byteLength(raw));assert.ok(Buffer.byteLength(raw)<=65536);calls++;const body=JSON.parse(raw);
+const provider=createServer(async(req,res)=>{let raw='';req.setEncoding('utf8');for await(const c of req)raw+=c;payloadBytes.push(Buffer.byteLength(raw));assert.ok(Buffer.byteLength(raw)<=81920);calls++;const body=JSON.parse(raw);
  const summary=!body.tools?.length;if(summary)compactions++;
  const messageText=v=>typeof v.content==='string'?v.content:(v.content??[]).filter(part=>part.type==='text').map(part=>part.text).join('\n');
  const references=body.messages.filter(v=>messageText(v).startsWith('个人记忆参考：'));
@@ -61,5 +65,5 @@ try{
  assert.ok(scopes.every(scope=>scope.call_limit===12 && scope.issued_calls<=12));
  assert.equal(scopes.reduce((sum,scope)=>sum+scope.issued_calls,0),calls);
  const ledger=h.sql(`SELECT JSON_OBJECT('calls',allocated_calls,'reserved',reserved_micros) FROM model_trials WHERE id='${profile.trial_id}'`)[0];assert.equal(ledger.calls,calls);assert.equal(ledger.reserved,0);assert.equal((await h.snapshot(cid)).runs.filter(r=>r.state==='finished').length,6);passed=true;
- console.log(JSON.stringify({passed,checks:[{name:'恢复24轮中文历史后，Pi原生压缩衔接近16KB宿主上下文和64KB门槛；继续6轮且保持同SDK会话，压缩请求计原预算；早期工具资料依赖保留，压缩后撤回仍在发送前拒绝',passed:true}],calls,compactions,payloadBytes,shortHistoryMessages:280,officialRequests:0}));
+ console.log(JSON.stringify({passed,checks:[{name:'恢复24轮中文历史后，Pi原生压缩衔接近16KB宿主上下文和重校准的80KB门槛；继续6轮且保持同SDK会话，压缩请求计原预算；早期工具资料依赖保留，压缩后撤回仍在发送前拒绝',passed:true}],calls,compactions,payloadBytes,shortHistoryMessages:280,officialRequests:0}));
 }finally{for(const [k,v]of Object.entries(before)){if(v===undefined)delete process.env[k];else process.env[k]=v;}await h.close();await new Promise(r=>provider.close(r));await writeFile('.local/checks/mvp-native-compaction.json',JSON.stringify({passed,calls,compactions,payloadBytes,shortHistoryMessages:280,officialRequests:0},null,2));}

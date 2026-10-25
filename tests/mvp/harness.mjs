@@ -86,6 +86,7 @@ export async function harness(options = {}) {
   ).trim();
   const directory = root + "/.local/checks/mvp-" + name;
   await mkdir(directory, { recursive: true });
+  const sourceSyncWorkers = [];
   const env = {
     ...process.env,
     PI_OFFLINE: "1",
@@ -148,13 +149,18 @@ export async function harness(options = {}) {
     logs.push(log);
     child.stdout.on("data", (d) => (log.output += d));
     child.stderr.on("data", (d) => (log.output += d));
+    child.on("exit", (code, signal) => {
+      log.output += `\n[${name} exited code=${code} signal=${signal}]\n`;
+    });
     return child;
   };
   const stop = async (child) => {
     if (!child) return;
     if (child.exitCode !== null || child.signalCode !== null) return;
+    const exited = new Promise((r) => child.once("exit", r));
     child.kill("SIGTERM");
-    await new Promise((r) => child.once("exit", r));
+    const force = setTimeout(() => child.kill("SIGKILL"), 5000);
+    try { await exited; } finally { clearTimeout(force); }
   };
   const health = async (port, path = "/health") =>
     until(async () => {
@@ -217,6 +223,30 @@ export async function harness(options = {}) {
   const captured = [];
   const captureAborted = [];
   const release = [];
+  let closing;
+  const close = () => closing ??= (async () => {
+    try {
+      await writeFile(directory + "/service-logs.json", JSON.stringify(logs, null, 2));
+    } finally {
+      for (const child of [...children].reverse()) await stop(child);
+      release.forEach((r) => r());
+      if (bridge) await new Promise((r) => bridge.close(r));
+      if (!options.keep) raw("DROP DATABASE " + database);
+      process.removeListener("SIGTERM", terminate);
+      process.removeListener("SIGINT", interrupt);
+    }
+  })();
+  // 测试被中断也清理本次资源；正常close与信号共用同一次收尾，不吞失败退出码。
+  const interrupted = code => {
+    void close().then(() => process.exit(code), error => {
+      console.error("test_resource_cleanup_failed", error);
+      process.exit(1);
+    });
+  };
+  const terminate = () => interrupted(143);
+  const interrupt = () => interrupted(130);
+  process.once("SIGTERM", terminate);
+  process.once("SIGINT", interrupt);
   try {
     platform = start("platform", "python3", [
       "apps/platform-mock/server.py",
@@ -269,10 +299,7 @@ export async function harness(options = {}) {
   } catch (e) {
     await writeFile(directory + "/startup-failure.json", JSON.stringify(logs, null, 2));
     console.error("startup diagnostics:", directory + "/startup-failure.json");
-    release.forEach((r) => r());
-    if (bridge) await new Promise((r) => bridge.close(r));
-    for (const child of children.reverse()) await stop(child);
-    if (!options.keep) raw("DROP DATABASE " + database);
+    await close();
     throw e;
   }
   return {
@@ -329,6 +356,12 @@ export async function harness(options = {}) {
       ], options.platformSourceDirectory ? {DATA_AGENT_SYNTHETIC_SOURCE_DIRECTORY:options.platformSourceDirectory} : {});
       await health(platformPort);
     },
+    async resumeSourceSyncWorker(count = 1) {
+      assert.ok(Number.isInteger(count) && count >= 1 && count <= 2);
+      while (sourceSyncWorkers.length < count) {
+        sourceSyncWorkers.push(start("source-sync-worker-" + sourceSyncWorkers.length, "target/debug/data-agent-worker", [], {DATA_AGENT_TEST_WORKER_ROLE:"source_sync"}));
+      }
+    },
     async pauseWorker() {
       await stop(worker);
     },
@@ -336,19 +369,6 @@ export async function harness(options = {}) {
       if(worker && worker.exitCode===null && worker.signalCode===null)return;
       worker = start("worker-resumed", "target/debug/data-agent-worker");
     },
-    async close() {
-      await writeFile(
-        directory + "/service-logs.json",
-        JSON.stringify(logs, null, 2),
-      );
-      for (const child of children.reverse()) await stop(child);
-      release.forEach((r) => r());
-      if (bridge) await new Promise((r) => bridge.close(r));
-      try {
-        if (!options.keep) raw("DROP DATABASE " + database);
-      } catch (e) {
-        throw new Error("test_database_cleanup_failed", { cause: e });
-      }
-    },
+    close,
   };
 }

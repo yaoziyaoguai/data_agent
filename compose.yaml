@@ -13,13 +13,13 @@ services:
     image: mysql:8.4.11@sha256:6ea90827b1100f8f2ae306a539f86d2c264a26ed435a2a9f75551dd5c3aeb242
     platform: linux/arm64
     restart: unless-stopped
-    mem_limit: 1024m
+    mem_limit: 2048m
     environment:
       MYSQL_DATABASE: data_agent
       MYSQL_USER: data_agent
       MYSQL_ROOT_PASSWORD_FILE: /run/secrets/mysql_root_password
       MYSQL_PASSWORD_FILE: /run/secrets/mysql_app_password
-    command: ["--innodb-buffer-pool-size=134217728", "--max-connections=100", "--table-definition-cache=400", "--table-open-cache=400", "--temptable-max-ram=67108864"]
+    command: ["--innodb-buffer-pool-size=268435456", "--max-connections=100", "--table-definition-cache=400", "--table-open-cache=400", "--temptable-max-ram=67108864"]
     ports:
       - "127.0.0.1:13306:3306"
     volumes:

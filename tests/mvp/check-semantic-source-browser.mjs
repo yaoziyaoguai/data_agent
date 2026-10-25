@@ -1,3 +1,4 @@
+import {synchronizeSources} from './source-sync.mjs';
 import assert from 'node:assert/strict';
 import {createServer} from 'node:http';
 import {randomUUID} from 'node:crypto';
@@ -24,7 +25,11 @@ await new Promise(resolve=>provider.listen(0,'127.0.0.1',resolve));
 const profile={provider_id:'deepseek',model_id:'deepseek-flash',trial_id:randomUUID(),price_version:'2026-10-04-peak-usd',input_limit:32768,output_limit:4096,trial_call_limit:6,trial_cost_micros:'500000',request_call_limit:6,toolset:'data',payload_bytes_limit:65536};
 try{
  h=await harness({capture:true,web:true,startWorker:false,env:{DATA_AGENT_PREFILL_PROFILE:JSON.stringify(profile),DATA_AGENT_PREFILL_TEST:'1',DATA_AGENT_PREFILL_URL:'http://127.0.0.1:'+provider.address().port}});
- const synced=await h.request('/source-syncs',{operation_id:randomUUID()});assert.equal(synced.status,200,JSON.stringify(synced.value));
+ const synced=await synchronizeSources(h);assert.equal(synced.value.status,'completed');assert.equal(synced.status,200,JSON.stringify(synced.value));
+ // 本检查只验证语义来源浏览器流程；同步期自动入队的对象预填与来源整理作业都不启动模型，
+ // 前者由check-prefill验收、后者由check-source-preparation验收，避免改变本检查的材料断言。
+ h.sql("DELETE FROM prefill_attempts WHERE state='queued'");
+ h.sql("DELETE FROM background_jobs WHERE kind='prepare_source'");
  const objects=h.sql("SELECT body FROM knowledge_objects WHERE source_id LIKE 'catalog-%'");
  const target=objects.find(object=>object.kind==='table'&&object.name==='demo_order_detail');assert.ok(target);assert.notEqual(target.id,'table-demo_order_detail');
  const read=async()=>{const response=await h.request('/knowledge/'+target.id);assert.equal(response.status,200,JSON.stringify(response.value));return response.value;};
@@ -70,8 +75,15 @@ try{
   assert.match(quote.location,/^L[1-9][0-9]*$/);
   assert.equal(source.body.split('\n')[Number(quote.location.slice(1))-1],quote.quote);
  }
- assert.deepEqual(sent[1].sources,sent[0].sources);
- checks.push('浏览器重预填实际调用Worker；同版输入包含业务文档和三个上游，分析与复核使用同一份材料，人工有效值保留');
+ // 分析期截断的正文进入续读后，复核交付同版来源的窗口或补齐区间；
+ // 固定不变量是同版冻结（来源、版本、总量一致），已全量交付的来源逐字节相同。
+ assert.deepEqual(sent[1].sources.map(source=>[source.source_id,source.version]),sent[0].sources.map(source=>[source.source_id,source.version]));
+ for(const [analysis,review] of sent[0].sources.map((source,index)=>[source,sent[1].sources[index]])){
+  assert.equal(review.body_range.total_bytes,analysis.body_range.total_bytes);
+  assert.ok(review.body_range.start_byte>=0&&review.body_range.start_byte<review.body_range.end_byte&&review.body_range.end_byte<=analysis.body_range.total_bytes,'复核区间必须是同版正文的有效窗口');
+  if(analysis.body_range.start_byte===0&&analysis.body_range.end_byte===analysis.body_range.total_bytes)assert.deepEqual(review,analysis,'已全量交付的来源复核必须原样保留');
+ }
+ checks.push('浏览器重预填实际调用Worker；同版输入包含业务文档和三个上游，复核沿同版来源续读，人工有效值保留');
 
  await page.reload();await entry.getByText(humanValue,{exact:true}).waitFor();
  await entry.locator('.provenance-detail > summary').click();

@@ -10,7 +10,15 @@ let calls=0,continuationCalls=0,phase='original',active,cancelled,h,passed=false
 const conditions={time_start:null,time_end:null,timezone:'UTC',metric:null,channel:null,group_by:[],filters:[],knowledge_refs:[],notes:''};
 const provider=createServer(async(req,res)=>{
  try{
- let raw='';req.setEncoding('utf8');for await(const part of req)raw+=part;const body=JSON.parse(raw);calls++;
+ let raw='';req.setEncoding('utf8');for await(const part of req)raw+=part;const body=JSON.parse(raw);
+ if(!body.tools?.length){
+  // Pi原生压缩的摘要请求不带工具定义，独立于续接交付断言；返回简短摘要后压缩继续。
+  res.writeHead(200,{'content-type':'text/event-stream'});
+  res.write('data: '+JSON.stringify({id:'synthetic-mixed-continuation',choices:[{index:0,delta:{role:'assistant',content:'早期上下文摘要：用户要求分别解释合成金额与时间，两项独立目标，金额目标随后被取消，时间目标继续。'},finish_reason:'stop'}]})+'\n\n');
+  res.write('data: '+JSON.stringify({choices:[],usage:{prompt_tokens:100,completion_tokens:30,total_tokens:130}})+'\n\n');res.end('data: [DONE]\n\n');
+  return;
+ }
+ calls++;
  let action;
  if(phase==='original'){
   if(calls===3)return; // 在两次已持久提交的工具之后保持模型请求未完成。
@@ -33,7 +41,7 @@ const provider=createServer(async(req,res)=>{
 const previous=Object.fromEntries(['DEEPSEEK_API_KEY','DEEPSEEK_BASE_URL','DATA_AGENT_PROVIDER_TEST'].map(k=>[k,process.env[k]]));
 try{
  const profile={provider_id:'deepseek',model_id:'deepseek-flash',trial_id:randomUUID(),price_version:'2026-10-04-peak-usd',input_limit:32768,output_limit:2048,trial_call_limit:20,trial_cost_micros:'300000',request_call_limit:12,toolset:'data',payload_bytes_limit:65536};
- h=await harness({capture:true,profile,env:{DATA_AGENT_LEASE_MS:'120000'}});
+ h=await harness({capture:true,profile,protocolProviderUrl:'http://127.0.0.1:'+provider.address().port,env:{DATA_AGENT_LEASE_MS:'120000'}});
  process.env.DEEPSEEK_API_KEY='synthetic-protocol-key';process.env.DEEPSEEK_BASE_URL='http://127.0.0.1:'+provider.address().port;process.env.DATA_AGENT_PROVIDER_TEST='1';
  const cid=await h.create(),original=await h.capture(cid,'分别解释合成金额和时间，这是两项独立目标。');await h.pauseWorker();
  const abort=new AbortController();
@@ -49,7 +57,8 @@ try{
  assert.deepEqual(new Set(resumed.workspace_context.input_task_ids),new Set([cancelled.id,active.id]));
  await deliver(resumed,h.env.DATA_AGENT_API_URL,h.env.DATA_AGENT_INTERNAL_TOKEN,'');h.releaseRun(resumed.run_id);
  const completed=await h.snapshot(cid);assert.equal(completed.tasks.length,2);assert.equal(completed.tasks.find(t=>t.id===cancelled.id).lifecycle,'cancelled');assert.equal(completed.tasks.find(t=>t.id===active.id).phase,'answered');
- const attempts=h.sql(`SELECT JSON_OBJECT('state',state,'scope',budget_scope_id) FROM model_call_attempts`);assert.equal(attempts.length,6);assert.equal(attempts.filter(a=>a.state==='unknown').length,1);assert.ok(attempts.every(a=>a.scope===original.budget_scope_id));
+ // 恢复会话超过载荷阈值时Pi原生压缩先发一次摘要请求；6次交付请求+1次摘要均沿原预算记账。
+ const attempts=h.sql(`SELECT JSON_OBJECT('state',state,'scope',budget_scope_id) FROM model_call_attempts`);assert.equal(attempts.length,7);assert.equal(attempts.filter(a=>a.state==='unknown').length,1);assert.ok(attempts.every(a=>a.scope===original.budget_scope_id));
  assert.equal(h.sql(`SELECT JSON_OBJECT('n',COUNT(*)) FROM tool_calls WHERE tool_name='update_analysis_task' AND state='succeeded'`)[0].n,3);
  passed=true;console.log(JSON.stringify({passed,calls,checks:['真实Pi创建双目标、取消中断、从持久检查点沿原链恢复；当前上下文包含取消状态，只续接剩余任务，工具无重复副作用，未知请求保留原账本'],officialRequests:0}));
 }finally{

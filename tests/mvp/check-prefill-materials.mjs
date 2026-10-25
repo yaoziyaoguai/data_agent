@@ -1,3 +1,4 @@
+import {synchronizeSources} from './source-sync.mjs';
 import assert from 'node:assert/strict';
 import {createServer} from 'node:http';
 import {randomUUID} from 'node:crypto';
@@ -10,7 +11,14 @@ const requests=[],checks=[],payloadBytes=[],draftPayloads=[];
 let release,block=false,passed=false,h,supplementSource;
 const provider=createServer(async(req,res)=>{
  let raw='';req.setEncoding('utf8');for await(const chunk of req)raw+=chunk;
- const material=JSON.parse(JSON.parse(raw).messages[1].content);requests.push(material);payloadBytes.push(Buffer.byteLength(raw));assert.ok(Buffer.byteLength(raw)<=65536);
+ const material=JSON.parse(JSON.parse(raw).messages[1].content);
+ if(material.source?.kind==='document'){
+  // 隔离删除与worker并行领取的竞态会让文档准备作业漏进本provider；
+  // 按其真实契约回应空成果，不进入对象预填的请求记账。
+  res.writeHead(200,{'content-type':'application/json'});res.end(JSON.stringify({choices:[{finish_reason:'tool_calls',message:{tool_calls:[{type:'function',function:{name:'submit_semantic_preparation',arguments:JSON.stringify({statements:[],relations:[],unresolved:[],semantic_status:'ready'})}}]}}],usage:{prompt_tokens:50,completion_tokens:10}}));
+  return;
+ }
+ requests.push(material);payloadBytes.push(Buffer.byteLength(raw));assert.ok(Buffer.byteLength(raw)<=65536);
  if(material.draft?.evidence_catalog){
   const expanded=structuredClone(material),catalog=expanded.draft.evidence_catalog;delete expanded.draft.evidence_catalog;
   for(const entry of expanded.draft.entries){entry.evidence=entry.evidence_indices.map(index=>catalog[index]);delete entry.evidence_indices;}
@@ -27,12 +35,17 @@ const provider=createServer(async(req,res)=>{
  res.writeHead(200,{'content-type':'application/json'});res.end(JSON.stringify({choices:[{finish_reason:'tool_calls',message:{tool_calls:[{type:'function',function:{name:'submit_semantic_prefill',arguments:JSON.stringify({entries})}}]}}],usage:{prompt_tokens:100,completion_tokens:200}}));
 });await new Promise(r=>provider.listen(0,'127.0.0.1',r));
 const profile={provider_id:'deepseek',model_id:'deepseek-flash',trial_id:randomUUID(),price_version:'2026-10-04-peak-usd',input_limit:32768,output_limit:4096,trial_call_limit:40,trial_cost_micros:'500000',request_call_limit:12,toolset:'data',payload_bytes_limit:65536};
+// 本检查只验证对象级预填材料；文档与来源的整理消费链路分别由check-document-preparation
+// 与check-source-preparation单独验收，这里不消费文档整理作业。
+const isolatePreparation=()=>h.sql("DELETE FROM background_jobs WHERE kind='prepare_source'");
 const column={id:'amount',name:'amount',data_type:'INTEGER',nullable:false,comment:''};
 const table=(id,version='1',upstream=[])=>({id,name:id,platform_version:version,comment:'',columns:[column],ddl:`CREATE TABLE ${id}(amount INTEGER NOT NULL);`,node:{id:'load-'+id,sql:`INSERT INTO ${id} SELECT amount FROM raw_value; -- generation ${version}`,upstream_ids:upstream}});
 try{
  h=await harness({capture:true,env:{DATA_AGENT_LEASE_MS:'120000',DATA_AGENT_PREFILL_PROFILE:JSON.stringify(profile),DATA_AGENT_PREFILL_TEST:'1',DATA_AGENT_PREFILL_URL:'http://127.0.0.1:'+provider.address().port}});
  await h.pauseWorker();
- const initialSync=await h.request('/source-syncs',{operation_id:randomUUID()});assert.equal(initialSync.status,200,JSON.stringify(initialSync.value));
+ const initialSync=await synchronizeSources(h);assert.equal(initialSync.value.status,'completed');assert.equal(initialSync.status,200,JSON.stringify(initialSync.value));
+ // 本检查只验证对象级预填材料；来源整理消费链路由check-source-preparation单独验收。
+ h.sql("DELETE FROM background_jobs WHERE kind='prepare_source'");
  const platformObjects=h.sql("SELECT body FROM knowledge_objects WHERE source_id LIKE 'catalog-%'");
  const platformTarget=platformObjects.find(o=>o.kind==='table'&&o.name==='demo_order_detail');assert.ok(platformTarget);assert.notEqual(platformTarget.id,'table-demo_order_detail');
  const platformRead=(await h.request('/knowledge/'+platformTarget.id)).value;
@@ -50,12 +63,15 @@ try{
  checks.push('实际合成平台稳定身份的预填输入包含业务文档，以及订单行、支付、客户三个上游DDL');
  // 下游位于首个目录页，上游在末页；其余表只是分页填充。
  const rows=[table('derived_values','1',['raw_values']),...Array.from({length:49},(_,i)=>table('filler_'+i)),table('raw_values')];
- const sync=async()=>{await writeFile(h.directory+'/platform/catalog.json',JSON.stringify({source_namespace:'prefill-materials',authoritative:true,tables:rows}));const r=await h.request('/source-syncs',{operation_id:randomUUID()});assert.equal(r.status,200,JSON.stringify(r.value));};
+ const sync=async()=>{await writeFile(h.directory+'/platform/catalog.json',JSON.stringify({source_namespace:'prefill-materials',authoritative:true,tables:rows}));const r=await synchronizeSources(h);assert.equal(r.value.status,'completed');assert.equal(r.status,200,JSON.stringify(r.value));
+ // 本检查只验证对象级预填材料；来源整理消费链路由check-source-preparation单独验收。
+ h.sql("DELETE FROM background_jobs WHERE kind='prepare_source'");};
  await sync();
  const objects=h.sql("SELECT body FROM knowledge_objects WHERE source_id LIKE 'catalog-%'");
  const target=objects.find(o=>o.name==='derived_values'),upstream=objects.find(o=>o.name==='raw_values');
  const doc=(await h.request('/knowledge',{operation_id:randomUUID(),kind:'document',name:'合成金额单位说明',body:'amount 以元保存；业务日按 Asia/Shanghai 划分。',related_ids:[target.id,upstream.id],source_url:null})).value;
  const fieldDoc=(await h.request('/knowledge',{operation_id:randomUUID(),kind:'document',name:'上游字段解释',body:'上游 amount 是原始金额，未进行币种换算。',related_ids:[objects.find(o=>o.name==='raw_values.amount').id],source_url:null})).value;
+ isolatePreparation();
  const read=async id=>(await h.request('/knowledge/'+id)).value;
  const reanalyze=async()=>{const v=await read(target.id);const r=await h.request('/knowledge/'+target.id+'/reanalyze',{operation_id:randomUUID(),expected_version:v.version});assert.equal(r.status,200);return r.value;};
  const wait=async(state)=>until(async()=>{const v=await read(target.id);return v.prefill_status?.state===state?v:false;},'资料预填 '+state,45000);
@@ -97,6 +113,7 @@ try{
 
  block=true;await reanalyze();await until(()=>release,'预填等待文档改版');
  const changed=await h.request('/knowledge/'+doc.id,{operation_id:randomUUID(),expected_version:doc.version,entry_id:'body',value:'amount 以元保存；新版只适用于已支付记录。'},'alice','PATCH');assert.equal(changed.status,200);
+ isolatePreparation();
  release();release=undefined;await wait('superseded');await freshReadRun();
  assert.equal((await invoke('read_source',{source_id:'document-'+doc.id,version:doc.version})).value.code,'stale_knowledge');
  checks.push('模型进行期间文档改版，旧建议不采用，旧来源版本不可继续读');
@@ -124,6 +141,7 @@ try{
  await h.pauseWorker();
  const boundedBody='首部规则：金额以元保存。\n'+'普通说明。\n'.repeat(1000)+'中段规则：按付款日归属。\n'+'普通说明。\n'.repeat(1000)+'原文尾部例外：退款拒收不计入。\n';
  const bounded=(await h.request('/knowledge',{operation_id:randomUUID(),kind:'document',name:'可续读合成规则',body:boundedBody,related_ids:[target.id],source_url:null})).value;
+ isolatePreparation();
  supplementSource='document-'+bounded.id;
  const beforeSupplement=requests.length;
  await reanalyze();await h.resumeWorker();current=await wait('succeeded');
@@ -155,6 +173,7 @@ try{
  assert.equal((await h.request('/knowledge/'+bounded.id+'/disable',{operation_id:randomUUID(),expected_version:bounded.version})).status,200);
  supplementSource=undefined;
  const long=(await h.request('/knowledge',{operation_id:randomUUID(),kind:'document',name:'长合成业务文档',body:'未知税费。'.repeat(6000),related_ids:[target.id],source_url:null})).value;
+ isolatePreparation();
  await reanalyze();const queued=h.sql(`SELECT input_json FROM prefill_attempts WHERE object_id='${target.id}' ORDER BY created_at DESC LIMIT 1`)[0];
  assert.equal(queued.coverage.state,'incomplete');const longSource=queued.sources.find(s=>s.source_id==='document-'+long.id);assert.equal(longSource.complete,false);assert.ok(longSource.body.length>0);assert.ok(queued.coverage.gaps.some(g=>g.reason==='body_limit'));
  assert.ok(queued.sources.reduce((n,s)=>n+Buffer.byteLength(s.body),0)<=24576);

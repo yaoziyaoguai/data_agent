@@ -1,3 +1,4 @@
+import {synchronizeSources} from './source-sync.mjs';
 import assert from 'node:assert/strict';
 import {spawn, execFileSync} from 'node:child_process';
 import {randomUUID,createHash} from 'node:crypto';
@@ -48,7 +49,7 @@ const table=(version,node)=>({id:'records',name:'replay_records',platform_versio
 const node={id:'load-records',sql:'INSERT INTO replay_records SELECT record_id FROM synthetic_records;',upstream_ids:['synthetic_records']};
 const syncCatalog=async value=>{
   await writeFile(h.directory+'/platform/catalog.json',JSON.stringify({source_namespace:'maintenance-replay',authoritative:true,tables:[value]}));
-  const response=await h.request('/source-syncs',{operation_id:randomUUID()});assert.equal(response.status,200,JSON.stringify(response.value));
+  const response=await synchronizeSources(h);assert.equal(response.value.status,'completed');assert.equal(response.status,200,JSON.stringify(response.value));
 };
 const modelRead=async object=>{
   await h.resumeWorker();const cid=await h.create();const run=await h.capture(cid,'读取合成维护表的当前来源');await h.pauseWorker();

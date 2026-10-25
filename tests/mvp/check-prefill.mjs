@@ -1,10 +1,28 @@
+import {synchronizeSources} from './source-sync.mjs';
 import assert from 'node:assert/strict';
 import {createServer} from 'node:http';
 import {randomUUID} from 'node:crypto';
 import {mkdir,copyFile,readFile,writeFile} from 'node:fs/promises';
 import {harness,until} from './harness.mjs';
 const checks=[];let passed=false,calls=0,mode='valid',release,arrived,expectedThinking='off',expectedOutput=2048;
-const resultSchema=JSON.parse(await readFile('packages/contracts/schema.json','utf8')).$defs.PrefillResult;
+const contractDocument=JSON.parse(await readFile('packages/contracts/schema.json','utf8'));
+const resultSchema=contractDocument.$defs.PrefillResult;
+// 发给模型的单一工具参数必须自包含：传递引用到的本地定义随参数附带，缺一个模型端就会遇到未解析引用。
+{
+ const collect=(node,found=new Set())=>{
+  if(Array.isArray(node))for(const item of node)collect(item,found);
+  else if(node&&typeof node==='object'){
+   for(const [key,value] of Object.entries(node)){
+    if(key==='$ref'&&typeof value==='string'){
+     const name=value.split('/').pop();
+     if(contractDocument.$defs[name]&&!found.has(name)){found.add(name);collect(contractDocument.$defs[name],found);}
+    }else collect(value,found);
+   }
+  }
+  return found;
+ };
+ resultSchema.$defs=Object.fromEntries([...collect(resultSchema)].map(name=>[name,contractDocument.$defs[name]]));
+}
 const provider=createServer(async(req,res)=>{
  let raw='';req.setEncoding('utf8');for await(const chunk of req)raw+=chunk;
  calls++;assert.ok(Buffer.byteLength(raw)<=65536);
@@ -13,7 +31,9 @@ const provider=createServer(async(req,res)=>{
  assert.equal(request.tools.length,1);assert.equal(request.tools[0].function.name,'submit_semantic_prefill');assert.deepEqual(request.tools[0].function.parameters,resultSchema);
  assert.deepEqual(request.tool_choice,expectedThinking==='off'?{type:'function',function:{name:'submit_semantic_prefill'}}:'auto');
  const input=JSON.parse(request.messages[1].content);const guide=input.sources.find(s=>s.source_id==='etl');
- assert.ok(input.sources.every(s=>s.complete));assert.ok(!raw.includes('required_facts'));
+ // bounded context合同：标complete的来源必须从0起交付全文且源快照完整；complete=false覆盖首轮截断、续读窗口和源不完整，成因由check-prefill-materials覆盖。
+ assert.ok(input.sources.every(s=>s.body_range&&s.body_range.start_byte<s.body_range.end_byte&&s.body_range.end_byte<=s.body_range.total_bytes));
+ assert.ok(input.sources.every(s=>s.complete!==true||(s.body_range.start_byte===0&&s.body_range.end_byte===s.body_range.total_bytes&&(s.source_complete??true)===true)),'标complete的来源必须从0起交付全文');assert.ok(!raw.includes('required_facts'));
  assert.ok(input.object.entries.every(e=>!['ddl','etl','type'].includes(e.path)));
  assert.deepEqual(input.object.related_ids,['table-demo_order_detail']);
  assert.ok(input.object.metadata.some(e=>e.path==='type'&&e.source_facts.quote.includes('paid_amount_cents TEXT NOT NULL')));
@@ -31,7 +51,7 @@ let h;
 try{
  h=await harness({platformSourceDirectory:process.cwd()+'/docs/sources',env:{DATA_AGENT_SYNTHETIC_SOURCE_DIRECTORY:process.cwd()+'/'+directory}});await h.pauseWorker();
  let schema=await readFile(directory+'/schema.sql','utf8');schema=schema.replace('paid_amount_cents INTEGER NOT NULL','paid_amount_cents TEXT NOT NULL');await writeFile(directory+'/schema.sql',schema);
- assert.equal((await h.request('/source-syncs',{operation_id:randomUUID()})).status,200);
+ assert.equal((await synchronizeSources(h)).value.status, 'completed');
  const table=(await h.request('/knowledge/table-demo_order_detail')).value;const field=(await h.request('/knowledge/field-paid_amount_cents')).value;
  assert.ok(table.entries.find(e=>e.path==='ddl').effective_value.includes('paid_amount_cents TEXT NOT NULL'));
  assert.equal(field.entries.find(e=>e.path==='type').effective_value,'TEXT');assert.ok(field.entries.find(e=>e.path==='type').source_facts.quote.includes('paid_amount_cents TEXT NOT NULL'));
@@ -68,10 +88,12 @@ try{
  checks.push({name:'模型进行期间人工编辑，新人工版本保留，迟到分析不覆盖',passed:true});
  mode='valid';await reanalyze();v=await wait('succeeded');assert.equal(v.entries.find(e=>e.path==='meaning').effective_value,'分析期间人工纠正');assert.equal(v.entries.find(e=>e.path==='meaning').suggestion.value,'新版合成语义建议');
  checks.push({name:'重新分析保留人工有效值，独立保存新模型建议和引用供复核',passed:true});
- await h.pauseWorker();const etl=await readFile(directory+'/etl.sql','utf8');await writeFile(directory+'/etl.sql',etl+'\n-- 单独变化的合成加工依据\n');const oldVersion=v.version;assert.equal((await h.request('/source-syncs',{operation_id:randomUUID()})).status,200);v=(await h.request('/knowledge/'+object)).value;assert.ok(BigInt(v.version)>BigInt(oldVersion));assert.equal(v.prefill_status.state,'queued');assert.ok(!v.entries.find(e=>e.path==='meaning').suggestion.evidence?.some(e=>e.source_id==='etl'&&e.version==='1'));
+ await h.pauseWorker();const etl=await readFile(directory+'/etl.sql','utf8');await writeFile(directory+'/etl.sql',etl+'\n-- 单独变化的合成加工依据\n');const oldVersion=v.version;assert.equal((await synchronizeSources(h)).value.status, 'completed');v=(await h.request('/knowledge/'+object)).value;assert.ok(BigInt(v.version)>BigInt(oldVersion));assert.equal(v.prefill_status.state,'queued');assert.ok(!v.entries.find(e=>e.path==='meaning').suggestion.evidence?.some(e=>e.source_id==='etl'&&e.version==='1'));
  checks.push({name:'模型新增ETL依据进入依赖；只改ETL后字段自动重分析，旧依据不继续有效',passed:true});
- // 隔离接下来的故障注入，其他已覆盖对象的queued job不启动模型。
- h.sql("DELETE FROM prefill_attempts WHERE state='queued'");await h.resumeWorker();
+ // 隔离接下来的故障注入：其余queued预填与来源整理作业不启动模型；
+ // 来源整理消费链路由check-source-preparation单独验收。
+ h.sql("DELETE FROM prefill_attempts WHERE state='queued'");
+ h.sql("DELETE FROM background_jobs WHERE kind='prepare_source'");await h.resumeWorker();
  mode='usage_missing';const before=await reanalyze();v=await wait('unknown');assert.equal(v.version,before.version);const ledger=h.sql(`SELECT JSON_OBJECT('calls',allocated_calls,'reserved',reserved_micros) FROM model_trials WHERE id='${profile.trial_id}'`)[0];assert.equal(ledger.calls,10);assert.ok(ledger.reserved>0);await new Promise(r=>setTimeout(r,400));assert.equal(calls,10);
  checks.push({name:'建议合法但usage缺失：不应用、回执未知、保留预算且不自动重试',passed:true});
  mode='blocked';const sent=new Promise(r=>arrived=r);await reanalyze();await sent;
