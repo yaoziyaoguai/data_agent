@@ -1,0 +1,337 @@
+{
+  "schema": 1,
+  "date": "2026-11-04",
+  "kind": "bounded_independent_static_review",
+  "status": "passed",
+  "conclusion": {
+    "engineering_repair_boundary": "pass",
+    "blocking_findings": 0,
+    "summary": "限定task.patch及直接接缝内未发现需要阻断本包工程修复交付的问题。目录刷新、来源说明、两处冗余删除与固定核心记录绑定符合执行包；现有目录证据不要求本包追加后端批读。",
+    "main09_complete": false,
+    "main09_status_observed": "active",
+    "main09_review_observed": {"status": "pending", "record": null},
+    "main09_evidence_observed": null,
+    "qualification": "本记录只签本轮工程修复边界，不是主09整体独审、业务重新判分或完成收据。既有API核心阻断、真实模型补验和来源资料前提均继续保留。"
+  },
+  "independence": {
+    "implementation_participation": false,
+    "delegated": false,
+    "method": "直接静态核对本轮补丁、工程规则、相关函数/接缝和已有完整日志；只用本地文本提取、逐字delta比较及SHA256。未加载其他开发或审计流水线。"
+  },
+  "activity": {
+    "new_model_calls": 0,
+    "new_embedding_calls": 0,
+    "new_memory_calls": 0,
+    "database_connections": 0,
+    "builds_run": 0,
+    "tests_run": 0,
+    "services_started_or_changed": 0,
+    "external_requests": 0,
+    "paid_calls": 0,
+    "credential_files_read": false,
+    "wire_files_read": false,
+    "implementation_or_test_or_result_edits": false,
+    "only_written_file": "docs/reviews/dogfood-core-repairs-review-20261104.json"
+  },
+  "scope": {
+    "patch": ".local/checks/dogfood-core-repairs-20261104/task.patch",
+    "manifest": ".local/checks/dogfood-core-repairs-20261104/scope.json",
+    "verification_manifest": ".local/checks/dogfood-core-repairs-20261104/verification.json",
+    "base_head_as_recorded": "04d27d06ba7b97d4cf3e288d4cf9e6300ef491a9",
+    "attribution": "只归因接手后task.patch，不以整个HEAD diff归因本轮。17个非CURRENT文件的实际after SHA和before快照均与scope一致，17份before到当前文件的逐字unified delta均出现在task.patch。",
+    "changed_files_in_manifest": 18,
+    "non_current_after_hashes_matched": 17,
+    "non_current_snapshot_deltas_matched": 17,
+    "rules": "AGENTS.md的模块/权限/版本/证据/Pi规则，以及执行包第1–2、4.1–4.3、5、7节；按直接风险读取相关实现设计合同。",
+    "current_context": {
+      "path": "docs/CURRENT.md",
+      "read_range": "当前frontmatter及最新09核心修复实施接续一节；未读取历史正文",
+      "goal_revision_observed": 154,
+      "full_file_sha256_frozen": false,
+      "note": "CURRENT仅供语义上下文和绑定核对；后续正常更新全文不因本记录自动失效。scope.json中原有CURRENT哈希只是实施者快照，本报告不将它作为未来全文冻结条件。"
+    },
+    "excluded": [
+      "继承的全工作树变更、全项目审计与架构重选",
+      "模型、数据库、构建、测试和服务的任何新运行",
+      "长wire、凭据、历史档案与新增历史事故调查",
+      "未变全库case重新判分、原题/断言/attempt/成绩改写",
+      "后端四类批读预建、池大小/超时/重试调整",
+      "主09完成gate、完成收据及整体独审状态修改"
+    ]
+  },
+  "findings": [],
+  "verified_observations": [
+    {
+      "topic": "目录刷新批次与收尾",
+      "result": "verified",
+      "evidence": ["apps/web/src/features/knowledge/KnowledgePage.tsx:275", "apps/web/src/features/knowledge/KnowledgePage.tsx:280", "apps/web/src/features/knowledge/KnowledgePage.tsx:296", "apps/web/src/features/knowledge/KnowledgePage.tsx:325"],
+      "detail": "所有原整页refresh触发经同一refreshRequest进入effect内run。inFlight覆盖首组目录/建议/权限与随后实际发出的全部可见详情；两组均用allSettled，不会因首个reject提前释放。完成后安排2000ms计时；在途触发合并为一个pending，收尾后补一次，不累积队列。真实失败经页面边界显示并保留已显示内容。"
+    },
+    {
+      "topic": "保存与同步最终补刷新",
+      "result": "verified",
+      "evidence": ["apps/web/src/features/knowledge/KnowledgePage.tsx:276", "apps/web/src/features/knowledge/KnowledgePage.tsx:397", "apps/web/src/features/knowledge/KnowledgePage.tsx:415", "apps/web/src/features/knowledge/KnowledgePage.tsx:498", "apps/web/src/features/knowledge/KnowledgePage.tsx:595", "apps/web/src/features/knowledge/SourceSynchronization.tsx:33", ".local/checks/dogfood-core-repairs-20261104/directory-regression-final.log"],
+      "detail": "同步终态回调、偏好保存、对象保存、新建和文档保存均仍触发统一刷新；同步hook沿changed ref调用当前回调。在途保存的补刷由现有浏览器场景覆盖，旧列表不能覆盖已保存对象的新版本。没有通过取消正常自动刷新来通过检查。"
+    },
+    {
+      "topic": "生命周期、薄signal接入与第一页详情去重",
+      "result": "verified",
+      "evidence": ["apps/web/src/features/knowledge/KnowledgePage.tsx:305", "apps/web/src/features/knowledge/KnowledgePage.tsx:335", "apps/web/src/shared/api.ts:17", "crates/data-agent/src/use_cases/knowledge.rs:25"],
+      "detail": "每批共享AbortController；用户依赖变化或卸载时先live=false、清pending和timer、abort并清刷新入口，晚到结果不提交，取消不显示为业务失败。api只新增可选第六参数并透传fetch.signal，原类型/错误边界不变。目录首页返回正式完整对象及状态，included集合仅排除本批首页同ID详情；首页外可见对象继续读取。去重结论限整页刷新批次，不宣称所有独立选中/关联请求全局去重。"
+    },
+    {
+      "topic": "分页、草稿及当前选择",
+      "result": "verified",
+      "evidence": ["apps/web/src/features/knowledge/KnowledgePage.tsx:29", "apps/web/src/features/knowledge/KnowledgePage.tsx:89", "apps/web/src/features/knowledge/KnowledgePage.tsx:252", "apps/web/src/features/knowledge/KnowledgePage.tsx:314", "apps/web/src/features/knowledge/KnowledgePage.tsx:389", "apps/web/src/features/knowledge/KnowledgeDirectory.tsx:27", ".local/checks/dogfood-core-repairs-20261104/initial-directory-selection-red.log", ".local/checks/dogfood-core-repairs-20261104/related-pagination.log"],
+      "detail": "刷新以旧Map为基础合并，不清已加载页；首页游标仅首次初始化，后续分页游标不倒退。currentObject保留内容、负责人和偏好的独立版本比较，编辑态不从新props重置草稿。首批自动选择读取当前scope/query ref，已切空负责目录或搜索后不会恢复旧表。补充RED明确1!=0，最终GREEN包含该原断言；已有Bob空目录/无结果筛选和关联分页断言保留。"
+    },
+    {
+      "topic": "来源目标、许可与身份说明一致性",
+      "result": "verified",
+      "evidence": ["apps/agent/session/resources.ts:21", "apps/agent/tools/data-tools.ts:21", "apps/agent/tools/data-tools.ts:45", "apps/agent/tools/data-tools.ts:157", "docs/architecture/implementation-design.md:711", "docs/architecture/implementation-design.md:732"],
+      "detail": "原冲突文字已替换。分析目标/统计对象/SQL表过滤不自动成为来源禁令；明确依据限制落实source_limits。新任务确认无限制才可null，已有任务省略继承，未知不置null。source_identity只提供候选及真实贡献根；同名对象、聚合根和部分根不冒称细源，roots_complete不证明许可或正文读完；范围内缺必需依据时请求具体决定。所查生效说明没有留下相反规则，未新加关键词授权器、来源审批系统或Agent循环。真实模型是否遵循仍未由这些文字检查证明。"
+    },
+    {
+      "topic": "source_identity重复Schema/view删除",
+      "result": "verified",
+      "evidence": ["crates/data-agent/src/use_cases/data_tools.rs:10", "crates/data-agent/src/use_cases/data_tools.rs:582", "crates/data-agent/src/use_cases/data_tools.rs:721", "crates/data-agent/src/use_cases/data_tools.rs:804", "crates/data-agent/src/use_cases/source_identity.rs:37", "crates/data-agent/src/use_cases/source_identity.rs:75"],
+      "detail": "源码及相关测试引用搜索仅找到data_tools::execute一个调用者，source_identity模块私有且search为pub(super)。execute按原登记工具版本选择输入Schema，validation?在锁外调用之前执行，分支本身要求source_identity view。删除只移除同义二次Schema/view检查。trim后空串业务判断、游标prefix/解码/绑定及actor/space、当前可读头与元信息/版本/贡献根核对均保留。现有来源边界10组含非法输入/游标和权限负控通过。"
+    },
+    {
+      "topic": "claimed_epoch恒等比较删除",
+      "result": "verified",
+      "evidence": ["crates/data-agent/src/use_cases/deliver_run.rs:82", "crates/data-agent/src/use_cases/deliver_run.rs:103", "crates/data-agent/src/use_cases/deliver_run.rs:319", "crates/data-agent/src/modules/conversations/store.rs:108", "crates/data-agent/src/modules/conversations/store.rs:271", "crates/data-agent/src/modules/jobs/store.rs:81", ".local/checks/dogfood-core-repairs-20261104/preparation-lease.log"],
+      "detail": "prepare_delivery持有FOR UPDATE取得的同一不可变LockedConversation，以lease_epoch+1预计算；claim_turn_in_tx以相同快照计算同一值，无另一分配路径。删除调用点临时变量与恒等比较不改变epoch算法。claim及await?、owner的current/lease_valid检查、job末尾renew/assert、begin_attempt与同事务提交均保留。复用两条准备期真实MySQL回归，不将其解释为S05初次失租根因证明。"
+    },
+    {
+      "topic": "grade可选必过检查与固定21+1绑定",
+      "result": "verified",
+      "evidence": ["docs/dogfood/cockpit/grade.py:42", "docs/dogfood/cockpit/grade.py:75", "docs/dogfood/cockpit/grade.py:85", "scripts/test_cockpit_records.py:47", "docs/execution/semantic-runtime/integrated-dogfood.md:19", ".local/checks/dogfood-core-repairs-20261104/records-red.log", ".local/checks/dogfood-core-repairs-20261104/records-green.log"],
+      "detail": "新增检查位于原完整记录验证之后；默认require_pass为空，默认兼容。完整100/10的ID、原断言顺序/状态、attempt模式/字段和证据存在性检查不变；指定ID须存在且总状态pass，其余合法not_run不受影响。缺参数RED及工具样例GREEN保留，样例只在临时目录，不进入业务成绩。CURRENT两条独立argv与scope固定选择逐项一致，来自原核心表，未动态挑选、缩减结果或修改验收引擎。"
+    },
+    {
+      "topic": "实际安全证据纳入scope及真实/mock边界",
+      "result": "verified",
+      "evidence": [".local/checks/dogfood-core-repairs-20261104/scope.json", ".local/checks/dogfood-core-repairs-20261104/verification.json", ".local/dogfood-runs/semantic-20261102/results.json", ".local/dogfood-runs/semantic-20261102/trajectory-results.json"],
+      "detail": "既有11个核心pass的断言证据及全部attempt trace共有38个去重安全路径，均存在且逐条列入当前verification_inputs，无wire/凭据路径。模型类通过记录P06/P07/A09/A10/A11/A12对应的7份成功real_model轨迹均execution_complete=true、run finished、profile为deepseek-flash；原失败attempt仍保留，未见用失败real加成功mock拼通过。本次只核此绑定与适用性，未重新裁决这些未变case的全部业务语义。P02工程、A14/A15/G01/G03 UI及本包本地协议证据均按各自类别解释。grade自身仍只作结构校验，不据它自动保证真实语义。"
+    },
+    {
+      "topic": "四份资料前提证据的结论边界",
+      "result": "verified",
+      "evidence": [".local/checks/dogfood-core-repairs-20261104/source-premise-and-quality.json", ".local/checks/dogfood-core-repairs-20261104/source-roots.json", ".local/checks/dogfood-core-repairs-20261104/source-premise-conclusion.json", ".local/checks/dogfood-core-repairs-20261104/vehicle-qualification-source.json"],
+      "detail": "初次限定取证已给旧ASR指标过滤SQL的实际回执/输入位置及最小引用，不能再说资格字段全无出处；后续当前依赖行补齐metric-asr_retry_turn_rate@1完整根为cockpit-metrics-analysis@1与business-guide@1。它更新了早先尚缺当前根的临时结论，不证明历史attempt已合法声明。独立catalog细来源revision1已定位vehicle_id/is_lab_unit/telemetry_consent，但当前原许可内完整车辆资格结构依据仍缺。拟议决定只允许后续新attempt补读这些结构，不能回写原成绩或自动豁免原21+1出口；没有重开wire历史调查。"
+    },
+    {
+      "topic": "补充的公开状态与证据适用性记录",
+      "result": "verified_with_limits",
+      "evidence": [".local/checks/dogfood-core-repairs-20261104/provider-public-status-check.json", ".local/checks/dogfood-core-repairs-20261104/evidence-applicability.json"],
+      "detail": "补充文件不改变待审task.patch。公开状态记录只说明一次读取主页与历史后，未取得比旧Monitoring后失败更新的可定位恢复时间；公开正常状态不能证明原配置端点已恢复，也不能据此宣布供应商当前仍故障。本审查未新访问公开页面或发付费代表。适用性文件逐项说明11个既有pass的复用理由，其成功attempt与证据SHA和本审查已核记录一致；模型类均有成功real_model attempt。仅支持本轮delta下复用原覆盖，不重判原成绩，也不覆盖新的明确来源效果。"
+    }
+  ],
+  "programming_conventions": [
+    {"rule": "有据防御", "result": "pass", "basis": "inFlight/pending/allSettled/取消与当前选择ref对应已复现重叠和迟到选择；未新增猜测性并发框架或后端保护。"},
+    {"rule": "内部不重复同义校验", "result": "pass", "basis": "只删除唯一已验证身份搜索接缝的重复Schema/view及同锁快照恒等epoch比较；新事务、权限、租约与游标业务复核保留。"},
+    {"rule": "单用简单逻辑就地", "result": "pass", "basis": "逻辑留在原组件effect、原工具入口和原grade函数；没有通用调度器、Validated包装层或新评分框架。run与refresh入口服务实际轮询/多回调复用。"},
+    {"rule": "try/catch只作必要边界处理", "result": "pass", "basis": "新增catch只把整批读取错误显示到页面；生命周期结束由live忽略取消，finally统一收尾和调度，不吞真实失败伪成功。"}
+  ],
+  "invariants": {
+    "pi_only": "本轮Agent代码仅改现有system/tool说明，没有新增循环、压缩器、会话或恢复框架；请求上下文与工具包装日志保留真实Pi SDK边界。",
+    "limits": "24次/消息、连续临时失败3次在本轮delta未改，未换试验ID或补额。",
+    "operation_identity": "原operation/origin/run恢复链、scope/budget/output路径未变；epoch删除不移除claim或job续验。",
+    "ledger": "已有前后快照均为2170 calls，2148 settled/22 unknown；call与budget_scope指纹一致。只能支持该观察窗未新增/改写相关账本，不追认历史unknown成功。",
+    "s05_attribution": "时间线撤回双入口重复记账解释，记为11 agent settled +10 knowledge_embedding settled +1 knowledge_embedding unknown；原记录与费用保留。未另作根因调查。",
+    "business_inputs": "两份原结果与原scenarios/integrated-trajectories的实际SHA均匹配verification及baseline；核心11pass/4partial/6not_run、来源fail未提升。"
+  },
+  "directory_backend_decision": {
+    "additional_backend_action_required_for_this_package": false,
+    "contracts": [
+      {"path": "docs/execution/semantic-runtime/dogfood-core-repairs.md:65", "section": "4.2", "basis": "先完成4.1并测量；仅串行装配仍造成实际可见慢响应或连接占用时，定位主要耗时再只批量化相关读取。查询形状不能代替性能证据，没有剩余问题就不改后端，四类不是预建清单。"},
+      {"path": "docs/execution/semantic-runtime/dogfood-core-repairs.md:82", "section": "4.3", "basis": "普通三路径有界观察；历史因果无法追溯可停止调查，根因未确认及既有API阻断仍保留。"}
+    ],
+    "measurement": {"objects": 100, "http_status": 200, "elapsed_ms": 712, "directory_thread": 770295, "transaction_ms": 612.103857, "prepared_execute_count": 422, "prepared_execute_server_ms": 92.032328},
+    "ordinary_observation": {
+      "completed_grouped_request_range_ms": [783, 2141],
+      "ordinary_models_checks": 8,
+      "ordinary_models_all_status": 200,
+      "representative_same_mount_completion_to_next_start_ms": [2011, 2023, 2008, 2007, 2019],
+      "raw_max_overlap_preserved": 2,
+      "explanation": "原始timeline确有StrictMode setup/cleanup启动取消与新setup请求短重叠，main.tsx保留StrictMode；没有把原始最大值改零。取消后跨挂载/导航间隔不冒充同页轮询间隔。取消样本有一条客户端结束未观测，随后DB样本活跃事务为0，只证明采样事实，不证明fetch abort立即终止服务端。"
+    },
+    "reason": "结果已能显示，正常刷新按完成后约2秒继续，普通API可用，未复现PoolTimedOut；612ms事务表示一个目录连接持有期，不是100对象占100连接。422次执行证明逐项装配仍在，但未给出剩余可见阻断或需批量化的具体owner耗时证据；也没有本包约定的硬毫秒门槛可据2141ms单次自动触发四类改造。",
+    "historical_api": "有限复核完成，根因未确认；旧核心阻断继续保留，不以当前成功或一次代码加载宣布修复。",
+    "s05_initial_loss": "有限复核完成，根因未确认；准备期工程GREEN不替代历史因果，也不重发原失败链。"
+  },
+  "verification_evidence": {
+    "mode": "读取并核对既有完整日志，未重新运行",
+    "all_16_manifest_logs_read_in_full": true,
+    "recorded_exit_codes": "verification.json列明16项均完整exit 0；未把截断、超时或早先失败当作通过。",
+    "results": [
+      {"log": "directory-regression-final.log", "result": "passed，10组，包括新增迟到首批选择断言"},
+      {"log": "related-pagination.log", "result": "passed，3组"},
+      {"log": "request-context.log", "result": "passed，9组；真实Pi循环/序列化本地mock payload，27个provider请求、0网络attempt/官方请求"},
+      {"log": "evidence-tool-shape.log", "result": "passed，8组；实际invokeRecorded/execute、RustTransport HTTP、Pi session、本地协议，0外部请求；不是实际Rust provider或真实模型证据"},
+      {"log": "evidence-source.log", "result": "passed，10组；现有真实隔离存储与本地协议边界，不代表真实模型来源判断"},
+      {"log": "preparation-lease.log", "result": "2 passed /0 failed；真实隔离MySQL、model not_called"},
+      {"log": "records-green.log", "result": "5 tests OK；记录校验工具样例"},
+      {"log": "types-selection.log", "result": "tsc --noEmit已完整结束，exit 0来自manifest"},
+      {"log": "build-web-selection.log", "result": "构建完成；保留outDir和chunk size警告，不将警告变为新增性能任务"},
+      {"log": "rust-format.log", "result": "空输出文件，exit 0依verification记录；无独立新运行"},
+      {"log": "clippy.log", "result": "检查完成；未据简短日志额外推断未记录的调用参数"},
+      {"log": "build-api.log", "result": "API单独构建完成，另有built-binaries.json指纹"},
+      {"log": "build-worker.log", "result": "Worker单独构建完成，另有built-binaries.json指纹"},
+      {"log": "materials-delivery.log", "result": "材料510项与增量声明通过、16项脚本测试OK；日志明确业务未验证且未运行验收命令"},
+      {"log": "architecture.log", "result": "模块依赖、SQL位置与表归属检查通过"},
+      {"log": "architecture-tests.log", "result": "12 tests OK"}
+    ],
+    "failed_attempts_preserved": [
+      {"log": "directory-red.log", "interpretation": "env -u顺序错误；不是行为RED"},
+      {"log": "directory-red-attempt2.log", "interpretation": "真实行为RED，重叠2!=1"},
+      {"log": "directory-regression.log", "interpretation": "旧慢刷新断言已通过，随后登录框等待超时；patch以先logout修复场景衔接，未放宽业务断言"},
+      {"log": "initial-directory-selection-red.log", "interpretation": "真实行为RED，迟到表详情1!=0；最终10组GREEN包含同断言"},
+      {"log": "records-red.log", "interpretation": "旧CLI不识别--require-pass，两种完整记录均出现RED"}
+    ],
+    "environment_boundary": "实现阶段证据分别涉及真实隔离MySQL、真实Milvus配本地embedding协议、可执行合成SQLite平台、Pi SDK1.3.0及本地模型协议。真实存储和SDK不能合并解释为真实供应商效果；真实平台未在本包验证。前后账本指纹及各日志officialRequests=0支持本次付费调用0。"
+  },
+  "business_record_boundary": {
+    "core_ids": ["P01", "P02", "P06", "P07", "S01", "S02", "S03", "J01", "J06", "J19", "T02", "A03", "A09", "A10", "A11", "A12", "A14", "A15", "G01", "G03", "G08"],
+    "source_trajectory": "time-and-definition-continuation",
+    "core_states_unchanged": {"pass": 11, "partial": 4, "not_run": 6},
+    "full_100_states_unchanged": {"pass": 17, "partial": 10, "fail": 1, "blocked_environment": 1, "not_run": 71},
+    "full_10_states_unchanged": {"pass": 1, "fail": 1, "not_run": 8},
+    "source_trajectory_status_unchanged": "fail",
+    "completion_gate_run": false,
+    "source_decision": "仅可提出是否允许后续新attempt补读syn_vehicle的vehicle_id/is_lab_unit/telemetry_consent定义；本审查没有作出该许可决定。",
+    "remaining_blockers": ["必要车辆资格结构的范围决定及原轨迹前提如何接受的明确记录", "供应商恢复后适用原核心真实补验", "既有API核心阻断；有限调查停止不等于解除"],
+    "no_regrading": "仅核绑定、引用与版本适用性，未重判未变全库case，也未用修复本身给原失败/partial/not_run升级。"
+  },
+  "limits": [
+    "这是限定独立静态审查；未亲自重跑任何实现阶段检查，也未验证生产部署、真实平台或用户验收。",
+    "来源四份本地证据按其明示时间与当前/历史边界使用；未重新打开原wire证明历史阅读过程，不将当前完整根伪装为当时合法声明。",
+    "grade保留原结构验证语义，不能自动识别全部业务质量或失败real+成功mock的拼接；本次核心绑定元数据没有该拼接，不把这一结论推广到未审全库。",
+    "SHA标识相关文件字节与本次可追溯输入；大文件只审所述函数/接缝，哈希不表示全文审计。38份既有业务支持文件主要核引用覆盖、指纹与必要成功轨迹元数据，不是重新判分。",
+    "CURRENT持续更新；本报告记录观测时的语义状态与固定绑定，不冻结其完整未来正文。",
+    "报告没有修改实现、测试、CURRENT或业务记录，没有授权补读、重新付费试用、提交、推送或部署。"
+  ],
+  "fingerprints": {
+    "algorithm": "SHA256",
+    "task_after_files": {
+      "apps/web/src/features/knowledge/KnowledgePage.tsx": "c208682b2dc7c5efb2fefe8578be669ea61fb469ac4162d2e172c16ba88aabfc",
+      "apps/web/src/shared/api.ts": "a284114b0febf95a934c8814245c12235af6ccbfd54fa9d7a67365c9fa6addff",
+      "tests/mvp/check-knowledge-experience-browser.mjs": "321ef255ef62765c5f5dfa70784efb28deb5d5c5c3c3b77cb91c8f4cd341fbb3",
+      "apps/agent/session/resources.ts": "8dcc29f6273b47ced40fff0cb61b0136554f30ed519b9bdda3595b14531dc087",
+      "apps/agent/tools/data-tools.ts": "53838b7834221e5961e8a74efa2cfbd2b82fd49aeb25f59fecffdf488011ab6a",
+      "crates/data-agent/src/use_cases/source_identity.rs": "3bcb09fd6cd2b538eef1c55d1572a8ba85a554891f1ddd5a54fb24866a5a7a4c",
+      "crates/data-agent/src/use_cases/deliver_run.rs": "ab1b6c61624f25ea8e4847a5cb227f34c1d4f7ab8e41b062b026f809cabcd0f4",
+      "docs/dogfood/cockpit/grade.py": "2d209ae885c26cd72a89ea8775bee59dc57fbc204205b8abcea7236cab961556",
+      "scripts/test_cockpit_records.py": "e88de6acefb1dceb62ce5e7ba582bbb1654a7fd2cb4bdded0242ca4dc486fe3e",
+      "README.md": "455468c78e96c708d06158038e21920e38b2afcc93886ce51c1014e430193177",
+      "docs/development.md": "b59c3e55d548348574ec9956e981d16a8f6427be678d89cac903b7698eea879c",
+      "docs/execution/semantic-runtime/integrated-dogfood.md": "2982f10e51665d909e5494f8fd9a3f8093624ccaf8389e764a210e79e082a8db",
+      ".local/dogfood-runs/semantic-20261102/quality-and-coverage.json": "975423281ecdd60c4a96b8b585a61daad9e1cb4e552b4fc8f358239f50ff5fbf",
+      ".local/dogfood-runs/semantic-20261102/evidence/S05-lease-timeline.json": "ff6e8ed566f9f1fda938f550b72f2732ef3e87ea70f97640f0a05d401f6c45e6",
+      "docs/architecture/implementation-design.md": "43f926c4afe57409f4b27745c5276409456f1ee7b4726a3bd91f2c2242edcbd7",
+      "docs/dogfood/cockpit/OPERATIONS.md": "b25de8673ada0fac888fdb4e04736442004429af742e79caf84acb3e2da8334c",
+      "docs/execution/semantic-runtime/dogfood-core-repairs.md": "b899b177db1b9ffdb01936bca08e7a9977fea126c849d52287eddf265c59c749"
+    },
+    "direct_seams_and_rules": {
+      "AGENTS.md": "5f758399140248da4b9bca827c06bf1c8d012e684c3f76bc7a178ccaccb756fe",
+      "crates/data-agent/src/use_cases/data_tools.rs": "c0f21f8c0ba66f5d8eca46f672e3ee71f07423e13f4a9e3621f67fe9b789cb2e",
+      "crates/data-agent/src/use_cases/knowledge.rs": "25154e02c28410bbbe23923b0fedc5bccb896551157cd66635882755795e0676",
+      "crates/data-agent/src/modules/conversations/store.rs": "8e92f884fdc70f2561addafb6226c481aa00432b148334f4d4aa86cebda4464a",
+      "crates/data-agent/src/modules/jobs/store.rs": "17dde9e3690c92463a692466a0f6f162c2c012d2b6c929f917930841e12476e0",
+      "apps/web/src/features/knowledge/SourceSynchronization.tsx": "00682a718540105395da336b37e115a90f0d8333b907606bc4d0479cd8eb1e04",
+      "apps/web/src/features/knowledge/KnowledgeDirectory.tsx": "771444c07d39f428c4d0a219352a20b3d15f38c47309aa72da1f6f32643f25d4",
+      "apps/web/src/main.tsx": "b079f7b73183b1b38adb6d10b58c93119fe7ff8a34a8be30ec295b6c75b2121a"
+    },
+    "review_inputs_and_observations": {
+      ".local/checks/dogfood-core-repairs-20261104/task.patch": "a2234acf7ed7b251eb1aceee7372070f6f8ae50f58ec726bfa4edc2c7a55efc2",
+      ".local/checks/dogfood-core-repairs-20261104/scope.json": "70231c0af359797d6b1952bcd51383b500eecf947a298c9c6e4717c229c305bb",
+      ".local/checks/dogfood-core-repairs-20261104/verification.json": "f6666fef12e92889ec9f51beebd660f66bbdcf96a9940b9ce6ddb0a63ff9684e",
+      ".local/checks/dogfood-core-repairs-20261104/provider-public-status-check.json": "a5d8486b434abc0014762d31d84b1c8e791454d22e2d0461b846c6e15b89ed24",
+      ".local/checks/dogfood-core-repairs-20261104/evidence-applicability.json": "64ab8caf16199b3ed2912707c37f2e35e0b46f2a15d225514b9fd51a88ff5df7",
+      ".local/checks/dogfood-core-repairs-20261104/directory-measurement.json": "8f8552328b6808c79c38660a2589fc5999c14c42177ab6a4276563bb35ad3936",
+      ".local/checks/dogfood-core-repairs-20261104/directory-bounded-observation.json": "e70c9fa10ecb58541896d42fcfa58a927b429996ffccd2001be78c8fb10f216e",
+      ".local/checks/dogfood-core-repairs-20261104/source-premise-and-quality.json": "f560d9fcc78de78f69f8afa549839f9ef115d39c3aaf48244d6a6db1d544ac00",
+      ".local/checks/dogfood-core-repairs-20261104/source-roots.json": "aa8894996de3a2ffba8e2f48e52e2bc3838276a859dd35eeb3ae9c016f8b6af6",
+      ".local/checks/dogfood-core-repairs-20261104/source-premise-conclusion.json": "444cc5244d325d94e3f9b30cc1b823a6ab3b4c9865cff43275af9bb7a8761ba9",
+      ".local/checks/dogfood-core-repairs-20261104/vehicle-qualification-source.json": "0dfd9101500ee10f21dd1bbec5d9da791f427c774f46c92cec091a6d35a462eb",
+      ".local/checks/dogfood-core-repairs-20261104/ledger-before.json": "f57ece24e70eea9233dd3001fbf2f9074d48f08fd3b892e4f745412d611315d7",
+      ".local/checks/dogfood-core-repairs-20261104/ledger-after.json": "21072f71c9887ae47fc08779c119131ca0f2b846bc0fff35764964c3c736fcd4",
+      ".local/checks/dogfood-core-repairs-20261104/results-integrity.json": "8bbbf5ecfc5050d996a12f3c4101625b46cfac8ade3afc10e65b067e7bfababa",
+      ".local/checks/dogfood-core-repairs-20261104/trajectories-integrity.json": "8f196336a0fa89f8865c48bfcec88911f68ec26fc91a7643da448f6c640c4a6a",
+      ".local/checks/dogfood-core-repairs-20261104/built-binaries.json": "786843bc9564f2a75b2953893cc3a1990b67d88b9adebb057b63f9832a5298db",
+      ".local/dogfood-runs/semantic-20261102/evidence/directory-pool-complete-7bbf0d16-76dd-4eef-afbf-da267ebd8b7d.json": "e3f9f3d9ed1017db7ac7f0010d9bd1aa1b8fee4bfa2c00a41cc1bee3dbed5785",
+      ".local/dogfood-runs/semantic-20261102/evidence/directory-pool-cancel-f420ccf8-41bc-415a-9cb5-c16c2590fb84.json": "5a00c9c2ff032bf17a28583fe1d30e78fbcf07e05fa2ea51ebe8cc6ed1e4f359",
+      ".local/dogfood-runs/semantic-20261102/evidence/directory-pool-reopen-333fc121-2bc2-4c47-9c47-a414a2f04a1d.json": "a07f0f3cd850ad8ba4694a21f8f2afce13a85da1218202967e0174327284f1b6"
+    },
+    "logs_read_in_full": {
+      ".local/checks/dogfood-core-repairs-20261104/directory-regression-final.log": "ae63a523411ea44bdd7208740df6fee537433abdb395fb9d2405c7eec687ddaa",
+      ".local/checks/dogfood-core-repairs-20261104/related-pagination.log": "79a3b92b320c12c2b99f46375e80d2ac1bdc5e915cab63eb556bc94e982ae5c3",
+      ".local/checks/dogfood-core-repairs-20261104/request-context.log": "d461078673aa6f3a6aea3eb4cae94c3fd6b7755b83410a5ae1e2c03653d5a1c3",
+      ".local/checks/dogfood-core-repairs-20261104/evidence-tool-shape.log": "a55947e3d3d475761c3b0935c9295aabaac8cc35b03328070982840a436d7de7",
+      ".local/checks/dogfood-core-repairs-20261104/evidence-source.log": "f59077066ae5cf50781c243fe31dfce6bc830ed1caee7931a014ff8c8b853966",
+      ".local/checks/dogfood-core-repairs-20261104/preparation-lease.log": "c7a27e5584134a5fde3f2bc93782dd22d0585be44ab42f6aaa71096180ff6112",
+      ".local/checks/dogfood-core-repairs-20261104/records-green.log": "02d7617346e9f87c612f55601950949c0ec7e0d104526080a7bc5831b1c51497",
+      ".local/checks/dogfood-core-repairs-20261104/types-selection.log": "f50fe1624c26efd634a1d99eca879f67e3b5cd1acf5f9e6642de5a0f1687cd94",
+      ".local/checks/dogfood-core-repairs-20261104/build-web-selection.log": "29e2a4d0e765b1e684959a1db0dc773cda9455c51525e85297b165ba19f2b7dc",
+      ".local/checks/dogfood-core-repairs-20261104/rust-format.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      ".local/checks/dogfood-core-repairs-20261104/clippy.log": "42a92cab7b0eae269f10ff5e0fcf94560c52a1b8518c789a941d655ebfaedca4",
+      ".local/checks/dogfood-core-repairs-20261104/build-api.log": "426660ef7bfaf2ecdb5356281308d11073598b126558360460b22aa77d7a67a4",
+      ".local/checks/dogfood-core-repairs-20261104/build-worker.log": "eb9b5662c391c0c6780d20bc5f07924037257af77cf47c2d7df59a16ae614c9c",
+      ".local/checks/dogfood-core-repairs-20261104/materials-delivery.log": "c4e88990ab87485cc0337e6a9fdf1013f95be2f5718ca22c2043d72705359075",
+      ".local/checks/dogfood-core-repairs-20261104/architecture.log": "22dc3d342be957d6cd58f7652c8408e83c992c6a6cc1909256fee66ef29ce70a",
+      ".local/checks/dogfood-core-repairs-20261104/architecture-tests.log": "efe7224c5314c96fbedaf7eba83deb2df6aedf172e37c94bf6ce188f0301b3f0",
+      ".local/checks/dogfood-core-repairs-20261104/directory-red.log": "858ce77edfeaa418ba39e733e5227eb29827fe2a4ff8b407af657e3acc71d853",
+      ".local/checks/dogfood-core-repairs-20261104/directory-red-attempt2.log": "bbdc234697de90bfd1e8737fe8e0786093d0d09e9d554118061415ea3a6fef0e",
+      ".local/checks/dogfood-core-repairs-20261104/directory-regression.log": "3e44b24ccc413a28a2e99ff9b152ab5b803648e7a8cafd1cbacc2e965a117e23",
+      ".local/checks/dogfood-core-repairs-20261104/initial-directory-selection-red.log": "90e74f64539ce2829dd7fe50c8803589274ccb0a5900269cd35ac3092baa891d",
+      ".local/checks/dogfood-core-repairs-20261104/records-red.log": "712dd63cf1a68cfe888cc9c3850c933d52d392663da448c5fc31c02b0ceb7b11"
+    },
+    "unchanged_business_inputs": {
+      ".local/dogfood-runs/semantic-20261102/results.json": "4c7b9473fee5def7671cd28916332a7dcc3674f432a7902c20a14789938935ac",
+      ".local/dogfood-runs/semantic-20261102/trajectory-results.json": "9778c25b1d6b976580b63072c76fb1049ea8f0a02085712d8b2d244450ae2fa9",
+      "docs/execution/semantic-runtime/integrated-trajectories.json": "e9865bbf31bc883eef03a227b848dc9906514108896baba7f6a79747dd7aa65e",
+      "docs/dogfood/cockpit/scenarios.json": "b05022bda132f01182446bd7278440c204e392e300801f404ed007c4f1f9eb92"
+    },
+    "existing_core_pass_support": {
+      ".local/dogfood-runs/semantic-20261102/attempts/A09-81780a35-03ce-4ccb-875f-ac677e3a9f54.json": "443840bfa13b373487fede1e41016a89e0f7bab6b09b619a4fc70ea683e8ea50",
+      ".local/dogfood-runs/semantic-20261102/attempts/A09-8eba11b7-32b7-4352-8190-312286d17742.json": "fec0303ffcb8deed2060a38c1289079daa732ba6500b5da2266daafcfc4245d3",
+      ".local/dogfood-runs/semantic-20261102/attempts/A10-de5a4e65-7919-4e32-9f6f-8285ef1a63ea.json": "420ed9724dea927f5f8b2b088ca55fcc1ede9a9a08ac225a477e3ecca830c674",
+      ".local/dogfood-runs/semantic-20261102/attempts/A11-2dc271f7-a051-4b43-a734-3c3a1e54f53a.json": "874982a68c2d86e7ae25a07be42710578b292ffa7c02cf9868ab2dd9b2a47a04",
+      ".local/dogfood-runs/semantic-20261102/attempts/A11-f28b54c4-34e0-4e5a-8c66-d662a2a9584a.json": "869ad678c91d452ce61820aa7e4e95ba163a3f94fbf2cb264b7ebc654e35d054",
+      ".local/dogfood-runs/semantic-20261102/attempts/A12-a1457d6b-5f44-47fd-a4e6-ffaea0e6d276.json": "6df65ab19e7e978f591e00636abf480a2dbc5893b296b8f997feddedc5d954fb",
+      ".local/dogfood-runs/semantic-20261102/attempts/A15-3f9bfef3-1a1e-41e1-aa98-d45e9ffac0ca.json": "53b560e422e7de4d559ff7619277f076b760801967356660201bbdabece4c552",
+      ".local/dogfood-runs/semantic-20261102/attempts/P06-b0ccbca3-7a59-4903-8ac6-96c017567759.json": "9879f95bda6b99505f66238b04998fa802304a7760edd32479db416e3c655434",
+      ".local/dogfood-runs/semantic-20261102/attempts/P07-a33341b1-273e-49b4-9fb3-43181537b106.json": "f488e83243a1bbabca103f41aed862de1d7a5ac024bac7ea3f0b20cbed311fc4",
+      ".local/dogfood-runs/semantic-20261102/attempts/P07-b3c942be-c7ab-4d5d-8318-7b0ddcd55f64.json": "a91bbf001941a77b32afb2dc73c6971fa741abcd6e00afbf87c7974494ecce6f",
+      ".local/dogfood-runs/semantic-20261102/evidence/A10-post-forget-diagnostic.json": "be3e7d87c8404f504fec295fb1f1c3235575981ff04dd6058e5644b7abc62954",
+      ".local/dogfood-runs/semantic-20261102/evidence/A10-post-forget-original-A11-message.json": "9b0b9443346f5e1f51d309edcb0866c988e2d9a768f21478a99297451d2a55dc",
+      ".local/dogfood-runs/semantic-20261102/evidence/A10-removal-receipt.json": "166258ad65a7cfe92bbe5511e455e51bddee90b38adc23dc8fe52b556fbb09fe",
+      ".local/dogfood-runs/semantic-20261102/evidence/A11-api-isolation.json": "6ab12bcca514944e8ffdb5e45f554082518910455e358589efd5c91d328371dc",
+      ".local/dogfood-runs/semantic-20261102/evidence/A14-complete-ui.json": "90059a3351e1d2b2e3ebb932f513e5839357e8086f8858f82b95a3af14d588a2",
+      ".local/dogfood-runs/semantic-20261102/evidence/A15-3f9bfef3-1a1e-41e1-aa98-d45e9ffac0ca-selection.json": "ca219c59641f645c4817041018d039cf4250f4011edace922957ad97d0638721",
+      ".local/dogfood-runs/semantic-20261102/evidence/A15-native-read-evaluation.json": "9fd1c812d30e05e1f95c6c4a01d92806e601580a060884b59321c10eff65f98f",
+      ".local/dogfood-runs/semantic-20261102/evidence/G01-independent-reference-ui.json": "7d7b65a7055d911078bf034a580903d61778bf867fd692508c2d5bcd2a812c45",
+      ".local/dogfood-runs/semantic-20261102/evidence/G01-owner-save-denial.json": "5e5f7aaa2452c42364e548da03ff202c00036c7df690a9a5fc95414aecec8bc3",
+      ".local/dogfood-runs/semantic-20261102/evidence/G01-readonly-inspection.json": "f136bfdbaa5c8c015259a2e52d7fbd4ffcdfb7da873d8c80c3d633f93c901e09",
+      ".local/dogfood-runs/semantic-20261102/evidence/G03-correction-ui.json": "fd88c276905b428f9af7de7c90771d36b255a3f93fea459d8c0da4d7538a1842",
+      ".local/dogfood-runs/semantic-20261102/evidence/P02-source-integrity.json": "5e47bee238b3044a9c3fc6e7ffd1284579f5665027b25e87a2c61734ff3b796a",
+      ".local/dogfood-runs/semantic-20261102/evidence/P06-b0ccbca3-7a59-4903-8ac6-96c017567759-m1.json": "d2a6966d22a530c93e61913d096a6bdcbaa5b8979b879ce8e0dc6d123cfa04bf",
+      ".local/dogfood-runs/semantic-20261102/evidence/P07-a33341b1-273e-49b4-9fb3-43181537b106-m1.json": "d0fe5683c018e2384a01e099daed4e495bf703a25a9dac225573a5f807b48688",
+      ".local/dogfood-runs/semantic-20261102/evidence/P07-recheck-after-refresh.json": "55cdae32a07d995a2d049990489ac1a873876958e993f098bf62114bc7cba7f3",
+      ".local/dogfood-runs/semantic-20261102/evidence/S04-settled-snapshot.json": "0cbf37da1671562bec7d0a5ba624d49a69190be958065089966dfdd9fc2c18e3",
+      ".local/dogfood-runs/semantic-20261102/evidence/memory-after-forget.json": "3d16d5524629f9ad95ac343343d4e27e7ac7237f4a22880fb89a3500b6040080",
+      ".local/dogfood-runs/semantic-20261102/evidence/memory-fresh-retrieval-receipts.json": "9ea81832d330780a6da10a2e7684a9cefdb46dc3cfefb5f2bef58c7112e01a02",
+      ".local/dogfood-runs/semantic-20261102/evidence/memory-recheck-after.json": "de733be582cb9013dbef6e95f3216820057923bc4ef167102cf557a2d4872637",
+      ".local/dogfood-runs/semantic-20261102/evidence/platform-catalog-original.json": "f85e523dfde94f6953f4e0fd97e8cf6510c4376f20e83c7d878db4684ca56382",
+      ".local/dogfood-runs/semantic-20261102/evidence/preflight.json": "b585ae81d49e097901a7d9fc6658d58259fbc2fadb91cdd69e62642c3f226372",
+      ".local/dogfood-runs/semantic-20261102/evidence/skill-public.json": "4e31710e7cc0e642acf65ffbf445b89ae334f7d60ee5d382b6694629c39d7363",
+      ".local/dogfood-runs/semantic-20261102/evidence/source-import.json": "e12cf8b0009a986877a28563e6260559e6b4c19d78d994dd6275d56f6ffe7f50",
+      ".local/dogfood-runs/semantic-20261102/runtime/platform/source-manifest.json": "75441d428c5c4f1f69eea304f835727bf04546d209c567fe86af54c3aa136e6d",
+      ".local/dogfood-runs/semantic-20261102/screenshots/A14-carol-explicit-selection.png": "edd3ee219205297cde51c29241433d8619114b38c515b143a6addd0fc872254c",
+      ".local/dogfood-runs/semantic-20261102/screenshots/A14-handled-not-applied.png": "34ad61fdf2333ff7f0f8848cb1bd568dc4338e288d1ab7b27264a105e8b23c60",
+      ".local/dogfood-runs/semantic-20261102/screenshots/A14-independent-final.png": "113f8fba2100746ebfe45e292ac8bd1b5f2958e9a40535738718e1da41f7258f",
+      ".local/dogfood-runs/semantic-20261102/screenshots/P07-recheck-after-refresh.png": "a013b09164d6b8fa0b06c90c3092446c6d50ba0e02e20e30cc548eea319deb43"
+    }
+  }
+}

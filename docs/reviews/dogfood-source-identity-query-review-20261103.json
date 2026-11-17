@@ -1,0 +1,37 @@
+{
+  "reviewer": "独立限定实施审查代理；未修改实现/CURRENT，未运行测试、构建、端点或付费调用，仅按授权写入本审查记录",
+  "increment": "I3-SOURCE-IDENTITY-QUERY-REPAIR",
+  "conclusion": "passed",
+  "scope_sha256": "f2e87f163b47436c84e48cf0c15296e323b216f28f6ca0a9bb5c105fdb9006af",
+  "summary": "相对本轮before基线的限定增量未发现可确认阻断。source_identity在校验并拒绝空查询后一次形成split_whitespace词列表，M02知识名称/标识查询与平台来源ID目录均按任一词匹配；SQL继续使用绑定参数，原空间、启用状态、kinds、keyset及limit保持。游标binding加入whitespace_any_1匹配语义版本，避免整串匹配的旧绑定被按新语义继续使用。合同及生成类型说明与实现一致；本修复只提高身份发现的多词可用性，不解析或扩大用户正文来源许可。",
+  "findings": [],
+  "scope": {
+    "baseline": ".local/checks/source-identity-query/before/",
+    "reviewed_delta": [
+      "crates/data-agent/src/use_cases/source_identity.rs：一次空白分词、词slice传递、平台ANY词匹配及match_semantics绑定",
+      "crates/data-agent/src/modules/knowledge/store.rs：仅identity_candidate_ids_in_tx的名称/标识按词OR查询",
+      "packages/contracts/schema.json：KnowledgeSearchInput.view的查询语义说明",
+      "packages/contracts/generated/boundary.rs与boundary.ts：对应生成说明",
+      "tests/mvp/check-evidence-source.mjs：双名称limit1真实续页、正文多词排除、旧匹配绑定协议负控及平台多词查询",
+      "docs/architecture/implementation-design.md：身份查询和来源许可边界说明",
+      "docs/CURRENT.md：本轮交付声明及最新修复/未完成事项段落"
+    ],
+    "necessary_seams": "source_identity入口的非空校验和当前绑定字段、M02身份函数的现有过滤/keyset及types::fingerprint序列化哈希。未重读或重审此前source-authority与记忆包，不将指纹覆盖目录视为全目录审查。",
+    "fingerprint_verified": true
+  },
+  "evidence_reviewed": [
+    ".local/checks/source-identity-query/red.log",
+    ".local/checks/source-identity-query/green.log",
+    ".local/checks/source-identity-query/build-api.log",
+    ".local/checks/source-identity-query/build-worker.log"
+  ],
+  "test_assessment": "旧API有效RED在两个独立名称的空白查询上返回0而非1。新增测试以limit1的真实两页分别取得两个精确文档ID，核对bounded/next及最终searched，排除仅正文匹配的多个词，并保持零embedding、空个人资产及authority不变。平台目录查询加入一个不匹配词后，仍沿真实keyset找到business-guide且保留精确SourceKey断言。旧绑定负控保留当前真实游标的位置，仅按旧绑定字段构造旧算法指纹；它是协议构造负控，不是历史实际回执。GREEN完整记录10组passed、3次本地provider请求、0正式请求；API/Worker各有一份完整Finished构建成功日志。原断言未放宽为模糊身份或JSON字符串顺序比较。",
+  "limits": [
+    "此处仅签署限定实施审查；四条正式验收命令尚未执行，不据本记录关闭增量。",
+    "审查没有运行测试、构建、服务端点或付费请求；运行结论仅来自所读完整日志。",
+    "匹配仅是空白名称/ID词的任一子串匹配，不是NLP、同义词分析、用户许可解析、单题规则或业务表名单生成。",
+    "修改不扩大正文来源允许集，不将身份发现或roots_complete等同于用户授权；模型选择过宽schema来源是独立仍未通过的问题。",
+    "旧绑定拒绝测试为协议构造负控，不能表述为回放了历史真实游标或真实回执。",
+    "本地工程和模拟provider证据不替代真实来源原题复验，也不证明已消除该原题的预算耗尽或完成后续月份输入。"
+  ]
+}

@@ -1,0 +1,316 @@
+{
+  "schema": 1,
+  "increment_id": "I3-SEMANTIC-DOGFOOD",
+  "reviewer": "Codex 独立实现审查者；未参与本轮实现；本次未委派代理或启动工作流",
+  "reviewed_at": "2026-11-16T09:38:10.475711+00:00",
+  "scope_sha256": "d474c79100ccee23f44ccdfcb297116864a4155d4d6cd96b20b94a558e5ff1c1",
+  "conclusion": "passed",
+  "conclusion_scope": "仅对开工快照以来限定的19个文件的工程实现、测试依据和报告边界作出通过结论；不批准完整I3或09关闭。",
+  "engineering_conclusion": "passed",
+  "delivery_ready": false,
+  "overall_increment_complete": false,
+  "summary": "限定工程审查通过，未发现本轮新增的确定性正确性缺陷或不当削弱验收。两协议合法工具回合保真、Bridge固定阶段诊断、首次续租和领取夹具修正、维护调用冻结预算与已知用量结算均有对应源码及原始本地证据。整体业务、真实维护、原库授权操作和当前完整50条验收仍未完成，工程结论不能用于关闭I3/09。",
+  "scope": {
+    "kind": "bounded_independent_implementation_review",
+    "baseline": ".local/checks/dogfood-usability-20261116/before-manifest.json",
+    "after": ".local/checks/dogfood-usability-20261116/after-manifest.json",
+    "patch": ".local/checks/dogfood-usability-20261116/implementation.diff",
+    "changed_file_count": 19,
+    "basis": "使用指定implementation.diff界定本轮改动，不使用累计HEAD diff。核对AGENTS.md，以及执行包第一、二、四、五节；当前状态以新REPORT及聚合记录为依据。",
+    "specification": "docs/execution/semantic-runtime/dogfood-report-repairs.md",
+    "report": ".local/dogfood-runs/qa-usability-20261116/REPORT.md",
+    "scope_recomputation": "通过导入scripts/check_delivery.py，实际调用read_delivery(root)及review_scope(root, delivery)重算；未猜测CLI参数。CURRENT只由现有锚定frontmatter函数解析，没有读取其历史正文或使用split解析。",
+    "formal_contract_change": false,
+    "review_actions": "只读源码、冻结快照、公开文档本地副本和原始收据；只写本审查JSON。未运行产品、测试runner、模型、网络或数据库操作，未修改产品、测试、CURRENT、成绩或授权。"
+  },
+  "reviewed_files": [
+    "README.md",
+    "apps/agent/session/deliver.ts",
+    "apps/agent/session/task-projection.ts",
+    "apps/agent/transport/server.ts",
+    "crates/data-agent/resources/deepseek/README.md",
+    "crates/data-agent/src/modules/ingestion/prefill.rs",
+    "crates/data-agent/src/modules/ingestion/prefill/input_tokens.rs",
+    "crates/data-agent/src/modules/runtime/model_calls/store.rs",
+    "crates/data-agent/src/use_cases/deliver_run.rs",
+    "crates/data-agent/tests/maintenance_billing.rs",
+    "crates/data-agent/tests/tool_contract_version.rs",
+    "docs/architecture/implementation-design.md",
+    "docs/architecture/runtime-modules.md",
+    "migrations/202611160001_maintenance_call_budget.sql",
+    "tests/mvp/check-maintenance-billing.mjs",
+    "tests/mvp/check-native-skills.mjs",
+    "tests/mvp/check-prefill-materials.mjs",
+    "tests/runtime/check-bridge.mjs",
+    "tests/runtime/check-request-context.mjs"
+  ],
+  "findings": [],
+  "evidence": [
+    {
+      "id": "scope-and-freeze",
+      "assessment": "passed",
+      "paths": [
+        ".local/checks/dogfood-usability-20261116/review-scope.json",
+        ".local/checks/dogfood-usability-20261116/before-manifest.json",
+        ".local/checks/dogfood-usability-20261116/after-manifest.json",
+        ".local/checks/dogfood-usability-20261116/implementation.diff",
+        "scripts/check_delivery.py"
+      ],
+      "observations": [
+        "diff列出19个改动文件；实际读取并核对对应源码，不把已存在的累计改动纳入本次实现结论。",
+        "审查开始及收尾重算的scope均为本记录scope_sha256。",
+        "after-manifest所列文件的当前SHA-256全部匹配，审查收尾仍一致。",
+        "通过现有read_delivery读取开工快照与当前frontmatter，50条acceptance除前两条报告命令外完整相同，包括ID、expected、requirements及timeout；当前仍为active。",
+        "审查目标文件不在当前verification_inputs覆盖的目录内，写入本记录不会改变已核对的代码/测试范围指纹。"
+      ]
+    },
+    {
+      "id": "provider-replay-and-source-gates",
+      "assessment": "passed_for_local_sdk_boundary",
+      "source_locations": [
+        {"path": "apps/agent/session/task-projection.ts", "line": 40},
+        {"path": "apps/agent/session/task-projection.ts", "line": 76},
+        {"path": "apps/agent/session/task-projection.ts", "line": 175},
+        {"path": "apps/agent/tools/data-tools.ts", "line": 305},
+        {"path": "apps/agent/tools/data-tools.ts", "line": 352},
+        {"path": "tests/runtime/check-request-context.mjs", "line": 386}
+      ],
+      "paths": [
+        ".local/checks/dogfood-usability-20261116/protocol-both-red.json",
+        ".local/checks/dogfood-usability-20261116/protocol-green.json",
+        ".local/checks/dogfood-usability-20261116/deepseek-payloads-green.json",
+        ".local/checks/dogfood-usability-20261116/anthropic-payloads-green.json",
+        ".local/checks/dogfood-usability-20261116/request-policy.log"
+      ],
+      "observations": [
+        "RED明确有两项失败：DeepSeek原非空reasoning_content变为空串；Anthropic原thinking/signature块消失。其余12项通过，不能把这份RED称为真实供应商HTTP拒绝。",
+        "修改只移除unresolvedInCurrentTurn及为删除thinking服务的定位/过滤分支。pending/sourceReady隐藏投影、技能段隐藏、控制身份投影、错误回执不解锁、context_reset刷新和session_before_compact取消仍在。",
+        "实际DeepSeek序列化共3份请求：首次隐藏正文/执行工具；route后原reasoning_content、route-before-exec调用与对应ready回执完整保留，后续get_query回合也保留其原reasoning。",
+        "实际Anthropic序列化共2份请求：第二份含原thinking及合成signature、anthropic-route的tool_use和同ID的tool_result，成功回执为source_context_ready=true；工具集合随ready恢复。测试使用Anthropic原生stream接缝，不是更换provider标签。",
+        "GREEN的14项包含未决、成功解锁、错误ready、待刷新/已刷新、恢复原输入、权限相关隐藏以及原生compact负控。data-tools与resources的来源事实和权限规则未被本轮修改。",
+        "Pi仍负责会话、工具循环、原生压缩、重试和取消。本轮没有新增Agent循环、强制业务工具流水线或从模型自然语言授予执行权限。"
+      ]
+    },
+    {
+      "id": "bridge-failure-localization",
+      "assessment": "passed",
+      "source_locations": [
+        {"path": "apps/agent/session/deliver.ts", "line": 50},
+        {"path": "apps/agent/transport/server.ts", "line": 49},
+        {"path": "tests/runtime/check-bridge.mjs", "line": 96}
+      ],
+      "paths": [
+        ".local/checks/dogfood-usability-20261116/bridge-green.log"
+      ],
+      "observations": [
+        "新增回调只报告有限DeliveryStage；原server单一catch选择固定阶段/调用点，保留宿主finish路径和受控错误分类，没有增加重试或改变业务状态。",
+        "真实deliver的checkpoint_restore及ModelRuntime.create入口注入覆盖普通Error、TypeError和受控model_timeout；断言500响应、准确阶段、受控码、零网络尝试以及秘密/资料哨兵不进入日志或响应。",
+        "失败不写成finished；同会话互斥、指定run/epoch取消和原传输边界继续有对应检查。P06-02历史epoch1的异常原因仍未知，新增诊断能力不证明历史根因已修复。"
+      ]
+    },
+    {
+      "id": "preparation-lease-and-claim-fixture",
+      "assessment": "passed_for_reproduced_failure_and_regressions",
+      "source_locations": [
+        {"path": "crates/data-agent/src/use_cases/deliver_run.rs", "line": 24},
+        {"path": "crates/data-agent/src/modules/jobs/store.rs", "line": 62},
+        {"path": "crates/data-agent/tests/tool_contract_version.rs", "line": 151},
+        {"path": "crates/data-agent/tests/tool_contract_version.rs", "line": 283}
+      ],
+      "paths": [
+        ".local/checks/dogfood-usability-20261116/lease-preparation-before.log",
+        ".local/checks/dogfood-usability-20261116/lease-lock-waits.json",
+        ".local/checks/dogfood-usability-20261116/lease-preparation-green.log",
+        ".local/checks/dogfood-usability-20261116/contract-recovery-green.log"
+      ],
+      "observations": [
+        "原始before日志是1通过/1失败，错误owner负控出现Lock wait timeout而非lease_lost；未把后续绿色覆盖首败。",
+        "172份锁采样中，164份为background_jobs主键UPDATE被Sleep连接持有的行锁阻塞，另8份为会话锁等待。该证据支持本轮泄漏事务的诊断方向，但不能唯一还原未记录阻塞者的历史首败。",
+        "首次renew_claim在启动prepare future之前完成，随后消费interval首个立即tick，后续仍按ttl/3续租；失效初始领取不会先启动准备事务再由首次心跳取消它。jobs owner仍按job/worker/epoch/running/未过期校验，未放宽TTL。",
+        "夹具只把首次领取前的固定250ms等待改成5秒内依据实际领取状态的等待；首次成功即退出，保留同一job/conversation/message、epoch=initial+1、attempts=0。",
+        "原1000ms TTL及实际2500ms持锁等待、准备期间attempt不增加、交付后正常attempt、原scope/chain/output/message、真正过期拒绝、旧epoch及错误owner拒绝的断言均保留。",
+        "定点原始日志为2通过/0失败；原顺序完整组合为7通过/0失败，另有明确排除的delivery_process，不是零项过滤通过。"
+      ]
+    },
+    {
+      "id": "maintenance-budget-facts-and-owner",
+      "assessment": "passed_for_local_engineering",
+      "source_locations": [
+        {"path": "crates/data-agent/src/modules/runtime/model_calls/store.rs", "line": 10},
+        {"path": "crates/data-agent/src/modules/runtime/model_calls/store.rs", "line": 68},
+        {"path": "crates/data-agent/src/modules/runtime/model_calls/store.rs", "line": 109},
+        {"path": "crates/data-agent/src/modules/ingestion/prefill.rs", "line": 589},
+        {"path": "crates/data-agent/src/use_cases/semantic_prefill.rs", "line": 121},
+        {"path": "crates/data-agent/src/use_cases/source_preparation.rs", "line": 339},
+        {"path": "migrations/202611160001_maintenance_call_budget.sql", "line": 1}
+      ],
+      "paths": [
+        ".local/checks/dogfood-usability-20261116/provider-docs/models.md",
+        ".local/checks/dogfood-usability-20261116/provider-docs/pricing.md",
+        ".local/checks/dogfood-usability-20261116/provider-docs/chat-completion.md",
+        ".local/checks/dogfood-usability-20261116/maintenance-billing-green.json"
+      ],
+      "observations": [
+        "本地官方副本明确：context_window=1048576，包含输入与输出；max_tokens允许1至393216。取整个总窗口作为保守输入上界，不臆测窗口减输出的更紧上界。",
+        "价格表的Flash/Pro峰值缓存未命中输入及输出费率分别为每百万0.30/1.20与1.32/3.96美元。代码使用相同单位；configured_model声明费率低于此依据时拒绝新预留。",
+        "分片仍使用原公开BPE和profile.input_limit，实际JSON仍发原profile.output_limit作为max_tokens；没有缩小正常材料或输出上限来取得通过。",
+        "runtime私有store拥有新budget_json的写入；可空ALTER不回填旧issued/unknown。新调用核对trial不可变指纹，冻结格式版本、完整原profile、服务输入上界及输出cap。",
+        "结算读取原call的trial与快照，不依赖后来传入的profile；旧NULL快照要求原trial/指纹一致，保持原输入/输出限额，未把新上界补给历史调用。非issued状态拒绝结算，unknown没有新增释放或重发能力。",
+        "已知超界用量先写实际费用、仅释放该call预留并将call设为settled、trial设为breached，随后返回budget_exhausted。实际semantic_prefill及source_preparation的分析/复核出口均先commit，再处理该错误。没有在路由或use_cases中绕过模块owner直接改账本表。"
+      ]
+    },
+    {
+      "id": "maintenance-owner-persistent-results",
+      "assessment": "passed",
+      "basis": "抽读maintenance-billing-green.json引用的五场景原始Rust owner日志及当前测试断言，没有仅采信聚合passed字段。每个日志均实际运行1项Rust测试且零失败。",
+      "scenarios": [
+        {
+          "name": "above_estimate",
+          "path": ".local/checks/mvp-2d436c943a43da80/maintenance-billing.log",
+          "line": 5,
+          "result": "实际HTTP分析与复核均max_tokens=4096；每次预留319488微美元，快照输入上界1048576、本地输入策略32768。每次usage为65536/20，owner succeeded；两次已结算实际费用合计39370，trial active；仅另一unknown的319488仍占用。"
+        },
+        {
+          "name": "input_exceeded",
+          "path": ".local/checks/mvp-ea6c7242f9316525/maintenance-billing.log",
+          "line": 5,
+          "result": "usage=1048577/20；实际费用314598已提交，call settled、trial breached，另一unknown的319488保持；owner budget_unavailable，测试继续验证后续reserve拒绝。"
+        },
+        {
+          "name": "output_exceeded",
+          "path": ".local/checks/mvp-3df029afaaca6fa3/maintenance-billing.log",
+          "line": 5,
+          "result": "实际请求cap=4096，回执usage=100/4097；实际费用4947已提交，call settled、trial breached，另一unknown的319488保持；后续reserve拒绝。"
+        },
+        {
+          "name": "usage_missing",
+          "path": ".local/checks/mvp-ed35ed270ef3bf98/maintenance-billing.log",
+          "line": 5,
+          "result": "prefill owner为unknown/model_usage_unknown，当前call仍issued、usage为空；spent=0，当前调用及原unknown合计638976预留保持，未伪造结算或释放。"
+        },
+        {
+          "name": "late_usage",
+          "path": ".local/checks/mvp-454a763d6dad5209/maintenance-billing.log",
+          "line": 5,
+          "result": "新call在传入不同trial且输入/输出限额均变为1的profile时仍用原快照结算19685。旧issued先拒绝漂移profile，再以原profile对32769输入按旧32768限额结算并标breached；旧budget仍NULL。原legacy-unknown的NULL、state及14746占用保持；trial最终spent=29540、reserved=14746。"
+        }
+      ]
+    },
+    {
+      "id": "test-expectations-and-materials",
+      "assessment": "passed",
+      "paths": [
+        "tests/mvp/check-maintenance-billing.mjs",
+        "crates/data-agent/tests/maintenance_billing.rs",
+        "tests/mvp/check-prefill-materials.mjs",
+        ".local/checks/dogfood-usability-20261116/prefill-budget-diagnostic-failure.json",
+        ".local/checks/dogfood-usability-20261116/prefill-after-fixture-budget-failure.json",
+        ".local/checks/dogfood-usability-20261116/prefill-materials-attempt4-receipt.json",
+        ".local/checks/dogfood-usability-20261116/prefill-materials-attempt4.log",
+        ".local/checks/dogfood-usability-20261116/maintenance-neighbor-receipts.json",
+        ".local/checks/dogfood-usability-20261116/prefill-field-evidence.log",
+        ".local/checks/dogfood-usability-20261116/source-preparation.log",
+        ".local/checks/dogfood-usability-20261116/document-preparation.log",
+        ".local/checks/dogfood-usability-20261116/shared-embedding.log"
+      ],
+      "observations": [
+        "材料夹具原500000微美元在已有spent=2457、reserved=319488时无法再容纳319488的新预留，总需641433；原失败记录确有budget_exhausted/budget_unavailable，具备独立的整数费用依据。",
+        "将纯回环随机隔离库夹具调整为5000000，调用上限仍40，原材料、输入策略、输出cap与业务断言不变，不改变真实试用账本。中间非法金额产生invalid_input/invalid_prefill且没有签发模型调用，不能算产品RED。",
+        "原新runner过滤到0项和遗漏夹具环境的失败均保留；当前runner要求日志明确为1 passed，避免退出0但实际未执行的假通过。",
+        "当前材料收据未超420秒，elapsed=204.971秒；原Rust材料检查实际13通过。主材料检查保留密集输入、中文/长SQL、同版续读首中尾、草稿引文、人工值与引用质量断言。",
+        "主材料日志记录26份输入计量，BPE估计2970至14189、本地策略32768、计费输入预留1048576、输出cap4096、每次预留319488，最大实际payload为52480字节；分片估计与计费上界已明确区分。",
+        "四项相邻收据均为exit_code=0、未超时、零官方请求；对应原始日志保留字段尾部材料、来源修订/未知占用、文档人工正文保护、1024维向量回执复用及原trial冻结的检查。它们证明本地接线，不是收费真实维护闭环。"
+      ]
+    },
+    {
+      "id": "native-skills-and-operation-recovery",
+      "assessment": "passed_for_engineering",
+      "paths": [
+        "tests/mvp/check-native-skills.mjs",
+        ".local/checks/dogfood-usability-20261116/native-skills-receipt.json",
+        ".local/checks/dogfood-usability-20261116/native-skills.log"
+      ],
+      "observations": [
+        "新增700行同版附件的首段与尾段读取，以及真实Pi会话恢复后原attachment-read-call回执、operation/origin映射和持久检查点断言；原正文分页、越界/未选/旧版拒绝没有删除。",
+        "附件读取和SKILL.md读取在恢复时沿原预算scope及原副作用身份接回；现有公共Skill停用、下一次准入/读取与同输入恢复拒绝、平台执行权限负控仍保留。",
+        "收据48.917秒、未超240秒，原始日志8项通过、零官方请求。此证据不证明A15原题真实模型已经读取并采用原checklist。"
+      ]
+    },
+    {
+      "id": "report-inheritance-and-business-denominators",
+      "assessment": "accurate_partial_delivery_boundary",
+      "paths": [
+        ".local/dogfood-runs/qa-usability-20261116/REPORT.md",
+        ".local/dogfood-runs/qa-usability-20261116/results.json",
+        ".local/dogfood-runs/qa-usability-20261116/trajectory-results.json",
+        ".local/dogfood-runs/qa-usability-20261116/inheritance-assessment.json",
+        ".local/dogfood-runs/qa-repair-20261115T065901Z/results.json",
+        ".local/dogfood-runs/qa-20261114T010142Z/evidence/G03-before-meaning.json",
+        ".local/dogfood-runs/qa-20261114T010142Z/evidence/G03-accepted-not-saved-meaning.json",
+        ".local/dogfood-runs/qa-20261114T010142Z/evidence/G03-saved-meaning.json",
+        ".local/checks/dogfood-usability-20261116/acceptance-preservation.json",
+        ".local/checks/dogfood-usability-20261116/approval-blocks.json"
+      ],
+      "observations": [
+        "独立重新计数：100项为19 pass/4 partial/2 blocked_authorization/75 not_run；10轨迹为1 partial/9 not_run；固定core_21为9 pass/3 partial/1 blocked_authorization/8 not_run。必过time-and-definition-continuation仍为not_run。",
+        "相对父报告仅五项总状态变动：P01/A14/A15从not_run变partial，G03变pass，G08变blocked_authorization；其余原状态与历史证据保留。新增聚合明确是同一原trial，新增模型与付费请求均记0。",
+        "继承评估引用的9个治理/UI/Skill owner当前源码哈希与记录一致；没有把这些未变路径解释成思考回放修改后的真实采用复验。",
+        "抽核G03原始HTTP证据均200：保存前版本1，接受后仍版本1且entries完全相同，仅maintenance字段改变，人工保存后版本2。故接受不直接生效的原人工三态可以继承；这不证明新索引成功或普通对象owner正例。",
+        "P01原库联合权限证据、A14当前完整采用、A15原题真实读取采用仍明确partial。S08保留历史成功，但当前字段明确说明删除thinking过滤后的真实代表链未复验。T02原拆分pass不覆盖原第二条已接收消息恢复。",
+        "审批记录的两项原库/平台权限动作均executed=false，且明确未改变原平台权限、trial授权或新增收费；这些记录是阻塞证据，不能视为业务操作通过。",
+        "README与REPORT保持已有资料可分析、维护收费未开放、原库未迁移、日常服务未更新的边界。原50条义务和完整100/10分母没有被免费工程结果替代。"
+      ]
+    },
+    {
+      "id": "common-engineering-records",
+      "assessment": "passed_as_recorded_not_rerun_by_reviewer",
+      "paths": [
+        ".local/checks/dogfood-usability-20261116/common-engineering.log",
+        ".local/checks/dogfood-usability-20261116/binary-fingerprints.json",
+        ".local/checks/dogfood-usability-20261116/maintenance-binary-fingerprints.json"
+      ],
+      "observations": [
+        "原始通用日志含同源Schema 677项、cargo fmt、clippy -D warnings、TypeScript、Web构建、模块/SQL位置/表owner检查、12项架构测试及锁定运行检查，均到达完成输出。Web包大小提示是构建警告，没有写成零警告或额外阻断。",
+        "冻结二进制证据记录的受影响Rust源与迁移哈希同当前源码一致；本审查未启动这些二进制，也不据此宣称原试用库、日常服务或部署已更新。"
+      ]
+    }
+  ],
+  "delivery_obligations": [
+    {
+      "id": "core-and-source",
+      "location": {"path": ".local/dogfood-runs/qa-usability-20261116/REPORT.md", "line": 28},
+      "status": "incomplete",
+      "trigger": "尝试以当前工程绿色记录关闭I3/09或声称真实核心能力已完整通过。",
+      "consequence": "core_21尚有3项部分、1项授权阻塞、8项未跑；必过来源轨迹未跑，不能满足现有业务成绩门。S08修复后的代表链及复杂口径、记忆和真实采用仍须相应证据。"
+    },
+    {
+      "id": "real-maintenance",
+      "location": {"path": ".local/dogfood-runs/qa-usability-20261116/REPORT.md", "line": 41},
+      "status": "blocked_authorization_and_not_run",
+      "trigger": "将本地协议替身和新随机库中的迁移成功解释为原试用库的真实维护已开放。",
+      "consequence": "原库尚未应用新列，真实预填保持关闭；新增/变更来源至整理、人工采纳、索引和检索回源的收费闭环没有完成，也未取得供应商实际账单。"
+    },
+    {
+      "id": "original-library-and-permissions",
+      "location": {"path": ".local/dogfood-runs/qa-usability-20261116/REPORT.md", "line": 47},
+      "status": "blocked_authorization",
+      "trigger": "恢复原库、执行其初始化/迁移或临时撤回原隔离平台读取权限。",
+      "consequence": "自动审批已拒绝对应动作，未执行；G08还缺同一成功结果的合法已保存报告基线。不能用新库权限负控或阻塞记录代替原业务链通过。"
+    },
+    {
+      "id": "complete-current-acceptance",
+      "location": {"path": ".local/dogfood-runs/qa-usability-20261116/REPORT.md", "line": 53},
+      "status": "not_run_complete",
+      "trigger": "将若干受影响工程检查、记录校验或本独审结论代替当前完整50条验收。",
+      "consequence": "完整当前收据尚不成立。原expected、requirements、超时、核心清单及来源轨迹义务继续有效；工程审查通过不批准增量关闭。"
+    }
+  ],
+  "limitations": [
+    "本次仅作限定独立实现审查及本地只读指纹/JSON核对，没有重新执行工程测试；运行结果依据明确列出的冻结原始日志和收据，不是审查者新跑的结果。",
+    "两协议检查使用真实锁定SDK转换与合成返回；Anthropic signature是合成哨兵，未验证供应商真实验签、HTTP接受或模型效果，也没有证明历史真实HTTP 400的因果。",
+    "请求上下文检查的宿主flag是本地受控输入，不能独自替代Rust生产者、真实路由准入或完整来源业务链；本轮未修改相关权限规则，原完整义务仍保留。",
+    "官方服务上界与峰值价格依据仅核对指定本地官方文档副本及其相关段；结论限对应型号/版本，没有联网重取资料或取得实际供应商账单。",
+    "本轮锁采样与负控回归支持当前修复；历史租约首败、固定睡眠首次空领取和P06-02 epoch1的唯一原因仍不能由现有记录反推。",
+    "原库迁移/撤权、真实维护、真实核心补验和原已接收消息恢复未由本审查执行或补全；原trial、scope、unknown及授权不得因本记录而重置、释放、转移或延期。"
+  ]
+}

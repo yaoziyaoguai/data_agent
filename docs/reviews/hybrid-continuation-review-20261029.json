@@ -1,0 +1,620 @@
+{
+  "schema": 1,
+  "increment": "I2-HYBRID-RETRIEVAL",
+  "reviewed_on": "2026-10-29",
+  "reviewer": "independent-continuation-reviewer / agent-a0fd25d8ffec176ba，未参与本增量产品或测试实施",
+  "conclusion": "passed",
+  "scope_sha256": "c4ce3ff0249c0df1358009b442a660a18476866646403ef6ee01a7b587d56b85",
+  "summary": "沿原05独立审查聚焦核CURRENT的HYBRID-SCOPE组时限1200→1800秒变更，未发现阻断。递归对照变更前合同并用当前全部声明文件重算旧scope仍一致，确认产品、测试、Makefile及原业务断言未变；只有组级600秒/50%余量和审查状态/证据正文变化。真实预检查在原1200秒上限被杀，末项Rust成功输出后仅余2.609秒，同一共享索引脚本单跑完整通过，支持增加组级余量；没有被杀瞬间语句快照，不推断具体停点或排除所有故障。原43文件实现审查、定位/事务修复及预期纠正依据保留，旧manifest/diff仅作历史且未覆盖。第三次正式绑定及后续预检查失败保留；1800秒下新四组尚未取得完整绑定收据，05仍未完成，完成后停06入口，不实施06–09。",
+  "scope": {
+    "base_head": "04d27d06ba7b97d4cf3e288d4cf9e6300ef491a9",
+    "baseline_manifest": ".local/hybrid-continuation-20261028-a3asuqf1/before-manifest.json",
+    "baseline_manifest_sha256": "bb648271e0096d59c4882aa57c327b5b6c4baeb236ab9c3ac84187636b3726fb",
+    "baseline_file_count": 373,
+    "final_manifest": ".local/hybrid-continuation-20261028-a3asuqf1/final-scope.json",
+    "final_manifest_sha256": "0eb27c440a654430289ea20fdb9418a16736bfc063041fee11e3ab1de2c387d4",
+    "final_diff": ".local/hybrid-continuation-20261028-a3asuqf1/final-continuation.diff",
+    "final_diff_sha256": "9c8637da79bb0093eba29b566afb9b79680aa4bd06faef4a7a85c9d8dbf5946c",
+    "final_diff_lines": 11532,
+    "total_changed_files": 43,
+    "modified_files": 41,
+    "added_files": [
+      "tests/mvp/check-retrieval-progress.mjs",
+      "tests/mvp/source-recall-fixtures.mjs"
+    ],
+    "deleted_files": 0,
+    "reviewed_files": [
+      "Makefile",
+      "crates/data-agent/src/modules/ingestion/mod.rs",
+      "crates/data-agent/src/modules/ingestion/store.rs",
+      "crates/data-agent/src/modules/knowledge/mod.rs",
+      "crates/data-agent/src/modules/knowledge/store.rs",
+      "crates/data-agent/src/modules/retrieval/excerpts.rs",
+      "crates/data-agent/src/modules/retrieval/mod.rs",
+      "crates/data-agent/src/modules/retrieval/search_reply.rs",
+      "crates/data-agent/src/modules/retrieval/store.rs",
+      "crates/data-agent/src/modules/retrieval/vector.rs",
+      "crates/data-agent/src/types/mod.rs",
+      "crates/data-agent/src/use_cases/context_authority.rs",
+      "crates/data-agent/src/use_cases/data_tools.rs",
+      "crates/data-agent/src/use_cases/knowledge.rs",
+      "crates/data-agent/src/use_cases/knowledge_embeddings.rs",
+      "crates/data-agent/src/use_cases/knowledge_sources.rs",
+      "crates/data-agent/src/use_cases/mod.rs",
+      "crates/data-agent/src/use_cases/source_limits.rs",
+      "crates/data-agent/tests/index_recovery.rs",
+      "crates/data-agent/tests/knowledge_dependencies.rs",
+      "crates/data-agent/tests/retrieval_channel_coverage.rs",
+      "crates/data-agent/tests/source_excerpt_recall.rs",
+      "docs/CURRENT.md",
+      "docs/architecture/implementation-design.md",
+      "docs/execution/semantic-runtime/hybrid-retrieval.md",
+      "tests/mvp/check-agent-library.mjs",
+      "tests/mvp/check-context-dependencies.mjs",
+      "tests/mvp/check-hybrid-retrieval.mjs",
+      "tests/mvp/check-retrieval-allowed-set.mjs",
+      "tests/mvp/check-retrieval-channel-coverage.mjs",
+      "tests/mvp/check-retrieval-channel-faults.mjs",
+      "tests/mvp/check-retrieval-content-units.mjs",
+      "tests/mvp/check-retrieval-deadline-order.mjs",
+      "tests/mvp/check-retrieval-deep-advance.mjs",
+      "tests/mvp/check-retrieval-excerpts.mjs",
+      "tests/mvp/check-retrieval-progress.mjs",
+      "tests/mvp/check-retrieval-ranking.mjs",
+      "tests/mvp/check-retrieval-scope.mjs",
+      "tests/mvp/check-shared-index-todo.mjs",
+      "tests/mvp/check-source-limits.mjs",
+      "tests/mvp/check-source-recall.mjs",
+      "tests/mvp/harness.mjs",
+      "tests/mvp/source-recall-fixtures.mjs"
+    ],
+    "changed_since_first_binding_files": [
+      "crates/data-agent/src/modules/knowledge/store.rs",
+      "crates/data-agent/src/modules/retrieval/store.rs",
+      "crates/data-agent/src/modules/retrieval/vector.rs",
+      "crates/data-agent/src/use_cases/knowledge.rs",
+      "crates/data-agent/tests/knowledge_dependencies.rs",
+      "crates/data-agent/tests/retrieval_channel_coverage.rs",
+      "docs/CURRENT.md",
+      "docs/architecture/implementation-design.md",
+      "docs/execution/semantic-runtime/hybrid-retrieval.md",
+      "tests/mvp/check-hybrid-retrieval.mjs",
+      "tests/mvp/check-retrieval-channel-coverage.mjs",
+      "tests/mvp/check-retrieval-content-units.mjs",
+      "tests/mvp/check-retrieval-excerpts.mjs",
+      "tests/mvp/check-retrieval-progress.mjs",
+      "tests/mvp/check-retrieval-ranking.mjs",
+      "tests/mvp/check-shared-index-todo.mjs"
+    ],
+    "changed_since_second_binding_files": [
+      "crates/data-agent/src/use_cases/knowledge.rs",
+      "tests/mvp/check-shared-index-todo.mjs",
+      "docs/architecture/implementation-design.md",
+      "docs/execution/semantic-runtime/hybrid-retrieval.md",
+      "docs/CURRENT.md"
+    ],
+    "verification": "前次独立审查已核373份before、42文件范围和完整11328行diff及首次冻结后14文件语义delta；其记录/manifest/diff保存在second-binding历史。当前再次逐份重算373份before，独立重建41修改、2新增、0删除的43项清单及完整11532行diff，与新manifest全部path/change/before/current SHA和补丁逐字一致。从第二次冻结diff在内存重建42份历史文件并逐份核旧SHA，独立对比当前5文件delta，与tail-claim-delta.json/.diff逐项逐字一致；除该5文件外其余前次范围未变。check-shared-index-todo原本已在before，本次首次进入增量清单，属于modified而非新增。语义复核聚焦事务/资格/租约/回执、透明响应门闩及保留原2+3+6项断言，不重复全旧diff或扩展面板。首次冻结后累计变化现16文件；本次字节重建不冒称重新语义审阅全部旧补丁。原累计HEAD脏diff不作本轮范围。",
+    "fingerprint_method": "只读调用当前scripts/check_delivery.py的read_delivery、fingerprint(for_review=True)和review_scope，由审查者自行计算；未执行main、--complete或验收命令。",
+    "fingerprint_file_count": 406,
+    "contract_sha256": "d2099c80c63de81aaff0b473a4088656fbbbf35c8e00efc3846802176ee7acaf",
+    "decisions_sha256": "c6456f454f3efb5763440301d1ea3298c518024f0fede2cb6be7dd86fa103e3b",
+    "checker_sha256": "444fa265c86b916224f538c8cf7ec11eeab3699f3ef0c14e9e58df93929a2bdf",
+    "current_record": "docs/CURRENT.md",
+    "current_record_sha256_at_review": "70bde0f8186bd612c9c59af36257dd234905785dee9277896d5e6b4109722631",
+    "increment_status_at_review": "active",
+    "review_status_before_record_update": "pending",
+    "fingerprint_limits": "review_scope排除审查记录自身及review指针，绑定当前交付合同、406项验收输入、registry、AGENTS、18项决定和检查器。CURRENT正文不在本次verification_inputs中，故另外记录本次审查时SHA；交付合同和18项决定仍单独绑定。范围指纹与历史43文件增量清单各有用途，均不构成不可篡改证明。",
+    "historical_freeze_applicability": "final_manifest、final_diff、43文件计数和verification字段保留上次事务修复审查时的历史冻结，不代表此次重审完整旧diff。两个冻结文件均未覆盖且SHA保持；本次与该43项逐份核对，除CURRENT外42项仍匹配原SHA。CURRENT原冻结SHA为fc164730374d16c954e8ef09e52e3b5c45dbce0567fd133c1366898bccd6594a，已由后续进度和本次组级时限合同变更取代；当前合同及CURRENT SHA以本次字段为准。",
+    "historical_frozen_contract_sha256": "19bb8f23fec7c897635abfd3107a43a9780b992e2db802c18ec61234425354e4",
+    "historical_frozen_current_record_sha256": "fc164730374d16c954e8ef09e52e3b5c45dbce0567fd133c1366898bccd6594a"
+  },
+  "scope_timeout_amendment": {
+    "reviewed_on": "2026-10-29",
+    "conclusion": "passed",
+    "blocking_findings": [],
+    "review_boundary": "沿原05独立审查，仅核CURRENT组级时限合同delta、新局部证据及绑定指纹；未重审全部旧diff，未运行DB、Cargo、服务、完整scope预检查或正式验收。仅更新此审查JSON，CURRENT由主线维护。",
+    "previous_review": {"path": ".local/hybrid-continuation-20261028-a3asuqf1/review-before-scope-timeout-amendment.json", "sha256": "6d1ae7e667a8b14f29dc71a487d726b22f58fb5b2b876316f29b7756bb681359"},
+    "previous_scope_sha256": "f2bfed82d9907c0ce0167d51b5ebb7ebcbe1363732d201713b10af17acdf19dc",
+    "previous_current": {"path": ".local/hybrid-continuation-20261028-a3asuqf1/current-before-scope-timeout-amendment.md", "sha256": "9d27d343c84a44b17688e3e7cedf464ba942d36beba6c8a2613429ed87ee66ea"},
+    "new_scope_sha256": "c4ce3ff0249c0df1358009b442a660a18476866646403ef6ee01a7b587d56b85",
+    "contract_delta": {
+      "path": "delivery.increment.acceptance[1].timeout_seconds",
+      "acceptance_id": "HYBRID-SCOPE",
+      "command": ["make", "verify-hybrid-scope"],
+      "old_seconds": 1200,
+      "new_seconds": 1800,
+      "increase_seconds": 600,
+      "increase_fraction": 0.5,
+      "other_frontmatter_changes": ["delivery.increment.review.status: passed→pending", "environment: 进度及证据正文"],
+      "independent_comparison": "按JSON frontmatter边界解析，递归比较恰为以上timeout、review.status和environment三处；delivery仅timeout及review.status两处。去除状态/审查/收据指针并将新timeout还原1200后，合同逐值一致。requirements、expected、command、verification_inputs、不变量、non_goals及18项决定均未变。",
+      "implementation": "scripts/check_delivery.py:255–293按相同argv合组并取组内最小timeout，run_command对整组子进程wait(timeout)，到期以SIGKILL终止进程组；本次只增加该外层make命令组的累计时限。",
+      "unchanged_limits": "产品共同10秒绝对检索工作期限、所有单例等待上限、模型/Embedding调用及预算、1000唯一候选/5轮/元信息50/正文30、场景、答案和全部业务断言均未变。其余组仍为HYBRID-RECALL 5400、HYBRID-RECOVERY 1200、HYBRID-BOUNDARIES 300秒。"
+    },
+    "input_integrity": {
+      "fingerprint_file_count": 406,
+      "old_contract_with_current_files_scope_sha256": "f2bfed82d9907c0ce0167d51b5ebb7ebcbe1363732d201713b10af17acdf19dc",
+      "verification": "用变更前delivery和当前全部声明文件独立重算，仍得到原scope；当前406项声明文件SHA与第三次正式绑定before.files排除REVIEW自身后逐项一致。旧/新合同下files字典相同，checker与decisions摘要均不变，新scope变化仅来自timeout合同。产品、测试和Makefile未改。",
+      "historical_manifest_check": "历史final-scope.json的43项中仅docs/CURRENT.md与历史SHA不同，其余42项保持；final-scope.json及final-continuation.diff自身SHA仍与原审查记录一致，未重写历史冻结。",
+      "contract_delta_index": {"path": ".local/hybrid-continuation-20261028-a3asuqf1/scope-timeout-contract-delta.json", "sha256": "42f1ef39128f8413129b543d0a0a4bb899c660c75a7ffc2691f398c9728b75ea", "limit": "定位索引；结论来自审查者独立合同递归比较和指纹重算。"}
+    },
+    "timing_assessment": {
+      "scope_duration_ms": 1200016,
+      "scope_exit_code": -9,
+      "scope_timed_out": true,
+      "seconds_to_final_fixture_creation": 1135.574,
+      "seconds_remaining_at_fixture_creation": 64.426,
+      "seconds_to_last_success_output": 1197.391,
+      "seconds_remaining_after_last_output": 2.609,
+      "standalone_log_wall_seconds": 57.912,
+      "previous_standalone_log_wall_seconds": 63.079,
+      "previous_complete_scope_log_wall_seconds": 1014.619,
+      "actual_sleep_wake_records_in_window": 0,
+      "independent_timing_sources": "独立核post-sleep-command-02.log的birthtime/mtime、对应末项夹具目录.local/checks/mvp-487e3d1a61016da9的birthtime及单跑/历史日志的birthtime至mtime跨度，分别对上诊断中的1135.574、1197.391、57.912、63.079、1014.619秒；组时限与终态另据原checker及preflight记录。夹具创建时间不等同于逐语句trace或严格进程起始时间。",
+      "observed_results": "被杀scope此前各正式脚本已有成功终态，最后共享索引脚本的原2+3+6 Rust套件也全过；但新增并发场景和末项passed终态未取得，故末项和整组仍失败。相同产品/测试输入的共享索引脚本随后单跑完整exit0，原2+3+6与正式HTTP并发保存、两个目标indexed/attempt1、完整9514投影及真实Milvus尾部断言均通过。",
+      "conclusion": "原1200秒组预算在最后Rust成功输出后只余2.609秒，同一末项单跑完整通过，支持为累计实耗增加600秒/50%组级余量。1800秒在相同夹具时点约余664.426秒，属于有证据的组级运行余量。",
+      "limits": "未取得被杀瞬间逐语句或SQL快照，不能断言准确停点或据单跑排除所有产品故障；无Sleep/Wake记录仅对应本次预检查窗口。文件时间跨度是本地可变计时证据，不构成完整执行trace。增加余量不保证1800秒下必过，正式绑定仍需实际完整执行。"
+    },
+    "evidence": [
+      {"path": ".local/hybrid-continuation-20261028-a3asuqf1/scope-timeout-diagnosis.json", "sha256": "304b3f3ac89ff15e61f123385f65b47c39dd2d3c6a483150df7539a183b3801d", "result": "7项引用的hash及bytes逐项独立匹配，计时另独立stat重算；索引解释不代替原始日志。"},
+      {"path": ".local/hybrid-continuation-20261028-a3asuqf1/post-sleep-preflight.json", "sha256": "143d9745b185ba53efa912de95013b05a52e5d931bbd4f931fd2c1223d7bbad2", "result": "preflight_only、scope 1200016ms、exit -9、timed_out=true、inputs_unchanged=true；失败后原两组未执行，不能作为正式收据。"},
+      {"path": ".local/hybrid-continuation-20261028-a3asuqf1/post-sleep-command-02.log", "sha256": "d9fbf81f8d4fb75afba2e62c8c480b8ee96e78a2b98692b10317a1c32934bed6", "result": "解析全日志终态，前序正式脚本与末项原2+3+6通过；新增并发场景及整组无完整成功终态，保留失败。"},
+      {"path": ".local/hybrid-continuation-20261028-a3asuqf1/post-sleep-shared-index-standalone.log", "sha256": "1f899e75d1895567eaa65b0cbb4b9fc1dfb0cfa641403f655855b8efdf976f88", "result": "相同输入单跑完整passed=true，两个目标indexed/attempt1/error=null、真实门闩事件及proxyErrors=[]，原2+3+6和新增正式长文强断言保留。"},
+      {"path": ".local/hybrid-continuation-20261028-a3asuqf1/post-sleep-scope-power-events.log", "sha256": "a30d2bc80e983e886c76e18735c3526d93193aa434ced89d8a412b0982d872c3", "result": "本次20分钟预检查窗口实际Sleep/Wake/DarkWake记录0；不与第三次正式失败的历史休眠诊断混同。"},
+      {"path": ".local/hybrid-continuation-20261028-a3asuqf1/post-sleep-orphan-cleanup.json", "sha256": "b3d7c0debc6155fb1ef22fc6d638048a8af78328cf6761d25cdb3ed41751c356", "result": "主线保留超时遗留隔离目标的身份核验及精确清理记录；审查者仅读identity/target/cleanup，未执行数据库或清理。"},
+      {"path": ".local/hybrid-continuation-20261028-a3asuqf1/pre-fourth-local-evidence-index.json", "sha256": "c7542c42512d0aae5a63ce97fe5ea48c11f7268b8d5b36b9bf835448a92ea13f", "result": "7项局部证据hash及bytes全部独立匹配；不是四组绑定收据。"},
+      {"path": ".local/hybrid-continuation-20261028-a3asuqf1/missing-groups-preflight.json", "sha256": "6f88d73cd7d19dafde1931d862288214378b8afcc87d3f057b1669a041e249bb", "result": "preflight_only，RECOVERY 94759ms、BOUNDARIES 33920ms，均exit0且未超时，inputs_unchanged_excluding_review=true。"},
+      {"path": ".local/hybrid-continuation-20261028-a3asuqf1/missing-groups-command-03.log", "sha256": "624e7beff0a22a48a626471cee2a13f659eba8276a3f43d41c666072ce73b8c6", "result": "完整局部日志：Embedding库2项、启动10项和shared-embedding原9组passed，真实租约/预算/回执与集合场景保留，officialRequests=0；构建行不额外冒称API独立重编。"},
+      {"path": ".local/hybrid-continuation-20261028-a3asuqf1/missing-groups-command-04.log", "sha256": "0d1416c65c8fccd6f946c4916a15053f639bdc8374757d6ad13df929eed4e02e", "result": "模块依赖/SQL/表归属静态检查通过、architecture12项OK及真实locking完整passed=true。"},
+      {"path": ".local/hybrid-continuation-20261028-a3asuqf1/scope-amendment-materials.log", "sha256": "303bea9c8a491b5f0d49e84f63d38cdaeccb0626438386b4d230bef35646a6c6", "result": "467项材料静态检查passed；不证明业务运行或正式验收完成。"}
+    ],
+    "third_binding_history": {
+      "receipt": {"path": ".local/hybrid-continuation-20261028-a3asuqf1/final-binding-third-failed.json", "sha256": "0a5dbac6abb99ee36c872b1d3d81b921f290985437b0a6b0e0a8eb6bd3aa78b5"},
+      "status": "failed",
+      "recall": {"exit_code": 0, "duration_ms": 2495111, "timed_out": false},
+      "scope": {"exit_code": 2, "duration_ms": 235683, "timed_out": false},
+      "remaining_two_groups": "not_executed",
+      "applicability": "本次只核正式失败状态、命令终态及before文件指纹，不重审第三次全部业务或休眠根因。第三次首组通过与随后scope预检查失败/单跑及补两组预检查均保留原边界，不能拼成新合同四组通过。"
+    },
+    "remaining_gate": "第四次正式绑定尚未启动；须由主线在本次新scope下从首组完整串行执行原四组并保存新绑定收据。不再额外重跑完整scope预检查；全部通过前05保持active、evidence null，完成后停06入口。"
+  },
+  "contract_sources": [
+    "AGENTS.md:117–123，要求防漂移、独立预期、变更记录、审查及绑定验收",
+    "docs/execution/semantic-runtime/hybrid-retrieval.md:61–63，唯一入口、内部结果与未交付定位",
+    "docs/execution/semantic-runtime/hybrid-retrieval.md:73–79，列绑定DDL、完整来源与原Embedding收尾",
+    "docs/execution/semantic-runtime/hybrid-retrieval.md:87–97，规范身份、owner窄读、原坐标及v1聚合",
+    "docs/execution/semantic-runtime/hybrid-retrieval.md:103–123，共享1000候选/5轮/30主读、SQL替代及共同排序",
+    "docs/execution/semantic-runtime/hybrid-retrieval.md:125–143，共同期限、错误出口、同stage双类型、四组门槛及停止点",
+    "docs/architecture/implementation-design.md，17.3.2完整问句评分、17.4、17.5、17.6、17.6.1及17.8",
+    "docs/execution/semantic-runtime/coverage-and-validation.md:96",
+    "docs/execution/semantic-runtime/compatible-upgrade.md:14，旧目标兼容、显式集合切换及原预算身份",
+    "docs/CURRENT.md:218–240，两次绑定失败、尾部事务反例及既有纠正的原值、新值、依据和证据边界",
+    "docs/architecture/implementation-design.md:823及hybrid-retrieval.md:167，空知识轮询后重开原文事务，保来源/正文owner、原租约/修订/账本边界"
+  ],
+  "implementation_assessment": [
+    {
+      "area": "规范内容与owner边界",
+      "result": "writer与两个SQL owner共用knowledge-statement-window-3、360字符窗口和280步长，绑定space、object/version、entry/path及适用statement。owner对完整和缺失locator均以同版有效层长度和statement映射元信息精确反查原record；只补缺字段，显式冲突拒绝，合法展示子区间仍可用。随后仍单窗口SUBSTRING并核长度/hash，不把全文下行重切、不按query另找窗口。statement正文、scope、statement_content及支持依赖沿原窄读保留。adapter仅将显式statement_id空串视为普通entry，其余已提供字段原样透传，缺身份时不丢显式statement_offset。",
+      "code": [
+        "crates/data-agent/src/types/mod.rs:90",
+        "crates/data-agent/src/modules/knowledge/store.rs:2024",
+        "crates/data-agent/src/modules/retrieval/vector.rs:257",
+        "crates/data-agent/src/modules/retrieval/vector.rs:1201",
+        "crates/data-agent/src/use_cases/knowledge.rs:1200",
+        "crates/data-agent/src/use_cases/knowledge_sources.rs"
+      ]
+    },
+    {
+      "area": "唯一推进、共享预算及共同排序",
+      "result": "search_stage_outside_lock及drive_launched_stage拥有唯一推进；已接收唯一身份加在途预留始终受1000约束，实际派发共享5轮，启动owner正文按内容占30且失败不退款。新正文读取前吸收已就绪事件，后页按实际消费行数推进。BM25成功空或任一实际分片/页成功均不触发SQL；整路明确全败才以两个SQL来源组成一个词法通道，与dense参加同一次k=60 RRF。精确score仍100，同分用该次channel_score再按record稳定排序；未加对象/类型配额、第三票、第二RRF或新协调器。",
+      "code": [
+        "crates/data-agent/src/use_cases/knowledge.rs:1526",
+        "crates/data-agent/src/use_cases/knowledge.rs:1901",
+        "crates/data-agent/src/modules/retrieval/mod.rs:188",
+        "crates/data-agent/src/modules/retrieval/vector.rs"
+      ]
+    },
+    {
+      "area": "候选词与完整问句计分",
+      "result": "候选筛选继续最多24个首中尾取样词；完整去重问句只参与计分。两SQL owner在同一次库内查询分别计算candidate_hit和完整name_term_hits/term_hits，先三维相关性排序再quota/OFFSET。数值编码基数为完整评分词数T+1，保持name_hit、name_term_hits、term_hits字典序；未扩大候选筛选、二次读取正文或引入reranker。",
+      "code": [
+        "crates/data-agent/src/use_cases/knowledge.rs:1572",
+        "crates/data-agent/src/modules/knowledge/store.rs:1798",
+        "crates/data-agent/src/modules/retrieval/store.rs:125",
+        "crates/data-agent/tests/knowledge_dependencies.rs:2134"
+      ]
+    },
+    {
+      "area": "共同期限及原Embedding账本",
+      "result": "首次范围准备前建立的10秒绝对期限覆盖范围、anchor、索引目标、Embedding、SQL、元信息、owner正文及覆盖COUNT。期后只保必要最终权限/版本/运行核验、正常清理及原Embedding结算。许可前到期不领许可；已确认未发沿原attempt零消耗收尾，已发按actual或unknown结算。结算存储失败明确报错并保留issued及预留，不换身份、不伪成功、不后台无限重试。10秒不是包括全部必要清理和结算的严格HTTP SLA。",
+      "code": [
+        "crates/data-agent/src/use_cases/data_tools.rs:725",
+        "crates/data-agent/src/use_cases/knowledge_embeddings.rs:308",
+        "crates/data-agent/src/use_cases/knowledge.rs:1795",
+        "crates/data-agent/src/use_cases/knowledge.rs:2248"
+      ]
+    },
+    {
+      "area": "完整来源、当前列绑定及实际authority",
+      "result": "保留当前列绑定必要DDL窄核验及legacy投影外完整必要来源。required有效性、实际贡献来源及最终可见内容登记仍分开；最终24KiB裁剪后按mapped/legacy/structure实际可见内容登记，保留的legacy目录仍带完整required_sources，整项省略不多登记。raw锁外读取后的revision在原最终事务重核。没有以保存时合法替代当前合法，也没有把支持ID当已交付支持正文。",
+      "code": [
+        "crates/data-agent/src/use_cases/knowledge.rs:578",
+        "crates/data-agent/src/use_cases/knowledge.rs:1097",
+        "crates/data-agent/src/use_cases/knowledge.rs:1245",
+        "crates/data-agent/src/use_cases/knowledge.rs:1965",
+        "crates/data-agent/src/use_cases/context_authority.rs:624",
+        "crates/data-agent/src/use_cases/data_tools.rs:952",
+        "crates/data-agent/src/use_cases/source_limits.rs:565"
+      ]
+    },
+    {
+      "area": "coverage、内部raw、公开v1及停止点",
+      "result": "search_coverage按实际候选/深度、主读、期限、索引/通道或拒读缺口表达；1000是上限，不要求强制扫满。reply_coverage和content_page/entries_complete分别表达回执容量与具体正文完整性，非零offset尾页仍不冒称全文完整。内部include_raw共用同stage、共同排序、owner和最终核验；相交raw仅末端有界合并且不退身份/名额。公开v1在召回计数前排raw，保持kinds/domain/anchor及本人资产目录，query=*及asset_after不派公共检索或查询Embedding。hits/pending/scan_progress未发布为v2；公开交付/续读归06，公共集合准备和切换归08。"
+    }
+  ],
+  "tail_claim_delta_assessment": {
+    "result": "passed，未发现本delta尚未闭合的阻断；不是当前四组完成结论",
+    "transaction_boundary": "process_index仅在vector且jobs.is_empty时提交旧事务并AppTx::begin。空jobs意味着未持有即将处理的知识批次租约；此前可能完成的旧知识作业收敛随commit正常提交。原文recoverable资格、锁定领取及owner来源/正文读取在新事务内完成，结束普通知识轮询建立的RR快照，不改全局隔离级别、不改owner锁策略。commit/begin失败直接传播，未领取原文前不增加其次数，也未发Embedding。",
+    "eligibility_lease_receipt": "unconfigured判定和实际target沿原调用；recoverable_source_heads在新事务先查精确资格，claim仍按source_kind/object/version、space、最新修订、120秒租约、SKIP LOCKED及三次上限加锁复核。领取epoch、批前/批后续租、修订核验、投影进度及最终finish按原epoch处理；原operation/attempt/profile/trial及实际/unknown回执身份未变。没有新重试、补额、后台收尾器或将错误吞为superseded。",
+    "test_event_order": "旧Rust套件在startWorker=false下先完整跑2+3+6，保持原pending_knowledge>0及所有断言；之后仅一个正式索引循环运行并先清空待办。门闩按COM_STMT_PREPARE/EXECUTE或COM_QUERY识别原知识轮询，仅缓存真实服务器返回帧，在实际响应已产生后才正式HTTP保存同一9514字符长文并等待200；其提交先于门闩释放，随后真实raw-claim和source-head发生。SQL结果、owner正文、Embedding和Milvus响应均透传；超时分支抛错，finally释放只做清理。",
+    "observable_success": "正式RED为MySQL8.4.11/REPEATABLE-READ，knowledge indexed而raw superseded，attempt1、proxyErrors=[]；GREEN重试完整原2+3+6通过，新doc两目标indexed/attempt1/error=null，投影revision1/complete1/applied_position9514，专用真实Milvus尾词及最大offset+length严格等9514。原千表120秒尾部等待与原Rust测试文件未改，未用加超时、改期望或跳例掩盖。",
+    "limits": "并发反例证实该机制和修复；第二次千表失败后隔离库/集合已清理，没有当时数据库快照，不能将原未分类1行确定为superseded，也不声称该局部GREEN已证明下一次千表组或四组通过。MySQL响应门闩只服务本场景，未扩通用故障注入框架。",
+    "code": [
+      "crates/data-agent/src/use_cases/knowledge.rs:647",
+      "crates/data-agent/src/use_cases/knowledge.rs:677",
+      "crates/data-agent/src/modules/knowledge/store.rs:1101",
+      "crates/data-agent/src/modules/knowledge/store.rs:1280",
+      "crates/data-agent/src/modules/knowledge/store.rs:1383",
+      "crates/data-agent/src/modules/knowledge/store.rs:1495",
+      "crates/data-agent/src/use_cases/knowledge_embeddings.rs:51",
+      "crates/data-agent/src/persistence/mod.rs:10",
+      "tests/mvp/check-shared-index-todo.mjs:31",
+      "tests/mvp/check-shared-index-todo.mjs:119"
+    ]
+  },
+  "blocking_findings": [],
+  "resolved_independent_findings": [
+    {
+      "issue": "元信息跨期或出口晚接候选后丢失已消费身份及定位",
+      "status": "closed",
+      "contract": "hybrid-retrieval.md:63、112、127",
+      "trigger": "两个SQL owner实际消费2候选，元信息被隔离锁阻塞到共同期限；RED主读0但pending0。",
+      "fix": "出口将未完成元信息核验的已收身份/定位保留为unverified并入pending，不在期后补正文或冒充已核验命中。",
+      "code": ["crates/data-agent/src/use_cases/knowledge.rs:1829", "crates/data-agent/src/use_cases/knowledge.rs:2143", "crates/data-agent/tests/knowledge_dependencies.rs:2480"],
+      "red": {"path": ".local/hybrid-continuation-20261028-a3asuqf1/pending-metadata-red.log", "sha256": "02467a3036777124d24bad820e375aebd33bd252b8c5f8e2abbc85b98a432392"},
+      "green": {"path": ".local/hybrid-continuation-20261028-a3asuqf1/pending-metadata-green.log", "sha256": "0478232a4245c4e99c53117616a8b2fdd7058a19ded1046e87e2229de8f05450", "result": "当时2项完整通过；后续完整progress已扩为4项并通过，保原消费位置、主读0及pending2的entry/path/Unicode定位。"}
+    },
+    {
+      "issue": "索引覆盖COUNT未受共同期限限制且跨期误报完整",
+      "status": "closed",
+      "contract": "hybrid-retrieval.md:127",
+      "trigger": "仅延迟实际知识覆盖COUNT，已读A/B保留，但RED仍报complete/current。该COUNT在before已存在，是05保留行为缺口。",
+      "fix": "启动前检查原deadline，COUNT使用同一timeout_at；跨期或未完成报incomplete/bounded，最终核验与原结算例外保留。",
+      "code": ["crates/data-agent/src/use_cases/knowledge.rs:2248", "tests/mvp/check-retrieval-deadline-order.mjs"],
+      "red": {"path": ".local/hybrid-continuation-20261028-a3asuqf1/coverage-deadline-red.log", "sha256": "2c7990cc55faf18bd607ca9873524a36ef6a7de002a0571e37116ca352e3267a"},
+      "green": {"path": ".local/hybrid-continuation-20261028-a3asuqf1/review-fixes-deadline-full.log", "sha256": "d228d00d7377444d9ba3401c8f7f3c3c563689ab6e82b4f46e4bd4f7a01d5b86", "result": "完整15组通过；COUNT跨期保A/B但明确缺口，范围或元信息已到期时不再启动COUNT，原许可和结算存储失败断言保留。最新完整scope预检查亦覆盖15组。"}
+    },
+    {
+      "issue": "同目标旧或缺投影版本的indexed回执可误报current",
+      "status": "closed",
+      "contract": "规范身份及reader/writer版本一致；compatible-upgrade.md限定08显式切换与原预算身份。",
+      "trigger": "正式writer/真实Milvus证明当前交付后移除成功回执版本，RED空查询仍报current。",
+      "fix": "writer记录projection_version，覆盖核当前常量；缺失/旧版报incomplete，不改target、不自动重领或全库重建、不变operation/attempt/profile/trial。",
+      "code": ["crates/data-agent/src/modules/retrieval/vector.rs", "crates/data-agent/src/modules/knowledge/store.rs:1547", "crates/data-agent/tests/index_recovery.rs:917"],
+      "red": {"path": ".local/hybrid-continuation-20261028-a3asuqf1/projection-coverage-red.log", "sha256": "d9b789a6cccdb55ce2d09528ed70cca4c9e90247bb605762c3d0540c5f4c4e10"},
+      "green": {"path": ".local/hybrid-continuation-20261028-a3asuqf1/projection-coverage-green.log", "sha256": "a397539bf4a9040a8021c60ccc91b93615dc8defb2f7e6b224e4bddca3b75568", "result": "实际Rust1项通过，缺失/旧版明确缺口，恢复原回执后current；原job/账本/trial及发送数不变。临时runner末尾旧三条文案不作其余索引行为证据，也不证明08切换。"}
+    },
+    {
+      "issue": "两个SQL owner将24候选词同时用于完整问句计分",
+      "status": "closed",
+      "contract": "只裁candidate_terms，完整去重问句参与原相关性计分；不得扩大正式limit掩盖。",
+      "trigger": "长中文默认10内容漏目标，limit30仅作可达控制；正式两owner反例中未选qtoken45名称计分为0而预期1。",
+      "fix": "统一stage生成完整scoring_terms，两owner同一SQL分筛选和评分，动态T+1编码原三维字典序；候选词仍最多24。",
+      "code": ["crates/data-agent/src/use_cases/knowledge.rs:1572", "crates/data-agent/src/modules/knowledge/store.rs:1798", "crates/data-agent/src/modules/retrieval/store.rs:125", "crates/data-agent/tests/knowledge_dependencies.rs:2134"],
+      "red": {"path": ".local/hybrid-continuation-20261028-a3asuqf1/full-query-score-red.log", "sha256": "e793e0976c1f0eeedd69b589a5acf4ee3b0ab0db85dc726e4def8e3af8cec836"},
+      "green": {"path": ".local/hybrid-continuation-20261028-a3asuqf1/full-query-score-green-retry.log", "sha256": "42a5f9c6ea2ced01c5761af773cf572468b88b2715716bafa38ea1c06116cc2b", "result": "正式1项通过；反向对象仅含候选词外qtoken45而无选定词，不进入候选；两owner原record一致，stage候选1/主读1。完整progress4项与ranking10组亦通过。首个green日志的SQL拼接失败未当通过。"}
+    },
+    {
+      "issue": "当前规范键仅缺冗余locator时被当用户invalid_input",
+      "status": "closed",
+      "contract": "hybrid-retrieval.md:87–95，规范身份由owner窄读核验，不能以SQL找回掩盖合法dense缺定位。",
+      "trigger": "夹具先保留target/projection/path/statement等无关字段，仅删原指定locator后，真实工具400/invalid_input。",
+      "fix": "owner按当前对象/同版/有效层元信息精确恢复原record的缺字段；未知键拒绝，显式冲突不覆盖，不按query另选窗，不修写索引。",
+      "code": ["crates/data-agent/src/modules/knowledge/store.rs:2024", "crates/data-agent/src/use_cases/knowledge.rs:1215", "tests/mvp/check-retrieval-excerpts.mjs:125"],
+      "red": {"path": ".local/hybrid-continuation-20261028-a3asuqf1/excerpts-legacy-fields-red.log", "sha256": "548887391bb8ba47d2ad88e38fabda0f731fe36abe164e9184747749a044b03a", "limit": "该探针after=[]仍漏target，不能据此说实体不存在；400与读取边界才是本反例证据。"},
+      "green": {"path": ".local/hybrid-continuation-20261028-a3asuqf1/excerpts-legacy-location-green.log", "sha256": "9da1f476cb2257cb21310631c5aa04e386264d038f88da902bd2642f1b2e3784", "result": "已知键同窗恢复且索引缺字段及正式版本保持；最新完整excerpts的无字面query、vector标签、健康空BM25及九候选正反控补足正式链证据。"}
+    },
+    {
+      "issue": "完整locator绕过record绑定，及缺statement字段误读或报错",
+      "status": "closed",
+      "contract": "原record绑定规范窗和适用statement；正确hash不能替代身份/位置核验，合法子区间仍允许。",
+      "trigger": "offset0 record配offset560/length240和正确hash仍交另一窗；非首有效statement只缺statement_offset报invalid_input，缺statement_id可能误走entry并丢支持依赖。",
+      "fix": "所有locator均核原record和规范窗，展示区间限制在该窗内，只恢复缺失entry/path/offset/length/statement字段，冲突拒绝；保statement正文、text/scope、statement_content及dependencies。",
+      "code": ["crates/data-agent/src/modules/knowledge/store.rs:2024", "crates/data-agent/tests/knowledge_dependencies.rs:2238", "crates/data-agent/tests/knowledge_dependencies.rs:2340", "tests/mvp/check-retrieval-content-units.mjs:166"],
+      "red": {"path": ".local/hybrid-continuation-20261028-a3asuqf1/owner-record-statement-red.log", "sha256": "de937462b267e7b41b2f2a4efc3450e253f5a6ef05248bf5e4f8763772be4055", "result": "两个正式owner反例0过2败。"},
+      "green": {"path": ".local/hybrid-continuation-20261028-a3asuqf1/owner-record-statement-green.log", "sha256": "0bdd653ef30da501dcdf0cbd59d89eb28c21f9cfc598bc37f838231d004afb5c", "result": "owner2过0败，保合法Unicode子窗、unknown/冲突拒绝及四种缺statement定位的支持依赖。该次HTTP四组来自修复前二进制，仅作原兼容前置；后来API/Worker分别重建和完整excerpts7组/channel-faults12组补新owner正式工具证据。"}
+    },
+    {
+      "issue": "adapter缺statement_id时同时丢掉仍显式提供的statement_offset，掩盖冲突",
+      "status": "closed",
+      "contract": "只恢复缺字段，显式冲突必须交owner拒绝；普通entry显式空statement_id的非适用坐标不得破坏合法子窗。",
+      "trigger": "正式协议入口将缺身份时的offset17变Null；真实工具缺statement_id但显式错误offset1仍交目标陈述。",
+      "fix": "仅statement_id显式空串省略不适用statement字段；其他已提供字段原样透传，不在adapter猜身份或重算坐标，原无字段行不新增null属性。",
+      "code": ["crates/data-agent/src/modules/retrieval/vector.rs:278", "crates/data-agent/tests/retrieval_channel_coverage.rs:134", "tests/mvp/check-retrieval-channel-coverage.mjs:23", "tests/mvp/check-retrieval-excerpts.mjs:229"],
+      "red": {"path": ".local/hybrid-continuation-20261028-a3asuqf1/statement-adapter-protocol-red.log", "sha256": "9c9a2c5ff26450512480edd6e608a65afb79cbedbfdcdd61abb8618034402793", "result": "4过1败，显式17被丢。"},
+      "formal_red": {"path": ".local/hybrid-continuation-20261028-a3asuqf1/statement-adapter-formal-red.log", "sha256": "85de7f3776f98900c52cd7d3fab336321b84905a942f89d971f6088ffc523506", "result": "真实工具错误offset1仍交目标正文，canonical及三种缺字段正控已越过。"},
+      "green": {"path": ".local/hybrid-continuation-20261028-a3asuqf1/statement-adapter-protocol-green.log", "sha256": "f848fd83fe6dc4cc7d6fb4f204e2d3e04d35ab4898839a0a82c6340e2154688b", "result": "5过0败；随后正式完整excerpts7组及channel-faults12组通过，保非首陈述原窗口/支持、三种缺字段恢复、显式冲突拒绝及原同record合法entry子窗。"}
+    },
+    {
+      "issue": "空知识轮询的RR旧快照与随后raw锁定领取当前读混用，误退役新提交的文档原文",
+      "reported_by": "主线真实反例，独立审查者复核机制、最小修复及保留边界",
+      "status": "closed",
+      "contract": "新保存原文经统一消费者完整入索引，不得将合法来源误报不存在或superseded；原资格、租约、修订和账本身份保留。",
+      "trigger": "透明代理先取得实际知识轮询响应，正式HTTP提交9514字符新doc后才放行；同一消费者锁定领取新raw作业，普通来源头仍沿旧RR快照，RED raw superseded而预期indexed。",
+      "fix": "仅在空知识批次转原文前commit并AppTx::begin，资格、claim、来源/正文在新事务读取；后续原批次/最终租约和回执路径保持。",
+      "code": ["crates/data-agent/src/use_cases/knowledge.rs:677", "tests/mvp/check-shared-index-todo.mjs:31", "tests/mvp/check-shared-index-todo.mjs:119"],
+      "red": {"path": ".local/hybrid-continuation-20261028-a3asuqf1/tail-claim-formal-red.log", "sha256": "ada6ebc802df5cdf0f62b511bdb362566dfe2aa21940dfffed73c0fd7021e3c0", "result": "真实MySQL8.4.11/RR，raw superseded/attempt1，knowledge indexed，代理错误为空；严格断言失败。"},
+      "green": {"path": ".local/hybrid-continuation-20261028-a3asuqf1/tail-claim-formal-green-retry.log", "sha256": "74f41f78a32550a7a7bdf380cb515c46a0c84a4ec3d998db6e82235e3a4b389f", "result": "原2+3+6项及新增并发场景完整exit0，两个目标indexed/attempt1，投影9514及真实Milvus尾词/终点严格正确，无proxy错误。"},
+      "failed_intermediate": {"path": ".local/hybrid-continuation-20261028-a3asuqf1/tail-claim-formal-green.log", "sha256": "872c2a5a6d1126bd28d54cff8f45abf8f791aee33f4a07f476c4fa28c5bcb164", "result": "新增场景先跑耗尽旧夹具积压，原pending_knowledge>0前提失败，整体exit1；保留失败，仅将原三个Rust套件移回新增场景之前，不放宽原前提或断言。"}
+    }
+  ],
+  "compatibility_fixes_reviewed": [
+    "业务域CTE丢行：实际SQL对照仅在必要消费者NO_MERGE后恢复正文和域两处候选；两个owner保范围在LIMIT前。当前完整scope及progress保原domain强断言。",
+    "结构anchor：仅effective_structure关联且related_ids为空时仍通过原窄refs和checked_refs核当前版本/path/来源，失效排除，普通错误传播；不扩大关联表快照。",
+    "精确同分：精确score=100，同一次RRF的channel_score破平局再按稳定record；未加reranker或配额。",
+    "SQL展示channel=lexical，保原record/定位/hash；健康BM25不因owner拒读变成全路失败，原两个SQL来源只在整路503等明确失败后启动。"
+  ],
+  "test_changes_reviewed": [
+    {
+      "files": ["tests/mvp/check-retrieval-scope.mjs"],
+      "change": "长文容量夹具名称移除replybound，仅正文首窗含唯一词；仍30篇、每篇超过6000字符，增加唯一词及不跨下一窗前提。资产目录续页由每页30公共引用改为首页严格30、asset_after页公共对象严格为空。",
+      "basis": "原按内容计数且无对象配额，旧名称使每篇所有窗口相关；既有query=*/asset_after合同是本人资产目录，allowed-set已有公共检索/Embedding零派发正控。保24KiB、完整引用全集、30资产无重复遍历、游标和同版补读；CURRENT记录原值/新值/依据。"
+    },
+    {
+      "files": ["tests/mvp/check-source-limits.mjs"],
+      "change": "两个允许/解除门正控改用独立合成资料已有精确表名demo_order_detail。",
+      "basis": "同允许集默认10内容可被其他相关条目占满，limit30诊断可交目标；本场景证明来源门。保持正式默认limit及权限/来源/正文断言，无对象配额。冻结后完整13组通过。"
+    },
+    {
+      "files": ["tests/mvp/source-recall-fixtures.mjs", "tests/mvp/check-source-recall.mjs", "tests/mvp/check-agent-library.mjs", "tests/mvp/check-hybrid-retrieval.mjs", "Makefile"],
+      "change": "复用七类平台来源正式夹具；library关闭原harness后异步串行调用专用source-recall，非0传播。千表环境精确运行原gated回环并断言实际1项及父代理真实查询增加，新增raw场景在专用环境跑完整14项。",
+      "basis": "原198过1败缺来源头；补头后199过，但直接跑raw因专用Milvus/Embedding/父代理缺失7过7败。复用真实runner取得199+1+14；不改Rust强断言、无skip或成功fallback。原千表回环和恢复保留，当前四组未重跑。"
+    },
+    {
+      "files": ["tests/mvp/check-retrieval-deep-advance.mjs", "tests/mvp/check-retrieval-channel-faults.mjs", "tests/mvp/check-retrieval-deadline-order.mjs", "crates/data-agent/tests/source_excerpt_recall.rs"],
+      "change": "保留早期纠正：dense-only无字面交集、第221条按真实消费offset、raw原分数交错、例外规范起点超过4000、相交窗真实段落、SQL布尔false、先建正式投影再故障注入。",
+      "basis": "依据原内容/消费/事件合同及独立观测，保排序、Unicode、额度、正文和故障强断言；前提失败、业务RED及未执行后续命令分开。"
+    },
+    {
+      "files": ["tests/mvp/check-hybrid-retrieval.mjs"],
+      "change": "向量服务故障降级的严格state从candidate_limit改为bounded；保lexical_authoritative、vector unavailable、candidate_limit1000、精确目标首位，新增正整数候选≤1000、SQL完成>0/轮1..5及description逐字等独立输入。",
+      "basis": "05独立1000/5/30上限及故障合同：1000为上限，30主读耗尽可停止扩深。32表小样96候选、30内容/16对象、SQL完成2/轮1、264ms支持该分支；其index incomplete也构成bounded，不能把原因全归主读。未改产品或改成多状态断言，千表current及新四组仍待。",
+      "red": {"path": ".local/hybrid-continuation-20261028-a3asuqf1/scale-fallback-minimal-red.log", "sha256": "5550b166598c191690226d47b5daeae794ab99eb1574f672838664ea141276dc"}
+    },
+    {
+      "files": ["tests/mvp/check-retrieval-ranking.mjs"],
+      "change": "首个短正文回执reply_coverage由严格bounded改为严格complete，增加按独立fixture核唯一entry/path/正文、offset0/total/next=null/complete、entries_complete、omitted=[]及returned_object_count10。",
+      "basis": "规范窗可完整覆盖短entry；独立工具探针12172B、10对象/10短正文逐字正确且全部完整，没有名称命中必须只交头部的合同。保六强字段全集/前六、无关关联排除及完整envelope≤24576；其他容量裁剪反例不改。",
+      "red": {"path": ".local/hybrid-continuation-20261028-a3asuqf1/ranking-reply-probe-red.log", "sha256": "a4f21c8fdb69ff520c711b34d569f6d24a5d959d34c1406913f331c726bbeb6e"}
+    },
+    {
+      "files": ["tests/mvp/check-retrieval-ranking.mjs", "crates/data-agent/tests/knowledge_dependencies.rs", "tests/mvp/check-retrieval-progress.mjs"],
+      "change": "保长中文首中尾默认limit10召回，新增qtoken45完整计分与无选定词反向对象；progress严格通过数3改4反映实际新增例。",
+      "basis": "原要求仅裁候选词；独立离线词项分析及正式两owner RED证实未选词丢评分。limit30只用于可达控制，未改正式limit。保原三进度/范围用例，候选词外项只评分不扩大筛选，stage仍同record候选1/主读1。"
+    },
+    {
+      "files": ["tests/mvp/check-retrieval-ranking.mjs"],
+      "change": "两组1200批量弱项补同版knowledge_versions；bb-tail同步human_override.value与effective_value，增加current/versioned/same全1200及每词300、每份一词、人工有效层一致前提。",
+      "basis": "原bulk漏版本导致owner正文失效并占30名额；仅补版本的控制运行原全部10组及三个candidate_limit均过。原四词轮换仅改human_override，实际正文仍全tailalpha，修正文增强原竞争场景。保1200数量、目标、默认limit、全部排名及三个严格candidate_limit，不为失败改产品。",
+      "red": {"path": ".local/hybrid-continuation-20261028-a3asuqf1/ranking-scale-observed-red.log", "sha256": "c23837c526d3246bea651c10a5cd24076a350d94f11f1749b0de0519610cf7be"},
+      "control": {"path": ".local/hybrid-continuation-20261028-a3asuqf1/ranking-scale-versions-control.log", "sha256": "4d18abf1640446920a91f77e00b94574800ed1b146f1e0d8cfe312ccb6876cb5"}
+    },
+    {
+      "files": ["tests/mvp/check-retrieval-excerpts.mjs"],
+      "change": "原search正文不含规则的负断言改为非零原offset、逐字等独立原文slice、total/分页正确且不冒称完整；另显式同版offset0/limit160补读前缀，严格等原文前160字符且不含规则。",
+      "basis": "05原坐标窄窗合同允许目标规则出现在选中正文，不要求顺带读开头。RED原文2283字符，交付offset2240的43字符，与原slice/摘录/同版read一致；next=null仍complete=false。保尾部、offset>600、双entry及其他权限/版本/来源场景。",
+      "red": {"path": ".local/hybrid-continuation-20261028-a3asuqf1/excerpt-prefix-probe-red.log", "sha256": "b2fc5b8785ebbc92cb53e7959f6b029b85766eb9045d441d8f12a30e7ce0c3c2"}
+    },
+    {
+      "files": ["tests/mvp/check-retrieval-excerpts.mjs"],
+      "change": "索引破坏夹具完整保留target/projection/path/statement等非目标字段。未知键/越界分健康BM25拒绝与整路真实503后原SQL回源；全坏dense不交伪头部/摘录、bounded，已知ref同版read仍成功。",
+      "basis": "成功BM25不能因owner拒读改为整路全败或加SQL票；无合法定位可沿已有bounded拒绝，无需新目录头读分支。相邻无字面query的canonical/missing正控严格vector和成功空BM25，防SQL掩盖定位缺口；原换版/停用/撤来源/空间与尾部仍保留。"
+    },
+    {
+      "files": ["tests/mvp/check-retrieval-excerpts.mjs"],
+      "change": "相同无字面query的canonical/missing/allbad候选预期1改为严格9，独立核offset[0,280,560,840,1120,1400,1680,1960,2240]。跨窗借键反例加已有related_object_id隔离被篡改对象，严格空对象、9候选、bounded及成功BM25单片。",
+      "basis": "原文长度与360/280直接推导九规范身份；向量取反只降低排名，limit1限制交付。全局跨窗负控原被其他对象candidate_limit遮盖，限定同对象后验证九次拒读；未改query/limit或产品coverage优先级。保vector标签、逐字同窗、allbad拒绝及已知ref补读，未过滤低分向量制造候选1。"
+    },
+    {
+      "files": ["crates/data-agent/tests/knowledge_dependencies.rs", "tests/mvp/check-retrieval-content-units.mjs", "crates/data-agent/tests/retrieval_channel_coverage.rs", "tests/mvp/check-retrieval-channel-coverage.mjs", "tests/mvp/check-retrieval-excerpts.mjs"],
+      "change": "新增两正式owner反例接入原content-units并严格2过0败；协议覆盖缺身份显式17、适用陈述及普通entry；正式工具新增非首陈述canonical、三种缺字段恢复和显式错坐标拒绝，严格保原窗口/支持。",
+      "basis": "同版原record与statement绑定合同，正确hash不能替代位置，显式冲突不能经丢字段被恢复掩盖。真实dense query无字面命中，BM25健康空，四候选由独立背景三窗加陈述一窗推导。原SQL/dense共record合法子窗12组正控保持；没有测试专用产品旁路。"
+    },
+    {
+      "files": ["tests/mvp/check-shared-index-todo.mjs"],
+      "change": "原2+3+6 Rust套件、子进程非0传播及真实Milvus查询断言全部保留并先执行；追加透明MySQL响应门闩、正式HTTP保存原9514字符长文、两个目标一次领取、投影完整终点及真实Milvus尾词强断言。",
+      "basis": "原千表long_tail_marker的原文逐字相同，独立计算9514字符。原尾部120秒断言及三个Rust测试文件均未改；新门闩只延迟真实轮询响应，在HTTP提交后释放，未制造SQL结果或Milvus输出。首次GREEN因顺序破坏原pending前提而整体失败，修顺序后原全部断言和新增例完整通过，不是删除旧例或反写期望。"
+    }
+  ],
+  "second_binding_history": {
+    "scope_sha256": "304f714c4d21a7fd3810644290aa13bd1743be32f79fe1a694e02099ed7c05f8",
+    "review_record": {"path": ".local/hybrid-continuation-20261028-a3asuqf1/review-before-tail-binding-failure.json", "sha256": "21b938ef6dc622a21b878712ae8f8219285a03777f04625f8e3d5ac680b14020"},
+    "manifest": {"path": ".local/hybrid-continuation-20261028-a3asuqf1/second-binding-final-scope.json", "sha256": "3fe4ca3ba897e48f8151fda44817076d7c4880c7e2dc1cf448704af2884bfb86"},
+    "diff": {"path": ".local/hybrid-continuation-20261028-a3asuqf1/second-binding-final-continuation.diff", "sha256": "ce152e7bb21bd660153a1f400c14a6224e61c6df2243cb5c0c544845e9c8c134"},
+    "receipt": {"path": ".local/hybrid-continuation-20261028-a3asuqf1/final-binding-second-failed.json", "sha256": "d6da5bb0084f9a0ed3ca483db8d3226ef9709da9668059d134c7eceeea7375e5"},
+    "command_log": {"path": ".local/delivery/I2-HYBRID-RETRIEVAL-1793228314992369000/command-01.log", "sha256": "5765a3276b9818d977aed92326441cabff1784bd0c92d2ae362dfa03775fb349"},
+    "runtime_snapshot": {"path": ".local/hybrid-continuation-20261028-a3asuqf1/scale-second-binding-failed.json", "sha256": "bec036b659f967f83cdf0e4d3a3a3664000ed6e3f5eb11bc4ef9aa6d5ef76241"},
+    "status": "failed",
+    "executed_command": ["make", "verify-hybrid-retrieval"],
+    "exit_code": 2,
+    "timed_out": false,
+    "duration_ms": 1000073,
+    "failure": "原check-hybrid-retrieval长文末尾标记的120秒局部等待失败；非5400秒外层超时。正式收据before/after一致，首组未通过，后三未执行。",
+    "remaining_three_groups": "not_executed",
+    "applicability": "保留第二次42文件审查及运行失败；前4项千表局部检查越过不等于首组通过。失败后库/集合清理，无当时DB快照，不能将原未分类1行确定为superseded。后续门闩证明该普通事务缺口，但仍须新指纹四组实际通过。"
+  },
+  "first_binding_history": {
+    "scope_sha256": "53925ef8273ec4d51a3ece455949d79545cb44c94fe4805511bc2f8ac2a31599",
+    "review_record": {"path": ".local/hybrid-continuation-20261028-a3asuqf1/review-before-binding-failure.json", "sha256": "f06796b90ea6388600dd052638ed6bcb53bc47e644b0dca7e5e13de03c13c9f4"},
+    "manifest": {"path": ".local/hybrid-continuation-20261028-a3asuqf1/first-binding-final-scope.json", "sha256": "9e169441972fee20cce733986973bfa63552114bb3e46beec432fd8d184434fd"},
+    "diff": {"path": ".local/hybrid-continuation-20261028-a3asuqf1/first-binding-final-continuation.diff", "sha256": "52a6fd8a173168dd8e96c868cbe5ebd6ca15c6deb1b77990c8e73b33dc2ad9df"},
+    "receipt": {"path": ".local/hybrid-continuation-20261028-a3asuqf1/final-binding-first-failed.json", "sha256": "3cd0d6dcaaa47327bd5462df12ad7a3f65eb7abd443ccd29ff558976c839477f"},
+    "status": "failed",
+    "executed_command": ["make", "verify-hybrid-retrieval"],
+    "exit_code": 2,
+    "timed_out": false,
+    "duration_ms": 2508794,
+    "failure": "向量服务故障降级bounded与旧candidate_limit断言冲突；不是环境超时。",
+    "remaining_three_groups": "not_executed",
+    "applicability": "首次40文件审查和首组已越过的局部检查仅对应当时版本；该scope已过期。保留失败，不将纠正后的预检查或局部绿色拼成正式四组通过。"
+  },
+  "tail_claim_evidence": {
+    "version": "第二次42文件绑定失败后、当前43文件的5文件delta；运行由主线执行，审查者只读核代码/断言/事件/hash",
+    "delta_manifest": {"path": ".local/hybrid-continuation-20261028-a3asuqf1/tail-claim-delta.json", "sha256": "a6b21666ff7fdb854c1d1e963efc2f759429233c3730bdd63030b5745e50d9e0"},
+    "delta_diff": {"path": ".local/hybrid-continuation-20261028-a3asuqf1/tail-claim-delta.diff", "sha256": "b49afcd2fea97d7ee4b911af0fb4b8d14fbfb5e7adcf80ccae568383e7acf0f7"},
+    "evidence_index": {"path": ".local/hybrid-continuation-20261028-a3asuqf1/tail-claim-evidence-index.json", "sha256": "467c31eb933d51e76584035ee7488e76beb25d9929456bf461f9bea4cdf9851d", "result": "14项新证据的实际hash及bytes逐项匹配；包含RED、失败中间GREEN及空fmt日志，索引本身不证明通过。"},
+    "build_api": {"path": ".local/hybrid-continuation-20261028-a3asuqf1/tail-claim-build-api.log", "sha256": "cfaefc998014fd7c7ee0fe964d0798f8731400d0d28923e77fdc24fd0c8950ff", "result": "API独立离线构建，实际编译data-agent和API，完整Finished。"},
+    "build_worker": {"path": ".local/hybrid-continuation-20261028-a3asuqf1/tail-claim-build-worker.log", "sha256": "6b57d761908952de99af558b5437ac0666a984cb03ed7e561251c9a2d23acc62", "result": "Worker独立离线构建，实际编译data-agent和Worker，完整Finished。"},
+    "formal_regression": {"path": ".local/hybrid-continuation-20261028-a3asuqf1/tail-claim-formal-green-retry.log", "sha256": "74f41f78a32550a7a7bdf380cb515c46a0c84a4ec3d998db6e82235e3a4b389f", "result": "source_index_registration2、raw_index_handover3、index_recovery6完整0失败，随后新增正式保存→原消费者→真实Milvus尾部反例完整passed；attempt1、无proxy错误。", "officialRequests": 0},
+    "code_contracts": {"path": ".local/hybrid-continuation-20261028-a3asuqf1/tail-claim-code-contracts.log", "sha256": "b4fdd8ca3167708d62564047525f518bc1e2999ddfa340c8e45f6e1b021a036a", "result": "最新584双侧契约、fmt、Clippy -D warnings、TypeScript及Web完整exit0；保既有Vite目录/chunk提示。空tail-claim-fmt.log本身未当成功证据。"},
+    "index_concurrency": {"path": ".local/hybrid-continuation-20261028-a3asuqf1/tail-claim-index-concurrency.log", "sha256": "e6fc45dc3b4d0ab8c2fdaf41fc60f301e688078ffdc77dad1a0fcfaf7453e133", "result": "原检查完整exit0：Worker跳过锁定对象仍索引其他对象、仅1对象等待者、合法保存200、71旧job退休/当前72版完成；内容摘要hash与旧次相同，不据此单独推断运行新鲜度，主线提供完整新终态。", "officialRequests": 0},
+    "limit": "证明本delta的真实局部反例及相称回归，不代替当前43文件四组绑定收据，不推断第二次千表失败时已清理数据库的具体行状态。"
+  },
+  "prior_evidence_version_note": "以下evidence及retained_prior_evidence保留第二次42文件审查的原内容和hash；其中“当前”指当时owner/adapter版本，均早于本次process_index事务刷新。其余相关产品路径未变化，未冒称这些运行在新事务delta后重新执行。当前delta新增回归单列tail_claim_evidence。",
+  "evidence": [
+    {
+      "path": ".local/hybrid-continuation-20261028-a3asuqf1/owner-binding-scope-preflight.log",
+      "sha256": "bc7becf24e23c4f259ea231032a7c4ffba5ef7d9eeb5deba6579d153d5e6f24e",
+      "version": "owner record/statement修正后、adapter最后修正前的完整范围预检查",
+      "result": "完整exit0：检索库56、allowed-set5、ranking10、excerpts6、entry-read3、content-units5含owner2、progress4、scope11、context-dependencies13、structure3、deep8、deadline15、granularity2、channel-coverage4、channel-faults12、raw允许集1和集成14、shared-index2+3+6。",
+      "limit": "尚不含后来协议第5例及正式statement摘录第7组；不能作为最新42文件全组绑定收据。"
+    },
+    {
+      "path": ".local/hybrid-continuation-20261028-a3asuqf1/statement-adapter-protocol-green.log",
+      "sha256": "f848fd83fe6dc4cc7d6fb4f204e2d3e04d35ab4898839a0a82c6340e2154688b",
+      "version": "当前adapter",
+      "result": "正式prepare_cursors/next_page/fetch_page/accept_page协议路径5 passed/0 failed，显式17保留，普通entry不带非适用statement字段。",
+      "limit": "协议替身验证字段与通道，不冒称真实Milvus。"
+    },
+    {
+      "path": ".local/hybrid-continuation-20261028-a3asuqf1/statement-adapter-build-api.log",
+      "sha256": "209c88b40e864c8fdf1e196141b65a28df7bc55ccf48ac1e53e619af1861ae28",
+      "result": "API独立离线构建完整Finished，实际重编data-agent和API。"
+    },
+    {
+      "path": ".local/hybrid-continuation-20261028-a3asuqf1/statement-adapter-build-worker.log",
+      "sha256": "1adaf7cb3bf249b07f63ce8158986f1c56e1c328cb047ca9797f5409f9da798e",
+      "result": "Worker另行构建完整Finished，实际重编Worker。"
+    },
+    {
+      "path": ".local/hybrid-continuation-20261028-a3asuqf1/statement-adapter-excerpts-full.log",
+      "sha256": "0595c89ede24dd230894776cd06af2aa775875225a6d541767aa598fc534860f",
+      "version": "当前owner/adapter及正式摘录断言",
+      "result": "检索库56及正式摘录7组完整通过。包含原坐标/前缀、九窗借键拒绝、无字面query的合法dense/缺locator/allbad、健康BM25无SQL、真实503后SQL、非首陈述canonical/三种缺字段/显式冲突与authority支持、版本/停用/来源/空间及真实280+段尾部。",
+      "officialRequests": 0
+    },
+    {
+      "path": ".local/hybrid-continuation-20261028-a3asuqf1/statement-adapter-channel-faults-full.log",
+      "sha256": "6d8ebab57936d2d037dc75bdb8de4b1a7101a10472527a0854ff36976c59d5df",
+      "version": "当前owner/adapter，原12组",
+      "result": "完整12组通过；partial健康片有正式正文且SQL0，慢后页期间dense先回源，同owner早E1及后到E2分别窄读，SQL及时强项在主读耗尽前参与共同排序并交付。SQL/dense共record实际候选1/主读1，规范0/204与展示84/50，原Unicode正文/ref及两种同版补读均正确。已核实际事件次序及门闩无超时。",
+      "officialRequests": 0
+    },
+    {
+      "path": ".local/hybrid-continuation-20261028-a3asuqf1/statement-adapter-code-contracts.log",
+      "sha256": "b2b5588bdc27fdffef9999c52eba0c74b14753ad1a7da75d27e3a0aa08ff5914",
+      "version": "当前owner/adapter后的完整检查链",
+      "result": "584双侧契约、fmt、Clippy -D warnings、TypeScript及Web完整通过；保既有Vite输出目录与chunk大小提示，未扩前端范围。"
+    },
+    {
+      "path": ".local/hybrid-continuation-20261028-a3asuqf1/statement-adapter-run-results.json",
+      "sha256": "bce22bb5fad35aa9adbc376fdf845b39d3b6d4eef7e24a7dba3bff6842903966",
+      "result": "主线辅助命令索引：b8ikfbyaa exit1；bg5w73yiz exit0；b6j3c4k20完整摘录→通道故障→契约/代码exit0。",
+      "limit": "辅助索引不代替产品日志或绑定收据。statement-adapter-formal-green.log为空，单独不证明成功；只以命令完整终态支持静默局部探针，正式工具结论以随后完整脚本为据。"
+    },
+    {
+      "path": ".local/hybrid-continuation-20261028-a3asuqf1/full-query-progress-green.log",
+      "sha256": "69071e016569e48f4b28b98c6d03ba4b197c32efa5a2b7634b52c202829380b2",
+      "result": "完整4 passed/0 failed：实际消费/交付分离、domain、完整问句评分及元信息跨期pending；反向无选定候选词对象不进入候选。"
+    },
+    {
+      "path": ".local/hybrid-continuation-20261028-a3asuqf1/ranking-complete-fixtures-green.log",
+      "sha256": "bac46c764f36bd0edb5787940c12fb5a789c0e6e51f5c200850d6743307d3796",
+      "result": "正式ranking完整10组通过，长问句首中尾均true、默认limit保持、三个candidate_limit原断言均保留。最后补充的1200同版逐正文及每词300前提由后续完整scope预检查覆盖。",
+      "officialRequests": 0
+    },
+    {
+      "path": ".local/hybrid-continuation-20261028-a3asuqf1/scale-fallback-content-green.log",
+      "sha256": "74303e85fa83603449b2d5b4a03dca2b422214baa3466ae9f18aacc8e86b8e65",
+      "result": "32表小样264ms，候选96、实际30内容/16对象、SQL完成2/轮1、严格bounded，精确目标首位且description等独立输入。",
+      "limit": "小样index incomplete，不单独归因所有bounded于30主读；不证明千表current覆盖或完整HYBRID-RECALL通过。"
+    },
+    {
+      "path": ".local/hybrid-continuation-20261028-a3asuqf1/refrozen-source-limits.log",
+      "sha256": "f3b972a077e52b7f3080f64cde24a4259baae4ba5dc9ff2ddab057b8892220b2",
+      "version": "冻结后主线串行补充兼容链完整exit0",
+      "result": "完整13组通过，保全部贡献根、unknown fail-closed、partial拒读、解除门、多任务、Skill、个人资产及晚到查询归属。",
+      "officialRequests": 0
+    },
+    {
+      "path": ".local/hybrid-continuation-20261028-a3asuqf1/refrozen-historical-source-access.log",
+      "sha256": "1fc33c1a67f9c01bbc142d6546ae6f2aa6ec57f26de3e7d341f486d02cd67860",
+      "version": "冻结后主线串行补充兼容链完整exit0",
+      "result": "完整5组通过；历史来源启停与映射缺失拒绝，历史核验下行56942B。该日志摘要与旧次相同；本次运行终态另由主线确认，不能仅用相同hash推断运行新鲜度。",
+      "officialRequests": 0
+    },
+    {
+      "path": ".local/hybrid-continuation-20261028-a3asuqf1/refrozen-agent-library.log",
+      "sha256": "2d79471a01648288716b88d148a9f607e412f6c813275fa8147f101dc0685b41",
+      "version": "冻结后主线串行补充兼容链完整exit0",
+      "result": "库199 passed/0 failed、原文允许集1、source_excerpt_recall完整14均通过，最终passed=true。raw-only真实queryEmbedding1，raw A高/B知识中/A低以1/60、1/61、1/62交错，低窗offset5200；307段尾部目标第152段/320759字符；pending/failed分别独立及最终stale_source拒绝；citation当前/snapshot窄读和普通DB错误传播保留。",
+      "officialRequests": 0
+    },
+    {
+      "path": ".local/hybrid-continuation-20261028-a3asuqf1/refrozen-delivery-declaration.log",
+      "sha256": "d14bb384d85f5064237613970f546fb966a1b692f6ac117ee4958c263bdc6961",
+      "result": "make verify-delivery声明有效、16检查器测试OK。",
+      "limit": "日志明确业务未验证、未运行验收；不得作为四组或产品通过证据。"
+    }
+  ],
+  "retained_prior_evidence": {
+    "version": "首次40文件范围已独立审过的对应版本证据；本次逐份重算既有18项path/hash全部匹配。以下12项与前三个发现的6项红绿共同组成原18项，不一概标为当前42文件运行。",
+    "records": [
+      {"path": ".local/hybrid-continuation-20261028-a3asuqf1/compat-scope-directory-contract.log", "sha256": "17ba22251a7e6df37a640f780ffd003b7cb79a1155ca968b5a62fe0ddba6c594", "result": "当时完整11组通过，范围/结构/资产/容量及Unicode补读，最大工具JSON23492B；后续完整scope再覆盖。"},
+      {"path": ".local/hybrid-continuation-20261028-a3asuqf1/compat-retry-source-limits.log", "sha256": "f3b972a077e52b7f3080f64cde24a4259baae4ba5dc9ff2ddab057b8892220b2", "result": "当时完整13组通过；冻结后另有对应完整兼容运行。"},
+      {"path": ".local/hybrid-continuation-20261028-a3asuqf1/compat-retry-historical-source-access.log", "sha256": "1fc33c1a67f9c01bbc142d6546ae6f2aa6ec57f26de3e7d341f486d02cd67860", "result": "当时完整5组通过；冻结后另有对应完整兼容运行。"},
+      {"path": ".local/hybrid-continuation-20261028-a3asuqf1/compat-library-protocol.log", "sha256": "beb1c20f37fdfc0ff2068d72d4dc8b0fca69b881a4ca9514027142d873c0bcc0", "result": "当时库199、原文允许集1、raw14通过；当前兼容以refrozen-agent-library为补充。"},
+      {"path": ".local/hybrid-continuation-20261028-a3asuqf1/compat-code-inferred-type.log", "sha256": "19e1e908e1f1f8fad2465dfad4b7cf9b96cd888b6f5c5e1f1871c36f21b1e1e9", "result": "首次版本584契约/fmt/Clippy/tsc/Web完整完成；先前type_complexity失败未作通过。当前以statement-adapter-code-contracts为据。"},
+      {"path": ".local/hybrid-continuation-20261028-a3asuqf1/final-build-api.log", "sha256": "a1ab569b64894dac77e92f114ccc6d18b514fc1f0a137273c5f68223d8fc4f50", "result": "首次API独立构建完成，当前已有adapter后重建。"},
+      {"path": ".local/hybrid-continuation-20261028-a3asuqf1/final-build-worker.log", "sha256": "72cb13d3f6c03f763fb27caafeb131d6907e09771b170a44d18740479359d304", "result": "首次Worker独立构建完成，当前已有adapter后重建。"},
+      {"path": ".local/hybrid-continuation-20261028-a3asuqf1/channel-extended-current.log", "sha256": "bbfa09bd74b55386063fe45011e7d1ad09a9740573b6a4b0af2ed64ae81e263a", "result": "当时12组通过；当前adapter后同12组再次完整通过。"},
+      {"path": ".local/hybrid-continuation-20261028-a3asuqf1/deep-extended-current.log", "sha256": "7eccbb558fb4ab06d894ab692810ba4401e32501cc0d99a8aea63152ba789dd3", "result": "完整8组通过；真实第221条、正文失效补页、最后100预留重复/503释放、逐事件唯一+在途≤1000、5轮850及851独立正控；后续完整scope再覆盖。"},
+      {"path": ".local/hybrid-continuation-20261028-a3asuqf1/delivery-capacity-current.log", "sha256": "7554175e377d61a93426efb6c0d4be5b814663a943980be7589ccb9715e7f3bf", "result": "完整13组通过；mapped/legacy/structure三类30内容经正式工具最终裁剪，authority对应实际可见内容，随后issue200；后续完整scope再覆盖。"},
+      {"path": ".local/hybrid-continuation-20261028-a3asuqf1/same-entry-windows-current.log", "sha256": "da7f61cc9ef4f3b89d0ad51a4f137d32e189ac84b40709b702b780e92b02a175", "result": "当时4组通过，巨大entry/非首statement/不同entry及offset0/280各计数；当前content-units扩5组并在完整scope通过。"},
+      {"path": ".local/hybrid-continuation-20261028-a3asuqf1/final-regression-index-concurrency.log", "sha256": "e6fc45dc3b4d0ab8c2fdaf41fc60f301e688078ffdc77dad1a0fcfaf7453e133", "result": "当时完整终态：实际锁定对象跳过、保存200、旧job退休/当前接续；仍不代替当前共享Embedding正式绑定组。"}
+    ]
+  },
+  "remaining_acceptance_gates": {
+    "status": "pending_mainline_execution",
+    "owner": "主线",
+    "commands": [
+      ["make", "verify-hybrid-retrieval"],
+      ["make", "verify-hybrid-scope"],
+      ["make", "verify-shared-embedding"],
+      ["make", "verify-architecture"]
+    ],
+    "execution": "由主线在本次timeout合同修订后的新review_scope下按现有make verify-increment从首组真实串行执行全部四组，保存完整退出状态与新绑定收据。三次正式失败、scope预检查被杀、相同共享索引脚本单跑通过及补缺两组exit0均保留原边界，不能拼成四组通过。产品/测试/Makefile未变；仅HYBRID-SCOPE整组1200→1800秒，其余时限及全部断言保留。不再额外重跑完整scope预检查。make verify-delivery及materials仅作静态声明/材料检查。四组全过且审查/收据均未过期后，主线才可按原流程关闭05；失败、超时或相关输入变化须保持active并复核受影响部分。",
+    "increment_complete_at_review": false,
+    "next_stage": "完成05后停在06入口，不实施06–09。06接search_stage_outside_lock(ScopedSearchRequest)、KnowledgeSearch.hits/pending/scan_progress及原owner定点API，沿当前范围/来源/修订/运行最终核验及v1资产兼容；公开v2、支持完整性、容量及四类续读由06负责。"
+  },
+  "limitations": [
+    "审查者只读核对本地源码、原合同、正式断言、已有完整日志、diff及SHA；未运行DB harness、Cargo、外部服务或四组长验收，未生成新的运行通过事实。动态调用检查器仅计算本地指纹与校验审查绑定。",
+    "审查者未改产品、测试、配置、CURRENT或服务；本次仅更新此唯一审查JSON，未spawn子代理、提交、推送、部署或付费调用。",
+    "证据来自真实隔离MySQL、专用真实Milvus、从零构造的合成资料及本地Embedding/provider协议替身；通道协议替身另行标明，officialRequests=0不证明真实模型语义效果。",
+    "运行日志及命令终态由主线实际执行后提供，审查者独立核正文、断言、事件和hash；普通日志/索引/JSON不是不可篡改证明，静默空日志不是完整成功证据。",
+    "完整scope预检查在adapter最后修正前通过；随后adapter协议5项、完整摘录7组、通道故障12组及来源/历史/library是第二次42文件版本证据。当前43文件事务delta后新增原2+3+6及透明门闩真实反例、最新代码/契约和原索引并发检查完成相称回归；未重跑全部旧范围，也未声称当前四组已全部执行。",
+    "第二次千表失败为局部120秒等待而非外层超时；原未分类1行没有保留下当时数据库快照，门闩反例不能倒推该行状态。新旧formal-green中间失败与空fmt日志明确保留，不据名称或空文件宣称通过。",
+    "真实企业逐资源ACL、模型出域策略、真实平台适配、生产规模与部署未验证；空间/启停/任务来源门及v1硬范围证据不能替代。",
+    "窄读字节只证明下行粒度，不证明数据库内部JSON扫描成本或大空间可扩展性。fallback32表小样不能代替千表current覆盖。",
+    "本审查不证明08旧集合已升级、新公共集合已准备或统一切换完成；没有扩大05为公开v2或06–09实施。"
+  ]
+}

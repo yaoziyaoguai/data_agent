@@ -1,0 +1,59 @@
+{
+  "reviewer": "independent-implementation-review-20261031-impl-audit-repair",
+  "scope_sha256": "6563f534433c906871bb514c68f4589cc23588fbf466f94ba4f8b44fcbb1ac03",
+  "conclusion": "passed",
+  "summary": "未参与实现的独立审查者对05–08审计修复包（4.1–4.5及冻结输入）做只读实现审查。初审指纹072f122a...c03d58结论passed（两处minor验证缺口）；实施者补齐后增量复审指纹734897a9...15aba9（本次记录值）结论passed。方法：通读audit-repair.md全文与CURRENT完成记录，五处产品代码（finish_run.rs守卫接入、task_answers.rs自然提交范围核验、source_limits.rs allowed_keys、evidence_delivery.rs目录重建与游标、AnalysisReport.tsx横幅拆分）与审计before快照逐一diff，静态核对全部测试脚本行为断言并抽查GREEN收据实际内容。增量部分：check-evidence-search-assets.mjs重构为两轮证明（充足轮50支持/19693B全交付含support_state=delivered、无未交游标、A/B逐字全文；裁剪轮51条长支持预算裁至23/26168B、裁剪重建路径真实走到、不变量断言保持），逐条满足audit-repair.md 140-144行两项证明目的且无放宽/删场景/过度防御；vector单测16项收据补齐；CURRENT 4.2按145行记录前提调整、4.4计数纠正为8项。六类行为问题、两类复杂度问题与工程阻断均有处置及本窗口GREEN证据；原05–08合同与架构入口一致；Mem0身份/目录游标、最终容量/原回执、三段式事务保持。",
+  "initial_review": {
+    "date": "2026-10-31",
+    "scope_sha256": "072f122a4968a01273c927f712a809feabe2844dace241f59000e7e1e2c03d58",
+    "conclusion": "passed",
+    "findings": [
+      {"severity": "minor", "item": "4.2-1 文档要求的容量充足的支持数量上限独立场景未落地", "disposition": "已由两轮证明结构关闭（增量复审确认）"},
+      {"severity": "minor", "item": "4.4-1 vector单元测试16项GREEN声明缺本窗口证据工件", "disposition": "vector-unit-green.log收据补齐（增量复审确认）"},
+      {"severity": "note", "item": "4.2-2 极窄预算带整项丢弃Mem0额外项且无痕迹（默认18KB不可达，修复前既有结构）", "disposition": "既有状态，本包未触及未恶化"},
+      {"severity": "note", "item": "4.1-1 allowed_keys未去重，方向为过严而非放过", "disposition": "既有状态，按不为未证边界增改防护保持现状"},
+      {"severity": "note", "item": "4.4-2 CURRENT记载deep-advance 9项与实际8项不符", "disposition": "已改为8项并补路径（增量复审确认）"},
+      {"severity": "note", "item": "4.5-1 AnalysisReport的matched.report判空按生成类型属冗余", "disposition": "既有状态，留待后续清理"},
+      {"severity": "note", "item": "4.2-3 基线步未显式锁定充足预算时全文交付", "disposition": "充足轮显式全文断言关闭（增量复审确认）"}
+    ]
+  },
+  "incremental_review": {
+    "date": "2026-10-31",
+    "scope_sha256": "734897a9271b323474090494a1893849c25a8187426542d77fa698b79f15aba9",
+    "conclusion": "passed",
+    "changes_reviewed": [
+      "tests/mvp/check-evidence-search-assets.mjs 两轮证明结构（充足轮+预算裁剪轮）",
+      ".local/checks/agent-reliability-repairs/vector-unit-green.log 收据",
+      "docs/CURRENT.md 4.2/4.4 记录更新"
+    ],
+    "findings": [
+      {"severity": "note", "item": "INC-1 CURRENT 4.2\"逐字节一致\"表述不精确（UUID必然不同，一致的是指标）", "disposition": "措辞问题，留待下次正文修订改为\"指标一致\"，避免本次指纹再变"},
+      {"severity": "note", "item": "INC-2 裁剪轮记忆不变量循环重复执行（幂等无行为影响）", "disposition": "可清理的重复代码，留待后续"}
+    ]
+  },
+  "second_incremental_review": {
+    "date": "2026-10-31",
+    "scope_sha256": "fee277325d70fd0cfb33cbd74306f6da080f653be129702f7b2dc26a1cf92bef",
+    "conclusion": "passed",
+    "trigger": "verify-increment 首轮 UPGRADE-INDEX 组失败：v2 search_knowledge 带 task_ref 稳定 409 source_not_allowed。排除 4.1/4.2 改动（临时还原后失败不变、逐字节恢复）后插桩定位（六处抛点临时标记、定位后全部移除）：受限检索分支只清空 memories，selected_skills 预览仍随回执交付并经 observe 进入依赖快照；execute 尾部 authority_within_in_tx 对 skills 资产取来源闭包，人工 Skill 五键全空整体拒绝。该重核段为继承未提交代码（git show HEAD 中不存在 authority_within 调用），01:18 的通过运行在旧二进制上，属继承\"已改未验\"组合（受限检索+已选Skill）首次被 verify-increment 暴露。",
+    "fix_reviewed": "crates/data-agent/src/use_cases/data_tools.rs 受限分支与 page[\"memories\"]=json!([]) 同批新增 page[\"selected_skills\"]=json!([])（3行+注释）。审查确认：与既有\"受限检索只交付允许来源实际贡献的命中\"设计对称，Skill 正文 read 路径不受影响；备选方案（authority_within 跳过空闭包资产）会为所有调用方放宽来源门，方向更松，未采纳正确；无限制路径（else if !memory_candidates 与目录页）未触及，受限分支之外无改动；失败态本就是\"交付预览后整次409\"的坏状态，无场景改宽。",
+    "verification_reviewed": [
+      "check-public-index-upgrade.mjs 修复后 passed:true/6项（收据 .local/checks/public-index-upgrade-run-1793422440043.json）",
+      "check-evidence-search-assets.mjs 回归过（充足轮50/19693；裁剪轮23/26178，与此前26168差10字节为随机UUID长度噪声）",
+      "check-result-notification-answers.mjs 回归过（12调用4场景）",
+      "cargo fmt --all --check 退出0；插桩无残留；finish_run.rs/task_answers.rs 临时还原逐字恢复"
+    ],
+    "findings": [
+      {"severity": "note", "item": "INC3-1 memory_retrieval=excluded_by_source_limits 现同时表达memories与skills两类排除，字段名仍memory专属，合同可读性后续文档同步即可", "disposition": "不要求本包处理"},
+      {"severity": "note", "item": "INC3-2 失败收据JSON未含错误码字样，归因依赖已移除的插桩与源码复核（审查者已独立复核一致）", "disposition": "按插桩移除约定可接受；后续同类失败建议收据带response body的code字段"}
+    ]
+  },
+  "timeout_calibration_review": {
+    "date": "2026-10-31",
+    "scope_sha256": "6563f534433c906871bb514c68f4589cc23588fbf466f94ba4f8b44fcbb1ac03",
+    "conclusion": "passed",
+    "trigger": "verify-increment 第二轮前 10 组全过（含修复后 UPGRADE-INDEX），RETRIEVAL-ADVANCE 超时：300s 时限内 dense 夹具 1079 行 upsert 仅到 868 行。",
+    "calibration": "空闲环境单独实测 /usr/bin/time -p node tests/mvp/check-retrieval-deep-advance.mjs = real 311.22s、8 项全过（deep-advance-timing.log）。CURRENT.md acceptance 中 RETRIEVAL-ADVANCE timeout_seconds 300→600，其余字段与测试内容/断言/命令零改动；测试文件自首次审查以来未改（mtime 核对）。审查确认符合执行包第5节\"完整日志证明健康组实际运行需要更多时间时调整并记录依据\"，进度线持续前进非挂起，600s 取扩展规模组惯例值，属时限记录核对而非放宽验收。",
+    "findings": []
+  }
+}

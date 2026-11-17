@@ -15,7 +15,7 @@
 3. time_roles区分event_time、observation_cutoff、data_batch；event_time含字段/业务意义，统计区间沿原time_start/end；截点带时区值，批次带批次值。request_clock和平台freshness不冒充用户截点。
 4. 新explicit_user由宿主核对本轮真实消息与原话；继承只从同任务已验证条件版本复制原采纳身份。模型自由填旧message_id不成立。needs_clarification不能用省略变unambiguous；request_query保存决策须与目标条件版本一致。口径采纳不授予SQL执行权。
 5. 将input_task_ids与持久active_task_ref分开。route/修订核验归属；缺task_ref继承真正活动任务，不绕过限制。来源不同的任务不取并集，同批跨任务读取不能暗中切换；批量已确认SQL控制仍逐项核验。
-6. 轮内收紧范围或切活动任务后，**下一次普通或摘要provider派发前**通过Pi原生接口重核/重投影：旧工具正文、个人资产、历史投影、派生摘要均在内。若SDK身份无法安全续接，按既有stale_context明确返回，不换operation_id重做。不要只修改下一run启动资源便宣称覆盖轮内。
+6. 轮内收紧范围或切活动任务后，**下一次普通或摘要provider派发前**通过Pi原生接口重核/重投影：旧工具正文、个人资产、历史投影、派生摘要均在内。若SDK身份无法安全续接，按既有stale_context明确返回，不换operation_id重做。不要只修改下一run启动资源便宣称覆盖轮内。两侧任务都已明确无限制时只更新活动归属；任一侧受限/未知，或同任务范围声明变化才重新投影，不因普通月份修订机械清空上下文。
 7. history_display/current_use由具体用例指定，不接受客户端或模型自由选择宽松purpose。普通语义改版不隐藏已存SQL/条件/决策/摘要/结论/报告；旧引用全文缺失只影响补读。撤权/删除/停用仍限制实际派生内容；原始结果过期只让依赖结果重建的图表/明细不可用，不整份报告消失、不自动重跑。
 8. 模型读取旧query/evidence/report用受控historical_analysis投影，含原记录引用、生成时间、条件、内容指纹和实际来源。authority增加historical_analyses[]并递增格式，保留dependency_schema=5解码，新格式未使用也带空数组。不能直接给所有旧记录追加required造成恢复失败。
 9. 摘要继承真实输入用途与来源；混合摘要缺可靠区分则沿原保守重建，重新读取允许的历史记录，不把整段摘要改标历史豁免。历史引用不能直接充当新草稿当前EvidenceRef。原回执、session、budget和operation身份保持。

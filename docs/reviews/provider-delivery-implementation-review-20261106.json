@@ -1,0 +1,219 @@
+{
+  "schema": 1,
+  "reviewer": "未参与本包实现的独立审查者；同一次限定审查从21文件首审续接至24文件冻结稿，未再委派",
+  "review_date": "2026-11-06",
+  "package": "docs/execution/semantic-runtime/provider-delivery-repairs.md",
+  "summary": "限定工程与证据如实性审查通过。首审发现的P2已由有效复合RED复现，当前按失败阶段去重及结算翻译修复有对应GREEN；新增Bridge诊断保留原异常类型、HTTP错误码和Worker恢复规则。通知覆盖使用Rust按原通知scope计算的宿主事实，原任务、来源及恢复身份保持；OpenAI原页面与精确Sol/high的合成协议证据可在说明的范围内复用。独立核对24文件实际before→current、68份证据指纹、原生宿主leaf、正式输出和账本用途后，未发现尚未处理的确定性delta代码阻断。本结论不签真实效果通过：DeepSeek新通知在成功模型/工具后未正式提交解释，具体原异常未知；OpenAI及J19验证因缺新凭据未运行。09仍active，无verify-increment或完成收据。",
+  "conclusion": "passed",
+  "engineering_conclusion": "passed",
+  "real_effect_conclusion": "blocked",
+  "overall_09_complete": false,
+  "scope_sha256": "449b814da6645cf0811b14be63a2da5db3d2d0df0d23758f65f22e0bfc2a0a6e",
+  "task_scope_sha256": "38e0baf425f4313ea8a039ef640ea81d35c523ec9a6293fcc03c16c6e22c3e1b",
+  "fingerprint_evidence": {
+    "method": "独立加载scripts/check_delivery.py，以read_delivery(root)读取当版delivery，再调用review_scope(root, delivery)。未从review-input复制指纹，未执行validate、verify_review、--complete或验收命令。",
+    "task_scope_file": ".local/checks/provider-delivery-implementation-20261106/scope.json",
+    "raw_delta_file": ".local/checks/provider-delivery-implementation-20261106/task.patch",
+    "review_input_file": ".local/checks/provider-delivery-implementation-20261106/review-input.json",
+    "verification_file": ".local/checks/provider-delivery-implementation-20261106/verification.json",
+    "verification_sha256": "acf88452d9f0c5f9b81a9483fccd61cdc9bd1ea00f643953f0fe802c2287042a",
+    "verification_references_checked": 68,
+    "verification_reference_sha_or_size_mismatches": [],
+    "baseline_public_files": 1145,
+    "before_current_file_pairs_checked": 24,
+    "before_current_file_hash_mismatches": [],
+    "raw_patch_independently_reconstructed": true,
+    "raw_patch_bytes": 121101,
+    "raw_patch_method": "按scope顺序从before快照和当前实际文件重新生成统一diff，与task.patch逐字相等；未使用整个HEAD diff。",
+    "first_review_scope_preserved": ".local/checks/provider-delivery-implementation-20261106/first-review-scope.json",
+    "first_review_delta_preserved": ".local/checks/provider-delivery-implementation-20261106/first-review-task.patch",
+    "review_record_excluded_from_scope": true,
+    "current_status_observed": "active",
+    "current_acceptance_count": 29,
+    "current_overall_review_observed": {"status": "pending", "record": null},
+    "current_increment_evidence_observed": null,
+    "verification_or_CURRENT_modified_by_reviewer": false
+  },
+  "reviewed_files": [
+    {"path":"README.md","sha256":"ab4584e392c81eb2bc9ca49be78bf42a2aa9cb5d4d4f6c8476e3c89bbea27548"},
+    {"path":"apps/agent/provider/controlled.ts","sha256":"71cff3e1d27a9d0d958bd7a45e0afbd4ac66457883133c78cc58b7305f08ad6e"},
+    {"path":"apps/agent/session/deliver.ts","sha256":"9891beeb414d7f2303e30ea355a2f7fdb466efd44a215354d38693559664cc01"},
+    {"path":"apps/agent/session/workspace-context.ts","sha256":"ef1e49ae150c8050ae362d95c5850d7189a188fa10e90c3b4dafbe870eeaf341"},
+    {"path":"apps/agent/transport/client.ts","sha256":"f388c547821f7a47231d1e9a07168340d957fed6f4f24925d8a2d59d163cbbff"},
+    {"path":"apps/agent/transport/server.ts","sha256":"d4a4ca59f00829f7a1a35d06a75d19ca13c8966e048905ff1a789c09ebe48271"},
+    {"path":"apps/web/src/features/models/ModelConfigurationPage.tsx","sha256":"c434d977a84d7fbcf61f7eef59b9caa5d1b2c16e87a4bcd17ded89957e4bfd66"},
+    {"path":"crates/data-agent/src/use_cases/data_tools.rs","sha256":"0c83e7e11da7167beec3d4254cbd8cf244d5d84695da772cf485c5fd482cfef5"},
+    {"path":"crates/data-agent/src/use_cases/deliver_run.rs","sha256":"8ab6ba38d76e96fee8eba06935220762276abac1db253bd8c1f5fc0e699d2789"},
+    {"path":"crates/data-agent/src/use_cases/task_answers.rs","sha256":"2ddb64ad7096c2807c7d57ef329d6a86f5429838aa6c07903e04fae5232257db"},
+    {"path":"docs/architecture/implementation-design.md","sha256":"447c02347dd50600989d40e91d1fc3e84d442edf5ea42fbfe0fdea39255fe802"},
+    {"path":"docs/development.md","sha256":"e3b0a23e656c0cb97d4841a1ce065271f06ed46d4489d5a178a540bc7962b7a5"},
+    {"path":"docs/execution/semantic-runtime/CONTINUATION_PROMPT.md","sha256":"6e286830c84744f265814e3d66ab7a91af59173dcf3e9d32b28015742f8efe0d"},
+    {"path":"packages/contracts/generated/boundary.rs","sha256":"e2ab03a74de15fc9c3e34b2cb265f4b0b3d0bada50f2aa0028cb209c1501c71f"},
+    {"path":"packages/contracts/generated/boundary.ts","sha256":"ef0ae0475624c22c9a4fcb9f26ec1cd58f5894f325173083ae66ec625c95136a"},
+    {"path":"packages/contracts/schema.json","sha256":"248bac3616e32878b07f64842cbb0e9d1dbbc2a869c7ec22af6a73223be72ba4"},
+    {"path":"tests/mvp/check-model-configuration.mjs","sha256":"994020adc3e9f06eacb1ea98c3ed59680a5fc831e2612c4c024aff454c4d1d1e"},
+    {"path":"tests/mvp/check-result-notification-answers.mjs","sha256":"dc9972dfdfe73905bf7ccc961772934cde47d597b7233767c7ded5ee807ce104"},
+    {"path":"tests/runtime/check-answer-state.mjs","sha256":"bfa2178ae30bb8816fefeac373033e41ff944b58fb93e05af3dc9f657bbc9046"},
+    {"path":"tests/runtime/check-bridge.mjs","sha256":"4f70fcc9760d5daf681dbf3ddb1f0166823542968db5fd5781e87e33a98deb39"},
+    {"path":"tests/runtime/check-configured-provider.mjs","sha256":"90ac1fa3c60af93fe421df514ebfbec2104882d5fea586758e4993d4ad882fb2"},
+    {"path":"tests/runtime/check-data-tool-transport.mjs","sha256":"08f05b841f694e30b8bcba6bc072353ed65a7805d4f9d0274531592f0d6ef919"},
+    {"path":"tests/runtime/configured-model-capabilities.mjs","sha256":"5a76e63c12edfbea39582edbf33b23d0136fa58e1119d269e2c2c9ac5acf8a41"},
+    {"path":"tests/runtime/model-protocol-fixture.mjs","sha256":"26bab9e17a35d0a8438b12a168b2d5f2c8a4915ff88381abf4731b7a34fdfaa4"}
+  ],
+  "scope_and_method": {
+    "requirements_read": [
+      "AGENTS.md的模块职责、跨语言契约、旧身份、日志、Pi复用及独审规则",
+      "provider-delivery-repairs.md第2至7节",
+      "CURRENT最新摘要和29项验收绑定；末次核默认派发命令已直接包含Bridge接缝",
+      "readiness audit第2至5节仅作定位背景，结论另以当前源码和原证据核定"
+    ],
+    "review_mode": "首审21文件actual delta及相关owner调用链；最终只复审诊断修复、新Bridge边界、变化的验收和说明、真实结果及证据复用。生成大文件只审实际合同delta，不声称全文件或全项目审计。",
+    "performed": [
+      "只读源码、合同、既有测试及完整有效RED/GREEN日志",
+      "独立文件SHA/大小、原始delta重建和现有review_scope计算",
+      "从保存的before/final状态逐行重比原账本记录、未知状态及原查询/配置摘要",
+      "独立重算17份真实agent wire参数指纹与状态，核17个账本agent身份的一一对应和费用分组",
+      "核原生会话文件到三个宿主leaf的字节前缀、SHA和条目数；只提取通知相关祖先链与候选元信息",
+      "核既有正式输出、浏览器重开/刷新记录和已保存刷新截图",
+      "核当前聚合移除唯一新增失败attempt后与原快照完全相等"
+    ],
+    "not_performed": [
+      "未运行任何测试、构建、DB查询、浏览器操作、服务、provider、Workflow或Oracle",
+      "未读取凭据或搜索无关Key文件，未委派、发布、提交、推送或部署",
+      "未修改源码、测试、CURRENT、成绩、verification或旧证据，仅写本JSON",
+      "未执行verify-increment、判分器或生成完成收据"
+    ],
+    "limit": "本地冻结材料审查不等于新运行验收；checker的声明输入指纹范围不代表人工重审了整个历史项目。"
+  },
+  "resolved_findings": [
+    {
+      "id": "provider-finalize-diagnostic-suppressed",
+      "priority": "P2",
+      "status": "resolved",
+      "first_review_root_cause": "全调用diagnosed布尔值在provider失败时已置位，随后finalize失败诊断被抑制；本轮同时删掉旧finally结算未确认日志，使结算端点与原因丢失。",
+      "locations": ["apps/agent/provider/controlled.ts:71", "apps/agent/provider/controlled.ts:155", "apps/agent/provider/controlled.ts:442", "apps/agent/provider/controlled.ts:465"],
+      "fix_assessed": "当前Set按failedStage去重。provider503与finalize坏回执各保一条；success后结算未确认的外层翻译仍归finalize，避免重复伪造provider失败。结算重送继续使用原settlement和原调用身份，没有新增模型重发。",
+      "evidence": [
+        ".local/checks/provider-delivery-implementation-20261106/dispatch-settlement-red.log",
+        ".local/checks/provider-delivery-implementation-20261106/dispatch-settlement-green4.log",
+        ".local/checks/provider-delivery-implementation-20261106/final-boundary-checks.log"
+      ],
+      "test_expected_values": "有效RED为诊断1而应2；最终复合断言要求provider503/model_service_unavailable和finalize200/invalid_response，原call_attempt_id、许可次数、敏感信息及全部重送payload保持。",
+      "test_cleanup_assessed": "测试消费真实流后等待一个setImmediate，仅让本地直接HTTP替身的清理微任务完成再恢复全局fetch；没有等待真实网络或将未完成检查当作通过。"
+    }
+  ],
+  "open_delta_findings": [],
+  "engineering_assessment": [
+    {
+      "topic": "模型派发、受控原因和未知身份",
+      "assessment": "符合限定要求",
+      "locations": ["apps/agent/provider/controlled.ts:68", "apps/agent/transport/client.ts:16"],
+      "reason": "payload/reserve/send/provider/finalize分别定位。日志只携原run/call、固定路径、耗时、HTTP状态、reserved/sent及有限原因；不复制输入、URL参数、头或任意异常原文。reserve未收到回执不据此释放预留；send未知不新增重试；finalize仅重送原payload。实际安全码、24次消息预算、三次临时失败和取消判断未因诊断改变。"
+    },
+    {
+      "topic": "真实失败后补齐的Bridge边界",
+      "assessment": "本地工程接线通过，真实未复验",
+      "locations": ["apps/agent/transport/client.ts:23", "apps/agent/transport/client.ts:54", "apps/agent/transport/server.ts:49", "tests/runtime/check-bridge.mjs:68", "tests/runtime/check-configured-provider.mjs:121"],
+      "reason": "私有Symbol把受控HTTP元信息附在原Error上，原SyntaxError/TimeoutError及message仍供既有逻辑使用。Bridge沿原失败日志输出finish/host_request/delivery、有限类型和原因及原run/message/chain，移除DATA_AGENT_DIAGNOSTICS任意message输出。failureCode允许集、HTTP响应和Worker策略未修改。最终Bridge RED脚本与当前测试只有两个import路径差异，使用相同有效envelope/FinishRun，0!=1是有效缺诊断RED；先前非法profile尝试不采信。最终GREEN验证超时分类和敏感内容边界，不能证明真实失败就是超时。"
+    },
+    {
+      "topic": "通知scope的根因、合同及所有消费者",
+      "assessment": "符合限定要求",
+      "locations": ["crates/data-agent/src/use_cases/task_answers.rs:185", "crates/data-agent/src/use_cases/task_answers.rs:505", "crates/data-agent/src/use_cases/task_answers.rs:620", "crates/data-agent/src/use_cases/data_tools.rs:163", "crates/data-agent/src/use_cases/data_tools.rs:2856", "crates/data-agent/src/use_cases/deliver_run.rs:242", "crates/data-agent/src/use_cases/deliver_run.rs:564", "apps/agent/session/workspace-context.ts:110", "apps/agent/session/deliver.ts:124"],
+      "reason": "原probe中A仅允许平台，B额外允许文档，C查询合法采用该文档；B的present及freeze确已成功，6次本地回合后原finish拒绝。原Rust覆盖函数还核原通知query/task/condition及其scope下全部实际sources，证明Node仅凭query ID会过早判覆盖。新增可选布尔沿同一次coverage产出，control正文为空也保留；启动、恢复、刷新和成功控制回执均有生产/消费。reconnect即使接回旧控制文字仍保当前覆盖值，replay仅在返回clone中移除旧bool，不改原存储字节。v1缺省不证明覆盖；未删除Rust原scope检查、合并许可或改operation/origin/output/budget身份。"
+    },
+    {
+      "topic": "OpenAI管理、原生Pi及实际配置",
+      "assessment": "合成接入通过，真实账户能力未验证",
+      "locations": ["apps/web/src/features/models/ModelConfigurationPage.tsx:533", "tests/mvp/check-model-configuration.mjs:107", "tests/mvp/check-model-configuration.mjs:203", "tests/runtime/configured-model-capabilities.mjs:40"],
+      "reason": "明确切换OpenAI时默认Responses、保留已填地址且协议可编辑。已保存Sol/high、五档、1050000/900000/128000、8MiB/600秒、5000000/15000000微美元费率和新消息冻结配置均有逐字段断言。有效high按锁定Pi的configuration_update及providerThinkingLevel核，顶层medium保留原生策略。两次工具往返沿同一Pi session，call_id、encrypted reasoning、usage及4笔875微美元结算有证据；100输入含缓存20，25输出含推理10。phase、store:false及strict:false沿Pi原生转换，未复制循环、历史或压缩器。容量推导与现有公式相符；官方容量/价格链接沿执行包依据，本次未新增外部查证，账户可用性及真实极限没有据此通过。"
+    },
+    {
+      "topic": "测试预期与验收修订",
+      "assessment": "有独立合同依据，未放宽业务标准",
+      "reason": "旧transport assert.rejects与接手未改的data-tools.formatResult/execute原生isError/details合同冲突；before及after-narrowing同样Missing expected rejection，当前改为完整回执/isError断言仍保请求序列、零新增提交和重放检查。最终传输12项及原SyntaxError断言通过。通知保原9场景，新增mixed-frozen-scope默认执行；fixture总调用48→60仅容纳45+10，本条消息24次及金额上限不变。A标题及恢复前run查找是夹具错误，修正不改变正文、原条件、来源或正式提交断言。新增Bridge直接由默认configured-provider入口加载，29条映射保留。"
+    },
+    {
+      "topic": "版本及证据复用",
+      "assessment": "复用范围成立，保留版本限制",
+      "reason": "UI green2前后hash稳定，表单、fixture、configured provider和容量逻辑与当前匹配。后续覆盖改动针对result_notification，而其管理和普通工具消息没有通知；最终Symbol元信息和日志只改变失败诊断，成功HTTP结果及原异常类型保持。七步完整批次使用当前Rust覆盖实现、deliver/workspace和合同；后续仅Node诊断/元信息/server变化，已另跑当前边界和类型检查。因此复用其相应成功行为及原预算/未知/取消证据，不声称整批在最终Node字节上重跑。真实runtime-version记录的client为32f6dede、controlled为1e1eb348版本，早于最终Symbol/Bridge补修；该补修未真实重验。"
+    },
+    {
+      "topic": "范围、命名和职责",
+      "assessment": "未见无依据扩张",
+      "reason": "通知修复有完整正常入口反例；Bridge诊断有本次真实成功工具后错误不透明的直接依据。新元信息结构限于现有HTTP边界，覆盖事实归Rust原owner，没有新公共错误协议、表、迁移、供应商切换、通用能力目录或第二Agent。文档已区分工程、本次真实失败、历史A03未知和OpenAI缺凭据。"
+    }
+  ],
+  "existing_verification_assessed": {
+    "reviewer_reran_commands": false,
+    "dispatch_original_red_green": "dispatch-red.log确因缺诊断0!=1失败；dispatch-final-local.log通过原四注入及三协议503；最终复合与Bridge以final-boundary为准。",
+    "form_red_green": "ui/red/check.log明确OpenAI新建默认openai-completions而应openai-responses；ui/green2/result.json完整code0，13组、22本地请求、官方0，前后输入hash稳定。",
+    "answer_state": "answer-state-coverage.log的21项通过，受控Rust合同补覆盖bool，未移除原候选失效/恢复断言。",
+    "affected_batch": {
+      "record": ".local/checks/provider-delivery-implementation-20261106/final-affected-checks/affected-checks.json",
+      "steps": 7,
+      "all_exit_zero_and_inputs_unchanged": true,
+      "notification": "默认10场景完整passed，55次本地协议调用、官方0；mixed-frozen-cover正例与mixed-frozen-scope窄范围反例均保留。",
+      "other_checks": "mixed-owner、natural-recovery/history、独立query-history、control-context及request-policy通过；自然恢复场景自身historyPermissionChecked=false未冒充历史权限证明，另一个query-history场景为true。",
+      "required_checks": "verify-code/contracts/architecture完整exit0：667双侧合同、12架构单元及锁检查通过；非阻断Vite输出目录/包大小提示保留。"
+    },
+    "final_boundary": "final-boundary-checks.log完整通过14次本地provider请求、既有Bridge组和传输12项；types-final-boundary.log的tsc通过。",
+    "static_records": "固定21核心检查及材料/delivery静态记录通过只证明原记录和声明；不是本包真实通知/OpenAI通过，也不是verify-increment。"
+  },
+  "real_effect_assessment": {
+    "DeepSeek": {
+      "status": "failed",
+      "attempt_id": "A03-ff1322be-d4ed-4cd0-aec2-f3129514bd3a",
+      "supplement": true,
+      "verification": true,
+      "covers_original_assertion_indices": [],
+      "observed": "两个正常新用户消息分别保存只读草稿和明确执行；新query仅一次提交且succeeded，实际返回sample_count=458、first_audio_p95_ms=6430。原生结果通知首轮4次模型调用全部成功结算，get_query和最终present成功，宿主已发布候选/context_edit，但没有正式结果解释。",
+      "native_boundary": "独立重算原会话到leaf493fe634、a3c5c0cd、cea82e32的字节前缀/SHA/条目数全部匹配。通知祖先链末端为成功present工具ad10ec39、stop助手2a7eba28和指向该助手的context_edit cea82e32；候选存在不等于正式输出已提交。",
+      "formal_result_explanations": 0,
+      "automatic_recovery": "同一通知job的4个run均失败，后三次原生恢复各新增模型行0，保持原message/recovery_chain/budget/output关系，最终retry_exhausted。没有付费人工重发。",
+      "browser_limit": "既有重开及普通刷新保留1012字草稿和789字等待正文，结果卡显示458/6430且errors=[]；这不能代替缺失的结果解释。",
+      "cause_limit": "仅证明成功模型/工具后正式提交未完成且Bridge返回unexpected_error。原Finish请求/HTTP响应和内部异常未捕获，不能确定timeout、provider、发送前、lease或特定代码根因，也不能称为已证既有失败。历史A03具体原因仍独立未知。",
+      "SQL_quality_limit": "生成SQL仅过滤播放received_at，未表达绝对播放finish早于snapshot；保原SQL及该精度限制，不以实际返回值认定完全满足题意或重写答案。",
+      "post_failure_diagnostic_patch_real_retested": false
+    },
+    "OpenAI_J19": {
+      "status": "blocked_credential",
+      "existing_openai_services": 0,
+      "real_provider_calls": 0,
+      "J19_new_messages": 0,
+      "real_configuration_writes": 0,
+      "reason": "原管理员GET及非秘密配置投影未发现OpenAI服务，未提供新的授权私密Key注入。既有合成配置不能代替真实账户验证；原J19题新attempt及一次显式只读追问均未运行。",
+      "preserved": "原J19七稿及未执行状态、旧attempt和valid/invalid泛化限制保留；曾贴出的Key未被用于本轮请求。"
+    }
+  },
+  "ledger_and_preservation": {
+    "basis": "保存的state-before/state-final-cleanup、原参数指纹查询对账、原wire及当前聚合；未做新DB查询。",
+    "new_settled_model_rows": 22,
+    "agent_rows": 17,
+    "agent_cost_micros": "809656",
+    "knowledge_embedding_rows": 5,
+    "knowledge_embedding_cost_micros": "17",
+    "total_spent_delta_micros": "809673",
+    "reserved_delta_micros": "0",
+    "new_unknown": 0,
+    "wire_reconciliation": "17个唯一agent call_attempt_id恰好覆盖保存的全部17个agent账本身份。独立从17份wire body重算parameters_fingerprint并核response_status，与对账逐项一致；无未匹配。5笔embedding处于原辅助边界，其物理请求不在DeepSeek hook内，不能称为5次聊天捕获缺失。",
+    "saved_original_rows_independently_compared": {
+      "model_call_attempts": {"before": 3230, "after": 3252, "changed_old": 0, "added": 22},
+      "maintenance_model_calls": {"before": 118, "after": 118, "changed_old": 0, "added": 0},
+      "budget_scopes": {"before": 80, "after": 82, "changed_old": 0, "added": 2}
+    },
+    "original_unknown_rows": 29,
+    "original_maintenance_issued_rows": 3,
+    "original_unknown_and_reserves_preserved": true,
+    "current_aggregate_old_content_exactly_preserved": "独立从当前results.json移除唯一新增A03失败attempt后，与state-before中原聚合完全相等；新条目为fail、supplement/verification=true、covers_original_assertion_indices=[]。comparison-final-cleanup中的inconclusive是main最终分类前快照，不用它替代当前fail。",
+    "other_preservation": "保存的原查询hash/API对象、source/index/settings、模型配置、权限存在状态及受保护元信息完全相等；原107文件/65 attempt文件的保全记录除新增attempt聚合和一次SQLite提交外无其他原文件变化。没有借新运行清除旧unknown或补额。",
+    "cleanup": "shutdown-final记录本轮8个自有进程退出、五端口释放，仅向自有supervisor发停止信号；原有两个API和共享基础设施未动。expiry、权限、默认、原配置未变，清理后未新增付费请求。"
+  },
+  "remaining_gaps_and_stopping_boundary": [
+    "必要DeepSeek真实通知交付失败；具体底层原因仍未定位，最终Bridge诊断补修仅有本地证明，没有真实复验。",
+    "OpenAI真实账户、J19解释精度及同会话一次显式读取工具续答待新授权私密凭据。",
+    "历史A03底层原因继续未知；固定21核心原成绩与新补充失败分开保存。",
+    "8MiB/600秒和新大窗口为配置及本地容量合同证明，真实极限继续后置。",
+    "本报告仅签限定工程和证据如实性。09保持active，不执行已知不满足真实条件的verify-increment、不生成完成收据，也不授权新模型消息、查询重放、服务恢复或下一修复。"
+  ]
+}

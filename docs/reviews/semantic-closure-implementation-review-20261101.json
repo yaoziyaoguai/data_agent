@@ -1,0 +1,105 @@
+{
+  "reviewer": "independent-implementer-review (Claude, non-implementer)",
+  "summary": "独立审查 I2-SEMANTIC-CLOSURE-REPAIRS（R01–R14、D1/D2、删除过度限制），以 .local/audits/semantic-runtime-20261031-60e76a2d/before/ 冻结快照为 diff 基线，逐项对照 closure-repairs.md 的已确认决定与 docs/CURRENT.md 切片1–4记录，并核对 .local/checks/semantic-closure/ 证据日志与测试期望变更。方法：diff 快照判定实际改动范围（全部落在 frontmatter allowed_paths 内，无权限/额度/常量上调，Makefile 仅新增校验入口）；重点抽核 R02（task_answers.rs 单份8000/24项/384281推导、migrations/202610310001 仅 assistant_outputs.final_text 扩 MEDIUMTEXT、schema.json ChatMessage 对象级 allOf assistant≤384281/user≤32000、FinishRun.final_text 保持8000）、R07（knowledge.rs 删除全查询 history 与全局1000门，改为窗口内 retired 生命周期：snapshot 窗耗尽即释放、suppresses 只作用本窗、absorb_legacy_history 旧cursor薄转换两条解码路径都并入，window_lifetime 3项单测含>1000退休与跨窗重现）、R12/R13/R14（data_tools.rs 仅真实 succeeded 分片作保、bm25 认 SQL 替代票、dense 无、channel_unavailable 与 available 并列、index_lag 只来自已证滞后；knowledge.rs:3340-3365/3373-3430 覆盖核验一次性短事务；!terms.complete 仅在 window_sql_active 时计入 bounded）、D1/D2（workspace-context.ts:38-58 仅 completed+无 pendingMessages+本轮末条纯文本助手消息才 context_edit；task_answers.rs reconnect_control_delivery_in_tx 按覆盖集合接回原持久投影不重造指纹；finish_run.rs:280-329 仅冻结解释的任务才 answered；runtime::control_deliveries_in_tx 收回 store 层裸SQL）。\n逐项结论：R01–R14、D1/D2 全部按已确认决定实现，无越权范围，无静默改预期；R03/R04/R05（reopen 不归零 batch_sequence、无 DELETE FROM knowledge_versions、ON DUPLICATE KEY 按 fingerprint 分流且 lease_epoch 只增）、R06/R08/R10/R11 抽核落点与正控一致。证据日志 15 份中 13 份结尾为 passed:true/exit=0/test ok；期望更新四组（lease与compact-capacity 的 bm25 not_configured→available 有 R12 决定+channel-faults:933 锁定语义支撑且 dense 保持 not_configured；deadline-order 四处均为测试侧陈旧修复并以探针/兄弟脚本契约为据；evidence-search 回退后相对快照仅多一条 exact:not_configured 收紧断言）全部正当，所有测试脚本 diff 呈净增断言。发现两项低级证据卫生问题（见 findings），不影响结论。",
+  "conclusion": "passed",
+  "scope_sha256": "7607161f3a0c9f783f966b5623d8da62088beae893bafab9ae9a0e1f872a28bd",
+  "findings": [
+    {
+      "item": "evidence_logs",
+      "severity": "low",
+      "detail": ".local/checks/semantic-closure/regression-evidence-support-lease.log 为 0 字节，日志本身无 exit=0 或 passed 标记，无法独立证实 CURRENT 切片4⑨『evidence-support-lease复跑绿 exit0』。间接证据成立：该脚本成功时不产生 stdout，结果由脚本自写 .local/checks/evidence-support-lease.json（passed=true、6 observations，mtime 13:55 晚于空日志创建 13:54），其中 SQL 共同期限场景 channels 含 bm25:available，与 R12 更新后的期望一致。属证据留痕卫生问题，非虚假声明。"
+    },
+    {
+      "item": "evidence_logs",
+      "severity": "info",
+      "detail": "fmt-check-slice4.log 为 0 字节（cargo fmt --all --check 通过时无输出，与通过一致但无显式成功标记）；clippy-slice4.log 有 Finished 且无警告。同轮 fmt 佐证见 sup23-fmt.log。"
+    },
+    {
+      "item": "R07",
+      "severity": "info",
+      "detail": "SEARCH-CONTINUATION-LIFETIME 深链场景走内部直工具路径（/internal/data/tool-calls 登记 + /internal/data/tools 执行 + DB 回执等同 + 契约校验）而非 Pi 会话传输：Pi 路径 schema 双编码字节使第二次 v2 分页回执必被 tool_response_capacity 拒绝。该产品容量限制已在 CURRENT 切片4②如实记录为残留缺口（r07-lifetime-third..eleventh 9次运行），未隐藏、未改产品掩盖，正式工具链本身仍被真实覆盖。"
+    }
+  ],
+  "verified": {
+    "R01": true,
+    "R02": true,
+    "R03": true,
+    "R04": true,
+    "R05": true,
+    "R06": true,
+    "R07": true,
+    "R08": true,
+    "R09": true,
+    "R10": true,
+    "R11": true,
+    "R12": true,
+    "R13": true,
+    "R14": true,
+    "D1": true,
+    "D2": true,
+    "evidence_logs": true,
+    "expectation_updates": true
+  },
+  "second_incremental_review": {
+    "reviewed_delta": "首轮make verify-increment组3（UPGRADE-RESTORE）失败后的修复：crates/data-agent/src/use_cases/data_tools.rs回执侧宿主控制投影附件增加 run.tool_contract_version == 2 门控（附中文理由注释），v1工具回执恢复D1前形态、不再让Node acceptReceipt缓存后走compose_in_tx拒绝的v2-only控制分支；v2回执与交付行为不变。审查#1之后声称无其他产品改动。",
+    "method": "①治理依据：docs/execution/semantic-runtime/closure-repairs.md:147-148（control_delivery投影与内部FinishRun control_delivery_ref为宿主v2合同接线）与docs/CURRENT.md切片5记录。②增量边界三重核实：mtime扫描（find -newer 审查记录）仅命中data_tools.rs及scripts/__pycache__两个.pyc（后者已查实为首轮verify-increment于14:19:53再生的字节码缓存，见findings）；更强证据：14:32失败收据.local/delivery/I2-SEMANTIC-CLOSURE-REPAIRS-result.json的before清单共570个文件sha256与当前逐一比对，唯一差异即crates/data-agent/src/use_cases/data_tools.rs、无缺失文件；并以该清单按fingerprint(for_review=True)算法重建复算得c092450c…与审查#1记录的scope_sha256一致，证明14:19运行态密码学等同于审查#1认证态；收据checker_sha256与当前scripts/check_delivery.py一致。③门控一致性：data_tools.rs:2608-2621以 run.tool_contract_version == 2 && matches!(update_analysis_task|request_query|execute_query) 门控投影附件，与deliver_run.rs:228、537（v2才计算control_delivery否则Null）及task_answers.rs:583 compose_in_tx（v1或控制组合非法即invalid_evidence）三出口同口径；通读该函数回执构造尾部（answer_parts/just_frozen/validate/record/commit，约2555-2628行）未见夹带其他行为变化。④局限：修复前data_tools.rs字节不可恢复（工作未提交、无中间副本），『仅此门控』无法逐字节密码学证明，由单文件哈希边界+整块阅读+行为证据共同支撑。⑤证据日志：fmt_exit=0/clippy_exit=0/build_exit=0（build-control-gate.log实际Compiling data-agent、data-agent-api、data-agent-worker三crate，Finished 25.01s）；checkpoint-storage-green.log结尾 {\"passed\":true,…,\"officialRequests\":0} 后 exit=0；control-gate-waiting-delivery.log {\"passed\":true,…,\"officialRequests\":0} 后 exit=0（d1-control/d1-recovery/d1-identity-recovery/d1-settle-boundary/d1-notification-after-control与d2三例全过）；checkpoint-storage-probe.log含v1（\"tool_contract_version\":1）回执携带1b35b5…指纹控制投影、第二次/internal/finish以finishRef提交获409 invalid_evidence的完整复现；秒级mtime链：源修复14:47:32→worker二进制14:47:58、api二进制14:48:04→两绿日志14:50:50/14:53:27，确认绿日志运行在修复后二进制上。⑥新范围指纹按scripts/check_delivery.py的review_scope现算；完整三组make verify-increment复跑与收据仍待完成，由CURRENT另行跟踪，不在本次增量审查结论内。",
+    "scope_sha256": "793ad41f4bf42ae90770fdd1f03ec7ffbbd3c3d75ca2727ea8a80a7951266755",
+    "timestamp": "2026-11-01T07:00:50Z",
+    "findings": [
+      {
+        "item": "delta_boundary",
+        "severity": "info",
+        "detail": "files-newer扫描额外出现 scripts/__pycache__/development.cpython-314.pyc 与 test_development.cpython-314.pyc（14:19:53，晚于审查记录14:18:15）。已查实为首轮make verify-increment（delivery run目录时间戳14:19:22）执行 `$(PYTHON) -m unittest discover -s scripts -p 'test_development.py'`（Makefile:67/70/145等）再生的字节码缓存：对应源scripts/development.py与scripts/test_development.py的mtime均为10-30 17:49未变，且check_delivery.py的fingerprint遍历显式跳过.pyc与__pycache__，不进入范围指纹。属生成物，非产品/测试/合同改动，无需处理。"
+      }
+    ]
+  },
+  "third_incremental_review": {
+    "reviewed_delta": "第二次make verify-increment组13（make verify-evidence-search）失败后的测试侧修复：tests/mvp/check-evidence-search-compact-capacity.mjs错误处理块（约85-92行）将pause_worker窗口+client侧的容忍码由仅ECONNRESET扩展为['ECONNRESET','EPIPE']并附中文理由注释。ECONNRESET容忍为增量前既有（审计快照中即为 error.code === 'ECONNRESET'），本次仅将同一主动停机噪声的另一表现纳入；无产品代码改动，无场景删除，无该边界外的断言放宽。",
+    "method": "①增量边界三重核实：mtime扫描（find -newer 审查记录）仅命中该测试文件及scripts/__pycache__/check_architecture.cpython-314.pyc（见findings）；15:43:01失败收据（.local/delivery/I2-SEMANTIC-CLOSURE-REPAIRS-result.json，status:failed、started 07:01:52Z）before清单570个文件sha256与当前逐一比对，唯一差异即该测试文件、无缺失；以该清单按fingerprint(for_review=True)算法重建复算得793ad41f…与本人第二轮记录一致，证明本轮运行起始态密码学等同于第二轮认证态；checker_sha256与当前scripts/check_delivery.py一致。②本轮达成字节级隔离（较第二轮更强）：该文件相对增量前审计快照的完整diff仅两个hunk——hunk二（R12无vector时bm25/exact按词法能力available、dense保持not_configured的期望更新）为审查#1已核实内容；hunk一即本次修复，且快照原行证明ECONNRESET容忍系增量前既有类别。③作用域判断：容忍条件严格为 sqlPhase==='pause_worker' && connection===socket（client侧）&& code∈['ECONNRESET','EPIPE']；sqlPhase转换在313-317行（setup→pause_worker紧贴h.pauseWorker()+100ms→deliver于deliver调用与deliver后断言之前），窗口精确；observations.sqlConnectionErrors仍记录全部连接错误（该行自快照未动，透明性保留）；setup/deliver阶段、upstream侧、任何其他码仍推入errors并使324/329行断言失败。④失败证据核对：.local/checks/mvp-30ef4c72dbc4a0ad/evidence-search-compact-capacity.json（sql-fallback，passed:false）errors恰为['SQL observation connection: EPIPE']一条，observations.sqlConnectionErrors两条均为pause_worker/client（ECONNRESET+EPIPE），indexedWindows:24、8页全交、deliver成功，失败点为deliver后errors断言——与归因一致；其内一条code=tool_response_capacity的toolResponses记录经查系场景刻意构造的容量拒绝路径（测试158-172行断言先经Pi原生摘要、拒绝冻结可重放、公共游标续页），非被掩盖故障。⑤绿日志：evidence-search-epipe-green.log（15:52:46，晚于测试修复15:46:05）含Makefile verify-evidence-search全部14条node检查回执passed:true（含compact-capacity milvus/sql-unconfigured/sql-fallback三种模式，sql-fallback passed:true），结尾exit=0。⑥时间线：失败证据15:42:56→收据failed 15:43:01→测试修复15:46:05→绿日志15:52:46。⑦新范围指纹按scripts/check_delivery.py的review_scope独立复算=bfee93b9…；无产品文件自第二轮后变更（哈希边界），worker停机/连接池拆除在本增量无产品改动的归因成立。完整收据状态由CURRENT另行跟踪。",
+    "scope_sha256": "bfee93b988764bccb1163e9400a58f3456d7c07034af1a6bf1dbd3275df94fca",
+    "timestamp": "2026-11-01T07:56:00Z",
+    "findings": [
+      {
+        "item": "delta_boundary",
+        "severity": "info",
+        "detail": "files-newer扫描额外出现 scripts/__pycache__/check_architecture.cpython-314.pyc（15:23:52，第二轮审查记录之后）。已查实为第二次verify-increment各验收组执行python架构检查时再生的字节码缓存：对应源scripts/check_architecture.py的mtime仍为10-30 16:59未变，且check_delivery.py的fingerprint遍历显式跳过.pyc与__pycache__，不进入范围指纹。属生成物，非产品/测试/合同改动，无需处理。"
+      }
+    ]
+  },
+  "fourth_incremental_review": {
+    "reviewed_delta": "第四次make verify-increment组17超时后的交付契约时限校准：docs/CURRENT.md frontmatter acceptance 中 TASK-COVERAGE（node tests/mvp/check-task-answer-boundaries.mjs）的 timeout_seconds 300→600。测试内容、断言、产品代码零改动（570个验收输入文件哈希逐一比对无差异）。正文另增切片5 ⑦⑧⑨ 状态记录条目（run3组2环境瞬时超时、run4全程与本校准、待第五次完整重跑），属状态记录正常进度内容，不入范围指纹。",
+    "method": "①增量边界（密码学）：mtime扫描（find -newer 第三轮审查记录）在全部列出的范围内路径零命中；第四次运行收据（.local/delivery/I2-SEMANTIC-CLOSURE-REPAIRS-result.json，status:failed、started 08:27:47Z、finished 09:13:01Z、error=验收命令失败未完成或超时）before清单570个文件sha256与当前逐一比对零差异——本轮无任何验收输入文件变更；checker_sha256与当前scripts/check_delivery.py一致。②指纹影响机制更正（见findings）：docs/CURRENT.md并不在verification_inputs内（清单无该条目），时限变更仅经contract_sha256（frontmatter delivery对象含acceptance）进入范围指纹，正文⑦⑧⑨不入指纹；将当前frontmatter的TASK-COVERAGE时限逆向改回300后按fingerprint(for_review=True)重建复算得bfee93b9…与本人第三轮记录一致——证明除该一个timeout_seconds值外，frontmatter合同全部内容（含全部31条acceptance的时限与命令，无论本轮是否执行）与决定段自第三轮完全未变。③超时证据：收据command 17为 node tests/mvp/check-task-answer-boundaries.mjs、duration 300s/timeout 300s、timed_out:true、exit_code -9（SIGKILL）；command-17.log 0字节，与该脚本仅在完成时输出单行JSON的形态一致（对照r02-answer-boundaries-green2.log首行即完整JSON报告、共2行）。④实测证据：boundaries-timing.log（17:20，晚于17:13失败、早于17:21时限修改）尾部 real 332.07/user 191.64/sys 17.11、exit=0，单行JSON报告 passed:true、34项checks全过——脚本真实超过旧300s时限且全部通过；10-31基线：I2-COMPATIBLE-UPGRADE收据同命令 duration_ms=208629（≈209s）、timeout 300、exit 0，证实300s系R02扩展前旧版标定。⑤先例与口径：docs/CURRENT.md:808 RETRIEVAL-ADVANCE 按实测300→600且明记『此为时限记录核对，不是放宽验收』，本次同型；⑧记录同口径表述。⑥余量核对（收据精确duration_ms）：除超时的组17外，16条已执行命令时长/时限最高占比0.51（deep-advance 307/600），次高0.40（verify-evidence-search 362/900，EPIPE修复组复验通过）、0.35、0.34，其余≤0.21，无需同批调整；UPGRADE-FROZEN 246s复验确认⑦的run3组2超时为环境瞬时性（run3=1793519936483898000，15:58:56启动，组2输出停于16:04后静默至1200s击杀，无收据；该窗口内无文件变更，由①②边界覆盖）。⑦新范围指纹按scripts/check_delivery.py的review_scope独立复算=6f219b34…。⑧记录处理：顶层scope_sha256与本对象为新指纹；第二、三轮增量审查的历史指纹按审计链保留。",
+    "scope_sha256": "6f219b3456405803ea40a604f98b0182ff370f296f91d1abf78dec9e9defd197",
+    "timestamp": "2026-11-01T09:26:12Z",
+    "findings": [
+      {
+        "item": "fingerprint_mechanism",
+        "severity": "info",
+        "detail": "协调交接中『docs/CURRENT.md IS in verification_inputs so it affects the fingerprint』的机制表述不准确：第四次运行收据before清单（570项）中并无docs/CURRENT.md，它不是验收输入；时限变更经contract_sha256（frontmatter delivery对象整体含acceptance条目）进入review_scope，正文切片5⑦⑧⑨条目完全不影响范围指纹。本轮已按正确机制验证：仅将TASK-COVERAGE时限逆改回300即精确复现第三轮指纹bfee93b9…，故除该值外frontmatter合同内容与决定段均未变。记录在此以免后续审查沿用错误机制。"
+      },
+      {
+        "item": "delta_boundary",
+        "severity": "info",
+        "detail": "协调交接未提及的第三次运行run3（.local/delivery/I2-SEMANTIC-CLOSURE-REPAIRS-1793519936483898000，15:58:56启动）：组1过、组2 UPGRADE-FROZEN 1200s超时SIGKILL（子命令输出~90s内完成后静默至击杀，日志mtime停在16:04、无第三条命令日志与收据）。该事件在docs/CURRENT.md切片5⑦中已如实记录并归因环境瞬时性（单独重跑255.76s绿），且经本轮①②密码学边界覆盖证明该窗口内无任何文件变更，不影响增量审查链。"
+      }
+    ]
+  },
+  "fifth_incremental_review": {
+    "reviewed_delta": "第五次make verify-increment组23（TASK-RESUMED-CLARIFICATION，check-task-answer-scope.mjs --new-task=clarify --null-task）exit1后的测试侧期望更新：clarify子变体committed期望由旧形态（把丙的澄清问题当作丙交付part）改为D1控制交付形态（甲冻结正文+宿主控制投影）；answer_parts对控制交付断null（SQL NULL包JSON_OBJECT适配h.sql逐行JSON.parse）；浏览器断言用无换行子串并新增『未核验的模型末条不进入正式交付』负断言；checks文案区分clarify/revise。另有docs/CURRENT.md切片5⑩记录与该验收expected描述同步。产品代码零改动。",
+    "method": "①增量边界：mtime扫描（find -newer 第四轮审查记录）在全部范围内路径仅命中tests/mvp/check-task-answer-scope.mjs（终版写于18:34:24）；第五次运行收据（started 09:28:27Z、failed 10:22:20Z，组23 exit1非超时、24.2s）before清单570个文件sha256与当前逐一比对唯一差异即该测试文件；checker_sha256一致；决定段摘要与run5起始一致。②字节级隔离：该文件在本增量内此前从未修改（经第一至五轮收据清单比对链可证），故其相对增量前审计快照的diff（14+/6-）即本次全部变更，逐行核对。③一致性核对：新期望的控制投影文本『本轮控制状态：\\n任务「合成丙解释」：仍在等待您补充已保存的问题。』与check-waiting-task-delivery的d2-frozen-clarification权威锁（control-gate-waiting-delivery.log）同形逐字一致，分隔符---与compose格式一致；产品侧finish_run.rs:245-246仅在input.answer_parts.is_some()时save_output_answer_parts_in_tx（控制路径不保存→SQL NULL），:134-136拒绝parts+control_delivery_ref组合，deliver.ts:91与430-438控制分支只发final_text+control_delivery_ref不发parts——与断null一致；opened_clarification问题断言保留（问题由任务卡承担，D2口径）；非clarify各变体期望与断言未动；无场景删除、无断言放宽、无吞错（diff无catch变更），浏览器负断言为净增强。④证据：run5组1–22过（含600s时限下TASK-COVERAGE）；command-23.log为旧期望对实际D1交付的AssertionError严格相等失败（scope.mjs:293:12）；归因佐证command-03.log内--upgrade变体passed:true（run5内17:45，v1门控后无投影）；复验五变体（clarify-null-fix2 30.95s、clarify-omitted 30.34s、revise-null 29.31s、cancel-b 28.74s、base 35.19s）均passed:true、exit=0，且全部晚于终版编辑18:34:24（18:35:00–18:37:30）；中间产物clarify-null-fix.log exit=1（18:34:00，:336）先于终版编辑，属被取代的迭代（见findings）。⑤CURRENT.md：⑩如实记录归因/修复/复验（时长与日志逐0.01s吻合）、expected描述同步为D1形态与测试实际断言一致、下一动作第五次复审+第六次重跑；决定段未动。⑥局限（见findings）：TASK-RESUMED-CLARIFICATION系增量内新增条目，HEAD无旧expected文本，⑩前frontmatter不可字节复原，run5起始合同≡第四轮认证合同的等值由文件清单哈希+决定段摘要+mtime+⑩语义共同支撑，未能如第二至四轮做全链密码学重建。⑦新范围指纹按scripts/check_delivery.py的review_scope独立复算=7607161f…；第二、三、四轮历史指纹按审计链保留。",
+    "scope_sha256": "7607161f3a0c9f783f966b5623d8da62088beae893bafab9ae9a0e1f872a28bd",
+    "timestamp": "2026-11-01T10:43:41Z",
+    "findings": [
+      {
+        "item": "delta_boundary",
+        "severity": "info",
+        "detail": "与前几轮不同，本轮无法对第四轮指纹6f219b34…做字节级重建：TASK-RESUMED-CLARIFICATION验收条目为本增量内新增（HEAD无旧值），⑩改写后的expected旧文本不可复原。run5起始合同与第四轮认证合同的等值证据为：570文件清单链（除本测试文件外全程零变更）、决定段摘要与run5收据一致、checker一致、mtime（除测试文件与CURRENT.md外无任何范围文件晚于第四轮记录）、⑩记述与实际改动逐项吻合。该局限已如实记录，不影响本轮增量结论（本轮边界以run5清单对当前树的密码学比对为准）。"
+      },
+      {
+        "item": "evidence_logs",
+        "severity": "info",
+        "detail": ".local/checks/semantic-closure/task-answer-scope-clarify-null-fix.log为exit=1的中间失败（18:34:00，断言:336），先于测试终版编辑18:34:24；最终五个变体绿日志（18:35:00–18:37:30）全部晚于终版编辑且passed:true。属测试侧修复的正常迭代留痕，非隐藏失败；协调交接『复验5个变体全部exit0』对最终轮次准确。"
+      }
+    ]
+  }
+}

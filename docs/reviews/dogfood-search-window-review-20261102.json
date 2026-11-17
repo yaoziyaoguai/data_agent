@@ -1,0 +1,139 @@
+{
+  "reviewer": "Codex 独立只读审查（未参与实现；未运行测试或重放；未委派）",
+  "increment": "I3-SEARCH-WINDOW-REPAIR",
+  "summary": "最终限定复审未发现阻断，代码实施结论 passed。原窗口 codec 已恢复，knowledge.rs 相对 knowledge-before.rs 仅改为尊重调用方临时快照上限；标准 gzip+URL-safe base64 仅作用于完整公共游标，外部仍限 65536B，回执预算仍为 98304B。恢复先限制输入长度，最多展开 8MiB，再执行原绑定和窗口校验。原 18 项测试逐字保留，新增两项公共边界测试通过。独立按字段解压原始本地两页证据：757 成员的身份、位置、hash、排名状态完全一致，只有退休集合从 20 推进到 40；实际游标 34294/34296B，API 回执记录为 65702/64375B。受控容量阻断已有合同内解法。正式五命令及其中后来新增的 profile/宿主持久状态断言仍待实际执行；真实付费 P03 两次失败状态不变，尚未复验，不记真实质量通过。",
+  "conclusion": "passed",
+  "scope_sha256": "6886838cd6e56015f171a5acdfbf2a6ab3f09804db501765914e53c887df40d0",
+  "findings": [],
+  "resolved_findings": [
+    {
+      "id": "SEARCH-WINDOW-REVIEW-01",
+      "priority": "P2",
+      "status": "resolved_for_implementation_review",
+      "title": "400 对象宽窗在正式公共游标封装后仍超限",
+      "resolution": "撤销未关闭增量中的 l/t 模板字典与空 b 省略，恢复原 codec。在最终公共游标边界对超限 JSON 使用标准 gzip 封装，再检查同一 65536B 上限；内部允许有界临时快照，避免在封装前错误拒绝。新增测试通过正式 next/restore 覆盖 1000 对象、任务 None/Some、交付 0/20/999 项，并逐项比较剩余排名。",
+      "evidence": ".local/checks/dogfood-search-capacity/standard-envelope-tests.log",
+      "maximum_observed_public_cursor_bytes": 59696
+    },
+    {
+      "id": "SEARCH-CAPACITY-DIAGNOSIS-01",
+      "priority": "P2",
+      "status": "resolved_for_controlled_capacity_case",
+      "title": "受控工具链生成的正常规模窗口仍无法交付续页状态",
+      "resolution": "同一原中文 query、缓存向量和只读真实索引经现有 Pi/API 路径完成首次查询与实际游标续页。两页保留同一 757 成员窗口，147436B 完整展开状态无损封装为 34294/34296B，均返回 HTTP200，回执在原 98304B 内。此前“尚无覆盖该受控规模的合同内表示”这一阻断已由实际工程证据解除；真实 P03 是否通过仍另行验证。",
+      "evidence": ".local/checks/dogfood-search-capacity/final-local-proof.json"
+    }
+  ],
+  "checks": [
+    "实现范围：knowledge.rs 相对 knowledge-before.rs 的唯一 diff 是 snapshot 由 max_bytes.min(SEARCH_CURSOR_BYTES) 改为 max_bytes。evidence_delivery.rs 逆向还原本次 imports、临时上限常量、next/restore 并移除新增 tests 模块后，哈希匹配原实现基线；其他交付裁剪逻辑未改。",
+    "公共合同：Schema 未变。next 对内部窗口及完整展开状态均执行 8MiB 临时上限，完整公共 JSON 超过 65536B 才生成 gz1: 加标准 gzip 的 URL-safe 无填充 base64；封装后再次检查 65536B。原 search_reply 的最终回执容量检查保持，不能以压缩绕过 98304B 或调用方更小预算；仍超限则明确返回容量错误，不删候选。",
+    "压缩输入边界：restore 在 base64 解码前先守外部 65536B；使用 flate2::bufread::GzDecoder 读取单个 gzip 流，take(8MiB+1) 限制展开量。超量、gzip 读取/完整性错误、剩余尾随字节或第二个流、非法 UTF-8、非法 JSON 均拒绝。bufread 解码器保留未消费尾部，get_ref().is_empty() 检查不会因普通预读吞掉尾随数据。",
+    "原授权与语义核验保持：解包后仍由原 SearchCursor/Window serde 及 validate 核对 schema、binding、scope、task、成员/位置/版本/通道顺序和退休状态；压缩未增加读取权、正文、允许集或服务端会话。压缩输出只是同一完整状态的无损表示。",
+    "兼容：较小游标仍直接返回原 JSON，restore 同时接受原 JSON 与版本化 gz1 封装。旧原 codec 的字段形状恢复。实验 l/t 游标的撤回依据当前明确的迁移说明：仅出现于临时 harness、原真实 P03 搜索均拒绝而未交付该格式；本次未审计已清理 harness 的历史存储。",
+    "测试迁移：从本轮 20 项测试快照移除两项新增实验测试后，与当前 search_continuation.rs 逐字相同，原 18 项未删改。CURRENT 已写明将内部未压缩容量和实验字段形状断言迁移为实际公共边界检查的独立依据，不以调整预期掩盖旧回归。original-codec-green.log 完整记录 18 passed。",
+    "公共边界：standard-envelope-tests.log 完整记录 2 passed。1000 对象在任务 None/Some、交付 0/20/999 六种组合下完整游标最大 59696B；真实 next/restore 后剩余排名与原后缀一致。旧 JSON、坏 base64、坏 gzip 尾部、尾随字节和小压缩输入展开超过 8MiB 的拒绝均有用例。gzip 完整性检查由标准解码器执行；损坏用例改变的是 footer 最末字节，不将其夸大为专项 CRC 位翻转测试。",
+    "依赖：Cargo.toml 仅新增 flate2 =1.1.10，关闭默认特性并指定 rust_backend。剔除 adler2、crc32fast、flate2、miniz_oxide、simd-adler32 五个新增包及 data-agent 的 flate2 依赖后，Cargo.lock 哈希与此前冻结一致，无其他包升级。未下载、安装或运行依赖。",
+    "原始证据独立核对：只按 final-local-proof.json 的 source 提取两次工具响应，使用 Python 标准 zlib 的 gzip 模式独立展开，检查完整流及无尾随，再解析 JSON。两页内部窗口均为 147250B，完整展开均为 147436B；除 d 外所有窗口字段逐值一致，规范化摘要同为 a34a3deb88e365718f543e63d13dc5f16d1d0d05526682594ea4b01df55987d4。退休集合由 20 增至 40，第二次请求确实使用第一次实际返回的 cursor；没有 l/t 实验字典。",
+    "本地完整链：原始记录及 replay-p03-tool-envelope2.log 均显示两次搜索 HTTP200、API 回执 65702/64375B、delivery=finished；工具账本包含两次 search_knowledge 和一次 update_analysis_task，状态均 succeeded。提供的模型和 embedding 调用计数均为新增付费 0。工程结果覆盖当前受控容量与续页，不评价真实语义答复。",
+    "验收脚本：仅复用现有 harness、deliver、管理 API 和回环协议 provider。固定四步用于触发首查、实际 cursor 续页、原消息 route 登记和测试终稿，没有新增生产 Agent 循环。原集合代理只准 describe/query/search，embedding 返回按原 query 绑定的缓存向量。脚本已纳入本次 verification_inputs 与正式验收命令。",
+    "尚待正式执行：当前脚本新增逐字段核对冻结 profile 和 snapshot 中 finished/committed 的断言；它们在给定 GREEN 后加入。原始 GREEN JSON 没有 frozen_model_profile 或 snapshot 字段，因此本审查不把这两组断言记为已执行。正式五命令必须运行当前冻结脚本和其余已绑定验收。"
+  ],
+  "scope": {
+    "implementation": [
+      "crates/data-agent/src/use_cases/knowledge.rs::SearchContinuation::snapshot",
+      "crates/data-agent/src/use_cases/evidence_delivery.rs::SearchSelection::next",
+      "crates/data-agent/src/use_cases/evidence_delivery.rs::SearchSelection::restore"
+    ],
+    "tests": [
+      "crates/data-agent/src/use_cases/evidence_delivery.rs::tests",
+      "crates/data-agent/tests/search_continuation.rs",
+      ".local/dogfood-runs/semantic-20261102/replay-p03-tool.mjs"
+    ],
+    "dependency": "flate2 =1.1.10 / rust_backend",
+    "frozen": ".local/checks/dogfood-search-capacity/frozen-final.json",
+    "fingerprint_validation": "通过绝对项目根目录调用 scripts/check_delivery.py 的 review_scope(root, read_delivery(root))，两次独立计算均为本记录 scope_sha256，与 frozen-final.json 相同。相对诊断冻结的共有输入变化仅 Cargo.lock、crate Cargo.toml、knowledge.rs、evidence_delivery.rs、search_continuation.rs、CURRENT.md 和 implementation-design.md；验收脚本等新增输入按新声明纳入指纹。"
+  },
+  "evidence": {
+    "standard_envelope_tests": ".local/checks/dogfood-search-capacity/standard-envelope-tests.log",
+    "original_codec_green_18": ".local/checks/dogfood-search-capacity/original-codec-green.log",
+    "local_tool_replay": ".local/dogfood-runs/semantic-20261102/replay-p03-tool-envelope2.log",
+    "local_proof_summary": ".local/checks/dogfood-search-capacity/final-local-proof.json",
+    "local_proof_source_fields_only": ".local/dogfood-runs/semantic-20261102/evidence/local-p03-11eb14fa-84b9-4160-bc6a-fc3814994822.json",
+    "pages": [
+      {"members": 757, "retired": 20, "internal_bytes": 147250, "expanded_public_bytes": 147436, "public_cursor_bytes": 34294, "recorded_api_receipt_bytes": 65702},
+      {"members": 757, "retired": 40, "internal_bytes": 147250, "expanded_public_bytes": 147436, "public_cursor_bytes": 34296, "recorded_api_receipt_bytes": 64375}
+    ]
+  },
+  "review_history": [
+    {
+      "stage": "initial_review",
+      "conclusion": "changes_requested",
+      "scope_sha256": "40b9da1ed411a3527ceded3cab6c99363f062e65f293bfc56dc98c9e2bf0b991",
+      "record": ".local/checks/dogfood-search-capacity/review-initial-changes-requested.json",
+      "finding": {
+        "id": "SEARCH-WINDOW-REVIEW-01",
+        "priority": "P2",
+        "title": "400 对象宽窗在正式公共游标封装后仍超限",
+        "input": "400 个不同 field 对象，内层 65448B，至少一个成员尚未交付；完整公共游标加入 binding/scope/task。",
+        "actual_output": "task=null 最小外层为 65634B，超过 65536B，实际工具边界仍返回 tool_response_capacity。",
+        "requested_change": "覆盖完整公共封装、部分交付和往返，保留全部未交付记录与排名，不提高硬限。"
+      },
+      "verification_limits": [
+        "初审未运行构建、测试、DB 或付费端点；字节结论来自既有日志和正式封装路径核算。",
+        "P03 原始失败窗口未捕获，不能把合成 400 对象形状等同于真实 P03。"
+      ]
+    },
+    {
+      "stage": "template_dictionary_phase_fix_review",
+      "conclusion": "passed",
+      "scope_sha256": "6080d7cda8503faa1f11970483275c7f4df659cd140dce0aa699c04977e698c2",
+      "record": ".local/checks/dogfood-search-capacity/review-full-cursor-passed.json",
+      "history_validation": "本次覆盖原记录前，该完整备份与原 JSON 逐字段相同；备份保留初审 finding、该阶段检查和 limits。",
+      "summary": "当时仅省略空 b，400 对象公共边界 62034–62139B、20 项 codec 通过；该阶段的范围结论有效，不能据此推断 P03 通过。实验实现现已由标准封装取代。",
+      "verification_limits": [
+        "本次仅做 SEARCH-WINDOW-REVIEW-01 的增量只读复核；读取新测试、限定源码/声明片段及三份日志，执行本地哈希和指定 scope 计算。未连接 DB、运行构建或测试、访问付费端点、修改产品/CURRENT 或委派。唯一写入为本审查 JSON。",
+        "运行日志由实现方提供，本审查未独立重跑；代码审查结论依据已读实现和完整现有 RED/GREEN，不冒称亲自运行边界测试。",
+        "完整游标测试覆盖上述 400 对象样本及默认回执容量下的简短命中；不证明所有候选形状、任意正文大小或更小预算都能容纳。",
+        "协调方已报告 P03 第二次原题复验仍失败。本次未诊断真实端点或 DB，不把合成反例与 P03 实际形状等同，不声明真实故障已解决。",
+        "正式 verify-increment、Pi 容量检查与 verify-code 待独立审查签署后运行；passed 仅表示当前冻结代码修复及无付费边界无阻断，不代表正式收据或后续 P03 原题复验通过。"
+      ]
+    },
+    {
+      "stage": "observed_window_diagnosis",
+      "conclusion": "changes_requested",
+      "scope_sha256": "929db8ca4e11d637c67e2a5152773d1462e4d70dcceff1476076f8960b164208",
+      "record": "docs/reviews/dogfood-search-capacity-diagnosis-20261102.json",
+      "record_preserved": true,
+      "finding": {
+        "id": "SEARCH-CAPACITY-DIAGNOSIS-01",
+        "priority": "P2",
+        "title": "受控工具链生成的正常规模窗口仍无法交付续页状态",
+        "input": "原中文 query、原缓存向量、只读原索引，独立 992 对象 harness，757 成员窗口、确认 20 项。",
+        "actual_output": "内层 105762B 超过 65536B，HTTP409；外层和正常回执尚未生成，138B 是错误体。",
+        "remaining_blocker_at_that_stage": "尚无覆盖观测规模并满足现合同的续页表示；需在现合同内解决，若改承载或合同则先明确设计决定。"
+      },
+      "verification_limits": [
+        "工程重放不是原付费 P03 异步窗口的精确复制；992 与原 996 对象不同。",
+        "离线 764/912 成员测量与实际 757 成员窗口不同，不混用外层或回执大小。",
+        "当前编码失败不证明所有编码均不可能，也不必然要求服务端状态或提高预算。",
+        "当时源码恢复哈希只证明诊断后内容一致，不是独立重跑工具链。真实 P03 仍失败，正式验收不由局部诊断推定。"
+      ]
+    },
+    {
+      "stage": "standard_public_envelope_final_review",
+      "conclusion": "passed",
+      "scope_sha256": "6886838cd6e56015f171a5acdfbf2a6ab3f09804db501765914e53c887df40d0",
+      "summary": "标准完整公共封装在现合同内解决已知合成与受控工具容量阻断；代码、依赖、测试迁移、原始两页无损状态及本地脚本均已独立只读核对。正式五命令和真实原题复验仍待完成。"
+    }
+  ],
+  "verification_limits": [
+    "本轮限定增量复审；只读实现、测试、声明、脚本和现有证据，并做本地 diff/哈希/JSON 字段与标准 gzip 解码比对。没有执行 Rust/Node 构建、测试、harness、DB、付费请求或委派；唯一写入为本审查 JSON。",
+    "18 项 codec、2 项公共边界和完整本地 Pi/API 运行日志由实现方提供，本审查未重跑。独立 Python 解码验证的是已保存游标及状态一致性，不冒称执行正式 Rust restore。",
+    "给定 GREEN 早于新增的 profile 和宿主持久 finished/committed 断言。已保存原始证据缺少这两组字段，其实际运行结果须由当前冻结正式验收补齐，不能用 delivery=finished 代替宿主持久状态证据。",
+    "本地 provider 固定步骤只用于工程测试，原向量来自缓存；新增付费计数 0 不表示真实模型质量通过。原试用 996 对象与独立 harness 的差异、原付费失败窗口未精确捕获等诊断限制继续保留。",
+    "压缩为已知窗口提供了实际可行表示，不承诺所有可能窗口均可压至 65536B；不可压缩或展开超过 8MiB 时仍明确拒绝，不丢候选来伪造成功。",
+    "原实验 l/t 格式撤回的适用范围依据本轮明确说明及 CURRENT 迁移记录；本审查没有读取已清理 harness，也不将该格式承诺为日常旧 JSON 合同。",
+    "诊断单独 JSON 和两阶段历史备份未修改。旧阶段 passed 不是实际 P03 通过，本次代码实施 passed 亦不关闭真实质量验收。",
+    "正式五命令 verify-increment 尚待签署后运行；真实付费 P03 两个 attempt 仍为 fail，后续原题一次复验尚未执行。本记录不声明正式收据或真实故障验收已通过。"
+  ]
+}

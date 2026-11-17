@@ -1,0 +1,321 @@
+{
+  "schema": 1,
+  "increment": "I2-COMPATIBLE-UPGRADE",
+  "review_date": "2026-10-30",
+  "reviewer": "Codex 独立审查实例（宿主为 Claude Code Agent SDK，环境报告模型为 codex/gpt-6.1-sol）。未参与本增量的产品实现或测试编写，未委派子审查；独立阅读既有要求、冻结差异、当前源码、测试断言及保存日志。本轮未执行数据库、harness、构建、测试或正式验收。",
+  "summary": "对指定冻结范围的独立关闭前审查结论为 blocked。确认两项范围内缺口：有效旧 raw 租约被重建跳过后没有生产接续路径；来源停用后恢复直接结束准备作业，遗留 applying 冻结正文。前者位于本轮新增的公开重建组合路径，后者是本轮实际终态释放要求尚未覆盖的继承出口。其余已审部分未发现足以另列阻断的事实，点名的测试预期修正具有所列独立依据，但局部日志不能代替正式八组。须修复两项并对明确 delta 独立复核后，才能重新判断是否允许进入正式八组；本报告不关闭增量。",
+  "conclusion": "blocked",
+  "scope_sha256": "1f81da880dd9950f2e744600c43fac3a52e2edd63803a727553a2fe89ad3b46b",
+  "scope": {
+    "head": "04d27d06ba7b97d4cf3e288d4cf9e6300ef491a9",
+    "preserved_worktree": "沿用并保留全部继承未提交修改；本报告的审查基线不是 HEAD 的干净树，也不是对全部继承修改重新认定为 08 新实现。",
+    "input": {
+      "path": ".local/compatible-upgrade-20261030/review-input.json",
+      "sha256": "e432e5651faaf22525e6c91eba9ede4a7e31da55f53fc8d5d4393837f39d5acc"
+    },
+    "baseline": {
+      "manifest": ".local/compatible-upgrade-20261030/before-manifest.json",
+      "sha256": "b8f1fc712496d8420f41c78c1ba927b33c8b7a66c804bc46d3b227fddaa3bc47",
+      "files": 495,
+      "snapshot_root": ".local/compatible-upgrade-20261030/before",
+      "limit": "495 份选定输入，不是全仓快照。未回写、补齐或覆盖原快照。",
+      "supplements": [
+        {
+          "target": "scripts/test_development.py",
+          "path": ".local/task-answers-20261030/before/scripts/test_development.py",
+          "sha256": "5fb4face8218abea855964baa3c9dd1f4aa0d758b9aa3bde256a5afb5a53c4c2",
+          "basis": "核对 07 清单，该文件在 07 未修改；作为明确补充基线，不计入原 495 份。"
+        },
+        {
+          "target": "docs/execution/semantic-runtime/compatible-upgrade.md",
+          "path": ".local/task-answers-20261030/before/docs/execution/semantic-runtime/compatible-upgrade.md",
+          "sha256": "33960d03ace20c54d360463ad1e1dd25d7b46f1d3c513026d87d05e891024dca",
+          "basis": "核对 07 清单及当前内容，规格在 07 未修改且本轮未变；不能将其早期修订算作 08 实现。"
+        }
+      ]
+    },
+    "changes": {
+      "manifest": ".local/compatible-upgrade-20261030/review-changes.json",
+      "sha256": "ceb9f39d5adaf653384cc3735d25d8eadfd6d6f8bf9f92d3a19119cf0b94978c",
+      "files": 46,
+      "modified": 38,
+      "added": 8,
+      "deleted": 0,
+      "patch": ".local/compatible-upgrade-20261030/review-diff.patch",
+      "patch_sha256": "2684e8877aca08024c2a852867372fef13946492636434774d35e77cad6c78e6",
+      "patch_lines": 6900,
+      "reading": "完整阅读 6900 行差异，并沿实际消费者及恢复路径补读继承源码；不是仅阅读实现者总结。"
+    },
+    "fingerprint_verification": {
+      "scope_files": 500,
+      "head_matches": true,
+      "baseline_hashes_match": true,
+      "supplement_hashes_match": true,
+      "all_46_before_after_hashes_match": true,
+      "patch_reconstructed_byte_for_byte": true,
+      "scope_matches_expected": true,
+      "record_absent_before_creation": true,
+      "method": "使用只读 Git 查询和 python3 -I -B 在内存核验哈希、按原 before/current 标签重建 unified diff；导入 scripts/check_delivery.py 后仅调用 read_delivery、fingerprint(for_review=True)、review_scope。未调用 main、complete_delivery 或验收执行入口。报告创建前再次核验 HEAD、495 份快照、两份补充、46 项差异、patch 和当前 scope，均匹配。",
+      "meaning": "这些结果证明输入一致及结论绑定范围，不证明业务通过；报告自身被 for_review 指纹排除。"
+    },
+    "requirements_read": [
+      "AGENTS.md",
+      "docs/CURRENT.md：本增量 frontmatter、最新 08 段及四条复杂度要求",
+      "docs/execution/semantic-runtime/compatible-upgrade.md",
+      "docs/execution/semantic-runtime/pi-reuse.md",
+      "docs/architecture/implementation-design.md：事务锁序、17.3、17.3.1、17.3.2、17.4–17.8",
+      "docs/development.md：统一版本、迁移顺序、索引维护入口、回退边界"
+    ],
+    "representative_logs": [
+      {
+        "path": ".local/checks/native-compaction-mixed-persisted-input.log",
+        "sha256": "e81f207d3f6d08637c91b53d76c2f9319eee5c18a98ba8fe8c6997726271039c",
+        "observed": "保存输出为 passed，24 次调用、10 次原生压缩、6 次混合用途摘要；历史记录改写和删除均 stale_context、provider 0；280 条短消息场景保留。"
+      },
+      {
+        "path": ".local/checks/legacy-model-profile-upgrade-recovery-diagnostic.log",
+        "sha256": "c79be1012bfab84ab8a537359e418573ca0f2003c4edaba7aaf87912ad27d123",
+        "observed": "窄入口仅一行成功描述；源码另有原 profile、连接、身份及预算断言。不能由这一行推导完整 model-configuration 全集通过。"
+      },
+      {
+        "path": ".local/checks/recovery-query-receipt-lost-worker-restart.log",
+        "sha256": "a5d2d7700ce5ccc4b598c6e990999033a7b31cdde2475e9612ca7d8e07d02a0f",
+        "observed": "保存输出为 passed，10 项含平台先接收、透明代理丢回执、真实 Worker 重启后 lookup 接回；提交及转发各一次。"
+      },
+      {
+        "path": ".local/checks/shared-index-todo-current-fault-seam.log",
+        "sha256": "a91b9b15a8418d0fcefed59989dc6e545afbba4570584e49b596e521b50727ea",
+        "observed": "登记 2/2、raw 移交 5/5、索引恢复 6/6，保存环境 MySQL 8.4.11 / REPEATABLE-READ；并发新文档两类目标各一次 attempt，proxyErrors 为空。缺少本报告 CU-01 的租约到期生产接续场景。"
+      },
+      {
+        "path": ".local/checks/historical-source-expired-before-source-drift.log",
+        "sha256": "90965522972fa67518d2549349ec31deae8fb435a647d2dd601c1295283cc196",
+        "observed": "保存输出为 passed；历史 SQL/报告正文与结果过期分开，平台提交保持一次，大原文核验窗口 62206 字节。"
+      },
+      {
+        "path": ".local/checks/public-index-upgrade-personal-selected-skills.log",
+        "sha256": "b24933457e8fae8856db46cf599a55c4507953a516c756259d5668aa15a7d0fa",
+        "observed": "保存输出为 passed；A→B、第三修订、兼容读取回退、个人资产/Skill 选择及原个人索引目标保持。个人服务为本地协议，非真实 Mem0。"
+      },
+      {
+        "path": ".local/checks/harness-upgrade-isolation-cleanup.log",
+        "sha256": "aa429137a59f2a5c23f92b60e2591e0d0e74c53e7596fa3f9da072d23d4f02be",
+        "observed": "保存输出为 passed；继承 DATABASE_URL 排除，SIGTERM/SIGINT 保非零退出并清自身 PID 与随机专用库。"
+      },
+      {
+        "path": ".local/checks/prefill-materials-request-contract-green.log",
+        "sha256": "4bb41829620fe1943a0f95d31635cddd1921a7916366128c436c44f6323310bd",
+        "observed": "保存输出为 passed；原十一项材料/人工/范围/尾部等场景，23 次协议调用，最大载荷 50675 字节；不包含 CU-02 的来源失效终态。"
+      },
+      {
+        "path": ".local/checks/compatible-upgrade-declaration.log",
+        "sha256": "71dba1ca663c96c1492ffda85777b8d330fd92951054c6d98a8f9565368ee9fe",
+        "observed": "交付声明有效及检查器 16 项；输出明确业务未验证、未运行验收命令，不能作业务完成证据。"
+      }
+    ]
+  },
+  "findings": [
+    {
+      "id": "CU-01",
+      "severity": "high",
+      "blocking": true,
+      "title": "有效旧 raw 租约被重建跳过后没有生产接续",
+      "location": {
+        "path": "crates/data-agent/src/use_cases/raw_index_handover.rs",
+        "line_start": 90,
+        "line_end": 99
+      },
+      "related_locations": [
+        {"path": "crates/data-agent/src/use_cases/knowledge.rs", "line_start": 1026, "line_end": 1047},
+        {"path": "apps/worker/src/main.rs", "line_start": 261, "line_end": 270},
+        {"path": "crates/data-agent/src/use_cases/knowledge.rs", "line_start": 705, "line_end": 727},
+        {"path": "crates/data-agent/src/modules/jobs/store.rs", "line_start": 203, "line_end": 235},
+        {"path": "crates/data-agent/tests/raw_index_handover.rs", "line_start": 427, "line_end": 470}
+      ],
+      "introduced_or_inherited": "本轮为公开重建增加 owner 来源补登/移交后，该生产入口的有效租约分支缺少后续接续。原 hand_over_backlog helper 已存在，但没有生产调用不能代替该入口。",
+      "trigger": [
+        "升级前当前可读来源仍有 schema_version=2、queued/running 的 raw_source_index，lease_until 尚未到期，且没有对应 source_excerpt 待办。旧 writer 已按切换要求停止，因此不会完成原作业。",
+        "维护者调用一次 POST /knowledge-index/rebuilds，rebuild_sources_in_tx 查到旧作业 available=false 后 continue，未登记当前 raw 目标；同事务仍保存并提交 queued 维护回执。",
+        "旧租约随后自然过期；保留原 operation_id 重传或重启统一 Worker。"
+      ],
+      "consequence": "重传在 knowledge::rebuild_index 开头直接接回原回执，不再扫描被跳过项。统一 Worker 只消费 knowledge_index_jobs，既不领取 raw_source_index，也不调用 hand_over_in_tx/backlog；因此租约到期不会产生 source_excerpt 目标，当前来源永久漏建索引，除非另发一个新的维护 operation。单次迁移操作不能从这个合法旧状态恢复。",
+      "requirement": [
+        "docs/execution/semantic-runtime/compatible-upgrade.md：步骤 2、4、6，未完旧操作恢复、从当前 raw 重建公共索引并保持原身份。",
+        "docs/architecture/implementation-design.md：17.8.2–17.8.3，未完成操作沿原身份恢复、公共集合从当前内容重建。",
+        "docs/CURRENT.md：08 raw 移交、原 origin/attempt/profile 与索引恢复范围。"
+      ],
+      "evidence": {
+        "source": "jobs::legacy_raw_jobs_in_tx 按实际 lease_until 算 available；raw_index_handover::rebuild_sources_in_tx 对 !available 无后续登记。全源码搜索 hand_over_in_tx/backlog，除 helper 内部互调外只有测试直接调用；公开生产重建只在 created 时调用 rebuild_sources_in_tx。",
+        "test_gap": "rebuild_registers_current_sources_preserves_legacy_work_and_replays_once 种入 120 秒有效旧租约，断言该来源没有新待办，并断言重复维护不改变已有目标；没有验证该租约到期后在同维护身份下恢复。已有 handover 测试证明跳过有效租约和 available 项原子移交，不能证明生产接续。",
+        "execution": "静态完整调用链结论，审查者未运行数据库或测试；现有局部 passed 日志没有该反例。"
+      },
+      "required_change": "在既有生产流程补足到期后的有界接续，保持原作业 origin、已用次数、冻结 profile 与已知/未知 Embedding 回执；有效租约内不能旁路。不得要求靠更换 operation 获得额外机会，也不应建设新的通用迁移调度系统。",
+      "required_verification": "在隔离库通过正式重建入口覆盖：有效旧租约且无统一待办→一次维护请求跳过→旧 writer 停止→租约到期→普通 Worker/既有恢复路径最终移交并消费。核同 operation 回执保持、原 origin/attempt/profile 接续、有效租约内无双份领取；保留原五项移交及公共切换场景。"
+    },
+    {
+      "id": "CU-02",
+      "severity": "medium",
+      "blocking": true,
+      "title": "来源失效后的准备作业终态遗留 applying 冻结正文",
+      "location": {
+        "path": "crates/data-agent/src/use_cases/source_preparation.rs",
+        "line_start": 99,
+        "line_end": 106
+      },
+      "related_locations": [
+        {"path": "crates/data-agent/src/use_cases/source_preparation.rs", "line_start": 332, "line_end": 343},
+        {"path": "crates/data-agent/src/modules/ingestion/preparation/store.rs", "line_start": 145, "line_end": 159},
+        {"path": "crates/data-agent/src/modules/ingestion/preparation/store.rs", "line_start": 70, "line_end": 77},
+        {"path": "crates/data-agent/src/use_cases/knowledge_sources.rs", "line_start": 20, "line_end": 27},
+        {"path": "crates/data-agent/src/modules/knowledge/store.rs", "line_start": 1023, "line_end": 1030},
+        {"path": "crates/data-agent/tests/frozen_job_inputs.rs", "line_start": 284, "line_end": 346}
+      ],
+      "introduced_or_inherited": "继承出口的范围内缺口，不声称由 08 新增。08 明确要求实际终态释放；本轮新增过期释放仅覆盖 analysis/review，未补这个已完成后台作业的恢复出口。",
+      "trigger": [
+        "来源整理已完成模型复核，stage_apply_in_tx 提交 call_state=applying、pending_draft，保留 frozen_batch 并令 issued_until=NULL。Worker 在实际应用前中断。",
+        "文档被停用或删除，随后重启并在原后台租约到期后重领原 prepare_source 作业。",
+        "resolve_source_head_in_tx 经 knowledge::enabled_head_in_tx 取不到 enabled 头，进入 head=None 分支。"
+      ],
+      "consequence": "该分支只将 background_jobs 置 finished 后返回，未将准备行收敛或释放 frozen_batch。准备行仍为 applying，issued_until=NULL；周期过期扫描仅处理 analysis/review，终态后台作业也不会再领取，因此本批临时正文永久保留，准备状态与实际后台终态不一致。这个路径无需假设外部篡改，普通停用与已支持的应用前中断即可触发。",
+      "requirement": [
+        "docs/architecture/implementation-design.md：17.3，正在执行的准备作业只保必要冻结输入，结束后释放，不构成历史资料库。",
+        "docs/execution/semantic-runtime/compatible-upgrade.md：步骤 3 的准备冻结输入就绪与新公共正文保留策略切换门。",
+        "docs/CURRENT.md：invariants 的实际终态释放及 UPGRADE-FROZEN，成功/失败/未知终态不再保留临时正文。"
+      ],
+      "evidence": {
+        "source": "stage_apply_in_tx 明确保留 frozen_batch 并清 issued_until；source_preparation 的 head=None 出口只有 jobs::settle_in_tx/commit。全文搜索准备清理调用，supersede 仅在存在较新当前头分支，fail 仅在错误路径；来源失效的成功返回不会进入两者。expire_issued_preparations_in_tx 排除 applying。",
+        "test_gap": "expired_preparation_releases_frozen_text_without_reopening_unknown_calls 正确断言合法 active/applying 仍保材料，但没有在 applying 后令来源失效并走真实 Worker 终态。公开 owner 的过期反例不能覆盖此组合。",
+        "execution": "静态状态转换和实际消费者判断，审查者未运行数据库或测试；不将该触发的发生率编造成已知数值。"
+      },
+      "required_change": "来源已经无法继续整理时，通过 ingestion owner 在与作业终态相称的事务中收敛准备状态并释放不再需要的冻结输入，保留输入指纹、覆盖、原调用/费用事实；不要误释放仍可应用的合法 applying 批次，不新增模型调用或重开未知调用。",
+      "required_verification": "补应用前中断→文档停用/删除→原作业恢复终态的反例，核 frozen_batch 释放且作业/准备状态一致、无模型重发或预算回退；保留启用来源下 applying 可恢复且冻结输入不提前清理的正例。"
+    }
+  ],
+  "coverage": [
+    {
+      "area": "当前读取、精确旧档及 archive/latest_only",
+      "assessment": "本轮消费者迁移静态可核，未另发现阻断；运行结果仍待正式八组。",
+      "paths": ["crates/data-agent/src/modules/knowledge/store.rs", "crates/data-agent/src/modules/knowledge/dependency_index/store.rs", "crates/data-agent/src/modules/ingestion/store.rs", "crates/data-agent/src/types/mod.rs", "migrations/202610300003_public_content_revisions.sql", "migrations/202610300004_source_revisions.sql"],
+      "facts": "显式同修订优先 current，旧修订只取精确 archive，缺失明确 not_available；当前索引、目录/上游、窗口、结构及相关指纹消费者已迁。新修订按显式 retention 同事务保存 current/必要元信息，默认 archive，latest_only 不新增逐版全文，不删已有档案；同修订文档派生只重置知识目标。回填按批和 SKIP LOCKED 保头、identity、complete 与 observation。残留 knowledge_versions 的 cfg(test) SQL 字符串没有误认作运行消费者。"
+    },
+    {
+      "area": "真正冻结输入与实际终态释放",
+      "assessment": "CU-02 阻断；其余预填与准备分支已沿实际调用核对。",
+      "paths": ["crates/data-agent/src/use_cases/prefill_materials.rs", "crates/data-agent/src/use_cases/semantic_prefill.rs", "crates/data-agent/src/use_cases/source_preparation.rs", "crates/data-agent/src/modules/ingestion/store.rs", "crates/data-agent/src/modules/ingestion/preparation/store.rs", "crates/data-agent/tests/frozen_job_inputs.rs"],
+      "facts": "首次模型调用前持久冻结两阶段实际有界窗口，review 不再补读旧全文；legacy coverage 保原 total 与未读范围，UTF-8 边界及两阶段各 24KiB 保持。预填成功、失败、unknown、expiry 路径释放临时正文并保分析、引用、material_coverage/输入指纹，usage 先独立结算；unknown 不清费用。准备合法 applying 留材料供应用恢复，不能把这一正例当作来源已失效终态也应保留材料的依据。"
+    },
+    {
+      "area": "raw 补登、移交、公共集合切换及恢复",
+      "assessment": "CU-01 阻断；公开维护入口存在，不能因独立 helper 未自动调用而笼统宣称整个迁移没有入口。",
+      "paths": ["crates/data-agent/src/use_cases/raw_index_handover.rs", "crates/data-agent/src/use_cases/knowledge.rs", "crates/data-agent/src/modules/jobs/store.rs", "crates/data-agent/src/modules/knowledge/store.rs", "tests/mvp/check-public-index-upgrade.mjs", "crates/data-agent/tests/raw_index_handover.rs"],
+      "facts": "来源 owner 限空间、当前修订、完整平台及启用独立非空文档；分块匹配旧 job、同事务登记/收敛，保 origin/attempt/profile；同 operation 维护幂等。知识领取先锁对象再锁目标，空知识轮询后另开 raw 事务避免旧 REPEATABLE-READ 快照。A→B 测试核当前头/实际集合、旧修订回执不变、长文尾部、两通道前置过滤及 Unicode；新修订只写 B，重建复用 Embedding 回执且语义调用不增。兼容回退仅停止写后读旧集合，不启动未知旧 writer。上述局部证据未覆盖有效旧租约到期后的生产接续。"
+    },
+    {
+      "area": "跨模块 owner 与真实锁序",
+      "assessment": "逐条检查实际 SQL 与事务边界；未将架构 checker 或 lock_rank 当作真实锁序证明，也未找到足以另列具体死锁阻断的同一行等待环。",
+      "paths": ["crates/data-agent/src/persistence/mod.rs", "crates/data-agent/src/use_cases/raw_index_handover.rs", "crates/data-agent/src/use_cases/catalog_import.rs", "crates/data-agent/src/use_cases/knowledge_documents.rs", "crates/data-agent/src/use_cases/dependency_registration.rs", "crates/data-agent/src/use_cases/source_fanout.rs", "crates/data-agent/src/use_cases/source_preparation.rs", "crates/data-agent/src/modules/jobs/store.rs", "crates/data-agent/src/modules/knowledge/store.rs"],
+      "facts": "组合层经各 owner 公开接口，不直接 SQL 私表；模型、Milvus 与网络在短事务外。实际 raw 移交会先持 legacy background job 再写索引，准备应用也先 assert 自身后台 job；这些路径并非全部由 rank 覆盖，不能声称全仓锁序已证明正确。继续追到普通文档/目录保存只 enqueue prepare_source、迁移锁 raw_source_index 的不同记录，未以模块先后顺序虚构同一行死锁。正式架构及真实锁回归本轮尚未执行。"
+    },
+    {
+      "area": "v1/v2 入口、旧 profile 与恢复身份",
+      "assessment": "已核显式新消息入口与继承恢复链，未另发现阻断；旧 profile 完整集合待正式验收。",
+      "paths": ["crates/data-agent/src/use_cases/deliver_run.rs", "crates/data-agent/src/modules/runtime/store.rs", "crates/data-agent/src/modules/runtime/model_configuration/store.rs", "apps/agent/provider/configured.ts", "apps/agent/provider/controlled.ts", "packages/contracts/capacity.ts", "tests/mvp/model-configuration-recovery.mjs"],
+      "facts": "新 chain 由显式 DATA_AGENT_TOOL_CONTRACT_VERSION 选择，缺省 1，已存在 chain 继承原 run 版本，不再耦合测试标记/库名/公共集合。恢复从原 budget_scopes 解码 profile，connection 读取冻结 service_version；缺 C/timeout 的旧 profile 保原 I/O、载荷和 90000ms，新消息才使用新修订。保存 original operation/origin、recovery/budget/session/output；新 run/attempt 不等于重绑副作用。版本合同、模型格式、authority schema 独立。"
+    },
+    {
+      "area": "Pi 原生会话、确认 leaf、authority、历史正文与定稿答案",
+      "assessment": "独立补读继承路径及组合断言，未另发现阻断；不把 06/07 的既有成果记作 08 新建。",
+      "paths": ["apps/agent/session/journal.ts", "apps/agent/session/checkpoint.ts", "apps/agent/session/deliver.ts", "apps/agent/tools/data-tools.ts", "apps/agent/transport/client.ts", "crates/data-agent/src/use_cases/context_authority.rs", "crates/data-agent/src/use_cases/historical_analysis.rs", "crates/data-agent/src/use_cases/knowledge_sources.rs", "tests/mvp/check-native-compaction.mjs", "tests/mvp/check-task-answer-scope.mjs"],
+      "facts": "SessionManager/createAgentSession、原生 prompt/compact/abort 继续承担 Agent 能力；健康引用导出不整读，外部恢复严格核，异常严格导出失败不发布仅内存 leaf。MySQL 已确认引用决定恢复分支；原工具按 SDK ID/operation 接回。authority=5 兼容，6 显式 historical_analyses；历史投影单列并核原记录内容未改，普通资料改版与当前采用分开，撤权/停用/删除/范围仍核。旧映射不完整且精确 archive 缺失时保守拒绝，不能拿 current 冒充。A 已定稿/B 恢复的 answer_parts、原 attempt 正文、output 绑定与下一消息隔离有明确断言。"
+    },
+    {
+      "area": "未知回执、预算、结果过期及恢复不盲重做",
+      "assessment": "实际状态分支与测试故障入口已核，未另发现阻断。",
+      "paths": ["crates/data-agent/src/use_cases/query_workflow.rs", "crates/data-agent/src/modules/queries/store.rs", "crates/data-agent/src/use_cases/knowledge_embeddings.rs", "tests/mvp/check-recovery-continuation.mjs", "tests/mvp/check-historical-source-access.mjs"],
+      "facts": "queued 才 submit；submitting/submission_unknown/running 走 lookup，只有明确 not_available 才在原 ID 下有限重提。真实平台先接收丢回执场景有独立 lookup 及 submit 一次断言，不靠 SQL 伪造 unknown。模型/Embedding 已成功或未知优先接原账本，unknown 保原预留、晚到 usage 原 ID 结算。历史 SQL/报告正文不因结果过期抹去，明细/动态图表到期不重新提交查询；原 query/SQL/operation/origin/预算与次数断言保留。"
+    },
+    {
+      "area": "个人资产、Mem0、Skill 与公共迁移隔离",
+      "assessment": "静态隔离和本地协议证据可核，真实 Mem0 未验证。",
+      "paths": ["tests/mvp/check-public-index-upgrade.mjs", "apps/agent/session/workspace-context.ts", "crates/data-agent/src/use_cases/deliver_run.rs", "scripts/development.py"],
+      "facts": "切换前后对个人资产及全部版本、selected_skills/未选排除、个人 target/job、profile/预算做对比，宿主真实 issue/finalize、个人索引只一次。公共集合与 retention 选择不重写个人目标；测试 memory 服务仅 index/search 协议，不代表真实 Mem0 集成或语义质量。"
+    },
+    {
+      "area": "统一启动、配置与测试资源隔离",
+      "assessment": "本轮变更及实际清理实现已核，未另发现阻断；本审查未启动服务。",
+      "paths": ["scripts/development.py", "scripts/test_development.py", "tests/mvp/harness.mjs", "tests/runtime/check-harness-cleanup.mjs", "Makefile", "docs/development.md"],
+      "facts": "三项显式选择统一传子进程，archive/1 及原公共集合默认覆盖继承值，选项不暗启向量或真实模型；元数据只记录非秘密选择，未改变原三项 .env 字段读取合同。harness 明确随机专用数据库并移除继承 DATABASE_URL；信号收尾停自有子进程、等待退出、清专用库并保失败码。Makefile 分别重建 API 与 Worker，未用一个多 -p Finished 冒充两端已更新。"
+    },
+    {
+      "area": "Pi 复用与四条复杂度约束",
+      "assessment": "本轮未发现新增第二 Agent、摘要/迁移框架或无需求防御设施；不将两项缺口扩大成基础设施建设。",
+      "paths": ["docs/execution/semantic-runtime/pi-reuse.md", "apps/agent/session/deliver.ts", "apps/agent/session/checkpoint.ts", "apps/agent/transport/client.ts", "crates/data-agent/src/use_cases/prefill_materials.rs", "crates/data-agent/src/use_cases/raw_index_handover.rs"],
+      "facts": "SDK 锁定 1.3.0；同侧相同 Schema 不再往返重复校验，不混同 Rust 独立边界及异步后权限/版本复核。新增封装服务实际冻结材料、终态释放或 owner 职责，无通用检索协调器、图服务、永久 cursor 或第二循环。默认错误传播，已处理分支用于恢复或区分业务状态；对未复现超时、费用断言及故障发生率保持未知，不据此增加框架。每消息 24 次、连续临时失败 3 次、检索 10 秒/1000 候选/5 轮/30 主读未在本轮差异中放宽。"
+    }
+  ],
+  "test_expectation_review": [
+    {
+      "target": "crates/data-agent/tests/source_index_registration.rs",
+      "judgment": "有独立依据，不构成放宽产品排序。",
+      "basis": "原固定 query vector 的全库 top10 将登记回环等同协议向量质量。保原无范围检索并新增 BM25/dense 候选均含目标，再以正式 AllowedRecords source scope 融合；仍断言 top10、非空本来源、消费及投影。依据是既定同权 RRF k=60 与协议替身不证明语义质量，未改产品限额。"
+    },
+    {
+      "target": "crates/data-agent/tests/index_recovery.rs",
+      "judgment": "故障入口修正命中 current 消费者。",
+      "basis": "knowledge_versions 改名已不影响当前读取；改在隔离库移开 knowledge_objects.body，保 unavailable、候选头、不增 attempt 和不派发断言，未以无效故障冒充通过。"
+    },
+    {
+      "target": "tests/mvp/check-public-index-upgrade.mjs",
+      "judgment": "selected_skills 与当前目标范围修正有同源合同和迁移规格依据。",
+      "basis": "正式 WorkspaceContext、Rust 与 Node 消费均使用 selected_skills，已选/未选断言保留。全部历史 indexed 行都改 B 的原期望违反当前重建/历史保持；改核当前头 B，并增旧修订 target/state/attempt/epoch 逐字段不变。不能因此视 CU-01 的有效旧租约接续已覆盖。"
+    },
+    {
+      "target": "tests/mvp/check-historical-source-access.mjs",
+      "judgment": "图表夹具与检查顺序修正有独立业务依据。",
+      "basis": "正式图表规则禁止同列既作 dimension 又作 measure，新增独立合成 category，原数字 7 保留；先验证 result_expired 再制造 source drift，仍保原 stale/range 反例，没有改错误优先级。"
+    },
+    {
+      "target": "tests/mvp/check-native-compaction.mjs",
+      "judgment": "历史 seed 及持久原输入修正与真实恢复合同一致。",
+      "basis": "无模型 seed 保存历史 SQL，finished 6→7 包含该 seed；原六个长轮、一个短轮及 12/48 限制保留。先真实 get_query 持久本消息 checkpoint，再改删历史记录，符合 deliver_run 的 resume_same_input 与新消息继承 checkpoint 的区别；没有手改 Pi 条目来强求拒绝或成功。"
+    },
+    {
+      "target": "tests/mvp/check-evidence-search-compact-capacity.mjs",
+      "judgment": "从 SQL 修改 run 版本改为正式显式 v2 入口，有新消息版本合同依据。",
+      "basis": "仍保 24 规范位置、5000 字节/1250 估算 token、小预算及回执重放不重扫断言；未放宽检索期限、容量或费用。"
+    },
+    {
+      "target": "tests/mvp/check-prefill-materials.mjs",
+      "judgment": "provider 分流与终态材料断言修正有请求合同及 17.3/17.8 依据。",
+      "basis": "按 submit_semantic_preparation/submit_semantic_prefill 工具名分流，平台准备是合法请求，不能仅识别 document。原十一场景保留；永久 review_input.sources 改为实际终态释放正文并保 analysis/review/引用/material_coverage，保两阶段次数、各 24KiB、Unicode、未读范围与人工保护。CU-02 说明 owner 及这些场景仍不足以覆盖所有真实终态。"
+    },
+    {
+      "target": "tests/mvp/check-prefill-timeouts.mjs",
+      "judgment": "archive 断言迁至旧档基线和实际修订元信息，与已确认 latest_only 一致。",
+      "basis": "默认仍七场景，--mode 仅窄诊断；原 unknown reserved、调用数、人工保护与晚到 usage 不变量未减。曾失败的费用预留断言重跑未复现，原因未知，不能宣称已定位根因。"
+    },
+    {
+      "target": "tests/mvp/model-configuration-recovery.mjs",
+      "judgment": "旧 profile 补证没有删除原 Responses 恢复场景或放宽原 20 秒等待。",
+      "basis": "在隔离持久配置中移除 legacy C/timeout，让真实 Worker 装载，再中断期间保存新配置修订；观测实际 runtime/timeout 入参且调用原函数，不靠替换 captured envelope 证明兼容。新增失败快照；原 Responses 超时未复现仍未知，窄入口不等于完整全集。"
+    }
+  ],
+  "verification_limits": {
+    "reviewer_executed": "只读源码/断言/日志审查及哈希、diff、scope 内存核验。唯一新写文件为本 JSON；未修改产品、测试、配置、CURRENT 或继承工作。",
+    "not_executed": [
+      "数据库、SQL、harness、构建、测试及服务启动",
+      "正式八组 UPGRADE-CURRENT / UPGRADE-FROZEN / UPGRADE-RESTORE / UPGRADE-INDEX / UPGRADE-CONTRACT / UPGRADE-CODE / UPGRADE-BOUNDARIES / UPGRADE-FLOW",
+      "check_delivery.py 的 main、complete_delivery、verify_review 或其他执行入口",
+      "真实模型、真实平台、真实 Mem0、真实企业 ACL/出域及部署验证",
+      "Git 写入、外部调用、凭据或真实 .env 读取、另行委派"
+    ],
+    "evidence_boundary": "保存日志是主线既有局部证据；本审查逐项检查相关实现及断言，不把它们表述为审查者亲自运行，不将多份局部通过拼成正式八组收据。500 份 scope 输入为指纹绑定，完整实质审查覆盖全部 46 项差异及列明的继承路径，不声称逐行审完每一个未变文件。",
+    "unresolved_observations": [
+      "旧 Responses 恢复 20 秒超时重跑未复现，根因未知；旧 profile 窄日志不能证明完整模型配置全集。",
+      "预填费用预留断言历史失败重跑未复现，根因未知；保留原限制和失败事实。",
+      "没有执行并发数据库验证；真实锁序分析不等于已覆盖所有可能 SQL 执行计划或证明无死锁。",
+      "两个阻断由静态实际路径和状态转换确认，未在本审查线程执行反例或量化发生率。"
+    ],
+    "entry_gate": "conclusion=blocked，不准据此关闭增量或将正式八组计通过。后续修复应保存本报告及原冻结输入，以明确 delta 和相应反例供独立复核；只有后续独立结论 passed 才表示允许进入正式八组，仍不代替正式执行或增量关闭。"
+  }
+}

@@ -1,0 +1,336 @@
+{
+  "schema": 1,
+  "reviewer": "独立代码、测试、合同及结果审查者；本会话未参与本包实现，未再委派",
+  "review_date": "2026-11-06",
+  "package": "docs/execution/semantic-runtime/dogfood-delivery-repairs.md",
+  "summary": "本轮26文件delta的限定工程审查通过：自然final、settle与宿主已发布leaf恢复接线一致；候选原登记owner、通知目标与实际source三元组分责，Rust新成功、回放、冻结、组合、单答案、覆盖及refs推进均有相应接线和已有运行证据。末次冻结来源修复将交付查证与当前run取证登记分开，未把冻结A来源并入受限B snapshot。独立核对源文件、合同前缀、原始diff、73份证据引用及真实结果后，未发现确定的本轮代码、测试或合同阻断。此passed只签限定工程与证据如实性；必要A03真实辅助attempt失败，09整体仍不完整。J19日表valid/invalid概括比实际SQL投影宽，明确保留说明精确性限制。",
+  "conclusion": "passed",
+  "engineering_conclusion": "passed",
+  "real_effect_conclusion": "blocked",
+  "overall_09_complete": false,
+  "scope_sha256": "e03b89b90e1480d8f43e0ba9c423cbd3ccfef8ed1daead578ed47e288d506c7f",
+  "task_scope_sha256": "02df18d885be3316270a7d28d4c0a01c8b387443dc1af7dcbf62849134c2cd05",
+  "fingerprint_evidence": {
+    "method": "实际以scripts/check_delivery.py的read_delivery(root)读取当前delivery，再调用review_scope(root, delivery)；未调用validate、verify_review、--complete或验收命令。review-input仅用于对照过期，不是指纹来源。",
+    "task_scope_file": ".local/checks/dogfood-delivery-implementation-20261106/scope.json",
+    "review_input_file": ".local/checks/dogfood-delivery-implementation-20261106/review-input.json",
+    "verification_file": ".local/checks/dogfood-delivery-implementation-20261106/verification.json",
+    "verification_sha256": "33f0eadda91b78875837e984ecb95969885e1088dfda62d6f4f0b737e0ffe99e",
+    "verification_references_checked": 73,
+    "verification_reference_sha_or_size_mismatches": [],
+    "baseline_file_count": 1044,
+    "baseline_basis": "本轮接手实际工作树的before快照及baseline.json，非HEAD全量diff",
+    "current_before_after_file_hash_mismatches": [],
+    "raw_patch_independently_reconstructed": true,
+    "raw_patch_bytes": 939743,
+    "raw_patch_method": "按scope文件顺序，对before/after的实际字节内容生成同名统一diff；与task.patch逐字相等。task-readable.patch用于逐项阅读，压缩合同样例另行解析。",
+    "review_record_excluded_from_scope": true,
+    "verification_pointer_not_modified_or_self_signed": true,
+    "no_circular_report_hash_binding_added": true
+  },
+  "reviewed_files": [
+    {"path":"apps/agent/session/deliver.ts","sha256":"7d04d9ac55ef25217e9a69d70f3961250c4ae168201ee951bdfc205dfef8f551"},
+    {"path":"apps/agent/session/resources.ts","sha256":"812d74e30b05cc8303983dca75615e06fb8468d12b7ba121e39273ee953ad1a4"},
+    {"path":"apps/agent/tools/data-tools.ts","sha256":"8247992d076dc01ebf03c19b57ecb5d32ada5b43efa82ea09f04d643ca607679"},
+    {"path":"crates/data-agent/src/modules/ingestion/preparation/mod.rs","sha256":"9cf23cd3c19b46fbe739d3ea4a3916dcc9eb2d1c8489f7331cb9ddc700478f65"},
+    {"path":"crates/data-agent/src/modules/runtime/mod.rs","sha256":"c89653a16caf8a10740c2528ad74d3512e2ba138c83460136a1f76ec310a84a1"},
+    {"path":"crates/data-agent/src/modules/runtime/outputs.rs","sha256":"99644c161b846ddd2f5eefcb7c8bd6f60af237fab9f52b86697c9459febb770b"},
+    {"path":"crates/data-agent/src/modules/runtime/store.rs","sha256":"2038b9a7ecb394a8b7e59a3cb60d56a81bb247d960a88f75b164fcbaf40a0b3c"},
+    {"path":"crates/data-agent/src/modules/runtime/tool_ledger.rs","sha256":"b57d67515c0a4fc8a673d6f6218097469db9eff33a413cf3312de24d65851467"},
+    {"path":"crates/data-agent/src/use_cases/analysis_answers.rs","sha256":"6f7b6728dfd67fb71956e71cc8757be818d396c9909e54cec33d7d1f14a56721"},
+    {"path":"crates/data-agent/src/use_cases/data_tools.rs","sha256":"dd7d077703fd286bfb4f2104718399a86667f7581c2e98d6542b5e5d15d6564e"},
+    {"path":"crates/data-agent/src/use_cases/deliver_run.rs","sha256":"d60fbb2beece6f7b6daa078e44b7adcafeecf60404db76c4db97397fca0847a0"},
+    {"path":"crates/data-agent/src/use_cases/finish_run.rs","sha256":"1ee2042db55c0ddd1dd5fb7924ab431a36c4a4a3866c37ad0ad7cb14a4a36b34"},
+    {"path":"crates/data-agent/src/use_cases/source_preparation.rs","sha256":"5146ed17ed04b8c051650c5328a1e8cd05e677a0e38e4d37399f3a4b9175ca21"},
+    {"path":"crates/data-agent/src/use_cases/task_answers.rs","sha256":"6df070b619be6ba3a793d0a56f2d7f0281c2e20e08203360052a46893e83eb30"},
+    {"path":"docs/architecture/implementation-design.md","sha256":"00bd2bdcce6408c61989ff459f40be25520fd4350f6688983721cba60ee36ee0"},
+    {"path":"docs/execution/semantic-runtime/CONTINUATION_PROMPT.md","sha256":"8b01153cd37ad4e4bfd45979a96aefdb67d21393fb7ed0f9b87331b075a9a496"},
+    {"path":"packages/contracts/generated/boundary.rs","sha256":"8f24489ff3f078ee9cfe6edd50ea9c0819d3c8c221c5c1b3dc0534fcbeaf9573"},
+    {"path":"packages/contracts/generated/boundary.ts","sha256":"3c45ca89efa25e717dad3e6a4e9e7a77e3252fca2cf1ff190651d2fc1cf7e1f8"},
+    {"path":"packages/contracts/schema.json","sha256":"ad67e4ca3ec90e82e2d36797288ff1d11b6e8dff8005db20775db47b522df0a3"},
+    {"path":"tests/contracts/cases.json","sha256":"8cf12d471b7e8067316182c1190db46ebc0058b787e9416e5b7055c69c540c79"},
+    {"path":"tests/mvp/check-control-context-edit.mjs","sha256":"100a775f399b65c9b1b46ab72cb7be41bb105f64632e7a2d82134f87fcd358bf"},
+    {"path":"tests/mvp/check-result-notification-answers.mjs","sha256":"f39bc5eed0c75ba5643654705425700d4749923e1c6b909d075a0a51d1c79d54"},
+    {"path":"tests/mvp/check-source-preparation.mjs","sha256":"cf5813dc1da788a177ef64b1da4808dc3aed2e723875cc9f7f1240c07a8e2349"},
+    {"path":"tests/mvp/check-task-query-answers.mjs","sha256":"22dc29babcea0c49d6bb98a3f889fcccb3658c1b572cbd903df253af5f410460"},
+    {"path":"tests/mvp/check-waiting-task-delivery.mjs","sha256":"5990893fa3f8cb5b23bf3669045919f5ffd70a0b3a9ab3dc33baba97da9ec484"},
+    {"path":"tests/runtime/check-answer-state.mjs","sha256":"cf603d1a55bd2129c6a1e95981c54f1786743c3c4db33e77f1721f6ed56fa2f6"}
+  ],
+  "scope_and_method": {
+    "review_mode": "26文件task-delta逐项静态审查，关键函数读取当前源码上下文；生成大文件只审实际delta，不声称全文件或全项目审计。",
+    "requirements_read": [
+      "AGENTS.md工程边界、Pi复用及交付检查约定",
+      "docs/CURRENT.md最新09答案交付修复节、验收与要求变更、当前delivery.increment的27项绑定",
+      "docs/execution/semantic-runtime/dogfood-delivery-repairs.md第1–4、6–7节；第5节仅核本轮维护实际delta",
+      "docs/dogfood/cockpit/CASES.md原J19两断言、原A03两断言及原题"
+    ],
+    "supporting_source_read": [
+      "apps/agent/session/checkpoint.ts",
+      "apps/agent/session/journal.ts",
+      "apps/agent/session/workspace-context.ts",
+      "apps/agent/provider/controlled.ts相关错误分类/发送/结算分支",
+      "apps/agent/transport/client.ts",
+      "crates/data-agent/src/use_cases/context_authority.rs相关查证/登记接口",
+      "crates/data-agent/src/use_cases/analysis_evidence.rs的assert_query",
+      "scripts/check_delivery.py的read_delivery、fingerprint、review_scope及静态/完成检查区分"
+    ],
+    "performed": [
+      "独立文件SHA、大小、JSON解析及原始delta重建",
+      "原要求到代码消费者及现有测试断言的静态追踪",
+      "完整已有日志、退出记录及对应代码/测试/二进制身份核对",
+      "原始状态与文件快照重算、原生Pi宿主leaf祖先链与正式正文核对",
+      "读取既有浏览器截图、DOM/快照及原查询资料"
+    ],
+    "not_performed": [
+      "未运行任何测试、构建、Workflow、Oracle、浏览器操作、服务、DB或模型",
+      "未执行verify-increment、判分器或生成完成收据",
+      "未重审整个项目、HEAD全量继承delta、全100题或十条轨迹",
+      "未修改源码、CURRENT、成绩、verification或旧记录；仅写本报告",
+      "未提交、推送、部署或发布"
+    ],
+    "evidence_limit": "本次对冻结本地材料作独立审查，不是新的运行验收或对外部系统当前状态的实时证明。"
+  },
+  "engineering_boundaries": [
+    {
+      "topic": "自然final、SQL状态与Pi投影分责",
+      "assessment": "符合限定合同",
+      "locations": ["apps/agent/session/deliver.ts:96","apps/agent/session/deliver.ts:150","apps/agent/session/deliver.ts:307","apps/agent/session/deliver.ts:461","crates/data-agent/src/use_cases/finish_run.rs:395"],
+      "reason": "同一selectDelivery同时供settle文本和finish选择；自然候选要求实际已完成助手消息stop、无toolCall、有非空文字且任务/版本匹配。通知来源义务、全任务已冻结和已冻结当前任务分别处理。error/aborted/length仍先失败；没有把waiting快照本身当作调查完成。自然文字保存不生成确认、查询提交或平台成功；Rust仍按原query等待相位推进。资源/工具说明已删除同任务正常末条强制定稿，保留中途显式handoff。"
+    },
+    {
+      "topic": "真实finish发布点、原输出身份与恢复",
+      "assessment": "符合限定合同",
+      "locations": ["apps/agent/session/deliver.ts:375","apps/agent/session/deliver.ts:524","apps/agent/tools/data-tools.ts:382","crates/data-agent/src/use_cases/finish_run.rs:48","crates/data-agent/src/modules/runtime/store.rs:356","crates/data-agent/src/modules/runtime/store.rs:419"],
+      "reason": "finish先接回已提交指纹；尚未提交时在原会话/运行/租约及原片段或成功SDK正文有效的准备事务内发布候选检查点，来源核验与正式正文/read_binding/完成状态仍在最终事务。custom只存message/recovery_chain/task_ref/输出位置，不复制正文；恢复从宿主leaf分支和有效投影采用原绑定或已消费成功toolResult。旧无位置自然检查点继续Pi，未到达finish的本地tail不承诺零模型。单自然及组合末项使用同output、会话、恢复链、连续原片段及SHA检查，读取单元保存原attempt范围，不重新广播旧delta；未新增恢复循环。"
+    },
+    {
+      "topic": "原登记候选owner、通知目标与实际来源",
+      "assessment": "符合限定合同",
+      "locations": ["apps/agent/tools/data-tools.ts:175","apps/agent/tools/data-tools.ts:188","crates/data-agent/src/use_cases/task_answers.rs:14","crates/data-agent/src/use_cases/task_answers.rs:78","crates/data-agent/src/use_cases/data_tools.rs:221","crates/data-agent/src/use_cases/data_tools.rs:2331"],
+      "reason": "answer_task_ref由runtime锁定读取的原task_id/task_condition_version给出，既不从唯一source反推，也不统一改成通知A。新成功及回放校验原owner与其scope；已有新字段和登记矛盾即invalid_evidence。Node保留所有实际source三元组，notificationAnswer用同一source的query/task/condition匹配。缺owner旧成功回执恢复走原SDK及原参数的tools回放，不重新登记；补字段只改返回副本，不更新原receipt、指纹或operation/origin。"
+    },
+    {
+      "topic": "Rust消费者、冻结前项、通知覆盖及任务推进",
+      "assessment": "符合限定合同",
+      "locations": ["crates/data-agent/src/use_cases/task_answers.rs:110","crates/data-agent/src/use_cases/task_answers.rs:138","crates/data-agent/src/use_cases/task_answers.rs:185","crates/data-agent/src/use_cases/task_answers.rs:364","crates/data-agent/src/use_cases/task_answers.rs:499","crates/data-agent/src/use_cases/task_answers.rs:879","crates/data-agent/src/use_cases/finish_run.rs:342"],
+      "reason": "新成功、回放、普通冻结、冻结原文读取、组合末项及无parts单答案均有原归属/通知原条件及来源范围核验。query来源仍核本人/空间、同会话、query/task/condition、成功状态、result_ref与当前访问证明。各交付scope单独检查，不取许可并集。B冻结正文实际覆盖A时，整体覆盖及finish从实际采用的成功SDK回执验证原通知，可只交B一次；refs只加入显式owner及确已覆盖的原通知条件，引用来源C不自动结清。A已修订、开放澄清、待确认/运行查询及生命周期仍沿原规则，旧通知不结清新条件。"
+    },
+    {
+      "topic": "最后历史反例修复：纯交付证明不污染活动snapshot",
+      "assessment": "符合限定合同",
+      "locations": ["crates/data-agent/src/use_cases/analysis_answers.rs:214","crates/data-agent/src/use_cases/analysis_answers.rs:228","crates/data-agent/src/use_cases/task_answers.rs:333","crates/data-agent/src/use_cases/task_answers.rs:130","crates/data-agent/src/use_cases/deliver_run.rs:58","crates/data-agent/src/use_cases/deliver_run.rs:507"],
+      "reason": "check_sources_in_tx纯查证并返回来源；check_in_tx保留新取证/原回放的merge_run登记责任。冻结/交付消费者使用前者。refresh及prepare_delivery只在锁外CheckedTextResults补冻结authority的结果有效性proof，不把它并入活动任务snapshot。已查看实际refresh及恢复前后finish请求：受限B的query_results/source_query_results为空，而冻结A前项仍保留，原自然末项绑定跨两次请求完全相同。"
+    },
+    {
+      "topic": "兼容、合同单源、工程规则与owner",
+      "assessment": "符合限定合同",
+      "reason": "Schema仅增加两个可选宿主字段；FinishRun.output_binding须有final_text并与parts、答案SDK、控制引用及当前range起点互斥。生成Rust可选字段有skip_serializing_if，旧缺字段Finish不增加null而改变指纹；旧SDK/handoff读取及成功receipt原字节兼容保留。SQL/工具账本读取位于runtime私有store，协调层没有跨owner SQL；AppTx未增加通用SQL能力。Pi1.3.0仍为唯一模型/工具/会话/压缩循环；本次是实际复用的选择/候选采用和来源查证接缝，无新工具、表、迁移、框架、分类模型或无依据重试。新增catch只见于既有恢复/边界用途。未据未证组合要求新矩阵。"
+    },
+    {
+      "topic": "维护第5节实际delta",
+      "assessment": "有限诊断符合范围",
+      "locations": ["crates/data-agent/src/modules/ingestion/preparation/mod.rs:106","crates/data-agent/src/use_cases/source_preparation.rs:58","crates/data-agent/src/use_cases/source_preparation.rs:97","tests/mvp/check-source-preparation.mjs:201"],
+      "reason": "新增stage/reason、目标/引文位置及受控数字诊断，不放宽validator或对外错误码，不保存模型正文。真实Worker错版负控只发一次本地协议，结算后拒绝、清理frozen/draft，保原unknown预留。历史13个列示来源已独立读原JSON计为3 invalid_prefill、2 invalid_input、3 model_unknown、5 partial；没有原拒绝草稿，不能进一步猜历史原因或声称维护全修复。"
+    }
+  ],
+  "contract_review": {
+    "before_cases": 662,
+    "after_cases": 667,
+    "old_case_values_unchanged": true,
+    "original_prefix_bytes_unchanged": true,
+    "method": "直接解析before及当前cases.json逐项比较前662项，并对原闭合数组前缀作字节比较；未把压缩大行整体载入审查文本。",
+    "new_cases_reviewed": [
+      "自然Finish保原output_binding的合法roundtrip",
+      "绑定自然Finish拒绝final_start_chunk_seq覆盖",
+      "绑定自然Finish要求final_text",
+      "候选owner与多个source任务分开表达的合法roundtrip",
+      "候选owner缺condition_version拒绝"
+    ],
+    "execution_evidence": ".local/checks/dogfood-delivery-implementation-20261106/contracts.log",
+    "execution_limit": "667样例的Rust/TypeScript共同校验为已有完整运行日志；本审查未重跑生成器或校验器。"
+  },
+  "test_evidence_review": {
+    "evidence_root": ".local/checks/dogfood-delivery-implementation-20261106",
+    "red_green": [
+      {
+        "behavior": "完整stop与SQL等待分责",
+        "red": "natural-final-red.log / natural-final-red.exit.json",
+        "red_observed": "真实Pi/Rust/MySQL在既有waiting接缝把完整自然末条替换成控制摘要，断言失败、exit1。",
+        "green": "natural-final-green2.log / natural-final-green2.exit.json，及waiting-delivery-full2.log",
+        "green_observed": "普通正文正式/重读保留，实际finish发布leaf后零模型恢复，原attempt读取绑定、SQL未提交、下一轮实际本地provider输入及撤源隐藏均有断言。"
+      },
+      {
+        "behavior": "合法混源按原owner冻结",
+        "red": "rust-mixed-owner-red.log",
+        "red_observed": "真实Rust成功答案后的冻结返回409 invalid_evidence。",
+        "green": "final-owner-mixed-green.log及对应mixed-owner-receipts.json",
+        "green_observed": "原owner保甲、实际sources含甲乙、冻结引用保全部query；人为构造新owner字段与登记矛盾时409，恢复原receipt字节。"
+      },
+      {
+        "behavior": "冻结查证不污染受限B及实际发布leaf恢复",
+        "red": "task-query-history-freeze-proof-red.log及其位置/刷新诊断记录",
+        "red_observed": "原历史权限接缝在真实context refresh抛stale_context；后续诊断定位缺冻结结果proof及查证误merge当前run。",
+        "green": "history-proof-green.log、history-proof-natural-recovery-green.log、history-proof-final-checks.json",
+        "green_observed": "同一接缝的refresh、独立B输入隔离、原前项保留、自然末项实际发布点恢复及原attempt/chunk读取成功，5个本地协议调用后恢复增量0。"
+      },
+      {
+        "behavior": "受控维护拒绝诊断",
+        "red": "maintenance-validator-red-valid.log",
+        "red_observed": "原validator返回相同invalid_prefill但缺目标错版reason，新增可定位原因断言失败。早先无效候选日志不作为行为RED。",
+        "green": "maintenance-validator-green.log、source-preparation-diagnostics.log、semantic-preparation-regression.log",
+        "green_observed": "5个validator测试及6项Worker回环检查完成；错版拒绝保错误码、阶段及具体位置，正文sentinel不入日志，结算与清理、unknown保护维持。"
+      }
+    ],
+    "notification_consumers": {
+      "record": "final-proof-consumer-checks.json",
+      "current_full_log": "final-notification-proof-green.log",
+      "cases_read": ["failed","cancelled","unavailable","v2-frozen-late-condition","mixed-no-parts","mixed-frozen-tail","mixed-frozen-cover","mixed-recovery","p-negative"],
+      "observed": "45次本地协议，实际Rust/MySQL及可执行合成SQLite；混源单答案5轮，冻结B加A混源末项8轮并核旧receipt返回副本，B冻结覆盖A为6轮且C相位不变，已消费成功候选5轮后恢复0轮；P答案不能满足Q通知，撤权/失败/取消各自保持。",
+      "original_real_receipt_offline": "original-notification-receipt.mjs/json读取旧A03真实成功混源回执，经当前Node候选接缝采用；原版本加一不匹配。只证明离线Node接入，不算新Rust提交或真实provider通知通过。"
+    },
+    "additional_checks_read": [
+      "answer-state-final.log：21项原答案失效、Pi执行前拒绝、原handoff及恢复/输出失败边界",
+      "control-context-green.log：6项settle、检查点与下一轮投影检查",
+      "waiting-delivery-full2.log：16项、45次本地协议，含原DFR-002冻结B/控制A、澄清及浏览器刷新",
+      "verify-code.log：已有格式/Clippy/Node类型/Web构建；最后Rust证明修复另有当版Clippy和architecture记录",
+      "history-proof-final-checks.json、final-proof-consumer-checks.json：所列当前源/测试SHA已再次与当前文件比较，无不匹配",
+      "history-proof-runtime-binaries.json：API/Worker分别构建；当前二进制SHA与该末次记录相同"
+    ],
+    "version_reuse": "不把较早候选green或失败日志当当前通过。原verify-code及waiting/维护等不受末次冻结纯查证修复影响的结果按影响复用；末次直接消费者有当前history、自然恢复、混源、完整通知、Clippy及架构复查。真实J19使用scope-runtime-binaries，早于末次冻结查证修复；其无冻结前项，普通自然final处理及本轮Node未因此再变，不声称它是在末次二进制上重跑的。",
+    "expectation_changes_assessed": [
+      "未显式定稿自然末条必丢弃→完整stop正式交付；独立依据是本包3.2及J19原完整正文被控制替换的真实证据。测试改核文本不授执行/确认权，未造文本分类器。",
+      "未发布本地控制tail的恢复0轮→原Pi继续1轮；删除直接注入pi_checkpoints的夹具，依据真实宿主发布边界；真正发布后0轮的新检查独立保留。",
+      "恢复自然final测试首次green候选误用assistant_outputs.id失败；改用实际attempt_id，原失败保留，未放宽业务断言。",
+      "扩大既有本地随机trial夹具40→48：原完整waiting在40次额度耗尽，完整新覆盖实际45次。仅测试夹具容量纠正；每消息24、合成金额及真实trial均未放宽。"
+    ],
+    "acceptance_bindings": {
+      "count": 27,
+      "explicit_new_branches": [
+        {"id":"ANSWER-OWNER-SOURCES","command":["node","tests/mvp/check-task-query-answers.mjs","--mixed-owner"],"executed_evidence":"final-proof-consumer-checks.json / final-owner-mixed-green.log"},
+        {"id":"NATURAL-OUTPUT-RECOVERY","command":["node","tests/mvp/check-task-query-answers.mjs","--natural-recovery","--history-permissions"],"executed_evidence":"history-proof-final-checks.json / history-proof-natural-recovery-green.log"}
+      ],
+      "qualification": "--natural-recovery --history-permissions确实建立受限B、核实际provider输入隔离、refresh来源桶及发布后恢复；其historyPermissionChecked=false表示它没有重复normal模式下的HTTP/SSE撤权投影块。该撤权/TTL/持久原文块由单独--history-permissions当版记录覆盖，不将两者混称。",
+      "full_increment_gate_executed": false,
+      "static_verify_delivery_is_business_gate": false
+    }
+  },
+  "supplemental_raw_evidence_checked": [
+    {"path":".local/checks/answer-state-contract/task-query-natural-recovery-8cf8dd73-6286-442b-9ecd-e7921df6fef5/finish-requests.json","sha256":"846bed98e5381a6e889fdb743d92f600bfab2789dd661f1b0e8944253b977b90","observed":"原/恢复两个finish同commit、同两份part、同自然entry/原attempt/首尾片段/SHA；当前run更换，B snapshot两个结果桶均空。"},
+    {"path":".local/checks/answer-state-contract/task-query-natural-recovery-8cf8dd73-6286-442b-9ecd-e7921df6fef5/refresh-requests.json","sha256":"2a1679383420a2d3f7e4838091abfe197149871f28a28340c5f308ff80e5e749","observed":"已存在冻结A时刷新成功，活动B的query_results/source_query_results仍空。"},
+    {"path":".local/checks/answer-state-contract/task-query-normal-3d96ad9e-7f54-44e3-9b2f-e389a203d80f/history-projection.json","sha256":"bc721d4a336b3cfa465f10a2c210c63df7e364ab7bc54c40c13a8f1c2b008669","observed":"当版原历史权限读取证据；与测试的逐份隐藏及独立B保留断言核对。"},
+    {"path":".local/checks/answer-state-contract/task-query-normal-36c9335a-c4ad-43c3-a7cb-494ce3125d53/mixed-owner-receipts.json","sha256":"a9b28250448b32685addaca7b9df5b0c69985ddb0388ce558f88fb7614e9c165","observed":"实际Rust回执owner为甲，sources含两个任务，冻结200并保存甲owner及两个source_query_ids。"}
+  ],
+  "real_effect_and_limits": {
+    "primary_evidence_root": ".local/checks/dogfood-delivery-implementation-20261106/real-verification",
+    "records_reviewed": ["final-outcome.json","assessment.json","J19-committed.txt","J19-persisted-projection-browser.json","J19-wire-evidence.json","J19-original-cards-browser.json","A03-failure-boundaries.json","A03-current-native-failure-entries.json","A03-new-call-and-tool-facts.json","A03-wire-evidence.json","comparison-final-cleanup.json","state-before.json","state-final-cleanup.json","file-state-before.json","file-state-final-cleanup.json","shutdown-final.json","index-window-restore.json"],
+    "J19": {
+      "assessment": "原两断言可判pass，带明确精确性限制",
+      "attempt_id": "J19-110c26bc-2f28-4efe-a5c4-fbeb6b1b2ce7",
+      "new_original_question_attempts": 1,
+      "final_chars": 2865,
+      "final_sha256": "20c1b6d43a5d796075a1bade0eaee03799ae04063a801076a06aaf44b34a9016",
+      "independent_identity_checks": "重算J19-committed.txt字符数及SHA，直接比较正式outputs、两次浏览器快照原消息；再读取原Pi journal按宿主leaf 2a05ca9a追祖先，绑定助手97f38272在链内、stop且无toolCall、原文相同，之后没有针对它的context_edit。custom仅有输入/恢复链/task_ref/output_binding，未用leaf外tail。",
+      "browser_evidence": "已阅读普通重开/刷新快照及既有截图；完整文字比对基于原消息字节，不把Markdown渲染文字当字节原文。",
+      "original_assertions": [
+        {"expected":"不适用阶段与执行失败区分","assessment":"pass","reason":"正文分别说明按键入口属性、无语音状态、无可见TTS与失败；入口保无session行，不再统一套用合格turn尾注。"},
+        {"expected":"NULL不默认0，零分母不固定0%或100%","assessment":"pass","reason":"正文明确缺测NULL、计数0、空分母比率NULL；原已批准补充及独立合成SQL分支证据未变，本轮不再运行。"}
+      ],
+      "sql_semantic_cross_check": "对照原五份SQL：入口LEFT JOIN会话并用wakeup.started_at；无语音/TTS/首音延迟按合格turn；日表wake/session/turn各自started_at归日。原七稿全部字段、SQL、参数、版本和未提交状态与本轮前快照相同，无新增查询。",
+      "reused_sql_evidence": ".local/checks/dogfood-followup-implementation-20261105/real-verification/J19-original-and-supplement-independent-sql-validation.json",
+      "limitations": [
+        "正文第52行与继承摘要泛称三类事实的valid/invalid计数；实际日表SQL只输出valid_wakes、invalid_wakes、valid_sessions、valid_turns、vehicles，没有invalid_sessions/invalid_turns。不能声称全文逐列无误。",
+        "已核宿主leaf有效投影同文；没有下一次真实provider输入的新调用观测，不将工程本地下一轮测试说成真实J19额外调用。",
+        "旧SQL独立样本证据为已有离线合成SQLite结果，本审查未执行平台草稿或重跑该验证。"
+      ]
+    },
+    "A03": {
+      "assessment": "必要新真实辅助路径失败，不能证明本次真实通知效果通过",
+      "attempt_id": "A03-0e520368-2792-4eb8-833f-116f3c2f513c",
+      "run_id": "c2a084be-f9ce-4fa4-8470-ee4e67aa165d",
+      "status": "fail",
+      "new_final_text_chars": 0,
+      "new_present_analysis_answer_successes": 0,
+      "persisted_model_calls": 1,
+      "persisted_model_call_state": "settled/success",
+      "provider_wire_records": 1,
+      "new_second_call_row": false,
+      "established": [
+        "四次读取被task_context_required拒绝，原生四个toolResult均isError=true，不能说Pi因未route而直接停止。",
+        "第四个toolResult和model_request_failed终止助手在宿主leaf43b483e1之后；只用于失败诊断，不当成已确认恢复或交付证据。",
+        "终止助手stopReason=error、零usage，新的实际provider发送前失败；保存的账本和wire均无第二call，无新正文、查询或成功答案。",
+        "原始异常及具体发送前端点没有留存，当前错误归类不足以确定根因；约10069ms只支持待核假设，不证明RustTransport的10000ms超时。"
+      ],
+      "not_established": ["不是已证模型未route导致终止","不是已证具体10秒超时","不是已证权限、预算、供应商或资源根因","不是新真实自动通知通过"],
+      "original_case_and_failures": "原A03 case仍pass，两条原answer_sources_required失败通知保留；新普通辅助fail单列，不倒改原成绩，不把旧case pass或原结果可读当新效果成功。"
+    },
+    "fixed_core": {"record_count":21,"record_pass_count":21,"entire_100_case_counts":{"pass":27,"partial":6,"fail":1,"blocked_environment":1,"not_run":65},"meaning":"独立读取当前聚合重计；这是记录状态，不是本轮全21项或100题真实重跑，也不消除A03必要新路径缺口。"},
+    "ledger_and_old_records": {
+      "method": "直接解析before/final状态及文件快照重算；模型旧行依据完整行SHA投影比较，维护与预算为全字段行比较，不是重新访问DB。",
+      "old_model_rows_unchanged": 3224,
+      "old_maintenance_rows_unchanged": 118,
+      "old_budget_rows_unchanged": 78,
+      "new_model_rows": 6,
+      "new_model_states": {"settled":6},
+      "new_maintenance_calls": 0,
+      "spent_delta_micros": "336240",
+      "reserved_delta_micros": "0",
+      "original_unknown_preserved": 29,
+      "new_unknown": 0,
+      "original_maintenance_issued_preserved": 3,
+      "total_reserved_micros_preserved": "6989107",
+      "original_queries_unchanged": 9,
+      "original_J19_draft_submission_attempts": [0,0,0,0,0,0,0],
+      "original_A03_submission_attempts": [1,1],
+      "new_queries": [],
+      "old_attempt_files_unchanged": 63,
+      "old_aggregate_attempt_entries_unchanged": 72,
+      "old_entries_count_detail": "results.json中67条，trajectory-results.json中5条；原entries均仍在且相等，原expected文本未变。",
+      "old_hashed_files": 105,
+      "only_changed_original_file": ".local/dogfood-runs/semantic-20261102/results.json",
+      "other_aggregate_metadata_and_conversations_unchanged": true,
+      "current_results_hash_matches_frozen_final": true
+    },
+    "cleanup": {
+      "assessment": "冻结清理证据与状态快照一致",
+      "owned_processes_exited": 9,
+      "released_ports": [22780,22781,22790,22791,19173],
+      "only_owned_supervisor_signaled": true,
+      "index_expiry_restored": "2026-11-04 12:19:43.251",
+      "index_only_expiry_changed": true,
+      "permission_file_original_absence_restored": true,
+      "shared_infrastructure_stopped": false,
+      "qualification": "读取shutdown-final及恢复前后账本/权限存在性证据，未启动服务或对共享设施作新操作；不声称本审查重新实时探测了进程/端口。"
+    }
+  },
+  "findings": [
+    {
+      "id": "REAL-A03-INCOMPLETE",
+      "kind": "已证真实失败及验收缺口",
+      "blocks": "09整体完成及新真实通知效果声明",
+      "blocks_engineering_review": false,
+      "location": ".local/checks/dogfood-delivery-implementation-20261106/real-verification/A03-failure-boundaries.json:9",
+      "input_to_consequence": "获准普通只读输入要求解释本会话两份原结果；四个isError返回后，发送新provider前model_request_failed，无第二call行且无正式答案。本包必要真实接入要求尚未满足。",
+      "required_disposition": "保持09 active、整体review pending/record null、evidence null；不运行verify-increment，不生成完成收据，不以旧case pass、离线回执或本地协议替代本次真实通过。具体根因未证，不要求猜测性超时/模型/资源修复或重发。"
+    },
+    {
+      "id": "J19-DAILY-PROJECTION-PRECISION",
+      "kind": "已证说明精确性限制",
+      "blocks_engineering_review": false,
+      "location": ".local/checks/dogfood-delivery-implementation-20261106/real-verification/J19-committed.txt:52",
+      "query_id": "89e880ef-bbf8-479e-b8fe-6108f156596a",
+      "input_to_consequence": "新正文沿继承摘要把日表概括为三类事实的valid/invalid计数，而实际原SQL只有invalid_wakes，没有invalid_sessions/invalid_turns；阅读者可能误以为三类均有invalid列。",
+      "required_disposition": "作为精确性限制保留，限定J19的pass为原两断言及正文交付；不得外推为所有文字与SQL逐列完全一致。本审查未改正文或原SQL。"
+    }
+  ],
+  "final_disposition": {
+    "engineering_review_passed": true,
+    "overall_09_complete": false,
+    "increment_status_observed": "active",
+    "overall_increment_review_observed": {"status":"pending","record":null},
+    "increment_evidence_observed": null,
+    "verify_increment_executed_by_reviewer": false,
+    "receipt_generated_by_reviewer": false,
+    "blocker_reported_to_main": true,
+    "only_written_file": "docs/reviews/dogfood-delivery-implementation-review-20261106.json"
+  }
+}

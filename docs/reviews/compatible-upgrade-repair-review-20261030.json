@@ -1,0 +1,256 @@
+{
+  "schema": 1,
+  "increment": "I2-COMPATIBLE-UPGRADE",
+  "review_date": "2026-10-30",
+  "reviewer": "Codex 独立审查实例（宿主为 Claude Code Agent SDK，环境报告模型为 codex/gpt-6.1-sol），接续原独立审查。未参与本增量及本次修复的产品实现或测试编写，未再委派；独立阅读完整修复 delta、必要继承链、断言和保存日志，并在内存核验归档、差异与范围。本轮未执行数据库、harness、构建、测试或正式验收。",
+  "summary": "对冻结的 16 文件、1084 行修复 delta 独立复核结论为 passed。CU-01 已由普通生产 process_index 的到期发现、owner 候选核验及原 transfer 补足接续；新增有界 keyset 分页能够越过不可用前缀并回绕，不改变跳过项的持久状态。CU-02 已在来源失效出口通过 ingestion owner 与原作业同事务收敛，合法 applying 仍沿原成果应用，unknown 事实及原账本保持。完整 delta 及必要继承链未发现新的阻断。原归档和非 delta 输入均经核验保持；测试夹具修正有独立的消费顺序及原合同依据，未删除原场景或放宽产品限制。本结论只允许主线进入正式八组；正式八组尚未运行，不关闭 08，不表示真实模型、平台、Mem0 或部署已验证。",
+  "conclusion": "passed",
+  "scope_sha256": "b5a98aea2a8f5b5d9d1f08b33dad87a6355fe9f662af62c5e35258d07b0b9247",
+  "original_review": {
+    "path": "docs/reviews/compatible-upgrade-review-20261030.json",
+    "archived_path": ".local/compatible-upgrade-20261030/blocked-review-original/compatible-upgrade-review-20261030.json",
+    "conclusion": "blocked",
+    "scope_sha256": "1f81da880dd9950f2e744600c43fac3a52e2edd63803a727553a2fe89ad3b46b",
+    "sha256": "34f2aaf6b7e49c56d211419f7563aea58b08a567ab5c6d3de88695e692046caf",
+    "preservation": "原报告及归档逐字保持，不改写原 blocked 事实。本报告仅对明确冻结修复作后续判断。"
+  },
+  "scope": {
+    "head": "04d27d06ba7b97d4cf3e288d4cf9e6300ef491a9",
+    "preserved_worktree": "保留全部继承未提交修改；原审查后状态由原 before 和原 patch 重建，不将 HEAD 当作本次干净基线。未修改产品、测试、配置或 CURRENT。",
+    "input": {
+      "path": ".local/compatible-upgrade-20261030/repair-delta-input.json",
+      "sha256": "057861ac8d3a6f43c2e1ee439c5181b000bd7eb82ce77cbafe0ba01302a782a3"
+    },
+    "delta": {
+      "manifest": ".local/compatible-upgrade-20261030/repair-delta-changes.json",
+      "manifest_sha256": "82605d50fa772a9f5e104a1c778a26a6269debee04f5508c36942061fbc00af8",
+      "patch": ".local/compatible-upgrade-20261030/repair-delta.patch",
+      "patch_sha256": "93b62e0470fc1604ba266038cab8f53e8c799f26d7138ffd67dbf3de104833c0",
+      "files": 16,
+      "modified": 16,
+      "added": 0,
+      "deleted": 0,
+      "patch_lines": 1084,
+      "reading": "完整阅读 1084 行 delta；补读普通生产调用、各 owner SQL、队列/索引身份、准备状态、测试前后置和保存日志。未只依据实现者总结形成结论。"
+    },
+    "original_archive": {
+      "manifest": ".local/compatible-upgrade-20261030/blocked-review-original/archive-manifest.json",
+      "manifest_sha256": "0adc81dfc04dc6c4688131ff4b28e4a9676ee8d1f6546f8703ab29d6c3f9391b",
+      "input": ".local/compatible-upgrade-20261030/blocked-review-original/review-input.json",
+      "input_sha256": "e432e5651faaf22525e6c91eba9ede4a7e31da55f53fc8d5d4393837f39d5acc",
+      "changes": ".local/compatible-upgrade-20261030/blocked-review-original/review-changes.json",
+      "changes_sha256": "ceb9f39d5adaf653384cc3735d25d8eadfd6d6f8bf9f92d3a19119cf0b94978c",
+      "patch": ".local/compatible-upgrade-20261030/blocked-review-original/review-diff.patch",
+      "patch_sha256": "2684e8877aca08024c2a852867372fef13946492636434774d35e77cad6c78e6"
+    },
+    "baseline": {
+      "manifest": ".local/compatible-upgrade-20261030/before-manifest.json",
+      "manifest_sha256": "b8f1fc712496d8420f41c78c1ba927b33c8b7a66c804bc46d3b227fddaa3bc47",
+      "snapshot_root": ".local/compatible-upgrade-20261030/before",
+      "files": 495,
+      "supplements": [
+        {
+          "target": "scripts/test_development.py",
+          "path": ".local/task-answers-20261030/before/scripts/test_development.py",
+          "sha256": "5fb4face8218abea855964baa3c9dd1f4aa0d758b9aa3bde256a5afb5a53c4c2"
+        },
+        {
+          "target": "docs/execution/semantic-runtime/compatible-upgrade.md",
+          "path": ".local/task-answers-20261030/before/docs/execution/semantic-runtime/compatible-upgrade.md",
+          "sha256": "33960d03ace20c54d360463ad1e1dd25d7b46f1d3c513026d87d05e891024dca"
+        }
+      ],
+      "reconstruction": "逐项核验 495 个原 before 及两份明确补充；在内存严格应用原 unified diff，核 46 个原 after hash，再用 before/current 标签重建原 patch 逐字节匹配。未变化项沿原快照；原新增 8 项一并重建，共得 505 个基线候选，覆盖本次全部 500 个 scope 输入。原 495 份不是全仓快照，未补写或覆盖。"
+    },
+    "fingerprint_verification": {
+      "scope_files": 500,
+      "head_matches": true,
+      "original_archive_and_report_match": true,
+      "baseline_495_hashes_match": true,
+      "supplement_2_hashes_match": true,
+      "original_46_after_reconstructed_and_hashes_match": true,
+      "original_patch_reconstructed_byte_for_byte": true,
+      "delta_16_before_after_hashes_match": true,
+      "delta_patch_reconstructed_byte_for_byte": true,
+      "unlisted_changes_against_reconstructed_baseline": [],
+      "scope_paths_without_baseline": [],
+      "original_9_representative_log_hashes_match": true,
+      "green_input_4_hashes_match_current": true,
+      "scope_matches_expected": true,
+      "record_absent_before_creation": true,
+      "method": "只读 Git rev-parse 与 python3 -I -B 内存哈希、严格 patch 应用和 difflib 重建；导入 scripts/check_delivery.py 后仅调用 read_delivery、fingerprint(for_review=True)、review_scope，未调用 main、complete_delivery、verify_review 或验收入口。创建报告前再次核 HEAD、原报告、delta 输入/manifest/patch、16 个 after 和当前 500 文件 scope，均匹配。",
+      "meaning": "证明审查输入一致及结论绑定范围；不证明局部日志已构成正式验收，也不声称逐行审完所有未变文件。"
+    },
+    "requirements": [
+      "AGENTS.md：owner、事务组合、独立审查、测试预期依据、Pi 复用",
+      "docs/CURRENT.md：I2-COMPATIBLE-UPGRADE frontmatter、最新 08 段及复杂度约束",
+      "docs/execution/semantic-runtime/compatible-upgrade.md：步骤 2–6、当前内容重建、旧操作身份、回退边界",
+      "docs/execution/semantic-runtime/pi-reuse.md：现有 owner/索引链、无第二框架、局部与正式证据分开",
+      "docs/architecture/implementation-design.md：真实锁序、17.3 冻结材料释放及继承的 17.8 升级合同"
+    ]
+  },
+  "original_findings_outcomes": [
+    {
+      "id": "CU-01",
+      "original_severity": "high",
+      "outcome": "fixed",
+      "blocking": false,
+      "assessment": "有效旧 raw 租约仍被显式重建及普通消费跳过；到期后不依赖新维护 operation，由既有 Worker 调用的 process_index 执行有界发现、owner 核验、原子移交，再由原统一消费者消费。原维护回执直接重放的语义保持。",
+      "locations": [
+        {"path": "crates/data-agent/src/use_cases/knowledge.rs", "line": 700},
+        {"path": "crates/data-agent/src/use_cases/raw_index_handover.rs", "line": 112},
+        {"path": "crates/data-agent/src/modules/jobs/store.rs", "line": 250},
+        {"path": "crates/data-agent/src/modules/knowledge/store.rs", "line": 1720},
+        {"path": "crates/data-agent/src/modules/jobs/store.rs", "line": 318},
+        {"path": "apps/worker/src/main.rs", "line": 264},
+        {"path": "crates/data-agent/tests/raw_index_handover.rs", "line": 533},
+        {"path": "crates/data-agent/tests/raw_index_handover.rs", "line": 745}
+      ],
+      "source_facts": [
+        "process_index 在向量目标已确认后调用 hand_over_due，并在移交独立提交后才开始索引 claim 事务；Worker 原循环持续调用该生产入口，Ok(false) 只短暂让出，不结束发现。",
+        "发现 SQL 只取 schema-2 raw_source_index 的 queued/running 且空租约或到期项，最多 64，FOR UPDATE SKIP LOCKED；有效租约及 failed/finished 不入候选。",
+        "队列资源名不授予身份。组合层经来源 owner 核空间、当前修订，再按平台 complete/未 retired 或启用独立非空文档判定可索引性。候选 owner SQL 与原全清单条件相符，不每轮下行全部来源/正文。",
+        "复用 transfer_in_tx：登记统一 source_excerpt 目标及结束旧 raw 行同事务。origin 用 COALESCE、次数用 GREATEST，登记不改已冻结 embedding_profile；后续首次目标绑定保旧次数，仅真实 claim 加一次。",
+        "原 RawIndex 操作及 attempt 按空间/来源别名/修订/文本指纹生成；先接旧 settled/unknown 账本，unknown 不换 ID 重发或释放原预留。新发现/移交不调用模型或改费用表。"
+      ],
+      "evidence": [
+        ".local/checks/raw-handover-expiry-red.log：到期后没有 source_excerpt 的真实 RED，cargo 101、runner 1。",
+        ".local/checks/raw-handover-expiry-green.log：同公开 HTTP 维护入口与生产 process_index，1/1；原 2 次移交后实际消费至 3，完整投影、旧首批账本逐字段保持，同 operation 回执重放不重排。",
+        ".local/checks/raw-handover-prefix-red.log 与 raw-handover-prefix-green.log：原超过 64 项遮挡反例及最终 128 项空/到期租约前缀、回绕、跳过项不变的 GREEN。",
+        ".local/checks/raw-handover-final-shared-index-regression.log：登记 2/2、raw 7/7、恢复 6/6；原 raw 五项保持，新到期及分页两项列入实际全集。"
+      ],
+      "limits": "新到期反例经真实 HTTP 和生产 use_case 执行，不是该反例单独重启 Worker 进程；Worker 关系由当前 main 静态确认，既有真实 Worker 回归仍由正式八组执行。首批 settled 向量为隔离账本夹具；不冒充真实 provider 发送。新例单独核首用配置冻结，旧冻结 profile/unknown/配置失效复用由未变原测试和消费者共同支持。"
+    },
+    {
+      "id": "CU-02",
+      "original_severity": "medium",
+      "outcome": "fixed",
+      "blocking": false,
+      "assessment": "head=None 的来源失效出口现在通过 ingestion::preparation::supersede_preparation_in_tx 与原 background job 终态同事务收敛，释放 applying 冻结正文和待应用成果；没有提前清理合法 enabled 恢复批次。",
+      "locations": [
+        {"path": "crates/data-agent/src/use_cases/source_preparation.rs", "line": 102},
+        {"path": "crates/data-agent/src/use_cases/source_preparation.rs", "line": 127},
+        {"path": "crates/data-agent/src/modules/ingestion/preparation/store.rs", "line": 217},
+        {"path": "migrations/202610240003_source_preparations.sql", "line": 15},
+        {"path": "crates/data-agent/tests/frozen_job_inputs.rs", "line": 337},
+        {"path": "crates/data-agent/tests/frozen_job_inputs.rs", "line": 363}
+      ],
+      "source_facts": [
+        "source/revision/method_version 是原 preparation 主键，来源头和知识对象 ID 亦为全局身份；旧准备作业自身携带同一 resource/revision。来源 enabled 头已消失时移除 space 谓词可以精确结束该原记录，不需要猜所属空间或跨空间枚举行。",
+        "supersede 只改非 ready/failed/superseded 且 call_state 非 unknown 的记录，置 superseded 并清 frozen_batch/pending_draft/call_state/issued_until；输入/依赖指纹、游标/覆盖、批次和未知事实不改。",
+        "head=None 与 current>revision 共用该 owner；原 job 租约校验、preparation 更新、jobs::settle 和提交在同一事务。未知调用费用不在此路径变更，未新增模型调用。",
+        "enabled 且仍为原修订时继续原 applying 分支读取已持久成果并 apply_and_advance；合法在途冻结和已保存 unknown 的正反例保留。"
+      ],
+      "evidence": [
+        ".local/checks/preparation-retired-source-red.log：正式停用后原 job 已结束、准备仍 applying 并保 frozen/pending 的真实失败，cargo 101、provider 0。",
+        ".local/checks/preparation-retired-source-green.log：disabled/deleted/enabled 同一新用例 1/1；原 job、epoch、attempt、账本及预算保持，provider 0。",
+        ".local/checks/preparation-retired-source-regression.log：原四项加新一项完整 5/5，exit 0/signal null；旧冻结两场景仍合计四次协议调用。",
+        ".local/checks/preparation-retired-source-green-input.json：两份产品、Rust 测试和 runner 四项 hash 均独立核对当前文件匹配。"
+      ],
+      "terminal_semantics": "原 17.3/CURRENT 要求实际结束后释放，没有规定必须 failed 或新错误码。复用既有 superseded 表示原修订不再推进有合同依据；测试允许 failed/superseded 仅约束原要求的合法终态，并同时严格核释放、未伪造覆盖、原次数/账本/预算，不是放宽一个原已确定状态。",
+      "limits": "结论针对原 applying 后来源失效出口及本次 delta，不声称审查线程实际执行了反例，也不扩大为所有来源生命周期或未知外部调用的全量审计。"
+    }
+  ],
+  "findings": [],
+  "delta_assessment": [
+    {
+      "area": "分页正确性、有限工作量与回绕",
+      "judgment": "未发现阻断。",
+      "facts": "游标字段与 ORDER BY(state,lease_until,id) 一致：相同 state 的 NULL 页后接受非 NULL 或更大 ID，非 NULL 页后按租约值再按 ID；state 更大直接进入下一状态。返回 64 项才保存末项，否则清游标回绕。新到期或刚被 SKIP LOCKED 跳过项可以下轮回绕重新发现；游标只记扫描位置，回滚不构成处理完成，重启从头。Mutex 只复制或比较更新内存游标，不跨 SQL await。一次最多核 64 个候选；没有持久 cursor、每库映射、独立队列或迁移服务。",
+      "evidence": "最终 128 前缀测试覆盖 queued/NULL、running/过期、八类不可迁移来源、有效项消费及新项回绕，逐字段核跳过项不变。保存 MySQL 8.4.11/RR 计划的首/NULL 后/过期后三页均为 jobs_target_due range，actual rows=64，无 filesort；owner 主键 const，文档 JSON_TABLE 仅作用于一个候选。计划说明代表样本中的查询形态，不是无限规模、并发饥饿或全部未来执行计划的证明。"
+    },
+    {
+      "area": "owner、事务边界及真实锁序",
+      "judgment": "未找到新增可具体证明的同一行等待环；不声称 rank 或 checker 已证明无死锁。",
+      "facts": "组合层只调用 owner 公开接口。新 due 事务先锁最多 64 个旧 raw background job，再普通 MVCC SELECT 核来源，写统一索引目标并收敛原 job 后提交；普通来源读不持对象写锁，随后索引 claim 另开事务，网络/Embedding/Milvus 在锁外。文档/目录保存登记的是 prepare_source，不能把它与 raw_source_index 当作同一行构造死锁。CU-02 先核自身 job 再收敛原准备，未增加回头锁会话的路径。lock_rank 只覆盖实际调用它的函数，不能据此扩大保证。"
+    },
+    {
+      "area": "范围及四条复杂度要求",
+      "judgment": "修复与原反例相称，未见新增第二框架或无证据防御设施。",
+      "facts": "到期候选扫描对应已确认的生产缺口，分页对应保存 RED 的超过 64 前缀；owner 候选方法隔离实际存储责任并避免每次枚举空间。没有升级 Pi、另建 Agent/压缩器/恢复服务、永久发现状态或通用重试协调器。错误继续传播，supersede 复用真实业务终态；没有把历史超时或故障发生率编成已知。输入同边界不新增等价 Schema 往返校验，异步后实际来源新鲜度核验保留。每消息 24 次、连续临时失败 3 次、检索 10 秒/1000 候选/5 轮/30 主读未在 delta 中改动。"
+    }
+  ],
+  "test_expectation_review": [
+    {
+      "target": "crates/data-agent/tests/raw_index_handover.rs：前缀测试等待 actual claim",
+      "judgment": "有独立依据，未放宽原结果。",
+      "basis": "register_source_index_target_in_tx 只继承 attempts=2；claim_source_index_in_tx 才加至 3。process_index 可以在移交后先处理既有 knowledge 工作，因此只等 todo 存在不等于消费完成。两份中间失败日志明确 left=2/right=3；当前测试改等 3，最终仍严格断言 3 和回绕新项 1，而非把期望改成登记值。"
+    },
+    {
+      "target": "crates/data-agent/tests/raw_index_handover.rs：harness 初始待办前置完成",
+      "judgment": "有独立的生产调度和测试隔离依据。",
+      "basis": "runner 在子测试前通过正式重建入口登记初始来源；process_index 先消费 knowledge 后消费 raw，16 轮不能同时被解释为全初始重建和仅本例前缀的上限。当前测试先最多 256 轮调用生产消费者，且必须实际返回 false 才 seed 前缀；随后两段仍各 16 轮、保 3/1、原 origin 和 128 跳过项逐字段不变。没有 SQL 标记初始工作已完成或扩大产品期限。日志显示登记未 claim；具体初始积压量没有逐项快照，不据此声称所有中间时序根因都已被量化。"
+    },
+    {
+      "target": "crates/data-agent/tests/frozen_job_inputs.rs：失效来源终态与 enabled 正例",
+      "judgment": "断言来自原合同且保留原场景。",
+      "basis": "正式 edit 停用/删除后重领同 prepare job，必须释放 frozen/pending、终态收敛且不伪造覆盖；enabled 必须 ready 并推进真实覆盖。准备/调用通过 owner seam 构造已保存成果，只推进隔离租约，不模拟来源状态成功。原 unknown 和合法 active/applying 测试保留并增加 supersede 不改 unknown 的完整值比较。"
+    },
+    {
+      "target": "tests/mvp/check-shared-index-todo.mjs",
+      "judgment": "窄诊断不替换默认全集。",
+      "basis": "target 限三项，filter 必须带 target、合法名且传 --exact；非零/信号/零测试都拒绝。无参数仍完整登记/raw/恢复三组及后续真实 Milvus 和 RR 并发新文档检查。未删除原五项 raw 或六项恢复。"
+    },
+    {
+      "target": "tests/mvp/check-frozen-job-inputs.mjs",
+      "judgment": "新增约束，没有削弱原两阶段调用断言。",
+      "basis": "默认完整入口仍严格四次协议调用，prefill 窄入口仍两次；非 prefill 窄恢复/清理现在额外要求零 provider。原非零/信号/至少一测试/不得零测试保持。"
+    }
+  ],
+  "inherited_review": {
+    "basis": "原报告全部 46 项差异及列明必要继承链的独立审查继续有效；本次重建并核验全部旧输入，除明确 16 文件外未发现漂移，原九份代表日志 hash 全匹配。继承的是原非阻断范围及其限制，两项原阻断仅由本报告 outcomes 更新。没有用原 blocked 的整体结论替代本次 delta 判断。",
+    "coverage": [
+      {"area": "current、精确旧档、archive/latest_only", "assessment": "继承原 coverage[0]；新增 candidate 仅投影可索引身份，不改正文选择/保留。旧全文缺失仍明确不可读。"},
+      {"area": "真正冻结输入与实际终态释放", "assessment": "继承原 coverage[1] 的其他分支；CU-02 出口由本轮完整复核。"},
+      {"area": "raw、公共 A→B、恢复及兼容回退", "assessment": "CU-01 和分页由本轮复核；原切换/当前目标/旧回执/停新写后旧集合读取范围继承，正式运行待后续。"},
+      {"area": "owner、真实锁序", "assessment": "继承原 coverage[3] 并复核新增路径；没有把不同 background job 种类当同一行。"},
+      {"area": "v1/v2、旧 ModelProfile、operation/origin/budget", "assessment": "继承原 coverage[4]；相关实现和产品限额无 delta，不把旧窄日志等同完整 model-configuration。"},
+      {"area": "Pi session、确认 leaf、authority、历史正文及定稿答案", "assessment": "继承原 coverage[5]，MySQL 确认引用、旧 attempt/output 和 A 定稿/B 恢复规则无修改。"},
+      {"area": "unknown 回执、预算、结果过期、不盲重做", "assessment": "继承原 coverage[6]，补核 raw 复用账本和 preparation unknown 保护；未新增费用路径。"},
+      {"area": "个人资产、Mem0、Skill", "assessment": "继承原 coverage[7]；公共修复无个人存储改动，真实 Mem0 仍未验证。"},
+      {"area": "统一启动、配置、隔离和清理", "assessment": "继承原 coverage[8]；本次 runner 仅增加诊断选择和断言，默认完整入口保留。"},
+      {"area": "Pi 复用与复杂度", "assessment": "继承原 coverage[9] 并审新增分页/候选/终态；Pi 锁定版本与 Agent 路径没有变化。"}
+    ],
+    "original_fixture_judgments": "原报告 test_expectation_review 的九项判断及限定继续继承；对应源码未在本次改动，不能因此宣称原 Responses 超时或预填费用断言的未知根因已解决。"
+  },
+  "evidence": [
+    {"path": ".local/checks/raw-handover-expiry-red.log", "sha256": "62cc6ed49749d08bb14b7caae7bd670cd12403326bb03b5d24e20e9f115b15ad", "observed": "到期后无待办的真实失败；0/1、16.38 秒、cargo101/runner1，Node26.8.1。"},
+    {"path": ".local/checks/raw-handover-expiry-green.log", "sha256": "8bc1a01348bdd860ab0fda1442d08a44fb7d8d82da46c9db04c6bfca5c939911", "observed": "到期生产接续 1/1、15.38 秒、code0/signal null，attempts2→3、完整投影。"},
+    {"path": ".local/checks/raw-handover-prefix-red.log", "sha256": "1f58516c8d0fcc5f70b82aaca283c4170834603f0c597b395306703b8eca815a", "observed": "超过64前缀后的有效项未发现，0/1、10.33 秒、code101；日志 Node22.23.1，不能记为Node26。"},
+    {"path": ".local/checks/raw-handover-prefix-green.log", "sha256": "817d8c728881e8e1ad230cab3e46475b2a9ba0b770175884693cdedf94e0a56e", "observed": "最终128项、两类租约、回绕及跳过项不变 marker；1/1、17.95 秒、code0/signal null。该日志本身没有Node版本字段。"},
+    {"path": ".local/checks/raw-handover-prefix-registration-before-claim.log", "sha256": "584c68f417dac9f2c5477b80ef19f2b3567320fdca6d31d95bbe63edb1baddc8", "observed": "中间失败，已登记attempt2但断言3，code101，Node22.23.1；不当作通过。"},
+    {"path": ".local/checks/raw-handover-prefix-initial-backlog-diagnostic.log", "sha256": "330068b63d622147c351dd1c96995bc7eba0555de28ab3cb298053ea05ded162", "observed": "另一中间失败，已登记attempt2但未claim3，code101，Node26.8.1；当前测试保最终3/1断言。"},
+    {"path": ".local/checks/raw-handover-final-shared-index-regression.log", "sha256": "e45586972682704994424e640c6942b5e8cf917a535da9e4b192bc0fe52c24a5", "observed": "登记2/2、raw7/7、恢复6/6，各code0/signal null；真实RR并发新文档两目标各attempt1、proxyErrors=[]。42S22是对应成功故障反例的预期输出。"},
+    {"path": ".local/checks/raw-handover-final-public-index-upgrade.log", "sha256": "b24933457e8fae8856db46cf599a55c4507953a516c756259d5668aa15a7d0fa", "observed": "单行passed、六组描述、official0；与原public-index-upgrade-personal-selected-skills.log字节相同。文件独自不能证明本次重新执行时间或完整命令退出，按可继承保存证据处理，不当新增正式收据。"},
+    {"path": ".local/checks/raw-handover-query-plans.mjs", "sha256": "822ad239615e3a9012d4d529fe1cc5b0c4559694b42aaf148606f2a01e98d96f", "observed": "已读脚本，构造随机隔离库代表样本，SQL与新增发现/owner候选查询形态对应；本审查未执行。"},
+    {"path": ".local/checks/raw-handover-query-plans.json", "sha256": "bb61aae11fc388ad84845e9c95db02bd18798d0a72cff99d99780d6ada1b0085", "observed": "Node26.8.1，MySQL8.4.11/RR，4096作业/2048raw/1536due；三页range actual64，无filesort，owner主键候选。"},
+    {"path": ".local/checks/raw-handover-query-plans.log", "sha256": "bb61aae11fc388ad84845e9c95db02bd18798d0a72cff99d99780d6ada1b0085", "observed": "与query-plans.json逐字节相同；同一次保存证据，不计作两次独立执行。"},
+    {"path": ".local/checks/preparation-retired-source-red.log", "sha256": "78d9d9eafc91e679f28e8c9f32bfb04f5fc5e61763be87dde3318c545903a021", "observed": "正式disabled后原job结束但applying冻结未释放；0/1、5.09秒、cargo101/runner1、provider0、Node26.8.1。"},
+    {"path": ".local/checks/preparation-retired-source-green.log", "sha256": "72a64b08826b0266e3458591d707e423c32602742a12574ae6a524c2dd7e7dae", "observed": "新三状态用例1/1、4.89秒、exitCode0/signal null、localProtocol0/official0。"},
+    {"path": ".local/checks/preparation-retired-source-regression.log", "sha256": "59a8ebbbec258a2dc9513153d847d1f3fd960eb0dbfd73cb552b775e9019d0fc", "observed": "完整5/5、6.38秒、exitCode0/signal null，原4项保持，localProtocol4/official0。"},
+    {"path": ".local/checks/preparation-retired-source-green-input.json", "sha256": "3ca480136e07923098ef8d21df4b0c68d9e36df2e0ac07336c43f095b098b455", "observed": "四项已验输入hash独立对照当前全部匹配。"},
+    {"path": ".local/checks/preparation-retired-source-build-api.log", "sha256": "02f2b6a10fdbcf0a8cb2b90994ade0ac2fd91f216bbe8d3f6a7b6e60a11fd0c9", "observed": "保存输出编译data-agent及API，35.98秒、exit0；没有源码/二进制hash，不能独自证明最终16文件对应的二进制。"},
+    {"path": ".local/checks/preparation-retired-source-build-worker.log", "sha256": "fda142676311afd3318fd1136e054428bc87095286583047ebdab1fad82dc5ea", "observed": "保存输出编译data-agent及Worker，20.07秒、exit0；与API分开构建。最终产品均已包含且之后只改测试是CURRENT声明，日志本身未做内容绑定。"}
+  ],
+  "verification_limits": {
+    "reviewer_executed": "只读源码、要求、断言、日志、Git HEAD 及哈希/diff/scope 内存核验；唯一新写为本 repair JSON。未修改原 blocked、产品、测试、配置、CURRENT 或任何继承工作。",
+    "not_executed": [
+      "数据库、SQL、harness、cargo、构建、测试、服务启动或正式验收",
+      "正式八组 UPGRADE-CURRENT / UPGRADE-FROZEN / UPGRADE-RESTORE / UPGRADE-INDEX / UPGRADE-CONTRACT / UPGRADE-CODE / UPGRADE-BOUNDARIES / UPGRADE-FLOW",
+      "check_delivery.py 的 main、complete_delivery、verify_review 或其他执行入口",
+      "真实模型、真实平台、真实 Mem0、企业 ACL/出域、付费、部署或用户日常服务验证",
+      "Git 写入、外部调用、凭据/真实 .env 读取或再次委派"
+    ],
+    "evidence_boundary": "所有运行日志均为主线保存，非本审查者执行。逐项核实现、断言及可见输出后将其作为局部证据；未把多个局部passed拼成正式八组，不以scope哈希代替实质审查或实际执行。",
+    "unresolved_observations": [
+      "旧Responses恢复20秒超时及预填费用预留断言历史失败重跑未复现，根因仍未知；相关产品限制没有放宽。",
+      "部分GREEN/最终日志无Node版本字段，Node26统一环境属于CURRENT/协调者声明；可见RED的Node22差异保留。",
+      "公共切换final日志与原日志完全相同，无法单由文件判断本次执行的新鲜度；相关源码未变，但正式组仍需实际执行。",
+      "两份构建日志未内容绑定最终源码/二进制；四项CU-02输入hash能核当前源码/测试，不能替代完整正式构建及验收。",
+      "新增到期测试没有单独重启Worker进程；生产入口连通由静态main及use_case执行共同支撑，原恢复和正式链仍按既定入口验证。",
+      "分页执行计划仅为指定隔离样本；没有运行并发锁测试或证明任意计划/负载下无死锁、无饥饿，不为这些未证实情形追加框架。"
+    ],
+    "formal_acceptance": "not_run",
+    "entry_gate": "conclusion=passed 只允许主线将 review 指针更新到本报告后进入正式八组。08 仍 active，evidence=null；不得据本报告关闭08、宣称八组通过或进入09。正式执行若出现新失败或实质输入变化，应保留真实失败并按新delta重新判断。"
+  }
+}

@@ -1,0 +1,157 @@
+{
+  "schema": 1,
+  "reviewed_at_utc": "2026-10-26 13:31:07 UTC",
+  "review_type": "bounded_correction_and_handoff",
+  "increment": "I2-HYBRID-RETRIEVAL",
+  "reviewer": "独立审查子代理 /root/canonical_authority_review。未参与本轮产品代码、测试或执行包编写；未运行产品测试。独立核对正式合同、局部代码与测试断言、主实施者保存的实际运行日志，以及Oracle原答与最终执行包的处置。",
+  "conclusion": "passed",
+  "summary": "本轮有界检索纠偏及下一包说明通过独立复核：已删除类型配额、关联腾位和自动集合切换；普通读取不创建集合，原文消费者在领取前核验显式目标；回源保留真实存储错误；子测试与故障屏障按实际调用关系运行。执行包已补齐Oracle三项必要约束，可交给后续实施者。此结论不是05完整实现或业务验收通过。",
+  "conclusions": {
+    "bounded_corrections": "passed",
+    "execution_package": "ready_for_implementation",
+    "full_increment": "not_complete",
+    "increment_closure_approved": false,
+    "delivery_gate_review": false
+  },
+  "scope": {
+    "specifications": [
+      "docs/architecture/implementation-design.md 第17.3.2、17.4、17.5、17.6、17.6.1节",
+      "docs/execution/semantic-runtime/hybrid-retrieval.md",
+      "docs/execution/semantic-runtime/AGENT_PROMPT.md"
+    ],
+    "boundary": "仅覆盖本轮删除类型配额/关联腾位、显式索引目标及raw领取前核验、原文回源错误分类、相关测试夹具修正与下一包的执行说明。快照中包含整份文件以便核对版本，不表示重新审查这些文件的全部既有能力。04已有独立关闭证据，不在本记录中重开；05完整主链及06–09均未获本记录的关闭结论。",
+    "excluded": [
+      "公共索引队列与投影进度的完整替换",
+      "每通道召回前允许集合、raw/knowledge共同排序、全部规模和故障边界的实现验收",
+      "05完整verify-increment、06公开工具交付、07答案组合、08统一升级和09整链dogfood",
+      "真实付费模型的语义质量、真实生产平台与部署"
+    ]
+  },
+  "snapshot": {
+    "branch": "codex/semantic-maintenance-prototype",
+    "head": "04d27d0",
+    "code_paths_sha256": {
+      "crates/data-agent/src/modules/retrieval/mod.rs": "96d04f7d4b720b5e13b81a69808a69dcb4e76efd46923277a88c40af0547323d",
+      "crates/data-agent/src/modules/retrieval/vector.rs": "8964c73cc64bbcfcd05dadb35b3f855fcfe5ba9b3db99ac97394d93ae1ffe19e",
+      "crates/data-agent/src/use_cases/knowledge.rs": "040a8dbad41f81559a28bdf21f9bab4bf380d164382258887171dabf9f712cea",
+      "crates/data-agent/src/use_cases/knowledge_sources.rs": "c536686b37fa7c7451ad9a4b2db597146f9413c1cc29e1e6b9379be4d5db32f6",
+      "crates/data-agent/src/use_cases/raw_source_index.rs": "0f946ce1104597c76c423fdaa17850bcc7932ebf1bf1d4021f56108a8f817987",
+      "crates/data-agent/tests/raw_index_target.rs": "8bd32d8532d70ff00d9367519105944fe502b882db469b37eca42133376119a3",
+      "crates/data-agent/tests/source_excerpt_recall.rs": "02f64afb6711383077940f70989a3e2e54d4503e09fb9e46607875da0e8bec07",
+      "tests/mvp/check-hybrid-retrieval.mjs": "515a2c738f9cbf0f4d60635247bec5bebe1d163a9bcfa4ed2e4fc83c50839cc0",
+      "tests/mvp/check-index-target.mjs": "5ea649293b081c60b9c8cb63a3e2d4e77afcd9011348deed21780508580b1d7c",
+      "tests/mvp/check-retrieval-ranking.mjs": "dabb131275029c81ad7dc5c7ff0ed01551b25d0f4d859e6f5768eacdbe0abc33",
+      "tests/mvp/check-shared-embedding.mjs": "75a848a56b75d2c73f4f5aace1cc9a91ffc8cf5c176dfa0eaa5ef51a153bff28",
+      "tests/mvp/check-source-recall.mjs": "bb7eeb9671c074e4f6a6c39ee65d69f45f35bfa82570b8554e36d066417a3735"
+    },
+    "code_aggregate_sha256": "cf0356dc7dfff2658e3893d09d459e49f8ce364968b6496b4ce7b96b18eeed46",
+    "document_paths_sha256": {
+      "docs/architecture/README.md": "77a3e8016d296b5c919a8c779c01fe50623793b75acaf993ae73aa00f949afd0",
+      "docs/execution/semantic-runtime/AGENT_PROMPT.md": "5b698a78bf4837587c269cf1353c1ca80de0a75e95320e89223d3f786bf2c00d",
+      "docs/execution/semantic-runtime/cross-validation.md": "b8ff3331e52ee3e5a88c42be78b96561dca92f597749dc851adcbb786a9f3ea3",
+      "docs/execution/semantic-runtime/hybrid-retrieval.md": "a8a3c6f4a512b598e5b19806e71d08bf5c8cfec23f96703ab46e51bb7d59f08e"
+    },
+    "fingerprint_method": "逐文件以原始字节计算SHA256；code_aggregate_sha256为按路径排序后拼接 path + NUL + sha256 + LF 的SHA256。此为有界审查快照，不是scripts/check_delivery.py的全增量review_scope，不能充当05关闭指纹。CURRENT未纳入快照，主实施者随后追加状态证据不改变已审查代码。"
+  },
+  "verified_changes": [
+    "rank_hybrid删除按类型补位，只按既有相关性顺序、稳定身份去重及limit截取；六个强字段不能被六类弱命中挤掉。knowledge检索删除普通related对象占用结果名额的分支，不用改配额掩盖该行为。",
+    "vector普通读写删除自动_h1推导与失败后建集合。查询只读取明确配置的集合；唯一prepare_index_target调用由已授权维护重建入口发起。旧dense形状明确拒绝，不改旧集合或另建替代集合。",
+    "独立审查发现raw消费者未经过目标形状核验，删除自动解析器后可能向旧dense集合写入并结算成功。真实公开用例RED复现Ok(true)，修复在领取前复用现有index_target；最终反例验证旧待办仍queued、attempts为0、没有upsert或Embedding调用。",
+    "recall_excerpts_in_tx仅把确定not_available/stale_source/stale_knowledge作为不可用旧命中舍弃；真实MySQL锁超时继续返回暂时存储错误，不能伪装成成功的空回执。",
+    "依赖父Node代理的Rust子测试使用异步spawn等待并传播非0退出码；父代理在子测试等待期间实际完成Milvus查询，完整原文回环有独立窄集成证据。",
+    "shared-embedding租约夹具按真实request的parameters_fingerprint与目标knowledge稳定operation匹配issued账本，排除raw请求串入。3秒注入窗口、下一目标批次大于110秒及至少两批的断言保留；主流程执行断言并清理资源。"
+  ],
+  "evidence": {
+    "ranking": {
+      "red": ".local/checks/retrieval-ranking-quota-red.log",
+      "green": ".local/checks/retrieval-ranking-quota-green.log",
+      "result": "真实工具首次回执保全六个同类强字段；窄limit及只有两项相关结果时不补关联。原广义1200候选缺口仍如实记录broadQueryIncludedTarget:false，未冒充全局候选问题已解决。"
+    },
+    "explicit_target": {
+      "initial_red": ".local/checks/index-target-red.log",
+      "reviewer_counterexample_red": ".local/checks/raw-index-target-red.log",
+      "final_green": ".local/checks/raw-index-target-green.log",
+      "result": "最终整脚本exit 0，75.43秒；缺失集合不自建、读取故障不换库、旧形状拒绝及raw未领取/未写入/未耗预算均通过。"
+    },
+    "source_recall": {
+      "fault_red": ".local/checks/source-recall-failure-red.log",
+      "fault_green": ".local/checks/source-recall-failure-final-green.log",
+      "full_round_trip_green": ".local/checks/source-recall-round-trip-green.log",
+      "result": "故障窄测及最终两项集成通过；实际MySQL锁超时保留分类，实际Milvus写入、双通道召回、当前修订定点回源、来源限制和旧修订拒绝通过。父HTTP代理实际响应，非仅编译或零测试退出。"
+    },
+    "retrieval_scope": {
+      "path": ".local/checks/retrieval-correction-scope.log",
+      "result": "完整11项原范围/长文/资产回归exit 0，117.9秒；最大工具回执23688字节。它是现有范围行为回归，不证明下一包的各通道前置允许集已实现。"
+    },
+    "shared_embedding": {
+      "original_failure": ".local/checks/retrieval-correction-shared-embedding.log",
+      "diagnosis": ".local/checks/shared-embedding-lease-diagnostic.log",
+      "first_complete_green": ".local/checks/shared-embedding-identity-green.log",
+      "final_serial_green": ".local/checks/shared-embedding-identity-serial-green.log",
+      "result": "正式测试最终独占串行exit 0，九组全部通过。目标knowledge批次租约观测2→119→119秒；原故障窗口和续租断言未放宽。第一次完整绿色与另一个DB检查短暂重叠，因此采用后一次独占串行日志作最终证据；原失败回归汇总未改写为通过。"
+    },
+    "build_and_static": {
+      "paths": [
+        ".local/checks/retrieval-correction-final-build.log",
+        ".local/checks/retrieval-correction-code.log",
+        ".local/checks/retrieval-correction-documents.log",
+        ".local/checks/retrieval-closure-architecture-docs.log",
+        ".local/checks/retrieval-handoff-links.json"
+      ],
+      "result": "API/Worker构建、fmt/clippy/TypeScript/Web构建通过；Web大bundle警告仍存在，不宣称性能验收。准备材料439项/263链接、声明检查及16项检查器自测通过；架构文档覆盖检查和6文件74本地链接通过。声明/文档检查不等于业务通过。"
+    },
+    "runner": "动态检查全部由主实施者执行，本审查者读取实际日志并核对当前断言；没有冒充独立重跑。",
+    "layers": {
+      "storage": "隔离真实MySQL、专用真实Milvus集合、实际API/Worker和受控工具",
+      "models": "本地Embedding/provider协议替身或捕获式模型；没有真实模型质量结论",
+      "business_materials": "从零构造的合成业务资料与合成平台",
+      "official_requests": 0
+    }
+  },
+  "fixture_changes_reviewed": [
+    {
+      "change": "raw回环清理上界从u64::MAX改成夹具实际修订之后的2和3",
+      "evidence": ".local/checks/source-recall-round-trip-diagnostic.log",
+      "reason": "Milvus返回code1100，明确是ParseInt无法接受18446744073709551615。修正只针对清理边界，所有召回/修订/定位/来源限制断言保留；此失败没有被归为产品成功或环境故障。"
+    },
+    {
+      "change": "原文待办未领取断言使用background_jobs实际公开状态queued",
+      "evidence": ".local/checks/raw-index-target-fixture-state.log",
+      "reason": "pending是先前夹具误用的字面；原待办未领取、attempts=0、不写旧集合及不发Embedding的业务预期未改变。"
+    },
+    {
+      "change": "共享Embedding续租屏障绑定目标operation及parameters_fingerprint",
+      "evidence": ".local/checks/shared-embedding-lease-diagnostic.log",
+      "reason": "诊断显示第二个全局请求属于raw，第三个才是同一knowledge的下一批，且该批租约已续至119秒。原全局计数把两个消费者混为一体；正式修正没有改产品租约、预算或重试限制。"
+    }
+  ],
+  "execution_package_review": {
+    "conclusion": "ready_for_implementation",
+    "oracle_source": ".local/oracle-retrieval-package/answer.md",
+    "oracle_scope": "Oracle只静态审阅所给材料，没有运行产品测试；本审查者读取其原答，并独立核对最终包如何落实意见，不宣称Oracle审查过随后修改的最终文件。",
+    "verified_constraints": [
+      "零候选仍从当前允许范围的待办及实际集合覆盖识别index_lag；semantic_status pending/failed本身不等于索引滞后。",
+      "旧raw移交先停旧入口新领取，保留有效租约；新待办建立与旧项移交在同一短事务提交，真实接续原operation、预算、冻结profile及已知/未知回执；整链验证后删除旧登记/领取/结算和重复Worker入口。",
+      "v1可交付record_kind在通道召回和名额计算前生效；内部raw/knowledge共同排名，v1不先被raw占位后再过滤，也不伪造旧知识引用。",
+      "已知空根与unknown按17.3.2/17.4区分，复用正式来源规则；用户控制信息与文档自身原文保留原含义，不新建授权判据副本。",
+      "每个通道的允许集分片先按可比较原始分数合并去重，再做BM25/dense同权一次RRF；精确ID优先不作第三票。五轮扩展与分片/通道深度分别表达，1000唯一已接收记录和统一10秒截止不重置。",
+      "SourceKey.kind/id贯穿写入、查询和清旧；文档别名/裸ID不一致及平台文档同ID互删进入typed目标整体替换反例。",
+      "候选元信息每批最多50、选中最多30才定点读取；历史访问复用owner元信息并持续核保存时来源闭包。06公开v2、07答案、08统一切换及09dogfood保持原路线，本包不提前实现。"
+    ]
+  },
+  "remaining_required_work": [
+    "knowledge统一拥有raw/knowledge公共索引待办，retrieval保存实际集合代次投影；迁接旧积压并删除旧raw消费者的全部重复职责。",
+    "原位完成各通道前置允许集合、raw/knowledge共同候选、同路多批分数合并、单次RRF、批量元信息及定点回源；删除对应旧路径，不能在后过滤或额外重排层打补丁。",
+    "旧raw文档清理仍存在document-别名与裸object_id不一致，须与typed目标整体替换处理；本轮只修领取前目标核验，未冒称完整raw索引生命周期正确。",
+    "完成独立BM25/dense故障、统一期限、零候选覆盖滞后、跨文档窗口全局排序、超过129块尾部、1200对象末尾高相关及两类集合重建等全部反例。",
+    "05完整混合检索主链与全部绑定验收尚未通过；CURRENT的review.status应保持pending且05保持active，须在后续真正完成后另做整包独立审查与verify-increment。"
+  ],
+  "limitations": [
+    "本轮没有重新执行完整千表hybrid电池；异步子进程及raw回环通过独立窄集成证明，不能据此声称整包规模验收通过。",
+    "真实付费模型质量、真实生产平台、发布部署和日常服务更新均不在本记录范围。",
+    "局部passed与执行包ready只适用于记录的冻结快照；不替代05关闭审查，不覆盖未列出的旧代码或所有未来改动。"
+  ],
+  "reviewer_edits": [
+    "docs/reviews/retrieval-handoff-review-20261026.json"
+  ]
+}

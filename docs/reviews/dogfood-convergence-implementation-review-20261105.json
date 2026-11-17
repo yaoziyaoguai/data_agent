@@ -1,0 +1,471 @@
+{
+  "schema": 1,
+  "date": "2026-11-05",
+  "kind": "bounded_independent_static_review",
+  "reviewer": {
+    "name": "Codex",
+    "role": "本包唯一最终独立审查者",
+    "model": "codex/gpt-6.1-sol"
+  },
+  "independence": {
+    "implementation_participation": false,
+    "delegated": false,
+    "additional_skill_pipeline_started": false,
+    "method": "直接核对执行包、实际开工工作树快照到当前文件的delta、所属owner及直接消费者，并读取既有完整验证日志、原attempt/evaluation和提取后的实际工具/provider输入。只作本地文本、JSON、字节差异及SHA256核对；没有执行产品、测试或构建。"
+  },
+  "scope": {
+    "execution_package": "docs/execution/semantic-runtime/dogfood-convergence-repairs.md",
+    "sections": ["2 编程约束", "3 已批准默认", "5 提交读取绑定", "6 已加载历史刷新", "7 澄清与采纳", "8 共享语义与SQL", "9 验证边界", "10 文档与冻结"],
+    "manifest": ".local/checks/dogfood-convergence-implementation-20261105/scope.json",
+    "verification_manifest": ".local/checks/dogfood-convergence-implementation-20261105/verification.json",
+    "patch": ".local/checks/dogfood-convergence-implementation-20261105/task.patch",
+    "before_directory": ".local/checks/dogfood-convergence-implementation-20261105/before/",
+    "base_head_as_recorded": "04d27d06ba7b97d4cf3e288d4cf9e6300ef491a9",
+    "attribution": "范围来自909份开工实际工作树before快照；70个变化文件中CURRENT仅作上下文，69个实现/契约/资料/测试/图文文件冻结。未将HEAD全量diff或继承改动归为本包。",
+    "changed_files_in_manifest": 70,
+    "frozen_implementation_files": 69,
+    "current_after_hashes_matched": 69,
+    "before_hash_mismatches": [],
+    "initial_review_text_deltas_matched_to_task_patch": 61,
+    "initial_review_patch_lines": 21928,
+    "follow_up_patch": ".local/checks/dogfood-convergence-implementation-20261105/dcr001.patch",
+    "follow_up_scope": ".local/checks/dogfood-convergence-implementation-20261105/dcr001-scope.json",
+    "follow_up_verification": ".local/checks/dogfood-convergence-implementation-20261105/dcr001-verification.json",
+    "follow_up_changed_files": 4,
+    "follow_up_exact_deltas_matched": 4,
+    "unchanged_frozen_files_reused": 65,
+    "generated_review": "生成Rust/TS按Schema、生成器及实际消费符号核对，结合contracts:check和662份跨语言原样例日志；不将生成代码当作另一套业务实现。SVG、atlas和目录仍纳入69文件指纹。图册仅解析嵌入数据核对源与SVG，没有全文展开数MB的atlas。",
+    "current_context": {
+      "path": "docs/CURRENT.md",
+      "read_range": "frontmatter及最新09整体连续修复节；未读取完整历史",
+      "goal_revision_observed": 167,
+      "increment_status_observed": "active",
+      "increment_review_observed": {"status": "pending", "record": null},
+      "increment_evidence_observed": null,
+      "full_file_sha256_frozen": false
+    },
+    "excluded": [
+      "全项目审计、重开01–08及继承未变工作",
+      "实现、测试、CURRENT、成绩、凭据或配置修改",
+      "数据库连接、模型或外部服务调用、服务启动、构建或测试重跑",
+      "未变Mem0及公共Skill生命周期重测、完整100项或十轨迹重跑",
+      "主09独审passed、完成gate及evidence收据"
+    ]
+  },
+  "scope_sha256": "b2061c2d4ce0ab75c963937733d76fc8c5199d98b2616deed741be22372577c8",
+  "scope_hash_verification": {
+    "algorithm": "SHA256",
+    "canonicalization": "以scope.json.frozen_implementation_files的path排序，逐一使用当前实际文件SHA256构造{path,sha256}数组；json.dumps(ensure_ascii=False, sort_keys=True, separators=(',',':'))的UTF-8字节取SHA256。",
+    "matches_manifest": true,
+    "mismatches": [],
+    "excludes_current_and_this_report": true
+  },
+  "status": "passed",
+  "conclusion": {
+    "engineering_repair_boundary": "pass",
+    "blocking_findings": 0,
+    "resolved_findings": 1,
+    "summary": "初审DCR-001已完成最小修复并通过本次定点独立复核：同源合同及Rust/TS生成类型补齐cancelled，实际流式片段经正式取消后的原范围POST刷新从400转为200，且取消片段在已加载缓存时其他答案仍能正常撤权/恢复。当前4文件delta无新阻断，其余65个冻结文件未变并复用初审结论；本包工程边界可签passed。初次blocked及原缺陷完整保留在initial_review和findings的历史说明中。",
+    "engineering_logs": "新增接缝RED在正式取消成功后命中afterCancel POST400，前7组已通过；同一脚本GREEN完整9组通过，officialRequests=0。契约生成一致性、662份原跨语言样例、fmt/all-targets Clippy/types/Web及API/Worker分别构建的完整原日志已核。审查者没有重跑。" ,
+    "main09_complete": false,
+    "main09_core_counts": {"pass": 15, "partial": 5, "not_run": 1},
+    "main09_state_claims_honest": true,
+    "qualification": "本记录仅签本包当前工程delta。DCR-001修复不改变真实效果的partial/not_run；主09仍active、review pending、evidence null。本报告不是主09独审或完成收据，也未修改CURRENT或成绩。"
+  },
+  "findings": [
+    {
+      "id": "DCR-001",
+      "priority": "P1",
+      "status": "resolved",
+      "blocking": false,
+      "initial_blocking": true,
+      "initial_applicable_scope_sha256": "5981a1d8e90fd8966b101129cac1442404d3ef146ffccbaec6ed8e33a9ab97d0",
+      "confidence": "high",
+      "category": "cross_boundary_contract_correctness",
+      "title": "OutputProjection遗漏cancelled，停止生成后整个历史刷新响应被拒绝",
+      "location": {"path": "packages/contracts/schema.json", "line": 1087},
+      "related_locations": [
+        {"path": "apps/web/src/features/workbench/Workbench.tsx", "line": 385},
+        {"path": "crates/data-agent/src/use_cases/cancel_run.rs", "line": 23},
+        {"path": "crates/data-agent/src/modules/runtime/store.rs", "line": 633},
+        {"path": "crates/data-agent/src/use_cases/read_conversation.rs", "line": 294},
+        {"path": "crates/data-agent/src/use_cases/read_conversation.rs", "line": 307},
+        {"path": "apps/api/src/routes.rs", "line": 213},
+        {"path": "crates/data-agent/src/contracts.rs", "line": 35},
+        {"path": "packages/contracts/generated/boundary.rs", "line": 3422}
+      ],
+      "trigger": [
+        "正常生成过程已经产生至少一个assistant_delta，工作台已读入该attempt的事件范围。",
+        "用户点击现有“停止生成”，cancel_run将该assistant_outputs行从streaming改为cancelled，并成功提交。",
+        "取消回调或后续轮询向POST snapshot发送同一attempt的loaded_outputs；首次重新打开历史时也会在读入该片段后的下一次轮询进入此路径。"
+      ],
+      "actual_result_from_code": "output_states_in_tx返回真实cancelled，read_page将它原样写入output_projections[].output_state；该值不在新增Schema枚举中。routes::refresh_snapshot最终调用success(\"SnapshotRefresh\", value)，contracts::validate返回invalid_input，由failure映射为HTTP 400。工作台catch保留旧snapshot，后续读取仍提交同一范围，因此再次失败。一个已取消片段就能阻断同次响应中其他正常已加载答案的撤权/恢复刷新。",
+      "expected": "合法的既有取消终态应能够被SnapshotRefresh表达，停止生成后普通轮询、翻页及其他已加载输出的当前权限投影继续正常工作。",
+      "basis": [
+        "docs/execution/semantic-runtime/dogfood-convergence-repairs.md:135要求每个请求范围带当前输出状态。",
+        "docs/execution/semantic-runtime/dogfood-convergence-repairs.md:149要求逐范围替换并统一重建messages；第152行要求正常读取门和失败隔离。",
+        "AGENTS.md:44要求跨边界字段及错误含义明确；取消是现有业务路径，不是推测的新状态。"
+      ],
+      "minimal_recommendation": "在同源OutputProjection.output_state合同中纳入runtime实际写入的cancelled，并用现有生成器同步Rust/TS类型。沿现有历史接缝补一条“读入流式片段→停止生成→携原已加载范围POST刷新”的回归，并核其他答案仍可撤权/恢复；无需新状态框架、重试或真实模型调用。",
+      "verification_boundary": "初审仅静态核对触发链；当时timeline中的cancelled仅为查询通知，原答案撤权流程未覆盖取消输出。此次定点复核读取实施者新增的完整原日志及实际浏览器请求轨迹，没有由审查者重跑接口、测试、构建或模型。",
+      "resolution": {
+        "date": "2026-11-05",
+        "outcome": "verified_fixed",
+        "scope_sha256": "b2061c2d4ce0ab75c963937733d76fc8c5199d98b2616deed741be22372577c8",
+        "implementation": "OutputProjection.output_state增加既有cancelled终态，生成Rust的OutputState::Cancelled和TS的cancelled联合成员；没有改runtime状态机、读取权限或页面算法。",
+        "test_path": "tests/mvp/check-grounded-answers.mjs:245",
+        "test_behavior": "沿同一history-browser夹具正式读入streaming片段，cancel-run成功后以原loaded_ranges继续POST，核cancelled及同次其他已提交正文；随后原两页普通轮询撤权/恢复继续执行。foreignAttempt在切换run前固定为原外会话attempt，原not_available及合法空范围断言保留。",
+        "red": "dcr001-cancelled-red.log显示前7组通过，afterCancel的ok断言在第263行收到400 invalid_input；取消成功断言在它之前，故命中原缺陷而非取消失败。",
+        "green": "dcr001-cancelled-green.log为同脚本9组完整通过，含新增取消范围和原两页权限流程，officialRequests=0。",
+        "actual_browser_trace": "history-loaded-reads.json共6条读取；read_index=4/5的普通读取均无新分页事件、携已加载cancelled范围并回显cancelled，其他已提交答案分别被限制及恢复；clientReads.max=1，browserErrors=[]。数组索引从0开始。",
+        "evidence": [
+          ".local/checks/dogfood-convergence-implementation-20261105/dcr001.patch",
+          ".local/checks/dogfood-convergence-implementation-20261105/dcr001-scope.json",
+          ".local/checks/dogfood-convergence-implementation-20261105/dcr001-cancelled-red.log",
+          ".local/checks/dogfood-convergence-implementation-20261105/dcr001-cancelled-green.log",
+          ".local/checks/dogfood-convergence-implementation-20261105/dcr001-contracts-code.log",
+          ".local/checks/mvp-8254ec510dd37d78/history-loaded-reads.json"
+        ]
+      }
+    }
+  ],
+  "verified_observations": [
+    {
+      "topic": "提交时有序UTF-8绑定及原子性",
+      "result": "verified_with_existing_evidence",
+      "evidence": [
+        "migrations/202611050001_output_read_binding.sql:2",
+        "crates/data-agent/src/modules/runtime/outputs.rs:149",
+        "crates/data-agent/src/modules/runtime/outputs.rs:164",
+        "crates/data-agent/src/use_cases/finish_run.rs:157",
+        "crates/data-agent/src/modules/runtime/store.rs:475",
+        "crates/data-agent/src/use_cases/task_answers.rs:695",
+        ".local/checks/dogfood-convergence-implementation-20261105/output-binding-red.log",
+        ".local/checks/dogfood-convergence-implementation-20261105/output-binding-green.log"
+      ],
+      "detail": "FinalOutput::compose在实际拼接时按String字节长度保存有序范围；除固定分隔字面量外标题与正文都进入单元。单答案取成功present回执及实际query/result依赖，自然final取提交时已核run来源与真实chunk范围；冻结项沿原handoff来源，末项标题并入实际goal来源，历史通知用中性标签，控制尾项沿原text_authority。final_text/read_binding、原commit/checkpoint/assistant_committed同事务；相同commit先取原回执。中文、emoji、正文内分隔符、逐份撤权/恢复、TTL及提交后handoff标题改变的既有反例与GREEN对应。"
+    },
+    {
+      "topic": "新读取路径、NULL兼容与当前查看者",
+      "result": "verified_with_existing_evidence",
+      "evidence": [
+        "crates/data-agent/src/modules/runtime/outputs.rs:212",
+        "crates/data-agent/src/modules/runtime/outputs.rs:289",
+        "crates/data-agent/src/use_cases/read_conversation.rs:10",
+        "crates/data-agent/src/use_cases/read_conversation.rs:105",
+        "crates/data-agent/src/use_cases/context_authority.rs:537",
+        "crates/data-agent/src/use_cases/context_authority.rs:1025",
+        ".local/checks/dogfood-convergence-implementation-20261105/output-binding-check-grounded-answers.log",
+        ".local/checks/dogfood-convergence-implementation-20261105/output-binding-check-task-answer-recovery.log"
+      ],
+      "detail": "非NULL绑定直接解码并检查schema、顺序、字符边界、覆盖和非空authority列表；格式损坏投影为受限正文，不进入无来源自然文本兼容。链回执反推仅留旧NULL/活跃输出入口。当前查看者的平台结果权限在锁外核对，回来重核状态和来源；已提交绑定不重建，活跃输出重读。结果依赖并入原query文字来源，history规则容忍普通改版及明细TTL，仍核当前会话、来源和资产可读性。恢复日志保留原attempt/commit身份。"
+    },
+    {
+      "topic": "SnapshotRefresh及前端合并",
+      "result": "verified_with_existing_evidence_and_DCR-001_follow_up",
+      "evidence": [
+        "packages/contracts/schema.json:1067",
+        "packages/contracts/openapi.json:253",
+        "apps/api/src/routes.rs:181",
+        "crates/data-agent/src/use_cases/read_conversation.rs:242",
+        "crates/data-agent/src/modules/conversations/store.rs:604",
+        "apps/web/src/features/workbench/conversation-timeline.ts:69",
+        "apps/web/src/features/workbench/conversation-timeline.ts:94",
+        "apps/web/src/features/workbench/Workbench.tsx:159",
+        ".local/checks/dogfood-convergence-implementation-20261105/history-timeline-final.log",
+        ".local/checks/dogfood-convergence-implementation-20261105/history-loaded-browser2.log"
+      ],
+      "detail": "GET仍校验旧Snapshot，POST独立校验SnapshotRequest/SnapshotRefresh；请求不携授权结论，before/after互斥，沿原HTTP大小边界。新页与全部已加载范围合并后只走一次共同输出核权。指纹包含会话/attempt/范围/状态和实际投影；每范围明确unchanged/replace/not_available，合法空范围为replace[]，外会话与缺失一致。客户端先合分页events再按回显范围替换并统一projectMessages；未读空洞不取min/max吞并，分页游标不由展示删减反算。首次页、轮询、翻页共用组件内门，合并完成才捕获下一范围，QueryList独立。既有两页浏览器证据覆盖无新事件撤权/恢复、503隔离、指纹不重传、用户及无关正文保持。初审遗漏的取消输出接缝已由DCR-001定点RED/GREEN及同夹具原请求轨迹补齐，见该finding的resolution及follow_up_review。"
+    },
+    {
+      "topic": "澄清唯一未决与说明非必填",
+      "result": "verified_with_existing_evidence",
+      "evidence": [
+        "migrations/202611050002_condition_decision_state.sql:2",
+        "crates/data-agent/src/modules/analysis/decisions.rs:28",
+        "crates/data-agent/src/modules/analysis/store.rs:420",
+        "crates/data-agent/src/use_cases/query_semantics.rs:183",
+        "apps/agent/tools/data-tools.ts:161",
+        ".local/checks/dogfood-convergence-implementation-20261105/decision-format-green2.log",
+        ".local/checks/dogfood-convergence-implementation-20261105/decision-legacy-final2.log"
+      ],
+      "detail": "宿主格式1/2归analysis owner，读取不迁移；持久边界分别验证旧/新说明。当前v2参数只暴露已采用说明；新条件为2，普通无说明/无开放问题可出稿。省略继承，null/unset只清说明，resolved IDs省略或[]不关闭；确认同值可空patch关闭指定问题。草稿继承目标版本说明，携带不同说明先拒绝，不独立制造决定；外部平台调用后仍重核版本/权限。完整原话及本轮真实消息身份由宿主核对，执行授权没有移到说明或resolved状态。"
+    },
+    {
+      "topic": "旧未决显式转换、字段证明、split及原wire身份",
+      "result": "verified_with_existing_evidence",
+      "evidence": [
+        "crates/data-agent/src/modules/analysis/decisions.rs:52",
+        "crates/data-agent/src/modules/analysis/store.rs:277",
+        "crates/data-agent/src/modules/runtime/store.rs:752",
+        "crates/data-agent/src/use_cases/data_tools.rs:414",
+        "crates/data-agent/src/use_cases/data_tools.rs:587",
+        "crates/data-agent/src/use_cases/data_tools.rs:672",
+        "crates/data-agent/src/use_cases/data_tools.rs:1932",
+        "crates/data-agent/src/use_cases/query_semantics.rs:223",
+        "tests/mvp/check-query-semantics.mjs:324"
+      ],
+      "detail": "legacy_pending沿原版本/索引，basis-only不遗漏。显式revise links才转换，未链接项按原说明来源登记open，既有open保ID，旧resolved按同任务成功条件回执、真实原消息、所指字段当前值与原authority核对；无依据恢复open。runtime通过窄接口取指定版本回执，analysis不查runtime私表。旧采纳早退不算核验，原quote不符时省略不可证说明，不凭resolved造explicit_user。split相同字段/说明沿原来源与采纳身份并仅迁移指定开放题。已登记调用先核原wire指纹并优先取receipt，不先补默认键；新序列含部分回答、无关notes后迁移、同值确认、split两稿与同操作不推第二版本。"
+    },
+    {
+      "topic": "共享合成默认、独立参考与固定事实",
+      "result": "verified_with_existing_evidence",
+      "evidence": [
+        "docs/sources/cockpit/documents/asr-candidates.md:73",
+        "docs/sources/cockpit/documents/dialogue-context.md:13",
+        "docs/sources/cockpit/documents/time-quality.md:17",
+        "apps/agent/session/resources.ts:25",
+        "docs/dogfood/cockpit/reference/oracle_queries.py:134",
+        "docs/dogfood/cockpit/reference/check_reference.py:121",
+        "docs/sources/cockpit/build_catalog.py:61",
+        ".local/checks/dogfood-convergence-implementation-20261105/approved-source-verify2.log",
+        ".local/checks/dogfood-convergence-implementation-20261105/approved-reference-verify2.log"
+      ],
+      "detail": "四项获准默认分别落在实际owner文档/共享说明；救回首末及分母、最终成功候选总体和零候选、turn.locale例外、年份继承均明确。新增SQL示例参数化，不含题号、期望数值或模型答案。资料生成器不读独立参考；当前目录较before只新增两个metric并改变六个既有对象，无删除。schema/seed/etl、scenarios、grade和轨迹输入字节未变，旧52项结果及原独立检查逐项保持；新reference由原ORACLES及独立原始事实计算路径生成。资料SQL反例通过只证明示例，未冒充模型稿。"
+    },
+    {
+      "topic": "当前启动及选择性同步",
+      "result": "verified_with_existing_evidence",
+      "evidence": [
+        "crates/data-agent/src/use_cases/knowledge.rs:17",
+        "crates/data-agent/src/use_cases/knowledge.rs:434",
+        "crates/data-agent/src/modules/ingestion/store.rs:405",
+        "crates/data-agent/src/modules/ingestion/store.rs:438",
+        "tests/mvp/check-source-upgrade.mjs:84",
+        ".local/checks/dogfood-convergence-implementation-20261105/catalog-restart-red.log",
+        ".local/checks/dogfood-convergence-implementation-20261105/catalog-sync-red.log",
+        ".local/checks/dogfood-convergence-implementation-20261105/catalog-difference-green.log",
+        ".local/checks/dogfood-convergence-implementation-20261105/startup-state-after-repair.json"
+      ],
+      "detail": "已有semantic-catalog头时启动不再导入磁盘新资料；首次仍沿原初始化。更新前catalog在M03原来源锁内读取，组合层按候选差异和实际变化来源依赖重分析，不因目录文件变更升版全部对象。两个行为RED分别证明重启提前导入和无关对象升版，GREEN保原整对象断言；两条精确owner回归各实际跑1测试。before/after启动快照的source_heads、knowledge、jobs、index_jobs逐项一致，原25秒限制下API ready 7.17秒。此结论只解释本次有现场的启动问题，不替历史PoolTimedOut、首次失租或旧启动事故定因。"
+    },
+    {
+      "topic": "正常来源同步与实际工具交付",
+      "result": "verified_with_limits",
+      "evidence": [
+        ".local/checks/dogfood-convergence-implementation-20261105/approved-source-sync-valid.json",
+        ".local/checks/dogfood-convergence-implementation-20261105/approved-document-progress.json",
+        ".local/checks/dogfood-convergence-implementation-20261105/dialogue-prefill-failure.json",
+        ".local/checks/dogfood-convergence-implementation-20261105/J01-actual-delivery.json",
+        ".local/checks/dogfood-convergence-implementation-20261105/S03-43273d15-ad75-4ef6-bfdf-5464fdc4301d-actual-evidence.json",
+        ".local/checks/dogfood-convergence-implementation-20261105/real-runtime-idle.json"
+      ],
+      "detail": "合法UUID操作经原/source-syncs完成，三份文档及semantic-catalog到修订2，原平台角色catalog不改；99个对象变化含2新增，没有全543重分析。J01实际provider输入收到新候选definition/SQL；S03实际provider输入收到field-voice_turn-locale@2的新默认正文，不能只用文件或索引入队代证。目标文档两份预填成功、一份invalid_prefill；上下文原文v2仍已索引。97个相关预填最终24成功/18无效/55被替代，原平台整理/索引失败仍保留，未声称全库ready。"
+    },
+    {
+      "topic": "图文及生成来源",
+      "result": "verified_with_existing_evidence",
+      "evidence": [
+        "docs/architecture/runtime-modules.md:174",
+        "docs/architecture/runtime-modules.md:402",
+        "docs/architecture/implementation-views.md:355",
+        "docs/architecture/render-implementation.mjs:18",
+        "docs/architecture/implementation-diagram-checks.json",
+        ".local/checks/dogfood-convergence-implementation-20261105/diagram-scope.json",
+        ".local/checks/dogfood-convergence-implementation-20261105/F06-flow.png",
+        ".local/checks/dogfood-convergence-implementation-20261105/F08-flow.png",
+        ".local/checks/dogfood-convergence-implementation-20261105/F12-visual.png"
+      ],
+      "detail": "仅F06/F08/F12 SVG较实际before变化；图源表达决定转换、写时绑定、逐范围页面刷新，模块owner不变。图册31份嵌入SVG与对应文件字节一致；已查看上述流程/图册截图。生成器--only复用其他既有SVG，未重画无关图；原型无新增能力。README和设计明确工程与真实效果分开，未宣称09完成。"
+    }
+  ],
+  "programming_conventions": [
+    {"rule": "有据防御", "result": "within_scope", "basis": "持久格式拒绝、非NULL损坏限制、范围归属、读取门和当前状态复核对应明确合同及已存反例。未新增权限总线、全局epoch、SQL语义裁判、预设分片或并发框架。DCR-001是遗漏已有正常状态，不能用防过度防御排除修复。"},
+    {"rule": "边界一次校验", "result": "within_scope", "basis": "外部Schema与持久格式在边界识别；request_query前置只决定一次，最终事务重核目标版本及权限。新提交读取不扫描回执或重拼正文；锁外平台调用后的来源/状态复核有必要，不是同义重复校验。"},
+    {"rule": "不早抽象", "result": "within_scope", "basis": "FinalOutput/读取单元归runtime，ConditionRevision及旧转换归analysis，前端范围合并归timeline；它们承担实际持久边界、复用和复杂度隔离。HTTP/Pi入口沿原用例组合，无新通用决策引擎、台账、repository或第二Agent循环。"},
+    {"rule": "控制流程与catch职责", "result": "within_scope", "basis": "新增catch主要为页面独立请求错误展示；finally释放读取门，取消由生命周期保护，不将QueryList失败吞成snapshot成功。旧说明无法核实则按合同省略而保问题/条件，不把无效预填伪装成功。"}
+  ],
+  "verification_evidence": {
+    "mode": "读取本地既有证据；本审查tests_run=0、builds_run=0",
+    "manifest_references": 64,
+    "manifest_references_present": 64,
+    "logs_policy": "最终通过依据取完整原日志；汇总JSON仅用作索引。大JSON按实际工具参数、provider正文、原结果、身份和修订路径提取，不读取凭据或不必要长wire。",
+    "complete_success_logs": [
+      {"files": ["output-binding-green.log", "output-binding-check-grounded-answers.log", "output-binding-check-task-query-answers.log", "output-binding-check-task-answer-recovery.log"], "observed": "写时绑定、合法单答案、NULL/损坏、组合及registered/committed恢复窗口通过，原协议回合保持。"},
+      {"files": ["history-timeline-final.log", "history-loaded-browser2.log", "history-check-history-browser.log"], "observed": "timeline离线反例、8组合法答案/两页权限浏览器流程及原5组历史浏览器回归通过；不覆盖DCR-001。"},
+      {"files": ["history4-check-waiting-task-delivery.log", "history4-check-result-notification-answers.log"], "observed": "15组控制/澄清/恢复/原生压缩/浏览器及7组结果通知通过；officialRequests=0。"},
+      {"files": ["decision-format-green2.log", "decision-legacy-final2.log", "decision-check-workflow-reliability.log", "decision-check-task-text-authority.log", "decision-check-time-roles.log", "decision-check-source-scope-equivalence.log"], "observed": "合法旧/新状态序列及原受影响工作流、权限、时间与来源等价断言通过。"},
+      {"files": ["current-tools2-check-tool-schema.log", "current-tools2-check-request-context.log", "current-tools2-check-answer-state.log", "verify-contracts.log"], "observed": "实际v1/v2工具参数、Pi请求上下文及21条答案状态；同源生成一致性及662份原跨语言契约样例通过。"},
+      {"files": ["approved-source-verify2.log", "approved-reference-verify2.log", "catalog-difference-green.log", "source-current-owner-final.log", "source-retention-owner-final.log"], "observed": "28表/421字段/28指标、两类资料SQL反例、53项参考、重启差异同步及两条各1测试的owner回归通过。"},
+      {"files": ["final-source-verify-code3.log", "final-source-verify-architecture.log", "final-materials-delivery.log", "catalog-difference-build-api.log", "catalog-difference-build-worker.log"], "observed": "格式、all-targets Clippy、类型、Web构建、owner/12测试/锁、523材料/16检查器测试，以及API/Worker分别构建均有完整成功输出；保留Web构建警告。材料/delivery明确不证明业务。"}
+    ],
+    "log_directory": ".local/checks/dogfood-convergence-implementation-20261105/",
+    "failure_interpretations": [
+      "output-binding-red.log与history-timeline-red.log是对应行为失败；其后同目标GREEN已读取。",
+      "decision-state-red/green/observed三份旧fixture把JSON对象写成字符串，不算有效目标RED；已核其失败日志及后来的合法fixture/持久格式拒绝RED和GREEN。",
+      "首次history-loaded-browser宿主route观察峰值2保留；后续实际fetch/body/abort轨迹与代码中的共享门解释非取消请求峰值1，没有将原失败删除。",
+      "控制测试补source_limits:null并将旧正文观察移到route后；归属前仍核无伪造正文及原任务控制身份，route后原断言与回合数保留。",
+      "catalog-restart/catalog-sync两个真实行为RED均保留。首次owner过滤跑0测试由wrapper拒绝，最终精确名字各跑1测试。",
+      "两次静态失败确为改DTO后的测试消费者未接changed字段；最终相同断言改字段访问后通过，不将早先失败称预先存在。",
+      "首次来源同步ID长度65的400没有被称成功；合法UUID另获202和completed。",
+      "G08三个观察器失败保留，最终明细stale_knowledge/stale_context不被当成权限证明。",
+      "J01新参考grader失败、J19零/缺行反例失败和上下文文档invalid_prefill均保留，未被GREEN摘要覆盖。"
+    ],
+    "initial_binary_fingerprints": ".local/checks/dogfood-convergence-implementation-20261105/catalog-difference-build-after.json",
+    "binary_fingerprints": ".local/checks/dogfood-convergence-implementation-20261105/dcr001-verification.json",
+    "limits": "这些是实施阶段环境和版本的证据。本次没有重跑，不能声称独立动态复现、部署、真实业务平台或用户验收通过。"
+  },
+  "real_effect": {
+    "original_inputs_and_expectations_unchanged": true,
+    "old_52_reference_results_unchanged": true,
+    "old_reference_checks_preserved_in_order": true,
+    "current_100_counts": {"pass": 21, "partial": 11, "fail": 1, "blocked_environment": 1, "not_run": 66},
+    "fixed_core_counts": {"pass": 15, "partial": 5, "not_run": 1},
+    "new_attempts": 5,
+    "assessment_integrity": "与results-before-current-assessments相比，只有本轮五个新attempt从inconclusive评为partial并附evaluation；其他原attempt逐项保持，所有原断言文本及顺序保持。",
+    "cases": [
+      {
+        "id": "J01",
+        "attempt_id": "J01-d504a0ef-147c-4bd1-8fb2-5abda06dfe33",
+        "status": "partial",
+        "facts": "实际收到新候选定义与SQL。独立离线稿与实际validate_sql参数逐字一致，SQL SHA256为4b0acda7b94dcbb7274ab53d949b9f4c971e9b5151f7d9942d064837df60707c；原snapshot=2026-11-04T23:51:00Z未被替换。原grader确实使用final_successful_attempt_candidate_mean及rename-only的actual，成功率0.9112149532710281与固定参考0.910377不符而失败。候选均值3.0单项相同不构成整项通过。request_query/execute_query均无调用，没有产品草稿或执行，第二条原执行消息未发。",
+        "evidence": [".local/checks/dogfood-convergence-implementation-20261105/J01-generated-sql-offline.json", ".local/checks/dogfood-convergence-implementation-20261105/J01-generated-sql-actual.json", ".local/checks/dogfood-convergence-implementation-20261105/J01-new-reference-grade.log", ".local/dogfood-runs/semantic-20261102/attempts/J01-d504a0ef-147c-4bd1-8fb2-5abda06dfe33.json"]
+      },
+      {
+        "id": "S03",
+        "attempt_id": "S03-43273d15-ad75-4ef6-bfdf-5464fdc4301d",
+        "status": "partial",
+        "facts": "沿原S01/S02会话将语言改为turn.locale=en-US，日期、快照和质量/车辆范围保持。实际request_query仍遇waiting_clarification、stale_knowledge、message_pending；没有新保存草稿。未拿旧成功查询或仅validate_sql代替新稿。",
+        "evidence": [".local/checks/dogfood-convergence-implementation-20261105/S03-43273d15-ad75-4ef6-bfdf-5464fdc4301d-actual-evidence.json", ".local/dogfood-runs/semantic-20261102/evidence/S03-43273d15-ad75-4ef6-bfdf-5464fdc4301d-convergence-evaluation.json"]
+      },
+      {
+        "id": "T02/A03",
+        "attempt_id": "T02-f455f5d6-8436-4db1-9951-3ad6b0482532",
+        "status": "T02 partial; A03 not_run",
+        "facts": "真实三条原消息后有九月ASR、八月首播两个独立条件任务，决定格式均2，采纳分别保原第二/第三消息quote及身份。对应问题resolved，年份/快照仍open留在原任务；没有两份保存草稿，A03原授权消息未发。实际split不能被扩大为完整两稿流程通过。",
+        "evidence": [".local/checks/dogfood-convergence-implementation-20261105/T02-current-decisions.json", ".local/dogfood-runs/semantic-20261102/attempts/T02-f455f5d6-8436-4db1-9951-3ad6b0482532.json", ".local/dogfood-runs/semantic-20261102/evidence/T02-f455f5d6-8436-4db1-9951-3ad6b0482532-convergence-evaluation.json"]
+      },
+      {
+        "id": "J06",
+        "attempt_id": "J06-431232a8-a6ce-4e42-b15f-31b86866d94c",
+        "status": "partial",
+        "facts": "原两消息真实保存、授权并执行查询2e9ecc55-b243-4104-9c6c-5af596b300c2。完整实际结果为424有尝试轮次、首次340、最终386、救回46；三比例0.8018867924528302、0.910377358490566、0.10849056603773585，七项数值与独立参考一致。会话冻结policy分支未触发，原第三断言保partial，不以没有误用24次预算代证策略覆盖。",
+        "evidence": [".local/checks/dogfood-convergence-implementation-20261105/J06-results.json", ".local/checks/dogfood-convergence-implementation-20261105/J06-numeric-evaluation.json", ".local/dogfood-runs/semantic-20261102/attempts/J06-431232a8-a6ce-4e42-b15f-31b86866d94c.json"]
+      },
+      {
+        "id": "J19",
+        "attempt_id": "J19-30bffadb-3118-4c98-acf2-c0f444c40d99",
+        "status": "partial",
+        "facts": "五份实际SQL与提取后的保存稿逐字相同，均not_submitted，未执行。原稿在晚到唯一TTS样本上通过；零信息SQL从fact_days驱动，无事实轮次时无汇总行/一行全零均返回[]，区分反例失败，且缺行直接称缺测缺少覆盖合同。原输入未触发零分母比例，继续未覆盖。旧稿反例、资料示例、新模型稿三类证据分开，未修改SQL后冒称原稿通过。",
+        "evidence": [".local/checks/dogfood-convergence-implementation-20261105/J19-new-original-sql.json", ".local/checks/dogfood-convergence-implementation-20261105/J19-new-sql-probes.json", ".local/checks/dogfood-convergence-implementation-20261105/J19-new-sql-probes.log", ".local/checks/dogfood-convergence-implementation-20261105/j19-delivery-assessment.json"]
+      },
+      {
+        "id": "G08",
+        "status": "existing pass retained; new ordinary-poll evidence verified within its branch",
+        "facts": "复用原合法报告及两份旧答案，普通已加载轮询撤权时两份原文均不在snapshot或页面，恢复后两份答案逐字一致；报告撤权返回sources_unavailable，恢复为可读condition_changed。零新增模型，记录中的会话账本及事件保持。三个失败观察器仍存在。明细基线stale_knowledge、撤权时stale_context只说明可用性，未用作权限证明。该通过分支不覆盖DCR-001的取消输出。",
+        "evidence": [".local/checks/dogfood-convergence-implementation-20261105/G08-original-history-final.json", ".local/checks/dogfood-convergence-implementation-20261105/G08-original-history-final.log", ".local/checks/dogfood-convergence-implementation-20261105/G08-original-projection.log", ".local/checks/dogfood-convergence-implementation-20261105/G08-original-loaded-permissions.log", ".local/checks/dogfood-convergence-implementation-20261105/G08-original-loaded-permissions-ttl.log"]
+      }
+    ],
+    "evaluation_directory": ".local/dogfood-runs/semantic-20261102/evidence/",
+    "reused_unchanged_evidence": "原来源轨迹在trajectory-results.json仍fail；批准三个车辆字段前提后的独立轨迹在trajectory-results-vehicle-definitions.json仍pass，均未重跑。真实Mem0和公共Skill生命周期按未变范围复用，不能称本包新测通过。",
+    "not_closeable": "五项partial及A03 not_run仍不足以满足固定核心21项；S04/G02等未触发复合断言、其他非核心缺口与完整100/10后置范围保持。本报告不运行已知不能通过的关闭gate。"
+  },
+  "operation_identity_and_cleanup": {
+    "verified_from_local_snapshots": [
+      "2442条原model_call_attempts逐行相同，57个原scope逐项相同，26条原unknown身份及内容相同。",
+      "本轮新增273条均settled，其中103 agent、170 knowledge_embedding；新增scope调用上限均24。没有把未知旧操作重发或改判成功。",
+      "两trial限额、配置指纹、原预留和最终期限均保持；新增费用分别4513076、4316微美元。",
+      "维护表当前78条均settled，但无逐行before，不能声称旧维护行指纹已核。",
+      "维护期限恢复记录只改变expires_at，未覆盖新增费用；本地cleanup记录五端口关闭及权限文件删除恢复。",
+      "business.sqlite与角色catalog.json当前文件字节SHA匹配前移来源快照前基线及cleanup；只读字节取哈希，未打开数据库连接。submissions账本保留新J06执行，不作整文件相同声明。"
+    ],
+    "evidence": [
+      ".local/checks/dogfood-convergence-implementation-20261105/ledger-before-real.json",
+      ".local/checks/dogfood-convergence-implementation-20261105/ledger-after-real.json",
+      ".local/checks/dogfood-convergence-implementation-20261105/maintenance-ledger-after.json",
+      ".local/checks/dogfood-convergence-implementation-20261105/ledger-integrity-and-cost.json",
+      ".local/checks/dogfood-convergence-implementation-20261105/index-window-restored.json",
+      ".local/checks/dogfood-convergence-implementation-20261105/cleanup.json",
+      ".local/checks/dogfood-convergence-implementation-20261105/semantic-source-snapshot-advance.json"
+    ]
+  },
+  "activity": {
+    "database_connections": 0,
+    "models_started_or_called": 0,
+    "external_requests": 0,
+    "services_started": 0,
+    "builds_run": 0,
+    "tests_run": 0,
+    "credential_files_read": false,
+    "long_wire_files_read": false,
+    "implementation_test_current_score_or_configuration_edits": false,
+    "commit_push_or_deploy": false,
+    "only_written_file": "docs/reviews/dogfood-convergence-implementation-review-20261105.json"
+  },
+  "input_fingerprints": {
+    ".local/checks/dogfood-convergence-implementation-20261105/scope.json": "7accd2fd613a152a7b5ccfc3d7f3b96fc69fb5d93d5623a56d8101872a516017",
+    ".local/checks/dogfood-convergence-implementation-20261105/verification.json": "29fc4a0f1bc23daf1e75e7b9c2be606bc66485aee2f36e437e38fbb2bc5b5019",
+    ".local/checks/dogfood-convergence-implementation-20261105/task.patch": "a32d6a86cda4a3e7c4d77e15b33ba15fb563e8f5d9954e6e6fa7dba993265c90",
+    ".local/checks/dogfood-convergence-implementation-20261105/dcr001.patch": "daab343ee64ac53c63e5af34ed53ab78fa2534787fa7b85ac435e519ba818ff3",
+    ".local/checks/dogfood-convergence-implementation-20261105/dcr001-scope.json": "a9e760d1d526281cc7e871e610fc409cbecdc8bdc99a85382f555548d091122d",
+    ".local/checks/dogfood-convergence-implementation-20261105/dcr001-verification.json": "ac313c4d64c14330b77d499725e42d1fcc9a9ddff36fd1433b16676f233b4356"
+  },
+  "initial_review": {
+    "date": "2026-11-05",
+    "status": "blocked",
+    "engineering_repair_boundary": "blocked",
+    "blocking_findings": ["DCR-001"],
+    "scope_sha256": "5981a1d8e90fd8966b101129cac1442404d3ef146ffccbaec6ed8e33a9ab97d0",
+    "summary": "初审发现新增OutputProjection合同遗漏正常可达的cancelled，停止生成后原范围POST刷新被自身响应Schema拒绝；当时工程日志未覆盖该接缝，不能签passed。",
+    "archived_report": ".local/checks/dogfood-convergence-implementation-20261105/dcr001-before/docs/reviews/dogfood-convergence-implementation-review-20261105.json",
+    "archived_report_sha256": "b36bb8e93516c7617a70b6b2eb8d4793ddd33e14d307e1333907e6653a6f5c94",
+    "archived_scope": ".local/checks/dogfood-convergence-implementation-20261105/dcr001-before/scope.json",
+    "archived_patch": ".local/checks/dogfood-convergence-implementation-20261105/dcr001-before/task.patch",
+    "archived_verification": ".local/checks/dogfood-convergence-implementation-20261105/dcr001-before/verification.json",
+    "original_input_sha256": {
+      "scope.json": "c830796f22be209c222392b093fa3b3a85e94a171629b3d8ba79dce880a82ac3",
+      "task.patch": "5aa89b93deaf3f177135b0355a39131301c89e9ec321bc2764d62b8787646094",
+      "verification.json": "29fc4a0f1bc23daf1e75e7b9c2be606bc66485aee2f36e437e38fbb2bc5b5019"
+    },
+    "preservation": "初次完整blocked报告及scope/task.patch/verification原样归档；本次只追加定点修复结论，不抹掉原缺陷或将初审追记成passed。"
+  },
+  "follow_up_review": {
+    "date": "2026-11-05",
+    "kind": "targeted_fix_verification",
+    "finding": "DCR-001",
+    "status": "passed",
+    "new_blocking_findings": 0,
+    "changed_files": [
+      "packages/contracts/schema.json",
+      "packages/contracts/generated/boundary.rs",
+      "packages/contracts/generated/boundary.ts",
+      "tests/mvp/check-grounded-answers.mjs"
+    ],
+    "actual_delta_matched_patch": 4,
+    "unchanged_frozen_files": 65,
+    "frozen_path_set_unchanged": true,
+    "current_scope_sha256": "b2061c2d4ce0ab75c963937733d76fc8c5199d98b2616deed741be22372577c8",
+    "scope_verified_from_actual_files": true,
+    "review_method": "读取dcr001.patch/scope/verification、完整RED/GREEN/契约代码日志及API/Worker各自构建日志；核四个实际文件与归档before的逐字delta，比较69文件实际SHA并确认另外65份未变；从history-loaded-reads.json提取原请求/响应的取消范围和其他答案隐藏/恢复。未重读全包patch、旧wire或所有旧日志，未重新审未变实现。",
+    "evidence_checks": [
+      "同源Schema和Rust/TS生成类型均包含cancelled；实际四文件SHA匹配dcr001-scope及当前scope。",
+      "新增夹具不靠SQL改输出状态：正式append、snapshot、cancel-run与原范围POST组成触发链；RED在afterCancel收到400，GREEN相同断言及全9组通过。",
+      "foreignAttempt保切换run前的真实外会话身份，原外会话/缺失一致not_available、合法空范围replace[]等断言未放宽。",
+      "普通浏览器请求轨迹read_index=4/5均无新分页事件、携带取消片段并返回cancelled，其他答案先受限后原文恢复；clientReads.max=1、browserErrors=[]。",
+      "dcr001-contracts-code.log完整通过生成一致性、662原样例、fmt、all-targets Clippy、类型和Web构建；保留原构建警告，不称为业务效果证明。",
+      "API和Worker各自完整构建日志已核，其文件哈希与dcr001-verification逐项一致；二进制SHA/mtime/size沿该记录引用，本审查没有重新构建或执行。"
+    ],
+    "log_sha256": {
+      ".local/checks/dogfood-convergence-implementation-20261105/dcr001-cancelled-red.log": "079c4ebb78d6d5990c7e7ca884fc58100be03077b8d0625020a48bbac16f5bd9",
+      ".local/checks/dogfood-convergence-implementation-20261105/dcr001-cancelled-green.log": "ce3fd9edd3a5703a6892ef761ff19083ddefde7421338a5807047997bc1a4d61",
+      ".local/checks/dogfood-convergence-implementation-20261105/dcr001-contracts-code.log": "a10d806e667d84901cbe17f173027a1650b54598335dfd0540b855ce578ff4af",
+      ".local/checks/dogfood-convergence-implementation-20261105/dcr001-build-api.log": "8f791492692cf4f40248df320a31752953121def2c0765fda7ad5ab7d943d1e4",
+      ".local/checks/dogfood-convergence-implementation-20261105/dcr001-build-worker.log": "b5cb84d824e3893c009195bccc79163398614476a49e513f8c4f731eb8f2dd5b"
+    },
+    "no_runtime_or_page_algorithm_change": true,
+    "new_model_calls_by_reviewer": 0,
+    "new_database_connections_by_reviewer": 0,
+    "tests_or_builds_run_by_reviewer": 0,
+    "main09_counts_retained": {"pass": 15, "partial": 5, "not_run": 1},
+    "main09_complete": false
+  },
+  "limitations": [
+    "初审是限定独立静态审查，DCR-001当时由实际生产路径及Schema矛盾证实。后续定点复核核阅实施者新增的原始动态RED/GREEN证据；审查者仍未启动、构建或重跑测试。",
+    "已读取既有完整最终日志并核直接断言与实际原记录；取消接缝已定点补证，不把这条修复或9组GREEN推广为所有未覆盖状态都通过。",
+    "生成大文件按真源、生成器、消费符号和一致性日志核对；SHA只冻结内容，不等于全文逐行审计所有生成代码或图册。",
+    "provider与工具证据使用本地已提取实际输入，不重新展开不必要长wire；不从命中列表、文件存在或索引入队推定模型已经采用。",
+    "可执行合成SQLite平台、真实供应商模型、真实存储和真实业务平台分别解释；本包不证明真实业务平台接入或用户验收。",
+    "CURRENT正常进度可继续更新；本报告不冻结其全文，也不替主09生成passed或evidence收据。",
+    "DCR-001已经补齐同源合同、实际历史回归及新冻结指纹，本包当前工程边界通过；真实核心仍15pass/5partial/1not_run，主09不能据本报告关闭。本审查只更新同一JSON，没有修改实现、CURRENT或成绩。"
+  ]
+}

@@ -1,0 +1,350 @@
+{
+  "reviewer": "Codex independent implementation reviewer; 未参与 I3-DOGFOOD-READINESS 产品或测试实现",
+  "summary": "第六轮最小UI增量复核 passed：仅knowledge-experience测试的目标导航及CURRENT说明变化，产品/合同和其余验收文件未变。统一登录后选择原表，末段仅链接文档沿创建回执ID打开；原长文、事务、幂等、搜索迟到、负责目录、并发和权限断言保持，八段完整局部成功结果已读取。该测试不认证无正文链接对象的词法搜索效果。DFR-01/02/03/04仍全部关闭，无新增阻断。最终review_scope=56fce0481ad6c86100b0caca58205e777ddf60bb97a28d4104c1d9403e70c9d9。首轮正式失败及后续失败attempt保留，新完整收据尚待执行。",
+  "conclusion": "passed",
+  "scope_sha256": "56fce0481ad6c86100b0caca58205e777ddf60bb97a28d4104c1d9403e70c9d9",
+  "increment": "I3-DOGFOOD-READINESS",
+  "review_date": "2026-11-02",
+  "scope": {
+    "frozen_manifest": ".local/checks/dogfood-readiness/frozen-scope-ui-complete.json",
+    "method": "以绝对项目root实际调用review_scope(root, read_delivery(root))，scope 56fce0481ad6c86100b0caca58205e777ddf60bb97a28d4104c1d9403e70c9d9及完整fingerprint均与最终冻结等值。",
+    "delta_from_review5": {
+      "changed_files": ["tests/mvp/check-knowledge-experience-browser.mjs"],
+      "added_or_removed_files": [],
+      "contract_and_decisions": "contract/decisions/declarations/checker摘要与review5等值；CURRENT正文补实际失败、统一目标导航、仅链接对象读取与检索效果边界，单独读取核对。",
+      "exact_delta_proof": "在内存移除login中新增的原表地址、将原heading wait还原到Bob调用处，再将末段回执ID导航还原原名称搜索后，文件SHA256精确匹配review5冻结。除这三处定位变更，全部代码和断言逐字保持。",
+      "test_sha256": "99aeb856bbdb31fc238d4f98b22ee1b8d65d979a8d526879ed1fcafdaf6d64a1"
+    },
+    "formal_evidence": null
+  },
+  "review5_scope": {
+    "frozen_manifest": ".local/checks/dogfood-readiness/frozen-scope-ui-final.json",
+    "method": "以绝对项目root实际调用review_scope(root, read_delivery(root))，最终scope bf754f8b137591c6c6d83c712491c8e6f2b8aa0f755bdc144ae3fa99dd3fa390及完整fingerprint均匹配最终UI冻结。",
+    "delta_from_review4": {
+      "changed_files": [
+        "tests/mvp/check-workspace-feedback-browser.mjs",
+        "tests/mvp/check-creator-ownership-browser.mjs",
+        "tests/mvp/check-semantic-governance-browser.mjs",
+        "tests/mvp/check-related-knowledge-browser.mjs",
+        "tests/mvp/check-management-buttons.mjs"
+      ],
+      "added_or_removed_files": [],
+      "contract_and_decisions": "contract/decisions/declarations/checker摘要与review4等值；CURRENT正文补正式失败、测试观察修正和management顺序调整依据，单独读取核对。",
+      "product_preservation": "全部apps/crates/packages/migrations的冻结哈希与review4及首轮正式收据before逐文件等值；无产品修改。",
+      "exact_diff_basis": "五份测试的HEAD内容SHA256均实际等于review4冻结哈希，可用HEAD到当前精确diff界定本批，无需将全仓累计差异当本轮。"
+    },
+    "formal_evidence": null
+  },
+  "review4_scope": {
+    "frozen_manifest": ".local/checks/dogfood-readiness/frozen-scope-review4.json",
+    "method": "以绝对项目 root 实际调用 review_scope(root, read_delivery(root))，结果 c8a5f0bbab80db4739c11e61a5b46f0d319d390b73681c685067255831e3473c 与第四轮冻结scope一致，完整fingerprint等值。",
+    "delta_from_review3": {
+      "changed_files": ["apps/agent/provider/synthetic-analysis.ts", "tests/runtime/check-synthetic-knowledge-reading.mjs"],
+      "added_or_removed_files": [],
+      "contract_and_decisions": "与第三轮摘要等值；CURRENT追加第三轮v1回归处置说明。CURRENT正文不在verification_inputs内，按用户要求另行读取核对。",
+      "exact_delta_proof": "provider中仅反向还原零付款回复的v1/v2三元分支、测试中仅移除新增legacyZeroRun及旧S01断言后，各自SHA256精确匹配第三轮冻结，因此未删除或放宽原有测试。",
+      "unchanged": "第三轮之外全部声明输入（含Rust修复、座舱provider、原100题/参考/来源、验收脚本和绑定）保持。"
+    },
+    "formal_evidence": null
+  },
+  "review3_scope": {
+    "frozen_manifest": ".local/checks/dogfood-readiness/frozen-scope-review3.json",
+    "method": "以绝对项目 root 实际调用 review_scope(root, read_delivery(root))，开始及结束复核时均为 188b88ed06fb5b3c9145c50c84e986c10d43fa4ee4a27731bd7f9dac339c1e1b，完整 fingerprint 与冻结清单等值。",
+    "delta_from_review2": {
+      "changed_files": ["apps/agent/provider/synthetic-analysis.ts", "tests/mvp/check-cockpit-source.mjs"],
+      "added_or_removed_files": [],
+      "contract_change": "CURRENT 新增 MOCK-RETAIL-EXPLANATION，实际调用现有 check-cockpit-source.mjs --v2 --retail；处置文字说明 v2 无citation时补读文档及不冒称已读加工SQL。",
+      "unchanged": "座舱provider、记录脚本、原SQL分页检查及其他产品输入与review2冻结等值。"
+    },
+    "formal_evidence": null
+  },
+  "review2_scope": {
+    "frozen_manifest": ".local/checks/dogfood-readiness/frozen-scope-review2.json",
+    "method": "以绝对项目 root 实际调用 review_scope(root, read_delivery(root))，开始增量复核时结果 a9f2bd0c5ce71f568ea5e2c14cc90d33ec509e9ed41b95ca03d0642184d03015 与新冻结清单一致；完整 fingerprint 等值。",
+    "delta_from_initial": {
+      "changed": ["apps/agent/provider/synthetic-cockpit.ts", "apps/agent/provider/synthetic-analysis.ts", "tests/runtime/check-synthetic-knowledge-reading.mjs"],
+      "added_to_declared_inputs": ["scripts/test_cockpit_records.py"],
+      "removed": [],
+      "contract_change": "CURRENT 的 verification_inputs 增加记录校验脚本；其他 acceptance 及要求不变。",
+      "record_test_sha256": "8f85641ac36b2285a4cbeb29a409bac89aa5bcdc0e133da114a5b3591b06fa0b"
+    },
+    "end_of_review_drift": "协调者开始下一轮 RED 后，tests/mvp/check-cockpit-source.mjs 相对 review2 冻结变化，current scope 为 dffbb42165b54e141fd8a24ea476c16647053a8e36493e7d26dc8380f6d7f853，其余输入及合同/决定摘要未变。本报告不覆盖该后续测试 delta。"
+  },
+  "initial_scope": {
+    "frozen_manifest": ".local/checks/dogfood-readiness/frozen-scope.json",
+    "baseline": ".local/checks/dogfood-readiness/before.json",
+    "method": "以绝对项目 root 导入 scripts/check_delivery.py，实际调用 review_scope(root, read_delivery(root))；审查期间已确认其结果与冻结 scope_sha256 一致，且 fingerprint(root, read_delivery(root), for_review=True) 与冻结 fingerprint 完全一致。",
+    "frozen_input_count": 672,
+    "baseline_inventory_count": 1107,
+    "baseline_comparison": {
+      "unchanged": 1095,
+      "changed": 12,
+      "missing": 0,
+      "new_declared_input_files": [
+        "tests/mvp/check-raw-bootstrap.mjs"
+      ],
+      "original_scenarios_reference_and_cockpit_source_files_checked": 82,
+      "original_scenarios_reference_and_cockpit_source_hashes_unchanged": true
+    },
+    "limits": [
+      "before.json 保存哈希和旧 delivery，没有所有源码原文。synthetic-analysis.ts、synthetic-cockpit.ts、grade.py、check-cockpit-source.mjs、check-synthetic-knowledge-reading.mjs 的 HEAD 内容哈希已逐项核对等于 before，可据此审查本轮精确 diff；不能将整个累计 HEAD diff 当成本轮。",
+      "knowledge.rs 当前内容在内存中仅反向还原 raw_projection 声明、注释和两个实参后，SHA256 精确匹配 before；因此可确认该文件本轮仅此一处修复，无需把此前大文件累计改造归入本轮。README、开发说明、实现设计的 before 与 HEAD 不同，按当前要求核对，未宣称恢复其全部本轮逐字差异。",
+      "未运行 DB harness、构建、浏览器或付费服务，未读取凭据。只读取已有局部日志和必要源码，并执行不写文件的哈希、Schema 与 provider 函数探针。",
+      "本次函数探针实际使用已安装 Node v24.18.0；已有实现日志标记 Node v26.8.1。纯函数反例不是完整 Pi/API/Worker 链复现，也不据其声称 Node26 的正式运行结果。",
+      "审查结束前重新计算时，唯一声明输入 tests/runtime/check-synthetic-knowledge-reading.mjs 已发生外部变更，current review_scope 为 337caf8725f0b7dfc7b225e2caccad46975666519d212d600c8aadaeaec0d901；contract/decisions/declarations/checker 摘要未变。按协调要求保留原冻结 scope，本报告不覆盖该后续 delta。"
+    ]
+  },
+  "findings": [
+    {
+      "id": "DFR-01",
+      "status": "fixed_in_review2",
+      "resolution": "synthetic-cockpit.ts 已消费匹配文档身份的 source_excerpt，使用命中的 revision 沿 read_source.next_locator 续读。Node26 同源 Schema 通过的9000 Unicode字符正例实际首读0/9000、第二页8000/1000后正常解释；stale_source、not_available 及revision=8对原7均报告缺口。原 knowledge_entry/v1 分支仍保留。",
+      "priority": "P1",
+      "title": "座舱解释分支没有消费真实 raw 通道返回的 source_excerpt",
+      "location": {
+        "file": "apps/agent/provider/synthetic-cockpit.ts",
+        "line": 57
+      },
+      "scenario": "显式 v2、真实 raw 通道已配置，ASR 或概览文档尚无整理陈述；搜索返回当前有效的 source_excerpt/citation。vector::prepare_cursors 在 include_raw=true 时过滤文档无 statement 的 knowledge 行，所以这正是该配置下可正常到达的返回形状。",
+      "observed": "cockpitAction 只寻找 record_kind=knowledge_entry 且固定 object_id/path 的命中；即使收到合法、可补读的 source_excerpt，也不调用 read_source，route 后直接返回“当前资料未能完整读取”。这会使真实 raw 配置中的已有说明演示失败。",
+      "expected": "按命中 record_kind 使用实际 ref 或 citation，逐页读取有效资料；只有缺失、失效或读取失败才保留缺口。",
+      "requested_change": "在现有座舱演示接缝内消费 source_excerpt 的真实 citation，并沿原范围和位置完成 read_source 分页、核对失败；保留现有 knowledge_entry/v1 分支，不放宽产品合同、不增加演示题库策略。扩展已有适配测试覆盖该真实返回类型。",
+      "evidence": [
+        "docs/execution/semantic-runtime/dogfood-readiness-repairs.md:26 要求 v2 search 消费 hits 的实际 ref/citation，原文 read 用 citation。",
+        "crates/data-agent/src/modules/retrieval/vector.rs:824-861：include_raw=true 时 knowledge 文档只保 statement，原文通过 raw 游标检索。",
+        "crates/data-agent/src/use_cases/data_tools.rs:1321-1325：raw 命中正式输出为 source_excerpt，保 citation/source_length/semantic_status。",
+        "纯函数探针：validateContract('KnowledgeSearchReply', reply) 成功；reply 唯一 hit 为 source_excerpt，citation={source:{kind:'document',id:'document-cockpit-asr-candidates'},revision:'7',locator:{offset:1200,length:10}}，source_length=5000，semantic_status='pending'，support_state='unknown'。向 cockpitAction 传 text='ASR耗时怎样统计'、tool_contract_version=2 及该 search 回执和成功 route 回执，实际返回资料未完整读取，没有生成 read_source。",
+        "tests/mvp/check-cockpit-source.mjs:15-16 未配置 raw 通道，本地词法 GREEN 不能覆盖该分支。"
+      ]
+    },
+    {
+      "id": "DFR-02",
+      "status": "fixed_in_review3",
+      "resolution": "review3 无raw/citation时新增文档检索并沿真实命中ref读取body，逐项核state=ok、对象/修订/path及Unicode连续页，失败给明确缺口；有citation分支保持read_source。Node26同源Schema有效v7文档9000字符两页正例及stale/not_available/错误/错版本/缺页五类反例均核通过。正式retail-explain-red.log→retail-explain-green3.log实际产品链局部红绿已读取。公开business-guide.md:33支持无成功付款时paid_at NULL和金额0；v2不冒称已读COALESCE/line_payments是有据收窄。但同一回复不应改变v1已读加工依据的原行为，另记DFR-04。",
+      "review2_resolution_history": "新增 knowledge_entry.citations 消费保留真实来源/修订和next_locator，对有citation的合成正例有效。但默认零售旧资料无statements，实际词法回执citations=[]，仍不可达该正例；review2保持阻断。",
+      "review2_evidence": [
+        "docs/sources/semantic-catalog.json 所有entry的source_facts.statements总数为0。",
+        "modules/knowledge/store.rs:2918-2922 无statement正文分支不创建statement_content；use_cases/data_tools.rs:1302仅从statement_content.citations生成search citations，无此字段时为[]。",
+        "已读取的正式harness历史产物 .local/checks/mvp-9894002953f2a7e3/probe.json 中20个实际search hits全citations=[]。Node26重新调用validateContract('KnowledgeSearchReply', data)成功。",
+        "Node26无DB函数探针以该实际回执及同形第二次search回执分别驱动既有B04/S01输入，两者均再发search_knowledge，route后返回原文资料不可读取，无read_source。此探针证明当前消费者面对实际回执形状仍失败，未声称重跑正式链。",
+        "新增check-synthetic-knowledge-reading.mjs:113-119手工设置citation revision=9，不是默认旧资料生成的回执；其GREEN证明新分支可用，未证明默认旧形状已可达。"
+      ],
+      "review2_requested_change": "无raw/citation时沿真实命中ref补读既有文档/加工依据，保逐项state、同版连续分页和失败缺口；不改Rust伪造citation或放宽v2。用现有正式链的既有月底/零付款问题覆盖真实回执形状。",
+      "priority": "P1",
+      "title": "零售 v2 原文解释在无 Milvus 的正常词法层退成缺口",
+      "location": {
+        "file": "apps/agent/provider/synthetic-analysis.ts",
+        "line": 228
+      },
+      "scenario": "使用前置包声明的 mock/v2/lexical 环境，询问既有“月底下单为何不算1月收入”或 paid_amount_cents 为0解释。SQL owner 的正常命中为 knowledge_entry；无 raw 游标时不会产生 source_excerpt。",
+      "observed": "分支仅从 source_excerpt 寻找 business-guide/etl citation。第一次搜索无此类型便再搜索一次，随后 route 并返回“原文资料不可读取”；即使 knowledge_entry 携带对应有效 citations，仍不调用 read_source。可读资料被误报不可用，既有零售原文说明行为没有完成 v2 适配。",
+      "expected": "保住现有零售 search/read/source 说明流程，按实际命中中的引用读取证据，不能把检索类型差异当作原文失败。",
+      "requested_change": "沿已有受控工具取得并消费词法命中的真实原文引用；需要补读 knowledge 时使用真实 ref，不硬编码或伪造来源修订。保留 v1 行为和已有说明内容，并以既有月底及零付款问题验证成功读取、失败缺口和必要分页。",
+      "evidence": [
+        "docs/execution/semantic-runtime/dogfood-readiness-repairs.md:22,27,31 明确指出零售 search/read/source 也须兼容，目的为保住既有回归。",
+        "crates/data-agent/src/use_cases/knowledge.rs:3193-3206：SQL/knowledge 内容输出为 Knowledge，raw 内容才输出 SourceExcerpt；未配置 vector 的 prepare_cursors 不创建 raw 游标。",
+        "纯函数探针：validateContract('KnowledgeSearchReply', reply) 成功；knowledge_entry ref={object_id:'metric-net_revenue',version:'7',path:'definition'}，citations 含 {source:{kind:'platform',id:'business-guide'},revision:'3',locator:{offset:0,length:10}}。text 使用既有 B04 原问题，tool_contract_version=2；第一回执后实际再发 search_knowledge，第二份同形有效回执及 route 后实际返回原文不可读取，没有 read_source。",
+        "tests/mvp/run-business-acceptance.mjs:162-166 与 201-202 保留零付款及月底说明的既有独立断言。",
+        "tests/mvp/check-conversation-experience-browser.mjs:41 的“改成2月，再执行”验证月份修订；全脚本没有“月底”或零付款解释输入，conversation-v2-green4.log 不能证明这两个分支。"
+      ]
+    },
+    {
+      "id": "DFR-04",
+      "status": "fixed_in_review4",
+      "resolution": "零付款正文按原tool_contract_version分支，v1及缺省版本恢复原已读ETL的COALESCE/line_payments说明，v2保持业务说明表述；未改失败分支或旧S01断言。Node26独立函数探针核显式v1与缺省版本均通过S01全部三条正则，读取失败仍只给缺口；v2真实ref v7、9000 Unicode两页及不冒称读SQL表述保持。新增反例legacy-zero-red.log实际exit1形状与本审查发现一致，green局部结果已读。",
+      "review3_status_history": "open_in_review3",
+      "priority": "P1",
+      "title": "v2零付款说明修订同时破坏了既有v1的S01回归",
+      "location": {"file": "apps/agent/provider/synthetic-analysis.ts", "line": 268},
+      "scenario": "v1合成零售输入既有S01问题，search.objects后成功read_source(etl, version=1)，再route。v1仍可读取加工SQL，不存在v2知识投影排除ETL后无citation的限制。",
+      "observed": "零付款最终正文在版本分支外统一替换，v1也不再含原加工说明。tests/mvp/run-business-acceptance.mjs:165原断言 /COALESCE|缺失|填.?0/ 仍保留，当前回复不匹配；本轮要求保v1，不能以新增v2测试通过替代旧合同。",
+      "requested_change": "保留v1成功读取ETL后的原COALESCE/line_payments解释，将基于公开business-guide的较窄说明限定在v2；不放宽既有S01断言、不修改原100题。",
+      "evidence": [
+        "Node v26.8.1无DB函数探针：tool_contract_version=1、text使用S01既有原问题、search_knowledge={objects:[]}、read_source={source_id:'etl',version:'1',current_version:'1',complete:true,body:'line_payments COALESCE(p.paid, 0)'}、成功route。syntheticAction返回新业务说明正文，对 /COALESCE|缺失|填.?0/ 求值为false。",
+        "tests/mvp/run-business-acceptance.mjs:7,116 的本地协议fixture实际使用syntheticAction；162-166仍检查S01原加工解释。脚本哈希与本轮开工一致，未改变预期。",
+        "docs/execution/semantic-runtime/dogfood-readiness-repairs.md:29要求保留v1行为，当前变更原因仅涉及v2词法投影。"
+      ]
+    },
+    {
+      "id": "DFR-03",
+      "status": "fixed_in_review2",
+      "resolution": "CURRENT verification_inputs 已增加 scripts/test_cockpit_records.py；新冻结fingerprint实际包含该脚本且SHA256与初审相同，未改四项记录检查断言。",
+      "priority": "P2",
+      "title": "新增记录校验测试未被正式验收输入指纹绑定",
+      "location": {
+        "file": "docs/CURRENT.md",
+        "line": 101
+      },
+      "scenario": "RECORDS-COVERAGE 正式执行 scripts/test_cockpit_records.py，但 delivery.increment.verification_inputs 只列 scripts/development.py、scripts/check_delivery.py 等，并未声明新增脚本或 scripts 目录。",
+      "observed": "已实际生成的 672 文件 fingerprint 和 frozen-scope.json 均不含 scripts/test_cockpit_records.py。改变或删除其中四项断言不会使 review_scope 改变，正式执行的记录测试内容未绑定到本轮独立审查。",
+      "expected": "本轮执行的新增验收测试应与代码、合同及其余测试一样纳入 review/receipt 指纹。",
+      "requested_change": "将 scripts/test_cockpit_records.py 纳入当前验证输入，随后重新冻结并对修复 delta 复核；无需扩成所有脚本或新增测试平台。",
+      "evidence": [
+        "docs/CURRENT.md:364：RECORDS-COVERAGE 命令实际调用 scripts/test_cockpit_records.py。",
+        "scripts/check_delivery.py:193-238：fingerprint 仅遍历 registry/AGENTS/verification_inputs，不解析 argv 自动发现脚本依赖。",
+        "实际检查 'scripts/test_cockpit_records.py' in fingerprint(root, read_delivery(root), for_review=True)['files'] 得 False；所读脚本 SHA256=8f85641ac36b2285a4cbeb29a409bac89aa5bcdc0e133da114a5b3591b06fa0b。"
+      ]
+    }
+  ],
+  "review_history": [
+    {
+      "review": 1,
+      "conclusion": "changes_requested",
+      "scope_sha256": "8c6c006ceecbc10629184bc7a66e50a7437069be5e6466c963b9dea3cbbd1e22",
+      "summary": "原冻结范围发现DFR-01/02两处有效资料被误判不可读及DFR-03验收脚本未绑定。原scope说明与原发现正文保留在本文件initial_scope及findings。"
+    },
+    {
+      "review": 2,
+      "conclusion": "changes_requested",
+      "scope_sha256": "a9f2bd0c5ce71f568ea5e2c14cc90d33ec509e9ed41b95ca03d0642184d03015",
+      "resolved": ["DFR-01", "DFR-03"],
+      "remaining": ["DFR-02"],
+      "evidence": [
+        ".local/checks/dogfood-readiness/review-raw-red.log：新增raw断言实际RED，Node26。",
+        ".local/checks/dogfood-readiness/review-raw-green.log：原SQL检查及两新增引用探针局部GREEN；未将手造citation正例当默认旧形状证明。",
+        ".local/checks/dogfood-readiness/types-review.log 与 cockpit-review.log：已读取局部类型检查及v2座舱脚本结果；协调者报告均exit0。本审查未重跑。",
+        "本审查Node v26.8.1、不写文件函数探针：同源Schema有效raw两页9000字符、两错误和错修订均符合预期；有citation零售页沿原locator/revision续读并在stale_source保缺口；真实旧词法回执citations=[]时B04/S01仍报告缺口。"
+      ],
+      "formal_receipt": "pending; 未执行verify-increment，局部GREEN不替代正式验收。"
+    },
+    {
+      "review": 3,
+      "conclusion": "changes_requested",
+      "scope_sha256": "188b88ed06fb5b3c9145c50c84e986c10d43fa4ee4a27731bd7f9dac339c1e1b",
+      "resolved": ["DFR-01", "DFR-02", "DFR-03"],
+      "remaining": ["DFR-04"],
+      "evidence": [
+        "review_scope及完整fingerprint在开始和结束均匹配第三轮冻结；原100题/参考/来源及既有S01脚本未改。",
+        "retail-explain-red.log明确月底解释返回资料缺口；retail-explain-green3.log给出同入口两解释passed=true/officialRequests=0；types-retail.log为局部tsc结果。协调者报告两者exit0，本审查未重跑DB或构建。",
+        "Node26同源Schema有效无citation文档ref v7：9000 Unicode字符按offset0/8000连续补读，stale/not_available/错版本/不连续页/upstream错误均缺口不生成查询。",
+        "公开业务说明第33行直接支持新的v2金额0/paid_at NULL说明；原SQL owner明确排除ddl/etl，未增加产品旁路。",
+        "v1既有S01函数反例实际不再匹配原加工说明断言，故新增DFR-04，不能签passed。"
+      ],
+      "formal_receipt": "pending; 尚未执行verify-increment，不将局部类型/正式链日志拼成最终通过。"
+    },
+    {
+      "review": 4,
+      "conclusion": "passed",
+      "scope_sha256": "c8a5f0bbab80db4739c11e61a5b46f0d319d390b73681c685067255831e3473c",
+      "resolved": ["DFR-01", "DFR-02", "DFR-03", "DFR-04"],
+      "remaining": [],
+      "evidence": [
+        "最终review_scope与完整fingerprint实际匹配第四轮冻结。provider与测试精确单hunk反向哈希均匹配第三轮，没有更改旧测试预期。",
+        "legacy-zero-red.log明确v1旧S01断言失败；legacy-zero-green.log中原SQL读取/分页/失败及新增v1断言全局部passed=true，officialRequests=0；types-legacy-zero.log为tsc局部结果。协调者报告GREEN/types均exit0，本审查未重跑DB/构建。",
+        "Node v26.8.1独立不写文件探针：显式1与缺省tool_contract_version均通过原S01三条正则；v1read_source失败不给COALESCE伪成功；v2文档ref v7两页9000 Unicode字符仍完成且不声称读COALESCE/line_payments。"
+      ],
+      "formal_receipt": "当时待执行；后续首轮正式验收实际失败，见review5，不能沿用本轮passed认证后续改动。"
+    },
+    {
+      "review": 5,
+      "kind": "ui_test_observation_repairs_after_formal_failure",
+      "conclusion": "passed",
+      "scope_sha256": "bf754f8b137591c6c6d83c712491c8e6f2b8aa0f755bdc144ae3fa99dd3fa390",
+      "superseded_intermediate_scope": "b0596abb0731cea0e6c4c716f9543d9abc5fbcd409944cc6bd68c7862b087d08；management后段尚失败，不曾签passed。",
+      "resolved": ["DFR-01", "DFR-02", "DFR-03", "DFR-04"],
+      "new_findings": [],
+      "remaining": [],
+      "test_change_assessment": [
+        {
+          "file": "tests/mvp/check-workspace-feedback-browser.mjs",
+          "judgment": "原负责人变更同平台版不再构成冲突；新负例先实际同步platform_version+1，再送旧版，符合ingestion/store.rs:133的stale_source条件。仍从真实UI触发后台失败、核中文反馈/原码/source_sync_failure日志及完整ownership快照不变，随后恢复已保存新版重试至completed。",
+          "independent_basis": "catalog_content.rs:94-95从内容比较移除maintainer_id/platform_version；catalog_import.rs:348-350仅整批完成才同步owner；data_routes.rs:216-221返回202，SourceSynchronizationStatus:101显示后台失败。HTTP request_id与API日志同号断言改为后台sync错误/Worker日志，属于观察层迁移，不宣称旧HTTP冲突分支通过。",
+          "limit": "当前日志断言未将Worker的sync ID与UI批次逐值绑定；该隔离测试无其他失败负例，足以验证本次失败可见，不据此宣称完整追踪系统验收。"
+        },
+        {
+          "file": "tests/mvp/check-creator-ownership-browser.mjs",
+          "judgment": "纠错按钮count=1限定document-section-tools，保持正文纠错恰一个；文档业务域另有独立ProposeCorrection，不是重复正文按钮。原Bob负责人/Carol不得编辑、丢回执创建恰一次、can_create及窄屏断言完整保留。",
+          "independent_basis": "KnowledgeDocument.tsx:70,85,91与KnowledgeBusinessDomain.tsx:66分别渲染业务域及body纠错入口。"
+        },
+        {
+          "file": "tests/mvp/check-semantic-governance-browser.mjs",
+          "judgment": "登录后显式打开既有table-demo_order_detail地址，消除目录默认排序导致的错误对象；全部原私人草稿、重复提交恰一次、Carol负责人、接受不生效、正式保存升版及Bob驳回可见断言未改。",
+          "independent_basis": "workspace-location.ts支持#knowledge?object；KnowledgePage.tsx:286默认取首个table，不能假定必为该原表。"
+        },
+        {
+          "file": "tests/mvp/check-related-knowledge-browser.mjs",
+          "judgment": "仅显式选择原关联目标表；120无关/105字段夹具、关联第二页末项及四类型页签、404/400边界均保留，未绕过关联读取或降低分页数量。"
+        },
+        {
+          "file": "tests/mvp/check-management-buttons.mjs",
+          "judgment": "同步按实际进度region终态与重新同步按钮观察，重选原表并限定表含义entry；当前语音样例只核真实输入填充，再明确发送原零售问题。完整查询/复制/执行/取消/任务取消/删除段移到改表之前，未以旧指标通过陈旧来源核验。",
+          "exact_move_proof": "将最终management中该11行完整块在内存移回语义修改后，SHA256精确等于中间scope-ui文件哈希；除已审样例按钮与输入调整，该块原断言/顺序/文本逐字保持。",
+          "independent_basis": "mvp-96a3136ba7cc4069/service-logs.json实际含stale_knowledge及后续message_pending；data_tools.rs:75/check_refs与knowledge.rs:630-648核结构依赖当前修订。查询放在编辑/清除/启停前符合该测试按钮目的，不放宽版本保护。",
+          "numeric_scope": "management本身只断复制SQL含SELECT并取消查询，不声称验证12400；真正12400数值/CSV断言在同wrapper的check-browser.mjs:64-72，该文件哈希未变，首轮该脚本实际通过。"
+        }
+      ],
+      "evidence": [
+        ".local/checks/dogfood-readiness/first-formal-receipt.json：status=failed，前7命令exit0且未超时，第8体验wrapper exit=-15/passed=false；之后未执行，finished_at=2026-11-02T07:49:49.591801+00:00。SHA256=9a8183d15b22a24c9524e71d5321923dde74e1ecf39c0bf8049175ae32a41364。",
+        ".local/delivery/I3-DOGFOOD-READINESS-1793604797397054000/command-08.log：已读取五项旧观察失败及其他成功子项；wrapper被停止，无完整组通过，不把前7或部分UI成功拼成最终验收。",
+        ".local/checks/dogfood-readiness/ui-repairs-green.log：creator、semantic-governance、related最终各通过，同日志workspace/management失败attempt保留。",
+        ".local/checks/dogfood-readiness/ui-repairs-green3.log：workspace最终passed=true；同日志management后段失败不当通过。",
+        ".local/checks/dogfood-readiness/management-green.log：最终management六组checks完整passed=true、errors=[]。协调者报告exit0，本审查读取对应management-buttons.json确认passed=true/officialRequests=0。",
+        "五个最终本地结果文件均读取：creator-ownership-browser/result.json、semantic-governance-browser/result.json、related-knowledge-browser.json、workspace-feedback/report.json、management-buttons.json；分别匹配上述最终日志。"
+      ],
+      "execution_limits": "本审查只读取现有产物与源码、计算哈希/内存diff，未执行DB harness、构建、浏览器或付费调用，唯一写入仍为本审查JSON。局部最终日志不等于同冻结输入的新一轮整包验收。",
+      "formal_receipt": "first_run_failed_preserved; 新冻结范围正式verify-increment待执行，CURRENT evidence=null。"
+    },
+    {
+      "review": 6,
+      "kind": "remaining_knowledge_ui_navigation_delta",
+      "conclusion": "passed",
+      "scope_sha256": "56fce0481ad6c86100b0caca58205e777ddf60bb97a28d4104c1d9403e70c9d9",
+      "superseded_intermediate_scope": "03e793f53be59f3009ee400d641d61bda2a48e7da1cdad013a106567d96645b4；仅修第一次Bob导航，后续Alice默认目标及末段无正文对象名称搜索仍失败，未签passed。",
+      "resolved": ["DFR-01", "DFR-02", "DFR-03", "DFR-04"],
+      "new_findings": [],
+      "remaining": [],
+      "assessment": [
+        "统一login显式选择table-demo_order_detail并等原标题，避免Bob/Alice/后续Bob依赖默认或保留对象。仍经过真实UI登录、语义管理及受控对象读取，未改变身份、权限或负责目录范围。",
+        "中段搜索拦截/迟到回执、空负责目录不泄漏他人详情、无结果筛选、平台转交后Bob保存、正文编辑及冲突保留草稿、长文不截断、末节事务回滚、幂等和1440/390宽度断言全部逐字保持。",
+        "末段已将文档正文清空、删除关联，只保source_url；新导航使用本轮真实PATCH回执linked.parts[0].id，随后仍独立以Bob GET并核source_url、页面链接href/rel及无编辑按钮。该段证明普通读者可读取打开链接与创建者编辑权限；去掉的是借词法名称搜索定位无正文对象的前提。CURRENT明确该测试不认证这种检索效果，未将其改记通过。",
+        "允许此定位调整的依据为本增量当前UI/读取目的、既有显式对象地址合同及真实回执身份，不放宽产品检索、权限或内容可用性规则。没有以失败业务输出反写长文/并发/权限预期。"
+      ],
+      "evidence": [
+        ".local/checks/dogfood-readiness/ui-remaining.log：query-boundaries/asset-experience/evidence-return局部通过，knowledge原默认表等待失败，前三段通过；完整wrapper结果仍failed，保留。",
+        ".local/checks/dogfood-readiness/knowledge-experience-green.log：前五段过后Alice默认目标导致文档标题等待超时，passed=false。",
+        ".local/checks/dogfood-readiness/knowledge-experience-green2.log：前七段过后仅链接无正文对象的名称搜索等待超时，passed=false。",
+        ".local/checks/dogfood-readiness/knowledge-experience-green3.log：最终八段完整passed=true，errors=[]，officialRequests=0；协调者报告exit0。",
+        ".local/checks/knowledge-experience/report.json：独立读取最终结果，同八段checks、passed=true及errors=[]，与green3一致。",
+        "最小内存反向哈希证明完整diff只含导航定位变化；最终review_scope及完整fingerprint匹配frozen-scope-ui-complete.json。"
+      ],
+      "execution_limits": "未运行DB harness、构建、浏览器或付费服务，未重审provider或其他实现文件；仅读当前测试、CURRENT、指定证据并更新本JSON。",
+      "formal_receipt": "pending; 旧首轮失败保留，新冻结范围的完整verify-increment尚待执行，不拼接局部通过。"
+    }
+  ],
+  "evidence": {
+    "rust_fix_assessment": {
+      "status": "supported_by_source_and_existing_local_logs; formal_runtime_pending",
+      "details": "raw_projection=include_raw && retrieval::vector::enabled() 同时传给 knowledge 与 retrieval 两个 SQL owner。无 Milvus 时两个 owner 的文档过滤从 statement_id IS NOT NULL 切回 IS NULL，旧未整理文档仍按当前对象/修订/位置进入 load_selected_in_tx，继续做当前版本、依赖、来源和提交前核验。真实 raw 配置且 include_raw=true 时仍传 true，原 raw 游标、共同排名与预算路径不变；v1 include_raw=false 行为也保持。没有新原文SQL扫描或绕过权限。",
+      "reviewed_paths": [
+        "crates/data-agent/src/use_cases/knowledge.rs:2545",
+        "crates/data-agent/src/modules/knowledge/store.rs:2533",
+        "crates/data-agent/src/modules/retrieval/store.rs:146",
+        "crates/data-agent/src/use_cases/knowledge.rs:2030",
+        "crates/data-agent/src/use_cases/knowledge.rs:3045",
+        "crates/data-agent/src/modules/retrieval/vector.rs:809"
+      ],
+      "limitation": "本审查未执行 Rust 构建或 DB；check-retrieval-channel-faults.mjs 等已绑定出口仍待正式执行，不以 fmt/Clippy 代替行为证明。"
+    },
+    "test_expectations": {
+      "original_100_and_reference_unchanged": true,
+      "grade_default_keeps_100_ids_and_original_assertions": true,
+      "trajectory_mode_reuses_existing_validation": true,
+      "cockpit_read_count_change": "原 v1 成功读取恰一次保留；v2 改为至少一页并核 state=ok、Unicode offset 连续、累计总长与末页 cursor 耗尽。CURRENT 已记原值/新值及分页合同依据，未发现据实现反写原100题答案。",
+      "runtime_sql_test": "原 v1 的完整SQL、Unicode连续页、错版本、缺页和错误回执断言保留；原冻结版本追加 v2 同 ref/逐项 stale/not_available 反例。该文件随后外部变化，未纳入本初审。",
+      "raw_bootstrap": "脚本检查空知识计数0、正常同步28表、正式文档创建且无整理陈述、真实raw尾部检索/定点读取及无查询；已有 source-and-index.json 明确 model answer not tested，不能记作原 raw-bootstrap 真实模型轨迹通过。"
+    },
+    "pi_and_budget_invariants": "开工哈希显示 Pi session/deliver/checkpoint/capacity/transport、Rust operation/origin/budget 及模型限额实现均未因本增量改变。模拟 provider 忽略 tool_response_capacity 以重新取证，没有新增压缩器、恢复框架、全局兼容层或题库策略；这不代替已绑定 CHECKPOINT/TOOL/RECEIPT 的正式运行证明。",
+    "local_logs_read": [
+      ".local/checks/dogfood-readiness/mock-v2-red.log",
+      ".local/checks/dogfood-readiness/mock-v2-green4.log",
+      ".local/checks/dogfood-readiness/mock-v1.log",
+      ".local/checks/dogfood-readiness/raw-bootstrap1.log",
+      ".local/checks/dogfood-readiness/conversation-v2-green4.log",
+      ".local/checks/dogfood-readiness/synthetic-pages.log",
+      ".local/checks/dogfood-readiness/records.log",
+      ".local/checks/dogfood-readiness/types-final.log"
+    ],
+    "formal_verification": "首轮正式执行失败收据保留：前7命令通过，第8体验wrapper被停止且未完成，后续未执行；不是正式整包通过。第五/六轮仅审已证UI测试观察修正，最终实施审查passed；写报告时CURRENT仍active、review pending、evidence null。协调者可绑定56fce048…最终scope后执行新的完整verify-increment；不拼接旧成功或定向局部GREEN，也不据此声称整体09、真实模型或真实端点通过。"
+  },
+  "process_disclosure": "尝试加载 code-review 技能意外触发宿主后台 fork，已立即要求停止；其确认仅查看 Git/指导材料，未读产品源码、未写文件、未启动子代理，也没有 findings。本报告的源码追查、探针和结论由本审查者独立完成，未采用该后台结果。唯一主动写入文件为本 JSON。"
+}

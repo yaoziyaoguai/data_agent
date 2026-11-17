@@ -1,0 +1,306 @@
+{
+  "reviewer": "Codex / gpt-6.1-sol，未参与实现的独立审查者；本轮未委派代理、未修改产品或测试",
+  "summary": "I2-SEMANTIC-DELIVERY-REPAIRS 独立实现审查通过，最终认证范围为 0fdb6a85ab4d9daa77f1c1bd84063f6e9b60ca51ae2d36ac7a43b388bd9a595b。首轮对 b2c87c28f7d03372166b61c70ecd3d089151b613de2707a56323cc46f343bbaf 审查发现P1旧控制回执来源绑定缺口，先落 changes_requested，未预设通过；协调者补正式RED、最小修复及GREEN后，同一审查者完成三文件增量复核，P1及Pi诊断索引覆盖问题均关闭。八项要求、正式调用路径、测试预期、原始本地证据、Pi公开SDK复用及新增内容必要性已核。最终18条去重命令收据尚待协调者执行；本结论不替代真实模型、真实平台或09验收。",
+  "conclusion": "passed",
+  "scope_sha256": "0fdb6a85ab4d9daa77f1c1bd84063f6e9b60ca51ae2d36ac7a43b388bd9a595b",
+  "scope": {
+    "increment": "I2-SEMANTIC-DELIVERY-REPAIRS",
+    "reviewed_frozen_scope_sha256": "0fdb6a85ab4d9daa77f1c1bd84063f6e9b60ca51ae2d36ac7a43b388bd9a595b",
+    "initial_reviewed_scope_sha256": "b2c87c28f7d03372166b61c70ecd3d089151b613de2707a56323cc46f343bbaf",
+    "fingerprint_method": "scripts/check_delivery.py::review_scope(root, delivery)，JSON frontmatter 采用锚定开头的正则解析，未用 split(\"---\")。初读时独立复算原冻结指纹一致、572份 frozen-scope.files 全部一致。",
+    "baseline": ".local/checks/semantic-delivery/before/ 与 before-manifest.json；task.diff、changed-paths.json、frozen-scope.json",
+    "baseline_recovery": "初始 before/ 缺4份文档及 tests/contracts/cases.json 原文，task.diff 同样遗漏；协调者随后补回。审查者独立重算5份文件 SHA256，全部匹配开工 before-manifest.json；已阅读补齐差异。合同658个旧例完整前缀未变，仅新增4例。不能把最初326份原文快照描述为已存全部1100份原文。",
+    "reviewed_paths": [
+      "apps/agent/session/deliver.ts",
+      "apps/agent/session/workspace-context.ts",
+      "crates/data-agent/src/use_cases/analysis_answers.rs",
+      "crates/data-agent/src/use_cases/data_tools.rs",
+      "crates/data-agent/src/use_cases/deliver_run.rs",
+      "crates/data-agent/src/use_cases/evidence_delivery.rs",
+      "crates/data-agent/src/use_cases/knowledge_supports.rs",
+      "crates/data-agent/src/use_cases/task_answers.rs",
+      "docs/CURRENT.md",
+      "docs/architecture/implementation-design.md",
+      "docs/execution/semantic-runtime/coverage-and-validation.md",
+      "docs/execution/semantic-runtime/pi-reuse.md",
+      "docs/execution/semantic-runtime/task-answers.md",
+      "packages/contracts/generate.mjs",
+      "packages/contracts/generated/boundary.rs",
+      "packages/contracts/generated/boundary.ts",
+      "packages/contracts/schema.json",
+      "tests/contracts/cases.json",
+      "tests/mvp/check-control-context-edit.mjs",
+      "tests/mvp/check-evidence-support-continuation.mjs",
+      "tests/mvp/check-result-notification-answers.mjs",
+      "tests/mvp/check-search-continuation-lifetime.mjs",
+      "tests/mvp/check-task-answer-scope.mjs",
+      "tests/mvp/check-waiting-task-delivery.mjs"
+    ],
+    "necessary_callers": [
+      "crates/data-agent/src/use_cases/context_authority.rs",
+      "crates/data-agent/src/use_cases/finish_run.rs",
+      "crates/data-agent/src/use_cases/query_workflow.rs",
+      "crates/data-agent/src/use_cases/analysis_evidence.rs",
+      "crates/data-agent/src/use_cases/historical_analysis.rs",
+      "crates/data-agent/src/use_cases/source_limits.rs",
+      "crates/data-agent/src/modules/analysis/store.rs",
+      "crates/data-agent/src/modules/runtime/store.rs",
+      "crates/data-agent/src/modules/runtime/tool_ledger.rs",
+      "apps/agent/tools/data-tools.ts",
+      "apps/agent/session/task-projection.ts",
+      "apps/agent/session/checkpoint.ts",
+      "apps/agent/session/capacity.ts",
+      "node_modules/@earendil-works/pi-coding-agent/dist/core/session-manager.js",
+      "node_modules/@earendil-works/pi-coding-agent/dist/core/agent-session.js",
+      "node_modules/@earendil-works/pi-coding-agent/dist/core/extensions/types.d.ts"
+    ],
+    "scope_changed_after_blocker_report": {
+      "reason": "首轮记录落地时协调者已开始TDD/修复，首轮明确未认证新增变更。现已完成相对首轮冻结的增量复核；first-review-scope及second-review-scope之间恰有以下3份文件改变，572份二次冻结文件与实时内容完全一致。已按first-review-task.diff和before重建3份首轮原文，重建SHA全部等于首轮冻结清单后逐行比较。",
+      "paths_changed_from_initial_frozen_files": [
+        "crates/data-agent/src/use_cases/task_answers.rs",
+        "tests/mvp/check-waiting-task-delivery.mjs",
+        "tests/mvp/check-search-continuation-lifetime.mjs"
+      ],
+      "incremental_review": "已完成。Rust仅缺省text_authority分支增加当前条件版本与原task_ref一致的检查；等待脚本仅增加旧回执同版正控、真实改名/停用、重放null、finish拒绝及原存储不改；深翻页脚本仅用if(usePi)限制固定Pi测量索引写入。CURRENT顶部最新补充准确记录首轮发现与实际RED/GREEN。完整差异与证据详见review_history。"
+    },
+    "excluded": [
+      "继承14项及01–08的全面重审",
+      "09执行；未修改其文件",
+      "DB harness运行、付费模型或embedding、凭据读取、commit/push/部署",
+      "本次审查授权之外的共享入口或CURRENT编辑"
+    ],
+    "integrated_dogfood_sha256": "ebcdc8798f6d63dcad8c399d95822a0db1e8103b44bcce9c305b9c9541c01e74"
+  },
+  "findings": [
+    {
+      "id": "CONTROL-LEGACY-TEXT-AUTHORITY",
+      "priority": "P1",
+      "blocking": false,
+      "was_blocking": true,
+      "status": "resolved_in_incremental_review",
+      "resolution": "task_answers.rs:395–402在旧回执缺省authority分支核当前condition_version仍等于原task_ref，无法证明旧文字来源时按stale_context抑制/拒绝。新回执仍核持久自身authority，不受该兼容限制。正式旧回执同版正控保留；legacy-control-authority-red.log证实修复前泄漏，green.log证实修复后显式null且无失效标记、finish409、原成功存储不改。未新建表、框架或替代循环。",
+      "title": "旧成功控制回执用当前目标来源核验旧正文，目标改名后可能重新暴露已失效文字",
+      "location": {
+        "path": "crates/data-agent/src/use_cases/task_answers.rs",
+        "line_at_reviewed_freeze": 394,
+        "end_line_at_reviewed_freeze": 408
+      },
+      "requirement": "delivery-repairs.md第4节：首次、重放和finish均核控制自身文字来源；旧成功事实不可借当前投影洗掉来源；成功抑制需显式null。",
+      "verified_evidence": [
+        "原冻结 validate_control_text_in_tx 在缺省text_authority时，按delivery.task_refs.task_id读取analysis::task_text_authorities_in_tx并直接合并fields.goal；未绑定旧task_ref.condition_version，也未证明当前goal仍是旧control.text采用的文字。",
+        "analysis/store.rs:435–448在非空且真实改名时原位替换goal、goal_authority、goal_condition_version；task_text_authorities_in_tx:537–568只读当前goal_authority，没有旧goal的版本快照。",
+        "data_tools.rs:561–598对成功原回执先走replay_receipt_in_tx并返回，在新调用的run来源守卫之前；replay_receipt_in_tx:248–272只有上述错误时才把control_delivery置null。旧route回执普通data仅含task_id/condition_version，不会在protect_update_result中另行验证旧goal。",
+        "同恢复链成功回执可由runtime/store.rs:182–205按conversation/recovery_chain/sdk_id重新读取。目标可由正常update_analysis_task改名；用户完整原话目标的goal authority可为空，见data_tools.rs:1876–1884。",
+        "新增正式authority场景仅生成带text_authority的新回执；旧兼容仅有JSON Schema roundtrip，未覆盖旧回执产生后goal真实改变。"
+      ],
+      "reachable_sequence": [
+        "升级前成功route等回执含来源D生成的目标文字，control_delivery不带text_authority。",
+        "正常任务修订将目标真正改为新的合法文字，覆盖当前goal_authority；新文字可无D来源。",
+        "D停用后，沿原SDK调用重放原成功route回执。",
+        "兼容分支只核当前新目标来源，仍保留旧control.text及原指纹，因而旧D文字可在成功回执顶层出现。最终finish的版本守卫可能另行拒绝，但无法撤销已经发生的重放正文泄漏。"
+      ],
+      "verification_level": "首轮以源码和正式可达链确认并报告阻断；增量阶段独立核协调者实际TDD日志，RED包含泄漏的SYNTHETIC_LEGACY_CONTROL_GOAL旧目标，GREEN含14场景/30本地协议调用。审查者未运行DB，不冒称本人重新执行。原日志、当前正式测试与最小补丁彼此对应。",
+      "requested_change": "旧回执必须能证明原文字与被核字段来源仍对应；不能对应时按既有错误/抑制合同保守处理，成功抑制返回显式null，原成功存储不改。新增一个正式旧回执→改名/版本推进→停用→重放与finish反例，保仍匹配且可读的旧回执正控；不要扩为新历史表或通用框架。"
+    },
+    {
+      "id": "DEEP-PI-DIAGNOSTIC-OVERWRITE",
+      "priority": "P3",
+      "blocking": false,
+      "status": "resolved_in_incremental_review",
+      "resolution": "tests/mvp/check-search-continuation-lifetime.mjs:379仅usePi时写固定Pi索引，默认路径仍保留独立harness结果。deep-backend-index-preserved.log默认回归通过后，Pi汇总仍usePi:true、5份wire；审查者逐字段核恢复索引等于source_harness原始JSON。",
+      "title": "默认后端回归覆盖固定Pi测量索引，引用文件不能稳定保留正式证据",
+      "location": {
+        "path": "tests/mvp/check-search-continuation-lifetime.mjs",
+        "line_at_reviewed_freeze": 379
+      },
+      "verified_evidence": [
+        "原冻结finally无条件写同一个.local/checks/semantic-delivery/deep-pi-diagnostic.json，包含默认usePi:false运行。",
+        "审查首次读取该文件为passed:true/usePi:false、budgets/wires/projections全空，与CURRENT所指完整Pi测量不符。",
+        "独立harness .local/checks/mvp-222398af940854b3/search-continuation-lifetime.json仍保存usePi:true和完整wires/budgets，故Pi实际通过没有丢失；协调者恢复汇总索引并注明source_harness。"
+      ],
+      "requested_change": "默认与Pi路径用不同诊断产物名，或仅Pi路径更新Pi索引；保留每次harness原始结果。这个证据卫生问题不应改成产品容量修复或重跑数据库的理由。"
+    }
+  ],
+  "verified": [
+    {
+      "gap": "1 控制文字authority与显式null/finish",
+      "result": "新回执路径及旧回执兼容修复均通过复核；原阻断保留历史并已关闭，见CONTROL-LEGACY-TEXT-AUTHORITY。",
+      "basis": "control_delivery_in_tx先对goal/clarification复用protect_task_context_in_tx，合并实际可读文字来源后持久化；data_tools重放抑制显式null，Node只对成功回执采用更新，省略保持不更新；compose在最终事务先核自身authority，失败在commit/consume/answered前回滚。check_results在会话锁外采样平台依赖；未将平台IO塞进会话锁。",
+      "evidence": [
+        ".local/checks/semantic-delivery/control-authority-red.log",
+        ".local/checks/semantic-delivery/waiting-freeze.log",
+        "tests/mvp/check-waiting-task-delivery.mjs:116–181（原冻结行号）"
+      ],
+      "limits": "正式新回执反例与新增旧回执改名后反例分别证明不同责任。旧回执版本推进后不再用当前字段为旧正文作保，恢复保持原持久成功事实。"
+    },
+    {
+      "gap": "5 新操作与恢复投影身份",
+      "result": "原冻结范围内未发现阻断。",
+      "basis": "正常新工具不再按task/version接回旧控制投影；A/B各自由当前query事实生成。启动/恢复的reconnect按task_refs及kind/task/version/query_id/clarification_id匹配，忽略queued→running观察变化以保原指纹。原A/B重放仍各回原持久receipt，不重写成功事实。",
+      "evidence": [
+        ".local/checks/semantic-delivery/waiting-freeze.log：control-new-operation-facts、d1-identity-recovery",
+        "tests/mvp/check-waiting-task-delivery.mjs:183–209（原冻结行号）"
+      ]
+    },
+    {
+      "gap": "2 pending先接续",
+      "result": "原冻结范围内未发现阻断。",
+      "basis": "删除pendingTaskCreation的局部门控，最早快路要求pendingCalls为空；普通pending经原data.invokeRecorded，调用登记由Rust按原SDK接回operation/origin。接完工具与投影后再次判断宿主交付义务，满足时零新增模型finish；没有放宽Rust未结算guard。",
+      "evidence": [
+        ".local/checks/semantic-delivery/pending-recovery-red.log：提前finish version_conflict",
+        ".local/checks/semantic-delivery/waiting-freeze.log：control-pending-query-recovery、控制/澄清恢复extra_model_calls=0",
+        ".local/checks/semantic-delivery/recovery-regression.log：10项恢复及旧unknown边界"
+      ],
+      "limits": "新增pending场景通过真实Worker派发及Node deliver，身份断言在正式工具账本；审查者未重复运行DB。"
+    },
+    {
+      "gap": "3 B冻结＋Q/A-v1组合",
+      "result": "原冻结范围内未发现阻断。",
+      "basis": "notification_matches仍核原query/task/condition，scope用source_limits_at_version，保task active；历史标题为中性原条件查询结果。成功present末项复用analysis_answers::check_in_tx返回自己的query文字与结果authority，不套run并集；B沿original_text_in_tx独立核。普通当前自然答案仍核当前scope/generated-text authority。",
+      "evidence": [
+        ".local/checks/semantic-delivery/historical-composition-red.log",
+        ".local/checks/semantic-delivery/history-frozen-input.log：7场景、29调用、p-negative、v2-frozen-late-condition",
+        "tests/mvp/check-result-notification-answers.mjs:175–283：真实Pi route B、冻结B、route A/v2、get_query Q/v1、present、正式组合和持久历史重读；A/v2 investigating、B answered、原query及预算保持"
+      ],
+      "limits": "本地协议与合成SQLite结果，不证明真实模型自主选择；测试未覆盖所有历史语义改版组合，本轮没有把其视为全面历史功能验收。"
+    },
+    {
+      "gap": "6 Pi无user定位与extension前快路",
+      "result": "原冻结范围内未发现阻断。",
+      "basis": "本轮边界用原生entry ID集合，恢复从原user或data_agent_current_input的message_id定位；归属未知明确checkpoint_conflict。deliveryContextEntries沿ProjectedSessionEntry.messages读取当前投影，再用公开context_edit；快路在导出前appendContextEdit/宿主消息。保旧轮条目，不修改SDK私有状态，不新建轮次账本。",
+      "evidence": [
+        ".local/checks/semantic-delivery/context-edit-red.log",
+        ".local/checks/semantic-delivery/waiting-freeze.log：control-provider-next-and-restart、d1-recovery",
+        ".local/checks/semantic-delivery/context-boundary-final.log",
+        "审查者Node26独立执行check-control-context-edit.mjs及内存SDK小检查均passed"
+      ],
+      "limits": "小检查核public SDK边界；正式下一次/重启provider输入由原冻结DB/Pi日志与源码断言核验，审查者未重跑。"
+    },
+    {
+      "gap": "7 grounded/通知选择与结束义务",
+      "result": "原冻结范围内未发现阻断。",
+      "basis": "settle与commit共用selectDelivery：needsResultAnswer未满足返回undefined；通知答案优先，再当前grounded，最后control。hook只在completed、continue=false、pendingMessages空时编辑，不设置continue，不把canContinue当模型义务。已核锁定Pi1.3的BoundaryState与_commitBoundaryDrafts/settle实现；SDK负责循环/排队/压缩。",
+      "evidence": [
+        ".local/checks/semantic-delivery/waiting-freeze.log：grounded-after-waiting-control保已核验正文、同任务另一SQL waiting_confirmation",
+        "tests/mvp/check-waiting-task-delivery.mjs:511–587（原冻结行号）实际provider下一轮/重启仍收到grounded原文",
+        ".local/checks/semantic-delivery/context-boundary-final.log及独立SDK小检查"
+      ]
+    },
+    {
+      "gap": "4 本回执支持完整性",
+      "result": "原冻结范围内未发现阻断。",
+      "basis": "SupportPage由first改携total；search/read初装配和最终裁剪均按本回执supports数量与每项完整性判partial，内嵌支持仍沿合法delivered_in映射。删除offset/first_offset/page_end旧中转，未加跨页读取账本。",
+      "evidence": [
+        ".local/checks/semantic-delivery/support-receipt-red.log：partial/partial/delivered反例",
+        ".local/checks/semantic-delivery/support-receipt-green.log：三短支持分三回执均partial、末cursor耗尽、同回执全交delivered；原51/50、旧游标保留",
+        ".local/checks/semantic-delivery/supports-regression.log：8项，含内嵌/短例外/长条末片",
+        ".local/checks/semantic-delivery/support-references-regression.log",
+        "tests/mvp/check-evidence-search-capacity.mjs:94–106保search最终回执不足支持为partial及映射检查；已绑定EVIDENCE-SEARCH，最终全绑定尚待协调者执行"
+      ]
+    },
+    {
+      "gap": "8 原1202位置Pi深翻页与容量归因",
+      "result": "Pi集成已有原始通过证据；旧失败根因仍未知，未将当前通过解释为已查明。",
+      "basis": "--pi复用原1202 dense位置、6合法、964+230失效、跨窗重现、term范围、limit30、131072B配置；实际deliver首批route+search，第二窗search，末项read_knowledge。保持默认后端接缝，无复制建库框架。容量产品capacity.ts/request-size.ts/tools/data-tools.ts均与接手before逐字节一致。",
+      "evidence": [
+        ".local/checks/mvp-222398af940854b3/search-continuation-lifetime.json：usePi=true、两页7/2命中、cursor790B、dense offset1100、read末项、4普通+1摘要、所有wire小于131072B",
+        ".local/checks/mvp-f364e91ed4de0170/search-continuation-lifetime.json：同首批route+search、无压缩maxWire74703B的对照",
+        ".local/checks/semantic-delivery/deep-pi-freeze.log",
+        ".local/checks/semantic-delivery/compare-historical-capacity.mjs：旧第二页快照比较仅分配器实验，不能代替旧当时wire/ResponseBudget"
+      ],
+      "measurements": {
+        "normal_calls": 4,
+        "native_summary_calls": 1,
+        "max_provider_wire_bytes": 104724,
+        "tools_bytes": 51218,
+        "normal_system_bytes": 13194,
+        "response_budget_max_bytes": [12762, 9012, 7870],
+        "actual_receipt_bytes": [4523, 1399, 465],
+        "diagnostic_protocol_bytes": [105270, 113048, 115331],
+        "cursor_bytes": 790
+      },
+      "limits": [
+        "protocolBytes与estimatedTokens是宿主估算，provider wire是本地HTTP端点实收字节，两者不可混用。预算首批还受route完成后释放预留影响。",
+        "prompt_tokens=1000/completion_tokens=100来自本地合成usage，不是真实模型计量。",
+        "旧tool_response_capacity当时没有完整wire/ResponseBudget，当前未复现，不能确认schema双编码或Defender是旧根因。",
+        "原独立harness结果未保存runBudget字段；原冻结脚本对同session/原budget/24限额及attempt计数有显式断言，但审查者不能仅凭恢复后的汇总声称逐条独立核实7份settled预算行。",
+        "default覆盖Pi索引问题单列DEEP-PI-DIAGNOSTIC-OVERWRITE；不影响独立harness仍保存正式Pi测量。"
+      ]
+    }
+  ],
+  "minimality_and_expectations": {
+    "new_helpers_and_guards": [
+      "validate_control_text_in_tx为缺口1的重放/启动/finish复用同一自身来源规则；首轮旧兼容阻断已用原版本一致性检查修复，新增检查直接对应真实RED，没有扩展猜测性防护。两处来源失效match只将当前可见控制抑制，非来源错误继续传播，未吞错转业务成功。",
+      "reconnect_control_delivery_in_tx分离启动恢复与新操作职责，fact身份匹配来自缺口5；没有增加恢复状态机。",
+      "analysis_answers::check_in_tx返回实际authority用于缺口3，复用原query/结果核验；删除不再需要的conv参数与旧extend转存路径，其他模块仍使用的extend_result_dependencies保留。",
+      "deliveryContextEntries与applyDeliveryContext服务settle及extension前快路两处实际复用；selectDelivery统一选择，均对应缺口6/7；归属未知拒绝对应包内明确合同。",
+      "SupportPage.total替换旧first/offset，只修缺口4；没有增加跨页账本、重读全集或新helper。"
+    ],
+    "tests": "扩展既有公开脚本，authority、新操作、pending、历史组合、SDK边界、正式下一轮/重启、支持末回执及深翻页分别证明不同责任；未见本轮新建平行测试框架。SDK无正文completed断言由无返回改为不得context_edit，符合包第7节允许确无正文时追加宿主事实，error/aborted仍严格无编辑。旧合同658例前缀不变、4新增只测新增序列化边界。",
+    "clarify_calls_3_to_2": {
+      "decision": "合理，来源为CURRENT明确验收与要求变更及delivery-repairs第5/7节；不是提高预算或删除行为断言。",
+      "verified": [
+        "相对before仅clarify生成调用计数和预算同值从3变2；普通revise仍3、cancel无新任务仍2，原24上限保持。",
+        "甲原文、丙问题task_changed身份、一次原SDK副作用、冻结引用、原operation/origin/fingerprint、browser两次刷新与不回灌甲来源断言均保留。",
+        "task-scope-regression.log实际仅2!=3失败，task-scope-green.log两次生成并通过全部正文/状态断言；先接原clarify后已有持久问题卡及控制投影，无须第三次模型重复提问。"
+      ]
+    },
+    "scope_discipline": "未发现本轮新增Pi替代循环、服务、后台监听、依赖升级、第二账本或扩大模型/检索限额；未全面审计继承实现。"
+  },
+  "independent_checks": [
+    {
+      "command": "/opt/homebrew/bin/node tests/mvp/check-control-context-edit.mjs",
+      "environment": "Node v26.8.1；无数据库、无模型网络",
+      "result": "exit0，5项checks，officialRequests=0"
+    },
+    {
+      "command": "Node26内存SDK检查（stdin，无新增脚本文件）",
+      "result": "exit0：selectText未满足时不编辑；压缩无user的快路公开context_edit生效；相同正文重复处理不追加编辑；previousEntryIds=null明确checkpoint_conflict"
+    },
+    {
+      "command": "Python -I只读复算review_scope、572冻结文件、补回5份before哈希及09 SHA256",
+      "result": "初始冻结全部吻合；补回5份与开工manifest一致；09未变；收到阻断后协调者开始的3份变化在scope中明确列出"
+    }
+  ],
+  "unverified_levels": [
+    "未运行DB harness；MySQL/Worker/SQLite/Milvus/Pi正式链通过依据来自独立阅读原始日志、每次harness结果及相应源码断言，不是审查者重新执行。",
+    "不验证真实模型自主调查、真实embedding质量、真实平台或部署；所有protocol usage为合成值。",
+    "未执行09，也未重跑继承14项/01–08全部验收。",
+    "本增量18条去重命令的最终verify-increment收据尚未取得；旧30条收据不能关闭本轮。",
+    "旧容量失败根因仍未知；当前正式Pi两窗与压缩通过不能倒推旧失败原因。已恢复原始测量索引，不将本地合成usage当真实provider计量。"
+  ],
+  "review_history": [
+    {
+      "round": 1,
+      "conclusion": "changes_requested",
+      "reviewed_scope_sha256": "b2c87c28f7d03372166b61c70ecd3d089151b613de2707a56323cc46f343bbaf",
+      "record_write_live_scope_sha256": "0fdb6a85ab4d9daa77f1c1bd84063f6e9b60ca51ae2d36ac7a43b388bd9a595b",
+      "reason_for_different_write_scope": "首轮报告P1后协调者开始修复，首轮落记录时实时范围已变化；首轮记录明确不认证未读新变更，未写passed。",
+      "findings": ["CONTROL-LEGACY-TEXT-AUTHORITY", "DEEP-PI-DIAGNOSTIC-OVERWRITE"],
+      "evidence": [".local/checks/semantic-delivery/first-review-scope.json", ".local/checks/semantic-delivery/first-review-task.diff"],
+      "status": "superseded_by_round_2_after_fix"
+    },
+    {
+      "round": 2,
+      "conclusion": "passed",
+      "reviewed_scope_sha256": "0fdb6a85ab4d9daa77f1c1bd84063f6e9b60ca51ae2d36ac7a43b388bd9a595b",
+      "method": "first-review-scope与second-review-scope的572份文件哈希逐项比较，恰3文件改变；从开工before原文加first-review-task.diff内存重建这3份首轮原文，哈希均匹配首轮冻结清单，再读取完整增量diff。实时review_scope等于second-review-scope，572文件全部吻合；CURRENT最新摘要补充已阅读；09 SHA不变。",
+      "changed_paths": [
+        "crates/data-agent/src/use_cases/task_answers.rs",
+        "tests/mvp/check-waiting-task-delivery.mjs",
+        "tests/mvp/check-search-continuation-lifetime.mjs"
+      ],
+      "verified_fix": "Rust仅在旧control缺省text_authority时要求current.condition_version==reference.condition_version；旧正文不能借已替换的新goal_authority通过。当前同版可读旧回执继续原样重放，新authority回执仍按自身来源核验。已有重放抑制将stale_context变显式null，原成功receipt没有覆盖；finish同校验在commit之前拒绝。",
+      "test_expectation_review": "新增旧回执用真实成功route回执删去新增authority字段构造升级前格式，原指纹/正文保留且先证明同版可读成功；之后用正式revise改名为用户原话、正式disable停用来源。RED/GREEN读取同一公开工具接缝，断言null、无marker、原持久receipt不改、finish409及无正式输出。该场景直接对应P1，没有引入新矩阵或放宽原断言。",
+      "evidence": [
+        ".local/checks/semantic-delivery/legacy-control-authority-red.log：exit1，actual含SYNTHETIC_LEGACY_CONTROL_GOAL旧目标，expected null",
+        ".local/checks/semantic-delivery/legacy-control-authority-green.log：exit0，14场景/30调用/officialRequests0，含所有原等待、grounded、上下文与浏览器场景",
+        ".local/checks/semantic-delivery/build-api-legacy-control.log与build-worker-legacy-control.log：两二进制分别重建，均Finished，早于GREEN",
+        ".local/checks/semantic-delivery/code-contracts-legacy-control.log：fmt/clippy/types/web构建及同源合同生成检查完成，662双侧合同通过",
+        ".local/checks/semantic-delivery/deep-backend-index-preserved.log：默认后端回归exit0；其后Pi汇总仍usePi true、5份wire，逐字段等于source_harness原结果"
+      ],
+      "limits": "不另跑DB harness；依据独立核源码、反例预期、完整原始运行日志与冻结哈希。最终verify-increment由协调者在审查通过后运行，本次passed只允许进入该步骤，不代表收据已经取得。"
+    }
+  ],
+  "next_action": "协调者可将review状态更新为passed并串行运行本增量18条去重命令verify-increment；失败或超时仍保持active，最终收据通过后才按既有规则关闭。完成本包后停止，不进入09。"
+}

@@ -1,0 +1,55 @@
+{
+  "reviewer": "Codex 独立只读证据复核（未参与实现；未运行重放；未委派）",
+  "summary": "现有证据足以定位受控 Pi→API 工具重放的直接失败：757 成员窗口在确认本页 20 项后，现行内层续页序列化为 105762B，超过 65536B，Rust 返回 HTTP409 tool_response_capacity；外层游标与正常回执尚未生成，138B 是错误体。相同中文 query、所指认的原 settled 向量及只读原集合使其与 P03 关联较强，但新 harness 为 992 对象、原试用为 996 对象，异步完成次序和原失败窗口均未精确重放。离线 764/912 成员窗口是另外两份编码测量，不能与本次 757 成员混为一窗。证据证明当前编码不能容纳这些观测窗口，不证明所有编码均不可能，也不必然要求外部状态。尚无满足现行保留语义和容量合同、覆盖观测规模窗口的续页结果，因此诊断结论为 changes_requested，阻止关闭实际容量故障。此前 SEARCH-WINDOW-REVIEW-01 的 400 对象代码修复 passed 历史保持。",
+  "conclusion": "changes_requested",
+  "scope_sha256": "929db8ca4e11d637c67e2a5152773d1462e4d70dcceff1476076f8960b164208",
+  "findings": [
+    {
+      "id": "SEARCH-CAPACITY-DIAGNOSIS-01",
+      "priority": "P2",
+      "status": "open",
+      "title": "受控工具链生成的正常规模窗口仍无法交付续页状态",
+      "input": "原中文 query“语音记录 录音 车主 隐私 脱敏”、limit=20、缓存 embedding 调用 889c436d2e5a4f3526f92f43ac533a79d09dd233e88feb90432bb31ebf4f81a9；独立 cockpit harness 同步 992 对象，原真实公共集合只读；Rust 工具预算显式设为 98304B/216429 estimated tokens。实际形成 757 成员窗口，本页确认 20 项，剩余 737 项需保留。",
+      "actual_output": "API trace 为 layer=window bytes=105762 members=757 retired=20 limit=65536；内层序列化超过游标硬限 40226B，工具 HTTP409/code=tool_response_capacity/retryable=false。没有正常外层游标或成功工具回执，Pi deliver 最终 model_run_failed；138B 仅是错误响应。",
+      "expected_output": "在保持所有未交付身份、位置、原排名、权限与预算绑定的条件下，生成符合当前游标和回执容量合同的可恢复续页状态。",
+      "remaining_blocker": "目前没有覆盖该观测规模并满足现合同的续页表示。需先落实并验证现合同内的表示修复；若拟改变状态承载或容量合同，则需明确相应设计决定。400 对象样本通过不能据以关闭这一故障。",
+      "evidence_limit": "此项是受控工具重放已定位的容量阻断；不声称原付费 P03 两个 attempt 的精确窗口或直接失败层均已捕获，也不证明任意编码方案都无法容纳该状态。"
+    }
+  ],
+  "checks": [
+    "直接证据一致：按字段提取 actual-tool-replay-summary.json 指向的原始 P03-local-tool-replay-attempt3.json，原 attempt/query/cached_embedding_call、capacity_trace、harness_heads、delivery_error 均与摘要一致。原始记录有 1 次 search_knowledge 工具调用、1 次回环 embedding 请求，工具参数、显式预算、409 响应与 138B 错误体也一致；没有通读或输出整份 772127B JSON。",
+    "失败位置：沿前次已读的现有容量顺序，SearchSelection::next 先调用 SearchContinuation::snapshot；snapshot 超限返回错误后，外层 SearchCursor 序列化以及 search_reply 对正常回执的容量检查不能完成。因此本次 trace 直接支持内层游标容量失败，不能把它归因于已生成正常回执过大；也不能把 138B 错误体当正常回执大小。",
+    "受控预算：原始调用的 before_budget 为 28070B/25709 estimated tokens，replay-p03-tool.mjs 在真实 /internal/data/tools 请求边界显式改为 98304B/216429。该设置排除了“Rust 仅收到小 mock profile 自动生成的较小预算”对本次失败的解释，但不构成真实模型 profile 或自然 Pi 预算协商的端到端验收。游标独立 65536B 硬限仍然生效。",
+    "复用路径：replay-p03-tool.mjs 导入现有 harness 和 apps/agent/session/deliver.ts，以回环协议模型触发 search_knowledge，通过真实 Pi→内部 API 入口执行。embedding 回环服务校验输入等于该中文 query，并返回 snapshot 绑定的原缓存向量；本次未重新调用付费 embedding。",
+    "原集合只读：脚本代理只允许 collections/describe、entities/search、entities/query，并固定目标为原公共集合。原始重放记录中的 33 次检索请求为 19 次 describe 和 14 次 search，没有集合写入请求。harness 自身的同步和应用对象属于独立环境，不能据此宣称原试用数据或原异步排序快照被精确复制。",
+    "与 P03 的关联：同 query、limit、缓存向量标识和原公共索引，为同类容量故障提供较强工程关联；992 对象与原 996 对象的差异、四个维护样本文档以及异步窗口/完成次序仍限制精确归因。未重新读取原始付费 P03 请求或计算缓存向量原值的指纹，不把已记录绑定标识夸大为此次独立完成的向量一致性证明。",
+    "离线窗口另行表述：captured-sharded-window-sizes.log 的中文窗口为 764 unique members、702 groups、76 templates、inner=106367B/public=106553B、给定最小转义回执=118998B；英文窗口为 912 members、856 groups、63 templates、inner=128098B/public=128284B、给定最小转义回执=142927B。两者均由当前 snapshot 拒绝。这些是特定捕获状态及特定序列化的大小，不是实际工具 trace 中 757 成员窗口的外层/正常回执测量，更不是所有可能编码的数学下界。",
+    "与 400 对象修复的关系：旧修复通过的是 400 个对象共享一个定位模板的合成边界及其实际 next/restore。观测窗口具有更多对象/组/模板；其失败说明旧反例覆盖不足，不推翻旧测试已经证明的无损往返和兼容结论。初审发现外层开销及其后续修复仍保留原历史。",
+    "结论界限：可以断言当前编码在上述观测窗口和既定硬限下失败，不能断言所有自包含编码均失败、必须改用服务端状态或必须提高上限。schema.json:4255 明确 cursor 为有界无正文字符串，maxLength=65536；运行时还按 65536B 检查。工具整体 98304B 预算不替代游标合同，单改一个限制也不能自动宣称仍符合全部合同。",
+    "范围完整性：frozen-diagnosis.json 中 knowledge.rs、evidence_delivery.rs、search_continuation.rs 的哈希与已 passed 的 frozen2.json 一致；本次不重新审查原代码。独立调用 scripts/check_delivery.py 的 review_scope(absolute_root, read_delivery(absolute_root))，结果与本记录及 frozen-diagnosis.json 一致。"
+  ],
+  "evidence": {
+    "summary": ".local/checks/dogfood-search-capacity/actual-tool-replay-summary.json",
+    "offline_window_sizes": ".local/checks/dogfood-search-capacity/captured-sharded-window-sizes.log",
+    "tool_replay_log": ".local/dogfood-runs/semantic-20261102/replay-p03-tool-attempt3.log",
+    "raw_fields_only": ".local/dogfood-runs/semantic-20261102/evidence/P03-local-tool-replay-attempt3.json",
+    "replay_path_inspection": ".local/dogfood-runs/semantic-20261102/replay-p03-tool.mjs",
+    "cursor_schema": "packages/contracts/schema.json:4255",
+    "frozen": ".local/checks/dogfood-search-capacity/frozen-diagnosis.json"
+  },
+  "preserved_review_history": {
+    "record": "docs/reviews/dogfood-search-window-review-20261102.json",
+    "resolved_finding": "SEARCH-WINDOW-REVIEW-01",
+    "conclusion": "passed",
+    "scope_sha256": "6080d7cda8503faa1f11970483275c7f4df659cd140dce0aa699c04977e698c2",
+    "meaning": "保留 400 对象代码修复及无付费公共游标边界的已通过结论；本诊断另行阻止关闭尚未解决的实际规模容量问题，不修改原记录。"
+  },
+  "verification_limits": [
+    "仅阅读指定三份证据，必要时查看本地重放脚本、既有 schema 片段，并按字段提取原始大 JSON；另执行只读 JSON/冻结摘要比对与指定 scope 计算。未运行测试、构建、重放、DB、端点或委派。唯一写入为本诊断 JSON。",
+    "容量 trace 来自已结束的临时工程观测；本次未重装探针或复跑请求。当前源码哈希恢复只证明诊断结束后的源码与已审冻结一致，不是此次独立重新执行原工具链的证据。",
+    "paid_provider_calls=0、paid_embedding_calls=0 与已读回环脚本和原始记录一致，表示提供的本地重放未新增这些付费调用；它不改变两次真实 P03 的失败事实或历史费用。",
+    "captured-sharded-window-sizes.log 的 minimum_escaped_reply_bytes 只表示该捕获状态、该表示和选定回执形状下的测量，不代表不可改进的编码下界。实际 API 失败没有生成对应外层或正常回执，不能把离线大小替代为其运行实测。",
+    "真实付费 P03 当前暂停，原失败窗口和完整原环境尚未精确复现；本记录不声明 P03 通过、真实故障已解决或整个增量可关闭。",
+    "此前代码审查 passed 与本次诊断 changes_requested 分属不同结论。正式验收是否通过不由本次局部证据复核推定。"
+  ]
+}

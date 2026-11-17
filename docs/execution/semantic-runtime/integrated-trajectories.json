@@ -1,0 +1,1014 @@
+{
+  "title": "09十条综合轨迹及要求映射",
+  "status": "prepared_not_run",
+  "source_cases": "docs/dogfood/cockpit/scenarios.json",
+  "source_cases_sha256": "b05022bda132f01182446bd7278440c204e392e300801f404ed007c4f1f9eb92",
+  "knowledge_manifest": "docs/sources/cockpit/knowledge-manifest.json",
+  "knowledge_manifest_sha256": "8d59c6f214ce4d41b3f91d3cfb2bce77b3b5ba0a40811457cfc33228d6975385",
+  "case_count": 10,
+  "result_file": ".local/dogfood-runs/<run_id>/trajectory-results.json",
+  "record_contract": "沿现有grade.py；未来--trajectories选择本清单，默认100项保持。工程/协议/真实模型/真实embedding/Mem0/真实平台证据不得互相替代。",
+  "freezing": "related_cases只作相关覆盖导航；reuse_cases须执行原消息、断言及depends_on，允许复用本轮满足全部断言的证据。新轨迹自身的messages/expect在执行前冻结；对象ID动态绑定但不改预期。独立预期不送产品。",
+  "cases": [
+    {
+      "id": "raw-bootstrap",
+      "title": "空业务目录→原文索引→尾部依据",
+      "mode": "model",
+      "requirements": [
+        "D04",
+        "D06",
+        "C01",
+        "C02",
+        "C06",
+        "A07"
+      ],
+      "environment": "独立空库/空objects源；工程协议先验证，真实模型效果另记",
+      "setup": [
+        "从允许的语音输入复制独立sourceDirectory，semantic-catalog.json保留synthetic/source_bundle和原来源文件hash，仅objects=[]，另记试验目录指纹；API/Worker/平台统一路径。启动后保存knowledge_objects业务计数0的证据；本轨迹不以前置全量资料检查P02为依赖。",
+        "通过正常同步导入表。通过正式文档入口创建《集成校准观察窗》：标题后依次写180个段落，每段为“第N段：本段只记录合成背景，不定义校准观察窗。”；最后两个段落分别为“校准观察窗从用户提交开始，到第一条有效回执为止。”和“例外：用户取消后的晚到回执不计入校准观察窗。”。",
+        "暂停此文档的语义整理，正常完成raw索引。证明没有已整理陈述；文档根对象与权限登记可以存在。"
+      ],
+      "messages": [
+        "只依据《集成校准观察窗》解释校准观察窗的起止，以及哪些回执应排除。不要执行SQL。"
+      ],
+      "steps": [
+        "记录raw目标、source revision和末尾位置；发送消息，保留实际search/read/provider输入及最终回答。",
+        "工程层可用既有协议模型确定调用路径；真实层让模型自主选择工具，禁止指定隐藏entry_id或塞完整文档/答案。"
+      ],
+      "expect": [
+        "启动起点没有预置业务知识，随后表经正常同步出现；不是在已有预置目录中只新增一个来源。",
+        "没有整理成果时检索能命中并定点补读尾部起止和取消例外，引用绑定当前原文。",
+        "真实回答同时说明提交开始、第一条有效回执结束、取消后晚到排除；无SQL执行、无整篇灌入模型。"
+      ],
+      "evidence": [
+        "empty-count.json",
+        "source-and-index.json",
+        "tool-trace.json",
+        "answer.json"
+      ],
+      "cleanup": "仅清理本轮隔离对象/进程，先完成所有引用它们的断言；保留原账本、失败attempt和证据。不得在日常实例做破坏性操作。",
+      "related_cases": [
+        "P02",
+        "P06"
+      ],
+      "reuse_cases": []
+    },
+    {
+      "id": "source-change-preservation",
+      "title": "格式/业务变更、负责人和退休",
+      "mode": "engineering",
+      "requirements": [
+        "D01",
+        "D04",
+        "D05",
+        "D06",
+        "C05",
+        "A05",
+        "A07",
+        "A08"
+      ],
+      "environment": "专用同步实例；复用真实owner/平台适配器/存储",
+      "setup": [
+        "复用check-source-sync-recovery.mjs与check-catalog-import.mjs的合成平台控制接缝；选一个稳定external_id表和一份人工覆盖，保存原identity/revision/指纹/待办。"
+      ],
+      "messages": [],
+      "steps": [
+        "仅在SQL字符串字面量之外增加排版空白，完整同步；再改变一个实际过滤条件，完整同步。",
+        "用相同external_id改表名，并把平台负责人alice改bob；在后页未完成时检查旧owner，整批完成后再检查新owner。",
+        "下一次权威完整目录明确移除该表；失败/不完整目录负控复用已有测试，不新造同义测试。"
+      ],
+      "expect": [
+        "纯排版不增加语义修订或重复整理，真实条件变化只更新相关内容/依赖，人工覆盖保留并按规则复核。",
+        "改名保留原来源与对象ID；平台owner只在整批完成后更新，不把引用关系当维护授权。",
+        "权威完整缺席使对应对象退休且历史保留；不完整/失败同步不推断删除。"
+      ],
+      "evidence": [
+        "sync-before-after.json",
+        "operation-trace.json",
+        "existing-test-receipts.json"
+      ],
+      "cleanup": "仅清理本轮隔离对象/进程，先完成所有引用它们的断言；保留原账本、失败attempt和证据。不得在日常实例做破坏性操作。",
+      "related_cases": [
+        "G01",
+        "G03",
+        "G04",
+        "G05"
+      ],
+      "reuse_cases": []
+    },
+    {
+      "id": "time-and-definition-continuation",
+      "title": "明确口径后只改月份",
+      "mode": "model",
+      "requirements": [
+        "D03",
+        "D09",
+        "D15",
+        "C03",
+        "C04"
+      ],
+      "environment": "完整语音真实模型实例",
+      "setup": [
+        "使用原语音资料；新会话，允许读取syn_asr_attempt、syn_voice_turn、syn_voice_session和关联的ASR/时间定义，固定观察截点2026-10-04T00:00:00Z。"
+      ],
+      "messages": [
+        "只依据syn_asr_attempt、syn_voice_turn、syn_voice_session及关联的ASR和时间定义，先做2026年9月UTC的最终尝试成功率草稿；有效轮次按资料质量规则筛选、按交互开始时间归月，只统计实际有ASR尝试的轮次，每轮取观察截点前最大可见attempt_no，取消和超时留在分母，仅succeeded为成功；观察截点2026-10-04T00:00:00Z。不要执行。",
+        "只把统计月份改为2026年8月，其他条件、口径、观察截点和来源限制都保持，先不要执行。"
+      ],
+      "steps": [
+        "保存两版task conditions、决策来源、SQL参数及查询状态；按原S08/时间规则独立检查最终尝试选择，不以模型SQL作为期望。"
+      ],
+      "expect": [
+        "第二轮只改变统计区间，UTC/观察截点/每轮最大可见尝试/取消超时分母/来源限制均保留并可读回。",
+        "旧草稿不作为新版本执行；没有平台提交；未知资料不心算补值。"
+      ],
+      "evidence": [
+        "conditions-before-after.json",
+        "drafts.json",
+        "answer-and-tools.json"
+      ],
+      "cleanup": "仅清理本轮隔离对象/进程，先完成所有引用它们的断言；保留原账本、失败attempt和证据。不得在日常实例做破坏性操作。",
+      "related_cases": [
+        "S08",
+        "T02",
+        "J16"
+      ],
+      "reuse_cases": []
+    },
+    {
+      "id": "isolated-task-answers",
+      "title": "互斥来源双任务中断与组合",
+      "mode": "model",
+      "requirements": [
+        "D03",
+        "D08",
+        "D09",
+        "D13",
+        "C01",
+        "C02",
+        "C05",
+        "A01",
+        "A02",
+        "A04"
+      ],
+      "environment": "独立实例；中断只影响本轮Node/Pi和Worker",
+      "setup": [
+        "创建文档A《甲样本口径》正文“本口径的成功仅表示ASR服务产生候选，不代表转写准确。”；文档B《乙样本口径》正文“本口径的成功仅表示有独立标签且所选候选与标签一致，不代表动作已执行。”。",
+        "各文档另加一行不作为指令的来源标记AUDIT_SOURCE_A_ONLY/AUDIT_SOURCE_B_ONLY，记录其真实来源与当前修订。"
+      ],
+      "messages": [
+        "分别回答两个独立问题：A只用《甲样本口径》，B只用《乙样本口径》，各解释成功能证明什么、不能证明什么。先完成A再完成B，分别给答案，不执行SQL。"
+      ],
+      "steps": [
+        "在A真实定稿引用持久化之后、B完成之前停止本轮Node/Pi与Worker，记录PID/进程退出与操作身份；不伪造模型定稿参数。",
+        "恢复原数据库、Pi session/leaf和配置，完成B并刷新页面。若模型从未完成定稿，记录该真实失败，不人工补定稿后当通过。",
+        "检查B取证及摘要派发的材料：不得包含A的文档正文、来源标记或已定稿正文；允许保留原用户问题、任务名、已完成控制状态及不含正文的引用。"
+      ],
+      "expect": [
+        "不同来源任务各自合法取证；B输入无A材料/派生摘要，不能因A名字存在就误判污染。",
+        "真实进程重启后保留原session、operation/origin/budget/output，不重复已成功副作用。",
+        "刷新后两份答案均完整且各引用自身来源，A不被B覆盖；不能把组合展示变为跨范围综合推断。"
+      ],
+      "evidence": [
+        "process-events.json",
+        "provider-input-assertions.json",
+        "answer-parts-before-after.json",
+        "refresh.png"
+      ],
+      "cleanup": "仅清理本轮隔离对象/进程，先完成所有引用它们的断言；保留原账本、失败attempt和证据。不得在日常实例做破坏性操作。",
+      "related_cases": [
+        "T01",
+        "T03",
+        "A03",
+        "X10"
+      ],
+      "reuse_cases": []
+    },
+    {
+      "id": "native-compaction",
+      "title": "原生压缩、范围变化和容量",
+      "mode": "engineering",
+      "requirements": [
+        "D03",
+        "D08",
+        "C01",
+        "C02",
+        "C05",
+        "A02",
+        "A04"
+      ],
+      "environment": "本地协议模型＋真实Pi/存储；真实质量由X07等另外判分",
+      "setup": [
+        "复用check-native-compaction.mjs/check-configured-compaction.mjs的既有压力夹具与原生会话；受控小窗口仅在工程配置中触发，产品默认不下调。"
+      ],
+      "messages": [],
+      "steps": [
+        "累积既有历史/工具，触发Pi真实摘要；记录普通和摘要两类请求的实际字节、输出cap及原budget。",
+        "继续同会话提问，再收紧本题来源或停用一份已采用资料，验证下一次普通/摘要输入。",
+        "中断并恢复原检查点；不得手改Pi摘要内容或重造session来通过。"
+      ],
+      "expect": [
+        "摘要由锁定Pi原生能力完成，普通/摘要请求符合冻结容量，原近期内容/当前任务及操作身份可续接。",
+        "范围变化后不再采用失效资料或依赖其的摘要；新调用不补旧额度。",
+        "本地估算与真实usage分开记录；协议模型成功不被写成真实模型总结质量通过。"
+      ],
+      "evidence": [
+        "capacity-and-usage.json",
+        "native-session.json",
+        "scope-input-checks.json"
+      ],
+      "cleanup": "仅清理本轮隔离对象/进程，先完成所有引用它们的断言；保留原账本、失败attempt和证据。不得在日常实例做破坏性操作。",
+      "related_cases": [
+        "X07",
+        "X10"
+      ],
+      "reuse_cases": []
+    },
+    {
+      "id": "checkpoint-continuity",
+      "title": "长日志、多任务与真实进程恢复",
+      "mode": "engineering",
+      "requirements": [
+        "D03",
+        "D07",
+        "D08",
+        "D09",
+        "C01",
+        "C05",
+        "C07",
+        "A02"
+      ],
+      "environment": "本地完整工程实例，实际Bridge进程",
+      "setup": [
+        "复用check-mixed-task-pi-continuation.mjs、check-checkpoint-storage.mjs与check-waiting-task-delivery.mjs中有区分力的已有场景；不要复制全部套件。"
+      ],
+      "messages": [],
+      "steps": [
+        "用正式Node/Pi桥执行连续工具、定稿前项/后项pending，记录原session/leaf和稳定operation。",
+        "在原日志和检查点存在时退出并重启本轮Bridge及Worker，再接回pending；父进程直接调用deliver不算Bridge重启。",
+        "核对原生引用导出采用既有增量路径；复用原成本检查，不新建观测框架。"
+      ],
+      "expect": [
+        "真实进程退出、重启和原检查点采用均有证据；未确认尾分支不能覆盖已确认leaf。",
+        "先接续pending再提交；已冻结答案/原成功回执不改写，副作用恰一次，预算不重置。",
+        "正常每次工具导出不重新读整本历史；打开/恢复必要校验仍在，不复制一套SDK恢复机制。"
+      ],
+      "evidence": [
+        "process-events.json",
+        "checkpoint-before-after.json",
+        "tool-ledger.json",
+        "journal-check.json"
+      ],
+      "cleanup": "仅清理本轮隔离对象/进程，先完成所有引用它们的断言；保留原账本、失败attempt和证据。不得在日常实例做破坏性操作。",
+      "related_cases": [
+        "X10",
+        "T13"
+      ],
+      "reuse_cases": []
+    },
+    {
+      "id": "retrieval-and-supports",
+      "title": "多强字段、深翻页和必要支持",
+      "mode": "model",
+      "requirements": [
+        "D04",
+        "D06",
+        "C01",
+        "C02",
+        "C06",
+        "A06"
+      ],
+      "environment": "真实Milvus工程层＋获准真实模型/embedding层分别记录",
+      "setup": [
+        "工程层复用已存在的同表强字段排序、1202候选/深页、超过128片段及小支持回执夹具；不把每个场景都重建千表库。",
+        "真实层使用完整语音数据和本轮允许的长文，模型输入不含独立答案；同类多字段使用syn_asr_attempt的attempt_no、wall_ms、queued_ms。"
+      ],
+      "messages": [
+        "解释syn_asr_attempt里attempt_no、wall_ms、queued_ms各自含义，wall_ms和queued_ms是什么关系？说明统计时要注意的粒度与例外，不执行SQL。"
+      ],
+      "steps": [
+        "工程层保留原深页位置和最终项，经实际Pi工具搜索、续页、补读；直接Rust调用不能替代。",
+        "支持反例沿既有三短条分三回执，检查各页完整性；不建立跨页已读账本。",
+        "真实层记录三字段依据是否在首次搜索或后续合法补查交付，模型有没有遗漏/误解；不能因模型自行多查就把首轮召回缺口隐藏。"
+      ],
+      "expect": [
+        "同表多个强相关字段不被弱类型挤走，字段关系符合公开语音规范；完整答案有实际交付依据。",
+        "原深页/尾部能续读到达，不设全查询1000终点；同窗不重不漏，跨新窗允许合同规定的晚到重现。",
+        "每回执support_state按该回执内容判，末游标耗尽不冒称所有支持已在本页交付；最终回答包含相关条件与例外。"
+      ],
+      "evidence": [
+        "ranking-and-pages.json",
+        "supports-receipts.json",
+        "provider-trace.json",
+        "answer.json"
+      ],
+      "cleanup": "仅清理本轮隔离对象/进程，先完成所有引用它们的断言；保留原账本、失败attempt和证据。不得在日常实例做破坏性操作。",
+      "related_cases": [
+        "P06",
+        "T14",
+        "X08"
+      ],
+      "reuse_cases": []
+    },
+    {
+      "id": "late-query-history",
+      "title": "晚到查询、旧条件和历史展示",
+      "mode": "model",
+      "requirements": [
+        "D02",
+        "D03",
+        "D09",
+        "D14",
+        "D15",
+        "C02",
+        "C04",
+        "C05",
+        "A02"
+      ],
+      "environment": "隔离语音平台，可控查询延迟与结果失效",
+      "setup": [
+        "沿T09的原输入/期望在独立会话执行旧条件查询；平台延迟使用原接缝，记录原query/条件/输出/来源。A03必须在另一会话接续T02实际产生的两份草稿，不能用T09产物代替；G05/G08沿各自隔离副本和权限恢复规则。"
+      ],
+      "messages": [],
+      "steps": [
+        "完整执行原T09并保留旧查询晚到前后的当前条件。另以本轮T02→A03完整证据检查跨条件组合；没有本轮有效前置证据就实际执行依赖，不跨会话混用产物。",
+        "在查询和答案保存后作普通语义改版，重看历史；当前再分析重新核验。",
+        "结果过期或撤权沿既有独立分支检查，不将普通语义改版等同撤权。"
+      ],
+      "expect": [
+        "旧结果始终归原query/条件，晚到不覆盖新任务；原授权不为新SQL授权。",
+        "普通语义改版仍可按历史用途看原SQL/结论/条件；当前采用另核验；过期明细/图表状态明确。",
+        "平台撤权不泄漏旧内容，结果过期不自动重跑；刷新保持正式答案和引用。"
+      ],
+      "evidence": [
+        "query-bindings.json",
+        "history-before-after.json",
+        "refresh.png"
+      ],
+      "cleanup": "仅清理本轮隔离对象/进程，先完成所有引用它们的断言；保留原账本、失败attempt和证据。不得在日常实例做破坏性操作。",
+      "related_cases": [
+        "T09",
+        "A03",
+        "G05",
+        "G08"
+      ],
+      "reuse_cases": [
+        "T09",
+        "T02",
+        "A03",
+        "G05",
+        "G08"
+      ]
+    },
+    {
+      "id": "personal-memory-and-skills",
+      "title": "记忆、方法及公共副本不退化",
+      "mode": "model",
+      "requirements": [
+        "D10",
+        "D11",
+        "D12",
+        "C02",
+        "C05",
+        "A08"
+      ],
+      "environment": "获准真实Mem0实例＋显式Skill；本地替身分开",
+      "setup": [
+        "沿原A07–A12和A04–A06/A14–A15消息/依赖操作，只用本轮个人资产；创建共享副本前保留其明确用户动作。",
+        "按原depends_on接续同一资产/会话；缺前置产物则执行原依赖，不能经API代造后称模型完成。已有本轮有效记录直接复用，不为了十条轨迹重复付费。"
+      ],
+      "messages": [],
+      "steps": [
+        "按依赖完成记忆保存/本次覆盖/修订/忘记/跨用户/近义召回；来源受限分支另核当前有效资产。",
+        "确认方法草稿并显式选用，通过Pi原生read获取附件；公共副本独立，停用后下一轮/恢复不复活。"
+      ],
+      "expect": [
+        "真实Mem0提取/近义检索有请求与回源证据，builtin或固定候选不冒称真实效果；仅本次要求不长期化。",
+        "选用范围/版本/来源继续有效，未选Skill不被默用，正文/附件由原生受控read交付。",
+        "个人编辑、停用、删除和公共独立副本保持隔离，错误服务不假报成功。"
+      ],
+      "evidence": [
+        "asset-versions.json",
+        "memory-trace.json",
+        "skill-read-trace.json",
+        "isolation.json"
+      ],
+      "cleanup": "仅清理本轮隔离对象/进程，先完成所有引用它们的断言；保留原账本、失败attempt和证据。不得在日常实例做破坏性操作。",
+      "related_cases": [
+        "A04",
+        "A05",
+        "A06",
+        "A07",
+        "A08",
+        "A09",
+        "A10",
+        "A11",
+        "A12",
+        "A14",
+        "A15"
+      ],
+      "reuse_cases": [
+        "A04",
+        "A05",
+        "A06",
+        "A07",
+        "A08",
+        "A09",
+        "A10",
+        "A11",
+        "A12",
+        "A14",
+        "A15"
+      ]
+    },
+    {
+      "id": "endpoint-capacity",
+      "title": "载荷、时限、取消与真实边界",
+      "mode": "engineering",
+      "requirements": [
+        "D07",
+        "C01",
+        "C05",
+        "C07"
+      ],
+      "environment": "本地精确边界先行；真实端点部分需当前有效授权",
+      "setup": [
+        "使用按17.7验证的新冻结profile；保留本地协议的精确字节/超限拒发/摘要cap/取消检查。真实连接与产品调用路径一致。",
+        "运行前为请求样本记录JSON的UTF-8实测bytes、token预算依据、output cap与按现有价格计算的预留费用；没有可信token依据不能盲目发8MiB。"
+      ],
+      "messages": [],
+      "steps": [
+        "本地验证接近和超过8,388,608 bytes的行为与超时冻结/取消传播，仍用既有容量接缝；输出raw JSON不能包含凭据。",
+        "真实接收：先使用代表样本中最大的自然请求；若仍不能回答8MiB边界问题且授权覆盖，构造一个按供应商能力能容纳、实测接近上限的合成请求，经实际受控provider发出。记录HTTP/网关/模型响应类别、usage和实际结算。不得用无效JSON或无关大header伪证正文能力。",
+        "真实时限：记录高思考代表样本的首事件/持续输出与链路断开。一次受控取消证明取消；若未实际经过相应时长，600秒全程支持标为未验证，不故意循环支付等待。只有当前已支持的供应商/网关明确证据或实际跨原90秒运行可以作相应范围证明。"
+      ],
+      "expect": [
+        "本地精确边界和冻结参数有真实检查，bytes与tokens没有混算，取消不换身份或重复派发。",
+        "真实端点收到并成功处理的最大请求字节如实记录；413/连接断开/上下文错误均不算8MiB成功处理。没有足够证据时该子断言partial/inconclusive/blocked，不抬成pass。",
+        "首事件、持续输出、取消和可证时长分别报告；取消成功不证明600秒无断链。真实异常/未知结算沿原规则查证，不静默缩小默认值。"
+      ],
+      "evidence": [
+        "sample-plan.json",
+        "wire-and-response-metadata.json",
+        "timeout-and-cancel.json",
+        "usage-ledger.json"
+      ],
+      "cleanup": "仅清理本轮隔离对象/进程，先完成所有引用它们的断言；保留原账本、失败attempt和证据。不得在日常实例做破坏性操作。",
+      "related_cases": [],
+      "reuse_cases": []
+    }
+  ],
+  "requirement_coverage": {
+    "A01": {
+      "cases": [
+        "T11",
+        "T03"
+      ],
+      "trajectories": [
+        "isolated-task-answers"
+      ],
+      "engineering_checks": [
+        "tests/mvp/check-mixed-task-cancellation.mjs"
+      ],
+      "note": "仅为需求子行为的证据导航，不代表单条轨迹覆盖整项要求或已经通过。核对原要求的全部子行为；按本轮变化核指纹和作用范围，未改变且匹配的工程证据可引用。"
+    },
+    "A02": {
+      "cases": [
+        "T13",
+        "X10"
+      ],
+      "trajectories": [
+        "checkpoint-continuity"
+      ],
+      "engineering_checks": [
+        "tests/mvp/check-evidence-replay-boundaries.mjs"
+      ],
+      "note": "仅为需求子行为的证据导航，不代表单条轨迹覆盖整项要求或已经通过。核对原要求的全部子行为；按本轮变化核指纹和作用范围，未改变且匹配的工程证据可引用。"
+    },
+    "A03": {
+      "cases": [
+        "T06",
+        "T11",
+        "T13"
+      ],
+      "trajectories": [],
+      "engineering_checks": [
+        "tests/mvp/check-query-boundaries.mjs"
+      ],
+      "note": "仅为需求子行为的证据导航，不代表单条轨迹覆盖整项要求或已经通过。核对原要求的全部子行为；按本轮变化核指纹和作用范围，未改变且匹配的工程证据可引用。"
+    },
+    "A04": {
+      "cases": [
+        "T02",
+        "X07"
+      ],
+      "trajectories": [
+        "isolated-task-answers"
+      ],
+      "engineering_checks": [
+        "tests/mvp/check-conversation-reliability.mjs"
+      ],
+      "note": "仅为需求子行为的证据导航，不代表单条轨迹覆盖整项要求或已经通过。核对原要求的全部子行为；按本轮变化核指纹和作用范围，未改变且匹配的工程证据可引用。"
+    },
+    "A05": {
+      "cases": [
+        "G05"
+      ],
+      "trajectories": [
+        "source-change-preservation"
+      ],
+      "engineering_checks": [
+        "tests/mvp/check-source-sync-recovery.mjs"
+      ],
+      "note": "仅为需求子行为的证据导航，不代表单条轨迹覆盖整项要求或已经通过。核对原要求的全部子行为；按本轮变化核指纹和作用范围，未改变且匹配的工程证据可引用。"
+    },
+    "A06": {
+      "cases": [
+        "G09",
+        "X08"
+      ],
+      "trajectories": [
+        "retrieval-and-supports"
+      ],
+      "engineering_checks": [
+        "tests/mvp/check-retrieval-allowed-set.mjs"
+      ],
+      "note": "仅为需求子行为的证据导航，不代表单条轨迹覆盖整项要求或已经通过。核对原要求的全部子行为；按本轮变化核指纹和作用范围，未改变且匹配的工程证据可引用。"
+    },
+    "A07": {
+      "cases": [
+        "P02"
+      ],
+      "trajectories": [
+        "raw-bootstrap",
+        "source-change-preservation"
+      ],
+      "engineering_checks": [
+        "tests/mvp/check-catalog-import.mjs"
+      ],
+      "note": "仅为需求子行为的证据导航，不代表单条轨迹覆盖整项要求或已经通过。核对原要求的全部子行为；按本轮变化核指纹和作用范围，未改变且匹配的工程证据可引用。"
+    },
+    "A08": {
+      "cases": [
+        "G03",
+        "A14"
+      ],
+      "trajectories": [
+        "source-change-preservation",
+        "personal-memory-and-skills"
+      ],
+      "engineering_checks": [
+        "tests/mvp/check-semantic-governance-browser.mjs"
+      ],
+      "note": "仅为需求子行为的证据导航，不代表单条轨迹覆盖整项要求或已经通过。核对原要求的全部子行为；按本轮变化核指纹和作用范围，未改变且匹配的工程证据可引用。"
+    },
+    "A09": {
+      "cases": [],
+      "trajectories": [],
+      "engineering_checks": [
+        "scripts/check_architecture.py"
+      ],
+      "note": "仅为需求子行为的证据导航，不代表单条轨迹覆盖整项要求或已经通过。核对原要求的全部子行为；按本轮变化核指纹和作用范围，未改变且匹配的工程证据可引用。"
+    },
+    "A10": {
+      "cases": [
+        "T13",
+        "X10"
+      ],
+      "trajectories": [],
+      "engineering_checks": [
+        "tests/mvp/check-slow-retrieval-lease.mjs",
+        "tests/mvp/check-skill-selection-locks.mjs"
+      ],
+      "note": "仅为需求子行为的证据导航，不代表单条轨迹覆盖整项要求或已经通过。核对原要求的全部子行为；按本轮变化核指纹和作用范围，未改变且匹配的工程证据可引用。"
+    },
+    "C01": {
+      "cases": [
+        "X07",
+        "X10"
+      ],
+      "trajectories": [
+        "native-compaction",
+        "checkpoint-continuity"
+      ],
+      "engineering_checks": [
+        "tests/mvp/check-native-compaction.mjs"
+      ],
+      "note": "仅为需求子行为的证据导航，不代表单条轨迹覆盖整项要求或已经通过。核对原要求的全部子行为；按本轮变化核指纹和作用范围，未改变且匹配的工程证据可引用。"
+    },
+    "C02": {
+      "cases": [
+        "A11",
+        "A13",
+        "G01",
+        "G06",
+        "G08",
+        "G09",
+        "X09"
+      ],
+      "trajectories": [
+        "isolated-task-answers",
+        "personal-memory-and-skills"
+      ],
+      "engineering_checks": [
+        "tests/mvp/check-authority.mjs"
+      ],
+      "note": "仅为需求子行为的证据导航，不代表单条轨迹覆盖整项要求或已经通过。核对原要求的全部子行为；按本轮变化核指纹和作用范围，未改变且匹配的工程证据可引用。"
+    },
+    "C03": {
+      "cases": [
+        "P07",
+        "P08",
+        "S03",
+        "T01",
+        "T02",
+        "X05"
+      ],
+      "trajectories": [
+        "time-and-definition-continuation"
+      ],
+      "engineering_checks": [
+        "tests/mvp/check-clarification.mjs"
+      ],
+      "note": "仅为需求子行为的证据导航，不代表单条轨迹覆盖整项要求或已经通过。核对原要求的全部子行为；按本轮变化核指纹和作用范围，未改变且匹配的工程证据可引用。"
+    },
+    "C04": {
+      "cases": [
+        "S01",
+        "S02",
+        "T03",
+        "T04",
+        "T05",
+        "T06",
+        "T07",
+        "T11"
+      ],
+      "trajectories": [
+        "late-query-history"
+      ],
+      "engineering_checks": [
+        "tests/mvp/check-query-boundaries.mjs"
+      ],
+      "note": "仅为需求子行为的证据导航，不代表单条轨迹覆盖整项要求或已经通过。核对原要求的全部子行为；按本轮变化核指纹和作用范围，未改变且匹配的工程证据可引用。"
+    },
+    "C05": {
+      "cases": [
+        "T08",
+        "T09",
+        "T13",
+        "X10"
+      ],
+      "trajectories": [
+        "checkpoint-continuity",
+        "endpoint-capacity"
+      ],
+      "engineering_checks": [
+        "tests/mvp/check-recovery-continuation.mjs"
+      ],
+      "note": "仅为需求子行为的证据导航，不代表单条轨迹覆盖整项要求或已经通过。核对原要求的全部子行为；按本轮变化核指纹和作用范围，未改变且匹配的工程证据可引用。"
+    },
+    "C06": {
+      "cases": [
+        "P06",
+        "T14",
+        "X08"
+      ],
+      "trajectories": [
+        "retrieval-and-supports"
+      ],
+      "engineering_checks": [
+        "tests/mvp/check-hybrid-retrieval.mjs",
+        "tests/mvp/check-search-continuation-lifetime.mjs"
+      ],
+      "note": "仅为需求子行为的证据导航，不代表单条轨迹覆盖整项要求或已经通过。核对原要求的全部子行为；按本轮变化核指纹和作用范围，未改变且匹配的工程证据可引用。"
+    },
+    "C07": {
+      "cases": [
+        "P03",
+        "P10"
+      ],
+      "trajectories": [
+        "checkpoint-continuity"
+      ],
+      "engineering_checks": [
+        "tests/mvp/check-evidence-tool-versions.mjs",
+        "packages/contracts/validate.ts"
+      ],
+      "note": "仅为需求子行为的证据导航，不代表单条轨迹覆盖整项要求或已经通过。核对原要求的全部子行为；按本轮变化核指纹和作用范围，未改变且匹配的工程证据可引用。"
+    },
+    "C08": {
+      "cases": [
+        "P01",
+        "P03",
+        "T12",
+        "T15"
+      ],
+      "trajectories": [],
+      "engineering_checks": [
+        "tests/mvp/check-experience-optimization.mjs",
+        "tests/mvp/check-experience-regressions.mjs"
+      ],
+      "note": "仅为需求子行为的证据导航，不代表单条轨迹覆盖整项要求或已经通过。核对原要求的全部子行为；按本轮变化核指纹和作用范围，未改变且匹配的工程证据可引用。"
+    },
+    "D01": {
+      "cases": [
+        "G01",
+        "G02",
+        "G03",
+        "G06"
+      ],
+      "trajectories": [
+        "source-change-preservation"
+      ],
+      "engineering_checks": [
+        "tests/mvp/check-semantic-role-boundaries-browser.mjs",
+        "tests/mvp/check-creator-ownership-browser.mjs"
+      ],
+      "note": "仅为需求子行为的证据导航，不代表单条轨迹覆盖整项要求或已经通过。核对原要求的全部子行为；按本轮变化核指纹和作用范围，未改变且匹配的工程证据可引用。"
+    },
+    "D02": {
+      "cases": [
+        "A01",
+        "A03",
+        "T09"
+      ],
+      "trajectories": [
+        "late-query-history"
+      ],
+      "engineering_checks": [
+        "tests/mvp/check-historical-source-access.mjs"
+      ],
+      "note": "仅为需求子行为的证据导航，不代表单条轨迹覆盖整项要求或已经通过。核对原要求的全部子行为；按本轮变化核指纹和作用范围，未改变且匹配的工程证据可引用。"
+    },
+    "D03": {
+      "cases": [
+        "G10",
+        "T12",
+        "X07",
+        "X10"
+      ],
+      "trajectories": [
+        "native-compaction",
+        "checkpoint-continuity"
+      ],
+      "engineering_checks": [
+        "tests/mvp/check-lifecycle.mjs"
+      ],
+      "note": "仅为需求子行为的证据导航，不代表单条轨迹覆盖整项要求或已经通过。核对原要求的全部子行为；按本轮变化核指纹和作用范围，未改变且匹配的工程证据可引用。"
+    },
+    "D04": {
+      "cases": [
+        "P02",
+        "X08"
+      ],
+      "trajectories": [
+        "raw-bootstrap",
+        "source-change-preservation",
+        "retrieval-and-supports"
+      ],
+      "engineering_checks": [
+        "tests/mvp/check-source-sync.mjs"
+      ],
+      "note": "仅为需求子行为的证据导航，不代表单条轨迹覆盖整项要求或已经通过。核对原要求的全部子行为；按本轮变化核指纹和作用范围，未改变且匹配的工程证据可引用。"
+    },
+    "D05": {
+      "cases": [
+        "G04",
+        "G05"
+      ],
+      "trajectories": [
+        "source-change-preservation"
+      ],
+      "engineering_checks": [
+        "tests/mvp/check-source-repreparation.mjs"
+      ],
+      "note": "仅为需求子行为的证据导航，不代表单条轨迹覆盖整项要求或已经通过。核对原要求的全部子行为；按本轮变化核指纹和作用范围，未改变且匹配的工程证据可引用。"
+    },
+    "D06": {
+      "cases": [
+        "G02",
+        "G05",
+        "P04",
+        "P05",
+        "P06"
+      ],
+      "trajectories": [
+        "raw-bootstrap",
+        "retrieval-and-supports"
+      ],
+      "engineering_checks": [
+        "tests/mvp/check-document-preparation.mjs"
+      ],
+      "note": "仅为需求子行为的证据导航，不代表单条轨迹覆盖整项要求或已经通过。核对原要求的全部子行为；按本轮变化核指纹和作用范围，未改变且匹配的工程证据可引用。"
+    },
+    "D07": {
+      "cases": [
+        "G07",
+        "P10",
+        "T10"
+      ],
+      "trajectories": [
+        "checkpoint-continuity",
+        "endpoint-capacity"
+      ],
+      "engineering_checks": [
+        "tests/mvp/check-tool-contract-version.mjs"
+      ],
+      "note": "仅为需求子行为的证据导航，不代表单条轨迹覆盖整项要求或已经通过。核对原要求的全部子行为；按本轮变化核指纹和作用范围，未改变且匹配的工程证据可引用。"
+    },
+    "D08": {
+      "cases": [
+        "T01",
+        "T11",
+        "X10"
+      ],
+      "trajectories": [
+        "isolated-task-answers",
+        "checkpoint-continuity"
+      ],
+      "engineering_checks": [
+        "tests/mvp/check-background-queries-browser.mjs"
+      ],
+      "note": "仅为需求子行为的证据导航，不代表单条轨迹覆盖整项要求或已经通过。核对原要求的全部子行为；按本轮变化核指纹和作用范围，未改变且匹配的工程证据可引用。"
+    },
+    "D09": {
+      "cases": [
+        "T01",
+        "T02",
+        "T03",
+        "T09"
+      ],
+      "trajectories": [
+        "isolated-task-answers",
+        "late-query-history"
+      ],
+      "engineering_checks": [
+        "tests/mvp/check-waiting-task-delivery.mjs"
+      ],
+      "note": "仅为需求子行为的证据导航，不代表单条轨迹覆盖整项要求或已经通过。核对原要求的全部子行为；按本轮变化核指纹和作用范围，未改变且匹配的工程证据可引用。"
+    },
+    "D10": {
+      "cases": [
+        "A07",
+        "A08",
+        "A09",
+        "A10"
+      ],
+      "trajectories": [
+        "personal-memory-and-skills"
+      ],
+      "engineering_checks": [
+        "tests/mvp/check-memory-revisions.mjs"
+      ],
+      "note": "仅为需求子行为的证据导航，不代表单条轨迹覆盖整项要求或已经通过。核对原要求的全部子行为；按本轮变化核指纹和作用范围，未改变且匹配的工程证据可引用。"
+    },
+    "D11": {
+      "cases": [
+        "A11",
+        "A12"
+      ],
+      "trajectories": [
+        "personal-memory-and-skills"
+      ],
+      "engineering_checks": [
+        "tests/mvp/check-memory-provider.mjs"
+      ],
+      "note": "仅为需求子行为的证据导航，不代表单条轨迹覆盖整项要求或已经通过。核对原要求的全部子行为；按本轮变化核指纹和作用范围，未改变且匹配的工程证据可引用。"
+    },
+    "D12": {
+      "cases": [
+        "A04",
+        "A05",
+        "A06",
+        "A15"
+      ],
+      "trajectories": [
+        "personal-memory-and-skills"
+      ],
+      "engineering_checks": [
+        "tests/mvp/check-native-skills.mjs"
+      ],
+      "note": "仅为需求子行为的证据导航，不代表单条轨迹覆盖整项要求或已经通过。核对原要求的全部子行为；按本轮变化核指纹和作用范围，未改变且匹配的工程证据可引用。"
+    },
+    "D13": {
+      "cases": [
+        "A02",
+        "A05",
+        "P01",
+        "T12",
+        "T15"
+      ],
+      "trajectories": [
+        "isolated-task-answers"
+      ],
+      "engineering_checks": [
+        "tests/mvp/check-experience-optimization.mjs",
+        "tests/mvp/check-experience-regressions.mjs"
+      ],
+      "note": "仅为需求子行为的证据导航，不代表单条轨迹覆盖整项要求或已经通过。核对原要求的全部子行为；按本轮变化核指纹和作用范围，未改变且匹配的工程证据可引用。"
+    },
+    "D14": {
+      "cases": [
+        "T14",
+        "A01",
+        "A03"
+      ],
+      "trajectories": [
+        "late-query-history"
+      ],
+      "engineering_checks": [
+        "tests/mvp/check-evidence-return-browser.mjs",
+        "tests/mvp/check-analysis-report-chart.mjs"
+      ],
+      "note": "仅为需求子行为的证据导航，不代表单条轨迹覆盖整项要求或已经通过。核对原要求的全部子行为；按本轮变化核指纹和作用范围，未改变且匹配的工程证据可引用。"
+    },
+    "D15": {
+      "cases": [
+        "J01",
+        "J02",
+        "J03",
+        "J04",
+        "J05",
+        "J06",
+        "J07",
+        "J08",
+        "J09",
+        "J10",
+        "J11",
+        "J12",
+        "J13",
+        "J14",
+        "J15",
+        "J16",
+        "J17",
+        "J18",
+        "J19",
+        "J20",
+        "P09",
+        "S04",
+        "S05",
+        "S06",
+        "S07",
+        "S08",
+        "S09",
+        "S10",
+        "S11",
+        "S12",
+        "S13",
+        "S14",
+        "S15",
+        "S16",
+        "S17",
+        "S18",
+        "S19",
+        "S20",
+        "X01",
+        "X02",
+        "X03",
+        "X04",
+        "X05",
+        "X06"
+      ],
+      "trajectories": [
+        "time-and-definition-continuation"
+      ],
+      "engineering_checks": [
+        "tests/mvp/check-query-result-statistics.mjs"
+      ],
+      "note": "仅为需求子行为的证据导航，不代表单条轨迹覆盖整项要求或已经通过。核对原要求的全部子行为；按本轮变化核指纹和作用范围，未改变且匹配的工程证据可引用。"
+    },
+    "D16": {
+      "cases": [
+        "P01",
+        "S01",
+        "S02"
+      ],
+      "trajectories": [],
+      "engineering_checks": [
+        "scripts/check_delivery.py"
+      ],
+      "note": "仅为需求子行为的证据导航，不代表单条轨迹覆盖整项要求或已经通过。核对原要求的全部子行为；按本轮变化核指纹和作用范围，未改变且匹配的工程证据可引用。"
+    },
+    "D17": {
+      "cases": [
+        "P02",
+        "P03"
+      ],
+      "trajectories": [
+        "raw-bootstrap",
+        "retrieval-and-supports"
+      ],
+      "engineering_checks": [
+        "tests/mvp/check-cockpit-source.mjs",
+        "docs/dogfood/cockpit/reference/check_reference.py"
+      ],
+      "note": "仅为需求子行为的证据导航，不代表单条轨迹覆盖整项要求或已经通过。核对原要求的全部子行为；按本轮变化核指纹和作用范围，未改变且匹配的工程证据可引用。"
+    },
+    "D18": {
+      "cases": [],
+      "trajectories": [],
+      "engineering_checks": [],
+      "deferred": "真实用户邀请/公开发布需独立授权，非本轮代码或coding-agent dogfood的漏做。"
+    }
+  }
+}

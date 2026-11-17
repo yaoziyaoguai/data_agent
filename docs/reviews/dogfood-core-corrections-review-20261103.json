@@ -1,0 +1,203 @@
+{
+  "schema": 1,
+  "review_kind": "bounded_supplement",
+  "parent_increment": "I3-SEMANTIC-DOGFOOD",
+  "review_date": "2026-11-04",
+  "reviewer": "Codex independent bounded reviewer; 未参与本次实现",
+  "conclusion": "passed",
+  "summary": "本次准备期租约修复、同次冻结引用回传修复、正式Node夹具合同纠正及UI采集脚本的小补丁未发现新增阻断问题。现存RED/GREEN与当前相关字节相符。此结论只覆盖下述补丁及直接调用接缝，不是主09整体独审或完成收据。",
+  "parent_state": {
+    "status": "active",
+    "overall_review": "pending",
+    "overall_evidence": null,
+    "core_acceptance_complete": false
+  },
+  "scope": {
+    "patch_sources": [
+      ".local/checks/dogfood-lease-preparation/task.patch",
+      ".local/checks/answer-state-contract/production-fix.patch",
+      ".local/checks/answer-state-contract/fixture-only.patch",
+      ".local/checks/answer-state-contract/task-delta.patch"
+    ],
+    "changed_files": [
+      "crates/data-agent/src/use_cases/deliver_run.rs",
+      "crates/data-agent/src/use_cases/task_answers.rs",
+      "crates/data-agent/src/use_cases/data_tools.rs",
+      "crates/data-agent/tests/tool_contract_version.rs",
+      "tests/mvp/check-tool-contract-version.mjs",
+      "tests/mvp/check-task-query-answers.mjs",
+      "tests/runtime/check-answer-state.mjs",
+      ".local/dogfood-runs/semantic-20261102/check-current-ui-09.mjs"
+    ],
+    "reviewed_regions": [
+      {"path": "crates/data-agent/src/use_cases/deliver_run.rs", "lines": [[9, 334], [366, 380], [437, 450]], "focus": "两个生产hunk、准备心跳及正常续租/未接纳回退接缝"},
+      {"path": "crates/data-agent/src/use_cases/task_answers.rs", "lines": [[14, 109], [189, 290], [327, 379], [499, 525]], "focus": "来源与任务核验、finalize返回、持久引用及just_frozen消费者"},
+      {"path": "crates/data-agent/src/use_cases/data_tools.rs", "lines": [[567, 638], [1030, 1080], [1936, 2058], [2534, 2547], [2647, 2736]], "focus": "运行/指纹/重放门、route事务、同次answer_parts/just_frozen与回执提交"},
+      {"path": "crates/data-agent/tests/tool_contract_version.rs", "lines": [[34, 235]], "focus": "两条新增准备期回归及原隔离夹具"},
+      {"path": "tests/mvp/check-tool-contract-version.mjs", "lines": [[1, 54]], "focus": "原runner与非filter计数4→6"},
+      {"path": "tests/mvp/check-task-query-answers.mjs", "lines": [[1, 154]], "focus": "原normal五轮、首次route/DB引用对照、UUID证据目录及保留的恢复分支"},
+      {"path": "tests/runtime/check-answer-state.mjs", "lines": [[1, 463]], "focus": "必要任务绑定/答案形状与grounded回执字段、原21场景与原provider脚本"},
+      {"path": ".local/dogfood-runs/semantic-20261102/check-current-ui-09.mjs", "lines": [[1, 172]], "focus": "实际按钮布尔、唯一attempt路径、wx与失败传播、alice独立入口"},
+      {"path": "crates/data-agent/src/modules/conversations/store.rs", "lines": [[78, 118], [271, 315]], "focus": "会话首锁、数据库时间及租约代次"},
+      {"path": "crates/data-agent/src/modules/jobs/store.rs", "lines": [[25, 121], [134, 137]], "focus": "原job身份、准备续租、有效领取核验与attempt记账"},
+      {"path": "crates/data-agent/src/modules/runtime/store.rs", "lines": [[148, 217], [268, 310], [337, 344]], "focus": "原chain/output/operation/origin、冻结顺序及成功回执存储"},
+      {"path": "crates/data-agent/src/modules/runtime/runs.rs", "lines": [[1, 33]], "focus": "start_run公开接缝"},
+      {"path": "crates/data-agent/src/modules/runtime/tool_ledger.rs", "lines": [[1, 50]], "focus": "原工具登记及回执存储公开接缝"},
+      {"path": "crates/data-agent/src/persistence/mod.rs", "lines": [[1, 51]], "focus": "AppTx事务所有权/提交与实际池上限12"},
+      {"path": "apps/worker/src/main.rs", "lines": [[296, 454]], "focus": "四次上限、准备完成后的派发/心跳与失租处理"},
+      {"path": "apps/agent/tools/data-tools.ts", "lines": [[112, 291]], "focus": "任务绑定候选、失败失效、原SDK调用接回与冻结引用消费"},
+      {"path": "apps/agent/session/deliver.ts", "lines": [[110, 160], [488, 526]], "focus": "结果通知按query及task/version匹配、B自然末项及同output提交"},
+      {"path": "packages/contracts/schema.json", "lines": [[194, 326]], "focus": "AnswerHandoff与source_query_ids的既有语义"}
+    ],
+    "contract_basis": [
+      "AGENTS.md:15-60,76-85,117-123",
+      "docs/architecture/runtime-modules.md:7-18,21-51,414-440",
+      "docs/architecture/implementation-design.md:349-355,750-760",
+      "docs/execution/semantic-runtime/task-answers.md:15-46",
+      "docs/execution/semantic-runtime/integrated-dogfood.md:17-47,80-92"
+    ],
+    "current_context": "已读docs/CURRENT.md frontmatter与最新09核心验收纠正段，含协调者收尾后2026-11-04的纠正结果及剩余阻塞。CURRENT仅作范围和缺口语义上下文，不冻结或指纹其持续变化全文。",
+    "limits": "只审上述hunk、相关函数和直接接缝；全文件SHA用于标识读取时字节，不表示对大文件其他区域作过完整审计。未审全仓、已关闭阶段、API历史故障根因或完整业务成绩。"
+  },
+  "verified_corrections": [
+    {
+      "id": "preparation-lease",
+      "conclusion": "限定工程边界通过",
+      "before_counterexample": "真实隔离MySQL的red-row-lock.log：已锁会话后等待旧run行锁2578ms，TTL=1000ms；返回lease_lost，但attempts=1、runs=2、job_valid=true、conversation_valid=false，model_calls=0、issued=0。证明旧实现在首次配对续租前已提交未派发attempt；不是触发器搭建失败，也不证明历史停滞的起因。",
+      "code_review": "会话行锁仍先取得；准备期仅以locked.lease_epoch+1绑定未提交run，已有效租约仍拒绝。上下文和checkpoint准备后才领取会话租约并核对代次，随后在同一AppTx续验原job并记录attempt再commit。末尾更新的是已持有的会话行，不是取得新的低序锁；job仍最后锁定。原独立job心跳只访问job，不形成反向等待链。",
+      "identity_and_failure_boundary": "run_id/attempt_id按既有恢复规则新建，原message/recovery_chain/budget_scope/output和job领取代次保留。最终job检查仍要求running、同epoch且未过期，不复活取消或失权领取。准备中的错误或future取消在commit前丢弃AppTx，未提交run/output替换/attempt随事务回滚；不把commit回执未知声称为确定回滚。并发会话写入仍由首把会话锁串行，后续派发继续原运行权与取消机制。未新增预算、恢复框架或模型调用。",
+      "existing_green": "正式runner完整exit0，2 passed/0 failed；相同准备等待2593ms后ready，两份租约有效，attempts=1、model_calls/issued=0，原scope/chain/output/message及后续renew断言通过。会话锁外等待2500ms的正控保持attempts=0、原job epoch有效。",
+      "evidence": [
+        ".local/checks/dogfood-lease-preparation/red-row-lock.log",
+        ".local/checks/dogfood-lease-preparation/diagnosis.json",
+        ".local/checks/tool-contract-version-core09-lease-preparation-1793721222904.json",
+        ".local/checks/tool-contract-version-core09-lease-preparation-1793721222904.log",
+        ".local/checks/dogfood-lease-preparation/green-source-fingerprints.json"
+      ],
+      "limit": "直接Rust用例/真实MySQL回归，不是完整Worker/Pi派发验收；未重放四次耗尽或原S05链，不能解释其历史首次失租，也不提升原S05成绩。"
+    },
+    {
+      "id": "same-transaction-frozen-reference",
+      "conclusion": "限定工程边界通过",
+      "before_counterexample": "real-rust-red.log和对应route-receipts记录：原normal第4次本地协议调用处，首次route的answer_parts[0]遗漏source_query_ids，而同事务tool_calls.answer_handoff.reference包含实际query ID；exit1、调用数4。此前把该项全部归为夹具或要求B再present的解释不成立。",
+      "code_review": "finalize_in_tx继续先核当前任务/条件/活跃状态、原生成范围、实际来源、成功present回执及未决工具，然后把含实际查询ID的同一个Value持久化并返回。data_tools仅将这个返回值赋回tool.answer_handoff，首次answer_parts和just_frozen都使用它；任务切换、冻结序号、正式工具回执仍在同一AppTx提交，后续失败不会单独发布冻结结果。",
+      "identity_and_replay": "未改变operation_id/origin_run_id/SDK调用键、原预算、恢复链或output_id。成功重放先读取原账本回执，不重做finalize；恢复封套仍按conversation+chain读取已成功的有序引用。Node只有query ID与原task/condition均匹配的冻结引用才覆盖原结果通知，不以B活动任务、全run来源并集或普通自然引用放行。",
+      "existing_green": "real-rust-green-run.json完整exit0，before==after且与当前输入一致；normal仍5次本地协议回合、present=1、预算5/24、同一Pi session。首次route引用与DB持久引用完全相同，source_query_ids仅含实际原查询；B自然正文连续完整、A/B原文有序组合且同output只提交一次。",
+      "evidence": [
+        ".local/checks/answer-state-contract/real-rust-red-run.json",
+        ".local/checks/answer-state-contract/real-rust-red.log",
+        ".local/checks/answer-state-contract/real-rust-green-run.json",
+        ".local/checks/answer-state-contract/task-query-normal-3d0e8cd7-c980-491c-8220-14869aec2e4b/route-receipts.json",
+        ".local/checks/answer-state-contract/task-query-normal-3d0e8cd7-c980-491c-8220-14869aec2e4b/result.json"
+      ],
+      "limit": "真实Rust/隔离MySQL/可执行合成SQLite平台及本地协议provider；本次实际Rust只执行normal，登记/提交丢回执与取消分支仅核相关静态接缝和既有Node证据，不宣称这些Rust变体本次重跑。"
+    },
+    {
+      "id": "formal-node-contract-fixture",
+      "conclusion": "正式最终结果已收到并核实，非pending",
+      "code_review": "补三处成功答案sources的query/result/task/condition绑定、fixture活动任务及对应query观察，并补旧答案形状中的queryIds/taskRef。最终grounded夹具仅按真实Rust GREEN给冻结A加入source_query_ids；普通自然A不增加此证明字段。原21个场景名称、业务断言与/chat/completions provider脚本保留，未强迫B调用present、改自然正文或增加模型轮数。",
+      "existing_results": "正式原状态15/21；必要夹具修正后20/21，唯一剩余是A查询冻结后B自然回答；实际Rust修复和证据取得后正式最终21/21、exit0、Node26.8.1、networkAttempts=0、officialRequests=0、databaseUsed=false。grounded仍原4轮且只有一次present；失败/未知/发送前拒绝/检查点拒绝后的未冻结答案失效断言仍在。",
+      "baseline_reconciliation": "original-test.mjs SHA为6b76dbb1890f52646867ea49950c53db3fa395975ec5557525ebd43df3ee6c09，与original-evidence.json一致；正式首次RED的58f5ebf0…仅把输出目录从agent-reliability-repairs改到answer-state-contract。对存档正文只作这一路径替换即可复算该RED指纹，不能误报为同字节原脚本。",
+      "evidence": [
+        ".local/checks/answer-state-contract/official-before-fixture-run.json",
+        ".local/checks/answer-state-contract/official-fixture-red-run.json",
+        ".local/checks/answer-state-contract/official-green-run.json",
+        ".local/checks/answer-state-contract/official-green.json",
+        ".local/checks/answer-state-contract/official-green.log",
+        ".local/checks/answer-state-contract/final-input-sha.json"
+      ],
+      "limit": "生产Node工具/交付逻辑与Pi1.3.0、受控Rust响应和本地协议provider，不能代替真实模型效果。"
+    },
+    {
+      "id": "ui-observation-correction",
+      "conclusion": "仅alice最新两个硬断言有本次复查证据",
+      "code_review": "waitForFunction只负责等待；发送、录入和同步按钮的后续判断取locator.isEnabled()实际布尔，不把JSHandle当布尔。结果和截图均绑定UUID attempt；结果writeFile保留wx且未吞写入失败，执行失败保存失败attempt后重新抛出。alice参数只运行aliceSection。",
+      "evidence": ".local/dogfood-runs/semantic-20261102/evidence/check09-ui-alice-f60a1866-0637-4722-a0fc-bccacf0e93e0.json",
+      "observed": "Node26.8.1、phase=alice、status=passed；alice-models-entry与alice-admin-entry为两个ok=true硬断言。sync-section-contract和standing-notices的ok=null仅为观察；实际syncEnabled=true、rebuild=1。",
+      "limit": "其余既有UI通过证据复用，不宣称本次重跑；未启动浏览器、未触发同步/重建、未把两个note计为通过，也未作截图视觉设计审计。"
+    },
+    {
+      "id": "api-pool-diagnostic-boundary",
+      "conclusion": "记录表述相称；不签修复或关闭",
+      "evidence": ".local/dogfood-runs/semantic-20261102/evidence/api-pool-wedge-under-load.json",
+      "checked": "记录明确实际max_connections=12；撤回默认10、由Sleep/12连接推永久占用或泄漏、以分相或重启规避关闭问题的旧推断。历史30秒PoolTimedOut/503与本次正常、关闭客户端、连续三次访问分别记录。本次记录中的43个GET结束和/models正常只支持该次观察。",
+      "unknowns": "历史故障窗缺原池size/num_idle、连接持有方及等待时序；Sleep或高载均不足以单独归因。本次客户端关闭后的未观测终止事件没有伪造成requestfinished。",
+      "limit": "按授权仅核这份诊断记录的事实/推断边界；未连接端点、重采样或独立审计三个底层attempt及API目录实现。保留core_blocker_cause_unconfirmed_not_closed。"
+    }
+  ],
+  "findings": [],
+  "remaining_gaps": [
+    {"id": "api-pool", "status": "open_core_blocker", "detail": "历史API池超时原因未明，本次补丁及三次正常访问均不能关闭。"},
+    {"id": "main09-core-exit", "status": "incomplete", "detail": "核心表、真实来源续聊及适用工程证据尚未取得整体出口；Flash所需真实项和来源集合过宽仍按CURRENT保留原缺口。INTEGRATED-EVIDENCE未绑定完整命令，主09仍active/整体独审pending/evidence=null。此审查不提升case成绩、不重发settled/unknown、不伪造正式收据。"},
+    {"id": "evidence-boundaries", "status": "explicit_limit", "detail": "上述GREEN证明所述工程环境和模式；不证明真实供应商、全部恢复/取消组合、历史宿主停滞根因或完整100项/十轨迹效果。没有据缺少新测试扩展场景。"}
+  ],
+  "verification_provenance": {
+    "reviewer_started_tests_builds_services_endpoints": false,
+    "reviewer_delegated": false,
+    "reviewer_modified_production_tests_current": false,
+    "reviewer_written_files": ["docs/reviews/dogfood-core-corrections-review-20261103.json"],
+    "method": "静态源代码/补丁/完整既有结果读取，内存diff重建、SHA256与原场景/provider文本对照；未执行项目测试或构建。",
+    "read_only_checks": [
+      "租约生产当前delta逐字匹配task.patch的两个hunk；当前三个任务文件等于fixed快照。",
+      "移除恰两条新增租约测试即可复算原测试SHA；runner仅6→4即可复算原SHA。",
+      "答案两份生产当前delta逐字匹配production-fix.patch；全部四份当前delta逐字匹配task-delta.patch。",
+      "正式租约GREEN六份源指纹、答案final-input-sha及Rust/Node GREEN的before/after均与当前相应文件相等。",
+      "原Node21个场景名称和provider脚本逐字保留；最终official-green.json与完整official-green.log的JSON一致。",
+      "真实Rust首次route的answer_parts[0]逐字段等于同次读取的持久reference。"
+    ],
+    "additional_lint_evidence": {"path": ".local/checks/core09-correction-clippy-1793721405.log", "observed": "完整日志显示data-agent检查成功结束；all-targets严格模式及exit0由协调者和CURRENT报告，日志本身不含命令行。本审查未重跑。"}
+  },
+  "file_sha256": {
+    "crates/data-agent/src/use_cases/deliver_run.rs": "f97969da729f469c3262b6f3eebbc6af713fd1686eb39547e481d74bf8240de7",
+    "crates/data-agent/src/use_cases/task_answers.rs": "5b0df0db84245a4df6e4438d408edd68566fc5cca0746cdda0a101b245db3be8",
+    "crates/data-agent/src/use_cases/data_tools.rs": "c0f21f8c0ba66f5d8eca46f672e3ee71f07423e13f4a9e3621f67fe9b789cb2e",
+    "crates/data-agent/tests/tool_contract_version.rs": "42d9d490ccf864f7197fc8bdf23789f553d018e73a4b86a049ed1110dd97e8c2",
+    "tests/mvp/check-tool-contract-version.mjs": "db074033b7a7e73aabe2098755a17f71932673925f1ed62a70b96ea4c5f6d22b",
+    "tests/mvp/check-task-query-answers.mjs": "975ba0ca87bb883273f62a84ad0415d57987a16a6eadcd1dc9728622d8de8537",
+    "tests/runtime/check-answer-state.mjs": "d9115588d3ac05a7cc22bd33895a8971a9f005cb993a05e3013c9fe2a56bfa18",
+    ".local/dogfood-runs/semantic-20261102/check-current-ui-09.mjs": "18e2d4be6437a8ee3b39e9b4ed3180ba4bd9faca286310b26750023700d49897",
+    "docs/architecture/implementation-design.md": "f57dea62724536df2bff027c52bbc7e87c4880f669e88b3c784a5e2f2164a8fa",
+    "docs/architecture/runtime-modules.md": "192564a939e14ceb4cbee89a4e898aff2f15dc9de4c7e4d4d2fe8b4e5f135d97",
+    "docs/execution/semantic-runtime/task-answers.md": "9fdf44c086ff625b4076a790e1b71bb7afb0c4f86538f4bec2b9ea88fdc4000a",
+    "docs/execution/semantic-runtime/integrated-dogfood.md": "50d3cc02e7f49c6fd172cb849f805d0f217a5c37edb2a9018b796d58e1d3f35b",
+    "apps/agent/tools/data-tools.ts": "ce7e9690b6ae0909c2c127762ff90b57e4384ae46eccf96027ca1ba449b90383",
+    "apps/agent/session/deliver.ts": "b85d765f4ec9ff7c6ca88b51f4882762d5ba0d95889bd0ef9402f74251c000fe",
+    "crates/data-agent/src/modules/conversations/store.rs": "8e92f884fdc70f2561addafb6226c481aa00432b148334f4d4aa86cebda4464a",
+    "crates/data-agent/src/modules/jobs/store.rs": "17dde9e3690c92463a692466a0f6f162c2c012d2b6c929f917930841e12476e0",
+    "crates/data-agent/src/modules/jobs/mod.rs": "c178fc32347754bf2ab78478225c4f4990a68179b3cda8a7b7efa21d2d1af92d",
+    "crates/data-agent/src/modules/runtime/store.rs": "4aa26268141975c8ee8f68c64da14511bfa4a4053e323eaf0acbe51adb03c585",
+    "crates/data-agent/src/modules/runtime/runs.rs": "07a64529e4e83fc180162f2439e845ab70a27b2fd1f35b81083ecc9706a7d19c",
+    "crates/data-agent/src/modules/runtime/tool_ledger.rs": "394ef3968cf6c220965e92df4c6187d375be96af45caa6bc94f4009cc060cd7e",
+    "crates/data-agent/src/persistence/mod.rs": "701bff0bf384e1c054f44aa942269499defe057f6cef53029af7ac8444e4bd53",
+    "apps/worker/src/main.rs": "3d193b777bf7dcaf485585b327495aad31201bd02e4363a24fa0bee017a0f8d4",
+    "packages/contracts/schema.json": "ff17fc4d8c79dc2311fcf3d45d5d887f3f6ada03a9286e670d4b9c3a5c6a71a0"
+  },
+  "patch_sha256": {
+    ".local/checks/dogfood-lease-preparation/task.patch": "5c47b4777317b0da4d1ceee387bcd4e4ce7451f6ce1330cf8a9a549a370ddbe7",
+    ".local/checks/answer-state-contract/production-fix.patch": "0ad776798ef015a2bc21bd0029559f63873afcc66920e38c15419c810a651a0e",
+    ".local/checks/answer-state-contract/fixture-only.patch": "eeee95fda0ac0516b3d58427c56b1c66e9a939952e5293009dce93e8c90d1fa5",
+    ".local/checks/answer-state-contract/task-delta.patch": "4726e2f8f9f0d90bfb3fedf1323d5aed665d48a812af3a749a3a653325392f96"
+  },
+  "evidence_sha256": {
+    ".local/checks/dogfood-lease-preparation/red-row-lock.log": "6073d85fe9568d7342c49a15079d3a608912147994f4443d74c20de8e9a874b1",
+    ".local/checks/dogfood-lease-preparation/diagnosis.json": "b652fdb96058f57bcc30c0a3a0b51c9b6233189c27ca8b8dd00222d622d8dd8d",
+    ".local/checks/tool-contract-version-core09-lease-preparation-1793721222904.json": "a1ef834122a2280ac8878288336b5ef6d4ad983f4bff9502c5536e59c11cc81d",
+    ".local/checks/tool-contract-version-core09-lease-preparation-1793721222904.log": "39ce0415e90f0318166a4a6169fb600718339b13996381d52d58f6e62d0ad088",
+    ".local/checks/dogfood-lease-preparation/green-source-fingerprints.json": "d864a0be88d5e4e2fa8ab3d90316a7fa08d82e2d6984a682acc7ed7654f93b9e",
+    ".local/checks/answer-state-contract/official-before-fixture-run.json": "313bd1bcb63760678368ffbe8823d0583a1d038035b20fa69d67bac5e481f12b",
+    ".local/checks/answer-state-contract/official-fixture-red-run.json": "87ebb9fa1a5d36caf78ee152be244e3ee4a8b8976ba90fe3432d48a586661df1",
+    ".local/checks/answer-state-contract/real-rust-red-run.json": "10a3987ff9962fec25b75ab5dc374df485b6f0a230e4c4ad6741db9f68de4478",
+    ".local/checks/answer-state-contract/real-rust-red.log": "1f8d711f00df6aa13c5720d8554dd7f4b7474baf5ea6ef37537f53e3bb49511e",
+    ".local/checks/answer-state-contract/real-rust-green-run.json": "9c8fc455491fe81a1e4e8ce3819d0492c4a71362e239ad30c5eaca904392a82e",
+    ".local/checks/answer-state-contract/real-rust-green.log": "5fcc2b94531e967e526b553810839de18b38f25018034a3e8483b9a9b3f4424b",
+    ".local/checks/answer-state-contract/task-query-normal-3d0e8cd7-c980-491c-8220-14869aec2e4b/route-receipts.json": "de3169830fee89e54bc667bda7001c672d47dfe09dcc3730db8643a50d7a63a9",
+    ".local/checks/answer-state-contract/task-query-normal-3d0e8cd7-c980-491c-8220-14869aec2e4b/result.json": "c7a826fee01c66fa5db2fb41070c9e98299024276e7f5cc3490f168ee7d8b352",
+    ".local/checks/answer-state-contract/official-green-run.json": "8cd013a45e9ddd9f66a691637722164fb4d7dd72abf1567e33218664b047a823",
+    ".local/checks/answer-state-contract/official-green.json": "c90e69be865aa425c61f31b649ab0ed95127c15697f2fd17309d6091b0c75fd8",
+    ".local/checks/answer-state-contract/official-green.log": "36cd54d4f7779bee59424f804528702b6d5b409871c9ae17c64fa113db3a970b",
+    ".local/checks/answer-state-contract/final-input-sha.json": "1fdb0bbf7547f77a9135252d8bfdeb459cc9c3dcc606f92493ff8655927548cc",
+    ".local/checks/core09-correction-clippy-1793721405.log": "7edb8703fa6278652286f9af6ad5341670f956e809f3a10ebda0d09d25ca59f4",
+    ".local/dogfood-runs/semantic-20261102/evidence/api-pool-wedge-under-load.json": "4fcb9083b960b806acab4661ebf53884b1f5e3fbacfdfe933c2609d6fe8d8af6",
+    ".local/dogfood-runs/semantic-20261102/evidence/check09-ui-alice-f60a1866-0637-4722-a0fc-bccacf0e93e0.json": "b9dc75f65561daa357a2e740f41e7a5f0f8a7b31ace36302615d80c73085cea8"
+  }
+}

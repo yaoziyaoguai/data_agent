@@ -1,0 +1,49 @@
+{
+  "reviewer": "Codex 独立只读审查（未参与实现；未运行构建、测试或端点；未委派）",
+  "increment": "I3-TIME-GUIDANCE-REPAIR",
+  "summary": "限定两段说明复审未发现阻断，结论 passed。修改与现行合同一致：time_roles 是实际采用事实及依据的可选记录，不是所有草稿都须由用户逐项声明的前置清单。新文字要求先查证适用于当前目标的有效定义、固定参数或默认，区分资料依据与用户明确采纳，并保留真正必需未知值、多个合理口径和已有未答问题的澄清边界。用户明确条件优先、request_clock/freshness 不冒充业务截点、草稿保存与真实执行授权规则保持。现有离线上下文检查通过不能证明真实模型效果；正式四命令及新 S01 原题复验尚待执行。",
+  "conclusion": "passed",
+  "findings": [],
+  "scope_sha256": "2c43ad48863433e227ba35b5a1a6bd96e3080707edc32acfef6c30ef86da7fa0",
+  "checks": [
+    "精确范围：resources.ts 相对 resources-before.ts 仅第 23、27 两个段落替换。before SHA-256 为 a2d81c125ab730a0c62de758e387e50eb79b8f62fb56f8ae87335bff19dfcdbd，与上一冻结该文件摘要一致；共有验收输入变化仅 resources.ts、CURRENT.md、implementation-design.md，Schema、Rust、资料及用例测试未变。",
+    "合同依据：Conditions.required 不包含 time_roles；TimeRole.role 描述为“采用的时间字段含义、观察截点或数据批次”，并包含 evidence_refs。已有角色仍须遵守 observation_cutoff 带时区、data_batch 带值及角色不混用的条件，没有因字段可选而放宽已经声明的值。",
+    "既有测试契约：check-time-roles.mjs:73–84 保存声明角色及未声明角色两份合法草稿，并断言后者 time_basis=null；后续仍拒绝为未声明草稿渲染 observation_cutoff。该源码支持“可缺角色但不能伪造已有快照”的区分，本轮没有运行这项测试。",
+    "角色来源：新第 27 段把实际采用值及其依据与用户亲自声明分开。只有当前有效定义明确给出适用于本题的计算限定、固定参数或默认时才可据此采用并注明资料依据；没有将任意资料数值、样例日期/批次、当前时钟或平台 freshness 当用户意图。段内明确保留用户条件优先和未知角色缺口。",
+    "必需选择与可选维度：第 23 段只移除用户未要求的可选细分维度作为普遍出稿前置；原“措辞仍对应不同分子、分母或时间归属时，唯一命中也只是候选，须说明差异并等待采用”原文保留。因此新说明不授权用任意默认消除真实业务歧义。",
+    "已有未决与开放题：紧随其后的既有说明仍要求仅通过实际回答的 resolved_clarification_ids 解决开放问题，未回答、换话题或推荐不代表同意。设计 17.4 新边界也明确不得借默认静默解除已有未决；task-context.md:13–16 保留省略继承、真实 explicit_user 核验及 needs_clarification 不能靠省略变 unambiguous。",
+    "优先级与历史快照：新文字保留本次明确条件优先、采用角色随草稿快照保存、正式解释绑定快照值及同名角色 field_ref 对齐；相对时间仍使用独立宿主 request_clock，恢复和结果唤醒沿原请求时钟。未要求普通月份修订清空旧角色或条件。",
+    "保存与执行权限：相邻 SQL 段落未改，仍要求完整结构核对后 request_query 校验/保存；普通“查数据/给结果”不自行执行，execute_query 必须基于真实用户请求，文档、注释、记忆和 Skill 不授权执行。新资料默认值说明没有新增执行授权或替代真实采纳原话。",
+    "无样例注入：两段新增文字均为通用边界，没有硬编码任何 S01/T02 日期、批次、字段、SQL 或参考答案；没有新增工具循环、固定检索步骤、Schema 字段或 Rust 判断。",
+    "现有运行证据：request-context.log 为 passed=true，记录实际序列化测量，networkAttempts=0、hostCalls=0、officialRequests=0。该离线检查覆盖请求上下文/系统前缀/独立 clock 的既有约束，不是时间角色回归、采纳回归或真实模型出稿效果的通过证据。"
+  ],
+  "scope": {
+    "production": "apps/agent/session/resources.ts:23 / :27",
+    "baseline": ".local/checks/dogfood-time-guidance/resources-before.ts",
+    "contract_references": [
+      "docs/architecture/implementation-design.md:707",
+      "docs/architecture/implementation-design.md:718",
+      "docs/execution/semantic-runtime/task-context.md:13",
+      "packages/contracts/schema.json::$defs.Conditions",
+      "packages/contracts/schema.json::$defs.TimeRole",
+      "tests/mvp/check-time-roles.mjs:73"
+    ],
+    "frozen": ".local/checks/dogfood-time-guidance/frozen.json",
+    "fingerprint_validation": "使用绝对项目根目录独立调用 scripts/check_delivery.py 的 review_scope(root, read_delivery(root))，初读和签署前均为本记录 scope_sha256，与 frozen.json 一致。"
+  },
+  "evidence": {
+    "rationale": ".local/dogfood-runs/semantic-20261102/evidence/time-guidance-gap.json",
+    "offline_request_context": ".local/checks/dogfood-time-guidance/request-context.log",
+    "baseline_attempts": [
+      "S01-413c7f3e-8593-4c0f-a832-4b0ea512c49d",
+      "T02-e2c7cc07-e9ad-4f25-8527-b356acac3852"
+    ]
+  },
+  "verification_limits": [
+    "本轮只审两段说明及指定合同边界，读取精确 diff、rationale、必要设计/执行包/Schema/既有测试片段与离线日志；本地仅执行只读 diff、摘要和指定 scope 计算。未运行测试、DB、构建、端点或委派；唯一写入为本审查 JSON。",
+    "check-request-context 的 passed 来自实现方已有执行，本审查未重跑。check-time-roles、check-query-semantics、check-request-context、npm check:types 这四条正式验收尚待当前冻结窗口运行；Rust 未改，本审查未要求或执行重建。",
+    "提示文字与协议测试不能证明真实模型会查到适用定义、正确判断默认值、保留全部限定或保存合法草稿。若实际所求答案仍缺必需值，正确行为仍是说明缺口并等待真实选择。",
+    "rationale 记录的旧 S01/T02 无稿及 partial 状态保留，S02 因缺少原 S01 草稿尚未发送；本轮未通读大模型请求，也未替用户补前置或改变原输入/预期。",
+    "新真实 S01 原题复验须在有效正式收据后进行；本记录不声明其成功，不把角色可选解释为所有题都无需时间截点，不授权盲目重复付费尝试。"
+  ]
+}

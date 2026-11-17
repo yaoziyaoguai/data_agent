@@ -1,0 +1,883 @@
+{
+  "reviewer": "Codex（codex/gpt-6.1-sol），Claude Code SDK 独立审查 agent；未参与 I2-TASK-ANSWERS 的实现或测试编写",
+  "review_date": "2026-10-30",
+  "increment": "I2-TASK-ANSWERS",
+  "summary": "第四次独立窄 delta 结论为 passed，仅针对冻结差异、原需求、当前代码/断言及完整保存日志；未发现本次新增阻断或 TA-01/02/03 回归。跨工具 seenRefs 仅减少重复引用说明：v1/v2 各19工具的全部验证结构保持，原49/52个说明源位置均至少可见一次；逐段核12段description及未变v2覆盖说明，未见业务、权限、分页、完整性、授权、任务或记忆边界的实质遗失。Schema检查改用明确v1/v2 run与各自原合同，保留旧合法/非法用例，只在v1拒绝v2新增定稿字段；Makefile保留原条目并接入Schema及两容量检查。原恢复7次账本、Bridge两窗口和两/六份长正文局部日志支持原断言保持，中间10/9次失败仍是失败。首轮正式六组实际前两组exit0、第三组exit2、后三组未执行；当前最终范围完整六组未重跑，answer-state/types早于最后纯description修改，真实模型理解改写未验证。审查者未运行DB、harness、build或测试，仅修改本JSON，历史结论与发现事实完整保留，不据本审查关闭增量。",
+  "conclusion": "passed",
+  "scope_sha256": "fe0fd85a4cb57f3c62dbca303250b877c41bd0d06fb834590d79417afd168f30",
+  "independence": {
+    "implemented_increment": false,
+    "authored_increment_tests": false,
+    "delegated_review": false,
+    "method": "以原要求、当前源码、锁定 Pi 1.3.0 已安装源码、测试断言和完整保存日志独立核对；没有将实施者总结直接当作通过依据。",
+    "executed_product_or_test_commands": [],
+    "credentials_read": false,
+    "external_models_or_publication_used": false,
+    "only_file_written": "docs/reviews/task-answers-review-20261030.json"
+  },
+  "scope": {
+    "baseline": ".local/task-answers-20261030/before",
+    "before_manifest": ".local/task-answers-20261030/before-manifest.json",
+    "before_manifest_sha256": "c8236cd0bc7d8e495b77c76538b1304945d7d5f3c4fb95a1d026e3f385bc414c",
+    "input_description": ".local/task-answers-20261030/fourth-delta-input.json",
+    "input_description_sha256": "7f8df78029fc2be2a73a90fe29649a7db1c1c8960d423089df3ef79012e2d5fa",
+    "change_manifest": ".local/task-answers-20261030/fourth-delta-changes.json",
+    "patch": ".local/task-answers-20261030/fourth-delta-diff.patch",
+    "manifest_sha256": "3bb5e6d00f25b95e26a5b8631211a94585dffa457bd5bf28625a1f5a69f0af5e",
+    "patch_sha256": "dd06237cffda28b2fe1723e40dbbdf274981fd72c8f7edbc282c97ea1e8b9a97",
+    "delta_patch": ".local/task-answers-20261030/fourth-vs-third-diff.patch",
+    "delta_patch_sha256": "4d838f0fee3310ff8bb02ca75af8ab21071388289a6bce5437d75af6822ad242",
+    "declared_file_count": 487,
+    "increment_changed_file_count": 34,
+    "patch_line_count": 3872,
+    "head": "04d27d06ba7b97d4cf3e288d4cf9e6300ef491a9",
+    "verification": "仅导入 scripts/check_delivery.py，调用只读 read_delivery、fingerprint(for_review=True)、review_scope 重算487项输入及fe0fd85a4cb57f3c62dbca303250b877c41bd0d06fb834590d79417afd168f30；未调用main、验收执行、DB、harness、build或测试。核before-manifest中966份非敏感源码/材料hash，49项非源码/缓存/敏感路径排除且未读取凭据。由实际before/current逐字重建34文件、3872行补丁，manifest/patch/hash/HEAD均匹配冻结输入。在内存应用third patch后重建fourth-vs-third补丁逐字相同，实际仅Makefile、data-tools、CURRENT、check-tool-schema四项变化，其余30项未变；原Pi续接、Bridge、长工具及原容量脚本均等于07开工before。第三次scope亦由旧patch和before在内存重算匹配。编辑前指定JSON与第三次精确归档逐字相同，hash为88d08b8f9208a6d9ec34d1b17ee5c8a874e6d5f445137472fc01754ac9b7633e。审查文件不在本次声明输入中，编辑不改变review_scope。"
+  },
+  "initial_review": {
+    "conclusion": "blocked",
+    "scope_sha256": "ed92952bc63b3858298257816f6d88e871a6da95f58616f8de799492450714ac",
+    "archive": ".local/task-answers-20261030/review-initial-blocked.json",
+    "archive_sha256": "d1243e6f4f0b4276de140943d7d98a2bc4365401452f01ceb4e787c749f5e1ca",
+    "change_manifest": ".local/task-answers-20261030/review-initial-changes.json",
+    "manifest_sha256": "c88ac2eb5c41fccc29eb46f7e31197d965f544ec9589fcadcec63d59ea97347f",
+    "patch": ".local/task-answers-20261030/review-initial-diff.patch",
+    "patch_sha256": "9751271955d60d2170df56fd65eb568eea447c2c0cdd4cdf121e8bffa61413b9",
+    "history_note": "原发现的标题、位置、要求、触发序列、分析、可观察失败、测试缺口和修复要求保留为初审事实；它们不表示修复后仍全部成立。各发现的 blocking、status 和 resolution 表示当前 delta 结论。initial_ 前缀章节保留初审判断和当时证据限制，精确原始记录以上述归档为准。"
+  },
+  "first_delta_review": {
+    "conclusion": "blocked",
+    "scope_sha256": "189ab7c4e9081c9dce39aebac9fd651e51935233b04c5c0da838312aac7cb504",
+    "archive": ".local/task-answers-20261030/review-registered-cancellation-blocked.json",
+    "archive_sha256": "26d023913ed4abe76bc72f86e4aba8ca2749fa2eb28a591f1b69121dfbbb0962",
+    "change_manifest": ".local/task-answers-20261030/review-registered-cancellation-changes.json",
+    "manifest_sha256": "c88ac2eb5c41fccc29eb46f7e31197d965f544ec9589fcadcec63d59ea97347f",
+    "patch": ".local/task-answers-20261030/review-registered-cancellation-diff.patch",
+    "patch_sha256": "f6eef2d314142092adf9ff77bcdf3f18947a44be52f1f947a1912512b1f58d6f",
+    "input_description": ".local/task-answers-20261030/review-registered-cancellation-input.json",
+    "input_description_sha256": "975e2af458fe86748b80c364103c02386852828baa65d1e7340776972ebcef9d",
+    "history_note": "本轮编辑前确认指定审查 JSON 与该归档逐字相等。原 delta_review 整段及 TA-02.resolution 保留第一次 delta 的 blocked 历史，不改写当时结论；TA-02.second_delta_resolution 表示本轮修复核对，当前各 finding 的 blocking/status 与顶层结论表示当前状态。delta_review 当时的 current 输入路径现已刷新，历史内容以本处精确归档为准。"
+  },
+  "second_delta_history": {
+    "conclusion": "blocked",
+    "scope_sha256": "262574257d41b2fadf94afaa9f97c6e50ac22ef10b1af8c2a0a0590ad8d5ea35",
+    "archive": ".local/task-answers-20261030/review-implicit-task-blocked.json",
+    "archive_sha256": "e366762a999bd76fb305b51c9a84b80f7a4a1b01f8399a7b55be86476362d64e",
+    "change_manifest": ".local/task-answers-20261030/review-implicit-task-changes.json",
+    "manifest_sha256": "31987af439c5aaf28a83dcabc80e3c92d62f55c59cf9c44162377481a4e7054b",
+    "patch": ".local/task-answers-20261030/review-implicit-task-diff.patch",
+    "patch_sha256": "dc43abb42c0ad0418f772c3841b1ed18de8fa7f88f1ea5db676a9e3ce569b0cf",
+    "input_description": ".local/task-answers-20261030/review-implicit-task-input.json",
+    "input_description_sha256": "0387a4b81382a2fa77fe8313736463b296c8d0ac5d1c2c1df1ca45f6d1508e2c",
+    "history_note": "本轮编辑前确认当前记录与此 blocked 归档逐字相同。原 second_delta_review 整段、TA-01/TA-02 全部字段及 TA-03 原发现事实保留；仅 TA-03 blocking/status 更新为当前状态并增加 third_delta_resolution。原 blocked 不代表当前仍阻断，当前结论以顶层和 third_delta_review 为准。前两次 delta 的可变输入文件路径按各精确归档解析，不用当前材料替换历史。"
+  },
+  "findings": [
+    {
+      "id": "TA-01",
+      "severity": "P1",
+      "initial_blocking": true,
+      "blocking": false,
+      "status": "fixed",
+      "resolution": {
+        "assessment": "独立源码及已有日志复核支持修复。dataTools 暴露仅清 answer/answerTask 的 invalidateAnswer，原 execute 与 invokeRecorded 继续使用；deliver 在 Pi tool_execution_end/isError 调用它。锁定 Pi 1.3.0 的 immediate 参数拒绝及未知工具拒绝也经过此事件，因此覆盖原来跳过自定义 execute 的失败。frozenParts 不被清除，未增加参数校验器或第二工具循环。",
+        "locations": [
+          {"path": "apps/agent/tools/data-tools.ts", "start_line": 158, "end_line": 168},
+          {"path": "apps/agent/tools/data-tools.ts", "start_line": 176, "end_line": 184},
+          {"path": "apps/agent/tools/data-tools.ts", "start_line": 314, "end_line": 339},
+          {"path": "apps/agent/session/deliver.ts", "start_line": 252, "end_line": 255},
+          {"path": "node_modules/@earendil-works/pi-agent-core/dist/agent-loop.js", "start_line": 374, "end_line": 399},
+          {"path": "node_modules/@earendil-works/pi-agent-core/dist/agent-loop.js", "start_line": 481, "end_line": 538},
+          {"path": "tests/runtime/check-answer-state.mjs", "start_line": 130, "end_line": 145},
+          {"path": "tests/runtime/check-answer-state.mjs", "start_line": 245, "end_line": 275},
+          {"path": "tests/runtime/check-answer-state.mjs", "start_line": 443, "end_line": 452}
+        ],
+        "evidence": [
+          ".local/task-answers-20261030/answer-state-pi-rejection-red.log",
+          ".local/task-answers-20261030/answer-state-frozen-rejection-green.log"
+        ],
+        "evidence_assessment": "RED 真实观察到两种前置拒绝后 finish 仍携 answer-before-rejection，以及后续 route 仍引用旧候选。GREEN 的全部 21 项注册、断言和完整报告已核；新五项覆盖非法参数、未知工具、后续 route、冻结 A 后 B 的两种拒绝。脚本断言失败 SDK ID 没有进入 Rust 登记/执行，新自然正文和 output binding 保持，冻结 A 引用保留；原 16 项断言未删除或放宽。",
+        "verification_limit": "审查者没有运行该脚本。该日志使用真实 Pi/deliver 1.3.0、受控 Rust transport 和 loopback 协议，networkAttempts=0、officialRequests=0、databaseUsed=false；它不证明真实 Rust 查询来源或外部模型质量。正式整轮仍待运行。"
+      },
+      "title": "Pi 执行前拒绝工具时，未冻结查询候选没有失效",
+      "primary_location": {
+        "path": "apps/agent/tools/data-tools.ts",
+        "start_line": 311,
+        "end_line": 328
+      },
+      "related_locations": [
+        {"path": "apps/agent/tools/data-tools.ts", "start_line": 158, "end_line": 165},
+        {"path": "apps/agent/tools/data-tools.ts", "start_line": 179, "end_line": 181},
+        {"path": "apps/agent/tools/data-tools.ts", "start_line": 250, "end_line": 253},
+        {"path": "apps/agent/session/deliver.ts", "start_line": 236, "end_line": 240},
+        {"path": "apps/agent/session/deliver.ts", "start_line": 357, "end_line": 389},
+        {"path": "node_modules/@earendil-works/pi-agent-core/dist/agent-loop.js", "start_line": 374, "end_line": 399},
+        {"path": "node_modules/@earendil-works/pi-agent-core/dist/agent-loop.js", "start_line": 481, "end_line": 538},
+        {"path": "node_modules/@earendil-works/pi-agent-core/dist/agent-loop.js", "start_line": 646, "end_line": 653},
+        {"path": "tests/runtime/check-answer-state.mjs", "start_line": 58, "end_line": 61},
+        {"path": "tests/runtime/check-answer-state.mjs", "start_line": 282, "end_line": 290}
+      ],
+      "requirement": "docs/execution/semantic-runtime/task-answers.md 第 5、15 行以及 docs/execution/semantic-runtime/pi-reuse.md 第 62–64 行要求：成功 present_analysis_answer 回执只是候选，未提交 part 的答案在同任务后续失败时仍须失效，不能仅凭缓存获得保护。",
+      "trigger": [
+        "当前任务成功调用 present_analysis_answer，Node 保存尚未经过 Rust route 事务冻结的 answer 候选。",
+        "随后同任务的 Pi assistant 调用 get_query({}) 等 Schema 不合法工具，或调用不存在的工具名。GetQueryInput 明确要求 query_id。",
+        "锁定 Pi 1.3.0 的 prepareToolCall 在进入自定义 execute 之前返回 immediate/isError；SDK 仍产生 tool_execution_end 和错误 toolResult，继续原模型循环。",
+        "模型再给自然 final，或下一条消息单独调用合法 finalize_current_answer route。"
+      ],
+      "analysis": "候选清空仅发生在 execute 或 invokeRecorded 内。SDK 前置拒绝跳过这两处；deliver 的 tool_execution_end 订阅只向 responseCapacity 记账，不处理候选失效，其他实际安装的投影/上下文扩展也不持有该候选。活动 task/version 未改变，因此 currentAnswer 仍返回旧值。commitAnswer 会优先选 grounded.text 并发送原 answer_sdk_tool_call_id；后续合法定稿 route 则会捕获同一旧 candidate，放入 answer_handoff。失败调用没有进入 Rust 工具登记，原成功回执和来源校验不能表达此次候选已经失效。",
+      "observable_failure_from_source": "在上述序列中，SDK 已向模型返回工具失败，但宿主仍选择失败前的未冻结查询答案；自然 final 的新正文会被旧 grounded.text 覆盖，或旧候选会被下一次 route 冻结。此为源码推导，未在本审查中执行运行复现。",
+      "test_gap": "check-answer-state.mjs 的非法参数断言通过 fixture 直接调用 ToolDefinition.execute，绕过 Pi 的 prepareToolCall，因此不能证明真实 Pi 执行前拒绝会使候选失效。已有真实 Pi 小样没有覆盖 present 成功后紧接 SDK 前置拒绝的序列。",
+      "required_correction": "沿既有 Pi 工具错误完成边界使当前未冻结候选失效，覆盖不进入 execute 的拒绝；保持已经持久冻结的 answerParts。无需新增工具循环或答案账本。",
+      "completion_evidence_needed": "补真实 Pi 与本地协议的最小反例：成功 present → SDK 拒绝非法参数/未知工具 → 自然 final 或定稿 route，断言失败前候选不再进入 FinishRun/answer_handoff；同时断言已有冻结 A 不因 B 的同类失败被删除。修复者执行反例，审查者只读复核增量。"
+    },
+    {
+      "id": "TA-02",
+      "severity": "P1",
+      "initial_blocking": true,
+      "blocking": false,
+      "status": "fixed",
+      "second_delta_resolution": {
+        "assessment": "本发现的原取消交付合同缺口及第一次 delta 登记后执行前取消残留均有源码和已有运行证据支持修复。新登记在原事务保存实际归属及 execution_started=false；execute 在原会话/运行/工具预检事务标 true 并提交，随后才进入工具业务。正式取消在会话锁内、运行处理后、任务锁前，仅为当前被取消 task/version 的 registered 且明确 false 原行保存 task_inactive 拒绝。原 B 未开始行因此合法结算，frozen-only finish 可按原引用交 A，不靠忽略 guard 或重放 B。TA-03 另记录新绑定对隐式新建的错误分类，不把该新问题混作原窗口未修复。",
+        "locations": [
+          {"path": "migrations/202610300002_tool_task_execution.sql", "start_line": 1, "end_line": 5},
+          {"path": "crates/data-agent/src/use_cases/data_tools.rs", "start_line": 375, "end_line": 448},
+          {"path": "crates/data-agent/src/use_cases/data_tools.rs", "start_line": 538, "end_line": 660},
+          {"path": "crates/data-agent/src/modules/runtime/store.rs", "start_line": 196, "end_line": 243},
+          {"path": "crates/data-agent/src/use_cases/conversation_lifecycle.rs", "start_line": 45, "end_line": 82},
+          {"path": "crates/data-agent/src/modules/runtime/store.rs", "start_line": 435, "end_line": 450},
+          {"path": "apps/agent/session/deliver.ts", "start_line": 60, "end_line": 76},
+          {"path": "tests/mvp/check-task-answer-scope.mjs", "start_line": 128, "end_line": 187},
+          {"path": "tests/mvp/check-task-answer-scope.mjs", "start_line": 207, "end_line": 218}
+        ],
+        "state_and_identity": "migration 三列可空且无默认 false/回填；旧行 NULL 不被猜作未开始。已存在 SDK 映射先按原 fingerprint/合同/回执返回，不重绑任务或 origin；已成功或拒绝回执在 started 标记前接回。取消 SQL 精确匹配 conversation/task/current version/registered/false，只改 state/receipt，保 operation/origin/SDK/合同版本/fingerprint。started=true、NULL、无单任务绑定的批量行不被改写，原 recovery_chain 未结算 guard 保持。",
+        "lock_order": "取消与 execute 预检都先取得同一 conversation 锁，串行决定是先合法拒绝未开始行，还是先持久化 started=true。取消遵循 conversation(1)→run(2)→tool(3)→task(4)，工具行 ORDER BY operation_id FOR UPDATE；显式任务及查询 owner 读取为普通 SELECT，不在 task 锁后倒序取 tool。工具拒绝及任务取消同事务提交，失败回滚。",
+        "evidence": [
+          ".local/task-answers-20261030/task-answer-cancelled-b-registered-red.log",
+          ".local/task-answers-20261030/registered-cancel-final.log",
+          ".local/task-answers-20261030/registered-cancel-invalidated.log",
+          ".local/task-answers-20261030/unknown-cancel-final.log",
+          ".local/task-answers-20261030/settled-cancel-final.log",
+          ".local/task-answers-20261030/settled-cancel-invalidated.log"
+        ],
+        "evidence_assessment": "原 RED 完整报告 passed=false、calls=2，栈明确 finish 返回 version_conflict。五条最终报告均 passed=true、calls=2、summaries=0、errors=[]：registered 正控核原身份拒绝、A 全文单次提交及两次工作台刷新；registered/settled 来源停用负控均整条明确拒绝；settled 正控核原成功回执逐字段不变；unknown 通过真实本地平台 validate 请求断连取得 outcome_unknown，started=true/registered 原行保持、平台请求恰一次、无重发及零 assistant_committed。unknown 报告通过表示拒绝未知的负控通过，不表示业务交付成功。",
+        "verification_limit": "审查者未执行上述脚本、DB、harness、build 或任何测试。五条单项完整报告及对应断言不代替冻结范围正式六组，也未覆盖 TA-03 的隐式新建任务隔离路径。第一轮 resolution/remaining_issue 仍作为当时历史完整保留。"
+      },
+      "resolution": {
+        "fixed_portion": "FinishRun 允许仅携全部冻结引用而省略 final_text；生成的 TypeScript/Rust 分别为可选 string/Option<String>，无 parts 的原单项仍要求正文。Rust compose 按当前真实 message_task_ids 读取每个任务，未取消任务必须有引用；全部引用须与原已冻结引用数量、顺序和内容一致，每 part 继续核条件版本、范围指纹及当前来源，再作原确定性组合。Node 在同输入恢复且所有未取消任务已有当前版本 part 时，不新增模型调用而直接提交。该改动解决了原强制新增不同任务末项的合同缺口，以及 B 工具已结算但回执未接回时的取消路径。",
+        "fixed_locations": [
+          {"path": "packages/contracts/schema.json", "start_line": 358, "end_line": 413},
+          {"path": "packages/contracts/generated/boundary.ts", "start_line": 1949, "end_line": 1967},
+          {"path": "packages/contracts/generated/boundary.rs", "start_line": 2083, "end_line": 2100},
+          {"path": "crates/data-agent/src/use_cases/task_answers.rs", "start_line": 218, "end_line": 263},
+          {"path": "crates/data-agent/src/use_cases/finish_run.rs", "start_line": 102, "end_line": 129},
+          {"path": "apps/agent/session/deliver.ts", "start_line": 60, "end_line": 76}
+        ],
+        "evidence": [
+          ".local/task-answers-20261030/task-answer-cancelled-b-red.log",
+          ".local/task-answers-20261030/frozen-only-contract-red.log",
+          ".local/task-answers-20261030/frozen-only-contract-green.log",
+          ".local/task-answers-20261030/cancelled-b-build.log",
+          ".local/task-answers-20261030/task-answer-cancelled-b-green.log",
+          ".local/task-answers-20261030/task-answer-cancelled-b-final.log",
+          ".local/task-answers-20261030/task-answer-cancelled-b-invalidated.log",
+          ".local/task-answers-20261030/task-answer-boundaries-capture-diagnosis.log"
+        ],
+        "evidence_assessment": "合同 RED 拒绝无新正文的冻结引用，GREEN 保存 652 双侧合同及 tsc 完整输出。取消最初 RED 在接回 B 旧工具时发生 stale_context，未实测到 compose 的旧数量拒绝。名字为 green 的首次日志实际 passed=false：业务断言已过，随后浏览器等待超时；未按文件名认定通过。最终日志 passed=true，calls=2、summaries=0、errors=[]，对应正式取消接口、原消息/chain/output/budget、A 冻结行与 session 不变、两次工作台刷新。失效日志 passed=true 且 committed 事件为零。20 项边界脚本相较初审仅增加两项拒绝场景，原 18 项断言未改；诊断重跑日志完整通过，但这些证据都未覆盖下面的登记后执行前取消窗口。",
+        "remaining_issue": {
+          "title": "B 登记后执行前取消，恢复跳过工具结算，仍阻止有效 A 提交",
+          "primary_location": {"path": "apps/agent/session/deliver.ts", "start_line": 63, "end_line": 75},
+          "related_locations": [
+            {"path": "apps/agent/tools/data-tools.ts", "start_line": 201, "end_line": 218},
+            {"path": "crates/data-agent/src/use_cases/data_tools.rs", "start_line": 361, "end_line": 414},
+            {"path": "crates/data-agent/src/use_cases/conversation_lifecycle.rs", "start_line": 45, "end_line": 73},
+            {"path": "crates/data-agent/src/use_cases/conversation_lifecycle.rs", "start_line": 91, "end_line": 122},
+            {"path": "crates/data-agent/src/modules/runtime/store.rs", "start_line": 548, "end_line": 563},
+            {"path": "apps/agent/session/deliver.ts", "start_line": 280, "end_line": 313},
+            {"path": "crates/data-agent/src/use_cases/finish_run.rs", "start_line": 167, "end_line": 181},
+            {"path": "crates/data-agent/src/modules/runtime/store.rs", "start_line": 384, "end_line": 400},
+            {"path": "tests/mvp/check-task-answer-scope.mjs", "start_line": 32, "end_line": 38},
+            {"path": "tests/mvp/check-task-answer-recovery.mjs", "start_line": 25, "end_line": 32}
+          ],
+          "trigger": [
+            "A 已真实冻结并切到 B；A 当前条件和来源仍有效，原消息成员为 A、B。",
+            "B 的合法工具调用（如 read_analysis_task/read_knowledge）经 /internal/data/tool-calls 成功登记。该事务已保存原 checkpoint 和 registered 工具行，但 /internal/data/tools 尚未执行；这是现有双请求工具链及 before_business_commit 故障点支持的恢复窗口。",
+            "在该窗口中断并通过正式任务取消接口取消 B。取消事务取消原 run/output、将 B 标为 cancelled 并恢复原消息到 A，不结算或删除 B 的 registered 工具行。原运行后续执行请求因失权不能完成该行。",
+            "恢复 envelope 仍有冻结 A、当前 A 和 cancelled B，同输入恢复成立。deliver 的新提前分支只检查任务集合和冻结版本，直接 /internal/finish，未进入后面的原 invokeRecorded 接回。"
+          ],
+          "observable_failure_from_source": "逐 part 来源及原文核验可以通过，但 finish_run 仍调用 commit_run_in_tx，最终 store::commit_run 对整个 recovery_chain 的 state NOT IN ('succeeded','rejected') 计数非零，返回 version_conflict；事务回滚，不产生最终 A 正文、消息 consumption 或 assistant_committed。每次恢复仍遇到同一 registered 行。该结论来自完整可达源码链，本审查未运行反例，也不声称已观察到实际重试次数。",
+          "why_existing_green_does_not_cover": "当前 check-task-answer-scope 的中断包裹先 await 原 transport 返回，仅在 /internal/data/tools 的 read-scope-b 已成功后 abort。因此 B 行已 succeeded，取消 GREEN 证明的是已结算但丢回执窗口。20 项边界里的 registered 负控检查定稿前拒绝，没有在 frozen-only 恢复前结算 cancelled B；原 registered 恢复脚本覆盖 A 的 route 且恢复仍走 invokeRecorded，不能证明新提前分支。",
+          "required_correction": "保留 Rust 未结算 guard；仅冻结引用提交前，沿原工具身份与既有接回/明确拒绝规则处理取消任务留下的已登记操作，或在原事务 owner 中形成可验证的合法结算事实。不能靠忽略 registered、删除工具行、重建操作身份或执行已取消任务副作用让 finish 成功。A 原 part、旧 attempt、session、output 和预算保持，不增加模型调用。",
+          "completion_evidence_needed": "由实施者补真实 Rust/隔离存储及 Pi 本地协议反例：A 冻结 → B 的 /internal/data/tool-calls 成功 → /internal/data/tools 前中断 → 正式取消 B → 原消息恢复。核原 B operation/origin/SDK 身份保留并得到合法可观察结算，无 B 副作用重放；A 原文只提交一次、B 仍 cancelled、全部工具无未结算、原预算不增且无第三次模型调用。保留现有已结算取消正控、源失效整条拒绝及真正未知未结算仍拒绝的负控。",
+          "verification_status": "source_confirmed_not_executed_by_reviewer"
+        },
+        "verification_limit": "审查者没有运行 DB、harness、build、合同检查或其他测试。已有局部 GREEN 不足以关闭 TA-02，也不替代冻结输入下的正式六组验收。"
+      },
+      "title": "冻结 A 后取消未完成 B，剩余有效 A 无法通过 finish 提交",
+      "primary_location": {
+        "path": "crates/data-agent/src/use_cases/task_answers.rs",
+        "start_line": 227,
+        "end_line": 258
+      },
+      "related_locations": [
+        {"path": "crates/data-agent/src/use_cases/conversation_lifecycle.rs", "start_line": 45, "end_line": 73},
+        {"path": "crates/data-agent/src/use_cases/conversation_lifecycle.rs", "start_line": 91, "end_line": 122},
+        {"path": "crates/data-agent/src/use_cases/deliver_run.rs", "start_line": 122, "end_line": 129},
+        {"path": "crates/data-agent/src/modules/runtime/store.rs", "start_line": 207, "end_line": 212},
+        {"path": "apps/agent/session/deliver.ts", "start_line": 379, "end_line": 393},
+        {"path": "crates/data-agent/src/use_cases/finish_run.rs", "start_line": 102, "end_line": 123},
+        {"path": "crates/data-agent/src/modules/analysis/store.rs", "start_line": 462, "end_line": 477},
+        {"path": "tests/mvp/check-mixed-task-cancellation.mjs", "start_line": 24, "end_line": 59},
+        {"path": "tests/mvp/check-mixed-task-pi-continuation.mjs", "start_line": 46, "end_line": 59},
+        {"path": "tests/mvp/check-mixed-task-bridge-cancellation.mjs", "start_line": 60, "end_line": 84}
+      ],
+      "requirement": "docs/execution/semantic-runtime/task-answers.md 第 21、45 行要求失败/取消只影响相应任务，原已完成部分不重放副作用，取消一个任务不能取消同会话另一任务；第 19 行要求按实际状态交付，失效不得被静默删去冒充全部完成。既有取消用例也明确要求原输入、恢复链和预算继续交付剩余目标。",
+      "trigger": [
+        "同一原消息有 A、B 两个任务；A 的有效完整答案已经由 finalize_current_answer route 在 Rust 提交为 part，活动任务切到尚未完成的 B。",
+        "B 处理期间用户调用现有取消接口取消 B；A 本身、其条件和来源仍有效。",
+        "现有 conversation_lifecycle 取消当前 run，保留 A 为 active，恢复原消息并把活动任务绑定回 A；新 run 沿原 chain/output/budget 加载已冻结的 A 引用。",
+        "恢复的 Pi 按当前 A 任务自然结束，宿主进入原 finish。"
+      ],
+      "analysis": "冻结并未把 A 的 lifecycle 变为非 active，取消逻辑会正确选中 A 作为 remaining。原工具行中的 frozen A 没有被删除。Node 只要看见 frozenParts 就固定构造 [frozen A, 当前末项]；此时末项仍属于 A。Rust compose 要求 references.len() == parts.len()+1，且末项任务不能与任何 frozen part 相同，于是拒绝 A 末项。只发送既有 frozen A 同样被长度条件拒绝；省略 answer_parts 又被 finish_run 的已冻结 guard 拒绝。B 已取消，也不能被当作合法新增末项。当前合同因此没有用于提交仍有效 A 的合法入口，重新建任务或重跑 A 都违背原身份与副作用要求。",
+      "business_state_at_failure": "B.lifecycle=cancelled；A.lifecycle=active 且原 part/operation/origin/attempt 保留；原消息和恢复链继续，活动任务为 A；没有合法的不同任务末项。",
+      "observable_failure_from_source": "正常 A 自然 final 的 finish 在 compose 的末项去重分支返回 invalid_evidence；只发已有 part 在数量分支返回同错误；省略 parts 则在 finish guard 返回同错误。A 的已完成答案无法通过本轮最终提交。这里没有执行 HTTP 复现，也不声称已实测最终后台作业失败或重试次数。",
+      "test_gap": "三项既有 mixed-task cancellation/continuation/bridge 用例均在创建两个目标后、任何答案冻结之前取消；新 task-answer recovery 用例覆盖传输中断和丢回执，不覆盖 A 冻结后 B 被正式取消。已有 GREEN 不能证明此窗口保持取消隔离。",
+      "required_correction": "让既有取消续接与最终提交合同能够处理末尾未完成任务被取消后的剩余有效冻结部分，保留原 part、输出身份和当前来源核验，不要求为交付再重做 A 或新建无关任务。仅取消 B 不能使 A 无法交付；来源失效仍须明确失败，不能借取消处理静默省略失效内容。",
+      "completion_evidence_needed": "用真实 Rust/隔离存储与 Pi 本地协议覆盖 A 冻结 → B 正式取消 → 原输入恢复：A 原文仍可交付且只出现一次，B 保持 cancelled，无 B 成功答案；原 session/output/operation/origin/旧 attempt 及 budget 均保持，A 副作用不重放，并核验最终工作台可见结果。修复后的合同应有对应正负边界。"
+    },
+    {
+      "id": "TA-03",
+      "severity": "P1",
+      "introduced_in": "second_delta",
+      "initial_blocking": false,
+      "blocking": false,
+      "status": "fixed",
+      "third_delta_resolution": {
+        "assessment": "独立核对原合同、实际创建分支、当前 register 和同一恢复循环，修复覆盖本发现的可达路径。首次登记排除 create/split 及非 route 且 task_id.is_null()，原合法 revise/clarify 缺省与 null 身份均保持 task/version=NULL、execution_started=false，不随 B 取消伪记 task_inactive。Node 从原检查点最后 assistant 和其后已完成 toolResult 推导 pendingCalls，若其中有待接回新建目标则跳过 frozen-only；同一 pendingCalls 交给原 invokeRecorded for 循环，沿原 SDK/operation 接回 C 后才进入原 Pi prompt。无第二工具循环、无模型重做 A 或汇总。",
+        "locations": [
+          {"path": "crates/data-agent/src/use_cases/data_tools.rs", "start_line": 407, "end_line": 448},
+          {"path": "apps/agent/session/deliver.ts", "start_line": 60, "end_line": 85},
+          {"path": "apps/agent/session/deliver.ts", "start_line": 290, "end_line": 321},
+          {"path": "crates/data-agent/src/use_cases/task_answers.rs", "start_line": 14, "end_line": 42},
+          {"path": "crates/data-agent/src/use_cases/task_answers.rs", "start_line": 137, "end_line": 176},
+          {"path": "crates/data-agent/src/use_cases/task_answers.rs", "start_line": 265, "end_line": 319},
+          {"path": "crates/data-agent/src/use_cases/finish_run.rs", "start_line": 196, "end_line": 218},
+          {"path": "tests/mvp/check-task-answer-scope.mjs", "start_line": 173, "end_line": 220},
+          {"path": "tests/mvp/check-task-answer-scope.mjs", "start_line": 242, "end_line": 253}
+        ],
+        "clarification_and_sources": "原 analysis::assert_current_in_tx 附带 requires_resolved=true，会拒绝自然澄清正文，独立依据 check-answer-phase 原场景确认这不是交付要求。task_answers scope 现仅解除该阶段前提，仍由同会话 owner 读取并核当前 condition_version、lifecycle=active、已声明 source_limits；original_text 与末项继续核范围指纹、authority、当前实际来源及完整原文。finish 原逻辑继续保 waiting_clarification，不把提交当问题已解决；request_condition_authority 和首次查询确认仍使用严格 assert_current_in_tx，未给 SQL 草稿或执行授权放宽。",
+        "failure_sequence": "完整读取四份失败历史：clarify-red 实际观察 C 原行被改 rejected/task_inactive；owner-fix 已保 C 原 registered 但提前 finish 返回 version_conflict，说明最终 guard 仍生效；recovery 已进第三次 provider 后 finish 返回 waiting_clarification；名为 clarify-final 的报告实际 passed=false，是 snapshot 窄 tasks 无 clarification 字段导致 TypeError。未将这些中间失败改成通过。",
+        "evidence": [
+          ".local/task-answers-20261030/implicit-task-clarify-omitted-green.log",
+          ".local/task-answers-20261030/implicit-task-clarify-null-green.log",
+          ".local/task-answers-20261030/implicit-task-revise-omitted-green.log",
+          ".local/task-answers-20261030/implicit-task-revise-null-green.log",
+          ".local/task-answers-20261030/implicit-task-registered-regression.log",
+          ".local/task-answers-20261030/implicit-task-registered-invalidated.log",
+          ".local/task-answers-20261030/implicit-task-unknown-regression.log",
+          ".local/task-answers-20261030/implicit-task-settled-regression.log",
+          ".local/task-answers-20261030/implicit-task-settled-invalidated.log"
+        ],
+        "evidence_assessment": "四种新建最终报告均 passed=true、calls=3、summaries=0、errors=[]，对应断言核取消后 C 仍原 registered/NULL归属/false、原消息 pending，接回后 C 成功且原 operation/origin/SDK/fingerprint 保持、业务恰一次，A+C 全文逐字相等、单 committed、两次工作台刷新和原 3/24 全 settled；clarify 的完整 workspace、实际 provider 及正式持久 task_changed 事件均核原问题，最终 C 仍 waiting_clarification。五原正负控均 calls=2；已开始 unknown 真实 validate 请求一次、原行不改、不重发、零提交；两来源失效仍整条拒绝，settled 回执深等保持。",
+        "verification_limit": "审查者仅阅读源码、断言及完整保存报告，未执行 DB、harness、build 或任何测试。四新建模式增加的第三次请求用于原 C 的正常续答，不是重新生成 A 或模型汇总，仍在原 24 次预算内。九条局部通过不表示正式六组、完整旧回归或完整 CODE 已完成；当前代码审查无剩余阻断。"
+      },
+      "title": "隐式新建任务误绑定活动 B，取消 B 可错误结算并跳过独立新目标",
+      "primary_location": {
+        "path": "crates/data-agent/src/use_cases/data_tools.rs",
+        "start_line": 407,
+        "end_line": 441
+      },
+      "related_locations": [
+        {"path": "packages/contracts/schema.json", "start_line": 3033, "end_line": 3074},
+        {"path": "tests/contracts/cases.json", "start_line": 2303, "end_line": 2327},
+        {"path": "crates/data-agent/src/modules/analysis/store.rs", "start_line": 270, "end_line": 318},
+        {"path": "crates/data-agent/src/use_cases/data_tools.rs", "start_line": 605, "end_line": 623},
+        {"path": "crates/data-agent/src/use_cases/source_limits.rs", "start_line": 678, "end_line": 687},
+        {"path": "crates/data-agent/src/modules/runtime/store.rs", "start_line": 196, "end_line": 207},
+        {"path": "crates/data-agent/src/modules/runtime/store.rs", "start_line": 218, "end_line": 241},
+        {"path": "crates/data-agent/src/use_cases/conversation_lifecycle.rs", "start_line": 70, "end_line": 84},
+        {"path": "apps/agent/session/deliver.ts", "start_line": 60, "end_line": 76},
+        {"path": "crates/data-agent/src/use_cases/task_answers.rs", "start_line": 227, "end_line": 245},
+        {"path": "crates/data-agent/src/modules/runtime/store.rs", "start_line": 443, "end_line": 450},
+        {"path": "tests/mvp/check-task-answer-scope.mjs", "start_line": 59, "end_line": 63},
+        {"path": "tests/mvp/check-task-answer-scope.mjs", "start_line": 140, "end_line": 187}
+      ],
+      "requirement": "docs/execution/semantic-runtime/task-answers.md 第 21 行要求取消只影响相应任务，取消事务仅拒绝属于该任务且明确未开始的原操作；AGENTS.md 第 57–59 行要求保留真实操作归属及失败/未知/取消含义。原 AnalysisUpdate 合同支持 revise/clarify 缺省或 null task_id 时用完整 goal/conditions 新建，不能因 action 拼写而把同一新建语义错误归到活动任务。",
+      "trigger": [
+        "真实原消息包含 A、B 及尚待登记的独立目标 C；A 已冻结，活动任务为已建立的 B，已持久消息成员当前只有 A、B。C 来自原用户目标，不是取消后凭空创建的补救目标。",
+        "Pi 通过原合法 AnalysisUpdate 发出 update_analysis_task(action=clarify, goal=C, conditions=完整条件, question=独立问题, options=合法选项)，省略 task_id/expected_version；原合同正例明确允许，业务 apply_update 会创建新 C。revise 在同样缺省任务且提供完整条件时也走新建分支。",
+        "该调用经 /internal/data/tool-calls 成功后、/internal/data/tools 执行前中断。新增 register 从 active_task_ref 初始化 B，只为 action=create/split 清空；本调用无显式目标或 query，因此以 B/current version、execution_started=false 保存。",
+        "用户经正式接口取消 B。取消 helper 将这条尚未执行的新建 C 操作按被取消 B 的行改成 rejected/task_inactive，保留该错误归属；C 尚未创建或加入消息成员。",
+        "恢复仍有 A frozen、A active、B cancelled，且没有其他未结算行时，Node 提前走 frozen-only finish。C 不在实际任务集合内，Rust 逐成员检查只见 A、B；被误拒的行已属 settled，原最终 guard 也无法阻止 A 单独提交。"
+      ],
+      "analysis": "新登记的归属分类与原业务语义不一致。analysis::apply_update 先处理 route/split，随后以 action=create 或 task_id.is_null() 判定新建；同文件 execute 的语义采纳预检和 source_limits::bind_update 也已有相同的缺省任务新建判定。register 只识别显式 create/split，遗漏了已有合同正例的 clarify 及 revise，导致后续取消 SQL 虽然严格按 task/version/false 匹配，却匹配到首次登记已错误绑定的独立操作。这里不是历史 NULL 或真正未知结果应继续阻止提交的问题：新操作明确未开始，但不属于被取消 B，不能以 task_inactive 给它合法结算。",
+      "observable_failure_from_source": "取消 B 会给原本应创建 C 的操作保存错误的 task_inactive 拒绝。仅冻结引用恢复可在没有处理 C、没有展示 C 的原澄清、没有新增模型请求时提交 A 并消耗原消息；按原 SDK 身份接回也只能得到错误拒绝。同一独立目标若使用显式 create 会保持 task=None/registered 并继续受 guard 保护，说明不一致来自本次新增 action 分类。此为可达源码推导；审查者没有执行新反例，也不声称已经观察到实际工作台遗漏。",
+      "test_gap": "现有 registered 正控只登记没有显式目标、业务确属活动 B 的 read_knowledge；unknown 负控只覆盖 validate_sql 的真实平台断连；settled 正控核成功回执不改。它们能证明正确 B 归属下的结算和未知保护，不能证明新建语义不会错误绑定 B。原合同 clarify 新建正例及原业务源码已足以证明请求合法，无需直接改库构造非法归属。",
+      "required_correction": "首次登记对新建任务的判定须与原 AnalysisUpdate 实际语义一致：revise/clarify 无 task_id 或 null 时，不得猜活动任务 B 为其 owner；保留定稿 route 属原当前任务、普通显式目标和查询沿 owner、跨任务批量不猜等已核规则。取消仅结算实际属于 B 且明确未开始的行，继续保留未结算 guard；不得通过禁止原合法合同、忽略剩余目标、换 operation/SDK 身份、重放已取消 B 或增加模型汇总来消除反例。",
+      "completion_evidence_needed": "由实施者补真实 Rust/隔离存储与 Pi 本地协议反例：已有 A frozen/B active，同条原输入另有 C 目标；登记合法缺省/null task_id 的 clarify/revise 新建 C 后在执行前中断，正式取消 B。核新建 C 原行未被归到 B 或伪写 task_inactive，原 operation/origin/SDK/fingerprint 保持；frozen-only 不得把 C 静默遗漏后消费消息。按原正常恢复处理 C 时保持原身份和 C 的澄清/来源语义；保留 B 未开始取消正控、已成功回执不改、真实 unknown 不重发且拒绝、来源失效整条拒绝及原预算断言。",
+      "verification_status": "source_confirmed_not_executed_by_reviewer"
+    }
+  ],
+  "initial_requirements_checked": [
+    {
+      "requirement": "真实完整 Pi 条目、唯一 route 与持久输出交接",
+      "status": "reviewed_with_existing_evidence",
+      "assessment": "锁定 Pi 源码确认公开 message_end 订阅先于 SessionManager 追加且不 await。当前适配在 route 的异步 execute 按 SDK ID 定位整条 assistant，检查全部 toolCall，await 原 output.drain；自然正文使用完整持久片段和 UTF-8 哈希。不是在 message_end 直接冻结。",
+      "paths": ["apps/agent/tools/data-tools.ts", "apps/agent/session/output-stream.ts", "crates/data-agent/src/modules/runtime/outputs.rs", "tests/runtime/check-sdk-event-order.mjs"]
+    },
+    {
+      "requirement": "Rust 同事务冻结与切任务；普通 route/message_end 不定稿",
+      "status": "reviewed_with_existing_evidence",
+      "assessment": "登记保存宿主 handoff，业务 route 在同一事务内执行 finalize、任务更新、活动绑定、成功回执和 checkpoint；目标更新失败会回滚冻结。只有显式 v2 finalize 路径产生 part。前序 registered 调用排除 route 自身后仍阻止冻结。",
+      "paths": ["crates/data-agent/src/use_cases/data_tools.rs", "crates/data-agent/src/use_cases/task_answers.rs", "crates/data-agent/src/modules/runtime/store.rs", "tests/mvp/check-task-answer-boundaries.mjs"]
+    },
+    {
+      "requirement": "未冻结候选失败失效；已冻结 A 不被 B 读取或写入清空",
+      "status": "blocked",
+      "assessment": "已冻结引用独立于临时候选，普通进入 execute 的 B 读取/失败/写入不会删 A，既有局部日志有对应断言；但 SDK 前置拒绝留下候选，见 TA-01。",
+      "paths": ["apps/agent/tools/data-tools.ts", "apps/agent/session/deliver.ts", "tests/runtime/check-answer-state.mjs", "tests/mvp/check-task-answers.mjs"]
+    },
+    {
+      "requirement": "逐 part 范围、当前实际来源及 grounded 数字/结果有效性",
+      "status": "reviewed_with_existing_evidence",
+      "assessment": "每个 frozen part 保存自身 task/version、source_limits、scope fingerprint 和生成时 authority；finish 逐项重新核当前任务、范围及来源。present 原成功回执经 analysis_answers 的真实结果填值与 check_in_tx 将查询文字及结果依赖合入 run authority，冻结时转为该 part 的持久来源。后续 CheckedTextResults 和 validate_text_in_tx 仍查平台结果权限、查询状态/结果引用、知识及资产当前来源；没有因为读取成功回执就绕过数字校验。来源停用局部日志观察到整条明确拒绝，没有部分成功。",
+      "paths": ["crates/data-agent/src/use_cases/task_answers.rs", "crates/data-agent/src/use_cases/analysis_answers.rs", "crates/data-agent/src/use_cases/context_authority.rs", "crates/data-agent/src/use_cases/source_limits.rs", "tests/mvp/check-task-query-answers.mjs", "tests/mvp/check-task-answer-scope.mjs"]
+    },
+    {
+      "requirement": "实际消息任务成员集合与有序引用边界",
+      "status": "reviewed_with_limitations",
+      "assessment": "已核 register 对当前 task 的真实成员 contains 检查，以及 route 覆盖 routed_task_id 前保存旧成员并添加新成员。逐一追查当前 bind_active_task writer：任务更新、查询修订、执行归属、通知启动及取消续接；没有仅因 compose 缺单独 contains 语句就断言可注入集合外任务。compose 现有数量/去重条件在真实取消状态下形成 TA-02；没有把非法直接改库构造当作新的产品路径。其他成员异常组合没有现成运行证据。",
+      "paths": ["crates/data-agent/src/modules/conversations/store.rs", "crates/data-agent/src/use_cases/data_tools.rs", "crates/data-agent/src/use_cases/query_workflow.rs", "crates/data-agent/src/use_cases/deliver_run.rs", "crates/data-agent/src/use_cases/conversation_lifecycle.rs", "crates/data-agent/src/use_cases/task_answers.rs"]
+    },
+    {
+      "requirement": "互斥来源实际 provider 输入、摘要与下一轮隔离",
+      "status": "reviewed_with_existing_evidence",
+      "assessment": "任务投影沿 Pi appendCompaction 自保留边界和原 context refresh，使用静态控制信息移出旧正文及派生摘要。组合只在 Rust 最终输出中生成，不追加 Pi 历史。scope 脚本与完整保存日志检查切 B、B 中断恢复和同 session 下一轮的实际协议输入不含 A 正文/答案/摘要，摘要模型调用为零。仅证明固定本地协议接线，不证明真实模型理解。",
+      "paths": ["apps/agent/session/task-projection.ts", "apps/agent/session/workspace-context.ts", "apps/agent/session/deliver.ts", "tests/mvp/check-task-answer-scope.mjs"]
+    },
+    {
+      "requirement": "同 output_id 确定性原子组合，无模型总论",
+      "status": "reviewed_except_cancellation_gap",
+      "assessment": "正常路径按原冻结顺序读取原回执/输出，逐字核最后正文，只添加保存的任务标题和固定分隔；同事务保存 answer_parts、最终文本、消息 consumption、任务阶段和一次 assistant_committed。省略已冻结前项的旧漏洞已有明确 RED→GREEN 证据，当前 guard 拒绝遗漏；取消后无新增末项的合同缺口见 TA-02。",
+      "paths": ["crates/data-agent/src/use_cases/task_answers.rs", "crates/data-agent/src/use_cases/finish_run.rs", "tests/mvp/check-task-answer-boundaries.mjs"]
+    },
+    {
+      "requirement": "登记未冻结与冻结丢回执两个恢复窗口、旧 attempt 和原身份",
+      "status": "reviewed_with_existing_evidence",
+      "assessment": "恢复直接 invokeRecorded 接原工具行，不重新执行 execute 绑定。lock_tool 使用原 conversation/chain/SDK ID；handoff 首次持久，旧 output attempt 还核同 output/conversation/chain。新 run/attempt 可以不同，旧答案引用不被新 attempt 空片段替换。同输入通知恢复不重绑回 A；通知 task_ref 由 Rust 原查询绑定，不依赖最近 12 项窗口。已有局部日志覆盖两窗口及 older-query。TA-02 另属正式取消的业务接点。",
+      "paths": ["apps/agent/session/deliver.ts", "crates/data-agent/src/modules/runtime/store.rs", "crates/data-agent/src/use_cases/deliver_run.rs", "tests/mvp/check-task-answer-recovery.mjs", "tests/mvp/check-task-query-answers.mjs"]
+    },
+    {
+      "requirement": "旧 v1、自然单任务、保存确认及预算保持",
+      "status": "partly_evidenced_formal_regressions_pending",
+      "assessment": "v1 不向模型暴露定稿参数，不根据旧回执缺字段猜冻结；原单任务 finish 分支保留。已有 boundary 日志覆盖 v1/v2 自然 final。已独立阅读旧 final-answer 和 grounded-answer 关键断言：不拼调查正文、纯保存可短答、数字/来源失效拒绝仍是原要求。完整旧回归本轮未运行，不能记 passed。预算沿原 scope，不因任务数或新恢复 attempt 增额。",
+      "paths": ["apps/agent/tools/data-tools.ts", "crates/data-agent/src/use_cases/finish_run.rs", "tests/mvp/check-final-answer.mjs", "tests/mvp/check-grounded-answers.mjs", "Makefile"]
+    }
+  ],
+  "initial_pi_reuse_and_complexity": {
+    "pi_owner": "继续使用 createAgentSession/session.prompt、原 SessionManager/JSONL、原生压缩、SDK 重试和取消；没有发现本包新增规划器、模型/工具循环、第二消息历史、答案正文库或模型汇总器。",
+    "necessary_adapters": "完整消息定位与 output.drain、原工具登记/回执接回、逐任务来源 authority、原输出 attempt 引用和 Rust 事务属于已明确业务要求，Pi 不能替代这些存储和权限事实。",
+    "constraints": [
+      {"rule": "保护须对应要求、已知失败或可解释实际路径", "assessment": "新增片段/哈希、整条工具集合、来源/当前版本和原 attempt 核验都对应任务合同；两个阻断均有当前生产调用链，无需假设低概率并发或新增保护框架。"},
+      {"rule": "实际边界校验一次；状态/权限/新进程复核保留", "assessment": "合同生成类型与 transport 边界保持；Rust 跨进程及事务提交前来源/状态复核有独立作用。没有把这些必要复核误报为同侧重复 Schema 校验。TA-01 需要接 SDK 失败事实，不需要增加第二次参数校验。"},
+      {"rule": "一次性逻辑内联，按真实复用或独立职责抽取", "assessment": "task_answers 聚合注册、冻结、原文读取与最终组合的业务职责，仍调用模块公开事务接口；AssistantOutputBinding 复用于交接和末项。没有新增万能 repository/helper 或通用迁移框架。"},
+      {"rule": "错误直接传播，catch 只用于恢复/边界翻译/上下文", "assessment": "Rust 主要沿 Result/?，output.drain 保留实际写入失败；原明确拒绝回执接回失败时继续抛原错误，未见新增第三层模型重试。TA-01 暴露的是候选状态未跟随 SDK 已表达失败失效，不是要求再套一层错误重试。"}
+    ]
+  },
+  "initial_test_expectation_review": [
+    {
+      "change": "公共集合检索请求预算由 3 修正为 4，仍限 24",
+      "assessment": "合理。原设计明确聊天检索共用请求预算，knowledge_embeddings 的工具绑定使用 run.budget_scope_id 和原 operation，purpose=knowledge_embedding 经原 provider_calls 账本计数。新断言精确要求原消息 3 次 agent 加 1 次 knowledge_embedding，全部 settled、总计 4/24；下一轮的 2 次生成属于新消息。没有提高生成上限或 24 次额度。",
+      "paths": ["docs/semantic-retrieval-design.md", "crates/data-agent/src/use_cases/knowledge_embeddings.rs", "crates/data-agent/src/modules/runtime/provider_calls/store.rs", "tests/mvp/check-task-answer-scope.mjs"]
+    },
+    {
+      "change": "恢复事件断言改查目标 B route 恰一次，operation/origin 从账本核对；原输出逐 chunk 完整比较",
+      "assessment": "合理。task_changed 原事件没有 operation_id，错误断言不能代表产品不幂等；新断言仍核原工具行 operation/origin 和一次副作用。逐 chunk 比较避免 GROUP_CONCAT 截断，证据更完整。首次失败日志保留，未假称通过。",
+      "paths": ["crates/data-agent/src/use_cases/data_tools.rs", "tests/mvp/check-task-answer-recovery.mjs"]
+    },
+    {
+      "change": "下一轮夹具增加原任务 route；结果通知预期增加 Rust task_ref",
+      "assessment": "合理。原新消息必须持久登记归属；补 route 保持下一轮 2 次生成，没有放宽产品 message_pending。通知 task_ref 核对原查询任务/条件，避免从最近观察窗口猜测，不更改旧结果归属。",
+      "paths": ["tests/mvp/check-task-answer-scope.mjs", "tests/mvp/check-result-notification-answers.mjs", "crates/data-agent/src/use_cases/deliver_run.rs"]
+    },
+    {
+      "change": "未冻结失败与取消回归的覆盖充分性",
+      "assessment": "不足。直接调用 execute 的参数失败断言遗漏 SDK 前置拒绝，取消用例在冻结之前发生，分别见 TA-01 和 TA-02。不能因原六项失败断言保留或三个取消脚本仍存在就声称这两个接点已经验证。"
+    }
+  ],
+  "initial_evidence_checked": [
+    {
+      "paths": [".local/task-answers-20261030/delivery-declaration.log"],
+      "observed": "声明检查 passed；脚本单测完整 16 项 OK。",
+      "limit": "日志明确写业务未验证、未执行验收命令。这里只是读取已有日志，审查者未运行该命令。"
+    },
+    {
+      "paths": [".local/task-answers-20261030/task-answer-boundaries-first.log", ".local/task-answers-20261030/task-answer-boundaries-finish-parts.log"],
+      "observed": "前一完整日志保存省略 answer_parts 时实际 200、只交 B 的失败；后一完整日志保存 18 项 passed，遗漏前项现为 409 invalid_evidence，且前后业务状态不变。包括普通 route、混工具、停止原因、缺片段、未结算、自然单项及真实 Rust chunk_gap 输出拒绝。",
+      "limit": "这是原实现过程的局部证据，不能替代当前范围的正式六组，也未覆盖两个新阻断。"
+    },
+    {
+      "paths": [".local/task-answers-20261030/task-answer-failed-tool.log", ".local/task-answers-20261030/task-answer-write-task.log"],
+      "observed": "两项均 passed，各 3 次本地生成，覆盖 frozen A 后 B 的业务失败和写入。",
+      "limit": "不包含 Pi 在进入 execute 之前拒绝工具的候选失效序列。"
+    },
+    {
+      "paths": [".local/task-answers-20261030/natural-recovery-first-check.log", ".local/task-answers-20261030/natural-recovery-event-check.log"],
+      "observed": "前项因不存在的事件 operation_id 断言失败；后项 registered/committed 两窗口 passed、各 3 次并断言 original_attempt=true。",
+      "limit": "原 attempt 全文比较及原操作身份可支持正常恢复；不能证明正式取消后的交付。"
+    },
+    {
+      "paths": [".local/task-answers-20261030/query-recovery-registered-first.log", ".local/task-answers-20261030/query-recovery-committed-first.log", ".local/task-answers-20261030/query-recovery-committed-binding-fix.log", ".local/task-answers-20261030/query-recovery-older-query-compacted.log", ".local/task-answers-20261030/query-recovery-notification-task-green.log"],
+      "observed": "registered 为 5 次 passed；committed 首次错误重绑 A 的 RED 保留，修复后 5 次 passed；older-query 首次因额外补救出现第 6 次调用的 RED 保留，原通知 task_ref 修复后 olderQuery=true、5 次 passed。",
+      "limit": "查询是可执行合成 SQLite 平台；模型是本地协议，不是真实业务平台或真实模型效果。"
+    },
+    {
+      "paths": [".local/task-answers-20261030/query-notification-task-contract-green.log"],
+      "observed": "完整保存的生成一致性、历史 Rust validate_contracts 构建以及双侧合同结果 649 项 passed。",
+      "limit": "仅阅读历史执行输出；本审查没有构建或重新运行合同检查。"
+    },
+    {
+      "paths": [".local/task-answers-20261030/task-answer-scope-next-route.log", ".local/task-answers-20261030/task-answer-scope-invalidated.log"],
+      "observed": "正常范围切换/中断恢复、两次工作台刷新及同 session 下一轮隔离 passed；来源停用场景 passed，整条明确失败、无 assistant_committed。",
+      "limit": "固定协议输入证明正文和摘要的接线隔离，不证明模型自主选择或解释质量。"
+    },
+    {
+      "paths": [".local/task-answers-20261030/task-answer-scope-public-index.log", ".local/task-answers-20261030/task-answer-scope-public-budget.log"],
+      "observed": "旧预算断言实际 4/24 对预期 3/24 的 RED 完整保留；修正后 publicIndex=true、passed，原三次与下轮两次生成、summaries=0、errors=[]、officialRequests=0。脚本按实际 provider_calls 目的精确断言 3 agent+1 embedding。",
+      "limit": "随机专用公共集合由正式 raw/knowledge 消费者索引并走正式检索；Embedding 仍为本地替身，不证明语义召回、真实分词质量或真实模型遵循率。"
+    }
+  ],
+  "initial_limitations": [
+    "用户禁止本审查运行 DB、harness、build 或任何测试。两个阻断均基于当前源码和锁定 SDK 的可达调用链，尚无本审查实际运行 RED；缺少的反例证据已逐条列出。",
+    "正式六组 verify-task-answers、verify-task-answer-regression、verify-task-answer-scope、verify-contracts、verify-code、verify-architecture 尚未在当前包完整同轮执行。本记录不将局部 GREEN 拼成正式验收通过。",
+    "多数局部证据为完整保存日志及对应脚本断言，没有独立的当前范围整轮 exit-code 收据；结论不超出其可观察范围。",
+    "没有使用真实外部模型、读取凭据或进行发布；真实模型语义质量和真实业务平台验收不属于本次证据。",
+    "本次仅新增指定审查 JSON，未改产品、测试、Schema、Makefile 或 CURRENT；本包不能据此关闭。"
+  ],
+  "initial_required_next_action": "由实施者先建立并修复 TA-01、TA-02 的真实最小反例，保持原身份、预算、来源和已冻结部分；然后对修复差异及新范围摘要做独立 delta 复核。代码审查通过后，才按冻结输入执行正式六组验收并留下完整同轮收据。",
+  "delta_review": {
+    "date": "2026-10-30",
+    "conclusion": "blocked",
+    "scope_sha256": "189ab7c4e9081c9dce39aebac9fd651e51935233b04c5c0da838312aac7cb504",
+    "input_description": ".local/task-answers-20261030/review-delta-input.json",
+    "input_description_sha256": "975e2af458fe86748b80c364103c02386852828baa65d1e7340776972ebcef9d",
+    "method": "以初审补丁和 before 在内存还原初审输入，再与冻结当前输入对照，定点核两修复、生成合同消费者、原消息真实成员、逐 part 当前来源、取消事务、工具登记/执行/接回及最终提交 guard。独立读取现有完整日志，并逐项核对应测试断言；未执行日志中的命令。",
+    "findings_status": {"TA-01": "fixed", "TA-02": "partially_fixed_blocking"},
+    "requirements_checked": [
+      {
+        "requirement": "候选失败失效与冻结引用隔离",
+        "assessment": "TA-01 修复沿 Pi 原失败完成事件清候选，覆盖 execute 前拒绝；原冻结引用独立保留，21 项脚本保留原 16 项及新增五项真实 Pi 序列。受控 transport 不负责证明 Rust 查询来源。"
+      },
+      {
+        "requirement": "仅冻结引用必须覆盖原消息所有未取消任务",
+        "assessment": "Schema 仅允许全部冻结形态无 final_text。Rust 从关联表和 routed_task_id 的真实 UNION 取成员，在持有会话事务锁时读取当前 lifecycle；未取消且无引用则拒绝。引用数量与原冻结数量精确一致、顺序内容逐项等原账本，不能用新候选伪装冻结项。新增两项边界均为 409 invalid_evidence 且前后业务状态相等，原遗漏、乱序和无 parts guard 保留。"
+      },
+      {
+        "requirement": "逐 part 当前范围和来源失效仍明确拒绝",
+        "assessment": "无新末项的分支仍先执行每个 original_text_in_tx：原任务当前条件、source_limits/fingerprint、authority 与平台结果/知识来源核验未跳过。取消后停用 A 来源的现有脚本要求整条 deliver 拒绝及零 assistant_committed，未减少断言；对应完整日志 passed。"
+      },
+      {
+        "requirement": "取消恢复保留未结算操作事实且剩余 A 可交付",
+        "assessment": "未闭合，见 TA-02.remaining_issue。Rust 原 commit guard 正确保留，防止未知工具被当成功；但 Node 提前 finish 跳过原接回，使 B 已登记未执行时的合法取消状态无法提交 A。现有取消正控只在业务执行已成功之后中断。"
+      },
+      {
+        "requirement": "无新增模型调用、原身份与旧 attempt",
+        "assessment": "已结算取消路径在创建模型会话前交原冻结引用，既不调用摘要/汇总也不重算旧输出绑定。脚本精确要求原 calls=2、全部 model attempts settled、limit=24，原 session/output/chain/预算及 A handoff/operation/origin 深等；当前日志支持该路径。尚不能将此 GREEN 推广到未结算取消窗口。"
+      },
+      {
+        "requirement": "原正常多任务、自然单项、v1 与保存确认保持",
+        "assessment": "正常有新末项仍要求全部 frozen 加一个不同当前任务的合法末项；无 parts 的自然单项仍须正文并核持久输出。20 项局部边界含 v1/v2 自然单项及普通 route，原保存确认及通知/恢复/历史回归条目保留在 Makefile。完整旧回归、Clippy 与 Web 构建当前范围未执行，不标记验收通过。"
+      }
+    ],
+    "pi_reuse_and_complexity": {
+      "pi_owner": "继续复用原 Pi SessionManager、会话树/JSONL、prompt 循环、工具错误回执、压缩、重试和取消。仅冻结引用路径不调用模型，而由 Rust 原 finish 按存储事实组合；未新增规划器、子会话、第二工具循环、答案正文库或模型汇总器。它在未结算操作处存在正确性缺口，不应以另建账本或放松 guard 处理。",
+      "constraints": [
+        {"rule": "保护对应当前要求、已知失败或可解释实际路径", "assessment": "Pi 前置拒绝和取消后无新末项均对应原阻断。残留 registered 窗口由原双请求协议、before_business_commit 故障点和已存在恢复测试共同支持；不需要假设无证概率或增加并发框架。"},
+        {"rule": "在实际边界校验；变化状态与权限复核保留", "assessment": "复用 SDK 失败事件而非再实现参数校验。Schema 限定无正文引用形态；Rust 提交前读真实任务状态与每 part 来源有独立作用，不能被 Node envelope 快照替代。未结算 guard 同属必须保留的最终事实检查。"},
+        {"rule": "简单一次性逻辑内联，仅真实复用或独立职责抽取", "assessment": "invalidateAnswer 在 execute、invokeRecorded 和 SDK 失败订阅三处复用，抽取有实际依据。仅冻结组合复用原 compose 与 finish，未另建通用 helper、repository 或第三种正文实现。"},
+        {"rule": "错误直接传播，catch 限于恢复或边界上下文", "assessment": "修复不新增吞错或模型重试；Rust Option 分支沿 Result/?，原输出错误仍传播。新提前 finish 的 version_conflict 会直接传播而非假成功，但缺失原操作接回仍是 TA-02 的阻断。"}
+      ]
+    },
+    "test_expectation_review": [
+      {"change": "answer-state 16 项扩为 21 项", "assessment": "以初审补丁在内存还原并核当前差异：原 fixture 与真实 deliver 断言保留。新场景先成功 present，再由真实 Pi 拒绝非法参数/未知工具，检查下轮实际收到错误、失败 SDK 未进入 Rust、旧候选不进入 finish/route、冻结 A 保留。新增分支不替代原正常 grounded/自然/两恢复窗口或输出失败断言。"},
+      {"change": "服务器边界 18 项扩为 20 项", "assessment": "真实初审至当前源码 delta 仅增加 B 未取消只交 A、带新正文只交 A 两个 rejectFinish。统一 helper 仍要求 409 invalid_evidence 和完整业务状态前后深等，原 v1/v2、混工具、终止原因、chunk_gap、未结算及幂等断言未放宽。"},
+      {"change": "取消模式、预算及工作台等待", "assessment": "cancelB 使用正式取消接口，取消后预期只含 A、禁止第三次模型调用合理；非取消原三次生成、公共 3 agent+1 embedding 和 limit=24 保持。原失效分支零提交、A 原冻结行与 session 深等保持。等待登录后 composer 再写会话选择只增加就绪等待，不延长原答案超时或删除两刷新断言；首次浏览器超时根因未证明。"},
+      {"change": "无新正文合同正负例", "assessment": "保留原合同场景，新增三项：仅冻结引用可无正文；未冻结末项无正文拒绝；无 parts 且无正文拒绝。Rust/TypeScript 生成类型和实际 finish 消费一致，现有日志从旧合同 RED 至 652 项 GREEN。该合同证据不覆盖工具账本状态。"}
+    ],
+    "evidence_checked": [
+      {"paths": [".local/task-answers-20261030/answer-state-pi-rejection-red.log", ".local/task-answers-20261030/answer-state-frozen-rejection-green.log"], "observed": "RED 三项失败明确包含旧 answer-before-rejection；GREEN 全 21 项通过，networkAttempts=0、officialRequests=0、databaseUsed=false。", "limit": "真实 Pi 与本地协议、受控 Rust transport；审查者未运行。"},
+      {"paths": [".local/task-answers-20261030/frozen-only-contract-red.log", ".local/task-answers-20261030/frozen-only-contract-green.log", ".local/task-answers-20261030/cancelled-b-build.log"], "observed": "旧 Schema 对新无正文正例 RED；后续保存生成一致性、validate_contracts 构建、652 双侧合同及 tsc 无报错。API 和 Worker 分别构建完成。", "limit": "仅历史局部执行日志；未在本审查运行，也不代表 verify-code、Clippy 或 Web 构建完成。"},
+      {"paths": [".local/task-answers-20261030/task-answer-cancelled-b-red.log", ".local/task-answers-20261030/task-answer-cancelled-b-green.log", ".local/task-answers-20261030/task-answer-cancelled-b-browser-diagnosis.log", ".local/task-answers-20261030/task-answer-cancelled-b-final.log", ".local/task-answers-20261030/task-answer-cancelled-b-invalidated.log"], "observed": "原取消 RED 在恢复旧 B 工具时 stale_context；首次名为 green 的日志实际业务已过但浏览器超时。诊断与最终正控 passed、calls=2、summaries=0、errors=[]，来源停用负控明确整条拒绝。", "limit": "不把首次失败改写为通过或声称其根因已证实；全部取消日志的工具中断均在 B 业务成功后，不覆盖 registered-before-execute。"},
+      {"paths": [".local/task-answers-20261030/task-answer-boundaries-frozen-only.log", ".local/task-answers-20261030/task-answer-boundaries-capture-diagnosis.log"], "observed": "首次在第 12 场景 capture 超时，前 11 项完成，passed=false；诊断重跑完整 20 项 passed。新增两项及其他拒绝的前后状态在日志中相等，最终仅两次输出故障本地模型调用。", "limit": "首次 capture 超时原因未定，未归咎环境。诊断运行不等于冻结输入下正式六组同轮验收；其 registered 负控覆盖定稿，不覆盖取消后的原操作结算。"}
+    ]
+  },
+  "second_delta_review": {
+    "date": "2026-10-30",
+    "conclusion": "blocked",
+    "scope_sha256": "262574257d41b2fadf94afaa9f97c6e50ac22ef10b1af8c2a0a0590ad8d5ea35",
+    "input_description": ".local/task-answers-20261030/review-delta-input.json",
+    "input_description_sha256": "0387a4b81382a2fa77fe8313736463b296c8d0ac5d1c2c1df1ca45f6d1508e2c",
+    "method": "以 before 与第一次 delta 归档补丁在内存还原旧输入，核当前 11 项实际 delta；其余 22 项逐字未变。独立追查首次登记、实际任务/query owner、执行预检提交、正式取消、原回执接回及最终 guard；读取完整新 RED、五条最终局部报告和对应断言。对可疑归属以原 Schema、已有正例及业务创建分支交叉验证，没有以实施总结或日志文件名判通过。仅用只读函数重算范围，未执行产品、harness、build 或测试入口。",
+    "findings_status": {"TA-01": "fixed", "TA-02": "fixed", "TA-03": "open_blocking"},
+    "changed_since_first_delta": [
+      "Makefile",
+      "apps/agent/session/deliver.ts",
+      "crates/data-agent/src/modules/runtime/mod.rs",
+      "crates/data-agent/src/modules/runtime/store.rs",
+      "crates/data-agent/src/use_cases/conversation_lifecycle.rs",
+      "crates/data-agent/src/use_cases/data_tools.rs",
+      "docs/CURRENT.md",
+      "docs/architecture/implementation-design.md",
+      "docs/execution/semantic-runtime/task-answers.md",
+      "migrations/202610300002_tool_task_execution.sql",
+      "tests/mvp/check-task-answer-scope.mjs"
+    ],
+    "requirements_checked": [
+      {
+        "requirement": "首次登记保存真实任务及未开始事实，旧登记不回填",
+        "assessment": "新行先由原 owner 登记，再在同事务保存 task/version/false；旧 SDK 映射分支先核 fingerprint 和原合同，直接复用 operation，未调用 bind_tool_task。migration 无默认值或数据回填，历史 NULL 保留未知。普通显式 task/task_ref 经同会话 analysis owner 读取，query_id 经原查询 owner 和 conversation 核对；定稿 route 保原活动任务，create/split 和 queries 批量无单任务绑定。遗漏原 revise/clarify 缺省 task_id 的新建语义，形成 TA-03，不能将绑定整体记为通过。"
+      },
+      {
+        "requirement": "执行开始标记先于当前工具业务派发",
+        "assessment": "execute 的原会话/运行/工具预检先接回完成回执，再对 registered/Some(false) 标 true，沿原事务在第 660 行提交；当前平台 validate、业务 prepare、个人资产及检索等在后。前置来源 preflight 查已有 authority/result 权限，不执行当前工具业务。预检失败回滚不会留下假 true；旧 NULL 不被当 false，也不阻止原恢复按既有身份查证。"
+      },
+      {
+        "requirement": "取消只拒绝属于当前被取消任务且明确未开始的原操作",
+        "assessment": "runtime owner 严格过滤 conversation/task/current version/registered/false，按 operation_id 排序加锁，回执只保存 task_inactive 拒绝，无正文和成功伪装。取消与执行先持同会话锁，取消调用位于 run 后、task 前，未见锁序倒置；相关工具拒绝及任务取消同事务。此规则对归属正确的 B 闭合原窗口，但不能纠正 register 已将独立新建 C 误绑 B 的 TA-03。"
+      },
+      {
+        "requirement": "旧成功/拒绝回执、未知及跨任务操作不被取消伪结算",
+        "assessment": "rejected/succeeded 回执在 execute 标记之前沿原身份接回；取消 SQL 不匹配成功/拒绝、started=true、NULL 或无 task 绑定的行，不改 operation/origin/SDK/fingerprint。真实 unknown 负控以平台请求断连而非 SQL 改 state 得到 outcome_unknown，取消后原 registered 行深等、平台仅一次，finish 仍明确拒绝。cross-task queries 批量为 None，原最终未结算 guard 保留；这不意味着所有多目标新建路径已正确分类。"
+      },
+      {
+        "requirement": "A 原引用/来源、一次组合和无额外模型保持",
+        "assessment": "Node 本次仅改提前分支注释，未新增接回循环、模型调用或第二工具循环；task_answers/finish_run/合同消费者逐字未变。registered 正控核 A 冻结 operation/origin/sequence/handoff 不变、原 session/output/chain/budget 保持、A 全文恰一次和工作台两刷新。两来源停用负控仍整条拒绝、零提交。新 TA-03 恰因错误结算另一目标而使这些局部 A 断言不足以证明整条输入已处理。"
+      },
+      {
+        "requirement": "原候选失败失效、v1、自然回答、保存确认及旧恢复保持",
+        "assessment": "TA-01 的 data-tools、21 项 answer-state、20 项 boundaries、652 合同 cases、task_answers/finish、通知和两恢复脚本均与第一次 delta 逐字相同；deliver 仅取消注释变化。原未取消正常模式三次生成、公共模式另一次 embedding、limit=24、原自然/保存与历史回归入口保持。完整正式回归和 CODE 未运行，不能据未变源码声称当前整轮通过。"
+      }
+    ],
+    "pi_reuse_and_complexity": {
+      "pi_owner": "沿用锁定 Pi 1.3.0 的唯一模型/工具循环、SessionManager/JSONL、原生压缩、重试和取消；Node 没有增加恢复循环或汇总调用。执行开始及取消拒绝事实属于 Rust 业务持久 owner，SDK 不能替代。未新增正文库、独立交付账本、规划器或子会话。",
+      "constraints": [
+        {"rule": "保护对应当前要求、已知失败或可解释实际路径", "assessment": "execution_started 与当前任务绑定直接响应真实 registered RED；保 NULL 和 started=true 是防止已发请求未知被误记拒绝。TA-03 使用原合法 clarify 创建正例和现有登记/取消窗口，有可达影响，不依赖假想新框架或无证概率。"},
+        {"rule": "外部边界校验一次；状态及权限变化复核保留", "assessment": "没有新增同侧 Schema validator；首次注册、旧合同恢复及最终权限/来源复核分别承担现有边界。启动标记和取消筛选是不同状态转换，原最终 guard 不能移除。TA-03 需要对齐已有业务分支，不需要再加一套参数校验。"},
+        {"rule": "一次性简单逻辑内联；真实复用或独立职责才抽取", "assessment": "任务归属组合放原 register，SQL 放 runtime/store；三个新增 owner 操作分别保存登记绑定、执行开始及取消拒绝，职责可解释，没有通用 repository 或迁移框架。修正隐式新建分类可沿原分支完成，无需抽象升级。"},
+        {"rule": "错误直接传播，catch 限于恢复、边界翻译或有效上下文", "assessment": "新增 owner 调用沿 Result/?，显式对象 not_available 仅使取消归属不猜，其他错误传播；未增加吞错、假成功或第三重试层。未知仍通过 guard 明确拒绝；TA-03 的错误来自不正确的业务拒绝事实，不能靠 catch 或放松 guard 修复。"}
+      ]
+    },
+    "test_expectation_review": [
+      {"change": "新增 registered-before-execute 正控及来源停用负控", "assessment": "中断包裹先 await 真 /internal/data/tool-calls 回执后 abort，断言 B task/version/started=0 与 receipt=null；正式取消后要求原身份 rejected/task_inactive、无 B 正文、原 chain 无未结算、A 单次提交。来源停用仍 deliver 拒绝且零 committed，原 A 引用/旧 attempt、session 和预算断言保留。它覆盖了第一次 delta 的具体遗漏。"},
+      {"change": "新增真实平台断连未知负控", "assessment": "在隔离 harness 原平台端口接收完整 /validate 请求后主动断连，沿原登记调用真实 Rust /internal/data/tools，要求 outcome_unknown 与平台请求一次；事实断言 started=1。取消恢复后原行深等、无业务重发及零提交。手动 h.internal 调用不经过 RustTransport posts，故 posts=0 不被误说成平台未执行；platformRequests=1 是实际派发证据。"},
+      {"change": "原 settled 正控及未取消流程保持", "assessment": "原取消业务成功后中断的分支保留，新增 deepEqual 要求原成功回执不改；两刷新、全文单次、B cancelled、A answered、原冻结行/session/output/预算继续核。正常和公共模式原第三次模型、下一轮实际输入隔离和 embedding 计数没有删除。unknown 的无 UI 是拒绝负控，未取代正控 UI。"},
+      {"change": "Makefile 增加三种模式", "assessment": "原 verify-task-answer-scope 条目保留，仅增 registered、registered+invalidate、unknown 三行；API/Worker 仍分别构建。原 21 项/20 项、合同 652 例及恢复/query 断言未变。新增模式未覆盖 TA-03 的隐式新建归属，不以已有全部局部通过替代这项缺口。"}
+    ],
+    "evidence_checked": [
+      {
+        "paths": [".local/task-answers-20261030/task-answer-cancelled-b-registered-red.log"],
+        "observed": "完整 RED passed=false、registeredB=true、calls=2、summaries=0，错误栈为 deliver.ts:71 的 /internal/finish version_conflict。",
+        "limit": "这是主线执行保存的原失败日志，审查者只读；它证明第一次 delta 具体窗口的实际失败，不证明所有新归属分类。"
+      },
+      {
+        "paths": [".local/task-answers-20261030/registered-cancel-final.log", ".local/task-answers-20261030/registered-cancel-invalidated.log"],
+        "observed": "两项完整报告均 passed=true、registeredB=true、calls=2、summaries=0、errors=[]、platformRequests=0、officialRequests=0；正控包含原 B 身份拒绝后仅交 A 及两次工作台刷新，失效负控要求整条明确拒绝。",
+        "limit": "对应脚本断言已核。只覆盖实际属 B 的 read_knowledge，不覆盖缺省/null task_id 的 clarify/revise 新建。"
+      },
+      {
+        "paths": [".local/task-answers-20261030/unknown-cancel-final.log"],
+        "observed": "完整报告 passed=true、unknownB=true、calls=2、summaries=0、errors=[]、platformRequests=1、officialRequests=0；脚本真实请求断连得 outcome_unknown，原 started=true/registered 不改、请求不重发、最终不提交。",
+        "limit": "通过的是未知必须拒绝的负控；不是平台业务成功或 A 最终交付。仅使用本地合成平台，未访问真实外部服务。"
+      },
+      {
+        "paths": [".local/task-answers-20261030/settled-cancel-final.log", ".local/task-answers-20261030/settled-cancel-invalidated.log"],
+        "observed": "两完整报告 passed=true、calls=2、summaries=0、errors=[]、platformRequests=0、officialRequests=0；原 settled 正控含两刷新，原来源停用仍明确失败。脚本原成功 B 回执须与中断前深等。",
+        "limit": "支持原已结算路径保持，不包含隐式新目标；五条局部报告不等于正式六组同轮收据。"
+      },
+      {
+        "paths": [".local/task-answers-20261030/registered-cancellation-bound-api-build.log", ".local/task-answers-20261030/registered-cancellation-bound-worker-build.log", ".local/task-answers-20261030/registered-cancellation-architecture-static.log"],
+        "observed": "完整历史日志分别含 API Finished 21.30s、Worker Finished 13.05s；静态模块依赖、SQL 位置和表归属检查通过。",
+        "limit": "审查者没有执行 cargo 或静态检查。分别构建日志不证明 verify-code、Clippy、Web 或正式整轮完成，也不能排除 TA-03。"
+      },
+      {
+        "paths": ["packages/contracts/schema.json", "tests/contracts/cases.json", "crates/data-agent/src/modules/analysis/store.rs", "crates/data-agent/src/use_cases/data_tools.rs", "crates/data-agent/src/use_cases/source_limits.rs"],
+        "observed": "原 Schema 与新建 clarify 正例支持缺省 task_id 的合法请求；apply_update 的 create||task_id.is_null() 新建分支、execute 语义采纳及 source_limits 的完整条件判定相互一致，只有新 register create/split 分类遗漏。",
+        "limit": "TA-03 为源码确认的可达业务错误；审查者未运行新反例，不把推导的工作台遗漏当已实测日志。"
+      }
+    ]
+  },
+  "third_delta_review": {
+    "date": "2026-10-30",
+    "conclusion": "passed",
+    "scope_sha256": "87450a63ebe7f0af5356ffb8f7000bba66019220a9b33a6b5ffb055d33711227",
+    "input_description": ".local/task-answers-20261030/third-delta-input.json",
+    "input_description_sha256": "ba283cba509466c0282c9a699cd8bdb5af7c0b262e286fd522f5f06f14cc4d25",
+    "head": "04d27d06ba7b97d4cf3e288d4cf9e6300ef491a9",
+    "method": "保留原 before 与第二次 delta 精确归档，在内存应用旧补丁后对照当前源码，实际差异 8 项、其余 25 项逐字未变。独立核合法 AnalysisUpdate 动作集合和创建语义、Node 最后 assistant/已接回 toolResult 的原恢复入口、Rust scope/最终来源/阶段写入、原 unknown 和 commit guard。完整读取四份中间失败、九份最终局部报告及对应断言，以旧 check-answer-phase 和正式 snapshot 投影核澄清预期/夹具纠正；未执行任何日志中的命令或测试入口。只读重算原 checker 范围并逐字重建给定补丁。",
+    "findings_status": {"TA-01": "fixed", "TA-02": "fixed", "TA-03": "fixed"},
+    "remaining_blockers": [],
+    "changed_since_second_delta": [
+      "Makefile",
+      "apps/agent/session/deliver.ts",
+      "crates/data-agent/src/use_cases/data_tools.rs",
+      "crates/data-agent/src/use_cases/task_answers.rs",
+      "docs/CURRENT.md",
+      "docs/architecture/implementation-design.md",
+      "docs/execution/semantic-runtime/task-answers.md",
+      "tests/mvp/check-task-answer-scope.mjs"
+    ],
+    "requirements_checked": [
+      {
+        "requirement": "首次登记与原隐式新建任务语义一致",
+        "assessment": "Schema 允许的动作只有 create/revise/clarify/route/split。当前 register 排除 create/split 及非 route 且 task_id.is_null()，与 apply_update 先处理 split/route、再按 create||task_id.is_null() 创建一致。缺省与 JSON null 在此均为新建，不将独立 C 猜为 B；原显式任务/query owner、定稿 route 原任务及 queries 批量不猜分支未改。原已有 SDK 登记仍只核 fingerprint/合同并接原 operation，不回填或改变归属。"
+      },
+      {
+        "requirement": "存在未建立新目标时先接原调用，不能提前消费消息",
+        "assessment": "deliver 仅把原最后 assistant 的 pending 工具提取前移；completed 仍取其后 toolResult，同一 pendingCalls 复用于原 for/invokeRecorded，不增加第二工具循环。仅待接回 create/split 或 revise/clarify 缺省/null 使 frozen-only 暂不采用，C 沿原 operation 成功后由原投影刷新实际任务并正常续答。四新场景在恢复前明确断言 C 行仍 registered/NULL归属/false、消息 pending，随后核 C 成功且只执行一次，A+C 单次提交，排除直接仅交 A 的旧失败。"
+      },
+      {
+        "requirement": "未知、旧回执及 TA-02 原取消窗口保持",
+        "assessment": "runtime store、取消事务、migration 与旧回执消费者逐字未变，原 conversation→run→tool→task 锁序、started=true/NULL 不猜、原身份回执和未结算 guard 均保持。普通 B read/validate 不满足 pendingTaskCreation，原 frozen-only 不进入 invokeRecorded。最新 unknown 负控要求真实 validate 断连一次、原 registered 行深等、无重发、零 committed；原未开始 B 合法拒绝及已成功 B 回执不变的正控均保留并有完整通过报告。"
+      },
+      {
+        "requirement": "自然澄清可交付，问题仍开放，查询入口继续严格",
+        "assessment": "scope 改动只解除 assert_current_in_tx 中 requires_resolved=true 的错误前提，独立依据旧 check-answer-phase 第 42–46 行原自然澄清场景。scope 仍同会话读当前任务，核 condition_version 精确相同、lifecycle=active 及已声明 source_limits。finish_run 原第 208–214 行跳过 waiting_clarification 的阶段推进；新脚本在 provider 前核原问题、phase 和 active_ref，提交后核 C 仍 waiting_clarification 及持久打开问题。request_condition_authority 和 query_workflow 首次确认仍调用原严格 assert_current_in_tx，未将正文交付放宽变为 SQL 授权。"
+      },
+      {
+        "requirement": "逐 part 原文、范围及当前来源核验保持",
+        "assessment": "除 scope 入口阶段前提外，task_answers 的原引用数量/顺序/内容、无末项真实成员检查、当前范围/指纹、authority、当前平台/知识/资产来源检查，以及输出绑定或成功 grounded 回执原文核验未改。A 仍从原 handoff/attempt 读取；C 末项继续核 active_ref、完整无工具 stop 输出及逐字正文，不拼调查文字。两最新来源停用负控仍明确拒绝且零提交，没有静默删 A。"
+      },
+      {
+        "requirement": "原断言和 Pi 唯一循环保持",
+        "assessment": "21 项 answer-state、20 项 boundaries、652 合同 cases、原 data-tools、output/恢复/query/finish 消费者与第二次 delta 逐字未变。scope 原模式断言保留，新建分支增加 C 检查而原取消分支仍精确 2 次，正常原 3 次/公共另 1 embedding 及 24 次上限不变。新 C 的第三次是原输入正常续答，摘要零；不重做 A、不加模型汇总、规划器、正文库、账本或子会话。完整正式回归仍待运行。"
+      }
+    ],
+    "pi_reuse_and_complexity": {
+      "pi_owner": "继续复用 Pi 1.3.0 SessionManager/JSONL、prompt、原生压缩、重试和取消。待接回提取从原循环前移并复用一次，仍由原 invokeRecorded 按原身份恢复；本次没有另造循环或调度状态机。Rust 的当前任务、来源和取消事实仍由业务 owner 负责。",
+      "constraints": [
+        {"rule": "保护对应当前要求、已知失败或可解释实际路径", "assessment": "新建分类与 pending 分支分别对应实际 C 误拒 RED 和归属修后 guard RED；scope 阶段修正有真实 waiting_clarification RED 及旧自然澄清合同依据。未为无证假想路径增加框架或保护。"},
+        {"rule": "外部边界校验一次；状态与权限复核保留", "assessment": "未增加参数 validator 或改原合法 Schema。Node 只判断是否应接回，Rust 仍校验登记、当前任务、来源和提交事实；当前 scope 保版本/active/来源，查询阶段仍由原严格入口决定。"},
+        {"rule": "一次性简单逻辑内联；实际复用或独立职责才抽取", "assessment": "Rust 归属和 scope 直接在原函数修正，Node pendingCalls 供判断和原循环共用，无新通用 helper、repository 或文件拆分。25 项未变消费者没有邻接清理。"},
+        {"rule": "错误直接传播，catch 限恢复、边界翻译或有效上下文", "assessment": "本次未增加 catch、吞错、模型补救重试或第三重试层；真正未知与原 guard 错误仍传播，合法新建按原恢复路径处理。中间失败保留为失败，夹具 TypeError 单独纠正，不冒称业务完成。"}
+      ]
+    },
+    "test_expectation_review": [
+      {
+        "change": "clarify/revise 各覆盖缺省及 null 身份四模式",
+        "assessment": "场景原用户输入明确含独立 C，避免取消后凭空补目标；真实登记后执行前中断，经正式取消 B 后核 C 原行不变、task/version NULL、started=0、原消息 pending。恢复 provider 前完整 workspace 已有 C、active_ref 精确匹配且实际输入不含 A 正文/摘要/答案；clarify 问题全文继续核对。最终业务恰一次、原 operation/origin/SDK/fingerprint 不变、A+C 引用与全文、单 committed、两刷新、原 session/chain/output/budget 均检查。"
+      },
+      {
+        "change": "澄清最终问题从窄 tasks 改查正式持久事件",
+        "assessment": "有独立源码依据：read_conversation 使用 analysis::read_tasks_in_tx，其窄任务列表原本不含 clarification；workspace 的 context_in_tx 才有完整问题。旧隐式 final 日志 TypeError 未当绿。当前最终 assertion 从同一正式 snapshot 的 task_changed.opened_clarification 核原问题，provider 前完整 workspace 仍核原问题和实际请求，最终任务 phase/lifecycle 也继续核；未删除内容断言或降低业务要求。"
+      },
+      {
+        "change": "新目标为三次，原取消路径保持两次",
+        "assessment": "新建 C 需要沿原 Pi 续答一次，非重新生成 A 或模型汇总；脚本精确要求 agent=3、embedding=0、总 3/24 且全部 settled、summaries=0。原 registered/settled/unknown 模式仍为 2/24，未知平台请求恰一次，正常及公共模式原计数保留。未扩额度或以重试掩盖原错误。"
+      },
+      {
+        "change": "Makefile 仅追加四种新建模式，原测试保持",
+        "assessment": "原 verify-task-answer-scope 所有条目及原模式保留，新增四行；API/Worker 仍分开构建。当前 scope diff 原 21/20 项、合同及恢复/query 脚本未改，原 A 冻结、当前来源失效、工作台、下一轮输入隔离、预算和 unknown 断言没有放宽。"
+      }
+    ],
+    "evidence_checked": [
+      {
+        "paths": [".local/task-answers-20261030/implicit-task-clarify-red.log", ".local/task-answers-20261030/implicit-task-clarify-owner-fix.log", ".local/task-answers-20261030/implicit-task-clarify-recovery.log"],
+        "observed": "三份完整失败分别明确 C 被伪拒 task_inactive、归属修后提前 finish version_conflict、第三次正常续答后 finish waiting_clarification；calls 依次 2/2/3。",
+        "limit": "主线保存的中间 RED，仅阅读。逐步失败不能记为正式通过；它们支持本轮三个修复接点。"
+      },
+      {
+        "paths": [".local/task-answers-20261030/implicit-task-clarify-final.log"],
+        "observed": "实际 passed=false、calls=3，栈为读取 taskC.clarification.question 的 TypeError；snapshot 窄 tasks 原无该字段，最终断言已改正式持久事件且 provider 前问题断言保留。",
+        "limit": "没有按 final 文件名判通过，没有把此失败当环境故障或删问题断言。"
+      },
+      {
+        "paths": [".local/task-answers-20261030/implicit-task-clarify-omitted-green.log", ".local/task-answers-20261030/implicit-task-clarify-null-green.log", ".local/task-answers-20261030/implicit-task-revise-omitted-green.log", ".local/task-answers-20261030/implicit-task-revise-null-green.log"],
+        "observed": "四份完整最终报告各自 newTask/newTaskIdentity 匹配，均 passed=true、calls=3、summaries=0、errors=[]、platformRequests=0、officialRequests=0，包含独立 C 原身份恢复及工作台两刷新。已逐项核对应业务、问题、原文、预算及一次副作用断言。",
+        "limit": "固定本地协议、真实 Pi/Rust/隔离存储链的保存结果；审查者未执行。四局部报告不代替正式六组同轮收据或真实模型效果。"
+      },
+      {
+        "paths": [".local/task-answers-20261030/implicit-task-registered-regression.log", ".local/task-answers-20261030/implicit-task-registered-invalidated.log", ".local/task-answers-20261030/implicit-task-settled-regression.log", ".local/task-answers-20261030/implicit-task-settled-invalidated.log"],
+        "observed": "四份完整报告 passed=true、calls=2、summaries=0、errors=[]、platformRequests=0、officialRequests=0；registered 正控合法拒绝原 B，settled 正控原成功回执不变，两个正控含两次工作台刷新；两来源失效负控均整条明确拒绝。",
+        "limit": "支持 TA-02 保持 fixed，不表示完整旧回归已跑。"
+      },
+      {
+        "paths": [".local/task-answers-20261030/implicit-task-unknown-regression.log"],
+        "observed": "完整报告 passed=true、unknownB=true、calls=2、summaries=0、errors=[]、platformRequests=1、officialRequests=0；对应真实 validate 断连后 outcome_unknown、原 registered 不改、无重发和零 committed 的负控。",
+        "limit": "负控通过表示未知继续拒绝，非业务交付成功；只涉及本地合成平台。"
+      },
+      {
+        "paths": [".local/task-answers-20261030/implicit-task-answer-state.log", ".local/task-answers-20261030/implicit-task-types.log", ".local/task-answers-20261030/implicit-task-owner-static.log", ".local/task-answers-20261030/implicit-task-final-api-build.log", ".local/task-answers-20261030/implicit-task-final-worker-build.log"],
+        "observed": "answer-state 完整 21 项逐项 passed，databaseUsed=false、networkAttempts=0，真实 Pi/deliver 1.3.0 与受控 Rust transport 边界明确；类型日志含 tsc --noEmit 且无错误，owner 静态日志通过，API/Worker 独立构建日志分别 Finished 21.29s/10.53s。",
+        "limit": "仅阅读已有输出，审查者未运行；没有独立的正式六组 exit-code 收据，不据这些局部日志宣称完整 CODE、Clippy 或 Web 构建通过。"
+      },
+      {
+        "paths": ["tests/mvp/check-answer-phase.mjs", "crates/data-agent/src/use_cases/finish_run.rs", "crates/data-agent/src/modules/analysis/store.rs", "crates/data-agent/src/use_cases/read_conversation.rs"],
+        "observed": "原 check-answer-phase 明确自然交付后仍 waiting_clarification；finish 原阶段保护保持。正式会话 tasks 取窄 read_tasks_in_tx，不包含问题正文；原 context_in_tx 和 task_changed 才提供问题，支持本轮澄清阶段修复及断言纠正的独立预期。",
+        "limit": "源码和原断言核对，不是本轮执行该回归。"
+      }
+    ]
+  },
+  "third_delta_history": {
+    "conclusion": "passed",
+    "scope_sha256": "87450a63ebe7f0af5356ffb8f7000bba66019220a9b33a6b5ffb055d33711227",
+    "archive": ".local/task-answers-20261030/review-before-pi-continuation-diagnosis.json",
+    "archive_sha256": "88d08b8f9208a6d9ec34d1b17ee5c8a874e6d5f445137472fc01754ac9b7633e",
+    "input_description": ".local/task-answers-20261030/third-delta-input.json",
+    "input_description_sha256": "ba283cba509466c0282c9a699cd8bdb5af7c0b262e286fd522f5f06f14cc4d25",
+    "change_manifest": ".local/task-answers-20261030/third-delta-changes.json",
+    "manifest_sha256": "31987af439c5aaf28a83dcabc80e3c92d62f55c59cf9c44162377481a4e7054b",
+    "patch": ".local/task-answers-20261030/third-delta-diff.patch",
+    "patch_sha256": "b993552a5b23b5e644300c9019ccd682e9da6a3b38c575d9f45264b21fae43f6",
+    "declared_file_count": 487,
+    "increment_changed_file_count": 33,
+    "patch_line_count": 3722,
+    "history_note": "编辑前当前审查JSON与此第三次passed归档逐字相同，hash已独立重算。third_delta_review、全部findings及前三次历史段落保持原值；顶层summary/conclusion/scope/limitations/next_action现表示第四次范围，不将第三次passed改写为正式验收通过。第三次原summary、scope核验文字和当时limitations的精确全文以此归档为准。"
+  },
+  "fourth_delta_review": {
+    "date": "2026-10-30",
+    "conclusion": "passed",
+    "scope_sha256": "fe0fd85a4cb57f3c62dbca303250b877c41bd0d06fb834590d79417afd168f30",
+    "input_description": ".local/task-answers-20261030/fourth-delta-input.json",
+    "input_description_sha256": "7f8df78029fc2be2a73a90fe29649a7db1c1c8960d423089df3ef79012e2d5fa",
+    "head": "04d27d06ba7b97d4cf3e288d4cf9e6300ef491a9",
+    "method": "独立按AGENTS、CURRENT frontmatter及07段、task-answers和pi-reuse原边界审查。用原before与third patch在内存还原第三次内容并重建两份冻结补丁；只读重算范围和材料hash。逐段比较12段原/新description，定点核Schema说明传播、每工具完整验证结构、版本夹具/全部原场景、锁定Pi1.3.0现有接入及最终消费者；完整读取指定局部日志、正式失败收据和其三份完整命令日志，不按文件名或主线总结判断。未运行产品、DB、harness、build、测试、外部模型，未读凭据或再委派。",
+    "changed_since_third_delta": [
+      "Makefile",
+      "apps/agent/tools/data-tools.ts",
+      "docs/CURRENT.md",
+      "tests/mvp/check-tool-schema.mjs"
+    ],
+    "unchanged_since_third_delta_count": 30,
+    "findings_status": {"TA-01": "fixed_no_delta_regression", "TA-02": "fixed_no_delta_regression", "TA-03": "fixed_no_delta_regression"},
+    "new_findings": [],
+    "remaining_blockers": [],
+    "shared_schema_reference_review": {
+      "locations": [
+        {"path": "apps/agent/tools/data-tools.ts", "start_line": 92, "end_line": 109},
+        {"path": "apps/agent/tools/data-tools.ts", "start_line": 299, "end_line": 314},
+        {"path": "tests/mvp/check-tool-schema.mjs", "start_line": 34, "end_line": 68}
+      ],
+      "assessment": "seenRefs从每个expand默认新Set改为单次dataTools构造内共享一个Set；仍在每个$ref位置展开完整定义，只通过includeDescriptions抑制重复引用子树的字符串description。title过滤为既有行为；名为description/title的业务属性值为Schema对象，过滤不会删字段。没有递归提前返回占位对象、共享验证结构缓存、修改同源schema或改变运行时参数验证。Set每次dataTools新建，不跨run或版本泄漏。",
+      "validation_structure": "以JSON数据作静态展开/去注释对照，v1/v2各19工具的type/properties/required/additionalProperties、枚举/模式/上下限、oneOf/anyOf/allOf/not/if/then等完整结构逐工具等于对应原合同；v1仍只移除新增finalize_current_answer及其专属条件。该读取未调用产品模块、Ajv、测试或harness。另查所有可达$ref，无被旧expand/validationSchema共同忽略的验证型兄弟关键字；现有兄弟description忽略是旧行为，本次未新增。已有最终Schema完整日志提供实际Ajv执行证据。",
+      "description_visibility": [
+        {"version": 1, "tool_count": 19, "original_description_source_locations": 49, "current_description_source_locations": 49, "original_description_instances": 66, "current_description_instances": 49, "lost_source_locations": []},
+        {"version": 2, "tool_count": 19, "original_description_source_locations": 52, "current_description_source_locations": 52, "original_description_instances": 72, "current_description_instances": 52, "lost_source_locations": []}
+      ],
+      "visible_first_occurrences": "按原Schema位置而非只按相同字符串核可见性。EvidenceRef的object_id/path说明在v1的validate_sql、v2的read_knowledge首先完整保留；QuerySemanticResolution全部说明在request_query保留，后续任务条件/补丁仅去重复；v2 SourceKey说明在read_source保留。其余独有字段说明及12段工具顶层说明仍保留。当前deliver激活整套data.tools，SDK仍按每工具description/parameters走原provider序列化，不存在本delta只暴露去掉说明的子集。未把静态说明仍可见等同真实模型必能正确理解。"
+    },
+    "description_comparison": [
+      {"tool": "search_knowledge", "line": 21, "assessment": "v1保有权知识/本人记忆/已选Skill，kinds及明确对象关联、每次business_domain不可省略/null或仅写query、过滤不改权限/资产目录和用户调查范围；空结果不证不存在、每对象至多三个条目、词法/向量标记、同版Unicode定位补读完整范围/例外均在。reply_coverage/omitted_objects与可补读身份、名称/条目/正文/结构完整性、部分词项须改写拆分、query=*及资产独立续页/标识全保留、正文可省略和资料非指令均保义。该段在v2由未变KnowledgeSearchInput说明覆盖，未将旧硬过滤语义写进v2 hints。"},
+      {"tool": "read_knowledge", "line": 25, "assessment": "v1保entry_id/offset/limit、content_page.complete/next_offset和同version续页，scope/source_text及各自page明确对应，采用前读齐范围和原话限定/例外、正文不替代来源。建议JSON/人工优先/未采用及候选依据隔离、正文/建议独立分页，结构同有效文字层/非confirmed查证、结构空时独立structure_only补齐后采用，以及每entry自己的source_facts均在。未变entry_id参数说明仍明确scope/source_text字面值；v2批量/支持/Skill边界说明逐字未改。"},
+      {"tool": "request_query", "line": 37, "assessment": "保只存口径已定草稿不执行，已有条件决策省略继承/携带逐字一致否则先修订，实质歧义即便公式明确仍needs_clarification并等待选择。explicit_user仍引本条完整原话、否定/限定及自写任务不算采用；原QuerySemanticResolution首次说明继续明确逐字、不截子串、前提/例外/换行和宿主采纳身份。SQL替代ID/独立null、诊断非阻断与不授执行权保留。"},
+      {"tool": "execute_query", "line": 41, "assessment": "保当前用户明确授权及完整逐字instruction_quote，包括否定/限定/换行/粘贴；单条三身份与多条完整queries集合、不混形状/不先route、整批同事务/任一拒绝无新增确认、已确认只接原状态、失败不新增关联授权、其他消息阻塞、原系统版本澄清授权、重放不再执行/转预算及明确重跑新查询均在。"},
+      {"tool": "update_analysis_task", "line": 45, "assessment": "逐项保create完整条件的null/[]/notes/timezone、已有真实ID/版本及省略goal保来源；revise/clarify补丁和旧稿失效；split原任务/版本、新目标/条件、迁移指定开放问题且原其余问题和查询不动、不带两类补丁字段。已读knowledge引用、问题原子性、question/数组互斥/options、仅关闭完整回答的问题、新问题全集/最早项/更多续读、普通route无条件补丁和仅改SQL替代ID均保留。v2追加的显式定稿、单独route、完整正文/成功查询候选与普通route不定稿说明逐字未改。原revise/clarify缺省/null新建合法合同及修复分支未改。"},
+      {"tool": "get_query", "line": 49, "assessment": "保只读不重跑、默认rows字节页/next_cursor及实际返回行统计、statistics的cursor平台页、cell绝对行列且无cursor。historical_analysis只代表保存时历史，保SQL/参数/原条件和不授当前执行权；原句不代表当前口径的含义由只代表保存时历史保留，没有将历史当当前。content_format=json/content_page片段、保持查询/view/行列/游标、按next_offset补齐JSON且不作完整值/NULL、系统统计范围与新确认查询只回状态/不轮询均在。"},
+      {"tool": "save_analysis_evidence", "line": 57, "assessment": "保真实任务/条件和有效历史，findings结论/计算/限制/资料/query_refs，精确query/列/全保存结果零起行/value与金额字符串；原任务原条件成功查询/真实result_ref、get_query补页和空/部分limitations/data_range、只核引用数值不证因果、新查询逐条聊天授权、回执引用及核验依赖均在。"},
+      {"tool": "present_analysis_answer", "line": 61, "assessment": "保定量来源、不存报告不执行，sources及唯一小写name的cell/statistic/parameter/metadata/截点/批次/field_ref所有绑定角色。template原值、日期金额行数绑定、禁阿拉伯/全角数字和SQL块、禁中文数词绕过、未返回派生值不自算而另给草稿，先完成保存后最后调用及answer_text原样不改写均保留；只证来源不证因果及概念/纯保存自然答复未删。"},
+      {"tool": "save_analysis_report", "line": 65, "assessment": "保本人同会话有效依据、当前报告归属与跨任务条件来源原身份、任一失效整份隐藏/改结论先新依据；首null/修订report_ref.version、成功result_ref和唯一列名、十进制精度/空或全NULL、line经SQL排序且维度唯一非空/bar唯一、完整聚合/超限注明/部分不当全量、标题约束与只返引用/系统展示执行边界均在。"},
+      {"tool": "read_analysis_report", "line": 69, "assessment": "保本人当前任务/同HTTP来源规则、首次task_id、实际title/evidence_ids/charts及局部修改保其余、reference.version乐观版本；精确JSON字符页需同版next_offset读齐、旧版续读拒绝/offset0重读、historical仅历史不作当前口径新执行依据、sources_unavailable无正文/不授SQL权均在。读齐要求和未变系统完整性规则保截断不可作全文。"},
+      {"tool": "manage_personal_asset", "line": 73, "assessment": "保本人可复用记忆先检索、三动作及ID/版本、替代偏好改原条而非追加冲突、成功告知。instruction_quote逐字本条相关指令及句子/分号/明确另外此外起点、逗号截断宿主补同句限定仍在；body保范围例外、不造别名缩写不扩大指标，Mem0同文body/scope及标签只截正文、候选以回执为准/不扩写、临时长期分别判断/仅本次不保存、未验证仅线索与Skill管理页保存选择均保留。未迁移Mem0或改变用户资产归属。"},
+      {"tool": "read_analysis_task", "line": 85, "assessment": "保省略取当前/指定真实历史，current_condition_version/lifecycle/phase始终当前控制状态；历史只给当前开放ID而不给当前目标/问题且无执行权，open_clarifications当前有效问题及同游标续页，失效来源正文隐藏不得从历史补回均在。"}
+    ],
+    "schema_fixture_review": {
+      "locations": [
+        {"path": "tests/mvp/check-tool-schema.mjs", "start_line": 43, "end_line": 78},
+        {"path": "tests/mvp/check-tool-schema.mjs", "start_line": 80, "end_line": 113},
+        {"path": "crates/data-agent/src/use_cases/data_tools.rs", "start_line": 10, "end_line": 35},
+        {"path": "packages/contracts/schema.json", "start_line": 2885, "end_line": 3001}
+      ],
+      "version_mapping": "原dataTools({},null,...)与06以来实际必需的transport.run不符，保存RED确为读取tool_contract_version的TypeError。现仅提供构造工具实际使用的run.tool_contract_version=1/2；不伪造业务执行transport或绕过服务端。v1仍映射SearchInput/ReadKnowledgeInput/ReadSourceInput；v2仅三工具映射KnowledgeSearchInput/KnowledgeReadInput/SourceReadInput，与当前Node及Rust input_schema逐项一致；其余16工具共用原合同。",
+      "v1_handoff_expectation": "v1模型原本就不暴露finalize_current_answer；本次expected移除的恰是新增可选字段及只由required(finalize_current_answer)触发的专属条件。additionalProperties=false和全部旧条件仍保留。70项AnalysisUpdate中只有两例含此新字段：一项v2合法单route、一项本已非法create；v1将前者拒绝，后者继续拒绝，v2仍按原fixture.valid。未把合法旧合同改错，也未把需要真实业务守卫的情况假称Schema充分。",
+      "cases_preserved": "tests/contracts/cases.json相对第三次逐字未变；相对07 before的643个完整用例对象均保留，新增9例为本包既有合同，不存在删除/放宽/替换原场景。原11个SearchInput、2个ReadKnowledgeInput、2个ReadSourceInput及通用合法/非法例继续在v1运行；v2使用原已有的5/11/2个分支用例，包括旧形状拒绝、支持独立游标、记忆/Skill分页隔离、结构陈述等。最终日志19×2项共158/161次fixture验证，另13项semantic_resolution及原报告10项/额外字段拒绝保持。",
+      "focused_checks_and_limits": "循环后tools是v2，但RequestQueryInput和SaveAnalysisReportInput两版本合同相同，原semantic_resolution可省略、13个决策正负例、报告/图表title逐字段深等和缺失/空白/类型拒绝、arbitrary字段拒绝均原样保留，v1主循环也完整比较这两工具并跑原cases。ProposalInput在原cases无专属用例，现日志仍cases=0；有结构深等但不能称已补全面行为覆盖，此为既有覆盖局限而非本次删例。"
+    },
+    "pi_reuse_and_regression_review": {
+      "assessment": "实际产品delta只有description文字、expand说明去重范围和一条注释；dataTools的候选失效、handoff、原账本接回、输出引用及Rust代码均未改。继续锁定Pi三包1.3.0、SessionManager/JSONL、prompt、原生compact/overflow、abort和原SDK重试；没有新增摘要器、循环、规划器、正文库、恢复框架或模型汇总调用。保留原同源Schema和业务权限/来源/版本校验。",
+      "original_assertions": [
+        {"path": "tests/mvp/check-mixed-task-pi-continuation.mjs", "lines": "43-63", "assessment": "逐字等于07 before。profile仍32768输入/2048输出/65536B、request_call_limit=12；精确attempts=7、unknown=1、全原scope、update_analysis_task成功3行、任务及原chain/request/budget身份断言保持。最终passed日志calls=6并有一次summary；最大普通序列化载荷65223B，未抬65536B。"},
+        {"path": "tests/mvp/check-mixed-task-bridge-cancellation.mjs", "lines": "47-99", "assessment": "逐字等于07 before。原即时/延迟2300ms两窗口、完成12000ms上限、旧provider实际断连、取消与剩余任务状态、原message/chain/scope、attempts=7/calls=6/unknown=1、3次任务成功及原作业失败次数均保持；延迟日志runs=9为脚本允许的interrupted重领，不将其说成单次续接。"},
+        {"path": "tests/mvp/check-large-tool-context.mjs", "lines": "11-94", "assessment": "逐字等于07 before，保24轮repeat100历史、两/六份各8192字、32768输入/8192输出/131072B、summary1–2、一次compaction、原溢出计数、最近完整SDK调用/回执配对及逐字全文、操作/origin/chain和精确模型账本；六份超限零正式提交/发送前终止。未为容量放行改变原夹具。"},
+        {"path": "tests/runtime/check-tool-capacity-compaction.mjs", "lines": "31-91", "assessment": "逐字等于07 before。真实Pi原生overflow成功续答及摘要503失败不发普通请求/不重做原读取，原65536输入/2048输出/131072B、许可次数和session身份不变。此脚本测试的是恢复容量控制，使用单个合成工具及受控许可，无DB，不单独证明完整dataTools固定开销。"}
+      ],
+      "formal_entry_wiring": "Makefile相对第三次只增三行：191行在verify-task-answers接check-tool-schema，213–214行在原verify-task-answer-regression末尾接两容量检查。未删原续接/Bridge/工作台等条目，未换mock、扩大profile或增加模型调用配额；CURRENT只扩回归expected说明，六组命令/timeout仍300/1200/1800/1800/600/300秒。两容量反例现进入原正式回归，尚未在此最终范围整组执行。",
+      "historical_findings_recheck": "TA-01继续经Pi tool_execution_end/isError清临时候选且frozenParts独立保留；data-tools执行体及deliver事件边界与第三次逐字相同。TA-02/03涉及的Rust register、取消筛选/started标记、commit未结算guard、task_answers原引用/逐part来源及Node pendingTaskCreation/原invokeRecorded均与第三次逐字相同；本次精简未移除对应参数约束和v2定稿指引。原waiting_clarification可自然交付且不标answered、SQL仍严格阶段的边界保持。此处是delta无回归核对，不将第三次旧局部证据冒充第四次执行。"
+    },
+    "evidence_checked": [
+      {
+        "paths": [".local/task-answers-20261030/formal-first-failed.json", ".local/delivery/I2-TASK-ANSWERS-1793336365784188000/command-01.log", ".local/delivery/I2-TASK-ANSWERS-1793336365784188000/command-02.log", ".local/delivery/I2-TASK-ANSWERS-1793336365784188000/command-03.log"],
+        "observed": "正式收据status=failed，before==after，保存的审查文件hash等第三次精确归档；合同19713ms/exit0、交接336329ms/exit0，旧回归353428ms/exit2且timed_out=false，后三组未执行。完整日志含652双侧合同、交接所有原脚本完成；旧回归前final/grounded/phase/通知/取消通过，随后原Pi续接在等待创建两个任务时timeout并退出make。",
+        "limit": "首轮绑定第三次历史范围，不能用这两组成功拼成本次正式通过。收据before/after自身一致已核；在内存重建第三次review_scope匹配，但未存当时CURRENT完整字节，不能仅由其hash完全重建正式frontmatter文本。没有把具体容量根因从正式timeout日志单独推出来，容量证据另见下一项。"
+      },
+      {
+        "paths": [".local/task-answers-20261030/pi-continuation-diagnosis.json", ".local/task-answers-20261030/pi-continuation-diagnosis-baseline.json", ".local/task-answers-20261030/diagnose-pi-continuation.mjs"],
+        "observed": "同一脚本以baseline动态import07 before Node，仍使用当前harness和当前Rust的隔离库；两份报告均第一普通请求65379B/19工具，首create成功仅一任务，再summary1323B，随后model_input_limit结束，2个attempt settled。两堆栈分别指当前与before deliver；该对照不支持将失败全归本包新答案业务。",
+        "limit": "这是当前Rust+旧Node的局部对照，未运行完整旧部署或旧Rust，不能宣称原整套部署也失败。两份报告不是双目标续接通过证据，也没有真实模型分词或语义结论。"
+      },
+      {
+        "paths": [".local/task-answers-20261030/pi-continuation-original-assertions.log", ".local/task-answers-20261030/trace-pi-continuation.mjs"],
+        "observed": "完整原脚本报告passed=true/calls=6；trace仅包JSON.stringify记录尺寸并原样返回，直接import未修改原测试，失败时记录error并置退出失败。最终7条序列化记录为6普通+1summary，toolsBytes47375，普通最大65223B，summary2132B，无error；原精确7次/unknown1/scope及3任务副作用断言可达并完成。",
+        "limit": "trace记录序列化候选不等同所有网络已发；本次6普通真实调用来自原测试calls，账本来自原断言。该局部日志无独立当前整轮收据，不提升为正式六组或真实模型效果。"
+      },
+      {
+        "paths": [".local/task-answers-20261030/pi-continuation-guidance-final.log", ".local/task-answers-20261030/pi-continuation-budget-preserved.log"],
+        "observed": "两个完整报告error分别为ERR_ASSERTION 10!==7与9!==7，栈均原续接脚本61行；含额外summary及部分超限序列化候选。保留为中间失败，不能按final或budget-preserved名字当成功。",
+        "limit": "它们不支持原7次账本已保持，修复后局部结论仅据上一项最终原断言日志；不删除这些失败或放宽原7次要求。"
+      },
+      {
+        "paths": [".local/task-answers-20261030/compact-guidance-bridge-cancellation.log"],
+        "observed": "完整报告两窗口均passed=true/calls=6，续接5221/7944ms，小于原12000ms；即时runs2、延迟runs9。首行bridge_failed/run_cancelled对应原请求取消，后续完整报告通过原provider断连、任务、7次模型账本/unknown1及原作业断言。",
+        "limit": "真实Worker/Bridge/Pi与本地协议的局部结果，不是正式回归整组完成；延迟模式多个interrupted尝试不被隐去。"
+      },
+      {
+        "paths": [".local/task-answers-20261030/compact-guidance-tool-capacity.log"],
+        "observed": "完整报告passed=true/errors=[]，成功组2次summary后1次普通续答；失败组1次summary503，无普通请求。对应原检查容量挡下请求不领send、Pi compaction_end和session身份断言。",
+        "limit": "真实Pi+受控provider/本地HTTP，模型许可为测试接缝，无MySQL和真实分词；不能单靠此单工具用例证明整套工具说明理解。"
+      },
+      {
+        "paths": [".local/task-answers-20261030/compact-guidance-large-tool-context.log"],
+        "observed": "完整两场景passed=true。两份8192正文载荷99757/38495/1309/126089B、summaries2、calls4/settled4；六份载荷99757/38495/1309B、summaries2、calls3/settled3，无超限普通续答派发。原全文、SDK配对、原操作、一次compaction、账本和零部分提交断言保留并完成。",
+        "limit": "合成真实Rust/隔离MySQL与本地协议的局部证据；最终未见当前六组统一收据，不证明真实模型或真实业务平台。"
+      },
+      {
+        "paths": [".local/task-answers-20261030/tool-schema-version-red.log", ".local/task-answers-20261030/tool-schema-final-versions.log"],
+        "observed": "旧夹具RED明确transport.run缺失TypeError。最终报告passed=true，v1/v2各19工具、158/161次既有用例，报告10项及semanticResolution13项保持，officialRequests0；脚本保完整结构比较、实际展开参数Ajv正负例及原额外字段拒绝。",
+        "limit": "这是最终工具Schema局部运行证据，不是六组正式收据。静态去重说明保留另由本次按原Schema位置独立核对，日志本身不证明真实模型理解。"
+      },
+      {
+        "paths": [".local/task-answers-20261030/compact-guidance-answer-state.log", ".local/task-answers-20261030/compact-guidance-types.log"],
+        "observed": "answer-state完整21项passed，真实Pi/deliver1.3.0、受控Rust transport/loopback，databaseUsed=false/networkAttempts0/officialRequests0；types保存tsc --noEmit且无错误。两份发生在最后几段纯description文字修改之前。",
+        "limit": "不能声称最终字节版已正式重跑answer-state/types；类型日志无独立exit-code收据。最终变化限字符串可支持静态无逻辑回归判断，仍需正式六组覆盖最终范围。"
+      }
+    ],
+    "evidence_sha256": {
+      ".local/task-answers-20261030/formal-first-failed.json": "1794ea5e425428bdf1a9a7ffbed1d726dd7979a666ae9a30307c23db80a54da5",
+      ".local/delivery/I2-TASK-ANSWERS-1793336365784188000/command-01.log": "3b3b51d2b5e62c5dc1a7eb27c2365c89808833be4fd72c50aa7085cdda6606fa",
+      ".local/delivery/I2-TASK-ANSWERS-1793336365784188000/command-02.log": "be93c08579f6d832a5ab354c2a804e6edd3460fdc63bc35cff17ec53026f131c",
+      ".local/delivery/I2-TASK-ANSWERS-1793336365784188000/command-03.log": "108b88fe4b55606c4fd94e7ff3b5d38edf016cd85d66e306060e0c82e79df1c6",
+      ".local/task-answers-20261030/pi-continuation-diagnosis.json": "96eb2e2a37cb6bb46b97c0da99c676bf91ad8920c0a86102341be1ece7190a19",
+      ".local/task-answers-20261030/pi-continuation-diagnosis-baseline.json": "964845b4f47e7dc8ee0d7a28b108b5e4d47e978c5178d69c69228e7c0d7542f7",
+      ".local/task-answers-20261030/pi-continuation-original-assertions.log": "5cdae8b7f1891fa2349073d56b7836f9715456ad3c247a6879d7f253837e6e4c",
+      ".local/task-answers-20261030/pi-continuation-guidance-final.log": "cd121fb60b19e5d1062683df6f24d37d48a603a9212590fa7bb080405b757c89",
+      ".local/task-answers-20261030/pi-continuation-budget-preserved.log": "4d538c2d5498f05dc2eda905e4fff8664be05632810eba184c52a604e1c69436",
+      ".local/task-answers-20261030/compact-guidance-bridge-cancellation.log": "b793f50c3ce4a2cc5ac8f974800f95ecee1836710bf0d74b4764054255d6722b",
+      ".local/task-answers-20261030/compact-guidance-tool-capacity.log": "122dcba6e4f3762db085fcf79d164dfcb47327b26b957023547312d8750c8b1a",
+      ".local/task-answers-20261030/compact-guidance-large-tool-context.log": "d8b9d3d61f29c5086c48152c637e09c22cc633c2aa9418cd7c53b1b0daeed552",
+      ".local/task-answers-20261030/tool-schema-final-versions.log": "0f113df1b379dde4f5f48b03e6e000ada7173487ca5ba8fec043b7d8b70647b6",
+      ".local/task-answers-20261030/compact-guidance-answer-state.log": "36cd54d4f7779bee59424f804528702b6d5b409871c9ae17c64fa113db3a970b",
+      ".local/task-answers-20261030/compact-guidance-types.log": "f50fe1624c26efd634a1d99eca879f67e3b5cd1acf5f9e6642de5a0f1687cd94"
+    },
+    "remaining_gaps": [
+      "最终冻结范围完整正式六组未重跑，首轮failed不能关闭；后三组和第三组未执行到的后续脚本仍待正式覆盖。",
+      "answer-state/types两份局部日志早于最后纯description修改，最终字节版执行新鲜度未由正式收据证明。",
+      "无真实模型调用；精简description的真实理解、定稿选择和语义效果未验证，本地协议只证明接线/结构/容量及原业务断言。",
+      "Node before/after诊断共用当前Rust/隔离DB，只能支持有限对照，不证明完整旧部署；局部日志不拼成整轮exit0。"
+    ]
+  },
+  "limitations": [
+    "本结论 passed 仅限第四次独立窄 delta 的源码、断言、冻结材料与完整保存日志。没有新增确定阻断，TA-01/TA-02/TA-03 未见本次delta回归；不表示整个增量完成或真实业务验收通过。",
+    "审查者没有执行 DB、harness、build、合同检查或任何测试，没有读取凭据、使用外部模型、发布或再委派；本轮仅执行只读范围/hash/历史/JSON校核并编辑指定审查文件，未调用验收检查器main或验收执行函数。",
+    "首轮正式收据明确failed：verify-contracts及verify-task-answers退出0，verify-task-answer-regression退出2，后续verify-task-answer-scope、verify-code、verify-architecture未执行。当前最终冻结范围仍须完整串行执行六组并保存同轮真实收据，局部通过不能替代；Clippy/Web和完整旧回归未由这些材料证明。",
+    "compact-guidance-answer-state.log及compact-guidance-types.log早于最后纯description修改，不能声称最终字节版已正式重跑；最终Schema及恢复/容量局部报告各支持其原脚本断言，不补成当前正式六组exit0。ProposalInput仍无专属正负fixture，有结构比较，不能声称每工具均有正负行为覆盖。",
+    "pi-continuation-guidance-final.log与pi-continuation-budget-preserved.log分别是10!==7和9!==7失败，dedup-first及正式超时也保留为失败。Node-before对照共用当前Rust和隔离DB，只证明该有限对照，不证明完整旧部署或旧Rust行为。",
+    "本地协议、受控provider/transport、合成平台和真实Pi的结果只支持相应接线、结构、容量、身份、预算及业务断言；无真实模型调用，未验证精简description的实际理解、定稿选择、语义效果或真实业务平台质量。",
+    "本轮只更新docs/reviews/task-answers-review-20261030.json，全部原findings及初审、第一次、第二次、第三次review段落保留；第三次顶层原summary/scope/limitations全文在已核SHA256的精确归档中保留。产品、测试、Schema、Makefile、CURRENT及历史.local材料均未修改，正式验收状态由主线按既有流程更新。"
+  ],
+  "required_next_action": "主线核对第四次审查JSON及其hash与fe0fd85a4cb57f3c62dbca303250b877c41bd0d06fb834590d79417afd168f30冻结范围一致后，按原计划完整串行执行verify-contracts、verify-task-answers、verify-task-answer-regression、verify-task-answer-scope、verify-code、verify-architecture六组并保存完整同轮真实收据；正式验收完成前保持I2-TASK-ANSWERS未关闭，不拼接局部成功或手写正式验收passed。真实模型理解与语义效果仍须在相应授权下另行验证，不由本次只读审查推定。若实现、断言或其他验收输入再变更，按新范围补相应独立delta。"
+}

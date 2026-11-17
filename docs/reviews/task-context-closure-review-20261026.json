@@ -1,0 +1,204 @@
+{
+  "schema": 1,
+  "reviewed_at_utc": "2026-10-26T11:37:54Z",
+  "increment": "I2-TASK-CONTEXT",
+  "reviewer": "独立审查子代理 /root/canonical_authority_review。未参与本增量产品代码、合同或测试的编写，未运行数据库测试；独立核对已确认要求、当前实现、测试断言及主实施者实际运行日志，仅写入本审查记录。",
+  "conclusion": "passed",
+  "summary": "04任务上下文纠偏的代码与证据审查通过。清空标准来源桶和task_text_provenance/delivered_provenance旁路已删除；任务范围、Pi原生重投影、历史正文与持续授权按正式合同实现。本审查中确认的活动任务、恢复、历史来源闭包、错误分类及Schema注释问题均已有对应修复和红绿证据，未发现当前04范围内尚未处理的阻断项。本记录不复用被推翻的旧三轮通过结论，也不代表最终verify-increment或05–09已通过。",
+  "scope_sha256": "5555337d6360d1eacd985997812f1b1d4142bf9fe1dc82a555b96f2588777618",
+  "scope": {
+    "requirements": [
+      "D02",
+      "D03",
+      "D08",
+      "D09",
+      "D13",
+      "D15",
+      "C01",
+      "C02",
+      "C03",
+      "C04",
+      "C05",
+      "C07",
+      "A01",
+      "A02",
+      "A04"
+    ],
+    "specifications": [
+      "docs/execution/semantic-runtime/task-context.md",
+      "docs/architecture/implementation-design.md 第17.4、17.8节",
+      "docs/CURRENT.md 当前I2-TASK-CONTEXT声明与验收变更记录"
+    ],
+    "reviewed_paths": [
+      "apps/agent/session/task-projection.ts",
+      "apps/agent/session/deliver.ts",
+      "apps/agent/session/workspace-context.ts",
+      "apps/agent/tools/data-tools.ts",
+      "crates/data-agent/src/use_cases/context_authority.rs",
+      "crates/data-agent/src/use_cases/source_limits.rs",
+      "crates/data-agent/src/use_cases/deliver_run.rs",
+      "crates/data-agent/src/use_cases/historical_analysis.rs",
+      "crates/data-agent/src/use_cases/query_workflow.rs",
+      "crates/data-agent/src/use_cases/query_semantics.rs",
+      "crates/data-agent/src/use_cases/analysis_reports.rs",
+      "crates/data-agent/src/use_cases/analysis_evidence.rs",
+      "crates/data-agent/src/use_cases/data_tools.rs",
+      "crates/data-agent/src/use_cases/knowledge.rs",
+      "crates/data-agent/src/use_cases/read_conversation.rs",
+      "crates/data-agent/src/modules/analysis",
+      "crates/data-agent/src/modules/queries",
+      "crates/data-agent/src/modules/conversations",
+      "packages/contracts",
+      "tests/mvp",
+      "Makefile"
+    ],
+    "boundary": "仅审查上述路径中04任务条件、来源范围、历史读取、Pi投影及直接受影响的恢复/容量行为；广目录作为指纹输入不等于审查其所有既有能力。05混合检索与06–09不在本结论范围。",
+    "fingerprint_method": "现场调用scripts/check_delivery.py::review_scope(root,read_delivery(root))；当前review.record为本文件。计算按项目规则排除本记录及review指针，未手抄旧审查指纹。"
+  },
+  "verified_decisions": [
+    "来源依赖继续使用单一完整authority；直接交付预览记入evidence_reads，派生正文保留真实出处。旧实验侧字段只作为不完整快照拒绝条件，未保留第二套来源合并或授权旁路。",
+    "source_limits缺失与明确null分别处理；旧任务依据可核实声明恢复，未知范围不猜无限制。未归属时只核活动任务；已取消任务不永久限制普通浏览。",
+    "两个活动任务均明确无限制时只更新归属；任一受限/未知或同任务来源声明变化时通过Pi原生接口重投影，不因普通月份修订机械清空上下文。",
+    "轮内投影沿Pi turn_end/appendCompaction和当前会话推进，恢复先接回原SDK工具组；原session、operation、run、recovery chain及预算身份保留。切回可用任务时合法Skill恢复。内部checkpoint读取不是provider派发，实际普通与摘要派发仍受范围检查。",
+    "历史查询/报告交付保存时SQL、原条件和已存正文；普通语义修订、旧全文清理或明确结果TTL过期不整份隐藏历史。撤权、停用、删除及unknown来源闭包仍拒绝，历史引用不取得当前采用或执行资格。",
+    "历史投影使用扁平去重来源，包含原条件与结果目标；读取时的范围校验和回执分页复用同一已核验投影，不递归复制完整历史authority。",
+    "旧explicit_user决策缺原采纳消息身份时拒绝，不能补写当前消息；查询控制投影剥除semantic_resolution，失效正文不从解释字段复活。",
+    "历史记录查询只将确定not_available转为stale_context，暂时和永久存储错误保留原分类；工具参数仅精简重复字符串description注释，保留TimeRole.description等真实业务字段及全部验证结构。"
+  ],
+  "resolved_review_findings": [
+    {
+      "problem": "活动任务切换泄漏旧任务正文、合法Skill被永久清空",
+      "evidence": [
+        ".local/checks/task-switch-projection-red.log",
+        ".local/checks/task-switch-projection-green.log"
+      ]
+    },
+    {
+      "problem": "范围变化后原消息无法安全恢复，含已持久toolResult窗口",
+      "evidence": [
+        ".local/checks/task-projection-recovery-red.log",
+        ".local/checks/task-projection-recovery-green.log",
+        ".local/checks/task-projection-receipt-recovery-green.log"
+      ]
+    },
+    {
+      "problem": "旧活动基线和unknown历史来源被误当可用；取消任务持续污染范围",
+      "evidence": [
+        ".local/checks/legacy-active-projection-green.log",
+        ".local/checks/historical-unknown-sources-green.log",
+        ".local/checks/cancelled-task-scope-green.log"
+      ]
+    },
+    {
+      "problem": "历史查询原条件/结果目标的来源范围检查不完整",
+      "evidence": [
+        ".local/checks/historical-scope-red.log",
+        ".local/checks/historical-scope-green.log"
+      ]
+    },
+    {
+      "problem": "历史记录读取吞掉真实sqlx暂时故障分类",
+      "evidence": [
+        ".local/checks/history-error-classification-red.log",
+        ".local/checks/history-error-classification-green.log"
+      ],
+      "result": "两处读取共用明确错误映射；2项纯测试通过，包含真实sqlx::Error::PoolTimedOut分类。未声称注入了真实数据库断网。"
+    },
+    {
+      "problem": "旧80KiB profile固定工具说明重复膨胀，Pi压缩后仍无法普通派发",
+      "evidence": [
+        ".local/checks/native-compaction-capacity-diagnostic.log",
+        ".local/checks/tool-schema-annotation-red.log",
+        ".local/checks/tool-schema-annotation-green.log",
+        ".local/checks/native-compaction-schema-green.log"
+      ],
+      "result": "保持旧限额，仅删除同工具重复引用的字符串说明；19个工具完整验证结构与同源合同一致。修复中发现的真实description属性误删已先红后绿修正。"
+    }
+  ],
+  "test_changes_reviewed": [
+    "删除check-source-limits对内部checkpoint读取必须stale_context的实现耦合断言；没有改成期待not_available。实际provider拒绝、普通/摘要重投影及两种中断恢复断言保留。",
+    "取消回归仅扩大两处Worker重启等待包络并记录实测时长；产品租约、失败次数、operation/budget及最终完成断言不变。原失败日志保留，完整8场景和20次续接通过。",
+    "查询正文夹具补全failed/cancelled结果通知的真实捕获、核验、get_query和正常finish，解决串行Worker未释放；没有修改产品代码或放宽正文保护断言。",
+    "workflow-reliability平台屏障只阻塞目标操作；result-authority按query/owner/result身份回放屏障前真实合成平台回执，陌生身份拒绝。保留24并发、锁队列交错、一次validate、单后继、旧确认拒绝及unknown重试次数。",
+    "旧记录缺source_limits使用真实缺字段旧修订构造，新记录明确null；派生正文反例按先读取资料、再生成目标的顺序构造，不把无来源的原始用户文字伪装成派生内容。",
+    "verify-task-scope外层时间包络扩大只用于完整串行测试，不改变任何产品预算。原失败整组日志没有改称通过，最终绑定验收仍需实际运行。"
+  ],
+  "evidence": {
+    "contracts": {
+      "path": ".local/checks/task-context-final-verify-contracts.log",
+      "result": "584项Rust/TypeScript同源合同通过"
+    },
+    "static": {
+      "paths": [
+        ".local/checks/task-context-final-verify-code.log",
+        ".local/checks/task-context-closure-build.log",
+        ".local/checks/task-context-closure-static.log"
+      ],
+      "result": "构建、fmt、clippy、TypeScript及架构9项通过；早先Web构建有既存大bundle警告，非性能验收"
+    },
+    "scope_and_recovery": {
+      "paths": [
+        ".local/checks/task-projection-receipt-recovery-green.log",
+        ".local/checks/mixed-task-cancellation-complete.log",
+        ".local/checks/task-context-recovery-results.json",
+        ".local/checks/task-context-compatibility-recovery-continuation.log",
+        ".local/checks/task-context-compatibility-session.log",
+        ".local/checks/task-context-compatibility-locking.log"
+      ],
+      "result": "范围投影与恢复窄集成、取消8场景、恢复9项、会话2项及锁序回归通过；最新三个串行命令均exit 0"
+    },
+    "history": {
+      "paths": [
+        ".local/checks/historical-scope-green.log",
+        ".local/checks/query-text-authority-notification-green.log",
+        ".local/checks/task-context-remaining-check-task-text-authority.log",
+        ".local/checks/task-context-remaining-check-context-dependencies.log",
+        ".local/checks/task-context-remaining-check-analysis-reports-browser.log"
+      ],
+      "result": "历史来源范围、查询正文8组、任务正文、schema5/6上下文兼容和浏览器6项通过；报告主流程/历史持续访问/报告正文各成功段见原历史组日志"
+    },
+    "query_regressions": {
+      "paths": [
+        ".local/checks/task-context-remaining-verify-query-workflow.log",
+        ".local/checks/workflow-reliability-protocol-green.log",
+        ".local/checks/task-context-compatibility-answer-phase.log"
+      ],
+      "result": "原主流程、边界和固定请求时刻成功；原整组后来在旧屏障失败。修复后可靠性完整13项与答案阶段6项分别通过，不把原整组失败日志算作整组通过"
+    },
+    "legacy_capacity": {
+      "path": ".local/checks/native-compaction-schema-green.log",
+      "result": "原24轮历史后续6轮及280条短消息通过；29次本地协议请求含15次Pi原生摘要，最大payload 81625字节，小于原81920字节；原会话、预算和撤回断言保留"
+    },
+    "failed_group_logs_retained": [
+      ".local/checks/task-context-final-verify-task-conditions.log",
+      ".local/checks/task-context-final-verify-task-scope.log",
+      ".local/checks/task-context-final-verify-task-history.log",
+      ".local/checks/task-context-remaining-verify-query-workflow.log",
+      ".local/checks/task-context-compatibility-results.json"
+    ],
+    "runner": "全部动态检查由主实施者运行；本审查者核对当前实现、测试原意、具体失败诊断及修复后完整结果，未冒充独立重跑。",
+    "layers": {
+      "storage": "涉及数据库的集成使用隔离真实MySQL/API/Worker与合成业务资料",
+      "provider": "本地协议provider或捕获式替身；session检查仅Pi SDK与本地fake host",
+      "platform": "可执行合成平台及明确故障屏障，不是真实生产平台",
+      "official_requests": 0
+    },
+    "delivery_declaration": {
+      "path": ".local/checks/task-context-closure-delivery.log",
+      "result": "verify-delivery通过；只证明增量声明与要求覆盖，不代表业务验收通过"
+    }
+  },
+  "remaining_gate": {
+    "status": "pending",
+    "commands": [
+      "make verify-increment"
+    ],
+    "meaning": "审查通过允许执行最终增量门禁，不替代三个完整绑定组的真实运行；门禁失败、指纹失配或后续实质修改均不能关闭增量。"
+  },
+  "limitations": [
+    "未验证真实付费模型质量或生产平台接入，也不证明完整产品dogfood通过。",
+    "80KiB测试证明冻结旧配置仍可安全续接；15次摘要和窄剩余空间不能被解释为生产性能或推荐容量。",
+    "05–09仍按原执行包推进，本审查不对这些阶段作通过结论。",
+    "范围指纹对应冻结时当前记录和源码；正文、合同、代码或测试发生相关变化需重新核对，不能继续沿用本指纹。"
+  ]
+}

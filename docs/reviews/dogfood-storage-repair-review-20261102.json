@@ -1,0 +1,112 @@
+{
+  "reviewer": "Codex 独立只读审查（未参与本增量实现；未委派）",
+  "increment": "I3-DOGFOOD-STORAGE-REPAIR",
+  "summary": "初审 P2 已修复：来源退休候选只按 space_id/source_id 取得 ID，不再按旧快照的 enabled 状态排除对象；逐主键当前读仍核对空间、来源及 enabled，保留 keep 和原保存路径。新增公开 change_state_in_tx 两连接测试准确复现旧快照遗漏，RED 为退休数 0 对预期 1，修后完整 16 项 GREEN，包含原两项无关行锁隔离测试。知识索引完整主键修复及其余已审锁序、版本、租约、权限与引用逻辑保持。产品代码未再变化；重签冻结相对已审 passed 冻结仅 docs/CURRENT.md 说明变化。仅复核本次最小 delta，未发现剩余阻断问题，结论为 passed；正式 verify-increment 尚未运行。",
+  "conclusion": "passed",
+  "scope_sha256": "362eb85e6f8624fdf5617eb7e45fe76b492e9243d0bf0a9276c0884d3aef2d03",
+  "findings": [],
+  "resolved_findings": [
+    {
+      "id": "STORAGE-REVIEW-01",
+      "priority": "P2",
+      "status": "resolved",
+      "path": "crates/data-agent/src/modules/knowledge/store.rs",
+      "line": 3174,
+      "resolution": "候选 SELECT 移除 state='enabled'，保留同来源既有 ID；可变状态只在逐主键 FOR UPDATE 当前读中判断，避免旧快照中的 disabled 状态漏掉已经提交启用的对象。逐主键查询仍重核 space_id、source_id、enabled，未恢复来源范围锁。",
+      "test": "crates/data-agent/tests/knowledge_read_pages.rs::source_retirement_rechecks_enable_after_the_transaction_snapshot",
+      "test_assessment": "先通过公开知识读在退休事务建立 disabled 快照，再由第二连接调用公开 change_state_in_tx 并提交 enabled，随后原事务执行正式退休操作，断言退休数为 1 且返回 disabled，最后提交事务。断言来自原当前读语义，不依赖 SQL 文本或模拟行为。",
+      "red_evidence": ".local/checks/dogfood-storage-repair/snapshot-red.log",
+      "green_evidence": ".local/checks/dogfood-storage-repair/snapshot-green.log"
+    }
+  ],
+  "scope": {
+    "implementation_delta": [
+      "crates/data-agent/src/modules/knowledge/store.rs",
+      "crates/data-agent/tests/knowledge_read_pages.rs"
+    ],
+    "baseline": ".local/checks/dogfood-storage-repair/{store-before.rs,tests-before.rs}",
+    "diff_validation": "从 before 快照重新计算的两个 unified diff 均与 store-final.diff、tests-final.diff 完全一致，并匹配 frozen-final.json 中的文件哈希。产品代码仍为此前独立审查通过的索引完整主键与来源退休两处锁修复，未再修改。",
+    "fingerprint_validation": "通过绝对项目根目录调用 scripts/check_delivery.py 的 review_scope(root, read_delivery(root)) 计算当前 scope_sha256，与 frozen-recheck.json 完全一致。逐文件比较 frozen-recheck.json 与此前 passed 的 frozen-final.json：仅 docs/CURRENT.md 哈希变化；store.rs 与 knowledge_read_pages.rs 哈希保持 d9ae9829576cf1fb2d217466ea852436ffc607c7ec3af36dac7a07247ff837ee 和 d12dde34e7a79f9640f38337e71246591e2296a1b84412dc676b6530e6e89478；声明、contract_sha256、decisions_sha256 及 checker_sha256 均一致。",
+    "excluded": "未重审前置收据、全部其他继承改动、真实维护配置恢复及其本地恢复记录、维护账本或后续真实效果问题。未修改账本规则。"
+  },
+  "checks": [
+    "沿用初审结论：既有迁移定义知识索引主键为 (target_kind,source_kind,object_id,version)，source_kind 默认空串；知识目标查询补全该条件，没有 Schema 或业务合同变更。",
+    "沿用初审结论：索引领取先按对象主键锁定，再锁索引待办；当前正文读取、版本冲突、租约代次、有效期、次数及冻结 embedding_profile 条件未被放宽。",
+    "复核确认：退休候选不再依赖快照中的启用状态，逐主键当前读重新核对 space_id、source_id、enabled；keep、next/persist、人工正文、needs_review 及保存后依赖登记保持。",
+    "新增快照测试通过两连接的真实状态变更覆盖初审发现；snapshot-green.log 完整记录 16 项通过，原 index_claim_does_not_wait_for_an_unrelated_job 和 source_retirement_does_not_wait_for_an_unrelated_object 均保留并通过。",
+    "重签核对确认产品代码与测试文件哈希和 passed 冻结完全一致；仅 CURRENT 说明因窗口输入恢复而变化，不影响本审查结论。"
+  ],
+  "evidence": {
+    "recheck_frozen": ".local/checks/dogfood-storage-repair/frozen-recheck.json",
+    "passed_frozen": ".local/checks/dogfood-storage-repair/frozen-final.json",
+    "final_store_diff": ".local/checks/dogfood-storage-repair/store-final.diff",
+    "final_tests_diff": ".local/checks/dogfood-storage-repair/tests-final.diff",
+    "snapshot_red": ".local/checks/dogfood-storage-repair/snapshot-red.log",
+    "snapshot_green_and_knowledge_pages_16_passed": ".local/checks/dogfood-storage-repair/snapshot-green.log",
+    "initial_index_red": ".local/checks/dogfood-storage-repair/index-red2.log",
+    "initial_index_green": ".local/checks/dogfood-storage-repair/index-green.log",
+    "initial_retirement_red": ".local/checks/dogfood-storage-repair/retire-red.log",
+    "initial_retirement_green": ".local/checks/dogfood-storage-repair/retire-green.log",
+    "initial_knowledge_pages_15_passed": ".local/checks/dogfood-storage-repair/pages-full.log",
+    "initial_catalog_passed": ".local/checks/dogfood-storage-repair/catalog.log",
+    "initial_verify_code_completed": ".local/checks/dogfood-storage-repair/code.log",
+    "initial_owner_passed": ".local/checks/dogfood-storage-repair/owner.log",
+    "explain": ".local/dogfood-runs/semantic-20261102/evidence/index-lock-plans.json",
+    "deadlock": {
+      "path": ".local/dogfood-runs/semantic-20261102/evidence/innodb-deadlock.txt",
+      "relevant_lines": [25, 28, 30, 33, 50, 71, 74, 76, 79, 1126, 1127, 1142],
+      "assessment": "初审只提取相关事务、SQL、持锁、等待与回滚行，未输出物理记录全文。缺 source_kind 的 UPDATE 与 source_id 范围锁定形成相互等待；EXPLAIN 中扫描估计从 519 行缩为使用全部四个主键分量的 1 行。本次未重复读取。"
+    }
+  },
+  "review_history": [
+    {
+      "stage": "initial_review",
+      "reviewer": "Codex 独立只读审查（未参与本增量实现；未委派）",
+      "summary": "知识索引补齐 source_kind='' 与既有完整主键一致，现有死锁、EXPLAIN 和两连接 RED/GREEN 证据支持锁范围修复；对象到索引的锁序、版本与租约条件保持。但来源退休的候选查询新增旧快照遗漏：快照建立后由现有人工路径启用的对象不会进入候选，逐主键当前读无法补回。发现一项需修复的快照语义回归，结论为 changes_requested。正式 verify-increment 尚未运行。",
+      "conclusion": "changes_requested",
+      "scope_sha256": "849a441fda314851303392778d398f47b69459e0adee7aa02c43325b1a127e0e",
+      "findings": [
+        {
+          "id": "STORAGE-REVIEW-01",
+          "priority": "P2",
+          "title": "退休候选不能依据旧快照的 enabled 状态排除对象",
+          "path": "crates/data-agent/src/modules/knowledge/store.rs",
+          "line": 3174,
+          "description": "候选 SELECT 是 REPEATABLE READ 下的普通一致性读，会复用同一目录事务先前建立的快照。若同来源、不在 keep 中的对象在该快照中为 disabled，而维护者通过现有 enabled 操作在 retire_source_objects_in_tx 调用前提交启用，新查询仍按旧 state 将其排除，后续逐主键 FOR UPDATE 根本不会访问它，权威完整同步可以成功结束却留下应退休的 enabled 对象。旧实现直接用 FOR UPDATE 按当前状态读取，因此会退休该对象。来源头 CAS 不能排除此时序：人工 change_state_in_tx 只锁知识对象并保存，启用这类来源对象的调用链不取得 source_sync_locks 或 source_heads 锁。",
+          "supporting_locations": [
+            "crates/data-agent/src/use_cases/catalog_import.rs:171",
+            "crates/data-agent/src/use_cases/catalog_import.rs:322",
+            "crates/data-agent/src/use_cases/catalog_import.rs:351",
+            "crates/data-agent/src/use_cases/catalog_import.rs:368",
+            "crates/data-agent/src/use_cases/knowledge.rs:321",
+            "crates/data-agent/src/modules/knowledge/store.rs:1491",
+            "crates/data-agent/src/use_cases/dependency_registration.rs:21",
+            "crates/data-agent/src/use_cases/knowledge_documents.rs:165"
+          ],
+          "requested_change": "保留候选不加锁、逐主键锁定并重核来源与启用状态的修法，但候选发现不要因旧快照中的 disabled 状态漏掉已有对象。可考虑按 space_id/source_id 取得候选 ID，不在候选阶段过滤 enabled，仅在逐主键当前读时检查 enabled；同时保留 keep、权限、来源 CAS 和对象到索引的锁序。",
+          "validation_expectation": "增加独立于 SQL 文本的两连接行为用例：先保存同来源 disabled 对象；退休事务先做普通读建立快照；另一连接通过公开知识状态操作提交 enabled；再在原事务调用 retire_source_objects_in_tx，断言它确实退休并保存该对象。保留现有无关行锁隔离用例。此次只做静态审查，未执行该反例。"
+        }
+      ],
+      "evidence_baseline": ".local/checks/dogfood-storage-repair/frozen.json"
+    },
+    {
+      "stage": "fix_review",
+      "reviewer": "Codex 独立只读审查（未参与本增量实现；未委派）",
+      "summary": "P2 修复后复核通过：候选去状态过滤，逐主键当前读保持来源与 enabled 重核；两连接快照 RED/GREEN 与完整 16 项 GREEN 有效。",
+      "conclusion": "passed",
+      "scope_sha256": "78e2b75a6feab3e4f51f68791f429f64b161c9879c76f55ae5222d7265efa3ed"
+    },
+    {
+      "stage": "resign_review",
+      "reviewer": "Codex 独立只读审查（未参与本增量实现；未委派）",
+      "summary": "重签范围相对已审 passed 冻结仅 docs/CURRENT.md 变化；产品代码与测试文件哈希完全一致，声明与合同摘要不变，因此无需重审产品实现，维持 passed。",
+      "conclusion": "passed",
+      "scope_sha256": "362eb85e6f8624fdf5617eb7e45fe76b492e9243d0bf0a9276c0884d3aef2d03"
+    }
+  ],
+  "verification_limits": [
+    "三轮审查仅阅读既有实现、测试及证据，并执行本地只读 diff 比对和指定指纹计算；未连接 DB、运行构建或测试、访问网络、进行付费调用或委派。唯一写入为本审查 JSON。",
+    "RED/GREEN 均为实现方提供的运行证据，本审查未独立重跑；catalog/code/owner 日志沿用初审证据，没有将其表述为最终版本已重新通过。",
+    "正式 verify-increment 在审查后运行；passed 仅为当前冻结范围的独立代码审查结论，不声明正式验收已通过，也不关闭增量。"
+  ]
+}

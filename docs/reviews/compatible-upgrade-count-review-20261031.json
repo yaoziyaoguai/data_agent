@@ -1,0 +1,253 @@
+{
+  "schema": 1,
+  "increment": "I2-COMPATIBLE-UPGRADE",
+  "review_date": "2026-10-31",
+  "reviewer": "原独立审查实例接续复核。未参与本增量、两项产品修复或本次计数夹具的实现与测试编写，未再委派；独立阅读完整 80 行 delta、目标测试前后版本、初始化与修订写入链、原合同及保存日志，并只读重建差异、核验归档和范围。本轮未运行数据库、harness、cargo、构建、测试或正式验收。",
+  "summary": "本次仅测试与 CURRENT 两文件的计数夹具 delta 复核为 passed，未发现新增阻断。固定总数 1 忽略了 API 初始化已经保存的 schema 修订元信息；既定升级合同要求保留旧元信息，不能删除产品正常保留的行来满足该断言。新测试在强制改版前保存完整元信息基线，要求改版恰增一条、旧行逐字段保持、未变同步后全列表完全相同，且保留原正文、版本、操作者、指纹、旧档及空 changed 断言。独立重建 patch、500 文件 scope、原 passed 与首轮失败归档全部匹配；声明验收输入仅该测试变化，499 项及合同未变，CURRENT 单独附审。原 CU-01/CU-02 fixed 及其他未变范围的审查可继承，运行证据限制仍保持。首轮正式验收只有 UPGRADE-CURRENT 执行且失败；局部 6/6 GREEN 不代替正式重跑。本结论只允许主线更新 review 指针后重新串行执行完整八组，不关闭 08、不进入 09。",
+  "conclusion": "passed",
+  "scope_sha256": "db829bff5d73fdf4bcc8688a1bd6e6303c736e24de0558240485e79d46c39cd5",
+  "prior_review": {
+    "path": "docs/reviews/compatible-upgrade-repair-review-20261030.json",
+    "archived_path": ".local/compatible-upgrade-20261030/formal-first-failed/review.json",
+    "sha256": "91555f082b19ba393bdffc3236728fdfb2c2929702dd8dd79e77a753ac55d2fc",
+    "scope_sha256": "b5a98aea2a8f5b5d9d1f08b33dad87a6355fe9f662af62c5e35258d07b0b9247",
+    "conclusion": "passed",
+    "preservation": "原报告与归档逐字匹配，均未改写。继承的是已绑定范围内的产品与断言审查及其限制，不把原 passed 解释为正式八组通过。"
+  },
+  "original_review": {
+    "path": "docs/reviews/compatible-upgrade-review-20261030.json",
+    "sha256": "34f2aaf6b7e49c56d211419f7563aea58b08a567ab5c6d3de88695e692046caf",
+    "scope_sha256": "1f81da880dd9950f2e744600c43fac3a52e2edd63803a727553a2fe89ad3b46b",
+    "conclusion": "blocked",
+    "preservation": "原 blocked 报告保持。CU-01/CU-02 的后续 fixed 判断仍来自独立 repair 报告，未用本次测试修改改写历史缺陷。"
+  },
+  "scope": {
+    "head": "04d27d06ba7b97d4cf3e288d4cf9e6300ef491a9",
+    "preserved_worktree": "保留全部继承未提交修改；以明确的修复后冻结 fingerprint 和两份 before 快照审查本轮 delta，不把 HEAD 当作干净基线。本线程只新建本 JSON。",
+    "input": {
+      "path": ".local/compatible-upgrade-20261030/formal-count-fix/review-input.json",
+      "sha256": "82a28c185bada69529053ea59138ea5f215f4c3a9efbdb51f97eedbc97b24b3d"
+    },
+    "before_input": {
+      "path": ".local/compatible-upgrade-20261030/formal-count-fix/before-input.json",
+      "sha256": "7812822b92f4a75d2e98c6720a0647ab2efd70a7784e99cf02ce50ae9949afb7",
+      "scope_sha256": "b5a98aea2a8f5b5d9d1f08b33dad87a6355fe9f662af62c5e35258d07b0b9247",
+      "snapshot_root": ".local/compatible-upgrade-20261030/formal-count-fix/before"
+    },
+    "delta": {
+      "manifest": ".local/compatible-upgrade-20261030/formal-count-fix/review-changes.json",
+      "manifest_sha256": "bcfd679c025b7425daf2556351b6a6dd200735b8b9f90ded6247eba577b79d27",
+      "patch": ".local/compatible-upgrade-20261030/formal-count-fix/review-delta.patch",
+      "patch_sha256": "6f7be8f9e3fec903df8ef20b24597285f581377d130abe2410d70095b8ec4de5",
+      "files": 2,
+      "modified": 2,
+      "added": 0,
+      "deleted": 0,
+      "patch_lines": 80,
+      "changed_files": [
+        {
+          "path": "crates/data-agent/tests/public_content_retention.rs",
+          "before": "63ea50c7c33648e39e519f820d58ef1f51b27e572ad6def5ac4649e3c07320a3",
+          "after": "35645c73e82bef0e3e0a957c6911fafd5a974c06adae3ff375ccb41db5671718"
+        },
+        {
+          "path": "docs/CURRENT.md",
+          "before": "90bbe21f7e550adb3dee2451556559bc0b6980a6bd3d49408f543258e96264b3",
+          "after": "ec5267922dc76f058fe6a06bab171652b8a5366b7efe7d6cd1359d3f9c88ae84"
+        }
+      ],
+      "verification_input_changes": ["crates/data-agent/tests/public_content_retention.rs"],
+      "additional_reviewed_files": ["docs/CURRENT.md"],
+      "reading": "完整阅读 80 行 patch、目标函数前后完整正文、配置和专用忽略入口；补读 API 启动、knowledge 初始化与 sync_catalog、ingestion 同步及元信息写入、source_revisions 建表和未变 runner。"
+    },
+    "fingerprint_verification": {
+      "scope_files": 500,
+      "unchanged_scope_files": 499,
+      "head_matches": true,
+      "before_canonical_fingerprint_matches_prior_scope": true,
+      "input_canonical_fingerprint_matches_declared_scope": true,
+      "current_fingerprint_matches_input": true,
+      "current_review_scope_matches": true,
+      "delta_before_after_hashes_match": true,
+      "patch_reconstructed_byte_for_byte": true,
+      "contract_decisions_declarations_checker_unchanged": true,
+      "unlisted_scope_changes": [],
+      "prior_reports_preserved": true,
+      "failed_archive_manifest_matches": true,
+      "archived_review_matches_original": true,
+      "archived_CURRENT_matches_before_snapshot": true,
+      "failed_receipt_before_equals_after": true,
+      "failed_receipt_matches_prior_scope_plus_review": true,
+      "inherited_repair_evidence_hashes_checked": 17,
+      "inherited_repair_evidence_hash_mismatches": [],
+      "record_absent_before_creation": true,
+      "method": "只读 git rev-parse HEAD 与 python3 -I -B；严格解析 JSON、计算 SHA256、用 before/current 标签在内存 difflib 重建 patch，并核验 500 文件 fingerprint。导入 scripts/check_delivery.py 后仅调用 read_delivery、fingerprint(for_review=True)、review_scope。另从归档 CURRENT 正则解析 JSON frontmatter，在内存重建包含原 review 的正式 fingerprint，与失败收据前后值一致；未用 split(\"---\")。创建前再次核 14 个输入/报告/证据 hash、两文件四个前后 hash、HEAD、当前 scope 和目标未存在，均匹配。",
+      "CURRENT_boundary": "docs/CURRENT.md 正文不是声明 verification_inputs；本轮将其作为第二个明确附审文件核完整 delta 和原始 hash。review 指针被 for_review 排除，不能用其正常变化冒充产品漂移，也不能据此忽略 CURRENT 的实质审查。",
+      "meaning": "证明冻结内容一致及继承范围；不声称逐行重新审完 499 个未变文件，也不以哈希替代业务判断或实际验收。"
+    },
+    "requirements": [
+      "AGENTS.md：独立审查、测试预期独立依据、保护历史和授权边界。",
+      "docs/CURRENT.md：本增量 frontmatter、08 最新记录、必要修订元信息不变量和完整八组绑定。",
+      "docs/execution/semantic-runtime/compatible-upgrade.md：步骤 3 保当前与必要版本元数据、旧档保持；正式组合证据边界。",
+      "docs/architecture/implementation-design.md：17.8 第 2 项同事务更新 current/版本元数据且既有历史原样保留。",
+      "docs/execution/semantic-runtime/pi-reuse.md：既有 owner、原身份与限额保持；局部日志不能拼为正式收据。"
+    ]
+  },
+  "formal_first_failure": {
+    "status": "failed",
+    "archive": ".local/compatible-upgrade-20261030/formal-first-failed",
+    "started_at": "2026-10-30T15:47:06.622538+00:00",
+    "finished_at": "2026-10-30T15:48:56.554770+00:00",
+    "executed_acceptance_ids": ["UPGRADE-CURRENT"],
+    "command": ["make", "verify-upgrade-current"],
+    "duration_ms": 109513,
+    "timeout_seconds": 1800,
+    "exit_code": 2,
+    "timed_out": false,
+    "before_equals_after": true,
+    "binding": "收据包含与原 b5a98 范围相同的 500 个输入，另绑定原 repair review；归档 CURRENT 的普通合同 hash 解释了正式与 for_review 合同摘要的正常差异。独立重建后与收据 before/after 全对象一致。",
+    "observed": "完整 command-01.log 依次显示 API/Worker 分别构建、启动器 21 项通过、SIGTERM/SIGINT 清理通过、knowledge 13/13、source-current 8/8；public_content_retention 为 5 passed、1 failed、2 原专用 ignored。失败是原 synthetic 例固定 COUNT=1，left=2/right=1，cargo101，经 runner 和 make 以 2 失败；日志末明确 Node v26.8.1。",
+    "unexecuted": "该首组在 public-retention 处停止，组内后续 archive 专用入口和默认 HTTP 升级场景亦未执行；后七个正式组没有执行记录。前置成功不能折算为首组或八组通过。",
+    "preservation": "真实失败及归档保持，不能以本轮局部 GREEN 覆盖或拼接成正式成功。"
+  },
+  "test_expectation_review": [
+    {
+      "target": "固定总数 1 的独立预期依据",
+      "judgment": "原期望漏算启动基线，本次纠正符合既定合同。",
+      "basis": "17.8 与 compatible-upgrade 步骤 3 要求保旧元信息、新修订保存必要元数据。未变 runner 先以 archive 启动 harness，再对子 Rust 测试设 latest_only；harness 先启动 API 并等待 health。API main 在路由可用前调用 knowledge::initialize，后者以 synthetic-import 调用 sync_catalog，再调用 ingestion::sync_sources_in_tx。首次无头时 content_changed=true，actual=0，version=1；写 current 后 record_source_revision_in_tx 保存元信息。archive 开关只控制 source_snapshots INSERT，不取消必要修订记录。故测试开始前已有元信息符合合同，固定整个历史表总数为 1 没有依据。",
+      "locations": [
+        {"path": "docs/architecture/implementation-design.md", "line": 907},
+        {"path": "docs/execution/semantic-runtime/compatible-upgrade.md", "line": 19},
+        {"path": "tests/mvp/check-source-upgrade.mjs", "line": 16},
+        {"path": "tests/mvp/check-source-upgrade.mjs", "line": 88},
+        {"path": "tests/mvp/harness.mjs", "line": 263},
+        {"path": "apps/api/src/main.rs", "line": 46},
+        {"path": "crates/data-agent/src/use_cases/knowledge.rs", "line": 12},
+        {"path": "crates/data-agent/src/use_cases/knowledge.rs", "line": 425},
+        {"path": "crates/data-agent/src/modules/ingestion/store.rs", "line": 424},
+        {"path": "crates/data-agent/src/modules/ingestion/store.rs", "line": 1130}
+      ],
+      "evidence": "保存的最小未改测试 RED 为 --exact 单例、0/1、cargo101/signal null，仍 left2/right1；JSON 在调用前已有 version1/synthetic-import，之后为保留 version1 并新增 version2/alice。它排除了必须由前序测试制造该行的解释。第二次 sync 的 empty 判断来自原测试控制流及失败位置：原断言已先通过并提交，才到固定 COUNT 失败；RED JSON 自身没有单列第二次 sync 事件。"
+    },
+    {
+      "target": "改版前基线、恰增一条与历史行保持",
+      "judgment": "新断言加强可观察不变量，未把固定 1 简单改成固定 2。",
+      "basis": "revision_baseline 位于强制 UPDATE 头指纹之前。测试仍将 schema 头指纹置零以触发 owner 的 content_changed 正常修订分支；这里是受控指纹失配，不把它描述为新的外部正文编辑。原 before+1 版本判断和精确正文读取保留。revised.len()==revision_baseline.len()+1 限制仅增一条，按 version 排序后的旧前缀与事前基线完全一致；source_revisions 主键为 source_id/version，新增版本由 actual+1 产生，排序与前缀判断有明确身份和递增依据。",
+      "locations": [
+        {"path": "crates/data-agent/tests/public_content_retention.rs", "line": 570},
+        {"path": "crates/data-agent/tests/public_content_retention.rs", "line": 582},
+        {"path": "crates/data-agent/tests/public_content_retention.rs", "line": 622},
+        {"path": "crates/data-agent/src/modules/ingestion/store.rs", "line": 427},
+        {"path": "migrations/202610300004_source_revisions.sql", "line": 12}
+      ]
+    },
+    {
+      "target": "未变再次同步不补造或改写元信息",
+      "judgment": "完整列表相等覆盖原不增长意图，并新增既有行不被重写的约束。",
+      "basis": "原第二次 sync 返回空 changed 的断言及事务提交保留。提交后重新读取的全列表必须与改版后 revised 完全相同。三次读取均包含 version、updated_by、content_fingerprint、explanation_fingerprint、comparison_method、parsed、complete、created_at 八字段；source_id 由同一 WHERE 固定，覆盖建表的全部字段。created_at 也参与等值比较，不能通过删行重插或回写操作者/比较依据来凑计数。",
+      "locations": [
+        {"path": "crates/data-agent/tests/public_content_retention.rs", "line": 632},
+        {"path": "crates/data-agent/tests/public_content_retention.rs", "line": 640},
+        {"path": "migrations/202610300004_source_revisions.sql", "line": 2}
+      ]
+    },
+    {
+      "target": "保留原断言、场景与运行入口",
+      "judgment": "没有删原场景、增加忽略、修改产品或放宽原标准。",
+      "basis": "完整前后函数核对保留旧 source_snapshots 非空基线及逐字不变、changed 包含 before+1、原 source_body、元信息版本/操作者 alice/raw_v1 及 current/head 指纹一致、未变 sync empty。该函数以外的测试文件内容逐字相同，测试与 helper 函数清单相同。默认仍六个测试，两项 ignored 原因和专用入口未变：配置子进程由配置测试调用，archive 由 --archive runner 运行。Makefile 完整八组绑定和 runner 的非零、信号、零测试拒绝不变；每消息24次、连续3次临时失败、检索10秒/1000候选/5轮/30主读均未改动。",
+      "locations": [
+        {"path": "crates/data-agent/tests/public_content_retention.rs", "line": 555},
+        {"path": "crates/data-agent/tests/public_content_retention.rs", "line": 48},
+        {"path": "crates/data-agent/tests/public_content_retention.rs", "line": 87},
+        {"path": "crates/data-agent/tests/public_content_retention.rs", "line": 96},
+        {"path": "tests/mvp/check-source-upgrade.mjs", "line": 75},
+        {"path": "Makefile", "line": 142}
+      ]
+    },
+    {
+      "target": "docs/CURRENT.md 的失败记录及验收状态",
+      "judgment": "状态与首轮实际失败相符，未将局部证据当作完成。",
+      "basis": "delta 将 review.status 从 passed 改为 pending，暂保原 repair record，evidence 仍 null；新增段说明原值/新值、启动基线独立原因、原断言保持、首轮失败归档及随后重新完整八组。增量 active、八项 acceptance、要求与产品限制没有改变。本报告交付后由主线更新新 review 指针；本审查不改 CURRENT，也不自行启动正式验收。"
+    }
+  ],
+  "findings": [],
+  "inherited_review": {
+    "basis": "本轮 before canonical fingerprint 与原 repair passed 的 b5a98 scope 一致；当前 500 文件中仅 public_content_retention.rs 变化，其余 499 文件、合同、决定、声明和 checker 相同。原 repair 报告及首轮归档逐字保持，报告列明的 17 份局部证据 hash 本轮重新核验全部匹配。因而可继承原产品审查、原修复判断和未受影响测试预期；本轮不重新逐行审查全部继承源码。",
+    "original_findings_outcomes": [
+      {"id": "CU-01", "outcome": "fixed", "basis": "原 repair 的普通生产到期接续、候选分页、原子移交及原账本/次数保护相关源码与测试均无本轮 delta，继承其判断及限制。"},
+      {"id": "CU-02", "outcome": "fixed", "basis": "原 repair 的来源失效终态释放、enabled 成果恢复、unknown 保持相关源码与测试均无本轮 delta，继承其判断及限制。"}
+    ],
+    "coverage": [
+      "current/精确旧档/archive/latest_only 的产品合同与消费者判断继承；本轮 synthetic 计数预期由上述独立判断更新。",
+      "准备/预填冻结及实际终态释放、CU-02、unknown 不重发和费用保留继承。",
+      "raw 接续、CU-01 分页、公共集合切换、当前目标与历史回执保持继承。",
+      "owner、实际事务与锁序判断继承，不把 checker/rank 或不同作业种类当无死锁证明。",
+      "v1/v2、旧 profile、operation/origin/budget、Pi session/确认 leaf/authority、历史 SQL/报告和定稿答案保持继承。",
+      "个人资产、Mem0/Skill、统一启动/隔离/清理、Pi 唯一循环与复杂度判断继承。",
+      "原九项其他夹具预期和 repair 五项预期判断的对象均未变化，继承其独立依据与限制。"
+    ],
+    "not_inherited_as_execution_pass": "原保存日志中的局部通过不代表当前正式验收成功。尤其当前 public-retention 已有真实 5/1/2 正式失败，不能用更早 6/6 或原 review passed 将其抹去；新局部 6/6 仅支持本轮测试修正，仍须新 scope 下完整重跑八组。"
+  },
+  "evidence": [
+    {
+      "path": ".local/compatible-upgrade-20261030/formal-first-failed/manifest.json",
+      "sha256": "0279b26bb7d56be2ac38ff8770f2f09dfbf1ff952736c2e7a48edcce4b0e4223",
+      "observed": "所列 result/review/CURRENT 三文件 hash 独立核验全部一致。"
+    },
+    {
+      "path": ".local/compatible-upgrade-20261030/formal-first-failed/result.json",
+      "sha256": "564d40b21a3801402ec71baddc4d7194f510ae10d5e4729a536943f3375c2bdb",
+      "observed": "executed_delivery failed，仅一个 UPGRADE-CURRENT，109513ms/exit2/未超时，before==after；与原 scope 加 review 的正式 fingerprint 匹配。"
+    },
+    {
+      "path": ".local/compatible-upgrade-20261030/formal-first-failed/review.json",
+      "sha256": "91555f082b19ba393bdffc3236728fdfb2c2929702dd8dd79e77a753ac55d2fc",
+      "observed": "原独立 repair passed 归档，与未改原报告逐字匹配。"
+    },
+    {
+      "path": ".local/compatible-upgrade-20261030/formal-first-failed/CURRENT.md",
+      "sha256": "90bbe21f7e550adb3dee2451556559bc0b6980a6bd3d49408f543258e96264b3",
+      "observed": "首轮 review 指向原 repair passed，与本轮 CURRENT before 快照逐字相同；用于独立解释正式合同摘要。"
+    },
+    {
+      "path": ".local/delivery/I2-COMPATIBLE-UPGRADE-1793375226625587000/command-01.log",
+      "sha256": "ce628db654ae4ea72b27646d1f64a4f1d56eba4d91c9606b17a59791d162e657",
+      "observed": "完整读取；启动器21、清理、knowledge13、current8通过，retention5/1/2且固定COUNT left2/right1；Node26.8.1，首组中止。"
+    },
+    {
+      "path": ".local/checks/synthetic-revision-count-red.json",
+      "sha256": "2c4d7ab0ab553425826aed2e01b4c5a9d6110bc825cde81f0dac007c006e0ae3",
+      "observed": "Node26.8.1，原 --exact 单例，before version1/synthetic-import，after 保原行并有 version2/alice，code101/signal null，officialRequests0。没有单列第二次sync事件。"
+    },
+    {
+      "path": ".local/checks/synthetic-revision-count-red.log",
+      "sha256": "46657168f1b7c61b648c5a29f3f1d73ee9eb37d11346c50ae1ade984ee396dec",
+      "observed": "原固定COUNT反例0/1、7 filtered，0.17秒，left2/right1；失败位置在原empty同步断言及提交之后。"
+    },
+    {
+      "path": ".local/checks/public-retention-formal-count-fix-green.log",
+      "sha256": "bc4f2af2fe6018b37db01f6595dc856c31a998a3265b5d1ac77543cbb432433b",
+      "observed": "完整输出8个测试，6 passed/0 failed/原2专用ignored/0 filtered，6.43秒，runner最终passed true、officialRequests0。未变runner只有在子进程code0/signal null及非零通过测试后才产生该末行；此日志未单列exit wrapper或Node版本，不把它当作完整首组或八组收据。"
+    }
+  ],
+  "verification_limits": {
+    "reviewer_executed": "只读要求、源码、断言、日志、Git HEAD 与哈希/diff/scope 内存核验；唯一新写为本 count JSON。原 blocked/passed、产品、测试、CURRENT 和其他继承修改均未由本线程改动。",
+    "not_executed": [
+      "数据库、SQL、harness、cargo、构建、测试、服务启动或正式验收。",
+      "check_delivery.py 的 main、complete_delivery、verify_review 或其他执行入口。",
+      "真实模型、真实平台、真实 Mem0、付费、部署或用户日常服务。",
+      "Git 写入、外部调用、凭据或真实 .env 读取、再次委派。"
+    ],
+    "evidence_boundary": "运行记录均为主线保存，本审查未亲自执行。静态初始化因果、既定历史保留合同和最小原测试失败共同支持预期修正；新 GREEN 只作为局部佐证，没有依据实现输出单独反写答案，也没有用局部通过拼正式收据。",
+    "inherited_limits": [
+      "旧 Responses 恢复20秒超时与预填费用预留断言历史失败重跑未复现，根因仍未知。",
+      "原部分GREEN没有Node版本字段；公共切换final与旧日志字节相同，不能单凭它认定新增执行。",
+      "原两份构建日志未绑定最终源码/二进制hash；本轮没有补这种证明，正式执行仍需依既定入口完成。",
+      "CU-01新增到期例没有单独重启Worker进程，静态生产连通与局部use_case结果的原限制保持。",
+      "分页SQL计划仅证明指定隔离样本，未证明任意计划、负载或并发下无死锁、无饥饿。",
+      "本轮GREEN没有独立源码/二进制hash或单列Node版本字段；本地协议/合成存储不证明真实供应商、平台、Mem0质量。"
+    ],
+    "formal_acceptance": "failed_first_group_pending_full_rerun",
+    "entry_gate": "conclusion=passed 仅允许主线将 review.status/record 更新为本轮报告后，在同一冻结输入下重新串行执行 UPGRADE-CURRENT、UPGRADE-FROZEN、UPGRADE-RESTORE、UPGRADE-INDEX、UPGRADE-CONTRACT、UPGRADE-CODE、UPGRADE-BOUNDARIES、UPGRADE-FLOW 完整八组。保留首轮失败，不复用其局部成功拼接。08 仍 active、evidence=null；不得凭本报告关闭08或进入09。新正式失败或实质输入变化必须保留证据并按实际delta重新判断。"
+  }
+}

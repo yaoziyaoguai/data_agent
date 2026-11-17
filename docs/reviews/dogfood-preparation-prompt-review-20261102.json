@@ -1,0 +1,59 @@
+{
+  "reviewer": "Codex 独立只读审查（未参与本增量实现；未委派）",
+  "increment": "I3-PREPARATION-PROMPT",
+  "summary": "本增量只澄清来源整理说明：embedded_in.locator 相对承载字段正文、citations/background 仍使用来源绝对坐标，并要求 embedded_in 非空时 content 逐字等于该区间原文；准备方法身份升为 semantic-preparation-2，hybrid fixture 同步。宿主校验未放宽，仍按 SourceLocator 的 Unicode code point 切片比对 content。最终文案后的 5 项单测和 document-preparation 均通过；attempt4 同账本两请求成功、settled、ready、无 error，费用与旧调用保留。正式收据因 A09 未绑定验收被拒后，仅从增量声明移除 A09，产品代码与测试未变；重签只更新范围摘要。未发现阻断问题，结论为 passed；正式 verify-increment 尚未运行。",
+  "conclusion": "passed",
+  "scope_sha256": "d7e76697b914eb10a4684848b124644b3e03a64c37131c44ea76d6777850fb84",
+  "findings": [],
+  "scope": {
+    "implementation_delta": [
+      "crates/data-agent/src/modules/ingestion/preparation/mod.rs",
+      "tests/mvp/check-hybrid-retrieval.mjs",
+      "docs/CURRENT.md"
+    ],
+    "baseline_note": "目标源文件在 Git 中为未跟踪文件，无法用 HEAD 生成可靠基线；用最终维护请求与旧维护请求中的系统说明逐行比对，确认除 review 前缀外，基础说明仅新增 embedded_in 坐标与 content 逐字要求。未发现校验器、合同、模型或费用逻辑变化。",
+    "fingerprint_validation": "通过绝对项目根目录调用 scripts/check_delivery.py 的 review_scope(root, read_delivery(root)) 计算当前 scope_sha256，与 frozen-prompt2.json 完全一致。相对 frozen-prompt.json 仅 docs/CURRENT.md 哈希变化：增量 requirements 从 D04,D06,C07,A09 变为 D04,D06,C07，验收条目未绑定 A09；preparation/mod.rs、hybrid fixture 及其余文件哈希不变。contract_sha256 的变化来自该声明移除，不是产品实现变化。"
+  },
+  "checks": [
+    "说明差异：maintenance-request-0.json 的旧基础说明与 maintenance-request-attempt4-1.json 的新说明逐行比对，新增内容为“embedded_in非空时content必须逐字等于该区间内的字段原文，不能留空”；review 前缀为复核请求原有部分，不是本次放宽。",
+    "坐标语义：preparation/mod.rs 明确 embedded_in.locator 相对 text/scope_text 字段正文起点，citations/background 仍用来源 revision 绝对 offset；SourceLocator::slice 按 Unicode code point 切片，与说明一致。",
+    "校验边界：knowledge/preparation/store.rs 在 embedded_in 非空时用 locator.slice(draft[field]) 与 support.content 逐字比较，越界由 slice 返回错误；未新增或放宽接受条件。原有越界、版本、对象/条目清单测试保留。",
+    "方法身份：PREPARATION_METHOD 为 semantic-preparation-2；analysis_call_id/review_call_id 都包含该方法身份，旧方法调用身份不会复用。check-hybrid-retrieval.mjs 的 fixture 已同步为 -2，目标文件中未残留 semantic-preparation-1。",
+    "测试证据：prompt-tests2.log 在最终源码之后运行，5 项 preparation 单测全部通过；document-preparation-final.log 在最终源码之后运行，passed=true、calls=6。新增说明断言只验证文案与常量，真实拒绝行为由未改动的宿主校验和 attempt4 样本提供补充证据。",
+    "维护样本：maintenance-representative-attempt4.json 显示 requests=2，max_tokens=65536、reasoning_effort=high，两请求均 settled，completion 3616/3761，state=ready、error=null；账本 calls=10、spent=64789、state=active、reserved=0。请求中的 supports content 非空，embedded_in 偏移相对 text 字段且与切片一致。",
+    "失败证据：attempt3 日志保留 invalid_prefill；旧调用/usage/费用未删除或重发。"
+  ],
+  "non_blocking_observations": [
+    "新增单测是说明文本断言，不直接构造 content 为空或绝对坐标的宿主拒绝用例；本次范围明确要求只补说明，宿主校验代码未变，且 attempt4 真实样本与既有越界测试提供行为证据，因此不构成阻断。"
+  ],
+  "evidence": {
+    "frozen": ".local/checks/dogfood-storage-repair/frozen-prompt.json",
+    "frozen_recheck": ".local/checks/dogfood-storage-repair/frozen-prompt2.json",
+    "unit_tests_final": ".local/checks/dogfood-storage-repair/prompt-tests2.log",
+    "document_preparation_final": ".local/checks/dogfood-storage-repair/document-preparation-final.log",
+    "old_request": ".local/dogfood-runs/semantic-20261102/evidence/maintenance-request-0.json",
+    "attempt4_request_analysis": ".local/dogfood-runs/semantic-20261102/evidence/maintenance-request-attempt4-0.json",
+    "attempt4_request_review": ".local/dogfood-runs/semantic-20261102/evidence/maintenance-request-attempt4-1.json",
+    "attempt4_representative": ".local/dogfood-runs/semantic-20261102/evidence/maintenance-representative-attempt4.json",
+    "attempt3_failure": ".local/dogfood-runs/semantic-20261102/maintenance-representative-attempt3.log"
+  },
+  "review_history": [
+    {
+      "stage": "initial_review",
+      "conclusion": "passed",
+      "scope_sha256": "8b637de3098efc838062c2b60a8d8cd01b06f3b7bd886444a68fec719d8e2fc4"
+    },
+    {
+      "stage": "declaration_only_resign",
+      "conclusion": "passed",
+      "scope_sha256": "d7e76697b914eb10a4684848b124644b3e03a64c37131c44ea76d6777850fb84",
+      "summary": "仅从增量 requirements 移除 A09；产品代码、测试、日志与审查内容未变，维持 passed。"
+    }
+  ],
+  "verification_limits": [
+    "仅阅读代码、测试、最终日志和维护样本，并执行本地只读文本/哈希比对；未连接 DB、运行构建或测试、访问网络、进行付费调用或委派。唯一写入为本审查 JSON。",
+    "日志由实现方提供，本审查未独立重跑；prompt-tests2.log 与 document-preparation-final.log 的 mtime 均晚于最终源码 mtime，document-preparation-final.log 为 283 字节且 passed=true。",
+    "重签只确认声明变化：相对 frozen-prompt.json 仅 docs/CURRENT.md 变化，产品与测试文件哈希不变；未重新审查产品实现。",
+    "正式 verify-increment 尚未运行；passed 仅表示当前冻结范围的独立代码审查无阻断，不声明正式验收已通过。"
+  ]
+}

@@ -1,0 +1,669 @@
+{
+  "schema": 1,
+  "increment": "I2-EVIDENCE-DELIVERY",
+  "reviewed_on": "2026-10-30",
+  "reviewer": "independent evidence-delivery reviewer / agent-a58a8514cf453ea75；未参与06产品、合同或测试实施，沿本代理已有Pi、支持与SQL游标窄审完成整包独立复核",
+  "conclusion": "passed",
+  "scope_sha256": "65fdc1ab7113451ab8e122b647091b6d479bbb02aef342024eda7e94081f16e0",
+  "summary": "复用已完成的06整包、SQL排序及覆盖夹具独立审查，本次仅补审check-large-tool-context历史规模delta和已有证据，未发现阻断。第三轮正式验收前六组exit0，第七组摘要次数断言失败，后两组未跑；完整失败及前两轮失败均保留。当前479项审查输入相对第三轮只变该测试，产品、Makefile、合同、业务限额、九组命令和超时均未改。精确还原新增注释及每轮100→140后与原文件逐字一致，24轮历史、两/六份8192字符正文、128KiB、摘要1–2次、一个compaction、溢出计数、逐字正文与工具配对、原operation/budget和有限失败全部断言保留。旧探针显示工具前先摘要造成总3摘要/2compaction；100重复的对照首请求可发送，工具后仍真实超限，两份压缩后续答，六份仍在发送前有限失败。正式最小脚本完整日志两场景passed，2摘要、4/3调用和settled次数一致、0付费；日志不含全输入指纹，不代替正式九组。923份before、90项/18165行归档独立重建一致，含更新前审查历史自引用。此passed仅为当前范围独立审查结论；九组须由主线绑定新审查后整轮串行重跑，不能拼前三轮成功项或最小GREEN，06尚未完成，07–09未纳入本次审查实施范围。",
+  "scope": {
+    "base_head": "04d27d06ba7b97d4cf3e288d4cf9e6300ef491a9",
+    "current_head": "04d27d06ba7b97d4cf3e288d4cf9e6300ef491a9",
+    "branch": "codex/semantic-maintenance-prototype",
+    "baseline_manifest": ".local/evidence-delivery-20261029-902223e3/before-manifest.json",
+    "baseline_manifest_sha256": "05cd59e81b9b5a0fbe4721ead1fadf838e3513c58baf7fc1a29c4a2de669ad08",
+    "baseline_file_count": 923,
+    "current_manifest": ".local/evidence-delivery-20261029-902223e3/large-context-fix-scope.json",
+    "current_manifest_sha256": "9fb629381f61d49c20c02536407c8f3f6b620cabd962c7f8141c9f87d7e7c089",
+    "increment_diff": ".local/evidence-delivery-20261029-902223e3/large-context-fix-increment.diff",
+    "increment_diff_sha256": "40a290501936956e96d701d39897dd12a08a85f0169e879a140033e1b530d031",
+    "increment_diff_lines": 18165,
+    "modified_files": 53,
+    "added_files": 37,
+    "deleted_files": 0,
+    "changed_files": 90,
+    "current_snapshot_files_before_this_record_update": 960,
+    "verification": "逐份重算923份before的SHA256与大小，独立重建大工具上下文夹具修订后的清单及完整unified diff，全部path/change/before/current SHA/bytes与90项/18165行补丁逐字一致；53modified+37added，0deleted，均在allowed_paths内。相对coverage-fix归档，只有CURRENT与原review内容变化，check-large-tool-context从接手后未改变成1项修改；没有新增产品。相对第三轮480项正式输入去除review后的479项，唯一变化是该测试，全部产品/Makefile/合同/限额/命令/超时均保持。范围核验不等于重新语义审阅全部18165行；沿既有独立审查仅补本次历史规模delta。",
+    "snapshot_self_reference_limit": "large-context-fix-scope及diff在本次审查更新前生成，包含覆盖delta审查SHA 8efdd95c394e730f6481424c322effeb924d52cf50cba11571d05a604b5f9408；内容另存review-before-large-context-diagnosis.json。更新后此一条目保持历史快照，不称仍匹配本记录，也不覆盖归档消除自引用。正式for_review指纹排除本记录及其指针，其余89项归档hash在更新时均与当前一致。",
+    "previous_coverage_review_snapshot": {
+      "scope_sha256": "2f5ebf8dce4f2bb6fc1258b2cd6fb23254e6a5e2d30d54833badfe042f19ba67",
+      "review_record": ".local/evidence-delivery-20261029-902223e3/review-before-large-context-diagnosis.json",
+      "review_record_sha256": "8efdd95c394e730f6481424c322effeb924d52cf50cba11571d05a604b5f9408",
+      "manifest": ".local/evidence-delivery-20261029-902223e3/coverage-fix-scope.json",
+      "manifest_sha256": "fcb49a6ecf7d045d207fa18e2f8f46263f4437abf6bcff41195b2929b974d02f",
+      "diff": ".local/evidence-delivery-20261029-902223e3/coverage-fix-increment.diff",
+      "diff_sha256": "c871e7c38982cae225b4798c414ada4b14186a879ddb3af778050bf942c3b75d",
+      "changed_files": 89,
+      "diff_lines": 18051,
+      "status": "覆盖夹具delta已独立审查；第三轮前六组通过但第七组失败，当前大上下文测试输入变化使旧范围不再当前，归档保留。"
+    },
+    "previous_sort_fix_review_snapshot": {
+      "scope_sha256": "1f2d946c6eaf7da5880adb4561066f4f1e0bfbb594fd8d599e05821cb73ce711",
+      "review_record": ".local/evidence-delivery-20261029-902223e3/review-before-coverage-diagnosis.json",
+      "review_record_sha256": "075ed031284fa535b608aa416cf5d4082b68599f8884c8007e55f45846ecd7d6",
+      "manifest": ".local/evidence-delivery-20261029-902223e3/sort-fix-scope.json",
+      "manifest_sha256": "85c08308f02cd194c0c106297b0773b9d36f3268141046445a2648a520d02845",
+      "diff": ".local/evidence-delivery-20261029-902223e3/sort-fix-increment.diff",
+      "diff_sha256": "f3babf4f9aefbfa022b136d7856982f3b459110c8bc641ecf2f1beb6ffb95033",
+      "changed_files": 88,
+      "diff_lines": 17930,
+      "status": "排序修复delta已独立审查；随后第二轮正式失败，测试输入变化使旧范围不再是当前范围，保留归档。"
+    },
+    "previous_review_snapshot": {
+      "scope_sha256": "5721b1b07f40ba9ddb8878c71479041be20a33e7a8d124e25e25cd61efdfdaa1",
+      "review_record": ".local/evidence-delivery-20261029-902223e3/review-before-sort-fix.json",
+      "review_record_sha256": "0a0293330a130bcdd8edcc80b3e1e58b4e1a046f16e0d1c253c04d8142944995",
+      "manifest": ".local/evidence-delivery-20261029-902223e3/current-scope.json",
+      "manifest_sha256": "0c90756d8679714c8e09e0db4ca4ad52546e6eb4aee98885d5469c08858c5870",
+      "diff": ".local/evidence-delivery-20261029-902223e3/current-increment.diff",
+      "diff_sha256": "40a10a88d00757f1002980de2afcc3cd2941faaa12b123ebaf0864c517ff78ee",
+      "changed_files": 87,
+      "diff_lines": 17518,
+      "status": "保留为修复前已完成整包独立审查，不覆盖旧范围或旧结论的版本边界。"
+    },
+    "fingerprint_method": "以python -B -I只读导入当前scripts/check_delivery.py，调用read_delivery、fingerprint(for_review=True)及review_scope，由审查者自行计算；没有调用main、run_command、complete_delivery、--complete或验收命令。",
+    "fingerprint_file_count": 479,
+    "contract_sha256": "69a899384e2601d3bc19363693ff35397101a0ee5c2d3e88611ebd3b7ff3a166",
+    "decisions_sha256": "c6456f454f3efb5763440301d1ea3298c518024f0fede2cb6be7dd86fa103e3b",
+    "checker_sha256": "444fa265c86b916224f538c8cf7ec11eeab3699f3ef0c14e9e58df93929a2bdf",
+    "current_record": "docs/CURRENT.md",
+    "current_record_sha256_at_review": "d985493be24dd13137190efdeae6ef0ace5954f1538b527932776c0b1ae03d94",
+    "goal_revision_at_review": 109,
+    "increment_status_at_review": "active",
+    "review_status_before_main_update": "pending",
+    "execution_evidence_at_review": null,
+    "fingerprint_limits": "review_scope绑定交付合同、479项声明输入、registry、AGENTS、18项决定及检查器，排除review记录自身及review指针。CURRENT全文未列为verification_input，故另记审查时SHA；合同和决定段仍单独绑定。它不是不可篡改证明，也不覆盖未声明文件或真实模型效果。"
+  },
+  "review_boundary": {
+    "read_only_product_and_tests": true,
+    "only_project_write": "docs/reviews/evidence-delivery-review-20261030.json",
+    "reviewer_executed": "源码/合同/测试/已有日志和结构收据的只读检查，本地hash/diff/JSON解析及公开review指纹计算。",
+    "reviewer_did_not_execute": [
+      "数据库、Cargo、构建、测试、正式verify-increment或批量验收",
+      "新代理或新审查面板",
+      "产品、测试、CURRENT、配置或权限修改",
+      "凭据文件读取、外部服务、付费模型、日常服务更新、发布或部署",
+      "Git提交、推送或远端写入"
+    ],
+    "requirements_basis": [
+      "AGENTS.md",
+      "docs/CURRENT.md",
+      "docs/execution/semantic-runtime/CONTINUATION_PROMPT.md",
+      "docs/execution/semantic-runtime/evidence-delivery.md",
+      "docs/execution/semantic-runtime/hybrid-retrieval.md:规范内容身份及1000候选/5轮/30读取/10秒",
+      "docs/execution/semantic-runtime/coverage-and-validation.md:A06及正文前后失效的证明边界",
+      "docs/execution/semantic-runtime/pi-reuse.md",
+      "docs/architecture/implementation-design.md:17.5、17.6.1",
+      "docs/semantic-retrieval-design.md:21需求登记"
+    ],
+    "preserved_invariants": [
+      "默认新消息仍v1，受控专用验收才采用v2；未提前实施07答案组合或08默认切换。",
+      "Pi三个锁定包1.3.0仍是唯一模型/工具循环、会话树、压缩、重试、取消与恢复基础；每消息24次、连续临时失败3次保持。",
+      "复用05唯一检索stage；10秒共同期限、1000唯一候选含在途预留、30主内容读取、5轮及原Embedding许可/结算收尾保持。",
+      "MySQL正式状态、Milvus可重建公共索引、Mem0个人记忆、Pi原生Skill职责保持；跨owner经具名use_cases和公开owner接口。",
+      "外部实际边界校验一次后传类型；不同进程、权限和变化状态仍核验。四条复杂度约束保持，未新增跨回执交付账本、服务器检索会话或第二恢复框架。"
+    ]
+  },
+  "requirements_mapping": [
+    {
+      "requirements": ["D03", "C01", "C05", "C07", "A02"],
+      "modules": ["M08", "M11"],
+      "scope": "06前置：健康检查点导出不反复整读，写盘失败不发布无效leaf，严格导入/恢复、原session/operation/budget及Pi生命周期保持。",
+      "implementation": ["apps/agent/session/checkpoint.ts", "apps/agent/session/journal.ts", "apps/agent/session/deliver.ts"],
+      "formal_assertions": ["tests/runtime/check-checkpoint-journal.mjs", "tests/runtime/check-pi-sdk.mjs", "tests/runtime/check-request-policy.mjs", "tests/mvp/check-native-compaction.mjs", "tests/mvp/check-recovery-continuation.mjs"],
+      "acceptance": ["PI-CHECKPOINT", "EVIDENCE-RECOVERY"],
+      "evidence": ["pi-checkpoint", "request-policy", "capacity-recovery"],
+      "assessment": "复用健康0整读及三个自动压缩位置的故障窄审，产品/测试hash未变；不是D03长期需求全部关闭或07多任务定稿已完成的声明。"
+    },
+    {
+      "requirements": ["D07", "C05", "C07", "A09"],
+      "modules": ["M01", "M08", "M11"],
+      "scope": "实际接收边界校验和生成类型，原登记工具版本优先及旧参数/回执恢复。",
+      "implementation": ["apps/agent/transport/client.ts", "apps/agent/tools/data-tools.ts", "apps/agent/provider/controlled.ts", "apps/agent/session/task-projection.ts", "crates/data-agent/src/modules/runtime/store.rs", "crates/data-agent/src/use_cases/deliver_run.rs", "migrations/202610290001_tool_contract_version.sql"],
+      "formal_assertions": ["tests/runtime/check-data-tool-transport.mjs", "tests/runtime/check-tool-serialization.mjs", "tests/runtime/check-evidence-tool-shape.mjs", "crates/data-agent/tests/tool_contract_version.rs", "tests/mvp/check-evidence-tool-versions.mjs"],
+      "acceptance": ["PI-TRANSPORT", "EVIDENCE-CONTRACT", "EVIDENCE-RECOVERY", "EVIDENCE-BOUNDARIES"],
+      "evidence": ["original-tool-version"],
+      "assessment": "同侧重复decode删除，Rust独立边界及权限规则保留；当前run只选新工具Schema，原登记tool版本选预算/执行/包装。历史缺版本receipt仅补返回副本，不改持久正文。"
+    },
+    {
+      "requirements": ["D04", "D06", "D07", "C07"],
+      "modules": ["M02", "M03", "M04", "M08", "M11"],
+      "scope": "06步骤1：同源v1/v2分支、宿主容量与支持三态来源。",
+      "implementation": ["packages/contracts/schema.json", "packages/contracts/generate.mjs", "packages/contracts/generated/boundary.rs", "packages/contracts/generated/boundary.ts", "crates/data-agent/src/bin/validate_contracts.rs"],
+      "formal_assertions": ["tests/contracts/cases.json", "tests/contracts/check-contracts.mjs", "crates/data-agent/tests/tool_contract_version.rs", "crates/data-agent/tests/support_completeness.rs"],
+      "acceptance": ["EVIDENCE-CONTRACT", "EVIDENCE-CODE"],
+      "assessment": "核正反例与真实生成类型decode/serialize路径，保required/optional/null和supports_complete历史缺失；旧v1缺省及专用v2开关反例在正式命令中接线。双侧合同最终执行仍待绑定。"
+    },
+    {
+      "requirements": ["D04", "D06", "C02", "C06", "A06"],
+      "modules": ["M01", "M02", "M03", "M04"],
+      "scope": "06步骤2/8：knowledge/raw共同排序、软hints、公共cursor和最终覆盖。",
+      "implementation": ["crates/data-agent/src/use_cases/data_tools.rs", "crates/data-agent/src/use_cases/knowledge.rs", "crates/data-agent/src/use_cases/evidence_delivery.rs", "crates/data-agent/src/modules/retrieval/vector.rs", "crates/data-agent/src/modules/knowledge/store.rs"],
+      "formal_assertions": ["tests/mvp/check-evidence-search.mjs", "tests/mvp/check-evidence-search-continuation.mjs", "tests/mvp/check-evidence-cursor-boundaries.mjs", "tests/mvp/check-evidence-search-progress.mjs", "tests/mvp/check-evidence-search-hints.mjs", "tests/mvp/check-evidence-search-hint-boundaries.mjs", "tests/mvp/check-evidence-search-compact-capacity.mjs", "crates/data-agent/tests/search_continuation.rs"],
+      "acceptance": ["EVIDENCE-SEARCH"],
+      "evidence": ["compact-sql", "cursor-boundaries", "hints-progress"],
+      "assessment": "复用唯一driver、共同候选/在途预留和期限；恢复整窗口原RRF名次后再排除retired，SQL只替代一条词法票，负dense分数保留，raw/knowledge无类型配额。hints在主读取前软排序并保exact优先。pending重核权限、条件、修订和target；裁掉整项不按扫描末尾跳过。C06千表级效果和成本不由06局部结果补成已证。"
+    },
+    {
+      "requirements": ["D04", "D06", "C02", "C06", "A06"],
+      "modules": ["M01", "M02", "M03", "M09"],
+      "scope": "06步骤3/4：1–20项保序、指定陈述/结构窄读、单项状态、原citation范围与Unicode位置。",
+      "implementation": ["crates/data-agent/src/use_cases/data_tools.rs", "crates/data-agent/src/use_cases/knowledge_sources.rs", "crates/data-agent/src/modules/knowledge/store.rs", "crates/data-agent/src/modules/ingestion/store.rs"],
+      "formal_assertions": ["tests/mvp/check-evidence-knowledge.mjs", "tests/mvp/check-evidence-statements.mjs", "tests/mvp/check-evidence-source.mjs", "tests/mvp/check-evidence-read-boundaries.mjs", "tests/mvp/check-evidence-read-capacity.mjs", "crates/data-agent/tests/knowledge_read_pages.rs"],
+      "acceptance": ["EVIDENCE-DELIVERY"],
+      "evidence": ["bounded-reads"],
+      "assessment": "单项stale/not_available保其他合法项；真实读取连接失败整次upstream_failed而非空成功。limit仅缩本次交付，不扩citation请求范围，也不使原越界请求变合法。statement坐标局部化，结构裁剪/尾页不发布可采用effective_structure，当前列绑定仍复核。"
+    },
+    {
+      "requirements": ["D04", "D06", "C02", "C06"],
+      "modules": ["M02", "M03", "M04"],
+      "scope": "06步骤7/8：支持完整性保存来源、实际内容、最终delivered_in与支持独立位置。",
+      "implementation": ["crates/data-agent/src/modules/knowledge/store.rs", "crates/data-agent/src/modules/knowledge/preparation/store.rs", "crates/data-agent/src/modules/knowledge/dependency_index/mod.rs", "crates/data-agent/src/use_cases/knowledge_supports.rs", "crates/data-agent/src/use_cases/evidence_delivery.rs"],
+      "formal_assertions": ["tests/mvp/check-support-completeness.mjs", "tests/mvp/check-evidence-supports.mjs", "tests/mvp/check-evidence-support-references.mjs", "tests/mvp/check-evidence-support-continuation.mjs", "tests/mvp/check-evidence-delivery.mjs", "crates/data-agent/tests/support_completeness.rs", "crates/data-agent/tests/knowledge_dependencies.rs"],
+      "acceptance": ["EVIDENCE-DELIVERY", "EVIDENCE-SEARCH"],
+      "evidence": ["saved-support", "support-references", "delivery-long-support"],
+      "assessment": "显式supports_complete由人工/准备保存，历史unknown不猜true。目录省略长保存content与原保存null有content_chars区分；保存长正文按原statement/support读取，原null才读引用指定范围。content_page及原supports cursor表达支持内偏移，limit=0不推进主正文。每最终回执共同50支持；尾页非0起点仍partial，delivered_in仅指本回执保留的完整承载段。"
+    },
+    {
+      "requirements": ["C01", "C05", "C07", "A02"],
+      "modules": ["M08", "M11"],
+      "scope": "06步骤5/6/9：宿主共享容量、Rust最终裁剪、冻结成功回执及Pi原生压缩。",
+      "implementation": ["apps/agent/session/capacity.ts", "apps/agent/session/deliver.ts", "apps/agent/provider/controlled.ts", "apps/agent/tools/data-tools.ts", "crates/data-agent/src/use_cases/evidence_delivery.rs", "crates/data-agent/src/use_cases/data_tools.rs"],
+      "formal_assertions": ["tests/runtime/check-tool-response-capacity.mjs", "tests/runtime/check-tool-capacity-compaction.mjs", "tests/mvp/check-evidence-response-budget.mjs", "tests/mvp/check-evidence-search-capacity.mjs", "tests/mvp/check-evidence-read-capacity.mjs"],
+      "acceptance": ["PI-TRANSPORT", "EVIDENCE-DELIVERY", "EVIDENCE-SEARCH", "EVIDENCE-RECOVERY"],
+      "evidence": ["shared-capacity", "capacity-recovery"],
+      "assessment": "response_budget由实际Pi投影/冻结profile及同批余量产生并预扣包装；不进模型参数、业务指纹或operation身份。已领取份额不重发，非读取完成只释放给未领取项。Rust按字节及UTF-16/4保守估算最终裁剪；v2 Node仅无损JSON包装，v1仍24KiB。较小恢复hint不改首次成功正文/游标；容量错误在模型派发前走Pi原生压缩，失败不清标记、不另造循环。"
+    },
+    {
+      "requirements": ["D10", "D11", "D12", "C02"],
+      "modules": ["M01", "M04", "M09", "M11"],
+      "scope": "06步骤10：本人资产目录、记忆三分支及当前已选原生Skill兼容。",
+      "implementation": ["crates/data-agent/src/use_cases/knowledge.rs", "crates/data-agent/src/use_cases/data_tools.rs", "crates/data-agent/src/use_cases/evidence_delivery.rs", "crates/data-agent/src/modules/retrieval/mod.rs", "apps/agent/session/skills.ts", "apps/agent/tools/read-skill.ts"],
+      "formal_assertions": ["tests/mvp/check-asset-directory.mjs", "tests/mvp/check-evidence-assets.mjs", "tests/mvp/check-evidence-search-assets.mjs", "tests/mvp/check-memory-revisions.mjs", "tests/mvp/check-completion-gaps.mjs"],
+      "acceptance": ["EVIDENCE-ASSETS", "EVIDENCE-SEARCH"],
+      "evidence": ["assets"],
+      "assessment": "query=*、asset_after/next_asset_after、total/invalid/memory_retrieval保留；资产不占公共hits名额但共享最终容量，按目录原顺序续读。记忆body/scope/source_text各自Unicode分页；他人/停用/旧版本/未选Skill不泄漏。Skill只当前已选descriptor与native_path，长scope分页及正文附件仍Pi原生read；未改变Mem0职责或选择权。"
+    },
+    {
+      "requirements": ["C02", "C05", "A02"],
+      "modules": ["M01", "M02", "M03", "M08", "M09"],
+      "scope": "最终交付依赖与原成功读取重放的当前权限/来源/修订核验。",
+      "implementation": ["crates/data-agent/src/use_cases/context_authority.rs", "crates/data-agent/src/use_cases/source_limits.rs", "crates/data-agent/src/use_cases/evidence_delivery.rs", "crates/data-agent/src/use_cases/data_tools.rs"],
+      "formal_assertions": ["tests/mvp/check-evidence-replay-boundaries.mjs", "tests/mvp/check-evidence-response-budget.mjs", "tests/mvp/check-authority.mjs"],
+      "acceptance": ["EVIDENCE-RECOVERY", "EVIDENCE-BOUNDARIES"],
+      "evidence": ["replay-authority", "capacity-recovery"],
+      "assessment": "最终实际可见knowledge/raw/成功asset进入authority，失败单项不登记不存在正文；同Pi会话已读依赖保并集。换版、停用、撤选、任务收紧后不能直接泄漏原成功正文，也不把首次成功改成拒绝或换operation重做。"
+    },
+    {
+      "requirements": ["D07", "C07", "A09"],
+      "modules": ["M01", "M02", "M03", "M04", "M08", "M09", "M11"],
+      "scope": "owner边界、命名/复杂度和正式可执行接线。",
+      "implementation": ["Makefile", "crates/data-agent/src/use_cases/mod.rs", "crates/data-agent/src/modules/knowledge/mod.rs", "scripts/check_architecture.py"],
+      "formal_assertions": ["make verify-code", "make verify-architecture"],
+      "acceptance": ["EVIDENCE-CODE", "EVIDENCE-BOUNDARIES"],
+      "assessment": "已审本包跨owner路径仍经具名use_cases及公开owner操作，未发现组合层新增裸SQL或第二Agent/恢复框架。新base64依赖用于有界游标编码。Makefile把三种compact模式及容量/恢复反例接入正式组，API/Worker在06组分别单-p构建。架构检查和格式/Clippy/构建的当前正式结果仍待主线。"
+    }
+  ],
+  "complete_delivery_path": [
+    "data_tools在短事务核原tool/run版本、当前task及source gate，建立原期限并把当前allowed records传给唯一ScopedSearchRequest；v1硬范围与v2软hints分离。",
+    "knowledge::drive_stage恢复有界候选/原通道名次和bookmark；pending不发公共候选扫描，主读取仍经knowledge/ingestion owner，权限/元信息/当前修订及索引target重新核验。已发Embedding沿原身份结算。",
+    "data_tools提交前重核运行/任务/来源；组装raw citation或knowledge ref/statement与真实支持内容，evidence_delivery按共同容量生成最终正文、状态及四类独立续读位置。",
+    "context_authority/source_limits从最终回执登记实际读取依赖；runtime在原operation下冻结首次成功receipt，response_budget不参与业务fingerprint。成功重放先核当前授权，再接原正文/游标。",
+    "Node invokeRecorded先登记取得原tool版本，之后才领取对应v2预算；RustTransport实际HTTP接收校验一次并传生成类型。formatResult按原receipt版本选择v1包装或v2 JSON.stringify(data)。",
+    "真实Pi工具串行执行和恢复接回原toolResult；provider本地协议测试逐页比较实际请求中的tool正文与Rust首次保存的receipt.data。空间不足在模型许可/发送前用Pi原生压缩，沿原budget与24/3限制。"
+  ],
+  "reused_narrow_reviews": [
+    {
+      "area": "Pi检查点",
+      "source_hashes": {
+        "apps/agent/session/deliver.ts": "1ac96e8a17c9be69f2f0b5a0f8e87bd24f6934bdc8df5aad6be8bda98eebf93b",
+        "apps/agent/session/journal.ts": "51c3d7b3a8f90e9847bb496ea24e361cab2cf8199599f73cfa4752c641692d7f",
+        "apps/agent/session/checkpoint.ts": "d8003416a861faa3ecfa17b322894ced91d12504a0e229f41eb9c29bbb4628cb",
+        "tests/runtime/check-checkpoint-journal.mjs": "87b969c0a21ac7ece8382270a967f3cc9c60d7c3994861d2ca85c50cd56aa287"
+      },
+      "assessment": "复用after_answer、before_prompt、after_tools窄审及正常/append失败对照；SDK可能吞压缩落盘异常，宿主故障门和粘性checkpointFailure防止继续派发/finish。健康导出0整读；原文件完整才可恢复确认leaf，首次flush不保证已有确认leaf，缺父链日志严格拒绝，不能宣称所有故障都可恢复旧leaf。"
+    },
+    {
+      "area": "保存长支持与原null引用",
+      "assessment": "复用schema/生成类型roundtrip、owner目录/窄正文、support cursor、最终delivered_in及content_page审查；本次补核两引用分支和长搜索的完整局部结果。没有新增跨回执交付状态表。"
+    },
+    {
+      "area": "SQL null-hash紧凑游标",
+      "source_hashes": {
+        "crates/data-agent/src/use_cases/knowledge.rs": "f084f0ed556c416eec3be581881481d048a7ca055b060ea870d53545799925d3",
+        "crates/data-agent/tests/search_continuation.rs": "7a1fe0866a079c11b4777057bafed6575d652551a73715be35d4ee54a23d0970"
+      },
+      "assessment": "复用18项纯测试断言及原RED→GREEN窄审，不重跑。hashed d为原index/offset/hash的42B成员，SQL null-hash用u保index/offset且恢复仍null；重复/缺失/越界拒绝，保1000双通道末pending及原RRF名次。原escaped7083B→1730B、inner734B为既有小样结果，本次另核SQL正式局部执行而非把纯编码结果当provider证明。"
+    }
+  ],
+  "execution_evidence_version_boundary": "以下execution_evidence保留初审实际读到的局部运行事实，均早于排序修复；未修改的Pi/支持/游标窄审可复用，不能称已覆盖当前整包。覆盖delta及本次大上下文delta重新逐项hash核四份收据：均不包含这两份变动测试，但其中三份声明的API/Worker二进制已因第二轮重建而与旧hash不同，current_input_differences保留实际差异。首轮/排序最小GREEN见sort_fix_delta_review；第二轮/覆盖诊断最小GREEN见coverage_fixture_delta_review；第三轮/历史规模对照及正式最小GREEN见large_context_fixture_delta_review，均不拼为新轮正式通过。",
+  "execution_evidence": [
+    {
+      "id": "pi-checkpoint",
+      "record": ".local/evidence-delivery-20261029-902223e3/pi-checkpoint-positions-final-result.json",
+      "record_sha256": "3478bc89c12b9211e68999a25b8be6c97851c9aa746114d6af2a6696e06568eb",
+      "exit_code": 0,
+      "log_sha256": "be88b95e9796edb81b2141481f8c5c705c0d817afeda51faa6a866e3309dc9da",
+      "report_sha256": "e68af14a519aa1fa76cd2255a42ebfda484dc2eb0fb845c97c9215cdf664c5ea",
+      "observed": "测试、日志和报告hash与记录一致；正常及故障压缩位置反例保留，无失败后模型派发或finish。",
+      "limit": "现有Node/Pi局部结果；不是九项当前正式绑定收据。"
+    },
+    {
+      "id": "support-references",
+      "record": ".local/evidence-delivery-20261029-902223e3/support-cross-execution.json",
+      "record_sha256": "aa8af5bf0c5cc21679879a82cc76433b3e620b63d15068947f6143e765e8c95a",
+      "inputs_checked": 130,
+      "current_input_differences": [{"path": "tests/mvp/check-evidence-delivery.mjs", "change": "初审前的后续协议修订"}, {"path": "crates/data-agent/src/modules/knowledge/store.rs", "change": "本次长支持排序修复"}],
+      "command_results": ["API单-p构建exit0", "Worker单-p构建exit0", "support-references exit0", "旧delivery搜索协议exit1"],
+      "observed": "support-cross-references.log正文为knowledge/source各7页8次模型调用拼回8500字符；source未越原locator，provider等首次receipt。",
+      "log_sha256": "e65b994162afa172345b4889fdfa47ba81852a0bb12d3eac9add24d57f02043b",
+      "limit": "此执行组含失败，不能记整组passed；相对修复后当前有delivery脚本与knowledge/store.rs两项差异，不抹去旧失败。"
+    },
+    {
+      "id": "delivery-long-support",
+      "record": ".local/evidence-delivery-20261029-902223e3/support-search-sql-retry-execution.json",
+      "record_sha256": "7cb7da36192c4f0983621a5fbc7ad367eab8f9edd4d811d7e029a947608c1499",
+      "inputs_checked": 224,
+      "current_input_differences": [{"path": "tests/mvp/check-evidence-search-compact-capacity.mjs", "change": "初审前的后续隔离v2/关闭分类修订"}, {"path": "crates/data-agent/src/modules/knowledge/store.rs", "change": "长支持排序修复"}, {"path": "target/debug/data-agent-api", "change": "第二轮正式单-p重建后与修复前收据hash不同"}, {"path": "target/debug/data-agent-worker", "change": "第二轮正式单-p重建后与修复前收据hash不同"}],
+      "command_results": ["初审时delivery协议exit0，39354ms", "旧SQL无vector夹具exit1"],
+      "report": ".local/checks/mvp-e9b9b83e5e553ee9/evidence-delivery.json",
+      "report_sha256": "9d50b1011563d157034f654a21e62bacc18db9af8e74df80fb155b3da64b2b69",
+      "current_test_sha256": "231407cf4305f687d2b82f65d2f067cd44d238b9b48869e55e384d419f5bd62c",
+      "observed": "原两短场景仍2/4调用；最终报告modelCalls17、providerErrors为空，长支持12普通调用+1summary、9页拼回9000字符，真实宿主降额拒绝沿原cursor续读。",
+      "limit": "修复前delivery单命令成功，执行组后续SQL失败；当前另有store、既有compact脚本及第二轮重建API/Worker差异，不能拼成当前整组通过。"
+    },
+    {
+      "id": "compact-sql",
+      "earlier_record": ".local/evidence-delivery-20261029-902223e3/sql-explicit-v2-execution.json",
+      "earlier_record_sha256": "1ebe30b0a1fa4a0de99e24394a47de574ff5a2823f91913562da30f584ff8eb2",
+      "earlier_command_results": ["sql-unconfigured显式v2 exit0，21029ms", "sql-fallback旧关闭分类exit1，20514ms"],
+      "earlier_current_input_differences": [{"path": "tests/mvp/check-evidence-search-compact-capacity.mjs", "change": "从e460f87e5a46711f5837fa67f1a1ceba193274b448eaad1ae15e45d16c3158d8变为bdb460903f8d5298a156c93b8acb14798a7826e742c8d84ef0ce9efe0561c950"}, {"path": "crates/data-agent/src/modules/knowledge/store.rs", "change": "长支持排序修复"}, {"path": "target/debug/data-agent-api", "change": "第二轮正式单-p重建后与修复前收据hash不同"}, {"path": "target/debug/data-agent-worker", "change": "第二轮正式单-p重建后与修复前收据hash不同"}],
+      "unconfigured_report": ".local/checks/mvp-825a54719049588b/evidence-search-compact-capacity.json",
+      "unconfigured_report_sha256": "d92ec395d37282d31b57694ffa65fe67cfc8f3ef999d18fa884eb4a52798bc5a",
+      "unconfigured_observed": "持久run显式2，8页24位置；provider10普通+1summary，11个agent attempt全settled，0公共vector搜索、两个SQL owner各一次。",
+      "pre_sort_fix_record": ".local/evidence-delivery-20261029-902223e3/sql-fallback-worker-stop-boundary-execution.json",
+      "pre_sort_fix_record_sha256": "aefd0b709fe78f4256a001be2eaa635d936a6698a9d3b88be4508abb3327ba58",
+      "inputs_checked": 224,
+      "input_differences_at_original_review": [],
+      "current_input_differences": [{"path": "crates/data-agent/src/modules/knowledge/store.rs", "change": "长支持排序修复"}, {"path": "target/debug/data-agent-api", "change": "第二轮正式单-p重建后与修复前收据hash不同"}, {"path": "target/debug/data-agent-worker", "change": "第二轮正式单-p重建后与修复前收据hash不同"}],
+      "pre_sort_fix_exit_code": 0,
+      "pre_sort_fix_duration_ms": 21342,
+      "pre_sort_fix_report": ".local/checks/mvp-4eaba98e00da2b04/evidence-search-compact-capacity.json",
+      "pre_sort_fix_report_sha256": "d9f75975621512ef4b704cac1c1cf5b6a03f88de1c12c70e0624668122ee0636",
+      "pre_sort_fix_observed": "真实24规范位置8页交齐，不漏不重，前7页4454–4535B、末2831B，估算token均<=1122；公共搜索2次、SQL扫描2次在pending续页不增加。provider10普通+1summary；真实573B hint导致原明确容量拒绝，原拒绝重放及新SDK id同cursor续读保持。20个attempt全settled，其中9个knowledge_embedding、11个agent；errors为空，连接错误仅pause_worker/client/ECONNRESET两项。",
+      "limit": "224项在初审时全部一致且局部完整exit0；当前与该收据有store及第二轮重建API/Worker共三项差异，不能称当前完整局部或三模式正式成功。无vector成功早于最后关闭分类脚本；pending不重扫仅指公共候选扫描，不能说0新Embedding。"
+    },
+    {
+      "id": "cursor-boundaries",
+      "record": ".local/evidence-delivery-20261029-902223e3/evidence-cursor-boundaries-fixture-result.json",
+      "record_sha256": "a9506b7e337b897882dee07a510f9e9f41866fa0e3186c82aceac7102c3349d7",
+      "exit_code": 0,
+      "test_sha256": "c4f97ca4dee477f5bdc5c7073377f35f597c45f3ba33b1753166ba591f648a60",
+      "log_sha256": "52dfa4bcf2b6ac0a8b75ecb6bad1913d1e35b4306b2f2a09ed173c42f19bec08",
+      "observed": "测试和日志hash当前一致，报告passed；真实来源换版、任务收紧及不同collectionID索引target切换后拒绝旧cursor，拒绝回放不夹旧正文。",
+      "limit": "夹具收据未绑定本包所有输入/二进制；不能提升为当前整包正式验收。"
+    },
+    {
+      "id": "bounded-reads",
+      "logs": [".local/evidence-delivery-20261029-902223e3/evidence-source-runtime-green.log", ".local/evidence-delivery-20261029-902223e3/evidence-batch-runtime-green-retry.log", ".local/evidence-delivery-20261029-902223e3/evidence-statement-runtime-green.log", ".local/evidence-delivery-20261029-902223e3/evidence-read-boundaries-green.log", ".local/evidence-delivery-20261029-902223e3/evidence-read-minimum-current-run.log"],
+      "minimum_log_sha256": "f844ee691c4ecc7bf640cc7dca86bc6651400aa5f07c119d24494b6a5c5ab6b9",
+      "observed": "已实际读取成功正文：原citation范围续读、批量保序与局部Unicode/statement、38060B窄下行及一次真实连接中断upstream_failed；最小容量只有身份能放下时明确拒绝，稍大余量推进记忆，Skill保native_path，结构分页和DDL当前绑定仍核验。",
+      "limit": "局部日志没有共同的当前479项输入及完整九组exit绑定；名含green的其他旧日志实际失败，未采用其文件名作为通过依据。"
+    },
+    {
+      "id": "saved-support",
+      "log": ".local/evidence-delivery-20261029-902223e3/evidence-supports-original-version.log",
+      "log_sha256": "adae95f54e5258b7faa5591d62244a24512f1061d21dd65e5f6d2b2a07fea479",
+      "observed": "正文passed、4次调用；保存的必要条件真实交付，delivered_in/content区分，容量裁剪移除悬空承载并推进正文。",
+      "limit": "复用既有支持窄审及局部日志，最终全组当前绑定待执行。"
+    },
+    {
+      "id": "shared-capacity",
+      "log": ".local/evidence-delivery-20261029-902223e3/evidence-search-capacity-assets-first.log",
+      "log_sha256": "cce34bda55fd023d6645c97fd077aa9a3ca24d4db47025966c268a8a872b600c",
+      "observed": "正文passed、3次调用2页；公共命中/支持/资产共同5000B/1250估算token，四类位置同页保留，支持limit=0直接补首未交项；provider等冻结data。",
+      "limit": "没有当前全输入结构收据，作为局部行为证据使用。"
+    },
+    {
+      "id": "assets",
+      "log": ".local/evidence-delivery-20261029-902223e3/evidence-assets-original-version.log",
+      "log_sha256": "3cbd6755b77e507a8352e38c2805983c7fe69599fac24525bbcc430a537f6e18",
+      "observed": "正文passed、7次调用；混批保序、三种记忆Unicode分页、他人/停用/旧版本隔离、provider等回执及最终容量内三部分连续交付，已选Skill选择权与原生附件read保持。evidence-assets-budget-routed.log同样实际读到完整成功结果。",
+      "limit": "局部日志不替代正式EVIDENCE-ASSETS及当前全输入绑定。"
+    },
+    {
+      "id": "capacity-recovery",
+      "log": ".local/evidence-delivery-20261029-902223e3/capacity-recovery-combined.log",
+      "log_sha256": "77be9c59672c893452d18955dc851ea6093d093190b351767c2fbf7e9322342b",
+      "observed": "正文passed，总11次调用、原场景4次。两个真实Worker新run组合用6079B已提交冻结成功正文、丢toolResult、1B恢复hint及剩余项真实Rust容量拒绝：成功组合原生summary一次后普通续答一次；失败组合summary503三次、无普通续答/成功compaction/finish。原operation/receipt/预算scope不变，无重复副作用，失败计数0/3。",
+      "limit": "核正式测试的真实业务/SDK断言和日志，不是本代理新运行，也无当前全输入正式组收据。"
+    },
+    {
+      "id": "replay-authority",
+      "log": ".local/evidence-delivery-20261029-902223e3/evidence-replay-boundaries-current-green.log",
+      "log_sha256": "af388d014e64154c5a028d0208e8abb7c6b0d9b320e52ccaa375b0b6c22d952a",
+      "observed": "六项正文结果：knowledge/source换版、memory停用、Skill撤选、任务收紧后knowledge/source重放明确拒绝且ledgerUnchanged；不能以lease/service错误代替授权错误，拒绝不夹原正文。",
+      "limit": "这些是同run真实HTTP变更后重放；跨run由response-budget另证，不外推运行中并发撤选。"
+    },
+    {
+      "id": "original-tool-version",
+      "record": ".local/evidence-delivery-20261029-902223e3/original-tool-version-commands.json",
+      "manifest": ".local/evidence-delivery-20261029-902223e3/original-tool-version-manifest.json",
+      "observed": "已读历史版本包装RED→GREEN及实际HTTP/Pi/provider测试记录、Node边界12项和原串行/取消检查。新正式测试同时核Rust登记/成功/拒绝原版本及历史缺字段持久值不变。",
+      "limit": "归档当时641项为Node-only合同结果，不能说是当前双侧合同验收；旧verify-pi-transport日志当时只有三脚本，当前增加容量两脚本，最终五脚本正式组待执行。"
+    },
+    {
+      "id": "hints-progress",
+      "logs": [".local/checks/evidence-search-raw-hints-green.log", ".local/checks/evidence-search-exact-hints-green.log", ".local/checks/evidence-search-compact-progress-regression.log", ".local/checks/evidence-search-compact-continuation-regression.log", ".local/checks/evidence-search-compact-original-capacity-regression.log"],
+      "observed": "已读实际passed正文并核对应正式断言：raw软提示提升且未匹配项续齐、exact名称/ID优先；仅余未派dense且Embedding快速失败时503/unavailable而非同cursor空成功，原attempt为unknown且无issued，同操作拒绝回放不重发Embedding。",
+      "limit": "这些局部日志没有当前整包输入绑定，部分早于后续SQL/紧凑编码，保留最终组覆盖要求。"
+    },
+    {
+      "id": "request-policy",
+      "logs": [".local/evidence-delivery-20261029-902223e3/request-policy-summary-before.log", ".local/evidence-delivery-20261029-902223e3/request-policy-summary-green.log", ".local/evidence-delivery-20261029-902223e3/request-policy-complete-green.log"],
+      "before_log_sha256": "1f3330c105369c8b436fe2af0a4565868800583e11bcb1d5872e9428f137d85d",
+      "green_log_sha256": "e819ecaefd420de1f859f522180c4c159b0152842d4a1c1f07f470fc4ec86bfc",
+      "complete_log_sha256": "061c402299a8bf7d32ef82ee26c3ee76b0b7f766f37faa8c9d20041c2a6c7e1c",
+      "observed": "before/current focused脚本除import位置与历史规模外一致；before在工具步骤提前触发摘要并报Summarization attempted to call a tool，current依次2普通+3摘要，完整日志有14项检查及tsc。原network5/ledger.calls5/failures0等断言不变。",
+      "limit": "局部日志没有完整当前正式绑定，不能代替EVIDENCE-RECOVERY。"
+    }
+  ],
+  "binary_reuse_check": {
+    "version": "修复前初审时的历史核验",
+    "method": "初审只读SHA256与support-cross分别单-p构建exit0所记值一致，没有执行二进制；本次不将这些历史hash称为修复后当前二进制。",
+    "historical_hashes": {
+      "target/debug/data-agent-api": "9fe7b4b885d626697055d7ea78d90a83d35e3f5c0dd8855a028dd82923cb493f",
+      "target/debug/data-agent-worker": "fedd1529a42762efaddd19cdc4ad5d9f1caeaf4359495e5a4ee726e88f39bf8b",
+      "tests/mvp/harness.mjs": "34b46d95bf22a1fa97915613da1f75526232565af59a35d3e697b52be2bf2e1e"
+    },
+    "limit": "上述hash只属于初审历史，不是当前二进制hash。排序最小GREEN只编译测试目标；之后第二轮command-04已实际分别单-p重建API/Worker并通过knowledge_read_pages完整7/7，绑定该轮before==after输入，但第二轮整体失败。覆盖delta不改产品，仍不能拼历史构建或部分成功为本轮九组成功。"
+  },
+  "test_amendments_review": [
+    {
+      "change": "长支持/compact本地provider支持Pi原生summary及冻结容量拒绝后沿原cursor发起新调用。",
+      "judgment": "可接受的协议夹具补齐，未发现放宽产品合同。",
+      "basis": "原要求本就规定空间不足走Pi原生压缩；原两短场景2/4调用、5000B/1250及原24额度保持。新增分支要求先出现summary且真实宿主hint低于5000B或1250，核原明确拒绝持久/重放及cursor不变，充分余量下不能以容量拒绝代替成功。最终provider逐页等冻结正文且9000字符/24位置完整交齐。旧两次长支持失败及SQL失败保留。"
+    },
+    {
+      "change": "sql-unconfigured夹具在隔离持久run行显式设置tool_contract_version=2。",
+      "judgment": "可接受的测试入口修正，未改变默认v1或生产启用条件。",
+      "basis": "先断言无vector配置时产品原受控开关返回1，再仅改harness专用合成库run并核持久2。controlled_tool_contract_version仍要求development/provider_test、隔离DB、test集合和本地vector端点。测试目的为v2 SQL容量链，不能把无vector默认1读成v2回执。"
+    },
+    {
+      "change": "SQL观察代理仅分类pause_worker阶段client侧ECONNRESET。",
+      "judgment": "可接受的主动停止事件边界，未发现忽略运行中读取失败。",
+      "basis": "分类前报告虽24位置交齐仍passed=false，三条错误均pause_worker/client/ECONNRESET。当前仅主动pause阶段/该side/code豁免，deliver、upstream及其他错误仍进入errors并使测试失败；最新报告errors为空且仅两条该停止事件。代理只观察候选SQL执行，不保存SQL、参数或认证帧，沿原测试ssl-mode=DISABLED。"
+    },
+    {
+      "change": "预算拦截从登记+执行改为仅/internal/data/tools执行入口，仍assert宿主预算存在。",
+      "judgment": "与原工具身份及容量交接合同一致。",
+      "basis": "登记必须先接原tool版本，不要求response_budget；执行才领取对应预算。旧登记期拦截失败日志保留；修正后仍真实限制最终Rust回执并核provider相等，未绕开宿主分配。"
+    },
+    {
+      "change": "最小memory夹具保合法空scope_page；Skill断言使用已有scope_page；DDL删列后用新run检查当前结构。",
+      "judgment": "修正边界预期，未发现削弱正文进展或旧authority拒绝。",
+      "basis": "最小记忆只放身份仍必须容量错误、稍大余量交实际字符；Skill长scope按合同保总长/native_path；DDL后原run已使用旧结构仍stale_context，另建run只用于确认当前缺失语义和人工值保留。对应旧失败和evidence-read-minimum-current-run.log完整成功均保留。"
+    },
+    {
+      "change": "check-request-policy最后摘要重试场景历史16×repeat167改为4×repeat40。",
+      "judgment": "有before反例的夹具隔离修正，原预算/重试断言保持。",
+      "basis": "同harness/Pi的before源码也在预定工具步骤提前触发摘要；focused差异仅import目标和历史规模。保原2普通+3摘要、network/ledger各5、failures0，原24发送/25拒绝、重启及三次临时失败/取消反例未删。大历史与真实压缩另由长期检查点、native-compaction及6079B恢复组合覆盖，不能把缩短本例当成大历史能力证明。"
+    },
+    {
+      "change": "游标来源换版夹具先等同修订索引/target投影就绪，再capture和pause。",
+      "judgment": "使旧cursor确实绑定待验证修订的就绪顺序修正。",
+      "basis": "原120000ms等待上限未增加，仍通过正式换版及真实不同target触发stale；不是用等待代替业务拒绝或增大产品10秒期限。"
+    }
+  ],
+  "sort_fix_delta_review": {
+    "conclusion": "passed",
+    "version_boundary": "本节保留排序delta审查时的判断和证据。其产品SHA截至覆盖delta仍一致；当时仅1/1GREEN及九组待跑的状态已由后续第二轮部分执行推进，见coverage_fixture_delta_review，不能把本节历史局限当成后续从未执行。",
+    "scope": "沿已完成06整包独立审查，仅复核read_support_content_in_tx的排序修复、原测试及已有诊断/首次正式失败/最小GREEN；不重新审完整06、不执行DB/Cargo/测试、不改CURRENT。",
+    "source": "crates/data-agent/src/modules/knowledge/store.rs",
+    "function": "read_support_content_in_tx",
+    "previous_source_sha256": "3c4e9f68845814488389c620025591827320d7f1f2ab73c99885d71e86e7a2b1",
+    "current_source_sha256": "5929263d265178c1890f67f1012b01c5e2eb41f8de21ab2fe52d3af047c3f009",
+    "delta_verification": "从接手before及旧current-increment.diff在内存重建初审store.rs，核SHA后与当前逐行比较：只有该函数注释及chosen CTE变化。原ORDER BY p.n LIMIT 1直接投影长content，改为chosen_position按st.object_id/st.version/st.statement_id分组求MIN(p.n)，再按原三字段主键join取该位置content。Rust绑定顺序、SUBSTRING/CHAR_LENGTH、offset/limit检查和返回逻辑均未改。",
+    "preserved_semantics": [
+      "migrations/202610240002_semantic_preparation.sql定义PRIMARY KEY(object_id,version,statement_id)，原指定object/version加BINARY statement_id匹配至多一条陈述；MIN(p.n)保持原重复support_id取最早位置的选择。",
+      "selected的space/object/version/path及有效layer判定、原entry_path、BINARY support_id/statement_id条件全部保留；回表只使用已通过这些条件选出的陈述主键，在同一SQL和事务内取原保存正文。",
+      "外层state/version、缺正文not_available、offset越界invalid_cursor及Unicode分页语义不变；原保存content仍由SQL SUBSTRING后下行，没有改用引用全文或把整段长支持搬回Rust。",
+      "聚合阶段只投影身份与位置，长content在定位后提取；没有改sort_buffer_size、max_sort_length或服务器配置，没有增加恢复、缓存、重试或新抽象。"
+    ],
+    "formal_first_attempt": {
+      "record": ".local/evidence-delivery-20261029-902223e3/formal-first-failed.json",
+      "record_sha256": "0702f71d776785a9718a75b345727945bf428669b30d66c2da6c26cdc56cf55a",
+      "status": "failed",
+      "before_equals_after": true,
+      "fingerprint_file_count_including_previous_review": 480,
+      "started_at": "2026-10-29T19:37:42.001789+00:00",
+      "finished_at": "2026-10-29T19:39:15.678195+00:00",
+      "command_results": [
+        {"id": "PI-CHECKPOINT", "exit_code": 0, "timed_out": false},
+        {"id": "PI-TRANSPORT", "exit_code": 0, "timed_out": false},
+        {"id": "EVIDENCE-CONTRACT", "exit_code": 0, "timed_out": false},
+        {"id": "EVIDENCE-DELIVERY", "exit_code": 2, "timed_out": false}
+      ],
+      "not_executed": ["EVIDENCE-SEARCH", "EVIDENCE-ASSETS", "EVIDENCE-RECOVERY", "EVIDENCE-CODE", "EVIDENCE-BOUNDARIES"],
+      "failure_log": ".local/delivery/I2-EVIDENCE-DELIVERY-1793302662004377000/command-04.log",
+      "failure_log_sha256": "6077220c9ce5c604c5a947ad01b19b7c65b0f1c04c02846f658855dbac2fc877",
+      "observed": "已读完整command-04日志：API/Worker分别单-p构建成功，依赖及completeness测试通过，knowledge_read_pages为6passed/1failed；原selected_support_content用例在read_support_content_in_tx返回MySQL HY001 Out of sort memory后unwrap失败，Cargo exit101，组exit2。不是超时，也未把产品SQL问题归为已证环境故障。",
+      "version_relation": "正式before与after一致。去除旧review后输入名仍为相同479项；逐项与当前for_review指纹相比，唯一变化是knowledge/store.rs，合同、决定、检查器、原测试、runner与Makefile均未变。首轮含review的合同hash与for_review排除review的合同hash用途不同。"
+    },
+    "diagnosis": {
+      "record": ".local/evidence-delivery-20261029-902223e3/support-sort-diagnosis.json",
+      "record_sha256": "b8034cf2b1d9c776df09a6dca9c559c8ef04b6cbcdc9340fd062b1e3ada6cb30",
+      "script": ".local/evidence-delivery-20261029-902223e3/diagnose-support-sort.mjs",
+      "script_sha256": "57aea41fb7b51f6469c843ffa2b81dbf97861414f61e4b937210e630acb822df",
+      "observed": "已读报告与脚本，未执行。MySQL8.4.11，sort_buffer_size=262144、max_sort_length=1024；合成目标仅一条陈述且支持200000字符。旧查询ERROR1038/HY001，only_sort_position查询成功，支持宽content参与排序是本次故障因素。",
+      "limit": "诊断的passed只表示脚本完成。only_sort_position选择p.n并把正文替成固定合成文本，其content空串/total_chars=2不能验证原保存正文窗口。报告没有源码hash，脚本现在会提取新SQL，故不将旧诊断冒称为修复后SQL的EXPLAIN或计划/性能证明。"
+    },
+    "original_test": {
+      "path": "crates/data-agent/tests/knowledge_read_pages.rs",
+      "sha256": "3a165c55c0d8cc5e9e2350b529f034c3d0fed1aa13f0c4342dd3890d44ea1940",
+      "name": "selected_support_content_keeps_bounded_pages_and_the_original_embedded_coordinates",
+      "runner": "tests/mvp/check-knowledge-read-pages.mjs",
+      "runner_sha256": "dea9cd9d5b2fccd76d2cc723eb1e24fc55a3ea18ea498d7e4b2781d0e997060e",
+      "makefile_sha256": "046cd22119ff8d2ea4461df8294fc029baf6659775b76273f39429e9480c1875",
+      "unchanged_from_first_formal_attempt": true,
+      "assertions": "200000字符保存支持；目录长content为null，原短支持及embedded_offset=7保持；按offset=7/limit=5读回字符串“正文。不能”，content_page为offset7/total_chars200000/completefalse/next_offset12；整个窄读下行<16384B。未缩fixture、未改窗口/容量断言或验收入口。"
+    },
+    "minimal_green": {
+      "record": ".local/checks/knowledge-read-pages-sort-position-fix-1793303060813.json",
+      "record_sha256": "7ea9ec49e182ebe51df201fd146d196f4a37ae045b0243719b89a596208ba7ee",
+      "log": ".local/checks/knowledge-read-pages-sort-position-fix-1793303060813.log",
+      "log_sha256": "dab213156f8b2acce33592d1131809215ac3248db746f179dc2ccb4e9796b876",
+      "command": ["cargo", "test", "--offline", "--locked", "-p", "data-agent", "--test", "knowledge_read_pages", "selected_support_content_keeps_bounded_pages_and_the_original_embedded_coordinates", "--", "--test-threads=1", "--nocapture"],
+      "exit_code": 0,
+      "signal": null,
+      "official_requests": 0,
+      "observed": "已读完整JSON及日志：data-agent测试目标重新编译，原同名用例ok，1passed/0failed/6filtered out；runner要求真实隔离MySQL、exit0、无signal且非0测试。审查者没有执行该命令。",
+      "limit": "这是主线交付的修复后原用例最小GREEN，JSON没有源文件输入hash或前后指纹；只能结合静态delta与未改测试核对，不能称该收据已严格绑定当前479项，也不等于7项owner整组、API/Worker重建或九组正式成功。"
+    },
+    "format_check": "主线回报fmt --check成功；本次未找到明确绑定本修复的格式执行收据，也未运行fmt，不作为审查者独立执行或完整正式检查结果。",
+    "blocking_findings": [],
+    "acceptance_effect": "静态修复与原断言未发现阻断，允许主线进入修复后正式绑定验收；首轮失败、旧局部成功与最小GREEN均保留各自版本和范围，九组仍须完整重跑，不拼首轮。"
+  },
+  "coverage_fixture_delta_review": {
+    "conclusion": "passed",
+    "version_boundary": "本节保留覆盖delta审查时的判断和证据；该夹具截至大上下文delta仍未改变，第三轮已通过EVIDENCE-SEARCH整组，后续进展另见large_context_fixture_delta_review，不能将本节当时待跑状态误作至今未执行。",
+    "scope": "沿已完成06整包及排序delta独立审查，只复核覆盖夹具、原要求和已有日志；不启动新面板、不执行DB/Cargo/测试、不改CURRENT或产品。",
+    "source": "tests/mvp/check-retrieval-coverage.mjs",
+    "previous_source_sha256": "50135a13233e765b721c3700b75fcf2147c2799b852d58efe01cac93b8f7caac",
+    "current_source_sha256": "2a427fe7435d12ab1d853c4a0ea0b73a43b01b84fe0aa90ec579ba479137420d",
+    "delta_verification": "旧夹具SHA与923份接手before及第二轮正式输入一致；从before直接逐行比较，改动仅独有查询词、正文/同版存档/有效依赖合成数据和新增断言。独立比较第二轮480项正式before==after，排除原review后当前479项输入唯一差异是该测试。knowledge/store.rs仍5929263d265178c1890f67f1012b01c5e2eb41f8de21ab2fe52d3af047c3f009，Makefile仍046cd22119ff8d2ea4461df8294fc029baf6659775b76273f39429e9480c1875；没有产品、限额、命令或超时变化。",
+    "requirements_and_source_basis": [
+      "hybrid-retrieval.md要求SQL与Milvus使用同一规范内容身份，SQL后备不是按对象名称制造空内容候选；1000是唯一候选含在途预留上限，5轮包含首轮，30次主读取不含元信息，失败/失效读取不退款，10秒共同期限不变。",
+      "modules/retrieval/store.rs的entry_rows从retrieval_documents.body.entries展开，只保effective_value字符串，windows只保CHAR_LENGTH(text)>0。旧1001对象entries=[]即使name匹配也不能产生夹具规范内容候选；原中文分词另命中种子，不可将种子结果当成这些空对象的候选。",
+      "use_cases/knowledge.rs::ranked_candidates_in_tx按complete映射游走必要依赖，在正文读取前排除stale；无映射的legacy对象留给load_selected_in_tx读取后核来源，启动时spent+=1，达到30会返回bounded。新增映射使原打算在元信息阶段排除的场景成立；诊断没有main_reads字段，30次是静态路径解释，不冒称实测计数。",
+      "当前1000条staleEntry有非空effective_value及source_facts.value/source_id=business-guide/version=0；依赖为body/source_fact/required/origin/effective、platform business-guide revision0，与现有effective_layer和collect_layer_sources原规则一致。后方有效项human_override持独立正文、无旧来源根，complete映射为空依赖，并保存同版knowledge_versions供正式窄读。",
+      "driver在round<5才推进新深度，达边界stop_scans(candidate_limit)；coverage的candidate_limit可表示额度或深度停止，不要求candidate_count恰好1000。诊断实际950/5轮符合此含义，不能说1000个都已扫描或整个千表效果已证明。"
+    ],
+    "assertions_review": {
+      "preserved": [
+        "浏览HTTP200且search_coverage.state=candidate_limit，examined/rejected不外露，objects严格空数组。",
+        "更具体名称查询HTTP200且首对象ID为zz-coverage-valid。",
+        "正式登记工具后执行search_knowledge成功，工具coverage仍candidate_limit，note仍含空结果不能证明不存在。"
+      ],
+      "added": [
+        "candidate_count>0且<=1000，防止空候选被当作上限场景。",
+        "lexical.rounds严格等于5，防止以正文读取耗尽或早停替代深度边界。",
+        "精确命中对象的entry.effective_value与合成正文逐字相等，防止只返回空身份。"
+      ],
+      "judgment": "补齐当前规范内容与有效依赖所需的夹具，原业务预期未降低；没有放宽candidate_limit为complete/bounded，没有改等待或业务时限。独有词只隔离种子干扰，同一词仍匹配全部1000过期对象及后方有效项；不把本例当作多词排序或dense扩深的独立证明。工具检查是实际登记/执行HTTP回执，不冒称本例又验证了完整provider输入。"
+    },
+    "formal_second_attempt": {
+      "record": ".local/evidence-delivery-20261029-902223e3/formal-second-failed.json",
+      "record_sha256": "8fedeaca1651b9f6e2d3b5a70802cb7b88eb90b4161b1610105944a90bf3aee5",
+      "status": "failed",
+      "before_equals_after": true,
+      "fingerprint_file_count_including_previous_review": 480,
+      "started_at": "2026-10-29T20:10:56.319725+00:00",
+      "finished_at": "2026-10-29T20:21:51.127978+00:00",
+      "command_results": [
+        {"id": "PI-CHECKPOINT", "exit_code": 0, "duration_ms": 13563, "timed_out": false},
+        {"id": "PI-TRANSPORT", "exit_code": 0, "duration_ms": 10972, "timed_out": false},
+        {"id": "EVIDENCE-CONTRACT", "exit_code": 0, "duration_ms": 28083, "timed_out": false},
+        {"id": "EVIDENCE-DELIVERY", "exit_code": 0, "duration_ms": 282203, "timed_out": false},
+        {"id": "EVIDENCE-SEARCH", "exit_code": 2, "duration_ms": 319608, "timed_out": false}
+      ],
+      "not_executed": ["EVIDENCE-ASSETS", "EVIDENCE-RECOVERY", "EVIDENCE-CODE", "EVIDENCE-BOUNDARIES"],
+      "delivery_log": ".local/delivery/I2-EVIDENCE-DELIVERY-1793304656322400000/command-04.log",
+      "delivery_log_sha256": "1e1f42d55895f490f504c3365761d1740f6f00331cf714223a4da5cfe45159bc",
+      "delivery_observed": "已读完整command-04：API与Worker分别单-p重新编译成功，knowledge_read_pages完整7/7含原20万字符支持用例成功，后续delivery/source/knowledge/statements/read-boundaries/supports/references/continuation/capacity均有passed正文。补足排序审查时仅1/1的历史证据，但第二轮整体仍失败。",
+      "failure_log": ".local/delivery/I2-EVIDENCE-DELIVERY-1793304656322400000/command-05.log",
+      "failure_log_sha256": "a7542a8b2531a929a1234e6f84297acce85440d2554b386beb7b497401b1a0ae",
+      "failure_observed": "已读完整command-05：search_continuation18/18及其后搜索检查含milvus/sql-unconfigured/sql-fallback三模式均有成功正文；末项check-retrieval-coverage在旧第17行因actual complete与expected candidate_limit不一致失败，Make组exit2，无超时。不能把该组前面成功项目拼成整组passed。"
+    },
+    "diagnosis": {
+      "script": ".local/evidence-delivery-20261029-902223e3/coverage-diagnosis.mjs",
+      "script_sha256": "c44894afc3b0c3eadb4abc761a96e57114a16c2e83fb23947b31a6d5f8525fdd",
+      "report": ".local/evidence-delivery-20261029-902223e3/coverage-diagnosis.json",
+      "report_sha256": "ccb14e4d1106fb0070c59ad5e2a70645927b0a9476d0fe5654fff36dbf3be2ca",
+      "initial_failed_log": ".local/evidence-delivery-20261029-902223e3/coverage-diagnosis.log",
+      "initial_failed_log_sha256": "4e4348e05e766ba3704c6ec70653c1440aea08e94d0b356ffc02084a849ecdeb",
+      "initial_failure": "最初对照实际取得4条种子候选却断言0，4!=0失败保留，未将诊断尝试都称为成功，也不将当前后修脚本强绑定到该旧失败。",
+      "completed_log": ".local/evidence-delivery-20261029-902223e3/coverage-diagnosis-unique-term.log",
+      "completed_log_sha256": "feeed2bff31c27af08d7d54fadf88d3824ea0a2dc812eb706739fec5a50b81ac",
+      "phases": [
+        {"phase": "original-empty-entries", "candidate_count": 4, "state": "complete", "observed": "仅种子返回，夹具对象不在结果中。"},
+        {"phase": "unique-term-empty-entries", "candidate_count": 0, "state": "complete", "observed": "独有词排除种子后，无夹具规范内容候选，浏览与精确查询均空。"},
+        {"phase": "nonempty-content-with-legacy-dependencies", "candidate_count": 150, "state": "bounded", "lexical_rounds": 1, "observed": "补正文后进入候选，legacy失效在正文读取后判断；精确查询可取得后方正文。"},
+        {"phase": "same-content-with-explicit-stale-dependencies", "candidate_count": 950, "state": "candidate_limit", "lexical_rounds": 5, "observed": "补明确过期依赖映射后空结果带五轮上限；精确名称仍取得后方同版正文。"}
+      ],
+      "limit": "诊断脚本/报告/两日志均已读取，未执行。报告没有源输入指纹或main_reads实测；后阶段手工依赖行的layer/role为source_facts/source，而当前正式夹具已按既有有效层规则改为source_fact/origin，因此诊断用于隔离成因，不冒称它运行了当前正式夹具。当前正式脚本的结果另列minimal_green。"
+    },
+    "minimal_green": {
+      "command": ["node", "tests/mvp/check-retrieval-coverage.mjs"],
+      "log": ".local/evidence-delivery-20261029-902223e3/coverage-fixture-green.log",
+      "log_sha256": "e2c599be5920544a7adf2644264e5dd8fcda3e69216ad244a9313e350c7b6769",
+      "report": ".local/checks/mvp-retrieval-coverage.json",
+      "report_sha256": "120d274f892d866424ac8fde78afac0694df1f5bada3498c8bb18acfec1fa927",
+      "observed": "已读日志passed=true及报告两项passed=true，原浏览覆盖和正式工具覆盖两场景均保留；日志officialRequests=0。主线报告原脚本完整exit0，审查者未执行。",
+      "limit": "该日志/报告没有命令前后源输入指纹，报告也无独立exitCode字段；不将其当成当前479项严格绑定的正式收据，不由passed字段证明真实模型效果或完整provider链。当前九组整轮仍未执行。"
+    },
+    "blocking_findings": [],
+    "acceptance_effect": "覆盖夹具修订无阻断，可将新scope审查绑定后进入九组完整正式重跑；第二轮前四组成功及第五组前置项目、最小GREEN都保留为各自版本事实，不拼接为当前整包通过。"
+  },
+  "large_context_fixture_delta_review": {
+    "conclusion": "passed",
+    "scope": "沿原06独立审查，只复核tests/mvp/check-large-tool-context.mjs的历史规模变化、原场景/合同/断言及第三轮/已有探针/正式最小脚本证据；不重新审整包、不执行DB/Cargo/构建/测试、不写CURRENT或产品。",
+    "source": "tests/mvp/check-large-tool-context.mjs",
+    "previous_source_sha256": "eb6371d6870778d06ed5e8b0fcaa275f4078fda0a2b5908173b262aa5ce5f9d3",
+    "current_source_sha256": "2f21498d00592afe6aeeb59802ecd4bdb99b35f364a318c432224cf57359508b",
+    "delta_verification": "原SHA与接手before及第三轮正式输入一致。当前删除新增中文解释注释并将合成旧资料.repeat(100)还原为repeat(140)后，与before全文逐字一致。24轮、所有assert、profile、provider、两/六份文档、工具执行/存储、budget和错误分支无变化。第三轮before==after480项，去除旧review后的479项与当前相比唯一差异是该测试；产品、Makefile及九组声明/超时未变。",
+    "contract_judgment": "可接受的场景前提修正，未降低原验收标准。implementation-design的Pi预检会在完整提示/资料/历史接近载荷门槛时先compact，provider仍在实际序列化后、预算预留/网络发送前判上限，轮内超限走Pi原生compact-and-retry并保最近完整工具组。旧140重复在工具前额外压缩，改变了本用例原先只预期工具后一个compaction的触发次序；100重复保24轮并仍由两份工具回执触发真实溢出，六份最小工具组仍压缩后装不下。没有提高128KiB或放宽摘要次数/compaction/失败断言，也没有改产品以迎合夹具。此测试不证明任意大历史都只有一个compaction；其他原Pi/检查点/恢复测试保持原职责。",
+    "preserved_assertions": [
+      "24轮用户/助手历史、两份与六份各8192字符原正文及原SDK工具ID/arguments配对均保持；普通续答实际provider检查三条完整工具回执并逐字等原正文。",
+      "profile.payload_bytes_limit=131072、input_limit32768/output_limit8192、trial24/request12及费用配置保持；实际已发送每请求<=131072B，至少一请求>65536B。",
+      "summaries>=1且<=2，原生compaction恰1个；request_too_large错误个数普通1/超限2，普通step2、超限step1。",
+      "两份正文仅一次普通续答并answered；六份正文压缩后仍明确model_run_failed/request_too_large，在网络发送前终止，不提交答复、不把任务answered或run finished。",
+      "所有工具成功仅一次，SDK/operation唯一，origin run/recovery_chain不变；模型ledger.calls等实际payload数量及step+summaries，reserved0，attempt数量/身份唯一且原scope/run/chain全settled。"
+    ],
+    "formal_third_attempt": {
+      "record": ".local/evidence-delivery-20261029-902223e3/formal-third-failed.json",
+      "record_sha256": "e0376e45d4d6863411c36a4e14304380b2f77da5c68dd4b01b43c037236363b1",
+      "status": "failed",
+      "before_equals_after": true,
+      "fingerprint_file_count_including_previous_review": 480,
+      "started_at": "2026-10-29T20:50:10.162820+00:00",
+      "finished_at": "2026-10-29T21:06:00.684275+00:00",
+      "command_results": [
+        {"id": "PI-CHECKPOINT", "exit_code": 0, "duration_ms": 7754, "timed_out": false},
+        {"id": "PI-TRANSPORT", "exit_code": 0, "duration_ms": 11270, "timed_out": false},
+        {"id": "EVIDENCE-CONTRACT", "exit_code": 0, "duration_ms": 14168, "timed_out": false},
+        {"id": "EVIDENCE-DELIVERY", "exit_code": 0, "duration_ms": 254748, "timed_out": false},
+        {"id": "EVIDENCE-SEARCH", "exit_code": 0, "duration_ms": 324525, "timed_out": false},
+        {"id": "EVIDENCE-ASSETS", "exit_code": 0, "duration_ms": 99135, "timed_out": false},
+        {"id": "EVIDENCE-RECOVERY", "exit_code": 2, "duration_ms": 238511, "timed_out": false}
+      ],
+      "not_executed": ["EVIDENCE-CODE", "EVIDENCE-BOUNDARIES"],
+      "search_log": ".local/delivery/I2-EVIDENCE-DELIVERY-1793307010165787000/command-05.log",
+      "search_log_sha256": "f2ac150ae5bc0f477c1ef4041116c9cba3774e1af6f98e51fe1e46d619981b3a",
+      "search_observed": "完整读取日志并解析三种compact成功行及末项coverage passed，两项原覆盖场景均通过；整组exit0由正式收据绑定第三轮输入。",
+      "assets_log": ".local/delivery/I2-EVIDENCE-DELIVERY-1793307010165787000/command-06.log",
+      "assets_log_sha256": "332735867f35f4ea8e80f9f31bd4b871f7f7a9df279f2cfe1f2ac75ae7c25c48",
+      "assets_observed": "完整读取asset-directory/evidence-assets/memory-revisions/completion-gaps的passed正文，包含目录、三分支、权限/修订、原生Skill、记忆生命周期及5100字段后精确命中。",
+      "failure_log": ".local/delivery/I2-EVIDENCE-DELIVERY-1793307010165787000/command-07.log",
+      "failure_log_sha256": "2df83f9b0c38e215fed63af4bc0eeaada0781a3309d28c47c6bdbf0969957147",
+      "failure_observed": "已读完整command-07：Pi SDK、answer-state、request-policy、原tool版本、冻结回执跨run摘要成功/503组合及六项失效重放均有通过正文，随后check-large-tool-context在原第77行summaries>=1&&summaries<=2断言失败，Make组exit2。该正式日志本身未输出实际summary计数，3摘要/2compaction来自下列另行诊断，不将其冒称为正式日志直接记录。",
+      "acceptance_limit": "第三轮前六组通过是实际历史绑定结果；第七组失败、后两组未执行使整轮失败，不能把最小GREEN接在其后凑为新九组通过。"
+    },
+    "diagnosis": {
+      "original_probe_log": ".local/evidence-delivery-20261029-902223e3/large-context-diagnosis.log",
+      "original_probe_log_sha256": "923a7f3f807fa4345fbb01b43409bafbb1726c5d88e9b91d986c7557ebd8028b",
+      "original_observed": "旧140重复的普通分支先在step0发summary27203B，再发普通91990B；工具后summary27718B/1309B，普通续答130049B。最终step2、summaries3、compactions2、一个request_too_large，仍在原摘要次数断言失败。这个探针失败保留，不以正文最终完整掩盖断言失败。",
+      "history_sample_log": ".local/evidence-delivery-20261029-902223e3/large-context-history-sample.log",
+      "history_sample_log_sha256": "e2c814587ba40e2ae301b8cac0b82ba34c770c559a6a5a4dfdfae21b69b1cb14",
+      "sample_observed": "100重复对照中，两分支首普通请求103717B且此前0摘要。两份正文后的候选完整载荷168101B未发送，摘要请求38495/1309B后普通续答130049B；step2/summaries2/compaction1/错误1。六份正文后的候选270606B及压缩后232554B都未发送，只有首普通与两摘要被provider收到；step1/summaries2/compaction1/错误2。原断言最终passed。",
+      "limit": "只读取已有探针日志，未执行。探针源码/前后源指纹未随日志冻结，因此载荷差值用于核场景机制，不将诊断日志本身视为严格绑定当前全部479项；正式最小脚本结果另列。payload探针的候选超限尺寸与request实际发送数组分别记录，超限尺寸不是已发送网络或已计账调用。"
+    },
+    "minimal_green": {
+      "command": ["node", "tests/mvp/check-large-tool-context.mjs"],
+      "log": ".local/evidence-delivery-20261029-902223e3/large-context-fixture-green.log",
+      "log_sha256": "f411bcf15802c1248bf109d5cb39cc1ffb696bff8c9e43bba3d07ebf6f94e4c0",
+      "main_reported_exit_code": 0,
+      "official_requests": 0,
+      "normal": {"sent_payload_bytes": [103717, 38495, 1309, 130049], "summaries": 2, "calls": 4, "settled_attempts": 4},
+      "oversized": {"sent_payload_bytes": [103717, 38495, 1309], "summaries": 2, "calls": 3, "settled_attempts": 3},
+      "observed": "收到主线完成信号后读取完整正式最小脚本日志：passed=true且两场景完整输出，所有原断言保持，尺寸/摘要/调用与对照一致，officialRequests0。没有把尚在运行的局部输出当完成。",
+      "limit": "该日志无独立命令退出结构字段或前后源输入指纹；exit0是主线完成回报，审查者核到完整passed正文但未执行命令。它不等于EVIDENCE-RECOVERY整组或当前九组正式成功，也不证明真实provider模型效果。"
+    },
+    "blocking_findings": [],
+    "acceptance_effect": "当前历史规模修正保留原合同、场景与验收标准，无阻断。只更新原review并交回；主线绑定后须按当前范围整轮串行九组，前三轮任何成功组/前置项目与此最小GREEN均不得拼接。"
+  },
+  "blocking_findings": [],
+  "limitations": [
+    "本代理未运行任何测试、DB、Cargo或正式验收；运行事实均来自实际读取的已有日志/报告/执行收据，并按输入版本区分。没有用文件名或实现者自报passed代替正文核验。",
+    "四份修复前局部执行收据未拼成整组passed。SQL fallback的224项只在初审时全部一致；当前四份均与knowledge/store.rs不同，前三份还各有既有脚本差异，其中后三份另有第二轮重建的API/Worker hash差异。所有差异已逐项核对并记录，它们不能证明当前执行成功。",
+    "前三轮正式验收均已执行且整体失败。第二轮补足排序修复后的API/Worker构建与owner7/7；第三轮前六组exit0使覆盖、三种compact及资产整组有实际绑定成功，第七组摘要次数失败、后两组未跑。当前大上下文最小GREEN两分支通过但缺全输入指纹，不能替代修订后九组完整收据，也没有新SQL EXPLAIN。",
+    "大上下文夹具仍24轮，仅每轮重复140→100；旧探针3摘要/2compaction的失败保留，新场景仍在工具后真实溢出且保所有原断言。候选168101/270606/232554B仅来自探针，不是实际发送；正式最小日志只记录实际发送数组。该单变量对照支持恢复本用例触发次序，不证明任意大历史一律只有一个compaction。",
+    "覆盖诊断的初次4!=0失败完整保留；成功对照实际950候选/5轮，证明到达深度边界，不能写成接收了1000项或测得30次正文读取。诊断后阶段的手工layer/role与正式夹具不同，当前夹具正确身份由源码静态核对及其独立最小日志说明；二者不合并成严格版本绑定执行。",
+    "修复后scope/diff包含更新前原审查产物；更新本JSON后其自记录条目保持历史快照，归档不覆写。review_scope排除本记录自身，CURRENT全文另记SHA；本代理未改CURRENT。",
+    "不少局部成功日志缺当前479项输入的结构绑定，不能据它们关闭06；第三轮EVIDENCE-SEARCH及EVIDENCE-ASSETS整组通过仍属于整体失败的第三轮，当前完整正式轮必须重跑，不能挑取成功项目沿用。",
+    "本地模型协议替身与合成数据证明接线和断言所列行为，不证明真实模型理解、真实provider分词、真实平台效果、付费请求或整体MVP验收。officialRequests=0是已读局部报告的边界。",
+    "检索共同10秒期限与已发Embedding原结算收尾分别表达，pending无新公共扫描不表示0Embedding；没有放宽24/3或把测试组时限当产品时限。",
+    "严格检查点恢复只在原日志完整时可接确认leaf；first_flush可能尚无确认持久leaf，SDK缺父尾部严格拒绝。没有修日志、镜像或另建恢复机制。",
+    "只评06声明范围对长期需求的贡献与兼容，不把本包审查通过等同D01–D18/C01–C08/A01–A10全部完成，不提前补做07多任务定稿、08默认切换或09真实层验收。"
+  ],
+  "formal_acceptance_pending": {
+    "status": "three_attempts_failed_current_full_rerun_pending",
+    "first_attempt": ".local/evidence-delivery-20261029-902223e3/formal-first-failed.json",
+    "second_attempt": ".local/evidence-delivery-20261029-902223e3/formal-second-failed.json",
+    "third_attempt": ".local/evidence-delivery-20261029-902223e3/formal-third-failed.json",
+    "current_rerun_requirement": "对大上下文夹具修订后的范围整轮串行重跑九组，绑定同轮输入/结果；前三轮部分成功组、组内前置项目、旧局部结果及各次最小GREEN均不能拼入新轮充作通过。审查者不执行正式命令。",
+    "checks": [
+      {"id": "PI-CHECKPOINT", "command": ["node", "tests/runtime/check-checkpoint-journal.mjs"], "timeout_seconds": 120},
+      {"id": "PI-TRANSPORT", "command": ["make", "verify-pi-transport"], "timeout_seconds": 120},
+      {"id": "EVIDENCE-CONTRACT", "command": ["make", "verify-contracts"], "timeout_seconds": 300},
+      {"id": "EVIDENCE-DELIVERY", "command": ["make", "verify-evidence-delivery"], "timeout_seconds": 1800},
+      {"id": "EVIDENCE-SEARCH", "command": ["make", "verify-evidence-search"], "timeout_seconds": 1800},
+      {"id": "EVIDENCE-ASSETS", "command": ["make", "verify-evidence-assets"], "timeout_seconds": 900},
+      {"id": "EVIDENCE-RECOVERY", "command": ["make", "verify-evidence-recovery"], "timeout_seconds": 1200},
+      {"id": "EVIDENCE-CODE", "command": ["make", "verify-code"], "timeout_seconds": 600},
+      {"id": "EVIDENCE-BOUNDARIES", "command": ["make", "verify-architecture"], "timeout_seconds": 300}
+    ],
+    "next_owner": "主线绑定新审查后，在大上下文夹具修订后输入冻结下串行整轮执行make verify-increment，取得九组完整绑定结果后按实际证据维护CURRENT；失败、未执行或指纹变化均保持未完成。声明检查不等于业务验收，不复用前三轮部分成功。",
+    "review_effect": "原整包、排序/覆盖delta及本次大上下文夹具delta独立复核无阻断，可进入当前正式绑定验收；CURRENT在审查时仍active/review pending/evidence null，本记录不改其状态，也不宣称06已完成。"
+  }
+}

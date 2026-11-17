@@ -1,0 +1,50 @@
+{
+  "schema": 1,
+  "increment_id": "I3-SEMANTIC-DOGFOOD",
+  "reviewer": "独立只读审查代理（未参与本轮产品、测试或文档实现；与编包审查相互独立）",
+  "reviewed_at": "2026-11-14T23:16:15+00:00",
+  "conclusion": "passed",
+  "summary": "对2026-11-14 Dogfood报告修复包六项任务实施做独立只读实现审查：任务一（运行政策）、任务二（工具参数）、任务三（就绪状态投影）、任务四（CTE只读授权）、任务六（check-answer-state六场景重修与验收收口）符合执行包与既定政策；任务五（资料与维护证据）主体符合，1项minor（全库566/565/1聚合当时未落盘）已在审查后补跑q6-all-targets.out复核一致。五条政策底线（取消累计上限不新增硬顶并保留熔断、无新框架不换mock不删场景不放宽断言、present退役不向v2新调用开放、代码/测试无阶段编号、面向公开分享的合成材料）逐条核对通过。",
+  "scope_sha256": "df8d7d29b35ccec3bc7dc4abe26c6978b2a0fbcff8bc0e50a4301e84f3841ea3",
+  "findings": [
+    {"severity": "minor", "file": "docs/CURRENT.md", "claim": "任务五声称全库566版本目标565 indexed+1 failed（含source_excerpt 18），但该全库聚合当时无捕获输出佐证（q6-all-targets.sql存在而q6-all-targets.out缺失；落盘证据仅覆盖knowledge_entry子集q4-coverage.out=547+1）"},
+    {"severity": "note", "file": "docs/CURRENT.md", "claim": "任务二记录AnalysisUpdateFields为15属性，schema.json实际14个properties（配套14条if-then）"},
+    {"severity": "note", "file": "docs/CURRENT.md", "claim": "任务五53条expected-results字节不变的表述与事实有出入：实为既有52条逐字节不变+新增1条final_successful_attempt_candidate_mean"},
+    {"severity": "note", "file": "docs/CURRENT.md", "claim": "审查时点CURRENT尚无任务六记录、verification.reason停留在任务五（收口未完成的如实状态）"},
+    {"severity": "note", "file": "crates/data-agent/src/use_cases/data_tools.rs", "claim": "Rust注册路径不硬禁v2下present注册，退役强制点在Node工具目录层（data-tools.ts目录覆盖+tools数组过滤）并有测试双向约束——与执行包所述机制一致，作为观察记录不要求修改"},
+    {"severity": "note", "file": "tests/mvp/check-source-limits.mjs", "claim": "头部存在04切片2阶段编号注释，属本轮之前遗留（本轮改动区无编号），不计入本轮"},
+    {"severity": "note", "file": ".local/checks/answer-state-contract/", "claim": "目录内original-test.mjs、official-fixture-red/green.json等为2026-11-03早前轮次遗留工件，与本轮收据并存（本轮为answer-state.json与answer-state-red.json）"}
+  ],
+  "resolved_findings": [
+    "minor（q6未落盘）：审查后沿原只读通道对data_agent_trial_1b4c4000adefcdf7补跑q6-all-targets.sql并落盘q6-all-targets.out——knowledge_entry indexed 547+failed 1、source_excerpt indexed 18，合计566=565 indexed+1 failed，与任务五声明一致；CURRENT任务五节已注明补落盘经过。",
+    "note（15属性）：CURRENT任务二节已修正为14属性。",
+    "note（53条字节不变）：CURRENT任务五节已修正为既有52条逐字节不变+新增1条（现共53条）。",
+    "note（缺任务六记录）：本轮收口补齐任务六节与verification.reason（工程收口完成、真实复验待付费额度）。",
+    "verify-increment首轮暴露：check-task-query-answers.mjs --history-permissions（HISTORY-OUTPUT-BINDING）乙delta拼接断言仍隐含v1前提（同attempt仅乙正文）；v2合同下甲渲染定稿与乙自然尾项共用attempt输出流，撤权投影按unit权限分别替换（甲chunk隐藏、乙chunk逐字保留，committed与includes断言均过）。断言预期按v2合同修正为隐藏提示+secondBody，仍为strictEqual全文精确匹配，复跑passed且officialRequests 0；非产品缺陷、非放宽。",
+    "verify-increment次轮（command-27，REGISTERED-DECISION-COMPATIBILITY）暴露：tool_contract_version.rs registered_legacy_decisions 测试的重放幂等断言要求重放回执与首次回执全量相等，而 replay_receipt（data_tools.rs）按设计移除动态事实字段 frozen_notification_covered（通知覆盖采用启动/刷新的当前事实，Node侧notificationCoveredByFrozen配套）；判定产品行为正确、测试期望隐含重放复述动态字段已过期。修法为按当前合同修正期望：断言首次回执该字段值为false，重放回执与剥离该字段后的首次回执全量严格相等（create与revise两处，强度不降）；单独复跑passed、officialRequests 0。另无filter全量组合跑暴露3个失败（historical_runs/run_version_is_frozen于not_available与降级断言、registered_legacy_decisions于helper unwrap not_available）：均不在38组验收命令范围（验收仅delivery_preparation_与registered_legacy_decisions_两条filter命令，分别已于次轮command-06与本轮单独复跑绿），失败点位于本轮修改点之前且属其他测试或存储错误，与本轮两处断言修改无因果；如实记录，不在本包范围内定性或修复。scope指纹随之重算。",
+    "Rust注册层观察与既有遗留note：按审查判定不改，已在CURRENT任务六节如实记录。"
+  ],
+  "evidence": [
+    ".local/checks/answer-state-contract/answer-state.json",
+    ".local/checks/answer-state-contract/answer-state-red.json",
+    ".local/checks/f08-unknown-discrimination/q1-model-call.out",
+    ".local/checks/f08-unknown-discrimination/q4-coverage.out",
+    ".local/checks/f08-unknown-discrimination/q6-all-targets.out",
+    ".local/delivery/I3-SEMANTIC-DOGFOOD-1794579092517234000/command-13.log",
+    "tests/runtime/check-answer-state.mjs",
+    "migrations/202611140001_open_request_scopes.sql",
+    "docs/execution/semantic-runtime/dogfood-report-repairs.md"
+  ],
+  "scope_binding": {
+    "independently_recomputed": true,
+    "review_scope_recomputed_after_fixtures": true,
+    "note": "scope指纹覆盖registry、AGENTS.md与38组验收声明的全部verification_inputs（含tests目录终态：临时RED重放文件已删除）；CURRENT.md不参与该指纹，收口补记不使其漂移"
+  },
+  "limitations": [
+    "只读约束下未运行测试/构建/迁移；任务六22/22基于保存回执answer-state.json（passed=true、networkAttempts 0）与测试源码静态核对，未独立复跑。",
+    "本轮与更早原型工作的分离依赖文件mtime（≥2026-11-14）与回执时间戳；整棵semantic-runtime工作树未提交（HEAD 04d27d0，2026-10-25）。",
+    "MySQL迁移实际效果（列改NULL生效、旧行冻结）未连库验证，依据迁移SQL文本与check-request-policy.mjs断言。",
+    "manifest完整性经本地sha256重算核对（0不匹配）；未重跑生成脚本。",
+    "verify-increment完整链路、真实provider行为、E2E全链未独立核验；真实付费复验不在本审查范围。"
+  ]
+}

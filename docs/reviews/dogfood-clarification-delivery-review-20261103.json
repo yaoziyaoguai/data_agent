@@ -1,0 +1,108 @@
+{
+  "reviewer": "Codex 独立只读审查（未参与实现；未运行构建、测试或端点；未委派）",
+  "increment": "I3-CLARIFICATION-DELIVERY-REPAIR",
+  "summary": "增量复核未发现剩余阻断，结论 passed。初审所述合法长选项使短 control_delivery 返回 None 的静态事实仍成立，但由此推断实际可见交付失败过强：原生 Pi 当前任务正文路径仍可通过既有范围、来源及真实输出绑定校验，与冻结 B 答案组合提交。原始动态证据确认 control=null、恰 2 次本地协议调用、持久运行 finished、A 仍 waiting_clarification、8000 字符选项仍完整 open 保存，正式正文含冻结 B 答案与明确标为简述的 A 可答说明。生产 task_answers.rs、deliver.ts 自初审未变；当前边界明确为短控制能容纳时显示完整问题/选项，长字段沿原生正文解释，不承诺在单条 8000 字符输出中镜像全部 24000 字符输入。15 项 GREEN 保留原 14 项结果。正式两命令及新真实 P07 尚未执行，本地协议简述不记真实模型质量通过。",
+  "conclusion": "passed",
+  "scope_sha256": "52069ad907cd9d86d9bb990ca03580ab1b69ab36ef8b73d7bf37a5eecdb74c2d",
+  "findings": [],
+  "resolved_findings": [
+    {
+      "id": "CLARIFICATION-DELIVERY-REVIEW-01",
+      "priority": "P2",
+      "status": "closed_after_dynamic_validation_and_contract_clarification",
+      "title": "合同内长选项会使整份控制交付返回 None",
+      "retained_static_fact": "当前问题与 8000/1 字符选项生成的短控制正文超过 8000 字符，control_delivery_in_tx 返回 None；该生产行为没有被修改。",
+      "corrected_impact": "None 只表示不采用短控制投影，不等于无正式终稿或冻结答案丢失。初审未充分核对既有原生当前任务正文交付路径，将内部返回值外推为用户交付阻断；此影响判断由动态证据纠正。",
+      "resolution": "无需新生产补丁。deliver.ts 按当前任务建立输出绑定和冻结引用；task_answers::compose_in_tx 允许 Clarification 覆盖，校验当前任务/版本、来源范围及真实输出后组合冻结正文与可答说明。CURRENT/设计明确短控制与长字段解释的边界，并新增公开原生流程回归。",
+      "dynamic_evidence": ".local/checks/dogfood-clarification-delivery/long-option-flow-summary.json",
+      "regression_case": "tests/mvp/check-waiting-task-delivery.mjs::d2-long-option-native-final"
+    }
+  ],
+  "checks": [
+    "范围：相对初审 frozen.json，最终冻结的输入变化仅 tests/mvp/check-waiting-task-delivery.mjs、CURRENT.md、implementation-design.md。task_answers.rs 与 deliver.ts 的生产哈希完全相同；没有为长选项新增补救实现、放宽验证或修改旧成功回执。",
+    "合同边界：独立读取现行 Schema，ControlDelivery.text 与 FinishRun.final_text 的 maxLength 均为 8000；选项输入可达 24000，不蕴含所有原始输入须逐字镜像到一条短终稿。当前说明保留可容纳时完整呈现可读问题/选项，长字段使用原生有界正文明确解释或归纳，原字段完整保存。没有提高上限、截断持久字段或新增 UI/DTO/codec。",
+    "原生终稿路径：deliver.ts 在 control 缺省时继续构造当前任务 output_binding，组合冻结 answer_parts，并通过既有 /internal/finish 提交。task_answers.rs:775 对 Clarification 的覆盖分支，以及随后当前任务/版本、scope、来源、输出绑定和 final_text 原文相等检查，均为未改动的既有实现，不是未校验模型正文的旁路。",
+    "动态证据：只按字段提取 long-option-flow.json。summary 的 kind、paid_requests、control_is_null、delivery、calls、committed 与原始记录一致；有 2 个模型请求，control=null，delivery=finished，snapshot 中持久 run.state=finished。正式已提交正文包含冻结 B 的完整答案和 A 的保存问题/候选简述，并明确“未逐字复述长选项”。",
+    "持久状态：原始 snapshot 中 A 为 waiting_clarification、B 为 answered；open 记录的问题仍为“采用哪个口径？”，state=open，两个原选项长度分别为 8000 和 1。简述未改写原长选项、未结清 A、未覆盖 B 冻结答案。",
+    "新增回归：d2-long-option-native-final 使用公开建任务/clarify/route 及既有 deliver，断言恰 2 次模型调用、短控制不存在、正式 body 精确为冻结 B 加当前 A 简述、原长字段完整 open 保存及相位保持。协议 provider 只固定这次工程用例，不增加生产 Agent 或补救模型循环。",
+    "既有边界保持：新 report 共 15 项、32 次本地协议调用、0 付费；旧 report 的 14 项结果逐字段一致。原 source-marker 撤源、legacy-control、来源范围、冻结正文、重放和恢复 0 额外调用及实际浏览器刷新场景仍通过；未将新长选项场景等同于旧恢复快路径。",
+    "沿用初审已核结论：新增短控制正文仅从 protect_task_context_in_tx 处理后的 visible.clarification 读取。不可读问题及选项整体移除后保留泛化状态，has_more 不冒充全部开放题，原 facts/相位/预算/成功回执路径未改。本轮不重新审查全部旧代码。",
+    "静态与动态结论分开：短控制返回 None 是正确记录的观察，实际正常结束和可见简述是本次补齐的工程证据；协议提供者预写的简述不能证明真实模型必然保留全部业务含义或按用户意图作答。"
+  ],
+  "scope": {
+    "production_unchanged_since_initial_review": [
+      "crates/data-agent/src/use_cases/task_answers.rs",
+      "apps/agent/session/deliver.ts"
+    ],
+    "incremental_review": [
+      "tests/mvp/check-waiting-task-delivery.mjs::d2-long-option-native-final",
+      "apps/agent/session/deliver.ts:495",
+      "crates/data-agent/src/use_cases/task_answers.rs:775",
+      "crates/data-agent/src/use_cases/task_answers.rs:844",
+      "docs/architecture/implementation-design.md:452"
+    ],
+    "baseline": ".local/checks/dogfood-clarification-delivery/task-answers-before.rs",
+    "frozen": ".local/checks/dogfood-clarification-delivery/frozen-final.json",
+    "fingerprint_validation": "通过绝对项目根目录调用 scripts/check_delivery.py 的 review_scope(root, read_delivery(root))，两次结果均为本记录 scope_sha256，与 frozen-final.json 一致。",
+    "excluded": "原 P05 误差界解释、P08 SQL/覆盖缺口和其他继承变化不在本次范围；不修改它们或旧 P07 fail 状态。"
+  },
+  "evidence": {
+    "long_option_summary": ".local/checks/dogfood-clarification-delivery/long-option-flow-summary.json",
+    "long_option_source_fields_only": ".local/checks/dogfood-clarification-delivery/long-option-flow.json",
+    "green_15": ".local/checks/dogfood-clarification-delivery/question-long-green.log",
+    "green_15_report": ".local/checks/dogfood-clarification-delivery/question-long-green-report.json",
+    "initial_red": ".local/checks/dogfood-clarification-delivery/question-red.log",
+    "initial_green_14_report": ".local/checks/dogfood-clarification-delivery/question-green-report.json",
+    "initial_review_archive": ".local/checks/dogfood-clarification-delivery/review-initial-changes-requested.json",
+    "archive_validation": "本次更新前，初审完整备份与原审查 JSON 逐字段一致；原静态 finding、检查和限制保留在备份中。"
+  },
+  "review_history": [
+    {
+      "stage": "initial_static_review",
+      "conclusion": "changes_requested",
+      "scope_sha256": "9be819533e640bb07f6f932403ece56229705260ba9c506c94cb10a62204e503",
+      "record": ".local/checks/dogfood-clarification-delivery/review-initial-changes-requested.json",
+      "findings": [
+        {
+          "id": "CLARIFICATION-DELIVERY-REVIEW-01",
+          "priority": "P2",
+          "title": "合同内长选项会使整份控制交付返回 None",
+          "path": "crates/data-agent/src/use_cases/task_answers.rs",
+          "line": 629,
+          "description": "新分支把完整 options 加入 lines，但函数末尾仍在 text.chars().count()>8000 时返回 Ok(None)。AnalysisUpdate.options 和 ClarificationRequest.options 允许最多 8 个、每个最长 24000 字符的字符串。因此合法且来源可读的问题/选项会因本次新增正文越过旧阈值，使整个宿主控制投影消失。修复前同一输入只生成短泛化文字并返回 Some；修复后返回 None，既不能保证当前保存的问题和选项被正式交付，也失去原宿主控制投影提供的交付/恢复路径。",
+          "input": "一个来源完整可读、处于 waiting_clarification 的任务，goal='合成澄清任务'，question='采用哪个口径？'，options=['A'.repeat(8000), 'B']。问题 7 字符、两个选项分别 8000/1 字符，均符合现行合同。",
+          "actual_output": "按新分支构造的 control text 为 8035 Unicode 字符，触发 task_answers.rs:663 的 >8000 分支，control_delivery_in_tx 返回 Ok(None)，而不是包含保存问题及所有选项的控制投影。",
+          "expected_output": "合同接受的当前可读问题与选项具有可靠的正式可见交付路径；不能因加入已保存文字而静默撤掉整份原控制投影，或依赖新的自由模型正文来补回宿主应交付的内容。",
+          "supporting_locations": [
+            "crates/data-agent/src/use_cases/task_answers.rs:627",
+            "crates/data-agent/src/use_cases/task_answers.rs:663",
+            "packages/contracts/schema.json:3201",
+            "packages/contracts/schema.json:11159",
+            "docs/architecture/implementation-design.md:452"
+          ],
+          "requested_change": "处理合法长问题/选项与现有控制正文容量的交互，保留有界、安全且不会静默丢失保存正文的交付路径，并补一个合同内长选项的公开交付检查。保留原撤源保护、冻结答案、等待态、重放及恢复身份；若确需改变容量或交付合同，应先明确该取舍。",
+          "verification": "本审查仅按已读分支进行字符串长度核算，并静态核对真实返回条件；没有运行 Rust/Node 测试、DB 或端点。现有 GREEN 的选项均很短，未覆盖这一合法输入。"
+        }
+      ],
+      "subsequent_assessment": "保留原静态观察；其中将短控制 None 视为实际交付失败的影响判断，经本次完整既有路径与动态证据核对后撤回。",
+      "verification_limits": [
+        "初审没有运行对应长选项端到端用例，只有合同和返回分支支持的静态核算。",
+        "当时已有 GREEN 仅覆盖短字段；原 P07 未复验，未证明真实模型质量。"
+      ]
+    },
+    {
+      "stage": "native_delivery_path_incremental_review",
+      "conclusion": "passed",
+      "scope_sha256": "52069ad907cd9d86d9bb990ca03580ab1b69ab36ef8b73d7bf37a5eecdb74c2d",
+      "summary": "无新增生产修补；证据证明短控制 None 时原生当前任务输出仍可核验并正式提交，长选项完整保存。边界说明与新增回归补齐影响判断，原 14 项结果保留，关闭实施阻断。"
+    }
+  ],
+  "verification_limits": [
+    "本轮只做 CLARIFICATION-DELIVERY-REVIEW-01 增量复核，读取摘要、必要既有输出绑定/组合片段、当前新增场景、限定文档及现有日志，并按字段提取原始动态 JSON。未运行测试、DB、构建、浏览器或端点，未委派；唯一写入为本审查 JSON。",
+    "动态探针和 15 项 GREEN 均由实现方执行，本审查未重跑。通过字段对照验证的是已保存运行记录和正文，不是本次重新执行真实 Pi/API。",
+    "8000 字符长选项仍不会由短控制逐字回显。当前边界允许既有自然正文明确简述或按用户意图解释；不承诺单条 8000 字符终稿镜像所有 24000 字符输入，原长字段仍完整保留。",
+    "协议 provider 的预设简述只证明宿主交付、冻结组合和状态路径可用，不证明真实模型的概括准确性、完整性或用户理解。新的长选项场景也不构成长字段的独立浏览器专项验收；原短字段刷新场景仍通过。",
+    "初审静态 finding 原文及完整备份保留，生产文件未因本次复核修改。代码审查通过不等于撤源/冻结等所有未来输入已穷尽验证。",
+    "正式两命令（waiting-task-delivery 与 make verify-code）仍待当前冻结窗口执行，修后新真实 P07 尚未执行；原 P07 fail 及 P05/P08 partial 不改。本记录不声明正式收据或真实模型质量通过。"
+  ]
+}

@@ -1,0 +1,132 @@
+{
+  "schema": 1,
+  "reviewed_at_utc": "2026-10-27T00:02:17Z",
+  "increment": "I2-HYBRID-RETRIEVAL",
+  "reviewer": "独立审查子代理（I2-HYBRID-RETRIEVAL 05中文混合检索）。未参与本增量任何产品代码、合同、测试的编写，也未运行其中的数据库检查；本审查逐条对照正式合同17.5/17.6/17.6.1、执行包hybrid-retrieval.md与当前工作树源码独立核对实现、测试断言与主实施者留下的真实运行日志，仅写入本记录文件。",
+  "conclusion": "passed",
+  "summary": "05原文与知识中文混合检索两条主链的代码与证据审查通过。主链一：公共索引待办确认由knowledge统一拥有（knowledge_index_jobs主键扩为target_kind/source_kind/object_id/version，迁移202610260003；space_id仅raw目标登记方填写），retrieval仅以retrieval_source_projections（迁移202610260002）保存实际集合代次上的投影进度（含collection_target指纹与applied_position，完成绑定实际集合身份非配置名）；旧文件modules/ingestion/preparation.rs、modules/knowledge/dependency_index.rs、use_cases/raw_source_index.rs确认已不存在，Worker收敛为唯一process_index消费者（apps/worker/src/main.rs按目标类型分派、锁外切块/嵌入/写入、批间短事务核租约代次与来源头修订、完成后按SourceKey完整身份清旧），生产代码无任何raw_source_index新登记（仅遗留移交SQL），无第三条并行路径；旧积压移交raw_index_handover在同一短事务建新待办+收敛旧项，tests/raw_index_handover.rs实证事务中断无双领取记录、幂等重移、有效租约不抢、失败终态保留、移交后可被统一消费者领取；rebuild同批重置两类目标且superseded历史行不回炉；整理pending/failed不进入索引判定（消费者只核来源头修订，check-hybrid-retrieval第6/8组实证）。主链二：允许集在每路召回前生效——data_tools.rs先短事务换算允许记录集（source_limits::allowed_records_in_tx只用元信息与贡献根闭包，文档按稳定身份直通，空根不放行、unknown fail-closed，单测judgment_matrix覆盖），词法两路（retrieval/store.rs candidates_scoped_in_tx、knowledge/store.rs matching_scoped_in_tx）加IN前置约束、Milvus知识/摘录通道按ALLOWED_SHARD=200标量过滤、空集不发查询不为空范围付嵌入；提交事务内重解析+filter_objects_in_tx保留新鲜度护栏，回执filtered_candidates=前置排除（excluded_by_gate_in_tx与matching_excluded_in_tx同一匹配口径取并集）+漏网后置之和，check-source-limits 13组含被过滤对象计入断言；共同排序统一为retrieval::rank_common一次RRF k=60（精确ID加分优先不作第三票、无类型/来源配额、同record同通道仅最佳片段计一票、名额窗口跨record_kind共用、同分按record键稳定、raw子序≤30），v1以include_raw=false在名额计算前前置过滤raw（单测v1名额在raw前置过滤后计算实证）；同通道跨分片merge_by_score按原始分数全局合并、同分按id稳定（单测shard_merges_rank_by_raw_score_across_batches），知识对象聚合取片段最高分；回源仅选中≤30（recall_excerpts_in_tx take(30)）、每来源一次读、相交窗口合并≤2400超限保持独立、修订/hash不符按滞后舍弃不冒充（source_excerpt_recall.rs隔离库真实Milvus回环+单测两例）；统一期限SEARCH_DEADLINE=10秒一次调用共享绝对期限（单测两次2秒睡眠被同一80毫秒截止切断、check-retrieval-channel-faults稀疏路拖11秒墙钟≤11.5秒且dense照常交付），通道故障真值表aggregate_state任一执行组有成功路即available+bounded（四组故障检查全绿）；零候选覆盖滞后由knowledge::index_coverage_in_tx判定（两类目标齐全且vector_target等于实际集合才current，不读source_preparations），check-hybrid-retrieval实证零候选pending作业如实index_state=incomplete、注入failed整理状态不误报（semantic_status≠索引滞后双向覆盖）。禁止项未回归：全库无类型配额/关联腾位/自动集合后缀逻辑，collections/create仅显式维护prepare_index_target可达（查询路径只identity/describe，丢库不重建由检查实证），Milvus客户端为127.0.0.1真实REST实现无mock冒充。历史元信息读取修正：knowledge_sources::read_meta_in_tx（平台分支ingestion::read_source_meta_in_tx只查complete列、文档分支knowledge::read_meta_in_tx以JSON_EXTRACT取状态/种类/版本/有效值、映射完备走依赖索引游走、迁移前legacy回退正文requirements校验保持可校验），context_authority.rs两处sources循环（validate_in_tx钉住版本、validate_history_in_tx存在性）均改走元信息，.local/checks/historical-source-access.json 5组全绿且字节量证据核验窗口下行56942B（RED全量23191053B）。测试真实性：check-hybrid-retrieval.mjs 17组断言逐条与执行包『必须覆盖』表对应（1204表/2408对象真实索引819.6秒、旧集合零写入、BM25否定区分、限定词/同词异义、原文尾部覆盖到终点、1200末尾多词召回、第三租约领取崩溃明确失败、未知回执查证不重复写入、晚到旧版不覆盖、个人记忆不入共享索引、向量故障降级），四HYBRID-SCOPE检查（allowed-set/ranking/excerpts/channel-faults）夹具真实（每运行独立Milvus集合、真实embedding provider、独立隔离库），harness.mjs的onDatabaseUrl钩子仅为纯TCP透传代理统计下行字节（tests/mvp/harness.mjs第119-120行URL替换）不改业务；运行证据（hybrid-slice6-run3.log+mvp-hybrid-retrieval.json 17组、hybrid-scope-serial.log四检查串行、verify-shared-embedding-prerun2.log 9组含租约2→119→119、verify-architecture-prerun.log、mvp-source-limits.json 13组、historical-source-access.json）与CURRENT.md切片记录声明一致，officialRequests全部为0。发现与遗留（均非05阻断项）：①frontmatter HYBRID-SCOPE验收expected文本中的『批量元信息≤50』在05内部链路没有独立的owner元信息分批机制与专项断言——raw候选元数据随索引行返回、核验窗口以选中≤30为界（该界内≤50平凡成立），知识候选核验沿用v1整对象读取（chunks(500)，v1回执需装配对象正文的既有协议形状，且包内明确v1保留原调用语义）；执行包收尾说明与被取代的旧记录均把v2每批≤50的owner元信息核对归06交付接线，切片5完成记录也未声称已做，建议06落地时覆盖或修订该expected表述，当前不构成反向实现或伪造绿灯。②简报中index_coverage_in_tx位置笔误：实际位于modules/knowledge/store.rs（非retrieval/store.rs），语义与要求一致。③vector.rs摘录通道注释残留『2秒预算』字样（现行为统一10秒期限），属注释漂移。④主实施者已如实声明的范围限制维持有效：中文语义质量未做真实付费模型小样（全部officialRequests=0，本地协议替身只证明协议）、performance_schema不可用下字节量证据仅覆盖历史核验路径、查询延迟中位2664.9ms/最大6414.5ms为实测记录不构成性能承诺。本记录不代表verify-increment已执行；.local/delivery/I2-HYBRID-RETRIEVAL-result.json尚不存在，四组绑定的最终真实执行仍是关闭05的前置门槛。",
+  "scope_sha256": "dacbacb1f702a62e7bf38201ae0fbf78b7606c6f98e343fb1c7cc7d30e718b29",
+  "scope": {
+    "requirements": [
+      "D04",
+      "D06",
+      "D07",
+      "D11",
+      "C02",
+      "C06",
+      "C07",
+      "A06",
+      "A09"
+    ],
+    "specifications": [
+      "docs/execution/semantic-runtime/hybrid-retrieval.md",
+      "docs/architecture/implementation-design.md 第17.5、17.6、17.6.1节",
+      "docs/CURRENT.md 当前I2-HYBRID-RETRIEVAL声明与05切片1-7记录"
+    ],
+    "reviewed_paths": [
+      "crates/data-agent/src/modules/knowledge/store.rs",
+      "crates/data-agent/src/modules/knowledge/mod.rs",
+      "crates/data-agent/src/modules/retrieval/store.rs",
+      "crates/data-agent/src/modules/retrieval/vector.rs",
+      "crates/data-agent/src/modules/retrieval/mod.rs",
+      "crates/data-agent/src/modules/retrieval/excerpts.rs",
+      "crates/data-agent/src/modules/retrieval/source_segments.rs",
+      "crates/data-agent/src/modules/ingestion/store.rs",
+      "crates/data-agent/src/modules/jobs/store.rs",
+      "crates/data-agent/src/use_cases/knowledge.rs",
+      "crates/data-agent/src/use_cases/raw_index_handover.rs",
+      "crates/data-agent/src/use_cases/source_limits.rs",
+      "crates/data-agent/src/use_cases/knowledge_sources.rs",
+      "crates/data-agent/src/use_cases/data_tools.rs",
+      "crates/data-agent/src/use_cases/context_authority.rs",
+      "crates/data-agent/src/use_cases/knowledge_embeddings.rs",
+      "apps/worker/src/main.rs",
+      "migrations/202610260001_shared_index_targets.sql",
+      "migrations/202610260002_source_index_projection.sql",
+      "migrations/202610260003_source_index_target_identity.sql",
+      "crates/data-agent/tests/raw_index_handover.rs",
+      "crates/data-agent/tests/raw_index_target.rs",
+      "crates/data-agent/tests/source_excerpt_recall.rs",
+      "tests/mvp/check-hybrid-retrieval.mjs",
+      "tests/mvp/check-retrieval-allowed-set.mjs",
+      "tests/mvp/check-retrieval-ranking.mjs",
+      "tests/mvp/check-retrieval-excerpts.mjs",
+      "tests/mvp/check-retrieval-channel-faults.mjs",
+      "tests/mvp/check-historical-source-access.mjs",
+      "tests/mvp/check-source-limits.mjs",
+      "tests/mvp/harness.mjs",
+      "Makefile"
+    ],
+    "boundary": "仅审查05两条主链（统一索引待办/投影进度；前置允许集、共同候选、一次融合、有界回源、故障与期限）及顺带的历史元信息读取修正；核对的运行证据限于.local/checks下主实施者留下的真实日志与JSON（hybrid第3次运行、hybrid-scope串行、shared-embedding预跑、architecture预跑、source-limits 13组、historical-source-access），本审查未重跑任何数据库检查。06-09公开交付、真实付费模型质量与生产平台不在本结论范围。",
+    "fingerprint_method": "现场调用scripts/check_delivery.py::review_scope(root,read_delivery(root))；计算排除本审查记录及CURRENT.md的status/evidence/review指针字段，未手抄任何旧审查指纹。"
+  },
+  "verified_decisions": [
+    "公共索引待办由knowledge拥有：knowledge_index_jobs主键扩为(target_kind,source_kind,object_id,version)，平台/文档同ID为独立目标；retrieval_source_projections按(source_kind,source_id,space_id)保存实际集合代次投影（collection_target=identity指纹、applied_position推进、complete绑定集合身份非配置名）。",
+    "旧职责原位删除且无第三路径：ingestion/preparation.rs、knowledge/dependency_index.rs、use_cases/raw_source_index.rs不存在；Worker单入口process_index按目标类型分派；生产代码无raw_source_index新登记，background_jobs中该kind仅存在于有界移交SQL。",
+    "移交原子性：新待办登记与旧项收敛同短事务（FOR UPDATE SKIP LOCKED领取），中断回滚无双领取记录；重复移交经同一登记入口幂等接回origin_job_id；有效租约与失败终态不抢不改。",
+    "允许集前置：allowed_records_in_tx按当前代贡献根闭包换算（文档直通、空根不放行、unknown fail-closed、全来源在集内才可召回），词法SQL两路IN前置、Milvus两通道标量分片过滤、空集短路不发全库查询；提交事务重解析+过滤护栏保留，filtered_candidates=前置排除并集+漏网后置之和。",
+    "共同排序一次RRF k=60：BM25/dense同权、精确ID加分优先不作第三票、无类型/来源配额、同record同通道最佳片段计一票、名额窗口跨record_kind、同分按record键稳定；v1可交付record_kind在名额计算前前置过滤raw（include_raw=false），不先全类型top-k再丢弃。",
+    "有界回源：仅选中≤30读内容、每来源一次读、相交窗口合并≤2400且超限保持独立、修订/位置/hash不符按index_lag舍弃计数不冒充当前原文；数据库暂时故障保留原分类不吞为降级成功。",
+    "统一期限与通道隔离：一次调用10秒共享绝对截止不逐批重置（单测两批睡眠同截止切断实证）；任一通道/执行组失败只记本路，聚合真值表任一组有成功路即available+bounded，嵌入不可用不阻止词法召回。",
+    "覆盖滞后语义：index_coverage_in_tx要求两类目标对齐实际集合代次才current，不读整理状态；零候选在有未建/未覆盖代次时如实index_state=incomplete；semantic_status的pending/failed不误报索引滞后（双向检查断言）。",
+    "禁止项未回归：无类型配额/关联腾位/自动集合后缀/查询建集合（collections/create仅显式维护入口）；Milvus为127.0.0.1真实REST客户端，无mock冒充。",
+    "历史元信息读取修正：平台分支只查complete列、文档分支JSON_EXTRACT元信息且不装配正文/knowledge_versions全文，映射完备走依赖索引游走、迁移前legacy回退保持可校验；两处sources循环均切换，字节量证据56942B对照全量23191053B。"
+  ],
+  "findings_and_residuals": [
+    "HYBRID-SCOPE验收expected文本含『批量元信息≤50』，05内部链路无独立owner元信息分批机制与专项断言：raw候选元数据随索引行返回、核验以选中≤30为界（界内≤50平凡满足）；知识候选核验沿用v1整对象读取（chunks(500)）为既有v1协议形状。执行包收尾说明与被取代旧记录均将v2每批≤50 owner元信息核对归06交付接线，切片5完成记录未声称已做。不构成反向实现或伪造绿灯，建议06覆盖或修订expected表述。",
+    "简报路径笔误：index_coverage_in_tx实际位于modules/knowledge/store.rs而非retrieval/store.rs，语义与合同一致。",
+    "vector.rs摘录通道注释残留『2秒预算』字样，现行为为统一10秒期限，属注释漂移非行为缺陷。",
+    "主实施者已如实声明的未验证范围维持：真实付费模型中文语义质量未抽样（officialRequests=0）、字节量证据仅覆盖历史核验路径、实测延迟数字不构成性能承诺；verify-increment四组绑定命令尚未真实执行，收据未生成，仍是关闭05的前置门槛。"
+  ],
+  "evidence": {
+    "hybrid_run3": {
+      "paths": [
+        ".local/checks/hybrid-slice6-run3.log",
+        ".local/checks/mvp-hybrid-retrieval.json"
+      ],
+      "result": "17组全绿含Rust子测试2/2；索引构建819.6秒、延迟中位2664.9ms/最大6414.5ms、Milvus查询10982/写入10981、officialRequests=0"
+    },
+    "hybrid_scope": {
+      "path": ".local/checks/hybrid-scope-serial.log",
+      "result": "四检查串行全绿（allowed-set/ranking/excerpts/channel-faults），channel-faults四组故障语义与aggregate_state真值表一致"
+    },
+    "recovery_and_boundaries": {
+      "paths": [
+        ".local/checks/verify-shared-embedding-prerun2.log",
+        ".local/checks/verify-architecture-prerun.log"
+      ],
+      "result": "共享嵌入9组全绿（租约2→119→119观察保留，vector_state断言按切片五通道隔离合同修正为available+bounded）；架构锁序检查通过"
+    },
+    "gate_and_regressions": {
+      "paths": [
+        ".local/checks/mvp-source-limits.json",
+        ".local/checks/retrieval-allowed-set.json",
+        ".local/checks/retrieval-ranking.json",
+        ".local/checks/retrieval-excerpts.json",
+        ".local/checks/retrieval-channel-faults.json",
+        ".local/checks/legacy-source-limits.json",
+        ".local/checks/source-limits-memory.json"
+      ],
+      "result": "source-limits 13组（含被过滤对象计入filtered_candidates与空根人工条目场景）、允许集、排序、摘录、通道故障各检查全绿"
+    },
+    "historical_meta": {
+      "path": ".local/checks/historical-source-access.json",
+      "result": "5组全绿；核验窗口下行56942B对照RED全量23191053B，字节量代理经纯TCP透传统计"
+    },
+    "runner": "全部动态检查由主实施者串行运行；本审查者核对当前实现、断言语义与既有完整结果日志，未冒充独立重跑，未启动数据库或发起付费调用。"
+  },
+  "remaining_gate": {
+    "status": "pending",
+    "commands": [
+      "make verify-delivery",
+      "make verify-increment --complete"
+    ],
+    "meaning": "审查通过允许进入最终门禁；四组绑定命令须真实执行并生成I2-HYBRID-RETRIEVAL收据后才能置increment.status=complete，指纹失配或门禁失败不能关闭05。"
+  },
+  "limitations": [
+    "本审查不验证真实付费模型质量、真实生产平台接入或完整产品dogfood；全部officialRequests=0只证明本地协议路径。",
+    "字节量证据覆盖历史核验路径，不能推广为全系统读取粒度证明。",
+    "05范围外事项（如binlog保留等环境维护）不在本结论内；06-09保持原执行包未审。",
+    "范围指纹对应本记录写入时的工作树；其后对声明输入的任何实质修改均需重新审查，不能沿用本指纹。"
+  ]
+}

@@ -1,0 +1,210 @@
+{
+  "schema": 1,
+  "increment_id": "I3-SEMANTIC-DOGFOOD",
+  "reviewer": "Codex 独立实现审查者；未参与本六文件修改，未再委派",
+  "reviewed_at": "2026-11-16T14:45:13.742993+00:00",
+  "conclusion": "passed",
+  "engineering_conclusion": "passed",
+  "delivery_ready": false,
+  "overall_increment_complete": false,
+  "summary": "限定六文件工程审查通过，未发现本轮新增的确定性正确性缺陷或削弱原负控。资料调查门仅解除开放澄清阻断，当前活动任务、版本、来源许可及原操作重放校验保留；读取不关闭问题，不授予草稿或执行权限。结论不覆盖正在运行的真实试用、全体业务、完整验收或I3关闭。",
+  "bounded_scope_sha256": "5dbfe5d7e2121731d0d3f8341e22e1c8caedc1d214504419c663fe25d078474f",
+  "scope_definition": {
+    "kind": "bounded_independent_implementation_review",
+    "before": ".local/checks/dogfood-usability-20261116/clarification-research-before-manifest.json",
+    "after": ".local/checks/dogfood-usability-20261116/clarification-research-after-manifest.json",
+    "patch": ".local/checks/dogfood-usability-20261116/clarification-research.diff",
+    "changed_file_count": 6,
+    "basis": "仅以指定before/after及clarification-research.diff界定改动，不使用累计HEAD diff。范围外只读直接调用方、既有契约及相关测试以核验边界，不作全仓审计。",
+    "canonical_definition": "bounded_scope_sha256 = SHA256(UTF-8(canonical(after.files)))；canonical仅序列化after-manifest的files对象，按路径键升序排列，键和值保留原字符串，JSON无额外空白、无末尾换行。等价于json.dumps(after['files'], sort_keys=True, separators=(',', ':'), ensure_ascii=False).encode('utf-8')。不包含manifest其他字段、报告或审查JSON。",
+    "formal_review_scope": "未计算、未批准当前完整check_delivery.review_scope。其完整指纹包含持续更新的报告；本记录不是关闭增量的正式全范围收据，不得用bounded_scope_sha256替代完整指纹。",
+    "formal_contract_change": false,
+    "actions": "只读源码、冻结快照和已有证据；唯一新写本JSON。未运行服务、数据库、构建、测试、网络或付费请求，未修改产品、测试、CURRENT、成绩或授权，未提交、推送或委派。"
+  },
+  "reviewed_files": [
+    "crates/data-agent/src/modules/analysis/mod.rs",
+    "crates/data-agent/src/modules/analysis/store.rs",
+    "crates/data-agent/src/use_cases/evidence_delivery.rs",
+    "tests/mvp/check-query-semantics.mjs",
+    "tests/mvp/check-evidence-replay-boundaries.mjs",
+    "docs/architecture/runtime-modules.md"
+  ],
+  "findings": [],
+  "evidence": [
+    {
+      "id": "frozen-scope",
+      "assessment": "passed",
+      "observations": [
+        "入口核对全部六份before快照SHA与before-manifest一致，全部六份当前文件SHA与after-manifest一致；runtime-modules按before_overrides使用before-clarification快照。",
+        "从before快照到当前六文件生成的统一diff逐字等于指定clarification-research.diff，两个manifest的路径集合均恰为这六文件。",
+        "2026-11-16T14:45:13.742993+00:00收尾复核六份before、六份当前文件及三个冻结依据均未变化，bounded_scope_sha256不变。"
+      ],
+      "control_file_sha256": {
+        "clarification-research-before-manifest.json": "2c563d2c46c036ceeb3bf386fb53e3c85f167b04613266088fdcf699d9684315",
+        "clarification-research-after-manifest.json": "022b677ff995c78307916bf82e4cfb40a4ae25635c5e920b97057dfa146f82bb",
+        "clarification-research.diff": "a39b85c388f7d971d186366aabec1864cea3707214f14f1b7387d0026172dc69"
+      }
+    },
+    {
+      "id": "read-versus-mutation-responsibility",
+      "assessment": "passed",
+      "source_locations": [
+        {"path": "AGENTS.md", "line": 24},
+        {"path": "AGENTS.md", "line": 35},
+        {"path": "docs/architecture/implementation-design.md", "line": 740},
+        {"path": "docs/architecture/implementation-design.md", "line": 746},
+        {"path": "crates/data-agent/src/modules/analysis/mod.rs", "line": 33},
+        {"path": "crates/data-agent/src/modules/analysis/store.rs", "line": 661},
+        {"path": "crates/data-agent/src/modules/analysis/store.rs", "line": 697},
+        {"path": "crates/data-agent/src/use_cases/evidence_delivery.rs", "line": 15},
+        {"path": "docs/architecture/runtime-modules.md", "line": 128}
+      ],
+      "observations": [
+        "既有契约允许已裁决来源范围内先调查待查事实；业务口径仍待澄清不等于资料许可未知。新增assert_read_context_in_tx与原assert_current_in_tx共享同一查询和assert_task_state，区别仅requires_resolved=false/true；版本不符和非active仍分别拒绝。",
+        "evidence_delivery先读会话真实active_task_ref，显式引用必须匹配该任务及版本，再通过analysis公开操作核同会话、当前版本与生命周期。SQL仍在analysis私有store，组合层没有越过表owner。",
+        "唯一切换调用位于资料读取上下文；没有修改澄清解决写入。Pi继续判断是否调查、是否需要用户选择以及事实是否唯一，Rust不从资料正文推断问题已解决。"
+      ]
+    },
+    {
+      "id": "permission-and-original-operation-replay",
+      "assessment": "passed_with_existing_synthetic_endpoint_limit",
+      "source_locations": [
+        {"path": "crates/data-agent/src/use_cases/data_tools.rs", "line": 722},
+        {"path": "crates/data-agent/src/use_cases/data_tools.rs", "line": 1264},
+        {"path": "crates/data-agent/src/use_cases/data_tools.rs", "line": 1299},
+        {"path": "crates/data-agent/src/use_cases/data_tools.rs", "line": 1741},
+        {"path": "crates/data-agent/src/use_cases/data_tools.rs", "line": 2019},
+        {"path": "crates/data-agent/src/use_cases/data_tools.rs", "line": 2813},
+        {"path": "crates/data-agent/src/use_cases/evidence_delivery.rs", "line": 35},
+        {"path": "crates/data-agent/src/use_cases/source_limits.rs", "line": 149},
+        {"path": "crates/data-agent/src/use_cases/source_limits.rs", "line": 208},
+        {"path": "crates/data-agent/src/use_cases/context_authority.rs", "line": 1039},
+        {"path": "crates/data-agent/src/use_cases/model_calls.rs", "line": 29},
+        {"path": "crates/data-agent/src/modules/runtime/model_configuration/store.rs", "line": 383},
+        {"path": "docs/architecture/implementation-design.md", "line": 604}
+      ],
+      "observations": [
+        "v2读取仍要求本消息已routed且活动范围已知，开放问题不会自动把未知来源补成null。省略task_ref仍由source_limits继承真实活动任务许可；正文读取、贡献来源、版本、资产归属/选用和最终交付依赖检查保留。",
+        "成功读取重放在原工具账本命中后，重核显式task_ref、当前资料/资产及活动范围，再取原成功回执；不重读正文、不按新容量重裁，不换operation/origin。拒绝回执也沿原身份接回，所以历史J01已rejected操作不会因本修复自动变成成功。",
+        "读取准备与最终提交之间仍核原工具指纹/operation、运行租约、活动任务版本及来源门；最终authority验证没有被新只读门替代。",
+        "模型reserve/send仍核原profile对应模型及原服务启停，并核当前上下文投影。本轮没有绕过该门或扩大接收端点；既有604行明确只覆盖管理员启用的合成工作区，真实企业资料类别/结果字段出域政策仍不在已实现证明内。"
+      ]
+    },
+    {
+      "id": "no-auto-resolution-or-execution",
+      "assessment": "passed",
+      "source_locations": [
+        {"path": "crates/data-agent/src/modules/analysis/store.rs", "line": 556},
+        {"path": "crates/data-agent/src/modules/analysis/store.rs", "line": 635},
+        {"path": "crates/data-agent/src/use_cases/data_tools.rs", "line": 66},
+        {"path": "crates/data-agent/src/use_cases/query_workflow.rs", "line": 361},
+        {"path": "crates/data-agent/src/use_cases/analysis_evidence.rs", "line": 144},
+        {"path": "crates/data-agent/src/use_cases/analysis_answers.rs", "line": 244},
+        {"path": "tests/mvp/check-query-semantics.mjs", "line": 329},
+        {"path": "tests/mvp/check-clarification.mjs", "line": 365}
+      ],
+      "observations": [
+        "读门仅SELECT，不推进condition_version、phase或clarifications。关题仍由apply_update的明确resolved_clarification_ids处理，普通修订和读取均不默认解决；开放题继续优先形成waiting_clarification。",
+        "request_query继续调用assert_current_in_tx；首次执行确认也继续调用原严格门并核实际消息授权。新测试在读取后仍须收到waiting_clarification，查询总数保持既有一稿。",
+        "定量答案未改用assert_read_context_in_tx，仍经原成功查询、真实result_ref、原任务/条件及数值来源核验。已有历史成功结果按原版本解释的兼容路径保留；不能把资料读取成功解释成新查询执行或结果成功。"
+      ]
+    },
+    {
+      "id": "red-green-and-independent-expectations",
+      "assessment": "passed_as_recorded_not_rerun",
+      "source_locations": [
+        {"path": "tests/mvp/check-query-semantics.mjs", "line": 27},
+        {"path": "tests/mvp/check-query-semantics.mjs", "line": 304},
+        {"path": "tests/mvp/harness.mjs", "line": 178},
+        {"path": "tests/mvp/harness.mjs", "line": 327},
+        {"path": "docs/sources/business-guide.md", "line": 69},
+        {"path": "docs/sources/schema.sql", "line": 1}
+      ],
+      "paths": [
+        ".local/checks/dogfood-usability-20261116/clarification-research-red.log",
+        ".local/checks/dogfood-usability-20261116/clarification-research-green.log",
+        ".local/checks/dogfood-usability-20261116/clarification-regression-check-query-semantics.log"
+      ],
+      "observations": [
+        "RED实际在search_knowledge收到409/waiting_clarification，checks为空，不能称为其他断言已通过。首份GREEN首先证明检索与原身份重放；后续回归日志首项明确扩展到检索、知识补读和回源。",
+        "测试通过正式tool-calls登记、tools执行及tool-rejections接口取得真实Rust回执，没有手造读取成功结果。新场景为真实v2任务、开放问题及显式source_limits=null；资料查询不是由模型模拟的业务结果。",
+        "知识正文断言的退款期间规则来自既有合成business-guide及semantic-catalog；source正文逐字符对照独立schema.sql前64字符，未由当前响应反写预期。另核问题列表、版本、phase、原operation/data及草稿硬拒绝。",
+        "版本负控实际提交current+1，是版本不匹配而非已发生修订后的旧版重放；错误活动任务用另一真实任务。response_budget为宿主侧测试夹具常量，不代表Pi真实容量分配已由此验证。"
+      ]
+    },
+    {
+      "id": "replay-fixture-correction",
+      "assessment": "passed_no_negative_control_weakened",
+      "source_locations": [
+        {"path": "tests/mvp/check-evidence-replay-boundaries.mjs", "line": 22},
+        {"path": "tests/mvp/check-evidence-replay-boundaries.mjs", "line": 41},
+        {"path": "tests/mvp/check-evidence-replay-boundaries.mjs", "line": 61},
+        {"path": "tests/mvp/check-evidence-replay-boundaries.mjs", "line": 145},
+        {"path": "tests/mvp/check-evidence-replay-boundaries.mjs", "line": 244},
+        {"path": "docs/architecture/implementation-design.md", "line": 746}
+      ],
+      "paths": [
+        ".local/checks/dogfood-usability-20261116/clarification-regression-check-evidence-replay-boundaries.log",
+        ".local/checks/dogfood-usability-20261116/clarification-regression2-check-evidence-replay-boundaries.log"
+      ],
+      "observations": [
+        "首败为首次read_knowledge收到409/task_context_required，尚未取得负控所需成功基线。修正仅在每场景begin后经正式update_analysis_task创建明确无额外来源限制的任务，并断言source_context_ready=true；依据是原有v2当前消息准入契约。",
+        "冻结diff未删除或放宽任何原负控断言。六项仍覆盖知识换版、来源换版、记忆三分支停用、Skill撤回选用及活动范围收紧后的两种正文重放；每项先核真实成功账本，再原封重传同SDK/operation/参数。",
+        "仍要求404/409及有限业务错误码、响应不含旧正文、原ledger/首次receipt不变、tool-rejections为404。修后原始日志六项均拒绝且ledgerUnchanged=true，不能由夹具错误、租约失败或服务错误代替目标拒绝。",
+        "新增任务没有取消后续范围收紧；该场景仍另建真实受限活动任务、读回收紧条件与活动版本，并检查省略task_ref的原成功回执拒绝。Skill场景原有暂存/恢复调度状态的测试接缝保持，不将其解释为用户可并发撤回流程证明。"
+      ]
+    },
+    {
+      "id": "serial-regressions-and-compatibility",
+      "assessment": "passed_as_recorded_with_first_failure_preserved",
+      "paths": [
+        ".local/checks/dogfood-usability-20261116/clarification-research-regressions-20261116T1424.json",
+        ".local/checks/dogfood-usability-20261116/clarification-research-regressions-20261116T1434.json",
+        ".local/checks/dogfood-usability-20261116/clarification-regression-check-evidence-source.log",
+        ".local/checks/dogfood-usability-20261116/clarification-regression2-check-source-limits.log",
+        ".local/checks/dogfood-usability-20261116/clarification-regression2-check-clarification.log",
+        ".local/checks/dogfood-usability-20261116/clarification-regression2-check-source-scope-equivalence.log"
+      ],
+      "observations": [
+        "两份serial=true收据分别为0/0/1和0/0/0/0退出码，逐项与原始日志相符。成功耗时分别为63.857、35.414、21.574、109.942、200.564、19.928秒；标有360秒原超时的三项均在界内，其余timeout=null不能虚称通过某个具体时限。各收据official_requests=0。",
+        "evidence-source原始日志包含v2来源未就绪拒读、合法route、当前修订/坐标、显式错误任务/版本、范围外拒绝及省略引用继承；source-limits保留v1来源闭包、未知映射拒绝、活动任务隔离、Skill读取和轮内派发负控。",
+        "clarification原始日志保留未答题阻断草稿/旧稿执行、仅改日期不关题、显式回答、另一任务正常执行与重启续答；其38次调用、4次压缩来自原Pi/本地协议替身，不是新增生产机制或真实模型判断正确率。",
+        "source-scope-equivalence原始日志显示只改月份、允许集重排及跨消息重申均不重投影，实际收紧才新增一次原生压缩；未把本轮读取修复变成上下文重建机制改造。",
+        "六文件未更改公共Schema、持久结构、SDK/工具版本或任何原operation/预算身份；原assert_current行为保持，v1参数和旧登记/成功/拒绝回执路径保持。未新增Agent、重试、压缩器或宿主固定调查流水线。"
+      ]
+    },
+    {
+      "id": "original-trial-stop",
+      "assessment": "failure_evidence_preserved_not_business_revalidated",
+      "source_locations": [
+        {"path": ".local/dogfood-runs/qa-usability-20261116/attempts/J01-01/assessment.json", "line": 11},
+        {"path": ".local/dogfood-runs/qa-usability-20261116/attempts/J01-01/draft/trace/tool-calls.json", "line": 90},
+        {"path": ".local/dogfood-runs/qa-usability-20261116/attempts/J01-01/draft/trace/tool-calls.json", "line": 102}
+      ],
+      "observations": [
+        "不只采信assessment根因文字：原工具轨迹中create成功，phase=waiting_clarification且source_context_ready=true；随后search_knowledge确以waiting_clarification持久拒绝，与before调用严格门及定点RED一致。",
+        "这支持修复资料读取被错误阻断的宿主原因，不证明修后模型会自行核对年份、粒度或分母并生成正确SQL。J01-01原fail及业务断言not_run保留；本审查不判定其他正在运行的attempt状态。"
+      ]
+    }
+  ],
+  "unresolved_issues": [
+    {
+      "id": "real-trial-and-full-delivery",
+      "status": "outside_bounded_review_not_verified",
+      "location": {"path": ".local/dogfood-runs/qa-usability-20261116/attempts/J01-01/assessment.json", "line": 12},
+      "detail": "指定证据不包含本修复之后J01原题的真实模型业务通过证明。本次不覆盖正在运行的真实试用、其他业务、完整验收及I3完成；不得把六文件工程通过改写为业务通过。"
+    },
+    {
+      "id": "enterprise-endpoint-policy",
+      "status": "documented_existing_limit_not_introduced_here",
+      "location": {"path": "docs/architecture/implementation-design.md", "line": 604},
+      "detail": "当前合成工作区端点启停校验保留；真实企业资料类别及结果字段的端点出域政策未由本增量实现或证明。"
+    }
+  ],
+  "limitations": [
+    "未重新执行构建或测试；运行判断依据指定完整历史日志、两份串行收据及实际测试代码。冻结SHA证明本次审查对象，日志和serial收据未逐项附当次源码/二进制指纹，不能额外声称精确二进制绑定或部署已更新。",
+    "新增确定性测试直接调用正式Rust接口，证明宿主读取状态门；其手工工具输入不证明真实模型的自主调查、事实充分性、语义理解或用户接受。",
+    "本轮未直接新增开放澄清下的取消任务、跨会话及端点停用组合测试；相应判断来自保留的校验调用链及已有相邻回归，不冒称所有组合均已动态执行。",
+    "只给出canonical(after.files)的有界指纹和限定工程结论；不替代完整check_delivery.review_scope、当前完整验收收据或正式关闭审查。"
+  ]
+}

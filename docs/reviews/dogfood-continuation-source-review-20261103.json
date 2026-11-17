@@ -1,0 +1,48 @@
+{
+  "reviewer": "独立限定补充审查代理；未修改实现/CURRENT，未运行测试、构建、端点或付费调用，仅按授权写入本审查记录",
+  "review_kind": "bounded_supplement",
+  "parent_increment": "I3-SEMANTIC-DOGFOOD",
+  "conclusion": "passed",
+  "summary": "仅本次普通续聊来源集合等价边界的实施补充审查通过，未发现可确认阻断。active_reset_required_in_tx复用既有gate_of和allowed_keys比较许可集合，不再因顺序、重复项或声明消息身份的JSON差异清除同任务仍有效的上下文。明确null与缺失/未知仍区分，受限跨任务仍刷新，后置实际证据读取和authority范围核验保持。本记录不创建新增量，不签署整个主09，也不是主09的完整有效验收收据。",
+  "findings": [],
+  "scope": {
+    "baseline": ".local/checks/continuation-overhead/before/crates/data-agent/src/use_cases/source_limits.rs",
+    "reviewed_delta": [
+      "crates/data-agent/src/use_cases/source_limits.rs：active_reset_required_in_tx约603–631行的集合等价比较增量",
+      "tests/mvp/check-source-scope-equivalence.mjs：新增零模型续聊边界测试",
+      "docs/architecture/implementation-design.md：第750行附近集合等价语义补充"
+    ],
+    "necessary_seams": "同文件已有allowed_keys排序去重、gate_of的SourceLimits校验，以及authority_projection_within继续核evidence_reads和authority的直接调用关系。新测试复用真实API、RustTransport、dataTools、taskProjection及原生SessionManager；未扩展为全目录、旧来源或记忆包审查。",
+    "hash_boundary": "以下SHA绑定三个完整文件的实际字节；审查内容仍仅为上述局部增量及必要接缝，不表示完整文件或主09均已审查。"
+  },
+  "file_sha256": {
+    "crates/data-agent/src/use_cases/source_limits.rs": "fe4a7a49e0406a940d1f496a714cd80c2889d31b876bd67725a43a73cc5f98f6",
+    "tests/mvp/check-source-scope-equivalence.mjs": "1d374de8607b9973904f9db375c9bf9e6121d2861b1e14958d70bf00ff306897",
+    "docs/architecture/implementation-design.md": "cd83d516acce3182c624745914954ea8ad13d4f00ee8380758fe122f6e58f17d"
+  },
+  "code_assessment": [
+    "仅Some(Value::Null)与当前无gate可以视为明确无限制；旧声明缺失或未知不等于null，scope_known=false的保护保持。",
+    "受限集合以既有(kind,id)排序去重结果比较，复用原SourceLimits校验与集合规则，没有新增状态、许可解析器或第二套归一化规则。",
+    "任务身份改变且当前存在受限gate时，即使集合相同仍返回需要刷新；原明确无限制两侧的普通续聊行为保持。",
+    "集合等价不会提前返回允许：后续authority_projection_within仍依次检查实际evidence_reads与完整authority是否在当前gate内。",
+    "比较不改写source_limits或origin_message_ids。新增跨消息受测路径确认新声明仍绑定当前消息，集合等价只减少重投影。"
+  ],
+  "evidence_reviewed": [
+    ".local/checks/continuation-overhead/regression-red.log",
+    ".local/checks/continuation-overhead/regression-green.log",
+    ".local/checks/continuation-overhead/regression-green-2.log",
+    ".local/checks/continuation-overhead/source-gates.log",
+    ".local/checks/continuation-overhead/projection.log",
+    ".local/checks/continuation-overhead/recovery.log",
+    ".local/checks/continuation-overhead/clippy.log"
+  ],
+  "test_assessment": "有效RED记录只改月份为0次清理，同集合重排却context_reset且增加1条原生compaction。最终regression-green-2完整passed：改月省略来源、同集合重排、跨消息重申分别0次重投影/清理，跨消息声明origin_message_ids仍为当前消息；实际收紧到schema触发刷新并增加1条原生compaction，旧业务指南正文移出当前上下文。两条请求预算下model_call_attempts合计0、officialRequests为0，原session ID保持。首次regression-green的checkpoint_storage_invalid保留为失败记录；当前测试先沿ReadCheckpoint按指纹解引用host_checkpoint并核leaf，再调用原restoreCheckpoint，没有修改生产恢复或删除断言。随后已实际完成且完整读取的相关日志为source-gates 13组passed、普通投影passed/calls5/summaries1、恢复passed/calls4/summaries1，以及crate Clippy完成；没有预测或重跑这些检查。",
+  "limits": [
+    "仅签本局部集合等价修复及对应测试/设计，不签主09完成，不伪称主09已取得完整有效收据。",
+    "审查未运行测试、构建或付费调用；所述运行结果来自已完成的完整日志。三个文件SHA单独绑定本次所审字节。",
+    "新增测试验证确定性工程路径的重投影/原生compaction次数与零模型调用，不能替代真实自然语言续聊的模型调用次数、成本和用户体验验证。",
+    "新增测试没有单独穷举null、未知与重复项的所有组合；这些边界的结论限于保留的代码分支、既有集合规则及相关来源门回归。",
+    "真实自然语言续聊成本、503失败、过宽来源选择和S05 abort均为独立未解问题，不合并根因，也不据本局部通过宣称已解决。",
+    "未改原任务、来源声明、预算、操作身份、旧失败或unknown记录；未重审此前已关闭的来源和记忆包。"
+  ]
+}

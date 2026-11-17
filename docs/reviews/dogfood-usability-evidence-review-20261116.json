@@ -1,0 +1,489 @@
+{
+  "schema": 1,
+  "coordinator_path_normalization": "实施协调者仅将本地绝对工作区前缀转换为仓库相对引用，遵守AGENTS记录规则；独立审查者的发现、结论、时间和输入指纹未改。后续修正另记，不将本记录改成当前完整通过。",
+  "review_type": "bounded_independent_evidence_verification",
+  "reviewed_at_utc": "2026-11-16T17:16:34.969026+00:00",
+  "conclusion": "needs_corrections: A12当前完整pass超出原始正文证据；CURRENT中A15待判措辞应与已完成partial判分统一。其余核实结论仅限下述证据范围。",
+  "bounded_scope_sha256": "ad3efe163131525435bdafa37322bdc1c980039a8e354eadc889155ffb92b6af",
+  "scope_integrity": {
+    "manifest": ".local/checks/dogfood-usability-20261116/current-evidence-review-inputs.json",
+    "file_count": 18,
+    "manifest_bytes_sha256_begin": "aadde360e40c56bc7fcf106daf2f348556929bdd4a66198c6898beb32f64df96",
+    "manifest_bytes_sha256_end": "aadde360e40c56bc7fcf106daf2f348556929bdd4a66198c6898beb32f64df96",
+    "manifest_unchanged": true,
+    "manifest_declared_bounded_scope_sha256": "ad3efe163131525435bdafa37322bdc1c980039a8e354eadc889155ffb92b6af",
+    "recomputed_manifest_map_sha256": "ad3efe163131525435bdafa37322bdc1c980039a8e354eadc889155ffb92b6af",
+    "recomputed_actual_map_sha256": "ad3efe163131525435bdafa37322bdc1c980039a8e354eadc889155ffb92b6af",
+    "file_mismatches": [],
+    "definition": "SHA256 of UTF-8 json.dumps(files, sort_keys=True, separators=(comma,colon)); bounded evidence/doc review, not full check_delivery review_scope",
+    "full_check_delivery_review_scope_computed": false
+  },
+  "review_actions": [
+    {
+      "action": "冻结范围核对",
+      "targets": [
+        ".local/checks/dogfood-usability-20261116/current-evidence-review-inputs.json"
+      ],
+      "detail": "开始时18项文件哈希全部匹配；结束按manifest定义重新计算，不计算完整check_delivery.review_scope。"
+    },
+    {
+      "action": "对照原场景",
+      "targets": [
+        "docs/dogfood/cockpit/scenarios.json"
+      ],
+      "case_ids": [
+        "J01",
+        "A09",
+        "A10",
+        "A11",
+        "A12",
+        "A15",
+        "G08"
+      ],
+      "detail": "使用原messages/expect/depends_on，不将100项逐条展开。"
+    },
+    {
+      "action": "对照原轨迹",
+      "targets": [
+        "docs/execution/semantic-runtime/integrated-trajectories.json",
+        ".local/dogfood-runs/qa-usability-20261116/trajectory-results.json"
+      ],
+      "case_ids": [
+        "personal-memory-and-skills",
+        "time-and-definition-continuation"
+      ],
+      "detail": "核对复用范围及当前partial/blocked_authorization，不将局部记忆或工程检查升格为整轨迹通过。"
+    },
+    {
+      "action": "J01原始证据核对",
+      "targets": [
+        ".local/dogfood-runs/qa-usability-20261116/attempts/J01-02/trace/submission-state.json",
+        ".local/dogfood-runs/qa-usability-20261116/attempts/J01-02/trace/execution-wire.json",
+        ".local/dogfood-runs/qa-usability-20261116/attempts/J01-03/trace/execution-confirmation.json",
+        ".local/dogfood-runs/qa-usability-20261116/attempts/J01-03/trace/platform-ledger.json",
+        ".local/dogfood-runs/qa-usability-20261116/attempts/J01-03/execution/query-results.json",
+        ".local/dogfood-runs/qa-usability-20261116/attempts/J01-03/execution/final-snapshot.json"
+      ],
+      "detail": "区分旧attempt零提交与新attempt持久提交，保留旧根因unknown及新正文分母矛盾。"
+    },
+    {
+      "action": "J01参考适用性",
+      "targets": [
+        "docs/sources/cockpit/documents/asr-candidates.md:200-208",
+        "docs/dogfood/cockpit/reference/oracle_queries.py:133-141",
+        "docs/dogfood/cockpit/reference/expected-results.json",
+        "docs/CURRENT.md#APPROVED-SPEECH-SEMANTICS"
+      ],
+      "detail": "只读既有定义/查询文本/结果及原批准条款，没有执行oracle或查询。"
+    },
+    {
+      "action": "A09-A12正文与检索回执",
+      "targets": [
+        ".local/dogfood-runs/qa-usability-20261116/attempts/A09-01/revision",
+        ".local/dogfood-runs/qa-usability-20261116/attempts/A10-01/forget",
+        ".local/dogfood-runs/qa-usability-20261116/attempts/A10-01/after-forget",
+        ".local/dogfood-runs/qa-usability-20261116/attempts/A11-01/positive-bob",
+        ".local/dogfood-runs/qa-usability-20261116/attempts/A11-01/negative-carol",
+        ".local/dogfood-runs/qa-usability-20261116/attempts/A12-01/synonym"
+      ],
+      "detail": "直接提取final-snapshot.messages、tool-calls.receipt.data及运行摘要；区分历史调用和当次调用，不只复述assessment。"
+    },
+    {
+      "action": "状态/收据分层",
+      "targets": [
+        "docs/CURRENT.md:1283-1322",
+        ".local/dogfood-runs/qa-usability-20261116/REPORT.md",
+        ".local/dogfood-runs/qa-usability-20261116/results.json",
+        ".local/dogfood-runs/qa-usability-20261116/budget.json",
+        ".local/checks/dogfood-usability-20261116/current-record-and-declaration-checks.json"
+      ],
+      "detail": "按JSON统计当前100/10项；核对记录校验与业务成绩门的退出码及完整50条未完成声明。未运行这些命令。"
+    },
+    {
+      "action": "执行约束",
+      "detail": "无模型、网络、数据库、服务、测试、构建、委派、权限或预算操作；没有使用全仓HEAD diff；只写本JSON。工具调用总数含最终handback为12。"
+    }
+  ],
+  "findings": [
+    {
+      "id": "F01",
+      "severity": "high",
+      "case_id": "A12",
+      "attempt_id": "A12-01",
+      "category": "unsupported_full_pass",
+      "current_status": "pass",
+      "supported_status": "partial",
+      "unmet_original_assertion": "新会话用近义表达召回当前有效范围和例外",
+      "finding": "真实检索已取回当前v2的完整body/scope和毫秒例外；但最终正文把规则表述为周报汇总的默认，未告知它仅适用于qa-20261114T010142Z这份周报。来源日期、个人可见和不改共享指标均不能替代适用范围。第二条真实近义检索断言有支持，不能据此把第一条连同正文完整性判pass。",
+      "evidence": [
+        {
+          "file": "docs/dogfood/cockpit/scenarios.json",
+          "json_pointer": "/cases/76/expect/0",
+          "quote": "新会话用近义表达召回当前有效范围和例外"
+        },
+        {
+          "file": ".local/dogfood-runs/qa-usability-20261116/attempts/A12-01/synonym/trace/tool-calls.json",
+          "selection": "search_knowledge receipt.data.memory_retrieval=mem0_authoritative; personal_memories[0] v2",
+          "quote": {
+            "body": "在qa-20261114T010142Z语音体验周报里，用户默认用秒显示时延并保留三位小数；当次要求毫秒时仍以当次为准。这是个人展示偏好，不改变共享指标。",
+            "scope": "在qa-20261114T010142Z语音体验周报里，用户默认用秒显示时延并保留三位小数；当次要求毫秒时仍以当次为准。这是个人展示偏好，不改变共享指标。"
+          }
+        },
+        {
+          "file": ".local/dogfood-runs/qa-usability-20261116/attempts/A12-01/synonym/final-snapshot.json",
+          "json_pointer": "/messages/1/text",
+          "quote": "按你已保存的个人偏好：**响应耗时用“秒”展示，并保留三位小数**（等价于毫秒精度）；如果某次你明确要求用毫秒，就以当次要求为准，改用毫秒展示。这是展示层的个人偏好，不改变共享的指标定义与计算口径。\n\n具体说明：\n\n- **底层单位是毫秒（ms）**：语音体验相关时延指标（如“已达成任务平均响应耗时”`completed_task_mean_ms`、“已达成任务P95耗时”`completed_task_p95_ms`）的定义单位都是 ms；我的记录中，周报汇总展示时，你希望换算成秒，并固定三位小数。\n- **换算与口径分开**：单位换算只影响呈现，分子、分母、样本筛选（非实验且授权车辆、有效完整会话、valid 轮次、只取 completed 等）以及“均值不能由分组均值再平均”等限制都不变；换算后的数值仍需对应正确的指标口径。\n- **例外优先**：若你下次说“这次用毫秒”，则以当次条件为优先，秒展示偏好不覆盖当次指令。\n- **来源与状态**：该偏好来自 2026-11-14 语音体验周报会话中你就时延展示方式提出的要求，属于个人积累（尚未经你复核确认，状态为未验证），仅用于你的展示，不写成团队通用口径。",
+          "missing_scope_identifier": "qa-20261114T010142Z",
+          "identifier_absent_from_answer": true
+        },
+        {
+          "file": ".local/dogfood-runs/qa-usability-20261116/attempts/A12-01/assessment.json",
+          "json_pointer": "/assertions/0",
+          "declared_status": "pass"
+        },
+        {
+          "file": ".local/dogfood-runs/qa-usability-20261116/results.json",
+          "json_pointer": "/cases/76/status",
+          "declared_status": "pass"
+        }
+      ],
+      "required_correction": "将A12首条及整项按原断言降为partial并保留检索成功；同步results、REPORT、CURRENT metadata/最新摘要和轨迹引用。无新证据时不靠改断言、缩范围或删用例保pass。若仅修正这一处，100项应为25pass/5partial/1blocked_environment/1blocked_authorization/68not_run；core_21按原列表同步重算。",
+      "aggregate_if_only_this_correction": {
+        "pass": 25,
+        "partial": 5,
+        "not_run": 68,
+        "blocked_environment": 1,
+        "blocked_authorization": 1
+      }
+    },
+    {
+      "id": "F02",
+      "severity": "low",
+      "case_id": "A15",
+      "attempt_id": "A15-02",
+      "category": "inconsistent_current_state_wording",
+      "finding": "CURRENT最新摘要仍含“尚待采用判分”“待按回执判分”，而A15-02已逐条判partial并明确原附件未实际读取/采用。metadata已有未读取说明，最新摘要内部仍有旧状态措辞；这不构成新增pass，但应统一。",
+      "evidence": [
+        {
+          "file": "docs/CURRENT.md",
+          "excerpts": [
+            {
+              "line": 1295,
+              "text": "- **当前报告：**`.local/dogfood-runs/qa-usability-20261116/`完整保留100项与10轨迹、原expected/失败/父报告引用并区分新增/继承/未跑/授权阻塞。截至当前有效assessment，100项26pass/4partial/1blocked_environment/1blocked_authorization/68not_run，core_21为15pass/3partial/1blocked_environment/2not_run；10轨迹为1partial/1blocked_authorization/8not_run。G08当前已记新前提attempt为blocked_environment：原结果报告/临时撤权恢复授权有效，但Bob正式semantic_ownership为0且报告为0；原授权前blocked_authorization尝试及拒绝原样保留。G03原三态经未变owner/表单指纹及原v1→v1→v2证据继承；P01已pass，A14及尚待采用判分的A15保持partial。G08原授权前blocked attempt保留，当前缺正式语义维护权及合法报告基线，不能继续笼统归为旧撤权授权不足。两份grader仅记录/引用校验通过，不判语义或替代必过成绩；新聚合存在后才更新前两条路径，`acceptance-preservation.json`证明原50条其余字段/超时/核心列表全未变。原P04非核心partial不增加发布门。"
+            },
+            {
+              "line": 1296,
+              "text": "- **免费核心进展：**原试用库API/Web在无Worker/收费派发条件下完成Bob/Carol/Alice正常登录、三入口导航、真实角色/模型管理权限与刷新恢复，`free-core/roles-and-navigation.json`和截图存证，账本整份不变。附件步骤因嵌套details选择器歧义停止，修正后续跑被自动审批以原库harness初始化/授权设置拒绝；更早原平台permissions.json的撤权动作亦被自动审批拒绝且未执行。上述是当时拒绝事实，后来用户已明确批准相应原隔离操作，见authorization-grant.json；当前不再以旧拒绝阻止已授权动作。长附件分页/恢复工程证据不替代原附件采用；A14/G03的继承已列入当前聚合，A15原附件界面/刷新/选择已补，真实采用运行已结束待按回执判分。"
+            }
+          ]
+        },
+        {
+          "file": ".local/dogfood-runs/qa-usability-20261116/attempts/A15-02/assessment.json",
+          "json_pointer": "/assertions/0",
+          "status": "partial",
+          "reason": "原清单选择/刷新成功，真实模型未发生read；不能用通用计划或700行另一附件的工程分页替代原附件采用。"
+        }
+      ],
+      "required_correction": "将A15待判措辞改为已判partial、读取与采用未通过；保留选择阳性及独立分页工程证据的各自边界。"
+    }
+  ],
+  "verified_claims": [
+    {
+      "claim": "J01-02未执行、未提交；新J01-03成功不倒改旧attempt，也不确定历史唯一根因。",
+      "status": "supported_with_limits",
+      "evidence": {
+        "old_query_id": "85a1cd6a-b48a-47c7-9d94-b5c4acbc415a",
+        "old_execution_state": "not_submitted",
+        "old_execute_tool_calls": 0,
+        "old_platform_rows": [],
+        "last_old_wire_request_sequence": 11,
+        "execution_tools_present": [
+          "get_query",
+          "execute_query"
+        ],
+        "source_context_ready": true,
+        "historical_unique_root_cause": "unknown"
+      },
+      "limit": "旧实际完整Schema及原始响应元数据不全，不能据新请求补证旧字节或宣称稳定性已修。"
+    },
+    {
+      "claim": "J01-03有执行确认、一个持久平台提交和完整结果；整体partial有正文依据。",
+      "status": "supported_with_limits",
+      "evidence": {
+        "query_id": "00f1cc01-59f2-4ec7-a921-4e7af5a02c7b",
+        "draft_version": 1,
+        "condition_version": 2,
+        "confirmation_message_id": "a533e291-23fb-469b-b1f9-b9f43681c618",
+        "platform_rows": 1,
+        "execute_tool_calls": 1,
+        "result_row": [
+          "424",
+          "386",
+          "0.910377358490566",
+          "1158",
+          "3.0"
+        ],
+        "answer_conflict": "两个分母实际是同一批：386个最终成功轮次",
+        "overall_status": "partial"
+      },
+      "limit": "一个持久提交不是独立HTTP尝试计数；本核证未打开刷新截图或重演刷新。"
+    },
+    {
+      "claim": "新旧候选均值是两个总体，不能互换；新查询成功率分母仍为424。",
+      "status": "supported_by_frozen_definitions_and_reference",
+      "evidence": {
+        "legacy_key": "asr_candidate_join",
+        "legacy_frozen_rows": [
+          [
+            424,
+            386,
+            0.910377,
+            1158,
+            2.731132
+          ]
+        ],
+        "additional_key": "final_successful_attempt_candidate_mean",
+        "additional_frozen_rows": [
+          [
+            0.910377,
+            3.0
+          ]
+        ],
+        "documents_lines": "asr-candidates.md:200-208",
+        "oracle_lines": "oracle_queries.py:133-141",
+        "original_approval_metadata": [
+          {
+            "metadata_path": "$.delivery.increment.acceptance[16]",
+            "record": {
+              "id": "APPROVED-SPEECH-SEMANTICS",
+              "requirements": [
+                "D04",
+                "D06",
+                "C03",
+                "C06",
+                "C07"
+              ],
+              "expected": "已批准合成口径、首末ASR既有定义、真实快照及合法零沿原资料链交付。资料检查保28表/421字段和原事实，指标新增仅来自已有首末定义且同步生成清单；用原ETL可达wake-only、无测量与空分母核SQL。旧参考key保留，新增参考来自批准定义，实际同步/整理/索引与模型采用另核实际证据。",
+              "evidence_kind": "runtime",
+              "command": [
+                "python3",
+                "docs/sources/cockpit/verify.py"
+              ],
+              "timeout_seconds": 180
+            }
+          }
+        ]
+      },
+      "limit": "旧均值1158/424=2.731132；新增均值1158/386=3.0仅含最终成功尝试，含成功零候选、先选最终再判succeeded。这里只读定义/冻结参考及已存结果，未运行oracle或访问数据库，亦未以新值覆写旧参考。"
+    },
+    {
+      "claim": "A09同ID修订v2及另一Bob新会话完整规则有原始证据。",
+      "status": "supported",
+      "evidence": {
+        "memory_id": "80a06900-e84e-4521-8631-8eca7e0e476f",
+        "revision": "v1 -> v2",
+        "scope": "qa-20261114T010142Z语音体验周报",
+        "rule": "秒、三位小数；当次明确要求毫秒优先；不改共享指标",
+        "new_session": "A11-01/positive-bob"
+      },
+      "limit": "没有把原先已停用的历史资产替换成当前版本，也未核查整个资产库是否存在其他无关记录。"
+    },
+    {
+      "claim": "A10同旧会话停用后的回答未复活默认；有效个人检索为空。",
+      "status": "supported_with_limits",
+      "evidence": {
+        "memory_id": "80a06900-e84e-4521-8631-8eca7e0e476f",
+        "disable_version": 3,
+        "state": "disabled",
+        "after_forget_authoritative_result": "asset_total=0, personal_memories=[]",
+        "conversation_id": "d6ebb75c-ec59-4485-b100-8c564162dfb7",
+        "answer": "当前没有生效的默认时延展示偏好"
+      },
+      "limit": "after-forget的tool-calls包含同会话历史v2命中，不能把历史命中当成停用后复活；本核证未做共享语义全库前后字节比较。"
+    },
+    {
+      "claim": "A11有Bob阳性与Carol阴性，正文与原始权威检索相符。",
+      "status": "supported",
+      "evidence": {
+        "positive_bob": "mem0_authoritative, v2同ID一条；正文明确仅限该run周报、秒三位、当次毫秒例外",
+        "negative_carol": "mem0_authoritative, asset_total=0, personal_memories=[]；答案未披露Bob的run_prefix、asset_id或私人规则"
+      },
+      "limit": "只证明留存这组正负对照，未扩大到所有用户或所有检索路径。"
+    },
+    {
+      "claim": "A12真实近义检索成功有支持；完整回答范围仍有F01缺口。",
+      "status": "retrieval_supported_answer_scope_partial",
+      "evidence": {
+        "user_input": "做每周语音链路体验汇总时，我希望响应耗时怎么展示？只解释，不取数。",
+        "input_has_no_run_prefix": true,
+        "retrieval": "两次mem0_authoritative命中同ID v2，完整body/scope包含例外"
+      },
+      "limit": "没有独立复验embedding提供方或索引写入全链，不能以工具回执证明正文已完整传达范围。"
+    },
+    {
+      "claim": "A15与G08仍是当前缺口，没有被工程通过或旧授权状态替成业务pass。",
+      "status": "declarations_supported_runtime_prerequisites_not_reexecuted",
+      "evidence": {
+        "A15": "partial；选择/刷新阳性不替代原附件read与采用",
+        "G08": "当前blocked_environment；缺正式语义维护权和合法产品报告基线，旧blocked_authorization attempt保留；原结果临时撤权/恢复已获准的声明未被取消"
+      },
+      "limit": "本轮未独立连接原库核验semantic_ownership或报告数量，亦未重新执行权限负控。"
+    },
+    {
+      "claim": "100/10项当前记录算术成立，但A12不实完整pass会传递至聚合数字。",
+      "status": "counts_verified_grades_need_F01_correction",
+      "evidence": {
+        "case_total": 100,
+        "current_counts": {
+          "pass": 26,
+          "partial": 4,
+          "not_run": 68,
+          "blocked_environment": 1,
+          "blocked_authorization": 1
+        },
+        "trajectory_total": 10,
+        "trajectory_counts": {
+          "not_run": 8,
+          "blocked_authorization": 1,
+          "partial": 1
+        },
+        "ledger_allocation_basis": {
+          "qa_chat_allocated_calls_final": 1033,
+          "qa_chat_new_calls": 185,
+          "qa_embedding_allocated_calls_final": 1318,
+          "qa_embedding_new_calls": 0,
+          "basis": "原持久账本分配数相对本轮848/1318基线；当前时点见budget.json，可能含在途调用，具体终态和费用逐attempt核对；不等同独立HTTP尝试计数。父报告计数保留在父报告。"
+        },
+        "new_model_requests_field": 185,
+        "new_paid_requests_field": 185,
+        "report_declaration_excerpts": [
+          {
+            "line": 3,
+            "text": "2026-11-16。本目录是同一原试用的新增聚合，不是新 trial。原 `qa-20261114T010142Z`、修复轮 `qa-repair-20261115T065901Z`、全部原失败/unknown 和独立参考均保留。截至16:23 UTC，本轮原qa_chat新增185笔分配，合计已花14.939984 CNY，包含S08、J01三次尝试、J19、A15及完整记忆片段；后台qa_embedding新增0笔。原四笔unknown保持，当前余量chat4.824880、embedding1.785536 CNY，合计6.610416，明细以budget.json及各attempt账本为准。维护启用和后续来源消息被审批拦截，均未执行或收费；本轮自有实例已关闭。未提交、推送、部署或更新日常服务。"
+          },
+          {
+            "line": 11,
+            "text": "- 维护预算：分片继续使用固定公开 BPE；预留使用公开服务总窗口 1,048,576 tokens、同次实际输出 cap 与峰值费率。原 `maintenance_model_calls` 增加可空 `budget_json`，新调用冻结格式版本、原 profile 和边界；结算不回退当前 profile。旧 NULL/issued 沿原 trial 指纹和原限额结算，unknown 不回填、不清占用。原先先 commit 再报告结算错误的 owner 出口保留。"
+          },
+          {
+            "line": 24,
+            "text": "维护检查曾遇到两类夹具错误，全部保留：新 runner 初版过滤到 0 项、遗漏 fixture 环境，均不计产品 RED；原材料夹具 500000 微美元无法同时容纳保留的 319488 预留及下一调用。纯回环随机测试库改为 5000000、调用上限仍 40，不改真实试用额度；中间 12779520 的夹具值被原七位金额 Schema 拒绝，未修改合同或扩大超时。"
+          },
+          {
+            "line": 28,
+            "text": "当前完整100项：26 pass、4 partial、1 blocked_environment、1 blocked_authorization、68 not_run。完整10轨迹：1 partial、1 blocked_authorization、8 not_run。固定core_21：15 pass、3 partial、1 blocked_environment、2 not_run。G08现已按授权后实际前提记为blocked_environment；原授权前blocked_authorization尝试及拒绝原样保留。"
+          },
+          {
+            "line": 30,
+            "text": "- P01：[当前补证](attempts/P01-02/assessment.json)复用未变UI的三身份正常登录、三入口、角色与模型管理权限、刷新/退出事实；在原库重新读回三角色及正式维护权限，Bob本人已有S08结果200/完整，但正式语义can_edit=false，与原独立矩阵联合核对后通过。没有新取数或赋权，原partial尝试保留。"
+          },
+          {
+            "line": 31,
+            "text": "- G03：按未变的语义治理/纠错表单 owner，继承原同一对象的 v1→接受后仍 v1→人工保存 v2 三态，原超级维护者身份明确，不把保存等同新索引成功。本项 pass 的继承范围见 [逐断言评估](inheritance-assessment.json)。"
+          },
+          {
+            "line": 33,
+            "text": "- [A15-02](attempts/A15-02/assessment.json)：原checklist经正常UI/刷新逐字读回，并在新会话显式选用；真实create省略source_limits，来源一直未就绪，重复route未解除状态，原生read为0，最终误称方法未加载。45笔settled计2.924512 CNY，保partial。驱动空标题首败时消息未发；修正后才首次发送。700行分页/恢复工程证据有效，不能替代原清单实际采用。"
+          },
+          {
+            "line": 39,
+            "text": "- 真实Mem0片段已完成：[A07前提](attempts/A07-02/assessment.json)、[A09同ID修订](attempts/A09-01/assessment.json)、[A11 Bob阳性/Carol阴性](attempts/A11-01/assessment.json)、[A12近义召回](attempts/A12-01/assessment.json)、[A10遗忘后旧会话不复活](attempts/A10-01/assessment.json)。原目标v1/v2 indexed，当前v3 disabled，旧已遗忘记录仍停用；46笔全部结算，计1.655960 CNY。A12答复的来源日期未独立核实，未把它作为记忆元数据或索引证据。"
+          },
+          {
+            "line": 40,
+            "text": "- core_21还缺六项：J01/A14/A15 partial，G08缺实际前提，J06尚未跑，A03仍缺原T02同对话两份合法草稿。J06与必过来源的原库消息写入已被自动审批拦截，未发送消息；精确输入和既有批准补充已备好，不换题。必过来源首句仅追加2026-11-04已批准车辆三字段有限许可，第二句不变。"
+          },
+          {
+            "line": 44,
+            "text": "[results.json](results.json)与[trajectory-results.json](trajectory-results.json)当前记录/引用校验通过，分别有206/14处现存引用；grader不判业务语义。原core_21门实际退出1，缺J01/J06/A03/A14/A15/G08六项；必过来源门退出1（blocked_authorization）。`make verify-delivery`声明及16个自测通过，原50条除已获准两处报告路径外完整保留，核心清单/flags/超时相同。六文件冻结SHA仍匹配；完整`make verify-increment`未运行且当前不具备完成条件，不能写成50条全过。收据见[当前记录和声明](../../checks/dogfood-usability-20261116/current-record-and-declaration-checks.json)。"
+          },
+          {
+            "line": 46,
+            "text": "## 维护可用性"
+          },
+          {
+            "line": 48,
+            "text": "工程计费与材料链可用性已有上述本地证据；原试用库已在获准恢复时应用可空 `budget_json`，旧调用不回填。真实预填保持关闭：本次对原库启用prefill被自动审批拒绝，未创建维护文档、未派发维护调用。已准备一份从零构造[合成说明](attempts/maintenance-01/prepared-source-v1.md)及[具体操作计划](attempts/maintenance-01/operation-plan.json)，仍未完成真实“新增/变更来源→整理→采纳/保存→索引→检索回源”。现交付范围仍为“已有资料可分析”，不把本地替身的正确接线写成供应商真实维护通过。供应商实际账单未取得，原账本金额是按冻结最高费率和实际 usage 的保守记账。"
+          },
+          {
+            "line": 54,
+            "text": "授权前自动审批曾分别拒绝原隔离平台 `permissions.json` 撤权和原库harness初始化/授权设置，见 [拒绝记录](../../checks/dogfood-usability-20261116/approval-blocks.json)。拒绝动作未执行。首次已完成的免费 UI 检查使用的自有服务已关闭，原 ledger 完整不变。后续工程检查全部使用新建随机隔离库。"
+          },
+          {
+            "line": 56,
+            "text": "原 Bob 没有已保存报告；现在已获准基于已有结果保存报告及临时结果撤权/恢复。新的只读角色核对还发现 Bob 没有正式语义维护权，见 [当前角色前提](../../checks/dogfood-usability-20261116/current-role-prerequisites.json)。公共 Skill 负责人不能代替正式语义维护人；不能悄悄新增权限或换成 Alice 冒充原题。已有 S08-04 成功结果可作为合法报告来源，不再为权限取数，仍受结果原有效期约束。"
+          },
+          {
+            "line": 58,
+            "text": "先前自动审批拒绝和授权前快照均保留。[一次授权请求](../../checks/dogfood-usability-20261116/authorization-request.md)本身不是授权，后续真实人类选择及已应用事务以 [authorization-grant.json](../../checks/dogfood-usability-20261116/authorization-grant.json)为准。本次另有两项自动审批拒绝：原库prefill启用、原库测试消息写入。两动作均未执行，不通过其他接口/代理绕过；同类J06/来源写入暂停，全部本轮自有实例已关闭，原日志保留。需直接确认的具体操作范围已补入上述请求文末，原97/3与固定截止不重新申请或延长。G08临时将本次新文档设为Bob正式负责人是另一个尚未获准的新权限决定，不默认包含在旧授权里。未更新日常服务。当前实例和开关以CURRENT运行记录为准。"
+          },
+          {
+            "line": 60,
+            "text": "限定原19文件的 [独立工程审查](../../../docs/reviews/dogfood-usability-implementation-review-20261116.json)通过，delivery_ready=false；后来新M06/测试/文档的六文件限定独审也已通过，完整业务/报告范围未获完成结论。整体审查与原50条当前完整收据尚不成立。已知必过成绩缺项时，没有反复跑注定失败的 `make verify-increment`。原验收义务保留，I3/09 继续 active。日常服务、Datasight 和正式认证接入仍不在本次操作范围。"
+          }
+        ],
+        "current_declaration_excerpts": [
+          {
+            "line": 1295,
+            "text": "- **当前报告：**`.local/dogfood-runs/qa-usability-20261116/`完整保留100项与10轨迹、原expected/失败/父报告引用并区分新增/继承/未跑/授权阻塞。截至当前有效assessment，100项26pass/4partial/1blocked_environment/1blocked_authorization/68not_run，core_21为15pass/3partial/1blocked_environment/2not_run；10轨迹为1partial/1blocked_authorization/8not_run。G08当前已记新前提attempt为blocked_environment：原结果报告/临时撤权恢复授权有效，但Bob正式semantic_ownership为0且报告为0；原授权前blocked_authorization尝试及拒绝原样保留。G03原三态经未变owner/表单指纹及原v1→v1→v2证据继承；P01已pass，A14及尚待采用判分的A15保持partial。G08原授权前blocked attempt保留，当前缺正式语义维护权及合法报告基线，不能继续笼统归为旧撤权授权不足。两份grader仅记录/引用校验通过，不判语义或替代必过成绩；新聚合存在后才更新前两条路径，`acceptance-preservation.json`证明原50条其余字段/超时/核心列表全未变。原P04非核心partial不增加发布门。"
+          },
+          {
+            "line": 1299,
+            "text": "- **当前免费核验：**`current-record-and-declaration-checks.json`记录100/10的结构与引用校验通过（206/14处现存引用），不判业务语义；原core_21成绩门实际退出1，缺J01/J06/A03/A14/A15/G08六项，必过来源成绩门退出1（审批阻塞）。`make verify-delivery`声明及16自测通过；原50条除前两处已存在报告路径外逐字段相同，core_21/来源flags/超时亦完全相同。六文件冻结SHA仍匹配。未启动已知会在成绩门失败的完整`make verify-increment`，完整50条义务仍未完成；证据没有被改成pass。"
+          },
+          {
+            "line": 1300,
+            "text": "- **审查边界：**当前整体review pending，record已指向原19文件限定工程审查，另有新增M06六文件限定审查通过；两者都明确delivery_ready=false，不是当前完整业务/报告范围的关闭收据。I3 active、完整验收evidence未取得；原50条及requirements不变。原passed审查保留历史身份，本次Oracle审包不替代修后独立实现审查。Oracle已按Power 5/5审查提交稿，三处规格意见经本地源码核验后纳入；结算先commit的已有实现予以复用，不冒称新增bug。最终修订由本地复核，未二次送审；证据在`.local/audits/dogfood-readiness-package-20261116/`。"
+          }
+        ]
+      },
+      "limit": "185按原账本分配相对基线的口径理解，未独立证明185次HTTP尝试或最终已结算付费请求。"
+    },
+    {
+      "claim": "结构检查、业务成绩和完整50条仍分层；整体未完成的声明成立。",
+      "status": "receipt_read_only",
+      "evidence": {
+        "receipt": ".local/checks/dogfood-usability-20261116/current-record-and-declaration-checks.json",
+        "acceptance_50_preserved": true,
+        "frozen_six_files_match": true,
+        "whole_increment_complete": false,
+        "results": [
+          {
+            "name": "current-record-100",
+            "exit_code": 0
+          },
+          {
+            "name": "current-record-10",
+            "exit_code": 0
+          },
+          {
+            "name": "current-core-21",
+            "exit_code": 1
+          },
+          {
+            "name": "current-required-source",
+            "exit_code": 1
+          },
+          {
+            "name": "current-verify-delivery",
+            "exit_code": 0
+          }
+        ]
+      },
+      "limit": "记录校验0和verify-delivery声明检查0不替代core_21/来源成绩门的1；维护启用及原库消息写入被审批拦截、未执行的最新声明保留。本轮未执行原50条，也未独立重算其全套配置保存比较。"
+    }
+  ],
+  "remaining_limits": [
+    "本次仅是冻结清单内的新增证据、判分和状态宣称核证；不是完整独审、工程实现复审、I3完成收据或交付批准。",
+    "不展开原19/6文件实现，不使用全仓HEAD diff，不计算完整check_delivery.review_scope。只按assessment指向读取必要原始证据和用户指定参考片段。",
+    "冻结18项的哈希覆盖不等于逐项业务复验；补读的原始运行文件与两处参考文本不在该18项哈希映射内，未扩充manifest或将它们伪称冻结哈希已覆盖。",
+    "早期批量提取产生过超限工具输出；未将截断部分视为已核实证据，最终结论基于后续字段定向提取。CURRENT历史没有逐行审查。",
+    "A15原附件真实采用、G08组合权限负控、必过来源、真实维护链和原50条完整当前收据仍缺；已记录的partial/blocked不能视为业务通过。",
+    "未重演模型、数据库、服务或浏览器行为；不核准任何新权限、费用或预算，不把历史授权文本当成本核证的新授权。",
+    "只核验留存证据及其现版本；未宣称生产部署、真实平台替代物之外的集成、跨用户普遍隔离或模型稳定性。"
+  ],
+  "delivery_ready": false,
+  "overall_increment_complete": false,
+  "i3_completion_receipt": false,
+  "written_file": "docs/reviews/dogfood-usability-evidence-review-20261116.json"
+}

@@ -1,0 +1,183 @@
+{
+  "schema": 1,
+  "increment_id": "I3-SEMANTIC-DOGFOOD",
+  "reviewer": "独立实现审查者；未参与本轮任何实现，未再委托。首轮审查15文件精确差异，第二轮只复核同名历史导航修复及对应证据，复用未变部分的首轮结论。仅写本审查JSON，未修改源码、测试、CURRENT或其他审查记录。",
+  "reviewed_at": "2026-11-13T14:04:02.159031Z",
+  "review_round": 2,
+  "conclusion": "passed",
+  "summary": "限定实现审查通过。首轮P2已用两条S02同名前缀历史并存的无费用场景复现；当前浏览器沿现有conversationStorageKey接缝绑定本次cid后reload，未用first/last挑历史，旧记录保持，当前查询卡、正式正文及刷新通过。独立核对第二轮4文件相对首轮的增量、15文件before/current哈希、原始patch重建与最新协议报告397项源码哈希，未发现新的具体阻断。其余首轮结论在未变范围内复用。原33组声明逐项保留，共38组；完整绑定验收待主线程随后执行。本结论仅签限定工程与证据如实性，不关闭09，不签真实模型语义通过，也不授予新付费或服务变更权限。",
+  "scope_sha256": "5d0c2148ca6e1fb2fd7a15b3a8f657712bbf4e7b5d7221943b8149adf2d3d26d",
+  "findings": [],
+  "resolved_findings": [
+    {
+      "id": "local-trial-browser-history-selector-ambiguous",
+      "priority": "P2",
+      "status": "resolved",
+      "first_review_file": "tests/mvp/run-business-acceptance.mjs",
+      "first_review_line": 556,
+      "original_problem": "正式conversation模式复用保留旧S02的原库时，按题目共同前缀点击历史会同时匹配旧、新对话，不能唯一读取本次conversation。首轮空库协议未覆盖该情形。",
+      "locations": [
+        "tests/mvp/run-business-acceptance.mjs:281",
+        "tests/mvp/run-business-acceptance.mjs:554",
+        "tests/mvp/run-business-acceptance.mjs:566",
+        "tests/mvp/run-business-acceptance.mjs:570",
+        "tests/mvp/run-business-acceptance.mjs:580",
+        "tests/mvp/run-business-acceptance.mjs:587",
+        "tests/mvp/check-business-conversation.mjs:36",
+        "apps/web/src/features/workbench/conversation-storage.ts:4",
+        "apps/web/src/features/workbench/Workbench.tsx:43",
+        "tests/mvp/check-history-browser.mjs:36"
+      ],
+      "red_assessed": "新增协议夹具先API create一条旧S02题名历史，仅在该隔离库设置测试title，没有发送模型消息。RED中本次业务S02 machinePassed=true，草稿0提交、授权后1次平台提交、13次loopback；browser在conversation_read失败，same_title_history_count=2，整体incomplete，外层检查1!=0失败。与首轮定位器反例相符，没有放宽业务断言。",
+      "fix_assessed": "当前导入现有conversationStorageKey('demo','alice')，将sample.cid写入页面自己的当前会话存储后reload；Workbench启动直接读取同一键。题目前缀定位器只观测历史数量，不再点击。后续仍等待本次query卡、核当前snapshot中的正式output及文本、刷新一致，再查旧历史id/title保持。浏览器采证在同一harness的h.close之前完成，前端未修改。",
+      "green_assessed": {
+        "conversation_id": "804c8d23-f154-4e72-ba75-69449b48b717",
+        "query_id": "7f9ac52c-dc5c-48cd-b977-794f96851d3d",
+        "formal_output_id": "329058d1-560b-423d-b457-2f5f547c4b5f",
+        "retained_history_conversation_id": "985282cd-42f4-4f97-9a46-c40c37ac7657",
+        "same_title_history_count": 2,
+        "previous_history_retained": true,
+        "browser_passed": true,
+        "browser_refresh_matches": true,
+        "browser_observed_at": "2026-11-13T13:51:07.356Z",
+        "runtime_closed_at": "2026-11-13T13:51:15.777Z",
+        "runtime_closed": true,
+        "official_requests": 0,
+        "model_dispatches": 13,
+        "ledger_delta_calls": 13,
+        "ledger_delta_reserved_micros": 0,
+        "history_fixture_user_messages": 0,
+        "current_conversation_user_messages": 2
+      },
+      "evidence": [
+        ".local/checks/local-trial-20261113T075223Z/browser-history-red.log",
+        ".local/checks/business-conversation-10c8bb91-951b-44f5-b019-e7ac383ebba3/runner.log",
+        ".local/checks/business-conversation-10c8bb91-951b-44f5-b019-e7ac383ebba3/result.json",
+        ".local/checks/local-trial-20261113T075223Z/browser-history-green.log",
+        ".local/checks/business-conversation-ddb513e9-d8cf-43cb-aa22-23522913915f/runner.log",
+        ".local/checks/business-conversation-ddb513e9-d8cf-43cb-aa22-23522913915f/result.json"
+      ],
+      "verification_limit": "审查者只读已保存RED/GREEN，未新启动DB、浏览器、服务或模型。RED报告保存的浏览器错误类型为Error，未保留原始严格定位异常全文；其失败阶段、两匹配计数、旧定位代码与GREEN共同支持本项。协议历史夹具不冒称真实付费库已运行。"
+    }
+  ],
+  "assessments": [
+    {
+      "topic": "一般实体身份与最终解释",
+      "result": "复用首轮通过，真实效果未复验",
+      "basis": "resources.ts及实际provider装配检查字节未变。规则约束最终解释，身份缺失不证明与已知实体互斥，也不证明匿名记录彼此不同；允许有依据的已知下界及已证互斥、同粒度集合求和。5个已知身份加匿名记录不能推出严格大于5，多个匿名订单可来自同一人。装配RED/GREEN只证接线。"
+    },
+    {
+      "topic": "原题、独立判分与完整质量分母",
+      "result": "保持",
+      "basis": "默认confirmation/16题、原Q02独立判分、全16题--audit --quality-review门槛没有第二轮改动。新增夹具只在protocol的conversation分支造无消息历史，正式分支不造假历史。最新报告仍仅S02且15题pending，续聊前提不满足则未运行；未手改SQL、独立期望或题目求绿。原33项acceptance与开工frontmatter逐项一致，共38组；第二轮只为新增CONVERSATION验收补同名历史要求。"
+    },
+    {
+      "topic": "聊天授权、原操作与预算身份",
+      "result": "最新协议证据保持",
+      "basis": "GREEN中的execute_query成功operation_id为6bc1a79b-ac77-4953-8860-a6a73b2e1a96；授权消息87110640-9122-445b-a8c0-857ead29de10，执行和结果唤醒均沿预算e37a9a2d-c9f9-4c7c-9c8e-a41d266aa4b7。实际草稿submit=0，平台HTTP submit=1且指向本次query，授权submission_attempts=1。Pi实际读取原查询结果，SQL/参数/task/condition/draft保持；没有host代调用confirm/execute_query。草稿、执行、结果三个run沿同一Pi session 01a1d52c-cf2e-7626-a17c-753cd0330d72，流式、finish、正式保存、snapshot与刷新保持一致。"
+    },
+    {
+      "topic": "CLI费用边界、原状态与旧证据",
+      "result": "复用首轮通过；真实复用仍未运行",
+      "basis": "CLI缺值/非法值/已有输出的前置拒绝、wx保护、原platformDirectory和modelKeyFile注入、跳过原模型目录重配置、账本before/after及本次增量均无第二轮变化。原真实报告和失败收据首轮已与副本逐字核对；原profile/database不改。原request模式trial active、expires_at=null、13次/136796 micros、预留0；缺口是本轮授权而非技术过期。最新协议13次派发等于增量13，不把旧13次冒称本次。"
+    },
+    {
+      "topic": "通知预算与API启动等待",
+      "result": "复用首轮通过，范围不扩大",
+      "basis": "通知测试、harness、development.py及启动测试字节均未变。通知采样计入原20秒，额外40秒只诊断仍抛原失败。API直接57.26秒健康事件支持仅API25→75秒，其他服务25秒、业务租约、24次与连续临时失败3次规则保持。CPU/NAT/Worker暂停未被证明为唯一通知超时原因。"
+    },
+    {
+      "topic": "完成层次与证据复用范围",
+      "result": "符合限定出口",
+      "basis": "完整38组尚未运行，review pending/evidence null、increment active，未以局部绿灯关闭09。旧真实S02数值[[5,1,1,1]]通过但“实际范围比5更大”的语义缺陷保持；本轮未获授权的新真实测量仍NOT_RUN_AUTHORIZATION。第一轮默认16题/规则/工程/启动证据在各自未受第二轮影响的行为范围复用；第一轮浏览器报告保留为旧版证据，最新导航以本轮GREEN为准。"
+    }
+  ],
+  "evidence": {
+    "directory": ".local/checks/local-trial-20261113T075223Z",
+    "previous_review": {
+      "path": ".local/checks/local-trial-20261113T075223Z/review-round-1/local-trial-implementation-review-20261113.json",
+      "sha256": "5a9d0ad1f48c1d4063ba500166e60fff26c9fbcf0eb17794b6f68fdcb07f817e",
+      "conclusion": "failed",
+      "scope_sha256": "d3f77bac3959f19b2ab9208343b8748844779bef6534771669c7597586dfa4a9",
+      "archive_compared_equal_before_update": true,
+      "archive_modified_by_reviewer": false
+    },
+    "red": {
+      "log": ".local/checks/local-trial-20261113T075223Z/browser-history-red.log",
+      "log_sha256": "4a19306619d90a8ecf30d8c09745ac258f6131eb961d89b047c27dbe8da63ad8",
+      "report": ".local/checks/business-conversation-10c8bb91-951b-44f5-b019-e7ac383ebba3/result.json",
+      "report_sha256": "17875309ae7abc1d02a85c786895a2a23e28fe633a648e224ee9f8e8f3ae717c",
+      "business_passed_browser_failed": true,
+      "source_changes_from_current": ["tests/mvp/run-business-acceptance.mjs"]
+    },
+    "green": {
+      "log": ".local/checks/local-trial-20261113T075223Z/browser-history-green.log",
+      "log_sha256": "bd47b11df45945f58338b15f08114cc7d6d6074aebaf934198db6bc0a7dcd8e1",
+      "report": ".local/checks/business-conversation-ddb513e9-d8cf-43cb-aa22-23522913915f/result.json",
+      "report_sha256": "b3ace0f4bbcec6e1307954a47de7c6518d9751c776f878fa1ec36cc966b72079",
+      "machine_passed": true,
+      "completion": "protocol_passed_quality_unverified",
+      "official_requests": 0,
+      "source_hashes_match_current": {"matched": 397, "total": 397},
+      "same_harness_browser_and_refresh_passed": true
+    },
+    "reused_first_round_checks": [
+      "engineering-checks.log：667双侧契约、fmt/Clippy、类型/Web构建、12项架构测试及锁检查",
+      "rules-red.log / rules-green-final.log：实际provider规则装配RED/GREEN，9项",
+      "evaluator-cli.log：原13条参考、反例与7项数据变体",
+      "cli-final-green.log / business-fixture-green.log：7项CLI、4项固定协议行为",
+      "default-16-green2.log：完整默认16题协议通过，官方0",
+      "notification-v1-frozen.log / notification-v2-frozen.log：原20秒含采样的12/2项",
+      "startup-wait-red.log / startup-wait-green.log：等待分配RED/GREEN及22项单测",
+      "candidate-startup-state-observation.log / startup-state-observation.json：57.26秒直接健康事件及4份有限快照",
+      "candidate-startup-green.log：普通启动器页面及2身份通过"
+    ],
+    "reviewer_reruns_first_round": [
+      {"command": "node tests/mvp/check-business-conversation-cli.mjs", "result": "passed:true, checks:7, officialRequests:0, databaseUsed:false"},
+      {"command": "node tests/runtime/check-business-protocol-fixture.mjs", "result": "passed:true, checks:4, officialRequests:0, databaseUsed:false"}
+    ],
+    "first_round_rerun_wrapper_exit_code": 0,
+    "reviewer_reruns_second_round": [],
+    "state_records_reused": ["trial-preflight.json", "original-state-preflight.json", "conversation-profile.json", "candidate.json"]
+  },
+  "scope_binding": {
+    "method": "Python以regex ^---\\s*\\n(.*?)\\n---(?:\\n|$) 和re.S读取CURRENT JSON frontmatter；sys.path.insert(0,'scripts'); import check_delivery as cd; cd.review_scope(Path('.').resolve(), metadata['delivery'])。基于当前冻结树重新计算，没有split('---')，未复制或仅替换旧指纹。",
+    "for_review": true,
+    "review_pointer_and_self_excluded": true,
+    "other_review_fingerprints_modified": false,
+    "head": "04d27d06ba7b97d4cf3e288d4cf9e6300ef491a9",
+    "branch": "codex/local-trial-closure",
+    "task_manifest": ".local/checks/local-trial-20261113T075223Z/review-scope.json",
+    "task_manifest_sha256": "4cfb708a69896fbd2ad481dd362a1bbbd73e21d2ba278bd06933552811374f6b",
+    "implementation_patch": ".local/checks/local-trial-20261113T075223Z/implementation.patch",
+    "implementation_patch_sha256": "4d8e13089c07241115891b65eabcfb3a95c0cfddf90952e77ea0a4ac7d7f3642",
+    "reviewed_delta_files": 15,
+    "before_hashes_match_first_round": true,
+    "after_hashes_match_current": true,
+    "patch_independently_reconstructed_equal": true,
+    "round_two_changed_files": [
+      "tests/mvp/run-business-acceptance.mjs",
+      "tests/mvp/check-business-conversation.mjs",
+      "docs/CURRENT.md",
+      "docs/execution/semantic-runtime/local-trial-closure.md"
+    ],
+    "remaining_11_files_match_first_round": true,
+    "original_33_acceptance_declarations_identical": true,
+    "current_acceptance_count": 38,
+    "current_review_observed": {"status": "pending", "record": null},
+    "current_increment_evidence_observed": null,
+    "current_increment_status_observed": "active",
+    "manual_review_boundary": "指纹覆盖项目检查器声明的当前输入；人工复核只审首轮至第二轮的4文件增量、直接导航接缝和指定RED/GREEN。其余15文件范围内的未变结论复用首轮，不声称重审指纹中的全部历史项目。"
+  },
+  "limitations": [
+    "第二轮没有运行任何测试、数据库、服务、浏览器、真实模型、Oracle或完整verify-increment；仅只读差异与保存证据、复算指纹并更新本JSON。整个审查仅首轮重跑2项无DB轻量检查。",
+    "完整38组按用户顺序待独审后运行；本次passed不等同整套绑定验收通过，不生成完成收据，也不关闭09。",
+    "真实聊天代表NOT_RUN_AUTHORIZATION；原request模式trial的expires_at=null不表示过期。未新运行原非空付费库，原平台/密钥接回及费用增量仍是代码与preflight层面的审查。",
+    "旧S02数值通过但语义缺陷保留；新规则只证明实际provider装配，协议固定答复不证明真实匿名身份、单位、口径或引用已经改善。",
+    "碰撞GREEN使用独立协议库中的旧题名历史夹具；证明同名并存情况下本次cid导航和刷新，不冒称已重跑真实原库。RED原始浏览器异常全文未保存，结论结合失败阶段、匹配数量、源码及GREEN核定。",
+    "第一轮日志不是第二轮整批重跑。未变规则、CLI、默认16题、通知和启动行为按已检查差异复用；第一轮导航证据不作为本轮修复的完成证明。",
+    "独立候选为mock/builtin/lexical；hybrid、Mem0和真实模型完整试用未重新启动，任意负载或冷库75秒内健康未获保证。通知旧超时仍无唯一根因。",
+    "旧check-synthetic-knowledge-reading分页fixture初始断言失败仍披露，未重跑且不计本轮通过。原报告、失败收据和首轮failed审查归档均保留。",
+    "上游502/proxy DNS中断不作为代码缺陷或通过依据。主线程负责后续审查指针绑定与完整38组执行；本记录不授权付费、日常服务变更、提交或推送。"
+  ]
+}

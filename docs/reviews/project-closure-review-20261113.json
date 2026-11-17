@@ -1,0 +1,51 @@
+{
+  "schema": 1,
+  "increment_id": "I3-SEMANTIC-DOGFOOD",
+  "reviewer": "独立实现审查代理（未参与本轮任何实施）；只读代码级审查，基于before/副本划定改动集，另行复跑无数据库依赖检查",
+  "reviewed_at": "2026-11-13T00:00:08.290348+00:00",
+  "conclusion": "passed",
+  "summary": "按执行包project-closure §1-2/§4/§5/§8/§10对本轮14份改动做逐项独审。§5报告锚点链核实：report_first_saved_seq_in_tx同一AppTx内按conversation_id+report_id跨全部版本取MIN(event_seq)，绑定顺序与AssertSqlSafe用法合乎仓库先例，无N+1，缺保存事件省略字段；read_page组合覆盖Snapshot与refresh共路径；TaskSnapshot可选新字段required/additionalProperties未动、生成两侧一致（复跑合同667项）；前端仅凭report_ref.report_id匹配锚点，回退顺序正确，BigInt全程无溢出。§4核实：规则并入既有段落未建第二块，v1/v2各加一句引用；判分器仅增scoring分类键，原Q02失败SQL与real-representative.json逐字一致且仍断言passed=false，13参考用例与全部变体未削弱（复跑通过）。§4.1交付fixture与原回执outcome.data逐字相等，经真实v2 formatResult与原生Pi会话在provider系统提示与协议正文断言（复跑9项）。不变量（Pi原生循环/24次/3次/权限/操作/预算身份）未触及。初判为有条件通过，条件（冻结重建后复跑数据库harness或披露最后一次read_conversation.rs修改内容）已按首选路径关闭：执行包§10.2披露该修改为clippy要求的纯格式闭包压缩（与当前.map(str::to_owned)形态吻合）并记载冻结后复跑check-analysis-reports通过；runtime-modules.md的before/缺失亦已披露本轮增量仅为§10.1所述两处。完整逐项发现与证据行号见docs/reviews/project-closure-implementation-review-20261113.md。",
+  "scope_sha256": "06e2492988004b3e6ab8a2902db8ec074a5f9dfdbf95081e280b31510e9c17df",
+  "findings": [],
+  "resolved_findings": [
+    "证据时序缺口（原建议1）：read_conversation.rs最后一次修改（06:25:45）晚于全部数据库harness运行（06:23:50-06:57），§6.1冻结重建（06:58）后初版未复跑且§10.2未披露。已关闭：执行包§10.2披露该修改为clippy要求的闭包压缩、无语义变化（与当前.map(str::to_owned)形态一致），并记载实施者在冻结重建后的最终二进制上复跑check-analysis-reports.mjs通过（exit=0、20项）。",
+    "基线覆盖缺口（原建议2）：docs/architecture/runtime-modules.md本轮有改动但未入20份before/副本，确切增量无法逐字隔离。已关闭：执行包§10.2披露该文件与implementation-design.md含既有未提交修改且未入before/，本轮增量仅§10.1所述两处（conversations操作表新行、snapshot分页条目补充）；所声称表格行已在当前文件核实。"
+  ],
+  "evidence": [
+    "docs/reviews/project-closure-implementation-review-20261113.md",
+    "docs/execution/semantic-runtime/project-closure.md",
+    ".local/checks/metric-report-closure-20261113/baseline.json",
+    ".local/checks/metric-report-closure-20261113/before",
+    ".local/checks/metric-report-closure-20261113/verify-block-6-1.log",
+    ".local/checks/metric-report-closure-20261113/environment.json",
+    ".local/checks/query-submission-implementation-20261110/real-representative.json",
+    ".local/checks/analysis-reports.json",
+    ".local/checks/report-text-authority.json",
+    ".local/checks/conversational-query.json",
+    ".local/checks/conversational-query-source-admission.json",
+    ".local/checks/analysis-reports-browser/result.json",
+    ".local/checks/report-reading-position/report.json",
+    ".local/checks/runtime-locking.json",
+    "tests/runtime/fixtures/q02-read-knowledge-receipt-data.json",
+    "packages/contracts/schema.json",
+    "packages/contracts/generated/boundary.ts",
+    "packages/contracts/generated/boundary.rs",
+    "crates/data-agent/src/modules/conversations/store.rs",
+    "crates/data-agent/src/use_cases/read_conversation.rs",
+    "apps/web/src/features/workbench/conversation-timeline.ts",
+    "apps/agent/session/resources.ts",
+    "apps/agent/tools/data-tools.ts",
+    "scripts/evaluate_business_sql.py"
+  ],
+  "scope_binding": {
+    "independently_recomputed": true,
+    "input_files": 804,
+    "acceptance_groups": 33
+  },
+  "limitations": [
+    "冻结重建后的数据库harness复跑由实施者执行，结果记载于执行包§10.2，审查者未动态复验数据库路径；审查者自行复跑的仅无数据库依赖检查（合同667、时间线投影11、工具装配9、判分13、架构与锁序、离线构建与fmt）。",
+    "read_conversation.rs最后一次修改为纯格式的结论依据执行包§10.2披露与当前代码形态（clippy闭包压缩）及最终树上全部无数据库检查通过，审查者无法逐字重建修改前状态（无中间快照）。",
+    "本记录只绑定I3-SEMANTIC-DOGFOOD工程实现与本轮14份改动；不关闭09整体验收，不替代产品审查与绑定验收（维持review pending/evidence null原状态），不证明DA-001真实模型改善（真实代表NOT_RUN_AUTHORIZATION），也不覆盖工作树内其余既有未提交工作。",
+    "范围指纹绑定计算时点的delivery输入；此后任何输入变更会使本记录scope_sha256过期，需重算重审。"
+  ]
+}

@@ -1,0 +1,75 @@
+{
+  "reviewer": "独立实施审查代理；未参与实现修改，未运行测试、端点或付费调用，仅按授权写入本审查记录",
+  "increment": "I3-SOURCE-AUTHORITY-REPAIR",
+  "conclusion": "passed",
+  "scope_sha256": "cd8e7d4bf9adfd0ffb5fd007de8181610be4ff6d5141869dee49c575c87d4658",
+  "summary": "限定实施复审未发现剩余可确认阻断。未归属或来源未知的v2正文读取由宿主拒绝；身份目录独立检索可读元信息，不登记已读依据。Node在未就绪及待范围刷新期间仅交付当前原话、控制信息和宿主净化的身份目录，并取消原生摘要。首轮发现的任务目录/续页丢失已修复；宿主目录无条件使用未知来源投影，旧活动任务允许的资料派生goal不能作为新输入标题，完整无资料来源的合法goal仍可定位任务。语义决策和时间角色的EvidenceRef与主引用一起在保存前校验，不存在的引用不能污染持久authority。此结论仅为本增量实施审查通过，正式10命令与真实来源原题验收仍待完成。",
+  "findings": [],
+  "closed_findings": [
+    {
+      "finding": "未就绪消费者丢弃任务目录及next_task_after，无法发现启动窗口外任务",
+      "closure": "task-projection从当前输入之后的原生assistant toolCall识别read_conversation(task_directory=true)，只保留宿主净化的任务控制字段、合法goal、next_task_after与page_limited。当前轮限制防止旧目录标题回流；消费者测试用29项的20+9两页按合法标题定位第27项目标，并在原session完成route，也覆盖待context_reset刷新阶段。"
+    },
+    {
+      "finding": "目录若沿旧活动任务A的许可透传派生goal，可能将A资料作为尚未裁决输入B的标题",
+      "closure": "data_tools的任务目录无条件使用ActiveProjection{task:None,gate:None,scope_known:false}调用既有protect_task_context_in_tx，逐项声明context_complete=false。沿用完整authority与has_no_sources判定，合法无资料来源goal保留，资料派生及NULL来源goal剔除，原任务身份和真实分页位置保持。宿主最小反例包含旧范围派生goal正常读取的正控，避免把已经不可读的标题当作隔离证明。"
+    }
+  ],
+  "scope": {
+    "baseline": ".local/checks/source-authority-repair/before/",
+    "reviewed_delta": [
+      "packages/contracts/schema.json：source_identity视图/身份命中及source_context_ready对应部分",
+      "packages/contracts/generated/boundary.rs与boundary.ts：身份/准入字段对应部分",
+      "crates/data-agent/src/modules/conversations/store.rs：公开routing_state",
+      "crates/data-agent/src/modules/knowledge/mod.rs与store.rs：身份元查询接口及keyset",
+      "crates/data-agent/src/use_cases/mod.rs与source_identity.rs：身份目录组合、映射、容量与独立游标",
+      "crates/data-agent/src/use_cases/source_limits.rs：消息准入及v1缺字段兼容",
+      "crates/data-agent/src/use_cases/data_tools.rs：准入、身份早分派、回放标志、任务目录净化及引用校验",
+      "crates/data-agent/src/use_cases/deliver_run.rs：派发/刷新准入及同输入范围变化保护",
+      "crates/data-agent/src/use_cases/query_semantics.rs：三类知识依据合并",
+      "apps/agent/session/task-projection.ts",
+      "apps/agent/session/workspace-context.ts",
+      "apps/agent/session/resources.ts",
+      "apps/agent/session/deliver.ts",
+      "apps/agent/tools/data-tools.ts",
+      "tests/runtime/check-request-context.mjs：本轮消费者与目录反例",
+      "tests/mvp/check-evidence-source.mjs：身份、权限、容量与视图测试增量",
+      "tests/mvp/check-evidence-search-continuation.mjs：真实取证游标反向负控",
+      "tests/mvp/check-query-semantics.mjs：错误引用拒绝增量",
+      "tests/mvp/check-task-text-authority.mjs：目录标题最小反例",
+      "tests/mvp/check-task-projection.mjs：消费者入口增量",
+      "docs/architecture/implementation-design.md：本轮来源准入设计增量",
+      "docs/CURRENT.md：本轮声明、夹具纠正说明及验收限度"
+    ],
+    "necessary_seams": "context_authority的protect_task_context/has_no_sources/引用与结果权限预检，analysis的goal_authority和任务目录接口，相关资产/Skill读取和原操作回放路径；仅沿公开接口核对。另核对当前Pi原生上下文/摘要接缝及完成工具参数的对象约束。未全量审查指纹覆盖目录、git HEAD或继承工作，未重审已关闭记忆包。",
+    "fingerprint_verified": true
+  },
+  "evidence_reviewed": [
+    ".local/dogfood-runs/semantic-20261102/evidence/source-limit-wire-path.json",
+    ".local/dogfood-runs/semantic-20261102/evidence/J17-reference-existence.json",
+    ".local/dogfood-runs/semantic-20261102/evidence/S05-original-error.json",
+    ".local/checks/source-authority-repair/task-directory-red.log",
+    ".local/checks/source-authority-repair/task-directory-green.log",
+    ".local/checks/source-authority-repair/node-task-directory-red.json",
+    ".local/checks/source-authority-repair/node-task-directory-green.json",
+    ".local/checks/source-authority-repair/node-task-directory-types.log",
+    ".local/checks/source-authority-repair/source-green-4.log",
+    ".local/checks/source-authority-repair/view-cursor-green.log",
+    ".local/checks/source-authority-repair/reference-red.log",
+    ".local/checks/source-authority-repair/reference-green.log",
+    ".local/checks/source-authority-repair/gates-green.log",
+    ".local/checks/source-authority-repair/task-projection-green.log",
+    ".local/checks/source-authority-repair/task-projection-recover.log",
+    ".local/checks/source-authority-repair/contracts.log"
+  ],
+  "test_assessment": "已读取的宿主目录GREEN含13项检查，保留来源有效派生目标可读、目录隐藏、无资料来源目标可见及NULL来源隐藏的区分。Node GREEN为9组消费者、27次本地mock provider请求、零网络尝试和零正式请求，覆盖目录分页/按名route、旧目录不回流、待刷新、原话/历史/session保持、普通请求与原生摘要隔离。身份GREEN覆盖稳定SourceKey、真实贡献根、映射不完整、其他空间/停用/个人资产隔离、独立keyset及容量续读；实际正常取证游标另在原排名续读夹具中反向拒绝。三处夹具纠正与已有语义一致：不要求平台项在首屏，按JSON结构核SourceKey，query=*仍为本人资产目录；保留默认正文正控及双向游标负控。引用GREEN证明错误语义依据不保存新稿且不改变原query/authority，纠正后同请求可继续。原来源门、普通/恢复投影日志通过，合同日志为662项Rust/TypeScript同源样例通过。未以这些既有单项日志替代最终冻结版本的正式整套收据。",
+  "limits": [
+    "本记录只签署限定实施审查；最终冻结版本的10条正式验收命令尚未执行，不据此关闭增量。",
+    "审查未运行测试、服务、浏览器、重建或付费调用；GREEN来自本轮提供的完整日志，版本绑定由review_scope核验。",
+    "程序准入及模拟消费者不证明Pi能把每句真实用户来源限制正确映射为允许集；显式错误null、细源/聚合源含义、否定和例外仍需真实来源原题核对。",
+    "旧v1缺准入flag保留兼容行为，不将其描述为具备新v2的声明前隔离保障；同session、历史和原工具/操作身份不作为可删除材料处理。",
+    "任务目录只能显示宿主证明完整且无资料来源的定位标题；派生或未知来源标题继续隐藏，不为可用性放回旧条件、问题、答案、SQL或资料正文。",
+    "S05原始This operation was aborted的发起者仍独立未定因，本修复不能宣称解决该abort；原失败、坏引用query、unknown及费用/预留记录保持。",
+    "未全扫仓库或已关闭记忆增量，不将范围指纹覆盖视为所有覆盖文件均已审查。"
+  ]
+}
