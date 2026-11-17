@@ -20,6 +20,84 @@ const boundaryPresence=anonymousPresence.replace('has_unknown_customer','unknown
 assert.equal(evaluate({case_id:'Q02',sql:'SELECT '+known+', '+anonymousLines+', '+boundaryPresence+' '+where}).passed,true,'明确的unknown_boundary_present别名按匿名存在标志核算');
 for(const columns of [known+', 1 AS unknown_boundary_present',known+', COUNT(DISTINCT CASE WHEN customer_id IS NULL THEN order_id END) AS anonymous_lines, '+boundaryPresence,'COUNT(customer_id) AS known_customer_count, '+boundaryPresence,known+', '+anonymousPresence+', '+boundaryPresence])
  assert.equal(evaluate({case_id:'Q02',sql:'SELECT '+columns+' '+where}).passed,false,'存在标志别名不能绕过常数、粒度、去重或重复角色检查');
+// §4.2/B1：形状未覆盖（无法自动判分）与已核算数值不符分开记录；原Q02失败SQL按独立合成数据保留原结果，不改列名不删变体。
+const originalQ02Sql=`SELECT
+  COUNT(DISTINCT customer_id) AS paying_customers_known,
+  COUNT(DISTINCT CASE WHEN customer_id IS NULL THEN order_id END) AS unknown_customer_orders,
+  SUM(CASE WHEN customer_id IS NULL THEN 1 ELSE 0 END) AS unknown_customer_rows,
+  COUNT(DISTINCT CASE WHEN customer_id IS NOT NULL THEN customer_id END)
+    + CASE WHEN COUNT(DISTINCT CASE WHEN customer_id IS NULL THEN order_id END) > 0
+           THEN 1 ELSE 0 END AS paying_customers_with_unknown_boundary
+FROM demo_order_detail
+WHERE is_test = 0
+  AND paid_amount_cents > 0
+  AND paid_at >= :start
+  AND paid_at < :end`;
+const originalQ02=evaluate({case_id:'Q02',sql:originalQ02Sql,parameters:{start:'2026-01-01T00:00:00Z',end:'2026-02-01T00:00:00Z'}});
+assert.equal(originalQ02.passed,false,'原Q02失败SQL在独立判分中继续失败');
+assert.equal(originalQ02.scoring,'cannot_autoscore_shape','第四列把未知折进总量属形状未覆盖，标无法自动判分；业务依据仍是原题、定义与表达式');
+assert.equal(originalQ02.expected_rows,null);
+assert.deepEqual(originalQ02.rows,[[5,1,1,6]],'独立合成数据上的原结果保持');
+const unrecognizedAlias=evaluate({case_id:'Q02',sql:'SELECT COUNT(DISTINCT customer_id) AS monthly_active_buyers, COUNT(DISTINCT order_id) AS paid_orders '+where});
+assert.equal(unrecognizedAlias.passed,false,'语义合法但别名未识别时不能自动推进为通过');
+assert.equal(unrecognizedAlias.scoring,'cannot_autoscore_shape','别名未识别只代表无法自动判分，不自动归因为模型口径错误');
+assert.equal(unrecognizedAlias.expected_rows,null);
+assert.ok(unrecognizedAlias.data_variations.every(v=>v.expected_rows===null));
+const numericMismatch=evaluate({case_id:'Q02',sql:'SELECT COUNT(DISTINCT customer_id)+1 AS known_customer_count '+where});
+assert.equal(numericMismatch.passed,false);
+assert.equal(numericMismatch.scoring,'compared','已核算的数值不符单独成类，与形状未覆盖区分');
+assert.deepEqual(numericMismatch.expected_rows,[[5]]);
+// 主指标可附整体订单/明细行作核对；仍按独立口径逐列核算，不能因正确主指标而忽略附列。
+const overallColumns=[known,'COUNT(DISTINCT order_id) AS paid_orders','COUNT(*) AS paid_order_lines'];
+const overall=evaluate({case_id:'Q02',sql:'SELECT '+overallColumns.join(', ')+' '+where});
+assert.equal(overall.passed,true,'客户汇总附整体订单数/订单行数也必须独立核算');
+assert.deepEqual(overall.expected_rows,[[5,8,10]]);
+assert.ok(overall.data_variations.every(v=>v.passed));
+const overallWithBoundary=[anonymousPresence,overallColumns[2],known,anonymousOrders,overallColumns[1],anonymousLines];
+assert.equal(evaluate({case_id:'Q02',sql:'SELECT '+overallWithBoundary.join(', ')+' '+where}).passed,true,'整体指标与匿名边界可换列序组合');
+for(const columns of [
+ [known,'COUNT(*) AS paid_orders'],
+ [known,'COUNT(DISTINCT order_id) AS paid_order_lines'],
+ [known,'8 AS paid_orders'],
+ [known,'10 AS paid_order_lines'],
+ [known,anonymousLines,'COUNT(*) AS paid_order_lines', '1 AS has_unknown_customer'],
+ [known,overallColumns[1],'COUNT(DISTINCT order_id) AS total_orders'],
+ [known,overallColumns[2],'COUNT(*) AS meaningless_column'],
+])assert.equal(evaluate({case_id:'Q02',sql:'SELECT '+columns.join(', ')+' '+where}).passed,false,'整体附列仍拒绝错粒度、常数、错误匿名边界、重复或未知角色');
+// 分组标签是维度，不能与客户去重数占用同一列角色；参考仍来自独立合成数据。
+const groupedCustomers=`SELECT CASE WHEN customer_id IS NULL THEN 'anonymous' ELSE 'known' END AS 客户分组,
+ COUNT(DISTINCT customer_id) AS 支付客户数 ${where} GROUP BY customer_id IS NULL`;
+const grouped=evaluate({case_id:'Q02',sql:groupedCustomers});
+assert.equal(grouped.passed,true,'按已知/匿名客户分组也必须独立核算，不能把分组列当计数');
+assert.deepEqual(grouped.expected_rows,[['known',5],['anonymous',0]]);
+const customerGroup="CASE WHEN customer_id IS NULL THEN '未知客户(匿名)' ELSE '已知客户' END AS customer_category";
+const groupedMetrics='COUNT(DISTINCT customer_id) AS monthly_customer_uv, COUNT(DISTINCT order_id) AS paying_orders, COUNT(*) AS paying_lines';
+const groupedSql=`SELECT ${customerGroup}, ${groupedMetrics} ${where} GROUP BY customer_id IS NULL`;
+const detailedGroup=evaluate({case_id:'Q02',sql:groupedSql});
+assert.equal(detailedGroup.passed,true,'分组的客户、订单和明细行数分别核算');
+assert.deepEqual(detailedGroup.expected_rows,[['known',5,7,9],['anonymous',0,1,1]]);
+assert.equal(detailedGroup.data_variations.length,7);
+assert.ok(detailedGroup.data_variations.every(v=>v.passed));
+assert.equal(evaluate({case_id:'Q02',sql:`SELECT ${groupedMetrics}, ${customerGroup.replace('customer_category','客户类型')} ${where} GROUP BY customer_id IS NULL ORDER BY paying_lines DESC`}).passed,true,'列序、行序与中英文角色名不限定为某题输出');
+const compoundLineNames=['paid_order_lines','order_line_count','支付订单行数'];
+for(const name of compoundLineNames){
+ const wrongGrain=`SELECT ${customerGroup}, COUNT(DISTINCT customer_id) AS paying_customers, COUNT(DISTINCT order_id) AS ${name} ${where} GROUP BY customer_id IS NULL`;
+ assert.equal(evaluate({case_id:'Q02',sql:wrongGrain}).passed,false,'订单行是行粒度，订单数不能因复合列名被接受：'+name);
+ assert.equal(evaluate({case_id:'Q02',sql:groupedSql.replace('AS paying_lines','AS '+name)}).passed,true,'复合订单行列名应与订单数区分：'+name);
+}
+assert.equal(evaluate({case_id:'Q02',sql:'SELECT '+known+', '+anonymousLines.replace('anonymous_lines','anonymous_order_lines')+' '+where}).passed,true,'匿名订单行也按明细行核算');
+const invalidGroups=[
+ groupedSql.replace('COUNT(DISTINCT customer_id)','5'),
+ groupedSql.replace('COUNT(DISTINCT customer_id)',"COUNT(DISTINCT COALESCE(customer_id,'anonymous'))"),
+ groupedSql.replace('COUNT(DISTINCT order_id)','COUNT(*)'),
+ groupedSql.replace('COUNT(*) AS paying_lines','COUNT(DISTINCT order_id) AS paying_lines'),
+ groupedSql.replace('GROUP BY customer_id IS NULL','AND customer_id IS NOT NULL GROUP BY customer_id IS NULL'),
+ groupedSql.replace("THEN '未知客户(匿名)' ELSE '已知客户'","THEN '已知客户' ELSE '未知客户(匿名)'"),
+ groupedSql+' UNION ALL '+groupedSql,
+ groupedSql.replace('AS paying_orders','AS customer_count'),
+ groupedSql.replace('AS paying_lines','AS meaningless_column'),
+];
+for(const sql of invalidGroups)assert.equal(evaluate({case_id:'Q02',sql}).passed,false,'分组不能绕过去重、匿名边界、粒度、常数或重复角色核验');
 const moneyRatio='SUM(refunded_amount_cents)*1.0/NULLIF(SUM(paid_amount_cents),0) AS refund_amount_ratio';
 for(const columns of [[moneyRatio],['SUM(refunded_amount_cents) AS refunded_amount_cents','SUM(paid_amount_cents) AS paid_amount_cents',moneyRatio],[moneyRatio,'SUM(paid_amount_cents) AS paid_amount_cents']])assert.equal(evaluate({case_id:'Q05',sql:'SELECT '+columns.join(',')+' '+where}).passed,true,'金额比例可附独立核算的分子分母');
 const wrong=[
@@ -76,4 +154,4 @@ for(const sample of [{case_id:'net_revenue_scope',channel:'app',filter:" AND cha
 }
 for(const sql of ['SELECT '+net+' AS net_cents '+where,'SELECT '+net+' AS net_cents '+where+tagged.replace("IN ('vip','newsletter')","= 'vip' AND t.tag = 'newsletter'"),'SELECT SUM(DISTINCT paid_amount_cents-refunded_amount_cents) AS net_cents '+where+tagged])
  assert.equal(evaluate({case_id:'Q06',sql}).passed,false,'标签客户集合不能丢失、改成AND或按金额值去重');
-console.log(JSON.stringify({passed:true,referenceCases:cases.length,validBoundaryShapes:4,validRefundAmountShapes:3,validMoneyUnitShapes:6,rejectedMoneyUnitCounterexamples:20,rejectedTagCounterexamples:3,dataVariations:7,rejectedCounterexamples:wrong.length,officialRequests:0}));
+console.log(JSON.stringify({passed:true,referenceCases:cases.length,validBoundaryShapes:4,validOverallCustomerShapes:2,rejectedOverallCustomerCounterexamples:7,validCustomerGroupShapes:3,compoundLineNames:compoundLineNames.length,rejectedCustomerGroupCounterexamples:invalidGroups.length+compoundLineNames.length,validRefundAmountShapes:3,validMoneyUnitShapes:6,rejectedMoneyUnitCounterexamples:20,rejectedTagCounterexamples:3,dataVariations:7,rejectedCounterexamples:wrong.length,officialRequests:0}));

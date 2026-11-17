@@ -5,6 +5,8 @@ use crate::{
 use serde_json::{Value, json};
 use sqlx::{MySqlPool, Row};
 
+pub const LEASE_SECONDS: u32 = 15;
+
 pub async fn task_waiting_phase_in_tx(
     tx: &mut AppTx<'_>,
     task: &str,
@@ -55,6 +57,20 @@ pub async fn read_in_tx(tx: &mut AppTx<'_>, ctx: &AccessContext, qid: &str) -> R
         .ok_or(Error::new("not_available"))?;
     Ok(view(&r))
 }
+// 历史投影需要的生成时间：查询视图不携带created_at，历史读取按行取原始时间。
+pub async fn created_at_in_tx(
+    tx: &mut AppTx<'_>,
+    ctx: &AccessContext,
+    qid: &str,
+) -> Result<String> {
+    sqlx::query_scalar::<_, String>("SELECT DATE_FORMAT(created_at,'%Y-%m-%dT%H:%i:%s.000Z') FROM query_requests WHERE id=? AND owner_id=?")
+        .bind(qid)
+        .bind(&ctx.user_id)
+        .fetch_optional(tx.connection())
+        .await?
+        .ok_or(Error::new("not_available"))
+}
+
 pub async fn text_authority_in_tx(
     tx: &mut AppTx<'_>,
     ctx: &AccessContext,
@@ -99,10 +115,12 @@ pub async fn is_confirmation_message_in_tx(
     .await?;
     Ok(count > 0)
 }
-pub async fn supersede_in_tx(tx: &mut AppTx<'_>, cid: &str, task: &str) -> Result<()> {
+pub async fn supersede_in_tx(tx: &mut AppTx<'_>, cid: &str, task: &str) -> Result<Vec<String>> {
     tx.lock_rank(5)?;
+    let ids = sqlx::query_scalar::<_, String>("SELECT id FROM query_requests WHERE conversation_id=? AND task_id=? AND confirmation_state='awaiting_confirmation' AND execution_state='not_submitted' ORDER BY created_at,id FOR UPDATE")
+        .bind(cid).bind(task).fetch_all(tx.connection()).await?;
     sqlx::query("UPDATE query_requests SET confirmation_state='superseded' WHERE conversation_id=? AND task_id=? AND confirmation_state='awaiting_confirmation' AND execution_state='not_submitted'").bind(cid).bind(task).execute(tx.connection()).await?;
-    Ok(())
+    Ok(ids)
 }
 pub async fn begin_revision_in_tx(
     tx: &mut AppTx<'_>,
@@ -262,7 +280,7 @@ pub async fn claim_due(pool: &MySqlPool, worker: &str) -> Result<Option<Value>> 
     let result = if let Some(r) = row {
         let qid = r.get::<String, _>("id");
         let lease = r.get::<u64, _>("lease_epoch") + 1;
-        sqlx::query("UPDATE query_requests SET lease_owner=?,lease_epoch=?,lease_until=TIMESTAMPADD(SECOND,15,UTC_TIMESTAMP(3)) WHERE id=?").bind(worker).bind(lease).bind(&qid).execute(tx.connection()).await?;
+        sqlx::query("UPDATE query_requests SET lease_owner=?,lease_epoch=?,lease_until=TIMESTAMPADD(SECOND,?,UTC_TIMESTAMP(3)) WHERE id=?").bind(worker).bind(lease).bind(LEASE_SECONDS).bind(&qid).execute(tx.connection()).await?;
         Some(
             json!({"query_id":qid,"lease_epoch":lease.to_string(),"owner_id":r.get::<String,_>("owner_id"),"conversation_id":r.get::<String,_>("conversation_id"),"budget_scope_id":r.get::<String,_>("budget_scope_id")}),
         )
@@ -271,6 +289,16 @@ pub async fn claim_due(pool: &MySqlPool, worker: &str) -> Result<Option<Value>> 
     };
     tx.commit().await?;
     Ok(result)
+}
+pub async fn renew_claim(pool: &MySqlPool, job: &Value, worker: &str) -> Result<()> {
+    let changed = sqlx::query("UPDATE query_requests SET lease_until=TIMESTAMPADD(SECOND,?,UTC_TIMESTAMP(3)) WHERE id=? AND lease_owner=? AND lease_epoch=? AND lease_until>UTC_TIMESTAMP(3) AND execution_state IN ('queued','submitting','submission_unknown','running')")
+        .bind(LEASE_SECONDS).bind(job["query_id"].as_str()).bind(worker)
+        .bind(epoch(job["lease_epoch"].as_str().unwrap_or("0"))?)
+        .execute(pool).await?;
+    if changed.rows_affected() != 1 {
+        return Err(Error::new("lease_lost"));
+    }
+    Ok(())
 }
 pub async fn begin_submission_in_tx(
     tx: &mut AppTx<'_>,
@@ -297,6 +325,13 @@ pub async fn begin_submission_in_tx(
     v["target_version"] = json!(row.get::<String, _>("target_version"));
     v["owner_id"] = json!(ctx.user_id);
     v["query_id"] = json!(qid);
+    // 持行锁期间时间仍会流逝；交接刷新自身核未过期，拒绝时由原事务回滚提交计数。
+    let changed = sqlx::query("UPDATE query_requests SET lease_until=TIMESTAMPADD(SECOND,?,UTC_TIMESTAMP(3)) WHERE id=? AND lease_epoch=? AND lease_until>UTC_TIMESTAMP(3)")
+        .bind(LEASE_SECONDS).bind(qid).bind(epoch(job["lease_epoch"].as_str().unwrap_or("0"))?)
+        .execute(tx.connection()).await?;
+    if changed.rows_affected() != 1 {
+        return Err(Error::new("lease_lost"));
+    }
     Ok(v)
 }
 pub async fn record_observation_in_tx(

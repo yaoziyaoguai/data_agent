@@ -103,34 +103,344 @@ pub async fn collect_in_tx(
             Err(error) => return Err(error),
         }
     }
-    bound_bodies(&mut sources, &mut gaps);
+    let mut table_name = object["entries"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .find(|entry| entry["path"] == "type")
+        .and_then(|entry| entry["source_facts"]["table"].as_str())
+        .map(str::to_owned);
+    if object["kind"] == "table" {
+        table_name = object["name"].as_str().map(str::to_owned);
+    }
+    if object["kind"] == "field" && table_name.is_none() {
+        for id in object["related_ids"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(Value::as_str)
+        {
+            match knowledge::read_meta_in_tx(tx, ctx, id, None).await {
+                Ok(meta) if meta["kind"] == "table" => {
+                    if table_name.is_some() {
+                        table_name = None;
+                        break;
+                    }
+                    table_name = meta["name"].as_str().map(str::to_owned);
+                }
+                Ok(_) => (),
+                Err(error) if error.code == "not_available" => (),
+                Err(error) => return Err(error),
+            }
+        }
+    }
+    let mut metadata =
+        prioritize_object_materials(object, &mut sources, table_name.as_deref(), &mut gaps);
+    let frozen = bound_bodies(&mut sources, &mut gaps);
+    for entry in &mut metadata {
+        let fact = &entry["source_facts"];
+        if fact["quote"].is_string()
+            && !sources.iter().any(|source| {
+                source["source_id"] == fact["source_id"]
+                    && source["version"] == fact["version"]
+                    && visible_contains(source, fact["quote"].as_str().unwrap_or(""))
+            })
+        {
+            entry["source_facts"]
+                .as_object_mut()
+                .expect("metadata")
+                .remove("quote");
+            entry["source_facts"]["complete"] = json!(false);
+        }
+    }
+    let ranges = source_coverage(&sources);
     Ok(
-        json!({"sources":sources,"coverage":{"state":if gaps.is_empty(){"complete"}else{"incomplete"},"gaps":gaps}}),
+        json!({"metadata":metadata,"sources":sources,"frozen_review_sources":frozen,
+        "coverage":{"state":if gaps.is_empty(){"complete"}else{"incomplete"},"gaps":gaps,"source_ranges":ranges}}),
     )
 }
 
+fn visible_contains(source: &Value, quote: &str) -> bool {
+    source["body"].as_str().unwrap_or("").contains(quote)
+        || source["supporting_excerpts"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .any(|part| part["body"].as_str().unwrap_or("").contains(quote))
+}
+
+// 优先装配当前对象的同版核心位置，剩余额度再交给普通来源前缀。
+fn prioritize_object_materials(
+    object: &Value,
+    sources: &mut [Value],
+    table: Option<&str>,
+    gaps: &mut Vec<Value>,
+) -> Vec<Value> {
+    let entries: Vec<_> = object["entries"].as_array().into_iter().flatten().collect();
+    let mut metadata:Vec<_>=entries.iter().filter(|entry|matches!(entry["path"].as_str(),Some("ddl"|"etl"|"type"))).map(|entry|json!({"entry_id":entry["entry_id"],"path":entry["path"],
+        "source_facts":{"source_id":entry["source_facts"]["source_id"],"version":entry["source_facts"]["version"],
+            "location":entry["source_facts"]["location"]}})).collect();
+    let mut candidates = Vec::new();
+    let mut quotes = Vec::new();
+    for entry in &entries {
+        let fact = &entry["source_facts"];
+        let Some(quote) = fact["quote"].as_str().filter(|q| !q.is_empty()) else {
+            continue;
+        };
+        let Some(index) = sources.iter().position(|source| {
+            source["source_id"] == fact["source_id"] && source["version"] == fact["version"]
+        }) else {
+            continue;
+        };
+        let body = sources[index]["body"].as_str().unwrap_or("");
+        let ddl = table.and_then(|name| ingestion::prefill::table_ddl_range(body, name));
+        let range = if entry["path"] == "type" {
+            let column = fact["column"]
+                .as_str()
+                .or_else(|| {
+                    object["name"]
+                        .as_str()
+                        .and_then(|name| name.rsplit('.').next())
+                })
+                .unwrap_or("");
+            table
+                .and_then(|table| ingestion::prefill::field_declaration_range(body, table, column))
+                .filter(|range| body[range.clone()].contains(quote))
+                .map(|range| (range.start, range.end))
+                .or_else(|| {
+                    (body.len() <= MAX_BODY_BYTES && body.contains(quote))
+                        .then_some((0, body.len()))
+                })
+        } else {
+            let mut matches = body.match_indices(quote);
+            matches.next().and_then(|(start, _)| {
+                matches
+                    .next()
+                    .is_none()
+                    .then_some((start, start + quote.len()))
+            })
+        };
+        if let Some(range) = range {
+            candidates.push((
+                if matches!(entry["path"].as_str(), Some("ddl" | "etl")) {
+                    1
+                } else {
+                    0
+                },
+                index,
+                range,
+            ));
+            if entry["path"] == "type" {
+                let metadata_index = metadata
+                    .iter()
+                    .position(|metadata| metadata["entry_id"] == entry["entry_id"])
+                    .expect("type metadata");
+                quotes.push((
+                    metadata_index,
+                    index,
+                    range,
+                    quote.to_owned(),
+                    fact["complete"] == true,
+                ));
+                if let Some(ddl) = ddl {
+                    candidates.push((1, index, (ddl.start, ddl.end)));
+                }
+            }
+        } else if entry["path"] == "type" {
+            gaps.push(json!({"entry_id":entry["entry_id"],"source_id":fact["source_id"],"reason":"metadata_location_unavailable"}));
+        }
+    }
+    candidates.sort_by_key(|(priority, index, range)| (*priority, *index, *range));
+    let mut selected = vec![Vec::new(); sources.len()];
+    let mut remaining = MAX_BODY_BYTES;
+    for (_, index, range) in candidates {
+        let old: usize = selected[index].iter().map(|(s, e)| e - s).sum();
+        let ranges = merge_ranges(selected[index].iter().copied().chain([range]).collect());
+        let added = ranges.iter().map(|(s, e)| e - s).sum::<usize>() - old;
+        if added <= remaining {
+            selected[index] = ranges;
+            remaining -= added;
+        } else {
+            gaps.push(
+                json!({"source_id":sources[index]["source_id"],"reason":"core_material_limit"}),
+            );
+        }
+    }
+    for (entry, index, (start, end), quote, complete) in quotes {
+        let visible = selected[index]
+            .iter()
+            .any(|(s, e)| *s <= start && *e >= end);
+        metadata[entry]["source_facts"]["complete"] = json!(visible && complete);
+        if visible {
+            metadata[entry]["source_facts"]["quote"] = json!(quote);
+        }
+    }
+    for (source, ranges) in sources.iter_mut().zip(selected) {
+        if !ranges.is_empty() {
+            let body = source["body"].as_str().unwrap_or("");
+            let parts: Vec<_> = ranges
+                .into_iter()
+                .map(|range| excerpt(body, range, body.len()))
+                .collect();
+            source["supporting_excerpts"] = json!(parts);
+        }
+    }
+    metadata
+}
+
+fn source_coverage(sources: &[Value]) -> Vec<Value> {
+    sources.iter().map(|source| {
+        let ranges=merge_ranges(std::iter::once(&source["body_range"]).chain(source["supporting_excerpts"].as_array().into_iter().flatten())
+            .filter_map(|part|Some((part["start_byte"].as_u64()? as usize,part["end_byte"].as_u64()? as usize))).collect());
+        let ranges:Vec<_>=ranges.into_iter().map(|(start,end)|json!({"start":start,"end":end})).collect();
+        json!({"source_id":source["source_id"],"version":source["version"],"total_bytes":source["body_range"]["total_bytes"],
+            "visible_byte_ranges":ranges,"seen_byte_ranges":ranges})
+    }).collect()
+}
+
+// 每来源最多再消费一轮正文预算；多留一个UTF-8字符以保持全文上的句末裁点。
+fn freeze_review_source(source: &Value, body: &str, prefix_bytes: usize) -> Value {
+    let mut end = body.len().min(prefix_bytes + MAX_BODY_BYTES + 4);
+    while !body.is_char_boundary(end) {
+        end -= 1;
+    }
+    json!({"source_id":source["source_id"],"version":source["version"],
+        "body":&body[..end],"total_bytes":body.len(),"complete":source["complete"]})
+}
+
+// 兼容已排队的裁剪输入：首次调用前补齐原身份/修订的复核窗口，不重新发现来源。
+pub async fn freeze_review_in_tx(
+    tx: &mut AppTx<'_>,
+    ctx: &AccessContext,
+    input: &Value,
+) -> Result<Value> {
+    let mut frozen = Vec::new();
+    for source in input["sources"]
+        .as_array()
+        .ok_or(Error::new("invalid_input"))?
+    {
+        let prefix = source["body"].as_str().ok_or(Error::new("invalid_input"))?;
+        if source["body_range"]["total_bytes"].as_u64().unwrap_or(0) > prefix.len() as u64
+            || input["coverage"]["gaps"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .any(|gap| gap["source_id"] == source["source_id"] && gap["reason"] == "body_limit")
+        {
+            let full = knowledge_sources::read_in_tx(
+                tx,
+                ctx,
+                source["source_id"]
+                    .as_str()
+                    .ok_or(Error::new("invalid_input"))?,
+                Some(epoch(source["version"].as_str().unwrap_or(""))?),
+            )
+            .await?;
+            let body = full["body"].as_str().ok_or(Error::new("invalid_input"))?;
+            if !body.starts_with(prefix)
+                || source["body_range"]["total_bytes"]
+                    .as_u64()
+                    .is_some_and(|total| total != body.len() as u64)
+            {
+                return Err(Error::new("stale_knowledge"));
+            }
+            frozen.push(freeze_review_source(&full, body, prefix.len()));
+        }
+    }
+    let mut input = input.clone();
+    input["frozen_review_sources"] = json!(frozen);
+    Ok(input)
+}
+
 // 按材料均分剩余额度，短材料释放余量；文档不会被排在前面的长SQL完全挤掉。
-fn bound_bodies(sources: &mut [Value], gaps: &mut Vec<Value>) {
+fn bound_bodies(sources: &mut [Value], gaps: &mut Vec<Value>) -> Vec<Value> {
+    let mut frozen = Vec::new();
     let mut order: Vec<_> = (0..sources.len()).collect();
     order.sort_by_key(|i| sources[*i]["body"].as_str().unwrap_or("").len());
-    let mut remaining = MAX_BODY_BYTES;
+    let reserved: usize = sources
+        .iter()
+        .flat_map(|source| {
+            source["supporting_excerpts"]
+                .as_array()
+                .into_iter()
+                .flatten()
+        })
+        .map(|part| part["body"].as_str().unwrap_or("").len())
+        .sum();
+    let mut remaining = MAX_BODY_BYTES.saturating_sub(reserved);
     let count = order.len();
     for (position, index) in order.into_iter().enumerate() {
         let source = &mut sources[index];
         let body = source["body"].as_str().unwrap_or("");
         let total = body.len();
-        let end = excerpt_end(body, 0, remaining / (count - position));
+        let credit = source["supporting_excerpts"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter(|part| part["start_byte"] == 0)
+            .filter_map(|part| part["end_byte"].as_u64())
+            .max()
+            .unwrap_or(0) as usize;
+        let end = excerpt_end(body, 0, remaining / (count - position) + credit).max(credit);
         let excerpt = body[..end].to_owned();
+        if end < total {
+            frozen.push(freeze_review_source(source, body, end));
+        }
+        let mut supports = source["supporting_excerpts"]
+            .as_array()
+            .cloned()
+            .unwrap_or_default();
+        let mut refund = 0;
+        supports.retain(|part| {
+            if part["end_byte"]
+                .as_u64()
+                .is_some_and(|bound| bound <= end as u64)
+            {
+                refund += part["body"].as_str().unwrap_or("").len();
+                false
+            } else {
+                true
+            }
+        });
         source["source_complete"] = source["complete"].clone();
         source["body_range"] =
             json!({"start_byte":0,"end_byte":end,"start_line":1,"total_bytes":total});
-        if end < total {
-            gaps.push(json!({"source_id":source["source_id"],"reason":"body_limit","included_bytes":end,"total_bytes":total}));
-            source["body"] = json!(excerpt);
-            source["complete"] = json!(false);
+        source["body"] = json!(excerpt);
+        if supports.is_empty() {
+            source
+                .as_object_mut()
+                .expect("source")
+                .remove("supporting_excerpts");
+        } else {
+            source["supporting_excerpts"] = json!(supports);
         }
-        remaining = remaining.saturating_sub(end);
+        let visible = merge_ranges(
+            std::iter::once((0, end))
+                .chain(
+                    source["supporting_excerpts"]
+                        .as_array()
+                        .into_iter()
+                        .flatten()
+                        .map(|part| {
+                            (
+                                part["start_byte"].as_u64().unwrap_or(0) as usize,
+                                part["end_byte"].as_u64().unwrap_or(0) as usize,
+                            )
+                        }),
+                )
+                .collect(),
+        );
+        let included = visible
+            .iter()
+            .map(|(start, end)| end - start)
+            .sum::<usize>();
+        source["complete"] = json!(source["source_complete"] == true && included == total);
+        if included < total {
+            gaps.push(json!({"source_id":source["source_id"],"reason":"body_limit","included_bytes":included,"total_bytes":total}));
+        }
+        remaining = remaining + refund - end;
     }
+    frozen
 }
 
 // 尽量在临近的换行或句末结束；巨型单行仍可裁剪，但范围明确且不声称语句完整。
@@ -168,43 +478,84 @@ fn merge_ranges(mut ranges: Vec<(usize, usize)>) -> Vec<(usize, usize)> {
     merged
 }
 
-fn excerpt(body: &str, (start, end): (usize, usize)) -> Value {
+fn excerpt(body: &str, (start, end): (usize, usize), total: usize) -> Value {
     json!({"body":&body[start..end],"start_byte":start,"end_byte":end,
-        "start_line":body[..start].bytes().filter(|b| *b == b'\n').count()+1,"total_bytes":body.len()})
+        "start_line":body[..start].bytes().filter(|b| *b == b'\n').count()+1,"total_bytes":total})
 }
 
-// 只续读已冻结的来源身份和版本；不重新发现材料，也不新建模型调用或预算。
-pub async fn review_in_tx(
-    tx: &mut AppTx<'_>,
-    ctx: &AccessContext,
-    input: &Value,
-    draft: &Value,
-) -> Result<Value> {
+// 冻结材料可以是不连续窗口；按真实绝对位置取片段，不能把晚位置片段当作前缀切片。
+fn source_excerpt(source: &Value, (start, end): (usize, usize), total: usize) -> Result<Value> {
+    let body = source["body"].as_str().unwrap_or("");
+    let base = source["body_range"]["start_byte"].as_u64().unwrap_or(0) as usize;
+    let line = source["body_range"]["start_line"].as_u64().unwrap_or(1);
+    let mut parts: Vec<_> = std::iter::once((body, base, line))
+        .chain(
+            source["supporting_excerpts"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .map(|part| {
+                    (
+                        part["body"].as_str().unwrap_or(""),
+                        part["start_byte"].as_u64().unwrap_or(0) as usize,
+                        part["start_line"].as_u64().unwrap_or(1),
+                    )
+                }),
+        )
+        .collect();
+    parts.sort_by_key(|(_, base, _)| *base);
+    let mut position = start;
+    let mut text = String::new();
+    let mut start_line = line;
+    for (body, base, line) in parts {
+        if base <= position && position < base + body.len() {
+            if position == start {
+                start_line =
+                    line + body[..start - base].bytes().filter(|b| *b == b'\n').count() as u64;
+            }
+            let next = end.min(base + body.len());
+            text.push_str(
+                body.get(position - base..next - base)
+                    .ok_or(Error::new("invalid_input"))?,
+            );
+            position = next;
+            if position == end {
+                break;
+            }
+        }
+    }
+    if position != end {
+        return Err(Error::new("invalid_input"));
+    }
+    Ok(
+        json!({"body":text,"start_byte":start,"end_byte":end,"total_bytes":total,"start_line":start_line}),
+    )
+}
+
+// 复核只消费首次调用前持久冻结的必要窗口；当前权限、修订和来源仍由check_in_tx核验。
+pub fn review(input: &Value, draft: &Value) -> Result<Value> {
     let mut full = input["sources"]
         .as_array()
         .ok_or(Error::new("invalid_input"))?
         .clone();
+    let frozen = input["frozen_review_sources"]
+        .as_array()
+        .ok_or(Error::new("invalid_input"))?;
     for source in &mut full {
-        if source["body_range"]["total_bytes"].as_u64().unwrap_or(0)
-            > source["body"].as_str().unwrap_or("").len() as u64
-            || input["coverage"]["gaps"]
-                .as_array()
-                .into_iter()
-                .flatten()
-                .any(|gap| gap["source_id"] == source["source_id"] && gap["reason"] == "body_limit")
-        {
-            *source = knowledge_sources::read_in_tx(
-                tx,
-                ctx,
-                source["source_id"]
-                    .as_str()
-                    .ok_or(Error::new("invalid_input"))?,
-                Some(epoch(source["version"].as_str().unwrap_or(""))?),
-            )
-            .await?;
+        if let Some(window) = frozen.iter().find(|window| {
+            window["source_id"] == source["source_id"] && window["version"] == source["version"]
+        }) {
+            source["body"] = window["body"].clone();
+            source["body_range"]["total_bytes"] = window["total_bytes"].clone();
+            source["source_complete"] = window["complete"].clone();
         }
     }
-    review_material(input, draft, &full)
+    let mut material = review_material(input, draft, &full)?;
+    material
+        .as_object_mut()
+        .ok_or(Error::new("invalid_input"))?
+        .remove("frozen_review_sources");
+    Ok(material)
 }
 
 fn review_material(input: &Value, draft: &Value, full: &[Value]) -> Result<Value> {
@@ -223,9 +574,13 @@ fn review_material(input: &Value, draft: &Value, full: &[Value]) -> Result<Value
     }
     let mut ranges = Vec::new();
     let mut ends = Vec::new();
+    let mut totals = Vec::new();
     let mut remaining = MAX_BODY_BYTES;
     for (source, original) in full.iter().zip(original) {
         let body = source["body"].as_str().ok_or(Error::new("invalid_input"))?;
+        let total = source["body_range"]["total_bytes"]
+            .as_u64()
+            .unwrap_or(body.len() as u64) as usize;
         let old = original["body"]
             .as_str()
             .ok_or(Error::new("invalid_input"))?;
@@ -236,8 +591,19 @@ fn review_material(input: &Value, draft: &Value, full: &[Value]) -> Result<Value
             return Err(Error::new("stale_knowledge"));
         }
         ends.push(old.len());
-        let mut retained = Vec::new();
-        if body.len() == old.len() {
+        totals.push(total);
+        let mut retained: Vec<_> = original["supporting_excerpts"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(|part| {
+                Some((
+                    part["start_byte"].as_u64()? as usize,
+                    part["end_byte"].as_u64()? as usize,
+                ))
+            })
+            .collect();
+        if original["complete"] == true || total == old.len() {
             retained.push((0, old.len()));
         } else {
             for evidence in draft["entries"]
@@ -252,22 +618,36 @@ fn review_material(input: &Value, draft: &Value, full: &[Value]) -> Result<Value
                 let quote = evidence["quote"]
                     .as_str()
                     .ok_or(Error::new("invalid_prefill"))?;
-                let start = old.find(quote).ok_or(Error::new("invalid_prefill"))?;
+                let (text, base, start) = std::iter::once((old, 0usize))
+                    .chain(
+                        original["supporting_excerpts"]
+                            .as_array()
+                            .into_iter()
+                            .flatten()
+                            .map(|part| {
+                                (
+                                    part["body"].as_str().unwrap_or(""),
+                                    part["start_byte"].as_u64().unwrap_or(0) as usize,
+                                )
+                            }),
+                    )
+                    .find_map(|(text, base)| text.find(quote).map(|start| (text, base, start)))
+                    .ok_or(Error::new("invalid_prefill"))?;
                 let end = start + quote.len();
-                // 优先保留引用所在完整行；很长的行只扩到有界上下文，片段边界仍明确。
+                // 优先保留实际可见片段中的完整行，不跨未交付空洞扩大引用。
                 let mut before = start.saturating_sub(256);
-                while !body.is_char_boundary(before) {
+                while !text.is_char_boundary(before) {
                     before += 1;
                 }
-                let begin = body[before..start]
+                let begin = text[before..start]
                     .rfind('\n')
                     .map_or(before, |n| before + n + 1);
-                let mut after = old.len().min(end.saturating_add(256));
-                while !body.is_char_boundary(after) {
+                let mut after = text.len().min(end.saturating_add(256));
+                while !text.is_char_boundary(after) {
                     after -= 1;
                 }
-                let finish = body[end..after].find('\n').map_or(after, |n| end + n + 1);
-                retained.push((begin, finish));
+                let finish = text[end..after].find('\n').map_or(after, |n| end + n + 1);
+                retained.push((base + begin, base + finish));
             }
         }
         let retained = merge_ranges(retained);
@@ -279,10 +659,10 @@ fn review_material(input: &Value, draft: &Value, full: &[Value]) -> Result<Value
     let mut pending: Vec<_> = full
         .iter()
         .enumerate()
-        .filter(|(i, source)| source["body"].as_str().unwrap_or("").len() > ends[*i])
+        .filter(|(i, _)| totals[*i] > ends[*i])
         .map(|(i, _)| i)
         .collect();
-    pending.sort_by_key(|i| full[*i]["body"].as_str().unwrap_or("").len() - ends[*i]);
+    pending.sort_by_key(|i| totals[*i] - ends[*i]);
     let count = pending.len();
     for (position, index) in pending.into_iter().enumerate() {
         let body = full[index]["body"].as_str().unwrap_or("");
@@ -302,7 +682,7 @@ fn review_material(input: &Value, draft: &Value, full: &[Value]) -> Result<Value
     let mut coverage = Vec::new();
     let mut sources = Vec::new();
     for (index, source) in full.iter().enumerate() {
-        let body = source["body"].as_str().unwrap_or("");
+        let total = totals[index];
         let visible = merge_ranges(ranges[index].clone());
         let seen = merge_ranges(visible.iter().copied().chain([(0, ends[index])]).collect());
         let included: usize = visible.iter().map(|(s, e)| e - s).sum();
@@ -313,7 +693,7 @@ fn review_material(input: &Value, draft: &Value, full: &[Value]) -> Result<Value
             .max_by_key(|(s, e)| e - s)
             .copied()
             .unwrap_or((0, 0));
-        let mut main_excerpt = excerpt(body, main);
+        let mut main_excerpt = source_excerpt(source, main, total)?;
         projected["body"] = main_excerpt["body"].take();
         main_excerpt
             .as_object_mut()
@@ -323,23 +703,28 @@ fn review_material(input: &Value, draft: &Value, full: &[Value]) -> Result<Value
         let supports: Vec<_> = visible
             .iter()
             .filter(|r| **r != main)
-            .map(|r| excerpt(body, *r))
-            .collect();
+            .map(|r| source_excerpt(source, *r, total))
+            .collect::<Result<_>>()?;
         if !supports.is_empty() {
             projected["supporting_excerpts"] = json!(supports);
+        } else {
+            projected
+                .as_object_mut()
+                .expect("source")
+                .remove("supporting_excerpts");
         }
         let complete = source["source_complete"]
             .as_bool()
             .unwrap_or(source["complete"] == true);
-        projected["complete"] = json!(complete && included == body.len());
-        if included < body.len() {
-            gaps.push(json!({"source_id":source["source_id"],"reason":"body_limit","included_bytes":included,"total_bytes":body.len()}));
+        projected["complete"] = json!(complete && included == total);
+        if included < total {
+            gaps.push(json!({"source_id":source["source_id"],"reason":"body_limit","included_bytes":included,"total_bytes":total}));
         }
-        if ends[index] < body.len() && seen.iter().all(|(_, end)| *end <= ends[index]) {
+        if ends[index] < total && seen.iter().all(|(_, end)| *end <= ends[index]) {
             gaps.push(json!({"source_id":source["source_id"],"reason":"supplement_capacity"}));
         }
-        if ends[index] < body.len() {
-            coverage.push(json!({"source_id":source["source_id"],"version":source["version"],"total_bytes":body.len(),
+        if ends[index] < total {
+            coverage.push(json!({"source_id":source["source_id"],"version":source["version"],"total_bytes":total,
             "visible_byte_ranges":visible.iter().map(|(s,e)|json!({"start":s,"end":e})).collect::<Vec<_>>(),
             "seen_byte_ranges":seen.iter().map(|(s,e)|json!({"start":s,"end":e})).collect::<Vec<_>>()}));
         }
@@ -374,9 +759,15 @@ pub async fn check_in_tx(tx: &mut AppTx<'_>, ctx: &AccessContext, input: &Value)
         }
         if let Some(id) = knowledge_sources::document_id(source_id) {
             refs.push((id.to_owned(), version));
-            let document = knowledge::read_in_tx(tx, ctx, id, Some(version), false).await?;
+            let document = knowledge::source_reference_objects_in_tx(tx, ctx, &[id.to_owned()])
+                .await?
+                .pop()
+                .ok_or(Error::new("not_available"))?;
             if document["kind"] != "document" {
                 return Err(Error::new("not_available"));
+            }
+            if document["version"].as_str() != Some(version.to_string().as_str()) {
+                return Err(Error::new("stale_knowledge"));
             }
             for (id, version) in knowledge_sources::requirements(&document)? {
                 pending.push(json!({"source_id":id,"version":version.to_string()}));

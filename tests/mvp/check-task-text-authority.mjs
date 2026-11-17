@@ -14,7 +14,7 @@ const checkpoint=()=>exportCheckpoint(manager,run.workspace_context.authority_re
 const begin=async(cid,text)=>{await h.resumeWorker();run=await h.capture(cid,text);await h.pauseWorker();manager=SessionManager.inMemory('/synthetic/data-agent');};
 const tool=async(name,args)=>{const input={run_id:run.run_id,lease_epoch:run.lease_epoch,sdk_tool_call_id:randomUUID(),tool_name:name,arguments:args,checkpoint:checkpoint()};lastInvocation=input;ok(await h.internal('/internal/data/tool-calls',input));return h.internal('/internal/data/tools',input);};
 const finish=async()=>{const text='本轮合成验证完成。';ok(await h.internal('/internal/outputs',{run_id:run.run_id,lease_epoch:run.lease_epoch,chunk_seq:'1',text}));ok(await h.internal('/internal/finish',{run_id:run.run_id,lease_epoch:run.lease_epoch,commit_id:run.output_id,final_text:text,checkpoint:checkpoint()}));h.releaseRun(run.run_id);};
-const conditions={time_start:null,time_end:null,timezone:'UTC',metric:null,channel:null,group_by:[],filters:[],knowledge_refs:[],notes:''};
+const conditions={time_start:null,time_end:null,timezone:'UTC',metric:null,channel:null,group_by:[],filters:[],knowledge_refs:[],notes:'',source_limits:null};
 const marker='SYNTHETIC_REVOKED_TEXT_MUST_HIDE';
 const assertHidden=value=>assert.equal(JSON.stringify(value).includes(marker),false,'失效正文不能通过其他版本或目录回流');
 const retainLegacyTaskText=()=>manager.appendMessage({role:'assistant',content:[{type:'text',text:JSON.stringify({goal:marker+'旧目标',clarification:{question:marker+'旧问题',options:[marker+'旧选项']}})}],api:'openai-completions',provider:'synthetic',model:'synthetic',stopReason:'stop',timestamp:Date.now(),usage:{input:0,output:0,cacheRead:0,cacheWrite:0,totalTokens:0,cost:{input:0,output:0,cacheRead:0,cacheWrite:0,total:0}}});
@@ -24,6 +24,25 @@ try {
   const original=ok(await tool('update_analysis_task',{action:'create',goal:'最初目标',conditions,options:[]})).data;
   const cited=ok(await tool('update_analysis_task',{action:'clarify',task_id:original.task_id,expected_version:original.condition_version,goal:marker+'目标',condition_patch:{set:{knowledge_refs:[{object_id:doc.id,version:doc.version,path:'body'}]},unset:[]},question:marker+'采用哪个口径？',options:[marker+'口径A','口径B']})).data;
   const citedInvocation=lastInvocation;
+  const beforeIdentityDirectory=ok(await tool('read_analysis_task',{task_id:original.task_id})).data;
+  assert.equal(beforeIdentityDirectory.goal,marker+'目标','旧活动任务范围中有效的派生目标仍可正常读取');
+  const sourceFree=ok(await tool('update_analysis_task',{action:'create',goal:run.text,conditions,options:[]})).data;
+  const legacyDirectoryTask=ok(await tool('update_analysis_task',{action:'create',goal:'合成旧格式目录目标',conditions,options:[]})).data;
+  h.sql(`UPDATE analysis_tasks SET goal_authority=NULL WHERE id='${legacyDirectoryTask.task_id}'`);
+  ok(await tool('update_analysis_task',{action:'route',task_id:original.task_id,expected_version:cited.condition_version,goal:'',options:[]}));
+  const identityDirectory=ok(await tool('read_conversation',{after_seq:'0',task_directory:true})).data;
+  const byIdentity=id=>identityDirectory.tasks.find(task=>task.id===id);
+  assert.equal(byIdentity(original.task_id).goal,undefined,'身份目录不能沿旧活动任务许可交付资料派生目标');
+  assert.equal(byIdentity(sourceFree.task_id).goal,run.text,'来源完整且不依赖资料的用户目标可用作路由标题');
+  assert.equal(byIdentity(legacyDirectoryTask.task_id).goal,undefined,'NULL来源不能作为无资料来源的标题');
+  for(const task of identityDirectory.tasks){
+    assert.equal(task.context_complete,false);
+    assert.equal(typeof task.id,'string');assert.equal(typeof task.condition_version,'string');
+    assert.equal(typeof task.lifecycle,'string');assert.equal(typeof task.phase,'string');
+    assert.equal(Object.hasOwn(task,'conditions'),false);
+  }
+  assert.equal(Object.hasOwn(identityDirectory,'next_task_after'),true,'保留宿主真实目录续页位置');
+  checks.push('身份目录只保合法无资料来源的标题与任务控制字段；旧范围有效派生目标和NULL来源标题均隐藏');
   ok(await h.request(`/knowledge/${doc.id}/disable`,{operation_id:randomUUID(),expected_version:doc.version}));
   const replay=ok(await h.internal('/internal/data/tools',citedInvocation)).data;
   assertHidden(replay);assert.equal(replay.condition_version,cited.condition_version);assert.equal(replay.context_complete,false);
@@ -85,7 +104,7 @@ try {
   await begin(cid,'升级后继续当前任务。');
   assert.equal(run.checkpoint,null,'旧schema4没有独立任务文本来源覆盖保证，必须重建而非接回旧历史');
   assertHidden(run.workspace_context);
-  assert.equal(run.workspace_context.authority_snapshot.dependency_schema,5);
+  assert.equal(run.workspace_context.authority_snapshot.dependency_schema,6);
   const continueTask=ok(await tool('read_analysis_task',{task_id:original.task_id})).data;
   assert.equal(continueTask.goal,'旧记录重新调查后的目标');assertHidden(continueTask);
   ok(await tool('update_analysis_task',{action:'route',task_id:original.task_id,expected_version:recovered.condition_version,goal:'',options:[]}));
@@ -153,6 +172,8 @@ try {
   // 旧channel任务续接：channel保留解码，新字段缺失与显式null区分不混同。
   const legacyCid=await h.create();await begin(legacyCid,'旧格式任务只带channel。');
   const legacyTask=ok(await tool('update_analysis_task',{action:'create',goal:'旧channel任务',conditions:{...conditions,channel:'web'},options:[]})).data;
+  // 真实旧持久形状没有新字段；新版本create已明确保存null，不能用新记录冒充旧记录。
+  h.sql(`UPDATE condition_revisions SET body=JSON_REMOVE(body,'$.source_limits'),field_authorities=JSON_REMOVE(field_authorities,'$.source_limits') WHERE task_id='${legacyTask.task_id}'`);
   const legacyRevised=ok(await tool('update_analysis_task',{action:'revise',task_id:legacyTask.task_id,expected_version:legacyTask.condition_version,goal:'',condition_patch:{set:{time_start:'2026-09-01T00:00:00Z'},unset:[]},options:[]})).data;
   const legacyView=ok(await tool('read_analysis_task',{task_id:legacyTask.task_id})).data;
   assert.equal(legacyView.conditions.channel,'web','旧channel保留解码');

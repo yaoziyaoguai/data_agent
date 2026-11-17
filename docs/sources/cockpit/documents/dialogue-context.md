@@ -10,6 +10,8 @@ syn_dialogue_transition保存轮内的状态迁移、迁移原因、上下文来
 
 final_outcome的eligible集合是completed、clarification_pending、rejected、failed、unknown；cancelled和no_speech单列，不进入任务达成率分母。clarification_pending代表目标尚待用户补充，不直接等于技术故障。parent_turn_id描述承接关系，否定、修改或换目标仍须查看状态迁移及上下文来源。
 
+轮次或轮次成功率分析未另行指定时，“语言”默认采用`syn_voice_turn.locale`，按本轮事实筛选。它不等同于`syn_voice_session.locale`：明确分析会话语言、此前已经采用会话语言条件，或用户指定其他粒度时，沿原选择，不自动改成轮次语言。此项是本公开合成资料的字段默认，不是所有记录语言相同的保证。
+
 ## `syn_voice_turn` · 用户交互轮次
 
 任务达成率eligible为completed/clarification_pending/rejected/failed/unknown，排除cancelled/no_speech。识别一致性只用标签子集；completed、播报成功与满意不是同一指标。
@@ -31,7 +33,7 @@ final_outcome的eligible集合是completed、clarification_pending、rejected、
 | `reference_text` | TEXT / NULL | — | 人工从零构造的转写参考；无标签NULL，不是模型预测或真实录音转写。 |
 | `reference_intent_id` | TEXT / NULL | — | 人工合成意图标签；无标签NULL。 引用`syn_intent_catalog.intent_id`。 |
 | `label_origin` | TEXT / NOT NULL | — | 人工标签来源，至少一个参考非空才为synthetic_authored。 允许值：synthetic_authored, none。 |
-| `locale` | TEXT / NOT NULL | — | 本轮locale。 允许值：zh-CN, en-US。 |
+| `locale` | TEXT / NOT NULL | — | 本轮locale；轮次及轮次率分析未另指定时以本列筛语言，不等同会话locale；明确采用会话语言或其他粒度时沿原选择。 允许值：zh-CN, en-US。 |
 | `seat_zone` | TEXT / NOT NULL | — | 输入音区。 允许值：driver, front_passenger, rear。 |
 | `input_ms` | INTEGER / NOT NULL | ms | 合成输入持续时长；无原始音频。 下界：0。 |
 | `terminal_offset_ms` | INTEGER / NOT NULL | ms | 从轮次起点到任务终态的单调偏移。 下界：0。 |
@@ -89,7 +91,7 @@ final_outcome的eligible集合是completed、clarification_pending、rejected、
 {"kind":"field","table":"syn_voice_turn","name":"reference_text","type":"TEXT","nullable":true,"meaning":"人工从零构造的转写参考；无标签NULL，不是模型预测或真实录音转写。"}
 {"kind":"field","table":"syn_voice_turn","name":"reference_intent_id","type":"TEXT","nullable":true,"meaning":"人工合成意图标签；无标签NULL。","references":{"table":"syn_intent_catalog","column":"intent_id"}}
 {"kind":"field","table":"syn_voice_turn","name":"label_origin","type":"TEXT","nullable":false,"meaning":"人工标签来源，至少一个参考非空才为synthetic_authored。","enum":["synthetic_authored","none"]}
-{"kind":"field","table":"syn_voice_turn","name":"locale","type":"TEXT","nullable":false,"meaning":"本轮locale。","enum":["zh-CN","en-US"]}
+{"kind":"field","table":"syn_voice_turn","name":"locale","type":"TEXT","nullable":false,"meaning":"本轮locale；轮次及轮次率分析未另指定时以本列筛语言，不等同会话locale；明确采用会话语言或其他粒度时沿原选择。","enum":["zh-CN","en-US"]}
 {"kind":"field","table":"syn_voice_turn","name":"seat_zone","type":"TEXT","nullable":false,"meaning":"输入音区。","enum":["driver","front_passenger","rear"]}
 {"kind":"field","table":"syn_voice_turn","name":"input_ms","type":"INTEGER","nullable":false,"meaning":"合成输入持续时长；无原始音频。","unit":"ms","minimum":0}
 {"kind":"field","table":"syn_voice_turn","name":"terminal_offset_ms","type":"INTEGER","nullable":false,"meaning":"从轮次起点到任务终态的单调偏移。","unit":"ms","minimum":0}

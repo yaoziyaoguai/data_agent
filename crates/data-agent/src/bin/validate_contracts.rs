@@ -13,8 +13,14 @@ fn main() {
             let valid = contracts::validate(name, &value).is_ok();
             let roundtrip = if valid {
                 match name {
+                    "AssistantOutputBinding" => serde_json::to_value(contracts::decode::<AssistantOutputBinding>(name,value).expect("generated type")).expect("serialize"),
+                    "AnswerHandoff" => serde_json::to_value(contracts::decode::<AnswerHandoff>(name,value).expect("generated type")).expect("serialize"),
+                    "AnswerPartReference" => serde_json::to_value(contracts::decode::<AnswerPartReference>(name,value).expect("generated type")).expect("serialize"),
+                    "OperationReceipt" => serde_json::to_value(contracts::decode::<OperationReceipt>(name,value).expect("generated type")).expect("serialize"),
+                    "DataToolOutcome" => serde_json::to_value(contracts::decode::<DataToolOutcome>(name,value).expect("generated type")).expect("serialize"),
                     "SourcePreparationResult" => serde_json::to_value(contracts::decode::<SourcePreparationResult>(name,value).expect("generated type")).expect("serialize"),
                     "SemanticStatement" => serde_json::to_value(contracts::decode::<SemanticStatement>(name,value).expect("generated type")).expect("serialize"),
+                    "DeliveredSupport" => serde_json::to_value(contracts::decode::<DeliveredSupport>(name,value).expect("generated type")).expect("serialize"),
                     "SourceKey" => serde_json::to_value(contracts::decode::<SourceKey>(name,value).expect("generated type")).expect("serialize"),
                     "SourceLocator" => serde_json::to_value(contracts::decode::<SourceLocator>(name,value).expect("generated type")).expect("serialize"),
                     "SourceCitation" => serde_json::to_value(contracts::decode::<SourceCitation>(name,value).expect("generated type")).expect("serialize"),
@@ -38,11 +44,18 @@ fn main() {
                     "SaveAnalysisEvidenceInput" => serde_json::to_value(contracts::decode::<SaveAnalysisEvidenceInput>(name,value).expect("generated type")).expect("serialize"),
                     "AnalysisFigure" => serde_json::to_value(contracts::decode::<AnalysisFigure>(name,value).expect("generated type")).expect("serialize"),
                     "AnalysisEvidenceRef" => serde_json::to_value(contracts::decode::<AnalysisEvidenceRef>(name,value).expect("generated type")).expect("serialize"),
+                    "KnowledgeReadInput" => serde_json::to_value(contracts::decode::<KnowledgeReadInput>(name,value).expect("generated type")).expect("serialize"),
+                    "KnowledgeReadReply" => serde_json::to_value(contracts::decode::<KnowledgeReadReply>(name,value).expect("generated type")).expect("serialize"),
+                    "SourceReadInput" => serde_json::to_value(contracts::decode::<SourceReadInput>(name,value).expect("generated type")).expect("serialize"),
+                    "SourceReadReply" => serde_json::to_value(contracts::decode::<SourceReadReply>(name,value).expect("generated type")).expect("serialize"),
+                    "KnowledgeSearchInput" => serde_json::to_value(contracts::decode::<KnowledgeSearchInput>(name,value).expect("generated type")).expect("serialize"),
+                    "KnowledgeSearchReply" => serde_json::to_value(contracts::decode::<KnowledgeSearchReply>(name,value).expect("generated type")).expect("serialize"),
                     "SearchInput" => serde_json::to_value(contracts::decode::<SearchInput>(name,value).expect("generated type")).expect("serialize"),
                     "SemanticStructure" => serde_json::to_value(contracts::decode::<SemanticStructure>(name,value).expect("generated type")).expect("serialize"),
                     "KnowledgeEdit" => serde_json::to_value(contracts::decode::<KnowledgeEdit>(name,value).expect("generated type")).expect("serialize"),
                     "SemanticCheckReport" => serde_json::to_value(contracts::decode::<SemanticCheckReport>(name,value).expect("generated type")).expect("serialize"),
                     "Checkpoint" => serde_json::to_value(contracts::decode::<Checkpoint>(name,value).expect("generated type")).expect("serialize"),
+                    "RefreshRunContext" => serde_json::to_value(contracts::decode::<RefreshRunContext>(name,value).expect("generated type")).expect("serialize"),
                     "ReadCheckpoint" => serde_json::to_value(contracts::decode::<ReadCheckpoint>(name,value).expect("generated type")).expect("serialize"),
                     "AnalysisUpdate" => serde_json::to_value(
                         contracts::decode::<AnalysisUpdate>(name, value).expect("generated type"),

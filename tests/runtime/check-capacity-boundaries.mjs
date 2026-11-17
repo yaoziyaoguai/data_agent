@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import {createServer} from 'node:http';
 import {setTimeout as delay} from 'node:timers/promises';
-import {generateSummaryWithUsage} from '@earendil-works/pi-coding-agent';
-import {isContextOverflow} from '@earendil-works/pi-ai/compat';
+import {compact, generateSummaryWithUsage} from '@earendil-works/pi-coding-agent';
+import {isContextOverflow, isRetryableAssistantError} from '@earendil-works/pi-ai/compat';
 import {guardedModelStream} from '../../apps/agent/provider/controlled.ts';
 import {providerEndpoint} from '../../apps/agent/provider/endpoint.ts';
 import {decodeContract} from '../../packages/contracts/validate.ts';
@@ -64,7 +64,7 @@ async function check(name, run) {
 }
 
 try {
-  await check('旧profile的原生摘要采用较小输出cap和调用方思考档位，旧限额不被改写', async () => {
+  await check('1.4摘要沿冻结输出能力及调用方思考档位，reserveTokens不再压低输出cap', async () => {
     const legacy = {
       provider_id: 'deepseek', model_id: 'deepseek-flash', trial_id: 'synthetic',
       price_version: '2026-10-04-peak-usd', input_limit: 65536, output_limit: 8192,
@@ -73,7 +73,7 @@ try {
     };
     decodeContract('ModelProfile', legacy);
     const sample = setup(legacy);
-    // Pi的旧reserveTokens=2048，原生历史摘要请求cap=floor(0.8*2048)=1638。
+    // 官方1.4不再以reserveTokens=2048推导1638输出帽；本次上界由冻结O=8192决定。
     const summary = await generateSummaryWithUsage(
       [{role: 'user', content: '合成的已完成分析，需要保留口径与下一步。', timestamp: 1}],
       sample.model, 2048, 'synthetic-only', undefined, undefined, undefined, undefined,
@@ -81,13 +81,25 @@ try {
     );
     assert.ok(summary.text.length > 0);
     const sent = fixture.requests.at(-1).body;
-    assert.equal(sent.max_tokens, 1638);
+    assert.equal(sent.max_tokens, 8192);
     assert.equal(sent.reasoning_effort, 'low');
     assert.equal(sent.thinking.type, 'enabled');
-    assert.equal(sample.posts.find(item => item.path.endsWith('/reserve')).input.output_tokens_max, 1638);
+    assert.equal(sample.posts.find(item => item.path.endsWith('/reserve')).input.output_tokens_max, 8192);
     assert.equal(legacy.output_limit, 8192);
     assert.equal(legacy.context_window, undefined);
     assert.equal(legacy.request_timeout_ms, undefined);
+  });
+
+  await check('SDK按上下文余量收紧wire cap，旧profile不把它覆盖回冻结O，费用可保守预留', async () => {
+    const legacy = {provider_id: 'deepseek', model_id: 'deepseek-flash', trial_id: 'synthetic', price_version: '2026-10-04-peak-usd', input_limit: 32768, output_limit: 8192, payload_bytes_limit: 131072, toolset: 'data', thinking_level: 'off'};
+    const sample = setup(legacy, {contextWindow: 16000});
+    const result = await sample.call({messages: [{role: 'user', content: 'x'.repeat(32000), timestamp: 1}]});
+    assert.equal(result.type, 'done', JSON.stringify(result));
+    const wire = fixture.requests.at(-1).body.max_tokens;
+    const reserved = sample.posts.find(item => item.path.endsWith('/reserve')).input.output_tokens_max;
+    assert.ok(wire > 0 && wire < legacy.output_limit, '最终wire cap必须保留SDK的上下文收紧');
+    assert.ok(reserved >= wire && reserved <= legacy.output_limit);
+    assert.equal(legacy.output_limit, 8192);
   });
 
   await check('可行的393216输出档能贯穿冻结profile、预留合同和实际payload', async () => {
@@ -157,6 +169,48 @@ try {
       assert.equal(isContextOverflow(error.error), false, '普通400不能伪装上下文溢出');
       assert.equal(invalid.posts.find(item => item.path.endsWith('/finalize')).input.outcome, 'permanent_error');
     } finally { fixture.setStatus(200); }
+  });
+
+  await check('1.4原生临时错误分类不把长编号中的503/429或字节数误判为可重试，billing限额保持终止', () => {
+    for (const errorMessage of ['invalid input request_id abc503def', 'request_id 14295007 exceeds allowed size 150000', 'insufficient_quota HTTP 429']) assert.equal(isRetryableAssistantError({stopReason: 'error', errorMessage}), false, errorMessage);
+    assert.equal(isRetryableAssistantError({stopReason: 'error', errorMessage: 'The service is temporarily unavailable'}), true);
+  });
+
+  await check('分段摘要逐请求预留结算，前段成功后段失败仍保留前段usage；原生重试各记一次且汇总usage不重复记账', async () => {
+    const preparation = {firstKeptEntryId: 'synthetic-kept', messagesToSummarize: [{role: 'user', content: '合成已完成历史', timestamp: 1}], turnPrefixMessages: [{role: 'user', content: '合成半轮前缀', timestamp: 1}], isSplitTurn: true, tokensBefore: 1000, fileOps: {read: new Set(), written: new Set(), edited: new Set()}, settings: {enabled: true, reserveTokens: 2048, keepRecentTokens: 64}};
+    for (const mode of ['second_fails', 'retry_then_success', 'reuse_previous']) {
+      const sample = setup(profile()), before = fixture.requests.length;
+      let calls = 0;
+      const stream = (model, context, options) => {
+        assert.equal(options.maxTokens, undefined, '1.4原生摘要不再传0.8R/0.5R输出帽');
+        calls++;
+        fixture.setStatus(mode === 'second_fails' && calls === 2 ? 400 : mode === 'retry_then_success' && calls <= 2 ? 503 : 200, 'synthetic provider error');
+        return sample.stream(model, context, options);
+      };
+      const input = structuredClone(preparation);
+      if (mode === 'reuse_previous') {input.messagesToSummarize = []; input.previousSummary = '不得新建费用记录的既有摘要';}
+      try {
+        const invoke = () => compact(input, sample.model, 'synthetic-only', undefined, undefined, undefined, 'off', stream, undefined, {enabled: true, maxRetries: 2, baseDelayMs: 1, maxAgentDelayMs: 2});
+        if (mode === 'second_fails') await assert.rejects(invoke(), /summarization|model_request_failed/i);
+        else {
+          const result = await invoke();
+          const settled = sample.posts.filter(post => post.path.endsWith('/finalize') && post.input.usage);
+          assert.equal(result.usage.input + result.usage.cacheRead + result.usage.cacheWrite, settled.reduce((sum, post) => sum + post.input.usage.input_tokens, 0));
+          assert.equal(result.usage.output, settled.reduce((sum, post) => sum + post.input.usage.output_tokens, 0));
+          if (mode === 'reuse_previous') assert.ok(result.summary.includes(input.previousSummary));
+        }
+        const expected = mode === 'retry_then_success' ? 4 : mode === 'second_fails' ? 2 : 1;
+        assert.equal(calls, expected);
+        assert.equal(fixture.requests.length - before, expected, 'HTTP层不再自行重试');
+        const reserves = sample.posts.filter(post => post.path.endsWith('/reserve'));
+        const finalizes = sample.posts.filter(post => post.path.endsWith('/finalize'));
+        assert.equal(reserves.length, expected); assert.equal(finalizes.length, expected);
+        assert.equal(new Set(reserves.map(post => post.input.call_attempt_id)).size, expected);
+        assert.ok(reserves.every(post => post.input.output_tokens_max === 8000));
+        assert.equal(finalizes.filter(post => post.input.usage).length, mode === 'retry_then_success' ? 2 : 1);
+        if (mode === 'second_fails') assert.equal(finalizes[0].input.usage.output_tokens, 25);
+      } finally {fixture.setStatus(200);}
+    }
   });
 
   await check('实际Undici dispatcher允许等待首响应并响应请求AbortSignal', async () => {

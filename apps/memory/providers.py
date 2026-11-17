@@ -29,7 +29,7 @@ class ModelGateway:
                              headers={"Authorization": "Bearer " + self.token}, json=envelope, timeout=10)
         if r.status_code != 200:
             code = r.json().get("code")
-            raise MemoryError(code if code in {"budget_exhausted", "lease_lost", "idempotency_conflict"} else "memory_unavailable")
+            raise MemoryError(code if code in {"budget_exhausted", "lease_lost", "idempotency_conflict", "memory_operation_unknown"} else "memory_unavailable")
         return r.json()
 
     def settle_pending(self):

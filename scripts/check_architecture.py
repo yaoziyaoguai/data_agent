@@ -10,8 +10,11 @@ OWNERS={
  'analysis':{'analysis_tasks','condition_revisions','clarifications','task_lifecycle_operations','analysis_evidence','analysis_evidence_operations','analysis_reports','analysis_report_revisions','analysis_report_operations'},
  'runtime':{'agent_runs','pi_checkpoints','tool_calls','assistant_outputs','output_chunks','budget_scopes','model_call_attempts','model_trials','maintenance_model_calls','model_space_settings','model_services','model_service_versions','model_definitions','model_definition_versions'},
  'jobs':{'background_jobs'},'access':{'semantic_ownership','semantic_owner_operations'},
- 'queries':{'query_requests'},'knowledge':{'knowledge_statements','knowledge_relations','knowledge_objects','knowledge_versions','knowledge_operations','semantic_change_proposals','knowledge_index_jobs','knowledge_index_rebuilds','semantic_corrections','semantic_correction_operations'},
- 'ingestion':{'source_current','catalog_sync_members','catalog_sync_pages','source_heads', 'source_sync_locks','source_snapshots','prefill_attempts','catalog_imports','catalog_platform_heads','catalog_table_snapshots','catalog_namespace_heads','table_analysis_preferences','analysis_preference_operations'},'assets':{'skill_publications','skill_suggestions','skill_drafts','personal_memory_index_jobs','personal_assets','personal_asset_versions','asset_operations','skill_selections','asset_adoptions'},'retrieval':{'retrieval_documents'},
+ 'queries':{'query_requests'},
+ # knowledge含依赖索引两张表（迁移202610240004，设计17.3归属M02）；
+ # ingestion含来源级准备进度（迁移202610240003，设计17.3归属M03）。
+ 'knowledge':{'knowledge_statements','knowledge_relations','knowledge_objects','knowledge_versions','knowledge_revisions','knowledge_operations','semantic_change_proposals','knowledge_index_jobs','knowledge_index_rebuilds','semantic_corrections','semantic_correction_operations','knowledge_dependencies','knowledge_dependency_states'},
+ 'ingestion':{'source_current','source_revisions','catalog_sync_members','catalog_sync_pages','source_heads', 'source_sync_locks','source_snapshots','prefill_attempts','catalog_imports','catalog_platform_heads','catalog_table_snapshots','catalog_namespace_heads','table_analysis_preferences','analysis_preference_operations','source_preparations'},'assets':{'skill_publications','skill_suggestions','skill_drafts','personal_memory_index_jobs','personal_assets','personal_asset_versions','asset_operations','skill_selections','asset_adoptions'},'retrieval':{'retrieval_documents','retrieval_source_projections'},
 }
 def violations(root:Path)->list[str]:
  errors=[];base=root/'crates/data-agent/src'
@@ -27,8 +30,13 @@ def violations(root:Path)->list[str]:
   sql_owner=module if path.name=='store.rs' else None
   if name.parts[0]!='persistence' and not sql_owner and re.search(r'\bsqlx::(?:query|raw_sql)|\.connection\s*\(',code):errors.append(f'{name}: SQL或底层连接位于私有store之外')
   if sql_owner:
-   for table in re.findall(r'\b(?:FROM|INTO|JOIN)\s+([a-z_]+)|\bUPDATE\s+([a-z_]+)\s+SET',source,re.I):
-    table=next(part for part in table if part)
+   # CTE引用和JSON_TABLE函数不是持久表；CTE体内的实际表仍按owner检查。
+   sql=re.sub(r'\\\n\s*',' ',source)
+   ctes={name.lower() for name in re.findall(r'(?:\bWITH(?:\s+RECURSIVE)?|,)\s*([a-z_]+)\s+AS\s*\(',sql,re.I)}
+   for match in re.finditer(r'\b(?:FROM|INTO|JOIN)\s+([a-z_]+)|\bUPDATE\s+([a-z_]+)\s+SET',sql,re.I):
+    table=next(part for part in match.groups() if part)
+    if not any(table.lower() in tables for tables in OWNERS.values()):
+     if table.lower() in ctes or (table.upper()=='JSON_TABLE' and sql[match.end():].lstrip().startswith('(')):continue
     if table.lower() not in OWNERS[sql_owner]:errors.append(f'{name}: 越界访问表 {table}')
   if name.parts[0]=='use_cases' and re.search(r'\b(?:Executor|Deref)\b|\b(?:SELECT|INSERT INTO|UPDATE [a-z_]+ SET|DELETE FROM)\b',code):errors.append(f'{name}: 协调层持有通用SQL入口')
  for directory in ('apps/api/src','apps/worker/src'):

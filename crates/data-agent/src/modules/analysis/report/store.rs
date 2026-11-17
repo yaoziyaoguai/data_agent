@@ -244,6 +244,30 @@ pub async fn read_report_in_tx(
     Ok(body)
 }
 
+/// 历史投影按引用的具体修订重建：报告head前进后旧版本正文仍可核（04切片8）。
+pub async fn read_report_revision_in_tx(
+    tx: &mut AppTx<'_>,
+    ctx: &AccessContext,
+    cid: &str,
+    report: &str,
+    version: u64,
+) -> Result<Value> {
+    let body = sqlx::query_scalar::<_, sqlx::types::Json<Value>>(
+        "SELECT r.body FROM analysis_report_revisions r JOIN analysis_reports h ON h.id=r.report_id WHERE h.owner_id=? AND h.space_id=? AND h.conversation_id=? AND h.id=? AND r.version=?",
+    )
+    .bind(&ctx.user_id)
+    .bind(&ctx.space_id)
+    .bind(cid)
+    .bind(report)
+    .bind(version)
+    .fetch_optional(tx.connection())
+    .await?
+    .ok_or(Error::new("not_available"))?
+    .0;
+    contracts::validate("AnalysisReport", &body)?;
+    Ok(body)
+}
+
 pub async fn report_ref_in_tx(tx: &mut AppTx<'_>, cid: &str, task: &str) -> Result<Option<Value>> {
     Ok(sqlx::query_scalar::<_, sqlx::types::Json<Value>>(
         "SELECT reference FROM analysis_reports WHERE conversation_id=? AND task_id=?",

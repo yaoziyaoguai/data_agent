@@ -10,7 +10,7 @@ import { decodeContract } from "../../../../../packages/contracts/validate.ts";
 import { WorkspaceShell, type View } from "../../shared/WorkspaceShell.tsx";
 import { Icon } from "../../shared/Icon.tsx";
 import { Modal } from "../../shared/Modal.tsx";
-import { conversationItems, displayUserMessage, mergeSnapshot } from "./conversation-timeline.ts";
+import { conversationItems, displayUserMessage, loadedOutputRanges, mergeSnapshot } from "./conversation-timeline.ts";
 import { SkillSelections } from "./SkillSelections.tsx";
 import { conversationTitle } from "./conversation-title.ts";
 import { QueryCard } from "./QueryCard.tsx";
@@ -68,6 +68,7 @@ export function Workbench({
   const [pendingError, setPendingError] = useState("");
   const [unavailableSubmissionDraft, setUnavailableSubmissionDraft] = useState<string | null>(null);
   const requestRefresh = useRef<() => void>(() => {});
+  const requestOlder = useRef<() => void>(() => {});
   const sendingRef = useRef(false);
   const mounted = useRef(true);
   const snapshotRef = useRef<Snapshot | null>(null);
@@ -155,41 +156,85 @@ export function Workbench({
     setText(localStorage.getItem(draftKey(cid)) ?? "");
     if (cid) localStorage.setItem(conversationStorageKey(space, user), cid);
     else localStorage.removeItem(conversationStorageKey(space, user));
-    let refreshing = false;
+    let snapshotBusy = false;
     let refreshAgain = false;
+    let olderRequested = false;
+    let queryBusy = false;
+    let snapshotUnavailable = false;
+    let queriesUnavailable = false;
+    let latestQueries: QueryList = { queries: [], confirmation_blocked: false };
+    const controller = new AbortController();
     let quietCycles = 0;
     let timer: number | undefined;
     let activeUntil = 0;
     const schedule = (delay: number) => {
       window.clearTimeout(timer);
-      if (current && cid && !document.hidden) timer = window.setTimeout(() => void refresh(), delay);
+      if (current && cid && !document.hidden) timer = window.setTimeout(() => void readSnapshot(), delay);
     };
-    const refresh = async () => {
-      if (!cid || !current || document.hidden) return;
-      if (refreshing) { refreshAgain = true; return; }
-      refreshing = true;
-      let active = false;
+    const refreshQueries = async () => {
+      if (queryBusy || !cid) return;
+      queryBusy = true;
       try {
-        const [s, q] = await Promise.all([
-          api("Snapshot", "/conversations/" + cid + "/snapshot" + (snapshotRef.current?.last_event_seq ? "?after_seq=" + snapshotRef.current.last_event_seq : "")),
-          api("QueryList", "/conversations/" + cid + "/queries"),
-        ]);
+        const q = await api("QueryList", "/conversations/" + cid + "/queries", "GET", undefined, undefined, controller.signal);
         if (current) {
-          const previous = snapshotRef.current;
-          snapshotRef.current = mergeSnapshot(previous, s);
-          setSnapshot(snapshotRef.current);
+          latestQueries = q;
           setQueries(old => JSON.stringify(old) === JSON.stringify(q) ? old : q);
-          setSyncUnavailable(false);
-          active = s.runs.some(run => run.state === "running") || q.queries.some(query => ["queued", "submitting", "submission_unknown", "running"].includes(query.execution_state));
-          quietCycles = active ? 0 : quietCycles + 1;
+          queriesUnavailable = false;
+          setSyncUnavailable(snapshotUnavailable);
         }
       } catch {
-        if (current) setSyncUnavailable(true);
+        if (current) { queriesUnavailable = true; setSyncUnavailable(true); }
+      } finally { queryBusy = false; }
+    };
+    const readSnapshot = async (older = false) => {
+      if (!cid || !current || (!older && document.hidden)) return;
+      if (older && !snapshotRef.current?.has_older) return;
+      if (snapshotBusy) {
+        if (older) { olderRequested = true; setLoadingOlder(true); }
+        else refreshAgain = true;
+        return;
+      }
+      snapshotBusy = true;
+      window.clearTimeout(timer);
+      if (older) setLoadingOlder(true);
+      else void refreshQueries();
+      let active = false;
+      try {
+        // 取得读取门后才捕获范围/指纹，前次响应必须已经合并。
+        const previous = snapshotRef.current;
+        const s = await api("SnapshotRefresh", "/conversations/" + cid + "/snapshot", "POST", {
+          loaded_outputs: previous ? loadedOutputRanges(previous) : [],
+          ...(older ? { before_seq: previous!.first_event_seq } : previous?.last_event_seq ? { after_seq: previous.last_event_seq } : {}),
+        }, undefined, controller.signal);
+        if (current) {
+          snapshotRef.current = mergeSnapshot(snapshotRef.current, s, older);
+          setSnapshot(snapshotRef.current);
+          snapshotUnavailable = false;
+          setSyncUnavailable(queriesUnavailable);
+          active = s.runs.some(run => run.state === "running") || latestQueries.queries.some(query => ["queued", "submitting", "submission_unknown", "running"].includes(query.execution_state));
+          quietCycles = active ? 0 : quietCycles + 1;
+        }
+      } catch (e) {
+        if (current) {
+          snapshotUnavailable = true;
+          setSyncUnavailable(true);
+          if (older) setError(String(e));
+        }
         quietCycles++;
       } finally {
-        refreshing = false;
-        if (refreshAgain) { refreshAgain = false; schedule(0); }
-        else schedule(active || Date.now() < activeUntil ? 700 : quietCycles < 2 ? 1500 : quietCycles < 3 ? 5000 : 15000);
+        snapshotBusy = false;
+        if (older && current) setLoadingOlder(false);
+        if (current) {
+          if (olderRequested && snapshotRef.current?.has_older) {
+            olderRequested = false;
+            void readSnapshot(true);
+          } else {
+            if (olderRequested) setLoadingOlder(false);
+            olderRequested = false;
+            if (refreshAgain) { refreshAgain = false; void readSnapshot(); }
+            else schedule(active || Date.now() < activeUntil ? 700 : quietCycles < 2 ? 1500 : quietCycles < 3 ? 5000 : 15000);
+          }
+        }
       }
     };
     const wake = () => {
@@ -197,14 +242,17 @@ export function Workbench({
       if (document.hidden) return;
       quietCycles = 0;
       activeUntil = Date.now() + 3000;
-      void refresh();
+      void readSnapshot();
     };
     requestRefresh.current = wake;
-    void refresh();
+    requestOlder.current = () => { void readSnapshot(true); };
+    void readSnapshot();
     window.addEventListener("focus", wake);
     document.addEventListener("visibilitychange", wake);
     return () => {
       current = false;
+      controller.abort();
+      requestOlder.current = () => {};
       window.clearTimeout(timer);
       window.removeEventListener("focus", wake);
       document.removeEventListener("visibilitychange", wake);
@@ -253,8 +301,9 @@ export function Workbench({
       requestRefresh.current();
       void refreshHistory().catch(() => { if (mounted.current) setError("消息已保存，暂时无法更新会话列表。"); });
     } catch (e) {
-      // 参数明确被拒绝时事务未保存消息；网络错误和未知回执必须继续使用原操作身份。
-      const rejected = messageAttempted && e instanceof ApiError && e.code === "invalid_input";
+      // 参数或模型明确被拒绝时事务未保存消息；网络错误和未知回执仍沿原操作身份。
+      const rejected = messageAttempted && e instanceof ApiError
+        && (e.code === "invalid_input" || e.code === "model_unavailable");
       const unavailable = messageAttempted && e instanceof ApiError && e.code === "not_available";
       if (rejected || unavailable) clearPendingSubmission(submission);
       if (mounted.current) {
@@ -294,26 +343,7 @@ export function Workbench({
       await sendPending(submission);
     } catch (e) { setError(e instanceof Error ? e.message : "无法保存待发送消息，请保留当前草稿。"); }
   };
-  const loadOlder = async () => {
-    if (!cid || !snapshot || loadingOlder) return;
-    const generation = viewGeneration.current;
-    setLoadingOlder(true);
-    const before = snapshot.first_event_seq;
-    try {
-      const page = await api(
-        "Snapshot",
-        "/conversations/" + cid + "/snapshot?before_seq=" + before,
-      );
-      if (viewGeneration.current === generation) {
-        snapshotRef.current = mergeSnapshot(snapshotRef.current, page, true);
-        setSnapshot(snapshotRef.current);
-      }
-    } catch (e) {
-      if (viewGeneration.current === generation) setError(String(e));
-    } finally {
-      if (viewGeneration.current === generation) setLoadingOlder(false);
-    }
-  };
+  const loadOlder = () => { if (!loadingOlder) requestOlder.current(); };
   const withdraw = async (message: string) => {
     if (!cid) return;
     try {
@@ -353,6 +383,18 @@ export function Workbench({
         ),
     ) ?? [];
   const currentRun = snapshot?.runs.find((r) => r.state === "running");
+  // 阶段提示只看最新run与当前attempt；旧轮取消/失败历史沿原消息保留，不再以"本次"名义常驻。
+  const latestRun = snapshot?.runs.at(-1);
+  const currentAttemptStarted = currentRun?.attempt_id != null && (snapshot?.events.some(
+    (e) => (e.type === "assistant_delta" || e.type === "assistant_committed") && e.payload.attempt_id === currentRun.attempt_id,
+  ) ?? false);
+  const activityText = currentRun
+    ? currentRun.purpose === "query_result"
+      ? "正在解读查询结果"
+      : currentAttemptStarted
+        ? "正在生成回答"
+        : "正在处理本次请求"
+    : undefined;
   const cancel = async () => {
     if (!cid || !currentRun) return;
     try {
@@ -500,12 +542,12 @@ export function Workbench({
                 </button>
               </p>
             ))}
-            {snapshot.runs.some((r) => r.state === "failed") && (
+            {latestRun?.state === "failed" && (
               <p className="error">
                 有一轮处理失败，已保存的记录仍可回看。可补充消息继续。
               </p>
             )}
-            {snapshot.runs.some((r) => r.state === "cancelled") && (
+            {latestRun?.state === "cancelled" && (
               <p className="quiet" role="status">
                 本次生成已停止，已保存的消息仍可查看。
               </p>
@@ -513,7 +555,7 @@ export function Workbench({
             {currentRun && (
               <div className="activity" role="status">
                 <i />
-                正在查阅资料并分析{" "}
+                {activityText}{" "}
                 <button onClick={() => void cancel()}>停止生成</button>
               </div>
             )}

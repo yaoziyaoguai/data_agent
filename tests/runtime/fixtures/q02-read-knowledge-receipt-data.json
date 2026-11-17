@@ -1,0 +1,56 @@
+{
+ "items": [
+  {
+   "ref": {
+    "path": "definition",
+    "version": "1",
+    "object_id": "metric-paying_customers"
+   },
+   "kind": "knowledge",
+   "state": "ok",
+   "content": "### 5.2 月支付客户数\n\n- 指标标识：`paying_customers`\n- 别名：UV 支付客户 月客户\n- 在整个月的已支付、非测试行上执行 `COUNT(DISTINCT customer_id)`。\n- 同一客户多次下单、多行商品只计一次；匿名客户不计已知客户数。\n- 全额退款客户仍曾成功付款，保留在该指标内；如用户要求“未全退客户”，属于不同口径，需要明确。\n- 不能把每天的客户数相加得到月客户数；同一客户可能跨天出现。\n\n计算 SQL（本说明人工制定的合成指标定义，时间参数含义同上）：\n\n```sql\nSELECT COUNT(DISTINCT customer_id) AS paying_customers\nFROM demo_order_detail\nWHERE is_test = 0 AND paid_amount_cents > 0\n  AND paid_at >= :start AND paid_at < :end;\n```",
+   "supports": [],
+   "citations": [],
+   "content_page": {
+    "offset": 0,
+    "complete": true,
+    "next_offset": null,
+    "total_chars": 434
+   },
+   "continuation": {
+    "content_next_offset": null,
+    "supports_next_cursor": null
+   },
+   "content_state": "complete",
+   "support_state": "unknown",
+   "supports_total": 0,
+   "supports_complete": null
+  },
+  {
+   "ref": {
+    "path": "body",
+    "version": "1",
+    "object_id": "document-guide-4"
+   },
+   "kind": "knowledge",
+   "state": "ok",
+   "content": "| 字段 | 类型 | 业务含义与注意事项 |\n| --- | --- | --- |\n| `order_id` | TEXT | 虚构订单标识；订单数应去重 |\n| `line_id` | INTEGER | 订单内行号，和订单号一起唯一 |\n| `customer_id` | TEXT，可空 | 已知客户标识；空值表示匿名购买，不能补成一个统一客户参与 UV |\n| `product_id` | TEXT | 虚构商品标识，不提供商品分类维表 |\n| `quantity` | INTEGER | 下单件数；没有单独的退货件数，不能推导净售出件数 |\n| `paid_amount_cents` | INTEGER | 成功付款累计金额，已分摊到当前行，整数分 |\n| `refunded_amount_cents` | INTEGER | 截至快照的成功退款累计金额，已分摊到当前行，整数分 |\n| `paid_at` | TEXT，可空 | 当前行首笔成功付款时刻，UTC；收入和支付客户的默认时间依据 |\n| `order_date` | TEXT | UTC 下单日期；用于下单分析，不是支付收入的默认日期 |\n| `channel` | TEXT | `web`=网页、`app`=应用、`store`=门店 |\n| `region` | TEXT，可空 | 当前客户快照地区；空值在展示上可以叫“未知”，存储保留 NULL |\n| `is_test` | INTEGER | 1 为测试交易，0 为普通交易；业务统计默认只取 0，明确查测试交易时可改 |\n| `order_status` | TEXT | 加工状态：当前行 `source_status=cancelled` 时优先标为 `cancelled`；其余行按整单金额汇总标为 `unpaid`、`refunded` 或 `paid` |\n\n`order_status` 同时使用行级状态和订单级金额：先判断当前行是否取消；未取消的行再按整单成功付款合计为 0、整单成功退款等于付款、其余情况，依次标为 `unpaid`、`refunded`、`paid`。同一订单的非取消行共享金额判定，但只要行级取消状态不同，最终状态就可能不同。DDL 和本说明没有规定同订单的 `source_status` 必须一致；不能从订单级汇总推导所有行状态相同。\n\n同一订单的某行全部退款，整单仍可能只是部分退款。判断一行退款金额应看金额字段，不能把 `order_status='refunded'` 当作“出现过退款”的过滤条件。`cancelled` 分支不检查支付金额或时间；取消是否意味着没有成功付款，不能仅由状态字段推断。",
+   "supports": [],
+   "citations": [],
+   "content_page": {
+    "offset": 0,
+    "complete": true,
+    "next_offset": null,
+    "total_chars": 1150
+   },
+   "continuation": {
+    "content_next_offset": null,
+    "supports_next_cursor": null
+   },
+   "content_state": "complete",
+   "support_state": "unknown",
+   "supports_total": 0,
+   "supports_complete": null
+  }
+ ]
+}

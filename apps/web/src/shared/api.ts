@@ -20,10 +20,12 @@ export async function api<N extends keyof ContractTypes>(
   method = "GET",
   body?: unknown,
   token?: string,
+  signal?: AbortSignal,
 ): Promise<ContractTypes[N]> {
   const response = await fetch("/api" + path, {
     method,
     credentials: "same-origin",
+    signal,
     headers: {
       "content-type": "application/json",
       ...(token ? { authorization: "Bearer " + token } : {}),

@@ -305,6 +305,12 @@ pub async fn change(
                 None,
             )
             .await?;
+            super::dependency_registration::after_content_saved_in_tx(
+                &mut tx,
+                ctx,
+                std::slice::from_ref(&saved),
+            )
+            .await?;
             v["state"] = json!("applied");
             v["applied_version"] = saved["version"].clone();
             v["applied_value"] = input["value"].clone();

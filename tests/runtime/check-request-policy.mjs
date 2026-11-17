@@ -7,6 +7,7 @@ import { deliver } from '../../apps/agent/session/deliver.ts';
 import { exportCheckpoint } from '../../apps/agent/session/checkpoint.ts';
 import { guardedDeepSeekStream } from '../../apps/agent/provider/deepseek.ts';
 import { RustTransport } from '../../apps/agent/transport/client.ts';
+import { validateContract } from '../../packages/contracts/validate.ts';
 import { harness, until } from '../mvp/harness.mjs';
 
 const profile = { provider_id: 'deepseek', model_id: 'deepseek-flash', trial_id: randomUUID(),
@@ -74,6 +75,11 @@ try {
     assert.deepEqual(h.sql(`USE ${migrationDatabase}; SELECT JSON_OBJECT('used',issued_calls,'limit',call_limit,'failures',model_failure_streak) FROM budget_scopes`)[0], { used: 2, limit: 6, failures: 0 });
     assert.deepEqual(h.sql(`USE ${migrationDatabase}; SELECT JSON_OBJECT('state',state,'reserved',reserved_micros,'outcome',outcome) FROM model_call_attempts`)[0], { state: 'unknown', reserved: 2458, outcome: null });
     check('实际旧schema账本迁移保留额度/已用/未知预留/到期/配置指纹');
+    h.sql(`USE ${migrationDatabase};\n` + await readFile('migrations/202611140001_open_request_scopes.sql', 'utf8'));
+    assert.deepEqual(h.sql(`USE ${migrationDatabase}; SELECT JSON_OBJECT('used',issued_calls,'limit',call_limit) FROM budget_scopes WHERE id='old-scope'`)[0], { used: 2, limit: 6 });
+    h.sql(`USE ${migrationDatabase}; INSERT INTO budget_scopes(id,call_limit,issued_calls) VALUES('open-scope',NULL,0)`);
+    assert.deepEqual(h.sql(`USE ${migrationDatabase}; SELECT JSON_OBJECT('limit',call_limit) FROM budget_scopes WHERE id='open-scope'`)[0], { limit: null });
+    check('正常scope累计上限迁移为可省略，旧scope数字原样冻结');
   } finally { h.sql(`DROP DATABASE ${migrationDatabase}`); }
 
   const row = h.sql(`SELECT JSON_OBJECT('calls',call_limit,'cost',cost_limit_micros,'expires',expires_at) FROM model_trials WHERE id='${profile.trial_id}'`)[0];
@@ -81,6 +87,12 @@ try {
   await h.restartApi();
   assert.deepEqual(h.sql(`SELECT JSON_OBJECT('calls',call_limit,'cost',cost_limit_micros,'expires',expires_at) FROM model_trials WHERE id='${profile.trial_id}'`)[0], row);
   check('正常配置无累计次数/金额/一小时门槛，重启保持同一账本');
+
+  const { request_call_limit: historicalCap, ...openProfile } = profile;
+  assert.equal(historicalCap, 24);
+  validateContract('ModelProfile', openProfile);
+  validateContract('EmbeddingProfile', { trial_id: 'embedding-maintenance' });
+  check('省略累计调用上限的正常模型与普通维护embedding配置合同合法');
 
   let run = await begin(); actions = [503, 429, 'tool', 503, 503, 'answer']; const before = network.length;
   await execute(run);
@@ -189,12 +201,12 @@ try {
   check('退避/发送中取消与SDK options.signal取消均不重试，不增加或清空原失败计数');
 
   run = await begin(); const capStart = network.length; actions = Array(25).fill('answer');
-  for (let i = 0; i < 24; i++) assert.equal((await once(run)).stopReason, 'stop');
-  assert.equal((await once(run)).errorMessage, 'model_budget_exhausted');
-  assert.equal(network.length - capStart, 24); assert.equal(ledger(run).calls, 24);
-  await h.restartApi(); assert.equal((await once(run)).errorMessage, 'model_budget_exhausted');
-  assert.equal(network.length - capStart, 24); await close(run);
-  check('正常24次实际HTTP获准，第25次与重启后的再次调用均在发送前拒绝');
+  for (let i = 0; i < 25; i++) assert.equal((await once(run)).stopReason, 'stop');
+  assert.equal(network.length - capStart, 25); assert.equal(ledger(run).calls, 25);
+  assert.equal(ledger(run).limit, null);
+  await h.restartApi(); assert.equal((await once(run)).stopReason, 'stop');
+  assert.equal(network.length - capStart, 26); await close(run);
+  check('正常任务无累计调用上限，25次探针全部获准，历史24字段与重启不再封顶');
 
   run = await begin();
   h.sql(`UPDATE model_trials SET cost_limit_micros=1 WHERE id='${profile.trial_id}'`);
@@ -205,8 +217,8 @@ try {
 
   run = await begin(); const manager = SessionManager.inMemory('/synthetic/data-agent');
   const usage = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } };
-  for (let i = 0; i < 16; i++) {
-    manager.appendMessage({ role: 'user', content: [{ type: 'text', text: '合成语义说明'.repeat(167) }], timestamp: Date.now() });
+  for (let i = 0; i < 4; i++) {
+    manager.appendMessage({ role: 'user', content: [{ type: 'text', text: '合成语义说明'.repeat(40) }], timestamp: Date.now() });
     manager.appendMessage({ role: 'assistant', content: [{ type: 'text', text: '已记录。' }], api: 'openai-completions', provider: 'local_mock', model: 'task_demo', stopReason: 'stop', usage, timestamp: Date.now() });
   }
   run.checkpoint = exportCheckpoint(manager); actions = ['tool', 'answer', 503, 503, 'answer']; const summaryStart = network.length;

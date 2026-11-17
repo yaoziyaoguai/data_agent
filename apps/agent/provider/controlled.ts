@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import {
   createAssistantMessageEventStream,
+  getCurrentTools,
   type Api,
   type Model,
   type SimpleStreamOptions,
@@ -12,11 +13,9 @@ import { streamSimple as anthropic } from "@earendil-works/pi-ai/api/anthropic-m
 import { isContextOverflow, isRetryableAssistantError } from "@earendil-works/pi-ai/compat";
 import type {
   FinalizeModelCall,
-  ModelCallReceipt,
   ModelProfile,
 } from "../../../packages/contracts/generated/boundary.ts";
-import { decodeContract } from "../../../packages/contracts/validate.ts";
-import { RustTransport } from "../transport/client.ts";
+import { rustRequestFailure, RustTransport } from "../transport/client.ts";
 import contractSchema from "../../../packages/contracts/schema.json" with { type: "json" };
 import { providerEndpoint } from "./endpoint.ts";
 import { providerUsage } from "./usage.ts";
@@ -24,6 +23,7 @@ import { effectiveOutputCap, planForProfile } from "../../../packages/contracts/
 const dataToolNames = new Set<string>(
   contractSchema.$defs.DataToolInvocation.properties.tool_name.enum,
 );
+const diagnosticCodes = new Set<string>(contractSchema.$defs.AppError.properties.code.enum);
 export interface ModelConnection {
   apiKey: string;
   baseUrl: string;
@@ -38,7 +38,7 @@ export function guardedModelStream(
   profile: ModelProfile,
   connection: ModelConnection,
   runSignal: AbortSignal,
-  checkCapacity?: () => void,
+  checkCapacity?: (context: TranscriptContext) => void,
 ) {
   // 超时随模型修订冻结；历史profile缺字段维持90秒，新大窗口配置可达600秒。
   const timeoutMs = connection.protocolTest
@@ -66,6 +66,29 @@ export function guardedModelStream(
       let endpoint: ReturnType<typeof providerEndpoint> | undefined;
       let settlement: FinalizeModelCall | undefined;
       let outcome: FinalizeModelCall["outcome"];
+      const phase: { current: 'payload' | 'reserve' | 'send' | 'provider'; started: number } = {
+        current: 'payload', started,
+      };
+      const diagnosed = new Set<string>();
+      const diagnose = (error: unknown, failedStage: typeof phase.current | 'finalize',
+        path: string | null, elapsedMs: number) => {
+        if (diagnosed.has(failedStage)) return;
+        diagnosed.add(failedStage);
+        const host = rustRequestFailure(error);
+        const reason = host?.reason
+          ?? (error instanceof Error && diagnosticCodes.has(error.message) ? error.message
+          : error instanceof Error && error.name === 'TimeoutError' ? 'timeout'
+          : error instanceof TypeError ? 'network' : 'other');
+        console.error(JSON.stringify({
+          event: 'model_dispatch_failed', stage: failedStage,
+          run_id: transport.run.run_id, call_attempt_id,
+          path: host?.path ?? path,
+          elapsed_ms: host?.elapsedMs ?? elapsedMs,
+          reserved, sent,
+          http_status: host ? host.status : failedStage === 'provider' ? status || null : null,
+          reason,
+        }));
+      };
       const binding = () => ({
         ...transport.binding(),
         call_attempt_id,
@@ -112,24 +135,25 @@ export function guardedModelStream(
             : null,
           ...(outcome ? { outcome } : {}),
         };
+        let failure: unknown;
+        const finalizeStarted = Date.now();
         for (let attempt = 0; attempt < 2; attempt++) {
           try {
-            const receipt = decodeContract<ModelCallReceipt>(
-              "ModelCallReceipt",
-              await transport.post(
-                "/internal/model/finalize",
-                "FinalizeModelCall",
-                settlement,
-              ),
+            const receipt = await transport.post(
+              "/internal/model/finalize",
+              "FinalizeModelCall",
+              settlement,
             );
             if (receipt.state !== (settlement.usage ? "settled" : "unknown"))
               throw new Error("model_finalize_invalid");
             finalized = true;
             return true;
-          } catch {
-            /* 只重送宿主幂等结算，不重发模型请求。 */
+          } catch (error) {
+            // 只重送宿主幂等结算；恢复成功时不把中间丢包报告为运行失败。
+            failure = error;
           }
         }
+        diagnose(failure, 'finalize', '/internal/model/finalize', Date.now() - finalizeStarted);
         return false;
       }
 
@@ -166,27 +190,39 @@ export function guardedModelStream(
           .digest("hex");
         if (actual !== parameters_fingerprint)
           throw new Error("provider_parameters_changed");
-        const permission = decodeContract<ModelCallReceipt>(
-          "ModelCallReceipt",
-          await transport.post(
+        phase.current = 'send';
+        phase.started = Date.now();
+        try {
+          const permission = await transport.post(
             "/internal/model/send",
             "SendModelCall",
             binding(),
-          ),
-        );
-        if (!permission.send_allowed) throw new Error("model_receipt_unknown");
+          );
+          if (!permission.send_allowed) throw new Error("model_receipt_unknown");
+        } catch (error) {
+          diagnose(error, phase.current, '/internal/model/send', Date.now() - phase.started);
+          throw error;
+        }
         sent = true;
-        const response = await endpoint!.fetch(input, {
-          ...init,
-          signal,
-          redirect: "error",
-        });
-        status = response.status;
-        return response;
+        phase.current = 'provider';
+        phase.started = Date.now();
+        try {
+          const response = await endpoint!.fetch(input, {
+            ...init,
+            signal,
+            redirect: "error",
+          });
+          status = response.status;
+          return response;
+        } catch (error) {
+          diagnose(error, phase.current, connection.api === 'openai-responses' ? '/responses'
+            : connection.api === 'openai-completions' ? '/chat/completions' : '/v1/messages', Date.now() - phase.started);
+          throw error;
+        }
       };
 
       try {
-        checkCapacity?.();
+        checkCapacity?.(context);
         endpoint = providerEndpoint(
           connection.baseUrl,
           connection.protocolTest,
@@ -223,7 +259,6 @@ export function guardedModelStream(
             if (!profile.configured_model)
               Object.assign(payload, {
                 model: profile.model_id,
-                max_tokens: outputCap,
                 thinking: {
                   type:
                     streamOptions.reasoning
@@ -232,6 +267,18 @@ export function guardedModelStream(
                 },
                 stream_options: { include_usage: true },
               });
+            if (connection.api === 'anthropic-messages' && profile.toolset === 'data') {
+              const task = getCurrentTools(context.messages).find(tool => tool.name === 'update_analysis_task');
+              // Pi非strict只取根properties/required；仅投影已核的任务合同，条件约束仍由Node/Rust执行。
+              const branches = (task?.parameters as Record<string, unknown> | undefined)?.allOf as {type?: string; properties?: Record<string, unknown>; required?: string[]}[] | undefined;
+              if (branches) {
+                const fields = branches[0], required = branches.at(-1)?.required;
+                if (![2, 3].includes(branches.length) || fields?.type !== 'object' || !fields.properties?.action || !required)
+                  throw new Error('provider_payload_invalid');
+                const serializedTask = payload.tools?.find((tool: {name?: string}) => tool.name === 'update_analysis_task');
+                if (serializedTask) serializedTask.input_schema = {type: 'object', properties: fields.properties, required};
+              }
+            }
             const requestedOutputCap =
               connection.api === "openai-responses"
                 ? payload.max_output_tokens
@@ -292,7 +339,7 @@ export function guardedModelStream(
               // 使用完整协议投影的字符估算（不是精确分词）；工具、临时上下文和转义均在其中。
               // 正常请求在预留线前交Pi原生compact-and-retry；摘要本身仍受I与C约束。
               const estimatedInput = Math.ceil(JSON.stringify(payload).length / 4);
-              const inputCap = payload.tools?.length
+              const inputCap = getCurrentTools(context.messages).length > 0
                 ? capacity.trigger
                 : Math.min(profile.input_limit, capacity.contextWindow - requestedOutputCap);
               if (estimatedInput > inputCap)
@@ -301,6 +348,8 @@ export function guardedModelStream(
             parameters_fingerprint = createHash("sha256")
               .update(JSON.stringify(payload))
               .digest("hex");
+            phase.current = 'reserve';
+            phase.started = Date.now();
             try {
               await transport.post(
                 "/internal/model/reserve",
@@ -308,11 +357,12 @@ export function guardedModelStream(
                 {
                   ...binding(),
                   input_tokens_upper: profile.input_limit,
-                  // 金额预留按本次实际输出cap；摘要请求不被按全额预留，也不放大约束。
+                  // 按三层调用上界保守预留；SDK可能进一步收紧wire cap，结算仍按本次真实usage。
                   output_tokens_max: outputCap,
                 },
               );
             } catch (error) {
+              diagnose(error, phase.current, '/internal/model/reserve', Date.now() - phase.started);
               if (
                 error instanceof Error &&
                 error.message === "budget_exhausted"
@@ -330,6 +380,8 @@ export function guardedModelStream(
               throw error;
             }
             reserved = true;
+            phase.current = 'payload';
+            phase.started = Date.now();
             return payload;
           },
         };
@@ -399,6 +451,10 @@ export function guardedModelStream(
             )
               code = "model_network_error";
             if (retryable(code) && rawUsage) code = "model_usage_unknown";
+            diagnose(new Error(code), phase.current, phase.current === 'provider'
+              ? connection.api === 'openai-responses' ? '/responses'
+                : connection.api === 'openai-completions' ? '/chat/completions' : '/v1/messages'
+              : null, Date.now() - phase.started);
             const canRetry = retryable(code) && !rawUsage;
             // 取消也可能来自进程交接；只终止当前调用，不把原请求熔断。
             outcome = cancelled()
@@ -418,6 +474,11 @@ export function guardedModelStream(
           }
         }
       } catch (error) {
+        diagnose(error, error instanceof Error && error.message === 'model_finalize_unconfirmed' ? 'finalize' : phase.current,
+          phase.current === 'provider'
+          ? connection.api === 'openai-responses' ? '/responses'
+            : connection.api === 'openai-completions' ? '/chat/completions' : '/v1/messages'
+          : null, Date.now() - phase.started);
         if (!cancelled()) outcome ??= "permanent_error";
         await finalize();
         const reason = cancelled() ? ("aborted" as const) : ("error" as const);
@@ -460,13 +521,6 @@ export function guardedModelStream(
         stream.push({ type: "error", reason, error: message });
       } finally {
         await finalize();
-        if (reserved && sent && !finalized)
-          console.error(
-            "model_finalize_unconfirmed run=" +
-              transport.run.run_id +
-              " attempt=" +
-              call_attempt_id,
-          );
         stream.end();
         await endpoint?.close();
       }

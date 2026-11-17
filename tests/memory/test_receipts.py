@@ -96,6 +96,25 @@ class ReceiptTests(unittest.TestCase):
         with self.assertRaisesRegex(MemoryError, "idempotency_conflict"):
             self.service.extract({**self.message, "quote": "其他指令"})
 
+    def test_revision_context_reaches_sdk_and_is_bound_to_replay(self):
+        previous = {"id": "asset-1", "version": "1",
+                    "body": "仅合成设备周报默认用毫秒，个人展示不改变共享指标。",
+                    "scope": "仅合成设备周报，其他报表不适用。"}
+        message = "把刚才的默认改成秒，三位小数；当次要求毫秒优先。"
+        request = {**self.message, "message": message, "quote": message,
+                   "previous_memory": previous}
+        first = self.service.extract(request)
+        messages, options = self.service.memory.add_calls[0]
+        self.assertEqual(messages, [{"role": "user", "content": message}])
+        self.assertIn(previous["body"], options["prompt"])
+        self.assertIn(previous["scope"], options["prompt"])
+        self.assertIn(message, options["prompt"])
+        self.assertEqual(self.service.extract(request)["body"], first["body"])
+        self.assertEqual(len(self.service.memory.add_calls), 1)
+        with self.assertRaisesRegex(MemoryError, "idempotency_conflict"):
+            self.service.extract({**request, "previous_memory": {**previous, "version": "2"}})
+        self.assertEqual(len(self.service.memory.add_calls), 1)
+
     def test_unknown_extraction_is_not_reissued(self):
         self.service.memory.fail_extract = True
         for _ in range(2):

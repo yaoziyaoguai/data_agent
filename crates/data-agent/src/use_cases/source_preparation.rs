@@ -11,7 +11,7 @@ use crate::{
     types::{AccessContext, Error, Result, fingerprint, id},
 };
 use serde_json::{Value, json};
-use sqlx::{MySqlPool, Row};
+use sqlx::MySqlPool;
 use std::time::Duration;
 
 // 后台来源整理：按修订分批消费prepare_source作业，分析/复核复用原维护预算与
@@ -58,6 +58,20 @@ pub async fn process_due(pool: &MySqlPool) -> Result<bool> {
         if error.code == "lease_lost" || error.code == "busy" {
             return Ok(true);
         }
+        // 终态会清掉冻结输入、草稿与阶段，先输出受控诊断，不保留模型正文。
+        let context = error
+            .message
+            .as_deref()
+            .filter(|message| message.starts_with("stage="))
+            .unwrap_or("stage=preparation sequence=unknown call=unknown");
+        eprintln!(
+            "source_preparation_failure source={} revision={:?} method={} code={} {}",
+            job.resource_id,
+            job.resource_version,
+            ingestion::preparation::PREPARATION_METHOD,
+            error.code,
+            context
+        );
         let transient = error.is_transient_storage();
         if transient && job.lease.attempts < 2 {
             let mut tx = AppTx::begin(pool).await?;
@@ -78,12 +92,20 @@ pub async fn process_due(pool: &MySqlPool) -> Result<bool> {
             }
             tx.commit().await?;
         }
-        eprintln!(
-            "source_preparation_failure source={} revision={:?} code={}",
-            job.resource_id, job.resource_version, error.code
-        );
     }
     Ok(true)
+}
+
+// 只接回本整理校验器生成的reason；其他模块的任意错误正文不进入日志。
+fn stage_failure(mut error: Error, stage: &str, sequence: u64, call: &str) -> Error {
+    let reason = error
+        .message
+        .take()
+        .filter(|message| message.starts_with("reason="))
+        .unwrap_or_else(|| format!("reason={}", error.code));
+    error.with_message(format!(
+        "stage={stage} sequence={sequence} call={call} {reason}"
+    ))
 }
 
 async fn prepare_source(pool: &MySqlPool, job: &jobs::SourceJob) -> Result<()> {
@@ -97,34 +119,12 @@ async fn prepare_source(pool: &MySqlPool, job: &jobs::SourceJob) -> Result<()> {
     loop {
         let mut tx = AppTx::begin(pool).await?;
         jobs::assert_job_in_tx(&mut tx, &job.lease.id, job.lease.lease_epoch).await?;
-        // document-来源的正文与版本由文档对象持有，不在source_heads登记。
-        let head = if let Some(document) = super::knowledge_sources::document_id(&source_id) {
-            sqlx::query(
-                "SELECT space_id,version FROM knowledge_objects WHERE id=? AND state='enabled'",
-            )
-            .bind(document)
-            .fetch_optional(tx.connection())
-            .await?
-            .map(|row| {
-                (
-                    row.get::<String, _>("space_id"),
-                    row.get::<u64, _>("version"),
-                )
-            })
-        } else {
-            sqlx::query("SELECT space_id,version FROM source_heads WHERE id=?")
-                .bind(&source_id)
-                .fetch_optional(tx.connection())
-                .await?
-                .map(|row| {
-                    (
-                        row.get::<String, _>("space_id"),
-                        row.get::<u64, _>("version"),
-                    )
-                })
-        };
+        // 来源当前头：document-来源由文档对象持有，平台来源在source_heads。
+        let head = super::knowledge_sources::resolve_source_head_in_tx(&mut tx, &source_id).await?;
         let Some((space, current)) = head else {
-            // 来源已不存在或已退休：本修订没有可整理正文，直接结束作业。
+            // 来源已失效：原准备与后台作业同事务结束，释放不再应用的冻结材料。
+            ingestion::preparation::supersede_preparation_in_tx(&mut tx, &source_id, revision)
+                .await?;
             jobs::settle_in_tx(&mut tx, &job.lease.id, job.lease.lease_epoch).await?;
             tx.commit().await?;
             return Ok(());
@@ -149,13 +149,8 @@ async fn prepare_source(pool: &MySqlPool, job: &jobs::SourceJob) -> Result<()> {
         if current > revision {
             // 来源已有更新修订，新作业随新修订入队；本修订不再重复整理，
             // 未完成的准备标记被取代，不留在pending冒充处理中。
-            ingestion::preparation::supersede_preparation_in_tx(
-                &mut tx,
-                &ctx.space_id,
-                &source_id,
-                revision,
-            )
-            .await?;
+            ingestion::preparation::supersede_preparation_in_tx(&mut tx, &source_id, revision)
+                .await?;
             jobs::settle_in_tx(&mut tx, &job.lease.id, job.lease.lease_epoch).await?;
             tx.commit().await?;
             return Ok(());
@@ -204,12 +199,15 @@ async fn prepare_source(pool: &MySqlPool, job: &jobs::SourceJob) -> Result<()> {
                 retry.commit().await?;
                 continue;
             }
+            let sequence = row["batch_sequence"].as_u64().unwrap_or(0);
+            let call = ingestion::preparation::review_call_id(&source_id, revision, sequence);
             ingestion::preparation::validate_preparation_output(
                 &serde_json::to_value(&key).map_err(|_| Error::new("invalid_input"))?,
                 &revision_text,
                 &frozen,
                 &output,
-            )?;
+            )
+            .map_err(|error| stage_failure(error, "apply", sequence, &call))?;
             tx.commit().await?;
             let batch = PendingBatch {
                 frozen,
@@ -219,8 +217,13 @@ async fn prepare_source(pool: &MySqlPool, job: &jobs::SourceJob) -> Result<()> {
                     .unwrap_or("")
                     .to_owned(),
                 unresolved_prior: row["unresolved"].clone(),
+                // 应用身份沿产生该成果的持久批次序列，恢复不换身份。
+                sequence,
             };
-            if apply_and_advance(pool, job, &ctx, &source_id, revision, &key, &batch).await? {
+            if apply_and_advance(pool, job, &ctx, &source_id, revision, &key, &batch)
+                .await
+                .map_err(|error| stage_failure(error, "apply", sequence, &call))?
+            {
                 return Ok(());
             }
             continue;
@@ -242,12 +245,29 @@ async fn prepare_source(pool: &MySqlPool, job: &jobs::SourceJob) -> Result<()> {
             // 过期清扫与本次读取的边界竞态：行已越过issued窗口但尚未被清扫改写，
             // 与过期清扫同一语义按unknown终态处理，不把它误标成version_conflict。
             tx.commit().await?;
-            return Err(Error::new("model_unknown"));
+            let sequence = row["batch_sequence"].as_u64().unwrap_or(0);
+            let stage = row["call_state"].as_str().unwrap_or("unknown");
+            let call = if stage == "review" {
+                ingestion::preparation::review_call_id(&source_id, revision, sequence)
+            } else {
+                ingestion::preparation::analysis_call_id(&source_id, revision, sequence)
+            };
+            return Err(stage_failure(
+                Error::new("model_unknown"),
+                stage,
+                sequence,
+                &call,
+            ));
         }
         if row["call_state"] == "unknown" {
-            // 过期在途调用按unknown终态处理，不换ID重发。
+            // 过期清扫已丢失原阶段，不能把候选调用身份冒充已知analysis/review。
             tx.commit().await?;
-            return Err(Error::new("model_unknown"));
+            return Err(stage_failure(
+                Error::new("model_unknown"),
+                "unknown",
+                row["batch_sequence"].as_u64().unwrap_or(0),
+                "unknown",
+            ));
         }
         let body = source_body_in_tx(&mut tx, &ctx, &source_id, revision).await?;
         if row["input_fingerprint"] != input_fingerprint(&source_id, revision, &body) {
@@ -312,21 +332,26 @@ async fn prepare_source(pool: &MySqlPool, job: &jobs::SourceJob) -> Result<()> {
         runtime::reserve_maintenance_in_tx(&mut tx, &analysis_call, &profile).await?;
         tx.commit().await?;
 
-        let (draft, usage) = analysis.analyze().await?;
+        let (draft, usage) = analysis
+            .analyze()
+            .await
+            .map_err(|error| stage_failure(error, "analysis", sequence, &analysis_call))?;
         let mut tx = AppTx::begin(pool).await?;
         let settled =
             runtime::settle_maintenance_in_tx(&mut tx, &analysis_call, &profile, &usage).await;
         tx.commit().await?;
-        settled?;
+        settled.map_err(|error| stage_failure(error, "analysis", sequence, &analysis_call))?;
         ingestion::preparation::validate_preparation_output(
             &serde_json::to_value(&key).map_err(|_| Error::new("invalid_input"))?,
             &revision_text,
             &frozen,
             &draft,
-        )?;
+        )
+        .map_err(|error| stage_failure(error, "analysis", sequence, &analysis_call))?;
 
         let review_call = ingestion::preparation::review_call_id(&source_id, revision, sequence);
-        let review = ingestion::preparation::prepare_preparation_submission(&frozen, Some(&draft))?;
+        let review = ingestion::preparation::prepare_preparation_submission(&frozen, Some(&draft))
+            .map_err(|error| stage_failure(error, "review", sequence, &review_call))?;
         let mut tx = AppTx::begin(pool).await?;
         jobs::assert_job_in_tx(&mut tx, &job.lease.id, job.lease.lease_epoch).await?;
         ingestion::preparation::stage_draft_in_tx(
@@ -340,42 +365,54 @@ async fn prepare_source(pool: &MySqlPool, job: &jobs::SourceJob) -> Result<()> {
         runtime::reserve_maintenance_in_tx(&mut tx, &review_call, &profile).await?;
         tx.commit().await?;
 
-        let (output, usage) = review.analyze().await?;
+        let (output, usage) = review
+            .analyze()
+            .await
+            .map_err(|error| stage_failure(error, "review", sequence, &review_call))?;
         let mut tx = AppTx::begin(pool).await?;
         let settled =
             runtime::settle_maintenance_in_tx(&mut tx, &review_call, &profile, &usage).await;
         tx.commit().await?;
-        settled?;
+        settled.map_err(|error| stage_failure(error, "review", sequence, &review_call))?;
         ingestion::preparation::validate_preparation_output(
             &serde_json::to_value(&key).map_err(|_| Error::new("invalid_input"))?,
             &revision_text,
             &frozen,
             &output,
-        )?;
+        )
+        .map_err(|error| stage_failure(error, "review", sequence, &review_call))?;
 
         // 复核成果先落库再应用：应用事务此后回滚时重试从已提交输出恢复。
         let mut tx = AppTx::begin(pool).await?;
         jobs::assert_job_in_tx(&mut tx, &job.lease.id, job.lease.lease_epoch).await?;
-        ingestion::preparation::stage_apply_in_tx(&mut tx, &source_id, revision, &output).await?;
+        ingestion::preparation::stage_apply_in_tx(&mut tx, &source_id, revision, &output)
+            .await
+            .map_err(|error| stage_failure(error, "apply", sequence, &review_call))?;
         tx.commit().await?;
         let batch = PendingBatch {
             frozen,
             output,
             dependency,
             unresolved_prior: row["unresolved"].clone(),
+            sequence,
         };
-        if apply_and_advance(pool, job, &ctx, &source_id, revision, &key, &batch).await? {
+        if apply_and_advance(pool, job, &ctx, &source_id, revision, &key, &batch)
+            .await
+            .map_err(|error| stage_failure(error, "apply", sequence, &review_call))?
+        {
             return Ok(());
         }
     }
 }
 
-// 一次待应用批次：冻结输入、复核成果、开批时依赖指纹与既有未决清单。
+// 一次待应用批次：冻结输入、复核成果、开批时依赖指纹、既有未决清单与
+// 产生该成果的持久批次序列。
 struct PendingBatch {
     frozen: Value,
     output: Value,
     dependency: String,
     unresolved_prior: Value,
+    sequence: u64,
 }
 
 // 应用与推进同事务：核对领取代次、依赖指纹与对象预期版本。依赖漂移或版本
@@ -402,12 +439,14 @@ async fn apply_and_advance(
         tx.commit().await?;
         return Ok(false);
     }
+    // 应用与模型调用同属该批：序列在依赖重开后仍单调，不复用已结算旧批身份；
+    // 不用可能重复的批次起点冒充批次身份。
     let operation = fingerprint(&json!([
         "prepare-apply",
         source_id,
         revision,
         ingestion::preparation::PREPARATION_METHOD,
-        frozen["coverage"]["batch_start"]
+        batch.sequence
     ]));
     let applied =
         knowledge::apply_preparation_in_tx(&mut tx, ctx, &operation, key, &revision_text, output)
@@ -423,7 +462,9 @@ async fn apply_and_advance(
         retry.commit().await?;
         return Ok(false);
     }
-    applied?;
+    let applied = applied?;
+    // 整理落库同属保存路径：补依赖目标指纹并按被依赖情况排队来源扇出（幂等）。
+    super::dependency_registration::after_content_saved_in_tx(&mut tx, ctx, &applied).await?;
     let unresolved = merge_unresolved(&batch.unresolved_prior, &output["unresolved"]);
     let next_cursor = frozen["next_cursor"].clone();
     ingestion::preparation::complete_batch_in_tx(

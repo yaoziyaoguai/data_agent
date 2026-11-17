@@ -137,6 +137,33 @@ await check('旧1.0.0检查点保留session/leaf/工具身份、原生摘要及�
   assert.equal(exported.storage.session_id, checkpoint.entries[0].id);
 });
 
+await check('1.3→1.4的inline与原生storage检查点保留session、确认leaf、authority及原工具/预算身份', async () => {
+  const checkpoint = JSON.parse(await readFile(new URL('./fixtures/pi-session-1.3.0.json', import.meta.url)));
+  assert.equal(checkpoint.sdk_version, '1.3.0');
+  assert.equal(VERSION, '1.4.0');
+  const restored = restoreCheckpoint('/synthetic/data-agent', checkpoint);
+  assert.equal(restored.getSessionId(), checkpoint.entries[0].id);
+  assert.equal(restored.getLeafId(), checkpoint.leaf_id);
+  for (const entry of checkpoint.entries.slice(1)) assert.deepEqual(restored.getEntry(entry.id), entry);
+  const exported = exportCheckpoint(restored, checkpoint.authority_revision, checkpoint.authority_snapshot);
+  assert.equal(exported.sdk_version, '1.4.0');
+  assert.deepEqual(exported.authority_snapshot, checkpoint.authority_snapshot);
+  assert.equal(exported.authority_revision, checkpoint.authority_revision);
+  // 旧entry逐字不变，storage引用仍可带其原1.3版本恢复；新导出明确标本次SDK。
+  const stored = {...checkpoint, entries: [], storage: exported.storage};
+  const reopened = restoreCheckpoint('/synthetic/data-agent', stored);
+  assert.equal(reopened.getLeafId(), checkpoint.leaf_id);
+  assert.equal(reopened.getSessionId(), restored.getSessionId());
+  assert.deepEqual(reopened.getEntries(), restored.getEntries());
+  const text = JSON.stringify(reopened.getEntries());
+  for (const identity of ['synthetic-1.3-read', 'synthetic-1.3-operation', 'synthetic-1.3-budget']) assert.ok(text.includes(identity));
+  const projected = JSON.stringify(reopened.buildSessionContext());
+  assert.ok(projected.includes('SQL草稿未执行'));
+  assert.ok(!projected.includes('未由宿主确认的合成尾部分支'));
+  assert.throws(() => restoreCheckpoint('/synthetic/data-agent', {...checkpoint, sdk_version: '1.2.0'}));
+  assert.throws(() => restoreCheckpoint('/synthetic/data-agent', {...checkpoint, sdk_version: '1.5.0'}));
+});
+
 const passed = checks.every(item => item.passed);
 await mkdir('.local/checks', {recursive: true});
 await writeFile('.local/checks/pi-sdk.json', JSON.stringify({passed, piSdk: VERSION,

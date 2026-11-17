@@ -17,10 +17,19 @@ const base={time_start:null,time_end:null,timezone:'UTC',metric:null,channel:nul
 const task=()=>tool('update_analysis_task',{action:'create',goal:'独立查询目标',conditions:base,options:[]});
 const source=marker=>h.request('/knowledge',{operation_id:randomUUID(),kind:'document',name:'查询派生合成来源',body:marker,related_ids:[]}).then(ok);
 const disable=doc=>h.request(`/knowledge/${doc.id}/disable`,{operation_id:randomUUID(),expected_version:doc.version}).then(ok);
-const draft=(t,marker)=>tool('request_query',{task_id:t.task_id,condition_version:t.condition_version,sql:'SELECT :label AS label',parameters:{label:marker},target_id:'synthetic-sqlite',summary:marker,knowledge_refs:[],replaces_query_id:null});
+const draft=(t,marker)=>tool('request_query',{task_id:t.task_id,condition_version:t.condition_version,sql:'SELECT :label AS label',parameters:{label:marker},target_id:'synthetic-sqlite',summary:marker,knowledge_refs:[],replaces_query_id:null,semantic_resolution:{interpretation:marker,basis:'unambiguous',user_quote:null,unresolved_differences:[],adoption_message_id:null}});
 const execute=q=>tool('execute_query',{query_id:q.id,draft_version:q.draft_version,condition_version:q.condition_version,instruction_quote:run.text});
-const control=(query,marker)=>{assert.equal(query.text_unavailable,true);for(const key of ['sql','parameters','summary','knowledge_refs','error_details','semantic_checks'])assert.equal(query[key],undefined);assert.equal(JSON.stringify(query).includes(marker),false);};
+const control=(query,marker)=>{assert.equal(query.text_unavailable,true);for(const key of ['sql','parameters','summary','knowledge_refs','error_details','semantic_checks','semantic_resolution'])assert.equal(query[key],undefined);assert.equal(JSON.stringify(query).includes(marker),false);};
 const queryState=q=>h.sql(`SELECT JSON_OBJECT('state',execution_state,'error',error_code,'version',draft_version,'budget',budget_scope_id,'confirm',confirmation_key) FROM query_requests WHERE id='${q.id}'`)[0];
+// 捕获替身必须实际收尾失败/取消通知；否则串行Worker会停在未回应的旧通知上。
+const finishNotification=async(cid,q,t,state,marker)=>{
+ run=await until(()=>h.captured.find(value=>value.conversation_id===cid&&value.workspace_context.result_notification?.query_id===q.id),'查询终态通知');
+ await h.pauseWorker();manager=SessionManager.inMemory('/synthetic/data-agent');
+ assert.deepEqual(run.workspace_context.result_notification,{query_id:q.id,execution_state:state,task_ref:{task_id:t.task_id,condition_version:t.condition_version}});
+ assert.deepEqual(run.workspace_context.active_task_ref,{task_id:t.task_id,condition_version:t.condition_version});
+ const reply=await tool('get_query',{query_id:q.id});control(reply.query,marker);assert.equal(reply.results,null);
+ await finish();
+};
 try {
  const marker='SYNTHETIC_QUERY_SOURCE';const doc=await source(marker);const cid=await h.create();await begin(cid,'生成草稿，不执行。');
  const t=await task();const syntax=await tool('validate_sql',{sql:'SELECT 1',parameters:{},target_id:'synthetic-sqlite'});assert.equal(syntax.state,'passed','validate_sql缺省knowledge_refs仍合法');await tool('read_knowledge',{object_id:doc.id});const q=await draft(t,marker);const original=lastInput;
@@ -57,12 +66,12 @@ try {
  checks.push('真实结果经get_query传递完整来源，新派生查询持久保留上游知识与结果引用；另轮撤源后正文/结果/导出均不回流且无递归');
 
  const queuedMarker='SYNTHETIC_QUEUED_SOURCE';const queuedSource=await source(queuedMarker);const queuedCid=await h.create();await begin(queuedCid,'明确执行这个合成查询。');const queuedTask=await task();await tool('read_knowledge',{object_id:queuedSource.id});const queued=await draft(queuedTask,queuedMarker);await execute(queued);const authorized=queryState(queued);await disable(queuedSource);await finish();await h.resumeWorker();
- await until(()=>queryState(queued).state==='failed','来源失效阻止首次平台提交');await h.pauseWorker();const rejected=queryState(queued);assert.equal(rejected.error,'stale_context');assert.equal(rejected.confirm,authorized.confirm);assert.equal(rejected.budget,authorized.budget);
+ await until(()=>queryState(queued).state==='failed','来源失效阻止首次平台提交');await finishNotification(queuedCid,queued,queuedTask,'failed',queuedMarker);const rejected=queryState(queued);assert.equal(rejected.error,'stale_context');assert.equal(rejected.confirm,authorized.confirm);assert.equal(rejected.budget,authorized.budget);
  const lookup=await fetch(h.env.DATA_AGENT_PLATFORM_URL+'/lookup',{method:'POST',headers:{authorization:'Bearer '+h.env.DATA_AGENT_INTERNAL_TOKEN,'content-type':'application/json'},body:JSON.stringify({query_id:queued.id,owner_id:'alice'})});assert.equal(lookup.status,409);assert.equal((await lookup.json()).code,'not_available','未向平台创建已失效来源的查询');
  checks.push('确认后提交前来源失效持久准确终态，不调用平台submit、不改变原确认身份或预算');
 
  const unknownMarker='SYNTHETIC_UNKNOWN_QUERY_SOURCE';const unknownSource=await source(unknownMarker);const unknownCid=await h.create();await begin(unknownCid,'明确执行，再核对未知回执。');const unknownTask=await task();await tool('read_knowledge',{object_id:unknownSource.id});const unknown=await draft(unknownTask,unknownMarker);await execute(unknown);const unknownAuthorization=queryState(unknown);await finish();await h.pausePlatform();await h.resumeWorker();await until(()=>queryState(unknown).state==='submission_unknown','提交回执未知');await h.pauseWorker();await disable(unknownSource);
- control(ok(await h.request(`/queries/${unknown.id}/cancel`,{operation_id:randomUUID()})),unknownMarker);await h.resumePlatform();await h.resumeWorker();await until(()=>queryState(unknown).state==='cancelled','来源失效后仍查证平台取消');await h.pauseWorker();assert.equal(queryState(unknown).confirm,unknownAuthorization.confirm);assert.equal(queryState(unknown).budget,unknownAuthorization.budget);
+ control(ok(await h.request(`/queries/${unknown.id}/cancel`,{operation_id:randomUUID()})),unknownMarker);await h.resumePlatform();await h.resumeWorker();await until(()=>queryState(unknown).state==='cancelled','来源失效后仍查证平台取消');await finishNotification(unknownCid,unknown,unknownTask,'cancelled',unknownMarker);assert.equal(queryState(unknown).confirm,unknownAuthorization.confirm);assert.equal(queryState(unknown).budget,unknownAuthorization.budget);
  checks.push('未知回执来源失效仍可按原query身份查证并停止，不重授权或换预算');
 
 

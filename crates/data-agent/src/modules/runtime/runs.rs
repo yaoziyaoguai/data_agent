@@ -17,12 +17,12 @@ pub async fn commit_run_in_tx(
     run: &LockedRun,
     commit_id: &str,
     fp: &str,
-    text: &str,
+    output: &super::outputs::FinalOutput,
 ) -> Result<()> {
     if run.state != "running" {
         return Err(Error::new("lease_lost"));
     }
-    store::commit_run(tx, run, commit_id, fp, text).await
+    store::commit_run(tx, run, commit_id, fp, output).await
 }
 
 pub async fn cancel_run_in_tx(tx: &mut AppTx<'_>, run: &LockedRun) -> Result<()> {

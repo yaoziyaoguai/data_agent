@@ -31,7 +31,7 @@ export function guardedDeepSeekStream(
   profile: ModelProfile,
   connection: DeepSeekConnection,
   signal: AbortSignal,
-  checkCapacity?: () => void,
+  checkCapacity?: (context: import('@earendil-works/pi-ai').TranscriptContext) => void,
 ) {
   return guardedModelStream(
     transport,

@@ -26,20 +26,24 @@ pub async fn process_due(pool: &MySqlPool) -> Result<bool> {
     let attempt = attempt_id.as_str();
     // 领取事务只碰任务队列，不能持有队列锁再等待来源同步/知识写入。
     tx.commit().await?;
-    if job["input"].get("coverage").is_none() {
+    if job["input"].get("frozen_review_sources").is_none() {
         let mut tx = AppTx::begin(pool).await?;
         let prepared = async {
             check_current_in_tx(&mut tx, &ctx, &job).await?;
-            let mut material = super::prefill_materials::collect_in_tx(
-                &mut tx,
-                &ctx,
-                &job["input"]["object"],
-                job["input"]["sources"]
-                    .as_array()
-                    .ok_or(Error::new("invalid_input"))?
-                    .clone(),
-            )
-            .await?;
+            let mut material = if job["input"].get("coverage").is_none() {
+                super::prefill_materials::collect_in_tx(
+                    &mut tx,
+                    &ctx,
+                    &job["input"]["object"],
+                    job["input"]["sources"]
+                        .as_array()
+                        .ok_or(Error::new("invalid_input"))?
+                        .clone(),
+                )
+                .await?
+            } else {
+                super::prefill_materials::freeze_review_in_tx(&mut tx, &ctx, &job["input"]).await?
+            };
             material["object"] = job["input"]["object"].clone();
             super::prefill_materials::check_in_tx(&mut tx, &ctx, &material).await?;
             ingestion::freeze_prefill_input_in_tx(&mut tx, attempt, &material).await?;
@@ -135,23 +139,22 @@ pub async fn process_due(pool: &MySqlPool) -> Result<bool> {
         tx.commit().await?;
         return Ok(true);
     }
-    // 在既有两阶段边界同版补料；失败不能退回旧前缀并宣称完成复核。
-    let review_input =
-        match super::prefill_materials::review_in_tx(&mut tx, &ctx, &job["input"], &draft).await {
-            Ok(input) => input,
-            Err(error) => {
-                ingestion::finish_prefill_in_tx(
-                    &mut tx,
-                    attempt,
-                    error_state(&error),
-                    &json!({"analysis":draft}),
-                    Some(error.code),
-                )
-                .await?;
-                tx.commit().await?;
-                return Ok(true);
-            }
-        };
+    // 在既有两阶段边界消费冻结补料；失败不能退回旧前缀并宣称完成复核。
+    let review_input = match super::prefill_materials::review(&job["input"], &draft) {
+        Ok(input) => input,
+        Err(error) => {
+            ingestion::finish_prefill_in_tx(
+                &mut tx,
+                attempt,
+                error_state(&error),
+                &json!({"analysis":draft}),
+                Some(error.code),
+            )
+            .await?;
+            tx.commit().await?;
+            return Ok(true);
+        }
+    };
     // 只有合法且仍适用的草稿进入复核；失败不得把第一轮当成成功建议应用。
     if let Err(error) =
         ingestion::record_prefill_draft_in_tx(&mut tx, attempt, &draft, &review_input).await
@@ -251,6 +254,14 @@ pub async fn process_due(pool: &MySqlPool) -> Result<bool> {
                 &candidate,
             )
             .await;
+            if let Ok(applied) = &applied {
+                super::dependency_registration::after_content_saved_in_tx(
+                    &mut tx,
+                    &ctx,
+                    std::slice::from_ref(applied),
+                )
+                .await?;
+            }
             match applied {
                 Ok(_) => {
                     ingestion::finish_prefill_in_tx(&mut tx, attempt, "succeeded", &history, None)

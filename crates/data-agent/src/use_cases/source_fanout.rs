@@ -3,7 +3,7 @@ use crate::{
     persistence::AppTx,
     types::{Result, id},
 };
-use sqlx::{MySqlPool, Row};
+use sqlx::MySqlPool;
 use std::collections::HashSet;
 
 // 来源扇出消费：被依赖对象改版登记的轻量作业在此展开——按页发现依赖者，只对
@@ -79,20 +79,16 @@ async fn fanout(pool: &MySqlPool, job: &jobs::SourceJob) -> Result<()> {
                 if owners.iter().any(|(owner, _)| owner == &dependent.owner_id) {
                     continue;
                 }
-                if let Some(version) = sqlx::query(
-                    "SELECT version FROM knowledge_objects WHERE id=? AND space_id=? AND state='enabled'",
-                )
-                .bind(&dependent.owner_id)
-                .bind(&space)
-                .fetch_optional(tx.connection())
-                .await?
+                if let Some(version) =
+                    knowledge::enabled_version_in_space_in_tx(&mut tx, &space, &dependent.owner_id)
+                        .await?
                 {
-                    owners.push((dependent.owner_id.clone(), version.get::<u64, _>("version")));
+                    owners.push((dependent.owner_id.clone(), version));
                 }
             }
             // 组内一次传递游走，stale归属按owner区分；unknown链不触发重整。
             let verdict =
-                knowledge::dependency_index::walk_required_in_tx(&mut tx, &space, &owners).await?;
+                super::dependency_validation::walk_required_in_tx(&mut tx, &space, &owners).await?;
             let stale: HashSet<&str> = verdict
                 .stale
                 .iter()
@@ -144,39 +140,23 @@ async fn fanout(pool: &MySqlPool, job: &jobs::SourceJob) -> Result<()> {
     Ok(())
 }
 
+// 依赖反向索引按目标身份给出被依赖的全部空间（作业不携带空间）。
 async fn target_spaces_in_tx(
     pool: &MySqlPool,
     target_kind: &str,
     target_id: &str,
 ) -> Result<Vec<String>> {
-    let spaces: Vec<String> = sqlx::query(
-        "SELECT DISTINCT space_id FROM knowledge_dependencies WHERE target_kind=? AND target_id=?",
-    )
-    .bind(target_kind)
-    .bind(target_id)
-    .fetch_all(pool)
-    .await?
-    .iter()
-    .map(|row| row.get("space_id"))
-    .collect();
+    let mut tx = AppTx::begin(pool).await?;
+    let spaces =
+        knowledge::dependency_index::dependent_spaces_in_tx(&mut tx, target_kind, target_id)
+            .await?;
+    tx.commit().await?;
     Ok(spaces)
 }
 
 async fn source_head_in_tx(tx: &mut AppTx<'_>, space: &str, source: &str) -> Result<Option<u64>> {
     if let Some(document) = source.strip_prefix("document-") {
-        let row = sqlx::query(
-            "SELECT version FROM knowledge_objects WHERE id=? AND space_id=? AND state='enabled'",
-        )
-        .bind(document)
-        .bind(space)
-        .fetch_optional(tx.connection())
-        .await?;
-        return Ok(row.map(|row| row.get::<u64, _>("version")));
+        return knowledge::enabled_version_in_space_in_tx(tx, space, document).await;
     }
-    let row = sqlx::query("SELECT version FROM source_heads WHERE id=? AND space_id=?")
-        .bind(source)
-        .bind(space)
-        .fetch_optional(tx.connection())
-        .await?;
-    Ok(row.map(|row| row.get::<u64, _>("version")))
+    ingestion::source_head_version_in_tx(tx, space, source).await
 }

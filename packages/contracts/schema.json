@@ -65,13 +65,34 @@
       "additionalProperties": false,
       "title": "TaskInput"
     },
+    "AuthoritySnapshot": {
+      "title": "AuthoritySnapshot",
+      "type": "object",
+      "additionalProperties": true,
+      "if": { "required": ["knowledge_entries"] },
+      "then": {
+        "properties": {
+          "knowledge_entries": {
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": { "type": "string" },
+              "minItems": 3,
+              "maxItems": 3
+            },
+            "description": "宿主已核知识范围的[object_id,version,path]；空path表示整对象。省略此清单的旧knowledge引用保持整对象含义，不能由后续窄读收紧。"
+          }
+        }
+      }
+    },
     "Checkpoint": {
       "type": "object",
       "properties": {
         "sdk_version": {
           "enum": [
             "1.0.0",
-            "1.3.0"
+            "1.3.0",
+            "1.4.0"
           ],
           "type": "string"
         },
@@ -94,8 +115,7 @@
           ]
         },
         "authority_snapshot": {
-          "type": "object",
-          "additionalProperties": true
+          "$ref": "#/$defs/AuthoritySnapshot"
         },
         "storage": {
           "$ref": "#/$defs/CheckpointReference"
@@ -125,9 +145,340 @@
         }
       ]
     },
+    "AssistantOutputBinding": {
+      "title": "AssistantOutputBinding",
+      "type": "object",
+      "properties": {
+        "entry_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "attempt_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "stop_reason": {
+          "type": "string",
+          "enum": [
+            "stop",
+            "toolUse",
+            "length",
+            "error",
+            "aborted"
+          ]
+        },
+        "tool_call_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 512
+          },
+          "uniqueItems": true,
+          "maxItems": 24
+        },
+        "text_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "first_chunk_seq": {
+          "type": "string",
+          "pattern": "^[1-9][0-9]{0,19}$"
+        },
+        "last_chunk_seq": {
+          "type": "string",
+          "pattern": "^[1-9][0-9]{0,19}$"
+        }
+      },
+      "required": [
+        "entry_id",
+        "attempt_id",
+        "stop_reason",
+        "tool_call_ids",
+        "text_sha256"
+      ],
+      "additionalProperties": false,
+      "description": "宿主从Pi完整助手条目绑定，正文位置来自已确认输出队列；模型不能提供这些字段。"
+    },
+    "RenderedAnswerBinding": {
+      "title": "RenderedAnswerBinding",
+      "type": "object",
+      "properties": {
+        "assistant": {
+          "$ref": "#/$defs/AssistantOutputBinding",
+          "description": "原Pi entry/attempt/stop/tool IDs与source_text的SHA256；本分支禁止携带first/last_chunk_seq，展示范围由外层字段表达。"
+        },
+        "source_text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 8000,
+          "description": "原Pi完整正文（含{{name}}标记），来自Node宿主SessionManager原assistant entry；不是展示替换后的文字。Rust边界核对其UTF-8 SHA256。"
+        },
+        "prepared_sdk_tool_call_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512,
+          "description": "本条正文实际采用的原prepare_analysis_answer成功回执；不因分支上后来存在新prepare而改用最近一份。"
+        },
+        "first_chunk_seq": {
+          "type": "string",
+          "pattern": "^[1-9][0-9]{0,19}$",
+          "description": "已持久化展示片段范围；display = replace_once(source_text, bindings) + required_suffix。"
+        },
+        "last_chunk_seq": {
+          "type": "string",
+          "pattern": "^[1-9][0-9]{0,19}$"
+        }
+      },
+      "required": [
+        "assistant",
+        "source_text",
+        "prepared_sdk_tool_call_id",
+        "first_chunk_seq",
+        "last_chunk_seq"
+      ],
+      "additionalProperties": false,
+      "description": "宿主生成的一次渲染绑定：原文、原prepare回执与展示片段范围；模型不能提供这些字段。"
+    },
+    "AnswerHandoff": {
+      "title": "AnswerHandoff",
+      "type": "object",
+      "properties": {
+        "assistant": {
+          "$ref": "#/$defs/AssistantOutputBinding"
+        },
+        "answer_sdk_tool_call_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "rendered_answer_binding": {
+          "$ref": "#/$defs/RenderedAnswerBinding",
+          "description": "渲染正文交接分支；与顶层assistant互斥。当前冻结route所在原assistant允许toolUse，tool_call_ids只含本次route。"
+        }
+      },
+      "oneOf": [
+        {
+          "required": [
+            "assistant"
+          ],
+          "not": {
+            "required": [
+              "rendered_answer_binding"
+            ]
+          }
+        },
+        {
+          "required": [
+            "rendered_answer_binding"
+          ],
+          "not": {
+            "required": [
+              "assistant"
+            ]
+          }
+        }
+      ],
+      "additionalProperties": false,
+      "description": "显式route登记时冻结的宿主事实；恢复先接原登记，不从新attempt重算。成功答案回执仍是候选，route事务提交后才成为part。"
+    },
+    "AnswerPartReference": {
+      "title": "AnswerPartReference",
+      "type": "object",
+      "properties": {
+        "task_ref": {
+          "$ref": "#/$defs/EvidenceTaskRef"
+        },
+        "finalized_by_sdk_tool_call_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "scope_fingerprint": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "source_query_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64,
+            "pattern": "^[A-Za-z0-9_-]+$"
+          },
+          "maxItems": 8,
+          "uniqueItems": true,
+          "description": "定稿答案成功回执实际核验的query_id集合；只标识实际来源，不证明符合通知原scope，通知覆盖由宿主另行核验。"
+        },
+        "output_binding": {
+          "$ref": "#/$defs/AssistantOutputBinding"
+        },
+        "answer_sdk_tool_call_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "rendered_answer_binding": {
+          "$ref": "#/$defs/RenderedAnswerBinding",
+          "description": "未冻结末项的渲染正文分支；与output_binding、answer_sdk_tool_call_id互斥。"
+        }
+      },
+      "required": [
+        "task_ref"
+      ],
+      "additionalProperties": false,
+      "oneOf": [
+        {
+          "required": [
+            "finalized_by_sdk_tool_call_id",
+            "scope_fingerprint"
+          ],
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "output_binding"
+                ]
+              },
+              {
+                "required": [
+                  "answer_sdk_tool_call_id"
+                ]
+              },
+              {
+                "required": [
+                  "rendered_answer_binding"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "required": [
+            "output_binding"
+          ],
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "finalized_by_sdk_tool_call_id"
+                ]
+              },
+              {
+                "required": [
+                  "scope_fingerprint"
+                ]
+              },
+              {
+                "required": [
+                  "answer_sdk_tool_call_id"
+                ]
+              },
+              {
+                "required": [
+                  "source_query_ids"
+                ]
+              },
+              {
+                "required": [
+                  "rendered_answer_binding"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "required": [
+            "answer_sdk_tool_call_id"
+          ],
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "finalized_by_sdk_tool_call_id"
+                ]
+              },
+              {
+                "required": [
+                  "scope_fingerprint"
+                ]
+              },
+              {
+                "required": [
+                  "output_binding"
+                ]
+              },
+              {
+                "required": [
+                  "source_query_ids"
+                ]
+              },
+              {
+                "required": [
+                  "rendered_answer_binding"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "required": [
+            "rendered_answer_binding"
+          ],
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "finalized_by_sdk_tool_call_id"
+                ]
+              },
+              {
+                "required": [
+                  "scope_fingerprint"
+                ]
+              },
+              {
+                "required": [
+                  "output_binding"
+                ]
+              },
+              {
+                "required": [
+                  "answer_sdk_tool_call_id"
+                ]
+              },
+              {
+                "required": [
+                  "source_query_ids"
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "description": "有序原内容引用。已定稿项只携宿主控制身份和实际source_query_ids，不凭ID命中判断通知scope覆盖；有新末项时引用原输出或成功答案回执。数量还须受实际消息任务集合约束，不增加模型额度。"
+    },
     "RunEnvelope": {
       "type": "object",
       "properties": {
+        "answer_parts": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/AnswerPartReference"
+          },
+          "maxItems": 24
+        },
+        "tool_contract_version": {
+          "type": "integer",
+          "enum": [
+            1,
+            2
+          ],
+          "description": "宿主冻结的工具合同版本；历史缺失按1恢复。"
+        },
         "run_id": {
           "type": "string",
           "minLength": 1,
@@ -310,6 +661,15 @@
     "FinishRun": {
       "type": "object",
       "properties": {
+        "answer_parts": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/AnswerPartReference"
+          },
+          "minItems": 1,
+          "maxItems": 24,
+          "description": "完整有序引用。存在新末项时final_text核对其原文；原消息其余任务均已取消或由可见任务卡/宿主控制交付解释且有效任务已冻结时，可只发冻结引用并省略final_text。单份正文仍限8000字符；多份组合由实际项数、标题和分隔格式推导，上限384281字符。Rust核当前任务集合与来源后取原内容组合。"
+        },
         "run_id": {
           "type": "string",
           "minLength": 1,
@@ -344,14 +704,122 @@
           "minLength": 1,
           "maxLength": 512,
           "description": "使用present_analysis_answer成功回执交付时绑定该SDK调用，正文须与宿主生成值一致。"
+        },
+        "control_delivery_ref": {
+          "$ref": "#/$defs/ControlDeliveryRef"
+        },
+        "output_binding": {
+          "$ref": "#/$defs/AssistantOutputBinding",
+          "description": "宿主确认的正常完整自然final原输出绑定；恢复时保原attempt/entry/片段。须有final_text，与answer_parts、answer_sdk_tool_call_id、control_delivery_ref及final_start_chunk_seq互斥。"
+        },
+        "rendered_answer_binding": {
+          "$ref": "#/$defs/RenderedAnswerBinding",
+          "description": "单份渲染正文分支：final_text为该份display（非模板、非整轮组合全文），与answer_parts、answer_sdk_tool_call_id、control_delivery_ref、output_binding及final_start_chunk_seq互斥。组合时改用answer_parts末项的rendered分支，不传顶层rendered。"
         }
       },
       "required": [
         "run_id",
         "lease_epoch",
         "commit_id",
-        "final_text",
         "checkpoint"
+      ],
+      "allOf": [
+        {
+          "if": {
+            "not": {
+              "required": [
+                "final_text"
+              ]
+            }
+          },
+          "then": {
+            "required": [
+              "answer_parts"
+            ],
+            "properties": {
+              "answer_parts": {
+                "items": {
+                  "required": [
+                    "finalized_by_sdk_tool_call_id",
+                    "scope_fingerprint"
+                  ]
+                }
+              }
+            },
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "answer_sdk_tool_call_id"
+                  ]
+                },
+                {
+                  "required": [
+                    "final_start_chunk_seq"
+                  ]
+                }
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "control_delivery_ref"
+            ]
+          },
+          "then": {
+            "required": [
+              "final_text"
+            ],
+            "not": {
+              "required": [
+                "answer_sdk_tool_call_id"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "output_binding"
+            ]
+          },
+          "then": {
+            "required": [
+              "final_text"
+            ],
+            "not": {
+              "anyOf": [
+                { "required": ["answer_parts"] },
+                { "required": ["answer_sdk_tool_call_id"] },
+                { "required": ["control_delivery_ref"] },
+                { "required": ["final_start_chunk_seq"] }
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "rendered_answer_binding"
+            ]
+          },
+          "then": {
+            "required": [
+              "final_text"
+            ],
+            "not": {
+              "anyOf": [
+                { "required": ["answer_parts"] },
+                { "required": ["answer_sdk_tool_call_id"] },
+                { "required": ["control_delivery_ref"] },
+                { "required": ["output_binding"] },
+                { "required": ["final_start_chunk_seq"] }
+              ]
+            }
+          }
+        }
       ],
       "additionalProperties": false,
       "title": "FinishRun"
@@ -530,8 +998,7 @@
         },
         "text": {
           "type": "string",
-          "minLength": 1,
-          "maxLength": 32000
+          "minLength": 1
         },
         "attempt_id": {
           "type": [
@@ -569,7 +1036,35 @@
         "committed"
       ],
       "additionalProperties": false,
-      "title": "ChatMessage"
+      "title": "ChatMessage",
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "role": {
+                "const": "assistant"
+              }
+            },
+            "required": [
+              "role"
+            ]
+          },
+          "then": {
+            "properties": {
+              "text": {
+                "maxLength": 384281
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "text": {
+                "maxLength": 32000
+              }
+            }
+          }
+        }
+      ]
     },
     "TaskSnapshot": {
       "type": "object",
@@ -605,6 +1100,10 @@
         },
         "report_ref": {
           "$ref": "#/$defs/AnalysisReportRef"
+        },
+        "report_timeline_event_seq": {
+          "type": "string",
+          "pattern": "^[1-9][0-9]{0,19}$"
         },
         "text_unavailable": {
           "type": "boolean"
@@ -673,6 +1172,32 @@
         "lease_epoch": {
           "type": "string",
           "pattern": "^(0|[1-9][0-9]{0,19})$"
+        },
+        "message_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$",
+          "description": "来自已有持久记录的触发消息身份；旧快照可缺省。"
+        },
+        "attempt_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$",
+          "description": "本run当前生成尝试身份，用于识别正文增量归属；旧快照可缺省。"
+        },
+        "purpose": {
+          "type": "string",
+          "enum": ["user_request", "query_result"],
+          "description": "user_request为用户消息触发；query_result为查询结果通知触发。旧快照可缺省，缺省时按中性处理提示展示。"
+        },
+        "result_query_id": {
+          "type": ["string", "null"],
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$",
+          "description": "结果通知run关联的原查询ID，来自conversations可信server:query-result消息关联；仅purpose=query_result时非null。"
         }
       },
       "required": [
@@ -740,6 +1265,67 @@
       ],
       "additionalProperties": false,
       "title": "Snapshot"
+    },
+    "LoadedOutputRange": {
+      "title": "LoadedOutputRange",
+      "type": "object",
+      "properties": {
+        "attempt_id": {"type": "string", "minLength": 1, "maxLength": 64, "pattern": "^[A-Za-z0-9_-]+$"},
+        "first_event_seq": {"type": "string", "pattern": "^[1-9][0-9]{0,19}$"},
+        "last_event_seq": {"type": "string", "pattern": "^[1-9][0-9]{0,19}$"},
+        "projection_fingerprint": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      },
+      "required": ["attempt_id", "first_event_seq", "last_event_seq"],
+      "additionalProperties": false,
+      "description": "客户端已读连续事件区间内的输出片段；指纹只标识缓存内容，不授读取权。"
+    },
+    "SnapshotRequest": {
+      "title": "SnapshotRequest",
+      "type": "object",
+      "properties": {
+        "before_seq": {"type": "string", "pattern": "^(0|[1-9][0-9]{0,19})$"},
+        "after_seq": {"type": "string", "pattern": "^(0|[1-9][0-9]{0,19})$"},
+        "loaded_outputs": {"type": "array", "items": {"$ref": "#/$defs/LoadedOutputRange"}}
+      },
+      "required": ["loaded_outputs"],
+      "not": {"required": ["before_seq", "after_seq"]},
+      "additionalProperties": false
+    },
+    "OutputProjection": {
+      "title": "OutputProjection",
+      "type": "object",
+      "properties": {
+        "attempt_id": {"$ref": "#/$defs/LoadedOutputRange/properties/attempt_id"},
+        "first_event_seq": {"$ref": "#/$defs/LoadedOutputRange/properties/first_event_seq"},
+        "last_event_seq": {"$ref": "#/$defs/LoadedOutputRange/properties/last_event_seq"},
+        "projection_fingerprint": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "output_state": {"type": ["string", "null"], "enum": ["streaming", "committed", "cancelled", "interrupted", "superseded", null]},
+        "projection_result": {"type": "string", "enum": ["unchanged", "replace", "not_available"]},
+        "events": {"type": "array", "items": {"$ref": "#/$defs/Event"}}
+      },
+      "required": ["attempt_id", "first_event_seq", "last_event_seq", "projection_fingerprint", "output_state", "projection_result"],
+      "allOf": [{"if": {"properties": {"projection_result": {"const": "replace"}}}, "then": {"required": ["events"]}, "else": {"not": {"required": ["events"]}}}],
+      "additionalProperties": false,
+      "description": "每个请求范围恰有一个结果；replace完整替换该范围的assistant事件，空数组仍表示替换。not_available不区分缺失和其他会话。"
+    },
+    "SnapshotRefresh": {
+      "title": "SnapshotRefresh",
+      "type": "object",
+      "properties": {
+        "conversation_id": {"$ref": "#/$defs/Snapshot/properties/conversation_id"},
+        "messages": {"$ref": "#/$defs/Snapshot/properties/messages"},
+        "tasks": {"$ref": "#/$defs/Snapshot/properties/tasks"},
+        "runs": {"$ref": "#/$defs/Snapshot/properties/runs"},
+        "events": {"$ref": "#/$defs/Snapshot/properties/events"},
+        "first_event_seq": {"$ref": "#/$defs/Snapshot/properties/first_event_seq"},
+        "last_event_seq": {"$ref": "#/$defs/Snapshot/properties/last_event_seq"},
+        "has_older": {"$ref": "#/$defs/Snapshot/properties/has_older"},
+        "has_newer": {"$ref": "#/$defs/Snapshot/properties/has_newer"},
+        "output_projections": {"type": "array", "items": {"$ref": "#/$defs/OutputProjection"}}
+      },
+      "required": ["conversation_id", "messages", "tasks", "runs", "events", "output_projections"],
+      "additionalProperties": false,
+      "description": "POST snapshot独立响应；普通分页游标与已加载输出的权限投影分开，旧GET Snapshot形状保持。"
     },
     "AppError": {
       "type": "object",
@@ -1057,6 +1643,14 @@
       "title": "OperationReceipt",
       "type": "object",
       "properties": {
+        "tool_contract_version": {
+          "type": "integer",
+          "enum": [
+            1,
+            2
+          ],
+          "description": "原登记tool行冻结的合同版本，不随当前run变化；历史缺失按1。"
+        },
         "operation_id": {
           "type": "string",
           "minLength": 1,
@@ -1170,7 +1764,8 @@
         "request_call_limit": {
           "type": "integer",
           "minimum": 1,
-          "maximum": 24
+          "maximum": 24,
+          "description": "历史兼容字段：旧request scope按每消息24次封顶；正常配置省略，残留值仅保旧解码，不作运行上限。"
         },
         "toolset": {
           "type": "string",
@@ -1202,7 +1797,7 @@
             "trial",
             "request"
           ],
-          "description": "省略沿用有限trial；request为正常持续使用，每消息24次，累计费用/试用期限不默认拦截。"
+          "description": "省略沿用有限trial；request为正常持续使用，无每消息累计调用上限，累计费用/试用期限不默认拦截。"
         },
         "configured_model": {
           "$ref": "#/$defs/ConfiguredModel"
@@ -1252,7 +1847,6 @@
             },
             "required": [
               "toolset",
-              "request_call_limit",
               "payload_bytes_limit"
             ]
           },
@@ -1338,7 +1932,7 @@
                   "trial",
                   "request"
                 ],
-                "description": "省略沿用有限trial；request为正常持续使用，每消息24次，累计费用/试用期限不默认拦截。"
+                "description": "省略沿用有限trial；request为正常持续使用，无每消息累计调用上限，累计费用/试用期限不默认拦截。"
               }
             },
             "allOf": [
@@ -1355,7 +1949,6 @@
                 },
                 "then": {
                   "required": [
-                    "request_call_limit",
                     "payload_bytes_limit"
                   ]
                 },
@@ -1436,14 +2029,10 @@
                   "properties": {
                     "toolset": {
                       "const": "data"
-                    },
-                    "request_call_limit": {
-                      "const": 24
                     }
                   },
                   "required": [
-                    "toolset",
-                    "request_call_limit"
+                    "toolset"
                   ]
                 },
                 "else": {
@@ -1471,14 +2060,10 @@
             "properties": {
               "toolset": {
                 "const": "data"
-              },
-              "request_call_limit": {
-                "const": 24
               }
             },
             "required": [
-              "toolset",
-              "request_call_limit"
+              "toolset"
             ]
           },
           "else": {
@@ -2120,6 +2705,14 @@
         "clear_override": {
           "type": "boolean"
         },
+        "statements": {
+          "type": "array",
+          "maxItems": 32,
+          "items": {
+            "$ref": "#/$defs/HumanStatementInput"
+          },
+          "description": "本次明确保存的人工陈述及支持提取声明；身份和origin由服务端生成，未提供时不编造完整性。"
+        },
         "source_url": {
           "type": [
             "string",
@@ -2674,13 +3267,13 @@
         "semantic_resolution": {
           "anyOf": [
             {
-              "$ref": "#/$defs/QuerySemanticResolution"
+              "$ref": "#/$defs/SemanticResolution"
             },
             {
               "type": "null"
             }
           ],
-          "description": "本题口径决策、依据及采纳来源；null表示尚未作出决定，不自动按无歧义处理。字段缺失表示旧版本未记录。"
+          "description": "当前格式仅记录已采用解释及依据，未决由clarifications表达；省略继承，null只清说明，未要求所有任务填写。旧形状按宿主持久格式标记兼容，读取不迁移。"
         }
       },
       "required": [
@@ -2815,10 +3408,14 @@
         }
       ]
     },
-    "AnalysisUpdate": {
-      "title": "AnalysisUpdate",
+    "AnalysisUpdateFields": {
+      "title": "AnalysisUpdateFields",
       "type": "object",
       "properties": {
+        "finalize_current_answer": {
+          "type": "boolean",
+          "description": "仅route可用：显式定稿当前任务已完成的说明或查询答案；可route到同一任务保留其SQL等待状态，也可切到其他目标。该助手消息只允许这个route；宿主绑定完整正文或原成功答案回执。普通route不定稿，不授执行权。"
+        },
         "action": {
           "type": "string",
           "enum": [
@@ -2876,11 +3473,12 @@
             "maxLength": 24000
           },
           "maxItems": 8,
-          "description": "澄清问题的候选答案；question=null时传[]。"
+          "description": "澄清问题的候选答案；仅与实际question同用，开放回答可无候选（空数组或省略）。"
         },
+        "legacy_resolution_migration": {"$ref": "#/$defs/LegacyResolutionMigration"},
         "condition_patch": {
           "$ref": "#/$defs/ConditionPatch",
-          "description": "修改已存任务条件时必填，action用revise或clarify；set指定新值，unset必须提供（不清空时为[]）。route禁止携带condition_patch，因为route只登记归属。"
+          "description": "修改已存任务条件时必填，action用revise或clarify；set指定新值，unset可省略（省略即不清空任何字段，null非法）。route禁止携带condition_patch，因为route只登记归属。"
         },
         "replaces_query_id": {
           "type": [
@@ -2901,7 +3499,7 @@
           },
           "uniqueItems": true,
           "maxItems": 8,
-          "description": "本消息已回答的真实问题ID；省略或[]保留全部未答问题，仅已有任务revise/clarify可用。"
+          "description": "本消息中用户已真实回答，或当前有效且获准资料已唯一解决的事实问题ID；事实解决须在同次revise保存条件与依据，不能伪称用户选择。省略或[]保留其他问题，仅已有任务revise/clarify可用。"
         },
         "clarifications": {
           "type": "array",
@@ -2924,12 +3522,27 @@
           "description": "split迁移到新独立目标的原开放问题ID，保留问题正文与来源，其余原目标问题不动。"
         }
       },
-      "required": [
-        "action",
-        "options"
-      ],
       "additionalProperties": false,
       "allOf": [
+        {"if": {"required": ["legacy_resolution_migration"]}, "then": {"properties": {"action": {"const": "revise"}}}},
+        {
+          "if": {
+            "required": [
+              "finalize_current_answer"
+            ]
+          },
+          "then": {
+            "properties": {
+              "action": {
+                "const": "route"
+              }
+            },
+            "required": [
+              "task_id",
+              "expected_version"
+            ]
+          }
+        },
         {
           "if": {
             "required": [
@@ -3288,6 +3901,973 @@
         }
       ]
     },
+    "AnalysisUpdate": {
+      "title": "AnalysisUpdate",
+      "allOf": [
+        { "$ref": "#/$defs/AnalysisUpdateFields" },
+        { "required": ["action", "options"] }
+      ]
+    },
+    "EvidenceTaskRef": {
+      "title": "EvidenceTaskRef",
+      "type": "object",
+      "properties": {
+        "task_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "condition_version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 20,
+          "pattern": "^[0-9]+$"
+        }
+      },
+      "required": [
+        "task_id",
+        "condition_version"
+      ],
+      "additionalProperties": false
+    },
+    "AssetReadRef": {
+      "title": "AssetReadRef",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "version": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]{0,19})$"
+        }
+      },
+      "required": [
+        "id",
+        "version"
+      ],
+      "additionalProperties": false
+    },
+    "KnowledgeReadItem": {
+      "title": "KnowledgeReadItem",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "knowledge"
+            },
+            "ref": {
+              "$ref": "#/$defs/EvidenceRef"
+            },
+            "statement_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "structure_only": {
+              "type": "boolean"
+            },
+            "supports_cursor": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 8192,
+              "description": "独立续读所选条目或陈述的必要支持；limit=0不重传正文，保持原ref、statement_id及structure_only。"
+            },
+            "offset": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 10000000
+            },
+            "limit": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 65536
+            }
+          },
+          "required": [
+            "kind",
+            "ref"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "memory"
+            },
+            "asset_ref": {
+              "$ref": "#/$defs/AssetReadRef"
+            },
+            "part": {
+              "type": "string",
+              "enum": [
+                "body",
+                "scope",
+                "source_text"
+              ]
+            },
+            "offset": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 10000000
+            },
+            "limit": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 65536
+            }
+          },
+          "required": [
+            "kind",
+            "asset_ref",
+            "part"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "skill"
+            },
+            "asset_ref": {
+              "$ref": "#/$defs/AssetReadRef"
+            }
+          },
+          "required": [
+            "kind",
+            "asset_ref"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "SkillReadResult": {
+      "title": "SkillReadResult",
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "skill"
+        },
+        "asset_ref": {
+          "$ref": "#/$defs/AssetReadRef"
+        },
+        "state": {
+          "type": "string",
+          "enum": [
+            "ok",
+            "stale",
+            "not_available"
+          ]
+        },
+        "asset": {
+          "$ref": "#/$defs/ModelAssetPreview"
+        }
+      },
+      "required": [
+        "kind",
+        "asset_ref",
+        "state"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "const": "ok"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "asset"
+            ]
+          },
+          "else": {
+            "not": {
+              "required": [
+                "asset"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "MemoryReadResult": {
+      "title": "MemoryReadResult",
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "memory"
+        },
+        "asset_ref": {
+          "$ref": "#/$defs/AssetReadRef"
+        },
+        "part": {
+          "type": "string",
+          "enum": [
+            "body",
+            "scope",
+            "source_text"
+          ]
+        },
+        "state": {
+          "type": "string",
+          "enum": [
+            "ok",
+            "stale",
+            "not_available"
+          ]
+        },
+        "asset": {
+          "$ref": "#/$defs/ModelAssetPreview"
+        }
+      },
+      "required": [
+        "kind",
+        "asset_ref",
+        "part",
+        "state"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "const": "ok"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "asset"
+            ]
+          },
+          "else": {
+            "not": {
+              "required": [
+                "asset"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "EvidenceReadResult": {
+      "title": "EvidenceReadResult",
+      "oneOf": [
+        {
+          "$ref": "#/$defs/KnowledgeReadResult"
+        },
+        {
+          "$ref": "#/$defs/MemoryReadResult"
+        },
+        {
+          "$ref": "#/$defs/SkillReadResult"
+        }
+      ]
+    },
+    "KnowledgeReadInput": {
+      "title": "KnowledgeReadInput",
+      "type": "object",
+      "properties": {
+        "items": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 20,
+          "items": {
+            "$ref": "#/$defs/KnowledgeReadItem"
+          }
+        },
+        "task_ref": {
+          "$ref": "#/$defs/EvidenceTaskRef"
+        }
+      },
+      "required": [
+        "items"
+      ],
+      "additionalProperties": false
+    },
+    "KnowledgeReadResult": {
+      "title": "KnowledgeReadResult",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "knowledge"
+            },
+            "ref": {
+              "$ref": "#/$defs/EvidenceRef"
+            },
+            "state": {
+              "type": "string",
+              "const": "ok"
+            },
+            "statement_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "content": {
+              "type": "string"
+            },
+            "content_page": {
+              "$ref": "#/$defs/ContentPage"
+            },
+            "structure_text": {
+              "type": "string"
+            },
+            "structure_page": {
+              "$ref": "#/$defs/ContentPage"
+            },
+            "effective_structure": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/SemanticStructure"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "structure_dependencies": {
+              "type": "array",
+              "items": { "$ref": "#/$defs/EvidenceRef" },
+              "description": "本次实际核定的当前结构表与显式语义依赖；原结构说明及原登记版本保持原值。"
+            },
+            "structure_coverage": {
+              "type": "object",
+              "properties": {
+                "state": {
+                  "type": "string",
+                  "enum": [
+                    "complete",
+                    "missing_semantics"
+                  ]
+                },
+                "notes": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "required": [
+                "state",
+                "notes"
+              ],
+              "additionalProperties": false
+            },
+            "supports": {
+              "type": "array",
+              "maxItems": 50,
+              "items": {
+                "$ref": "#/$defs/DeliveredSupport"
+              }
+            },
+            "supports_total": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "supports_complete": {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            "citations": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/SourceCitation"
+              }
+            },
+            "content_state": {
+              "type": "string",
+              "enum": [
+                "complete",
+                "partial"
+              ]
+            },
+            "support_state": {
+              "type": "string",
+              "enum": [
+                "delivered",
+                "partial",
+                "unknown"
+              ]
+            },
+            "continuation": {
+              "$ref": "#/$defs/EvidenceContinuation"
+            }
+          },
+          "required": [
+            "kind",
+            "ref",
+            "state",
+            "content",
+            "content_page",
+            "supports",
+            "supports_complete",
+            "citations",
+            "content_state",
+            "support_state",
+            "continuation"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "knowledge"
+            },
+            "ref": {
+              "$ref": "#/$defs/EvidenceRef"
+            },
+            "state": {
+              "type": "string",
+              "const": "stale"
+            }
+          },
+          "required": [
+            "kind",
+            "ref",
+            "state"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "knowledge"
+            },
+            "ref": {
+              "$ref": "#/$defs/EvidenceRef"
+            },
+            "state": {
+              "type": "string",
+              "const": "not_available"
+            }
+          },
+          "required": [
+            "kind",
+            "ref",
+            "state"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "KnowledgeReadReply": {
+      "title": "KnowledgeReadReply",
+      "type": "object",
+      "properties": {
+        "items": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 20,
+          "items": {
+            "$ref": "#/$defs/EvidenceReadResult"
+          }
+        }
+      },
+      "required": [
+        "items"
+      ],
+      "additionalProperties": false
+    },
+    "SourceReadInput": {
+      "title": "SourceReadInput",
+      "type": "object",
+      "properties": {
+        "citation": {
+          "$ref": "#/$defs/SourceCitation"
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65536
+        },
+        "task_ref": {
+          "$ref": "#/$defs/EvidenceTaskRef"
+        }
+      },
+      "required": [
+        "citation"
+      ],
+      "additionalProperties": false
+    },
+    "SourceReadReply": {
+      "title": "SourceReadReply",
+      "type": "object",
+      "properties": {
+        "source": {
+          "$ref": "#/$defs/SourceKey"
+        },
+        "revision": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]{0,19})$"
+        },
+        "locator": {
+          "$ref": "#/$defs/SourceLocator"
+        },
+        "source_length": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "text": {
+          "type": "string"
+        },
+        "content_state": {
+          "type": "string",
+          "enum": [
+            "complete",
+            "partial"
+          ]
+        },
+        "next_locator": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SourceLocator"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "source",
+        "revision",
+        "locator",
+        "source_length",
+        "text",
+        "content_state",
+        "next_locator"
+      ],
+      "additionalProperties": false
+    },
+    "KnowledgeSearchInput": {
+      "title": "KnowledgeSearchInput",
+      "type": "object",
+      "properties": {
+        "view": {
+          "type": "string",
+          "enum": ["evidence", "source_identity"],
+          "description": "省略为evidence取证。source_identity的query按空白分隔名称/ID词，任一词在可读名称或标识中匹配即可返回；单独的*保留目录浏览。只匹配元信息，不解析自然语言、同义词或用户许可，不提供正文/定义/摘录/建议或个人资产，不调用付费语义检索，也不算已读证据或授予正文权限。两种视图的cursor不可互换，身份匹配语义更新后的旧绑定cursor无效。"
+        },
+        "query": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 30
+        },
+        "kinds": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 7,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "enum": [
+              "table",
+              "field",
+              "metric",
+              "document",
+              "relationship",
+              "term",
+              "query_example"
+            ]
+          }
+        },
+        "asset_after": {
+          "type": "string",
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "task_ref": {
+          "$ref": "#/$defs/EvidenceTaskRef"
+        },
+        "hints": {
+          "type": "object",
+          "properties": {
+            "business_domain": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "related_object_ids": {
+              "type": "array",
+              "maxItems": 20,
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 64,
+                "pattern": "^[A-Za-z0-9_-]+$"
+              }
+            }
+          },
+          "additionalProperties": false,
+          "description": "仅用于相关性排序，不扩大或收窄当前权限、kinds及任务来源范围。"
+        },
+        "cursor": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 65536,
+          "description": "由evidence视图search_coverage.next返回的短不透明回执引用rc1:<operation_id>，或旧JSON/gzip续读状态；宿主按当前用户/空间/会话从原成功工具回执恢复完整候选窗口，短引用不是读取凭据。保持原查询、kinds、hints和任务绑定，asset_after独立推进。source_identity视图沿用独立cursor。"
+        }
+      },
+      "required": [
+        "query"
+      ],
+      "additionalProperties": false
+    },
+    "EvidenceContinuation": {
+      "title": "EvidenceContinuation",
+      "type": "object",
+      "properties": {
+        "content_next_offset": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "supports_next_cursor": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "content_next_offset",
+        "supports_next_cursor"
+      ],
+      "additionalProperties": false
+    },
+    "KnowledgeSearchHit": {
+      "title": "KnowledgeSearchHit",
+      "oneOf": [
+        {
+          "title": "SourceIdentityHit",
+          "type": "object",
+          "properties": {
+            "record_kind": {"type": "string", "const": "source_identity"},
+            "name": {"type": "string"},
+            "kind": {"type": "string", "enum": ["table", "field", "metric", "document", "relationship", "term", "query_example"]},
+            "object_id": {"type": "string", "minLength": 1, "maxLength": 64, "pattern": "^[A-Za-z0-9_-]+$"},
+            "object_version": {"type": "string", "pattern": "^(0|[1-9][0-9]{0,19})$", "description": "若有知识对象，这是当前对象版本，不是已读正文引用。"},
+            "source_keys": {"type": "array", "maxItems": 1000, "items": {"$ref": "#/$defs/SourceKey"}},
+            "roots_complete": {"type": "boolean", "description": "来源映射是否完整；false时不得将空/部分映射当无来源。完整也不代表聚合整源符合用户细范围，更不代表读过正文。"}
+          },
+          "required": ["record_kind", "name", "source_keys", "roots_complete"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "record_kind": {
+              "type": "string",
+              "const": "knowledge_entry"
+            },
+            "ref": {
+              "$ref": "#/$defs/EvidenceRef"
+            },
+            "statement_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "name": {
+              "type": "string"
+            },
+            "kind": {
+              "type": "string",
+              "enum": [
+                "table",
+                "field",
+                "metric",
+                "document",
+                "relationship",
+                "term",
+                "query_example"
+              ]
+            },
+            "definition": {
+              "type": "string"
+            },
+            "scope_text": {
+              "type": "string"
+            },
+            "supports": {
+              "type": "array",
+              "maxItems": 50,
+              "items": {
+                "$ref": "#/$defs/DeliveredSupport"
+              }
+            },
+            "supports_complete": {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            "example_refs": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/EvidenceRef"
+              }
+            },
+            "citations": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/SourceCitation"
+              }
+            },
+            "content_state": {
+              "type": "string",
+              "enum": [
+                "complete",
+                "partial"
+              ]
+            },
+            "support_state": {
+              "type": "string",
+              "enum": [
+                "delivered",
+                "partial",
+                "unknown"
+              ]
+            },
+            "continuation": {
+              "$ref": "#/$defs/EvidenceContinuation"
+            }
+          },
+          "required": [
+            "record_kind",
+            "ref",
+            "name",
+            "kind",
+            "definition",
+            "scope_text",
+            "supports",
+            "supports_complete",
+            "example_refs",
+            "citations",
+            "content_state",
+            "support_state",
+            "continuation"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "record_kind": {
+              "type": "string",
+              "const": "source_excerpt"
+            },
+            "citation": {
+              "$ref": "#/$defs/SourceCitation"
+            },
+            "source_length": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "text": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            },
+            "content_state": {
+              "type": "string",
+              "enum": [
+                "complete",
+                "partial"
+              ]
+            },
+            "support_state": {
+              "type": "string",
+              "enum": [
+                "unknown"
+              ]
+            },
+            "semantic_status": {
+              "type": "string",
+              "enum": [
+                "pending",
+                "partial",
+                "ready",
+                "failed"
+              ]
+            }
+          },
+          "required": [
+            "record_kind",
+            "citation",
+            "source_length",
+            "text",
+            "name",
+            "content_state",
+            "support_state",
+            "semantic_status"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "KnowledgeSearchCoverage": {
+      "title": "KnowledgeSearchCoverage",
+      "type": "object",
+      "properties": {
+        "channels": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 3,
+          "items": {
+            "type": "object",
+            "properties": {
+              "channel": {
+                "type": "string",
+                "enum": [
+                  "exact",
+                  "bm25",
+                  "dense"
+                ]
+              },
+              "state": {
+                "type": "string",
+                "enum": [
+                  "available",
+                  "unavailable",
+                  "not_configured"
+                ]
+              }
+            },
+            "required": [
+              "channel",
+              "state"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "state": {
+          "type": "string",
+          "enum": [
+            "searched",
+            "bounded"
+          ]
+        },
+        "reasons": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "enum": [
+              "index_lag",
+              "candidate_limit",
+              "deadline",
+              "channel_unavailable"
+            ]
+          }
+        },
+        "next": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "evidence视图有后页时为宿主生成的短不透明回执引用rc1:<operation_id>，长度不超过96 ASCII字节；宿主只在原成功工具回执持久化完整候选窗口后发布，同操作重放返回同一引用。无后页为null。source_identity视图沿用独立cursor。"
+        }
+      },
+      "required": [
+        "channels",
+        "state",
+        "reasons",
+        "next"
+      ],
+      "additionalProperties": false
+    },
+    "KnowledgeSearchReply": {
+      "title": "KnowledgeSearchReply",
+      "type": "object",
+      "properties": {
+        "hits": {
+          "type": "array",
+          "maxItems": 30,
+          "items": {
+            "$ref": "#/$defs/KnowledgeSearchHit"
+          }
+        },
+        "search_coverage": {
+          "$ref": "#/$defs/KnowledgeSearchCoverage"
+        },
+        "personal_memories": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "selected_skills": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "next_asset_after": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "asset_total": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "asset_cursor_invalid": {
+          "type": "boolean"
+        },
+        "memory_retrieval": {
+          "type": "string",
+          "description": "个人记忆检索通道：受限任务来源门生效时按资产真实来源过滤，仅无可证明同源记忆时标记excluded_by_source_limits；命中侧过滤事实见回执source_limits块。"
+        }
+      },
+      "required": [
+        "hits",
+        "search_coverage",
+        "personal_memories",
+        "selected_skills",
+        "next_asset_after",
+        "asset_total",
+        "asset_cursor_invalid",
+        "memory_retrieval"
+      ],
+      "additionalProperties": false
+    },
     "SearchInput": {
       "title": "SearchInput",
       "type": "object",
@@ -3420,8 +5000,8 @@
       "type": "object",
       "properties": {
         "semantic_resolution": {
-          "$ref": "#/$defs/QuerySemanticResolution",
-          "description": "与任务当前条件声明对齐：条件已声明决策时省略即继承；携带须与声明逐字一致；条件未声明时按本轮真实用户原话记录explicit_user或如实记录needs_clarification。"
+          "$ref": "#/$defs/SemanticResolution",
+          "description": "省略继承目标条件版本已有采纳说明；兼容携带只核同义声明，不能独立另作决定。新任务未决定时登记clarifications，改变解释先同次修订条件。旧形状仅沿旧格式兼容。"
         },
         "task_id": {
           "type": "string",
@@ -3720,6 +5300,9 @@
       "title": "DataToolInvocation",
       "type": "object",
       "properties": {
+        "answer_handoff": {
+          "$ref": "#/$defs/AnswerHandoff"
+        },
         "run_id": {
           "type": "string",
           "minLength": 1,
@@ -3757,11 +5340,38 @@
             "save_analysis_report",
             "read_analysis_report",
             "prepare_skill_draft",
-            "present_analysis_answer"
+            "present_analysis_answer",
+            "prepare_analysis_answer"
           ]
         },
         "arguments": {
           "type": "object"
+        },
+        "response_budget": {
+          "type": "object",
+          "description": "宿主按实际Pi投影与同批工具共享余量分配；不参与业务身份，不属于模型工具参数。历史调用可缺省。",
+          "properties": {
+            "max_bytes": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 262144
+            },
+            "estimated_tokens": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 2000000
+            },
+            "projection_fingerprint": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          },
+          "required": [
+            "max_bytes",
+            "estimated_tokens",
+            "projection_fingerprint"
+          ],
+          "additionalProperties": false
         },
         "checkpoint": {
           "$ref": "#/$defs/Checkpoint"
@@ -3777,10 +5387,51 @@
       ],
       "additionalProperties": false
     },
+    "SourceContextBlocker": {
+      "title": "SourceContextBlocker",
+      "type": "string",
+      "enum": [
+        "input_not_routed",
+        "source_scope_unknown",
+        "context_refresh_pending"
+      ],
+      "description": "既有来源准入判定的阻断原因：本条输入未归属、有效来源声明未定、或等待原上下文刷新。仅用于恢复指导，不授予权限或改变来源范围。"
+    },
     "DataToolOutcome": {
       "title": "DataToolOutcome",
       "type": "object",
       "properties": {
+        "frozen_notification_covered": {
+          "type": "boolean",
+          "description": "宿主按本运行原通知query/task/condition及其原scope核验全部实际冻结答案后的覆盖事实；与control_delivery共同计算，不从source_query_ids推断。只随控制状态回执更新，不授来源或SQL权限。"
+        },
+        "answer_task_ref": {
+          "$ref": "#/$defs/EvidenceTaskRef",
+          "description": "成功答案的原工具登记归属，来自宿主task_id/task_condition_version；与实际sources和通知交付目标分开，不改原回执存储字节。"
+        },
+        "source_context_ready": {
+          "type": "boolean",
+          "description": "宿主核对本消息归属和来源声明后的正文准入状态；不由模型填写。若context_reset存在，Pi先完成既有重投影/刷新再采用新正文。"
+        },
+        "source_context_blocker": {
+          "$ref": "#/$defs/SourceContextBlocker",
+          "description": "未就绪原因，由原判定同次产出；就绪时省略。旧回执可缺省，不据缺省推断已就绪，恢复时采用当前宿主事实。"
+        },
+        "answer_parts": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/AnswerPartReference"
+          },
+          "maxItems": 24
+        },
+        "tool_contract_version": {
+          "type": "integer",
+          "enum": [
+            1,
+            2
+          ],
+          "description": "生成该结果的原tool合同版本，成功与明确拒绝均沿原登记值；历史缺失按1，Node可由已校验的原OperationReceipt补足。"
+        },
         "operation_id": {
           "type": "string",
           "minLength": 1,
@@ -3808,11 +5459,58 @@
             "save_analysis_report",
             "read_analysis_report",
             "prepare_skill_draft",
-            "present_analysis_answer"
+            "present_analysis_answer",
+            "prepare_analysis_answer"
           ]
+        },
+        "superseded_query_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64,
+            "pattern": "^[A-Za-z0-9_-]+$"
+          },
+          "description": "本次条件修订实际作废的未提交SQL草稿ID；宿主同事务生成，消费者撤下旧观察。缺省表示旧回执未提供该信息，不据此推定草稿有效。"
         },
         "data": {
           "type": "object"
+        },
+        "context_reset": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "task_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "pattern": "^[A-Za-z0-9_-]+$"
+            },
+            "condition_version": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 20,
+              "pattern": "^[0-9]+$"
+            }
+          },
+          "required": [
+            "task_id",
+            "condition_version"
+          ],
+          "additionalProperties": false,
+          "description": "宿主成功回执声明需要Pi原生重投影的活动任务。省略表示无需调整。"
+        },
+        "control_delivery": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ControlDelivery"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "required": [
@@ -3826,6 +5524,18 @@
       "title": "WorkspaceContext",
       "type": "object",
       "properties": {
+        "frozen_notification_covered": {
+          "type": "boolean",
+          "description": "启动/恢复/刷新时，宿主按原通知条件scope核验已冻结答案的覆盖事实。缺省不证明已覆盖，不能凭query_id命中扩大通知范围。"
+        },
+        "source_context_ready": {
+          "type": "boolean",
+          "description": "当前输入已归属且来源范围可确定，才可将证据正文交给模型。false时只提供用户原话及控制/来源身份元信息，保留同一Pi会话而暂不发送旧资料正文。v2派发和刷新由宿主计算；旧v1缺省不改变原行为。"
+        },
+        "source_context_blocker": {
+          "$ref": "#/$defs/SourceContextBlocker",
+          "description": "与本快照source_context_ready同次计算的未就绪原因；仅控制信息，不含来源正文。就绪时省略，旧快照缺省仍沿原准入行为。"
+        },
         "tasks": {
           "type": "array",
           "items": {
@@ -3860,8 +5570,7 @@
           "type": "string"
         },
         "authority_snapshot": {
-          "type": "object",
-          "additionalProperties": true
+          "$ref": "#/$defs/AuthoritySnapshot"
         },
         "asset_counts": {
           "type": "object",
@@ -3895,16 +5604,48 @@
           "uniqueItems": true,
           "description": "当前输入的持久全部任务归属；恢复时按当前lifecycle继续剩余目标。"
         },
+        "active_task_ref": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "task_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "pattern": "^[A-Za-z0-9_-]+$"
+            },
+            "condition_version": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 20,
+              "pattern": "^[0-9]+$"
+            }
+          },
+          "required": [
+            "task_id",
+            "condition_version"
+          ],
+          "additionalProperties": false,
+          "description": "会话持久活动取证任务：一次派发只绑定一个活动任务，受限读取与轮内重投影由此继承；null表示尚无活动任务。"
+        },
         "memory_retrieval": {
           "type": "string",
           "enum": [
             "mem0_authoritative",
-            "directory_fallback"
-          ]
+            "directory_fallback",
+            "excluded_by_source_limits"
+          ],
+          "description": "个人记忆注入通道：mem0_authoritative按Mem0召回注入，directory_fallback为Mem0不可用退回目录。受限任务来源门生效时按资产真实来源过滤后仍注入同源记忆，仅无可证明同源资产或来源范围未知时不注入并标记excluded_by_source_limits；与search_knowledge回执中的同值口径一致。"
         },
         "result_notification": {
           "type": "object",
           "properties": {
+            "task_ref": {
+              "$ref": "#/$defs/EvidenceTaskRef",
+              "description": "原查询所属任务和条件版本，由宿主绑定；恢复已切任务时不依赖最近查询观察窗口。旧通知缺字段沿原兼容路径读取。"
+            },
             "query_id": {
               "type": "string",
               "minLength": 1,
@@ -3925,6 +5666,16 @@
           ],
           "additionalProperties": false,
           "description": "宿主查询终态通知身份；普通用户消息省略，不从文字前缀推断成功。"
+        },
+        "control_delivery": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ControlDelivery"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "required": [
@@ -4048,7 +5799,7 @@
         "semantic_resolution": {
           "anyOf": [
             {
-              "$ref": "#/$defs/QuerySemanticResolution"
+              "$ref": "#/$defs/SemanticResolution"
             },
             {
               "type": "null"
@@ -4070,6 +5821,15 @@
             }
           ],
           "description": "保存草稿时任务条件声明的时间基准；旧草稿返回null。观察截点与批次是用户声明，不得以request_clock或平台data_freshness冒充。"
+        },
+        "text_historical": {
+          "type": "boolean",
+          "description": "正文按历史记录展示：来源已改版或结果已漂移，但记录仍可核。SQL、参数与说明保留原样，不能作为当前口径或执行依据；需要当前数据须重新确认。"
+        },
+        "timeline_event_seq": {
+          "type": ["string", "null"],
+          "pattern": "^(0|[1-9][0-9]{0,19})$",
+          "description": "原查询首次query_changed事件的持久序号，作为对话时间线中查询卡的稳定锚点；旧记录无对应事件时为null，旧Schema解码兼容可缺省，前端已有值不被后续有限事件页覆盖。"
         }
       },
       "required": [
@@ -4552,12 +6312,12 @@
               "semantic_resolution"
             ]
           },
-          "uniqueItems": true
+          "uniqueItems": true,
+          "description": "清除指定条件字段。省略即空集合（不清空任何字段），null非法；显式数组仍清除列出的字段。"
         }
       },
       "required": [
-        "set",
-        "unset"
+        "set"
       ],
       "additionalProperties": false
     },
@@ -4595,6 +6355,35 @@
     "ModelAssetPreview": {
       "title": "ModelAssetPreview",
       "type": "object",
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "scope": {
+                "const": ""
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "scope_page"
+            ],
+            "properties": {
+              "scope_page": {
+                "properties": {
+                  "complete": {
+                    "const": false
+                  },
+                  "next_offset": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                }
+              }
+            }
+          }
+        }
+      ],
       "properties": {
         "id": {
           "type": "string",
@@ -4620,7 +6409,6 @@
         },
         "scope": {
           "type": "string",
-          "minLength": 1,
           "maxLength": 24000
         },
         "version": {
@@ -4924,17 +6712,91 @@
             "unconfigured"
           ]
         },
+        "index_lag": {
+          "type": "boolean",
+          "description": "是否实际查到旧投影或漏索引（覆盖检查已完成并确认滞后）。incomplete还可能是检查未完成，见index_check_incomplete；两者不能互相反推。"
+        },
+        "index_check_incomplete": {
+          "type": "boolean",
+          "description": "覆盖检查因期限耗尽或读取超时未完成；此时没有已证滞后，不能报index_lag，未覆盖原因以deadline/通道事实表达。"
+        },
         "scope_applied": {
           "type": "boolean"
         },
         "query_terms_complete": {
           "type": "boolean",
           "description": "候选谓词是否覆盖全部去重检索词项；false时应改写或拆分查询，不能据空结果断言没有资料。"
+        },
+        "candidate_count": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "本次实际接收的唯一候选记录身份数（有效性筛除与合并前，跨通道跨轮去重累计）；达到candidate_limit即如实报覆盖不足。"
+        },
+        "channels": {
+          "type": "object",
+          "properties": {
+            "lexical": {
+              "$ref": "#/$defs/ChannelProgress"
+            },
+            "dense": {
+              "$ref": "#/$defs/ChannelProgress"
+            },
+            "raw": {
+              "$ref": "#/$defs/ChannelProgress"
+            }
+          },
+          "required": [
+            "lexical",
+            "dense"
+          ],
+          "additionalProperties": false,
+          "description": "逐通道有界进度；足够本页结果不表示穷举了该通道。"
         }
       },
       "required": [
         "state",
         "candidate_limit"
+      ],
+      "additionalProperties": false
+    },
+    "ChannelProgress": {
+      "title": "ChannelProgress",
+      "type": "object",
+      "properties": {
+        "rounds": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "shards": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "completed": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "exhausted": {
+          "type": "boolean"
+        },
+        "uncovered": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "candidate_limit",
+            "deadline",
+            "embedding_unavailable",
+            null
+          ],
+          "description": "未覆盖原因：停在候选额度、共享期限，或dense因查询嵌入不可用停轮；null且exhausted=true表示该通道已穷举。"
+        }
+      },
+      "required": [
+        "rounds",
+        "shards",
+        "completed",
+        "exhausted"
       ],
       "additionalProperties": false
     },
@@ -5013,8 +6875,15 @@
           "description": "整体替换时间口径角色；清空使用unset。"
         },
         "semantic_resolution": {
-          "$ref": "#/$defs/QuerySemanticResolution",
-          "description": "保存口径决策及采纳来源；清空使用unset。"
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SemanticResolution"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "只更新已采用解释及来源；null/unset只清说明，不解决开放问题。旧未决通过明确legacy_resolution_migration转换。"
         }
       },
       "additionalProperties": false,
@@ -5468,6 +7337,23 @@
       "title": "MemoryExtractionRequest",
       "type": "object",
       "properties": {
+        "previous_memory": {
+          "description": "修订时由宿主从本人可用的expected_version绑定的旧记忆；只作解析指代和保留未改限定的资料，当前真实指令优先。新建时省略或为null。",
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "id": { "type": "string", "minLength": 1, "maxLength": 64, "pattern": "^[A-Za-z0-9_-]+$" },
+                "version": { "type": "string", "pattern": "^(0|[1-9][0-9]{0,19})$" },
+                "body": { "type": "string", "maxLength": 40000 },
+                "scope": { "type": "string", "minLength": 1, "maxLength": 24000 }
+              },
+              "required": ["id", "version", "body", "scope"],
+              "additionalProperties": false
+            },
+            { "type": "null" }
+          ]
+        },
         "operation_id": {
           "type": "string",
           "minLength": 1,
@@ -5771,17 +7657,17 @@
         "call_limit": {
           "type": "integer",
           "minimum": 1,
-          "maximum": 100000
+          "maximum": 100000,
+          "description": "可选：显式维护试用的累计调用帽；普通维护配置省略，无累计上限与期限。"
         },
         "cost_limit_micros": {
           "type": "string",
-          "pattern": "^[1-9][0-9]{0,6}$"
+          "pattern": "^[1-9][0-9]{0,6}$",
+          "description": "可选：显式维护试用的累计费用帽；普通维护配置省略。"
         }
       },
       "required": [
-        "trial_id",
-        "call_limit",
-        "cost_limit_micros"
+        "trial_id"
       ]
     },
     "SemanticAccess": {
@@ -8226,6 +10112,9 @@
       "title": "WorkspaceTask",
       "type": "object",
       "properties": {
+        "decision_state_version": {"type": "integer", "enum": [1, 2]},
+        "legacy_pending": {"$ref": "#/$defs/LegacyPending"},
+        "revision_origin": {"$ref": "#/$defs/LegacyRevisionOrigin"},
         "evidence_refs": {
           "type": "array",
           "items": {
@@ -8595,19 +10484,25 @@
               "const": "condition_changed"
             },
             "reference": {
-              "anyOf": [
-                {
-                  "$ref": "#/$defs/AnalysisReportRef"
-                },
-                {
-                  "type": "null"
-                }
-              ]
+              "$ref": "#/$defs/AnalysisReportRef"
+            },
+            "report": {
+              "$ref": "#/$defs/AnalysisReport"
+            },
+            "chart_results": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/QueryResults"
+              },
+              "minItems": 0,
+              "maxItems": 6
             }
           },
           "required": [
             "status",
-            "reference"
+            "reference",
+            "report",
+            "chart_results"
           ],
           "additionalProperties": false
         },
@@ -8790,6 +10685,84 @@
           "required": [
             "status",
             "reference"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "status": {
+              "type": "string",
+              "const": "historical"
+            },
+            "historical_analysis": {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "type": "string",
+                  "const": "report"
+                },
+                "reference": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/AnalysisReportRef"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "generated_at": {
+                  "type": "string"
+                },
+                "conditions": {
+                  "type": "array",
+                  "items": {
+                    "type": "object"
+                  }
+                },
+                "evidence": {
+                  "type": "array",
+                  "items": {
+                    "type": "object"
+                  }
+                },
+                "content_fingerprint": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "actual_sources": {
+                  "type": "object"
+                }
+              },
+              "required": [
+                "kind",
+                "reference",
+                "generated_at",
+                "conditions",
+                "evidence",
+                "content_fingerprint",
+                "actual_sources"
+              ],
+              "additionalProperties": false
+            },
+            "reference": {
+              "$ref": "#/$defs/AnalysisReportRef"
+            },
+            "content_text": {
+              "type": "string",
+              "maxLength": 8192
+            },
+            "content_page": {
+              "$ref": "#/$defs/ContentPage"
+            }
+          },
+          "required": [
+            "status",
+            "historical_analysis",
+            "reference",
+            "content_text",
+            "content_page"
           ],
           "additionalProperties": false
         }
@@ -9579,6 +11552,103 @@
       ],
       "additionalProperties": false
     },
+    "SemanticResolution": {
+      "title": "SemanticResolution",
+      "oneOf": [{"$ref": "#/$defs/QuerySemanticResolution"}, {"$ref": "#/$defs/AdoptedSemanticResolution"}],
+      "description": "旧未决形状与新采纳说明仅在兼容边界解码；实际条件格式由宿主decision_state_version决定。"
+    },
+    "AdoptedSemanticResolution": {
+      "title": "AdoptedSemanticResolution",
+      "type": "object",
+      "properties": {
+        "interpretation": {"type": "string", "minLength": 1, "maxLength": 1600, "pattern": "\\S"},
+        "basis": {"type": "string", "enum": ["explicit_user", "unambiguous"]},
+        "user_quote": {"type": ["string", "null"], "minLength": 1, "maxLength": 24000},
+        "adoption_message_id": {"type": ["string", "null"], "minLength": 1, "maxLength": 64},
+        "evidence_refs": {"type": "array", "items": {"$ref": "#/$defs/EvidenceRef"}, "maxItems": 50}
+      },
+      "required": ["interpretation", "basis", "user_quote"],
+      "additionalProperties": false,
+      "allOf": [{
+        "if": {"properties": {"basis": {"const": "explicit_user"}}},
+        "then": {"properties": {"user_quote": {"type": "string", "pattern": "\\S"}}},
+        "else": {"properties": {"user_quote": {"type": "null"}, "adoption_message_id": {"type": "null"}}}
+      }],
+      "description": "新格式仅记录已经采用的解释。explicit_user引用本轮完整原话，null/省略采纳身份由宿主绑定；原已核对象可同文继承。未决只登记clarifications，无问题且条件充分时不要求本对象。"
+    },
+    "LegacyPendingItem": {
+      "title": "LegacyPendingItem",
+      "type": "object",
+      "properties": {
+        "index": {"type": "integer", "minimum": 0},
+        "text": {"type": "string", "minLength": 1},
+        "text_unavailable": {"type": "boolean", "const": true}
+      },
+      "required": ["index"],
+      "oneOf": [{"required": ["text"], "not": {"required": ["text_unavailable"]}}, {"required": ["text_unavailable"], "not": {"required": ["text"]}}],
+      "additionalProperties": false
+    },
+    "LegacyPending": {
+      "title": "LegacyPending",
+      "type": "object",
+      "properties": {
+        "condition_version": {"type": "string", "pattern": "^[1-9][0-9]*$"},
+        "items": {"type": "array", "items": {"$ref": "#/$defs/LegacyPendingItem"}, "minItems": 1}
+      },
+      "required": ["condition_version", "items"],
+      "additionalProperties": false,
+      "description": "旧条件未决的只读投影；索引来自原数组，basis-only旧项用索引0。不授采纳或执行权。"
+    },
+    "LegacyRevisionOrigin": {
+      "title": "LegacyRevisionOrigin",
+      "type": "object",
+      "properties": {
+        "operation_id": {"type": "string", "minLength": 1, "maxLength": 64},
+        "origin_run_id": {"type": "string", "minLength": 1, "maxLength": 64},
+        "message_id": {"type": "string", "minLength": 1, "maxLength": 64},
+        "user_supplied": {"type": "boolean"},
+        "user_quote": {"type": ["string", "null"], "maxLength": 24000}
+      },
+      "required": ["operation_id", "origin_run_id", "message_id", "user_supplied", "user_quote"],
+      "additionalProperties": false,
+      "description": "显式读取旧条件版本时接回的真实成功修订出处；原话只说明来源，不自动证明采纳或授执行权。"
+    },
+    "LegacyResolutionLink": {
+      "title": "LegacyResolutionLink",
+      "type": "object",
+      "properties": {
+        "pending_index": {"type": "integer", "minimum": 0},
+        "clarification_id": {"type": "string", "minLength": 1, "maxLength": 64, "pattern": "^[A-Za-z0-9_-]+$"},
+        "resolution_condition_version": {"type": "string", "pattern": "^[1-9][0-9]*$"},
+        "condition_fields": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "enum": ["time_start", "time_end", "timezone", "metric", "channel", "group_by", "filters", "knowledge_refs", "notes", "source_limits", "time_roles", "semantic_resolution"]}}
+      },
+      "required": ["pending_index", "clarification_id"],
+      "dependentRequired": {"resolution_condition_version": ["condition_fields"], "condition_fields": ["resolution_condition_version"]},
+      "additionalProperties": false
+    },
+    "LegacyResolutionMigration": {
+      "title": "LegacyResolutionMigration",
+      "type": "object",
+      "properties": {
+        "from_condition_version": {"type": "string", "pattern": "^[1-9][0-9]*$"},
+        "links": {"type": "array", "items": {"$ref": "#/$defs/LegacyResolutionLink"}}
+      },
+      "required": ["from_condition_version", "links"],
+      "additionalProperties": false,
+      "description": "仅revise显式转换旧未决。每项链接实际问题；已resolved项给原条件版本及所指顶层字段，宿主核实际回执/原消息及字段来源。无依据保持或恢复open，未关联旧项登记open。"
+    },
+    "CurrentAnalysisUpdate": {
+      "title": "CurrentAnalysisUpdate",
+      "allOf": [{"$ref": "#/$defs/AnalysisUpdateFields"}, {"properties": {
+        "conditions": {"properties": {"semantic_resolution": {"anyOf": [{"$ref": "#/$defs/AdoptedSemanticResolution"}, {"type": "null"}]}}},
+        "condition_patch": {"properties": {"set": {"properties": {"semantic_resolution": {"anyOf": [{"$ref": "#/$defs/AdoptedSemanticResolution"}, {"type": "null"}]}}}}}
+      }},
+        { "required": ["action"] }]
+    },
+    "CurrentRequestQueryInput": {
+      "title": "CurrentRequestQueryInput",
+      "allOf": [{"$ref": "#/$defs/RequestQueryInput"}, {"properties": {"semantic_resolution": {"$ref": "#/$defs/AdoptedSemanticResolution"}}}]
+    },
     "QuerySemanticResolution": {
       "title": "QuerySemanticResolution",
       "type": "object",
@@ -10361,6 +12431,28 @@
           "type": "string",
           "maxLength": 200,
           "description": "observation_cutoff/data_batch在同名角色多条时按field_ref对齐声明；缺省要求该角色唯一。"
+        },
+        "format": {
+          "type": "object",
+          "properties": {
+            "style": {
+              "enum": [
+                "raw",
+                "decimal",
+                "percent"
+              ]
+            },
+            "precision": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 12
+            }
+          },
+          "required": [
+            "style"
+          ],
+          "additionalProperties": false,
+          "description": "展示格式：缺省或raw为原值；decimal为固定小数位；percent只对单个ratio乘100加百分号。decimal/percent必须给precision，raw不接受precision。展示字符串不写回查询结果。"
         }
       },
       "required": [
@@ -10426,6 +12518,67 @@
               "metadata"
             ]
           }
+        },
+        {
+          "if": {
+            "properties": {
+              "format": {
+                "properties": {
+                  "style": {
+                    "enum": [
+                      "decimal",
+                      "percent"
+                    ]
+                  }
+                },
+                "required": [
+                  "style"
+                ]
+              }
+            },
+            "required": [
+              "format"
+            ]
+          },
+          "then": {
+            "properties": {
+              "format": {
+                "required": [
+                  "precision"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "format": {
+                "properties": {
+                  "style": {
+                    "const": "raw"
+                  }
+                },
+                "required": [
+                  "style"
+                ]
+              }
+            },
+            "required": [
+              "format"
+            ]
+          },
+          "then": {
+            "properties": {
+              "format": {
+                "not": {
+                  "required": [
+                    "precision"
+                  ]
+                }
+              }
+            }
+          }
         }
       ],
       "title": "AnalysisAnswerValue"
@@ -10437,8 +12590,7 @@
           "type": "string",
           "minLength": 1,
           "maxLength": 6000,
-          "description": "解释模板，数字/日期/单位换算结果全部用{{name}}引用values；不在模板中写数字或SQL代码块。定性解释必须有依据，不写未经证实的因果。",
-          "pattern": "^[^0-9０-９]*$"
+          "description": "解释模板，定量结果用{{name}}引用values；正常语义数字（如零分母说明、年份、编号）可以直写，SQL代码块仍不放模板。定性解释必须有依据，不写未经证实的因果。"
         },
         "sources": {
           "type": "array",
@@ -10464,6 +12616,33 @@
       "additionalProperties": false,
       "title": "PresentAnalysisAnswerInput"
     },
+    "PrepareAnalysisAnswerInput": {
+      "title": "PrepareAnalysisAnswerInput",
+      "type": "object",
+      "properties": {
+        "sources": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/AnalysisAnswerSource"
+          },
+          "minItems": 1,
+          "maxItems": 8
+        },
+        "values": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/AnalysisAnswerValue"
+          },
+          "maxItems": 60
+        }
+      },
+      "required": [
+        "sources",
+        "values"
+      ],
+      "additionalProperties": false,
+      "description": "准备数值绑定：不接收template、不返回完整answer_text；成功回执提供bindings与required_suffix，正文由Pi下一次自然生成。"
+    },
     "SourceKey": {
       "title": "SourceKey",
       "type": "object",
@@ -10487,7 +12666,7 @@
         "id"
       ],
       "additionalProperties": false,
-      "description": "来源的稳定身份；不包含修订号，也不使用索引chunk ID。"
+      "description": "来源的稳定身份。kind和id须成对原样使用source_identity回执的source_keys或已有citation.source；不按资料名称、object_id前缀或正文是文档来猜kind，不将document改成platform。不包含修订号，也不使用索引chunk ID。"
     },
     "SourceLocator": {
       "title": "SourceLocator",
@@ -10792,6 +12971,73 @@
       ],
       "additionalProperties": false
     },
+    "DeliveredSupport": {
+      "title": "DeliveredSupport",
+      "type": "object",
+      "properties": {
+        "support_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "role": {
+          "type": "string",
+          "enum": [
+            "prerequisite",
+            "exception",
+            "calculation_dependency"
+          ]
+        },
+        "reference": {
+          "$ref": "#/$defs/SemanticReference"
+        },
+        "content": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "content_page": {
+          "$ref": "#/$defs/ContentPage",
+          "description": "支持正文自己的Unicode字符页；游标仍沿supports_next_cursor继续。同一支持的尾页不代表本回执已包含整条支持。"
+        },
+        "embedded_in": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/EmbeddedSupportLocation"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "delivered_in": {
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string",
+              "pattern": "^/(items/[0-9]+/content|hits/[0-9]+/(definition|scope_text|text))$"
+            },
+            "locator": {
+              "$ref": "#/$defs/SourceLocator"
+            }
+          },
+          "required": [
+            "path",
+            "locator"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "support_id",
+        "role",
+        "reference",
+        "content",
+        "embedded_in"
+      ],
+      "additionalProperties": false
+    },
     "SemanticStatement": {
       "title": "SemanticStatement",
       "type": "object",
@@ -10830,6 +13076,13 @@
           "items": {
             "$ref": "#/$defs/SemanticSupport"
           }
+        },
+        "supports_complete": {
+          "type": [
+            "boolean",
+            "null"
+          ],
+          "description": "人工或整理成果对该陈述支持提取范围的明确完整性声明；历史缺字段或null为unknown，不从空supports或ready推导。"
         }
       },
       "required": [
@@ -10945,6 +13198,58 @@
       ],
       "additionalProperties": false
     },
+    "HumanStatementInput": {
+      "title": "HumanStatementInput",
+      "type": "object",
+      "properties": {
+        "key": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "target": {
+          "$ref": "#/$defs/EvidenceRef"
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100000
+        },
+        "scope_text": {
+          "type": "string",
+          "maxLength": 100000
+        },
+        "citations": {
+          "type": "array",
+          "maxItems": 50,
+          "items": {
+            "$ref": "#/$defs/SourceCitation"
+          }
+        },
+        "supports": {
+          "type": "array",
+          "maxItems": 50,
+          "items": {
+            "$ref": "#/$defs/PreparedSupport"
+          }
+        },
+        "supports_complete": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "key",
+        "target",
+        "text",
+        "scope_text",
+        "citations",
+        "supports"
+      ],
+      "additionalProperties": false
+    },
     "PreparedStatement": {
       "title": "PreparedStatement",
       "type": "object",
@@ -10978,6 +13283,13 @@
           "items": {
             "$ref": "#/$defs/PreparedSupport"
           }
+        },
+        "supports_complete": {
+          "type": [
+            "boolean",
+            "null"
+          ],
+          "description": "对该陈述已记录必要支持提取范围的明确声明；省略或null保留unknown，semantic_status不代替此字段。"
         }
       },
       "required": [
@@ -11159,6 +13471,197 @@
         "time_roles"
       ],
       "additionalProperties": false
+    },
+    "RefreshRunContext": {
+      "title": "RefreshRunContext",
+      "type": "object",
+      "properties": {
+        "run_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "lease_epoch": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]{0,19})$"
+        },
+        "sdk_tool_call_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512,
+          "pattern": "^[^\\s\\x00-\\x1f\\x7f]+$"
+        },
+        "checkpoint": {
+          "$ref": "#/$defs/Checkpoint"
+        }
+      },
+      "required": [
+        "run_id",
+        "lease_epoch",
+        "sdk_tool_call_id",
+        "checkpoint"
+      ],
+      "additionalProperties": false
+    },
+    "ControlDeliveryFact": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "enum": [
+            "query",
+            "clarification"
+          ]
+        },
+        "task_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "condition_version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 20,
+          "pattern": "^[0-9]+$"
+        },
+        "query_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "execution_state": {
+          "enum": [
+            "not_submitted",
+            "queued",
+            "submitting",
+            "running",
+            "submission_unknown",
+            "succeeded",
+            "failed",
+            "cancelled"
+          ]
+        },
+        "confirmation_state": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "clarification_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "question": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4000
+        },
+        "has_more": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "kind",
+        "task_id",
+        "condition_version"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "query"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "required": [
+              "query_id",
+              "execution_state"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "clarification"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "required": [
+              "clarification_id"
+            ]
+          }
+        }
+      ]
+    },
+    "ControlDelivery": {
+      "type": "object",
+      "properties": {
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 8000
+        },
+        "task_refs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/EvidenceTaskRef"
+          },
+          "minItems": 1,
+          "maxItems": 24,
+          "uniqueItems": true
+        },
+        "facts": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ControlDeliveryFact"
+          },
+          "maxItems": 100
+        },
+        "text_authority": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "fingerprint": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      },
+      "required": [
+        "text",
+        "task_refs",
+        "facts",
+        "fingerprint"
+      ],
+      "additionalProperties": false,
+      "description": "宿主按持久任务/查询事实生成的短控制交付；只覆盖已保存、已提交、等待结果和已持久澄清，不代表分析完成。text_authority只记录实际展示文字的来源；旧回执缺省时沿原任务字段来源核验，不能当作空来源。"
+    },
+    "ControlDeliveryRef": {
+      "type": "object",
+      "properties": {
+        "fingerprint": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      },
+      "required": [
+        "fingerprint"
+      ],
+      "additionalProperties": false
     }
   },
   "properties": {
@@ -11206,6 +13709,39 @@
     },
     "snapshot": {
       "$ref": "#/$defs/Snapshot"
+    },
+    "loadedOutputRange": {
+      "$ref": "#/$defs/LoadedOutputRange"
+    },
+    "snapshotRequest": {
+      "$ref": "#/$defs/SnapshotRequest"
+    },
+    "outputProjection": {
+      "$ref": "#/$defs/OutputProjection"
+    },
+    "snapshotRefresh": {
+      "$ref": "#/$defs/SnapshotRefresh"
+    },
+    "adoptedSemanticResolution": {
+      "$ref": "#/$defs/AdoptedSemanticResolution"
+    },
+    "legacyPendingItem": {
+      "$ref": "#/$defs/LegacyPendingItem"
+    },
+    "legacyPending": {
+      "$ref": "#/$defs/LegacyPending"
+    },
+    "legacyResolutionLink": {
+      "$ref": "#/$defs/LegacyResolutionLink"
+    },
+    "legacyResolutionMigration": {
+      "$ref": "#/$defs/LegacyResolutionMigration"
+    },
+    "currentAnalysisUpdate": {
+      "$ref": "#/$defs/CurrentAnalysisUpdate"
+    },
+    "currentRequestQueryInput": {
+      "$ref": "#/$defs/CurrentRequestQueryInput"
     },
     "appError": {
       "$ref": "#/$defs/AppError"
@@ -11285,6 +13821,9 @@
     "knowledgeEdit": {
       "$ref": "#/$defs/KnowledgeEdit"
     },
+    "humanStatementInput": {
+      "$ref": "#/$defs/HumanStatementInput"
+    },
     "knowledgeCreate": {
       "$ref": "#/$defs/KnowledgeCreate"
     },
@@ -11308,6 +13847,60 @@
     },
     "analysisUpdate": {
       "$ref": "#/$defs/AnalysisUpdate"
+    },
+    "contentPage": {
+      "$ref": "#/$defs/ContentPage"
+    },
+    "assetReadRef": {
+      "$ref": "#/$defs/AssetReadRef"
+    },
+    "memoryReadResult": {
+      "$ref": "#/$defs/MemoryReadResult"
+    },
+    "skillReadResult": {
+      "$ref": "#/$defs/SkillReadResult"
+    },
+    "evidenceReadResult": {
+      "$ref": "#/$defs/EvidenceReadResult"
+    },
+    "knowledgeReadItem": {
+      "$ref": "#/$defs/KnowledgeReadItem"
+    },
+    "knowledgeReadInput": {
+      "$ref": "#/$defs/KnowledgeReadInput"
+    },
+    "knowledgeReadResult": {
+      "$ref": "#/$defs/KnowledgeReadResult"
+    },
+    "knowledgeReadReply": {
+      "$ref": "#/$defs/KnowledgeReadReply"
+    },
+    "evidenceTaskRef": {
+      "$ref": "#/$defs/EvidenceTaskRef"
+    },
+    "sourceReadInput": {
+      "$ref": "#/$defs/SourceReadInput"
+    },
+    "sourceReadReply": {
+      "$ref": "#/$defs/SourceReadReply"
+    },
+    "knowledgeSearchInput": {
+      "$ref": "#/$defs/KnowledgeSearchInput"
+    },
+    "evidenceContinuation": {
+      "$ref": "#/$defs/EvidenceContinuation"
+    },
+    "deliveredSupport": {
+      "$ref": "#/$defs/DeliveredSupport"
+    },
+    "knowledgeSearchHit": {
+      "$ref": "#/$defs/KnowledgeSearchHit"
+    },
+    "knowledgeSearchCoverage": {
+      "$ref": "#/$defs/KnowledgeSearchCoverage"
+    },
+    "knowledgeSearchReply": {
+      "$ref": "#/$defs/KnowledgeSearchReply"
     },
     "searchInput": {
       "$ref": "#/$defs/SearchInput"
@@ -11758,6 +14351,9 @@
     },
     "SourcePreparationResult": {
       "$ref": "#/$defs/SourcePreparationResult"
+    },
+    "refreshRunContext": {
+      "$ref": "#/$defs/RefreshRunContext"
     }
   },
   "required": [
@@ -11776,6 +14372,17 @@
     "taskSnapshot",
     "runSnapshot",
     "snapshot",
+    "loadedOutputRange",
+    "snapshotRequest",
+    "outputProjection",
+    "snapshotRefresh",
+    "adoptedSemanticResolution",
+    "legacyPendingItem",
+    "legacyPending",
+    "legacyResolutionLink",
+    "legacyResolutionMigration",
+    "currentAnalysisUpdate",
+    "currentRequestQueryInput",
     "appError",
     "toolOutcome",
     "conversationReceipt",
@@ -11810,6 +14417,11 @@
     "skillSelection",
     "conditions",
     "analysisUpdate",
+    "knowledgeSearchInput",
+    "evidenceContinuation",
+    "knowledgeSearchHit",
+    "knowledgeSearchCoverage",
+    "knowledgeSearchReply",
     "searchInput",
     "readKnowledgeInput",
     "readSourceInput",
@@ -11858,7 +14470,8 @@
     "modelConnection",
     "sourceKey",
     "sourceLocator",
-    "sourceCitation"
+    "sourceCitation",
+    "refreshRunContext"
   ],
   "additionalProperties": false
 }

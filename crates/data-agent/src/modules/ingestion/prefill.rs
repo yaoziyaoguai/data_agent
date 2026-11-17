@@ -1,3 +1,5 @@
+mod input_tokens;
+
 use crate::types::{Error, Result};
 use serde_json::{Value, json};
 
@@ -32,6 +34,44 @@ pub fn timing() -> Result<(std::time::Duration, u64)> {
         std::time::Duration::from_millis(milliseconds),
         TEST_LEASE_SECONDS,
     ))
+}
+
+// 与字段事实定位共用表范围；同名定义不唯一时不能把任意一段当作该表的依据。
+pub fn table_ddl_range(body: &str, table: &str) -> Option<std::ops::Range<usize>> {
+    let spaced = format!("CREATE TABLE {table} (");
+    let compact = format!("CREATE TABLE {table}(");
+    let mut starts = body
+        .match_indices(&spaced)
+        .map(|(start, _)| start)
+        .chain(body.match_indices(&compact).map(|(start, _)| start));
+    let start = starts.next()?;
+    if starts.next().is_some() {
+        return None;
+    }
+    let end = body[start..].find(';')? + start + 1;
+    Some(start..end)
+}
+
+pub fn field_declaration_range(
+    body: &str,
+    table: &str,
+    column: &str,
+) -> Option<std::ops::Range<usize>> {
+    let ddl = table_ddl_range(body, table)?;
+    let mut offset = ddl.start;
+    let mut found = None;
+    for line in body[ddl].split_inclusive('\n') {
+        let trimmed = line.trim();
+        if trimmed.starts_with(&format!("{column} ")) {
+            if found.is_some() {
+                return None;
+            }
+            let start = offset + line.len() - line.trim_start().len();
+            found = Some(start..start + trimmed.trim_end_matches(',').len());
+        }
+        offset += line.len();
+    }
+    found
 }
 
 // 结构事实从当前原文重新提取；模型推导只放suggestion，不冒充平台注释。
@@ -70,12 +110,7 @@ pub fn refresh_facts(object: &mut Value, sources: &[Value]) {
         let authored = entry["source_facts"]["classification"] == "authored_definition";
         let quoted = if path == "ddl" {
             let table = object_id.as_str().trim_start_matches("table-");
-            body.find(&format!("CREATE TABLE {table} ("))
-                .and_then(|start| {
-                    body[start..]
-                        .find(';')
-                        .map(|end| body[start..start + end + 1].to_owned())
-                })
+            table_ddl_range(body, table).map(|range| body[range].to_owned())
         } else if path == "type" {
             let field = entry["source_facts"]["column"]
                 .as_str()
@@ -84,14 +119,7 @@ pub fn refresh_facts(object: &mut Value, sources: &[Value]) {
                 .as_str()
                 .or(field_table.as_deref())
                 .unwrap_or("");
-            let table = body
-                .find(&format!("CREATE TABLE {table_name} ("))
-                .map(|start| body[start..].split(';').next().unwrap_or(""))
-                .unwrap_or("");
-            table
-                .lines()
-                .find(|line| line.trim_start().starts_with(&format!("{field} ")))
-                .map(|line| line.trim().trim_end_matches(',').to_owned())
+            field_declaration_range(body, table_name, field).map(|range| body[range].to_owned())
         } else if path == "etl" {
             let table = object_id.trim_start_matches("table-");
             let marker = format!("-- target: {table}\n");
@@ -463,18 +491,25 @@ fn prepare_stage(
         return Err(Error::new("invalid_prefill"));
     }
     // 模型从原资料分析；不把旧建议、人工测试值或合成目录答案当作分析输入。
-    let metadata: Vec<_> = object["entries"].as_array().into_iter().flatten()
-        .filter(|entry| matches!(entry["path"].as_str(), Some("ddl" | "etl" | "type")))
-        .map(|entry| {
-            let facts = &entry["source_facts"];
-            let mut reference = json!({"source_id":facts["source_id"],"version":facts["version"],"location":facts["location"]});
-            if entry["path"] == "type" {
-                let quote = facts["quote"].as_str().unwrap_or("");
-                reference["quote"] = json!(quote.chars().take(512).collect::<String>());
-                reference["complete"] = json!(quote.chars().count()<=512 && facts["complete"]==true);
-            }
-            json!({"entry_id":entry["entry_id"],"path":entry["path"],"source_facts":reference})
-        }).collect();
+    let metadata: Vec<_> = if let Some(metadata) = input["metadata"].as_array() {
+        metadata.clone()
+    } else {
+        // 旧排队材料只允许展示完整可见来源中的类型原句，不再另开metadata白名单。
+        object["entries"].as_array().into_iter().flatten()
+            .filter(|entry|matches!(entry["path"].as_str(),Some("ddl"|"etl"|"type"))).map(|entry| {
+                let facts=&entry["source_facts"];
+                let mut reference=json!({"source_id":facts["source_id"],"version":facts["version"],"location":facts["location"]});
+                if entry["path"]=="type" {
+                    let quote=facts["quote"].as_str().unwrap_or("");
+                    let visible=!quote.is_empty() && input["sources"].as_array().into_iter().flatten().any(|source|
+                        source["source_id"]==facts["source_id"] && source["version"]==facts["version"] && source["complete"]==true
+                            && source["body"].as_str().unwrap_or("").contains(quote));
+                    if visible {reference["quote"]=json!(quote);}
+                    reference["complete"]=json!(visible && facts["complete"]==true);
+                }
+                json!({"entry_id":entry["entry_id"],"path":entry["path"],"source_facts":reference})
+            }).collect()
+    };
     let mut sources = input["sources"].clone();
     let items = sources.as_array_mut().ok_or(Error::new("invalid_input"))?;
     let quote_allowance = 4096 / items.len().max(1);
@@ -578,7 +613,8 @@ pub fn prepare_submission(
         .is_some_and(|v| !matches!(v, crate::contracts::generated::ThinkingLevel::Off));
     // 原生工具携带同源结构约束；这里只接收建议，不执行模型声明的业务副作用。
     // DeepSeek思考模式只允许auto，关闭思考时才可指定唯一提交工具。
-    let mut request = json!({"model":profile.model_id,"thinking":{"type":if thinking{"enabled"}else{"disabled"}},"stream":false,"max_tokens":profile.output_limit,"tools":[{"type":"function","function":{"name":submission_tool,"description":"提交所有待分析语义条目的说明、实际缺口及逐字来源引用。","parameters":parameters}}],"tool_choice":if thinking{json!("auto")}else{json!({"type":"function","function":{"name":submission_tool}})},"messages":[{"role":"system","content":instructions},{"role":"user","content":serde_json::to_string(&material).map_err(|_|Error::new("invalid_input"))?}]});
+    let material_text = serde_json::to_string(material).map_err(|_| Error::new("invalid_input"))?;
+    let mut request = json!({"model":profile.model_id,"thinking":{"type":if thinking{"enabled"}else{"disabled"}},"stream":false,"max_tokens":profile.output_limit,"tools":[{"type":"function","function":{"name":submission_tool,"description":"提交所有待分析语义条目的说明、实际缺口及逐字来源引用。","parameters":parameters}}],"tool_choice":if thinking{json!("auto")}else{json!({"type":"function","function":{"name":submission_tool}})},"messages":[{"role":"system","content":instructions},{"role":"user","content":material_text}]});
     if let Some(level) = profile.thinking_level.as_ref()
         && !matches!(level, crate::contracts::generated::ThinkingLevel::Off)
     {
@@ -590,6 +626,23 @@ pub fn prepare_submission(
         .len()
         > profile.payload_bytes_limit.unwrap_or(65536) as usize
     {
+        return Err(Error::new("payload_limit"));
+    }
+    // 公开BPE与模板只作分片/发送准备估计；收费预留由runtime按服务总窗口另算，
+    // 同次请求的实际max_tokens仍取原profile，usage按原调用预算快照结算。
+    let published_input_tokens = input_tokens::published_input_tokens(
+        profile,
+        instructions,
+        &material_text,
+        &request["tools"][0]["function"],
+    )?;
+    if published_input_tokens > profile.input_limit as usize {
+        if std::env::var("DATA_AGENT_DIAGNOSTICS").as_deref() == Ok("1") {
+            eprintln!(
+                "maintenance_input_limit tool={submission_tool} published_input_tokens={published_input_tokens} input_limit={}",
+                profile.input_limit
+            );
+        }
         return Err(Error::new("payload_limit"));
     }
     let request = reqwest::Client::builder()
@@ -815,6 +868,18 @@ mod tests {
         assert_eq!(candidate["entries"][0]["suggestion"]["value"], "INTEGER");
         assert_eq!(candidate["entries"][1]["suggestion"]["value"], "新含义");
         assert_eq!(candidate["entries"][2]["suggestion"]["value"], "新边界");
+        let mut wrong_version = result.clone();
+        wrong_version["entries"][0]["evidence"][0]["version"] = json!("2");
+        assert!(
+            validate_result(&input(), &wrong_version).is_err(),
+            "相同原句的错误来源修订仍拒绝"
+        );
+        let mut forged = result;
+        forged["entries"][0]["evidence"][0]["quote"] = json!("没有交付的伪造原句");
+        assert!(
+            validate_result(&input(), &forged).is_err(),
+            "有正确来源身份也不能引用未交付原句"
+        );
     }
     #[test]
     fn source_structure_needs_its_own_current_quote() {
@@ -877,6 +942,67 @@ mod tests {
             );
         }
         assert_eq!(restored, original);
+    }
+
+    fn token_dense_material() -> Value {
+        let list = vec!["0"; 5000].join(",");
+        let table = json!({"id":"synthetic-dense-table","name":"t","platform_version":"1","comment":"",
+            "columns":[{"id":"v","name":"v","data_type":"INTEGER","nullable":false,"comment":""}],
+            "ddl":"CREATE TABLE t(v INTEGER NOT NULL);","node":{"id":"synthetic-load","sql":format!("INSERT INTO t SELECT v FROM raw_values WHERE v IN ({list});"),"upstream_ids":[]}});
+        let ctx = crate::types::AccessContext {
+            user_id: "synthetic-prefill-owner".into(),
+            space_id: "synthetic-prefill-space".into(),
+            request_id: "synthetic-prefill-request".into(),
+        };
+        let object = super::super::catalog::objects(&ctx, "synthetic-capacity", &table, 1)
+            .unwrap()
+            .remove(0);
+        let body = super::super::catalog::source_text(&table);
+        assert!(body.len() < 24576, "合法来源仍在现有正文容量内");
+        assert_eq!(
+            body.matches(&list).count(),
+            2,
+            "生产来源同时保留元数据和原加工SQL"
+        );
+        json!({"sources":[{"source_id":object["source_id"],"version":"1","body":body,"complete":true,
+            "body_range":{"start_byte":0,"end_byte":body.len(),"start_line":1,"total_bytes":body.len()}}],
+            "object":object,"frozen_review_sources":[],"coverage":{"state":"complete","source_ranges":[],"gaps":[]}})
+    }
+
+    #[test]
+    #[ignore = "requires the controlled prefill URL provided by check-prefill-materials"]
+    fn token_dense_analysis_is_rejected_before_maintenance_reservation() {
+        let profile = crate::contracts::decode("ModelProfile",json!({"provider_id":"deepseek","model_id":"deepseek-flash","trial_id":"synthetic-input-capacity","price_version":"2026-10-04-peak-usd","input_limit":4096,"output_limit":4096,"toolset":"data","payload_bytes_limit":65536,"thinking_level":"high","budget_mode":"request"})).unwrap();
+        // 官方预分词的数字隔离规则使每份5000项列表至少9999 token；两份已超过4096。
+        match prepare(&token_dense_material(), &profile) {
+            Err(error) => assert_eq!(error.code, "payload_limit"),
+            Ok(prepared) => {
+                let request = prepared.request.build().unwrap();
+                let bytes = request.body().unwrap().as_bytes().unwrap().len();
+                assert!(bytes <= 65536, "反例不能先被旧字节门挡住");
+                panic!("合法请求{bytes}字节、可见输入至少19998 token，不能按4096 token签发预留");
+            }
+        }
+    }
+
+    #[test]
+    #[ignore = "requires the controlled prefill URL provided by check-prefill-materials"]
+    fn token_dense_review_is_rejected_before_its_second_reservation() {
+        let profile = crate::contracts::decode("ModelProfile",json!({"provider_id":"deepseek","model_id":"deepseek-flash","trial_id":"synthetic-review-capacity","price_version":"2026-10-04-peak-usd","input_limit":32768,"output_limit":32768,"toolset":"data","payload_bytes_limit":65536,"thinking_level":"high","budget_mode":"request"})).unwrap();
+        let input = token_dense_material();
+        let entries: Vec<_> = ["description","grain","time","keys","filters","metrics","limitations"].into_iter().enumerate().map(|(index,id)|json!({"entry_id":id,"value":if index==0 {vec!["0";9000].join(",")} else {"仅说明已给定的合成材料".into()},"gaps":[],"evidence":[{"source_id":input["sources"][0]["source_id"],"version":"1","location":"L1","quote":"# 平台原始元数据"}]})).collect();
+        let draft = json!({"entries":entries});
+        validate_result(&input, &draft).unwrap();
+        // 合法草稿再带至少17999 token，加上两份SQL列表后至少37997，输出cap足够生成此草稿。
+        match prepare_review(&input, &profile, &draft) {
+            Err(error) => assert_eq!(error.code, "payload_limit"),
+            Ok(prepared) => {
+                let request = prepared.request.build().unwrap();
+                let bytes = request.body().unwrap().as_bytes().unwrap().len();
+                assert!(bytes <= 65536, "复核反例也必须低于旧字节门");
+                panic!("合法复核{bytes}字节、输入至少37997 token，不能按32768 token签发预留");
+            }
+        }
     }
 
     #[test]

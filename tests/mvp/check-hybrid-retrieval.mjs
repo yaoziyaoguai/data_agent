@@ -1,7 +1,7 @@
 import {synchronizeSources} from './source-sync.mjs';
 import assert from 'node:assert/strict';
 import {createServer} from 'node:http';
-import {execFileSync} from 'node:child_process';
+import {spawn} from 'node:child_process';
 import {homedir} from 'node:os';
 import {readFile,writeFile} from 'node:fs/promises';
 import {randomUUID} from 'node:crypto';
@@ -11,6 +11,7 @@ import {targets,topics,table} from './shared-retrieval-fixture.mjs';
 const provider=await embeddingProvider();
 
 const collection='da_app_'+randomUUID().replaceAll('-','');
+const legacyCollection=collection+'_legacy';
 let unavailable=false,loseUpsert=false,upserts=0,queries=0,h,passed=false,created=false,buildSeconds=null;
 const checks=[],latencies=[],indexObservations=[];
 const proxy=createServer(async(req,res)=>{
@@ -25,6 +26,8 @@ const proxy=createServer(async(req,res)=>{
  }catch{res.writeHead(503,{'content-type':'application/json'});res.end('{"code":1}');}
 });await new Promise(r=>proxy.listen(0,'127.0.0.1',r));
 const tables=[...targets.map(([id,text])=>table(id,text)),...Array.from({length:1200},(_,i)=>table('synthetic_catalog_'+String(i).padStart(4,'0'),topics[i%topics.length]))];
+// 末尾对象（存储顺序最后）带多词高相关标记：不仅测精确名称，含义词也要召回末尾项。
+tables[tables.length-1].comment+='。末尾校准锚点：极光漂移多词高相关专用标记。';
 const token=(await readFile('.local/infra/milvus-root-password','utf8')).trim();
 const milvus=async(path,body)=>{
  const response=await fetch('http://127.0.0.1:19531/v2/vectordb/'+path,{method:'POST',headers:{'content-type':'application/json',authorization:'Bearer root:'+token},body:JSON.stringify({dbName:'default',collectionName:collection,...body})});
@@ -44,16 +47,16 @@ const waitCurrentIndex=async label=>{
   const coverage=response.value.search_coverage;
   indexObservations.push({stage:label,pending:state.pending,indexState:coverage.index_state,vectorState:coverage.vector_state});
   return coverage.index_state==='current'&&coverage.vector_state==='available';
- },label,900000);
+ },label,1500000);
 };
 try{
- // 05切片2前置：先用旧形状（仅dense、无sparse/text）占用配置名集合，模拟生产既有集合；
- // 新代码必须自动落到_h1代次新形状集合，旧集合不删不改、行数保持为0。
+ // 独立保留一个旧形状集合；测试显式配置并准备新目标，普通查询不得换库。
  const legacySchema={dimension:1024,idType:'VarChar',autoID:false,primaryFieldName:'id',
   vectorFieldName:'vector',metricType:'COSINE',consistencyLevel:'Strong',
   params:{max_length:'128','enableDynamicField':true}};
- await milvus('collections/create',legacySchema);
+ await milvus('collections/create',{...legacySchema,collectionName:legacyCollection});
  h=await harness({startWorker:false,env:{...provider.env,DATA_AGENT_VECTOR_URL:'http://127.0.0.1:'+proxy.address().port,DATA_AGENT_VECTOR_COLLECTION:collection,DATA_AGENT_VECTOR_TOKEN_FILE:process.cwd()+'/.local/infra/milvus-root-password'}});
+ const prepared=await h.request('/knowledge-index/rebuilds',{operation_id:randomUUID()});assert.equal(prepared.status,200,JSON.stringify(prepared.value));
  await writeFile(h.directory+'/platform/catalog.json',JSON.stringify({source_namespace:'synthetic-scale',authoritative:true,tables}));
  const start=performance.now();assert.equal((await synchronizeSources(h)).value.status, 'completed');
  const imported=h.sql("SELECT JSON_OBJECT('n',COUNT(*)) FROM knowledge_objects WHERE source_id LIKE 'catalog-%'")[0].n;assert.equal(imported,2408);
@@ -69,13 +72,13 @@ try{
   assert.ok(result.objects.slice(0,6).some(o=>o.name===id),JSON.stringify({question,names:result.objects.map(o=>o.name)}));
  }
  checks.push({name:'1204张接口表和2408个新对象的真实应用索引；协议向量与精确通道可用（中文语义质量另做真实百炼小样）',imported,buildSeconds});
- // 旧形状集合共存：全部索引落在_h1代次集合，旧集合保持零写入且未被删除。
- const legacyHas=(await milvus('collections/has',{})).has;
- const hybridHas=(await call0('collections/has',{collectionName:collection+'_h1'})).has;
- const legacyRows=await milvus('entities/query',{filter:'object_id != ""',outputFields:['id'],limit:1,consistencyLevel:'Strong'});
- assert.ok(legacyHas&&hybridHas,'旧形状集合保留且_h1代次集合已建立');
+ // 两个明确集合互不代替；索引和读取只使用配置的目标。
+ const legacyHas=(await milvus('collections/has',{collectionName:legacyCollection})).has;
+ const hybridHas=(await call0('collections/has',{collectionName:collection})).has;
+ const legacyRows=await milvus('entities/query',{collectionName:legacyCollection,filter:'object_id != ""',outputFields:['id'],limit:1,consistencyLevel:'Strong'});
+ assert.ok(legacyHas&&hybridHas,'旧形状集合保留且显式目标集合已建立');
  assert.equal(legacyRows.length,0,'旧集合不被写入（统一切换按08，不长期双写）');
- checks.push({name:'旧形状集合不能原地升级：自动落到_h1代次（chinese分析器+BM25+dense），旧集合零写入且保留'});
+ checks.push({name:'显式准备chinese+BM25+dense测试集合；旧集合零写入且保留，不自动选择目标'});
  // BM25通道中文否定区分：未付款原文必须排在已付款原文之前，不能丢否定。
  // 查询含未付款规则独有的含义词（首次申请免费），BM25分差须压过dense伪向量的随机序。
  const negation=await query('未付款订单首次申请免费处理吗');
@@ -84,40 +87,129 @@ try{
  assert.ok(unpaidAt>=0,'未付款规则必须可召回: '+JSON.stringify(names));
  if(paidAt>=0)assert.ok(unpaidAt<paidAt,'否定区分：未付款在已付款前 '+JSON.stringify(names));
  checks.push({name:'BM25通道经chinese分析器保留否定区分（未付款规则先于已付款规则召回）'});
- // 05切片3：raw_source_index消费者——文档与平台原文不等整理即入代次索引
+ // 首次/最终/除外限定词与同词异义：限定词参与区分，同词异义靠共现词消歧——
+ // 两条规则同含“最终”，查询“协议解释”须召回未付款、“手续费/除外”须召回已付款。
+ const firstOnly=await query('首次申请免费处理吗');
+ assert.ok(firstOnly.objects.slice(0,6).some(o=>o.name==='unpaid_refund_rule'),'首次限定词可召回: '+JSON.stringify(firstOnly.objects.map(o=>o.name).slice(0,6)));
+ const exclusion=await query('已付款订单运费除外吗');
+ const exNames=exclusion.objects.map(o=>o.name);
+ const exPaid=exNames.indexOf('paid_refund_rule'),exUnpaid=exNames.indexOf('unpaid_refund_rule');
+ assert.ok(exPaid>=0,'除外限定词可召回已付款规则: '+JSON.stringify(exNames));
+ if(exUnpaid>=0)assert.ok(exPaid<exUnpaid,'除外区分：已付款在未付款前');
+ const ambiguity=await query('最终解释以协议为准');
+ const amNames=ambiguity.objects.map(o=>o.name);
+ const amUnpaid=amNames.indexOf('unpaid_refund_rule'),amPaid=amNames.indexOf('paid_refund_rule');
+ assert.ok(amUnpaid>=0,'最终+协议组合可召回未付款规则: '+JSON.stringify(amNames));
+ if(amPaid>=0)assert.ok(amUnpaid<amPaid,'同词异义：同含“最终”，协议解释先于退款手续费');
+ checks.push({name:'限定词（首次/最终/除外）参与区分；同词“最终”靠共现词消歧（协议解释vs退款手续费）'});
+ // 05切片3：统一公共索引消费者——文档与平台原文不等整理即入代次索引
  // （kind=source_excerpt带source_kind/修订/位置），v1知识检索不把摘录冒充知识对象。
  let excerptRows=[];
  await until(async()=>{
-  excerptRows=await call0('entities/query',{collectionName:collection+'_h1',filter:`kind == "source_excerpt" && object_id == "${unpaid.value.id}"`,outputFields:['id','source_kind','object_version','char_offset','char_length','text'],limit:16,consistencyLevel:'Strong'});
+  excerptRows=await call0('entities/query',{collectionName:collection,filter:`kind == "source_excerpt" && object_id == "${unpaid.value.id}"`,outputFields:['id','source_kind','object_version','char_offset','char_length','text'],limit:16,consistencyLevel:'Strong'});
   return excerptRows.length>0;
  },'raw摘录已入索引',60000);
  assert.ok(excerptRows.some(r=>(r.text||'').includes('未付款订单不产生退款')),'摘录正文含否定原文');
  for(const row of excerptRows){assert.equal(row.source_kind,'document');assert.ok(Number(row.object_version)>=1);assert.ok(Number(row.char_length)>0);}
- const platformExcerpts=await call0('entities/query',{collectionName:collection+'_h1',filter:'kind == "source_excerpt" && source_kind == "platform"',outputFields:['id','object_id','object_version'],limit:4,consistencyLevel:'Strong'});
+ // 原文尾部：长文档把专有标记放到正文末尾，末块必须入索引且覆盖推进到正文终点。
+ const tailBody='开头说明。'+Array.from({length:400},(_,i)=>'第'+i+'行常规填充内容，用于把标记推到原文末尾。').join('')+'末尾专有标记：尾部锚点漂移校准专用词。';
+ const tailDoc=await h.request('/knowledge',{operation_id:randomUUID(),kind:'document',name:'long_tail_marker',body:tailBody,source_url:null,related_ids:[]});assert.equal(tailDoc.status,200,JSON.stringify(tailDoc.value));
+ let tailRows=[];
+ await until(async()=>{
+  tailRows=await call0('entities/query',{collectionName:collection,filter:`kind == "source_excerpt" && object_id == "${tailDoc.value.id}"`,outputFields:['id','char_offset','char_length','text'],limit:64,consistencyLevel:'Strong'});
+  // 等标记本身出现：摘录按批次推进，首批落地不代表末尾批次已到。
+  return tailRows.some(r=>(r.text||'').includes('尾部锚点漂移校准'));
+ },'长文末尾标记入摘录索引',120000);
+ const tailCovered=Math.max(...tailRows.map(r=>Number(r.char_offset)+Number(r.char_length)));
+ assert.ok(tailCovered>=tailBody.length-64,'末块覆盖推进到正文终点: '+tailCovered+'/'+tailBody.length
+   +' rows='+tailRows.length+' tail='+JSON.stringify(tailRows.map(r=>[Number(r.char_offset),Number(r.char_length)]).slice(-3)));
+ await until(()=>{
+  const job=h.sql(`SELECT JSON_OBJECT('open',SUM(vector_state IN ('pending','sending','unknown')),'failed',SUM(vector_state='failed')) FROM knowledge_index_jobs WHERE target_kind='knowledge_entry' AND object_id='${tailDoc.value.id}'`)[0];
+  return Number(job.open||0)===0&&Number(job.failed||0)===0;
+ },'长文知识条目索引收尾',60000);
+ checks.push({name:'原文尾部：长文末尾标记入索引，末块覆盖到正文终点（cursor处理到末尾）'});
+ const platformExcerpts=await call0('entities/query',{collectionName:collection,filter:'kind == "source_excerpt" && source_kind == "platform"',outputFields:['id','object_id','object_version'],limit:4,consistencyLevel:'Strong'});
  assert.ok(platformExcerpts.length>0,'平台来源原文同样不等整理即入摘录索引');
  const rawGuard=await query('未付款订单首次申请免费处理吗');
  assert.ok(rawGuard.objects.length>0&&rawGuard.objects.every(o=>o.kind!=='source_excerpt'),'v1知识检索不冒充raw摘录');
- // 作业如实收尾：文档作业结算、全库raw作业无失败（1204个平台来源作业量大，
- // 不要求在断言时限内全部完成，剩余保持真实queued由worker继续推进）。
+ // 作业如实收尾：文档目标结算、全库原文目标无失败（1204个平台来源目标量大，
+ // 不要求在断言时限内全部完成，剩余保持真实pending由worker继续推进）。
  await until(()=>{
-  const docJobs=h.sql(`SELECT JSON_OBJECT('open',SUM(state IN ('queued','running')),'failed',SUM(state='failed')) FROM background_jobs WHERE kind='raw_source_index' AND resource_id IN ('document-${unpaid.value.id}','document-${paid.value.id}')`)[0];
+  const docJobs=h.sql(`SELECT JSON_OBJECT('open',SUM(vector_state IN ('pending','sending','unknown')),'failed',SUM(vector_state='failed')) FROM knowledge_index_jobs WHERE target_kind='source_excerpt' AND source_kind='document' AND object_id IN ('${unpaid.value.id}','${paid.value.id}')`)[0];
   return Number(docJobs.open||0)===0&&Number(docJobs.failed||0)===0;
  },'文档raw作业收尾',60000);
- const rawFailed=h.sql("SELECT JSON_OBJECT('failed',SUM(state='failed')) FROM background_jobs WHERE kind='raw_source_index'")[0].failed;
+ const rawFailed=h.sql("SELECT JSON_OBJECT('failed',SUM(vector_state='failed')) FROM knowledge_index_jobs WHERE target_kind='source_excerpt'")[0].failed;
  assert.equal(Number(rawFailed||0),0,'raw作业不得失败');
- checks.push({name:'raw_source_index消费者：文档与平台原文不等整理即入代次索引（kind=source_excerpt带source_kind/修订/位置/正文），作业如实收尾，v1不冒充raw'});
- // Rust门控集成：同隔离库+同专用集合跑完整raw回环（写入→双通道召回→门控回源→升版滞后）。
- execFileSync(homedir()+'/.cargo/bin/cargo',['test','--offline','--locked','-p','data-agent','--lib','--','--exact','use_cases::knowledge_sources::raw_recall_tests::gated_raw_source_round_trip_recalls_revision_and_reports_lag'],{env:{...h.env,DATA_AGENT_VECTOR_URL:'http://127.0.0.1:'+proxy.address().port,DATA_AGENT_VECTOR_COLLECTION:collection,DATA_AGENT_VECTOR_TOKEN_FILE:process.cwd()+'/.local/infra/milvus-root-password'},stdio:'inherit'});
+ checks.push({name:'统一索引消费者：文档与平台原文不等整理即入代次索引（kind=source_excerpt带source_kind/修订/位置/正文），作业如实收尾，v1不冒充raw'});
+ // 整理状态≠索引滞后：pending与failed是两个独立夹具，各自有可查raw且状态如实，
+ // 已完成索引照常召回，覆盖回执不因整理状态误报index_state未就绪。本电池不配置
+ // 整理模型（没有真实模型授权），两个夹具按整理消费者写库的同一行形状显式建立：
+ // 真实文档来源、真实原文目标、明确的semantic_status与error_code，不用“有行才
+ // failed、否则pending”的分支冒充双覆盖。
+ await h.pauseWorker();
+ const prepState=source=>h.sql(`SELECT JSON_OBJECT('status',semantic_status,'error',error_code) FROM source_preparations WHERE source_id='${source}' ORDER BY method_version DESC LIMIT 1`)[0];
+ const rawRowsOf=source=>{
+  // 整理来源身份对文档带document-前缀，公共索引目标用裸对象id；平台两者相同。
+  const bare=source.startsWith('document-')?source.slice('document-'.length):source;
+  return h.sql(`SELECT JSON_OBJECT('n',COUNT(*)) FROM knowledge_index_jobs WHERE target_kind='source_excerpt' AND object_id='${bare}'`)[0].n;
+ };
+ const fixtures=[
+  {source:`document-${unpaid.value.id}`,revision:unpaid.value.version,status:'pending',error:null},
+  {source:`document-${paid.value.id}`,revision:paid.value.version,status:'failed',error:'model_fault'},
+ ];
+ for(const fixture of fixtures){
+  h.sql(`INSERT INTO source_preparations(source_id,space_id,revision,method_version,input_fingerprint,dependency_fingerprint,semantic_status,error_code,unresolved) VALUES('${fixture.source}','demo',${fixture.revision},'semantic-preparation-2','fixture-input','fixture-dependency','${fixture.status}',${fixture.error===null?'NULL':`'${fixture.error}'`},CAST('[]' AS JSON)) ON DUPLICATE KEY UPDATE semantic_status=VALUES(semantic_status),error_code=VALUES(error_code),frozen_batch=NULL,pending_draft=NULL,call_state=NULL,issued_until=NULL`);
+  assert.deepEqual(prepState(fixture.source),{status:fixture.status,error:fixture.error},`${fixture.status}夹具状态如实`);
+  assert.ok(Number(rawRowsOf(fixture.source))>0,`${fixture.status}夹具仍有可查原文目标`);
+ }
+ const afterState=await query('未付款订单首次申请免费处理吗');
+ assert.equal(afterState.search_coverage.index_state,'current','pending/failed整理状态都不误报索引未就绪');
+ assert.ok(afterState.objects.some(o=>o.name==='unpaid_refund_rule'),'已完成索引照常召回');
+ // 状态经正式对象读取路径可见，证明夹具落在真实读链上而不是旁表诱饵。
+ const pendingRead=await h.request('/knowledge/'+unpaid.value.id);
+ assert.equal(pendingRead.status,200,JSON.stringify(pendingRead.value));
+ const failedRead=await h.request('/knowledge/'+paid.value.id);
+ assert.equal(failedRead.status,200,JSON.stringify(failedRead.value));
+ const pendingObject=pendingRead.value;
+ const failedObject=failedRead.value;
+ assert.equal(pendingObject.preparation_status?.state,'pending',JSON.stringify(pendingObject.preparation_status));
+ assert.equal(failedObject.preparation_status?.state,'failed',JSON.stringify(failedObject.preparation_status));
+ assert.equal(failedObject.preparation_status?.error_code,'model_fault');
+ // 移除夹具行：它们只证明整理状态与索引覆盖分离，不改变本电池后续消费。
+ for(const fixture of fixtures)h.sql(`DELETE FROM source_preparations WHERE source_id='${fixture.source}' AND method_version='semantic-preparation-2' AND input_fingerprint='fixture-input'`);
+ await h.resumeWorker();
+ checks.push({name:'整理状态≠索引滞后：pending与failed两个独立夹具各有可查原文目标且状态如实，index_state仍current，已完成索引照常召回'});
+ // 同千表集合保留原门控回环；其余raw反例在check-source-recall专用协议环境完整执行。
+ await h.pauseWorker();
+ const queriesBeforeRecall=queries;
+ let recallOutput='';
+ await new Promise((resolve,reject)=>{
+  const child=spawn(homedir()+'/.cargo/bin/cargo',['test','--offline','--locked','-p','data-agent','--test','source_excerpt_recall','gated_raw_source_round_trip_recalls_revision_and_reports_lag','--','--exact','--test-threads=1'],{env:{...h.env,DATA_AGENT_VECTOR_URL:'http://127.0.0.1:'+proxy.address().port,DATA_AGENT_VECTOR_COLLECTION:collection,DATA_AGENT_VECTOR_TOKEN_FILE:process.cwd()+'/.local/infra/milvus-root-password'},stdio:['ignore','pipe','inherit']});
+  child.stdout.on('data',chunk=>{recallOutput+=chunk;process.stdout.write(chunk);});
+  child.once('error',reject);child.once('close',code=>code===0?resolve():reject(new Error('source excerpt recall exited '+code)));
+ });
+ assert.match(recallOutput,/test result: ok\. 1 passed; 0 failed/);
+ assert.ok(queries>queriesBeforeRecall,'子测试运行期间父HTTP服务完成了真实Milvus查询');
+ await h.resumeWorker();
  checks.push({name:'Rust门控集成：raw摘录双通道召回→门控回源→升版滞后如实报告（隔离库+专用集合）'});
  const exact=await query('synthetic_catalog_1199');assert.equal(exact.objects[0].name,'synthetic_catalog_1199');
  checks.push({name:'目录末尾精确名称优先，不受对象枚举前5000条限制'});
+ // 1200对象末尾多词高相关项：不用精确名称，仅凭含义词组合召回存储顺序最末的对象；
+ // 高分对象在末尾也按相关性返回，不能用1000候选限额解释排序前误截断。
+ const tailWords=await query('极光漂移多词高相关校准');
+ assert.ok(tailWords.objects.slice(0,6).some(o=>o.name==='synthetic_catalog_1199'),
+   '末尾对象须按多词含义召回: '+JSON.stringify(tailWords.objects.map(o=>o.name).slice(0,6)));
+ checks.push({name:'1200对象末尾多词高相关项召回（不仅测精确名称）'});
 
  await h.pauseWorker();await milvus('collections/drop',{});
  const newObject=await h.request('/knowledge',{operation_id:randomUUID(),kind:'document',name:'合成自动恢复说明',body:'当前新增对象触发丢库后的完整索引恢复。',source_url:null,related_ids:[]});assert.equal(newObject.status,200);
+ assert.equal((await query('synthetic_catalog_1199')).search_coverage.vector_state,'unavailable');
+ assert.equal((await milvus('collections/has')).has,false,'读取不创建缺失集合');
+ const recovered=await h.request('/knowledge-index/rebuilds',{operation_id:randomUUID()});assert.equal(recovered.status,200);
  await h.resumeWorker();
- await waitCurrentIndex('丢库后新增对象自动重排全体索引');
+ await waitCurrentIndex('显式重建配置集合后重排全体索引');
  for(const [id,_text,question] of targets){let result;await until(async()=>{result=await query(id);return result.search_coverage.vector_state==='available';},'自动重建后召回',15000);assert.ok(result.objects.slice(0,6).some(o=>o.name===id));assert.equal(result.search_coverage.index_state,'current');}
- checks.push({name:'同名collection丢失后新增对象，实际collection代次变化自动重建全部旧对象，不能把局部新库报成完整'});
+ checks.push({name:'同名集合丢失后查询不重建；显式维护创建新代次并重排全部旧对象，不能把局部新库报成完整'});
 
  await h.pauseWorker();
  const stranded=(await query('synthetic_catalog_1199')).objects[0];
@@ -159,13 +251,34 @@ try{
  const privateAsset=await h.request('/assets',{operation_id:randomUUID(),id:null,expected_version:null,kind:'memory',name:'私有词条hybrid_private_marker',body:'仅本人合成偏好',scope:'本人分析',verified:true,source_text:'用户输入',dependencies:[]});assert.equal(privateAsset.status,200);
  const privateRows=await milvus('entities/query',{filter:`object_id == "asset-${privateAsset.value.id}"`,outputFields:['object_id'],limit:1});assert.equal(privateRows.length,0);
  checks.push({name:'个人记忆未写入共享向量索引'});
- unavailable=true;const fallback=await query('synthetic_catalog_1199');assert.equal(fallback.retrieval_mode,'lexical_authoritative');assert.equal(fallback.search_coverage.vector_state,'unavailable');assert.equal(fallback.search_coverage.state,'candidate_limit');assert.equal(fallback.search_coverage.candidate_limit,2200);assert.equal(fallback.objects[0].name,'synthetic_catalog_1199');
+ unavailable=true;const fallback=await query('synthetic_catalog_1199');
+ assert.equal(fallback.retrieval_mode,'lexical_authoritative');
+ assert.equal(fallback.search_coverage.vector_state,'unavailable');
+ // 30个主内容已足够时停止扩深；服务故障不等于1000候选或五轮已耗尽。
+ assert.equal(fallback.search_coverage.state,'bounded');
+ assert.equal(fallback.search_coverage.candidate_limit,1000);
+ assert.ok(Number.isInteger(fallback.search_coverage.candidate_count)&&fallback.search_coverage.candidate_count>0&&fallback.search_coverage.candidate_count<=1000);
+ assert.ok(fallback.search_coverage.channels.lexical.completed>0);
+ assert.ok(fallback.search_coverage.channels.lexical.rounds>=1&&fallback.search_coverage.channels.lexical.rounds<=5);
+ assert.equal(fallback.objects[0].name,'synthetic_catalog_1199');
+ assert.equal(fallback.objects[0].entries.find(entry=>entry.path==='description')?.effective_value,tables[tables.length-1].comment);
  checks.push({name:'向量服务故障明确降级，当前精确/关键词通道仍能使用'});unavailable=false;
- passed=true;console.log(JSON.stringify({passed,checks,latencyMs:{max:Math.max(...latencies),median:[...latencies].sort((a,b)=>a-b)[Math.floor(latencies.length/2)]},officialRequests:0}));
+ // 零候选也要表达覆盖滞后：worker暂停下保存新知识（作业pending），向量故障
+ // 降级的零候选查询必须按当前覆盖报告index_state=incomplete，不得以零结果
+ // 冒充索引就绪（semantic_status与索引滞后是两回事）。
+ await h.pauseWorker();
+ unavailable=true;
+ const pendingDoc=await h.request('/knowledge',{operation_id:randomUUID(),kind:'document',name:'pending_lag_probe',body:'覆盖滞后探针正文，索引作业保持未完成。',source_url:null,related_ids:[]});assert.equal(pendingDoc.status,200,JSON.stringify(pendingDoc.value));
+ const lag=await query('氍毹魍魉绮语');
+ assert.equal(lag.objects.length,0,'零候选：词法与精确通道都不命中');
+ assert.equal(lag.search_coverage.vector_state,'unavailable');
+ assert.equal(lag.search_coverage.index_state,'incomplete','零候选仍须表达index_lag');
+ checks.push({name:'零候选覆盖滞后：pending作业使index_state=incomplete如实上报'});
+ passed=true;console.log(JSON.stringify({passed,checks,latencyMs:{max:Math.max(...latencies),median:[...latencies].sort((a,b)=>a-b)[Math.floor(latencies.length/2)]},milvusQueries:queries,milvusUpserts:upserts,officialRequests:0}));
 }finally{
  if(h)await h.close();
  if(created||(await milvus('collections/has',{})).has){await milvus('collections/drop',{});assert.equal((await milvus('collections/has',{})).has,false);}
- await call0('collections/drop',{collectionName:collection+'_h1'}).catch(()=>{}); // 清理代次集合
+ if((await milvus('collections/has',{collectionName:legacyCollection})).has)await milvus('collections/drop',{collectionName:legacyCollection});
  await new Promise(r=>proxy.close(r));await provider.close();
- await writeFile('.local/checks/mvp-hybrid-retrieval.json',JSON.stringify({passed,checks,buildSeconds,latencies,indexObservations,officialRequests:0,temporaryCollectionRemoved:true},null,2));
+ await writeFile('.local/checks/mvp-hybrid-retrieval.json',JSON.stringify({passed,checks,buildSeconds,latencies,indexObservations,milvusQueries:queries,milvusUpserts:upserts,officialRequests:0,temporaryCollectionRemoved:true},null,2));
 }

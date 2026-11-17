@@ -86,6 +86,7 @@ export async function harness(options = {}) {
   ).trim();
   const directory = root + "/.local/checks/mvp-" + name;
   await mkdir(directory, { recursive: true });
+  const platformDirectory = options.platformDirectory ?? directory + "/platform";
   const sourceSyncWorkers = [];
   const env = {
     ...process.env,
@@ -116,6 +117,8 @@ export async function harness(options = {}) {
     DATA_AGENT_QUERY_DELAY_SECONDS: "1",
     ...options.env,
   };
+  if (options.onDatabaseUrl)
+    env.DATA_AGENT_DATABASE_URL = options.onDatabaseUrl(env.DATA_AGENT_DATABASE_URL);
   if (options.sourceDirectory) {
     assert.ok(!options.platformSourceDirectory || options.platformSourceDirectory === options.sourceDirectory,
       'sourceDirectory必须同时指定API、预填Worker与平台的同一资料包');
@@ -126,7 +129,9 @@ export async function harness(options = {}) {
     "DEEPSEEK_BASE_URL",
     "DEEPSEEK_MODEL",
     "DATA_AGENT_MODEL_PROFILE",
+    "DATA_AGENT_MODEL_FAULT",
     "DATA_AGENT_FAULT",
+    "DATABASE_URL",
   ])
     delete env[k];
   if (options.profile)
@@ -251,7 +256,7 @@ export async function harness(options = {}) {
     platform = start("platform", "python3", [
       "apps/platform-mock/server.py",
       "--directory",
-      directory + "/platform",
+      platformDirectory,
       "--port",
       String(platformPort),
     ], options.platformSourceDirectory ? {DATA_AGENT_SYNTHETIC_SOURCE_DIRECTORY:options.platformSourceDirectory} : {});
@@ -330,11 +335,12 @@ export async function harness(options = {}) {
       });
       return { status: r.status, value: await r.json() };
     },
-    async capture(cid, text) {
+    async capture(cid, text, waitMs = 20000) {
       const message = await send(cid, text);
       return until(
         () => captured.find((run) => run.conversation_id === cid && run.message_id === message.message_id),
         "captured input " + message.message_id,
+        waitMs,
       );
     },
     url: "http://127.0.0.1:" + webPort,
@@ -350,7 +356,7 @@ export async function harness(options = {}) {
       platform = start("platform-resumed", "python3", [
         "apps/platform-mock/server.py",
         "--directory",
-        directory + "/platform",
+        platformDirectory,
         "--port",
         String(platformPort),
       ], options.platformSourceDirectory ? {DATA_AGENT_SYNTHETIC_SOURCE_DIRECTORY:options.platformSourceDirectory} : {});

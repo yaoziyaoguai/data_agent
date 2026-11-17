@@ -19,7 +19,7 @@ const page=await context.newPage(),checks=[],errors=[],responses=[];let passed=f
 page.on('pageerror',e=>errors.push(e.message));
 page.on('response',r=>{const p=new URL(r.url()).pathname;if(p.startsWith('/api/'))responses.push({method:r.request().method(),path:p,status:r.status()});});
 const click=name=>page.getByRole('button',{name,exact:true}).click();
-const entry=()=>page.locator('.semantic-entry').first();
+const entry=()=>page.locator('.semantic-entry').filter({has:page.locator('.entry-head strong',{hasText:'表含义'})}).first();
 try{
  await page.goto(h.url);await page.getByLabel('演示登录凭据').fill(h.tokens.alice);await click('进入工作台 →');
  await page.getByRole('button',{name:/我的积累/}).click();await click('新增记忆');
@@ -34,8 +34,19 @@ try{
  await card().getByRole('button',{name:'启用',exact:true}).click();await expandAsset(card()); await card().getByRole('button', {name: '停用',exact:true}).waitFor();
  await expandAsset(card()); await card().getByRole('button', {name: '删除',exact:true}).click();await until(async()=>await card().count()===0,'删除个人记忆');
  checks.push('个人记忆新增、来源、编辑、索引完成、停用、启用、删除真实点按');
+ await page.getByRole('button',{name:/工作台/}).first().click();await page.getByRole('button',{name:'新对话',exact:true}).click();await page.getByRole('button',{name:'查2026年9月语音任务达成率 ↗',exact:true}).click();assert.equal(await page.getByLabel('你的数据问题').inputValue(),'查2026年9月语音任务达成率');await page.getByLabel('你的数据问题').fill('查2026年1月净收入');await click('发送 ↑');await page.getByRole('heading',{name:'SQL 已准备好',exact:true}).waitFor();
+ await click('复制 SQL');assert.match(await page.evaluate(()=>navigator.clipboard.readText()),/SELECT/i);
+ await page.getByLabel('你的数据问题').fill('执行这条');await click('发送 ↑');await click('停止');await until(async()=>await page.getByRole('heading',{name:'已取消',exact:true}).count()===1,'查询取消');
+ assert.equal(await page.getByText(/本次对话中的问题/).count(),0);assert.equal(await page.getByRole('button',{name:/继续这个问题|停止这个问题的分析/}).count(),0);
+ const cid=await page.evaluate(()=>localStorage.getItem('data-agent.conversation.["demo","alice"]'));
+ const task=(await h.request('/conversations/'+cid+'/snapshot')).value.tasks[0];
+ const cancelled=await h.request('/conversations/'+cid+'/tasks/'+task.id+'/cancel',{operation_id:randomUUID(),expected_version:task.condition_version});assert.equal(cancelled.status,200);
+ assert.equal((await h.request('/conversations/'+cid+'/snapshot')).value.tasks.find(value=>value.id===task.id).lifecycle,'cancelled');
+ await click('查看全部会话 ↗');await page.getByRole('dialog').getByRole('button',{name:/^删除会话 /}).first().click();await click('删除此会话');
+ await page.getByRole('button',{name:'删除此会话',exact:true}).waitFor({state:'detached'});await discardEditor(page);
+ checks.push('新会话示例、复制SQL、聊天执行、停止运行查询与删除会话真实点按；内部问题按钮不展示，原后台取消API仍有效');
  await page.getByRole('button',{name:/语义管理/}).click();await page.locator('.object-list button').filter({hasText:'demo_order_detail'}).click();
- await page.getByText('维护操作',{exact:true}).click();await click('同步来源');await page.getByRole('button',{name:'同步来源',exact:true}).waitFor();await click('重建检索索引');
+ await page.getByText('维护操作',{exact:true}).click();await click('同步来源');await page.getByRole('region',{name:'来源同步进度'}).getByText('资料同步：已完成',{exact:true}).waitFor();await page.getByRole('button',{name:'重新同步',exact:true}).waitFor();await page.goto(h.url+'/#knowledge?object=table-demo_order_detail');await page.getByRole('heading',{name:'demo_order_detail',exact:true}).waitFor();await click('重建检索索引');
  await page.getByRole('alert').filter({hasText:'尚未配置语义检索服务'}).waitFor();
  await entry().getByRole('button',{name:'编辑',exact:true}).click();await entry().locator('textarea').fill('临时合成说明');await entry().getByRole('button',{name:'放弃本次编辑',exact:true}).click();await page.getByRole('dialog',{name:'保留刚才的修改吗？',exact:true}).getByRole('button',{name:'放弃修改',exact:true}).click();
  assert.doesNotMatch(await entry().innerText(),/临时合成说明/);
@@ -61,17 +72,6 @@ try{
  checks.push('私人草稿提交、本人范围、接受不生效和编辑保存，正式版本实际更新');
  await click('录入业务文档');await page.getByLabel('文档名称',{exact:true}).fill('合成跨表说明');await page.getByLabel('正文（支持 Markdown 章节）').fill('# 合成说明\n只用于页面检查，不是业务真值。');await until(async()=>(await page.getByRole('dialog').locator('.knowledge-picker').innerText()).includes('demo_order_detail'),'associated table name loaded');await click('保存文档');
  await page.getByRole('heading',{name:'合成跨表说明',exact:true}).waitFor();checks.push('文档创建及关联表单真实保存');
- await page.getByRole('button',{name:/工作台/}).first().click();await page.getByRole('button',{name:'新对话',exact:true}).click();await page.getByRole('button',{name:'查2026年1月净收入 ↗',exact:true}).click();assert.equal(await page.getByLabel('你的数据问题').inputValue(),'查2026年1月净收入');await click('发送 ↑');await page.getByRole('heading',{name:'SQL 已准备好',exact:true}).waitFor();
- await click('复制 SQL');assert.match(await page.evaluate(()=>navigator.clipboard.readText()),/SELECT/i);
- await page.getByLabel('你的数据问题').fill('执行这条');await click('发送 ↑');await click('停止');await until(async()=>await page.getByRole('heading',{name:'已取消',exact:true}).count()===1,'查询取消');
- assert.equal(await page.getByText(/本次对话中的问题/).count(),0);assert.equal(await page.getByRole('button',{name:/继续这个问题|停止这个问题的分析/}).count(),0);
- const cid=await page.evaluate(()=>localStorage.getItem('data-agent.conversation.["demo","alice"]'));
- const task=(await h.request('/conversations/'+cid+'/snapshot')).value.tasks[0];
- const cancelled=await h.request('/conversations/'+cid+'/tasks/'+task.id+'/cancel',{operation_id:randomUUID(),expected_version:task.condition_version});assert.equal(cancelled.status,200);
- assert.equal((await h.request('/conversations/'+cid+'/snapshot')).value.tasks.find(value=>value.id===task.id).lifecycle,'cancelled');
- await click('查看全部会话 ↗');await page.getByRole('dialog').getByRole('button',{name:/^删除会话 /}).first().click();await click('删除此会话');
- await page.getByRole('button',{name:'删除此会话',exact:true}).waitFor({state:'detached'});await discardEditor(page);
- checks.push('新会话示例、复制SQL、聊天执行、停止运行查询与删除会话真实点按；内部问题按钮不展示，原后台取消API仍有效');
  const privateAsset=await h.request('/assets',{operation_id:randomUUID(),id:null,expected_version:null,kind:'memory',name:'Alice专属合成说明',body:'仅本人记录',scope:'合成检查',verified:false,source_text:'合成测试页面录入',dependencies:[]});assert.equal(privateAsset.status,200,JSON.stringify(privateAsset.value));
  await page.getByRole('button',{name:/我的积累/}).click();await page.getByText('Alice专属合成说明',{exact:true}).waitFor();
  const logout=page.waitForResponse(r=>new URL(r.url()).pathname==='/api/session'&&r.request().method()==='DELETE');

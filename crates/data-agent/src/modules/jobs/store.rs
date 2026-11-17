@@ -60,9 +60,22 @@ pub async fn assert_job_in_tx(tx: &mut AppTx<'_>, job_id: &str, epoch: u64) -> R
 
 // 运行尚未建立时只续领取身份，不锁会话；过期或已换代绝不能续活。
 pub async fn renew_claim(pool: &MySqlPool, job: &ClaimedJob, ttl_ms: u32) -> Result<()> {
-    let changed = sqlx::query("UPDATE background_jobs SET lease_until=TIMESTAMPADD(MICROSECOND,?,UTC_TIMESTAMP(3)) WHERE id=? AND lease_owner=? AND lease_epoch=? AND state='running' AND lease_until>UTC_TIMESTAMP(3)")
+    let started = std::time::Instant::now();
+    let result = sqlx::query("UPDATE background_jobs SET lease_until=TIMESTAMPADD(MICROSECOND,?,UTC_TIMESTAMP(3)) WHERE id=? AND lease_owner=? AND lease_epoch=? AND state='running' AND lease_until>UTC_TIMESTAMP(3)")
         .bind(ttl_ms * 1000).bind(&job.id).bind(&job.worker_id).bind(job.lease_epoch)
-        .execute(pool).await?;
+        .execute(pool).await;
+    if std::env::var("DATA_AGENT_DIAGNOSTICS").as_deref() == Ok("1") {
+        eprintln!(
+            "job_claim_renew job={} worker={} epoch={} elapsed_ms={} affected={:?} storage_error={}",
+            job.id,
+            job.worker_id,
+            job.lease_epoch,
+            started.elapsed().as_millis(),
+            result.as_ref().ok().map(|value| value.rows_affected()),
+            result.is_err()
+        );
+    }
+    let changed = result?;
     if changed.rows_affected() != 1 {
         return Err(Error::new("lease_lost"));
     }
@@ -191,6 +204,143 @@ pub async fn requeue_terminal_source_in_tx(
     .await?;
     Ok(())
 }
+// 来源清单由owner核定；同时返回有效租约事实，防止重建经新队列旁路在途旧作业。
+#[derive(Clone)]
+pub struct LegacyRawJob {
+    pub id: String,
+    pub resource_id: String,
+    pub resource_version: Option<u64>,
+    pub attempts: u32,
+    pub available: bool,
+}
+pub async fn legacy_raw_jobs_in_tx(
+    tx: &mut AppTx<'_>,
+    sources: &[(String, u64)],
+) -> Result<Vec<LegacyRawJob>> {
+    if sources.is_empty() {
+        return Ok(Vec::new());
+    }
+    tx.lock_rank(8)?;
+    let mut query = sqlx::QueryBuilder::<sqlx::MySql>::new(
+        "SELECT id,resource_id,resource_version,attempts,\
+         (lease_until IS NULL OR lease_until<=UTC_TIMESTAMP(3)) AS available FROM background_jobs \
+         WHERE kind='raw_source_index' AND schema_version=2 AND state IN ('queued','running') \
+         AND (resource_id,resource_version) IN (",
+    );
+    let mut identities = query.separated(",");
+    for (source, revision) in sources {
+        identities.push("(");
+        identities.push_bind_unseparated(source);
+        identities.push_unseparated(",");
+        identities.push_bind_unseparated(*revision);
+        identities.push_unseparated(")");
+    }
+    query.push(") ORDER BY dispatch_seq FOR UPDATE");
+    let rows = query.build().fetch_all(tx.connection()).await?;
+    Ok(rows
+        .into_iter()
+        .map(|row| LegacyRawJob {
+            id: row.get("id"),
+            resource_id: row.get("resource_id"),
+            resource_version: row.get("resource_version"),
+            attempts: row.get("attempts"),
+            available: row.get("available"),
+        })
+        .collect())
+}
+#[derive(Clone, PartialEq, Eq)]
+struct LegacyRawCursor {
+    state: String,
+    lease_until: Option<String>,
+    id: String,
+}
+// 只记发现顺序，不记已处理事实。页尾回绕、重启从头，回滚或SKIP LOCKED跳过
+// 的项仍会再次被核验；不改变外空间、失效来源或尚未到期作业的持久状态。
+static LEGACY_RAW_CURSOR: std::sync::Mutex<Option<LegacyRawCursor>> = std::sync::Mutex::new(None);
+
+// 生产接续只读取到期旧作业元信息，按既有到期索引逐页推进，不枚举来源。
+// 来源owner仍须核验实际空间、当前修订与可读性，队列资源名不授予来源身份。
+pub async fn due_legacy_raw_jobs_in_tx(tx: &mut AppTx<'_>) -> Result<Vec<LegacyRawJob>> {
+    let after = LEGACY_RAW_CURSOR
+        .lock()
+        .map_err(|_| Error::new("unavailable"))?
+        .clone();
+    tx.lock_rank(8)?;
+    let mut query = sqlx::QueryBuilder::<sqlx::MySql>::new(
+        "SELECT id,resource_id,resource_version,attempts,state,CAST(lease_until AS CHAR) AS scan_lease \
+         FROM background_jobs WHERE kind='raw_source_index' AND schema_version=2 \
+         AND state IN ('queued','running') AND (lease_until IS NULL OR lease_until<=UTC_TIMESTAMP(3))",
+    );
+    if let Some(cursor) = &after {
+        query
+            .push(" AND (state>")
+            .push_bind(&cursor.state)
+            .push(" OR (state=")
+            .push_bind(&cursor.state)
+            .push(" AND (");
+        if let Some(until) = &cursor.lease_until {
+            query
+                .push("lease_until>")
+                .push_bind(until)
+                .push(" OR (lease_until=")
+                .push_bind(until)
+                .push(" AND id>")
+                .push_bind(&cursor.id)
+                .push(")");
+        } else {
+            query
+                .push("lease_until IS NOT NULL OR (lease_until IS NULL AND id>")
+                .push_bind(&cursor.id)
+                .push(")");
+        }
+        query.push(")))");
+    }
+    query.push(" ORDER BY state,lease_until,id LIMIT 64 FOR UPDATE SKIP LOCKED");
+    let rows = query.build().fetch_all(tx.connection()).await?;
+    let next = rows
+        .last()
+        .filter(|_| rows.len() == 64)
+        .map(|row| LegacyRawCursor {
+            state: row.get("state"),
+            lease_until: row.get("scan_lease"),
+            id: row.get("id"),
+        });
+    {
+        // 并发发现可各自SKIP LOCKED领取；同步锁只保护游标快照，不跨SQL等待。
+        let mut cursor = LEGACY_RAW_CURSOR
+            .lock()
+            .map_err(|_| Error::new("unavailable"))?;
+        if *cursor == after {
+            *cursor = next;
+        }
+    }
+    Ok(rows
+        .into_iter()
+        .map(|row| LegacyRawJob {
+            id: row.get("id"),
+            resource_id: row.get("resource_id"),
+            resource_version: row.get("resource_version"),
+            attempts: row.get("attempts"),
+            available: true,
+        })
+        .collect())
+}
+
+// 已移交旧项收敛为终态（写入侧）：仅当仍处于可移交状态时生效，重复移交不会
+// 二次收敛；新待办在移交事务提交前对消费者不可见，不出现两份可领取记录。
+pub async fn settle_handover_in_tx(tx: &mut AppTx<'_>, id: &str) -> Result<()> {
+    tx.lock_rank(8)?;
+    sqlx::query(
+        "UPDATE background_jobs SET state='finished',lease_owner=NULL,lease_until=NULL \
+         WHERE id=? AND kind='raw_source_index' AND state IN ('queued','running') \
+         AND (lease_until IS NULL OR lease_until<=UTC_TIMESTAMP(3))",
+    )
+    .bind(id)
+    .execute(tx.connection())
+    .await?;
+    Ok(())
+}
+
 pub async fn claim_source_sync(
     pool: &MySqlPool,
     worker: &str,
@@ -260,6 +410,24 @@ pub async fn release_source_page_in_tx(tx: &mut AppTx<'_>, job: &SourceJob) -> R
     sqlx::query("UPDATE background_jobs SET state='queued',attempts=0,lease_owner=NULL,lease_until=NULL WHERE id=?")
         .bind(&job.lease.id).execute(tx.connection()).await?;
     Ok(())
+}
+// 指定来源作业的最近真实排队/执行态：尚无准备记录的对象用它回退展示进度，
+// 不猜测状态；没有作业行为None。
+pub async fn latest_source_job_state_in_tx(
+    tx: &mut AppTx<'_>,
+    kind: &str,
+    resource: &str,
+    version: u64,
+) -> Result<Option<String>> {
+    let state = sqlx::query_scalar::<_, String>(
+        "SELECT state FROM background_jobs WHERE kind=? AND resource_id=? AND resource_version=? ORDER BY dispatch_seq DESC LIMIT 1",
+    )
+    .bind(kind)
+    .bind(resource)
+    .bind(version)
+    .fetch_optional(tx.connection())
+    .await?;
+    Ok(state)
 }
 pub async fn source_work_progress_in_tx(
     tx: &mut AppTx<'_>,

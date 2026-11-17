@@ -30,7 +30,10 @@ const provider=createServer(async(req,res)=>{
  res.write('data: '+JSON.stringify({id:'synthetic-long-run',choices:[],usage:{prompt_tokens:100,completion_tokens:30,total_tokens:130}})+'\n\n');res.end('data: [DONE]\n\n');
 });await new Promise(r=>provider.listen(0,'127.0.0.1',r));
 try{
- const profile={provider_id:'deepseek',model_id:'deepseek-flash',trial_id:randomUUID(),price_version:'2026-10-04-peak-usd',input_limit:32768,output_limit:8192,trial_call_limit:20,trial_cost_micros:'300000',request_call_limit:16,toolset:'data',payload_bytes_limit:65536,thinking_level:'low'};
+ // v2语义工具集的固定底座（系统协议+工具schema展开）实测约77KB，超过旧的65536字节门：
+ // 字节门先于token触发（trigger≈21504 tokens），压缩摘要后首轮即stage=payload失败。
+ // 对齐既有native-compaction同input_limit的98304先例；token门仍先于字节门驱动压缩场景。
+ const profile={provider_id:'deepseek',model_id:'deepseek-flash',trial_id:randomUUID(),price_version:'2026-10-04-peak-usd',input_limit:32768,output_limit:8192,trial_call_limit:20,trial_cost_micros:'300000',request_call_limit:16,toolset:'data',payload_bytes_limit:98304,thinking_level:'low'};
  h=await harness({profile,protocolProviderUrl:'http://127.0.0.1:'+provider.address().port});
  const cid=await h.create(),started=performance.now();await h.send(cid,'回看这段合成会话的历史资料。');
  const snapshot=await until(async()=>{const s=await h.snapshot(cid);assert.ok(!s.events.some(e=>e.type==='run_failed'),JSON.stringify(s.events));return s.runs.some(r=>r.state==='finished')?s:false;},'完整Worker→Bridge长调查',130000);

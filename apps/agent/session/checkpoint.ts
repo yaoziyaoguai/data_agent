@@ -11,11 +11,11 @@ export function isRecoveryNotice(message: { role: string; content?: unknown }): 
   return Array.isArray(message.content) && message.content.some(part => part?.type === 'text' && typeof part.text === 'string' && part.text.startsWith(RECOVERY_NOTICE));
 }
 
-export function exportCheckpoint(manager: SessionManager, authority?:string|null, authoritySnapshot?:Record<string,unknown>|null): Checkpoint {
-  if (VERSION !== '1.3.0') throw new Error('checkpoint_sdk_version_unsupported');
+export function exportCheckpoint(manager: SessionManager, authority?:string|null, authoritySnapshot?:Record<string,unknown>|null, verifyPersisted=false): Checkpoint {
+  if (VERSION !== '1.4.0') throw new Error('checkpoint_sdk_version_unsupported');
   const header = manager.getHeader();
   if (!header) throw new Error('missing session header');
-  const storage=storedReference(manager);
+  const storage=storedReference(manager,verifyPersisted);
   return { ...(authority?{authority_revision:authority}:{}), ...(authoritySnapshot?{authority_snapshot:authoritySnapshot}:{}), ...(storage?{storage}:{}), sdk_version: VERSION, entries: storage?[]:JSON.parse(JSON.stringify([header, ...manager.getEntries()])), leaf_id: manager.getLeafId() };
 }
 export function restoreCheckpoint(cwd: string, checkpoint: Checkpoint | null): SessionManager {

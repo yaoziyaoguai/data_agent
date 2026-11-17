@@ -7,6 +7,123 @@ use data_agent::{
 use serde_json::{Value, json};
 use sqlx::{MySqlPool, Row};
 
+// 必要支持可以独立指向来源，不要求同时出现在陈述citations中；否则完整映射
+// 会漏掉支持来源，使来源范围及失效传播只看见citation与knowledge支持。
+#[test]
+fn source_supports_register_required_dependencies_on_the_effective_human_layer() {
+    let text = "月弧订单按入账日统计。";
+    let prerequisite = "仅统计已结算的月弧订单。";
+    let exception = "试运行渠道不计入月弧订单。";
+    let citation = |kind: &str, id: &str, revision: &str, content: &str| {
+        json!({"source":{"kind":kind,"id":id},"revision":revision,
+            "locator":{"offset":0,"length":content.chars().count()}})
+    };
+    let statement = json!({
+        "statement_id":"moon-order-rule",
+        "object_ref":{"object_id":"term-moon-orders","version":"7","path":"body"},
+        "text":text,"scope_text":"","origin":"human",
+        "citations":[citation("document", "moon-order-guide", "5", text)],
+        "supports":[
+            {"support_id":"moon-settlement-support","role":"prerequisite",
+                "reference":{"kind":"source","citation":
+                    citation("document", "moon-settlement-guide", "2", prerequisite)},
+                "content":prerequisite,"embedded_in":null},
+            {"support_id":"moon-channel-exception","role":"exception",
+                "reference":{"kind":"source","citation":
+                    citation("platform", "moon-channel-source", "3", exception)},
+                "content":exception,"embedded_in":null},
+            {"support_id":"moon-counting-support","role":"calculation_dependency",
+                "reference":{"kind":"knowledge","ref":{
+                    "object_id":"term-moon-counting","version":"4","path":"body"}},
+                "content":"同一月弧订单只计一次。","embedded_in":null}
+        ],
+        "supports_complete":true
+    });
+    contracts::validate("SemanticStatement", &statement).unwrap();
+    let object = json!({
+        "id":"term-moon-orders","kind":"term","name":"合成月弧订单口径",
+        "version":"7","state":"enabled","source_id":null,"source_version":"0",
+        "related_ids":[],"updated_by":"alice",
+        "entries":[{
+            "entry_id":"body","path":"body","label":"正文",
+            "source_facts":{"complete":false,"gap":"人工录入，尚无平台来源"},
+            "suggestion":{},
+            "human_override":{"value":text,"edited_by":"alice","statements":[statement]},
+            "effective_value":text,"effective_structure":null,"review_state":"confirmed"
+        }]
+    });
+    contracts::validate("KnowledgeObject", &object).unwrap();
+
+    let indexed = knowledge::dependency_index::rows_for_object(&object).unwrap();
+    assert!(indexed.complete, "已明确保存来源的人工陈述应有完整依赖映射");
+    assert!(indexed.rows.iter().all(|row| {
+        row.owner_id == "term-moon-orders" && row.owner_version == 7 && row.entry_path == "body"
+    }));
+    let mut rows = indexed
+        .rows
+        .iter()
+        .map(|row| {
+            (
+                row.layer.as_str(),
+                row.purpose.as_str(),
+                row.role.as_str(),
+                row.effective,
+                row.target_kind.as_str(),
+                row.target_id.as_str(),
+                row.target_revision,
+                row.target_path.as_str(),
+            )
+        })
+        .collect::<Vec<_>>();
+    rows.sort_unstable();
+    assert_eq!(
+        rows,
+        vec![
+            (
+                "human_override",
+                "required",
+                "citation",
+                true,
+                "document",
+                "moon-order-guide",
+                5,
+                ""
+            ),
+            (
+                "human_override",
+                "required",
+                "support",
+                true,
+                "document",
+                "moon-settlement-guide",
+                2,
+                ""
+            ),
+            (
+                "human_override",
+                "required",
+                "support",
+                true,
+                "knowledge",
+                "term-moon-counting",
+                4,
+                "body"
+            ),
+            (
+                "human_override",
+                "required",
+                "support",
+                true,
+                "platform",
+                "moon-channel-source",
+                3,
+                ""
+            ),
+        ],
+        "文档与平台来源支持必须和citation、knowledge支持一起登记为有效必要依赖"
+    );
+}
+
 // 合成库按串行使用（与mvp检查的--test-threads=1一致），互斥覆盖整个测试：
 // 串行后每个测试在自己的runtime上建池，迁移只由先到者执行一次。
 static SERIAL: std::sync::LazyLock<tokio::sync::Mutex<()>> =
@@ -18,6 +135,15 @@ async fn harness_pool() -> MySqlPool {
     )
     .await
     .unwrap()
+}
+
+// 生产保存组合：模块保存（或整理应用）＋保存后跨模块登记（指纹补记/扇出排队）
+// 同事务执行。架构上跨模块登记归use_cases组合层，测试按同组合驱动，断言登记
+// 语义（指纹列、扇出作业、保守失效）时不得只调模块函数。
+async fn register_saved_in_tx(tx: &mut AppTx<'_>, ctx: &AccessContext, saved: &[Value]) {
+    data_agent::use_cases::dependency_registration::after_content_saved_in_tx(tx, ctx, saved)
+        .await
+        .unwrap();
 }
 
 // 依赖索引登记：保存/整理同事务生成依赖行，有效层行参与语义有效性，
@@ -416,6 +542,7 @@ async fn transitive_walk_finds_source_change_immediately_and_stops_cycles() {
     )
     .await
     .unwrap();
+    register_saved_in_tx(&mut tx, &ctx, std::slice::from_ref(&adopted_citing)).await;
     tx.commit().await.unwrap();
     let citing_version = adopted_citing["version"]
         .as_str()
@@ -464,6 +591,7 @@ async fn transitive_walk_finds_source_change_immediately_and_stops_cycles() {
     )
     .await
     .unwrap();
+    register_saved_in_tx(&mut tx, &ctx, std::slice::from_ref(&adopted_upstream)).await;
     tx.commit().await.unwrap();
     let upstream_version = adopted_upstream["version"]
         .as_str()
@@ -474,7 +602,7 @@ async fn transitive_walk_finds_source_change_immediately_and_stops_cycles() {
 
     // 链路当前一致：A→B→D(1) 全部匹配，无失效无未知。
     let mut tx = AppTx::begin(&pool).await.unwrap();
-    let clean = knowledge::dependency_index::walk_required_in_tx(
+    let clean = data_agent::use_cases::dependency_validation::walk_required_in_tx(
         &mut tx,
         &ctx.space_id,
         &[(upstream_id.clone(), upstream_version)],
@@ -488,6 +616,28 @@ async fn transitive_walk_finds_source_change_immediately_and_stops_cycles() {
         clean.stale,
         clean.unknown
     );
+
+    // 中间对象仅同文确认升版，A仍须沿原B修订核其必要来源，不能因正文指纹相等停止游走。
+    let mut tx = AppTx::begin(&pool).await.unwrap();
+    let resaved_citing = knowledge::save_edit_in_tx(&mut tx, &ctx, &citing_id,
+        &json!({"operation_id":"walk-resave-citing","expected_version":citing_version.to_string(),
+            "entry_id":"body","value":adopted_citing["entries"][0]["effective_value"],"structured_value":null}),None).await.unwrap();
+    register_saved_in_tx(&mut tx, &ctx, std::slice::from_ref(&resaved_citing)).await;
+    tx.commit().await.unwrap();
+    assert_eq!(
+        resaved_citing["entries"][0]["effective_value"],
+        adopted_citing["entries"][0]["effective_value"]
+    );
+    let mut tx = AppTx::begin(&pool).await.unwrap();
+    let unchanged = data_agent::use_cases::dependency_validation::walk_required_in_tx(
+        &mut tx,
+        &ctx.space_id,
+        &[(upstream_id.clone(), upstream_version)],
+    )
+    .await
+    .unwrap();
+    assert!(unchanged.stale.is_empty() && unchanged.unknown.is_empty());
+    tx.commit().await.unwrap();
 
     // D改版（编辑正文推进修订）：不等扇出作业，从A出发立即看到B的依据失效。
     let mut tx = AppTx::begin(&pool).await.unwrap();
@@ -503,7 +653,7 @@ async fn transitive_walk_finds_source_change_immediately_and_stops_cycles() {
     .unwrap();
     tx.commit().await.unwrap();
     let mut tx = AppTx::begin(&pool).await.unwrap();
-    let stale = knowledge::dependency_index::walk_required_in_tx(
+    let stale = data_agent::use_cases::dependency_validation::walk_required_in_tx(
         &mut tx,
         &ctx.space_id,
         &[(upstream_id.clone(), upstream_version)],
@@ -527,7 +677,7 @@ async fn transitive_walk_finds_source_change_immediately_and_stops_cycles() {
         "D改版后A的下游B立即失效，登记修订1、当前修订2"
     );
     let mut tx = AppTx::begin(&pool).await.unwrap();
-    let self_clean = knowledge::dependency_index::walk_required_in_tx(
+    let self_clean = data_agent::use_cases::dependency_validation::walk_required_in_tx(
         &mut tx,
         &ctx.space_id,
         &[(guide.clone(), 2)],
@@ -600,7 +750,7 @@ async fn transitive_walk_finds_source_change_immediately_and_stops_cycles() {
         tx.commit().await.unwrap();
     }
     let mut tx = AppTx::begin(&pool).await.unwrap();
-    let cycled = knowledge::dependency_index::walk_required_in_tx(
+    let cycled = data_agent::use_cases::dependency_validation::walk_required_in_tx(
         &mut tx,
         &ctx.space_id,
         &[(cycle_ids.0.clone(), 3)],
@@ -710,7 +860,7 @@ async fn transitive_walk_finds_source_change_immediately_and_stops_cycles() {
         .unwrap();
 
     let mut tx = AppTx::begin(&pool).await.unwrap();
-    let unknown = knowledge::dependency_index::walk_required_in_tx(
+    let unknown = data_agent::use_cases::dependency_validation::walk_required_in_tx(
         &mut tx,
         &ctx.space_id,
         &[(referencing_id, referencing_version)],
@@ -723,6 +873,430 @@ async fn transitive_walk_finds_source_change_immediately_and_stops_cycles() {
         "支持指向无映射成果时，该链路成员报unknown而非空链"
     );
     assert!(unknown.stale.is_empty(), "无版本变化时unknown链不产生stale");
+}
+
+// 历史展示核验（04切片7关闭审查修复）：上游普通改版（仍有当前修订）不隐藏已存
+// 引用，严格核验照旧失败；上游被停用（走查stale且无当前修订）按撤权拒绝，
+// 历史展示不复活派生内容。
+#[tokio::test]
+async fn history_check_tolerates_upstream_revision_but_not_revocation() {
+    let _guard = SERIAL.lock().await;
+    let pool = harness_pool().await;
+    let ctx = AccessContext {
+        user_id: "alice".into(),
+        space_id: "demo".into(),
+        request_id: "synthetic-history-check".into(),
+    };
+    let prepare = |statement_target: &str, citation: Value| {
+        json!({"statements":[{
+            "key":"history-statement", "target":{"object_id":statement_target,"version":"1","path":"body"},
+            "text":"历史核验合成陈述", "scope_text":"适用范围：历史核验验收",
+            "citations":citation.as_array().cloned().unwrap_or_default(), "supports":[]
+        }],"relations":[],"unresolved":[],"semantic_status":"ready"})
+    };
+
+    // D：被引用的正式文档；B：词条，采纳的陈述引用D首版并进入有效必要依赖。
+    let mut tx = AppTx::begin(&pool).await.unwrap();
+    let guide = knowledge::create_in_tx(
+        &mut tx,
+        &ctx,
+        &json!({
+            "operation_id":"create-history-guide", "kind":"document", "name":"历史核验口径指南",
+            "body":"# 指南\n\n首版口径", "related_ids":[], "source_url":null,
+            "structured_value":null
+        }),
+    )
+    .await
+    .unwrap();
+    tx.commit().await.unwrap();
+    let guide_id = guide["id"].as_str().unwrap().to_owned();
+    let mut tx = AppTx::begin(&pool).await.unwrap();
+    let citing = knowledge::create_in_tx(
+        &mut tx,
+        &ctx,
+        &json!({
+            "operation_id":"create-history-citing", "kind":"term", "name":"历史核验词条",
+            "body":"待整理", "related_ids":[], "source_url":null, "structured_value":null
+        }),
+    )
+    .await
+    .unwrap();
+    tx.commit().await.unwrap();
+    let citing_id = citing["id"].as_str().unwrap().to_owned();
+    let citation = json!([{"source":{"kind":"document","id":&guide_id},"revision":"1","locator":{"offset":8,"length":4}}]);
+    let mut tx = AppTx::begin(&pool).await.unwrap();
+    knowledge::apply_preparation_in_tx(
+        &mut tx,
+        &ctx,
+        "history-apply-citing",
+        &contracts::decode("SourceKey", json!({"kind":"document","id":&guide_id})).unwrap(),
+        "1",
+        &prepare(&citing_id, citation),
+    )
+    .await
+    .unwrap();
+    tx.commit().await.unwrap();
+    let mut tx = AppTx::begin(&pool).await.unwrap();
+    let adopted = knowledge::save_edit_in_tx(
+        &mut tx,
+        &ctx,
+        &citing_id,
+        &json!({"operation_id":"history-adopt-citing","expected_version":"2",
+            "entry_id":"body","clear_override":true}),
+        None,
+    )
+    .await
+    .unwrap();
+    tx.commit().await.unwrap();
+    assert_eq!(adopted["version"], "3");
+    let reference = json!([{"object_id": citing_id, "version": "3", "path": "body"}]);
+
+    // 基线：链路一致，历史核验与严格核验都通过。
+    let mut tx = AppTx::begin(&pool).await.unwrap();
+    data_agent::use_cases::knowledge::history_check_refs_in_tx(&mut tx, &ctx, &reference)
+        .await
+        .unwrap();
+    data_agent::use_cases::knowledge::check_refs_in_tx(&mut tx, &ctx, &reference)
+        .await
+        .unwrap();
+    tx.commit().await.unwrap();
+
+    // D普通改版：严格核验按当前版本失败；历史核验容忍修订推进（上游仍有当前
+    // 修订），已存引用不隐藏。
+    let mut tx = AppTx::begin(&pool).await.unwrap();
+    knowledge::save_edit_in_tx(
+        &mut tx,
+        &ctx,
+        &guide_id,
+        &json!({"operation_id":"history-edit-guide","expected_version":"1",
+            "entry_id":"body","value":"# 指南\n\n改版后的口径","structured_value":null}),
+        None,
+    )
+    .await
+    .unwrap();
+    tx.commit().await.unwrap();
+    let mut tx = AppTx::begin(&pool).await.unwrap();
+    let strict = data_agent::use_cases::knowledge::check_refs_in_tx(&mut tx, &ctx, &reference)
+        .await
+        .unwrap_err();
+    tx.commit().await.unwrap();
+    assert_eq!(strict.code, "stale_knowledge");
+    let mut tx = AppTx::begin(&pool).await.unwrap();
+    data_agent::use_cases::knowledge::history_check_refs_in_tx(&mut tx, &ctx, &reference)
+        .await
+        .unwrap();
+    tx.commit().await.unwrap();
+
+    // D停用：上游已无当前修订，历史核验按not_available拒绝——撤权不借历史复活。
+    let mut tx = AppTx::begin(&pool).await.unwrap();
+    knowledge::change_state_in_tx(
+        &mut tx,
+        &ctx,
+        &guide_id,
+        &json!({"operation_id":"history-disable-guide","expected_version":"2"}),
+        "disabled",
+    )
+    .await
+    .unwrap();
+    tx.commit().await.unwrap();
+    let mut tx = AppTx::begin(&pool).await.unwrap();
+    let revoked =
+        data_agent::use_cases::knowledge::history_check_refs_in_tx(&mut tx, &ctx, &reference)
+            .await
+            .unwrap_err();
+    tx.commit().await.unwrap();
+    assert_eq!(revoked.code, "not_available");
+
+    // 独立人工内容的完整空来源索引足够核权，历史读取不额外依赖旧正文。
+    let mut tx = AppTx::begin(&pool).await.unwrap();
+    let independent = knowledge::create_in_tx(
+        &mut tx,
+        &ctx,
+        &json!({"operation_id":"history-independent-create", "kind":"term",
+            "name":"独立人工历史词条", "body":"人工独立写出的原口径", "related_ids":[],
+            "source_url":null, "structured_value":null}),
+    )
+    .await
+    .unwrap();
+    let independent_id = independent["id"].as_str().unwrap();
+    tx.commit().await.unwrap();
+    let mut tx = AppTx::begin(&pool).await.unwrap();
+    knowledge::save_edit_in_tx(
+        &mut tx,
+        &ctx,
+        independent_id,
+        &json!({"operation_id":"history-independent-revise", "expected_version":"1",
+            "entry_id":"body", "value":"人工独立写出的新口径", "structured_value":null}),
+        None,
+    )
+    .await
+    .unwrap();
+    tx.commit().await.unwrap();
+    sqlx::query("DELETE FROM knowledge_versions WHERE object_id=?")
+        .bind(independent_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let mut tx = AppTx::begin(&pool).await.unwrap();
+    data_agent::use_cases::knowledge::history_check_refs_in_tx(
+        &mut tx,
+        &ctx,
+        &json!([{"object_id":independent_id,"version":"1","path":"body"}]),
+    )
+    .await
+    .unwrap();
+    tx.commit().await.unwrap();
+}
+
+// legacy回退（无依赖索引状态的迁移前存档，04关闭第三轮审查修复）：迁移前
+// 存档没有可回填的索引行，传递撤权必须在回退内就地检出——A(支持B、引用
+// 锚点)→B(引用指南D)：删除A的映射状态行后，D停用经B传递仍拒绝；D普通改版
+// 不隐藏已存记录；B自身撤下同样拒绝。
+#[tokio::test]
+async fn legacy_fallback_without_index_rows_covers_transitive_revocation() {
+    let _guard = SERIAL.lock().await;
+    let pool = harness_pool().await;
+    let ctx = AccessContext {
+        user_id: "alice".into(),
+        space_id: "demo".into(),
+        request_id: "synthetic-legacy-fallback".into(),
+    };
+    let prepare = |statement_target: &str, citation: Value, support: Value| {
+        json!({"statements":[{
+            "key":"legacy-statement", "target":{"object_id":statement_target,"version":"1","path":"body"},
+            "text":"legacy回退合成陈述", "scope_text":"适用范围：legacy回退验收",
+            "citations":citation.as_array().cloned().unwrap_or_default(),
+            "supports":support.as_array().cloned().unwrap_or_default()
+        }],"relations":[],"unresolved":[],"semantic_status":"ready"})
+    };
+    let adopt = |operation: &str, version: u64| {
+        json!({"operation_id":operation,"expected_version":version.to_string(),
+            "entry_id":"body","clear_override":true})
+    };
+    let source_key =
+        |id: &str| contracts::decode("SourceKey", json!({"kind":"document","id":id})).unwrap();
+    let citation = |id: &str| {
+        json!([{"source":{"kind":"document","id":id},
+            "revision":"1","locator":{"offset":6,"length":4}}])
+    };
+    let create = |operation: &str, kind: &str, name: &str, body: &str| {
+        json!({"operation_id":operation, "kind":kind, "name":name,
+            "body":body, "related_ids":[], "source_url":null, "structured_value":null})
+    };
+
+    let mut tx = AppTx::begin(&pool).await.unwrap();
+    let anchor = knowledge::create_in_tx(
+        &mut tx,
+        &ctx,
+        &create(
+            "create-legacy-anchor",
+            "document",
+            "legacy锚点文档",
+            "# 锚点\n\n稳定口径",
+        ),
+    )
+    .await
+    .unwrap();
+    tx.commit().await.unwrap();
+    let anchor_id = anchor["id"].as_str().unwrap().to_owned();
+    let mut tx = AppTx::begin(&pool).await.unwrap();
+    let guide = knowledge::create_in_tx(
+        &mut tx,
+        &ctx,
+        &create(
+            "create-legacy-guide",
+            "document",
+            "legacy指南文档",
+            "# 指南\n\n首版口径",
+        ),
+    )
+    .await
+    .unwrap();
+    tx.commit().await.unwrap();
+    let guide_id = guide["id"].as_str().unwrap().to_owned();
+
+    // B：采纳的陈述引用指南D首版。
+    let mut tx = AppTx::begin(&pool).await.unwrap();
+    let citing = knowledge::create_in_tx(
+        &mut tx,
+        &ctx,
+        &create("create-legacy-citing", "term", "legacy引用词条", "待整理"),
+    )
+    .await
+    .unwrap();
+    tx.commit().await.unwrap();
+    let citing_id = citing["id"].as_str().unwrap().to_owned();
+    let mut tx = AppTx::begin(&pool).await.unwrap();
+    knowledge::apply_preparation_in_tx(
+        &mut tx,
+        &ctx,
+        "legacy-apply-citing",
+        &source_key(&guide_id),
+        "1",
+        &prepare(&citing_id, citation(&guide_id), json!([])),
+    )
+    .await
+    .unwrap();
+    tx.commit().await.unwrap();
+    let mut tx = AppTx::begin(&pool).await.unwrap();
+    let adopted_citing = knowledge::save_edit_in_tx(
+        &mut tx,
+        &ctx,
+        &citing_id,
+        &adopt("legacy-adopt-citing", 2),
+        None,
+    )
+    .await
+    .unwrap();
+    tx.commit().await.unwrap();
+    let citing_version = adopted_citing["version"]
+        .as_str()
+        .unwrap()
+        .parse::<u64>()
+        .unwrap();
+
+    // A：采纳的陈述引用锚点并支持B，自身不直接引用指南。
+    let mut tx = AppTx::begin(&pool).await.unwrap();
+    let upstream = knowledge::create_in_tx(
+        &mut tx,
+        &ctx,
+        &create("create-legacy-upstream", "term", "legacy上游词条", "待整理"),
+    )
+    .await
+    .unwrap();
+    tx.commit().await.unwrap();
+    let upstream_id = upstream["id"].as_str().unwrap().to_owned();
+    let support = json!([{"key":"legacy-citing-ref", "role":"prerequisite",
+        "reference":{"kind":"knowledge","ref":{"object_id":&citing_id,
+            "version":citing_version.to_string(),"path":"body"}},
+        "content":"下游词条口径", "embedded_in":null}]);
+    let mut tx = AppTx::begin(&pool).await.unwrap();
+    knowledge::apply_preparation_in_tx(
+        &mut tx,
+        &ctx,
+        "legacy-apply-upstream",
+        &source_key(&anchor_id),
+        "1",
+        &prepare(&upstream_id, citation(&anchor_id), support),
+    )
+    .await
+    .unwrap();
+    tx.commit().await.unwrap();
+    let mut tx = AppTx::begin(&pool).await.unwrap();
+    let adopted_upstream = knowledge::save_edit_in_tx(
+        &mut tx,
+        &ctx,
+        &upstream_id,
+        &adopt("legacy-adopt-upstream", 2),
+        None,
+    )
+    .await
+    .unwrap();
+    tx.commit().await.unwrap();
+    let upstream_version = adopted_upstream["version"]
+        .as_str()
+        .unwrap()
+        .parse::<u64>()
+        .unwrap();
+    let reference = json!([{"object_id": &upstream_id, "version": upstream_version.to_string(), "path": "body"}]);
+
+    // 基线：索引在位时历史核验通过。
+    let mut tx = AppTx::begin(&pool).await.unwrap();
+    data_agent::use_cases::knowledge::history_check_refs_in_tx(&mut tx, &ctx, &reference)
+        .await
+        .unwrap();
+    tx.commit().await.unwrap();
+
+    // 删除A的映射状态行模拟迁移前存档（无索引可走），回退接管且链路完好时通过。
+    sqlx::query("DELETE FROM knowledge_dependency_states WHERE owner_id=? AND owner_version=?")
+        .bind(&upstream_id)
+        .bind(upstream_version)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let mut tx = AppTx::begin(&pool).await.unwrap();
+    data_agent::use_cases::knowledge::history_check_refs_in_tx(&mut tx, &ctx, &reference)
+        .await
+        .unwrap();
+    tx.commit().await.unwrap();
+
+    // D普通改版：回退只核当前头存在性，版本推进容忍——已存记录不隐藏。
+    let mut tx = AppTx::begin(&pool).await.unwrap();
+    let edited_guide = knowledge::save_edit_in_tx(
+        &mut tx,
+        &ctx,
+        &guide_id,
+        &json!({"operation_id":"legacy-edit-guide","expected_version":"1",
+            "entry_id":"body","value":"# 指南\n\n改版后的口径","structured_value":null}),
+        None,
+    )
+    .await
+    .unwrap();
+    tx.commit().await.unwrap();
+    let guide_version = edited_guide["version"]
+        .as_str()
+        .unwrap()
+        .parse::<u64>()
+        .unwrap();
+    let mut tx = AppTx::begin(&pool).await.unwrap();
+    data_agent::use_cases::knowledge::history_check_refs_in_tx(&mut tx, &ctx, &reference)
+        .await
+        .unwrap();
+    tx.commit().await.unwrap();
+
+    // D停用：撤权经B传递到A——legacy回退必须递归检出，不能只核直接引用层。
+    let mut tx = AppTx::begin(&pool).await.unwrap();
+    let disabled_guide = knowledge::change_state_in_tx(
+        &mut tx,
+        &ctx,
+        &guide_id,
+        &json!({"operation_id":"legacy-disable-guide",
+            "expected_version":guide_version.to_string()}),
+        "disabled",
+    )
+    .await
+    .unwrap();
+    tx.commit().await.unwrap();
+    let mut tx = AppTx::begin(&pool).await.unwrap();
+    let transitive =
+        data_agent::use_cases::knowledge::history_check_refs_in_tx(&mut tx, &ctx, &reference)
+            .await
+            .unwrap_err();
+    tx.commit().await.unwrap();
+    assert_eq!(transitive.code, "not_available");
+
+    // 恢复D后B自身撤下：知识支持对象的撤下同样拒绝。
+    let mut tx = AppTx::begin(&pool).await.unwrap();
+    knowledge::change_state_in_tx(
+        &mut tx,
+        &ctx,
+        &guide_id,
+        &json!({"operation_id":"legacy-enable-guide",
+            "expected_version":disabled_guide["version"].as_str().unwrap()}),
+        "enabled",
+    )
+    .await
+    .unwrap();
+    tx.commit().await.unwrap();
+    let mut tx = AppTx::begin(&pool).await.unwrap();
+    knowledge::change_state_in_tx(
+        &mut tx,
+        &ctx,
+        &citing_id,
+        &json!({"operation_id":"legacy-disable-citing",
+            "expected_version":citing_version.to_string()}),
+        "disabled",
+    )
+    .await
+    .unwrap();
+    tx.commit().await.unwrap();
+    let mut tx = AppTx::begin(&pool).await.unwrap();
+    let support_revoked =
+        data_agent::use_cases::knowledge::history_check_refs_in_tx(&mut tx, &ctx, &reference)
+            .await
+            .unwrap_err();
+    tx.commit().await.unwrap();
+    assert_eq!(support_revoked.code, "not_available");
 }
 
 // 实际贡献根：A(引用锚点+支持B)→B(引用指南D)的来源闭包包含锚点与D；related用途的
@@ -1352,7 +1926,7 @@ async fn human_edit_kinds_separate_replacement_from_retained_sources() {
 
     // 未替换部分保留来源：游走只报business_domain的建议行，真替换的body不阻断。
     let mut tx = AppTx::begin(&pool).await.unwrap();
-    let after_replace = knowledge::dependency_index::walk_required_in_tx(
+    let after_replace = data_agent::use_cases::dependency_validation::walk_required_in_tx(
         &mut tx,
         &ctx.space_id,
         &[(term_id.clone(), replaced_version)],
@@ -1427,7 +2001,7 @@ async fn human_edit_kinds_separate_replacement_from_retained_sources() {
     )
     .await
     .unwrap();
-    let confirmed_walk = knowledge::dependency_index::walk_required_in_tx(
+    let confirmed_walk = data_agent::use_cases::dependency_validation::walk_required_in_tx(
         &mut tx,
         &ctx.space_id,
         &[(term_id.clone(), confirmed_version)],
@@ -1475,7 +2049,7 @@ async fn human_edit_kinds_separate_replacement_from_retained_sources() {
     data_agent::use_cases::knowledge::assert_source_in_tx(&mut tx, &ctx, &freed_object)
         .await
         .unwrap();
-    let freed_walk = knowledge::dependency_index::walk_required_in_tx(
+    let freed_walk = data_agent::use_cases::dependency_validation::walk_required_in_tx(
         &mut tx,
         &ctx.space_id,
         &[(term_id.clone(), freed_version)],
@@ -1517,24 +2091,798 @@ async fn human_edit_kinds_separate_replacement_from_retained_sources() {
     tx.commit().await.unwrap();
 }
 
-async fn search_object_ids(pool: &MySqlPool, ctx: &AccessContext, query: &str) -> Vec<String> {
-    let mut tx = AppTx::begin(pool).await.unwrap();
-    let result = data_agent::use_cases::knowledge::retrieve_scoped_in_tx(
-        &mut tx,
+async fn search_stage(
+    pool: &MySqlPool,
+    ctx: &AccessContext,
+    query: &str,
+    limit: usize,
+) -> data_agent::use_cases::knowledge::ScopedSearchStage {
+    let checked = Default::default();
+    data_agent::use_cases::knowledge::search_stage_outside_lock(
+        pool,
         ctx,
-        query,
-        10,
-        &data_agent::modules::retrieval::vector::Candidates::lexical(),
-        &data_agent::search_scope::KnowledgeSearchScope::default(),
+        &mut data_agent::use_cases::knowledge::ScopedSearchRequest {
+            query,
+            limit,
+            launch: None,
+            vector: data_agent::modules::retrieval::vector::Candidates::lexical(),
+            scope: &data_agent::search_scope::KnowledgeSearchScope::default(),
+            allowed: None,
+            asset_after: None,
+            hints: None,
+            cid: "",
+            text_results: &checked,
+            include_raw: false,
+        },
     )
     .await
-    .unwrap();
-    tx.commit().await.unwrap();
-    result
+    .unwrap()
+}
+
+async fn search_object_ids(pool: &MySqlPool, ctx: &AccessContext, query: &str) -> Vec<String> {
+    search_stage(pool, ctx, query, 10)
+        .await
+        .search
         .objects
         .iter()
         .filter_map(|object| object["id"].as_str().map(str::to_owned))
         .collect()
+}
+
+#[tokio::test]
+async fn sql_search_stage_keeps_consumed_positions_separate_from_delivered_content() {
+    let _guard = SERIAL.lock().await;
+    let pool = harness_pool().await;
+    let ctx = AccessContext {
+        user_id: "alice".into(),
+        space_id: "demo".into(),
+        request_id: "synthetic-sql-scan-progress".into(),
+    };
+    let mut tx = AppTx::begin(&pool).await.unwrap();
+    let mut object = knowledge::create_in_tx(
+        &mut tx,
+        &ctx,
+        &json!({"operation_id":"create-sql-progress", "kind":"term",
+            "name":"合成扫描进度资料", "body":"sqlprogressneedle 独立原文。",
+            "related_ids":[], "source_url":null, "structured_value":null}),
+    )
+    .await
+    .unwrap();
+    tx.commit().await.unwrap();
+    object["entries"] =
+        json!((0..61).map(|index| json!({
+        "entry_id":format!("rule-{index:02}"),"path":format!("rule-{index:02}"),
+        "label":"正文","effective_value":format!("sqlprogressneedle 合成规则第{index}条。"),
+        "source_facts":{"complete":false,"gap":"独立合成扫描夹具"},
+        "suggestion":{},"human_override":null,"review_state":"unverified"
+    })).collect::<Vec<_>>());
+    for statement in [
+        "UPDATE knowledge_objects SET body=? WHERE id=?",
+        "UPDATE knowledge_versions SET body=? WHERE object_id=? AND version=1",
+    ] {
+        sqlx::query(statement)
+            .bind(sqlx::types::Json(&object))
+            .bind(object["id"].as_str().unwrap())
+            .execute(&pool)
+            .await
+            .unwrap();
+    }
+    let mut tx = AppTx::begin(&pool).await.unwrap();
+    data_agent::modules::retrieval::index_in_tx(&mut tx, &ctx.space_id, &object)
+        .await
+        .unwrap();
+    tx.commit().await.unwrap();
+    let stage = search_stage(&pool, &ctx, "sqlprogressneedle", 1).await;
+    assert_eq!(stage.search.hits.len(), 1);
+    assert_eq!(
+        stage.search.coverage["candidate_count"], 50,
+        "两SQL owner的相同规范定位只计一次"
+    );
+    assert_eq!(
+        stage.search.pending.len(),
+        49,
+        "已收但未交付的位置保留，不能按交付数推进扫描"
+    );
+    assert_eq!(stage.search.scan_progress["rounds"], 1);
+    assert_eq!(stage.search.scan_progress["main_reads"], 1);
+    let sql = stage.search.scan_progress["sql"].as_array().unwrap();
+    assert_eq!(sql.len(), 2);
+    for source in sql {
+        assert_eq!(source["consumed"], 50, "扫描位置按各owner实际返回行数推进");
+        assert_eq!(source["round"], 1);
+        assert_eq!(source["succeeded"], true);
+        assert_eq!(source["exhausted"], false, "达到交付limit不证明后端穷尽");
+        assert_eq!(source["in_flight"], false);
+    }
+    let mut tx = AppTx::begin(&pool).await.unwrap();
+    data_agent::use_cases::knowledge::assert_search_fresh_in_tx(&mut tx, &ctx, &stage)
+        .await
+        .unwrap();
+    tx.commit().await.unwrap();
+}
+
+#[tokio::test]
+async fn search_stage_keeps_explicit_domain_in_owner_candidates() {
+    let _guard = SERIAL.lock().await;
+    let pool = harness_pool().await;
+    let ctx = AccessContext {
+        user_id: "alice".into(),
+        space_id: "demo".into(),
+        request_id: "synthetic-sql-domain-scope".into(),
+    };
+    let scope = data_agent::search_scope::KnowledgeSearchScope {
+        kinds: vec!["document".into()],
+        domain: Some("合成范围🌏".into()),
+        ..Default::default()
+    };
+    let mut tx = AppTx::begin(&pool).await.unwrap();
+    let object = knowledge::create_in_tx(
+        &mut tx,
+        &ctx,
+        &json!({"operation_id":"create-sql-domain-scope", "kind":"document",
+            "name":"sqlscopeneedle", "body":"独立合成范围内的正式正文。",
+            "business_domain":"合成范围🌏", "related_ids":[], "source_url":null,
+            "structured_value":null}),
+    )
+    .await
+    .unwrap();
+    data_agent::modules::retrieval::index_in_tx(&mut tx, &ctx.space_id, &object)
+        .await
+        .unwrap();
+    tx.commit().await.unwrap();
+    let id = object["id"].as_str().unwrap().to_owned();
+    let mut tx = AppTx::begin(&pool).await.unwrap();
+    let heads = knowledge::scoped_enabled_heads_in_tx(&mut tx, &ctx, &scope)
+        .await
+        .unwrap();
+    assert_eq!(heads, vec![(id.clone(), 1)], "允许集须保留已确认业务域");
+    let allowed = vec![id.clone()];
+    let terms = vec!["sqlscopeneedle".to_owned()];
+    let knowledge_rows = knowledge::matching_content_in_tx(
+        &mut tx,
+        &ctx,
+        "sqlscopeneedle",
+        &terms,
+        &terms,
+        &scope,
+        Some(&allowed),
+        50,
+        0,
+        false,
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        knowledge_rows.len(),
+        2,
+        "知识owner须返回同域正文和域条目的规范位置"
+    );
+    let retrieval_rows = data_agent::modules::retrieval::content_candidates_scoped_in_tx(
+        &mut tx,
+        &ctx.space_id,
+        "sqlscopeneedle",
+        &terms,
+        &terms,
+        &scope,
+        Some(&allowed),
+        50,
+        0,
+        false,
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        retrieval_rows.len(),
+        2,
+        "投影owner须沿相同硬范围返回规范位置"
+    );
+    let records = |rows: &[Value]| {
+        rows.iter()
+            .map(|row| row["record_id"].clone())
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(records(&knowledge_rows), records(&retrieval_rows));
+    tx.commit().await.unwrap();
+    let checked = Default::default();
+    let stage = data_agent::use_cases::knowledge::search_stage_outside_lock(
+        &pool,
+        &ctx,
+        &mut data_agent::use_cases::knowledge::ScopedSearchRequest {
+            query: "sqlscopeneedle",
+            limit: 10,
+            launch: None,
+            vector: data_agent::modules::retrieval::vector::Candidates::lexical(),
+            scope: &scope,
+            allowed: None,
+            asset_after: None,
+            hints: None,
+            cid: "",
+            text_results: &checked,
+            include_raw: false,
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(stage.search.objects.len(), 1);
+    assert_eq!(stage.search.objects[0]["id"], id);
+    assert_eq!(stage.search.hits.len(), 2);
+    assert_eq!(stage.search.coverage["candidate_count"], 2);
+    assert_eq!(
+        stage.search.objects[0]["retrieval"]["channel"], "lexical",
+        "正式SQL定位须保留词法通道",
+    );
+}
+
+#[tokio::test]
+async fn search_stage_keeps_full_query_scores_in_sql_owners() {
+    let _guard = SERIAL.lock().await;
+    let pool = harness_pool().await;
+    let ctx = AccessContext {
+        user_id: "alice".into(),
+        space_id: "demo".into(),
+        request_id: "synthetic-full-query-scoring".into(),
+    };
+    let query = (0..48)
+        .map(|index| format!("qtoken{index:02}"))
+        .collect::<Vec<_>>()
+        .join(" ");
+    let selected = data_agent::modules::retrieval::candidate_terms(&query);
+    let scoring_terms = data_agent::modules::retrieval::tokens(&query);
+    assert!(!selected.complete);
+    assert!(!selected.values.iter().any(|term| term == "qtoken45"));
+    assert!(selected.values.iter().any(|term| term == "qtoken47"));
+    let mut tx = AppTx::begin(&pool).await.unwrap();
+    let object = knowledge::create_in_tx(
+        &mut tx,
+        &ctx,
+        &json!({"operation_id":"create-full-query-scoring", "kind":"term",
+            "name":"qtoken45", "body":"qtoken47 独立合成正文。",
+            "related_ids":[], "source_url":null, "structured_value":null}),
+    )
+    .await
+    .unwrap();
+    data_agent::modules::retrieval::index_in_tx(&mut tx, &ctx.space_id, &object)
+        .await
+        .unwrap();
+    let excluded = knowledge::create_in_tx(
+        &mut tx,
+        &ctx,
+        &json!({"operation_id":"create-unselected-query-term", "kind":"term",
+            "name":"qtoken45", "body":"只含未选词的独立合成资料。",
+            "related_ids":[], "source_url":null, "structured_value":null}),
+    )
+    .await
+    .unwrap();
+    data_agent::modules::retrieval::index_in_tx(&mut tx, &ctx.space_id, &excluded)
+        .await
+        .unwrap();
+    tx.commit().await.unwrap();
+    let allowed = vec![
+        object["id"].as_str().unwrap().to_owned(),
+        excluded["id"].as_str().unwrap().to_owned(),
+    ];
+    let scope = Default::default();
+    let mut tx = AppTx::begin(&pool).await.unwrap();
+    let current = knowledge::matching_content_in_tx(
+        &mut tx,
+        &ctx,
+        &query,
+        &selected.values,
+        &scoring_terms,
+        &scope,
+        Some(&allowed),
+        50,
+        0,
+        false,
+    )
+    .await
+    .unwrap();
+    let indexed = data_agent::modules::retrieval::content_candidates_scoped_in_tx(
+        &mut tx,
+        &ctx.space_id,
+        &query,
+        &selected.values,
+        &scoring_terms,
+        &scope,
+        Some(&allowed),
+        50,
+        0,
+        false,
+    )
+    .await
+    .unwrap();
+    for rows in [&current, &indexed] {
+        assert_eq!(rows.len(), 1, "选定候选词qtoken47仍可召回同一规范正文");
+        assert_eq!(
+            rows[0]["name_term_hits"], 1,
+            "未入24个候选词的qtoken45仍参与名称评分"
+        );
+        assert_eq!(
+            rows[0]["term_hits"], 2,
+            "完整问句的名称与正文词均参与同一owner评分"
+        );
+    }
+    assert_eq!(current[0]["record_id"], indexed[0]["record_id"]);
+    tx.commit().await.unwrap();
+    let stage = search_stage(&pool, &ctx, &query, 1).await;
+    assert_eq!(stage.search.hits.len(), 1);
+    assert_eq!(stage.search.objects[0]["id"], object["id"]);
+    assert_eq!(stage.search.coverage["candidate_count"], 1);
+    assert_eq!(stage.search.coverage["query_terms_complete"], false);
+    assert_eq!(stage.search.scan_progress["main_reads"], 1);
+    let mut tx = AppTx::begin(&pool).await.unwrap();
+    data_agent::use_cases::knowledge::assert_search_fresh_in_tx(&mut tx, &ctx, &stage)
+        .await
+        .unwrap();
+    tx.commit().await.unwrap();
+}
+
+#[tokio::test]
+async fn selected_content_rejects_record_window_drift_and_keeps_subranges() {
+    let _guard = SERIAL.lock().await;
+    let pool = harness_pool().await;
+    let ctx = AccessContext {
+        user_id: "alice".into(),
+        space_id: "demo".into(),
+        request_id: "synthetic-record-window-binding".into(),
+    };
+    let mut tx = AppTx::begin(&pool).await.unwrap();
+    let mut object = knowledge::create_in_tx(
+        &mut tx,
+        &ctx,
+        &json!({"operation_id":"create-record-window-binding", "kind":"document",
+            "name":"规范窗口绑定合成资料", "body":"初始化", "related_ids":[],
+            "source_url":null,"structured_value":null}),
+    )
+    .await
+    .unwrap();
+    tx.commit().await.unwrap();
+    let text = format!(
+        "{}{}{}",
+        "甲🌏".repeat(140),
+        "乙🧪".repeat(140),
+        "丙".repeat(240)
+    );
+    object["entries"][0]["effective_value"] = json!(text);
+    for statement in [
+        "UPDATE knowledge_objects SET body=? WHERE id=?",
+        "UPDATE knowledge_versions SET body=? WHERE object_id=? AND version=1",
+    ] {
+        sqlx::query(statement)
+            .bind(sqlx::types::Json(&object))
+            .bind(object["id"].as_str().unwrap())
+            .execute(&pool)
+            .await
+            .unwrap();
+    }
+    let record = data_agent::types::fingerprint(&json!([
+        "knowledge-statement-window-3",
+        "demo",
+        object["id"],
+        "1",
+        "body",
+        "body",
+        null,
+        0
+    ]));
+    let mut tx = AppTx::begin(&pool).await.unwrap();
+    let mut relocated = json!({"entry_id":"body","path":"body","offset":560,"length":240,
+        "content_hash":data_agent::types::fingerprint(&json!("丙".repeat(240)))});
+    assert!(
+        knowledge::read_entries_in_tx(
+            &mut tx,
+            &ctx,
+            object["id"].as_str().unwrap(),
+            1,
+            &record,
+            &mut relocated,
+            &Default::default()
+        )
+        .await
+        .unwrap()
+        .is_none(),
+        "另一合法窗口即使hash正确，也不能借原record身份交付"
+    );
+    let expected = "甲🌏".repeat(60);
+    let mut subset = json!({"entry_id":"body","path":"body","offset":80,"length":120,
+        "content_hash":data_agent::types::fingerprint(&json!(expected))});
+    let read = knowledge::read_entries_in_tx(
+        &mut tx,
+        &ctx,
+        object["id"].as_str().unwrap(),
+        1,
+        &record,
+        &mut subset,
+        &Default::default(),
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    assert_eq!(read["entries"][0]["effective_value"], expected);
+    assert_eq!(read["entries"][0]["content_page"]["offset"], 80);
+    assert_eq!(read["entries"][0]["content_page"]["total_chars"], 800);
+    let mut unknown = subset.clone();
+    assert!(
+        knowledge::read_entries_in_tx(
+            &mut tx,
+            &ctx,
+            object["id"].as_str().unwrap(),
+            1,
+            "unknown-current-record",
+            &mut unknown,
+            &Default::default()
+        )
+        .await
+        .unwrap()
+        .is_none()
+    );
+    tx.commit().await.unwrap();
+}
+
+#[tokio::test]
+async fn selected_content_restores_statement_fields_and_keeps_dependencies() {
+    let _guard = SERIAL.lock().await;
+    let pool = harness_pool().await;
+    let ctx = AccessContext {
+        user_id: "alice".into(),
+        space_id: "demo".into(),
+        request_id: "synthetic-statement-locator".into(),
+    };
+    let mut tx = AppTx::begin(&pool).await.unwrap();
+    let support = knowledge::create_in_tx(
+        &mut tx,
+        &ctx,
+        &json!({"operation_id":"create-statement-locator-support", "kind":"term",
+            "name":"独立合成前提", "body":"设备已完成双人复核。", "related_ids":[],
+            "source_url":null,"structured_value":null}),
+    )
+    .await
+    .unwrap();
+    let mut object = knowledge::create_in_tx(
+        &mut tx,
+        &ctx,
+        &json!({"operation_id":"create-statement-locator", "kind":"metric",
+            "name":"陈述定位合成资料", "body":"初始化", "related_ids":[],
+            "source_url":null,"structured_value":null}),
+    )
+    .await
+    .unwrap();
+    tx.commit().await.unwrap();
+    let earlier = "背景🌏。".repeat(80);
+    let text = "设备停用后不得继续计入有效设备数。";
+    let scope_text = "仅适用已复核设备。";
+    let selected = format!("{text}\n{scope_text}");
+    let rendered = format!("{earlier}\n\n{selected}");
+    let base = earlier.chars().count() + 2;
+    let reference =
+        json!({"object_id":support["id"],"version":"1","path":support["entries"][0]["path"]});
+    let statements = json!([
+        {"statement_id":"earlier-rule","object_ref":{"object_id":object["id"],"version":"1","path":"rules"},
+            "text":earlier,"scope_text":"","origin":"model_inference","citations":[],"supports":[]},
+        {"statement_id":"selected-rule","object_ref":{"object_id":object["id"],"version":"1","path":"rules"},
+            "text":text,"scope_text":scope_text,"origin":"model_inference","citations":[],
+            "supports":[{"support_id":"selected-prerequisite","role":"prerequisite",
+                "reference":{"kind":"knowledge","ref":reference},"embedded_in":null}]}
+    ]);
+    object["entries"] = json!([{"entry_id":"rules","path":"rules","label":"规则",
+        "effective_value":rendered,"source_facts":{},
+        "suggestion":{"value":rendered,"statements":statements},
+        "human_override":null,"review_state":"unverified"}]);
+    for statement in [
+        "UPDATE knowledge_objects SET body=? WHERE id=?",
+        "UPDATE knowledge_versions SET body=? WHERE object_id=? AND version=1",
+    ] {
+        sqlx::query(statement)
+            .bind(sqlx::types::Json(&object))
+            .bind(object["id"].as_str().unwrap())
+            .execute(&pool)
+            .await
+            .unwrap();
+    }
+    for statement in statements.as_array().unwrap() {
+        sqlx::query("INSERT INTO knowledge_statements(object_id,version,statement_id,space_id,entry_path,layer,body) VALUES(?,1,?,'demo','rules','model_suggestion',?)")
+            .bind(object["id"].as_str().unwrap()).bind(statement["statement_id"].as_str().unwrap())
+            .bind(sqlx::types::Json(statement)).execute(&pool).await.unwrap();
+    }
+    let record = data_agent::types::fingerprint(&json!([
+        "knowledge-statement-window-3",
+        "demo",
+        object["id"],
+        "1",
+        "rules",
+        "rules",
+        "selected-rule",
+        base
+    ]));
+    let canonical = json!({"entry_id":"rules","path":"rules","statement_id":"selected-rule",
+        "statement_offset":0,"offset":base,"length":selected.chars().count(),
+        "content_hash":data_agent::types::fingerprint(&json!(selected))});
+    let mut tx = AppTx::begin(&pool).await.unwrap();
+    for fields in [
+        vec!["statement_offset"],
+        vec!["statement_id"],
+        vec!["statement_id", "statement_offset"],
+        vec![
+            "entry_id",
+            "path",
+            "offset",
+            "length",
+            "statement_id",
+            "statement_offset",
+        ],
+    ] {
+        let mut location = canonical.clone();
+        for field in fields {
+            location.as_object_mut().unwrap().remove(field);
+        }
+        let read = knowledge::read_entries_in_tx(
+            &mut tx,
+            &ctx,
+            object["id"].as_str().unwrap(),
+            1,
+            &record,
+            &mut location,
+            &Default::default(),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+        assert_eq!(location, canonical, "仅补缺字段，不能丢陈述身份或改变窗口");
+        assert_eq!(read["entries"][0]["effective_value"], selected);
+        assert_eq!(
+            read["entries"][0]["statement_content"]["statement_id"],
+            "selected-rule"
+        );
+        assert_eq!(read["entries"][0]["statement_content"]["text"], text);
+        assert_eq!(
+            read["entries"][0]["statement_content"]["scope_text"],
+            scope_text
+        );
+        assert_eq!(read["statement_dependencies"], json!([reference]));
+    }
+    let mut conflict = canonical.clone();
+    conflict["statement_id"] = json!("earlier-rule");
+    assert!(
+        knowledge::read_entries_in_tx(
+            &mut tx,
+            &ctx,
+            object["id"].as_str().unwrap(),
+            1,
+            &record,
+            &mut conflict,
+            &Default::default()
+        )
+        .await
+        .unwrap()
+        .is_none()
+    );
+    tx.commit().await.unwrap();
+}
+
+#[tokio::test]
+async fn search_stage_keeps_consumed_candidates_when_metadata_crosses_deadline() {
+    let _guard = SERIAL.lock().await;
+    let pool = harness_pool().await;
+    let ctx = AccessContext {
+        user_id: "alice".into(),
+        space_id: "demo".into(),
+        request_id: "synthetic-pending-metadata-deadline".into(),
+    };
+    let mut tx = AppTx::begin(&pool).await.unwrap();
+    let mut object = knowledge::create_in_tx(
+        &mut tx,
+        &ctx,
+        &json!({"operation_id":"create-pending-metadata", "kind":"term",
+            "name":"合成待核验定位资料", "body":"pendingmetadataneedle 独立原文。",
+            "related_ids":[], "source_url":null, "structured_value":null}),
+    )
+    .await
+    .unwrap();
+    tx.commit().await.unwrap();
+    object["entries"] = json!([
+        {"entry_id":"rule-a","path":"rule-a","label":"规则A",
+         "effective_value":"pendingmetadataneedle 合成规则甲。",
+         "source_facts":{},"suggestion":{},"human_override":null,"review_state":"unverified"},
+        {"entry_id":"rule-b","path":"rule-b","label":"规则B",
+         "effective_value":"pendingmetadataneedle 合成规则乙。",
+         "source_facts":{},"suggestion":{},"human_override":null,"review_state":"unverified"}
+    ]);
+    for statement in [
+        "UPDATE knowledge_objects SET body=? WHERE id=?",
+        "UPDATE knowledge_versions SET body=? WHERE object_id=? AND version=1",
+    ] {
+        sqlx::query(statement)
+            .bind(sqlx::types::Json(&object))
+            .bind(object["id"].as_str().unwrap())
+            .execute(&pool)
+            .await
+            .unwrap();
+    }
+    let mut tx = AppTx::begin(&pool).await.unwrap();
+    data_agent::modules::retrieval::index_in_tx(&mut tx, &ctx.space_id, &object)
+        .await
+        .unwrap();
+    tx.commit().await.unwrap();
+
+    // 真实候选SQL可返回，只有元信息后的依赖映射核验被表锁阻塞；不替换候选响应。
+    let mut blocker = pool.acquire().await.unwrap();
+    sqlx::raw_sql("LOCK TABLES knowledge_dependency_states WRITE")
+        .execute(&mut *blocker)
+        .await
+        .unwrap();
+    let checked = Default::default();
+    let mut vector = data_agent::modules::retrieval::vector::Candidates::lexical();
+    vector.deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(1);
+    let started = tokio::time::Instant::now();
+    let result = tokio::time::timeout(
+        std::time::Duration::from_secs(3),
+        data_agent::use_cases::knowledge::search_stage_outside_lock(
+            &pool,
+            &ctx,
+            &mut data_agent::use_cases::knowledge::ScopedSearchRequest {
+                query: "pendingmetadataneedle",
+                limit: 2,
+                launch: None,
+                vector,
+                scope: &data_agent::search_scope::KnowledgeSearchScope::default(),
+                allowed: None,
+                asset_after: None,
+                hints: None,
+                cid: "",
+                text_results: &checked,
+                include_raw: false,
+            },
+        ),
+    )
+    .await;
+    sqlx::raw_sql("UNLOCK TABLES")
+        .execute(&mut *blocker)
+        .await
+        .unwrap();
+    let stage = result.expect("元信息超期不能等待阻塞核验").unwrap();
+    assert!(started.elapsed() >= std::time::Duration::from_millis(900));
+    assert!(stage.search.hits.is_empty());
+    assert_eq!(stage.search.coverage["state"], "bounded");
+    assert_eq!(stage.search.coverage["candidate_count"], 2);
+    assert_eq!(stage.search.scan_progress["main_reads"], 0);
+    for source in stage.search.scan_progress["sql"].as_array().unwrap() {
+        assert_eq!(source["consumed"], 2);
+        assert_eq!(source["succeeded"], true);
+        assert_eq!(source["in_flight"], false);
+    }
+    assert_eq!(
+        stage.search.pending.len(),
+        2,
+        "已消费但未核验的定位不能丢失"
+    );
+    let mut actual = stage
+        .search
+        .pending
+        .iter()
+        .map(|candidate| {
+            assert_eq!(candidate["id"], object["id"]);
+            assert_eq!(candidate["version"], "1");
+            assert!(candidate.get("entries").is_none(), "待核验引用不携带正文");
+            let location = &candidate["matches"][0];
+            assert_eq!(location["offset"], 0);
+            assert_eq!(location["length"], 28);
+            assert_eq!(location["path"], location["entry_id"]);
+            (
+                candidate["record_id"].as_str().unwrap().to_owned(),
+                location["entry_id"].as_str().unwrap().to_owned(),
+            )
+        })
+        .collect::<Vec<_>>();
+    actual.sort();
+    let mut expected = object["entries"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|entry| {
+            (
+                data_agent::types::knowledge_record_id(&ctx.space_id, &object, entry, 0),
+                entry["entry_id"].as_str().unwrap().to_owned(),
+            )
+        })
+        .collect::<Vec<_>>();
+    expected.sort();
+    assert_eq!(
+        actual, expected,
+        "原entry/path/窗口身份须在后续核验前完整保留"
+    );
+}
+
+#[tokio::test]
+async fn narrow_search_projection_rechecks_unshown_required_sources() {
+    let _guard = SERIAL.lock().await;
+    let pool = harness_pool().await;
+    let ctx = AccessContext {
+        user_id: "alice".into(),
+        space_id: "demo".into(),
+        request_id: "synthetic-narrow-source-freshness".into(),
+    };
+    let mut tx = AppTx::begin(&pool).await.unwrap();
+    let source = knowledge::create_in_tx(
+        &mut tx,
+        &ctx,
+        &json!({"operation_id":"create-narrow-source", "kind":"document",
+            "name":"合成计数说明", "body":"首次确认后计入统计。", "related_ids":[],
+            "source_url":null, "structured_value":null}),
+    )
+    .await
+    .unwrap();
+    let mut object = knowledge::create_in_tx(
+        &mut tx,
+        &ctx,
+        &json!({"operation_id":"create-narrow-dependent", "kind":"term",
+            "name":"合成计数口径", "body":"projectionfreshneedle 检索命中正文。",
+            "related_ids":[], "source_url":null, "structured_value":null}),
+    )
+    .await
+    .unwrap();
+    tx.commit().await.unwrap();
+    let source_id = source["id"].as_str().unwrap();
+    let owner_id = object["id"].as_str().unwrap().to_owned();
+
+    // 迁移前对象的另一条目携带必要来源，但不包含查询词，不进入正文投影。
+    object["entries"].as_array_mut().unwrap().push(json!({
+        "entry_id":"calculation-source", "path":"calculation-source", "label":"计数依据",
+        "effective_value":"首次确认的计数依据来自说明文档。",
+        "source_facts":{"source_id":format!("document-{source_id}"),"version":"1","complete":true},
+        "suggestion":{}, "human_override":null, "review_state":"unverified"
+    }));
+    for statement in [
+        "UPDATE knowledge_objects SET body=? WHERE id=?",
+        "UPDATE knowledge_versions SET body=? WHERE object_id=? AND version=1",
+        "UPDATE retrieval_documents SET body=? WHERE object_id=?",
+    ] {
+        sqlx::query(statement)
+            .bind(sqlx::types::Json(&object))
+            .bind(&owner_id)
+            .execute(&pool)
+            .await
+            .unwrap();
+    }
+    sqlx::query("DELETE FROM knowledge_dependency_states WHERE owner_id=? AND owner_version=1")
+        .bind(&owner_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    let stage = search_stage(&pool, &ctx, "projectionfreshneedle", 1).await;
+    assert_eq!(stage.search.objects.len(), 1, "来源有效时正常交付命中正文");
+    assert_eq!(stage.search.objects[0]["id"], owner_id);
+    assert_eq!(
+        stage.search.objects[0]["entries"].as_array().unwrap().len(),
+        1
+    );
+    assert_eq!(stage.search.objects[0]["entries"][0]["entry_id"], "body");
+    let mut tx = AppTx::begin(&pool).await.unwrap();
+    data_agent::use_cases::knowledge::assert_search_fresh_in_tx(&mut tx, &ctx, &stage)
+        .await
+        .unwrap();
+    tx.commit().await.unwrap();
+
+    // 检索事务已经结束；正式保存改版来源，命中对象自身仍是同一版本。
+    let mut tx = AppTx::begin(&pool).await.unwrap();
+    let edited = knowledge::save_edit_in_tx(
+        &mut tx,
+        &ctx,
+        source_id,
+        &json!({"operation_id":"change-narrow-source", "expected_version":"1",
+            "entry_id":"body", "value":"最终确认后计入统计。", "structured_value":null}),
+        None,
+    )
+    .await
+    .unwrap();
+    register_saved_in_tx(&mut tx, &ctx, std::slice::from_ref(&edited)).await;
+    tx.commit().await.unwrap();
+
+    let mut tx = AppTx::begin(&pool).await.unwrap();
+    let error = data_agent::use_cases::knowledge::assert_search_fresh_in_tx(&mut tx, &ctx, &stage)
+        .await
+        .expect_err("未展示条目的必要来源换版后，不能交付锁外取得的旧正文");
+    assert_eq!(error.code, "stale_knowledge");
 }
 
 // 检索过滤走依赖索引：映射完备对象按有效层判定——人工真正替换后的平台事实引用
@@ -1593,6 +2941,7 @@ async fn search_filter_judges_effective_dependencies_not_legacy_refs() {
     )
     .await
     .unwrap();
+    register_saved_in_tx(&mut tx, &ctx, std::slice::from_ref(&replaced_saved)).await;
     tx.commit().await.unwrap();
     let replaced_version = replaced_saved["version"]
         .as_str()
@@ -1647,7 +2996,7 @@ async fn search_filter_judges_effective_dependencies_not_legacy_refs() {
         "citations":citation, "supports":[]
     }],"relations":[],"unresolved":[],"semantic_status":"ready"});
     let mut tx = AppTx::begin(&pool).await.unwrap();
-    knowledge::apply_preparation_in_tx(
+    let prepared = knowledge::apply_preparation_in_tx(
         &mut tx,
         &ctx,
         "search-apply-derived",
@@ -1657,6 +3006,7 @@ async fn search_filter_judges_effective_dependencies_not_legacy_refs() {
     )
     .await
     .unwrap();
+    register_saved_in_tx(&mut tx, &ctx, &prepared).await;
     tx.commit().await.unwrap();
     let mut tx = AppTx::begin(&pool).await.unwrap();
     let adopted = knowledge::save_edit_in_tx(
@@ -1669,6 +3019,7 @@ async fn search_filter_judges_effective_dependencies_not_legacy_refs() {
     )
     .await
     .unwrap();
+    register_saved_in_tx(&mut tx, &ctx, std::slice::from_ref(&adopted)).await;
     tx.commit().await.unwrap();
     let derived_version = adopted["version"].as_str().unwrap().parse::<u64>().unwrap();
     let mut tx = AppTx::begin(&pool).await.unwrap();
@@ -1736,7 +3087,7 @@ async fn search_filter_judges_effective_dependencies_not_legacy_refs() {
         "citations":anchor_citation, "supports":[]
     }],"relations":[],"unresolved":[],"semantic_status":"ready"});
     let mut tx = AppTx::begin(&pool).await.unwrap();
-    knowledge::apply_preparation_in_tx(
+    let prepared = knowledge::apply_preparation_in_tx(
         &mut tx,
         &ctx,
         "search-apply-middle",
@@ -1746,6 +3097,7 @@ async fn search_filter_judges_effective_dependencies_not_legacy_refs() {
     )
     .await
     .unwrap();
+    register_saved_in_tx(&mut tx, &ctx, &prepared).await;
     tx.commit().await.unwrap();
     let mut tx = AppTx::begin(&pool).await.unwrap();
     let middle_adopted = knowledge::save_edit_in_tx(
@@ -1758,6 +3110,7 @@ async fn search_filter_judges_effective_dependencies_not_legacy_refs() {
     )
     .await
     .unwrap();
+    register_saved_in_tx(&mut tx, &ctx, std::slice::from_ref(&middle_adopted)).await;
     tx.commit().await.unwrap();
     let middle_version = middle_adopted["version"]
         .as_str()
@@ -1788,7 +3141,7 @@ async fn search_filter_judges_effective_dependencies_not_legacy_refs() {
             "content":"中间词条的派生口径", "embedded_in":null}]
     }],"relations":[],"unresolved":[],"semantic_status":"ready"});
     let mut tx = AppTx::begin(&pool).await.unwrap();
-    knowledge::apply_preparation_in_tx(
+    let prepared = knowledge::apply_preparation_in_tx(
         &mut tx,
         &ctx,
         "search-apply-chained",
@@ -1798,9 +3151,10 @@ async fn search_filter_judges_effective_dependencies_not_legacy_refs() {
     )
     .await
     .unwrap();
+    register_saved_in_tx(&mut tx, &ctx, &prepared).await;
     tx.commit().await.unwrap();
     let mut tx = AppTx::begin(&pool).await.unwrap();
-    knowledge::save_edit_in_tx(
+    let chained_adopted = knowledge::save_edit_in_tx(
         &mut tx,
         &ctx,
         &chained_id,
@@ -1810,6 +3164,7 @@ async fn search_filter_judges_effective_dependencies_not_legacy_refs() {
     )
     .await
     .unwrap();
+    register_saved_in_tx(&mut tx, &ctx, std::slice::from_ref(&chained_adopted)).await;
     tx.commit().await.unwrap();
 
     // 平台来源与锚点文档分别改版；人工替换对象和派生对象的登记修订都停在首版。
@@ -1820,7 +3175,7 @@ async fn search_filter_judges_effective_dependencies_not_legacy_refs() {
         .await
         .unwrap();
     let mut tx = AppTx::begin(&pool).await.unwrap();
-    knowledge::save_edit_in_tx(
+    let anchor_advanced = knowledge::save_edit_in_tx(
         &mut tx,
         &ctx,
         &anchor_id,
@@ -1830,6 +3185,7 @@ async fn search_filter_judges_effective_dependencies_not_legacy_refs() {
     )
     .await
     .unwrap();
+    register_saved_in_tx(&mut tx, &ctx, std::slice::from_ref(&anchor_advanced)).await;
     tx.commit().await.unwrap();
 
     let kept = search_object_ids(&pool, &ctx, "人工独立口径术语").await;
@@ -1929,7 +3285,7 @@ async fn content_fingerprint_tolerates_revision_only_advance() {
         "citations":citation, "supports":[]
     }],"relations":[],"unresolved":[],"semantic_status":"ready"});
     let mut tx = AppTx::begin(&pool).await.unwrap();
-    knowledge::apply_preparation_in_tx(
+    let prepared = knowledge::apply_preparation_in_tx(
         &mut tx,
         &ctx,
         "fingerprint-apply",
@@ -1939,6 +3295,7 @@ async fn content_fingerprint_tolerates_revision_only_advance() {
     )
     .await
     .unwrap();
+    register_saved_in_tx(&mut tx, &ctx, &prepared).await;
     tx.commit().await.unwrap();
     let mut tx = AppTx::begin(&pool).await.unwrap();
     let adopted = knowledge::save_edit_in_tx(
@@ -1951,6 +3308,7 @@ async fn content_fingerprint_tolerates_revision_only_advance() {
     )
     .await
     .unwrap();
+    register_saved_in_tx(&mut tx, &ctx, std::slice::from_ref(&adopted)).await;
     tx.commit().await.unwrap();
     let adopted_version = adopted["version"].as_str().unwrap().parse::<u64>().unwrap();
 
@@ -1985,7 +3343,7 @@ async fn content_fingerprint_tolerates_revision_only_advance() {
     .unwrap();
     tx.commit().await.unwrap();
     let mut tx = AppTx::begin(&pool).await.unwrap();
-    let unchanged = knowledge::dependency_index::walk_required_in_tx(
+    let unchanged = data_agent::use_cases::dependency_validation::walk_required_in_tx(
         &mut tx,
         ctx.space_id.as_str(),
         &[(citing_id.clone(), adopted_version)],
@@ -2012,7 +3370,7 @@ async fn content_fingerprint_tolerates_revision_only_advance() {
     .unwrap();
     tx.commit().await.unwrap();
     let mut tx = AppTx::begin(&pool).await.unwrap();
-    let changed = knowledge::dependency_index::walk_required_in_tx(
+    let changed = data_agent::use_cases::dependency_validation::walk_required_in_tx(
         &mut tx,
         ctx.space_id.as_str(),
         &[(citing_id.clone(), adopted_version)],
@@ -2184,7 +3542,7 @@ async fn partial_edit_keeps_sources_only_for_verbatim_retained_statements() {
     .unwrap();
     tx.commit().await.unwrap();
     let mut tx = AppTx::begin(&pool).await.unwrap();
-    let after_source_change = knowledge::dependency_index::walk_required_in_tx(
+    let after_source_change = data_agent::use_cases::dependency_validation::walk_required_in_tx(
         &mut tx,
         &ctx.space_id,
         &[(term_id.clone(), partial_version)],
@@ -2228,7 +3586,7 @@ async fn partial_edit_keeps_sources_only_for_verbatim_retained_statements() {
     )
     .await
     .unwrap();
-    let no_retention_walk = knowledge::dependency_index::walk_required_in_tx(
+    let no_retention_walk = data_agent::use_cases::dependency_validation::walk_required_in_tx(
         &mut tx,
         &ctx.space_id,
         &[(term_id.clone(), rewritten_version)],
@@ -2383,7 +3741,7 @@ async fn structure_dependencies_and_computed_metrics_register_knowledge_targets(
         .unwrap();
         tx.commit().await.unwrap();
         let mut tx = AppTx::begin(&pool).await.unwrap();
-        let verdict = knowledge::dependency_index::walk_required_in_tx(
+        let verdict = data_agent::use_cases::dependency_validation::walk_required_in_tx(
             &mut tx,
             &ctx.space_id,
             &[(example_id.clone(), 1)],
@@ -2437,7 +3795,7 @@ async fn saving_a_depended_object_registers_a_lightweight_fanout_job() {
     tx.commit().await.unwrap();
     let independent_id = independent["id"].as_str().unwrap().to_owned();
     let mut tx = AppTx::begin(&pool).await.unwrap();
-    knowledge::save_edit_in_tx(
+    let independent_edited = knowledge::save_edit_in_tx(
         &mut tx,
         &ctx,
         &independent_id,
@@ -2447,6 +3805,7 @@ async fn saving_a_depended_object_registers_a_lightweight_fanout_job() {
     )
     .await
     .unwrap();
+    register_saved_in_tx(&mut tx, &ctx, std::slice::from_ref(&independent_edited)).await;
     tx.commit().await.unwrap();
     assert!(
         fanout_jobs(&independent_id).await.is_empty(),
@@ -2482,7 +3841,7 @@ async fn saving_a_depended_object_registers_a_lightweight_fanout_job() {
     tx.commit().await.unwrap();
     let citing_id = citing["id"].as_str().unwrap().to_owned();
     let mut tx = AppTx::begin(&pool).await.unwrap();
-    knowledge::apply_preparation_in_tx(
+    let prepared = knowledge::apply_preparation_in_tx(
         &mut tx,
         &ctx,
         "fanout-apply-citing",
@@ -2502,9 +3861,10 @@ async fn saving_a_depended_object_registers_a_lightweight_fanout_job() {
     )
     .await
     .unwrap();
+    register_saved_in_tx(&mut tx, &ctx, &prepared).await;
     tx.commit().await.unwrap();
     let mut tx = AppTx::begin(&pool).await.unwrap();
-    knowledge::save_edit_in_tx(
+    let citing_cleared = knowledge::save_edit_in_tx(
         &mut tx,
         &ctx,
         &citing_id,
@@ -2514,6 +3874,7 @@ async fn saving_a_depended_object_registers_a_lightweight_fanout_job() {
     )
     .await
     .unwrap();
+    register_saved_in_tx(&mut tx, &ctx, std::slice::from_ref(&citing_cleared)).await;
     tx.commit().await.unwrap();
 
     // B改版：同一事务留下扇出待办。
@@ -2528,6 +3889,7 @@ async fn saving_a_depended_object_registers_a_lightweight_fanout_job() {
     )
     .await
     .unwrap();
+    register_saved_in_tx(&mut tx, &ctx, std::slice::from_ref(&edited)).await;
     tx.commit().await.unwrap();
     let edited_version = edited["version"].as_str().unwrap().parse::<u64>().unwrap();
     let jobs = fanout_jobs(&depended_id).await;
@@ -2684,7 +4046,7 @@ async fn fanout_reopens_preparation_only_for_stale_dependents() {
             json!([])
         };
         let mut tx = AppTx::begin(&pool).await.unwrap();
-        knowledge::apply_preparation_in_tx(
+        let prepared = knowledge::apply_preparation_in_tx(
             &mut tx,
             &ctx,
             &format!("fanout-consumer-apply-{index}"),
@@ -2701,12 +4063,13 @@ async fn fanout_reopens_preparation_only_for_stale_dependents() {
         )
         .await
         .unwrap();
+        register_saved_in_tx(&mut tx, &ctx, &prepared).await;
         tx.commit().await.unwrap();
         citing_version += 1;
     }
     // 创建正文占着human_override层；解除后整理陈述成为有效层，依赖行生效。
     let mut tx = AppTx::begin(&pool).await.unwrap();
-    knowledge::save_edit_in_tx(
+    let citing_cleared = knowledge::save_edit_in_tx(
         &mut tx,
         &ctx,
         &citing_id,
@@ -2716,11 +4079,12 @@ async fn fanout_reopens_preparation_only_for_stale_dependents() {
     )
     .await
     .unwrap();
+    register_saved_in_tx(&mut tx, &ctx, std::slice::from_ref(&citing_cleared)).await;
     tx.commit().await.unwrap();
 
     // B改版登记扇出；消费后只有可重开来源被复位，在途与缺头来源保持原状。
     let mut tx = AppTx::begin(&pool).await.unwrap();
-    knowledge::save_edit_in_tx(
+    let depended_edited = knowledge::save_edit_in_tx(
         &mut tx,
         &ctx,
         &depended_id,
@@ -2730,6 +4094,7 @@ async fn fanout_reopens_preparation_only_for_stale_dependents() {
     )
     .await
     .unwrap();
+    register_saved_in_tx(&mut tx, &ctx, std::slice::from_ref(&depended_edited)).await;
     tx.commit().await.unwrap();
 
     // 消费者与worker同节奏：一次调用只领取一个作业，先于本测试登记的其他扇出

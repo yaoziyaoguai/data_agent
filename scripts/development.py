@@ -141,15 +141,21 @@ def main():
     parser.add_argument('--model', choices=('mock','deepseek','protocol-test'), default='mock', help='mock不付费；deepseek沿用已批准小样的原数据库与试验预算')
     parser.add_argument('--model-profile', type=Path, help='读取已获授权的持久模型试验配置；不重置其ID、数据库或额度')
     parser.add_argument('--model-url', help='仅protocol-test接受127.0.0.1回环模型；不读取官方密钥')
+    parser.add_argument('--prefill', choices=('enabled','disabled'), default='enabled', help='默认沿原模型许可启用整理/预填；disabled只关闭维护调用，不更换聊天profile或账本')
     parser.add_argument('--memory',choices=('builtin','mem0'),help='真实DeepSeek默认Mem0；mock默认builtin且不付费')
     parser.add_argument('--memory-configuration',type=Path,default=ROOT/'.local/memory/configuration.json')
     parser.add_argument('--retrieval',choices=('hybrid','lexical'),help='真实DeepSeek默认百炼Qwen和Milvus；mock默认词法且不付费')
     parser.add_argument('--embedding-profile',type=Path,default=ROOT/'.local/embedding/profile.json',help='共享索引与页面检索的固定维护预算')
     parser.add_argument('--embedding-configuration',type=Path,default=ROOT/'.local/memory/configuration.json',help='复用百炼endpoint和密钥路径，不启动Mem0服务')
+    parser.add_argument('--public-collection', help='显式选择公共Milvus集合；默认沿用数据库摘要集合')
+    parser.add_argument('--public-content-retention', choices=('archive', 'latest_only'), default='archive', help='新公共修订正文保留策略；默认archive')
+    parser.add_argument('--tool-contract-version', choices=('1', '2'), default='1', help='新消息工具合同；默认1，旧消息沿用原合同')
     parser.add_argument('--check', action='store_true', help='启动、检查身份和页面，然后关闭自己启动的进程')
     parser.add_argument('--port-offset', type=int, default=0, help='本地验证使用独立端口，不影响正在运行的工作台')
     parser.add_argument('--runtime-dir', type=Path, help='使用.local下独立的运行目录保存本次开发身份和平台账本')
     args = parser.parse_args()
+    if args.public_collection is not None and not re.fullmatch(r'[A-Za-z_][A-Za-z0-9_]{0,127}', args.public_collection):
+        parser.error('--public-collection必须以字母或下划线开头，仅含ASCII字母、数字、下划线，长度1–128')
     retrieval_mode=args.retrieval or ("hybrid" if args.model=="deepseek" else "lexical")
     if retrieval_mode=="hybrid" and args.model!="deepseek":
         raise RuntimeError("真实向量需要显式deepseek模型配置和持久预算；mock请用lexical")
@@ -214,13 +220,14 @@ def main():
     env = dict(os.environ, PI_OFFLINE='1', DATA_AGENT_MODE='development', DATA_AGENT_TOOLSET='data', DATA_AGENT_PLATFORM_URL='http://127.0.0.1:'+str(ports['platform']),
                DATA_AGENT_SYNTHETIC_SOURCE_DIRECTORY=str(source_directory),
                DATA_AGENT_DEMO_PROFILE=source_manifest.get('demo_profile', 'retail'),
+               DATA_AGENT_PUBLIC_CONTENT_RETENTION=args.public_content_retention,
+               DATA_AGENT_TOOL_CONTRACT_VERSION=args.tool_contract_version,
                DATA_AGENT_DATABASE_URL='mysql://data_agent:' + quote(password, safe='') + '@127.0.0.1:13306/'+database,
                DATA_AGENT_SEMANTIC_SUPER_MAINTAINERS=os.environ.get('DATA_AGENT_SEMANTIC_SUPER_MAINTAINERS', json.dumps({'demo': ['alice']})),
                DATA_AGENT_DEV_IDENTITIES=json.dumps({identities[user]: user for user in users}),
                DATA_AGENT_INTERNAL_TOKEN=identities['internal'], DATA_AGENT_API_PORT=str(ports['api']),
                DATA_AGENT_BRIDGE_PORT=str(ports['bridge']), DATA_AGENT_API_URL='http://127.0.0.1:' + str(ports['api']),
                DATA_AGENT_BRIDGE_URL='http://127.0.0.1:' + str(ports['bridge']))
-    (private / 'environment.json').write_text(json.dumps({'database':database,'source_directory':str(source_directory.relative_to(ROOT)) if source_directory.is_relative_to(ROOT) else str(source_directory),'ports':ports,'model_mode':args.model},ensure_ascii=False,indent=2)+'\n')
     env = with_local_proxy_bypass(env)
     # 故障注入只属于测试命令，不随日常演示环境继承。
     for option in ('DATA_AGENT_FAULT', 'DATA_AGENT_MOCK_DELAY_MS', 'DATA_AGENT_LEASE_MS', 'DATA_AGENT_MODEL_PROFILE', 'DATA_AGENT_PROVIDER_TEST', 'DATA_AGENT_MODEL_TIMEOUT_MS', 'DATA_AGENT_PREFILL_TIMEOUT_MS', 'DATA_AGENT_PREFILL_PROFILE', 'DATA_AGENT_PREFILL_URL', 'DATA_AGENT_PREFILL_TEST', 'DEEPSEEK_API_KEY', 'DEEPSEEK_BASE_URL', 'DEEPSEEK_MODEL'):
@@ -234,11 +241,13 @@ def main():
         if not token_file.is_file():
             raise RuntimeError('先运行 make infra-up，准备本地Milvus')
         env.update(DATA_AGENT_VECTOR_URL='http://127.0.0.1:19531',DATA_AGENT_VECTOR_TOKEN_FILE=str(token_file))
+    if args.public_collection is not None:
+        env['DATA_AGENT_VECTOR_COLLECTION'] = args.public_collection
     if model_profile:
         env['DATA_AGENT_MODEL_PROFILE']=json.dumps(model_profile)
     if model_profile:
         env['DATA_AGENT_TOOLSET']=model_profile.get('toolset','task')
-        if model_profile.get('toolset') == 'data':
+        if model_profile.get('toolset') == 'data' and args.prefill == 'enabled':
             env['DATA_AGENT_PREFILL_PROFILE']=json.dumps(model_profile)
             env['DATA_AGENT_PREFILL_URL']=model_credentials['DEEPSEEK_BASE_URL']+'/chat/completions'
     if args.model == 'protocol-test':
@@ -250,6 +259,14 @@ def main():
         env['DATA_AGENT_MEMORY_URL']='http://127.0.0.1:'+str(ports['memory'])
         target, memory_directory, effective_memory_configuration = memory_configuration(args.memory_configuration, database)
         env['DATA_AGENT_MEMORY_INDEX_TARGET'] = target
+    (private / 'environment.json').write_text(json.dumps({
+        'database': database,
+        'source_directory': str(source_directory.relative_to(ROOT)) if source_directory.is_relative_to(ROOT) else str(source_directory),
+        'ports': ports, 'model_mode': args.model, 'retrieval_mode': retrieval_mode, 'memory_mode': memory_provider,
+        'public_collection': env.get('DATA_AGENT_VECTOR_COLLECTION'),
+        'public_content_retention': env['DATA_AGENT_PUBLIC_CONTENT_RETENTION'],
+        'tool_contract_version': int(env['DATA_AGENT_TOOL_CONTRACT_VERSION']),
+    }, ensure_ascii=False, indent=2) + '\n')
     commands = [
         ('platform', ['python3','apps/platform-mock/server.py','--directory',str(private/'platform'),'--port',str(ports['platform'])]),
         ('api', [str(ROOT / 'target/debug/data-agent-api')]),
@@ -270,7 +287,9 @@ def main():
             print(f'startup service={name} stage=spawn log={log.name}', flush=True)
             processes.append((name, subprocess.Popen(argv, cwd=ROOT, env={**env,**(model_credentials if name in ('api','bridge','worker','memory') else {})}, stdout=log, stderr=log)))
             if name in ('api', 'bridge','platform','memory'):
-                wait_health('http://127.0.0.1:' + str(ports[name]) + '/health', processes, name, private)
+                # API完成目录初始化后才监听；本机已观测57秒就绪，仅此启动阶段保留75秒预算。
+                wait_health('http://127.0.0.1:' + str(ports[name]) + '/health', processes, name, private,
+                            timeout=75 if name == 'api' else 25)
         wait_health('http://127.0.0.1:' + str(ports['web']), processes, 'web', private)
         model_label = ('DeepSeek V4 Pro' if model_profile['model_id'] == 'deepseek-v4-pro' else 'DeepSeek Flash') if model_profile else '本地模拟模型'
         for user in users:

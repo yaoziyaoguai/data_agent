@@ -71,18 +71,30 @@ verify-startup: build
 	$(PYTHON) scripts/development.py --check
 	node tests/mvp/check-model-startup.mjs
 
+.PHONY: verify-pi-transport
+verify-pi-transport:
+	node tests/runtime/check-data-tool-transport.mjs --diagnose-validation
+	node tests/runtime/check-tool-serialization.mjs
+	node tests/runtime/check-evidence-tool-shape.mjs
+	node tests/runtime/check-tool-response-capacity.mjs
+	node tests/runtime/check-tool-capacity-compaction.mjs
+	node tests/runtime/check-anthropic-tool-schema.mjs
+	node tests/runtime/check-pi-upgrade-lifecycle.mjs
+
 verify-contracts:
 	$(NPM) run contracts:check
 	$(CARGO) build --offline --locked -p data-agent --bin validate_contracts
 	node tests/contracts/check-contracts.mjs
 
 verify-runtime-flow:
-	$(CARGO) build --offline --locked -p data-agent-api -p data-agent-worker
+	$(CARGO) build --offline --locked -p data-agent-api
+	$(CARGO) build --offline --locked -p data-agent-worker
 	$(NPM) run check:bridge
 	node tests/runtime/check-runtime.mjs --flow
 
 verify-recovery:
-	$(CARGO) build --offline --locked -p data-agent-api -p data-agent-worker
+	$(CARGO) build --offline --locked -p data-agent-api
+	$(CARGO) build --offline --locked -p data-agent-worker
 	node tests/runtime/check-runtime.mjs --recovery
 
 verify-architecture:
@@ -104,7 +116,8 @@ verify-model-provider:
 
 .PHONY: verify-runtime-capacity verify-retrieval-lease verify-worker-storage-recovery verify-compatible-restore
 verify-runtime-capacity:
-	$(CARGO) build --offline --locked -p data-agent-api -p data-agent-worker
+	$(CARGO) build --offline --locked -p data-agent-api
+	$(CARGO) build --offline --locked -p data-agent-worker
 	$(CARGO) test --offline --locked -p data-agent --lib modules::runtime::model_configuration::capacity
 	node tests/runtime/check-capacity-derivation.mjs
 	node tests/runtime/check-capacity-boundaries.mjs
@@ -126,16 +139,56 @@ verify-worker-storage-recovery:
 	$(CARGO) test --offline --locked -p data-agent --lib types::tests
 	$(CARGO) test --offline --locked -p data-agent --lib use_cases::deliver_run::tests
 	node tests/mvp/check-worker-storage-recovery.mjs
+	node tests/mvp/check-worker-memory-progress.mjs
 	node tests/mvp/check-worker-run-deadline.mjs
 
+.PHONY: verify-upgrade-current verify-upgrade-frozen verify-upgrade-index
+verify-upgrade-current:
+	$(CARGO) build --offline --locked -p data-agent-api
+	$(CARGO) build --offline --locked -p data-agent-worker
+	$(PYTHON) -m unittest discover -s scripts -p 'test_development.py'
+	node tests/runtime/check-harness-cleanup.mjs
+	node tests/mvp/check-knowledge-read-pages.mjs
+	node tests/mvp/check-source-upgrade.mjs --case current-owner
+	node tests/mvp/check-source-upgrade.mjs --case public-retention
+	node tests/mvp/check-source-upgrade.mjs --case public-retention --archive
+	node tests/mvp/check-source-upgrade.mjs
+
+verify-upgrade-frozen:
+	$(CARGO) build --offline --locked -p data-agent-api
+	$(CARGO) build --offline --locked -p data-agent-worker
+	$(CARGO) test --offline --locked -p data-agent --lib use_cases::prefill_materials::tests
+	node tests/mvp/check-frozen-job-inputs.mjs
+	node tests/mvp/check-prefill-materials.mjs
+	node tests/mvp/check-prefill-timeouts.mjs
+
+verify-upgrade-index:
+	$(CARGO) build --offline --locked -p data-agent-api
+	$(CARGO) build --offline --locked -p data-agent-worker
+	node tests/mvp/check-public-index-upgrade.mjs
+	node tests/mvp/check-shared-index-todo.mjs
+	node tests/mvp/check-index-concurrency.mjs
+
 verify-compatible-restore:
-	$(CARGO) build --offline --locked -p data-agent-api -p data-agent-worker
+	$(CARGO) build --offline --locked -p data-agent-api
+	$(CARGO) build --offline --locked -p data-agent-worker
 	node tests/mvp/check-native-compaction.mjs
 	node tests/mvp/check-recovery-continuation.mjs
+	node tests/mvp/check-sdk-upgrade-recovery.mjs
 	node tests/mvp/check-large-tool-context.mjs
 	node tests/mvp/check-session.mjs
 	node tests/mvp/check-checkpoint-storage.mjs
 	node tests/mvp/check-task-text-authority.mjs
+	node tests/mvp/check-tool-contract-version.mjs
+	node tests/mvp/check-evidence-tool-versions.mjs
+	node tests/runtime/check-capacity-boundaries.mjs
+	node tests/runtime/check-checkpoint-journal.mjs
+	node tests/mvp/check-context-dependencies.mjs
+	node tests/mvp/check-historical-source-access.mjs
+	node tests/mvp/check-model-configuration.mjs
+	node tests/mvp/check-memory-revisions.mjs
+	node tests/mvp/check-task-answer-scope.mjs --upgrade
+	node tests/mvp/check-task-answer-scope.mjs --upgrade --invalidate
 
 # 只审计已完成的官方小样，不再次付费。执行获准小样须显式运行--run命令。
 verify-model-trial:
@@ -154,6 +207,7 @@ verify-source-preparation:
 	node tests/mvp/check-source-preparation.mjs
 	node tests/mvp/check-source-preparation-concurrency.mjs
 	node tests/mvp/check-document-preparation.mjs
+	node tests/mvp/check-source-repreparation.mjs
 
 verify-effective-dependencies:
 	$(CARGO) test --offline --locked -p data-agent --test knowledge_dependencies
@@ -161,14 +215,101 @@ verify-effective-dependencies:
 	node tests/mvp/check-retrieval-coverage.mjs
 
 verify-task-conditions:
-	$(CARGO) build --offline --locked -p data-agent-api -p data-agent-worker
+	$(CARGO) build --offline --locked -p data-agent-api
+	$(CARGO) build --offline --locked -p data-agent-worker
 	$(CARGO) build --offline --locked -p data-agent --bin validate_contracts
+	$(CARGO) test --offline --locked -p data-agent --lib use_cases::query_semantics::tests
+	$(CARGO) test --offline --locked -p data-agent --lib use_cases::historical_analysis::tests
 	node tests/contracts/check-contracts.mjs
 	node tests/mvp/check-tool-schema.mjs
 	node tests/mvp/check-query-semantics.mjs
 	node tests/mvp/check-task-text-authority.mjs
 	node tests/mvp/check-source-limits.mjs
+	node tests/mvp/check-source-search-admission.mjs
 	node tests/mvp/check-time-roles.mjs
+
+# 任务答案沿原route/finish交付；真实数据库脚本逐条执行。
+.PHONY: verify-task-answers verify-task-answer-regression verify-task-answer-scope
+verify-task-answers:
+	$(CARGO) build --offline --locked -p data-agent-api
+	$(CARGO) build --offline --locked -p data-agent-worker
+	node tests/runtime/check-sdk-event-order.mjs
+	node tests/runtime/check-checkpoint-journal.mjs
+	node tests/runtime/check-answer-state.mjs
+	node tests/mvp/check-tool-schema.mjs
+	node tests/mvp/check-task-answers.mjs
+	node tests/mvp/check-task-answers.mjs --failed-tool
+	node tests/mvp/check-task-answers.mjs --write-task
+	node tests/mvp/check-task-answer-recovery.mjs
+	node tests/mvp/check-task-answer-boundaries.mjs
+	node tests/mvp/check-task-query-answers.mjs
+	node tests/mvp/check-task-query-answers.mjs --registered
+	node tests/mvp/check-task-query-answers.mjs --committed
+	node tests/mvp/check-task-query-answers.mjs --committed --older-query
+
+verify-task-answer-regression:
+	$(CARGO) build --offline --locked -p data-agent-api
+	$(CARGO) build --offline --locked -p data-agent-worker
+	node tests/mvp/check-final-answer.mjs
+	node tests/mvp/check-grounded-answers.mjs
+	node tests/mvp/check-answer-phase.mjs
+	node tests/mvp/check-result-notification-answers.mjs
+	node tests/mvp/check-mixed-task-cancellation.mjs
+	node tests/mvp/check-mixed-task-pi-continuation.mjs
+	node tests/mvp/check-mixed-task-bridge-cancellation.mjs
+	node tests/mvp/check-conversation-timeline.mjs
+	node tests/runtime/check-tool-capacity-compaction.mjs
+	node tests/mvp/check-large-tool-context.mjs
+
+verify-task-answer-scope:
+	$(CARGO) build --offline --locked -p data-agent-api
+	$(CARGO) build --offline --locked -p data-agent-worker
+	node tests/mvp/check-task-answer-scope.mjs
+	node tests/mvp/check-task-answer-scope.mjs --invalidate
+	node tests/mvp/check-task-answer-scope.mjs --public-index
+	node tests/mvp/check-task-answer-scope.mjs --cancel-b
+	node tests/mvp/check-task-answer-scope.mjs --cancel-b --invalidate
+	node tests/mvp/check-task-answer-scope.mjs --cancel-b-registered
+	node tests/mvp/check-task-answer-scope.mjs --cancel-b-registered --invalidate
+	node tests/mvp/check-task-answer-scope.mjs --cancel-b-unknown
+	node tests/mvp/check-task-answer-scope.mjs --new-task=clarify
+	node tests/mvp/check-task-answer-scope.mjs --new-task=clarify --null-task
+	node tests/mvp/check-task-answer-scope.mjs --new-task=revise
+	node tests/mvp/check-task-answer-scope.mjs --new-task=revise --null-task
+	node tests/mvp/check-evidence-delivery.mjs
+	node tests/mvp/check-evidence-assets.mjs
+	node tests/mvp/check-evidence-response-budget.mjs
+	node tests/mvp/check-evidence-tool-versions.mjs
+	node tests/mvp/check-evidence-replay-boundaries.mjs
+	node tests/mvp/check-historical-source-access.mjs
+	node tests/mvp/check-task-text-authority.mjs
+
+.PHONY: verify-task-scope verify-task-history
+verify-task-scope:
+	$(CARGO) build --offline --locked -p data-agent-api -p data-agent-worker
+	node tests/mvp/check-source-limits.mjs
+	node tests/mvp/check-source-limits-memory.mjs
+	node tests/mvp/check-derived-source-dispatch.mjs
+	node tests/mvp/check-legacy-source-limits.mjs
+	node tests/mvp/check-task-projection.mjs
+	node tests/mvp/check-task-projection.mjs --recover
+	node tests/mvp/check-task-projection.mjs --recover-receipt
+	node tests/mvp/check-request-context.mjs
+	node tests/mvp/check-context-dependencies.mjs
+	node tests/mvp/check-task-host-authority.mjs
+	node tests/mvp/check-task-result-authority.mjs
+	node tests/mvp/check-mixed-task-cancellation.mjs
+
+# 04切片6–9历史分析验收：分用途读取、格式六投影与展示路径的过期局部化。
+verify-task-history:
+	$(CARGO) build --offline --locked -p data-agent-api -p data-agent-worker
+	node tests/mvp/check-analysis-reports.mjs
+	node tests/mvp/check-historical-source-access.mjs
+	node tests/mvp/check-report-text-authority.mjs
+	node tests/mvp/check-query-text-authority.mjs
+	node tests/mvp/check-task-text-authority.mjs
+	node tests/mvp/check-context-dependencies.mjs
+	node tests/mvp/check-analysis-reports-browser.mjs
 
 .PHONY: verify-query-workflow verify-knowledge-workflow verify-mvp-browser verify-mvp-regression
 verify-query-workflow:
@@ -247,8 +388,89 @@ verify-mvp-regression: verify-code verify-model-provider verify-runtime-regressi
 
 .PHONY: verify-hybrid-retrieval
 verify-hybrid-retrieval:
-	$(CARGO) build --offline --locked -p data-agent-api -p data-agent-worker
+	$(CARGO) build --offline --locked -p data-agent-api
+	$(CARGO) build --offline --locked -p data-agent-worker
 	node tests/mvp/check-hybrid-retrieval.mjs
+
+# 检索范围、排名、故障回执与迁接续接；完整验收范围和剩余缺口见CURRENT。
+.PHONY: verify-hybrid-scope
+verify-hybrid-scope:
+	$(CARGO) build --offline --locked -p data-agent-api
+	$(CARGO) build --offline --locked -p data-agent-worker
+	$(CARGO) test --offline --locked -p data-agent --lib modules::retrieval
+	node tests/mvp/check-retrieval-allowed-set.mjs
+	node tests/mvp/check-retrieval-ranking.mjs
+	node tests/mvp/check-retrieval-excerpts.mjs
+	node tests/mvp/check-retrieval-entry-read.mjs
+	node tests/mvp/check-retrieval-content-units.mjs
+	node tests/mvp/check-retrieval-progress.mjs
+	node tests/mvp/check-retrieval-scope.mjs
+	node tests/mvp/check-context-dependencies.mjs
+	node tests/mvp/check-structure-column-bindings.mjs
+	node tests/mvp/check-retrieval-deep-advance.mjs
+	node tests/mvp/check-retrieval-deadline-order.mjs
+	node tests/mvp/check-retrieval-granularity.mjs
+	node tests/mvp/check-retrieval-channel-coverage.mjs
+	node tests/mvp/check-retrieval-channel-faults.mjs
+	node tests/mvp/check-search-continuation-lifetime.mjs
+	node tests/mvp/check-source-recall.mjs
+	node tests/mvp/check-shared-index-todo.mjs
+
+# 合同2受控验收：真实存储、专用索引与本地协议端点；数据库脚本串行执行。
+.PHONY: verify-evidence-delivery verify-evidence-search verify-evidence-assets verify-evidence-recovery
+verify-evidence-delivery:
+	$(CARGO) build --offline --locked -p data-agent-api
+	$(CARGO) build --offline --locked -p data-agent-worker
+	$(CARGO) test --offline --locked -p data-agent --test knowledge_dependencies source_supports_register_required_dependencies_on_the_effective_human_layer
+	node tests/mvp/check-support-completeness.mjs
+	node tests/mvp/check-knowledge-read-pages.mjs
+	node tests/mvp/check-evidence-delivery.mjs
+	node tests/mvp/check-evidence-source.mjs
+	node tests/mvp/check-evidence-knowledge.mjs
+	node tests/mvp/check-evidence-statements.mjs
+	node tests/mvp/check-evidence-read-boundaries.mjs
+	node tests/mvp/check-evidence-support-lease.mjs
+	node tests/mvp/check-evidence-supports.mjs
+	node tests/mvp/check-evidence-support-references.mjs
+	node tests/mvp/check-evidence-support-continuation.mjs
+	node tests/mvp/check-evidence-read-capacity.mjs
+
+verify-evidence-search:
+	$(CARGO) build --offline --locked -p data-agent-api
+	$(CARGO) build --offline --locked -p data-agent-worker
+	$(CARGO) test --offline --locked -p data-agent --test search_continuation
+	node tests/mvp/check-evidence-search.mjs
+	node tests/mvp/check-evidence-search-continuation.mjs
+	node tests/mvp/check-evidence-cursor-boundaries.mjs
+	node tests/mvp/check-evidence-search-progress.mjs
+	node tests/mvp/check-evidence-search-hints.mjs
+	node tests/mvp/check-evidence-search-hint-boundaries.mjs raw
+	node tests/mvp/check-evidence-search-hint-boundaries.mjs exact
+	node tests/mvp/check-evidence-search-assets.mjs
+	node tests/mvp/check-evidence-search-capacity.mjs
+	node tests/mvp/check-evidence-search-compact-capacity.mjs
+	node tests/mvp/check-evidence-search-compact-capacity.mjs sql-unconfigured
+	node tests/mvp/check-evidence-search-compact-capacity.mjs sql-fallback
+	node tests/mvp/check-evidence-search-statements.mjs
+	node tests/mvp/check-retrieval-coverage.mjs
+
+verify-evidence-assets:
+	node tests/mvp/check-asset-directory.mjs
+	node tests/mvp/check-evidence-assets.mjs
+	node tests/mvp/check-memory-revisions.mjs
+	node tests/mvp/check-completion-gaps.mjs
+
+verify-evidence-recovery:
+	node tests/runtime/check-pi-sdk.mjs
+	node tests/runtime/check-answer-state.mjs
+	node tests/runtime/check-request-policy.mjs
+	node tests/mvp/check-evidence-tool-versions.mjs
+	node tests/mvp/check-evidence-response-budget.mjs
+	node tests/mvp/check-evidence-replay-boundaries.mjs
+	node tests/mvp/check-large-tool-context.mjs
+	node tests/mvp/check-native-compaction.mjs
+	node tests/mvp/check-recovery-continuation.mjs
+	node tests/mvp/check-authority.mjs
 
 .PHONY: verify-catalog-workflow
 verify-catalog-workflow:

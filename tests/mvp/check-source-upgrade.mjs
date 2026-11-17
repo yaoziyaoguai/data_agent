@@ -1,14 +1,29 @@
 import assert from 'node:assert/strict';
 import {execFileSync, spawn} from 'node:child_process';
 import {randomUUID} from 'node:crypto';
-import {writeFile} from 'node:fs/promises';
+import {writeFile, readFile, mkdir, copyFile} from 'node:fs/promises';
+import {resolve} from 'node:path';
+import {homedir} from 'node:os';
 import {harness, until} from './harness.mjs';
 
 // 只由当前兼容writer运行；SQL仅构造升级前缺失/过期的派生存储和受控并发窗口。
 const selected = process.argv.includes('--case') ? process.argv[process.argv.indexOf('--case') + 1] : null;
-const cases = ['stable-keys', 'legacy-backfill', 'comparison-upgrade', 'concurrent-write'];
+const cases = ['stable-keys', 'legacy-backfill', 'comparison-upgrade', 'concurrent-write', 'current-owner', 'public-retention', 'catalog-restart'];
 assert.ok(selected === null || cases.includes(selected), 'unknown upgrade case');
-const h = await harness({capture: true, startWorker: false, env: {DATA_AGENT_TEST_WORKER_ROLE: 'source_sync'}});
+for (const name of ['DEEPSEEK_API_KEY', 'DEEPSEEK_BASE_URL', 'DEEPSEEK_MODEL',
+  'OPENAI_API_KEY', 'OPENAI_BASE_URL', 'ANTHROPIC_API_KEY', 'ANTHROPIC_BASE_URL',
+  'GOOGLE_API_KEY', 'GEMINI_API_KEY', 'DATA_AGENT_MODEL_PROFILE', 'DATA_AGENT_MODEL_FAULT',
+  'DATABASE_URL']) delete process.env[name];
+let sourceDirectory;
+if (selected === 'catalog-restart') {
+  sourceDirectory = resolve('.local/checks/catalog-restart-' + randomUUID() + '/sources');
+  await mkdir(sourceDirectory, {recursive: true});
+  for (const file of ['schema.sql', 'etl.sql', 'business-guide.md', 'seed.sql', 'knowledge-manifest.json', 'semantic-catalog.json']) {
+    await copyFile('docs/sources/' + file, sourceDirectory + '/' + file);
+  }
+}
+const h = await harness({capture: true, startWorker: false, ...(sourceDirectory ? {sourceDirectory} : {}),
+  env: {DATA_AGENT_TEST_WORKER_ROLE: 'source_sync', DATA_AGENT_PUBLIC_CONTENT_RETENTION: 'archive'}});
 const database = new URL(h.env.DATA_AGENT_DATABASE_URL).pathname.slice(1);
 assert.match(database, /^data_agent_test_[a-f0-9]+$/);
 const checks = [], gates = [];
@@ -66,6 +81,63 @@ async function hold(query) {
   };
 }
 try {
+  if (selected === 'catalog-restart') {
+    const original = ok(await h.request('/knowledge/metric-net_revenue'));
+    const unaffected = ok(await h.request('/knowledge/metric-refund_rate'));
+    const catalogPath = sourceDirectory + '/semantic-catalog.json';
+    const catalog = JSON.parse(await readFile(catalogPath, 'utf8'));
+    const candidate = catalog.objects.find(object => object.id === original.id);
+    candidate.name = original.name + '（合成说明更新）';
+    await writeFile(catalogPath, JSON.stringify(catalog));
+    await h.restartApi();
+    assert.deepEqual(ok(await h.request('/knowledge/' + original.id)), original,
+      '重启不能替代手动来源同步，或提前导入尚未确认的资料变化');
+    const accepted = await h.request('/source-syncs', {operation_id: randomUUID()});
+    assert.equal(accepted.status, 202);
+    await h.resumeWorker();
+    await finished(accepted.value);
+    const updated = ok(await h.request('/knowledge/' + original.id));
+    assert.equal(updated.name, candidate.name);
+    assert.equal(Number(updated.version), Number(original.version) + 1);
+    assert.deepEqual(ok(await h.request('/knowledge/' + unaffected.id)), unaffected,
+      '目录中的单对象修改不能重分析其他未变对象或改变其版本和复核状态');
+    checks.push('重启保已保存来源；正式手动同步只应用实际变化候选，未变对象原版本与状态保持');
+  }
+  if (selected === 'current-owner' || selected === 'public-retention') {
+    const filterIndex = process.argv.indexOf('--filter');
+    const filter = filterIndex < 0 ? [] : [process.argv[filterIndex + 1]];
+    assert.ok(filter.every(value => /^[a-z0-9_]+$/.test(value)), 'invalid owner test filter');
+    const labelIndex = process.argv.indexOf('--label');
+    const label = labelIndex < 0 ? 'run' : process.argv[labelIndex + 1];
+    assert.match(label, /^[a-z0-9-]+$/);
+    const archive = selected === 'public-retention' && process.argv.includes('--archive');
+    const test = selected === 'current-owner' ? 'source_current_compatibility' : 'public_content_retention';
+    const command = ['test', '--offline', '--locked', '-p', 'data-agent', '--test',
+      test, ...(archive ? ['archive_mode_keeps_full_revisions'] : filter), '--', ...(archive ? ['--ignored'] : []), '--test-threads=1', '--nocapture'];
+    let output = '';
+    const result = await new Promise((resolve, reject) => {
+      const child = spawn(homedir() + '/.cargo/bin/cargo', command, {env: {...h.env,
+        ...(selected === 'public-retention' ? {DATA_AGENT_PUBLIC_CONTENT_RETENTION: archive ? 'archive' : 'latest_only'} : {})}, stdio: ['ignore', 'pipe', 'pipe']});
+      child.stdout.on('data', chunk => {output += chunk; process.stdout.write(chunk);});
+      child.stderr.on('data', chunk => {output += chunk; process.stderr.write(chunk);});
+      child.once('error', reject);
+      child.once('close', (code, signal) => resolve({code, signal}));
+    });
+    const name = `${selected === 'current-owner' ? 'source-current-owner' : 'public-content-retention'}-${label}-${Date.now()}`;
+    await writeFile('.local/checks/' + name + '.log', output, {flag: 'wx'});
+    await writeFile('.local/checks/' + name + '.json', JSON.stringify({passed: result.code === 0 && result.signal === null,
+      ...result, officialRequests: 0, command: ['cargo', ...command], harnessDirectory: h.directory,
+      scope: selected === 'current-owner'
+        ? '公开 ingestion owner；真实隔离 MySQL；仅合成 legacy 夹具'
+        : '公开 knowledge/ingestion owner；真实隔离 MySQL；公共内容保留策略'}, null, 2), {flag: 'wx'});
+    assert.equal(result.code, 0, '公开 owner 测试必须完整通过');
+    assert.equal(result.signal, null);
+    assert.match(output, /test result: ok\. [1-9]\d* passed; 0 failed/);
+    assert.doesNotMatch(output, /running 0 tests/);
+    checks.push(selected === 'current-owner'
+      ? '公开 ingestion owner 的 current/精确 archive 兼容行为在真实隔离 MySQL 验证'
+      : '公开 owner 的公共内容保留策略在真实隔离 MySQL 验证');
+  }
   if (!selected || selected === 'stable-keys') {
     const namespace = 'synthetic-voice-case';
     const lower = table('voice_events', '小写外部键的原文标记'), upper = table('VOICE_EVENTS', '大写外部键的原文标记');
@@ -150,7 +222,10 @@ try {
     assert.deepEqual(current(identity.source_id).observed, {platform_version: '9', maintainer_id: 'bob'},
       '方法回填不能用旧正文metadata覆盖较新观测版本或负责人');
     assert.equal(current(identity.source_id).body, baseline.body);
-    const jobsBefore = h.sql(`SELECT JSON_OBJECT('n',COUNT(*)) FROM background_jobs WHERE resource_id=${quote(identity.source_id)} AND kind IN ('prepare_source','raw_source_index')`)[0].n;
+    const taskCount = () =>
+      h.sql(`SELECT JSON_OBJECT('n',COUNT(*)) FROM background_jobs WHERE resource_id=${quote(identity.source_id)} AND kind='prepare_source'`)[0].n +
+      h.sql(`SELECT JSON_OBJECT('n',COUNT(*)) FROM knowledge_index_jobs WHERE target_kind='source_excerpt' AND source_kind='platform' AND object_id=${quote(identity.source_id)}`)[0].n;
+    const jobsBefore = taskCount();
     h.sql(`UPDATE source_current SET comparison_method='retired_comparison_v0',content_fingerprint=REPEAT('2',64) WHERE source_id=${quote(identity.source_id)}`);
     h.sql(`UPDATE source_heads SET fingerprint=REPEAT('3',64) WHERE id=${quote(identity.source_id)}`);
     await synchronize(namespace, [{...observed, platform_version: '10', node: {...observed.node,
@@ -158,7 +233,7 @@ try {
     assert.equal(current(identity.source_id).revision, identity.revision);
     assert.equal(current(identity.source_id).body, baseline.body);
     assert.equal(ok(await h.request('/knowledge/' + identity.object_id)).version, String(identity.object_version));
-    assert.equal(h.sql(`SELECT JSON_OBJECT('n',COUNT(*)) FROM background_jobs WHERE resource_id=${quote(identity.source_id)} AND kind IN ('prepare_source','raw_source_index')`)[0].n, jobsBefore);
+    assert.equal(taskCount(), jobsBefore);
     assert.deepEqual(current(identity.source_id).observed, {platform_version: '10', maintainer_id: 'bob'});
     checks.push('比较方法升级同方法重比两份SQL，纯排版不升版、不改正文或重复排任务，旧metadata不覆盖新观测');
   }
@@ -185,10 +260,13 @@ try {
     assert.equal(identities(namespace)[0].revision, value.revision);
     assert.equal(identities(namespace)[0].object_id, identity.object_id);
     assert.equal(ok(await h.request('/sources/' + identity.source_id)).body, value.body);
-    const pending = h.sql(`SELECT JSON_OBJECT('kind',kind,'state',state,'attempts',attempts,'version',resource_version)
-      FROM background_jobs WHERE resource_id=${quote(identity.source_id)} AND kind IN ('prepare_source','raw_source_index') ORDER BY kind,resource_version`);
-    assert.equal(pending.length, 4);
-    assert.ok(pending.every(job => job.state === 'queued' && job.attempts === 0), '未接处理器的新任务不能被旧消费者领取或伪完成');
+    const pendingPrepare = h.sql(`SELECT JSON_OBJECT('kind',kind,'state',state,'attempts',attempts,'version',resource_version)
+      FROM background_jobs WHERE resource_id=${quote(identity.source_id)} AND kind='prepare_source' ORDER BY resource_version`);
+    const pendingRaw = h.sql(`SELECT JSON_OBJECT('state',vector_state,'attempts',vector_attempts,'version',version)
+      FROM knowledge_index_jobs WHERE target_kind='source_excerpt' AND source_kind='platform' AND object_id=${quote(identity.source_id)} ORDER BY version`);
+    assert.equal(pendingPrepare.length + pendingRaw.length, 4);
+    assert.ok(pendingPrepare.every(job => job.state === 'queued' && job.attempts === 0), '未接处理器的新任务不能被旧消费者领取或伪完成');
+    assert.ok(pendingRaw.every(job => job.state === 'pending' && job.attempts === 0), '未接处理器的原文目标保持真实pending');
     checks.push('回填与实时写真实竞争后当前正文保持新修订，新prepare/raw任务仍未被错误消费');
   }
   passed = true;
@@ -196,6 +274,8 @@ try {
   for (const gate of gates) if (!gate.released) { gate.released = true; gate.child.stdin.end('ROLLBACK;\n'); await gate.ended; }
   await h.close();
   await writeFile('.local/checks/source-upgrade' + (selected ? '-' + selected : '') + '.json', JSON.stringify({passed, checks, selected,
-    evidence: {api: 'real', worker: 'real', storage: 'MySQL', platform: 'synthetic', model: 'capture'}, officialRequests: 0}, null, 2));
+    evidence: selected === 'current-owner' || selected === 'public-retention'
+      ? {owner: 'Rust library', storage: 'MySQL', platform: 'synthetic', model: 'not_called'}
+      : {api: 'real', worker: 'real', storage: 'MySQL', platform: 'synthetic', model: 'capture'}, officialRequests: 0}, null, 2));
 }
 console.log(JSON.stringify({passed, checks, selected, officialRequests: 0}));

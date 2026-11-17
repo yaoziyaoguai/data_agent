@@ -118,6 +118,15 @@ def independent_checks(db, expected):
         groups[row['endpoint_kind']].append(row)
     match('asr_final_success', [[key, len(rows), *[sum(x['outcome'] == state for x in rows) for state in ('succeeded','failed','timeout','cancelled')],
                                round(sum(x['outcome']=='succeeded' for x in rows)/len(rows),6)] for key, rows in sorted(groups.items())])
+    successful_final = {row['asr_attempt_id'] for row in final.values() if row['outcome'] == 'succeeded'}
+    candidates = defaultdict(int)
+    for row in tables['asr_hypothesis']:
+        if row['asr_attempt_id'] in successful_final and row['received_at'] < CUTOFF:
+            candidates[row['asr_attempt_id']] += 1
+    match('final_successful_attempt_candidate_mean', [[
+        round(len(successful_final) / len(final), 6) if final else None,
+        round(sum(candidates[ident] for ident in successful_final) / len(successful_final), 6) if successful_final else None,
+    ]])
     audible = {}
     for row in tables['playback_segment']:
         if visible(row) and row['played_ms'] > 0:

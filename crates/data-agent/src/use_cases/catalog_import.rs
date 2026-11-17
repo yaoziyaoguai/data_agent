@@ -1,4 +1,5 @@
 use crate::{
+    contracts::generated::{SourceKey, SourceKeyKind},
     modules::{access, ingestion, jobs, knowledge},
     persistence::AppTx,
     types::{AccessContext, Error, Result},
@@ -66,8 +67,9 @@ pub async fn progress(pool: &MySqlPool, ctx: &AccessContext, sync: &str) -> Resu
     result["error_message"] = read["error_message"].clone();
     result["preparation"] =
         jobs::source_work_progress_in_tx(&mut tx, "prepare_source", &sources).await?;
+    // 原文索引进度读knowledge拥有的公共待办；平台来源的SourceKey身份与登记一致。
     result["raw_index"] =
-        jobs::source_work_progress_in_tx(&mut tx, "raw_source_index", &sources).await?;
+        knowledge::platform_source_index_progress_in_tx(&mut tx, &ctx.space_id, &sources).await?;
     result["knowledge_index"] = knowledge::index_progress_in_tx(&mut tx, ctx, &objects).await?;
     tx.commit().await?;
     crate::contracts::validate("SourceSyncProgress", &result)?;
@@ -189,7 +191,19 @@ async fn apply_page(pool: &MySqlPool, job: &jobs::SourceJob) -> Result<()> {
         .await?;
     }
     for (source, version) in pending {
-        jobs::enqueue_source_in_tx(&mut tx, "raw_source_index", &source, version).await?;
+        // 原文索引目标登记进knowledge拥有的公共待办（同一保存事务）；语义整理
+        // 仍走原prepare_source待办，两者互不等待。
+        knowledge::register_source_index_target_in_tx(
+            &mut tx,
+            &ctx.space_id,
+            &SourceKey {
+                kind: SourceKeyKind::Platform,
+                id: source.clone(),
+            },
+            version,
+            None,
+        )
+        .await?;
         jobs::enqueue_source_in_tx(&mut tx, "prepare_source", &source, version).await?;
     }
     if complete {
@@ -260,6 +274,14 @@ async fn apply_table(
                     Err(error) => return Err(error),
                 };
         if let Some(updated) = updated {
+            // 保存后跨模块登记（指纹补记/扇出）须在下方continue之前：continue只跳过
+            // 预填排队，登记语义属于保存本身，新对象首版也要执行。
+            super::dependency_registration::after_content_saved_in_tx(
+                tx,
+                ctx,
+                std::slice::from_ref(&updated),
+            )
+            .await?;
             let preferred = ingestion::read_analysis_preference_in_tx(tx, ctx, &updated)
                 .await?
                 .is_some_and(|v| v["preferred"] == true);
@@ -343,17 +365,20 @@ async fn finish_directory(
                 .flatten()
                 .filter_map(|v| v.as_str().map(str::to_owned))
                 .collect();
-            knowledge::retire_source_objects_in_tx(
+            let retired = knowledge::retire_source_objects_in_tx(
                 tx,
                 ctx,
                 member["source_id"].as_str().unwrap_or(""),
                 &keep,
             )
             .await?;
+            super::dependency_registration::after_content_saved_in_tx(tx, ctx, &retired).await?;
         }
         for source in missing {
             ingestion::retire_catalog_source_in_tx(tx, ctx, read, &source).await?;
-            knowledge::retire_source_objects_in_tx(tx, ctx, &source, &HashSet::new()).await?;
+            let retired =
+                knowledge::retire_source_objects_in_tx(tx, ctx, &source, &HashSet::new()).await?;
+            super::dependency_registration::after_content_saved_in_tx(tx, ctx, &retired).await?;
         }
     }
     ingestion::complete_catalog_namespace_in_tx(tx, ctx, read, namespace).await?;

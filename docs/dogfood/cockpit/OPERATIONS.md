@@ -9,12 +9,14 @@
 已有启动器支持 `--runtime-dir`、`--port-offset`、`--model`、`--model-profile`。先读 `python3 scripts/development.py --help` 和[开发说明](../../development.md)。无模型费用的隔离基线可用：
 
 ```sh
-python3 scripts/development.py --model mock --runtime-dir .local/dogfood-runs/voice-isolated/runtime --port-offset 10000
+python3 scripts/development.py --model mock --tool-contract-version 2 --public-content-retention latest_only --memory builtin --retrieval lexical --runtime-dir .local/dogfood-runs/voice-isolated/runtime --port-offset 10000
 ```
 
-先确认端口空闲与该目录尚未被其他进程占用，再运行。此命令使用固定模拟模型，适合工程/UI前置，不可替代真实模型场景。真实模型用已批准配置及原持久预算，不能复制trial、重置数据库或换ID获得额外额度。当前真实配置若无法隔离所需故障，将该分支记为blocked_environment，而不是破坏日常数据。
+先确认端口空闲与该目录尚未被其他进程占用，再运行。此命令使用固定模拟模型，适合工程/UI前置，不可替代真实模型场景。真实模型用已批准配置及原持久预算，不能复制trial、重置数据库或换ID获得额外额度。每个收费通道分别核原期限与剩余；正常消息无默认累计调用/费用/整轮时限，显式测试帽仍生效。维护输入的公开编码计量与托管API模板映射分别核证；后者未获充分依据时，启动参数显式加`--prefill disabled`，关闭预填/整理而保留聊天profile和原账本，不用mock补成真实通过。当前真实配置若无法隔离所需故障，将该分支记为blocked_environment，而不是破坏日常数据。
 
 `G08`的权限文件位于该隔离平台运行目录中，使用平台已有的 `denied_query_users` 机制；先保存本轮文件原内容，完成后恢复。只撤回本轮试用身份，不操作其他环境。`T13`需证明服务已接受但响应丢失；只断网后重发一条新消息不能验证幂等。`X10`只停止并重启自己创建的隔离进程，记录PID、配置与中断位置。固定协议/模型替身跑过的故障场景必须标成engineering/model_mock。
+
+交互修复版中，查询卡保留首次持久事件位置，状态变化只更新卡内内容；活动提示区分处理请求、生成回答和解读原查询结果。v2数值说明先准备绑定，再流式显示同一份正文，刷新读回正式正文。验证流式过程须保存provider结束前的DOM采样和增长，不能用定稿截图代替；原`check-answer-streaming-browser.mjs`为本包唯一整体浏览器流程。当前通过范围、真实模型失败和日常入口是否更新以CURRENT为准；隔离harness证据不表示已部署到试用服务。
 
 ## 独立参考
 
@@ -35,9 +37,16 @@ python3 docs/dogfood/cockpit/reference/check_reference.py
 
 每个逐条断言使用与案例相同的状态枚举，`pass`必须有可定位证据；案例全部断言与必要步骤通过才可标pass。模板中的空证据仅允许not_run。失败后重试保留原attempt。数值对比可把实际结果另存为 `{"columns":[...],"rows":[...]}`；使用 `grade.py --reference-key KEY --actual FILE`核对同列同顺序结果，列名不同先作明确可审计映射。
 
+原100项继续使用 `results.json`，默认严格检查原100个ID和冻结断言。十条综合轨迹另存 `trajectory-results.json`，显式传 `--trajectories` 后只读取[轨迹清单](../../execution/semantic-runtime/integrated-trajectories.json)的 `cases`，按其ID数量、顺序一致的 `expect` 和 `mode` 复用同一记录校验。初始记录每条为 `case_id=id`、`status=not_run`、`attempts=[]`，每条断言为 `{expected,status:not_run,reason:'',evidence:[]}`；不得覆盖已有结果。两份记录分别报告分母。
+
+`--require-pass CASE_ID ...`在原完整记录、冻结断言、attempt及证据检查后，要求指定ID存在且总状态为pass；默认命令仍允许合法not_run，不能传只有核心行的缩减记录。09固定选择与两条实际命令绑定在CURRENT，不能按当前成绩挑选ID。记录检查不能自动判语义或证明某个pass确由真实attempt支持，仍需对应证据与独审；核心前提未满足时不运行已知必失败的完成检查。
+
+轨迹的 `mode=model` 沿用真实模型要求，仅有 `model_mock` attempt 不能标pass；`mode=engineering` 可以保留本地工程证据。工程轨迹里的真实端点子断言仍须由操作者核对对应真实证据，证据不足按清单记 `partial`、`inconclusive` 或相应blocked状态。当前清单的 `expect` 是字符串，没有机器可读的真实子断言标记；校验器检查记录和证据文件存在，不从文字或文件名推断真实调用、语义正确性或端点能力。
+
 ```sh
 python3 docs/dogfood/cockpit/grade.py .local/dogfood-runs/<run_id>/results.json
+python3 docs/dogfood/cockpit/grade.py --trajectories .local/dogfood-runs/<run_id>/trajectory-results.json
 python3 docs/dogfood/cockpit/grade.py --reference-key turns_september --actual .local/dogfood-runs/<run_id>/actual.json
 ```
 
-每一批结束写HANDOFF，保留已发送/尚未发送消息、已执行/在途/未知动作、依赖产物和下一案例。中断不等于失败或取消，未知操作先查原身份，不盲目重发。试用结束后清理本轮对象清单，不删除账本和问题证据。
+持续执行的当前进度只更新`docs/CURRENT.md`，原attempt和证据保留已发送/尚未发送消息、已执行/在途/未知动作及依赖产物，不另维护平行HANDOFF。中断不等于失败或取消，未知操作先查原身份，不盲目重发。试用结束后清理本轮对象清单，不删除账本和问题证据。

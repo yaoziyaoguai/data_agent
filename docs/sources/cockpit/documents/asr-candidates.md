@@ -14,7 +14,7 @@ reference_text仅在人工合成标签子集存在，NULL表示没有标签。�
 
 ## `syn_asr_attempt` · ASR处理尝试
 
-ASR成功只表示产生候选；最终采用哪一条见asr_hypothesis.selected_for_nlu。失败重试次数不能替代用户输入量。
+ASR尝试的succeeded是处理状态，不保证该快照内候选行数大于零；最终采用哪条文本见asr_hypothesis.selected_for_nlu。最终ASR尝试按同轮快照内最大attempt_no选择，再判断结果；不能先筛成功再取最后一条。失败重试次数不能替代用户输入量。
 
 - 行粒度：一轮输入的一次端侧或云侧识别尝试
 - 主键：`asr_attempt_id`
@@ -70,12 +70,196 @@ ASR成功只表示产生候选；最终采用哪一条见asr_hypothesis.selected
 | `locale` | TEXT / NOT NULL | — | 候选locale。 允许值：zh-CN, en-US。 |
 | `received_at` | TEXT / NOT NULL | UTC RFC3339 second | 该规范记录进入快照的接收时间；received_at必须早于snapshot_exclusive才可用于快照统计。 |
 
+## 首末尝试与候选统计默认
+
+固定快照内先按每个事实自身的收到时点和业务时点确定可见集合，再按同轮最小/最大attempt_no选择首次/最终尝试。最终ASR成功率以全部有可见ASR尝试的合格轮次为分母；本定义的最终尝试率、全部尝试成功率与NLU候选选择率是不同统计，不能互相替代。
+
+首末两项以相同的“有可见ASR尝试的合格轮次”为总体。下列规范指标的time_basis条目连接[概览](overview.md)中的合成资料活动期和固定快照；已有用户条件和任务时间优先，不能用请求当前时刻补快照。
+
+## `asr_first_attempt_success_rate` · ASR首次尝试成功率
+
+分子是快照内首次ASR尝试outcome为succeeded的合格轮次数，分母是有可见ASR尝试的全部合格轮次数。首次取同轮最小attempt_no，处理成功不等于转写正确。单位为ratio，空分母返回NULL。SQL以:start/:end选择turn.started_at的UTC半开区间，:snapshot为排他观察截点；父事实及每份ASR尝试分别核自身可见性。
+
+```sql
+WITH qualified_turns AS (
+    SELECT t.turn_id, t.started_at
+    FROM syn_voice_turn t
+    JOIN syn_voice_session s ON s.session_id = t.session_id
+    JOIN syn_vehicle v ON v.vehicle_id = s.vehicle_id
+    WHERE v.is_lab_unit = 0 AND v.telemetry_consent = 1
+      AND s.quality_state = 'valid' AND s.is_complete = 1
+      AND t.quality_state = 'valid'
+      AND t.started_at >= :start AND t.started_at < :end
+      AND s.started_at < :snapshot AND s.ended_at < :snapshot
+      AND t.finished_at < :snapshot
+      AND t.received_at < :snapshot AND s.received_at < :snapshot
+), visible_attempts AS (
+    SELECT a.*
+    FROM syn_asr_attempt a JOIN qualified_turns t ON t.turn_id = a.turn_id
+    WHERE a.received_at < :snapshot
+      AND CAST(strftime('%s', t.started_at) AS INTEGER) * 1000 + a.finish_offset_ms
+          < CAST(strftime('%s', :snapshot) AS INTEGER) * 1000
+), first_last AS (
+    SELECT turn_id, MIN(attempt_no) AS first_no, MAX(attempt_no) AS last_no
+    FROM visible_attempts GROUP BY turn_id
+)
+SELECT COALESCE(SUM(a.outcome = 'succeeded'), 0) AS numerator,
+       COUNT(*) AS denominator,
+       CAST(SUM(a.outcome = 'succeeded') AS REAL) / NULLIF(COUNT(*), 0) AS value
+FROM first_last b
+JOIN visible_attempts a ON a.turn_id = b.turn_id AND a.attempt_no = b.first_no;
+```
+
+## `asr_final_attempt_success_rate` · ASR最终尝试成功率
+
+分子是快照内最终ASR尝试outcome为succeeded的合格轮次数，分母仍是有可见ASR尝试的全部合格轮次数。先取同轮最大attempt_no，再判断状态；最终失败、取消和超时保留在分母，不能先过滤成功记录。此分母也不能被候选JOIN缩小。单位为ratio，空分母返回NULL，处理成功不等于识别正确。
+
+```sql
+WITH qualified_turns AS (
+    SELECT t.turn_id, t.started_at
+    FROM syn_voice_turn t
+    JOIN syn_voice_session s ON s.session_id = t.session_id
+    JOIN syn_vehicle v ON v.vehicle_id = s.vehicle_id
+    WHERE v.is_lab_unit = 0 AND v.telemetry_consent = 1
+      AND s.quality_state = 'valid' AND s.is_complete = 1
+      AND t.quality_state = 'valid'
+      AND t.started_at >= :start AND t.started_at < :end
+      AND s.started_at < :snapshot AND s.ended_at < :snapshot
+      AND t.finished_at < :snapshot
+      AND t.received_at < :snapshot AND s.received_at < :snapshot
+), visible_attempts AS (
+    SELECT a.*
+    FROM syn_asr_attempt a JOIN qualified_turns t ON t.turn_id = a.turn_id
+    WHERE a.received_at < :snapshot
+      AND CAST(strftime('%s', t.started_at) AS INTEGER) * 1000 + a.finish_offset_ms
+          < CAST(strftime('%s', :snapshot) AS INTEGER) * 1000
+), first_last AS (
+    SELECT turn_id, MIN(attempt_no) AS first_no, MAX(attempt_no) AS last_no
+    FROM visible_attempts GROUP BY turn_id
+)
+SELECT COALESCE(SUM(a.outcome = 'succeeded'), 0) AS numerator,
+       COUNT(*) AS denominator,
+       CAST(SUM(a.outcome = 'succeeded') AS REAL) / NULLIF(COUNT(*), 0) AS value
+FROM first_last b
+JOIN visible_attempts a ON a.turn_id = b.turn_id AND a.attempt_no = b.last_no;
+```
+
+```semantic-definitions
+{"kind":"metric","id":"asr_first_attempt_success_rate","name":"ASR首次尝试成功率","aliases":["首次ASR成功率","ASR首次成功率","首次尝试成功率"],"tables":["syn_voice_turn","syn_voice_session","syn_vehicle","syn_asr_attempt"],"numerator":"快照内首次ASR尝试outcome为succeeded的合格轮次数","denominator":"有可见ASR尝试的全部合格轮次数","unit":"ratio","scope":"非实验且遥测授权车辆、有效完整会话和valid轮次；按turn.started_at选择UTC半开区间，事实按各自时点及received_at排他快照核对。","empty_or_zero_rule":"空分母返回NULL；没有首次成功轮次时分子为0。","limitations":"首次按最小attempt_no选择；处理成功不是转写正确，不能先筛成功或按候选行数计算。","description":"ASR首次尝试成功率：快照内按同轮最小attempt_no选首次，再以outcome=succeeded计分子；全部有可见ASR尝试的合格轮次计分母。非实验、遥测授权车辆，有效完整会话和valid轮次；按turn.started_at的UTC半开区间及各事实自身快照筛选。空分母返回NULL，处理成功不等于转写正确。"}
+{"kind":"metric","id":"asr_final_attempt_success_rate","name":"ASR最终尝试成功率","aliases":["最终ASR成功率","ASR最终成功率","最终尝试成功率"],"tables":["syn_voice_turn","syn_voice_session","syn_vehicle","syn_asr_attempt"],"numerator":"快照内最终ASR尝试outcome为succeeded的合格轮次数","denominator":"有可见ASR尝试的全部合格轮次数","unit":"ratio","scope":"非实验且遥测授权车辆、有效完整会话和valid轮次；按turn.started_at选择UTC半开区间，事实按各自时点及received_at排他快照核对。","empty_or_zero_rule":"空分母返回NULL；有尝试但最终未成功的轮次保留分母且不计分子。","limitations":"先按最大attempt_no选最终再判断状态；最终失败/取消/超时保留分母，候选JOIN不能缩小总体。","description":"ASR最终尝试成功率：快照内先按同轮最大attempt_no选最终，再以outcome=succeeded计分子；全部有可见ASR尝试的合格轮次计分母，最终失败、取消和超时仍在分母。非实验、遥测授权车辆，有效完整会话和valid轮次；按turn.started_at的UTC半开区间及各事实自身快照筛选。空分母返回NULL，不按候选JOIN缩小总体；处理成功不等于识别正确。"}
+```
+
+## `asr_recovered_turn_rate` · ASR重试救回轮次占比
+
+指标：ASR重试救回轮次占比。
+分子：首次未成功、最终成功且存在后续尝试的去重轮次数。
+分母：有ASR可见尝试的全部合格轮次数。
+单位：ratio。
+范围：非实验且遥测授权车辆、有效完整会话和valid轮次；按turn.started_at的UTC半开区间，父事实、ASR尝试和候选分别按自身快照可见性筛选。
+空值与零：分母为0时比例返回NULL；没有匹配救回轮次时分子为0。
+限制：首末按快照内最小/最大attempt_no；首次即回退成功不并入救回分子。有回退或有重试本身不等于被救回；另有需要时再说明首次回退成功，不额外增加未请求指标。
+
+以下参数化SQL使用:start、:end、:snapshot，不包含数据预期值。
+
+```sql
+WITH qualified_turns AS (
+    SELECT t.turn_id, t.started_at
+    FROM syn_voice_turn t
+    JOIN syn_voice_session s ON s.session_id = t.session_id
+    JOIN syn_vehicle v ON v.vehicle_id = s.vehicle_id
+    WHERE v.is_lab_unit = 0 AND v.telemetry_consent = 1
+      AND s.quality_state = 'valid' AND s.is_complete = 1
+      AND t.quality_state = 'valid'
+      AND t.started_at >= :start AND t.started_at < :end
+      AND s.started_at < :snapshot AND s.ended_at < :snapshot
+      AND t.finished_at < :snapshot
+      AND t.received_at < :snapshot AND s.received_at < :snapshot
+), visible_attempts AS (
+    SELECT a.*
+    FROM syn_asr_attempt a JOIN qualified_turns t ON t.turn_id = a.turn_id
+    WHERE a.received_at < :snapshot
+      AND CAST(strftime('%s', t.started_at) AS INTEGER) * 1000 + a.finish_offset_ms
+          < CAST(strftime('%s', :snapshot) AS INTEGER) * 1000
+), first_last AS (
+    SELECT turn_id, MIN(attempt_no) AS first_no, MAX(attempt_no) AS last_no
+    FROM visible_attempts GROUP BY turn_id
+), observed AS (
+    SELECT b.turn_id,
+           CASE WHEN f.outcome <> 'succeeded' AND l.outcome = 'succeeded'
+                     AND b.last_no > b.first_no THEN 1 ELSE 0 END AS recovered
+    FROM first_last b
+    JOIN visible_attempts f ON f.turn_id = b.turn_id AND f.attempt_no = b.first_no
+    JOIN visible_attempts l ON l.turn_id = b.turn_id AND l.attempt_no = b.last_no
+)
+SELECT COALESCE(SUM(recovered), 0) AS recovered_turns,
+       COUNT(*) AS attempted_turns,
+       CAST(SUM(recovered) AS REAL) / NULLIF(COUNT(*), 0) AS recovered_turn_rate
+FROM observed;
+```
+
+## `final_successful_attempt_candidate_mean` · 最终成功ASR尝试平均候选数
+
+指标：最终成功ASR尝试平均候选数。
+分子：最终成功尝试在快照内可见的hypothesis_id行数合计。
+分母：最终尝试outcome为succeeded的合格轮次数。
+单位：candidate/attempt。
+范围：非实验且遥测授权车辆、有效完整会话和valid轮次；按turn.started_at的UTC半开区间，父事实、ASR尝试和候选分别按自身快照可见性筛选。
+空值与零：成功但没有可见候选行计0，保留在平均分母；没有最终成功尝试时均值为NULL。
+限制：先在全部可见尝试中选最终，再筛succeeded。最终失败/取消/超时不进入候选平均总体；候选计数不按selected_for_nlu筛选，不用partial_result_count替代。ASR最终成功率仍以全部有可见尝试的合格轮次为分母，不能被候选JOIN缩小。
+
+以下参数化SQL使用:start、:end、:snapshot，不包含数据预期值。
+
+```sql
+WITH qualified_turns AS (
+    SELECT t.turn_id, t.started_at
+    FROM syn_voice_turn t
+    JOIN syn_voice_session s ON s.session_id = t.session_id
+    JOIN syn_vehicle v ON v.vehicle_id = s.vehicle_id
+    WHERE v.is_lab_unit = 0 AND v.telemetry_consent = 1
+      AND s.quality_state = 'valid' AND s.is_complete = 1
+      AND t.quality_state = 'valid'
+      AND t.started_at >= :start AND t.started_at < :end
+      AND s.started_at < :snapshot AND s.ended_at < :snapshot
+      AND t.finished_at < :snapshot
+      AND t.received_at < :snapshot AND s.received_at < :snapshot
+), visible_attempts AS (
+    SELECT a.*
+    FROM syn_asr_attempt a JOIN qualified_turns t ON t.turn_id = a.turn_id
+    WHERE a.received_at < :snapshot
+      AND CAST(strftime('%s', t.started_at) AS INTEGER) * 1000 + a.finish_offset_ms
+          < CAST(strftime('%s', :snapshot) AS INTEGER) * 1000
+), last_attempts AS (
+    SELECT turn_id, MAX(attempt_no) AS last_no
+    FROM visible_attempts GROUP BY turn_id
+), final_attempts AS (
+    SELECT a.* FROM visible_attempts a
+    JOIN last_attempts l ON l.turn_id = a.turn_id AND l.last_no = a.attempt_no
+), candidate_counts AS (
+    SELECT h.asr_attempt_id, COUNT(h.hypothesis_id) AS candidates
+    FROM syn_asr_hypothesis h
+    JOIN final_attempts a ON a.asr_attempt_id = h.asr_attempt_id
+    WHERE a.outcome = 'succeeded' AND h.received_at < :snapshot
+    GROUP BY h.asr_attempt_id
+)
+SELECT COUNT(*) AS successful_final_attempts,
+       COALESCE(SUM(COALESCE(h.candidates, 0)), 0) AS final_successful_candidates,
+       CAST(SUM(COALESCE(h.candidates, 0)) AS REAL) / NULLIF(COUNT(*), 0) AS mean_candidates
+FROM final_attempts a
+LEFT JOIN candidate_counts h ON h.asr_attempt_id = a.asr_attempt_id
+WHERE a.outcome = 'succeeded';
+```
+
+```semantic-definitions
+{"kind":"metric","id":"asr_recovered_turn_rate","name":"ASR重试救回轮次占比","aliases":["重试救回占比","ASR救回率"],"tables":["syn_voice_turn","syn_voice_session","syn_vehicle","syn_asr_attempt"],"numerator":"首次未成功、最终成功且存在后续尝试的去重轮次数","denominator":"有ASR可见尝试的全部合格轮次数","unit":"ratio","scope":"非实验且遥测授权车辆、有效完整会话和valid轮次；按turn.started_at的UTC半开区间，父事实、ASR尝试和候选分别按自身快照可见性筛选。","empty_or_zero_rule":"分母为0时比例返回NULL；没有匹配救回轮次时分子为0。","limitations":"首末按快照内最小/最大attempt_no；首次即回退成功不并入救回分子。有回退或有重试本身不等于被救回；另有需要时再说明首次回退成功，不额外增加未请求指标。","sql":"WITH qualified_turns AS (\n    SELECT t.turn_id, t.started_at\n    FROM syn_voice_turn t\n    JOIN syn_voice_session s ON s.session_id = t.session_id\n    JOIN syn_vehicle v ON v.vehicle_id = s.vehicle_id\n    WHERE v.is_lab_unit = 0 AND v.telemetry_consent = 1\n      AND s.quality_state = 'valid' AND s.is_complete = 1\n      AND t.quality_state = 'valid'\n      AND t.started_at >= :start AND t.started_at < :end\n      AND s.started_at < :snapshot AND s.ended_at < :snapshot\n      AND t.finished_at < :snapshot\n      AND t.received_at < :snapshot AND s.received_at < :snapshot\n), visible_attempts AS (\n    SELECT a.*\n    FROM syn_asr_attempt a JOIN qualified_turns t ON t.turn_id = a.turn_id\n    WHERE a.received_at < :snapshot\n      AND CAST(strftime('%s', t.started_at) AS INTEGER) * 1000 + a.finish_offset_ms\n          < CAST(strftime('%s', :snapshot) AS INTEGER) * 1000\n), first_last AS (\n    SELECT turn_id, MIN(attempt_no) AS first_no, MAX(attempt_no) AS last_no\n    FROM visible_attempts GROUP BY turn_id\n), observed AS (\n    SELECT b.turn_id,\n           CASE WHEN f.outcome <> 'succeeded' AND l.outcome = 'succeeded'\n                     AND b.last_no > b.first_no THEN 1 ELSE 0 END AS recovered\n    FROM first_last b\n    JOIN visible_attempts f ON f.turn_id = b.turn_id AND f.attempt_no = b.first_no\n    JOIN visible_attempts l ON l.turn_id = b.turn_id AND l.attempt_no = b.last_no\n)\nSELECT COALESCE(SUM(recovered), 0) AS recovered_turns,\n       COUNT(*) AS attempted_turns,\n       CAST(SUM(recovered) AS REAL) / NULLIF(COUNT(*), 0) AS recovered_turn_rate\nFROM observed;","description":"指标：ASR重试救回轮次占比。\n分子：首次未成功、最终成功且存在后续尝试的去重轮次数。\n分母：有ASR可见尝试的全部合格轮次数。\n单位：ratio。\n范围：非实验且遥测授权车辆、有效完整会话和valid轮次；按turn.started_at的UTC半开区间，父事实、ASR尝试和候选分别按自身快照可见性筛选。\n空值与零：分母为0时比例返回NULL；没有匹配救回轮次时分子为0。\n限制：首末按快照内最小/最大attempt_no；首次即回退成功不并入救回分子。有回退或有重试本身不等于被救回；另有需要时再说明首次回退成功，不额外增加未请求指标。"}
+{"kind":"metric","id":"final_successful_attempt_candidate_mean","name":"最终成功ASR尝试平均候选数","aliases":["平均候选数","最终成功平均候选数"],"tables":["syn_voice_turn","syn_voice_session","syn_vehicle","syn_asr_attempt","syn_asr_hypothesis"],"numerator":"最终成功尝试在快照内可见的hypothesis_id行数合计","denominator":"最终尝试outcome为succeeded的合格轮次数","unit":"candidate/attempt","scope":"非实验且遥测授权车辆、有效完整会话和valid轮次；按turn.started_at的UTC半开区间，父事实、ASR尝试和候选分别按自身快照可见性筛选。","empty_or_zero_rule":"成功但没有可见候选行计0，保留在平均分母；没有最终成功尝试时均值为NULL。","limitations":"先在全部可见尝试中选最终，再筛succeeded。最终失败/取消/超时不进入候选平均总体；候选计数不按selected_for_nlu筛选，不用partial_result_count替代。ASR最终成功率仍以全部有可见尝试的合格轮次为分母，不能被候选JOIN缩小。","sql":"WITH qualified_turns AS (\n    SELECT t.turn_id, t.started_at\n    FROM syn_voice_turn t\n    JOIN syn_voice_session s ON s.session_id = t.session_id\n    JOIN syn_vehicle v ON v.vehicle_id = s.vehicle_id\n    WHERE v.is_lab_unit = 0 AND v.telemetry_consent = 1\n      AND s.quality_state = 'valid' AND s.is_complete = 1\n      AND t.quality_state = 'valid'\n      AND t.started_at >= :start AND t.started_at < :end\n      AND s.started_at < :snapshot AND s.ended_at < :snapshot\n      AND t.finished_at < :snapshot\n      AND t.received_at < :snapshot AND s.received_at < :snapshot\n), visible_attempts AS (\n    SELECT a.*\n    FROM syn_asr_attempt a JOIN qualified_turns t ON t.turn_id = a.turn_id\n    WHERE a.received_at < :snapshot\n      AND CAST(strftime('%s', t.started_at) AS INTEGER) * 1000 + a.finish_offset_ms\n          < CAST(strftime('%s', :snapshot) AS INTEGER) * 1000\n), last_attempts AS (\n    SELECT turn_id, MAX(attempt_no) AS last_no\n    FROM visible_attempts GROUP BY turn_id\n), final_attempts AS (\n    SELECT a.* FROM visible_attempts a\n    JOIN last_attempts l ON l.turn_id = a.turn_id AND l.last_no = a.attempt_no\n), candidate_counts AS (\n    SELECT h.asr_attempt_id, COUNT(h.hypothesis_id) AS candidates\n    FROM syn_asr_hypothesis h\n    JOIN final_attempts a ON a.asr_attempt_id = h.asr_attempt_id\n    WHERE a.outcome = 'succeeded' AND h.received_at < :snapshot\n    GROUP BY h.asr_attempt_id\n)\nSELECT COUNT(*) AS successful_final_attempts,\n       COALESCE(SUM(COALESCE(h.candidates, 0)), 0) AS final_successful_candidates,\n       CAST(SUM(COALESCE(h.candidates, 0)) AS REAL) / NULLIF(COUNT(*), 0) AS mean_candidates\nFROM final_attempts a\nLEFT JOIN candidate_counts h ON h.asr_attempt_id = a.asr_attempt_id\nWHERE a.outcome = 'succeeded';","description":"指标：最终成功ASR尝试平均候选数。\n分子：最终成功尝试在快照内可见的hypothesis_id行数合计。\n分母：最终尝试outcome为succeeded的合格轮次数。\n单位：candidate/attempt。\n范围：非实验且遥测授权车辆、有效完整会话和valid轮次；按turn.started_at的UTC半开区间，父事实、ASR尝试和候选分别按自身快照可见性筛选。\n空值与零：成功但没有可见候选行计0，保留在平均分母；没有最终成功尝试时均值为NULL。\n限制：先在全部可见尝试中选最终，再筛succeeded。最终失败/取消/超时不进入候选平均总体；候选计数不按selected_for_nlu筛选，不用partial_result_count替代。ASR最终成功率仍以全部有可见尝试的合格轮次为分母，不能被候选JOIN缩小。"}
+```
+
 ## 可机读定义
 
 以下记录是上文的明确结构定义，目录生成器只复用这些定义并与实际DDL核对；没有种子安排或用例预期值。
 
 ```semantic-definitions
-{"kind":"table","table":"syn_asr_attempt","label":"ASR处理尝试","grain":"一轮输入的一次端侧或云侧识别尝试","primary_key":["asr_attempt_id"],"unique_keys":[["turn_id","attempt_no"]],"description":"ASR成功只表示产生候选；最终采用哪一条见asr_hypothesis.selected_for_nlu。失败重试次数不能替代用户输入量。","time_basis":"维度按快照读取；事实按各自文档时点与接收截止核对。","checks":["finish_offset_ms >= start_offset_ms","wall_ms=finish_offset_ms-start_offset_ms","queued_ms<=wall_ms"],"time_columns":[{"column":"received_at","role":"received"}],"default_filters":[]}
+{"kind":"table","table":"syn_asr_attempt","label":"ASR处理尝试","grain":"一轮输入的一次端侧或云侧识别尝试","primary_key":["asr_attempt_id"],"unique_keys":[["turn_id","attempt_no"]],"description":"ASR尝试的succeeded是处理状态，不保证该快照内候选行数大于零；最终采用哪条文本见asr_hypothesis.selected_for_nlu。最终ASR尝试按同轮快照内最大attempt_no选择，再判断结果；不能先筛成功再取最后一条。失败重试次数不能替代用户输入量。","time_basis":"维度按快照读取；事实按各自文档时点与接收截止核对。","checks":["finish_offset_ms >= start_offset_ms","wall_ms=finish_offset_ms-start_offset_ms","queued_ms<=wall_ms"],"time_columns":[{"column":"received_at","role":"received"}],"default_filters":[]}
 {"kind":"field","table":"syn_asr_attempt","name":"asr_attempt_id","type":"TEXT","nullable":false,"meaning":"ASR尝试主键。"}
 {"kind":"field","table":"syn_asr_attempt","name":"turn_id","type":"TEXT","nullable":false,"meaning":"所属轮次。","references":{"table":"syn_voice_turn","column":"turn_id"}}
 {"kind":"field","table":"syn_asr_attempt","name":"attempt_no","type":"INTEGER","nullable":false,"meaning":"同轮ASR从1递增尝试号。","minimum":1}

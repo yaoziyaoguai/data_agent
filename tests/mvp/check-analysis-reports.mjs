@@ -110,6 +110,7 @@ export async function createReportFixture(options = {}) {
       time_start: "2026-01-01T00:00:00Z",
       time_end: "2026-04-01T00:00:00Z",
       timezone: "UTC",
+      source_limits: null,
       metric: "net_revenue",
       channel: null,
       group_by: ["month"],
@@ -368,6 +369,32 @@ export async function createReportFixture(options = {}) {
       },
       get checkpoint() {
         return checkpoint();
+      },
+      // 确认后执行到结果通知轮并收尾：不落报告证据，供语义改版等场景取得带结果的查询。
+      async executeAndNotify(query, target, within) {
+        await h.resumeWorker();
+        await until(
+          async () => (await readQuery(query)).execution_state === "succeeded",
+          "查询执行完成",
+          40000,
+        );
+        attach(
+          await until(
+            () =>
+              h.captured.find(
+                (value) =>
+                  value.conversation_id === cid &&
+                  !handled.has(value.run_id) &&
+                  value.text.includes("query_id=" + query.id),
+              ),
+            "查询结果通知",
+            40000,
+          ),
+        );
+        await h.pauseWorker();
+        if (target) await route(target);
+        if (within) await within();
+        await finish("查询已完成，等待后续核对。");
       },
       async collectNew(query, target) {
         await h.resumeWorker();
@@ -665,6 +692,123 @@ async function checkReports() {
       "空原生检查点通过有界、同版分页读取实际HTTP修订，保全不在任务最近5项的选中依据与图表；Pi仅改标题并稳定重放，不新增SQL查询",
     );
 
+    // §5.3.2：报告卡持久首次保存锚点。首次保存→大量正常合成流式事件→最新页snapshot/refresh→补旧页；
+    // 任务投影带正确首次序号，锚点不来自当前事件页；无报告任务省略字段，不填0或null。
+    const anchorReportId = reference.report_id;
+    // h.sql按行JSON.parse单列结果：MIN/MAX直接是数字，不是{s:...}行对象。
+    const firstSaveSeq = h.sql(
+      `SELECT MIN(event_seq) FROM conversation_events WHERE conversation_id='${cid}' AND event_type='analysis_report_saved' AND JSON_UNQUOTE(JSON_EXTRACT(payload,'$.report_id'))='${anchorReportId}'`,
+    )[0];
+    const latestSeqBeforeBulk = h.sql(
+      `SELECT MAX(event_seq) FROM conversation_events WHERE conversation_id='${cid}'`,
+    )[0];
+    await fixture.begin(
+      cid,
+      "补充大量正常合成流式输出，验证报告卡位置不受分页影响。",
+    );
+    await fixture.route(fixture.task);
+    const bulkChunks = 1001 + Number(latestSeqBeforeBulk) - Number(firstSaveSeq);
+    assert.ok(
+      Number.isInteger(bulkChunks) && bulkChunks > 1000,
+      "bulk块数须按真实事件序号计算: first=" +
+        firstSaveSeq +
+        " latest=" +
+        latestSeqBeforeBulk,
+    );
+    const anchorBinding = () => ({
+      run_id: fixture.run.run_id,
+      lease_epoch: fixture.run.lease_epoch,
+    });
+    for (let seq = 1; seq <= bulkChunks; seq++) {
+      const chunkResponse = await h.internal("/internal/outputs", {
+        ...anchorBinding(),
+        chunk_seq: String(seq),
+        text: "合成流式块" + seq + "。",
+      });
+      if (chunkResponse.status !== 200)
+        throw new Error(
+          "bulk chunk " +
+            seq +
+            " rejected: " +
+            JSON.stringify(chunkResponse.value) +
+            "; last accepted chunk_seq: " +
+            h.sql(
+              `SELECT JSON_UNQUOTE(JSON_EXTRACT(payload,'$.chunk_seq')) FROM conversation_events WHERE conversation_id='${cid}' AND event_type='assistant_delta' ORDER BY event_seq DESC LIMIT 1`,
+            )[0],
+        );
+    }
+    ok(
+      await h.internal("/internal/finish", {
+        ...anchorBinding(),
+        commit_id: fixture.run.output_id,
+        // final_text限8000字符，不能拼接全部块；自然final只核最后一块起的原文。
+        final_text: "合成流式块" + bulkChunks + "。",
+        final_start_chunk_seq: String(bulkChunks),
+        checkpoint: fixture.checkpoint,
+      }),
+    );
+    h.releaseRun(fixture.run.run_id);
+    const snapshotView = ok(await h.request(`/conversations/${cid}/snapshot`));
+    const anchoredTask = snapshotView.tasks.find(
+      (task) => task.id === fixture.task.task_id,
+    );
+    assert.equal(anchoredTask.report_ref.report_id, anchorReportId);
+    assert.equal(
+      anchoredTask.report_timeline_event_seq,
+      String(firstSaveSeq),
+      "最新页不含保存事件时，任务投影带持久首次锚点",
+    );
+    assert.ok(snapshotView.events.length <= 1000);
+    assert.ok(
+      snapshotView.events.every(
+        (event) => Number(event.event_seq) > Number(firstSaveSeq),
+      ),
+      "反例前提：首次保存事件确实不在最新页",
+    );
+    assert.ok(snapshotView.has_older, "超过1000条事件后最新页存在更早分页");
+    assert.equal(
+      snapshotView.tasks.find((task) => task.id === fixture.otherTask.task_id)
+        .report_timeline_event_seq,
+      undefined,
+      "无报告任务省略锚点字段，不填0或null冒充",
+    );
+    const refreshView = ok(
+      await h.request(
+        `/conversations/${cid}/snapshot`,
+        { loaded_outputs: [] },
+        undefined,
+        "POST",
+      ),
+    );
+    assert.equal(
+      refreshView.tasks.find((task) => task.id === fixture.task.task_id)
+        .report_timeline_event_seq,
+      String(firstSaveSeq),
+      "refresh路径与snapshot组合同一锚点",
+    );
+    const olderView = ok(
+      await h.request(
+        `/conversations/${cid}/snapshot?before_seq=${Number(firstSaveSeq) + 1}`,
+      ),
+    );
+    assert.ok(
+      olderView.events.some(
+        (event) =>
+          event.type === "analysis_report_saved" &&
+          event.payload.report_id === anchorReportId,
+      ),
+      "补旧页可见首次保存事件",
+    );
+    assert.equal(
+      olderView.tasks.find((task) => task.id === fixture.task.task_id)
+        .report_timeline_event_seq,
+      String(firstSaveSeq),
+      "补旧页后锚点不变，分页游标含义不变",
+    );
+    checks.push(
+      "首次保存序号作为任务展示锚点经真实API组合：最新页缺保存事件不落0，refresh同锚，补旧页不换锚，无报告任务省略字段",
+    );
+
     await fixture.begin(cid, "把报告范围改为新的合成比较，先给SQL。");
     fixture.task = await fixture.invoke("update_analysis_task", {
       action: "revise",
@@ -674,11 +818,43 @@ async function checkReports() {
       condition_patch: { set: { channel: "app", group_by: [] }, unset: [] },
       options: [],
     });
-    unavailable(await read(), "condition_changed");
+    // 普通语义改版（条件修订）后：Web刷新仍返回完整已存报告并标记condition_changed；
+    // 模型读取有界历史正文及原记录身份，不授予当前采用资格。
+    const changedView = await read();
+    assert.equal(changedView.status, "condition_changed");
+    assert.equal(changedView.report.title, "通过聊天仅改标题的报告修订");
+    assert.ok(JSON.stringify(changedView.report).includes("合成观察"));
+    assert.equal(changedView.chart_results.length, 3);
     const changedPage = await fixture.invoke("read_analysis_report", {
       task_id: fixture.task.task_id,
     });
-    unavailable(changedPage, "condition_changed");
+    assert.equal(changedPage.status, "historical");
+    assert.equal(changedPage.historical_analysis.kind, "report");
+    assert.equal(
+      changedPage.historical_analysis.reference.report_id,
+      changedView.reference.report_id,
+    );
+    assert.ok(changedPage.historical_analysis.content_fingerprint.length >= 16);
+    assert.ok(
+      changedPage.historical_analysis.actual_sources.result_dependencies.length >= 1,
+    );
+    assert.ok(
+      changedPage.historical_analysis.evidence.every(
+        (item) => item.content_fingerprint.length >= 16,
+      ),
+    );
+    assert.equal(typeof changedPage.content_text, "string", "历史报告须交付有界正文，不仅是指纹");
+    let savedText = changedPage.content_text;
+    let savedPage = changedPage;
+    while (!savedPage.content_page.complete) {
+      savedPage = await fixture.invoke("read_analysis_report", {
+        task_id: fixture.task.task_id, version: changedView.reference.version,
+        offset: savedPage.content_page.next_offset,
+      });
+      savedText += savedPage.content_text;
+    }
+    assert.deepEqual(JSON.parse(savedText), changedView.report,
+      "历史分页拼接仍是保存时的完整报告、原条件和结论");
     assert.ok(
       (
         await h.request(
@@ -723,11 +899,30 @@ async function checkReports() {
       ),
     );
     assert.equal(reference.version, "5");
+    // §5.3.2续：修订保存在批量事件之后产生新的analysis_report_saved事件；
+    // 锚点仍取同报告全部版本的最小序号，最新内容与首次位置分别处理。
+    const afterRevisionView = ok(
+      await h.request(`/conversations/${cid}/snapshot`),
+    );
+    const revisedAnchoredTask = afterRevisionView.tasks.find(
+      (task) => task.id === fixture.task.task_id,
+    );
+    assert.equal(revisedAnchoredTask.report_ref.report_id, anchorReportId);
+    assert.equal(
+      revisedAnchoredTask.report_timeline_event_seq,
+      String(firstSaveSeq),
+      "新修订保存事件进入最新页后，首次锚点不换",
+    );
+    checks.push("报告修订更新内容与引用，首次保存锚点保持不变");
     assert.equal(
       (await read()).reference.condition_version,
       fixture.task.condition_version,
     );
     const composite = await read();
+    assert.ok(
+      composite.status === "available" && composite.report,
+      JSON.stringify(composite).slice(0, 600),
+    );
     assert.equal(composite.report.evidence.length, 3);
     assert.deepEqual(composite.report.evidence.map(item => [item.reference.task_id, item.reference.condition_version]), [
       [fixture.task.task_id, "1"], [fixture.otherTask.task_id, "1"], [fixture.task.task_id, fixture.task.condition_version],
@@ -748,11 +943,28 @@ async function checkReports() {
     checks.push(
       "报告容器继续绑定当前条件；同会话多任务及历史条件来源分别保留task/version/条件快照和精确值，仅改标题保留全部来源及图表，不改挂旧查询",
     );
+    // 结果过期只局部受影响（04切片7）：依赖过期的图表数据不可用，报告正文与
+    // 其他图表保留，不整份消失也不自动重跑；恢复后图表回到完整。
     fixture.alterExpiry(queries[4], Date.now() / 1000 - 1);
-    unavailable(await read(), "sources_unavailable");
+    const expiredView = await read();
+    assert.equal(expiredView.status, "available");
+    assert.ok(JSON.stringify(expiredView.report).includes("合成观察"));
+    assert.equal(expiredView.report.charts.length, 3);
+    assert.equal(expiredView.chart_results.length, 2, JSON.stringify({got:expiredView.chart_results.map(v=>v.query_id),foreign:fixture.foreignQuery.id,newQuery:newQuery.id,q4:queries[4].id}));
+    assert.ok(
+      !expiredView.chart_results.some(
+        (value) => value.query_id === queries[4].id,
+      ),
+    );
+    assert.equal(
+      expiredView.chart_results.find(
+        (value) => value.query_id === fixture.foreignQuery.id,
+      ).rows[0][1],
+      "99",
+    );
     fixture.alterExpiry(queries[4], Date.now() / 1000 + 86400);
-    assert.equal((await read()).status, "available");
-    checks.push("组合报告中历史来源过期也整份隐藏，其他仍有效来源不能掩盖旧来源失效");
+    assert.equal((await read()).chart_results.length, 3);
+    checks.push("组合报告中历史来源过期只省略该图表数据，正文与其余图表保留，不整份隐藏、不自动重跑");
     // 仅隔离夹具：模拟某来源记录不再属于当前本人/空间，检验已存报告副本也不能绕过归属。
     for (const [column, hidden, original] of [["owner_id", "bob", "alice"], ["space_id", "another-space", "demo"]]) {
       h.sql(`UPDATE analysis_evidence SET ${column}='${hidden}' WHERE id='${historical.evidence_id}'`);
@@ -765,16 +977,25 @@ async function checkReports() {
     checks.push("隔离归属夹具验证：任一来源属于另一用户或空间时报告整份隐藏且新引用404，恢复夹具后来源身份和修订不变");
 
     fixture.alterExpiry(newQuery, Date.now() / 1000 - 1);
-    unavailable(await read(), "sources_unavailable");
+    const currentExpiredView = await read();
+    assert.equal(currentExpiredView.status, "available");
+    assert.ok(
+      !currentExpiredView.chart_results.some(
+        (value) => value.query_id === newQuery.id,
+      ),
+    );
     await fixture.begin(cid, "核对这份当前报告的依据是否仍然有效。");
     await fixture.route(fixture.task);
-    unavailable(
-      await fixture.invoke("read_analysis_report", {
-        task_id: fixture.task.task_id,
-      }),
-      "sources_unavailable",
-    );
-    await fixture.finish("报告依据已不可用，需重新核对后再继续分析。");
+    const currentExpiredPage = await fixture.invoke("read_analysis_report", {
+      task_id: fixture.task.task_id,
+    });
+    // 模型读取当前报告但结果已漂移：降级历史投影，不把过期数字当当前依据交付。
+    assert.equal(currentExpiredPage.status, "historical");
+    assert.equal(currentExpiredPage.historical_analysis.kind, "report");
+    assert.equal(typeof currentExpiredPage.content_text, "string",
+      "结果过期仍能分页读取已保存报告正文");
+    assert.deepEqual(currentExpiredPage.reference, currentExpiredView.reference);
+    await fixture.finish("报告依据已过期，需重新执行后再继续分析。");
     assert.ok(
       (
         await h.request(
@@ -793,13 +1014,23 @@ async function checkReports() {
       JSON.stringify({ denied_query_users: ["alice"] }),
     );
     unavailable(await read(), "sources_unavailable");
+    await fixture.begin(cid, "撤权后模型也不能读取报告派生内容。");
+    await fixture.route(fixture.task);
+    const deniedPage = await fixture.invoke("read_analysis_report", {
+      task_id: fixture.task.task_id,
+    });
+    // 撤权反例：平台拒绝后Pi端同样不复活派生内容，只返回状态与引用。
+    assert.equal(deniedPage.status, "sources_unavailable");
+    assert.ok(!("historical_analysis" in deniedPage));
+    assert.ok(!JSON.stringify(deniedPage).includes("合成观察"));
+    await fixture.finish("平台已拒绝查询权限，停止读取报告。");
     await writeFile(
       h.directory + "/platform/permissions.json",
       JSON.stringify({}),
     );
     assert.equal((await read()).status, "available");
     checks.push(
-      "结果过期或平台撤权后报告只返回状态与引用，不能读取保存数字、正文或图表；恢复仅限本次隔离测试夹具",
+      "结果过期只局部受影响且模型改读历史投影；平台撤权后Web与Pi都不复活派生内容，恢复权限仅限本次隔离测试夹具",
     );
 
     await h.pausePlatform();
@@ -979,6 +1210,197 @@ async function checkReports() {
     assert.equal(crossConversation.value.code, "invalid_evidence");
     assert.equal(ok(await h.request(conditionPath)).reference.version, conditionReport.version);
     checks.push("同一用户的另一会话依据不能拼入报告；拒绝不创建新修订，跨用户读写仍为404");
+    // 普通语义改版正例（04切片7/8）：先固定引用旧版文档的查询，再PATCH出新版。
+    await fixture.begin(cid, "补一条引用正式文档的查询，供语义改版核验。");
+    await fixture.route(conditionTask);
+    const semanticQuery = await fixture.invoke("request_query", {
+      task_id: conditionTask.task_id,
+      condition_version: conditionTask.condition_version,
+      sql: "SELECT '语义说明' AS category,7 AS amount",
+      parameters: {},
+      target_id: "synthetic-sqlite",
+      summary: "引用正式文档的说明查询。",
+      knowledge_refs: [
+        { object_id: document.id, version: document.version, path: "body" },
+      ],
+      replaces_query_id: null,
+    });
+    await fixture.finish();
+    // 先执行该查询拿到真实结果：语义改版后它的历史投影要带实际来源引用（04切片9），
+    // 并把结果落成正式依据+图表，核验普通改版不隐藏图表数据（04关闭审查修复）。
+    await fixture.confirm(semanticQuery);
+    let semanticResultRef = null;
+    let semanticEvidence = null;
+    await fixture.executeAndNotify(semanticQuery, conditionTask, async () => {
+      const page = (
+        await fixture.invoke("get_query", { query_id: semanticQuery.id })
+      ).results;
+      semanticResultRef = page.result_ref;
+      semanticEvidence = await fixture.invoke("save_analysis_evidence", {
+        task_id: conditionTask.task_id,
+        condition_version: conditionTask.condition_version,
+        data_range: "引用正式文档的语义说明查询。",
+        findings: [
+          {
+            text: "按语义说明口径记录分类值。",
+            calculation: "采用SQL返回的原值。",
+            limitations: [],
+            query_refs: [
+              {
+                query_id: semanticQuery.id,
+                result_ref: semanticResultRef,
+                columns: ["category", "amount"],
+              },
+            ],
+            knowledge_refs: [],
+            figures: [],
+          },
+        ],
+      });
+    });
+    conditionReport = ok(
+      await h.request(conditionPath, {
+        ...conditionInput,
+        operation_id: randomUUID(),
+        expected_version: conditionReport.version,
+        evidence_ids: [
+          conditionEvidence.evidence_id,
+          semanticEvidence.evidence_id,
+        ],
+        charts: [
+          {
+            // 无ORDER BY的单行查询只配柱状图：折线图要求维度列是ORDER BY首列。
+            kind: "bar",
+            title: "语义说明值",
+            query_id: semanticQuery.id,
+            result_ref: semanticResultRef,
+            dimension_column: "category",
+            measure_column: "amount",
+          },
+        ],
+      }),
+    );
+    assert.equal(conditionReport.version, "3");
+    const revisedDocument = ok(
+      await h.request(
+        `/knowledge/${document.id}`,
+        {
+          operation_id: randomUUID(),
+          expected_version: document.version,
+          entry_id: "body",
+          value: "改版后的文档正文。",
+          clear_override: false,
+        },
+        "alice",
+        "PATCH",
+      ),
+    );
+    assert.notEqual(revisedDocument.version, document.version);
+    // 普通改版后图表数据保留（04关闭审查修复）：结果未过期，查询引用的知识只是
+    // 版本漂移，图表数据照常交付，只有真实结果过期才按缺图呈现。
+    const driftChartView = ok(await h.request(conditionPath));
+    assert.equal(driftChartView.status, "available");
+    assert.equal(driftChartView.chart_results.length, 1);
+    assert.equal(driftChartView.chart_results[0].query_id, semanticQuery.id);
+    assert.equal(driftChartView.chart_results[0].rows[0][1], "7");
+    checks.push(
+      "普通语义改版不隐藏已存图表数据：结果未过期只算引用版本漂移，图表照常交付且不误报结果过期",
+    );
+    const revisedReportView = ok(await h.request(documentPath));
+    assert.equal(revisedReportView.status, "available");
+    assert.ok(
+      JSON.stringify(revisedReportView.report).includes("旧文档依据正文"),
+    );
+    const revisedQueryView = await fixture.readQuery(semanticQuery);
+    assert.equal(revisedQueryView.text_historical, true);
+    assert.ok(revisedQueryView.sql.includes("语义说明"));
+    assert.ok(!("text_unavailable" in revisedQueryView));
+    await fixture.begin(cid, "改版后核对模型读取分途。");
+    await fixture.route(conditionTask);
+    await writeFile(h.directory + '/platform/permissions.json',
+      JSON.stringify({denied_query_users: ['alice']}));
+    const blockedHistory = await fixture.invoke("get_query", {query_id: semanticQuery.id});
+    assert.equal(blockedHistory.content_text, undefined, "首次读取历史查询前已撤权，不得交付SQL正文");
+    const blockedReport = await fixture.invoke("read_analysis_report", {task_id: documentTask.task_id});
+    assert.equal(blockedReport.content_text, undefined, "首次读取报告前已撤权，不得交付派生正文");
+    await writeFile(h.directory + '/platform/permissions.json', '{}');
+    const revisedModelReport = await fixture.invoke("read_analysis_report", {
+      task_id: documentTask.task_id,
+    });
+    assert.equal(revisedModelReport.status, "historical");
+    assert.equal(revisedModelReport.historical_analysis.kind, "report");
+    assert.equal(
+      revisedModelReport.historical_analysis.reference.report_id,
+      documentReport.report_id,
+    );
+    assert.ok(
+      JSON.stringify(revisedModelReport).includes("旧文档依据正文"),
+    );
+    const revisedModelQuery = await fixture.invoke("get_query", {
+      query_id: semanticQuery.id,
+    });
+    assert.equal(revisedModelQuery.query.text_unavailable, true);
+    assert.equal(revisedModelQuery.historical_analysis.kind, "query");
+    assert.equal(
+      revisedModelQuery.historical_analysis.reference.query_id,
+      semanticQuery.id,
+    );
+    assert.ok(
+      revisedModelQuery.historical_analysis.content_fingerprint.length >= 16,
+    );
+    assert.ok(JSON.stringify(revisedModelQuery).includes("语义说明"), "历史查询必须交付保存时SQL");
+    const savedQuery = JSON.parse(revisedModelQuery.content_text);
+    assert.equal(savedQuery.sql, revisedQueryView.sql);
+    assert.deepEqual(savedQuery.parameters, revisedQueryView.parameters);
+    assert.equal(savedQuery.conditions.timezone, "UTC");
+    const dispatch = () => h.internal('/internal/model/issue', {
+      run_id: fixture.run.run_id, lease_epoch: fixture.run.lease_epoch,
+      call_attempt_id: randomUUID(),
+    });
+    assert.equal((await dispatch()).status, 200, "仅普通语义改版的历史内容仍可复述");
+    fixture.alterExpiry(semanticQuery, Date.now() / 1000 - 1);
+    assert.equal((await dispatch()).status, 200, "结果过期不抹掉已交付的历史正文");
+    await writeFile(h.directory + '/platform/permissions.json',
+      JSON.stringify({denied_query_users: ['alice']}));
+    assert.equal((await dispatch()).value.code, 'stale_context',
+      "语义已改版且结果已过期时，平台撤权仍须阻止下一次派发");
+    unavailable(ok(await h.request(conditionPath)), "sources_unavailable");
+    await writeFile(h.directory + '/platform/permissions.json', '{}');
+    fixture.alterExpiry(semanticQuery, Date.now() / 1000 + 86400);
+    checks.push("历史投影持续核验平台访问；普通改版、结果过期与平台撤权分别处理");
+    // 04切片9反例：历史投影只登记在historical桶，不能充当新答案的当前依据；
+    // 引用旧查询结果作为答案来源仍被拒绝，需按新输入重新建立口径。
+    const historicalReference =
+      revisedModelQuery.historical_analysis.actual_sources.result_dependencies[0];
+    const historicalAnswer = await fixture.invokeRaw("present_analysis_answer", {
+      template: "按历史口径说明{{value}}。",
+      sources: [
+        {
+          query_id: historicalReference.query_id,
+          result_ref: historicalReference.result_ref,
+          columns: ["category", "amount"],
+        },
+      ],
+      values: [
+        {
+          name: "value",
+          kind: "cell",
+          query_id: historicalReference.query_id,
+          column: "amount",
+          row_index: 0,
+        },
+      ],
+    });
+    assert.notEqual(historicalAnswer.response.status, 200);
+    assert.equal(
+      historicalAnswer.response.value.code,
+      "stale_context",
+      JSON.stringify(historicalAnswer.response.value),
+    );
+    await fixture.finish();
+    checks.push(
+      "普通语义改版后Web报告与SQL按历史记录完整展示并标记text_historical；模型读取降级受控历史投影（引用/生成时间/条件/指纹/实际来源），保留有界历史正文；历史投影不能充当新答案的当前依据",
+    );
     ok(
       await h.request(`/knowledge/${conditionDocument.id}/disable`, {
         operation_id: randomUUID(),
@@ -1001,7 +1423,7 @@ async function checkReports() {
     ok(
       await h.request(`/knowledge/${document.id}/disable`, {
         operation_id: randomUUID(),
-        expected_version: document.version,
+        expected_version: revisedDocument.version,
       }),
     );
     const disabledDocumentView = ok(await h.request(documentPath));

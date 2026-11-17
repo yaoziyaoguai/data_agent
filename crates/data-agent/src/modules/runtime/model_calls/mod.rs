@@ -8,6 +8,9 @@ use crate::{
 use serde_json::Value;
 use sqlx::MySqlPool;
 
+pub async fn ensure_default_trial(pool: &MySqlPool, profile: &ModelProfile) -> Result<()> {
+    store::ensure_default_trial(pool, profile).await
+}
 pub async fn configure_trial(pool: &MySqlPool, profile: &ModelProfile) -> Result<()> {
     store::configure_trial(pool, profile).await
 }

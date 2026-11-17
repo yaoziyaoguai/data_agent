@@ -14,9 +14,37 @@ pub async fn check_text_results(
 ) -> Result<super::context_authority::CheckedTextResults> {
     let mut tx = AppTx::begin(pool).await?;
     let authorities = queries::text_authorities_in_tx(&mut tx, ctx, cid, qid).await?;
+    let mut historical = Vec::new();
+    for query in queries::list_in_tx(&mut tx, cid).await? {
+        if qid.is_some_and(|id| query["id"] != id) {
+            continue;
+        }
+        let conditions = analysis::read_evidence_conditions_in_tx(
+            &mut tx,
+            ctx,
+            cid,
+            query["task_id"]
+                .as_str()
+                .ok_or(Error::new("invalid_input"))?,
+            epoch(
+                query["condition_version"]
+                    .as_str()
+                    .ok_or(Error::new("invalid_input"))?,
+            )?,
+        )
+        .await?;
+        match super::historical_analysis::query_projection_in_tx(&mut tx, ctx, &query, &conditions)
+            .await
+        {
+            Ok(entry) => historical.push(entry["actual_sources"]["authority"].clone()),
+            Err(error) if matches!(error.code, "stale_context" | "not_available") => (),
+            Err(error) => return Err(error),
+        }
+    }
     tx.commit().await?;
     let mut checked = super::context_authority::CheckedTextResults::default();
     checked.include_authorities(pool, ctx, &authorities).await?;
+    checked.include_history(pool, ctx, &historical).await?;
     Ok(checked)
 }
 
@@ -45,6 +73,8 @@ pub fn control_projection(mut query: Value) -> Value {
         "knowledge_refs",
         "error_details",
         "semantic_checks",
+        "semantic_resolution",
+        "time_basis",
     ] {
         query.as_object_mut().expect("query").remove(key);
     }
@@ -52,6 +82,81 @@ pub fn control_projection(mut query: Value) -> Value {
     query
 }
 
+/// 查询正文读取的三种结局：Current=当前核验通过；Historical=严格
+/// 核验因语义改版或结果漂移失败、但历史展示核验仍通过（正文作为已存记录展示，
+/// 不再是当前口径依据）；Restricted=撤权/删除/停用/越权，正文隐藏。
+pub enum ProtectedText {
+    Current(Value),
+    Historical { entry: Value, conditions: Value },
+    Restricted,
+}
+
+pub async fn protect_text_outcome_in_tx(
+    tx: &mut AppTx<'_>,
+    ctx: &AccessContext,
+    cid: &str,
+    query: &Value,
+    checked: &super::context_authority::CheckedTextResults,
+) -> Result<ProtectedText> {
+    let qid = query["id"].as_str().ok_or(Error::new("invalid_input"))?;
+    let authority = queries::text_authority_in_tx(tx, ctx, qid).await?;
+    let strict = if !checked.allows(&authority) {
+        Err(Error::new("stale_context"))
+    } else {
+        super::context_authority::validate_in_tx(tx, ctx, cid, &authority).await
+    };
+    match strict {
+        Ok(()) => Ok(ProtectedText::Current(authority)),
+        Err(error)
+            if matches!(
+                error.code,
+                "stale_context" | "stale_knowledge" | "invalid_input"
+            ) =>
+        {
+            // 读取前核全部历史来源，包括原条件及已保存结果；不能等下一次派发才拒绝。
+            let historical = async {
+                let conditions = analysis::read_evidence_conditions_in_tx(
+                    tx,
+                    ctx,
+                    cid,
+                    query["task_id"]
+                        .as_str()
+                        .ok_or(Error::new("invalid_input"))?,
+                    epoch(
+                        query["condition_version"]
+                            .as_str()
+                            .ok_or(Error::new("invalid_input"))?,
+                    )?,
+                )
+                .await?;
+                let entry =
+                    super::historical_analysis::query_projection_in_tx(tx, ctx, query, &conditions)
+                        .await?;
+                let sources = &entry["actual_sources"]["authority"];
+                if !checked.allows_history(sources) {
+                    return Err(Error::new("not_available"));
+                }
+                super::context_authority::validate_history_in_tx(tx, ctx, cid, sources).await?;
+                Ok((entry, conditions))
+            }
+            .await;
+            match historical {
+                Ok((entry, conditions)) => Ok(ProtectedText::Historical { entry, conditions }),
+                Err(error) if super::personal_assets::unavailable_text(&error) => {
+                    Ok(ProtectedText::Restricted)
+                }
+                Err(error) => Err(error),
+            }
+        }
+        Err(error) if matches!(error.code, "forbidden" | "not_available") => {
+            Ok(ProtectedText::Restricted)
+        }
+        Err(error) => Err(error),
+    }
+}
+
+/// Web查询读取固定为history_display：语义改版保留已存SQL/参数/说明并标记
+/// text_historical；撤权类仍隐藏正文。模型路径（get_query）不复用此函数。
 pub async fn protect_text_in_tx(
     tx: &mut AppTx<'_>,
     ctx: &AccessContext,
@@ -59,30 +164,16 @@ pub async fn protect_text_in_tx(
     query: &mut Value,
     checked: &super::context_authority::CheckedTextResults,
 ) -> Result<Value> {
-    match validate_text_in_tx(
-        tx,
-        ctx,
-        cid,
-        query["id"].as_str().ok_or(Error::new("invalid_input"))?,
-        checked,
-    )
-    .await
-    {
-        Ok(authority) => Ok(authority),
-        Err(error)
-            if matches!(
-                error.code,
-                "stale_context"
-                    | "stale_knowledge"
-                    | "not_available"
-                    | "forbidden"
-                    | "invalid_input"
-            ) =>
-        {
+    match protect_text_outcome_in_tx(tx, ctx, cid, query, checked).await? {
+        ProtectedText::Current(authority) => Ok(authority),
+        ProtectedText::Historical { .. } => {
+            query["text_historical"] = json!(true);
+            Ok(super::context_authority::empty())
+        }
+        ProtectedText::Restricted => {
             *query = control_projection(query.clone());
             Ok(super::context_authority::empty())
         }
-        Err(error) => Err(error),
     }
 }
 
@@ -91,8 +182,14 @@ pub async fn list(pool: &MySqlPool, ctx: &AccessContext, cid: &str) -> Result<Va
     let mut tx = AppTx::begin(pool).await?;
     conversations::lock_conversation_in_tx(&mut tx, ctx, cid).await?;
     let mut queries = queries::list_in_tx(&mut tx, cid).await?;
+    let anchors = conversations::first_query_changed_seq_in_tx(&mut tx, cid).await?;
     for query in &mut queries {
         protect_text_in_tx(&mut tx, ctx, cid, query, &checked).await?;
+        query["timeline_event_seq"] = query["id"]
+            .as_str()
+            .and_then(|id| anchors.get(id))
+            .map(|seq| json!(seq))
+            .unwrap_or(Value::Null);
     }
     let blocked = conversations::confirmation_blocked_in_tx(&mut tx, cid).await?;
     tx.commit().await?;
@@ -106,6 +203,12 @@ pub async fn read(pool: &MySqlPool, ctx: &AccessContext, qid: &str) -> Result<Va
     conversations::lock_conversation_in_tx(&mut tx, ctx, &location.conversation_id).await?;
     let mut v = queries::read_in_tx(&mut tx, ctx, qid).await?;
     protect_text_in_tx(&mut tx, ctx, &location.conversation_id, &mut v, &checked).await?;
+    v["timeline_event_seq"] =
+        conversations::first_query_changed_seq_in_tx(&mut tx, &location.conversation_id)
+            .await?
+            .get(v["id"].as_str().unwrap_or(""))
+            .map(|seq| json!(seq))
+            .unwrap_or(Value::Null);
     tx.commit().await?;
     Ok(v)
 }
@@ -195,15 +298,30 @@ pub async fn execute_from_message_in_tx(
         );
     }
     // 整批确认后才登记；已确认项重放不让本条输入承担旧授权和预算。
+    let mut confirmed_tasks = std::collections::BTreeSet::new();
     for query in &queries {
+        let task = query["task_id"].as_str();
+        if let Some(task) = task {
+            confirmed_tasks.insert(task.to_owned());
+        }
         conversations::route_message_in_tx(
             tx,
             conv,
             &message.id,
-            query["task_id"].as_str(),
+            task,
             query["confirmation_state"] != "confirmed",
         )
         .await?;
+    }
+    // 批量已确认SQL控制仍逐项校验；同批跨任务不隐式切换活动目标，只有唯一
+    // 所属任务时按其当前版本保存活动绑定（每项的condition_version已核当前）。
+    if let [task] = confirmed_tasks.iter().collect::<Vec<_>>()[..] {
+        let version = queries
+            .iter()
+            .find(|query| query["task_id"].as_str() == Some(task.as_str()))
+            .and_then(|query| query["condition_version"].as_str())
+            .unwrap_or("0");
+        conversations::bind_active_task_in_tx(tx, conv, task, epoch(version)?).await?;
     }
     if batch.is_some() {
         Ok(json!({"queries":confirmed}))
@@ -303,6 +421,27 @@ pub async fn results(
     qid: &str,
     cursor: Option<&str>,
 ) -> Result<Value> {
+    results_with(pool, ctx, qid, cursor, false).await
+}
+
+/// 展示路径的结果读取（04切片7）：知识引用按历史规则核验——版本漂移不隐藏
+/// 已存结果数据；对象撤下或上游被撤仍拒绝。保存/采用路径沿用results。
+async fn results_for_display(
+    pool: &MySqlPool,
+    ctx: &AccessContext,
+    qid: &str,
+    cursor: Option<&str>,
+) -> Result<Value> {
+    results_with(pool, ctx, qid, cursor, true).await
+}
+
+async fn results_with(
+    pool: &MySqlPool,
+    ctx: &AccessContext,
+    qid: &str,
+    cursor: Option<&str>,
+    history_refs: bool,
+) -> Result<Value> {
     let v = read(pool, ctx, qid).await?;
     if v["text_unavailable"] == true {
         return Err(Error::new("stale_context"));
@@ -310,7 +449,11 @@ pub async fn results(
     if v["execution_state"] != "succeeded" {
         return Err(Error::new("result_unavailable"));
     }
-    knowledge_check(pool, ctx, &v["knowledge_refs"]).await?;
+    if history_refs {
+        history_knowledge_check(pool, ctx, &v["knowledge_refs"]).await?;
+    } else {
+        knowledge_check(pool, ctx, &v["knowledge_refs"]).await?;
+    }
     let mut result = queries::platform::saved_result_page(
         &json!({"query_id":qid,"owner_id":ctx.user_id,"cursor":cursor}),
     )
@@ -380,17 +523,69 @@ pub(super) async fn result_state_authority(
     queries::platform::result_authority(qid, &ctx.user_id, result_ref).await
 }
 
+/// 历史正文仍核当前平台访问；只忽略原始结果TTL，不能用语义改版跳过平台。
+pub(super) async fn historical_result_authority(
+    pool: &MySqlPool,
+    ctx: &AccessContext,
+    qid: &str,
+    result_ref: &str,
+) -> Result<()> {
+    let mut tx = AppTx::begin(pool).await?;
+    let query = queries::read_in_tx(&mut tx, ctx, qid).await?;
+    conversations::assert_readable_in_tx(
+        &mut tx,
+        ctx,
+        query["conversation_id"]
+            .as_str()
+            .ok_or(Error::new("not_available"))?,
+    )
+    .await?;
+    if query["execution_state"] != "succeeded" || query["result_ref"].as_str() != Some(result_ref) {
+        return Err(Error::new("invalid_evidence"));
+    }
+    super::knowledge::history_check_refs_in_tx(&mut tx, ctx, &query["knowledge_refs"]).await?;
+    tx.commit().await?;
+    match queries::platform::result_authority(qid, &ctx.user_id, result_ref).await {
+        Err(error) if error.code == "result_expired" => Ok(()),
+        result => result,
+    }
+}
+
 /// 读取已保存页不会创建新查询；每一页复用正常结果读取的当前授权与依据检查。
 pub async fn collect_saved_results(
     pool: &MySqlPool,
     ctx: &AccessContext,
     qid: &str,
 ) -> Result<Value> {
+    collect_saved_results_with(pool, ctx, qid, true).await
+}
+
+/// 展示路径的已存结果收集（04切片7）：图表数据按结果状态授权交付，不做正文
+/// 严格核验——查询正文曾依赖的其他结果过期只影响口径说明，不隐藏本结果数据；
+/// 撤权类仍由结果状态授权拒绝。保存/采用路径继续用collect_saved_results。
+pub async fn collect_saved_results_for_display(
+    pool: &MySqlPool,
+    ctx: &AccessContext,
+    qid: &str,
+) -> Result<Value> {
+    collect_saved_results_with(pool, ctx, qid, false).await
+}
+
+async fn collect_saved_results_with(
+    pool: &MySqlPool,
+    ctx: &AccessContext,
+    qid: &str,
+    strict_text: bool,
+) -> Result<Value> {
     let mut pages = Vec::new();
     let mut cursor = None;
     let mut received_bytes = 0_usize;
     for _ in 0..queries::SAVED_RESULT_MAX_PAGES {
-        let page = results(pool, ctx, qid, cursor.as_deref()).await?;
+        let page = if strict_text {
+            results(pool, ctx, qid, cursor.as_deref()).await?
+        } else {
+            results_for_display(pool, ctx, qid, cursor.as_deref()).await?
+        };
         if page["fetched_offset"].as_str() != Some(cursor.as_deref().unwrap_or("0"))
             || pages.first().is_some_and(|first: &Value| {
                 [
@@ -423,15 +618,23 @@ pub async fn collect_saved_results(
         if cursor.is_none() {
             let result = queries::merge_saved_result_pages(qid, &pages)?;
             contracts::validate("QueryResults", &result)?;
-            result_authority(
-                pool,
-                ctx,
-                qid,
-                result["result_ref"]
-                    .as_str()
-                    .ok_or(Error::new("result_unavailable"))?,
-            )
-            .await?;
+            let reference = result["result_ref"]
+                .as_str()
+                .ok_or(Error::new("result_unavailable"))?;
+            if strict_text {
+                result_authority(pool, ctx, qid, reference).await?;
+            } else if let Err(error) = result_state_authority(pool, ctx, qid, reference).await {
+                // 展示路径的知识引用已在results_for_display按历史规则核验（撤权类
+                // 在那层整份拒绝）；末次状态授权里的严格引用核验对版本漂移类失败
+                // 不隐藏图表数据（04切片7），撤权与过期类照常上抛——与展示路径
+                // 直接调用处的容忍清单一致。
+                if !matches!(
+                    error.code,
+                    "stale_context" | "stale_knowledge" | "invalid_input"
+                ) {
+                    return Err(error);
+                }
+            }
             return Ok(result);
         }
     }
@@ -440,6 +643,16 @@ pub async fn collect_saved_results(
 async fn knowledge_check(pool: &MySqlPool, ctx: &AccessContext, refs: &Value) -> Result<()> {
     let mut tx = AppTx::begin(pool).await?;
     super::knowledge::check_refs_in_tx(&mut tx, ctx, refs).await?;
+    tx.commit().await
+}
+
+async fn history_knowledge_check(
+    pool: &MySqlPool,
+    ctx: &AccessContext,
+    refs: &Value,
+) -> Result<()> {
+    let mut tx = AppTx::begin(pool).await?;
+    super::knowledge::history_check_refs_in_tx(&mut tx, ctx, refs).await?;
     tx.commit().await
 }
 pub async fn process_due(pool: &MySqlPool, worker: &str) -> Result<bool> {
@@ -453,47 +666,73 @@ pub async fn process_due(pool: &MySqlPool, worker: &str) -> Result<bool> {
     };
     let cid = job["conversation_id"].as_str().unwrap_or("");
     let qid = job["query_id"].as_str().unwrap_or("");
-    let mut preflight = AppTx::begin(pool).await?;
-    let pending = queries::read_in_tx(&mut preflight, &ctx, qid).await?;
-    preflight.commit().await?;
-    // unknown 只查证、取消只发送控制操作；不能因旧正文失效而重新提交或中止查证。
-    let checked = if pending["execution_state"] == "queued" && pending["cancel_state"] == "none" {
-        Some(check_text_results(pool, &ctx, cid, Some(qid)).await?)
-    } else {
-        None
-    };
-    let mut tx = AppTx::begin(pool).await?;
-    let conv = conversations::lock_for_cleanup_in_tx(&mut tx, &ctx, cid).await?;
-    analysis::lock_tasks_in_tx(&mut tx, cid).await?;
-    let query = queries::read_in_tx(&mut tx, &ctx, qid).await?;
-    let authorization_error = if query["execution_state"] == "queued"
-        && query["cancel_state"] == "none"
-    {
-        match checked.as_ref() {
-            Some(checked) => match validate_text_in_tx(&mut tx, &ctx, cid, qid, checked).await {
-                Ok(_) => None,
-                Err(error)
-                    if matches!(
-                        error.code,
-                        "stale_context"
-                            | "stale_knowledge"
-                            | "not_available"
-                            | "forbidden"
-                            | "invalid_input"
-                    ) =>
-                {
-                    Some(error.code)
+    // 与消息准备相同，两份future并行推进；续租等待查询行锁时不能暂停准备事务。
+    let heartbeat = async {
+        let mut interval = tokio::time::interval(std::time::Duration::from_secs(
+            u64::from(queries::LEASE_SECONDS) / 3,
+        ));
+        loop {
+            interval.tick().await;
+            if let Err(error) = queries::renew_claim(pool, &job, worker).await {
+                if !error.is_transient_storage() {
+                    return Err(error);
                 }
-                Err(error) => return Err(error),
-            },
-            None => Some("stale_context"),
+                eprintln!(
+                    "query_prepare_renew_transient query={qid} code={}",
+                    error.code
+                );
+            }
         }
-    } else {
-        None
     };
-    let packet = queries::begin_submission_in_tx(&mut tx, &ctx, &job).await?;
-    tx.commit().await?;
-    let qid = job["query_id"].as_str().unwrap_or("");
+    let prepare = async {
+        let mut preflight = AppTx::begin(pool).await?;
+        let pending = queries::read_in_tx(&mut preflight, &ctx, qid).await?;
+        preflight.commit().await?;
+        // unknown 只查证、取消只发送控制操作；不能因旧正文失效而重新提交或中止查证。
+        let checked = if pending["execution_state"] == "queued" && pending["cancel_state"] == "none"
+        {
+            Some(check_text_results(pool, &ctx, cid, Some(qid)).await?)
+        } else {
+            None
+        };
+        let mut tx = AppTx::begin(pool).await?;
+        let conv = conversations::lock_for_cleanup_in_tx(&mut tx, &ctx, cid).await?;
+        analysis::lock_tasks_in_tx(&mut tx, cid).await?;
+        let query = queries::read_in_tx(&mut tx, &ctx, qid).await?;
+        let authorization_error =
+            if query["execution_state"] == "queued" && query["cancel_state"] == "none" {
+                match checked.as_ref() {
+                    Some(checked) => {
+                        match validate_text_in_tx(&mut tx, &ctx, cid, qid, checked).await {
+                            Ok(_) => None,
+                            Err(error)
+                                if matches!(
+                                    error.code,
+                                    "stale_context"
+                                        | "stale_knowledge"
+                                        | "not_available"
+                                        | "forbidden"
+                                        | "invalid_input"
+                                ) =>
+                            {
+                                Some(error.code)
+                            }
+                            Err(error) => return Err(error),
+                        }
+                    }
+                    None => Some("stale_context"),
+                }
+            } else {
+                None
+            };
+        let packet = queries::begin_submission_in_tx(&mut tx, &ctx, &job).await?;
+        tx.commit().await?;
+        Ok::<_, Error>((conv, packet, authorization_error))
+    };
+    let (conv, packet, authorization_error) = tokio::select! {
+        result = prepare => result?,
+        result = heartbeat => return result,
+    };
     let action = packet["action"].as_str().unwrap_or("lookup");
     let observation = if action == "submit" && authorization_error.is_some() {
         json!({"state":"failed","error":authorization_error})
@@ -570,6 +809,9 @@ pub async fn process_due(pool: &MySqlPool, worker: &str) -> Result<bool> {
         .await?
         {
             jobs::enqueue_in_tx(&mut tx, cid, &message.id).await?;
+            // 活动任务绑定不在完成事务里做：worker完成时刻不持轮租约，晚到查询
+            // 会改写其他任务运行中的会话活动范围（04关闭审查修复）。归属在结果
+            // 输入自己的交付事务（deliver_run，持租约串行）里落到该查询的任务。
         }
     }
     tx.commit().await?;

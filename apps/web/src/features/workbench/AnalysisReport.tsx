@@ -22,43 +22,76 @@ export function AnalysisReport({ reference, currentConditionVersion, onClose, on
   const changed = currentConditionVersion !== undefined && currentConditionVersion !== reference.condition_version;
   useEffect(() => {
     let mounted = true;
+    let reading = false;
+    let timer: number | undefined;
+    let controller: AbortController | undefined;
+    setView(null); setError(""); setLoading(true);
+    const schedule = () => {
+      if (mounted && !document.hidden) timer = window.setTimeout(() => void load(), 2000);
+    };
     const load = async () => {
+      if (!mounted || document.hidden || reading) return;
+      window.clearTimeout(timer);
+      reading = true;
       const request = ++generation.current;
-      setView(null); setError(""); setLoading(true);
+      controller = new AbortController();
       try {
-        const next = await api("AnalysisReportView", "/conversations/" + reference.conversation_id + "/tasks/" + reference.task_id + "/report");
+        const next = await api("AnalysisReportView", "/conversations/" + reference.conversation_id + "/tasks/" + reference.task_id + "/report", "GET", undefined, undefined, controller.signal);
         if (!mounted || request !== generation.current) return;
         if (next.status === "available" && (next.reference.report_id !== reference.report_id || next.reference.task_id !== reference.task_id
           || next.reference.conversation_id !== reference.conversation_id || next.reference.condition_version !== reference.condition_version
           || BigInt(next.reference.version) < BigInt(reference.version))) throw new Error("报告引用已变化，请返回对话重新打开。");
-        setView(next);
+        // 普通读取保留正文和阅读位置；收到不可读响应时仍立即撤下旧内容。
+        setView(next); setError("");
       } catch (failure) {
-        if (mounted && request === generation.current) setError(failure instanceof ApiError && ["forbidden", "not_available"].includes(failure.code)
-          ? "这份报告目前不可访问，请返回对话核对。" : "暂时无法核对报告与数据依据，请重试。");
-      } finally { if (mounted && request === generation.current) setLoading(false); }
+        if (mounted && request === generation.current) {
+          setView(null);
+          setError(failure instanceof ApiError && ["forbidden", "not_available"].includes(failure.code)
+            ? "这份报告目前不可访问，请返回对话核对。" : "暂时无法核对报告与数据依据，请重试。");
+        }
+      } finally {
+        if (mounted && request === generation.current) {
+          reading = false; controller = undefined; setLoading(false);
+          schedule();
+        }
+      }
     };
-    const wake = () => { if (!document.hidden) void load(); };
+    const wake = () => { window.clearTimeout(timer); if (!document.hidden) void load(); };
     void load();
     window.addEventListener("focus", wake);
     document.addEventListener("visibilitychange", wake);
-    return () => { mounted = false; ++generation.current; window.removeEventListener("focus", wake); document.removeEventListener("visibilitychange", wake); };
+    return () => {
+      mounted = false; ++generation.current; window.clearTimeout(timer); controller?.abort();
+      window.removeEventListener("focus", wake); document.removeEventListener("visibilitychange", wake);
+    };
   }, [reference.report_id, reference.version, reference.conversation_id, reference.task_id, reference.condition_version, currentConditionVersion, retry]);
-  const available = !changed && view?.status === "available" && view.reference.report_id === reference.report_id
-    && view.reference.condition_version === reference.condition_version && BigInt(view.reference.version) >= BigInt(reference.version) ? view : null;
+  const matched = view && view.reference && view.reference.report_id === reference.report_id
+    && view.reference.conversation_id === reference.conversation_id
+    && view.reference.task_id === reference.task_id
+    && BigInt(view.reference.version) >= BigInt(reference.version) ? view : null;
+  const available = !changed && matched?.status === "available" && matched.reference.report_id === reference.report_id
+    && matched.reference.condition_version === reference.condition_version && BigInt(matched.reference.version) >= BigInt(reference.version) ? matched : null;
+  const historical = matched?.status === "condition_changed" && matched.report && matched.reference.report_id === reference.report_id
+    && BigInt(matched.reference.version) >= BigInt(reference.version) ? matched : null;
+  const body = available ?? historical;
+  const chartResults = body?.chart_results ?? [];
   return <Modal title="分析报告" className="analysis-report-dialog" closeLabel="返回对话" onClose={onClose}
     footer={<button className="primary" onClick={onClose}>返回对话</button>}>
-    {changed || view?.status === "condition_changed" ? <div className="report-state" role="status"><h3>分析条件已更新</h3><p>这份报告采用的是此前条件。请返回对话，核对新的分析结果后再整理报告。</p></div>
-      : view?.status === "sources_unavailable" ? <div className="report-state" role="status"><h3>报告依据暂不可用</h3><p>报告依赖的结果或资料已过期或不可读取。请返回对话重新核对；需要重新查询时，通过聊天提出执行要求。</p></div>
-        : loading ? <p className="report-state" role="status">正在核对报告与数据依据…</p>
-          : error ? <div className="report-state" role="alert"><p>{error}</p><button onClick={() => setRetry(value => value + 1)}>重新读取报告</button></div>
-            : available ? <article className="analysis-report-body">
-              <header className="report-heading"><h3>{available.report.title}</h3><p>整理于 <time dateTime={available.report.created_at}>{new Date(available.report.created_at).toLocaleString("zh-CN", { hour12: false })}</time></p></header>
-              <section className="report-scope" aria-label="分析范围"><h4>分析范围与来源条件</h4>{available.report.evidence.map((evidence, index) =>
+    {(changed || view?.status === "condition_changed") && <div className="report-state" role="status"><h3>分析条件已更新</h3><p>{body
+      ? "这份报告采用的是此前条件的记录。以下为已存内容，仅供回顾；请返回对话，核对新的分析结果后再整理报告。"
+      : "这份报告采用的是此前条件的记录。已存正文核对完成后才会展示；请返回对话，核对新的分析结果后再整理报告。"}</p></div>}
+    {view?.status === "sources_unavailable" && <div className="report-state" role="status"><h3>报告依据暂不可用</h3><p>报告依赖的资料已撤回或不可读取。请返回对话重新核对；需要重新查询时，通过聊天提出执行要求。</p></div>}
+    {!body && view?.status !== "condition_changed" && view?.status !== "sources_unavailable" && (loading
+      ? <p className="report-state" role="status">正在核对报告与数据依据…</p>
+      : error ? <div className="report-state" role="alert"><p>{error}</p><button onClick={() => setRetry(value => value + 1)}>重新读取报告</button></div> : null)}
+    {body && <article className="analysis-report-body">
+              <header className="report-heading"><h3>{body.report.title}</h3><p>整理于 <time dateTime={body.report.created_at}>{new Date(body.report.created_at).toLocaleString("zh-CN", { hour12: false })}</time></p></header>
+              <section className="report-scope" aria-label="分析范围"><h4>分析范围与来源条件</h4>{body.report.evidence.map((evidence, index) =>
                 <section key={evidence.reference.evidence_id} id={"report-source-" + evidence.reference.evidence_id} className="report-source" aria-label={"来源 " + (index + 1)}>
                   <h5>来源 {index + 1}</h5><p>{evidence.data_range}</p><ReportConditions conditions={evidence.conditions} />
                   <details className="report-evidence"><summary>核对来源归属</summary><dl className="report-conditions"><div><dt>分析任务</dt><dd>{evidence.reference.task_id}</dd></div><div><dt>条件版本</dt><dd>{evidence.reference.condition_version}</dd></div></dl></details>
                 </section>)}</section>
-              <section aria-label="分析结论" className="report-findings"><h4>主要结论</h4>{available.report.evidence.flatMap((evidence, sourceIndex) => evidence.findings.map((finding, index) =>
+              <section aria-label="分析结论" className="report-findings"><h4>主要结论</h4>{body.report.evidence.flatMap((evidence, sourceIndex) => evidence.findings.map((finding, index) =>
                 <section key={evidence.reference.evidence_id + ":" + index} className="report-finding">
                   <p className="report-source-label">采用来源 {sourceIndex + 1} 的条件</p><MarkdownContent text={finding.text} />
                   {!!finding.figures.length && <dl className="report-figures">{finding.figures.map((figure, figureIndex) => <div key={figureIndex}><dt>{figure.label}</dt><dd>{figure.value === null ? "暂无数值" : String(figure.value)}</dd></div>)}</dl>}
@@ -66,15 +99,15 @@ export function AnalysisReport({ reference, currentConditionVersion, onClose, on
                   {(finding.calculation || finding.query_refs.length || finding.knowledge_refs.length) && <details className="report-evidence"><summary>核对计算与口径依据</summary>
                     {finding.calculation && <p>{finding.calculation}</p>}
                     {!!finding.query_refs.length && <div className="report-query-links">{finding.query_refs.map((query, queryIndex) => <button className="text-link" key={query.query_id} onClick={() => onQuery(query.query_id)}>查看计算查询 {queryIndex + 1}</button>)}</div>}
-                    {!!finding.knowledge_refs.length && <div className="evidence-row">{finding.knowledge_refs.map(ref => <KnowledgeReference key={ref.object_id + ":" + ref.path} id={ref.object_id} path={ref.path} onOpen={id => onEvidence(id, available.report.title, ref.version)} />)}</div>}
+                    {!!finding.knowledge_refs.length && <div className="evidence-row">{finding.knowledge_refs.map(ref => <KnowledgeReference key={ref.object_id + ":" + ref.path} id={ref.object_id} path={ref.path} onOpen={id => onEvidence(id, body.report.title, ref.version)} />)}</div>}
                   </details>}
                 </section>))}</section>
-              {!!available.report.charts.length && <section className="report-charts" aria-label="分析图表"><h4>图表与数据</h4>{available.report.charts.map((chart, index) => {
-                const result = available.chart_results.find(result => result.query_id === chart.query_id && result.result_ref === chart.result_ref);
-                const sourceLabels = available.report.evidence.flatMap((evidence, sourceIndex) => evidence.findings.some(finding => finding.query_refs.some(query => query.query_id === chart.query_id && query.result_ref === chart.result_ref)) ? ["来源 " + (sourceIndex + 1)] : []);
-                return result ? <ReportChart key={index} chart={chart} result={result} sourceLabels={sourceLabels} /> : <p key={index} className="report-state" role="status">该图表的数据暂不可用，请返回对话核对。</p>;
+              {!!body.report.charts.length && <section className="report-charts" aria-label="分析图表"><h4>图表与数据</h4>{body.report.charts.map((chart, index) => {
+                const result = chartResults.find(result => result.query_id === chart.query_id && result.result_ref === chart.result_ref);
+                const sourceLabels = body.report.evidence.flatMap((evidence, sourceIndex) => evidence.findings.some(finding => finding.query_refs.some(query => query.query_id === chart.query_id && query.result_ref === chart.result_ref)) ? ["来源 " + (sourceIndex + 1)] : []);
+                return result ? <ReportChart key={index} chart={chart} result={result} sourceLabels={sourceLabels} /> : <p key={index} className="report-state" role="status">该图表的数据暂不可用（原结果已过期，报告正文仍为当时记录）；需要最新数据请返回对话重新查询。</p>;
               })}</section>}
-            </article> : null}
+            </article>}
   </Modal>;
 }
 

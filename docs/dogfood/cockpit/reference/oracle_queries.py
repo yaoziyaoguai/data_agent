@@ -130,6 +130,15 @@ SELECT COUNT(*) AS final_attempt_turns,SUM(a.outcome='succeeded') AS succeeded,
  ROUND(SUM(a.outcome='succeeded')*1.0/NULLIF(COUNT(*),0),6) AS final_success_rate,
  SUM(COALESCE(h.n,0)) AS final_attempt_hypotheses,ROUND(AVG(COALESCE(h.n,0)),6) AS mean_hypotheses
 FROM final_asr a LEFT JOIN hc h ON h.asr_attempt_id=a.asr_attempt_id WHERE a.final_rank=1;""",'final_attempt_turns succeeded final_success_rate final_attempt_hypotheses mean_hypotheses')
+# 2026-11-05合成定义：最终率保原分母；候选均值只含最终成功尝试，含零候选。
+put('final_successful_attempt_candidate_mean','WITH '+final_asr()+f""", candidate_counts AS (
+ SELECT h.asr_attempt_id,COUNT(*) AS n FROM syn_asr_hypothesis h
+ JOIN facts a ON a.asr_attempt_id=h.asr_attempt_id
+ WHERE h.received_at<'{CUTOFF}' GROUP BY h.asr_attempt_id)
+SELECT ROUND(SUM(a.outcome='succeeded')*1.0/NULLIF(COUNT(*),0),6) AS final_success_rate,
+ ROUND(AVG(CASE WHEN a.outcome='succeeded' THEN COALESCE(h.n,0) END),6) AS mean_candidates
+FROM final_asr a LEFT JOIN candidate_counts h ON h.asr_attempt_id=a.asr_attempt_id
+WHERE a.final_rank=1;""",'final_success_rate mean_candidates','独立新总体；旧asr_candidate_join及其冻结结果保持。候选按保存的可见行计数，不按NLU是否选中收窄。')
 put('asr_selection','WITH '+asr+',\n'+hyp+""", selected AS (SELECT h.* FROM hyp h WHERE h.selected_for_nlu=1 AND h.is_final=1)
 SELECT candidate_rank,COUNT(*) AS selected_turns,SUM(confidence_permille < (SELECT MAX(x.confidence_permille) FROM hyp x WHERE x.asr_attempt_id=h.asr_attempt_id)) AS below_max_confidence
 FROM selected h GROUP BY candidate_rank ORDER BY candidate_rank;""",'candidate_rank selected_turns below_max_confidence')

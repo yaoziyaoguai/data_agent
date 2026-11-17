@@ -32,7 +32,9 @@ export function outputStream(write: (sequence: string, text: string) => Promise<
     },
     async drain() {
       flush();
+      const lastSequence = sequence;
       await pending;
+      return lastSequence;
     },
     async close() {
       closed = true;

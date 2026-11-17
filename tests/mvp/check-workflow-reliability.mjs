@@ -11,6 +11,7 @@ const profile = {provider_id:'deepseek',model_id:'deepseek-flash',trial_id:rando
 const h = await harness({capture:true,profile,env:{DATA_AGENT_LEASE_MS:'120000',DATA_AGENT_QUERY_DELAY_SECONDS:'0'}});
 const manager = SessionManager.inMemory('/synthetic/data-agent');
 const checks = [];
+const draftBoundary=process.argv.includes('--draft-boundary');
 let run, passed = false, platformFixture, releaseValidation, lockHolder, targetVersion;
 const conditions = {time_start:'2026-01-01T00:00:00Z',time_end:'2026-02-01T00:00:00Z',timezone:'UTC',metric:'net_revenue',channel:null,group_by:[],filters:[],knowledge_refs:[],notes:''};
 const checkpoint = () => exportCheckpoint(manager,run.workspace_context.authority_revision,run.workspace_context.authority_snapshot);
@@ -32,6 +33,30 @@ const finish = async () => {
 const start = async cid => {await h.resumeWorker();run=await h.capture(cid,'继续合成可靠性验证');await h.pauseWorker();};
 const confirm = q => h.request('/queries/'+q.id+'/confirm',{operation_id:randomUUID(),draft_version:q.draft_version,condition_version:q.condition_version});
 const read = async q => (await h.request('/queries/'+q.id)).value;
+const resultAuthorities=new Map();
+const authorityKey=body=>JSON.stringify([body.query_id,body.owner_id,body.result_ref]);
+const pausePlatform=async()=>{
+  resultAuthorities.clear();
+  for(const body of h.sql("SELECT JSON_OBJECT('query_id',id,'owner_id',owner_id,'result_ref',result_ref) FROM query_requests WHERE execution_state='succeeded' AND result_ref IS NOT NULL")){
+    const response=await fetch(h.env.DATA_AGENT_PLATFORM_URL+'/result-authority',{method:'POST',headers:{authorization:'Bearer '+h.env.DATA_AGENT_INTERNAL_TOKEN,'content-type':'application/json'},body:JSON.stringify(body)});
+    assert.equal(response.status,200,'屏障前先查证真实合成平台结果');
+    resultAuthorities.set(authorityKey(body),await response.json());
+  }
+  await h.pausePlatform();
+};
+const platformServer=handler=>createServer(async(req,res)=>{
+  let raw='';for await(const part of req)raw+=part;
+  assert.equal(req.headers.authorization,'Bearer '+h.env.DATA_AGENT_INTERNAL_TOKEN);
+  const body=JSON.parse(raw);
+  if(req.url==='/result-authority'){
+    // 校验/提交屏障不截住独立的历史访问查证；只回放同身份的真实合成平台回执。
+    const authority=resultAuthorities.get(authorityKey(body));
+    res.writeHead(authority?200:404,{'content-type':'application/json'});
+    res.end(JSON.stringify(authority??{code:'not_available'}));
+    return;
+  }
+  await handler(req,res,body);
+});
 const withdrawResults = async cid => {
   for (const m of h.sql(`SELECT JSON_OBJECT('id',id) FROM conversation_messages WHERE conversation_id='${cid}' AND client_key LIKE 'server:query-result:%' AND disposition='pending'`)) {
     assert.equal((await h.request(`/conversations/${cid}/messages/${m.id}/withdraw`,{operation_id:randomUUID()})).status,200);
@@ -55,6 +80,26 @@ try {
   const metadataResponse=await fetch(h.env.DATA_AGENT_PLATFORM_URL+'/validate',{method:'POST',headers:{authorization:'Bearer '+h.env.DATA_AGENT_INTERNAL_TOKEN,'content-type':'application/json'},body:JSON.stringify({sql:'SELECT 1',parameters:{}})});
   assert.equal(metadataResponse.status,200);targetVersion=(await metadataResponse.json()).target_version;
   assert.equal(targetVersion,'2','来源快照修订沿已确定的默认版本2');
+  {
+    const cid=await h.create();await h.pauseWorker();
+    const failed=await h.send(cid,'这是一条此前失败且尚未归属的合成输入。');
+    // 仅历史失败状态是存储夹具；当前归属、草稿保存和执行确认走正式入口。
+    h.sql(`UPDATE background_jobs SET state='failed' WHERE message_id='${failed.message_id}';
+      UPDATE conversation_messages SET disposition='failed' WHERE id='${failed.message_id}'`);
+    await start(cid);
+    const task=await update({conditions:{...conditions,source_limits:null}});
+    const prepared=await draft(task,'SELECT 17 AS amount');
+    assert.equal(prepared.execution_state,'not_submitted');assert.equal(prepared.confirmation_state,'awaiting_confirmation');
+    const refused=await confirm(prepared);assert.equal(refused.status,409,JSON.stringify(refused.value));
+    assert.equal(refused.value.code,'message_pending','其他旧失败输入继续阻断执行确认');
+    const after=await read(prepared);assert.equal(after.execution_state,'not_submitted');assert.equal(after.confirmation_state,'awaiting_confirmation');
+    const original=h.sql(`SELECT JSON_OBJECT('disposition',disposition,'routing_state',routing_state) FROM conversation_messages WHERE id='${failed.message_id}'`)[0];
+    assert.deepEqual(original,{disposition:'failed',routing_state:'pending'},'准备草稿不更改旧失败输入的身份和状态');
+    checks.push({id:'IA01',name:'旧失败输入未归属时，当前消息正确归属仍可保存未执行草稿；执行确认继续拒绝，旧输入和草稿执行权不变',passed:true});
+    assert.equal((await h.request('/conversations/'+cid+'/cancel-run',{run_id:run.run_id,lease_epoch:run.lease_epoch})).status,200);
+    h.releaseRun(run.run_id);
+  }
+  if(!draftBoundary){
   const cid=await h.create();await start(cid);
   const task=await update({});
   const wrongRoute={run_id:run.run_id,lease_epoch:run.lease_epoch,sdk_tool_call_id:randomUUID(),tool_name:'update_analysis_task',arguments:{action:'route',task_id:task.task_id,expected_version:task.condition_version,goal:'',question:null,options:[],condition_patch:{set:{channel:'app'},unset:[]}},checkpoint:checkpoint()};
@@ -107,14 +152,18 @@ try {
   const interleavedAncestor=await draft(task,'SELECT 33 AS interleaved_original');
   const interleavedInput={...replayInput,run_id:run.run_id,lease_epoch:run.lease_epoch,sdk_tool_call_id:randomUUID(),arguments:{...replayInput.arguments,sql:'SELECT 34 AS interleaved_revision',replaces_query_id:interleavedAncestor.id},checkpoint:checkpoint()};
   assert.equal((await h.internal('/internal/data/tool-calls',interleavedInput)).status,200);
-  await h.pausePlatform();let validationCount=0,arrivedAtValidation;
+  await pausePlatform();let validationCount=0,arrivedAtValidation;
+  const platformPaths=[];
   const validationArrived=new Promise(r=>arrivedAtValidation=r),validationHeld=new Promise(r=>releaseValidation=r);
-  platformFixture=createServer(async(req,res)=>{for await(const _part of req){};validationCount++;arrivedAtValidation();await validationHeld;res.writeHead(200,{'content-type':'application/json'});res.end(JSON.stringify({state:'passed',target_id:'synthetic-sqlite',target_version:targetVersion,dialect:'SQLite',read_only:true}));});
+  platformFixture=platformServer(async(req,res)=>{assert.equal(req.url,'/validate');platformPaths.push(req.url);validationCount++;arrivedAtValidation();await validationHeld;res.writeHead(200,{'content-type':'application/json'});res.end(JSON.stringify({state:'passed',target_id:'synthetic-sqlite',target_version:targetVersion,dialect:'SQLite',read_only:true}));});
   await new Promise(r=>platformFixture.listen(Number(new URL(h.env.DATA_AGENT_PLATFORM_URL).port),'127.0.0.1',r));
   const firstRevision=h.internal('/internal/data/tools',interleavedInput);await validationArrived;
   const waitingLocks=await holdConversation(cid);
   const retransmittedRevision=h.internal('/internal/data/tools',interleavedInput);
-  await until(()=>waitingLocks()===1,'B首次回执事务先排队');
+  await Promise.race([
+    until(()=>waitingLocks()===1,'B首次回执事务先排队'),
+    retransmittedRevision.then(response=>{throw new Error('重传未到会话锁即返回: '+JSON.stringify({response,platformPaths}));}),
+  ]);
   releaseValidation();await until(()=>waitingLocks()===2,'A保存事务随后排队');
   // InnoDB锁队列使B先读空回执，再由已排队A保存，B第二事务才取得锁。
   await releaseConversation();
@@ -126,10 +175,10 @@ try {
   checks.push({id:'IA01',name:'MySQL锁队列固定B首次空回执、A提交后继、B第二事务的交错，重传同回执且只一次平台检查',passed:true});
 
   await start(cid);
-  await h.pausePlatform();
+  await pausePlatform();
   let arrived,barrierRequests=0;
   const reached=new Promise(r=>arrived=r), held=new Promise(r=>releaseValidation=r);
-  platformFixture=createServer(async(req,res)=>{for await(const _part of req){};barrierRequests++;arrived();await held;res.writeHead(200,{'content-type':'application/json'});res.end(JSON.stringify({state:'passed',target_id:'synthetic-sqlite',target_version:targetVersion,dialect:'SQLite',read_only:true}));});
+  platformFixture=platformServer(async(req,res)=>{assert.equal(req.url,'/validate');barrierRequests++;arrived();await held;res.writeHead(200,{'content-type':'application/json'});res.end(JSON.stringify({state:'passed',target_id:'synthetic-sqlite',target_version:targetVersion,dialect:'SQLite',read_only:true}));});
   await new Promise(r=>platformFixture.listen(Number(new URL(h.env.DATA_AGENT_PLATFORM_URL).port),'127.0.0.1',r));
   const unroutedInput={run_id:run.run_id,lease_epoch:run.lease_epoch,sdk_tool_call_id:randomUUID(),tool_name:'request_query',arguments:{task_id:task.task_id,condition_version:task.condition_version,sql:'SELECT 10 AS other_amount',parameters:{},target_id:'synthetic-sqlite',replaces_query_id:guardCandidate.id,summary:'未归属修订',knowledge_refs:[]},checkpoint:checkpoint()};
   assert.equal((await h.internal('/internal/data/tool-calls',unroutedInput)).status,200);
@@ -253,11 +302,9 @@ try {
   await start(cid);assert.equal(run.workspace_context.selected_skills.length,0);await finish();
   checks.push({id:'IA09',name:'同操作同参返回原回执，跨资产/会话异参拒绝；重传旧回执不重新激活已改版Skill',passed:true});
 
-  await h.pausePlatform();
+  await pausePlatform();
   let submits=0,lookups=0,mode='reject';
-  platformFixture=createServer(async(req,res)=>{
-    for await(const _part of req){};
-    assert.equal(req.headers.authorization,'Bearer '+h.env.DATA_AGENT_INTERNAL_TOKEN);
+  platformFixture=platformServer(async(req,res)=>{
     if(req.url==='/submit')submits++;if(req.url==='/lookup')lookups++;
     const code=req.url==='/submit'?(mode==='reject'?'sql_not_supported':'outcome_unknown'):'not_available';
     res.writeHead(409,{'content-type':'application/json'});res.end(JSON.stringify({code}));
@@ -268,19 +315,19 @@ try {
   assert.equal(submits,1);assert.equal(lookups,0);assert.equal((await read(next)).error,'sql_not_supported');await withdrawResults(cid);
   checks.push({id:'IA06',name:'平台检查后明确拒绝提交进入失败，只提交一次',passed:true});
   await new Promise(r=>platformFixture.close(r));platformFixture=undefined;await h.resumePlatform();
-  await start(cid);await update({action:'route'});const changedTarget=await draft(task,'SELECT 45');await finish();await h.pausePlatform();
+  await start(cid);await update({action:'route'});const changedTarget=await draft(task,'SELECT 45');await finish();await pausePlatform();
   submits=0;lookups=0;
-  platformFixture=createServer(async(req,res)=>{let raw='';for await(const chunk of req)raw+=chunk;
-    if(req.url==='/submit'){submits++;assert.equal(JSON.parse(raw).target_version,targetVersion,'实际提交沿持久目标版本');}else lookups++;
+  platformFixture=platformServer(async(req,res,body)=>{
+    if(req.url==='/submit'){submits++;assert.equal(body.target_version,targetVersion,'实际提交沿持久目标版本');}else lookups++;
     res.writeHead(409,{'content-type':'application/json'});res.end(JSON.stringify({code:'version_conflict'}));});
   await new Promise(r=>platformFixture.listen(Number(new URL(h.env.DATA_AGENT_PLATFORM_URL).port),'127.0.0.1',r));
   await confirm(changedTarget);await h.resumeWorker();await until(async()=>(await read(changedTarget)).execution_state==='failed','目标版本变化明确失败');await h.pauseWorker();
   assert.equal(submits,1);assert.equal(lookups,0);assert.equal((await read(changedTarget)).error,'version_conflict');await withdrawResults(cid);
   checks.push({id:'SOURCE-TARGET',name:'非1检查版持久保存并原版提交；平台409版本拒绝确定失败，不重复提交或查证未知',passed:true});
   await new Promise(r=>platformFixture.close(r));platformFixture=undefined;await h.resumePlatform();
-  await start(cid);await update({action:'route'});const missing=await draft(task,'SELECT 44');await finish();await h.pausePlatform();
+  await start(cid);await update({action:'route'});const missing=await draft(task,'SELECT 44');await finish();await pausePlatform();
   mode='unknown';submits=0;lookups=0;
-  platformFixture=createServer(async(req,res)=>{for await(const _part of req){};if(req.url==='/submit')submits++;else lookups++;res.writeHead(409,{'content-type':'application/json'});res.end(JSON.stringify({code:req.url==='/submit'?'outcome_unknown':'not_available'}));});
+  platformFixture=platformServer(async(req,res)=>{if(req.url==='/submit')submits++;else lookups++;res.writeHead(409,{'content-type':'application/json'});res.end(JSON.stringify({code:req.url==='/submit'?'outcome_unknown':'not_available'}));});
   await new Promise(r=>platformFixture.listen(Number(new URL(h.env.DATA_AGENT_PLATFORM_URL).port),'127.0.0.1',r));
   await confirm(missing);await h.resumeWorker();await until(async()=>(await read(missing)).execution_state==='failed','未知查证有界',30000);await h.pauseWorker();
   assert.equal(submits,3);assert.equal(lookups,3);assert.equal((await read(missing)).error,'submission_retry_exhausted');await withdrawResults(cid);
@@ -300,6 +347,7 @@ try {
   assert.equal(h.sql(`SELECT JSON_OBJECT('reserved',reserved_micros) FROM model_trials WHERE id='${profile.trial_id}'`)[0].reserved,0);
   h.releaseRun(run.run_id);
   checks.push({id:'IA08',name:'会话删除后原调用可靠usage幂等结算释放预留；异参拒绝且不能新发请求',passed:true});
+  }
   passed=true;console.log(JSON.stringify({passed,checks,officialRequests:0}));
 } finally {
   releaseValidation?.();

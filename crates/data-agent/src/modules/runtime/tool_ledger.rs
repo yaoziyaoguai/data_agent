@@ -11,6 +11,28 @@ pub async fn lock_tool_call_in_tx(
 ) -> Result<Option<LockedTool>> {
     store::lock_tool(tx, run, sdk_id).await
 }
+pub async fn read_answer_tool_in_tx(
+    tx: &mut AppTx<'_>,
+    run: &LockedRun,
+    sdk_id: &str,
+) -> Result<Option<LockedTool>> {
+    store::read_answer_tool(tx, run, sdk_id).await
+}
+pub async fn read_prepare_tool_in_tx(
+    tx: &mut AppTx<'_>,
+    run: &LockedRun,
+    sdk_id: &str,
+) -> Result<Option<LockedTool>> {
+    store::read_prepare_tool(tx, run, sdk_id).await
+}
+pub async fn read_search_cursor_in_tx(
+    tx: &mut AppTx<'_>,
+    run: &LockedRun,
+    operation: &str,
+) -> Result<String> {
+    store::read_search_cursor(tx, run, operation).await
+}
+
 pub async fn register_tool_call_in_tx(
     tx: &mut AppTx<'_>,
     run: &LockedRun,
@@ -19,6 +41,15 @@ pub async fn register_tool_call_in_tx(
 ) -> Result<String> {
     store::insert_tool(tx, run, sdk_id, fp, "update_analysis_task").await
 }
+pub async fn bind_answer_handoff_in_tx(
+    tx: &mut AppTx<'_>,
+    run: &LockedRun,
+    operation: &str,
+    handoff: &Value,
+) -> Result<()> {
+    store::bind_answer_handoff(tx, run, operation, handoff).await
+}
+
 pub async fn record_tool_receipt_in_tx(
     tx: &mut AppTx<'_>,
     tool: &LockedTool,

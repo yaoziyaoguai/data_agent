@@ -20,7 +20,7 @@ pub async fn initialize(
 ) -> Result<()> {
     if profile.is_none() {
         let base = contracts::decode("ModelProfile", store::base_profile(space))?;
-        super::configure_trial(pool, &base).await?;
+        super::ensure_default_trial(pool, &base).await?;
     }
     store::initialize(pool, space, profile).await
 }

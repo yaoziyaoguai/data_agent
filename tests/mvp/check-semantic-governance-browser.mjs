@@ -27,6 +27,8 @@ const login = async (user) => {
     .first()
     .click();
   await page.getByRole("heading", { name: "语义管理", exact: true }).waitFor();
+  await page.goto(h.url + '/#knowledge?object=' + table);
+  await page.getByRole('heading', {name: 'demo_order_detail', exact: true}).waitFor();
 };
 const logout = async () => {
   await page.getByRole("button", { name: "退出", exact: true }).click();

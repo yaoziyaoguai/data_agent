@@ -140,6 +140,7 @@ try {
           ? {
               task_id: "original-task",
               condition_version: "1",
+              conditions: input.arguments.conditions,
               question: null,
               options: [],
             }
@@ -209,6 +210,7 @@ try {
       data = {
         task_id: task.id,
         condition_version: "1",
+        conditions: args.conditions,
         question: null,
         options: [],
       };

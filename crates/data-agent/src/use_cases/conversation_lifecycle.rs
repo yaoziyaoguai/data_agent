@@ -67,8 +67,21 @@ pub async fn cancel_task(
             .await?;
         }
     }
+    runtime::reject_unstarted_task_tools_in_tx(
+        &mut tx,
+        cid,
+        task,
+        crate::types::epoch(
+            input["expected_version"]
+                .as_str()
+                .expect("validated version"),
+        )?,
+    )
+    .await?;
     let tasks = analysis::lock_tasks_in_tx(&mut tx, cid).await?;
     analysis::cancel_task_in_tx(&mut tx, &tasks, task).await?;
+    // 取消只清掉被取消任务自身的活动绑定；其他任务的条件与归属不变。
+    conversations::clear_active_task_in_tx(&mut tx, &conv, task).await?;
     analysis::record_lifecycle_receipt_in_tx(&mut tx, &ctx.user_id, operation, &command, &receipt)
         .await?;
     for query in queries::list_in_tx(&mut tx, cid)
@@ -89,15 +102,29 @@ pub async fn cancel_task(
     for message in pending {
         let mut remaining = None;
         for bound in conversations::message_task_ids_in_tx(&mut tx, &conv, &message).await? {
-            if bound != task
-                && analysis::read_task_in_tx(&mut tx, cid, &bound).await?["lifecycle"] == "active"
-            {
-                remaining = Some(bound);
+            let snapshot = analysis::read_task_in_tx(&mut tx, cid, &bound).await?;
+            if bound != task && snapshot["lifecycle"] == "active" {
+                remaining = Some((
+                    bound,
+                    snapshot["condition_version"]
+                        .as_str()
+                        .unwrap_or("0")
+                        .to_owned(),
+                ));
                 break;
             }
         }
-        if let Some(task) = remaining {
+        if let Some((task, version)) = remaining {
             conversations::resume_task_input_in_tx(&mut tx, &conv, &message, &task).await?;
+            // 混合输入取消后续接：剩余任务成为明确归属，活动绑定随之更新，
+            // 不残留被取消任务的读取范围。
+            conversations::bind_active_task_in_tx(
+                &mut tx,
+                &conv,
+                &task,
+                crate::types::epoch(&version)?,
+            )
+            .await?;
             jobs::resume_message_job_in_tx(
                 &mut tx,
                 &message,

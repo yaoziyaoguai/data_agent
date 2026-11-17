@@ -159,7 +159,7 @@ try {
     0,
   );
   assert.equal(
-    await documentReader
+    await documentReader.locator('.document-section-tools')
       .getByRole("button", { name: "提出纠错", exact: true })
       .count(),
     1,

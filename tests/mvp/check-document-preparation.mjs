@@ -36,7 +36,9 @@ const profile={provider_id:'deepseek',model_id:'deepseek-flash',trial_id:randomU
 try{
  h=await harness({keep:process.env.KEEP==='1',env:{DATA_AGENT_PREFILL_PROFILE:JSON.stringify(profile),DATA_AGENT_PREFILL_TEST:'1',DATA_AGENT_PREFILL_URL:'http://127.0.0.1:'+provider.address().port}});
  await h.pauseWorker();
- const jobs=(kind,id,version)=>h.sql(`SELECT JSON_OBJECT('state',state) FROM background_jobs WHERE kind='${kind}' AND resource_id='document-${id}' AND resource_version=${version}`);
+ const jobs=(kind,id,version)=>kind==='raw_source_index'
+  ?h.sql(`SELECT JSON_OBJECT('state',vector_state) FROM knowledge_index_jobs WHERE target_kind='source_excerpt' AND source_kind='document' AND object_id='${id}' AND version=${version}`).map(row=>({state:row.state==='pending'?'queued':row.state}))
+  :h.sql(`SELECT JSON_OBJECT('state',state) FROM background_jobs WHERE kind='${kind}' AND resource_id='document-${id}' AND resource_version=${version}`);
  const preparation=(id,revision)=>h.sql(`SELECT JSON_OBJECT('status',semantic_status,'call',call_state,'error',error_code,'segments',segments_read) FROM source_preparations WHERE source_id='document-${id}' AND revision=${revision}`)[0];
 
  // 阶段一：创建响应返回即原子登记；整理到ready只登记建议，人工正文与修订不变。

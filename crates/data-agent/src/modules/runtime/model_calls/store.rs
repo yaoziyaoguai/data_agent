@@ -3,8 +3,45 @@ use crate::{
     persistence::AppTx,
     types::{Error, Result},
 };
+use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use sqlx::{MySqlPool, Row};
+
+#[derive(Deserialize, Serialize)]
+struct MaintenanceBudget {
+    format_version: u8,
+    profile: crate::contracts::generated::ModelProfile,
+    input_tokens_upper: u64,
+    output_tokens_max: u64,
+}
+
+impl MaintenanceBudget {
+    fn for_profile(profile: &crate::contracts::generated::ModelProfile) -> Result<Self> {
+        // 官方/models与chat/completions合同：总窗口含输入/输出，输入保守取完整窗口，
+        // 不把本地分片估计或“窗口减max_tokens”当作已证计费上界。
+        // https://api-docs.deepseek.com/api/list-models/
+        let (input_peak, output_peak) = match profile.model_id.as_str() {
+            "deepseek-flash" => (300_000, 1_200_000),
+            "deepseek-v4-pro" => (1_320_000, 3_960_000),
+            _ => return Err(Error::new("budget_unavailable")),
+        };
+        if profile.provider_id != "deepseek" || !(1..=393_216).contains(&profile.output_limit) {
+            return Err(Error::new("budget_unavailable"));
+        }
+        if let Some(configuration) = &profile.configured_model
+            && (crate::types::epoch(&configuration.input_rate)? < input_peak
+                || crate::types::epoch(&configuration.output_rate)? < output_peak)
+        {
+            return Err(Error::new("budget_unavailable"));
+        }
+        Ok(Self {
+            format_version: 1,
+            profile: profile.clone(),
+            input_tokens_upper: 1_048_576,
+            output_tokens_max: profile.output_limit as u64,
+        })
+    }
+}
 
 // 使用官方高峰、缓存未命中价作保守预留；金额以整数微美元保存。
 fn model_cost(
@@ -39,11 +76,14 @@ pub(super) async fn reserve_maintenance_in_tx(
     .bind(&profile.trial_id)
     .fetch_one(tx.connection())
     .await?;
-    let reservation = model_cost(
-        profile,
-        profile.input_limit as u64,
-        profile.output_limit as u64,
-    )?;
+    let budget = MaintenanceBudget::for_profile(profile)?;
+    let configuration = serde_json::to_value(profile).map_err(|_| Error::new("invalid_input"))?;
+    if trial.get::<String, _>("configuration_fingerprint")
+        != crate::types::fingerprint(&configuration)
+    {
+        return Err(Error::new("budget_unavailable"));
+    }
+    let reservation = model_cost(profile, budget.input_tokens_upper, budget.output_tokens_max)?;
     if trial.get::<i64, _>("valid") == 0
         || trial.get::<String, _>("state") != "active"
         || trial
@@ -60,7 +100,9 @@ pub(super) async fn reserve_maintenance_in_tx(
     {
         return Err(Error::new("budget_exhausted"));
     }
-    sqlx::query("INSERT INTO maintenance_model_calls(id,trial_id,state,reserved_micros) VALUES(?,?,'issued',?)").bind(attempt).bind(&profile.trial_id).bind(reservation).execute(tx.connection()).await?;
+    sqlx::query("INSERT INTO maintenance_model_calls(id,trial_id,state,reserved_micros,budget_json) VALUES(?,?,'issued',?,?)")
+        .bind(attempt).bind(&profile.trial_id).bind(reservation)
+        .bind(sqlx::types::Json(budget)).execute(tx.connection()).await?;
     sqlx::query("UPDATE model_trials SET allocated_calls=allocated_calls+1,reserved_micros=reserved_micros+? WHERE id=?").bind(reservation).bind(&profile.trial_id).execute(tx.connection()).await?;
     Ok(())
 }
@@ -86,9 +128,36 @@ pub(super) async fn settle_maintenance_in_tx(
     if input > 100000000 || output > 100000000 {
         return Err(Error::new("model_usage_unknown"));
     };
-    let cost = model_cost(profile, input, output)?;
-    let breached = input > profile.input_limit as u64 || output > profile.output_limit as u64;
-    sqlx::query("UPDATE model_trials SET spent_micros=spent_micros+?,reserved_micros=reserved_micros-?,state=IF(?,'breached',state) WHERE id=?").bind(cost).bind(call.get::<u64,_>("reserved_micros")).bind(breached).bind(&profile.trial_id).execute(tx.connection()).await?;
+    let trial_id: String = call.get("trial_id");
+    let budget = if let Some(budget) =
+        call.get::<Option<sqlx::types::Json<MaintenanceBudget>>, _>("budget_json")
+    {
+        if budget.format_version != 1 || budget.profile.trial_id != trial_id {
+            return Err(Error::new("budget_unavailable"));
+        }
+        budget.0
+    } else {
+        // 旧issued只能用原trial不可变指纹匹配的原profile结算，保持旧输入限额；
+        // 缺快照时不能借当前选择给旧调用补新上界、转trial或释放unknown。
+        let fingerprint: String =
+            sqlx::query_scalar("SELECT configuration_fingerprint FROM model_trials WHERE id=?")
+                .bind(&trial_id)
+                .fetch_one(tx.connection())
+                .await?;
+        let original = serde_json::to_value(profile).map_err(|_| Error::new("invalid_input"))?;
+        if profile.trial_id != trial_id || crate::types::fingerprint(&original) != fingerprint {
+            return Err(Error::new("budget_unavailable"));
+        }
+        MaintenanceBudget {
+            format_version: 0,
+            profile: profile.clone(),
+            input_tokens_upper: profile.input_limit as u64,
+            output_tokens_max: profile.output_limit as u64,
+        }
+    };
+    let cost = model_cost(&budget.profile, input, output)?;
+    let breached = input > budget.input_tokens_upper || output > budget.output_tokens_max;
+    sqlx::query("UPDATE model_trials SET spent_micros=spent_micros+?,reserved_micros=reserved_micros-?,state=IF(?,'breached',state) WHERE id=?").bind(cost).bind(call.get::<u64,_>("reserved_micros")).bind(breached).bind(&trial_id).execute(tx.connection()).await?;
     sqlx::query("UPDATE maintenance_model_calls SET state='settled',usage_json=? WHERE id=?")
         .bind(sqlx::types::Json(usage))
         .bind(attempt)
@@ -97,6 +166,20 @@ pub(super) async fn settle_maintenance_in_tx(
     if breached {
         return Err(Error::new("budget_exhausted"));
     }
+    Ok(())
+}
+
+pub(super) async fn ensure_default_trial(
+    pool: &MySqlPool,
+    profile: &crate::contracts::generated::ModelProfile,
+) -> Result<()> {
+    let configuration = serde_json::to_value(profile).map_err(|_| Error::new("invalid_input"))?;
+    // 默认引导仅补缺行；升级后的默认值不能重配既有账本或重置其状态。
+    sqlx::query("INSERT INTO model_trials(id,configuration_fingerprint,call_limit,cost_limit_micros,expires_at) VALUES(?,?,NULL,NULL,NULL) ON DUPLICATE KEY UPDATE id=id")
+        .bind(&profile.trial_id)
+        .bind(crate::types::fingerprint(&configuration))
+        .execute(pool)
+        .await?;
     Ok(())
 }
 
@@ -122,13 +205,15 @@ pub(super) async fn configure_embedding_trial(
     pool: &MySqlPool,
     profile: &crate::contracts::generated::EmbeddingProfile,
 ) -> Result<()> {
+    // 普通维护配置无累计限额与期限；仅显式限额的维护试用给一小时窗口。
+    let explicit_limit = profile.call_limit.is_some() || profile.cost_limit_micros.is_some();
     configure_budget(
         pool,
         &serde_json::to_value(profile).map_err(|_| Error::new("invalid_input"))?,
         &profile.trial_id,
-        Some(profile.call_limit as u32),
-        Some(&profile.cost_limit_micros),
-        Some(3600),
+        profile.call_limit.map(|limit| limit as u32),
+        profile.cost_limit_micros.as_deref(),
+        explicit_limit.then_some(3600),
     )
     .await
 }
@@ -218,7 +303,10 @@ pub(super) async fn reserve_model_call(
         .bind(&input.call_attempt_id)
         .execute(tx.connection())
         .await?;
-    if scope.get::<u32, _>("issued_calls") >= scope.get::<u32, _>("call_limit") {
+    if scope
+        .get::<Option<u32>, _>("call_limit")
+        .is_some_and(|limit| scope.get::<u32, _>("issued_calls") >= limit)
+    {
         return Err(Error::new("budget_exhausted"));
     }
     if scope.get::<u8, _>("model_failure_streak") >= 3 {

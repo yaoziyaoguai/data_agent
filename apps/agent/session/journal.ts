@@ -54,12 +54,15 @@ function syncJournal(path:string) {
 export function createStoredSession(cwd:string) {
   return SessionManager.create(cwd,privateDirectory());
 }
-export function openStoredSession(cwd:string,file:string,sessionId:string,leaf:string|null) {
-  const {path}=readJournal(file,sessionId,leaf);
+function openJournal(cwd:string,path:string,sessionId:string,leaf:string|null) {
   const manager=SessionManager.open(path,privateDirectory(),cwd);
   if(manager.getSessionId()!==sessionId)throw new Error('checkpoint_storage_invalid');
   if(leaf===null)manager.resetLeaf();else manager.branch(leaf);
   return manager;
+}
+export function openStoredSession(cwd:string,file:string,sessionId:string,leaf:string|null) {
+  const {path}=readJournal(file,sessionId,leaf);
+  return openJournal(cwd,path,sessionId,leaf);
 }
 export function importStoredSession(cwd:string,entries:unknown[],leaf:string|null) {
   const valid=validateEntries(entries,undefined,leaf);
@@ -76,9 +79,9 @@ export function importStoredSession(cwd:string,entries:unknown[],leaf:string|nul
   const byId=new Map(existing.map(entry=>[entry.id,entry]));
   if(valid.some(entry=>!isDeepStrictEqual(byId.get(entry.id),entry)))throw new Error('checkpoint_conflict');
   syncJournal(path);
-  return openStoredSession(cwd,file,sessionId,leaf);
+  return openJournal(cwd,path,sessionId,leaf);
 }
-export function storedReference(manager:SessionManager) {
+export function storedReference(manager:SessionManager,verifyPersisted=false) {
   const file=manager.getSessionFile();
   if(!manager.isPersisted()||!file)return null;
   if(dirname(file)!==privateDirectory())throw new Error('checkpoint_storage_invalid');
@@ -87,7 +90,8 @@ export function storedReference(manager:SessionManager) {
     if(manager.getEntries().some(entry=>entry.type==='message'&&['user','assistant'].includes(entry.message.role)))throw new Error('checkpoint_storage_missing');
     return null;
   }
-  readJournal(basename(file),manager.getSessionId(),manager.getLeafId());
+  // 正常运行由SDK同步追加；异常出口才核内存leaf是否实际落盘。
+  if(verifyPersisted)readJournal(basename(file),manager.getSessionId(),manager.getLeafId());
   syncJournal(file);
   return {kind:'pi_session' as const,file:basename(file),session_id:manager.getSessionId()};
 }

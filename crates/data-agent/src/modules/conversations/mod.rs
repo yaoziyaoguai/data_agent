@@ -7,6 +7,7 @@ pub use store::{
     lock_conversation_in_tx, read_events_in_tx, read_message_in_tx, release_turn_in_tx,
     renew_turn_in_tx,
 };
+pub use store::{active_task_ref_in_tx, bind_active_task_in_tx, clear_active_task_in_tx};
 pub use store::{
     assert_routed_in_tx, confirmation_blocked_in_tx, delete_in_tx, enqueue_result_input_in_tx,
     has_pending_input_in_tx, lock_for_cleanup_in_tx, other_input_blocks_confirmation_in_tx,
@@ -14,9 +15,12 @@ pub use store::{
 };
 pub use store::{read_model_selection, save_model_selection_in_tx};
 
-pub use store::model_history_in_tx;
+pub use store::{model_history_in_tx, output_event_range_in_tx};
 
-pub use store::result_query_for_message_in_tx;
+pub use store::{
+    first_query_changed_seq_in_tx, report_first_saved_seq_in_tx, result_query_for_message_in_tx,
+    result_query_map_in_tx,
+};
 pub use store::{
     message_task_ids_in_tx, resume_task_input_in_tx, skip_task_input_in_tx, task_pending_ids_in_tx,
 };

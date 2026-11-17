@@ -21,6 +21,18 @@ async fn harness_pool() -> MySqlPool {
     .unwrap()
 }
 
+// 生产保存组合：模块保存（或整理应用）＋保存后跨模块登记同事务执行；
+// 扇出作业由组合层登记，测试按同组合驱动。
+async fn register_saved_in_tx(
+    tx: &mut AppTx<'_>,
+    ctx: &AccessContext,
+    saved: &[serde_json::Value],
+) {
+    data_agent::use_cases::dependency_registration::after_content_saved_in_tx(tx, ctx, saved)
+        .await
+        .unwrap();
+}
+
 // 构造：source_heads v2 + prepare_source 作业置终态 + 指定错误码的failed准备行，
 // C 的陈述引用该来源v2并支持引用B，clear_override 后成为有效依赖；B改版触发扇出。
 async fn arrange(pool: &MySqlPool, source: &str, error_code: Option<&str>, job_state: &str) {
@@ -85,7 +97,7 @@ async fn arrange(pool: &MySqlPool, source: &str, error_code: Option<&str>, job_s
     tx.commit().await.unwrap();
     let citing_id = citing["id"].as_str().unwrap().to_owned();
     let mut tx = AppTx::begin(pool).await.unwrap();
-    knowledge::apply_preparation_in_tx(
+    let prepared = knowledge::apply_preparation_in_tx(
         &mut tx,
         &ctx,
         &format!("apply-citing-{source}"),
@@ -102,9 +114,10 @@ async fn arrange(pool: &MySqlPool, source: &str, error_code: Option<&str>, job_s
     )
     .await
     .unwrap();
+    register_saved_in_tx(&mut tx, &ctx, &prepared).await;
     tx.commit().await.unwrap();
     let mut tx = AppTx::begin(pool).await.unwrap();
-    knowledge::save_edit_in_tx(
+    let citing_cleared = knowledge::save_edit_in_tx(
         &mut tx,
         &ctx,
         &citing_id,
@@ -114,10 +127,11 @@ async fn arrange(pool: &MySqlPool, source: &str, error_code: Option<&str>, job_s
     )
     .await
     .unwrap();
+    register_saved_in_tx(&mut tx, &ctx, std::slice::from_ref(&citing_cleared)).await;
     tx.commit().await.unwrap();
 
     let mut tx = AppTx::begin(pool).await.unwrap();
-    knowledge::save_edit_in_tx(
+    let depended_edited = knowledge::save_edit_in_tx(
         &mut tx,
         &ctx,
         &depended_id,
@@ -127,6 +141,7 @@ async fn arrange(pool: &MySqlPool, source: &str, error_code: Option<&str>, job_s
     )
     .await
     .unwrap();
+    register_saved_in_tx(&mut tx, &ctx, std::slice::from_ref(&depended_edited)).await;
     tx.commit().await.unwrap();
 }
 

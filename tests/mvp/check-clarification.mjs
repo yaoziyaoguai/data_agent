@@ -98,6 +98,7 @@ const conditions = {
   filters: ["is_test=0", "paid_amount_cents>0"],
   knowledge_refs: [],
   notes: "付款日期范围，排除测试，先沿用原过滤条件。",
+  source_limits: null,
 };
 const revisions = (task) =>
   h.sql(
@@ -159,7 +160,9 @@ const provider = createServer(async (request, response) => {
     const body = JSON.parse(raw);
     payloadBytes.push(Buffer.byteLength(raw));
     assert.ok(Buffer.byteLength(raw) <= profile.payload_bytes_limit);
-    assert.equal(body.max_tokens, profile.output_limit);
+    // Pi原生摘要请求自带较小max_tokens（0.8×保留token，见SDK compaction），不适用冻结档位相等断言；
+    // 同check-analysis-continuation口径：只有携带业务工具的常规请求按profile.output_limit断言。
+    if (body.tools?.length) assert.equal(body.max_tokens, profile.output_limit);
     assert.deepEqual(body.thinking, { type: "disabled" });
     let step;
     if (!body.tools?.length) {

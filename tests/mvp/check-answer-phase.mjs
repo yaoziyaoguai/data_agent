@@ -81,5 +81,19 @@ try{
  assert.equal(await phase(noDraft,freshVersion),'investigating');await finish(freshVersion);
  assert.equal(await phase(noDraft,freshVersion),'investigating');
  checks.push('旧结果运行即使route到当前版本，无新草稿的新条件仍未回答');
+
+ const patch=await h.create();await start(patch);const patchTask=await create();
+ // §6.1：unset省略即空集合——只应用set，未声明字段不清空；null仍非法；显式数组仍清除指定字段。
+ const omitted=await tool('update_analysis_task',{action:'revise',task_id:patchTask.task_id,expected_version:patchTask.condition_version,goal:'省略unset的修订',condition_patch:{set:{channel:'app'}},options:[]});
+ let current=await tool('read_analysis_task',{task_id:omitted.task_id});
+ assert.equal(current.conditions.channel,'app');
+ assert.equal(current.conditions.metric,conditions.metric,'省略unset不清空未声明字段');
+ const illegal=await h.internal('/internal/data/tools',{run_id:run.run_id,lease_epoch:run.lease_epoch,sdk_tool_call_id:randomUUID(),tool_name:'update_analysis_task',arguments:{action:'revise',task_id:omitted.task_id,expected_version:omitted.condition_version,goal:'null unset非法',condition_patch:{set:{},unset:null},options:[]},checkpoint:checkpoint()});
+ assert.equal(illegal.status,400,'unset:null仍非法');
+ const cleared=await tool('update_analysis_task',{action:'revise',task_id:omitted.task_id,expected_version:omitted.condition_version,goal:'显式unset仍清除',condition_patch:{set:{},unset:['channel']},options:[]});
+ current=await tool('read_analysis_task',{task_id:cleared.task_id});
+ assert.equal(current.conditions.channel,null,'显式数组仍清除指定字段');
+ await finish(cleared);
+ checks.push('ConditionPatch.unset省略即空集合，null非法，显式数组仍清除');
  passed=true;console.log(JSON.stringify({passed,checks,officialRequests:0}));
 }finally{await writeFile('.local/checks/mvp-answer-phase.json',JSON.stringify({passed,checks,officialRequests:0},null,2));await h.close();}

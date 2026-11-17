@@ -17,34 +17,89 @@ def read_query(db, sql, parameters=None):
     return [list(row) for row in cursor.fetchall()], [v[0] for v in cursor.description]
 
 
-def customer_expectation(db, columns, known):
-    """主指标及可选匿名边界逐列绑定；不能扫描哪列恰好等于参考数。"""
-    anonymous, _ = read_query(db, """SELECT COUNT(DISTINCT order_id), COUNT(*) FROM demo_order_detail
-        WHERE customer_id IS NULL AND is_test=0 AND paid_amount_cents>0
-          AND paid_at>='2026-01-01T00:00:00Z' AND paid_at<'2026-02-01T00:00:00Z'""")
+def customer_roles(columns):
+    """先区分客户分组维度与度量，再拒绝未知列和重复角色。"""
     if len(columns) == 1:
-        return [[known]]
-    expected, roles = [], set()
+        return ['known_customers']
+    roles = []
     for column in columns:
         name = column.lower()
-        if re.search(r'unknown|anonymous|未知|匿名', name):
+        if re.search(r'customer|客户', name) and re.search(r'segment|group|category|class|type|分组|类别|分类|类型', name):
+            role = 'customer_group'
+        elif re.search(r'unknown|anonymous|未知|匿名', name):
             if re.search(r'^(has|any|exists)_(unknown|anonymous)', name) or name == 'unknown_boundary_present':
-                role, value = 'anonymous_present', int(anonymous[0][1] > 0)
-            elif re.search(r'order|订单', name):
-                role, value = 'anonymous_orders', anonymous[0][0]
+                role = 'anonymous_present'
             elif re.search(r'line|row|行', name):
-                role, value = 'anonymous_lines', anonymous[0][1]
+                role = 'anonymous_lines'
+            elif re.search(r'order|订单', name):
+                role = 'anonymous_orders'
             else:
                 return None
         elif re.search(r'customer|客户|^uv$', name):
-            role, value = 'known_customers', known
+            role = 'known_customers'
+        # order_line等复合名表达明细行，比其中的order更具体。
+        elif re.search(r'line|row|行', name):
+            role = 'paid_lines'
+        elif re.search(r'order|订单', name):
+            role = 'paid_orders'
         else:
             return None
         if role in roles:
             return None
-        roles.add(role)
-        expected.append(value)
-    return [expected] if 'known_customers' in roles else None
+        roles.append(role)
+    return roles if 'known_customers' in roles else None
+
+
+def customer_expectation(db, roles, known):
+    """计数全部来自独立数据；分组使用固定语义标识，不抄模型输出标签或数值。"""
+    if roles is None:
+        return None
+    if 'customer_group' in roles:
+        if any(role.startswith('anonymous_') for role in roles):
+            return None
+        groups, _ = read_query(db, """SELECT customer_id IS NULL, COUNT(DISTINCT customer_id),
+            COUNT(DISTINCT order_id), COUNT(*) FROM demo_order_detail
+            WHERE is_test=0 AND paid_amount_cents>0
+              AND paid_at>='2026-01-01T00:00:00Z' AND paid_at<'2026-02-01T00:00:00Z'
+            GROUP BY customer_id IS NULL ORDER BY customer_id IS NULL""")
+        expected = []
+        for anonymous, customers, orders, lines in groups:
+            values = {'customer_group': 'anonymous' if anonymous else 'known',
+                      'known_customers': customers, 'paid_orders': orders, 'paid_lines': lines}
+            expected.append([values[role] for role in roles])
+        return expected
+    counts, _ = read_query(db, """SELECT
+        COUNT(DISTINCT CASE WHEN customer_id IS NULL THEN order_id END),
+        COUNT(CASE WHEN customer_id IS NULL THEN 1 END), COUNT(DISTINCT order_id), COUNT(*)
+        FROM demo_order_detail WHERE is_test=0 AND paid_amount_cents>0
+          AND paid_at>='2026-01-01T00:00:00Z' AND paid_at<'2026-02-01T00:00:00Z'""")
+    anonymous_orders, anonymous_lines, paid_orders, paid_lines = counts[0]
+    values = {'known_customers': known, 'anonymous_present': int(anonymous_lines > 0),
+              'anonymous_orders': anonymous_orders, 'anonymous_lines': anonymous_lines,
+              'paid_orders': paid_orders, 'paid_lines': paid_lines}
+    return [[values[role] for role in roles]]
+
+
+def customer_rows_match(actual, expected, roles):
+    if expected is None:
+        return False
+    if 'customer_group' in roles:
+        group_index = roles.index('customer_group')
+        canonical = []
+        for row in actual:
+            label = row[group_index]
+            if not isinstance(label, str):
+                return False
+            label = label.lower()
+            if re.search(r'unknown|anonymous|unidentified|未知|匿名', label):
+                group = 'anonymous'
+            elif re.search(r'known|identified|已知|实名', label):
+                group = 'known'
+            else:
+                return False
+            canonical.append([group if i == group_index else value for i, value in enumerate(row)])
+        actual = canonical
+    return sorted(actual, key=lambda row: json.dumps(row)) == sorted(expected, key=lambda row: json.dumps(row))
 
 
 def customer_variations(db):
@@ -212,13 +267,15 @@ def evaluate(sample):
                     wanted = net_revenue_expectation(db, variant_columns, channel, tagged)
                     variations.append({'name': name, 'passed': wanted is not None and actual == wanted, 'rows': actual, 'expected_rows': wanted})
             if reference['id'] == 'Q02':
-                expected = customer_expectation(db, columns, reference['expected_rows'][0][0])
+                roles = customer_roles(columns)
+                expected = customer_expectation(db, roles, reference['expected_rows'][0][0])
                 reference_sql = (ROOT / 'docs/sources/evaluation' / reference['sql_file']).read_text()
                 for name in customer_variations(db):
                     actual, variant_columns = read_query(db, sample['sql'], sample.get('parameters'))
                     known, _ = read_query(db, reference_sql)
-                    wanted = customer_expectation(db, variant_columns, known[0][0])
-                    variations.append({'name': name, 'passed': wanted is not None and actual == wanted, 'rows': actual, 'expected_rows': wanted})
+                    variant_roles = customer_roles(variant_columns)
+                    wanted = customer_expectation(db, variant_roles, known[0][0])
+                    variations.append({'name': name, 'passed': customer_rows_match(actual, wanted, variant_roles), 'rows': actual, 'expected_rows': wanted})
             if reference['id'] in ('Q04','Q05','Q10'):
                 expected=refund_expectation(db,reference['id'],columns)
                 for name in refund_variations(db,reference['id']):
@@ -232,9 +289,14 @@ def evaluate(sample):
             db.set_authorizer(None)
     def normal(values):
         return sorted(values, key=lambda row: json.dumps(row, ensure_ascii=False))
-    matched=refund_rows_match(rows,expected,columns) if reference['id'] in ('Q04','Q05','Q10') else expected is not None and normal(rows)==normal(expected)
+    if reference['id'] == 'Q02':
+        matched = customer_rows_match(rows, expected, roles)
+    else:
+        matched=refund_rows_match(rows,expected,columns) if reference['id'] in ('Q04','Q05','Q10') else expected is not None and normal(rows)==normal(expected)
     return {'case_id': reference['id'], 'passed': matched and all(v['passed'] for v in variations),
             'rows': rows, 'expected_rows': expected, 'columns': columns, 'data_variations': variations,
+            # 形状未覆盖（无法自动判分）与已核算数值不符分开记录；两者都可能 passed=false，不能互相冒充。
+            'scoring': 'cannot_autoscore_shape' if expected is None else 'compared',
             'evidence_kind': 'independent_synthetic_result',
             'limitation': '只证明该SQL在独立合成数据上的结果；语言解释、引用和适用边界另需审查。'}
 

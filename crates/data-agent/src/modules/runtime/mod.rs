@@ -13,24 +13,42 @@ pub use checkpoints::read_conversation_checkpoint_in_tx;
 pub use checkpoints::{bind_delivery_checkpoint_in_tx, read_delivery_checkpoint_in_tx};
 pub use checkpoints::{read_checkpoint_in_tx, save_checkpoint_in_tx};
 pub use model_calls::{
-    configure_embedding_trial, configure_trial, finalize_model_call_in_tx,
+    configure_embedding_trial, configure_trial, ensure_default_trial, finalize_model_call_in_tx,
     reserve_maintenance_in_tx, reserve_model_call_in_tx, send_model_call_in_tx,
     settle_maintenance_in_tx,
 };
-pub use outputs::{append_output_in_tx, read_output_text_in_tx};
+pub use outputs::{
+    FinalOutput, OutputChunkRange, OutputReadBinding, OutputReadUnit, answer_read_unit,
+    append_output_in_tx, display_from_preparation, prepared_dependencies, read_bound_output_in_tx,
+    read_output_bindings_in_tx, read_output_text_in_tx, read_rendered_in_tx, substitute,
+};
 pub use runs::{
     cancel_run_in_tx, commit_run_in_tx, interrupt_run_in_tx, lock_run_in_tx, start_run_in_tx,
 };
 pub use store::{
-    LockedRun, LockedTool, RunStart, fail_message_runs_in_tx, locate_run, locate_run_message,
-    read_budget_profile_in_tx, read_runs_in_tx, recorded_tool_operations_in_tx, reject_tool_in_tx,
+    LockedRun, LockedTool, RunStart, control_deliveries_in_tx, fail_message_runs_in_tx, locate_run,
+    locate_run_message, read_budget_profile_in_tx, read_runs_in_tx, recorded_tool_operations_in_tx,
+    reject_tool_in_tx,
 };
-pub use tool_ledger::{lock_tool_call_in_tx, record_tool_receipt_in_tx, register_tool_call_in_tx};
+pub use store::{
+    bind_tool_task_in_tx, reject_unstarted_task_tools_in_tx, start_tool_execution_in_tx,
+};
+pub use store::{
+    finalize_answer_handoff_in_tx, read_answer_handoffs_in_tx,
+    read_frozen_answer_authorities_in_tx, save_output_answer_parts_in_tx,
+};
+pub use tool_ledger::bind_answer_handoff_in_tx;
+pub use tool_ledger::{
+    lock_tool_call_in_tx, read_answer_tool_in_tx, read_prepare_tool_in_tx,
+    read_search_cursor_in_tx, record_tool_receipt_in_tx, register_tool_call_in_tx,
+};
 
 pub use tool_ledger::register_named_tool_in_tx;
 
+pub use store::assert_tools_settled_in_tx;
 pub use store::{read_authority_in_tx, save_authority_in_tx};
 
 pub use store::budget_message_in_tx;
-pub use store::delivery_task_refs_in_tx;
-pub use store::output_states_in_tx;
+pub use store::{
+    TaskConditionUpdate, delivery_task_refs_in_tx, output_states_in_tx, task_condition_update_in_tx,
+};

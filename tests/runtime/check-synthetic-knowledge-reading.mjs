@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import {mkdir, writeFile} from 'node:fs/promises';
 import {syntheticAction} from '../../apps/agent/provider/synthetic-analysis.ts';
+import {cockpitAction} from '../../apps/agent/provider/synthetic-cockpit.ts';
 
 // 仅验证合成provider遵守工具分页合同；不代表真实模型的检索或SQL质量。
 const conditions = {
@@ -86,6 +87,43 @@ try {
 
   expectGap(action(search, [firstPage, page(chars.slice(offset + 1).join(''), offset + 1, null, chars.length)]));
   checks.push('分页存在缺口时不生成查询');
+  run.tool_contract_version = 2;
+  const reference = {object_id: 'metric-refund_rate', version: '7', path: 'sql'};
+  const hit = {record_kind: 'knowledge_entry', ref: reference, name: '合成退款率', kind: 'metric', definition: sql.slice(0, 80), content_state: 'partial'};
+  const currentSearch = {hits: [hit], personal_memories: []};
+  const currentPage = legacy => ({items: [{kind: 'knowledge', ref: {...reference, version: legacy.version}, state: 'ok',
+    content: legacy.entries[0].effective_value, content_page: legacy.entries[0].content_page}]});
+  assert.deepEqual(action(currentSearch), {tool: 'read_knowledge', args: {items: [{kind: 'knowledge', ref: reference, offset: 0, limit: 4096}]}});
+  const currentFirst = currentPage(firstPage), currentLast = currentPage(lastPage);
+  assert.deepEqual(action(currentSearch, [currentFirst]), {tool: 'read_knowledge', args: {items: [{kind: 'knowledge', ref: reference, offset, limit: 4096}]}});
+  const currentComplete = action(currentSearch, [currentFirst, currentLast]);
+  assert.equal(currentComplete.tool, 'request_query');
+  assert.equal(currentComplete.args.sql, complete.args.sql);
+  expectGap(action(currentSearch, [{items: [{kind: 'knowledge', ref: reference, state: 'not_available'}]}]));
+  expectGap(action(currentSearch, [{items: [{kind: 'knowledge', ref: reference, state: 'stale'}]}]));
+  checks.push('v2沿命中ref及逐项状态消费同版连续SQL页，旧版与不可用不生成查询');
+  const rawCitation = {source: {kind: 'document', id: 'document-cockpit-asr-candidates'}, revision: '7', locator: {offset: 10, length: 20}};
+  const cockpitRun = {text: 'ASR耗时怎样统计', tool_contract_version: 2, workspace_context: {tasks: [], query_observations: [], memories: []}};
+  const rawAction = cockpitAction(cockpitRun, {messages: [{role: 'user', content: cockpitRun.text}, receipt('search_knowledge', {
+    hits: [{record_kind: 'source_excerpt', name: '端云识别与候选选择', citation: rawCitation, source_length: 60, text: '已找到的原文窗口', content_state: 'complete'}],
+  })]});
+  assert.equal(rawAction.tool, 'read_source');
+  assert.deepEqual(rawAction.args.citation.source, rawCitation.source);
+  assert.equal(rawAction.args.citation.revision, '7');
+  const citation = {source: {kind: 'platform', id: 'business-guide'}, revision: '9', locator: {offset: 0, length: 120}};
+  const explanationRun = {text: '月底下单为什么不在收入里', tool_contract_version: 2, workspace_context: {tasks: [], query_observations: [], memories: []}};
+  const explain = syntheticAction(explanationRun, {messages: [{role: 'user', content: explanationRun.text}, receipt('search_knowledge', {
+    hits: [{record_kind: 'knowledge_entry', ref: {object_id: 'document-guide-3', version: '9', path: 'body'}, name: '上游与加工', kind: 'document', definition: '正文预览', citations: [citation]}],
+  })]});
+  assert.equal(explain.tool, 'read_source');
+  assert.deepEqual(explain.args.citation, citation);
+  checks.push('v2座舱raw摘录与零售知识citation均按实际来源/修订读取');
+  const legacyZeroRun = {text: 'paid_amount_cents为0是什么意思', tool_contract_version: 1, workspace_context: {tasks: [], query_observations: [], memories: []}};
+  const legacyZero = syntheticAction(legacyZeroRun, {messages: [{role: 'user', content: legacyZeroRun.text},
+    receipt('search_knowledge', {objects: []}), receipt('read_source', {source_id: 'etl', version: '1', body: 'COALESCE(p.paid, 0)'}),
+    receipt('update_analysis_task', {task_id: null, condition_version: null})]});
+  assert.match(legacyZero.text, /COALESCE|缺失|填.?0/);
+  checks.push('v1已读ETL的零付款解释保留原合同');
   passed = true;
   console.log(JSON.stringify({passed, checks, officialRequests: 0}));
 } finally {

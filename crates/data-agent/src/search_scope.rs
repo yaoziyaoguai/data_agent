@@ -1,7 +1,4 @@
-use crate::{
-    contracts,
-    types::{Error, Result},
-};
+use crate::types::{Error, Result};
 use serde_json::Value;
 use sqlx::{MySql, QueryBuilder};
 
@@ -14,8 +11,9 @@ pub struct KnowledgeSearchScope {
 }
 
 impl KnowledgeSearchScope {
-    pub fn from_input(input: &Value) -> Result<Self> {
-        contracts::validate("SearchInput", input)?;
+    // 工具入口已按SearchInput校验过参数（外部输入在对应边界只校验一次，内部传
+    // 类型）；这里只做范围含义的换算，不重复Schema校验。
+    pub fn from_validated(input: &Value) -> Result<Self> {
         let kinds = input["kinds"]
             .as_array()
             .into_iter()
@@ -169,7 +167,7 @@ mod tests {
     fn default_scope_keeps_old_calls_and_scopes_are_combined() {
         let source = object();
         assert!(KnowledgeSearchScope::default().matches(&source));
-        let scope=KnowledgeSearchScope::from_input(&json!({"query":"收入","kinds":["metric"],"related_object_id":"table-purchases","business_domain":"合成零售"})).unwrap();
+        let scope=KnowledgeSearchScope::from_validated(&json!({"query":"收入","kinds":["metric"],"related_object_id":"table-purchases","business_domain":"合成零售"})).unwrap();
         assert!(scope.matches(&source));
         assert!(
             !KnowledgeSearchScope {

@@ -1,5 +1,1180 @@
 [
   {
+    "name": "source context explains input_not_routed",
+    "schema": "WorkspaceContext",
+    "value": {
+      "tasks": [],
+      "recent_messages": [],
+      "selected_skills": [],
+      "memories": [],
+      "query_observations": [],
+      "authority_revision": "1",
+      "source_context_ready": false,
+      "source_context_blocker": "input_not_routed"
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "source context explains source_scope_unknown",
+    "schema": "WorkspaceContext",
+    "value": {
+      "tasks": [],
+      "recent_messages": [],
+      "selected_skills": [],
+      "memories": [],
+      "query_observations": [],
+      "authority_revision": "1",
+      "source_context_ready": false,
+      "source_context_blocker": "source_scope_unknown"
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "source context explains context_refresh_pending",
+    "schema": "WorkspaceContext",
+    "value": {
+      "tasks": [],
+      "recent_messages": [],
+      "selected_skills": [],
+      "memories": [],
+      "query_observations": [],
+      "authority_revision": "1",
+      "source_context_ready": false,
+      "source_context_blocker": "context_refresh_pending"
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "old source context without reason remains readable",
+    "schema": "WorkspaceContext",
+    "value": {
+      "tasks": [],
+      "recent_messages": [],
+      "selected_skills": [],
+      "memories": [],
+      "query_observations": [],
+      "authority_revision": "1",
+      "source_context_ready": false
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "unknown source blocker is rejected",
+    "schema": "WorkspaceContext",
+    "value": {
+      "tasks": [],
+      "recent_messages": [],
+      "selected_skills": [],
+      "memories": [],
+      "query_observations": [],
+      "authority_revision": "1",
+      "source_context_ready": false,
+      "source_context_blocker": "unrestricted_by_default"
+    },
+    "valid": false
+  },
+  {
+    "name": "tool receipt carries source decision reason",
+    "schema": "DataToolOutcome",
+    "value": {
+      "operation_id": "op-source-decision",
+      "tool_name": "update_analysis_task",
+      "source_context_ready": false,
+      "source_context_blocker": "source_scope_unknown",
+      "data": {
+        "task_id": "task-source",
+        "condition_version": "1",
+        "routed": true
+      }
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "explicit route can finalize the current answer without model positions",
+    "schema": "AnalysisUpdate",
+    "value": {
+      "action": "route",
+      "task_id": "synthetic-next",
+      "expected_version": "1",
+      "options": [],
+      "finalize_current_answer": true
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "create cannot finalize a different task answer",
+    "schema": "AnalysisUpdate",
+    "value": {
+      "action": "create",
+      "goal": "合成目标",
+      "options": [],
+      "finalize_current_answer": true
+    },
+    "valid": false
+  },
+  {
+    "name": "frozen answer reference contains no answer body",
+    "schema": "AnswerPartReference",
+    "value": {
+      "task_ref": {
+        "task_id": "synthetic-first",
+        "condition_version": "1"
+      },
+      "finalized_by_sdk_tool_call_id": "synthetic-route",
+      "scope_fingerprint": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "task identity alone cannot claim a finalized answer",
+    "schema": "AnswerPartReference",
+    "value": {
+      "task_ref": {
+        "task_id": "synthetic-first",
+        "condition_version": "1"
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "saved support text has an independent content page",
+    "schema": "DeliveredSupport",
+    "value": {
+      "support_id": "synthetic-long-condition",
+      "role": "prerequisite",
+      "reference": {
+        "kind": "knowledge",
+        "ref": {
+          "object_id": "synthetic-reference",
+          "version": "1",
+          "path": "body"
+        }
+      },
+      "content": "条件🧪",
+      "embedded_in": null,
+      "content_page": {
+        "offset": 0,
+        "total_chars": 12000,
+        "complete": false,
+        "next_offset": 3
+      }
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "support content continuation rejects a negative offset",
+    "schema": "DeliveredSupport",
+    "value": {
+      "support_id": "synthetic-long-condition",
+      "role": "prerequisite",
+      "reference": {
+        "kind": "knowledge",
+        "ref": {
+          "object_id": "synthetic-reference",
+          "version": "1",
+          "path": "body"
+        }
+      },
+      "content": "条件🧪",
+      "embedded_in": null,
+      "content_page": {
+        "offset": -1,
+        "total_chars": 12000,
+        "complete": false,
+        "next_offset": 3
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "host response budget is carried outside model arguments",
+    "schema": "DataToolInvocation",
+    "value": {
+      "run_id": "run",
+      "lease_epoch": "1",
+      "sdk_tool_call_id": "budget-read",
+      "tool_name": "read_source",
+      "arguments": {},
+      "checkpoint": {
+        "sdk_version": "1.3.0",
+        "leaf_id": null,
+        "entries": []
+      },
+      "response_budget": {
+        "max_bytes": 12000,
+        "estimated_tokens": 3000,
+        "projection_fingerprint": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+      }
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "knowledge support continuation reads independently without retransmitting content",
+    "schema": "KnowledgeReadInput",
+    "value": {
+      "items": [
+        {
+          "kind": "knowledge",
+          "ref": {
+            "object_id": "synthetic-rule",
+            "version": "2",
+            "path": "body"
+          },
+          "statement_id": "synthetic-rule-statement",
+          "supports_cursor": "synthetic-opaque-support-cursor",
+          "limit": 0
+        }
+      ]
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "memory body pagination cannot consume a knowledge support cursor",
+    "schema": "KnowledgeReadInput",
+    "value": {
+      "items": [
+        {
+          "kind": "memory",
+          "asset_ref": {
+            "id": "synthetic-memory",
+            "version": "1"
+          },
+          "part": "body",
+          "supports_cursor": "synthetic-opaque-support-cursor"
+        }
+      ]
+    },
+    "valid": false
+  },
+  {
+    "name": "knowledge support points only to a retained local content interval",
+    "schema": "KnowledgeReadReply",
+    "value": {
+      "items": [
+        {
+          "kind": "knowledge",
+          "ref": {
+            "object_id": "synthetic-rule",
+            "version": "2",
+            "path": "body"
+          },
+          "state": "ok",
+          "content": "规则。\n停用不计。",
+          "content_page": {
+            "offset": 0,
+            "total_chars": 9,
+            "complete": true,
+            "next_offset": null
+          },
+          "supports": [
+            {
+              "support_id": "synthetic-exception",
+              "role": "exception",
+              "reference": {
+                "kind": "knowledge",
+                "ref": {
+                  "object_id": "synthetic-support",
+                  "version": "1",
+                  "path": "body"
+                }
+              },
+              "content": null,
+              "embedded_in": {
+                "field": "scope_text",
+                "locator": {
+                  "offset": 0,
+                  "length": 5
+                }
+              },
+              "delivered_in": {
+                "path": "/items/0/content",
+                "locator": {
+                  "offset": 4,
+                  "length": 5
+                }
+              }
+            }
+          ],
+          "supports_complete": true,
+          "citations": [],
+          "content_state": "complete",
+          "support_state": "delivered",
+          "continuation": {
+            "content_next_offset": null,
+            "supports_next_cursor": null
+          }
+        }
+      ]
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "human knowledge edit submits an explicit statement coverage declaration",
+    "schema": "KnowledgeEdit",
+    "value": {
+      "operation_id": "synthetic-human-edit",
+      "expected_version": "1",
+      "entry_id": "body",
+      "value": "明确合成规则。\n仅限演练。",
+      "statements": [
+        {
+          "key": "synthetic-rule",
+          "target": {
+            "object_id": "synthetic-object",
+            "version": "1",
+            "path": "body"
+          },
+          "text": "明确合成规则。",
+          "scope_text": "仅限演练。",
+          "citations": [],
+          "supports": [],
+          "supports_complete": true
+        }
+      ]
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "human knowledge edit preserves an explicit unknown coverage declaration",
+    "schema": "KnowledgeEdit",
+    "value": {
+      "operation_id": "synthetic-human-unknown",
+      "expected_version": "1",
+      "entry_id": "body",
+      "value": "待核对的合成规则。",
+      "statements": [
+        {
+          "key": "synthetic-rule",
+          "target": {
+            "object_id": "synthetic-object",
+            "version": "1",
+            "path": "body"
+          },
+          "text": "待核对的合成规则。",
+          "scope_text": "",
+          "citations": [],
+          "supports": [],
+          "supports_complete": null
+        }
+      ]
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "human knowledge edit cannot supply a trusted statement origin",
+    "schema": "KnowledgeEdit",
+    "value": {
+      "operation_id": "synthetic-human-origin",
+      "expected_version": "1",
+      "entry_id": "body",
+      "value": "合成规则。",
+      "statements": [
+        {
+          "key": "synthetic-rule",
+          "target": {
+            "object_id": "synthetic-object",
+            "version": "1",
+            "path": "body"
+          },
+          "text": "合成规则。",
+          "scope_text": "",
+          "citations": [],
+          "supports": [],
+          "supports_complete": true,
+          "origin": "source_fact"
+        }
+      ]
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "knowledge batch reads a selected skill through its asset reference",
+    "schema": "KnowledgeReadInput",
+    "value": {
+      "items": [
+        {
+          "kind": "skill",
+          "asset_ref": {
+            "id": "synthetic-skill",
+            "version": "2"
+          }
+        }
+      ]
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "skill batch success keeps only its selected current descriptor",
+    "schema": "KnowledgeReadReply",
+    "value": {
+      "items": [
+        {
+          "kind": "skill",
+          "asset_ref": {
+            "id": "synthetic-skill",
+            "version": "2"
+          },
+          "state": "ok",
+          "asset": {
+            "id": "synthetic-skill",
+            "version": "2",
+            "kind": "skill",
+            "name": "合成方法",
+            "body": "",
+            "scope": "仅合成资料",
+            "source_text": "",
+            "state": "enabled",
+            "verified": false,
+            "dependencies": [],
+            "selected": true,
+            "native_path": "/skills/synthetic-skill/2/SKILL.md"
+          }
+        }
+      ]
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "skill batch failure has no private descriptor",
+    "schema": "KnowledgeReadReply",
+    "value": {
+      "items": [
+        {
+          "kind": "skill",
+          "asset_ref": {
+            "id": "synthetic-skill",
+            "version": "2"
+          },
+          "state": "not_available"
+        }
+      ]
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "skill batch does not accept memory text pagination",
+    "schema": "KnowledgeReadInput",
+    "value": {
+      "items": [
+        {
+          "kind": "skill",
+          "asset_ref": {
+            "id": "synthetic-skill",
+            "version": "2"
+          },
+          "part": "body"
+        }
+      ]
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "knowledge batch selects a statement and an independent structure page",
+    "schema": "KnowledgeReadInput",
+    "value": {
+      "items": [
+        {
+          "kind": "knowledge",
+          "ref": {
+            "object_id": "synthetic-rule",
+            "version": "1",
+            "path": "rule"
+          },
+          "statement_id": "synthetic-second",
+          "offset": 1,
+          "limit": 3
+        },
+        {
+          "kind": "knowledge",
+          "ref": {
+            "object_id": "synthetic-rule",
+            "version": "1",
+            "path": "rule"
+          },
+          "structure_only": true,
+          "offset": 2,
+          "limit": 6
+        }
+      ]
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "knowledge batch partial structure preserves null instead of adopting a JSON fragment",
+    "schema": "KnowledgeReadReply",
+    "value": {
+      "items": [
+        {
+          "kind": "knowledge",
+          "ref": {
+            "object_id": "synthetic-rule",
+            "version": "1",
+            "path": "rule"
+          },
+          "state": "ok",
+          "statement_id": "synthetic-second",
+          "content": "{\"kind",
+          "content_page": {
+            "offset": 0,
+            "total_chars": 60,
+            "complete": false,
+            "next_offset": 6
+          },
+          "structure_text": "{\"kind",
+          "structure_page": {
+            "offset": 0,
+            "total_chars": 60,
+            "complete": false,
+            "next_offset": 6
+          },
+          "effective_structure": null,
+          "structure_coverage": {
+            "state": "complete",
+            "notes": []
+          },
+          "supports": [],
+          "supports_complete": true,
+          "citations": [],
+          "content_state": "partial",
+          "support_state": "delivered",
+          "continuation": {
+            "content_next_offset": 6,
+            "supports_next_cursor": null
+          }
+        }
+      ]
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "knowledge batch rejects empty statement identity",
+    "schema": "KnowledgeReadInput",
+    "value": {
+      "items": [
+        {
+          "kind": "knowledge",
+          "ref": {
+            "object_id": "synthetic-rule",
+            "version": "1",
+            "path": "rule"
+          },
+          "statement_id": ""
+        }
+      ]
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "memory batch success preserves independent source page and nullable next offset",
+    "schema": "KnowledgeReadReply",
+    "value": {
+      "items": [
+        {
+          "kind": "memory",
+          "asset_ref": {
+            "id": "synthetic-memory",
+            "version": "2"
+          },
+          "part": "source_text",
+          "state": "ok",
+          "asset": {
+            "id": "synthetic-memory",
+            "version": "2",
+            "kind": "memory",
+            "name": "合成记忆",
+            "body": "",
+            "scope": "合成范围",
+            "source_text": "例外必须核对。",
+            "state": "enabled",
+            "verified": false,
+            "dependencies": [],
+            "selected": false,
+            "source_page": {
+              "offset": 10,
+              "total_chars": 17,
+              "complete": false,
+              "next_offset": null
+            }
+          }
+        }
+      ]
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "search continuation binds current task and soft ordering hints independently of assets",
+    "schema": "KnowledgeSearchInput",
+    "value": {
+      "query": "合成例外",
+      "limit": 2,
+      "kinds": [
+        "term",
+        "document"
+      ],
+      "task_ref": {
+        "task_id": "synthetic-task",
+        "condition_version": "3"
+      },
+      "hints": {
+        "business_domain": "合成域",
+        "related_object_ids": [
+          "synthetic-related"
+        ]
+      },
+      "cursor": "synthetic-opaque-cursor",
+      "asset_after": "synthetic-memory"
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "search continuation rejects an empty public cursor",
+    "schema": "KnowledgeSearchInput",
+    "value": {
+      "query": "合成",
+      "cursor": ""
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "search soft ordering cannot accept an empty related identity",
+    "schema": "KnowledgeSearchInput",
+    "value": {
+      "query": "合成",
+      "hints": {
+        "related_object_ids": [
+          ""
+        ]
+      }
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "memory bounded page keeps empty scope with an explicit independent continuation",
+    "schema": "KnowledgeReadReply",
+    "value": {
+      "items": [
+        {
+          "kind": "memory",
+          "asset_ref": {
+            "id": "synthetic-memory",
+            "version": "2"
+          },
+          "part": "body",
+          "state": "ok",
+          "asset": {
+            "id": "synthetic-memory",
+            "version": "2",
+            "kind": "memory",
+            "name": "合成记忆",
+            "body": "合成",
+            "scope": "",
+            "source_text": "",
+            "state": "enabled",
+            "verified": false,
+            "dependencies": [],
+            "selected": false,
+            "content_page": {
+              "offset": 4,
+              "total_chars": 20,
+              "complete": false,
+              "next_offset": 6
+            },
+            "scope_page": {
+              "offset": 0,
+              "total_chars": 20,
+              "complete": false,
+              "next_offset": 0
+            },
+            "source_page": {
+              "offset": 0,
+              "total_chars": 20,
+              "complete": false,
+              "next_offset": 0
+            }
+          }
+        }
+      ]
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "memory empty scope without continuation remains invalid",
+    "schema": "ModelAssetPreview",
+    "value": {
+      "id": "synthetic-memory",
+      "version": "2",
+      "kind": "memory",
+      "name": "合成记忆",
+      "body": "",
+      "scope": "",
+      "source_text": "",
+      "state": "enabled",
+      "verified": false,
+      "dependencies": [],
+      "selected": false
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "memory batch unavailable item cannot carry asset body",
+    "schema": "KnowledgeReadReply",
+    "value": {
+      "items": [
+        {
+          "kind": "memory",
+          "asset_ref": {
+            "id": "synthetic-memory",
+            "version": "2"
+          },
+          "part": "body",
+          "state": "not_available",
+          "asset": {
+            "id": "synthetic-memory",
+            "version": "2",
+            "kind": "memory",
+            "name": "合成记忆",
+            "body": "不得泄露",
+            "scope": "合成范围",
+            "source_text": "",
+            "state": "enabled",
+            "verified": false,
+            "dependencies": [],
+            "selected": false
+          }
+        }
+      ]
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "knowledge batch reads memory parts with their own asset identity",
+    "schema": "KnowledgeReadInput",
+    "value": {
+      "items": [
+        {
+          "kind": "knowledge",
+          "ref": {
+            "object_id": "synthetic-rule",
+            "version": "1",
+            "path": "body"
+          }
+        },
+        {
+          "kind": "memory",
+          "asset_ref": {
+            "id": "synthetic-memory",
+            "version": "2"
+          },
+          "part": "source_text",
+          "offset": 3,
+          "limit": 2
+        }
+      ]
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "memory batch failure preserves asset reference without body",
+    "schema": "KnowledgeReadReply",
+    "value": {
+      "items": [
+        {
+          "kind": "memory",
+          "asset_ref": {
+            "id": "synthetic-memory",
+            "version": "2"
+          },
+          "part": "source_text",
+          "state": "not_available"
+        }
+      ]
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "memory batch part cannot use a public knowledge reference",
+    "schema": "KnowledgeReadInput",
+    "value": {
+      "items": [
+        {
+          "kind": "memory",
+          "ref": {
+            "object_id": "synthetic-memory",
+            "version": "2",
+            "path": "body"
+          },
+          "part": "body"
+        }
+      ]
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "knowledge batch read binds ordered versioned paths",
+    "schema": "KnowledgeReadInput",
+    "value": {
+      "items": [
+        {
+          "kind": "knowledge",
+          "ref": {
+            "object_id": "synthetic-rule",
+            "version": "1",
+            "path": "body"
+          },
+          "offset": 2,
+          "limit": 3
+        },
+        {
+          "kind": "knowledge",
+          "ref": {
+            "object_id": "synthetic-unavailable",
+            "version": "1",
+            "path": "body"
+          }
+        }
+      ]
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "knowledge batch reply preserves useful content beside unavailable and stale items",
+    "schema": "KnowledgeReadReply",
+    "value": {
+      "items": [
+        {
+          "kind": "knowledge",
+          "ref": {
+            "object_id": "synthetic-rule",
+            "version": "1",
+            "path": "body"
+          },
+          "state": "ok",
+          "content": "甲🌏e",
+          "content_page": {
+            "offset": 2,
+            "total_chars": 10,
+            "complete": false,
+            "next_offset": 5
+          },
+          "supports": [],
+          "supports_complete": null,
+          "citations": [],
+          "content_state": "partial",
+          "support_state": "unknown",
+          "continuation": {
+            "content_next_offset": 5,
+            "supports_next_cursor": null
+          }
+        },
+        {
+          "kind": "knowledge",
+          "ref": {
+            "object_id": "synthetic-unavailable",
+            "version": "1",
+            "path": "body"
+          },
+          "state": "not_available"
+        },
+        {
+          "kind": "knowledge",
+          "ref": {
+            "object_id": "synthetic-rule",
+            "version": "0",
+            "path": "body"
+          },
+          "state": "stale"
+        }
+      ]
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "knowledge batch read rejects empty batch",
+    "schema": "KnowledgeReadInput",
+    "value": {
+      "items": []
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "knowledge batch read rejects legacy single object input",
+    "schema": "KnowledgeReadInput",
+    "value": {
+      "object_id": "synthetic-rule",
+      "version": "1"
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "knowledge batch unavailable item cannot carry content",
+    "schema": "KnowledgeReadReply",
+    "value": {
+      "items": [
+        {
+          "kind": "knowledge",
+          "ref": {
+            "object_id": "synthetic-unavailable",
+            "version": "1",
+            "path": "body"
+          },
+          "state": "not_available",
+          "content": "不得泄露"
+        }
+      ]
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "tool contract 2 runtime envelope keeps explicit version",
+    "schema": "RunEnvelope",
+    "value": {
+      "request_id": "request",
+      "run_id": "run",
+      "conversation_id": "conversation",
+      "recovery_chain_id": "chain",
+      "lease_epoch": "1",
+      "budget_scope_id": "budget",
+      "output_id": "output",
+      "attempt_id": "attempt",
+      "message_id": "message",
+      "text": "核对合成来源",
+      "checkpoint": null,
+      "model_profile": null,
+      "tool_contract_version": 2
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "tool contract historical envelope may omit version",
+    "schema": "RunEnvelope",
+    "value": {
+      "request_id": "request",
+      "run_id": "run",
+      "conversation_id": "conversation",
+      "recovery_chain_id": "chain",
+      "lease_epoch": "1",
+      "budget_scope_id": "budget",
+      "output_id": "output",
+      "attempt_id": "attempt",
+      "message_id": "message",
+      "text": "恢复合成旧会话",
+      "checkpoint": null,
+      "model_profile": null
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "tool contract rejects unknown version",
+    "schema": "RunEnvelope",
+    "value": {
+      "request_id": "request",
+      "run_id": "run",
+      "conversation_id": "conversation",
+      "recovery_chain_id": "chain",
+      "lease_epoch": "1",
+      "budget_scope_id": "budget",
+      "output_id": "output",
+      "attempt_id": "attempt",
+      "message_id": "message",
+      "text": "核对合成来源",
+      "checkpoint": null,
+      "model_profile": null,
+      "tool_contract_version": 3
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "public search contract 2 uses explicit branch input",
+    "schema": "KnowledgeSearchInput",
+    "value": {
+      "query": "合成校准规则",
+      "limit": 2,
+      "kinds": [
+        "document",
+        "term"
+      ]
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "contract 2 does not reinterpret legacy hard scope as hints",
+    "schema": "KnowledgeSearchInput",
+    "value": {
+      "query": "合成校准",
+      "business_domain": "合成域",
+      "related_object_id": "synthetic-table"
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "mixed search keeps knowledge nullable support completeness and raw citation",
+    "schema": "KnowledgeSearchReply",
+    "value": {
+      "hits": [
+        {
+          "record_kind": "knowledge_entry",
+          "ref": {
+            "object_id": "synthetic-rule",
+            "version": "1",
+            "path": "description"
+          },
+          "name": "合成校准规则",
+          "kind": "term",
+          "definition": "合成校准仅统计已确认条目。",
+          "scope_text": "",
+          "supports": [],
+          "supports_complete": null,
+          "example_refs": [],
+          "citations": [],
+          "content_state": "complete",
+          "support_state": "unknown",
+          "continuation": {
+            "content_next_offset": null,
+            "supports_next_cursor": null
+          }
+        },
+        {
+          "record_kind": "source_excerpt",
+          "citation": {
+            "source": {
+              "kind": "document",
+              "id": "synthetic-source"
+            },
+            "revision": "1",
+            "locator": {
+              "offset": 24,
+              "length": 11
+            }
+          },
+          "source_length": 80,
+          "text": "合成异常条目次日复核。",
+          "name": "合成校准手册",
+          "content_state": "complete",
+          "support_state": "unknown",
+          "semantic_status": "pending"
+        }
+      ],
+      "search_coverage": {
+        "channels": [
+          {
+            "channel": "bm25",
+            "state": "available"
+          }
+        ],
+        "state": "searched",
+        "reasons": [],
+        "next": null
+      },
+      "personal_memories": [],
+      "selected_skills": [],
+      "next_asset_after": null,
+      "asset_total": 0,
+      "asset_cursor_invalid": false,
+      "memory_retrieval": "not_configured"
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "raw hit cannot impersonate knowledge evidence",
+    "schema": "KnowledgeSearchHit",
+    "value": {
+      "record_kind": "source_excerpt",
+      "ref": {
+        "object_id": "synthetic-source",
+        "version": "1",
+        "path": "description"
+      },
+      "citation": {
+        "source": {
+          "kind": "document",
+          "id": "synthetic-source"
+        },
+        "revision": "1",
+        "locator": {
+          "offset": 0,
+          "length": 10
+        }
+      },
+      "source_length": 10,
+      "text": "合成异常条目次日复核。",
+      "name": "合成手册",
+      "content_state": "complete",
+      "support_state": "unknown",
+      "semantic_status": "pending"
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "knowledge hit must state support completeness even when unknown",
+    "schema": "KnowledgeSearchHit",
+    "value": {
+      "record_kind": "knowledge_entry",
+      "ref": {
+        "object_id": "synthetic-rule",
+        "version": "1",
+        "path": "description"
+      },
+      "name": "合成规则",
+      "kind": "term",
+      "definition": "仅统计已确认条目。",
+      "scope_text": "",
+      "supports": [],
+      "example_refs": [],
+      "citations": [],
+      "content_state": "complete",
+      "support_state": "unknown",
+      "continuation": {
+        "content_next_offset": null,
+        "supports_next_cursor": null
+      }
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
     "name": "valid HTTP message",
     "schema": "MessageInput",
     "value": {
@@ -274,6 +1449,73 @@
     "roundtrip": false
   },
   {
+    "name": "frozen answers finish without new generated text",
+    "schema": "FinishRun",
+    "value": {
+      "run_id": "r",
+      "lease_epoch": "1",
+      "commit_id": "o",
+      "answer_parts": [
+        {
+          "task_ref": {
+            "task_id": "task-a",
+            "condition_version": "1"
+          },
+          "finalized_by_sdk_tool_call_id": "finalize-a",
+          "scope_fingerprint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      ],
+      "checkpoint": {
+        "sdk_version": "1.0.0",
+        "entries": [],
+        "leaf_id": null
+      }
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "unfinished answer reference requires final text",
+    "schema": "FinishRun",
+    "value": {
+      "run_id": "r",
+      "lease_epoch": "1",
+      "commit_id": "o",
+      "answer_parts": [
+        {
+          "task_ref": {
+            "task_id": "task-a",
+            "condition_version": "1"
+          },
+          "answer_sdk_tool_call_id": "candidate-a"
+        }
+      ],
+      "checkpoint": {
+        "sdk_version": "1.0.0",
+        "entries": [],
+        "leaf_id": null
+      }
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "finish without answers still requires final text",
+    "schema": "FinishRun",
+    "value": {
+      "run_id": "r",
+      "lease_epoch": "1",
+      "commit_id": "o",
+      "checkpoint": {
+        "sdk_version": "1.0.0",
+        "entries": [],
+        "leaf_id": null
+      }
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
     "name": "valid finish",
     "schema": "FinishRun",
     "value": {
@@ -289,6 +1531,488 @@
     },
     "valid": true,
     "roundtrip": true
+  },
+  {
+    "name": "merged answer finish accepts exactly 24 part references",
+    "schema": "FinishRun",
+    "value": {
+      "run_id": "r",
+      "lease_epoch": "1",
+      "commit_id": "o",
+      "answer_parts": [
+        {
+          "task_ref": {
+            "task_id": "task-00",
+            "condition_version": "1"
+          },
+          "finalized_by_sdk_tool_call_id": "finalize-00",
+          "scope_fingerprint": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+        },
+        {
+          "task_ref": {
+            "task_id": "task-01",
+            "condition_version": "1"
+          },
+          "finalized_by_sdk_tool_call_id": "finalize-01",
+          "scope_fingerprint": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+        },
+        {
+          "task_ref": {
+            "task_id": "task-02",
+            "condition_version": "1"
+          },
+          "finalized_by_sdk_tool_call_id": "finalize-02",
+          "scope_fingerprint": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+        },
+        {
+          "task_ref": {
+            "task_id": "task-03",
+            "condition_version": "1"
+          },
+          "finalized_by_sdk_tool_call_id": "finalize-03",
+          "scope_fingerprint": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+        },
+        {
+          "task_ref": {
+            "task_id": "task-04",
+            "condition_version": "1"
+          },
+          "finalized_by_sdk_tool_call_id": "finalize-04",
+          "scope_fingerprint": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+        },
+        {
+          "task_ref": {
+            "task_id": "task-05",
+            "condition_version": "1"
+          },
+          "finalized_by_sdk_tool_call_id": "finalize-05",
+          "scope_fingerprint": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+        },
+        {
+          "task_ref": {
+            "task_id": "task-06",
+            "condition_version": "1"
+          },
+          "finalized_by_sdk_tool_call_id": "finalize-06",
+          "scope_fingerprint": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+        },
+        {
+          "task_ref": {
+            "task_id": "task-07",
+            "condition_version": "1"
+          },
+          "finalized_by_sdk_tool_call_id": "finalize-07",
+          "scope_fingerprint": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+        },
+        {
+          "task_ref": {
+            "task_id": "task-08",
+            "condition_version": "1"
+          },
+          "finalized_by_sdk_tool_call_id": "finalize-08",
+          "scope_fingerprint": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+        },
+        {
+          "task_ref": {
+            "task_id": "task-09",
+            "condition_version": "1"
+          },
+          "finalized_by_sdk_tool_call_id": "finalize-09",
+          "scope_fingerprint": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+        },
+        {
+          "task_ref": {
+            "task_id": "task-10",
+            "condition_version": "1"
+          },
+          "finalized_by_sdk_tool_call_id": "finalize-10",
+          "scope_fingerprint": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+        },
+        {
+          "task_ref": {
+            "task_id": "task-11",
+            "condition_version": "1"
+          },
+          "finalized_by_sdk_tool_call_id": "finalize-11",
+          "scope_fingerprint": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+        },
+        {
+          "task_ref": {
+            "task_id": "task-12",
+            "condition_version": "1"
+          },
+          "finalized_by_sdk_tool_call_id": "finalize-12",
+          "scope_fingerprint": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+        },
+        {
+          "task_ref": {
+            "task_id": "task-13",
+            "condition_version": "1"
+          },
+          "finalized_by_sdk_tool_call_id": "finalize-13",
+          "scope_fingerprint": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+        },
+        {
+          "task_ref": {
+            "task_id": "task-14",
+            "condition_version": "1"
+          },
+          "finalized_by_sdk_tool_call_id": "finalize-14",
+          "scope_fingerprint": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+        },
+        {
+          "task_ref": {
+            "task_id": "task-15",
+            "condition_version": "1"
+          },
+          "finalized_by_sdk_tool_call_id": "finalize-15",
+          "scope_fingerprint": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+        },
+        {
+          "task_ref": {
+            "task_id": "task-16",
+            "condition_version": "1"
+          },
+          "finalized_by_sdk_tool_call_id": "finalize-16",
+          "scope_fingerprint": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+        },
+        {
+          "task_ref": {
+            "task_id": "task-17",
+            "condition_version": "1"
+          },
+          "finalized_by_sdk_tool_call_id": "finalize-17",
+          "scope_fingerprint": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+        },
+        {
+          "task_ref": {
+            "task_id": "task-18",
+            "condition_version": "1"
+          },
+          "finalized_by_sdk_tool_call_id": "finalize-18",
+          "scope_fingerprint": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+        },
+        {
+          "task_ref": {
+            "task_id": "task-19",
+            "condition_version": "1"
+          },
+          "finalized_by_sdk_tool_call_id": "finalize-19",
+          "scope_fingerprint": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+        },
+        {
+          "task_ref": {
+            "task_id": "task-20",
+            "condition_version": "1"
+          },
+          "finalized_by_sdk_tool_call_id": "finalize-20",
+          "scope_fingerprint": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+        },
+        {
+          "task_ref": {
+            "task_id": "task-21",
+            "condition_version": "1"
+          },
+          "finalized_by_sdk_tool_call_id": "finalize-21",
+          "scope_fingerprint": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+        },
+        {
+          "task_ref": {
+            "task_id": "task-22",
+            "condition_version": "1"
+          },
+          "finalized_by_sdk_tool_call_id": "finalize-22",
+          "scope_fingerprint": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+        },
+        {
+          "task_ref": {
+            "task_id": "task-23",
+            "condition_version": "1"
+          },
+          "finalized_by_sdk_tool_call_id": "finalize-23",
+          "scope_fingerprint": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+        }
+      ],
+      "checkpoint": {
+        "sdk_version": "1.0.0",
+        "entries": [],
+        "leaf_id": null
+      }
+    },
+    "valid": true
+  },
+  {
+    "name": "merged answer finish rejects 25 part references",
+    "schema": "FinishRun",
+    "value": {
+      "run_id": "r",
+      "lease_epoch": "1",
+      "commit_id": "o",
+      "answer_parts": [
+        {
+          "task_ref": {
+            "task_id": "task-00",
+            "condition_version": "1"
+          },
+          "finalized_by_sdk_tool_call_id": "finalize-00",
+          "scope_fingerprint": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+        },
+        {
+          "task_ref": {
+            "task_id": "task-01",
+            "condition_version": "1"
+          },
+          "finalized_by_sdk_tool_call_id": "finalize-01",
+          "scope_fingerprint": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+        },
+        {
+          "task_ref": {
+            "task_id": "task-02",
+            "condition_version": "1"
+          },
+          "finalized_by_sdk_tool_call_id": "finalize-02",
+          "scope_fingerprint": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+        },
+        {
+          "task_ref": {
+            "task_id": "task-03",
+            "condition_version": "1"
+          },
+          "finalized_by_sdk_tool_call_id": "finalize-03",
+          "scope_fingerprint": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+        },
+        {
+          "task_ref": {
+            "task_id": "task-04",
+            "condition_version": "1"
+          },
+          "finalized_by_sdk_tool_call_id": "finalize-04",
+          "scope_fingerprint": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+        },
+        {
+          "task_ref": {
+            "task_id": "task-05",
+            "condition_version": "1"
+          },
+          "finalized_by_sdk_tool_call_id": "finalize-05",
+          "scope_fingerprint": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+        },
+        {
+          "task_ref": {
+            "task_id": "task-06",
+            "condition_version": "1"
+          },
+          "finalized_by_sdk_tool_call_id": "finalize-06",
+          "scope_fingerprint": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+        },
+        {
+          "task_ref": {
+            "task_id": "task-07",
+            "condition_version": "1"
+          },
+          "finalized_by_sdk_tool_call_id": "finalize-07",
+          "scope_fingerprint": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+        },
+        {
+          "task_ref": {
+            "task_id": "task-08",
+            "condition_version": "1"
+          },
+          "finalized_by_sdk_tool_call_id": "finalize-08",
+          "scope_fingerprint": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+        },
+        {
+          "task_ref": {
+            "task_id": "task-09",
+            "condition_version": "1"
+          },
+          "finalized_by_sdk_tool_call_id": "finalize-09",
+          "scope_fingerprint": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+        },
+        {
+          "task_ref": {
+            "task_id": "task-10",
+            "condition_version": "1"
+          },
+          "finalized_by_sdk_tool_call_id": "finalize-10",
+          "scope_fingerprint": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+        },
+        {
+          "task_ref": {
+            "task_id": "task-11",
+            "condition_version": "1"
+          },
+          "finalized_by_sdk_tool_call_id": "finalize-11",
+          "scope_fingerprint": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+        },
+        {
+          "task_ref": {
+            "task_id": "task-12",
+            "condition_version": "1"
+          },
+          "finalized_by_sdk_tool_call_id": "finalize-12",
+          "scope_fingerprint": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+        },
+        {
+          "task_ref": {
+            "task_id": "task-13",
+            "condition_version": "1"
+          },
+          "finalized_by_sdk_tool_call_id": "finalize-13",
+          "scope_fingerprint": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+        },
+        {
+          "task_ref": {
+            "task_id": "task-14",
+            "condition_version": "1"
+          },
+          "finalized_by_sdk_tool_call_id": "finalize-14",
+          "scope_fingerprint": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+        },
+        {
+          "task_ref": {
+            "task_id": "task-15",
+            "condition_version": "1"
+          },
+          "finalized_by_sdk_tool_call_id": "finalize-15",
+          "scope_fingerprint": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+        },
+        {
+          "task_ref": {
+            "task_id": "task-16",
+            "condition_version": "1"
+          },
+          "finalized_by_sdk_tool_call_id": "finalize-16",
+          "scope_fingerprint": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+        },
+        {
+          "task_ref": {
+            "task_id": "task-17",
+            "condition_version": "1"
+          },
+          "finalized_by_sdk_tool_call_id": "finalize-17",
+          "scope_fingerprint": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+        },
+        {
+          "task_ref": {
+            "task_id": "task-18",
+            "condition_version": "1"
+          },
+          "finalized_by_sdk_tool_call_id": "finalize-18",
+          "scope_fingerprint": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+        },
+        {
+          "task_ref": {
+            "task_id": "task-19",
+            "condition_version": "1"
+          },
+          "finalized_by_sdk_tool_call_id": "finalize-19",
+          "scope_fingerprint": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+        },
+        {
+          "task_ref": {
+            "task_id": "task-20",
+            "condition_version": "1"
+          },
+          "finalized_by_sdk_tool_call_id": "finalize-20",
+          "scope_fingerprint": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+        },
+        {
+          "task_ref": {
+            "task_id": "task-21",
+            "condition_version": "1"
+          },
+          "finalized_by_sdk_tool_call_id": "finalize-21",
+          "scope_fingerprint": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+        },
+        {
+          "task_ref": {
+            "task_id": "task-22",
+            "condition_version": "1"
+          },
+          "finalized_by_sdk_tool_call_id": "finalize-22",
+          "scope_fingerprint": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+        },
+        {
+          "task_ref": {
+            "task_id": "task-23",
+            "condition_version": "1"
+          },
+          "finalized_by_sdk_tool_call_id": "finalize-23",
+          "scope_fingerprint": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+        },
+        {
+          "task_ref": {
+            "task_id": "task-24",
+            "condition_version": "1"
+          },
+          "finalized_by_sdk_tool_call_id": "finalize-24",
+          "scope_fingerprint": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+        }
+      ],
+      "checkpoint": {
+        "sdk_version": "1.0.0",
+        "entries": [],
+        "leaf_id": null
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "finish final text accepts exactly 8000 characters",
+    "schema": "FinishRun",
+    "value": {
+      "run_id": "r",
+      "lease_epoch": "1",
+      "commit_id": "o",
+      "final_text": "完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完",
+      "checkpoint": {
+        "sdk_version": "1.0.0",
+        "entries": [],
+        "leaf_id": null
+      }
+    },
+    "valid": true
+  },
+  {
+    "name": "finish final text rejects 8001 characters",
+    "schema": "FinishRun",
+    "value": {
+      "run_id": "r",
+      "lease_epoch": "1",
+      "commit_id": "o",
+      "final_text": "完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完完",
+      "checkpoint": {
+        "sdk_version": "1.0.0",
+        "entries": [],
+        "leaf_id": null
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "assistant history message accepts merged text beyond the old uniform 32000",
+    "schema": "ChatMessage",
+    "value": {
+      "role": "assistant",
+      "text": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "attempt_id": "a",
+      "committed": true,
+      "event_seq": "1"
+    },
+    "valid": true
+  },
+  {
+    "name": "user history message keeps the original 32000 character limit",
+    "schema": "ChatMessage",
+    "value": {
+      "role": "user",
+      "text": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "attempt_id": null,
+      "committed": false,
+      "event_seq": "1"
+    },
+    "valid": false
   },
   {
     "name": "valid SSE",
@@ -959,6 +2683,139 @@
     },
     "valid": true,
     "roundtrip": true
+  },
+  {
+    "name": "operation receipt preserves historical missing tool version",
+    "schema": "OperationReceipt",
+    "value": {
+      "operation_id": "original-operation"
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "operation receipt carries original tool v1",
+    "schema": "OperationReceipt",
+    "value": {
+      "operation_id": "original-operation",
+      "tool_contract_version": 1
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "operation receipt carries original tool v2",
+    "schema": "OperationReceipt",
+    "value": {
+      "operation_id": "original-operation",
+      "tool_contract_version": 2
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "operation receipt rejects unknown tool version",
+    "schema": "OperationReceipt",
+    "value": {
+      "operation_id": "original-operation",
+      "tool_contract_version": 3
+    },
+    "valid": false
+  },
+  {
+    "name": "operation receipt rejects string tool version",
+    "schema": "OperationReceipt",
+    "value": {
+      "operation_id": "original-operation",
+      "tool_contract_version": "2"
+    },
+    "valid": false
+  },
+  {
+    "name": "operation receipt rejects null tool version",
+    "schema": "OperationReceipt",
+    "value": {
+      "operation_id": "original-operation",
+      "tool_contract_version": null
+    },
+    "valid": false
+  },
+  {
+    "name": "data tool outcome carries original tool v1",
+    "schema": "DataToolOutcome",
+    "value": {
+      "operation_id": "original-operation",
+      "tool_name": "read_knowledge",
+      "tool_contract_version": 1,
+      "data": {
+        "name": "合成旧目录",
+        "body": "保留原文。"
+      }
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "data tool outcome carries original tool v2",
+    "schema": "DataToolOutcome",
+    "value": {
+      "operation_id": "original-operation",
+      "tool_name": "read_knowledge",
+      "tool_contract_version": 2,
+      "data": {
+        "items": []
+      }
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "rejected data tool outcome carries original tool v2",
+    "schema": "DataToolOutcome",
+    "value": {
+      "operation_id": "original-operation",
+      "tool_name": "read_knowledge",
+      "tool_contract_version": 2,
+      "data": {
+        "error": "invalid_evidence",
+        "outcome": "rejected"
+      }
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "data tool outcome rejects unknown tool version",
+    "schema": "DataToolOutcome",
+    "value": {
+      "operation_id": "original-operation",
+      "tool_name": "read_knowledge",
+      "tool_contract_version": 3,
+      "data": {}
+    },
+    "valid": false
+  },
+  {
+    "name": "data tool outcome rejects string tool version",
+    "schema": "DataToolOutcome",
+    "value": {
+      "operation_id": "original-operation",
+      "tool_name": "read_knowledge",
+      "tool_contract_version": "2",
+      "data": {}
+    },
+    "valid": false
+  },
+  {
+    "name": "data tool outcome rejects null tool version",
+    "schema": "DataToolOutcome",
+    "value": {
+      "operation_id": "original-operation",
+      "tool_name": "read_knowledge",
+      "tool_contract_version": null,
+      "data": {}
+    },
+    "valid": false
   },
   {
     "name": "早期任务读取回执",
@@ -2079,6 +3936,48 @@
     "roundtrip": true
   },
   {
+    "name": "result notification retains original task outside observation window",
+    "schema": "WorkspaceContext",
+    "value": {
+      "tasks": [],
+      "recent_messages": [],
+      "selected_skills": [],
+      "memories": [],
+      "query_observations": [],
+      "authority_revision": "1",
+      "result_notification": {
+        "query_id": "query-a",
+        "execution_state": "succeeded",
+        "task_ref": {
+          "task_id": "task-a",
+          "condition_version": "1"
+        }
+      }
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "result notification rejects incomplete original task",
+    "schema": "WorkspaceContext",
+    "value": {
+      "tasks": [],
+      "recent_messages": [],
+      "selected_skills": [],
+      "memories": [],
+      "query_observations": [],
+      "authority_revision": "1",
+      "result_notification": {
+        "query_id": "query-a",
+        "execution_state": "succeeded",
+        "task_ref": {
+          "task_id": "task-a"
+        }
+      }
+    },
+    "valid": false
+  },
+  {
     "name": "duplicate input task identities rejected",
     "schema": "WorkspaceContext",
     "value": {
@@ -2771,6 +4670,14 @@
       "model_id": "unapproved"
     },
     "valid": false
+  },
+  {
+    "name": "普通维护embedding配置省略累计限额",
+    "schema": "EmbeddingProfile",
+    "value": {
+      "trial_id": "embedding-maintenance"
+    },
+    "valid": true
   },
   {
     "name": "shared creation capability",
@@ -6234,23 +8141,7 @@
     "valid": false
   },
   {
-    "name": "condition_changed report carries reference without private body",
-    "schema": "AnalysisReportView",
-    "value": {
-      "status": "condition_changed",
-      "reference": {
-        "report_id": "report-one",
-        "conversation_id": "conversation-one",
-        "task_id": "task-one",
-        "condition_version": "1",
-        "version": "1"
-      }
-    },
-    "valid": true,
-    "roundtrip": true
-  },
-  {
-    "name": "condition_changed report rejects copied private body",
+    "name": "condition_changed carries the stored report body and per-chart results for historical display",
     "schema": "AnalysisReportView",
     "value": {
       "status": "condition_changed",
@@ -6351,12 +8242,150 @@
           }
         ],
         "created_at": "2026-10-13T00:00:00Z"
+      },
+      "chart_results": [
+        {
+          "query_id": "query-one",
+          "source": "mock",
+          "columns": [
+            {
+              "name": "net_revenue",
+              "type": "text",
+              "encoding": "string"
+            }
+          ],
+          "rows": [
+            [
+              "125.00"
+            ]
+          ],
+          "result_complete": true,
+          "truncated": false,
+          "data_freshness": "synthetic",
+          "result_ref": "result-one",
+          "next_cursor": null,
+          "fetched_offset": "0",
+          "saved_row_count": 1000,
+          "saved_result_complete": false
+        }
+      ]
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "condition_changed report body rejects private result rows",
+    "schema": "AnalysisReportView",
+    "value": {
+      "status": "condition_changed",
+      "reference": {
+        "report_id": "report-one",
+        "conversation_id": "conversation-one",
+        "task_id": "task-one",
+        "condition_version": "1",
+        "version": "1"
+      },
+      "report": {
+        "schema_version": 1,
+        "reference": {
+          "report_id": "report-one",
+          "conversation_id": "conversation-one",
+          "task_id": "task-one",
+          "condition_version": "1",
+          "version": "1"
+        },
+        "title": "合成收入报告",
+        "charts": [
+          {
+            "kind": "line",
+            "title": "合成月度收入",
+            "query_id": "query-one",
+            "result_ref": "result-one",
+            "dimension_column": "month",
+            "measure_column": "amount"
+          }
+        ],
+        "evidence": [
+          {
+            "schema_version": 1,
+            "data_range": "2026年合成付款订单",
+            "findings": [
+              {
+                "text": "合成收入为9007199254740993.01元",
+                "calculation": "读取保存结果amount列",
+                "limitations": [
+                  "只说明该合成范围"
+                ],
+                "query_refs": [
+                  {
+                    "query_id": "query-one",
+                    "result_ref": "result-one",
+                    "columns": [
+                      "month",
+                      "amount"
+                    ]
+                  }
+                ],
+                "knowledge_refs": [],
+                "figures": [
+                  {
+                    "label": "收入",
+                    "query_id": "query-one",
+                    "column": "amount",
+                    "row_index": 0,
+                    "value": "9007199254740993.01"
+                  }
+                ]
+              }
+            ],
+            "conditions": {
+              "time_start": null,
+              "time_end": null,
+              "timezone": "UTC",
+              "metric": null,
+              "channel": null,
+              "group_by": [],
+              "filters": [],
+              "knowledge_refs": [],
+              "notes": ""
+            },
+            "validated_sources": {
+              "result_dependencies": [
+                {
+                  "query_id": "query-one",
+                  "result_ref": "result-one"
+                }
+              ],
+              "query_coverage": [],
+              "knowledge_refs": []
+            },
+            "reference": {
+              "evidence_id": "evidence-one",
+              "conversation_id": "conversation-one",
+              "task_id": "task-one",
+              "condition_version": "1",
+              "result_dependencies": [
+                {
+                  "query_id": "query-one",
+                  "result_ref": "result-one"
+                }
+              ]
+            },
+            "source_message_id": "message-one"
+          }
+        ],
+        "created_at": "2026-10-13T00:00:00Z",
+        "rows": [
+          [
+            "private-row"
+          ]
+        ]
       }
     },
     "valid": false
   },
   {
-    "name": "condition_changed report rejects copied chart results",
+    "name": "condition_changed chart results reject incomplete result pages",
     "schema": "AnalysisReportView",
     "value": {
       "status": "condition_changed",
@@ -6369,34 +8398,7 @@
       },
       "chart_results": [
         {
-          "query_id": "query-one",
-          "source": "mock",
-          "columns": [
-            {
-              "name": "month",
-              "type": "string",
-              "encoding": "utf8"
-            },
-            {
-              "name": "amount",
-              "type": "decimal",
-              "encoding": "decimal_string"
-            }
-          ],
-          "rows": [
-            [
-              "2026-01",
-              "9007199254740993.01"
-            ]
-          ],
-          "result_complete": true,
-          "truncated": false,
-          "data_freshness": "synthetic",
-          "result_ref": "result-one",
-          "next_cursor": null,
-          "fetched_offset": "0",
-          "saved_row_count": 1,
-          "saved_result_complete": true
+          "query_id": "query-one"
         }
       ]
     },
@@ -8003,7 +10005,7 @@
     "roundtrip": false
   },
   {
-    "name": "request budget cannot lower the normal message allowance",
+    "name": "request budget historical call field no longer enforces a cap",
     "schema": "ModelProfile",
     "value": {
       "provider_id": "deepseek",
@@ -8018,7 +10020,7 @@
       "payload_bytes_limit": 131072,
       "thinking_level": "off"
     },
-    "valid": false,
+    "valid": true,
     "roundtrip": false
   },
   {
@@ -8055,6 +10057,24 @@
       "payload_bytes_limit": 131072,
       "thinking_level": "off",
       "trial_cost_micros": "1000000"
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "normal request profile omits the cumulative call cap",
+    "schema": "ModelProfile",
+    "value": {
+      "provider_id": "deepseek",
+      "model_id": "deepseek-flash",
+      "trial_id": "local-data-agent",
+      "price_version": "2026-10-04-peak-usd",
+      "budget_mode": "request",
+      "input_limit": 65536,
+      "output_limit": 8192,
+      "toolset": "data",
+      "payload_bytes_limit": 131072,
+      "thinking_level": "off"
     },
     "valid": true,
     "roundtrip": true
@@ -8271,6 +10291,27 @@
     },
     "valid": true,
     "roundtrip": true
+  },
+  {
+    "name": "Pi 1.4.0 inline checkpoint",
+    "schema": "Checkpoint",
+    "value": {"sdk_version": "1.4.0", "entries": [], "leaf_id": null},
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "Pi 1.4.0 native checkpoint reference",
+    "schema": "Checkpoint",
+    "value": {"sdk_version": "1.4.0", "entries": [], "leaf_id": null, "storage": {"kind": "pi_session", "file": "synthetic-sdk14.jsonl", "session_id": "synthetic-sdk14"}},
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "future Pi SDK version is not implicitly accepted",
+    "schema": "Checkpoint",
+    "value": {"sdk_version": "1.5.0", "entries": [], "leaf_id": null},
+    "valid": false,
+    "roundtrip": false
   },
   {
     "name": "unverified Pi SDK minor version",
@@ -9570,6 +11611,179 @@
     "valid": false
   },
   {
+    "name": "current revision omits unused candidate options",
+    "schema": "CurrentAnalysisUpdate",
+    "value": {
+      "action": "revise",
+      "task_id": "task-1",
+      "expected_version": "1",
+      "goal": "解释合成字段",
+      "question": null,
+      "conditions": {
+        "time_start": null,
+        "time_end": null,
+        "timezone": "UTC",
+        "metric": null,
+        "channel": null,
+        "group_by": [],
+        "filters": [],
+        "knowledge_refs": [],
+        "notes": ""
+      },
+      "condition_patch": {
+        "set": {},
+        "unset": []
+      }
+    },
+    "valid": true
+  },
+  {
+    "name": "current route omits the options key",
+    "schema": "CurrentAnalysisUpdate",
+    "value": {
+      "action": "route",
+      "task_id": "task-1",
+      "expected_version": "1",
+      "goal": "",
+      "question": null
+    },
+    "valid": true
+  },
+  {
+    "name": "current create omits unused candidate options",
+    "schema": "CurrentAnalysisUpdate",
+    "value": {
+      "action": "create",
+      "goal": "解释合成字段",
+      "conditions": {
+        "time_start": null,
+        "time_end": null,
+        "timezone": "UTC",
+        "metric": null,
+        "channel": null,
+        "group_by": [],
+        "filters": [],
+        "knowledge_refs": [],
+        "notes": ""
+      }
+    },
+    "valid": true
+  },
+  {
+    "name": "current open question accepts no candidate options",
+    "schema": "CurrentAnalysisUpdate",
+    "value": {
+      "action": "create",
+      "goal": "解释合成字段",
+      "conditions": {
+        "time_start": null,
+        "time_end": null,
+        "timezone": "UTC",
+        "metric": null,
+        "channel": null,
+        "group_by": [],
+        "filters": [],
+        "knowledge_refs": [],
+        "notes": ""
+      },
+      "question": "请说明统计口径偏好"
+    },
+    "valid": true
+  },
+  {
+    "name": "current clarify with real candidates stays contract-shaped",
+    "schema": "CurrentAnalysisUpdate",
+    "value": {
+      "action": "create",
+      "goal": "解释合成字段",
+      "options": [
+        "订单",
+        "金额"
+      ],
+      "conditions": {
+        "time_start": null,
+        "time_end": null,
+        "timezone": "UTC",
+        "metric": null,
+        "channel": null,
+        "group_by": [],
+        "filters": [],
+        "knowledge_refs": [],
+        "notes": ""
+      },
+      "question": "请选择统计分母"
+    },
+    "valid": true
+  },
+  {
+    "name": "current route cannot carry a condition patch",
+    "schema": "CurrentAnalysisUpdate",
+    "value": {
+      "action": "route",
+      "task_id": "task-1",
+      "expected_version": "1",
+      "goal": "",
+      "question": null,
+      "condition_patch": {
+        "set": {
+          "channel": "app"
+        },
+        "unset": []
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "current route cannot carry full conditions",
+    "schema": "CurrentAnalysisUpdate",
+    "value": {
+      "action": "route",
+      "task_id": "task-1",
+      "expected_version": "1",
+      "goal": "",
+      "question": null,
+      "conditions": {
+        "time_start": null,
+        "time_end": null,
+        "timezone": "UTC",
+        "metric": null,
+        "channel": null,
+        "group_by": [],
+        "filters": [],
+        "knowledge_refs": [],
+        "notes": ""
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "legacy revision still requires the options key",
+    "schema": "AnalysisUpdate",
+    "value": {
+      "action": "revise",
+      "task_id": "task-1",
+      "expected_version": "1",
+      "goal": "解释合成字段",
+      "question": null,
+      "conditions": {
+        "time_start": null,
+        "time_end": null,
+        "timezone": "UTC",
+        "metric": null,
+        "channel": null,
+        "group_by": [],
+        "filters": [],
+        "knowledge_refs": [],
+        "notes": ""
+      },
+      "condition_patch": {
+        "set": {},
+        "unset": []
+      }
+    },
+    "valid": false
+  },
+  {
     "name": "SaveModelService configurable model roundtrip",
     "schema": "SaveModelService",
     "value": {
@@ -10014,7 +12228,7 @@
     "valid": true
   },
   {
-    "name": "定量说明不接受直接补算数字",
+    "name": "定量说明可直写阿拉伯数字",
     "schema": "PresentAnalysisAnswerInput",
     "value": {
       "template": "增长10.8%",
@@ -10037,10 +12251,10 @@
         }
       ]
     },
-    "valid": false
+    "valid": true
   },
   {
-    "name": "定量说明不接受全角数字绕过",
+    "name": "定量说明可直写全角数字",
     "schema": "PresentAnalysisAnswerInput",
     "value": {
       "template": "增长１０%",
@@ -10063,7 +12277,7 @@
         }
       ]
     },
-    "valid": false
+    "valid": true
   },
   {
     "name": "定量说明不接受任意算式",
@@ -10174,6 +12388,178 @@
     },
     "valid": true,
     "roundtrip": true
+  },
+  {
+    "name": "source window request binds revision and unicode range",
+    "schema": "SourceReadInput",
+    "value": {
+      "citation": {
+        "source": {
+          "kind": "document",
+          "id": "synthetic-range"
+        },
+        "revision": "1",
+        "locator": {
+          "offset": 3,
+          "length": 8
+        }
+      },
+      "limit": 2
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "source window delivery returns only the remaining requested range",
+    "schema": "SourceReadReply",
+    "value": {
+      "source": {
+        "kind": "document",
+        "id": "synthetic-range"
+      },
+      "revision": "1",
+      "locator": {
+        "offset": 3,
+        "length": 2
+      },
+      "source_length": 30,
+      "text": "语🌏",
+      "content_state": "partial",
+      "next_locator": {
+        "offset": 5,
+        "length": 6
+      }
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "source window request rejects legacy identity fields",
+    "schema": "SourceReadInput",
+    "value": {
+      "source_id": "synthetic-range",
+      "version": "1"
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "human statement explicitly preserves complete support extraction",
+    "schema": "SemanticStatement",
+    "value": {
+      "statement_id": "synthetic-human-completeness",
+      "object_ref": {
+        "object_id": "synthetic-term",
+        "version": "1",
+        "path": "body"
+      },
+      "text": "只统计复核通过的条目。",
+      "scope_text": "合成支持完整性验收。",
+      "origin": "human",
+      "citations": [],
+      "supports": [],
+      "supports_complete": true
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "statement preserves known incomplete extraction separately from empty supports",
+    "schema": "SemanticStatement",
+    "value": {
+      "statement_id": "synthetic-incomplete",
+      "object_ref": {
+        "object_id": "synthetic-term",
+        "version": "1",
+        "path": "body"
+      },
+      "text": "只统计复核通过的条目。",
+      "scope_text": "",
+      "origin": "model_inference",
+      "citations": [],
+      "supports": [],
+      "supports_complete": false
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "statement retains explicit unknown support extraction",
+    "schema": "SemanticStatement",
+    "value": {
+      "statement_id": "synthetic-unknown",
+      "object_ref": {
+        "object_id": "synthetic-term",
+        "version": "1",
+        "path": "body"
+      },
+      "text": "只统计复核通过的条目。",
+      "scope_text": "",
+      "origin": "source_fact",
+      "citations": [],
+      "supports": [],
+      "supports_complete": null
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "preparation explicitly declares support extraction completeness",
+    "schema": "SourcePreparationResult",
+    "value": {
+      "statements": [
+        {
+          "key": "synthetic-complete",
+          "target": {
+            "object_id": "synthetic-term",
+            "version": "1",
+            "path": "body"
+          },
+          "text": "只统计复核通过的条目。",
+          "scope_text": "",
+          "citations": [
+            {
+              "source": {
+                "kind": "document",
+                "id": "synthetic-guide"
+              },
+              "revision": "1",
+              "locator": {
+                "offset": 0,
+                "length": 12
+              }
+            }
+          ],
+          "supports": [],
+          "supports_complete": true
+        }
+      ],
+      "relations": [],
+      "unresolved": [],
+      "semantic_status": "ready"
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "support extraction cannot use a truthy string",
+    "schema": "SemanticStatement",
+    "value": {
+      "statement_id": "synthetic-invalid-completeness",
+      "object_ref": {
+        "object_id": "synthetic-term",
+        "version": "1",
+        "path": "body"
+      },
+      "text": "只统计复核通过的条目。",
+      "scope_text": "",
+      "origin": "human",
+      "citations": [],
+      "supports": [],
+      "supports_complete": "true"
+    },
+    "valid": false,
+    "roundtrip": false
   },
   {
     "name": "semantic statement keeps exact source and embedded exception",
@@ -10806,5 +13192,469 @@
     },
     "valid": false,
     "roundtrip": false
+  },
+  {
+    "name": "condition_changed view without stored body is not a report record",
+    "schema": "AnalysisReportView",
+    "value": {
+      "status": "condition_changed",
+      "reference": {
+        "report_id": "report-one",
+        "conversation_id": "conversation-one",
+        "task_id": "task-one",
+        "condition_version": "1",
+        "version": "1"
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "historical page is the controlled projection for condition-changed reports",
+    "schema": "AnalysisReportPage",
+    "valid": true,
+    "value": {
+      "status": "historical",
+      "historical_analysis": {
+        "kind": "report",
+        "reference": {
+          "report_id": "report-read",
+          "conversation_id": "conversation-read",
+          "task_id": "task-read",
+          "condition_version": "2",
+          "version": "3"
+        },
+        "generated_at": "2026-10-26T00:00:00Z",
+        "conditions": [
+          {
+            "task_id": "task-read",
+            "condition_version": "2"
+          }
+        ],
+        "evidence": [
+          {
+            "reference": {
+              "evidence_id": "evidence-1"
+            },
+            "conditions": {
+              "metric": "amount"
+            },
+            "content_fingerprint": "sha256:abc"
+          }
+        ],
+        "content_fingerprint": "sha256:def",
+        "actual_sources": {
+          "result_dependencies": [],
+          "knowledge_refs": [
+            {
+              "object_id": "doc-1",
+              "version": "2"
+            }
+          ]
+        }
+      },
+      "reference": {
+        "report_id": "report-read",
+        "conversation_id": "conversation-read",
+        "task_id": "task-read",
+        "condition_version": "2",
+        "version": "3"
+      },
+      "content_text": "{}",
+      "content_page": {
+        "offset": 0,
+        "total_chars": 2,
+        "complete": true,
+        "next_offset": null
+      }
+    }
+  },
+  {
+    "name": "historical page rejects additional properties",
+    "schema": "AnalysisReportPage",
+    "valid": false,
+    "value": {
+      "status": "historical",
+      "historical_analysis": {
+        "kind": "report",
+        "reference": {
+          "report_id": "report-read",
+          "conversation_id": "conversation-read",
+          "task_id": "task-read",
+          "condition_version": "2",
+          "version": "3"
+        },
+        "generated_at": "2026-10-26T00:00:00Z",
+        "conditions": [
+          {
+            "task_id": "task-read",
+            "condition_version": "2"
+          }
+        ],
+        "evidence": [
+          {
+            "reference": {
+              "evidence_id": "evidence-1"
+            },
+            "conditions": {
+              "metric": "amount"
+            },
+            "content_fingerprint": "sha256:abc"
+          }
+        ],
+        "content_fingerprint": "sha256:def",
+        "actual_sources": {
+          "result_dependencies": [],
+          "knowledge_refs": [
+            {
+              "object_id": "doc-1",
+              "version": "2"
+            }
+          ]
+        }
+      },
+      "extra": true,
+      "reference": {
+        "report_id": "report-read",
+        "conversation_id": "conversation-read",
+        "task_id": "task-read",
+        "condition_version": "2",
+        "version": "3"
+      },
+      "content_text": "{}",
+      "content_page": {
+        "offset": 0,
+        "total_chars": 2,
+        "complete": true,
+        "next_offset": null
+      }
+    }
+  },
+  {
+    "name": "Pi scope refresh preserves original run and checkpoint",
+    "schema": "RefreshRunContext",
+    "value": {
+      "run_id": "run-1",
+      "lease_epoch": "1",
+      "sdk_tool_call_id": "scope-call",
+      "checkpoint": {
+        "sdk_version": "1.0.0",
+        "entries": [],
+        "leaf_id": null,
+        "storage": {
+          "kind": "pi_session",
+          "file": "synthetic-session.jsonl",
+          "session_id": "synthetic-session"
+        }
+      }
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "Pi scope refresh needs original scope control call",
+    "schema": "RefreshRunContext",
+    "value": {
+      "run_id": "run-1",
+      "lease_epoch": "1",
+      "checkpoint": {
+        "sdk_version": "1.0.0",
+        "entries": [],
+        "leaf_id": null,
+        "storage": {
+          "kind": "pi_session",
+          "file": "synthetic-session.jsonl",
+          "session_id": "synthetic-session"
+        }
+      }
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "task receipt requests bound context projection",
+    "schema": "DataToolOutcome",
+    "value": {
+      "operation_id": "scope-operation",
+      "tool_name": "update_analysis_task",
+      "data": {},
+      "context_reset": {
+        "task_id": "task-a",
+        "condition_version": "2"
+      }
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "task projection cannot omit condition version",
+    "schema": "DataToolOutcome",
+    "value": {
+      "operation_id": "scope-operation",
+      "tool_name": "update_analysis_task",
+      "data": {},
+      "context_reset": {
+        "task_id": "task-a"
+      }
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "legacy control delivery without text authority",
+    "schema": "ControlDelivery",
+    "value": {
+      "text": "本轮控制状态：等待确认。",
+      "task_refs": [
+        {
+          "task_id": "synthetic-task",
+          "condition_version": "1"
+        }
+      ],
+      "facts": [],
+      "fingerprint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "control delivery with bound text authority",
+    "schema": "ControlDelivery",
+    "value": {
+      "text": "本轮控制状态：等待确认。",
+      "task_refs": [
+        {
+          "task_id": "synthetic-task",
+          "condition_version": "1"
+        }
+      ],
+      "facts": [],
+      "fingerprint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "text_authority": {
+        "dependency_schema": 6,
+        "knowledge": []
+      }
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "control delivery rejects null text authority",
+    "schema": "ControlDelivery",
+    "value": {
+      "text": "本轮控制状态：等待确认。",
+      "task_refs": [
+        {
+          "task_id": "synthetic-task",
+          "condition_version": "1"
+        }
+      ],
+      "facts": [],
+      "fingerprint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "text_authority": null
+    },
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "control clarification retains identity without unavailable question",
+    "schema": "ControlDelivery",
+    "value": {
+      "text": "本轮控制状态：等待补充。",
+      "task_refs": [
+        {
+          "task_id": "synthetic-task",
+          "condition_version": "1"
+        }
+      ],
+      "facts": [
+        {
+          "kind": "clarification",
+          "task_id": "synthetic-task",
+          "condition_version": "1",
+          "clarification_id": "synthetic-question"
+        }
+      ],
+      "fingerprint": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "natural finish preserves original output binding",
+    "schema": "FinishRun",
+    "value": {
+      "run_id": "r",
+      "lease_epoch": "1",
+      "commit_id": "o",
+      "final_text": "完成",
+      "checkpoint": {
+        "sdk_version": "1.3.0",
+        "entries": [],
+        "leaf_id": null
+      },
+      "output_binding": {
+        "entry_id": "original-entry",
+        "attempt_id": "original-attempt",
+        "stop_reason": "stop",
+        "tool_call_ids": [],
+        "text_sha256": "c0b3fbff51ccc40b8bf1a81666e7ecced016187cbe2ac6f1d627e0d7a287e04d",
+        "first_chunk_seq": "1",
+        "last_chunk_seq": "1"
+      }
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "bound natural finish rejects current range override",
+    "schema": "FinishRun",
+    "value": {
+      "run_id": "r",
+      "lease_epoch": "1",
+      "commit_id": "o",
+      "final_text": "完成",
+      "checkpoint": {
+        "sdk_version": "1.3.0",
+        "entries": [],
+        "leaf_id": null
+      },
+      "output_binding": {
+        "entry_id": "original-entry",
+        "attempt_id": "original-attempt",
+        "stop_reason": "stop",
+        "tool_call_ids": [],
+        "text_sha256": "c0b3fbff51ccc40b8bf1a81666e7ecced016187cbe2ac6f1d627e0d7a287e04d",
+        "first_chunk_seq": "1",
+        "last_chunk_seq": "1"
+      },
+      "final_start_chunk_seq": "1"
+    },
+    "valid": false
+  },
+  {
+    "name": "bound natural finish requires final text",
+    "schema": "FinishRun",
+    "value": {
+      "run_id": "r",
+      "lease_epoch": "1",
+      "commit_id": "o",
+      "checkpoint": {
+        "sdk_version": "1.3.0",
+        "entries": [],
+        "leaf_id": null
+      },
+      "output_binding": {
+        "entry_id": "original-entry",
+        "attempt_id": "original-attempt",
+        "stop_reason": "stop",
+        "tool_call_ids": [],
+        "text_sha256": "c0b3fbff51ccc40b8bf1a81666e7ecced016187cbe2ac6f1d627e0d7a287e04d",
+        "first_chunk_seq": "1",
+        "last_chunk_seq": "1"
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "answer owner is independent from source tasks",
+    "schema": "DataToolOutcome",
+    "value": {
+      "operation_id": "original-answer",
+      "tool_name": "present_analysis_answer",
+      "answer_task_ref": {
+        "task_id": "task-b",
+        "condition_version": "2"
+      },
+      "data": {
+        "answer_text": "按原条件核对两项结果。",
+        "sources": [
+          {
+            "query_id": "query-a",
+            "task_id": "task-a",
+            "condition_version": "1"
+          },
+          {
+            "query_id": "query-b",
+            "task_id": "task-b",
+            "condition_version": "2"
+          }
+        ]
+      }
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "answer owner requires original condition version",
+    "schema": "DataToolOutcome",
+    "value": {
+      "operation_id": "original-answer",
+      "tool_name": "present_analysis_answer",
+      "answer_task_ref": {
+        "task_id": "task-b"
+      },
+      "data": {
+        "answer_text": "按原条件核对两项结果。",
+        "sources": [
+          {
+            "query_id": "query-a",
+            "task_id": "task-a",
+            "condition_version": "1"
+          },
+          {
+            "query_id": "query-b",
+            "task_id": "task-b",
+            "condition_version": "2"
+          }
+        ]
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "draft_revision_receipt",
+    "schema": "DataToolOutcome",
+    "valid": true,
+    "value": {
+      "operation_id": "synthetic-op",
+      "tool_name": "update_analysis_task",
+      "data": {
+        "task_id": "synthetic-task",
+        "condition_version": "2"
+      },
+      "superseded_query_ids": [
+        "old-draft"
+      ]
+    }
+  },
+  {
+    "name": "draft_revision_empty",
+    "schema": "DataToolOutcome",
+    "valid": true,
+    "value": {
+      "operation_id": "synthetic-op",
+      "tool_name": "update_analysis_task",
+      "data": {
+        "task_id": "synthetic-task",
+        "condition_version": "2"
+      },
+      "superseded_query_ids": []
+    }
+  },
+  {
+    "name": "draft_revision_invalid_ids",
+    "schema": "DataToolOutcome",
+    "valid": false,
+    "value": {
+      "operation_id": "synthetic-op",
+      "tool_name": "update_analysis_task",
+      "data": {
+        "task_id": "synthetic-task",
+        "condition_version": "2"
+      },
+      "superseded_query_ids": [
+        9
+      ]
+    }
   }
 ]

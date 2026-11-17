@@ -1,14 +1,14 @@
 import assert from 'node:assert/strict';
 import {createServer} from 'node:http';
-import {randomUUID} from 'node:crypto';
-import {writeFile} from 'node:fs/promises';
+import {createHash,randomUUID} from 'node:crypto';
+import {readFile,writeFile} from 'node:fs/promises';
 import {synchronizeSources} from './source-sync.mjs';
 import {harness,until} from './harness.mjs';
 
 // 来源级语义整理消费链路验收：分批覆盖与成果落地、在途调用中断按unknown终态不重发、
 // 新修订重新整理且旧记录保留。对象级预填链路由check-prefill单独验收。
 const checks=[];let passed=false,calls=0,h,blocked=false,release,arrived,raceDoc,raceDocEdited=false,raceTableSource,raceTableObject,raceTableEdited=false;
-const batches=[];
+const batches=[];let rejectedSource;
 const provider=createServer(async(req,res)=>{
  let raw='';req.setEncoding('utf8');for await(const chunk of req)raw+=chunk;
  calls++;assert.ok(Buffer.byteLength(raw)<=65536);
@@ -34,6 +34,10 @@ const provider=createServer(async(req,res)=>{
  }
  if(blocked&&!material.draft){blocked=false;arrived?.();await new Promise(r=>release=r);}
  const output=material.draft??preparationOutput(material);
+ if(material.source.id===rejectedSource&&!material.draft){
+  output.statements[0].target.version=String(BigInt(output.statements[0].target.version)+1n);
+  output.statements[0].text+=' MAINTENANCE_PRIVATE_BODY_SENTINEL';
+ }
  res.writeHead(200,{'content-type':'application/json'});res.end(JSON.stringify({choices:[{finish_reason:'tool_calls',message:{tool_calls:[{type:'function',function:{name:'submit_semantic_preparation',arguments:JSON.stringify(output)}}]}}],usage:{prompt_tokens:100,completion_tokens:200}}));
 });await new Promise(r=>provider.listen(0,'127.0.0.1',r));
 
@@ -196,6 +200,29 @@ try{
  assert.equal(h.sql("SELECT JSON_OBJECT('n',COUNT(*)) FROM maintenance_model_calls WHERE state='settled'")[0].n,calls-1,'除结果不确定的那一次外全部如实结算');
  raceTableSource=raceTableObject=undefined;
  checks.push('依赖指纹不变的对象版本推进按新版本重开批，不把version_conflict当永久失败');
+
+ // 一个已知错版负控穿过真实Worker：保原错误码、已结算调用与清理，同时留下可关联的拒绝分支。
+ await h.pauseWorker();
+ const catalog=JSON.parse(await readFile(h.directory+'/platform/catalog.json','utf8'));
+ const tiny=catalog.tables.find(t=>t.id==='tiny_signal');
+ tiny.platform_version='3';tiny.node.sql='INSERT INTO tiny_signal SELECT 3; -- 错版诊断';
+ await writeFile(h.directory+'/platform/catalog.json',JSON.stringify(catalog));
+ assert.equal((await synchronizeSources(h)).value.status,'completed');
+ isolateObjectPrefill();rejectedSource=tinySource;
+ const rejectionCallsBefore=calls;
+ await h.resumeWorker();
+ await until(async()=>{const row=preparation(tinySource,3);return row&&row.status==='failed'&&row.error==='invalid_prefill'&&row.call===null?row:false;},'错版成果拒收并清理',120000);
+ const call=createHash('sha256').update(JSON.stringify(['source-preparation',tinySource,3,'semantic-preparation-2',1])).digest('hex');
+ const failure=await until(async()=>h.logs.flatMap(log=>log.output.split('\n')).find(line=>line.includes(`source_preparation_failure source=${tinySource} revision=Some(3)`)),'错版拒绝诊断日志',10000);
+ assert.ok(failure.includes(`method=semantic-preparation-2 code=invalid_prefill stage=analysis sequence=1 call=${call} reason=target_version_mismatch location=statements[0].target`),failure);
+ assert.match(failure,/expected_version="[0-9]+" actual_version="[0-9]+"/);
+ assert.ok(!h.logs.some(log=>log.output.includes('MAINTENANCE_PRIVATE_BODY_SENTINEL')),'诊断不得记录模型正文');
+ const cleared=h.sql(`SELECT JSON_OBJECT('frozen',frozen_batch,'draft',pending_draft) FROM source_preparations WHERE source_id='${tinySource}' AND revision=3`)[0];
+ assert.deepEqual(cleared,{frozen:null,draft:null});
+ assert.equal(calls-rejectionCallsBefore,1,'已拒绝分析不得进入复核或自动重试');
+ assert.equal(h.sql(`SELECT JSON_OBJECT('state',state) FROM maintenance_model_calls WHERE id='${call}'`)[0].state,'settled');
+ assert.equal(h.sql(`SELECT JSON_OBJECT('reserved',reserved_micros) FROM model_trials WHERE id='${profile.trial_id}'`)[0].reserved,unknownReserved,'原unknown预留保持');
+ checks.push('错版拒绝在清理前记录source/revision/method/sequence/call/analysis及具体原因，不保存正文或重发unknown');
 
  passed=true;console.log(JSON.stringify({passed,checks,officialRequests:0,calls}));
 }finally{release?.();if(h)await h.close();await new Promise(r=>provider.close(r));await writeFile('.local/checks/mvp-source-preparation.json',JSON.stringify({passed,checks,officialRequests:0,calls},null,2));}

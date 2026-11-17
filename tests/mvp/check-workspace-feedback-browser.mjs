@@ -15,15 +15,17 @@ const login=async user=>{await page.goto(h.url);await page.getByLabel('演示登
 const tab=name=>page.getByRole('tab',{name:new RegExp('^'+name)}).click();
 try {
  assert.equal((await synchronizeSources(h)).value.status, 'completed');
- const catalog=await fetch(h.env.DATA_AGENT_PLATFORM_URL+'/catalog',{method:'POST',headers:{authorization:'Bearer '+h.env.DATA_AGENT_INTERNAL_TOKEN,'content-type':'application/json'},body:JSON.stringify({limit:50})}).then(r=>r.json());
+ let catalog=await fetch(h.env.DATA_AGENT_PLATFORM_URL+'/catalog',{method:'POST',headers:{authorization:'Bearer '+h.env.DATA_AGENT_INTERNAL_TOKEN,'content-type':'application/json'},body:JSON.stringify({limit:50})}).then(r=>r.json());
+ await writeFile(h.directory+'/platform/catalog.json',JSON.stringify({source_namespace:catalog.source_namespace,tables:catalog.tables.map(t=>({...t,platform_version:String(Number(t.platform_version)+1)}))}));
+ assert.equal((await synchronizeSources(h)).value.status,'completed');
  const ownership=h.sql("SELECT JSON_OBJECT('id',object_id,'owner',maintainer_id,'version',CAST(version AS CHAR)) FROM semantic_ownership ORDER BY object_id");
  await writeFile(h.directory+'/platform/catalog.json',JSON.stringify({source_namespace:catalog.source_namespace,tables:catalog.tables.map(t=>({...t,maintainer_id:'bob'}))}));
  await login('alice');await navigate('语义管理');await page.getByText('维护操作',{exact:true}).click();await page.getByRole('button',{name:'同步来源',exact:true}).click();
- const error=page.getByRole('alert').filter({hasText:'来源同步发生版本冲突'});await error.waitFor();const errorText=await error.innerText();assert.match(errorText,/version_conflict/);const requestId=errorText.match(/诊断编号：([A-Za-z0-9_-]+)/)[1];
- assert.ok(h.logs.find(v=>v.name==='api').output.includes(`request_id=${requestId} code=version_conflict`));assert.deepEqual(h.sql("SELECT JSON_OBJECT('id',object_id,'owner',maintainer_id,'version',CAST(version AS CHAR)) FROM semantic_ownership ORDER BY object_id"),ownership);
- checks.push('真实同步冲突有中文说明/下一步/原码，与API脱敏日志同号；负责人快照未改变');
- await writeFile(h.directory+'/platform/catalog.json',JSON.stringify({source_namespace:catalog.source_namespace,tables:catalog.tables.map(t=>({...t,platform_version:'2'}))}));
- await page.getByRole('button',{name:'同步来源',exact:true}).click();await page.getByText('来源同步完成；语义分析按维护配置继续处理，人工修改保留。').waitFor();
+ const error=page.getByRole('region',{name:'来源同步进度'}).getByRole('alert');await error.waitFor();const errorText=await error.innerText();assert.match(errorText,/本次同步未完成/);assert.match(errorText,/stale_source/);
+ assert.ok(h.logs.some(v=>v.output.includes('source_sync_failure')&&v.output.includes('code=stale_source')));assert.deepEqual(h.sql("SELECT JSON_OBJECT('id',object_id,'owner',maintainer_id,'version',CAST(version AS CHAR)) FROM semantic_ownership ORDER BY object_id"),ownership);
+ checks.push('真实后台同步拒绝旧平台版本，界面保留失败说明与原码、Worker脱敏日志可查；负责人快照未改变');
+ await writeFile(h.directory+'/platform/catalog.json',JSON.stringify({source_namespace:catalog.source_namespace,tables:catalog.tables.map(t=>({...t,platform_version:String(Number(t.platform_version)+1)}))}));
+ await page.getByRole('button',{name:'重新同步',exact:true}).click();await page.getByRole('region',{name:'来源同步进度'}).getByText('资料同步：已完成',{exact:true}).waitFor();
  const seed=ok(await h.request('/knowledge/table-demo_order_detail'));
  const listing=page.getByRole('navigation',{name:'语义对象'});const matching=listing.getByRole('button').filter({has:page.getByText(seed.name,{exact:true})});
  await until(async()=>await matching.count()>=2,'two same named tables');

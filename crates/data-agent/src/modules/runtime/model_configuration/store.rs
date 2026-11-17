@@ -377,7 +377,7 @@ pub async fn selection_in_tx(
 }
 
 pub fn base_profile(space: &str) -> Value {
-    json!({"provider_id":"deepseek","model_id":"deepseek-flash","trial_id":format!("models-{}",&fingerprint(&json!(space))[..24]),"price_version":"2026-10-04-peak-usd","input_limit":65536,"output_limit":8192,"request_call_limit":24,"toolset":"data","payload_bytes_limit":131072,"thinking_level":"off","budget_mode":"request"})
+    json!({"provider_id":"deepseek","model_id":"deepseek-flash","trial_id":format!("models-{}",&fingerprint(&json!(space))[..24]),"price_version":"2026-10-04-peak-usd","input_limit":65536,"output_limit":8192,"toolset":"data","payload_bytes_limit":131072,"thinking_level":"off","budget_mode":"request"})
 }
 
 pub async fn assert_active_in_tx(

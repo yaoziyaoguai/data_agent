@@ -18,7 +18,7 @@ const usage={input:0,output:0,cacheRead:0,cacheWrite:0,totalTokens:0,cost:{input
 const assistant=content=>({role:'assistant',api:'openai-completions',provider:'local_mock',model:'task_demo',content,stopReason:'toolUse',usage,timestamp:Date.now()});
 try {
  const cid=await h.create(); const skills=[];
- for(let i=0;i<23;i++) {const v=ok(await h.request('/assets',assetInput({name:'同名合成方法',body:Array.from({length:700},(_,n)=>`合成步骤 ${n+1}`).join('\n'),files:[{path:'references/guide.md',content:'合成参考内容\n只读查询需要用户确认'},{path:'assets/template.csv',content:'month,value\n2026-01,0'}]})));skills.push(v);ok(await select(h,cid,v));}
+ for(let i=0;i<23;i++) {const v=ok(await h.request('/assets',assetInput({name:'同名合成方法',body:Array.from({length:700},(_,n)=>`合成步骤 ${n+1}`).join('\n'),files:[{path:'references/guide.md',content:'合成参考内容\n只读查询需要用户确认\n'+Array.from({length:700},(_,n)=>`合成附件步骤 ${n+1}`).join('\n')},{path:'assets/template.csv',content:'month,value\n2026-01,0'}]})));skills.push(v);ok(await select(h,cid,v));}
  const unselected=ok(await h.request('/assets',assetInput({name:'没有选用的方法'})));
  run=await h.capture(cid,'查看方法的合成说明');await h.pauseWorker();
  const catalog=selectedSkillResources(run.workspace_context.selected_skills);assert.equal(catalog.length,20);assert.equal(new Set(catalog.map(v=>v.name)).size,20);
@@ -31,11 +31,26 @@ try {
  const path=`/skills/${chosen.id}/${chosen.version}/SKILL.md`;
  const first=await read({path,limit:50});assert.match(first.content[0].text,/合成步骤 1/);assert.match(first.content[0].text,/offset=51/);
  const tail=await read({path,offset:651,limit:100});assert.match(tail.content[0].text,/合成步骤 700/);
- assert.match((await read({path:`/skills/${chosen.id}/1/references/guide.md`})).content[0].text,/合成参考内容/);
+ const attachmentPath=`/skills/${chosen.id}/1/references/guide.md`;
+ assert.match((await read({path:attachmentPath})).content[0].text,/合成参考内容/);
+ const attachmentFirst=await read({path:attachmentPath,limit:50});
+ assert.match(attachmentFirst.content[0].text,/合成附件步骤 1/);assert.match(attachmentFirst.content[0].text,/offset=51/);
+ const attachmentTail=await read({path:attachmentPath,offset:651,limit:100});
+ assert.match(attachmentTail.content[0].text,/合成附件步骤 700/);
  assert.match((await read({path:`/skills/${chosen.id}/1/assets/template.csv`})).content[0].text,/month,value/);
  const legacy=(await invoke('read_knowledge',{object_id:'asset-'+chosen.id,version:'1'})).data;assert.equal(legacy.body,'');assert.equal(legacy.native_path,path);
- for(const forbidden of ['/etc/passwd',`/skills/${chosen.id}/1/references/../SKILL.md`,`/skills/${unselected.id}/1/SKILL.md`,`/skills/${chosen.id}/9/SKILL.md`])await assert.rejects(read({path:forbidden}));
- checks.push('Pi原生目录解析同名多选，受控read按行续读长文及附件，旧正文接口只返回路径，越界/未选/旧版拒绝');
+ // 越界/未选/旧版不抛异常：错误经Pi isError回执给模型，保留错误码供归属投影，且不泄露正文。
+ for(const forbidden of ['/etc/passwd',`/skills/${chosen.id}/1/references/../SKILL.md`,`/skills/${unselected.id}/1/SKILL.md`,`/skills/${chosen.id}/9/SKILL.md`]){
+  const denied=await read({path:forbidden});
+  assert.equal(denied.isError,true);
+  const text=denied.content.map(block=>block.text).join('');
+  // 结构化拒绝码与Rust回执hint表同源；旧版读取按stale_knowledge拒绝而非吞掉。
+  assert.match(text,/"error"\s*:\s*"(not_available|forbidden|selection_required|stale_knowledge)"/);
+  assert.match(text,/"outcome"\s*:\s*"rejected"/);
+  assert.match(text,/"hint"\s*:/);
+  assert.ok(!text.includes('合成步骤')&&!text.includes('合成参考内容'));
+ }
+ checks.push('Pi原生目录解析同名多选，受控read按行续读长文及附件，旧正文接口只返回路径，越界/未选/旧版以错误回执拒绝且不泄露正文');
  const full=(await invoke('search_knowledge',{query:'*',limit:30})).data.selected_skills;assert.equal(full.length,23);
  const omitted=skills.find(v=>!run.workspace_context.selected_skills.some(s=>s.id===v.id));assert.ok(full.some(v=>v.id===omitted.id));
  assert.match((await read({path:`/skills/${omitted.id}/1/SKILL.md`,limit:20})).content[0].text,/合成步骤 1/);
@@ -44,9 +59,11 @@ try {
  // 真实 Pi 会话恢复：首个工具登记输入，第二工具读取完成但回执丢失。
  const recovery=await h.create();ok(await select(h,recovery,chosen));await h.resumeWorker();run=await h.capture(recovery,'恢复时仍按原方法查看');await h.pauseWorker();
  const recoveryManager=SessionManager.inMemory('/synthetic/data-agent');recoveryManager.appendMessage({role:'user',content:run.text,timestamp:Date.now()});
- recoveryManager.appendMessage(assistant([{type:'toolCall',id:'route-call',name:'update_analysis_task',arguments:{action:'route',task_id:null,expected_version:null,goal:'',question:null,options:[]}},{type:'toolCall',id:'read-call',name:'read',arguments:{path,limit:30}}]));
+ recoveryManager.appendMessage(assistant([{type:'toolCall',id:'route-call',name:'update_analysis_task',arguments:{action:'route',task_id:null,expected_version:null,goal:'',question:null,options:[]}},{type:'toolCall',id:'attachment-read-call',name:'read',arguments:{path:attachmentPath,limit:30}},{type:'toolCall',id:'read-call',name:'read',arguments:{path,limit:30}}]));
  run={...run,resume_same_input:true,checkpoint:exportCheckpoint(recoveryManager,run.workspace_context.authority_revision,run.workspace_context.authority_snapshot)};
  ModelRuntime.prototype.registerProvider=function(name,config) {return originalRegister.call(this,name,{...config,streamSimple(model,context){
+  const attachmentResult=context.messages.find(v=>v.role==='toolResult'&&v.toolCallId==='attachment-read-call');
+  assert.ok(attachmentResult);assert.match(attachmentResult.content[0].text,/合成附件步骤 1/);
   const readResult=context.messages.findLast(v=>v.role==='toolResult'&&v.toolName==='read');
   assert.ok(readResult);assert.match(readResult.content[0].text,/合成步骤 1/);assert.ok(!readResult.content[0].text.startsWith('{'));observedRead=true;
   const out=createAssistantMessageEventStream();const message={...assistant([{type:'text',text:'合成方法已读取。'}]),api:model.api,provider:model.provider,model:model.id,stopReason:'stop'};
@@ -55,15 +72,19 @@ try {
  RustTransport.prototype.post=async function(path,name,input){const result=await originalPost.call(this,path,name,input);if(interrupt&&path==='/internal/data/tools'&&input.sdk_tool_call_id==='read-call')throw new Error('synthetic_read_receipt_lost');return result;};
  interrupt=true;await assert.rejects(deliver(run,h.env.DATA_AGENT_API_URL,h.env.DATA_AGENT_INTERNAL_TOKEN,''),/synthetic_read_receipt_lost/);
  const before=h.sql(`SELECT JSON_OBJECT('operation',operation_id,'origin',origin_run_id) FROM tool_calls WHERE conversation_id='${recovery}' AND sdk_tool_call_id='read-call'`)[0];
+ const attachmentBefore=h.sql(`SELECT JSON_OBJECT('operation',operation_id,'origin',origin_run_id) FROM tool_calls WHERE conversation_id='${recovery}' AND sdk_tool_call_id='attachment-read-call'`)[0];
+ assert.ok(attachmentBefore);
  const previous=run;const count=h.captured.length;h.releaseRun(previous.run_id);
  h.sql(`UPDATE agent_runs SET state='interrupted' WHERE id='${previous.run_id}';UPDATE conversations SET lease_owner=NULL,lease_until=NULL WHERE id='${recovery}';UPDATE background_jobs SET state='queued',lease_owner=NULL,lease_until=NULL WHERE message_id='${previous.message_id}';`);
  await h.resumeWorker();run=await until(()=>h.captured.slice(count).find(v=>v.message_id===previous.message_id),'same input resumes');await h.pauseWorker();
  assert.equal(run.resume_same_input,true);assert.equal(run.budget_scope_id,previous.budget_scope_id);
  interrupt=false;await deliver(run,h.env.DATA_AGENT_API_URL,h.env.DATA_AGENT_INTERNAL_TOKEN,'');h.releaseRun(run.run_id);assert.ok(observedRead);
  assert.deepEqual(h.sql(`SELECT JSON_OBJECT('operation',operation_id,'origin',origin_run_id) FROM tool_calls WHERE conversation_id='${recovery}' AND sdk_tool_call_id='read-call'`)[0],before);
+ assert.deepEqual(h.sql(`SELECT JSON_OBJECT('operation',operation_id,'origin',origin_run_id) FROM tool_calls WHERE conversation_id='${recovery}' AND sdk_tool_call_id='attachment-read-call'`)[0],attachmentBefore);
  const saved=h.sql(`SELECT checkpoint FROM pi_checkpoints WHERE recovery_chain_id='${run.recovery_chain_id}'`)[0];
  assert.ok(restoreCheckpoint('/synthetic/data-agent',saved).getBranch().some(v=>v.type==='message'&&v.message.role==='toolResult'&&v.message.toolName==='read'&&v.message.content[0].text.includes('合成步骤 1')));
- checks.push('read成功后丢回执，新Worker运行沿原operation与预算恢复，Pi接到原生分页文本而非原始JSON');
+ assert.ok(restoreCheckpoint('/synthetic/data-agent',saved).getBranch().some(v=>v.type==='message'&&v.message.role==='toolResult'&&v.message.toolCallId==='attachment-read-call'&&v.message.content[0].text.includes('合成附件步骤 1')));
+ checks.push('read成功后丢回执，新Worker运行沿原operation与预算恢复，Pi接到原生分页文本而非原始JSON；700行同版附件可分段读取，已成功附件读取亦保留原operation/origin并恢复');
  const changed=ok(await h.request('/assets',editInput(chosen,{body:'新方法'})));
  await h.resumeWorker();const nextRun=await h.capture(recovery,'继续新的问题');await h.pauseWorker();assert.equal(nextRun.checkpoint,null);assert.ok(!nextRun.workspace_context.selected_skills.some(v=>v.id===changed.id));
  checks.push('改版后下一轮重建旧Pi上下文，旧选择不自动升级或带入旧正文');

@@ -18,7 +18,7 @@ try{
  h.sql('INSERT INTO semantic_ownership(space_id,object_id,authority_id,source,updated_by) VALUES'+ownership.join(','));
  assert.equal((await h.request('/knowledge?related_id=table-demo_order_detail')).status,200);
  await page.goto(h.url);await page.getByLabel('演示登录凭据').fill(h.tokens.alice);await page.getByRole('button',{name:'进入工作台 →',exact:true}).click();
- await page.getByRole('button',{name:/语义管理/}).click();await page.getByRole('heading',{name:'demo_order_detail',exact:true}).waitFor();
+ await page.getByRole('button',{name:/语义管理/}).click();await page.goto(h.url+'/#knowledge?object=table-demo_order_detail');await page.getByRole('heading',{name:'demo_order_detail',exact:true}).waitFor();
  await page.getByRole('tab',{name:'字段语义',exact:true}).click();
  await page.locator('.field-object > details > summary').filter({hasText:/^合成字段 0尚缺说明查看$/}).waitFor({timeout:6000});
  checks.push('目录首页无关联字段时，表详情单独读取关联对象');

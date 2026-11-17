@@ -21,12 +21,7 @@ const profile = {
   payload_bytes_limit: 131072,
 };
 const sourceDirectory = resolve("docs/sources/analysis");
-const h = await harness({
-  capture: true,
-  profile,
-  sourceDirectory,
-  env: { DATA_AGENT_LEASE_MS: "120000", DATA_AGENT_QUERY_DELAY_SECONDS: "6" },
-});
+let h;
 let run,
   plan,
   protocolFailure,
@@ -53,6 +48,63 @@ const lastReply = (body) => {
 };
 const toolStep = (name, args, observe) => ({ name, args, observe });
 const finalStep = (text, observe) => ({ text, observe });
+// 来源未裁决（收窄上下文，无工具回执）期间暂停正文读取与执行工具，以及
+// Rust requires_source_context 必拒的纯受限工具（data_tools.rs 无豁免名单）；
+// 归属/来源身份/任务目录/取消保留。
+const pausedWhileUnresolved = [
+  "read",
+  "read_knowledge",
+  "read_source",
+  "request_query",
+  "execute_query",
+  "get_query",
+  "prepare_analysis_answer",
+  "present_analysis_answer",
+  "save_analysis_evidence",
+  "save_analysis_report",
+  "read_analysis_report",
+  "read_analysis_task",
+  "validate_sql",
+  "prepare_skill_draft",
+  "propose_semantic_change",
+];
+const keptWhileUnresolved = [
+  "update_analysis_task",
+  "read_conversation",
+  "search_knowledge",
+  "cancel_query",
+  "manage_personal_asset",
+];
+const assertToolVisibility = (body) => {
+  const names = body.tools.map((tool) => tool.function.name);
+  // 收窄请求以投影注入的宿主事实标记识别（custom消息转user进入真实payload）；
+  // 普通首请求允许全量工具。§6.1：来源未裁决期间暂停正文读取与执行工具，
+  // 以及宿主来源门必拒的纯受限工具；裁决后恢复。
+  const narrowed = body.messages.some((message) =>
+    typeof message.content === "string"
+      ? message.content.includes("来源尚未确定")
+      : Array.isArray(message.content) &&
+        message.content.some(
+          (part) => part.type === "text" && part.text.includes("来源尚未确定"),
+        ),
+  );
+  if (!narrowed) {
+    // 非收窄请求按原始契约可见全部受限工具（prepare/present随合同版本取舍，不在此列）。
+    for (const name of ["read_analysis_task", "validate_sql", "prepare_skill_draft", "propose_semantic_change"])
+      assert.ok(names.includes(name), "来源裁决后应恢复受限工具可见：" + name);
+    return;
+  }
+  for (const name of pausedWhileUnresolved)
+    assert.ok(
+      !names.includes(name),
+      "来源未裁决时不得可见正文读取或执行工具：" + name,
+    );
+  for (const name of keptWhileUnresolved)
+    assert.ok(
+      names.includes(name),
+      "来源未裁决时任务目录/取消等合法工具必须可见：" + name,
+    );
+};
 const provider = createServer(async (request, response) => {
   try {
     assert.equal(
@@ -65,60 +117,73 @@ const provider = createServer(async (request, response) => {
     const body = JSON.parse(raw);
     payloadBytes.push(Buffer.byteLength(raw));
     assert.ok(Buffer.byteLength(raw) <= profile.payload_bytes_limit);
-    assert.equal(body.max_tokens, profile.output_limit);
+    const serve = (delta, finishReason) => {
+      const chunk = (delta, finish_reason = null) => ({
+        id: "synthetic-analysis",
+        object: "chat.completion.chunk",
+        created: 1,
+        model: "deepseek-flash",
+        choices: [{ index: 0, delta, finish_reason }],
+      });
+      response.writeHead(200, { "content-type": "text/event-stream" });
+      response.write("data: " + JSON.stringify(chunk(delta)) + "\n\n");
+      response.write("data: " + JSON.stringify(chunk({}, finishReason)) + "\n\n");
+      response.write(
+        "data: " +
+          JSON.stringify({
+            id: "synthetic-analysis",
+            choices: [],
+            usage: { prompt_tokens: 100, completion_tokens: 25, total_tokens: 125 },
+          }) +
+          "\n\n",
+      );
+      response.end("data: [DONE]\n\n");
+    };
+    // Pi原生压缩摘要请求（较小max_tokens）：不占交付计划，也不适用正文payload断言。
+    if (body.max_tokens !== profile.output_limit) {
+      calls++;
+      serve({ role: "assistant", content: "已汇总先前对话：任务、查询、依据与冻结答案的身份保留。" }, "stop");
+      return;
+    }
     assert.deepEqual(body.thinking, { type: "disabled" });
     assert.ok(
       body.tools.some(
         (value) => value.function.name === "save_analysis_evidence",
       ),
     );
-    assert.ok(plan && plan.index < plan.steps.length, "计划外请求不能制造成功");
+    assertToolVisibility(body);
+    assert.ok(
+      plan && plan.index < plan.steps.length,
+      "计划外请求不能制造成功：" +
+        plan?.label +
+        " 已用" +
+        plan?.index +
+        "/" +
+        plan?.steps.length +
+        " 追加消息=" +
+        JSON.stringify(body.messages.at(-1)?.content ?? "").slice(0, 120),
+    );
     const step = plan.steps[plan.index++];
     if (step.observe) await step.observe(body);
     const args = typeof step.args === "function" ? step.args(body) : step.args;
     calls++;
-    const delta = step.name
-      ? {
-          role: "assistant",
-          content: "正在核对分析依据。",
-          tool_calls: [
-            {
-              index: 0,
-              id: randomUUID(),
-              type: "function",
-              function: { name: step.name, arguments: JSON.stringify(args) },
-            },
-          ],
-        }
-      : { role: "assistant", content: step.text };
-    const chunk = (delta, finish_reason = null) => ({
-      id: "synthetic-analysis",
-      object: "chat.completion.chunk",
-      created: 1,
-      model: "deepseek-flash",
-      choices: [{ index: 0, delta, finish_reason }],
-    });
-    response.writeHead(200, { "content-type": "text/event-stream" });
-    response.write("data: " + JSON.stringify(chunk(delta)) + "\n\n");
-    response.write(
-      "data: " +
-        JSON.stringify(chunk({}, step.name ? "tool_calls" : "stop")) +
-        "\n\n",
+    serve(
+      step.name
+        ? {
+            role: "assistant",
+            content: "正在核对分析依据。",
+            tool_calls: [
+              {
+                index: 0,
+                id: randomUUID(),
+                type: "function",
+                function: { name: step.name, arguments: JSON.stringify(args) },
+              },
+            ],
+          }
+        : { role: "assistant", content: step.text },
+      step.name ? "tool_calls" : "stop",
     );
-    response.write(
-      "data: " +
-        JSON.stringify({
-          id: "synthetic-analysis",
-          choices: [],
-          usage: {
-            prompt_tokens: 100,
-            completion_tokens: 25,
-            total_tokens: 125,
-          },
-        }) +
-        "\n\n",
-    );
-    response.end("data: [DONE]\n\n");
   } catch (error) {
     protocolFailure = error;
     response.writeHead(500, { "content-type": "application/json" });
@@ -130,6 +195,14 @@ const provider = createServer(async (request, response) => {
   }
 });
 await new Promise((resolve) => provider.listen(0, "127.0.0.1", resolve));
+// harness须在provider就绪后启动：凭据经protocolProviderUrl注入api子进程。
+h = await harness({
+  capture: true,
+  profile,
+  sourceDirectory,
+  protocolProviderUrl: "http://127.0.0.1:" + provider.address().port,
+  env: { DATA_AGENT_LEASE_MS: "120000", DATA_AGENT_QUERY_DELAY_SECONDS: "6" },
+});
 const previous = Object.fromEntries(
   ["DEEPSEEK_API_KEY", "DEEPSEEK_BASE_URL", "DATA_AGENT_PROVIDER_TEST"].map(
     (key) => [key, process.env[key]],
@@ -143,8 +216,8 @@ const begin = async (cid, text) => {
   run = await h.capture(cid, text);
   await h.pauseWorker();
 };
-const completeRound = async (label, steps) => {
-  plan = { steps, index: 0 };
+const completeRound = async (label, steps, finalText) => {
+  plan = { label, steps, index: 0 };
   protocolFailure = null;
   try {
     await deliver(
@@ -189,7 +262,7 @@ const completeRound = async (label, steps) => {
     snapshot.messages.findLast(
       (value) => value.role === "assistant" && value.committed,
     ).text,
-    steps.at(-1).text,
+    finalText ?? steps.at(-1).text,
   );
   const saved = h.sql(
     `SELECT checkpoint FROM pi_checkpoints WHERE recovery_chain_id='${run.recovery_chain_id}'`,
@@ -271,66 +344,92 @@ const captureResult = async (cid, query, expectedState = "succeeded") => {
     "执行消息不能假装是已经完成的结果唤醒",
   );
 };
+// v1合同：成功结果通知的解释由present_analysis_answer交付（数字经values绑定），
+// 依据保存保持独立步骤；该义务先于本包存在，计划在此补齐对应交付步骤。
 const saveResult = async (
   cid,
   task,
   query,
   expectedRows,
-  figures,
-  observation,
+  answer,
   limitations,
 ) => {
   await captureResult(cid, query);
   let result, reference;
-  await completeRound("结果唤醒后核对并保存依据", [
-    toolStep("update_analysis_task", routeArgs(task)),
-    toolStep("get_query", { query_id: query.id }),
-    toolStep("save_analysis_evidence", (body) => {
-      const actual = lastReply(body);
-      assert.equal(actual.query.id, query.id);
-      result = actual.results;
-      assert.ok(result.saved_result_complete);
-      assert.equal(result.data_freshness, "synthetic_snapshot_2026-04-04");
-      expectedRows(result.rows);
-      return {
-        task_id: task.task_id,
-        condition_version: task.condition_version,
-        data_range:
-          "UTC；排除测试；付款时间半开区间；退款截至2026年4月4日按原付款归属。",
-        findings: [
-          {
-            text: observation,
-            calculation: "按已保存SQL结果核对；金额单位为分。",
-            limitations,
-            query_refs: [
-              {
+  await completeRound(
+    "结果唤醒后核对并保存依据",
+    [
+      toolStep("update_analysis_task", routeArgs(task)),
+      toolStep("get_query", { query_id: query.id }),
+      toolStep("save_analysis_evidence", (body) => {
+        const actual = lastReply(body);
+        assert.equal(actual.query.id, query.id);
+        result = actual.results;
+        assert.ok(result.saved_result_complete);
+        assert.equal(result.data_freshness, "synthetic_snapshot_2026-04-04");
+        expectedRows(result.rows);
+        return {
+          task_id: task.task_id,
+          condition_version: task.condition_version,
+          data_range:
+            "UTC；排除测试；付款时间半开区间；退款截至2026年4月4日按原付款归属。",
+          findings: [
+            {
+              text: answer.text,
+              calculation: "按已保存SQL结果核对；金额单位为分。",
+              limitations,
+              query_refs: [
+                {
+                  query_id: query.id,
+                  result_ref: result.result_ref,
+                  columns: result.columns.map((value) => value.name),
+                },
+              ],
+              knowledge_refs: [],
+              figures: answer.figures.map((value) => ({
+                ...value,
                 query_id: query.id,
-                result_ref: result.result_ref,
-                columns: result.columns.map((value) => value.name),
-              },
-            ],
-            knowledge_refs: [],
-            figures: figures.map((value) => ({ ...value, query_id: query.id })),
-          },
-        ],
-      };
-    }),
-    finalStep(observation, (body) => {
-      reference = lastReply(body);
-      assert.deepEqual(Object.keys(reference).sort(), [
-        "condition_version",
-        "conversation_id",
-        "evidence_id",
-        "result_dependencies",
-        "task_id",
-      ]);
-      assert.equal(reference.task_id, task.task_id);
-      assert.equal(reference.condition_version, task.condition_version);
-      assert.deepEqual(reference.result_dependencies, [
-        { query_id: query.id, result_ref: result.result_ref },
-      ]);
-    }),
-  ]);
+              })),
+            },
+          ],
+        };
+      }),
+      toolStep("present_analysis_answer", (body) => {
+        // present执行前，最后的真实回执是保存依据的回执：核对独立保存的依据身份。
+        reference = lastReply(body);
+        assert.deepEqual(Object.keys(reference).sort(), [
+          "condition_version",
+          "conversation_id",
+          "evidence_id",
+          "result_dependencies",
+          "task_id",
+        ]);
+        assert.equal(reference.task_id, task.task_id);
+        assert.equal(reference.condition_version, task.condition_version);
+        assert.deepEqual(reference.result_dependencies, [
+          { query_id: query.id, result_ref: result.result_ref },
+        ]);
+        return {
+          template: answer.template,
+          sources: [
+            {
+              query_id: query.id,
+              result_ref: result.result_ref,
+              columns: result.columns.map((value) => value.name),
+            },
+          ],
+          values: answer.values.map((value) => ({
+            ...value,
+            kind: "cell",
+            query_id: query.id,
+          })),
+        };
+      }),
+      // present回执后工具循环还有一轮；答案已由present交付（messageDeferred），文本步仅收尾。
+      finalStep(answer.text),
+    ],
+    answer.text,
+  );
   evidence.push(reference);
   return reference;
 };
@@ -432,15 +531,24 @@ try {
         ],
       );
     },
-    [
-      {
-        label: "三月净收入（分）",
-        column: "net_cents",
-        row_index: 2,
-        value: "134000",
-      },
-    ],
-    "月度净收入依次为102000、113000、134000分；这描述变化，尚不能解释业务原因。",
+    {
+      template:
+        "月度净收入依次为{{a}}、{{b}}、{{c}}分；这描述变化，尚不能解释业务原因。",
+      text: "月度净收入依次为102000、113000、134000分；这描述变化，尚不能解释业务原因。",
+      figures: [
+        {
+          label: "三月净收入（分）",
+          column: "net_cents",
+          row_index: 2,
+          value: "134000",
+        },
+      ],
+      values: [
+        { name: "a", column: "net_cents", row_index: 0 },
+        { name: "b", column: "net_cents", row_index: 1 },
+        { name: "c", column: "net_cents", row_index: 2 },
+      ],
+    },
     [
       "退款按原付款月份归属，截至2026年4月4日；不是完整四月数据。",
       "算术变化不能证明业务因果。",
@@ -486,21 +594,31 @@ try {
         ["store", "23000", "27000", "4000", "21000"],
         ["web", "39000", "45000", "6000", "21000"],
       ]),
-    [
-      {
-        label: "app增量（分）",
-        column: "delta_cents",
-        row_index: 0,
-        value: "11000",
-      },
-      {
-        label: "总增量（分）",
-        column: "total_delta_cents",
-        row_index: 0,
-        value: "21000",
-      },
-    ],
-    "二月至三月总增量21000分，其中app贡献11000分，web贡献6000分，store贡献4000分。",
+    {
+      template:
+        "二月至三月总增量{{total}}分，其中app贡献{{app}}分，web贡献{{web}}分，store贡献{{store}}分。",
+      text: "二月至三月总增量21000分，其中app贡献11000分，web贡献6000分，store贡献4000分。",
+      figures: [
+        {
+          label: "app增量（分）",
+          column: "delta_cents",
+          row_index: 0,
+          value: "11000",
+        },
+        {
+          label: "总增量（分）",
+          column: "total_delta_cents",
+          row_index: 0,
+          value: "21000",
+        },
+      ],
+      values: [
+        { name: "total", column: "total_delta_cents", row_index: 0 },
+        { name: "app", column: "delta_cents", row_index: 0 },
+        { name: "store", column: "delta_cents", row_index: 1 },
+        { name: "web", column: "delta_cents", row_index: 2 },
+      ],
+    },
     ["贡献是分组金额差，不能据此认定渠道活动造成增长。"],
   );
   checks.push(
@@ -615,21 +733,31 @@ try {
     tagTask,
     tagQuery,
     (rows) => assert.deepEqual(rows, [["267250", "23000", "244250", "5"]]),
-    [
-      {
-        label: "净收入（分）",
-        column: "net_cents",
-        row_index: 0,
-        value: "244250",
-      },
-      {
-        label: "季度去重客户数",
-        column: "known_customers",
-        row_index: 0,
-        value: "5",
-      },
-    ],
-    "标签客户季度付款267250分、退款23000分、净收入244250分，去重客户5人；不能相加每月去重人数。",
+    {
+      template:
+        "标签客户季度付款{{paid}}分、退款{{refund}}分、净收入{{net}}分，去重客户{{customers}}人；不能相加每月去重人数。",
+      text: "标签客户季度付款267250分、退款23000分、净收入244250分，去重客户5人；不能相加每月去重人数。",
+      figures: [
+        {
+          label: "净收入（分）",
+          column: "net_cents",
+          row_index: 0,
+          value: "244250",
+        },
+        {
+          label: "季度去重客户数",
+          column: "known_customers",
+          row_index: 0,
+          value: "5",
+        },
+      ],
+      values: [
+        { name: "paid", column: "paid_cents", row_index: 0 },
+        { name: "refund", column: "refund_cents", row_index: 0 },
+        { name: "net", column: "net_cents", row_index: 0 },
+        { name: "customers", column: "known_customers", row_index: 0 },
+      ],
+    },
     [
       "按当前客户标签选择；不代表交易当时标签。",
       "退款截至4月4日按原付款归属；不是按退款发生月。",

@@ -12,7 +12,7 @@ import { RustTransport } from "../transport/client.ts";
 import { isRecoveryNotice } from "../session/checkpoint.ts";
 
 // 模拟模型仅生成SDK消息；任务、回执、运行和输出都通过真实宿主入口保存。
-export function mockStream(transport: RustTransport, delayMs = 0) {
+export function mockStream(transport: RustTransport, delayMs = 0, checkContext?: (context: TranscriptContext) => void) {
   return (model: Model<Api>, context: TranscriptContext) => {
     const stream = createAssistantMessageEventStream();
     void (async () => {
@@ -36,6 +36,7 @@ export function mockStream(transport: RustTransport, delayMs = 0) {
         },
       };
       try {
+        checkContext?.(context);
         await transport.post("/internal/model/issue", "ModelAttempt", binding);
         if (delayMs)
           await new Promise((resolve) => setTimeout(resolve, delayMs));

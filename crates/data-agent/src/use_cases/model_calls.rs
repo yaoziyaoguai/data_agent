@@ -28,6 +28,16 @@ pub async fn reserve(
     }
     super::context_authority::assert_run_in_tx(&mut tx, context, &cid, &input.run_id).await?;
     super::context_authority::assert_checked_run_in_tx(&mut tx, &input.run_id, &checked).await?;
+    // 真实provider每次派发（普通请求与Pi压缩摘要）都先过宿主预检；轮内收紧
+    // 来源或切换活动任务后，已交付证据违反当前限制时按stale_context拦截。
+    let authority = runtime::read_authority_in_tx(&mut tx, &input.run_id).await?;
+    super::source_limits::assert_dispatch_projection_in_tx(
+        &mut tx,
+        context,
+        &conversation,
+        authority.as_ref(),
+    )
+    .await?;
     let profile = runtime::read_budget_profile_in_tx(&mut tx, &run.budget_scope_id)
         .await?
         .ok_or(Error::new("model_unavailable"))?;
@@ -57,6 +67,14 @@ pub async fn send(
     }
     super::context_authority::assert_run_in_tx(&mut tx, context, &cid, &input.run_id).await?;
     super::context_authority::assert_checked_run_in_tx(&mut tx, &input.run_id, &checked).await?;
+    let authority = runtime::read_authority_in_tx(&mut tx, &input.run_id).await?;
+    super::source_limits::assert_dispatch_projection_in_tx(
+        &mut tx,
+        context,
+        &conversation,
+        authority.as_ref(),
+    )
+    .await?;
     let profile = runtime::read_budget_profile_in_tx(&mut tx, &run.budget_scope_id)
         .await?
         .ok_or(Error::new("model_unavailable"))?;

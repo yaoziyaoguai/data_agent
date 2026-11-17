@@ -1,13 +1,17 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { SessionManager } from "@earendil-works/pi-coding-agent";
 import { exportCheckpoint } from "../../apps/agent/session/checkpoint.ts";
 import { harness, until } from "./harness.mjs";
 
 // 真实业务入口核对数值来源和正式交付；不以工具脚本冒称模型理解能力。
+const historyBrowser = process.argv.includes("--history-browser");
 const h = await harness({
   capture: true,
+  web: historyBrowser,
+  // 新隔离库准备已超出默认窗口；这里只调整准备等待，业务与租约断言不变。
+  startupTimeout: 180000,
   env: { DATA_AGENT_LEASE_MS: "120000", DATA_AGENT_QUERY_DELAY_SECONDS: "0.1" },
 });
 const checks = [];
@@ -113,14 +117,16 @@ try {
   await rejectAnswer(badRow);
   const unbound = structuredClone(validInput); unbound.template = "净收入{{missing}}分。";
   await rejectAnswer(unbound);
-  await rejectAnswer({ ...validInput, template: "净收入增长10.8%。" }, "invalid_input");
+  // 数字禁令已随格式化合同移除：正常语义数字直写不再被机械拒绝，程序只保证绑定值与来源一致。
+  const directNumbers = await tool("present_analysis_answer", { ...validInput, template: "净收入增长10.8%；分母为0时比例为空。" });
+  assert.equal(directNumbers.answer_text, "净收入增长10.8%；分母为0时比例为空。");
   const wrongResult = structuredClone(validInput); wrongResult.sources[0].result_ref = "other-result";
   await rejectAnswer(wrongResult);
   await rejectAnswer({
     template: "金额{{amount}}分。", sources: [source(foreignQuery, foreign)],
     values: [{ name: "amount", kind: "cell", query_id: foreignQuery.id, column: "amount", row_index: 0 }],
   }, "not_available");
-  checks.push("未返回列、越界行、无来源插槽、模型直写比例、错结果版本及跨会话结果都不能形成正式答案");
+  checks.push("未返回列、越界行、无来源插槽、错结果版本及跨会话结果都不能形成正式答案；语义数字直写不再整轮拒绝");
 
   const countInput = (query, result) => ({
     template: "实际取得{{rows}}行。", sources: [source(query, result)],
@@ -150,9 +156,23 @@ try {
   const stored = h.sql(`SELECT JSON_OBJECT('state',state,'text',final_text) FROM assistant_outputs WHERE attempt_id='${run.attempt_id}'`)[0];
   assert.deepEqual(stored, { state: "committed", text: expected });
   const snapshot = await h.snapshot(cid);
-  assert.ok(snapshot.messages.some(message => message.role === "assistant" && message.text === expected), "刷新读取持久正式答案与核对回执一致");
+  const originalAnswer = snapshot.messages.find(message => message.role === "assistant" && message.text === expected);
+  assert.ok(originalAnswer, "刷新读取持久正式答案与核对回执一致");
   assert.equal(snapshot.events.filter(event => event.type === "assistant_committed" && event.payload.attempt_id === run.attempt_id).length, 1);
   checks.push("定量答案直接finish，核验与正文事件同事务；改写正文或借用读取回执被拒绝且不提前广播，合法提交幂等并与刷新内容一致");
+
+  // 同一合法单答案核旧NULL格式；非NULL损坏格式不能回退为公开自然文本。
+  const originalBinding = h.sql(`SELECT JSON_OBJECT('binding',read_binding) FROM assistant_outputs WHERE attempt_id='${run.attempt_id}'`)[0].binding;
+  try {
+    h.sql(`UPDATE assistant_outputs SET read_binding=NULL WHERE attempt_id='${run.attempt_id}'`);
+    assert.equal((await h.snapshot(cid)).messages.find(message => message.attempt_id === run.attempt_id)?.text, expected, "旧NULL格式仍接回原成功单答案");
+    h.sql(`UPDATE assistant_outputs SET read_binding=JSON_OBJECT('schema',1,'units',JSON_ARRAY()) WHERE attempt_id='${run.attempt_id}'`);
+    assert.equal((await h.snapshot(cid)).messages.find(message => message.attempt_id === run.attempt_id)?.text, "部分内容因来源不可读而隐藏。", "非NULL格式缺少来源单元必须限制正文");
+  } finally {
+    h.sql(`UPDATE assistant_outputs SET read_binding=CONVERT(0x${Buffer.from(JSON.stringify(originalBinding), 'utf8').toString('hex')} USING utf8mb4) WHERE attempt_id='${run.attempt_id}'`);
+  }
+  assert.equal((await h.snapshot(cid)).messages.find(message => message.attempt_id === run.attempt_id)?.text, expected, "恢复原绑定后读取同一提交原文");
+  checks.push("单答案旧NULL读取兼容，非NULL损坏绑定不降为无来源，恢复原绑定后正文保持");
 
   // 捕获式模型替身必须完成队列中先到的结果回合，才会继续派发下一会话。
   const completedResults = new Set([run.run_id]);
@@ -174,8 +194,11 @@ try {
   }
   assert.equal(run.conversation_id, foreignCid);
   await route(foreignTask);
+  // HTTP读取不登记本轮已交付结果；先由当前run读取，再绑定同一结果形成答案。
+  const revocableResult = (await tool("get_query", { query_id: foreignQuery.id })).results;
+  assert.equal(revocableResult.result_ref, foreign.result_ref, "当前run仍须读取原来同一份结果");
   const revocableInput = {
-    template: "实际金额{{amount}}分。", sources: [source(foreignQuery, foreign)],
+    template: "实际金额{{amount}}分。", sources: [source(foreignQuery, revocableResult)],
     values: [{ name: "amount", kind: "cell", query_id: foreignQuery.id, column: "amount", row_index: 0 }],
   };
   const revocable = await rawTool("present_analysis_answer", revocableInput);
@@ -195,6 +218,160 @@ try {
   assert.equal(committedReplay.final_text, undefined);
   assert.equal(committedReplay.answer_text, undefined);
   checks.push("成功present后撤权阻止旧回执和finish，snapshot/events没有泄漏正文；已提交finish的相同payload撤权后仍幂等返回状态且无正文");
+  const revokedCommitted = await h.snapshot(cid);
+  assert.ok(!revokedCommitted.messages.some(message => message.role === "assistant" && message.text.includes("9007199254740993.01")), "撤权后已提交历史答案不能由snapshot缓存返回");
+  assert.ok(!revokedCommitted.events.some(event => ["assistant_delta", "assistant_committed"].includes(event.type) && event.payload.text?.includes("9007199254740993.01")), "历史事件页同样不能返回撤权数值");
+  const restrictedAnswer = revokedCommitted.messages.find(message => message.attempt_id === originalAnswer.attempt_id && message.committed);
+  assert.ok(restrictedAnswer, "限制正文仍保留原答案消息身份");
+  assert.equal(restrictedAnswer.output_id, originalAnswer.output_id);
+  assert.ok(revokedCommitted.messages.some(message => message.role === "assistant" && message.text === "合成查询草稿已经准备。"), "无结果依赖的原说明继续可读");
+  assert.ok(revokedCommitted.messages.some(message => message.role === "user" && message.text === "准备精确金额、空值和分页样例，先不执行。"), "用户原消息继续可读");
+  const eventResponse = await fetch(h.env.DATA_AGENT_API_URL + `/conversations/${cid}/events?after_seq=0`, {headers: {authorization: "Bearer " + h.tokens.alice}});
+  assert.equal(eventResponse.status, 200);
+  const eventReplay = (await eventResponse.text()).split("\n").filter(line => line.startsWith("data: ")).map(line => JSON.parse(line.slice(6)));
+  assert.ok(!eventReplay.some(event => ["assistant_delta", "assistant_committed"].includes(event.type) && event.payload.text?.includes("9007199254740993.01")), "SSE重放不能绕过snapshot正文权限投影");
+  // 正式数值可直接提交而不广播delta；用紧邻提交的游标核对重放来源。
+  const originalCommit = snapshot.events.find(event => event.type === "assistant_committed" && event.payload.attempt_id === originalAnswer.attempt_id);
+  assert.ok(originalCommit);
+  const cursorResponse = await fetch(h.env.DATA_AGENT_API_URL + `/conversations/${cid}/events?after_seq=${BigInt(originalCommit.event_seq) - 1n}`, {headers: {authorization: "Bearer " + h.tokens.alice}});
+  assert.equal(cursorResponse.status, 200);
+  const cursorReplay = (await cursorResponse.text()).split("\n").filter(line => line.startsWith("data: ")).map(line => JSON.parse(line.slice(6)));
+  assert.ok(cursorReplay.some(event => event.type === "assistant_committed" && event.payload.attempt_id === originalAnswer.attempt_id), "游标从答案内部续读仍保留提交身份");
+  assert.ok(!cursorReplay.some(event => ["assistant_delta", "assistant_committed"].includes(event.type) && event.payload.text?.includes("9007199254740993.01")), "游标续读仍须核原答案来源");
+  await writeFile(h.directory + "/platform/permissions.json", "{}");
+  const restoredCommitted = await h.snapshot(cid);
+  assert.ok(restoredCommitted.messages.some(message => message.role === "assistant" && message.text === expected), "恢复读取权后原正式正文仍可读，不能删除或改写历史记录");
+  checks.push("已提交历史答案及事件按当前结果权限投影，恢复后读回同一原文且不重新执行查询");
+  if (historyBrowser) {
+    const { chromium } = await import("playwright");
+    const foreignAttempt = run.attempt_id;
+    ok(await h.internal("/internal/finish", finishInput(revokedText, revocable.input.sdk_tool_call_id)));
+    h.releaseRun(run.run_id);
+    await begin(cid, "先生成一段可停止的合成说明，不执行查询。");
+    const cancelledAttempt = run.attempt_id;
+    ok(await append("尚未定稿的合成说明。", 1));
+    const streamingPage = await h.snapshot(cid);
+    const streamEvent = streamingPage.events.find(event => event.type === "assistant_delta" && event.payload.attempt_id === cancelledAttempt);
+    assert.ok(streamEvent, "取消前确已读入流式片段");
+    const loadedRanges = [
+      { attempt_id: cancelledAttempt, first_event_seq: streamEvent.event_seq, last_event_seq: streamEvent.event_seq },
+      { attempt_id: originalAnswer.attempt_id, first_event_seq: originalCommit.event_seq, last_event_seq: originalCommit.event_seq },
+    ];
+    const beforeCancel = ok(await h.request(`/conversations/${cid}/snapshot`, { loaded_outputs: loadedRanges }));
+    assert.equal(beforeCancel.output_projections[0].output_state, "streaming");
+    const cancelled = ok(await h.request(`/conversations/${cid}/cancel-run`, binding()));
+    assert.equal(cancelled.state, "cancelled");
+    h.releaseRun(run.run_id);
+    const afterCancel = ok(await h.request(`/conversations/${cid}/snapshot`, {
+      after_seq: streamingPage.last_event_seq, loaded_outputs: loadedRanges,
+    }));
+    assert.equal(afterCancel.output_projections[0].output_state, "cancelled", "正常取消终态必须能进入历史刷新响应");
+    assert.ok(afterCancel.output_projections[1].events.some(event => event.payload.text === expected), "取消片段不能阻断同次响应中的已提交答案");
+    checks.push("已读流式片段经正式停止生成后仍能按原范围刷新，并保同次已提交答案投影");
+    // 只在本隔离夹具的合法提交之间补分页消息，保答案、来源、ID及相对顺序。
+    const cut = Number(originalCommit.event_seq), padding = 1100;
+    const before = h.sql(`SELECT JSON_OBJECT('seq',event_seq) FROM conversations WHERE id='${cid}'`)[0].seq;
+    h.sql(`UPDATE conversation_events SET event_seq=event_seq+${padding} WHERE conversation_id='${cid}' AND event_seq>${cut} ORDER BY event_seq DESC`);
+    const rows = Array.from({ length: padding }, (_, index) => {
+      const payload = Buffer.from(JSON.stringify({ message_id: "history-permission-" + index, text: "历史权限分页消息 " + index }), "utf8").toString("hex");
+      return `('${randomUUID()}','${cid}',${cut + index + 1},'message',CONVERT(0x${payload} USING utf8mb4))`;
+    });
+    h.sql("INSERT INTO conversation_events(event_id,conversation_id,event_seq,event_type,payload) VALUES" + rows.join(",") + `;UPDATE conversations SET event_seq=${Number(before) + padding} WHERE id='${cid}'`);
+    const eventCursor = String(Number(before) + padding);
+    const browser = await chromium.launch();
+    const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
+    const browserErrors = [], reads = [];
+    let activeReads = 0, maxActiveReads = 0, holdNext = false, held = false, releaseHeld = () => {};
+    page.on("pageerror", error => browserErrors.push(error.message));
+    const permissions = h.directory + "/platform/permissions.json", originalPermissions = await readFile(permissions, "utf8");
+    await page.route(`**/api/conversations/${cid}/snapshot`, async request => {
+      activeReads++; maxActiveReads = Math.max(maxActiveReads, activeReads);
+      try {
+        assert.equal(request.request().method(), "POST");
+        const input = request.request().postDataJSON();
+        const response = await request.fetch();
+        const output = await response.json();
+        reads.push({ input, output });
+        if (holdNext && input.after_seq) {
+          holdNext = false; held = true;
+          await new Promise(resolve => { releaseHeld = resolve; });
+        }
+        await request.fulfill({ response });
+      } finally { activeReads--; }
+    });
+    try {
+      await page.addInitScript(id => {
+        localStorage.setItem('data-agent.conversation.["demo","alice"]', id);
+        const nativeFetch = window.fetch.bind(window), active = new Set();
+        const observed = window.__historySnapshotReads = { max: 0, trace: [] };
+        let sequence = 0;
+        window.fetch = async (url, options) => {
+          if (!String(url).endsWith(`/conversations/${id}/snapshot`)) return nativeFetch(url, options);
+          const key = ++sequence, signal = options?.signal;
+          active.add(key); observed.max = Math.max(observed.max, active.size);
+          observed.trace.push({ event: "start", key, input: JSON.parse(options.body) });
+          const settle = event => { active.delete(key); observed.trace.push({ event, key }); signal?.removeEventListener("abort", aborted); };
+          const aborted = () => settle("abort");
+          signal?.addEventListener("abort", aborted, { once: true });
+          try {
+            const response = await nativeFetch(url, options), json = response.json.bind(response);
+            response.json = async () => { try { return await json(); } finally { settle("body_read"); } };
+            return response;
+          } catch (error) { settle("failed"); throw error; }
+        };
+      }, cid);
+      await page.goto(h.url);
+      await page.getByLabel("演示登录凭据").fill(h.tokens.alice);
+      await page.getByRole("button", { name: "进入工作台 →", exact: true }).click();
+      await page.getByText("实际取得205行。", { exact: true }).waitFor();
+      holdNext = true;
+      await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+      await until(() => held, "普通快照在途");
+      const heldCount = reads.length;
+      await page.getByRole("button", { name: "加载更早的消息", exact: true }).click();
+      await page.waitForTimeout(800);
+      assert.equal(reads.length, heldCount, "loadOlder在普通刷新合并前不能另发snapshot");
+      releaseHeld();
+      await page.getByText(expected, { exact: true }).waitFor();
+      await page.getByText("合成查询草稿已经准备。", { exact: true }).waitFor();
+      const loaded = reads.findLast(read => read.input.before_seq);
+      assert.ok(loaded, "确实加载旧页");
+      assert.equal((await page.evaluate(() => window.__historySnapshotReads)).max, 1, "首次页、普通刷新与翻页共用一个读取门");
+      // QueryList故障不能丢掉已经成功的snapshot权限刷新。
+      await page.route(`**/api/conversations/${cid}/queries`, request => request.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ code: "upstream_failed", message: "合成查询目录暂时不可用", request_id: randomUUID(), retryable: true }) }));
+      await writeFile(permissions, JSON.stringify({ denied_query_users: ["alice"] }));
+      await until(async () => await page.getByText(expected, { exact: true }).count() === 0 && await page.getByText("实际取得205行。", { exact: true }).count() === 0, "正常轮询隐藏旧新页答案", 40000);
+      assert.equal(await page.getByText("合成查询草稿已经准备。", { exact: true }).count(), 1);
+      assert.equal(await page.getByText("准备精确金额、空值和分页样例，先不执行。", { exact: true }).count(), 1);
+      await page.getByText("部分内容因来源不可读而隐藏。", { exact: true }).first().scrollIntoViewIfNeeded();
+      await page.screenshot({ path: h.directory + "/history-loaded-denied.png" });
+      await page.unroute(`**/api/conversations/${cid}/queries`);
+      await writeFile(permissions, originalPermissions);
+      await until(async () => await page.getByText(expected, { exact: true }).count() === 1 && await page.getByText("实际取得205行。", { exact: true }).count() === 1, "正常轮询恢复全部已加载页原文", 40000);
+      await page.getByText(expected, { exact: true }).scrollIntoViewIfNeeded();
+      await page.screenshot({ path: h.directory + "/history-loaded-restored.png" });
+      await until(() => reads.some(read => read.input.loaded_outputs?.length && read.output.output_projections?.every(projection => projection.projection_result === "unchanged" && projection.events === undefined)), "相同投影不重传正文", 40000);
+      assert.ok(reads.some(read => read.output.output_projections?.some(projection => projection.attempt_id === cancelledAttempt && projection.output_state === "cancelled")), "普通轮询已携带取消片段，其他答案仍完成撤权和恢复");
+      assert.equal(String(h.sql(`SELECT JSON_OBJECT('seq',event_seq) FROM conversations WHERE id='${cid}'`)[0].seq), eventCursor, "撤权和恢复没有追加会话事件");
+      assert.equal((await page.evaluate(() => window.__historySnapshotReads)).max, 1);
+      assert.deepEqual(browserErrors, []);
+      const boundary = ok(await h.request(`/conversations/${cid}/snapshot`, { after_seq: eventCursor, loaded_outputs: [
+        { attempt_id: foreignAttempt, first_event_seq: "1", last_event_seq: eventCursor },
+        { attempt_id: "missing-output", first_event_seq: "1", last_event_seq: eventCursor },
+        { attempt_id: originalAnswer.attempt_id, first_event_seq: String(Number(eventCursor) + 1), last_event_seq: String(Number(eventCursor) + 1) },
+      ] }));
+      assert.deepEqual(boundary.output_projections.slice(0, 2).map(projection => [projection.projection_result, projection.output_state, projection.events]), [["not_available", null, undefined], ["not_available", null, undefined]], "外会话和缺失输出返回相同结果");
+      assert.equal(boundary.output_projections[2].projection_result, "replace");
+      assert.deepEqual(boundary.output_projections[2].events, [], "合法空范围也有明确完整替换");
+      checks.push("真实浏览器两页正常轮询撤权/恢复，无新事件、无需手动刷新；events缓存、单读取门、QueryList失败隔离、指纹与范围结果保持");
+    } finally {
+      releaseHeld();
+      await writeFile(permissions, originalPermissions);
+      const clientReads = await page.evaluate(() => window.__historySnapshotReads ?? null);
+      await writeFile(h.directory + "/history-loaded-reads.json", JSON.stringify({ reads, hostRouteMaxActive: maxActiveReads, clientReads, eventCursor, browserErrors }, null, 2) + "\n");
+      await browser.close();
+    }
+  }
   passed = true;
 } finally {
   await mkdir(".local/checks/agent-reliability-repairs", { recursive: true });

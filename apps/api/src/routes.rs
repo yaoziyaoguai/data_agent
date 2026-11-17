@@ -21,6 +21,7 @@ pub(crate) fn failure(error: Error) -> (StatusCode, Json<Value>) {
     );
     let status = match error.code {
         "invalid_input"
+        | "invalid_cursor"
         | "skill_line_too_long"
         | "invalid_model_endpoint"
         | "model_capacity_invalid" => StatusCode::BAD_REQUEST,
@@ -28,6 +29,7 @@ pub(crate) fn failure(error: Error) -> (StatusCode, Json<Value>) {
         "unauthenticated" => StatusCode::UNAUTHORIZED,
         "not_available" => StatusCode::NOT_FOUND,
         "unavailable"
+        | "upstream_failed"
         | "source_unavailable"
         | "source_interrupted"
         | "vector_unconfigured"
@@ -169,12 +171,48 @@ pub async fn snapshot(
     if before.is_some() && after.is_some() {
         return Err(failure(Error::new("invalid_input")));
     }
-    let value = use_cases::read_conversation::read_page(&state.pool, &context, &cid, before, after)
-        .await
-        .map_err(failure)?;
+    let value =
+        use_cases::read_conversation::read_page(&state.pool, &context, &cid, before, after, None)
+            .await
+            .map_err(failure)?;
     contracts::validate("Snapshot", &value).map_err(failure)?;
     Ok(Json(value))
 }
+pub async fn refresh_snapshot(
+    AxumState(state): AxumState<State>,
+    headers: HeaderMap,
+    Path(cid): Path<String>,
+    Json(value): Json<Value>,
+) -> ResponseResult {
+    let context = user(&state, &headers).map_err(failure)?;
+    contracts::validate("SnapshotRequest", &value).map_err(failure)?;
+    let request: SnapshotRequest =
+        serde_json::from_value(value).map_err(|_| failure(Error::new("invalid_input")))?;
+    let before = request
+        .before_seq
+        .as_deref()
+        .map(data_agent::types::epoch)
+        .transpose()
+        .map_err(failure)?;
+    let after = request
+        .after_seq
+        .as_deref()
+        .map(data_agent::types::epoch)
+        .transpose()
+        .map_err(failure)?;
+    use_cases::read_conversation::read_page(
+        &state.pool,
+        &context,
+        &cid,
+        before,
+        after,
+        Some(&request.loaded_outputs),
+    )
+    .await
+    .map_err(failure)
+    .and_then(|value| success("SnapshotRefresh", value))
+}
+
 pub async fn events(
     AxumState(state): AxumState<State>,
     headers: HeaderMap,
@@ -259,6 +297,22 @@ pub async fn finish(
         .await
         .map_err(failure)
         .and_then(|value| success("FinishReceipt", value))
+}
+pub async fn refresh_context(
+    AxumState(state): AxumState<State>,
+    headers: HeaderMap,
+    Json(body): Json<Value>,
+) -> ResponseResult {
+    let input = contracts::decode::<data_agent::contracts::generated::RefreshRunContext>(
+        "RefreshRunContext",
+        body.clone(),
+    )
+    .map_err(failure)?;
+    let context = internal(&state, &headers, &body).await.map_err(failure)?;
+    use_cases::deliver_run::refresh_context(&state.pool, &context, input)
+        .await
+        .map_err(failure)
+        .and_then(|value| success("WorkspaceContext", value))
 }
 pub async fn read_checkpoint(
     AxumState(state): AxumState<State>,

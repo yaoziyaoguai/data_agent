@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import {writeFile,mkdir,readFile} from 'node:fs/promises';
 import {deriveCapacityPlan,planForProfile,assertRuntimeOverhead,effectiveOutputCap,capacityRanges} from '../../packages/contracts/capacity.ts';
 import {estimateFixedContextTokens,estimateRequestBytes} from '../../apps/agent/session/request-size.ts';
+import {SessionManager} from '@earendil-works/pi-coding-agent';
+import {sessionCapacity} from '../../apps/agent/session/capacity.ts';
 
 const checks=[];let passed=false;
 try {
@@ -23,9 +25,9 @@ try {
   assert.equal(typeof initial,'object');
   assert.deepEqual(
     [initial.historyReserve,initial.trigger,initial.keepRecent,initial.toolReserve,initial.summaryCap,initial.splitSummaryCap],
-    [120000,880000,65536,20000,65536,60000],
+    [120000,880000,65536,20000,65536,65536],
   );
-  checks.push('DeepSeek初值C=1M/I=900000/O=65536：R=120000、T=880000、K=65536、H=20000、S1=65536、S2=60000');
+  checks.push('DeepSeek初值C=1M/I=900000/O=65536：R=120000、T=880000、K=65536、H=20000、Pi1.4 S1=S2=65536');
 
   const longOutput=deriveCapacityPlan(1000000,900000,131072);
   assert.equal(longOutput.trigger,848928);
@@ -52,6 +54,21 @@ try {
     [16000,5000,8000,7000],
   );
   checks.push('缺context_window走legacy；实际输出cap=min(SDK当次maxTokens,冻结输出,已知端点上限)');
+
+  // 1.4分段时可能直接沿用旧摘要；2O+K不包含它的真实长度或SDK文件附记。
+  const manager=SessionManager.inMemory('/synthetic/capacity');
+  const firstKeptEntryId=manager.appendMessage({role:'user',content:'保留的当前合成输入',timestamp:1});
+  const preparation={firstKeptEntryId,messagesToSummarize:[],turnPrefixMessages:[{role:'user',content:'分段前缀',timestamp:1}],isSplitTurn:true,tokensBefore:100,previousSummary:'短旧摘要',fileOps:{read:new Set(),written:new Set(),edited:new Set()},settings:{enabled:true,reserveTokens:plan.historyReserve,keepRecentTokens:plan.keepRecent}};
+  for(const kind of ['reused_previous_summary','file_operations']){
+    const capacity=sessionCapacity(plan,manager,()=>slack-256);
+    assert.equal(capacity.failure(),null);
+    const event=structuredClone(preparation);
+    if(kind==='reused_previous_summary')event.previousSummary='x'.repeat((plan.summaryCap+1024)*4);
+    else event.fileOps.read.add('/skills/'+('synthetic/'.repeat(500))+'SKILL.md');
+    await capacity.extension.handlers.get('session_before_compact')[0]({preparation:event});
+    assert.equal(capacity.failure(),'fixed_overhead_insufficient',kind+'必须计入压缩后空间');
+  }
+  checks.push('实际沿用的长旧摘要与原生文件附记突破静态2O+K预算时，摘要发送前拒绝，不降低冻结输出帽');
 
   passed=true;
   console.log(JSON.stringify({passed,checks,officialRequests:0}));

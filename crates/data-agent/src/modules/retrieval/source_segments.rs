@@ -11,6 +11,8 @@ use sqlparser::{
 };
 
 pub const SEGMENTATION_VERSION: &str = "source-structure-1";
+// 投影进度存储的数值版本：与SEGMENTATION_VERSION同升；变更切块规则时同步递增。
+pub const SEGMENTATION_VERSION_NUMBER: u32 = 1;
 const TARGET_CHARS: usize = 1200;
 const MAX_CHARS: usize = 2400;
 const OVERLAP_CHARS: usize = 160;

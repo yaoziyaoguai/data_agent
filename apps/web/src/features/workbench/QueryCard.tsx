@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type {
   QueryView,
   QueryResults,
@@ -44,6 +44,7 @@ export function QueryCard({
   const [showSql, setShowSql] = useState(false);
   const [copied, setCopied] = useState(false);
   const resultGeneration = useRef(0);
+  const readResult = useRef<(() => void) | null>(null);
   const refresh = useRef(onRefresh);
   refresh.current = onRefresh;
   const readable = query.text_unavailable !== true;
@@ -83,37 +84,62 @@ export function QueryCard({
       setBusy(false);
     }
   };
-  const load = useCallback(async () => {
-    if (!readable) return;
-    const generation = ++resultGeneration.current;
-    setBusy(true);
-    setError("");
-    try {
-      const value = await api(
-        "QueryResults",
-        "/queries/" + query.id + "/results",
-      );
-      if (generation !== resultGeneration.current) return;
-      setResult(value);
-    } catch (e) {
-      if (generation === resultGeneration.current) {
-        setResult(null);
-        setError(e instanceof Error ? e.message : "结果读取失败");
-        refresh.current();
-      }
-    } finally {
-      if (generation === resultGeneration.current) setBusy(false);
-    }
-  }, [query.id, readable]);
   useEffect(() => {
+    let mounted = true;
+    let reading = false;
+    let pollRead = false;
+    let timer: number | undefined;
+    let controller: AbortController | undefined;
     setResult(null);
     setShowSql(false);
     setCopied(false);
     setError("");
     setBusy(false);
-    if (readable && query.execution_state === "succeeded") void load();
-    return () => { ++resultGeneration.current; };
-  }, [load, readable, query.execution_state, query.result_ref]);
+    const schedule = () => {
+      if (mounted && pollRead && !document.hidden) timer = window.setTimeout(() => void load(), 2000);
+    };
+    const load = async (foreground = false) => {
+      if (!mounted || !readable || query.execution_state !== "succeeded" || reading || (!foreground && document.hidden)) return;
+      window.clearTimeout(timer);
+      reading = true;
+      const generation = ++resultGeneration.current;
+      controller = new AbortController();
+      if (foreground) { setBusy(true); setError(""); }
+      try {
+        const value = await api("QueryResults", "/queries/" + query.id + "/results", "GET", undefined, undefined, controller.signal);
+        if (!mounted || generation !== resultGeneration.current) return;
+        setResult(value); setError("");
+        pollRead = true;
+      } catch (e) {
+        if (mounted && generation === resultGeneration.current) {
+          const message = e instanceof Error ? e.message : "结果读取失败";
+          setResult(null); setError(message);
+          if (message === "result_expired") pollRead = false;
+          refresh.current();
+        }
+      } finally {
+        if (mounted && generation === resultGeneration.current) {
+          reading = false; controller = undefined; setBusy(false);
+          schedule();
+        }
+      }
+    };
+    const wake = () => {
+      window.clearTimeout(timer);
+      if (pollRead && !document.hidden) void load();
+    };
+    // 只回读已成功打开的当前页；撤权后继续核对恢复，过期仍等待用户另发查询。
+    readResult.current = () => void load(true);
+    if (readable && query.execution_state === "succeeded") void load(true);
+    window.addEventListener("focus", wake);
+    document.addEventListener("visibilitychange", wake);
+    return () => {
+      mounted = false; ++resultGeneration.current; window.clearTimeout(timer); controller?.abort();
+      readResult.current = null;
+      window.removeEventListener("focus", wake);
+      document.removeEventListener("visibilitychange", wake);
+    };
+  }, [query.id, readable, query.execution_state, query.result_ref]);
   const running = ["queued", "submitting", "running", "submission_unknown"].includes(query.execution_state);
   const stopping = running && query.cancel_state === "requested";
   const queryError = query.error === "outcome_unknown"
@@ -155,7 +181,7 @@ export function QueryCard({
         {readable && <details className="running-sql"><summary>查看 SQL 和参数</summary>{sql}</details>}
       </> : sql}
       {readable && !!references.length && <details className="query-evidence"><summary>查看口径依据</summary><div className="evidence-row">{references.map(ref => <KnowledgeReference key={ref.object_id + ref.path} id={ref.object_id} path={ref.path} onOpen={id => onEvidence(id, query.summary, ref.version)}/>)}</div></details>}
-      {readable && query.execution_state === "succeeded" && !result && error !== "result_expired" && <p className="quiet">{busy ? "正在读取查询结果…" : <button onClick={() => void load()}>重新读取结果</button>}</p>}
+      {readable && query.execution_state === "succeeded" && !result && error !== "result_expired" && <p className="quiet">{busy ? "正在读取查询结果…" : <button onClick={() => readResult.current?.()}>重新读取结果</button>}</p>}
       {query.execution_state === "submission_unknown" && !stopping && (
         <p className="quiet">
           正在向查询平台确认状态，你可以继续聊天。

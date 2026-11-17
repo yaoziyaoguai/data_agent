@@ -117,7 +117,7 @@ try {
   const first = await capture(conversation, '继续解释已经读取的合成文档。');
   for (const field of ['context_window', 'input_limit', 'output_limit', 'payload_bytes_limit', 'request_timeout_ms', 'capability_source'])
     assert.equal(first.model_profile[field], definition[field], field + '必须在宿主消息中冻结');
-  assert.equal(first.model_profile.request_call_limit, 24);
+  assert.equal(first.model_profile.request_call_limit, undefined, '正常新配置不恢复已取消的默认24次帽');
 
   // 与正式运行一致使用Pi持久journal；大历史不能作为内联checkpoint反复塞入工具HTTP请求。
   const manager = restoreCheckpoint('/synthetic/data-agent', null);
@@ -150,9 +150,9 @@ try {
   const firstRequests = requests.filter(request => request.message === first.message_id);
   assert.ok(firstRequests.some(request => request.kind === 'history'), '真实Pi须执行历史摘要');
   assert.ok(firstRequests.some(request => request.kind === 'turn_prefix'), '同一次压缩须执行split-turn前缀摘要');
-  // C=240000/I=200000/O=35000：H=16384，R=56384，S1=35000，S2=28192。
+  // 1.4两类摘要都用O=35000；此样本I+O+SDK余量小于C，未触发wire输出收紧。
   assert.ok(firstRequests.filter(request => request.kind === 'history').every(request => request.outputCap === 35000));
-  assert.ok(firstRequests.filter(request => request.kind === 'turn_prefix').every(request => request.outputCap === 28192));
+  assert.ok(firstRequests.filter(request => request.kind === 'turn_prefix').every(request => request.outputCap === 35000));
   assert.equal(restoreCheckpoint('/synthetic/data-agent', checkpoint).getHeader().id, originalSession);
   assert.ok(restoreCheckpoint('/synthetic/data-agent', checkpoint).getBranch().some(entry => entry.type === 'compaction'));
   const projection = restoreCheckpoint('/synthetic/data-agent', checkpoint).buildSessionContext().messages;
@@ -162,7 +162,7 @@ try {
     const body = JSON.parse(result.content.find(part => part.type === 'text').text).entries.find(entry => entry.entry_id === 'body').effective_value;
     assert.equal(body, documents.find(document => document.id === call.arguments.object_id).body);
   }
-  checks.push({name: '中型新profile原生split-turn双摘要，摘要输入和不同输出cap生效，近期工具正文逐字保留',
+  checks.push({name: '中型新profile原生split-turn双摘要，两类输出沿冻结O且实际输入受限，近期工具正文逐字保留',
     summaryRequests: firstRequests.filter(request => request.kind !== 'ordinary')});
 
   const allRuns = [first];
@@ -184,9 +184,8 @@ try {
     assert.ok(attempts.every(attempt => attempt.scope === run.budget_scope_id && attempt.run === run.run_id && attempt.state === 'settled'));
     assert.deepEqual(attempts.map(attempt => attempt.cap).sort((a, b) => a - b), sent.map(request => request.outputCap).sort((a, b) => a - b));
     const scope = h.sql(`SELECT JSON_OBJECT('calls',issued_calls,'limit',call_limit) FROM budget_scopes WHERE id='${run.budget_scope_id}'`)[0];
-    assert.equal(scope.limit, 24);
+    assert.equal(scope.limit, null, '正常scope无默认累计帽；有限旧profile和显式trial另由原回归验证');
     assert.equal(scope.calls, sent.length);
-    assert.ok(scope.calls <= 24);
   }
   checks.push({name: '三轮保持同一个Pi会话，摘要和普通请求沿各原消息预算范围，旧工具operation和origin不变',
     messages: allRuns.length, originalTools: initialTools.length});

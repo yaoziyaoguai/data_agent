@@ -204,6 +204,9 @@ def build_catalog(directory: Path = ROOT) -> dict:
                          table=table, column=name)]
         result.append(object_(identifier('field-', table.removeprefix('syn_') + '-' + name), 'field', table + '.' + name,
                               entries, source, ['table-' + table]))
+    time_source = manifest['source_ids']['documents/overview.md']
+    time_quote = next(line for line in sources['documents/overview.md'].splitlines()
+                      if line.startswith('资料覆盖活动期为'))
     metric_ids = set()
     for definition, source, quote in metrics:
         ident = identifier('metric-', definition['id'])
@@ -212,16 +215,23 @@ def build_catalog(directory: Path = ROOT) -> dict:
         metric_ids.add(ident)
         if not set(definition['tables']) <= set(tables):
             raise ValueError('指标引用不存在的表: ' + ident)
-        prose = definition['description']
+        prose = definition['description'] + '\n\n缺省时间依据见本指标的time_basis条目；用户明确条件和任务已采用值优先。'
         entries = [entry('definition', '指标口径', prose, source, quote, definition['id'], definition.get('structure')),
-                   entry('aliases', '别名', '、'.join(definition['aliases']), source, quote, definition['id'])]
-        if definition.get('sql'):
-            sql = definition['sql']
+                   entry('aliases', '别名', '、'.join(definition['aliases']), source, quote, definition['id']),
+                   entry('time_basis', '合成资料活动期与固定快照', definition['name'] + '的合成资料时间依据：\n' + time_quote,
+                         time_source, time_quote, '合成数据范围与固定快照')]
+        sql = definition.get('sql')
+        if not sql:
+            # 新定义的SQL只在同名章节维护一份，仍从允许来源原文生成。
+            section = source_by_id[source].partition('## `' + definition['id'] + '`')[2].partition('\n## ')[0]
+            block = re.search(r'```sql\n(.*?)\n```', section, re.S)
+            sql = block.group(1) if block else None
+        if sql:
             if sql not in source_by_id[source]:
                 raise ValueError('指标SQL不是来源原文: ' + ident)
             entries.append(entry('sql', '计算SQL', sql, source, sql, definition['id']))
         result.append(object_(ident, 'metric', definition['name'], entries, source,
-                              ['table-' + table for table in definition['tables']]))
+                              ['table-' + table for table in definition['tables']] + [identifier('document-', time_source)]))
     for name, body in sources.items():
         if not name.startswith('documents/'):
             continue

@@ -11,6 +11,9 @@ pub fn search_preview(mut object: Value, query: &str) -> Value {
         .as_array()
         .cloned()
         .unwrap_or_default();
+    // 窄读保留对象的条目总数，以及每个窗口在原正文中的位置与总长度。
+    let entries_total = object["entries_total"].as_u64();
+    let entries_complete = object["entries_complete"] != false;
     if let Some(entries) = object.get_mut("entries").and_then(Value::as_array_mut) {
         let original_count = entries.len();
         if !excerpts.is_empty() {
@@ -41,11 +44,13 @@ pub fn search_preview(mut object: Value, query: &str) -> Value {
             entries.truncate(3);
         }
         for entry in entries.iter_mut() {
-            let (_, page) =
-                super::text_page(entry["effective_value"].as_str().unwrap_or(""), 0, 160);
-            entry["content_page"] = page;
+            if !entry["content_page"].is_object() {
+                entry["content_page"] = json!({"offset":0,"total_chars":entry["effective_value"]
+                    .as_str().unwrap_or("").chars().count()});
+            }
         }
-        object["entries_complete"] = json!(entries.len() == original_count);
+        let total = entries_total.unwrap_or(original_count as u64);
+        object["entries_complete"] = json!(entries_complete && entries.len() as u64 == total);
     }
     compact_object(super::preview(object), false)
 }
@@ -246,29 +251,33 @@ fn compact_object(object: Value, minimal: bool) -> Value {
     }
     for entry in object["entries"].as_array().into_iter().flatten().take(3) {
         let text = entry["effective_value"].as_str().unwrap_or("");
-        let (body, page) = super::text_page(text, 0, if minimal { 0 } else { 160 });
+        let body = text
+            .chars()
+            .take(if minimal { 0 } else { 160 })
+            .collect::<String>();
+        let offset = entry["content_page"]["offset"].as_u64().unwrap_or(0);
+        let total = entry["content_page"]["total_chars"]
+            .as_u64()
+            .unwrap_or_else(|| text.chars().count() as u64);
+        let end = offset.saturating_add(body.chars().count() as u64);
+        let complete = offset == 0 && end >= total;
+        let page = json!({"offset":offset,"total_chars":total,"complete":complete,
+            "next_offset":if end<total{Some(end)}else{None}});
+        if !complete {
+            result["entries_complete"] = json!(false);
+        }
         let available =
             entry["structure_available"] == true || !entry["effective_structure"].is_null();
         let structure = &entry["effective_structure"];
         let full_structure = !minimal && !structure.is_null() && bytes(structure) <= 1024;
-        let mut summary = json!({"entry_id":entry["entry_id"],"path":short(&entry["path"],if minimal{40}else{128}),
+        let summary = json!({"entry_id":entry["entry_id"],"path":short(&entry["path"],if minimal{40}else{128}),
             "label":short(&entry["label"],if minimal{40}else{80}),"effective_value":body,
-            "review_state":entry["review_state"],"content_page":entry.get("content_page").cloned().unwrap_or(page),
+            "review_state":entry["review_state"],"content_page":page,
             "source_facts":{"source_id":entry["source_facts"]["source_id"],"version":entry["source_facts"]["version"]},
             "suggestion":bounded_metadata(&entry["suggestion"],0),
             "human_override":if entry["human_override"].is_null(){Value::Null}else{json!({"has_override":true})},
             "structure_available":available,"effective_structure":if full_structure{structure.clone()}else{Value::Null},
             "structure_page":{"complete":full_structure,"next_offset":if available && !full_structure{Some(0)}else{None}}});
-        let delivered = body.chars().count() as u64;
-        let total = summary["content_page"]["total_chars"]
-            .as_u64()
-            .unwrap_or(text.chars().count() as u64);
-        summary["content_page"]["complete"] = json!(delivered >= total);
-        summary["content_page"]["next_offset"] = json!(if delivered < total {
-            Some(delivered)
-        } else {
-            None
-        });
         result["entries"]
             .as_array_mut()
             .expect("entries")
@@ -351,6 +360,138 @@ mod tests {
         assert_eq!(entry["content_page"]["complete"], false);
         assert_eq!(entry["content_page"]["next_offset"], 160);
         assert!(!preview.to_string().contains("不应进入工具的完整来源"));
+    }
+
+    #[test]
+    fn narrow_window_preview_keeps_original_unicode_page_across_compaction() {
+        let prefix = "资料背景🌏".repeat(127);
+        let window = "校准限制🌏".repeat(60);
+        let offset = prefix.chars().count();
+        let total = offset + window.chars().count() + "补充例外".repeat(100).chars().count();
+        let mut original = json!({"id":"manual","version":"7","kind":"document","name":"校准规则",
+            "state":"enabled","entries_total":1,"entries":[{"entry_id":"rule","path":"body",
+            "effective_value":window,"content_page":{"offset":offset,"total_chars":total}}]});
+        super::super::attach_matches(
+            "demo",
+            &mut original,
+            &json!({"id":"manual","version":"7","matches":[{"entry_id":"rule",
+                "offset":offset,"length":window.chars().count(),
+                "content_hash":crate::types::fingerprint(&json!(window))}]}),
+        );
+        assert_eq!(original["retrieval"]["state"], "located");
+        assert_eq!(original["retrieval"]["excerpts"][0]["text"], window);
+        assert_eq!(original["retrieval"]["excerpts"][0]["offset"], offset);
+        assert_eq!(original["retrieval"]["excerpts"][0]["total_chars"], total);
+        crate::contracts::validate("KnowledgeRetrieval", &original["retrieval"]).unwrap();
+
+        let preview = search_preview(original, "校准限制");
+        let page =
+            json!({"offset":offset,"total_chars":total,"complete":false,"next_offset":offset+160});
+        assert_eq!(preview["entries"][0]["content_page"], page);
+        assert_eq!(
+            preview["entries"][0]["effective_value"],
+            window.chars().take(160).collect::<String>()
+        );
+        assert_eq!(preview["entries_complete"], false);
+        let once = bounded_search_reply(data(vec![preview.clone()]));
+        let twice = bounded_search_reply(data(vec![once["objects"][0].clone()]));
+        for object in [&preview, &once["objects"][0], &twice["objects"][0]] {
+            assert_eq!(object["entries"][0]["content_page"], page);
+            assert_eq!(
+                object["entries"][0]["effective_value"],
+                preview["entries"][0]["effective_value"]
+            );
+            assert_eq!(object["retrieval"], preview["retrieval"]);
+            assert_eq!(object["entries_complete"], false);
+        }
+        assert!(
+            bytes(
+                &json!({"operation_id":"0".repeat(64),"tool_name":"search_knowledge","data":twice})
+            ) <= SEARCH_REPLY_LIMIT
+        );
+    }
+
+    #[test]
+    fn narrow_window_at_entry_end_still_reports_missing_prefix() {
+        let offset = "前言🌏".repeat(200).chars().count();
+        let window = "尾段例外🌏";
+        let total = offset + window.chars().count();
+        let preview = search_preview(
+            json!({"id":"manual","version":"7","entries_total":1,"entries":[
+                {"entry_id":"rule","path":"body","effective_value":window,
+                    "content_page":{"offset":offset,"total_chars":total}}]}),
+            "例外",
+        );
+        let page = json!({"offset":offset,"total_chars":total,"complete":false,"next_offset":null});
+        assert_eq!(preview["entries"][0]["content_page"], page);
+        assert_eq!(preview["entries_complete"], false);
+        let reply = bounded_search_reply(data(vec![preview]));
+        assert_eq!(reply["objects"][0]["entries"][0]["content_page"], page);
+        assert_eq!(reply["objects"][0]["entries_complete"], false);
+    }
+
+    #[test]
+    fn window_preview_keeps_original_unicode_page_through_repeated_compaction() {
+        let prefix = "未读前言🌏İ".repeat(120);
+        let window = "设备校准🌏İ".repeat(60);
+        let full = format!("{prefix}{window}{}", "未读例外".repeat(50));
+        let offset = prefix.chars().count();
+        let total = full.chars().count();
+        let mut original = json!({"id":"manual","kind":"document","name":"设备规则","version":"7",
+            "state":"enabled","related_ids":[],"entries_total":1,"entries":[
+            {"entry_id":"rule","path":"rule","label":"设备规则","effective_value":window,
+             "content_page":{"offset":offset,"total_chars":total}}]});
+        super::super::attach_matches(
+            "demo",
+            &mut original,
+            &json!({"id":"manual","version":"7","matches":[
+            {"entry_id":"rule","offset":offset,"length":window.chars().count(),
+             "content_hash":crate::types::fingerprint(&json!(window))}]}),
+        );
+        let preview = search_preview(original, "设备校准");
+        assert_eq!(preview["entries_complete"], false);
+        assert_eq!(
+            preview["entries"][0]["effective_value"],
+            window.chars().take(160).collect::<String>()
+        );
+        assert_eq!(
+            preview["entries"][0]["content_page"],
+            json!({
+            "offset":offset,"total_chars":total,"complete":false,"next_offset":offset + 160})
+        );
+        assert_eq!(preview["retrieval"]["channel"], "vector");
+        assert_eq!(preview["retrieval"]["excerpts"][0]["offset"], offset);
+        assert_eq!(preview["retrieval"]["excerpts"][0]["total_chars"], total);
+        let reply = bounded_search_reply(data(vec![preview.clone()]));
+        let repeated = bounded_search_reply(reply.clone());
+        for delivered in [&reply, &repeated] {
+            assert_eq!(delivered["objects"][0]["entries"], preview["entries"]);
+            assert_eq!(delivered["objects"][0]["retrieval"], preview["retrieval"]);
+            assert_eq!(delivered["objects"][0]["entries_complete"], false);
+            assert!(bytes(delivered) <= CONTENT_LIMIT);
+        }
+    }
+
+    #[test]
+    fn final_window_page_remains_partial_even_when_it_reaches_the_entry_end() {
+        let prefix = "未读前言🌏İ".repeat(120);
+        let window = "设备校准期限🌏İ";
+        let offset = prefix.chars().count();
+        let total = offset + window.chars().count();
+        let original = json!({"id":"manual","kind":"document","name":"设备规则","version":"7",
+            "state":"enabled","related_ids":[],"entries_total":1,"entries":[
+            {"entry_id":"rule","path":"rule","label":"设备规则","effective_value":window,
+             "content_page":{"offset":offset,"total_chars":total}}]});
+        let preview = search_preview(original, "设备校准");
+        assert_eq!(
+            preview["entries"][0]["content_page"],
+            json!({
+            "offset":offset,"total_chars":total,"complete":false,"next_offset":null})
+        );
+        assert_eq!(preview["entries_complete"], false);
+        let reply = bounded_search_reply(data(vec![preview.clone()]));
+        assert_eq!(reply["objects"][0]["entries"], preview["entries"]);
+        assert_eq!(reply["objects"][0]["entries_complete"], false);
     }
 
     #[test]

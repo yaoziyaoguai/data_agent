@@ -25,6 +25,17 @@ class BudgetContractTests(unittest.TestCase):
             with self.subTest(kind=kind, sdk_id=sdk_id):
                 validate("MemoryModelCall", self.request(kind, sdk_id))
 
+    def test_extraction_accepts_bound_previous_memory_and_old_requests(self):
+        request = {"operation_id": "synthetic-operation", "owner_id": "alice",
+                   "space_id": "demo", "message": "把刚才的默认改成秒。",
+                   "quote": "把刚才的默认改成秒。", "budget": self.request("run", "call-1")["budget"]}
+        validate("MemoryExtractionRequest", request)
+        previous = {"id": "synthetic-asset", "version": "1",
+                    "body": "仅合成周报用毫秒。", "scope": "仅合成周报。"}
+        validate("MemoryExtractionRequest", {**request, "previous_memory": previous})
+        with self.assertRaises(jsonschema.ValidationError):
+            validate("MemoryExtractionRequest", {**request, "previous_memory": {**previous, "version": "-1"}})
+
     def test_index_does_not_invent_sdk_identity_and_tool_ids_remain_validated(self):
         for kind, sdk_id in [("index", "invented-tool"), ("run", ""), ("run", "call\n1")]:
             with self.subTest(kind=kind, sdk_id=sdk_id):

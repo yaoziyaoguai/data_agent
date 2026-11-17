@@ -8,7 +8,8 @@ import {harness, until} from '../mvp/harness.mjs';
 if (process.argv.includes('--child')) {
   const h = await harness({capture:true, startWorker:false});
   const pids = execFileSync('pgrep', ['-P', String(process.pid)], {encoding:'utf8'}).trim().split('\n').map(Number);
-  process.send({database:new URL(h.env.DATA_AGENT_DATABASE_URL).pathname.slice(1), pids});
+  process.send({database:new URL(h.env.DATA_AGENT_DATABASE_URL).pathname.slice(1), pids,
+    inheritedDatabaseUrl:Object.hasOwn(h.env, 'DATABASE_URL')});
 } else {
   const container = execFileSync('docker', ['--context','colima-data-agent','ps','--filter','label=com.docker.compose.project=data-agent','--filter','label=com.docker.compose.service=mysql','--format','{{.ID}}'], {encoding:'utf8'}).trim();
   assert.match(container, /^[a-f0-9]+$/);
@@ -17,7 +18,9 @@ if (process.argv.includes('--child')) {
   const checks = []; let passed = false;
   try {
     for (const signal of ['SIGTERM','SIGINT']) {
-      const child = fork(fileURLToPath(import.meta.url), ['--child'], {stdio:['ignore','ignore','pipe','ipc']});
+      const child = fork(fileURLToPath(import.meta.url), ['--child'], {
+        env:{...process.env, DATABASE_URL:'synthetic-inherited-database-must-not-reach-services'},
+        stdio:['ignore','ignore','pipe','ipc']});
       let resource, exited, errors = '';
       child.stderr.on('data', data => errors += data);
       const exit = once(child, 'exit').then(value => {exited=value; return value;});
@@ -25,6 +28,7 @@ if (process.argv.includes('--child')) {
       try {
         await until(() => {assert.ok(!exited,errors);return resource;}, '隔离harness启动',60000);
         assert.match(resource.database, /^data_agent_test_[a-f0-9]+$/);
+        assert.equal(resource.inheritedDatabaseUrl, false, 'harness传给服务的环境必须清除继承DATABASE_URL');
         child.kill(signal);
         await until(() => exited, 'harness中断后清理并退出',15000);
         assert.equal(sql(`SELECT COUNT(*) FROM information_schema.schemata WHERE schema_name='${resource.database}';`), '0', '中断必须移除本次专用测试库');

@@ -131,7 +131,8 @@ async function verifyRecovery({id, name, faults, dispatchFailure}) {
       provider_id: 'deepseek', model_id: 'deepseek-flash', trial_id: randomUUID(),
       price_version: '2026-10-04-peak-usd', input_limit: 32768, output_limit: 8192,
       trial_call_limit: 24, trial_cost_micros: '300000', request_call_limit: 24,
-      toolset: 'data', payload_bytes_limit: 65536, thinking_level: 'low',
+      // 当前固定工具/系统材料约76KiB；此夹具验证恢复，字节溢出另有专门检查。
+      toolset: 'data', payload_bytes_limit: 131072, thinking_level: 'low',
     };
     h = await harness({
       capture: false, startWorker: false, profile,

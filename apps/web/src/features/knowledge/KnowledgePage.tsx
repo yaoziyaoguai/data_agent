@@ -249,6 +249,8 @@ export function KnowledgePage({
   };
   const [query, setQuery] = useState("");
   const [directoryScope, setDirectoryScope] = useState<"tables" | "all" | "maintained">(initialScope);
+  const directorySelection = useRef({scope: directoryScope, query});
+  directorySelection.current = {scope: directoryScope, query};
   const [directoryRevision, setDirectoryRevision] = useState(0);
   const [createdObjectId, setCreatedObjectId] = useState("");
   const [nextAfter, setNextAfter] = useState<string | null>(null);
@@ -265,50 +267,84 @@ export function KnowledgePage({
   const [error, setError] = useState("");
   const [source, setSource] = useState<SourceDocument | null>(null);
   const [proposals, setProposals] = useState<Proposal[]>([]);
-  const refreshGeneration = useRef(0);
-  const directoryInitialized = useRef(false);
+  const refreshRequest = useRef<() => void>(() => {});
   const visibleObjectIds = useRef<string[]>([]);
   const expandedFields = useRef(new Set<string>());
   const [canAdmin,setCanAdmin]=useState(false);
   const [canCreate,setCanCreate]=useState(false);
-  const refresh = async () => {
-    const generation = ++refreshGeneration.current;
-    const [knowledge, proposals, visible, access] = await Promise.all([
-      api("KnowledgeList", "/knowledge?directory=all&directory_view=grouped"),
-      api("ProposalList", "/knowledge-proposals"),
-      Promise.all(visibleObjectIds.current.map(id => api("KnowledgeObject", "/knowledge/" + id))),
-      api("SemanticAccess","/semantic-access"),
-    ]);
-    if (generation !== refreshGeneration.current) return;
-    if (!directoryInitialized.current) {
-      directoryInitialized.current = true;
-      setNextAfter(knowledge.next_after_id);
-      if (initialScope === "tables") setCurrent(previous => previous || knowledge.objects.find(object => object.kind === "table")?.id || "");
-    }
-    setObjects((old) => { const byId = new Map(old.map(o => [o.id,o])); for (const v of [...knowledge.objects, ...visible]) byId.set(v.id, currentObject(byId.get(v.id),v)); return [...byId.values()]; });
-    setProposals(proposals.proposals);
-    setCanAdmin(access.can_admin);
-    setCanCreate(access.can_create);
-  };
+  const refresh = () => refreshRequest.current();
   const sourceSync = useSourceSynchronization(user, canAdmin, () => {
     setDirectoryRevision(value => value + 1);
-    void refresh().catch(e => setError(e.message));
+    refresh();
   });
   useEffect(() => {
-    void refresh().catch((e) => setError(e.message));
-    return () => { ++refreshGeneration.current; };
+    let live = true;
+    let inFlight = false;
+    let pending = false;
+    let initialized = false;
+    let timer: number | undefined;
+    let controller: AbortController | undefined;
+    const run = async () => {
+      if (!live) return;
+      if (inFlight) { pending = true; return; }
+      window.clearTimeout(timer);
+      inFlight = true;
+      controller = new AbortController();
+      const signal = controller.signal;
+      try {
+        // 子请求失败也须等同批读取结束，避免提前释放在途状态。
+        const [knowledge, proposals, access] = await Promise.allSettled([
+          api("KnowledgeList", "/knowledge?directory=all&directory_view=grouped", "GET", undefined, undefined, signal),
+          api("ProposalList", "/knowledge-proposals", "GET", undefined, undefined, signal),
+          api("SemanticAccess", "/semantic-access", "GET", undefined, undefined, signal),
+        ]);
+        if (!live) return;
+        if (knowledge.status === "rejected") throw knowledge.reason;
+        if (proposals.status === "rejected") throw proposals.reason;
+        if (access.status === "rejected") throw access.reason;
+        const page = knowledge.value;
+        const included = new Set(page.objects.map(object => object.id));
+        const visible = await Promise.allSettled(visibleObjectIds.current
+          .filter(id => !included.has(id))
+          .map(id => api("KnowledgeObject", "/knowledge/" + id, "GET", undefined, undefined, signal)));
+        if (!live) return;
+        const failed = visible.find(result => result.status === "rejected");
+        if (failed?.status === "rejected") throw failed.reason;
+        const details = visible.flatMap(result => result.status === "fulfilled" ? [result.value] : []);
+        if (!initialized) {
+          initialized = true;
+          setNextAfter(page.next_after_id);
+          if (directorySelection.current.scope === "tables" && !directorySelection.current.query.trim()) setCurrent(previous => previous || page.objects.find(object => object.kind === "table")?.id || "");
+        }
+        setObjects(old => { const byId = new Map(old.map(object => [object.id, object])); for (const value of [...page.objects, ...details]) byId.set(value.id, currentObject(byId.get(value.id), value)); return [...byId.values()]; });
+        setProposals(proposals.value.proposals);
+        setCanAdmin(access.value.can_admin);
+        setCanCreate(access.value.can_create);
+      } catch (e) {
+        if (live) setError(e instanceof Error ? e.message : "目录读取失败");
+      } finally {
+        inFlight = false;
+        if (live) {
+          if (pending) { pending = false; void run(); }
+          else timer = window.setTimeout(() => void run(), 2000);
+        }
+      }
+    };
+    refreshRequest.current = () => void run();
+    void run();
+    return () => {
+      live = false;
+      pending = false;
+      window.clearTimeout(timer);
+      controller?.abort();
+      refreshRequest.current = () => {};
+    };
   }, [user]);
   useEffect(() => {
     if (initialObject !== undefined) setCurrent(initialObject ?? "");
     setTab(["概览", "字段语义", "关联与血缘", "指标 SQL", "业务文档", "变更记录"].includes(initialTab) ? initialTab : "概览");
     setDirectoryScope(initialScope);
   }, [initialObject, initialTab, initialScope]);
-  useEffect(() => {
-    const timer = window.setInterval(() => {
-      void refresh().catch((e) => setError(e.message));
-    }, 2000);
-    return () => { window.clearInterval(timer); ++refreshGeneration.current; };
-  }, [user, current, tab]);
   useEffect(() => {
     const generation = ++searchGeneration.current;
     if (directoryScope !== "tables") return;
@@ -364,10 +400,9 @@ export function KnowledgePage({
     setSavingPreference(true);setError("");
     try{
       const value=await api("TableAnalysisPreference","/knowledge/"+selected.id+"/analysis-preference","POST",{operation_id:crypto.randomUUID(),expected_version:preference.version,preferred:!preference.preferred});
-      ++refreshGeneration.current;
       setObjects(old=>old.map(o=>o.analysis_preference?.table_id===value.table_id?currentObject(o,{...o,analysis_preference:value}):o));
       setMaintenanceNotice(value.preferred?"已设为常用表，当前表及字段优先分析。其他表仍可按需预填。":"已取消常用设置，已有语义保留。来源改版仍会自动重分析。");
-      await refresh();
+      refresh();
     }catch(e){setError(e instanceof Error?e.message:"常用范围保存失败");}finally{setSavingPreference(false);}
   };
   const rebuild=async()=>{
@@ -378,9 +413,9 @@ export function KnowledgePage({
   };
   const tables = objects.filter((o) => o.kind === "table");
   const save = (v: KnowledgeObject) => {
-    ++refreshGeneration.current;
     if (objects.find(object => object.id === v.id)?.state !== v.state) setDirectoryRevision(value => value + 1);
     setObjects((old) => old.map((o) => (o.id === v.id ? currentObject(o, v) : o)));
+    refresh();
   };
   const selectObject = (v: KnowledgeObject | null) => {
     if (!v) { setCurrent(""); return; }
@@ -461,7 +496,7 @@ export function KnowledgePage({
           </button>
           {canAdmin && <button onClick={()=>void rebuild()} disabled={rebuilding}>{rebuilding?"正在排队…":"重建检索索引"}</button>}</div></details>
           <KnowledgeCreator user={user} canCreate={canCreate} relatedId={current} onCreated={v => {
-            ++refreshGeneration.current;
+            refresh();
             // 新建成功后清除旧筛选，并取消旧目录请求，避免刚保存的对象被切走。
             setCreatedObjectId(v.id);
             setQuery("");
@@ -557,7 +592,7 @@ export function KnowledgePage({
                     {!relatedPage.loading && !relatedPage.failed && groups.length === 0 && <p className="quiet">当前已读取的内容中没有此类关联。</p>}
                     {(relatedPage.next || relatedPage.failed) && <button disabled={relatedPage.loading} onClick={() => void loadRelated(current, relatedPage.next)}>{relatedPage.failed ? "重试关联内容" : "加载更多关联内容"}</button>}
                   </>}
-                  {documentRepresentatives(groups).map((o) => o.kind === "document" ? <KnowledgeDocument key={o.source_id ?? o.id} object={o} onOpen={o.id !== current ? () => selectObject(o) : undefined} onSaved={parts => { ++refreshGeneration.current; setDirectoryRevision(value => value + 1); setObjects(old => { const byId = new Map(old.map(o => [o.id, o])); for (const part of parts) byId.set(part.id, currentObject(byId.get(part.id), part)); return [...byId.values()]; }); }} onCorrection={() => void refresh()}/> : (
+                  {documentRepresentatives(groups).map((o) => o.kind === "document" ? <KnowledgeDocument key={o.source_id ?? o.id} object={o} onOpen={o.id !== current ? () => selectObject(o) : undefined} onSaved={parts => { refresh(); setDirectoryRevision(value => value + 1); setObjects(old => { const byId = new Map(old.map(o => [o.id, o])); for (const part of parts) byId.set(part.id, currentObject(byId.get(part.id), part)); return [...byId.values()]; }); }} onCorrection={() => void refresh()}/> : (
                     <article key={o.id} className={"semantic-object" + (o.kind === "field" ? " field-object" : "")}>
                       {o.id !== current && o.kind !== "field" && (
                         <h3>

@@ -374,12 +374,13 @@ async function checkReuse() {
     await fixture.invoke("update_analysis_task", { action: "route", task_id: task.task_id,
       expected_version: task.condition_version, goal: "", options: [] });
     const stale = await fixture.invokeRaw("read_knowledge", { object_id: example.id, version: example.version });
-    const staleData = ok(stale).data;
-    const staleEntry = staleData.entries.find(entry => entry.path === "body");
-    assert.equal(staleEntry.effective_structure, null);
-    assert.ok(staleEntry.structure_gap);
+    assert.equal(stale.status, 409);
+    assert.equal(stale.value.code, "stale_knowledge");
+    assert.equal(Object.hasOwn(stale.value, "data"), false);
+    assert.equal(JSON.stringify(stale.value).includes(example.entries[0].effective_value), false);
+    assert.equal(JSON.stringify(stale.value).includes(queryExampleInput([]).structured_value.sql), false);
     await fixture.finish();
-    checks.push("来源改版拒绝旧维护页，按ID保留旧版本直接依赖；Agent读旧案例显式失效，不按名称猜规则");
+    checks.push("必要来源正文变化拒绝旧案例的当前读取，不交付旧正文或SQL；按ID保留旧版本直接依赖，不按名称猜规则");
 
     const freshSource = revisedSource;
     // 独立大量真实知识创建验证分页；正文无关系，只由显式related_ids提供引用。

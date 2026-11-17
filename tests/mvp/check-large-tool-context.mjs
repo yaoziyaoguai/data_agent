@@ -59,8 +59,9 @@ try{
   if(oversized)assert.ok(bodies.reduce((bytes,body)=>bytes+Buffer.byteLength(body),0)>profile.payload_bytes_limit);
   const cid=await h.create();run=await h.capture(cid,'继续调查合成长文');await h.pauseWorker();
   const manager=SessionManager.inMemory('/synthetic/data-agent');const usage={input:0,output:0,cacheRead:0,cacheWrite:0,totalTokens:0,cost:{input:0,output:0,cacheRead:0,cacheWrite:0,total:0}};
+  // 保留24轮历史；当前工具合同下，100次重复使首请求可发送，工具回执才触发128KiB溢出。
   for(let index=0;index<24;index++){
-    manager.appendMessage({role:'user',content:'合成旧资料'.repeat(140),timestamp:Date.now()});
+    manager.appendMessage({role:'user',content:'合成旧资料'.repeat(100),timestamp:Date.now()});
     manager.appendMessage({role:'assistant',content:[{type:'text',text:'已记录。'}],api:'openai-completions',provider:'controlled_deepseek',model:'deepseek-flash',stopReason:'stop',usage,timestamp:Date.now()});
   }
   run.checkpoint=exportCheckpoint(manager,run.workspace_context.authority_revision,run.workspace_context.authority_snapshot);

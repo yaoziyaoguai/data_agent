@@ -107,11 +107,15 @@ DELIMITER ;
   assert.deepEqual(jobs, [{sync_id: syncId, state: 'finished', epoch: 2, attempts: 0}], '两页只各领取一次，没有租约超时后重领');
   assert.equal(h.sql(`SELECT JSON_OBJECT('n',COUNT(*)) FROM catalog_imports WHERE operation_id='${operationId}'`)[0].n, 1);
   assert.equal(h.sql(`SELECT JSON_OBJECT('n',COUNT(*)) FROM catalog_sync_members WHERE sync_id='${syncId}'`)[0].n, 2);
-  const pending = h.sql(`SELECT JSON_OBJECT('kind',j.kind,'state',j.state,'attempts',j.attempts) FROM background_jobs j
+  const pendingPrepare = h.sql(`SELECT JSON_OBJECT('kind',j.kind,'state',j.state,'attempts',j.attempts) FROM background_jobs j
     JOIN catalog_sync_members m ON m.source_id=j.resource_id AND m.accepted_revision=j.resource_version
-    WHERE m.sync_id='${syncId}' AND j.kind IN ('prepare_source','raw_source_index')`);
-  assert.equal(pending.length, 4);
-  assert.ok(pending.every(job => job.state === 'queued' && job.attempts === 0));
+    WHERE m.sync_id='${syncId}' AND j.kind='prepare_source'`);
+  const pendingRaw = h.sql(`SELECT JSON_OBJECT('state',j.vector_state,'attempts',j.vector_attempts) FROM knowledge_index_jobs j
+    JOIN catalog_sync_members m ON m.source_id=j.object_id AND m.accepted_revision=j.version
+    WHERE m.sync_id='${syncId}' AND j.target_kind='source_excerpt' AND j.source_kind='platform'`);
+  assert.equal(pendingPrepare.length + pendingRaw.length, 4);
+  assert.ok(pendingPrepare.every(job => job.state === 'queued' && job.attempts === 0));
+  assert.ok(pendingRaw.every(job => job.state === 'pending' && job.attempts === 0));
   const replay = await h.request('/source-syncs', {operation_id: operationId});
   assert.equal(replay.status, 202);
   assert.equal(replay.value.sync_id, syncId);

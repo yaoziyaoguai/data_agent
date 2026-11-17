@@ -7,14 +7,16 @@ import {streamSimple as responses} from '@earendil-works/pi-ai/api/openai-respon
 import {streamSimple as anthropic} from '@earendil-works/pi-ai/api/anthropic-messages';
 import {configuredModel} from '../../apps/agent/provider/configured.ts';
 import {guardedModelStream} from '../../apps/agent/provider/controlled.ts';
+import {decodeContract} from '../../packages/contracts/validate.ts';
+import {deriveCapacityPlan} from '../../packages/contracts/capacity.ts';
 
 export async function checkConfiguredCapabilities() {
   const runtime=await ModelRuntime.create({credentials:{read:async()=>undefined,list:async()=>[],modify:async()=>{},delete:async()=>{}},modelsPath:null,modelsStore:new InMemoryModelsStore(),refreshOnCreate:false,allowModelNetwork:false});
   let networks=0;
-  async function model({provider='compatible',id='synthetic/reasoning',api='openai-responses',level='off',mode,service='a',version='1',output=16000,supported=true}={}) {
-    const profile={provider_id:provider,model_id:id,trial_id:'synthetic',price_version:'configured:model:1',input_limit:128000,output_limit:output,payload_bytes_limit:262144,request_call_limit:24,budget_mode:'request',toolset:'data',thinking_level:level,configured_model:{id:'model',version:'1',service_id:service,service_version:version,api,input_rate:'0',output_rate:'0',reasoning_supported:supported,...(mode?{anthropic_thinking_mode:mode}:{})}};
+  async function model({provider='compatible',id='synthetic/reasoning',api='openai-responses',level='off',mode,service='a',version='1',output=16000,input=128000,window=128000,supported=true}={}) {
+    const profile={provider_id:provider,model_id:id,trial_id:'synthetic',price_version:'configured:model:1',context_window:window,input_limit:input,output_limit:output,payload_bytes_limit:262144,request_call_limit:24,budget_mode:'request',toolset:'data',thinking_level:level,configured_model:{id:'model',version:'1',service_id:service,service_version:version,api,input_rate:'0',output_rate:'0',reasoning_supported:supported,...(mode?{anthropic_thinking_mode:mode}:{})}};
     const connection={api,api_key:'synthetic-only',provider_id:provider,base_url:'https://example.com/v1',runtime_provider:'configured_'+createHash('sha256').update(service+':'+version).digest('hex')};
-    const transport={run:{run_id:'synthetic'},binding:()=>({run_id:'synthetic',lease_epoch:'1'}),post:async()=>connection};
+    const transport={run:{run_id:'synthetic'},binding:()=>({run_id:'synthetic',lease_epoch:'1'}),post:async()=>decodeContract('ModelConnection',connection)};
     return {model:await configuredModel(runtime,transport,profile,new AbortController().signal),profile};
   }
   const tools=[{name:'update_analysis_task',description:'Synthetic tool',parameters:{type:'object',properties:{},additionalProperties:false}}];
@@ -35,6 +37,19 @@ export async function checkConfiguredCapabilities() {
     const a=await payload(unknown);assert.equal(a.thinking.type,level==='off'?'disabled':'enabled');
     if(level!=='off')assert.ok(a.thinking.budget_tokens>=1024&&a.thinking.budget_tokens<a.max_tokens);
   }
+  const sol=await model({provider:'openai',id:'gpt-6.1-sol',level:'high',input:900000,window:1050000,output:128000});
+  assert.equal(sol.model.contextWindow,1050000);assert.equal(sol.model.maxTokens,128000);
+  assert.equal(sol.model.thinkingLevelMap.high,'high');
+  const solBody=await payload(sol);
+  assert.equal(solBody.model,'gpt-6.1-sol');assert.equal(solBody.max_output_tokens,128000);
+  assert.equal(solBody.reasoning.effort,'medium');
+  assert.equal(solBody.input.filter(item=>item.type==='configuration_update').at(-1).reasoning.effort,'high');
+  assert.equal(solBody.store,false);
+  const solTools=[...(solBody.tools??[]),...solBody.input.flatMap(item=>item.type==='additional_tools'?item.tools:[])];
+  assert.deepEqual(solTools.map(tool=>tool.name),['update_analysis_task']);
+  assert.equal(solTools[0].strict,false);
+  assert.deepEqual(deriveCapacityPlan(1050000,900000,128000),{contextWindow:1050000,historyReserve:171000,toolReserve:21000,keepRecent:65536,trigger:879000,summaryCap:128000,splitSummaryCap:128000});
+  await assert.rejects(model({provider:'openai',id:'gpt-6.1-sol',input:900000,window:1050000,output:128000}),/provider_configuration_invalid/);
   assert.equal((await payload(await model({supported:true}))).reasoning.effort,'none','off-only reasoning capability stays explicit');
   await assert.rejects(model({provider:'openai',id:'gpt-5.5',level:'max'}),/provider_configuration_invalid/);
   await assert.rejects(model({api:'anthropic-messages',level:'max',mode:'budget'}),/provider_configuration_invalid/);

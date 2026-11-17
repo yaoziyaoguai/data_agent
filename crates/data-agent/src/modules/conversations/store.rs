@@ -39,6 +39,7 @@ pub struct Message {
     pub recovery_chain_id: String,
     pub budget_scope_id: String,
     pub disposition: String,
+    pub routing_state: String,
     pub request_id: String,
     pub request_clock: Value,
 }
@@ -56,6 +57,83 @@ pub async fn result_query_for_message_in_tx(
     .fetch_one(tx.connection())
     .await?;
     Ok(key.strip_prefix("server:query-result:").map(str::to_owned))
+}
+// 会话内全部server:query-result消息关联的批量读取：message_id -> 原查询ID。
+pub async fn result_query_map_in_tx(
+    tx: &mut AppTx<'_>,
+    cid: &str,
+) -> Result<std::collections::HashMap<String, String>> {
+    let rows = sqlx::query(
+        "SELECT id,client_key FROM conversation_messages WHERE conversation_id=? AND client_key LIKE 'server:query-result:%'",
+    )
+    .bind(cid)
+    .fetch_all(tx.connection())
+    .await?;
+    Ok(rows
+        .iter()
+        .filter_map(|row| {
+            let key = row.get::<String, _>("client_key");
+            Some((
+                row.get::<String, _>("id"),
+                key.strip_prefix("server:query-result:")?.to_owned(),
+            ))
+        })
+        .collect())
+}
+// 每个查询首次query_changed事件的持久序号：查询卡在时间线中的稳定锚点。
+pub async fn first_query_changed_seq_in_tx(
+    tx: &mut AppTx<'_>,
+    cid: &str,
+) -> Result<std::collections::HashMap<String, String>> {
+    let rows = sqlx::query(
+        "SELECT JSON_UNQUOTE(JSON_EXTRACT(payload,'$.query_id')) AS qid,MIN(event_seq) AS seq \
+         FROM conversation_events WHERE conversation_id=? AND event_type='query_changed' GROUP BY qid HAVING qid IS NOT NULL",
+    )
+    .bind(cid)
+    .fetch_all(tx.connection())
+    .await?;
+    Ok(rows
+        .iter()
+        .map(|row| {
+            (
+                row.get::<String, _>("qid"),
+                row.get::<u64, _>("seq").to_string(),
+            )
+        })
+        .collect())
+}
+// 每个报告首次analysis_report_saved事件的持久序号：报告卡在时间线中的稳定展示锚点。
+// 按conversation_id+report_id的全部已保存版本取MIN，不按当前版本或事件页筛选；单次窄查询，不逐报告N+1。
+pub async fn report_first_saved_seq_in_tx(
+    tx: &mut AppTx<'_>,
+    cid: &str,
+    report_ids: &[String],
+) -> Result<std::collections::HashMap<String, String>> {
+    if report_ids.is_empty() {
+        return Ok(std::collections::HashMap::new());
+    }
+    let placeholders = std::iter::repeat_n("?", report_ids.len())
+        .collect::<Vec<_>>()
+        .join(",");
+    let sql = format!(
+        "SELECT JSON_UNQUOTE(JSON_EXTRACT(payload,'$.report_id')) AS rid,MIN(event_seq) AS seq \
+         FROM conversation_events WHERE conversation_id=? AND event_type='analysis_report_saved' \
+         AND JSON_UNQUOTE(JSON_EXTRACT(payload,'$.report_id')) IN ({placeholders}) GROUP BY rid"
+    );
+    let mut query = sqlx::query(sqlx::AssertSqlSafe(sql)).bind(cid);
+    for id in report_ids {
+        query = query.bind(id);
+    }
+    let rows = query.fetch_all(tx.connection()).await?;
+    Ok(rows
+        .iter()
+        .map(|row| {
+            (
+                row.get::<String, _>("rid"),
+                row.get::<u64, _>("seq").to_string(),
+            )
+        })
+        .collect())
 }
 pub async fn create_conversation_in_tx(
     tx: &mut AppTx<'_>,
@@ -207,6 +285,7 @@ fn message_from_row(row: &sqlx::mysql::MySqlRow) -> Message {
         recovery_chain_id: row.get("recovery_chain_id"),
         budget_scope_id: row.get("budget_scope_id"),
         disposition: row.get("disposition"),
+        routing_state: row.get("routing_state"),
         request_id: row
             .get::<Option<String>, _>("request_id")
             .unwrap_or_else(|| row.get("id")),
@@ -253,6 +332,7 @@ pub async fn accept_message_in_tx(
         recovery_chain_id: id(),
         budget_scope_id: id(),
         disposition: "pending".into(),
+        routing_state: "pending".into(),
         request_id: request_id.into(),
         request_clock: json!({"reference_time_utc":reference,"business_timezone":timezone}),
     };
@@ -364,7 +444,7 @@ pub async fn read_events_in_tx(
 ) -> Result<Vec<Value>> {
     current(tx, locked)?;
     let rows=sqlx::query("SELECT * FROM conversation_events WHERE conversation_id=? AND event_seq>? ORDER BY event_seq LIMIT 1000").bind(&locked.id).bind(after).fetch_all(tx.connection()).await?;
-    Ok(rows.iter().map(|r|json!({"schema_version":1,"event_id":r.get::<String,_>("event_id"),"event_seq":r.get::<u64,_>("event_seq").to_string(),"conversation_id":locked.id,"type":r.get::<String,_>("event_type"),"payload":r.get::<sqlx::types::Json<Value>,_>("payload").0})).collect())
+    Ok(rows.iter().map(|row| event_value(locked, row)).collect())
 }
 pub async fn list_conversations_in_tx(
     tx: &mut AppTx<'_>,
@@ -431,6 +511,8 @@ pub async fn route_message_in_tx(
     applied: bool,
 ) -> Result<()> {
     current(tx, locked)?;
+    // 旧结果输入可能只有routed_task_id；覆盖前保留其原任务归属。
+    sqlx::query("INSERT IGNORE INTO conversation_message_tasks(message_id,task_id) SELECT id,routed_task_id FROM conversation_messages WHERE id=? AND conversation_id=? AND disposition='pending' AND routed_task_id IS NOT NULL").bind(message).bind(&locked.id).execute(tx.connection()).await?;
     sqlx::query("UPDATE conversation_messages SET routed_task_id=COALESCE(?,routed_task_id),routing_state='routed',applied_to_task=applied_to_task OR ? WHERE id=? AND conversation_id=? AND disposition='pending'").bind(task).bind(applied).bind(message).bind(&locked.id).execute(tx.connection()).await?;
     if let Some(task) = task {
         sqlx::query("INSERT IGNORE INTO conversation_message_tasks(message_id,task_id) SELECT id,? FROM conversation_messages WHERE id=? AND conversation_id=? AND disposition='pending'").bind(task).bind(message).bind(&locked.id).execute(tx.connection()).await?;
@@ -440,6 +522,64 @@ pub async fn route_message_in_tx(
 pub async fn confirmation_blocked_in_tx(tx: &mut AppTx<'_>, cid: &str) -> Result<bool> {
     let count:i64=sqlx::query_scalar("SELECT COUNT(*) FROM conversation_messages WHERE conversation_id=? AND routing_state='pending' AND disposition IN ('pending','failed')").bind(cid).fetch_one(tx.connection()).await?;
     Ok(count > 0)
+}
+
+// 会话级活动取证任务（task_id/condition_version），与消息任务清单分离：一次派发
+// 只绑定一个活动任务，归属核验在use_cases组合层完成后由宿主保存。
+pub async fn active_task_ref_in_tx(
+    tx: &mut AppTx<'_>,
+    locked: &LockedConversation,
+) -> Result<Option<(String, u64)>> {
+    current(tx, locked)?;
+    let row = sqlx::query(
+        "SELECT active_task_id,active_task_condition_version FROM conversations WHERE id=?",
+    )
+    .bind(&locked.id)
+    .fetch_one(tx.connection())
+    .await?;
+    Ok(
+        match (
+            row.get::<Option<String>, _>("active_task_id"),
+            row.get::<Option<u64>, _>("active_task_condition_version"),
+        ) {
+            (Some(task), Some(version)) => Some((task, version)),
+            _ => None,
+        },
+    )
+}
+
+pub async fn bind_active_task_in_tx(
+    tx: &mut AppTx<'_>,
+    locked: &LockedConversation,
+    task: &str,
+    version: u64,
+) -> Result<()> {
+    current(tx, locked)?;
+    sqlx::query(
+        "UPDATE conversations SET active_task_id=?,active_task_condition_version=? WHERE id=?",
+    )
+    .bind(task)
+    .bind(version)
+    .bind(&locked.id)
+    .execute(tx.connection())
+    .await?;
+    Ok(())
+}
+
+pub async fn clear_active_task_in_tx(
+    tx: &mut AppTx<'_>,
+    locked: &LockedConversation,
+    task: &str,
+) -> Result<()> {
+    current(tx, locked)?;
+    sqlx::query(
+        "UPDATE conversations SET active_task_id=NULL,active_task_condition_version=NULL WHERE id=? AND active_task_id=?",
+    )
+    .bind(&locked.id)
+    .bind(task)
+    .execute(tx.connection())
+    .await?;
+    Ok(())
 }
 /// 聊天执行已核对本条真实输入；其他尚未归属的输入仍阻止确认。
 pub async fn other_input_blocks_confirmation_in_tx(
@@ -503,6 +643,7 @@ pub async fn enqueue_result_input_in_tx(
         recovery_chain_id: id(),
         budget_scope_id: budget.into(),
         disposition: "pending".into(),
+        routing_state: "routed".into(),
         request_id: id(),
         request_clock: json!({"reference_time_utc":reference,"business_timezone":timezone}),
     };
@@ -524,12 +665,34 @@ pub async fn event_page_in_tx(
         sqlx::query("SELECT * FROM conversation_events WHERE conversation_id=? AND (? IS NULL OR event_seq<?) ORDER BY event_seq DESC LIMIT 1000")
             .bind(&locked.id).bind(before).bind(before).fetch_all(tx.connection()).await?
     };
-    let mut events:Vec<Value> = rows.iter().map(|r|json!({"schema_version":1,"event_id":r.get::<String,_>("event_id"),"conversation_id":locked.id,"event_seq":r.get::<u64,_>("event_seq").to_string(),"type":r.get::<String,_>("event_type"),"payload":r.get::<sqlx::types::Json<Value>,_>("payload").0})).collect();
+    let mut events: Vec<Value> = rows.iter().map(|row| event_value(locked, row)).collect();
     if after.is_none() {
         events.reverse();
     }
     Ok(events)
 }
+fn event_value(locked: &LockedConversation, row: &sqlx::mysql::MySqlRow) -> Value {
+    json!({"schema_version":1,"event_id":row.get::<String,_>("event_id"),"conversation_id":locked.id,
+        "event_seq":row.get::<u64,_>("event_seq").to_string(),"type":row.get::<String,_>("event_type"),
+        "payload":row.get::<sqlx::types::Json<Value>,_>("payload").0})
+}
+
+pub async fn output_event_range_in_tx(
+    tx: &mut AppTx<'_>,
+    locked: &LockedConversation,
+    attempt: &str,
+    first: u64,
+    last: u64,
+) -> Result<Vec<Value>> {
+    current(tx, locked)?;
+    let rows = sqlx::query(
+        "SELECT * FROM conversation_events WHERE conversation_id=? AND event_seq>=? AND event_seq<=? \
+         AND event_type IN ('assistant_delta','assistant_committed','assistant_replaced') \
+         AND JSON_UNQUOTE(JSON_EXTRACT(payload,'$.attempt_id'))=? ORDER BY event_seq",
+    ).bind(&locked.id).bind(first).bind(last).bind(attempt).fetch_all(tx.connection()).await?;
+    Ok(rows.iter().map(|row| event_value(locked, row)).collect())
+}
+
 pub async fn last_event_seq_in_tx(tx: &mut AppTx<'_>, locked: &LockedConversation) -> Result<u64> {
     current(tx, locked)?;
     Ok(

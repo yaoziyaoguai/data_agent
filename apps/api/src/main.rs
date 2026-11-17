@@ -85,13 +85,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         )
         .route("/conversations/{id}/messages", post(routes::message))
         .route("/conversations/{id}/cancel-run", post(routes::cancel_run))
-        .route("/conversations/{id}/snapshot", get(routes::snapshot))
+        .route(
+            "/conversations/{id}/snapshot",
+            get(routes::snapshot).post(routes::refresh_snapshot),
+        )
         .route("/conversations/{id}/events", get(routes::events))
         .route("/internal/tool-calls", post(routes::register))
         .route("/internal/tools", post(routes::tool))
         .route("/internal/outputs", post(routes::output))
         .route("/internal/finish", post(routes::finish))
         .route("/internal/checkpoints/read", post(routes::read_checkpoint))
+        .route("/internal/context/refresh", post(routes::refresh_context))
         .route(
             "/internal/memory/model-calls",
             post(data_routes::memory_model_call),

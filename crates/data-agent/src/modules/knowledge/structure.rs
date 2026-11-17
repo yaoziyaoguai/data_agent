@@ -152,6 +152,9 @@ pub fn table_dependencies(structure: &Value) -> Vec<Value> {
 }
 
 pub fn structure_dependencies(object: &Value) -> Vec<Value> {
+    if let Some(references) = object["structure_dependencies"].as_array() {
+        return references.clone();
+    }
     let mut seen = HashSet::new();
     object["entries"]
         .as_array()
@@ -174,6 +177,16 @@ pub fn structure_dependencies(object: &Value) -> Vec<Value> {
             seen.insert((id.to_owned(), version.to_owned(), path.to_owned()))
                 .then_some(reference)
         })
+        .collect()
+}
+
+pub fn semantic_dependencies(object: &Value) -> Vec<Value> {
+    object["entries"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter(|entry| entry["effective_structure"]["kind"] == "query_example")
+        .flat_map(|entry| query_example_dependencies(&entry["effective_structure"]))
         .collect()
 }
 
@@ -390,6 +403,189 @@ async fn decorated_table(
     table["column_names"] = json!(columns);
     table["column_names_complete"] = json!(complete);
     Ok(table)
+}
+
+// 结构采用与显式知识引用分责：先证明登记时的相关DDL，再核当前列与规则。
+pub struct CurrentTableBinding {
+    pub entry: Value,
+    pub registered: Value,
+    pub table: Value,
+    pub fingerprint: String,
+    pub needs_registration: bool,
+    pub original_source: Option<Value>,
+}
+
+pub async fn read_current_bindings_in_tx(
+    tx: &mut AppTx<'_>,
+    ctx: &AccessContext,
+    object: &Value,
+) -> Result<Vec<CurrentTableBinding>> {
+    use super::dependency_index::{
+        DependencySelection, content_fingerprint, selected_dependencies_in_tx,
+    };
+    let mut bindings = Vec::new();
+    let mut tables = BTreeMap::new();
+    for entry in object["entries"].as_array().into_iter().flatten() {
+        let structure = &entry["effective_structure"];
+        if structure.is_null() || structure["kind"] == "query_example" {
+            continue;
+        }
+        let selection = DependencySelection {
+            object_id: object["id"].as_str().unwrap_or("").to_owned(),
+            version: epoch(object["version"].as_str().unwrap_or(""))?,
+            path: entry["path"].as_str().unwrap_or("").to_owned(),
+        };
+        let rows = selected_dependencies_in_tx(tx, &[selection], Some("required")).await?;
+        let references = if structure["kind"] == "table" {
+            vec![json!({"object_id":object["id"],"version":object["version"]})]
+        } else {
+            table_dependencies(structure)
+        };
+        for reference in references {
+            let id = reference["object_id"].as_str().unwrap_or("");
+            let registered_version = epoch(reference["version"].as_str().unwrap_or(""))?;
+            if !tables.contains_key(id) {
+                let mut table = store::read_table_binding_in_tx(tx, ctx, id, None).await?;
+                let (names, complete) = columns(&table, &[]);
+                table["column_names"] = json!(names);
+                table["column_names_complete"] = json!(complete);
+                tables.insert(id.to_owned(), table);
+            }
+            let table = tables[id].clone();
+            let mut fingerprint = rows
+                .iter()
+                .find(|row| {
+                    row.role == "table_binding"
+                        && row.target_id == id
+                        && row.target_revision == registered_version
+                })
+                .map(|row| row.target_fingerprint.clone())
+                .unwrap_or_default();
+            let needs_registration = fingerprint.is_empty();
+            if fingerprint.is_empty() {
+                if table["version"] == reference["version"] {
+                    fingerprint = content_fingerprint("knowledge", &table, "ddl");
+                } else if let Some(ddl) =
+                    store::original_table_ddl_in_tx(tx, id, registered_version).await?
+                {
+                    fingerprint = content_fingerprint(
+                        "knowledge",
+                        &json!({"entries":[{"path":"ddl","effective_value":ddl}]}),
+                        "ddl",
+                    );
+                }
+            }
+            let original_source = if fingerprint.is_empty() && structure["kind"] == "field" {
+                store::field_binding_source_in_tx(
+                    tx,
+                    object["id"].as_str().unwrap_or(""),
+                    epoch(object["version"].as_str().unwrap_or(""))?,
+                )
+                .await?
+            } else {
+                None
+            };
+            bindings.push(CurrentTableBinding {
+                entry: entry.clone(),
+                registered: reference,
+                table,
+                fingerprint,
+                needs_registration,
+                original_source,
+            });
+        }
+    }
+    Ok(bindings)
+}
+
+// 旧字段只凭同版类型事实定位原表；原文必须完整包含当前这份DDL及对应列原句。
+pub fn prove_original_binding(binding: &mut CurrentTableBinding, source: &Value) -> Result<()> {
+    use super::dependency_index::content_fingerprint;
+    let fact = binding
+        .original_source
+        .as_ref()
+        .ok_or(Error::new("stale_knowledge"))?;
+    let name = binding.table["name"].as_str().unwrap_or("");
+    let column = binding.entry["effective_structure"]["column"]
+        .as_str()
+        .unwrap_or("");
+    let location = format!("CREATE TABLE {name} / {column}");
+    let ddl = binding.table["entries"][0]["effective_value"]
+        .as_str()
+        .ok_or(Error::new("stale_knowledge"))?;
+    let quote = fact["quote"]
+        .as_str()
+        .filter(|s| !s.is_empty())
+        .ok_or(Error::new("stale_knowledge"))?;
+    let located = fact["table"].as_str() == Some(name) && fact["column"].as_str() == Some(column)
+        || fact["location"].as_str() == Some(location.as_str())
+        // 原refresh_facts将类型位置记为type；所属表/列仍须通过原字段绑定及同版原句核实。
+        || fact["location"] == "type" && quote.split_whitespace().next() == Some(column);
+    let body = source["body"].as_str().unwrap_or("");
+    if !located
+        || source["source_id"] != fact["source_id"]
+        || source["version"] != fact["version"]
+        || !body.contains(ddl)
+        || !ddl.contains(quote)
+        || body.matches(&format!("CREATE TABLE {name} (")).count() != 1
+    {
+        return Err(Error::new("stale_knowledge"));
+    }
+    check_column(&binding.table, column)?;
+    binding.fingerprint = content_fingerprint("knowledge", &binding.table, "ddl");
+    Ok(())
+}
+
+pub async fn validate_current_bindings_in_tx(
+    tx: &mut AppTx<'_>,
+    ctx: &AccessContext,
+    object: &Value,
+    bindings: &[CurrentTableBinding],
+) -> Result<Vec<Value>> {
+    use super::dependency_index::{content_fingerprint, register_table_binding_in_tx};
+    let mut references = Vec::new();
+    for entry in object["entries"].as_array().into_iter().flatten() {
+        let mut structure = entry["effective_structure"].clone();
+        if structure.is_null() || structure["kind"] == "query_example" {
+            continue;
+        }
+        let mut tables = BTreeMap::new();
+        for binding in bindings.iter().filter(|b| b.entry["path"] == entry["path"]) {
+            if binding.fingerprint.is_empty()
+                || content_fingerprint("knowledge", &binding.table, "ddl") != binding.fingerprint
+            {
+                return Err(Error::new("stale_knowledge"));
+            }
+            let id = binding.registered["object_id"].as_str().unwrap_or("");
+            for key in ["table", "left_table", "right_table"] {
+                if structure[key]["object_id"] == id {
+                    structure[key]["version"] = binding.table["version"].clone();
+                }
+            }
+            tables.insert(id.to_owned(), binding.table.clone());
+            let reference = json!({"object_id":id,"version":binding.table["version"],"path":"ddl"});
+            if !references.contains(&reference) {
+                references.push(reference);
+            }
+        }
+        validate_bindings(object, &structure, &tables)?;
+        for binding in bindings.iter().filter(|b| {
+            b.needs_registration
+                && b.entry["path"] == entry["path"]
+                && b.registered["object_id"] != object["id"]
+        }) {
+            register_table_binding_in_tx(
+                tx,
+                ctx,
+                object,
+                entry,
+                &binding.registered,
+                &binding.fingerprint,
+            )
+            .await?;
+        }
+    }
+    Ok(references)
 }
 
 pub async fn validate_edit_in_tx(

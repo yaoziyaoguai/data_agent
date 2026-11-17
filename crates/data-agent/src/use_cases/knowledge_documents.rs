@@ -1,5 +1,6 @@
 use crate::{
     contracts,
+    contracts::generated::{SourceKey, SourceKeyKind},
     modules::{access, jobs, knowledge},
     persistence::AppTx,
     types::{AccessContext, Error, Result, epoch},
@@ -134,6 +135,8 @@ pub async fn edit(
         .map(|part| part["id"].as_str().unwrap_or("").to_owned())
         .collect::<Vec<_>>();
     let saved = knowledge::save_document_in_tx(&mut tx, ctx, object, &input, &order).await?;
+    // 模块内保存不含跨模块登记：补依赖目标指纹并排队来源扇出（幂等）。
+    super::dependency_registration::after_content_saved_in_tx(&mut tx, ctx, &saved).await?;
     // 保存推进了文档修订：原子登记该修订的raw索引与语义准备，两作业互不等待。
     for part in &saved {
         let expected = input["parts"]
@@ -144,7 +147,7 @@ pub async fn edit(
             .and_then(|submitted| submitted["expected_version"].as_str())
             .unwrap_or("");
         if part["version"].as_str() != Some(expected) {
-            register_document_preparation_in_tx(&mut tx, part).await?;
+            register_document_preparation_in_tx(&mut tx, &ctx.space_id, part).await?;
         }
     }
     let result = present(&mut tx, ctx, saved).await?;
@@ -156,6 +159,7 @@ pub async fn edit(
 // 文档分册与停用对象不属于单文档原文，不在此登记。
 pub async fn register_document_preparation_in_tx(
     tx: &mut AppTx<'_>,
+    space: &str,
     document: &Value,
 ) -> Result<()> {
     if document["kind"] != "document"
@@ -179,8 +183,20 @@ pub async fn register_document_preparation_in_tx(
         .as_str()
         .and_then(|value| value.parse::<u64>().ok())
         .ok_or(Error::new("invalid_input"))?;
+    // 原文索引目标经knowledge公开入口登记进公共待办（SourceKey身份贯穿写入与
+    // 清旧）；语义整理仍走原prepare_source队列，两作业互不等待。
+    knowledge::register_source_index_target_in_tx(
+        tx,
+        space,
+        &SourceKey {
+            kind: SourceKeyKind::Document,
+            id: id.to_owned(),
+        },
+        version,
+        None,
+    )
+    .await?;
     let source = format!("document-{id}");
-    jobs::enqueue_source_in_tx(tx, "raw_source_index", &source, version).await?;
     jobs::enqueue_source_in_tx(tx, "prepare_source", &source, version).await?;
     Ok(())
 }

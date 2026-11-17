@@ -7,6 +7,8 @@ pub use store::{
 };
 
 pub use store::{
-    SourceJob, claim_source_sync, claim_source_work, enqueue_source_in_tx,
-    release_source_page_in_tx, requeue_terminal_source_in_tx, source_work_progress_in_tx,
+    LegacyRawJob, SourceJob, claim_source_sync, claim_source_work, due_legacy_raw_jobs_in_tx,
+    enqueue_source_in_tx, latest_source_job_state_in_tx, legacy_raw_jobs_in_tx,
+    release_source_page_in_tx, requeue_terminal_source_in_tx, settle_handover_in_tx,
+    source_work_progress_in_tx,
 };

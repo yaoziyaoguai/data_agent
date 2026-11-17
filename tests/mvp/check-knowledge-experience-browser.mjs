@@ -16,8 +16,69 @@ const ok=result=>{assert.equal(result.status,200,JSON.stringify(result.value));r
 const read=async()=>ok(await h.request(documentPath));
 const editBody=(document, update)=>({operation_id:randomUUID(),body:update(document.body),parts:document.parts.map(part=>({id:part.id,expected_version:part.version}))});
 const nav=name=>navigateWorkspace(page,name);
-const login=async user=>{await page.goto(h.url);await page.getByLabel('演示登录凭据').fill(h.tokens[user]);await page.getByRole('button',{name:'进入工作台 →'}).click();await nav('语义管理');};
+const login=async user=>{await page.goto(h.url);await page.getByLabel('演示登录凭据').fill(h.tokens[user]);await page.getByRole('button',{name:'进入工作台 →'}).click();await nav('语义管理');await page.goto(h.url+'/#knowledge?object=table-demo_order_detail');await page.getByRole('heading',{name:'demo_order_detail',exact:true}).waitFor();};
 try {
+  let initialDirectoryReturned=false;
+  const initialDirectoryPattern=url=>url.pathname==='/api/knowledge'&&url.search==='?directory=all&directory_view=grouped';
+  await page.route(initialDirectoryPattern,async route=>{
+    const response=await route.fetch();await new Promise(resolve=>setTimeout(resolve,2600));
+    await route.fulfill({response});initialDirectoryReturned=true;
+  });
+  try{
+    await login('bob');
+    await page.getByLabel('语义目录范围',{exact:true}).selectOption('maintained');
+    await page.getByText('你目前没有负责的内容。可切换到全部对象查看并提出建议。',{exact:true}).waitFor();
+    await until(()=>initialDirectoryReturned,'initial slow directory result');
+    await page.waitForTimeout(200);
+    assert.equal(await page.locator('.object-heading').count(),0,'late initial list must not restore a table after switching to an empty owned directory');
+    checks.push('首批慢目录返回时保留用户已切换的空负责目录选择');
+  }finally{await page.unroute(initialDirectoryPattern);}
+  await logoutWorkspace(page);
+  await login('alice');
+  const tableEntry=page.locator('.semantic-entry').first();
+  await tableEntry.getByRole('button',{name:'编辑',exact:true}).click();
+  await tableEntry.locator('textarea').fill('慢刷新期间保留的合成草稿。');
+  let refreshReads=0,activeRefreshes=0,maxActiveRefreshes=0,releaseSavedRefresh;
+  const savedRefreshHeld=new Promise(resolve=>releaseSavedRefresh=resolve);
+  let firstFinished=false,secondStarted=false,leavingRefreshStarted=false;
+  const refreshPattern=url=>url.pathname==='/api/knowledge'&&url.search==='?directory=all&directory_view=grouped';
+  await page.route(refreshPattern,async route=>{
+    const index=++refreshReads;activeRefreshes++;maxActiveRefreshes=Math.max(maxActiveRefreshes,activeRefreshes);
+    try{
+      const response=await route.fetch();
+      if(index===1)await new Promise(resolve=>setTimeout(resolve,2600));
+      if(index===2){secondStarted=true;await savedRefreshHeld;}
+      if(index===4){leavingRefreshStarted=true;await new Promise(resolve=>setTimeout(resolve,2600));}
+      await route.fulfill({response});
+    }finally{activeRefreshes--;if(index===1)firstFinished=true;}
+  });
+  let proposalFailed=false;
+  await page.route('**/api/knowledge-proposals',route=>{
+    if(proposalFailed)return route.continue();proposalFailed=true;
+    return route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({code:'unavailable',message:'合成建议读取故障',request_id:'slow-refresh-failure',retryable:true})});
+  });
+  try{
+    await until(()=>firstFinished,'slow refresh completed',15000);
+    assert.equal(maxActiveRefreshes,1,'a failed child must not release a refresh batch while its slow sibling is pending');
+    assert.equal(await tableEntry.locator('textarea').inputValue(),'慢刷新期间保留的合成草稿。','automatic refresh preserves an open draft');
+    await page.getByRole('alert').filter({hasText:'unavailable'}).waitFor();
+    await page.unroute('**/api/knowledge-proposals');
+    await until(()=>secondStarted,'next automatic refresh starts after completion');
+    await tableEntry.getByRole('button',{name:'保存修改',exact:true}).click();
+    await tableEntry.locator('.entry-value').filter({hasText:/^慢刷新期间保留的合成草稿。$/}).waitFor();
+    releaseSavedRefresh();
+    await until(()=>refreshReads>=3&&activeRefreshes===0,'saved refresh is eventually drained');
+    assert.equal(maxActiveRefreshes,1,'saving during a refresh must coalesce without overlapping batches');
+    assert.equal(await tableEntry.locator('.entry-value').innerText(),'慢刷新期间保留的合成草稿。','late list data cannot overwrite the saved object version');
+    await until(()=>leavingRefreshStarted,'ordinary automatic refresh remains enabled');
+    await nav('工作台');
+    const readsAfterLeaving=refreshReads;
+    await page.waitForTimeout(2900);
+    assert.equal(refreshReads,readsAfterLeaving,'leaving the page stops future refresh batches');
+    checks.push('超过2秒的目录读取与子请求失败不叠加刷新；草稿保留，在途保存最终补刷新且旧版本不覆盖，离开停止调度');
+  }finally{releaseSavedRefresh();await page.unroute(refreshPattern);await page.unroute('**/api/knowledge-proposals');}
+  if(!process.argv.includes('--refresh-only')){
+  await logoutWorkspace(page);
   let original=await read(); assert.equal(original.parts.length,8); assert.equal(original.title,'虚构零售业务说明');
   for (const part of original.parts.slice(0,2)) ok(await h.request('/knowledge/'+part.id,{operation_id:randomUUID(),expected_version:part.version,entry_id:'body',value:'合成长文。'.repeat(12000)},'alice','PATCH'));
   const longDocument=await read();assert.ok(longDocument.body.length>100000,'legal chapters can exceed the single edit limit in aggregate');
@@ -47,7 +108,7 @@ try {
   changed=await read();ok(await h.request(documentPath,editBody(changed,()=>original.body),'alice','PATCH'));
   checks.push('序言、标题、增删章节、表格、代码块和尾部空行可全文保存并逐字还原；来源重分析不复活已删章节');
 
-  await login('bob'); await page.getByRole('heading',{name:'demo_order_detail',exact:true}).waitFor();
+  await login('bob');
   let releaseSearch, intercepted=false; const heldSearch=new Promise(resolve=>releaseSearch=resolve);
   await page.route('**/api/knowledge?q=*',async route=>{const response=await route.fetch();intercepted=true;await heldSearch;await route.fulfill({response});});
   await page.getByLabel('搜索语义对象').fill('demo');await until(()=>intercepted,'old search in flight');
@@ -91,9 +152,10 @@ try {
   await dialog.getByLabel('来源链接（可选）',{exact:true}).fill('https://example.invalid/retail-guide');while(await dialog.getByRole('button',{name:'移除关联资料'}).count()) await dialog.getByRole('button',{name:'移除关联资料'}).first().click();
   const linkSave=page.waitForResponse(response=>response.url().endsWith('/document')&&response.request().method()==='PATCH');
   await dialog.getByRole('button',{name:'保存文档',exact:true}).click();const linked=await (await linkSave).json();assert.equal(linked.parts[0].entries.find(entry=>entry.entry_id==='body').human_override.source_url,'https://example.invalid/retail-guide');assert.deepEqual(linked.parts[0].related_ids,[]);await dialog.waitFor({state:'detached'});await reader.getByText('尚未录入正文',{exact:true}).waitFor();
-  await logoutWorkspace(page);await login('bob');await page.getByLabel('搜索语义对象').fill('合成完整文档');await reader.getByRole('heading',{name:'合成完整文档',exact:true}).waitFor();
+  await logoutWorkspace(page);await login('bob');await page.goto(h.url+'/#knowledge?object='+linked.parts[0].id);await reader.getByRole('heading',{name:'合成完整文档',exact:true}).waitFor();
   const linkedRead=(await h.request('/knowledge/'+linked.parts[0].id+'/document',undefined,'bob')).value;assert.equal(linkedRead.parts[0].entries.find(entry=>entry.entry_id==='body').human_override.source_url,'https://example.invalid/retail-guide');
   const sourceLink=reader.getByRole('link',{name:'打开来源链接 ↗',exact:true});assert.equal(await sourceLink.getAttribute('href'),'https://example.invalid/retail-guide');assert.equal(await sourceLink.getAttribute('rel'),'noopener noreferrer');assert.equal(await reader.getByRole('button',{name:'编辑文档',exact:true}).count(),0);
   checks.push('来源链接可整篇编辑并由普通读者打开；仅链接文档保留正文缺口，文档编辑权限仍属于创建者');
+  }
   assert.deepEqual(errors,[]);passed=true;
 } finally {if(!passed)await page.screenshot({path:directory+'/failure.png',fullPage:true}).catch(()=>{});await writeFile(directory+'/report.json',JSON.stringify({passed,checks,errors,officialRequests:0},null,2));await browser.close();await h.close();console.log(JSON.stringify({passed,checks,errors,officialRequests:0}));}

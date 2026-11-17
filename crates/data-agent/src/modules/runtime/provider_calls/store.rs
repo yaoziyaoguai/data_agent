@@ -108,9 +108,22 @@ pub async fn issue_in_tx(
             .ok_or(Error::new("not_available"))?
             .0;
         if profile["trial_id"] != budget.trial_id
-            || row.get::<u32, _>("issued_calls") >= row.get::<u32, _>("call_limit")
+            || row
+                .get::<Option<u32>, _>("call_limit")
+                .is_some_and(|limit| row.get::<u32, _>("issued_calls") >= limit)
         {
             return Err(Error::new("budget_exhausted"));
+        }
+        // 预算行串行化同一请求；当前读阻止换工具ID绕过未知提取。
+        if purpose == "memory_extraction"
+            && sqlx::query("SELECT id FROM model_call_attempts WHERE budget_scope_id=? AND purpose='memory_extraction' AND parameters_fingerprint=? AND state='unknown' LIMIT 1 FOR UPDATE")
+                .bind(scope)
+                .bind(input["parameters_fingerprint"].as_str())
+                .fetch_optional(tx.connection())
+                .await?
+                .is_some()
+        {
+            return Err(Error::new("memory_operation_unknown"));
         }
         sqlx::query("UPDATE budget_scopes SET issued_calls=issued_calls+1 WHERE id=?")
             .bind(scope)
@@ -240,6 +253,16 @@ pub async fn cached_embedding_in_tx(tx: &mut AppTx<'_>, input: &Value) -> Result
     row.get::<Option<sqlx::types::Json<Value>>, _>("response_json")
         .map(|v| Some(v.0))
         .ok_or(Error::new("embedding_unavailable"))
+}
+
+// 原账本回执行存在性判定：只查单行状态，不装配响应；恢复资格用它区分
+// "有原调用可回放/收敛"与"从未发送"，不重发也不补造配置。
+pub async fn attempt_state_in_tx(tx: &mut AppTx<'_>, id: &str) -> Result<Option<String>> {
+    let row = sqlx::query("SELECT state FROM model_call_attempts WHERE id=?")
+        .bind(id)
+        .fetch_optional(tx.connection())
+        .await?;
+    Ok(row.map(|row| row.get("state")))
 }
 
 pub async fn finish_embedding_in_tx(

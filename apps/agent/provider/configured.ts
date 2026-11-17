@@ -3,11 +3,7 @@ import type {
   ModelThinkingLevel,
   ThinkingLevelMap,
 } from "@earendil-works/pi-ai";
-import type {
-  ModelConnection,
-  ModelProfile,
-} from "../../../packages/contracts/generated/boundary.ts";
-import { decodeContract } from "../../../packages/contracts/validate.ts";
+import type { ModelProfile } from "../../../packages/contracts/generated/boundary.ts";
 import type { RustTransport } from "../transport/client.ts";
 import { guardedModelStream } from "./controlled.ts";
 
@@ -16,15 +12,12 @@ export async function configuredModel(
   transport: RustTransport,
   profile: ModelProfile,
   signal: AbortSignal,
-  checkCapacity?: () => void,
+  checkCapacity?: (context: import('@earendil-works/pi-ai').TranscriptContext) => void,
 ) {
-  const connection = decodeContract<ModelConnection>(
-    "ModelConnection",
-    await transport.post(
-      "/internal/model/connection",
-      "ReadModelConnection",
-      transport.binding(),
-    ),
+  const connection = await transport.post(
+    "/internal/model/connection",
+    "ReadModelConnection",
+    transport.binding(),
   );
   if (
     connection.api !== profile.configured_model?.api ||
@@ -117,6 +110,7 @@ export async function configuredModel(
                       thinkingFormat: "deepseek",
                       maxTokensField: "max_tokens",
                       supportsReasoningEffort: true,
+                      requiresReasoningContentOnAssistantMessages: true,
                     } as const)
                   : {}),
               },

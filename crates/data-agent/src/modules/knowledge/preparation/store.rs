@@ -137,7 +137,7 @@ pub async fn apply_preparation_in_tx(
             }
             let statement = json!({"statement_id":statement_id,"object_ref":draft["target"],
                 "text":draft["text"],"scope_text":draft["scope_text"],"origin":"model_inference",
-                "citations":draft["citations"],"supports":supports});
+                "citations":draft["citations"],"supports":supports,"supports_complete":draft["supports_complete"]});
             contracts::validate("SemanticStatement", &statement)?;
             let mut statements = entry["suggestion"]["statements"]
                 .as_array()
@@ -204,26 +204,12 @@ pub async fn apply_preparation_in_tx(
         }
         if document {
             // 派生陈述只登记，不推进原文修订：同修订重写登记行，人工正文与版本保持不变。
-            let version = epoch(
-                object["version"]
-                    .as_str()
-                    .ok_or(Error::new("invalid_input"))?,
-            )?;
-            sqlx::query("DELETE FROM knowledge_versions WHERE object_id=? AND version=?")
-                .bind(object_id)
-                .bind(version)
-                .execute(tx.connection())
-                .await?;
-            sqlx::query("DELETE FROM knowledge_index_jobs WHERE object_id=? AND version=?")
-                .bind(object_id)
-                .bind(version)
-                .execute(tx.connection())
-                .await?;
+            // 既有完整归档与索引待办身份都由保存owner保留，不在整理分支删除。
         } else {
             super::super::store::next(&mut object, ctx);
         }
         super::project_object(&mut object);
-        super::super::store::persist(tx, ctx, &object).await?;
+        super::super::store::persist(tx, ctx, &object, &["*"]).await?;
         saved.push(object);
     }
     super::super::store::record(tx, ctx, operation, &command, &json!(saved)).await?;

@@ -53,14 +53,6 @@ async fn checked_binding(
             args["scope"].as_str().unwrap_or(""),
         )?;
         super::knowledge::check_refs_in_tx(&mut tx, ctx, &args["dependencies"]).await?;
-        if args["action"] == "update_memory" {
-            let old =
-                assets::read_in_tx(&mut tx, ctx, args["asset_id"].as_str().unwrap_or(""), false)
-                    .await?;
-            if old["kind"] != "memory" || old["version"] != args["expected_version"] {
-                return Err(Error::new("version_conflict"));
-            }
-        }
     }
     tx.commit().await?;
     Ok((
@@ -88,7 +80,28 @@ pub async fn extract(
             .unwrap_or(""),
         input["arguments"]["scope"].as_str().unwrap_or(""),
     )?;
-    let request = json!({"operation_id":budget["operation_id"],"owner_id":ctx.user_id,"space_id":ctx.space_id,"message":message,"quote":quote,"budget":budget});
+    let mut request = json!({"operation_id":budget["operation_id"],"owner_id":ctx.user_id,"space_id":ctx.space_id,"message":message,"quote":quote,"budget":budget});
+    if input["arguments"]["action"] == "update_memory" {
+        let old = super::personal_assets::read(
+            pool,
+            ctx,
+            input["arguments"]["asset_id"].as_str().unwrap_or(""),
+        )
+        .await?;
+        if old["kind"] != "memory" || old["version"] != input["arguments"]["expected_version"] {
+            return Err(Error::new("version_conflict"));
+        }
+        if old["text_unavailable"] == true {
+            return Err(Error::new("stale_context"));
+        }
+        let mut tx = AppTx::begin(pool).await?;
+        super::knowledge::check_refs_in_tx(&mut tx, ctx, &old["dependencies"]).await?;
+        tx.commit().await?;
+        request["previous_memory"] = json!({
+            "id": old["id"], "version": old["version"],
+            "body": old["body"], "scope": old["scope"],
+        });
+    }
     let first = assets::memory_provider::call(
         "/extract",
         "MemoryExtractionRequest",
@@ -368,10 +381,33 @@ pub async fn prepare_workspace(
         .as_str()
         .unwrap_or("")
         .to_owned();
-    let items =
+    let conv = conversations::lock_conversation_in_tx(&mut tx, ctx, &cid).await?;
+    // 来源限制同样约束派发前的记忆扩展（04关闭审查修复）：未知来源范围保守不注入；
+    // 已知受限范围按资产真实来源过滤后注入，只把同源资产写进运行权威，避免下一次
+    // 派发重核时拦截整个运行。
+    let projection = super::source_limits::active_projection_in_tx(&mut tx, &conv).await?;
+    if !projection.scope_known {
+        tx.commit().await?;
+        envelope["workspace_context"]["memory_retrieval"] = json!("excluded_by_source_limits");
+        return Ok(());
+    }
+    let gate = projection.gate;
+    let mut items =
         super::knowledge::valid_assets_in_tx(&mut tx, ctx, items, &cid, &checked_text).await?;
+    if let Some(gate) = &gate {
+        let mut kept = Vec::new();
+        for asset in items.drain(..) {
+            if super::source_limits::asset_within_in_tx(&mut tx, ctx, gate, &asset).await? {
+                kept.push(asset);
+            }
+        }
+        items = kept;
+    }
     tx.commit().await?;
     if items.is_empty() {
+        if gate.is_some() {
+            envelope["workspace_context"]["memory_retrieval"] = json!("excluded_by_source_limits");
+        }
         return Ok(());
     }
     let binding = json!({"kind":"run","id":envelope["run_id"],"epoch":envelope["lease_epoch"],"sdk_tool_call_id":null,"operation_id":format!("context-{}",envelope["message_id"].as_str().unwrap_or(""))});
@@ -399,8 +435,17 @@ pub async fn prepare_workspace(
         .into_iter()
         .filter(|v| v["kind"] == "memory")
         .collect();
-    let current =
+    let mut current =
         super::knowledge::valid_assets_in_tx(&mut tx, ctx, current, &cid, &checked_text).await?;
+    if let Some(gate) = &gate {
+        let mut kept = Vec::new();
+        for asset in current.drain(..) {
+            if super::source_limits::asset_within_in_tx(&mut tx, ctx, gate, &asset).await? {
+                kept.push(asset);
+            }
+        }
+        current = kept;
+    }
     let mut ranked = Vec::new();
     for candidate in result["candidates"].as_array().into_iter().flatten() {
         if let Some(asset) = current
@@ -417,6 +462,10 @@ pub async fn prepare_workspace(
         }
     }
     ranked.truncate(20);
+    if ranked.is_empty() && gate.is_some() {
+        envelope["workspace_context"]["memory_retrieval"] = json!("excluded_by_source_limits");
+        return Ok(());
+    }
     envelope["workspace_context"]["memories"] = json!(
         ranked
             .into_iter()
@@ -447,6 +496,10 @@ pub async fn prepare_workspace(
         }
     }
     super::context_authority::observe(&mut snapshot, &envelope["workspace_context"]);
+    super::context_authority::observe_workspace_previews(
+        &mut snapshot,
+        &envelope["workspace_context"],
+    );
     runtime::save_authority_in_tx(&mut tx, &run_id, &snapshot).await?;
     envelope["workspace_context"]["authority_revision"] = json!(fingerprint(&snapshot));
     envelope["workspace_context"]["authority_snapshot"] = snapshot;

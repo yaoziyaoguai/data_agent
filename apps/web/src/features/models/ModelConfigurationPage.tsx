@@ -533,11 +533,13 @@ function ServiceFields({
                   ...draft,
                   provider_id: value,
                   api:
-                    value === "anthropic"
-                      ? "anthropic-messages"
-                      : value === "deepseek"
-                        ? "openai-completions"
-                        : draft.api,
+                    value === "openai"
+                      ? "openai-responses"
+                      : value === "anthropic"
+                        ? "anthropic-messages"
+                        : value === "deepseek"
+                          ? "openai-completions"
+                          : draft.api,
                 });
             }}
           >
@@ -590,9 +592,11 @@ function ServiceFields({
           required
           maxLength={2048}
           placeholder={
-            draft.api === "anthropic-messages"
-              ? "https://api.anthropic.com"
-              : "https://api.example.com/v1"
+            draft.provider_id === "openai"
+              ? "https://api.openai.com/v1"
+              : draft.api === "anthropic-messages"
+                ? "https://api.anthropic.com"
+                : "https://api.example.com/v1"
           }
           value={draft.base_url}
           onChange={(e) => change({ ...draft, base_url: e.target.value })}

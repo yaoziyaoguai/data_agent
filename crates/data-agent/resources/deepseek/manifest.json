@@ -1,0 +1,23 @@
+{
+  "license": "LICENSE",
+  "models": {
+    "deepseek-flash": {
+      "upstream": "DeepSeek-V4.1-Flash-1017",
+      "url": "https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash-1017",
+      "tokenizer_sha256": "c90dfa01249db1be4245780a052ede752e1361c612ac6d08e2bdada7d599476b",
+      "encoder_sha256": "13231c592e958fb39e2af6001dae69d90e7a36b265702b9b390236fb387599e2",
+      "tokenizer": "flash-tokenizer.json",
+      "format": "flash-format.json",
+      "encoder_reference": "flash-encoding.py.txt"
+    },
+    "deepseek-v4-pro": {
+      "upstream": "DeepSeek-V4-Pro-0813",
+      "url": "https://huggingface.co/deepseek-ai/DeepSeek-V4-Pro-0813",
+      "tokenizer_sha256": "8f9f37ca37fdc4f5fd36d5cf4d3b0e8392edb4e894fd10cc0d70b4957c8633cf",
+      "encoder_sha256": "abc0d26120250dda0ae077dc64aa28836026e61e970854aaeb792445e6a0dde6",
+      "tokenizer": "pro-tokenizer.json",
+      "format": "pro-format.json",
+      "encoder_reference": "pro-encoding.py.txt"
+    }
+  }
+}

@@ -44,6 +44,54 @@ async fn knowledge_without_prepared_relations_remains_readable_under_its_respons
 }
 
 #[tokio::test]
+async fn source_target_catalog_keeps_metadata_order_with_large_source_quotes() {
+    let pool = persistence::connect(
+        &std::env::var("DATA_AGENT_DATABASE_URL").expect("isolated harness database"),
+    )
+    .await
+    .unwrap();
+    let ctx = AccessContext {
+        user_id: "alice".into(),
+        space_id: "demo".into(),
+        request_id: "synthetic-wide-source-targets".into(),
+    };
+    let source = "synthetic-wide-source-targets";
+    let mut expected = Vec::new();
+    for index in 0..2 {
+        let mut tx = AppTx::begin(&pool).await.unwrap();
+        let object = knowledge::create_in_tx(
+            &mut tx,
+            &ctx,
+            &json!({"operation_id":format!("wide-target-{index}"), "kind":"term",
+                "name":format!("合成整理对象{index}"), "body":"对象正文不进入整理目标目录。",
+                "related_ids":[], "source_url":null, "structured_value":null}),
+        )
+        .await
+        .unwrap();
+        tx.commit().await.unwrap();
+        // 复现真实整理后积累的大原文引用；本接口仅消费条目身份，不应排序整份正文。
+        sqlx::query("UPDATE knowledge_objects SET source_id=?,body=JSON_SET(body,'$.entries[0].source_facts',JSON_OBJECT('complete',FALSE,'gap','合成宽材料','quote',REPEAT('合成引文。',30000))) WHERE id=?")
+            .bind(source)
+            .bind(object["id"].as_str().unwrap())
+            .execute(&pool)
+            .await
+            .unwrap();
+        expected.push(json!({"id":object["id"],"kind":"term","version":"1","name":object["name"],
+            "entries":[{"entry_id":object["entries"][0]["entry_id"],"path":object["entries"][0]["path"],"label":object["entries"][0]["label"]}]}));
+    }
+    expected.sort_by(|a, b| a["id"].as_str().cmp(&b["id"].as_str()));
+    let mut tx = AppTx::begin(&pool).await.unwrap();
+    let targets = knowledge::source_objects_in_tx(&mut tx, &ctx, source)
+        .await
+        .unwrap();
+    assert_eq!(
+        targets, expected,
+        "宽原文不改变整理目录的身份、版本、顺序和条目元数据"
+    );
+    tx.commit().await.unwrap();
+}
+
+#[tokio::test]
 async fn prepared_statement_keeps_support_and_host_origin_without_replacing_human_text() {
     let pool = persistence::connect(
         &std::env::var("DATA_AGENT_DATABASE_URL").expect("isolated harness database"),

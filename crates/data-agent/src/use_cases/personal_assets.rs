@@ -407,7 +407,9 @@ pub async fn selections(
                 Err(e) => return Err(e),
             }
         };
-        selections.push(json!({"selection_id":row["selection_id"],"asset_id":row["asset_id"],"selected_version":row["selected_version"],"current_version":asset["version"],"name":if availability == "available" { asset["name"].clone() } else { json!("Skill 当前不可用") },"visibility":asset["visibility"],"owner_id":asset["owner_id"],"availability":availability}));
+        // name只承载资产身份；可用性由availability表达，删除或越界的资产name为null，
+        // 界面侧按自己的fallback文案渲染，不在后端投影里重复。
+        selections.push(json!({"selection_id":row["selection_id"],"asset_id":row["asset_id"],"selected_version":row["selected_version"],"current_version":asset["version"],"name":asset["name"].clone(),"visibility":asset["visibility"],"owner_id":asset["owner_id"],"availability":availability}));
     }
     tx.commit().await?;
     Ok(
@@ -459,14 +461,16 @@ pub async fn review_suggestion(
     Ok(value)
 }
 
-pub async fn read_skill_file_in_tx(
+pub(super) async fn read_skill_file_in_tx(
     tx: &mut AppTx<'_>,
     ctx: &AccessContext,
-    cid: &str,
+    conv: &crate::modules::conversations::LockedConversation,
     run: &str,
     path: &str,
     checked: &CheckedText,
+    gate: Option<&super::source_limits::SourceGate>,
 ) -> Result<Value> {
+    let cid = conv.id.as_str();
     let (id, version, file) = assets::skill_files::parse_location(path)?;
     let asset = assets::read_in_tx(tx, ctx, id, true).await?;
     if asset["kind"] != "skill" || asset["version"] != version {
@@ -478,6 +482,12 @@ pub async fn read_skill_file_in_tx(
         .any(|v| v["id"] == id && v["version"] == version)
     {
         return Err(Error::new("selection_required"));
+    }
+    // 受限任务的读取门在读取点硬拒：资产按自身dependencies/字段authority核来源
+    //（不能拿资产ID查知识贡献根），否则成功交付会把skill正文写入skills桶，下一次
+    // 派发被"存在即残留"整轮stale_context且同输入不可恢复（04关闭审查修复）。
+    if let Some(gate) = gate {
+        super::source_limits::assert_asset_in_tx(tx, ctx, gate, &asset).await?;
     }
     let authority = text_authority_in_tx(tx, ctx, cid, &asset, checked).await?;
     super::context_authority::merge_run_in_tx(tx, run, &authority).await?;

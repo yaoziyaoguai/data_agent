@@ -42,6 +42,7 @@ const conditions = {
   filters: ["is_test=0", "paid_amount_cents>0"],
   knowledge_refs: [],
   notes: "截至快照，按付款月份归属退款。",
+  source_limits: null,
 };
 const ok = (response) => {
   assert.equal(response.status, 200, JSON.stringify(response.value));

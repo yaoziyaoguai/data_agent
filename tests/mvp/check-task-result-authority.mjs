@@ -33,8 +33,28 @@ try{
  assert.deepEqual(h.sql(`SELECT JSON_OBJECT('calls',issued_calls) FROM budget_scopes WHERE id='${run.budget_scope_id}'`)[0],issueBefore);
  checks.push('query_result真实交付后绑定正文；平台权限未知明确outcome_unknown，恢复后正文可读且未调用模型');
  await writeFile(h.directory+'/platform/permissions.json',JSON.stringify({denied_query_users:['alice']}));
- const replay=await h.internal('/internal/data/tools',originalDerivedInvocation);assert.equal(replay.status,200,JSON.stringify(replay));assert.equal(JSON.stringify(replay.value).includes(marker),false,'成功回执按已撤结果权限投影');await finish();
- await begin(cid,'权限变化后继续核对任务。');assert.equal(run.checkpoint,null);assert.equal(JSON.stringify(run.workspace_context).includes(marker),false);
+ const replay=await h.internal('/internal/data/tools',originalDerivedInvocation);assert.equal(replay.status,200,JSON.stringify(replay));assert.equal(JSON.stringify(replay.value).includes(marker),false,'成功回执按已撤结果权限投影');
+ // R01：本轮已采用的查询结果撤权后，普通自然final必须在提交前拒绝，三类持久状态不推进。
+ const finishText='本轮合成检查已记录。';
+ ok(await h.internal('/internal/outputs',{run_id:run.run_id,lease_epoch:run.lease_epoch,chunk_seq:'1',text:finishText}));
+ const beforeFinish=await h.snapshot(cid);
+ const rejected=await h.internal('/internal/finish',{run_id:run.run_id,lease_epoch:run.lease_epoch,commit_id:run.output_id,final_text:finishText,checkpoint:cp()});
+ assert.equal(rejected.status,409,JSON.stringify(rejected));assert.equal(rejected.value.code,'stale_context');
+ const afterFinish=await h.snapshot(cid);
+ assert.deepEqual(afterFinish.messages,beforeFinish.messages,'撤权后自然final拒绝不能提交正文');
+ assert.deepEqual(afterFinish.tasks,beforeFinish.tasks,'撤权后自然final拒绝不能结清任务');
+ assert.equal(afterFinish.runs.find(r=>r.run_id===run.run_id).state,'running');
+ assert.equal(h.sql(`SELECT JSON_OBJECT('n',COUNT(*)) FROM assistant_outputs WHERE attempt_id='${run.attempt_id}' AND state='committed'`)[0].n,0);
+ h.sql(`UPDATE agent_runs SET state='failed' WHERE id='${run.run_id}' AND state='running';
+   UPDATE conversations SET lease_owner=NULL,lease_until=NULL WHERE id='${cid}';
+   UPDATE background_jobs SET state='failed',lease_owner=NULL,lease_until=NULL WHERE message_id='${run.message_id}';
+   UPDATE conversation_messages SET disposition='failed' WHERE id='${run.message_id}' AND disposition='pending';`);
+ h.releaseRun(run.run_id);
+ checks.push('撤权后普通自然final在提交前stale_context拒绝，正文/任务/提交状态不推进');
+ await begin(cid,'权限变化后继续核对任务。');
+ // 被拒绝的运行按失败结束，下一轮只接最后一个已结清检查点；该检查点不得再携带已撤结果。
+ assert.equal(run.checkpoint?.authority_snapshot?.query_results.some(pair=>pair[0]===query.id),false);
+ assert.equal(JSON.stringify(run.workspace_context).includes(marker),false);
  const current=await tool('read_analysis_task',{task_id:derived.task_id});assert.equal(JSON.stringify(current).includes(marker),false);assert.ok(current.unavailable_condition_fields.includes('notes'));assert.equal(current.phase,'waiting_clarification');
  const history=await tool('read_analysis_task',{task_id:derived.task_id,condition_version:derived.condition_version});assert.equal(JSON.stringify(history).includes(marker),false);
  const wakeHidden=await tool('read_analysis_task',{task_id:wakeTask.task_id});assert.equal(wakeHidden.goal,undefined,'结果唤醒原文作为目标仍依赖结果来源');

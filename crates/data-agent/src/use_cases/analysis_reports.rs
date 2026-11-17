@@ -12,17 +12,18 @@ fn text<'a>(value: &'a Value, key: &str) -> Result<&'a str> {
     value[key].as_str().ok_or(Error::new("invalid_input"))
 }
 
-fn unavailable_source(error: &Error) -> bool {
+// 撤权/删除/停用/越权或来源记录被改写：实际派生内容不允许借读取复活，
+// 整份报告只返回状态与引用。
+fn revoked_source(error: &Error) -> bool {
     matches!(
         error.code,
-        "result_expired"
-            | "result_unavailable"
-            | "forbidden"
-            | "not_available"
-            | "stale_knowledge"
-            | "stale_context"
-            | "invalid_evidence"
+        "forbidden" | "not_available" | "stale_knowledge" | "stale_context" | "invalid_evidence"
     )
+}
+
+// 原始结果过期或暂不可读：只影响依赖该结果重建的图表/明细，不隐藏报告正文。
+fn expired_source(error: &Error) -> bool {
+    matches!(error.code, "result_expired" | "result_unavailable")
 }
 
 pub fn sources(evidence: &Value) -> Result<Value> {
@@ -271,6 +272,92 @@ async fn check_report_in_tx(
     Ok(authority)
 }
 
+// 历史展示核验（04切片7）：已存报告在普通语义改版后仍完整展示。依据行必须
+// 原样存在且归属不变；条件与结论引用的知识按记录版本存档读取，版本漂移不算
+// 失效；查询依赖只核归属与形状。撤权、删除、停用仍按限制类失败整份隐藏。
+pub(super) async fn check_report_history_in_tx(
+    tx: &mut AppTx<'_>,
+    ctx: &AccessContext,
+    cid: &str,
+    report: &Value,
+) -> Result<()> {
+    async fn history_refs_in_tx(
+        tx: &mut AppTx<'_>,
+        ctx: &AccessContext,
+        refs: &Value,
+    ) -> Result<()> {
+        // 存档版本读取容忍版本漂移；对象撤下或上游被撤仍按限制类拒绝。
+        super::knowledge::history_check_refs_in_tx(tx, ctx, refs).await
+    }
+    for item in report["evidence"]
+        .as_array()
+        .ok_or(Error::new("invalid_evidence"))?
+    {
+        let reference = &item["reference"];
+        if reference["conversation_id"] != cid {
+            return Err(Error::new("invalid_evidence"));
+        }
+        let current =
+            analysis::read_evidence_in_tx(tx, ctx, text(reference, "evidence_id")?).await?;
+        if current != *item {
+            return Err(Error::new("invalid_evidence"));
+        }
+        let conditions = analysis::read_evidence_conditions_in_tx(
+            tx,
+            ctx,
+            cid,
+            text(reference, "task_id")?,
+            epoch(text(reference, "condition_version")?)?,
+        )
+        .await?;
+        if conditions != item["conditions"] {
+            return Err(Error::new("invalid_evidence"));
+        }
+        // 正文与条件的来源快照仍按记录引用核验（历史规则）：撤源/停用/缺闭包
+        // 照样拒绝，只是版本漂移不再隐藏。
+        let evidence_authority =
+            analysis::read_evidence_authority_in_tx(tx, ctx, text(reference, "evidence_id")?)
+                .await?;
+        super::context_authority::validate_history_in_tx(tx, ctx, cid, &evidence_authority).await?;
+        let fields = analysis::condition_text_authorities_in_tx(
+            tx,
+            cid,
+            text(reference, "task_id")?,
+            epoch(text(reference, "condition_version")?)?,
+        )
+        .await?;
+        for key in item["conditions"]
+            .as_object()
+            .ok_or(Error::new("invalid_evidence"))?
+            .keys()
+        {
+            super::context_authority::validate_history_in_tx(tx, ctx, cid, &fields[key]).await?;
+        }
+        history_refs_in_tx(tx, ctx, &conditions["knowledge_refs"]).await?;
+        history_refs_in_tx(tx, ctx, &item["validated_sources"]["knowledge_refs"]).await?;
+        for finding in item["findings"]
+            .as_array()
+            .ok_or(Error::new("invalid_evidence"))?
+        {
+            history_refs_in_tx(tx, ctx, &finding["knowledge_refs"]).await?;
+        }
+        for dependency in item["validated_sources"]["result_dependencies"]
+            .as_array()
+            .ok_or(Error::new("invalid_evidence"))?
+        {
+            let query = queries::read_in_tx(tx, ctx, text(dependency, "query_id")?).await?;
+            super::analysis_evidence::assert_query(&query, cid, reference, dependency)?;
+        }
+    }
+    let titles = analysis::read_report_authorities_in_tx(tx, ctx, &report["reference"]).await?;
+    for authority in report_authorities(report, &titles) {
+        super::context_authority::validate_history_in_tx(tx, ctx, cid, &authority).await?;
+    }
+    Ok(())
+}
+
+/// 保存路径（current_use）仍要求全部采纳结果当前有效：过期依据不能借新报告
+/// 版本重新采用；旧数据只保留在已存展示里。
 async fn result_sources(
     pool: &MySqlPool,
     ctx: &AccessContext,
@@ -306,6 +393,68 @@ async fn result_sources(
         }
         let query = super::query_workflow::read(pool, ctx, qid).await?;
         queries::validate_report_chart(chart, &query, &results[qid])?;
+    }
+    Ok(results.into_values().collect())
+}
+
+/// 展示路径（history_display）逐图表收集：依赖过期的图表数据不可用（省略该
+/// 结果，界面按缺失呈现），报告正文保留；撤权类失败上抛整份限制。不自动重跑查询。
+async fn partial_chart_results(
+    pool: &MySqlPool,
+    ctx: &AccessContext,
+    evidence: &Value,
+    charts: &Value,
+) -> Result<Vec<Value>> {
+    let adopted = sources(evidence)?;
+    let mut results = BTreeMap::new();
+    for chart in charts.as_array().ok_or(Error::new("invalid_input"))? {
+        if !adopted["result_dependencies"]
+            .as_array()
+            .expect("checked")
+            .iter()
+            .any(|r| r["query_id"] == chart["query_id"] && r["result_ref"] == chart["result_ref"])
+        {
+            return Err(Error::new("invalid_evidence"));
+        }
+        let qid = text(chart, "query_id")?;
+        // 图表数据可用性按结果状态判定：只有原始结果过期（过期类）才省略该图；
+        // 语义改版的版本漂移不隐藏已存结果数据（04切片7），撤权类上抛整份限制。
+        let mut unavailable = false;
+        if let Err(error) = super::query_workflow::result_state_authority(
+            pool,
+            ctx,
+            qid,
+            text(chart, "result_ref")?,
+        )
+        .await
+        {
+            if matches!(error.code, "forbidden" | "not_available") {
+                return Err(error);
+            }
+            if expired_source(&error) {
+                unavailable = true;
+            } else if !matches!(
+                error.code,
+                "stale_context" | "stale_knowledge" | "invalid_input"
+            ) {
+                return Err(error);
+            }
+        }
+        if !unavailable && !results.contains_key(qid) {
+            match super::query_workflow::collect_saved_results_for_display(pool, ctx, qid).await {
+                Ok(collected) => {
+                    results.insert(qid.to_owned(), collected);
+                }
+                // 展示收集已按历史规则核验引用：漂移不报错，撤权类如实上抛，
+                // 此处只有真实结果过期才按缺图处理。
+                Err(error) if expired_source(&error) => {}
+                Err(error) => return Err(error),
+            }
+        }
+        if let Some(saved) = results.get(qid) {
+            let query = super::query_workflow::read(pool, ctx, qid).await?;
+            queries::validate_report_chart(chart, &query, saved)?;
+        }
     }
     Ok(results.into_values().collect())
 }
@@ -367,12 +516,13 @@ pub struct ReportWrite<'a> {
 pub async fn save_in_tx(
     tx: &mut AppTx<'_>,
     ctx: &AccessContext,
-    cid: &str,
+    conv: &crate::modules::conversations::LockedConversation,
     write: ReportWrite<'_>,
     input: &Value,
     evidence: &Value,
     checked_text: &super::context_authority::CheckedTextResults,
 ) -> Result<Value> {
+    let cid = conv.id.as_str();
     let ReportWrite {
         operation_id: operation,
         message_id: message,
@@ -437,7 +587,7 @@ pub async fn save(
     let receipt = save_in_tx(
         &mut tx,
         ctx,
-        cid,
+        &conversation,
         ReportWrite {
             operation_id: &operation,
             message_id: &message,
@@ -466,6 +616,13 @@ fn changed(task: &Value, report: &Value) -> bool {
         || task["lifecycle"] != "active"
 }
 
+fn unavailable_view(reference: &Value) -> Value {
+    json!({"status":"sources_unavailable","reference":reference})
+}
+
+/// 报告读取按具体用例固定用途（04切片7）：Web/报告页是history_display——已存
+/// 内容在语义改版后仍完整，结果过期只省略受影响图表，撤权类整份限制；条件
+/// 已变化的报告保留正文并标记condition_changed，不自动重跑。
 async fn read_view(
     pool: &MySqlPool,
     ctx: &AccessContext,
@@ -476,42 +633,38 @@ async fn read_view(
 ) -> Result<Value> {
     let mut tx = AppTx::begin(pool).await?;
     conversations::lock_conversation_in_tx(&mut tx, ctx, cid).await?;
-    let task = analysis::read_task_in_tx(&mut tx, cid, task_id).await?;
+    let _task = analysis::read_task_in_tx(&mut tx, cid, task_id).await?;
     let report = analysis::read_report_in_tx(&mut tx, ctx, cid, task_id).await?;
     let reference = report["reference"].clone();
-    if changed(&task, &report) {
-        tx.commit().await?;
-        return Ok(json!({"status":"condition_changed","reference":reference}));
-    }
-    let preflight = async {
-        let mut authorities =
-            evidence_authorities_in_tx(&mut tx, ctx, cid, &report["evidence"]).await?;
-        let titles = analysis::read_report_authorities_in_tx(&mut tx, ctx, &reference).await?;
-        authorities.extend(report_authorities(&report, &titles));
-        Ok::<_, Error>(authorities)
-    }
-    .await;
+    let history = check_report_history_in_tx(&mut tx, ctx, cid, &report).await;
+    let projection =
+        super::historical_analysis::report_projection_in_tx(&mut tx, ctx, &report).await;
     tx.commit().await?;
-    let authorities = match preflight {
-        Ok(authorities) => authorities,
-        Err(error) if unavailable_source(&error) => {
-            return Ok(json!({"status":"sources_unavailable","reference":reference}));
+    if let Err(error) = history {
+        if revoked_source(&error) {
+            return Ok(unavailable_view(&reference));
         }
-        Err(error) => return Err(error),
-    };
+        return Err(error);
+    }
+    // 全部实际来源包含标题、条件等间接来源，平台核验仍在事务外。
+    let projection = projection?;
+    let authority = &projection["actual_sources"]["authority"];
     checked_text
-        .include_authorities(pool, ctx, &authorities)
+        .include_history(pool, ctx, std::slice::from_ref(authority))
         .await?;
+    if !checked_text.allows_history(authority) {
+        return Ok(unavailable_view(&reference));
+    }
     let no_charts = json!([]);
     let charts = if with_chart_results {
         &report["charts"]
     } else {
         &no_charts
     };
-    let chart_results = match result_sources(pool, ctx, &report["evidence"], charts).await {
+    let chart_results = match partial_chart_results(pool, ctx, &report["evidence"], charts).await {
         Ok(results) => results,
-        Err(error) if unavailable_source(&error) => {
-            return Ok(json!({"status":"sources_unavailable","reference":reference}));
+        Err(error) if revoked_source(&error) => {
+            return Ok(unavailable_view(&reference));
         }
         Err(error) => return Err(error),
     };
@@ -521,23 +674,31 @@ async fn read_view(
     if latest["reference"] != reference {
         return Err(Error::new("version_conflict"));
     }
-    if changed(
+    let changed = changed(
         &analysis::read_task_in_tx(&mut tx, cid, task_id).await?,
         &latest,
-    ) {
+    );
+    if let Err(error) = check_report_history_in_tx(&mut tx, ctx, cid, &latest).await {
         tx.commit().await?;
-        return Ok(json!({"status":"condition_changed","reference":reference}));
+        if revoked_source(&error) {
+            return Ok(unavailable_view(&reference));
+        }
+        return Err(error);
     }
-    let local = check_report_in_tx(&mut tx, ctx, cid, &report, checked_text).await;
+    let current_projection =
+        super::historical_analysis::report_projection_in_tx(&mut tx, ctx, &latest).await?;
+    if current_projection != projection
+        || !checked_text.allows_history(&current_projection["actual_sources"]["authority"])
+    {
+        return Err(Error::new("version_conflict"));
+    }
     tx.commit().await?;
-    if let Err(error) = local {
-        return if unavailable_source(&error) {
-            Ok(json!({"status":"sources_unavailable","reference":reference}))
-        } else {
-            Err(error)
-        };
-    }
-    let view = json!({"status":"available","reference":reference,"report":report,"chart_results":chart_results});
+    let status = if changed {
+        "condition_changed"
+    } else {
+        "available"
+    };
+    let view = json!({"status":status,"reference":reference,"report":report,"chart_results":chart_results});
     contracts::validate("AnalysisReportView", &view)?;
     Ok(view)
 }
@@ -553,44 +714,52 @@ pub async fn read(
 }
 
 fn report_page(view: &Value, input: &Value) -> Result<Value> {
-    if view["status"] != "available" {
+    if view["status"] != "available" && view["status"] != "historical" {
         return Ok(json!({"page":view,"sources":null}));
     }
     if input.get("version").is_some() && input["version"] != view["reference"]["version"] {
         return Err(Error::new("version_conflict"));
     }
     let report = &view["report"];
-    let body = serde_json::to_string(report).map_err(|_| Error::new("invalid_input"))?;
-    let chars: Vec<_> = body.chars().collect();
-    let offset = input["offset"].as_u64().unwrap_or(0) as usize;
-    let limit = input["limit"].as_u64().unwrap_or(4096) as usize;
-    if offset > chars.len() {
-        return Err(Error::new("invalid_input"));
-    }
-    let mut end = offset.saturating_add(limit).min(chars.len());
-    let mut page = json!({"status":"available","reference":view["reference"],"title":report["title"],
-        "evidence_ids":report["evidence"].as_array().ok_or(Error::new("invalid_evidence"))?.iter().map(|item|item["reference"]["evidence_id"].clone()).collect::<Vec<_>>(),
-        "charts":report["charts"],"content_text":"","content_page":{}});
-    loop {
-        page["content_text"] = json!(chars[offset..end].iter().collect::<String>());
-        page["content_page"] = json!({"offset":offset,"total_chars":chars.len(),"complete":end==chars.len(),"next_offset":if end<chars.len(){Some(end)}else{None}});
-        // 为运行回执封套留1KiB，不把合法报告全文一次塞进模型上下文。
-        if serde_json::to_vec(&page)
-            .map_err(|_| Error::new("invalid_input"))?
-            .len()
-            <= 23 * 1024
-        {
-            break;
-        }
-        if end == offset {
-            return Err(Error::new("request_too_large"));
-        }
-        end = offset + (end - offset) / 2;
-    }
+    let page = if view["status"] == "historical" {
+        json!({"status":"historical","reference":view["reference"],
+            "historical_analysis":view["historical_analysis"]})
+    } else {
+        json!({"status":"available","reference":view["reference"],"title":report["title"],
+            "evidence_ids":report["evidence"].as_array().ok_or(Error::new("invalid_evidence"))?.iter().map(|item|item["reference"]["evidence_id"].clone()).collect::<Vec<_>>(),
+            "charts":report["charts"]})
+    };
+    let page = super::historical_analysis::content_page(
+        page,
+        report,
+        input["offset"].as_u64().unwrap_or(0) as usize,
+        input["limit"].as_u64().unwrap_or(4096) as usize,
+    )?;
     contracts::validate("AnalysisReportPage", &page)?;
-    Ok(json!({"page":page,"sources":sources(&report["evidence"])?}))
+    Ok(
+        json!({"page":page,"sources":if view["status"] == "historical" { Value::Null } else { sources(&report["evidence"])? }}),
+    )
 }
 
+async fn historical_page(
+    pool: &MySqlPool,
+    ctx: &AccessContext,
+    cid: &str,
+    mut view: Value,
+    input: &Value,
+) -> Result<Value> {
+    let mut tx = AppTx::begin(pool).await?;
+    conversations::lock_conversation_in_tx(&mut tx, ctx, cid).await?;
+    check_report_history_in_tx(&mut tx, ctx, cid, &view["report"]).await?;
+    view["historical_analysis"] =
+        super::historical_analysis::report_projection_in_tx(&mut tx, ctx, &view["report"]).await?;
+    tx.commit().await?;
+    view["status"] = json!("historical");
+    report_page(&view, input)
+}
+
+/// 当前报告沿严格核验；旧报告按历史用途交付保存时正文及原条件。
+/// 历史引用只用于复述，不获得当前采用或执行资格。
 pub async fn read_for_agent(
     pool: &MySqlPool,
     ctx: &AccessContext,
@@ -599,10 +768,60 @@ pub async fn read_for_agent(
     checked_text: &mut super::context_authority::CheckedTextResults,
 ) -> Result<Value> {
     contracts::validate("ReadAnalysisReportInput", input)?;
-    report_page(
-        &read_view(pool, ctx, cid, text(input, "task_id")?, false, checked_text).await?,
-        input,
-    )
+    let view = read_view(pool, ctx, cid, text(input, "task_id")?, false, checked_text).await?;
+    if view["status"] == "condition_changed" {
+        return historical_page(pool, ctx, cid, view, input).await;
+    }
+    if view["status"] != "available" {
+        return Ok(json!({"page":view,"sources":null}));
+    }
+    let mut tx = AppTx::begin(pool).await?;
+    conversations::lock_conversation_in_tx(&mut tx, ctx, cid).await?;
+    let report = analysis::read_report_in_tx(&mut tx, ctx, cid, text(input, "task_id")?).await?;
+    // 严格核验与交付正文保持同一修订：read_view提交后可能并发保存新修订（如
+    // 仅改标题），及早按reference比对以version_conflict失败，不让核验与
+    // include_authorities落在与拟交付正文不同的修订上（与库内既有竞态处理
+    // 一致，04关闭审查修复）。
+    if report["reference"] != view["reference"] {
+        tx.commit().await?;
+        return Err(Error::new("version_conflict"));
+    }
+    // 报告自身记录的依据/条件/标题引用先进入本轮已核集合（04关闭审查修复）：
+    // 严格核验按报告记录的引用判定，不因当前运行尚未采用其上游结果而把完全
+    // 有效的报告误判stale降级为历史投影。
+    let authorities = async {
+        let mut authorities =
+            evidence_authorities_in_tx(&mut tx, ctx, cid, &report["evidence"]).await?;
+        let titles =
+            analysis::read_report_authorities_in_tx(&mut tx, ctx, &report["reference"]).await?;
+        authorities.extend(report_authorities(&report, &titles));
+        Ok::<_, Error>(authorities)
+    }
+    .await;
+    tx.commit().await?;
+    let strict = match authorities {
+        Ok(authorities) => {
+            checked_text
+                .include_authorities(pool, ctx, &authorities)
+                .await?;
+            let mut tx = AppTx::begin(pool).await?;
+            conversations::lock_conversation_in_tx(&mut tx, ctx, cid).await?;
+            let strict = check_report_in_tx(&mut tx, ctx, cid, &report, checked_text).await;
+            tx.commit().await?;
+            strict
+        }
+        Err(error) => Err(error),
+    };
+    match strict {
+        Ok(_) => report_page(&view, input),
+        Err(error) if matches!(error.code, "stale_context" | "stale_knowledge") => {
+            historical_page(pool, ctx, cid, view, input).await
+        }
+        Err(error) if revoked_source(&error) => {
+            Ok(json!({"page":unavailable_view(&view["reference"]),"sources":null}))
+        }
+        Err(error) => Err(error),
+    }
 }
 
 pub async fn assert_page_in_tx(
@@ -614,6 +833,26 @@ pub async fn assert_page_in_tx(
     checked_text: &super::context_authority::CheckedTextResults,
 ) -> Result<Value> {
     let page = &checked["page"];
+    if page["status"] == "historical" {
+        // 与事务外读取核对同一修订及实际页，防止分页期间换成另一份正文。
+        let report = analysis::read_report_in_tx(tx, ctx, cid, text(input, "task_id")?).await?;
+        let entry = &page["historical_analysis"];
+        let projection =
+            super::historical_analysis::report_projection_in_tx(tx, ctx, &report).await?;
+        let expected = report_page(
+            &json!({"status":"historical","historical_analysis":projection,
+            "reference":report["reference"],"report":report}),
+            input,
+        )?;
+        if expected != *checked {
+            return Err(Error::new("version_conflict"));
+        }
+        check_report_history_in_tx(tx, ctx, cid, &report).await?;
+        if !checked_text.allows_history(&entry["actual_sources"]["authority"]) {
+            return Err(Error::new("not_available"));
+        }
+        return Ok(super::historical_analysis::carrying(entry));
+    }
     if page["status"] != "available" {
         return Ok(super::context_authority::empty());
     }
@@ -649,7 +888,10 @@ mod tests {
             &super::super::context_authority::empty(),
         );
         assert_eq!(changed["title"], super::super::context_authority::empty());
-        assert_eq!(changed["charts"], json!([second, first]));
+        // 旧whole-object引用规范为全对象空路径，重排仍必须带回完整原依赖。
+        let mut normalized_second = second.clone();
+        normalized_second["knowledge_entries"] = json!([["private-definition", "2", ""]]);
+        assert_eq!(changed["charts"], json!([normalized_second, first]));
         let mut legacy = sources;
         legacy["charts"][0] = Value::Null;
         let generated = title_authorities(&input, &previous, &legacy, &second);

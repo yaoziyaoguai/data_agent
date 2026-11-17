@@ -1,11 +1,36 @@
-use crate::types::{Error, Result};
+use crate::{
+    modules::analysis,
+    types::{Error, Result},
+};
 use serde_json::{Value, json};
 
+/// 这些合约字段都可引入资料依据；合并后在同一边界核验，不能只查主knowledge_refs。
+pub(super) fn knowledge_references(inputs: &[&Value]) -> Value {
+    let mut references = Vec::new();
+    for input in inputs {
+        let mut groups = vec![
+            input.get("knowledge_refs"),
+            input["semantic_resolution"].get("evidence_refs"),
+        ];
+        for role in input["time_roles"].as_array().into_iter().flatten() {
+            groups.push(role.get("evidence_refs"));
+        }
+        for reference in groups
+            .into_iter()
+            .flatten()
+            .filter_map(Value::as_array)
+            .flatten()
+        {
+            if !references.contains(reference) {
+                references.push(reference.clone());
+            }
+        }
+    }
+    json!(references)
+}
+
 fn unresolved_declared(resolution: &Value) -> bool {
-    resolution["basis"] == "needs_clarification"
-        || resolution["unresolved_differences"]
-            .as_array()
-            .is_some_and(|differences| !differences.is_empty())
+    analysis::legacy_resolution_pending(resolution)
 }
 
 /// 本轮真实消息亲自采纳的核对：引用必须是本轮用户完整原话，系统结果唤醒不算。
@@ -88,7 +113,7 @@ pub(super) fn validate_condition_resolution(
             } else {
                 // 复制继承：与当前条件已验证决策逐字一致才成立；改写内容或凭空
                 // 引用旧消息ID都不是采纳证明。
-                if inherited.is_some_and(|prior| prior == resolution) {
+                if inherited.is_some_and(|prior| analysis::same_adoption(prior, resolution)) {
                     Ok(())
                 } else {
                     Err(Error::new("invalid_evidence"))
@@ -139,11 +164,75 @@ pub(super) fn draft_resolution(
     if unresolved_declared(declared) {
         return Err(Error::new("clarification_required"));
     }
+    // 继承只能复制已有采纳身份，不能把旧记录缺失的来源补成当前用户已采纳。
+    if declared["basis"] == "explicit_user"
+        && declared["adoption_message_id"]
+            .as_str()
+            .is_none_or(|id| id.trim().is_empty())
+    {
+        return Err(Error::new("invalid_evidence"));
+    }
     match args {
-        None => Ok(Some(bind(declared.clone()))),
+        None => Ok(Some(declared.clone())),
         Some(args) if args == *declared => Ok(Some(args)),
         Some(_) => Err(Error::new("invalid_input")),
     }
+}
+
+/// 新格式只继承目标条件版本；兼容携带也不能为草稿另作一份决定。
+pub(super) fn draft_for_condition(
+    args: Option<&Value>,
+    revision: Option<&analysis::ConditionRevision>,
+    user_message: &str,
+    user_supplied: bool,
+    message_id: &str,
+) -> Result<Option<Value>> {
+    let declared = revision.and_then(|revision| revision.body.get("semantic_resolution"));
+    if revision
+        .is_none_or(|revision| revision.decision_state == analysis::DecisionStateVersion::Legacy)
+    {
+        return draft_resolution(args, declared, user_message, user_supplied, message_id);
+    }
+    let supplied = args
+        .filter(|value| !value.is_null())
+        .map(analysis::normalized_adoption)
+        .transpose()?;
+    let Some(declared) = declared.filter(|value| value.is_object()) else {
+        return if supplied.is_some() {
+            Err(Error::new("invalid_input"))
+        } else {
+            Ok(None)
+        };
+    };
+    if declared["basis"] == "explicit_user" && declared["adoption_message_id"].as_str().is_none() {
+        return Err(Error::new("invalid_evidence"));
+    }
+    if let Some(mut supplied) = supplied {
+        // 这里只能复制目标版本已有身份，省略不表示本轮又采纳一次。
+        if supplied["basis"] == "explicit_user" && supplied["adoption_message_id"].is_null() {
+            supplied["adoption_message_id"] = declared["adoption_message_id"].clone();
+        }
+        if supplied != *declared {
+            return Err(Error::new("invalid_input"));
+        }
+    }
+    Ok(Some(declared.clone()))
+}
+
+/// 旧未决的早退从未验证采纳；用真实原消息单独核采纳部分，不用resolved状态代替。
+pub(super) fn verified_legacy_adoption(
+    resolution: Option<&Value>,
+    user_message: &str,
+    user_supplied: bool,
+    message_id: &str,
+) -> Option<Value> {
+    let mut adopted = resolution.filter(|value| value.is_object())?.clone();
+    adopted.as_object_mut()?.remove("unresolved_differences");
+    validate_resolution(Some(&adopted), user_message, user_supplied, message_id).ok()?;
+    if adopted["basis"] == "explicit_user" && adopted["adoption_message_id"].is_null() {
+        adopted["adoption_message_id"] = json!(message_id);
+    }
+    analysis::normalized_adoption(&adopted).ok()
 }
 
 #[cfg(test)]
@@ -172,6 +261,29 @@ mod tests {
             None => Value::Null,
         };
         value
+    }
+
+    #[test]
+    fn inherited_adoption_without_original_message_stays_unverified() {
+        for declared in [
+            decision("explicit_user", Some("按语音轮次数计算"), vec![]),
+            adopted("explicit_user", Some("按语音轮次数计算"), vec![], None),
+        ] {
+            for user_supplied in [true, false] {
+                assert_eq!(
+                    draft_resolution(
+                        None,
+                        Some(&declared),
+                        "查看上次结果",
+                        user_supplied,
+                        "later-message"
+                    )
+                    .unwrap_err()
+                    .code,
+                    "invalid_evidence"
+                );
+            }
+        }
     }
 
     #[test]

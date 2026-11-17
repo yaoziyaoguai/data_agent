@@ -1,5 +1,7 @@
 use crate::{
-    contracts::generated::{SourceCitation, SourceExcerpt, SourceKeyKind},
+    contracts::generated::{
+        ContentState, SourceCitation, SourceExcerpt, SourceKeyKind, SourceReadReply,
+    },
     modules::{ingestion, knowledge},
     persistence::AppTx,
     types::{AccessContext, Error, Result, epoch},
@@ -10,6 +12,19 @@ use std::collections::{HashMap, HashSet};
 // document-是M02文档的来源引用别名；正文和版本仍由M02管理。
 pub fn document_id(source: &str) -> Option<&str> {
     source.strip_prefix("document-")
+}
+
+// 解析来源资源身份的当前头：document-前缀来源的正文与版本由文档对象持有
+// （enabled头），平台来源在source_heads。返回(所属空间,当前版本)，作业据此
+// 定位空间并判断修订新旧；来源不存在或已退休为None。
+pub(super) async fn resolve_source_head_in_tx(
+    tx: &mut AppTx<'_>,
+    source_id: &str,
+) -> Result<Option<(String, u64)>> {
+    if let Some(document) = document_id(source_id) {
+        return knowledge::enabled_head_in_tx(tx, document).await;
+    }
+    ingestion::source_head_in_tx(tx, source_id).await
 }
 pub fn document_source(document: &Value) -> Value {
     let body = document["entries"]
@@ -24,6 +39,21 @@ pub fn document_source(document: &Value) -> Value {
 }
 
 pub fn requirements(v: &Value) -> Result<Vec<(String, u64)>> {
+    // 窄投影携带完整来源清单；不能从已裁小的正文重新推导必要来源。
+    if let Some(sources) = v["required_sources"].as_array() {
+        return sources
+            .iter()
+            .map(|source| {
+                Ok((
+                    source[0]
+                        .as_str()
+                        .ok_or(Error::new("invalid_evidence"))?
+                        .to_owned(),
+                    epoch(source[1].as_str().unwrap_or(""))?,
+                ))
+            })
+            .collect();
+    }
     let mut refs = std::collections::HashSet::new();
     if let Some(source) = v["source_id"].as_str() {
         refs.insert((
@@ -91,7 +121,7 @@ pub async fn versions_in_tx(
                 raw.push(source);
             }
         }
-        for document in knowledge::current_objects_in_tx(tx, ctx, &document_ids).await? {
+        for document in knowledge::source_reference_objects_in_tx(tx, ctx, &document_ids).await? {
             if document["kind"] != "document" {
                 continue;
             }
@@ -119,6 +149,15 @@ pub async fn versions_in_tx(
     Ok(versions)
 }
 pub async fn assert_in_tx(tx: &mut AppTx<'_>, ctx: &AccessContext, object: &Value) -> Result<()> {
+    assert_selected_in_tx(tx, ctx, object, "").await
+}
+
+pub async fn assert_selected_in_tx(
+    tx: &mut AppTx<'_>,
+    ctx: &AccessContext,
+    object: &Value,
+    path: &str,
+) -> Result<()> {
     let owner = object["id"].as_str().ok_or(Error::new("invalid_input"))?;
     let version = object["version"]
         .as_str()
@@ -144,10 +183,14 @@ pub async fn assert_in_tx(tx: &mut AppTx<'_>, ctx: &AccessContext, object: &Valu
     // 依赖索引传递核验：有效层陈述的引用与知识支持按登记修订逐层比对，下游对象
     // 依据失效立即报stale_knowledge，不等扇出作业。旧成果没有索引状态时按unknown
     // 处理，不硬失败；实际贡献根与权限门走contribution_roots查询。
-    let verdict = knowledge::dependency_index::walk_required_in_tx(
+    let verdict = super::dependency_validation::walk_selected_required_in_tx(
         tx,
         &ctx.space_id,
-        &[(owner.to_owned(), version)],
+        &[knowledge::dependency_index::DependencySelection {
+            object_id: owner.to_owned(),
+            version,
+            path: path.to_owned(),
+        }],
     )
     .await?;
     if !verdict.stale.is_empty() {
@@ -177,41 +220,195 @@ pub async fn read_in_tx(
     }
 }
 
+// 历史核验的元信息读取：身份、修订与完整性足够判定，不装配任何正文。
+// 文档来源照常做依赖核验——映射完备走依赖索引游走（同assert_in_tx后半段）；
+// 迁移前legacy对象没有索引状态，窄读来源引用后沿用requirements校验。
+pub async fn read_meta_in_tx(
+    tx: &mut AppTx<'_>,
+    ctx: &AccessContext,
+    source: &str,
+    version: Option<u64>,
+) -> Result<Value> {
+    if let Some(id) = document_id(source) {
+        let version = match version {
+            Some(v) => v,
+            None => knowledge::enabled_head_in_tx(tx, id)
+                .await?
+                .map(|(_, v)| v)
+                .ok_or(Error::new("not_available"))?,
+        };
+        let meta = knowledge::read_meta_in_tx(tx, ctx, id, Some(version)).await?;
+        if meta["kind"] != "document" {
+            return Err(Error::new("not_available"));
+        }
+        if knowledge::dependency_index::mapping_complete_in_tx(tx, &(id.to_owned(), version))
+            .await?
+        {
+            let verdict = super::dependency_validation::walk_required_in_tx(
+                tx,
+                &ctx.space_id,
+                &[(id.to_owned(), version)],
+            )
+            .await?;
+            if !verdict.stale.is_empty() {
+                return Err(Error::new("stale_knowledge"));
+            }
+        } else {
+            let document = knowledge::source_reference_objects_in_tx(tx, ctx, &[id.to_owned()])
+                .await?
+                .pop()
+                .ok_or(Error::new("not_available"))?;
+            if document["kind"] != "document" {
+                return Err(Error::new("not_available"));
+            }
+            assert_in_tx(tx, ctx, &document).await?;
+        }
+        Ok(
+            json!({"source_id":source,"name":meta["name"],"version":meta["version"],"current_version":meta["version"],"complete":meta["complete"]}),
+        )
+    } else {
+        let version = match version {
+            Some(v) => v,
+            None => ingestion::source_version_in_tx(tx, &ctx.space_id, source).await?,
+        };
+        ingestion::read_source_meta_in_tx(tx, ctx, source, version).await
+    }
+}
+
 pub async fn read_citation_in_tx(
     tx: &mut AppTx<'_>,
     ctx: &AccessContext,
     citation: SourceCitation,
 ) -> Result<SourceExcerpt> {
+    let (content, _) = read_citation_window_in_tx(tx, ctx, &citation, None).await?;
+    Ok(SourceExcerpt { citation, content })
+}
+
+pub(super) async fn read_citation_page_in_tx(
+    tx: &mut AppTx<'_>,
+    ctx: &AccessContext,
+    citation: SourceCitation,
+    limit: usize,
+) -> Result<SourceReadReply> {
+    let (text, source_length) = read_citation_window_in_tx(tx, ctx, &citation, Some(limit)).await?;
+    let mut locator = citation.locator;
+    let requested_length = locator.length;
+    locator.length = text.chars().count() as i64;
+    let next_locator = if locator.length < requested_length {
+        let mut next = locator.clone();
+        next.offset += locator.length;
+        next.length = requested_length - locator.length;
+        Some(next)
+    } else {
+        None
+    };
+    Ok(SourceReadReply {
+        source: citation.source,
+        revision: citation.revision,
+        locator,
+        source_length: source_length as i64,
+        text,
+        content_state: if next_locator.is_some() {
+            ContentState::Partial
+        } else {
+            ContentState::Complete
+        },
+        next_locator,
+    })
+}
+
+async fn read_citation_window_in_tx(
+    tx: &mut AppTx<'_>,
+    ctx: &AccessContext,
+    citation: &SourceCitation,
+    limit: Option<usize>,
+) -> Result<(String, usize)> {
+    let offset =
+        usize::try_from(citation.locator.offset).map_err(|_| Error::new("invalid_input"))?;
+    let requested_length =
+        usize::try_from(citation.locator.length).map_err(|_| Error::new("invalid_input"))?;
+    let length = limit.map_or(requested_length, |limit| requested_length.min(limit));
     let source = match citation.source.kind {
         SourceKeyKind::Platform => citation.source.id.clone(),
         SourceKeyKind::Document => format!("document-{}", citation.source.id),
     };
-    let current = read_in_tx(tx, ctx, &source, None).await?;
-    // 旧全文入口仍可读取保留的快照；定点读只解释所绑定的当前修订。
-    if current["version"].as_str() != Some(&citation.revision) {
-        return Err(Error::new("stale_source"));
+    let (text, total_length) = if matches!(citation.source.kind, SourceKeyKind::Document) {
+        let meta = read_meta_in_tx(tx, ctx, &source, None).await?;
+        if meta["version"].as_str() != Some(&citation.revision) {
+            return Err(Error::new("stale_source"));
+        }
+        let mut windowed = knowledge::read_document_windows_in_tx(
+            tx,
+            ctx,
+            &citation.source.id,
+            epoch(&citation.revision)?,
+            &[(offset, length)],
+        )
+        .await?;
+        if !windowed.complete {
+            return Err(Error::new("not_available"));
+        }
+        (
+            windowed.texts.remove(&(offset, length)).unwrap_or_default(),
+            windowed.total_length,
+        )
+    } else {
+        let version = ingestion::source_version_in_tx(tx, &ctx.space_id, &source).await?;
+        // 旧全文入口仍可读取保留的快照；定点读只解释所绑定的当前修订。
+        if version.to_string() != citation.revision {
+            return Err(Error::new("stale_source"));
+        }
+        let windowed =
+            ingestion::read_source_window_in_tx(tx, ctx, &source, version, &[(offset, length)])
+                .await?;
+        if windowed["complete"] != true {
+            return Err(Error::new("not_available"));
+        }
+        (
+            windowed["texts"][0][2].as_str().unwrap_or("").to_owned(),
+            windowed["total_length"].as_u64().unwrap_or(0) as usize,
+        )
+    };
+    // limit只缩小下行正文，不能把原请求越界伪装成合法短页。
+    if offset
+        .checked_add(requested_length)
+        .is_none_or(|end| end > total_length)
+    {
+        let available_length = total_length.saturating_sub(offset);
+        let valid_locator = if offset <= total_length && available_length > 0 {
+            json!({"offset": offset, "length": available_length})
+        } else {
+            Value::Null
+        };
+        let hint = if available_length > 0 {
+            format!(
+                "请求区间超出当前版本原文总长（source_length={total_length}，从 offset={offset} 起最多可读取 available_length={available_length} 字符）；请将 citation.locator 调整为有效区间（可用 valid_locator）后重试，分页限制请用 limit。"
+            )
+        } else if offset == total_length {
+            format!(
+                "请求起点已到达当前版本原文末尾（source_length={total_length}，offset={offset}，available_length=0）；当前位置没有更多剩余字符。如需重读尾页或指定段落，请将 citation.locator 调回 [0, {total_length}] 内的有效区间。"
+            )
+        } else {
+            format!(
+                "请求起点超出当前版本原文总长（source_length={total_length}，offset={offset}，available_length=0）；请将 citation.locator.offset 调回 0 到 {total_length} 之间后重试。"
+            )
+        };
+        return Err(Error::new("invalid_input").with_details(json!({
+            "source": citation.source,
+            "revision": citation.revision,
+            "requested_locator": {"offset": offset, "length": requested_length},
+            "source_length": total_length,
+            "available_length": available_length,
+            "valid_locator": valid_locator,
+            "hint": hint,
+        })));
     }
-    if current["complete"] != true {
-        return Err(Error::new("not_available"));
-    }
-    let content = citation
-        .locator
-        .slice(
-            current["body"]
-                .as_str()
-                .ok_or(Error::new("not_available"))?,
-        )?
-        .to_owned();
-    Ok(SourceExcerpt { citation, content })
+    Ok((text, total_length))
 }
 
-// 05切片3/8：raw摘录候选的确认与回源（06接入公开v2 hits）。门控在回源前按
-// 来源身份成员判定执行（不查库；receipt只报过滤计数，不泄露受限名称）；选中
-// 命中≤30才读正文，每来源只读一次当前修订；相交窗口有界合并≤2400，超限的
-// 相交窗口保持独立，不能链式合并成全文；修订过期或hash不符的命中按index_lag
-// 舍弃计数，不冒充当前原文。limits为本题声明的SourceLimits合同值；05由门控
-// 集成测试驱动局部链路（索引→候选→回源），06在交付层接线。
-#[cfg_attr(not(test), allow(dead_code))]
+// 正式stage选中raw后调用的owner回源；来源门在召回前进入共同允许集。
+// 独立调用携带limits时再按稳定来源身份核门；这里只读≤30个已选窗口，
+// 核修订/hash后合并≤2400字符的相交范围，失效命中如实计为index_lag。
 pub async fn recall_excerpts_in_tx(
     tx: &mut AppTx<'_>,
     ctx: &AccessContext,
@@ -235,7 +432,7 @@ pub async fn recall_excerpts_in_tx(
             filtered += 1;
         }
     }
-    // 每来源一次回源：读当前修订，窗口核验与合并都在该正文上进行。
+    // 每来源批量读取当前修订的选中窗口，再核验和合并；不读取未命中的正文。
     let mut by_source: HashMap<(String, String), Vec<&Value>> = HashMap::new();
     for hit in &allowed {
         by_source
@@ -247,34 +444,137 @@ pub async fn recall_excerpts_in_tx(
             .push(hit);
     }
     let mut lagged = 0usize;
-    let mut groups: Vec<(Vec<Value>, f64)> = Vec::new();
+    let mut delivered = Vec::new();
     for ((kind, id), group) in by_source {
-        let current = match read_in_tx(tx, ctx, &source_arg(&kind, &id), None).await {
-            Ok(current) => current,
-            Err(_) => {
-                // 来源读不出（已退休/未完成）：这些命中无法回源核验，按滞后舍弃。
-                lagged += group.len();
-                continue;
-            }
-        };
-        let revision = current["version"].as_str().unwrap_or("").to_owned();
-        let body = current["body"].as_str().unwrap_or("").to_owned();
-        let (windows, window_lagged) = if current["complete"] == true {
-            verify_and_merge(&body, &group, &revision, &kind, &id)?
+        let mut ranges: Vec<(usize, usize)> = group
+            .iter()
+            .filter_map(|hit| {
+                Some((
+                    hit["offset"].as_u64()? as usize,
+                    hit["length"].as_u64().unwrap_or(0) as usize,
+                ))
+            })
+            .collect();
+        ranges.sort_unstable();
+        ranges.dedup();
+        let (mut windows, window_lagged, revision, name) = if kind == "document" {
+            let meta = match read_meta_in_tx(tx, ctx, &format!("document-{id}"), None).await {
+                Ok(current) => current,
+                Err(error)
+                    if matches!(
+                        error.code,
+                        "not_available" | "stale_source" | "stale_knowledge"
+                    ) =>
+                {
+                    // 确定失效的索引命中可舍弃；数据库故障保留原分类，不能冒充无资料。
+                    lagged += group.len();
+                    continue;
+                }
+                Err(error) => return Err(error),
+            };
+            let revision = meta["version"].as_str().unwrap_or("");
+            let windowed =
+                knowledge::read_document_windows_in_tx(tx, ctx, &id, epoch(revision)?, &ranges)
+                    .await?;
+            let (windows, window_lagged) = if windowed.complete {
+                verify_and_merge_windows(
+                    &group,
+                    &windowed.texts,
+                    windowed.total_length,
+                    revision,
+                    &kind,
+                    &id,
+                )?
+            } else {
+                (Vec::new(), group.len())
+            };
+            (
+                windows,
+                window_lagged,
+                revision.to_owned(),
+                meta["name"].clone(),
+            )
         } else {
-            (Vec::new(), group.len())
+            // 平台来源定点读取（05接续C）：先钉当前修订，再按命中的字符窗口读回
+            // 文本（utf8mb4下SUBSTRING按字符定位），不把整篇正文读入进程后裁剪。
+            let version = match ingestion::source_version_in_tx(tx, &ctx.space_id, &id).await {
+                Ok(version) => version,
+                Err(error) if matches!(error.code, "not_available") => {
+                    lagged += group.len();
+                    continue;
+                }
+                Err(error) => return Err(error),
+            };
+            let windowed =
+                match ingestion::read_source_window_in_tx(tx, ctx, &id, version, &ranges).await {
+                    Ok(windowed) => windowed,
+                    Err(error) if matches!(error.code, "not_available") => {
+                        lagged += group.len();
+                        continue;
+                    }
+                    Err(error) => return Err(error),
+                };
+            let revision = windowed["version"].as_str().unwrap_or("").to_owned();
+            let texts: HashMap<(usize, usize), String> = windowed["texts"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .filter_map(|entry| {
+                    Some((
+                        (entry[0].as_u64()? as usize, entry[1].as_u64()? as usize),
+                        entry[2].as_str()?.to_owned(),
+                    ))
+                })
+                .collect();
+            let total_length = windowed["total_length"].as_u64().unwrap_or(0) as usize;
+            let (windows, window_lagged) = if windowed["complete"] == true {
+                verify_and_merge_windows(&group, &texts, total_length, &revision, &kind, &id)?
+            } else {
+                (Vec::new(), group.len())
+            };
+            (windows, window_lagged, revision, windowed["name"].clone())
         };
         lagged += window_lagged;
-        let best = windows
-            .first()
-            .and_then(|w| w["score"].as_f64())
-            .unwrap_or(0.);
         if !windows.is_empty() {
-            groups.push((windows, best));
+            let owner = if kind == "document" {
+                json!({"kind":"document","id":id,"version":revision})
+            } else {
+                json!({"source_id":id,"source_version":revision})
+            };
+            let preparation = ingestion::preparation_record_status_in_tx(tx, ctx, &owner).await?;
+            // 原文可读不代表已整理；complete只表示本次定位窗口已交齐。
+            let semantic_status = preparation["state"].as_str().unwrap_or("pending");
+            for window in &mut windows {
+                window["name"] = name.clone();
+                window["semantic_status"] = json!(semantic_status);
+                window["content_state"] = json!("complete");
+                window["support_state"] = json!("unknown");
+            }
         }
+        delivered.extend(windows);
     }
-    groups.sort_by(|a, b| b.1.total_cmp(&a.1));
-    let delivered: Vec<Value> = groups.into_iter().flat_map(|(w, _)| w).collect();
+    // 按来源批读只减少I/O；交付仍按每个位置的融合分数排序。
+    delivered.sort_by(|a, b| {
+        b["score"]
+            .as_f64()
+            .unwrap_or(0.)
+            .total_cmp(&a["score"].as_f64().unwrap_or(0.))
+            .then_with(|| {
+                a["citation"]["source"]["kind"]
+                    .as_str()
+                    .cmp(&b["citation"]["source"]["kind"].as_str())
+            })
+            .then_with(|| {
+                a["citation"]["source"]["id"]
+                    .as_str()
+                    .cmp(&b["citation"]["source"]["id"].as_str())
+            })
+            .then_with(|| {
+                a["citation"]["locator"]["offset"]
+                    .as_u64()
+                    .cmp(&b["citation"]["locator"]["offset"].as_u64())
+            })
+    });
     let state = if delivered.is_empty() {
         "unlocated"
     } else if lagged > 0 {
@@ -290,14 +590,6 @@ pub async fn recall_excerpts_in_tx(
     }))
 }
 
-fn source_arg(kind: &str, id: &str) -> String {
-    if kind == "document" {
-        format!("document-{id}")
-    } else {
-        id.to_owned()
-    }
-}
-
 fn source_arg_of(hit: &Value) -> Result<String> {
     let id = hit["source_id"]
         .as_str()
@@ -308,38 +600,42 @@ fn source_arg_of(hit: &Value) -> Result<String> {
     })
 }
 
-// 逐窗口核验：修订一致且当前正文切片hash相符才可用；然后按相交合并，合并后
-// 长度≤2400（与切块MAX_CHARS同界），超限的相交窗口保持独立。
-pub(crate) fn verify_and_merge(
-    body: &str,
+// 定点窗口核验（05接续C）：命中窗口文本由read_source_window_in_tx按字符定位读回，
+// 核验与合并不需要整篇正文。逐命中核：修订一致且窗口文本hash相符才可用；然后按
+// 相交合并，合并后长度≤2400（与切块MAX_CHARS同界），超限的相交窗口保持独立；
+// 相交窗口的合并文本按成员定位偏移去重叠拼接，不重复不丢字。
+pub(crate) fn verify_and_merge_windows(
     hits: &[&Value],
+    texts: &HashMap<(usize, usize), String>,
+    total_length: usize,
     revision: &str,
     kind: &str,
     id: &str,
 ) -> Result<(Vec<Value>, usize)> {
     const MERGE_CAP: usize = 2400;
-    let chars: Vec<char> = body.chars().collect();
     let mut verified: Vec<(usize, usize, f64)> = Vec::new();
     let mut lagged = 0usize;
     for hit in hits {
         let offset = hit["offset"].as_u64().unwrap_or(u64::MAX) as usize;
         let length = hit["length"].as_u64().unwrap_or(0) as usize;
-        let text: String = if offset.saturating_add(length) <= chars.len() {
-            chars[offset..offset + length].iter().collect()
-        } else {
-            String::new()
-        };
-        let hash_ok = !text.is_empty()
-            && hit["content_hash"]
-                .as_str()
-                .is_some_and(|hash| *hash == crate::types::fingerprint(&json!(text)));
         // 向量层回传的修订是数值，回源侧是数字字符串：两种形状都按同一数值比较。
         let revision_ok = hit["revision"]
             .as_u64()
             .is_some_and(|value| value.to_string() == revision)
             || hit["revision"].as_str() == Some(revision);
-        if !revision_ok || !hash_ok {
-            // 旧offset切不出新原文：如实计滞后，不编造可回源片段。
+        let hash_ok = texts.get(&(offset, length)).is_some_and(|text| {
+            !text.is_empty()
+                && hit["content_hash"]
+                    .as_str()
+                    .is_some_and(|hash| *hash == crate::types::fingerprint(&json!(text)))
+        });
+        if !revision_ok
+            || !hash_ok
+            || !offset
+                .checked_add(length)
+                .is_some_and(|end| end <= total_length)
+        {
+            // 未读回、越界或hash不符的窗口：如实计滞后，不编造可回源片段。
             lagged += 1;
             continue;
         }
@@ -347,40 +643,53 @@ pub(crate) fn verify_and_merge(
     }
     verified.sort_by(|a, b| a.0.cmp(&b.0).then_with(|| a.1.cmp(&b.1)));
     let mut merged: Vec<Value> = Vec::new();
-    let mut pending: Option<(usize, usize, f64)> = None;
+    let mut pending: Option<(usize, usize, f64, String)> = None;
     for window @ (start, end, _) in verified {
+        let text = texts
+            .get(&(start, end - start))
+            .cloned()
+            .unwrap_or_default();
         match pending.take() {
-            Some((p_start, p_end, p_score)) if start <= p_end && end - p_start <= MERGE_CAP => {
-                pending = Some((p_start, end.max(p_end), p_score.max(window.2)));
+            Some((p_start, p_end, p_score, p_text))
+                if start <= p_end && end - p_start <= MERGE_CAP =>
+            {
+                // 相交拼接：新窗口文本去掉与前窗重叠的字符段再接上。
+                let overlap = p_end.saturating_sub(start).min(text.chars().count());
+                let tail: String = text.chars().skip(overlap).collect();
+                pending = Some((
+                    p_start,
+                    end.max(p_end),
+                    p_score.max(window.2),
+                    format!("{p_text}{tail}"),
+                ));
             }
             Some(closed) => {
-                merged.push(window_of(&chars, closed, revision, kind, id));
-                pending = Some(window);
+                merged.push(window_of_text(closed, total_length, revision, kind, id));
+                pending = Some((start, end, window.2, text));
             }
-            None => pending = Some(window),
+            None => pending = Some((start, end, window.2, text)),
         }
     }
     if let Some(window) = pending {
-        merged.push(window_of(&chars, window, revision, kind, id));
+        merged.push(window_of_text(window, total_length, revision, kind, id));
     }
     Ok((merged, lagged))
 }
 
-fn window_of(
-    chars: &[char],
-    (start, end, score): (usize, usize, f64),
+fn window_of_text(
+    (start, end, score, text): (usize, usize, f64, String),
+    total_length: usize,
     revision: &str,
     kind: &str,
     id: &str,
 ) -> Value {
-    let text: String = chars[start..end].iter().collect();
     json!({
         "citation":{
             "source":{"kind":kind,"id":id},
             "revision":revision,
             "locator":{"offset":start,"length":end - start}
         },
-        "source_length":chars.len(),
+        "source_length":total_length,
         "text":text,
         "score":score,
     })
@@ -424,14 +733,12 @@ mod raw_recall_tests {
             hit("platform", "src", 4, 60, &text(30, 40), 0.4),
         ];
         let refs = hits.iter().collect::<Vec<_>>();
-        let (merged, lagged) = verify_and_merge(
-            &body.iter().collect::<String>(),
-            &refs,
-            "4",
-            "platform",
-            "src",
-        )
-        .unwrap();
+        let texts = [(0, 40), (20, 40), (120, 40), (60, 40)]
+            .into_iter()
+            .map(|range @ (offset, length)| (range, text(offset, length)))
+            .collect();
+        let (merged, lagged) =
+            verify_and_merge_windows(&refs, &texts, body.len(), "4", "platform", "src").unwrap();
         assert_eq!(lagged, 2);
         assert_eq!(merged.len(), 2, "相交窗口合并，远端位置保持独立");
         assert_eq!(merged[0]["citation"]["locator"]["offset"], 0);
@@ -452,8 +759,12 @@ mod raw_recall_tests {
             hit("platform", "s", 1, 1600, &text(1600, 800), 0.01),
         ];
         let refs = within.iter().collect::<Vec<_>>();
-        let body_text = body.iter().collect::<String>();
-        let (merged, lagged) = verify_and_merge(&body_text, &refs, "1", "platform", "s").unwrap();
+        let texts = [(0, 2000), (1600, 800), (1900, 2000)]
+            .into_iter()
+            .map(|range @ (offset, length)| (range, text(offset, length)))
+            .collect();
+        let (merged, lagged) =
+            verify_and_merge_windows(&refs, &texts, body.len(), "1", "platform", "s").unwrap();
         assert_eq!((merged.len(), lagged), (1, 0));
         assert_eq!(merged[0]["citation"]["locator"]["length"], 2400);
         // 相交但合并后超上限：保持独立，不链式合并成全文。
@@ -462,242 +773,70 @@ mod raw_recall_tests {
             hit("platform", "s", 1, 1900, &text(1900, 2000), 0.01),
         ];
         let refs = beyond.iter().collect::<Vec<_>>();
-        let (merged, _) = verify_and_merge(&body_text, &refs, "1", "platform", "s").unwrap();
+        let (merged, _) =
+            verify_and_merge_windows(&refs, &texts, body.len(), "1", "platform", "s").unwrap();
         assert_eq!(merged.len(), 2);
         assert!(merged[0]["citation"]["locator"]["length"].as_u64().unwrap() <= 2400);
         assert!(merged[1]["citation"]["locator"]["length"].as_u64().unwrap() <= 2400);
     }
-}
 
-// 门控集成：隔离库+专用测试集合（data_agent_test_前缀，防误写共享集合）才
-// 执行；缺环境时跳过，不冒充通过。链路=确定性切块→摘录写入→双通道召回→
-// 门控回源→升版滞后（05切片3的局部集成证明；嵌入协议由共享嵌入检查覆盖，
-// 此处用替身向量）。
-#[tokio::test]
-async fn gated_raw_source_round_trip_recalls_revision_and_reports_lag() {
-    let Ok(url) = std::env::var("DATA_AGENT_DATABASE_URL") else {
-        return;
-    };
-    let dedicated = std::env::var("DATA_AGENT_VECTOR_COLLECTION")
-        .unwrap_or_default()
-        .starts_with("data_agent_test_")
-        || std::env::var("DATA_AGENT_VECTOR_COLLECTION")
-            .unwrap_or_default()
-            .starts_with("da_app_");
-    if std::env::var("DATA_AGENT_VECTOR_URL").is_err()
-        || std::env::var("DATA_AGENT_VECTOR_TOKEN_FILE").is_err()
-        || !dedicated
-    {
-        return;
-    }
-    let pool = crate::persistence::connect(&url).await.unwrap();
-    let ctx = AccessContext {
-        user_id: "raw-recall-check".into(),
-        space_id: "demo".into(),
-        request_id: "raw-recall-round-trip".into(),
-    };
-    let source_id = "raw-recall-it";
-    let body = format!(
-        "{}未付款订单不产生退款，首次申请免费处理。{}最终解释以协议为准，运费除外。{}",
-        "背景说明。".repeat(240),
-        "补充条款。".repeat(240),
-        "尾部备注。".repeat(240)
-    );
-    let mut tx = AppTx::begin(&pool).await.unwrap();
-    for statement in [
-        "DELETE FROM source_current WHERE source_id='raw-recall-it'",
-        "DELETE FROM source_heads WHERE id='raw-recall-it'",
-    ] {
-        sqlx::query(statement)
-            .execute(tx.connection())
-            .await
-            .unwrap();
-    }
-    sqlx::query("INSERT INTO source_heads(id,space_id,version,fingerprint) VALUES(?,?,1,'fp')")
-        .bind(source_id)
-        .bind(&ctx.space_id)
-        .execute(tx.connection())
-        .await
-        .unwrap();
-    sqlx::query(
-        "INSERT INTO source_current(source_id,space_id,adapter_id,source_kind,namespace,\
-             external_id,revision,body,complete,metadata,content_fingerprint,\
-             explanation_fingerprint,comparison_method,parsed,observed_metadata) \
-             VALUES(?,?,?,?,?,?,1,?,TRUE,'{}','fp','fp','exact',TRUE,'{}')",
-    )
-    .bind(source_id)
-    .bind(&ctx.space_id)
-    .bind("adapter")
-    .bind("platform")
-    .bind("ns")
-    .bind(source_id)
-    .bind(&body)
-    .execute(tx.connection())
-    .await
-    .unwrap();
-    tx.commit().await.unwrap();
-    crate::modules::retrieval::vector::drop_source_excerpts(&ctx.space_id, source_id, u64::MAX)
-        .await
-        .unwrap();
-
-    let key = crate::contracts::generated::SourceKey {
-        kind: crate::contracts::generated::SourceKeyKind::Platform,
-        id: source_id.into(),
-    };
-    let revision_text = "1".to_string();
-    let text_source = crate::modules::retrieval::source_segments::SourceText {
-        source: &key,
-        revision: &revision_text,
-        text: &body,
-        format: crate::modules::retrieval::source_segments::SourceFormat::Sql,
-        background: &[],
-    };
-    let mut segments = Vec::new();
-    let mut cursor = None;
-    loop {
-        let batch = crate::modules::retrieval::source_segments::segment_source(
-            &text_source,
-            cursor.as_ref(),
-        )
-        .unwrap();
-        if batch.segments.is_empty() {
-            break;
-        }
-        segments.extend(batch.segments.iter().cloned());
-        cursor = batch.next_cursor;
-        if cursor.is_none() {
-            break;
-        }
-    }
-    assert!(
-        segments.len() >= 3,
-        "长文应切出多段，实测{}",
-        segments.len()
-    );
-    let dim = crate::modules::retrieval::embedding::SPEC.dimension;
-    crate::modules::retrieval::vector::apply_source_excerpts(
-        &ctx.space_id,
-        &segments,
-        |_, texts| async move {
-            Ok::<_, crate::types::Error>(
-                texts.iter().map(|_| vec![0.01f32; dim]).collect::<Vec<_>>(),
-            )
-        },
-    )
-    .await
-    .unwrap();
-
-    let candidates = crate::modules::retrieval::vector::search_scoped(
-        &ctx.space_id,
-        "未付款订单首次申请免费处理",
-        vec![0.02f32; dim],
-        &crate::search_scope::KnowledgeSearchScope::default(),
-        10,
-    )
-    .await;
-    assert_eq!(candidates.raw.state, "available");
-    assert!(!candidates.raw.hits.is_empty(), "raw通道必须可召回");
-    // 同集合可能混有其他来源的摘录（E2E里是数千条目录正文）：只认本测试来源
-    // 的命中做回环断言；dense通道按伪向量近邻会召回无关来源，属预期。
-    let mine: Vec<Value> = candidates
-        .raw
-        .hits
-        .iter()
-        .filter(|hit| hit["source_id"] == source_id)
-        .cloned()
-        .collect();
-    assert!(
-        !mine.is_empty(),
-        "BM25通道必须召回本来源：{:?}",
-        candidates.raw.hits
-    );
-    for hit in &mine {
-        assert_eq!(hit["source_kind"], "platform");
-        assert_eq!(hit["revision"].as_u64(), Some(1));
-    }
-
-    let mut tx = AppTx::begin(&pool).await.unwrap();
-    let recall = recall_excerpts_in_tx(&mut tx, &ctx, None, &mine)
-        .await
-        .unwrap();
-    tx.commit().await.unwrap();
-    assert_eq!(recall["state"], "located", "recall={recall}");
-    assert_eq!(recall["lagged"], 0);
-    let total = body.chars().count();
-    for hit in recall["hits"].as_array().unwrap() {
-        let offset = hit["citation"]["locator"]["offset"].as_u64().unwrap() as usize;
-        let length = hit["citation"]["locator"]["length"].as_u64().unwrap() as usize;
-        assert!(length <= 2400, "合并窗口不得超过2400");
-        assert!(offset + length <= total);
-        assert_eq!(hit["citation"]["revision"], "1");
-        let expect: String = body.chars().skip(offset).take(length).collect();
+    // 05接续C：平台来源定点窗口核验——text来自按字符定位的窗口读回（不依赖整篇
+    // 正文），相交窗口去重叠拼接不重复不丢字；修订/hash不符与未读回窗口计滞后。
+    #[test]
+    fn windowed_verify_merges_read_texts_without_full_body() {
+        let mut body: Vec<char> = "甲".repeat(60).chars().collect();
+        body.extend("乙".repeat(140).chars());
+        let text = |offset: usize, length: usize| slice(&body, offset, length);
+        let hits = [
+            hit("platform", "src", 4, 0, &text(0, 40), 0.03),
+            hit("platform", "src", 4, 20, &text(20, 40), 0.02),
+            hit("platform", "src", 4, 120, &text(120, 40), 0.01),
+            // 修订过期：计滞后。
+            hit("platform", "src", 3, 0, &text(0, 40), 0.5),
+            // hash不符：计滞后。
+            hit("platform", "src", 4, 60, &text(30, 40), 0.4),
+        ];
+        // 读回的窗口文本：只包含实际请求的(offset,length)。
+        let texts: HashMap<(usize, usize), String> =
+            [(0usize, 40usize), (20, 40), (120, 40), (0, 40), (60, 40)]
+                .into_iter()
+                .map(|(offset, length)| ((offset, length), text(offset, length)))
+                .collect();
+        let refs = hits.iter().collect::<Vec<_>>();
+        let (merged, lagged) =
+            verify_and_merge_windows(&refs, &texts, body.len(), "4", "platform", "src").unwrap();
+        assert_eq!(lagged, 2);
+        assert_eq!(merged.len(), 2, "相交窗口合并，远端位置保持独立");
+        assert_eq!(merged[0]["citation"]["locator"]["offset"], 0);
+        assert_eq!(merged[0]["citation"]["locator"]["length"], 60);
         assert_eq!(
-            hit["text"].as_str().unwrap(),
-            expect,
-            "回读必须与当前正文切片一致"
+            merged[0]["text"],
+            text(0, 60),
+            "相交段去重叠拼接：不重复不丢字"
         );
-        assert_eq!(hit["source_length"].as_u64().unwrap() as usize, total);
+        assert_eq!(
+            merged[0]["source_length"],
+            body.len() as u64,
+            "总长度来自读回的长度列"
+        );
+        assert_eq!(merged[1]["citation"]["locator"]["offset"], 120);
+        // 未读回的窗口（读侧缺该定位文本）：hash无从核验，计滞后不编造。
+        let missing: HashMap<(usize, usize), String> = HashMap::new();
+        let (merged, lagged) =
+            verify_and_merge_windows(&refs, &missing, body.len(), "4", "platform", "src").unwrap();
+        assert_eq!(lagged, hits.len());
+        assert!(merged.is_empty());
     }
 
-    // 门控：允许集不含该来源→只报过滤计数；不泄露受限名称，不读回源。
-    let limits = json!({
-        "allowed_sources":[{"kind":"platform","id":"other-source"}],
-        "origin_message_ids":["m1"]
-    });
-    let mut tx = AppTx::begin(&pool).await.unwrap();
-    let gated = recall_excerpts_in_tx(&mut tx, &ctx, Some(&limits), &mine)
-        .await
-        .unwrap();
-    tx.commit().await.unwrap();
-    assert_eq!(
-        gated["filtered"].as_u64().unwrap(),
-        mine.len().min(30) as u64
-    );
-    assert_eq!(gated["hits"].as_array().unwrap().len(), 0);
-    assert_eq!(gated["lagged"], 0);
-
-    // 升版：旧修订命中不再回源成正文，按滞后如实报告。
-    let body2 = format!(
-        "{}已付款订单可以申请退款，运费除外。",
-        "新版背景。".repeat(240)
-    );
-    let mut tx = AppTx::begin(&pool).await.unwrap();
-    sqlx::query("UPDATE source_heads SET version=2 WHERE id=?")
-        .bind(source_id)
-        .execute(tx.connection())
-        .await
-        .unwrap();
-    sqlx::query("UPDATE source_current SET revision=2, body=? WHERE source_id=?")
-        .bind(&body2)
-        .bind(source_id)
-        .execute(tx.connection())
-        .await
-        .unwrap();
-    tx.commit().await.unwrap();
-    let mut tx = AppTx::begin(&pool).await.unwrap();
-    let lagged_view = recall_excerpts_in_tx(&mut tx, &ctx, None, &mine)
-        .await
-        .unwrap();
-    tx.commit().await.unwrap();
-    assert_eq!(lagged_view["state"], "unlocated");
-    assert_eq!(
-        lagged_view["lagged"].as_u64().unwrap(),
-        mine.len().min(30) as u64
-    );
-
-    // 清理：删行与摘录向量；专用集合本身由harness管理。
-    let mut tx = AppTx::begin(&pool).await.unwrap();
-    for statement in [
-        "DELETE FROM source_current WHERE source_id='raw-recall-it'",
-        "DELETE FROM source_heads WHERE id='raw-recall-it'",
-    ] {
-        sqlx::query(statement)
-            .execute(tx.connection())
-            .await
-            .unwrap();
+    #[test]
+    fn truncated_source_window_cannot_validate_an_out_of_range_locator() {
+        let mut indexed = hit("document", "short", 1, 1, "乙", 1.);
+        indexed["length"] = json!(9);
+        // SUBSTRING会在末尾截短；即使剩余文字的hash相符，也不能交付越界定位。
+        let texts = HashMap::from([((1, 9), "乙".to_owned())]);
+        let (merged, lagged) =
+            verify_and_merge_windows(&[&indexed], &texts, 2, "1", "document", "short").unwrap();
+        assert!(merged.is_empty());
+        assert_eq!(lagged, 1);
     }
-    tx.commit().await.unwrap();
-    crate::modules::retrieval::vector::drop_source_excerpts(&ctx.space_id, source_id, u64::MAX)
-        .await
-        .unwrap();
 }

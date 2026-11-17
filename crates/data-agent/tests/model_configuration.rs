@@ -210,3 +210,44 @@ async fn configuration_is_scoped_and_frozen_service_remains_authoritative() {
     tx.commit().await.unwrap();
     pool.close().await;
 }
+
+#[tokio::test]
+async fn explicit_trial_reconfiguration_remains_strict_and_preserves_ledger() {
+    let pool = persistence::connect(
+        &std::env::var("DATA_AGENT_DATABASE_URL").expect("isolated harness database"),
+    )
+    .await
+    .unwrap();
+    let mut profile: data_agent::contracts::generated::ModelProfile = contracts::decode(
+        "ModelProfile",
+        json!({"provider_id":"deepseek","model_id":"deepseek-flash","trial_id":"synthetic-explicit-configuration","price_version":"2026-10-04-peak-usd","input_limit":65536,"output_limit":8192,"toolset":"data","budget_mode":"request","payload_bytes_limit":131072,"thinking_level":"off"}),
+    )
+    .unwrap();
+    data_agent::modules::runtime::configure_trial(&pool, &profile)
+        .await
+        .unwrap();
+    sqlx::query(
+        "UPDATE model_trials SET allocated_calls=7,spent_micros=123,reserved_micros=17 WHERE id=?",
+    )
+    .bind(&profile.trial_id)
+    .execute(&pool)
+    .await
+    .unwrap();
+    let before: serde_json::Value = sqlx::query_scalar("SELECT JSON_OBJECT('fingerprint',configuration_fingerprint,'calls',allocated_calls,'spent',spent_micros,'reserved',reserved_micros,'call_limit',call_limit,'cost_limit',cost_limit_micros,'state',state,'expires_at',expires_at) FROM model_trials WHERE id=?")
+        .bind(&profile.trial_id).fetch_one(&pool).await.unwrap();
+    data_agent::modules::runtime::configure_trial(&pool, &profile)
+        .await
+        .unwrap();
+    profile.output_limit = 16384;
+    assert_eq!(
+        data_agent::modules::runtime::configure_trial(&pool, &profile)
+            .await
+            .unwrap_err()
+            .code,
+        "idempotency_conflict"
+    );
+    let after: serde_json::Value = sqlx::query_scalar("SELECT JSON_OBJECT('fingerprint',configuration_fingerprint,'calls',allocated_calls,'spent',spent_micros,'reserved',reserved_micros,'call_limit',call_limit,'cost_limit',cost_limit_micros,'state',state,'expires_at',expires_at) FROM model_trials WHERE id=?")
+        .bind(&profile.trial_id).fetch_one(&pool).await.unwrap();
+    assert_eq!(after, before);
+    pool.close().await;
+}

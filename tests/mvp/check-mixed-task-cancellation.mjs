@@ -6,7 +6,14 @@ import {exportCheckpoint} from '../../apps/agent/session/checkpoint.ts';
 import {harness,until} from './harness.mjs';
 
 const h=await harness({capture:true,env:{DATA_AGENT_LEASE_MS:'120000'}});
-let run,manager,passed=false;const checks=[];
+let run,manager,passed=false;const checks=[],continuationMs=[];
+// 这里等待完整Worker重启与上下文准备，不是产品续租/失败重试的时间上限。
+const waitForContinuation=async(predicate,label)=>{
+ const started=performance.now();
+ const next=await until(predicate,label,60000);
+ continuationMs.push(performance.now()-started);
+ return next;
+};
 const conditions={time_start:null,time_end:null,timezone:'UTC',metric:'net_revenue',channel:null,group_by:[],filters:[],knowledge_refs:[],notes:''};
 const tool=async(name,args)=>{
  const input={run_id:run.run_id,lease_epoch:run.lease_epoch,sdk_tool_call_id:randomUUID(),tool_name:name,arguments:args,checkpoint:exportCheckpoint(manager,run.workspace_context.authority_revision,run.workspace_context.authority_snapshot)};
@@ -31,7 +38,7 @@ try{
   assert.equal(h.sql(`SELECT JSON_OBJECT('state',disposition) FROM conversation_messages WHERE id='${original.message_id}'`)[0].state,'pending');
   assert.equal((await h.internal('/internal/model/issue',{run_id:run.run_id,lease_epoch:run.lease_epoch,call_attempt_id:randomUUID()})).status,409);
   h.releaseRun(original.run_id);await h.resumeWorker();
-  run=await until(()=>h.captured.find(v=>v.message_id===original.message_id&&v.run_id!==original.run_id),'混合输入在原链继续');await h.pauseWorker();
+  run=await waitForContinuation(()=>h.captured.find(v=>v.message_id===original.message_id&&v.run_id!==original.run_id),'混合输入在原链继续');await h.pauseWorker();
   assert.equal(run.budget_scope_id,original.budget_scope_id);assert.equal(run.recovery_chain_id,original.recovery_chain_id);assert.equal(run.request_id,original.request_id);
   assert.deepEqual(new Set(run.workspace_context.input_task_ids),new Set(tasks.map(v=>v.task_id)));
   const continuationState=()=>h.sql(`SELECT JSON_OBJECT('run_state',r.state,'lease_epoch',r.lease_epoch,'job_state',j.state,'job_epoch',j.lease_epoch,'attempts',j.attempts,'issued_calls',b.issued_calls,'event_seq',c.event_seq) FROM agent_runs r JOIN background_jobs j ON j.id=r.job_id JOIN budget_scopes b ON b.id=r.budget_scope_id JOIN conversations c ON c.id=r.conversation_id WHERE r.id='${run.run_id}'`)[0];
@@ -64,7 +71,7 @@ try{
    assert.equal((await h.request(`/conversations/${cid}/tasks/${tasks[i].task_id}/cancel`,{operation_id:randomUUID(),expected_version:tasks[i].condition_version})).status,200);
    assert.equal(h.sql(`SELECT JSON_OBJECT('attempts',attempts) FROM background_jobs WHERE message_id='${run.message_id}'`)[0].attempts,preservedFailures);
    h.releaseRun(previous.run_id);await h.resumeWorker();
-   run=await until(()=>h.captured.find(v=>v.message_id===original.message_id&&v.lease_epoch!==previous.lease_epoch&&BigInt(v.lease_epoch)>BigInt(previous.lease_epoch)),'多次用户取消后剩余目标继续');await h.pauseWorker();
+   run=await waitForContinuation(()=>h.captured.find(v=>v.message_id===original.message_id&&v.lease_epoch!==previous.lease_epoch&&BigInt(v.lease_epoch)>BigInt(previous.lease_epoch)),'多次用户取消后剩余目标继续');await h.pauseWorker();
    assert.equal(run.budget_scope_id,original.budget_scope_id);assert.equal(run.recovery_chain_id,original.recovery_chain_id);assert.equal(run.request_id,original.request_id);
    assert.equal(h.sql(`SELECT JSON_OBJECT('attempts',attempts) FROM background_jobs WHERE message_id='${run.message_id}'`)[0].attempts,1+preservedFailures);
   }
@@ -74,5 +81,13 @@ try{
   assert.equal((await h.snapshot(cid)).tasks.find(t=>t.id===keep.task_id).phase,'answered');
   checks.push({name:`${claimWindow?'新job已领旧run未更新窗口；':''}五目标连续取消四个，剩余目标在原账本提交；保留${preservedFailures}次既有失败`,passed:true});
  }
- passed=true;console.log(JSON.stringify({passed,checks,officialRequests:0}));
-}finally{await writeFile('.local/checks/mvp-mixed-task-cancellation.json',JSON.stringify({passed,checks,officialRequests:0},null,2));await h.close();}
+ passed=true;console.log(JSON.stringify({passed,checks,continuationMs,officialRequests:0}));
+}catch(error){
+ if(run)await writeFile(h.directory+'/cancellation-failure.json',JSON.stringify({
+  error:String(error),run_id:run.run_id,
+  jobs:h.sql(`SELECT JSON_OBJECT('id',id,'state',state,'attempts',attempts,'epoch',lease_epoch,'lease_until',lease_until) FROM background_jobs WHERE message_id='${run.message_id}'`),
+  runs:h.sql(`SELECT JSON_OBJECT('id',id,'state',state,'epoch',lease_epoch) FROM agent_runs WHERE message_id='${run.message_id}'`),
+  snapshot:await h.snapshot(run.conversation_id),
+ },null,2));
+ throw error;
+}finally{await writeFile('.local/checks/mvp-mixed-task-cancellation.json',JSON.stringify({passed,checks,continuationMs,officialRequests:0},null,2));await h.close();}

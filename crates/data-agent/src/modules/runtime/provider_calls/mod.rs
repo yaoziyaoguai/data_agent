@@ -1,5 +1,6 @@
 mod store;
 
 pub use store::{
-    ProviderBudget, cached_embedding_in_tx, finish_embedding_in_tx, finish_in_tx, issue_in_tx,
+    ProviderBudget, attempt_state_in_tx, cached_embedding_in_tx, finish_embedding_in_tx,
+    finish_in_tx, issue_in_tx,
 };

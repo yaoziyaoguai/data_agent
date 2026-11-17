@@ -6,8 +6,8 @@ pub struct CapacityPlan {
     pub tool_reserve: u64,      // H，工具/临时资料/估算误差预留
     pub keep_recent: u64,       // K=min(65536,T/4)
     pub trigger: u64,           // T=B-H，原生压缩触发线
-    pub summary_cap: u64,       // S1=min(floor(0.8R),O)
-    pub split_summary_cap: u64, // S2=min(floor(0.5R),O)
+    pub summary_cap: u64,       // S1=O：1.4单次历史摘要的冻结输出上界
+    pub split_summary_cap: u64, // S2=O：不包含沿用的旧摘要/文件附记
 }
 
 fn derive(
@@ -27,8 +27,9 @@ fn derive(
     let history_reserve = context_window - body + tool_reserve;
     let trigger = body - tool_reserve;
     let keep_recent = (trigger / 4).min(65536);
-    let summary_cap = ((history_reserve * 4) / 5).min(output_limit); // floor(0.8R)
-    let split_summary_cap = (history_reserve / 2).min(output_limit); // floor(0.5R)
+    // 两次新摘要的配置空间；旧摘要复用、附记与完整保留组由Node运行边界另核。
+    let summary_cap = output_limit;
+    let split_summary_cap = output_limit;
     if summary_cap + split_summary_cap + keep_recent >= trigger {
         return Err("summary_space_insufficient");
     }
@@ -149,7 +150,7 @@ mod tests {
         assert_eq!(plan.keep_recent, 65_536);
         assert_eq!(plan.tool_reserve, 20_000);
         assert_eq!(plan.summary_cap, 65_536);
-        assert_eq!(plan.split_summary_cap, 60_000);
+        assert_eq!(plan.split_summary_cap, 65_536);
     }
 
     #[test]

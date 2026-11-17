@@ -19,6 +19,100 @@ platform_mock = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(platform_mock)
 
 
+# 原2026-11-14 J02草稿（合成语音链路资料）逐字保留：多CTE链中GROUP BY+HAVING形状的
+# CTE引用会以CTE名触发SQLITE_READ，曾在编译期被误拒为SQLITE_AUTH。
+J02_DRAFT_SQL = """WITH qualified_turns AS (
+    SELECT t.turn_id, t.started_at
+    FROM syn_voice_turn t
+    JOIN syn_voice_session s ON s.session_id = t.session_id
+    JOIN syn_vehicle v ON v.vehicle_id = s.vehicle_id
+    WHERE v.is_lab_unit = 0 AND v.telemetry_consent = 1
+      AND s.quality_state = 'valid' AND s.is_complete = 1
+      AND t.quality_state = 'valid'
+      AND t.started_at >= :start AND t.started_at < :end
+      AND s.started_at < :snapshot AND s.ended_at < :snapshot
+      AND t.finished_at < :snapshot
+      AND t.received_at < :snapshot AND s.received_at < :snapshot
+),
+visible_attempts AS (
+    SELECT a.asr_attempt_id, a.turn_id, a.attempt_no
+    FROM syn_asr_attempt a
+    JOIN qualified_turns t ON t.turn_id = a.turn_id
+    WHERE a.received_at < :snapshot
+      AND CAST(strftime('%s', t.started_at) AS INTEGER) * 1000 + a.finish_offset_ms
+          < CAST(strftime('%s', :snapshot) AS INTEGER) * 1000
+),
+last_attempts AS (
+    SELECT turn_id, MAX(attempt_no) AS last_no
+    FROM visible_attempts
+    GROUP BY turn_id
+),
+final_attempts AS (
+    SELECT a.asr_attempt_id
+    FROM visible_attempts a
+    JOIN last_attempts l ON l.turn_id = a.turn_id AND l.last_no = a.attempt_no
+),
+visible_hyp AS (
+    SELECT h.hypothesis_id,
+           h.asr_attempt_id,
+           h.turn_id,
+           h.candidate_rank AS candidate_rank,
+           h.confidence_permille AS score,
+           h.selected_for_nlu AS selected
+    FROM syn_asr_hypothesis h
+    JOIN qualified_turns t ON t.turn_id = h.turn_id
+    WHERE h.received_at < :snapshot
+),
+attempt_best AS (
+    SELECT vh.asr_attempt_id,
+           bb.best_score AS best_score,
+           COUNT(*) AS candidates,
+           SUM(CASE WHEN vh.score = bb.best_score THEN 1 ELSE 0 END) AS at_best_candidates
+    FROM visible_hyp vh
+    JOIN (SELECT asr_attempt_id, MAX(score) AS best_score
+          FROM visible_hyp GROUP BY asr_attempt_id) bb
+      ON bb.asr_attempt_id = vh.asr_attempt_id
+    GROUP BY vh.asr_attempt_id
+),
+selected_eval AS (
+    SELECT s.turn_id,
+           s.asr_attempt_id,
+           s.score AS selected_score,
+           b.best_score AS best_score,
+           CASE WHEN s.score < b.best_score THEN 1 ELSE 0 END AS not_highest,
+           CASE WHEN s.score = b.best_score AND b.at_best_candidates > 1 THEN 1 ELSE 0 END AS tied_top_not_unique,
+           CASE WHEN fa.asr_attempt_id IS NULL THEN 1 ELSE 0 END AS not_final_attempt
+    FROM visible_hyp s
+    JOIN attempt_best b ON b.asr_attempt_id = s.asr_attempt_id
+    LEFT JOIN final_attempts fa ON fa.asr_attempt_id = s.asr_attempt_id
+    WHERE s.selected = 1
+),
+turn_candidate_gap AS (
+    SELECT vh.turn_id
+    FROM visible_hyp vh
+    GROUP BY vh.turn_id
+    HAVING SUM(vh.selected) = 0
+),
+turn_multi_selected AS (
+    SELECT s.turn_id
+    FROM selected_eval s
+    GROUP BY s.turn_id
+    HAVING COUNT(*) > 1
+)
+SELECT
+    (SELECT COUNT(*) FROM qualified_turns) AS qualified_turns,
+    (SELECT COUNT(*) FROM selected_eval) AS selected_records,
+    (SELECT COUNT(DISTINCT turn_id) FROM selected_eval) AS turns_with_selected,
+    (SELECT COALESCE(SUM(not_highest), 0) FROM selected_eval) AS selected_not_highest_records,
+    CAST((SELECT COALESCE(SUM(not_highest), 0) FROM selected_eval) AS REAL)
+        / NULLIF((SELECT COUNT(*) FROM selected_eval), 0) AS selected_not_highest_ratio,
+    (SELECT COALESCE(SUM(tied_top_not_unique), 0) FROM selected_eval) AS selected_tied_top_not_unique_records,
+    (SELECT COALESCE(SUM(not_final_attempt), 0) FROM selected_eval) AS selected_on_non_final_attempt_records,
+    (SELECT COUNT(*) FROM turn_multi_selected) AS turns_with_multiple_selected,
+    (SELECT COUNT(*) FROM turn_candidate_gap) AS turns_with_candidates_but_no_selection;"""
+J02_DRAFT_PARAMETERS = {"start": "2026-09-01T00:00:00Z", "end": "2026-10-01T00:00:00Z", "snapshot": "2026-10-04T00:00:00Z"}
+
+
 class PlatformSourceTest(unittest.TestCase):
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()
@@ -39,6 +133,79 @@ class PlatformSourceTest(unittest.TestCase):
                                           'sql': 'SELECT SUM(paid_amount_cents-refunded_amount_cents) AS net FROM demo_order_detail',
                                           'parameters': {}, 'target_id': 'synthetic-sqlite',
                                           'target_version': platform.platform_version})
+
+    def test_cte_queries_authorize_statement_local_relations_with_underlying_reads(self):
+        platform = self.platform()
+        # 最小等价query：CTE本体引用与触发READ事件的HAVING形状都要放行。
+        minimal = {
+            'plain': 'WITH t AS (SELECT COUNT(*) AS c FROM demo_order_detail) SELECT c FROM t',
+            'having': 'WITH g AS (SELECT order_id FROM demo_order_detail GROUP BY order_id HAVING COUNT(*)>0) SELECT COUNT(*) FROM g',
+            'shadow': 'WITH demo_order_detail AS (SELECT COUNT(*) AS c FROM dim_customers) SELECT c FROM demo_order_detail',
+        }
+        for label, sql in minimal.items():
+            with self.subTest(shape=label):
+                self.assertEqual(platform.compile({'sql': sql})['state'], 'passed', label)
+        # 合法遮蔽：CTE与物理表同名时实际读取底表，许可随底表判定，不因重名拒绝。
+        platform.delay = 0
+        platform.operate('/submit', {'owner_id': 'alice', 'query_id': 'shadow-query', 'sql': minimal['shadow'],
+                                     'parameters': {}, 'target_id': 'synthetic-sqlite',
+                                     'target_version': platform.platform_version})
+        with sqlite3.connect(platform.business) as db:
+            expected = db.execute('SELECT COUNT(*) FROM dim_customers').fetchone()[0]
+        result = platform.operate('/results', {'owner_id': 'alice', 'query_id': 'shadow-query'})
+        self.assertEqual(result['rows'], [[str(expected)]])
+
+    def test_original_cte_draft_compiles_and_executes_with_normal_diagnostics(self):
+        platform = platform_mock.Platform(self.directory / 'cockpit-runtime', ROOT / 'docs/sources/cockpit')
+        report = platform.compile({'sql': J02_DRAFT_SQL, 'parameters': J02_DRAFT_PARAMETERS})
+        self.assertEqual(report['state'], 'passed')
+        platform.delay = 0
+        platform.operate('/submit', {'owner_id': 'bob', 'query_id': 'cte-draft', 'sql': J02_DRAFT_SQL,
+                                     'parameters': J02_DRAFT_PARAMETERS, 'target_id': 'synthetic-sqlite',
+                                     'target_version': platform.platform_version})
+        # 独立核对：同库无授权直连执行同一SQL，逐值比对，不用平台结果反写预期。
+        with sqlite3.connect(f'file:{platform.business}?mode=ro', uri=True) as db:
+            expected = [[None if cell is None else str(cell) for cell in row]
+                        for row in db.execute(J02_DRAFT_SQL, J02_DRAFT_PARAMETERS).fetchall()]
+        result = platform.operate('/results', {'owner_id': 'bob', 'query_id': 'cte-draft'})
+        self.assertEqual(platform.operate('/status', {'owner_id': 'bob', 'query_id': 'cte-draft'})['state'], 'succeeded')
+        self.assertEqual(result['rows'], expected)
+
+    def test_read_guard_keeps_engine_objects_and_internal_tables_denied(self):
+        platform = self.platform()
+        # 引擎eponymous对象与内部表不得借READ事件混入：仍然拒绝。
+        for label, sql in {
+            'pragma-vtab': "SELECT name FROM pragma_table_info('demo_order_detail')",
+            'json-each': "SELECT value FROM json_each('[1,2]')",
+            'internal': 'SELECT name FROM sqlite_master',
+        }.items():
+            with self.subTest(engine_object=label):
+                report = platform.compile({'sql': sql})
+                self.assertEqual(report['state'], 'rejected')
+                self.assertEqual(report['reason'], 'sql_not_supported')
+        # 探针连接与被守卫连接同物理宇宙（平台上两者同开business文件）：
+        # 未授权底表在探针上可解析，因而被拒；CTE名不可解析，是语句内虚拟关系。
+        with sqlite3.connect(':memory:') as probe:
+            probe.execute('CREATE TABLE demo_order_detail(id INTEGER)')
+            probe.execute('CREATE TABLE dim_customers(id INTEGER)')
+            guard = platform_mock.ReadGuard({'demo_order_detail'}, probe)
+            ok = sqlite3.SQLITE_OK
+            deny = sqlite3.SQLITE_DENY
+            # 物理授权集与语句内虚拟关系放行；未授权底表、内部表、引擎对象拒绝。
+            self.assertEqual(guard(sqlite3.SQLITE_READ, 'demo_order_detail', 'id', None, None), ok)
+            self.assertEqual(guard(sqlite3.SQLITE_READ, 'qualified_turns', '', None, None), ok)
+            self.assertEqual(guard(sqlite3.SQLITE_READ, 'dim_customers', 'id', None, None), deny)
+            self.assertEqual(guard(sqlite3.SQLITE_READ, 'sqlite_master', 'name', None, None), deny)
+            self.assertEqual(guard(sqlite3.SQLITE_READ, 'sqlite_sequence', 'name', None, None), deny)
+            self.assertEqual(guard(sqlite3.SQLITE_READ, None, None, None, None), deny)
+            self.assertEqual(guard(sqlite3.SQLITE_READ, 'json_each', 'value', None, None), deny)
+            self.assertEqual(guard(sqlite3.SQLITE_READ, 'pragma_table_info', 'name', None, None), deny)
+            # 只读与函数白名单不变：写、ATTACH、PRAGMA、白名单外函数仍拒。
+            self.assertEqual(guard(sqlite3.SQLITE_INSERT, 'demo_order_detail', None, None, None), deny)
+            self.assertEqual(guard(sqlite3.SQLITE_ATTACH, None, None, 'x.db', None), deny)
+            self.assertEqual(guard(sqlite3.SQLITE_PRAGMA, 'main', 'journal_mode', None, None), deny)
+            self.assertEqual(guard(sqlite3.SQLITE_FUNCTION, None, 'count', None, None), ok)
+            self.assertEqual(guard(sqlite3.SQLITE_FUNCTION, None, 'load_extension', None, None), deny)
 
     def change_source(self):
         with (self.sources / 'etl.sql').open('a') as output:

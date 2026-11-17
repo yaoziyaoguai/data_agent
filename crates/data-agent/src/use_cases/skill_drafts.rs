@@ -221,9 +221,16 @@ pub async fn prepare_in_tx(
         &authority,
     )
     .await?;
-    super::context_authority::extend_run_in_tx(tx, &run.id, &sources["knowledge_refs"]).await?;
+    super::context_authority::extend_run_in_tx(
+        tx,
+        conversation,
+        &run.id,
+        &sources["knowledge_refs"],
+    )
+    .await?;
     super::context_authority::extend_result_dependencies_in_tx(
         tx,
+        conversation,
         &run.id,
         &sources["result_dependencies"],
     )

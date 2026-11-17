@@ -59,7 +59,7 @@ pub fn attach_matches(space: &str, object: &mut Value, candidate: &Value) {
     let located = !selected.is_empty();
     let lagged = located && lagged_hits > 0;
     object["retrieval"] = json!({
-        "channel":"vector",
+        "channel":if candidate["channel"] == "lexical" {"lexical"} else {"vector"},
         "state":if located { if lagged {"index_lag"} else {"located"} } else { "unlocated" },
         "excerpts":selected,
         "note":if located {
@@ -91,13 +91,16 @@ pub fn attach_lexical_matches(object: &mut Value, query: &str) {
         let Some((offset, score)) = lexical_location(text, &tokens) else {
             continue;
         };
-        let total = text.chars().count();
+        let page_offset = entry["content_page"]["offset"].as_u64().unwrap_or(0);
+        let total = entry["content_page"]["total_chars"]
+            .as_u64()
+            .unwrap_or_else(|| text.chars().count() as u64);
         let start = offset.saturating_sub(80);
         let text = text.chars().skip(start).take(360).collect::<String>();
         excerpts.push((
             score,
             json!({"entry_id":entry["entry_id"],"path":entry["path"],
-            "offset":start,"length":text.chars().count(),"total_chars":total,"text":text}),
+            "offset":page_offset + start as u64,"length":text.chars().count(),"total_chars":total,"text":text}),
         ));
     }
     excerpts.sort_by(|(a_score, a), (b_score, b)| {
@@ -155,11 +158,21 @@ fn checked_excerpt(object: &Value, hit: &Value) -> Option<Value> {
         .iter()
         .find(|e| e["entry_id"] == entry_id)?;
     let value = entry["effective_value"].as_str()?;
-    let total = value.chars().count();
-    if offset.checked_add(length)? > total {
+    let available = value.chars().count();
+    let page_offset =
+        usize::try_from(entry["content_page"]["offset"].as_u64().unwrap_or(0)).ok()?;
+    let total = usize::try_from(
+        entry["content_page"]["total_chars"]
+            .as_u64()
+            .unwrap_or(available as u64),
+    )
+    .ok()?;
+    let local_offset = offset.checked_sub(page_offset)?;
+    if offset.checked_add(length)? > total || local_offset.checked_add(length)? > available {
         return None;
     }
-    let text: String = value.chars().skip(offset).take(length).collect();
+    let text: String = value.chars().skip(local_offset).take(length).collect();
+    // SQL候选的空hash由组合层在owner窄读后补齐；这里沿用全文读取的hash核验。
     if hit["content_hash"].as_str()? != fingerprint(&json!(text)) {
         return None;
     }
@@ -206,6 +219,47 @@ mod tests {
     }
 
     #[test]
+    fn window_matches_keep_original_unicode_coordinates_and_hash_checks() {
+        let prefix = "未读前言🌏İ".repeat(120);
+        let lead = "窗口背景🌏İ".repeat(20);
+        let rule = "设备超过校准期限必须停用。";
+        let window = format!("{lead}{rule}{}", "补充说明🌏".repeat(20));
+        let full = format!("{prefix}{window}{}", "未读例外".repeat(50));
+        let base = json!({"id":"manual","version":"7","entries":[
+            {"entry_id":"rule","path":"rule","effective_value":window,
+             "content_page":{"offset":prefix.chars().count(),"total_chars":full.chars().count()}}]});
+        let offset = prefix.chars().count() + lead.chars().count();
+        let candidate = json!({"id":"manual","version":"7","matches":[hit("rule",offset,rule)]});
+        let mut current = base.clone();
+        attach_matches("demo", &mut current, &candidate);
+        assert_eq!(current["retrieval"]["state"], "located");
+        assert_eq!(
+            current["retrieval"]["excerpts"],
+            json!([
+            {"entry_id":"rule","path":"rule","offset":offset,"length":rule.chars().count(),
+             "total_chars":full.chars().count(),"text":rule}])
+        );
+        let mut complete = json!({"id":"manual","version":"7","entries":[
+            {"entry_id":"rule","path":"rule","effective_value":full}]});
+        attach_matches("demo", &mut complete, &candidate);
+        assert_eq!(current["retrieval"], complete["retrieval"]);
+        for bad in [
+            json!({"entry_id":"rule","offset":offset,"length":rule.chars().count(),"content_hash":null}),
+            hit("rule", offset, "已废止的旧规则"),
+            hit("rule", prefix.chars().count() - 1, rule),
+        ] {
+            let mut stale = base.clone();
+            attach_matches(
+                "demo",
+                &mut stale,
+                &json!({"id":"manual","version":"7","matches":[bad]}),
+            );
+            assert_eq!(stale["retrieval"]["state"], "unlocated");
+            assert_eq!(stale["retrieval"]["excerpts"], json!([]));
+        }
+    }
+
+    #[test]
     fn legacy_invalid_and_stale_hits_cannot_claim_a_source_excerpt() {
         let base = json!({"id":"manual","version":"2","entries":[
             {"entry_id":"body","path":"body","effective_value":"当前规则"}]});
@@ -238,6 +292,39 @@ mod tests {
             &json!({"id":"manual","version":"1","matches":[hit("body",0,"当前规则")]}),
         );
         assert!(current.get("retrieval").is_none());
+    }
+
+    #[test]
+    fn narrow_window_rechecks_hash_and_rejects_ranges_outside_loaded_text() {
+        let offset = "未读前言🌏".repeat(100).chars().count();
+        let window_prefix = "窗口开头🌏";
+        let rule = "设备超过校准期限必须停用。";
+        let window = format!("{window_prefix}{rule}");
+        let rule_offset = offset + window_prefix.chars().count();
+        let total = offset + window.chars().count() + 500;
+        let base = json!({"id":"manual","version":"7","entries":[{"entry_id":"rule",
+            "path":"body","effective_value":window,"content_page":{"offset":offset,"total_chars":total}}]});
+        let current_hit = hit("rule", rule_offset, rule);
+        for invalid_hit in [
+            hit("rule", 0, rule),
+            hit("rule", offset + window.chars().count(), rule),
+            hit("rule", rule_offset, &format!("{rule}额外正文")),
+            hit("rule", rule_offset, "过期规则"),
+            json!({"entry_id":"rule","offset":rule_offset,"length":rule.chars().count(),"content_hash":null}),
+        ] {
+            let mut object = base.clone();
+            attach_matches(
+                "demo",
+                &mut object,
+                &json!({"id":"manual","version":"7","matches":[current_hit,invalid_hit]}),
+            );
+            assert_eq!(object["retrieval"]["state"], "index_lag");
+            assert_eq!(
+                object["retrieval"]["excerpts"],
+                json!([{"entry_id":"rule","path":"body","offset":rule_offset,
+                    "length":rule.chars().count(),"total_chars":total,"text":rule}])
+            );
+        }
     }
 
     #[test]
@@ -319,6 +406,56 @@ mod tests {
         );
         assert!(excerpt["text"].as_str().unwrap().contains("RULE仅适用于"));
         assert_eq!(excerpt["entry_id"], "rule");
+    }
+
+    #[test]
+    fn lexical_narrow_window_maps_unicode_coordinates_to_the_original_entry() {
+        let offset = "原文背景🌏".repeat(150).chars().count();
+        let window_prefix = "局部背景🌏İ".repeat(20);
+        let window = format!("{window_prefix}RULE仅限校准设备。{}", "窗口尾部".repeat(80));
+        let total = offset + window.chars().count() + 500;
+        let mut object = json!({"entries":[{"entry_id":"rule","path":"body",
+            "effective_value":window,"content_page":{"offset":offset,"total_chars":total}}]});
+        attach_lexical_matches(&mut object, "RULE");
+        let excerpt = &object["retrieval"]["excerpts"][0];
+        let local_start = window_prefix.chars().count() - 80;
+        assert_eq!(excerpt["offset"], offset + local_start);
+        assert_eq!(excerpt["total_chars"], total);
+        assert_eq!(
+            excerpt["text"],
+            window
+                .chars()
+                .skip(local_start)
+                .take(360)
+                .collect::<String>()
+        );
+        crate::contracts::validate("KnowledgeRetrieval", &object["retrieval"]).unwrap();
+    }
+
+    #[test]
+    fn lexical_window_matches_map_back_to_original_unicode_coordinates() {
+        let prefix = "未读前言🌏İ".repeat(120);
+        let lead = "窗口背景🌏İ".repeat(20);
+        let window = format!("{lead}RULE仅适用于校准设备。{}", "补充说明🌏".repeat(20));
+        let full = format!("{prefix}{window}{}", "未读例外".repeat(50));
+        let mut object = json!({"id":"manual","version":"9","entries":[
+            {"entry_id":"rule","path":"rule","effective_value":window,
+             "content_page":{"offset":prefix.chars().count(),"total_chars":full.chars().count()}}]});
+        attach_lexical_matches(&mut object, "RULE");
+        assert_eq!(object["retrieval"]["channel"], "lexical");
+        let excerpt = &object["retrieval"]["excerpts"][0];
+        let start = prefix.chars().count() + lead.chars().count() - 80;
+        let text = full
+            .chars()
+            .skip(start)
+            .take(window.chars().count() - lead.chars().count() + 80)
+            .collect::<String>();
+        assert_eq!(
+            excerpt,
+            &json!({"entry_id":"rule","path":"rule","offset":start,
+            "length":text.chars().count(),"total_chars":full.chars().count(),"text":text})
+        );
+        crate::contracts::validate("KnowledgeRetrieval", &object["retrieval"]).unwrap();
     }
 
     #[test]

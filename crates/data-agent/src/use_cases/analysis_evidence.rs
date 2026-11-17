@@ -228,12 +228,13 @@ pub struct EvidenceWrite<'a> {
 pub async fn save_in_tx(
     tx: &mut AppTx<'_>,
     ctx: &AccessContext,
-    cid: &str,
+    conv: &crate::modules::conversations::LockedConversation,
     write: EvidenceWrite<'_>,
     input: &Value,
     sources: &Value,
     checked_text: &super::context_authority::CheckedTextResults,
 ) -> Result<Value> {
+    let cid = conv.id.as_str();
     let EvidenceWrite {
         operation_id: operation,
         message_id,
@@ -312,9 +313,10 @@ pub async fn save_in_tx(
         super::context_authority::merge_run_in_tx(tx, run_id, &query_authority).await?;
     }
     super::knowledge::check_refs_in_tx(tx, ctx, &sources["knowledge_refs"]).await?;
-    super::context_authority::extend_run_in_tx(tx, run_id, sources).await?;
+    super::context_authority::extend_run_in_tx(tx, conv, run_id, sources).await?;
     super::context_authority::extend_result_dependencies_in_tx(
         tx,
+        conv,
         run_id,
         &sources["result_dependencies"],
     )

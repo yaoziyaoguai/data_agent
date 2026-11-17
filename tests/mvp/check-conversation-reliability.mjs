@@ -79,11 +79,32 @@ try {
 
   await composer().fill('超过边界的草稿');await composer().evaluate(input=>{input.maxLength=40000;});await composer().fill('合'.repeat(32001));await send().click();
   await page.getByRole('alert').filter({hasText:'消息内容或模型设置不符合要求'}).waitFor();assert.equal(await readPending(),null);assert.equal((await composer().inputValue()).length,32001);
-  const beforeReject=counts(created.conversation_id);delete h.env.DATA_AGENT_MODEL_PROFILE;await h.restartApi();
-  await composer().fill('当前模型配置撤下时保留这份草稿');await send().click();await page.getByRole('alert').filter({hasText:'消息内容或当前模型设置未被接受'}).waitFor();
-  assert.equal(await readPending(),null);assert.equal(await composer().inputValue(),'当前模型配置撤下时保留这份草稿');assert.deepEqual(counts(created.conversation_id),beforeReject);assert.equal(await send().isDisabled(),false);
+  delete h.env.DATA_AGENT_MODEL_PROFILE;await h.restartApi();
+  const beforeEnvironmentRemoval=counts(created.conversation_id);
+  await composer().fill('撤下环境profile后已托管模型仍可发送');await send().click();
+  await until(async()=>counts(created.conversation_id).messages===beforeEnvironmentRemoval.messages+1,'persisted model remains available without environment profile');
+  await until(async()=>await composer().inputValue()==='','accepted managed-model draft settles');
+  checks.push('已持久托管模型在撤下环境profile并重启API后仍可正常接收消息');
+  const beforeReject=counts(created.conversation_id);
+  const selection=ok(await h.request('/conversations/'+created.conversation_id+'/model-selection')).selection;
+  const configuration=ok(await h.request('/model-configuration'));
+  const selected=configuration.models.find(model=>model.id===selection.model_id);
+  const selectedService=configuration.services.find(service=>service.id===selected.service_id);
+  const {version,credential_configured,...serviceInput}=selectedService;
+  ok(await h.request('/model-services',{...serviceInput,expected_version:version,enabled:false}));
+  ok(await h.request('/conversations/'+created.conversation_id+'/messages',frozenCreation.input));
+  assert.deepEqual(counts(created.conversation_id),beforeReject,'已保存消息的同ID重放仍幂等接回，不受后来停用影响');
+  const rejectedResponse=page.waitForResponse(response=>new URL(response.url()).pathname===`/api/conversations/${created.conversation_id}/messages`&&response.request().method()==='POST');
+  await composer().fill('当前选中模型停用时保留这份草稿');await send().click();
+  const response=await rejectedResponse;assert.equal(response.status(),409);
+  const rejection=await response.json();assert.equal(rejection.code,'model_unavailable');
+  measurements.modelRejection={status:response.status(),code:rejection.code,before:beforeReject};
+  await page.getByRole('alert').filter({hasText:'消息内容或当前模型设置未被接受'}).waitFor();
+  assert.equal(await readPending(),null);assert.equal(await composer().inputValue(),'当前选中模型停用时保留这份草稿');assert.deepEqual(counts(created.conversation_id),beforeReject);assert.equal(await send().isDisabled(),false);
+  const disabled=ok(await h.request('/model-configuration')).services.find(service=>service.id===selectedService.id);
+  ok(await h.request('/model-services',{...serviceInput,expected_version:disabled.version,enabled:true}));
   h.env.DATA_AGENT_MODEL_PROFILE=JSON.stringify(profile);await h.restartApi();await send().click();await until(async()=>counts(created.conversation_id).messages===beforeReject.messages+1,'rejected input can be sent after correction');await until(async()=>await composer().inputValue()==='','accepted retry clears original draft');
-  checks.push('超长载荷在冻结前拒绝且保留草稿；服务端模型配置撤下导致真实invalid_input时无消息/预算/任务，恢复配置后可重新发送');
+  checks.push('超长载荷及真实管理API停用选中模型均在保存前拒绝并保留草稿；model_unavailable不会留下待确认回执，消息/预算/任务零新增，恢复服务后原草稿可发');
 
   const isolated=droppedResponse(`**/api/conversations/${created.conversation_id}/messages`);await isolated.install();
   await composer().fill('Alice 合成设备故障记录');await send().click();await isolated.accepted;await composer().fill('Alice 私人待写草稿');isolated.release();await retry().waitFor();const alicePending=await readPending();
@@ -133,11 +154,11 @@ try {
 
   const firstSnapshot=await h.snapshot(legacy);const merged=mergeSnapshot(null,firstSnapshot);const empty=(await h.request(`/conversations/${legacy}/snapshot?after_seq=${firstSnapshot.last_event_seq}`)).value;
   assert.equal(mergeSnapshot(merged,empty),merged);
-  const requestTimes=[];const countRequest=request=>{if(request.method()==='GET'&&new URL(request.url()).pathname.startsWith('/api/'))requestTimes.push({time:Date.now(),path:new URL(request.url()).pathname});};page.on('request',countRequest);
+  const requestTimes=[];const countRequest=request=>{const method=request.method(),path=new URL(request.url()).pathname;if(path.startsWith('/api/')&&(method==='GET'||method==='POST'&&path.endsWith('/snapshot')))requestTimes.push({time:Date.now(),method,path});};page.on('request',countRequest);
   await page.waitForTimeout(8000);requestTimes.length=0;const idleStart=Date.now();await page.waitForTimeout(30000);await page.waitForTimeout(30000);const idle=requestTimes.splice(0);measurements.idleWindowMs=Date.now()-idleStart;measurements.idleRequests=idle.length;measurements.idlePaths=idle.map(item=>item.path);
   assert.ok(idle.length<=15,`idle requests ${idle.length}/60s exceeds 15`);
   await visibility(true);await page.waitForTimeout(300);requestTimes.length=0;await page.waitForTimeout(5000);assert.equal(requestTimes.length,0);const resumed=Date.now();await visibility(false);await until(()=>requestTimes.some(item=>item.path.endsWith('/snapshot')),'visible refresh',2000);measurements.visibilityRefreshMs=Date.now()-resumed;
-  page.off('request',countRequest);checks.push('完整60秒空闲窗口API GET不超过15次，空增量复用历史引用；可见性事件夹具隐藏期间零请求，恢复立即读取');
+  page.off('request',countRequest);checks.push('完整60秒空闲窗口API读取（GET及snapshot POST）不超过15次，空增量复用历史引用；可见性事件夹具隐藏期间零请求，恢复立即读取');
 
   const manager=SessionManager.inMemory('/synthetic/data-agent');const active=await h.create();await openConversation(active);await h.resumeWorker();
   const run=await h.capture(active,'检查合成设备状态，仅准备查询');await h.pauseWorker();

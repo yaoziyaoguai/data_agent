@@ -49,6 +49,7 @@ if(process.argv.includes('--audit')){
  let started=false;
  try{
   assert.equal(h.sql(`SELECT JSON_OBJECT('n',COUNT(*)) FROM model_call_attempts WHERE trial_id='${config.profile.trial_id}'`)[0].n,0,'sample already sent; audit original evidence, do not reset budget');
+  const prepared=await h.request('/knowledge-index/rebuilds',{operation_id:randomUUID()});assert.equal(prepared.status,200,JSON.stringify(prepared.value));
   started=true;
   // 先核对一条真实响应和usage，再批量建立小样索引。
   const first=await h.request('/knowledge?q='+encodeURIComponent('净收入'));

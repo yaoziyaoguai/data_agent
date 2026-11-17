@@ -8,8 +8,8 @@ export interface CapacityPlan {
   toolReserve: number;       // H：工具/临时资料/估算误差预留
   keepRecent: number;        // K=min(65536,floor(T/4))
   trigger: number;           // T=B-H
-  summaryCap: number;        // S1=min(floor(0.8R),O)
-  splitSummaryCap: number;   // S2=min(floor(0.5R),O)
+  summaryCap: number;        // S1=O：1.4单次历史摘要的冻结输出上界
+  splitSummaryCap: number;   // S2=O：单次前缀摘要上界，不包含沿用的旧摘要/文件附记
 }
 
 export type CapacityFailure =
@@ -35,8 +35,9 @@ export function deriveCapacityPlan(
   const historyReserve = contextWindow - body + toolReserve;
   const trigger = body - toolReserve;
   const keepRecent = Math.min(65536, Math.floor(trigger / 4));
-  const summaryCap = Math.min(Math.floor((historyReserve * 4) / 5), outputLimit);
-  const splitSummaryCap = Math.min(Math.floor(historyReserve / 2), outputLimit);
+  // 保留两次新摘要的配置空间保证；旧摘要复用、文件附记及完整工具组在运行时另核。
+  const summaryCap = outputLimit;
+  const splitSummaryCap = outputLimit;
   if (summaryCap + splitSummaryCap + keepRecent >= trigger) return 'summary_space_insufficient';
   return { contextWindow, historyReserve, toolReserve, keepRecent, trigger, summaryCap, splitSummaryCap };
 }

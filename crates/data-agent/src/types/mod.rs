@@ -5,10 +5,22 @@ mod source_locator;
 
 pub type Result<T> = std::result::Result<T, Error>;
 
+pub fn retain_public_content_archives() -> Result<bool> {
+    match std::env::var("DATA_AGENT_PUBLIC_CONTENT_RETENTION") {
+        Ok(value) if value == "archive" => Ok(true),
+        Ok(value) if value == "latest_only" => Ok(false),
+        Err(std::env::VarError::NotPresent) => Ok(true),
+        _ => Err(Error::new("invalid_input").with_message(
+            "DATA_AGENT_PUBLIC_CONTENT_RETENTION must be archive or latest_only".into(),
+        )),
+    }
+}
+
 #[derive(Debug)]
 pub struct Error {
     pub code: &'static str,
     pub message: Option<String>,
+    pub details: Option<Value>,
     transient_storage: bool,
 }
 impl Error {
@@ -16,6 +28,7 @@ impl Error {
         Self {
             code,
             message: None,
+            details: None,
             transient_storage: false,
         }
     }
@@ -23,6 +36,7 @@ impl Error {
         Self {
             code: "unavailable",
             message: None,
+            details: None,
             transient_storage: true,
         }
     }
@@ -31,6 +45,10 @@ impl Error {
     }
     pub fn with_message(mut self, message: String) -> Self {
         self.message = Some(message);
+        self
+    }
+    pub fn with_details(mut self, details: Value) -> Self {
+        self.details = Some(details);
         self
     }
 }
@@ -42,8 +60,9 @@ impl From<sqlx::Error> for Error {
 
         if let Some(database) = error.as_database_error() {
             eprintln!(
-                "storage_failure kind=database code={}",
-                database.code().as_deref().unwrap_or("unknown")
+                "storage_failure kind=database code={} message={}",
+                database.code().as_deref().unwrap_or("unknown"),
+                database.message()
             );
         } else {
             eprintln!(
@@ -66,6 +85,7 @@ impl From<sqlx::Error> for Error {
         Self {
             code: "unavailable",
             message: None,
+            details: None,
             transient_storage: transient,
         }
     }
@@ -84,6 +104,22 @@ pub fn fingerprint(value: &Value) -> String {
         "{:x}",
         Sha256::digest(serde_json::to_vec(value).expect("JSON value"))
     )
+}
+// SQL 后备与公共索引共用规范窗口；展示裁剪不改变内容身份。
+pub const KNOWLEDGE_PROJECTION: &str = "knowledge-statement-window-3";
+pub const KNOWLEDGE_WINDOW: usize = 360;
+pub const KNOWLEDGE_STRIDE: usize = 280;
+pub fn knowledge_record_id(space: &str, object: &Value, entry: &Value, offset: usize) -> String {
+    fingerprint(&serde_json::json!([
+        KNOWLEDGE_PROJECTION,
+        space,
+        object["id"],
+        object["version"],
+        entry["entry_id"],
+        entry["path"],
+        entry.get("statement_id"),
+        offset
+    ]))
 }
 pub fn epoch(value: &str) -> Result<u64> {
     value.parse().map_err(|_| Error::new("invalid_input"))

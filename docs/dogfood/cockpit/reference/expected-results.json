@@ -5,6 +5,7 @@
     "turns_september",
     "turns_empty_month",
     "asr_final_success",
+    "final_successful_attempt_candidate_mean",
     "first_playback_quantiles",
     "first_audio_redundant_field_matches_observed_playback",
     "transcript_label_accuracy",
@@ -5013,6 +5014,21 @@
           0.430318,
           407,
           2875.773956
+        ]
+      ],
+      "rows_included_complete": true
+    },
+    "final_successful_attempt_candidate_mean": {
+      "columns": [
+        "final_success_rate",
+        "mean_candidates"
+      ],
+      "row_count": 1,
+      "rows_sha256": "a91f100bc9cdc7be475868ee527dd2e7caf26983a09cfa25f84948096e47b636",
+      "rows": [
+        [
+          0.910377,
+          3.0
         ]
       ],
       "rows_included_complete": true

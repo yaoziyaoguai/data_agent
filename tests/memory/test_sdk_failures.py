@@ -71,6 +71,15 @@ class EmbeddingBudgetTests(unittest.TestCase):
 
 
 class SdkFailureTests(unittest.TestCase):
+    def test_host_unknown_is_not_translated_to_retryable_unavailable(self):
+        gateway = ModelGateway.__new__(ModelGateway)
+        gateway.token = 'synthetic-not-a-key'
+        gateway.client = SimpleNamespace(post=lambda *_args, **_kwargs: SimpleNamespace(
+            status_code=409, json=lambda: {'code': 'memory_operation_unknown'}))
+        with patch.dict(os.environ, {'DATA_AGENT_API_URL': 'http://127.0.0.1/synthetic'}):
+            with self.assertRaisesRegex(MemoryError, '^memory_operation_unknown$'):
+                gateway.host({'action': 'issue'})
+
     def test_batch_timeout_cannot_issue_sdk_individual_fallback_requests(self):
         main = importlib.import_module('mem0.memory.main')
         sent, permits = [], []

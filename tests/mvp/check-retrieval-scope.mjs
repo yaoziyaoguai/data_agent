@@ -299,9 +299,10 @@ try {
       assignDomain(
         await create(
           "document",
-          "replybound_" + index,
-          "可公开的长业务说明🌏。".repeat(600) +
-            "\nreplybound 尾部补充：须依据当前资料确认计算范围。",
+          "合成长业务说明_" + index,
+          "可公开的长业务说明🌏。replybound 检索定位。" +
+            "可公开的长业务说明🌏。".repeat(600) +
+            "\n尾部补充：须依据当前资料确认计算范围。",
         ),
         "回执边界",
       ),
@@ -312,6 +313,13 @@ try {
         "replybound 本人可复用偏好🙂。".repeat(500),
       ),
     );
+  }
+  for (const object of largeDocs) {
+    const body = object.entries[0].effective_value;
+    assert.ok(!object.name.includes("replybound"));
+    assert.equal(body.split("replybound").length - 1, 1);
+    assert.ok([...body.slice(0, body.indexOf("replybound"))].length < 280);
+    assert.ok([...body].length > 6000, "容量夹具仍须保留长正文");
   }
   const aliceAsset = await asset(
     "scope_personal_marker",
@@ -663,10 +671,14 @@ try {
       ...current.objects.map((object) => object.id),
       ...current.reply_coverage.omitted_objects.map((value) => value.object_id),
     ]);
-    assert.deepEqual(
-      [...visible].sort(),
-      largeDocs.map((object) => object.id).sort(),
-    );
+    if (cursor) {
+      assert.deepEqual([...visible], [], "资产续页不重复派发公共知识检索");
+    } else {
+      assert.deepEqual(
+        [...visible].sort(),
+        largeDocs.map((object) => object.id).sort(),
+      );
+    }
     for (const memory of current.personal_memories) {
       assert.ok(!deliveredAssets.has(memory.id), "资产游标不重复交付已读项");
       deliveredAssets.add(memory.id);

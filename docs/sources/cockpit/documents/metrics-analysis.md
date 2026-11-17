@@ -14,9 +14,11 @@
 
 ASR/意图的一致率只在人工标签子集有定义，且缺预测仍留分母；覆盖率单独报告。动作确认率以operation去重；阶段率以attempt计数；播报率以片段计数。这些比例的分母不同，不能相互替代或直接串成一个全链路成功率。
 
+ASR首次/最终尝试成功率采用[端云识别与候选选择](asr-candidates.md)中的规范定义：在全部可见尝试中按同轮最小/最大attempt_no先选首末，最终失败/取消/超时仍留成功率分母，候选平均另按最终成功尝试。资料活动期和默认快照以[概览](overview.md)为唯一原文，指标time_basis条目由该段派生；用户及任务已采用值优先。
+
 ## `syn_daily_voice_experience` · 语音交互日体验汇总
 
-不同事实分别按所属轮次或独立入口日期聚合，不能将attempt/候选/槽位直接联接后重复SUM。轮次跨午夜按本轮开始日，阶段后续日期不能改归属。
+不同事实分别按所属轮次或独立入口日期聚合，不能将attempt/候选/槽位直接联接后重复SUM。轮次跨午夜按本轮开始日，阶段后续日期不能改归属。日表键来自合格wake、session和turn的日期/车辆/冻结build并集，合法wake-only或session-only行可以有零轮次；不能只用turn日期驱动核对，具体零值、行存在性与测量样本见时间质量文档。
 
 - 行粒度：一个UTC活动日、车辆及各事实冻结build的并列计数
 - 主键：`activity_date`, `vehicle_id`, `build_id`
@@ -846,7 +848,7 @@ WHERE f.received_at < :snapshot;
 以下记录是上文的明确结构定义，目录生成器只复用这些定义并与实际DDL核对；没有种子安排或用例预期值。
 
 ```semantic-definitions
-{"kind":"table","table":"syn_daily_voice_experience","label":"语音交互日体验汇总","grain":"一个UTC活动日、车辆及各事实冻结build的并列计数","primary_key":["activity_date","vehicle_id","build_id"],"unique_keys":[],"description":"不同事实分别按所属轮次或独立入口日期聚合，不能将attempt/候选/槽位直接联接后重复SUM。轮次跨午夜按本轮开始日，阶段后续日期不能改归属。","time_basis":"activity_date按各指标明确的起点；轮次及阶段按turn.started_at日期。","checks":["wakeup_accepted_count<=wakeup_attempt_count","wakeup_false_accept_count<=wakeup_labeled_count","eligible_turn_count=task_completed_count+clarification_count+failed_turn_count+unknown_turn_count+rejected_turn_count","turn_count=eligible_turn_count+cancelled_turn_count+no_speech_turn_count","asr_exact_match_count<=asr_labeled_turn_count","intent_match_count<=intent_labeled_turn_count","positive_feedback_count<=feedback_count"],"time_columns":[{"column":"activity_date","role":"business"},{"column":"snapshot_exclusive","role":"snapshot"}],"default_filters":["snapshot_exclusive = '2026-10-04T00:00:00Z'"]}
+{"kind":"table","table":"syn_daily_voice_experience","label":"语音交互日体验汇总","grain":"一个UTC活动日、车辆及各事实冻结build的并列计数","primary_key":["activity_date","vehicle_id","build_id"],"unique_keys":[],"description":"不同事实分别按所属轮次或独立入口日期聚合，不能将attempt/候选/槽位直接联接后重复SUM。轮次跨午夜按本轮开始日，阶段后续日期不能改归属。日表键来自合格wake、session和turn的日期/车辆/冻结build并集，合法wake-only或session-only行可以有零轮次；不能只用turn日期驱动核对，具体零值、行存在性与测量样本见时间质量文档。","time_basis":"activity_date按各指标明确的起点；轮次及阶段按turn.started_at日期。","checks":["wakeup_accepted_count<=wakeup_attempt_count","wakeup_false_accept_count<=wakeup_labeled_count","eligible_turn_count=task_completed_count+clarification_count+failed_turn_count+unknown_turn_count+rejected_turn_count","turn_count=eligible_turn_count+cancelled_turn_count+no_speech_turn_count","asr_exact_match_count<=asr_labeled_turn_count","intent_match_count<=intent_labeled_turn_count","positive_feedback_count<=feedback_count"],"time_columns":[{"column":"activity_date","role":"business"},{"column":"snapshot_exclusive","role":"snapshot"}],"default_filters":["snapshot_exclusive = '2026-10-04T00:00:00Z'"]}
 {"kind":"field","table":"syn_daily_voice_experience","name":"activity_date","type":"TEXT","nullable":false,"meaning":"UTC活动日期：轮次按started_at；唤醒按自身started_at；会话数按session.started_at。","unit":"UTC date"}
 {"kind":"field","table":"syn_daily_voice_experience","name":"vehicle_id","type":"TEXT","nullable":false,"meaning":"车辆维度。","references":{"table":"syn_vehicle","column":"vehicle_id"}}
 {"kind":"field","table":"syn_daily_voice_experience","name":"build_id","type":"TEXT","nullable":false,"meaning":"事件当时冻结build。","references":{"table":"syn_software_build","column":"build_id"}}

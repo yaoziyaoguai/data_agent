@@ -1,6 +1,6 @@
 [
-  {"context":1000000,"input":900000,"output":65536,"plan":[120000,20000,65536,880000,65536,60000]},
-  {"context":1000000,"input":900000,"output":131072,"plan":[151072,20000,65536,848928,120857,75536]},
+  {"context":1000000,"input":900000,"output":65536,"plan":[120000,20000,65536,880000,65536,65536]},
+  {"context":1000000,"input":900000,"output":131072,"plan":[151072,20000,65536,848928,131072,131072]},
   {"context":131072,"input":65536,"output":65536,"failure":"summary_space_insufficient","ranges":{"input":null,"output":[1,21503]}},
   {"context":1000000,"input":65536,"output":65536,"failure":"summary_space_insufficient","ranges":{"input":[194763,934464],"output":[1,21503]}},
   {"context":65536,"input":65536,"output":65536,"failure":"reserve_exceeds_history"},

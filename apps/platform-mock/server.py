@@ -1,5 +1,6 @@
 """合成 SQLite 数据平台：持久提交查证、只读编译、结果分页及取消。"""
 import argparse
+import contextlib
 from datetime import datetime
 import hashlib
 import hmac
@@ -88,12 +89,39 @@ def sql_diagnostic(error):
         code, message = 'parameter_out_of_range', '整数参数超出 SQLite 有符号 64 位范围。'
     return {'code': code, 'message': message[:1000]}
 
-def authorizer(action, first, second, _database, _trigger, *, tables):
-    if action == sqlite3.SQLITE_READ:
-        return sqlite3.SQLITE_OK if first in tables else sqlite3.SQLITE_DENY
-    if action == sqlite3.SQLITE_FUNCTION:
-        return sqlite3.SQLITE_OK if (second or '').lower() in ALLOWED_FUNCTIONS else sqlite3.SQLITE_DENY
-    return sqlite3.SQLITE_OK if action in (sqlite3.SQLITE_SELECT, sqlite3.SQLITE_RECURSIVE) else sqlite3.SQLITE_DENY
+class ReadGuard:
+    """语句级只读授权。物理表按封闭授权集逐次判定；SQLite内部对象拒绝。
+    其余名字只放行当前语句声明的虚拟关系（CTE/子查询别名）：SQLite对这类引用会以
+    关系名触发SQLITE_READ，且早于其主体SELECT事件，无法按事件顺序识别——改为用裸探针
+    证明该名字离开本语句不可解析；json_each、pragma_*、dbstat等引擎eponymous对象能
+    独立解析，因而不是语句内虚拟关系，照旧拒绝。探针经独立只读连接执行，不复用被
+    授权语句的连接。"""
+
+    def __init__(self, tables, probe):
+        self.tables, self.probe = tables, probe
+        self.virtual = set()
+
+    def statement_local(self, name):
+        quoted = '"' + name.replace('"', '""') + '"'
+        try:
+            self.probe.execute('SELECT 1 FROM ' + quoted + ' LIMIT 0').fetchall()
+            return False
+        except sqlite3.Error as error:
+            return str(error).startswith('no such table')
+
+    def __call__(self, action, first, second, _database, _trigger):
+        if action == sqlite3.SQLITE_READ:
+            if first in self.tables or first in self.virtual:
+                return sqlite3.SQLITE_OK
+            if not first or first.startswith('sqlite_'):
+                return sqlite3.SQLITE_DENY
+            if self.statement_local(first):
+                self.virtual.add(first)
+                return sqlite3.SQLITE_OK
+            return sqlite3.SQLITE_DENY
+        if action == sqlite3.SQLITE_FUNCTION:
+            return sqlite3.SQLITE_OK if (second or '').lower() in ALLOWED_FUNCTIONS else sqlite3.SQLITE_DENY
+        return sqlite3.SQLITE_OK if action in (sqlite3.SQLITE_SELECT, sqlite3.SQLITE_RECURSIVE) else sqlite3.SQLITE_DENY
 
 class Platform:
     def __init__(self, directory, source_directory=None):
@@ -270,8 +298,9 @@ class Platform:
         if not isinstance(sql,str) or not sql.strip() or len(sql)>24000 or not isinstance(params,dict):
             return {'state':'rejected','reason':'invalid_input'}
         try:
-            with sqlite3.connect(f'file:{self.business}?mode=ro',uri=True) as db:
-                db.set_authorizer(lambda *args: authorizer(*args, tables=self.allowed_tables))
+            with sqlite3.connect(f'file:{self.business}?mode=ro',uri=True) as db, \
+                    contextlib.closing(sqlite3.connect(f'file:{self.business}?mode=ro',uri=True)) as probe:
+                db.set_authorizer(ReadGuard(self.allowed_tables, probe))
                 db.execute('EXPLAIN '+sql,params).fetchall()
             return {'state':'passed','reason':None,'target_id':'synthetic-sqlite','target_version':self.platform_version,'dialect':'SQLite','read_only':True}
         except (sqlite3.Error,ValueError,TypeError,OverflowError) as error:
@@ -316,8 +345,9 @@ class Platform:
             if state=='running' and time.time()>=row['ready_at']:
                 args=json.loads(row['payload']); deadline=time.monotonic()+3
                 try:
-                    with sqlite3.connect(f'file:{self.business}?mode=ro',uri=True) as source:
-                        source.set_authorizer(lambda *args: authorizer(*args, tables=self.allowed_tables))
+                    with sqlite3.connect(f'file:{self.business}?mode=ro',uri=True) as source, \
+                            contextlib.closing(sqlite3.connect(f'file:{self.business}?mode=ro',uri=True)) as probe:
+                        source.set_authorizer(ReadGuard(self.allowed_tables, probe))
                         source.set_progress_handler(lambda: int(time.monotonic()>deadline),1000)
                         cursor=source.execute(args['sql'],args.get('parameters',{}))
                         rows=cursor.fetchmany(1001); truncated=len(rows)>1000; rows=rows[:1000]

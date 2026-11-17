@@ -34,6 +34,8 @@ const indexed = async () => {
   return result.value.search_coverage?.index_state === 'current' && result.value.search_coverage.vector_state === 'available';
 };
 try {
+  const prepared = await h.request('/knowledge-index/rebuilds', {operation_id: randomUUID()});
+  assert.equal(prepared.status, 200, JSON.stringify(prepared.value));
   await until(indexed, '初始索引可用', 120000);
   await page.goto(h.url);
   await page.getByLabel('演示登录凭据').fill(h.tokens.alice);

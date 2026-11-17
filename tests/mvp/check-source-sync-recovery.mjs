@@ -51,8 +51,10 @@ try {
   assert.equal(recovered.maintenance.maintainer_id,'bob');assert.equal(recovered.state,'enabled');
   const field=(await h.request('/knowledge?directory=all&q=voice_a.event_id')).value.objects.find(o=>o.kind==='field');
   assert.equal(field.state,'enabled','未变成员的子对象不能因重启遗漏而退休');
-  const jobs=h.sql("SELECT JSON_OBJECT('n',COUNT(*)) FROM background_jobs WHERE kind IN ('prepare_source','raw_source_index') AND resource_id='"+original.source_id+"'")[0].n;
-  assert.equal(jobs,2,'同页恢复不重复排待办');
+  const prepared=h.sql("SELECT JSON_OBJECT('n',COUNT(*)) FROM background_jobs WHERE kind='prepare_source' AND resource_id='"+original.source_id+"'")[0].n;
+  const rawTargets=h.sql("SELECT JSON_OBJECT('n',COUNT(*)) FROM knowledge_index_jobs WHERE target_kind='source_excerpt' AND source_kind='platform' AND object_id='"+original.source_id+"'")[0].n;
+  assert.equal(prepared,1,'同页恢复不重复排整理待办');
+  assert.equal(rawTargets,1,'同页恢复不重复登记原文索引目标');
   const replay=await h.request('/source-syncs',{operation_id:key});assert.equal(replay.status,202);assert.equal(replay.value.sync_id,accepted.value.sync_id);
   checks.push('第一页unchanged及待生效负责人持久保存；Worker退出后原游标/原批次完成，子对象不误退休，待办不重复');
   await closeServer();await h.resumePlatform();
