@@ -1,6 +1,6 @@
 # 会话、分析、查询与运行模块设计
 
-2026-10-23目标合同见[实现设计第17节](implementation-design.md#17-语义检索与上下文的实施合同2026-10-23)，实施状态：M08/M11的容量接线、Pi摘要边界与Worker恢复已落代码并在本地验证；M06任务来源限制、时间角色和采用口径，以及M07持久草稿决策仍待后续增量。图F06/F07表达目标交接，现有执行授权、结果归属、预算及Pi会话主体保留。
+本文记录M05–M08的职责、事务与恢复合同，接口及持久格式见[实现设计第17节](implementation-design.md#17-语义检索与上下文的实施合同2026-10-23)。F06/F07同时表达当前消息归属、决定格式、未执行草稿与执行确认的分责。当前实现、工程证据和真实效果只在CURRENT维护；Pi仍负责唯一会话、循环与恢复。
 
 > 设计基线：对应本地MVP实现；实时验收状态见[CURRENT](../CURRENT.md)。本文把[系统设计第 17–20 节](../semantic-retrieval-design.md#17-实施基线与交付顺序2026-10-02)细化为首轮代码接口；不代表 Pi 恢复、平台幂等或真实模型调用已验证。模块 ID 与整体代码模块设计一致，不新增独立服务。
 
@@ -53,6 +53,7 @@
 | `commit_consumption_in_tx` | 运行权、锁定输入、期望输入游标 → 消费回执 | 只将该运行已领取且仍为 `pending` 的输入置 `consumed`；沿连续终态推进 `input_seq`，遇 `pending` 即停止；重复提交返回原结果 |
 | `dispose_inputs_in_tx` | 宿主动作及同事务受影响范围、锁定输入、`withdrawn/suppressed` 与原因 → 处分/游标回执 | 宿主短事务仅处分明确撤回消息或已取消任务/已删除会话的对应输入；幂等、不改已消费输入，不以模型失败为由跳过其他消息 |
 | `read_events_in_tx` | `AccessContext, conversation_id, after_seq, limit` → 事件页/新游标 | 当前权限回源；游标超出保留范围返回 `snapshot_required`，不静默漏事件 |
+| `report_first_saved_seq_in_tx` | 已锁会话事务、报告 ID 列表 → 每报告首次 `analysis_report_saved` 事件序号 | 同事务窄查询：按 `conversation_id+report_id` 跨全部已保存版本取 `MIN(event_seq)`，不按版本或事件页筛选；组合层把它写入任务投影作展示锚点，无保存事件的旧记录省略该可选字段 |
 
 输入游标只扫描 Agent 输入，并跨过已经 `consumed/withdrawn/suppressed` 的连续前缀；展示事件无输入序号，不形成缺口。运行提交与宿主处分复用该规则；处分不会调用模型，也不能将仍待判断的其他消息冒充已消费。
 
@@ -114,15 +115,17 @@ M05提供`recent_task_ids_in_tx`只读投影：按未撤回消息的实际事件
 
 **边界：**不判断消息的自然语言含义、不生成 SQL、不保存用户执行确认、不把模型叙述转为平台成功。SQL 草稿和查询状态由 M07 提供事实快照。
 
-目标Conditions新增source_limits、time_roles和semantic_resolution；省略修订字段继承、显式unset才清空。TaskReadContext绑定task_id/condition_version，所有取证工具使用同一本题限制；分析目标和检索hints不自动成为来源限制。旧channel只兼容读取，新维度沿通用filters。字段、旧数据未知状态与来源收紧后的Pi重建见实现设计17.4，不新增查询DSL或问题重写模型。
+Conditions保存source_limits、time_roles和semantic_resolution；省略修订继承，semantic_resolution的null/unset只清采纳说明，不关闭问题。新格式的开放clarifications是唯一未决事实，采纳说明非必填，不带needs_clarification或可写未决数组。condition_revisions以宿主decision_state_version标记旧1/新2；读取不迁移，旧未决只在明确legacy_resolution_migration时连接问题并核指定字段/原回执，不制造历史用户采纳。TaskReadContext绑定task_id/condition_version；分析目标和检索hints不自动成为来源限制。旧channel只兼容读取，新维度沿通用filters。字段来源、旧数据及Pi重建见实现设计17.4，不新增查询DSL、问题重写模型或证明台账。
 
-**私有数据：**`analysis_tasks`、`condition_revisions`、`clarifications`、`task_lifecycle_operations`；条件包含目标、对象、时间/时区、过滤、维度、粒度、依据与来源、未解决问题。澄清含问题、候选任务、可选答案、创建事件、回答消息和解决版本；无明确任务时可暂挂会话。取消命令按用户和操作身份保存载荷指纹与回执；相同载荷重传直接取回执，换目标或版本拒绝冲突，已取消终态不再次中断剩余目标。
+**私有数据：**`analysis_tasks`、`condition_revisions`、`clarifications`、`task_lifecycle_operations`；条件保存对象、时间/时区、过滤、维度、依据、字段来源与已采用说明，当前未决由澄清状态表达。澄清保存问题、选项、任务/条件版本、状态及文字来源；既有表没有逐问题解决操作或回答消息列，旧转换只从指定版本的真实成功工具回执和原用户消息核依据，不宣称resolved本身已记录逐题历史证明。无明确任务时可暂挂会话。取消命令按用户和操作身份保存载荷指纹与回执；相同载荷重传直接取回执，换目标或版本拒绝冲突，已取消终态不再次中断剩余目标。
+
+旧已登记命令在工具边界先核原ledger、wire指纹与合法形状，再通过内部`AnalysisUpdateRequest`传给M06。v1及同v2中确属旧形状的registered无receipt操作按原决定格式完成create/revise；新v2登记使用CurrentAnalysisUpdate，模型没有方言参数。已成功/拒绝回执先按原身份接回；目标已迁移时仍按原expected_version处理，新状态不降版。条件、问题、原operation/origin和receipt沿同一事务流程保存。
 
 Pi工具的`AnalysisUpdate`沿用同源JSON Schema：新建任务须带完整`conditions`，新建可省略尚未分配的`task_id/expected_version`（保留接受JSON null），已有任务必须给真实ID与当前版本；未指定标量保留null、列表保留空数组。已有任务版本使用工具回执中的数字字符串。没有需要用户补充的歧义时省略`question`并传`options=[]`（仍接受JSON null）。`knowledge_refs`引用知识对象的`id/version/path`，来源读取的`source_id`不能充当知识对象ID。校验失败仍作为Pi工具错误交模型修正，不由宿主猜测任务条件。
 
 已有任务的`revise/clarify`须带`condition_patch`及当前版本；空白问题和字符串`null/undefined`不能生成澄清。普通正式输出取Pi最后一条助手消息；来源答案则使用`present_analysis_answer`的宿主生成正文并绑定对应SDK回执。自然回答通过`FinishRun.final_start_chunk_seq`绑定已保存片段，省略该字段的旧请求从片段1核对；来源答案在finish事务核验后写入相同输出身份，再发布正式事件。Rust核对片段连续、起点和正文一致；未展示的调查过程保留在Pi历史，不宣称全部进入页面事件。Pi系统规则要求所有工具之后的最后回复独立完成本条请求：分析兼保存须保留结论、关键数字、必要依据与限制及真实保存结果，不能仅确认保存；纯保存、草稿及提交仍可简短确认。工具可能推翻前文，因此宿主不拼接调查文字，也不靠文本长度或固定“已保存”词句判断完整性；协议测试证明交付与恢复路径，真实模型是否遵循仍需质量验证。
 
-普通条件修订不自动解决澄清。已有任务的 `revise/clarify` 可携 `resolved_clarification_ids`，只解决本消息明确回答的开放问题；服务端核对当前任务版本、同会话同任务与开放状态，任一错误使整次修订回滚。未指定问题继续开放，即使其创建条件版本较早；当前条件版本过期的回答仍拒绝。任务目录给出最早未决 `clarification`；`read_analysis_task` 按 `clarification_after/next_clarification_after` 每页返回最多8条 `open_clarifications`，更新回执额外返回本次 `opened_clarification`，支持先回答后出现的问题。还有问题时阶段保持 `waiting_clarification`。同事务可回答旧问题并创建新问题；不授予SQL执行权。
+带任务引用的语义检索、知识/来源读取及其重放通过 `assert_read_context_in_tx` 核对同会话当前版本和活动状态；开放澄清不阻止已获准资料调查，来源/权限门仍独立生效，读取不会自动关闭问题。草稿、执行及定量交付继续使用各自原条件已解决的门，不能因读取而获得执行权。普通条件修订不自动解决澄清。已有任务的 `revise/clarify` 可携 `resolved_clarification_ids`：用户选择按真实回答解决，待查事实可由当前有效且获准资料唯一确定，在同次revise更新事实条件与依据并关闭对应ID；仍有多义或冲突的保留。Pi理解问题含义，服务端核对当前任务版本、同会话同任务、依据及开放状态，任一错误使整次修订回滚。未指定问题继续开放，即使其创建条件版本较早；当前条件版本过期的回答仍拒绝。任务目录给出最早未决 `clarification`；`read_analysis_task` 按 `clarification_after/next_clarification_after` 每页返回最多8条 `open_clarifications`，更新回执额外返回本次 `opened_clarification`，支持先回答后出现的问题。还有问题时阶段保持 `waiting_clarification`。同事务可回答旧问题并创建新问题；不授予SQL执行权。
 
 `route`只登记消息归属，禁止附带`conditions/condition_patch`或澄清问题。修改渠道、时间、指标等条件使用`revise`，获得新的条件版本并失效旧待确认草稿；只有条件保持不变而改写SQL时，`route`可带`replaces_query_id`声明修订。错误动作与参数组合在共享契约边界拒绝，不能成功返回后静默丢掉修改。
 
@@ -174,15 +177,18 @@ flowchart LR
 
 ```mermaid
 flowchart TD
-  A[结构化任务操作] --> B{起点版本与归属有效}
+  A[结构化条件修订<br/>宿主按原ledger及指纹识别请求方言] --> B{起点版本与归属有效}
   A -->|用户取消目标任务| XCancel[关闭目标澄清并停止该任务<br/>其他任务继续]
   B -->|否| X[返回冲突或拒绝]
-  B -->|是| C{存在必须补充的条件}
-  C -->|是| D[保存澄清与已知条件]
-  D --> E[校验回答并保存新修订]
-  C -->|否| F[保存条件 来源限制 时间角色与采用口径<br/>未改字段沿用原修订]
-  E --> F
-  F --> G[返回新版本和影响范围]
+  B -->|是| C{本次提交独立待补问题}
+  C -->|是| D[登记或保留开放问题<br/>不把未回答当采纳]
+  D --> E[落实用户回答或资料唯一事实与依据<br/>只关闭对应已解决ID 允许确认同值]
+  C -->|否| E
+  E --> Legacy{显式转换旧未决}
+  Legacy -->|是| Proof[核原修订回执和所指字段来源<br/>缺依据项保留或恢复open]
+  Legacy -->|否| F[同事务按已识别方言保存条件与问题<br/>旧已登记操作保原格式 新状态不降版]
+  Proof --> F
+  F --> G[返回新版本和影响范围<br/>说明非必填 不授执行权]
   G --> H[组合层据持久事实推进交互阶段]
 ```
 
@@ -192,7 +198,7 @@ flowchart TD
 
 **负责：**SQL 草稿/参数/依据/条件/执行目标绑定、完整语法与只读能力检查、待确认请求、真实用户确认、平台提交与查证、结果引用和取消记录。
 
-**边界：**`request_query` 只检查和保存草稿，成功返回 `awaiting_confirmation`；它没有用户确认能力。`execute_query`另经`execute_from_message_in_tx`核对当前真实用户消息、完整原话、归属和版本，并复用确认事务；两种入口均通过组合层调用下表操作。模块不整理条件、不解释结果、不把本地超时推断成平台失败或取消成功。
+**边界：**`request_query`通过LockedRun的真实message_id复用M05本条归属核验，M06核任务/条件版本；所选条目及本次结构绑定进入原来源门。它只检查和保存草稿，成功返回 `awaiting_confirmation`；整会话其他待归属或失败输入继续由执行确认门阻断，不阻止当前已归属消息准备未执行草稿。`execute_query`另经`execute_from_message_in_tx`核对当前真实用户消息、完整原话、归属和版本，并复用确认事务；两种入口均通过组合层调用下表操作。模块不整理条件、不解释结果、不把本地超时推断成平台失败或取消成功。
 
 **私有数据：**`sql_drafts` 及不可变版本、`query_requests`、确认记录、平台提交/观察/取消回执；每个请求固定 `task_id, condition_revision, draft_version, target_id, target_version`。首次聊天确认写入`confirmation_message_id`，并将`budget_scope_id`绑定执行消息；此后均不可改变。显式HTTP确认保留NULL消息来源和草稿预算。主键在预览时创建；主动重跑创建新待确认请求，SQL 相同仍需用户确认。
 
@@ -220,12 +226,15 @@ Pi `get_query` 的默认 `view=rows` 在已鉴权的固定保存结果上按序�
 | `hold_pending_in_tx / supersede_pending_in_tx` | 任务范围、消息/条件修订引用 → 受影响请求 ID | 明确补充先置 `modifying`；新修订置 `superseded`；不改变已确认或执行中的请求 |
 | `release_pending_in_tx` | 需释放的消息阻塞及同事务剩余阻塞快照 → 可恢复请求 | 仅撤回或确定不影响时恢复未失效请求；不得复活已替代的草稿 |
 | `confirm_request_in_tx` | 可信用户动作、锁定请求/会话/任务、展示草稿版本、确认 ID → 同一查询 ID | 已确认重传只返回现状，不重新排队；首次仅从 `awaiting_confirmation + not_submitted + active task + cancel=none` 进入 `queued`，并核对阻塞/版本/目标/权限；取消或替代请求拒绝 |
-| `begin_submission_in_tx` | 锁定请求/任务、当前 Worker 代次、最新权限/能力检查结果 → 提交包或已有状态 | 仅 `confirmed + queued + active task + cancel=none` 可原子登记提交意图并置 `submitting`；与本地取消按同锁事务提交顺序竞争；网络在提交后调用 |
+| `claim_due / renew_claim` | query ID、process_due的Worker身份和领取epoch → 原有效领取 | 领取、续租与交接共用15秒；续租条件为同lease_owner/epoch、未过期及可处理状态，不改授权、预算或提交次数 |
+| `begin_submission_in_tx` | 锁定请求/任务、当前 Worker 代次、最新权限/能力检查结果 → 提交包或已有状态 | 仅 `confirmed + queued + active task + cancel=none` 可原子登记提交意图并置 `submitting`；末尾UPDATE自身重核query/epoch/未过期，按数据库刷新时刻加15秒，无匹配回滚计数和动作；与本地取消按同锁事务提交顺序竞争；网络在提交后调用 |
 | `record_submission_in_tx` | 请求 ID、代次、提交回执/未知原因 → 平台 ID/执行状态 | 同次提交回执幂等；明确拒绝进入 failed，未知置 `submission_unknown` 后先查证；仅平台确认未接收才可重排，最多三次提交；旧代次拒绝。保存平台错误类别与至多1000字符诊断，查询工具和页面可读取 |
 | `record_observation_in_tx` | 请求 ID、代次、稳定观察 ID、平台状态/结果引用 → 状态变化及交付载荷 | 校验平台身份与版本；不从终态回退；同观察去重，终态交付 ID 按查询固定；与交付事件登记共事务 |
 | `request_cancel_in_tx / record_cancel_in_tx` | 可信取消动作或平台回执、锁定请求 → 已知取消/执行状态 | `not_submitted/queued` 且无提交意图可本地置 `execution=cancelled, cancel=completed`；未确认置 `superseded`，已确认保留 `confirmed` 历史；`submitting` 以后先查证/发取消，终态竞争保留平台证据 |
 | `read_query_in_tx / resolve_result_ref_in_tx` | 查询 ID、当前授权 → 查询快照/结果引用 | 回看重新核对权限和有效期；过期不自动重跑；历史条件版本保持不变 |
 | `fetch_result_page`（事务外） | 已授权结果引用、游标、范围 → 标准结果页 | 经平台适配器读取；明确字段类型、精确数值编码、完整性/截断/来源；CSV 仅导出同一已授权范围，不提交 SQL |
+
+查询领取后，`query_workflow::process_due`复用消息准备的两个并行future：准备覆盖读取、来源/权限预检与锁内重核直到提交事务commit；心跳立即开始，每15秒的三分之一续同领取。续租等待查询行锁时，准备仍继续推进；任一准备结局或确定失租结束心跳，不留后台task。commit后保留原`authorization_error`拦截，再进入平台动作；不为平台调用及后续观测无限续租。
 
 平台接口为 `submit_query / lookup_submission / get_status / read_results / cancel_query`。组合层在数据库事务之间调用适配器；提交前重新核对权限和目标能力。网络检查返回的版本/有效期在落库前核对，实际平台仍负责最终权限与只读约束。
 
@@ -265,7 +274,8 @@ flowchart LR
 
 ```mermaid
 flowchart TD
-  A[检查并保存草稿及本题口径依据] --> B[展示 SQL 参数与采用条件]
+  Input[本条真实消息已登记归属<br/>核任务 条件版本及所选依据] --> A[核只读和目标能力 保存未执行草稿]
+  A --> B[展示 SQL 参数与采用条件]
   B --> U{用户聊天意图}
   U -->|只修改| A
   U -->|修改后执行| Rev[修订并保存最终SQL]
@@ -273,7 +283,7 @@ flowchart TD
   U -->|指代不明| Ask[澄清后继续]
   Ask --> U
   Rev --> Auth
-  Auth --> C{真实消息 / 查询集合 / 版本 / 无阻塞}
+  Auth --> C{真实消息 / 查询集合 / 版本<br/>整会话无阻塞}
   C -->|否| X[拒绝本次确认]
   C -->|是| D[同事务确认全部合法新项<br/>绑定原消息和预算，各查询排队]
   B -->|取消先提交| L[本地取消并拒绝旧确认]
@@ -299,7 +309,7 @@ flowchart TD
 
 **边界：**不根据文本承诺修改任务/查询，不重放已成功业务副作用，不自行给新运行补额度。Pi 检查点不是条件、确认或长期记忆的替代品。
 
-**私有数据：**`agent_runs`、`pi_checkpoints`、`tool_calls`、`assistant_outputs`/尝试/片段、`budget_scopes`、`model_call_attempts`、`model_space_settings`、`model_services`/`model_service_versions`、`model_definitions`/`model_definition_versions`。模型配置接口、加密与冻结规则见[实现设计第16节](implementation-design.md#16-模型接入配置2026-10-20)。当前检查点含 SDK 格式版本、原 session、私有 JSONL 文件名、精确 leaf 和 authority；完整原生树由 M11 保存。旧 inline 在交付事务绑定不可变副本及指纹，受当前运行权校验后只读迁移；凭据不在其中。
+**私有数据：**`agent_runs`、`pi_checkpoints`、`tool_calls`、`assistant_outputs`/尝试/片段、`budget_scopes`、`model_trials`、`model_call_attempts`、`maintenance_model_calls`、`model_space_settings`、`model_services`/`model_service_versions`、`model_definitions`/`model_definition_versions`。模型配置接口、加密与冻结规则见[实现设计第16节](implementation-design.md#16-模型接入配置2026-10-20)。当前检查点含 SDK 格式版本、原 session、私有 JSONL 文件名、精确 leaf 和 authority；完整原生树由 M11 保存。旧 inline 在交付事务绑定不可变副本及指纹，受当前运行权校验后只读迁移；凭据不在其中。
 
 `recovery_chain_id` 绑定一次逻辑交付、原输入/预算和 `output_id`，重启或替换执行创建新 `run_id` 时继承；新用户操作/新结果交付另建恢复链。工具业务唯一键为 `(conversation_id, operation_id)`；恢复映射另以 `(conversation_id, recovery_chain_id, sdk_tool_call_id)` 唯一，指向同一稳定操作，保存工具名/参数指纹、`origin_run_id` 与接回记录。去重不按 SQL/参数永久生效；相同参数的新操作可以正常执行，已提交调用恢复不能换链或操作身份。
 
@@ -308,6 +318,8 @@ flowchart TD
 目标补充：历史分析投影沿原查询/依据/报告读取入口由宿主标记用途；authority新格式记录其稳定引用、内容指纹和实际来源，当前schema=5仍按原合同解码。旧知识工具/混合摘要不享受整体历史豁免，无法区分时使用Pi原生接口重建并按保存记录重新读取，详见实现设计17.4。
 
 目标将消息的全部任务归属与当前active_task_ref分开；不同来源限制的任务沿原route顺序切换，每次切换在下一次模型派发前通过Pi投影核验，不能合并允许集。M08保存各任务完整答案的原工具回执/输出范围引用，M11保留宿主引用而移除不属于当前任务的正文；finish_run按有序answer_parts逐任务重核、确定性组合，普通解释仍走自然回答路径。来源按答案与当前投影分别检查，不将全run并集用于单任务放行。沿原会话、恢复链、预算和output_id，不新增结果模型调用或强制保存报告，完整合同见实现设计17.4。
+
+来源恢复反馈复用原判定：v2回执与工作区提供可选`source_context_blocker`，区分本条输入未归属、有效来源声明未定和等待刷新。Node跨回执/临时投影/刷新保留控制原因与归属事实，按现有工具给出恢复指导；不从当前条件缺字段推断无限制，不新增授权状态或循环。有效明确选用数量与来源过滤后的预览分开：空预览不表示未选择，正文仍经原来源门。具体字段与兼容语义见实现设计的“Pi工作区与个人记忆上下文接入”。
 
 **内部文件：**`runs.rs`、`checkpoints.rs`、`outputs.rs`、`tool_ledger.rs`、`budgets.rs` 分担本模块规则，`store.rs` 保存存储细节；这些是内部职责边界，不导出一个同时处理全部动作的 Agent 类。
 
@@ -337,17 +349,19 @@ flowchart TD
 | `issue_model_call_in_tx` | 许可 ID、运行权 → 一次性发送许可或已知状态 | 检查代次、参数、限额版本、到期时间；仅首次 `reserved→issued` 返回可发送，不因重传再次授权 |
 | `settle_model_call_in_tx` | 尝试 ID、可靠用量/未发出证据/未知原因 → 结算状态 | 用量幂等结算；超时未知不退款；会话删除/取消后允许核对归属、原运行代次与指纹后结算原尝试，不能获得新发送权 |
 | `prepare_run_commit_in_tx` | 运行权、最终片段摘要、SDK 检查点、消费事件列表 → 已验证提交材料 | 检查完整片段、格式版本、事件/输出归属和未决工具；不接收任意任务/查询状态；纯验证不提前提交 |
-| `commit_run_in_tx` | 提交材料、稳定 `commit_id` → 最终输出引用/运行回执 | 在组合层事务内保存最终正文、检查点和运行终态；同 ID/摘要返回原提交，冲突拒绝；旧代次不能新增提交 |
+| `commit_run_in_tx` | 提交材料、稳定 `commit_id` → 最终输出引用/运行回执 | 在组合层事务内保存最终正文、有序read_binding、检查点及运行终态；同 ID/摘要接原提交，不重组标题；旧代次不能新增提交 |
 
 预算新增 `scope_kind=user_request|maintenance`。用户范围继续严格遵守第 19.8 节；资料预填和 Embedding 等后台付费调用采用已配置的有界 `maintenance` 范围，并受试验总上限约束。M03 单次结构化分析可经 `PrefillModelPort` 调模型；它不建立自主循环，也须先申请 M08 许可。
 
 调用许可接受宿主绑定的 `RunContext` 或 `MaintenanceContext`；后者固定作业 ID、领取代次、配置/模型/资料范围、预算引用。维护调用校验 M10 的当前代次；工具/聊天接口不接受维护上下文，模型不能借此改换预算。若资料同步仅调用不计费平台读取，则不扣模型额度。
 
-`append_output` 组合用例在一事务保存 M08 片段和 M05 流式事件，提交后才投递；事件携带输出/尝试/片段 ID。模型消费推进 `input_seq`，SSE 按 `event_seq` 读取；输出/展示事件不重新成为 Agent 输入。
+`append_output` 组合用例在一事务保存 M08 片段和 M05 流式事件，提交后才投递；事件携带输出/尝试/片段 ID。v2的prepare只保存核定bindings与来源；M11沿Pi原生text_delta替换标记、在message_end追加一次范围后缀并drain，传入这里的始终是展示片段。M08 outputs拥有替换及展示等式的单一核验实现，具名use_cases向下调用；原entry/source_text、原prepare SDK调用与展示chunk范围分别绑定。完整候选先发布原checkpoint，恢复不重播已保存片段或生成正文；原present路径保留。模型消费推进 `input_seq`，SSE 按 `event_seq` 读取；输出/展示事件不重新成为 Agent 输入。Web仍用现有快照轮询读取assistant_delta，`/events`为有限批次，不表示已建立持续SSE连接。
 
 M08 `model_configuration`提供按空间维护的可信目录与`selected_profile`；部署导入的Flash/Pro保留原档位和价格版本，原I0 task配置继续限Flash/off。`receive_message`先查幂等回执，再依次取本条显式选择、M05已存选择、空间默认模型，将服务及模型修订、协议、能力、限制和费率冻结到M08 `budget_scopes.model_profile`。继承原trial和请求/总预算，不重新配置试验。未带选择的旧客户端消息保持原指纹；显式选择是新消息指纹的一部分。Pi使用锁定SDK的原生协议与模型能力信息，通过`createAgentSession`和`thinkingLevel`续接同一会话。恢复、消息重放和查询结果通知沿原scope取配置；切换不改变已运行回复与查询。配置权限、加密和停用边界见[实现设计第16节](implementation-design.md#16-模型接入配置2026-10-20)。
 
-维护预填仍沿启动模型；Mem0抽取和百炼向量仍用各自配置及原辅助计价，仅继承请求预算引用。聊天与维护按各自模型的高峰缓存未命中价保守计账，不声称等于服务商实际折扣账单。
+维护预填仍沿启动模型；Mem0抽取和百炼向量仍用各自配置及原辅助计价，仅继承请求预算引用。聊天与维护按各自模型的高峰缓存未命中价保守计账，不声称等于服务商实际折扣账单。正常配置不默认增加累计调用、费用或整轮时长硬帽；显式试用总额、子帽、期限和未知占用仍由原账本校验。
+
+M08独占`maintenance_model_calls.budget_json`：新调用冻结格式版本、原`ModelProfile`、有独立依据的服务输入上界与实际输出cap。公开BPE只决定M03的分片准备，不能冒充计费上界；[固定资产与服务依据](../../crates/data-agent/resources/deepseek/README.md)区分两者。结算读取原调用快照，不使用后来选择的profile；旧NULL快照仅接受原trial不可变指纹匹配的原profile并保持旧输入限额，不回填新上界，旧unknown保留身份/占用。已知但超界的usage仍先结算真实费用、只释放本调用预留并标记breached；原semantic_prefill/source_preparation owner提交该短事务后才报告失败。新增字段沿原表可空迁移，不另建预算服务或更改Pi循环。
 
 调用耗时和 token/调用数跨重启累计，等待用户/查询不算模型运行时长。SDK 每次实际网络尝试均先取许可；不能拦截的隐式重试必须关闭，否则真实模型子项保持阻塞。价格或可计算输入/输出上界缺失时不承诺严格金额上限。
 
@@ -395,11 +409,15 @@ flowchart TD
   B --> C[Node运行Pi SDK循环]
   C --> D[按链和SDK调用ID登记<br/>跨run接回原operation与回执]
   D --> B
-  C --> E[按序保存输出片段]
-  E --> Sync[M11校验并fsync原生会话<br/>导出精确leaf小引用]
-  Sync --> Parts[保留各任务已定稿交付引用<br/>按所属任务重核并有序组合]
+  C --> Prepare[需要定量说明时核定bindings与来源<br/>prepare本身不表示已回答]
+  Prepare --> D
+  C --> E[M11替换一次正文增量<br/>M08按序保存展示片段]
+  E --> Sync[message_end追加一次范围后缀并drain<br/>绑定原entry与展示范围后发布精确leaf]
+  Sync --> Parts[保留冻结项及最多一个合法新尾项<br/>按原prepare或present身份逐份重核]
   Parts --> F{正常结束且提交材料完整}
-  F -->|是| G[交给finish_run组合事务]
+  F -->|是| Binding[按每份原来源与实际拼接生成读取绑定<br/>标题 正文 UTF-8范围及片段身份]
+  Binding --> G[finish_run同事务保存正文和read_binding]
+  G --> Read[历史读取直接消费绑定<br/>旧NULL窄兼容 当前查看者仍核权]
   F -->|否| H[记录中断失败或预算耗尽]
   H --> I{输入仍待处理且未被处分}
   I -->|是| Retry[沿原恢复链恢复或替换尝试]
@@ -421,7 +439,7 @@ flowchart TD
 
 1. Worker 事务外读取平台状态，事务内经 M05 会话锁、M06 任务锁、M07 请求锁及 M10 代次校验保存观察。M05 登记稳定 `query_id + terminal_delivery` 展示事件，仅任务仍可推进时才登记 Agent 输入与 M10 交付；重复观察不重复交付。 尚未提交或排队的查询可由取消用例直接结束：HTTP和Pi工具共用`query_workflow::cancel_in_tx`，在同一锁序与事务内保存取消、唯一`query_result`事件及任务等待阶段。与Worker共用终态记录规则；本地取消没有平台结果，不另发起模型解释。
 2. 交付固定原任务、条件、草稿和预算范围；页面立即可见结果状态，Pi 会话忙时排队。取得新会话运行权后，组合层读取历史条件和当前授权的结果范围，M08 启动原范围的解释运行，经 M11 交给 Pi。
-   查询领取按租约到期时间、创建时间和ID排序，未领取请求优先，避免旧查询反复轮询阻塞后发请求；租约和代次校验保持。Web按已加载的确认事件固定查询位置，历史确认页尚未加载时暂置顶部，补页后恢复真实位置。终态事件另追加可定位通知，不等待Pi解释才展示结果。输入区可继续发送，新的用户输入仍经M05排队交给同一个Pi会话，已提交的平台查询继续独立运行。表格/图表预览前10行，下载沿M07分页接口读取该查询的已保存范围（当前合成平台最多1000行，截断明确提示）。
+   查询领取按租约到期时间、创建时间和ID排序，未领取请求优先，避免旧查询反复轮询阻塞后发请求；租约和代次校验保持。Web按QueryView.timeline_event_seq的首次持久query_changed锚点固定查询位置，即使当前有限事件页缺首次事件也不漂移，后续页面不能覆盖已有锚点；只有缺该字段的旧输入沿原兼容回退。终态事件另追加可定位通知，不等待Pi解释才展示结果。活动提示区分处理请求、生成回答与解读原结果，查询卡独立显示当前执行状态；提交说明只表达已提交事实。输入区可继续发送，新的用户输入仍经M05排队交给同一个Pi会话，已提交的平台查询继续独立运行。表格/图表预览前10行，下载沿M07分页接口读取该查询的已保存范围（当前合成平台最多1000行，截断明确提示）。
 3. 原预算耗尽仍保存查询结果，解释标为未完成并说明原因；新消息“继续解释 Q1”可创建仅针对 Q1 的新解释操作，不修改旧范围、不重跑查询。解释失败/重试也不调用 `submit_query`。
 4. 旧条件结果晚到，保留原条件标签和结果事件，不覆盖新条件/阶段。取消任务或删除会话只查证/收尾；已排队输入由宿主按明确范围置 `suppressed`，新终态仅记展示事件，不唤醒解释。读取结果再查权限和过期，失败保持明确状态。
 
@@ -460,8 +478,8 @@ DeepSeek提取固定Flash、4096输出上限、关闭思考；Agent仍沿用自�
 
 ### 正常请求预算与原生重试
 
-正常模拟输入和`ModelProfile.budget_mode=request`每条消息24次，原scope贯穿摘要、重试、恢复和结果唤醒。新正常账本允许累计次数/金额/到期为空；显式配置的累计门槛仍校验，旧trial全部原值及一小时有效期不变。迁移不重置任何计数或未知预留，同一账本配置指纹仍不可变。
+正常模拟输入和`ModelProfile.budget_mode=request`的新消息不设累计调用次数、默认累计费用或总时长硬上限；原scope贯穿摘要、重试、恢复和结果唤醒。新正常scope用NULL表达无限，显式费用帽与旧有限scope保持。迁移不重置任何计数或未知预留，旧trial的配置指纹、状态、上限和期限不变。无环境profile时的默认引导仅由M08账本owner补缺，不将初始化当作显式重配置。
 
 M11启用Pi1.3.0原生retry，maxRetries=2，普通与摘要均复用；HTTP SDK层maxRetries=0。固定错误码只对明确临时provider失败开放重试；429的quota/billing由SDK分类排除，调用者取消与单次超时分开。缺少可靠usage、宿主许可未知或结算不确认停止。每次重试重新申请许可且扣原额度，不重放业务副作用。取消信号只中止本次请求，保留未知预留、不新增或清零模型失败；进程中断后的恢复仍沿原scope，真实用户取消由Rust运行终态拒绝续发。
 
-M08在budget_scopes保存连续失败，在model_call_attempts保存scope调用序号和outcome。outcome区分模型结果与费用settled/unknown；同attempt结算幂等，按最近三次实际调用顺序重算，旧run晚到成功不清较新失败、晚到失败也不漏计。第三次失败后reserve/send都拒绝继续；成功仅清失败计数，不退已使用次数或未知预留。Pi仍是唯一执行循环，宿主只执行预算边界。单次模型90秒与工具HTTP超时、运行租约/取消保持；Worker不再由次数推导额外整轮截止。
+M08在budget_scopes保存连续失败，在model_call_attempts保存scope调用序号和outcome。outcome区分模型结果与费用settled/unknown；同attempt结算幂等，按最近三次实际调用顺序重算，旧run晚到成功不清较新失败、晚到失败也不漏计。第三次失败后reserve/send都拒绝继续；成功仅清失败计数，不退已使用次数或未知预留。Pi仍是唯一执行循环，宿主只执行预算边界。单次模型超时取冻结配置（历史缺省90秒、大窗口配置600秒），工具HTTP超时、运行租约/取消保持；Worker不由次数推导额外整轮截止。

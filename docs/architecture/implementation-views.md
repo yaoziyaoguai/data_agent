@@ -146,14 +146,22 @@ sequenceDiagram
   B->>R: 领取原会话结果事件
   R->>P: 原任务、原条件和原预算范围；恢复解释
   alt 查询成功且结果仍可读
-    P->>R: present_analysis_answer / 说明模板与结果值引用
-    R-->>P: 来源核对后的文字 / 保留范围限制
+    P->>R: prepare_analysis_answer / 结果来源与数值引用
+    R-->>P: 核定bindings、required_suffix与来源身份 / 不返回全文
+    loop Pi只生成一次说明正文
+      P->>R: 宿主替换text_delta标记后AppendOutput
+      R->>D: 展示片段与assistant_delta同事务保存
+      W->>R: 现有活跃快照刷新
+      R-->>W: 生成结束前可见的正文增量
+    end
+    Note over R,P: message_end追加一次范围后缀并drain；绑定原entry与展示范围
   else 失败、取消或结果不可用
-    Note over R,P: 如实说明状态，不强制生成定量答案
+    Note over R,P: 如实自然说明状态，不强制定量准备
   end
-  P->>R: finish_run / 来源答案回执或自然说明 / SDK 恢复条目
-  R->>D: 事务：重核来源答案、提交正文与正式事件、检查点和消费进度
-  R-->>W: 原任务结果、实际执行SQL与解释 / SSE
+  Note over R,P: v1与旧登记present操作仍按原身份恢复
+  P->>R: finish_run / 原prepare与RenderedAnswerBinding或自然说明 / SDK leaf
+  R->>D: 事务：重渲染核对应、重核来源、提交正式正文与检查点和消费进度
+  R-->>W: assistant_committed / 与流式显示同一份正文
   opt 明确且有复用价值的个人纠错
     U->>W: 纠正理解或口径
     W->>R: 保存消息并登记续跑
@@ -265,7 +273,12 @@ flowchart LR
   Storage -->|小引用| Open["校验文件 / 原 session / 精确 leaf"]
   Storage -->|旧 inline 绑定| Read["只读获取不可变副本<br/>核对指纹并一次性迁入 JSONL"]
   Open & Read --> B["沿保存 leaf 恢复 SDK 与原工具回执<br/>合同1/2兼容 保留资产能力"]
-  B --> Capacity["按总窗口 输入 输出 字节设置Pi<br/>正常历史原生压缩 保留任务引用"]
+  B --> Projection{"待完成范围投影？"}
+  Projection -->|是| Reset["接回原工具身份与控制状态<br/>Pi原生边界移出旧正文和摘要"]
+  Reset --> Refresh["Rust重核任务与已结算工具<br/>同事务保存authority和检查点"]
+  Refresh --> Assets["按目标范围更新工作区及已选Skill<br/>保留原会话与预算"]
+  Assets --> Capacity["按总窗口 输入 输出 字节设置Pi<br/>正常历史原生压缩 保留任务引用"]
+  Projection -->|否| Capacity
   Capacity --> Scope["每次派发前核验活动任务与来源限制<br/>任务切换也重投影 历史用途分开"]
   Scope --> C["每次普通或摘要请求申请并消费原许可"]
   C --> D["Pi 模型与工具循环"]
@@ -273,7 +286,7 @@ flowchart LR
   Budget --> E["Rust 受控工具 / 原 operation_id"]
   E --> Visible["校验Rust最终投影并无损包装<br/>正文 支持 游标与承载位置一致"]
   Visible --> Native["原生阈值检查<br/>大回执按定位续读"]
-  Native --> Scope
+  Native --> Projection
   D -->|输出| F["带序号追加片段"]
   F --> Sync["SDK 会话文件 fsync<br/>导出精确 leaf 小引用"]
   Sync --> G["finish_run 按任务核验交付引用<br/>确定性组合 原子提交正文与引用"]
@@ -349,7 +362,10 @@ flowchart TB
 
 ```mermaid
 flowchart LR
-  A["加载服务端快照"] --> B["对话、独立查询组件<br/>结果预览10行 / CSV下载"]
+  A["首次页 轮询 翻页共用snapshot读取门"] --> P["新页事件与全部已加载输出当前投影"]
+  P --> Merge["按回显范围替换events再生成消息<br/>分页游标独立 无新事件也刷新权限"]
+  Merge --> B["对话、独立查询组件<br/>结果预览10行 / CSV下载"]
+  B -->|正常刷新| A
   B --> C{"用户操作"}
   C -->|提问 / 修改 / 执行意图| D["提交稳定消息 ID 与原话"]
   C -->|运行中停止| E["取消具体查询"]
@@ -358,8 +374,8 @@ flowchart LR
   F -->|接收| G["更新查询状态<br/>终态通知可定位原查询"]
   F -->|冲突 / 拒绝| H["保留输入，展示原因与当前版本"]
   G --> B
-  G -->|断线| I["按游标重连，必要时取快照"]
-  I --> B
+  G -->|断线| I["按实际分页游标及已加载范围恢复"]
+  I --> A
 ```
 
 页面关闭不取消后台任务；草稿按会话保存，未发送内容不暂停 SQL 确认。验证至少覆盖重复事件、重连、两个页面确认竞争、旧版本、移动端和键盘操作；文档图与 mock 界面不能替代服务端行为证据。

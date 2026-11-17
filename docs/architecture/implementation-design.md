@@ -175,8 +175,8 @@ AppError = { code, message, retryable, request_id, resource_ref? }
 - `GET /conversations?q=&before_id=`按当前用户的首问题标题搜索，稳定顺序为创建时刻/ID，返回`next_before_id`；每页100条。
 - 管理目录 `GET /knowledge?directory=all|maintained&directory_view=grouped` 在服务端分页前排除字段和关系，保留表、指标、文档、术语；省略 view 或 flat 保持原列表契约。字段/关系仍由所属表的关联接口读取，权限、对象身份及来源不变。直接对象地址仍可定位字段，单独字段查找需显式展开。
 
-- `GET /conversations/{id}/snapshot?before_seq=`读取旧事件页，`after_seq=`读取新事件页。响应携带最后序号和后续状态；React按全部已加载事件投影，完整提交替代同次片段，恢复隐藏旧尝试。
-- `GET /knowledge?after_id=`按ID分页；`q=`做有界词法检索并回源。`search_coverage`只表达候选完整性和固定工作量上限，不提供权限过滤数量。长JSON的候选排序按主键扫描，正文在确定ID后读取。
+- `GET /conversations/{id}/snapshot?before_seq=`读取旧事件页，`after_seq=`读取新事件页。响应携带最后序号和后续状态；React按全部已加载事件投影，完整提交替代同次片段，恢复隐藏旧尝试。带报告的任务投影含可选`report_timeline_event_seq`——该报告跨全部版本的首次`analysis_report_saved`事件序号，由同一读取事务经会话模块窄查询组合（覆盖Snapshot与refresh同一路径）；报告卡优先按它定位，当前事件页缺保存事件时不落0，补旧页只可能前移一次，锚点只随任务`report_ref.report_id`匹配生效，不注入事件流、不影响分页游标。无保存事件的旧记录省略该字段并回退已加载页事件。
+- `GET /knowledge?after_id=`按ID分页；`q=`做有界词法检索并回源。`search_coverage`只表达候选完整性和固定工作量上限，不提供权限过滤数量。长JSON的候选排序按主键扫描，正文在确定ID后读取。维护页整批刷新在全部子请求收尾后再安排下一次，保存/同步意图合并补一次；页面或用户生命周期结束时取消读取并忽略晚到结果，保留已加载分页、草稿与对象各自版本比较。第一页已包含的完整对象不在该批再次取详情。
 - `PATCH /knowledge/{id}`的document正文编辑可同时改变`source_url`和`related_ids`，保存到同一版本；正文创建、编辑、响应均允许100000字符。URL和关联对象权限沿用创建规则。
 - M05在消息接收时持久保存`request_clock`；M08提供`budget_message_in_tx`读取原预算消息身份，M07结果编排把该身份交给M05读取原时钟。不会通过客户端ID的文本前缀判断原消息。首次聊天执行的查询预算绑定执行消息；结果解释以实际SQL的绝对日期参数为准，不按执行日期重新展开相对时间。
 
@@ -207,7 +207,7 @@ AppError = { code, message, retryable, request_id, resource_ref? }
 - Rust → Node：`resume_and_deliver`、`cancel_run`。恢复载荷包含 SDK 格式版本、头/条目/活动分支、目标事件和允许的工具；条目在集成边界转换，业务模块不解析 SDK 内部对象。
 - Node → Rust：`invoke_tool`、`append_output`、`finish_run`，以及模型调用的预留、发出许可、结算接口。内部请求绑定有效运行和租约；内网并不等于无须认证。
 - 工具按业务意图提供，沿用既有名称：`search_knowledge`、`read_knowledge`、`read_source`、`validate_sql`、`request_query`、`execute_query`、`update_analysis_task`、`get_query`、`present_analysis_answer`、`cancel_query`、`manage_personal_asset`、`propose_semantic_change`。个人资产候选由搜索返回，正文读取经资产模块校验；Skill正文只有已有用户选择才可正式加载。禁止给模型暴露通用数据库写入或可自报用户/确认状态的入口。`execute_query`必须经Rust绑定当前真实用户消息。
-- `request_query`只产生待执行草稿。`execute_query`接受完整`instruction_quote`和`queries`集合，每项绑定查询ID、草稿及条件版本；一次最多12项，不得重复查询。Rust在同一事务核对全部新确认并登记任务归属，任一项失败不留下本批新增确认；平台仍逐查询执行，不承诺外部批量原子性。单条`query_id/draft_version/condition_version`输入保留兼容及原归属检查，与`queries`互斥。批量入口不要求模型先分别`route`，其他未处理消息仍可阻塞。首次确认绑定原消息和原预算，已确认项重放不改绑；自然语言是否确实授权仍由Pi理解，不能把真实原话匹配视为语义证明。
+- `request_query`只产生待执行草稿。`execute_query`接受完整`instruction_quote`和`queries`集合，每项绑定查询ID、草稿及条件版本；一次最多12项，不得重复查询。Rust在同一事务核对全部新确认并登记任务归属，任一项失败不留下本批新增确认；平台仍逐查询执行，不承诺外部批量原子性。单条`query_id/draft_version/condition_version`输入保留兼容及原归属检查，与`queries`互斥。v2来源未就绪时先完成本消息的必要归属，等待宿主回执或刷新确认`source_context_ready=true`后get_query核对并执行；route成功不直接解锁或授执行权。批量授权无需逐一route各目标，读取仍受当前活动来源限制，不自动并集许可；拒绝只回滚本调用新增项，先前成功route保持。v1及旧登记操作保留原直接执行兼容，其他未处理消息仍可阻塞。首次确认绑定原消息和原预算，已确认项重放不改绑；自然语言是否确实授权仍由Pi理解，不能把真实原话匹配视为语义证明。
 - 当前消息的执行动作完成后，Pi结束本轮，由既有结果通知续接解释。M07通过`is_confirmation_message_in_tx`识别确认来源；`get_query`在读取外部结果前及最终事务核对，对该来源消息保留真实成功状态、返回空结果与等待交付提示。同消息恢复不提前取得结果，系统结果消息及后续追问不受影响；不新增结果调度器或去重状态。
 - 查询取消的HTTP和Pi入口共用`query_workflow::cancel_in_tx`。本地可结束的未提交/排队查询在同事务记录终态事件并更新等待阶段，重复取消只返回原状态；已提交查询继续向平台请求取消并查证。终态事件格式、稳定查询身份和平台结果解释入口保持。
 - M12将同一会话的查询作为独立组件显示，按已加载的确认事件定位；确认事件尚在未加载的历史页时暂置顶部，补页后恢复真实位置。`query_result`事件生成可定位原查询的终态通知，按查询身份去重。消息区独立滚动、输入区持续可用。表格/图表只预览前10行；CSV仍由M07按原查询权限逐页读取，预览不修改SQL、结果分页或下载范围。该展示调整不改变M05会话串行租约或M07后台查询接口。
@@ -242,6 +242,10 @@ AppError = { code, message, retryable, request_id, resource_ref? }
 
 自动记忆在保存入口统一字段来源：Mem0最终正文（builtin为工具正文）同时成为body/scope，name仅截取前40个Unicode字符作为标签。工具中的name/scope仍接收以保留既有Pi检查点参数兼容，scope只参与临时限定预检查，不独立作为正式语义；提示与Schema明确回执才是最终保存结果。人工资产接口保持显式编辑行为。
 
+修订提取的`MemoryExtractionRequest.previous_memory`由宿主从本人可用的起点版本绑定`id/version/body/scope`，不接受Pi拟稿替代。Mem0以旧内容理解“刚才”等指代，按当前真实指令修改并保留未改范围及边界，返回完整新版；旧内容仅作资料，不能成为新指令。当前`message/quote`仍是原话，旧记忆上下文参与同一operation的幂等指纹。发送前核验旧显式依赖和字段来源；Mem0修订后的新版合并旧显式依赖，并继承旧字段authority、移除旧记忆自身引用，后续撤源仍可阻断。提取只使用原话与旧上下文，不因此继承主Agent本轮其他调查内容。字段可省略或为null，新建及旧无上下文请求保持原行为与指纹；同次服务升级先启用侧车再启用Rust调用方，无持久数据迁移。该输入修复不证明任意自然语言修订都保真，实际提取效果另以真实试用核对。
+
+同一原请求预算下，`memory_extraction`的实际供应商载荷指纹已有unknown时，M08在持有预算行锁后以当前读拒绝新call/operation ID的同载荷许可，返回`memory_operation_unknown`，事务回滚新调用记录且不加计数或预留。原call ID仍返回原状态、不能外发；后续真实usage可以按原ID结算。此守卫只约束同请求同提取载荷，不阻断不同载荷或其他请求；unknown记录、费用及预留不清除。Python侧车原样保留该错误，不把它翻译为可重试的`memory_unavailable`。
+
 记忆的来源原话沿用 `read_knowledge`，指定 `object_id=asset-<id>`、`entry_id=source_text`、`version/offset/limit` 按 Unicode 字符补读，仍核对当前归属、启用状态、依赖和版本。`ModelAssetPreview.source_page` 与正文的 `content_page`、范围的 `scope_page` 分别声明完整性；缺省不带原话正文，保留其总长和补读位置。模型可以核对提取前的限定与例外，宿主不据此宣称已验证两段自然语言语义等价。
 
 ### 4.4 平台与模型边界
@@ -258,13 +262,13 @@ AppError = { code, message, retryable, request_id, resource_ref? }
 
 共享检索固定使用百炼 `qwen3.7-text-embedding`、1024维，与Mem0个人索引分开。`use_cases/knowledge_embeddings`组合权限、版本/租约和原预算；M04 `retrieval/embedding`负责受控HTTP，M08 `runtime/provider_calls`保存调用及成功向量回执。`knowledge_index_jobs.embedding_profile`冻结该对象版本首次维护额度，`model_call_attempts.response_json`供相同操作恢复、重建复用。HTTP、Pi工具与SSE接口不变；新增同源配置契约 `EmbeddingProfile`（trial_id、call_limit、cost_limit_micros），生成模型仍用 `ModelProfile`。
 
-本轮补出的预算细化：`scope_kind=user_request|maintenance`。主动用户消息沿用第 19.8 节原规则；自动同步后的模型预填和索引向量化引用有明确限额的维护配置，不能靠每次 Worker 重试自动创建新额度。维护模型预算未配置时仍可保存来源事实，模型工作返回 `budget_unavailable`。实际金额、并发等在真实试验前确定，本设计不暗中授权付费。
+本轮补出的预算细化：`scope_kind=user_request|maintenance`。主动用户消息沿用第 19.8 节原规则；自动同步后的模型预填和索引向量化引用原维护配置，显式试用限额和期限按原授权执行，不能靠每次 Worker 重试自动创建新额度。正常产品不默认增加累计调用、费用或整轮时长硬帽。维护模型预算未配置时仍可保存来源事实，模型工作返回 `budget_unavailable`。实际金额、并发等在真实试验前确定，本设计不暗中授权付费。维护调用的分片估计、服务计费上界、原调用预算快照和旧issued/unknown兼容见[M08运行模块](runtime-modules.md#5-m08-runtime运行检查点工具输出与预算)；准备、预留、实际输出cap与结算沿原调用关联，不以当前profile替换旧事实。
 
 ### 4.5 跨语言契约真源
 
 `packages/contracts` 保存唯一的传输契约：HTTP 用 OpenAPI 3.1，Pi 内部命令、工具参数和 SSE payload 用 JSON Schema；共用定义相互引用，不抄出三套正文。Rust/TypeScript 的边界类型从该源生成，入口对外部输入做运行时校验；业务领域类型在模块内部手写并显式转换。生成文件不手改。
 
-API在开始监听前初始化共用契约校验器，健康端点可访问前已完成初始化，第一条身份或业务请求不再触发全量契约编译。启动检查仍保留单次2秒与健康等待25秒限制。
+API在开始监听前初始化共用契约校验器，健康端点可访问前已完成初始化，第一条身份或业务请求不再触发全量契约编译。启动检查仍保留单次2秒与健康等待25秒限制。空空间首次初始化导入合成样例；已有来源的重启保留持久版本，资料包更新经手动来源同步进入。M03在同一来源锁内交付更新前目录及本次内容，知识组合层比较实际候选变化，并结合来源依赖决定重分析范围；目录文件变化本身不使全部未变对象升版。
 
 I0 先用消息、工具调用、查询确认和错误四类代表对象验证生成器及运行时解析器，再固定版本。必验必填字段、标签分支、空值、未知字段、精确数字与格式版本；同一组正反例在 Rust/Node/Web 契约测试中一致。当前已使用JSON Schema/OpenAPI真源与quicktype生成器，并有跨语言正反例；实际版本与最新证据见CURRENT。
 
@@ -288,6 +292,7 @@ I0 先用消息、工具调用、查询确认和错误四类代表对象验证�
 | `apply_analysis_update` | M05核验归属；M06创建任务/新条件或澄清，仅显式ID解决已回答问题；M07失效受影响待确认；M08保存工具回执 | 不能修改已确认/运行查询的条件；生成新SQL另一次操作 |
 | `confirm_query` | 相同会话锁顺序；M05核验待归属；M06核验条件；M07原子确认同一请求；聊天入口同事务记录confirmation_message_id与执行消息budget_scope_id，并把M05消息标为已应用；Worker领取待提交请求 | 提交前重新核对平台权限/能力；有变化不得静默换SQL执行 |
 | `query_workflow::agent_results` | M05/M07核对查询归属，M02/M03校验依据；M07对固定保存页做有界行/单元格/统计投影 | 原平台读取，不提交SQL；重新核对result_ref、绝对游标与连续性，超长内容沿原JSON分页 |
+| `query_workflow::process_due` | M07领取后由两个并行future推进准备及有效领取续租；来源/权限/版本核验后，提交事务末尾按query/epoch/未过期刷新原租约 | 领取、续租和交接同用15秒；lease_owner为Worker，过期/换代拒绝并回滚新增提交计数；commit后仍先拦authorization_error，再沿原submit/lookup/cancel调用 |
 | `record_query_observation` | M07保存平台已知状态/结果引用；M05登记稳定结果事件；M10登记可续跑事件 | 交付原任务/条件/预算；预算不足仍保存结果，不新增解释调用 |
 | `finish_run` | M05核验代次、推进消费并释放运行权；M08检查点/输出提交；M06按事实更新阶段；M10完成工作并登记下一交付 | 外部模型无法与DB原子提交；已提交工具靠账本接回 |
 | `sync_sources` | M03保存快照并按采集起点 CAS 推进来源头；M02创建来源新对象或标记既有受影响条目待复核；M10登记预填/索引待办 | 来源头冲突只留冲突元数据，不把旧载荷换起点重试；新对象首版含可确定事实/缺口，读取始终核对来源头 |
@@ -298,7 +303,7 @@ I0 先用消息、工具调用、查询确认和错误四类代表对象验证�
 | `cancel_task` | M06核验命令回执及终态并取消目标任务；M05保存输入全部目标归属；M07取消关联请求；M08仅中断实际处理该任务的运行，M05按匹配运行撤销租约；M10登记收尾与剩余目标续跑 | 原message、恢复链、预算和job不变；重传原取消不再次中断剩余运行，同操作改目标或版本拒绝；旧会话按成功工具回执回填归属，平台终态另查证 |
 | `delete_conversation` | M05标记删除、处置全会话输入并撤销运行权；M06停止全部关联任务；M07登记取消；M08停止全会话运行；M10登记收尾 | 平台取消在事务外查终态；已独立保存资产不随会话删除 |
 
-会话相关锁序以运行模块第 1 节为准：会话/输入 → 运行/恢复链 → 工具或模型尝试 → 任务/澄清 → 查询请求 → 预算范围 → 试验总额 → 后台任务；各组按 ID 排序。不涉及会话的同步/知识事务按来源头、知识对象、语义提案、个人资产、索引进度的顺序，各组内按ID排序，最后登记后台任务。模型许可、后台领取使用短独立事务，不持有业务对象锁等待模型或网络；不能持有job行锁再回头领取会话。死锁重试仅重放已具幂等且未产生外部副作用的事务。
+会话相关锁序以运行模块第 1 节为准：会话/输入 → 运行/恢复链 → 工具或模型尝试 → 任务/澄清 → 查询请求 → 预算范围 → 试验总额 → 后台任务；各组按 ID 排序。不涉及会话的同步/知识事务按来源头、知识对象、语义提案、个人资产、索引进度的顺序，各组内按ID排序，最后登记后台任务。知识索引行的读取、更新与续租使用完整主键`(target_kind,source_kind,object_id,version)`，知识目标的`source_kind=''`不能省略；来源退休先列候选ID，再逐主键锁定并重核来源/状态，避免无索引范围锁住其他来源。模型许可、后台领取使用短独立事务，不持有业务对象锁等待模型或网络；不能持有job行锁再回头领取会话。死锁重试仅重放已具幂等且未产生外部副作用的事务。
 
 组合层通过所属模块的 `lock_*_in_tx` 取得锁定快照，不写 `SELECT … FOR UPDATE`。普通读取不暗含写锁，锁定快照只在当前 `AppTx` 有效；发现需要更早顺序的锁时重新开始事务，不能倒序追加。M05–M08 的锁接口与具体取消/恢复事务以 [运行模块契约](runtime-modules.md) 为准；来源头校验、首次创建及提案应用以 [知识模块契约](knowledge-modules.md) 为准。
 
@@ -348,7 +353,7 @@ python3 docs/architecture/check-implementation.py
 
 跨语言使用JSON Schema 2020-12与OpenAPI 3.1，quicktype生成Rust/TypeScript；运行时校验与业务规则分开。会话恢复保存真实SDK会话树；对于assistant工具调用后退出，只查证或完成已登记调用，再将工具回执交还Pi继续。稳定operation_id、origin_run_id、recovery_chain_id、budget_scope_id和输入request_id跨恢复保留。此接入处理不产生第二套Agent规划循环。
 
-实际交付次数与作业领取次数分开；会话忙退回等待，交付最多四次后保存明确失败。SSE当前为持久事件批次，React轮询持久快照；完整上下文、持续推送、查询、取消及个人资产按后续增量补齐。实现这些最小接口不意味着完整模块或MVP已完成。
+实际交付次数与作业领取次数分开；会话忙退回等待，交付最多四次后保存明确失败。准备期间沿既有心跳维持M10作业租约；M05会话行锁固定本次运行代次，上下文与检查点准备完成后才正式领取会话租约，并在同事务内续验作业租约、记录本次交付次数及提交运行。准备失败回滚，不能提交一个尚未派发且会话租约已经过期的attempt；两份租约、原恢复链、操作身份和预算的含义不变。SSE当前为持久事件批次，React轮询持久快照；完整上下文、持续推送、查询、取消及个人资产按后续增量补齐。实现这些最小接口不意味着完整模块或MVP已完成。
 
 
 ### Pi 会话持久化与旧检查点迁移
@@ -363,9 +368,13 @@ Pi依赖统一精确锁定1.3.0，恢复仍使用原SessionManager格式，不�
 
 M11 使用 Pi SDK 1.3.0 的官方扩展 `context` 事件，由 `session/workspace-context.ts` 投影本轮已回源的工作区与记忆。`ResourceLoader` 只保留固定行为规则、工具和已明确选择的Skill目录，仅注册宿主指定的扩展，不启用文件或用户目录自动发现。时钟、任务、查询观察及记忆作为临时参考放在已恢复历史之后、本轮用户输入之前；轮内工具回执在其后。split-turn压缩移走用户输入时，参考放在摘要之后、保留的完整工具组之前。Pi将`custom`转为模型的`user`消息；固定规则和参考标记说明它们是资料，不授予执行权。
 
-工具正常执行和半轮恢复都经过 `dataTools.invokeRecorded`。成功回执撤下已修订/停用的旧记忆、已换条件版本的任务候选，以及已补读的任务/查询观察；新正文来自原工具结果，不拿模型参数重建。`route`同版回执不带完整条件，故保留同版任务候选，避免强迫补读；拒绝或未知不撤旧。投影只使用本轮快照，无额外数据库或Mem0调用，不改宿主authority，不积累跨轮启动快照。
+工具正常执行和半轮恢复都经过 `dataTools.invokeRecorded`。成功回执撤下已修订/停用的旧记忆、已换条件版本的任务候选，以及已补读的任务/查询观察；新正文来自原工具结果，不拿模型参数重建。`route`同版回执不带完整条件，故保留同版任务候选，避免强迫补读；拒绝或未知不撤旧。投影只使用本轮快照，无额外数据库或Mem0调用，不改宿主authority，不积累跨轮启动快照。当来源在同一轮由未就绪变为就绪后，继续由Pi原生provider序列化回放合法工具回合的thinking、signature与工具配对；应用不再删除思考块。`data-tools.ts`随控制回执返回`execution_tools_ready: true`与当前控制说明，模型仍须沿原工具实际完成读取或提交，不能凭说明宣称已执行。
 
-`context` 返回值不写入Pi会话树，原生compaction直接读取持久分支，不接收这份临时投影；压缩后下次普通请求重新投影当前候选。既有工具结果、助手复述和摘要仍属会话历史，不承诺清除历史正文。权限与预算继续由Rust在reserve/send边界校验；Pi捕获context异常后可能继续请求，因此扩展仅做资料投影，不承担失效拒绝。新输入与同输入恢复的旧依据处理保持原规则。
+未就绪时，Rust复用原归属/来源判定在回执和`WorkspaceContext`给出可选`source_context_blocker`：`input_not_routed`、`source_scope_unknown`或`context_refresh_pending`。这是既有判定的解释，不是新的权限状态。Node只把原因、任务/版本身份和固定恢复指导送入实际Pi请求，成功归属的`routed`事实也保留；创建后刷新同样携带原因，不能只依赖已移出分支的旧回执。来源仍未知时重复route不改条件，Pi按真实原话显式revise来源声明或clarify；宿主不补null、不放开已选Skill的来源门。等待刷新期间不提前解锁，刷新确认就绪后去掉旧原因，继续原Skill版本和原任务。旧回执/快照可以缺此字段，缺省不证明就绪，也不重放创建操作。 `asset_counts.selected_skills`记录经过权限、状态与版本核对的明确选用数量；`selected_skills`只含当前来源范围允许交付的预览。来源未定可隐藏预览，不能据空预览声称用户没有选择；此计数不放开正文读取，也不包含已失效资产。
+
+条件修订使未提交草稿失效时，Rust在同一事务返回可选控制字段`superseded_query_ids`；Node只撤下这些查询的当前观察，不重做条件或SQL有效性判断。启动及刷新查询观察同时包含`draft_version`和`confirmation_state`，`not_submitted`不表示草稿仍可执行。旧回执缺少新字段时不据此推断有效。
+
+`context` 返回值不写入Pi会话树，原生compaction直接读取持久分支，不接收这份临时投影；压缩后下次普通请求重新投影当前候选。既有工具结果、助手复述和摘要仍属会话历史，不承诺清除历史正文。权限与预算继续由Rust在reserve/send边界校验；Pi捕获context异常后可能继续请求，因此扩展仅做资料投影，不承担失效拒绝。新输入与同输入恢复的旧依据处理保持原规则。在来源边界上，`read_source`（M02 `use_cases/knowledge_sources.rs`）在完成权限、完整性和当前修订校验之后，仅对合法当前来源的超界请求在 `invalid_input` 回执附带 `available_length`、`valid_locator` 与 `hint`（对 `stale_source`/`not_available`/`source_not_allowed` 不回传任何长度细节），且 v2 证据工具仅在 `source_context_ready === false` 或 `context_reset` 存在时附带控制提示，不破坏既有 JSON Schema 与结果载荷。
 
 提交前的容量预检读取`session.systemPrompt`、完整Pi消息、完整工具定义、实际临时参考和本轮输入，额外计算JSON字符串转义并留协议余量；超阈值只调用Pi原生`session.compact()`。预检为保守估算，不能保证所有未来SDK协议的准确字节。Pi1.3.0仍未公开canCompact；仅把其明确的Already compacted/Nothing to compact当作无摘要可做，继续实际载荷检查，其余压缩失败传播。provider继续在SDK序列化后、预算预留/网络发送前按原64KiB或所选profile上限检查完整请求。轮内`request_too_large`由Pi1.3.0原生识别并最多compact-and-retry一次；不另造重试/摘要器，也不剪掉最近完整工具组。
 
@@ -378,7 +387,8 @@ M11 使用 Pi SDK 1.3.0 的官方扩展 `context` 事件，由 `session/workspac
 ### 语义材料与实际上下文依赖
 
 - 预填材料由 `use_cases/prefill_materials` 组合 M02 文档和 M03 来源，沿已导入血缘读取必要上游及关联表/字段文档。文档仍属M02，`document-<id>`仅作来源引用别名，最长73字符；统一经 `knowledge_sources` 检查读取、检索、预填及依赖有效性。不能用目标文档自身旧正文作为其重分析来源。
-- 普通维护入口在排队时冻结输入。目录自动预填保留原子待办与原目标/来源版本，等本批分页终止后，在首次模型调用前装配并持久冻结补充材料。上游32份、深度8、关联文档32份和正文24576 UTF-8字节是当前维护边界；超限/缺失均进入coverage，裁剪片段标记不完整。元数据不再重复携带DDL/ETL正文，辅助引用目录总量4096字节，完整请求仍受profile上限校验。
+- 普通维护入口在排队时冻结输入。目录自动预填保留原子待办与原目标/来源版本，等本批分页终止后，在首次模型调用前装配并持久冻结补充材料。上游32份、深度8、关联文档32份和正文24576 UTF-8字节是当前维护边界；超限/缺失均进入coverage，裁剪片段标记不完整。装配先按同版实际位置保留本对象语义定义原句、字段类型、相关DDL和生产SQL，再分配普通材料前缀；sources、supporting_excerpts、最终metadata及coverage共同冻结。发送与引文核验消费同一可见集合，放不下的metadata引文同步撤下。复核保留首阶段核心片段和草稿引用，再补既有后续窗口；片段与整来源完整性分别记录。元数据不重复携带DDL/ETL全文，辅助引用目录总量4096字节；metadata与sources重复展示的字节计入实际完整请求，仍受profile上限校验。终态释放临时metadata及原文，保留分析结果、引用、范围、原调用与费用。
+- 维护输入容量归M03既有`prefill::prepare_submission`：先装配实际system、user材料及完整function schema，在维护预留/发送前核HTTP字节与公开编码token数。私有`input_tokens`使用固定官方Flash/Pro tokenizer与公开prompt格式，对完整prompt一次BPE计量；function沿公开Python JSON空格，HTTP外层转义不重复计入。超出`profile.input_limit`沿原`payload_limit`拒绝，输出cap及M08预留仍取同一profile。固定资产与MIT许可见[计量说明](../../crates/data-agent/resources/deepseek/README.md)。该计量不证明托管API模板/别名的无条件映射；通道未获充分证据时通过已有启动器`--prefill disabled`关闭，聊天及原账本身份保持。
 - 采用建议前先锁来源空间与当前来源头，再按ID锁定目标和所有引用文档的版本/状态，网络在事务外。人工覆盖不被建议替换；`material_refs`保存全部已采用材料依赖。
 - `read_knowledge`的有效值与`suggestion.details`各自按`entry_id/offset/limit`分页。后者保存JSON文本形式的缺口、依据、验证状态和资料完整性；`pending_review`时另含候选value，不能将候选缺口套到人工定义。
 - M08只登记实际交给模型的启动材料与工具输出，在Pi会话检查点中累积依赖；原生压缩后仍保留早期引用。无关知识改版不影响会话。实际依赖失效或旧清单不完整时，新输入重建，同输入恢复拒绝且不更换原副作用身份。用户和助手历史均沿用Pi检查点；`recent_messages`保留空兼容字段，不再注入额外300字短副本。需要压缩前原话时经`read_conversation`按消息ID完整分页，按当前任务ID用`read_analysis_task`补齐条件/问题；新输入重建和同输入失效拒绝规则不变。
@@ -409,7 +419,7 @@ M12 在我的积累页内区分个人和公共，发布前预览、建议处理�
 
 ## 10. 计算规则与限定 SQL 诊断（2026-10-13）
 
-M02 的知识条目在来源、建议和人工覆盖三层中保存可选 `structured_value`，有效文字与 `effective_structure` 取自同一层。同一对象只保留一套有效结构；正文单独修改时结构留缺口，不借用底层旧规则。表粒度/键/时间、字段单位、完整关联键/基数、指标表达式/时间/过滤/维度沿既有 JSON 正文与不可变版本保存，无新知识真源。当前表列以有效 DDL AST 核对，依赖版本不自动漂移。旧调用仍可读写文字。
+M02 的知识条目在来源、建议和人工覆盖三层中保存可选 `structured_value`，有效文字与 `effective_structure` 取自同一层。同一对象只保留一套有效结构；正文单独修改时结构留缺口，不借用底层旧规则。表粒度/键/时间、字段单位、完整关联键/基数、指标表达式/时间/过滤/维度沿既有 JSON 正文与不可变版本保存，无新知识真源。当前表列以有效 DDL AST 核对；显式知识引用保持原版本语义，内部结构绑定按已证相关DDL及当前结构核验并返回本次实际依赖。旧调用仍可读写文字。
 
 M03 提供结构候选和来源，不决定正式有效层；M02保存时统一投影，重新预填保留人工说明与结构并标为待复核。M02 校验对象类型、实际列、当前引用和总字节上限；该校验只证明结构可追溯且格式适用，不证明业务口径正确。结构与文字的业务一致性仍需维护者核对。
 
@@ -437,7 +447,7 @@ M02正式知识与M04词法索引各自在候选上限之前应用范围；向�
 
 ## 12. 澄清与多任务续接（2026-10-13）
 
-M06使用 `AnalysisUpdate` 的 `create/revise/clarify/route/split`；`clarify`必须给出非空`question`或`clarifications`列表，两者互斥；列表最多8个独立问题，各有独立ID，不能借空澄清关闭旧问题。独立目标分别建任务，同一目标的多个独立缺口可同批提出，条件修订只合并明确set/unset字段；仅以 `resolved_clarification_ids` 解决本次实际回答的开放问题，普通修订保留其他未答问题。`read_analysis_task` 每页返回最多8条开放问题与真实ID，可按游标补齐。普通route不改条件，也不关闭问题；其他任务的更新不影响原问题。
+M06使用 `AnalysisUpdate` 的 `create/revise/clarify/route/split`；`clarify`必须给出非空`question`或`clarifications`列表，两者互斥；列表最多8个独立问题，各有独立ID，不能借空澄清关闭旧问题。独立目标分别建任务，同一目标的多个独立缺口可同批提出，条件修订只合并明确set/unset字段；仅以 `resolved_clarification_ids` 解决本次用户真实回答或当前获准资料已唯一解决的对应问题，事实条件与依据在同次revise保存；普通修订保留其他未解决问题。`read_analysis_task` 每页返回最多8条开放问题与真实ID，可按游标补齐。普通route不改条件，也不关闭问题；其他任务的更新不影响原问题。
 
 联合分析可以共用任务；用户开始只修订、澄清或执行其中一个目标时，`split`从原任务当前版本创建独立目标。输入保留原`task_id/expected_version`，给出新目标的完整`goal/conditions`和`moved_clarification_ids`；指定开放题保留原ID、问题、选项与来源，仅迁移归属。原任务条件及旧查询不迁移、不改版，剩余开放题继续有效。复制的相同条件保留原来源，新内容继承本轮已核对来源；拆分不授予执行权。验收看局部条件与未答事项是否独立，不要求三个指标机械对应三个任务。
 
@@ -448,6 +458,8 @@ M06使用 `AnalysisUpdate` 的 `create/revise/clarify/route/split`；`clarify`�
 交给模型的任务正文按宿主实际交付的完整来源保护，不以模型填写的`knowledge_refs`作为唯一清单。`analysis_tasks.goal_authority`、`clarifications.text_authority`分别保存目标、问题及选项的来源；`condition_revisions.field_authorities`按条件字段保存来源。新文本继承本轮宿主来源，未改字段沿用原来源；同文重传、只删引用或修订其他条件不能解除旧正文的权限约束。显式清空字段不再携带旧文字。`goal_condition_version`仍记录目标实际改写时的条件版本，但不替代完整来源校验。
 
 迁移`202610190001_task_goal_authority.sql`及`202610190002_task_text_authority.sql`对旧记录保留NULL。旧正文缺少完整来源时持续隐藏，不能用当前引用、历史条件并集或一次重建伪造“已查明全部来源”。重新调查后实际改写的字段才绑定新的宿主来源；未改字段仍保留未知来源。历史条件供报告或查询使用时须核验全部字段，不能把局部可读投影当成原完整条件。
+
+宿主短控制投影可容纳时，直接呈现经过字段来源保护后仍可读的当前持久澄清问题及选项，不能只说“等待已保存的问题”而假设另有任务卡。长问题/选项超过8000字符的短控制总量时，不生成伪完整控制投影，继续沿已有Pi当前任务正文、来源校验和输出绑定路径交付说明，可明确归纳或按用户意图继续解释；原长选项完整保存在任务记录中，不把简述冒称原文全文。预览之外还有未答项时明确说明仍有其他问题，沿既有读取分页继续；不宣称当前预览就是全集。其他任务的冻结答案仍按原引用组合，开放问题保持开放，原成功回执不因刷新或重放被改写。
 
 启动上下文、任务读取、任务目录及任务更新的成功/重放回执共用正文保护。某个目标、问题或条件字段来源失效时只隐藏相应正文，保留问题身份和等待状态，并返回`text_unavailable`、受影响的`unavailable_clarification_ids`或`unavailable_condition_fields`；其他合法字段仍可读取。原更新条件整体失效的重放只接回控制事实，不重复应用更新或带回旧正文。实际交付的有效正文来源进入上下文依赖清单格式5。它区分本会话直接使用的`skills/query_results`与持久正文继承的`source_skills/source_query_results`：后者仍核对当前用户、空间、版本、状态、原查询会话可读性与平台结果授权，并核对快照完整包含上游私有来源，但不要求接收会话重新选用上游Skill，也不把旧查询改属接收会话；来源引用不授予Skill执行或新查询权。保存正文与再次交付统一复用这一格式，不另建来源框架。
 
@@ -463,9 +475,11 @@ M05记录真实消息归属，M07按原规则失效受影响草稿；等待澄�
 
 ## 13. 分析依据与结果有效性（2026-10-13）
 
-正式定量说明使用`present_analysis_answer`：`template`组织文字，`values`按名字引用`cell`、`statistic`、`parameter`或`metadata`，`sources`绑定真实查询与`result_ref`。单元格按精确字符串读取，统计在完整已保存页合并后重新计算；参数引用原执行条件，元数据限实际快照和保存行数。模板内的阿拉伯/全角数字须通过占位值提供，宿主不执行算术、不全局删除聊天数字或UUID，部分结果自动附范围说明。来源检查沿用现有权限、历史条件与结果有效性，正式正文绑定本轮成功SDK工具回执；该机制只验证绑定值和来源，不保证中文定量描述、指标语义或业务因果正确。
+当前v2正式定量说明先使用`prepare_analysis_answer({sources, values})`核定数值绑定，再由Pi生成一次正文。`values`按名字引用`cell`、`statistic`、`parameter`或`metadata`，`sources`绑定真实查询与`result_ref`；准备回执只给bindings、required_suffix和来源身份，不接收template或返回完整answer_text，也不表示任务已回答。单元格按精确字符串读取，统计在完整已保存页合并后重新计算；参数引用原执行条件，元数据限实际快照和保存行数。原`present_analysis_answer`在v1、旧已登记操作与checkpoint恢复中保持原义，v2日常工具目录提供prepare，不用旧名字执行新语义。
 
-Node仅在成功查询结果解释回合暂缓助手正文，普通调查、概念解释和操作确认保持原流式体验，工具事件即时展示。只有成功且结果仍可读的结果通知要求通过该工具交付说明；失败、取消、结果不可用及普通概念解释、澄清、纯保存可自然回答。来源答案在finish事务重新核验来源和SDK回执，连同正文与正式事件原子提交，不先广播答案正文。Pi继续负责调查、工具选择和循环；本工具不触发新SQL，缺少派生值时另给补算草稿，执行仍按原规则。最终持久正文与展示正文保持一致，不把先前未经核对的过程文字拼成正式答案。
+Rust支持raw、固定精度decimal和单值ratio的percent展示，十进制半值远离零，不先经JS Number；NULL不变零，非数值不猜单位。正常年份、编号和“分母为0时比例为空”等语义数字可以直接写，不再用数字字符禁令检查全文。绑定只证明来源值、格式及定位相符，不机械证明自由正文、指标语义或因果。差值、跨值比例等未返回的派生指标仍另给补算SQL并按原规则取得执行授权；把单个0.4显示为40%不需补算查询。
+
+Node从Pi text_delta替换`{{name}}`并沿既有outputStream保存和展示，只有可能尚未闭合的标记尾部被缓存；原assistant完整结束后追加一次required_suffix并await drain。展示片段、assistant_delta及正式正文使用同一份文本；RenderedAnswerBinding分别绑定原SessionManager entry的source_text/SHA256、原prepare SDK调用和实际展示chunk范围。Rust在冻结/finish入口核`display = replace_once(source_text, bindings) + required_suffix`，并沿原来源、版本、范围、原操作和提交幂等约束保存正式正文。完整候选先沿原checkpoint发布，失败恢复接原binding/prepare，不重叫模型；旧present恢复不改登记身份。准备本身不能覆盖成功结果通知。失败、取消、结果不可用及普通概念解释、澄清、纯保存仍可自然回答；冻结后最多一个合法新自然尾项可交付保存结果说明，原冻结项不丢失。Pi继续负责唯一循环、会话、压缩与取消，完整合同见[交互修复包§5](../execution/semantic-runtime/interaction-delivery-repairs.md#5-答案准备一次流式正文与定稿)。
 
 Pi通过`save_analysis_evidence`保存绑定真实原任务及条件版本的轻量结论；条件修订后仍可显式保存有效历史成功结果，不把旧结果改标为当前条件。M06拥有不可变正文、当时条件和命令回执，M07拥有查询及平台结果；`use_cases/analysis_evidence.rs`组合两者，不访问模块私有表。回执和任务摘要只包含引用，完整结果、SQL和参数不复制进依据存储。
 
@@ -529,9 +543,9 @@ Pi按需通过`read_analysis_report`读取当前报告的标题、选中依据�
 
 结构包含适用问题、参数定义、SQL、结果粒度、`dependencies`及可空的核对记录。依赖和核对依据均保留完整`object_id/version/path`，可以引用表、指标、文档具体条目。结构与正文沿同一人工层保存，继续使用既有8192字节结构上限；不足时明确拒绝，不截断为有效规则。
 
-有效案例沿既有150条有界引用遍历核对完整依赖，并将传递引用一起交付和登记；例如案例引用指标、指标引用表，表改版也会使已读取案例的上下文失效。上下文只核验实际交付的依赖，已撤下结构的线索仍可用于补查，不能再后加该对象的原始旧规则。传递引用自清单格式4纳入，当前格式5还覆盖独立任务正文来源；更早格式通过原Pi上下文接口在新输入重建，同输入恢复仍拒绝不完整或失效清单，操作身份和预算保持。正式查询、任务和依据保存继续递归核对当前依赖，线索不授予规则采用权。
+有效案例沿既有150条有界引用遍历核对完整依赖，并将传递引用一起交付和登记；例如案例引用指标、指标引用表，相关必要内容变化会使当前采用失效。完整有效性依据不能因裁小正文或撤下结构而缩减；有效层required依赖实际失效时，当前工具读取按第17.3.2/17.4节拒绝并返回`stale_knowledge`，不交付旧正文或SQL。仅在必要来源仍有效、缺口来自非required结构内容时，才可交付有效线索并说明缺口；线索不授予规则采用权。传递引用自清单格式4纳入，当前格式5还覆盖独立任务正文来源；更早格式通过原Pi上下文接口在新输入重建，同输入恢复仍拒绝不完整或失效清单，操作身份和预算保持。正式查询、任务和依据保存继续递归核对当前依赖。
 
-核对记录是维护者保存的说明及依据，不由模型声明“认证”。检索摘要包含适用问题和有界参数，并给完整补读入口。Pi采用前按同版`read_knowledge`补齐结构与依赖，说明本次沿用原逻辑还是参考后改写；两者都先展示最终SQL，再沿既有聊天授权执行。依赖变动时，Agent读取撤下可采用结构并说明缺口；维护HTTP仍保留正式结构供负责人核对编辑。
+核对记录是维护者保存的说明及依据，不由模型声明“认证”。检索摘要包含适用问题和有界参数，并给完整补读入口。Pi采用前按同版`read_knowledge`补齐结构与依赖，说明本次沿用原逻辑还是参考后改写；两者都先展示最终SQL，再沿既有聊天授权执行。必要来源实际失效时，Agent当前读取拒绝；维护HTTP仍保留正式结构供负责人核对编辑。已保存查询、分析和报告的历史展示另按第17.4节，不能借历史豁免把旧内容作为当前语义依据。
 
 ### 方法草稿与确认
 
@@ -564,22 +578,30 @@ M02覆盖结构、案例依赖及核对依据、文档材料别名和明确关�
 
 ### 正常请求预算与原生重试
 
-正常模拟输入和`ModelProfile.budget_mode=request`每条消息24次，原scope贯穿摘要、重试、恢复和结果唤醒。新正常账本允许累计次数/金额/到期为空；显式配置的累计门槛仍校验，旧trial全部原值及一小时有效期不变。迁移不重置任何计数或未知预留，同一账本配置指纹仍不可变。
+**2026-11-14确认、已在本地候选实现的运行政策：** 正常新任务取消固定累计调用总数，不设置默认累计费用或总时长硬上限。正常模拟输入与`ModelProfile.budget_mode=request`的新请求均遵循这一规则，不能改为48/100次或只排除embedding计数。原scope仍贯穿摘要、重试、恢复和结果唤醒，完整记录次数、费用及原操作身份。[报告修复包](../execution/semantic-runtime/dogfood-report-repairs.md)的验证和剩余缺口见[CURRENT](../CURRENT.md)，本地实现不代表日常服务已升级。
+
+旧有限scope、冻结profile和trial原值保留；新正常scope用可空调用限制表达无限，不以0或巨大整数替代。显式试用费用授权单独生效，本次dogfood原100元包含已花与未知预留，不能因取消产品总次数门而重置或绕过。迁移不清计数/未知预留、不覆盖同一账本配置指纹；配置装配、后台embedding与历史恢复的兼容验收见修复包。正常产品不限累计额度不等于新的付费授权。
 
 M11启用Pi1.3.0原生retry，maxRetries=2，普通与摘要均复用；HTTP SDK层maxRetries=0。固定错误码只对明确临时provider失败开放重试；429的quota/billing由SDK分类排除，调用者取消与单次超时分开。缺少可靠usage、宿主许可未知或结算不确认停止。每次重试重新申请许可且扣原额度，不重放业务副作用。取消信号只中止本次请求，保留未知预留、不新增或清零模型失败；进程中断后的恢复仍沿原scope，真实用户取消由Rust运行终态拒绝续发。
 
-M08在budget_scopes保存连续失败，在model_call_attempts保存scope调用序号和outcome。outcome区分模型结果与费用settled/unknown；同attempt结算幂等，按最近三次实际调用顺序重算，旧run晚到成功不清较新失败、晚到失败也不漏计。第三次失败后reserve/send都拒绝继续；成功仅清失败计数，不退已使用次数或未知预留。Pi仍是唯一执行循环，宿主只执行预算边界。单次模型90秒与工具HTTP超时、运行租约/取消保持；Worker不再由次数推导额外整轮截止。
+M08在budget_scopes保存连续失败，在model_call_attempts保存scope调用序号和outcome。outcome区分模型结果与费用settled/unknown；同attempt结算幂等，按最近三次实际调用顺序重算，旧run晚到成功不清较新失败、晚到失败也不漏计。第三次失败后reserve/send都拒绝继续；成功仅清失败计数，不退已使用次数或未知预留。Pi仍是唯一执行循环，宿主落实调用许可和显式费用边界。单次超时取冻结配置（历史缺省90秒，大窗口配置600秒），工具HTTP超时、运行租约/取消保持；Worker不由次数推导额外整轮截止。
 
 
 ## 16. 模型接入配置（2026-10-20）
 
 M01复用可信空间超级维护者身份授予模型管理操作；管理读写和普通模型目录使用独立用例。M08 `model_configuration`拥有服务、不可变服务修订、模型定义、不可变模型修订和空间默认设置，SQL只在其私有`store.rs`。React负责输入和展示，配置权限与可用性在Rust检查；普通用户无法通过URL或直接调用接口访问管理配置。
 
-消息接收在会话锁内解析空间模型逻辑ID，把服务/模型版本、实际Model ID、API、思考、上下文/输出/载荷上限和输入输出费率复制进原`budget_scope.model_profile.configured_model`。配置编辑只影响后续消息；恢复、原生摘要和查询结果解释继续使用原版本。停用逻辑模型或原服务后，交付、预留和发送许可拒绝；已在途请求仍可结算。改绑服务不使旧运行改用新服务，也不由新服务的启停替代原服务状态。每消息24次、连续临时失败3次规则保持，试验配置继续沿原账本。
+空间默认trial由M08账本owner的`ensure_default_trial`引导：缺失时原子创建，存在时保持原指纹、状态、期限、帽和记账值，不把GET/POST视为显式重配置。该引导在无环境profile时每次初始化都可调用，以覆盖已托管模型撤下环境profile的生命周期；显式`configure_trial`仍对同ID的真正配置变化报冲突。`model_configuration`只调用具名业务入口，不直接写trial表。
+
+消息接收在会话锁内解析空间模型逻辑ID，把服务/模型版本、实际Model ID、API、思考、上下文/输出/载荷上限和输入输出费率复制进原`budget_scope.model_profile.configured_model`。配置编辑只影响后续消息；恢复、原生摘要和查询结果解释继续使用原版本。停用逻辑模型或原服务后，交付、预留和发送许可拒绝；已在途请求仍可结算。改绑服务不使旧运行改用新服务，也不由新服务的启停替代原服务状态。正常新消息取消累计调用上限，连续临时失败3次保持；旧冻结操作及显式试用费用沿原账本，实施状态见上节。
 
 服务API Key使用ring AES-256-GCM加密，随机nonce及空间/服务/修订AAD；服务请求的重放指纹使用主密钥HMAC，不留下可离线猜测的密钥普通哈希。主密钥位于API主机的`DATA_AGENT_MODEL_KEY_FILE`（默认`.local/model-configuration.key`），必须与数据库一起安全备份。数据库已有密文而主密钥缺失时失败关闭；不自动换密钥。管理GET只返回`credential_configured`；密钥不进入目录、消息、日志和Pi检查点。修改连接目标必须重新输入密钥。
 
-M11只为已绑定租约的运行调用`POST /internal/model/connection`，由M08读取原服务修订并解密。Pi `ModelRuntime`注册受控provider，底层请求和流解析直接使用Pi1.3原生`openai-completions`、`openai-responses`或`anthropic-messages`。内置模型复用SDK能力信息，目录外Model ID使用管理员声明的能力；供应商独有的新协议仍须适配代码。`provider/controlled.ts`共用许可、实际字节检查、用量核验与结算，旧DeepSeek入口作为薄兼容适配。Undici连接器在每次DNS解析后拒绝非公网地址并使用该已验证结果；不跟随重定向。只允许SDK既定路径及Anthropic固定`beta=true`，测试模式才允许回环HTTP。
+M11只为已绑定租约的运行调用`POST /internal/model/connection`，由M08读取原服务修订并解密。Pi `ModelRuntime`注册受控provider，底层请求和流解析直接使用Pi1.3原生`openai-completions`、`openai-responses`或`anthropic-messages`。其中 DeepSeek `openai-completions` 兼容配置显式启用 `requiresReasoningContentOnAssistantMessages: true`，确保当轮剥离 `thinking` 块或无思考内容助手消息由 Pi 原生补齐兼容字段而不触发供应商校验拒收。内置模型复用SDK能力信息，目录外Model ID使用管理员声明的能力；供应商独有的新协议仍须适配代码。`provider/controlled.ts`共用许可、实际字节检查、用量核验与结算，旧DeepSeek入口作为薄兼容适配。Undici连接器在每次DNS解析后拒绝非公网地址并使用该已验证结果；不跟随重定向。只允许SDK既定路径及Anthropic固定`beta=true`，测试模式才允许回环HTTP。
+
+派发诊断仍归M11原适配边界：`RustTransport.post`以类型携带固定宿主路径、HTTP状态、耗时和有限原因；`guardedModelStream`在SDK覆盖异常之前，每个失败阶段只记录一次`model_dispatch_failed`，区分payload、reserve、send许可、provider请求和finalize阶段，并关联原run/call及客户端已确认的reserved/sent。受控原因取同源AppError码或timeout/network/invalid_response/other，不输出任意异常文本或请求资料。诊断不新增公共事件、存储或重试；reserve超时及send未知均不能据此释放预留，丢失结算仍仅重送原payload。宿主HTTP错误通过私有符号携带该边界已核定的元信息并保留原异常类型；provider与Bridge共用读取，避免改写工具JSON错误或取消语义。Bridge将原失败日志结构化，区分答案finish、其他宿主请求和本地交付阶段，只输出有限异常类型/原因与原run/message/chain身份；不输出任意异常原文。HTTP对外码及Worker终态/恢复策略不因诊断改变。
+
+OpenAI复用同一管理、加密、冻结及原生Responses链。明确选择OpenAI的表单初值为Responses，仍可编辑兼容协议。`gpt-6.1-sol/high`使用管理员声明的官方容量覆盖旧SDK目录窗口；有效思考档按原生`configuration_update`核验，顶层兼容effort保持SDK原值。encrypted reasoning、工具关联和phase由Pi保留，同服务修订可回放、跨修订隔离；`store:false`及应用侧Pi压缩继续沿用。实际配置值、折算费率与验证边界见[开发说明](../development.md#通过管理页接入聊天模型)，账户接入状态见CURRENT。
 
 工具账本完整保存Pi的复合`call_id|item_id`等不透明SDK标识（最多512字符、无空白/控制字符、区分大小写）。不截断、不换操作身份；恢复仍按原恢复链映射到同一`operation_id`。
 
@@ -690,6 +712,12 @@ SQL归一只忽略解析上无意义的词间空白及注释边界外的排版�
 
 每条依赖绑定具体条目、内容层、用途及目标相关内容指纹，正文及依赖同事务保存；条目还记录依赖提取是否完整。M02先按原合并规则确定effective_value及其实际组成，再取这些组成的required依赖；不是把事实、旧建议和人工覆盖的全部来源无差别并集，也不是遇到人工值就清空来源。查询`find_dependents`可以返回潜在受影响内容，真正失效/重整只针对相关内容发生变化的有效依赖；无法可靠细分时按该来源保守重整，不让仅有修订号变化代替内容比较。
 
+**条目选择与结构绑定。** 显式EvidenceRef继续严格核object_id/version/path；M02先把支持的entry_id或path解析为规范条目选择，省略path保持全对象含义。选择贯穿结构窄读、有效required依赖、全部贡献来源和草稿来源门；登记去重保留target_path，游走节点包括所选范围。相关正文指纹相等只完成该边比较，仍沿原登记版本及所选条目的必要依赖下钻。
+
+内部table_binding与显式知识正文分责。`read_current_bindings_in_tx`返回所选结构的CurrentTableBinding，M02按原相关DDL指纹及当前列、类型、键和约束核对；组合层再核实际来源与任务范围，并把本次核定的当前表引用交给原上下文登记。表仅普通说明改版不使未变DDL失效，显式旧表正文引用仍拒绝。新结构在原保存事务登记当时已核DDL指纹。旧缺指纹只对触及条目从可读原版DDL或同版字段/表原文补证；缺原文保留缺口，相关内容变化沿原定点整理。原结构说明、历史read_binding和原receipt保持原身份。
+
+上下文authority可带`knowledge_entries=[object_id,version,path]`清单，空path表示全对象；同一对象不同条目均保留。旧清单缺该字段时继续按原整对象范围核验，后续窄读不能收紧已保存范围。它是原Checkpoint开放对象中的宿主元数据，不是模型可选择的授权或兼容方言。已保存答案、条件、查询和报告的历史读取也沿保存时条目范围检查全部贡献来源；显式ref.path按原登记修订解析，省略仍为整对象；原修订缺定位证据时保守核整对象，不额外要求旧正文。历史普通改版容忍和unknown回退保持，未选条目撤回不隐藏合法历史，已选来源撤回仍限制。
+
 人工真正替换的部分由最终保存值与已有结构化来源映射确定；未改部分及仅确认、同文重存保留真实来源。旧建议的依赖仍可追溯，但不阻断已完全替换的有效人工值。仅调查/关联的资料标related，普通改版不会因曾读过就使定义失效。缺少依赖映射的旧自动成果标未知并重新整理，未知不能伪装成已确认无依赖。
 
 语义依赖与隐私来源用途分开：前者决定口径更新、适用性及必要支持；实际交付资料与其派生内容仍沿既有authority清单追踪。权限、端点范围、用户明确来源限制要检查所有实际贡献内容的来源，不能只检查模型自报required，也不能因背景资料不是业务前提就删除已经外发的来源记录。当前有效内容的来源允许集通过M02公开查询构造，再由M01核验；旧层不用来收紧新独立人工内容的业务依赖。这里不新增每轮模型判断、审批、图服务或跨会话交付账本。
@@ -702,36 +730,80 @@ SQL归一只忽略解析上无意义的词间空白及注释边界外的排版�
 
 ### 17.4 任务范围与本题采用事实
 
-任务仍由Pi理解和修订，Rust保存可检查的结构及可信消息来源。保留Conditions原时间区间、timezone、metric、group_by、filters、knowledge_refs与notes；不把座舱维度硬编码成新的channel枚举。
+任务仍由Pi理解和修订，Rust保存可检查的结构及可信消息来源。保留Conditions原时间区间、timezone、metric、group_by、filters、knowledge_refs与notes；不把座舱维度硬编码成新的channel枚举。分析目标、统计对象及SQL表过滤本身不新增来源禁令；用户明确限定依据资料时才保存来源允许集。身份候选与真实贡献根只帮助定位，`roots_complete`不证明用户许可或正文已读完；同名对象、聚合根及部分根不能冒称指定细来源。允许集内缺必要依据时说明具体缺口并请求范围决定，不自动解除或扩大。
 
 | 扩展字段 | 创建、修订与读取语义 |
 | --- | --- |
 | TaskReadContext | task_id＋condition_version。进入有约束分析后，search/read请求携带task_ref；宿主核对所属会话及实际活动任务。缺task_ref不能绕过已绑定活动任务的限制，多任务不能合并允许范围；没有绑定受限任务的普通知识浏览可省略 |
 | Conditions.source_limits | null表示本题未声明额外来源限制；否则为非空allowed_sources:SourceKey[]和由宿主绑定的origin_message_ids。限制跟稳定来源身份走，实际读取仍核对当前修订。省略修订字段表示继承，撤销必须显式unset并来自真实用户修改 |
 | Conditions.time_roles | 数组；每项role为event_time/observation_cutoff/data_batch，description说明业务含义；field_ref可空，evidence_refs可空。event_time表示采用的时间字段/含义，value可空，实际区间沿原time_start/time_end；observation_cutoff必须带有时区的时间值，data_batch必须带批次值。统计起止仍在原time_start/time_end，request_clock和平台data_freshness保持独立 |
-| Conditions.semantic_resolution | 扩展QuerySemanticResolution的evidence_refs和采纳来源；保存采用解释、选择依据及未决差异。explicit_user带宿主核实的adoption_message_id；可空表示尚未作出决定，不自动按无歧义处理 |
+| Conditions.semantic_resolution | 当前格式仅保存已采用解释、basis、user_quote、adoption_message_id和evidence_refs；不是所有任务的必填槽。开放问题由clarifications独立表达；省略继承，null/unset只清说明。explicit_user保宿主核实的真实采纳消息；旧未决形状只在兼容边界读取 |
 | ConditionPatch | set替换指定字段，unset清空指定字段，省略继承；新增字段进入同源枚举及校验。口径/限制/快照改变产生条件新版本，原已执行查询仍指原版本 |
 | QueryView.semantic_resolution | 保存草稿时的决策及依据，旧记录返回null。历史展示的可读性按下文检查；仅普通语义改版不设置text_unavailable，不从自由文本或模型历史猜出旧决策回填 |
+
+time_roles不是所有草稿都必须补齐的前置清单。用户明确条件优先；已采用的有效指标定义若明确给出适用于本题的计算限定或默认参数，可核对出处后沿用并注明依据，不能伪称用户逐字声明。未给出且当前计算不依赖的角色保留未知，不凭request_clock、平台freshness或样例现象造值；只有所求答案确需、且资料/既有约定无法确定的选择才先澄清。已登记的用户选择须按真实回答处理；待查事实可由当前有效且获准资料唯一确定，在同次revise落实事实条件、unambiguous依据和对应resolved_clarification_ids。仍有多义、冲突或未回答的选择保持open，不能静默关闭。
 
 旧channel保留解码；迁移到通用filters时保留原值及历史条件版本，不改写已执行SQL。新任务不再填写web/app/store专用字段。普通“九月改十月”只改统计区间，不能重置观察截点、来源限制和口径。
 
 旧数据没有source_limits不能证明用户从未限定来源；已存在任务续接先利用原条件/原消息核对，不能把缺字段当解除限制。兼容期旧工具调用仍继承宿主已保存限制；活动任务不明确且涉及限制时返回task_context_required，模型通过原任务工具确定归属。没有约束的普通知识阅读不强制建任务。
 
-QuerySemanticResolution.basis沿explicit_user/unambiguous/needs_clarification；只在真实消息支持时使用explicit_user。已有明确未决会阻止request_query保存正式可确认稿，带假设SQL仍可在普通解释中讨论。迁移前旧调用缺semantic_resolution仍走原合同；新工具合同要求填写并持久化，原操作重放先接回真实回执，不重复执行。
+v2新增证据准入复用当前消息的`routing_state`：本消息未归属或来源声明仍未知时，取证与资料采用返回`task_context_required`，控制、取消及来源身份发现仍可用。普通无限制浏览可以`route(task_id:null)`，不新建分析任务；taskless route不会清除原活动任务已有的限制。新v2完整条件缺少source_limits时保留未知，不自动补null；null仅表示Pi已根据真实用户输入判断无额外来源限制，不能代替尚未解析的来源身份。用户没有附加资料限制时，Pi须在新任务完整条件中显式声明null；业务口径、指标或维度仍待澄清不等于资料许可未知，不能要求用户额外授予一次资料读取范围。用户已限制资料但范围或身份尚未判断时继续保持未知；宿主不替Pi自动补null，普通route也不补来源声明。
 
-采纳来源分两条验证路径：新选择由宿主将adoption_message_id绑定本轮真实消息，核对user_quote及用户表达；继承时工具引用同一任务已验证的条件版本，宿主复制原决策、原消息身份和引用，不要求本轮再出现旧原话，也不接受模型自由填写旧消息ID作为证明。request_query须与目标条件版本的决策一致，并保存完整采纳记录。原明确未决不能通过省略变成无歧义；旧记录缺少可核实采纳来源时仍为未知。采纳某个口径不授予SQL执行权。
+已持久的明确工具拒绝由Node按Pi原生`isError:true`结果返回，保留原回执`details`；不把它再次转成只剩错误文本的异常。来源未就绪期间仅为已核定的`task_context_required`补入Rust固定hint及原recovery的task/query身份、条件/草稿版本、生命周期/确认/执行状态和问题ID；不携带条件、SQL、问题/答案正文、自由detail或尚未开放工具的read_tool建议。错误不更新来源就绪状态，不能解锁。`stale_knowledge`等可能拼接外部detail的hint保持原隐藏行为。Pi本地未知工具没有Rust回执，只保原SDK调用身份和isError，由当前宿主来源控制事实指导归属；不从arguments造恢复身份或重送任意SDK错误正文。未取得明确回执的传输错误、参数错误仍沿原异常传播，不伪造成功或拒绝回执。
+
+`read_conversation(task_directory=true)`返回用于归属的身份目录，所有阶段均按未知来源投影调用既有文本来源保护：只有来源完整、当前合法且无资料来源的goal可作为控制标题；旧活动范围中仍合法的资料派生goal、NULL或不完整authority不能借目录交给尚未确定的新范围。任务id/condition_version/lifecycle/phase、context_complete=false及真实next_task_after保留；普通任务正文仍用受当前范围约束的read_analysis_task读取。Node在临时隐藏期间只透传当轮真实目录调用的这份已净化控制页和续页位置，不从旧目录补标题；数据库已route但Node仍等待context_reset/refresh时同样适用。
+
+`search_knowledge(view=source_identity)`通过当前可读元信息查稳定来源身份，不调用向量、embedding或Mem0，不取正文/定义/摘录/建议，也不将结果登记为已读证据。返回`source_identity`项的name、可选kind/object_id/object_version、source_keys和roots_complete；知识对象版本不是正文引用。roots_complete仅证明贡献根映射完整，不表示根闭包等于用户允许范围；映射不完整不能当无来源，聚合semantic-catalog/schema整包不能被解释成某张表或子域。该视图的非空`kinds`只列对应知识对象；没有知识对象的平台原始来源须不筛种类并按来源ID发现，不能把`kinds=[document]`当作全部文本资料目录。该视图不列个人资产，memory_retrieval=excluded_by_view及资产数零只描述该视图，不证明用户没有记忆。query按空白分隔的名称/标识词做任一词的子串匹配，不拆业务语义、不检索正文；单独*浏览元信息目录。目录以独立游标绑定view/query/kinds/hints、匹配语义版本及actor/space，按当前头keyset推进，不承诺冻结语义排名；旧匹配绑定及evidence游标不可混用。实际正文仍走既有来源门及当前权限/版本核验，身份发现本身不授正文读取权。
+
+取证视图的`kinds`同样收窄原文候选：文档原文按document身份纳入，平台原文在不筛种类或由匹配表对象定位时纳入。空结果或仅无关命中不证明其他种类来源缺失，可调整Agent自选筛选，仍须遵守用户的来源允许集。查询embedding与Agent调用继续关联原消息记账范围；正常新消息不再共享固定24次停止门，显式测试费用仍合并核算，实施状态见“正常请求预算与原生重试”。已知ref/citation可直接补读，筛选、来源准入与原操作身份保持。
+
+派发/刷新`WorkspaceContext.source_context_ready`和回执同名元信息由宿主计算。新消息来源尚未裁决或等待既有范围刷新时，Pi消费者临时只向模型提供宿主原话、控制身份和当轮来源身份元信息；旧工具/助手正文、记忆、Skill正文及旧压缩材料不进入普通请求。Pi原生摘要直接读持久分支，因此未就绪期间取消该摘要并跳过旧分支手动预检；过滤后真实请求仍按原容量门校验，过大明确拒绝，不扩大上限。v2本消息尚未归属时，任务写入只绑定当前可见输入的显式引用，不继承Pi已隐藏的历史/资产隐式依赖；原运行与检查点授权不清空。归属后的生成正文及旧v1仍继承实际采用的完整来源，未修改的旧条件也保留自身来源。继承范围可在同session恢复授权上下文；范围变化继续用原context_reset/refresh与Pi自保留边界，不创建新会话、摘要器或恢复账本。同输入恢复若范围变化尚未重投影，派发先保持未就绪，不能把数据库声明完成当作旧检查点已获新范围许可。回源可更新当前准入元信息，不追写原业务回执内容或改变原操作身份。
+
+口径决策与时间角色里的evidence_refs同样是外部引用。保存草稿时与主knowledge_refs、有效条件依据合并去重后核对真实对象/版本/路径、可读性及任务来源允许集；条件写入在提交前核对同类引用。不存在的ID明确拒绝，不能先把它提升为run/checkpoint/query的持久authority再在下一次派发失败，也不按相似名字自动修正。原已保存的坏引用及失败操作保留保护状态，修后用真实正确依据生成新版本，不伪装历史已修复。
+
+上述程序边界不证明Pi对每句自然语言的来源判断都正确。原话到允许集、否定/例外及“相关定义”的成员关系仍需真实原题验证；模型显式提交错误null不能因结构合法被算作范围落实成功。
+
+当前条件格式以clarifications为唯一未决状态，semantic_resolution仅描述已采用的解释，basis为explicit_user或unambiguous；当前模型参数不再暴露needs_clarification和unresolved_differences。普通无歧义、无开放问题且条件充分的任务可直接出稿，不要求额外采纳槽或工具回合。新草稿从目标task/condition_version继承采纳说明；兼容携带只核同义内容，改变解释先修订条件，不能在request_query独立作决定。采纳前置核对不让被拒修订失效旧稿；平台调用后最终事务仍核同一目标版本及当前权限，不重复作一份决定。
+
+condition_revisions.decision_state_version由analysis owner写入，旧行默认1，新条件和明确转换后的版本为2；模型不能set/unset该标记。普通读取不迁移。普通新v2修订可无损规范化旧无未决条件，v1及已识别旧命令保持原决定格式；旧仍有未决时read_analysis_task返回带原版本和稳定索引的legacy_pending，basis-only旧项也保留。仅revise显式legacy_resolution_migration执行一次转换：links连接实际clarification_id，未连接项按原说明来源登记open；既有open沿原ID，已resolved项须核同会话/任务的成功条件修订回执、真实原用户消息及所指condition_fields的当前值和原来源，不能只认resolved或比较整份conditions。缺条件依据的项保留或恢复open。runtime只提供指定版本的窄出处，analysis不查询runtime私表，不扫描全历史或建立证明台账。
+
+旧已登记未完成命令的写入方言由工具边界依据原ledger、wire指纹和合法原合同一次识别。v1调用，以及同v2中registered无receipt且确属旧AnalysisUpdate形状的操作，通过内部AnalysisUpdateRequest保留旧create/revise未决语义及格式；新v2登记仍使用CurrentAnalysisUpdate。模型没有方言参数，宽AnalysisUpdate校验不能将普通当前命令降级。原operation/origin/合同版本、预算及receipt路径保持同一套；目标已迁移时按原expected_version和既有冲突规则处理，新状态不降版，unknown仍先按原操作查证。
+
+新explicit_user由宿主核对本轮完整真实原话并绑定adoption_message_id；复制继承须与原已核对象一致，不用自由填写旧消息ID授信。旧未决的早退不是采纳核验：转换继承旧explicit_user时重新核原消息的采纳部分，条件可证明而解释不可核实时保留条件/字段来源并省略该说明，不制造历史用户采纳。当前新回答、必要条件/采纳、指定问题关闭和格式标记同事务完成；确认同值可关闭实际已答题，省略或清说明不关闭其他题。split复制相同条件/解释时保原字段来源及采纳身份，仅迁移指定开放题。历史版本、旧稿和原成功回执不改写；旧操作先按原wire指纹接回，采纳不授SQL执行权。
 
 来源限制适用于所有通道、按ID读取、必要支持及实际模型上下文。update_analysis_task在本轮收紧限制后，下一次provider派发前，M08/M11通过Pi原生上下文投影或会话重建去除不可再用材料及依赖它们的摘要；不能仅使用现有“交付新运行前”的重建入口便宣称覆盖轮内变化。若不能保留原SDK工具身份安全续接，沿既有stale_context返回受影响输入失效，明确说明并等待新输入，不换operation_id重做副作用。这里处理用户主动改变范围，不新增持续语义变化监听。自然语言解释仍由模型完成，程序校验身份和明确保存的值，不声称能证明模型完整理解了用户原话。
 
+轮内接线沿现有工具回执增加宿主控制字段`context_reset`。M11在Pi 1.3.0的`turn_end`完成原工具组后，用`SessionManager.appendCompaction`的自保留边界移出旧正文及摘要；保留同一会话树、原用户输入和已处理工具的身份/状态。内部`RefreshRunContext`携带原run/lease、触发的SDK工具ID和检查点，Rust核对成功回执与目标任务、拒绝未结算工具，再原子保存新authority和检查点。启动与轮内刷新共用有效资产选择规则，系统Skill目录使用Pi原生格式按目标投影更新，不永久清空选择。范围改变已提交但刷新前中断，恢复先接回原回执（包括已经写入检查点的toolResult），再完成投影；内部检查点读取不等于模型派发，普通及摘要派发的校验不放宽。
+
 **消息归属与活动取证任务。** input_task_ids表示本消息涉及的全部任务，不等于一次模型派发可合并使用它们的来源。存在不同来源限制时，一次取证派发只绑定一个active_task_ref（task_id/condition_version）；沿既有route/任务更新操作由宿主核验并保存活动绑定。切换任务即使没有修改条件，也必须在下一次普通或摘要派发前按目标任务重建Pi可见投影，覆盖旧工具正文、历史投影、个人资产和派生摘要。未确定唯一目标时只交付任务目录及控制信息，受限正文读取返回task_context_required。同批跨任务的取证调用不隐式切换或并集放行，先完成明确归属；批量执行已确认SQL的控制操作仍按各查询独立校验，不因此取消原批量执行能力。
 
-同一消息仍可顺序完成多个任务，共用原Pi会话、消息、恢复链和24次预算。对于来源限制不同的任务，分别保存已核验的答案，再由宿主按任务有序组合交付，不能让模型把互斥范围的依据混成新的综合结论。复用现有工具账本和输出尝试：查询结果答案引用成功的present_analysis_answer回执，普通解释沿原自然回答路径引用已持久的完整助手消息及片段范围，不能取调查过程或半截消息；各部分绑定task_ref、生成时的范围指纹和实际来源。内部finish_run合同扩展有界且有序的answer_parts引用，按各任务分别复核，正文必须来自原回执/输出，宿主只加任务标题和分隔，仍为同一个output_id的一次原子提交。后续任务不能清空前一任务已经定稿的部分，恢复沿原引用接回；尚未完成部分按实际状态说明，不冒称整条消息全部完成。无需强制保存分析依据或报告，不新增交付账本、规划器、子会话或模型汇总调用。跨范围的新比较仍须具备适用的任务条件，不能借“合并展示”获得授权。
+两侧任务均已明确`source_limits=null`时，只更新活动归属，保留同一Pi会话的一般调查上下文；任一侧受限或范围未知时仍按目标重投影。同一任务来源许可的等价性按既有allowed_keys集合比较，顺序、重复项和origin_message_ids变化不触发重投影；声明身份仍按真实消息保存。来源省略继承、只改月份时保留仍有效的上下文。未知范围、受限任务切换和实际收紧仍沿原刷新与authority校验处理。同一消息仍可顺序完成多个任务，共用原Pi会话、消息、恢复链和请求预算；正常新scope无累计调用门，旧有限scope及显式费用帽保持。对于来源限制不同的任务，分别保存已核验的答案，再由宿主按任务有序组合交付，不能让模型把互斥范围的依据混成新的综合结论。复用现有工具账本和输出尝试：查询结果答案引用成功的present_analysis_answer回执，普通解释沿原自然回答路径引用已持久的完整助手消息及片段范围，不能取调查过程或半截消息；各部分绑定task_ref、生成时的范围指纹和实际来源。内部finish_run合同扩展有界且有序的answer_parts引用，按各任务分别复核，正文必须来自原回执/输出，宿主只加任务标题和分隔，仍为同一个output_id的一次原子提交。后续任务不能清空前一任务已经定稿的部分，恢复沿原引用接回；尚未完成部分按实际状态说明，不冒称整条消息全部完成。无需强制保存分析依据或报告，不新增交付账本、规划器、子会话或模型汇总调用。跨范围的新比较仍须具备适用的任务条件，不能借“合并展示”获得授权。
+
+控制交付只采用字段级保护后仍可读的目标与开放问题；`ControlDelivery.text_authority`保存实际展示文字的来源，旧回执缺省时按原字段来源核验。成功重放抑制失效控制投影须显式返回null撤下当前候选，不覆盖原成功存储；最终提交再核其自身来源，不因run其他资料失效误拒合法控制事实。新保存/提交操作生成新事实，启动和恢复只在同query/澄清身份下接回原观察正文及指纹；普通pending调用先沿原operation/origin接续，再判断能否零额外模型交付。
 
 切换后M11可保留前一任务答案的宿主引用和“已完成”等控制状态，不把该答案正文留在另一受限任务的模型投影。各答案的持久来源与当前送给模型的来源分开核验，不能继续以全run来源并集代替活动任务范围；组合后的最终文本也不作为一个不分任务的引用重新送给模型。查询结果回执可含多个原查询，但须全部符合其所属答案任务的限制；普通解释不被迫调用要求查询结果的答案工具。来源/结果有效性检查失败沿原明确失败路径处理，不能静默删掉某一部分后冒称全部交付。
 
-普通解释在任务切换前如何定稿必须显式表达：沿既有route增加可选finalize_current_answer，模型只声明“当前答案完成并切换”；M11根据该SDK调用绑定真实的完整助手条目与已持久片段范围，不接受模型自报正文位置。该助手消息只允许这一route控制调用，不能混有尚待完成的检索/写入；Rust核验当前任务、消息未以error/aborted/length结束、片段完整及前序工具已结算后，同事务冻结本任务交付引用并切换活动任务。普通route不定稿，message_end也不能单独把“我先查一下”变成答案。最后一个任务沿原无工具最终回答正常定稿；查询结果仍使用成功答案工具回执，不绕过数字与来源核验。不新增工具或为了定稿额外调用模型。
+**2026-11-06交付修订（实施与验证状态见CURRENT）：** 普通解释在Pi正常完成、最终助手条目stop且无未完成工具、原消息/来源/输出绑定有效时直接交付，SQL等待状态不替换该正文，Rust仍保持原查询等待相位及执行确认。settle、正式提交和恢复采用同一交付选择；只有等待快照不能证明解释已完成。详见[答案交付修复包](../execution/semantic-runtime/dogfood-delivery-repairs.md)第3–4节。下述显式定稿用于中途保存任务答案，不是普通同任务最后回答的前置要求。
+
+中途冻结说明沿既有route使用可选finalize_current_answer，模型声明当前说明已完整，可切到其他目标，也可留在同一任务。M11根据该SDK调用绑定真实的完整助手条目与已持久片段范围，不接受模型自报正文位置。该助手消息只允许这一route控制调用，不能混有尚待完成的检索/写入；Rust核验当前任务、消息未以error/aborted/length结束、片段完整及前序工具已结算后，同事务冻结本任务交付引用。普通route不定稿，message_end也不能单独把“我先查一下”变成答案。同一任务既解释业务又保存待确认SQL时，显式定稿后的说明沿原绑定展示，SQL仍保持原等待确认阶段和执行约束；所有本轮目标已有冻结正文时只提交这些引用，不再追加同任务末条或用控制摘要覆盖说明。其他最后任务仍可沿原无工具回答定稿；查询结果继续使用成功答案工具回执，不绕过数字与来源核验。不新增工具、独立模型判定器或自建循环，正常工具闭环沿Pi原机制并计入原每消息预算。
+
+答案的交付task/condition与实际查询sources分别表达。一份答案可引用符合其原scope的多个任务结果，不能从sources唯一性反推归属，也不能要求所有source等于交付owner。宿主可选`DataToolOutcome.answer_task_ref`表示首次工具登记的候选归属，由runtime owner带出原task/condition列；不能把通知运行中全部答案改绑通知任务。普通候选/冻结沿原登记，实际承担通知的单答案或末项沿原query/task/condition及适用scope，旧冻结项沿原handoff及scope指纹。旧receipt只补有原证明的返回副本，原存储保持。通知可由另一owner的合法冻结答案实际覆盖，不必重复生成一份通知正文；Rust整体覆盖和finish均核实际成功来源，任务推进只包括明确交付owner与确已覆盖的原通知条件，其他被引用任务不自动结清。各自范围单独核验，不取许可并集。Node在成功回执边界保留原owner与各source三元组；Rust在新答案、回放、冻结、组合及单答案交付分别使用其原证明。刷新与同输入恢复启动在锁外补齐原冻结项的有效性证明，但不把前项来源加入当前任务snapshot；交付采用纯来源查证，新取证成功及回放仍沿原入口登记当前来源。工程与真实效果的当版证据见CURRENT，合同说明不替代验收。
+
+正常完整final的恢复沿Pi原生分支与可恢复leaf接续。宿主在输出队列确认后，以Pi已有custom entry保存原输入、task_ref和`AssistantOutputBinding`，不复制正文或建立第二套恢复存储。合法自然绑定在现有finish准备阶段连同候选检查点保存；已消费的成功答案候选同样在原SDK/正文核对后沿此发布点保存。候选保存只提供恢复位置，后续仍核原条件及来源，正式正文/read_binding/完成状态在最终事务原子提交；单有本地条目不声称宿主leaf已更新，也不伪造范围刷新。已消费成功答案回执与pending tool分开接回，先还原仍有效候选，再决定是否需要Pi继续调查；已有可交付正文及绑定时不额外调用模型。无冻结前项时`FinishRun.output_binding`复用同一绑定类型，须带final_text并与answer_parts、答案SDK、控制引用及当前片段起点互斥；有前项仍用既有末项`output_binding`。Rust复用同output/会话/恢复链、原片段和SHA核验，不用新attempt空输出冒充原正文。旧无自然绑定路径与原commit指纹保持，已提交请求先接回原事实；已消费成功回执缺新owner字段时，只回放原成功tools回执取得有证据的返回副本，不重新登记或执行。未能证明的旧自然输出继续原Pi恢复，只有waiting快照或未发布本地尾部也不能跳过调查。详见执行包第3.5节及CURRENT当版验证。
+
+**逐任务定稿的持久接线。** `AssistantOutputBinding`保存宿主确认的Pi `entry_id`、原`attempt_id`、`stop_reason`、整条`tool_call_ids`、正文UTF-8 SHA256和已确认的首尾`chunk_seq`；模型业务参数只含`finalize_current_answer`。M11在唯一route的异步execute中定位原助手条目并等待`output.drain`，通过`DataToolInvocation.answer_handoff`首次登记到原`tool_calls.answer_handoff`。查询候选另携原成功答案工具的SDK引用，成功回执本身不冻结。Rust在原route事务内复核正文/来源、排除route自身后核前序工具均结算，沿原工具行保存`answer_part_sequence`并按route登记目标（可保留当前任务）；成功`DataToolOutcome.answer_parts`与恢复`RunEnvelope.answer_parts`只返回有序引用。本次route回执必须与该事务持久的完整引用一致，包含查询答案实际采用的`source_query_ids`；这些ID只标识来源。通知是否已由冻结答案覆盖，M11消费`DataToolOutcome.frozen_notification_covered`或启动/恢复/刷新的同名`WorkspaceContext`字段，缺省不证明覆盖。Rust在原控制义务计算中，复用按原通知query/task/condition及原scope核验的结果，同时产出控制正文和覆盖事实；控制正文为空也保留该布尔值，不重复查证来源。B的宽范围冻结答案命中A查询但含A范围外来源时，B仍合法冻结、A仍需沿自身范围交付，不合并允许集。历史成功回执重放仅在返回副本省略旧覆盖值，沿当前宿主上下文事实继续，原存储字节与引用不改。恢复先读原登记/回执，不能用新attempt的空输出重绑旧答案。旧v1缺新字段不推断定稿。
+
+`FinishRun.answer_parts`按冻结顺序引用前项，并为最后任务携原无工具完整输出绑定或成功查询答案引用；存在新末项时`final_text`只发送该末项原文。新工具首次登记在原行保存宿主核定的`task_id/task_condition_version`及`execution_started=false`；`create/split`及`revise/clarify`缺省或null `task_id`均属新建，不猜活动任务为owner。恢复检查点中尚未接回的新建目标先沿原`invokeRecorded`处理，不能仅凭已建立的`input_task_ids`提交冻结项；新目标自然澄清可交付且保留`waiting_clarification`，版本、活动状态和来源继续核验。执行在原预检事务提交前保存`true`，先于业务派发；此前的来源权限查证不执行工具业务。历史缺该事实保持NULL。正式取消在会话/运行锁之后、任务锁之前，仅将属于原任务且明确未开始的登记操作记为原身份的`task_inactive`拒绝；已开始、历史未知及跨任务批量操作不批量结算，原未结算guard保持。取消末尾未完成任务后，如果原消息剩余有效任务均有当前条件的冻结引用，合法结算后恢复入口直接提交全部原引用并省略`final_text`，不执行已取消任务业务、不重新生成已定稿正文。Rust在原会话锁下核对原消息全部任务，仍未取消的未完成任务不能省略；已冻结项逐一核条件、生成范围指纹和当前实际来源，再读取原输出/回执，原子写入同一`assistant_outputs`的组合正文与引用。失效项仍明确拒绝，不能借取消省略。组合只加保存的任务标题和分隔，不追加Pi消息或模型汇总。结果通知的可选`task_ref`由Rust按原查询绑定，不能依赖最近12条查询观察猜任务；同输入恢复保留已经提交的route进度。旧通知缺字段沿兼容读取，默认新消息仍v1，专用v2完整联调和后续切换分开验证。
 
 **历史展示与当前采用分开。** 查询详情、已完成分析与本人报告保留保存时的SQL、条件、口径决策、结果摘要、结论和报告正文。普通语义内容改版不隐藏这些记录，也不修改原条件版本；保留生成时间和原依据引用，不冒称采用了当前口径。缺失旧资料全文只影响旧引用的回读，不连带隐藏仍可访问的已保存分析。平台原始结果沿原有效期，过期明确说明并保留SQL及已存摘要，不自动重跑。报告中已经持久保存的标题、结论、数字和原条件继续按历史展示核验；需要从平台结果重建的图表或明细，单独标为结果过期/不可用，不能连带隐藏整份报告，也不新增永久结果缓存。
+
+新答案在finish_run正式提交事务内同时保存final_text及assistant_outputs.read_binding。M08的schema=1格式按实际拼接记录有序UTF-8字节范围、各份原authority、query/result依赖、SDK及可靠chunk身份，覆盖单答案、冻结组合、控制尾项、自然final及其标题；只有组合器固定分隔字面量不归具体单元。标题使用冻结时或本次实际采用字段的来源，宿主中性标签不虚构字段来源。新格式读取直接取原文范围，不再扫描链回执或反推Markdown；旧NULL行保留窄兼容入口，不回填历史，非NULL损坏绑定不降成无来源自然文本。相同commit重放接原已存结果，不采用当前标题重组。
+
+Rust会话读取用例让snapshot与SSE共用历史输出投影，经query owner读取原文字来源，在锁外按当前查看者核平台结果权限，再锁定会话重核当前状态和来源。已提交绑定不可变，不重复重建；未提交输出仍接回当前绑定。不可读只改变返回正文，保留输出/attempt/事件身份、用户消息和合法份，可靠chunk范围逐份核验；缺失来源不当无依赖。结果TTL与撤权分开：仅明细过期仍保留有权历史正文，不改持久内容，恢复权限重新读回原文。
+
+同一snapshot资源保留旧GET严格形状及SSE，新增POST的SnapshotRequest/SnapshotRefresh。客户端提交全部已加载连续区间内的attempt及first/last_event_seq和可选指纹，不提交来源或许可。新页与缓存范围走本次同一权限投影，每范围返回projection_result=unchanged/replace/not_available；replace带完整assistant事件（可为空），缺失与外会话均not_available。指纹绑定会话、attempt、范围、状态和实际当前投影，比较前先核归属和权限，不追加持久事件或推进游标。M12先合并分页，再按回显范围替换events并统一生成messages，保未加载空洞和无关事件；游标按实际分页独立合并，不从展示删减反算。首次页、轮询及loadOlder共用组件内读取门，前次合并后才捕获下一范围/指纹；QueryList独立，失败不丢成功snapshot。生命周期取消和换会话检查保留，不另建权限事件总线、分片或全历史重读服务。
+
+旧结果通知与另一任务冻结正文组合时，末项按通知原query/task/condition及实际结果来源核验，原条件scope不替换为当前版本；没有历史goal时使用宿主中性标题“原条件查询结果”。成功答案复用原答案核验责任，不能用当前goal或整轮来源并集替代，旧通知不结清新条件任务。普通当前答案仍核当前scope及生成文字来源。
 
 读取用例明确区分history_display和current_use，参数由具体用例确定，不能让模型或客户端选择较宽检查来执行。history_display核对本人/空间、当前资源访问权、删除/停用与资料端点范围，不仅因修订号不同拒绝正文；任一实际内容来源撤权、删除或停用仍按既有规则限制相应派生内容。current_use用于新草稿、执行、口径采用和作为当前语义依据的模型上下文，继续验证当前有效定义及全部适用边界。旧分析可作为带原条件的历史事实读取，不因此变成当前语义依据或执行授权；请求再分析/执行时按当前资料重新核对。Pi恢复不能因历史展示放宽而重新注入不允许的旧工具正文/摘要。不建设旧语义全文库，不监听旧分析的变化、不提醒、不自动重算。
 
@@ -739,11 +811,13 @@ QuerySemanticResolution.basis沿explicit_user/unambiguous/needs_clarification；
 
 历史投影核验本人/空间、当前访问权、停用/删除、端点与本题来源限制；原始结果到期只影响需要回读的结果，不抹掉仍可访问的已存摘要。它的来源引用不是当前语义校验凭据，不能直接充作新草稿的有效EvidenceRef；新查询和执行仍单独校验当前依据及用户授权。
 
+实际来源保留扁平、去重的来源清单，不在新历史记录里递归复制前代历史投影。历史核验读取当前来源身份和保存时的依赖映射，不依赖旧知识全文；旧全文已清理且来源映射完整时仍可读。来源映射为unknown时不能猜成独立无来源内容，沿既有来源不可证明路径限制派生正文。首次正文读取、后续派发和恢复均核验实际结果权限；只有明确的result_expired允许保留已存正文，result_unavailable不能代表授权成功。
+
 现有authority清单在对应实现增量扩展格式，加入`historical_analyses[]`：每项kind=query/evidence/report、所属记录原有reference、projection_fingerprint及实际来源清单。未使用历史投影的新清单也明确带空数组，避免把缺字段猜为空；已发布dependency_schema=5保持原解码，新格式统一经Schema发布并递增版本。这里是有用途的既有来源追踪，不是另建上下文存储。M08按历史用途核验并恢复这些受控投影，M11通过Pi原生恢复/上下文接口交付；旧知识工具正文、旧结果明细及依赖它们的摘要仍走current_use。压缩摘要继承其实际输入的用途和来源，不能把整个旧摘要改标成历史以跳过检查；混合摘要缺少可靠区分时沿原保守重建，再按保存记录重新取得历史投影。旧格式没有用途证明时不猜回填，原operation_id/预算/会话身份保持。
 
 ### 17.5 搜索、批量读取与内部组合合同
 
-工具集合沿现有search/read演进。引入RunEnvelope.tool_contract_version，旧记录缺省为1，新运行在完成两端兼容后发2；版本绑定原运行/工具账本。1维持已发布形状，2使用下表。HTTP知识维护入口只加必要的可选读字段，不另建文档服务。
+工具集合沿现有search/read演进。引入RunEnvelope.tool_contract_version，旧记录缺省为1，新运行在完成两端兼容后发2；版本绑定原运行/工具账本。登记回执与新生成的成功/明确拒绝回执携带原工具版本，Node据此选择读取包装和容量分配；当前run版本只决定新调用的模型参数合同。历史保存回执缺版本时不改写，接收侧可沿登记回执补足返回副本。1维持已发布形状，2使用下表。HTTP知识维护入口只加必要的可选读字段，不另建文档服务。
 
 | 操作 / v2输入 | 必需输出与可选项 | owner / 失败语义 |
 | --- | --- | --- |
@@ -754,7 +828,9 @@ QuerySemanticResolution.basis沿explicit_user/unambiguous/needs_clarification；
 | 内部prepare_source / apply_preparation | 冻结SourceCitation与依赖指纹→有出处成果及覆盖；提交另带预期修订和作业代次 | M03准备，M02保存有效层，use_cases在原事务中组合 |
 | 内部search_candidates / build_index_payload | 有效候选范围＋query/向量→候选/通道状态；当前内容＋出处→派生索引批次 | M04不读其他模块私表；检索网络不在会话续租锁内 |
 
-交付状态固定区分三件事：content_state=complete/partial表示这次指定内容是否交齐；support_state=delivered/partial/unknown表示本次最终可见回执是否实际包含声明范围的必要支持内容；search_coverage只表达本次通道的查询覆盖。unknown不能解释为没有例外，complete也不证明业务结论正确。continuation含可空content_next_offset与supports_next_cursor，分别对应正文位置和必要支持续读；支持续读允许limit=0，只读支持、不重传正文。正文offset不能代替支持列表游标。全部需要的依据已交付时，Pi可以直接采用。
+来源准入与上游有效性分别核验。旧格式文档窗口保留实际交付的knowledge对象、版本与path，沿既有规则接受文档直接许可或完整贡献根许可；不能把上游版本/完整性清单无差别登记成本次已读来源，也不能额外强要document许可。共享上下文验证仍按所选path的有效贡献来源核对当前完整性，并沿原owner核版本/指纹；未选path的不完整来源不污染合法正文。显式citations/supports继续登记各自来源依赖，来源声明不产生额外许可。
+
+交付状态固定区分三件事：content_state=complete/partial表示这次指定内容是否交齐；support_state=delivered/partial/unknown表示本次最终可见回执是否实际包含声明范围的必要支持内容；search_coverage只表达本次通道的查询覆盖。unknown不能解释为没有例外，complete也不证明业务结论正确。continuation含可空content_next_offset与supports_next_cursor，分别对应正文位置和必要支持续读；携statement_id时正文offset以该陈述的text及非空scope_text拼接为原点，不使用整个entry的基址或总长。支持续读允许limit=0，只读支持、不重传正文。正文offset不能代替支持列表游标。全部需要的依据已交付时，Pi可以直接采用。
 
 **必要支持按内容交付。** 支持映射在整理/人工维护时随陈述保存：每项指向定义中完整承载条件的字段/区间，或可定点读取的必要片段。回源校验后，回执附短内容，或以delivered_in指向本回执中实际保留的内容；不在每次搜索用模型重新判断“语义相同”。映射只证明有明确承载关系，不证明原整理正确。出处ID、数据库存有全文、模型以前读过都不能单独算交付。
 
@@ -762,7 +838,7 @@ QuerySemanticResolution.basis沿explicit_user/unambiguous/needs_clarification；
 - partial：存在已知必要内容未交付，给出缺项与具体补读位置；即使还有未知部分，也保留unknown信息，不把已知缺项藏掉。
 - unknown：支持提取完整性未确定；空列表及支持分页结束不能转换为delivered。回执另给supports_complete，false/null表示仍有缺口/未知，以免partial掩盖未知。
 
-状态在Rust最终裁剪后计算。v2的Node桥不再结构性裁剪Rust已定稿的工具正文，只做无损SDK包装；Rust在最终回执中计算游标和状态，并预留包装开销。任何后续改动若裁剪，都须同时维护下述游标和delivered_in，不能只改状态。按完整条件分配回执空间，优先短条件/例外；不得截掉半句再标完整。支持列表按稳定ID去重、防环并分页，每回执最多50项；正文与支持游标各走自己的进度。分页结束只表示支持目录遍历结束，多页内容没有在同一回执同时交付时不能冒称本次delivered；Pi可结合已收到的多页判断本题依据是否足够，不新增跨回执记账器。partial/unknown不是禁止回答、通读全文或无限递归的指令，交付状态不保证模型理解或压缩后永久保留。
+状态在Rust最终裁剪后计算。v2的Node桥不再结构性裁剪Rust已定稿的工具正文，只做无损SDK包装；Rust在最终回执中计算游标和状态，并预留包装开销。任何后续改动若裁剪，都须同时维护下述游标和delivered_in，不能只改状态。按完整条件分配回执空间，优先短条件/例外；不得截掉半句再标完整。支持列表按稳定ID去重、防环并分页，每回执最多50项；正文与支持游标各走自己的进度。已保存支持正文超过单页或最终容量时，附可选content_page表达该支持自己的Unicode字符区间，supports_next_cursor同时保目录位置与当前支持内偏移；未交齐当前支持前不能越过它。保存正文即使不同于引用全文也保持原内容，不能用引用正文替换；原本未保存内容时才沿引用指定范围补读。分页结束只表示支持目录遍历结束，多页内容没有在同一回执同时交付时不能冒称本次delivered；Pi可结合已收到的多页判断本题依据是否足够，不新增跨回执记账器。partial/unknown不是禁止回答、通读全文或无限递归的指令，交付状态不保证模型理解或压缩后永久保留。
 
 **宿主容量交接。** v2内部DataToolInvocation增加宿主生成的response_budget，包含max_bytes、estimated_tokens及projection_fingerprint，分别表示已扣除SDK包装余量的正文JSON字节上限、保守估算token额度和M11所用上下文投影基准。它不是模型可填写的工具参数，也不是新的费用额度。M11持有Pi实际上下文，结合冻结profile、临时资料和同批工具组分配；同批多个工具共享一份余量，不能每个调用各拿全部剩余量。Rust按提示与自身硬上限取小值，完成正文、支持、状态与游标的最终裁剪；估算tokens不声称等于供应商实际用量，最终provider预检仍负责完整载荷。
 
@@ -775,7 +851,7 @@ QuerySemanticResolution.basis沿explicit_user/unambiguous/needs_clarification；
 | search_knowledge公共objects及结构补读 | 改为hits分支及knowledge批量读取，保留structure_only分页；原v1参数与回执不改义 |
 | personal_memories、selected_skills、next_asset_after、asset_total、asset_cursor_invalid、memory_retrieval | 字段及归属/选择/状态校验保留；query=*和asset_after继续翻本人有效资产目录。公共cursor与资产cursor独立，不能一个游标跳过另一目录 |
 | 个人记忆正文、scope、source_text | memory分支以asset_ref绑定版本，part明确读取内容；对应content_page/scope_page/source_page沿原含义，各自offset/next_offset，不默认附全部原话 |
-| read_knowledge中的Skill descriptor及Pi read | skill分支只给已选当前版本descriptor；正文和附件仍走Pi原生read按行续读，不改用公共SourceCitation，不迁移Mem0或增加Skill选择权 |
+| read_knowledge中的Skill descriptor及Pi read | skill分支只给已选当前版本descriptor；长scope按最终容量给前缀与scope_page，保完整总长及native_path。正文、完整范围和附件仍走Pi原生read按行续读，不改用公共SourceCitation，不迁移Mem0或增加Skill选择权 |
 | 同一Pi长期会话升级 | 新用户消息可采用合同2；历史合同1工具内容保留解码，恢复原已登记调用按原合同形状接回。保留session、operation_id、原预算及未完成副作用身份，不能重新建会话/重做操作来兼容 |
 
 asset_ref只表示现有资产身份和版本，不能当作公共知识EvidenceRef。资产目录的limit沿原独立分页，不占公共hits名额；两部分共同受最终回执容量限制，被裁剪的未交付项必须保留可恢复的资产续读位置，不能推进游标越过它。公共kinds/hints不改变个人资产原有范围；任务明确来源限制同样约束实际交付的资产及其来源。没有权限或未选Skill不以批量读取绕过，错误不泄露他人资产。
@@ -786,7 +862,11 @@ content_next_offset、supports_next_cursor、公共cursor、asset_after和delive
 
 搜索cursor由search_coverage.next返回，带查询参数/范围指纹、任务条件版本及各路进度；支持游标另绑定知识/来源修订和已展开支持位置。宿主校验当前权限及绑定值，不让游标成为授权凭据；参数变化返回invalid_cursor，已知版本或索引代次变化返回stale_cursor并要求重查。批次查询不承诺跨请求快照，索引异步更新仍可能影响排名；不建立服务端资料包会话。分页去重沿知识/陈述身份或来源修订与片段位置，不能按文档ID把不同位置全部合并，也不能把局部页的排名当全局排名。
 
-搜索回执v2的coverage包含channels[]（exact/bm25/dense各自available/unavailable/not_configured）、state（searched/bounded）、reasons[]（index_lag/candidate_limit/deadline/channel_unavailable）、next可空；不暴露过滤数量或受限对象名。searched只代表本次声明的通道/范围已查，不表示全库不存在答案。旧SearchCoverage.complete保持旧合同及已有局限，v2不复用它表达更强保证。
+**短引用与旧回执投影。** v2公共搜索游标为`rc1:operation_id`短引用，指向本会话原成功搜索操作的持久工具回执；续页经runtime窄读取按当前用户/空间/会话定位原回执后交原检索恢复逻辑核验，短引用不是读取凭据。同会话下一条消息在相同任务/条件/查询/范围下可复用原短引用，不要求沿同一recovery_chain；会话授权复用conversations公开边界，runtime私有store不跨表重查conversations归属。这修订早前"游标完全自包含且不新增服务端状态"的取舍：不新建独立服务端检索会话，改为引用已存在的持久工具回执（已测游标占回执约81.5%时的体积主导项）。已恢复Pi分支中的旧结构化search回执（content含长游标、details带operation_id）由宿主在交付启动时扫描：只对能按operation_id准确关联的成功回执追加Pi原生context edit，把模型可见投影中的长游标替换为对应rc1短引用；原entry、持久回执与原调用参数不变，同targetId幂等不重复追加。Pi原生prepareCompaction沿buildSessionProjection输入，持久context edit同样进入压缩，普通请求与摘要请求看到同一短引用。不扫描正文猜ID、不改用户文字或旧压缩摘要；已写入旧摘要、无法准确定位的长文本不做全量迁移，沿Pi正常压缩收敛，列为历史优化限制。
+
+65536字节硬上限在包含查询、范围和任务绑定的完整公共cursor上执行。较小cursor保持原JSON；超过该限的内部状态采用标准gzip和URL-safe base64无损封装，封装后仍须满足65536字节及整份回执预算，压缩后仍超限则明确拒绝。旧JSON继续可读，恢复时先限制外部长度，压缩格式最多临时展开8MiB并检查完整压缩流，再执行原成员、位置、版本、排名及权限/任务绑定核验。不增加服务端检索状态，不因编码改变候选、排名或交付进度；只包含原身份/定位元信息，仍无正文。
+
+搜索回执v2的coverage包含channels[]（exact/bm25/dense各自available/unavailable/not_configured）、state（searched/bounded）、reasons[]（index_lag/candidate_limit/deadline/channel_unavailable）、next可空；不暴露过滤数量或受限对象名。searched只代表本次声明的通道/范围已查，不表示全库不存在答案。旧SearchCoverage.complete保持旧合同及已有局限，v2不复用它表达更强保证。 v1兼容字段filtered_candidates只表示已取得候选在后续核验中实际被排除的数量；未进入允许范围的记录不属于本次候选，不为补算数量反向查询范围外正文。
 
 具名取证用例分三段：①短事务核对运行、任务版本和范围，记录稳定工具身份；②锁外召回、分批读候选及内容；③短事务重核运行/任务/来源修订，保存工具回执及实际交付依赖。无锁阶段不得跨模块直接SQL；发生版本竞争返回对应可修正错误，不能交付混合版本正文。会话逻辑串行仍保留，只有数据库行锁不跨慢工作。
 
@@ -798,7 +878,7 @@ content_next_offset、supports_next_cursor、公共cursor、asset_after和delive
 | --- | --- |
 | 原文检索片段 | 目标约1200 Unicode字符，单块上限2400，边界重叠160；另加至多256字符的可溯源标题/对象背景。完整原文不裁剪；无每对象128块总上限，后台每批64块持续到结束 |
 | Embedding | 保留现有Qwen 1024维；每块还须满足部署模型的真实输入token上限，超过则继续拆。字符初值不冒充token精确计数；更换表示/模型才重算向量 |
-| 自动整理 | 按源修订分批，单批原文目标至多32K估算tokens且受实际模型剩余容量约束，单批最多32个目标陈述；分析/复核沿现有有界维护调用。未覆盖范围进入后续作业，不能截头后标完成 |
+| 自动整理 | 按源修订分批，单批原文目标至多32K估算tokens且受实际模型剩余容量约束，单批最多32个目标陈述；分析/复核沿现有有界维护调用。 交给模型的coverage.segments_read/covered_chars表示此前已提交批次的累计进度；当前批由segments和batch_*表达，final_batch表示之后无剩余片段，首批累计0不表示当前原文缺失。未覆盖范围进入后续作业，不能截头后标完成 |
 | 依赖补齐 | 按已记录的必要关系批量展开、去重并防环；单回执最多50个支持引用。未交付部分提供续读定位，不能用层数/数量上限声称没有更多条件 |
 | 召回与排序 | 精确名称/标识＋BM25＋dense；BM25采用Jieba search起步，不使用删除否定/顺序/例外词的通用停用词表。标识保留完整项及可解释别名；首轮RRF k=60，两通道同权，精确ID优先，无类型配额，不接重排模型 |
 | 候选批次 | 每路首批max(50, 5×limit)，过滤不足再扩大；单次合计最多1000候选、5批、10秒，均为可调初值。先在各路按相关性取候选，不能按数据库ID先截1000再评分；到界给bounded和继续入口 |
@@ -817,9 +897,17 @@ content_next_offset、supports_next_cursor、公共cursor、asset_after和delive
 
 **保存与后台处理。** 平台资料原文归M03，用户文档原文归M02；保存当前原文及修订时，在同一短事务通过既有组合用例登记两类待办：原文索引和语义整理。原文索引只做确定性切块、必要Embedding及索引写入，不依赖语义整理模型的完成状态。整理产物经M02保存后另行登记knowledge_entry索引；两类作业复用现有Worker、租约与预算，不新建服务、消息总线或第二个Agent。
 
-M02保留公共knowledge_index_jobs的登记/领取职责，扩展待办目标以区分record_kind、所属来源或知识对象、目标修订和索引版本；平台来源待办由组合用例调用M02公开入口登记，M03不写其私表。M04保存对应投影的应用进度，M03的source_preparations只记录整理覆盖。完成整理不等于索引成功，原文索引完成也不把semantic_status改为ready。
+M02保留公共knowledge_index_jobs的登记/领取职责，扩展待办目标以区分record_kind、所属来源或知识对象、目标修订和索引版本；平台来源待办由组合用例调用M02公开入口登记，M03不写其私表。M04保存对应投影的应用进度，M03的source_preparations只记录整理覆盖。完成整理不等于索引成功，原文索引完成也不把semantic_status改为ready。统一消费者在知识轮询为空后先结束其事务，再开启原文领取事务；不能让锁定领取看见的新作业沿用旧知识轮询的一致性快照核来源，以免将其误判为superseded。来源/正文仍在原文领取事务内由owner核对，原租约、修订及Embedding账本纪律保持。
 
 **两类记录与读取合同。** 它们共用同一Milvus公共集合和BM25/dense通道。索引记录中的正文仅为派生检索文本；工具正文均从owner按当前有效修订读取。
+
+内部owner接口：M02的`read_document_windows_in_tx`接收文档ID、当前修订及字符窗口，返回总字符数、原文完整性和各窗口正文；M03对应`read_source_window_in_tx`。文档legacy依赖只投影来源ID/修订，经既有规则核验，不为核验加载正文或quote。窗口越界、修订/hash不符不能交付截短文本配旧定位。该接口不表示knowledge条目/statement窄读或整条检索期限已完成，实现状态仍见CURRENT。
+
+结构关系核验使用M02的`read_structure_refs_in_tx`：返回同版对象/条目身份、有效层结构引用和完整必要来源，不附正文、DDL、加工SQL或指标表达式。列绑定由`validate_current_bindings_in_tx`读取相关表的当前DDL投影并复用原规则，单个表在本次核验只读取一次，不恢复整对象snapshot或重复结构Schema校验。保存边界校验结构输入，但重分析保留人工规则、自动预填并不证明列绑定有效；后续DDL或绑定对象变化仍须核验当前结构能否采用，不能把“曾经保存合法”当成永远有效。投影携带的完整必要来源用于最终新鲜度核验，实际可见内容的依赖登记另按已有映射；不从裁小entries反推完整来源。这不新增模块或存储owner，具体修复与验证状态见CURRENT。
+
+知识窄投影保留实际entry/statement、修订、原位置及补读信息；M02按已收到的规范record核同版长度与映射元信息，补缺失定位，并检查展示子区间仍在原entry/适用statement的规范窗口内；未知键或显式冲突按候选拒绝，不按query重定位、重读整entry或修写索引。适用陈述不能因缺冗余字段丢失其支持依赖；Milvus接入仅把显式空statement_id视为普通entry标记，缺身份时仍保留已给出的statement_offset交owner核验，不替外部冲突字段补成正确值。必要依赖和实际贡献来源由既有元信息/有效层索引/legacy窄引用取得，随内容传给最终核验，不能从裁小的正文推断完整依赖。v1装配、来源过滤及交付依赖登记复用这份依据，裁剪后仅登记实际可见内容对应的依赖，不以整对象回读维持兼容。
+
+内部完整检索由`use_cases/knowledge.rs::search_stage_outside_lock`接收`ScopedSearchRequest`，其中`drive_stage`拥有唯一推进循环：边界在范围准备前建立绝对期限，用例共享候选身份、分片深度、有效性及已读内容；`knowledge_embeddings::SearchLaunch`仅持原查询Embedding句柄，保留原授权/发送/结算，M04提供`next_page/fetch_page/accept_page`及共同融合。`ScopedSearchStage.search`的`KnowledgeSearch`保存按共同次序的`SearchHit::Knowledge`或`SourceExcerpt`、v1末端聚合`objects`、未交付定位`pending`及内部`scan_progress`。进度区分实际消费位置、实际轮数、主读取数和各分片状态；元信息未完成或出口才接回的候选只保留引用，后续交付前须正常重核，不能冒充已验证正文。知识规范身份使用`knowledge-statement-window-3`的360字符窗口/280步长，raw身份绑定`source-structure-1`及原来源/修订/字符窗口；相交raw合并保留全部成员身份，不退已消费额度。SQL后备在各自owner内以最多24个去重分布词筛候选，完整去重问句词项参与同一次SQL的名称/内容评分，再按相关性和稳定定位排序、以quota/OFFSET限制下行；词项覆盖不足仍如实表达，不增加通道票或在组合层重读正文评分。知识及raw索引覆盖探测同样受原期限限制，未完成报incomplete；知识覆盖还核同目标成功回执的`projection_version`，旧或缺失版本不报current，不因此自动重领作业或改变原Embedding身份，新公共集合仍由08显式切换。最终`assert_search_fresh_in_tx`按同一组实际命中重核来源和修订，原Embedding收尾仍可跨期。公开v1传`include_raw=false`且保资产目录；未配置Milvus原文通道的词法模式保留未整理文档的正文候选，按命中ref同版补读，不能因启用v2便把它们过滤为空；配置原文通道时，独立文档正文走raw、整理陈述保留知识身份；同步派生文档没有独立document原文索引，正文仍由现有知识窗口召回。各路只在原允许记录集中搜索，不因文档关联上游而扩大平台来源许可；覆盖核验也只要求相应owner负责的索引。双类型不另建调度模块，`hits/pending/scan_progress`均不是公开v2 Schema，公开v2装配与续读编码仍归06。验证状态与证据见CURRENT。
 
 | record_kind | 建索引的资料与身份 | 公共搜索hit的必要字段及补读 |
 | --- | --- | --- |
@@ -863,29 +951,31 @@ source_excerpt的content_state只表示请求的片段是否交齐，不能表�
 
 ### 17.7 模型容量与Pi原生压缩
 
-运行前置读取同样受租约保护：领取后到run建立前由原job心跳覆盖锁外来源校验，run建立后接正常会话与job续租。慢Skill选择采用短事务核原回执/忙闲、锁外来源校验、短事务重核版本和来源再保存；已成功操作只接回原回执，不重新激活选择。
+运行前置读取同样受租约保护：领取后到run建立前由原job心跳覆盖锁外来源校验，run建立后接正常会话与job续租。派发前记忆准备与完整续租future必须同时推进；不能在心跳分支内阻塞等待续租，使持会话锁的准备future停止推进。请求结束时停止后续心跳并等已开始的续租事务完成，不中断数据库BEGIN。慢Skill选择采用短事务核原回执/忙闲、锁外来源校验、短事务重核版本和来源再保存；已成功操作只接回原回执，不重新激活选择。
 
-复用锁定Pi coding-agent 1.3.0的SettingsManager、SessionManager和AgentSession；不借用durable包的backgroundTokens或另写摘要循环。已核对原生阈值为contextWindow−reserveTokens，近期原文由keepRecentTokens决定；摘要maxTokens为reserveTokens的比例并受模型上限约束。依据为[官方压缩文档](https://github.com/earendil-works/pi/blob/v1.3.0/packages/coding-agent/docs/compaction.md)及锁定包compaction.js / agent-session.js。
+复用精确锁定Pi coding-agent 1.4.0的SettingsManager、SessionManager和AgentSession；不借用durable包的backgroundTokens或另写摘要循环。原生阈值为contextWindow−reserveTokens，keepRecentTokens是按完整消息/工具组选择切点的目标，不是尾部硬帽。1.4摘要忽略历史reserveTokens参数，普通/分段摘要采用模型输出能力，并可按上下文余量收紧实际wire cap。依据为[官方1.4变更记录](https://github.com/earendil-works/pi/blob/v1.4.0/packages/coding-agent/CHANGELOG.md)、[压缩文档](https://github.com/earendil-works/pi/blob/v1.4.0/packages/coding-agent/docs/compaction.md)及锁定包compaction.js / agent-session.js / simple-options.js。
 
 新保存的ModelDefinition/SaveModelDefinition及其新冻结ModelProfile要求context_window（总tokens）；历史持久profile解码明确允许缺字段，仅在legacy路径使用，不能给所有旧RunEnvelope/Checkpoint直接追加required后拒绝恢复。input_limit继续表示请求输入策略，output_limit表示含思考在内的单次输出策略，payload_bytes_limit只表示UTF-8完整JSON字节。能力来源记录为SDK目录或管理员声明；目录外型号不猜窗口。request_timeout_ms随新模型修订冻结，历史缺字段维持90000；字段UI用“总上下文 tokens / 最大输入 tokens / 最大输出 tokens / 请求体 MiB / 请求超时秒”，不把128KiB标成128K上下文。输出Schema上限提高到已支持模型能力所需的范围（首轮至少393216），仍由端点能力和窗口校验约束。
 
 容量推导固定为：C=context_window，I=input_limit，O=output_limit，B=min(I, C−O)，H0=min(65536, max(16384, ceil(0.02×C)))，H=min(H0, max(1024, floor(B/8)))；要求B>2H。Pi注册contextWindow=C、maxTokens=O；R=reserveTokens=C−B+H，原生触发线T=B−H；K=keepRecentTokens=min(65536, floor(T/4))，不能因为平均消息短降到256/128。H是工具/临时资料/估算误差预留，输入、输出不能分别占满C；按B缩放H使小窗口不用硬套大窗口预留。
 
-配置有效还须检查压缩后空间：Pi1.3的历史摘要cap为S1=min(floor(0.8×R),O)，split-turn可能另有S2=min(floor(0.5×R),O)。新配置要求S1+S2+K<T；每次运行按实际固定规则、工具及不可再压缩消息开销F，再核对S1+S2+K+F<T。保留区按消息边界产生的超额也计入F，K不是单条消息的硬裁剪。无法满足的配置明确拒绝并给出输入/输出的可行范围，不靠反复摘要解决；旧配置沿下述legacy路径，不静默扩大原限额。普通工具内容先分页，固定规则等本身装不下则返回容量配置问题。这是容量校验，不增加摘要器或另设摘要模型。反例C=1,000,000、I=O=65,536会被拒绝；默认大窗口方案有余量。
+配置有效仍须给两次新摘要预留空间：Pi1.4的单次历史摘要上界S1=O，单次split-turn前缀摘要上界S2=O；新配置要求S1+S2+K<T，每次运行再按固定规则、活动工具及不可压缩开销F核对S1+S2+K+F<T。这保留了新摘要的空间校验，但2O+K不是压缩结果的通用上界：没有新history时SDK直接沿用previousSummary，旧摘要可能来自不同输出配置；SDK还会追加文件操作附记。session_before_compact依据原生preparation另核实际沿用的旧摘要、完整保留组超出K的部分、拼接标记与文件附记；这些都不裁剪到O/K。无法满足时在摘要派发前明确拒绝，逐请求实际JSON/token启发式硬门继续保留，不能承诺任意固定部分都必能续答。可行范围沿同源向量给出，旧配置沿下述legacy路径，不静默扩大原限额；普通工具内容按原接口分页，不靠反复摘要解决当前完整工具组本身超限。反例C=1,000,000、I=O=65,536仍被拒绝；默认大窗口方案有余量。
 
 DeepSeek已核对的1M窗口采用十进制1,000,000 tokens作为首轮配置基准（不向上猜1,048,576），默认I=900000、O=65536、载荷8MiB；由此B=900000、H=20000、reserveTokens=120000、近期保留65536、触发线880000。max档或明确长输出可采用O=131072，此时B=868928、触发线848928。供应商最大393216输出是能力上限及Schema可表达上限，实际可启用组合仍须通过容量校验；首轮默认/长输出档分别为65536/131072，不承诺原生摘要参数下全部极值组合可同时启用。上述是待验证的配置初值，当前服务未变；代理/网关须先验证8MiB真实接收能力。
 
 容量适配只负责预检、设置与错误转换：普通发送前考虑系统规则、工具定义、临时workspace、用户输入和实际工具组。Pi估算优先使用有效usage，无usage或原生摘要后使用SDK估算；临时context及工具定义未纳入的部分单独计入预留，不能重复算整份历史。轮内按本次回执预算返回可续读内容；预计加入后越阈值时使用Pi原生压缩路径。provider仍在reserve/send前核对实际JSON字节和冻结上限，字节不换算成“精确tokens”。
 
-Node provider使用min(SDK本次maxTokens, O, 已知端点上限)，SDK未给出才用O；不覆盖较小摘要要求，也不擅自关掉摘要选择的reasoning。reserve/send的金额预留使用实际本次输出cap，未知结算仍沿原规则。正常历史压缩沿同一Pi会话、原用户消息额度和操作身份。预计不能容纳单条工具内容时先分页；摘要失败、不可再压缩的超大单条输入、供应商拒绝、用户取消和24次耗尽按各自错误如实结束，不无限循环。
+Node provider调用上界使用min(SDK本次maxTokens, O, 已知端点上限)，未给出的项不参与取小；SDK还可按上下文余量收紧最终wire cap，旧接入也不得再覆盖回O，不改写冻结profile。摘要保持SDK选择的reasoning。reserve/send按调用上界保守预留，可高于较小wire cap；每次真实摘要及重试单独按真实usage结算，前段成功后段失败仍保留前段费用，SDK汇总usage不再次收费，直接沿用旧摘要不新建账目。未知结算仍沿原规则。正常历史压缩沿同一Pi会话、原用户消息记账范围和操作身份。预计不能容纳单条工具内容时先分页；摘要的不可恢复失败、不可再压缩的超大单条输入、供应商明确拒绝、用户取消及显式测试费用耗尽按各自原因结束。正常压缩与工具回合不再因固定累计调用次数停止，不新增应用循环。
 
 旧模型修订及正在进行的消息配置不重写。已知旧profile可从原能力目录补充只读总窗口元数据，保留原I/O/载荷及预算；只有通过新容量校验才进入新公式，否则沿legacy接入。无法确定能力的目录外旧配置标记legacy能力来源，暂沿旧行为并在管理页提示补充，不虚构C。新消息升级到新修订后生效；tool_contract_version不承担模型profile格式版本的职责。
 
-三次连续临时失败和每消息24次不变。新大窗口配置的单次provider请求超时初值为600秒，含思考阶段；用户取消立即中止请求，运行仍按原租约续租，不设新的整轮截止。历史冻结配置/旧接入的90秒保持。实施时将该超时随模型修订冻结并核对HTTP/代理链不先于它断开；真实高思考样本验证首事件等待、持续输出及取消。600秒是待验工程初值，不是已证明的供应商时延，也不改变原费用与失败次数边界。
+三次连续临时失败保持；正常新任务累计调用上限已按2026-11-14决定取消，本地候选的验证和完整出口见CURRENT。新大窗口配置的单次provider请求超时初值为600秒，含思考阶段；用户取消立即中止请求，运行仍按原租约续租，不设新的整轮截止。历史冻结配置/旧接入的90秒保持。将该超时随模型修订冻结并核对HTTP/代理链不先于它断开；真实高思考样本验证首事件等待、持续输出及取消。600秒是工程配置，不是供应商时延保证，也不取消显式测试费用与失败次数边界。
 
 ### 17.8 迁移、发布边界与恢复
 
 采用同一交付包升级Rust/Node/Web，避免长期维护两套工具。兼容只解决真实的存量消息、检查点、幂等回执和旧客户端形状，不增加通用协议平台。
+
+检查点新导出标实际运行的1.4.0；历史导入只接受同源枚举中的已验证版本，保留原1.0兼容回归并新增1.3→1.4的inline/storage验证，不重标旧检查点或放开任意版本。两版原生session格式均为3，仍须实际open/restore、确认leaf与落盘校验。1.4恢复工具loadout不替代宿主首个出站前的活动工具投影；来源未就绪时正文与旧摘要继续隐藏。原生length恢复仅在输出未达原目标上限等SDK适用条件内使用；Rust已提交的半轮工具仍按原operation/origin和budget接回，不能因SDK隐去助手/工具投影而重做。
 
 1. **先扩展可读结构。** 增加当前来源、关系/依赖/准备记录及可空查询决策；生成Schema类型，provider和consumer同时支持新字段。旧源/知识ID、修订号、任务/SQL/操作ID不改。按批回填当前内容及有证据的依赖，namespace纳入外部键并映射已有ID，不从自然语言猜回填口径或语义关系。
 2. **再切换新写入。** 确认当前内容回填一致、依赖索引可用后，停止为新公共修订永久复制全文；同事务更新当前内容、版本元数据和待办。既有历史原样保留，终态查询不改写；旧完整快照仍按其原版本读取；已完成分析按17.4历史展示，未完成操作沿原身份恢复。操作幂等先查原回执，不能因Schema变化重做已成功操作。

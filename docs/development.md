@@ -1,22 +1,30 @@
 # 本地开发环境
 
-当前合成平台 MVP 已完成。验证环境为 macOS ARM64：Node / Rust / Python 在本机运行，MySQL / Milvus 在专用 Colima 实例运行。正式工作台使用 React、Rust API/Worker 与 Pi SDK；真实模型模式已接入 DeepSeek Flash 和 Mem0 个人记忆。当前状态和证据见 [CURRENT](CURRENT.md)，运行职责见[架构说明](architecture/README.md)。真实数据平台、正式认证和同事使用验收属于后续接入。
+当前已有可运行的本地合成平台候选，整体真实业务验收仍未收齐。验证环境为 macOS ARM64：Node / Rust / Python 在本机运行，MySQL / Milvus 在专用 Colima 实例运行。正式工作台使用 React、Rust API/Worker 与 Pi SDK；真实模型模式已接入 DeepSeek Flash 和 Mem0 个人记忆。当前状态和证据见 [CURRENT](CURRENT.md)，运行职责见[架构说明](architecture/README.md)。真实数据平台、正式认证和同事使用验收属于后续接入。
 
 **语义权限的当前边界：**表负责人通过 `/source-syncs` 从 Datasight mock 目录的 `maintainer_id` 同步；按平台 `namespace + id` 匹配，不按同名表推断。字段继承所属表；本空间表维护人均可创建独立指标、文档等，首次保存者自动负责，超级维护者可调整归属。`DATA_AGENT_SEMANTIC_SUPER_MAINTAINERS` 是可信启动 JSON 配置，例如 `{"demo":["alice"]}`；未配置不授予超级角色。开发启动脚本显式配置 Alice，正式身份接入仍未实现。此角色只管理共享语义，不扩大平台查询权或个人资产范围。
 
-**2026-10-23实施中：**[工程合同第17节](architecture/implementation-design.md#17-语义检索与上下文的实施合同2026-10-23)按[九阶段执行包](execution/semantic-runtime/README.md)逐步落地。当前运行与容量代码已区分总窗口tokens、输入/输出tokens、请求体字节和单次请求超时：管理员保存新的模型修订时校验容量，Pi原生摘要与普通请求使用当次实际输出cap，旧冻结profile仍沿用原限额。已核实DeepSeek型号的新配置初值为总窗口1,000,000、输入900,000、输出65,536、请求体8MiB和600秒；不能将此值套到其他型号。实际验证状态见CURRENT，当前未更新日常服务，真实供应商600秒与8MiB验收尚未执行。
+**实施与验证边界：**[工程合同第17节](architecture/implementation-design.md#17-语义检索与上下文的实施合同2026-10-23)按[九阶段执行包](execution/semantic-runtime/README.md)推进，01–08及后续有界修复已有各自关闭证据；09按固定核心范围补验，工程修复不代替真实业务通过，当前状态只见CURRENT。运行与容量代码区分总窗口tokens、输入/输出tokens、请求体字节和单次请求超时：新模型修订校验容量，Pi原生摘要与普通请求使用当次实际输出cap，旧冻结profile沿用原限额。已核实DeepSeek型号的新配置初值为总窗口1,000,000、输入900,000、输出65,536、请求体8MiB和600秒；不能套到其他型号。实际证据和当前本地服务配置见CURRENT；不能将模型配置初值视为真实供应商600秒与8MiB极限验收已通过。
 
 慢检索在会话锁外完成后，以最终短事务的一致性读时点核对知识/来源/资产；时点之前已提交的变化拒绝旧回执，时点之后的变化由下一次模型派发的上下文核验处理，不追踪每次语义修改并通知用户。Worker保留错误分类，暂态存储错误可恢复；明确模型失败和未知回执停止自动派发，未知占额保留，晚到回执沿原ID结算。单次临时终态写入失败已用短重试验证，持续断库叠加进程丢失没有被这组测试覆盖。
 
-来源同步已接入后台队列：新命令 `POST /source-syncs` 返回202及 `sync_id/status/status_url`，页面通过 `GET /source-syncs/{sync_id}` 查看保存、整理、原文索引和知识索引各自进度。同步完成不代表后三项完成。来源整理消费者已完成本地验收；原文索引消费者和混合检索代码已接入，完整应用链路仍待验收。旧成功命令仍返回原200回执。任务条件已部分实现，活动任务与历史分析等仍有缺口；v2工具续读和答案组合尚未切换，迁移顺序见同文17.8，实际验收见CURRENT。
+来源同步已接入后台队列：新命令 `POST /source-syncs` 返回202及 `sync_id/status/status_url`，页面通过 `GET /source-syncs/{sync_id}` 查看保存、整理、原文索引和知识索引各自进度。同步完成不代表后三项完成。来源整理、统一原文/知识索引、混合检索、活动任务和历史分析已完成所属增量验收；旧成功命令仍返回原200回执。v2工具续读与多任务答案组合已有完整工程证据，默认启用和存量切换在08专用环境演练，实际进度见CURRENT。
 
 完整来源按JSON的UTF-8字节计量，单来源8MiB、单页16MiB；过大时批次明确失败并显示实际大小与上限，已保存的旧内容不被截断覆盖。后台同步没有100页完成门槛。`make verify-source-content verify-source-sync verify-source-upgrade verify-source-ui`分别覆盖完整存取与位置、分页及故障恢复、旧来源回填、进度界面；数据库验收串行运行，使用隔离合成库。极限样本的资源开销与临时环境调整见CURRENT，这些限制不等于每次模型输入量。
 
 `GET /sources/{id}?version=<revision>&offset=<offset>&length=<length>` 返回 `SourceExcerpt`，位置单位为Unicode code point。三个参数须齐备，旧修订返回 `stale_source`，不会用旧位置截取新正文；无位置参数的全文入口保留旧快照兼容读取。文档URL的 `document-` 别名在入口转成 `SourceKey {kind:document,id}`，不写进文档真实ID。
 
-M03批次成员、游标及待生效负责人已持久保存。内部response_budget、活动任务投影与answer_parts交付引用仍是待实现合同；实施时须同批更新宿主、Pi工具桥及恢复验证，不能只改提示词或最后一段答案的拼接，详见[审计第10节](reviews/predevelopment-closure-audit-20261023.md#10-最终技能专项审计与交接修订)。
+来源批次成员、游标及待生效负责人已持久保存。`response_budget`由宿主分配，Rust裁剪并冻结回执，Pi无损接回；检索、支持内容、正文与个人资产各自续读。任务投影与`answer_parts`沿原Pi条目、工具和输出账本绑定：显式任务交接可定稿当前答案，普通单任务仍自然完成；后续工具或恢复不丢已定稿正文。健康会话导出检查点不再整读历史，外部恢复仍严格核验文件与确认leaf。上述修复的06/07整包证据见CURRENT；本地协议与存储验证不代表真实模型质量。
 
 连续实施使用[九阶段执行包](execution/semantic-runtime/README.md)及[验收映射](execution/semantic-runtime/coverage-and-validation.md)。按当前增量推进；兼容统一版本先运行，再切新公共写入/索引，最后启用新消息v2。执行包不表示这些迁移或服务更新已经完成。
+
+## 当前本地试用服务
+
+本次用户已授权更新，工作台为`http://127.0.0.1:27173`，API/Bridge为30780/30781；沿原试用库、合成身份及费用账本，Flash/high、Mem0、混合检索、v2工具、latest_only，预填保持disabled。没有切换到Pro、重置unknown或改动另一份旧mock库。正常产品的运行政策与本次显式试用额度分别管理：本次仍受200元总额和2026-11-18 17:27上海的截止约束。
+
+本机接续命令为`python3 .local/checks/dogfood-final-20261117/start-approved-trial.py 22000`。这是依赖当前忽略目录中既有配置的接续入口；全新安装仍按下文步骤进行。不要在已有实例运行时重复启动。当前控制进程、runtime目录、配置路径与截止记录在`.local/checks/dogfood-final-20261117/runtime-additional-budget.json`；登录使用该runtime中`identities.json`的合成凭据，凭据不进入Git。关闭时只停止该次启动的控制进程，数据库和会话保留。
+
+本次更新关闭了临时模型请求取证observer。健康检查及普通登录/历史刷新证据在`.local/checks/dogfood-final-20261117/updated-service-health.json`和`updated-service-ui.json`。既有结果可查看；明确执行、记忆范围和正式报告保存的模型失败及来源续接缺口仍见CURRENT，不能把启动成功写成完整业务验收通过。
 
 ## 1. 固定的运行时与依赖
 
@@ -118,14 +126,48 @@ make vm-stop
 | `make verify-runtime-capacity` | 容量公式、实际provider与摘要输入、模型配置UI、新配置原生压缩、SDK工具事件与输出队列边界；本地协议替身不代表真实模型质量 |
 | `make verify-retrieval-lease` | 真实MySQL慢读取续租、会话行锁探针和并发停用拒绝 |
 | `make verify-worker-storage-recovery` | 临时存储失败、原scope恢复、错误码落库、未知模型回执晚到结算和长运行续租 |
-| `make verify-compatible-restore` | legacy压缩、检查点、会话与原操作续接、任务文字来源保护 |
+| `make verify-upgrade-current` | 真实MySQL current/旧档精确回退、来源分批/并发回填、latest-only与archive兼容，启动配置及资源清理 |
+| `make verify-upgrade-frozen` | 整理/预填必要输入冻结与实际终态释放，未知调用保预留、晚到usage原身份结算 |
+| `make verify-upgrade-index` | 公共A→B切换、raw补登/移交/索引恢复、尾部/范围及个人目标不变；旧archive并发回归 |
+| `make verify-compatible-restore` | 旧合同/profile/authority与原Pi会话、混合用途摘要、丢查询回执后重启查证、到期历史不重跑、个人版本及跨v1/v2答案保留 |
 | `make verify-code` | Rust fmt/Clippy、TypeScript类型检查、正式React构建 |
 | `make verify-contracts` | 同源产物一致、Rust/JS正反例与序列化往返 |
 | `make verify-runtime-flow` | 真实页面提交、Pi受控工具、持久结果、身份隔离、刷新、双Worker串行和失败终态 |
 | `make verify-recovery` | 三个真实进程退出点、新run/原operation恢复、一份副作用、旧代次拒绝 |
 | `make verify-architecture` | 导入/SQL归属及故意反例、真实MySQL当前读取/事务快照/锁序/并发 |
 
-测试只创建和删除自己随机命名的临时数据库，使用本项目新生成的开发密码；日志与截图在忽略的`.local/checks/`。本地模拟provider调用也向Rust预留/结算调用预算，每个模拟输入最多24次模型调用，跨恢复run保留；实际交付最多4次，会话忙等待不计入次数。生产认证与真实 Datasight 仍需接入验证；真实模型验收遵守单独的持久试验额度。
+测试只创建和删除自己随机命名的临时数据库，使用本项目新生成的开发密码；日志与截图在忽略的`.local/checks/`。本地模拟provider调用也向Rust预留/结算调用预算；正常新输入不设累计调用次数、默认累计费用或总时长硬上限，恢复仍沿原scope。显式有限夹具和旧数字scope保持，连续临时失败3次、取消与单请求超时继续生效。生产认证与真实 Datasight 仍需接入验证；真实模型验收遵守单独的持久试验额度。
+
+### 兼容升级与公共索引切换
+
+统一交付以同一源码指纹、`Cargo.lock`和`package-lock.json`为版本依据；包内的`0.1.0`或`0.0.0`不能单独识别本次升级。08开工HEAD为`04d27d06ba7b97d4cf3e288d4cf9e6300ef491a9`，另有保留的未提交改动，实际构建输入以CURRENT引用的当轮审查和验收收据为准。
+
+| 交付部分 | 版本与构建入口 |
+| --- | --- |
+| Rust API / Worker | 两个crate均`0.1.0`；分别运行`cargo build --offline --locked -p data-agent-api`和`cargo build --offline --locked -p data-agent-worker` |
+| Pi Bridge / Web | 根包`0.0.0`；Node 26.8.1、npm 11.19.0；Pi三个直接依赖精确锁定1.3.0，`npm run check:types`与`npm run build:web`验证当轮源码 |
+| MySQL | 8.4.11；API沿原数据库执行嵌入迁移。`202610300003_public_content_revisions.sql`和`202610300004_source_revisions.sql`新增必要修订元信息，不删旧全文档案 |
+| 公共索引 | Milvus 3.0.2；集合身份由当前配置记录，公共目标变更不改个人Mem0目标 |
+
+统一启动器提供三个显式选项，API、Worker和Pi Bridge共用同一选择；`environment.json`记录非秘密配置。未指定时保持`archive`、工具合同`1`与原数据库摘要公共集合，继承环境不会暗改这三个默认值。选项本身不启用向量或真实模型，也不迁移个人Mem0。
+
+| 选项 | 作用 |
+| --- | --- |
+| `--public-content-retention archive\|latest_only` | 只改变新公共修订的全文保留策略；旧档、任务、SQL、输出、调用账本和个人资产版本保留 |
+| `--public-collection <name>` | 选择公共Milvus集合；不自动搬数据、不删除旧集合，切换后需由维护入口登记重建 |
+| `--tool-contract-version 1\|2` | 只决定新消息的工具合同；进行中的消息及已登记工具继续使用持久版本 |
+
+演练始终使用独立`.local`运行目录和合成库，按以下顺序执行。每一步保留原运行目录及数据库，停止该实例后重新启动统一版本；不能用新运行目录的空库冒充原状态升级。
+
+1. 先以兼容版本、`archive`、旧公共集合和v1启动。迁移与current回填从原身份继续；核对来源、知识、人工值及必要依赖。当前修订读current，旧修订只精确回旧archive；缺失旧全文明确不可读。
+2. 核对实际读取、历史、authority和恢复入口，再显式选择`--public-content-retention latest_only`。新修订同事务保存current、版本元信息和待办；进行中整理/预填保留必要冻结材料，实际终态释放临时正文，unknown仍占原预算。已保存复核成果但尚未应用的整理若遇来源停用/删除，恢复时与原作业同事务收尾并释放材料；启用来源仍沿原成果应用，不重新调用模型。
+3. 停止原公共writer后，以`--public-collection <新集合>`启动同一实例。使用维护者页面“重建检索索引”或`POST /knowledge-index/rebuilds`登记当前知识与raw；重复同一`operation_id`接回原回执。旧raw作业的有效租约内不旁路，租约到期后由普通索引消费流程分批接续，保原作业身份、已用次数及冻结Embedding回执，无需另发维护操作。等待当前目标完成，核对中文、范围过滤及长文尾部。切换间隙允许明确降级和精确回读，旧集合保留且停写。
+4. 公共目标核验后，再显式选择`--tool-contract-version 2`。既有v1操作、原Pi session/确认leaf、operation/origin、预算与输出身份不改，模型profile和authority格式不由这个选项控制。
+5. 回退时先停新写。兼容版本可指向旧集合读取，并由当前owner核权限、修订和正文；也可恢复升级前的一致备份。新结构已有写入后，不能直接启动不认识它的旧writer。
+
+旧已登记的任务更新先按原wire指纹接回ledger；同v2中合法旧shape且registered无receipt的create/revise由宿主识别内部方言，按旧决定格式完成。新v2登记仍用CurrentAnalysisUpdate，模型不能选择兼容方言，迁移后的新状态不降版。草稿保存只要求LockedRun本条消息已归属及任务/条件/来源有效，其他旧失败输入仍由执行确认门检查；准备草稿不增加执行权。相关接缝为`check-tool-contract-version.mjs --filter=registered_legacy_decisions_`、`check-workflow-reliability.mjs`和`check-prefill-materials.mjs --field-evidence`，它们与真实效果分别报告。
+
+08的可复现入口及当轮结果保存在CURRENT。09验收实例显式采用`--tool-contract-version 2 --public-content-retention latest_only`；本地模拟层另选`--memory builtin --retrieval lexical`，真实层按有效授权选独立profile、库、公共集合与Mem0目标。启动后核首条run的合同和冻结profile，不能只核命令行。大窗口聊天配置通过管理员模型定义保存；启动器的旧部署profile仍受legacy合同限制，不能直接把900000输入塞入该格式，维护模型与聊天配置分开核对。局部升级会话、公共切换或本地协议通过，均不等于完成真实模型验收、发布或更新日常服务。没有获准端点和额度时，不执行上面的真实模型/向量配置；无费用检查使用测试脚本自建的回环协议端点。
 
 ### 完整业务验证
 
@@ -171,9 +213,17 @@ python3 scripts/development.py --model deepseek \
 
 `make verify-hybrid-retrieval`在独立数据库和临时Milvus collection中导入1204张合成表，验证中文检索、精确名称、实际写入回执丢失、旧版过滤、个人资产隔离、服务降级，以及保留MySQL后的索引重建。实际结果统一见CURRENT，测试规模本身不构成通过证据。
 
-目录分页必须保持namespace、snapshot_id及authoritative一致；仅完整权威目录允许停用缺席对象。采集起点固定来源头与范围代次，完成即使内容未变也推进范围代次，晚到旧快照不能执行删除。新后台批次只认现有作业租约：每页网络读取在事务外，保存内容、成员、待办及游标同事务；中断沿原批次和已提交游标重领。终态失败保留前页内容，不切换整批负责人，不退休缺席对象；原命令重传仍回该失败批次。旧前台fetching记录继续保留原15分钟中断判断。语义维护的旧分析/复核路径仍沿原维护许可；聊天请求超时按冻结模型配置，Worker整轮按原请求调用上限推导期限并持续续租。
+目录分页必须保持namespace、snapshot_id及authoritative一致；仅完整权威目录允许停用缺席对象。采集起点固定来源头与范围代次，完成即使内容未变也推进范围代次，晚到旧快照不能执行删除。新后台批次只认现有作业租约：每页网络读取在事务外，保存内容、成员、待办及游标同事务；中断沿原批次和已提交游标重领。终态失败保留前页内容，不切换整批负责人，不退休缺席对象；原命令重传仍回该失败批次。旧前台fetching记录继续保留原15分钟中断判断。语义维护的分析/复核路径仍沿原维护许可；聊天单请求超时按冻结模型配置，Worker持续续租，正常任务无按累计调用数推导的整轮期限。
+
+预填先按同版实际表/列定位核心原句及DDL，剩余额度再分配普通材料前缀；sources、supporting_excerpts、最终metadata和coverage共同冻结。发送、复核和引文白名单消费同一可见集合，未交付的metadata原句同步撤下；body与独立片段维持24576 UTF-8字节预算，metadata的重复字节计入完整请求容量。复核保留首阶段核心片段及原引文，再补固定后续窗口；终态释放临时metadata/原文，保留结果、范围、失败和费用。
 
 预填把同源`PrefillResult`作为原生`submit_semantic_prefill`工具的参数Schema，只列待分析的语义条目。思考模式使用auto工具选择，off指定唯一提交工具；服务只接受一次完整同名工具参数，按当前来源继续验证后才保存建议。工具只提交建议，不执行业务副作用。服务端要求完整覆盖，拒绝空结果、漏条目和来源事实条目。没有业务资料时可以留空说明，但必须记录明确缺口及已查材料引用。`verify-knowledge-workflow`同时运行这些纯Rust反例与实际Worker拒绝/人工保护流程。
+
+维护请求在`prepare_submission`内先组装system、实际user材料（含草稿、supports和quote_catalog）及展开后的同源工具Schema，再核请求体字节门与输入容量。输入计量由原owner内的`input_tokens`适配完成：按固定公开Flash-1017/Pro-0813编码格式组装完整prompt，function使用Python默认JSON分隔空格，再一次执行官方tokenizer的BPE；HTTP外层转义不重复计入，也不把独立分词片段简单相加。这样既拒绝字节门内的高密度输入，也保留原中文长材料的正常容量。公开编码token数超过`profile.input_limit`返回现有`payload_limit`，发生在维护预留/HTTP之前；实际`max_tokens`与预留仍取同份profile.output_limit，结算继续核真实usage。固定数据、MIT许可、指纹和隔离的Python独立参考环境见[编码资产说明](../crates/data-agent/resources/deepseek/README.md)。应用只使用Rust本地计数，未增加远程计数服务或新模型调用。
+
+需要保持维护模型通道关闭时，给现有启动器传`--prefill disabled`。它仅不设置整理/预填的profile与URL，聊天、检索、记忆及其原trial/数据库继续使用原配置；缺省`enabled`保持原启动行为。该选项可用于尚未取得维护发送条件的真实试用，不需要更换profile、trial或独立启动器。
+
+上述推导只覆盖已核对的公开编码器形状（两条纯文本消息、一个无namespace函数，无历史/图像/response_format），不是服务端输入硬限制。官方托管API未给出与公开编码器逐字相同的模板保证，off的强制工具选择也未在公开encoder中展开；本地检查不能据此声称所有托管别名/模板都有无条件硬上界。真实维护通道是否具备发送条件以CURRENT的具体证据为准，不能从配置了input_limit或固定模拟usage推断。公开依据：[Flash编码器](https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash-1017/blob/main/encoding/encoding.py)、[Pro编码器](https://huggingface.co/deepseek-ai/DeepSeek-V4-Pro-0813/blob/main/encoding/encoding_dsv4.py)、[官方用量说明](https://api-docs.deepseek.com/quick_start/token_usage/)；本轮保存的版本指纹与复核结果见CURRENT。
 
 工作台解释与预填都区分程序约束、业务文档约定、样例未覆盖和未知。描述某个值可能存在时，模型需核对完整加工及目标表全部约束；描述某组合不能保存时，需有实际排除该组合的谓词，并检查合法反例。预填第二次调用着重挑战草稿的推断及前后矛盾。这些是模型分析要求，程序对引用与结构的校验仍不能证明业务推断正确；真实模型验收须另做独立语义复核。
 
@@ -220,11 +270,21 @@ python3 scripts/development.py --model deepseek \
 
 API首次加密配置时在`DATA_AGENT_MODEL_KEY_FILE`创建32字节主密钥，默认`.local/model-configuration.key`，Unix权限0600。该文件不进Git；备份/迁移数据库时也须安全备份/迁移同一密钥，多API实例须使用同一文件内容。已有密文而文件缺失、权限不当或解密失败会报错，不会生成替代密钥掩盖丢失。不应手工覆盖；当前不提供在线主密钥轮换。
 
-启动DeepSeek profile在空间首次初始化时提供兼容Flash/Pro目录，并将当时API进程收到的密钥加密封存为服务版本1；若未提供则显示缺少密钥，需要管理员补录。之后编辑页面不会重写环境文件，重启也不会覆盖持久配置。原消息保留原连接修订与模型费率，停用则阻止后续模型请求；密钥轮换/地址编辑本身只作用于新消息，需要立即阻止旧请求时先停用服务。升级前已经接收且没有配置版本引用的历史消息仍使用原DeepSeek环境适配，不能追溯恢复当时未保存的密钥；停用原部署服务可阻止这些旧消息发送，不受当前逻辑模型改绑影响。新消息全部使用版本引用。默认单消息24次、连续临时失败3次规则不变。Mem0和向量服务仍用下方部署配置。
+启动DeepSeek profile在空间首次初始化时提供兼容Flash/Pro目录，并将当时API进程收到的密钥加密封存为服务版本1；若未提供则显示缺少密钥，需要管理员补录。之后编辑页面不会重写环境文件，重启也不会覆盖持久配置。原消息保留原连接修订与模型费率，停用则阻止后续模型请求；密钥轮换/地址编辑本身只作用于新消息，需要立即阻止旧请求时先停用服务。升级前已经接收且没有配置版本引用的历史消息仍使用原DeepSeek环境适配，不能追溯恢复当时未保存的密钥；停用原部署服务可阻止这些旧消息发送，不受当前逻辑模型改绑影响。新消息全部使用版本引用。正常新消息不设累计调用、默认累计费用或总时长硬上限，连续临时失败3次及单请求超时保持；旧有限scope与显式试用费用帽不重配。Mem0和向量服务仍用下方部署配置。
 
 每个空间/服务修订有独立Pi运行身份，切换账户或服务时保留公开历史和工具回执，但不发送旧连接的推理签名。关闭SDK隐式模型回退与额外工具注入，实际输出上限在领取发送许可前再核对，SDK不能扩大管理员设定的上限。
 
-本地无费用验证：`node tests/runtime/check-configured-provider.mjs`和`node tests/mvp/check-model-configuration.mjs`。后者需要已构建服务与隔离MySQL，包含真实Pi三协议工具回合、跨空间边界和浏览器操作；只调用合成供应商，不能代替真实供应商和模型质量验收。
+OpenAI 服务在明确选择供应商时默认使用 Responses，地址例子为 `https://api.openai.com/v1`；例子不自动填入地址，也不覆盖已输入的地址，协议仍可编辑。密钥由管理员在原页面输入，保存后只显示配置状态。不要把会话里贴过的 Key 复制进源码、命令或验收日志。
+
+2026-11-06 核对的可选配置为 `gpt-6.1-sol`、展示名 `OpenAI GPT-6.1 Sol`、Responses，支持思考并开放 `low/medium/high/xhigh/max`，本轮代表验证使用 `high`。总窗口为 1,050,000 tokens，最大输入 900,000、最大输出 128,000（包含推理输出）、请求体 8 MiB、provider 请求超时 600 秒，能力来源选 `admin_declared`。依据为[官方型号页](https://developers.openai.com/api/docs/models/gpt-6.1-sol)和[部署说明](https://developers.openai.com/api/docs/guides/deployment-checklist)；账户实际可用性仍须由该账户请求验证。新增为可选模型即可，空间默认值按管理员选择，代表对话显式选择模型和 high 后发送新用户消息，以该消息的冻结 profile 为准。旧消息恢复继续使用原修订。
+
+该配置沿现有容量公式得到 trigger=879000、historyReserve=171000、toolReserve=21000、keepRecent=65536；Pi 1.3.0 的目录窗口仍为272000，由管理员声明的 `context_window` 覆盖。有效 high 位于原生 `input` 的末次 `configuration_update.reasoning.effort`，顶层 `reasoning.effort=medium` 沿 SDK 兼容策略保留。Responses 使用 `store:false`，同一服务修订的 encrypted reasoning、工具 call_id/result 及消息 phase 由 Pi 原生续接，不另拼消息历史或启用服务端自动压缩。
+
+本组 Standard 请求的两项折算费率可暂填输入 5、输出 15 美元/百万 tokens，分别保存为5000000、15000000微美元/百万 tokens。这是覆盖长输入、将缓存按输入上界折算的保守估算；官方缓存和长输入分档未由两字段完整表达，供应商账单另行对账。用量沿实际 usage：输入包含缓存，输出已包含推理消耗，不重复相加；金额按 `ceil((input_tokens × input_rate + output_tokens × output_rate) / 1000000)` 计为微美元。[官方价格](https://developers.openai.com/api/docs/pricing)。
+
+派发失败在现有 bridge 本地日志中记录 `event=model_dispatch_failed`。`stage` 区分 `payload/reserve/send/provider/finalize`，并携原 `run_id/call_attempt_id`、固定 `path`、`elapsed_ms`、`http_status`、客户端已确认的 `reserved/sent` 和有限 `reason`。诊断不输出任意异常原文、地址参数、请求头、提示词或工具正文。reserve 超时只说明未收到回执，不能据此断言宿主未处理；send 状态未知保留原操作和预留，结算回执丢失只重送原结算。宿主普通HTTP请求的10秒与冻结的provider 600秒分属不同阶段，日志分类不改变原对外错误码或重试规则。宿主错误元信息通过私有符号随原Error传递，保持SyntaxError、TimeoutError等原类型，不复制请求体；Bridge沿原`bridge_failed`日志记录finish/host_request/delivery阶段、固定路径、HTTP状态、耗时、有限异常类型和原因，原HTTP响应仍只返回原code。旧诊断开关下的任意error.message输出已移除。成功provider后的答案finish失败与模型finalize结算失败分别定位；本地注入TimeoutError只证明分类接线，不证明某次历史失败的底层原因。
+
+本地无费用验证：`node tests/runtime/check-configured-provider.mjs`和`node tests/mvp/check-model-configuration.mjs`。前者核实际HTTP适配/Pi诊断及所选型号原生请求、容量；后者需要已构建服务与隔离MySQL，包含真实Pi协议工具回合、跨空间边界和浏览器操作。它们只调用合成供应商，不能代替真实账户和模型质量验收；当前真实状态见CURRENT。
 
 ## 6. 真实模型小样与取消
 
@@ -253,7 +313,7 @@ make verify-model-trial
 
 ### 正常消息的调用与重试规则
 
-正常模拟消息以及显式`budget_mode=request`的数据profile，每条用户消息最多24次模型调用；调查、原生摘要、重试、恢复和结果解释共用原scope。默认不设整个任务的总时长或费用截止。每次聊天模型请求仍有90秒超时，用户可随时取消，Worker持续续租。
+正常模拟消息以及显式`budget_mode=request`的数据profile不设累计调用次数、默认累计费用或总时长硬上限；调查、原生摘要、重试、恢复和结果解释共用原scope。旧数字scope保持冻结值，显式试用费用帽仍生效。单次聊天请求超时取冻结配置（旧配置缺省90秒，大窗口配置可为600秒），用户可随时取消，Worker持续续租，不再由调用次数推导整轮截止。
 
 Pi1.3.0负责普通调用及摘要的原生重试：首次失败加最多2次重试，连续失败3次停止，成功清零。HTTP SDK层保持零重试；每次Pi重试申请新的宿主许可。Rust按原scope持久保存结果和序号，重启不重置，旧成功回执不能清掉较新失败。明确临时429/500/502/503/504、模型请求超时或连接失败可重试；认证、参数、计费配额、取消、缺失/无效用量、未知宿主许可和结算不确认直接停止。未知费用预留继续保留，不冒充零费用。取消不记为模型失败，也不清掉已有连续失败；进程中断恢复沿原预算，明确取消的运行不能继续。
 
@@ -276,7 +336,7 @@ python3 scripts/development.py --model deepseek --model-profile .local/model-wor
 
 启动器保留现有代理设置，并在子进程的NO_PROXY/no_proxy/no_grpc_proxy中追加回环地址，保证Mem0的本机Milvus gRPC连接不经代理。
 
-本机已有工作台时，启动验收会选用独立端口和`.local/checks`运行目录。也可以显式传`--port-offset 18000 --runtime-dir .local/checks/my-startup`，保留现有工作台、身份及平台账本。
+本机已有工作台时，启动验收会选用独立端口和`.local/checks`运行目录。也可以显式传`--port-offset 18000 --runtime-dir .local/checks/my-startup`，保留现有工作台、身份及平台账本。API完成目录初始化后才监听；启动器仅API阶段采用75秒健康等待，平台、Bridge、Mem0和Web仍为25秒，超时继续报失败并关闭本次进程。这是启动等待，不改变查询、租约或模型费用上限；冷库和任意宿主负载未获统一时限保证。
 
 未建立空间模型配置时，持久试验配置的 `profile.model_id` 和 `thinking_level` 提供首次导入的默认值，通常为Flash/off；`.env`只提供本地凭据和端点。数据工作台可按对话选择Flash（off/low/high/max）或Pro（off/high/max），页面分别显示关闭、轻度、深度、最高。锁定Pi 1.3.0支持这些原生档位，见[官方思考模式](https://api-docs.deepseek.com/zh-cn/guides/thinking_mode/)。Flash 配对 `2026-10-04-peak-usd`，Pro 配对 `2026-10-05-pro-peak-usd`；服务端按所选模型固定价格，按原trial与每请求额度计账，切换不增加或重置额度。价格依据[官方价格页](https://api-docs.deepseek.com/quick_start/pricing)，以高峰未命中价保守计账。I0 task配置仍仅支持原Flash/off限制。
 
@@ -290,11 +350,19 @@ python3 scripts/development.py --model deepseek --model-profile .local/model-wor
 
 ```sh
 make verify-business-acceptance
-# 用获准配置运行指定业务题；不会创建新trial或补额。
+# 旧兼容接口：保留默认16题；S02先草稿再经按钮确认。
 node tests/mvp/run-business-acceptance.mjs --run --model-profile .local/model-workflow/configuration.json --cases S02,S04,S05
+# 无费用聊天链：真实隔离MySQL、原生Pi、本地协议替身及同一harness浏览器。
+node tests/mvp/run-business-acceptance.mjs --check --interaction conversation --cases S02 --output .local/checks/s02-conversation-protocol.json
+# 仅在当前授权覆盖原trial及启动费用时运行一次；文件必须尚不存在。
+node tests/mvp/run-business-acceptance.mjs --run --interaction conversation --cases S02 --model-profile .local/model-workflow/conversation-configuration.json --output .local/checks/s02-conversation-official.json
 # 只核对保存的业务证据与公开输入哈希，0新增模型请求。
 node tests/mvp/run-business-acceptance.mjs --audit
 ```
+
+聊天代表只支持原 S02 的两条固定自然消息，独立核验实际新草稿 SQL 后才发送明确执行消息，不调用确认 HTTP 接口替代聊天；平台实际 HTTP submit、原 message/query/task/condition/draft/budget、结果读取、流式与正式正文、刷新分别留证。正式解释须区分记录与实体：身份未知不能证明是已知人群之外的新实体，也不能证明多个匿名记录属于不同实体；有依据的已知下界及互斥集合求和仍可说明。协议固定答复只验证链路，真实模型数值通过也不自动表示解释正确。
+
+聊天模式复用原 profile/database，配置须另含 `platformDirectory`（原平台账本目录）及 `modelKeyFile`（该库原模型配置解密文件路径）；只登记路径，不复制或输出密钥。它接回原模型目录，不改服务修订或重建 trial，并记录账本 before/after、本次增量和实际模型派发数。复用前核有效窗口、查询/索引/记忆待办和所有 Worker/Bridge/Pi 执行者；启动本身可能产生费用。默认启动器的工具合同为 1、公共正文策略为 `archive`，本地候选显式传 `--tool-contract-version 2 --public-content-retention latest_only`。无费用 mock/builtin/lexical 候选不证明 hybrid、Mem0 或真实模型能力。`--output` 在启动前独占创建本次文件，非法路径或既有文件会拒绝；后续只更新该报告。浏览器在本次 `h.close()` 之前验证同库同对话，`keep` 仅保库。原 16 题 `--audit --quality-review` 的完整门槛保持。
 
 业务入口记录S01–S05、B01–B08及B05保存失败变体的适用流程，并用独立SQLite数据核算Q02/Q04/Q05/Q06/Q10。同一入口还可运行P01–P05的初次/再次预填和人工保护，聊天与维护共用原trial账本。回环演示模型只有固定策略，证明宿主工具与流程可用；真实模型的解释、引用和缺口仍须独立审查。达到请求、费用或时间上限时保留已使用账本和未完成题目，不能自动重跑或以模拟输出补齐。Q01–Q13参考SQL及18种错误SQL另由独立验收器核对；不声称已验证全部题的模型生成质量。
 
@@ -308,7 +376,7 @@ node tests/mvp/run-business-acceptance.mjs --audit
 
 宿主环境变量`DATA_AGENT_BUSINESS_TIMEZONE`目前支持`UTC`（默认）和`Asia/Shanghai`。每条消息接收时固定UTC参考时刻和业务时区；重传、跨日恢复、查询结果唤醒均沿用原值。相对日期仍由Pi模型展开，宿主提供可信输入而不猜测用户时间意图。
 
-历史会话按首问题标题搜索、每页100条；对话事件用`before_seq`补旧页、`after_seq`增量读取，已加载历史持续保留。公共语义目录按ID每页100对象，后台刷新保持已推进游标并直读当前对象和展开的相关对象。搜索候选达到工作量上限时返回`search_coverage.state=candidate_limit`，页面和模型明确提示缩小范围；不透露被权限过滤的数量。当前支持百炼Qwen/Milvus组合检索与受限合成千表验证；更广跨业务质量和真实目录仍属I3，实际证据统一见CURRENT。
+历史会话按首问题标题搜索、每页100条；对话事件用`before_seq`补旧页、`after_seq`增量读取，已加载历史持续保留。公共语义目录按ID每页100对象，后台刷新保持已推进游标、选择与编辑草稿；每批全部读取收尾后等2秒再刷新，保存/同步期间已有批次时合并补一次。第一页包含完整对象时不在该批重复读同ID详情，其余当前对象和展开的相关对象仍按需读取；离开页面取消读取并忽略晚到结果，真实失败保留已有内容并显示。搜索候选达到工作量上限时返回`search_coverage.state=candidate_limit`，页面和模型明确提示缩小范围；不透露被权限过滤的数量。当前支持百炼Qwen/Milvus组合检索与受限合成千表验证；更广跨业务质量和真实目录仍属I3，实际证据统一见CURRENT。
 
 
 ### Pi 原生会话文件
@@ -380,6 +448,8 @@ make verify-contracts    # 包括WorkspaceContext的记忆检索状态
 ## 试用修复与 Skill 验证
 
 启动器输出 service、stage、elapsed 和本次 runtime 的日志路径；Mem0 区分导入/SDK构造/监听，Pi 区分模块加载/监听。健康检查仍以完整初始化完成为准。默认等待 25 秒；遇到超时应先读具体阶段，不能用提前就绪掩盖未完成初始化。
+
+空空间首次启动导入合成样例；已有资料的重启保留持久版本。修改资料包后通过 `/source-syncs` 手动同步，再查看整理与索引进度。目录文件变化只重分析实际变化的候选及受变化来源影响的对象，不给未变对象升版或重复排预填。`node tests/mvp/check-source-upgrade.mjs --case catalog-restart` 在隔离合成库验证这条流程。
 
 当前空间公共 Skill 从“我的积累”中明确发布，负责人维护，其他成员可选用和提建议。个人资产默认保持私人，发布预览不复制来源备注。附件仅接受受控文本，不能执行脚本。SQL 仍须按具体版本确认。
 
