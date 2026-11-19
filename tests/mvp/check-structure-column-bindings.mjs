@@ -267,9 +267,10 @@ try {
   await new Promise(resolve=>provider.listen(0,'127.0.0.1',resolve));
   let h;
   try {
+    // 维护单次保守预留317031微美元；合成费用须容纳它及首轮实际126，保持两调用和64KiB门。
     const profile={provider_id:'deepseek',model_id:'deepseek-flash',trial_id:randomUUID(),
       price_version:'2026-10-04-peak-usd',input_limit:32768,output_limit:2048,
-      trial_call_limit:2,trial_cost_micros:'300000',request_call_limit:2,toolset:'data',payload_bytes_limit:65536};
+      trial_call_limit:2,trial_cost_micros:'400000',request_call_limit:2,toolset:'data',payload_bytes_limit:65536};
     h=await harness({capture:true,startWorker:false,env:{DATA_AGENT_PREFILL_PROFILE:JSON.stringify(profile),
       DATA_AGENT_PREFILL_TEST:'1',DATA_AGENT_PREFILL_URL:'http://127.0.0.1:'+provider.address().port}});
     const table=ok(await h.request('/knowledge/table-demo_order_detail'));
