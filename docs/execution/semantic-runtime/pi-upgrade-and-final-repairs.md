@@ -1,143 +1,92 @@
-# Pi 1.4 已升级后的剩余问题收口执行包
+# 来源发现与两轮草稿收口执行包
 
-更新：2026-11-18。当前状态只在 `docs/CURRENT.md` 维护。本包承接上一版规格；SDK升级已经完成，不重新升级、不回退1.3、不重开九阶段。原规格快照在本轮审计目录和上一实施的before树保存。
+本包收口两件事。第一，用户点名字段或资料时，Pi 发给模型的工具说明会讲清楚首批缺少目标时怎样查，以及怎样根据用户许可定范围。第二，合成用例能在真实存储里辨认两个正式字段和一个平台来源，按获准原文保存两版草稿。交付范围为工程修改和免费验证。真实模型能否自主完成原题，由原题复验判定。
 
-## 1. 目标、入口和已经完成的部分
+## 接手与取舍
 
-**目标：**保留Pi1.4成果，修复范围切换后的过期容量开销、原128KiB容量、来源精读、明确执行与展示单位不一致的问题，补足派生陈述检索的实际验证，按原要求完成本地收口。没有证据支持的原因先做一次有判别力的免费反例，不凭猜测写保护分支。
+先读仓库 `AGENTS.md`、[CURRENT 最新节](../../CURRENT.md)和本包。在项目原工作目录核对分支 `codex/pi-140-final-repairs`、接手 HEAD `e12eb60`、工作树和相关文件内容。9 个前轮变更路径已逐项核对，另有更早的未提交成果。新增的 `tests/mvp/check-source-selection-cursors.mjs` 也属于这些成果。完整 Git 差异包含多轮工作。启动时记录本轮实际输入指纹，交付时单列本轮差异。执行包及证据更新于 2026-11-18。
 
-**启动必读：** `AGENTS.md`、CURRENT frontmatter及最新审计摘要、本包§1–2。随后只展开当前任务对应章节和代码；历史仅按证据链接追溯，不要求先读整套历史。
-
-**正式合同：** `docs/architecture/implementation-design.md` §17.4–17.8及原系统设计的权限、授权、来源、恢复规则。最新决定覆盖历史默认24次、锁定1.3和旧摘要比例；显式旧配置不变。
-
-| 已有成果 | 本轮处理 |
+| 已核实的基线 | 本轮用途 |
 | --- | --- |
-| 三个直接Pi依赖及内部包精确1.4.0 | 保持package/lock；不夹带其他依赖升级。Codemode/MCP为原SDK依赖，不等于产品已启用，不能据此新增功能。 |
-| 检查点新导出1.4、旧1.3 inline/storage及原1.0兼容 | 复用已有验证。原1.0属于既有支持，不按上一版“只1.3/1.4”误删；未知版本仍拒绝。 |
-| 原生摘要、工具loadout恢复、适用条件内length配对、错误分类 | 继续Pi实现；保留业务投影、invokeRecorded、确认leaf、落盘失败、原operation/origin/预算身份。 |
-| Anthropic任务参数根allOf投影、SDK wire输出收紧 | 当前局部协议检查通过，按本次触及情况回归；不扩大为通用Schema框架或宣称真实Anthropic业务通过。 |
-| 原96KiB六轮压缩、旧游标两类请求覆盖 | 已通过；保留原文件与断言，受容量修改影响时再跑。 |
-| 普通legacy文档搜索的来源误拒绝、上游完整性 | 有真实DB反例及修复，保留文档直接许可/完整贡献根两条合法路径和当前最终门。不能因后续修精读撤掉版本/完整性。 |
-| A03-05正式报告和UI刷新 | 1.4真实通过；不能代替J01执行和A12单位一致性。 |
+| 旧 API 在同一 MySQL 签发的精读 `rc1`，升级后交付原第二页的同一正文、修订和区间。结束旧消息，新消息在新的运行和恢复链里接回原任务，也读到同一页。普通旧游标及原操作重放通过。 | 保留现有 Rust 实现并做兼容回归。无关文档新增、换版、撤权和切任务均有对照。精读的整目录 SQL 由 1 次降至 0 次。 |
+| 精读实际完成时 `exact=available`。没有定位的获准原文仍保留覆盖缺口，有效同批项可读。 | 保留原正负控及两种原文 owner、精确引用和最终权限复核。 |
+| `check-request-context.mjs` 有 20 个场景通过、2 个在 v2 身份检索指引处失败。本地协议首个请求也因这处失败返回 400。 | 先复现，再改模型实际收到的说明。这个 400 来自本地测试供应商的断言。 |
+| 仅在隔离探针补入缺失指引后，新结算场景才到达“应有一条”断言，实得三条。另一个仅运行该场景的诊断逐项核实这三条，11 次本地协议请求、两次精确补读、两版草稿、平台零提交。 | 正式通过要求仓库原入口整组退出 0，运行时清除诊断注入。该探针曾有一次整组运行在 worker 捕获输入时超时，收据保留。 |
+| 实际 Flash/high 来源 08 的宽查首批 20/198，三项正式定义在第六页。任务只选了四个表目录，两次保存被 `waiting_clarification` 拒绝。 | 原来源仍为 `partial`。能确定第一次选错范围的位置。新的指引对真实选择的影响待独立复验。 |
 
-**接手基线：**分支 `codex/local-trial-closure`，记录HEAD `04d27d06ba7b97d4cf3e288d4cf9e6300ef491a9`。上一实施对比基线为 `.local/checks/pi-upgrade-20261117/before/tree/`：1205文件，到完成时1211文件，共29修改、6新增、0删除，与申报35路径相符。本轮审计目录为 `.local/audits/pi-140-implementation-20261117/`；其scope、依赖差异、免费检查、Oracle材料分开保存。接手仍须核实时Git状态，不能把累计dirty归为本包改动。
+本轮产品改动限 [dataTools 中 v2 的 search_knowledge.description](../../../apps/agent/tools/data-tools.ts)。测试改动限 [现有来源场景](../../../tests/mvp/check-source-search-admission.mjs)。用已有 [Pi 请求断言](../../../tests/runtime/check-request-context.mjs) 验收模型实际看到的说明。沿用 Pi 1.4.0 的工具选择、会话、恢复和压缩。身份搜索、排序、Schema、Rust 权限、版本绑定、操作身份和预算机制按当前业务合同运行。保留原问题、实际发送文本、独立参考 SQL、判据、50 条验收及历史结果。此次不涉及 Git 提交、推送、部署、日常服务或付费复验。
 
-## 2. 全局约束、顺序与出口
+## 先补模型能看到的来源指引
 
-1. 先固定接手指纹及原验收，再按§3.1容量开销失效→§3.2固定载荷→§4来源→§5执行→§6单位→§7交付推进。独立项可在另一项阻塞时继续，但共享文件由同一owner顺序整合，不开自动审查面板。
-2. 使用dev_co衔接当前增量，新增行为先写可失败反例；跨语言接口变化沿contract-first和同源Schema。产品名称用业务职责，阶段编号不能进入实现名称。
-3. 不改原问题、独立参考、原128KiB/96KiB门槛、原50条验收；不截必要正文/思考/工具配对、不删场景、不换mock、不反写答案。当前30pass/4partial/66not_run和十轨迹2partial/8not_run如实保留；不重跑全部100项。
-4. Pi独占循环、压缩、切点、重试、会话恢复。Rust独占业务身份/来源、SQL授权、版本、幂等、资产与账本。不要新造执行兜底、模型评判/重写循环、规划器、字段ACL、来源权限DSL或另一套摘要/恢复框架。
-5. 入口校验和内部类型传递沿原边界；权限/版本变化的重核保留。只删除有证据的重复职责，单次简单逻辑就地处理，不以删行数量为目标，也不为低概率猜测扩充保护分支。
-6. 只用Flash/high。原授权总200元（chat195/embedding5），截止 **2026-11-18 17:27:09.662 Asia/Shanghai**。上次余额58.541440元，仅供参考；每次付费前查原账本，保留4笔旧unknown，不换trial/清账/追加额度。期限或余额不足，只停止付费分支，继续免费工作。
-7. 正常新消息无默认累计调用/费用/时长帽，连续临时失败3次停止；历史冻结和显式试用限制仍有效，不借新政策清除旧限制。收费诊断和修后验收分别记录，不把同题重复发送直到偶然成功当证据。
-8. 当前任务无commit/push/云部署/删库授权。产品修改由接手者执行；相关验证后本地服务更新沿用户原授权。保留原数据/身份/账本，切换时先确认原实例状态，不随意杀其他agent进程。
+1. 对照 `dataTools` 中合同 v2 的说明、`assertSourceSearch` 和来源场景中的本地 HTTP 接收端。用当前工作树重现请求检查失败，留下实际出站 `tools[].function.description` 和对应参数结构的合成证据。历史日志匹配输入时用于跳过重复调查。
+2. 在同一条 v2 说明内改写。身份目录按空白分词，任一词可匹配，在知识对象和平台来源各自的序列中按稳定 ID 续页。已知表、字段或资料名时可以用限定名窄查。已知知识对象种类可用 `kinds`，找无知识对象的平台来源应省略 `kinds`。同名字段以 `source_keys` 区分目录和正式定义，`roots_complete` 表示这条身份的贡献根描述是否完整。目录身份与根都不授读取权。
+3. 当 `bounded` 带 `next` 且所需目标仍缺时，Pi 可窄查或续页。任务范围根据当前用户明确的指令或该任务可合法继承的范围填写 `conditions.source_limits`。许可确实不明时沿用澄清。已满足目标就可以继续。限定字段原文使用回执的 `object_id/object_version` 构造 `source_selection[{object_id,version}]`，再用真实 citation 调 `read_source`。用户给定的来源限制始终生效。保留原说明已有的身份与取证各自的游标、原文类型与筛选、支持内容和完整性、个人资产续页等含义。
+4. 用实际序列化请求验收声明前、来源就绪后和同会话恢复三处。身份查询的 `cursor` 与选择参数可用，未声明阶段仍隐藏正文读取。就绪时有 `read_source(citation)`。原首批 `bounded/next`、贡献根和对象版本进入后续请求，越权读取仍拒绝。保留现有断言。下方备选文案已通过两处来源测试和 Anthropic 投影测试中的全部 9 条既有文案正则。最终以实际 Pi 请求、完整工具与行为断言为准。产品文案用一般业务语言，样例名称、原题答案、固定工具顺序均留在测试层。
 
-**统一停止条件：**每个问题先写出待证假设、一次能区分原因的反例和预期修法。证据否定就换假设；没有可验证路径则记具体缺口并停止该项，继续独立任务。不能用“工程完成”替代原题通过，也不能把未复现的条件风险列成必修功能。
+<details>
+<summary>一条可直接试用的 v2 说明</summary>
 
-## 3. 容量：先修过期判断，再做等价减重
+```text
+view=source_identity只列身份，未读正文，无语义召回。空白分词任一匹配，稳定ID分页。完整字段名、表名或文档名窄查。对象可筛kinds，无对象平台源按名/ID查并省略kinds。source_keys区分同名目录与正式定义，roots_complete仅述根是否齐全。bounded带next且目标仍缺，窄查或续页再按获准来源定conditions.source_limits，许可不明先问。限读原文用object_id/object_version填evidence的source_selection（version取object_version），取citation再read_source。不扩许可，不授派生知识/结构采用权。两视图cursor不互用。默认evidence遵来源门，kinds=document只取文档原文，平台原文不筛种类或选匹配table。hits按相关性返knowledge_entry/source_excerpt，用ref/citation补读，raw不可作知识ref。content_state指本项，support_state与supports_complete分别指支持交付、提取完整性，unknown仍可能有例外。search_coverage示覆盖，空结果不能判不存在。本人有效资产用query=*或asset_after单独翻页。
+```
 
-### 3.1 范围切换后，旧保留开销仍参与容量判断
+旧说明和这条候选的 UTF-8 大小分别为 1091 B 和 1084 B。此处只计算说明字符串，正式验收仍测序列化后的整个 HTTP 请求。
 
-**已复现。** `session/capacity.ts`的`retainedOverhead`只在`session_before_compact`更新；`task-projection.ts`通过原生`appendCompaction`撤下旧范围后没有使这份开销失效。`deliver.ts`下一次`checkContext`仍调用原`capacity.check()`。这份缓存设计在接手基线已有，不能称为已证实的1.4回归，也不能说它解释了J01或当前128KiB原题。
+</details>
 
-审计使用真实`SessionManager`和现有`taskProjection`，没有网络：有效配置C/I/O=65536/50000/8192，旧保留附加量1500 tokens，切换后当前投影仅30 tokens、固定开销15429；旧实例报`fixed_overhead_insufficient`，按同一新投影构造的检查器通过。完整参数和结果在本轮审计目录的`retained-overhead-reproduction.json`，可运行反例为`reproduce-retained-overhead.mjs`。
+## 再修三条身份的夹具预期
 
-**修复与边界：**先将该反例转成期望“真实范围替换后可继续”的失败测试，再让附加量只对其所属保留边界有效。复用当前Pi投影/压缩边界，或在已确认的范围替换出口更新这份现有缓存；不要另存一套历史或新事件框架。普通消息追加不是范围替换，不能每次leaf变化都清零；真实长保留组、旧摘要、文件附记仍必须计入。刷新失败恢复旧分支时不能错误清除旧边界的开销。
+先让指引通过，再运行正式的 `source-selection` 场景并保留首次到达 `checkSettlementContinuation` 的 `3 !== 1` 和三条实际回执。独立预期来自当前夹具的两条 `definitionId`、共同的 `source_id`，及查询不带 `kinds` 时的平台来源合同。可按需看 [目录 owner 查询](../../../crates/data-agent/src/modules/knowledge/store.rs) 与 [平台身份枚举](../../../crates/data-agent/src/use_cases/source_identity.rs)。
 
-**验收：**同一Session中，范围变更成功后的首个正常请求不因已经撤下的内容而被误拒；没有范围变更时，真实超限仍拒绝；刷新失败仍沿原分支判断。覆盖动态工具/宿主事实改变固定开销的情形。沿`check-capacity-derivation`、`check-request-context`及容量原生回归补行为证明，不以仅创建一个新检查器替代实际调用链。
+直接在 `settlement-rules-identity` 的消费位置替换“长度 1、取首项”。查询之前，按建夹具时的对象 ID、名称、版本和完整的 `{kind,id}` 根对构造预期。复用已有 `settlement.fields`、源名及建目录时用到的版本。断言采用独立预期，后续工具入参使用实际回执。只数三条、按返回顺序取首条、从 `rules.hits` 生成预期，都会漏掉此缺陷。
 
-### 3.2 原128KiB请求体：等价减重与完整续答
+| 合成输入中的身份 | 必须断言的事实 |
+| --- | --- |
+| 两个正式字段对象 | 正好各出现一次，ID 集合等于 `settlement.fields` 的两个 `definitionId`，名称与版本对应各自夹具，`kind=field`、`roots_complete=true`。逐字段核对贡献根精确集合 `[{kind:"platform",id:settlement.source},{kind:"platform",id:"schema"}]`，含各自类型和 ID。按身份和集合比较，宽查询原有稳定顺序断言继续执行。 |
+| 一个平台来源 | 本项同时缺省 `object_id` 和 `object_version`，名称等于 `settlement.source`，`roots_complete=true`，唯一根为该平台来源。从这条回执取得 `{kind,id}`，结合本轮合成用户明确指定的来源及 `origin_message_ids` 声明任务范围。DDL 虽出现在字段的贡献根中，任务允许集仅含用户指定的平台来源。用户只要两个字段时，后续仍按两个对象精读。 |
+| 整页 | 三项都是 `source_identity`，无缺项、重复或额外身份。本夹具此查询已查完，核 `searched` 和 `next=null`。此前宽查的 `bounded / candidate_limit / next`、同名目录字段与正式字段的窄查断言保留。 |
 
-**问题与已证根因。** `tests/mvp/check-large-tool-context.mjs`的两份8192字符正文，在Pi原生压缩后仍是141344B，超过131072B共10272B；固定提示、工具定义和当前不可拆工具组超过门槛。Pi已经压缩，这不是“没有开启SDK压缩”。六份正文的有限失败分支因前一分支先失败而尚未执行。不要宣称差额证明任何减重都不可能。
+继续通过同一入口走完两轮。选中版本和 citation 来自真实回执。首份精读只有两个获准定义和各自例外，把每个 `read_source` 的来源、修订、Unicode 区间和正文与其对应的精读命中逐项比较。下一次送给本地协议模型的实际请求中也应有这些回执，并无无关字段正文。核对真实存储的任务与条件版本、两份 SQL、参数、UTC、截点和替代关系。只换月份，五月稿 `superseded`、六月稿 `awaiting_confirmation`，两者 `not_submitted`，平台提交记录为 0。报告说明此处的动作和 SQL 来自脚本。11 次是曾观察到的请求数，不设为通过门槛。
 
-**当前任务必读：**该原测试、`apps/agent/session/{resources,request-size,capacity,deliver}.ts`、`apps/agent/tools/data-tools.ts`、`apps/agent/provider/controlled.ts`及已有两版载荷日志。必要时读取实际锁定SDK序列化/压缩源码。正常v2活动工具投影已改善，但原失败样本仍需沿自己的真实合同处理。
+## 按原入口验证并交接
 
-**实施：**
+用隔离 MySQL、现有本地 Milvus 及本地协议供应商串行验收。本机 Docker 上下文为 `colima-data-agent`。核对 API/Worker 与被验代码匹配后直接复用。若二进制确实过期，分别构建 `cargo build --offline --locked -p data-agent-api` 和 `cargo build --offline --locked -p data-agent-worker`。在用于全部验证的子 shell 中清除真实供应商配置及诊断注入，由每个夹具设置自己的工具合同。
 
-- 保留原场景，捕获实际序列化后请求的分项字节，区分全目录、实际活动工具、系统规则、临时宿主事实、assistant/工具正文和转义。现纯构造测量：系统规则20116B；v1 `update_analysis_task`参数20244B＋描述1652B。这些是优先检查点，不是预定删减目标。
-- 优先删除/合并真正重复的规则或等价约束，缩短表述时列出唯一语义保留位置。每个动态开放工具仍可独立理解；不能恢复跨工具去重后少数初始工具缺SourceKey说明的问题。共享权威Schema的接受/拒绝行为不变，v1恢复与v2当前投影分别验证。
-- 已删除的v2中间`allOf`已另核完整源Schema：该分支自身不增加字段存在性或条件必填；其嵌套采纳对象约束仍保留。78份原合同样本及缺字段/null/新旧解释变体共858项差分结果一致。此证据只覆盖当前删减，后续每项精简仍须保持相关行为。“OpenAI未改变”仅指Anthropic边界补丁不改OpenAI；通用工具Schema的减重会作用于所有相关协议。
-- 不用新的动态意图路由来删工具，不通过自动更换模型、升级旧profile、提高字节上限、移除thinking或工具正文解决。若使用某种SDK原生Schema表达，先核对应provider真实支持，不能假设任意`$ref`/`$defs`都可用。
-- 原生容量三层合同保持：reserveTokens是触发线，keepRecentTokens不是硬尾长；旧摘要复用、完整组和文件附记看实际preparation。冻结O、本次SDK cap、wire cap与费用保守预留分别校验，不重造摘要器或把2O+K当普遍保证。
-- 核当前实际冻结C/I/O及`planForProfile`生效路径，不能用假想旧配置宣称现行配置已回归。`JSON.stringify(...).length/4`是现有启发式，不声称精确token上界。当前按较大冻结O预留是保守行为，尚无因此误拒的证据，本包不扩展为预算精细化；真实usage结算和unknown规则保持。
+```sh
+export PATH="$HOME/.cargo/bin:$PATH"
+unset DEEPSEEK_API_KEY DEEPSEEK_BASE_URL DEEPSEEK_MODEL DATA_AGENT_MODEL_PROFILE DATA_AGENT_MODEL_FAULT
+unset DATA_AGENT_TOOL_CONTRACT_VERSION NODE_OPTIONS
+run_evidence=$(mktemp -d "$PWD/.local/checks/source-discovery-XXXXXX")
+mkdir -p "$run_evidence/selected-red" "$run_evidence/selected-green" "$run_evidence/default-green"
+```
 
-**验收：**原两条测试文件逐字保持；128KiB的两正文逐字保留、原工具调用配对、同operation/scope及正常续答通过，六正文分支有限失败且超限不发送/不正式答复；原96KiB六轮/普通请求与摘要旧游标断言都保持。完整失败日志与减重后实际差额保存。无等价修法时明确列冲突，禁止自行降低标准。
+在指引修复、夹具尚未修正时，给专项命令设置 `DATA_AGENT_SOURCE_CHECK_DIRECTORY="$run_evidence/selected-red"`。夹具修正后，专项和默认组分别写 `selected-green`、`default-green`。分开保存真实退出码和完整日志，保留整组超时和单场景结果。
 
-## 4. 来源交付：合法精读与派生陈述搜索
+| 顺序 | 命令与通过依据 |
+| --- | --- |
+| 出站及两轮草稿 | `node tests/runtime/check-request-context.mjs`、`node tests/mvp/check-source-search-admission.mjs source-selection`、`node tests/mvp/check-source-search-admission.mjs`。含原先五次请求的用例及新场景都执行。从源码和真实存储核三条身份、两段原文、两版草稿、零提交。 |
+| 原容量与 Pi | `node tests/mvp/check-large-tool-context.mjs`、`node tests/mvp/check-native-compaction.mjs`、`make verify-pi-transport`（已含 Anthropic 工具 Schema）。原 128 KiB 用例以默认 v1 的旧参数形状运行，两份各 8192 字正文逐字交付，六正文确实无法容纳时，超限请求发出数为 0。历史峰值 131057 B，仅余 15 B。原 96 KiB 用例显式 v2，核六轮同会话原生压缩、摘要/普通请求和原操作身份。记录本次实际序列化峰值及对应版本。在 v2 来源场景的现有本地 HTTP 接收端，逐请求累计原始正文 Buffer 的字节数，或对完整按 UTF-8 解码的 `raw` 取 `Buffer.byteLength(raw, "utf8")`。在现有测试收据记录请求阶段、合同版本、原上限 131072 B 和实测峰值。重新序列化 `providerRequests` 会丢失原始转义或空白信息。 |
+| 来源与兼容 | `node tests/mvp/check-source-recall.mjs`、`node tests/mvp/check-source-limits.mjs`、`node tests/mvp/check-source-scope-equivalence.mjs`。用 `node tests/mvp/check-source-selection-cursors.mjs .local/checks/pi140-remaining.JBtWF18y/legacy-api` 验证真旧程序签发的两类 `rc1` 与新程序同页。旧二进制 SHA-256 为 `d025d96b13811ddc8ab84c999a65b759570fd1ed9325c851d2974f13fd0a3189`。普通无参入口只覆盖当前程序。若历史文件不在执行机，说明兼容实跑缺口并引用已有跨消息收据，继续完成两项修复。 |
+| 工程与冻结 | `make verify-code verify-architecture verify-delivery`、`git diff --check`。将 CURRENT 的 50 个完整验收对象与冻结的 `original-acceptance.json` 深比较，复核原题/参考、两容量夹具、成绩和账本哈希。静态声明检查和既有核心 21 成绩各自报告。 |
 
-**问题分开处理。** legacy文档普通检索修法已经有证据；不能由一个反例推断历史9次来源拒绝全部同根。当前未闭合的是下面两项。
+发生容量失败时先核实际工具合同、HTTP 请求组成、原正文与超限路径。仅在本次 v2 说明内消除重复表达。保持原字节门、历史、完整正文和原生压缩条件。若证据指向其他模块，先交付该失败样本和必要的改动范围。测试中用过的内存注入和仅执行新场景的探针只用于定位。正式验收运行仓库中的原入口。
 
-### 4.1 字段定义存在，但合法定位/交付路径不通
+`original-acceptance.json` 比较源为 `docs/CURRENT.md` frontmatter 的 `delivery.increment.acceptance`，逐项包括命令参数、期望和时限。`baseline.json.hashes` 记录 `docs/dogfood/` 的 106 个、`docs/sources/` 的 67 个原输入。`original-record-update-integrity.json.record_sha256` 对应 `.local/dogfood-runs/qa-usability-20261116/` 中的 `results.json`、`trajectory-results.json` 和 `budget.json`。原 128/96 KiB 测试文件本身也核对冻结指纹。
 
-原来源07允许三项车辆字段定义；实际搜索窗口1183字符与后续3200字符读取均带无关字段/其他能力定义，仍partial。已同步的`meaning`正文来自允许的身份文档，但`effective_structure.table`产生`table_binding → ddl → schema`传递依赖，当前贡献根判据要求额外整包来源。另一套平台目录对象的comment/meaning确实空，不能混为同一个对象或补造解释。
+完成后在 [CURRENT](../../CURRENT.md) 的“验收与要求变更”记录原单条预期、三条新预期、独立依据和对新合成测试的影响，再登记正式命令和未验项。验收结果绑定最终改动指纹，留给未实施者复核。**两项工程修改以正式免费回归通过为收口条件。** I3 另按原业务验收判定。 来源 08 原两句及获准前提需另有有效授权才用 Flash/high 复验。真实 OpenAI Responses/high 及 J19 正式解释另有证据缺口。此前逐条 49/50 对应上一版。上述业务证据仍缺时，I3 保持 `active`、完整审查 `pending`、完成收据空。原门与独审都具备后再执行 `make verify-increment`。
 
-**必读代码：** `crates/data-agent/src/modules/knowledge/dependency_index/{mod,store}.rs`、`use_cases/{source_limits,context_authority,knowledge_sources,data_tools}.rs`、`modules/retrieval/{source_segments,excerpts,search_reply}.rs`，以及原source proof和三字段实际记录。权限/有效性/引用边界仍按正式设计§17.4–17.6。
+## 证据入口
 
-**实施边界：**
+本地可查 `.local/audits/pi140-cursor-implementation-20261118T172629-SaNOBQ/audit.json`（原题、前后指纹、同库及跨消息游标、两个红测和隔离诊断），以及 `.local/checks/pi140-closure-20261118/`（原 50 条绑定、原题取证、两容量日志、成绩及账本指纹）。正式业务边界见[实现设计](../../architecture/implementation-design.md)和[原验收记录](../../reviews/data-agent-final-closure-review-20261117.md)。
 
-- 先做最小真实存储反例：一个字段含义来自已允许文档，结构仅绑定另一表；分别观察纯定义、实际结构/DDL正文和显式citation/support的来源集合、版本校验及最终provider输入。确定哪些依赖证明当前有效性，哪些来源实际贡献了交付内容；不能仅因角色名是table_binding就全局排除，也不能按本题对象名特判。
-- 在这条来源路径中同时核一个有代码依据的疑点：新增完整性读取调用`knowledge_sources::read_meta_in_tx`，若贡献根为document，该入口又遍历整份文档依赖。已有“未选platform附录不完整”反例不能自动覆盖嵌套document贡献根。只按现有合同验证所选片段有效、未选片段失效时的结果；如果该贡献根本来就是整对象依赖，拒绝正确，不改。如果确为不必要的整文档重查，只窄化这次元信息读取，保留原版本、指纹、选中依赖和完整性门，不另造权限层。
-- 优先沿现有entry/ref/locator/批读取得三个合法定义；结构确有独立职责时按实际交付部分使用既有投影。版本/指纹/停用/来源门保持；不能为纯文字成功而放行不获准的结构、DDL或必要支持。
-- 对已有来源事实和精确quote，可核同修订原文中的真实位置；复用已有定位/引用能力，quote不唯一或无匹配即留缺口，不凭object_id/version造`path=/`或猜offset。任何定位结果不新增许可。不能先把整文交给模型再裁回答。
-- 搜索的召回块和交付片段可以有不同大小，但必须仍引用原文真实字符范围，保留必要条件/例外。只在证据说明现有粒度有缺口时改对应定位/交付，不能全局缩topK、改存储或新增通用文本解析框架。
-- 若“完全不读任何无关字段”的原要求在当前接口下没有合法路径，写清最小缺失能力及影响，保持partial；不要把自然语言字段限制擅自升级为全系统字段ACL，也不要修改原题的许可范围。
+本次 Oracle Web 以 Power 5/5 审核了两项实施顺序及其证据，结论为“可执行”。终稿采纳了两条具体修订。三身份的预期值取自查询前的夹具，平台来源同时核对两个对象字段均缺省。v2 容量按接收端原始 HTTP 正文字节取证，并记录版本、阶段、上限。本地已逐项核对 owner 查询、平台枚举、合成回执与接收端代码。Oracle 原答和确认记录在本机 `.local/audits/source-discovery-closure-20261118T180614-XHOv4S/`。此次审查对象为执行包，最终实现由未参与编码者另行复核。
 
-**验收：**搜索windows、read正文和下一次provider输入都只包含原许可内容及必要上下文；ref来源/版本/字符位置对应，不能只检查最终答案。原两句逐字保持，第二轮业务条件仅月份变化，正常版本/旧稿失效仍推进；9月稿作废、8月稿保存，UTC/截点/分母/来源不变、平台零提交。只有免费路径证明后才在原费用范围内做一次Flash/high原题复验，正常UI刷新核两稿与正文。
+## 交接 prompt
 
-### 4.2 显式citation/support的陈述检索尚未取得正控
+```text
+在本机 Data Agent 原仓库接手“来源发现与两轮草稿”收口。先读 AGENTS.md、docs/CURRENT.md 最新节，再读 docs/execution/semantic-runtime/pi-upgrade-and-final-repairs.md。核对当前分支和未提交工作，按包连续完成两项修复。
 
-`check-source-search-admission.mjs`当前`explicit-dependencies`分支证明的是指定statement_id的read正反控。曾有搜索hits为空且伴index_lag/channel_unavailable；手工插`knowledge_statements`不等于正式保存和索引已完成，不能将零命中当授权成功或直接列产品bug。
+先复现 v2 工具指引未进入实际 Pi 请求的问题，只改 search_knowledge 的 v2 说明，保留现有请求断言。再从正式 source-selection 入口复现 3 !== 1，用查询前的夹具事实精确断言两个正式字段和唯一平台来源。按用户许可和真实回执限定来源，两次定点补读后保存替代草稿，核实旧稿作废、新稿待确认、平台零提交。
 
-用现有正式语义保存/整理及索引入口构造小样，先确认目标陈述已进入对应候选/索引，再测试“全部所需来源允许”的搜索正控确实返回同一statement_id、正文和citation/support；缺相应来源时不得交付正文。并行命中合法内容不能因为另一个越界候选导致整批误拒绝。若正式路径仍不能召回，记录首次丢失于owner持久、索引、召回、过滤还是交付，只修该原因；原定点read正反控继续保留。不要把测试数据直接插表后缺索引修成生产兜底扫描。
-
-**本节回归：**复用`check-source-search-admission.mjs`、`check-source-recall.mjs`、原source-limits/相关entry-read/structure-binding检查；只增加本次缺失的行为证据，不铺新的测试框架。
-
-## 5. 明确要求执行，仍只route后结束
-
-**已证事实与未知。** J01-07原第二句“执行刚才SQL。”只产生一次route，最终说无执行入口，平台零提交。route持久回执ready/execution_tools_ready均true；原生loadout和零网络分支回放含19工具及get_query/execute_query。回放不是失败当时的最终HTTP，请求时序、宿主文字和模型决策尚未完全区分。SQL离线正确不能代替真实执行，旧1.3成功也不证明1.4通过。
-
-**必读：**原两句、J01-07 trace/loadout/free-native-tool-wire、`session/{task-projection,workspace-context,deliver}.ts`、`tools/data-tools.ts`、原`check-request-context.mjs`。当前免费测试已证明无reset和有reset的常规工具开放；先复用它，只有新差异才补反例。
-
-**判别与修复：**
-
-1. 对齐同一SDK调用/本轮消息，在route前、回执消费后、最终onPayload分别核工具名称和参数、当前ready事实、用户原话及有无过时“无入口”指引。优先找原attempt持久的`parameters_fingerprint`，按同一检查点、冻结配置和回执重建，只有最终载荷指纹匹配才可将回放作为该历史请求的加强证据；不存在或不匹配即保留缺口。恢复与动态注册必须在首个后续请求生效。只读必要正文/工具，不提取模型思维，取证不记录凭据。
-2. 原证据不足且免费路径无法判别时，可沿已有observer做一次原题收费诊断；事先写清这一笔区分什么，冻结原题与Flash/high，沿原预算/期限，不以诊断直接标修后pass。
-3. 如果实际wire缺工具或有错误控制事实，修产生错误的现有入口，使用Pi的活动工具/上下文接口；如果wire完整正确但模型正常stop且不调用，则仅能认定该样本的工具决策未完成，不能虚构SDKbug。检查既有规则是否自相矛盾，确有歧义只修改同一处表达。
-4. 禁止宿主看到“执行”就直接调用SQL、强制tool_choice、再包循环、自动重发用户消息或模型拒绝后另起纠错Agent。仍由Pi理解执行意图，Rust绑定真实消息、最终SQL/条件/版本及原副作用身份。
-
-**验收：**免费反例覆盖已证故障及正常工具开放，不解除来源门；真实原两句从草稿到一次平台提交，再取得实际结果，386/424与1158/386两总体正确，刷新保持。不执行时必须保留partial，不用离线SQL、模拟工具或卡片手点替代原要求。
-
-## 6. 记忆已正确召回，展示单位仍自相矛盾
-
-**已证事实。** A12-04七次真实Mem0回执均为同一完整v2，明确该周报默认秒三位、当次要求毫秒则例外。最终答案先说默认秒三位，后说主指标展示ms，随后又给条件式秒说明。没有旧v1混入或范围丢失证据；失败位于最终答案整合，不支持改Mem0、重建索引或改记忆正文。
-
-**必读：**A12-04原输入、`memory-scope-proof.json`、最终可见答案，`session/resources.ts`与`workspace-context.ts`，实际工具交付中的共享指标单位及个人展示偏好。
-
-**实施：**先查最终请求是否清楚区分“指标定义/存储单位”和“本次展示单位”。不能仅凭记忆标注“非指令/非执行授权”就判定原因。若既有说明混称或冲突，在原说明处统一表达：适用范围内的稳定偏好在不与本轮要求冲突时采用，展示换算不改变指标定义，也不授予执行权限；应用偏好须同时保持其范围和例外。不要再附一套长规则、单位规则引擎、二次模型审答或答案后处理。若输入已清楚一致，保留该样本输出失败，不以新增框架保证模型永不矛盾。
-
-免费检查只证明原v2/scope/例外和修订后的指引实际进入请求；不能用固定模拟回答证明质量。随后有依据地一次原近义题Flash/high复验，整段答案展示方案一致，不混淆共享ms与展示s，不泛化到全部周报、不取数、不执行、不改记忆。其他单位与例外反例采用从零构造的合成语义，不能把原题答案写进提示或fixture模型。
-
-## 7. 验证、独立复核和本地交付
-
-**环境：**主仓库原checkout；Node26.8.1/npm11.19.0已有记录，接手核实；cargo PATH沿当前环境；Docker `--context colima-data-agent`。MySQL仅1GiB，DB harness串行，Rust改动后分别build API/Worker。免费测试子进程移除真实DEEPSEEK和模型配置环境，合成HTTP由现有harness提供；不读取/输出凭据。
-
-**相称验证顺序：**
-
-- 先本次RED→GREEN和触及的合同检查；共享接口变更同源生成并核TS/Rust。四项审计时已通过：`check-anthropic-tool-schema`、`check-pi-upgrade-lifecycle`、`check-capacity-boundaries`、`check-request-context`，代码或输入有相关变化再重跑。
-- 容量改动跑原`check-large-tool-context.mjs`、`check-native-compaction.mjs`及`make verify-runtime-capacity`，不把局部单测当整目标通过。来源沿§4回归，恢复/费用被触及时核原`check-sdk-upgrade-recovery.mjs`和原恢复流程。
-- `make verify-code verify-contracts verify-architecture verify-delivery`与原CURRENT绑定的`verify-increment`分别记录。不能为了越过审查门制造passed记录；由未负责对应实现的审查者核对实际需求、代码、原标准和当前证据，审查范围与指纹匹配。
-- 实际core21和来源成绩门仍需通过；原50条必须取得当前完整执行结果才按原规则关闭。66项not_run和其他partial不自动变pass；不扩大为全100重测。没有取得当前证据的项目保持未验证。
-- 真实请求只在免费证明后按原授权执行。原失败、被纠正的初判、unknown及费用保留。错误不归咎环境/模型除非有对应证据，单次成功不宣传稳定性百分比。
-
-**文档及服务：**只更新CURRENT当前摘要、原审查、本包状态、直接受影响正式设计/README和本地REPORT。模块拓扑未变不重画全套图。验证后沿原库/身份/账本更新确切本地实例，保留Flash/high、observer关闭和预填策略；确认无在途消息后再切换。健康、正常登录、已有结果/正式报告和刷新读回，记录实际SDK/端口/运行目录与限制，不发无关付费问候。当前运行目录记录是`runtime-20261117T132322Z`，不能仅凭旧PID认为进程还活着。
-
-**完成出口：**逐项报告修了什么、证实的原因、删除/保留的Pi适配及证据。容量、来源或核心题未过时保持I3 active/partial。若剩余原因确需改变产品合同，列明唯一必要取舍交用户决定；不预先放宽标准，不用“执行包已完成”代替产品完成。
-
-## 8. 审计来源和边界
-
-本地审计以完整接手基线对比、当前源码/合同、实际原题记录、四项重新执行的免费检查、858项Schema差分和范围切换容量反例为据；不是只复述前一agent总结。已独立确认35路径范围、包版本、原两容量文件及50验收未改。完整历史累计工作不因本包获得全局批准。
-
-Oracle本次审查及最终交叉结论见 `docs/reviews/data-agent-final-closure-review-20261117.md` 最新节。它的建议须经当前代码核实，不能授权新范围、付费、部署或改变验收。其审查材料、原答复、会话和清理收据存本轮本地审计目录；最终执行包后续实现仍需自己的验证。
-
-Oracle独立给出方案后，本地证实其容量缓存疑点，并排除了目前Schema删减错误的疑点；本包已合并这些结果。最终合并稿未再次送审，不将Oracle对附件的审查称为对未来实现或全I3的批准。当前没有必须新增的产品决定；仅当后续证明原合同无法同时满足时，才将具体冲突交用户决定。
+按执行包串行跑隔离 MySQL、本地协议、原 128/96 KiB、Pi 传输、来源范围和真旧 rc1 回归。保留原题、判据、阈值、权限与 Pi 原生循环，正式运行清除诊断注入。收尾更新 CURRENT，交付本轮差异、原命令退出码、证据位置和未验项。此次授权为两项工程修改和免费验证。来源 08 和整体 I3 按原业务门单独报告。
+```

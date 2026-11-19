@@ -9,10 +9,9 @@
   "sources": {
     "implementation-views.md": "e13ddb89462fff3f72e5ab3d04e5c7a2a113fae1571707f6a527b6b13837d88d",
     "knowledge-modules.md": "ce77179fe584d7e9cdb6628429744725b9851e3dfcded2cc28390805f09d9fb8",
-    "runtime-modules.md": "a5896bb054eaae6b97d1e63415083aab75502d838e16c35f0bab696ae1852106"
+    "runtime-modules.md": "6ff906573ade6f7e04068ccb5e4cd1379836bb8d2298f5d65c027578d2995e0d"
   },
   "renderedDiagrams": [
-    "V03",
     "F08"
   ],
   "diagrams": [

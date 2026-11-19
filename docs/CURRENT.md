@@ -3,11 +3,11 @@
   "workflow": "development",
   "schema": 1,
   "phase": "repair",
-  "goal_revision": 228,
-  "environment": "2026-11-17实际已更新本地Pi1.4.0：Web27173/API30780/Bridge30781/平台30790/Mem030791，控制器4458，runtime-20261117T132322Z；原data_agent_trial_1b4c4000adefcdf7、身份/平台/Mem0/索引/账本和Flash/high保持，observer关闭、prefill disabled。旧25554切换前已退出、原因未捕获。沿docker context colima-data-agent；不部署云端。原200元（chat195/embedding5）与2026-11-18 17:27:09.662上海截止不变；最新实账/健康仍须运行前重核。",
+  "goal_revision": 235,
+  "environment": "2026-11-18恢复原日常实例，Web27173/API30780/Bridge30781/平台30790/Mem030791均200，控制器70269，runtime-20261118T024923Z。使用原库、身份、平台、Mem0、索引和账本，Flash/high，observer关闭，prefill disabled。两道原题各完成一次复验，45笔结算共3.121736元，余额54.797416元，保留4笔旧unknown及占额，新增unknown及在途均为0。原授权200元（chat195/embedding5），截止2026-11-18 17:27:09.662上海。",
   "verification": {
     "level": "increment",
-    "reason": "Git归档前verify-code、verify-contracts、verify-architecture和verify-delivery均实际exit0，日志在.local/git-delivery-20261118；不将这些基础门当作原50条或真实模型验收。前次Pi1.4实现审计、858项Schema差分及容量开销误拒反例保留，原128KiB/来源/J01/A12/statement检索和全I3关闭仍未完成。当前30pass/4partial/66not_run、core21为19pass/2partial、十轨迹2partial/8not_run不变；原费用与4旧unknown不变。",
+    "reason": "两项来源定点试验和受影响免费回归均通过。脚本替身以原消息保存同任务两稿，三字段取证及跨轮恢复通过，平台提交为零。来源 08 原真实轨迹仍为 partial，I3 active，完整审查 pending。待真实 Flash/high 复验。",
     "freshness": "content",
     "checks": [],
     "inputs": [
@@ -84,7 +84,7 @@
       "id": "I3-SEMANTIC-DOGFOOD",
       "phase": "I3",
       "status": "active",
-      "goal": "先按本轮授权将当前累计实现、测试、合成材料、文档和审计交接分批提交，推送并快进合并现有默认分支codex/semantic-maintenance-prototype；保持已知未完成项和原验收。后续产品修复继续按Pi1.4收口包§3–7，I3 active/review pending不变。",
+      "goal": "保留 Pi 1.4、容量、正式陈述词法、A12、J01 以及已验精读覆盖和新旧游标。当前只修 v2 来源发现指引及新合成夹具的三身份断言，完成免费回归。真实业务沿原题、原判据和有效授权复验。",
       "requirements": [
         "D01",
         "D02",
@@ -164,8 +164,8 @@
         "package-lock.json"
       ],
       "non_goals": [
-        "本轮仅对当前累计成果授权本地提交、推送GitHub并合并现有默认分支；不发布Release、不部署云端、不重启日常服务。后续原题付费验证仍限原200元、对话195/embedding5、截止2026-11-18 17:27上海、Flash/high及实时余额。",
-        "不重开九阶段、不换模型/存储；SDK仅按当前包精确升级1.4.0，不增加Agent/压缩/恢复/重试/预算框架、循环守卫或无证据的并发保护；D18邀请及真实平台接入继续后置。",
+        "本次收口交接限工程和免费验证。原两次 Flash/high 复验已用，后续真实调用须核有效授权与原账本；原200元（对话195、embedding5）及2026-11-18 17:27:09.662上海截止留作历史。提交、推送、部署和日常实例变更按当次授权。",
+        "不重开九阶段、不换模型/存储；Pi SDK 保持 1.4.0，不增加Agent/压缩/恢复/重试/预算框架、循环守卫或无证据的并发保护；D18邀请及真实平台接入继续后置。",
         "原100项/10轨迹、独立参考、失败attempt、已花费用与unknown保持；正常产品取消累计门不取消本次200元总授权，不通过新trial/新scope清账补额。",
         "只修已证问题及经判别证实的一般原因；缺证据的unknown如实记录，不能改题、放宽断言、改mock或把设计/记录检查当业务通过。"
       ],
@@ -1283,9 +1283,80 @@
       "evidence": null
     }
   },
-  "reason": "用户明确要求先归档当前代码、提交推送并合并到GitHub现有默认分支；本轮不继续修复产品、不关闭I3、不发布Release或部署服务。"
+  "reason": "按用户决定归档本地内测版，更新工作台与读者文档。I3 原题、50 条正式绑定与历史成绩保留。"
 }
 ---
+
+## 本地内测版交付（2026-11-19）
+
+本版冻结 Pi 1.4.0、v2 字段原文精读和旧游标续页。平台使用合成座舱语音资料。用户可以在本地查找语义、起草 SQL、确认执行并续看结果和报告。[使用入口](../README.md#快速开始) · [本地服务](development.md#当前本地试用服务)
+
+- 代码和测试分三批归档到 `a48e72d`、`4998a3f`、`b201c17`。来源验收在自选的新目录里会于写回执时报 `ENOENT`，现于启动验证前建好目录。原台账、字段引用和草稿断言均保留，常规任务条件回归也会执行显式字段选择用例。
+- 这次重新构建了 API 和 Worker。694 项 Rust / TypeScript 同源契约、代码与架构检查、Pi SDK 与传输回归、普通来源准入 14 项和字段精读 7 项均通过。用旧服务实际发出的游标在升级后读到同一第二页，换一条用户消息后仍可续读。README 引用的架构总览、运行和记忆视图已按锁定依赖重新生成，离线图册验证 12 个模块和 31 张图。
+- 本版以原两轮消息在独立 MySQL 和合成 SQLite 上复跑。协议替身保存同任务的九月、八月两份草稿，平台提交为零。另用四组对照确认显式选择三列、下一轮保留三列、明确允许整表时可读整表，以及普通宽查会读到额外字段。此轮官方模型调用为零。串行出口、接收端和任务依据留在本机 `.local/checks/internal-preview-release-95Bzzu/`。
+- 验收资料对账：`make verify-cockpit` 首跑发现 `manifest.json` 中 `fixtures/public-query-case.md` 的 SHA-256 过期。旧摘要 `ec7a1303…` 恰好等于现有文件末尾再加一个换行的摘要。沿用已提交案例的原始字节，仅将派生清单的该条更新为 `7fa94636…`。100 项原题、参考 SQL、冻结答案、评分器、50 条绑定和旧成绩均未改。
+- 正式 Dogfood 仍为 `I3 active`，独审 `pending`。已有 21 个核心用例的成绩通过。最近的真实 Flash/high 来源续接原题仍为 `partial`，车辆三列扩大到十三列，两轮都停在澄清。此前 50 条命令整组通过 48 条，单独补测后逐项有 49 条通过记录。按正式要求还缺当版 OpenAI 工具续答、J19 对 SQL 计数列的准确解释和正式保存证据。[原判据与实测边界](reviews/data-agent-final-closure-review-20261117.md)
+
+## 来源发现、字段范围与两轮草稿（2026-11-19）
+
+[两项收口执行包](execution/semantic-runtime/source-dogfood-acceptance.md)的定点工程验证已完成。接手工作树已有 v2 来源发现指引与 Rust 精读选择路径，两处经验证可用。接手快照的 1,213 个路径逐一校验，本轮版本化变更仅更新本记录。
+
+- **来源发现至草稿。** 历史 Flash/high 已收到 198 个目录候选中的首批 20 个和 `next`。两条必需正式字段定义仍在后面的候选中，首次偏差发生在从目录结果声明任务来源时，发生于精读、采纳和保存之前。任务只声明四个表目录，漏掉承载定义的 `cockpit-identity-and-version`，随后两次保存均被 `waiting_clarification` 拒绝，零稿。当前工作树的 [v2 搜索工具说明](../apps/agent/tools/data-tools.ts)在原入口给出全名窄查／续页和按真实来源定范围的指导。保留原题原文，以本地协议替身在真实隔离 MySQL、合成 SQLite 平台复跑。一页宽查仍复现未返回目标；一次窄查同时得到目录字段和带正确来源的正式身份。三个定点引用均按同一来源修订读回，四份模型可见精读回执与 Rust 持久账本对应，八月恢复的仍是原回执。两份草稿用同一任务、同一 SQL，条件和参数只改月界，保留 UTC 与 `2026-10-04T00:00:00Z`。九月稿为 `superseded`，八月稿为 `awaiting_confirmation` 并指回原稿，均未提交，平台提交 0。两稿存储的文本依据保留实际读过的原文来源和修订。SQL 与工具选择由测试替身提供，原文引用按原契约记录，未当作派生知识引用。
+- **限定三字段。** 历史第一个范围扩大在工具实参。任务范围送入整个车辆平台来源，普通搜索实参只有查询文本中的三个字段名，缺少 `source_selection`。Rust 首份回执已包含 13 个车辆字段及覆盖 0–5342 字符的四个窗口，后续 provider 请求与第二轮恢复传递同一正文。用另一张合成表复现此路径，未传选择时四条定义确实出现在实际请求。当前 [精读 owner](../crates/data-agent/src/use_cases/knowledge_sources.rs)按显式三项对象／版本、源和唯一引文位置只交付三段，逐段与 `read_source` 回执对应。同一任务下一条消息确认归属后恢复原三段，第四段缺席。明确允许整表的独立任务能通过原接口读到四段。此证据验证精读参数及恢复的范围，三个字段写入自由文本本身不会建立结构化字段选择。
+- **证据与冻结。** `.local/checks/source-dogfood-closure-m6rwEM/` 留存原题对照 `source-trajectory-probe-2026-11-19T000803916Z.json`、字段范围 `field-scope-receipt.json`、输入指纹 `frozen-inputs.json` 及逐命令日志。原题 SHA、67 份原来源、106 份原验收材料、50 个验收对象和原成绩及账本逐项相同。首个原题探针因测试步骤没有推进而耗尽本地模拟调用次数；默认套件首跑因本轮未预建归档目录报错，已另存并复跑。这两次失败不计为产品回归。
+- **串行回归。** 请求投影、默认与专项来源准入、来源召回、来源限制、同范围续接、受限对话草稿准入均通过。已用旧 API 保留的 `rc1` 实跑同库升级、同轮和新消息，均续到同一第二页。原 128 KiB 峰值 131057 B，保留两份完整正文且超限请求未发出。原 96 KiB 峰值 93383 B，20 次本地请求、6 次 Pi 原生压缩，旧游标正常续接。`verify-pi-transport`、`verify-code`、`verify-architecture` 和 `git diff --check` 通过。 `verify-delivery` 静态记录检查和 16 项单测通过。
+- **完成边界。** 原整组验收未在本轮重跑。原核心 21 的记录检查通过，来源原轨迹的冻结判分仍为 `partial`。I3 保持 `active`，全局独审 `pending`，完成收据为空。**待真实 Flash/high 复验。** 本轮官方供应商请求为 0，历史授权已到期。实际模型能否自主选择窄查、采用 ASR 和时间资料，并在原题下生成两稿，尚待验证。
+
+
+## Dogfood 来源收口复核与执行入口（2026-11-19）
+
+同一组两轮 Flash/high 原题仍未通过：两轮均停在澄清，均未保存草稿；要求的两项正式字段依据没有绑定到任务，车辆表只要求三列，实际模型正文却收到十三列。前者已定位到来源发现至草稿引用之间，后者已确认交付范围扩大；首个偏差发生在哪一层，按执行包取证后再改。旧精读游标的跨轮续页已有独立证据，不重做。原题、50 条绑定验收和 I3 的 active 状态均保持不变。
+
+[两项问题的详细执行包](execution/semantic-runtime/source-dogfood-acceptance.md)已按本地证据和两轮 Oracle Web 审核定稿。审计材料和原始返回见本机 `.local/audits/dogfood-source-acceptance-20261119/REVIEW.md`。本次没有执行产品修复或新的付费复验；历史经费授权已到期。
+
+## 来源发现与两轮草稿收口交接（2026-11-18）
+
+[最终执行包和可复制 prompt](execution/semantic-runtime/pi-upgrade-and-final-repairs.md)接续原工作树。当前实施项有两处。v2 工具说明缺少窄查与续页指引，新结算测试错把两个正式字段加一个平台来源预期为单条。原搜索、权限及 Pi 会话沿既有合同。先用实际 Pi 请求验证指引，再用独立夹具事实核三条身份，并在隔离库完成两版草稿。真旧 `rc1` 在同库升级、同任务的新消息中均交付原第二页，精读覆盖和无关新增已复核，归入回归。
+
+Oracle Web Power 5/5 对草案给出“可执行”。终稿要求查询前固定身份与完整贡献根、验证平台身份缺省两个对象字段，并在接收端按 v2 原始 HTTP 正文字节留证。两个根因的独立收据见 `.local/audits/pi140-cursor-implementation-20261118T172629-SaNOBQ/audit.json`。此次交接仅更新文档。任务仍待编码，正式修后免费回归和最终实现独审仍待执行。原 50 条绑定保留，来源 08 仍为 `partial`，真实 OpenAI Responses/high 与 J19 代表证据另列。原试用授权于 11 月 18 日 17:27 上海时间到期。
+
+## Pi 1.4 候选审计与下一轮入口（2026-11-18，上一份交接）
+
+**结论。** J01 已按原题真实通过，Pi 1.4 容量与恢复成果保留。来源 08 仍为 `partial`。本轮按接手快照审 25 个实际变化路径，未发现扩大产品范围、第二套 Agent 循环或放宽原验收。已确认精读覆盖误报和无关目录使续页失效。后续按[收口执行包](execution/semantic-runtime/pi-upgrade-and-final-repairs.md)处理，本轮只更新接手资料。
+
+- **来源原题断点。** 真实首批身份查询拿到 `bounded/next`，三项目标在第六页。之后只声明了四张表的目录来源，漏正式定义，普通搜索交付过多正文。零次精读或补读，两稿未保存。隔离库和实际 Pi 本地协议已核工具可达，真实旧请求的 search 参数树哈希缺失。
+- **两项工程缺口。** 精确命中并读回三项原文时，`exact` 被误报 unavailable。隔离 MySQL 仅新建一份无关文档，原续页从成功变为 `409 stale_cursor`，两份新查结果相同。按更新顺序先纠正通道状态，再收窄精读准备。兼容已发的精读续页，保留选中对象换版和来源撤权的写回复核。
+- **证据与完成状态。** 四项免费重跑通过，23 个冻结文件及原 50 条／50 日志指纹匹配。原整组 48 通过，定点复验后逐项 49 通过，core21 全过。原来源真验及当版 OpenAI Responses/high 代表仍缺，原两次 Flash/high 复验额度已用。I3 `active`，完整审查 `pending`，完成收据空。[审计与证据](reviews/data-agent-final-closure-review-20261117.md)
+
+oracle-web 重试在 Power 5/5 下取得完整答复。对代表性源码和证据的复核确认两项工程缺陷，并要求以升级前已发的精读游标作为兼容验收。来源发现指引仍待真实原题验证。首轮 Chrome 关闭记录与本次成功证据均保留。
+
+## Pi 1.4 当前收口结果（2026-11-18）
+
+本轮在 `codex/pi-140-final-repairs` 的 `e12eb60` 基线上实施，接续 13 个未提交路径。冻结相对 HEAD 的 23 个产品、合同和测试文件后，两道原题各完成一次 Flash/high 复验。证据根为 `.local/checks/pi140-closure-20261118/`。`baseline.json` 记录接手树和原两份容量用例的指纹，`candidate-code.json` 绑定冻结候选，`before/records/` 保存接手时的成绩和账本。[收口执行包](execution/semantic-runtime/pi-upgrade-and-final-repairs.md)
+
+- **容量与说明。** `sessionCapacity` 用 Pi 原生 `buildContextEntries()` 判断保留边界是否仍在，压缩准备按实际消息投影估算。范围替换撤下旧开销，普通追加和刷新回滚仍计入。`distinct_count` 恢复按平台返回的原始文本去重，`get_query` 恢复仅对本消息刚确认的查询返回状态并等待交付。实际 Pi 请求先失败再通过。补文后的首次 128 KiB 复验因固定说明增加 35 B 失败。缩掉同段重复表达后，原 128/96 KiB 完整用例最大分别为 131057 B 和 93387 B。前者余 15 B，两份 8192 字符正文逐字保留，六正文明确结束且超限请求实际发出数为零。后者 20 请求、6 次压缩，原普通及摘要旧游标均可续接。见 `large-context-final.log` 和 `native-compaction-final.log`。
+- **核稿。** 成功 `get_query` 原先重复发出核稿提示。局部移除这条提示后，普通回执带真实 SQL、参数、版本、状态与就绪字段，任务来源刚就绪的回执仍说明工具已解锁。实际 Pi 请求 RED→GREEN。执行授权仍由 Rust 按本消息、原 SQL、参数、版本及操作身份核验。Pi 继续负责唯一循环、工具选择、压缩、重试和恢复。见 `related-checks.json`、`pi-transport-selector.log`。
+- **来源精读。** 正式保存并索引后，旧检索用身份和软提示只返回包含无关字段的原文块。v2 `source_selection` 现在可用身份目录返回的对象 ID 和对象版本选择正式来源事实。来源 owner 核允许范围、空间、完整性及原文修订，在同修订唯一 quote 上生成 Unicode `SourceCitation`。现有 `read_source` 直接读定义与范围内例外。派生陈述或结构仍核 citation、support、`table_binding → DDL` 及整对象依赖。新入口与原游标绑定，普通搜索和 v1 仍按各自合同。最终免费整链 6 项、43 响应、5 次实际 Pi 出站通过，覆盖两个来源 owner、重复 quote、旧版本、越权、同批合法命中、分页和原 operation 重放。原默认组 14 项、34 响应通过，双侧合同 694 项通过。首次夹具准备及对账失败留在 `source/runs.json`，最终日志在 `source/verified/` 和 `source/regression/`。正式陈述的词法搜索和支持补读已验证，该条陈述的 `vector_state` 仍为 `pending`。正式接口见[实现设计 §17.5](architecture/implementation-design.md#175-搜索批量读取与内部组合合同)。
+
+- **J01-09 通过。** 第一句保存待确认稿，第二句使同一份 SQL、参数和版本真实提交一次。Rust 提交计数、独立平台行、结果通知与实际 HTTP 对齐。实际核稿回执已就绪，下一步调用 `execute_query`。正式结果为最终成功率 386/424（91.04%）、成功尝试平均候选 1158/386（3.00），与冻结参考一致。独立核两条原判据及正常历史刷新均通过。早期 J01-08 诊断保留其失败判分，历史停在核稿后的唯一原因仍待证。见 `pair-runtime-proof.json`、`original-pair-independent-review.json` 和 `j01-final-ui-readback.json`。
+- **来源 08 为 `partial`。** 实际请求收到身份目录首批 20 条和续页游标。模型未续页或按字段窄查，随后只声明四个表目录来源，缺三项正式定义所属来源。按原查询在试用库只读重算，198 个知识身份候选的前 20 项与实际回执逐项一致，目标排第 113、117、118 位。实际首份车辆正文的四段窗口覆盖全部 5342 字符，另有 13 个字段条目。实际 `source_selection` 和 `read_source` 各 0 次。两次 `request_query` 均返回 `waiting_clarification`，九月稿和八月替代稿均未保存，平台零提交。独审两条原判据为 `fail`、`partial`。最早观察到的断点在身份发现到来源声明之间，真实请求的 search 工具定义哈希及未选择精读的原因仍待证。见 `source-paid-forensics.json`、`source-identity-sql-forensics.json`、`original-pair-independent-review.json` 和 `source-final-ui-readback.json`。
+- **同源免费探针。** 在隔离库经实际 Pi 本地协议翻到广搜第六页，120 个身份无重复，三项正式定义均在第六页。此后一次派发触发 `model_input_limit` 且未发送，随后本地驱动在核 `september-task` 回执时失败，广搜分支未走完。另起会话按完整字段名和 `field` 类型窄查，首批即区分同名表目录项和正式定义。工具选择和 SQL 由探针给定。首份证据只交三项同修订定义，随后并行 `read_source` 逐字读回。九月稿 `superseded`，八月替代稿 `awaiting_confirmation`，只有月份起止及对应参数改变。两稿平台提交数为零，10 次本地请求的最大载荷为 100954 B，官方请求为零。真实原题仍待模型自行完成精读和两稿续接。见 `source-trajectory-probe-2026-11-18T045504904Z.json`、`source-trajectory-probe-2026-11-18T045845282Z.json`。
+
+- **本地交付。** 原日常实例运行在 Web `27173`、控制器 `70269`、`runtime-20261118T024923Z`，五项健康均为 HTTP 200。沿原库、身份、平台、Mem0、Flash/high 和账本，预填 disabled，observer 关闭。J01、来源会话和原 A03 正式报告已正常导航及刷新读回。A12-05 沿原真实通过证据。两道原题合计 45 笔结算、3.121736 元，其中 J01 22 笔、1.493512 元，来源 23 笔、1.628224 元。27 笔聊天请求逐笔与 HTTP 指纹对齐，另有 7 笔知识嵌入和 11 笔记忆嵌入。余额 54.797416 元，4 笔旧 `unknown` 及占用计入原账本，新增 `unknown` 和在途均为 0。本轮两次原题复验额度已用完。交付保留在本地工作树。见 `ledger-after-paid.json`、`service-ledger-delivery.json` 和 `final-ui/report-readback.json`。
+- **验收与独审。** 原 50 条整组实际执行 48 通过、2 未通过。第 28 条 `QUERY-NOTIFICATION-SOURCES` 原运行超时，同原命令及 360 秒时限定点复验 338.609 秒退出 0，独立复核确认 618 个输入指纹匹配、11 个场景和 60 次本地协议请求完整结束。原超时原因仍待证。合并定点证据后逐条 49 通过、1 未通过，第 02 条因 `time-and-definition-continuation` 为 `partial` 退出 1。原核心成绩命令退出 0，core21 共 21 项通过。100 项为 32 pass／2 partial／66 not_run，十轨迹为 2 partial／8 not_run。其他 99 题和 9 轨迹、原判据及旧 attempt 前缀均已核对。冻结候选的 TS、Rust 来源和免费证据，限定独审均无已确认缺陷。见 `original-record-update-integrity.json`、`original-acceptance-run.json`、`notification-retest-integrity.json` 和[限定独审记录](reviews/data-agent-final-closure-review-20261117.md)。
+- **完成门。** 当版真实 DeepSeek 结果通知已有 J01 证据。`INTEGRATED-EVIDENCE` 另需真实 OpenAI Responses/high 同会话的工具往返和续答，以及 J19 准确解释已保存 SQL 的计数列并正式保存。历史记录为 `blocked_credential`，本轮原授权仅覆盖 Flash/high。来源 08 尚缺原题真实达标证据。`make verify-increment` 退出 2，派发验收前报告“缺少已通过的审查记录”。I3 为 `active`，完整审查为 `pending`，完成收据为 `null`。见 `verify-increment-final.json`、[真实供应商审查](reviews/provider-delivery-implementation-review-20261106.json)。
+
+## Pi 1.4剩余收口实施（2026-11-18，本轮验证结束，I3未关闭）
+
+- **接手与范围：**实际HEAD为`e12eb60d07a33272529878733b43eb38ec7d8441`，默认分支工作树干净；本轮从`codex/pi-140-final-repairs`继续。只按[收口包](execution/semantic-runtime/pi-upgrade-and-final-repairs.md)§3.1–7推进，不重做Pi升级/归档，不执行全仓审计或UI/UX重做。
+- **容量与输入：**`.local/checks/final-repairs-20261118/before/`保存原50条验收、两容量SHA和原记录。范围替换反例RED→GREEN：附加量绑定Pi保留条目，普通追加/刷新回滚仍拒绝真实长组；真实Pi首个后续请求通过。固定规则/工具说明等价精简后，最终原128KiB完整exit0：两正文逐字保留，最大131051B，比前次141344B减少10293B、余量21B；实际出站分项为tools 53223B、system消息12065B，分别减2131B/8162B，其余消息字节与前次逐项相同（两工具正文各25430B、assistant 12885B及12KB思考均保留）；六正文有限失败、0正式答复且超限不发送。原96KiB六轮最终exit0，最大94944B、20调用/6压缩，旧游标普通2次/摘要1次，原身份/正文/依赖失效断言保持。没有改两原文件、门槛或50条验收。v1/v2各19棵完整参数树经独审与基线deepEqual；Q02原接线短语缩写触发正式检查失败后已恢复原词，原断言未改。
+- **来源：**正式POST/PATCH陈述经异步SQL词法索引后，同statement_id的citation/support搜索正控、缺来源负控及合法并行命中通过；默认all为14项/34回执，vector_state=pending不称向量通过。来源07原36回执只交13个type ref、无meaning路径，现接口缺合法定义定位身份→同修订唯一quote locator链，离线位置不注入模型，§4.1保持partial、未收费重跑。纯definition与structure_only均受整path的table_binding→ddl根约束，未全局排除依赖或扩许可；嵌套document是整对象依赖，附录换版拒绝正确，不改read_meta。仅complete=false的首次预测未成立、非法创建夹具失败均保留，不当产品RED。
+- **真实J01诊断：**原会话只做一次原执行句。J01-08-diagnostic三笔聊天与账本指纹完全匹配，route后两个实际请求各含19工具、正确get_query/execute_query参数树、ready及同轮指导；实际顺序route→get_query→正常stop，未execute_query，原稿仍not_submitted。只排除本样本的漏工具并确认执行工具决策未完成；J01-07历史回放仍不匹配原指纹，旧标题/历史拒绝的因果未证。原题保持partial，不加宿主执行器、强制tool_choice或再次抽样，诊断不当修后pass。
+- **真实A12验收：**定义/存储与展示单位在原偏好说明处分开，通用合成输入反例RED→GREEN后原近义题A12-05一次Flash/high通过原两项及§6。原Mem0持久search:context回执实际completed、唯一命中同一v2，checkpoint采用一致；整段主展示秒三位、原范围/当次毫秒例外保持，无取数/执行/记忆写入。P50/自然周/异常样本等条件式附加建议的业务适用性未独立核实，不当已确认偏好；独审反证后未增设读文档验收门，判分更正依据留存。
+- **账本与本地交付：**本轮7笔settled（Agent5笔0.622240元、记忆查询embedding2笔0.000048元）合计0.622288元，原余额57.919152元，独立embedding子账本不变，4旧unknown及占用原样、0新增unknown、0在途。先核4458/零在途后正常停止原任务，9785仅用于限定诊断，再沿原启动器恢复25633/runtime-20261117T183321Z、五health200、observer关闭、prefill disabled。身份/平台链接和原库/配置/账本保持。J01早期固定等待截图为空态，原件保留；补正常历史导航、等待目标正文并刷新后与API一致，不据空态认定产品UI缺陷。A12原答复及现服务刷新均读回，原A03正式报告保持同ID/两个月份/四个数字。
+- **成绩与审查：**当前100项31pass/3partial/66not_run、core21为20pass/1partial（J01），十轨迹2partial/8not_run；其他98项逐项相同，100项expected及旧attempt前缀不变。记录完整性通过；核心/来源成绩门仍exit1，I3 active、完整review pending。限定独审代码0 open confirmed findings并独立复核J01 partial/A12 pass，不能替代全I3。原50条已完整串行执行，46过/4失败、无超时，执行前后源码输入相同。除两成绩门外，库入口把需要真实Milvus的同步文档dense用例放进未配向量的MySQL阶段；结构预填夹具300000微美元小于原维护单次保守预留317031，0次派发即budget_unavailable。两入口及其Rust路径与e12eb60逐字相同，未归咎本轮产品修改。已将dense用例留到既有专用真实Milvus阶段并强制核实际通过，预填仅将合成费用前提改400000，64KiB/两调用/坏列断言不变；两个原命令已完整exit0，结构8项/两回环调用/坏列缺口保持；库215项通过，移交dense用例在真实Milvus阶段实际1项通过，raw_allowed及14项集成通过，原2ignored仍保留。独审追加两文件未发现已确认缺陷，不能把移交写成删除场景。原整组46过/4败收据保留；复用原46个未变通过命令和两项同argv复验后，最新48过/2成绩门未过，不冒称另一次整组重跑通过，也不变更原50数组或真实200元。
+- **工程与完成门：**最终两入口修正后`verify-code/verify-contracts/verify-architecture/verify-delivery`全部exit0，689双侧合同保持；正式容量、Pi传输及19项请求上下文检查通过。`verify-increment`实际Make exit2、原因仍为缺少完整已通过审查记录；原核心/来源成绩门各exit1，未制造passed记录。全量首跑与定点复验关系在`original-acceptance-retests.json`，8个实际已审产品/测试指纹在`implementation-fingerprints.json`；同轮实际载荷分项在`capacity-wire-breakdown.json`。
+- **授权与出口：**本轮工作停在有证据的边界，不追加J01/A12/来源收费抽样。无本轮commit/push/云部署；原授权、期限、实时余额和4旧unknown保持。I3 active、完整review pending；后续仅凭新证据补来源合法定义定位/唯一quote链与J01执行决策，不将局部通过宣称全I3。日常后台任务为本轮沿原启动器恢复的实例，保留运行，不当测试清理。
 
 ## 当前成果Git归档与默认分支合并（2026-11-18）
 

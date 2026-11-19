@@ -20,11 +20,9 @@
 
 ## 当前本地试用服务
 
-本次用户已授权更新，工作台为`http://127.0.0.1:27173`，API/Bridge为30780/30781；沿原试用库、合成身份及费用账本，Flash/high、Mem0、混合检索、v2工具、latest_only，预填保持disabled。没有切换到Pro、重置unknown或改动另一份旧mock库。正常产品的运行政策与本次显式试用额度分别管理：本次仍受200元总额和2026-11-18 17:27上海的截止约束。
+现有内测工作台监听 `http://127.0.0.1:27173/`，API 与 Pi Bridge 分别监听 30780、30781。该实例沿用原试用库、合成身份、Mem0 和混合检索。模型为 Flash/high，工具合同为 v2，公共正文采用 `latest_only`，维护预填关闭。历史结果和报告可从工作台查看。原聊天与 embedding 试用授权已于 2026 年 11 月 18 日 17:27（北京时间）到期。重新发送付费请求需要新授权，重启沿用原账本。
 
-本机接续命令为`python3 .local/checks/dogfood-final-20261117/start-approved-trial.py 22000`。这是依赖当前忽略目录中既有配置的接续入口；全新安装仍按下文步骤进行。不要在已有实例运行时重复启动。当前控制进程、runtime目录、配置路径与截止记录在`.local/checks/dogfood-final-20261117/runtime-additional-budget.json`；登录使用该runtime中`identities.json`的合成凭据，凭据不进入Git。关闭时只停止该次启动的控制进程，数据库和会话保留。
-
-本次更新关闭了临时模型请求取证observer。健康检查及普通登录/历史刷新证据在`.local/checks/dogfood-final-20261117/updated-service-health.json`和`updated-service-ui.json`。既有结果可查看；明确执行、记忆范围和正式报告保存的模型失败及来源续接缺口仍见CURRENT，不能把启动成功写成完整业务验收通过。
+这组端口属于既有本机实例。全新安装可按下文用 `make dev` 启动免费演示，默认端口为 5173。维护既有实例时，通过项目启动器 `scripts/development.py` 沿用同一模型和 embedding 配置、数据库、身份目录、平台状态和主密钥。先确认没有在途运行和查询，再停止原控制进程。启动后核对各服务健康、工作台登录、历史结果及账本。当前实例信息与本次实测见 [CURRENT](CURRENT.md)。
 
 ## 1. 固定的运行时与依赖
 
@@ -33,7 +31,7 @@
 | Node / npm | 26.8.1 / 11.19.0；`.node-version`、`package.json`，安装时检查 engines |
 | React / React DOM | 19.3.0；通过静态渲染与 Vite 构建检查 |
 | Vite | 8.3.2；依赖烟测生成临时 React 项目，输出在 `.local/` |
-| Pi SDK | `@earendil-works/pi-coding-agent`、`pi-ai`、`pi-agent-core` 均精确锁定 1.3.0；npm 依赖，不依赖相邻源码目录 |
+| Pi SDK | `@earendil-works/pi-coding-agent`、`pi-ai`、`pi-agent-core` 均由 npm 锁定为 1.4.0 |
 | Playwright | 1.63.0；使用对应 Chromium，避免依赖会自行升级的日常 Chrome |
 | Rust | 1.99.0，minimal 工具链加 rustfmt / Clippy；见 `rust-toolchain.toml` |
 | Rust HTTP / 异步 / MySQL | Axum 0.8.9、Tokio 1.53.1、SQLx 0.9.0；依赖检查工具见 `tools/check-rust/` |
@@ -47,7 +45,7 @@ Node 依赖由 `package-lock.json` 锁定，`make setup-node` 显式使用 `npm 
 
 Pi通过显式资源加载器与内存凭据/模型存储运行，不发现本机工具、扩展、Skill或私人配置。Pi运行本地模拟或显式选择的DeepSeek provider；两者分别记录证据。运行目录固定为合成目录，不把本机路径加进模型提示词。
 
-Pi依赖沿官方稳定版1.3.0同版锁定，间接Pi包也由该版精确依赖，避免安装混版。采用SDK原生的完整工具参数校验、跨模型思考隔离和摘要省去思考块；不启用MCP、codemode或默认资源发现。`node tests/runtime/check-pi-sdk.mjs`验证这些行为及由旧1.0.0实际生成的合成检查点续接；原会话ID、leaf、工具调用身份和未执行状态保持，新检查点通过SDK公开`VERSION`记录实际版本。该检查使用内存及合成fetch，不调用真实模型；完整升级回归与限制见[CURRENT](CURRENT.md)。
+Pi 的三个直接依赖统一使用 1.4.0。会话检查点保存 SDK 报告的版本；恢复 1.0.0、1.3.0 的旧会话时，保留已确认的 leaf、工具操作和预算身份。运行 `node tests/runtime/check-pi-sdk.mjs` 可离线验证。SDK 负责工具参数解析、会话历史和压缩，Rust 负责数据权限与查询授权。[版本迁移合同](architecture/implementation-design.md#178-迁移发布边界与恢复)
 
 ## 2. 安装和运行
 
@@ -145,7 +143,7 @@ make vm-stop
 | 交付部分 | 版本与构建入口 |
 | --- | --- |
 | Rust API / Worker | 两个crate均`0.1.0`；分别运行`cargo build --offline --locked -p data-agent-api`和`cargo build --offline --locked -p data-agent-worker` |
-| Pi Bridge / Web | 根包`0.0.0`；Node 26.8.1、npm 11.19.0；Pi三个直接依赖精确锁定1.3.0，`npm run check:types`与`npm run build:web`验证当轮源码 |
+| Pi Bridge / Web | 根包`0.0.0`；Node 26.8.1、npm 11.19.0；Pi三个直接依赖精确锁定1.4.0，`npm run check:types`与`npm run build:web`验证当轮源码 |
 | MySQL | 8.4.11；API沿原数据库执行嵌入迁移。`202610300003_public_content_revisions.sql`和`202610300004_source_revisions.sql`新增必要修订元信息，不删旧全文档案 |
 | 公共索引 | Milvus 3.0.2；集合身份由当前配置记录，公共目标变更不改个人Mem0目标 |
 
@@ -278,7 +276,7 @@ OpenAI 服务在明确选择供应商时默认使用 Responses，地址例子为
 
 2026-11-06 核对的可选配置为 `gpt-6.1-sol`、展示名 `OpenAI GPT-6.1 Sol`、Responses，支持思考并开放 `low/medium/high/xhigh/max`，本轮代表验证使用 `high`。总窗口为 1,050,000 tokens，最大输入 900,000、最大输出 128,000（包含推理输出）、请求体 8 MiB、provider 请求超时 600 秒，能力来源选 `admin_declared`。依据为[官方型号页](https://developers.openai.com/api/docs/models/gpt-6.1-sol)和[部署说明](https://developers.openai.com/api/docs/guides/deployment-checklist)；账户实际可用性仍须由该账户请求验证。新增为可选模型即可，空间默认值按管理员选择，代表对话显式选择模型和 high 后发送新用户消息，以该消息的冻结 profile 为准。旧消息恢复继续使用原修订。
 
-该配置沿现有容量公式得到 trigger=879000、historyReserve=171000、toolReserve=21000、keepRecent=65536；Pi 1.3.0 的目录窗口仍为272000，由管理员声明的 `context_window` 覆盖。有效 high 位于原生 `input` 的末次 `configuration_update.reasoning.effort`，顶层 `reasoning.effort=medium` 沿 SDK 兼容策略保留。Responses 使用 `store:false`，同一服务修订的 encrypted reasoning、工具 call_id/result 及消息 phase 由 Pi 原生续接，不另拼消息历史或启用服务端自动压缩。
+该配置沿现有容量公式得到 trigger=879000、historyReserve=171000、toolReserve=21000、keepRecent=65536；Pi 1.4.0 的模型目录标注 272,000 tokens，运行时采用管理员声明并冻结的 `context_window`。有效 high 位于原生 `input` 的末次 `configuration_update.reasoning.effort`，顶层 `reasoning.effort=medium` 沿 SDK 兼容策略保留。Responses 使用 `store:false`，同一服务修订的 encrypted reasoning、工具 call_id/result 及消息 phase 由 Pi 原生续接，不另拼消息历史或启用服务端自动压缩。
 
 本组 Standard 请求的两项折算费率可暂填输入 5、输出 15 美元/百万 tokens，分别保存为5000000、15000000微美元/百万 tokens。这是覆盖长输入、将缓存按输入上界折算的保守估算；官方缓存和长输入分档未由两字段完整表达，供应商账单另行对账。用量沿实际 usage：输入包含缓存，输出已包含推理消耗，不重复相加；金额按 `ceil((input_tokens × input_rate + output_tokens × output_rate) / 1000000)` 计为微美元。[官方价格](https://developers.openai.com/api/docs/pricing)。
 
@@ -315,7 +313,7 @@ make verify-model-trial
 
 正常模拟消息以及显式`budget_mode=request`的数据profile不设累计调用次数、默认累计费用或总时长硬上限；调查、原生摘要、重试、恢复和结果解释共用原scope。旧数字scope保持冻结值，显式试用费用帽仍生效。单次聊天请求超时取冻结配置（旧配置缺省90秒，大窗口配置可为600秒），用户可随时取消，Worker持续续租，不再由调用次数推导整轮截止。
 
-Pi1.3.0负责普通调用及摘要的原生重试：首次失败加最多2次重试，连续失败3次停止，成功清零。HTTP SDK层保持零重试；每次Pi重试申请新的宿主许可。Rust按原scope持久保存结果和序号，重启不重置，旧成功回执不能清掉较新失败。明确临时429/500/502/503/504、模型请求超时或连接失败可重试；认证、参数、计费配额、取消、缺失/无效用量、未知宿主许可和结算不确认直接停止。未知费用预留继续保留，不冒充零费用。取消不记为模型失败，也不清掉已有连续失败；进程中断恢复沿原预算，明确取消的运行不能继续。
+Pi 1.4.0 负责普通调用及摘要的原生重试：首次失败加最多2次重试，连续失败3次停止，成功清零。HTTP SDK层保持零重试；每次Pi重试申请新的宿主许可。Rust按原scope持久保存结果和序号，重启不重置，旧成功回执不能清掉较新失败。明确临时429/500/502/503/504、模型请求超时或连接失败可重试；认证、参数、计费配额、取消、缺失/无效用量、未知宿主许可和结算不确认直接停止。未知费用预留继续保留，不冒充零费用。取消不记为模型失败，也不清掉已有连续失败；进程中断恢复沿原预算，明确取消的运行不能继续。
 
 `infra/model-profile.example.json`为正常配置模板，使用已有128KiB请求体档和持久数据库`data_agent`。复制到本地忽略目录后可交给`--model-profile`；启动器不会自动替换现有配置。`trial_id`沿用既有账本身份字段名，正常模式下仍固定且不可通过重启改配置。正常模式可省略累计`trial_call_limit`和`trial_cost_micros`；管理员显式填写时仍校验相应累计上限。
 
@@ -338,7 +336,7 @@ python3 scripts/development.py --model deepseek --model-profile .local/model-wor
 
 本机已有工作台时，启动验收会选用独立端口和`.local/checks`运行目录。也可以显式传`--port-offset 18000 --runtime-dir .local/checks/my-startup`，保留现有工作台、身份及平台账本。API完成目录初始化后才监听；启动器仅API阶段采用75秒健康等待，平台、Bridge、Mem0和Web仍为25秒，超时继续报失败并关闭本次进程。这是启动等待，不改变查询、租约或模型费用上限；冷库和任意宿主负载未获统一时限保证。
 
-未建立空间模型配置时，持久试验配置的 `profile.model_id` 和 `thinking_level` 提供首次导入的默认值，通常为Flash/off；`.env`只提供本地凭据和端点。数据工作台可按对话选择Flash（off/low/high/max）或Pro（off/high/max），页面分别显示关闭、轻度、深度、最高。锁定Pi 1.3.0支持这些原生档位，见[官方思考模式](https://api-docs.deepseek.com/zh-cn/guides/thinking_mode/)。Flash 配对 `2026-10-04-peak-usd`，Pro 配对 `2026-10-05-pro-peak-usd`；服务端按所选模型固定价格，按原trial与每请求额度计账，切换不增加或重置额度。价格依据[官方价格页](https://api-docs.deepseek.com/quick_start/pricing)，以高峰未命中价保守计账。I0 task配置仍仅支持原Flash/off限制。
+未建立空间模型配置时，持久试验配置的 `profile.model_id` 和 `thinking_level` 提供首次导入的默认值，通常为Flash/off；`.env`只提供本地凭据和端点。数据工作台可按对话选择Flash（off/low/high/max）或Pro（off/high/max），页面分别显示关闭、轻度、深度、最高。当前 Pi 1.4.0 支持这些原生档位，见[官方思考模式](https://api-docs.deepseek.com/zh-cn/guides/thinking_mode/)。Flash 配对 `2026-10-04-peak-usd`，Pro 配对 `2026-10-05-pro-peak-usd`；服务端按所选模型固定价格，按原trial与每请求额度计账，切换不增加或重置额度。价格依据[官方价格页](https://api-docs.deepseek.com/quick_start/pricing)，以高峰未命中价保守计账。I0 task配置仍仅支持原Flash/off限制。
 
 输入框选择即时保存到已有对话，新对话在首次发送时保存；每条消息携带当时的选择，原消息的重试、恢复和查询结果解释沿用已持久配置。刷新保留选择，切换模型不丢草稿；主动切换模型时保留仍受支持的档位，否则使用该模型列出的首档；既有选择被管理员停用或移除档位时保留原选择并阻止发送，要求用户重新选择。保存失败回读并提示。Mem0抽取和百炼向量仍沿原辅助模型配置，继承原请求预算，不随聊天模型切换。`GET /models`读取可用目录，`GET/POST /conversations/{id}/model-selection`读取或按 `expected_version` 保存本人设置；普通聊天客户端不能设置价格、限额、密钥或端点；专用管理接口仅对超级管理员开放。
 

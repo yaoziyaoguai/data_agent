@@ -362,11 +362,11 @@ M11 使用锁定 Pi 的原生 `SessionManager.create/open/branch/resetLeaf`，�
 
 旧 inline 检查点在 `start_delivery` 同事务绑定到当前 run 的不可变副本，封套只带其指纹。受内部身份、当前 run/epoch/authority 校验的 `/internal/checkpoints/read` 返回该副本；调用方不选其他恢复链。Node 验证原始响应指纹，再按原 Pi JSONL 格式一次性物化，保留原 header 和 SDK entry/call ID。Rust 不写 SDK 文件，也不新增规划或压缩循环。MySQL 与原生私有会话目录必须一同保留及备份；当前统一部署在同一宿主，不据此宣称跨主机无状态恢复。
 
-Pi依赖统一精确锁定1.3.0，恢复仍使用原SessionManager格式，不重写旧会话身份或工具操作身份。新检查点的`sdk_version`来自公开`VERSION`；旧1.0.0的原生v3/inline检查点继续按原格式验证、物化及定位leaf。SDK负责拒绝完整响应中损坏的工具JSON，不能以部分解析的字段执行；模型可在原会话中修正，业务校验与预算仍由宿主控制。跨模型思考块不作为正文传递给新模型，原生摘要不包含思考块；可见正文、工具和依据仍按既有上下文规则保存。上述行为复用SDK，无新增规划、解析补丁或压缩层。
+Pi 依赖统一精确锁定为 1.4.0，恢复仍使用原SessionManager格式，不重写旧会话身份或工具操作身份。新检查点的`sdk_version`来自公开`VERSION`；旧1.0.0的原生v3/inline检查点继续按原格式验证、物化及定位leaf。SDK负责拒绝完整响应中损坏的工具JSON，不能以部分解析的字段执行；模型可在原会话中修正，业务校验与预算仍由宿主控制。跨模型思考块不作为正文传递给新模型，原生摘要不包含思考块；可见正文、工具和依据仍按既有上下文规则保存。上述行为复用SDK，无新增规划、解析补丁或压缩层。
 
 ### Pi 工作区与个人记忆上下文接入
 
-M11 使用 Pi SDK 1.3.0 的官方扩展 `context` 事件，由 `session/workspace-context.ts` 投影本轮已回源的工作区与记忆。`ResourceLoader` 只保留固定行为规则、工具和已明确选择的Skill目录，仅注册宿主指定的扩展，不启用文件或用户目录自动发现。时钟、任务、查询观察及记忆作为临时参考放在已恢复历史之后、本轮用户输入之前；轮内工具回执在其后。split-turn压缩移走用户输入时，参考放在摘要之后、保留的完整工具组之前。Pi将`custom`转为模型的`user`消息；固定规则和参考标记说明它们是资料，不授予执行权。
+M11 使用 Pi SDK 1.4.0 的官方扩展 `context` 事件，由 `session/workspace-context.ts` 投影本轮已回源的工作区与记忆。`ResourceLoader` 只保留固定行为规则、工具和已明确选择的Skill目录，仅注册宿主指定的扩展，不启用文件或用户目录自动发现。时钟、任务、查询观察及记忆作为临时参考放在已恢复历史之后、本轮用户输入之前；轮内工具回执在其后。split-turn压缩移走用户输入时，参考放在摘要之后、保留的完整工具组之前。Pi将`custom`转为模型的`user`消息；固定规则和参考标记说明它们是资料，不授予执行权。指标定义/存储单位与当前展示单位分开：适用且不冲突的稳定偏好用于展示，换算不改共享定义，回答保持记忆对象、范围和例外；本轮明确条件优先，不匹配的局部偏好不泛化。该指导不构成答案重写或单位规则引擎，真实答案一致性另验。
 
 工具正常执行和半轮恢复都经过 `dataTools.invokeRecorded`。成功回执撤下已修订/停用的旧记忆、已换条件版本的任务候选，以及已补读的任务/查询观察；新正文来自原工具结果，不拿模型参数重建。`route`同版回执不带完整条件，故保留同版任务候选，避免强迫补读；拒绝或未知不撤旧。投影只使用本轮快照，无额外数据库或Mem0调用，不改宿主authority，不积累跨轮启动快照。当来源在同一轮由未就绪变为就绪后，继续由Pi原生provider序列化回放合法工具回合的thinking、signature与工具配对；应用不再删除思考块。`data-tools.ts`随控制回执返回`execution_tools_ready: true`与当前控制说明，模型仍须沿原工具实际完成读取或提交，不能凭说明宣称已执行。
 
@@ -376,7 +376,7 @@ M11 使用 Pi SDK 1.3.0 的官方扩展 `context` 事件，由 `session/workspac
 
 `context` 返回值不写入Pi会话树，原生compaction直接读取持久分支，不接收这份临时投影；压缩后下次普通请求重新投影当前候选。既有工具结果、助手复述和摘要仍属会话历史，不承诺清除历史正文。权限与预算继续由Rust在reserve/send边界校验；Pi捕获context异常后可能继续请求，因此扩展仅做资料投影，不承担失效拒绝。新输入与同输入恢复的旧依据处理保持原规则。在来源边界上，`read_source`（M02 `use_cases/knowledge_sources.rs`）在完成权限、完整性和当前修订校验之后，仅对合法当前来源的超界请求在 `invalid_input` 回执附带 `available_length`、`valid_locator` 与 `hint`（对 `stale_source`/`not_available`/`source_not_allowed` 不回传任何长度细节），且 v2 证据工具仅在 `source_context_ready === false` 或 `context_reset` 存在时附带控制提示，不破坏既有 JSON Schema 与结果载荷。
 
-提交前的容量预检读取`session.systemPrompt`、完整Pi消息、完整工具定义、实际临时参考和本轮输入，额外计算JSON字符串转义并留协议余量；超阈值只调用Pi原生`session.compact()`。预检为保守估算，不能保证所有未来SDK协议的准确字节。Pi1.3.0仍未公开canCompact；仅把其明确的Already compacted/Nothing to compact当作无摘要可做，继续实际载荷检查，其余压缩失败传播。provider继续在SDK序列化后、预算预留/网络发送前按原64KiB或所选profile上限检查完整请求。轮内`request_too_large`由Pi1.3.0原生识别并最多compact-and-retry一次；不另造重试/摘要器，也不剪掉最近完整工具组。
+提交前的容量预检读取`session.systemPrompt`、完整Pi消息、完整工具定义、实际临时参考和本轮输入，额外计算JSON字符串转义并留协议余量；超阈值只调用Pi原生`session.compact()`。预检为保守估算，不能保证所有未来SDK协议的准确字节。Pi 1.4.0 未提供公开的 canCompact；仅把其明确的Already compacted/Nothing to compact当作无摘要可做，继续实际载荷检查，其余压缩失败传播。provider继续在SDK序列化后、预算预留/网络发送前按原64KiB或所选profile上限检查完整请求。轮内`request_too_large`由Pi 1.4.0 原生识别并最多compact-and-retry一次；不另造重试/摘要器，也不剪掉最近完整工具组。
 
 保留目标仍由Pi选择合法切点。基于工作区、工具、提示和当前输入占用后的剩余容量，通过公开`SettingsManager.applyOverrides`将原2048/256目标限制在128至原目标之间；按24字节折算一个SDK估算token是结合字符/4与JSON转义的启发式，不是精确token或硬字节保证。小历史从预检起使用本轮目标；历史自身接近摘要载荷上限时，首次预检先保留较多尾部，避免初始摘要请求本身超限，之后应用本轮目标。成功修订回执及原生工具组保持完整；最小工具组仍装不下时沿原有限失败，不抬高预算或剪正文。已有依赖和每次实际摘要调用保持原权限/预算。参考消息只留资料身份和回执优先提示，固定的优先级、补读和权限原则由系统资源承担。
 
@@ -582,7 +582,7 @@ M02覆盖结构、案例依赖及核对依据、文档材料别名和明确关�
 
 旧有限scope、冻结profile和trial原值保留；新正常scope用可空调用限制表达无限，不以0或巨大整数替代。显式试用费用授权单独生效，本次dogfood原100元包含已花与未知预留，不能因取消产品总次数门而重置或绕过。迁移不清计数/未知预留、不覆盖同一账本配置指纹；配置装配、后台embedding与历史恢复的兼容验收见修复包。正常产品不限累计额度不等于新的付费授权。
 
-M11启用Pi1.3.0原生retry，maxRetries=2，普通与摘要均复用；HTTP SDK层maxRetries=0。固定错误码只对明确临时provider失败开放重试；429的quota/billing由SDK分类排除，调用者取消与单次超时分开。缺少可靠usage、宿主许可未知或结算不确认停止。每次重试重新申请许可且扣原额度，不重放业务副作用。取消信号只中止本次请求，保留未知预留、不新增或清零模型失败；进程中断后的恢复仍沿原scope，真实用户取消由Rust运行终态拒绝续发。
+M11启用Pi 1.4.0 原生retry，maxRetries=2，普通与摘要均复用；HTTP SDK层maxRetries=0。固定错误码只对明确临时provider失败开放重试；429的quota/billing由SDK分类排除，调用者取消与单次超时分开。缺少可靠usage、宿主许可未知或结算不确认停止。每次重试重新申请许可且扣原额度，不重放业务副作用。取消信号只中止本次请求，保留未知预留、不新增或清零模型失败；进程中断后的恢复仍沿原scope，真实用户取消由Rust运行终态拒绝续发。
 
 M08在budget_scopes保存连续失败，在model_call_attempts保存scope调用序号和outcome。outcome区分模型结果与费用settled/unknown；同attempt结算幂等，按最近三次实际调用顺序重算，旧run晚到成功不清较新失败、晚到失败也不漏计。第三次失败后reserve/send都拒绝继续；成功仅清失败计数，不退已使用次数或未知预留。Pi仍是唯一执行循环，宿主落实调用许可和显式费用边界。单次超时取冻结配置（历史缺省90秒，大窗口配置600秒），工具HTTP超时、运行租约/取消保持；Worker不由次数推导额外整轮截止。
 
@@ -773,7 +773,7 @@ condition_revisions.decision_state_version由analysis owner写入，旧行默认
 
 来源限制适用于所有通道、按ID读取、必要支持及实际模型上下文。update_analysis_task在本轮收紧限制后，下一次provider派发前，M08/M11通过Pi原生上下文投影或会话重建去除不可再用材料及依赖它们的摘要；不能仅使用现有“交付新运行前”的重建入口便宣称覆盖轮内变化。若不能保留原SDK工具身份安全续接，沿既有stale_context返回受影响输入失效，明确说明并等待新输入，不换operation_id重做副作用。这里处理用户主动改变范围，不新增持续语义变化监听。自然语言解释仍由模型完成，程序校验身份和明确保存的值，不声称能证明模型完整理解了用户原话。
 
-轮内接线沿现有工具回执增加宿主控制字段`context_reset`。M11在Pi 1.3.0的`turn_end`完成原工具组后，用`SessionManager.appendCompaction`的自保留边界移出旧正文及摘要；保留同一会话树、原用户输入和已处理工具的身份/状态。内部`RefreshRunContext`携带原run/lease、触发的SDK工具ID和检查点，Rust核对成功回执与目标任务、拒绝未结算工具，再原子保存新authority和检查点。启动与轮内刷新共用有效资产选择规则，系统Skill目录使用Pi原生格式按目标投影更新，不永久清空选择。范围改变已提交但刷新前中断，恢复先接回原回执（包括已经写入检查点的toolResult），再完成投影；内部检查点读取不等于模型派发，普通及摘要派发的校验不放宽。
+轮内接线沿现有工具回执增加宿主控制字段`context_reset`。M11在Pi 1.4.0的`turn_end`完成原工具组后，用`SessionManager.appendCompaction`的自保留边界移出旧正文及摘要；保留同一会话树、原用户输入和已处理工具的身份/状态。内部`RefreshRunContext`携带原run/lease、触发的SDK工具ID和检查点，Rust核对成功回执与目标任务、拒绝未结算工具，再原子保存新authority和检查点。启动与轮内刷新共用有效资产选择规则，系统Skill目录使用Pi原生格式按目标投影更新，不永久清空选择。范围改变已提交但刷新前中断，恢复先接回原回执（包括已经写入检查点的toolResult），再完成投影；内部检查点读取不等于模型派发，普通及摘要派发的校验不放宽。
 
 **消息归属与活动取证任务。** input_task_ids表示本消息涉及的全部任务，不等于一次模型派发可合并使用它们的来源。存在不同来源限制时，一次取证派发只绑定一个active_task_ref（task_id/condition_version）；沿既有route/任务更新操作由宿主核验并保存活动绑定。切换任务即使没有修改条件，也必须在下一次普通或摘要派发前按目标任务重建Pi可见投影，覆盖旧工具正文、历史投影、个人资产和派生摘要。未确定唯一目标时只交付任务目录及控制信息，受限正文读取返回task_context_required。同批跨任务的取证调用不隐式切换或并集放行，先完成明确归属；批量执行已确认SQL的控制操作仍按各查询独立校验，不因此取消原批量执行能力。
 
@@ -821,12 +821,14 @@ Rust会话读取用例让snapshot与SSE共用历史输出投影，经query owner
 
 | 操作 / v2输入 | 必需输出与可选项 | owner / 失败语义 |
 | --- | --- | --- |
-| search_knowledge：query必填；limit默认10、1–30；task_ref可省；kinds可省；hints含可选business_domain、related_object_ids；cursor可省；asset_after沿旧资产分页 | hits[]、search_coverage及原personal_memories/selected_skills资产分支；公共hit按record_kind区分原文和有效知识，字段及补读入口见17.6.1。limit计去重后的命中项，同一文档不同相关位置可以各占一项；必要支持不另占名额 | M04召回，M02/M03取内容，use_cases组合。hints仅排序；旧v1 business_domain/related_object_id保持原硬过滤，不能静默改义 |
+| search_knowledge：query必填；limit默认10、1–30；task_ref可省；kinds可省；hints含可选business_domain、related_object_ids；source_selection可省、非空时1–20项{object_id,version}且仅evidence；cursor可省；asset_after沿旧资产分页 | hits[]、search_coverage及原personal_memories/selected_skills资产分支；公共hit按record_kind区分原文和有效知识，字段及补读入口见17.6.1。limit计去重后的命中项，同一文档不同相关位置可以各占一项；必要支持不另占名额 | M04召回，M02/M03取内容，use_cases组合。hints仅排序；旧v1 business_domain/related_object_id保持原硬过滤，不能静默改义 |
 | read_knowledge：items必填、1–20；每项kind=knowledge或memory/skill；knowledge有ref:EvidenceRef、可选statement_id及structure_only；memory/skill有asset_ref:{id,version}，memory的part=body/scope/source_text；offset默认0、limit默认4096字符，knowledge可带supports_cursor；task_ref可省 | 按输入顺序返回带kind的items；knowledge含ref、state、content、supports、citations、continuation及两个交付状态，可按陈述或条目读，structure_only保留结构分页；memory保留正文/范围/原话各自分页；skill只返回已选版本descriptor。批量中某项不可用不抹掉其余合法项 | M02/M09按kind公开读取，use_cases复核授权/来源、陈述或资产归属。state为ok/stale/not_available；服务故障为整次upstream_failed，不冒充每项不存在 |
 | read_source：citation必填，可选limit默认8192字符；task_ref可省 | 原source/revision、实际locator、source_length、text、content_state、next_locator可空；source_length为该版原文总Unicode字符数 | M03或M02按owner读取；修订不符为stale_source，缺权限统一not_available；不接受只给chunk_id的请求。读取范围由citation.locator明确指定，limit只限制本次交付 |
 | 内部read_statements / read_supports | 指定EvidenceRef[]、已核对范围→定义与已记录必要支持、依赖版本及未取项 | M02，批量读私有表；不替Pi挑口径，不遍历普通related全图 |
 | 内部prepare_source / apply_preparation | 冻结SourceCitation与依赖指纹→有出处成果及覆盖；提交另带预期修订和作业代次 | M03准备，M02保存有效层，use_cases在原事务中组合 |
 | 内部search_candidates / build_index_payload | 有效候选范围＋query/向量→候选/通道状态；当前内容＋出处→派生索引批次 | M04不读其他模块私表；检索网络不在会话续租锁内 |
+
+`source_selection`由来源身份视图返回的object_id/object_version构造，其中version填对象修订；它只选择当前对象正式来源事实的原文定位，不把对象修订当来源revision，不授派生知识或结构采用权。M02提供所选对象的窄来源事实，来源owner按真实SourceKey、空间、可读性、当前修订与完整性核验，沿受核citation或同修订唯一quote确定Unicode code point区间。输出仍为source_excerpt及SourceCitation，随后用原read_source补读；首次正文只交选定片段，无法唯一定位时保留缺口，不猜offset或退回大块/全文。普通原文support_state仍unknown，采用派生陈述或结构继续核必要citation/support、table_binding→DDL及整对象依赖。选择不改变来源允许集，hints仍只排序；省略时保留旧请求与游标绑定，v1和已登记回执不改写。当前实现和验证状态见CURRENT。
 
 来源准入与上游有效性分别核验。旧格式文档窗口保留实际交付的knowledge对象、版本与path，沿既有规则接受文档直接许可或完整贡献根许可；不能把上游版本/完整性清单无差别登记成本次已读来源，也不能额外强要document许可。共享上下文验证仍按所选path的有效贡献来源核对当前完整性，并沿原owner核版本/指纹；未选path的不完整来源不污染合法正文。显式citations/supports继续登记各自来源依赖，来源声明不产生额外许可。
 
@@ -959,7 +961,7 @@ source_excerpt的content_state只表示请求的片段是否交齐，不能表�
 
 容量推导固定为：C=context_window，I=input_limit，O=output_limit，B=min(I, C−O)，H0=min(65536, max(16384, ceil(0.02×C)))，H=min(H0, max(1024, floor(B/8)))；要求B>2H。Pi注册contextWindow=C、maxTokens=O；R=reserveTokens=C−B+H，原生触发线T=B−H；K=keepRecentTokens=min(65536, floor(T/4))，不能因为平均消息短降到256/128。H是工具/临时资料/估算误差预留，输入、输出不能分别占满C；按B缩放H使小窗口不用硬套大窗口预留。
 
-配置有效仍须给两次新摘要预留空间：Pi1.4的单次历史摘要上界S1=O，单次split-turn前缀摘要上界S2=O；新配置要求S1+S2+K<T，每次运行再按固定规则、活动工具及不可压缩开销F核对S1+S2+K+F<T。这保留了新摘要的空间校验，但2O+K不是压缩结果的通用上界：没有新history时SDK直接沿用previousSummary，旧摘要可能来自不同输出配置；SDK还会追加文件操作附记。session_before_compact依据原生preparation另核实际沿用的旧摘要、完整保留组超出K的部分、拼接标记与文件附记；这些都不裁剪到O/K。无法满足时在摘要派发前明确拒绝，逐请求实际JSON/token启发式硬门继续保留，不能承诺任意固定部分都必能续答。可行范围沿同源向量给出，旧配置沿下述legacy路径，不静默扩大原限额；普通工具内容按原接口分页，不靠反复摘要解决当前完整工具组本身超限。反例C=1,000,000、I=O=65,536仍被拒绝；默认大窗口方案有余量。
+配置有效仍须给两次新摘要预留空间：Pi1.4的单次历史摘要上界S1=O，单次split-turn前缀摘要上界S2=O；新配置要求S1+S2+K<T，每次运行再按固定规则、活动工具及不可压缩开销F核对S1+S2+K+F<T。这保留了新摘要的空间校验，但2O+K不是压缩结果的通用上界：没有新history时SDK直接沿用previousSummary，旧摘要可能来自不同输出配置；SDK还会追加文件操作附记。session_before_compact依据原生preparation另核实际沿用的旧摘要、完整保留组超出K的部分、拼接标记与文件附记；这些都不裁剪到O/K。附加量绑定该preparation的firstKeptEntryId，只在Pi原生buildContextEntries()仍选择该边界时计入；成员判断不构建完整消息投影，压缩准备仍按实际消息估算。业务范围替换撤下旧边界后失效，普通leaf追加不清除，刷新失败回到原分支则仍计原开销。无法满足时在摘要派发前明确拒绝，逐请求实际JSON/token启发式硬门继续保留，不能承诺任意固定部分都必能续答。可行范围沿同源向量给出，旧配置沿下述legacy路径，不静默扩大原限额；普通工具内容按原接口分页，不靠反复摘要解决当前完整工具组本身超限。反例C=1,000,000、I=O=65,536仍被拒绝；默认大窗口方案有余量。
 
 DeepSeek已核对的1M窗口采用十进制1,000,000 tokens作为首轮配置基准（不向上猜1,048,576），默认I=900000、O=65536、载荷8MiB；由此B=900000、H=20000、reserveTokens=120000、近期保留65536、触发线880000。max档或明确长输出可采用O=131072，此时B=868928、触发线848928。供应商最大393216输出是能力上限及Schema可表达上限，实际可启用组合仍须通过容量校验；首轮默认/长输出档分别为65536/131072，不承诺原生摘要参数下全部极值组合可同时启用。上述是待验证的配置初值，当前服务未变；代理/网关须先验证8MiB真实接收能力。
 

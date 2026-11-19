@@ -367,7 +367,7 @@ M08独占`maintenance_model_calls.budget_json`：新调用冻结格式版本、�
 
 `issued` 落库与网络发送之间不能原子化，崩溃按可能已发出处理；新调用另申请尝试且旧预留保留。模型用量迟到可凭平台回执结算原账本，运行已过期不允许因此提交旧输出或再次发请求。
 
-锁定Pi 1.3.0的恢复接入：从最近assistant消息中找出尚未匹配toolResult的调用，即使检查点以另一工具的结果结尾，也沿原SDK调用及operation_id逐个接回。明确拒绝的持久回执接为isError结果，成功的只写一次。工具提交响应失败后，通过内部只读`/internal/data/tool-rejections`按当前运行权、原SDK调用和参数指纹查证；仅返回已持久的rejected回执，不执行原工具、不返回成功正文，不存在或失权继续保留原错误。首次业务拒绝也在同次恢复交给Pi，不额外耗费一次Worker交付。执行前工具名/参数校验失败也接为未执行的isError结果，交Pi修正；登记与提交未知继续抛出，不能伪装成明确失败。接回后使用公开的`session.prompt(RECOVERY_NOTICE, { expandPromptTemplates: false })`继续原输入，先刷新当前资源，再经SDK会话的原生完成后处理与溢出压缩；不直接调用底层`session.agent.continue()`。恢复通知绑定原message_id/recovery_chain_id，不创建新业务输入或新预算。
+Pi 1.4.0 的恢复接入：从最近assistant消息中找出尚未匹配toolResult的调用，即使检查点以另一工具的结果结尾，也沿原SDK调用及operation_id逐个接回。明确拒绝的持久回执接为isError结果，成功的只写一次。工具提交响应失败后，通过内部只读`/internal/data/tool-rejections`按当前运行权、原SDK调用和参数指纹查证；仅返回已持久的rejected回执，不执行原工具、不返回成功正文，不存在或失权继续保留原错误。首次业务拒绝也在同次恢复交给Pi，不额外耗费一次Worker交付。执行前工具名/参数校验失败也接为未执行的isError结果，交Pi修正；登记与提交未知继续抛出，不能伪装成明确失败。接回后使用公开的`session.prompt(RECOVERY_NOTICE, { expandPromptTemplates: false })`继续原输入，先刷新当前资源，再经SDK会话的原生完成后处理与溢出压缩；不直接调用底层`session.agent.continue()`。恢复通知绑定原message_id/recovery_chain_id，不创建新业务输入或新预算。
 
 正式回答交付若被`finish_run`明确拒绝`message_pending`，说明当前消息尚未登记归属且输出未提交。SDK明确报告`stopReason=length`时同样拒绝提交半截回答。Node仅通过Pi原生`sendCustomMessage`反馈一次相应拒绝，让模型补齐归属/澄清或重写简洁完整的回答，再提交修正后的完整文本。沿用原会话、run、message、恢复链和调用预算；宿主不替模型创建任务。取消后不起补正轮；再次拒绝、其他错误和未知回执均继续失败，不循环追加反馈或重做未知提交。验证覆盖修正成功、持续遗漏仅反馈一次、明确length不提交及最后回答替代前轮文本。`stopReason=stop`并不能证明自然语言完整或正确，仍需业务质量审查。
 
@@ -480,6 +480,6 @@ DeepSeek提取固定Flash、4096输出上限、关闭思考；Agent仍沿用自�
 
 正常模拟输入和`ModelProfile.budget_mode=request`的新消息不设累计调用次数、默认累计费用或总时长硬上限；原scope贯穿摘要、重试、恢复和结果唤醒。新正常scope用NULL表达无限，显式费用帽与旧有限scope保持。迁移不重置任何计数或未知预留，旧trial的配置指纹、状态、上限和期限不变。无环境profile时的默认引导仅由M08账本owner补缺，不将初始化当作显式重配置。
 
-M11启用Pi1.3.0原生retry，maxRetries=2，普通与摘要均复用；HTTP SDK层maxRetries=0。固定错误码只对明确临时provider失败开放重试；429的quota/billing由SDK分类排除，调用者取消与单次超时分开。缺少可靠usage、宿主许可未知或结算不确认停止。每次重试重新申请许可且扣原额度，不重放业务副作用。取消信号只中止本次请求，保留未知预留、不新增或清零模型失败；进程中断后的恢复仍沿原scope，真实用户取消由Rust运行终态拒绝续发。
+M11启用Pi 1.4.0 原生retry，maxRetries=2，普通与摘要均复用；HTTP SDK层maxRetries=0。固定错误码只对明确临时provider失败开放重试；429的quota/billing由SDK分类排除，调用者取消与单次超时分开。缺少可靠usage、宿主许可未知或结算不确认停止。每次重试重新申请许可且扣原额度，不重放业务副作用。取消信号只中止本次请求，保留未知预留、不新增或清零模型失败；进程中断后的恢复仍沿原scope，真实用户取消由Rust运行终态拒绝续发。
 
 M08在budget_scopes保存连续失败，在model_call_attempts保存scope调用序号和outcome。outcome区分模型结果与费用settled/unknown；同attempt结算幂等，按最近三次实际调用顺序重算，旧run晚到成功不清较新失败、晚到失败也不漏计。第三次失败后reserve/send都拒绝继续；成功仅清失败计数，不退已使用次数或未知预留。Pi仍是唯一执行循环，宿主只执行预算边界。单次模型超时取冻结配置（历史缺省90秒、大窗口配置600秒），工具HTTP超时、运行租约/取消保持；Worker不由次数推导额外整轮截止。
