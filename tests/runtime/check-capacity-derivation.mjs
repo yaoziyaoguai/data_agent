@@ -2,8 +2,9 @@ import assert from 'node:assert/strict';
 import {writeFile,mkdir,readFile} from 'node:fs/promises';
 import {deriveCapacityPlan,planForProfile,assertRuntimeOverhead,effectiveOutputCap,capacityRanges} from '../../packages/contracts/capacity.ts';
 import {estimateFixedContextTokens,estimateRequestBytes} from '../../apps/agent/session/request-size.ts';
-import {SessionManager} from '@earendil-works/pi-coding-agent';
+import {SessionManager,estimateTokens} from '@earendil-works/pi-coding-agent';
 import {sessionCapacity} from '../../apps/agent/session/capacity.ts';
+import {taskProjection} from '../../apps/agent/session/task-projection.ts';
 
 const checks=[];let passed=false;
 try {
@@ -69,6 +70,47 @@ try {
     assert.equal(capacity.failure(),'fixed_overhead_insufficient',kind+'必须计入压缩后空间');
   }
   checks.push('实际沿用的长旧摘要与原生文件附记突破静态2O+K预算时，摘要发送前拒绝，不降低冻结输出帽');
+
+  // 真实范围替换后沿同一检查器派发；新宿主事实/活动工具增加固定开销时也不能带上已撤下的保留组。
+  const scopedPlan=deriveCapacityPlan(65536,50000,8192);
+  const scopedManager=SessionManager.inMemory('/synthetic/scoped-capacity');
+  const retained={role:'user',content:'x'.repeat((scopedPlan.keepRecent+1500)*4),timestamp:1};
+  const retainedId=scopedManager.appendMessage(retained);
+  const retainedOverhead=estimateTokens(retained)-scopedPlan.keepRecent;
+  const scopedSlack=scopedPlan.trigger-scopedPlan.summaryCap-scopedPlan.splitSummaryCap-scopedPlan.keepRecent;
+  let fixed=scopedSlack-retainedOverhead-500;
+  const scopedCapacity=sessionCapacity(scopedPlan,scopedManager,()=>fixed);
+  await scopedCapacity.extension.handlers.get('session_before_compact')[0]({preparation:{
+    firstKeptEntryId:retainedId,messagesToSummarize:[{role:'user',content:'旧范围',timestamp:0}],
+    turnPrefixMessages:[],isSplitTurn:false,fileOps:{read:new Set(),written:new Set(),edited:new Set()},
+  }});
+  scopedCapacity.check();
+  const workspace={tasks:[],recent_messages:[],selected_skills:[],memories:[],query_observations:[],
+    authority_revision:'1',source_context_ready:true};
+  const transport={run:{run_id:'synthetic-run',message_id:'synthetic-message',text:'切换合成范围',workspace_context:workspace},
+    binding:()=>({run_id:'synthetic-run',lease_epoch:'1'}),post:async path=>{
+      assert.equal(path,'/internal/context/refresh');return workspace;
+    }};
+  fixed+=1000;
+  scopedManager.appendMessage({role:'user',content:'普通追加不替换已有范围',timestamp:2});
+  assert.throws(()=>scopedCapacity.check(),/model_input_limit/,'普通leaf追加仍必须计入长保留组');
+  fixed-=1000;
+  const oldLeaf=scopedManager.getLeafId();
+  const projection=taskProjection(transport,scopedManager,()=>{fixed+=1000;});
+  projection.acceptReceipt({data:{},context_reset:{task_id:'synthetic-task',condition_version:'2'},source_context_ready:true},'synthetic-route');
+  assert.equal((await projection.extension.handlers.get('turn_end')[0]()).continue,true);
+  projection.check();
+  assert.ok(scopedManager.getEntries().some(entry=>entry.id===retainedId),'原条目仍持久保留');
+  assert.ok(!scopedManager.buildSessionProjection().entries.some(entry=>entry.sourceEntry.id===retainedId),'旧保留组已由Pi撤下');
+  assert.doesNotThrow(()=>scopedCapacity.check(),'同一范围切换后的首个请求不能被已撤下的旧开销误拒');
+  checks.push('真实Pi范围替换后，同一容量检查器按新投影接受动态固定开销；普通追加仍核长保留组，原历史未删除');
+  scopedManager.branch(oldLeaf);
+  const rollback=taskProjection({...transport,post:async()=>{throw new Error('synthetic_refresh_failed');}},scopedManager,()=>assert.fail('失败刷新不能替换宿主事实'));
+  rollback.acceptReceipt({data:{},context_reset:{task_id:'synthetic-task',condition_version:'3'},source_context_ready:true},'synthetic-failed-route');
+  await assert.rejects(()=>rollback.apply(),/synthetic_refresh_failed/);
+  assert.equal(scopedManager.getLeafId(),oldLeaf);
+  assert.throws(()=>scopedCapacity.check(),/model_input_limit/,'刷新回滚恢复原分支时必须重新计入原保留边界');
+  checks.push('真实范围刷新失败回到原leaf，原长保留组仍拒绝；不因临时新分支清空开销');
 
   passed=true;
   console.log(JSON.stringify({passed,checks,officialRequests:0}));

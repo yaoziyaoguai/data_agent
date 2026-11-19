@@ -19,7 +19,13 @@ export function sessionCapacity(
   fixedOverheadTokens: () => number,
 ) {
   let retainedOverhead = 0;
-  const failure = () => assertRuntimeOverhead(plan, fixedOverheadTokens() + retainedOverhead);
+  let retainedFrom: string | undefined;
+  const failure = () => {
+    // 开销只属于该保留边界；Pi撤下它后不再计入，刷新回滚到原分支时仍可复用。
+    const retainedIsActive = retainedFrom !== undefined && manager.buildContextEntries()
+      .some(entry => entry.id === retainedFrom);
+    return assertRuntimeOverhead(plan, fixedOverheadTokens() + (retainedIsActive ? retainedOverhead : 0));
+  };
   const path = '<inline:data_agent_capacity>';
   const extension: Extension = {
     path, resolvedPath: path,
@@ -29,6 +35,7 @@ export function sessionCapacity(
       const entries = manager.buildSessionProjection().entries;
       const firstKept = entries.findIndex(entry => entry.sourceEntry.id === preparation.firstKeptEntryId);
       if (firstKept < 0) throw new Error('checkpoint_conflict');
+      retainedFrom = preparation.firstKeptEntryId;
       const retainedTokens = entries.slice(firstKept).flatMap(entry => entry.messages)
         .reduce((total, message) => total + estimateTokens(message), 0);
       retainedOverhead = Math.max(0, retainedTokens - plan.keepRecent);
