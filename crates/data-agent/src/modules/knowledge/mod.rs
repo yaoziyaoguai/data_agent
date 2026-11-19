@@ -20,6 +20,9 @@ pub use store::{
     register_source_index_target_in_tx, renew_source_index_lease_in_tx, source_index_heads_in_tx,
 };
 pub use store::{document_parts_in_tx, save_document_in_tx};
+pub use store::{
+    locate_document_quote_in_tx, read_source_fact_quote_in_tx, source_fact_refs_in_tx,
+};
 pub use store::{lock_versions_in_tx, related_documents_in_tx};
 pub use store::{matching_content_in_tx, matching_scoped_in_tx};
 pub use structure::{

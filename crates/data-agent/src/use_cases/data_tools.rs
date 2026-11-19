@@ -1,3 +1,4 @@
+use super::evidence_delivery::{SearchCursorInput, SearchScope, SearchSelection};
 use crate::{
     contracts,
     modules::{analysis, assets, conversations, knowledge, queries, retrieval, runtime},
@@ -191,13 +192,13 @@ fn public_search_receipt(input: &Value, mut receipt: Value) -> Value {
 }
 
 // 短引用只在本轮已核会话/租约的短事务里展开为原完整窗口；原登记参数与指纹保持短引用。
-async fn effective_cursor_in_tx(
+async fn effective_cursor_in_tx<'a>(
     tx: &mut AppTx<'_>,
     run: &runtime::LockedRun,
-    cursor: &str,
-) -> Result<String> {
+    cursor: &'a str,
+) -> Result<SearchCursorInput<'a>> {
     let Some(operation) = cursor.strip_prefix(SEARCH_RECEIPT_PREFIX) else {
-        return Ok(cursor.to_owned());
+        return Ok(SearchCursorInput::Inline(cursor));
     };
     if operation.is_empty()
         || operation.len() > 64
@@ -207,7 +208,9 @@ async fn effective_cursor_in_tx(
     {
         return Err(Error::new("invalid_cursor"));
     }
-    runtime::read_search_cursor_in_tx(tx, run, operation).await
+    runtime::read_search_cursor_in_tx(tx, run, operation)
+        .await
+        .map(SearchCursorInput::Receipt)
 }
 
 fn replay_receipt(name: &str, mut receipt: Value) -> Result<Value> {
@@ -604,7 +607,7 @@ async fn execute(pool: &MySqlPool, ctx: &AccessContext, input: Value) -> Result<
     let mut query_resolution: Option<Value> = None;
     let tool_contract_version;
     let validation;
-    let mut effective_cursor: Option<String> = None;
+    let mut effective_cursor = None;
     let cid = runtime::locate_run(pool, text(&input, "run_id")?).await?;
     // 正文回放先查外部结果权限，最终事务再核当前依赖和活动范围。
     let replay_checked = if !source_identity_view
@@ -1130,95 +1133,110 @@ async fn execute(pool: &MySqlPool, ctx: &AccessContext, input: Value) -> Result<
         } else {
             None
         };
-    let mut search_selection = None;
+    let source_selection = search_request
+        .as_ref()
+        .and_then(|request| request.source_selection.as_deref());
     let search_deadline = retrieval::vector::retrieval_deadline();
-    // 05接续：空间、对象启停、v1硬范围与任务来源限制在同一入口换算为允许记录集，
-    // 每路召回前生效（无来源限制不是无范围）；门的最终裁决仍在提交事务内重解析+
-    // 过滤（轮内收紧/放宽与对象换代立即生效），这里的预过滤只缩小每条通道的召回范围。
-    let allowed_records = if name == "search_knowledge" && !source_identity_view {
-        match tokio::time::timeout_at(search_deadline, async {
-            let message = runtime::locate_run_message(pool, text(&input, "run_id")?).await?;
-            let mut tx = AppTx::begin(pool).await?;
-            let conv = conversations::lock_conversation_in_tx(&mut tx, ctx, &cid).await?;
-            let active = if let Some(request) = &search_request {
-                super::evidence_delivery::current_task_in_tx(
-                    &mut tx,
-                    &conv,
-                    request.task_ref.as_ref(),
-                )
-                .await?
-            } else {
-                None
-            };
-            let gate = super::source_limits::resolve_in_tx(&mut tx, &conv, &message).await?;
-            let records =
-                super::source_limits::allowed_records_in_tx(&mut tx, ctx, gate.as_ref(), &scope)
-                    .await?;
-            if let Some(request) = &search_request {
-                search_selection = Some(super::evidence_delivery::SearchSelection::new(
-                    ctx,
-                    request,
-                    active,
-                    Some(&records),
-                ));
+    // 普通召回把空间、启停、硬范围与来源门换算为通道允许集。精读只准备任务与门，
+    // 在锁外按已选对象和版本核定原文。最终裁决仍使用提交事务内的当前权限。
+    let (search_selection, source_selection_gate, allowed_records) =
+        if name == "search_knowledge" && !source_identity_view {
+            match tokio::time::timeout_at(search_deadline, async {
+                let message = runtime::locate_run_message(pool, text(&input, "run_id")?).await?;
+                let mut tx = AppTx::begin(pool).await?;
+                let conv = conversations::lock_conversation_in_tx(&mut tx, ctx, &cid).await?;
+                let active = if let Some(request) = &search_request {
+                    super::evidence_delivery::current_task_in_tx(
+                        &mut tx,
+                        &conv,
+                        request.task_ref.as_ref(),
+                    )
+                    .await?
+                } else {
+                    None
+                };
+                let gate = super::source_limits::resolve_in_tx(&mut tx, &conv, &message).await?;
+                let records = if source_selection.is_some() {
+                    None
+                } else {
+                    Some(
+                        super::source_limits::allowed_records_in_tx(
+                            &mut tx,
+                            ctx,
+                            gate.as_ref(),
+                            &scope,
+                        )
+                        .await?,
+                    )
+                };
+                let selection = search_request.as_ref().map(|request| {
+                    let scope = match &records {
+                        Some(records) => SearchScope::Recall(records),
+                        None => SearchScope::Selected(gate.as_ref()),
+                    };
+                    SearchSelection::new(ctx, request, active, scope)
+                });
+                tx.commit().await?;
+                Ok::<_, Error>((selection, gate, records))
+            })
+            .await
+            {
+                Ok(prepared) => prepared?,
+                Err(_) if source_selection.is_some() => return Err(Error::new("unavailable")),
+                Err(_) => (
+                    None,
+                    None,
+                    Some(retrieval::vector::AllowedRecords {
+                        knowledge_ids: Vec::new(),
+                        sources: Vec::new(),
+                    }),
+                ),
             }
-            tx.commit().await?;
-            Ok::<_, Error>(records)
-        })
-        .await
-        {
-            Ok(records) => Some(records?),
-            Err(_) => Some(retrieval::vector::AllowedRecords {
-                knowledge_ids: Vec::new(),
-                sources: Vec::new(),
-            }),
-        }
-    } else {
-        None
-    };
+        } else {
+            (None, None, None)
+        };
     let continuation = search_request
         .as_ref()
         .and_then(|request| request.cursor.as_deref())
         .map(|_| {
-            let cursor = effective_cursor
-                .as_deref()
-                .ok_or(Error::new("unavailable"))?;
+            let cursor = effective_cursor.ok_or(Error::new("unavailable"))?;
             search_selection
                 .as_ref()
                 .ok_or(Error::new("unavailable"))?
                 .restore(cursor)
         })
         .transpose()?;
-    let launch = if name == "search_knowledge" && !source_identity_view {
-        if let Some(anchor) = &scope.anchor
-            && tokio::time::Instant::now() < search_deadline
-        {
-            // anchor元信息沿范围准备前的同一期限；普通读取错误仍传播。
-            if let Ok(result) = tokio::time::timeout_at(search_deadline, async {
-                let mut tx = AppTx::begin(pool).await?;
-                knowledge::read_meta_in_tx(&mut tx, ctx, anchor, None).await?;
-                tx.commit().await
-            })
-            .await
+    let launch =
+        if name == "search_knowledge" && !source_identity_view && source_selection.is_none() {
+            if let Some(anchor) = &scope.anchor
+                && tokio::time::Instant::now() < search_deadline
             {
-                result?;
+                // anchor元信息沿范围准备前的同一期限；普通读取错误仍传播。
+                if let Ok(result) = tokio::time::timeout_at(search_deadline, async {
+                    let mut tx = AppTx::begin(pool).await?;
+                    knowledge::read_meta_in_tx(&mut tx, ctx, anchor, None).await?;
+                    tx.commit().await
+                })
+                .await
+                {
+                    result?;
+                }
             }
-        }
-        // 05切片4：词法Milvus路与查询嵌入并行发出；锁外检索阶段在词法就绪后
-        // 即核验/预读，嵌入就绪后dense首轮并入共同排序，不等待慢嵌入。
-        super::knowledge_embeddings::launch_scoped(
-            pool,
-            ctx,
-            text(args, "query")?,
-            Some(&input),
-            tool_contract_version == 2,
-            allowed_records.as_ref(),
-            search_deadline,
-        )
-        .await
-    } else {
-        None
-    };
+            // 05切片4：词法Milvus路与查询嵌入并行发出；锁外检索阶段在词法就绪后
+            // 即核验/预读，嵌入就绪后dense首轮并入共同排序，不等待慢嵌入。
+            super::knowledge_embeddings::launch_scoped(
+                pool,
+                ctx,
+                text(args, "query")?,
+                Some(&input),
+                tool_contract_version == 2,
+                allowed_records.as_ref(),
+                search_deadline,
+            )
+            .await
+        } else {
+            None
+        };
     let mut search_stage = if name == "search_knowledge" && !source_identity_view {
         let mut candidates = retrieval::vector::Candidates::lexical();
         candidates.deadline = search_deadline;
@@ -1238,7 +1256,17 @@ async fn execute(pool: &MySqlPool, ctx: &AccessContext, input: Value) -> Result<
             text_results: &text_results,
             include_raw: tool_contract_version == 2,
         };
-        Some(if let Some(continuation) = continuation {
+        Some(if let Some(selection) = source_selection {
+            super::knowledge::search_selected_sources_outside_lock(
+                pool,
+                ctx,
+                &request,
+                selection,
+                source_selection_gate.as_ref(),
+                continuation,
+            )
+            .await?
+        } else if let Some(continuation) = continuation {
             super::knowledge::restore_search_stage_outside_lock(
                 pool,
                 ctx,

@@ -406,6 +406,107 @@ async fn read_citation_window_in_tx(
     Ok((text, total_length))
 }
 
+// 对象选择只定位其正式来源事实。先核源级许可、当前修订和完整性，才取quote；
+// 不读取对象有效定义，也不将缺DDL等贡献根的对象提升为可采用知识。
+pub(super) async fn selected_excerpt_candidates_in_tx(
+    tx: &mut AppTx<'_>,
+    ctx: &AccessContext,
+    selection: &[crate::contracts::generated::SourceObjectSelection],
+    scope: &crate::search_scope::KnowledgeSearchScope,
+    gate: Option<&super::source_limits::SourceGate>,
+) -> Result<(Vec<Value>, Vec<(String, String)>, bool)> {
+    let mut candidates = Vec::new();
+    let mut versions = Vec::new();
+    let mut unlocated = false;
+    let mut seen = HashSet::new();
+    for reference in selection {
+        let facts = match knowledge::source_fact_refs_in_tx(tx, ctx, reference, scope).await {
+            Ok(facts) => facts,
+            Err(error) if matches!(error.code, "not_available" | "stale_knowledge") => {
+                unlocated = true;
+                continue;
+            }
+            Err(error) => return Err(error),
+        };
+        let mut located = false;
+        for fact in facts {
+            let Some(source) = fact["source_id"].as_str() else {
+                continue;
+            };
+            if gate.is_some_and(|gate| !gate.allows_source_arg(source)) {
+                continue;
+            }
+            let revision = fact["revision"].as_str().unwrap_or("");
+            if fact["complete"] != true || fact["quote_chars"].as_u64().unwrap_or(0) == 0 {
+                unlocated = true;
+                continue;
+            }
+            let current = match read_meta_in_tx(tx, ctx, source, None).await {
+                Ok(current) => current,
+                Err(error)
+                    if matches!(
+                        error.code,
+                        "not_available" | "stale_source" | "stale_knowledge"
+                    ) =>
+                {
+                    unlocated = true;
+                    continue;
+                }
+                Err(error) => return Err(error),
+            };
+            if current["version"] != revision || current["complete"] != true {
+                unlocated = true;
+                continue;
+            }
+            let quote = knowledge::read_source_fact_quote_in_tx(
+                tx,
+                ctx,
+                reference,
+                fact["entry_id"]
+                    .as_str()
+                    .ok_or(Error::new("invalid_evidence"))?,
+            )
+            .await?;
+            let offset = if let Some(document) = document_id(source) {
+                knowledge::locate_document_quote_in_tx(tx, ctx, document, epoch(revision)?, &quote)
+                    .await?
+            } else {
+                ingestion::locate_source_quote_in_tx(tx, ctx, source, epoch(revision)?, &quote)
+                    .await?
+            };
+            let Some(offset) = offset else {
+                unlocated = true;
+                continue;
+            };
+            located = true;
+            let (kind, id) =
+                document_id(source).map_or(("platform", source), |id| ("document", id));
+            let chars: Vec<_> = quote.chars().collect();
+            for (page, part) in chars.chunks(2400).enumerate() {
+                let text: String = part.iter().collect();
+                let candidate = json!({"source_kind":kind,"source_id":id,"revision":epoch(revision)?,
+                    "offset":offset+page*2400,"length":part.len(),"content_hash":crate::types::fingerprint(&json!(text)),
+                    "segmentation_version":crate::modules::retrieval::source_segments::SEGMENTATION_VERSION,"score":1.0});
+                let key = crate::modules::retrieval::raw_record(&candidate)
+                    .ok_or(Error::new("invalid_evidence"))?;
+                if seen.insert(key) {
+                    candidates.push(candidate);
+                }
+                if candidates.len() > 1000 {
+                    return Err(Error::new("tool_response_capacity"));
+                }
+            }
+        }
+        // 有定位的对象仍参与版本复核，即使它只贡献了已去重的原文。
+        if located {
+            versions.push((reference.object_id.clone(), reference.version.clone()));
+        } else {
+            unlocated = true;
+        }
+    }
+    Ok((candidates, versions, unlocated))
+}
+
 // 正式stage选中raw后调用的owner回源；来源门在召回前进入共同允许集。
 // 独立调用携带limits时再按稳定来源身份核门；这里只读≤30个已选窗口，
 // 核修订/hash后合并≤2400字符的相交范围，失效命中如实计为index_lag。

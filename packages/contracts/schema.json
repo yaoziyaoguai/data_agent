@@ -4466,6 +4466,16 @@
       ],
       "additionalProperties": false
     },
+    "SourceObjectSelection": {
+      "title": "SourceObjectSelection",
+      "type": "object",
+      "properties": {
+        "object_id": {"type": "string", "minLength": 1, "maxLength": 64, "pattern": "^[A-Za-z0-9_-]+$"},
+        "version": {"type": "string", "pattern": "^(0|[1-9][0-9]{0,19})$"}
+      },
+      "required": ["object_id", "version"],
+      "additionalProperties": false
+    },
     "KnowledgeSearchInput": {
       "title": "KnowledgeSearchInput",
       "type": "object",
@@ -4534,16 +4544,22 @@
           "additionalProperties": false,
           "description": "仅用于相关性排序，不扩大或收窄当前权限、kinds及任务来源范围。"
         },
+        "source_selection": {
+          "type": "array", "minItems": 1, "maxItems": 20, "uniqueItems": true,
+          "items": {"$ref": "#/$defs/SourceObjectSelection"},
+          "description": "仅evidence视图使用的精确原文选择。object_id取source_identity.object_id，version取其object_version；只定位这些当前对象的正式source_facts，不授予知识或结构采用权，也不将对象版本当作来源revision。原文仍核实际SourceKey、来源许可、当前修订、完整性与唯一定位；失败项不妨碍其他合法项。kinds仍筛选所选对象类型，hints仍只排序；不接受客户端quote/path/offset，不退到全文。省略时保持原搜索。"
+        },
         "cursor": {
           "type": "string",
           "minLength": 1,
           "maxLength": 65536,
-          "description": "由evidence视图search_coverage.next返回的短不透明回执引用rc1:<operation_id>，或旧JSON/gzip续读状态；宿主按当前用户/空间/会话从原成功工具回执恢复完整候选窗口，短引用不是读取凭据。保持原查询、kinds、hints和任务绑定，asset_after独立推进。source_identity视图沿用独立cursor。"
+          "description": "由evidence视图search_coverage.next返回的短不透明回执引用rc1:<operation_id>，或旧JSON/gzip续读状态；宿主按当前用户/空间/会话从原成功工具回执恢复完整候选窗口，短引用不是读取凭据。保持原查询、kinds、hints、source_selection和任务绑定，asset_after独立推进。source_identity视图沿用独立cursor。"
         }
       },
       "required": [
         "query"
       ],
+      "allOf": [{"if": {"required": ["source_selection"]}, "then": {"properties": {"view": {"const": "evidence"}}}}],
       "additionalProperties": false
     },
     "EvidenceContinuation": {

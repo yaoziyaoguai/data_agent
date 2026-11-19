@@ -91,6 +91,18 @@ struct SearchCursor {
     window: super::knowledge::SearchContinuation,
 }
 
+const SELECTED_SCOPE_PREFIX: &str = "sg1:";
+
+pub(super) enum SearchScope<'a> {
+    Recall(&'a retrieval::vector::AllowedRecords),
+    Selected(Option<&'a super::source_limits::SourceGate>),
+}
+
+pub(super) enum SearchCursorInput<'a> {
+    Inline(&'a str),
+    Receipt(String),
+}
+
 pub(super) struct SearchSelection {
     binding: String,
     scope: String,
@@ -102,15 +114,29 @@ impl SearchSelection {
         ctx: &AccessContext,
         request: &KnowledgeSearchInput,
         task: Option<(String, u64)>,
-        allowed: Option<&retrieval::vector::AllowedRecords>,
+        scope: SearchScope<'_>,
     ) -> Self {
+        let mut binding = json!({"space_id":ctx.space_id,"user_id":ctx.user_id,
+            "query":request.query,"limit":request.limit.unwrap_or(10),
+            "kinds":request.kinds,"hints":request.hints});
+        // 省略新选择字段时保留原绑定字节语义，既有游标和已登记调用继续可接回。
+        if let Some(selection) = &request.source_selection {
+            binding["source_selection"] = json!(selection);
+        }
+        let scope = match scope {
+            SearchScope::Recall(records) => {
+                fingerprint(&json!((&records.knowledge_ids, &records.sources)))
+            }
+            SearchScope::Selected(gate) => format!(
+                "{SELECTED_SCOPE_PREFIX}{}",
+                fingerprint(&json!(
+                    gate.map(super::source_limits::SourceGate::allowed_keys)
+                ))
+            ),
+        };
         Self {
-            binding: fingerprint(&json!({"space_id":ctx.space_id,"user_id":ctx.user_id,
-                "query":request.query,"limit":request.limit.unwrap_or(10),
-                "kinds":request.kinds,"hints":request.hints})),
-            scope: fingerprint(&json!(
-                allowed.map(|records| (&records.knowledge_ids, &records.sources))
-            )),
+            binding: fingerprint(&binding),
+            scope,
             task,
         }
     }
@@ -126,7 +152,14 @@ impl SearchSelection {
         Ok(())
     }
 
-    pub(super) fn restore(&self, cursor: &str) -> Result<super::knowledge::SearchContinuation> {
+    pub(super) fn restore(
+        &self,
+        cursor: SearchCursorInput<'_>,
+    ) -> Result<super::knowledge::SearchContinuation> {
+        let (cursor, from_receipt) = match &cursor {
+            SearchCursorInput::Inline(cursor) => (*cursor, false),
+            SearchCursorInput::Receipt(cursor) => (cursor.as_str(), true),
+        };
         if cursor.len() > 65_536 {
             return Err(Error::new("invalid_cursor"));
         }
@@ -154,7 +187,15 @@ impl SearchSelection {
         if saved.schema != 1 || saved.binding != self.binding {
             return Err(Error::new("invalid_cursor"));
         }
-        if saved.scope != self.scope || saved.task != self.task {
+        // 旧精读摘要绑定的是完整允许集。持久成功回执可接回，剩余窗口由精读阶段按当前来源门重核。
+        let legacy_selected = from_receipt
+            && self.scope.starts_with(SELECTED_SCOPE_PREFIX)
+            && saved.scope.len() == 64
+            && saved
+                .scope
+                .bytes()
+                .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte));
+        if saved.task != self.task || (saved.scope != self.scope && !legacy_selected) {
             return Err(Error::new("stale_cursor"));
         }
         saved.window.validate()?;
@@ -1034,7 +1075,9 @@ mod tests {
                 assert!(cursor.len() <= 65_536);
                 assert!(ResponseCapacity::new(None).fits(&json!({"hits":[{"definition":"合成字段含义"}],"search_coverage":{"next":cursor}})),
                     "转义后的公共游标仍须给实际搜索回执留出容量");
-                let restored = selection.restore(cursor).unwrap();
+                let restored = selection
+                    .restore(SearchCursorInput::Inline(cursor))
+                    .unwrap();
                 restored.assert_pending_knowledge(&vector.lexical).unwrap();
                 assert_eq!(
                     restored
@@ -1071,7 +1114,7 @@ mod tests {
         let legacy = next.as_str().unwrap();
         assert!(legacy.starts_with('{'));
         selection
-            .restore(legacy)
+            .restore(SearchCursorInput::Inline(legacy))
             .unwrap()
             .assert_pending_knowledge(&vector.lexical)
             .unwrap();
@@ -1081,7 +1124,7 @@ mod tests {
         let bytes = gzip.finish().unwrap();
         let compressed = format!("gz1:{}", URL_SAFE_NO_PAD.encode(&bytes));
         selection
-            .restore(&compressed)
+            .restore(SearchCursorInput::Inline(&compressed))
             .unwrap()
             .assert_pending_knowledge(&vector.lexical)
             .unwrap();
@@ -1095,7 +1138,10 @@ mod tests {
             format!("gz1:{}", URL_SAFE_NO_PAD.encode(trailing)),
         ] {
             assert_eq!(
-                selection.restore(&input).unwrap_err().code,
+                selection
+                    .restore(SearchCursorInput::Inline(&input))
+                    .unwrap_err()
+                    .code,
                 "invalid_cursor"
             );
         }
@@ -1108,7 +1154,10 @@ mod tests {
         let oversized = format!("gz1:{}", URL_SAFE_NO_PAD.encode(gzip.finish().unwrap()));
         assert!(oversized.len() < 65_536);
         assert_eq!(
-            selection.restore(&oversized).unwrap_err().code,
+            selection
+                .restore(SearchCursorInput::Inline(&oversized))
+                .unwrap_err()
+                .code,
             "invalid_cursor"
         );
     }

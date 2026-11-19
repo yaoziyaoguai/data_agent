@@ -694,6 +694,35 @@ pub async fn read_source_meta_in_tx(
     )
 }
 
+// BINARY查找先按字节验证唯一性，再把前缀换算为Unicode字符坐标；只查指定源。
+pub async fn locate_source_quote_in_tx(
+    tx: &mut AppTx<'_>,
+    ctx: &AccessContext,
+    source: &str,
+    version: u64,
+    quote: &str,
+) -> Result<Option<usize>> {
+    let current = source_version_in_tx(tx, &ctx.space_id, source).await?;
+    if current != version {
+        return Err(Error::new("stale_source"));
+    }
+    let offset = sqlx::query_scalar::<_, i64>(
+        "WITH source AS (SELECT body,complete FROM source_current \
+           WHERE source_id=? AND space_id=? AND revision=? \
+           UNION ALL SELECT body,complete FROM source_snapshots WHERE source_id=? AND version=? \
+             AND NOT EXISTS(SELECT 1 FROM source_current WHERE source_id=? AND space_id=? AND revision=?)), \
+         located AS (SELECT body,complete,LOCATE(CAST(? AS BINARY),CAST(body AS BINARY)) AS p FROM source) \
+         SELECT CHAR_LENGTH(CONVERT(LEFT(CAST(body AS BINARY),p-1) USING utf8mb4)) FROM located \
+         WHERE complete=TRUE AND p>0 AND LOCATE(CAST(? AS BINARY),CAST(body AS BINARY),p+1)=0",
+    )
+    .bind(source).bind(&ctx.space_id).bind(version)
+    .bind(source).bind(version)
+    .bind(source).bind(&ctx.space_id).bind(version)
+    .bind(quote).bind(quote)
+    .fetch_optional(tx.connection()).await?;
+    Ok(offset.map(|offset| offset as usize))
+}
+
 // 定点窗口读取（05接续C）：与read_source_in_tx同一钉住/回退/缺失语义，但只取
 // 请求的字符窗口（utf8mb4下SUBSTRING按字符定位，Unicode语义与索引切块一致）、
 // 总长度与修订头——不把整篇正文读入进程后再裁剪。窗口数与长度由调用方按

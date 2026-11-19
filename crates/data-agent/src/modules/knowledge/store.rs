@@ -908,6 +908,94 @@ pub struct DocumentWindows {
     pub texts: std::collections::HashMap<(usize, usize), String>,
 }
 
+// 这里只提供正式来源事实的定位材料；对象身份不授予有效知识或结构的采用权。
+pub async fn source_fact_refs_in_tx(
+    tx: &mut AppTx<'_>,
+    ctx: &AccessContext,
+    reference: &crate::contracts::generated::SourceObjectSelection,
+    scope: &crate::search_scope::KnowledgeSearchScope,
+) -> Result<Vec<Value>> {
+    let meta = read_meta_in_tx(tx, ctx, &reference.object_id, None).await?;
+    if meta["version"] != reference.version {
+        return Err(Error::new("stale_knowledge"));
+    }
+    if !scope.matches(&meta) {
+        return Ok(vec![]);
+    }
+    let rows = sqlx::query_scalar::<_, sqlx::types::Json<Value>>(
+        "SELECT JSON_OBJECT('entry_id',JSON_EXTRACT(j.e,'$.entry_id'), \
+           'source_id',JSON_EXTRACT(j.e,'$.source_facts.source_id'), \
+           'revision',JSON_EXTRACT(j.e,'$.source_facts.version'), \
+           'complete',JSON_EXTRACT(j.e,'$.source_facts.complete'), \
+           'quote_chars',CHAR_LENGTH(JSON_UNQUOTE(JSON_EXTRACT(j.e,'$.source_facts.quote')))) \
+         FROM knowledge_objects o,JSON_TABLE(o.body,'$.entries[*]' \
+           COLUMNS(n FOR ORDINALITY,e JSON PATH '$')) j \
+         WHERE o.id=? AND o.space_id=? AND o.version=? AND o.state='enabled' \
+           AND JSON_TYPE(JSON_EXTRACT(j.e,'$.source_facts.source_id'))='STRING' \
+           AND JSON_TYPE(JSON_EXTRACT(j.e,'$.source_facts.quote'))='STRING' ORDER BY j.n",
+    )
+    .bind(&reference.object_id)
+    .bind(&ctx.space_id)
+    .bind(epoch(&reference.version)?)
+    .fetch_all(tx.connection())
+    .await?;
+    Ok(rows.into_iter().map(|row| row.0).collect())
+}
+
+pub async fn read_source_fact_quote_in_tx(
+    tx: &mut AppTx<'_>,
+    ctx: &AccessContext,
+    reference: &crate::contracts::generated::SourceObjectSelection,
+    entry: &str,
+) -> Result<String> {
+    sqlx::query_scalar::<_, String>(
+        "SELECT JSON_UNQUOTE(JSON_EXTRACT(j.e,'$.source_facts.quote')) \
+         FROM knowledge_objects o,JSON_TABLE(o.body,'$.entries[*]' COLUMNS(e JSON PATH '$')) j \
+         WHERE o.id=? AND o.space_id=? AND o.version=? AND o.state='enabled' \
+           AND BINARY JSON_UNQUOTE(JSON_EXTRACT(j.e,'$.entry_id'))=BINARY ? \
+           AND JSON_TYPE(JSON_EXTRACT(j.e,'$.source_facts.quote'))='STRING'",
+    )
+    .bind(&reference.object_id)
+    .bind(&ctx.space_id)
+    .bind(epoch(&reference.version)?)
+    .bind(entry)
+    .fetch_optional(tx.connection())
+    .await?
+    .ok_or(Error::new("not_available"))
+}
+
+// 在单个已核文档内确定唯一位置；全文仅在owner的SQL表达式内拼接，不下行正文。
+pub async fn locate_document_quote_in_tx(
+    tx: &mut AppTx<'_>,
+    ctx: &AccessContext,
+    object: &str,
+    version: u64,
+    quote: &str,
+) -> Result<Option<usize>> {
+    let row = sqlx::query_scalar::<_, i64>(
+        "WITH parts AS (SELECT j.n,JSON_UNQUOTE(j.v) AS text \
+           FROM knowledge_objects o,JSON_TABLE(o.body,'$.entries[*]' \
+             COLUMNS(n FOR ORDINALITY,v JSON PATH '$.effective_value')) j \
+           WHERE o.id=? AND o.space_id=? AND o.version=? AND o.kind='document' \
+             AND o.state='enabled' AND JSON_TYPE(j.v)='STRING'), \
+         assembled AS (SELECT GROUP_CONCAT(text ORDER BY n SEPARATOR '\\n\\n') AS body, \
+           SUM(OCTET_LENGTH(text))+2*GREATEST(COUNT(*)-1,0) AS expected_bytes FROM parts), \
+         located AS (SELECT body,expected_bytes,LOCATE(CAST(? AS BINARY),CAST(body AS BINARY)) AS p FROM assembled) \
+         SELECT /*+ SET_VAR(group_concat_max_len=16777216) */ \
+           CHAR_LENGTH(CONVERT(LEFT(CAST(body AS BINARY),p-1) USING utf8mb4)) \
+         FROM located WHERE p>0 AND OCTET_LENGTH(body)=expected_bytes \
+           AND LOCATE(CAST(? AS BINARY),CAST(body AS BINARY),p+1)=0",
+    )
+    .bind(object)
+    .bind(&ctx.space_id)
+    .bind(version)
+    .bind(quote)
+    .bind(quote)
+    .fetch_optional(tx.connection())
+    .await?;
+    Ok(row.map(|offset| offset as usize))
+}
+
 // 文档位置以原数组内字符串effective_value用两个换行拼接为准。空串占分隔符，
 // 非字符串不占位置；库内计算各条目的跨度，只返回与请求窗口相交的子串。
 pub async fn read_document_windows_in_tx(

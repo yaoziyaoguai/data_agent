@@ -73,6 +73,7 @@ export interface ContractTypes {
   KnowledgeReadReply: Boundary.KnowledgeReadReply;
   SourceReadInput: Boundary.SourceReadInput;
   SourceReadReply: Boundary.SourceReadReply;
+  SourceObjectSelection: Boundary.SourceObjectSelection;
   KnowledgeSearchInput: Boundary.KnowledgeSearchInput;
   EvidenceContinuation: Boundary.EvidenceContinuation;
   KnowledgeSearchHit: Boundary.KnowledgeSearchHit;

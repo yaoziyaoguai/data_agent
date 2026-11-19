@@ -2096,6 +2096,7 @@ pub struct ScopedSearchStage {
     pub search: KnowledgeSearch,
     pub items: Vec<Value>,
     pub page: Value,
+    source_selection_versions: Vec<(String, String)>,
 }
 
 pub struct ScopedSearchRequest<'a> {
@@ -3153,8 +3154,17 @@ async fn run_search_stage(
         &mut reads,
     )
     .await?;
-    // 覆盖核验已自带一次性事务；资产/记忆读取在装配完成后另起短事务，
-    // 不与装配前的任何查询共用连接。
+    finish_search_stage(pool, ctx, request, search, vec![]).await
+}
+
+async fn finish_search_stage(
+    pool: &MySqlPool,
+    ctx: &AccessContext,
+    request: &ScopedSearchRequest<'_>,
+    search: KnowledgeSearch,
+    source_selection_versions: Vec<(String, String)>,
+) -> Result<ScopedSearchStage> {
+    // 资产/记忆读取与普通检索共用原目录入口，选择原文不改变个人资产能力。
     let mut tx = AppTx::begin(pool).await?;
     let memories = crate::modules::assets::list_in_tx(&mut tx, ctx, true)
         .await?
@@ -3178,7 +3188,93 @@ async fn run_search_stage(
         search,
         items,
         page,
+        source_selection_versions,
     })
+}
+
+// 已知对象的精确原文选择复用raw候选、补读和原回执游标；不启动另一套检索。
+pub(super) async fn search_selected_sources_outside_lock(
+    pool: &MySqlPool,
+    ctx: &AccessContext,
+    request: &ScopedSearchRequest<'_>,
+    selection: &[crate::contracts::generated::SourceObjectSelection],
+    gate: Option<&super::source_limits::SourceGate>,
+    resume: Option<SearchContinuation>,
+) -> Result<ScopedSearchStage> {
+    let mut tx = AppTx::begin(pool).await?;
+    let (candidates, versions, mut unlocated) = tokio::time::timeout_at(
+        request.vector.deadline,
+        super::knowledge_sources::selected_excerpt_candidates_in_tx(
+            &mut tx,
+            ctx,
+            selection,
+            request.scope,
+            gate,
+        ),
+    )
+    .await
+    .map_err(|_| Error::new("unavailable"))??;
+    let mut vector = retrieval::vector::Candidates::lexical();
+    vector.space = Some(ctx.space_id.clone());
+    // 仅借既有raw位置快照编码保存引用，不声称执行过BM25或dense。
+    vector.raw.lexical = candidates.clone();
+    let mut saved = if let Some(saved) = resume {
+        for record in &saved.records {
+            if saved.suppresses(&record.key()) {
+                continue;
+            }
+            if !candidates.iter().any(|candidate| {
+                SavedCandidate::capture(candidate, true).as_ref().ok() == Some(record)
+            }) {
+                return Err(Error::new("stale_cursor"));
+            }
+        }
+        saved
+    } else {
+        SearchContinuation::capture(&vector, &[vec![], vec![]], &[])?
+    };
+    saved.sql_active = false;
+    let mut hits = Vec::new();
+    let mut pending = Vec::new();
+    let mut failed = Vec::new();
+    for record in &saved.records {
+        let key = record.key();
+        if saved.suppresses(&key) {
+            continue;
+        }
+        let candidate = record.row(1.0);
+        if hits.len() >= request.limit {
+            pending.push(candidate);
+            continue;
+        }
+        let reply = tokio::time::timeout_at(
+            request.vector.deadline,
+            super::knowledge_sources::recall_excerpts_in_tx(&mut tx, ctx, None, &[candidate]),
+        )
+        .await
+        .map_err(|_| Error::new("unavailable"))??;
+        if let Some(content) = reply["hits"].as_array().and_then(|hits| hits.first()) {
+            hits.push(SearchHit::SourceExcerpt {
+                records: vec![key],
+                score: 1.0,
+                content: content.clone(),
+            });
+        } else {
+            unlocated = true;
+            failed.push(key);
+        }
+    }
+    saved.retire(failed.into_iter());
+    tx.commit().await?;
+    let search = KnowledgeSearch {
+        objects: vec![],
+        hits,
+        pending,
+        coverage: json!({"state":if unlocated {"bounded"}else{"complete"},"index_lag":false}),
+        scan_progress: json!({"exact":"available","milvus":{},"sql":[]}),
+        continuation: Some(saved),
+    };
+    finish_search_stage(pool, ctx, request, search, versions).await
 }
 
 // 提交前重核：检索命中的对象、其结构依赖和目录资产仍为当前有效版本且来源未变。
@@ -3188,6 +3284,21 @@ pub async fn assert_search_fresh_in_tx(
     ctx: &AccessContext,
     stage: &ScopedSearchStage,
 ) -> Result<()> {
+    if !stage.source_selection_versions.is_empty() {
+        let ids = stage
+            .source_selection_versions
+            .iter()
+            .map(|(id, _)| id.clone())
+            .collect::<Vec<_>>();
+        let current = knowledge::current_versions_in_tx(tx, ctx, &ids).await?;
+        if stage
+            .source_selection_versions
+            .iter()
+            .any(|reference| !current.get(reference).copied().unwrap_or(false))
+        {
+            return Err(Error::new("stale_knowledge"));
+        }
+    }
     let mut object_ids = Vec::new();
     for object in &stage.search.objects {
         object_ids.push(

@@ -650,6 +650,41 @@
     "roundtrip": true
   },
   {
+    "name": "source selection binds identities and object versions without a client locator",
+    "schema": "KnowledgeSearchInput",
+    "value": {"query": "合成字段", "source_selection": [{"object_id": "field-synthetic", "version": "3"}]},
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "legacy search keeps its original parameter contract",
+    "schema": "SearchInput",
+    "value": {"query": "合成字段", "source_selection": [{"object_id": "field-synthetic", "version": "3"}]},
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "source identity discovery cannot carry a body selection",
+    "schema": "KnowledgeSearchInput",
+    "value": {"view": "source_identity", "query": "合成字段", "source_selection": [{"object_id": "field-synthetic", "version": "3"}]},
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "source selection requires the returned object version",
+    "schema": "KnowledgeSearchInput",
+    "value": {"query": "合成字段", "source_selection": [{"object_id": "field-synthetic"}]},
+    "valid": false,
+    "roundtrip": false
+  },
+  {
+    "name": "source selection does not accept a caller quote or locator",
+    "schema": "KnowledgeSearchInput",
+    "value": {"query": "合成字段", "source_selection": [{"object_id": "field-synthetic", "version": "3", "quote": "猜测引文"}]},
+    "valid": false,
+    "roundtrip": false
+  },
+  {
     "name": "search continuation rejects an empty public cursor",
     "schema": "KnowledgeSearchInput",
     "value": {

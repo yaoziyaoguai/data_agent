@@ -13,6 +13,7 @@ use serde_json::{Value, json};
 // 本轮消息绑定任务声明的来源允许集。None表示本轮未声明限制：不设门，
 // 共享定义与无限制浏览行为不变（限制是独立于检索范围的来源允许层，
 // 不进KnowledgeSearchScope——scope描述去哪找，gate裁决能不能作为依据交付）。
+#[derive(Clone)]
 pub(super) struct SourceGate {
     allowed: Vec<(String, String)>,
     limits: Value,

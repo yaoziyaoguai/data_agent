@@ -3007,13 +3007,16 @@ pub enum KnowledgeSearchHitSemanticStatus {
 pub struct KnowledgeSearchInputClass {
     pub asset_after: Option<String>,
     ///
-    /// 由evidence视图search_coverage.next返回的短不透明回执引用rc1:<operation_id>，或旧JSON/gzip续读状态；宿主按当前用户/空间/会话从原成功工具回执恢复完整候选窗口，短引用不是读取凭据。保持原查询、kinds、hints和任务绑定，asset_after独立推进。source_identity视图沿用独立cursor。
+    /// 由evidence视图search_coverage.next返回的短不透明回执引用rc1:<operation_id>，或旧JSON/gzip续读状态；宿主按当前用户/空间/会话从原成功工具回执恢复完整候选窗口，短引用不是读取凭据。保持原查询、kinds、hints、source_selection和任务绑定，asset_after独立推进。source_identity视图沿用独立cursor。
     pub cursor: Option<String>,
     /// 仅用于相关性排序，不扩大或收窄当前权限、kinds及任务来源范围。
     pub hints: Option<HintsClass>,
     pub kinds: Option<Vec<KindElement>>,
     pub limit: Option<i32>,
     pub query: String,
+    ///
+    /// 仅evidence视图使用的精确原文选择。object_id取source_identity.object_id，version取其object_version；只定位这些当前对象的正式source_facts，不授予知识或结构采用权，也不将对象版本当作来源revision。原文仍核实际SourceKey、来源许可、当前修订、完整性与唯一定位；失败项不妨碍其他合法项。kinds仍筛选所选对象类型，hints仍只排序；不接受客户端quote/path/offset，不退到全文。省略时保持原搜索。
+    pub source_selection: Option<Vec<SourceSelectionElement>>,
     pub task_ref: Option<EvidenceTaskRefElement>,
     ///
     /// 省略为evidence取证。source_identity的query按空白分隔名称/ID词，任一词在可读名称或标识中匹配即可返回；单独的*保留目录浏览。只匹配元信息，不解析自然语言、同义词或用户许可，不提供正文/定义/摘录/建议或个人资产，不调用付费语义检索，也不算已读证据或授予正文权限。两种视图的cursor不可互换，身份匹配语义更新后的旧绑定cursor无效。
@@ -3025,6 +3028,12 @@ pub struct KnowledgeSearchInputClass {
 pub struct HintsClass {
     pub business_domain: Option<String>,
     pub related_object_ids: Option<Vec<String>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SourceSelectionElement {
+    pub object_id: String,
+    pub version: String,
 }
 
 ///
@@ -6248,7 +6257,7 @@ pub struct KnowledgeSearchInput {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub asset_after: Option<String>,
     ///
-    /// 由evidence视图search_coverage.next返回的短不透明回执引用rc1:<operation_id>，或旧JSON/gzip续读状态；宿主按当前用户/空间/会话从原成功工具回执恢复完整候选窗口，短引用不是读取凭据。保持原查询、kinds、hints和任务绑定，asset_after独立推进。source_identity视图沿用独立cursor。
+    /// 由evidence视图search_coverage.next返回的短不透明回执引用rc1:<operation_id>，或旧JSON/gzip续读状态；宿主按当前用户/空间/会话从原成功工具回执恢复完整候选窗口，短引用不是读取凭据。保持原查询、kinds、hints、source_selection和任务绑定，asset_after独立推进。source_identity视图沿用独立cursor。
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cursor: Option<String>,
     /// 仅用于相关性排序，不扩大或收窄当前权限、kinds及任务来源范围。
@@ -6259,6 +6268,10 @@ pub struct KnowledgeSearchInput {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub limit: Option<i32>,
     pub query: String,
+    ///
+    /// 仅evidence视图使用的精确原文选择。object_id取source_identity.object_id，version取其object_version；只定位这些当前对象的正式source_facts，不授予知识或结构采用权，也不将对象版本当作来源revision。原文仍核实际SourceKey、来源许可、当前修订、完整性与唯一定位；失败项不妨碍其他合法项。kinds仍筛选所选对象类型，hints仍只排序；不接受客户端quote/path/offset，不退到全文。省略时保持原搜索。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source_selection: Option<Vec<SourceObjectSelection>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub task_ref: Option<EvidenceTaskRef>,
     ///
@@ -6272,6 +6285,12 @@ pub struct KnowledgeSearchInput {
 pub struct Hints {
     pub business_domain: Option<String>,
     pub related_object_ids: Option<Vec<String>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SourceObjectSelection {
+    pub object_id: String,
+    pub version: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

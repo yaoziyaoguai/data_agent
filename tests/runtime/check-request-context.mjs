@@ -14,6 +14,8 @@ import {RECOVERY_NOTICE, exportCheckpoint, restoreCheckpoint} from '../../apps/a
 import {deliver} from '../../apps/agent/session/deliver.ts';
 import {decodeContract} from '../../packages/contracts/validate.ts';
 import schema from '../../packages/contracts/schema.json' with {type: 'json'};
+import {deriveCapacityPlan} from '../../packages/contracts/capacity.ts';
+import {sessionCapacity} from '../../apps/agent/session/capacity.ts';
 
 // 宿主flag在传输接缝按共享契约输入；真实Pi循环/序列化，fetch只接本地SSE，无Rust生产者结论。
 const checks = [], failures = [];
@@ -55,13 +57,13 @@ function makeWorkspace(ready) {
     authority_revision: 'synthetic-authority', authority_snapshot: {active_task: taskA, private: '宿主私有快照哨兵'},
   });
 }
-async function fixture({ready = false, resume = false, compacted = false, projectedInput = false, reasoning = false, api = 'openai-completions', text = currentText, reply, toolReply, refresh} = {}) {
+async function fixture({ready = false, resume = false, compacted = false, projectedInput = false, reasoning = false, api = 'openai-completions', text = currentText, reply, toolReply, refresh, capacityPlan, fixedOverhead = () => 0, retainedText = currentText, afterReplace = () => {}} = {}) {
   const manager = SessionManager.inMemory('/synthetic/source-consumer');
   // 前一完整轮提供Pi合法摘要切点；最近工具组由SDK决定保留，不能假定它必在摘要里。
   manager.appendMessage({role: 'user', content: '先核对合成甲资料。', timestamp: 0});
   manager.appendMessage(assistant([{type: 'text', text: markers.tool}]));
   // 旧输入刻意与本条原话相同，不能凭文本把旧轮工具当成本轮回执。
-  const oldUser = manager.appendMessage({role: 'user', content: currentText, timestamp: 1});
+  const oldUser = manager.appendMessage({role: 'user', content: retainedText, timestamp: 1});
   manager.appendMessage(assistant([{type: 'toolCall', id: 'old-read', name: 'read_source', arguments: {}}]));
   manager.appendMessage({role: 'toolResult', toolCallId: 'old-read', toolName: 'read_source',
     content: [{type: 'text', text: markers.tool}], isError: false, timestamp: 2});
@@ -98,7 +100,8 @@ async function fixture({ready = false, resume = false, compacted = false, projec
       return decodeContract('DataToolOutcome', {operation_id: 'operation-' + input.sdk_tool_call_id,
         tool_name: input.tool_name, tool_contract_version: 2, ...(await toolReply?.(input) ?? {data: {}})});
     }};
-  projection = taskProjection(transport, manager, workspace.replace);
+  const capacity = capacityPlan ? sessionCapacity(capacityPlan, manager, fixedOverhead) : null;
+  projection = taskProjection(transport, manager, value => {workspace.replace(value); afterReplace();});
   const data = dataTools(transport, manager, '', (receipt, sdk) => {
     workspace.acceptReceipt(receipt); projection.acceptReceipt(receipt, sdk);
   });
@@ -116,7 +119,9 @@ async function fixture({ready = false, resume = false, compacted = false, projec
   const nativeStream = api === 'anthropic-messages' ? streamAnthropic : streamSimple;
   runtime.registerProvider('source_consumer_mock', {api, apiKey: 'synthetic-offline',
     baseUrl: 'https://source-consumer.invalid/v1',
-    streamSimple: (model, context, options) => nativeStream(model, context, {...options,
+    streamSimple: (model, context, options) => {
+      capacity?.check();
+      return nativeStream(model, context, {...options,
       apiKey: 'synthetic-offline', maxRetries: 0, fetch: async (request, init) => {
         try {
           const payload = JSON.parse(typeof init?.body === 'string' ? init.body : await request.text());
@@ -155,7 +160,8 @@ async function fixture({ready = false, resume = false, compacted = false, projec
             'data: [DONE]\n\n';
           return new Response(sse, {headers: {'content-type': 'text/event-stream'}});
         } catch (error) {providerFailure ??= error; throw error;}
-      }}),
+      }});
+    },
     models: [{id: 'source-consumer', name: '合成消费者模型', api, reasoning,
       input: ['text'], cost: {input: 0, output: 0, cacheRead: 0, cacheWrite: 0}, contextWindow: 131072, maxTokens: 2048,
       ...(reasoning && api === 'openai-completions'
@@ -164,8 +170,10 @@ async function fixture({ready = false, resume = false, compacted = false, projec
   });
   const {session} = await createAgentSession({cwd: '/synthetic/source-consumer', modelRuntime: runtime,
     model: runtime.getModel('source_consumer_mock', 'source-consumer'), thinkingLevel: reasoning ? 'high' : 'off', sessionManager: manager,
-    settingsManager: SettingsManager.inMemory({defaultTools: [], compaction: {enabled: false, reserveTokens: 2048, keepRecentTokens: 64}, retry: {enabled: false}}),
-    resourceLoader: resources(true, selectedSkillResources(run.workspace_context.selected_skills), [projection.extension, workspace.extension]),
+    settingsManager: SettingsManager.inMemory({defaultTools: [], compaction: {enabled: false,
+      reserveTokens: capacityPlan?.historyReserve ?? 2048, keepRecentTokens: capacityPlan?.keepRecent ?? 64}, retry: {enabled: false}}),
+    resourceLoader: resources(true, selectedSkillResources(run.workspace_context.selected_skills),
+      [projection.extension, workspace.extension, ...(capacity ? [capacity.extension] : [])]),
     tools: data.tools.map(tool => tool.name), customTools: data.tools});
   projection.attachToolGate(names => session.setActiveToolsByName(names), data.tools.map(tool => tool.name));
   const unbind = await session.bindExtensions({onError: error => errors.push(error)});
@@ -203,6 +211,24 @@ function hidden(payload, text = currentText) {
   // 未决期提示必须给真实状态与合法下一动作：已选Skill未被取消，不得引导重新选用。
   assert.ok(raw(payload).includes('保持原选择和版本'), '未决期提示必须说明已选Skill保持原选择和版本');
   assert.ok(raw(payload).includes('不需要重新选用'), '未决期提示必须明确不需要重新选用');
+}
+function assertSourceSearch(payload, ready) {
+  const search = payload.tools.find(tool => tool.function?.name === 'search_knowledge')?.function;
+  assert.ok(search, '身份目录在声明范围前和就绪后均须可见');
+  const properties = search.parameters.properties;
+  assert.ok(properties.view.enum.includes('source_identity'));
+  assert.equal(properties.cursor.type, 'string');
+  assert.deepEqual([...properties.source_selection.items.required].sort(), ['object_id', 'version']);
+  assert.match(search.description, /空白分词任一匹配.*稳定ID分页/);
+  assert.match(search.description, /完整字段名、表名或文档名窄查.*kinds.*省略kinds/);
+  assert.match(search.description, /source_keys区分同名目录与正式定义.*roots_complete/);
+  assert.match(search.description, /bounded.*next.*目标仍缺.*窄查或续页.*conditions\.source_limits/);
+  assert.match(search.description, /object_version.*source_selection.*citation.*read_source/);
+  assert.match(search.description, /不扩许可/);
+  const read = payload.tools.find(tool => tool.function?.name === 'read_source')?.function;
+  assert.equal(Boolean(read), ready);
+  if (read) assert.ok(read.parameters.properties.citation, '就绪后可按实际citation补读');
+  return search;
 }
 async function check(name, test) {
   try {await test(); checks.push(name);} catch (error) {failures.push({name, error: error.stack});}
@@ -252,14 +278,19 @@ try {
   await check('身份结果可选稳定细源，范围改变先刷新再读正文，后续来源门负控仍拒绝', async () => {
     let f, refreshes = 0;
     const citation = source => ({source, revision: '1', locator: {offset: 0, length: 12}});
+    const directory = {hits: [identity], search_coverage: {state: 'bounded', next: 'synthetic-identity-next',
+      reasons: ['candidate_limit'], channels: [{channel: 'exact', state: 'available'}]}};
     f = await fixture({reply(payload, index) {
       if (index <= 2) hidden(payload);
+      assertSourceSearch(payload, index > 2);
       assert.ok(!raw(payload).includes(markers.tool));
       if (index === 1) return call('identity-b', 'search_knowledge', {query: '合成乙资料', view: 'source_identity'});
       if (index === 2) {
-        assert.ok(raw(payload).includes(identity.name));
-        assert.ok(raw(payload).includes(sourceB.id));
-        assert.ok(raw(payload).includes('synthetic-identity-next'), '身份视图的覆盖/续读控制保持可用');
+        const texts = payload.messages.flatMap(message => typeof message.content === 'string' ? [message.content]
+          : (message.content ?? []).filter(part => part.type === 'text').map(part => part.text));
+        const control = texts.find(text => text.startsWith('{"sdk_tool_call_id":"identity-b"'));
+        assert.ok(control, '未声明时按原SDK调用身份交付目录控制');
+        assert.deepEqual(JSON.parse(control).data, directory, '实际请求保留整个bounded身份回执及next');
         return call('scope-b', 'update_analysis_task', {action: 'route', task_id: taskB.task_id, expected_version: '1', options: []});
       }
       assert.equal(refreshes, 1, 'ready回执有context_reset时先完成宿主刷新');
@@ -267,9 +298,7 @@ try {
       if (index === 4) {assert.ok(raw(payload).includes('合成乙已允许正文')); return call('read-a', 'read_source', {citation: citation(sourceA)});}
       assert.ok(raw(payload).includes('source_not_allowed')); return {content: '仅采用合成乙资料，甲资料读取被拒绝。'};
     }, toolReply(input) {
-      if (input.tool_name === 'search_knowledge') return {source_context_ready: false, data: {hits: [identity],
-        search_coverage: {state: 'bounded', next: 'synthetic-identity-next', reasons: ['candidate_limit'],
-          channels: [{channel: 'exact', state: 'available'}]}}};
+      if (input.tool_name === 'search_knowledge') return {source_context_ready: false, data: directory};
       if (input.tool_name === 'update_analysis_task') return {source_context_ready: true, context_reset: taskB, data: {...taskB}};
       if (input.arguments.citation.source.id === sourceA.id) return {source_context_ready: true, data: {error: 'source_not_allowed'}};
       return {source_context_ready: true, data: {text: '合成乙已允许正文'}};
@@ -344,6 +373,11 @@ try {
         assert.ok(raw(payload).includes('SELECT 17 AS sample_value'));
         const admitted = toolBody(payload, 'admitted-query');
         assert.equal(admitted.source_context_ready, true, '刷新完成后回执正文携带真实就绪状态');
+        assert.equal(admitted.execution_tools_ready, true);
+        assert.equal(admitted.control_note, undefined, '成功核稿保留事实，不重复要求从get_query开始');
+        assert.deepEqual(admitted.query, {...safeQuery, id: safeQuery.query_id, sql: 'SELECT 17 AS sample_value', parameters: {}});
+        assert.equal(admitted.results, null);
+        assert.match(admitted.status_note, /未提交/);
         return call('admitted-execution', 'execute_query', {query_id: safeQuery.query_id,
           draft_version: '1', condition_version: '1', instruction_quote: text});
       }
@@ -825,6 +859,8 @@ try {
       await deliver(run, origin, 'synthetic-token', '');
       assert.deepEqual(hostErrors, []); assert.equal(payloads.length, 2); assert.equal(finishes.length, 1);
       hidden(payloads[0]);
+      assert.deepEqual(assertSourceSearch(payloads[0], false), assertSourceSearch(payloads[1], true),
+        '实际首轮及恢复的声明前后均保留同一身份与精读工具合同');
       const restored = restoreCheckpoint('/synthetic/data-agent', finishes[0].checkpoint);
       assert.equal(restored.getHeader().id, sessionId);
       for (const id of originalIds) assert.ok(restored.getBranch().some(entry => entry.id === id));
@@ -835,6 +871,69 @@ try {
       server.closeAllConnections(); await new Promise(resolve => server.close(resolve));
     }
     }
+  });
+  await check('v2搜索说明以正式身份版本选择原文精读，选择不扩来源许可', async () => {
+    const f = await fixture({ready: true, reply(payload) {
+      const search = payload.tools.find(tool => tool.function.name === 'search_knowledge');
+      assert.ok(search.function.parameters.properties.source_selection, '精确选择参数必须进入实际工具定义');
+      assert.match(search.function.description, /source_selection/);
+      assert.match(search.function.description, /object_version/);
+      assert.match(search.function.description, /不扩许可/);
+      return {content: '按正式身份选择获准原文。'};
+    }});
+    try {await f.prompt();} finally {f.close();}
+  });
+  await check('实际请求明确平台原始文本去重及统计范围，跨页distinct不可相加', async () => {
+    const f = await fixture({ready: true, reply(payload) {
+      assert.match(raw(payload), /distinct_count按平台返回的原始文本去重/);
+      assert.match(raw(payload), /不含NULL/);
+      assert.match(raw(payload), /跨页.*不可相加/);
+      return {content: '按平台统计范围解释。'};
+    }});
+    try {await f.prompt();} finally {f.close();}
+  });
+  await check('查询说明将仅回状态限定到本消息刚确认，历史查询仍可查看', async () => {
+    const f = await fixture({ready: true, reply(payload) {
+      const query = payload.tools.find(tool => tool.function.name === 'get_query');
+      assert.match(query.function.description, /本消息刚确认的查询只返状态/);
+      return {content: '按当前消息确认归属查看。'};
+    }});
+    try {await f.prompt();} finally {f.close();}
+  });
+  await check('展示偏好与指标定义单位区分的指导及记忆范围/例外进入实际请求', async () => {
+    const preference = '合成出行月报默认以公里、两位小数展示距离；当次要求米时以当次为准，不适用其他报告。';
+    const f = await fixture({ready: true});
+    try {
+      f.workspace.replace({...f.run.workspace_context, memories: [asset('memory', 'synthetic-distance-preference', preference)]});
+      await f.prompt();
+      const payload = raw(f.payloads[0]);
+      assert.ok(payload.includes(preference), '完整偏好及限定/例外不变');
+      assert.ok(payload.includes('指标定义/存储单位与展示单位分开'), '实际系统指导须区分指标定义单位和展示单位');
+      assert.ok(payload.includes('适用且不冲突的稳定偏好用于本次展示'), '范围内偏好应实际应用，而非被共享存储单位覆盖');
+      assert.ok(!payload.includes('秒三位') && !payload.includes('毫秒时'), '不把真实原题答案写入指导');
+    } finally {f.close();}
+  });
+  await check('原生压缩后真实范围刷新撤下长保留组，后续provider请求不带旧容量开销', async () => {
+    const plan = deriveCapacityPlan(65536, 50000, 8192);
+    const slack = plan.trigger - plan.summaryCap - plan.splitSummaryCap - plan.keepRecent;
+    let fixed = slack - 2500, normalRequests = 0;
+    const f = await fixture({ready: true, capacityPlan: plan, fixedOverhead: () => fixed,
+      retainedText: 'x'.repeat((plan.keepRecent + 1500) * 4), afterReplace: () => {fixed += 2000;},
+      reply(payload) {
+        if (!payload.tools?.length) return {content: '合成历史摘要。'};
+        if (normalRequests++ === 0) return call('capacity-route', 'update_analysis_task',
+          {action: 'route', task_id: taskB.task_id, expected_version: '1', options: []});
+        assert.ok(!raw(payload).includes('x'.repeat(100)), '新范围请求不携旧长正文');
+        return {content: '按新范围继续。'};
+      }, toolReply: () => ({data: {task_id: taskB.task_id, condition_version: '1'},
+        source_context_ready: true, context_reset: taskB})});
+    try {
+      await f.session.compact();
+      await f.prompt();
+      assert.equal(normalRequests, 2, '范围刷新后的第一个provider请求应正常发送');
+      assert.equal(f.manager.getBranch().filter(entry => entry.type === 'compaction').length, 2,
+        '仅原生压缩和既有范围替换，不新增摘要/恢复循环');
+    } finally {f.close();}
   });
   await check('隐藏期间原生compact在摘要发出前取消，原leaf与历史保留；ready后仍能原生compact', async () => {
     const f = await fixture({reply: (_payload, index) => index === 1

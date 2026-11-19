@@ -226,6 +226,7 @@ verify-task-conditions:
 	node tests/mvp/check-task-text-authority.mjs
 	node tests/mvp/check-source-limits.mjs
 	node tests/mvp/check-source-search-admission.mjs
+	node tests/mvp/check-source-search-admission.mjs source-selection
 	node tests/mvp/check-time-roles.mjs
 
 # 任务答案沿原route/finish交付；真实数据库脚本逐条执行。
@@ -442,6 +443,7 @@ verify-evidence-search:
 	node tests/mvp/check-evidence-search.mjs
 	node tests/mvp/check-evidence-search-continuation.mjs
 	node tests/mvp/check-evidence-cursor-boundaries.mjs
+	node tests/mvp/check-source-selection-cursors.mjs
 	node tests/mvp/check-evidence-search-progress.mjs
 	node tests/mvp/check-evidence-search-hints.mjs
 	node tests/mvp/check-evidence-search-hint-boundaries.mjs raw

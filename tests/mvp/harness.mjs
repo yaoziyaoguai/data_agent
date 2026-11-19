@@ -261,7 +261,7 @@ export async function harness(options = {}) {
       String(platformPort),
     ], options.platformSourceDirectory ? {DATA_AGENT_SYNTHETIC_SOURCE_DIRECTORY:options.platformSourceDirectory} : {});
     await health(platformPort);
-    apiProcess = start("api", "target/debug/data-agent-api");
+    apiProcess = start("api", options.apiBinary ?? "target/debug/data-agent-api");
     await health(apiPort);
     if (options.capture || options.deliveryDispatch) {
       bridge = createDeliveryServer(
@@ -347,9 +347,9 @@ export async function harness(options = {}) {
     async pausePlatform() {
       await stop(platform);
     },
-    async restartApi() {
+    async restartApi(binary = "target/debug/data-agent-api") {
       await stop(apiProcess);
-      apiProcess = start("api-resumed", "target/debug/data-agent-api");
+      apiProcess = start("api-resumed", binary);
       await health(apiPort);
     },
     async resumePlatform() {

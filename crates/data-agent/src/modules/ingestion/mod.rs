@@ -11,11 +11,11 @@ mod store;
 pub use store::{
     SyntheticSourceChanges, assert_prefill_active_in_tx, check_prefill_sources_in_tx,
     claim_prefill_in_tx, current_source_body_in_tx, effective_versions_in_tx, finish_prefill_in_tx,
-    prefill_status_in_tx, preparation_record_status_in_tx, preparation_source_of,
-    queue_prefill_in_tx, read_source_in_tx, read_source_meta_in_tx, read_source_window_in_tx,
-    readable_source_candidate_in_tx, readable_source_heads_in_tx, record_prefill_draft_in_tx,
-    snapshot_bodies_in_tx, source_head_in_tx, source_head_version_in_tx, source_version_in_tx,
-    source_versions_in_tx, sync_sources_in_tx,
+    locate_source_quote_in_tx, prefill_status_in_tx, preparation_record_status_in_tx,
+    preparation_source_of, queue_prefill_in_tx, read_source_in_tx, read_source_meta_in_tx,
+    read_source_window_in_tx, readable_source_candidate_in_tx, readable_source_heads_in_tx,
+    record_prefill_draft_in_tx, snapshot_bodies_in_tx, source_head_in_tx,
+    source_head_version_in_tx, source_version_in_tx, source_versions_in_tx, sync_sources_in_tx,
 };
 pub use store::{read_analysis_preference_in_tx, save_analysis_preference_in_tx};
 pub fn source_body(name: &str) -> crate::types::Result<String> {
