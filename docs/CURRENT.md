@@ -4,7 +4,7 @@
   "schema": 1,
   "phase": "repair",
   "goal_revision": 235,
-  "environment": "2026-11-18恢复原日常实例，Web27173/API30780/Bridge30781/平台30790/Mem030791均200，控制器70269，runtime-20261118T024923Z。使用原库、身份、平台、Mem0、索引和账本，Flash/high，observer关闭，prefill disabled。两道原题各完成一次复验，45笔结算共3.121736元，余额54.797416元，保留4笔旧unknown及占额，新增unknown及在途均为0。原授权200元（chat195/embedding5），截止2026-11-18 17:27:09.662上海。",
+  "environment": "2026-11-19 已更新本地内测实例，Web 27173、API 30780、Bridge 30781、平台 30790、Mem0 30791 均返回 200。沿用原数据库、合成身份、平台状态和两个原账本。Flash/high、v2、latest_only，维护预填关闭。原付费授权已于 2026-11-18 17:27 上海时间到期，历史报告可正常查看。当前控制进程和配置路径记在 .local/checks/internal-preview-release-95Bzzu/service.json。",
   "verification": {
     "level": "increment",
     "reason": "两项来源定点试验和受影响免费回归均通过。脚本替身以原消息保存同任务两稿，三字段取证及跨轮恢复通过，平台提交为零。来源 08 原真实轨迹仍为 partial，I3 active，完整审查 pending。待真实 Flash/high 复验。",
@@ -1295,6 +1295,8 @@
 - 这次重新构建了 API 和 Worker。694 项 Rust / TypeScript 同源契约、代码与架构检查、Pi SDK 与传输回归、普通来源准入 14 项和字段精读 7 项均通过。用旧服务实际发出的游标在升级后读到同一第二页，换一条用户消息后仍可续读。README 引用的架构总览、运行和记忆视图已按锁定依赖重新生成，离线图册验证 12 个模块和 31 张图。
 - 本版以原两轮消息在独立 MySQL 和合成 SQLite 上复跑。协议替身保存同任务的九月、八月两份草稿，平台提交为零。另用四组对照确认显式选择三列、下一轮保留三列、明确允许整表时可读整表，以及普通宽查会读到额外字段。此轮官方模型调用为零。串行出口、接收端和任务依据留在本机 `.local/checks/internal-preview-release-95Bzzu/`。
 - 验收资料对账：`make verify-cockpit` 首跑发现 `manifest.json` 中 `fixtures/public-query-case.md` 的 SHA-256 过期。旧摘要 `ec7a1303…` 恰好等于现有文件末尾再加一个换行的摘要。沿用已提交案例的原始字节，仅将派生清单的该条更新为 `7fa94636…`。100 项原题、参考 SQL、冻结答案、评分器、50 条绑定和旧成绩均未改。
+- 本地服务已从合入代码 `1a8c560` 重新启动。API、Worker 实际加载的文件与本次构建相符，五个服务入口均返回 200。浏览器从历史会话打开原报告，刷新后报告 ID、修订、两个月份和四个数值一致。切换前后仍为 82 个会话、50 份查询记录、3 份报告和 12 次合成平台提交；聊天和向量账本、四笔待查费用及原截止时间均保持原值。运行与比对记录见本机同目录的 `service.json`、`installed-binaries.json`、`installed-after.json` 及 `report-ui/report-readback.json`。
+- 免费演示的 `make verify-cockpit` 也已通过：53 条独立参考查询与合成平台逐项核对，浏览器和应用的 7 项流程覆盖语义目录、草稿、用户确认、合成 SQL 执行及结果。真实来源成绩检查仍判部分通过；`make verify-increment` 因缺少完整通过的独审记录退出 2。
 - 正式 Dogfood 仍为 `I3 active`，独审 `pending`。已有 21 个核心用例的成绩通过。最近的真实 Flash/high 来源续接原题仍为 `partial`，车辆三列扩大到十三列，两轮都停在澄清。此前 50 条命令整组通过 48 条，单独补测后逐项有 49 条通过记录。按正式要求还缺当版 OpenAI 工具续答、J19 对 SQL 计数列的准确解释和正式保存证据。[原判据与实测边界](reviews/data-agent-final-closure-review-20261117.md)
 
 ## 来源发现、字段范围与两轮草稿（2026-11-19）
