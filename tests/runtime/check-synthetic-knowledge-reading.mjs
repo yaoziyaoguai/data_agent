@@ -22,7 +22,7 @@ const search = {objects: [
     entries: [{path: 'definition', entry_id: 'definition', effective_value: '已确认的合成指标'}]},
   {id: 'table-demo_order_detail', version: '3', entries: []},
 ]};
-const update = {task_id: 'refund-task', condition_version: '2', phase: 'investigating'};
+const update = {task_id: 'refund-task', condition_version: '2', phase: 'investigating', conditions: {...conditions, metric: 'refund_rate'}};
 const receipt = (toolName, data) => ({role: 'toolResult', toolName,
   content: [{type: 'text', text: JSON.stringify(data)}]});
 const action = (knowledge = search, reads = []) => syntheticAction(run, {messages: [
@@ -104,7 +104,8 @@ try {
   checks.push('v2沿命中ref及逐项状态消费同版连续SQL页，旧版与不可用不生成查询');
   const rawCitation = {source: {kind: 'document', id: 'document-cockpit-asr-candidates'}, revision: '7', locator: {offset: 10, length: 20}};
   const cockpitRun = {text: 'ASR耗时怎样统计', tool_contract_version: 2, workspace_context: {tasks: [], query_observations: [], memories: []}};
-  const rawAction = cockpitAction(cockpitRun, {messages: [{role: 'user', content: cockpitRun.text}, receipt('search_knowledge', {
+  const rawAction = cockpitAction(cockpitRun, {messages: [{role: 'user', content: cockpitRun.text},
+    receipt('update_analysis_task', {routed: true, task_id: null}), receipt('search_knowledge', {
     hits: [{record_kind: 'source_excerpt', name: '端云识别与候选选择', citation: rawCitation, source_length: 60, text: '已找到的原文窗口', content_state: 'complete'}],
   })]});
   assert.equal(rawAction.tool, 'read_source');
@@ -112,7 +113,8 @@ try {
   assert.equal(rawAction.args.citation.revision, '7');
   const citation = {source: {kind: 'platform', id: 'business-guide'}, revision: '9', locator: {offset: 0, length: 120}};
   const explanationRun = {text: '月底下单为什么不在收入里', tool_contract_version: 2, workspace_context: {tasks: [], query_observations: [], memories: []}};
-  const explain = syntheticAction(explanationRun, {messages: [{role: 'user', content: explanationRun.text}, receipt('search_knowledge', {
+  const explain = syntheticAction(explanationRun, {messages: [{role: 'user', content: explanationRun.text},
+    receipt('update_analysis_task', {routed: true, task_id: null}), receipt('search_knowledge', {
     hits: [{record_kind: 'knowledge_entry', ref: {object_id: 'document-guide-3', version: '9', path: 'body'}, name: '上游与加工', kind: 'document', definition: '正文预览', citations: [citation]}],
   })]});
   assert.equal(explain.tool, 'read_source');

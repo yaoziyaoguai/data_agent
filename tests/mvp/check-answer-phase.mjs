@@ -58,7 +58,8 @@ try{
  await resultRun(first);assert.equal(await phase(multiple,multiTask),'waiting_confirmation');
  await finish(multiTask);assert.equal(await phase(multiple,multiTask),'waiting_confirmation');
  // 已通过真实草稿/确认入口，固定另一份提交中的状态作为交付竞争边界。
- assert.equal((await confirm(second)).status,200);await start(multiple);
+ // 本轮已归属且 worker 暂停时从按钮确认，避免后台先交付第二份结果。
+ await start(multiple);await route(multiTask);assert.equal((await confirm(second)).status,200);
  for(const state of ['queued','submitting','running','submission_unknown']){
   h.sql(`UPDATE query_requests SET execution_state='${state}',lease_until=TIMESTAMPADD(SECOND,120,UTC_TIMESTAMP(3)) WHERE id='${second.id}';UPDATE analysis_tasks SET phase='investigating' WHERE id='${multiTask.task_id}';`);
   await finish(multiTask);assert.equal(await phase(multiple,multiTask),'waiting_query');
@@ -66,12 +67,12 @@ try{
  }
  checks.push('同版本另一份待确认或四种运行状态不能被首份结果/解释覆盖');
 
- const old=await h.create();await start(old);const oldTask=await create();const oldQuery=await draft(oldTask);await finish(oldTask);assert.equal((await confirm(oldQuery)).status,200);
- await start(old);
+ const old=await h.create();await start(old);const oldTask=await create();const oldQuery=await draft(oldTask);await finish(oldTask);
+ await start(old);await route(oldTask);
+ assert.equal((await confirm(oldQuery)).status,200);
  const revised=await tool('update_analysis_task',{action:'revise',task_id:oldTask.task_id,expected_version:oldTask.condition_version,goal:'更新渠道后的任务',condition_patch:{set:{channel:'app'},unset:[]},options:[]});
  const currentQuery=await draft(revised);await finish(revised);assert.equal(await phase(old,revised),'waiting_confirmation');
- const pending=h.captured.find(r=>r.text.includes('query_id='+oldQuery.id)&&r.run_id!==run.run_id);
- if(pending)attach(pending);else await resultRun(oldQuery);
+ await resultRun(oldQuery);
  await finish(revised);assert.equal(await phase(old,revised),'waiting_confirmation');
  assert.equal((await h.request('/queries/'+currentQuery.id)).value.execution_state,'not_submitted');
  checks.push('旧条件结果与正式解释不能推进新条件任务');
