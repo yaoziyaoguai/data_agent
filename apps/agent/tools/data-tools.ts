@@ -417,12 +417,21 @@ export function dataTools(
     const query = name === "get_query" ? receipt.data.query : receipt.data;
     const status = query && typeof query === "object" && !Array.isArray(query) && "execution_state" in query ? query.execution_state : undefined;
     const statusNote = typeof status === "string" ? statusNotes[status] : undefined;
+    // 阶段感知提示：核对通过且待确认、尚未提交时，明确下一步就是提交，避免模型
+    // 误把get_query当任务终点而stop（J01）。
+    const executeHint = name === "get_query" && query && typeof query === "object" && !Array.isArray(query)
+      && "confirmation_state" in query && query.confirmation_state === "awaiting_confirmation"
+      && "check_state" in query && query.check_state === "passed"
+      && "execution_state" in query && query.execution_state === "not_submitted"
+      ? {phase_note: "草稿核对完成；若当前用户消息已明确要求执行该查询，请立即调用execute_query提交，无需再次询问。"}
+      : undefined;
     const displayName = query && typeof query === "object" && "summary" in query && typeof query.summary === "string"
       ? query.summary : typeof receipt.data.goal === "string" ? receipt.data.goal
       : typeof receipt.data.name === "string" ? receipt.data.name
       : args && typeof args === "object" && "goal" in args && typeof args.goal === "string" ? args.goal : undefined;
     return {content: [{type: "text" as const, text: JSON.stringify({
       ...(statusNote ? {status_note: statusNote} : {}),
+      ...(executeHint ?? {}),
       ...(displayName ? {display_name: displayName} : {}), ...receipt.data,
       ...(receipt.superseded_query_ids ? {superseded_query_ids: receipt.superseded_query_ids} : {}),
       ...(controlFacts(receipt) ?? {}),
