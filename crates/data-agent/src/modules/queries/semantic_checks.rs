@@ -8,6 +8,7 @@ use sqlparser::{
     },
     dialect::SQLiteDialect,
     parser::Parser,
+    tokenizer::{Token, Tokenizer},
 };
 use std::collections::BTreeSet;
 
@@ -82,27 +83,45 @@ pub fn check_semantics(sql: &str, parameters: &Value, snapshot: &Value) -> Value
         .map(Vec::as_slice)
         .unwrap_or(&[]);
     let relation = &select.from[0];
-    let mut bindings = Vec::new();
-    for table in
-        std::iter::once(&relation.relation).chain(relation.joins.iter().map(|join| &join.relation))
-    {
-        let Some((name, alias)) = physical_table(table) else {
-            return unsupported("仅支持普通表及表别名；子查询、表函数、采样和历史表版本未检查。");
-        };
-        let candidates: Vec<_> = objects
-            .iter()
-            .filter(|object| object["kind"] == "table" && object["state"] == "enabled")
-            .filter(|object| {
-                object["name"]
-                    .as_str()
-                    .is_some_and(|n| n.eq_ignore_ascii_case(&name))
+    let Some(bindings) = table_bindings(select, objects) else {
+        return unsupported("仅支持普通表及表别名；子查询、表函数、采样和历史表版本未检查。");
+    };
+    let simple_projection = select.projection.iter().all(|item| match item {
+        SelectItem::Wildcard(options) => plain_wildcard(options),
+        SelectItem::QualifiedWildcard(
+            SelectItemQualifiedWildcardKind::ObjectName(name),
+            options,
+        ) => plain_name(name).is_some() && plain_wildcard(options),
+        _ => projection_expr(item)
+            .is_some_and(|expr| direct_column(expr) || sum_column(expr).is_some()),
+    });
+    let metrics: Vec<_> = objects
+        .iter()
+        .filter(|object| object["kind"] == "metric" && object["state"] == "enabled")
+        .flat_map(|object| {
+            effective_structures(object, "metric")
+                .into_iter()
+                .map(move |structure| (object, structure))
+        })
+        .collect();
+    if !simple_projection {
+        let mut report =
+            unsupported("仅支持直接列及SUM(直接列)；其他聚合、换算、窗口和复杂表达式未检查。");
+        if let ([binding], [(metric, structure)]) = (bindings.as_slice(), metrics.as_slice())
+            && binding.object.is_some_and(|table| {
+                ref_matches(&structure["table"], table) && table["column_names_complete"] == true
             })
-            .collect();
-        bindings.push(Binding {
-            name,
-            alias,
-            object: (candidates.len() == 1).then(|| candidates[0]),
-        });
+            && let Some(expression) = structure["expression"].as_str()
+            && let Some(expected) = metric_expression(expression)
+            && mixes_metric_boundary(select, &expected, binding)
+        {
+            report["checks"].as_array_mut().unwrap().push(json!({
+                "rule":"metric_boundary_mixed", "state":"warning", "evidence_refs":[object_ref(metric)],
+                "finding":"此列把已确认指标和空值样本加减合并，结果与登记口径不同。若需分别核对，请分列展示。",
+                "coverage_limit":"仅比对单表顶层投影中的加减项，不判定用户意图或执行权限。"
+            }));
+        }
+        return report;
     }
     let mut report = Report::default();
     report.add(
@@ -170,7 +189,7 @@ pub fn check_semantics(sql: &str, parameters: &Value, snapshot: &Value) -> Value
         &bindings,
         &sums,
         objects,
-        &snapshot["semantic_resolution"],
+        &metrics,
         &mut report,
     );
     if let Some(notes) = snapshot["coverage"]["notes"].as_array() {
@@ -267,6 +286,31 @@ fn physical_table(table: &TableFactor) -> Option<(String, Option<String>)> {
         plain_name(name)?,
         alias.as_ref().map(|alias| alias.name.value.clone()),
     ))
+}
+
+fn table_bindings<'a>(select: &Select, objects: &'a [Value]) -> Option<Vec<Binding<'a>>> {
+    let [relation] = select.from.as_slice() else {
+        return None;
+    };
+    std::iter::once(&relation.relation)
+        .chain(relation.joins.iter().map(|join| &join.relation))
+        .map(|table| {
+            let (name, alias) = physical_table(table)?;
+            let mut candidates = objects.iter().filter(|object| {
+                object["kind"] == "table"
+                    && object["state"] == "enabled"
+                    && object["name"]
+                        .as_str()
+                        .is_some_and(|n| n.eq_ignore_ascii_case(&name))
+            });
+            let object = candidates.next().filter(|_| candidates.next().is_none());
+            Some(Binding {
+                name,
+                alias,
+                object,
+            })
+        })
+        .collect()
 }
 
 fn projection_expr(item: &SelectItem) -> Option<&Expr> {
@@ -402,18 +446,6 @@ fn check_shape(select: &Select) -> std::result::Result<(), &'static str> {
         || select.value_table_mode.is_some()
     {
         return Err("去重、HAVING、窗口及其他特殊SELECT结构未检查。");
-    }
-    for item in &select.projection {
-        match item {
-            SelectItem::Wildcard(options) if plain_wildcard(options) => (),
-            SelectItem::QualifiedWildcard(
-                SelectItemQualifiedWildcardKind::ObjectName(name),
-                options,
-            ) if plain_name(name).is_some() && plain_wildcard(options) => (),
-            _ if projection_expr(item)
-                .is_some_and(|expr| direct_column(expr) || sum_column(expr).is_some()) => {}
-            _ => return Err("仅支持直接列及SUM(直接列)；其他聚合、换算、窗口和复杂表达式未检查。"),
-        }
     }
     match &select.group_by {
         GroupByExpr::Expressions(exprs, modifiers)
@@ -648,18 +680,9 @@ fn check_metrics(
     bindings: &[Binding<'_>],
     sums: &[Column],
     objects: &[Value],
-    resolution: &Value,
+    candidates: &[(&Value, &Value)],
     report: &mut Report,
 ) {
-    let candidates: Vec<_> = objects
-        .iter()
-        .filter(|object| object["kind"] == "metric" && object["state"] == "enabled")
-        .flat_map(|object| {
-            effective_structures(object, "metric")
-                .into_iter()
-                .map(move |structure| (object, structure))
-        })
-        .collect();
     if candidates.len() != 1 {
         report.missing(
             "metric_binding",
@@ -694,30 +717,9 @@ fn check_metrics(
         report.missing("metric_expression", refs, "指标缺少计算表达式，未检查。");
         return;
     };
-    // DA-001：主指标表达式与CASE WHEN … IS NULL边界项加减拼成自造复合列，须先于
-    // SUM形态检查执行，COUNT类指标同样适用。
-    check_metric_boundary_mixing(select, expression, resolution, refs.clone(), report);
-    let parsed = Parser::new(&SQLiteDialect {})
-        .with_recursion_limit(32)
-        .try_with_sql(&format!("SELECT {expression}"))
-        .and_then(|mut parser| parser.parse_statements());
-    let column = parsed.ok().and_then(|statements| {
-        let [Statement::Query(query)] = statements.as_slice() else {
-            return None;
-        };
-        if query.with.is_some() || query.order_by.is_some() || query.limit_clause.is_some() {
-            return None;
-        }
-        let SetExpr::Select(select) = query.body.as_ref() else {
-            return None;
-        };
-        if !select.from.is_empty() || select.selection.is_some() {
-            return None;
-        }
-        let [item] = select.projection.as_slice() else {
-            return None;
-        };
-        let expr = sum_column(projection_expr(item)?)?;
+    let metric_expr = metric_expression(expression);
+    let column = metric_expr.as_ref().and_then(|expr| {
+        let expr = sum_column(expr)?;
         match unnested(expr) {
             Expr::Identifier(ident) => Some(ident.value.to_ascii_lowercase()),
             // 正式表达式只允许本指标表的明确物理表限定，不能猜作者临时别名。
@@ -838,132 +840,70 @@ fn check_metrics(
     );
 }
 
-// DA-001：把已确认指标表达式与额外CASE WHEN … IS NULL边界项加减拼接成
-// “自造复合指标”。在顶层SELECT投影的加减链上做规范化表达式比对；未在任务
-// semantic_resolution中获用户明确确认（basis=explicit_user且说明包含该列名）时
-// 给出metric_boundary_mixed诊断，引导拆分为独立并列列。只报告首个复合列。
-fn check_metric_boundary_mixing(
-    select: &Select,
-    expression: &str,
-    resolution: &Value,
-    refs: Vec<Value>,
-    report: &mut Report,
-) {
-    let Some(metric_sql) = canonical_expression_sql(expression) else {
-        return;
-    };
-    for item in &select.projection {
-        let Some(expr) = projection_expr(item) else {
-            continue;
-        };
-        let mut terms = Vec::new();
-        arithmetic_terms(unnested(expr), &mut terms);
-        if terms.len() < 2 {
-            continue;
-        }
-        let matched = terms
-            .iter()
-            .any(|term| canonical_projection(term) == metric_sql);
-        let patched = terms.iter().any(|term| {
-            let term_sql = canonical_projection(term);
-            term_sql != metric_sql && contains_boundary_patch(term)
-        });
-        if !matched || !patched {
-            continue;
-        }
-        let alias = item_alias(item);
-        let confirmed = resolution["basis"] == "explicit_user"
-            && alias.as_deref().is_some_and(|alias| {
-                resolution["interpretation"]
-                    .as_str()
-                    .is_some_and(|text| text.to_lowercase().contains(&alias.to_lowercase()))
-            });
-        if confirmed {
-            report.add(
-                "metric_boundary_mixed",
-                "checked",
-                refs,
-                "复合口径列已在语义决策中获用户明确确认，保留原表达式。",
-                LIMITATION,
-            );
-        } else {
-            report.add(
-                "metric_boundary_mixed",
-                "warning",
-                refs,
-                "检测到把已确认指标与CASE WHEN … IS NULL边界项加减拼接的复合列；正式指标列须严格沿用已确认表达式，缺失实体或异常样本单独作为辅助列输出，禁止加总为新指标。",
-                "仅比对顶层SELECT投影的加减链；嵌套在子查询、函数参数内的拼接未检查。",
-            );
-        }
-        return;
-    }
-}
-
-// 独立解析指标表达式（无FROM/WHERE的SELECT投影），返回规范化SQL文本。
-fn canonical_expression_sql(expression: &str) -> Option<String> {
-    let parsed = Parser::new(&SQLiteDialect {})
+fn metric_expression(sql: &str) -> Option<Expr> {
+    let mut parser = Parser::new(&SQLiteDialect {})
         .with_recursion_limit(32)
-        .try_with_sql(&format!("SELECT {expression}"))
-        .and_then(|mut parser| parser.parse_statements())
+        .try_with_sql(sql)
         .ok()?;
-    let [Statement::Query(query)] = parsed.as_slice() else {
-        return None;
-    };
-    if query.with.is_some() || query.order_by.is_some() || query.limit_clause.is_some() {
-        return None;
-    }
-    let SetExpr::Select(select) = query.body.as_ref() else {
-        return None;
-    };
-    if !select.from.is_empty() || select.selection.is_some() {
-        return None;
-    }
-    let [item] = select.projection.as_slice() else {
-        return None;
-    };
-    Some(canonical_projection(projection_expr(item)?))
+    let expr = parser.parse_expr().ok()?;
+    (parser.peek_token().token == Token::EOF).then_some(expr)
 }
 
-// 规范化：小写、压缩空白、去除列限定，使 COUNT(DISTINCT t.customer_id) 与
-// count(distinct customer_id) 等价。两侧同法处理，不引入口径判断。
-fn canonical_projection(expr: &Expr) -> String {
-    let sql = expr.to_string().to_lowercase();
-    strip_qualifiers(&sql.split_whitespace().collect::<Vec<_>>().join(" "))
-}
-
-// 去除标识符的表限定；跳过单引号字符串内容与数字字面量，一次扫描同时处理
-// 多级限定（a.b.c → c）。
-fn strip_qualifiers(sql: &str) -> String {
-    let chars: Vec<char> = sql.chars().collect();
-    let mut remove = vec![false; chars.len()];
-    let mut in_string = false;
-    for (index, &symbol) in chars.iter().enumerate() {
-        if symbol == '\'' {
-            in_string = !in_string;
-            continue;
-        }
-        if symbol != '.' || in_string {
-            continue;
-        }
-        let mut start = index;
-        while start > 0 && (chars[start - 1].is_ascii_alphanumeric() || chars[start - 1] == '_') {
-            start -= 1;
-        }
-        let token_is_identifier =
-            start < index && (chars[start].is_ascii_alphabetic() || chars[start] == '_');
-        let forward_is_identifier = chars
-            .get(index + 1)
-            .is_some_and(|c| c.is_ascii_alphabetic() || *c == '_');
-        if token_is_identifier && forward_is_identifier {
-            remove[start..=index].fill(true);
+// 输入是已解析的单表投影。仅忽略本表限定和未引号标识符的大小写，常量原样参与比对。
+fn metric_key(expr: &Expr, binding: &Binding<'_>) -> Option<Vec<Token>> {
+    let sql = unnested(expr).to_string();
+    let mut tokens = Tokenizer::new(&SQLiteDialect {}, &sql).tokenize().ok()?;
+    tokens.retain(|t| !matches!(t, Token::Whitespace(_)));
+    for token in &mut tokens {
+        if let Token::Word(word) = token
+            && word.quote_style.is_none()
+        {
+            word.value.make_ascii_lowercase();
         }
     }
-    chars
+    let mut key = Vec::new();
+    let mut index = 0;
+    while index < tokens.len() {
+        if index == 0 || tokens[index - 1] != Token::Period {
+            for name in binding.alias.iter().chain(std::iter::once(&binding.name)) {
+                let mut end = index;
+                if name.split('.').all(|part| {
+                    let matches = matches!(tokens.get(end), Some(Token::Word(w)) if w.value.eq_ignore_ascii_case(part))
+                        && tokens.get(end+1) == Some(&Token::Period);
+                    end += 2;
+                    matches
+                }) && matches!(tokens.get(end), Some(Token::Word(_))) {
+                    index = end;
+                    break;
+                }
+            }
+        }
+        key.push(tokens[index].clone());
+        index += 1;
+    }
+    Some(key)
+}
+
+fn mixes_metric_boundary(select: &Select, expected: &Expr, binding: &Binding<'_>) -> bool {
+    let Some(expected) = metric_key(expected, binding) else {
+        return false;
+    };
+    select
+        .projection
         .iter()
-        .enumerate()
-        .filter(|(position, _)| !remove[*position])
-        .map(|(_, symbol)| *symbol)
-        .collect()
+        .filter_map(projection_expr)
+        .any(|expr| {
+            let mut terms = Vec::new();
+            arithmetic_terms(expr, &mut terms);
+            terms.len() > 1
+                && terms
+                    .iter()
+                    .any(|term| metric_key(term, binding).as_ref() == Some(&expected))
+                && terms.iter().any(|term| {
+                    contains_boundary_patch(term)
+                        && metric_key(term, binding).as_ref() != Some(&expected)
+                })
+        })
 }
 
 // 顶层加减链分解：a + b - (c + d) → [a, b, (c+d)]；括号内加减不提升为顶层项。
@@ -984,7 +924,10 @@ fn arithmetic_terms<'a>(expr: &'a Expr, terms: &mut Vec<&'a Expr>) {
 // 边界项特征：CASE WHEN分支或IS NULL判定——“存在匿名则+1”式补丁的形态。
 fn contains_boundary_patch(expr: &Expr) -> bool {
     match expr {
-        Expr::Case { .. } | Expr::IsNull(_) => true,
+        Expr::IsNull(_) => true,
+        Expr::Case { conditions, .. } => conditions
+            .iter()
+            .any(|branch| contains_boundary_patch(&branch.condition)),
         Expr::Nested(inner) => contains_boundary_patch(inner),
         Expr::BinaryOp { left, right, .. } => {
             contains_boundary_patch(left) || contains_boundary_patch(right)
@@ -1006,10 +949,155 @@ fn contains_boundary_patch(expr: &Expr) -> bool {
     }
 }
 
-fn item_alias(item: &SelectItem) -> Option<String> {
-    match item {
-        SelectItem::ExprWithAlias { alias, .. } => Some(alias.value.clone()),
-        _ => None,
+/// 平台结果列按 SELECT 的投影顺序返回。标签只来自这次查询引用的、已确认的结构。
+pub fn annotate_result_columns(sql: &str, columns: &mut [Value], snapshot: &Value, refs: &[Value]) {
+    let Ok(statements) = Parser::new(&SQLiteDialect {})
+        .with_recursion_limit(32)
+        .try_with_sql(sql)
+        .and_then(|mut parser| parser.parse_statements())
+    else {
+        return;
+    };
+    let [Statement::Query(query)] = statements.as_slice() else {
+        return;
+    };
+    let SetExpr::Select(select) = query.body.as_ref() else {
+        return;
+    };
+    let Some(objects) = snapshot["objects"].as_array() else {
+        return;
+    };
+    let Some(bindings) = table_bindings(select, objects) else {
+        return;
+    };
+    if query.with.is_some() {
+        return;
+    }
+    let wildcard = match select.projection.as_slice() {
+        [SelectItem::Wildcard(opts)] => bindings.len() == 1 && plain_wildcard(opts),
+        [SelectItem::QualifiedWildcard(SelectItemQualifiedWildcardKind::ObjectName(n), opts)] => {
+            bindings.len() == 1
+                && plain_wildcard(opts)
+                && plain_name(n).is_some_and(|name| {
+                    bindings[0]
+                        .alias
+                        .as_ref()
+                        .unwrap_or(&bindings[0].name)
+                        .eq_ignore_ascii_case(&name)
+                })
+        }
+        _ => false,
+    };
+    if !wildcard
+        && (select.projection.len() != columns.len()
+            || select
+                .projection
+                .iter()
+                .any(|item| projection_expr(item).is_none()))
+    {
+        return;
+    }
+    // 结果说明沿用查询真正引用的条目。单位条目被引用时，不顺带展示同对象其他来源的说明。
+    let definitions: Vec<_> = objects
+        .iter()
+        .filter(|o| o["state"] == "enabled")
+        .filter_map(|object| {
+            let kind = object["kind"].as_str()?;
+            if !matches!(kind, "field" | "metric") {
+                return None;
+            }
+            let mut selected = object["entries"].as_array()?.iter().filter(|entry| {
+                entry["review_state"] == "confirmed"
+                    && refs.iter().any(|r| {
+                        ref_matches(r, object)
+                            && r["path"].as_str().is_none_or(|path| {
+                                path.is_empty()
+                                    || entry["entry_id"] == path
+                                    || entry["path"] == path
+                            })
+                    })
+            });
+            let rule = selected
+                .clone()
+                .map(|e| &e["effective_structure"])
+                .find(|rule| rule["kind"] == kind)?;
+            let label = if kind == "field" {
+                selected
+                    .find(|e| e["path"] == "meaning")
+                    .and_then(|e| e["effective_value"].as_str())
+            } else {
+                object["name"].as_str()
+            };
+            Some((rule, label.map(str::trim)))
+        })
+        .collect();
+    for (index, output) in columns.iter_mut().enumerate() {
+        let Some(name) = output["name"].as_str() else {
+            continue;
+        };
+        let wildcard_column;
+        let expr = if wildcard {
+            wildcard_column = Expr::Identifier(sqlparser::ast::Ident::new(name));
+            &wildcard_column
+        } else {
+            let item = &select.projection[index];
+            if let SelectItem::ExprWithAlias { alias, .. } = item
+                && !alias.value.eq_ignore_ascii_case(name)
+            {
+                continue;
+            }
+            let Some(expr) = projection_expr(item) else {
+                continue;
+            };
+            expr
+        };
+        let field = if matches!(unnested(expr), Expr::Identifier(_))
+            && bindings.len() > 1
+            && bindings.iter().any(|binding| {
+                binding
+                    .object
+                    .is_none_or(|table| table["column_names_complete"] != true)
+            }) {
+            None
+        } else {
+            resolve_column(expr, &bindings)
+        };
+        let mut matches = definitions.iter().filter_map(|(rule, label)| {
+            match rule["kind"].as_str()? {
+                "field" => {
+                    let column = field.as_ref()?;
+                    if rule["table"]["object_id"] != column.table_id
+                        || !rule["column"].as_str()?.eq_ignore_ascii_case(&column.name)
+                    {
+                        return None;
+                    }
+                }
+                "metric" => {
+                    let [binding] = bindings.as_slice() else {
+                        return None;
+                    };
+                    if !ref_matches(&rule["table"], binding.object?) {
+                        return None;
+                    }
+                    let expected = metric_expression(rule["expression"].as_str()?)?;
+                    if metric_key(&expected, binding)? != metric_key(expr, binding)? {
+                        return None;
+                    }
+                }
+                _ => return None,
+            }
+            Some((*label, rule["unit"].as_str().map(str::trim)))
+        });
+        if let Some((label, unit)) = matches.next()
+            && matches.next().is_none()
+        {
+            if let Some(label) = label.filter(|s| (1..=240).contains(&s.chars().count())) {
+                output["display_label"] = json!(label);
+            }
+            if let Some(unit) = unit.filter(|s| (1..=64).contains(&s.chars().count())) {
+                output["unit"] = json!(unit);
+            }
+        }
     }
 }
 
@@ -1186,6 +1274,132 @@ mod tests {
             .as_str()
             .unwrap()
             .to_owned()
+    }
+
+    #[test]
+    fn result_annotations_follow_the_bound_projection_and_confirmed_structure() {
+        let mut snapshot = with_metric("分");
+        let refs = [
+            json!({"object_id":"purchase_net","version":"2","path":""}),
+            json!({"object_id":"purchase_amount","version":"4","path":"sql"}),
+            json!({"object_id":"purchase_amount","version":"4","path":"definition"}),
+        ];
+        let objects = snapshot["objects"].as_array_mut().unwrap();
+        for object in objects {
+            match object["kind"].as_str() {
+                Some("field") => {
+                    object["entries"][0]["path"] = json!("meaning");
+                    object["entries"][0]["effective_value"] = json!("购买净额");
+                }
+                Some("metric") => object["entries"][0]["path"] = json!("definition"),
+                _ => (),
+            }
+        }
+        let mut cols = vec![
+            json!({"name":"amount"}),
+            json!({"name":"net_minor"}),
+            json!({"name":"total"}),
+        ];
+        annotate_result_columns(
+            "SELECT p.net_minor AS amount, p.net_minor / 100 AS net_minor, SUM(p.net_minor) AS total FROM warehouse.purchases p",
+            &mut cols,
+            &snapshot,
+            &refs,
+        );
+        assert_eq!(cols[0]["display_label"], "购买净额");
+        assert_eq!(cols[0]["unit"], "分");
+        assert!(cols[1].get("unit").is_none());
+        assert_eq!(cols[2]["unit"], "分");
+        let objects = snapshot["objects"].as_array_mut().unwrap();
+        let metric = objects.iter_mut().find(|o| o["kind"] == "metric").unwrap();
+        metric["entries"][0]["path"] = json!("sql");
+        let field = objects.iter_mut().find(|o| o["kind"] == "field").unwrap();
+        field["entries"][0]["path"] = json!("unit");
+        let mut col = [json!({"name":"net_minor"})];
+        annotate_result_columns(
+            "SELECT * FROM warehouse.purchases",
+            &mut col,
+            &snapshot,
+            &refs,
+        );
+        assert!(col[0].get("display_label").is_none());
+        assert_eq!(col[0]["unit"], "分");
+        let field = snapshot["objects"]
+            .as_array_mut()
+            .unwrap()
+            .iter_mut()
+            .find(|o| o["kind"] == "field")
+            .unwrap();
+        field["entries"].as_array_mut().unwrap().push(
+            json!({"path":"meaning","review_state":"confirmed","effective_value":"其他依据的说明"}),
+        );
+        let unit_ref = [json!({"object_id":"purchase_net","version":"2","path":"unit"})];
+        let mut selected = [json!({"name":"net_minor"})];
+        annotate_result_columns(
+            "SELECT net_minor FROM warehouse.purchases",
+            &mut selected,
+            &snapshot,
+            &unit_ref,
+        );
+        assert_eq!(selected[0]["unit"], "分");
+        assert!(selected[0].get("display_label").is_none());
+        let mut total = [json!({"name":"total"})];
+        annotate_result_columns(
+            "SELECT SUM(net_minor) AS total FROM warehouse.purchases",
+            &mut total,
+            &snapshot,
+            &refs,
+        );
+        assert_eq!(total[0]["display_label"], "购买净额");
+        snapshot["objects"]
+            .as_array_mut()
+            .unwrap()
+            .iter_mut()
+            .find(|o| o["kind"] == "field")
+            .unwrap()["entries"][0]["review_state"] = json!("needs_review");
+        let mut omitted = [json!({"name":"net_minor"})];
+        annotate_result_columns(
+            "SELECT net_minor FROM warehouse.purchases",
+            &mut omitted,
+            &snapshot,
+            &refs,
+        );
+        assert!(omitted[0].get("unit").is_none());
+    }
+
+    #[test]
+    fn mixed_metric_warns_without_inferring_user_approval_from_the_alias() {
+        let mut snapshot = with_metric("分");
+        let metric = snapshot["objects"]
+            .as_array_mut()
+            .unwrap()
+            .iter_mut()
+            .find(|o| o["kind"] == "metric")
+            .unwrap();
+        metric["entries"][0]["effective_structure"]["expression"] =
+            json!("COUNT(DISTINCT purchase_key)");
+        snapshot["semantic_resolution"] =
+            json!({"basis":"explicit_user","interpretation":"不要使用 merged_count"});
+        let count = "COUNT(DISTINCT p.purchase_key)";
+        let patch = "SUM(CASE WHEN p.purchase_key IS NULL THEN 1 ELSE 0 END)";
+        let query = |projection: &str| {
+            check_semantics(
+                &format!("SELECT {projection} FROM warehouse.purchases p"),
+                &json!({}),
+                &snapshot,
+            )
+        };
+        let mixed = query(&format!("{count} + {patch} AS merged_count"));
+        assert_eq!(state(&mixed, "metric_boundary_mixed"), "warning");
+        assert_eq!(state(&mixed, "sql_shape"), "not_checked");
+        let separate = query(&format!("{count}, {patch}"));
+        assert!(
+            separate["checks"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .all(|c| c["rule"] != "metric_boundary_mixed")
+        );
     }
 
     #[test]

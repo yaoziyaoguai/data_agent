@@ -530,63 +530,6 @@ async fn results_for_display(
     results_with(pool, ctx, qid, cursor, true).await
 }
 
-/// U-05列注解：SQL投影列名与知识对象精确相等才附带中文列名/单位。
-/// metric同时认对象名与指标标识；字段含义取meaning条目、单位取unit条目，
-/// 缺条目就不注解——聚合别名、未知列一律保持原始列名，不从列名猜业务含义。
-async fn column_annotations(
-    pool: &MySqlPool,
-    ctx: &AccessContext,
-    knowledge_refs: &Value,
-) -> Result<std::collections::HashMap<String, (String, Option<String>)>> {
-    let mut annotations = std::collections::HashMap::new();
-    let Some(refs) = knowledge_refs.as_array() else {
-        return Ok(annotations);
-    };
-    let mut tx = AppTx::begin(pool).await?;
-    for reference in refs {
-        let Some(object_id) = reference["object_id"].as_str() else {
-            continue;
-        };
-        let version = reference["version"].as_str().and_then(|v| epoch(v).ok());
-        let object = match knowledge::read_in_tx(&mut tx, ctx, object_id, version, false).await {
-            Ok(object) => object,
-            Err(_) => continue,
-        };
-        let kind = object["kind"].as_str().unwrap_or("");
-        if kind != "field" && kind != "metric" {
-            continue;
-        }
-        let entries = object["entries"].as_array().cloned().unwrap_or_default();
-        let value_of = |path: &str| {
-            entries
-                .iter()
-                .find(|entry| entry["path"] == path)
-                .and_then(|entry| entry["effective_value"].as_str())
-                .filter(|value| !value.trim().is_empty())
-                .map(str::to_owned)
-        };
-        let unit = value_of("unit");
-        let label = if kind == "metric" {
-            object["name"].as_str().unwrap_or("").trim().to_owned()
-        } else {
-            value_of("meaning").unwrap_or_default()
-        };
-        if label.is_empty() {
-            continue;
-        }
-        let mut keys = vec![object["name"].as_str().unwrap_or("").to_owned()];
-        if kind == "metric" {
-            keys.extend(object_id.strip_prefix("metric-").map(str::to_owned));
-        }
-        for key in keys.into_iter().filter(|key| !key.is_empty()) {
-            annotations
-                .entry(key)
-                .or_insert_with(|| (label.clone(), unit.clone()));
-        }
-    }
-    Ok(annotations)
-}
-
 async fn results_with(
     pool: &MySqlPool,
     ctx: &AccessContext,
@@ -615,22 +558,18 @@ async fn results_with(
         return Err(Error::new("result_unavailable"));
     }
     result["statistics"] = queries::page_statistics(&result)?;
-    // 列注解按引用对象的精确名匹配附加；未匹配列保持原样，校验含新增可选字段。
-    let annotations = column_annotations(pool, ctx, &v["knowledge_refs"]).await?;
-    if let Some(columns) = result["columns"].as_array_mut() {
-        for column in columns {
-            if let Some((label, unit)) = column["name"]
-                .as_str()
-                .and_then(|name| annotations.get(name))
-            {
-                column["display_label"] = json!(label);
-                if let Some(unit) = unit {
-                    column["unit"] = json!(unit);
-                }
-            }
+    if let Some(refs) = v["knowledge_refs"]
+        .as_array()
+        .filter(|refs| !refs.is_empty())
+    {
+        let mut tx = AppTx::begin(pool).await?;
+        let snapshot =
+            knowledge::semantic_snapshot_in_tx(&mut tx, ctx, &v["knowledge_refs"]).await?;
+        tx.commit().await?;
+        if let (Some(sql), Some(columns)) = (v["sql"].as_str(), result["columns"].as_array_mut()) {
+            queries::annotate_result_columns(sql, columns, &snapshot, refs);
         }
     }
-    contracts::validate("QueryResults", &result)?;
     Ok(result)
 }
 

@@ -398,13 +398,13 @@ pub struct AgentQueryResultsClass {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ResultColumnElement {
-    /// 仅在SQL投影列名与当前有效field/metric对象名精确匹配时附带的中文列头说明；未匹配的列缺省，不从列名猜测。
+    /// 查询投影能唯一绑定已确认的字段或指标表达式时提供的列头说明。
     pub display_label: Option<String>,
     pub encoding: String,
     pub name: String,
     #[serde(rename = "type")]
     pub result_column_type: String,
-    /// 已核实并随对象维护的业务单位标签（如 元/单、%）；来源同display_label，未核实缺省。
+    /// 从查询所选的已确认结构取得的业务单位，可独立于列头说明展示。
     pub unit: Option<String>,
 }
 
@@ -7499,14 +7499,14 @@ pub struct QueryResults {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ResultColumn {
-    /// 仅在SQL投影列名与当前有效field/metric对象名精确匹配时附带的中文列头说明；未匹配的列缺省，不从列名猜测。
+    /// 查询投影能唯一绑定已确认的字段或指标表达式时提供的列头说明。
     #[serde(skip_serializing_if = "Option::is_none")]
     pub display_label: Option<String>,
     pub encoding: String,
     pub name: String,
     #[serde(rename = "type")]
     pub result_column_type: String,
-    /// 已核实并随对象维护的业务单位标签（如 元/单、%）；来源同display_label，未核实缺省。
+    /// 从查询所选的已确认结构取得的业务单位，可独立于列头说明展示。
     #[serde(skip_serializing_if = "Option::is_none")]
     pub unit: Option<String>,
 }

@@ -94,6 +94,22 @@ try {
  checks.push('validate_sql是只读检查，原SDK成功重放也先重核来源；撤源后不返旧诊断、不向平台重新发送旧SQL');
 
  const legacyCid=await h.create();await begin(legacyCid,'建立旧查询来源缺失夹具。');const legacyTask=await task();const legacy=await draft(legacyTask,'合成旧稿');h.sql(`UPDATE query_requests SET text_authority=NULL WHERE id='${legacy.id}'`);control((await tool('get_query',{query_id:legacy.id})).query,'合成旧稿');await finish();assert.equal((await h.request(`/queries/${legacy.id}/confirm`,{operation_id:randomUUID(),draft_version:legacy.draft_version,condition_version:legacy.condition_version})).value.code,'stale_context');
+ const field=ok(await h.request('/knowledge/field-quantity'));
+ const meaning=field.entries.find(e=>e.path==='meaning');
+ const confirmed=ok(await h.request('/knowledge/'+field.id,{operation_id:randomUUID(),expected_version:field.version,entry_id:meaning.entry_id,
+   value:'商品件数',structured_value:meaning.effective_structure},'alice','PATCH'));
+ const ref={object_id:confirmed.id,version:confirmed.version,path:'meaning'};
+ const columnCid=await h.create();await begin(columnCid,'执行这个数量查询。');const columnTask=await task();
+ await tool('read_knowledge',{object_id:confirmed.id});
+ const annotated=await tool('request_query',{task_id:columnTask.task_id,condition_version:columnTask.condition_version,
+   sql:'SELECT d.quantity AS item_count, d.quantity / 100.0 AS quantity FROM demo_order_detail d LIMIT 2',parameters:{},target_id:'synthetic-sqlite',
+   summary:'原数与换算列',knowledge_refs:[ref],replaces_query_id:null});
+ await execute(annotated);await finish();await h.resumeWorker();
+ await until(()=>queryState(annotated).state==='succeeded','合成平台交付结果');
+ const result=ok(await h.request('/queries/'+annotated.id+'/results'));
+ assert.equal(result.columns[0].display_label,'商品件数');assert.equal(result.columns[0].unit,'件');
+ assert.equal(result.columns[1].unit,undefined);assert.equal(result.columns[1].display_label,undefined);
+ checks.push('真实查询页按已确认字段给直接投影别名补单位，同名换算列保留原列头');
  checks.push('旧NULL来源查询不被假定为独立合法正文，状态可查而不能新确认');passed=true;
 }finally {await writeFile('.local/checks/query-text-authority.json',JSON.stringify({passed,checks,officialRequests:0},null,2));await h.close();}
 console.log(JSON.stringify({passed,checks,officialRequests:0}));

@@ -261,14 +261,14 @@ export interface AgentQueryResultsClass {
 
 export interface ResultColumnElement {
     /**
-     * 仅在SQL投影列名与当前有效field/metric对象名精确匹配时附带的中文列头说明；未匹配的列缺省，不从列名猜测。
+     * 查询投影能唯一绑定已确认的字段或指标表达式时提供的列头说明。
      */
     display_label?: string;
     encoding:       string;
     name:           string;
     type:           string;
     /**
-     * 已核实并随对象维护的业务单位标签（如 元/单、%）；来源同display_label，未核实缺省。
+     * 从查询所选的已确认结构取得的业务单位，可独立于列头说明展示。
      */
     unit?: string;
 }
@@ -6321,14 +6321,14 @@ export interface QueryResults {
 
 export interface ResultColumn {
     /**
-     * 仅在SQL投影列名与当前有效field/metric对象名精确匹配时附带的中文列头说明；未匹配的列缺省，不从列名猜测。
+     * 查询投影能唯一绑定已确认的字段或指标表达式时提供的列头说明。
      */
     display_label?: string;
     encoding:       string;
     name:           string;
     type:           string;
     /**
-     * 已核实并随对象维护的业务单位标签（如 元/单、%）；来源同display_label，未核实缺省。
+     * 从查询所选的已确认结构取得的业务单位，可独立于列头说明展示。
      */
     unit?: string;
 }

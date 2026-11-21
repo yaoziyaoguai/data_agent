@@ -674,7 +674,7 @@ pub async fn semantic_snapshot_in_tx(
             }
             Err(error) => return Err(error),
         };
-        if let Some(path) = reference["path"].as_str()
+        if let Some(path) = reference["path"].as_str().filter(|path| !path.is_empty())
             && !object["entries"].as_array().is_some_and(|entries| {
                 entries
                     .iter()
@@ -687,21 +687,31 @@ pub async fn semantic_snapshot_in_tx(
         objects.insert(object["id"].as_str().unwrap_or("").to_owned(), object);
     }
     let ids = objects.keys().cloned().collect::<Vec<_>>();
-    let mut tables = BTreeMap::new();
+    let mut tables: BTreeMap<String, Value> = BTreeMap::new();
     for id in &ids {
         let mut object = objects[id].clone();
         project_object(&mut object);
         if object["kind"] == "table" {
-            let table = decorated_table(tx, ctx, object.clone()).await?;
-            tables.insert(id.clone(), table.clone());
-            object = table;
+            if let Some(table) = tables.get(id).filter(|t| t["version"] == object["version"]) {
+                object = table.clone();
+            } else {
+                object = decorated_table(tx, ctx, object).await?;
+                tables.insert(id.clone(), object.clone());
+            }
         }
         for entry in object["entries"].as_array().into_iter().flatten() {
             for reference in table_dependencies(&entry["effective_structure"]) {
+                let table_id = reference["object_id"].as_str().unwrap_or("");
+                if tables
+                    .get(table_id)
+                    .is_some_and(|table| table["version"] == reference["version"])
+                {
+                    continue;
+                }
                 let dependency = store::read_in_tx(
                     tx,
                     ctx,
-                    reference["object_id"].as_str().unwrap_or(""),
+                    table_id,
                     Some(epoch(reference["version"].as_str().unwrap_or(""))?),
                     false,
                 )
@@ -709,10 +719,7 @@ pub async fn semantic_snapshot_in_tx(
                 match dependency {
                     Ok(table) if table["kind"] == "table" => {
                         let table = decorated_table(tx, ctx, table).await?;
-                        tables.insert(
-                            reference["object_id"].as_str().unwrap_or("").to_owned(),
-                            table,
-                        );
+                        tables.insert(table_id.to_owned(), table);
                     }
                     Ok(_) => {
                         notes.push("计算规则引用了不适用的对象类型。".to_owned());
