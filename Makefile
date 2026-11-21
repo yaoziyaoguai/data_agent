@@ -361,6 +361,7 @@ verify-mvp-browser:
 .PHONY: verify-management-buttons verify-memory-runtime
 verify-management-buttons:
 	$(CARGO) build --offline --locked -p data-agent-api -p data-agent-worker
+	node tests/mvp/check-batch-edit-retry.mjs
 	node tests/mvp/check-management-buttons.mjs
 	node tests/mvp/check-related-knowledge-browser.mjs
 

@@ -69,7 +69,7 @@ function EntryEditor({
   availableObjects: KnowledgeObject[];
   batchMode?: boolean;
   stagedValue?: string;
-  onStage?: (object: KnowledgeObject, entry: KnowledgeEntry, value: string) => void;
+  onStage?: (objectId: string, entryId: string, version: string, value: string) => void;
 }) {
   const operation = useStableOperation();
   const [editing, setEditing] = useState(false);
@@ -100,7 +100,7 @@ function EntryEditor({
   const save = async (clear = false) => {
     // 批量核对模式只暂存纯文本修改；结构化条目仍走即时保存以保留结构编辑器语义。
     if (batchMode && !clear && onStage && !hasStructureEditor) {
-      onStage(object, entry, value);
+      onStage(object.id, entry.entry_id, editVersion, value);
       confirmClose.markSaved();
       setEditing(false);
       return;
@@ -350,10 +350,10 @@ export function KnowledgePage({
   // U-02：条目快速筛选与批量核对暂存；stagedEdits 以“对象:条目”为键，提交时按对象分组。
   const [entryFilter, setEntryFilter] = useState<"all" | "suggested" | "overridden" | "missing">("all");
   const [batchMode, setBatchMode] = useState(false);
-  const [stagedEdits, setStagedEdits] = useState<Record<string, {objectId: string; entryId: string; value: string}>>({});
+  const [stagedEdits, setStagedEdits] = useState<Record<string, {objectId: string; entryId: string; version: string; value: string}>>({});
   const [diffOpen, setDiffOpen] = useState(false);
   const [batchBusy, setBatchBusy] = useState(false);
-  const batchOperations = useRef<Record<string, string>>({});
+  const batchOperation = useStableOperation();
   const refresh = () => refreshRequest.current();
   const sourceSync = useSourceSynchronization(user, canAdmin, () => {
     setDirectoryRevision(value => value + 1);
@@ -588,30 +588,31 @@ export function KnowledgePage({
     : groups;
   const stagedKey = (objectId: string, entryId: string) => objectId + ":" + entryId;
   const stagedList = Object.entries(stagedEdits).map(([key, edit]) => ({key, ...edit}));
-  const stageEdit = (object: KnowledgeObject, entry: KnowledgeEntry, value: string) => {
-    setStagedEdits(old => ({...old, [stagedKey(object.id, entry.entry_id)]: {objectId: object.id, entryId: entry.entry_id, value}}));
+  const stageEdit = (objectId: string, entryId: string, version: string, value: string) => {
+    setStagedEdits(old => ({...old, [stagedKey(objectId, entryId)]: {objectId, entryId, version, value}}));
   };
   const submitBatch = async () => {
     if (batchBusy || stagedList.length === 0) return;
     setBatchBusy(true); setError("");
-    const byObject = new Map<string, {entryId: string; value: string}[]>();
-    for (const item of stagedList) byObject.set(item.objectId, [...(byObject.get(item.objectId) ?? []), {entryId: item.entryId, value: item.value}]);
-    const operationFor = (objectId: string, entryIds: string[]) => {
-      // 同一组修改跨重试保持同一操作号；服务端按操作幂等去重，避免部分成功后重复应用。
-      const key = objectId + ":" + [...entryIds].sort().join(",");
-      return batchOperations.current[key] ??= crypto.randomUUID();
-    };
+    const byObject = new Map<string, {expected_version: string; edits: {entry_id: string; value: string}[]}>();
+    for (const item of stagedList) {
+      const body = byObject.get(item.objectId) ?? {expected_version: item.version, edits: []};
+      // 一组暂存跨过了版本更新时，沿用最早读到的版本，由服务端一次核对。
+      if (BigInt(item.version) < BigInt(body.expected_version)) body.expected_version = item.version;
+      body.edits.push({entry_id: item.entryId, value: item.value});
+      byObject.set(item.objectId, body);
+    }
     try {
-      for (const [objectId, edits] of byObject) {
-        const object = objects.find(o => o.id === objectId);
-        if (!object) throw new Error("暂存对象已不在当前列表，请刷新后重新核对");
+      for (const [objectId, body] of byObject) {
         const updated = await api("KnowledgeObject", "/knowledge/" + encodeURIComponent(objectId) + "/entries", "PATCH", {
-          operation_id: operationFor(objectId, edits.map(e => e.entryId)),
-          expected_version: object.version,
-          edits: edits.map(e => ({entry_id: e.entryId, value: e.value})),
+          ...body, operation_id: batchOperation({objectId, ...body}),
         });
         save(updated);
-        setStagedEdits(old => { const next = {...old}; for (const e of edits) delete next[stagedKey(objectId, e.entryId)]; return next; });
+        setStagedEdits(old => {
+          const next = {...old};
+          for (const edit of body.edits) delete next[stagedKey(objectId, edit.entry_id)];
+          return next;
+        });
       }
       setDiffOpen(false);
     } catch (e) {
