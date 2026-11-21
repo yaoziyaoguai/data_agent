@@ -1287,6 +1287,18 @@
 }
 ---
 
+## data_agent.html 审计确认问题修复（2026-11-21）
+
+按报告编号修复全部确认问题并跑完项目验证（编号沿用仓库根 [data_agent.html](../data_agent.html)）。除 P-03 因付费授权已于 2026-11-18 17:27 上海时间到期暂缓外，产品、原型、运行时与代码各项均已落地或按现行不变量等效适配。
+
+- 产品层：P-01 报告卡与查询结果不再 2 秒轮询重读——报告内容不可变，按引用与版本只读一次，长会话卡片漂移的轮询触发源消除。P-02 等效适配：get_query 回执在“核对通过＋待确认＋未提交”阶段附 phase_note，指明用户已要求执行时立即调用 execute_query（J01 断链点）；deliver.ts 侧防停守卫未加，避免与交付幂等不变量冲突。P-04 普通用户的语义页收窄为只读“数据字典”，维护动作、影响面板、常用表开关与预填/整理状态仅维护者可见，方法草稿并入个人方法统一视图；角色判定收敛为单一 canMaintain 变量（修复 JSX `a || b && x` 优先级把布尔渲染成空、维护者看不到维护面板的问题）。P-05 查询卡按执行状态显示活动标签（SQL 已准备好/查询运行中/查询完成等），查询历史行同样带状态。
+- 原型退化回收：U-02 条目快速筛选（建议/已人工/缺失，带待核对计数）＋批量核对暂存，按对象分组提交且 operation_id 按“对象＋条目组”稳定、重试幂等，提交前有差异确认弹窗。U-03 “血缘与加工”页签：上游表名命中已加载表即可点击直达，ETL 步骤分步只读展示并可维护，旧名“关联与血缘”归一。U-04 历史记录改会话/查询双栏：查询按内容检索、跨会话定位到查询卡片（未加载时自动翻更早一页再重试，有界次数），⌘K 新建对话；离开工作台后壳层提供“返回刚才的分析”。U-05 结果表头显示 display_label 与单位副行，数值列右对齐等宽数字。U-06 原型页顶部加归档横幅，应用内空间名改为接口下发（登录后显示“合成座舱语音空间”）。
+- 运行时层：A-02 Worker 空闲退避 100ms→2s 阶梯、处理到任务即复位，连接池上限改由 DATA_AGENT_DB_MAX_CONNECTIONS 配置。A-03 /events 改为真正 SSE 长连接：先补发 after_seq 之后增量，随后每秒尾部扫描推送，15 秒 keep-alive，Last-Event-ID 续传，会话删除或撤权时下发 stream_closed；前端全部轮询定时器移除，改为 SSE 唤醒＋窗口 focus/visibility 唤醒。A-04 Mem0 撤全局进程锁：写操作按租户串行，/search 完全无锁，且不再逐写 flush。
+- 代码层：C-02 clippy 全量 `-D warnings` 通过（清理 needless_borrow、redundant_guards、collapsible_if 等 12 处），全局 `#![deny(clippy::unwrap_used)]` 未启用、存量裸解包保留。C-03 事务内循环单行回源改批量化（如 live_table_ids_in_tx 一次解析 field→table 归属），“固定 ≤4 次 SQL”的验收未完全达成。C-04 reqwest::Client、Milvus 客户端与模型主密钥改 OnceLock 进程级复用（主密钥含 0600 权限与符号链接校验后常驻）。C-05 登录升级为服务端会话：Cookie 只含随机不透明令牌（7 天 TTL、HttpOnly、SameSite=Strict），DELETE /session 即吊销；已有登录态的浏览器需重新登录。
+- 契约与测试同步：schema 新增必填 space_name 等字段并同步生成物与 6 个契约夹具；架构检查暴露的协调层 SQL 下沉到 knowledge store。测试侧三处 /events 消费从“等正文结束”改为增量读取后取消（tests/runtime/check-runtime.mjs、tests/mvp/harness.mjs 新增 replayEvents），匹配持续流语义——这是 verify-runtime-flow 此前挂起的根因，属本轮 SSE 语义变更引发的测试适配。
+- 验证：make verify-code、verify-contracts（694 项）、verify-architecture、infra 冒烟、verify-runtime-flow（真实 Pi 工具链/SSE/浏览器全流程/串行与失败终止 4 项）、verify-recovery（3 个故障注入场景）、npm run check:browser（151 项，需先 `npm run browser:install` 补齐锁定 Chromium）、node tests/mvp/check-task-query-answers.mjs --history-permissions、check-grounded-answers、make verify-pi-transport 全部通过；本轮官方模型调用为零。真实 Flash/high 与付费能力未验证（授权到期）。
+- 未做与暂缓：P-03 付费预填（授权到期）；A-05～A-08 分步重构举措；C-01 超大文件拆分（use_cases/knowledge.rs、data_tools.rs、context_authority.rs、knowledge/store.rs、retrieval/vector.rs、style.css 等维持现状）；C-06/C-07（与现行不变量冲突）；compose.yaml 与 MySQL max-connections 等基础设施层调整（allowed_paths 未含）。
+
 ## 本地内测版交付（2026-11-19）
 
 本版冻结 Pi 1.4.0、v2 字段原文精读和旧游标续页。平台使用合成座舱语音资料。用户可以在本地查找语义、起草 SQL、确认执行并续看结果和报告。[使用入口](../README.md#快速开始) · [本地服务](development.md#当前本地试用服务)
