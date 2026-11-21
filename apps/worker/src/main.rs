@@ -372,6 +372,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut deliveries = JoinSet::new();
     let mut idle = 0u32;
     loop {
+        while let Some(result) = deliveries.try_join_next() {
+            if let Err(error) = result {
+                eprintln!("worker_delivery_join_error {error}");
+            }
+        }
         // 先等空闲槽位再领取；等待期间收到停机信号则不再新派。
         let permit = tokio::select! {
             changed = shutdown.changed() => {

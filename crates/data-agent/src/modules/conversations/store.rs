@@ -439,12 +439,13 @@ pub async fn append_event_in_tx(
 }
 pub async fn read_events_in_tx(
     tx: &mut AppTx<'_>,
-    locked: &LockedConversation,
+    context: &AccessContext,
+    cid: &str,
     after: u64,
 ) -> Result<Vec<Value>> {
-    current(tx, locked)?;
-    let rows=sqlx::query("SELECT * FROM conversation_events WHERE conversation_id=? AND event_seq>? ORDER BY event_seq LIMIT 1000").bind(&locked.id).bind(after).fetch_all(tx.connection()).await?;
-    Ok(rows.iter().map(|row| event_value(locked, row)).collect())
+    assert_readable_in_tx(tx, context, cid).await?;
+    let rows=sqlx::query("SELECT * FROM conversation_events WHERE conversation_id=? AND event_seq>? ORDER BY event_seq LIMIT 1000").bind(cid).bind(after).fetch_all(tx.connection()).await?;
+    Ok(rows.iter().map(event_value).collect())
 }
 /// 批量判断会话对当前用户仍可见（未删除、属当前空间）；供跨会话列表过滤死链。
 pub async fn visible_ids_in_tx(
@@ -689,14 +690,14 @@ pub async fn event_page_in_tx(
         sqlx::query("SELECT * FROM conversation_events WHERE conversation_id=? AND (? IS NULL OR event_seq<?) ORDER BY event_seq DESC LIMIT 1000")
             .bind(&locked.id).bind(before).bind(before).fetch_all(tx.connection()).await?
     };
-    let mut events: Vec<Value> = rows.iter().map(|row| event_value(locked, row)).collect();
+    let mut events: Vec<Value> = rows.iter().map(event_value).collect();
     if after.is_none() {
         events.reverse();
     }
     Ok(events)
 }
-fn event_value(locked: &LockedConversation, row: &sqlx::mysql::MySqlRow) -> Value {
-    json!({"schema_version":1,"event_id":row.get::<String,_>("event_id"),"conversation_id":locked.id,
+fn event_value(row: &sqlx::mysql::MySqlRow) -> Value {
+    json!({"schema_version":1,"event_id":row.get::<String,_>("event_id"),"conversation_id":row.get::<String,_>("conversation_id"),
         "event_seq":row.get::<u64,_>("event_seq").to_string(),"type":row.get::<String,_>("event_type"),
         "payload":row.get::<sqlx::types::Json<Value>,_>("payload").0})
 }
@@ -714,7 +715,7 @@ pub async fn output_event_range_in_tx(
          AND event_type IN ('assistant_delta','assistant_committed','assistant_replaced') \
          AND JSON_UNQUOTE(JSON_EXTRACT(payload,'$.attempt_id'))=? ORDER BY event_seq",
     ).bind(&locked.id).bind(first).bind(last).bind(attempt).fetch_all(tx.connection()).await?;
-    Ok(rows.iter().map(|row| event_value(locked, row)).collect())
+    Ok(rows.iter().map(event_value).collect())
 }
 
 pub async fn last_event_seq_in_tx(tx: &mut AppTx<'_>, locked: &LockedConversation) -> Result<u64> {

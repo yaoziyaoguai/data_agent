@@ -64,6 +64,23 @@ try{
  // 事件流现在是持续SSE：按块读到断言所需事件即取消，不能等正文结束。
  const stream=await fetch(env.DATA_AGENT_API_URL+'/conversations/'+cid+'/events?after_seq=0',{headers:{authorization:'Bearer '+alice}});assert.equal(stream.headers.get('content-type'),'text/event-stream');
  const reader=stream.body.getReader();let events='';try{const deadline=Date.now()+10000;while(!/assistant_committed/.test(events)&&Date.now()<deadline){const {value,done}=await reader.read();if(done)break;events+=new TextDecoder().decode(value);}}finally{await reader.cancel();}assert.match(events,/assistant_committed/);
+ const seqs=[...events.matchAll(/^id: (\d+)$/gm)].map(match=>Number(match[1]));
+ assert.ok(seqs.length>=2);
+ const login=await fetch(env.DATA_AGENT_API_URL+'/session',{method:'POST',headers:{authorization:'Bearer '+alice}});
+ assert.equal(login.status,200);
+ const cookie=login.headers.get('set-cookie').split(';')[0];
+ const resumed=await fetch(env.DATA_AGENT_API_URL+'/conversations/'+cid+'/events?after_seq=0',{
+   headers:{cookie,'Last-Event-ID':String(seqs.at(-2))},signal:AbortSignal.timeout(12000)});
+ const lastReader=resumed.body.getReader();let tail='';
+ try {
+   while(!tail.includes('\n\n')) {const chunk=await lastReader.read();assert.equal(chunk.done,false);tail+=new TextDecoder().decode(chunk.value);}
+   assert.equal(Number(tail.match(/^id: (\d+)$/m)?.[1]),seqs.at(-1));
+   const logout=await fetch(env.DATA_AGENT_API_URL+'/session',{method:'DELETE',headers:{cookie}});
+   assert.equal(logout.status,200);
+   while(!tail.includes('stream_closed')) {const chunk=await lastReader.read();assert.equal(chunk.done,false);tail+=new TextDecoder().decode(chunk.value);}
+   assert.match(tail,/unauthenticated/);
+ } finally {await lastReader.cancel();}
+ checks.push({name:'原URL断线续传从已收事件号继续；退出登录关闭已打开的空闲事件流',passed:true});
  checks.push({name:'真实Pi工具链、持久结果、重复消息、身份隔离和SSE',passed:true});
  const web=start('web','node',['node_modules/vite/bin/vite.js','apps/web','--config','apps/web/vite.config.ts','--port',String(webPort)]);await until(async()=>{try{return(await fetch('http://127.0.0.1:'+webPort)).ok;}catch{return false;}},'web');
  browser=await chromium.launch({headless:true});const context=await browser.newContext({viewport:{width:1440,height:1000}});const page=await context.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));

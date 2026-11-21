@@ -1,6 +1,6 @@
 use crate::{
     contracts::generated::LoadedOutputRange,
-    modules::{analysis, conversations, queries, runtime},
+    modules::{access, analysis, conversations, queries, runtime},
     persistence::AppTx,
     types::{AccessContext, Error, Result, epoch, fingerprint},
 };
@@ -252,10 +252,17 @@ pub async fn read_events(
     context: &AccessContext,
     cid: &str,
     after: u64,
+    session_hash: Option<&str>,
 ) -> Result<Vec<Value>> {
     let mut tx = AppTx::begin(pool).await?;
-    let conversation = conversations::lock_conversation_in_tx(&mut tx, context, cid).await?;
-    let mut events = conversations::read_events_in_tx(&mut tx, &conversation, after).await?;
+    if let Some(hash) = session_hash
+        && access::resolve_session_in_tx(&mut tx, hash)
+            .await?
+            .is_none()
+    {
+        return Err(Error::new("unauthenticated"));
+    }
+    let mut events = conversations::read_events_in_tx(&mut tx, context, cid, after).await?;
     tx.commit().await?;
     protect_output_events(pool, context, cid, &mut events, &[]).await?;
     Ok(events)

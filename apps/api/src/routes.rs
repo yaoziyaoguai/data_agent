@@ -273,24 +273,35 @@ pub async fn events(
         .get("Last-Event-ID")
         .and_then(|value| value.to_str().ok())
         .and_then(|value| value.parse::<u64>().ok());
-    // 显式游标优先；自动重连的Last-Event-ID其次；新连接从头跟随。
-    let start = after_seq.or(last_event).unwrap_or(0);
+    // EventSource 重连时沿用首次 URL，已收到的事件号才是最新位置。
+    let start = after_seq.max(last_event).unwrap_or(0);
+    let session_hash = if bearer(&headers).is_none() {
+        session_cookie(&headers).map(access::session_token_hash)
+    } else {
+        None
+    };
     // 先做一次读取校验会话存在且可读，失败直接返回HTTP状态而不是挂起SSE。
-    let first = use_cases::read_conversation::read_events(&state.pool, &context, &cid, start)
+    let first = use_cases::read_conversation::read_events(&state.pool, &context, &cid, start, None)
         .await
         .map_err(failure)?;
     let (tx, rx) = tokio::sync::mpsc::channel::<Result<SseEvent, Infallible>>(32);
     let pool = state.pool.clone();
     tokio::spawn(async move {
         let mut cursor = start;
-        let mut opening = first.into_iter().collect::<Vec<_>>();
-        let mut ticker = tokio::time::interval(Duration::from_secs(1));
+        let mut opening = Some(first);
         loop {
-            ticker.tick().await;
             loop {
-                let page = if opening.is_empty() {
-                    match use_cases::read_conversation::read_events(&pool, &context, &cid, cursor)
-                        .await
+                let page = if let Some(page) = opening.take() {
+                    page
+                } else {
+                    match use_cases::read_conversation::read_events(
+                        &pool,
+                        &context,
+                        &cid,
+                        cursor,
+                        session_hash.as_deref(),
+                    )
+                    .await
                     {
                         Ok(page) => page,
                         Err(error)
@@ -312,8 +323,6 @@ pub async fn events(
                             break;
                         }
                     }
-                } else {
-                    std::mem::take(&mut opening)
                 };
                 let drained = page.len();
                 for event in page {
@@ -335,6 +344,10 @@ pub async fn events(
                 if drained < 1000 {
                     break;
                 }
+            }
+            tokio::select! {
+                _ = tx.closed() => return,
+                _ = tokio::time::sleep(Duration::from_secs(1)) => {}
             }
         }
     });
