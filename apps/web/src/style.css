@@ -1725,3 +1725,43 @@ dialog.evidence-dialog[open] { display: flex; flex-direction: column; }
 .message-data-detail > summary { color: #52657d; cursor: pointer; }
 .history-dialog button > span { overflow-wrap: anywhere; }
 .knowledge-status { display: inline-flex; flex-wrap: wrap; gap: .35rem .8rem; font-size: .8rem; font-weight: 400; line-height: 1.5; }
+
+/* U-02：条目筛选与批量核对。 */
+.entry-filter-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin: 14px 0; }
+.entry-filter-bar .pending-summary { font-size: 12px; color: #52657d; }
+.entry-filter-bar .filter-buttons { display: flex; flex-wrap: wrap; gap: 6px; }
+.entry-filter-bar .filter-buttons button { font-size: 12px; padding: 5px 10px; border-radius: 16px; }
+.entry-filter-bar .filter-buttons button[aria-pressed="true"] { background: #326bdd; border-color: #326bdd; color: #fff; }
+.entry-filter-bar .batch-toggle { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: #354965; margin-left: auto; }
+.status-pill.staged { background: #f5efff; color: #6a4fd0; }
+.staged-value { border-color: #e5dcf7; background: #faf8ff; }
+.batch-diff { display: grid; gap: 14px; max-height: 55dvh; overflow-y: auto; }
+.batch-diff-item { border: 1px solid #e7ecf3; border-radius: 8px; padding: 12px 14px; }
+.batch-diff-item h4 { margin: 0 0 8px; font-size: 13px; }
+.batch-diff-item h5 { margin: 0 0 4px; font-size: 11px; color: #52657d; font-weight: 600; }
+.batch-diff-item p { margin: 0 0 6px; }
+.batch-diff-item .diff-old { color: #8b4a4a; text-decoration: line-through; text-decoration-thickness: 1px; }
+.batch-diff-item .diff-new { color: #2f6b46; }
+
+/* U-03：血缘与加工页签。 */
+.lineage-object h3 { margin: 0 0 8px; }
+.lineage-list { margin: 0 0 10px; padding: 0; list-style: none; display: flex; flex-wrap: wrap; gap: 6px 10px; }
+.lineage-list li { font-size: 13px; color: #354965; }
+.lineage-list button { font-size: 13px; color: #326bdd; padding: 2px 4px; }
+.etl-step { margin: 10px 0; }
+.etl-step h4 { margin: 8px 0 6px; font-size: 12px; color: #52657d; }
+
+/* P-04：待核对方法草稿并入 Skill 列表顶部。 */
+.skill-draft-card { border-style: dashed; }
+.skill-draft-card .asset-state small { display: block; margin-top: 4px; }
+
+/* U-04：历史记录双栏与返回刚才的分析。 */
+.history-tabs { display: flex; gap: 6px; margin-bottom: 10px; }
+.history-tabs button { font-size: 12px; padding: 5px 12px; border-radius: 16px; }
+.history-tabs button[aria-pressed="true"] { background: #326bdd; border-color: #326bdd; color: #fff; }
+.return-button { font-size: 12px; color: #326bdd; padding: 5px 10px; white-space: nowrap; }
+
+/* U-05：列头中文含义与单位、数值等宽右对齐。 */
+th.annotated { vertical-align: top; }
+.column-meaning { display: block; margin-top: 2px; font-size: 10px; font-weight: 400; color: #52657d; white-space: normal; }
+td.numeric { text-align: right; font-variant-numeric: tabular-nums; }

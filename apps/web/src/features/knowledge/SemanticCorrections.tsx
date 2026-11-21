@@ -72,10 +72,14 @@ export function SemanticCorrections({
       }
     };
     void refresh();
-    const timer = setInterval(() => void refresh(), 2000);
+    // A-02：不再按固定间隔轮询；进入页面和回到窗口时读取，保存后经reload立即刷新。
+    const wake = () => { if (!document.hidden) void refresh(); };
+    window.addEventListener("focus", wake);
+    document.addEventListener("visibilitychange", wake);
     return () => {
       live = false;
-      clearInterval(timer);
+      window.removeEventListener("focus", wake);
+      document.removeEventListener("visibilitychange", wake);
     };
   }, [user, pageCount, reload]);
   const saved = () => {

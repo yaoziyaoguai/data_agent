@@ -1,8 +1,8 @@
 {
-  "startedAt": "2026-10-03T04:31:43.414Z",
+  "startedAt": "2026-11-20T18:31:38.807Z",
   "scope": "隔离浏览器中的前端合成流程；不验证模型、账号权限、数仓查询或生产恢复。",
   "inputHashes": {
-    "index.html": "c7c334034a4fe24c85a3227bc2af3542c7c9ae7c90757e9a553ef844b8c55cff",
+    "index.html": "391582eb89cc33d68363bdd499ba17b8538a53a3b7a4b3c22fd1179b801740ec",
     "app.js": "2ba74474df8fe812dabe166746d71a5cb28d1c528cd7f3826c586ef944b0b0eb",
     "personal.js": "dcbdc88ab8addbe07367b9f45c7684ee29d2c9fa9f90dae77cb4b26a9ea94fbf",
     "knowledge.js": "0a615d30efc8a7451bc14b9ba3ecba2b1ed5e41ffb5f7b2ff014a5ce648c53f4",
@@ -597,7 +597,7 @@
           "name": "移动结果在首屏内开始展示",
           "passed": true,
           "details": {
-            "resultTop": 326.484375
+            "resultTop": 383.484375
           }
         },
         {
@@ -745,9 +745,9 @@
     "system-flow-mobile-focused-result.png",
     "system-flow-keyboard-focus.png"
   ],
-  "completedAt": "2026-10-03T04:32:11.151Z",
+  "completedAt": "2026-11-20T18:32:05.554Z",
   "finalInputHashes": {
-    "index.html": "c7c334034a4fe24c85a3227bc2af3542c7c9ae7c90757e9a553ef844b8c55cff",
+    "index.html": "391582eb89cc33d68363bdd499ba17b8538a53a3b7a4b3c22fd1179b801740ec",
     "app.js": "2ba74474df8fe812dabe166746d71a5cb28d1c528cd7f3826c586ef944b0b0eb",
     "personal.js": "dcbdc88ab8addbe07367b9f45c7684ee29d2c9fa9f90dae77cb4b26a9ea94fbf",
     "knowledge.js": "0a615d30efc8a7451bc14b9ba3ecba2b1ed5e41ffb5f7b2ff014a5ce648c53f4",

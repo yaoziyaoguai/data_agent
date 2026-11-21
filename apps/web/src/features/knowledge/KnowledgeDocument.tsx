@@ -59,8 +59,11 @@ export function KnowledgeDocument({ object, onSaved, onCorrection, onOpen }: {
       finally { pending = false; }
     };
     void refresh();
-    const timer = setInterval(() => void refresh(), 2000);
-    return () => { live = false; clearInterval(timer); };
+    // A-02：不再按固定间隔轮询；进入页面和回到窗口时读取，保存已在本地合并。
+    const wake = () => { if (!window.document.hidden) void refresh(); };
+    window.addEventListener("focus", wake);
+    window.document.addEventListener("visibilitychange", wake);
+    return () => { live = false; window.removeEventListener("focus", wake); window.document.removeEventListener("visibilitychange", wake); };
   }, [object.id, object.version, object.maintenance?.version, revision]);
   if (!document) return <section className="document-reader">{error ? <p role="alert">{error} <button onClick={() => setRevision(v => v + 1)}>重新读取文档</button></p> : <p role="status">正在读取整篇文档…</p>}</section>;
   const grouped = document.parts.length > 1;

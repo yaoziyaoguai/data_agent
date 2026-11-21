@@ -22,17 +22,10 @@ export function AnalysisReport({ reference, currentConditionVersion, onClose, on
   const changed = currentConditionVersion !== undefined && currentConditionVersion !== reference.condition_version;
   useEffect(() => {
     let mounted = true;
-    let reading = false;
-    let timer: number | undefined;
     let controller: AbortController | undefined;
     setView(null); setError(""); setLoading(true);
-    const schedule = () => {
-      if (mounted && !document.hidden) timer = window.setTimeout(() => void load(), 2000);
-    };
     const load = async () => {
-      if (!mounted || document.hidden || reading) return;
-      window.clearTimeout(timer);
-      reading = true;
+      if (!mounted) return;
       const request = ++generation.current;
       controller = new AbortController();
       try {
@@ -51,18 +44,14 @@ export function AnalysisReport({ reference, currentConditionVersion, onClose, on
         }
       } finally {
         if (mounted && request === generation.current) {
-          reading = false; controller = undefined; setLoading(false);
-          schedule();
+          controller = undefined; setLoading(false);
         }
       }
     };
-    const wake = () => { window.clearTimeout(timer); if (!document.hidden) void load(); };
+    // 报告内容不可变：打开或引用/条件版本变化时读取一次，失败由用户手动重试。
     void load();
-    window.addEventListener("focus", wake);
-    document.addEventListener("visibilitychange", wake);
     return () => {
-      mounted = false; ++generation.current; window.clearTimeout(timer); controller?.abort();
-      window.removeEventListener("focus", wake); document.removeEventListener("visibilitychange", wake);
+      mounted = false; ++generation.current; controller?.abort();
     };
   }, [reference.report_id, reference.version, reference.conversation_id, reference.task_id, reference.condition_version, currentConditionVersion, retry]);
   const matched = view && view.reference && view.reference.report_id === reference.report_id

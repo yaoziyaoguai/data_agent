@@ -57,10 +57,10 @@ export function SkillSelections({cid, onManage, refreshRevision}: {cid: string; 
     const update = () => { generation++; void refresh(); };
     reload.current = update;
     update();
-    const timer = window.setInterval(update, 30_000);
+    // A-02：会话内更新由run状态变化与窗口唤醒承担，不再保留固定间隔轮询。
     window.addEventListener('focus', update);
     document.addEventListener('visibilitychange', update);
-    return () => { current = false; clearInterval(timer); window.removeEventListener('focus', update); document.removeEventListener('visibilitychange', update); };
+    return () => { current = false; window.removeEventListener('focus', update); document.removeEventListener('visibilitychange', update); };
   }, [cid]);
   useEffect(() => {
     const revision = refreshRevision ?? '';

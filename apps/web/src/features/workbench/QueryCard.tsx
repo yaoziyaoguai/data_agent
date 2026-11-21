@@ -86,58 +86,41 @@ export function QueryCard({
   };
   useEffect(() => {
     let mounted = true;
-    let reading = false;
-    let pollRead = false;
-    let timer: number | undefined;
     let controller: AbortController | undefined;
     setResult(null);
     setShowSql(false);
     setCopied(false);
     setError("");
     setBusy(false);
-    const schedule = () => {
-      if (mounted && pollRead && !document.hidden) timer = window.setTimeout(() => void load(), 2000);
-    };
-    const load = async (foreground = false) => {
-      if (!mounted || !readable || query.execution_state !== "succeeded" || reading || (!foreground && document.hidden)) return;
-      window.clearTimeout(timer);
-      reading = true;
+    const load = async () => {
+      if (!mounted || !readable || query.execution_state !== "succeeded") return;
       const generation = ++resultGeneration.current;
       controller = new AbortController();
-      if (foreground) { setBusy(true); setError(""); }
+      setBusy(true); setError("");
       try {
         const value = await api("QueryResults", "/queries/" + query.id + "/results", "GET", undefined, undefined, controller.signal);
         if (!mounted || generation !== resultGeneration.current) return;
         setResult(value); setError("");
-        pollRead = true;
       } catch (e) {
         if (mounted && generation === resultGeneration.current) {
           const message = e instanceof Error ? e.message : "结果读取失败";
           setResult(null); setError(message);
-          if (message === "result_expired") pollRead = false;
+          // 结果过期只能由用户新发查询解决；刷新对话让查询状态回到最新。
           refresh.current();
         }
       } finally {
         if (mounted && generation === resultGeneration.current) {
-          reading = false; controller = undefined; setBusy(false);
-          schedule();
+          controller = undefined; setBusy(false);
         }
       }
     };
-    const wake = () => {
-      window.clearTimeout(timer);
-      if (pollRead && !document.hidden) void load();
-    };
-    // 只回读已成功打开的当前页；撤权后继续核对恢复，过期仍等待用户另发查询。
-    readResult.current = () => void load(true);
-    if (readable && query.execution_state === "succeeded") void load(true);
-    window.addEventListener("focus", wake);
-    document.addEventListener("visibilitychange", wake);
+    // 结果只在成功态进入时读取一次；运行态推进由工作台事件流唤醒的查询列表刷新承担，
+    // 过期与撤权仍等待用户另发查询。
+    readResult.current = () => void load();
+    if (readable && query.execution_state === "succeeded") void load();
     return () => {
-      mounted = false; ++resultGeneration.current; window.clearTimeout(timer); controller?.abort();
+      mounted = false; ++resultGeneration.current; controller?.abort();
       readResult.current = null;
-      window.removeEventListener("focus", wake);
-      document.removeEventListener("visibilitychange", wake);
     };
   }, [query.id, readable, query.execution_state, query.result_ref]);
   const running = ["queued", "submitting", "running", "submission_unknown"].includes(query.execution_state);

@@ -26,6 +26,7 @@ export function AssetsPage({
   const [loadedUser, setLoadedUser] = useState(user);
   const [editingDraft, setEditingDraft] = useState<PendingSkillDraft | null>(null);
   const [draftRefresh, setDraftRefresh] = useState(0);
+  const [pendingDrafts, setPendingDrafts] = useState(0);
   const [tab, setTab] = useState<"memory" | "skill" | "shared">(initialTab);
   const [editing, setEditing] = useState<Asset | null | undefined>();
   const [editingKind, setEditingKind] = useState<AssetKind>("memory");
@@ -211,11 +212,11 @@ export function AssetsPage({
         {value:"skill",label:<>我的 Skill <small>{assets.filter(a => a.kind === "skill" && a.visibility !== "space").length}</small></>},
         {value:"shared",label:<>空间公共 Skill <small>{assets.filter(a => a.visibility === "space").length}</small></>},
       ]}/>
-      {tab !== "shared" && <SkillDrafts key={user} user={user} refreshKey={draftRefresh} onEdit={editDraft}/>}
       <div className="asset-filters"><label className="search-box"><input aria-label="搜索资产" placeholder="搜索名称、内容或适用范围" value={search} onChange={event => setSearch(event.target.value)}/></label><select aria-label="资产状态" value={statusFilter} onChange={event => setStatusFilter(event.target.value)}><option value="">全部状态</option><option value="enabled">已启用</option><option value="disabled">已停用</option></select></div>
-      {tab === "skill" && <p className="quiet">Skill 是可重复使用的分析方法，选用后为当前对话提供步骤和注意事项。</p>}
+      {tab === "skill" && <p className="quiet">Skill 是可重复使用的分析方法，选用后为当前对话提供步骤和注意事项。对话中保留的方法会以待核对保存状态出现在列表顶部。</p>}
       {tab === "shared" && <p className="quiet skill-sharing-note">本空间成员共享的分析方法。负责人维护正文，其他成员可以提出建议；使用时仍需明确选用。</p>}
       <div className="asset-grid">
+        {tab === "skill" && <SkillDrafts key={user} user={user} refreshKey={draftRefresh} onEdit={editDraft} onCount={setPendingDrafts}/>}
         {assets
           .filter(matches).filter(asset => (!statusFilter || asset.state === statusFilter) && [asset.name, asset.body, asset.scope].some(value => value.toLowerCase().includes(search.trim().toLowerCase())))
           .map((asset) => (
@@ -267,7 +268,7 @@ export function AssetsPage({
           ))}
       </div>
       {assets.some(matches) && !assets.filter(matches).some(asset => (!statusFilter || asset.state === statusFilter) && [asset.name, asset.body, asset.scope].some(value => value.toLowerCase().includes(search.trim().toLowerCase())) ) && <div className="asset-empty"><p>没有符合当前条件的内容。</p><button onClick={() => { setSearch(""); setStatusFilter(""); }}>清除筛选</button></div>}
-      {!assets.some(matches) && (
+      {!assets.some(matches) && pendingDrafts === 0 && (
         <div className="asset-empty">
           <span>◇</span>
           <h2>

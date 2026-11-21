@@ -18,14 +18,13 @@ export function objectReferenceLabels(snapshot: Snapshot | null, queries: QueryV
   };
   for (const task of snapshot?.tasks ?? []) {
     add(task.id, "任务", goal(task.id));
-    for (const evidence of task.evidence_refs ?? []) add(evidence.evidence_id, "分析依据", goal(evidence.task_id));
+    // P-04：分析依据由后台自动绑定，不在对话里作为独立实体露出；报告仍可见。
     if (task.report_ref) add(task.report_ref.report_id, "分析报告", goal(task.id));
   }
   for (const query of queries) add(query.id, "查询", query.text_unavailable ? "" : shortName(query.summary));
   for (const event of snapshot?.events ?? []) {
     const payload = event.payload;
     if (event.type === "analysis_report_saved") add(payload.report_id, "分析报告", goal(payload.task_id));
-    else if (event.type === "analysis_evidence_saved") add(payload.evidence_id, "分析依据", goal(payload.task_id));
     else if (event.type === "skill_draft_prepared") add(payload.draft_id, "方法草稿", goal(payload.task_id));
     else if (event.type === "memory_saved" || event.type === "memory_disabled") add(payload.asset_id, "个人记忆");
   }

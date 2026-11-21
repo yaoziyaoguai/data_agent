@@ -9,7 +9,7 @@ import { ModelConfigurationPage } from "./features/models/ModelConfigurationPage
 import { AssetsPage } from "./features/assets/AssetsPage.tsx";
 import { WorkspaceShell, type View } from "./shared/WorkspaceShell.tsx";
 import { UnsavedChangesProvider, useNavigationGuard } from "./shared/UnsavedChanges.tsx";
-import { useWorkspaceLocation } from "./shared/workspace-location.ts";
+import { useWorkspaceLocation, type WorkspaceLocation } from "./shared/workspace-location.ts";
 import { KnowledgeEvidence } from "./features/knowledge/KnowledgeEvidence.tsx";
 import { Modal } from "./shared/Modal.tsx";
 import type { Asset } from "../../../packages/contracts/generated/boundary.ts";
@@ -22,13 +22,22 @@ function App() {
   const [modelLabel, setModelLabel] = useState("");
   const [user, setUser] = useState<string | null>(null);
   const [space, setSpace] = useState("");
+  const [spaceName, setSpaceName] = useState("");
   const [token, setToken] = useState("");
   const [error, setError] = useState("");
+  // U-04：从工作台跳去语义或积累页时记住来路，壳层提供一键返回刚才的分析。
+  const [returnToAnalysis, setReturnToAnalysis] = useState(false);
+  const locate = (patch: Partial<WorkspaceLocation>, replace?: boolean) => {
+    if (patch.view && patch.view !== "workbench") setReturnToAnalysis(previous => view === "workbench" ? true : previous);
+    else if (patch.view === "workbench" || (view === "workbench" && !patch.view)) setReturnToAnalysis(false);
+    return changeLocation(patch, replace);
+  };
   useEffect(() => {
     void api("Identity", "/session")
       .then((result) => {
         setUser(result.user_id);
         setSpace(result.space_id);
+        setSpaceName(result.space_name);
         setModelLabel(result.model_label);
       })
       .catch(() => {});
@@ -39,11 +48,10 @@ function App() {
         setUser(null);
         setShowEvidence(false);
         setEvidence(null);
-        changeLocation({ view: "workbench", object: null });
+        locate({ view: "workbench", object: null });
       })
       .catch((e) => setError(e.message));
-  };
-  const useSkill = async (asset: Asset) => {
+  };  const useSkill = async (asset: Asset) => {
     if (!user) return;
     let cid = localStorage.getItem(conversationStorageKey(space, user));
     if (!cid) {
@@ -63,11 +71,11 @@ function App() {
       asset_id: asset.id,
       version: asset.version,
     });
-    changeLocation({ view: "workbench" });
+    locate({ view: "workbench" });
   };
   const navigate = (destination: View) => {
     setShowEvidence(false);
-    changeLocation({ view: destination, ...(destination === "assets" ? { assetsTab: "memory" } : {}) });
+    locate({ view: destination, ...(destination === "assets" ? { assetsTab: "memory" } : {}) });
   };
   if (user) {
     if (view === "workbench")
@@ -81,19 +89,20 @@ function App() {
             onLogout={() => guard(logout)}
             onView={navigate}
             onManageSkills={() => {
-              changeLocation({ view: "assets", assetsTab: "skill" });
+              locate({ view: "assets", assetsTab: "skill" });
             }}
             onEvidence={(id, summary, version) => {
               setEvidence({id, summary, version});
               setShowEvidence(true);
             }}
+            spaceName={spaceName}
           />
           {showEvidence && evidence && (
             <Modal
               title="口径依据"
               className="evidence-dialog"
               onClose={() => setShowEvidence(false)}
-              footer={<><button onClick={() => { setShowEvidence(false); changeLocation({view: "knowledge", object: evidence.id, tab: "概览"}); }}>去维护此内容</button><button className="primary" onClick={() => setShowEvidence(false)}>返回对话</button></>}
+              footer={<><button onClick={() => { setShowEvidence(false); locate({view: "knowledge", object: evidence.id, tab: "概览"}); }}>去维护此内容</button><button className="primary" onClick={() => setShowEvidence(false)}>返回对话</button></>}
             >
               <div className="evidence-content">
                 <KnowledgeEvidence id={evidence.id} version={evidence.version} querySummary={evidence.summary}/>
@@ -109,11 +118,13 @@ function App() {
         onLogout={() => guard(logout)}
         view={view}
         onView={navigate}
+        spaceName={spaceName}
+        onReturn={returnToAnalysis ? () => locate({ view: "workbench" }) : undefined}
       >
         {view === "models" ? <ModelConfigurationPage key={JSON.stringify([space,user])}/> : view === "knowledge" ? (
-          <KnowledgePage user={user} initialObject={object} initialTab={location.tab} initialScope={location.scope} onLocation={(patch, replace) => changeLocation(patch, replace)} />
+          <KnowledgePage user={user} initialObject={object} initialTab={location.tab} initialScope={location.scope} onLocation={(patch, replace) => locate(patch, replace)} />
         ) : (
-          <AssetsPage user={user} initialTab={assetsEntry} onTab={assetsTab => changeLocation({assetsTab})} onUseSkill={useSkill} />
+          <AssetsPage user={user} initialTab={assetsEntry} onTab={assetsTab => locate({assetsTab})} onUseSkill={useSkill} />
         )}
       </WorkspaceShell>
     );
@@ -142,6 +153,7 @@ function App() {
               );
               setUser(result.user_id);
               setSpace(result.space_id);
+              setSpaceName(result.space_name);
               setModelLabel(result.model_label);
               setToken("");
             } catch (e) {

@@ -2,6 +2,8 @@ import { useEffect, useLayoutEffect, useState, useRef, useMemo } from "react";
 import type {
   Snapshot,
   QueryList,
+  QueryHistory,
+  QueryHistoryItem,
   HistoryItem,
   AnalysisReportRef,
 } from "../../../../../packages/contracts/generated/boundary.ts";
@@ -22,6 +24,7 @@ import { ModelSelector } from "./ModelSelector.tsx";
 import { useModelSelection } from "./useModelSelection.ts";
 import { clearPendingSubmission, conversationStorageKey, draftStorageKey, pendingSubmissionKey, readPendingSubmission, settleSubmission, storePendingSubmission, writeDraft, type PendingSubmission } from "./conversation-storage.ts";
 const creationTime = (value?: string) => value ? new Date(value).toLocaleString("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false }) : "";
+const queryExecutionLabel = (state: string) => ({succeeded: "已执行", failed: "执行失败", running: "执行中", queued: "排队中", submitting: "提交中", submission_unknown: "提交确认中", canceled: "已取消", not_submitted: "未提交", awaiting_confirmation: "待确认"} as Record<string, string>)[state] ?? state;
 export function Workbench({
   user,
   space,
@@ -30,6 +33,7 @@ export function Workbench({
   onView,
   onManageSkills,
   onEvidence,
+  spaceName,
 }: {
   user: string;
   space: string;
@@ -38,6 +42,7 @@ export function Workbench({
   onView: (v: View) => void;
   onManageSkills: () => void;
   onEvidence: (id: string, summary?: string, version?: string) => void;
+  spaceName: string;
 }) {
   const [cid, setCid] = useState<string | null>(() =>
     localStorage.getItem(conversationStorageKey(space, user)),
@@ -61,6 +66,13 @@ export function Workbench({
   const [error, setError] = useState("");
   const [syncUnavailable, setSyncUnavailable] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  // U-04：历史记录分“会话/查询记录”两栏；查询记录跨会话检索并可跳回原对话。
+  const [historyTab, setHistoryTab] = useState<"conversations" | "queries">("conversations");
+  const [queryHistory, setQueryHistory] = useState<QueryHistoryItem[]>([]);
+  const [queryHistoryNext, setQueryHistoryNext] = useState<string | null>(null);
+  const [queryHistoryBusy, setQueryHistoryBusy] = useState(false);
+  const queryHistoryGeneration = useRef(0);
+  const pendingQueryJump = useRef<string | null>(null);
   const [selectedReport, setSelectedReport] = useState<AnalysisReportRef | null>(null);
   useEffect(() => { setSelectedReport(null); }, [cid, space, user]);
   const [historySearch, setHistorySearch] = useState("");
@@ -145,6 +157,25 @@ export function Workbench({
     const timer = window.setTimeout(() => { void refreshHistory().catch(e => setError(e.message)); }, 150);
     return () => { window.clearTimeout(timer); ++historyGeneration.current; };
   }, [space, user, historySearch]);
+  const refreshQueryHistory = async (query = historySearch, before?: string) => {
+    const generation = ++queryHistoryGeneration.current;
+    setQueryHistoryBusy(true);
+    try {
+      const params = new URLSearchParams({ q: query });
+      if (before) params.set("before_id", before);
+      const page: QueryHistory = await api("QueryHistory", "/queries?" + params);
+      if (generation !== queryHistoryGeneration.current) return;
+      setQueryHistory(old => before ? [...old, ...page.queries.filter(v => !old.some(o => o.id === v.id))] : page.queries);
+      setQueryHistoryNext(page.next_before_id);
+    } finally {
+      if (generation === queryHistoryGeneration.current) setQueryHistoryBusy(false);
+    }
+  };
+  useEffect(() => {
+    if (historyTab !== "queries") return;
+    const timer = window.setTimeout(() => { void refreshQueryHistory().catch(e => setError(e.message)); }, 150);
+    return () => { window.clearTimeout(timer); ++queryHistoryGeneration.current; };
+  }, [space, user, historySearch, historyTab]);
   useEffect(() => {
     let current = true;
     snapshotRef.current = null;
@@ -167,9 +198,12 @@ export function Workbench({
     let quietCycles = 0;
     let timer: number | undefined;
     let activeUntil = 0;
+    let events: EventSource | undefined;
+    let sseOpen = false;
     const schedule = (delay: number) => {
       window.clearTimeout(timer);
-      if (current && cid && !document.hidden) timer = window.setTimeout(() => void readSnapshot(), delay);
+      // SSE连接期间停用轮询阶梯：事件流本身承担唤醒，不再按时距扫描。
+      if (current && cid && !document.hidden && !sseOpen) timer = window.setTimeout(() => void readSnapshot(), delay);
     };
     const refreshQueries = async () => {
       if (queryBusy || !cid) return;
@@ -211,6 +245,8 @@ export function Workbench({
           setSnapshot(snapshotRef.current);
           snapshotUnavailable = false;
           setSyncUnavailable(queriesUnavailable);
+          // 尾部读取成功即建立/重试事件流连接；连接成功后轮询阶梯停摆。
+          if (!older) openEvents();
           active = s.runs.some(run => run.state === "running") || latestQueries.queries.some(query => ["queued", "submitting", "submission_unknown", "running"].includes(query.execution_state));
           quietCycles = active ? 0 : quietCycles + 1;
         }
@@ -245,6 +281,30 @@ export function Workbench({
       void readSnapshot();
     };
     requestRefresh.current = wake;
+    // A-03：会话事件SSE只作唤醒信号，正确性仍由POST快照按after_seq合并保证。
+    // 首次成功读取后连接（此时才稳定持有last_event_seq）；网络中断由浏览器带
+    // Last-Event-ID自动重连；明确失败先回退轮询阶梯，下次成功读取时重试连接。
+    const openEvents = () => {
+      if (!cid || events || !snapshotRef.current || !snapshotRef.current.last_event_seq) return;
+      const source = new EventSource("/api/conversations/" + cid + "/events?after_seq=" + snapshotRef.current.last_event_seq);
+      events = source;
+      source.onopen = () => { sseOpen = true; window.clearTimeout(timer); };
+      source.onmessage = () => { void readSnapshot(); };
+      // 会话删除或权限失效：服务端要求停止重连，交回轮询兜底（读取会给出对应错误）。
+      source.addEventListener("stream_closed", () => {
+        source.close();
+        if (events === source) events = undefined;
+        sseOpen = false;
+        schedule(1500);
+      });
+      source.onerror = () => {
+        if (source.readyState !== EventSource.CLOSED) { sseOpen = false; return; }
+        source.close();
+        if (events === source) events = undefined;
+        sseOpen = false;
+        schedule(700);
+      };
+    };
     requestOlder.current = () => { void readSnapshot(true); };
     void readSnapshot();
     window.addEventListener("focus", wake);
@@ -254,6 +314,8 @@ export function Workbench({
       controller.abort();
       requestOlder.current = () => {};
       window.clearTimeout(timer);
+      events?.close();
+      events = undefined;
       window.removeEventListener("focus", wake);
       document.removeEventListener("visibilitychange", wake);
     };
@@ -344,6 +406,49 @@ export function Workbench({
     } catch (e) { setError(e instanceof Error ? e.message : "无法保存待发送消息，请保留当前草稿。"); }
   };
   const loadOlder = () => { if (!loadingOlder) requestOlder.current(); };
+  // U-04：定位查询卡片；未加载的事件先请求更早一页再重试，有界次数后放弃并提示。
+  const jumpToQuery = (queryId: string) => {
+    let attempts = 0;
+    const attempt = () => {
+      const target = document.getElementById("query-" + queryId);
+      if (target) {
+        const previous = target.closest<HTMLDetailsElement>("details.previous-query");
+        if (previous) previous.open = true;
+        target.scrollIntoView({ block: "start" });
+        target.focus({ preventScroll: true });
+        return;
+      }
+      if (++attempts > 10) { setError("这条查询未在当前已加载的对话内容中定位到，可在对话内继续加载更早消息后重试。"); return; }
+      requestOlder.current();
+      window.setTimeout(attempt, 400);
+    };
+    window.requestAnimationFrame(attempt);
+  };
+  const openQueryFromHistory = (item: QueryHistoryItem) => {
+    setShowHistory(false);
+    if (item.conversation_id === cid) { jumpToQuery(item.id); return; }
+    pendingQueryJump.current = item.id;
+    setCid(item.conversation_id);
+  };
+  useEffect(() => {
+    const pending = pendingQueryJump.current;
+    if (!snapshot || !pending) return;
+    pendingQueryJump.current = null;
+    jumpToQuery(pending);
+  }, [snapshot]);
+  // ⌘/Ctrl + K 新建对话；输入法组合与文本编辑快捷键不受影响（仅监听组合键）。
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && !event.altKey && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        setCid(null);
+        setText(localStorage.getItem(draftKey(null)) ?? "");
+        textarea.current?.focus();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
   const withdraw = async (message: string) => {
     if (!cid) return;
     try {
@@ -388,12 +493,18 @@ export function Workbench({
   const currentAttemptStarted = currentRun?.attempt_id != null && (snapshot?.events.some(
     (e) => (e.type === "assistant_delta" || e.type === "assistant_committed") && e.payload.attempt_id === currentRun.attempt_id,
   ) ?? false);
+  // P-05：服务端把最近登记的工具映射为中文动作提示；本attempt最新事件已是正文
+  // 增量而非工具回执时，工具阶段已结束，提示切换为生成回答，不沿用旧工具文案。
+  const lastActivityEvent = snapshot?.events.filter(
+    (e) => e.type === "tool_result" || (e.type === "assistant_delta" && e.payload.attempt_id === currentRun?.attempt_id),
+  ).at(-1);
+  const writingAnswer = currentAttemptStarted && lastActivityEvent?.type === "assistant_delta";
   const activityText = currentRun
     ? currentRun.purpose === "query_result"
       ? "正在解读查询结果"
-      : currentAttemptStarted
+      : writingAnswer
         ? "正在生成回答"
-        : "正在处理本次请求"
+        : currentRun.activity_label ?? (currentAttemptStarted ? "正在生成回答" : "正在处理本次请求")
     : undefined;
   const cancel = async () => {
     if (!cid || !currentRun) return;
@@ -446,6 +557,7 @@ export function Workbench({
       onView={onView}
       sidebar={side}
       title={conversationTitle(history.find(item => item.id === cid)?.title ?? "") || "新对话"}
+      spaceName={spaceName}
       onNewConversation={() => { setCid(null); setText(localStorage.getItem(draftKey(null)) ?? ""); textarea.current?.focus(); }}
     >
       <section
@@ -555,7 +667,10 @@ export function Workbench({
             {currentRun && (
               <div className="activity" role="status">
                 <i />
-                {activityText}{" "}
+                {activityText}
+                {typeof currentRun.completed_steps === "number" && currentRun.completed_steps > 0
+                  ? `（已完成 ${currentRun.completed_steps} 步）`
+                  : ""}{" "}
                 <button onClick={() => void cancel()}>停止生成</button>
               </div>
             )}
@@ -641,22 +756,34 @@ export function Workbench({
           </Modal>
         )}
         {showHistory && (
-          <Modal title="全部会话" onClose={() => setShowHistory(false)}>
+          <Modal title="历史记录" onClose={() => setShowHistory(false)}>
+            <div className="history-tabs" role="group" aria-label="历史类型">
+              <button aria-pressed={historyTab === "conversations"} onClick={() => setHistoryTab("conversations")}>会话</button>
+              <button aria-pressed={historyTab === "queries"} onClick={() => setHistoryTab("queries")}>查询记录</button>
+            </div>
             <label className="search-box">
               <input
-                aria-label="搜索会话"
+                aria-label={historyTab === "conversations" ? "搜索会话" : "搜索查询"}
                 value={historySearch}
-                placeholder="按标题搜索"
+                placeholder={historyTab === "conversations" ? "按标题搜索" : "按查询内容搜索"}
                 onChange={(e) => setHistorySearch(e.target.value)}
               />
             </label>
+            {historyTab === "conversations" ? <>
             <nav className="history-dialog" aria-label="全部会话">
               {historyItems.map(item => <div className="history-row" key={item.id}><button onClick={() => { setCid(item.id); setShowHistory(false); }}><span title={item.title}>{conversationTitle(item.title) || "未命名会话"}</span>{item.created_at && <small><time dateTime={item.created_at}>创建于 {creationTime(item.created_at)}</time></small>}</button><button className="history-delete" aria-label={"删除会话 " + (item.title || "未命名会话")} onClick={() => setDeleteId(item.id)}>删除</button></div>)}
             </nav>
             {!historyItems.length && !historyBusy && <p className="quiet">没有找到符合条件的会话，请调整搜索词。</p>}
             {historyNext && <button disabled={historyBusy} onClick={() => void refreshHistory(historySearch, historyNext).catch(e => setError(e.message))}>加载更多会话</button>}
             {historyBusy && <p role="status">正在查找会话…</p>}
-
+            </> : <>
+            <nav className="history-dialog" aria-label="全部查询">
+              {queryHistory.map(item => <div className="history-row" key={item.id}><button onClick={() => openQueryFromHistory(item)}><span title={item.summary}>{item.text_unavailable ? "正文已失效的查询" : item.summary || "未命名查询"}</span><small><time dateTime={item.created_at}>{creationTime(item.created_at)}</time> · {queryExecutionLabel(item.execution_state)}</small></button></div>)}
+            </nav>
+            {!queryHistory.length && !queryHistoryBusy && <p className="quiet">没有找到符合条件的查询，请调整搜索词。</p>}
+            {queryHistoryNext && <button disabled={queryHistoryBusy} onClick={() => void refreshQueryHistory(historySearch, queryHistoryNext).catch(e => setError(e.message))}>加载更多查询</button>}
+            {queryHistoryBusy && <p role="status">正在查找查询…</p>}
+            </>}
           </Modal>
         )}
       </section>
