@@ -71,7 +71,7 @@ pub async fn list_history_page_in_tx(
         None
     };
     let rows = sqlx::query(
-        "SELECT id,conversation_id,task_id,condition_version,draft_version,sql_text,summary,confirmation_state,execution_state,DATE_FORMAT(created_at,'%Y-%m-%dT%H:%i:%s.%fZ') AS created_at \
+        "SELECT id,conversation_id,task_id,condition_version,draft_version,sql_text,summary,knowledge_refs,result_ref,confirmation_state,execution_state,DATE_FORMAT(created_at,'%Y-%m-%dT%H:%i:%s.%fZ') AS created_at \
          FROM query_requests WHERE owner_id=? AND INSTR(LOWER(CONCAT_WS(' ',summary,sql_text)),LOWER(?))>0 \
          AND (? IS NULL OR created_at<? OR (created_at=? AND id<?)) ORDER BY created_at DESC,id DESC LIMIT ?",
     )
@@ -87,7 +87,7 @@ pub async fn list_history_page_in_tx(
     Ok(rows
         .iter()
         .map(|r| {
-            json!({"id":r.get::<String,_>("id"),"conversation_id":r.get::<String,_>("conversation_id"),"task_id":r.get::<String,_>("task_id"),"condition_version":r.get::<u64,_>("condition_version").to_string(),"draft_version":r.get::<u64,_>("draft_version").to_string(),"sql":r.get::<String,_>("sql_text"),"summary":r.get::<String,_>("summary"),"confirmation_state":r.get::<String,_>("confirmation_state"),"execution_state":r.get::<String,_>("execution_state"),"created_at":r.get::<String,_>("created_at")})
+            json!({"id":r.get::<String,_>("id"),"conversation_id":r.get::<String,_>("conversation_id"),"task_id":r.get::<String,_>("task_id"),"condition_version":r.get::<u64,_>("condition_version").to_string(),"draft_version":r.get::<u64,_>("draft_version").to_string(),"sql":r.get::<String,_>("sql_text"),"summary":r.get::<String,_>("summary"),"knowledge_refs":r.get::<sqlx::types::Json<Value>,_>("knowledge_refs").0,"result_ref":r.get::<Option<String>,_>("result_ref"),"confirmation_state":r.get::<String,_>("confirmation_state"),"execution_state":r.get::<String,_>("execution_state"),"created_at":r.get::<String,_>("created_at")})
         })
         .collect())
 }

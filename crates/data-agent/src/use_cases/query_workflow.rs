@@ -204,13 +204,11 @@ pub async fn history(
     query: &str,
 ) -> Result<Value> {
     const PAGE: usize = 50;
-    const FETCH_ROUNDS: usize = 5;
     let mut items = Vec::new();
-    let mut next_before_id = Value::Null;
     let mut cursor = before.map(str::to_owned);
-    for _ in 0..FETCH_ROUNDS {
+    loop {
         let mut tx = AppTx::begin(pool).await?;
-        let rows = queries::list_history_page_in_tx(
+        let mut rows = queries::list_history_page_in_tx(
             &mut tx,
             ctx,
             cursor.as_deref(),
@@ -218,76 +216,58 @@ pub async fn history(
             PAGE as u64 + 1,
         )
         .await?;
-        let cids: Vec<String> = rows
+        let exhausted = rows.len() <= PAGE;
+        cursor = rows
+            .last()
+            .and_then(|row| row["id"].as_str())
+            .map(str::to_owned);
+        let conversations: std::collections::HashSet<_> = rows
             .iter()
             .filter_map(|row| row["conversation_id"].as_str().map(str::to_owned))
-            .collect::<std::collections::HashSet<_>>()
-            .into_iter()
             .collect();
-        let visible = conversations::visible_ids_in_tx(&mut tx, ctx, &cids).await?;
+        let visible = conversations::visible_ids_in_tx(
+            &mut tx,
+            ctx,
+            &conversations.into_iter().collect::<Vec<_>>(),
+        )
+        .await?;
         tx.commit().await?;
-        let exhausted = rows.len() <= PAGE;
-        for row in rows {
-            if items.len() == PAGE {
-                break;
-            }
-            if !row["conversation_id"]
-                .as_str()
-                .is_some_and(|cid| visible.contains(cid))
-            {
-                continue;
-            }
-            cursor = row["id"].as_str().map(str::to_owned);
-            items.push(row);
-        }
-        if items.len() == PAGE {
-            next_before_id = json!(cursor);
-            break;
-        }
-        if exhausted {
-            break;
-        }
-    }
-    // 正文保护按会话分组做同一授权检查；timeline锚点也在同会话读取事务中取。
-    let mut tx = AppTx::begin(pool).await?;
-    let by_conversation: std::collections::HashMap<String, Vec<usize>> = items
-        .iter()
-        .enumerate()
-        .filter_map(|(index, row)| {
+        rows.retain(|row| {
             row["conversation_id"]
                 .as_str()
-                .map(|cid| (cid.to_owned(), index))
-        })
-        .fold(
-            std::collections::HashMap::new(),
-            |mut groups, (cid, index)| {
-                groups.entry(cid).or_default().push(index);
-                groups
-            },
-        );
-    let mut anchors = std::collections::HashMap::new();
-    for (cid, indexes) in &by_conversation {
-        let checked = check_text_results(pool, ctx, cid, None).await?;
-        for index in indexes {
-            protect_text_in_tx(&mut tx, ctx, cid, &mut items[*index], &checked).await?;
+                .is_some_and(|cid| visible.contains(cid))
+        });
+        for cid in visible {
+            let checked = check_text_results(pool, ctx, &cid, None).await?;
+            let mut tx = AppTx::begin(pool).await?;
+            let anchors = conversations::first_query_changed_seq_in_tx(&mut tx, &cid).await?;
+            for row in rows.iter_mut().filter(|row| row["conversation_id"] == cid) {
+                protect_text_in_tx(&mut tx, ctx, &cid, row, &checked).await?;
+                // 核验历史来源所需的字段不属于列表的公共返回形状。
+                let fields = row.as_object_mut().expect("query history row");
+                fields.remove("knowledge_refs");
+                fields.remove("result_ref");
+                row["timeline_event_seq"] =
+                    json!(row["id"].as_str().and_then(|id| anchors.get(id)));
+            }
+            tx.commit().await?;
         }
-        let conversation_anchors =
-            conversations::first_query_changed_seq_in_tx(&mut tx, cid).await?;
-        anchors.extend(conversation_anchors);
+        items.extend(
+            rows.into_iter()
+                .filter(|row| query.is_empty() || row["text_unavailable"] != true),
+        );
+        if items.len() > PAGE || exhausted {
+            break;
+        }
     }
-    tx.commit().await?;
-    let queries: Vec<Value> = items
-        .iter_mut()
-        .map(|row| {
-            row["timeline_event_seq"] = row["id"]
-                .as_str()
-                .and_then(|id| anchors.get(id))
-                .map(|seq| json!(seq))
-                .unwrap_or(Value::Null);
-            row.clone()
-        })
-        .collect();
-    Ok(json!({"queries":queries,"next_before_id":next_before_id}))
+    let has_more = items.len() > PAGE;
+    items.truncate(PAGE);
+    let next = if has_more {
+        items.last().and_then(|row| row["id"].as_str())
+    } else {
+        None
+    };
+    Ok(json!({"queries":items,"next_before_id":next}))
 }
 
 pub async fn read(pool: &MySqlPool, ctx: &AccessContext, qid: &str) -> Result<Value> {

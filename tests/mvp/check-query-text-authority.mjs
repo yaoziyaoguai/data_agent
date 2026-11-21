@@ -33,9 +33,13 @@ const finishNotification=async(cid,q,t,state,marker)=>{
 try {
  const marker='SYNTHETIC_QUERY_SOURCE';const doc=await source(marker);const cid=await h.create();await begin(cid,'生成草稿，不执行。');
  const t=await task();const syntax=await tool('validate_sql',{sql:'SELECT 1',parameters:{},target_id:'synthetic-sqlite'});assert.equal(syntax.state,'passed','validate_sql缺省knowledge_refs仍合法');await tool('read_knowledge',{object_id:doc.id});const q=await draft(t,marker);const original=lastInput;
+ const searchHistory = async word => ok(await h.request('/queries?q='+encodeURIComponent(word)));
+ assert.ok((await searchHistory(marker)).queries.some(row=>row.id===q.id));
  await disable(doc);control(ok(await h.internal('/internal/data/tools',original)).data,marker);await finish();
  await begin(cid,'核对已有草稿。');assert.equal(run.checkpoint,null);control((await tool('get_query',{query_id:q.id})).query,marker);
  control(ok(await h.request(`/queries/${q.id}`)),marker);control(ok(await h.request(`/conversations/${cid}/queries`)).queries.find(value=>value.id===q.id),marker);
+ control(ok(await h.request('/queries')).queries.find(row=>row.id===q.id),marker);
+ assert.deepEqual(await searchHistory(marker),{queries:[],next_before_id:null},'收回来源后不再通过搜索命中其正文');
  await tool('update_analysis_task',{action:'route',task_id:t.task_id,expected_version:t.condition_version,goal:'',options:[]});await finish();
  const confirmation=await h.request(`/queries/${q.id}/confirm`,{operation_id:randomUUID(),draft_version:q.draft_version,condition_version:q.condition_version});assert.equal(confirmation.value.code,'stale_context');assert.equal(queryState(q).state,'not_submitted');
  control(ok(await h.request(`/queries/${q.id}/cancel`,{operation_id:randomUUID()})),marker);assert.equal(queryState(q).state,'cancelled');
@@ -93,6 +97,32 @@ try {
  ok(await h.request(`/conversations/${diagnosticCid}`,{operation_id:randomUUID()},'alice','DELETE'));h.releaseRun(run.run_id);
  checks.push('validate_sql是只读检查，原SDK成功重放也先重核来源；撤源后不返旧诊断、不向平台重新发送旧SQL');
 
+ const olderCid=await h.create();await begin(olderCid,'保留一份可搜索的独立历史草稿。');
+ const olderDoc=await source('之后改版的合成说明');const olderTask=await task();
+ await tool('read_knowledge',{object_id:olderDoc.id});
+ const older=await draft(olderTask,'分页时仍可见的历史');await finish();
+ const editedDoc=ok(await h.request('/knowledge/'+olderDoc.id,{operation_id:randomUUID(),expected_version:olderDoc.version,entry_id:'body',value:'新的合成说明'},'alice','PATCH'));
+ assert.equal((await searchHistory('分页时仍可见的历史')).queries.find(row=>row.id===older.id).text_historical,true);
+ const removedCid=await h.create();await begin(removedCid,'创建随后删除的独立会话。');
+ const removed=await draft(await task(),'分页时仍可见的历史');await finish();
+ ok(await h.request('/conversations/'+removedCid,{operation_id:randomUUID()},'alice','DELETE'));
+ // 从真实草稿复制合成候选，整页已删除会话不得遮住更老的可读记录。
+ const fields='conversation_id,owner_id,task_id,condition_version,draft_version,sql_text,parameters,target_id,target_version,summary,knowledge_refs,check_state,budget_scope_id,text_authority';
+ const copyHistory=(id,count)=>h.sql(`INSERT INTO query_requests(id,operation_id,${fields})
+   WITH RECURSIVE seq(n) AS (SELECT 1 UNION ALL SELECT n+1 FROM seq WHERE n<${count})
+   SELECT UUID(),UUID(),${fields} FROM query_requests CROSS JOIN seq WHERE id='${id}'`);
+ copyHistory(removed.id,260);
+ const visibleHistory=await searchHistory('分页时仍可见的历史');
+ assert.deepEqual(visibleHistory.queries.map(row=>row.id),[older.id]);assert.equal(visibleHistory.next_before_id,null);
+ copyHistory(older.id,50);
+ const firstPage=await searchHistory('分页时仍可见的历史');
+ assert.equal(firstPage.queries.length,50);
+ assert.equal(firstPage.next_before_id,firstPage.queries.at(-1).id);
+ const nextPage=ok(await h.request('/queries?'+new URLSearchParams({q:'分页时仍可见的历史',before_id:firstPage.next_before_id})));
+ assert.deepEqual(nextPage.queries.map(row=>row.id),[older.id]);assert.equal(nextPage.next_before_id,null);
+ await disable(editedDoc);
+ assert.equal((await searchHistory('分页时仍可见的历史')).queries.length,0);
+ checks.push('跨会话搜索只匹配可读正文，260条不可见候选之后的旧查询仍可找到');
  const legacyCid=await h.create();await begin(legacyCid,'建立旧查询来源缺失夹具。');const legacyTask=await task();const legacy=await draft(legacyTask,'合成旧稿');h.sql(`UPDATE query_requests SET text_authority=NULL WHERE id='${legacy.id}'`);control((await tool('get_query',{query_id:legacy.id})).query,'合成旧稿');await finish();assert.equal((await h.request(`/queries/${legacy.id}/confirm`,{operation_id:randomUUID(),draft_version:legacy.draft_version,condition_version:legacy.condition_version})).value.code,'stale_context');
  const field=ok(await h.request('/knowledge/field-quantity'));
  const meaning=field.entries.find(e=>e.path==='meaning');
