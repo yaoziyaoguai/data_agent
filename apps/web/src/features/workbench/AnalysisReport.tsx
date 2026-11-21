@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import type { AnalysisReportRef, AnalysisReportView, AnalysisReportChart, Conditions, QueryResults } from "../../../../../packages/contracts/generated/boundary.ts";
 import { api, ApiError } from "../../shared/api.ts";
 import { Modal } from "../../shared/Modal.tsx";
@@ -18,50 +18,52 @@ export function AnalysisReport({ reference, currentConditionVersion, onClose, on
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [retry, setRetry] = useState(0);
-  const generation = useRef(0);
   const changed = currentConditionVersion !== undefined && currentConditionVersion !== reference.condition_version;
   useEffect(() => {
-    let mounted = true;
-    let controller: AbortController | undefined;
+    const controller = new AbortController();
+    let reading = false;
+    let timer: number | undefined;
     setView(null); setError(""); setLoading(true);
     const load = async () => {
-      if (!mounted) return;
-      const request = ++generation.current;
-      controller = new AbortController();
+      if (controller.signal.aborted || document.hidden || reading) return;
+      window.clearTimeout(timer);
+      reading = true;
       try {
         const next = await api("AnalysisReportView", "/conversations/" + reference.conversation_id + "/tasks/" + reference.task_id + "/report", "GET", undefined, undefined, controller.signal);
-        if (!mounted || request !== generation.current) return;
+        if (controller.signal.aborted) return;
         if (next.status === "available" && (next.reference.report_id !== reference.report_id || next.reference.task_id !== reference.task_id
           || next.reference.conversation_id !== reference.conversation_id || next.reference.condition_version !== reference.condition_version
           || BigInt(next.reference.version) < BigInt(reference.version))) throw new Error("报告引用已变化，请返回对话重新打开。");
         // 普通读取保留正文和阅读位置；收到不可读响应时仍立即撤下旧内容。
         setView(next); setError("");
       } catch (failure) {
-        if (mounted && request === generation.current) {
+        if (!controller.signal.aborted) {
           setView(null);
           setError(failure instanceof ApiError && ["forbidden", "not_available"].includes(failure.code)
             ? "这份报告目前不可访问，请返回对话核对。" : "暂时无法核对报告与数据依据，请重试。");
         }
       } finally {
-        if (mounted && request === generation.current) {
-          controller = undefined; setLoading(false);
+        if (!controller.signal.aborted) {
+          reading = false; setLoading(false);
+          if (!document.hidden) timer = window.setTimeout(() => void load(), 2000);
         }
       }
     };
-    // 报告内容不可变：打开或引用/条件版本变化时读取一次，失败由用户手动重试。
+    const wake = () => { window.clearTimeout(timer); if (!document.hidden) void load(); };
     void load();
+    window.addEventListener("focus", wake);
+    document.addEventListener("visibilitychange", wake);
     return () => {
-      mounted = false; ++generation.current; controller?.abort();
+      window.clearTimeout(timer); controller.abort();
+      window.removeEventListener("focus", wake); document.removeEventListener("visibilitychange", wake);
     };
   }, [reference.report_id, reference.version, reference.conversation_id, reference.task_id, reference.condition_version, currentConditionVersion, retry]);
   const matched = view && view.reference && view.reference.report_id === reference.report_id
     && view.reference.conversation_id === reference.conversation_id
     && view.reference.task_id === reference.task_id
     && BigInt(view.reference.version) >= BigInt(reference.version) ? view : null;
-  const available = !changed && matched?.status === "available" && matched.reference.report_id === reference.report_id
-    && matched.reference.condition_version === reference.condition_version && BigInt(matched.reference.version) >= BigInt(reference.version) ? matched : null;
-  const historical = matched?.status === "condition_changed" && matched.report && matched.reference.report_id === reference.report_id
-    && BigInt(matched.reference.version) >= BigInt(reference.version) ? matched : null;
+  const available = !changed && matched?.status === "available" && matched.reference.condition_version === reference.condition_version ? matched : null;
+  const historical = matched?.status === "condition_changed" && matched.report ? matched : null;
   const body = available ?? historical;
   const chartResults = body?.chart_results ?? [];
   return <Modal title="分析报告" className="analysis-report-dialog" closeLabel="返回对话" onClose={onClose}
