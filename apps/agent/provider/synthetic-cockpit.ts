@@ -130,6 +130,12 @@ export function cockpitAction(run: RunEnvelope, context: TranscriptContext): Syn
     semantic_resolution: run.tool_contract_version === 2
       ? {interpretation:"使用已读取的task_completion_rate定义，日汇总同轮次分子分母相加后计算。",basis:"unambiguous",user_quote:null,evidence_refs:refs}
       : {interpretation:"使用已读取的task_completion_rate定义，日汇总同轮次分子分母相加后计算。",basis:"unambiguous",user_quote:null,unresolved_differences:[],evidence_refs:refs}};
+  // 每条新消息都必须先过update_analysis_task登记归属（独立目标create、追问route、
+  // 改条件revise）。v2来源门已在上面route；v1在此补登：此前静默复用active会让
+  // 消息停在message_pending，request_query被拒且finish重试耗尽（dogfood 2026-11-21）。
+  if (!tools.some(tool => tool.name === "update_analysis_task")) {
+    return {tool:"update_analysis_task",args:{action:"create",goal:input,conditions,options:[]}};
+  }
   // v2来源门先route再取正文；route回执(routed:true,task_id可空)只证明归属落实。
   // create属范围变更工具，context_reset后旧回执按设计移出上下文，任务身份以
   // 刷新后的宿主workspace为准（active_task_ref/tasks），与真实模型的恢复路径一致。
@@ -147,6 +153,8 @@ export function cockpitAction(run: RunEnvelope, context: TranscriptContext): Syn
       knowledge_refs:refs,replaces_query_id:null}};
   }
   // 被拒草稿仍持久保存：回执带草稿身份与诊断，话术不得说未保存。
-  if (latest("request_query")!.error) return {text: "SQL已保存为草稿，但编译检查未通过，诊断已随回执记录；没有执行SQL。请按诊断修改后重新保存。"};
+  // 拒绝原因不止编译检查（如message_pending归属未登记），按回执真实error码播报。
+  const rejectedQuery = latest("request_query")!;
+  if (rejectedQuery.error) return {text: `SQL保存请求被拒绝（${typeof rejectedQuery.error === "string" ? rejectedQuery.error : JSON.stringify(rejectedQuery.error)}）；草稿身份与诊断以回执为准，没有执行SQL。请按诊断处理后重新保存。`};
   return {text:"SQL已保存为草稿，尚未执行。请核对范围和口径，需要取数时说“执行这条”。当前仅为固定合成演示。"};
 }
