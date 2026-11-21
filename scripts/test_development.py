@@ -122,7 +122,7 @@ class StartupConfigurationTest(unittest.TestCase):
         def response(request, timeout):
             user = next((user for user, token in self.identities.items()
                          if request.get_header('Authorization') == 'Bearer ' + token), None)
-            result = io.BytesIO(json.dumps({'user_id': user, 'space_id': 'demo',
+            result = io.BytesIO(json.dumps({'user_id': user, 'space_id': 'demo', 'space_name': '合成座舱语音空间',
                                            'model_label': 'DeepSeek V4 Pro' if '--model' in self.argv else '本地模拟模型'}).encode())
             result.status = 200
             return result

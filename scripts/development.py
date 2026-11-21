@@ -294,7 +294,7 @@ def main():
         model_label = ('DeepSeek V4 Pro' if model_profile['model_id'] == 'deepseek-v4-pro' else 'DeepSeek Flash') if model_profile else '本地模拟模型'
         for user in users:
             with request(env['DATA_AGENT_API_URL'] + '/session', identities[user]) as response:
-                assert json.load(response) == {'user_id': user,'space_id':'demo','model_label':model_label}
+                assert json.load(response) == {'user_id': user,'space_id':'demo','space_name':'合成座舱语音空间','model_label':model_label}
         print('工作台：http://127.0.0.1:' + str(ports['web']) + '/', flush=True)
         print('演示登录凭据：' + str(credentials.relative_to(ROOT)) + ' 中的 ' + '、'.join(users) + ' 值；此文件不进入 Git。', flush=True)
         if args.check:
