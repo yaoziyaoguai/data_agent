@@ -398,10 +398,14 @@ pub struct AgentQueryResultsClass {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ResultColumnElement {
+    /// 仅在SQL投影列名与当前有效field/metric对象名精确匹配时附带的中文列头说明；未匹配的列缺省，不从列名猜测。
+    pub display_label: Option<String>,
     pub encoding: String,
     pub name: String,
     #[serde(rename = "type")]
     pub result_column_type: String,
+    /// 已核实并随对象维护的业务单位标签（如 元/单、%）；来源同display_label，未核实缺省。
+    pub unit: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -2447,6 +2451,8 @@ pub struct PreparedSupportElement {
 pub struct IdentityClass {
     pub model_label: ModelLabel,
     pub space_id: String,
+    /// 空间显示名，由部署配置下发；与space_id分开，不参与授权判断。
+    pub space_name: String,
     pub user_id: String,
 }
 
@@ -4108,8 +4114,12 @@ pub struct RevisionOriginClass {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RunSnapshotElement {
+    /// 运行中run最近一次已登记工具调用的中文动作提示，由服务端映射工具名生成；无工具调用的旧记录缺省。
+    pub activity_label: Option<String>,
     /// 本run当前生成尝试身份，用于识别正文增量归属；旧快照可缺省。
     pub attempt_id: Option<String>,
+    /// 该run已成功回执的工具调用计数；旧记录缺省。仅作进度展示，不作为执行依据。
+    pub completed_steps: Option<i32>,
     pub lease_epoch: String,
     /// 来自已有持久记录的触发消息身份；旧快照可缺省。
     pub message_id: Option<String>,
@@ -4313,6 +4323,8 @@ pub struct SendModelCallClass {
 pub struct SessionReceiptClass {
     pub model_label: ModelLabel,
     pub space_id: String,
+    /// 空间显示名，由部署配置下发；与space_id分开，不参与授权判断。
+    pub space_name: String,
     pub state: SessionReceiptState,
     pub user_id: String,
 }
@@ -5182,9 +5194,15 @@ pub struct Event {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RunSnapshot {
+    /// 运行中run最近一次已登记工具调用的中文动作提示，由服务端映射工具名生成；无工具调用的旧记录缺省。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub activity_label: Option<String>,
     /// 本run当前生成尝试身份，用于识别正文增量归属；旧快照可缺省。
     #[serde(skip_serializing_if = "Option::is_none")]
     pub attempt_id: Option<String>,
+    /// 该run已成功回执的工具调用计数；旧记录缺省。仅作进度展示，不作为执行依据。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub completed_steps: Option<i32>,
     pub lease_epoch: String,
     /// 来自已有持久记录的触发消息身份；旧快照可缺省。
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -5328,6 +5346,8 @@ pub struct HistoryItem {
 pub struct Identity {
     pub model_label: ModelLabel,
     pub space_id: String,
+    /// 空间显示名，由部署配置下发；与space_id分开，不参与授权判断。
+    pub space_name: String,
     pub user_id: String,
 }
 
@@ -5335,6 +5355,8 @@ pub struct Identity {
 pub struct SessionReceipt {
     pub model_label: ModelLabel,
     pub space_id: String,
+    /// 空间显示名，由部署配置下发；与space_id分开，不参与授权判断。
+    pub space_name: String,
     pub state: SessionReceiptState,
     pub user_id: String,
 }
@@ -5761,6 +5783,32 @@ pub struct PreparedSupport {
     pub key: String,
     pub reference: SemanticReference,
     pub role: PreparedSupportRole,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct KnowledgeEntryBatch {
+    /// 同一对象内按序应用的条目修改；任一条目校验失败则整批回滚。
+    pub edits: Vec<KnowledgeEntryEdit>,
+    /// 批量开始前的对象版本；同一事务内逐条保存，每条按既有语义递增，返回对象为最终版本。
+    pub expected_version: String,
+    pub operation_id: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct KnowledgeEntryEdit {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub clear_override: Option<bool>,
+    pub entry_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub related_ids: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source_url: Option<String>,
+    /// 本条目明确保存的人工陈述及支持提取声明；身份和origin由服务端生成。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub statements: Option<Vec<HumanStatementInput>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub structured_value: Option<KnowledgeEntryQueryExampleStructure>,
+    pub value: String,
 }
 
 /// 独立对象首次创建时自动归属可信登录者；请求不接受负责人字段，后续调整使用独立管理接口。
@@ -6654,6 +6702,48 @@ pub struct TimeBasis {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct QueryHistoryQuery {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub before_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub q: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct QueryHistory {
+    pub next_before_id: Option<String>,
+    pub queries: Vec<QueryHistoryItem>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct QueryHistoryItem {
+    pub condition_version: String,
+    pub confirmation_state: String,
+    pub conversation_id: String,
+    /// 查询创建时间（UTC），用于区分同名查询，不改变分页顺序。
+    pub created_at: String,
+    pub draft_version: String,
+    pub execution_state: String,
+    pub id: String,
+    /// 查询SQL原文；正文失效的查询缺省，不用于重新执行。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sql: Option<String>,
+    /// 查询保存时的摘要原文；正文失效的查询仅返回控制字段，summary缺省。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub summary: Option<String>,
+    pub task_id: String,
+    /// 正文按历史记录展示：来源已改版或结果已漂移但记录仍可核；不能作为当前口径或执行依据。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub text_historical: Option<bool>,
+    /// 正文来源失效或无法核实时为true；此时仅保留身份与控制状态。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub text_unavailable: Option<bool>,
+    /// 该查询首次query_changed事件序号；无事件的旧记录为null，跳转定位由前端回退处理。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub timeline_event_seq: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConfirmQuery {
     pub condition_version: String,
     pub draft_version: String,
@@ -7409,10 +7499,16 @@ pub struct QueryResults {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ResultColumn {
+    /// 仅在SQL投影列名与当前有效field/metric对象名精确匹配时附带的中文列头说明；未匹配的列缺省，不从列名猜测。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub display_label: Option<String>,
     pub encoding: String,
     pub name: String,
     #[serde(rename = "type")]
     pub result_column_type: String,
+    /// 已核实并随对象维护的业务单位标签（如 元/单、%）；来源同display_label，未核实缺省。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub unit: Option<String>,
 }
 
 /// 应用对当前有权结果页计算的统计；历史客户端可省略。

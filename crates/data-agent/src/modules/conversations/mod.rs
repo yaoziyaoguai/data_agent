@@ -5,7 +5,7 @@ pub use store::{
     create_conversation_in_tx, event_page_in_tx, fail_consumption_in_tx, find_message_in_tx,
     last_event_seq_in_tx, list_conversations_in_tx, locate_conversation, locate_message_request,
     lock_conversation_in_tx, read_events_in_tx, read_message_in_tx, release_turn_in_tx,
-    renew_turn_in_tx,
+    renew_turn_in_tx, visible_ids_in_tx,
 };
 pub use store::{active_task_ref_in_tx, bind_active_task_in_tx, clear_active_task_in_tx};
 pub use store::{

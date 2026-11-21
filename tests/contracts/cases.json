@@ -652,35 +652,76 @@
   {
     "name": "source selection binds identities and object versions without a client locator",
     "schema": "KnowledgeSearchInput",
-    "value": {"query": "合成字段", "source_selection": [{"object_id": "field-synthetic", "version": "3"}]},
+    "value": {
+      "query": "合成字段",
+      "source_selection": [
+        {
+          "object_id": "field-synthetic",
+          "version": "3"
+        }
+      ]
+    },
     "valid": true,
     "roundtrip": true
   },
   {
     "name": "legacy search keeps its original parameter contract",
     "schema": "SearchInput",
-    "value": {"query": "合成字段", "source_selection": [{"object_id": "field-synthetic", "version": "3"}]},
+    "value": {
+      "query": "合成字段",
+      "source_selection": [
+        {
+          "object_id": "field-synthetic",
+          "version": "3"
+        }
+      ]
+    },
     "valid": false,
     "roundtrip": false
   },
   {
     "name": "source identity discovery cannot carry a body selection",
     "schema": "KnowledgeSearchInput",
-    "value": {"view": "source_identity", "query": "合成字段", "source_selection": [{"object_id": "field-synthetic", "version": "3"}]},
+    "value": {
+      "view": "source_identity",
+      "query": "合成字段",
+      "source_selection": [
+        {
+          "object_id": "field-synthetic",
+          "version": "3"
+        }
+      ]
+    },
     "valid": false,
     "roundtrip": false
   },
   {
     "name": "source selection requires the returned object version",
     "schema": "KnowledgeSearchInput",
-    "value": {"query": "合成字段", "source_selection": [{"object_id": "field-synthetic"}]},
+    "value": {
+      "query": "合成字段",
+      "source_selection": [
+        {
+          "object_id": "field-synthetic"
+        }
+      ]
+    },
     "valid": false,
     "roundtrip": false
   },
   {
     "name": "source selection does not accept a caller quote or locator",
     "schema": "KnowledgeSearchInput",
-    "value": {"query": "合成字段", "source_selection": [{"object_id": "field-synthetic", "version": "3", "quote": "猜测引文"}]},
+    "value": {
+      "query": "合成字段",
+      "source_selection": [
+        {
+          "object_id": "field-synthetic",
+          "version": "3",
+          "quote": "猜测引文"
+        }
+      ]
+    },
     "valid": false,
     "roundtrip": false
   },
@@ -2184,7 +2225,8 @@
     "value": {
       "user_id": "alice",
       "model_label": "本地模拟模型",
-      "space_id": "sample-space"
+      "space_id": "sample-space",
+      "space_name": "合成座舱语音空间"
     },
     "valid": true,
     "roundtrip": true
@@ -2202,7 +2244,8 @@
       "user_id": "alice",
       "unexpected": true,
       "model_label": "本地模拟模型",
-      "space_id": "sample-space"
+      "space_id": "sample-space",
+      "space_name": "合成座舱语音空间"
     },
     "valid": false
   },
@@ -2213,7 +2256,8 @@
       "state": "authenticated",
       "user_id": "alice",
       "model_label": "本地模拟模型",
-      "space_id": "sample-space"
+      "space_id": "sample-space",
+      "space_name": "合成座舱语音空间"
     },
     "valid": true,
     "roundtrip": true
@@ -2232,7 +2276,8 @@
       "user_id": "alice",
       "unexpected": true,
       "model_label": "本地模拟模型",
-      "space_id": "sample-space"
+      "space_id": "sample-space",
+      "space_name": "合成座舱语音空间"
     },
     "valid": false
   },
@@ -4638,7 +4683,8 @@
     "value": {
       "user_id": "alice",
       "model_label": "DeepSeek V4 Pro",
-      "space_id": "sample-space"
+      "space_id": "sample-space",
+      "space_name": "合成座舱语音空间"
     },
     "valid": true,
     "roundtrip": true
@@ -4650,7 +4696,8 @@
       "state": "authenticated",
       "user_id": "alice",
       "model_label": "DeepSeek V4 Pro",
-      "space_id": "sample-space"
+      "space_id": "sample-space",
+      "space_name": "合成座舱语音空间"
     },
     "valid": true,
     "roundtrip": true
@@ -10330,21 +10377,38 @@
   {
     "name": "Pi 1.4.0 inline checkpoint",
     "schema": "Checkpoint",
-    "value": {"sdk_version": "1.4.0", "entries": [], "leaf_id": null},
+    "value": {
+      "sdk_version": "1.4.0",
+      "entries": [],
+      "leaf_id": null
+    },
     "valid": true,
     "roundtrip": true
   },
   {
     "name": "Pi 1.4.0 native checkpoint reference",
     "schema": "Checkpoint",
-    "value": {"sdk_version": "1.4.0", "entries": [], "leaf_id": null, "storage": {"kind": "pi_session", "file": "synthetic-sdk14.jsonl", "session_id": "synthetic-sdk14"}},
+    "value": {
+      "sdk_version": "1.4.0",
+      "entries": [],
+      "leaf_id": null,
+      "storage": {
+        "kind": "pi_session",
+        "file": "synthetic-sdk14.jsonl",
+        "session_id": "synthetic-sdk14"
+      }
+    },
     "valid": true,
     "roundtrip": true
   },
   {
     "name": "future Pi SDK version is not implicitly accepted",
     "schema": "Checkpoint",
-    "value": {"sdk_version": "1.5.0", "entries": [], "leaf_id": null},
+    "value": {
+      "sdk_version": "1.5.0",
+      "entries": [],
+      "leaf_id": null
+    },
     "valid": false,
     "roundtrip": false
   },

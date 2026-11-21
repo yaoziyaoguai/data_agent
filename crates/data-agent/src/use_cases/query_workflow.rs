@@ -1,6 +1,6 @@
 use crate::{
     contracts,
-    modules::{access, analysis, conversations, jobs, queries, runtime},
+    modules::{access, analysis, conversations, jobs, knowledge, queries, runtime},
     persistence::AppTx,
     types::{AccessContext, Error, Result, epoch, id},
 };
@@ -195,6 +195,101 @@ pub async fn list(pool: &MySqlPool, ctx: &AccessContext, cid: &str) -> Result<Va
     tx.commit().await?;
     Ok(json!({"queries":queries,"confirmation_blocked":blocked}))
 }
+/// 跨会话查询历史：按创建时间倒序，正文授权沿用会话内同一保护逻辑。
+/// 不可见会话（已删除/越权）的查询被过滤；每轮多取一页原料以判断是否还有更早记录。
+pub async fn history(
+    pool: &MySqlPool,
+    ctx: &AccessContext,
+    before: Option<&str>,
+    query: &str,
+) -> Result<Value> {
+    const PAGE: usize = 50;
+    const FETCH_ROUNDS: usize = 5;
+    let mut items = Vec::new();
+    let mut next_before_id = Value::Null;
+    let mut cursor = before.map(str::to_owned);
+    for _ in 0..FETCH_ROUNDS {
+        let mut tx = AppTx::begin(pool).await?;
+        let rows = queries::list_history_page_in_tx(
+            &mut tx,
+            ctx,
+            cursor.as_deref(),
+            query,
+            PAGE as u64 + 1,
+        )
+        .await?;
+        let cids: Vec<String> = rows
+            .iter()
+            .filter_map(|row| row["conversation_id"].as_str().map(str::to_owned))
+            .collect::<std::collections::HashSet<_>>()
+            .into_iter()
+            .collect();
+        let visible = conversations::visible_ids_in_tx(&mut tx, ctx, &cids).await?;
+        tx.commit().await?;
+        let exhausted = rows.len() <= PAGE;
+        for row in rows {
+            if items.len() == PAGE {
+                break;
+            }
+            if !row["conversation_id"]
+                .as_str()
+                .is_some_and(|cid| visible.contains(cid))
+            {
+                continue;
+            }
+            cursor = row["id"].as_str().map(str::to_owned);
+            items.push(row);
+        }
+        if items.len() == PAGE {
+            next_before_id = json!(cursor);
+            break;
+        }
+        if exhausted {
+            break;
+        }
+    }
+    // 正文保护按会话分组做同一授权检查；timeline锚点也在同会话读取事务中取。
+    let mut tx = AppTx::begin(pool).await?;
+    let by_conversation: std::collections::HashMap<String, Vec<usize>> = items
+        .iter()
+        .enumerate()
+        .filter_map(|(index, row)| {
+            row["conversation_id"]
+                .as_str()
+                .map(|cid| (cid.to_owned(), index))
+        })
+        .fold(
+            std::collections::HashMap::new(),
+            |mut groups, (cid, index)| {
+                groups.entry(cid).or_default().push(index);
+                groups
+            },
+        );
+    let mut anchors = std::collections::HashMap::new();
+    for (cid, indexes) in &by_conversation {
+        let checked = check_text_results(pool, ctx, cid, None).await?;
+        for index in indexes {
+            protect_text_in_tx(&mut tx, ctx, cid, &mut items[*index], &checked).await?;
+        }
+        let conversation_anchors =
+            conversations::first_query_changed_seq_in_tx(&mut tx, cid).await?;
+        anchors.extend(conversation_anchors);
+    }
+    tx.commit().await?;
+    let queries: Vec<Value> = items
+        .iter_mut()
+        .map(|row| {
+            row["timeline_event_seq"] = row["id"]
+                .as_str()
+                .and_then(|id| anchors.get(id))
+                .map(|seq| json!(seq))
+                .unwrap_or(Value::Null);
+            row.clone()
+        })
+        .collect();
+    Ok(json!({"queries":queries,"next_before_id":next_before_id}))
+}
+
 pub async fn read(pool: &MySqlPool, ctx: &AccessContext, qid: &str) -> Result<Value> {
     let location = queries::locate(pool, qid).await?;
     access::authorize_owner(ctx, &location.owner_id, &location.space_id)?;
@@ -435,6 +530,63 @@ async fn results_for_display(
     results_with(pool, ctx, qid, cursor, true).await
 }
 
+/// U-05列注解：SQL投影列名与知识对象精确相等才附带中文列名/单位。
+/// metric同时认对象名与指标标识；字段含义取meaning条目、单位取unit条目，
+/// 缺条目就不注解——聚合别名、未知列一律保持原始列名，不从列名猜业务含义。
+async fn column_annotations(
+    pool: &MySqlPool,
+    ctx: &AccessContext,
+    knowledge_refs: &Value,
+) -> Result<std::collections::HashMap<String, (String, Option<String>)>> {
+    let mut annotations = std::collections::HashMap::new();
+    let Some(refs) = knowledge_refs.as_array() else {
+        return Ok(annotations);
+    };
+    let mut tx = AppTx::begin(pool).await?;
+    for reference in refs {
+        let Some(object_id) = reference["object_id"].as_str() else {
+            continue;
+        };
+        let version = reference["version"].as_str().and_then(|v| epoch(v).ok());
+        let object = match knowledge::read_in_tx(&mut tx, ctx, object_id, version, false).await {
+            Ok(object) => object,
+            Err(_) => continue,
+        };
+        let kind = object["kind"].as_str().unwrap_or("");
+        if kind != "field" && kind != "metric" {
+            continue;
+        }
+        let entries = object["entries"].as_array().cloned().unwrap_or_default();
+        let value_of = |path: &str| {
+            entries
+                .iter()
+                .find(|entry| entry["path"] == path)
+                .and_then(|entry| entry["effective_value"].as_str())
+                .filter(|value| !value.trim().is_empty())
+                .map(str::to_owned)
+        };
+        let unit = value_of("unit");
+        let label = if kind == "metric" {
+            object["name"].as_str().unwrap_or("").trim().to_owned()
+        } else {
+            value_of("meaning").unwrap_or_default()
+        };
+        if label.is_empty() {
+            continue;
+        }
+        let mut keys = vec![object["name"].as_str().unwrap_or("").to_owned()];
+        if kind == "metric" {
+            keys.extend(object_id.strip_prefix("metric-").map(str::to_owned));
+        }
+        for key in keys.into_iter().filter(|key| !key.is_empty()) {
+            annotations
+                .entry(key)
+                .or_insert_with(|| (label.clone(), unit.clone()));
+        }
+    }
+    Ok(annotations)
+}
+
 async fn results_with(
     pool: &MySqlPool,
     ctx: &AccessContext,
@@ -463,6 +615,21 @@ async fn results_with(
         return Err(Error::new("result_unavailable"));
     }
     result["statistics"] = queries::page_statistics(&result)?;
+    // 列注解按引用对象的精确名匹配附加；未匹配列保持原样，校验含新增可选字段。
+    let annotations = column_annotations(pool, ctx, &v["knowledge_refs"]).await?;
+    if let Some(columns) = result["columns"].as_array_mut() {
+        for column in columns {
+            if let Some((label, unit)) = column["name"]
+                .as_str()
+                .and_then(|name| annotations.get(name))
+            {
+                column["display_label"] = json!(label);
+                if let Some(unit) = unit {
+                    column["unit"] = json!(unit);
+                }
+            }
+        }
+    }
     contracts::validate("QueryResults", &result)?;
     Ok(result)
 }

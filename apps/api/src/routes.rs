@@ -3,15 +3,21 @@ use axum::{
     Json,
     extract::{Path, Query, State as AxumState},
     http::{HeaderMap, StatusCode, header},
-    response::IntoResponse,
+    response::{
+        IntoResponse,
+        sse::{Event as SseEvent, KeepAlive, KeepAliveStream, Sse},
+    },
 };
 use data_agent::{
     contracts::{self, generated::*},
+    modules::access,
+    persistence::AppTx,
     types::{AccessContext, Error, id},
     use_cases,
 };
 use serde_json::{Value, json};
 use std::collections::HashMap;
+use std::{convert::Infallible, time::Duration};
 type ResponseResult = Result<Json<Value>, (StatusCode, Json<Value>)>;
 pub(crate) fn failure(error: Error) -> (StatusCode, Json<Value>) {
     let request_id = id();
@@ -55,18 +61,31 @@ pub(crate) fn bearer(headers: &HeaderMap) -> Option<&str> {
         .ok()?
         .strip_prefix("Bearer ")
 }
-pub(crate) fn user(state: &State, headers: &HeaderMap) -> Result<AccessContext, Error> {
-    let token = bearer(headers)
-        .or_else(|| {
-            headers
-                .get(header::COOKIE)?
-                .to_str()
-                .ok()?
-                .split(';')
-                .find_map(|p| p.trim().strip_prefix("data_agent_session="))
-        })
+pub(crate) fn session_cookie(headers: &HeaderMap) -> Option<&str> {
+    headers
+        .get(header::COOKIE)?
+        .to_str()
+        .ok()?
+        .split(';')
+        .find_map(|part| part.trim().strip_prefix("data_agent_session="))
+}
+// Bearer仍是开发/CLI直连凭据；浏览器Cookie只承载随机会话令牌，吊销即失效。
+pub(crate) async fn user(state: &State, headers: &HeaderMap) -> Result<AccessContext, Error> {
+    if let Some(token) = bearer(headers) {
+        return state.identities.resolve(token);
+    }
+    let token = session_cookie(headers).ok_or(Error::new("unauthenticated"))?;
+    let hash = access::session_token_hash(token);
+    let mut tx = AppTx::begin(&state.pool).await?;
+    let (user_id, space_id) = access::resolve_session_in_tx(&mut tx, &hash)
+        .await?
         .ok_or(Error::new("unauthenticated"))?;
-    state.identities.resolve(token)
+    tx.commit().await?;
+    Ok(AccessContext {
+        user_id,
+        space_id,
+        request_id: id(),
+    })
 }
 pub(crate) async fn internal(
     state: &State,
@@ -81,33 +100,52 @@ pub(crate) async fn internal(
         .ok_or(Error::new("invalid_input"))?;
     use_cases::deliver_run::context_for_run(&state.pool, run).await
 }
+const SESSION_TTL_SECONDS: i64 = 7 * 24 * 3600;
+// 登录凭据只走一次Bearer验证；成功后签发随机会话令牌，Cookie不再携带原始凭据。
 pub async fn login(AxumState(state): AxumState<State>, headers: HeaderMap) -> impl IntoResponse {
-    match bearer(&headers)
-        .ok_or(Error::new("unauthenticated"))
-        .and_then(|token| {
-            state
-                .identities
-                .resolve(token)
-                .map(|context| (token, context.user_id, context.space_id))
-        }) {
-        Ok((token, user_id, space_id)) => (
-            StatusCode::OK,
-            [(
-                header::SET_COOKIE,
-                format!("data_agent_session={token}; HttpOnly; SameSite=Strict; Path=/"),
-            )],
-            Json(json!({"state":"authenticated","user_id":user_id,"space_id":space_id,"model_label":model_label(&state)})),
-        )
-            .into_response(),
+    match login_session(&state, &headers).await {
+        Ok((token, user_id, space_id)) => {
+            let mut cookie = format!(
+                "data_agent_session={token}; HttpOnly; SameSite=Strict; Path=/; Max-Age={SESSION_TTL_SECONDS}"
+            );
+            if state.cookie_secure {
+                cookie.push_str("; Secure");
+            }
+            (
+                StatusCode::OK,
+                [(header::SET_COOKIE, cookie)],
+                Json(json!({"state":"authenticated","user_id":user_id,"space_id":space_id,"space_name":access::space_name(),"model_label":model_label(&state)})),
+            )
+                .into_response()
+        }
         Err(e) => failure(e).into_response(),
     }
+}
+async fn login_session(
+    state: &State,
+    headers: &HeaderMap,
+) -> Result<(String, String, String), Error> {
+    let context = state
+        .identities
+        .resolve(bearer(headers).ok_or(Error::new("unauthenticated"))?)?;
+    let token = access::issue_session_token()?;
+    let mut tx = AppTx::begin(&state.pool).await?;
+    access::create_session_in_tx(
+        &mut tx,
+        &context,
+        &access::session_token_hash(&token),
+        SESSION_TTL_SECONDS,
+    )
+    .await?;
+    tx.commit().await?;
+    Ok((token, context.user_id, context.space_id))
 }
 pub async fn create(
     AxumState(state): AxumState<State>,
     headers: HeaderMap,
     Json(body): Json<Value>,
 ) -> ResponseResult {
-    let context = user(&state, &headers).map_err(failure)?;
+    let context = user(&state, &headers).await.map_err(failure)?;
     let input =
         contracts::decode::<CreateConversation>("CreateConversation", body).map_err(failure)?;
     use_cases::receive_message::create_conversation(&state.pool, &context, input)
@@ -121,7 +159,7 @@ pub async fn message(
     Path(cid): Path<String>,
     Json(body): Json<Value>,
 ) -> ResponseResult {
-    let context = user(&state, &headers).map_err(failure)?;
+    let context = user(&state, &headers).await.map_err(failure)?;
     let input = contracts::decode::<MessageInput>("MessageInput", body).map_err(failure)?;
     use_cases::receive_message::receive_message(
         &state.pool,
@@ -139,7 +177,7 @@ pub async fn history(
     headers: HeaderMap,
     Query(query): Query<HashMap<String, String>>,
 ) -> ResponseResult {
-    let context = user(&state, &headers).map_err(failure)?;
+    let context = user(&state, &headers).await.map_err(failure)?;
     contracts::validate("HistoryQuery", &json!(query)).map_err(failure)?;
     use_cases::read_conversation::list_history(
         &state.pool,
@@ -157,7 +195,7 @@ pub async fn snapshot(
     Path(cid): Path<String>,
     Query(query): Query<HashMap<String, String>>,
 ) -> ResponseResult {
-    let context = user(&state, &headers).map_err(failure)?;
+    let context = user(&state, &headers).await.map_err(failure)?;
     let before = query
         .get("before_seq")
         .map(|s| data_agent::types::epoch(s))
@@ -184,7 +222,7 @@ pub async fn refresh_snapshot(
     Path(cid): Path<String>,
     Json(value): Json<Value>,
 ) -> ResponseResult {
-    let context = user(&state, &headers).map_err(failure)?;
+    let context = user(&state, &headers).await.map_err(failure)?;
     contracts::validate("SnapshotRequest", &value).map_err(failure)?;
     let request: SnapshotRequest =
         serde_json::from_value(value).map_err(|_| failure(Error::new("invalid_input")))?;
@@ -213,40 +251,100 @@ pub async fn refresh_snapshot(
     .and_then(|value| success("SnapshotRefresh", value))
 }
 
+// 会话事件实时流：连接先校验可读并补发after_seq之后的增量，随后每秒做轻量尾部
+// 扫描推送新事件；断线由浏览器自动重连，Last-Event-ID续传；15秒Keep-Alive防
+// 中间层掐空闲连接。客户端断开时发送端失败即停，不再扫库。
 pub async fn events(
     AxumState(state): AxumState<State>,
     headers: HeaderMap,
     Path(cid): Path<String>,
     Query(query): Query<HashMap<String, String>>,
-) -> Result<impl IntoResponse, (StatusCode, Json<Value>)> {
-    let context = user(&state, &headers).map_err(failure)?;
-    let after = query
+) -> Result<
+    Sse<KeepAliveStream<tokio_stream::wrappers::ReceiverStream<Result<SseEvent, Infallible>>>>,
+    (StatusCode, Json<Value>),
+> {
+    let context = user(&state, &headers).await.map_err(failure)?;
+    let after_seq = query
         .get("after_seq")
-        .map(|v| v.parse())
+        .map(|v| v.parse::<u64>())
         .transpose()
-        .map_err(|_| failure(Error::new("invalid_input")))?
-        .unwrap_or(0);
-    let values = use_cases::read_conversation::read_events(&state.pool, &context, &cid, after)
+        .map_err(|_| failure(Error::new("invalid_input")))?;
+    let last_event = headers
+        .get("Last-Event-ID")
+        .and_then(|value| value.to_str().ok())
+        .and_then(|value| value.parse::<u64>().ok());
+    // 显式游标优先；自动重连的Last-Event-ID其次；新连接从头跟随。
+    let start = after_seq.or(last_event).unwrap_or(0);
+    // 先做一次读取校验会话存在且可读，失败直接返回HTTP状态而不是挂起SSE。
+    let first = use_cases::read_conversation::read_events(&state.pool, &context, &cid, start)
         .await
         .map_err(failure)?;
-    let stream = values
-        .into_iter()
-        .map(|event| {
-            format!(
-                "id: {}\nevent: {}\ndata: {}\n\n",
-                event["event_seq"].as_str().unwrap_or("0"),
-                event["type"].as_str().unwrap_or("unknown"),
-                event
-            )
-        })
-        .collect::<String>();
-    Ok((
-        [
-            (header::CONTENT_TYPE, "text/event-stream"),
-            (header::CACHE_CONTROL, "no-cache"),
-        ],
-        stream,
-    ))
+    let (tx, rx) = tokio::sync::mpsc::channel::<Result<SseEvent, Infallible>>(32);
+    let pool = state.pool.clone();
+    tokio::spawn(async move {
+        let mut cursor = start;
+        let mut opening = first.into_iter().collect::<Vec<_>>();
+        let mut ticker = tokio::time::interval(Duration::from_secs(1));
+        loop {
+            ticker.tick().await;
+            loop {
+                let page = if opening.is_empty() {
+                    match use_cases::read_conversation::read_events(&pool, &context, &cid, cursor)
+                        .await
+                    {
+                        Ok(page) => page,
+                        Err(error)
+                            if matches!(
+                                error.code,
+                                "not_available" | "forbidden" | "unauthenticated"
+                            ) =>
+                        {
+                            // 会话删除或权限失效：通知前端停止重连后结束流。
+                            let _ = tx
+                                .send(Ok(SseEvent::default()
+                                    .event("stream_closed")
+                                    .data(json!({"code": error.code}).to_string())))
+                                .await;
+                            return;
+                        }
+                        Err(error) => {
+                            eprintln!("events_poll_transient cid={cid} code={}", error.code);
+                            break;
+                        }
+                    }
+                } else {
+                    std::mem::take(&mut opening)
+                };
+                let drained = page.len();
+                for event in page {
+                    let seq = event["event_seq"]
+                        .as_str()
+                        .and_then(|value| value.parse::<u64>().ok());
+                    // 事件不命名：前端onmessage统一作为唤醒信号接收，新增事件类型不漏。
+                    // id仍带游标，浏览器自动重连时以Last-Event-ID续传。
+                    let mut message = SseEvent::default();
+                    if let Some(seq) = seq {
+                        message = message.id(seq.to_string());
+                        cursor = seq;
+                    }
+                    if tx.send(Ok(message.data(event.to_string()))).await.is_err() {
+                        // 客户端已断开：停止扫描。
+                        return;
+                    }
+                }
+                if drained < 1000 {
+                    break;
+                }
+            }
+        }
+    });
+    Ok(
+        Sse::new(tokio_stream::wrappers::ReceiverStream::new(rx)).keep_alive(
+            KeepAlive::new()
+                .interval(Duration::from_secs(15))
+                .text("keep-alive"),
+        ),
+    )
 }
 pub async fn register(
     AxumState(state): AxumState<State>,
@@ -366,20 +464,36 @@ pub async fn settle(
 }
 
 pub async fn identity(AxumState(state): AxumState<State>, headers: HeaderMap) -> ResponseResult {
-    let context = user(&state, &headers).map_err(failure)?;
+    let context = user(&state, &headers).await.map_err(failure)?;
     success(
         "Identity",
-        json!({"user_id":context.user_id,"space_id":context.space_id,"model_label":model_label(&state)}),
+        json!({"user_id":context.user_id,"space_id":context.space_id,"space_name":access::space_name(),"model_label":model_label(&state)}),
     )
 }
-pub async fn logout() -> impl IntoResponse {
+// 登出先吊销服务端会话再清Cookie；已捕获旧Cookie的请求立即401。
+pub async fn logout(AxumState(state): AxumState<State>, headers: HeaderMap) -> impl IntoResponse {
+    if let Some(token) = session_cookie(&headers) {
+        let hash = access::session_token_hash(token);
+        let result = async {
+            let mut tx = AppTx::begin(&state.pool).await?;
+            access::revoke_session_in_tx(&mut tx, &hash).await?;
+            tx.commit().await
+        }
+        .await;
+        if let Err(e) = result {
+            return failure(e).into_response();
+        }
+    }
+    // 无会话Cookie的登出保持幂等：只回清Cookie响应。
+    let mut cookie = "data_agent_session=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0".to_owned();
+    if state.cookie_secure {
+        cookie.push_str("; Secure");
+    }
     (
-        [(
-            header::SET_COOKIE,
-            "data_agent_session=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0",
-        )],
+        [(header::SET_COOKIE, cookie)],
         Json(json!({"state":"logged_out"})),
     )
+        .into_response()
 }
 
 fn model_label(state: &State) -> &'static str {
@@ -440,7 +554,7 @@ pub async fn cancel_run(
     Path(cid): Path<String>,
     Json(body): Json<Value>,
 ) -> ResponseResult {
-    let context = user(&state, &headers).map_err(failure)?;
+    let context = user(&state, &headers).await.map_err(failure)?;
     let input = contracts::decode::<CancelRun>("CancelRun", body.clone()).map_err(failure)?;
     let receipt = use_cases::cancel_run::cancel(&state.pool, &context, &cid, &input)
         .await

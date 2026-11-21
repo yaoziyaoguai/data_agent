@@ -12,7 +12,7 @@ use serde_json::Value;
 use std::collections::HashMap;
 type ResponseResult = Result<Json<Value>, (axum::http::StatusCode, Json<Value>)>;
 pub async fn access(AxumState(state): AxumState<State>, headers: HeaderMap) -> ResponseResult {
-    let ctx = user(&state, &headers).map_err(failure)?;
+    let ctx = user(&state, &headers).await.map_err(failure)?;
     success(
         "SemanticAccess",
         semantic_governance::read_access(&state.pool, &ctx)
@@ -21,7 +21,7 @@ pub async fn access(AxumState(state): AxumState<State>, headers: HeaderMap) -> R
     )
 }
 pub async fn members(AxumState(state): AxumState<State>, headers: HeaderMap) -> ResponseResult {
-    let ctx = user(&state, &headers).map_err(failure)?;
+    let ctx = user(&state, &headers).await.map_err(failure)?;
     success(
         "SemanticMemberList",
         semantic_governance::list_members(&ctx, &state.identities.members(&ctx))
@@ -34,7 +34,7 @@ pub async fn assign(
     Path(id): Path<String>,
     Json(input): Json<Value>,
 ) -> ResponseResult {
-    let ctx = user(&state, &headers).map_err(failure)?;
+    let ctx = user(&state, &headers).await.map_err(failure)?;
     success(
         "SemanticMaintenance",
         semantic_governance::assign(
@@ -53,7 +53,7 @@ pub async fn draft(
     headers: HeaderMap,
     Json(input): Json<Value>,
 ) -> ResponseResult {
-    let ctx = user(&state, &headers).map_err(failure)?;
+    let ctx = user(&state, &headers).await.map_err(failure)?;
     success(
         "Proposal",
         semantic_governance::draft(&state.pool, &ctx, input)
@@ -66,7 +66,7 @@ pub async fn list(
     headers: HeaderMap,
     Query(query): Query<HashMap<String, String>>,
 ) -> ResponseResult {
-    let ctx = user(&state, &headers).map_err(failure)?;
+    let ctx = user(&state, &headers).await.map_err(failure)?;
     if query.keys().any(|k| k != "after_id") {
         return Err(failure(data_agent::types::Error::new("invalid_input")));
     }
@@ -82,7 +82,7 @@ pub async fn read(
     headers: HeaderMap,
     Path(id): Path<String>,
 ) -> ResponseResult {
-    let ctx = user(&state, &headers).map_err(failure)?;
+    let ctx = user(&state, &headers).await.map_err(failure)?;
     success(
         "SemanticCorrection",
         semantic_governance::read(&state.pool, &ctx, &id)
@@ -95,7 +95,7 @@ pub async fn submit(
     headers: HeaderMap,
     Json(input): Json<Value>,
 ) -> ResponseResult {
-    let ctx = user(&state, &headers).map_err(failure)?;
+    let ctx = user(&state, &headers).await.map_err(failure)?;
     success(
         "SemanticCorrection",
         semantic_governance::change(&state.pool, &ctx, None, "submit", input)
@@ -109,7 +109,7 @@ pub async fn revise(
     Path(id): Path<String>,
     Json(input): Json<Value>,
 ) -> ResponseResult {
-    let ctx = user(&state, &headers).map_err(failure)?;
+    let ctx = user(&state, &headers).await.map_err(failure)?;
     success(
         "SemanticCorrection",
         semantic_governance::change(&state.pool, &ctx, Some(&id), "revise", input)
@@ -123,7 +123,7 @@ pub async fn action(
     Path((id, action)): Path<(String, String)>,
     Json(input): Json<Value>,
 ) -> ResponseResult {
-    let ctx = user(&state, &headers).map_err(failure)?;
+    let ctx = user(&state, &headers).await.map_err(failure)?;
     if !matches!(action.as_str(), "review" | "apply") {
         return Err(failure(data_agent::types::Error::new("invalid_input")));
     }

@@ -59,6 +59,16 @@ impl Milvus {
             token: format!("root:{}", token.trim()),
         })
     }
+    // 进程级共享：客户端与令牌文件只初始化一次；未成功前不缓存，
+    // configured()的原始错误码逐次原样返回，配置修复后无需重启。
+    fn shared() -> Result<&'static Milvus> {
+        static SHARED: std::sync::OnceLock<Milvus> = std::sync::OnceLock::new();
+        if let Some(milvus) = SHARED.get() {
+            return Ok(milvus);
+        }
+        let milvus = Milvus::configured()?;
+        Ok(SHARED.get_or_init(|| milvus))
+    }
     async fn call(&self, path: &str, payload: Value) -> Result<Value> {
         let mut payload = payload;
         payload["collectionName"] = json!(self.collection);
@@ -159,12 +169,12 @@ impl Milvus {
     }
 }
 pub async fn index_target() -> Result<String> {
-    Milvus::configured()?.identity().await
+    Milvus::shared()?.identity().await
 }
 
 // 仅显式维护动作可准备配置的集合；查询和后台消费不创建或推导其他目标。
 pub async fn prepare_index_target() -> Result<String> {
-    let milvus = Milvus::configured()?;
+    let milvus = Milvus::shared()?;
     let exists = milvus.call("collections/has", json!({})).await?["has"]
         .as_bool()
         .ok_or(Error::new("vector_unavailable"))?;
@@ -766,7 +776,7 @@ pub struct CandidatePage {
 
 pub async fn fetch_page(request: PageRequest) -> CandidatePage {
     let outcome = async {
-        let milvus = Milvus::configured()?;
+        let milvus = Milvus::shared()?;
         let output = if request.channel.raw() {
             json!([
                 "id",
@@ -783,7 +793,7 @@ pub async fn fetch_page(request: PageRequest) -> CandidatePage {
         };
         if request.channel.dense() {
             run_dense(
-                &milvus,
+                milvus,
                 &request.filter,
                 &output,
                 request.vector.as_deref().expect("dense query"),
@@ -794,7 +804,7 @@ pub async fn fetch_page(request: PageRequest) -> CandidatePage {
             .await
         } else {
             run_lexical(
-                &milvus,
+                milvus,
                 &request.filter,
                 &output,
                 &request.query,
@@ -1513,7 +1523,7 @@ where
     F: FnMut(Value, usize, Vec<String>) -> Fut + Send,
     Fut: Future<Output = Result<Vec<Vec<f32>>>> + Send,
 {
-    let milvus = Milvus::configured()?;
+    let milvus = Milvus::shared()?;
     // 调用者领取前已核验集合；中途丢库由下一次领取重新核验，避免每对象重复describe。
     let mut reports = Vec::new();
     for object in objects {
@@ -1605,7 +1615,7 @@ where
     F: FnMut(usize, Vec<String>) -> Fut + Send,
     Fut: Future<Output = Result<Vec<Vec<f32>>>> + Send,
 {
-    let milvus = Milvus::configured()?;
+    let milvus = Milvus::shared()?;
     let mut pieces = Vec::new();
     for segment in segments {
         let background = segment
@@ -1710,7 +1720,7 @@ pub async fn drop_source_excerpts(
     source: &str,
     before: u64,
 ) -> Result<()> {
-    let milvus = Milvus::configured()?;
+    let milvus = Milvus::shared()?;
     milvus
         .call(
             "entities/delete",

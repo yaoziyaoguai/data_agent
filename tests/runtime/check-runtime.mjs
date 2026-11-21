@@ -61,7 +61,9 @@ try{
  assert.equal((await request('/conversations/'+cid+'/messages',{client_message_id:randomUUID(),text:'冒用',user_id:'bob'})).status,400);
  assert.equal((await request('/conversations',undefined,bob)).value.conversations.length,0);
  assert.equal((await request('/internal/outputs',{run_id:complete.runs[0].run_id,lease_epoch:complete.runs[0].lease_epoch,chunk_seq:'2',text:'late'},alice)).status,401);
- const stream=await fetch(env.DATA_AGENT_API_URL+'/conversations/'+cid+'/events?after_seq=0',{headers:{authorization:'Bearer '+alice}});assert.equal(stream.headers.get('content-type'),'text/event-stream');const events=await stream.text();assert.match(events,/assistant_committed/);
+ // 事件流现在是持续SSE：按块读到断言所需事件即取消，不能等正文结束。
+ const stream=await fetch(env.DATA_AGENT_API_URL+'/conversations/'+cid+'/events?after_seq=0',{headers:{authorization:'Bearer '+alice}});assert.equal(stream.headers.get('content-type'),'text/event-stream');
+ const reader=stream.body.getReader();let events='';try{const deadline=Date.now()+10000;while(!/assistant_committed/.test(events)&&Date.now()<deadline){const {value,done}=await reader.read();if(done)break;events+=new TextDecoder().decode(value);}}finally{await reader.cancel();}assert.match(events,/assistant_committed/);
  checks.push({name:'真实Pi工具链、持久结果、重复消息、身份隔离和SSE',passed:true});
  const web=start('web','node',['node_modules/vite/bin/vite.js','apps/web','--config','apps/web/vite.config.ts','--port',String(webPort)]);await until(async()=>{try{return(await fetch('http://127.0.0.1:'+webPort)).ok;}catch{return false;}},'web');
  browser=await chromium.launch({headless:true});const context=await browser.newContext({viewport:{width:1440,height:1000}});const page=await context.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));

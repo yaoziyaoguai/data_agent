@@ -17,7 +17,7 @@ pub async fn list(
     headers: HeaderMap,
     Query(query): Query<HashMap<String, String>>,
 ) -> ResponseResult {
-    let ctx = user(&state, &headers).map_err(failure)?;
+    let ctx = user(&state, &headers).await.map_err(failure)?;
     data_agent::contracts::validate("AssetPageQuery", &json!(query)).map_err(failure)?;
     let value = use_cases::skill_drafts::list(
         &state.pool,
@@ -34,7 +34,7 @@ pub async fn read(
     headers: HeaderMap,
     Path(draft): Path<String>,
 ) -> ResponseResult {
-    let ctx = user(&state, &headers).map_err(failure)?;
+    let ctx = user(&state, &headers).await.map_err(failure)?;
     let value = use_cases::skill_drafts::read(&state.pool, &ctx, &draft)
         .await
         .map_err(failure)?;

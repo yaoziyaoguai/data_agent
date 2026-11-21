@@ -284,7 +284,7 @@ pub(super) async fn insert_tool(
 ) -> Result<String> {
     tx.assert_snapshot(&run.transaction_id)?;
     let operation_id = id();
-    sqlx::query("INSERT INTO tool_calls(operation_id,conversation_id,recovery_chain_id,sdk_tool_call_id,origin_run_id,tool_contract_version,tool_name,arguments_fingerprint,state) VALUES(?,?,?,?,?,?,?,?,'registered')")
+    sqlx::query("INSERT INTO tool_calls(operation_id,conversation_id,recovery_chain_id,sdk_tool_call_id,origin_run_id,tool_contract_version,tool_name,arguments_fingerprint,state,created_at) VALUES(?,?,?,?,?,?,?,?,'registered',UTC_TIMESTAMP(3))")
  .bind(&operation_id).bind(&run.conversation_id).bind(&run.recovery_chain_id).bind(sdk_id).bind(&run.id).bind(run.tool_contract_version).bind(name).bind(fp).execute(tx.connection()).await?;
     Ok(operation_id)
 }
@@ -665,6 +665,32 @@ pub(super) async fn settle_call(tx: &mut AppTx<'_>, run: &LockedRun, attempt: &s
 pub async fn read_runs_in_tx(tx: &mut AppTx<'_>, cid: &str) -> Result<Vec<Value>> {
     let rows=sqlx::query("SELECT id,state,lease_epoch,message_id,attempt_id FROM agent_runs WHERE conversation_id=? ORDER BY created_at,id").bind(cid).fetch_all(tx.connection()).await?;
     Ok(rows.iter().map(|r|json!({"run_id":r.get::<String,_>("id"),"state":r.get::<String,_>("state"),"lease_epoch":r.get::<u64,_>("lease_epoch").to_string(),"message_id":r.get::<String,_>("message_id"),"attempt_id":r.get::<String,_>("attempt_id")})).collect())
+}
+
+/// 运行中run的当前活动：最近一次登记的工具名与已成功回执计数。
+/// 历史行created_at为迁移默认值，同刻并列按operation_id稳定排序。
+pub async fn running_activity_in_tx(
+    tx: &mut AppTx<'_>,
+    cid: &str,
+) -> Result<std::collections::HashMap<String, (String, u64)>> {
+    let rows = sqlx::query(
+        "SELECT t.origin_run_id AS run_id,t.tool_name AS tool_name,t.state AS state \
+         FROM tool_calls t JOIN agent_runs r ON r.id=t.origin_run_id \
+         WHERE r.conversation_id=? AND r.state='running' ORDER BY t.created_at,t.operation_id",
+    )
+    .bind(cid)
+    .fetch_all(tx.connection())
+    .await?;
+    let mut activity = std::collections::HashMap::<String, (String, u64)>::new();
+    for row in rows {
+        let run_id: String = row.get("run_id");
+        let entry = activity.entry(run_id).or_insert_with(|| (String::new(), 0));
+        entry.0 = row.get::<String, _>("tool_name");
+        if row.get::<String, _>("state") == "succeeded" {
+            entry.1 += 1;
+        }
+    }
+    Ok(activity)
 }
 
 pub async fn fail_message_runs_in_tx(tx: &mut AppTx<'_>, message_id: &str) -> Result<()> {

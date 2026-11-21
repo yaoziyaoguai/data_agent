@@ -9,9 +9,9 @@ pub use store::{
     TEXT_FIELDS, begin_removal_in_tx, begin_save_in_tx, begin_selection_in_tx, can_edit,
     change_state_authorized_in_tx, change_state_in_tx, current_versions_in_tx,
     legacy_operation_ids_in_tx, list_in_tx, materialize_field_authorities_in_tx, publish_in_tx,
-    read_field_authorities_in_tx, read_in_tx, record_adoption_in_tx, remove_selection_in_tx,
-    review_suggestion_in_tx, save_authorized_in_tx, save_draft_in_tx, save_in_tx,
-    save_with_authority_in_tx, select_in_tx, selected_in_tx, selection_page_in_tx,
+    read_enabled_in_tx, read_field_authorities_in_tx, read_in_tx, record_adoption_in_tx,
+    remove_selection_in_tx, review_suggestion_in_tx, save_authorized_in_tx, save_draft_in_tx,
+    save_in_tx, save_with_authority_in_tx, select_in_tx, selected_in_tx, selection_page_in_tx,
     selection_receipt_in_tx, suggest_in_tx, suggestions_in_tx,
 };
 

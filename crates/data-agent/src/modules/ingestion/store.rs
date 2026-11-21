@@ -694,6 +694,66 @@ pub async fn read_source_meta_in_tx(
     )
 }
 
+// 历史核验批量元信息：与read_source_meta_in_tx同一钉住/回退/缺失语义；
+// 当前头与当前正文各一条IN查询，仅钉住旧修订且不在current的项逐条回退快照。
+pub async fn read_source_metas_in_tx(
+    tx: &mut AppTx<'_>,
+    ctx: &AccessContext,
+    refs: &[(String, Option<u64>)],
+) -> Result<std::collections::HashMap<String, Value>> {
+    let mut ids: Vec<String> = refs.iter().map(|(id, _)| id.clone()).collect();
+    ids.sort();
+    ids.dedup();
+    let heads = source_versions_in_tx(tx, &ctx.space_id, &ids).await?;
+    let mut currents: std::collections::HashMap<String, (u64, bool)> = Default::default();
+    for chunk in ids.chunks(500) {
+        let mut query = sqlx::QueryBuilder::<sqlx::MySql>::new(
+            "SELECT source_id,revision,complete FROM source_current WHERE space_id=",
+        );
+        query.push_bind(&ctx.space_id).push(" AND source_id IN (");
+        let mut keys = query.separated(",");
+        for id in chunk {
+            keys.push_bind(id);
+        }
+        query.push(")");
+        for row in query.build().fetch_all(tx.connection()).await? {
+            currents.insert(
+                row.get::<String, _>("source_id"),
+                (
+                    row.get::<u64, _>("revision"),
+                    row.get::<bool, _>("complete"),
+                ),
+            );
+        }
+    }
+    let mut metas = std::collections::HashMap::new();
+    let mut seen = std::collections::HashSet::new();
+    for (id, pinned) in refs {
+        if !seen.insert(id) {
+            continue;
+        }
+        let current = *heads.get(id).ok_or(Error::new("not_available"))?;
+        let version = pinned.unwrap_or(current);
+        let complete = match currents.get(id) {
+            Some((revision, complete)) if *revision == version => *complete,
+            _ => {
+                sqlx::query("SELECT complete FROM source_snapshots WHERE source_id=? AND version=?")
+                    .bind(id)
+                    .bind(version)
+                    .fetch_optional(tx.connection())
+                    .await?
+                    .ok_or(Error::new("not_available"))?
+                    .get::<bool, _>("complete")
+            }
+        };
+        metas.insert(
+            id.clone(),
+            json!({"source_id":id,"version":version.to_string(),"current_version":current.to_string(),"complete":complete}),
+        );
+    }
+    Ok(metas)
+}
+
 // BINARY查找先按字节验证唯一性，再把前缀换算为Unicode字符坐标；只查指定源。
 pub async fn locate_source_quote_in_tx(
     tx: &mut AppTx<'_>,

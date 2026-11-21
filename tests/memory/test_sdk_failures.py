@@ -4,6 +4,7 @@ import json
 import os
 import sys
 import tempfile
+import threading
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
@@ -26,6 +27,7 @@ class EmbeddingBudgetTests(unittest.TestCase):
         store = ReceiptStore(Path(directory.name) / 'receipts.sqlite')
         self.addCleanup(store.db.close)
         self.gateway = ModelGateway.__new__(ModelGateway)
+        self.gateway._state = threading.local()
         self.gateway.store, self.gateway.failure = store, None
         self.gateway.binding = {'operation_id': 'synthetic-embedding'}
         self.gateway.config = {'embedding_url': 'http://127.0.0.1/synthetic'}
@@ -86,6 +88,7 @@ class SdkFailureTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             store = ReceiptStore(Path(directory) / 'receipts.sqlite')
             gateway = ModelGateway.__new__(ModelGateway)
+            gateway._state = threading.local()
             gateway.store, gateway.failure = store, None
             gateway.binding = {'operation_id': 'synthetic-operation'}
             gateway.config = {'embedding_url': 'http://127.0.0.1/synthetic'}

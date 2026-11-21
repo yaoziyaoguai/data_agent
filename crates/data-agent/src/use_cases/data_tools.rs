@@ -158,6 +158,11 @@ async fn semantic_diagnostics_in_tx(
         }
     }
     snapshot["objects"] = json!(valid);
+    // 口径诊断需要知道复合列是否已获用户明确确认；validate_sql等未携带时视为未确认。
+    snapshot["semantic_resolution"] = args
+        .get("semantic_resolution")
+        .cloned()
+        .unwrap_or(Value::Null);
     let report = queries::check_semantics(text(args, "sql")?, &args["parameters"], &snapshot);
     contracts::validate("SemanticCheckReport", &report)?;
     Ok(report)

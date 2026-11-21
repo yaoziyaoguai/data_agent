@@ -310,6 +310,32 @@ pub async fn table_objects_in_tx(
     Ok(rows.iter().map(body).collect())
 }
 
+// 启动重放批量登记的field→table归属解析：候选id中当前空间仍为table且未删除的集合。
+pub async fn live_table_ids_in_tx(
+    tx: &mut AppTx<'_>,
+    ctx: &AccessContext,
+    ids: &[String],
+) -> Result<std::collections::HashSet<String>> {
+    let mut tables = std::collections::HashSet::new();
+    for chunk in ids.chunks(500) {
+        let mut query = sqlx::QueryBuilder::<sqlx::MySql>::new(
+            "SELECT id FROM knowledge_objects WHERE space_id=",
+        );
+        query
+            .push_bind(&ctx.space_id)
+            .push(" AND state<>'deleted' AND JSON_UNQUOTE(JSON_EXTRACT(body,'$.kind'))='table' AND id IN (");
+        let mut keys = query.separated(",");
+        for id in chunk {
+            keys.push_bind(id);
+        }
+        query.push(")");
+        for row in query.build().fetch_all(tx.connection()).await? {
+            tables.insert(row.get::<String, _>("id"));
+        }
+    }
+    Ok(tables)
+}
+
 pub async fn related_documents_in_tx(
     tx: &mut AppTx<'_>,
     ctx: &AccessContext,

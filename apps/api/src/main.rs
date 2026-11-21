@@ -17,6 +17,7 @@ pub struct State {
     pub identities: DevelopmentIdentity,
     pub internal_token: Arc<String>,
     pub model_profile: Option<data_agent::contracts::generated::ModelProfile>,
+    pub cookie_secure: bool,
 }
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -36,6 +37,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 data_agent::contracts::decode("ModelProfile", value)
             })
             .transpose()?,
+        // HTTPS部署置1，为会话Cookie补Secure属性；本地HTTP默认关闭。
+        cookie_secure: env::var("DATA_AGENT_COOKIE_SECURE")
+            .map(|v| v == "1")
+            .unwrap_or(false),
     };
     if state.internal_token.len() < 32 {
         return Err("internal token too short".into());
@@ -114,6 +119,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             get(data_routes::read_knowledge).patch(data_routes::edit_knowledge),
         )
         .route(
+            "/knowledge/{id}/entries",
+            axum::routing::patch(data_routes::edit_knowledge_entries),
+        )
+        .route(
             "/knowledge/{id}/document",
             get(data_routes::read_document).patch(data_routes::edit_document),
         )
@@ -162,6 +171,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .delete(data_routes::remove_skill),
         )
         .route("/conversations/{id}/queries", get(data_routes::queries))
+        .route("/queries", get(data_routes::query_history))
         .route("/queries/{id}", get(data_routes::query))
         .route("/queries/{id}/confirm", post(data_routes::confirm))
         .route("/queries/{id}/cancel", post(data_routes::cancel))

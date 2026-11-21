@@ -260,9 +260,17 @@ export interface AgentQueryResultsClass {
 }
 
 export interface ResultColumnElement {
-    encoding: string;
-    name:     string;
-    type:     string;
+    /**
+     * 仅在SQL投影列名与当前有效field/metric对象名精确匹配时附带的中文列头说明；未匹配的列缺省，不从列名猜测。
+     */
+    display_label?: string;
+    encoding:       string;
+    name:           string;
+    type:           string;
+    /**
+     * 已核实并随对象维护的业务单位标签（如 元/单、%）；来源同display_label，未核实缺省。
+     */
+    unit?: string;
 }
 
 export type ContentFormat = "json";
@@ -2427,7 +2435,11 @@ export interface HumanStatementInputElement {
 export interface IdentityClass {
     model_label: ModelLabel;
     space_id:    string;
-    user_id:     string;
+    /**
+     * 空间显示名，由部署配置下发；与space_id分开，不参与授权判断。
+     */
+    space_name: string;
+    user_id:    string;
 }
 
 export type ModelLabel = "本地模拟模型" | "DeepSeek Flash" | "DeepSeek V4 Pro";
@@ -3477,10 +3489,18 @@ export type ResultNotificationExecutionState = "succeeded" | "failed" | "cancell
 
 export interface RunSnapshotElement {
     /**
+     * 运行中run最近一次已登记工具调用的中文动作提示，由服务端映射工具名生成；无工具调用的旧记录缺省。
+     */
+    activity_label?: string;
+    /**
      * 本run当前生成尝试身份，用于识别正文增量归属；旧快照可缺省。
      */
     attempt_id?: string;
-    lease_epoch: string;
+    /**
+     * 该run已成功回执的工具调用计数；旧记录缺省。仅作进度展示，不作为执行依据。
+     */
+    completed_steps?: number;
+    lease_epoch:      string;
     /**
      * 来自已有持久记录的触发消息身份；旧快照可缺省。
      */
@@ -3574,8 +3594,12 @@ export interface SendModelCallClass {
 export interface SessionReceiptClass {
     model_label: ModelLabel;
     space_id:    string;
-    state:       SessionReceiptState;
-    user_id:     string;
+    /**
+     * 空间显示名，由部署配置下发；与space_id分开，不参与授权判断。
+     */
+    space_name: string;
+    state:      SessionReceiptState;
+    user_id:    string;
 }
 
 export type SessionReceiptState = "authenticated";
@@ -4184,10 +4208,18 @@ export interface Event {
 
 export interface RunSnapshot {
     /**
+     * 运行中run最近一次已登记工具调用的中文动作提示，由服务端映射工具名生成；无工具调用的旧记录缺省。
+     */
+    activity_label?: string;
+    /**
      * 本run当前生成尝试身份，用于识别正文增量归属；旧快照可缺省。
      */
     attempt_id?: string;
-    lease_epoch: string;
+    /**
+     * 该run已成功回执的工具调用计数；旧记录缺省。仅作进度展示，不作为执行依据。
+     */
+    completed_steps?: number;
+    lease_epoch:      string;
     /**
      * 来自已有持久记录的触发消息身份；旧快照可缺省。
      */
@@ -4308,14 +4340,22 @@ export interface HistoryItem {
 export interface Identity {
     model_label: ModelLabel;
     space_id:    string;
-    user_id:     string;
+    /**
+     * 空间显示名，由部署配置下发；与space_id分开，不参与授权判断。
+     */
+    space_name: string;
+    user_id:    string;
 }
 
 export interface SessionReceipt {
     model_label: ModelLabel;
     space_id:    string;
-    state:       SessionReceiptState;
-    user_id:     string;
+    /**
+     * 空间显示名，由部署配置下发；与space_id分开，不参与授权判断。
+     */
+    space_name: string;
+    state:      SessionReceiptState;
+    user_id:    string;
 }
 
 export interface LogoutReceipt {
@@ -4693,6 +4733,31 @@ export interface PreparedSupport {
     key:         string;
     reference:   SemanticReference;
     role:        PreparedSupportRole;
+}
+
+export interface KnowledgeEntryBatch {
+    /**
+     * 同一对象内按序应用的条目修改；任一条目校验失败则整批回滚。
+     */
+    edits: [KnowledgeEntryEdit, ...KnowledgeEntryEdit[]];
+    /**
+     * 批量开始前的对象版本；同一事务内逐条保存，每条按既有语义递增，返回对象为最终版本。
+     */
+    expected_version: string;
+    operation_id:     string;
+}
+
+export interface KnowledgeEntryEdit {
+    clear_override?: boolean;
+    entry_id:        string;
+    related_ids?:    string[];
+    source_url?:     null | string;
+    /**
+     * 本条目明确保存的人工陈述及支持提取声明；身份和origin由服务端生成。
+     */
+    statements?:       HumanStatementInput[];
+    structured_value?: KnowledgeEntryQueryExampleStructure | null;
+    value:             string;
 }
 
 /**
@@ -5537,6 +5602,50 @@ export interface TimeBasis {
     timezone:   null | string;
 }
 
+export interface QueryHistoryQuery {
+    before_id?: string;
+    q?:         string;
+}
+
+export interface QueryHistory {
+    next_before_id: null | string;
+    queries:        QueryHistoryItem[];
+}
+
+export interface QueryHistoryItem {
+    condition_version:  string;
+    confirmation_state: string;
+    conversation_id:    string;
+    /**
+     * 查询创建时间（UTC），用于区分同名查询，不改变分页顺序。
+     */
+    created_at:      string;
+    draft_version:   string;
+    execution_state: string;
+    id:              string;
+    /**
+     * 查询SQL原文；正文失效的查询缺省，不用于重新执行。
+     */
+    sql?: string;
+    /**
+     * 查询保存时的摘要原文；正文失效的查询仅返回控制字段，summary缺省。
+     */
+    summary?: string;
+    task_id:  string;
+    /**
+     * 正文按历史记录展示：来源已改版或结果已漂移但记录仍可核；不能作为当前口径或执行依据。
+     */
+    text_historical?: boolean;
+    /**
+     * 正文来源失效或无法核实时为true；此时仅保留身份与控制状态。
+     */
+    text_unavailable?: boolean;
+    /**
+     * 该查询首次query_changed事件序号；无事件的旧记录为null，跳转定位由前端回退处理。
+     */
+    timeline_event_seq?: null | string;
+}
+
 export interface ConfirmQuery {
     condition_version: string;
     draft_version:     string;
@@ -6211,9 +6320,17 @@ export interface QueryResults {
 }
 
 export interface ResultColumn {
-    encoding: string;
-    name:     string;
-    type:     string;
+    /**
+     * 仅在SQL投影列名与当前有效field/metric对象名精确匹配时附带的中文列头说明；未匹配的列缺省，不从列名猜测。
+     */
+    display_label?: string;
+    encoding:       string;
+    name:           string;
+    type:           string;
+    /**
+     * 已核实并随对象维护的业务单位标签（如 元/单、%）；来源同display_label，未核实缺省。
+     */
+    unit?: string;
 }
 
 /**

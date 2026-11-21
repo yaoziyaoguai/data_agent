@@ -264,6 +264,34 @@ pub async fn read_in_tx(
     let row=sqlx::query("SELECT body,owner_id,visibility FROM personal_assets WHERE id=? AND (owner_id=? OR (visibility='space' AND kind='skill')) AND space_id=? AND state<>'deleted' AND (?=0 OR state='enabled')").bind(asset).bind(&ctx.user_id).bind(&ctx.space_id).bind(active).fetch_optional(tx.connection()).await?.ok_or(Error::new("not_available"))?;
     Ok(body(&row))
 }
+// 快照/历史核验的批量读取：与单条read_in_tx(active=true)同一可见性语义，
+// 把N+1循环合并为一条IN查询；缺失项由调用方按原not_available处理。
+pub async fn read_enabled_in_tx(
+    tx: &mut AppTx<'_>,
+    ctx: &AccessContext,
+    ids: &[String],
+) -> Result<std::collections::HashMap<String, Value>> {
+    let mut assets = std::collections::HashMap::new();
+    for chunk in ids.chunks(500) {
+        let mut query = sqlx::QueryBuilder::<sqlx::MySql>::new(
+            "SELECT id,body,owner_id,visibility FROM personal_assets WHERE (owner_id=",
+        );
+        query
+            .push_bind(&ctx.user_id)
+            .push(" OR (visibility='space' AND kind='skill')) AND space_id=")
+            .push_bind(&ctx.space_id)
+            .push(" AND state='enabled' AND id IN (");
+        let mut keys = query.separated(",");
+        for id in chunk {
+            keys.push_bind(id);
+        }
+        query.push(")");
+        for row in query.build().fetch_all(tx.connection()).await? {
+            assets.insert(row.get::<String, _>("id"), body(&row));
+        }
+    }
+    Ok(assets)
+}
 async fn begin_operation(
     tx: &mut AppTx<'_>,
     ctx: &AccessContext,

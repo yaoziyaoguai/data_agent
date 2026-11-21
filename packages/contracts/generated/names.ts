@@ -51,6 +51,8 @@ export interface ContractTypes {
   KnowledgeObject: Boundary.KnowledgeObject;
   KnowledgeList: Boundary.KnowledgeList;
   KnowledgeEdit: Boundary.KnowledgeEdit;
+  KnowledgeEntryEdit: Boundary.KnowledgeEntryEdit;
+  KnowledgeEntryBatch: Boundary.KnowledgeEntryBatch;
   KnowledgeCreate: Boundary.KnowledgeCreate;
   VersionCommand: Boundary.VersionCommand;
   Asset: Boundary.Asset;
@@ -92,6 +94,9 @@ export interface ContractTypes {
   WorkspaceContext: Boundary.WorkspaceContext;
   QueryView: Boundary.QueryView;
   QueryList: Boundary.QueryList;
+  QueryHistoryQuery: Boundary.QueryHistoryQuery;
+  QueryHistoryItem: Boundary.QueryHistoryItem;
+  QueryHistory: Boundary.QueryHistory;
   ConfirmQuery: Boundary.ConfirmQuery;
   ResultColumn: Boundary.ResultColumn;
   QueryResults: Boundary.QueryResults;

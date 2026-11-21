@@ -3,6 +3,7 @@ import hashlib
 import json
 import math
 import os
+import threading
 import time
 import uuid
 from pathlib import Path
@@ -18,11 +19,27 @@ class ModelGateway:
     def __init__(self, config, store):
         self.config, self.store = config, store
         self.client = httpx.Client(timeout=90, trust_env=False, follow_redirects=False)
-        self.binding = None
-        self.failure = None
+        # 请求内状态按线程隔离：/search与/extract并发时预算绑定与失败标记互不串用。
+        self._state = threading.local()
         self.token = os.environ["DATA_AGENT_INTERNAL_TOKEN"]
         self.key = os.environ["DEEPSEEK_API_KEY"]
         self.embedding_key = Path(config["embedding_key_file"]).read_text().strip()
+
+    @property
+    def binding(self):
+        return getattr(self._state, "binding", None)
+
+    @binding.setter
+    def binding(self, value):
+        self._state.binding = value
+
+    @property
+    def failure(self):
+        return getattr(self._state, "failure", None)
+
+    @failure.setter
+    def failure(self, value):
+        self._state.failure = value
 
     def host(self, envelope):
         r = self.client.post(os.environ["DATA_AGENT_API_URL"] + "/internal/memory/model-calls",

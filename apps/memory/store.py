@@ -1,6 +1,7 @@
-"""Mem0技术回执；正式个人资产仍由Rust/MySQL管理。"""
+"""Mem0技术回执；正式个人资产仍由Rust/MySQL管理。WAL下各线程独立连接并发读，写由SQLite自身串行。"""
 import json
 import sqlite3
+import threading
 
 
 class MemoryError(Exception):
@@ -9,14 +10,27 @@ class MemoryError(Exception):
 
 class ReceiptStore:
     def __init__(self, path):
-        self.db = sqlite3.connect(path, check_same_thread=False)
-        self.db.execute("PRAGMA journal_mode=WAL")
-        self.db.execute("PRAGMA synchronous=FULL")
+        self.path = path
+        self._local = threading.local()
+        # 建表只跑一次；WAL让各线程的独立连接并发读取互不阻塞。
         self.db.executescript("""
         CREATE TABLE IF NOT EXISTS operations(id TEXT PRIMARY KEY, fingerprint TEXT NOT NULL, state TEXT NOT NULL, result TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS assets(identity TEXT PRIMARY KEY, version INTEGER NOT NULL, state TEXT NOT NULL, memory_ids TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS provider_calls(id TEXT PRIMARY KEY, input TEXT NOT NULL, usage TEXT, state TEXT NOT NULL);
         """)
+
+    @property
+    def db(self):
+        # 线程局部连接：检索与提取并发时不再共用一个连接互相阻塞；
+        # 写入竞争交给SQLite写锁，busy_timeout内自动等待而非立即报错。
+        db = getattr(self._local, "db", None)
+        if db is None:
+            db = sqlite3.connect(self.path, check_same_thread=False)
+            db.execute("PRAGMA journal_mode=WAL")
+            db.execute("PRAGMA synchronous=FULL")
+            db.execute("PRAGMA busy_timeout=5000")
+            self._local.db = db
+        return db
 
     def operation(self, key, fingerprint):
         row = self.db.execute("SELECT fingerprint,state,result FROM operations WHERE id=?", (key,)).fetchone()

@@ -1,10 +1,9 @@
-"""本机Mem0适配进程：显式配置、同源JSON Schema、内部凭据及串行SDK访问。"""
+"""本机Mem0适配进程：显式配置、同源JSON Schema、内部凭据；检索无锁并发，写按租户串行。"""
 import argparse
 import fcntl
 import json
 import os
 import re
-import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse
@@ -46,7 +45,6 @@ def main():
     process_lock = (args.directory / 'service.lock').open('a')
     fcntl.flock(process_lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
     service = MemoryService(config, args.directory)
-    lock = threading.Lock()
     token = os.environ["DATA_AGENT_INTERNAL_TOKEN"]
     if len(token) < 32:
         raise RuntimeError("memory_token_invalid")
@@ -71,8 +69,8 @@ def main():
                 return self.reply(401, {"error": "unauthenticated"})
             if self.path not in ROUTES:
                 return self.reply(404, {"error": "not_available"})
-            if not lock.acquire(timeout=3):
-                return self.reply(503, {"error": "memory_unavailable"})
+            # 无全局锁：并发边界由service内租户锁与线程局部状态承担，
+            # 慢提取不再把常规检索拖到超时。
             try:
                 length = int(self.headers.get("Content-Length", "0"))
                 if not 0 < length <= 131072:
@@ -89,9 +87,6 @@ def main():
                 code = str(e) if isinstance(e, MemoryError) else "memory_unavailable"
                 print("memory_operation_failed code=" + (code if isinstance(e, MemoryError) else type(e).__name__), flush=True)
                 self.reply(503, {"error": code})
-            finally:
-                service.gateway.binding = None
-                lock.release()
 
     server = ThreadingHTTPServer(("127.0.0.1", args.port), Handler)
     print(f"startup service=memory stage=listening elapsed={time.monotonic()-_started:.2f}s", flush=True)

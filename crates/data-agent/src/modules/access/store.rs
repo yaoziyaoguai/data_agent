@@ -5,6 +5,53 @@ use crate::{
 use serde_json::{Value, json};
 use sqlx::Row;
 
+// 会话令牌摘要入库；过期与吊销在读取侧统一判定，登录态不复活。
+pub async fn create_session_in_tx(
+    tx: &mut AppTx<'_>,
+    ctx: &AccessContext,
+    token_hash: &str,
+    ttl_seconds: i64,
+) -> Result<()> {
+    sqlx::query(
+        "INSERT INTO user_sessions(id,user_id,space_id,expires_at) \
+         VALUES(?,?,?,TIMESTAMPADD(SECOND,?,UTC_TIMESTAMP(3)))",
+    )
+    .bind(token_hash)
+    .bind(&ctx.user_id)
+    .bind(&ctx.space_id)
+    .bind(ttl_seconds)
+    .execute(tx.connection())
+    .await?;
+    Ok(())
+}
+pub async fn resolve_session_in_tx(
+    tx: &mut AppTx<'_>,
+    token_hash: &str,
+) -> Result<Option<(String, String)>> {
+    let row = sqlx::query(
+        "SELECT user_id,space_id FROM user_sessions \
+         WHERE id=? AND revoked_at IS NULL AND expires_at>UTC_TIMESTAMP(3)",
+    )
+    .bind(token_hash)
+    .fetch_optional(tx.connection())
+    .await?;
+    Ok(row.map(|row| {
+        (
+            row.get::<String, _>("user_id"),
+            row.get::<String, _>("space_id"),
+        )
+    }))
+}
+pub async fn revoke_session_in_tx(tx: &mut AppTx<'_>, token_hash: &str) -> Result<()> {
+    sqlx::query(
+        "UPDATE user_sessions SET revoked_at=UTC_TIMESTAMP(3) WHERE id=? AND revoked_at IS NULL",
+    )
+    .bind(token_hash)
+    .execute(tx.connection())
+    .await?;
+    Ok(())
+}
+
 pub async fn can_create_in_tx(tx: &mut AppTx<'_>, ctx: &AccessContext) -> Result<bool> {
     // 锁住一个当前有效的表维护关系，创建与该关系撤回按事务先后生效。
     read_can_create_in_tx(tx, ctx, true).await
@@ -79,6 +126,39 @@ pub async fn register_in_tx(
     }
     sqlx::query("INSERT IGNORE INTO semantic_ownership(space_id,object_id,authority_id,source,updated_by) VALUES(?,?,?,?,?)")
         .bind(&ctx.space_id).bind(object).bind(authority).bind(source).bind(&ctx.user_id).execute(tx.connection()).await?;
+    Ok(())
+}
+// 启动登记的批量幂等写入：与register_in_tx同语义，仅首次创建生效，不覆盖已有归属。
+pub async fn register_batch_in_tx(
+    tx: &mut AppTx<'_>,
+    ctx: &AccessContext,
+    rows: &[(String, String, &'static str)],
+) -> Result<()> {
+    for chunk in rows.chunks(500) {
+        let mut query = sqlx::QueryBuilder::<sqlx::MySql>::new(
+            "INSERT IGNORE INTO semantic_ownership(space_id,object_id,authority_id,source,updated_by) VALUES ",
+        );
+        let mut first = true;
+        for (object, authority, source) in chunk {
+            if !first {
+                query.push(",");
+            }
+            first = false;
+            query
+                .push("(")
+                .push_bind(&ctx.space_id)
+                .push(",")
+                .push_bind(object)
+                .push(",")
+                .push_bind(authority)
+                .push(",")
+                .push_bind(*source)
+                .push(",")
+                .push_bind(&ctx.user_id)
+                .push(")");
+        }
+        query.build().execute(tx.connection()).await?;
+    }
     Ok(())
 }
 

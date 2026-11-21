@@ -7,6 +7,34 @@ use crate::{
 use serde_json::{Value, json};
 use sqlx::MySqlPool;
 use std::collections::{HashMap, HashSet};
+
+// 运行活动中文提示：与use_cases::data_tools收录的工具名一一映射；未知工具不猜文案。
+fn activity_label(tool: &str) -> Option<&'static str> {
+    Some(match tool {
+        "search_knowledge" => "正在检索语义知识",
+        "read_knowledge" => "正在阅读知识对象",
+        "read_source" => "正在读取来源原文",
+        "read" => "正在读取技能文件",
+        "validate_sql" => "正在核验SQL",
+        "request_query" => "正在起草数据查询",
+        "execute_query" => "正在执行数据查询",
+        "get_query" => "正在核对查询状态",
+        "cancel_query" => "正在取消查询",
+        "update_analysis_task" => "正在整理分析任务",
+        "save_analysis_evidence" => "正在保存分析依据",
+        "prepare_analysis_answer" => "正在准备回答",
+        "present_analysis_answer" => "正在生成回答",
+        "save_analysis_report" => "正在保存分析报告",
+        "read_analysis_report" => "正在读取分析报告",
+        "prepare_skill_draft" => "正在准备技能草稿",
+        "manage_personal_asset" => "正在整理个人资产",
+        "propose_semantic_change" => "正在提交语义修订",
+        "read_conversation" => "正在读取会话记录",
+        "read_analysis_task" => "正在读取分析任务",
+        _ => return None,
+    })
+}
+
 async fn read_output_authorities_in_tx(
     tx: &mut AppTx<'_>,
     context: &AccessContext,
@@ -299,6 +327,7 @@ pub async fn read_page(
     // run身份由runtime提供，结果通知关联由conversations可信记录组合；不跨模块私表SQL。
     let mut runs = runtime::read_runs_in_tx(&mut tx, cid).await?;
     let result_queries = conversations::result_query_map_in_tx(&mut tx, cid).await?;
+    let activity = runtime::running_activity_in_tx(&mut tx, cid).await?;
     for run in &mut runs {
         let result_query_id = run["message_id"]
             .as_str()
@@ -309,6 +338,15 @@ pub async fn read_page(
             json!("user_request")
         };
         run["result_query_id"] = result_query_id.map(|qid| json!(qid)).unwrap_or(Value::Null);
+        // 运行中才提示活动；最近一次登记的工具名映射为中文动作，未知工具不编造文案。
+        if run["state"] == "running"
+            && let Some((tool, steps)) = activity.get(run["run_id"].as_str().unwrap_or(""))
+        {
+            if let Some(label) = activity_label(tool) {
+                run["activity_label"] = json!(label);
+            }
+            run["completed_steps"] = json!(steps);
+        }
     }
     tx.commit().await?;
     let loaded_attempts = loaded_counts
@@ -402,4 +440,39 @@ pub async fn read_page(
         snapshot["output_projections"] = json!(output_projections);
     }
     Ok(snapshot)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::activity_label;
+
+    #[test]
+    fn known_tools_map_to_activity_labels_and_unknown_stays_silent() {
+        for tool in [
+            "search_knowledge",
+            "read_knowledge",
+            "read_source",
+            "read",
+            "validate_sql",
+            "request_query",
+            "execute_query",
+            "get_query",
+            "cancel_query",
+            "update_analysis_task",
+            "save_analysis_evidence",
+            "prepare_analysis_answer",
+            "present_analysis_answer",
+            "save_analysis_report",
+            "read_analysis_report",
+            "prepare_skill_draft",
+            "manage_personal_asset",
+            "propose_semantic_change",
+            "read_conversation",
+            "read_analysis_task",
+        ] {
+            let label = activity_label(tool).unwrap_or_else(|| panic!("{tool}缺少活动提示"));
+            assert!(label.starts_with("正在"), "{tool}提示不是动作式中文");
+        }
+        assert_eq!(activity_label("unknown_tool"), None);
+    }
 }

@@ -15,7 +15,7 @@ use serde_json::Value;
 type Response = Result<Json<Value>, (StatusCode, Json<Value>)>;
 
 pub async fn catalog(AxumState(state): AxumState<State>, headers: HeaderMap) -> Response {
-    let context = user(&state, &headers).map_err(failure)?;
+    let context = user(&state, &headers).await.map_err(failure)?;
     let value = model_configuration::catalog(&state.pool, &context, state.model_profile.as_ref())
         .await
         .map_err(failure)?;
@@ -26,7 +26,7 @@ pub async fn read(
     headers: HeaderMap,
     Path(cid): Path<String>,
 ) -> Response {
-    let context = user(&state, &headers).map_err(failure)?;
+    let context = user(&state, &headers).await.map_err(failure)?;
     let value = conversation_models::read(&state.pool, &context, &cid)
         .await
         .map_err(failure)?;
@@ -38,7 +38,7 @@ pub async fn save(
     Path(cid): Path<String>,
     Json(body): Json<Value>,
 ) -> Response {
-    let context = user(&state, &headers).map_err(failure)?;
+    let context = user(&state, &headers).await.map_err(failure)?;
     let input = contracts::decode("SaveModelSelection", body).map_err(failure)?;
     let value = conversation_models::save(
         &state.pool,
@@ -53,14 +53,14 @@ pub async fn save(
 }
 
 pub async fn access(AxumState(state): AxumState<State>, headers: HeaderMap) -> Response {
-    let context = user(&state, &headers).map_err(failure)?;
+    let context = user(&state, &headers).await.map_err(failure)?;
     success(
         "ModelConfigurationAccess",
         model_configuration::access(&context).map_err(failure)?,
     )
 }
 pub async fn configuration(AxumState(state): AxumState<State>, headers: HeaderMap) -> Response {
-    let context = user(&state, &headers).map_err(failure)?;
+    let context = user(&state, &headers).await.map_err(failure)?;
     success(
         "ModelConfiguration",
         model_configuration::read(&state.pool, &context, state.model_profile.as_ref())
@@ -69,7 +69,7 @@ pub async fn configuration(AxumState(state): AxumState<State>, headers: HeaderMa
     )
 }
 async fn save_configuration(state: State, headers: HeaderMap, body: Value, kind: &str) -> Response {
-    let context = user(&state, &headers).map_err(failure)?;
+    let context = user(&state, &headers).await.map_err(failure)?;
     success(
         "ModelConfiguration",
         model_configuration::save(

@@ -17,7 +17,7 @@ pub async fn read(
     Path(object): Path<String>,
     Query(query): Query<HashMap<String, String>>,
 ) -> Result<Json<Value>, (axum::http::StatusCode, Json<Value>)> {
-    let ctx = user(&state, &headers).map_err(failure)?;
+    let ctx = user(&state, &headers).await.map_err(failure)?;
     let input = query
         .into_iter()
         .map(|(key, value)| (key, json!(value)))

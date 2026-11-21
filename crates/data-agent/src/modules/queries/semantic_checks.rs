@@ -164,7 +164,15 @@ pub fn check_semantics(sql: &str, parameters: &Value, snapshot: &Value) -> Value
             &mut report,
         );
     }
-    check_metrics(select, parameters, &bindings, &sums, objects, &mut report);
+    check_metrics(
+        select,
+        parameters,
+        &bindings,
+        &sums,
+        objects,
+        &snapshot["semantic_resolution"],
+        &mut report,
+    );
     if let Some(notes) = snapshot["coverage"]["notes"].as_array() {
         report
             .missing
@@ -640,6 +648,7 @@ fn check_metrics(
     bindings: &[Binding<'_>],
     sums: &[Column],
     objects: &[Value],
+    resolution: &Value,
     report: &mut Report,
 ) {
     let candidates: Vec<_> = objects
@@ -685,6 +694,9 @@ fn check_metrics(
         report.missing("metric_expression", refs, "指标缺少计算表达式，未检查。");
         return;
     };
+    // DA-001：主指标表达式与CASE WHEN … IS NULL边界项加减拼成自造复合列，须先于
+    // SUM形态检查执行，COUNT类指标同样适用。
+    check_metric_boundary_mixing(select, expression, resolution, refs.clone(), report);
     let parsed = Parser::new(&SQLiteDialect {})
         .with_recursion_limit(32)
         .try_with_sql(&format!("SELECT {expression}"))
@@ -824,6 +836,181 @@ fn check_metrics(
         },
         "仅比较明确单位文本，不猜测汇率、币种或单位换算；复杂表达式未检查。",
     );
+}
+
+// DA-001：把已确认指标表达式与额外CASE WHEN … IS NULL边界项加减拼接成
+// “自造复合指标”。在顶层SELECT投影的加减链上做规范化表达式比对；未在任务
+// semantic_resolution中获用户明确确认（basis=explicit_user且说明包含该列名）时
+// 给出metric_boundary_mixed诊断，引导拆分为独立并列列。只报告首个复合列。
+fn check_metric_boundary_mixing(
+    select: &Select,
+    expression: &str,
+    resolution: &Value,
+    refs: Vec<Value>,
+    report: &mut Report,
+) {
+    let Some(metric_sql) = canonical_expression_sql(expression) else {
+        return;
+    };
+    for item in &select.projection {
+        let Some(expr) = projection_expr(item) else {
+            continue;
+        };
+        let mut terms = Vec::new();
+        arithmetic_terms(unnested(expr), &mut terms);
+        if terms.len() < 2 {
+            continue;
+        }
+        let matched = terms
+            .iter()
+            .any(|term| canonical_projection(term) == metric_sql);
+        let patched = terms.iter().any(|term| {
+            let term_sql = canonical_projection(term);
+            term_sql != metric_sql && contains_boundary_patch(term)
+        });
+        if !matched || !patched {
+            continue;
+        }
+        let alias = item_alias(item);
+        let confirmed = resolution["basis"] == "explicit_user"
+            && alias.as_deref().is_some_and(|alias| {
+                resolution["interpretation"]
+                    .as_str()
+                    .is_some_and(|text| text.to_lowercase().contains(&alias.to_lowercase()))
+            });
+        if confirmed {
+            report.add(
+                "metric_boundary_mixed",
+                "checked",
+                refs,
+                "复合口径列已在语义决策中获用户明确确认，保留原表达式。",
+                LIMITATION,
+            );
+        } else {
+            report.add(
+                "metric_boundary_mixed",
+                "warning",
+                refs,
+                "检测到把已确认指标与CASE WHEN … IS NULL边界项加减拼接的复合列；正式指标列须严格沿用已确认表达式，缺失实体或异常样本单独作为辅助列输出，禁止加总为新指标。",
+                "仅比对顶层SELECT投影的加减链；嵌套在子查询、函数参数内的拼接未检查。",
+            );
+        }
+        return;
+    }
+}
+
+// 独立解析指标表达式（无FROM/WHERE的SELECT投影），返回规范化SQL文本。
+fn canonical_expression_sql(expression: &str) -> Option<String> {
+    let parsed = Parser::new(&SQLiteDialect {})
+        .with_recursion_limit(32)
+        .try_with_sql(&format!("SELECT {expression}"))
+        .and_then(|mut parser| parser.parse_statements())
+        .ok()?;
+    let [Statement::Query(query)] = parsed.as_slice() else {
+        return None;
+    };
+    if query.with.is_some() || query.order_by.is_some() || query.limit_clause.is_some() {
+        return None;
+    }
+    let SetExpr::Select(select) = query.body.as_ref() else {
+        return None;
+    };
+    if !select.from.is_empty() || select.selection.is_some() {
+        return None;
+    }
+    let [item] = select.projection.as_slice() else {
+        return None;
+    };
+    Some(canonical_projection(projection_expr(item)?))
+}
+
+// 规范化：小写、压缩空白、去除列限定，使 COUNT(DISTINCT t.customer_id) 与
+// count(distinct customer_id) 等价。两侧同法处理，不引入口径判断。
+fn canonical_projection(expr: &Expr) -> String {
+    let sql = expr.to_string().to_lowercase();
+    strip_qualifiers(&sql.split_whitespace().collect::<Vec<_>>().join(" "))
+}
+
+// 去除标识符的表限定；跳过单引号字符串内容与数字字面量，一次扫描同时处理
+// 多级限定（a.b.c → c）。
+fn strip_qualifiers(sql: &str) -> String {
+    let chars: Vec<char> = sql.chars().collect();
+    let mut remove = vec![false; chars.len()];
+    let mut in_string = false;
+    for (index, &symbol) in chars.iter().enumerate() {
+        if symbol == '\'' {
+            in_string = !in_string;
+            continue;
+        }
+        if symbol != '.' || in_string {
+            continue;
+        }
+        let mut start = index;
+        while start > 0 && (chars[start - 1].is_ascii_alphanumeric() || chars[start - 1] == '_') {
+            start -= 1;
+        }
+        let token_is_identifier =
+            start < index && (chars[start].is_ascii_alphabetic() || chars[start] == '_');
+        let forward_is_identifier = chars
+            .get(index + 1)
+            .is_some_and(|c| c.is_ascii_alphabetic() || *c == '_');
+        if token_is_identifier && forward_is_identifier {
+            remove[start..=index].fill(true);
+        }
+    }
+    chars
+        .iter()
+        .enumerate()
+        .filter(|(position, _)| !remove[*position])
+        .map(|(_, symbol)| *symbol)
+        .collect()
+}
+
+// 顶层加减链分解：a + b - (c + d) → [a, b, (c+d)]；括号内加减不提升为顶层项。
+fn arithmetic_terms<'a>(expr: &'a Expr, terms: &mut Vec<&'a Expr>) {
+    match unnested(expr) {
+        Expr::BinaryOp {
+            left,
+            op: BinaryOperator::Plus | BinaryOperator::Minus,
+            right,
+        } => {
+            arithmetic_terms(left, terms);
+            terms.push(unnested(right));
+        }
+        _ => terms.push(expr),
+    }
+}
+
+// 边界项特征：CASE WHEN分支或IS NULL判定——“存在匿名则+1”式补丁的形态。
+fn contains_boundary_patch(expr: &Expr) -> bool {
+    match expr {
+        Expr::Case { .. } | Expr::IsNull(_) => true,
+        Expr::Nested(inner) => contains_boundary_patch(inner),
+        Expr::BinaryOp { left, right, .. } => {
+            contains_boundary_patch(left) || contains_boundary_patch(right)
+        }
+        Expr::Function(function) => {
+            let FunctionArguments::List(args) = &function.args else {
+                return false;
+            };
+            args.args.iter().any(|arg| match arg {
+                FunctionArg::Named { arg, .. }
+                | FunctionArg::Unnamed(arg)
+                | FunctionArg::ExprNamed { arg, .. } => match arg {
+                    FunctionArgExpr::Expr(expr) => contains_boundary_patch(expr),
+                    _ => false,
+                },
+            })
+        }
+        _ => false,
+    }
+}
+
+fn item_alias(item: &SelectItem) -> Option<String> {
+    match item {
+        SelectItem::ExprWithAlias { alias, .. } => Some(alias.value.clone()),
+        _ => None,
+    }
 }
 
 fn scalar_bound(expr: &Expr, parameters: &Value) -> bool {

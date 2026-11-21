@@ -446,6 +446,30 @@ pub async fn read_events_in_tx(
     let rows=sqlx::query("SELECT * FROM conversation_events WHERE conversation_id=? AND event_seq>? ORDER BY event_seq LIMIT 1000").bind(&locked.id).bind(after).fetch_all(tx.connection()).await?;
     Ok(rows.iter().map(|row| event_value(locked, row)).collect())
 }
+/// 批量判断会话对当前用户仍可见（未删除、属当前空间）；供跨会话列表过滤死链。
+pub async fn visible_ids_in_tx(
+    tx: &mut AppTx<'_>,
+    context: &AccessContext,
+    ids: &[String],
+) -> Result<std::collections::HashSet<String>> {
+    if ids.is_empty() {
+        return Ok(std::collections::HashSet::new());
+    }
+    let mut sql =
+        sqlx::QueryBuilder::<sqlx::MySql>::new("SELECT id FROM conversations WHERE owner_id=");
+    sql.push_bind(&context.user_id)
+        .push(" AND space_id=")
+        .push_bind(&context.space_id)
+        .push(" AND deleted=0 AND id IN (");
+    let mut separated = sql.separated(", ");
+    for id in ids {
+        separated.push_bind(id);
+    }
+    separated.push_unseparated(")");
+    let rows: Vec<String> = sql.build_query_scalar().fetch_all(tx.connection()).await?;
+    Ok(rows.into_iter().collect())
+}
+
 pub async fn list_conversations_in_tx(
     tx: &mut AppTx<'_>,
     context: &AccessContext,

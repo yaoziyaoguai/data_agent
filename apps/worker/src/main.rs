@@ -1,10 +1,25 @@
 use data_agent::{
     modules::jobs,
-    persistence,
+    persistence::{self, MySqlPool},
     types::{Error, id},
     use_cases::deliver_run,
 };
-use std::{collections::HashMap, env, sync::Mutex, time::Duration};
+use std::{
+    collections::HashMap,
+    env,
+    sync::{Arc, Mutex},
+    time::Duration,
+};
+use tokio::{
+    sync::{Semaphore, watch},
+    task::JoinSet,
+};
+
+// 空闲退避阶梯：连续无任务时从100ms放缓到2s；一轮处理了任务立即复位。
+const BACKOFF_STEPS_MS: [u64; 5] = [100, 250, 500, 1000, 2000];
+fn backoff_delay(consecutive_idle: u32) -> Duration {
+    Duration::from_millis(BACKOFF_STEPS_MS[(consecutive_idle.min(4)) as usize])
+}
 
 // 合成验收钩子：按阶段注入一次临时存储故障（claim/context/renew/defer/defer_lease/fail），
 // 验证worker不退出、任务可继续。未设置时不产生任何行为差异。
@@ -177,7 +192,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     if env::var("DATA_AGENT_MODE")?.as_str() != "development" {
         return Err("explicit development configuration required".into());
     }
-    let pool = persistence::connect(&env::var("DATA_AGENT_DATABASE_URL")?).await?;
+    let pool = persistence::connect_with_default(&env::var("DATA_AGENT_DATABASE_URL")?, 32).await?;
     let worker_id = id();
     let ttl_ms = env::var("DATA_AGENT_LEASE_MS")
         .unwrap_or_else(|_| "15000".into())
@@ -202,6 +217,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let sync_pool = pool.clone();
         let sync_worker = id();
         let sync_task = tokio::spawn(async move {
+            let mut idle = 0u32;
             loop {
                 match data_agent::use_cases::catalog_import::process_due(
                     &sync_pool,
@@ -210,11 +226,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 )
                 .await
                 {
-                    Ok(true) => continue,
+                    Ok(true) => {
+                        idle = 0;
+                        continue;
+                    }
                     Ok(false) => {}
                     Err(e) => eprintln!("source_sync_worker_failure code={}", e.code),
                 }
-                tokio::time::sleep(Duration::from_millis(100)).await;
+                tokio::time::sleep(backoff_delay(idle)).await;
+                idle += 1;
             }
         });
         // 合成验收可单独推进真实来源队列，避免同时消费被其他场景刻意暂停的预填/对话。
@@ -224,276 +244,390 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         let prefill_pool = pool.clone();
         tokio::spawn(async move {
+            let mut idle = 0u32;
             loop {
-                if let Err(e) =
-                    data_agent::use_cases::semantic_prefill::process_due(&prefill_pool).await
-                {
-                    eprintln!("prefill_failure code={}", e.code);
+                match data_agent::use_cases::semantic_prefill::process_due(&prefill_pool).await {
+                    Ok(true) => {
+                        idle = 0;
+                        continue;
+                    }
+                    Ok(false) => {}
+                    Err(e) => eprintln!("prefill_failure code={}", e.code),
                 }
-                tokio::time::sleep(Duration::from_millis(100)).await;
+                tokio::time::sleep(backoff_delay(idle)).await;
+                idle += 1;
             }
         });
         let preparation_pool = pool.clone();
         tokio::spawn(async move {
+            let mut idle = 0u32;
             loop {
                 match data_agent::use_cases::source_preparation::process_due(&preparation_pool)
                     .await
                 {
-                    Ok(true) => continue,
+                    Ok(true) => {
+                        idle = 0;
+                        continue;
+                    }
                     Ok(false) => {}
                     Err(e) => eprintln!("source_preparation_worker_failure code={}", e.code),
                 }
-                tokio::time::sleep(Duration::from_millis(100)).await;
+                tokio::time::sleep(backoff_delay(idle)).await;
+                idle += 1;
             }
         });
         // 公共索引消费者：知识对象与原文来源目标同表分派，不再另设原文队列循环。
         let fanout_pool = pool.clone();
         tokio::spawn(async move {
+            let mut idle = 0u32;
             loop {
                 match data_agent::use_cases::source_fanout::process_due(&fanout_pool).await {
-                    Ok(true) => continue,
+                    Ok(true) => {
+                        idle = 0;
+                        continue;
+                    }
                     Ok(false) => {}
                     Err(e) => eprintln!("source_fanout_worker_failure code={}", e.code),
                 }
-                tokio::time::sleep(Duration::from_millis(100)).await;
+                tokio::time::sleep(backoff_delay(idle)).await;
+                idle += 1;
             }
         });
         let index_pool = pool.clone();
         tokio::spawn(async move {
+            let mut idle = 0u32;
             loop {
                 match data_agent::use_cases::knowledge::process_index(&index_pool).await {
-                    Ok(true) => continue,
+                    Ok(true) => {
+                        idle = 0;
+                        continue;
+                    }
                     Ok(false) => {}
                     Err(e) => eprintln!("knowledge_index_failure code={}", e.code),
                 }
-                tokio::time::sleep(Duration::from_millis(100)).await;
+                tokio::time::sleep(backoff_delay(idle)).await;
+                idle += 1;
             }
         });
         let memory_pool = pool.clone();
         tokio::spawn(async move {
+            let mut idle = 0u32;
             loop {
-                if let Err(e) =
-                    data_agent::use_cases::personal_memory::process_index(&memory_pool).await
-                {
-                    eprintln!("memory_worker_failure code={}", e.code);
+                match data_agent::use_cases::personal_memory::process_index(&memory_pool).await {
+                    Ok(true) => {
+                        idle = 0;
+                        continue;
+                    }
+                    Ok(false) => {}
+                    Err(e) => eprintln!("memory_worker_failure code={}", e.code),
                 }
-                tokio::time::sleep(Duration::from_millis(300)).await;
+                tokio::time::sleep(backoff_delay(idle)).await;
+                idle += 1;
             }
         });
         let query_pool = pool.clone();
         let query_worker = id();
         tokio::spawn(async move {
+            let mut idle = 0u32;
             loop {
-                if let Err(e) =
-                    data_agent::use_cases::query_workflow::process_due(&query_pool, &query_worker)
-                        .await
+                match data_agent::use_cases::query_workflow::process_due(&query_pool, &query_worker)
+                    .await
                 {
-                    eprintln!("query_worker_failure code={}", e.code);
+                    Ok(true) => {
+                        idle = 0;
+                        continue;
+                    }
+                    Ok(false) => {}
+                    Err(e) => eprintln!("query_worker_failure code={}", e.code),
                 }
-                tokio::time::sleep(Duration::from_millis(100)).await;
+                tokio::time::sleep(backoff_delay(idle)).await;
+                idle += 1;
             }
         });
     }
+    let concurrency = env::var("DATA_AGENT_DELIVERY_CONCURRENCY")
+        .ok()
+        .and_then(|value| value.parse::<usize>().ok())
+        .unwrap_or(16);
+    if concurrency == 0 {
+        return Err("invalid delivery concurrency".into());
+    }
+    let semaphore = Arc::new(Semaphore::new(concurrency));
+    let (shutdown_tx, shutdown_rx) = watch::channel(false);
+    tokio::spawn(async move {
+        let terminate = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate());
+        let mut terminate = match terminate {
+            Ok(stream) => stream,
+            Err(_) => return,
+        };
+        tokio::select! {
+            _ = tokio::signal::ctrl_c() => {}
+            _ = terminate.recv() => {}
+        }
+        // 优雅退出：停止领取新任务；在途交付继续收尾。
+        eprintln!("worker_shutdown_requested");
+        let _ = shutdown_tx.send(true);
+    });
+    let mut shutdown = shutdown_rx.clone();
+    let mut deliveries = JoinSet::new();
+    let mut idle = 0u32;
     loop {
+        // 先等空闲槽位再领取；等待期间收到停机信号则不再新派。
+        let permit = tokio::select! {
+            changed = shutdown.changed() => {
+                let _ = changed;
+                break;
+            }
+            permit = Arc::clone(&semaphore).acquire_owned() => permit?,
+        };
         let claimed = if storage_fault_injected("claim") {
             Err(Error::transient_storage())
         } else {
             jobs::claim_due(&pool, &worker_id, ttl_ms).await
         };
         let job = match claimed {
+            Ok(Some(job)) => job,
             Ok(None) => {
-                tokio::time::sleep(Duration::from_millis(100)).await;
+                tokio::time::sleep(backoff_delay(idle)).await;
+                idle += 1;
                 continue;
             }
-            Ok(Some(job)) => job,
             Err(error) if is_transient(&error) => {
                 // 临时数据库故障只跳过本轮领取；任务仍由租约到期后重新领取。
                 eprintln!("worker_claim_transient code={}", error.code);
-                tokio::time::sleep(Duration::from_millis(100)).await;
+                tokio::time::sleep(backoff_delay(idle)).await;
+                idle += 1;
                 continue;
             }
             Err(error) => return Err(error.into()),
         };
-        if job.attempts >= 4 {
-            record_delivery_failure(&job, "retry_exhausted", || {
-                deliver_run::fail_delivery(&pool, &job, "retry_exhausted")
-            })
-            .await?;
-            continue;
-        }
-        match deliver_run::start_delivery(&pool, &job, ttl_ms).await {
-            Ok(envelope) => {
-                let run_id = envelope["run_id"].as_str().ok_or("missing run")?;
-                let context = if storage_fault_injected("context") {
-                    Err(Error::transient_storage())
-                } else {
-                    deliver_run::context_for_run(&pool, run_id).await
-                };
-                let context = match context {
-                    Ok(context) => context,
-                    Err(error) if is_transient(&error) => {
-                        // 运行已建立但上下文读取暂时失败：退回任务等待会话租约到期后重派，不结束worker。
+        idle = 0;
+        // 同会话串行由claim_due的同会话前置任务排除保证；跨会话在此完全并行。
+        deliveries.spawn(deliver_job(
+            pool.clone(),
+            client.clone(),
+            url.clone(),
+            token.clone(),
+            job,
+            ttl_ms,
+            permit,
+        ));
+    }
+    // 停止领取后等待在途交付完成续租收尾或取消通知；超限退出由租约到期自然恢复。
+    let drain_deadline = tokio::time::Instant::now() + Duration::from_secs(30);
+    while !deliveries.is_empty() && tokio::time::Instant::now() < drain_deadline {
+        let _ = tokio::time::timeout(Duration::from_secs(1), deliveries.join_next()).await;
+    }
+    if !deliveries.is_empty() {
+        eprintln!(
+            "worker_shutdown_drain_timeout remaining={}",
+            deliveries.len()
+        );
+    }
+    Ok(())
+}
+
+// 单条任务的全周期交付协程；并发槽位随协程结束自动释放。
+async fn deliver_job(
+    pool: MySqlPool,
+    client: reqwest::Client,
+    url: String,
+    token: String,
+    job: jobs::ClaimedJob,
+    ttl_ms: u32,
+    _permit: tokio::sync::OwnedSemaphorePermit,
+) {
+    if let Err(error) = run_delivery(&pool, &client, &url, &token, &job, ttl_ms).await {
+        // 原先会终止整个worker的持久收尾失败：并发模式下只终止本交付，
+        // 任务租约到期后由后续槽位重派，worker不退出。
+        eprintln!("worker_delivery_fatal job={} code={}", job.id, error.code);
+    }
+}
+async fn run_delivery(
+    pool: &MySqlPool,
+    client: &reqwest::Client,
+    url: &str,
+    token: &str,
+    job: &jobs::ClaimedJob,
+    ttl_ms: u32,
+) -> Result<(), Error> {
+    if job.attempts >= 4 {
+        record_delivery_failure(job, "retry_exhausted", || {
+            deliver_run::fail_delivery(pool, job, "retry_exhausted")
+        })
+        .await?;
+        return Ok(());
+    }
+    match deliver_run::start_delivery(pool, job, ttl_ms).await {
+        Ok(envelope) => {
+            let run_id = envelope["run_id"]
+                .as_str()
+                .ok_or_else(|| Error::new("unavailable"))?;
+            let context = if storage_fault_injected("context") {
+                Err(Error::transient_storage())
+            } else {
+                deliver_run::context_for_run(pool, run_id).await
+            };
+            let context = match context {
+                Ok(context) => context,
+                Err(error) if is_transient(&error) => {
+                    // 运行已建立但上下文读取暂时失败：退回任务等待会话租约到期后重派，不结束worker。
+                    eprintln!(
+                        "worker_context_transient run={} code={}",
+                        run_id, error.code
+                    );
+                    if let Err(defer_error) = jobs::defer(pool, job).await {
                         eprintln!(
-                            "worker_context_transient run={} code={}",
-                            run_id, error.code
+                            "worker_defer_rejected job={} code={}",
+                            job.id, defer_error.code
                         );
-                        if let Err(defer_error) = jobs::defer(&pool, &job).await {
-                            eprintln!(
-                                "worker_defer_rejected job={} code={}",
-                                job.id, defer_error.code
-                            );
-                        }
-                        continue;
                     }
-                    Err(error) => {
-                        record_delivery_failure(&job, error.code, || {
-                            deliver_run::fail_delivery(&pool, &job, error.code)
-                        })
-                        .await?;
-                        continue;
-                    }
-                };
-                let mut dispatch_envelope = envelope.clone();
-                let request = async {
-                    data_agent::use_cases::personal_memory::prepare_workspace(
-                        &pool,
-                        &context,
-                        &mut dispatch_envelope,
-                    )
-                    .await
-                    .map_err(|e| e.code)?;
-                    client
-                        .post(format!("{url}/resume-and-deliver"))
-                        // Pi每次调用有超时；宿主按原请求限次并持续续租，不另设整轮截止。
-                        .bearer_auth(&token)
-                        .json(&dispatch_envelope)
-                        .send()
-                        .await
-                        .map_err(|_| "bridge_unavailable")
-                };
-                tokio::pin!(request);
-                // 准备记忆上下文也会持会话锁。续租必须与request同时推进，
-                // 不能在select分支内等待续租，饿死持锁的request。
-                let lease_epoch = envelope["lease_epoch"]
-                    .as_str()
-                    .ok_or("missing epoch")?
-                    .parse()?;
-                let (stop_heartbeat, mut stopped) = tokio::sync::oneshot::channel::<()>();
-                let heartbeat = async {
-                    let mut interval =
-                        tokio::time::interval(Duration::from_millis(u64::from(ttl_ms) / 3));
-                    loop {
-                        tokio::select! {
-                            biased;
-                            _ = &mut stopped => return None,
-                            _ = interval.tick() => {}
-                        }
-                        let renewed = if storage_fault_injected("renew") {
-                            Err(Error::transient_storage())
-                        } else {
-                            deliver_run::renew_delivery(
-                                &pool,
-                                &context,
-                                run_id,
-                                lease_epoch,
-                                ttl_ms,
-                            )
-                            .await
-                        };
-                        match renewed {
-                            Ok(()) => {}
-                            Err(error) if is_transient(&error) => {
-                                eprintln!(
-                                    "delivery_renew_transient job={} code={}",
-                                    job.id, error.code
-                                );
-                            }
-                            Err(error) => return Some(error),
-                        }
-                    }
-                };
-                tokio::pin!(heartbeat);
-                tokio::select! {
-                     result=&mut request=>{
-                        // 已开始的数据库续租完成后再退出，避免在BEGIN中途取消连接。
-                        let _ = stop_heartbeat.send(());
-                        if let Some(error) = heartbeat.await {
-                            // 桥接2xx已完成finish并释放租约，此时lease_lost是正常收尾。
-                            // 其他结果仍沿下面的拒绝/中断路径处理，保留续租失败诊断。
-                            if error.code != "lease_lost"
-                                || !matches!(&result, Ok(response) if response.status().is_success())
-                            {
-                                eprintln!("delivery_renew_after_dispatch job={} code={}", job.id, error.code);
-                            }
-                        }
-                        match result {
-                            Ok(response) if response.status()==reqwest::StatusCode::CONFLICT => {
-                                let deferred = if storage_fault_injected("defer") {
-                                    Err(Error::transient_storage())
-                                } else {
-                                    deliver_run::defer_busy_delivery(&pool,&context,envelope["run_id"].as_str().ok_or("missing run")?,envelope["lease_epoch"].as_str().ok_or("missing epoch")?.parse()?).await
-                                };
-                                if let Err(error) = deferred {
-                                    if is_transient(&error) {
-                                        // 桥接未接纳但回退失败：保持领取，租约到期自然重派。
-                                        eprintln!("delivery_defer_transient job={} code={}",job.id,error.code);
-                                    } else {
-                                        eprintln!("delivery_defer_rejected job={} code={}",job.id,error.code);
-                                    }
-                                }
-                            }
-                            Ok(response) if !response.status().is_success() => {
-                                let status=response.status().as_u16();
-                                let code=dispatch_failure_code(response).await;
-                                eprintln!("delivery_interrupted job={} epoch={} status={} code={}",job.id,job.lease_epoch,status,code);
-                                if is_terminal_dispatch_failure(&code) {
-                                    record_delivery_failure(&job,&code,||deliver_run::fail_delivery(&pool,&job,&code)).await?;
-                                } else {
-                                    notify_run_cancelled(&client,&url,&token,&envelope).await;
-                                }
-                            }
-                            Ok(_) => {}
-                            Err(transport) => {
-                                eprintln!("delivery_interrupted job={} epoch={} transport={:?}",job.id,job.lease_epoch,transport);
-                                notify_run_cancelled(&client,&url,&token,&envelope).await;
-                            }
-                        }
-                     }
-                     lost=&mut heartbeat=>{
-                        if let Some(error) = lost {
-                            eprintln!("delivery_lease_lost job={} code={}",job.id,error.code);
-                            notify_run_cancelled(&client,&url,&token,&envelope).await;
-                        }
-                     }
+                    return Ok(());
                 }
-            }
-            Err(error) => {
-                eprintln!("delivery_rejected job={} code={}", job.id, error.code);
-                if is_transient(&error) {
-                    // 建立运行的事务未确认，不持久化为业务失败；原任务租约到期后核对并恢复。
-                    eprintln!("worker_start_transient job={} code={}", job.id, error.code);
-                } else if error.code == "lease_lost" {
-                    let deferred = if storage_fault_injected("defer_lease") {
-                        Err(Error::transient_storage())
-                    } else {
-                        jobs::defer(&pool, &job).await
-                    };
-                    match deferred {
-                        Ok(()) => {}
-                        Err(error) if is_transient(&error) => {
-                            eprintln!("worker_defer_transient job={} code={}", job.id, error.code);
-                        }
-                        Err(error) => return Err(error.into()),
-                    }
-                } else {
-                    record_delivery_failure(&job, error.code, || {
-                        deliver_run::fail_delivery(&pool, &job, error.code)
+                Err(error) => {
+                    record_delivery_failure(job, error.code, || {
+                        deliver_run::fail_delivery(pool, job, error.code)
                     })
                     .await?;
+                    return Ok(());
                 }
+            };
+            let mut dispatch_envelope = envelope.clone();
+            let request = async {
+                data_agent::use_cases::personal_memory::prepare_workspace(
+                    pool,
+                    &context,
+                    &mut dispatch_envelope,
+                )
+                .await
+                .map_err(|e| e.code)?;
+                client
+                    .post(format!("{url}/resume-and-deliver"))
+                    // Pi每次调用有超时；宿主按原请求限次并持续续租，不另设整轮截止。
+                    .bearer_auth(token)
+                    .json(&dispatch_envelope)
+                    .send()
+                    .await
+                    .map_err(|_| "bridge_unavailable")
+            };
+            tokio::pin!(request);
+            // 准备记忆上下文也会持会话锁。续租必须与request同时推进，
+            // 不能在select分支内等待续租，饿死持锁的request。
+            let lease_epoch = envelope["lease_epoch"]
+                .as_str()
+                .ok_or_else(|| Error::new("invalid_input"))?
+                .parse::<u64>()
+                .map_err(|_| Error::new("invalid_input"))?;
+            let (stop_heartbeat, mut stopped) = tokio::sync::oneshot::channel::<()>();
+            let heartbeat = async {
+                let mut interval =
+                    tokio::time::interval(Duration::from_millis(u64::from(ttl_ms) / 3));
+                loop {
+                    tokio::select! {
+                        biased;
+                        _ = &mut stopped => return None,
+                        _ = interval.tick() => {}
+                    }
+                    let renewed = if storage_fault_injected("renew") {
+                        Err(Error::transient_storage())
+                    } else {
+                        deliver_run::renew_delivery(pool, &context, run_id, lease_epoch, ttl_ms)
+                            .await
+                    };
+                    match renewed {
+                        Ok(()) => {}
+                        Err(error) if is_transient(&error) => {
+                            eprintln!(
+                                "delivery_renew_transient job={} code={}",
+                                job.id, error.code
+                            );
+                        }
+                        Err(error) => return Some(error),
+                    }
+                }
+            };
+            tokio::pin!(heartbeat);
+            tokio::select! {
+                 result=&mut request=>{
+                    // 已开始的数据库续租完成后再退出，避免在BEGIN中途取消连接。
+                    let _ = stop_heartbeat.send(());
+                    if let Some(error) = heartbeat.await {
+                        // 桥接2xx已完成finish并释放租约，此时lease_lost是正常收尾。
+                        // 其他结果仍沿下面的拒绝/中断路径处理，保留续租失败诊断。
+                        if error.code != "lease_lost"
+                            || !matches!(&result, Ok(response) if response.status().is_success())
+                        {
+                            eprintln!("delivery_renew_after_dispatch job={} code={}", job.id, error.code);
+                        }
+                    }
+                    match result {
+                        Ok(response) if response.status()==reqwest::StatusCode::CONFLICT => {
+                            let deferred = if storage_fault_injected("defer") {
+                                Err(Error::transient_storage())
+                            } else {
+                                deliver_run::defer_busy_delivery(pool,&context,envelope["run_id"].as_str().ok_or_else(|| Error::new("unavailable"))?,envelope["lease_epoch"].as_str().ok_or_else(|| Error::new("invalid_input"))?.parse::<u64>().map_err(|_| Error::new("invalid_input"))?).await
+                            };
+                            if let Err(error) = deferred {
+                                if is_transient(&error) {
+                                    // 桥接未接纳但回退失败：保持领取，租约到期自然重派。
+                                    eprintln!("delivery_defer_transient job={} code={}",job.id,error.code);
+                                } else {
+                                    eprintln!("delivery_defer_rejected job={} code={}",job.id,error.code);
+                                }
+                            }
+                        }
+                        Ok(response) if !response.status().is_success() => {
+                            let status=response.status().as_u16();
+                            let code=dispatch_failure_code(response).await;
+                            eprintln!("delivery_interrupted job={} epoch={} status={} code={}",job.id,job.lease_epoch,status,code);
+                            if is_terminal_dispatch_failure(&code) {
+                                record_delivery_failure(job,&code,||deliver_run::fail_delivery(pool,job,&code)).await?;
+                            } else {
+                                notify_run_cancelled(client,url,token,&envelope).await;
+                            }
+                        }
+                        Ok(_) => {}
+                        Err(transport) => {
+                            eprintln!("delivery_interrupted job={} epoch={} transport={:?}",job.id,job.lease_epoch,transport);
+                            notify_run_cancelled(client,url,token,&envelope).await;
+                        }
+                    }
+                 }
+                 lost=&mut heartbeat=>{
+                    if let Some(error) = lost {
+                        eprintln!("delivery_lease_lost job={} code={}",job.id,error.code);
+                        notify_run_cancelled(client,url,token,&envelope).await;
+                    }
+                 }
+            }
+        }
+        Err(error) => {
+            eprintln!("delivery_rejected job={} code={}", job.id, error.code);
+            if is_transient(&error) {
+                // 建立运行的事务未确认，不持久化为业务失败；原任务租约到期后核对并恢复。
+                eprintln!("worker_start_transient job={} code={}", job.id, error.code);
+            } else if error.code == "lease_lost" {
+                let deferred = if storage_fault_injected("defer_lease") {
+                    Err(Error::transient_storage())
+                } else {
+                    jobs::defer(pool, job).await
+                };
+                match deferred {
+                    Ok(()) => {}
+                    Err(error) if is_transient(&error) => {
+                        eprintln!("worker_defer_transient job={} code={}", job.id, error.code);
+                    }
+                    Err(error) => return Err(error),
+                }
+            } else {
+                record_delivery_failure(job, error.code, || {
+                    deliver_run::fail_delivery(pool, job, error.code)
+                })
+                .await?;
             }
         }
     }
+    Ok(())
 }
 
 #[cfg(test)]

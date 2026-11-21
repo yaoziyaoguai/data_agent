@@ -1714,6 +1714,52 @@
         ]
       }
     },
+    "/queries": {
+      "get": {
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schema.json#/$defs/QueryHistory"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "应用错误；权限、版本、待归属、未知和服务失败保留独立code",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schema.json#/$defs/AppError"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "maxLength": 240
+            }
+          },
+          {
+            "name": "before_id",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "pattern": "^[A-Za-z0-9_-]+$"
+            }
+          }
+        ]
+      }
+    },
     "/queries/{id}": {
       "get": {
         "responses": {
@@ -2831,6 +2877,52 @@
             }
           }
         ]
+      }
+    },
+    "/knowledge/{id}/entries": {
+      "patch": {
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schema.json#/$defs/KnowledgeObject"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "应用错误；权限、版本、待归属、未知和服务失败保留独立code",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schema.json#/$defs/AppError"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "./schema.json#/$defs/KnowledgeEntryBatch"
+              }
+            }
+          }
+        }
       }
     },
     "/knowledge/{id}/document": {

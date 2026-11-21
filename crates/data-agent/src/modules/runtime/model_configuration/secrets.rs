@@ -9,7 +9,18 @@ use std::{
     path::PathBuf,
 };
 
-fn master_key(create: bool) -> Result<Vec<u8>> {
+// 进程级缓存：首次加载（含0600权限与符号链接校验、必要时创建）成功后常驻
+// 内存，seal/open/请求指纹不再逐次读盘；密钥文件更换需重启进程生效。
+fn master_key(create: bool) -> Result<&'static [u8]> {
+    static KEY: std::sync::OnceLock<Vec<u8>> = std::sync::OnceLock::new();
+    if let Some(key) = KEY.get() {
+        return Ok(key);
+    }
+    let key = load_master_key(create)?;
+    Ok(KEY.get_or_init(|| key))
+}
+
+fn load_master_key(create: bool) -> Result<Vec<u8>> {
     let path = PathBuf::from(
         std::env::var("DATA_AGENT_MODEL_KEY_FILE")
             .unwrap_or_else(|_| ".local/model-configuration.key".into()),
@@ -60,7 +71,7 @@ fn master_key(create: bool) -> Result<Vec<u8>> {
 
 pub(super) fn request_fingerprint(value: &serde_json::Value, allow_create: bool) -> Result<String> {
     // 请求指纹也含密钥输入，使用带密钥摘要，不能保存可离线猜测的普通哈希。
-    let key = hmac::Key::new(hmac::HMAC_SHA256, &master_key(allow_create)?);
+    let key = hmac::Key::new(hmac::HMAC_SHA256, master_key(allow_create)?);
     let tag = hmac::sign(
         &key,
         &serde_json::to_vec(value).map_err(|_| Error::new("invalid_input"))?,
@@ -70,7 +81,7 @@ pub(super) fn request_fingerprint(value: &serde_json::Value, allow_create: bool)
 
 pub(super) fn seal(secret: &str, identity: &str, allow_create: bool) -> Result<Vec<u8>> {
     let key = aead::LessSafeKey::new(
-        aead::UnboundKey::new(&aead::AES_256_GCM, &master_key(allow_create)?)
+        aead::UnboundKey::new(&aead::AES_256_GCM, master_key(allow_create)?)
             .map_err(|_| Error::new("model_secret_unavailable"))?,
     );
     let mut nonce = [0u8; 12];
@@ -92,7 +103,7 @@ pub(super) fn open(ciphertext: &[u8], identity: &str) -> Result<String> {
         return Err(Error::new("model_secret_unavailable"));
     }
     let key = aead::LessSafeKey::new(
-        aead::UnboundKey::new(&aead::AES_256_GCM, &master_key(false)?)
+        aead::UnboundKey::new(&aead::AES_256_GCM, master_key(false)?)
             .map_err(|_| Error::new("model_secret_unavailable"))?,
     );
     let nonce = aead::Nonce::try_assume_unique_for_key(&ciphertext[..12])

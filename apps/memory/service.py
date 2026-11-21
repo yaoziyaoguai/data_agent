@@ -2,6 +2,7 @@
 import hashlib
 import json
 import os
+import threading
 import time
 from pathlib import Path
 
@@ -25,6 +26,10 @@ class MemoryService:
         self.store = ReceiptStore(directory / "receipts.sqlite")
         self.gateway = ModelGateway(config, self.store)
         self.fingerprint = digest(config)
+        # 写操作按租户串行：同一租户的提取/入库不交错改向量映射；跨租户并发
+        # 进行，/search完全无锁，慢提取不再阻塞其他请求的常规检索。
+        self._tenant_locks = {}
+        self._locks_guard = threading.Lock()
         print("startup service=memory stage=configuration_started", flush=True)
         self.memory = Memory.from_config({
             "vector_store": {"provider": "milvus", "config": {
@@ -38,18 +43,24 @@ class MemoryService:
         self.memory.llm = BudgetedLLM(self.gateway)
         self.memory.embedding_model = BudgetedEmbedding(self.gateway)
 
-    def flush(self):
-        self.memory.vector_store.client.flush(collection_name=self.memory.collection_name)
-
     def handle(self, path, request):
         self.gateway.settle_pending()
         self.gateway.binding = request["budget"]
         self.gateway.failure = None
-        if path == "/extract":
-            return self.extract(request)
-        if path == "/index":
+        if path == "/search":
+            return self.search(request)
+        with self._tenant_gate(self.tenant(request)):
+            if path == "/extract":
+                return self.extract(request)
             return self.index(request)
-        return self.search(request)
+
+    def _tenant_gate(self, tenant):
+        with self._locks_guard:
+            lock = self._tenant_locks.get(tenant)
+            if lock is None:
+                lock = threading.Lock()
+                self._tenant_locks[tenant] = lock
+            return lock
 
     @staticmethod
     def tenant(r):
@@ -87,7 +98,8 @@ class MemoryService:
             body = "\n".join(v["memory"].strip() for v in items)
             if len(body) > 12000:
                 raise MemoryError("memory_unavailable")
-            self.flush()
+            # 不做同步flush：pymilvus默认Session一致性下本进程写入即可见，
+            # 强制flush只会制造微小段碎片与磁盘写放大。
             self.store.write_operation(key, fp, "prepared", {"body": body, "ids": [v["id"] for v in items], "owner_id": r["owner_id"], "space_id": r["space_id"]})
             return {"operation_id": r["operation_id"], "body": body, "replayed": False}
         except Exception as e:
@@ -145,7 +157,6 @@ class MemoryService:
                 if not record:
                     raise MemoryError("memory_unavailable")
                 self.memory.vector_store.update(memory_id, payload={**record.payload, "commit_state": "ready", "asset_id": asset["id"], "asset_version": asset["version"]})
-        self.flush()
         self.store.write_asset(identity, version, receipt["state"], ids if asset["state"] == "enabled" else [])
         self.store.write_operation(key, fp, "completed", {"receipt": receipt})
         return receipt

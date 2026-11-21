@@ -2,6 +2,19 @@ use crate::types::{Error, Result};
 use serde::Deserialize;
 use serde_json::{Value, json};
 use std::time::Duration;
+// 进程级共享客户端：连接池与TLS上下文只建一次；构建失败语义与逐次构建一致。
+fn shared_client() -> Option<&'static reqwest::Client> {
+    static CLIENT: std::sync::OnceLock<Option<reqwest::Client>> = std::sync::OnceLock::new();
+    CLIENT
+        .get_or_init(|| {
+            reqwest::Client::builder()
+                .no_proxy()
+                .timeout(Duration::from_secs(5))
+                .build()
+                .ok()
+        })
+        .as_ref()
+}
 pub async fn call(path: &str, input: &Value) -> Result<Value> {
     call_limited(path, input, None).await
 }
@@ -18,11 +31,8 @@ async fn call_limited(path: &str, input: &Value, limit: Option<usize>) -> Result
     }
     let token =
         std::env::var("DATA_AGENT_INTERNAL_TOKEN").map_err(|_| Error::new("unauthenticated"))?;
-    let mut response = reqwest::Client::builder()
-        .no_proxy()
-        .timeout(Duration::from_secs(5))
-        .build()
-        .map_err(|_| Error::new("unavailable"))?
+    let mut response = shared_client()
+        .ok_or(Error::new("unavailable"))?
         .post(format!("{url}{path}"))
         .bearer_auth(token)
         .json(input)

@@ -195,9 +195,10 @@ pub async fn queue_in_tx(
     assets::memory_index::queue_in_tx(tx, ctx, asset, scope, profile.as_ref(), extraction).await
 }
 
-pub async fn process_index(pool: &MySqlPool) -> Result<()> {
+// 返回本轮是否领取并处理了索引任务，供worker退避调度复位。
+pub async fn process_index(pool: &MySqlPool) -> Result<bool> {
     if !assets::memory_provider::enabled() {
-        return Ok(());
+        return Ok(false);
     }
     if let Ok(value) = std::env::var("DATA_AGENT_MODEL_PROFILE") {
         let profile: Value =
@@ -206,7 +207,7 @@ pub async fn process_index(pool: &MySqlPool) -> Result<()> {
         assets::memory_index::queue_missing(pool, &profile).await?;
     }
     let Some(job) = assets::memory_index::claim(pool).await? else {
-        return Ok(());
+        return Ok(false);
     };
     let mut index_asset = job["asset"].clone();
     if index_asset["state"] == "enabled" {
@@ -222,10 +223,14 @@ pub async fn process_index(pool: &MySqlPool) -> Result<()> {
                 if asset["text_unavailable"] != true
                     && asset["version"] == index_asset["version"] => {}
             Ok(_) => {
-                return assets::memory_index::complete(pool, &job, Some("stale_context")).await;
+                return assets::memory_index::complete(pool, &job, Some("stale_context"))
+                    .await
+                    .map(|_| true);
             }
             Err(error) => {
-                return assets::memory_index::complete(pool, &job, Some(error.code)).await;
+                return assets::memory_index::complete(pool, &job, Some(error.code))
+                    .await
+                    .map(|_| true);
             }
         }
     } else {
@@ -242,7 +247,9 @@ pub async fn process_index(pool: &MySqlPool) -> Result<()> {
     if let Err(error) = &result {
         eprintln!("memory_index_failure job={} code={}", job["id"], error.code);
     }
-    assets::memory_index::complete(pool, &job, result.as_ref().err().map(|e| e.code)).await
+    assets::memory_index::complete(pool, &job, result.as_ref().err().map(|e| e.code))
+        .await
+        .map(|_| true)
 }
 
 // 侧车无预算决定权；宿主从活动run或持久作业恢复原预算，结算不重新授予发送权。

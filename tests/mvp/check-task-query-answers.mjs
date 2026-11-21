@@ -7,7 +7,7 @@ import {SessionManager} from '@earendil-works/pi-coding-agent';
 import {deliver} from '../../apps/agent/session/deliver.ts';
 import {exportCheckpoint, restoreCheckpoint} from '../../apps/agent/session/checkpoint.ts';
 import {RustTransport} from '../../apps/agent/transport/client.ts';
-import {harness, until} from './harness.mjs';
+import {harness, replayEvents, until} from './harness.mjs';
 
 // 真实SQLite查询结果经Rust核值，A来源答案冻结后B仍自然输出；中断使用原业务账本。
 const profile={provider_id:'deepseek',model_id:'deepseek-flash',trial_id:randomUUID(),price_version:'2026-10-04-peak-usd',
@@ -265,9 +265,7 @@ try{
       const readableDeltas=restricted.events.filter(event=>event.type==='assistant_delta'&&event.payload.attempt_id===run.attempt_id).map(event=>event.payload.text).join('');
       assert.ok(readableDeltas.includes(secondAnswer),'同attempt的乙持久片段仍可读');
       assert.equal(readableDeltas,'部分内容因来源不可读而隐藏。'+secondBody,'同attempt的甲片段按unit权限替换为隐藏提示，乙持久片段仍逐字保留完整中文、emoji与正文内分隔符');
-      const replay=await fetch(h.env.DATA_AGENT_API_URL+`/conversations/${cid}/events?after_seq=0`,{headers:{authorization:'Bearer '+h.tokens.alice}});
-      assert.equal(replay.status,200);
-      const events=(await replay.text()).split('\n').filter(line=>line.startsWith('data: ')).map(line=>JSON.parse(line.slice(6)));
+      const events=await replayEvents(h.env.DATA_AGENT_API_URL+`/conversations/${cid}/events?after_seq=0`,{authorization:'Bearer '+h.tokens.alice});
       assert.ok(!events.some(event=>['assistant_delta','assistant_committed'].includes(event.type)&&event.payload.text?.includes(firstAnswer)),'SSE不能重放冻结甲的受限结果');
       assert.ok(events.some(event=>event.type==='assistant_committed'&&event.payload.text?.includes(secondAnswer)),'SSE保留乙的合法正文');
       assert.equal(events.findLast(event=>event.type==='assistant_committed'&&event.payload.output_id===run.output_id)?.payload.text,answer.text,'SSE与snapshot使用同一份逐份权限投影原文');

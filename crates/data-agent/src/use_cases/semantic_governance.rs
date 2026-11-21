@@ -56,6 +56,53 @@ pub async fn register_object_in_tx(
     };
     access::register_in_tx(tx, ctx, object_id, &authority, source).await
 }
+// 启动重放登记的批量路径：field→table归属先一次性解析（state<>'deleted'同
+// read_in_tx(manage=true)），再单条幂等INSERT IGNORE写入全部对象；
+// 逐对象语义与register_object_in_tx一致：仅首次创建生效，与列表顺序无关。
+pub async fn register_objects_in_tx(
+    tx: &mut AppTx<'_>,
+    ctx: &AccessContext,
+    objects: &[Value],
+) -> Result<()> {
+    let mut related: Vec<String> = vec![];
+    for object in objects {
+        if object["kind"] == "field" {
+            for id in object["related_ids"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .filter_map(Value::as_str)
+            {
+                related.push(id.to_owned());
+            }
+        }
+    }
+    related.sort();
+    related.dedup();
+    let tables = knowledge::live_table_ids_in_tx(tx, ctx, &related).await?;
+    let mut rows: Vec<(String, String, &'static str)> = vec![];
+    for object in objects {
+        let object_id = object["id"].as_str().ok_or(Error::new("invalid_input"))?;
+        let mut authority = object_id.to_owned();
+        if object["kind"] == "field" {
+            for related in object["related_ids"].as_array().into_iter().flatten() {
+                if let Some(parent) = related.as_str()
+                    && tables.contains(parent)
+                {
+                    authority = parent.to_owned();
+                    break;
+                }
+            }
+        }
+        let source = if object["kind"] == "table" || object["kind"] == "field" {
+            "datasight"
+        } else {
+            "system"
+        };
+        rows.push((object_id.to_owned(), authority, source));
+    }
+    access::register_batch_in_tx(tx, ctx, &rows).await
+}
 pub async fn decorate_in_tx(tx: &mut AppTx<'_>, ctx: &AccessContext, v: &mut Value) -> Result<()> {
     v["maintenance"] = access::maintenance_in_tx(tx, ctx, v["id"].as_str().unwrap_or("")).await?;
     Ok(())

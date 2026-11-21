@@ -13,6 +13,34 @@ export async function until(fn, label, ms = 20000) {
   }
   throw new Error("timeout: " + label);
 }
+// 事件流是持续SSE：读完重放批次（收到数据后静默1.2秒）即取消连接，不能等正文结束。
+// 只用于已结束的会话重放；调用方断言的是历史事件的取舍，不依赖后续新增事件。
+export async function replayEvents(url, headers) {
+  const response = await fetch(url, { headers });
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get("content-type"), "text/event-stream");
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  const deadline = Date.now() + 8000;
+  let text = "";
+  let pending = reader.read();
+  try {
+    while (Date.now() < deadline) {
+      const quietFor = text ? 1200 : 3000;
+      const timer = new Promise((resolve) => setTimeout(resolve, quietFor, "quiet"));
+      const won = await Promise.race([pending, timer]);
+      if (won === "quiet" || won.done) break;
+      text += decoder.decode(won.value);
+      pending = reader.read();
+    }
+  } finally {
+    await reader.cancel();
+  }
+  return text
+    .split("\n")
+    .filter((line) => line.startsWith("data: "))
+    .map((line) => JSON.parse(line.slice(6)));
+}
 const freePort = () =>
   new Promise((resolve) => {
     const s = net.createServer();

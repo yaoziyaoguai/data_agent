@@ -15,6 +15,40 @@ pub(super) fn has_no_sources(authority: &Value) -> bool {
     merge(&mut sources, authority).is_ok() && sources == empty()
 }
 
+// 批量核验前的桶内ID收集：去重排序后供IN查询。
+fn bucket_ids(snapshot: &Value, kinds: &[&str]) -> Vec<String> {
+    let mut ids: Vec<String> = kinds
+        .iter()
+        .flat_map(|kind| snapshot[*kind].as_array().expect("checked").iter())
+        .filter_map(|reference| reference[0].as_str().map(str::to_owned))
+        .collect();
+    ids.sort();
+    ids.dedup();
+    ids
+}
+
+/// 快照桶内的带版本引用：[id, version]二元组的受检解析。形态异常按
+/// stale_context失效而非panic——快照由系统装配，异常即不可信。
+pub(super) struct VersionedRef {
+    pub id: String,
+    pub version: String,
+}
+
+pub(super) fn versioned_ref(reference: &Value) -> Result<VersionedRef> {
+    Ok(VersionedRef {
+        id: reference
+            .get(0)
+            .and_then(Value::as_str)
+            .ok_or(Error::new("stale_context"))?
+            .to_owned(),
+        version: reference
+            .get(1)
+            .and_then(Value::as_str)
+            .ok_or(Error::new("stale_context"))?
+            .to_owned(),
+    })
+}
+
 /// 按文本自己的来源核验；当前条件移除引用不能使旧目标、开放问题脱离权限约束。
 pub async fn protect_task_context_in_tx(
     tx: &mut AppTx<'_>,
@@ -1111,31 +1145,29 @@ pub async fn validate_in_tx(
             .filter_map(|entry| entry[2].as_str())
             .collect::<Vec<_>>()
     };
-    let ids = snapshot["knowledge"]
-        .as_array()
-        .expect("checked")
-        .iter()
-        .filter(|r| {
-            let paths = paths_for(r);
-            paths.is_empty() || paths.contains(&"")
-        })
-        .map(|r| r[0].as_str().unwrap().to_owned())
-        .collect::<Vec<_>>();
+    let mut ids = Vec::new();
+    for reference in snapshot["knowledge"].as_array().expect("checked") {
+        let paths = paths_for(reference);
+        if paths.is_empty() || paths.contains(&"") {
+            ids.push(versioned_ref(reference)?.id);
+        }
+    }
     let objects = knowledge::source_reference_objects_in_tx(tx, ctx, &ids).await?;
     let mut documents = Vec::new();
     for reference in snapshot["knowledge"].as_array().expect("checked") {
         let paths = paths_for(reference);
+        let reference = versioned_ref(reference)?;
         if paths.is_empty() || paths.contains(&"") {
             let object = objects
                 .iter()
-                .find(|v| v["id"] == reference[0] && v["version"] == reference[1])
+                .find(|v| v["id"] == reference.id && v["version"] == reference.version)
                 .ok_or(Error::new("stale_context"))?;
             super::knowledge::assert_source_in_tx(tx, ctx, object).await?;
             if object["kind"] == "document" {
                 documents.push((
                     knowledge::dependency_index::DependencySelection {
-                        object_id: reference[0].as_str().unwrap().to_owned(),
-                        version: epoch(reference[1].as_str().unwrap())?,
+                        object_id: reference.id.clone(),
+                        version: epoch(&reference.version)?,
                         path: String::new(),
                     },
                     object.clone(),
@@ -1143,11 +1175,11 @@ pub async fn validate_in_tx(
             }
         } else {
             for path in paths {
-                let version = epoch(reference[1].as_str().unwrap())?;
+                let version = epoch(&reference.version)?;
                 let object = knowledge::read_selected_structure_in_tx(
                     tx,
                     ctx,
-                    reference[0].as_str().unwrap(),
+                    &reference.id,
                     version,
                     Some(path),
                 )
@@ -1163,7 +1195,7 @@ pub async fn validate_in_tx(
                 if object["kind"] == "document" {
                     documents.push((
                         knowledge::dependency_index::DependencySelection {
-                            object_id: reference[0].as_str().unwrap().to_owned(),
+                            object_id: reference.id.clone(),
                             version,
                             path: path.to_owned(),
                         },
@@ -1174,6 +1206,12 @@ pub async fn validate_in_tx(
         }
     }
     validate_document_sources_in_tx(tx, ctx, &documents, snapshot).await?;
+    let assets_read = assets::read_enabled_in_tx(
+        tx,
+        ctx,
+        &bucket_ids(snapshot, &["memories", "skills", "source_skills"]),
+    )
+    .await?;
     for kind in ["memories", "skills", "source_skills"] {
         let selected = if kind == "skills" {
             assets::selected_in_tx(tx, ctx, cid).await?
@@ -1181,43 +1219,58 @@ pub async fn validate_in_tx(
             vec![]
         };
         for reference in snapshot[kind].as_array().expect("checked") {
-            let asset = assets::read_in_tx(tx, ctx, reference[0].as_str().unwrap(), true).await?;
-            if asset["version"] != reference[1]
+            let reference = versioned_ref(reference)?;
+            let asset = assets_read
+                .get(&reference.id)
+                .ok_or(Error::new("not_available"))?;
+            if asset["version"] != reference.version
                 || (kind == "skills"
                     && !selected
                         .iter()
-                        .any(|v| v["id"] == reference[0] && v["version"] == reference[1]))
+                        .any(|v| v["id"] == reference.id && v["version"] == reference.version))
             {
                 return Err(Error::new("stale_context"));
             }
             super::knowledge::check_refs_in_tx(tx, ctx, &asset["dependencies"]).await?;
             // 投影时已展开的私有来源必须仍完整包含在快照中；不递归重造资产编排。
-            for source in super::personal_assets::authorities_in_tx(tx, ctx, &asset).await? {
+            for source in super::personal_assets::authorities_in_tx(tx, ctx, asset).await? {
                 if !covers(snapshot, &source) {
                     return Err(Error::new("stale_context"));
                 }
             }
         }
     }
+    let mut source_refs: Vec<(String, Option<u64>)> = vec![];
     for reference in snapshot["sources"].as_array().expect("checked") {
-        // 历史核验只取元信息：身份、修订与完整性别名同read_in_tx，正文不回源装配。
-        let source = super::knowledge_sources::read_meta_in_tx(
-            tx,
-            ctx,
-            reference[0].as_str().unwrap(),
-            Some(epoch(reference[1].as_str().unwrap())?),
-        )
-        .await?;
+        let reference = versioned_ref(reference)?;
+        source_refs.push((reference.id, Some(epoch(&reference.version)?)));
+    }
+    // 历史核验只取元信息：身份、修订与完整性别名同read_in_tx，正文不回源装配。
+    let source_metas = super::knowledge_sources::read_metas_in_tx(tx, ctx, &source_refs).await?;
+    for reference in snapshot["sources"].as_array().expect("checked") {
+        let reference = versioned_ref(reference)?;
+        let source = source_metas
+            .get(&reference.id)
+            .ok_or(Error::new("not_available"))?;
         if source["version"] != source["current_version"] || source["complete"] != true {
             return Err(Error::new("stale_context"));
         }
     }
+    let queries_read = queries::read_map_in_tx(
+        tx,
+        ctx,
+        &bucket_ids(snapshot, &["query_results", "source_query_results"]),
+    )
+    .await?;
     for kind in ["query_results", "source_query_results"] {
         for reference in snapshot[kind].as_array().expect("checked") {
-            let query = queries::read_in_tx(tx, ctx, reference[0].as_str().unwrap()).await?;
+            let reference = versioned_ref(reference)?;
+            let query = queries_read
+                .get(&reference.id)
+                .ok_or(Error::new("not_available"))?;
             if (kind == "query_results" && query["conversation_id"] != cid)
                 || query["execution_state"] != "succeeded"
-                || query["result_ref"] != reference[1]
+                || query["result_ref"] != reference.version
             {
                 return Err(Error::new("stale_context"));
             }
@@ -1230,9 +1283,7 @@ pub async fn validate_in_tx(
                     .ok_or(Error::new("stale_context"))?,
             )
             .await?;
-            let source =
-                queries::text_authority_in_tx(tx, ctx, reference[0].as_str().expect("reference"))
-                    .await?;
+            let source = queries::text_authority_in_tx(tx, ctx, &reference.id).await?;
             if !covers(snapshot, &source) {
                 return Err(Error::new("stale_context"));
             }
@@ -1271,22 +1322,43 @@ pub async fn validate_history_in_tx(
         )
         .await?;
     }
+    let assets_read = assets::read_enabled_in_tx(
+        tx,
+        ctx,
+        &bucket_ids(snapshot, &["memories", "skills", "source_skills"]),
+    )
+    .await?;
     for kind in ["memories", "skills", "source_skills"] {
         for reference in snapshot[kind].as_array().expect("checked") {
-            let asset = assets::read_in_tx(tx, ctx, reference[0].as_str().unwrap(), true).await?;
+            let reference = versioned_ref(reference)?;
+            let asset = assets_read
+                .get(&reference.id)
+                .ok_or(Error::new("not_available"))?;
             if asset["state"] == "disabled" || asset["state"] == "deleted" {
                 return Err(Error::new("not_available"));
             }
         }
     }
-    for reference in snapshot["sources"].as_array().expect("checked") {
-        // 历史展示不读正文：存在/可用性以元信息判定，结果与read_in_tx一致。
-        super::knowledge_sources::read_meta_in_tx(tx, ctx, reference[0].as_str().unwrap(), None)
-            .await?;
-    }
+    // 历史展示不读正文：存在/可用性以元信息判定，结果与read_in_tx一致。
+    let source_refs: Vec<(String, Option<u64>)> = snapshot["sources"]
+        .as_array()
+        .expect("checked")
+        .iter()
+        .filter_map(|reference| reference[0].as_str().map(|id| (id.to_owned(), None)))
+        .collect();
+    super::knowledge_sources::read_metas_in_tx(tx, ctx, &source_refs).await?;
+    let queries_read = queries::read_map_in_tx(
+        tx,
+        ctx,
+        &bucket_ids(snapshot, &["query_results", "source_query_results"]),
+    )
+    .await?;
     for kind in ["query_results", "source_query_results"] {
         for reference in snapshot[kind].as_array().expect("checked") {
-            let query = queries::read_in_tx(tx, ctx, reference[0].as_str().unwrap()).await?;
+            let reference = versioned_ref(reference)?;
+            let query = queries_read
+                .get(&reference.id)
+                .ok_or(Error::new("not_available"))?;
             if kind == "query_results" && query["conversation_id"] != cid {
                 return Err(Error::new("stale_context"));
             }
@@ -1298,9 +1370,7 @@ pub async fn validate_history_in_tx(
                     .ok_or(Error::new("stale_context"))?,
             )
             .await?;
-            let source =
-                queries::text_authority_in_tx(tx, ctx, reference[0].as_str().expect("reference"))
-                    .await?;
+            let source = queries::text_authority_in_tx(tx, ctx, &reference.id).await?;
             if !covers(
                 &historical_sources(snapshot)?,
                 &historical_sources(&source)?,

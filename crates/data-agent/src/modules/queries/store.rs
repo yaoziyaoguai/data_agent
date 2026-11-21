@@ -48,6 +48,49 @@ pub async fn list_in_tx(tx: &mut AppTx<'_>, cid: &str) -> Result<Vec<Value>> {
             .await?;
     Ok(rows.iter().map(view).collect())
 }
+
+/// 跨会话历史分页：按创建时间倒序，游标为已见查询id；正文授权由协调层另行套用。
+/// limit由调用方给足一页加一，用于判断是否还有更早记录。
+pub async fn list_history_page_in_tx(
+    tx: &mut AppTx<'_>,
+    ctx: &AccessContext,
+    before: Option<&str>,
+    query: &str,
+    limit: u64,
+) -> Result<Vec<Value>> {
+    let cursor = if let Some(id) = before {
+        Some(sqlx::query_scalar::<_, String>(
+            "SELECT DATE_FORMAT(created_at,'%Y-%m-%d %H:%i:%s.%f') FROM query_requests WHERE id=? AND owner_id=?",
+        )
+        .bind(id)
+        .bind(&ctx.user_id)
+        .fetch_optional(tx.connection())
+        .await?
+        .ok_or(Error::new("invalid_input"))?)
+    } else {
+        None
+    };
+    let rows = sqlx::query(
+        "SELECT id,conversation_id,task_id,condition_version,draft_version,sql_text,summary,confirmation_state,execution_state,DATE_FORMAT(created_at,'%Y-%m-%dT%H:%i:%s.%fZ') AS created_at \
+         FROM query_requests WHERE owner_id=? AND INSTR(LOWER(CONCAT_WS(' ',summary,sql_text)),LOWER(?))>0 \
+         AND (? IS NULL OR created_at<? OR (created_at=? AND id<?)) ORDER BY created_at DESC,id DESC LIMIT ?",
+    )
+    .bind(&ctx.user_id)
+    .bind(query)
+    .bind(&cursor)
+    .bind(&cursor)
+    .bind(&cursor)
+    .bind(before)
+    .bind(limit)
+    .fetch_all(tx.connection())
+    .await?;
+    Ok(rows
+        .iter()
+        .map(|r| {
+            json!({"id":r.get::<String,_>("id"),"conversation_id":r.get::<String,_>("conversation_id"),"task_id":r.get::<String,_>("task_id"),"condition_version":r.get::<u64,_>("condition_version").to_string(),"draft_version":r.get::<u64,_>("draft_version").to_string(),"sql":r.get::<String,_>("sql_text"),"summary":r.get::<String,_>("summary"),"confirmation_state":r.get::<String,_>("confirmation_state"),"execution_state":r.get::<String,_>("execution_state"),"created_at":r.get::<String,_>("created_at")})
+        })
+        .collect())
+}
 pub async fn read_in_tx(tx: &mut AppTx<'_>, ctx: &AccessContext, qid: &str) -> Result<Value> {
     let r = sqlx::query("SELECT * FROM query_requests WHERE id=? AND owner_id=?")
         .bind(qid)
@@ -56,6 +99,30 @@ pub async fn read_in_tx(tx: &mut AppTx<'_>, ctx: &AccessContext, qid: &str) -> R
         .await?
         .ok_or(Error::new("not_available"))?;
     Ok(view(&r))
+}
+// 快照/历史核验的批量读取：与单条read_in_tx同一属主过滤，把N+1循环合并为一条IN查询。
+pub async fn read_map_in_tx(
+    tx: &mut AppTx<'_>,
+    ctx: &AccessContext,
+    ids: &[String],
+) -> Result<std::collections::HashMap<String, Value>> {
+    let mut queries = std::collections::HashMap::new();
+    for chunk in ids.chunks(500) {
+        let mut query =
+            sqlx::QueryBuilder::<sqlx::MySql>::new("SELECT * FROM query_requests WHERE owner_id=");
+        query.push_bind(&ctx.user_id).push(" AND id IN (");
+        let mut keys = query.separated(",");
+        for id in chunk {
+            keys.push_bind(id);
+        }
+        query.push(")");
+        for row in query.build().fetch_all(tx.connection()).await? {
+            let id = row.get::<String, _>("id");
+            let value = view(&row);
+            queries.insert(id, value);
+        }
+    }
+    Ok(queries)
 }
 // 历史投影需要的生成时间：查询视图不携带created_at，历史读取按行取原始时间。
 pub async fn created_at_in_tx(

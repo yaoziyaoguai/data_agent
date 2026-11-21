@@ -275,6 +275,33 @@ pub async fn read_meta_in_tx(
     }
 }
 
+// 快照/历史核验的批量元信息：平台来源走ingestion批量读取（当前头/当前正文
+// 各一条IN查询）；文档来源含依赖核验游走，保持逐条read_meta_in_tx语义。
+pub async fn read_metas_in_tx(
+    tx: &mut AppTx<'_>,
+    ctx: &AccessContext,
+    refs: &[(String, Option<u64>)],
+) -> Result<HashMap<String, Value>> {
+    let mut metas: HashMap<String, Value> = HashMap::new();
+    let mut platform: Vec<(String, Option<u64>)> = vec![];
+    let mut seen = HashSet::new();
+    for (source, version) in refs {
+        if !seen.insert(source) {
+            continue;
+        }
+        if document_id(source).is_some() {
+            metas.insert(
+                source.clone(),
+                read_meta_in_tx(tx, ctx, source, *version).await?,
+            );
+        } else {
+            platform.push((source.clone(), *version));
+        }
+    }
+    metas.extend(ingestion::read_source_metas_in_tx(tx, ctx, &platform).await?);
+    Ok(metas)
+}
+
 pub async fn read_citation_in_tx(
     tx: &mut AppTx<'_>,
     ctx: &AccessContext,

@@ -20,7 +20,7 @@ pub async fn analysis_report(
     headers: HeaderMap,
     Path((cid, task)): Path<(String, String)>,
 ) -> ResponseResult {
-    let ctx = user(&state, &headers).map_err(failure)?;
+    let ctx = user(&state, &headers).await.map_err(failure)?;
     success(
         "AnalysisReportView",
         use_cases::analysis_reports::read(&state.pool, &ctx, &cid, &task)
@@ -34,7 +34,7 @@ pub async fn save_analysis_report(
     Path((cid, task)): Path<(String, String)>,
     Json(input): Json<Value>,
 ) -> ResponseResult {
-    let ctx = user(&state, &headers).map_err(failure)?;
+    let ctx = user(&state, &headers).await.map_err(failure)?;
     success(
         "AnalysisReportRef",
         use_cases::analysis_reports::save(&state.pool, &ctx, &cid, &task, input)
@@ -47,7 +47,7 @@ pub async fn knowledge(
     headers: HeaderMap,
     Query(query): Query<HashMap<String, String>>,
 ) -> ResponseResult {
-    let ctx = user(&state, &headers).map_err(failure)?;
+    let ctx = user(&state, &headers).await.map_err(failure)?;
     let v = use_cases::knowledge::list(&state.pool, &ctx, &json!(query))
         .await
         .map_err(failure)?;
@@ -58,7 +58,7 @@ pub async fn read_document(
     headers: HeaderMap,
     Path(object): Path<String>,
 ) -> ResponseResult {
-    let ctx = user(&state, &headers).map_err(failure)?;
+    let ctx = user(&state, &headers).await.map_err(failure)?;
     success(
         "KnowledgeDocument",
         use_cases::knowledge_documents::read(&state.pool, &ctx, &object)
@@ -72,7 +72,7 @@ pub async fn edit_document(
     Path(object): Path<String>,
     Json(input): Json<Value>,
 ) -> ResponseResult {
-    let ctx = user(&state, &headers).map_err(failure)?;
+    let ctx = user(&state, &headers).await.map_err(failure)?;
     success(
         "KnowledgeDocument",
         use_cases::knowledge_documents::edit(&state.pool, &ctx, &object, input)
@@ -86,7 +86,7 @@ pub async fn read_knowledge(
     Path(object): Path<String>,
     Query(query): Query<HashMap<String, String>>,
 ) -> ResponseResult {
-    let ctx = user(&state, &headers).map_err(failure)?;
+    let ctx = user(&state, &headers).await.map_err(failure)?;
     let version = query
         .get("version")
         .map(|v| epoch(v))
@@ -104,7 +104,7 @@ pub async fn create_knowledge(
     headers: HeaderMap,
     Json(input): Json<Value>,
 ) -> ResponseResult {
-    let ctx = user(&state, &headers).map_err(failure)?;
+    let ctx = user(&state, &headers).await.map_err(failure)?;
     success(
         "KnowledgeObject",
         use_cases::knowledge::edit(&state.pool, &ctx, None, "create", input)
@@ -118,10 +118,24 @@ pub async fn edit_knowledge(
     Path(object): Path<String>,
     Json(input): Json<Value>,
 ) -> ResponseResult {
-    let ctx = user(&state, &headers).map_err(failure)?;
+    let ctx = user(&state, &headers).await.map_err(failure)?;
     success(
         "KnowledgeObject",
         use_cases::knowledge::edit(&state.pool, &ctx, Some(&object), "edit", input)
+            .await
+            .map_err(failure)?,
+    )
+}
+pub async fn edit_knowledge_entries(
+    AxumState(state): AxumState<State>,
+    headers: HeaderMap,
+    Path(object): Path<String>,
+    Json(input): Json<Value>,
+) -> ResponseResult {
+    let ctx = user(&state, &headers).await.map_err(failure)?;
+    success(
+        "KnowledgeObject",
+        use_cases::knowledge::edit_entries(&state.pool, &ctx, &object, input)
             .await
             .map_err(failure)?,
     )
@@ -132,7 +146,7 @@ pub async fn knowledge_action(
     Path((object, action)): Path<(String, String)>,
     Json(input): Json<Value>,
 ) -> ResponseResult {
-    let ctx = user(&state, &headers).map_err(failure)?;
+    let ctx = user(&state, &headers).await.map_err(failure)?;
     let action = match action.as_str() {
         "disable" => "disabled",
         "enable" => "enabled",
@@ -153,7 +167,7 @@ pub async fn analysis_preference(
     Path(table): Path<String>,
     Json(input): Json<Value>,
 ) -> ResponseResult {
-    let ctx = user(&state, &headers).map_err(failure)?;
+    let ctx = user(&state, &headers).await.map_err(failure)?;
     success(
         "TableAnalysisPreference",
         use_cases::knowledge::set_table_analysis_preference(&state.pool, &ctx, &table, input)
@@ -167,7 +181,7 @@ pub async fn source(
     Path(source): Path<String>,
     Query(query): Query<HashMap<String, String>>,
 ) -> ResponseResult {
-    let ctx = user(&state, &headers).map_err(failure)?;
+    let ctx = user(&state, &headers).await.map_err(failure)?;
     if query.contains_key("offset") || query.contains_key("length") {
         let position = |name: &str| {
             query
@@ -204,7 +218,7 @@ pub async fn sync(
     headers: HeaderMap,
     Json(input): Json<Value>,
 ) -> Result<axum::response::Response, (StatusCode, Json<Value>)> {
-    let ctx = user(&state, &headers).map_err(failure)?;
+    let ctx = user(&state, &headers).await.map_err(failure)?;
     data_agent::contracts::validate("CreateConversation", &input).map_err(failure)?;
     let result = use_cases::knowledge::sync(
         &state.pool,
@@ -225,7 +239,7 @@ pub async fn sync_progress(
     headers: HeaderMap,
     Path(sync): Path<String>,
 ) -> ResponseResult {
-    let ctx = user(&state, &headers).map_err(failure)?;
+    let ctx = user(&state, &headers).await.map_err(failure)?;
     success(
         "SourceSyncProgress",
         use_cases::catalog_import::progress(&state.pool, &ctx, &sync)
@@ -238,7 +252,7 @@ pub async fn rebuild_index(
     headers: HeaderMap,
     Json(input): Json<Value>,
 ) -> ResponseResult {
-    let ctx = user(&state, &headers).map_err(failure)?;
+    let ctx = user(&state, &headers).await.map_err(failure)?;
     success(
         "MutationReceipt",
         use_cases::knowledge::rebuild_index(&state.pool, &ctx, &input)
@@ -247,7 +261,7 @@ pub async fn rebuild_index(
     )
 }
 pub async fn assets(AxumState(state): AxumState<State>, headers: HeaderMap) -> ResponseResult {
-    let ctx = user(&state, &headers).map_err(failure)?;
+    let ctx = user(&state, &headers).await.map_err(failure)?;
     success(
         "AssetList",
         use_cases::personal_assets::list(&state.pool, &ctx)
@@ -260,7 +274,7 @@ pub async fn save_asset(
     headers: HeaderMap,
     Json(input): Json<Value>,
 ) -> ResponseResult {
-    let ctx = user(&state, &headers).map_err(failure)?;
+    let ctx = user(&state, &headers).await.map_err(failure)?;
     success(
         "Asset",
         use_cases::personal_assets::save(&state.pool, &ctx, input)
@@ -274,7 +288,7 @@ pub async fn asset_action(
     Path((asset, action)): Path<(String, String)>,
     Json(input): Json<Value>,
 ) -> ResponseResult {
-    let ctx = user(&state, &headers).map_err(failure)?;
+    let ctx = user(&state, &headers).await.map_err(failure)?;
     let target = match action.as_str() {
         "disable" => "disabled",
         "enable" => "enabled",
@@ -294,7 +308,7 @@ pub async fn select_skill(
     Path(cid): Path<String>,
     Json(input): Json<Value>,
 ) -> ResponseResult {
-    let ctx = user(&state, &headers).map_err(failure)?;
+    let ctx = user(&state, &headers).await.map_err(failure)?;
     success(
         "Asset",
         use_cases::personal_assets::select(&state.pool, &ctx, &cid, input)
@@ -308,7 +322,7 @@ pub async fn remove_skill(
     Path(cid): Path<String>,
     Json(input): Json<Value>,
 ) -> ResponseResult {
-    let ctx = user(&state, &headers).map_err(failure)?;
+    let ctx = user(&state, &headers).await.map_err(failure)?;
     success(
         "SkillRemovalReceipt",
         use_cases::personal_assets::remove_selection(&state.pool, &ctx, &cid, input)
@@ -321,7 +335,7 @@ pub async fn queries(
     headers: HeaderMap,
     Path(cid): Path<String>,
 ) -> ResponseResult {
-    let ctx = user(&state, &headers).map_err(failure)?;
+    let ctx = user(&state, &headers).await.map_err(failure)?;
     success(
         "QueryList",
         use_cases::query_workflow::list(&state.pool, &ctx, &cid)
@@ -329,12 +343,31 @@ pub async fn queries(
             .map_err(failure)?,
     )
 }
+pub async fn query_history(
+    AxumState(state): AxumState<State>,
+    headers: HeaderMap,
+    Query(query): Query<HashMap<String, String>>,
+) -> ResponseResult {
+    let ctx = user(&state, &headers).await.map_err(failure)?;
+    data_agent::contracts::validate("QueryHistoryQuery", &json!(query)).map_err(failure)?;
+    success(
+        "QueryHistory",
+        use_cases::query_workflow::history(
+            &state.pool,
+            &ctx,
+            query.get("before_id").map(String::as_str),
+            query.get("q").map_or("", String::as_str),
+        )
+        .await
+        .map_err(failure)?,
+    )
+}
 pub async fn query(
     AxumState(state): AxumState<State>,
     headers: HeaderMap,
     Path(qid): Path<String>,
 ) -> ResponseResult {
-    let ctx = user(&state, &headers).map_err(failure)?;
+    let ctx = user(&state, &headers).await.map_err(failure)?;
     success(
         "QueryView",
         use_cases::query_workflow::read(&state.pool, &ctx, &qid)
@@ -348,7 +381,7 @@ pub async fn confirm(
     Path(qid): Path<String>,
     Json(input): Json<Value>,
 ) -> ResponseResult {
-    let ctx = user(&state, &headers).map_err(failure)?;
+    let ctx = user(&state, &headers).await.map_err(failure)?;
     success(
         "QueryView",
         use_cases::query_workflow::confirm(&state.pool, &ctx, &qid, input)
@@ -362,7 +395,7 @@ pub async fn cancel(
     Path(qid): Path<String>,
     Json(input): Json<Value>,
 ) -> ResponseResult {
-    let ctx = user(&state, &headers).map_err(failure)?;
+    let ctx = user(&state, &headers).await.map_err(failure)?;
     data_agent::contracts::validate("CreateConversation", &input).map_err(failure)?;
     success(
         "QueryView",
@@ -377,7 +410,7 @@ pub async fn results(
     Path(qid): Path<String>,
     Query(query): Query<HashMap<String, String>>,
 ) -> ResponseResult {
-    let ctx = user(&state, &headers).map_err(failure)?;
+    let ctx = user(&state, &headers).await.map_err(failure)?;
     success(
         "QueryResults",
         use_cases::query_workflow::results(
@@ -395,7 +428,7 @@ pub async fn export(
     headers: HeaderMap,
     Path(qid): Path<String>,
 ) -> Result<impl IntoResponse, (StatusCode, Json<Value>)> {
-    let ctx = user(&state, &headers).map_err(failure)?;
+    let ctx = user(&state, &headers).await.map_err(failure)?;
     let mut cursor = None;
     let mut lines = Vec::new();
     let escaped = |value: &Value, numeric: bool| {
@@ -494,7 +527,7 @@ pub async fn tool_rejection(
     )
 }
 pub async fn proposals(AxumState(state): AxumState<State>, headers: HeaderMap) -> ResponseResult {
-    let ctx = user(&state, &headers).map_err(failure)?;
+    let ctx = user(&state, &headers).await.map_err(failure)?;
     success(
         "ProposalList",
         use_cases::knowledge::proposals(&state.pool, &ctx)
@@ -508,7 +541,7 @@ pub async fn apply_proposal(
     Path(id): Path<String>,
     Json(input): Json<Value>,
 ) -> ResponseResult {
-    let ctx = user(&state, &headers).map_err(failure)?;
+    let ctx = user(&state, &headers).await.map_err(failure)?;
     success(
         "KnowledgeObject",
         use_cases::knowledge::edit(&state.pool, &ctx, Some(&id), "apply-proposal", input)
@@ -523,7 +556,7 @@ pub async fn cancel_task(
     Path((cid, task)): Path<(String, String)>,
     Json(input): Json<Value>,
 ) -> ResponseResult {
-    let ctx = user(&state, &headers).map_err(failure)?;
+    let ctx = user(&state, &headers).await.map_err(failure)?;
     success(
         "MutationReceipt",
         use_cases::conversation_lifecycle::cancel_task(&state.pool, &ctx, &cid, &task, input)
@@ -537,7 +570,7 @@ pub async fn withdraw(
     Path((cid, message)): Path<(String, String)>,
     Json(input): Json<Value>,
 ) -> ResponseResult {
-    let ctx = user(&state, &headers).map_err(failure)?;
+    let ctx = user(&state, &headers).await.map_err(failure)?;
     success(
         "MutationReceipt",
         use_cases::conversation_lifecycle::withdraw(&state.pool, &ctx, &cid, &message, input)
@@ -551,7 +584,7 @@ pub async fn delete_conversation(
     Path(cid): Path<String>,
     Json(input): Json<Value>,
 ) -> ResponseResult {
-    let ctx = user(&state, &headers).map_err(failure)?;
+    let ctx = user(&state, &headers).await.map_err(failure)?;
     success(
         "MutationReceipt",
         use_cases::conversation_lifecycle::delete(&state.pool, &ctx, &cid, input)
@@ -582,7 +615,7 @@ pub async fn publish_skill(
     Path(asset): Path<String>,
     Json(input): Json<Value>,
 ) -> ResponseResult {
-    let ctx = user(&state, &headers).map_err(failure)?;
+    let ctx = user(&state, &headers).await.map_err(failure)?;
     success(
         "Asset",
         use_cases::personal_assets::publish(&state.pool, &ctx, &asset, input)
@@ -596,7 +629,7 @@ pub async fn skill_selections(
     Path(cid): Path<String>,
     Query(query): Query<HashMap<String, String>>,
 ) -> ResponseResult {
-    let ctx = user(&state, &headers).map_err(failure)?;
+    let ctx = user(&state, &headers).await.map_err(failure)?;
     data_agent::contracts::validate("AssetPageQuery", &json!(query)).map_err(failure)?;
     success(
         "ConversationSkillSelections",
@@ -616,7 +649,7 @@ pub async fn skill_suggestions(
     Path(asset): Path<String>,
     Query(query): Query<HashMap<String, String>>,
 ) -> ResponseResult {
-    let ctx = user(&state, &headers).map_err(failure)?;
+    let ctx = user(&state, &headers).await.map_err(failure)?;
     data_agent::contracts::validate("AssetPageQuery", &json!(query)).map_err(failure)?;
     success(
         "SkillSuggestionList",
@@ -636,7 +669,7 @@ pub async fn suggest_skill(
     Path(asset): Path<String>,
     Json(input): Json<Value>,
 ) -> ResponseResult {
-    let ctx = user(&state, &headers).map_err(failure)?;
+    let ctx = user(&state, &headers).await.map_err(failure)?;
     success(
         "SkillSuggestion",
         use_cases::personal_assets::suggest(&state.pool, &ctx, &asset, input)
@@ -650,7 +683,7 @@ pub async fn review_skill_suggestion(
     Path((asset, suggestion)): Path<(String, String)>,
     Json(input): Json<Value>,
 ) -> ResponseResult {
-    let ctx = user(&state, &headers).map_err(failure)?;
+    let ctx = user(&state, &headers).await.map_err(failure)?;
     success(
         "SkillSuggestion",
         use_cases::personal_assets::review_suggestion(

@@ -26,9 +26,8 @@ pub async fn initialize(pool: &MySqlPool) -> Result<()> {
         sync_catalog(pool, &ctx).await?;
     }
     let mut tx = AppTx::begin(pool).await?;
-    for object in knowledge::list_in_tx(&mut tx, &ctx, false).await? {
-        super::semantic_governance::register_object_in_tx(&mut tx, &ctx, &object).await?;
-    }
+    let objects = knowledge::list_in_tx(&mut tx, &ctx, false).await?;
+    super::semantic_governance::register_objects_in_tx(&mut tx, &ctx, &objects).await?;
     tx.commit().await
 }
 pub async fn list(pool: &MySqlPool, ctx: &AccessContext, input: &Value) -> Result<Value> {
@@ -201,86 +200,7 @@ pub async fn edit(
         "edit" => {
             contracts::validate("KnowledgeEdit", &input)?;
             let object = object.ok_or(Error::new("invalid_input"))?;
-            if let Some(receipt) = knowledge::begin_edit_in_tx(&mut tx, ctx, object, &input).await?
-            {
-                receipt
-            } else {
-                if input["clear_override"] != true {
-                    check_input_structure_sources_in_tx(&mut tx, ctx, &input).await?;
-                    if let Some(statements) = input["statements"].as_array() {
-                        let mut references = Vec::new();
-                        let mut citations = Vec::new();
-                        for statement in statements {
-                            citations.extend(
-                                statement["citations"]
-                                    .as_array()
-                                    .into_iter()
-                                    .flatten()
-                                    .cloned(),
-                            );
-                            for support in statement["supports"].as_array().into_iter().flatten() {
-                                if support["reference"]["kind"] == "knowledge" {
-                                    references.push(support["reference"]["ref"].clone());
-                                } else {
-                                    citations.push(support["reference"]["citation"].clone());
-                                }
-                            }
-                        }
-                        check_refs_in_tx(&mut tx, ctx, &json!(references)).await?;
-                        let mut checked = std::collections::HashSet::new();
-                        for citation in citations {
-                            if checked.insert(crate::types::fingerprint(&citation)) {
-                                let citation = serde_json::from_value(citation)
-                                    .map_err(|_| Error::new("invalid_input"))?;
-                                super::knowledge_sources::read_citation_in_tx(
-                                    &mut tx, ctx, citation,
-                                )
-                                .await?;
-                            }
-                        }
-                    }
-                }
-                let mut source_value = None;
-                if input["clear_override"] == true {
-                    let old = knowledge::read_in_tx(&mut tx, ctx, object, None, true).await?;
-                    let entry = old["entries"].as_array().and_then(|entries| {
-                        entries
-                            .iter()
-                            .find(|entry| entry["entry_id"] == input["entry_id"])
-                    });
-                    // 旧条目尚未保存来源基础值时，用同版本候选补齐，不能把quote当正文。
-                    if entry.is_some_and(|entry| {
-                        entry["suggestion"]["value"].as_str().is_none()
-                            && entry["source_facts"]["value"].as_str().is_none()
-                    }) && let Some(source) = old["source_id"].as_str()
-                    {
-                        assert_source_in_tx(&mut tx, ctx, &old).await?;
-                        let candidate = if source.starts_with("catalog-") {
-                            ingestion::catalog_candidate_in_tx(&mut tx, ctx, source, object).await?
-                        } else {
-                            let catalog = current_catalog_in_tx(&mut tx, ctx).await?;
-                            catalog["objects"]
-                                .as_array()
-                                .and_then(|objects| {
-                                    objects.iter().find(|candidate| candidate["id"] == object)
-                                })
-                                .ok_or(Error::new("unsupported"))?
-                                .clone()
-                        };
-                        source_value = candidate["entries"]
-                            .as_array()
-                            .and_then(|entries| {
-                                entries
-                                    .iter()
-                                    .find(|entry| entry["entry_id"] == input["entry_id"])
-                            })
-                            .and_then(|entry| entry["effective_value"].as_str())
-                            .map(str::to_owned);
-                    }
-                }
-                knowledge::save_edit_in_tx(&mut tx, ctx, object, &input, source_value.as_deref())
-                    .await?
-            }
+            apply_entry_edit_in_tx(&mut tx, ctx, object, &input).await?
         }
         "reanalyze" => {
             contracts::validate("VersionCommand", &input)?;
@@ -343,6 +263,123 @@ pub async fn edit(
     // 模块内保存不含跨模块登记：这里补依赖目标指纹并排队来源扇出（幂等，重放不破坏）。
     super::dependency_registration::after_content_saved_in_tx(&mut tx, ctx, &[v.clone()]).await?;
     // 保存文档原文（创建或改版）即原子登记raw索引与语义准备；两作业互不等待。
+    super::knowledge_documents::register_document_preparation_in_tx(&mut tx, &ctx.space_id, &v)
+        .await?;
+    super::semantic_governance::decorate_in_tx(&mut tx, ctx, &mut v).await?;
+    contracts::validate("KnowledgeObject", &v)?;
+    tx.commit().await?;
+    Ok(v)
+}
+// 单条条目保存的核心路径：回执幂等、结构/引用校验、clear_override 的来源基础值
+// 回填，最后落库。edit 与 edit_entries 共用；input 须携带 operation_id 与
+// expected_version。
+async fn apply_entry_edit_in_tx(
+    tx: &mut AppTx<'_>,
+    ctx: &AccessContext,
+    object: &str,
+    input: &Value,
+) -> Result<Value> {
+    if let Some(receipt) = knowledge::begin_edit_in_tx(tx, ctx, object, input).await? {
+        return Ok(receipt);
+    }
+    if input["clear_override"] != true {
+        check_input_structure_sources_in_tx(tx, ctx, input).await?;
+        if let Some(statements) = input["statements"].as_array() {
+            let mut references = Vec::new();
+            let mut citations = Vec::new();
+            for statement in statements {
+                citations.extend(
+                    statement["citations"]
+                        .as_array()
+                        .into_iter()
+                        .flatten()
+                        .cloned(),
+                );
+                for support in statement["supports"].as_array().into_iter().flatten() {
+                    if support["reference"]["kind"] == "knowledge" {
+                        references.push(support["reference"]["ref"].clone());
+                    } else {
+                        citations.push(support["reference"]["citation"].clone());
+                    }
+                }
+            }
+            check_refs_in_tx(tx, ctx, &json!(references)).await?;
+            let mut checked = std::collections::HashSet::new();
+            for citation in citations {
+                if checked.insert(fingerprint(&citation)) {
+                    let citation = serde_json::from_value(citation)
+                        .map_err(|_| Error::new("invalid_input"))?;
+                    super::knowledge_sources::read_citation_in_tx(tx, ctx, citation).await?;
+                }
+            }
+        }
+    }
+    let mut source_value = None;
+    if input["clear_override"] == true {
+        let old = knowledge::read_in_tx(tx, ctx, object, None, true).await?;
+        let entry = old["entries"].as_array().and_then(|entries| {
+            entries
+                .iter()
+                .find(|entry| entry["entry_id"] == input["entry_id"])
+        });
+        // 旧条目尚未保存来源基础值时，用同版本候选补齐，不能把quote当正文。
+        if entry.is_some_and(|entry| {
+            entry["suggestion"]["value"].as_str().is_none()
+                && entry["source_facts"]["value"].as_str().is_none()
+        }) && let Some(source) = old["source_id"].as_str()
+        {
+            assert_source_in_tx(tx, ctx, &old).await?;
+            let candidate = if source.starts_with("catalog-") {
+                ingestion::catalog_candidate_in_tx(tx, ctx, source, object).await?
+            } else {
+                let catalog = current_catalog_in_tx(tx, ctx).await?;
+                catalog["objects"]
+                    .as_array()
+                    .and_then(|objects| objects.iter().find(|candidate| candidate["id"] == object))
+                    .ok_or(Error::new("unsupported"))?
+                    .clone()
+            };
+            source_value = candidate["entries"]
+                .as_array()
+                .and_then(|entries| {
+                    entries
+                        .iter()
+                        .find(|entry| entry["entry_id"] == input["entry_id"])
+                })
+                .and_then(|entry| entry["effective_value"].as_str())
+                .map(str::to_owned);
+        }
+    }
+    knowledge::save_edit_in_tx(tx, ctx, object, input, source_value.as_deref()).await
+}
+// 表级批量保存：同一对象、同一事务、同一条乐观锁链。逐条 operation_id 由批次
+// operation_id 加“-{序号}”派生，expected_version 自基准依次 +1；整批重放时逐条
+// 命中各自回执（单事务要么全落要么全无，不存在半批状态）。跨模块登记、文档
+// 准备与治理装饰在批末只执行一次，返回最新对象。
+pub async fn edit_entries(
+    pool: &MySqlPool,
+    ctx: &AccessContext,
+    object: &str,
+    input: Value,
+) -> Result<Value> {
+    contracts::validate("KnowledgeEntryBatch", &input)?;
+    let edits = input["edits"]
+        .as_array()
+        .ok_or(Error::new("invalid_input"))?;
+    let operation = input["operation_id"]
+        .as_str()
+        .ok_or(Error::new("invalid_input"))?;
+    let base = epoch(input["expected_version"].as_str().unwrap_or(""))?;
+    let mut tx = AppTx::begin(pool).await?;
+    access::authorize_semantic_in_tx(&mut tx, ctx, object).await?;
+    let mut v = Value::Null;
+    for (index, edit) in edits.iter().enumerate() {
+        let mut entry = edit.clone();
+        entry["operation_id"] = json!(format!("{operation}-{index}"));
+        entry["expected_version"] = json!((base + index as u64).to_string());
+        v = apply_entry_edit_in_tx(&mut tx, ctx, object, &entry).await?;
+    }
+    super::dependency_registration::after_content_saved_in_tx(&mut tx, ctx, &[v.clone()]).await?;
     super::knowledge_documents::register_document_preparation_in_tx(&mut tx, &ctx.space_id, &v)
         .await?;
     super::semantic_governance::decorate_in_tx(&mut tx, ctx, &mut v).await?;
@@ -3418,6 +3455,23 @@ fn aggregate_search_objects(contents: Vec<Value>) -> Vec<Value> {
 }
 
 #[allow(clippy::too_many_arguments)]
+// 摘录窗口的受检解析：定位/长度/正文缺失或非数值按invalid_input拒收，不再panic。
+fn excerpt_bounds(content: &Value) -> Result<(u64, u64)> {
+    let start = content["citation"]["locator"]["offset"]
+        .as_u64()
+        .ok_or_else(|| Error::new("invalid_input"))?;
+    let length = content["citation"]["locator"]["length"]
+        .as_u64()
+        .ok_or_else(|| Error::new("invalid_input"))?;
+    Ok((start, start + length))
+}
+fn excerpt_text(content: &Value) -> Result<&str> {
+    content["text"]
+        .as_str()
+        .ok_or_else(|| Error::new("invalid_input"))
+}
+// 一次装配同时接收通道候选、范围与允许集，参数不拆结构体以保持与推进侧同构。
+#[allow(clippy::too_many_arguments)]
 async fn assemble_search_in_tx(
     pool: &MySqlPool,
     ctx: &AccessContext,
@@ -3490,74 +3544,57 @@ async fn assemble_search_in_tx(
             content,
         } = hit
         {
-            let start = content["citation"]["locator"]["offset"]
-                .as_u64()
-                .expect("verified raw offset");
-            let end = start
-                + content["citation"]["locator"]["length"]
-                    .as_u64()
-                    .expect("verified raw length");
-            if let Some(SearchHit::SourceExcerpt {
-                records: previous_records,
-                score: previous_score,
-                content: previous,
-            }) = merged.iter_mut().find(|hit| {
+            let (start, end) = excerpt_bounds(&content)?;
+            // 先按索引定位可合并窗口，闭包里已解析的边界直接复用到合并，避免二次解包。
+            let merge_at = merged.iter().enumerate().find_map(|(index, hit)| {
                 let SearchHit::SourceExcerpt {
                     content: previous, ..
                 } = hit
                 else {
-                    return false;
+                    return None;
                 };
-                let previous_start = previous["citation"]["locator"]["offset"]
-                    .as_u64()
-                    .expect("verified raw offset");
-                let previous_end = previous_start
-                    + previous["citation"]["locator"]["length"]
-                        .as_u64()
-                        .expect("verified raw length");
-                previous["citation"]["source"] == content["citation"]["source"]
+                let (previous_start, previous_end) = excerpt_bounds(previous).ok()?;
+                (previous["citation"]["source"] == content["citation"]["source"]
                     && previous["citation"]["revision"] == content["citation"]["revision"]
                     && start <= previous_end
                     && previous_start <= end
-                    && end.max(previous_end) - start.min(previous_start) <= 2400
-            }) {
-                let previous_start = previous["citation"]["locator"]["offset"].as_u64().unwrap();
-                let previous_end =
-                    previous_start + previous["citation"]["locator"]["length"].as_u64().unwrap();
-                let text = if start < previous_start {
-                    content["text"]
-                        .as_str()
-                        .unwrap()
-                        .chars()
-                        .take((previous_start - start) as usize)
-                        .chain(previous["text"].as_str().unwrap().chars())
-                        .chain(
-                            content["text"]
-                                .as_str()
-                                .unwrap()
-                                .chars()
-                                .skip((previous_end - start) as usize),
-                        )
-                        .collect::<String>()
-                } else {
-                    previous["text"]
-                        .as_str()
-                        .unwrap()
-                        .chars()
-                        .chain(
-                            content["text"]
-                                .as_str()
-                                .unwrap()
-                                .chars()
-                                .skip((previous_end - start) as usize),
-                        )
-                        .collect::<String>()
-                };
-                previous["text"] = json!(text);
-                previous["citation"]["locator"] = json!({"offset":start.min(previous_start),"length":end.max(previous_end) - start.min(previous_start)});
-                *previous_score = previous_score.max(score);
-                previous["score"] = json!(previous_score);
-                previous_records.extend(records);
+                    && end.max(previous_end) - start.min(previous_start) <= 2400)
+                    .then_some((index, previous_start, previous_end))
+            });
+            if let Some((index, previous_start, previous_end)) = merge_at {
+                if let SearchHit::SourceExcerpt {
+                    records: previous_records,
+                    score: previous_score,
+                    content: previous,
+                } = &mut merged[index]
+                {
+                    let text = if start < previous_start {
+                        excerpt_text(&content)?
+                            .chars()
+                            .take((previous_start - start) as usize)
+                            .chain(excerpt_text(previous)?.chars())
+                            .chain(
+                                excerpt_text(&content)?
+                                    .chars()
+                                    .skip((previous_end - start) as usize),
+                            )
+                            .collect::<String>()
+                    } else {
+                        excerpt_text(previous)?
+                            .chars()
+                            .chain(
+                                excerpt_text(&content)?
+                                    .chars()
+                                    .skip((previous_end - start) as usize),
+                            )
+                            .collect::<String>()
+                    };
+                    previous["text"] = json!(text);
+                    previous["citation"]["locator"] = json!({"offset":start.min(previous_start),"length":end.max(previous_end) - start.min(previous_start)});
+                    *previous_score = previous_score.max(score);
+                    previous["score"] = json!(previous_score);
+                    previous_records.extend(records);
+                }
             } else {
                 merged.push(SearchHit::SourceExcerpt {
                     records,

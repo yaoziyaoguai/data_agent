@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { SessionManager } from "@earendil-works/pi-coding-agent";
 import { exportCheckpoint } from "../../apps/agent/session/checkpoint.ts";
-import { harness, until } from "./harness.mjs";
+import { harness, replayEvents, until } from "./harness.mjs";
 
 // 真实业务入口核对数值来源和正式交付；不以工具脚本冒称模型理解能力。
 const historyBrowser = process.argv.includes("--history-browser");
@@ -226,16 +226,12 @@ try {
   assert.equal(restrictedAnswer.output_id, originalAnswer.output_id);
   assert.ok(revokedCommitted.messages.some(message => message.role === "assistant" && message.text === "合成查询草稿已经准备。"), "无结果依赖的原说明继续可读");
   assert.ok(revokedCommitted.messages.some(message => message.role === "user" && message.text === "准备精确金额、空值和分页样例，先不执行。"), "用户原消息继续可读");
-  const eventResponse = await fetch(h.env.DATA_AGENT_API_URL + `/conversations/${cid}/events?after_seq=0`, {headers: {authorization: "Bearer " + h.tokens.alice}});
-  assert.equal(eventResponse.status, 200);
-  const eventReplay = (await eventResponse.text()).split("\n").filter(line => line.startsWith("data: ")).map(line => JSON.parse(line.slice(6)));
+  const eventReplay = await replayEvents(h.env.DATA_AGENT_API_URL + `/conversations/${cid}/events?after_seq=0`, {authorization: "Bearer " + h.tokens.alice});
   assert.ok(!eventReplay.some(event => ["assistant_delta", "assistant_committed"].includes(event.type) && event.payload.text?.includes("9007199254740993.01")), "SSE重放不能绕过snapshot正文权限投影");
   // 正式数值可直接提交而不广播delta；用紧邻提交的游标核对重放来源。
   const originalCommit = snapshot.events.find(event => event.type === "assistant_committed" && event.payload.attempt_id === originalAnswer.attempt_id);
   assert.ok(originalCommit);
-  const cursorResponse = await fetch(h.env.DATA_AGENT_API_URL + `/conversations/${cid}/events?after_seq=${BigInt(originalCommit.event_seq) - 1n}`, {headers: {authorization: "Bearer " + h.tokens.alice}});
-  assert.equal(cursorResponse.status, 200);
-  const cursorReplay = (await cursorResponse.text()).split("\n").filter(line => line.startsWith("data: ")).map(line => JSON.parse(line.slice(6)));
+  const cursorReplay = await replayEvents(h.env.DATA_AGENT_API_URL + `/conversations/${cid}/events?after_seq=${BigInt(originalCommit.event_seq) - 1n}`, {authorization: "Bearer " + h.tokens.alice});
   assert.ok(cursorReplay.some(event => event.type === "assistant_committed" && event.payload.attempt_id === originalAnswer.attempt_id), "游标从答案内部续读仍保留提交身份");
   assert.ok(!cursorReplay.some(event => ["assistant_delta", "assistant_committed"].includes(event.type) && event.payload.text?.includes("9007199254740993.01")), "游标续读仍须核原答案来源");
   await writeFile(h.directory + "/platform/permissions.json", "{}");

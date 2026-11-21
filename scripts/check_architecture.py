@@ -9,7 +9,7 @@ OWNERS={
  'conversations':{'conversations','conversation_messages','conversation_events','conversation_message_tasks'},
  'analysis':{'analysis_tasks','condition_revisions','clarifications','task_lifecycle_operations','analysis_evidence','analysis_evidence_operations','analysis_reports','analysis_report_revisions','analysis_report_operations'},
  'runtime':{'agent_runs','pi_checkpoints','tool_calls','assistant_outputs','output_chunks','budget_scopes','model_call_attempts','model_trials','maintenance_model_calls','model_space_settings','model_services','model_service_versions','model_definitions','model_definition_versions'},
- 'jobs':{'background_jobs'},'access':{'semantic_ownership','semantic_owner_operations'},
+ 'jobs':{'background_jobs'},'access':{'semantic_ownership','semantic_owner_operations','user_sessions'},
  'queries':{'query_requests'},
  # knowledge含依赖索引两张表（迁移202610240004，设计17.3归属M02）；
  # ingestion含来源级准备进度（迁移202610240003，设计17.3归属M03）。
