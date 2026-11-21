@@ -94,7 +94,7 @@ flowchart TD
   F --> E
   G --> C
   E --> H[追加事件并等待事务提交]
-  H --> I[SSE按序读取已提交事件]
+  H --> I[API 按会话广播已提交事件]
 ```
 
 ### 消息发送与输出传输补充
@@ -355,7 +355,7 @@ flowchart TD
 
 调用许可接受宿主绑定的 `RunContext` 或 `MaintenanceContext`；后者固定作业 ID、领取代次、配置/模型/资料范围、预算引用。维护调用校验 M10 的当前代次；工具/聊天接口不接受维护上下文，模型不能借此改换预算。若资料同步仅调用不计费平台读取，则不扣模型额度。
 
-`append_output` 组合用例在一事务保存 M08 片段和 M05 流式事件，提交后才投递；事件携带输出/尝试/片段 ID。v2的prepare只保存核定bindings与来源；M11沿Pi原生text_delta替换标记、在message_end追加一次范围后缀并drain，传入这里的始终是展示片段。M08 outputs拥有替换及展示等式的单一核验实现，具名use_cases向下调用；原entry/source_text、原prepare SDK调用与展示chunk范围分别绑定。完整候选先发布原checkpoint，恢复不重播已保存片段或生成正文；原present路径保留。模型消费推进 `input_seq`，SSE 按 `event_seq` 读取；输出/展示事件不重新成为 Agent 输入。Web仍用现有快照轮询读取assistant_delta，`/events`为有限批次，不表示已建立持续SSE连接。
+`append_output` 组合用例在一事务保存 M08 片段和 M05 流式事件，提交后才投递；事件携带输出/尝试/片段 ID。v2的prepare只保存核定bindings与来源；M11沿Pi原生text_delta替换标记、在message_end追加一次范围后缀并drain，传入这里的始终是展示片段。M08 outputs拥有替换及展示等式的单一核验实现，具名use_cases向下调用；原entry/source_text、原prepare SDK调用与展示chunk范围分别绑定。完整候选先发布原checkpoint，恢复不重播已保存片段或生成正文；原present路径保留。模型消费推进 `input_seq`，SSE 按 `event_seq` 读取；输出/展示事件不重新成为 Agent 输入。Web 建连补读历史，随后在 `/events` 直接消费 `assistant_delta` 和其他事件。API 将各类已提交更新投影一次再推给当前会话的客户端；事件断层时重新同步快照。
 
 M08 `model_configuration`提供按空间维护的可信目录与`selected_profile`；部署导入的Flash/Pro保留原档位和价格版本，原I0 task配置继续限Flash/off。`receive_message`先查幂等回执，再依次取本条显式选择、M05已存选择、空间默认模型，将服务及模型修订、协议、能力、限制和费率冻结到M08 `budget_scopes.model_profile`。继承原trial和请求/总预算，不重新配置试验。未带选择的旧客户端消息保持原指纹；显式选择是新消息指纹的一部分。Pi使用锁定SDK的原生协议与模型能力信息，通过`createAgentSession`和`thinkingLevel`续接同一会话。恢复、消息重放和查询结果通知沿原scope取配置；切换不改变已运行回复与查询。配置权限、加密和停用边界见[实现设计第16节](implementation-design.md#16-模型接入配置2026-10-20)。
 

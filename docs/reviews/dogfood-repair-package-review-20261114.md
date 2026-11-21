@@ -4,13 +4,13 @@
 
 ## 两份独立方案与方法
 
-当前Codex先按 `dev_co` 的渐进读取/交接约定编制[本地独立稿](../../.local/audits/qa-repair-package-20261114/local-plan.md)，使用 `contract-first` 校对现有同源Schema与消费者，将 `tdd` 的RED/GREEN要求用于未来实施。本轮没有执行产品TDD。独立稿在读取Oracle答案前冻结，SHA256为 `b02111236ed301b0870e7c57d4ec6f5624235455a37e8e6be1bbdd6addc3a47f`。
+当前Codex先按 `dev_co` 的渐进读取/交接约定编制本地独立稿（`.local/audits/qa-repair-package-20261114/local-plan.md`），使用 `contract-first` 校对现有同源Schema与消费者，将 `tdd` 的RED/GREEN要求用于未来实施。本轮没有执行产品TDD。独立稿在读取Oracle答案前冻结，SHA256为 `b02111236ed301b0870e7c57d4ec6f5624235455a37e8e6be1bbdd6addc3a47f`。
 
-随后通过已安装 `oracle-web` 提交三份共同事实/必要代码/验证入口，约17,225输入tokens，不发送本地方案或整个仓库，不使用子代理。[Oracle独立稿](../../.local/audits/qa-repair-package-20261114/oracle-plan.md)提出八片，本地稿为六项；差别主要是把回答、CTE和试用前提分列，不是新增产品能力。最终把相关工作合并为六项，保留全部问题的定位、边界及出口。
+随后通过已安装 `oracle-web` 提交三份共同事实/必要代码/验证入口，约17,225输入tokens，不发送本地方案或整个仓库，不使用子代理。Oracle独立稿（`.local/audits/qa-repair-package-20261114/oracle-plan.md`）提出八片，本地稿为六项；差别主要是把回答、CTE和试用前提分列，不是新增产品能力。最终把相关工作合并为六项，保留全部问题的定位、边界及出口。
 
 Oracle会话：生成修复执行包（会话链接留存本地证据）。两次发送前选择证据均为 `Power, item 5 of 5 (slider ARIA)`。网页显示思考8分50秒后给出完整方案，包含范围表、执行建议和交接文本。
 
-**抓取限制如实保留：** CLI没有识别新版页面的最终回复，持续等待。本轮只读访问它自己记录的Chrome端口与target，在同一已提交会话两次核对回复稳定、无停止生成按钮、有复制/朗读工具栏，并补齐可见文本未展开的表格和代码块。随后只关闭该临时浏览器；CLI因此exit 1，不能记作自动抓取成功。本记录采用已核完整网页回复，不采用错误进程的部分日志或未完成草稿，没有重发问题。对应Chrome PID已退出，临时Profile已删除，没有信号操作controller或清理其他会话。详见[来源和清理证据](../../.local/audits/qa-repair-package-20261114/oracle-provenance.json)与[完整正文](../../.local/audits/qa-repair-package-20261114/oracle-complete-response.txt)。
+**抓取限制如实保留：** CLI没有识别新版页面的最终回复，持续等待。本轮只读访问它自己记录的Chrome端口与target，在同一已提交会话两次核对回复稳定、无停止生成按钮、有复制/朗读工具栏，并补齐可见文本未展开的表格和代码块。随后只关闭该临时浏览器；CLI因此exit 1，不能记作自动抓取成功。本记录采用已核完整网页回复，不采用错误进程的部分日志或未完成草稿，没有重发问题。对应Chrome PID已退出，临时Profile已删除，没有信号操作controller或清理其他会话。详见来源和清理证据（`.local/audits/qa-repair-package-20261114/oracle-provenance.json`）与完整正文（`.local/audits/qa-repair-package-20261114/oracle-complete-response.txt`）。
 
 最终稿由当前Codex逐条对照代码和用户决定修订，没有再送Oracle审最终措辞，不声称Oracle逐字批准。
 
@@ -48,7 +48,7 @@ Oracle会话：生成修复执行包（会话链接留存本地证据）。两�
 
 - 文档链接与所列现有命令文件核对；原38组验收、要求编号和失败记录保留。
 - 编包前记录的17份产品/测试/Schema文件哈希保持；本轮实际改动为执行包、Prompt、审查记录、CURRENT和相关设计/入口。
-- `make verify-delivery`及其16项检查器测试通过；它只证明声明覆盖和记录结构，不代表产品业务通过。最终检查细节见[本轮验证记录](../../.local/audits/qa-repair-package-20261114/document-validation.json)。
+- `make verify-delivery`及其16项检查器测试通过；它只证明声明覆盖和记录结构，不代表产品业务通过。最终检查细节见本轮验证记录（`.local/audits/qa-repair-package-20261114/document-validation.json`）。
 - 没有运行新真实模型dogfood、完整工程验收、提交推送、部署或更新日常服务。独立方案交叉核对不替代未来独立实现审查。
 
 执行入口：[最终详细包](../execution/semantic-runtime/dogfood-report-repairs.md)；[完整交接Prompt](../execution/semantic-runtime/DOGFOOD_REPAIR_PROMPT.md)。

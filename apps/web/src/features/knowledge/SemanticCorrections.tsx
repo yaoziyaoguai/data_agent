@@ -21,10 +21,12 @@ const labels = {
 };
 export function SemanticCorrections({
   user,
+  revision,
   proposals,
   onSaved,
 }: {
   user: string;
+  revision: number;
   proposals: Proposal[];
   onSaved: () => void;
 }) {
@@ -81,7 +83,7 @@ export function SemanticCorrections({
       window.removeEventListener("focus", wake);
       document.removeEventListener("visibilitychange", wake);
     };
-  }, [user, pageCount, reload]);
+  }, [user, pageCount, reload, revision]);
   const saved = () => {
     onSaved();
     setReload((v) => v + 1);

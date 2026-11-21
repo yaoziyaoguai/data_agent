@@ -1,4 +1,5 @@
 pub mod contracts;
+pub mod live_changes;
 pub mod modules;
 pub mod persistence;
 pub mod search_scope;

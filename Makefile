@@ -96,6 +96,7 @@ verify-recovery:
 	$(CARGO) build --offline --locked -p data-agent-api
 	$(CARGO) build --offline --locked -p data-agent-worker
 	node tests/runtime/check-runtime.mjs --recovery
+	node tests/mvp/check-worker-shutdown.mjs
 
 verify-architecture:
 	$(PYTHON) scripts/check_architecture.py
@@ -357,6 +358,7 @@ verify-mvp-browser:
 	node tests/mvp/check-browser.mjs
 	node tests/mvp/check-conversation-timeline.mjs
 	node tests/mvp/check-history-browser.mjs
+	node tests/mvp/check-live-workbench.mjs
 
 .PHONY: verify-management-buttons verify-memory-runtime
 verify-management-buttons:

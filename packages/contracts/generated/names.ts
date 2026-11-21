@@ -263,4 +263,8 @@ export interface ContractTypes {
   ControlDeliveryFact: Boundary.FactElement;
   ControlDelivery: Boundary.ControlDeliveryClass;
   ControlDeliveryRef: Boundary.ControlDeliveryRef;
+  KnowledgeEditGroup: Boundary.KnowledgeEditGroup;
+  KnowledgeBatchEdit: Boundary.KnowledgeBatchEdit;
+  KnowledgeBatchReceipt: Boundary.KnowledgeBatchReceipt;
+  WorkbenchUpdate: Boundary.WorkbenchUpdate;
 }

@@ -40,7 +40,12 @@ try {
   assert.equal(await longMessage.locator('tbody tr').count(),14);
   await longMessage.getByText('查看回复中的 SQL（查询卡片已提供）',{exact:true}).click();
   assert.equal((await longMessage.locator('code').filter({hasText:query.sql}).innerText()).trim(),query.sql.trim());
-  for(let i=0;i<2;i++)await page.waitForResponse(r=>r.url().includes('/snapshot')&&r.status()===200);
+  for(let i=0;i<2;i++){
+    const review='核对已展开的明细 '+(i+1);
+    const pending=await h.send(cid,review);
+    await page.getByText(review,{exact:true}).waitFor();
+    ok(await h.request(`/conversations/${cid}/messages/${pending.message_id}/withdraw`,{operation_id:randomUUID()}));
+  }
   assert.equal(await longMessage.locator('table').isVisible(),true);
   await page.setViewportSize({width:390,height:740});
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
@@ -56,19 +61,19 @@ try {
   assert.equal(await longMessage.locator('details[open]').count(),2);
   await page.screenshot({path:output+'/readability-mobile.png'});
   await page.setViewportSize({width:1280,height:800});
-  // 仅此展示夹具替换浏览器读取的 SQL；不改数据库、不执行，验证字面量空白不能被归一化。
-  const queriesPath='**/conversations/'+cid+'/queries';
-  await page.route(queriesPath,async route=>{const response=await route.fetch();const body=await response.json();body.queries=body.queries.map(q=>q.id===query.id?{...q,sql:"SELECT 'a b' AS label;"}:q);await route.fulfill({response,json:body});});
+  // 在隔离夹具中替换用于对照的已存 SQL，随后重连读取这份历史。不执行对照 SQL。
   const literalText="字面量空白差异\n\n```sql\nSELECT 'a b' AS label;\n```\n\n```sql\nSELECT 'a  b' AS label;\n```";
   const literalSeq=Number((await h.snapshot(cid)).last_event_seq)+1;
+  h.sql(`UPDATE query_requests SET sql_text=${quote("SELECT 'a b' AS label;")} WHERE id=${quote(query.id)}`);
   h.sql(`INSERT INTO conversation_events(event_id,conversation_id,event_seq,event_type,payload) VALUES(${quote(randomUUID())},${quote(cid)},${literalSeq},'assistant_committed',${quote(JSON.stringify({output_id:'literal-answer',attempt_id:'literal-attempt',text:literalText}))});UPDATE conversations SET event_seq=${literalSeq} WHERE id=${quote(cid)}`);
+  await page.reload();
   const literals=page.locator('.assistant-markdown').filter({hasText:'字面量空白差异'});
   await literals.locator('details').waitFor();
   assert.equal(await literals.locator('details').count(),1);
   assert.equal(await literals.locator('code').nth(0).isVisible(),false);
   assert.equal(await literals.locator('code').nth(1).isVisible(),true);
   assert.equal((await literals.locator('code').nth(1).textContent()).trim(),"SELECT 'a  b' AS label;");
-  await page.unroute(queriesPath);
+  h.sql(`UPDATE query_requests SET sql_text=${quote(query.sql)} WHERE id=${quote(query.id)}`);
   checks.push('长标题压缩且保留原文；重复SQL/14行表折叠，独立SQL和字面量空白差异不误折叠；新增查询保持旧表节点、展开、滚动和焦点');
 
   execFileSync('python3',['-c','import sqlite3,sys\nwith sqlite3.connect(sys.argv[1]) as db: db.execute("UPDATE submissions SET expires_at=0 WHERE id=?",(sys.argv[2],))',h.directory+'/platform/submissions.sqlite',query.id]);

@@ -3,10 +3,7 @@ use axum::{
     Json,
     extract::{Path, Query, State as AxumState},
     http::{HeaderMap, StatusCode, header},
-    response::{
-        IntoResponse,
-        sse::{Event as SseEvent, KeepAlive, KeepAliveStream, Sse},
-    },
+    response::IntoResponse,
 };
 use data_agent::{
     contracts::{self, generated::*},
@@ -17,7 +14,6 @@ use data_agent::{
 };
 use serde_json::{Value, json};
 use std::collections::HashMap;
-use std::{convert::Infallible, time::Duration};
 type ResponseResult = Result<Json<Value>, (StatusCode, Json<Value>)>;
 pub(crate) fn failure(error: Error) -> (StatusCode, Json<Value>) {
     let request_id = id();
@@ -76,14 +72,12 @@ pub(crate) async fn user(state: &State, headers: &HeaderMap) -> Result<AccessCon
     }
     let token = session_cookie(headers).ok_or(Error::new("unauthenticated"))?;
     let hash = access::session_token_hash(token);
-    let mut tx = AppTx::begin(&state.pool).await?;
-    let (user_id, space_id) = access::resolve_session_in_tx(&mut tx, &hash)
+    let session = access::resolve_session(&state.pool, &hash)
         .await?
         .ok_or(Error::new("unauthenticated"))?;
-    tx.commit().await?;
     Ok(AccessContext {
-        user_id,
-        space_id,
+        user_id: session.user_id,
+        space_id: session.space_id,
         request_id: id(),
     })
 }
@@ -251,114 +245,6 @@ pub async fn refresh_snapshot(
     .and_then(|value| success("SnapshotRefresh", value))
 }
 
-// 会话事件实时流：连接先校验可读并补发after_seq之后的增量，随后每秒做轻量尾部
-// 扫描推送新事件；断线由浏览器自动重连，Last-Event-ID续传；15秒Keep-Alive防
-// 中间层掐空闲连接。客户端断开时发送端失败即停，不再扫库。
-pub async fn events(
-    AxumState(state): AxumState<State>,
-    headers: HeaderMap,
-    Path(cid): Path<String>,
-    Query(query): Query<HashMap<String, String>>,
-) -> Result<
-    Sse<KeepAliveStream<tokio_stream::wrappers::ReceiverStream<Result<SseEvent, Infallible>>>>,
-    (StatusCode, Json<Value>),
-> {
-    let context = user(&state, &headers).await.map_err(failure)?;
-    let after_seq = query
-        .get("after_seq")
-        .map(|v| v.parse::<u64>())
-        .transpose()
-        .map_err(|_| failure(Error::new("invalid_input")))?;
-    let last_event = headers
-        .get("Last-Event-ID")
-        .and_then(|value| value.to_str().ok())
-        .and_then(|value| value.parse::<u64>().ok());
-    // EventSource 重连时沿用首次 URL，已收到的事件号才是最新位置。
-    let start = after_seq.max(last_event).unwrap_or(0);
-    let session_hash = if bearer(&headers).is_none() {
-        session_cookie(&headers).map(access::session_token_hash)
-    } else {
-        None
-    };
-    // 先做一次读取校验会话存在且可读，失败直接返回HTTP状态而不是挂起SSE。
-    let first = use_cases::read_conversation::read_events(&state.pool, &context, &cid, start, None)
-        .await
-        .map_err(failure)?;
-    let (tx, rx) = tokio::sync::mpsc::channel::<Result<SseEvent, Infallible>>(32);
-    let pool = state.pool.clone();
-    tokio::spawn(async move {
-        let mut cursor = start;
-        let mut opening = Some(first);
-        loop {
-            loop {
-                let page = if let Some(page) = opening.take() {
-                    page
-                } else {
-                    match use_cases::read_conversation::read_events(
-                        &pool,
-                        &context,
-                        &cid,
-                        cursor,
-                        session_hash.as_deref(),
-                    )
-                    .await
-                    {
-                        Ok(page) => page,
-                        Err(error)
-                            if matches!(
-                                error.code,
-                                "not_available" | "forbidden" | "unauthenticated"
-                            ) =>
-                        {
-                            // 会话删除或权限失效：通知前端停止重连后结束流。
-                            let _ = tx
-                                .send(Ok(SseEvent::default()
-                                    .event("stream_closed")
-                                    .data(json!({"code": error.code}).to_string())))
-                                .await;
-                            return;
-                        }
-                        Err(error) => {
-                            eprintln!("events_poll_transient cid={cid} code={}", error.code);
-                            break;
-                        }
-                    }
-                };
-                let drained = page.len();
-                for event in page {
-                    let seq = event["event_seq"]
-                        .as_str()
-                        .and_then(|value| value.parse::<u64>().ok());
-                    // 事件不命名：前端onmessage统一作为唤醒信号接收，新增事件类型不漏。
-                    // id仍带游标，浏览器自动重连时以Last-Event-ID续传。
-                    let mut message = SseEvent::default();
-                    if let Some(seq) = seq {
-                        message = message.id(seq.to_string());
-                        cursor = seq;
-                    }
-                    if tx.send(Ok(message.data(event.to_string()))).await.is_err() {
-                        // 客户端已断开：停止扫描。
-                        return;
-                    }
-                }
-                if drained < 1000 {
-                    break;
-                }
-            }
-            tokio::select! {
-                _ = tx.closed() => return,
-                _ = tokio::time::sleep(Duration::from_secs(1)) => {}
-            }
-        }
-    });
-    Ok(
-        Sse::new(tokio_stream::wrappers::ReceiverStream::new(rx)).keep_alive(
-            KeepAlive::new()
-                .interval(Duration::from_secs(15))
-                .text("keep-alive"),
-        ),
-    )
-}
 pub async fn register(
     AxumState(state): AxumState<State>,
     headers: HeaderMap,

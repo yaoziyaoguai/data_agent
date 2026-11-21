@@ -9,6 +9,7 @@ use axum::{
     response::IntoResponse,
 };
 use data_agent::{
+    contracts,
     types::{Error, epoch},
     use_cases,
 };
@@ -136,6 +137,20 @@ pub async fn edit_knowledge_entries(
     success(
         "KnowledgeObject",
         use_cases::knowledge::edit_entries(&state.pool, &ctx, &object, input)
+            .await
+            .map_err(failure)?,
+    )
+}
+pub async fn edit_knowledge_batch(
+    AxumState(state): AxumState<State>,
+    headers: HeaderMap,
+    Json(input): Json<Value>,
+) -> ResponseResult {
+    let ctx = user(&state, &headers).await.map_err(failure)?;
+    let input = contracts::decode("KnowledgeBatchEdit", input).map_err(failure)?;
+    success(
+        "KnowledgeBatchReceipt",
+        use_cases::knowledge::edit_batch(&state.pool, &ctx, input)
             .await
             .map_err(failure)?,
     )

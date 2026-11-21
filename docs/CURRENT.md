@@ -3,11 +3,11 @@
   "workflow": "development",
   "schema": 1,
   "phase": "repair",
-  "goal_revision": 236,
+  "goal_revision": 238,
   "environment": "2026-11-21 本轮仅使用临时测试实例与隔离 MySQL。上次日常实例更新在 2026-11-19，Web 27173、API 30780、Bridge 30781、平台 30790、Mem0 30791 均返回 200。沿用原数据库、合成身份、平台状态和两个原账本。Flash/high、v2、latest_only，维护预填关闭。原付费授权已于 2026-11-18 17:27 上海时间到期，历史报告可正常查看。当前控制进程和配置路径记在 .local/checks/internal-preview-release-95Bzzu/service.json。",
   "verification": {
     "level": "increment",
-    "reason": "本次工作台修复的本地验证见最新一节。来源 08 的脚本证据和真实成绩分别保留，I3 整体仍待正式审查和有效授权下的真实复验。",
+    "reason": "本次返工的首批行为和实跑证据见最新一节。I3 的历史真测、原题和成绩保留。",
     "freshness": "content",
     "checks": [],
     "inputs": [
@@ -84,7 +84,7 @@
       "id": "I3-SEMANTIC-DOGFOOD",
       "phase": "I3",
       "status": "active",
-      "goal": "保留 Pi 1.4、容量、正式陈述词法、A12、J01 以及已验精读覆盖和新旧游标。本轮收口工作台审计复核中的查询诊断、连续编辑、撤权、历史和结果展示，以及运行连接回收。来源 08 的真实业务复验单列，沿原题、原判据和有效授权。",
+      "goal": "保留 Pi 1.4、容量、正式陈述词法、A12、J01 以及已验精读覆盖和新旧游标。本轮修复根目录门禁、提交后事件广播、语义批量编辑、Worker 停机、Mem0 并发和连接池鉴权。用户已核验首批六项主体。先修主密钥失效、旧稿确认拒绝码和三轮响应回归，三条原脚本与静态门禁全过后提交首批，再接续架构减负。",
       "requirements": [
         "D01",
         "D02",
@@ -157,6 +157,10 @@
         "docs/semantic-retrieval-design.md",
         "scripts/test_platform_sources.py",
         "Makefile",
+        ".gitignore",
+        "data_agent.html",
+        "compose.yaml",
+        "scripts/check_architecture.py",
         "infra/model-profile.example.json",
         "infra/embedding-profile.example.json",
         "Cargo.lock",
@@ -1287,6 +1291,38 @@
 }
 ---
 
+## 工作台返工封板复验（2026-11-21）
+
+用户已核验首批六项主体，要求三条原失败回归全过后封板，随后直接实施架构减负。原待确认 SQL 断言和原 20 秒窗口保留。
+
+- 主密钥每次读取文件元数据。只在文件标识、修订或权限状态有变化时重读内容，文件缺失或权限不合规返回 `409 model_secret_unavailable`。原模型配置集成已退出 0。轮换文件与权限回归另有本地测试。
+- HTTP 确认旧稿将引用过期反馈归入 `stale_context`。知识维护的错误含义、失败前的校验顺序和事务写入边界保留。原语义工作流已退出 0，包含拒绝后确认状态、确认键和租约的原断言。
+- Worker 的交付和查询空闲上限 500ms，后台维护保留原退避。进程内交付和后台结果提交互相唤醒，停机信号优先于领取。另一次计时发现首次接续在事务中触发约 6.7 秒的全量契约编译。Worker 改为按名称首次用到时编译，API 监听前的预热与校验标准保留。完整浏览器用例沿原 20 秒窗口通过。
+- 同一浏览器用例还确认了两处事件链回归。首次快照与查询状态一起呈现，重复 SQL 的折叠规则一致。提交纠错后向空间广播变更信号，负责人页面通过原有权限接口立即读到建议。源 SQL、值、显示内容和原断言保留，两个旧轮询等待使用真实消息事件触发。
+
+三条原回归、Worker 停机和密钥单测、694 项双侧契约、`make verify`、三项静态门禁及 G08 报告浏览器复验均退出 0。独立复核发现的停机分支优先与密钥轮换测试问题已修正。全部证据为本地隔离验证，真实模型请求为零。
+
+本机证据在 `.local/checks/workbench-rework/p0-closeout/`，实际命令、标准输出、退出码和封板提交统计见 `terminal.txt`。
+
+## 工作台首批返工验收（2026-11-21）
+
+基线 `ea32a232`。首批由当前分支实施，验收状态见本节。后续批次以用户核验后的决定为入口。
+
+- 移出根目录外部报告，忽略根目录临时 HTML，临时证据改记文本路径。材料检查继续使用原脚本。
+- API 在事务提交后按会话和空间广播，Worker 和合成平台经鉴权通知接口接入。首次建连补读历史，稳态直收事件和更新视图。新消息、分段、查询状态、报告和权限变更各自触发更新。空间目录只广播变更信号，对象及版本经现有有权目录接口返回。报告和查询结果按权限通知或窗口唤醒重验，来源同步仅在活动期间退避读取状态。
+- 批量编辑暂存普通语义条目和结构规则，离开前提示，提交使用同一请求和事务。任一对象版本冲突或权限拒绝，整批回滚。索引按各对象最终版本排队。独立复核发现拆分时漏掉了原陈述的升版投影，已在单条和批量入口恢复，并在返回回执与原读回断言中核对。
+- Worker 主流程和后台工作收到 SIGTERM 后停止领取，在途 SQL 和向量操作收尾后退出。Compose 将 MySQL 配置为 300 连接和 512 MiB 缓冲池，Rust 的空闲连接 120 秒回收。HTTP 会话用连接池直查，Worker 分批删除失效会话。
+- Mem0 结算和检索身份在原 SQLite 记录内原子领取，后台对账和回收旧向量。重建保留已就绪版本，Milvus 新版本可读后再切换；历史读写沿锁定 Mem0 SDK 的 SQLite 锁。
+- 架构检查对本批触及的非生成源码执行 800 行上限；22 个未改的历史超长源码按内容冻结，触及即须拆分。类别拆分和责任边界同步到[实现设计](architecture/implementation-design.md)。
+- 原撤权结果可见性判据保留，授权夹具通过合成平台的权限入口提交。原撤回浏览器用例从直写事件改为协议替身发出真实 Worker 可接收的失败，仍验证同一条消息可撤回。横向阅读位置改由实际消息增量触发原断言。旧全量语义工作流的冷启动夹具补清由启动器写入的修订元数据，显式选择该用例一直核验的历史归档模式。
+- 测试在隔离 MySQL、真实本地 Milvus、合成平台以及本地协议模型完成，官方模型请求为零。官方试用成绩沿用历史记录。
+
+首批专项实测通过。三项静态门禁与根目录检查均退出 0，旧定时查库与事务鉴权的搜索均无命中。报告浏览器 11 项含撤权和恢复；20 个独立浏览器会话在 60 秒内没有额外事件或会话 SQL，50 帧无快照及查询列表重拉。原子批量覆盖两对象、两条回滚路径、两个最终索引目标及实际 UI 结构单位编辑。Worker 退出码为 0，七个后台循环和会话清理均结束。Mem0 16 线程 200 次请求中，100 次搜索均召回，99 次索引生效，1 次旧版被更新版本取代，补结算 1 次、重复结算为 0。代码、694 项双侧契约、Pi 主链与恢复、查询流程 51 项和人工陈述完整性 3 项通过。
+
+全量验证仍有失败。主密钥被移走后，已有内存缓存的进程返回 200，模型配置旧用例要求 409。语义工作流的最后一项确实拒绝确认已停用知识的查询（409），返回 `stale_knowledge`，旧断言要求 `stale_context`。浏览器可读性用例在第 3 个 Pi 运行的 20 秒等待窗口到期，独立观察显示查询已成功，三次运行在约 28 秒完结。这些检查的原判据保留。裸跑 Rust 工作区测试还需要各目标的独立数据夹具，相关目标的配置后重跑分别留档。Worker 通知若未送达，持久事件仍可经续接补读；最后一次通知失败时，在线页面可能等到重连才更新。
+
+本机运行证据目录为 `.local/checks/workbench-rework/`，完整输出、退出码及文件统计记录于 `p0-terminal.txt` 和 `git-status-and-lines.txt`。本批修改保留在 `codex/workbench-rework`，等待用户核验。
+
 ## 工作台审计复核与修复（2026-11-21）
 
 基线 `998b6bb`。原 HTML 的 P-01 是指标混算，早先记录误将其写作报告刷新。此次签收范围为审计复核出的本地工作台问题，I3 整体验收另列。
@@ -1306,11 +1342,11 @@
 
 ## data_agent.html 审计确认问题修复（2026-11-21）
 
-按报告编号修复全部确认问题并跑完项目验证（编号沿用仓库根 [data_agent.html](../data_agent.html)）。除 P-03 因付费授权已于 2026-11-18 17:27 上海时间到期暂缓外，产品、原型、运行时与代码各项均已落地或按现行不变量等效适配。
+以下为上一轮实施记录。对 `ea32a232` 的复审确认，事件流仍按连接轮询数据库，报告与语义页仍有定时刷新，批量编辑只做到前端分组。以本轮返工记录及实际验收为准。
 
-- 产品层：P-01 报告卡与查询结果不再 2 秒轮询重读——报告内容不可变，按引用与版本只读一次，长会话卡片漂移的轮询触发源消除。P-02 等效适配：get_query 回执在“核对通过＋待确认＋未提交”阶段附 phase_note，指明用户已要求执行时立即调用 execute_query（J01 断链点）；deliver.ts 侧防停守卫未加，避免与交付幂等不变量冲突。P-04 普通用户的语义页收窄为只读“数据字典”，维护动作、影响面板、常用表开关与预填/整理状态仅维护者可见，方法草稿并入个人方法统一视图；角色判定收敛为单一 canMaintain 变量（修复 JSX `a || b && x` 优先级把布尔渲染成空、维护者看不到维护面板的问题）。P-05 查询卡按执行状态显示活动标签（SQL 已准备好/查询运行中/查询完成等），查询历史行同样带状态。
+- 产品层：P-01 当时删除了部分查询卡和报告轮询。后续报告撤权修复恢复了报告定时刷新，此提交仍有语义页和服务端的定时读取。P-02 等效适配：get_query 回执在“核对通过＋待确认＋未提交”阶段附 phase_note，指明用户已要求执行时立即调用 execute_query（J01 断链点）；deliver.ts 侧防停守卫未加，避免与交付幂等不变量冲突。P-04 普通用户的语义页收窄为只读“数据字典”，维护动作、影响面板、常用表开关与预填/整理状态仅维护者可见，方法草稿并入个人方法统一视图；角色判定收敛为单一 canMaintain 变量（修复 JSX `a || b && x` 优先级把布尔渲染成空、维护者看不到维护面板的问题）。P-05 查询卡按执行状态显示活动标签（SQL 已准备好/查询运行中/查询完成等），查询历史行同样带状态。
 - 原型退化回收：U-02 条目快速筛选（建议/已人工/缺失，带待核对计数）＋批量核对暂存，按对象分组提交且 operation_id 按“对象＋条目组”稳定、重试幂等，提交前有差异确认弹窗。U-03 “血缘与加工”页签：上游表名命中已加载表即可点击直达，ETL 步骤分步只读展示并可维护，旧名“关联与血缘”归一。U-04 历史记录改会话/查询双栏：查询按内容检索、跨会话定位到查询卡片（未加载时自动翻更早一页再重试，有界次数），⌘K 新建对话；离开工作台后壳层提供“返回刚才的分析”。U-05 结果表头显示 display_label 与单位副行，数值列右对齐等宽数字。U-06 原型页顶部加归档横幅，应用内空间名改为接口下发（登录后显示“合成座舱语音空间”）。
-- 运行时层：A-02 Worker 空闲退避 100ms→2s 阶梯、处理到任务即复位，连接池上限改由 DATA_AGENT_DB_MAX_CONNECTIONS 配置。A-03 /events 改为真正 SSE 长连接：先补发 after_seq 之后增量，随后每秒尾部扫描推送，15 秒 keep-alive，Last-Event-ID 续传，会话删除或撤权时下发 stream_closed；前端全部轮询定时器移除，改为 SSE 唤醒＋窗口 focus/visibility 唤醒。A-04 Mem0 撤全局进程锁：写操作按租户串行，/search 完全无锁，且不再逐写 flush。
+- 运行时层的当时实现：Worker 主循环使用退避，SSE 支持 `after_seq`、`Last-Event-ID` 和 `stream_closed`，每条连接仍每秒扫描数据库。报告与语义页也保留定时读取。Mem0 当时撤了全局锁，重索引仍可能让旧向量暂时不可见。
 - 代码层：C-02 clippy 全量 `-D warnings` 通过（清理 needless_borrow、redundant_guards、collapsible_if 等 12 处），全局 `#![deny(clippy::unwrap_used)]` 未启用、存量裸解包保留。C-03 事务内循环单行回源改批量化（如 live_table_ids_in_tx 一次解析 field→table 归属），“固定 ≤4 次 SQL”的验收未完全达成。C-04 reqwest::Client、Milvus 客户端与模型主密钥改 OnceLock 进程级复用（主密钥含 0600 权限与符号链接校验后常驻）。C-05 登录升级为服务端会话：Cookie 只含随机不透明令牌（7 天 TTL、HttpOnly、SameSite=Strict），DELETE /session 即吊销；已有登录态的浏览器需重新登录。
 - 契约与测试同步：schema 新增必填 space_name 等字段并同步生成物与 6 个契约夹具；架构检查暴露的协调层 SQL 下沉到 knowledge store。测试侧三处 /events 消费从“等正文结束”改为增量读取后取消（tests/runtime/check-runtime.mjs、tests/mvp/harness.mjs 新增 replayEvents），匹配持续流语义——这是 verify-runtime-flow 此前挂起的根因，属本轮 SSE 语义变更引发的测试适配。
 - 验证：make verify-code、verify-contracts（694 项）、verify-architecture、infra 冒烟、verify-runtime-flow（真实 Pi 工具链/SSE/浏览器全流程/串行与失败终止 4 项）、verify-recovery（3 个故障注入场景）、npm run check:browser（151 项，需先 `npm run browser:install` 补齐锁定 Chromium）、node tests/mvp/check-task-query-answers.mjs --history-permissions、check-grounded-answers、make verify-pi-transport 全部通过；本轮官方模型调用为零。真实 Flash/high 与付费能力未验证（授权到期）。
@@ -1512,38 +1548,38 @@ oracle-web 重试在 Power 5/5 下取得完整答复。对代表性源码和证�
 ## 本轮实施：默认配置兼容（2026-11-15，完整模型配置检查通过）
 
 - **根因及修复：**无环境profile时每次初始化误用严格`configure_trial`，旧含`request_call_limit:24`的typed指纹与当前省略字段指纹冲突。M08账本owner新增`ensure_default_trial`仅缺失时原子创建，已有trial原行保留；`model_configuration`调用该入口，显式重配置仍严格拒绝真正变化。旧scope/账本及Pi恢复策略未改，同步implementation-design第16节。
-- **RED/GREEN：**[RED](../.local/checks/dogfood-closure-20261115T032354Z/default-configuration-red.log)通过生产登记和GET/POST复现双409，未手写指纹；[四生命周期证据](../.local/checks/dogfood-closure-20261115T032354Z/default-upgrade-green.json)覆盖旧含字段、当前缺字段、全新空间、已托管撤环境且无默认trial，两次API重启仍可GET/POST。非零旧记账/期限/帽/指纹及数字scope整份不变，新正常scope.call_limit=NULL。
-- **完整验证：**[模型配置收据](../.local/checks/dogfood-closure-20261115T032354Z/model-configuration-report.json)passed，14项检查含浏览器/三协议/恢复与新增显式同trial配置冲突断言，22个本地协议请求、官方请求0。首次GREEN尝试在新增显式配置fixture解码报invalid_input（遗漏data工具集必填payload_bytes_limit）；补合法字段后完整通过，未改产品合同或弱化断言。Rust源修改后API/Worker分别重建且mtime晚于修复；[请求政策完整检查](../.local/checks/dogfood-closure-20261115T032354Z/request-policy-green.log)退出0，覆盖25次调用不封顶、连续三败、取消、原未知预留/旧账本迁移、摘要和显式费用帽。完整50条出口/真实复验/独审仍未完成。
+- **RED/GREEN：**RED（`.local/checks/dogfood-closure-20261115T032354Z/default-configuration-red.log`）通过生产登记和GET/POST复现双409，未手写指纹；四生命周期证据（`.local/checks/dogfood-closure-20261115T032354Z/default-upgrade-green.json`）覆盖旧含字段、当前缺字段、全新空间、已托管撤环境且无默认trial，两次API重启仍可GET/POST。非零旧记账/期限/帽/指纹及数字scope整份不变，新正常scope.call_limit=NULL。
+- **完整验证：**模型配置收据（`.local/checks/dogfood-closure-20261115T032354Z/model-configuration-report.json`）passed，14项检查含浏览器/三协议/恢复与新增显式同trial配置冲突断言，22个本地协议请求、官方请求0。首次GREEN尝试在新增显式配置fixture解码报invalid_input（遗漏data工具集必填payload_bytes_limit）；补合法字段后完整通过，未改产品合同或弱化断言。Rust源修改后API/Worker分别重建且mtime晚于修复；请求政策完整检查（`.local/checks/dogfood-closure-20261115T032354Z/request-policy-green.log`）退出0，覆盖25次调用不封顶、连续三败、取消、原未知预留/旧账本迁移、摘要和显式费用帽。完整50条出口/真实复验/独审仍未完成。
 
 ## 本轮实施：测试隔离与租约判别（2026-11-15，工程检查通过；历史租约唯一根因未确认）
 
-- **隔离RED/GREEN：**[新增身份断言的完整RED](../.local/checks/dogfood-closure-20261115T032354Z/contract-identity-red.log)七项3过4败，直接显示领取值来自前例；各数据库场景改为runner创建独立随机库并在finally删除，子进程显式继承该场景库，循环场景结束自建job。未改生产claim排序/版本规则。真正空库又暴露旧NOT NULL scope不能经当前NULL入口建样本，按旧writer显式登记24数字scope；迁移前确认版本列不存在、迁移后旧值1，保留原operation/回执/旧run断言。[无filter完整组合](../.local/checks/dogfood-closure-20261115T032354Z/contract-isolation-green.log)7/7通过、官方调用0。
-- **租约证据与边界：**[旧准备顺序定点采样](../.local/checks/dogfood-closure-20261115T032354Z/contract-isolated-timing.log)两例有效入场（剩约991ms），被测阻塞超过2500ms；续租affected=1、2–20ms，prepare先正常返回；不能倒推历史失败唯一根因。测试改为锁/连接准备先于短TTL起点，release只采样并释放锁、join后先报告原准备结果，再严格断言有效性/attempt。TTL仍1000ms，未改生产续租算法，仅原诊断开关补阶段/分支/续租耗时和行数。两例[分别](../.local/checks/dogfood-closure-20261115T032354Z/lease-recovery-green.log)[通过](../.local/checks/dogfood-closure-20261115T032354Z/lease-claim-green.log)且上述组合通过；等待阶段attempt0，提交后双租约有效、模型计数0、scope/chain/output身份不变。实等到数据库确认过期后，原续租/交付均lease_lost且不增加run/attempt，换代后旧epoch和错误owner不能续活（完整日志含UTC/lease_until/owner/epoch）。
-- **标题来源：**复用输入指纹仍完全一致的审计RED（[对照](../.local/checks/dogfood-closure-20261115T032354Z/title-red-reuse.json)）；仅把期望补成显式全对象空路径knowledge_entries，保整份依赖/重排/人工改题/null断言。[当前单测](../.local/checks/dogfood-closure-20261115T032354Z/report-title-green.log)通过。
-- **模型停用：**撤下环境profile后仍可发的正例通过；改用真实管理API停用选中服务，新消息409 model_unavailable，已保存同ID重放仍接原回执。该[浏览器RED](../.local/checks/dogfood-closure-20261115T032354Z/conversation-model-unavailable-red.json)暴露Workbench误判明确拒绝为未知保存；按现有服务端“先查原回执、再验新选择”的合同纳入明确拒绝分支，保草稿/零新增要求。[完整浏览器](../.local/checks/dogfood-closure-20261115T032354Z/conversation-reliability-green.json)9项通过，草稿/未知回执/用户空间隔离/删除/真实查询轮询原断言均保留；60秒读取12次≤15、恢复可见13ms、取消84ms、结果呈现789ms。后续执行到可见性断言时发现观测器只记GET而生产snapshot已为POST，按合法producer/consumer合同把POST读取也计入（旧阈值和隐藏零请求要求不变，计数更严格；RED保留conversation-post-observer-red.json）。[合法MySQL与已完成Pi运行下完整lib+source-recall](../.local/checks/dogfood-closure-20261115T032354Z/agent-library-green.log)退出0：213个lib全部通过（含原5个DB门控），另1个raw allowed单测及14个文档窗口测试通过，专用Milvus集成通过、官方调用0。
+- **隔离RED/GREEN：**新增身份断言的完整RED（`.local/checks/dogfood-closure-20261115T032354Z/contract-identity-red.log`）七项3过4败，直接显示领取值来自前例；各数据库场景改为runner创建独立随机库并在finally删除，子进程显式继承该场景库，循环场景结束自建job。未改生产claim排序/版本规则。真正空库又暴露旧NOT NULL scope不能经当前NULL入口建样本，按旧writer显式登记24数字scope；迁移前确认版本列不存在、迁移后旧值1，保留原operation/回执/旧run断言。无filter完整组合（`.local/checks/dogfood-closure-20261115T032354Z/contract-isolation-green.log`）7/7通过、官方调用0。
+- **租约证据与边界：**旧准备顺序定点采样（`.local/checks/dogfood-closure-20261115T032354Z/contract-isolated-timing.log`）两例有效入场（剩约991ms），被测阻塞超过2500ms；续租affected=1、2–20ms，prepare先正常返回；不能倒推历史失败唯一根因。测试改为锁/连接准备先于短TTL起点，release只采样并释放锁、join后先报告原准备结果，再严格断言有效性/attempt。TTL仍1000ms，未改生产续租算法，仅原诊断开关补阶段/分支/续租耗时和行数。两例分别（`.local/checks/dogfood-closure-20261115T032354Z/lease-recovery-green.log`）通过（`.local/checks/dogfood-closure-20261115T032354Z/lease-claim-green.log`）且上述组合通过；等待阶段attempt0，提交后双租约有效、模型计数0、scope/chain/output身份不变。实等到数据库确认过期后，原续租/交付均lease_lost且不增加run/attempt，换代后旧epoch和错误owner不能续活（完整日志含UTC/lease_until/owner/epoch）。
+- **标题来源：**复用输入指纹仍完全一致的审计RED（对照（`.local/checks/dogfood-closure-20261115T032354Z/title-red-reuse.json`））；仅把期望补成显式全对象空路径knowledge_entries，保整份依赖/重排/人工改题/null断言。当前单测（`.local/checks/dogfood-closure-20261115T032354Z/report-title-green.log`）通过。
+- **模型停用：**撤下环境profile后仍可发的正例通过；改用真实管理API停用选中服务，新消息409 model_unavailable，已保存同ID重放仍接原回执。该浏览器RED（`.local/checks/dogfood-closure-20261115T032354Z/conversation-model-unavailable-red.json`）暴露Workbench误判明确拒绝为未知保存；按现有服务端“先查原回执、再验新选择”的合同纳入明确拒绝分支，保草稿/零新增要求。完整浏览器（`.local/checks/dogfood-closure-20261115T032354Z/conversation-reliability-green.json`）9项通过，草稿/未知回执/用户空间隔离/删除/真实查询轮询原断言均保留；60秒读取12次≤15、恢复可见13ms、取消84ms、结果呈现789ms。后续执行到可见性断言时发现观测器只记GET而生产snapshot已为POST，按合法producer/consumer合同把POST读取也计入（旧阈值和隐藏零请求要求不变，计数更严格；RED保留conversation-post-observer-red.json）。合法MySQL与已完成Pi运行下完整lib+source-recall（`.local/checks/dogfood-closure-20261115T032354Z/agent-library-green.log`）退出0：213个lib全部通过（含原5个DB门控），另1个raw allowed单测及14个文档窗口测试通过，专用Milvus集成通过、官方调用0。
 
 ## 本轮实施：预填输入预留（2026-11-15，关键工程检查通过；真实维护保持关闭）
 
-- **真实装配RED：**[无网络两个反例](../.local/checks/dogfood-closure-20261115T032354Z/prefill-input-bound-red.log)均由合法CatalogTable→生产catalog原文/对象→prepare/prepare_review生成：分析34996字节<65536，5000个0的逗号列表在原元数据和加工SQL各一份，按当前官方数字隔离规则至少19998输入tokens>I4096；合法长草稿复核54834字节<65536、至少37997输入tokens>I32768。完整Schema、系统说明、草稿与真实output cap保留，未发送网络或签发预留。新增两条模块反例由check-prefill-materials在受控环境显式include-ignored执行，原11个模块检查保留。
-- **修复与当前状态：**prepare_submission在原prepare-before-reserve接缝补输入容量判断，沿现有payload_limit错误；输出cap与账本owner未改。[两个反例已GREEN](../.local/checks/dogfood-closure-20261115T032354Z/prefill-input-bound-green.log)，但初版把HTTP pretty JSON当输入，导致[代表材料检查失败](../.local/checks/dogfood-closure-20261115T032354Z/prefill-materials-capacity.log)，未把局部绿报完成。已改为公开编码器实际system/user/function文本计量：Rust按JSON结构计算Python默认分隔空格，协议消费者独立调用Python序列化并关联本次已提交14746微美元维护预留，原覆盖/尾部/人工值断言不变；随后完整代表检查仍因平台对象公开字节上界50385>I32768失败；为保原中文/首中尾覆盖与原配置，改用固定官方tokenizer与公开prompt格式做本地Rust精确BPE计量（不拆段相加，不改原材料owner）。`tokenizers=0.22.1`关闭HTTP/训练加速默认特性；两份MIT数据共12734403字节归原ingestion owner，依赖解析保留全部旧锁定版本。测试用隔离Python绑定及公开encoder AST独立计量实际HTTP，并按原attempt/来源批次/阶段关联唯一预留；初版全trial唯一issued假定在中断场景不成立，相关RED保留，未清旧issued/unknown。
-- **证据边界：**[公开tokenizer属性及指纹](../.local/checks/dogfood-closure-20261115T032354Z/public-tokenizer-properties.json)证无正规化/ByteLevel BPE及数字隔离；[独立静态复核](../.local/checks/dogfood-closure-20261115T032354Z/published-encoding-static-review.md)确认公开模板及原字节推导，明确其与托管API（特别是off强制tool_choice）的映射仍有外部证据限制；此记录先于精确分词实现，不冒充整包最终独审。真实整理/预填保持关闭；发现现启动器默认随data profile启用维护后，新增`--prefill disabled`明确关该通道，聊天profile/数据库/账本不变、默认行为保留，[23项启动器单测](../.local/checks/dogfood-closure-20261115T032354Z/startup-maintenance-disabled-green.log)RED→GREEN。其他已授权通道继续，最终50条出口/独审/I3均未关闭。
-- **当前工程出口：**[普通材料](../.local/checks/dogfood-closure-20261115T032354Z/prefill-materials-report.json)12项、[字段原句](../.local/checks/dogfood-closure-20261115T032354Z/prefill-field-evidence-report.json)2项均passed；原首中尾/完整范围/引用/人工值断言不变，最大请求52480字节、公开token计数14189≤32768，实际输出cap4096与每次14746微美元预留同源，分别核到27/2条关联预留、官方调用0。随后来源整理6项/文档2项/预填21矩阵/79秒长消息/共享embedding10项/记忆预算3项/参数与范围/native Skill/平台22项/请求上下文12项及[contracts/code/architecture三门](../.local/checks/dogfood-closure-20261115T032354Z/free-engineering-gates.log)串行退出0，完整结果在同目录free-*.log。
+- **真实装配RED：**无网络两个反例（`.local/checks/dogfood-closure-20261115T032354Z/prefill-input-bound-red.log`）均由合法CatalogTable→生产catalog原文/对象→prepare/prepare_review生成：分析34996字节<65536，5000个0的逗号列表在原元数据和加工SQL各一份，按当前官方数字隔离规则至少19998输入tokens>I4096；合法长草稿复核54834字节<65536、至少37997输入tokens>I32768。完整Schema、系统说明、草稿与真实output cap保留，未发送网络或签发预留。新增两条模块反例由check-prefill-materials在受控环境显式include-ignored执行，原11个模块检查保留。
+- **修复与当前状态：**prepare_submission在原prepare-before-reserve接缝补输入容量判断，沿现有payload_limit错误；输出cap与账本owner未改。两个反例已GREEN（`.local/checks/dogfood-closure-20261115T032354Z/prefill-input-bound-green.log`），但初版把HTTP pretty JSON当输入，导致代表材料检查失败（`.local/checks/dogfood-closure-20261115T032354Z/prefill-materials-capacity.log`），未把局部绿报完成。已改为公开编码器实际system/user/function文本计量：Rust按JSON结构计算Python默认分隔空格，协议消费者独立调用Python序列化并关联本次已提交14746微美元维护预留，原覆盖/尾部/人工值断言不变；随后完整代表检查仍因平台对象公开字节上界50385>I32768失败；为保原中文/首中尾覆盖与原配置，改用固定官方tokenizer与公开prompt格式做本地Rust精确BPE计量（不拆段相加，不改原材料owner）。`tokenizers=0.22.1`关闭HTTP/训练加速默认特性；两份MIT数据共12734403字节归原ingestion owner，依赖解析保留全部旧锁定版本。测试用隔离Python绑定及公开encoder AST独立计量实际HTTP，并按原attempt/来源批次/阶段关联唯一预留；初版全trial唯一issued假定在中断场景不成立，相关RED保留，未清旧issued/unknown。
+- **证据边界：**公开tokenizer属性及指纹（`.local/checks/dogfood-closure-20261115T032354Z/public-tokenizer-properties.json`）证无正规化/ByteLevel BPE及数字隔离；独立静态复核（`.local/checks/dogfood-closure-20261115T032354Z/published-encoding-static-review.md`）确认公开模板及原字节推导，明确其与托管API（特别是off强制tool_choice）的映射仍有外部证据限制；此记录先于精确分词实现，不冒充整包最终独审。真实整理/预填保持关闭；发现现启动器默认随data profile启用维护后，新增`--prefill disabled`明确关该通道，聊天profile/数据库/账本不变、默认行为保留，23项启动器单测（`.local/checks/dogfood-closure-20261115T032354Z/startup-maintenance-disabled-green.log`）RED→GREEN。其他已授权通道继续，最终50条出口/独审/I3均未关闭。
+- **当前工程出口：**普通材料（`.local/checks/dogfood-closure-20261115T032354Z/prefill-materials-report.json`）12项、字段原句（`.local/checks/dogfood-closure-20261115T032354Z/prefill-field-evidence-report.json`）2项均passed；原首中尾/完整范围/引用/人工值断言不变，最大请求52480字节、公开token计数14189≤32768，实际输出cap4096与每次14746微美元预留同源，分别核到27/2条关联预留、官方调用0。随后来源整理6项/文档2项/预填21矩阵/79秒长消息/共享embedding10项/记忆预算3项/参数与范围/native Skill/平台22项/请求上下文12项及contracts/code/architecture三门（`.local/checks/dogfood-closure-20261115T032354Z/free-engineering-gates.log`）串行退出0，完整结果在同目录free-*.log。
 
 ## 本轮实施：原题真实复验（2026-11-15，S01/S02/S03通过，ASR/Skill前置进行中）
 
-新attempt报告根[qa-repair-20261115T065901Z](../.local/dogfood-runs/qa-repair-20261115T065901Z/runtime.json)，沿原qa-20261114T010142Z数据库/runtime/集合/密钥和trial，不改原报告、题目、费用或unknown。开跑前[原账本实读](../.local/dogfood-runs/qa-repair-20261115T065901Z/evidence/ledger-before.jsonl)仍已花3336905微美元、unknown47；chat可用6814855微美元（54.51884元）、embedding可用1723192微美元（13.785536元，12:00 UTC到期），无queued/running job，平台submit基线0。总100元授权余73.304384元包含未分配缓冲，不互挪子帽。原运行日志已归档，新源码/二进制指纹、配置及开账记录存新报告。原实例已按原配置加`--prefill disabled`接回：启动后花费/预留/配置指纹无漂移，37条旧scope逐项完全一致；采用已缓存Playwright CLI0.1.23、Bob普通用户、原Flash/high，通过正常UI发原话，无API替代模型业务操作。
+新attempt报告根qa-repair-20261115T065901Z（`.local/dogfood-runs/qa-repair-20261115T065901Z/runtime.json`），沿原qa-20261114T010142Z数据库/runtime/集合/密钥和trial，不改原报告、题目、费用或unknown。开跑前原账本实读（`.local/dogfood-runs/qa-repair-20261115T065901Z/evidence/ledger-before.jsonl`）仍已花3336905微美元、unknown47；chat可用6814855微美元（54.51884元）、embedding可用1723192微美元（13.785536元，12:00 UTC到期），无queued/running job，平台submit基线0。总100元授权余73.304384元包含未分配缓冲，不互挪子帽。原运行日志已归档，新源码/二进制指纹、配置及开账记录存新报告。原实例已按原配置加`--prefill disabled`接回：启动后花费/预留/配置指纹无漂移，37条旧scope逐项完全一致；采用已缓存Playwright CLI0.1.23、Bob普通用户、原Flash/high，通过正常UI发原话，无API替代模型业务操作。
 
-- **真实正常链通过：**[S01](../.local/dogfood-runs/qa-repair-20261115T065901Z/attempts/S01-01/assessment.json)在新scope.call_limit=NULL、原qa_chat trial下形成正确UTC/质量/快照的轮次与去重车辆草稿，submit0；[S02](../.local/dogfood-runs/qa-repair-20261115T065901Z/attempts/S02-01/assessment.json)原话明确执行后同query/SQL/参数/版本恰好submit1，返回430/31，完整结果按显式列名映射与独立oracle精确一致，刷新前后5段持久正文全文一致。均为真实DeepSeek、真实MySQL与可执行合成SQLite，不代表真实生产平台或真实声学模型。
-- **本链费用：**[收尾账本](../.local/dogfood-runs/qa-repair-20261115T065901Z/evidence/ledger-after-normal-chain.jsonl)本链新增226787微美元=1.814296元；累计spent+unknown28.509912元，总授权余71.490088元（原子帽及未分配缓冲分别保持），unknown仍只有原47微美元。后续在途费用须随下一完整轨迹再核，不把此时点当全轮最终费用。
-- **S03及Skill前置：**[原S03](../.local/dogfood-runs/qa-repair-20261115T065901Z/attempts/S03-01/assessment.json)按批准context替换primary_locale=en-US，仅新增turn.locale过滤，其他SQL/参数完全不变，条件2→3、原已执行结果保留、新稿未提交、平台总submit仍1。ASR原S08在新会话bd88ae87-fc09-48ea-95d9-9f5992f0647d按原话产出正确草稿99bdebb2-8aaf-4e2c-9671-771023ef7da3，但原第二句90c3e9fc-e402-43a1-be4d-0c78832015dc后未执行：[失败attempt](../.local/dogfood-runs/qa-repair-20261115T065901Z/attempts/S08-01/assessment.json)保留，模型称没有可用执行通道、query仍awaiting_confirmation/not_submitted、results409。ASR→首播→Skill依赖收费链暂停，不改原话追加工具名求绿。只读[真实轨迹](../.local/dogfood-runs/qa-repair-20261115T065901Z/attempts/S08-01/trace/evidence-index.json)确认执行run72f0376d先read_conversation得ready=false，再route成功ready=true，Pi于08:38:04.990Z重新加入含execute_query的14工具，随后直接答复；无execute/get_query调用。实际provider wire未保留，不能将目录记录等同wire或把模型自述当通道确实缺失。随后生产deliver+configured-provider派生恢复形状的[本地SSE装配](../.local/checks/dogfood-closure-20261115T032354Z/execution-tool-replay-result.json)通过：第三请求已有get_query/execute_query、choice非none及原用户全文，非本地请求0；只证明当前合法形状，不冒充历史wire或真实模型成功。首版receipt前缀及文本块断言错误已修，原失败保留。
-- **当前费用及剩余：**截至[08:56 UTC只读账本](../.local/dogfood-runs/qa-repair-20261115T065901Z/attempts/S08-01/trace/cost-summary.json)，累计spent+unknown30.642504元，原100总授权余69.357496元；chat子帽余50.571952元、embedding子帽余13.785536元（原12:00 UTC到期不延长），唯一unknown仍原47微美元/原operation。受影响原题、产品Skill七步、100/10完整对账、最终独审及50条完整验收仍未完成，I3/09保持active。
+- **真实正常链通过：**S01（`.local/dogfood-runs/qa-repair-20261115T065901Z/attempts/S01-01/assessment.json`）在新scope.call_limit=NULL、原qa_chat trial下形成正确UTC/质量/快照的轮次与去重车辆草稿，submit0；S02（`.local/dogfood-runs/qa-repair-20261115T065901Z/attempts/S02-01/assessment.json`）原话明确执行后同query/SQL/参数/版本恰好submit1，返回430/31，完整结果按显式列名映射与独立oracle精确一致，刷新前后5段持久正文全文一致。均为真实DeepSeek、真实MySQL与可执行合成SQLite，不代表真实生产平台或真实声学模型。
+- **本链费用：**收尾账本（`.local/dogfood-runs/qa-repair-20261115T065901Z/evidence/ledger-after-normal-chain.jsonl`）本链新增226787微美元=1.814296元；累计spent+unknown28.509912元，总授权余71.490088元（原子帽及未分配缓冲分别保持），unknown仍只有原47微美元。后续在途费用须随下一完整轨迹再核，不把此时点当全轮最终费用。
+- **S03及Skill前置：**原S03（`.local/dogfood-runs/qa-repair-20261115T065901Z/attempts/S03-01/assessment.json`）按批准context替换primary_locale=en-US，仅新增turn.locale过滤，其他SQL/参数完全不变，条件2→3、原已执行结果保留、新稿未提交、平台总submit仍1。ASR原S08在新会话bd88ae87-fc09-48ea-95d9-9f5992f0647d按原话产出正确草稿99bdebb2-8aaf-4e2c-9671-771023ef7da3，但原第二句90c3e9fc-e402-43a1-be4d-0c78832015dc后未执行：失败attempt（`.local/dogfood-runs/qa-repair-20261115T065901Z/attempts/S08-01/assessment.json`）保留，模型称没有可用执行通道、query仍awaiting_confirmation/not_submitted、results409。ASR→首播→Skill依赖收费链暂停，不改原话追加工具名求绿。只读真实轨迹（`.local/dogfood-runs/qa-repair-20261115T065901Z/attempts/S08-01/trace/evidence-index.json`）确认执行run72f0376d先read_conversation得ready=false，再route成功ready=true，Pi于08:38:04.990Z重新加入含execute_query的14工具，随后直接答复；无execute/get_query调用。实际provider wire未保留，不能将目录记录等同wire或把模型自述当通道确实缺失。随后生产deliver+configured-provider派生恢复形状的本地SSE装配（`.local/checks/dogfood-closure-20261115T032354Z/execution-tool-replay-result.json`）通过：第三请求已有get_query/execute_query、choice非none及原用户全文，非本地请求0；只证明当前合法形状，不冒充历史wire或真实模型成功。首版receipt前缀及文本块断言错误已修，原失败保留。
+- **当前费用及剩余：**截至08:56 UTC只读账本（`.local/dogfood-runs/qa-repair-20261115T065901Z/attempts/S08-01/trace/cost-summary.json`），累计spent+unknown30.642504元，原100总授权余69.357496元；chat子帽余50.571952元、embedding子帽余13.785536元（原12:00 UTC到期不延长），唯一unknown仍原47微美元/原operation。受影响原题、产品Skill七步、100/10完整对账、最终独审及50条完整验收仍未完成，I3/09保持active。
 
 ## 本轮实施：真实派发判别与覆盖对账（2026-11-15，进行中）
 
-- **S08原话诊断仍失败：**[S08-02](../.local/dogfood-runs/qa-repair-20261115T065901Z/attempts/S08-02/assessment.json)保留独立新会话和两条原话。实际seq14请求已包含get_query/execute_query，唯一宿主参考ready=true、query/task/version正确，最后用户文本SHA与持久原执行句完全一致；对应调用已settled。模型仍仅read_conversation→route后声称无执行入口，query未提交、results409。排除本attempt最后请求未带工具/原话被替换；没有完整wire正文/Schema，不能证明全部控制语境正确、定唯一模型根因或倒推S08-01。ASR→首播→产品Skill依赖暂停，不第三次盲试或用API/手写方法补绿。
-- **费用及通道边界：**[11:09 UTC快照](../.local/dogfood-runs/qa-repair-20261115T065901Z/attempts/S08-02/ledger-at-exit.jsonl)累计spent+unknown32.204584元，chat余49.009872元、维护embedding余13.785536元，原unknown47保持。S08-02的4次检索embedding实际归原chat scope/trial；12:00 UTC仅是qa_embedding维护trial截止，不能一概当聊天/请求内检索截止。后续每题按实际owner/原scope核费，不延长、互挪或换trial。
+- **S08原话诊断仍失败：**S08-02（`.local/dogfood-runs/qa-repair-20261115T065901Z/attempts/S08-02/assessment.json`）保留独立新会话和两条原话。实际seq14请求已包含get_query/execute_query，唯一宿主参考ready=true、query/task/version正确，最后用户文本SHA与持久原执行句完全一致；对应调用已settled。模型仍仅read_conversation→route后声称无执行入口，query未提交、results409。排除本attempt最后请求未带工具/原话被替换；没有完整wire正文/Schema，不能证明全部控制语境正确、定唯一模型根因或倒推S08-01。ASR→首播→产品Skill依赖暂停，不第三次盲试或用API/手写方法补绿。
+- **费用及通道边界：**11:09 UTC快照（`.local/dogfood-runs/qa-repair-20261115T065901Z/attempts/S08-02/ledger-at-exit.jsonl`）累计spent+unknown32.204584元，chat余49.009872元、维护embedding余13.785536元，原unknown47保持。S08-02的4次检索embedding实际归原chat scope/trial；12:00 UTC仅是qa_embedding维护trial截止，不能一概当聊天/请求内检索截止。后续每题按实际owner/原scope核费，不延长、互挪或换trial。
 - **独立原题及页面恢复：**P03已给正式合成范围回答；P04仍漏业务session/turn与Data Agent任务的明确区分；P05已读完整time-quality但错误泛化耗时不能换算，未保墙钟区间定义的特例；P07已登记真实澄清但解释仍不完整。逐项新attempt留本次报告，不改题或重问洗绿。用户误关Web后仅恢复自有页面，Web/API原服务仍200；关页前已保存消息不重发，P05前置origin拒绝为0POST并在查证后首次实际提交。
-- **当前设置与历史证据：**只读API完整6页核547对象=28表/421字段/30指标/14文档/54关系；[14文档完整正文](../.local/dogfood-runs/qa-repair-20261115T065901Z/evidence/P02-current-document-hashes.json)均与批准源逐字一致，原P02要求的两文档UI打开继续核对。[独立有效性表](../.local/checks/dogfood-closure-20261115T032354Z/evidence-validity.json)逐项核14题/28断言、35个未变owner指纹及105个引用；允许保存历史读文/生命周期事实，不称当前复跑。活跃文档的旧24门已同步，QA导航仅更新OPERATIONS单项SHA，[58份生成物与53条参考验证](../.local/checks/dogfood-closure-20261115T032354Z/qa-document-sync-check.log)通过，原题/参考/业务材料未改。当前[源清单e62b178f28a4](../.local/dogfood-runs/qa-repair-20261115T065901Z/evidence/source-manifest-e62b178f28a4.json)仅比首批多两份QA文档元数据差额，未重建二进制。
+- **当前设置与历史证据：**只读API完整6页核547对象=28表/421字段/30指标/14文档/54关系；14文档完整正文（`.local/dogfood-runs/qa-repair-20261115T065901Z/evidence/P02-current-document-hashes.json`）均与批准源逐字一致，原P02要求的两文档UI打开继续核对。独立有效性表（`.local/checks/dogfood-closure-20261115T032354Z/evidence-validity.json`）逐项核14题/28断言、35个未变owner指纹及105个引用；允许保存历史读文/生命周期事实，不称当前复跑。活跃文档的旧24门已同步，QA导航仅更新OPERATIONS单项SHA，58份生成物与53条参考验证（`.local/checks/dogfood-closure-20261115T032354Z/qa-document-sync-check.log`）通过，原题/参考/业务材料未改。当前源清单e62b178f28a4（`.local/dogfood-runs/qa-repair-20261115T065901Z/evidence/source-manifest-e62b178f28a4.json`）仅比首批多两份QA文档元数据差额，未重建二进制。
 
 ## 历史实施者记录：Dogfood修复任务六（2026-11-15；完成声明已由上方复核更正）
 
@@ -1638,7 +1674,7 @@ oracle-web 重试在 Power 5/5 下取得完整答复。对代表性源码和证�
 
 ## 历史试用：本地全能力QA（2026-11-14，原报告完成）
 
-本轮按[执行包](execution/semantic-runtime/dogfood-qa.md)实际使用 dev_co 与 gstack-qa-only 的 browser + functional 报告模式。唯一完整报告：[REPORT.md](../.local/dogfood-runs/qa-20261114T010142Z/REPORT.md)；原100项、10轨迹、Skill链、探索、账本、截图与复现证据均在同一运行目录。
+本轮按[执行包](execution/semantic-runtime/dogfood-qa.md)实际使用 dev_co 与 gstack-qa-only 的 browser + functional 报告模式。唯一完整报告：REPORT.md（`.local/dogfood-runs/qa-20261114T010142Z/REPORT.md`）；原100项、10轨迹、Skill链、探索、账本、截图与复现证据均在同一运行目录。
 
 - 原100项：11通过、12部分、8失败、66前提阻塞、3未运行；原10轨迹：4部分、4阻塞、2未运行。两份原 `grade.py` 记录完整性校验通过，不能据此宣布业务或发布验收通过。37条真实消息运行中33 finished、4 failed，finished不等于用户目标完成。
 - S01保存了未执行草稿；S02首次及唯一同原文复现均未提交查询。多条独立请求同样出现宿主ready=true、模型仍称未就绪；公共与私人附件方法虽明确选中，均未完成实际采用。J02另有原SQL只读诊断：本地authorizer拒绝读取CTE虚拟关系。根因证据与未确认假设分别列在报告，未修产品或测试。
@@ -2282,7 +2318,7 @@ S03 `S03-be33d0b0-ff6b-47c8-8e35-7c1c3ed7124c`新attempt因24/24失败，无修�
 
 ## 09供应商恢复单次实测（2026-11-04；历史实测记录）
 
-用户本次明确要求实测供应商是否恢复，据此只做一次原S01核心代表；没有重复付费探测。公开主页/history仍无带时间的新恢复记录，但本次真实响应已提供原配置可用的新证据：`deepseek-flash`、thinking enabled/high，2026-11-04T03:27:09Z至03:29:32Z的15次Agent调用均HTTP200、均取得usage并settled，无500/503或model_service_unavailable。原始wire中11条有完整传输结束、4条在200后记录code20，全部保留；不能单据code20判供应商故障，也不凭200头部判完整成功，结论同时依据实际工具回执和持久usage结算。本样本证明当前原配置可正常响应，不保证所有端点或持续稳定性。完整结论见[恢复实测证据](../.local/dogfood-runs/semantic-20261102/evidence/provider-recovery-S01-20261104-result.json)。
+用户本次明确要求实测供应商是否恢复，据此只做一次原S01核心代表；没有重复付费探测。公开主页/history仍无带时间的新恢复记录，但本次真实响应已提供原配置可用的新证据：`deepseek-flash`、thinking enabled/high，2026-11-04T03:27:09Z至03:29:32Z的15次Agent调用均HTTP200、均取得usage并settled，无500/503或model_service_unavailable。原始wire中11条有完整传输结束、4条在200后记录code20，全部保留；不能单据code20判供应商故障，也不凭200头部判完整成功，结论同时依据实际工具回执和持久usage结算。本样本证明当前原配置可正常响应，不保证所有端点或持续稳定性。完整结论见恢复实测证据（`.local/dogfood-runs/semantic-20261102/evidence/provider-recovery-S01-20261104-result.json`）。
 
 本次attempt `S01-d4540dda-152e-42a1-a2ae-e03434e7742b`经原UI发送原S01消息，148422ms后run failed，明确终止码`model_budget_exhausted`：15次Agent＋9次本消息检索embedding恰为原24次上限，22条工具成功，但SQL草稿0、平台提交0。新attempt记fail，S01已有partial和两个原断言、此前两次attempt全部保留，不把端点可用提升为业务pass。原21项仍11pass/4partial/6not_run，原100项仍17pass/10partial/1fail/1blocked_environment/71not_run；原来源轨迹fail、调整后来源not_run，未发S02/S03或其他新模型场景。原操作身份、24/3和模型选择未改，不加额度或重发旧unknown。
 
@@ -2292,7 +2328,7 @@ S03 `S03-be33d0b0-ff6b-47c8-8e35-7c1c3ed7124c`新attempt因24/24失败，无修�
 
 ## 09限定来源授权与核心验收接续（2026-11-04；历史前提调整记录）
 
-用户已明确允许后续新attempt补读`syn_vehicle.vehicle_id`、`is_lab_unit`、`telemetry_consent`的已有定义，包括完成关联和资格过滤所需的字段含义、取值说明；本次范围决定已生效，无须再次询问。只补充上述字段所需来源，不扩大到整个schema、不改全局来源规则，也不在产品代码或系统提示中写本题字段或答案。原题、原许可、原轨迹fail、失败attempt、unknown和费用均保持。具体来源、原文位置、冻结新输入和原记录SHA见[本次授权与取证](../.local/dogfood-runs/semantic-20261102/evidence/source-permission-vehicle-definitions-20261104.json)。
+用户已明确允许后续新attempt补读`syn_vehicle.vehicle_id`、`is_lab_unit`、`telemetry_consent`的已有定义，包括完成关联和资格过滤所需的字段含义、取值说明；本次范围决定已生效，无须再次询问。只补充上述字段所需来源，不扩大到整个schema、不改全局来源规则，也不在产品代码或系统提示中写本题字段或答案。原题、原许可、原轨迹fail、失败attempt、unknown和费用均保持。具体来源、原文位置、冻结新输入和原记录SHA见本次授权与取证（`.local/dogfood-runs/semantic-20261102/evidence/source-permission-vehicle-definitions-20261104.json`）。
 
 已通过原试用库只读核对两份现存revision1来源：独立平台细源`catalog-f9dce8295fce6f1dcca5bdcdf33e1165418119a49b79f543`提供`vehicle_id`主键、三个字段的类型/非空和0/1值域；该源字段注释为空，业务含义另由`cockpit-identity-and-version`中对应定义提供，其当前正文与[已有合成文档](sources/cockpit/documents/identity-and-version.md)逐字一致。`vehicle_id`为非空合成设备号；`telemetry_consent`为非空0/1遥测允许标记；`is_lab_unit`为非空0/1实验设备标记，现有说明明确其默认资格处理。新增许可只涵盖这三个字段的结构与定义，原关联/质量规则保持。原文Unicode位置已保存，可沿现有`read_source`定点读取；未重新导入资料或修改数据库。
 
@@ -2301,13 +2337,13 @@ S03 `S03-be33d0b0-ff6b-47c8-8e35-7c1c3ed7124c`新attempt因24/24失败，无修�
 ### 验收与要求变更
 
 - 原值：`SOURCE-TRAJECTORY-EVIDENCE`绑定原`trajectory-results.json`，要求原限定范围的来源轨迹pass；原两条消息和原成绩文件保持冻结。
-- 新值：按用户本次明确的前提调整，仅对该来源条目准备[独立完整10条记录](../.local/dogfood-runs/semantic-20261102/trajectory-results-vehicle-definitions.json)，来源出口改绑此文件；其他九条逐字复用原记录，原来源条目独立保留在原文件且仍fail。调整后条目为not_run、无attempt，不伪造执行记录。原两条业务断言逐字保留，新首条输入只在原话后追加本次有限来源许可，第二条月份消息逐字不变；冻结文本见上述授权证据。
+- 新值：按用户本次明确的前提调整，仅对该来源条目准备独立完整10条记录（`.local/dogfood-runs/semantic-20261102/trajectory-results-vehicle-definitions.json`），来源出口改绑此文件；其他九条逐字复用原记录，原来源条目独立保留在原文件且仍fail。调整后条目为not_run、无attempt，不伪造执行记录。原两条业务断言逐字保留，新首条输入只在原话后追加本次有限来源许可，第二条月份消息逐字不变；冻结文本见上述授权证据。
 - 原因与独立依据：用户明确授权必要字段的已有结构、含义和值域，并要求单独判定；现存细源DDL、身份文档对应定义和完整依赖根已核。旧六份细资料不足的问题由这两处定点补读前提处理，不从模型SQL反写答案、不扩大至整包。
 - 影响：将来成功只能报告“调整来源前提后的轨迹通过”，不能称原限定范围轨迹通过；本次准备不产生业务pass。沿同一试验ID、原库/集合/账本、现有`grade.py --trajectories --require-pass`和固定轨迹ID，无新增评分框架。历史工程限定独审按原范围复用，本次前提调整和未来真实结果仍纳主09整体独审；主09的review仍pending、evidence仍null。
 
 本次各一次免费读取官方状态主页与history，提取结果仍无旧Monitoring后失败（约2026-11-03T10:19:48Z）之后带绝对时间的API恢复记录或事件链接。整体正常字样不能据以判断原端点恢复；继续保留恢复启动条件，不付费探测、不继续轮询。没有启动服务、模型/embedding/Mem0调用或新业务attempt；2170条调用（2148 settled、22 unknown）及调用身份/状态/预留/实际费用、scope计数/额度指纹与上一轮完全一致。原21项仍11pass/4partial/6not_run，原来源轨迹fail，调整后来源not_run，历史API阻断保留。
 
-本次准备校验通过：完整10条独立记录沿现有grade默认校验合法；原两份题目/成绩SHA、原两条消息、原业务断言及其他九条记录一致，2份来源当前修订及11处Unicode原文位置精确匹配。材料检查514项、42处source_quotes、336处链接，增量声明及16项检查器自测通过；检查结果见[准备验证证据](../.local/dogfood-runs/semantic-20261102/evidence/source-permission-vehicle-definitions-validation-20261104.json)，日志在`.local/dogfood-runs/semantic-20261102/source-permission-static-20261104.log`。仅本地资料/记录校验，未运行核心必过gate、产品构建或真实模型，不把已有工程pass计为新增业务结果。
+本次准备校验通过：完整10条独立记录沿现有grade默认校验合法；原两份题目/成绩SHA、原两条消息、原业务断言及其他九条记录一致，2份来源当前修订及11处Unicode原文位置精确匹配。材料检查514项、42处source_quotes、336处链接，增量声明及16项检查器自测通过；检查结果见准备验证证据（`.local/dogfood-runs/semantic-20261102/evidence/source-permission-vehicle-definitions-validation-20261104.json`），日志在`.local/dogfood-runs/semantic-20261102/source-permission-static-20261104.log`。仅本地资料/记录校验，未运行核心必过gate、产品构建或真实模型，不把已有工程pass计为新增业务结果。
 
 唯一下一步：取得新的可定位供应商恢复依据后，沿仍适用的原授权只做一个原S01核心代表，复用其真实产物推进S02/S03及其余核心依赖，并执行本次前提调整后的来源新attempt。当前不重发旧unknown、不跑完整100项/十轨迹，不提前申请历史API豁免；没有未受阻的产品修改可继续实施。当前进度只维护本文件。
 

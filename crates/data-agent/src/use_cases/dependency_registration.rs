@@ -52,5 +52,10 @@ pub async fn after_content_saved_in_tx(
             .await?;
         }
     }
+    if !saved.is_empty() {
+        tx.notify(crate::live_changes::Change::Catalog {
+            space_id: ctx.space_id.clone(),
+        });
+    }
     Ok(())
 }

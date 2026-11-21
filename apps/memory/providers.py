@@ -51,8 +51,19 @@ class ModelGateway:
 
     def settle_pending(self):
         for envelope, usage in self.store.unsettled():
+            if self.store.claim_settlement(envelope["call_attempt_id"]):
+                try:
+                    self.finalize(envelope, usage)
+                except (MemoryError, httpx.HTTPError, ValueError) as error:
+                    print(f"memory_settlement_unconfirmed kind={type(error).__name__}", flush=True)
+
+    def finalize(self, envelope, usage):
+        try:
             self.host({**envelope, "action": "finalize", "usage": usage})
-            self.store.call(envelope, usage, "settled")
+        except (MemoryError, httpx.HTTPError, ValueError):
+            self.store.call(envelope, usage, "received")
+            raise
+        self.store.call(envelope, usage, "settled")
 
     def call(self, purpose, payload, input_upper):
         if self.failure:
@@ -89,9 +100,8 @@ class ModelGateway:
                 raise MemoryError("memory_operation_unknown")
             usage = {"input_tokens": tokens, "output_tokens": output, "elapsed_ms": min(120000, round((time.monotonic() - start)*1000))}
             # 内容格式有误也先保存真实usage；结算回执丢失仅重送同一结算。
-            self.store.call(envelope, usage, "received")
-            self.host({**envelope, "action": "finalize", "usage": usage})
-            self.store.call(envelope, usage, "settled")
+            self.store.call(envelope, usage, "settling")
+            self.finalize(envelope, usage)
             if tokens > input_upper or output > envelope["output_tokens_max"]:
                 raise MemoryError("budget_exhausted")
             return value

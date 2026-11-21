@@ -1,4 +1,7 @@
-use crate::types::{Error, Result, id};
+use crate::{
+    live_changes::{self, Change},
+    types::{Error, Result, id},
+};
 pub use sqlx::MySqlPool;
 use sqlx::{MySql, MySqlConnection, Transaction};
 
@@ -6,6 +9,7 @@ pub struct AppTx<'a> {
     transaction: Transaction<'a, MySql>,
     id: String,
     rank: u8,
+    changes: Vec<Change>,
 }
 impl<'a> AppTx<'a> {
     pub async fn begin(pool: &'a MySqlPool) -> Result<Self> {
@@ -13,6 +17,7 @@ impl<'a> AppTx<'a> {
             transaction: pool.begin().await?,
             id: id(),
             rank: 0,
+            changes: Vec::new(),
         })
     }
     pub fn id(&self) -> &str {
@@ -35,8 +40,14 @@ impl<'a> AppTx<'a> {
         }
         Ok(())
     }
+    pub fn notify(&mut self, change: Change) {
+        if live_changes::enabled() {
+            self.changes.push(change);
+        }
+    }
     pub async fn commit(self) -> Result<()> {
         self.transaction.commit().await?;
+        live_changes::committed(self.changes).await;
         Ok(())
     }
 }
@@ -53,7 +64,7 @@ pub async fn connect_with_default(url: &str, default_max: u32) -> Result<MySqlPo
     let pool = sqlx::mysql::MySqlPoolOptions::new()
         .max_connections(max_connections)
         .acquire_timeout(std::time::Duration::from_secs(5))
-        .idle_timeout(std::time::Duration::from_secs(300))
+        .idle_timeout(std::time::Duration::from_secs(120))
         .connect(url)
         .await?;
     sqlx::migrate!("../../migrations")

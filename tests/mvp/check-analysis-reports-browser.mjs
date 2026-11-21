@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import { chromium } from "playwright";
 import { createReportFixture, ok } from "./check-analysis-reports.mjs";
 import { logoutWorkspace } from "./experience-navigation.mjs";
@@ -321,22 +321,29 @@ try {
     "关闭加载窗口后切换真实会话，释放原报告GET的真实迟到响应不会恢复旧窗口或私人正文；返回原对话可重新打开",
   );
 
-  const permissionsPath = h.directory + "/platform/permissions.json";
-  let originalPermissions, permissionsChanged = false;
-  try { originalPermissions = await readFile(permissionsPath); }
-  catch (error) { if (error.code !== "ENOENT") throw error; }
+  const setPermissions = async denied => {
+    const response = await fetch(h.env.DATA_AGENT_PLATFORM_URL + "/permissions", {
+      method: "POST",
+      headers: { authorization: "Bearer " + h.env.DATA_AGENT_INTERNAL_TOKEN, "content-type": "application/json" },
+      body: JSON.stringify({space_id: "demo", denied_query_users: denied}),
+    });
+    assert.equal(response.status, 200, "平台撤权及变更事件已提交");
+  };
+  const queryCard = page.locator("#query-" + fixture.queries[0].id);
+  await queryCard.getByRole("region", {name: "查询结果表格"}).waitFor();
   pollingDiagnostics.permission = { before: ok(await h.request(reportPath())).status };
   try {
-    await writeFile(permissionsPath, JSON.stringify({ denied_query_users: ["alice"] }), { mode: 0o600 });
-    permissionsChanged = true;
+    await setPermissions(["alice"]);
     const denied = ok(await h.request(reportPath()));
     assert.equal(denied.status, "sources_unavailable");
     assert.equal(Object.hasOwn(denied, "report"), false);
     pollingDiagnostics.permission.denied = denied.status;
-    // 不触发focus或重开：验证已打开正文和图表由普通刷新撤下。
+    // 不触发 focus 或重开。平台主动通知撤权，报告与查询卡同时重核。
     await dialog().getByRole("heading", { name: "报告依据暂不可用", exact: true }).waitFor();
     assert.equal(await dialog().locator(".analysis-report-body").count(), 0);
     assert.equal(await dialog().getByRole("img").count(), 0);
+    await queryCard.getByText("当前无权读取此查询结果。", {exact:true}).waitFor();
+    assert.equal(await queryCard.getByRole("region", {name:"查询结果表格"}).count(), 0);
     assert.ok(!(await dialog().innerText()).includes("9007199254740993.01"));
     await page.screenshot({ path: directory + "/permission-denied.png" });
   } catch (error) {
@@ -344,16 +351,14 @@ try {
     await page.screenshot({ path: directory + "/permission-denied-failure.png" });
     throw error;
   } finally {
-    if (permissionsChanged) {
-      if (originalPermissions === undefined) await unlink(permissionsPath);
-      else await writeFile(permissionsPath, originalPermissions);
-    }
+    await setPermissions([]);
   }
   await dialog().getByRole("heading", { name: title, exact: true }).waitFor();
-  await until(async () => await dialog().getByRole("img").count() === 2, "恢复权限后普通刷新恢复全部图表");
+  await until(async () => await dialog().getByRole("img").count() === 2, "恢复权限事件恢复全部图表");
   assert.ok((await dialog().innerText()).includes("9007199254740993.01"));
   pollingDiagnostics.permission.restored = ok(await h.request(reportPath())).status;
-  checks.push("保持报告打开且不触发focus，真实撤权使正文与图表由普通刷新隐藏，恢复原权限后自动读回原文和完整图表；不以TTL过期代替权限变化");
+  await queryCard.getByRole("region", {name:"查询结果表格"}).waitFor();
+  checks.push("保持报告和查询卡打开，平台权限事件撤下报告正文、图表及查询结果，权限恢复后自动读回");
 
   let refreshHeld = false, releaseRefresh, refreshError;
   let activeReads = 0, maxActiveReads = 0;
@@ -382,13 +387,17 @@ try {
       }
     });
     await page.waitForTimeout(2400);
-    assert.equal(refreshStarts.length, 1, "同一在途读取期间focus/visibility与周期意图不能叠加请求");
+    assert.equal(refreshStarts.length, 1, "同一在途读取期间 focus 与 visibility 不重复发出请求");
     assert.equal(maxActiveReads, 1);
     assert.equal(await dialog().locator(".analysis-report-body").count(), 1, "普通慢读取期间保留当前合法正文，避免阅读位置闪动");
     const releasedAt = Date.now(); releaseRefresh();
-    await until(() => refreshStarts.length >= 2 && activeReads === 0 || refreshError, "慢读取完成后恢复普通周期读取");
+    await until(() => activeReads === 0 || refreshError, "慢读取完成");
+    await page.waitForTimeout(2400);
+    assert.equal(refreshStarts.length, 1, "前次读取完成后空闲不再定时重读");
+    await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+    await until(() => refreshStarts.length === 2 && activeReads === 0 || refreshError, "重新聚焦核对");
+
     if (refreshError) throw refreshError;
-    assert.ok(refreshStarts[1] - releasedAt >= 1500, "周期从读取完成后等待约2秒，而不是在途积压后立刻连发");
     assert.equal(maxActiveReads, 1);
     pollingDiagnostics.singleRead = { refreshStarts, releasedAt, maxActiveReads };
   } finally {
@@ -396,7 +405,7 @@ try {
     await until(() => activeReads === 0, "受控报告读取清理完成");
     await page.unroute("**/api" + reportPath(), refreshRoute);
   }
-  checks.push("初次/focus/visibility/周期共用一次在途读取；慢请求跨过周期仍合并同意图，保持正文，完成后约2秒才再次读取");
+  checks.push("focus 与 visibility 复核共用一次在途读取，慢读期间保留正文，空闲时没有后续请求");
 
   fixture.alterExpiry(fixture.queries[0], Date.now() / 1000 - 1);
   // 结果过期只局部受影响（04切片7）：报告仍available，过期图表数据省略并提示，正文与其余图表保留。

@@ -42,16 +42,22 @@ export function useSourceSynchronization(user: string, canAdmin: boolean, onChan
     if (!accepted || accepted.owner !== user || !canAdmin) return;
     let live = true;
     let timer: number | undefined;
+    const controller = new AbortController();
+    let previous: string | undefined;
+    let delay = 250;
     let refreshed = false;
     const poll = async () => {
       try {
-        const current = await api("SourceSyncProgress", accepted.status_url);
+        const current = await api("SourceSyncProgress", accepted.status_url, "GET", undefined, undefined, controller.signal);
         if (!live) return;
         if (current.sync_id !== accepted.sync_id) throw new Error("sync_identity_mismatch");
         setProgress(current); setError("");
         if (terminal(current.status) && !refreshed) { refreshed = true; changed.current(); }
         if (!terminal(current.status) || [current.preparation, current.raw_index, current.knowledge_index].some(workPending)) {
-          timer = window.setTimeout(() => void poll(), 2000);
+          const shape = JSON.stringify(current);
+          delay = previous === shape ? Math.min(4000, delay * 2) : 250;
+          previous = shape;
+          timer = window.setTimeout(() => void poll(), delay);
         }
       } catch (cause) {
         if (live) setError(failureMessage(cause, true));
@@ -59,7 +65,7 @@ export function useSourceSynchronization(user: string, canAdmin: boolean, onChan
     };
     void poll();
     // 页面离开或切换批次后不再轮询，已发出的读取也不能写回旧状态。
-    return () => { live = false; window.clearTimeout(timer); };
+    return () => { live = false; controller.abort(); window.clearTimeout(timer); };
   }, [accepted, canAdmin, user, pollRevision]);
 
   const current = accepted?.owner === user ? accepted : null;

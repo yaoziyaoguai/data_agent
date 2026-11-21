@@ -411,6 +411,9 @@ async fn prepare_delivery(
     conversations::claim_turn_in_tx(&mut tx, &conversation, &run_id, ttl_ms).await?;
     jobs::renew_lease_in_tx(&mut tx, &job.id, job.lease_epoch, ttl_ms).await?;
     jobs::begin_attempt_in_tx(&mut tx, job).await?;
+    tx.notify(crate::live_changes::Change::Run {
+        scope: conversation.live_scope(),
+    });
     tx.commit().await?;
     if diagnostics {
         eprintln!(

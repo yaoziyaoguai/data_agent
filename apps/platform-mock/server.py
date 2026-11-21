@@ -13,6 +13,7 @@ import sqlite3
 import tempfile
 import threading
 import time
+from urllib.request import ProxyHandler, Request, build_opener
 
 ROOT = Path(__file__).resolve().parents[2]
 ALLOWED_FUNCTIONS = {'sum','count','min','max','avg','coalesce','nullif','round','strftime','date','datetime','substr','lower','upper','replace','char','abs','length','row_number','rank','dense_rank','lag','lead','total','ifnull','cast'}
@@ -308,6 +309,26 @@ class Platform:
     def operate(self,path,payload):
         if path=='/catalog': return self.catalog(payload)
         if path=='/validate': return self.compile(payload)
+        if path == '/permissions':
+            space = payload.get('space_id')
+            denied = payload.get('denied_query_users')
+            if not isinstance(space, str) or not space or not isinstance(denied, list) or any(not isinstance(user, str) for user in denied):
+                raise ValueError('invalid_input')
+            current = self.catalog_file.parent / 'permissions.json'
+            with LOCK:
+                pending = current.with_suffix('.new')
+                pending.write_text(json.dumps({'denied_query_users': denied}))
+                pending.replace(current)
+            req = Request(
+                os.environ['DATA_AGENT_API_URL'] + '/internal/live-changes',
+                data=json.dumps([{'kind': 'authority', 'space_id': space}]).encode(),
+                headers={'Authorization': 'Bearer ' + os.environ['DATA_AGENT_INTERNAL_TOKEN'],
+                         'Content-Type': 'application/json'},
+            )
+            with build_opener(ProxyHandler({})).open(req, timeout=3) as response:
+                if response.status != 204:
+                    raise OSError('权限已保存，变更通知未确认')
+            return {'state': 'updated'}
         qid=payload.get('query_id'); owner=payload.get('owner_id')
         if not isinstance(qid,str) or not isinstance(owner,str): raise ValueError('invalid_input')
         permission_file=self.catalog_file.parent/'permissions.json'

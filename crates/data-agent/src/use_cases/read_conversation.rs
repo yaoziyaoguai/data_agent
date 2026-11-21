@@ -1,6 +1,6 @@
 use crate::{
     contracts::generated::LoadedOutputRange,
-    modules::{access, analysis, conversations, queries, runtime},
+    modules::{analysis, conversations, queries, runtime},
     persistence::AppTx,
     types::{AccessContext, Error, Result, epoch, fingerprint},
 };
@@ -252,21 +252,102 @@ pub async fn read_events(
     context: &AccessContext,
     cid: &str,
     after: u64,
-    session_hash: Option<&str>,
 ) -> Result<Vec<Value>> {
     let mut tx = AppTx::begin(pool).await?;
-    if let Some(hash) = session_hash
-        && access::resolve_session_in_tx(&mut tx, hash)
-            .await?
-            .is_none()
-    {
-        return Err(Error::new("unauthenticated"));
-    }
     let mut events = conversations::read_events_in_tx(&mut tx, context, cid, after).await?;
     tx.commit().await?;
     protect_output_events(pool, context, cid, &mut events, &[]).await?;
     Ok(events)
 }
+pub async fn project_live_events(
+    pool: &MySqlPool,
+    context: &AccessContext,
+    cid: &str,
+    events: &mut [Value],
+) -> Result<()> {
+    protect_output_events(pool, context, cid, events, &[]).await?;
+    Ok(())
+}
+
+pub async fn live_states(
+    pool: &MySqlPool,
+    context: &AccessContext,
+    cid: &str,
+    include_tasks: bool,
+) -> Result<Value> {
+    let checked = if include_tasks {
+        Some(super::context_authority::check_task_text_results(pool, context, cid, None).await?)
+    } else {
+        None
+    };
+    let mut tx = AppTx::begin(pool).await?;
+    conversations::assert_readable_in_tx(&mut tx, context, cid).await?;
+    let mut state = json!({"runs":run_states_in_tx(&mut tx, cid).await?});
+    if let Some(checked) = checked {
+        state["tasks"] = json!(task_states_in_tx(&mut tx, context, cid, &checked).await?);
+    }
+    tx.commit().await?;
+    Ok(state)
+}
+
+async fn task_states_in_tx(
+    tx: &mut AppTx<'_>,
+    context: &AccessContext,
+    cid: &str,
+    checked: &super::context_authority::CheckedTextResults,
+) -> Result<Vec<Value>> {
+    let mut tasks = analysis::read_tasks_in_tx(tx, cid).await?;
+    for task in &mut tasks {
+        super::context_authority::protect_task_context_in_tx(tx, context, cid, task, checked, None)
+            .await?;
+    }
+    // §5：报告卡首次保存事件序号作为展示锚点；同一读取事务内组合，覆盖Snapshot与refresh同一路径。
+    // 无保存事件的旧记录省略可选字段，不填0或null冒充锚点。
+    let report_ids: Vec<String> = tasks
+        .iter()
+        .filter_map(|task| task["report_ref"]["report_id"].as_str().map(str::to_owned))
+        .collect();
+    if !report_ids.is_empty() {
+        let anchors = conversations::report_first_saved_seq_in_tx(tx, cid, &report_ids).await?;
+        for task in &mut tasks {
+            if let Some(report_id) = task["report_ref"]["report_id"].as_str()
+                && let Some(seq) = anchors.get(report_id)
+            {
+                task["report_timeline_event_seq"] = json!(seq);
+            }
+        }
+    }
+    Ok(tasks)
+}
+
+async fn run_states_in_tx(tx: &mut AppTx<'_>, cid: &str) -> Result<Vec<Value>> {
+    // run身份由runtime提供，结果通知关联由conversations可信记录组合；不跨模块私表SQL。
+    let mut runs = runtime::read_runs_in_tx(tx, cid).await?;
+    let result_queries = conversations::result_query_map_in_tx(tx, cid).await?;
+    let activity = runtime::running_activity_in_tx(tx, cid).await?;
+    for run in &mut runs {
+        let result_query_id = run["message_id"]
+            .as_str()
+            .and_then(|message| result_queries.get(message));
+        run["purpose"] = if result_query_id.is_some() {
+            json!("query_result")
+        } else {
+            json!("user_request")
+        };
+        run["result_query_id"] = result_query_id.map(|qid| json!(qid)).unwrap_or(Value::Null);
+        // 运行中才提示活动；最近一次登记的工具名映射为中文动作，未知工具不编造文案。
+        if run["state"] == "running"
+            && let Some((tool, steps)) = activity.get(run["run_id"].as_str().unwrap_or(""))
+        {
+            if let Some(label) = activity_label(tool) {
+                run["activity_label"] = json!(label);
+            }
+            run["completed_steps"] = json!(steps);
+        }
+    }
+    Ok(runs)
+}
+
 pub async fn read_conversation(
     pool: &MySqlPool,
     context: &AccessContext,
@@ -307,54 +388,8 @@ pub async fn read_page(
         events.extend(cached);
     }
     let last = conversations::last_event_seq_in_tx(&mut tx, &conversation).await?;
-    let mut tasks = analysis::read_tasks_in_tx(&mut tx, cid).await?;
-    for task in &mut tasks {
-        super::context_authority::protect_task_context_in_tx(
-            &mut tx, context, cid, task, &checked, None,
-        )
-        .await?;
-    }
-    // §5：报告卡首次保存事件序号作为展示锚点；同一读取事务内组合，覆盖Snapshot与refresh同一路径。
-    // 无保存事件的旧记录省略可选字段，不填0或null冒充锚点。
-    let report_ids: Vec<String> = tasks
-        .iter()
-        .filter_map(|task| task["report_ref"]["report_id"].as_str().map(str::to_owned))
-        .collect();
-    if !report_ids.is_empty() {
-        let anchors =
-            conversations::report_first_saved_seq_in_tx(&mut tx, cid, &report_ids).await?;
-        for task in &mut tasks {
-            if let Some(report_id) = task["report_ref"]["report_id"].as_str()
-                && let Some(seq) = anchors.get(report_id)
-            {
-                task["report_timeline_event_seq"] = json!(seq);
-            }
-        }
-    }
-    // run身份由runtime提供，结果通知关联由conversations可信记录组合；不跨模块私表SQL。
-    let mut runs = runtime::read_runs_in_tx(&mut tx, cid).await?;
-    let result_queries = conversations::result_query_map_in_tx(&mut tx, cid).await?;
-    let activity = runtime::running_activity_in_tx(&mut tx, cid).await?;
-    for run in &mut runs {
-        let result_query_id = run["message_id"]
-            .as_str()
-            .and_then(|message| result_queries.get(message));
-        run["purpose"] = if result_query_id.is_some() {
-            json!("query_result")
-        } else {
-            json!("user_request")
-        };
-        run["result_query_id"] = result_query_id.map(|qid| json!(qid)).unwrap_or(Value::Null);
-        // 运行中才提示活动；最近一次登记的工具名映射为中文动作，未知工具不编造文案。
-        if run["state"] == "running"
-            && let Some((tool, steps)) = activity.get(run["run_id"].as_str().unwrap_or(""))
-        {
-            if let Some(label) = activity_label(tool) {
-                run["activity_label"] = json!(label);
-            }
-            run["completed_steps"] = json!(steps);
-        }
-    }
+    let tasks = task_states_in_tx(&mut tx, context, cid, &checked).await?;
+    let runs = run_states_in_tx(&mut tx, cid).await?;
     tx.commit().await?;
     let loaded_attempts = loaded_counts
         .iter()

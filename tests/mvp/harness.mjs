@@ -296,6 +296,8 @@ export async function harness(options = {}) {
         env.DATA_AGENT_API_URL,
         internal,
         options.deliveryDispatch ?? (async (run, _apiUrl, _token, _fault, signal) => {
+          const error = options.captureError?.(run);
+          if (error) throw error;
           captured.push(run);
           // 替身沿用正式Pi的取消协议，否则被取消的旧run会一直占住同对话的bridge。
           await new Promise((resolve) => {

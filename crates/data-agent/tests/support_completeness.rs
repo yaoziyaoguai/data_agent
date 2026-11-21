@@ -465,6 +465,20 @@ async fn human_edit_saves_explicit_declarations_without_trusting_origin_or_chang
             "{label}不能生成有效人工声明"
         );
     }
+    let batch = contracts::decode(
+        "KnowledgeBatchEdit",
+        json!({"operation_id":"human-batch-declaration","objects":[{"object_id":id,
+            "expected_version":object["version"],"edits":[{"entry_id":"body",
+                "value":"人工合成规则。\n仅合成演练。","statements":[valid_draft]}]}]}),
+    )
+    .unwrap();
+    let receipt = data_agent::use_cases::knowledge::edit_batch(&pool, &ctx, batch)
+        .await
+        .unwrap();
+    let edited = &receipt["objects"][0];
+    let batch_statement = &edited["entries"][0]["human_override"]["statements"][0];
+    assert_eq!(batch_statement["object_ref"]["version"], edited["version"]);
+    object = edited.clone();
     let saved = data_agent::use_cases::knowledge::edit(
         &pool,
         &ctx,

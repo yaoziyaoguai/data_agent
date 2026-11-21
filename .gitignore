@@ -11,6 +11,8 @@
 /.migration/
 # 博客稿件和配图在仓库外保存，避免再次误加入代码仓库。
 /docs/articles/
+# 外部审计报告放在仓库外，根目录不收录 HTML 报告。
+/*.html
 node_modules/
 target/
 __pycache__/

@@ -369,6 +369,9 @@ pub async fn change(
     knowledge::corrections::save_in_tx(&mut tx, ctx, &v).await?;
     knowledge::corrections::record_in_tx(&mut tx, ctx, &command, &v).await?;
     let v = view_in_tx(&mut tx, ctx, v, true).await?;
+    tx.notify(crate::live_changes::Change::Corrections {
+        space_id: ctx.space_id.clone(),
+    });
     tx.commit().await?;
     Ok(v)
 }

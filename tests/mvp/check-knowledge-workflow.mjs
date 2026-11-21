@@ -15,7 +15,7 @@ for (const name of [
   await copyFile("docs/sources/" + name, dir + "/" + name);
 const h = await harness({
   startupTimeout: 60000,
-  env: { DATA_AGENT_SYNTHETIC_SOURCE_DIRECTORY: process.cwd() + "/" + dir },
+  env: { DATA_AGENT_SYNTHETIC_SOURCE_DIRECTORY: process.cwd() + "/" + dir, DATA_AGENT_PUBLIC_CONTENT_RETENTION: "archive" },
   // 内置来源版本测试独立于平台的固定执行快照；平台漂移拒绝另有专门测试。
   platformSourceDirectory: process.cwd() + "/docs/sources",
 });
@@ -27,7 +27,7 @@ const command = (version) => ({
 });
 try {
   await h.pauseWorker();
-  h.sql("DELETE FROM knowledge_index_jobs;DELETE FROM knowledge_versions;DELETE FROM knowledge_objects;DELETE FROM source_current;DELETE FROM source_heads;DELETE FROM source_snapshots;");
+  h.sql("DELETE FROM knowledge_index_jobs;DELETE FROM knowledge_versions;DELETE FROM knowledge_revisions;DELETE FROM knowledge_objects;DELETE FROM source_current;DELETE FROM source_revisions;DELETE FROM source_heads;DELETE FROM source_snapshots;");
   const importCommands=[1,2].map(()=>({operation_id:randomUUID()}));
   await h.resumeSourceSyncWorker(2);
   const imports=await Promise.all(importCommands.map(command=>synchronizeSources(h,command.operation_id)));

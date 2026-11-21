@@ -1,9 +1,46 @@
 use crate::{
+    live_changes::Change,
     persistence::AppTx,
     types::{AccessContext, Error, Result, epoch, fingerprint},
 };
 use serde_json::{Value, json};
-use sqlx::Row;
+use sqlx::{MySqlPool, Row};
+
+pub struct SessionIdentity {
+    pub user_id: String,
+    pub space_id: String,
+    pub remaining_ms: u64,
+}
+
+pub async fn resolve_session(
+    pool: &MySqlPool,
+    token_hash: &str,
+) -> Result<Option<SessionIdentity>> {
+    let identity = sqlx::query_as::<_, (String, String, i64)>(
+        "SELECT user_id,space_id,TIMESTAMPDIFF(MICROSECOND,UTC_TIMESTAMP(3),expires_at) DIV 1000 \
+         FROM user_sessions WHERE id=? AND revoked_at IS NULL AND expires_at>UTC_TIMESTAMP(3)",
+    )
+    .bind(token_hash)
+    .fetch_optional(pool)
+    .await?;
+    Ok(
+        identity.map(|(user_id, space_id, remaining_ms)| SessionIdentity {
+            user_id,
+            space_id,
+            remaining_ms: remaining_ms as u64,
+        }),
+    )
+}
+
+pub async fn prune_sessions(pool: &MySqlPool) -> Result<bool> {
+    let deleted = sqlx::query(
+        "DELETE FROM user_sessions WHERE expires_at<=UTC_TIMESTAMP(3) OR revoked_at IS NOT NULL \
+         ORDER BY expires_at,id LIMIT 500",
+    )
+    .execute(pool)
+    .await?;
+    Ok(deleted.rows_affected() == 500)
+}
 
 // 会话令牌摘要入库；过期与吊销在读取侧统一判定，登录态不复活。
 pub async fn create_session_in_tx(
@@ -24,24 +61,6 @@ pub async fn create_session_in_tx(
     .await?;
     Ok(())
 }
-pub async fn resolve_session_in_tx(
-    tx: &mut AppTx<'_>,
-    token_hash: &str,
-) -> Result<Option<(String, String)>> {
-    let row = sqlx::query(
-        "SELECT user_id,space_id FROM user_sessions \
-         WHERE id=? AND revoked_at IS NULL AND expires_at>UTC_TIMESTAMP(3)",
-    )
-    .bind(token_hash)
-    .fetch_optional(tx.connection())
-    .await?;
-    Ok(row.map(|row| {
-        (
-            row.get::<String, _>("user_id"),
-            row.get::<String, _>("space_id"),
-        )
-    }))
-}
 pub async fn revoke_session_in_tx(tx: &mut AppTx<'_>, token_hash: &str) -> Result<()> {
     sqlx::query(
         "UPDATE user_sessions SET revoked_at=UTC_TIMESTAMP(3) WHERE id=? AND revoked_at IS NULL",
@@ -49,6 +68,9 @@ pub async fn revoke_session_in_tx(tx: &mut AppTx<'_>, token_hash: &str) -> Resul
     .bind(token_hash)
     .execute(tx.connection())
     .await?;
+    tx.notify(Change::SessionRevoked {
+        session_hash: token_hash.to_owned(),
+    });
     Ok(())
 }
 

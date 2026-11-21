@@ -3,7 +3,7 @@ import type {
   QueryView,
   QueryResults,
 } from "../../../../../packages/contracts/generated/boundary.ts";
-import { api } from "../../shared/api.ts";
+import { api, ApiError } from "../../shared/api.ts";
 import { Modal } from "../../shared/Modal.tsx";
 import { QueryResultsView } from "./QueryResultsView.tsx";
 import { KnowledgeReference } from "../../shared/KnowledgeReference.tsx";
@@ -31,11 +31,11 @@ function status(q: QueryView) {
 }
 export function QueryCard({
   query,
-  onRefresh,
+  authorityRevision,
   onEvidence,
 }: {
   query: QueryView;
-  onRefresh: () => void;
+  authorityRevision: number;
   onEvidence: (id: string, summary?: string, version?: string) => void;
 }) {
   const [result, setResult] = useState<QueryResults | null>(null);
@@ -43,10 +43,8 @@ export function QueryCard({
   const [busy, setBusy] = useState(false);
   const [showSql, setShowSql] = useState(false);
   const [copied, setCopied] = useState(false);
-  const resultGeneration = useRef(0);
-  const readResult = useRef<(() => void) | null>(null);
-  const refresh = useRef(onRefresh);
-  refresh.current = onRefresh;
+  const lastAuthority = useRef(authorityRevision);
+  const readResult = useRef<((authorityChanged?: boolean) => void) | null>(null);
   const readable = query.text_unavailable !== true;
   const parameters = query.parameters ?? {};
   const references = query.knowledge_refs ?? [];
@@ -77,7 +75,6 @@ export function QueryCard({
       await api("QueryView", "/queries/" + query.id + "/cancel", "POST", {
         operation_id: crypto.randomUUID(),
       });
-      onRefresh();
     } catch (e) {
       setError(String(e));
     } finally {
@@ -92,37 +89,43 @@ export function QueryCard({
     setCopied(false);
     setError("");
     setBusy(false);
-    const load = async () => {
-      if (!mounted || !readable || query.execution_state !== "succeeded") return;
-      const generation = ++resultGeneration.current;
-      controller = new AbortController();
+    const load = async (authorityChanged = false) => {
+      if (!mounted || !readable || query.execution_state !== "succeeded" || (document.hidden && !authorityChanged)) return;
+      if (controller && !authorityChanged) return;
+      controller?.abort();
+      const request = new AbortController();
+      controller = request;
       setBusy(true); setError("");
       try {
-        const value = await api("QueryResults", "/queries/" + query.id + "/results", "GET", undefined, undefined, controller.signal);
-        if (!mounted || generation !== resultGeneration.current) return;
-        setResult(value); setError("");
-      } catch (e) {
-        if (mounted && generation === resultGeneration.current) {
-          const message = e instanceof Error ? e.message : "结果读取失败";
-          setResult(null); setError(message);
-          // 结果过期只能由用户新发查询解决；刷新对话让查询状态回到最新。
-          refresh.current();
+        const value = await api("QueryResults", "/queries/" + query.id + "/results", "GET", undefined, undefined, request.signal);
+        if (!request.signal.aborted) setResult(value);
+      } catch (cause) {
+        if (!request.signal.aborted) {
+          setResult(null);
+          setError(cause instanceof ApiError ? cause.code : "结果读取失败");
         }
       } finally {
-        if (mounted && generation === resultGeneration.current) {
-          controller = undefined; setBusy(false);
-        }
+        if (!request.signal.aborted) { controller = undefined; setBusy(false); }
       }
     };
-    // 结果只在成功态进入时读取一次；运行态推进由工作台事件流唤醒的查询列表刷新承担，
-    // 过期与撤权仍等待用户另发查询。
-    readResult.current = () => void load();
-    if (readable && query.execution_state === "succeeded") void load();
+    const wake = () => { void load(); };
+    readResult.current = (authorityChanged) => void load(authorityChanged);
+    void load();
+    window.addEventListener("focus", wake);
+    document.addEventListener("visibilitychange", wake);
     return () => {
-      mounted = false; ++resultGeneration.current; controller?.abort();
+      mounted = false;
+      controller?.abort();
       readResult.current = null;
+      window.removeEventListener("focus", wake);
+      document.removeEventListener("visibilitychange", wake);
     };
   }, [query.id, readable, query.execution_state, query.result_ref]);
+  useEffect(() => {
+    if (lastAuthority.current === authorityRevision) return;
+    lastAuthority.current = authorityRevision;
+    readResult.current?.(true);
+  }, [authorityRevision]);
   const running = ["queued", "submitting", "running", "submission_unknown"].includes(query.execution_state);
   const stopping = running && query.cancel_state === "requested";
   const queryError = query.error === "outcome_unknown"
@@ -164,7 +167,7 @@ export function QueryCard({
         {readable && <details className="running-sql"><summary>查看 SQL 和参数</summary>{sql}</details>}
       </> : sql}
       {readable && !!references.length && <details className="query-evidence"><summary>查看口径依据</summary><div className="evidence-row">{references.map(ref => <KnowledgeReference key={ref.object_id + ref.path} id={ref.object_id} path={ref.path} onOpen={id => onEvidence(id, query.summary, ref.version)}/>)}</div></details>}
-      {readable && query.execution_state === "succeeded" && !result && error !== "result_expired" && <p className="quiet">{busy ? "正在读取查询结果…" : <button onClick={() => readResult.current?.()}>重新读取结果</button>}</p>}
+      {readable && query.execution_state === "succeeded" && !result && !["result_expired", "forbidden", "not_available", "unauthenticated"].includes(error) && <p className="quiet">{busy ? "正在读取查询结果…" : <button onClick={() => readResult.current?.()}>重新读取结果</button>}</p>}
       {query.execution_state === "submission_unknown" && !stopping && (
         <p className="quiet">
           正在向查询平台确认状态，你可以继续聊天。
@@ -175,7 +178,9 @@ export function QueryCard({
         <p role="alert" className="error">
           {error === "result_expired"
             ? "结果已过期。可以在对话中要求重新查询。"
-            : error}
+            : ["forbidden", "not_available", "unauthenticated"].includes(error)
+              ? "当前无权读取此查询结果。"
+              : error}
         </p>
       )}
       {readable && showSql && <Modal title="最终执行的 SQL" onClose={() => setShowSql(false)} footer={<button className="primary" onClick={() => setShowSql(false)}>返回结果</button>}>{sql}{error && <p role="alert" className="error">{error}</p>}</Modal>}

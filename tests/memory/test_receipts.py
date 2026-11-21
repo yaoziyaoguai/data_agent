@@ -7,7 +7,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "apps/memory"))
-from service import MemoryService
+from service import ActiveVectors, MemoryService
 from store import MemoryError, ReceiptStore
 
 
@@ -62,6 +62,7 @@ class ReceiptTests(unittest.TestCase):
 
     def load(self):
         service = MemoryService.__new__(MemoryService)
+        service.vectors = [ActiveVectors() for _ in range(256)]
         service.store, service.memory = ReceiptStore(self.path), FakeMemory()
         service.fingerprint = "fixed-configuration"
         return service

@@ -68,5 +68,9 @@ pub async fn register_named_tool_in_tx(
     fp: &str,
     name: &str,
 ) -> Result<String> {
-    store::insert_tool(tx, run, sdk_id, fp, name).await
+    let operation = store::insert_tool(tx, run, sdk_id, fp, name).await?;
+    tx.notify(crate::live_changes::Change::Activity {
+        conversation_id: run.conversation_id.clone(),
+    });
+    Ok(operation)
 }

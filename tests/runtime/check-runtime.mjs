@@ -77,7 +77,7 @@ try{
    assert.equal(Number(tail.match(/^id: (\d+)$/m)?.[1]),seqs.at(-1));
    const logout=await fetch(env.DATA_AGENT_API_URL+'/session',{method:'DELETE',headers:{cookie}});
    assert.equal(logout.status,200);
-   while(!tail.includes('stream_closed')) {const chunk=await lastReader.read();assert.equal(chunk.done,false);tail+=new TextDecoder().decode(chunk.value);}
+   while(!tail.includes('stream_closed')) {const chunk=await lastReader.read();assert.equal(chunk.done,false,tail.split('\n').filter(line=>line.startsWith('id:')||line.startsWith('event:')).join(' '));tail+=new TextDecoder().decode(chunk.value);}
    assert.match(tail,/unauthenticated/);
  } finally {await lastReader.cancel();}
  checks.push({name:'原URL断线续传从已收事件号继续；退出登录关闭已打开的空闲事件流',passed:true});

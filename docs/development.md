@@ -131,7 +131,7 @@ make vm-stop
 | `make verify-code` | Rust fmt/Clippy、TypeScript类型检查、正式React构建 |
 | `make verify-contracts` | 同源产物一致、Rust/JS正反例与序列化往返 |
 | `make verify-runtime-flow` | 真实页面提交、Pi受控工具、持久结果、身份隔离、刷新、双Worker串行和失败终态 |
-| `make verify-recovery` | 三个真实进程退出点、新run/原operation恢复、一份副作用、旧代次拒绝 |
+| `make verify-recovery` | 三个进程退出点和原操作恢复；Worker 停机等在途工作完成与过期会话清理 |
 | `make verify-architecture` | 导入/SQL归属及故意反例、真实MySQL当前读取/事务快照/锁序/并发 |
 
 测试只创建和删除自己随机命名的临时数据库，使用本项目新生成的开发密码；日志与截图在忽略的`.local/checks/`。本地模拟provider调用也向Rust预留/结算调用预算；正常新输入不设累计调用次数、默认累计费用或总时长硬上限，恢复仍沿原scope。显式有限夹具和旧数字scope保持，连续临时失败3次、取消与单请求超时继续生效。生产认证与真实 Datasight 仍需接入验证；真实模型验收遵守单独的持久试验额度。

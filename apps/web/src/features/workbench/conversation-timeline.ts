@@ -74,6 +74,19 @@ type ConversationSnapshot = Snapshot & { output_projections?: LoadedOutputRange[
 const outputRangeKey = (range: LoadedOutputRange) => JSON.stringify([range.attempt_id, range.first_event_seq, range.last_event_seq]);
 const assistantEvent = (event: Event) => ["assistant_delta", "assistant_committed", "assistant_replaced"].includes(event.type);
 
+export function appendLiveEvent(snapshot: ConversationSnapshot, event: Event): ConversationSnapshot {
+  if (event.conversation_id !== snapshot.conversation_id || BigInt(event.event_seq) <= BigInt(snapshot.last_event_seq ?? "0")) {
+    return snapshot;
+  }
+  const events = [...snapshot.events, event];
+  return {
+    ...snapshot, events, messages: projectMessages(events),
+    first_event_seq: snapshot.first_event_seq === "0" ? event.event_seq : snapshot.first_event_seq,
+    last_event_seq: event.event_seq,
+    has_newer: false,
+  };
+}
+
 // 只在实际连续缓存区间内合并同一attempt，不能用全局min/max吞掉尚未读过的页。
 export function loadedOutputRanges(snapshot: ConversationSnapshot): LoadedOutputRange[] {
   const ranges: LoadedOutputRange[] = [];

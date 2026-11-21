@@ -1,4 +1,5 @@
 use crate::{
+    live_changes::Change,
     persistence::AppTx,
     types::{AccessContext, Error, Result, RunLocation, epoch, id},
 };
@@ -337,6 +338,9 @@ pub async fn cancel_in_tx(tx: &mut AppTx<'_>, ctx: &AccessContext, qid: &str) ->
             .bind(qid)
             .execute(tx.connection())
             .await?;
+        tx.notify(Change::Query {
+            conversation_id: row.get("conversation_id"),
+        });
     }
     read_in_tx(tx, ctx, qid).await
 }
@@ -382,6 +386,9 @@ pub async fn begin_submission_in_tx(
             .execute(tx.connection())
             .await?;
         v["action"] = json!("submit");
+        tx.notify(Change::Query {
+            conversation_id: row.get("conversation_id"),
+        });
     } else {
         v["action"] = json!(if v["cancel_state"] == "requested" {
             "cancel"
@@ -415,10 +422,8 @@ pub async fn record_observation_in_tx(
         .fetch_optional(tx.connection())
         .await?
         .ok_or(Error::new("lease_lost"))?;
-    if !matches!(
-        row.get::<String, _>("execution_state").as_str(),
-        "succeeded" | "failed" | "cancelled"
-    ) {
+    let previous: &str = row.try_get("execution_state")?;
+    if !matches!(previous, "succeeded" | "failed" | "cancelled") {
         let state = observation["state"]
             .as_str()
             .unwrap_or("submission_unknown");
@@ -429,6 +434,11 @@ pub async fn record_observation_in_tx(
             return Err(Error::new("invalid_input"));
         }
         sqlx::query("UPDATE query_requests SET execution_state=?,result_ref=?,error_code=?,error_details=?,cancel_state=IF(?='cancelled','completed',cancel_state),lease_until=TIMESTAMPADD(MICROSECOND,250000,UTC_TIMESTAMP(3)) WHERE id=?").bind(state).bind(observation["result_ref"].as_str()).bind(observation["error"].as_str()).bind(observation.get("diagnostic").map(sqlx::types::Json)).bind(state).bind(qid).execute(tx.connection()).await?;
+        if state != previous {
+            tx.notify(Change::Query {
+                conversation_id: row.get("conversation_id"),
+            });
+        }
     }
     read_in_tx(tx, ctx, qid).await
 }

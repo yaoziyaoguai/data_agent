@@ -1,7 +1,5 @@
 import { useEffect, useLayoutEffect, useState, useRef, useMemo } from "react";
 import type {
-  Snapshot,
-  QueryList,
   QueryHistory,
   QueryHistoryItem,
   HistoryItem,
@@ -12,7 +10,7 @@ import { decodeContract } from "../../../../../packages/contracts/validate.ts";
 import { WorkspaceShell, type View } from "../../shared/WorkspaceShell.tsx";
 import { Icon } from "../../shared/Icon.tsx";
 import { Modal } from "../../shared/Modal.tsx";
-import { conversationItems, displayUserMessage, loadedOutputRanges, mergeSnapshot } from "./conversation-timeline.ts";
+import { conversationItems, displayUserMessage } from "./conversation-timeline.ts";
 import { SkillSelections } from "./SkillSelections.tsx";
 import { conversationTitle } from "./conversation-title.ts";
 import { QueryCard } from "./QueryCard.tsx";
@@ -21,6 +19,7 @@ import { AssistantMessage } from "./AssistantMessage.tsx";
 import { objectReferenceLabels } from "./object-reference-labels.ts";
 import { ConversationFeed } from "./ConversationFeed.tsx";
 import { ModelSelector } from "./ModelSelector.tsx";
+import { useLiveConversation } from "./useLiveConversation.ts";
 import { useModelSelection } from "./useModelSelection.ts";
 import { clearPendingSubmission, conversationStorageKey, draftStorageKey, pendingSubmissionKey, readPendingSubmission, settleSubmission, storePendingSubmission, writeDraft, type PendingSubmission } from "./conversation-storage.ts";
 const creationTime = (value?: string) => value ? new Date(value).toLocaleString("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false }) : "";
@@ -49,14 +48,10 @@ export function Workbench({
   );
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const model = useModelSelection(space, user, cid);
-  const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
+  const { snapshot, queries, loadingOlder, syncUnavailable, authorityRevision, requestOlder, requestReconnect } = useLiveConversation(cid, space, user);
   const technicalIdsKey = "data-agent.technical-identifiers." + JSON.stringify([space, user]);
   const [showTechnicalIds, setShowTechnicalIds] = useState(() => localStorage.getItem(technicalIdsKey) === "true");
   useEffect(() => { setShowTechnicalIds(localStorage.getItem(technicalIdsKey) === "true"); }, [technicalIdsKey]);
-  const [queries, setQueries] = useState<QueryList>({
-    queries: [],
-    confirmation_blocked: false,
-  });
   const objectReferences = useMemo(() => objectReferenceLabels(snapshot, queries.queries), [snapshot, queries.queries]);
   const savedSql = useMemo(() => queries.queries.flatMap(query => query.sql ? [query.sql] : []), [queries.queries]);
   const [text, setText] = useState(() =>
@@ -64,7 +59,6 @@ export function Workbench({
   );
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
-  const [syncUnavailable, setSyncUnavailable] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   // U-04：历史记录分“会话/查询记录”两栏；查询记录跨会话检索并可跳回原对话。
   const [historyTab, setHistoryTab] = useState<"conversations" | "queries">("conversations");
@@ -79,11 +73,8 @@ export function Workbench({
   const [pending, setPending] = useState<PendingSubmission | null>(null);
   const [pendingError, setPendingError] = useState("");
   const [unavailableSubmissionDraft, setUnavailableSubmissionDraft] = useState<string | null>(null);
-  const requestRefresh = useRef<() => void>(() => {});
-  const requestOlder = useRef<() => void>(() => {});
   const sendingRef = useRef(false);
   const mounted = useRef(true);
-  const snapshotRef = useRef<Snapshot | null>(null);
   const [historyNext, setHistoryNext] = useState<string | null>(null);
   const historyGeneration = useRef(0);
   const [historyBusy, setHistoryBusy] = useState(false);
@@ -101,7 +92,6 @@ export function Workbench({
     activeConversation.current = cid;
     viewGeneration.current += 1;
   }
-  const [loadingOlder, setLoadingOlder] = useState(false);
   const draftKey = (id: string | null) =>
     draftStorageKey(space, user, id);
   const changeText = (value: string) => {
@@ -177,148 +167,10 @@ export function Workbench({
     return () => { window.clearTimeout(timer); ++queryHistoryGeneration.current; };
   }, [space, user, historySearch, historyTab]);
   useEffect(() => {
-    let current = true;
-    snapshotRef.current = null;
-    setLoadingOlder(false);
-    setSnapshot(null);
-    setQueries({ queries: [], confirmation_blocked: false });
     setError("");
-    setSyncUnavailable(false);
     setText(localStorage.getItem(draftKey(cid)) ?? "");
     if (cid) localStorage.setItem(conversationStorageKey(space, user), cid);
     else localStorage.removeItem(conversationStorageKey(space, user));
-    let snapshotBusy = false;
-    let refreshAgain = false;
-    let olderRequested = false;
-    let queryBusy = false;
-    let snapshotUnavailable = false;
-    let queriesUnavailable = false;
-    let latestQueries: QueryList = { queries: [], confirmation_blocked: false };
-    const controller = new AbortController();
-    let quietCycles = 0;
-    let timer: number | undefined;
-    let activeUntil = 0;
-    let events: EventSource | undefined;
-    let sseOpen = false;
-    const schedule = (delay: number) => {
-      window.clearTimeout(timer);
-      // SSE连接期间停用轮询阶梯：事件流本身承担唤醒，不再按时距扫描。
-      if (current && cid && !document.hidden && !sseOpen) timer = window.setTimeout(() => void readSnapshot(), delay);
-    };
-    const refreshQueries = async () => {
-      if (queryBusy || !cid) return;
-      queryBusy = true;
-      try {
-        const q = await api("QueryList", "/conversations/" + cid + "/queries", "GET", undefined, undefined, controller.signal);
-        if (current) {
-          latestQueries = q;
-          setQueries(old => JSON.stringify(old) === JSON.stringify(q) ? old : q);
-          queriesUnavailable = false;
-          setSyncUnavailable(snapshotUnavailable);
-        }
-      } catch {
-        if (current) { queriesUnavailable = true; setSyncUnavailable(true); }
-      } finally { queryBusy = false; }
-    };
-    const readSnapshot = async (older = false) => {
-      if (!cid || !current || (!older && document.hidden)) return;
-      if (older && !snapshotRef.current?.has_older) return;
-      if (snapshotBusy) {
-        if (older) { olderRequested = true; setLoadingOlder(true); }
-        else refreshAgain = true;
-        return;
-      }
-      snapshotBusy = true;
-      window.clearTimeout(timer);
-      if (older) setLoadingOlder(true);
-      else void refreshQueries();
-      let active = false;
-      try {
-        // 取得读取门后才捕获范围/指纹，前次响应必须已经合并。
-        const previous = snapshotRef.current;
-        const s = await api("SnapshotRefresh", "/conversations/" + cid + "/snapshot", "POST", {
-          loaded_outputs: previous ? loadedOutputRanges(previous) : [],
-          ...(older ? { before_seq: previous!.first_event_seq } : previous?.last_event_seq ? { after_seq: previous.last_event_seq } : {}),
-        }, undefined, controller.signal);
-        if (current) {
-          snapshotRef.current = mergeSnapshot(snapshotRef.current, s, older);
-          setSnapshot(snapshotRef.current);
-          snapshotUnavailable = false;
-          setSyncUnavailable(queriesUnavailable);
-          // 尾部读取成功即建立/重试事件流连接；连接成功后轮询阶梯停摆。
-          if (!older) openEvents();
-          active = s.runs.some(run => run.state === "running") || latestQueries.queries.some(query => ["queued", "submitting", "submission_unknown", "running"].includes(query.execution_state));
-          quietCycles = active ? 0 : quietCycles + 1;
-        }
-      } catch (e) {
-        if (current) {
-          snapshotUnavailable = true;
-          setSyncUnavailable(true);
-          if (older) setError(String(e));
-        }
-        quietCycles++;
-      } finally {
-        snapshotBusy = false;
-        if (older && current) setLoadingOlder(false);
-        if (current) {
-          if (olderRequested && snapshotRef.current?.has_older) {
-            olderRequested = false;
-            void readSnapshot(true);
-          } else {
-            if (olderRequested) setLoadingOlder(false);
-            olderRequested = false;
-            if (refreshAgain) { refreshAgain = false; void readSnapshot(); }
-            else schedule(active || Date.now() < activeUntil ? 700 : quietCycles < 2 ? 1500 : quietCycles < 3 ? 5000 : 15000);
-          }
-        }
-      }
-    };
-    const wake = () => {
-      window.clearTimeout(timer);
-      if (document.hidden) return;
-      quietCycles = 0;
-      activeUntil = Date.now() + 3000;
-      void readSnapshot();
-    };
-    requestRefresh.current = wake;
-    // A-03：会话事件SSE只作唤醒信号，正确性仍由POST快照按after_seq合并保证。
-    // 首次成功读取后连接（此时才稳定持有last_event_seq）；网络中断由浏览器带
-    // Last-Event-ID自动重连；明确失败先回退轮询阶梯，下次成功读取时重试连接。
-    const openEvents = () => {
-      if (!cid || events || !snapshotRef.current || !snapshotRef.current.last_event_seq) return;
-      const source = new EventSource("/api/conversations/" + cid + "/events?after_seq=" + snapshotRef.current.last_event_seq);
-      events = source;
-      source.onopen = () => { sseOpen = true; window.clearTimeout(timer); };
-      source.onmessage = () => { void readSnapshot(); };
-      // 会话删除或权限失效：服务端要求停止重连，交回轮询兜底（读取会给出对应错误）。
-      source.addEventListener("stream_closed", () => {
-        source.close();
-        if (events === source) events = undefined;
-        sseOpen = false;
-        schedule(1500);
-      });
-      source.onerror = () => {
-        if (source.readyState !== EventSource.CLOSED) { sseOpen = false; return; }
-        source.close();
-        if (events === source) events = undefined;
-        sseOpen = false;
-        schedule(700);
-      };
-    };
-    requestOlder.current = () => { void readSnapshot(true); };
-    void readSnapshot();
-    window.addEventListener("focus", wake);
-    document.addEventListener("visibilitychange", wake);
-    return () => {
-      current = false;
-      controller.abort();
-      requestOlder.current = () => {};
-      window.clearTimeout(timer);
-      events?.close();
-      events = undefined;
-      window.removeEventListener("focus", wake);
-      document.removeEventListener("visibilitychange", wake);
-    };
   }, [cid, space, user]);
   const sendPending = async (submission: PendingSubmission) => {
     if (sendingRef.current) return;
@@ -360,7 +212,6 @@ export function Workbench({
         if (!submission.origin_conversation_id) setCid(conversation);
         setText(nextDraft);
       }
-      requestRefresh.current();
       void refreshHistory().catch(() => { if (mounted.current) setError("消息已保存，暂时无法更新会话列表。"); });
     } catch (e) {
       // 参数或模型明确被拒绝时事务未保存消息；网络错误和未知回执仍沿原操作身份。
@@ -458,7 +309,6 @@ export function Workbench({
         "POST",
         { operation_id: crypto.randomUUID() },
       );
-      requestRefresh.current();
     } catch (e) {
       setError(e instanceof Error && e.message === "input_already_applied" ? "这条输入已经应用到任务。请补充新消息修订条件，不能撤回已经生效的修改。" : String(e));
     }
@@ -515,7 +365,6 @@ export function Workbench({
         "POST",
         { run_id: currentRun.run_id, lease_epoch: currentRun.lease_epoch },
       );
-      requestRefresh.current();
     } catch (e) {
       setError(e instanceof Error ? e.message : "停止失败");
     }
@@ -611,7 +460,7 @@ export function Workbench({
             {conversationItems(snapshot, queries.queries).map(item => item.kind === "query" ? (
               <div key={item.key} className="message assistant query-message">
                 <div className="message-label">Data Agent · 查询</div>
-                <QueryCard query={item.query} onRefresh={() => requestRefresh.current()} onEvidence={onEvidence}/>
+                <QueryCard query={item.query} authorityRevision={authorityRevision} onEvidence={onEvidence}/>
               </div>
             ) : item.kind === "query_notice" ? (
               <div key={item.key} className="query-notice" role="status">
@@ -685,7 +534,7 @@ export function Workbench({
         </div>}
         {pendingError && <p className="error" role="alert">{pendingError}</p>}
         {model.error && <p role="alert" className="error model-selection-error">{model.error} <button className="text-link" onClick={() => void model.reload()}>重新读取</button></p>}
-        {syncUnavailable && <p className="quiet conversation-sync" role="status">暂时无法更新对话，正在重试…</p>}
+        {syncUnavailable && <p className="quiet conversation-sync" role="status">暂时无法更新对话。 <button onClick={() => requestReconnect.current()}>重新连接</button></p>}
         {error && <p role="alert" className="error conversation-error">{error}</p>}
         </div>
         </ConversationFeed>
@@ -728,6 +577,7 @@ export function Workbench({
         <p className="footnote">Enter 发送 · Shift + Enter 换行</p>
         {selectedReport && selectedReport.conversation_id === cid && <AnalysisReport
           reference={snapshot?.tasks.find(task => task.id === selectedReport.task_id)?.report_ref ?? selectedReport}
+          authorityRevision={authorityRevision}
           currentConditionVersion={snapshot?.tasks.find(task => task.id === selectedReport.task_id)?.condition_version}
           onClose={() => setSelectedReport(null)}
           onQuery={queryId => {

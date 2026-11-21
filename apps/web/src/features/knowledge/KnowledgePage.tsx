@@ -2,19 +2,17 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type {
   KnowledgeObject,
   KnowledgeEntry,
+  KnowledgeEntryEdit,
   SourceDocument,
   Proposal,
 } from "../../../../../packages/contracts/generated/boundary.ts";
-import { ProposeCorrection } from "./CorrectionComposer.tsx";
 import { SemanticCorrections } from "./SemanticCorrections.tsx";
 import { KnowledgeCreator } from "./KnowledgeCreator.tsx";
 import { KnowledgeDocument, documentRepresentatives } from "./KnowledgeDocument.tsx";
-import { KnowledgePicker } from "../../shared/KnowledgePicker.tsx";
 import { useStableOperation } from "./semantic-commands.ts";
 import { KnowledgeDirectory } from "./KnowledgeDirectory.tsx";
 import { SemanticMaintainer } from "./SemanticMaintainer.tsx";
 import { KnowledgeOrigin } from "./KnowledgeOrigin.tsx";
-import { KnowledgeStatus } from "./KnowledgeStatus.tsx";
 import { KnowledgeBusinessDomain } from "./KnowledgeBusinessDomain.tsx";
 import { KnowledgeMaintenanceImpact } from "./KnowledgeMaintenanceImpact.tsx";
 import { SourceSynchronizationStatus, useSourceSynchronization } from "./SourceSynchronization.tsx";
@@ -25,7 +23,7 @@ import { useUnsavedChanges, useNavigationGuard } from "../../shared/UnsavedChang
 import { Tabs } from "../../shared/Tabs.tsx";
 import type { WorkspaceLocation } from "../../shared/workspace-location.ts";
 import { knowledgeKindLabels } from "../../shared/knowledge-labels.ts";
-import { SemanticStructureEditor, SemanticStructureView, structureDraft, structureEntryId, structureFromDraft } from "./SemanticStructure.tsx";
+import { EntryEditor, type StagedEntry } from "./EntryEditor.tsx";
 function currentObject(previous: KnowledgeObject | undefined, incoming: KnowledgeObject): KnowledgeObject {
   if (!previous) return incoming;
   const oldPreference=previous.analysis_preference;
@@ -48,198 +46,7 @@ function currentObject(previous: KnowledgeObject | undefined, incoming: Knowledg
   }
   return current;
 }
-function EntryEditor({
-  object,
-  entry,
-  canEdit,
-  onSaved,
-  onSource,
-  onCorrection,
-  availableObjects,
-  batchMode,
-  stagedValue,
-  onStage,
-}: {
-  object: KnowledgeObject;
-  entry: KnowledgeEntry;
-  canEdit: boolean;
-  onSaved: (object: KnowledgeObject) => void;
-  onSource: (id: string) => void;
-  onCorrection: () => void;
-  availableObjects: KnowledgeObject[];
-  batchMode?: boolean;
-  stagedValue?: string;
-  onStage?: (objectId: string, entryId: string, version: string, value: string) => void;
-}) {
-  const operation = useStableOperation();
-  const [editing, setEditing] = useState(false);
-  const [value, setValue] = useState(entry.effective_value);
-  const [error, setError] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [editVersion, setEditVersion] = useState(object.version);
-  const isDocument = object.kind === "document" && entry.entry_id === "body";
-  const hasStructureEditor = structureEntryId(object) === entry.entry_id;
-  const [structure, setStructure] = useState(() => hasStructureEditor ? structureDraft(object, entry, availableObjects) : null);
-  const [saveStructure, setSaveStructure] = useState(false);
-  let displayValue = entry.effective_value;
-  if (entry.path === "lineage") {
-    try {
-      const upstream: unknown = JSON.parse(displayValue);
-      if (Array.isArray(upstream) && upstream.every(value => typeof value === "string")) displayValue = upstream.join("、") || "暂无上游表";
-    } catch { /* 人工填写的自然语言按原文展示。 */ }
-  }
-  const [editUrl, setEditUrl] = useState(String(entry.human_override?.source_url ?? ""));
-  const [editRelated, setEditRelated] = useState(object.related_ids);
-  // 批量模式下暂存值优先作为编辑起点，避免重复打开编辑器时丢失已暂存内容。
-  const baseValue = stagedValue ?? entry.effective_value;
-  const initialEdit = useRef("");
-  const confirmClose = useUnsavedChanges(editing && initialEdit.current !== JSON.stringify([value, editUrl, editRelated, structure, saveStructure]), () => { setEditing(false); setValue(baseValue); });
-  useEffect(() => {
-    if (!editing) setValue(baseValue);
-  }, [object.version, entry.entry_id, editing, baseValue]);
-  const save = async (clear = false) => {
-    // 批量核对模式只暂存纯文本修改；结构化条目仍走即时保存以保留结构编辑器语义。
-    if (batchMode && !clear && onStage && !hasStructureEditor) {
-      onStage(object.id, entry.entry_id, editVersion, value);
-      confirmClose.markSaved();
-      setEditing(false);
-      return;
-    }
-    setBusy(true);
-    setError("");
-    try {
-      const structuredValue = !clear && saveStructure && structure ? structureFromDraft(structure) : null;
-      const v = await api(
-        "KnowledgeObject",
-        "/knowledge/" + object.id,
-        "PATCH",
-        {
-          operation_id: operation({ object: object.id, entry: entry.entry_id, editVersion, value, clear, editUrl, editRelated, structuredValue }),
-          expected_version: editVersion,
-          entry_id: entry.entry_id,
-          value,
-          clear_override: clear,
-          ...(hasStructureEditor ? { structured_value: structuredValue } : {}),
-          ...(isDocument && !clear ? { source_url: editUrl.trim() || null, related_ids: editRelated } : {}),
-        },
-      );
-      confirmClose.markSaved();
-      onSaved(v);
-      setEditing(false);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "保存失败");
-    } finally {
-      setBusy(false);
-    }
-  };
-  const sourceId =
-    typeof entry.source_facts.source_id === "string"
-      ? entry.source_facts.source_id
-      : object.source_id;
-  return (
-    <div className="semantic-entry">
-      <div className="entry-head">
-        <strong>{entry.label}</strong>
-        <KnowledgeStatus entries={[entry]}/>
-        {stagedValue !== undefined && <span className="status-pill staged">已暂存</span>}
-        {canEdit && !editing && (
-          <button onClick={() => {const draft=hasStructureEditor ? structureDraft(object,entry,availableObjects) : null;initialEdit.current = JSON.stringify([baseValue, String(entry.human_override?.source_url ?? ""), object.related_ids,draft,false]);setStructure(draft);setSaveStructure(false);setEditVersion(object.version);setEditUrl(String(entry.human_override?.source_url ?? ""));setEditRelated(object.related_ids);setValue(baseValue);setEditing(true);}}>编辑</button>
-        )}
-      </div>
-      {editing ? (
-        <>
-          <label className="sr-only" htmlFor={object.id + "-" + entry.entry_id}>
-            {entry.label}
-          </label>
-          <textarea
-            disabled={busy}
-            id={object.id + "-" + entry.entry_id}
-            className="editor"
-            rows={Math.min(14, Math.max(3, value.split("\n").length))}
-            value={value}
-            onChange={(e) => setValue(e.target.value)}
-          />
-          {isDocument && <>
-            <label className="form-label">来源链接<input aria-label="编辑来源链接" value={editUrl} onChange={e => setEditUrl(e.target.value)} /></label>
-            <KnowledgePicker selected={editRelated} disabled={busy} onAdd={object => setEditRelated(old => [...old, object.id])} onRemove={id => setEditRelated(old => old.filter(value => value !== id))}/>
-          </>}
-          {hasStructureEditor && structure && <SemanticStructureEditor object={object} draft={structure} confirmed={saveStructure} disabled={busy} hadStructure={Boolean(entry.effective_structure)} onChange={setStructure} onConfirm={setSaveStructure}/>}
-          <div className="actions">
-            <button
-              className="primary"
-              disabled={busy}
-              onClick={() => void save()}
-            >
-              {batchMode && !hasStructureEditor ? "暂存修改" : "保存修改"}
-            </button>
-            <button
-              disabled={busy}
-              onClick={() => confirmClose(() => { setEditing(false); setValue(baseValue); })}
-            >
-              放弃本次编辑
-            </button>
-            {entry.human_override && (
-              <button disabled={busy} onClick={() => void save(true)}>
-                清除人工覆盖
-              </button>
-            )}
-          </div>
-        </>
-      ) : stagedValue !== undefined ? (
-        <>
-          {!["sql", "ddl", "etl", "lineage"].includes(entry.path)
-            ? <MarkdownContent text={stagedValue || "尚缺说明"} className="entry-value staged-value"/>
-            : <p className="code-text staged-value">{stagedValue || "尚缺说明"}</p>}
-          <p className="quiet">暂存值，随“查看本次修改”批量提交后生效。</p>
-        </>
-      ) : !["sql", "ddl", "etl", "lineage"].includes(entry.path) ? <MarkdownContent text={entry.effective_value || "尚缺说明"} className="entry-value" /> : (
-        <p
-          className={
-            entry.path === "sql" || entry.path === "ddl" || entry.path === "etl"
-              ? "code-text"
-              : "entry-value"
-          }
-        >
-          {displayValue || "尚缺说明"}
-        </p>
-      )}
-      {!editing && hasStructureEditor && <SemanticStructureView value={entry.effective_structure}/>}
-      {typeof entry.human_override?.source_url === "string" && /^https?:\/\//i.test(entry.human_override.source_url) && (
-        <p className="quiet"><a href={entry.human_override.source_url} target="_blank" rel="noopener noreferrer">打开来源链接 ↗</a>{!entry.effective_value.trim() && " · 正文尚未录入，Agent无法据此解释业务"}</p>
-      )}
-      <details className="provenance-detail">
-        <summary>查看依据与修改记录</summary>
-        <div className="provenance-columns">
-          <section>
-            <h4>来源资料</h4>
-            <p>{String(entry.source_facts.value ?? entry.source_facts.gap ?? "请查看来源正文")}</p>
-            {sourceId && (
-              <button onClick={() => onSource(sourceId)}>查看来源正文 ↗</button>
-            )}
-          </section>
-          <section>
-            <h4>分析建议</h4>
-            <p>{String(entry.suggestion.value ?? "暂无分析建议")}</p>
-          </section>
-          <section>
-            <h4>人工修改</h4>
-            <p>{entry.human_override ? `由 ${String(entry.human_override.edited_by ?? object.updated_by)} 修改` : "尚未人工修改"}</p>
-          </section>
-        </div>
-      </details>
-      {!canEdit && <ProposeCorrection object={object} entry={entry} onSaved={onCorrection}/>}
-      {error && (
-        <p className="error" role="alert">
-          {error === "version_conflict"
-            ? "版本已变化，请刷新后核对再保存。"
-            : error}
-        </p>
-      )}
-    </div>
-  );
-}
-// U-03：血缘与加工页签——上游表名与已加载表匹配后可点击直达，未匹配按原文展示；加工步骤按序只读展示并可维护。
-function LineageAndEtl({object, tables, onOpen, onSaved, onCorrection, onSource, availableObjects}: {
+function LineageAndEtl({object, tables, onOpen, onSaved, onCorrection, onSource, availableObjects, stagedEdits, onStage}: {
   object: KnowledgeObject;
   tables: KnowledgeObject[];
   onOpen: (id: string) => void;
@@ -247,6 +54,8 @@ function LineageAndEtl({object, tables, onOpen, onSaved, onCorrection, onSource,
   onCorrection: () => void;
   onSource: (id: string) => void;
   availableObjects: KnowledgeObject[];
+  stagedEdits: Record<string, StagedEntry>;
+  onStage?: (item: StagedEntry) => void;
 }) {
   const lineageEntry = object.entries.find(e => e.path === "lineage");
   const etlEntries = object.entries.filter(e => e.path === "etl");
@@ -256,7 +65,7 @@ function LineageAndEtl({object, tables, onOpen, onSaved, onCorrection, onSource,
       return Array.isArray(parsed) && parsed.every(name => typeof name === "string") ? parsed : [];
     } catch { return []; }
   })();
-  const editorProps = {canEdit: object.maintenance?.can_edit ?? false, onCorrection, onSaved, onSource, availableObjects};
+  const editorProps = {canEdit: object.maintenance?.can_edit ?? false, onCorrection, onSaved, onSource, availableObjects, batchMode: !!onStage && object.maintenance?.can_edit === true, onStage};
   return (
     <article className="semantic-object lineage-object">
       <h3>血缘</h3>
@@ -271,7 +80,7 @@ function LineageAndEtl({object, tables, onOpen, onSaved, onCorrection, onSource,
       {lineageEntry && (
         <details className="technical-source">
           <summary>维护血缘说明</summary>
-          <EntryEditor object={object} entry={lineageEntry} {...editorProps}/>
+          <EntryEditor object={object} entry={lineageEntry} staged={stagedEdits[object.id + ":" + lineageEntry.entry_id]} {...editorProps}/>
         </details>
       )}
       {etlEntries.length > 0 && <>
@@ -279,7 +88,7 @@ function LineageAndEtl({object, tables, onOpen, onSaved, onCorrection, onSource,
         {etlEntries.map((entry, index) => (
           <section key={entry.entry_id} className="etl-step">
             <h4>步骤 {index + 1}</h4>
-            <EntryEditor object={object} entry={entry} {...editorProps}/>
+            <EntryEditor object={object} entry={entry} staged={stagedEdits[object.id + ":" + entry.entry_id]} {...editorProps}/>
           </section>
         ))}
       </>}
@@ -316,7 +125,7 @@ export function KnowledgePage({
   const guard = useNavigationGuard();
   const move = (id: string, nextTab = "概览", scope = directoryScope) => {
     if (onLocation) { if (onLocation({object: id, tab: nextTab, scope})) { setCurrent(id); setTab(nextTab); setDirectoryScope(scope); } }
-    else guard(() => { setCurrent(id); setTab(nextTab); setDirectoryScope(scope); });
+    else guard(() => { setCurrent(id); setTab(nextTab); setDirectoryScope(scope); }, undefined, "knowledge");
   };
   const [query, setQuery] = useState("");
   const [directoryScope, setDirectoryScope] = useState<"tables" | "all" | "maintained">(initialScope);
@@ -339,8 +148,10 @@ export function KnowledgePage({
   const [source, setSource] = useState<SourceDocument | null>(null);
   const [proposals, setProposals] = useState<Proposal[]>([]);
   const refreshRequest = useRef<() => void>(() => {});
-  const visibleObjectIds = useRef<string[]>([]);
-  const expandedFields = useRef(new Set<string>());
+  const activeObject = useRef(current);
+  activeObject.current = current;
+  const [authorityRevision, setAuthorityRevision] = useState(0);
+  const [correctionsRevision, setCorrectionsRevision] = useState(0);
   const [canAdmin,setCanAdmin]=useState(false);
   const [canCreate,setCanCreate]=useState(false);
   // P-04：普通用户把语义页收窄为只读数据字典，隐藏维护面、同步与预填状态。
@@ -350,10 +161,12 @@ export function KnowledgePage({
   // U-02：条目快速筛选与批量核对暂存；stagedEdits 以“对象:条目”为键，提交时按对象分组。
   const [entryFilter, setEntryFilter] = useState<"all" | "suggested" | "overridden" | "missing">("all");
   const [batchMode, setBatchMode] = useState(false);
-  const [stagedEdits, setStagedEdits] = useState<Record<string, {objectId: string; entryId: string; version: string; value: string}>>({});
+  const [stagedEdits, setStagedEdits] = useState<Record<string, StagedEntry>>({});
   const [diffOpen, setDiffOpen] = useState(false);
   const [batchBusy, setBatchBusy] = useState(false);
   const batchOperation = useStableOperation();
+  const discardBatch = () => { setStagedEdits({}); setDiffOpen(false); };
+  const batchGuard = useUnsavedChanges(Object.keys(stagedEdits).length > 0, discardBatch, "knowledge");
   const refresh = () => refreshRequest.current();
   const sourceSync = useSourceSynchronization(user, canAdmin, () => {
     setDirectoryRevision(value => value + 1);
@@ -364,15 +177,15 @@ export function KnowledgePage({
     let inFlight = false;
     let pending = false;
     let initialized = false;
-    let timer: number | undefined;
-    let controller: AbortController | undefined;
+    const controller = new AbortController();
+    const { signal } = controller;
+    let relatedChanged = false;
     const run = async () => {
       if (!live) return;
       if (inFlight) { pending = true; return; }
-      window.clearTimeout(timer);
       inFlight = true;
-      controller = new AbortController();
-      const signal = controller.signal;
+      const readRelated = relatedChanged;
+      relatedChanged = false;
       try {
         // 子请求失败也须等同批读取结束，避免提前释放在途状态。
         const [knowledge, proposals, access] = await Promise.allSettled([
@@ -385,44 +198,55 @@ export function KnowledgePage({
         if (proposals.status === "rejected") throw proposals.reason;
         if (access.status === "rejected") throw access.reason;
         const page = knowledge.value;
-        const included = new Set(page.objects.map(object => object.id));
-        const visible = await Promise.allSettled(visibleObjectIds.current
-          .filter(id => !included.has(id))
-          .map(id => api("KnowledgeObject", "/knowledge/" + id, "GET", undefined, undefined, signal)));
-        if (!live) return;
-        const failed = visible.find(result => result.status === "rejected");
-        if (failed?.status === "rejected") throw failed.reason;
-        const details = visible.flatMap(result => result.status === "fulfilled" ? [result.value] : []);
         if (!initialized) {
           initialized = true;
           setNextAfter(page.next_after_id);
           if (directorySelection.current.scope === "tables" && !directorySelection.current.query.trim()) setCurrent(previous => previous || page.objects.find(object => object.kind === "table")?.id || "");
         }
-        setObjects(old => { const byId = new Map(old.map(object => [object.id, object])); for (const value of [...page.objects, ...details]) byId.set(value.id, currentObject(byId.get(value.id), value)); return [...byId.values()]; });
+        setObjects(old => { const byId = new Map(old.map(object => [object.id, object])); for (const value of page.objects) byId.set(value.id, currentObject(byId.get(value.id), value)); return [...byId.values()]; });
         setProposals(proposals.value.proposals);
         setCanAdmin(access.value.can_admin);
         setCanCreate(access.value.can_create);
         setRole(access.value.highest_role);
+        if (readRelated && activeObject.current) await loadRelated(activeObject.current, null, true);
       } catch (e) {
         if (live) setError(e instanceof Error ? e.message : "目录读取失败");
       } finally {
         inFlight = false;
-        if (live) {
-          if (pending) { pending = false; void run(); }
-          else timer = window.setTimeout(() => void run(), 2000);
-        }
+        if (live && pending) { pending = false; void run(); }
       }
     };
-    refreshRequest.current = () => void run();
+    refreshRequest.current = () => { void run(); };
+    const stream = new EventSource("/api/workspace/events");
+    const refreshAuthority = () => {
+      setObjects([]);
+      setMatches([]);
+      setSource(null);
+      setAuthorityRevision(revision => revision + 1);
+      setDirectoryRevision(revision => revision + 1);
+      setCorrectionsRevision(revision => revision + 1);
+    };
+    let connected = false;
+    stream.onopen = () => {
+      if (connected) refreshAuthority();
+      connected = true;
+    };
+    stream.addEventListener("catalog_changed", () => {
+      relatedChanged = true;
+      setDirectoryRevision(revision => revision + 1);
+      void run();
+    });
+    stream.addEventListener("corrections_changed", () => setCorrectionsRevision(revision => revision + 1));
+    stream.addEventListener("authority_changed", refreshAuthority);
+    stream.addEventListener("lagged", refreshAuthority);
+    stream.addEventListener("stream_closed", () => stream.close());
     void run();
     return () => {
       live = false;
-      pending = false;
-      window.clearTimeout(timer);
-      controller?.abort();
-      refreshRequest.current = () => {};
+      controller.abort();
+      stream.close();
     };
-  }, [user]);
+  }, [user, authorityRevision]);
   useEffect(() => {
     if (initialObject !== undefined) setCurrent(initialObject ?? "");
     // U-03：旧页签名“关联与血缘”归一到“血缘与加工”，历史链接仍可直达。
@@ -445,16 +269,16 @@ export function KnowledgePage({
       }).catch(e => { if(generation === searchGeneration.current) setError(e.message); });
     }, 150);
     return () => { window.clearTimeout(timer); ++searchGeneration.current; };
-  }, [query, directoryScope]);
+  }, [query, directoryScope, authorityRevision]);
   useEffect(() => {
     if (!current) return;
     let live=true;
     void api("KnowledgeObject","/knowledge/"+current).then(v => { if(live) setObjects(old => [...old.filter(o => o.id!==v.id),currentObject(old.find(o => o.id===v.id),v)]); }).catch(e => { if(live) setError(e.message); });
     return () => {live=false;};
-  }, [current]);
-  const loadRelated = async (parent: string, after: string | null = null) => {
+  }, [current, authorityRevision]);
+  const loadRelated = async (parent: string, after: string | null = null, keepLoaded = false) => {
     const generation = ++relatedGeneration.current;
-    setRelatedPage(old => ({parent, ids: after && old.parent === parent ? old.ids : [], next: after, loading: true, failed: false}));
+    if (!keepLoaded) setRelatedPage(old => ({parent, ids: after && old.parent === parent ? old.ids : [], next: after, loading: true, failed: false}));
     try {
       const page = await api("KnowledgeList", "/knowledge?related_id=" + encodeURIComponent(parent) + (after ? "&after_id=" + encodeURIComponent(after) : ""));
       if (generation !== relatedGeneration.current) return;
@@ -470,7 +294,7 @@ export function KnowledgePage({
     if (!current) { setRelatedPage({parent: "", ids: [], next: null, loading: false, failed: false}); return; }
     void loadRelated(current);
     return () => { ++relatedGeneration.current; };
-  }, [current]);
+  }, [current, authorityRevision]);
   const loadMore = async () => {
     if(!nextAfter || loadingMore) return;
     setLoadingMore(true);
@@ -512,7 +336,7 @@ export function KnowledgePage({
     if (!append && !values.some(value => value.id === current)) {
       const next = values[0]?.id ?? "";
       if (onLocation) { if (onLocation({object: next, tab: "概览"}, true)) { setCurrent(next); setTab("概览"); } }
-      else guard(() => { setCurrent(next); setTab("概览"); });
+      else guard(() => { setCurrent(next); setTab("概览"); }, undefined, "knowledge");
     }
   };
   const showSource = async (id: string) => {
@@ -562,9 +386,6 @@ export function KnowledgePage({
             : selected
               ? [selected]
               : [];
-  visibleObjectIds.current = [...new Set([current, ...groups
-    .filter(o => o.kind !== "field" || expandedFields.current.has(o.id))
-    .map(o => o.id)].filter(Boolean))];
   // U-02：待核对范围限定为当前表与其已加载字段对象；条目按“建议/人工覆盖/尚缺说明”归类。
   const fieldObjects = selected?.kind === "table"
     ? relatedObjects.filter(o => o.kind === "field" && o.related_ids.includes(current))
@@ -588,35 +409,34 @@ export function KnowledgePage({
     : groups;
   const stagedKey = (objectId: string, entryId: string) => objectId + ":" + entryId;
   const stagedList = Object.entries(stagedEdits).map(([key, edit]) => ({key, ...edit}));
-  const stageEdit = (objectId: string, entryId: string, version: string, value: string) => {
-    setStagedEdits(old => ({...old, [stagedKey(objectId, entryId)]: {objectId, entryId, version, value}}));
+  const stageEdit = (item: StagedEntry) => {
+    setStagedEdits(old => ({...old, [stagedKey(item.objectId, item.edit.entry_id)]: item}));
   };
   const submitBatch = async () => {
     if (batchBusy || stagedList.length === 0) return;
     setBatchBusy(true); setError("");
-    const byObject = new Map<string, {expected_version: string; edits: {entry_id: string; value: string}[]}>();
+    const byObject = new Map<string, {object_id: string; expected_version: string; edits: KnowledgeEntryEdit[]}>();
     for (const item of stagedList) {
-      const body = byObject.get(item.objectId) ?? {expected_version: item.version, edits: []};
-      // 一组暂存跨过了版本更新时，沿用最早读到的版本，由服务端一次核对。
-      if (BigInt(item.version) < BigInt(body.expected_version)) body.expected_version = item.version;
-      body.edits.push({entry_id: item.entryId, value: item.value});
-      byObject.set(item.objectId, body);
+      const group = byObject.get(item.objectId) ?? { object_id: item.objectId, expected_version: item.version, edits: [] };
+      if (BigInt(item.version) < BigInt(group.expected_version)) group.expected_version = item.version;
+      group.edits.push(item.edit);
+      byObject.set(item.objectId, group);
     }
+    const changes = [...byObject.values()];
     try {
-      for (const [objectId, body] of byObject) {
-        const updated = await api("KnowledgeObject", "/knowledge/" + encodeURIComponent(objectId) + "/entries", "PATCH", {
-          ...body, operation_id: batchOperation({objectId, ...body}),
-        });
-        save(updated);
-        setStagedEdits(old => {
-          const next = {...old};
-          for (const edit of body.edits) delete next[stagedKey(objectId, edit.entry_id)];
-          return next;
-        });
-      }
-      setDiffOpen(false);
+      const receipt = await api("KnowledgeBatchReceipt", "/knowledge/batch-entries", "PATCH", {
+        operation_id: batchOperation(changes), objects: changes,
+      });
+      setObjects(old => {
+        const updated = new Map(receipt.objects.map(object => [object.id, object]));
+        return old.map(object => updated.has(object.id) ? currentObject(object, updated.get(object.id)!) : object);
+      });
+      batchGuard.markSaved();
+      discardBatch();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "批量提交失败，未提交的暂存修改仍保留");
+      setError(e instanceof Error && e.message === "version_conflict"
+        ? "有条目的版本已变化，整批尚未保存。请重新核对后暂存。"
+        : e instanceof Error ? e.message : "批量提交失败，暂存修改仍保留");
     } finally {
       setBatchBusy(false);
     }
@@ -744,7 +564,7 @@ export function KnowledgePage({
               ) : (
                 <div className="semantic-groups">
                   {tab === "血缘与加工" && selected.kind === "table" && (
-                    <LineageAndEtl object={selected} tables={tables} onOpen={id => move(id)} onSaved={save} onCorrection={() => void refresh()} onSource={id => void showSource(id)} availableObjects={objects}/>
+                    <LineageAndEtl object={selected} tables={tables} onOpen={id => move(id)} onSaved={save} onCorrection={() => void refresh()} onSource={id => void showSource(id)} availableObjects={objects} stagedEdits={stagedEdits} onStage={batchMode ? stageEdit : undefined}/>
                   )}
                   {!["概览", "变更记录"].includes(tab) && <>
                     {relatedPage.loading && <p role="status">正在读取关联内容…</p>}
@@ -761,13 +581,7 @@ export function KnowledgePage({
                       )}
 
                       {o.kind === "field" ? (
-                        <details onToggle={event => {
-                          if (event.currentTarget.open) expandedFields.current.add(o.id);
-                          else expandedFields.current.delete(o.id);
-                          visibleObjectIds.current = [...new Set([current, ...groups
-                            .filter(v => v.kind !== "field" || expandedFields.current.has(v.id))
-                            .map(v => v.id)])];
-                        }}>
+                        <details>
                           <summary>
                             <strong>{o.name.split(".").at(-1)}</strong><span>{o.entries.find(e => e.path === "meaning")?.effective_value || "尚缺说明"}</span><span className="field-detail-label">查看</span>
                           </summary>
@@ -783,13 +597,13 @@ export function KnowledgePage({
                               onSource={(id) => void showSource(id)}
                               availableObjects={objects}
                               batchMode={batchMode && (o.maintenance?.can_edit ?? false)}
-                              stagedValue={stagedEdits[stagedKey(o.id, e.entry_id)]?.value}
+                              staged={stagedEdits[stagedKey(o.id, e.entry_id)]}
                               onStage={stageEdit}
                             />
                           ))}
                         </details>
                       ) : (
-                        <><KnowledgeBusinessDomain object={o} onSaved={save} onCorrection={() => void refresh()} onSource={id => void showSource(id)}/>{o.entries.filter(e => e.path !== "business_domain" && e.path !== "lineage" && e.path !== "etl" && (tab !== "概览" || entryMatchesFilter(e))).map((e) => e.path === "ddl" ? <details key={e.entry_id} className="technical-source"><summary>{e.label}</summary><EntryEditor object={o} entry={e} canEdit={o.maintenance?.can_edit ?? false} onCorrection={() => void refresh()} onSaved={save} onSource={id => void showSource(id)} availableObjects={objects} batchMode={batchMode && (o.maintenance?.can_edit ?? false)} stagedValue={stagedEdits[stagedKey(o.id, e.entry_id)]?.value} onStage={stageEdit}/></details> : (
+                        <><KnowledgeBusinessDomain object={o} onSaved={save} onCorrection={() => void refresh()} onSource={id => void showSource(id)}/>{o.entries.filter(e => e.path !== "business_domain" && e.path !== "lineage" && e.path !== "etl" && (tab !== "概览" || entryMatchesFilter(e))).map((e) => e.path === "ddl" ? <details key={e.entry_id} className="technical-source"><summary>{e.label}</summary><EntryEditor object={o} entry={e} canEdit={o.maintenance?.can_edit ?? false} onCorrection={() => void refresh()} onSaved={save} onSource={id => void showSource(id)} availableObjects={objects} batchMode={batchMode && (o.maintenance?.can_edit ?? false)} staged={stagedEdits[stagedKey(o.id, e.entry_id)]} onStage={stageEdit}/></details> : (
                           <EntryEditor
                             key={e.entry_id}
                             object={o}
@@ -800,7 +614,7 @@ export function KnowledgePage({
                             onSource={(id) => void showSource(id)}
                             availableObjects={objects}
                             batchMode={batchMode && (o.maintenance?.can_edit ?? false)}
-                            stagedValue={stagedEdits[stagedKey(o.id, e.entry_id)]?.value}
+                            staged={stagedEdits[stagedKey(o.id, e.entry_id)]}
                             onStage={stageEdit}
                           />
                         ))}</>
@@ -814,7 +628,7 @@ export function KnowledgePage({
           {!selected && <div className="knowledge-empty"><h2>选择要查看的内容</h2><p>左侧只列出符合当前范围的内容。没有匹配时，可调整范围或搜索条件。</p></div>}
         </div>
       </div>
-      <SemanticCorrections key={user} user={user} proposals={proposals} onSaved={()=>void refresh()}/>
+      <SemanticCorrections key={user} user={user} revision={correctionsRevision} proposals={proposals} onSaved={()=>void refresh()}/>
       {error && (
         <p role="alert" className="error">
           {error}
@@ -837,10 +651,10 @@ export function KnowledgePage({
             <div className="batch-diff">
               {stagedList.map(item => {
                 const object = objects.find(o => o.id === item.objectId);
-                const entry = object?.entries.find(e => e.entry_id === item.entryId);
+                const entry = object?.entries.find(e => e.entry_id === item.edit.entry_id);
                 return (
                   <section key={item.key} className="batch-diff-item">
-                    <h4>{object?.name ?? item.objectId} · {entry?.label ?? item.entryId}</h4>
+                    <h4>{object?.name ?? item.objectId} · {entry?.label ?? item.edit.entry_id}</h4>
                     <div className="provenance-columns">
                       <section>
                         <h5>来源事实</h5>
@@ -853,7 +667,7 @@ export function KnowledgePage({
                       <section>
                         <h5>人工值变化</h5>
                         <p className="code-text diff-old">{entry?.effective_value || "（空）"}</p>
-                        <p className="code-text diff-new">{item.value || "（空）"}</p>
+                        <p className="code-text diff-new">{item.edit.clear_override ? "清除人工覆盖" : item.edit.value || "（空）"}</p>
                       </section>
                     </div>
                   </section>
@@ -862,7 +676,7 @@ export function KnowledgePage({
             </div>
             <div className="actions">
               <button className="primary" disabled={batchBusy} onClick={() => void submitBatch()}>{batchBusy ? "正在提交…" : "提交全部修改"}</button>
-              <button disabled={batchBusy} onClick={() => { setStagedEdits({}); setDiffOpen(false); }}>放弃全部</button>
+              <button disabled={batchBusy} onClick={discardBatch}>放弃全部</button>
             </div>
           </>}
           {error && <p className="error" role="alert">{error}</p>}

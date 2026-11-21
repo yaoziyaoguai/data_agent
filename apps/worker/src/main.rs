@@ -1,3 +1,4 @@
+mod background;
 use data_agent::{
     modules::jobs,
     persistence::{self, MySqlPool},
@@ -11,7 +12,7 @@ use std::{
     time::Duration,
 };
 use tokio::{
-    sync::{Semaphore, watch},
+    sync::{Notify, Semaphore, watch},
     task::JoinSet,
 };
 
@@ -19,6 +20,9 @@ use tokio::{
 const BACKOFF_STEPS_MS: [u64; 5] = [100, 250, 500, 1000, 2000];
 fn backoff_delay(consecutive_idle: u32) -> Duration {
     Duration::from_millis(BACKOFF_STEPS_MS[(consecutive_idle.min(4)) as usize])
+}
+fn interactive_delay(consecutive_idle: u32) -> Duration {
+    backoff_delay(consecutive_idle.min(2))
 }
 
 // 合成验收钩子：按阶段注入一次临时存储故障（claim/context/renew/defer/defer_lease/fail），
@@ -213,138 +217,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .no_proxy()
         .connect_timeout(Duration::from_secs(5))
         .build()?;
-    if env::var("DATA_AGENT_TOOLSET").as_deref() == Ok("data") {
-        let sync_pool = pool.clone();
-        let sync_worker = id();
-        let sync_task = tokio::spawn(async move {
-            let mut idle = 0u32;
-            loop {
-                match data_agent::use_cases::catalog_import::process_due(
-                    &sync_pool,
-                    &sync_worker,
-                    ttl_ms,
-                )
-                .await
-                {
-                    Ok(true) => {
-                        idle = 0;
-                        continue;
-                    }
-                    Ok(false) => {}
-                    Err(e) => eprintln!("source_sync_worker_failure code={}", e.code),
-                }
-                tokio::time::sleep(backoff_delay(idle)).await;
-                idle += 1;
-            }
-        });
-        // 合成验收可单独推进真实来源队列，避免同时消费被其他场景刻意暂停的预填/对话。
-        if env::var("DATA_AGENT_TEST_WORKER_ROLE").as_deref() == Ok("source_sync") {
-            sync_task.await?;
-            return Ok(());
-        }
-        let prefill_pool = pool.clone();
-        tokio::spawn(async move {
-            let mut idle = 0u32;
-            loop {
-                match data_agent::use_cases::semantic_prefill::process_due(&prefill_pool).await {
-                    Ok(true) => {
-                        idle = 0;
-                        continue;
-                    }
-                    Ok(false) => {}
-                    Err(e) => eprintln!("prefill_failure code={}", e.code),
-                }
-                tokio::time::sleep(backoff_delay(idle)).await;
-                idle += 1;
-            }
-        });
-        let preparation_pool = pool.clone();
-        tokio::spawn(async move {
-            let mut idle = 0u32;
-            loop {
-                match data_agent::use_cases::source_preparation::process_due(&preparation_pool)
-                    .await
-                {
-                    Ok(true) => {
-                        idle = 0;
-                        continue;
-                    }
-                    Ok(false) => {}
-                    Err(e) => eprintln!("source_preparation_worker_failure code={}", e.code),
-                }
-                tokio::time::sleep(backoff_delay(idle)).await;
-                idle += 1;
-            }
-        });
-        // 公共索引消费者：知识对象与原文来源目标同表分派，不再另设原文队列循环。
-        let fanout_pool = pool.clone();
-        tokio::spawn(async move {
-            let mut idle = 0u32;
-            loop {
-                match data_agent::use_cases::source_fanout::process_due(&fanout_pool).await {
-                    Ok(true) => {
-                        idle = 0;
-                        continue;
-                    }
-                    Ok(false) => {}
-                    Err(e) => eprintln!("source_fanout_worker_failure code={}", e.code),
-                }
-                tokio::time::sleep(backoff_delay(idle)).await;
-                idle += 1;
-            }
-        });
-        let index_pool = pool.clone();
-        tokio::spawn(async move {
-            let mut idle = 0u32;
-            loop {
-                match data_agent::use_cases::knowledge::process_index(&index_pool).await {
-                    Ok(true) => {
-                        idle = 0;
-                        continue;
-                    }
-                    Ok(false) => {}
-                    Err(e) => eprintln!("knowledge_index_failure code={}", e.code),
-                }
-                tokio::time::sleep(backoff_delay(idle)).await;
-                idle += 1;
-            }
-        });
-        let memory_pool = pool.clone();
-        tokio::spawn(async move {
-            let mut idle = 0u32;
-            loop {
-                match data_agent::use_cases::personal_memory::process_index(&memory_pool).await {
-                    Ok(true) => {
-                        idle = 0;
-                        continue;
-                    }
-                    Ok(false) => {}
-                    Err(e) => eprintln!("memory_worker_failure code={}", e.code),
-                }
-                tokio::time::sleep(backoff_delay(idle)).await;
-                idle += 1;
-            }
-        });
-        let query_pool = pool.clone();
-        let query_worker = id();
-        tokio::spawn(async move {
-            let mut idle = 0u32;
-            loop {
-                match data_agent::use_cases::query_workflow::process_due(&query_pool, &query_worker)
-                    .await
-                {
-                    Ok(true) => {
-                        idle = 0;
-                        continue;
-                    }
-                    Ok(false) => {}
-                    Err(e) => eprintln!("query_worker_failure code={}", e.code),
-                }
-                tokio::time::sleep(backoff_delay(idle)).await;
-                idle += 1;
-            }
-        });
-    }
+    let change_sink =
+        reqwest::Url::parse(&env::var("DATA_AGENT_API_URL")?)?.join("/internal/live-changes")?;
+    data_agent::live_changes::install(data_agent::live_changes::Publisher::Worker {
+        client: client.clone(),
+        api: change_sink,
+        token: token.clone(),
+    })?;
     let concurrency = env::var("DATA_AGENT_DELIVERY_CONCURRENCY")
         .ok()
         .and_then(|value| value.parse::<usize>().ok())
@@ -353,83 +232,110 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Err("invalid delivery concurrency".into());
     }
     let semaphore = Arc::new(Semaphore::new(concurrency));
-    let (shutdown_tx, shutdown_rx) = watch::channel(false);
+    let (shutdown_tx, mut shutdown) = watch::channel(false);
+    let mut terminate = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())?;
+    let signal_shutdown = shutdown_tx.clone();
     tokio::spawn(async move {
-        let terminate = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate());
-        let mut terminate = match terminate {
-            Ok(stream) => stream,
-            Err(_) => return,
-        };
         tokio::select! {
             _ = tokio::signal::ctrl_c() => {}
             _ = terminate.recv() => {}
         }
-        // 优雅退出：停止领取新任务；在途交付继续收尾。
         eprintln!("worker_shutdown_requested");
-        let _ = shutdown_tx.send(true);
+        signal_shutdown.send_replace(true);
     });
-    let mut shutdown = shutdown_rx.clone();
+    let data_tools = env::var("DATA_AGENT_TOOLSET").as_deref() == Ok("data");
+    // 合成验收可单独推进真实来源队列。
+    let source_only =
+        data_tools && env::var("DATA_AGENT_TEST_WORKER_ROLE").as_deref() == Ok("source_sync");
+    let delivery_ready = Arc::new(Notify::new());
+    let query_ready = Arc::new(Notify::new());
+    let mut background = if data_tools {
+        background::start(
+            &pool,
+            ttl_ms,
+            source_only,
+            shutdown.clone(),
+            delivery_ready.clone(),
+            query_ready.clone(),
+        )
+    } else {
+        JoinSet::new()
+    };
+    if !source_only {
+        background::start_session_cleanup(&pool, &shutdown, &mut background);
+    }
     let mut deliveries = JoinSet::new();
     let mut idle = 0u32;
-    loop {
+    let dispatch = loop {
         while let Some(result) = deliveries.try_join_next() {
             if let Err(error) = result {
                 eprintln!("worker_delivery_join_error {error}");
             }
         }
+        if source_only {
+            shutdown.changed().await?;
+            break Ok(());
+        }
         // 先等空闲槽位再领取；等待期间收到停机信号则不再新派。
         let permit = tokio::select! {
-            changed = shutdown.changed() => {
-                let _ = changed;
-                break;
-            }
-            permit = Arc::clone(&semaphore).acquire_owned() => permit?,
+            biased;
+            _ = shutdown.changed() => break Ok(()),
+            permit = Arc::clone(&semaphore).acquire_owned() => match permit {
+                Ok(permit) => permit,
+                Err(error) => break Err(error.into()),
+            },
         };
         let claimed = if storage_fault_injected("claim") {
             Err(Error::transient_storage())
         } else {
             jobs::claim_due(&pool, &worker_id, ttl_ms).await
         };
-        let job = match claimed {
-            Ok(Some(job)) => job,
-            Ok(None) => {
-                tokio::time::sleep(backoff_delay(idle)).await;
-                idle += 1;
+        match claimed {
+            Ok(Some(job)) => {
+                idle = 0;
+                // 同会话串行由 claim_due 保证，跨会话共用并发槽位。
+                let delivery = deliver_job(
+                    pool.clone(),
+                    client.clone(),
+                    url.clone(),
+                    token.clone(),
+                    job,
+                    ttl_ms,
+                    permit,
+                );
+                let ready = query_ready.clone();
+                deliveries.spawn(async move {
+                    if delivery.await {
+                        ready.notify_one();
+                    }
+                });
                 continue;
             }
+            Ok(None) => {}
             Err(error) if is_transient(&error) => {
-                // 临时数据库故障只跳过本轮领取；任务仍由租约到期后重新领取。
                 eprintln!("worker_claim_transient code={}", error.code);
-                tokio::time::sleep(backoff_delay(idle)).await;
-                idle += 1;
-                continue;
             }
-            Err(error) => return Err(error.into()),
-        };
-        idle = 0;
-        // 同会话串行由claim_due的同会话前置任务排除保证；跨会话在此完全并行。
-        deliveries.spawn(deliver_job(
-            pool.clone(),
-            client.clone(),
-            url.clone(),
-            token.clone(),
-            job,
-            ttl_ms,
-            permit,
-        ));
+            Err(error) => break Err(error.into()),
+        }
+        tokio::select! {
+            biased;
+            _ = shutdown.changed() => break Ok(()),
+            _ = delivery_ready.notified() => { idle = 0; continue; }
+            _ = tokio::time::sleep(interactive_delay(idle)) => {}
+        }
+        idle = idle.saturating_add(1);
+    };
+    shutdown_tx.send_replace(true);
+    while let Some(result) = deliveries.join_next().await {
+        if let Err(error) = result {
+            eprintln!("worker_delivery_join_error {error}");
+        }
     }
-    // 停止领取后等待在途交付完成续租收尾或取消通知；超限退出由租约到期自然恢复。
-    let drain_deadline = tokio::time::Instant::now() + Duration::from_secs(30);
-    while !deliveries.is_empty() && tokio::time::Instant::now() < drain_deadline {
-        let _ = tokio::time::timeout(Duration::from_secs(1), deliveries.join_next()).await;
+    while let Some(result) = background.join_next().await {
+        result?;
     }
-    if !deliveries.is_empty() {
-        eprintln!(
-            "worker_shutdown_drain_timeout remaining={}",
-            deliveries.len()
-        );
-    }
-    Ok(())
+    pool.close().await;
+    dispatch
 }
 
 // 单条任务的全周期交付协程；并发槽位随协程结束自动释放。
@@ -441,11 +347,13 @@ async fn deliver_job(
     job: jobs::ClaimedJob,
     ttl_ms: u32,
     _permit: tokio::sync::OwnedSemaphorePermit,
-) {
-    if let Err(error) = run_delivery(&pool, &client, &url, &token, &job, ttl_ms).await {
-        // 原先会终止整个worker的持久收尾失败：并发模式下只终止本交付，
-        // 任务租约到期后由后续槽位重派，worker不退出。
-        eprintln!("worker_delivery_fatal job={} code={}", job.id, error.code);
+) -> bool {
+    match run_delivery(&pool, &client, &url, &token, &job, ttl_ms).await {
+        Ok(()) => true,
+        Err(error) => {
+            eprintln!("worker_delivery_fatal job={} code={}", job.id, error.code);
+            false
+        }
     }
 }
 async fn run_delivery(

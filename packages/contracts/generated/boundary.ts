@@ -71,10 +71,13 @@ export interface Boundary {
     host_checkpoint_reference:    HostCheckpointReferenceClass;
     humanStatementInput?:         HumanStatementInputElement;
     identity:                     IdentityClass;
+    knowledgeBatchEdit?:          KnowledgeBatchEditClass;
+    knowledgeBatchReceipt?:       KnowledgeBatchReceiptClass;
     knowledgeCreate:              KnowledgeCreateClass;
     knowledgeDocument?:           KnowledgeDocumentClass;
     knowledgeDocumentEdit?:       KnowledgeDocumentEditClass;
     knowledgeEdit:                KnowledgeEditClass;
+    knowledgeEditGroup?:          KnowledgeEditGroupElement;
     knowledgeEntry:               KnowledgeEntryElement;
     knowledgeList:                KnowledgeListClass;
     knowledgeListQuery:           KnowledgeListQueryClass;
@@ -228,6 +231,7 @@ export interface Boundary {
     toolOutcome:                  ToolOutcomeClass;
     toolReceipt:                  ToolReceiptClass;
     versionCommand:               VersionCommandClass;
+    workbenchUpdate?:             WorkbenchUpdateClass;
     workspaceContext:             WorkspaceContextClass;
     WorkspaceTask?:               WorkspaceTaskElement;
 }
@@ -2250,7 +2254,7 @@ export interface EvidenceReadResultElement {
     content_page?:        ContentPageClass;
     content_state?:       ContentState;
     continuation?:        EvidenceContinuationClass;
-    effective_structure?: KnowledgeCreateQueryExampleStructure | null;
+    effective_structure?: KnowledgeEntryQueryExampleStructure | null;
     kind:                 EvidenceReadResultKind;
     ref?:                 EvidenceRefElement;
     state:                EvidenceReadResultState;
@@ -2296,7 +2300,7 @@ export interface MemoryElement {
 
 export type ContentState = "complete" | "partial";
 
-export type KnowledgeCreateQueryExampleStructure = SemanticStructure;
+export type KnowledgeEntryQueryExampleStructure = SemanticStructure;
 
 export type EvidenceReadResultKind = "knowledge" | "memory" | "skill";
 
@@ -2444,33 +2448,38 @@ export interface IdentityClass {
 
 export type ModelLabel = "本地模拟模型" | "DeepSeek Flash" | "DeepSeek V4 Pro";
 
-/**
- * 独立对象首次创建时自动归属可信登录者；请求不接受负责人字段，后续调整使用独立管理接口。
- */
-export interface KnowledgeCreateClass {
-    body: string;
-    /**
-     * 对象自身的显式业务域；省略或空值表示未分类，不从关联对象继承。
-     */
-    business_domain?:  string;
-    kind:              KindElement;
-    name:              string;
-    operation_id:      string;
-    related_ids:       string[];
-    source_url?:       null | string;
-    structured_value?: KnowledgeCreateQueryExampleStructure | null;
+export interface KnowledgeBatchEditClass {
+    objects:      [KnowledgeEditGroupElement, ...KnowledgeEditGroupElement[]];
+    operation_id: string;
 }
 
-export type KindElement = "table" | "field" | "metric" | "document" | "relationship" | "term" | "query_example";
+export interface KnowledgeEditGroupElement {
+    /**
+     * 同一对象内按序应用的条目修改；任一条目校验失败则整批回滚。
+     */
+    edits: [EditElement, ...EditElement[]];
+    /**
+     * 暂存这些条目时读到的对象版本。
+     */
+    expected_version: string;
+    object_id:        string;
+}
 
-/**
- * 将同一来源的业务文档按自然章节组合阅读；parts保留原引用身份，编辑时一次提交全部章节。
- */
-export interface KnowledgeDocumentClass {
-    body:     string;
-    can_edit: boolean;
-    parts:    [KnowledgeObjectElement, ...KnowledgeObjectElement[]];
-    title:    string;
+export interface EditElement {
+    clear_override?: boolean;
+    entry_id:        string;
+    related_ids?:    string[];
+    source_url?:     null | string;
+    /**
+     * 本条目明确保存的人工陈述及支持提取声明；身份和origin由服务端生成。
+     */
+    statements?:       HumanStatementInputElement[];
+    structured_value?: KnowledgeEntryQueryExampleStructure | null;
+    value:             string;
+}
+
+export interface KnowledgeBatchReceiptClass {
+    objects: KnowledgeObjectElement[];
 }
 
 export interface KnowledgeObjectElement {
@@ -2505,7 +2514,7 @@ export interface KnowledgeObjectElement {
 }
 
 export interface KnowledgeEntryElement {
-    effective_structure?: KnowledgeCreateQueryExampleStructure | null;
+    effective_structure?: KnowledgeEntryQueryExampleStructure | null;
     effective_value:      string;
     entry_id:             string;
     human_override:       null | KnowledgeEntryHumanOverride;
@@ -2518,21 +2527,23 @@ export interface KnowledgeEntryElement {
 }
 
 export interface KnowledgeEntryHumanOverride {
-    structured_value?: KnowledgeCreateQueryExampleStructure | null;
+    structured_value?: KnowledgeEntryQueryExampleStructure | null;
     [property: string]: unknown;
 }
 
 export type ReviewState = "unverified" | "confirmed" | "needs_review";
 
 export interface KnowledgeEntrySourceFacts {
-    structured_value?: KnowledgeCreateQueryExampleStructure | null;
+    structured_value?: KnowledgeEntryQueryExampleStructure | null;
     [property: string]: unknown;
 }
 
 export interface KnowledgeEntrySuggestion {
-    structured_value?: KnowledgeCreateQueryExampleStructure | null;
+    structured_value?: KnowledgeEntryQueryExampleStructure | null;
     [property: string]: unknown;
 }
+
+export type KindElement = "table" | "field" | "metric" | "document" | "relationship" | "term" | "query_example";
 
 export interface KnowledgeObjectPrefillStatus {
     attempt_id: string;
@@ -2551,6 +2562,33 @@ export interface KnowledgeObjectPreparationStatus {
  * 平台移除与人工停用分开；重新出现只能恢复平台导致的停用。
  */
 export type StateOrigin = "platform" | "human";
+
+/**
+ * 独立对象首次创建时自动归属可信登录者；请求不接受负责人字段，后续调整使用独立管理接口。
+ */
+export interface KnowledgeCreateClass {
+    body: string;
+    /**
+     * 对象自身的显式业务域；省略或空值表示未分类，不从关联对象继承。
+     */
+    business_domain?:  string;
+    kind:              KindElement;
+    name:              string;
+    operation_id:      string;
+    related_ids:       string[];
+    source_url?:       null | string;
+    structured_value?: KnowledgeEntryQueryExampleStructure | null;
+}
+
+/**
+ * 将同一来源的业务文档按自然章节组合阅读；parts保留原引用身份，编辑时一次提交全部章节。
+ */
+export interface KnowledgeDocumentClass {
+    body:     string;
+    can_edit: boolean;
+    parts:    [KnowledgeObjectElement, ...KnowledgeObjectElement[]];
+    title:    string;
+}
 
 /**
  * 完整Markdown与完整片段版本集合；服务端逐一授权，正文与后台顺序同事务保存，重复操作返回原回执。
@@ -2579,7 +2617,7 @@ export interface KnowledgeEditClass {
      * 本次明确保存的人工陈述及支持提取声明；身份和origin由服务端生成，未提供时不编造完整性。
      */
     statements?:       HumanStatementInputElement[];
-    structured_value?: KnowledgeCreateQueryExampleStructure | null;
+    structured_value?: KnowledgeEntryQueryExampleStructure | null;
     value:             string;
 }
 
@@ -2704,7 +2742,7 @@ export interface KnowledgeReadResultClass {
     content_page?:        ContentPageClass;
     content_state?:       ContentState;
     continuation?:        EvidenceContinuationClass;
-    effective_structure?: KnowledgeCreateQueryExampleStructure | null;
+    effective_structure?: KnowledgeEntryQueryExampleStructure | null;
     kind:                 KnowledgeReadResultKind;
     ref:                  EvidenceRefElement;
     state:                EvidenceReadResultState;
@@ -3166,7 +3204,7 @@ export interface PrefillResultEntry {
     entry_id:          string;
     evidence:          [PurpleEvidence, ...PurpleEvidence[]];
     gaps:              string[];
-    structured_value?: KnowledgeCreateQueryExampleStructure | null;
+    structured_value?: KnowledgeEntryQueryExampleStructure | null;
     value:             string;
 }
 
@@ -3732,6 +3770,12 @@ export type ToolOutcomeType = "succeeded" | "failed";
 export interface VersionCommandClass {
     expected_version: string;
     operation_id:     string;
+}
+
+export interface WorkbenchUpdateClass {
+    query_list?: QueryListClass;
+    runs?:       RunSnapshotElement[];
+    tasks?:      TaskSnapshotElement[];
 }
 
 export interface CreateConversation {
@@ -4477,7 +4521,7 @@ export interface TableAnalysisPreference {
 }
 
 export interface KnowledgeEntry {
-    effective_structure?: KnowledgeEntryQueryExampleStructure | null;
+    effective_structure?: KnowledgeEntryQueryExampleStructureClass | null;
     effective_value:      string;
     entry_id:             string;
     human_override:       null | KnowledgeEntryHumanOverrideObject;
@@ -4489,7 +4533,7 @@ export interface KnowledgeEntry {
     suggestion:           KnowledgeEntrySuggestionObject;
 }
 
-export type KnowledgeEntryQueryExampleStructure = SemanticStructure;
+export type KnowledgeEntryQueryExampleStructureClass = SemanticStructure;
 
 export interface ComputedMetric {
     /**
@@ -4531,12 +4575,12 @@ export interface QueryExampleVerification {
 }
 
 export interface KnowledgeEntryHumanOverrideObject {
-    structured_value?: KnowledgeEntryQueryExampleStructure | null;
+    structured_value?: KnowledgeEntryQueryExampleStructureClass | null;
     [property: string]: unknown;
 }
 
 export interface KnowledgeEntrySourceFactsObject {
-    structured_value?: KnowledgeEntryQueryExampleStructure | null;
+    structured_value?: KnowledgeEntryQueryExampleStructureClass | null;
     [property: string]: unknown;
 }
 
@@ -4599,7 +4643,7 @@ export interface SemanticReference {
 }
 
 export interface KnowledgeEntrySuggestionObject {
-    structured_value?: KnowledgeEntryQueryExampleStructure | null;
+    structured_value?: KnowledgeEntryQueryExampleStructureClass | null;
     [property: string]: unknown;
 }
 
@@ -4713,7 +4757,7 @@ export interface KnowledgeEdit {
      * 本次明确保存的人工陈述及支持提取声明；身份和origin由服务端生成，未提供时不编造完整性。
      */
     statements?:       HumanStatementInput[];
-    structured_value?: KnowledgeEntryQueryExampleStructure | null;
+    structured_value?: KnowledgeEntryQueryExampleStructureClass | null;
     value:             string;
 }
 
@@ -4756,7 +4800,7 @@ export interface KnowledgeEntryEdit {
      * 本条目明确保存的人工陈述及支持提取声明；身份和origin由服务端生成。
      */
     statements?:       HumanStatementInput[];
-    structured_value?: KnowledgeEntryQueryExampleStructure | null;
+    structured_value?: KnowledgeEntryQueryExampleStructureClass | null;
     value:             string;
 }
 
@@ -4774,7 +4818,7 @@ export interface KnowledgeCreate {
     operation_id:      string;
     related_ids:       string[];
     source_url?:       null | string;
-    structured_value?: KnowledgeEntryQueryExampleStructure | null;
+    structured_value?: KnowledgeEntryQueryExampleStructureClass | null;
 }
 
 export interface VersionCommand {
@@ -5164,7 +5208,7 @@ export type KnowledgeReadResult = {
     content_page: ContentPage;
     structure_text?: string;
     structure_page?: ContentPage;
-    effective_structure?: KnowledgeEntryQueryExampleStructure | null;
+    effective_structure?: KnowledgeEntryQueryExampleStructureClass | null;
     structure_dependencies?: EvidenceRef[];
     structure_coverage?: FluffyStructureCoverage;
     supports: DeliveredSupport[];
@@ -5509,99 +5553,6 @@ export interface DataToolOutcomeContextResetClass {
     task_id:           string;
 }
 
-export interface QueryList {
-    confirmation_blocked: boolean;
-    queries:              QueryView[];
-}
-
-export interface QueryView {
-    cancel_state:       string;
-    check_state:        string;
-    condition_version:  string;
-    confirmation_state: string;
-    conversation_id:    string;
-    draft_version:      string;
-    error:              null | string;
-    error_details?:     QueryViewErrorDetailsClass | null;
-    execution_state:    string;
-    id:                 string;
-    knowledge_refs?:    EvidenceRef[];
-    parameters?:        { [key: string]: unknown };
-    replaces_query_id?: null | string;
-    result_ref:         null | string;
-    /**
-     * 草稿工具回执的非阻断诊断；查询读取接口不承诺重现此报告。
-     */
-    semantic_checks?: SemanticCheckReport;
-    /**
-     * 保存草稿时的口径决策及依据；旧记录返回null，不从自由文本或模型历史猜回填。
-     */
-    semantic_resolution?: ConditionsQuerySemanticResolution | null;
-    sql?:                 string;
-    summary?:             string;
-    target_id:            string;
-    task_id:              string;
-    /**
-     * 正文按历史记录展示：来源已改版或结果已漂移，但记录仍可核。SQL、参数与说明保留原样，不能作为当前口径或执行依据；需要当前数据须重新确认。
-     */
-    text_historical?: boolean;
-    /**
-     * 正文来源失效或无法核实时只返回查询身份和控制状态；SQL、参数、说明、依据及诊断正文均不可返回。
-     */
-    text_unavailable?: boolean;
-    /**
-     * 保存草稿时任务条件声明的时间基准；旧草稿返回null。观察截点与批次是用户声明，不得以request_clock或平台data_freshness冒充。
-     */
-    time_basis?: TimeBasis | null;
-    /**
-     * 原查询首次query_changed事件的持久序号，作为对话时间线中查询卡的稳定锚点；旧记录无对应事件时为null，旧Schema解码兼容可缺省，前端已有值不被后续有限事件页覆盖。
-     */
-    timeline_event_seq?: null | string;
-}
-
-export interface QueryViewErrorDetailsClass {
-    code:    string;
-    message: string;
-}
-
-/**
- * 草稿工具回执的非阻断诊断；查询读取接口不承诺重现此报告。
- */
-export interface SemanticCheckReport {
-    checks:   FluffyCheck[];
-    coverage: FluffyCoverage;
-}
-
-export interface FluffyCheck {
-    coverage_limit: string;
-    evidence_refs:  SemanticEvidenceRef[];
-    finding:        string;
-    rule:           string;
-    state:          CheckState;
-}
-
-export interface SemanticEvidenceRef {
-    object_id: string;
-    version:   string;
-}
-
-export interface FluffyCoverage {
-    missing_semantics:      string[];
-    sql_shape:              SQLShape;
-    supported_scope:        string[];
-    unsupported_constructs: string[];
-}
-
-/**
- * 草稿保存时从任务当前条件投影的时间基准；统计起止沿time_start/time_end，观察截点/批次只在time_roles中声明。
- */
-export interface TimeBasis {
-    time_end:   null | string;
-    time_roles: TimeRole[];
-    time_start: null | string;
-    timezone:   null | string;
-}
-
 export interface QueryHistoryQuery {
     before_id?: string;
     q?:         string;
@@ -5717,7 +5668,7 @@ export interface PrefillResultEntryClass {
     entry_id:          string;
     evidence:          [FluffyEvidence, ...FluffyEvidence[]];
     gaps:              string[];
-    structured_value?: KnowledgeEntryQueryExampleStructure | null;
+    structured_value?: KnowledgeEntryQueryExampleStructureClass | null;
     value:             string;
 }
 
@@ -7102,6 +7053,126 @@ export interface RefreshRunContext {
     lease_epoch:      string;
     run_id:           string;
     sdk_tool_call_id: string;
+}
+
+export interface KnowledgeBatchEdit {
+    objects:      [KnowledgeEditGroup, ...KnowledgeEditGroup[]];
+    operation_id: string;
+}
+
+export interface KnowledgeEditGroup {
+    /**
+     * 同一对象内按序应用的条目修改；任一条目校验失败则整批回滚。
+     */
+    edits: [KnowledgeEntryEdit, ...KnowledgeEntryEdit[]];
+    /**
+     * 暂存这些条目时读到的对象版本。
+     */
+    expected_version: string;
+    object_id:        string;
+}
+
+export interface KnowledgeBatchReceipt {
+    objects: KnowledgeObject[];
+}
+
+export interface WorkbenchUpdate {
+    query_list?: QueryList;
+    runs?:       RunSnapshot[];
+    tasks?:      TaskSnapshot[];
+}
+
+export interface QueryList {
+    confirmation_blocked: boolean;
+    queries:              QueryView[];
+}
+
+export interface QueryView {
+    cancel_state:       string;
+    check_state:        string;
+    condition_version:  string;
+    confirmation_state: string;
+    conversation_id:    string;
+    draft_version:      string;
+    error:              null | string;
+    error_details?:     QueryViewErrorDetailsClass | null;
+    execution_state:    string;
+    id:                 string;
+    knowledge_refs?:    EvidenceRef[];
+    parameters?:        { [key: string]: unknown };
+    replaces_query_id?: null | string;
+    result_ref:         null | string;
+    /**
+     * 草稿工具回执的非阻断诊断；查询读取接口不承诺重现此报告。
+     */
+    semantic_checks?: SemanticCheckReport;
+    /**
+     * 保存草稿时的口径决策及依据；旧记录返回null，不从自由文本或模型历史猜回填。
+     */
+    semantic_resolution?: ConditionsQuerySemanticResolution | null;
+    sql?:                 string;
+    summary?:             string;
+    target_id:            string;
+    task_id:              string;
+    /**
+     * 正文按历史记录展示：来源已改版或结果已漂移，但记录仍可核。SQL、参数与说明保留原样，不能作为当前口径或执行依据；需要当前数据须重新确认。
+     */
+    text_historical?: boolean;
+    /**
+     * 正文来源失效或无法核实时只返回查询身份和控制状态；SQL、参数、说明、依据及诊断正文均不可返回。
+     */
+    text_unavailable?: boolean;
+    /**
+     * 保存草稿时任务条件声明的时间基准；旧草稿返回null。观察截点与批次是用户声明，不得以request_clock或平台data_freshness冒充。
+     */
+    time_basis?: TimeBasis | null;
+    /**
+     * 原查询首次query_changed事件的持久序号，作为对话时间线中查询卡的稳定锚点；旧记录无对应事件时为null，旧Schema解码兼容可缺省，前端已有值不被后续有限事件页覆盖。
+     */
+    timeline_event_seq?: null | string;
+}
+
+export interface QueryViewErrorDetailsClass {
+    code:    string;
+    message: string;
+}
+
+/**
+ * 草稿工具回执的非阻断诊断；查询读取接口不承诺重现此报告。
+ */
+export interface SemanticCheckReport {
+    checks:   FluffyCheck[];
+    coverage: FluffyCoverage;
+}
+
+export interface FluffyCheck {
+    coverage_limit: string;
+    evidence_refs:  SemanticEvidenceRef[];
+    finding:        string;
+    rule:           string;
+    state:          CheckState;
+}
+
+export interface SemanticEvidenceRef {
+    object_id: string;
+    version:   string;
+}
+
+export interface FluffyCoverage {
+    missing_semantics:      string[];
+    sql_shape:              SQLShape;
+    supported_scope:        string[];
+    unsupported_constructs: string[];
+}
+
+/**
+ * 草稿保存时从任务当前条件投影的时间基准；统计起止沿time_start/time_end，观察截点/批次只在time_roles中声明。
+ */
+export interface TimeBasis {
+    time_end:   null | string;
+    time_roles: TimeRole[];
+    time_start: null | string;
+    timezone:   null | string;
 }
 
 

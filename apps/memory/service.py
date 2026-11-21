@@ -4,6 +4,7 @@ import json
 import os
 import threading
 import time
+from contextlib import contextmanager
 from pathlib import Path
 
 from providers import BudgetedEmbedding, BudgetedLLM, ModelGateway
@@ -12,6 +13,40 @@ from store import MemoryError, ReceiptStore
 
 def digest(value):
     return hashlib.sha256(json.dumps(value, ensure_ascii=False, sort_keys=True).encode()).hexdigest()
+
+
+class ActiveVectors:
+    """同一分段内，检索可并发。切换只等已开始的检索完成。"""
+    def __init__(self):
+        self.writes = threading.Lock()
+        self.condition = threading.Condition()
+        self.readers = 0
+        self.publishing = False
+
+    @contextmanager
+    def read(self):
+        with self.condition:
+            self.condition.wait_for(lambda: not self.publishing)
+            self.readers += 1
+        try:
+            yield
+        finally:
+            with self.condition:
+                self.readers -= 1
+                if self.readers == 0:
+                    self.condition.notify_all()
+
+    @contextmanager
+    def publish(self):
+        with self.condition:
+            self.publishing = True
+            self.condition.wait_for(lambda: self.readers == 0)
+        try:
+            yield
+        finally:
+            with self.condition:
+                self.publishing = False
+                self.condition.notify_all()
 
 
 class MemoryService:
@@ -26,10 +61,7 @@ class MemoryService:
         self.store = ReceiptStore(directory / "receipts.sqlite")
         self.gateway = ModelGateway(config, self.store)
         self.fingerprint = digest(config)
-        # 写操作按租户串行：同一租户的提取/入库不交错改向量映射；跨租户并发
-        # 进行，/search完全无锁，慢提取不再阻塞其他请求的常规检索。
-        self._tenant_locks = {}
-        self._locks_guard = threading.Lock()
+        self.vectors = [ActiveVectors() for _ in range(256)]
         print("startup service=memory stage=configuration_started", flush=True)
         self.memory = Memory.from_config({
             "vector_store": {"provider": "milvus", "config": {
@@ -37,30 +69,45 @@ class MemoryService:
                 "collection_name": config["collection"], "embedding_model_dims": 1024, "metric_type": "COSINE", "db_name": "default"}},
             "embedder": {"provider": "openai", "config": {"model": "qwen3.7-text-embedding", "embedding_dims": 1024, "api_key": "host-adapter"}},
             "llm": {"provider": "openai", "config": {"api_key": "host-adapter", "enable_vision": False}},
+            # 锁定版本的 SQLiteManager 已在历史读写时持锁。
             "history_db_path": str(directory / "history.sqlite"), "reranker": None})
+        vector = self.memory.vector_store
+        if vector.client.describe_collection(vector.collection_name)["consistency_level"] != 0:
+            vector.client.alter_collection_properties(
+                collection_name=vector.collection_name, properties={"consistency_level": "Strong"},
+            )
         print(f"startup service=memory stage=configuration_ready elapsed={time.monotonic()-started:.2f}s", flush=True)
         # 固定SDK构造器不发模型请求；替换公开实例属性以沿用宿主预算，SDK算法保持原样。
         self.memory.llm = BudgetedLLM(self.gateway)
         self.memory.embedding_model = BudgetedEmbedding(self.gateway)
 
     def handle(self, path, request):
-        self.gateway.settle_pending()
         self.gateway.binding = request["budget"]
         self.gateway.failure = None
         if path == "/search":
             return self.search(request)
-        with self._tenant_gate(self.tenant(request)):
+        with self._active_vectors(self.tenant(request)).writes:
             if path == "/extract":
                 return self.extract(request)
             return self.index(request)
 
-    def _tenant_gate(self, tenant):
-        with self._locks_guard:
-            lock = self._tenant_locks.get(tenant)
-            if lock is None:
-                lock = threading.Lock()
-                self._tenant_locks[tenant] = lock
-            return lock
+    def _active_vectors(self, tenant):
+        return self.vectors[hash(tenant) % len(self.vectors)]
+
+    def maintain(self, stop):
+        while not stop.is_set():
+            self.gateway.settle_pending()
+            for key, fingerprint, record in self.store.retired():
+                try:
+                    with self._active_vectors(record["tenant"]).writes:
+                        active = self.store.asset(record["identity"])["memory_ids"]
+                        for memory_id in record["retired"]:
+                            if memory_id not in active and self.memory.vector_store.get(memory_id):
+                                self.memory.delete(memory_id)
+                        self.store.write_operation(key, fingerprint, "completed", {"receipt": record["receipt"]})
+                except Exception as error:
+                    print(f"memory_vector_cleanup_failed kind={type(error).__name__}", flush=True)
+            stop.wait(2)
 
     @staticmethod
     def tenant(r):
@@ -98,8 +145,7 @@ class MemoryService:
             body = "\n".join(v["memory"].strip() for v in items)
             if len(body) > 12000:
                 raise MemoryError("memory_unavailable")
-            # 不做同步flush：pymilvus默认Session一致性下本进程写入即可见，
-            # 强制flush只会制造微小段碎片与磁盘写放大。
+            # 进程启动时设定集合强一致，后续读回新向量无需主动 flush。
             self.store.write_operation(key, fp, "prepared", {"body": body, "ids": [v["id"] for v in items], "owner_id": r["owner_id"], "space_id": r["space_id"]})
             return {"operation_id": r["operation_id"], "body": body, "replayed": False}
         except Exception as e:
@@ -109,7 +155,8 @@ class MemoryService:
 
     def index(self, r):
         asset, key = r["asset"], "index:" + r["operation_id"]
-        identity = self.tenant(r) + "::" + asset["id"]
+        tenant = self.tenant(r)
+        identity = tenant + "::" + asset["id"]
         fp = digest([self.fingerprint, identity, asset, r["extraction_operation_id"]])
         previous = self.store.operation(key, fp)
         current = self.store.asset(identity)
@@ -120,8 +167,6 @@ class MemoryService:
         if previous and previous["state"] == "completed":
             return previous["receipt"]
         old_ids = current["memory_ids"] if current else []
-        # 先取消旧映射；检索返回前还会核对这份映射及Rust正式记录。
-        self.store.write_asset(identity, version, "pending", old_ids)
         ids = (previous or {}).get("ids")
         if asset["state"] == "enabled" and ids is None:
             if r["extraction_operation_id"]:
@@ -147,29 +192,25 @@ class MemoryService:
                     raise MemoryError("memory_unavailable")
         ids = ids or []
         self.store.write_operation(key, fp, "prepared", {"ids": ids})
-        # 下列仅改向量元数据或删除，可按相同IDs重放，不重新infer或embedding。
-        for memory_id in old_ids:
-            if memory_id not in ids and self.memory.vector_store.get(memory_id):
-                self.memory.delete(memory_id)
-        if asset["state"] == "enabled":
-            for memory_id in ids:
-                record = self.memory.vector_store.get(memory_id)
-                if not record:
-                    raise MemoryError("memory_unavailable")
-                self.memory.vector_store.update(memory_id, payload={**record.payload, "commit_state": "ready", "asset_id": asset["id"], "asset_version": asset["version"]})
-        self.store.write_asset(identity, version, receipt["state"], ids if asset["state"] == "enabled" else [])
-        self.store.write_operation(key, fp, "completed", {"receipt": receipt})
+        with self._active_vectors(tenant).publish():
+            if asset["state"] == "enabled":
+                for memory_id in ids:
+                    record = self.memory.vector_store.get(memory_id)
+                    if not record:
+                        raise MemoryError("memory_unavailable")
+                    self.memory.vector_store.update(memory_id, payload={**record.payload, "commit_state": "ready", "asset_id": asset["id"], "asset_version": asset["version"]})
+            self.store.publish_asset(key, fp, tenant, identity, version, ids, receipt,
+                                     [memory_id for memory_id in old_ids if memory_id not in ids])
         return receipt
 
     def search(self, r):
         key = 'search:' + r.get('operation_id', 'test')
         fp = digest([self.fingerprint, self.tenant(r), r['query']])
-        previous = self.store.operation(key, fp)
+        previous = self.store.claim_search(key, fp)
         if previous:
             if previous['state'] != 'completed':
                 raise MemoryError('memory_operation_unknown')
             return previous['receipt']
-        self.store.write_operation(key, fp, 'unknown', {})
         receipt = self.search_current(r)
         self.store.write_operation(key, fp, 'completed', {'receipt': receipt})
         return receipt
@@ -180,6 +221,10 @@ class MemoryService:
             raise MemoryError(failure)
 
     def search_current(self, r):
+        with self._active_vectors(self.tenant(r)).read():
+            return self.search_active(r)
+
+    def search_active(self, r):
         result = self.memory.search(r["query"], top_k=200, threshold=0.0, rerank=False,
             filters={"user_id": self.tenant(r), "owner_id": r["owner_id"], "space_id": r["space_id"], "commit_state": "ready"})
         self.check_calls()

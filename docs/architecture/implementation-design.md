@@ -136,7 +136,9 @@ AppError = { code, message, retryable, request_id, resource_ref? }
 | `GET/POST /conversations/{id}/model-selection` | 读取；或 `selection + expected_version` → 已保存选择与版本 | `conversation_models` / M05+M08；仅本人对话 |
 | `POST /conversations/{id}/messages` | 客户端消息 ID、正文、可选模型选择 → 持久消息 ID、归属状态、事件序号 | `receive_message` / M05+M07+M08+M10 |
 | `POST /conversations/{id}/messages/{message_id}/withdraw` | 命令 ID → 撤回状态及剩余确认阻塞 | `withdraw_pending_message` / M05+M07+M08；已应用内容只能新修订 |
-| `GET /conversations/{id}/events?after_seq=` | 已接收序号 → 有序事件/SSE | `read_events` / M05；游标过旧返回需快照重同步 |
+| `GET /conversations/{id}/events?after_seq=&view=workbench` | 已接收序号 → 持久事件及工作台状态增量 | M05 先订阅，再补读持久历史以防漏接；断层以快照重同步，省略 `view` 保留原事件消费方式 |
+| `GET /workspace/events` | 当前会话身份 → 目录、纠错和权限变更信号 | M01 绑定空间；对象标识、版本和正文由有权读取接口提供 |
+| `POST /internal/live-changes` | Worker 或平台适配器通知 → 204 | 内部凭据；接收已提交写入，经 API 广播 |
 | `GET /conversations/{id}/snapshot` | 会话 ID → 任务/请求/输出状态与快照截止序号 | `read_conversation` / M05+M06+M07+M08 |
 | `POST /queries/{id}/confirm` | 显式客户端提交草稿版本、条件版本、确认ID → 同一查询状态；Web改用聊天 | `confirm_query` / M05+M06+M07+M10 |
 | `GET /queries/{id}` | 查询 ID → 执行与取消状态、绑定条件 | `read_query` / M07 |
@@ -147,6 +149,7 @@ AppError = { code, message, retryable, request_id, resource_ref? }
 | `GET /knowledge`、`GET /knowledge/{id}` | 空间、筛选/ID、版本可选 → 有权对象与出处 | `read_knowledge` / M01+M02 |
 | `POST /knowledge` | 命令 ID、类型、正文/引用、可选来源稳定键；无起点版本 → 首版或原创建回执 | `create_knowledge` / M01+M02+M10 |
 | `PATCH /knowledge/{id}` | 命令 ID、正文/引用补丁、必填起点版本、可选提案 ID/修订号 → 新版本、索引状态 | `save_knowledge` / M01+M02+M10；基版本冲突不得覆盖 |
+| `PATCH /knowledge/batch-entries` | 命令 ID、多个目标与起点版本、条目/结构改动 → 对象最终版本 | M01+M02；同一事务保存全部改动、回执和最终索引任务 |
 | `GET /knowledge-proposals` | → 本人建议列表、基版本和依据 | `proposals` / M01+M02 |
 | `POST /knowledge-proposals/{id}/apply` | 命令ID、目标起点版本 → 维护者本人应用后的知识版本 | `apply_proposal` / M01+M02；先核对维护权限与当前基版 |
 | `POST /knowledge/{id}/disable`、`POST /knowledge/{id}/enable`、`POST /knowledge/{id}/delete` | 命令 ID、起点版本 → 状态及引用失效回执 | `change_knowledge_state` / M01+M02+M10 |
@@ -174,11 +177,11 @@ AppError = { code, message, retryable, request_id, resource_ref? }
 
 - `GET /conversations?q=&before_id=`按当前用户的首问题标题搜索，稳定顺序为创建时刻/ID，返回`next_before_id`；每页100条。
 - `GET /queries?q=&before_id=` 每页最多交付 50 条可见查询，返回的游标取自本页最后交付的查询。搜索匹配仍可读的已存 SQL 和摘要。来源被撤回后，无关键词列表可显示查询状态，有关键词时只有可读正文参与匹配。
-- 会话事件流使用首次请求的起始序号和浏览器最近接收的事件号续传。流关闭后停止读库，登录撤销或过期会结束对应连接。已打开且可见的报告定期复核平台权限，同一时刻只有一个读取请求。
+- HTTP 会话从连接池直查。会话事件流按 `after_seq` 与 `Last-Event-ID` 较大值补读，然后接收进程内广播。登录撤销或过期结束对应流，常规保活只发注释。Worker 的查询状态、目录写入在提交后发通知，持久事件可在重连时补齐。空间权限变化会触发历史投影重核及打开的报告、查询结果重新读取，窗口重新获得焦点时也会重验权限。
 - 管理目录 `GET /knowledge?directory=all|maintained&directory_view=grouped` 在服务端分页前排除字段和关系，保留表、指标、文档、术语；省略 view 或 flat 保持原列表契约。字段/关系仍由所属表的关联接口读取，权限、对象身份及来源不变。直接对象地址仍可定位字段，单独字段查找需显式展开。
 
 - `GET /conversations/{id}/snapshot?before_seq=`读取旧事件页，`after_seq=`读取新事件页。响应携带最后序号和后续状态；React按全部已加载事件投影，完整提交替代同次片段，恢复隐藏旧尝试。带报告的任务投影含可选`report_timeline_event_seq`——该报告跨全部版本的首次`analysis_report_saved`事件序号，由同一读取事务经会话模块窄查询组合（覆盖Snapshot与refresh同一路径）；报告卡优先按它定位，当前事件页缺保存事件时不落0，补旧页只可能前移一次，锚点只随任务`report_ref.report_id`匹配生效，不注入事件流、不影响分页游标。无保存事件的旧记录省略该字段并回退已加载页事件。
-- `GET /knowledge?after_id=`按ID分页；`q=`做有界词法检索并回源。`search_coverage`只表达候选完整性和固定工作量上限，不提供权限过滤数量。长JSON的候选排序按主键扫描，正文在确定ID后读取。维护页整批刷新在全部子请求收尾后再安排下一次，保存/同步意图合并补一次；页面或用户生命周期结束时取消读取并忽略晚到结果，保留已加载分页、草稿与对象各自版本比较。第一页已包含的完整对象不在该批再次取详情。
+- `GET /knowledge?after_id=`按ID分页；`q=`做有界词法检索并回源。`search_coverage`只表达候选完整性和固定工作量上限，不提供权限过滤数量。长JSON的候选排序按主键扫描，正文在确定ID后读取。目录变化由有权目录和已打开的关联列表读取并按对象版本合并。来源同步运行期间退避读取轻量状态，结束后停止。条目和结构编辑可在页面内暂存，离开前询问，批量提交只发一次。
 - `PATCH /knowledge/{id}`的document正文编辑可同时改变`source_url`和`related_ids`，保存到同一版本；正文创建、编辑、响应均允许100000字符。URL和关联对象权限沿用创建规则。
 - M05在消息接收时持久保存`request_clock`；M08提供`budget_message_in_tx`读取原预算消息身份，M07结果编排把该身份交给M05读取原时钟。不会通过客户端ID的文本前缀判断原消息。首次聊天执行的查询预算绑定执行消息；结果解释以实际SQL的绝对日期参数为准，不按执行日期重新展开相对时间。
 
@@ -355,7 +358,7 @@ python3 docs/architecture/check-implementation.py
 
 跨语言使用JSON Schema 2020-12与OpenAPI 3.1，quicktype生成Rust/TypeScript；运行时校验与业务规则分开。会话恢复保存真实SDK会话树；对于assistant工具调用后退出，只查证或完成已登记调用，再将工具回执交还Pi继续。稳定operation_id、origin_run_id、recovery_chain_id、budget_scope_id和输入request_id跨恢复保留。此接入处理不产生第二套Agent规划循环。
 
-实际交付次数与作业领取次数分开；会话忙退回等待，交付最多四次后保存明确失败。准备期间沿既有心跳维持M10作业租约；M05会话行锁固定本次运行代次，上下文与检查点准备完成后才正式领取会话租约，并在同事务内续验作业租约、记录本次交付次数及提交运行。准备失败回滚，不能提交一个尚未派发且会话租约已经过期的attempt；两份租约、原恢复链、操作身份和预算的含义不变。SSE当前为持久事件批次，React轮询持久快照；完整上下文、持续推送、查询、取消及个人资产按后续增量补齐。实现这些最小接口不意味着完整模块或MVP已完成。
+实际交付次数与作业领取次数分开；会话忙退回等待，交付最多四次后保存明确失败。准备期间沿既有心跳维持M10作业租约；M05会话行锁固定本次运行代次，上下文与检查点准备完成后才正式领取会话租约，并在同事务内续验作业租约、记录本次交付次数及提交运行。准备失败回滚，不能提交一个尚未派发且会话租约已经过期的attempt；两份租约、原恢复链、操作身份和预算的含义不变。当前 SSE 在建连时补读持久事件，随后由 API 按会话广播；空闲连接只发保活注释。实现这些最小接口不意味着完整模块或MVP已完成。
 
 
 ### Pi 会话持久化与旧检查点迁移

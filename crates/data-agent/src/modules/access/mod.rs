@@ -130,8 +130,9 @@ mod store;
 pub use store::{
     assign_in_tx, authorize_semantic_in_tx, can_create_in_tx, can_create_snapshot_in_tx,
     create_session_in_tx, has_maintenance_snapshot_in_tx, maintainable_ids_in_tx,
-    maintenance_in_tx, maintenance_snapshot_in_tx, register_batch_in_tx, register_creator_in_tx,
-    register_in_tx, resolve_session_in_tx, revoke_session_in_tx, sync_maintainer_in_tx,
+    maintenance_in_tx, maintenance_snapshot_in_tx, prune_sessions, register_batch_in_tx,
+    register_creator_in_tx, register_in_tx, resolve_session, revoke_session_in_tx,
+    sync_maintainer_in_tx,
 };
 
 // 会话令牌：256位随机数十六进制下发，库中只存其SHA-256摘要；库泄露不等于

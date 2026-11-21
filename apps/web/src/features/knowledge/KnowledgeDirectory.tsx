@@ -61,12 +61,12 @@ export function KnowledgeDirectory({ user, scope, current, revision, onSelect, o
     .map(kind => ({kind, objects: grouped.filter(object => object.kind === kind)}));
   return <>
     <div className="directory-filters">
-      <label className="form-label">按名称查找<input aria-label="管理目录名称" value={name} onChange={e => { const value = e.target.value; guard(() => { onSelect(null); setName(value); }); }} /></label>
-      <label className="form-label">对象状态<select aria-label="管理目录状态" value={state} onChange={e => { const value = e.target.value; guard(() => { onSelect(null); setState(value); }); }}>
+      <label className="form-label">按名称查找<input aria-label="管理目录名称" value={name} onChange={e => { const value = e.target.value; guard(() => { onSelect(null); setName(value); }, undefined, "knowledge"); }} /></label>
+      <label className="form-label">对象状态<select aria-label="管理目录状态" value={state} onChange={e => { const value = e.target.value; guard(() => { onSelect(null); setState(value); }, undefined, "knowledge"); }}>
         <option value="">全部状态</option><option value="enabled">启用</option><option value="disabled">停用</option>
       </select></label>
       <button disabled={loading} onClick={() => setRefresh(value => value + 1)}>刷新目录</button>
-      <label className="directory-expand"><input type="checkbox" checked={expanded} onChange={e => { const value=e.target.checked; guard(() => { onSelect(null); setExpanded(value); }); }}/>单独查找字段与关联</label>
+      <label className="directory-expand"><input type="checkbox" checked={expanded} onChange={e => { const value=e.target.checked; guard(() => { onSelect(null); setExpanded(value); }, undefined, "knowledge"); }}/>单独查找字段与关联</label>
     </div>
     {!expanded && <p className="quiet directory-hint">从表内查看字段、加工 SQL 与血缘。</p>}
     {sections.filter(section => section.objects.length).map(section => <section className="directory-group" key={section.kind} aria-label={knowledgeKindLabels[section.kind]}><h3>{knowledgeKindLabels[section.kind]}</h3>{section.objects.map(o => <button key={o.id} aria-current={o.id === current ? "true" : undefined} onClick={() => onSelect(o)}>

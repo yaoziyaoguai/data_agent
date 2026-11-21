@@ -1,9 +1,10 @@
-"""本机Mem0适配进程：显式配置、同源JSON Schema、内部凭据；检索无锁并发，写按租户串行。"""
+"""本机Mem0适配进程：同源JSON Schema、内部凭据及独立的记忆对账线程。"""
 import argparse
 import fcntl
 import json
 import os
 import re
+import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse
@@ -69,8 +70,6 @@ def main():
                 return self.reply(401, {"error": "unauthenticated"})
             if self.path not in ROUTES:
                 return self.reply(404, {"error": "not_available"})
-            # 无全局锁：并发边界由service内租户锁与线程局部状态承担，
-            # 慢提取不再把常规检索拖到超时。
             try:
                 length = int(self.headers.get("Content-Length", "0"))
                 if not 0 < length <= 131072:
@@ -90,7 +89,13 @@ def main():
 
     server = ThreadingHTTPServer(("127.0.0.1", args.port), Handler)
     print(f"startup service=memory stage=listening elapsed={time.monotonic()-_started:.2f}s", flush=True)
-    server.serve_forever()
+    stop = threading.Event()
+    maintenance = threading.Thread(target=service.maintain, args=(stop,), daemon=True)
+    maintenance.start()
+    try:
+        server.serve_forever()
+    finally:
+        stop.set()
 
 
 if __name__ == "__main__":

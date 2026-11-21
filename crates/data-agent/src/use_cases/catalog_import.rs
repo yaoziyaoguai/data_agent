@@ -211,6 +211,9 @@ async fn apply_page(pool: &MySqlPool, job: &jobs::SourceJob) -> Result<()> {
     } else {
         jobs::release_source_page_in_tx(&mut tx, job).await?;
     }
+    tx.notify(crate::live_changes::Change::Catalog {
+        space_id: ctx.space_id.clone(),
+    });
     tx.commit().await
 }
 async fn apply_table(

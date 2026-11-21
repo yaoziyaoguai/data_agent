@@ -1,18 +1,21 @@
 import { createContext, useCallback, useContext, useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { Modal } from "./Modal.tsx";
 
-type Guard = { register: (id: string, dirty: boolean, discard?: () => void) => () => void; leave: (action: () => void, id?: string) => boolean };
+type Guard = {
+  register: (id: string, dirty: boolean, discard?: () => void, retainView?: string) => () => void;
+  leave: (action: () => void, id?: string, destination?: string) => boolean;
+};
 const Context = createContext<Guard | null>(null);
 
 export function UnsavedChangesProvider({ children }: { children: ReactNode }) {
-  const changes = useRef(new Map<string, {dirty: boolean; discard?: () => void}>());
+  const changes = useRef(new Map<string, {dirty: boolean; discard?: () => void; retainView?: string}>());
   const [pending, setPending] = useState<(() => void) | null>(null);
-  const register = useCallback((id: string, dirty: boolean, discard?: () => void) => {
-    changes.current.set(id, {dirty, discard});
+  const register = useCallback((id: string, dirty: boolean, discard?: () => void, retainView?: string) => {
+    changes.current.set(id, {dirty, discard, retainView});
     return () => { changes.current.delete(id); };
   }, []);
-  const leave = useCallback((action: () => void, id?: string) => {
-    const ids = id ? [id] : [...changes.current.keys()];
+  const leave = useCallback((action: () => void, id?: string, destination?: string) => {
+    const ids = id ? [id] : [...changes.current.keys()].filter(key => !destination || changes.current.get(key)?.retainView !== destination);
     const dirty = ids.some(key => changes.current.get(key)?.dirty);
     if (dirty) setPending(() => () => {
       for (const key of ids) {
@@ -47,12 +50,12 @@ export function useNavigationGuard() {
   return guard.leave;
 }
 
-export function useUnsavedChanges(dirty: boolean, onDiscard?: () => void) {
+export function useUnsavedChanges(dirty: boolean, onDiscard?: () => void, retainView?: string) {
   const guard = useContext(Context);
   if (!guard) throw new Error("Editor requires UnsavedChangesProvider");
   const id = useId();
   const discard = useRef(onDiscard);
   discard.current = onDiscard;
-  useEffect(() => guard.register(id, dirty, () => discard.current?.()), [guard.register, id, dirty]);
+  useEffect(() => guard.register(id, dirty, () => discard.current?.(), retainView), [guard.register, id, dirty, retainView]);
   return Object.assign((action: () => void) => guard.leave(action, id), { markSaved: () => { guard.register(id, false); } });
 }

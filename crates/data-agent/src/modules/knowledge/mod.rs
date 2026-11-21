@@ -58,3 +58,8 @@ pub use store::index_progress_in_tx;
 mod preparation;
 pub use preparation::apply_preparation_in_tx;
 pub mod dependency_index;
+
+pub use store::{
+    apply_entry_in_tx, begin_entry_batch_in_tx, lock_entry_batch_in_tx, persist_entry_batch_in_tx,
+    record_entry_batch_in_tx,
+};

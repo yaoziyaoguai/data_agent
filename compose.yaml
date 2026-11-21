@@ -19,7 +19,7 @@ services:
       MYSQL_USER: data_agent
       MYSQL_ROOT_PASSWORD_FILE: /run/secrets/mysql_root_password
       MYSQL_PASSWORD_FILE: /run/secrets/mysql_app_password
-    command: ["--innodb-buffer-pool-size=268435456", "--max-connections=100", "--table-definition-cache=400", "--table-open-cache=400", "--temptable-max-ram=67108864"]
+    command: ["--innodb-buffer-pool-size=536870912", "--max-connections=300", "--table-definition-cache=400", "--table-open-cache=400", "--temptable-max-ram=67108864"]
     ports:
       - "127.0.0.1:13306:3306"
     volumes:

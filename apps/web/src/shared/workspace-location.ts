@@ -35,7 +35,7 @@ export function useWorkspaceLocation() {
       const allowed = leave(() => {
         if (immediate || !distance) { history.replaceState({ ...history.state, dataAgentPosition: index }, "", address(next)); apply(next, index); }
         else { approved = true; history.go(distance); }
-      });
+      }, undefined, next.view);
       immediate = false;
       if (!allowed) {
         if (distance) { restoring = true; history.go(-distance); }
@@ -45,13 +45,15 @@ export function useWorkspaceLocation() {
     window.addEventListener("popstate", back);
     return () => window.removeEventListener("popstate", back);
   }, [leave]);
-  const navigate = (patch: Partial<WorkspaceLocation>, replace = false) => leave(() => {
+  const navigate = (patch: Partial<WorkspaceLocation>, replace = false) => {
     const next = { ...current.current, ...patch };
-    if (address(next) !== address(current.current)) {
-      const index = position.current + (replace ? 0 : 1);
-      history[replace ? "replaceState" : "pushState"]({ dataAgentPosition: index }, "", address(next));
-      apply(next, index);
-    } else apply(next, position.current);
-  });
+    return leave(() => {
+      if (address(next) !== address(current.current)) {
+        const index = position.current + (replace ? 0 : 1);
+        history[replace ? "replaceState" : "pushState"]({ dataAgentPosition: index }, "", address(next));
+        apply(next, index);
+      } else apply(next, position.current);
+    }, undefined, next.view);
+  };
   return { location, navigate };
 }

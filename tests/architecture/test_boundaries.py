@@ -32,6 +32,9 @@ class Boundaries(unittest.TestCase):
   # 登记不放松边界：knowledge的store仍不得越界读ingestion或jobs的表。
   self.assertTrue(self.check('modules/knowledge/dependency_index/store.rs','sqlx::query("SELECT version FROM source_heads");'))
   self.assertTrue(self.check('modules/ingestion/store.rs','sqlx::query("SELECT state FROM background_jobs");'))
+ def test_source_line_limit(self):
+  self.assertFalse(self.check('use_cases/boundary.rs','// permitted\n'*800))
+  self.assertTrue(any('801 行' in error for error in self.check('use_cases/boundary.rs','// too long\n'*801)))
  def test_cli_rejects_deliberate_violations(self):
   for path,source in [('use_cases/bad.rs','sqlx::query("SELECT id FROM conversations");'),('modules/conversations/bad.rs','use crate::modules::analysis;')]:
    with self.subTest(path=path), tempfile.TemporaryDirectory() as temporary:

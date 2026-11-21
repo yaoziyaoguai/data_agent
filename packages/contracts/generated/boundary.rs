@@ -121,10 +121,13 @@ pub struct Boundary {
     pub host_checkpoint_reference: HostCheckpointReferenceClass,
     pub human_statement_input: Option<HumanStatementInputElement>,
     pub identity: IdentityClass,
+    pub knowledge_batch_edit: Option<KnowledgeBatchEditClass>,
+    pub knowledge_batch_receipt: Option<KnowledgeBatchReceiptClass>,
     pub knowledge_create: KnowledgeCreateClass,
     pub knowledge_document: Option<KnowledgeDocumentClass>,
     pub knowledge_document_edit: Option<KnowledgeDocumentEditClass>,
     pub knowledge_edit: KnowledgeEditClass,
+    pub knowledge_edit_group: Option<KnowledgeEditGroupElement>,
     pub knowledge_entry: KnowledgeEntryElement,
     pub knowledge_list: KnowledgeListClass,
     pub knowledge_list_query: KnowledgeListQueryClass,
@@ -336,6 +339,7 @@ pub struct Boundary {
     pub tool_outcome: ToolOutcomeClass,
     pub tool_receipt: ToolReceiptClass,
     pub version_command: VersionCommandClass,
+    pub workbench_update: Option<WorkbenchUpdateClass>,
     pub workspace_context: WorkspaceContextClass,
     #[serde(rename = "WorkspaceTask")]
     pub workspace_task: Option<WorkspaceTaskElement>,
@@ -2120,7 +2124,7 @@ pub struct EvidenceReadResultElement {
     pub content_page: Option<ContentPageClass>,
     pub content_state: Option<ContentState>,
     pub continuation: Option<EvidenceContinuationClass>,
-    pub effective_structure: Option<KnowledgeCreateQueryExampleStructure>,
+    pub effective_structure: Option<KnowledgeEntryQueryExampleStructure>,
     pub kind: EvidenceReadResultKind,
     #[serde(rename = "ref")]
     pub evidence_read_result_ref: Option<EvidenceRefElement>,
@@ -2169,7 +2173,7 @@ pub enum ContentState {
     Partial,
 }
 
-pub type KnowledgeCreateQueryExampleStructure = SemanticStructure;
+pub type KnowledgeEntryQueryExampleStructure = SemanticStructure;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -2466,40 +2470,36 @@ pub enum ModelLabel {
     Empty,
 }
 
-/// 独立对象首次创建时自动归属可信登录者；请求不接受负责人字段，后续调整使用独立管理接口。
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct KnowledgeCreateClass {
-    pub body: String,
-    /// 对象自身的显式业务域；省略或空值表示未分类，不从关联对象继承。
-    pub business_domain: Option<String>,
-    pub kind: KindElement,
-    pub name: String,
+pub struct KnowledgeBatchEditClass {
+    pub objects: Vec<KnowledgeEditGroupElement>,
     pub operation_id: String,
-    pub related_ids: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct KnowledgeEditGroupElement {
+    /// 同一对象内按序应用的条目修改；任一条目校验失败则整批回滚。
+    pub edits: Vec<EditElement>,
+    /// 暂存这些条目时读到的对象版本。
+    pub expected_version: String,
+    pub object_id: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EditElement {
+    pub clear_override: Option<bool>,
+    pub entry_id: String,
+    pub related_ids: Option<Vec<String>>,
     pub source_url: Option<String>,
-    pub structured_value: Option<KnowledgeCreateQueryExampleStructure>,
+    /// 本条目明确保存的人工陈述及支持提取声明；身份和origin由服务端生成。
+    pub statements: Option<Vec<HumanStatementInputElement>>,
+    pub structured_value: Option<KnowledgeEntryQueryExampleStructure>,
+    pub value: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum KindElement {
-    Document,
-    Field,
-    Metric,
-    #[serde(rename = "query_example")]
-    QueryExample,
-    Relationship,
-    Table,
-    Term,
-}
-
-/// 将同一来源的业务文档按自然章节组合阅读；parts保留原引用身份，编辑时一次提交全部章节。
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct KnowledgeDocumentClass {
-    pub body: String,
-    pub can_edit: bool,
-    pub parts: Vec<KnowledgeObjectElement>,
-    pub title: String,
+pub struct KnowledgeBatchReceiptClass {
+    pub objects: Vec<KnowledgeObjectElement>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -2537,7 +2537,7 @@ pub struct TableAnalysisPreferenceClass {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct KnowledgeEntryElement {
-    pub effective_structure: Option<KnowledgeCreateQueryExampleStructure>,
+    pub effective_structure: Option<KnowledgeEntryQueryExampleStructure>,
     pub effective_value: String,
     pub entry_id: String,
     pub human_override: Option<KnowledgeEntryHumanOverride>,
@@ -2551,7 +2551,7 @@ pub struct KnowledgeEntryElement {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct KnowledgeEntryHumanOverride {
-    pub structured_value: Option<KnowledgeCreateQueryExampleStructure>,
+    pub structured_value: Option<KnowledgeEntryQueryExampleStructure>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -2565,7 +2565,7 @@ pub enum ReviewState {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct KnowledgeEntrySourceFacts {
-    pub structured_value: Option<KnowledgeCreateQueryExampleStructure>,
+    pub structured_value: Option<KnowledgeEntryQueryExampleStructure>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -2602,7 +2602,20 @@ pub struct SemanticSupportElement {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct KnowledgeEntrySuggestion {
-    pub structured_value: Option<KnowledgeCreateQueryExampleStructure>,
+    pub structured_value: Option<KnowledgeEntryQueryExampleStructure>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum KindElement {
+    Document,
+    Field,
+    Metric,
+    #[serde(rename = "query_example")]
+    QueryExample,
+    Relationship,
+    Table,
+    Term,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -2705,6 +2718,29 @@ pub enum StateOrigin {
     Platform,
 }
 
+/// 独立对象首次创建时自动归属可信登录者；请求不接受负责人字段，后续调整使用独立管理接口。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct KnowledgeCreateClass {
+    pub body: String,
+    /// 对象自身的显式业务域；省略或空值表示未分类，不从关联对象继承。
+    pub business_domain: Option<String>,
+    pub kind: KindElement,
+    pub name: String,
+    pub operation_id: String,
+    pub related_ids: Vec<String>,
+    pub source_url: Option<String>,
+    pub structured_value: Option<KnowledgeEntryQueryExampleStructure>,
+}
+
+/// 将同一来源的业务文档按自然章节组合阅读；parts保留原引用身份，编辑时一次提交全部章节。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct KnowledgeDocumentClass {
+    pub body: String,
+    pub can_edit: bool,
+    pub parts: Vec<KnowledgeObjectElement>,
+    pub title: String,
+}
+
 /// 完整Markdown与完整片段版本集合；服务端逐一授权，正文与后台顺序同事务保存，重复操作返回原回执。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct KnowledgeDocumentEditClass {
@@ -2731,7 +2767,7 @@ pub struct KnowledgeEditClass {
     pub source_url: Option<String>,
     /// 本次明确保存的人工陈述及支持提取声明；身份和origin由服务端生成，未提供时不编造完整性。
     pub statements: Option<Vec<HumanStatementInputElement>>,
-    pub structured_value: Option<KnowledgeCreateQueryExampleStructure>,
+    pub structured_value: Option<KnowledgeEntryQueryExampleStructure>,
     pub value: String,
 }
 
@@ -2885,7 +2921,7 @@ pub struct KnowledgeReadResultClass {
     pub content_page: Option<ContentPageClass>,
     pub content_state: Option<ContentState>,
     pub continuation: Option<EvidenceContinuationClass>,
-    pub effective_structure: Option<KnowledgeCreateQueryExampleStructure>,
+    pub effective_structure: Option<KnowledgeEntryQueryExampleStructure>,
     pub kind: KnowledgeReadResultKind,
     #[serde(rename = "ref")]
     pub knowledge_read_result_ref: EvidenceRefElement,
@@ -3589,7 +3625,7 @@ pub struct PrefillResultEntry {
     pub entry_id: String,
     pub evidence: Vec<PurpleEvidence>,
     pub gaps: Vec<String>,
-    pub structured_value: Option<KnowledgeCreateQueryExampleStructure>,
+    pub structured_value: Option<KnowledgeEntryQueryExampleStructure>,
     pub value: String,
 }
 
@@ -4686,6 +4722,13 @@ pub struct VersionCommandClass {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WorkbenchUpdateClass {
+    pub query_list: Option<QueryListClass>,
+    pub runs: Option<Vec<RunSnapshotElement>>,
+    pub tasks: Option<Vec<TaskSnapshotElement>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CreateConversation {
     pub operation_id: String,
 }
@@ -5499,7 +5542,7 @@ pub struct TableAnalysisPreference {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct KnowledgeEntry {
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub effective_structure: Option<KnowledgeEntryQueryExampleStructure>,
+    pub effective_structure: Option<KnowledgeEntryQueryExampleStructureClass>,
     pub effective_value: String,
     pub entry_id: String,
     pub human_override: Option<KnowledgeEntryHumanOverrideClass>,
@@ -5512,7 +5555,7 @@ pub struct KnowledgeEntry {
     pub suggestion: KnowledgeEntrySuggestionClass,
 }
 
-pub type KnowledgeEntryQueryExampleStructure = SemanticStructure;
+pub type KnowledgeEntryQueryExampleStructureClass = SemanticStructure;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ComputedMetric {
@@ -5558,12 +5601,12 @@ pub struct QueryExampleVerification {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct KnowledgeEntryHumanOverrideClass {
-    pub structured_value: Option<KnowledgeEntryQueryExampleStructure>,
+    pub structured_value: Option<KnowledgeEntryQueryExampleStructureClass>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct KnowledgeEntrySourceFactsClass {
-    pub structured_value: Option<KnowledgeEntryQueryExampleStructure>,
+    pub structured_value: Option<KnowledgeEntryQueryExampleStructureClass>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -5636,7 +5679,7 @@ pub struct SemanticReference {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct KnowledgeEntrySuggestionClass {
-    pub structured_value: Option<KnowledgeEntryQueryExampleStructure>,
+    pub structured_value: Option<KnowledgeEntryQueryExampleStructureClass>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -5756,7 +5799,7 @@ pub struct KnowledgeEdit {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub statements: Option<Vec<HumanStatementInput>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub structured_value: Option<KnowledgeEntryQueryExampleStructure>,
+    pub structured_value: Option<KnowledgeEntryQueryExampleStructureClass>,
     pub value: String,
 }
 
@@ -5807,7 +5850,7 @@ pub struct KnowledgeEntryEdit {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub statements: Option<Vec<HumanStatementInput>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub structured_value: Option<KnowledgeEntryQueryExampleStructure>,
+    pub structured_value: Option<KnowledgeEntryQueryExampleStructureClass>,
     pub value: String,
 }
 
@@ -5825,7 +5868,7 @@ pub struct KnowledgeCreate {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub source_url: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub structured_value: Option<KnowledgeEntryQueryExampleStructure>,
+    pub structured_value: Option<KnowledgeEntryQueryExampleStructureClass>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -6207,7 +6250,7 @@ pub enum KnowledgeReadResult {
             deserialize_with = "deserialize_present",
             skip_serializing_if = "Option::is_none"
         )]
-        effective_structure: Option<Option<KnowledgeEntryQueryExampleStructure>>,
+        effective_structure: Option<Option<KnowledgeEntryQueryExampleStructureClass>>,
         #[serde(skip_serializing_if = "Option::is_none")]
         structure_dependencies: Option<Vec<EvidenceRef>>,
         #[serde(skip_serializing_if = "Option::is_none")]
@@ -6605,103 +6648,6 @@ pub struct DataToolOutcomeContextResetClass {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct QueryList {
-    pub confirmation_blocked: bool,
-    pub queries: Vec<QueryView>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct QueryView {
-    pub cancel_state: String,
-    pub check_state: String,
-    pub condition_version: String,
-    pub confirmation_state: String,
-    pub conversation_id: String,
-    pub draft_version: String,
-    pub error: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub error_details: Option<QueryViewErrorDetailsClass>,
-    pub execution_state: String,
-    pub id: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub knowledge_refs: Option<Vec<EvidenceRef>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub parameters: Option<HashMap<String, Option<serde_json::Value>>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub replaces_query_id: Option<String>,
-    pub result_ref: Option<String>,
-    /// 草稿工具回执的非阻断诊断；查询读取接口不承诺重现此报告。
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub semantic_checks: Option<SemanticCheckReport>,
-    /// 保存草稿时的口径决策及依据；旧记录返回null，不从自由文本或模型历史猜回填。
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub semantic_resolution: Option<ConditionsQuerySemanticResolution>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub sql: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub summary: Option<String>,
-    pub target_id: String,
-    pub task_id: String,
-    /// 正文按历史记录展示：来源已改版或结果已漂移，但记录仍可核。SQL、参数与说明保留原样，不能作为当前口径或执行依据；需要当前数据须重新确认。
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub text_historical: Option<bool>,
-    /// 正文来源失效或无法核实时只返回查询身份和控制状态；SQL、参数、说明、依据及诊断正文均不可返回。
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub text_unavailable: Option<bool>,
-    /// 保存草稿时任务条件声明的时间基准；旧草稿返回null。观察截点与批次是用户声明，不得以request_clock或平台data_freshness冒充。
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub time_basis: Option<TimeBasis>,
-    /// 原查询首次query_changed事件的持久序号，作为对话时间线中查询卡的稳定锚点；旧记录无对应事件时为null，旧Schema解码兼容可缺省，前端已有值不被后续有限事件页覆盖。
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub timeline_event_seq: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct QueryViewErrorDetailsClass {
-    pub code: String,
-    pub message: String,
-}
-
-/// 草稿工具回执的非阻断诊断；查询读取接口不承诺重现此报告。
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SemanticCheckReport {
-    pub checks: Vec<FluffyCheck>,
-    pub coverage: FluffyCoverage,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct FluffyCheck {
-    pub coverage_limit: String,
-    pub evidence_refs: Vec<SemanticEvidenceRef>,
-    pub finding: String,
-    pub rule: String,
-    pub state: CheckState,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SemanticEvidenceRef {
-    pub object_id: String,
-    pub version: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct FluffyCoverage {
-    pub missing_semantics: Vec<String>,
-    pub sql_shape: SqlShape,
-    pub supported_scope: Vec<String>,
-    pub unsupported_constructs: Vec<String>,
-}
-
-/// 草稿保存时从任务当前条件投影的时间基准；统计起止沿time_start/time_end，观察截点/批次只在time_roles中声明。
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TimeBasis {
-    pub time_end: Option<String>,
-    pub time_roles: Vec<TimeRole>,
-    pub time_start: Option<String>,
-    pub timezone: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct QueryHistoryQuery {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub before_id: Option<String>,
@@ -6826,7 +6772,7 @@ pub struct PrefillResultEntryClass {
     pub entry_id: String,
     pub evidence: Vec<FluffyEvidence>,
     pub gaps: Vec<String>,
-    pub structured_value: Option<KnowledgeEntryQueryExampleStructure>,
+    pub structured_value: Option<KnowledgeEntryQueryExampleStructureClass>,
     pub value: String,
 }
 
@@ -8248,6 +8194,133 @@ pub struct RefreshRunContext {
     pub lease_epoch: String,
     pub run_id: String,
     pub sdk_tool_call_id: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct KnowledgeBatchEdit {
+    pub objects: Vec<KnowledgeEditGroup>,
+    pub operation_id: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct KnowledgeEditGroup {
+    /// 同一对象内按序应用的条目修改；任一条目校验失败则整批回滚。
+    pub edits: Vec<KnowledgeEntryEdit>,
+    /// 暂存这些条目时读到的对象版本。
+    pub expected_version: String,
+    pub object_id: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct KnowledgeBatchReceipt {
+    pub objects: Vec<KnowledgeObject>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WorkbenchUpdate {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub query_list: Option<QueryList>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub runs: Option<Vec<RunSnapshot>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tasks: Option<Vec<TaskSnapshot>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct QueryList {
+    pub confirmation_blocked: bool,
+    pub queries: Vec<QueryView>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct QueryView {
+    pub cancel_state: String,
+    pub check_state: String,
+    pub condition_version: String,
+    pub confirmation_state: String,
+    pub conversation_id: String,
+    pub draft_version: String,
+    pub error: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error_details: Option<QueryViewErrorDetailsClass>,
+    pub execution_state: String,
+    pub id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub knowledge_refs: Option<Vec<EvidenceRef>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub parameters: Option<HashMap<String, Option<serde_json::Value>>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub replaces_query_id: Option<String>,
+    pub result_ref: Option<String>,
+    /// 草稿工具回执的非阻断诊断；查询读取接口不承诺重现此报告。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub semantic_checks: Option<SemanticCheckReport>,
+    /// 保存草稿时的口径决策及依据；旧记录返回null，不从自由文本或模型历史猜回填。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub semantic_resolution: Option<ConditionsQuerySemanticResolution>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sql: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub summary: Option<String>,
+    pub target_id: String,
+    pub task_id: String,
+    /// 正文按历史记录展示：来源已改版或结果已漂移，但记录仍可核。SQL、参数与说明保留原样，不能作为当前口径或执行依据；需要当前数据须重新确认。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub text_historical: Option<bool>,
+    /// 正文来源失效或无法核实时只返回查询身份和控制状态；SQL、参数、说明、依据及诊断正文均不可返回。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub text_unavailable: Option<bool>,
+    /// 保存草稿时任务条件声明的时间基准；旧草稿返回null。观察截点与批次是用户声明，不得以request_clock或平台data_freshness冒充。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub time_basis: Option<TimeBasis>,
+    /// 原查询首次query_changed事件的持久序号，作为对话时间线中查询卡的稳定锚点；旧记录无对应事件时为null，旧Schema解码兼容可缺省，前端已有值不被后续有限事件页覆盖。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub timeline_event_seq: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct QueryViewErrorDetailsClass {
+    pub code: String,
+    pub message: String,
+}
+
+/// 草稿工具回执的非阻断诊断；查询读取接口不承诺重现此报告。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SemanticCheckReport {
+    pub checks: Vec<FluffyCheck>,
+    pub coverage: FluffyCoverage,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FluffyCheck {
+    pub coverage_limit: String,
+    pub evidence_refs: Vec<SemanticEvidenceRef>,
+    pub finding: String,
+    pub rule: String,
+    pub state: CheckState,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SemanticEvidenceRef {
+    pub object_id: String,
+    pub version: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FluffyCoverage {
+    pub missing_semantics: Vec<String>,
+    pub sql_shape: SqlShape,
+    pub supported_scope: Vec<String>,
+    pub unsupported_constructs: Vec<String>,
+}
+
+/// 草稿保存时从任务当前条件投影的时间基准；统计起止沿time_start/time_end，观察截点/批次只在time_roles中声明。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TimeBasis {
+    pub time_end: Option<String>,
+    pub time_roles: Vec<TimeRole>,
+    pub time_start: Option<String>,
+    pub timezone: Option<String>,
 }
 
 fn deserialize_present<'de, D, T>(deserializer: D) -> Result<Option<T>, D::Error>

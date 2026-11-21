@@ -69,7 +69,7 @@ G08是原[座舱场景库](../dogfood/cockpit/scenarios.json)中的“平台权�
 
 `Workbench.tsx`普通轮询带`after_seq=last_event_seq`；服务端只取序号大于它的事件。平台撤权没有增加该对话的事件。`conversation-timeline.ts::mergeSnapshot`遇空events保留旧messages/events。因此后端全量重载已隐藏，不会让已打开页面后续正常刷新同步隐藏。
 
-本轮用原G08保存的恢复/拒绝snapshot，按当前服务端过滤合同构造增量响应，再执行实际生产`mergeSnapshot`：游标94、拒绝后仍94、新事件0；两份原答案仍留在页面模型中，完整重载则为0份。证据是[离线反例](../../.local/checks/dogfood-convergence-audit-20261104-223601/history-incremental-cache-probe.json)。这不是新的浏览器E2E，也不是要求追回已发送给浏览器的字节；缺的是产品下一次正常刷新时的可见状态更新。
+本轮用原G08保存的恢复/拒绝snapshot，按当前服务端过滤合同构造增量响应，再执行实际生产`mergeSnapshot`：游标94、拒绝后仍94、新事件0；两份原答案仍留在页面模型中，完整重载则为0份。证据是离线反例（`.local/checks/dogfood-convergence-audit-20261104-223601/history-incremental-cache-probe.json`）。这不是新的浏览器E2E，也不是要求追回已发送给浏览器的字节；缺的是产品下一次正常刷新时的可见状态更新。
 
 建议沿现有snapshot刷新合同返回**已加载输出的当前可读投影**，按稳定输出身份替换缓存。接口需要覆盖已加载的旧页，不能只刷新最新一页、仅隐藏一个组件或新建权限事件总线。Oracle补充的消费者要求已核对代码：真正用于生成messages的是events，不能只替换`incoming.messages`；隐藏committed正文时也不能让旧delta重新拼回正文。客户端只提供输出身份，来源和当前权限仍由后端核定。保留服务端现有授权owner；一个有区分力的撤权→普通刷新→恢复回归足够，不铺全权限组合。
 
@@ -89,13 +89,13 @@ G08准确delta为四个生产文件新增615/删除38行。必要部分是按每
 
 ### 3.4 J19有确定SQL错误，另有未触发断言
 
-第二份核对SQL只对`turn`用`received_at < snapshot`，其`frontend`/`tts`/`playback`存在性子查询不筛快照。最小反例保持实际SQL，只用九月参数隔离子事实规则：主轮次在快照前，唯一TTS于10月5日收到，10月4日快照下应仍为无TTS；实际SQL计0。证据：[反例](../../.local/checks/dogfood-convergence-audit-20261104-223601/j19-child-snapshot-probe.json)和[原稿](../../.local/checks/dogfood-convergence-audit-20261104-223601/j19-original-drafts.json)。未更改原attempt或执行真实查询。
+第二份核对SQL只对`turn`用`received_at < snapshot`，其`frontend`/`tts`/`playback`存在性子查询不筛快照。最小反例保持实际SQL，只用九月参数隔离子事实规则：主轮次在快照前，唯一TTS于10月5日收到，10月4日快照下应仍为无TTS；实际SQL计0。证据：反例（`.local/checks/dogfood-convergence-audit-20261104-223601/j19-child-snapshot-probe.json`）和原稿（`.local/checks/dogfood-convergence-audit-20261104-223601/j19-original-drafts.json`）。未更改原attempt或执行真实查询。
 
 原三稿示例日期为10月28日至11月4日，超出资料活动期且晚于固定快照。它们明确称为示例并未执行，不能说已产生错误业务结果；但不能把该窗口当作适用样本的有效验证。
 
 应把“参与快照判断的事实都按各自接收时间裁剪”作为一般语义要求核对实际交付与生成，再用该反例验证SQL。不能只改题目日期或加单题SQL模板，也不据一个错误建立万能SQL语义守卫。原题没要求比例而expect含零分母处理是另一个评测前提问题；历史不改分，下一次评测应先修齐输入/断言关系。
 
-Oracle另指出第三稿的五项汇总不足以单独区分“没有日表行”与“存在数值为零的日表行”。本地用同一保存SQL作最小对照，两种状态确实返回相同五项数值，见[信息区分核对](../../.local/checks/dogfood-convergence-audit-20261104-223601/j19-zero-coverage-information-probe.json)。采纳边界是：判断“真实零”须结合实际覆盖依据，或保留有意义的记录存在性；**行不存在不自动等于覆盖不足**，完整的稀疏汇总允许缺行表示零。不能据此宣布COALESCE普遍错误，也不要求所有计数查询新增守卫。
+Oracle另指出第三稿的五项汇总不足以单独区分“没有日表行”与“存在数值为零的日表行”。本地用同一保存SQL作最小对照，两种状态确实返回相同五项数值，见信息区分核对（`.local/checks/dogfood-convergence-audit-20261104-223601/j19-zero-coverage-information-probe.json`）。采纳边界是：判断“真实零”须结合实际覆盖依据，或保留有意义的记录存在性；**行不存在不自动等于覆盖不足**，完整的稀疏汇总允许缺行表示零。不能据此宣布COALESCE普遍错误，也不要求所有计数查询新增守卫。
 
 ### 3.5 真歧义和不必要澄清分开
 

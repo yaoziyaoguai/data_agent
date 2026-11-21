@@ -5,9 +5,11 @@ import {chromium} from 'playwright';
 import { SessionManager } from "@earendil-works/pi-coding-agent";
 import { exportCheckpoint } from "../../apps/agent/session/checkpoint.ts";
 import { harness, until } from "./harness.mjs";
+const failedMessage = "合成未完成输入";
 const h = await harness({
   web: true,
   capture: true,
+  captureError: run => run.text === failedMessage ? new Error("model_run_failed") : undefined,
   env: {
     DATA_AGENT_LEASE_MS: "120000",
     DATA_AGENT_QUERY_DELAY_SECONDS: "0.1",
@@ -220,12 +222,16 @@ try {
     for await(const chunk of stream)chunks.push(chunk);
     const exported=Buffer.concat(chunks).toString('utf8').replace(/^\uFEFF/,'').trim().split('\r\n');
     assert.equal(exported.length,1001);assert.equal(exported.at(-1),'"1000"');
-    const pending=await h.send(cid,'合成未完成输入');
-    h.sql(`INSERT INTO conversation_events(event_id,conversation_id,event_seq,event_type,payload) SELECT '${randomUUID()}',id,event_seq+1,'run_failed',JSON_OBJECT('message_id','${pending.message_id}','code','unavailable') FROM conversations WHERE id='${cid}';UPDATE conversations SET event_seq=event_seq+1 WHERE id='${cid}';`);
+    await h.resumeWorker();
+    const pending = await h.send(cid, failedMessage);
+    await until(async () => (await h.snapshot(cid)).events.some(e =>
+      e.type === 'run_failed' && e.payload.message_id === pending.message_id && e.payload.code === 'model_run_failed'),
+    'Worker persists the bridge failure');
+    await h.pauseWorker();
     await page.getByRole('button',{name:'撤回未完成输入',exact:true}).click();
     await page.getByRole('button',{name:'撤回未完成输入',exact:true}).waitFor({state:'detached'});
     assert.ok((await h.snapshot(cid)).events.some(e=>e.type==='message_withdrawn'&&e.payload.message_id===pending.message_id));
-    checks.push({name:'实际浏览器仅预览10行、CSV下载1000行并提示截断；合成失败事件后点击撤回，正式消息状态更新',passed:true});
+    checks.push({name:'实际浏览器仅预览10行、CSV下载1000行并提示截断；真实 Worker 写入失败事件后点击撤回，正式消息状态更新',passed:true});
     for(const sample of previews) {
       await confirm(sample.query);await h.resumeWorker();
       await until(async()=>(await h.request('/queries/'+sample.query.id)).value.execution_state==='succeeded','预览样例完成');
@@ -245,8 +251,10 @@ try {
         await page.setViewportSize({width:390,height:1000});
         const scroll=view.locator('.table-scroll');
         const left=await scroll.evaluate(el=>{el.scrollLeft=250;return el.scrollLeft;});assert.ok(left>0);
-        await page.waitForResponse(r=>r.url().includes('/snapshot'));
+        const reading = await h.send(cid, '核对预览时保持阅读位置');
+        await page.getByText('核对预览时保持阅读位置', {exact:true}).waitFor();
         assert.equal(await scroll.evaluate(el=>el.scrollLeft),left);
+        assert.equal((await h.request(`/conversations/${cid}/messages/${reading.message_id}/withdraw`, {operation_id:randomUUID()})).status,200);
         await view.getByRole('button',{name:'图表',exact:true}).click();
         assert.equal(await view.locator('.chart-row').count(),10);
         assert.equal(await view.getByLabel('图表指标').locator('option').filter({hasText:'original_integer_without_precision_loss'}).count(),0,'不能把超大整数转为图表浮点数');
@@ -265,7 +273,7 @@ try {
         assert.equal(await view.getByRole('button',{name:'图表',exact:true}).isEnabled(),false);
       }
     }
-    checks.push({name:'25/5/0行结果分别预览10/5/0行，下载为25/5/0行；图表同10行、横向滚动经刷新保持，桌面和手机无页面溢出',passed:true});
+    checks.push({name:'25/5/0行结果分别预览10/5/0行，下载为25/5/0行；图表同10行、事件到达后保持横向滚动，桌面和手机无页面溢出',passed:true});
     await confirm(overflow);await h.resumeWorker();
     await until(async()=>(await h.request('/queries/'+overflow.id)).value.execution_state==='failed','平台执行失败');
     await h.pauseWorker();await withdrawExplanations(cid);

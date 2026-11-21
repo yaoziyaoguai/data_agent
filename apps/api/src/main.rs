@@ -1,5 +1,6 @@
 mod data_routes;
 mod knowledge_impact_routes;
+mod live_events;
 mod model_routes;
 mod routes;
 mod semantic_routes;
@@ -18,12 +19,15 @@ pub struct State {
     pub internal_token: Arc<String>,
     pub model_profile: Option<data_agent::contracts::generated::ModelProfile>,
     pub cookie_secure: bool,
+    live: live_events::LiveEvents,
 }
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     data_agent::contracts::initialize_validators();
+    let pool = persistence::connect(&env::var("DATA_AGENT_DATABASE_URL")?).await?;
+    let live = live_events::LiveEvents::start(&pool)?;
     let state = State {
-        pool: persistence::connect(&env::var("DATA_AGENT_DATABASE_URL")?).await?,
+        pool,
         identities: DevelopmentIdentity::from_config(
             &env::var("DATA_AGENT_MODE")?,
             &env::var("DATA_AGENT_DEV_IDENTITIES")?,
@@ -41,6 +45,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         cookie_secure: env::var("DATA_AGENT_COOKIE_SECURE")
             .map(|v| v == "1")
             .unwrap_or(false),
+        live,
     };
     if state.internal_token.len() < 32 {
         return Err("internal token too short".into());
@@ -94,7 +99,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             "/conversations/{id}/snapshot",
             get(routes::snapshot).post(routes::refresh_snapshot),
         )
-        .route("/conversations/{id}/events", get(routes::events))
+        .route("/conversations/{id}/events", get(live_events::conversation))
+        .route("/workspace/events", get(live_events::workspace))
+        .route("/internal/live-changes", post(live_events::receive))
         .route("/internal/tool-calls", post(routes::register))
         .route("/internal/tools", post(routes::tool))
         .route("/internal/outputs", post(routes::output))
@@ -121,6 +128,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route(
             "/knowledge/{id}/entries",
             axum::routing::patch(data_routes::edit_knowledge_entries),
+        )
+        .route(
+            "/knowledge/batch-entries",
+            axum::routing::patch(data_routes::edit_knowledge_batch),
         )
         .route(
             "/knowledge/{id}/document",
