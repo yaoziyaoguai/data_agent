@@ -300,8 +300,9 @@ try {
       const {runs} = await h.snapshot(run.conversation_id);
       const active = runs.find(item => item.run_id === run.run_id);
       assert.equal(active.completed_steps,1);
-      assert.deepEqual(active.completed_step_summaries,[]);
-      checks.push('逆序的耗时记录不造耗时，已完成计数与会话快照仍可读取');
+      assert.equal(active.completed_step_summaries.length,1);
+      assert.equal(active.completed_step_summaries[0].duration_ms,null);
+      checks.push('时钟回拨后原步骤和完成计数仍可读取，耗时标为不可用');
     }
     assistant(firstAnswer,[],'stop'); await append(firstChunks);
     const input = {...binding(),commit_id:randomUUID(),final_text:firstAnswer,checkpoint:checkpoint()};
@@ -383,7 +384,7 @@ try {
     toolResult(input,receipt);
     return {input,receipt};
   };
-  const renderAnswer = async task => {
+  const answerCompletion = async (task, legacy) => {
     const query = (await invokeTool('request_query',{task_id:task.task_id,condition_version:task.condition_version,
       sql:'SELECT 42 AS amount',parameters:{},target_id:'synthetic-sqlite',
       summary:'合成答案金额',knowledge_refs:[],replaces_query_id:null})).receipt.data;
@@ -394,19 +395,42 @@ try {
     await h.pauseWorker();
     const detail = (await invokeTool('get_query',{query_id:query.id})).receipt.data;
     assert.equal(detail.query.execution_state,'succeeded','合成答案查询先真实执行');
-    const {input,receipt} = await invokeTool('prepare_analysis_answer',{
+    const args = {
       sources:[{query_id:query.id,result_ref:detail.results.result_ref,columns:['amount']}],
-      values:[{name:'amount',kind:'cell',query_id:query.id,column:'amount',row_index:0}]});
+      values:[{name:'amount',kind:'cell',query_id:query.id,column:'amount',row_index:0}]};
+    const {input,receipt} = await invokeTool('prepare_analysis_answer',args);
     const template = '合成答案金额{{amount}}分。';
-    const entry = assistant(template,[],'stop');
     const display = template.replace('{{amount}}',receipt.data.bindings.amount) + receipt.data.required_suffix;
+    if (legacy) {
+      // 退役工具不能新登记。旧成功回执使用同一个真实查询、正式结果和任务绑定。
+      const toolName = 'present_analysis_answer';
+      const oldReceipt = {...receipt,tool_name:toolName,
+        data:{answer_text:display,sources:receipt.data.sources,result_dependencies:receipt.data.result_dependencies}};
+      const legacyArgs = {sources:args.sources,template,values:args.values};
+      const canonical = value => Array.isArray(value) ? value.map(canonical)
+        : value && typeof value === 'object' ? Object.fromEntries(Object.keys(value).sort().map(key=>[key,canonical(value[key])]))
+        : value;
+      const fingerprint = createHash('sha256').update(JSON.stringify(canonical({name:toolName,arguments:legacyArgs}))).digest('hex');
+      const encoded = Buffer.from(JSON.stringify(oldReceipt)).toString('hex');
+      h.sql(`UPDATE tool_calls SET tool_name='${toolName}',arguments_fingerprint='${fingerprint}',
+        receipt=CAST(CONVERT(0x${encoded} USING utf8mb4) AS JSON) WHERE operation_id='${receipt.operation_id}'`);
+      const call = {type:'toolCall',id:input.sdk_tool_call_id,name:toolName,arguments:legacyArgs};
+      manager.branch(manager.getEntry(input.checkpoint.leaf_id).parentId);
+      assistant('',[call]);
+      toolResult(invocation(call),oldReceipt);
+      return {...binding(),commit_id:randomUUID(),final_text:display,
+        final_start_chunk_seq:String(sequence+1),answer_sdk_tool_call_id:call.id,checkpoint:checkpoint()};
+    }
+    const entry = assistant(template,[],'stop');
     const range = await append([display]);
-    return {display,binding:{assistant:outputBinding(entry),source_text:template,
+    return {...binding(),commit_id:randomUUID(),final_text:display,checkpoint:checkpoint(),
+      rendered_answer_binding:{assistant:outputBinding(entry),source_text:template,
       prepared_sdk_tool_call_id:input.sdk_tool_call_id,
       first_chunk_seq:String(range.first),last_chunk_seq:String(range.last)}};
   };
-  {
-    await begin('grounded跨范围结清',2,false,false,{});
+  for (const legacy of [false,true]) {
+    const answerPath = legacy ? '旧成功答案回执' : '渲染答案';
+    await begin(answerPath+'跨范围结清',2,false,false,{});
     // 甲未声明来源、乙明确无限制：范围不一致不能由乙的成功答案回执一起结清。
     h.sql(`UPDATE condition_revisions SET body=JSON_REMOVE(body,'$.source_limits')
       WHERE task_id='${taskA.task_id}'`);
@@ -419,10 +443,7 @@ try {
       run.workspace_context = ok(await h.internal('/internal/context/refresh',
         {...binding(),sdk_tool_call_id:switching.sdk_tool_call_id,checkpoint:checkpoint()}));
     }
-    const rendered = await renderAnswer(taskB);
-    const completion = {...binding(),commit_id:randomUUID(),final_text:rendered.display,
-      rendered_answer_binding:rendered.binding,
-      checkpoint:checkpoint()}, before = await observe();
+    const completion = await answerCompletion(taskB,legacy), before = await observe();
     assert.deepEqual(before.frozen,[]);
     const response = await h.internal('/internal/finish',completion), after = await observe();
     observations.push({label:'范围不一致任务的grounded答案引用不能结清全部任务',stage:'finish',
@@ -430,19 +451,17 @@ try {
     assert.equal(response.status,409,'grounded提交不能绕过跨范围覆盖：' + JSON.stringify(response.value));
     assert.equal(response.value.code,'invalid_evidence');
     assert.deepEqual(after,before,'拒绝不能消费原消息或把甲标为answered');
-    checks.push('范围不一致任务的grounded答案引用不能结清全部任务'); retire();
+    checks.push(answerPath+'不能结清范围不一致的其他任务'); retire();
   }
-  {
-    await begin('单任务grounded直接提交',2,true);
-    const rendered = await renderAnswer(taskA);
-    const completion = {...binding(),commit_id:randomUUID(),final_text:rendered.display,
-      rendered_answer_binding:rendered.binding,
-      checkpoint:checkpoint()};
+  for (const legacy of [false,true]) {
+    const answerPath = legacy ? '旧成功答案回执' : '渲染答案';
+    await begin('单任务'+answerPath+'直接提交',2,true);
+    const completion = await answerCompletion(taskA,legacy);
     const finished = ok(await h.internal('/internal/finish',completion)), state = await observe();
     assert.equal(finished.output_id,run.output_id);
-    assert.equal(state.output.text,rendered.display);
+    assert.equal(state.output.text,completion.final_text);
     assert.equal(state.commits.length,1); assert.equal(state.state,'finished');
-    checks.push('单任务成功答案回执的直接提交保持'); retire();
+    checks.push('单任务'+answerPath+'的直接提交保持'); retire();
   }
 
   await begin('旧v1拒绝新定稿参数',1);

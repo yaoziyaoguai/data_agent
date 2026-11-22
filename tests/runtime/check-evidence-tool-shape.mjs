@@ -21,24 +21,23 @@ for (const version of [undefined, 1, 2]) {
   const state = dataTools(new RustTransport({...run, ...(version ? {tool_contract_version: version} : {})}, 'http://127.0.0.1:1', 'synthetic-unused'), SessionManager.inMemory('/synthetic/evidence-tool-shape'), '');
   const taskTool = state.tools.find(tool => tool.name === 'update_analysis_task');
   const taskParameters = JSON.stringify(taskTool.parameters);
-  if (version === 2) {
-    assert.doesNotMatch(taskParameters, /"(?:web|app|store)"/,
-      '当前任务参数不能把旧零售渠道当作分析候选；业务渠道通过通用 filters 表达');
-    const fields = taskTool.parameters.allOf.find(branch => branch.properties).properties;
-    assert.deepEqual(fields.conditions.properties.channel, {type: 'null'}, '完整条件保留空兼容字段');
-    assert.equal(Object.hasOwn(fields.condition_patch.properties.set.properties, 'channel'), false,
-      '当前条件补丁不再引导写旧渠道字段，历史字段仍可通过 unset 清除');
-    assert.ok(!fields.condition_patch.properties.set.required?.includes('channel'));
-    assert.ok(fields.condition_patch.properties.unset.items.enum.includes('channel'));
-    assert.ok(fields.conditions.properties.filters);
-  } else assert.match(taskParameters, /"web"/, '旧工具合同与历史调用保持可读');
+  // 新调用只开放现行工具。下方 restoreTool 独立核对历史原参数和回执。
+  assert.doesNotMatch(taskParameters, /"(?:web|app|store)"/,
+    '当前任务参数不能把旧零售渠道当作分析候选；业务渠道通过通用 filters 表达');
+  const fields = taskTool.parameters.allOf.find(branch => branch.properties).properties;
+  assert.deepEqual(fields.conditions.properties.channel, {type: 'null'}, '完整条件保留空兼容字段');
+  assert.equal(Object.hasOwn(fields.condition_patch.properties.set.properties, 'channel'), false,
+    '当前条件补丁不再引导写旧渠道字段，历史字段仍可通过 unset 清除');
+  assert.ok(!fields.condition_patch.properties.set.required?.includes('channel'));
+  assert.ok(fields.condition_patch.properties.unset.items.enum.includes('channel'));
+  assert.ok(fields.conditions.properties.filters);
   const tool = state.tools.find(tool => tool.name === 'search_knowledge');
   assert.ok(tool);
   assert.equal(tool.executionMode, 'sequential');
-  assert.equal(Object.hasOwn(tool.parameters.properties, 'related_object_id'), version !== 2, '历史缺省1及显式1保持硬范围；2使用独立合同');
+  assert.equal(Object.hasOwn(tool.parameters.properties, 'related_object_id'), false, '新搜索使用现行范围合同');
   const knowledgeTool = state.tools.find(tool => tool.name === 'read_knowledge');
-  assert.equal(Object.hasOwn(knowledgeTool.parameters.properties, 'items'), version === 2);
-  assert.equal(Object.hasOwn(knowledgeTool.parameters.properties, 'object_id'), version !== 2);
+  assert.equal(Object.hasOwn(knowledgeTool.parameters.properties, 'items'), true);
+  assert.equal(Object.hasOwn(knowledgeTool.parameters.properties, 'object_id'), false);
   if (version === 2) {
     assert.ok(JSON.stringify(knowledgeTool.parameters).includes('asset_ref'));
     const memory = cases.find(value => value.name === 'memory batch success preserves independent source page and nullable next offset').value;
@@ -47,8 +46,8 @@ for (const version of [undefined, 1, 2]) {
     assert.deepEqual(JSON.parse(formatted.content[0].text), memory, '记忆正文与独立分页从Rust到Pi保持原JSON');
   }
   const sourceTool = state.tools.find(tool => tool.name === 'read_source');
-  assert.equal(Object.hasOwn(sourceTool.parameters.properties, 'citation'), version === 2, 'v2原文补读必须绑定citation，旧合同保持source_id/version');
-  assert.equal(Object.hasOwn(sourceTool.parameters.properties, 'source_id'), version !== 2);
+  assert.equal(Object.hasOwn(sourceTool.parameters.properties, 'citation'), true, '新原文补读绑定 citation');
+  assert.equal(Object.hasOwn(sourceTool.parameters.properties, 'source_id'), false);
   const receipt = {operation_id: 'operation', tool_name: 'search_knowledge',
     ...(version ? {tool_contract_version: version} : {}), data: version === 2 ? mixed : {objects: [], name: '合成旧目录'}};
   const result = await state.formatResult('search_knowledge', {query: '合成'}, receipt);
@@ -263,11 +262,9 @@ await check('Q02原read_knowledge回执经正式执行与Pi会话完整交付指
     outcomeVersion: 2, fresh: true, args: q02ReadArgs, data: q02ReadReceiptData}, evidence);
   // §4.2 规则接线：新指标与诊断分离规则须实际装配进provider系统提示，不能只存在源码里。
   assert.ok(systemPrompt.includes('记录存在不等于新增实体'), '实体识别约束必须进入实际provider系统提示');
-  assert.ok(systemPrompt.includes('身份缺失不能证明不同于已知实体，也不能证明多个缺失记录对应不同实体'));
-  assert.ok(systemPrompt.includes('去重键、粒度及包含/互斥关系足以支持时'), '有依据的合并与界限仍须允许');
-  assert.ok(systemPrompt.includes('最终解释也须核对上述实体关系'), '规则覆盖SQL后的结果解释');
-  assert.ok(systemPrompt.includes('匿名订单数'));
-  assert.ok(systemPrompt.includes('保存SQL前核对度量表达式、已定解释、字段粒度和诊断列是否一致'));
+  assert.ok(systemPrompt.includes('归并去重须有身份关系与键的依据'), '身份缺失本身不足以区分或归并实体');
+  assert.ok(systemPrompt.includes('缺失身份单列诊断，保存 SQL 和解释时沿同一口径'),
+    '缺失身份单列，归并口径覆盖 SQL 与结果解释');
   const delivered = JSON.parse(providerContent);
   const definition = delivered.items.find(item => item.ref?.object_id === 'metric-paying_customers');
   const guide = delivered.items.find(item => item.ref?.object_id === 'document-guide-4');

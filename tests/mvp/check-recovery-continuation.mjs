@@ -49,7 +49,7 @@ const seed=async(cid,second,withHistory=false)=>{
   }
   manager.appendMessage({role:'user',content:run.text,timestamp:Date.now()});
   manager.appendMessage(assistant([
-    {type:'toolCall',id:'first-call',name:'update_analysis_task',arguments:{action:'create',task_id:null,expected_version:null,goal:'仅创建一次的合成任务',conditions:{time_start:'2026-01-01T00:00:00Z',time_end:'2026-02-01T00:00:00Z',timezone:'UTC',metric:'net_revenue',channel:null,group_by:[],filters:[],knowledge_refs:[],notes:''},question:null,options:[]}},
+    {type:'toolCall',id:'first-call',name:'update_analysis_task',arguments:{action:'create',task_id:null,expected_version:null,goal:'仅创建一次的合成任务',conditions:{time_start:'2026-01-01T00:00:00Z',time_end:'2026-02-01T00:00:00Z',timezone:'UTC',metric:'net_revenue',channel:null,group_by:[],filters:[],knowledge_refs:[],notes:'',source_limits:null},question:null,options:[]}},
     {type:'toolCall',id:'second-call',...second},
   ]));
   run={...run,resume_same_input:true,checkpoint:checkpoint(manager)};
@@ -77,11 +77,14 @@ const legacySeed=async(state='succeeded')=>{
   // 只在随机合成数据库中装入旧版接受过的快照；模拟提交后进程退出，SDK还没有toolResult。
   call.arguments.conditions.time_start='2026-01-01';call.arguments.conditions.time_end='2026-01-31';
   const receipt=committed?structuredClone(committed.value):state==='rejected'?{operation_id:registered.value.operation_id,tool_name:call.name,data:{error:'invalid_input',hint:'合成旧版明确拒绝。'}}:null;
-  if(committed)receipt.data.conditions=structuredClone(call.arguments.conditions);
+  if(committed){
+    delete receipt.tool_contract_version;
+    receipt.data.conditions=structuredClone(call.arguments.conditions);
+  }
   const fp=createHash('sha256').update(JSON.stringify(canonical({name:call.name,arguments:call.arguments}))).digest('hex');
-  h.sql(`UPDATE tool_calls SET arguments_fingerprint='${fp}',state='${state}',receipt=${receipt?sqlJson(receipt):'NULL'} WHERE operation_id='${registered.value.operation_id}';UPDATE pi_checkpoints SET checkpoint=${sqlJson(run.checkpoint)} WHERE recovery_chain_id='${run.recovery_chain_id}';`);
+  h.sql(`UPDATE agent_runs SET tool_contract_version=1 WHERE id='${run.run_id}';UPDATE tool_calls SET arguments_fingerprint='${fp}',state='${state}',receipt=${receipt?sqlJson(receipt):'NULL'},tool_contract_version=1 WHERE operation_id='${registered.value.operation_id}';UPDATE pi_checkpoints SET checkpoint=${sqlJson(run.checkpoint)} WHERE recovery_chain_id='${run.recovery_chain_id}';`);
   if(committed)h.sql(`UPDATE condition_revisions SET body=${sqlJson(receipt.data.conditions)} WHERE task_id='${receipt.data.task_id}';UPDATE conversation_events SET payload=${sqlJson(receipt.data)} WHERE conversation_id='${cid}' AND event_type='task_changed';`);
-  return {cid,call,receipt,input:{...input,arguments:call.arguments},checkpoint:run.checkpoint};
+  return {cid,call,receipt,operation:registered.value.operation_id,input:{...input,arguments:call.arguments},checkpoint:run.checkpoint};
 };
 try{
   const legacy=await legacySeed();
@@ -98,7 +101,9 @@ try{
   const legacySaved=h.sql(`SELECT checkpoint FROM pi_checkpoints WHERE recovery_chain_id='${run.recovery_chain_id}'`)[0];
   const legacyResult=restoreCheckpoint('/synthetic/data-agent',legacySaved).buildSessionContext().messages.find(v=>v.role==='toolResult'&&v.toolCallId==='first-call');
   assert.equal(legacyResult?.isError,false,'旧版已提交日期参数必须接回成功回执，不能向Pi报告未执行');
-  assert.deepEqual(legacyResult.details,legacy.receipt);
+  const {frozen_notification_covered: priorCoverage, ...replayedReceipt} = legacy.receipt;
+  assert.equal(priorCoverage,false);
+  assert.deepEqual(legacyResult.details,{...replayedReceipt,tool_contract_version:1},'接回原业务回执及合同版本，通知覆盖状态沿当前宿主上下文');
   assert.deepEqual(h.sql(`SELECT JSON_OBJECT('operation',operation_id,'origin',origin_run_id,'fingerprint',arguments_fingerprint,'state',state,'receipt',receipt) FROM tool_calls WHERE operation_id='${legacy.receipt.operation_id}'`)[0],legacyIdentity);
   assert.deepEqual(h.sql(`SELECT body FROM condition_revisions WHERE task_id='${legacy.receipt.data.task_id}'`),[legacy.receipt.data.conditions]);
   assert.equal(h.sql(`SELECT JSON_OBJECT('n',COUNT(*)) FROM conversation_events WHERE conversation_id='${legacy.cid}' AND event_type='task_changed'`)[0].n,1);
@@ -116,7 +121,10 @@ try{
   const unknown=await legacySeed('registered');await retry();
   const unknownInput={...unknown.input,run_id:run.run_id,lease_epoch:run.lease_epoch};
   const chatsBeforeUnknown=chats;
-  for(const path of ['/internal/data/tool-calls','/internal/data/tools'])assert.equal((await h.internal(path,unknownInput)).value.code,'outcome_unknown');
+  assert.deepEqual((await h.internal('/internal/data/tool-calls',unknownInput)).value,{
+    operation_id:unknown.operation,tool_contract_version:1,
+  });
+  assert.equal((await h.internal('/internal/data/tools',unknownInput)).value.code,'outcome_unknown');
   await assert.rejects(deliver(run,h.env.DATA_AGENT_API_URL,h.env.DATA_AGENT_INTERNAL_TOKEN,''),/outcome_unknown/);
   assert.equal(chats,chatsBeforeUnknown,'已登记未知结果不能向Pi伪报未执行');
   assert.equal(h.sql(`SELECT JSON_OBJECT('state',state,'receipt',receipt) FROM tool_calls WHERE conversation_id='${unknown.cid}'`)[0].state,'registered');
@@ -127,7 +135,8 @@ try{
 
   const newInvalid=await h.create();await seed(newInvalid,{name:'update_analysis_task',arguments:structuredClone(legacy.call.arguments)});
   const invalidInput={run_id:run.run_id,lease_epoch:run.lease_epoch,sdk_tool_call_id:'second-call',tool_name:'update_analysis_task',arguments:legacy.call.arguments,checkpoint:run.checkpoint};
-  for(const path of ['/internal/data/tool-calls','/internal/data/tools'])assert.equal((await h.internal(path,invalidInput)).value.code,'invalid_input');
+  assert.equal((await h.internal('/internal/data/tool-calls',invalidInput)).value.code,'invalid_input');
+  assert.equal((await h.internal('/internal/data/tools',invalidInput)).value.code,'version_conflict');
   assert.equal(h.sql(`SELECT JSON_OBJECT('n',COUNT(*)) FROM tool_calls WHERE conversation_id='${newInvalid}'`)[0].n,0);
   await deliver(run,h.env.DATA_AGENT_API_URL,h.env.DATA_AGENT_INTERNAL_TOKEN,'');h.releaseRun(run.run_id);
   const invalidSaved=h.sql(`SELECT checkpoint FROM pi_checkpoints WHERE recovery_chain_id='${run.recovery_chain_id}'`)[0];
@@ -148,7 +157,9 @@ try{
   assert.equal((await h.snapshot(cid)).tasks.length,1);assert.equal((await h.snapshot(cid)).tasks[0].phase,'answered');assert.equal((await h.snapshot(cid)).runs.filter(v=>v.state==='finished').length,1);
   checks.push({id:'IA04',name:'双工具恢复在第二工具登记后再次中断；真实MySQL账本与新Worker运行接回原调用，只创建一次任务',passed:true});
 
-  const rejected=await h.create();await seed(rejected,{name:'read_knowledge',arguments:{object_id:'synthetic-missing-object'}});
+  const rejected=await h.create();await seed(rejected,{name:'read_source',arguments:{
+    citation:{source:{kind:'document',id:'synthetic-missing-object'},revision:'1',locator:{offset:0,length:1}},
+  }});
   interrupt=true;await assert.rejects(deliver(run,h.env.DATA_AGENT_API_URL,h.env.DATA_AGENT_INTERNAL_TOKEN,''),/synthetic_process_interruption/);
   const rejectedOperation=h.sql(`SELECT JSON_OBJECT('operation',operation_id,'origin',origin_run_id) FROM tool_calls WHERE conversation_id='${rejected}' AND sdk_tool_call_id='second-call'`)[0];
   await retry();interrupt=false;await deliver(run,h.env.DATA_AGENT_API_URL,h.env.DATA_AGENT_INTERNAL_TOKEN,'');h.releaseRun(run.run_id);
@@ -173,7 +184,7 @@ try{
   const mixedManager=SessionManager.inMemory('/synthetic/data-agent');mixedManager.appendMessage({role:'user',content:run.text,timestamp:Date.now()});
   const mixedTasks=[];
   for(const goal of ['金额目标A','时间目标B']){
-    const call={type:'toolCall',id:randomUUID(),name:'update_analysis_task',arguments:{action:'create',goal,conditions:{time_start:null,time_end:null,timezone:'UTC',metric:null,channel:null,group_by:[],filters:[],knowledge_refs:[],notes:''},options:[]}};
+    const call={type:'toolCall',id:randomUUID(),name:'update_analysis_task',arguments:{action:'create',goal,conditions:{time_start:null,time_end:null,timezone:'UTC',metric:null,channel:null,group_by:[],filters:[],knowledge_refs:[],notes:'',source_limits:null},options:[]}};
     mixedManager.appendMessage(assistant([call]));
     const input={run_id:run.run_id,lease_epoch:run.lease_epoch,sdk_tool_call_id:call.id,tool_name:call.name,arguments:call.arguments,checkpoint:checkpoint(mixedManager)};
     assert.equal((await h.internal('/internal/data/tool-calls',input)).status,200);
@@ -219,12 +230,12 @@ try{
 
   const queryCid=await h.create();await h.resumeWorker();run=await h.capture(queryCid,'执行这个合成参数查询；提交回执丢失后查证原查询。');await h.pauseWorker();
   const queryOrigin=run,queryManager=SessionManager.inMemory('/synthetic/data-agent');
-  assert.equal(queryOrigin.tool_contract_version,1,'跨版本查询恢复沿旧v1工具合同');
+  assert.equal(queryOrigin.tool_contract_version,2);
   queryManager.appendMessage({role:'user',content:run.text,timestamp:Date.now()});
   const queryTool=async(name,args)=>{
     const call={type:'toolCall',id:randomUUID(),name,arguments:args};queryManager.appendMessage(assistant([call]));
     const input={run_id:run.run_id,lease_epoch:run.lease_epoch,sdk_tool_call_id:call.id,tool_name:name,arguments:args,checkpoint:checkpoint(queryManager)};
-    const registered=await h.internal('/internal/data/tool-calls',input);assert.equal(registered.status,200,JSON.stringify(registered.value));assert.equal(registered.value.tool_contract_version,1);
+    const registered=await h.internal('/internal/data/tool-calls',input);assert.equal(registered.status,200,JSON.stringify(registered.value));assert.equal(registered.value.tool_contract_version,2);
     const response=await h.internal('/internal/data/tools',input);assert.equal(response.status,200,JSON.stringify(response.value));assert.equal(response.value.operation_id,registered.value.operation_id);
     queryManager.appendMessage({role:'toolResult',toolCallId:call.id,toolName:name,content:[{type:'text',text:JSON.stringify(response.value.data)}],details:response.value,isError:false,timestamp:Date.now()});
     return response.value;
@@ -235,20 +246,22 @@ try{
     assert.equal((await h.internal('/internal/finish',{run_id:run.run_id,lease_epoch:run.lease_epoch,commit_id:run.output_id,final_text:text,checkpoint:checkpoint(queryManager)})).status,200);
     h.releaseRun(run.run_id);
   };
-  const queryTask=(await queryTool('update_analysis_task',{action:'create',goal:'只提交一次的合成查询恢复',conditions:{time_start:null,time_end:null,timezone:'UTC',metric:null,channel:null,group_by:[],filters:[],knowledge_refs:[],notes:''},options:[]})).data;
+  const queryTask=(await queryTool('update_analysis_task',{action:'create',goal:'只提交一次的合成查询恢复',conditions:{time_start:null,time_end:null,timezone:'UTC',metric:null,channel:null,group_by:[],filters:[],knowledge_refs:[],notes:'',source_limits:null},options:[]})).data;
   const querySql='SELECT :label AS label, :amount + 1 AS amount',queryParameters={label:'SYNTHETIC_ACCEPTED_QUERY_RECEIPT_LOST',amount:41};
-  const draftReceipt=await queryTool('request_query',{task_id:queryTask.task_id,condition_version:queryTask.condition_version,sql:querySql,parameters:queryParameters,target_id:'synthetic-sqlite',summary:'合成查询已保存但提交回执丢失',knowledge_refs:[],replaces_query_id:null,semantic_resolution:{interpretation:'合成参数查询',basis:'unambiguous',user_quote:null,unresolved_differences:[],adoption_message_id:null}});
+  const draftReceipt=await queryTool('request_query',{task_id:queryTask.task_id,condition_version:queryTask.condition_version,sql:querySql,parameters:queryParameters,target_id:'synthetic-sqlite',summary:'合成查询已保存但提交回执丢失',knowledge_refs:[],replaces_query_id:null});
   const query=draftReceipt.data;
   const executionReceipt=await queryTool('execute_query',{query_id:query.id,draft_version:query.draft_version,condition_version:query.condition_version,instruction_quote:run.text});
+  // v1 已退役。用当前入口记录同一笔授权，在首发前构造升级遗留的 v1 账本。
+  h.sql(`UPDATE agent_runs SET tool_contract_version=1 WHERE id='${queryOrigin.run_id}';UPDATE tool_calls SET tool_contract_version=1,receipt=JSON_REMOVE(receipt,'$.tool_contract_version') WHERE origin_run_id='${queryOrigin.run_id}';`);
   const queryState=()=>h.sql(`SELECT JSON_OBJECT('identity',JSON_OBJECT('id',id,'conversation',conversation_id,'owner',owner_id,'task',task_id,'condition',CAST(condition_version AS CHAR),'draft',CAST(draft_version AS CHAR),'operation',operation_id,'sql',sql_text,'parameters',parameters,'target',target_id,'target_version',target_version,'budget',budget_scope_id,'confirmation',confirmation_state,'confirmation_key',confirmation_key,'confirmation_message',confirmation_message_id),'state',execution_state,'error',error_code,'attempts',submission_attempts,'lease_owner',lease_owner,'lease_epoch',CAST(lease_epoch AS CHAR),'result_ref',result_ref,'notified',result_notified) FROM query_requests WHERE id='${query.id}'`)[0];
-  const queryLedger=()=>h.sql(`SELECT JSON_OBJECT('sdk',sdk_tool_call_id,'operation',operation_id,'origin',origin_run_id,'chain',recovery_chain_id,'fingerprint',arguments_fingerprint,'state',state,'receipt',receipt) FROM tool_calls WHERE conversation_id='${queryCid}' ORDER BY sdk_tool_call_id`);
+  const queryLedger=()=>h.sql(`SELECT JSON_OBJECT('sdk',sdk_tool_call_id,'operation',operation_id,'origin',origin_run_id,'chain',recovery_chain_id,'version',tool_contract_version,'fingerprint',arguments_fingerprint,'state',state,'receipt',receipt) FROM tool_calls WHERE conversation_id='${queryCid}' ORDER BY sdk_tool_call_id`);
   const queryBudgets=()=>h.sql(`SELECT JSON_OBJECT('id',b.id,'message',b.message_id,'limit',b.call_limit,'issued',b.issued_calls,'profile',b.model_profile,'failure_streak',b.model_failure_streak) FROM budget_scopes b JOIN conversation_messages m ON m.id=b.message_id WHERE m.conversation_id='${queryCid}' ORDER BY b.id`);
   const authorized=queryState(),originalQueryLedger=queryLedger(),originalQueryBudgets=queryBudgets();
   assert.equal(authorized.state,'queued');assert.equal(authorized.attempts,0);
   assert.equal(authorized.identity.operation,draftReceipt.operation_id);assert.equal(authorized.identity.confirmation_key,executionReceipt.operation_id);
   assert.equal(authorized.identity.confirmation_message,queryOrigin.message_id);assert.equal(authorized.identity.budget,queryOrigin.budget_scope_id);
   assert.equal(authorized.identity.sql,querySql);assert.deepEqual(authorized.identity.parameters,queryParameters);
-  assert.equal(originalQueryLedger.length,3);assert.ok(originalQueryLedger.every(value=>value.state==='succeeded'&&value.origin===queryOrigin.run_id&&value.chain===queryOrigin.recovery_chain_id));
+  assert.equal(originalQueryLedger.length,3);assert.ok(originalQueryLedger.every(value=>value.state==='succeeded'&&value.version===1&&value.origin===queryOrigin.run_id&&value.chain===queryOrigin.recovery_chain_id));
   assert.equal(originalQueryBudgets.length,1);assert.equal(originalQueryBudgets[0].id,queryOrigin.budget_scope_id);
   queryRecovery.authorized=authorized;queryRecovery.ledger=originalQueryLedger;queryRecovery.budgets=originalQueryBudgets;
   await finishQueryRun('合成查询已确认，等待平台结果。');
@@ -278,7 +291,8 @@ try{
   const submittingWorker=h.logs.slice(workerLogStart).find(value=>value.name==='worker-resumed');assert.ok(submittingWorker);
   await until(()=>{if(proxyFailure)throw proxyFailure;return queryState().state==='submission_unknown';},'真实平台已接收而提交回执丢失');
   await h.pauseWorker();
-  assert.match(submittingWorker.output,/\[worker-resumed exited code=.* signal=SIG(?:TERM|KILL)\]/,'harness必须已等到实际Worker进程退出');
+  assert.match(submittingWorker.output,/worker_background_stopped name=query/);
+  assert.match(submittingWorker.output,/\[worker-resumed exited code=0 signal=null\]/,'harness必须已等到实际Worker正常退出');
   const stopped=queryState();queryRecovery.stopped=stopped;
   assert.equal(stopped.state,'submission_unknown');assert.equal(stopped.error,'outcome_unknown');assert.equal(stopped.attempts,1);assert.equal(stopped.result_ref,null);
   assert.deepEqual(stopped.identity,authorized.identity);assert.deepEqual(queryLedger(),originalQueryLedger);assert.deepEqual(queryBudgets(),originalQueryBudgets);

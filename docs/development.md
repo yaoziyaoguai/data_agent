@@ -111,7 +111,9 @@ make vm-stop
 
 `DATA_AGENT_HTTP_UPSTREAMS` 接受逗号分隔的主机名、IP 或 CIDR。未设置时只允许回环地址。容器部署可以显式填写上游服务名，例如 `platform,agent,mem0,milvus`，也可填写使用字面 IP 的私有子网。HTTP 客户端按配置的源直接请求。生产模型和嵌入仍沿各自的 HTTPS 及业务配置校验。
 
-API、Pi Bridge 和 Mem0 默认监听 `127.0.0.1`，需要在隔离网络内互通时可设置 `DATA_AGENT_BIND_HOST=0.0.0.0`，再配置对应的上游地址。API 在报告健康前应用数据库迁移，Worker 在 API 就绪后启动并直接连接已迁移的库。Mem0 最多同时处理 32 个请求，繁忙时返回 `503 memory_busy`。
+API、Pi Bridge 和 Mem0 默认监听 `127.0.0.1`，需要在隔离网络内互通时可设置 `DATA_AGENT_BIND_HOST=0.0.0.0`，再配置对应的上游地址。API 在报告健康前应用数据库迁移。独立启动的 Worker 最多等待 30 秒，核对同库已完成当前迁移后才领取作业。Pi Bridge 收到停机信号后关闭监听并等已接纳请求结束。
+
+Mem0 最多同时执行 32 个业务请求，额外 16 个连接用于接收请求和返回繁忙响应。合规 POST 发完正文后，业务槽已满时收到 `503 memory_busy`。提取的候选向量等待正式发布，同租户其他资产可在提取期间继续索引。
 
 分词加载依次使用显式 `DATA_AGENT_RESOURCES_DIR`、可执行文件旁的 `resources/` 或开发资源目录。前两种目录下均须有 `deepseek/`。词表按所选模型校验固定 SHA-256，读取成功后缓存。补齐缺失文件后可重新加载。
 

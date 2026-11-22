@@ -115,8 +115,16 @@ async function checkConcurrentRemoval() {
   await h.pausePlatform();
   let responses = [];
   const server = createServer(async (req, res) => {
-    for await (const _ of req) {
+    let raw = "";
+    for await (const part of req) raw += part;
+    if (req.url === "/catalog-access") {
+      const {user_id,space_id} = JSON.parse(raw);
+      res.writeHead(200, {"content-type":"application/json"}).end(JSON.stringify({
+        user_id,space_id,namespace:catalog.source_namespace,table_ids:[],legacy_table_names:[],complete_access:true,
+      }));
+      return;
     }
+    assert.equal(req.url,"/catalog");
     responses.push(res);
     if (responses.length < 2) return;
     const pair = responses;
@@ -367,10 +375,9 @@ try {
       assert.equal(savedDefinition.effective_value, definition);
       assert.deepEqual(savedDefinition.effective_structure, metricRule);
       await h.resumeWorker();
-      await writeFile(
-        h.directory + "/platform/permissions.json",
-        JSON.stringify({ denied_query_users: ["alice", "bob"] }),
-      );
+      const permissionsPath = h.directory + "/platform/permissions.json";
+      const denied = JSON.stringify({ denied_query_users: ["alice", "bob"] });
+      await writeFile(permissionsPath, denied);
       for (const user of ["alice", "bob", "carol"]) {
         const cid = await h.create(user);
         await h.send(cid, "查2026年1月净收入", user);
@@ -381,15 +388,22 @@ try {
         assert.ok(q);
         assert.equal(q.confirmation_state, "awaiting_confirmation");
         assert.equal(q.execution_state, "not_submitted");
-        await ok(
-          "/queries/" + q.id + "/confirm",
-          {
-            ...command(),
-            condition_version: q.condition_version,
-            draft_version: q.draft_version,
-          },
-          user,
-        );
+        const confirmPath = "/queries/" + q.id + "/confirm";
+        const input = {...command(),condition_version:q.condition_version,draft_version:q.draft_version};
+        if (user !== "carol") {
+          const rejected = await h.request(confirmPath, input, user);
+          assert.equal(rejected.status,403);
+          assert.equal(rejected.value.code,"forbidden");
+          assert.equal((await ok("/queries/" + q.id, undefined, user)).execution_state,"not_submitted");
+          // 权限先于确认核对。原平台拒绝场景在合法确认后、Worker 提交前撤权。
+          await h.pauseWorker();
+          await writeFile(permissionsPath, "{}");
+        }
+        await ok(confirmPath,input,user);
+        if (user !== "carol") {
+          await writeFile(permissionsPath, denied);
+          await h.resumeWorker();
+        }
         const completed = await until(async () => {
           const v = await ok("/queries/" + q.id, undefined, user);
           return ["failed", "succeeded"].includes(v.execution_state) && v;

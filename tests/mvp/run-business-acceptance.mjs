@@ -251,7 +251,7 @@ const verifyNetScope=async(cid,channel)=>{
   const stored=h.sql(`SELECT body FROM condition_revisions WHERE task_id='${query.task_id}' AND version=${query.condition_version}`)[0];
   assert.equal(stored.channel,null,'新条件通过通用 filters 保存渠道');
   const savedChannels=stored.filters.flatMap(filter=>{
-    const match=filter.match(/^\s*channel\s*=\s*(['"]?)(web|app|store)\1\s*$/i);
+    const match=filter.match(/^\s*(?:[a-z_][a-z0-9_]*\s*\.\s*)?channel\s*=\s*(['"]?)(web|app|store)\1\s*$/i);
     return match?[match[2].toLowerCase()]:[];
   });
   assert.deepEqual(savedChannels,channel===null?[]:[channel]);
