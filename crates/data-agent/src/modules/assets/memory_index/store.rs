@@ -70,7 +70,7 @@ pub async fn claim(pool: &MySqlPool) -> Result<Option<Value>> {
 }
 pub async fn complete(pool: &MySqlPool, job: &Value, error: Option<&str>) -> Result<()> {
     let mut tx = AppTx::begin(pool).await?;
-    sqlx::query("UPDATE personal_memory_index_jobs SET state=IF(? AND attempts<3,'queued',?),error_code=? WHERE id=? AND lease_epoch=? AND state='issued'").bind(error==Some("memory_unavailable"))
+    sqlx::query("UPDATE personal_memory_index_jobs SET state=IF(? AND attempts<3,'queued',?),error_code=? WHERE id=? AND lease_epoch=? AND state='issued'").bind(matches!(error, Some("memory_unavailable" | "memory_busy")))
         .bind(if error.is_some(){"failed"}else{"indexed"}).bind(error).bind(job["id"].as_str()).bind(epoch(job["epoch"].as_str().unwrap_or("0"))?).execute(tx.connection()).await?;
     tx.commit().await
 }

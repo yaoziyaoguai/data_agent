@@ -56,13 +56,14 @@ pub(crate) fn failure(error: Error) -> (StatusCode, Json<Value>) {
         | "source_interrupted"
         | "vector_unconfigured"
         | "vector_unavailable"
+        | "memory_busy"
         | "embedding_unavailable" => StatusCode::SERVICE_UNAVAILABLE,
         _ => StatusCode::CONFLICT,
     };
     (
         status,
         Json(
-            json!({"code":error.code,"message":error.message.as_deref().unwrap_or(error.code),"request_id":request_id,"retryable":error.code=="unavailable"}),
+            json!({"code":error.code,"message":error.message.as_deref().unwrap_or(error.code),"request_id":request_id,"retryable":matches!(error.code,"unavailable"|"memory_busy")}),
         ),
     )
 }

@@ -1085,6 +1085,8 @@ pub enum Code {
     InvalidToolArguments,
     #[serde(rename = "lease_lost")]
     LeaseLost,
+    #[serde(rename = "memory_busy")]
+    MemoryBusy,
     #[serde(rename = "memory_extraction_empty")]
     MemoryExtractionEmpty,
     #[serde(rename = "memory_operation_unknown")]

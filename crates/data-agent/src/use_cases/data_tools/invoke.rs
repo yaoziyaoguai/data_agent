@@ -196,6 +196,7 @@ pub async fn invoke_validated(
                 | "selection_required"
                 | "scope_incomplete"
                 | "memory_unavailable"
+                | "memory_busy"
                 | "memory_extraction_empty"
                 | "memory_operation_unknown"
                 | "stale_knowledge"

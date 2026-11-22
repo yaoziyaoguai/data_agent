@@ -27,31 +27,29 @@ ROUTES = {"/extract": ("MemoryExtractionRequest", "MemoryExtractionReceipt"),
 class MemoryServer(ThreadingHTTPServer):
     request_queue_size = 64
     worker_limit = 32
+    connection_limit = 48
     client_io_timeout = 10
 
-    def __init__(self, address, handler):
+    def __init__(self, address, service, token):
+        self.service = service
+        self.token = token
         self.slots = threading.BoundedSemaphore(self.worker_limit)
-        self.workers = ThreadPoolExecutor(max_workers=self.worker_limit)
-        super().__init__(address, handler)
+        self.connections = threading.BoundedSemaphore(self.connection_limit)
+        self.workers = ThreadPoolExecutor(max_workers=self.connection_limit)
+        super().__init__(address, MemoryHandler)
 
     def process_request(self, request, client_address):
         request.settimeout(self.client_io_timeout)
-        if self.slots.acquire(blocking=False):
+        if self.connections.acquire(blocking=False):
             self.workers.submit(self.serve_request, request, client_address)
         else:
-            body = b'{"error":"memory_busy"}'
-            header = ("HTTP/1.1 503 Service Unavailable\r\nContent-Type: application/json\r\n"
-                      f"Content-Length: {len(body)}\r\nConnection: close\r\n\r\n")
-            try:
-                request.sendall(header.encode("ascii") + body)
-            finally:
-                self.shutdown_request(request)
+            self.shutdown_request(request)
 
     def serve_request(self, request, client_address):
         try:
             self.process_request_thread(request, client_address)
         finally:
-            self.slots.release()
+            self.connections.release()
 
     def server_close(self):
         super().server_close()
@@ -60,6 +58,54 @@ class MemoryServer(ThreadingHTTPServer):
 
 def validate(name, value):
     jsonschema.Draft202012Validator({"$ref": "#/$defs/" + name, "$defs": CONTRACT["$defs"]}).validate(value)
+
+
+class MemoryHandler(BaseHTTPRequestHandler):
+    def log_message(self, *_args):
+        pass
+
+    def reply(self, status, value):
+        data = json.dumps(value, ensure_ascii=False).encode()
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
+
+    def do_GET(self):
+        self.reply(200 if self.path == "/health" else 404, {"provider": "mem0", "version": "2.2.1"})
+
+    def do_POST(self):
+        if self.headers.get("Authorization") != "Bearer " + self.server.token:
+            return self.reply(401, {"error": "unauthenticated"})
+        if self.path not in ROUTES:
+            return self.reply(404, {"error": "not_available"})
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+        except ValueError:
+            return self.reply(400, {"error": "invalid_input"})
+        if not 0 < length <= 131072:
+            return self.reply(400, {"error": "invalid_input"})
+        # 先接收有界正文再拒绝业务过载，避免关连接时重置仍在发送的客户端。
+        body = self.rfile.read(length)
+        if not self.server.slots.acquire(blocking=False):
+            return self.reply(503, {"error": "memory_busy"})
+        try:
+            request_schema, response_schema = ROUTES[self.path]
+            request = json.loads(body)
+            validate(request_schema, request)
+            value = self.server.service.handle(self.path, request)
+            validate(response_schema, value)
+            status = 200
+        except (json.JSONDecodeError, jsonschema.ValidationError, ValueError):
+            status, value = 400, {"error": "invalid_input"}
+        except Exception as e:
+            code = str(e) if isinstance(e, MemoryError) else "memory_unavailable"
+            print("memory_operation_failed code=" + (code if isinstance(e, MemoryError) else type(e).__name__), flush=True)
+            status, value = 503, {"error": code}
+        finally:
+            self.server.slots.release()
+        self.reply(status, value)
 
 
 def main():
@@ -85,44 +131,7 @@ def main():
     if len(token) < 32:
         raise RuntimeError("memory_token_invalid")
 
-    class Handler(BaseHTTPRequestHandler):
-        def log_message(self, *_args):
-            pass
-
-        def reply(self, status, value):
-            data = json.dumps(value, ensure_ascii=False).encode()
-            self.send_response(status)
-            self.send_header("Content-Type", "application/json")
-            self.send_header("Content-Length", str(len(data)))
-            self.end_headers()
-            self.wfile.write(data)
-
-        def do_GET(self):
-            self.reply(200 if self.path == "/health" else 404, {"provider": "mem0", "version": "2.2.1"})
-
-        def do_POST(self):
-            if self.headers.get("Authorization") != "Bearer " + token:
-                return self.reply(401, {"error": "unauthenticated"})
-            if self.path not in ROUTES:
-                return self.reply(404, {"error": "not_available"})
-            try:
-                length = int(self.headers.get("Content-Length", "0"))
-                if not 0 < length <= 131072:
-                    raise MemoryError("invalid_input")
-                request = json.loads(self.rfile.read(length))
-                request_schema, response_schema = ROUTES[self.path]
-                validate(request_schema, request)
-                value = service.handle(self.path, request)
-                validate(response_schema, value)
-                self.reply(200, value)
-            except (json.JSONDecodeError, jsonschema.ValidationError, ValueError):
-                self.reply(400, {"error": "invalid_input"})
-            except Exception as e:
-                code = str(e) if isinstance(e, MemoryError) else "memory_unavailable"
-                print("memory_operation_failed code=" + (code if isinstance(e, MemoryError) else type(e).__name__), flush=True)
-                self.reply(503, {"error": code})
-
-    with MemoryServer((os.environ.get("DATA_AGENT_BIND_HOST", "127.0.0.1"), args.port), Handler) as server:
+    with MemoryServer((os.environ.get("DATA_AGENT_BIND_HOST", "127.0.0.1"), args.port), service, token) as server:
         print(f"startup service=memory stage=listening elapsed={time.monotonic()-_started:.2f}s", flush=True)
         stop = threading.Event()
         threading.Thread(target=service.maintain, args=(stop,), daemon=True).start()

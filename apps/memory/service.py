@@ -101,26 +101,29 @@ class MemoryService:
         self.gateway.failure = None
         if path == "/search":
             return self.search(request)
+        if path == "/extract":
+            return self.extract(request)
         active = self.vectors.for_tenant(self.tenant(request))
         with active.writes:
-            if path == "/extract":
-                return self.extract(request)
             return self.index(request)
 
     def maintain(self, stop):
         while not stop.is_set():
             self.gateway.settle_pending()
             for key, fingerprint, record in self.store.retired():
+                vectors = self.vectors.for_tenant(record["tenant"])
+                if not vectors.writes.acquire(blocking=False):
+                    continue
                 try:
-                    vectors = self.vectors.for_tenant(record["tenant"])
-                    with vectors.writes:
-                        active = self.store.asset(record["identity"])["memory_ids"]
-                        for memory_id in record["retired"]:
-                            if memory_id not in active and self.memory.vector_store.get(memory_id):
-                                self.memory.delete(memory_id)
-                        self.store.write_operation(key, fingerprint, "completed", {"receipt": record["receipt"]})
+                    active = self.store.asset(record["identity"])["memory_ids"]
+                    for memory_id in record["retired"]:
+                        if memory_id not in active and self.memory.vector_store.get(memory_id):
+                            self.memory.delete(memory_id)
+                    self.store.write_operation(key, fingerprint, "completed", {"receipt": record["receipt"]})
                 except Exception as error:
                     print(f"memory_vector_cleanup_failed kind={type(error).__name__}", flush=True)
+                finally:
+                    vectors.writes.release()
             stop.wait(2)
 
     @staticmethod
@@ -134,15 +137,15 @@ class MemoryService:
         if previous_memory is not None:
             identity.append(previous_memory)
         fp = digest(identity)
-        previous = self.store.operation(key, fp)
+        # 提取只写当前 operation 的 pending 向量，发布前不会参与正式检索。
+        previous = self.store.claim_operation(key, fp)
         if previous:
             if previous["state"] != "prepared":
                 raise MemoryError(previous.get("error", "memory_operation_unknown"))
             return {"operation_id": r["operation_id"], "body": previous["body"], "replayed": True}
-        if r["quote"] not in r["message"]:
-            raise MemoryError("memory_unavailable")
-        self.store.write_operation(key, fp, "unknown", {})
         try:
+            if r["quote"] not in r["message"]:
+                raise MemoryError("memory_unavailable")
             prompt = "只提取以下原文引用对应的可复用个人事项。完整消息用于理解上下文及限制；当次查询与临时例外不得变成长久偏好。每条记忆在同一段中保留适用对象、默认、范围、例外和待核实含义，用中文记录。业务指标和对象名称沿用原话，不添加原话没有的别名、英文缩写或同义关系，不扩大到其他指标，不增加公共口径。没有可复用事项返回空。原文引用：" + r["quote"]
             if previous_memory is not None:
                 context = {"body": previous_memory["body"]}
@@ -220,7 +223,7 @@ class MemoryService:
     def search(self, r):
         key = 'search:' + r.get('operation_id', 'test')
         fp = digest([self.fingerprint, self.tenant(r), r['query']])
-        previous = self.store.claim_search(key, fp)
+        previous = self.store.claim_operation(key, fp)
         if previous:
             if previous['state'] != 'completed':
                 raise MemoryError('memory_operation_unknown')

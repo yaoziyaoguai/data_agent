@@ -1493,6 +1493,7 @@
             "unsupported",
             "version_conflict",
             "memory_unavailable",
+            "memory_busy",
             "memory_extraction_empty",
             "memory_operation_unknown",
             "vector_unconfigured",

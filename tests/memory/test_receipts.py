@@ -122,6 +122,62 @@ class ReceiptTests(unittest.TestCase):
         self.assertEqual(self.search("bob"), [])
         self.assertEqual(self.search(space="another"), [])
 
+    def test_slow_extraction_does_not_block_same_tenant_index_or_reissue(self):
+        entered, release = threading.Event(), threading.Event()
+        add = self.service.memory.add
+
+        def pause_extraction(content, **kwargs):
+            if kwargs["infer"]:
+                entered.set()
+                if not release.wait(6):
+                    raise TimeoutError("合成推理尚未释放")
+            return add(content, **kwargs)
+
+        self.service.gateway = threading.local()
+        self.service.memory.add = pause_extraction
+        request = {**self.message, "budget": {}}
+        with ThreadPoolExecutor(max_workers=3) as threads:
+            extraction = threads.submit(self.service.handle, "/extract", request)
+            try:
+                self.assertTrue(entered.wait(2))
+                index = threads.submit(self.service.handle, "/index", {**self.apply(extraction=None), "budget": {}})
+                self.assertEqual(index.result(timeout=2)["state"], "ready")
+                replay = threads.submit(self.service.handle, "/extract", request)
+                with self.assertRaisesRegex(MemoryError, "memory_operation_unknown"):
+                    replay.result(timeout=2)
+                self.assertFalse(extraction.done())
+            finally:
+                release.set()
+            self.assertEqual(extraction.result(timeout=2)["operation_id"], request["operation_id"])
+        self.assertEqual(sum(options["infer"] for _, options in self.service.memory.add_calls), 1)
+
+    def test_retirement_of_other_tenants_continues_while_writer_is_busy(self):
+        stop, deleted = threading.Event(), threading.Event()
+        self.service.gateway = SimpleNamespace(settle_pending=lambda: None)
+        for owner in ("alice", "bob"):
+            for version in (1, 2):
+                request = self.apply(str(version), extraction=None, operation=f"index-{owner}-{version}")
+                self.service.index({**request, "owner_id": owner})
+        retired = {record["tenant"]: record["retired"][0] for _, _, record in self.service.store.retired()}
+        delete = self.service.memory.delete
+
+        def observe_delete(key):
+            delete(key)
+            if key == retired["bob::demo"]:
+                deleted.set()
+
+        self.service.memory.delete = observe_delete
+        alice = self.service.vectors.for_tenant("alice::demo")
+        with ThreadPoolExecutor(max_workers=1) as threads:
+            with alice.writes:
+                maintenance = threads.submit(self.service.maintain, stop)
+                try:
+                    self.assertTrue(deleted.wait(2), "Alice 的写入不能阻塞 Bob 的退役向量回收")
+                    self.assertIsNotNone(self.service.memory.vector_store.get(retired["alice::demo"]))
+                finally:
+                    stop.set()
+            maintenance.result(timeout=6)
+
     def test_extract_replays_after_process_restart_without_new_model_call(self):
         first = self.service.extract(self.message)
         self.service.store.db.close()

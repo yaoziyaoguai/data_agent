@@ -45,7 +45,7 @@ pub async fn call(
         .send()
         .await
         .map_err(|_| Error::new("memory_unavailable"))?;
-    let ok = response.status().is_success();
+    let status = response.status();
     let bytes = response
         .bytes()
         .await
@@ -55,9 +55,12 @@ pub async fn call(
     }
     let value: Value =
         serde_json::from_slice(&bytes).map_err(|_| Error::new("memory_unavailable"))?;
-    if !ok {
+    if !status.is_success() {
         return Err(Error::new(match value["error"].as_str() {
             Some("budget_exhausted") => "budget_exhausted",
+            Some("memory_busy") if status == reqwest::StatusCode::SERVICE_UNAVAILABLE => {
+                "memory_busy"
+            }
             Some("memory_extraction_empty") => "memory_extraction_empty",
             Some("memory_operation_unknown") => "memory_operation_unknown",
             Some("idempotency_conflict") => "idempotency_conflict",

@@ -44,7 +44,7 @@ class ReceiptStore:
             self.db.execute("INSERT INTO operations VALUES(?,?,?,?) ON CONFLICT(id) DO UPDATE SET state=excluded.state,result=excluded.result",
                             (key, fingerprint, state, json.dumps(value, ensure_ascii=False)))
 
-    def claim_search(self, key, fingerprint):
+    def claim_operation(self, key, fingerprint):
         with self.db:
             claimed = self.db.execute("INSERT INTO operations VALUES(?,?,'unknown','{}') ON CONFLICT(id) DO NOTHING",
                                       (key, fingerprint)).rowcount
