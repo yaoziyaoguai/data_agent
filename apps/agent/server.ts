@@ -37,6 +37,9 @@ if (url.protocol !== 'http:' || url.username || url.password || !allowed) {
   throw new Error('permitted API upstream required');
 }
 const host = process.env.DATA_AGENT_BIND_HOST ?? '127.0.0.1';
-createDeliveryServer(apiUrl, token, deliver, process.env.DATA_AGENT_FAULT ?? '').listen(port, host, () => {
+const server = createDeliveryServer(apiUrl, token, deliver, process.env.DATA_AGENT_FAULT ?? '');
+server.listen(port, host, () => {
   console.log('startup service=bridge stage=listening elapsed_ms=' + Math.round(performance.now() - started) + ' port=' + port);
 });
+process.once('SIGINT', () => server.close());
+process.once('SIGTERM', () => server.close());

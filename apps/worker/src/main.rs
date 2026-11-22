@@ -193,7 +193,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     if env::var("DATA_AGENT_MODE")?.as_str() != "development" {
         return Err("explicit development configuration required".into());
     }
-    let pool = persistence::connect_pool(&env::var("DATA_AGENT_DATABASE_URL")?, 32).await?;
+    let pool = persistence::connect_worker(&env::var("DATA_AGENT_DATABASE_URL")?, 32).await?;
     let worker_id = id();
     let ttl_ms = env::var("DATA_AGENT_LEASE_MS")
         .unwrap_or_else(|_| "15000".into())
