@@ -388,6 +388,19 @@ fn bm25_channel_ranks_without_memory_scoring_and_rrf_uses_k60() {
 }
 
 #[test]
+fn common_ranking_excludes_unlocatable_source_rows_before_limiting_results() {
+    let raw = vec![
+        json!({"source_kind":"document","distance":100}),
+        json!({"source_kind":"document","source_id":"readable","revision":1,
+            "offset":0,"length":20,"segmentation_version":"source-structure-1","distance":1}),
+    ];
+    let ranked = rank_common("规则", vec![], &Channels::all(&[], &[], &raw, &[]), 1, true);
+    assert_eq!(ranked.raw.len(), 1);
+    assert_eq!(ranked.raw[0]["source_id"], "readable");
+    assert_eq!(ranked.sequence.len(), 1);
+}
+
+#[test]
 fn common_ranking_keeps_every_selected_raw_location_for_owner_reads() {
     let rows = (0..31).map(|offset| {
         json!({"id":format!("raw-{offset}"),"source_kind":"document","source_id":"many-positions",

@@ -312,7 +312,7 @@ async fn drive_stage(
                         (format!("k:{}", retrieval::knowledge_record(candidate)), score)
                     }).collect::<std::collections::HashMap<_, _>>();
                     for candidate in &rank.raw {
-                        let id = candidate["source_id"].as_str().unwrap_or_default();
+                        let id = candidate["source_id"].as_str().ok_or(Error::new("invalid_evidence"))?;
                         let score = i64::from(hints.related_object_ids.as_ref().is_some_and(|ids| ids.iter().any(|value| value == id)));
                         matches.insert(format!("raw:{}", retrieval::raw_record(candidate).ok_or(crate::types::Error::new("unavailable"))?), score);
                     }

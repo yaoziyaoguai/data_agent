@@ -10,6 +10,7 @@ import { MarkdownContent } from "../../shared/MarkdownContent.tsx";
 import { KnowledgeReference } from "../../shared/KnowledgeReference.tsx";
 import { useUnsavedChanges } from "../../shared/UnsavedChanges.tsx";
 import { Tabs } from "../../shared/Tabs.tsx";
+import { AssetPreview } from "./AssetPreview.tsx";
 import { SkillExamples } from "./SkillExamples.tsx";
 export function AssetsPage({
   user,
@@ -24,6 +25,7 @@ export function AssetsPage({
   const [assets, setAssets] = useState<Asset[]>([]);
   const [loadedUser, setLoadedUser] = useState(user);
   const [tab, setTab] = useState<"memory" | "skill" | "shared">(initialTab);
+  const [previewDraft, setPreviewDraft] = useState<string | null>(null);
   const [editing, setEditing] = useState<Asset | null | undefined>();
   const editingDraft = editing?.state === "draft" ? editing : null;
   const [editingKind, setEditingKind] = useState<AssetKind>("memory");
@@ -47,7 +49,7 @@ export function AssetsPage({
   useEffect(() => {
     if (initialTab !== tab) {
       editorSession.current++; publicationSession.current++;
-      setEditing(undefined); setPublishing(null); setSuggesting(null); setSaving(false);
+      setEditing(undefined); setPublishing(null); setSuggesting(null); setSaving(false); setPreviewDraft(null);
       setSearch(""); setStatusFilter(""); setTab(initialTab);
     }
   }, [initialTab]);
@@ -235,8 +237,18 @@ export function AssetsPage({
               <div className="asset-scope"><p title={asset.scope}>{asset.scope}</p></div>
               <div className="asset-state"><span className="status-pill">{asset.state === "draft" ? "待核对保存" : asset.state === "enabled" ? "已启用" : "已停用"}</span><small>{asset.text_unavailable ? "暂不可用" : asset.verified ? "已核对" : "待核对"}</small></div>
               {asset.text_unavailable && <p role="status" className="quiet">来源已失效或无法核验，当前内容不能采用。你仍可停用、删除或重新编写。</p>}
-              <div className="actions asset-primary-actions">{asset.can_edit && <button onClick={() => void editAsset(asset)}>{asset.state === "draft" ? "核对并保存" : asset.text_unavailable ? "重写内容" : "编辑"}</button>}{asset.kind === "skill" && asset.state === "enabled" && !asset.text_unavailable && <button className="primary" onClick={() => void onUseSkill(asset).catch(e => setError(e.message))}>在当前对话选用</button>}</div>
-              <details className="asset-full-content" hidden={asset.state === "draft"}><summary>{asset.text_unavailable ? "管理这条记录" : "查看完整" + (asset.kind === "memory" ? "记忆" : "方法")}</summary>{!asset.text_unavailable && <><MarkdownContent text={asset.body}/><p><strong>适用范围：</strong>{asset.scope}</p></>}
+              <div className="actions asset-primary-actions">{asset.can_edit && <button onClick={() => void editAsset(asset)}>{asset.state === "draft" ? "核对并保存" : asset.text_unavailable ? "重写内容" : "编辑"}</button>}{asset.kind === "skill" && asset.state === "enabled" && !asset.text_unavailable && <button className="primary" onClick={() => void onUseSkill(asset).catch(e => setError(e.message))}>在当前对话选用</button>}
+                {asset.state === "draft" && asset.can_edit && <button className="text-link" onClick={() => void state(asset, "delete")}>丢弃草稿</button>}
+              </div>
+              {asset.state === "draft" ?
+                <details className="asset-full-content" open={previewDraft === asset.id} onToggle={event => {
+                  const open = event.currentTarget.open;
+                  setPreviewDraft(previous => open ? asset.id : previous === asset.id ? null : previous);
+                }}>
+                  <summary>预览待核对方法</summary>
+                  {previewDraft === asset.id && <AssetPreview key={asset.version} id={asset.id}/>}
+                </details>
+              : <details className="asset-full-content"><summary>{asset.text_unavailable ? "管理这条记录" : "查看完整" + (asset.kind === "memory" ? "记忆" : "方法")}</summary>{!asset.text_unavailable && <><MarkdownContent text={asset.body}/><p><strong>适用范围：</strong>{asset.scope}</p></>}
               {asset.kind === "skill" && <p className="quiet skill-owner">{asset.visibility === "space" ? "空间公共" : "个人"} · 负责人 {asset.owner_id ?? user}</p>}
               {asset.memory_index_state && asset.memory_index_state !== "indexed" && (
                 <p className="asset-index-state" role="status">
@@ -251,7 +263,7 @@ export function AssetsPage({
               </details>
               {(asset.files ?? []).map(file => <details key={file.path}><summary>{file.path.replace(/^(references|assets)\//, "")}</summary><pre className="skill-preview">{file.content}</pre></details>)}
               <div className="actions">
-                {asset.can_edit && asset.state !== "draft" && <>
+                {asset.can_edit && <>
                 <button
                   onClick={() =>
                     void state(
@@ -268,7 +280,7 @@ export function AssetsPage({
                 {asset.kind === "skill" && asset.visibility !== "space" && asset.state === "enabled" && !asset.text_unavailable && <button onClick={() => publish(asset)}>发布到空间</button>}
                 {asset.visibility === "space" && !asset.text_unavailable && <button onClick={() => setSuggesting(asset)}>修改建议</button>}
 
-              </div></details>
+              </div></details>}
             </article>
           ))}
       </div>

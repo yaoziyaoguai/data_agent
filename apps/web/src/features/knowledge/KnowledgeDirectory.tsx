@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import type { KnowledgeObject } from "../../../../../packages/contracts/generated/boundary.ts";
 import { DocumentName, documentRepresentatives } from "./KnowledgeDocument.tsx";
 import { KnowledgeOrigin } from "./KnowledgeOrigin.tsx";
@@ -6,7 +6,7 @@ import { useNavigationGuard } from "../../shared/UnsavedChanges.tsx";
 import { api } from "../../shared/api.ts";
 import { knowledgeKindLabels } from "../../shared/knowledge-labels.ts";
 
-export function KnowledgeDirectory({ user, scope, current, revision, onSelect, onPage }: {
+export const KnowledgeDirectory = memo(function KnowledgeDirectory({ user, scope, current, revision, onSelect, onPage }: {
   user: string;
   scope: "all" | "maintained";
   current: string;
@@ -77,4 +77,4 @@ export function KnowledgeDirectory({ user, scope, current, revision, onSelect, o
     {error && <p role="alert" className="error">{error}<button onClick={() => setRefresh(value => value + 1)}>重试目录</button></p>}
     {after && <button disabled={loading} onClick={() => void fetchPage(after, generation.current)}>加载更多目录对象</button>}
   </>;
-}
+});

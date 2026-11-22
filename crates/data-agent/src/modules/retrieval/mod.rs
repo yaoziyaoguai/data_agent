@@ -64,18 +64,21 @@ fn merge_channel(knowledge: &[(&str, f64)], raw: &[&Value]) -> Vec<(f64, String)
         .map(|(id, score)| (*score, format!("k:{id}"), false))
         .collect();
     for row in raw {
-        let record = raw_record(row).unwrap_or_default();
+        let Some(record) = raw_record(row) else {
+            continue;
+        };
+        let record = format!("raw:{record}");
         let distance = row["distance"].as_f64().unwrap_or(0.);
         if let Some(entry) = merged
             .iter_mut()
-            .find(|(_, seen, is_raw)| *is_raw && *seen == format!("raw:{record}"))
+            .find(|(_, seen, is_raw)| *is_raw && *seen == record)
         {
             if distance > entry.0 {
                 entry.0 = distance;
             }
             continue;
         }
-        merged.push((distance, format!("raw:{record}"), true));
+        merged.push((distance, record, true));
     }
     merged.sort_by(|a, b| b.0.total_cmp(&a.0).then_with(|| a.1.cmp(&b.1)));
     merged
@@ -232,8 +235,9 @@ pub fn rank_common(
     // 同一位置的定位信息相同，直接取一份；跨BM25/COSINE只融合名次，不比原始分数。
     let mut raw_rows: HashMap<String, Value> = HashMap::new();
     for row in channels.raw_bm25.iter().chain(channels.raw_dense.iter()) {
-        let record = raw_record(row).unwrap_or_default();
-        raw_rows.entry(record).or_insert_with(|| row.clone());
+        if let Some(record) = raw_record(row) {
+            raw_rows.entry(record).or_insert_with(|| row.clone());
+        }
     }
     let raws: Vec<(f64, String, Value)> = raw_rows
         .into_iter()

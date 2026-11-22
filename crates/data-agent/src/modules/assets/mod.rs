@@ -10,8 +10,8 @@ pub(crate) use store::{
 };
 pub use store::{
     begin_removal_in_tx, begin_save_in_tx, begin_selection_in_tx, can_edit,
-    change_state_authorized_in_tx, change_state_in_tx, enabled_sources_in_tx, list_in_tx,
-    publish_in_tx, read_assets_with_sources_in_tx, read_enabled_in_tx, read_in_tx,
+    change_state_authorized_in_tx, change_state_in_tx, enabled_sources_in_tx, hide_skill_text,
+    list_in_tx, publish_in_tx, read_assets_with_sources_in_tx, read_enabled_in_tx, read_in_tx,
     read_with_sources_in_tx, record_adoption_in_tx, remove_selection_in_tx,
     review_suggestion_in_tx, save_authorized_in_tx, save_in_tx, save_with_skill_sources_in_tx,
     select_in_tx, selected_in_tx, selection_page_in_tx, suggest_in_tx, suggestions_in_tx,

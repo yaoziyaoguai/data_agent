@@ -101,7 +101,8 @@ async function checkHistoricalMethodSources(fixture, checks) {
   const { h } = fixture;
   const cid = await h.create();
   const conditions = { time_start: "2026-01-01T00:00:00Z", time_end: "2026-04-01T00:00:00Z",
-    timezone: "UTC", metric: null, channel: null, group_by: [], filters: [], knowledge_refs: [], notes: "合成固定结果" };
+    timezone: "UTC", metric: null, channel: null, group_by: [], filters: [], knowledge_refs: [], notes: "合成固定结果",
+    source_limits: null };
   const route = task => fixture.invoke("update_analysis_task", { action: "route", task_id: task.task_id,
     expected_version: task.condition_version, options: [] });
   const queryEvidence = async (task, sql, column, expected) => {
@@ -210,15 +211,19 @@ async function checkHistoricalMethodSources(fixture, checks) {
   assert.equal(unavailable.status, "sources_unavailable");
   assert.equal(Object.hasOwn(unavailable, "body"), false);
   const stored = ok(await h.request("/assets")).assets.find(asset => asset.id === saved.id);
-  assert.equal(stored.body, input.body);
+  assert.equal(stored.text_unavailable, true);
+  assert.equal(stored.body, "");
   await writeFile(h.directory + "/platform/permissions.json", "{}");
+  const restored = ok(await h.request(`/assets/${saved.id}`));
+  assert.equal(restored.body, input.body);
+  assert.equal(restored.version, saved.version);
   await fixture.begin(cid, "修改方法当前任务的范围说明。");
   await fixture.invoke("update_analysis_task", { action: "revise", task_id: current.task_id,
     expected_version: current.condition_version,
     condition_patch: { set: { notes: "调整后的范围" }, unset: [] }, options: [] });
   await fixture.finish();
   assert.equal(ok(await h.request(`/assets/skill-drafts/${refs[2].draft_id}`)).status, "condition_changed");
-  checks.push("跨会话来源仍拒绝；结果撤权使实际结果及依赖它的草稿不可读，已保存个人方法正文保留");
+  checks.push("跨会话来源拒绝；撤权隐藏结果、草稿及显式引用结果的方法正文，恢复后读回原已保存版本");
 }
 
 async function checkReuse() {
@@ -432,7 +437,7 @@ async function checkReuse() {
     const makePending = async name => {
       const currentTask = await fixture.invoke("update_analysis_task", { action: "create", goal: name,
         conditions: { time_start: null, time_end: null, timezone: "UTC", metric: null, channel: null,
-          group_by: [], filters: [], knowledge_refs: [reference(freshDocument)], notes: "原范围" }, options: [] });
+          group_by: [], filters: [], knowledge_refs: [reference(freshDocument)], notes: "原范围", source_limits: null }, options: [] });
       const currentEvidence = await fixture.invoke("save_analysis_evidence", { task_id: currentTask.task_id,
         condition_version: currentTask.condition_version, data_range: "独立合成资料",
         findings: [{ text: "只采用资料定义。", calculation: "按资料读取。", limitations: [],
@@ -489,7 +494,7 @@ async function checkReuse() {
     assert.equal(explicitOldTable.items[0].state, "stale");
     const investigationTask = await fixture.invoke("update_analysis_task", { action: "create", goal: "核对改版资料",
       conditions: { time_start: null, time_end: null, timezone: "UTC", metric: null, channel: null,
-        group_by: [], filters: [], knowledge_refs: [], notes: "先查资料" }, options: [] });
+        group_by: [], filters: [], knowledge_refs: [], notes: "先查资料", source_limits: null }, options: [] });
     const oldRuleAdoption = await fixture.invokeRaw("request_query", { task_id: investigationTask.task_id,
       condition_version: investigationTask.condition_version, sql: "SELECT 1 AS value", parameters: {},
       target_id: "synthetic-sqlite", summary: "尝试绑定已失效的表正文，应被拒绝。",

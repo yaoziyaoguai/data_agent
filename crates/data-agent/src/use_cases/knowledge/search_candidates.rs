@@ -173,7 +173,9 @@ pub(super) async fn load_selected_in_tx(
             Err(error) if matches!(error.code, "not_available") => return Ok(None),
             Err(error) => return Err(error),
         };
-        let anchor_current = anchor_head["version"].as_str().unwrap_or_default();
+        let anchor_current = anchor_head["version"]
+            .as_str()
+            .ok_or(Error::new("invalid_evidence"))?;
         let registered_at_current = references["entries"]
             .as_array()
             .into_iter()
@@ -256,7 +258,10 @@ pub(super) async fn ranked_candidates_in_tx(
         }
         for value in values {
             cache.meta.insert(
-                value["id"].as_str().unwrap_or_default().to_owned(),
+                value["id"]
+                    .as_str()
+                    .ok_or(Error::new("invalid_evidence"))?
+                    .to_owned(),
                 Some(value),
             );
         }

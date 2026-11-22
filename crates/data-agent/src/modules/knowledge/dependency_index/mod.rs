@@ -107,6 +107,12 @@ struct DependencyKey {
     target_path: String,
 }
 
+struct SourceTarget<'a> {
+    kind: &'static str,
+    id: &'a str,
+    revision: u64,
+}
+
 struct DependencyCollector {
     owner_id: String,
     owner_version: u64,
@@ -141,28 +147,14 @@ impl DependencyCollector {
         }
     }
 
-    // 来源引用按document-前缀区分文档与平台来源；缺身份或修订不登记。
     fn push_source(
         &mut self,
         entry_path: &str,
         layer: &str,
         effective: bool,
         role: &str,
-        reference: &Value,
+        source: SourceTarget<'_>,
     ) {
-        let Some(source) = reference["source_id"].as_str() else {
-            return;
-        };
-        let Some(revision) = reference["version"]
-            .as_str()
-            .and_then(|value| value.parse::<u64>().ok())
-        else {
-            return;
-        };
-        let (kind, id) = match source.strip_prefix("document-") {
-            Some(id) => ("document", id.to_owned()),
-            None => ("platform", source.to_owned()),
-        };
         self.push(DependencyRow {
             owner_id: String::new(),
             owner_version: 0,
@@ -171,9 +163,9 @@ impl DependencyCollector {
             purpose: "required".to_owned(),
             role: role.to_owned(),
             effective,
-            target_kind: kind.to_owned(),
-            target_id: id,
-            target_revision: revision,
+            target_kind: source.kind.to_owned(),
+            target_id: source.id.to_owned(),
+            target_revision: source.revision,
             target_path: String::new(),
             target_fingerprint: String::new(),
         });
@@ -233,18 +225,27 @@ fn collect_statement_sources(
     row_layer: &str,
     effective: bool,
     statement: &Value,
-) {
+) -> Result<()> {
     for citation in statement["citations"].as_array().into_iter().flatten() {
-        let reference = json_source_reference(&citation["source"], &citation["revision"]);
-        collector.push_source(entry_path, row_layer, effective, "citation", &reference);
+        collector.push_source(
+            entry_path,
+            row_layer,
+            effective,
+            "citation",
+            citation_target(citation)?,
+        );
     }
     for support in statement["supports"].as_array().into_iter().flatten() {
         let reference = &support["reference"];
         match reference["kind"].as_str() {
             Some("source") => {
-                let citation = &reference["citation"];
-                let source = json_source_reference(&citation["source"], &citation["revision"]);
-                collector.push_source(entry_path, row_layer, effective, "support", &source);
+                collector.push_source(
+                    entry_path,
+                    row_layer,
+                    effective,
+                    "support",
+                    citation_target(&reference["citation"])?,
+                );
             }
             Some("knowledge") => collector.push_knowledge_reference(
                 entry_path,
@@ -256,6 +257,7 @@ fn collect_statement_sources(
             _ => {}
         }
     }
+    Ok(())
 }
 
 // 陈述完整文本（text＋scope_text，与建议层value拼接形态一致）逐字留在人工值中
@@ -281,30 +283,28 @@ fn collect_layer_sources(
     row_layer: &str,
     source_layer: &str,
     effective: bool,
-) {
+) -> Result<()> {
     match source_layer {
         "source_fact" => {
-            if entry["source_facts"]["source_id"].is_string() {
-                collector.push_source(
-                    entry_path,
-                    row_layer,
-                    effective,
-                    "origin",
-                    &entry["source_facts"],
-                );
+            if let Some(source) = legacy_source_target(&entry["source_facts"]) {
+                collector.push_source(entry_path, row_layer, effective, "origin", source);
             }
             for reference in entry["source_facts"]["structured_evidence"]
                 .as_array()
                 .into_iter()
                 .flatten()
             {
-                collector.push_source(entry_path, row_layer, effective, "evidence", reference);
+                if let Some(source) = legacy_source_target(reference) {
+                    collector.push_source(entry_path, row_layer, effective, "evidence", source);
+                }
             }
         }
         "model_suggestion" => {
             for (field, role) in [("material_refs", "material"), ("evidence", "evidence")] {
                 for reference in entry["suggestion"][field].as_array().into_iter().flatten() {
-                    collector.push_source(entry_path, row_layer, effective, role, reference);
+                    if let Some(source) = legacy_source_target(reference) {
+                        collector.push_source(entry_path, row_layer, effective, role, source);
+                    }
                 }
             }
         }
@@ -315,8 +315,9 @@ fn collect_layer_sources(
         .into_iter()
         .flatten()
     {
-        collect_statement_sources(collector, entry_path, row_layer, effective, statement);
+        collect_statement_sources(collector, entry_path, row_layer, effective, statement)?;
     }
+    Ok(())
 }
 
 pub fn rows_for_object(object: &Value) -> Result<ObjectDependencies> {
@@ -342,7 +343,7 @@ pub fn rows_for_object(object: &Value) -> Result<ObjectDependencies> {
                 layer,
                 layer,
                 effective == layer,
-            );
+            )?;
         }
         // 同文确认：人工正文与自动层逐字相同，出处仍是该层来源，按人工层登记为
         // 有效行（同文重存/仅确认保留来源）。局部替换：与整层文本不同，但逐字
@@ -366,7 +367,7 @@ pub fn rows_for_object(object: &Value) -> Result<ObjectDependencies> {
                             "human_override",
                             layer,
                             true,
-                        );
+                        )?;
                     } else {
                         for statement in entry[field]["statements"].as_array().into_iter().flatten()
                         {
@@ -377,7 +378,7 @@ pub fn rows_for_object(object: &Value) -> Result<ObjectDependencies> {
                                     "human_override",
                                     true,
                                     statement,
-                                );
+                                )?;
                             }
                         }
                     }
@@ -465,10 +466,33 @@ fn layer_field(layer: &str) -> &str {
     }
 }
 
-fn json_source_reference(source: &Value, revision: &Value) -> Value {
-    let id = match source["kind"].as_str() {
-        Some("document") => format!("document-{}", source["id"].as_str().unwrap_or_default()),
-        _ => source["id"].as_str().unwrap_or_default().to_owned(),
+fn citation_target(citation: &Value) -> Result<SourceTarget<'_>> {
+    let source = &citation["source"];
+    let id = source["id"]
+        .as_str()
+        .filter(|id| !id.is_empty())
+        .ok_or(Error::new("invalid_evidence"))?;
+    let kind = match source["kind"].as_str() {
+        Some("document") => "document",
+        Some("platform") => "platform",
+        _ => return Err(Error::new("invalid_evidence")),
     };
-    serde_json::json!({"source_id":id,"version":revision})
+    let revision = citation["revision"]
+        .as_str()
+        .ok_or(Error::new("invalid_evidence"))?;
+    Ok(SourceTarget {
+        kind,
+        id,
+        revision: crate::types::epoch(revision)?,
+    })
+}
+
+fn legacy_source_target(reference: &Value) -> Option<SourceTarget<'_>> {
+    let id = reference["source_id"].as_str()?;
+    let revision = reference["version"].as_str()?.parse().ok()?;
+    let (kind, id) = match id.strip_prefix("document-") {
+        Some(id) => ("document", id),
+        None => ("platform", id),
+    };
+    (!id.is_empty()).then_some(SourceTarget { kind, id, revision })
 }

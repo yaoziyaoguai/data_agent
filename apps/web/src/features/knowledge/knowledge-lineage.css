@@ -38,6 +38,11 @@
   padding: 0;
   margin: 0;
 }
+.lineage-kind h5 {
+  margin: 8px 0 2px;
+  color: #52657d;
+  font-size: 12px;
+}
 .lineage-nodes li {
   display: grid;
   gap: 3px;

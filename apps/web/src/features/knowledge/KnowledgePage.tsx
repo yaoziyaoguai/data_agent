@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type {
   KnowledgeObject,
   KnowledgeEntry,
@@ -110,12 +110,12 @@ export function KnowledgePage({
     return () => window.removeEventListener("resize", alignSelection);
   }, [current, objects.length]);
   const guard = useNavigationGuard();
-  const move = (id: string, nextTab = "概览", scope = directoryScope) => {
-    if (onLocation) { if (onLocation({object: id, tab: nextTab, scope})) { setCurrent(id); setTab(nextTab); setDirectoryScope(scope); } }
-    else guard(() => { setCurrent(id); setTab(nextTab); setDirectoryScope(scope); }, undefined, "knowledge");
-  };
   const [query, setQuery] = useState("");
   const [directoryScope, setDirectoryScope] = useState<"tables" | "all" | "maintained">(initialScope);
+  const move = useCallback((id: string, nextTab = "概览", scope = directoryScope) => {
+    if (onLocation) { if (onLocation({object: id, tab: nextTab, scope})) { setCurrent(id); setTab(nextTab); setDirectoryScope(scope); } }
+    else guard(() => { setCurrent(id); setTab(nextTab); setDirectoryScope(scope); }, undefined, "knowledge");
+  }, [directoryScope, onLocation, guard]);
   const directorySelection = useRef({scope: directoryScope, query});
   directorySelection.current = {scope: directoryScope, query};
   const [directoryRevision, setDirectoryRevision] = useState(0);
@@ -307,25 +307,37 @@ export function KnowledgePage({
     try{await api("MutationReceipt","/knowledge-index/rebuilds","POST",{operation_id:crypto.randomUUID()});setMaintenanceNotice("索引重建已排队。检索期间仍会核对当前正式知识，覆盖情况会随进度更新。");}
     catch(e){setError(e instanceof Error && e.message === "vector_unconfigured" ? "尚未配置语义检索服务，暂时无法重建索引。" : e instanceof Error ? e.message : "索引重建失败");}finally{setRebuilding(false);}
   };
-  const tables = objects.filter((o) => o.kind === "table");
+  const tables = useMemo(() => objects.filter(object => object.kind === "table"), [objects]);
+  const browseButtons = useMemo(() => {
+    const repeatedNames = new Map<string, number>();
+    const tableIds = new Set(tables.map(table => table.id));
+    for (const table of tables) repeatedNames.set(table.name, (repeatedNames.get(table.name) ?? 0) + 1);
+    const values = query ? matches.map(match => objects.find(object => object.id === match.id) ?? match) : tables;
+    return values.map(object => <button key={object.id} aria-current={object.id === current ? "true" : undefined}
+      onClick={() => move(object.id)}>
+      <span>{object.name}</span>
+      {(repeatedNames.get(object.name) ?? 0) > Number(tableIds.has(object.id)) && <KnowledgeOrigin object={object}/>}
+      <small>{knowledgeKindLabels[object.kind]}{object.analysis_preference?.preferred ? " · 常用" : ""}</small>
+    </button>);
+  }, [tables, matches, query, objects, current, move]);
   const save = (v: KnowledgeObject) => {
     if (objects.find(object => object.id === v.id)?.state !== v.state) setDirectoryRevision(value => value + 1);
     setObjects((old) => old.map((o) => (o.id === v.id ? currentObject(o, v) : o)));
     refresh();
   };
-  const selectObject = (v: KnowledgeObject | null) => {
+  const selectObject = useCallback((v: KnowledgeObject | null) => {
     if (!v) { setCurrent(""); return; }
     setObjects(old => [...old.filter(o => o.id !== v.id), currentObject(old.find(o => o.id === v.id), v)]);
     move(v.id);
-  };
-  const showDirectoryPage = (values: KnowledgeObject[], append: boolean) => {
+  }, [move]);
+  const showDirectoryPage = useCallback((values: KnowledgeObject[], append: boolean) => {
     setObjects(old => { const byId = new Map(old.map(o => [o.id, o])); for (const value of values) byId.set(value.id, currentObject(byId.get(value.id), value)); return [...byId.values()]; });
     if (!append && !values.some(value => value.id === current)) {
       const next = values[0]?.id ?? "";
       if (onLocation) { if (onLocation({object: next, tab: "概览"}, true)) { setCurrent(next); setTab("概览"); } }
       else guard(() => { setCurrent(next); setTab("概览"); }, undefined, "knowledge");
     }
-  };
+  }, [current, onLocation, guard]);
   const showSource = async (id: string) => {
     try {
       setSource(await api("SourceDocument", "/sources/" + id));
@@ -473,20 +485,7 @@ export function KnowledgePage({
       {canAdmin && <SourceSynchronizationStatus sync={sourceSync}/>}
       <div className="knowledge-layout">
         <nav ref={directoryElement} aria-label="语义对象" className={"object-list" + (directoryScope !== "tables" ? " management-directory" : "")}>
-          {directoryScope !== "tables" ? <KnowledgeDirectory key={createdObjectId} user={user} scope={directoryScope} current={current} revision={directoryRevision} onSelect={selectObject} onPage={showDirectoryPage}/> : <>{(query ? matches.map(o=>objects.find(current=>current.id===o.id)??o) : tables
-          ).map((o) => (
-            <button
-              key={o.id}
-              aria-current={o.id === current ? "true" : undefined}
-              onClick={() => move(o.id)}
-            >
-              <span>{o.name}</span>
-              {tables.some(other => other.id !== o.id && other.name === o.name) && <KnowledgeOrigin object={o}/>}
-              <small>
-                {knowledgeKindLabels[o.kind]}{o.analysis_preference?.preferred?" · 常用":""}
-              </small>
-            </button>
-          ))}
+          {directoryScope !== "tables" ? <KnowledgeDirectory key={createdObjectId} user={user} scope={directoryScope} current={current} revision={directoryRevision} onSelect={selectObject} onPage={showDirectoryPage}/> : <>{browseButtons}
           {nextAfter && !query && <button disabled={loadingMore} onClick={() => void loadMore()}>加载更多语义对象</button>}
           </>}
         </nav>

@@ -172,19 +172,6 @@ pub(super) async fn retain_authorized_skills_in_tx(
     Ok(())
 }
 
-fn hide_skill(asset: &mut Value) {
-    for field in ["name", "scope"] {
-        asset[field] = json!("来源不可用，正文已隐藏");
-    }
-    for field in ["body", "source_text"] {
-        asset[field] = json!("");
-    }
-    for field in ["files", "dependencies"] {
-        asset[field] = json!([]);
-    }
-    asset["text_unavailable"] = json!(true);
-}
-
 pub(super) async fn project_skill_in_tx(
     tx: &mut AppTx<'_>,
     ctx: &AccessContext,
@@ -195,7 +182,7 @@ pub(super) async fn project_skill_in_tx(
         if !unavailable_text(&error) {
             return Err(error);
         }
-        hide_skill(asset);
+        assets::hide_skill_text(asset);
     }
     asset
         .as_object_mut()
@@ -209,7 +196,9 @@ pub(super) async fn project_receipt(
     ctx: &AccessContext,
     mut asset: Value,
 ) -> Result<Value> {
-    if asset["kind"] != "skill" {
+    if asset["kind"] != "skill"
+        || (asset["state"] == "deleted" && asset["text_unavailable"] == true)
+    {
         return Ok(asset);
     }
     let mut tx = AppTx::begin(pool).await?;
@@ -266,7 +255,7 @@ pub async fn list(pool: &MySqlPool, ctx: &AccessContext) -> Result<Value> {
         asset["can_edit"] = json!(assets::can_edit(ctx, asset, can_admin));
         if asset["state"] == "draft" {
             // 草稿目录不交付模型生成的正文、标题或范围。
-            hide_skill(asset);
+            assets::hide_skill_text(asset);
             asset["name"] = json!("待核对的 Skill");
             asset["scope"] = json!("打开核对后查看适用范围");
             let draft = asset
@@ -363,11 +352,11 @@ pub async fn select(
                 let mut current = current;
                 project_skill_in_tx(&mut tx, ctx, &mut current, &checked).await?;
                 if current["text_unavailable"] == true {
-                    hide_skill(&mut receipt);
+                    assets::hide_skill_text(&mut receipt);
                 }
             }
-            Ok(_) => hide_skill(&mut receipt),
-            Err(error) if unavailable_text(&error) => hide_skill(&mut receipt),
+            Ok(_) => assets::hide_skill_text(&mut receipt),
+            Err(error) if unavailable_text(&error) => assets::hide_skill_text(&mut receipt),
             Err(error) => return Err(error),
         }
         tx.commit().await?;

@@ -4,6 +4,20 @@ use crate::{
 };
 use serde_json::{Value, json};
 use sqlx::Row;
+
+pub fn hide_skill_text(asset: &mut Value) {
+    for field in ["name", "scope"] {
+        asset[field] = json!("来源不可用，正文已隐藏");
+    }
+    for field in ["body", "source_text"] {
+        asset[field] = json!("");
+    }
+    for field in ["files", "dependencies"] {
+        asset[field] = json!([]);
+    }
+    asset["text_unavailable"] = json!(true);
+}
+
 fn without_skill_sources(mut asset: Value) -> Result<Value> {
     asset
         .as_object_mut()
@@ -188,8 +202,9 @@ async fn locked(
     ctx: &AccessContext,
     asset: &str,
     expected: &str,
+    include_draft: bool,
 ) -> Result<Value> {
-    let row=sqlx::query("SELECT body,owner_id,visibility FROM personal_assets WHERE id=? AND (owner_id=? OR (visibility='space' AND kind='skill')) AND space_id=? AND state NOT IN ('deleted','draft') FOR UPDATE").bind(asset).bind(&ctx.user_id).bind(&ctx.space_id).fetch_optional(tx.connection()).await?.ok_or(Error::new("not_available"))?;
+    let row=sqlx::query("SELECT body,owner_id,visibility FROM personal_assets WHERE id=? AND (owner_id=? OR (visibility='space' AND kind='skill')) AND space_id=? AND state<>'deleted' AND (? OR state<>'draft') FOR UPDATE").bind(asset).bind(&ctx.user_id).bind(&ctx.space_id).bind(include_draft).fetch_optional(tx.connection()).await?.ok_or(Error::new("not_available"))?;
     let v = body_with_sources(&row);
     if v["version"] != expected {
         return Err(Error::new("version_conflict"));
@@ -296,6 +311,7 @@ pub async fn save_with_skill_sources_in_tx(
                 ctx,
                 asset,
                 input["expected_version"].as_str().unwrap_or(""),
+                false,
             )
             .await?;
             require_edit(ctx, &old, can_admin)?;
@@ -386,9 +402,19 @@ pub async fn change_state_authorized_in_tx(
         ctx,
         asset,
         input["expected_version"].as_str().unwrap_or(""),
+        state == "deleted",
     )
     .await?;
     require_edit(ctx, &v, can_admin)?;
+    if v["state"] == "draft" {
+        super::skill_drafts::invalidate_in_tx(tx, ctx, asset, "sources_unavailable").await?;
+        // 草稿从未形成正式 Skill 版本。保留删除回执，正文与待确认依据由草稿入口清除。
+        v["state"] = json!("deleted");
+        hide_skill_text(&mut v);
+        let receipt = without_skill_sources(v)?;
+        record_operation(tx, ctx, key, &command, &receipt).await?;
+        return Ok(receipt);
+    }
     v["state"] = json!(state);
     v["selected"] = json!(false);
     v["version"] = json!((epoch(v["version"].as_str().unwrap_or("0"))? + 1).to_string());
@@ -519,6 +545,7 @@ pub async fn publish_in_tx(
         ctx,
         asset,
         input["expected_version"].as_str().unwrap_or(""),
+        false,
     )
     .await?;
     if value["owner_id"] != ctx.user_id

@@ -25,9 +25,10 @@ const stateLabels: Record<MaintenanceReference["reference_state"], string> = {
   related: "关联，未绑定版本",
 };
 
-export function KnowledgeMaintenanceImpact({ objectId, version }: {
+export function KnowledgeMaintenanceImpact({ objectId, version, label = "查看直接维护影响" }: {
   objectId: string;
   version: string;
+  label?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [kind, setKind] = useState<MaintenanceImpactKind>("knowledge");
@@ -64,7 +65,7 @@ export function KnowledgeMaintenanceImpact({ objectId, version }: {
   }, [open, objectId, version, kind]);
 
   return <details className="knowledge-maintenance-impact" onToggle={event => setOpen(event.currentTarget.open)}>
-    <summary>查看直接维护影响</summary>
+    <summary>{label}</summary>
     {open && <>
       <p className="quiet">这里列出已记录的直接引用，包括本空间公共知识、我的 Skill 与本空间公共 Skill。文字中的未记录引用和间接依赖需另行核对。</p>
       <Tabs label="维护影响范围" value={kind} onChange={value => setKind(value === "skill" ? "skill" : "knowledge")} items={[

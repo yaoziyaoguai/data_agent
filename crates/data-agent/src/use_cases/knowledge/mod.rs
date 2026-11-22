@@ -1,14 +1,11 @@
-#[path = "knowledge/maintenance.rs"]
 mod maintenance;
 pub use maintenance::{
     KnowledgeChange, KnowledgeVersionAction, edit, edit_batch, edit_entries, write,
 };
-#[path = "knowledge/catalog.rs"]
 mod catalog;
 pub(super) use catalog::semantic_object_in_tx;
 pub(crate) use catalog::sync_catalog;
 use catalog::{current_catalog_in_tx, sources_in_tx};
-#[path = "knowledge/references.rs"]
 mod references;
 pub(super) use references::check_adoptable_refs_in_tx;
 pub(super) use references::{assert_selection_sources_in_tx, check_refs_for_task_in_tx};
@@ -16,30 +13,24 @@ pub use references::{assert_source_in_tx, check_refs_in_tx, history_check_refs_i
 use references::{
     check_input_structure_sources_in_tx, checked_refs_in_tx, current_structure_refs_in_tx,
 };
-#[path = "knowledge/indexing.rs"]
 mod indexing;
 use indexing::depends_on_source;
 pub(crate) use indexing::source_alias;
 pub use indexing::{process_index, rebuild_index, rebuild_index_for_operation};
-#[path = "knowledge/search_cursor.rs"]
 mod search_cursor;
 use search_cursor::SavedCandidate;
 pub use search_cursor::SearchContinuation;
 #[cfg(test)]
 use search_cursor::{SEARCH_CURSOR_BYTES, SavedLocation};
-#[path = "knowledge/search_candidates.rs"]
 mod search_candidates;
 pub use search_candidates::{ScopedSearchRequest, ScopedSearchStage, StageReads, VerdictCache};
 use search_candidates::{load_selected_in_tx, ordered_candidates_with, ranked_candidates_in_tx};
-#[path = "knowledge/search_stage.rs"]
 mod search_stage;
 use search_stage::finish_search_stage;
 pub use search_stage::{restore_search_stage_outside_lock, search_stage_outside_lock};
-#[path = "knowledge/search_sources.rs"]
 mod search_sources;
 pub use search_sources::assert_search_fresh_in_tx;
 pub(super) use search_sources::search_selected_sources_outside_lock;
-#[path = "knowledge/search_delivery.rs"]
 mod search_delivery;
 use search_delivery::assemble_search_in_tx;
 

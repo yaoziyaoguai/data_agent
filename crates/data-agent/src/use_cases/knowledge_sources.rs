@@ -380,7 +380,7 @@ async fn read_citation_window_in_tx(
             return Err(Error::new("not_available"));
         }
         (
-            windowed.texts.remove(&(offset, length)).unwrap_or_default(),
+            windowed.texts.remove(&(offset, length)),
             windowed.total_length,
         )
     } else {
@@ -396,8 +396,13 @@ async fn read_citation_window_in_tx(
             return Err(Error::new("not_available"));
         }
         (
-            windowed["texts"][0][2].as_str().unwrap_or("").to_owned(),
-            windowed["total_length"].as_u64().unwrap_or(0) as usize,
+            windowed["texts"][0][2].as_str().map(str::to_owned),
+            usize::try_from(
+                windowed["total_length"]
+                    .as_u64()
+                    .ok_or(Error::new("invalid_evidence"))?,
+            )
+            .map_err(|_| Error::new("invalid_evidence"))?,
         )
     };
     // limit只缩小下行正文，不能把原请求越界伪装成合法短页。
@@ -434,5 +439,5 @@ async fn read_citation_window_in_tx(
             "hint": hint,
         })));
     }
-    Ok((text, total_length))
+    Ok((text.ok_or(Error::new("invalid_evidence"))?, total_length))
 }
