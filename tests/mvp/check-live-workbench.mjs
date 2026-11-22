@@ -63,7 +63,18 @@ try {
   await Promise.all(pages.map(page => page.getByText(expected, { exact: true }).waitFor()));
   assert.equal(snapshots - initialSnapshots, 0, "50 帧均直接合并，无快照刷新");
   assert.equal(queryLists - initialQueryLists, 0, "50 帧无 HTTP 查询列表刷新");
-  console.log(JSON.stringify({ passed: true, browserClients: 20, idleSeconds: 60, idleSql, frames: 50, snapshotRefreshes: 0, queryListRefreshes: 0, officialRequests: 0 }));
+  // 模拟队列只交付补读信号，鉴权结果仍来自正式的会话读回。
+  h.sql("UPDATE user_sessions SET revoked_at=UTC_TIMESTAMP(3) WHERE user_id='alice'");
+  const rejected = pages[0].waitForResponse(response => new URL(response.url()).pathname.endsWith("/snapshot") && response.status() === 401);
+  const resync = await fetch(h.env.DATA_AGENT_API_URL + "/internal/live-changes", {
+    method: "POST",
+    headers: { authorization: "Bearer " + h.env.DATA_AGENT_INTERNAL_TOKEN, "content-type": "application/json" },
+    body: JSON.stringify([{ kind: "resync" }]),
+  });
+  assert.equal(resync.status, 204);
+  await rejected;
+  await pages[0].getByText(expected, { exact: true }).waitFor({ state: "hidden" });
+  console.log(JSON.stringify({ passed: true, browserClients: 20, idleSeconds: 60, idleSql, frames: 50, snapshotRefreshes: 0, queryListRefreshes: 0, revokedReplayCleared: true, officialRequests: 0 }));
 } finally {
   await browser.close();
   await h.close();

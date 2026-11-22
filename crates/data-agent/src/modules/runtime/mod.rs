@@ -30,9 +30,10 @@ pub(crate) use store::{
     decode_delivery_history, push_legacy_checkpoint_run,
 };
 pub use store::{
-    LockedRun, LockedTool, RunStart, control_deliveries_in_tx, fail_message_runs_in_tx, locate_run,
-    locate_run_message, read_budget_profile_in_tx, read_runs_in_tx, read_skill_sources_in_tx,
-    recorded_tool_operations_in_tx, reject_tool_in_tx, running_activity_in_tx,
+    LockedRun, LockedTool, RunStart, ToolActivity, control_deliveries_in_tx,
+    fail_message_runs_in_tx, locate_run, locate_run_message, read_budget_profile_in_tx,
+    read_runs_in_tx, read_skill_sources_in_tx, recorded_tool_operations_in_tx, reject_tool_in_tx,
+    tool_activity_in_tx,
 };
 pub use store::{
     bind_tool_task_in_tx, reject_unstarted_task_tools_in_tx, start_tool_execution_in_tx,

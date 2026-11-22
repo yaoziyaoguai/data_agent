@@ -363,6 +363,7 @@ verify-mvp-browser:
 	node tests/mvp/check-conversation-timeline.mjs
 	node tests/mvp/check-history-browser.mjs
 	node tests/mvp/check-live-workbench.mjs
+	node tests/mvp/check-live-projection-isolation.mjs
 
 .PHONY: verify-management-buttons verify-memory-runtime
 verify-management-buttons:

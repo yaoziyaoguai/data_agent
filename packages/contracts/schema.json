@@ -4,6 +4,22 @@
   "title": "Boundary",
   "type": "object",
   "$defs": {
+    "RunStepList": {
+      "title": "RunStepList",
+      "type": "object",
+      "properties": {
+        "steps": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/RunStepSummary"
+          }
+        }
+      },
+      "required": [
+        "steps"
+      ],
+      "additionalProperties": false
+    },
     "RunStepSummary": {
       "title": "RunStepSummary",
       "type": "object",

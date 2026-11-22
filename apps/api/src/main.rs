@@ -59,7 +59,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         data_agent::modules::runtime::configure_trial(&state.pool, profile).await?;
     }
     data_agent::use_cases::knowledge::initialize(&state.pool, &space).await?;
+    let live = state.live.clone();
     let router = Router::new()
+        .route(
+            "/conversations/{cid}/runs/{run_id}/steps",
+            get(routes::run_steps),
+        )
         .route("/health", get(|| async { "ok" }))
         .route("/models", get(model_routes::catalog))
         .route("/model-configuration/access", get(model_routes::access))
@@ -230,8 +235,26 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .layer(axum::extract::DefaultBodyLimit::max(512 * 1024))
         .with_state(state);
     let port = env::var("DATA_AGENT_API_PORT")?.parse::<u16>()?;
-    let listener = tokio::net::TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, port)).await?;
-    eprintln!("api_started port={port} mode=development");
-    axum::serve(listener, router).await?;
+    let host = match env::var("DATA_AGENT_BIND_HOST") {
+        Ok(host) => host.parse::<std::net::IpAddr>()?,
+        Err(env::VarError::NotPresent) => std::net::Ipv4Addr::LOCALHOST.into(),
+        Err(error) => return Err(error.into()),
+    };
+    let listener = tokio::net::TcpListener::bind((host, port)).await?;
+    let mut terminate = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())?;
+    eprintln!("api_started host={host} port={port}");
+    axum::serve(listener, router)
+        .with_graceful_shutdown(async move {
+            tokio::select! {
+                result = tokio::signal::ctrl_c() => {
+                    if let Err(error) = result {
+                        eprintln!("api_signal_error {error}");
+                    }
+                }
+                _ = terminate.recv() => {}
+            }
+            live.shutdown();
+        })
+        .await?;
     Ok(())
 }

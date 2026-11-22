@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { Event, QueryList, WorkbenchUpdate } from "../../../../../packages/contracts/generated/boundary.ts";
 import { decodeContract } from "../../../../../packages/contracts/validate.ts";
-import { api } from "../../shared/api.ts";
+import { api, ApiError } from "../../shared/api.ts";
 import { appendLiveEvent, loadedOutputRanges, mergeSnapshot } from "./conversation-timeline.ts";
 
 const emptyQueries: QueryList = { queries: [], confirmation_blocked: false };
@@ -33,6 +33,17 @@ export function useLiveConversation(cid: string | null, space: string, user: str
       current = next;
       if (published) setSnapshot(next);
     };
+    const closeStream = () => {
+      controller.abort();
+      source?.close();
+      source = undefined;
+      current = null;
+      setSnapshot(null);
+      setQueries(emptyQueries);
+      setLoadingOlder(false);
+      setAuthorityRevision(value => value + 1);
+      setSyncUnavailable(true);
+    };
     const reconnect = () => {
       source?.close();
       source = undefined;
@@ -52,8 +63,13 @@ export function useLiveConversation(cid: string | null, space: string, user: str
         update(mergeSnapshot(current, next, older));
         setSyncUnavailable(false);
         if (!older) connect();
-      } catch {
-        if (!signal.aborted) setSyncUnavailable(true);
+      } catch (error) {
+        if (signal.aborted) return;
+        if (error instanceof ApiError && ["unauthenticated", "forbidden", "not_available"].includes(error.code)) {
+          closeStream();
+        } else {
+          setSyncUnavailable(true);
+        }
       } finally {
         busy = false;
         if (!signal.aborted) {
@@ -104,15 +120,7 @@ export function useLiveConversation(cid: string | null, space: string, user: str
         if (message.data === '{"reason":"authority_changed"}') setAuthorityRevision(value => value + 1);
         reconnect();
       });
-      stream.addEventListener("stream_closed", () => {
-        stream.close();
-        source = undefined;
-        current = null;
-        setSnapshot(null);
-        setQueries(emptyQueries);
-        setAuthorityRevision(value => value + 1);
-        setSyncUnavailable(true);
-      });
+      stream.addEventListener("stream_closed", closeStream);
       stream.onerror = () => {
         setSyncUnavailable(true);
         if (!published && current) {

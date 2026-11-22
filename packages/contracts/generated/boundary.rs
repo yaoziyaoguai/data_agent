@@ -4831,6 +4831,18 @@ pub struct WorkbenchUpdateClass {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RunStepList {
+    pub steps: Vec<RunStepSummary>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RunStepSummary {
+    pub category: String,
+    pub duration_ms: i64,
+    pub target_name: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct KnowledgeLineage {
     pub downstream: Vec<KnowledgeLineageEdge>,
     pub more_downstream: bool,
@@ -5390,13 +5402,6 @@ pub struct RunSnapshot {
     pub result_query_id: Option<String>,
     pub run_id: String,
     pub state: RunSnapshotState,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct RunStepSummary {
-    pub category: String,
-    pub duration_ms: i64,
-    pub target_name: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

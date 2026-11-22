@@ -377,30 +377,6 @@ pub async fn visible_ids_in_tx(
     Ok(rows.into_iter().collect())
 }
 
-pub async fn list_conversations_in_tx(
-    tx: &mut AppTx<'_>,
-    context: &AccessContext,
-    before: Option<&str>,
-    query: &str,
-) -> Result<Value> {
-    let cursor = if let Some(id) = before {
-        Some(sqlx::query_scalar::<_,String>("SELECT DATE_FORMAT(created_at,'%Y-%m-%d %H:%i:%s.%f') FROM conversations WHERE id=? AND owner_id=? AND space_id=?")
-            .bind(id).bind(&context.user_id).bind(&context.space_id).fetch_optional(tx.connection()).await?.ok_or(Error::new("invalid_input"))?)
-    } else {
-        None
-    };
-    let rows = sqlx::query("SELECT id,COALESCE(title,'新对话') AS title,DATE_FORMAT(created_at,'%Y-%m-%dT%H:%i:%s.%fZ') AS created_at FROM conversations WHERE owner_id=? AND space_id=? AND deleted=0 AND INSTR(LOWER(COALESCE(title,'')),LOWER(?))>0 AND (? IS NULL OR created_at<? OR (created_at=? AND id<?)) ORDER BY created_at DESC,id DESC LIMIT 101")
-        .bind(&context.user_id).bind(&context.space_id).bind(query).bind(&cursor).bind(&cursor).bind(&cursor).bind(before).fetch_all(tx.connection()).await?;
-    let next = if rows.len() > 100 {
-        rows.get(99).map(|r| r.get::<String, _>("id"))
-    } else {
-        None
-    };
-    Ok(
-        json!({"conversations":rows.iter().take(100).map(|r|json!({"id":r.get::<String,_>("id"),"title":r.get::<String,_>("title"),"created_at":r.get::<String,_>("created_at")})).collect::<Vec<_>>(),"next_before_id":next}),
-    )
-}
-
 pub async fn fail_consumption_in_tx(
     tx: &mut AppTx<'_>,
     locked: &LockedConversation,

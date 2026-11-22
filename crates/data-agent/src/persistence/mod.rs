@@ -50,15 +50,21 @@ impl<'a> AppTx<'a> {
     }
     pub async fn commit(self) -> Result<()> {
         self.transaction.commit().await?;
-        live_changes::committed(self.changes).await;
+        live_changes::committed(self.changes);
         Ok(())
     }
 }
 pub async fn connect(url: &str) -> Result<MySqlPool> {
-    connect_with_default(url, 24).await
+    let pool = connect_pool(url, 24).await?;
+    sqlx::migrate!("../../migrations")
+        .run(&pool)
+        .await
+        .map_err(|_| Error::new("unavailable"))?;
+    Ok(pool)
 }
-// 池上限来自部署配置；默认值按调用方角色区分（API 24、Worker 32）。
-pub async fn connect_with_default(url: &str, default_max: u32) -> Result<MySqlPool> {
+
+// API 及独立导入命令使用 connect 完成迁移；Worker 在 API 就绪后只建连接池。
+pub async fn connect_pool(url: &str, default_max: u32) -> Result<MySqlPool> {
     let max_connections = std::env::var("DATA_AGENT_DB_MAX_CONNECTIONS")
         .ok()
         .and_then(|value| value.parse::<u32>().ok())
@@ -70,9 +76,5 @@ pub async fn connect_with_default(url: &str, default_max: u32) -> Result<MySqlPo
         .idle_timeout(std::time::Duration::from_secs(120))
         .connect(url)
         .await?;
-    sqlx::migrate!("../../migrations")
-        .run(&pool)
-        .await
-        .map_err(|_| Error::new("unavailable"))?;
     Ok(pool)
 }

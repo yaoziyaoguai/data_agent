@@ -24,7 +24,7 @@ use std::{
     time::Duration,
 };
 use tokio::{
-    sync::{Mutex, broadcast, mpsc},
+    sync::{Mutex, Semaphore, broadcast, mpsc, watch},
     time::Instant,
 };
 use tokio_stream::wrappers::ReceiverStream;
@@ -75,16 +75,22 @@ struct ConversationChanges {
 #[derive(Clone)]
 pub struct LiveEvents {
     topics: Arc<Mutex<HashMap<Topic, Weak<broadcast::Sender<Frame>>>>>,
-    changes: mpsc::Sender<Vec<Change>>,
+    publisher: Publisher,
+    projections: Arc<Mutex<HashMap<String, Option<ConversationChanges>>>>,
+    projection_slots: Arc<Semaphore>,
+    shutdown: watch::Sender<bool>,
 }
 
 impl LiveEvents {
     pub fn start(pool: &MySqlPool) -> Result<Self> {
-        let (changes, mut incoming) = mpsc::channel(128);
-        live_changes::install(Publisher::Local(changes.clone()))?;
+        let (publisher, mut incoming) = Publisher::channel();
+        live_changes::install(publisher.clone())?;
         let live = Self {
             topics: Arc::default(),
-            changes,
+            publisher,
+            projections: Arc::default(),
+            projection_slots: Arc::new(Semaphore::new(16)),
+            shutdown: watch::channel(false).0,
         };
         let publisher = live.clone();
         let pool = pool.clone();
@@ -94,6 +100,10 @@ impl LiveEvents {
             }
         });
         Ok(live)
+    }
+
+    pub fn shutdown(&self) {
+        self.shutdown.send_replace(true);
     }
 
     async fn listen(&self, topic: Topic) -> Subscription {
@@ -129,6 +139,7 @@ impl LiveEvents {
         let mut catalog = HashSet::new();
         for change in changes {
             match change {
+                Change::Resync => self.publisher.invalidate(),
                 Change::Timeline { scope, event } => {
                     let update = conversations
                         .entry(scope.conversation_id.clone())
@@ -194,68 +205,120 @@ impl LiveEvents {
         for space_id in catalog {
             self.broadcast(Topic::Space(space_id), Frame::Catalog).await;
         }
-        for (cid, updates) in conversations {
+        for (cid, mut update) in conversations {
             let Some(channel) = self.channel(&Topic::Conversation(cid.clone())).await else {
                 continue;
             };
-            if let Err(error) = deliver(pool, &channel, &cid, updates).await {
-                eprintln!("live_event_projection_failed code={}", error.code);
-                drop(channel.send(Frame::Lagged));
+            for event in std::mem::take(&mut update.events) {
+                match event["event_seq"]
+                    .as_str()
+                    .and_then(|value| epoch(value).ok())
+                {
+                    Some(sequence) => drop(channel.send(Frame::Timeline {
+                        sequence,
+                        json: event.to_string().into(),
+                    })),
+                    None => drop(channel.send(Frame::Lagged)),
+                }
+            }
+            if update.runs || update.tasks || update.queries {
+                self.schedule_projection(pool, cid, channel, update).await;
             }
         }
     }
+
+    async fn schedule_projection(
+        &self,
+        pool: &MySqlPool,
+        cid: String,
+        channel: Arc<broadcast::Sender<Frame>>,
+        update: ConversationChanges,
+    ) {
+        use std::collections::hash_map::Entry;
+        let mut projections = self.projections.lock().await;
+        match projections.entry(cid.clone()) {
+            Entry::Occupied(mut slot) => {
+                if let Some(pending) = slot.get_mut() {
+                    pending.runs |= update.runs;
+                    pending.tasks |= update.tasks;
+                    pending.queries |= update.queries;
+                    if update.context.is_some() {
+                        pending.context = update.context;
+                    }
+                } else {
+                    slot.insert(Some(update));
+                }
+                return;
+            }
+            Entry::Vacant(slot) => {
+                slot.insert(Some(update));
+            }
+        }
+        let live = self.clone();
+        let pool = pool.clone();
+        tokio::spawn(async move {
+            loop {
+                let update = {
+                    let mut projections = live.projections.lock().await;
+                    match projections.get_mut(&cid).and_then(Option::take) {
+                        Some(update) => update,
+                        None => {
+                            projections.remove(&cid);
+                            return;
+                        }
+                    }
+                };
+                let Ok(_permit) = live.projection_slots.acquire().await else {
+                    return;
+                };
+                if channel.receiver_count() == 0 {
+                    continue;
+                }
+                if let Err(error) = deliver_state(&pool, &channel, &cid, update).await {
+                    eprintln!("live_event_projection_failed code={}", error.code);
+                    drop(channel.send(Frame::Lagged));
+                }
+            }
+        });
+    }
 }
 
-async fn deliver(
+async fn deliver_state(
     pool: &MySqlPool,
     channel: &broadcast::Sender<Frame>,
     cid: &str,
     update: ConversationChanges,
 ) -> Result<()> {
-    for event in update.events {
-        drop(
-            channel.send(Frame::Timeline {
-                sequence: epoch(
-                    event["event_seq"]
-                        .as_str()
-                        .ok_or(Error::new("invalid_input"))?,
-                )?,
-                json: event.to_string().into(),
-            }),
-        );
-    }
-    if update.runs || update.tasks || update.queries {
-        let context = if let Some(scope) = update.context {
-            AccessContext {
-                user_id: scope.user_id,
-                space_id: scope.space_id,
-                request_id: id(),
-                table_access: None,
-            }
-        } else {
-            let scope = conversations::locate_conversation(pool, cid).await?;
-            AccessContext {
-                user_id: scope.owner_id,
-                space_id: scope.space_id,
-                request_id: id(),
-                table_access: None,
-            }
-        };
-        let read_started = Instant::now();
-        let state = overview(
-            pool,
-            &context,
-            cid,
-            update.runs || update.tasks,
-            update.tasks,
-            update.queries,
-        )
-        .await?;
-        drop(channel.send(Frame::State {
-            read_started,
-            json: state.to_string().into(),
-        }));
-    }
+    let context = if let Some(scope) = update.context {
+        AccessContext {
+            user_id: scope.user_id,
+            space_id: scope.space_id,
+            request_id: id(),
+            table_access: None,
+        }
+    } else {
+        let scope = conversations::locate_conversation(pool, cid).await?;
+        AccessContext {
+            user_id: scope.owner_id,
+            space_id: scope.space_id,
+            request_id: id(),
+            table_access: None,
+        }
+    };
+    let read_started = Instant::now();
+    let state = overview(
+        pool,
+        &context,
+        cid,
+        update.runs || update.tasks,
+        update.tasks,
+        update.queries,
+    )
+    .await?;
+    drop(channel.send(Frame::State {
+        read_started,
+        json: state.to_string().into(),
+    }));
     Ok(())
 }
 
@@ -267,14 +330,14 @@ async fn overview(
     tasks: bool,
     queries: bool,
 ) -> Result<Value> {
+    let context = data_agent::use_cases::knowledge::catalog_context(context).await?;
     let mut result = if runs {
-        let scoped = data_agent::use_cases::knowledge::catalog_context(context).await?;
-        read_conversation::live_states(pool, &scoped, cid, tasks).await?
+        read_conversation::live_states(pool, &context, cid, tasks).await?
     } else {
         json!({})
     };
     if queries {
-        result["query_list"] = query_workflow::list(pool, context, cid).await?;
+        result["query_list"] = query_workflow::list(pool, &context, cid).await?;
     }
     Ok(result)
 }
@@ -287,12 +350,7 @@ pub async fn receive(
     if bearer(&headers) != Some(state.internal_token.as_str()) {
         return Err(failure(Error::new("unauthenticated")));
     }
-    state
-        .live
-        .changes
-        .send(changes)
-        .await
-        .map_err(|_| failure(Error::new("unavailable")))?;
+    state.live.publisher.enqueue(changes).map_err(failure)?;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -362,6 +420,11 @@ async fn listen(
     conversation: Option<(String, u64)>,
     workbench: bool,
 ) -> HttpStream {
+    let mut missed = state.live.publisher.subscribe_missed();
+    let mut shutdown = state.live.shutdown.subscribe();
+    if *shutdown.borrow() {
+        return Err(failure(Error::new("unavailable")));
+    }
     let (context, session) = stream_identity(&state, &headers).await.map_err(failure)?;
     let mut space = state
         .live
@@ -379,22 +442,21 @@ async fn listen(
     };
     let (send, receive) = mpsc::channel(32);
     tokio::spawn(async move {
-        let mut cursor = 0;
-        let mut live = None;
-        let mut initial_state_read = Instant::now();
-        let mut session = session;
-        let mut revoked = std::pin::pin!(async {
-            if let Some((revoke, expires)) = &mut session {
+        let revoked = async {
+            if let Some((mut revoke, expires)) = session {
                 tokio::select! {
                     _ = revoke.recv() => {}
-                    _ = tokio::time::sleep_until(*expires) => {}
+                    _ = tokio::time::sleep_until(expires) => {}
                 }
             } else {
                 pending::<()>().await;
             }
-        });
-        if let Some((connection, cid, after, first)) = tail {
-            let opening = async {
+        };
+        let forward = async {
+            let mut cursor = 0;
+            let mut live = None;
+            let mut initial_state_read = Instant::now();
+            if let Some((connection, cid, after, first)) = tail {
                 cursor = after;
                 replay(&state.pool, &context, &cid, &send, &mut cursor, first).await?;
                 if workbench {
@@ -407,75 +469,76 @@ async fn listen(
                         .await
                         .map_err(|_| Error::new("closed"))?;
                 }
-                Ok::<_, Error>(())
-            };
-            tokio::select! {
-                biased;
-                _ = send.closed() => return,
-                _ = &mut revoked => { end_stream(&send, "unauthenticated").await; return; }
-                result = opening => {
-                    if let Err(error) = result {
-                        if error.code != "closed" { eprintln!("live_replay_failed code={}", error.code); }
-                        return;
+                live = Some(connection);
+            }
+            loop {
+                let received = tokio::select! {
+                    biased;
+                    result = space.recv() => match result {
+                        Err(broadcast::error::RecvError::Lagged(_)) => return Ok(Some(lagged_frame(true))),
+                        result => result,
+                    },
+                    result = receive_frame(&mut live) => result,
+                };
+                let event = match received {
+                    Ok(Frame::Timeline { sequence, json }) => {
+                        if sequence <= cursor {
+                            continue;
+                        }
+                        if sequence != cursor + 1 {
+                            return Ok(Some(lagged_frame(false)));
+                        }
+                        cursor = sequence;
+                        Event::default()
+                            .id(sequence.to_string())
+                            .data(json.as_ref())
                     }
+                    Ok(Frame::State { read_started, json })
+                        if workbench && read_started >= initial_state_read =>
+                    {
+                        Event::default()
+                            .event("workbench_state")
+                            .data(json.as_ref())
+                    }
+                    Ok(Frame::State { .. }) => continue,
+                    Ok(Frame::Catalog) => Event::default().event("catalog_changed").data("{}"),
+                    Ok(Frame::Corrections) => {
+                        Event::default().event("corrections_changed").data("{}")
+                    }
+                    Ok(Frame::Authority) if workbench => return Ok(Some(lagged_frame(true))),
+                    Ok(Frame::Authority) => Event::default().event("authority_changed").data("{}"),
+                    Ok(Frame::Closed(code)) => return Ok(Some(closed_frame(code))),
+                    Ok(Frame::Lagged) | Err(broadcast::error::RecvError::Lagged(_)) => {
+                        return Ok(Some(lagged_frame(false)));
+                    }
+                    Err(broadcast::error::RecvError::Closed) => return Ok::<_, Error>(None),
+                };
+                send.send(Ok(event))
+                    .await
+                    .map_err(|_| Error::new("closed"))?;
+            }
+        };
+        let terminal = tokio::select! {
+            biased;
+            _ = send.closed() => return,
+            _ = shutdown.changed() => return,
+            _ = revoked => Some(closed_frame("unauthenticated")),
+            _ = missed.changed() => Some(lagged_frame(true)),
+            result = forward => match result {
+                Ok(terminal) => terminal,
+                Err(error) => {
+                    if error.code != "closed" {
+                        eprintln!("live_replay_failed code={}", error.code);
+                    }
+                    None
                 }
             }
-            live = Some(connection);
-        }
-        loop {
-            let received = tokio::select! {
+        };
+        if let Some(event) = terminal {
+            tokio::select! {
                 biased;
-                _ = send.closed() => return,
-                _ = &mut revoked => { end_stream(&send, "unauthenticated").await; return; }
-                result = space.recv() => result,
-                result = receive_frame(&mut live) => result,
-            };
-            let event = match received {
-                Ok(Frame::Timeline { sequence, json }) => {
-                    if sequence <= cursor {
-                        continue;
-                    }
-                    if sequence != cursor + 1 {
-                        drop(
-                            send.send(Ok(Event::default().event("lagged").data("{}")))
-                                .await,
-                        );
-                        return;
-                    }
-                    cursor = sequence;
-                    Event::default()
-                        .id(sequence.to_string())
-                        .data(json.as_ref())
-                }
-                Ok(Frame::State { read_started, json })
-                    if workbench && read_started >= initial_state_read =>
-                {
-                    Event::default()
-                        .event("workbench_state")
-                        .data(json.as_ref())
-                }
-                Ok(Frame::State { .. }) => continue,
-                Ok(Frame::Catalog) => Event::default().event("catalog_changed").data("{}"),
-                Ok(Frame::Corrections) => Event::default().event("corrections_changed").data("{}"),
-                Ok(Frame::Authority) if workbench => Event::default()
-                    .event("lagged")
-                    .data(r#"{"reason":"authority_changed"}"#),
-                Ok(Frame::Authority) => Event::default().event("authority_changed").data("{}"),
-                Ok(Frame::Closed(code)) => {
-                    end_stream(&send, code).await;
-                    return;
-                }
-                Ok(Frame::Lagged) | Err(broadcast::error::RecvError::Lagged(_)) => {
-                    drop(
-                        send.send(Ok(Event::default().event("lagged").data("{}")))
-                            .await,
-                    );
-                    return;
-                }
-                Err(broadcast::error::RecvError::Closed) => return,
-            };
-            if send.send(Ok(event)).await.is_err() {
-                return;
+                _ = shutdown.changed() => {}
+                _ = send.send(Ok(event)) => {}
             }
         }
     });
@@ -524,14 +587,17 @@ async fn replay(
     }
 }
 
-async fn end_stream(
-    send: &mpsc::Sender<std::result::Result<Event, Infallible>>,
-    code: &'static str,
-) {
-    drop(
-        send.send(Ok(Event::default()
-            .event("stream_closed")
-            .data(json!({"code":code}).to_string())))
-            .await,
-    );
+fn closed_frame(code: &'static str) -> Event {
+    Event::default()
+        .event("stream_closed")
+        .data(json!({"code":code}).to_string())
+}
+
+fn lagged_frame(recheck_authority: bool) -> Event {
+    let reason = if recheck_authority {
+        r#"{"reason":"authority_changed"}"#
+    } else {
+        "{}"
+    };
+    Event::default().event("lagged").data(reason)
 }

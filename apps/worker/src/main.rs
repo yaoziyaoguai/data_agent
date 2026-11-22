@@ -193,7 +193,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     if env::var("DATA_AGENT_MODE")?.as_str() != "development" {
         return Err("explicit development configuration required".into());
     }
-    let pool = persistence::connect_with_default(&env::var("DATA_AGENT_DATABASE_URL")?, 32).await?;
+    let pool = persistence::connect_pool(&env::var("DATA_AGENT_DATABASE_URL")?, 32).await?;
     let worker_id = id();
     let ttl_ms = env::var("DATA_AGENT_LEASE_MS")
         .unwrap_or_else(|_| "15000".into())
@@ -217,11 +217,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Err("permitted API upstream required".into());
     }
     let change_sink = api.join("/internal/live-changes")?;
-    data_agent::live_changes::install(data_agent::live_changes::Publisher::Worker {
-        client: client.clone(),
-        api: change_sink,
-        token: token.clone(),
-    })?;
+    let (finish_notifications, notifications) =
+        data_agent::live_changes::start_worker(client.clone(), change_sink, token.clone())?;
     let concurrency = env::var("DATA_AGENT_DELIVERY_CONCURRENCY")
         .ok()
         .and_then(|value| value.parse::<usize>().ok())
@@ -332,6 +329,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     while let Some(result) = background.join_next().await {
         result?;
     }
+    let _ = finish_notifications.send(());
+    notifications.await?;
     pool.close().await;
     dispatch
 }

@@ -132,7 +132,9 @@ const createTask = async (goal, allowedSources) => {
   const registered = await register(input), receipt = ok(await h.internal('/internal/data/tools',input));
   assert.equal(receipt.operation_id,registered.operation_id); assert.equal(receipt.data.error,undefined);
   assert.equal(receipt.tool_contract_version,run.tool_contract_version);
-  assert.equal((await h.snapshot(run.conversation_id)).tasks.find(task => task.id === receipt.data.task_id)?.goal,goal);
+  const snapshot = await h.request('/conversations/'+run.conversation_id+'/snapshot');
+  assert.equal(snapshot.status,200,snapshot.value.code);
+  assert.equal(snapshot.value.tasks.find(task => task.id === receipt.data.task_id)?.goal,goal);
   assert.equal(ledger(input)[0].state,'succeeded');
   toolResult(input,receipt);
   if (allowedSources !== undefined && receipt.context_reset) {
@@ -146,13 +148,8 @@ const begin = async (label, version = 2, single = false, includeThird = false, s
   await h.resumeWorker();
   run = await h.capture(await h.create(),'分别说明合成目标，核对' + label + '。');
   await h.pauseWorker();
-  assert.equal(run.tool_contract_version,1,'默认新消息仍是v1，不切产品默认版本');
+  assert.equal(run.tool_contract_version,2,'新消息使用当前工具合同');
   assert.deepEqual(budget(),{message_id:run.message_id,calls:0,limit:24});
-  // 与原task-answers夹具相同：只在本次隔离合成库冻结专用v2，不连接/重建索引。
-  if (version === 2) {
-    h.sql(`UPDATE agent_runs SET tool_contract_version=2 WHERE id='${run.run_id}'`);
-    run.tool_contract_version = 2;
-  }
   manager = SessionManager.inMemory('/synthetic/task-answer-boundaries'); sequence = 0;
   manager.appendMessage({role:'user',content:run.text,timestamp:Date.now()});
   const taskC = includeThird ? await createTask('合成丙目标') : undefined;
@@ -165,6 +162,11 @@ const begin = async (label, version = 2, single = false, includeThird = false, s
     WHERE message_id='${run.message_id}' ORDER BY task_id`).map(row => row.task_id);
   assert.deepEqual(attached,[taskA.task_id,...(taskB ? [taskB.task_id] : []),...(taskC ? [taskC.task_id] : [])].sort(),
     '反例开始前全部真实任务均已登记本消息归属，不能由缺任务掩盖边界');
+  // 旧运行继承已持久任务；退役合同本身不执行新的创建动作。
+  if (version === 1) {
+    h.sql(`UPDATE agent_runs SET tool_contract_version=1 WHERE id='${run.run_id}'`);
+    run.tool_contract_version = 1;
+  }
   return taskC;
 };
 const retire = () => {
@@ -292,6 +294,15 @@ try {
   // 原单任务直接自然final；不能为新组合合同强迫v1/v2多一次route或答案工具。
   for (const version of [1,2]) {
     await begin('单任务自然回答v' + version,version,true);
+    if (version === 2) {
+      h.sql(`UPDATE tool_calls SET completed_at=TIMESTAMPADD(MICROSECOND,-5000,created_at)
+        WHERE origin_run_id='${run.run_id}' AND state='succeeded'`);
+      const {runs} = await h.snapshot(run.conversation_id);
+      const active = runs.find(item => item.run_id === run.run_id);
+      assert.equal(active.completed_steps,1);
+      assert.deepEqual(active.completed_step_summaries,[]);
+      checks.push('逆序的耗时记录不造耗时，已完成计数与会话快照仍可读取');
+    }
     assistant(firstAnswer,[],'stop'); await append(firstChunks);
     const input = {...binding(),commit_id:randomUUID(),final_text:firstAnswer,checkpoint:checkpoint()};
     const receipt = ok(await h.internal('/internal/finish',input)); assert.equal(receipt.output_id,run.output_id);
@@ -372,7 +383,7 @@ try {
     toolResult(input,receipt);
     return {input,receipt};
   };
-  const answerReceipt = async task => {
+  const renderAnswer = async task => {
     const query = (await invokeTool('request_query',{task_id:task.task_id,condition_version:task.condition_version,
       sql:'SELECT 42 AS amount',parameters:{},target_id:'synthetic-sqlite',
       summary:'合成答案金额',knowledge_refs:[],replaces_query_id:null})).receipt.data;
@@ -383,9 +394,16 @@ try {
     await h.pauseWorker();
     const detail = (await invokeTool('get_query',{query_id:query.id})).receipt.data;
     assert.equal(detail.query.execution_state,'succeeded','合成答案查询先真实执行');
-    return invokeTool('present_analysis_answer',{template:'合成答案金额{{amount}}分。',
+    const {input,receipt} = await invokeTool('prepare_analysis_answer',{
       sources:[{query_id:query.id,result_ref:detail.results.result_ref,columns:['amount']}],
       values:[{name:'amount',kind:'cell',query_id:query.id,column:'amount',row_index:0}]});
+    const template = '合成答案金额{{amount}}分。';
+    const entry = assistant(template,[],'stop');
+    const display = template.replace('{{amount}}',receipt.data.bindings.amount) + receipt.data.required_suffix;
+    const range = await append([display]);
+    return {display,binding:{assistant:outputBinding(entry),source_text:template,
+      prepared_sdk_tool_call_id:input.sdk_tool_call_id,
+      first_chunk_seq:String(range.first),last_chunk_seq:String(range.last)}};
   };
   {
     await begin('grounded跨范围结清',2,false,false,{});
@@ -401,9 +419,9 @@ try {
       run.workspace_context = ok(await h.internal('/internal/context/refresh',
         {...binding(),sdk_tool_call_id:switching.sdk_tool_call_id,checkpoint:checkpoint()}));
     }
-    const {input,receipt} = await answerReceipt(taskB);
-    const completion = {...binding(),commit_id:randomUUID(),final_text:receipt.data.answer_text,
-      final_start_chunk_seq:String(sequence+1),answer_sdk_tool_call_id:input.sdk_tool_call_id,
+    const rendered = await renderAnswer(taskB);
+    const completion = {...binding(),commit_id:randomUUID(),final_text:rendered.display,
+      rendered_answer_binding:rendered.binding,
       checkpoint:checkpoint()}, before = await observe();
     assert.deepEqual(before.frozen,[]);
     const response = await h.internal('/internal/finish',completion), after = await observe();
@@ -416,13 +434,13 @@ try {
   }
   {
     await begin('单任务grounded直接提交',2,true);
-    const {input,receipt} = await answerReceipt(taskA);
-    const completion = {...binding(),commit_id:randomUUID(),final_text:receipt.data.answer_text,
-      final_start_chunk_seq:String(sequence+1),answer_sdk_tool_call_id:input.sdk_tool_call_id,
+    const rendered = await renderAnswer(taskA);
+    const completion = {...binding(),commit_id:randomUUID(),final_text:rendered.display,
+      rendered_answer_binding:rendered.binding,
       checkpoint:checkpoint()};
     const finished = ok(await h.internal('/internal/finish',completion)), state = await observe();
     assert.equal(finished.output_id,run.output_id);
-    assert.equal(state.output.text,receipt.data.answer_text);
+    assert.equal(state.output.text,rendered.display);
     assert.equal(state.commits.length,1); assert.equal(state.state,'finished');
     checks.push('单任务成功答案回执的直接提交保持'); retire();
   }

@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useState, useRef, useMemo } from "react";
+import { useEffect, useLayoutEffect, useState, useRef, useMemo, useSyncExternalStore } from "react";
 import type {
   QueryHistory,
   QueryHistoryItem,
@@ -9,6 +9,7 @@ import { api, ApiError } from "../../shared/api.ts";
 import { decodeContract } from "../../../../../packages/contracts/validate.ts";
 import { WorkspaceShell, type View } from "../../shared/WorkspaceShell.tsx";
 import { Icon } from "../../shared/Icon.tsx";
+import { Tabs } from "../../shared/Tabs.tsx";
 import { Modal } from "../../shared/Modal.tsx";
 import { conversationItems, displayUserMessage } from "./conversation-timeline.ts";
 import { SkillSelections } from "./SkillSelections.tsx";
@@ -21,7 +22,7 @@ import "./workbench-dock.css";
 import { AssistantMessage } from "./AssistantMessage.tsx";
 import { objectReferenceLabels } from "./object-reference-labels.ts";
 import { ConversationFeed } from "./ConversationFeed.tsx";
-import { RunActivity } from "./RunActivity.tsx";
+import { CompletedRunSteps, RunActivity } from "./RunActivity.tsx";
 import { ModelSelector } from "./ModelSelector.tsx";
 import { useLiveConversation } from "./useLiveConversation.ts";
 import { useModelSelection } from "./useModelSelection.ts";
@@ -32,6 +33,19 @@ type WorkbenchDetail =
   | { kind: "report"; reference: AnalysisReportRef }
   | { kind: "results"; queryId: string }
   | { kind: "evidence"; id: string; summary?: string; version?: string };
+
+const panelLabel = {report: "分析报告", results: "查询结果", evidence: "口径依据"};
+const wideQuery = "(min-width: 1280px)";
+const dockMinimum = 36;
+const dockMaximum = 64;
+const clampDockWidth = (width: number) => Math.min(dockMaximum, Math.max(dockMinimum, width));
+const dockedViewport = () => window.matchMedia(wideQuery).matches;
+const subscribeViewport = (listener: () => void) => {
+  const viewport = window.matchMedia(wideQuery);
+  viewport.addEventListener("change", listener);
+  return () => viewport.removeEventListener("change", listener);
+};
+
 
 export function Workbench({
   user,
@@ -76,11 +90,38 @@ export function Workbench({
   const [queryHistoryBusy, setQueryHistoryBusy] = useState(false);
   const queryHistoryGeneration = useRef(0);
   const pendingQueryJump = useRef<string | null>(null);
-  const [panel, setPanel] = useState<{ conversation: string | null; detail: WorkbenchDetail } | null>(null);
-  const detail = panel?.conversation === cid ? panel.detail : null;
-  const selectedReport = detail?.kind === "report" ? detail.reference : null;
-  const closePanel = () => setPanel(null);
-  const openPanel = (detail: WorkbenchDetail) => setPanel({conversation: cid, detail});
+  const docked = useSyncExternalStore(subscribeViewport, dockedViewport, () => false);
+  const [dockWidth, setDockWidth] = useState(60);
+  const dock = useRef<HTMLDivElement>(null);
+  const returnPanelFocus = useRef<{opener: HTMLElement | null} | null>(null);
+  const [panel, setPanel] = useState<{
+    conversation: string | null;
+    views: (WorkbenchDetail & {opener: HTMLElement | null})[];
+    active: WorkbenchDetail["kind"];
+  } | null>(null);
+  const open = panel?.conversation === cid ? panel : null;
+  const closePanel = () => {
+    if (docked && open && dock.current?.contains(document.activeElement)) {
+      returnPanelFocus.current = {opener: open.views.find(view => view.kind === open.active)?.opener ?? null};
+    }
+    setPanel(previous => {
+      if (!previous || !docked) return null;
+      const views = previous.views.filter(view => view.kind !== previous.active);
+      const last = views.at(-1);
+      return last ? { ...previous, views, active: last.kind } : null;
+    });
+  };
+  const openPanel = (detail: WorkbenchDetail) => {
+    const focused = document.activeElement;
+    const view = {...detail, opener: focused instanceof HTMLElement ? focused : null};
+    setPanel(previous => {
+      const views = docked && previous?.conversation === cid ? previous.views : [];
+      const next = views.some(existing => existing.kind === detail.kind)
+        ? views.map(existing => existing.kind === detail.kind ? view : existing)
+        : [...views, view];
+      return { conversation: cid, views: next, active: detail.kind };
+    });
+  };
   const openEvidence = (id: string, summary?: string, version?: string) => openPanel({kind: "evidence", id, summary, version});
   useEffect(() => { setPanel(null); }, [cid]);
   const [historySearch, setHistorySearch] = useState("");
@@ -94,6 +135,15 @@ export function Workbench({
   const [historyBusy, setHistoryBusy] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const textarea = useRef<HTMLTextAreaElement>(null);
+  useLayoutEffect(() => {
+    const pending = returnPanelFocus.current;
+    if (!pending) return;
+    returnPanelFocus.current = null;
+    const target = pending.opener?.getClientRects().length && pending.opener !== document.body
+      ? pending.opener
+      : dock.current?.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]') ?? textarea.current;
+    target?.focus({preventScroll: true});
+  }, [open]);
   useLayoutEffect(() => {
     const input = textarea.current;
     if (!input) return;
@@ -354,6 +404,10 @@ export function Workbench({
   const currentRun = snapshot?.runs.find((r) => r.state === "running");
   // 阶段提示只看最新run与当前attempt；旧轮取消/失败历史沿原消息保留，不再以"本次"名义常驻。
   const latestRun = snapshot?.runs.at(-1);
+  const finishedRuns = useMemo(() => new Map(snapshot?.runs
+    .filter(run => run.state === "finished")
+    .map(run => [run.attempt_id, run.run_id])), [snapshot?.runs]);
+
   const currentAttemptStarted = currentRun?.attempt_id != null && (snapshot?.events.some(
     (e) => (e.type === "assistant_delta" || e.type === "assistant_committed") && e.payload.attempt_id === currentRun.attempt_id,
   ) ?? false);
@@ -421,7 +475,8 @@ export function Workbench({
       spaceName={spaceName}
       onNewConversation={() => { setCid(null); setText(localStorage.getItem(draftKey(null)) ?? ""); textarea.current?.focus(); }}
     >
-      <div className={"workbench-detail-layout" + (detail ? " has-workbench-detail" : "")}>
+      <div className={"workbench-detail-layout" + (open ? " has-workbench-detail" : "")}
+        style={docked && open ? {gridTemplateColumns: `minmax(0, 1fr) 8px ${dockWidth}%`} : undefined}>
       <section
         className={
           "conversation " + (!snapshot?.messages.length ? "empty" : "")
@@ -489,7 +544,7 @@ export function Workbench({
               </div>
             ) : item.kind === "report" ? (
               <div key={item.key} className="report-notice" role="status"><span>{item.conditionChanged ? "分析条件已更新，报告需重新整理" : "分析报告已保存"}</span><button className="text-link" onClick={() => openPanel({kind: "report", reference: item.reference})}>查看分析报告</button></div>
-            ) : (() => { const m = item.message; const display = displayUserMessage(m.text, snapshot.tasks); return (
+            ) : (() => { const m = item.message; const display = displayUserMessage(m.text, snapshot.tasks); const finishedRun = m.attempt_id ? finishedRuns.get(m.attempt_id) : undefined; return (
               <article
                 key={item.key}
                 className={"message " + m.role}
@@ -501,7 +556,10 @@ export function Workbench({
                   )}
                 </div>
                 {m.role === "assistant" ? (
-                  <AssistantMessage text={m.text} savedSql={savedSql} objectReferences={showTechnicalIds ? undefined : objectReferences} />
+                  <><AssistantMessage text={m.text} savedSql={savedSql} objectReferences={showTechnicalIds ? undefined : objectReferences} />
+                    {cid && m.committed && finishedRun &&
+                      <CompletedRunSteps key={finishedRun} cid={cid} runId={finishedRun}
+                        authorityRevision={authorityRevision}/>}</>
                 ) : (
                   <>{display.subject && <small className="reply-subject">针对：{display.subject}</small>}<p>{display.text}</p></>
                 )}
@@ -581,31 +639,49 @@ export function Workbench({
         </div>
         <p className="footnote">Enter 发送 · Shift + Enter 换行</p>
       </section>
-        {selectedReport && selectedReport.conversation_id === cid && <AnalysisReport
-          reference={snapshot?.tasks.find(task => task.id === selectedReport.task_id)?.report_ref ?? selectedReport}
-          authorityRevision={authorityRevision}
-          currentConditionVersion={snapshot?.tasks.find(task => task.id === selectedReport.task_id)?.condition_version}
-          onClose={closePanel}
-          onQuery={queryId => {
-            closePanel();
-            window.requestAnimationFrame(() => {
-              const target = document.getElementById("query-" + queryId);
-              const previous = target?.closest<HTMLDetailsElement>("details.previous-query");
-              if (previous) previous.open = true;
-              target?.scrollIntoView({ block: "start" });
-              target?.focus({ preventScroll: true });
-            });
+        {docked && open && <div className="workbench-divider" role="separator" tabIndex={0}
+          aria-orientation="vertical" aria-label="调整右侧宽度" aria-controls="workbench-details"
+          aria-valuemin={dockMinimum} aria-valuemax={dockMaximum} aria-valuenow={dockWidth}
+          onPointerDown={event => event.currentTarget.setPointerCapture(event.pointerId)}
+          onPointerMove={event => {
+            if (!event.currentTarget.hasPointerCapture(event.pointerId)) return;
+            const layout = event.currentTarget.parentElement!.getBoundingClientRect();
+            setDockWidth(clampDockWidth(Math.round((layout.right - event.clientX) * 100 / layout.width)));
           }}
-          onEvidence={openEvidence}
-        />}
-        {detail?.kind === "results" && <QueryResultPanel key={detail.queryId}
-          queryId={detail.queryId} authorityRevision={authorityRevision} onClose={closePanel}/>}
-        {detail?.kind === "evidence" && <Modal dock title="口径依据" className="evidence-dialog" onClose={closePanel}
-          footer={<><button onClick={() => { closePanel(); onMaintainEvidence(detail.id); }}>去维护此内容</button><button className="primary" onClick={closePanel}>返回对话</button></>}>
-          <div className="evidence-content">
-            <KnowledgeEvidence key={authorityRevision} id={detail.id} version={detail.version} querySummary={detail.summary}/>
-          </div>
-        </Modal>}
+          onKeyDown={event => {
+            if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+            event.preventDefault();
+            setDockWidth(width => clampDockWidth(width + (event.key === "ArrowLeft" ? 2 : -2)));
+          }}/>}
+        {open && <div id="workbench-details" ref={dock} className={docked ? "workbench-dock-area" : undefined}>
+          {docked && open.views.length > 1 && <Tabs label="右侧工作区" value={open.active}
+            items={open.views.map(view => ({ value: view.kind, label: panelLabel[view.kind] }))}
+            onChange={active => setPanel(previous => previous ? { ...previous, active } : null)}/>}
+          {open.views.map(view => {
+            const active = view.kind === open.active;
+            if (!docked && !active) return null;
+            return <div key={view.kind} className={docked ? "workbench-dock-view" : undefined} hidden={!active}>
+              {view.kind === "report" && <AnalysisReport key={view.reference.report_id}
+                reference={snapshot?.tasks.find(task => task.id === view.reference.task_id)?.report_ref ?? view.reference}
+                authorityRevision={authorityRevision} docked={docked}
+                currentConditionVersion={snapshot?.tasks.find(task => task.id === view.reference.task_id)?.condition_version}
+                onClose={closePanel}
+                onQuery={queryId => {
+                  if (!docked) closePanel();
+                  jumpToQuery(queryId);
+                }}
+                onEvidence={openEvidence}/>}
+              {view.kind === "results" && <QueryResultPanel key={view.queryId}
+                queryId={view.queryId} authorityRevision={authorityRevision} docked={docked} onClose={closePanel}/>}
+              {view.kind === "evidence" && <Modal docked={docked} title="口径依据" className="evidence-dialog" onClose={closePanel}
+                footer={<><button onClick={() => { closePanel(); onMaintainEvidence(view.id); }}>去维护此内容</button><button className="primary" onClick={closePanel}>返回对话</button></>}>
+                <div className="evidence-content">
+                  <KnowledgeEvidence key={authorityRevision} id={view.id} version={view.version} querySummary={view.summary}/>
+                </div>
+              </Modal>}
+            </div>;
+          })}
+        </div>}
       </div>
       {deleteId && (
         <Modal title="删除这个会话？" onClose={() => setDeleteId(null)}>

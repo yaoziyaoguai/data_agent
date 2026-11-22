@@ -445,7 +445,10 @@ pub async fn register_validated(
         }
         (tool.operation_id, tool.tool_contract_version)
     } else {
-        // 新动作仍按当前契约校验；旧映射只凭原参数指纹接回。
+        // 退役版本只接回已登记的原操作，避免留下无法执行的新登记。
+        if run.tool_contract_version != 2 {
+            return Err(Error::new("invalid_input"));
+        }
         contracts::validate(input_schema(name)?, &input["arguments"])?;
         let handoff =
             super::super::task_answers::register_in_tx(&mut tx, &conv, &run, &input).await?;

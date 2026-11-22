@@ -3819,6 +3819,16 @@ export interface WorkbenchUpdateClass {
     tasks?:      TaskSnapshotElement[];
 }
 
+export interface RunStepList {
+    steps: RunStepSummary[];
+}
+
+export interface RunStepSummary {
+    category:    string;
+    duration_ms: number;
+    target_name: null | string;
+}
+
 export interface KnowledgeLineage {
     downstream:      KnowledgeLineageEdge[];
     more_downstream: boolean;
@@ -4337,12 +4347,6 @@ export interface RunSnapshot {
     result_query_id?: null | string;
     run_id:           string;
     state:            RunSnapshotState;
-}
-
-export interface RunStepSummary {
-    category:    string;
-    duration_ms: number;
-    target_name: null | string;
 }
 
 export interface TaskSnapshot {

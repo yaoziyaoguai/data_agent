@@ -585,17 +585,20 @@ pub struct ToolActivity {
 pub struct CompletedStep {
     pub tool: String,
     pub target_id: Option<String>,
-    pub duration_ms: u64,
+    pub duration_ms: i64,
 }
 
 /// 仅投影服务端认可的工具类别与对象 ID。正文、参数与原始工具回执不进入界面。
-pub async fn running_activity_in_tx(
+pub async fn tool_activity_in_tx(
     tx: &mut AppTx<'_>,
     cid: &str,
+    run_id: Option<&str>,
 ) -> Result<std::collections::HashMap<String, ToolActivity>> {
     let rows = sqlx::query(
         "SELECT t.origin_run_id AS run_id,t.tool_name,t.state, \
-         TIMESTAMPDIFF(MICROSECOND,t.created_at,t.completed_at) DIV 1000 AS duration_ms, \
+         CASE WHEN t.completed_at>=t.created_at \
+           THEN TIMESTAMPDIFF(MICROSECOND,t.created_at,t.completed_at) DIV 1000 \
+         END AS duration_ms, \
          CASE \
            WHEN t.tool_name='read_knowledge' AND JSON_LENGTH(t.receipt,'$.data.items')=1 \
                 AND JSON_VALUE(t.receipt,'$.data.items[0].state')='ok' \
@@ -604,9 +607,12 @@ pub async fn running_activity_in_tx(
              THEN JSON_VALUE(t.receipt,'$.data.source.id') \
          END AS target_id \
          FROM tool_calls t JOIN agent_runs r ON r.id=t.origin_run_id \
-         WHERE r.conversation_id=? AND r.state='running' ORDER BY t.created_at,t.operation_id",
+         WHERE r.conversation_id=? AND (r.id=? OR (? IS NULL AND r.state='running')) \
+         ORDER BY t.created_at,t.operation_id",
     )
     .bind(cid)
+    .bind(run_id)
+    .bind(run_id)
     .fetch_all(tx.connection())
     .await?;
     let mut activity = std::collections::HashMap::<String, ToolActivity>::new();
@@ -621,11 +627,11 @@ pub async fn running_activity_in_tx(
         entry.tool = row.get("tool_name");
         if row.get::<String, _>("state") == "succeeded" {
             entry.completed += 1;
-            if let Some(duration) = row.get::<Option<i64>, _>("duration_ms") {
+            if let Some(duration_ms) = row.get::<Option<i64>, _>("duration_ms") {
                 entry.steps.push(CompletedStep {
                     tool: entry.tool.clone(),
                     target_id: row.get("target_id"),
-                    duration_ms: u64::try_from(duration).map_err(|_| Error::new("unavailable"))?,
+                    duration_ms,
                 });
             }
         }

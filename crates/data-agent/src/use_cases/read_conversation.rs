@@ -1,5 +1,5 @@
 use crate::{
-    contracts::generated::LoadedOutputRange,
+    contracts::generated::{LoadedOutputRange, RunStepList, RunStepSummary},
     modules::{analysis, conversations, knowledge, runtime},
     persistence::AppTx,
     types::{AccessContext, Error, Result, epoch, fingerprint},
@@ -64,7 +64,7 @@ pub async fn list_history(
     context: &AccessContext,
     before: Option<&str>,
     query: &str,
-) -> Result<Value> {
+) -> Result<crate::contracts::generated::History> {
     let mut tx = AppTx::begin(pool).await?;
     let result = conversations::list_conversations_in_tx(&mut tx, context, before, query).await?;
     tx.commit().await?;
@@ -128,24 +128,8 @@ async fn run_states_in_tx(
     // run身份由runtime提供，结果通知关联由conversations可信记录组合；不跨模块私表SQL。
     let mut runs = runtime::read_runs_in_tx(tx, cid).await?;
     let result_queries = conversations::result_query_map_in_tx(tx, cid).await?;
-    let activity = runtime::running_activity_in_tx(tx, cid).await?;
-    let targets: HashSet<_> = activity
-        .values()
-        .flat_map(|run| run.steps.iter().filter_map(|step| step.target_id.clone()))
-        .collect();
-    let names: HashMap<_, _> =
-        knowledge::candidate_meta_in_tx(tx, ctx, &targets.into_iter().collect::<Vec<_>>(), None)
-            .await?
-            .into_iter()
-            .filter(|object| object["state"] == "enabled")
-            .map(|object| {
-                let key = object["id"]
-                    .as_str()
-                    .ok_or(Error::new("invalid_input"))?
-                    .to_owned();
-                Ok((key, object["name"].clone()))
-            })
-            .collect::<Result<_>>()?;
+    let activity = runtime::tool_activity_in_tx(tx, cid, None).await?;
+    let names = step_names(tx, ctx, activity.values()).await?;
 
     for run in &mut runs {
         let result_query_id = run["message_id"]
@@ -166,21 +150,77 @@ async fn run_states_in_tx(
                 run["activity_label"] = json!(label);
             }
             run["completed_steps"] = json!(activity.completed);
-            run["completed_step_summaries"] = json!(
-                activity
-                    .steps
-                    .iter()
-                    .filter_map(|step| {
-                        let label = activity_label(&step.tool)?;
-                        Some(json!({"category":label.trim_start_matches("正在"),
-                    "target_name":step.target_id.as_ref().and_then(|id| names.get(id)),
-                    "duration_ms":step.duration_ms}))
-                    })
-                    .collect::<Vec<_>>()
-            );
+            run["completed_step_summaries"] = json!(step_summaries(activity, &names));
         }
     }
     Ok(runs)
+}
+
+async fn step_names<'a>(
+    tx: &mut AppTx<'_>,
+    ctx: &AccessContext,
+    activities: impl Iterator<Item = &'a runtime::ToolActivity>,
+) -> Result<HashMap<String, String>> {
+    let targets: HashSet<_> = activities
+        .flat_map(|activity| {
+            activity
+                .steps
+                .iter()
+                .filter_map(|step| step.target_id.clone())
+        })
+        .collect();
+    knowledge::candidate_meta_in_tx(tx, ctx, &targets.into_iter().collect::<Vec<_>>(), None)
+        .await?
+        .into_iter()
+        .filter(|object| object["state"] == "enabled")
+        .map(|object| {
+            let id = object["id"].as_str().ok_or(Error::new("invalid_input"))?;
+            let name = object["name"].as_str().ok_or(Error::new("invalid_input"))?;
+            Ok((id.to_owned(), name.to_owned()))
+        })
+        .collect()
+}
+
+fn step_summaries(
+    activity: &runtime::ToolActivity,
+    names: &HashMap<String, String>,
+) -> Vec<RunStepSummary> {
+    activity
+        .steps
+        .iter()
+        .filter_map(|step| {
+            Some(RunStepSummary {
+                category: activity_label(&step.tool)?
+                    .trim_start_matches("正在")
+                    .to_owned(),
+                target_name: step
+                    .target_id
+                    .as_ref()
+                    .and_then(|id| names.get(id))
+                    .cloned(),
+                duration_ms: step.duration_ms,
+            })
+        })
+        .collect()
+}
+
+pub async fn run_steps(
+    pool: &MySqlPool,
+    ctx: &AccessContext,
+    cid: &str,
+    run_id: &str,
+) -> Result<RunStepList> {
+    let mut tx = AppTx::begin(pool).await?;
+    conversations::assert_readable_in_tx(&mut tx, ctx, cid).await?;
+    let activities = runtime::tool_activity_in_tx(&mut tx, cid, Some(run_id)).await?;
+    let steps = if let Some(activity) = activities.get(run_id) {
+        let names = step_names(&mut tx, ctx, std::iter::once(activity)).await?;
+        step_summaries(activity, &names)
+    } else {
+        Vec::new()
+    };
+    tx.commit().await?;
+    Ok(RunStepList { steps })
 }
 
 pub async fn read_conversation(

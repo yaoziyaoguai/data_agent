@@ -7,10 +7,11 @@ import { KnowledgeReference } from "../../shared/KnowledgeReference.tsx";
 import { decimalChartScale } from "./analysis-report-chart.ts";
 import "./analysis-report.css";
 
-export function AnalysisReport({ reference, currentConditionVersion, authorityRevision, onClose, onQuery, onEvidence }: {
+export function AnalysisReport({ reference, currentConditionVersion, authorityRevision, docked, onClose, onQuery, onEvidence }: {
   reference: AnalysisReportRef;
   currentConditionVersion?: string;
   authorityRevision: number;
+  docked: boolean;
   onClose: () => void;
   onQuery: (queryId: string) => void;
   onEvidence: (id: string, summary?: string, version?: string) => void;
@@ -75,7 +76,7 @@ export function AnalysisReport({ reference, currentConditionVersion, authorityRe
   const historical = matched?.status === "condition_changed" && matched.report ? matched : null;
   const body = available ?? historical;
   const chartResults = body?.chart_results ?? [];
-  return <Modal title="分析报告" dock className="analysis-report-dialog" closeLabel="返回对话" onClose={onClose}
+  return <Modal title="分析报告" docked={docked} className="analysis-report-dialog" closeLabel="返回对话" onClose={onClose}
     footer={<button className="primary" onClick={onClose}>返回对话</button>}>
     {(changed || view?.status === "condition_changed") && <div className="report-state" role="status"><h3>分析条件已更新</h3><p>{body
       ? "这份报告采用的是此前条件的记录。以下为已存内容，仅供回顾；请返回对话，核对新的分析结果后再整理报告。"

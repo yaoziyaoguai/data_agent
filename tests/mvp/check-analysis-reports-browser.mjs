@@ -5,6 +5,7 @@ import { chromium } from "playwright";
 import { createReportFixture, ok } from "./check-analysis-reports.mjs";
 import { logoutWorkspace } from "./experience-navigation.mjs";
 import { until } from "./harness.mjs";
+import { assetInput } from "./skill-fixtures.mjs";
 
 const directory = ".local/checks/analysis-reports-browser";
 await mkdir(directory, { recursive: true });
@@ -241,6 +242,37 @@ try {
   assert.equal(await composer.inputValue(), "查阅报告时仍能补充");
   assert.equal(await composer.evaluate(element => element === document.activeElement), true);
   await page.screenshot({ path: directory + "/docked-report.png" });
+  const divider = page.getByRole("separator", {name:"调整右侧宽度"});
+  const dividerBox = await divider.boundingBox();
+  await page.mouse.move(dividerBox.x + 4, dividerBox.y + 40);
+  await page.mouse.down();
+  await page.mouse.move(dividerBox.x + 94, dividerBox.y + 40);
+  await page.mouse.up();
+  const narrower = (await dialog().boundingBox()).width;
+  assert.ok(narrower < dockBox.width - 50, "拖拽分栏应改变右栏宽度");
+  await divider.press("ArrowLeft");
+  assert.ok((await dialog().boundingBox()).width > narrower, "键盘可以扩大右栏");
+  await dialog().getByText("核对计算与口径依据", {exact:true}).first().click();
+  await dialog().getByRole("button", {name:"查看计算查询 1", exact:true}).first().click();
+  assert.equal(await dialog().isVisible(), true, "定位左栏查询时保留右栏报告");
+  const reportBody = dialog().locator(".modal-body");
+  const readingPosition = await reportBody.evaluate(element => {
+    element.scrollTop = 180;
+    return element.scrollTop;
+  });
+  assert.ok(readingPosition > 0, "报告应有可保留的阅读位置");
+  const inspectedResult = page.locator("#query-" + fixture.queries[1].id)
+    .getByRole("button", {name:"查看完整表格"});
+  await inspectedResult.click();
+  const dockTabs = page.getByRole("tablist", {name:"右侧工作区"});
+  await dockTabs.getByRole("tab", {name:"分析报告", exact:true}).click();
+  assert.equal(await reportBody.evaluate(element => element.scrollTop), readingPosition);
+  await dockTabs.getByRole("tab", {name:"查询结果", exact:true}).click();
+  await page.getByRole("dialog", {name:"查询结果", exact:true})
+    .getByRole("button", {name:"返回对话", exact:true}).last().press("Enter");
+  await dialog().waitFor();
+  assert.equal(await inspectedResult.evaluate(element => element === document.activeElement), true);
+  checks.push("右栏报告与结果页签切换保留滚动，定位左栏查询保持报告打开，键盘关闭时还原焦点");
   await back().click();
   await dialog().waitFor({state:"detached"});
   assert.equal(await composer.inputValue(), "查阅报告时仍能补充");
@@ -628,12 +660,25 @@ try {
   await sourcePanel.getByRole("button", {name:"返回对话", exact:true}).click();
   await sourcePanel.waitFor({state:"detached"});
   checks.push("真实查询的口径依据在大屏打开右栏，保留左侧输入");
+  const activityRun = h.captured.find(run => run.conversation_id === activityCid);
+  const stepsPath = "/conversations/" + activityCid + "/runs/" + activityRun.run_id + "/steps";
   await fixture.finish("已核对合成表定义。");
   await progress.waitFor({state:"detached"});
-  checks.push("活跃运行显示最新读取动作，展开已完成步骤可见真实授权表名和毫秒用时");
+  const completed = page.locator("article.message.assistant").filter({hasText:"已核对合成表定义。"});
+  await completed.getByText("查看运行步骤", {exact:true}).click();
+  const completedRead = completed.getByRole("listitem").filter({hasText:"阅读知识对象 · " + table.name});
+  await completedRead.waitFor();
+  assert.match(await completedRead.innerText(), /\d+ ms/);
+  assert.equal((await h.request(stepsPath, undefined, "bob")).status, 404);
+  checks.push("工具运行时和结束后均可看授权步骤与耗时，跨用户读取为 404");
 
+  const method = ok(await h.request("/assets", assetInput({
+    name:"血缘核对方法", body:"先核对合成表的商品行粒度。",
+    dependencies:[tableRef],
+  })));
   const graph = ok(await h.request("/knowledge/" + table.id + "/lineage"));
   assert.ok(graph.upstream.length && graph.downstream.length, "实际血缘包含上下游");
+  assert.ok(graph.downstream.some(edge => edge.object_id === method.id && edge.kind === "skill"));
   await page.getByRole("navigation", {name:"主导航"}).getByRole("button", {name:"语义管理"}).click();
   const tableEntry = page.getByRole("navigation", {name:"语义对象"}).getByRole("button", {name:new RegExp(table.name)});
   await tableEntry.click();
@@ -645,6 +690,12 @@ try {
     name:graph.downstream.find(edge => edge.kind !== "skill").name, exact:true,
   }).waitFor();
   assert.equal(await lineage.locator("svg").count(), 2);
+  await lineage.getByRole("button", {name:method.name, exact:true}).click();
+  const lineageSkill = page.getByRole("dialog", {name:"Skill 详情", exact:true});
+  await lineageSkill.getByText(method.body, {exact:true}).waitFor();
+  await lineageSkill.getByRole("button", {name:"关闭", exact:true}).click();
+  await lineageSkill.waitFor({state:"detached"});
+  checks.push("从真实血缘打开授权 Skill 正文及其显式依赖");
   const setTableReaders = async table_readers => {
     const response = await fetch(h.env.DATA_AGENT_PLATFORM_URL + "/permissions", {
       method:"POST",
@@ -658,6 +709,8 @@ try {
     await setTableReaders({alice:["raw_payments"]});
     const hiddenGraph = await h.request("/knowledge/" + table.id + "/lineage");
     assert.equal(hiddenGraph.status, 404, "撤销本表读权后的血缘端点不泄露对象");
+    const revokedSteps = ok(await h.request(stepsPath));
+    assert.equal(revokedSteps.steps.find(step => step.category === "阅读知识对象").target_name, null);
     assert.ok(!JSON.stringify(hiddenGraph.value).includes(table.name));
   } finally {
     await setTableReaders({});

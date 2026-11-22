@@ -1,7 +1,7 @@
 use crate::routes::ResponseResult;
 use crate::{
     State,
-    request::{ContractBody, ContractQuery, request_contracts},
+    request::{ContractBody, ContractQuery, RawContractBody, request_contracts},
     routes::{catalog_user, failure, internal_for_run, respond, semantic_user, user},
 };
 use axum::{
@@ -58,7 +58,7 @@ pub async fn save_analysis_report(
     AxumState(state): AxumState<State>,
     headers: HeaderMap,
     Path((cid, task)): Path<(String, String)>,
-    ContractBody { value: input, raw }: ContractBody<SaveAnalysisReport>,
+    RawContractBody { value: input, raw }: RawContractBody<SaveAnalysisReport>,
 ) -> ResponseResult {
     let ctx = semantic_user(&state, &headers).await.map_err(failure)?;
     respond!(
@@ -96,7 +96,7 @@ pub async fn edit_document(
     AxumState(state): AxumState<State>,
     headers: HeaderMap,
     Path(object): Path<String>,
-    ContractBody { value: input, raw }: ContractBody<KnowledgeDocumentEdit>,
+    RawContractBody { value: input, raw }: RawContractBody<KnowledgeDocumentEdit>,
 ) -> ResponseResult {
     let ctx = semantic_user(&state, &headers).await.map_err(failure)?;
     respond!(
@@ -128,7 +128,7 @@ pub async fn read_knowledge(
 pub async fn create_knowledge(
     AxumState(state): AxumState<State>,
     headers: HeaderMap,
-    ContractBody { value: input, raw }: ContractBody<KnowledgeCreate>,
+    RawContractBody { value: input, raw }: RawContractBody<KnowledgeCreate>,
 ) -> ResponseResult {
     let ctx = semantic_user(&state, &headers).await.map_err(failure)?;
     let command = KnowledgeChange::Create {
@@ -146,7 +146,7 @@ pub async fn edit_knowledge(
     AxumState(state): AxumState<State>,
     headers: HeaderMap,
     Path(object): Path<String>,
-    ContractBody { value: input, raw }: ContractBody<KnowledgeEdit>,
+    RawContractBody { value: input, raw }: RawContractBody<KnowledgeEdit>,
 ) -> ResponseResult {
     let ctx = semantic_user(&state, &headers).await.map_err(failure)?;
     let command = KnowledgeChange::Edit {
@@ -165,7 +165,7 @@ pub async fn edit_knowledge_entries(
     AxumState(state): AxumState<State>,
     headers: HeaderMap,
     Path(object): Path<String>,
-    ContractBody { value: input, raw }: ContractBody<KnowledgeEntryBatch>,
+    RawContractBody { value: input, raw }: RawContractBody<KnowledgeEntryBatch>,
 ) -> ResponseResult {
     let ctx = semantic_user(&state, &headers).await.map_err(failure)?;
     respond!(
@@ -332,7 +332,7 @@ pub async fn asset(
 pub async fn save_asset(
     AxumState(state): AxumState<State>,
     headers: HeaderMap,
-    ContractBody { value: input, raw }: ContractBody<AssetSave>,
+    RawContractBody { value: input, raw }: RawContractBody<AssetSave>,
 ) -> ResponseResult {
     let ctx = semantic_user(&state, &headers).await.map_err(failure)?;
     respond!(
@@ -485,7 +485,7 @@ pub async fn results(
 pub async fn register(
     AxumState(state): AxumState<State>,
     headers: HeaderMap,
-    ContractBody { value: input, raw }: ContractBody<DataToolInvocation>,
+    RawContractBody { value: input, raw }: RawContractBody<DataToolInvocation>,
 ) -> ResponseResult {
     let ctx = internal_for_run(&state, &headers, &input.run_id)
         .await
@@ -500,7 +500,7 @@ pub async fn register(
 pub async fn tool(
     AxumState(state): AxumState<State>,
     headers: HeaderMap,
-    ContractBody { value: input, raw }: ContractBody<DataToolInvocation>,
+    RawContractBody { value: input, raw }: RawContractBody<DataToolInvocation>,
 ) -> ResponseResult {
     let ctx = internal_for_run(&state, &headers, &input.run_id)
         .await
@@ -518,7 +518,7 @@ pub async fn tool(
 pub async fn tool_rejection(
     AxumState(state): AxumState<State>,
     headers: HeaderMap,
-    ContractBody { value: input, raw }: ContractBody<DataToolInvocation>,
+    RawContractBody { value: input, raw }: RawContractBody<DataToolInvocation>,
 ) -> ResponseResult {
     let ctx = internal_for_run(&state, &headers, &input.run_id)
         .await
@@ -608,7 +608,7 @@ pub async fn delete_conversation(
 pub async fn memory_model_call(
     AxumState(state): AxumState<State>,
     headers: HeaderMap,
-    ContractBody { value: input, raw }: ContractBody<MemoryModelCall>,
+    RawContractBody { value: input, raw }: RawContractBody<MemoryModelCall>,
 ) -> ResponseResult {
     if crate::routes::bearer(&headers) != Some(state.internal_token.as_str()) {
         return Err(failure(Error::new("unauthenticated")));

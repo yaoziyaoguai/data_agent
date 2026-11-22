@@ -503,6 +503,32 @@
         }
       }
     },
+    "/conversations/{id}/runs/{run_id}/steps": {
+      "get": {
+        "parameters": [
+          {"in": "path", "name": "id", "required": true, "schema": {"type": "string"}},
+          {"in": "path", "name": "run_id", "required": true, "schema": {"type": "string"}}
+        ],
+        "responses": {
+          "200": {
+            "description": "当前有权查看的已完成工具步骤摘要",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "./schema.json#/$defs/RunStepList"}
+              }
+            }
+          },
+          "default": {
+            "description": "应用错误",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "./schema.json#/$defs/AppError"}
+              }
+            }
+          }
+        }
+      }
+    },
     "/conversations/{id}/events": {
       "get": {
         "parameters": [

@@ -1,6 +1,6 @@
 use crate::{
     State,
-    request::{ContractBody, ContractQuery, request_contracts},
+    request::{ContractBody, ContractQuery, RawContractBody, request_contracts},
 };
 use axum::{
     Json,
@@ -66,23 +66,15 @@ pub(crate) fn failure(error: Error) -> (StatusCode, Json<Value>) {
         ),
     )
 }
-pub(crate) fn success<T: serde::de::DeserializeOwned + serde::Serialize>(
-    _schema: &str,
-    value: Value,
-) -> ResponseResult {
+pub(crate) fn success(_schema: &str, value: Value) -> ResponseResult {
     #[cfg(debug_assertions)]
     contracts::validate(_schema, &value).map_err(failure)?;
-    let typed: T =
-        serde_json::from_value(value).map_err(|_| failure(Error::new("invalid_input")))?;
-    Ok(Json(typed).into_response())
+    Ok(Json(value).into_response())
 }
 
 macro_rules! respond {
     ($schema:ident, $body:expr $(,)?) => {
-        $crate::routes::success::<data_agent::contracts::generated::$schema>(
-            stringify!($schema),
-            $body,
-        )
+        $crate::routes::success(stringify!($schema), $body)
     };
 }
 pub(crate) use respond;
@@ -218,7 +210,7 @@ pub async fn history(
     headers: HeaderMap,
     ContractQuery(query): ContractQuery<HistoryQuery>,
 ) -> ResponseResult {
-    let context = semantic_user(&state, &headers).await.map_err(failure)?;
+    let context = user(&state, &headers).await.map_err(failure)?;
     use_cases::read_conversation::list_history(
         &state.pool,
         &context,
@@ -227,7 +219,7 @@ pub async fn history(
     )
     .await
     .map_err(failure)
-    .and_then(|value| respond!(History, value))
+    .map(|value| Json(value).into_response())
 }
 pub async fn snapshot(
     AxumState(state): AxumState<State>,
@@ -285,6 +277,18 @@ pub async fn refresh_snapshot(
     .await
     .map_err(failure)
     .and_then(|value| respond!(SnapshotRefresh, value))
+}
+
+pub async fn run_steps(
+    AxumState(state): AxumState<State>,
+    headers: HeaderMap,
+    Path((cid, run_id)): Path<(String, String)>,
+) -> ResponseResult {
+    let context = semantic_user(&state, &headers).await.map_err(failure)?;
+    use_cases::read_conversation::run_steps(&state.pool, &context, &cid, &run_id)
+        .await
+        .map_err(failure)
+        .map(|steps| Json(steps).into_response())
 }
 
 pub async fn register(
@@ -501,10 +505,10 @@ pub async fn cancel_run(
     AxumState(state): AxumState<State>,
     headers: HeaderMap,
     Path(cid): Path<String>,
-    ContractBody {
+    RawContractBody {
         value: input,
         raw: body,
-    }: ContractBody<CancelRun>,
+    }: RawContractBody<CancelRun>,
 ) -> ResponseResult {
     let context = user(&state, &headers).await.map_err(failure)?;
     let receipt = use_cases::cancel_run::cancel(&state.pool, &context, &cid, &input)
