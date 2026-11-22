@@ -148,17 +148,9 @@ pub async fn prepare_in_tx(
     Ok(reference)
 }
 
-pub async fn invalidate_in_tx(
-    tx: &mut AppTx<'_>,
-    ctx: &AccessContext,
-    draft: &str,
-    state: &str,
-) -> Result<()> {
-    if !matches!(state, "condition_changed" | "sources_unavailable") {
-        return Err(Error::new("invalid_input"));
-    }
-    sqlx::query("UPDATE personal_assets SET state='deleted',body=JSON_OBJECT(),draft_origin=JSON_SET(draft_origin,'$.status',?,'$.evidence_refs',NULL) WHERE id=? AND owner_id=? AND space_id=? AND state='draft'")
-        .bind(state).bind(draft).bind(&ctx.user_id).bind(&ctx.space_id).execute(tx.connection()).await?;
+pub async fn discard_in_tx(tx: &mut AppTx<'_>, ctx: &AccessContext, draft: &str) -> Result<()> {
+    sqlx::query("UPDATE personal_assets SET state='deleted',body=JSON_OBJECT(),draft_origin=JSON_SET(draft_origin,'$.status','discarded','$.evidence_refs',NULL) WHERE id=? AND owner_id=? AND space_id=? AND state='draft'")
+        .bind(draft).bind(&ctx.user_id).bind(&ctx.space_id).execute(tx.connection()).await?;
     Ok(())
 }
 

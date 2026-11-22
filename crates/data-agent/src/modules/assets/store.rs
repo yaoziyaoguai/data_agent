@@ -407,7 +407,7 @@ pub async fn change_state_authorized_in_tx(
     .await?;
     require_edit(ctx, &v, can_admin)?;
     if v["state"] == "draft" {
-        super::skill_drafts::invalidate_in_tx(tx, ctx, asset, "sources_unavailable").await?;
+        super::skill_drafts::discard_in_tx(tx, ctx, asset).await?;
         // 草稿从未形成正式 Skill 版本。保留删除回执，正文与待确认依据由草稿入口清除。
         v["state"] = json!("deleted");
         hide_skill_text(&mut v);

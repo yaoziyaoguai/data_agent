@@ -346,6 +346,16 @@ async fn check_text_in_tx(
 pub async fn read(pool: &MySqlPool, ctx: &AccessContext, draft_id: &str) -> Result<Value> {
     let mut tx = AppTx::begin(pool).await?;
     let reference = assets::skill_drafts::locate_in_tx(&mut tx, ctx, draft_id).await?;
+    let unavailable_view = |error: Error| {
+        let status = if error.code == "version_conflict" {
+            "condition_changed"
+        } else if unavailable_source(&error) {
+            "sources_unavailable"
+        } else {
+            return Err(error);
+        };
+        Ok(json!({"status":status,"reference":reference}))
+    };
     let conversation =
         conversations::lock_for_cleanup_in_tx(&mut tx, ctx, text(&reference, "conversation_id")?)
             .await?;
@@ -355,20 +365,13 @@ pub async fn read(pool: &MySqlPool, ctx: &AccessContext, draft_id: &str) -> Resu
         tx.commit().await?;
         return Ok(view);
     }
-    let local = check_pending_in_tx(&mut tx, ctx, &conversation, &draft).await;
-    if let Err(error) = &local {
-        let status = if error.code == "version_conflict" {
-            "condition_changed"
-        } else if unavailable_source(error) {
-            "sources_unavailable"
-        } else {
-            return Err(Error::new(error.code));
-        };
-        assets::skill_drafts::invalidate_in_tx(&mut tx, ctx, draft_id, status).await?;
-        tx.commit().await?;
-        return Ok(json!({"status":status,"reference":reference}));
-    }
-    let evidence = local?;
+    let evidence = match check_pending_in_tx(&mut tx, ctx, &conversation, &draft).await {
+        Ok(evidence) => evidence,
+        Err(error) => {
+            tx.commit().await?;
+            return unavailable_view(error);
+        }
+    };
     let authorities = [
         super::analysis_reports::evidence_authority(&evidence)?,
         super::personal_assets::skill_authority(
@@ -379,19 +382,7 @@ pub async fn read(pool: &MySqlPool, ctx: &AccessContext, draft_id: &str) -> Resu
     let mut checked = super::context_authority::CheckedTextResults::default();
     checked.include(pool, ctx, &authorities, false).await?;
     if let Err(error) = result_sources(pool, ctx, &evidence).await {
-        if !unavailable_source(&error) {
-            return Err(error);
-        }
-        let mut tx = AppTx::begin(pool).await?;
-        conversations::lock_for_cleanup_in_tx(&mut tx, ctx, text(&reference, "conversation_id")?)
-            .await?;
-        assets::skill_drafts::invalidate_in_tx(&mut tx, ctx, draft_id, "sources_unavailable")
-            .await?;
-        let view = assets::skill_drafts::read_in_tx(&mut tx, ctx, draft_id)
-            .await?
-            .view()?;
-        tx.commit().await?;
-        return Ok(view);
+        return unavailable_view(error);
     }
     // 网络查证后重新锁来源；删除或条件修订不能让迟到读回旧正文。
     let mut tx = AppTx::begin(pool).await?;
@@ -402,16 +393,8 @@ pub async fn read(pool: &MySqlPool, ctx: &AccessContext, draft_id: &str) -> Resu
     if current.state == "pending"
         && let Err(error) = check_text_in_tx(&mut tx, ctx, &conversation, &current, &checked).await
     {
-        let status = if error.code == "version_conflict" {
-            "condition_changed"
-        } else if unavailable_source(&error) {
-            "sources_unavailable"
-        } else {
-            return Err(error);
-        };
-        assets::skill_drafts::invalidate_in_tx(&mut tx, ctx, draft_id, status).await?;
         tx.commit().await?;
-        return Ok(json!({"status":status,"reference":reference}));
+        return unavailable_view(error);
     }
     let view = current.view()?;
     tx.commit().await?;

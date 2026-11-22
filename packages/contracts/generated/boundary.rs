@@ -4505,6 +4505,7 @@ pub enum SkillDraftStatus {
     #[serde(rename = "condition_changed")]
     ConditionChanged,
     Confirmed,
+    Discarded,
     Pending,
     #[serde(rename = "sources_unavailable")]
     SourcesUnavailable,
@@ -7812,6 +7813,8 @@ pub enum SkillDraft {
     ConditionChanged { reference: SkillDraftRef },
     #[serde(rename = "sources_unavailable")]
     SourcesUnavailable { reference: SkillDraftRef },
+    #[serde(rename = "discarded")]
+    Discarded { reference: SkillDraftRef },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

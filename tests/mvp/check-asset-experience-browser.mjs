@@ -7,8 +7,10 @@ const {h,draft,draftInput}=await createReuseFixture({web:true});
 const browser=await chromium.launch();const page=await browser.newPage({viewport:{width:1440,height:1000}});
 const directory='.local/checks/asset-experience';await mkdir(directory,{recursive:true});const checks=[],errors=[];let passed=false;page.on('pageerror',e=>errors.push(e.message));
 try {
+ const origin=await h.create();
+ await page.addInitScript(cid=>localStorage.setItem('data-agent.conversation.["demo","alice"]',cid),origin);
  await page.goto(h.url);await page.getByLabel('演示登录凭据').fill(h.tokens.alice);await page.getByRole('button',{name:'进入工作台 →'}).click();
- const origin=await h.create();await page.evaluate(cid=>localStorage.setItem('data-agent.conversation.["demo","alice"]',cid),origin);await page.reload();
+ await page.getByLabel('你的数据问题').waitFor();await page.reload();
  await page.getByLabel('你的数据问题').fill('尚未发送的分析问题');
  await page.getByRole('button',{name:'＋ 选用分析方法',exact:true}).click();
  assert.match(await page.getByRole('tab',{selected:true}).innerText(),/^我的 Skill/);
@@ -34,7 +36,7 @@ try {
  assert.equal(replay.status,200);assert.equal(replay.value.state,'deleted');assert.equal(replay.value.body,'');
  assert.equal(replay.value.text_unavailable,true);
  const discarded=await h.request('/assets/skill-drafts/'+draft.draft_id);
- assert.equal(discarded.value.status,'sources_unavailable');assert.equal(Object.hasOwn(discarded.value,'body'),false);
+ assert.equal(discarded.value.status,'discarded');assert.equal(Object.hasOwn(discarded.value,'body'),false);
  checks.push('待核对方法按需读取真实草稿正文，普通启用命令不能绕过核对，丢弃后不可再读取');
  await page.getByRole('button',{name:'新增个人 Skill',exact:true}).click();let dialog=page.getByRole('dialog');
  for(const width of [1440,390]){await page.setViewportSize({width,height:1000});await page.screenshot({path:directory+'/examples-'+width+'.png',animations:'disabled'});}

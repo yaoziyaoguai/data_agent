@@ -179,6 +179,9 @@ async function checkHistoricalMethodSources(fixture, checks) {
     assert.deepEqual(draft.evidence_refs[1].result_dependencies,
       [{ query_id: contribution.query.id, result_ref: contribution.query.result_ref }]);
   }
+  const originalPreview = ok(await h.request(`/assets/${refs[1].draft_id}`));
+  assert.equal(originalPreview.version, "1");
+  assert.equal(originalPreview.body, drafts[1].body);
   assert.deepEqual(ok(await h.request(`/assets/skill-drafts/${refs[0].draft_id}`)).evidence_refs, drafts[0].evidence_refs);
   const saved = ok(await h.request("/assets", assetInput({ draft_id: refs[0].draft_id, name: input.name,
     body: input.body, scope: input.scope, dependencies: drafts[0].dependencies, files: input.files })));
@@ -217,13 +220,15 @@ async function checkHistoricalMethodSources(fixture, checks) {
   const restored = ok(await h.request(`/assets/${saved.id}`));
   assert.equal(restored.body, input.body);
   assert.equal(restored.version, saved.version);
+  assert.deepEqual(ok(await h.request(`/assets/${refs[1].draft_id}`)), originalPreview);
+  assert.deepEqual(ok(await h.request(`/assets/skill-drafts/${refs[1].draft_id}`)), drafts[1]);
   await fixture.begin(cid, "修改方法当前任务的范围说明。");
   await fixture.invoke("update_analysis_task", { action: "revise", task_id: current.task_id,
     expected_version: current.condition_version,
     condition_patch: { set: { notes: "调整后的范围" }, unset: [] }, options: [] });
   await fixture.finish();
   assert.equal(ok(await h.request(`/assets/skill-drafts/${refs[2].draft_id}`)).status, "condition_changed");
-  checks.push("跨会话来源拒绝；撤权隐藏结果、草稿及显式引用结果的方法正文，恢复后读回原已保存版本");
+  checks.push("跨会话来源拒绝；撤权隐藏结果、草稿及显式引用结果的方法正文，恢复后读回原草稿及已保存版本");
 }
 
 async function checkReuse() {

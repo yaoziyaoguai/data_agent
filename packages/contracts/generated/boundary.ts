@@ -1288,7 +1288,7 @@ export interface SkillDraftRefClass {
     task_id:           string;
 }
 
-export type SkillDraftStatus = "pending" | "confirmed" | "condition_changed" | "sources_unavailable";
+export type SkillDraftStatus = "pending" | "confirmed" | "condition_changed" | "sources_unavailable" | "discarded";
 
 export interface SkillDraftListClass {
     drafts:        SkillDraftElement[];
@@ -6516,6 +6516,9 @@ export type SkillDraft = {
     reference: SkillDraftRef;
 } | {
     status: "sources_unavailable";
+    reference: SkillDraftRef;
+} | {
+    status: "discarded";
     reference: SkillDraftRef;
 };
 

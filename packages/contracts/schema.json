@@ -11471,6 +11471,24 @@
             "reference"
           ],
           "additionalProperties": false
+        },
+        {
+          "title": "discarded",
+          "type": "object",
+          "properties": {
+            "status": {
+              "type": "string",
+              "const": "discarded"
+            },
+            "reference": {
+              "$ref": "#/$defs/SkillDraftRef"
+            }
+          },
+          "required": [
+            "status",
+            "reference"
+          ],
+          "additionalProperties": false
         }
       ]
     },
