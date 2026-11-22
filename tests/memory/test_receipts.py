@@ -1,13 +1,15 @@
 """检查正式记忆接缝的失败/重启行为；不把测试替身当作Mem0质量证据。"""
 import json
 import sys
+import threading
 import tempfile
 import unittest
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from types import SimpleNamespace
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "apps/memory"))
-from service import ActiveVectors, MemoryService
+from service import MemoryService, TenantVectors
 from store import MemoryError, ReceiptStore
 
 
@@ -62,7 +64,7 @@ class ReceiptTests(unittest.TestCase):
 
     def load(self):
         service = MemoryService.__new__(MemoryService)
-        service.vectors = [ActiveVectors() for _ in range(256)]
+        service.vectors = TenantVectors()
         service.store, service.memory = ReceiptStore(self.path), FakeMemory()
         service.fingerprint = "fixed-configuration"
         return service
@@ -77,6 +79,40 @@ class ReceiptTests(unittest.TestCase):
 
     def search(self, owner="alice", space="demo"):
         return self.service.search_current({"owner_id": owner, "space_id": space, "query": "收入单位"})["candidates"]
+
+    def test_extraction_does_not_block_another_tenant_in_the_same_old_shard(self):
+        shards = {}
+        for index in range(257):
+            candidate = f"user-{index}"
+            shard = hash(candidate + "::demo") % 256
+            if shard in shards:
+                first, second = shards[shard], candidate
+                break
+            shards[shard] = candidate
+        entered, release = threading.Event(), threading.Event()
+        add = self.service.memory.add
+
+        def pause_first(content, **kwargs):
+            if kwargs["user_id"] == first + "::demo":
+                entered.set()
+                if not release.wait(5):
+                    raise TimeoutError("待测请求未完成")
+            return add(content, **kwargs)
+
+        self.service.gateway = threading.local()
+        self.service.memory.add = pause_first
+        first_request = {**self.message, "owner_id": first, "budget": {}}
+        next_request = {**self.message, "owner_id": second, "budget": {}, "operation_id": "save-2"}
+        with ThreadPoolExecutor(max_workers=2) as threads:
+            blocked = threads.submit(self.service.handle, "/extract", first_request)
+            try:
+                self.assertTrue(entered.wait(2))
+                other = threads.submit(self.service.handle, "/extract", next_request)
+                self.assertEqual(other.result(timeout=2)["operation_id"], "save-2")
+                self.assertFalse(blocked.done())
+            finally:
+                release.set()
+            self.assertEqual(blocked.result(timeout=2)["operation_id"], "save-1")
 
     def test_prepared_candidate_is_invisible_until_formal_commit(self):
         self.service.extract(self.message)

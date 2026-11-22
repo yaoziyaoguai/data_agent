@@ -6,6 +6,7 @@ import threading
 import time
 from contextlib import contextmanager
 from pathlib import Path
+from weakref import WeakValueDictionary
 
 from providers import BudgetedEmbedding, BudgetedLLM, ModelGateway
 from store import MemoryError, ReceiptStore
@@ -16,7 +17,7 @@ def digest(value):
 
 
 class ActiveVectors:
-    """同一分段内，检索可并发。切换只等已开始的检索完成。"""
+    """同一租户内，检索可并发。切换只等已开始的检索完成。"""
     def __init__(self):
         self.writes = threading.Lock()
         self.condition = threading.Condition()
@@ -49,6 +50,20 @@ class ActiveVectors:
                 self.condition.notify_all()
 
 
+class TenantVectors:
+    def __init__(self):
+        self.active = WeakValueDictionary()
+        self.lock = threading.Lock()
+
+    def for_tenant(self, tenant):
+        with self.lock:
+            state = self.active.get(tenant)
+            if state is None:
+                state = ActiveVectors()
+                self.active[tenant] = state
+            return state
+
+
 class MemoryService:
     def __init__(self, config, directory):
         os.environ["MEM0_TELEMETRY"] = "False"
@@ -61,7 +76,7 @@ class MemoryService:
         self.store = ReceiptStore(directory / "receipts.sqlite")
         self.gateway = ModelGateway(config, self.store)
         self.fingerprint = digest(config)
-        self.vectors = [ActiveVectors() for _ in range(256)]
+        self.vectors = TenantVectors()
         print("startup service=memory stage=configuration_started", flush=True)
         self.memory = Memory.from_config({
             "vector_store": {"provider": "milvus", "config": {
@@ -86,20 +101,19 @@ class MemoryService:
         self.gateway.failure = None
         if path == "/search":
             return self.search(request)
-        with self._active_vectors(self.tenant(request)).writes:
+        active = self.vectors.for_tenant(self.tenant(request))
+        with active.writes:
             if path == "/extract":
                 return self.extract(request)
             return self.index(request)
-
-    def _active_vectors(self, tenant):
-        return self.vectors[hash(tenant) % len(self.vectors)]
 
     def maintain(self, stop):
         while not stop.is_set():
             self.gateway.settle_pending()
             for key, fingerprint, record in self.store.retired():
                 try:
-                    with self._active_vectors(record["tenant"]).writes:
+                    vectors = self.vectors.for_tenant(record["tenant"])
+                    with vectors.writes:
                         active = self.store.asset(record["identity"])["memory_ids"]
                         for memory_id in record["retired"]:
                             if memory_id not in active and self.memory.vector_store.get(memory_id):
@@ -192,7 +206,7 @@ class MemoryService:
                     raise MemoryError("memory_unavailable")
         ids = ids or []
         self.store.write_operation(key, fp, "prepared", {"ids": ids})
-        with self._active_vectors(tenant).publish():
+        with self.vectors.for_tenant(tenant).publish():
             if asset["state"] == "enabled":
                 for memory_id in ids:
                     record = self.memory.vector_store.get(memory_id)
@@ -221,7 +235,7 @@ class MemoryService:
             raise MemoryError(failure)
 
     def search_current(self, r):
-        with self._active_vectors(self.tenant(r)).read():
+        with self.vectors.for_tenant(self.tenant(r)).read():
             return self.search_active(r)
 
     def search_active(self, r):

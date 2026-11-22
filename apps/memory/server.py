@@ -5,6 +5,7 @@ import json
 import os
 import re
 import threading
+from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse
@@ -21,6 +22,40 @@ ROOT = Path(__file__).resolve().parents[2]
 CONTRACT = json.loads((ROOT / "packages/contracts/schema.json").read_text())
 ROUTES = {"/extract": ("MemoryExtractionRequest", "MemoryExtractionReceipt"),
           "/index": ("MemoryIndexRequest", "MemoryIndexReceipt"), "/search": ("MemorySearchRequest", "MemorySearchReceipt")}
+
+
+class MemoryServer(ThreadingHTTPServer):
+    request_queue_size = 64
+    worker_limit = 32
+    client_io_timeout = 10
+
+    def __init__(self, address, handler):
+        self.slots = threading.BoundedSemaphore(self.worker_limit)
+        self.workers = ThreadPoolExecutor(max_workers=self.worker_limit)
+        super().__init__(address, handler)
+
+    def process_request(self, request, client_address):
+        request.settimeout(self.client_io_timeout)
+        if self.slots.acquire(blocking=False):
+            self.workers.submit(self.serve_request, request, client_address)
+        else:
+            body = b'{"error":"memory_busy"}'
+            header = ("HTTP/1.1 503 Service Unavailable\r\nContent-Type: application/json\r\n"
+                      f"Content-Length: {len(body)}\r\nConnection: close\r\n\r\n")
+            try:
+                request.sendall(header.encode("ascii") + body)
+            finally:
+                self.shutdown_request(request)
+
+    def serve_request(self, request, client_address):
+        try:
+            self.process_request_thread(request, client_address)
+        finally:
+            self.slots.release()
+
+    def server_close(self):
+        super().server_close()
+        self.workers.shutdown()
 
 
 def validate(name, value):
@@ -87,15 +122,14 @@ def main():
                 print("memory_operation_failed code=" + (code if isinstance(e, MemoryError) else type(e).__name__), flush=True)
                 self.reply(503, {"error": code})
 
-    server = ThreadingHTTPServer(("127.0.0.1", args.port), Handler)
-    print(f"startup service=memory stage=listening elapsed={time.monotonic()-_started:.2f}s", flush=True)
-    stop = threading.Event()
-    maintenance = threading.Thread(target=service.maintain, args=(stop,), daemon=True)
-    maintenance.start()
-    try:
-        server.serve_forever()
-    finally:
-        stop.set()
+    with MemoryServer((os.environ.get("DATA_AGENT_BIND_HOST", "127.0.0.1"), args.port), Handler) as server:
+        print(f"startup service=memory stage=listening elapsed={time.monotonic()-_started:.2f}s", flush=True)
+        stop = threading.Event()
+        threading.Thread(target=service.maintain, args=(stop,), daemon=True).start()
+        try:
+            server.serve_forever()
+        finally:
+            stop.set()
 
 
 if __name__ == "__main__":

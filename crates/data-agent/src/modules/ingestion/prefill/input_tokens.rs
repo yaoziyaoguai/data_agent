@@ -9,7 +9,7 @@ use std::{
     collections::BTreeMap,
     fs, io,
     path::{Path, PathBuf},
-    sync::LazyLock,
+    sync::OnceLock,
 };
 use tokenizers::Tokenizer;
 
@@ -60,30 +60,33 @@ fn verified_asset(path: &Path, sha256: &str) -> std::result::Result<Vec<u8>, Str
 }
 
 fn encoding_directory() -> PathBuf {
-    std::env::var_os("DATA_AGENT_RESOURCES_DIR")
-        .map_or_else(
-            || PathBuf::from("crates/data-agent/resources"),
-            PathBuf::from,
-        )
-        .join("deepseek")
+    if let Some(directory) = std::env::var_os("DATA_AGENT_RESOURCES_DIR") {
+        return PathBuf::from(directory).join("deepseek");
+    }
+    if let Ok(executable) = std::env::current_exe()
+        && let Some(parent) = executable.parent()
+    {
+        let packaged = parent.join("resources/deepseek");
+        if packaged.is_dir() {
+            return packaged;
+        }
+    }
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("resources/deepseek")
 }
 
-static FLASH: LazyLock<std::result::Result<ModelEncoding, String>> = LazyLock::new(|| {
-    ModelEncoding::load(
-        &encoding_directory(),
-        "flash",
-        "c90dfa01249db1be4245780a052ede752e1361c612ac6d08e2bdada7d599476b",
-        "47ba348f139492c8e7fcd08fa52e6f25c591c2a7ac6f8fd47ff24f99665628df",
-    )
-});
-static PRO: LazyLock<std::result::Result<ModelEncoding, String>> = LazyLock::new(|| {
-    ModelEncoding::load(
-        &encoding_directory(),
-        "pro",
-        "8f9f37ca37fdc4f5fd36d5cf4d3b0e8392edb4e894fd10cc0d70b4957c8633cf",
-        "2fe4bc210bce9bd7902524d68d9240bce2913b0f35e68c594f4a4f94b9f70811",
-    )
-});
+static FLASH: OnceLock<ModelEncoding> = OnceLock::new();
+static PRO: OnceLock<ModelEncoding> = OnceLock::new();
+
+fn load_encoding(
+    cache: &OnceLock<ModelEncoding>,
+    load: impl FnOnce() -> std::result::Result<ModelEncoding, String>,
+) -> Result<&ModelEncoding> {
+    if let Some(encoding) = cache.get() {
+        return Ok(encoding);
+    }
+    let encoding = load().map_err(|problem| Error::new("unavailable").with_message(problem))?;
+    Ok(cache.get_or_init(|| encoding))
+}
 
 // 公开encoder用Python默认JSON分隔符；仅改变结构空格，不改写字段/正文/Unicode。
 struct PythonSeparators;
@@ -124,12 +127,24 @@ pub(super) fn published_input_tokens(
     function: &Value,
 ) -> Result<usize> {
     let encoding = match profile.model_id.as_str() {
-        "deepseek-flash" => &*FLASH,
-        "deepseek-v4-pro" => &*PRO,
-        _ => return Err(Error::new("invalid_input")),
-    }
-    .as_ref()
-    .map_err(|problem| Error::new("unavailable").with_message(problem.clone()))?;
+        "deepseek-flash" => load_encoding(&FLASH, || {
+            ModelEncoding::load(
+                &encoding_directory(),
+                "flash",
+                "c90dfa01249db1be4245780a052ede752e1361c612ac6d08e2bdada7d599476b",
+                "47ba348f139492c8e7fcd08fa52e6f25c591c2a7ac6f8fd47ff24f99665628df",
+            )
+        }),
+        "deepseek-v4-pro" => load_encoding(&PRO, || {
+            ModelEncoding::load(
+                &encoding_directory(),
+                "pro",
+                "8f9f37ca37fdc4f5fd36d5cf4d3b0e8392edb4e894fd10cc0d70b4957c8633cf",
+                "2fe4bc210bce9bd7902524d68d9240bce2913b0f35e68c594f4a4f94b9f70811",
+            )
+        }),
+        _ => Err(Error::new("invalid_input")),
+    }?;
     let mode = match profile.thinking_level.as_ref() {
         None | Some(ThinkingLevel::Off) => "off",
         Some(ThinkingLevel::Low) => "low",
@@ -166,6 +181,24 @@ pub(super) fn published_input_tokens(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn tokenizer_load_can_recover_after_a_missing_resource() {
+        let directory = Path::new(env!("CARGO_MANIFEST_DIR")).join("resources/deepseek");
+        let load = |path: &Path| {
+            ModelEncoding::load(
+                path,
+                "flash",
+                "c90dfa01249db1be4245780a052ede752e1361c612ac6d08e2bdada7d599476b",
+                "47ba348f139492c8e7fcd08fa52e6f25c591c2a7ac6f8fd47ff24f99665628df",
+            )
+        };
+        let cache = OnceLock::new();
+        let missing = directory.join("missing");
+        assert!(load_encoding(&cache, || load(&missing)).is_err());
+        assert!(load_encoding(&cache, || load(&directory)).is_ok());
+        assert!(load_encoding(&cache, || load(&missing)).is_ok());
+    }
 
     #[test]
     fn tokenizer_assets_are_verified_before_parsing() {
