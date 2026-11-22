@@ -170,7 +170,7 @@ flowchart LR
 
 个人记忆继续由Mem0提取和检索，正式内容仍以MySQL为准。查询案例是共享知识，报告属于本人任务，待确认方法属于本人；这几类内容分别保存。私人分析不会自动成为公共案例或公共方法，引用关系也不会授予维护权。
 
-图表使用有界的已保存结果，保留精确金额和截断说明。同一会话的组合报告可引用 1–5 份分析依据，各自保留原查询与条件身份；任一来源失效时整份报告只显示状态。待确认方法也可组合本人同会话不同任务或历史条件的有效依据，各份来源保留原身份；来源失效或会话删除后，草稿正文清理。已保存的个人 Skill 保留资产记录，生成正文继续携带来源约束；清空引用或原文重传不能解除这些约束，人工独立改写另按保存规则处理。
+图表使用有界的已保存结果，保留精确金额和截断说明。同一会话的组合报告可引用 1–5 份分析依据，各自保留原查询与条件身份。引用的资料被停用、删除或撤回读取权限时，整份报告只显示状态。权限恢复后可重新读取。单个查询结果到期时，报告仍保留正文和其他可用图表。待确认方法也可组合本人同会话不同任务或历史条件的有效依据，各份来源保留原身份；来源失效或会话删除后，草稿正文清理。已保存的个人 Skill 保留资产记录，生成正文继续携带来源约束；清空引用或原文重传不能解除这些约束，人工独立改写另按保存规则处理。
 
 接口和边界见[第二版执行包](docs/analysis-capabilities-execution.md)及[实现设计](docs/architecture/implementation-design.md)。最新完成状态与验证范围见[CURRENT](docs/CURRENT.md)；本轮新增能力的本地协议测试不代表真实模型的自主分析准确率。
 
@@ -248,6 +248,10 @@ python3 scripts/development.py --model mock --prefill disabled --memory builtin 
 
 ## 验证与边界
 
+### 当前版本验证
+
+本次工作台在隔离 MySQL、合成平台和 Chromium 中通过了报告与撤权回归 16 项、查询边界回归 10 项、Dogfood 可读性回归 5 项。验收覆盖宽屏停靠、移动端、流式 CSV 与撤权恢复、三栏血缘及实时步骤，真实模型调用为 0。离线构建和 Rust、TypeScript 双侧契约检查通过，共核对 696 个契约样例。[当前验收记录](docs/CURRENT.md#p2-强类型部署配置与工作台本地验收通过)
+
 ### 已有证据
 
 2026-10-19新版160项`flash-r1`已逐项处理，保留真实Flash、UI与工程专项各自证据及失败，不折算成模型准确率。2026-10-20的[一般性根因复核](docs/reviews/dogfood-root-causes-20261020.md)记录执行恢复、完整来源、澄清、知识维护及多来源报告修复，并单独保留高思考档对照中尚未闭环的语义问题。座舱语音 100 项及[报告修复收口](docs/execution/semantic-runtime/dogfood-report-repairs.md)的最新工程证据、真实复验、遗留缺口与账本状态统一见[CURRENT](docs/CURRENT.md)；原始对话、账户与运行账本保留忽略目录，未公开上传。
@@ -281,10 +285,15 @@ python3 scripts/development.py --model mock --prefill disabled --memory builtin 
 
 ```sh
 # 无模型调用的静态与离线检查
-make verify-materials verify-fixture
-make verify-code verify-contracts
+make verify verify-code verify-contracts
 
-# 需要本项目 MySQL；各项串行运行
+# 启动本项目基础设施后，构建并串行运行工作台专项
+make build
+node tests/mvp/check-analysis-reports-browser.mjs
+node tests/mvp/check-query-boundaries.mjs
+node tests/mvp/check-dogfood-readability.mjs
+
+# 其他业务回归，在同一台机器上串行运行
 make verify-query-workflow verify-knowledge-workflow
 make verify-mvp-browser verify-mvp-regression
 make verify-business-acceptance verify-hybrid-retrieval
