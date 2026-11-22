@@ -7,15 +7,17 @@ fn continuation_scan_restores_offsets_without_filter_or_budget_reset() {
     let page = original
         .next_page(ScanChannel::Lexical, "合成问题", 1, 1)
         .unwrap();
-    original.accept_page(
-        CandidatePage {
-            count: page.reserved,
-            request: page,
-            rows: vec![],
-            failed: false,
-        },
-        None,
-    );
+    original
+        .accept_page(
+            CandidatePage {
+                count: page.reserved,
+                request: page,
+                rows: vec![],
+                failed: false,
+            },
+            None,
+        )
+        .unwrap();
     let snapshot = original.snapshot_scan().unwrap();
     let encoded = serde_json::to_string(&snapshot).unwrap();
     assert!(!encoded.contains("private-filter"));
@@ -45,15 +47,17 @@ fn continuation_scan_rejects_live_pages_and_changed_current_scope() {
         .next_page(ScanChannel::Lexical, "合成问题", 1, 1)
         .unwrap();
     assert_eq!(original.snapshot_scan().unwrap_err().code, "invalid_cursor");
-    original.accept_page(
-        CandidatePage {
-            request: page,
-            count: 0,
-            rows: vec![],
-            failed: false,
-        },
-        None,
-    );
+    original
+        .accept_page(
+            CandidatePage {
+                request: page,
+                count: 0,
+                rows: vec![],
+                failed: false,
+            },
+            None,
+        )
+        .unwrap();
     let snapshot = original.snapshot_scan().unwrap();
     let mut changed = Candidates::lexical();
     changed.cursors.lexical = Some(ChannelCursor::new(vec!["changed-scope".into()]));
@@ -114,18 +118,20 @@ fn channel_failures_isolate_and_report_partial_availability() {
         ] {
             if let Some(available) = available {
                 let request = candidates.next_page(channel, "范围", 1, 1).unwrap();
-                candidates.accept_page(
-                    CandidatePage {
-                        request,
-                        count: 0,
-                        rows: vec![],
-                        failed: !available,
-                    },
-                    None,
-                );
+                candidates
+                    .accept_page(
+                        CandidatePage {
+                            request,
+                            count: 0,
+                            rows: vec![],
+                            failed: !available,
+                        },
+                        None,
+                    )
+                    .unwrap();
             }
         }
-        candidates.refresh_progress();
+        candidates.refresh_progress().unwrap();
         assert_eq!((candidates.state, candidates.bounded), expected);
     }
     // 单路批次吸收：失败只记本路，不改写为空成功；解析失败同样只记本路。
@@ -507,15 +513,17 @@ async fn failed_shard_is_not_completed_or_exhausted() {
     )
     .await;
     let (count, rows, failed) = absorb_batch(result, aggregate_hits);
-    candidates.accept_page(
-        CandidatePage {
-            request,
-            count,
-            rows,
-            failed,
-        },
-        None,
-    );
+    candidates
+        .accept_page(
+            CandidatePage {
+                request,
+                count,
+                rows,
+                failed,
+            },
+            None,
+        )
+        .unwrap();
     let cursor = candidates.cursors.lexical.as_ref().unwrap();
     assert!(cursor.failed);
     assert_eq!(cursor.progress().completed, 0, "失败分片没有完成检索");
@@ -571,15 +579,17 @@ fn vector_results_must_stay_within_the_sent_source_scope() {
         {"id":"out-of-scope","object_id":"other-guide","object_version":1},
     ]))
     .unwrap();
-    result.accept_page(
-        CandidatePage {
-            count: rows.len(),
-            request,
-            rows,
-            failed: false,
-        },
-        Some(&allowed),
-    );
+    result
+        .accept_page(
+            CandidatePage {
+                count: rows.len(),
+                request,
+                rows,
+                failed: false,
+            },
+            Some(&allowed),
+        )
+        .unwrap();
     assert!(result.lexical.is_empty());
     assert_eq!(result.lexical_state, "unavailable");
     assert!(result.bounded);

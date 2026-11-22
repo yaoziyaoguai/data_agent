@@ -10,14 +10,12 @@ use crate::{
 use serde_json::{Value, json};
 use sqlx::{MySqlPool, Row};
 
-fn versioned(mut value: Value, version: u64) -> Value {
-    value["version"] = json!(version.to_string());
-    value.as_object_mut().unwrap().remove("legacy");
-    value
-        .as_object_mut()
-        .unwrap()
-        .remove("deployment_credential");
-    value
+fn versioned(mut value: Value, version: u64) -> Result<Value> {
+    let object = value.as_object_mut().ok_or(Error::new("unavailable"))?;
+    object.insert("version".into(), json!(version.to_string()));
+    object.remove("legacy");
+    object.remove("deployment_credential");
+    Ok(value)
 }
 fn identity(space: &str, id: &str, version: u64) -> String {
     format!("{space}/{id}/{version}")
@@ -78,7 +76,7 @@ pub async fn initialize(
                 "3960000",
             ),
         ] {
-            let model = json!({"id":id,"service_id":"deployment-deepseek","model_id":id,"label":label,"thinking_levels":levels,"reasoning_supported":true,"default_thinking":if id==profile.model_id {serde_json::to_value(profile).unwrap()["thinking_level"].as_str().unwrap_or("off").to_owned()} else {"off".into()},"input_limit":profile.input_limit,"output_limit":profile.output_limit,"payload_bytes_limit":profile.payload_bytes_limit.unwrap_or(65536),"input_rate":input,"output_rate":output,"enabled":true,"legacy":true});
+            let model = json!({"id":id,"service_id":"deployment-deepseek","model_id":id,"label":label,"thinking_levels":levels,"reasoning_supported":true,"default_thinking":if id==profile.model_id {serde_json::to_value(profile).map_err(|_| crate::types::Error::new("unavailable"))?["thinking_level"].as_str().unwrap_or("off").to_owned()} else {"off".into()},"input_limit":profile.input_limit,"output_limit":profile.output_limit,"payload_bytes_limit":profile.payload_bytes_limit.unwrap_or(65536),"input_rate":input,"output_rate":output,"enabled":true,"legacy":true});
             sqlx::query("INSERT INTO model_definitions(space_id,id,version,payload,last_fingerprint) VALUES(?,?,1,?,?)").bind(space).bind(id).bind(&model).bind(fingerprint(&model)).execute(tx.connection()).await?;
             sqlx::query("INSERT INTO model_definition_versions(space_id,id,version,payload,updated_by) VALUES(?,?,1,?,'deployment')").bind(space).bind(id).bind(&model).execute(tx.connection()).await?;
         }
@@ -107,16 +105,16 @@ pub async fn snapshot(pool: &MySqlPool, space: &str) -> Result<Value> {
             .fetch_all(tx.connection())
             .await?
             .into_iter()
-            .map(|r| versioned(r.get("payload"), r.get("version")))
-            .collect::<Vec<_>>();
+            .map(|r| versioned(r.try_get("payload")?, r.try_get("version")?))
+            .collect::<Result<Vec<_>>>()?;
     let models =
         sqlx::query("SELECT payload,version FROM model_definitions WHERE space_id=? ORDER BY id")
             .bind(space)
             .fetch_all(tx.connection())
             .await?
             .into_iter()
-            .map(|r| versioned(r.get("payload"), r.get("version")))
-            .collect::<Vec<_>>();
+            .map(|r| versioned(r.try_get("payload")?, r.try_get("version")?))
+            .collect::<Result<Vec<_>>>()?;
     let result = json!({"version":setting.get::<u64,_>("version").to_string(),"default_model_id":setting.get::<Option<String>,_>("default_model_id"),"services":services,"models":models});
     tx.commit().await?;
     Ok(result)
@@ -157,8 +155,14 @@ pub async fn save_service(pool: &MySqlPool, ctx: &AccessContext, input: Value) -
         return Err(Error::new("version_conflict"));
     }
     let mut payload = input.clone();
-    payload.as_object_mut().unwrap().remove("expected_version");
-    payload.as_object_mut().unwrap().remove("api_key");
+    payload
+        .as_object_mut()
+        .ok_or(crate::types::Error::new("unavailable"))?
+        .remove("expected_version");
+    payload
+        .as_object_mut()
+        .ok_or(crate::types::Error::new("unavailable"))?
+        .remove("api_key");
     let models: Vec<Value> = sqlx::query_scalar("SELECT payload FROM model_definitions WHERE space_id=? AND JSON_UNQUOTE(JSON_EXTRACT(payload,'$.service_id'))=?")
         .bind(&ctx.space_id).bind(id).fetch_all(tx.connection()).await?;
     for model in models {
@@ -203,7 +207,9 @@ pub async fn save_service(pool: &MySqlPool, ctx: &AccessContext, input: Value) -
 pub async fn save_model(pool: &MySqlPool, ctx: &AccessContext, input: Value) -> Result<()> {
     let expected = epoch(input["expected_version"].as_str().unwrap_or(""))?;
     let next_version = expected.checked_add(1).ok_or(Error::new("invalid_input"))?;
-    let id = input["id"].as_str().unwrap();
+    let id = input["id"]
+        .as_str()
+        .ok_or(crate::types::Error::new("unavailable"))?;
     let fp = fingerprint(&input);
     let mut tx = AppTx::begin(pool).await?;
     sqlx::query("SELECT version FROM model_space_settings WHERE space_id=? FOR UPDATE")
@@ -212,7 +218,11 @@ pub async fn save_model(pool: &MySqlPool, ctx: &AccessContext, input: Value) -> 
         .await?;
     let service = sqlx::query("SELECT payload FROM model_services WHERE space_id=? AND id=?")
         .bind(&ctx.space_id)
-        .bind(input["service_id"].as_str().unwrap())
+        .bind(
+            input["service_id"]
+                .as_str()
+                .ok_or(crate::types::Error::new("unavailable"))?,
+        )
         .fetch_optional(tx.connection())
         .await?;
     let service: Value = service.ok_or(Error::new("not_available"))?.get("payload");
@@ -237,7 +247,10 @@ pub async fn save_model(pool: &MySqlPool, ctx: &AccessContext, input: Value) -> 
         return Err(Error::new("version_conflict"));
     }
     let mut payload = input.clone();
-    payload.as_object_mut().unwrap().remove("expected_version");
+    payload
+        .as_object_mut()
+        .ok_or(crate::types::Error::new("unavailable"))?
+        .remove("expected_version");
     let version = next_version;
     sqlx::query("INSERT INTO model_definition_versions(space_id,id,version,payload,updated_by) VALUES(?,?,?,?,?)").bind(&ctx.space_id).bind(id).bind(version).bind(&payload).bind(&ctx.user_id).execute(tx.connection()).await?;
     sqlx::query("INSERT INTO model_definitions(space_id,id,version,payload,last_fingerprint) VALUES(?,?,?,?,?) ON DUPLICATE KEY UPDATE version=VALUES(version),payload=VALUES(payload),last_fingerprint=VALUES(last_fingerprint)").bind(&ctx.space_id).bind(id).bind(version).bind(&payload).bind(&fp).execute(tx.connection()).await?;
@@ -256,10 +269,16 @@ pub async fn default_model(pool: &MySqlPool, space: &str, input: Value) -> Resul
     .bind(space)
     .fetch_one(tx.connection())
     .await?;
-    let expected = epoch(input["expected_version"].as_str().unwrap())?;
+    let expected = epoch(
+        input["expected_version"]
+            .as_str()
+            .ok_or(crate::types::Error::new("unavailable"))?,
+    )?;
     let next_version = expected.checked_add(1).ok_or(Error::new("invalid_input"))?;
     let version: u64 = row.get("version");
-    let id = input["model_id"].as_str().unwrap();
+    let id = input["model_id"]
+        .as_str()
+        .ok_or(crate::types::Error::new("unavailable"))?;
     if version == next_version
         && row.get::<Option<String>, _>("default_model_id").as_deref() == Some(id)
     {
@@ -290,7 +309,11 @@ async fn active_definition(
     let service =
         sqlx::query("SELECT payload,version FROM model_services WHERE space_id=? AND id=?")
             .bind(space)
-            .bind(m["service_id"].as_str().unwrap())
+            .bind(
+                m["service_id"]
+                    .as_str()
+                    .ok_or(crate::types::Error::new("unavailable"))?,
+            )
             .fetch_optional(tx.connection())
             .await?
             .ok_or(Error::new("model_unavailable"))?;
@@ -325,11 +348,12 @@ pub async fn selection_in_tx(
     };
     let (model, version, service, service_version) = active_definition(tx, space, &id).await?;
     let thinking = selection
-        .map(|s| serde_json::to_value(&s.thinking_level).unwrap())
+        .map(|s| serde_json::to_value(&s.thinking_level).map_err(|_| Error::new("unavailable")))
+        .transpose()?
         .unwrap_or_else(|| model["default_thinking"].clone());
     if !model["thinking_levels"]
         .as_array()
-        .unwrap()
+        .ok_or(crate::types::Error::new("unavailable"))?
         .contains(&thinking)
     {
         return Err(Error::new("invalid_input"));
@@ -339,7 +363,8 @@ pub async fn selection_in_tx(
         json!({"model_id":id,"thinking_level":thinking}),
     )?;
     let mut profile = fallback
-        .map(|p| serde_json::to_value(p).unwrap())
+        .map(|p| serde_json::to_value(p).map_err(|_| Error::new("unavailable")))
+        .transpose()?
         .unwrap_or_else(|| base_profile(space));
     profile["provider_id"] = service["provider_id"].clone();
     profile["model_id"] = model["model_id"].clone();

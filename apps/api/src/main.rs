@@ -1,7 +1,10 @@
+#![cfg_attr(not(test), deny(clippy::unwrap_used, clippy::expect_used))]
 mod data_routes;
 mod knowledge_impact_routes;
 mod live_events;
 mod model_routes;
+mod query_export;
+mod request;
 mod routes;
 mod semantic_routes;
 mod skill_draft_routes;
@@ -23,7 +26,8 @@ pub struct State {
 }
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    data_agent::contracts::initialize_validators();
+    data_agent::contracts::initialize_validators()?;
+    let space = data_agent::modules::access::default_space()?;
     let pool = persistence::connect(&env::var("DATA_AGENT_DATABASE_URL")?).await?;
     let live = live_events::LiveEvents::start(&pool)?;
     let state = State {
@@ -31,6 +35,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         identities: DevelopmentIdentity::from_config(
             &env::var("DATA_AGENT_MODE")?,
             &env::var("DATA_AGENT_DEV_IDENTITIES")?,
+            &space,
         )?,
         internal_token: Arc::new(env::var("DATA_AGENT_INTERNAL_TOKEN")?),
         model_profile: env::var("DATA_AGENT_MODEL_PROFILE")
@@ -53,7 +58,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     if let Some(profile) = &state.model_profile {
         data_agent::modules::runtime::configure_trial(&state.pool, profile).await?;
     }
-    data_agent::use_cases::knowledge::initialize(&state.pool).await?;
+    data_agent::use_cases::knowledge::initialize(&state.pool, &space).await?;
     let router = Router::new()
         .route("/health", get(|| async { "ok" }))
         .route("/models", get(model_routes::catalog))
@@ -138,6 +143,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             get(data_routes::read_document).patch(data_routes::edit_document),
         )
         .route(
+            "/knowledge/{id}/lineage",
+            get(knowledge_impact_routes::lineage),
+        )
+        .route(
             "/knowledge/{id}/maintenance-impact",
             get(knowledge_impact_routes::read),
         )
@@ -188,7 +197,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/queries/{id}/confirm", post(data_routes::confirm))
         .route("/queries/{id}/cancel", post(data_routes::cancel))
         .route("/queries/{id}/results", get(data_routes::results))
-        .route("/queries/{id}/export.csv", get(data_routes::export))
+        .route("/queries/{id}/export.csv", get(query_export::export))
         .route("/semantic-access", get(semantic_routes::access))
         .route("/semantic-members", get(semantic_routes::members))
         .route("/knowledge/{id}/maintainer", post(semantic_routes::assign))

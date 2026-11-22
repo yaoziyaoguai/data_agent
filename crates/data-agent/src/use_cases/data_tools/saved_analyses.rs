@@ -35,7 +35,7 @@ pub(super) async fn query(
             super::super::query_workflow::ProtectedText::Current(authority) => {
                 let mut authority = authority.clone();
                 if let Some(result) = external.filter(|result| result["error"].is_null()) {
-                    super::super::context_authority::observe(&mut authority, result);
+                    super::super::context_authority::observe(&mut authority, result)?;
                 }
                 authority
             }
@@ -72,7 +72,7 @@ pub(super) async fn query(
             let content = json!({"sql":q["sql"],"parameters":q["parameters"],
                         "summary":q["summary"],"semantic_resolution":q["semantic_resolution"],
                         "conditions":conditions});
-            q = super::super::query_workflow::control_projection(q);
+            q = super::super::query_workflow::control_projection(q)?;
             super::super::historical_analysis::content_page(
                 json!({"query":q,"results":null,"historical_analysis":entry,
                             "hint":"这是保存时的SQL、原条件和说明，只用于复述当时的分析。当前口径与新执行仍需重新核对。正文按content_page.next_offset用content_offset续读。"}),
@@ -82,7 +82,7 @@ pub(super) async fn query(
             )?
         }
         super::super::query_workflow::ProtectedText::Restricted => {
-            q = super::super::query_workflow::control_projection(q);
+            q = super::super::query_workflow::control_projection(q)?;
             json!({"query":q,"results":null,"hint":"查询正文来源已失效或缺少完整记录；只返回原状态，可停止查询，不能据此确认执行或恢复旧正文。"})
         }
     })
@@ -120,7 +120,7 @@ pub(super) async fn read_report(
         super::super::context_authority::merge_run_in_tx(
             tx,
             &run.id,
-            &super::super::context_authority::from_sources(&checked["sources"]),
+            &super::super::context_authority::from_sources(&checked["sources"])?,
         )
         .await?;
     }
@@ -164,7 +164,7 @@ pub(super) async fn save_report(
     super::super::context_authority::merge_run_in_tx(
         tx,
         &run.id,
-        &super::super::context_authority::from_sources(&adopted),
+        &super::super::context_authority::from_sources(&adopted)?,
     )
     .await?;
     conversations::append_event_in_tx(tx, conv, &id(), "analysis_report_saved", receipt.clone())

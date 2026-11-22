@@ -793,7 +793,7 @@ async fn run_version_is_frozen_across_process_recovery() {
     assert_eq!(tool.tool_contract_version, 2);
     let receipt = json!({"operation_id":operation,"tool_name":"search_knowledge",
         "data":{"synthetic_frozen_body":"原正文","cursor":"original-next-position"}});
-    runtime::record_tool_receipt_in_tx(&mut tx, &tool, &receipt)
+    runtime::record_tool_receipt_in_tx(&mut tx, &run, &tool, &receipt)
         .await
         .unwrap();
     let pending_operation = runtime::register_named_tool_in_tx(

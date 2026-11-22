@@ -73,13 +73,13 @@ async fn prepare_delivery(
     }
     let mut authorities: Vec<_> = answer_handoffs
         .iter()
-        .map(|v| v["authority"].clone())
+        .map(|v| Ok(v["authority"].clone()))
         .chain(
             selected_skill_provenance
                 .iter()
                 .map(super::personal_assets::skill_authority),
         )
-        .collect();
+        .collect::<Result<Vec<_>>>()?;
     if let Some(previous) = &checkpoint {
         authorities.push(previous["authority_snapshot"].clone());
     }
@@ -229,7 +229,7 @@ async fn prepare_delivery(
             &text_results,
             &result_proofs,
             &projection,
-        );
+        )?;
         let (invalidated, scope_changed) = if let Some(previous) = &checkpoint {
             let invalidated = !text_results.allows(&previous["authority_snapshot"], false)
                 || previous["authority_snapshot"]["checkpoint_reset_required"] == true
@@ -538,7 +538,7 @@ pub async fn refresh_context(
         .await?
         .iter()
         .map(super::personal_assets::skill_authority)
-        .collect::<Vec<_>>();
+        .collect::<Result<Vec<_>>>()?;
     let result_proofs = verify_checkpoint_results(pool, ctx, &authorities).await?;
     let mut tx = AppTx::begin(pool).await?;
     let conv = conversations::lock_conversation_in_tx(&mut tx, ctx, &cid).await?;
@@ -595,7 +595,7 @@ pub async fn refresh_context(
         &text_results,
         &result_proofs,
         &projection,
-    );
+    )?;
     let mut visible_tasks = Vec::new();
     for task in tasks {
         if projection.scope_known && task["id"] == baseline["task_id"] {
@@ -621,7 +621,8 @@ pub async fn refresh_context(
     runtime::save_checkpoint_in_tx(
         &mut tx,
         &run,
-        &serde_json::to_value(&input.checkpoint).expect("checkpoint"),
+        &serde_json::to_value(&input.checkpoint)
+            .map_err(|_| crate::types::Error::new("unavailable"))?,
     )
     .await?;
     visible["authority_revision"] = json!(fingerprint(&snapshot));
@@ -650,9 +651,11 @@ fn observe_previews(
 ) -> Result<()> {
     super::context_authority::observe_workspace_previews(snapshot, visible)?;
     for skill in super::context_authority::items(&visible["selected_skills"]) {
-        if let Some(authority) =
-            selected_provenance.get(skill["id"].as_str().expect("selected asset ID"))
-        {
+        if let Some(authority) = selected_provenance.get(
+            skill["id"]
+                .as_str()
+                .ok_or(crate::types::Error::new("unavailable"))?,
+        ) {
             super::context_authority::merge(snapshot, authority)?;
         }
     }
@@ -666,67 +669,80 @@ fn workspace_assets(
     results: &super::context_authority::CheckedTextResults,
     result_proofs: &[ResultProof],
     projection: &super::source_limits::ActiveProjection,
-) -> WorkspaceAssets {
+) -> Result<WorkspaceAssets> {
     let mut selected_provenance = HashMap::new();
-    let (mut memories, mut selected): (Vec<_>, Vec<_>) = assets
-        .into_iter()
-        .filter(|asset| {
-            if asset.get("skill_sources").is_some() {
-                let authority = super::personal_assets::skill_authority(asset);
-                if !results.allows(&authority, false)
-                    || !super::context_authority::items(&authority["source_skills"])
-                        .iter()
-                        .all(|reference| {
-                            active_source_skills
-                                .get(reference[0].as_str().expect("source skill ID"))
-                                .is_some_and(|v| reference[1] == v["version"])
-                        })
-                {
-                    return false;
-                }
-                selected_provenance.insert(
-                    asset["id"].as_str().expect("selected asset ID").to_owned(),
-                    authority,
-                );
+    let mut memories = Vec::new();
+    let mut selected = Vec::new();
+    let mut selected_count = 0;
+    for asset in assets {
+        let dependencies = super::context_authority::items(&asset["dependencies"]);
+        if !dependencies.iter().all(|reference| {
+            reference["object_id"]
+                .as_str()
+                .and_then(|id| sources.get(id))
+                .is_some_and(|source| source["version"] == reference["version"])
+        }) {
+            continue;
+        }
+        let ancestors = super::context_authority::items(&asset["skill_sources"]["source_skills"]);
+        let query_sources =
+            super::context_authority::items(&asset["skill_sources"]["source_query_results"]);
+        let mut authorized_ancestors = Vec::new();
+        if asset.get("skill_sources").is_some() {
+            let authority = super::personal_assets::skill_authority(&asset)?;
+            if !results.allows(&authority, false) {
+                continue;
             }
-            super::context_authority::items(&asset["dependencies"])
+            for pair in ancestors {
+                let id = pair[0].as_str().ok_or(Error::new("unavailable"))?;
+                if let Some(source) = active_source_skills
+                    .get(id)
+                    .filter(|source| pair[1] == source["version"])
+                {
+                    authorized_ancestors.push(source);
+                }
+            }
+            if authorized_ancestors.len() != ancestors.len() {
+                continue;
+            }
+            let id = asset["id"].as_str().ok_or(Error::new("unavailable"))?;
+            selected_provenance.insert(id.to_owned(), authority);
+        }
+        let is_memory = asset["kind"] == "memory";
+        // 选用事实与实际交付预览分开，限源过滤后仍保留合法选用计数。
+        selected_count += usize::from(!is_memory);
+        if !projection.scope_known {
+            continue;
+        }
+        if let Some(gate) = &projection.gate {
+            let in_scope = dependencies
                 .iter()
-                .all(|reference| {
-                    reference["object_id"]
+                .chain(authorized_ancestors.into_iter().flat_map(|ancestor| {
+                    super::context_authority::items(&ancestor["dependencies"])
+                }))
+                .try_fold(!dependencies.is_empty(), |visible, reference| {
+                    let id = reference["object_id"]
                         .as_str()
-                        .and_then(|id| sources.get(id))
-                        .is_some_and(|source| source["version"] == reference["version"])
+                        .ok_or(Error::new("unavailable"))?;
+                    let object = sources.get(id).ok_or(Error::new("unavailable"))?;
+                    Ok::<_, Error>(visible && gate.allows_object(object)?)
+                })?;
+            if !in_scope
+                || !query_sources.iter().all(|pair| {
+                    result_proofs.iter().any(|((id, reference, _), result)| {
+                        pair[0] == id.as_str()
+                            && pair[1] == reference.as_str()
+                            && gate.allows_source_arg(&result.target_id)
+                    })
                 })
-        })
-        .partition(|asset| asset["kind"] == "memory");
-    // 选用事实与可交付预览分开：来源门可以隐藏预览，不能把有效选用报告为零。
-    let selected_count = selected.len();
-    // 未知来源范围保守清空；已知受限范围按资产真实来源过滤，合法同源资产保留，
-    // 不再把限制来源扩大成禁止一类能力。
-    if !projection.scope_known {
-        memories.clear();
-        selected.clear();
-    } else if let Some(gate) = &projection.gate {
-        let dependency_allowed = |reference: &Value| {
-            gate.allows_object(
-                &sources[reference["object_id"]
-                    .as_str()
-                    .expect("checked asset dependency")],
-            )
-        };
-        for assets in [&mut memories, &mut selected] {
-            assets.retain(|asset| {
-                let dependencies = super::context_authority::items(&asset["dependencies"]);
-                !dependencies.is_empty()
-                    && dependencies.iter().all(&dependency_allowed)
-                    && super::context_authority::items(&asset["skill_sources"]["source_skills"])
-                       .iter().flat_map(|pair| super::context_authority::items(
-                           &active_source_skills[pair[0].as_str().expect("source skill ID")]["dependencies"]))
-                       .all(&dependency_allowed)
-                    && super::context_authority::items(&asset["skill_sources"]["source_query_results"])
-                       .iter().all(|pair| result_proofs.iter().any(|((id, reference, _), result)|
-                           pair[0] == id.as_str() && pair[1] == reference.as_str() && gate.allows_source_arg(&result.target_id)))
-            });
+            {
+                continue;
+            }
+        }
+        if is_memory {
+            memories.push(asset);
+        } else {
+            selected.push(asset);
         }
     }
     let counts = json!({"memories":memories.len(),"selected_skills":selected_count});
@@ -740,12 +756,12 @@ fn workspace_assets(
         .take(20)
         .map(crate::modules::assets::skill_files::descriptor)
         .collect();
-    WorkspaceAssets {
+    Ok(WorkspaceAssets {
         memories,
         selected,
         counts,
         selected_provenance,
-    }
+    })
 }
 
 #[cfg(test)]

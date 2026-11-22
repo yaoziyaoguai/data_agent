@@ -1,7 +1,7 @@
 use crate::{
     live_changes::Change,
     persistence::AppTx,
-    types::{AccessContext, Error, Result, RunLocation, epoch, id},
+    types::{AccessContext, Error, Result, epoch, id},
 };
 use serde_json::{Value, json};
 use sqlx::{MySqlPool, Row};
@@ -29,17 +29,12 @@ pub async fn task_waiting_phase_in_tx(
 fn view(r: &sqlx::mysql::MySqlRow) -> Value {
     json!({"id":r.get::<String,_>("id"),"conversation_id":r.get::<String,_>("conversation_id"),"task_id":r.get::<String,_>("task_id"),"condition_version":r.get::<u64,_>("condition_version").to_string(),"draft_version":r.get::<u64,_>("draft_version").to_string(),"sql":r.get::<String,_>("sql_text"),"parameters":r.get::<sqlx::types::Json<Value>,_>("parameters").0,"target_id":r.get::<String,_>("target_id"),"summary":r.get::<String,_>("summary"),"knowledge_refs":r.get::<sqlx::types::Json<Value>,_>("knowledge_refs").0,"confirmation_state":r.get::<String,_>("confirmation_state"),"execution_state":r.get::<String,_>("execution_state"),"cancel_state":r.get::<String,_>("cancel_state"),"result_ref":r.get::<Option<String>,_>("result_ref"),"check_state":r.get::<String,_>("check_state"),"error":r.get::<Option<String>,_>("error_code"),"replaces_query_id":r.get::<Option<String>,_>("replaces_query_id"),"error_details":r.get::<Option<sqlx::types::Json<Value>>,_>("error_details").map(|v|v.0),"semantic_resolution":r.get::<Option<sqlx::types::Json<Value>>,_>("semantic_resolution").map(|v|v.0).unwrap_or(Value::Null),"time_basis":r.get::<Option<sqlx::types::Json<Value>>,_>("time_basis").map(|v|v.0).unwrap_or(Value::Null)})
 }
-pub async fn locate(pool: &MySqlPool, qid: &str) -> Result<RunLocation> {
-    let r = sqlx::query("SELECT conversation_id,owner_id FROM query_requests WHERE id=?")
+pub async fn locate(pool: &MySqlPool, qid: &str) -> Result<(String, String)> {
+    sqlx::query_as("SELECT conversation_id,owner_id FROM query_requests WHERE id=?")
         .bind(qid)
         .fetch_optional(pool)
         .await?
-        .ok_or(Error::new("not_available"))?;
-    Ok(RunLocation {
-        conversation_id: r.get("conversation_id"),
-        owner_id: r.get("owner_id"),
-        space_id: "demo".into(),
-    })
+        .ok_or(Error::new("not_available"))
 }
 pub async fn list_in_tx(tx: &mut AppTx<'_>, cid: &str) -> Result<Vec<Value>> {
     let rows =

@@ -140,8 +140,8 @@ pub(super) async fn query_projection_in_tx(
 ) -> Result<Value> {
     let qid = query["id"].as_str().ok_or(Error::new("stale_context"))?;
     let created_at = queries::created_at_in_tx(tx, ctx, qid).await?;
-    let mut authority = super::context_authority::from_sources(query);
-    super::context_authority::observe(&mut authority, &conditions["knowledge_refs"]);
+    let mut authority = super::context_authority::from_sources(query)?;
+    super::context_authority::observe(&mut authority, &conditions["knowledge_refs"])?;
     with_sources(query_projection(query, &created_at, conditions), authority)
 }
 

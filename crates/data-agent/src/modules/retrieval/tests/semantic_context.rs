@@ -608,7 +608,7 @@ fn asset_search_keeps_exact_name_ahead_of_prefix_matches() {
             .map(|i| asset(format!("prefix-{i:02}"), format!("{name}{i}")))
             .collect();
         items.push(asset("target".into(), name.into()));
-        let page = asset_directory(items, query, None, 30);
+        let page = asset_directory(items, query, None, 30).unwrap();
         // 长摘要触发字节分页时，完整名称仍应留在首页，不能被同前缀条目挤掉。
         assert_eq!(page["memories"][0]["id"], "target");
         assert!(!page["next_asset_after"].is_null());

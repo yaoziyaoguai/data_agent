@@ -114,7 +114,7 @@ async fn drive_stage(
             setup_error = Some(error);
         }
         if embedding.is_none() && vector.dense_vector.is_none() {
-            vector.mark_embedding_unavailable();
+            vector.mark_embedding_unavailable()?;
         }
         events.spawn(async move {
             SearchEvent::Target(
@@ -134,7 +134,7 @@ async fn drive_stage(
     if restored_window
         && let Err(error) = resume
             .as_ref()
-            .expect("restored window")
+            .ok_or(crate::types::Error::new("unavailable"))?
             .restore_window(vector)
     {
         setup_error = Some(error);
@@ -167,7 +167,7 @@ async fn drive_stage(
         loop {
             if tokio::time::Instant::now() >= deadline {
                 reads.deadline_capped = true;
-                vector.stop_scans("deadline");
+                vector.stop_scans("deadline")?;
                 break;
             }
             // 所有已就绪事件先入共同排名，再分配下一笔主命中读取。
@@ -191,31 +191,31 @@ async fn drive_stage(
                                 vector.lexical_state = "unavailable";
                                 vector.dense_state = "unavailable";
                                 vector.bounded = true;
-                                vector.fail_channels();
+                                vector.fail_channels()?;
                             }
                         }
                     }
-                    SearchEvent::Page(page) => vector.accept_page(page, allowed),
+                    SearchEvent::Page(page) => vector.accept_page(page, allowed)?,
                     SearchEvent::Sql { source, reserved, result } => {
                         reads.deadline_capped |= sql[source].accept(&mut vector.budget, reserved, result)?;
                     }
                 }
             }
             if embedding.as_ref().is_some_and(|handle| handle.is_finished()) {
-                let result = embedding.take().expect("ready embedding").await
+                let result = embedding.take().ok_or(crate::types::Error::new("unavailable"))?.await
                     .map_err(|error| Error::new("unavailable").with_message(format!("embedding task: {error}")))?;
                 match result {
                     Ok(query_vector) => {
                         vector.dense_vector = query_vector;
                         if vector.dense_vector.is_none() {
-                            vector.mark_embedding_unavailable();
+                            vector.mark_embedding_unavailable()?;
                         }
                     }
                     Err(error) => { embedding_error = Some(error); break; }
                 }
             }
             // 只有整条BM25明确失败才替代词法；成功空、成功页及尚未执行的分片都阻止SQL加票。
-            let sql_active = if restored_window { resume.as_ref().expect("restored window").sql_active }
+            let sql_active = if restored_window { resume.as_ref().ok_or(crate::types::Error::new("unavailable"))?.sql_active }
                 else { vector.sql_lexical_active() };
             window_sql_active |= sql_active;
             // 先让本轮各路开始，之后可在其I/O期间核验已收内容；临时零预留不封死游标。
@@ -264,7 +264,7 @@ async fn drive_stage(
                 if let Some(event) = events.join_next().await { pending_events.push_back(event.map_err(|error| Error::new("unavailable").with_message(format!("search task: {error}")))?); }
                 continue;
             }
-            let lexical = if restored_window && sql_active { resume.as_ref().expect("restored window").rows(4) }
+            let lexical = if restored_window && sql_active { resume.as_ref().ok_or(crate::types::Error::new("unavailable"))?.rows(4) }
                 else if sql_active { retrieval::merge_sql_lexical(sql[0].hits.clone(), sql[1].hits.clone()) }
                 else { vector.lexical.clone() };
             let mut enough = false;
@@ -279,7 +279,7 @@ async fn drive_stage(
                 };
                 if restored_window {
                     let checked = tokio::time::timeout_at(deadline, async {
-                    let saved = resume.as_ref().expect("restored window");
+                    let saved = resume.as_ref().ok_or(crate::types::Error::new("unavailable"))?;
                     // 先重核整批未交付引用；不存在/换版不能当作普通失效候选静默舍弃。
                     saved.assert_pending_knowledge(&ranked)?;
                     for record in &saved.records {
@@ -302,7 +302,7 @@ async fn drive_stage(
                 }
                 reads.ranked = ranked.clone();
                 let channels = retrieval::Channels::all(&lexical, &vector.values, &vector.raw.lexical, &vector.raw.dense);
-                let mut rank = if restored_window { resume.as_ref().expect("restored window").rank_window(query, ranked) }
+                let mut rank = if restored_window { resume.as_ref().ok_or(crate::types::Error::new("unavailable"))?.rank_window(query, ranked)? }
                     else { retrieval::rank_common(query, ranked, &channels, 1000, include_raw) };
                 reads.exact_checked = true;
                 if let Some(hints) = hints {
@@ -314,7 +314,7 @@ async fn drive_stage(
                     for candidate in &rank.raw {
                         let id = candidate["source_id"].as_str().unwrap_or_default();
                         let score = i64::from(hints.related_object_ids.as_ref().is_some_and(|ids| ids.iter().any(|value| value == id)));
-                        matches.insert(format!("raw:{}", retrieval::raw_record(candidate).expect("ranked raw identity")), score);
+                        matches.insert(format!("raw:{}", retrieval::raw_record(candidate).ok_or(crate::types::Error::new("unavailable"))?), score);
                     }
                     // 精确ID/名称优先级沿原score保留；同级才按提示稳定提升。
                     rank.sequence.sort_by_key(|(score, key)| std::cmp::Reverse((*score >= 100., matches.get(key).copied().unwrap_or(0))));
@@ -336,11 +336,11 @@ async fn drive_stage(
                     if tokio::time::Instant::now() >= deadline { reads.deadline_capped = true; break; }
                     reads.spent += 1;
                     let content = if let Some(record) = key.strip_prefix("k:") {
-                        let candidate = rank.objects.iter().find(|value| retrieval::knowledge_record(value) == record).expect("ranked content");
+                        let candidate = rank.objects.iter().find(|value| retrieval::knowledge_record(value) == record).ok_or(crate::types::Error::new("unavailable"))?;
                         tokio::time::timeout_at(deadline, load_selected_in_tx(&mut tx, ctx, candidate, scope, &cache)).await
                     } else {
-                        let record = key.strip_prefix("raw:").expect("raw content");
-                        let candidate = rank.raw.iter().find(|value| retrieval::raw_record(value).as_deref() == Some(record)).expect("ranked raw content");
+                        let record = key.strip_prefix("raw:").ok_or(crate::types::Error::new("unavailable"))?;
+                        let candidate = rank.raw.iter().find(|value| retrieval::raw_record(value).as_deref() == Some(record)).ok_or(crate::types::Error::new("unavailable"))?;
                         tokio::time::timeout_at(deadline, async {
                             let reply = crate::use_cases::knowledge_sources::recall_excerpts_in_tx(&mut tx, ctx, None, std::slice::from_ref(candidate)).await?;
                             Ok::<_, Error>(reply["hits"].as_array().and_then(|hits| hits.first()).cloned())
@@ -380,7 +380,7 @@ async fn drive_stage(
                     continue;
                 }
                 if embedding.is_none() {
-                    if can_advance { vector.stop_scans("candidate_limit"); }
+                    if can_advance { vector.stop_scans("candidate_limit")?; }
                     break;
                 }
             }
@@ -392,12 +392,15 @@ async fn drive_stage(
                         pending_events.push_back(event);
                     }
                 }
-                result = async { embedding.as_mut().expect("pending embedding").await }, if embedding.is_some() => {
+                result = async { match embedding.as_mut() {
+                    Some(task) => task.await.map_err(|error| Error::new("unavailable").with_message(format!("embedding task: {error}"))),
+                    None => Err(Error::new("unavailable")),
+                } }, if embedding.is_some() => {
                     embedding = None;
-                    match result.map_err(|error| Error::new("unavailable").with_message(format!("embedding task: {error}")))? {
+                    match result? {
                         Ok(query_vector) => {
                             vector.dense_vector = query_vector;
-                            if vector.dense_vector.is_none() { vector.mark_embedding_unavailable(); }
+                            if vector.dense_vector.is_none() { vector.mark_embedding_unavailable()?; }
                         }
                         Err(error) => { embedding_error = Some(error); break; }
                     }
@@ -419,7 +422,7 @@ async fn drive_stage(
             break;
         };
         match event {
-            Ok(SearchEvent::Page(page)) => vector.accept_page(page, allowed),
+            Ok(SearchEvent::Page(page)) => vector.accept_page(page, allowed)?,
             Ok(SearchEvent::Sql {
                 source,
                 reserved,
@@ -490,7 +493,7 @@ async fn drive_stage(
     for candidate in vector.raw.lexical.iter().chain(&vector.raw.dense) {
         let key = format!(
             "raw:{}",
-            retrieval::raw_record(candidate).expect("validated raw candidate")
+            retrieval::raw_record(candidate).ok_or(crate::types::Error::new("invalid_input"))?
         );
         if !resume
             .as_ref()
@@ -501,10 +504,10 @@ async fn drive_stage(
         }
     }
     if reads.deadline_capped {
-        vector.stop_scans("deadline");
+        vector.stop_scans("deadline")?;
     }
     vector.bounded |= reads.deadline_capped || (!terms.complete && window_sql_active);
-    vector.refresh_progress();
+    vector.refresh_progress()?;
     if sql.iter().any(|cursor| cursor.dispatched_round > 0) {
         vector.lexical_progress = retrieval::vector::ChannelProgress {
             rounds: sql
@@ -553,7 +556,9 @@ async fn drive_stage(
     });
     if include_raw {
         let mut continuation = if restored_window {
-            resume.take().expect("restored window")
+            resume
+                .take()
+                .ok_or(crate::types::Error::new("unavailable"))?
         } else {
             SearchContinuation::capture(vector, &[sql[0].hits.clone(), sql[1].hits.clone()], &[])?
         };
@@ -705,7 +710,7 @@ pub(super) async fn finish_search_stage(
         request.query,
         request.asset_after,
         request.limit,
-    );
+    )?;
     tx.commit().await?;
     Ok(ScopedSearchStage {
         search,

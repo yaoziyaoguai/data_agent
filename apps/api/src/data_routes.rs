@@ -1,21 +1,46 @@
 use crate::routes::ResponseResult;
 use crate::{
     State,
-    routes::{catalog_user, failure, internal, respond, semantic_run, semantic_user, user},
+    request::{ContractBody, ContractQuery, request_contracts},
+    routes::{catalog_user, failure, internal_for_run, respond, semantic_user, user},
 };
 use axum::{
     Json,
     extract::{Path, Query, State as AxumState},
-    http::{HeaderMap, StatusCode, header},
+    http::{HeaderMap, StatusCode},
     response::IntoResponse,
 };
 use data_agent::{
-    contracts,
+    contracts::generated::*,
     types::{Error, epoch},
     use_cases,
+    use_cases::knowledge::{KnowledgeChange, KnowledgeVersionAction},
 };
 use serde_json::{Value, json};
 use std::collections::HashMap;
+request_contracts!(
+    SaveAnalysisReport,
+    KnowledgeDocumentEdit,
+    KnowledgeCreate,
+    KnowledgeEdit,
+    KnowledgeEntryBatch,
+    KnowledgeBatchEdit,
+    VersionCommand,
+    AnalysisPreferenceCommand,
+    AssetSave,
+    SkillSelection,
+    SkillSelectionRemoval,
+    ConfirmQuery,
+    DataToolInvocation,
+    MemoryModelCall,
+    PublishSkill,
+    SuggestSkill,
+    ReviewSkillSuggestion,
+    KnowledgeListQuery,
+    QueryHistoryQuery,
+    AssetPageQuery,
+);
+
 pub async fn analysis_report(
     AxumState(state): AxumState<State>,
     headers: HeaderMap,
@@ -33,12 +58,12 @@ pub async fn save_analysis_report(
     AxumState(state): AxumState<State>,
     headers: HeaderMap,
     Path((cid, task)): Path<(String, String)>,
-    Json(input): Json<Value>,
+    ContractBody { value: input, raw }: ContractBody<SaveAnalysisReport>,
 ) -> ResponseResult {
     let ctx = semantic_user(&state, &headers).await.map_err(failure)?;
     respond!(
         AnalysisReportRef,
-        use_cases::analysis_reports::save(&state.pool, &ctx, &cid, &task, input)
+        use_cases::analysis_reports::save(&state.pool, &ctx, &cid, &task, input, raw)
             .await
             .map_err(failure)?,
     )
@@ -46,10 +71,10 @@ pub async fn save_analysis_report(
 pub async fn knowledge(
     AxumState(state): AxumState<State>,
     headers: HeaderMap,
-    Query(query): Query<HashMap<String, String>>,
+    ContractQuery(query): ContractQuery<KnowledgeListQuery>,
 ) -> ResponseResult {
     let ctx = catalog_user(&state, &headers).await.map_err(failure)?;
-    let v = use_cases::knowledge::list(&state.pool, &ctx, &json!(query))
+    let v = use_cases::knowledge::list(&state.pool, &ctx, query)
         .await
         .map_err(failure)?;
     respond!(KnowledgeList, v)
@@ -71,12 +96,12 @@ pub async fn edit_document(
     AxumState(state): AxumState<State>,
     headers: HeaderMap,
     Path(object): Path<String>,
-    Json(input): Json<Value>,
+    ContractBody { value: input, raw }: ContractBody<KnowledgeDocumentEdit>,
 ) -> ResponseResult {
     let ctx = semantic_user(&state, &headers).await.map_err(failure)?;
     respond!(
         KnowledgeDocument,
-        use_cases::knowledge_documents::edit(&state.pool, &ctx, &object, input)
+        use_cases::knowledge_documents::edit(&state.pool, &ctx, &object, input, raw)
             .await
             .map_err(failure)?,
     )
@@ -103,12 +128,16 @@ pub async fn read_knowledge(
 pub async fn create_knowledge(
     AxumState(state): AxumState<State>,
     headers: HeaderMap,
-    Json(input): Json<Value>,
+    ContractBody { value: input, raw }: ContractBody<KnowledgeCreate>,
 ) -> ResponseResult {
     let ctx = semantic_user(&state, &headers).await.map_err(failure)?;
+    let command = KnowledgeChange::Create {
+        request: input,
+        raw,
+    };
     respond!(
         KnowledgeObject,
-        use_cases::knowledge::edit(&state.pool, &ctx, None, "create", input)
+        use_cases::knowledge::write(&state.pool, &ctx, command)
             .await
             .map_err(failure)?,
     )
@@ -117,12 +146,17 @@ pub async fn edit_knowledge(
     AxumState(state): AxumState<State>,
     headers: HeaderMap,
     Path(object): Path<String>,
-    Json(input): Json<Value>,
+    ContractBody { value: input, raw }: ContractBody<KnowledgeEdit>,
 ) -> ResponseResult {
     let ctx = semantic_user(&state, &headers).await.map_err(failure)?;
+    let command = KnowledgeChange::Edit {
+        object: &object,
+        request: input,
+        raw,
+    };
     respond!(
         KnowledgeObject,
-        use_cases::knowledge::edit(&state.pool, &ctx, Some(&object), "edit", input)
+        use_cases::knowledge::write(&state.pool, &ctx, command)
             .await
             .map_err(failure)?,
     )
@@ -131,12 +165,12 @@ pub async fn edit_knowledge_entries(
     AxumState(state): AxumState<State>,
     headers: HeaderMap,
     Path(object): Path<String>,
-    Json(input): Json<Value>,
+    ContractBody { value: input, raw }: ContractBody<KnowledgeEntryBatch>,
 ) -> ResponseResult {
     let ctx = semantic_user(&state, &headers).await.map_err(failure)?;
     respond!(
         KnowledgeObject,
-        use_cases::knowledge::edit_entries(&state.pool, &ctx, &object, input)
+        use_cases::knowledge::edit_entries(&state.pool, &ctx, &object, input, raw)
             .await
             .map_err(failure)?,
     )
@@ -144,10 +178,9 @@ pub async fn edit_knowledge_entries(
 pub async fn edit_knowledge_batch(
     AxumState(state): AxumState<State>,
     headers: HeaderMap,
-    Json(input): Json<Value>,
+    ContractBody { value: input, .. }: ContractBody<KnowledgeBatchEdit>,
 ) -> ResponseResult {
     let ctx = semantic_user(&state, &headers).await.map_err(failure)?;
-    let input = contracts::decode("KnowledgeBatchEdit", input).map_err(failure)?;
     respond!(
         KnowledgeBatchReceipt,
         use_cases::knowledge::edit_batch(&state.pool, &ctx, input)
@@ -159,19 +192,24 @@ pub async fn knowledge_action(
     AxumState(state): AxumState<State>,
     headers: HeaderMap,
     Path((object, action)): Path<(String, String)>,
-    Json(input): Json<Value>,
+    ContractBody { value: input, .. }: ContractBody<VersionCommand>,
 ) -> ResponseResult {
     let ctx = semantic_user(&state, &headers).await.map_err(failure)?;
     let action = match action.as_str() {
-        "disable" => "disabled",
-        "enable" => "enabled",
-        "delete" => "deleted",
-        "reanalyze" => "reanalyze",
+        "disable" => KnowledgeVersionAction::SetState(MemoryState::Disabled),
+        "enable" => KnowledgeVersionAction::SetState(MemoryState::Enabled),
+        "delete" => KnowledgeVersionAction::SetState(MemoryState::Deleted),
+        "reanalyze" => KnowledgeVersionAction::Reanalyze,
         _ => return Err(failure(Error::new("invalid_input"))),
+    };
+    let command = KnowledgeChange::Version {
+        object: &object,
+        action,
+        request: input,
     };
     respond!(
         KnowledgeObject,
-        use_cases::knowledge::edit(&state.pool, &ctx, Some(&object), action, input)
+        use_cases::knowledge::write(&state.pool, &ctx, command)
             .await
             .map_err(failure)?,
     )
@@ -180,7 +218,7 @@ pub async fn analysis_preference(
     AxumState(state): AxumState<State>,
     headers: HeaderMap,
     Path(table): Path<String>,
-    Json(input): Json<Value>,
+    ContractBody { value: input, .. }: ContractBody<AnalysisPreferenceCommand>,
 ) -> ResponseResult {
     let ctx = semantic_user(&state, &headers).await.map_err(failure)?;
     respond!(
@@ -231,17 +269,12 @@ pub async fn source(
 pub async fn sync(
     AxumState(state): AxumState<State>,
     headers: HeaderMap,
-    Json(input): Json<Value>,
+    ContractBody { value: input, .. }: ContractBody<CreateConversation>,
 ) -> Result<axum::response::Response, (StatusCode, Json<Value>)> {
     let ctx = user(&state, &headers).await.map_err(failure)?;
-    data_agent::contracts::validate("CreateConversation", &input).map_err(failure)?;
-    let result = use_cases::knowledge::sync(
-        &state.pool,
-        &ctx,
-        input["operation_id"].as_str().unwrap_or(""),
-    )
-    .await
-    .map_err(failure)?;
+    let result = use_cases::knowledge::sync(&state.pool, &ctx, &input.operation_id)
+        .await
+        .map_err(failure)?;
     if result.get("sync_id").is_some() {
         Ok((StatusCode::ACCEPTED, respond!(SourceSyncAccepted, result)?).into_response())
     } else {
@@ -264,12 +297,12 @@ pub async fn sync_progress(
 pub async fn rebuild_index(
     AxumState(state): AxumState<State>,
     headers: HeaderMap,
-    Json(input): Json<Value>,
+    ContractBody { value: input, .. }: ContractBody<CreateConversation>,
 ) -> ResponseResult {
     let ctx = user(&state, &headers).await.map_err(failure)?;
     respond!(
         MutationReceipt,
-        use_cases::knowledge::rebuild_index(&state.pool, &ctx, &input)
+        use_cases::knowledge::rebuild_index_for_operation(&state.pool, &ctx, &input.operation_id)
             .await
             .map_err(failure)?,
     )
@@ -299,12 +332,12 @@ pub async fn asset(
 pub async fn save_asset(
     AxumState(state): AxumState<State>,
     headers: HeaderMap,
-    Json(input): Json<Value>,
+    ContractBody { value: input, raw }: ContractBody<AssetSave>,
 ) -> ResponseResult {
     let ctx = semantic_user(&state, &headers).await.map_err(failure)?;
     respond!(
         Asset,
-        use_cases::personal_assets::save(&state.pool, &ctx, input)
+        use_cases::personal_assets::save(&state.pool, &ctx, input, raw)
             .await
             .map_err(failure)?,
     )
@@ -313,13 +346,13 @@ pub async fn asset_action(
     AxumState(state): AxumState<State>,
     headers: HeaderMap,
     Path((asset, action)): Path<(String, String)>,
-    Json(input): Json<Value>,
+    ContractBody { value: input, .. }: ContractBody<VersionCommand>,
 ) -> ResponseResult {
     let ctx = semantic_user(&state, &headers).await.map_err(failure)?;
     let target = match action.as_str() {
-        "disable" => "disabled",
-        "enable" => "enabled",
-        "delete" => "deleted",
+        "disable" => AssetState::Disabled,
+        "enable" => AssetState::Enabled,
+        "delete" => AssetState::Deleted,
         _ => return Err(failure(Error::new("invalid_input"))),
     };
     respond!(
@@ -333,7 +366,7 @@ pub async fn select_skill(
     AxumState(state): AxumState<State>,
     headers: HeaderMap,
     Path(cid): Path<String>,
-    Json(input): Json<Value>,
+    ContractBody { value: input, .. }: ContractBody<SkillSelection>,
 ) -> ResponseResult {
     let ctx = semantic_user(&state, &headers).await.map_err(failure)?;
     respond!(
@@ -347,7 +380,7 @@ pub async fn remove_skill(
     AxumState(state): AxumState<State>,
     headers: HeaderMap,
     Path(cid): Path<String>,
-    Json(input): Json<Value>,
+    ContractBody { value: input, .. }: ContractBody<SkillSelectionRemoval>,
 ) -> ResponseResult {
     let ctx = user(&state, &headers).await.map_err(failure)?;
     respond!(
@@ -373,17 +406,16 @@ pub async fn queries(
 pub async fn query_history(
     AxumState(state): AxumState<State>,
     headers: HeaderMap,
-    Query(query): Query<HashMap<String, String>>,
+    ContractQuery(query): ContractQuery<QueryHistoryQuery>,
 ) -> ResponseResult {
     let ctx = semantic_user(&state, &headers).await.map_err(failure)?;
-    data_agent::contracts::validate("QueryHistoryQuery", &json!(query)).map_err(failure)?;
     respond!(
         QueryHistory,
         use_cases::query_workflow::history(
             &state.pool,
             &ctx,
-            query.get("before_id").map(String::as_str),
-            query.get("q").map_or("", String::as_str),
+            query.before_id.as_deref(),
+            query.q.as_deref().unwrap_or(""),
         )
         .await
         .map_err(failure)?,
@@ -406,7 +438,7 @@ pub async fn confirm(
     AxumState(state): AxumState<State>,
     headers: HeaderMap,
     Path(qid): Path<String>,
-    Json(input): Json<Value>,
+    ContractBody { value: input, .. }: ContractBody<ConfirmQuery>,
 ) -> ResponseResult {
     let ctx = semantic_user(&state, &headers).await.map_err(failure)?;
     respond!(
@@ -420,10 +452,9 @@ pub async fn cancel(
     AxumState(state): AxumState<State>,
     headers: HeaderMap,
     Path(qid): Path<String>,
-    Json(input): Json<Value>,
+    ContractBody { .. }: ContractBody<CreateConversation>,
 ) -> ResponseResult {
     let ctx = user(&state, &headers).await.map_err(failure)?;
-    data_agent::contracts::validate("CreateConversation", &input).map_err(failure)?;
     respond!(
         QueryView,
         use_cases::query_workflow::cancel(&state.pool, &ctx, &qid)
@@ -438,8 +469,7 @@ pub async fn results(
     Query(query): Query<HashMap<String, String>>,
 ) -> ResponseResult {
     let ctx = semantic_user(&state, &headers).await.map_err(failure)?;
-    respond!(
-        QueryResults,
+    Ok(Json(
         use_cases::query_workflow::results(
             &state.pool,
             &ctx,
@@ -449,80 +479,20 @@ pub async fn results(
         .await
         .map_err(failure)?,
     )
+    .into_response())
 }
-pub async fn export(
-    AxumState(state): AxumState<State>,
-    headers: HeaderMap,
-    Path(qid): Path<String>,
-) -> Result<impl IntoResponse, (StatusCode, Json<Value>)> {
-    let ctx = semantic_user(&state, &headers).await.map_err(failure)?;
-    let mut cursor = None;
-    let mut lines = Vec::new();
-    let escaped = |value: &Value, numeric: bool| {
-        let value = value.as_str().unwrap_or("");
-        let value = if !numeric && value.starts_with(['=', '+', '-', '@', '\t', '\r']) {
-            format!("'{value}")
-        } else {
-            value.into()
-        };
-        format!("\"{}\"", value.replace('"', "\"\""))
-    };
-    loop {
-        let r = use_cases::query_workflow::results(&state.pool, &ctx, &qid, cursor.as_deref())
-            .await
-            .map_err(failure)?;
-        if lines.is_empty() {
-            lines.push(
-                r["columns"]
-                    .as_array()
-                    .unwrap_or(&Vec::new())
-                    .iter()
-                    .map(|v| escaped(&v["name"], false))
-                    .collect::<Vec<_>>()
-                    .join(","),
-            );
-        }
-        for row in r["rows"].as_array().unwrap_or(&Vec::new()) {
-            lines.push(
-                row.as_array()
-                    .unwrap_or(&Vec::new())
-                    .iter()
-                    .enumerate()
-                    .map(|(i, v)| {
-                        escaped(
-                            v,
-                            matches!(r["columns"][i]["type"].as_str(), Some("integer" | "number")),
-                        )
-                    })
-                    .collect::<Vec<_>>()
-                    .join(","),
-            );
-        }
-        cursor = r["next_cursor"].as_str().map(str::to_string);
-        if cursor.is_none() {
-            break;
-        }
-    }
-    Ok((
-        [
-            (header::CONTENT_TYPE, "text/csv; charset=utf-8".to_string()),
-            (
-                header::CONTENT_DISPOSITION,
-                format!("attachment; filename=\"query-{qid}.csv\""),
-            ),
-        ],
-        format!("\u{feff}{}\r\n", lines.join("\r\n")),
-    ))
-}
+
 pub async fn register(
     AxumState(state): AxumState<State>,
     headers: HeaderMap,
-    Json(input): Json<Value>,
+    ContractBody { value: input, raw }: ContractBody<DataToolInvocation>,
 ) -> ResponseResult {
-    let ctx = internal(&state, &headers, &input).await.map_err(failure)?;
+    let ctx = internal_for_run(&state, &headers, &input.run_id)
+        .await
+        .map_err(failure)?;
     respond!(
         OperationReceipt,
-        use_cases::data_tools::register(&state.pool, &ctx, input)
+        use_cases::data_tools::register_validated(&state.pool, &ctx, &input, raw)
             .await
             .map_err(failure)?,
     )
@@ -530,14 +500,17 @@ pub async fn register(
 pub async fn tool(
     AxumState(state): AxumState<State>,
     headers: HeaderMap,
-    Json(input): Json<Value>,
+    ContractBody { value: input, raw }: ContractBody<DataToolInvocation>,
 ) -> ResponseResult {
-    let ctx = semantic_run(&state, &headers, &input)
+    let ctx = internal_for_run(&state, &headers, &input.run_id)
+        .await
+        .map_err(failure)?;
+    let ctx = use_cases::knowledge::catalog_context(&ctx)
         .await
         .map_err(failure)?;
     respond!(
         DataToolOutcome,
-        use_cases::data_tools::invoke(&state.pool, &ctx, input)
+        use_cases::data_tools::invoke_validated(&state.pool, &ctx, &input, raw)
             .await
             .map_err(failure)?,
     )
@@ -545,14 +518,17 @@ pub async fn tool(
 pub async fn tool_rejection(
     AxumState(state): AxumState<State>,
     headers: HeaderMap,
-    Json(input): Json<Value>,
+    ContractBody { value: input, raw }: ContractBody<DataToolInvocation>,
 ) -> ResponseResult {
-    let ctx = semantic_run(&state, &headers, &input)
+    let ctx = internal_for_run(&state, &headers, &input.run_id)
+        .await
+        .map_err(failure)?;
+    let ctx = use_cases::knowledge::catalog_context(&ctx)
         .await
         .map_err(failure)?;
     respond!(
         DataToolOutcome,
-        use_cases::data_tools::recorded_rejection(&state.pool, &ctx, input)
+        use_cases::data_tools::recorded_rejection_validated(&state.pool, &ctx, &input, raw)
             .await
             .map_err(failure)?,
     )
@@ -570,12 +546,17 @@ pub async fn apply_proposal(
     AxumState(state): AxumState<State>,
     headers: HeaderMap,
     Path(id): Path<String>,
-    Json(input): Json<Value>,
+    ContractBody { value: input, .. }: ContractBody<VersionCommand>,
 ) -> ResponseResult {
     let ctx = semantic_user(&state, &headers).await.map_err(failure)?;
+    let command = KnowledgeChange::Version {
+        object: &id,
+        action: KnowledgeVersionAction::ApplyProposal,
+        request: input,
+    };
     respond!(
         KnowledgeObject,
-        use_cases::knowledge::edit(&state.pool, &ctx, Some(&id), "apply-proposal", input)
+        use_cases::knowledge::write(&state.pool, &ctx, command)
             .await
             .map_err(failure)?,
     )
@@ -585,7 +566,7 @@ pub async fn cancel_task(
     AxumState(state): AxumState<State>,
     headers: HeaderMap,
     Path((cid, task)): Path<(String, String)>,
-    Json(input): Json<Value>,
+    ContractBody { value: input, .. }: ContractBody<VersionCommand>,
 ) -> ResponseResult {
     let ctx = user(&state, &headers).await.map_err(failure)?;
     respond!(
@@ -599,7 +580,7 @@ pub async fn withdraw(
     AxumState(state): AxumState<State>,
     headers: HeaderMap,
     Path((cid, message)): Path<(String, String)>,
-    Json(input): Json<Value>,
+    ContractBody { value: input, .. }: ContractBody<CreateConversation>,
 ) -> ResponseResult {
     let ctx = user(&state, &headers).await.map_err(failure)?;
     respond!(
@@ -613,7 +594,7 @@ pub async fn delete_conversation(
     AxumState(state): AxumState<State>,
     headers: HeaderMap,
     Path(cid): Path<String>,
-    Json(input): Json<Value>,
+    ContractBody { value: input, .. }: ContractBody<CreateConversation>,
 ) -> ResponseResult {
     let ctx = user(&state, &headers).await.map_err(failure)?;
     respond!(
@@ -627,14 +608,14 @@ pub async fn delete_conversation(
 pub async fn memory_model_call(
     AxumState(state): AxumState<State>,
     headers: HeaderMap,
-    Json(input): Json<Value>,
+    ContractBody { value: input, raw }: ContractBody<MemoryModelCall>,
 ) -> ResponseResult {
     if crate::routes::bearer(&headers) != Some(state.internal_token.as_str()) {
         return Err(failure(Error::new("unauthenticated")));
     }
     respond!(
         ModelCallReceipt,
-        use_cases::personal_memory::model_call(&state.pool, input)
+        use_cases::personal_memory::model_call(&state.pool, input, raw)
             .await
             .map_err(failure)?,
     )
@@ -644,7 +625,7 @@ pub async fn publish_skill(
     AxumState(state): AxumState<State>,
     headers: HeaderMap,
     Path(asset): Path<String>,
-    Json(input): Json<Value>,
+    ContractBody { value: input, .. }: ContractBody<PublishSkill>,
 ) -> ResponseResult {
     let ctx = semantic_user(&state, &headers).await.map_err(failure)?;
     respond!(
@@ -658,17 +639,16 @@ pub async fn skill_selections(
     AxumState(state): AxumState<State>,
     headers: HeaderMap,
     Path(cid): Path<String>,
-    Query(query): Query<HashMap<String, String>>,
+    ContractQuery(query): ContractQuery<AssetPageQuery>,
 ) -> ResponseResult {
     let ctx = semantic_user(&state, &headers).await.map_err(failure)?;
-    data_agent::contracts::validate("AssetPageQuery", &json!(query)).map_err(failure)?;
     respond!(
         ConversationSkillSelections,
         use_cases::personal_assets::selections(
             &state.pool,
             &ctx,
             &cid,
-            query.get("after_id").map(String::as_str).unwrap_or(""),
+            query.after_id.as_deref().unwrap_or(""),
         )
         .await
         .map_err(failure)?,
@@ -678,17 +658,16 @@ pub async fn skill_suggestions(
     AxumState(state): AxumState<State>,
     headers: HeaderMap,
     Path(asset): Path<String>,
-    Query(query): Query<HashMap<String, String>>,
+    ContractQuery(query): ContractQuery<AssetPageQuery>,
 ) -> ResponseResult {
     let ctx = semantic_user(&state, &headers).await.map_err(failure)?;
-    data_agent::contracts::validate("AssetPageQuery", &json!(query)).map_err(failure)?;
     respond!(
         SkillSuggestionList,
         use_cases::personal_assets::suggestions(
             &state.pool,
             &ctx,
             &asset,
-            query.get("after_id").map(String::as_str).unwrap_or(""),
+            query.after_id.as_deref().unwrap_or(""),
         )
         .await
         .map_err(failure)?,
@@ -698,7 +677,7 @@ pub async fn suggest_skill(
     AxumState(state): AxumState<State>,
     headers: HeaderMap,
     Path(asset): Path<String>,
-    Json(input): Json<Value>,
+    ContractBody { value: input, .. }: ContractBody<SuggestSkill>,
 ) -> ResponseResult {
     let ctx = semantic_user(&state, &headers).await.map_err(failure)?;
     respond!(
@@ -712,7 +691,7 @@ pub async fn review_skill_suggestion(
     AxumState(state): AxumState<State>,
     headers: HeaderMap,
     Path((asset, suggestion)): Path<(String, String)>,
-    Json(input): Json<Value>,
+    ContractBody { value: input, .. }: ContractBody<ReviewSkillSuggestion>,
 ) -> ResponseResult {
     let ctx = semantic_user(&state, &headers).await.map_err(failure)?;
     respond!(

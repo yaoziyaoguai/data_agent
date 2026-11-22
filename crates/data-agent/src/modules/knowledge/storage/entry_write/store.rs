@@ -74,7 +74,7 @@ pub async fn save_edit_in_tx(
     )
     .await?;
     let changed_path = apply_entry_in_tx(tx, ctx, &mut v, input, key, source_value).await?;
-    next(&mut v, ctx);
+    next(&mut v, ctx)?;
     crate::modules::knowledge::preparation::project_object(&mut v);
     persist(tx, ctx, &v, &[&changed_path]).await?;
     record(tx, ctx, key, &command, &v).await?;
@@ -319,7 +319,7 @@ pub async fn persist_entry_batch_in_tx(
 ) -> Result<()> {
     let mut versions = Vec::with_capacity(objects.len());
     for (object, paths) in objects.iter_mut().zip(paths) {
-        next(object, ctx);
+        next(object, ctx)?;
         crate::modules::knowledge::preparation::project_object(object);
         let changed: Vec<&str> = paths.iter().map(String::as_str).collect();
         persist_object(tx, ctx, object, &changed, false).await?;
@@ -385,7 +385,10 @@ pub async fn create_in_tx(tx: &mut AppTx<'_>, ctx: &AccessContext, input: &Value
             json!({"value":domain,"edited_by":ctx.user_id,"operation_id":key});
         entry["effective_value"] = domain.clone();
         entry["review_state"] = json!("confirmed");
-        v["entries"].as_array_mut().unwrap().push(entry);
+        v["entries"]
+            .as_array_mut()
+            .ok_or(crate::types::Error::new("unavailable"))?
+            .push(entry);
     }
     if !input["structured_value"].is_null()
         && input["body"]
@@ -443,7 +446,7 @@ pub async fn change_state_in_tx(
     .await?;
     v["state"] = json!(state);
     v["state_origin"] = json!("human");
-    next(&mut v, ctx);
+    next(&mut v, ctx)?;
     persist(tx, ctx, &v, &["*"]).await?;
     record(tx, ctx, key, &command, &v).await?;
     Ok(v)
@@ -539,7 +542,7 @@ pub async fn reanalyze_in_tx(
     v["source_version"] = json!(source_version.to_string());
     crate::modules::knowledge::structure::project_object(&mut v);
     crate::modules::knowledge::structure::validate_single_structure(&v)?;
-    next(&mut v, ctx);
+    next(&mut v, ctx)?;
     persist(tx, ctx, &v, &["*"]).await?;
     record(tx, ctx, key, &command, &v).await?;
     Ok(v)

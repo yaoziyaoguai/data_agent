@@ -10,15 +10,11 @@ import { AssetsPage } from "./features/assets/AssetsPage.tsx";
 import { WorkspaceShell, type View } from "./shared/WorkspaceShell.tsx";
 import { UnsavedChangesProvider, useNavigationGuard } from "./shared/UnsavedChanges.tsx";
 import { useWorkspaceLocation, type WorkspaceLocation } from "./shared/workspace-location.ts";
-import { KnowledgeEvidence } from "./features/knowledge/KnowledgeEvidence.tsx";
-import { Modal } from "./shared/Modal.tsx";
 import type { Asset } from "../../../packages/contracts/generated/boundary.ts";
 function App() {
   const { location, navigate: changeLocation } = useWorkspaceLocation();
   const { view, object, assetsTab: assetsEntry } = location;
   const guard = useNavigationGuard();
-  const [evidence, setEvidence] = useState<{id: string; version?: string; summary?: string} | null>(null);
-  const [showEvidence, setShowEvidence] = useState(false);
   const [modelLabel, setModelLabel] = useState("");
   const [user, setUser] = useState<string | null>(null);
   const [space, setSpace] = useState("");
@@ -46,8 +42,6 @@ function App() {
     void api("LogoutReceipt", "/session", "DELETE")
       .then(() => {
         setUser(null);
-        setShowEvidence(false);
-        setEvidence(null);
         locate({ view: "workbench", object: null });
       })
       .catch((e) => setError(e.message));
@@ -74,42 +68,22 @@ function App() {
     locate({ view: "workbench" });
   };
   const navigate = (destination: View) => {
-    setShowEvidence(false);
     locate({ view: destination, ...(destination === "assets" ? { assetsTab: "memory" } : {}) });
   };
   if (user) {
     if (view === "workbench")
       return (
-        <>
-          <Workbench
-            key={JSON.stringify([space, user])}
-            user={user}
-            space={space}
-            modelLabel={modelLabel}
-            onLogout={() => guard(logout)}
-            onView={navigate}
-            onManageSkills={() => {
-              locate({ view: "assets", assetsTab: "skill" });
-            }}
-            onEvidence={(id, summary, version) => {
-              setEvidence({id, summary, version});
-              setShowEvidence(true);
-            }}
-            spaceName={spaceName}
-          />
-          {showEvidence && evidence && (
-            <Modal
-              title="口径依据"
-              className="evidence-dialog"
-              onClose={() => setShowEvidence(false)}
-              footer={<><button onClick={() => { setShowEvidence(false); locate({view: "knowledge", object: evidence.id, tab: "概览"}); }}>去维护此内容</button><button className="primary" onClick={() => setShowEvidence(false)}>返回对话</button></>}
-            >
-              <div className="evidence-content">
-                <KnowledgeEvidence id={evidence.id} version={evidence.version} querySummary={evidence.summary}/>
-              </div>
-            </Modal>
-          )}
-        </>
+        <Workbench
+          key={JSON.stringify([space, user])}
+          user={user}
+          space={space}
+          modelLabel={modelLabel}
+          onLogout={() => guard(logout)}
+          onView={navigate}
+          onManageSkills={() => locate({ view: "assets", assetsTab: "skill" })}
+          onMaintainEvidence={id => locate({view: "knowledge", object: id, tab: "概览"})}
+          spaceName={spaceName}
+        />
       );
     return (
       <WorkspaceShell

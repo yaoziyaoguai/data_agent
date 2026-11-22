@@ -129,6 +129,7 @@ pub struct Boundary {
     pub knowledge_edit: KnowledgeEditClass,
     pub knowledge_edit_group: Option<KnowledgeEditGroupElement>,
     pub knowledge_entry: KnowledgeEntryElement,
+    pub knowledge_lineage: Option<KnowledgeLineageClass>,
     pub knowledge_list: KnowledgeListClass,
     pub knowledge_list_query: KnowledgeListQueryClass,
     pub knowledge_object: KnowledgeObjectElement,
@@ -386,7 +387,7 @@ pub struct AgentQueryResultsClass {
     pub rows: Option<Vec<Vec<Option<String>>>>,
     pub saved_result_complete: Option<bool>,
     pub saved_row_count: Option<i64>,
-    pub source: Option<AgentQueryResultsSource>,
+    pub source: Option<String>,
     /// 应用对当前有权结果页计算的统计；历史客户端可省略。
     pub statistics: Option<ResultStatisticsClass>,
     pub truncated: Option<bool>,
@@ -426,12 +427,6 @@ pub struct PurpleQueryResultContentRange {
     pub total_chars: i64,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum AgentQueryResultsSource {
-    Mock,
-}
-
 /// 应用对当前有权结果页计算的统计；历史客户端可省略。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ResultStatisticsClass {
@@ -448,6 +443,10 @@ pub struct ResultColumnStatisticsElement {
     pub column_name: String,
     /// 不含NULL，按平台返回的原始文本去重；不模拟数据库排序规则。
     pub distinct_count: i64,
+    /// 当前统计范围的最大非空值，保留原始表示。
+    pub max: Option<String>,
+    /// 当前统计范围的最小非空值，保留原始表示。
+    pub min: Option<String>,
     pub non_null_count: i64,
     pub null_count: i64,
     pub numeric_counts: Option<NumericValueCountsClass>,
@@ -880,7 +879,7 @@ pub struct QueryResultsElement {
     pub rows: Vec<Vec<Option<String>>>,
     pub saved_result_complete: Option<bool>,
     pub saved_row_count: Option<i32>,
-    pub source: AgentQueryResultsSource,
+    pub source: String,
     /// 应用对当前有权结果页计算的统计；历史客户端可省略。
     pub statistics: Option<ResultStatisticsClass>,
     pub truncated: bool,
@@ -2679,13 +2678,13 @@ pub struct SemanticMaintenanceClass {
     pub can_edit: bool,
     /// 当前对象负责人：表来自 Datasight；独立人工对象默认创建者，超级维护者可调整。
     pub maintainer_id: Option<String>,
-    pub source: SemanticMaintenanceSource,
+    pub source: Source,
     pub version: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum SemanticMaintenanceSource {
+pub enum Source {
     Creator,
     Datasight,
     System,
@@ -2823,6 +2822,44 @@ pub struct KnowledgeEditClass {
     pub statements: Option<Vec<HumanStatementInputElement>>,
     pub structured_value: Option<KnowledgeEntryQueryExampleStructure>,
     pub value: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct KnowledgeLineageClass {
+    pub downstream: Vec<DownstreamElement>,
+    pub more_downstream: bool,
+    pub upstream: Vec<DownstreamElement>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DownstreamElement {
+    pub key_summary: Option<String>,
+    pub kind: DownstreamKind,
+    pub name: String,
+    pub object_id: String,
+    pub relationship: Relationship,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DownstreamKind {
+    Field,
+    Metric,
+    Skill,
+    Table,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Relationship {
+    #[serde(rename = "field_reference")]
+    FieldReference,
+    #[serde(rename = "metric_query")]
+    MetricQuery,
+    #[serde(rename = "skill_dependency")]
+    SkillDependency,
+    #[serde(rename = "table_relation")]
+    TableRelation,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -4210,6 +4247,8 @@ pub struct RunSnapshotElement {
     pub activity_label: Option<String>,
     /// 本run当前生成尝试身份，用于识别正文增量归属；旧快照可缺省。
     pub attempt_id: Option<String>,
+    /// 已完成的工具动作、当前可读对象名称与真实耗时。仅作界面进度提示。
+    pub completed_step_summaries: Option<Vec<CompletedStepSummaryElement>>,
     /// 该run已成功回执的工具调用计数；旧记录缺省。仅作进度展示，不作为执行依据。
     pub completed_steps: Option<i32>,
     pub lease_epoch: String,
@@ -4221,6 +4260,13 @@ pub struct RunSnapshotElement {
     pub result_query_id: Option<String>,
     pub run_id: String,
     pub state: RunSnapshotState,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CompletedStepSummaryElement {
+    pub category: String,
+    pub duration_ms: i64,
+    pub target_name: Option<String>,
 }
 
 /// user_request为用户消息触发；query_result为查询结果通知触发。旧快照可缺省，缺省时按中性处理提示展示。
@@ -4785,6 +4831,22 @@ pub struct WorkbenchUpdateClass {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct KnowledgeLineage {
+    pub downstream: Vec<KnowledgeLineageEdge>,
+    pub more_downstream: bool,
+    pub upstream: Vec<KnowledgeLineageEdge>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct KnowledgeLineageEdge {
+    pub key_summary: Option<String>,
+    pub kind: DownstreamKind,
+    pub name: String,
+    pub object_id: String,
+    pub relationship: Relationship,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CreateConversation {
     pub operation_id: String,
 }
@@ -5310,6 +5372,9 @@ pub struct RunSnapshot {
     /// 本run当前生成尝试身份，用于识别正文增量归属；旧快照可缺省。
     #[serde(skip_serializing_if = "Option::is_none")]
     pub attempt_id: Option<String>,
+    /// 已完成的工具动作、当前可读对象名称与真实耗时。仅作界面进度提示。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub completed_step_summaries: Option<Vec<RunStepSummary>>,
     /// 该run已成功回执的工具调用计数；旧记录缺省。仅作进度展示，不作为执行依据。
     #[serde(skip_serializing_if = "Option::is_none")]
     pub completed_steps: Option<i32>,
@@ -5325,6 +5390,13 @@ pub struct RunSnapshot {
     pub result_query_id: Option<String>,
     pub run_id: String,
     pub state: RunSnapshotState,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RunStepSummary {
+    pub category: String,
+    pub duration_ms: i64,
+    pub target_name: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -5777,7 +5849,7 @@ pub struct SemanticMaintenance {
     pub can_edit: bool,
     /// 当前对象负责人：表来自 Datasight；独立人工对象默认创建者，超级维护者可调整。
     pub maintainer_id: Option<String>,
-    pub source: SemanticMaintenanceSource,
+    pub source: Source,
     pub version: String,
 }
 
@@ -7539,7 +7611,7 @@ pub struct QueryResults {
     pub saved_result_complete: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub saved_row_count: Option<i32>,
-    pub source: AgentQueryResultsSource,
+    pub source: String,
     /// 应用对当前有权结果页计算的统计；历史客户端可省略。
     #[serde(skip_serializing_if = "Option::is_none")]
     pub statistics: Option<ResultStatistics>,
@@ -7576,6 +7648,12 @@ pub struct ResultColumnStatistics {
     pub column_name: String,
     /// 不含NULL，按平台返回的原始文本去重；不模拟数据库排序规则。
     pub distinct_count: i64,
+    /// 当前统计范围的最大非空值，保留原始表示。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max: Option<String>,
+    /// 当前统计范围的最小非空值，保留原始表示。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub min: Option<String>,
     pub non_null_count: i64,
     pub null_count: i64,
     pub numeric_counts: Option<NumericValueCounts>,
@@ -7838,7 +7916,7 @@ pub struct AgentQueryResults {
     pub rows: Option<Vec<Vec<Option<String>>>>,
     pub saved_result_complete: Option<bool>,
     pub saved_row_count: Option<i64>,
-    pub source: Option<AgentQueryResultsSource>,
+    pub source: Option<String>,
     /// 应用对当前有权结果页计算的统计；历史客户端可省略。
     pub statistics: Option<ResultStatistics>,
     pub truncated: Option<bool>,

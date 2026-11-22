@@ -255,8 +255,7 @@ impl Candidates {
             }
         }
         self.target = snapshot.facts.target.clone();
-        self.refresh_progress();
-        Ok(())
+        self.refresh_progress()
     }
 }
 

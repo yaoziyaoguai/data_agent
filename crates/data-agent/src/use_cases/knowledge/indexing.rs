@@ -15,9 +15,9 @@ pub async fn process_index(pool: &MySqlPool) -> Result<bool> {
     } else {
         false
     };
-    let ctx = AccessContext {
+    let scheduling = AccessContext {
         user_id: "synthetic-index".into(),
-        space_id: "demo".into(),
+        space_id: crate::modules::access::default_space()?,
         request_id: id(),
         table_access: None,
     };
@@ -27,12 +27,17 @@ pub async fn process_index(pool: &MySqlPool) -> Result<bool> {
         retrieval::vector::target()
     };
     if vector {
-        crate::use_cases::raw_index_handover::hand_over_due(pool, &ctx.space_id).await?;
+        crate::use_cases::raw_index_handover::hand_over_due(pool, &scheduling.space_id).await?;
     }
     let mut tx = AppTx::begin(pool).await?;
-    let jobs =
-        knowledge::claim_index_batch_in_tx(&mut tx, &ctx, vector, Some(&target), unconfigured)
-            .await?;
+    let jobs = knowledge::claim_index_batch_in_tx(
+        &mut tx,
+        &scheduling,
+        vector,
+        Some(&target),
+        unconfigured,
+    )
+    .await?;
     // 一次只领取即将处理的一类工作；长原文不能占用尚未开始的知识批次租约。
     let source_job = if vector && jobs.is_empty() {
         // 空知识轮询已建立一致性快照；原文锁定领取可见其后提交的新作业，
@@ -42,7 +47,8 @@ pub async fn process_index(pool: &MySqlPool) -> Result<bool> {
         let eligible = if unconfigured {
             Some(
                 crate::use_cases::knowledge_embeddings::recoverable_source_heads_in_tx(
-                    &mut tx, &ctx,
+                    &mut tx,
+                    &scheduling,
                 )
                 .await?,
             )
@@ -51,7 +57,7 @@ pub async fn process_index(pool: &MySqlPool) -> Result<bool> {
         };
         knowledge::claim_source_index_in_tx(
             &mut tx,
-            &ctx.space_id,
+            &scheduling.space_id,
             true,
             Some(&target),
             eligible.as_deref(),
@@ -59,6 +65,21 @@ pub async fn process_index(pool: &MySqlPool) -> Result<bool> {
         .await?
     } else {
         None
+    };
+    let Some(next) = jobs.first().or(source_job.as_ref()) else {
+        tx.commit().await?;
+        return Ok(false);
+    };
+    // 默认空间界定轮询范围。索引写入和账本绑定使用已领取记录的实际空间。
+    let ctx = AccessContext {
+        space_id: next["space_id"]
+            .as_str()
+            .ok_or_else(|| {
+                Error::new("unavailable")
+                    .with_message("Claimed index record missing space_id".into())
+            })?
+            .to_owned(),
+        ..scheduling
     };
     // 原文目标在领取事务内核头来修订并读正文；来源缺失或已有更新修订时不花
     // 嵌入预算，按superseded收尾，清旧由更新修订的作业负责。分页未完成的
@@ -78,7 +99,7 @@ pub async fn process_index(pool: &MySqlPool) -> Result<bool> {
         let head =
             crate::use_cases::knowledge_sources::resolve_source_head_in_tx(&mut tx, &alias).await?;
         let outcome = match head {
-            Some((space, current)) if current <= revision => {
+            Some((space, current)) if space == ctx.space_id && current <= revision => {
                 crate::use_cases::knowledge_sources::read_in_tx(
                     &mut tx,
                     &AccessContext {
@@ -155,9 +176,6 @@ pub async fn process_index(pool: &MySqlPool) -> Result<bool> {
         valid.push(job["object"].clone());
     }
     tx.commit().await?;
-    if jobs.is_empty() && indexed_source.is_none() && source_job.is_none() {
-        return Ok(false);
-    }
     let mut source_error: Option<String> = None;
     let mut source_superseded_midway = false;
     if let Some((job, key, body)) = &indexed_source {
@@ -282,7 +300,7 @@ async fn index_source_target(
             let head =
                 crate::use_cases::knowledge_sources::resolve_source_head_in_tx(&mut tx, &alias)
                     .await?;
-            let stale = !matches!(head, Some((_, current)) if current <= revision);
+            let stale = !matches!(head, Some((space, current)) if space == ctx.space_id && current <= revision);
             tx.commit().await?;
             if stale {
                 return Err(Error::new("superseded"));
@@ -364,7 +382,18 @@ async fn index_source_target(
 pub async fn rebuild_index(pool: &MySqlPool, ctx: &AccessContext, input: &Value) -> Result<Value> {
     access::authorize_maintainer(ctx)?;
     contracts::validate("CreateConversation", input)?;
-    let operation = input["operation_id"].as_str().unwrap_or("");
+    let operation = input["operation_id"]
+        .as_str()
+        .ok_or(Error::new("invalid_input"))?;
+    rebuild_index_for_operation(pool, ctx, operation).await
+}
+
+pub async fn rebuild_index_for_operation(
+    pool: &MySqlPool,
+    ctx: &AccessContext,
+    operation: &str,
+) -> Result<Value> {
+    access::authorize_maintainer(ctx)?;
     let mut recorded = AppTx::begin(pool).await?;
     let receipt = knowledge::index_rebuild_receipt_in_tx(&mut recorded, ctx, operation).await?;
     recorded.commit().await?;

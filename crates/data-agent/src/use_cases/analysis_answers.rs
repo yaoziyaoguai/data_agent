@@ -252,7 +252,10 @@ async fn verified_sources(
 ) -> Result<(Vec<Value>, BTreeMap<String, (Value, Value)>)> {
     let mut sources = BTreeMap::new();
     let mut references = Vec::new();
-    for source in input["sources"].as_array().expect("validated") {
+    for source in input["sources"]
+        .as_array()
+        .ok_or(crate::types::Error::new("invalid_input"))?
+    {
         let qid = text(source, "query_id")?;
         let query = super::query_workflow::read(pool, ctx, qid).await?;
         let conditions = json!({"task_id":query["task_id"],"condition_version":query["condition_version"],
@@ -357,7 +360,7 @@ pub(super) async fn check_sources_in_tx(
         .await?;
         super::context_authority::merge(&mut sources, &authority)?;
     }
-    let result_sources = super::context_authority::from_sources(answer);
+    let result_sources = super::context_authority::from_sources(answer)?;
     if !checked.allows(&result_sources, false) {
         return Err(Error::new("stale_context"));
     }

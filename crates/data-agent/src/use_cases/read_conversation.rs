@@ -1,6 +1,6 @@
 use crate::{
     contracts::generated::LoadedOutputRange,
-    modules::{analysis, conversations, runtime},
+    modules::{analysis, conversations, knowledge, runtime},
     persistence::AppTx,
     types::{AccessContext, Error, Result, epoch, fingerprint},
 };
@@ -91,7 +91,7 @@ pub async fn live_states(
 ) -> Result<Value> {
     let mut tx = AppTx::begin(pool).await?;
     conversations::assert_readable_in_tx(&mut tx, context, cid).await?;
-    let mut state = json!({"runs":run_states_in_tx(&mut tx, cid).await?});
+    let mut state = json!({"runs":run_states_in_tx(&mut tx, context, cid).await?});
     if include_tasks {
         state["tasks"] = json!(task_states_in_tx(&mut tx, cid).await?);
     }
@@ -120,11 +120,33 @@ async fn task_states_in_tx(tx: &mut AppTx<'_>, cid: &str) -> Result<Vec<Value>> 
     Ok(tasks)
 }
 
-async fn run_states_in_tx(tx: &mut AppTx<'_>, cid: &str) -> Result<Vec<Value>> {
+async fn run_states_in_tx(
+    tx: &mut AppTx<'_>,
+    ctx: &AccessContext,
+    cid: &str,
+) -> Result<Vec<Value>> {
     // run身份由runtime提供，结果通知关联由conversations可信记录组合；不跨模块私表SQL。
     let mut runs = runtime::read_runs_in_tx(tx, cid).await?;
     let result_queries = conversations::result_query_map_in_tx(tx, cid).await?;
     let activity = runtime::running_activity_in_tx(tx, cid).await?;
+    let targets: HashSet<_> = activity
+        .values()
+        .flat_map(|run| run.steps.iter().filter_map(|step| step.target_id.clone()))
+        .collect();
+    let names: HashMap<_, _> =
+        knowledge::candidate_meta_in_tx(tx, ctx, &targets.into_iter().collect::<Vec<_>>(), None)
+            .await?
+            .into_iter()
+            .filter(|object| object["state"] == "enabled")
+            .map(|object| {
+                let key = object["id"]
+                    .as_str()
+                    .ok_or(Error::new("invalid_input"))?
+                    .to_owned();
+                Ok((key, object["name"].clone()))
+            })
+            .collect::<Result<_>>()?;
+
     for run in &mut runs {
         let result_query_id = run["message_id"]
             .as_str()
@@ -137,12 +159,25 @@ async fn run_states_in_tx(tx: &mut AppTx<'_>, cid: &str) -> Result<Vec<Value>> {
         run["result_query_id"] = result_query_id.map(|qid| json!(qid)).unwrap_or(Value::Null);
         // 运行中才提示活动；最近一次登记的工具名映射为中文动作，未知工具不编造文案。
         if run["state"] == "running"
-            && let Some((tool, steps)) = activity.get(run["run_id"].as_str().unwrap_or(""))
+            && let Some(activity) =
+                activity.get(run["run_id"].as_str().ok_or(Error::new("invalid_input"))?)
         {
-            if let Some(label) = activity_label(tool) {
+            if let Some(label) = activity_label(&activity.tool) {
                 run["activity_label"] = json!(label);
             }
-            run["completed_steps"] = json!(steps);
+            run["completed_steps"] = json!(activity.completed);
+            run["completed_step_summaries"] = json!(
+                activity
+                    .steps
+                    .iter()
+                    .filter_map(|step| {
+                        let label = activity_label(&step.tool)?;
+                        Some(json!({"category":label.trim_start_matches("正在"),
+                    "target_name":step.target_id.as_ref().and_then(|id| names.get(id)),
+                    "duration_ms":step.duration_ms}))
+                    })
+                    .collect::<Vec<_>>()
+            );
         }
     }
     Ok(runs)
@@ -187,7 +222,7 @@ pub async fn read_page(
     }
     let last = conversations::last_event_seq_in_tx(&mut tx, &conversation).await?;
     let tasks = task_states_in_tx(&mut tx, cid).await?;
-    let runs = run_states_in_tx(&mut tx, cid).await?;
+    let runs = run_states_in_tx(&mut tx, context, cid).await?;
     let states = output_states(&mut tx, cid, &mut events).await?;
     tx.commit().await?;
     let mut cached_events = events.split_off(page_len).into_iter();

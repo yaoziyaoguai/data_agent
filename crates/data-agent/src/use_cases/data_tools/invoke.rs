@@ -157,14 +157,26 @@ async fn rejection_data_in_tx(
 }
 
 pub async fn invoke(pool: &MySqlPool, ctx: &AccessContext, input: Value) -> Result<Value> {
+    let request = contracts::decode("DataToolInvocation", input.clone())?;
+    invoke_validated(pool, ctx, &request, input).await
+}
+
+pub async fn invoke_validated(
+    pool: &MySqlPool,
+    ctx: &AccessContext,
+    request: &contracts::generated::DataToolInvocation,
+    input: Value,
+) -> Result<Value> {
     // 目录读取需要可核对的表集合，控制和幂等回执则可在平台暂不可用时处理。
     if ctx
         .table_access
         .as_ref()
         .is_some_and(|access| access.unavailable)
         && matches!(
-            input["tool_name"].as_str(),
-            Some("search_knowledge" | "read_knowledge" | "read_source")
+            request.tool_name,
+            contracts::generated::ToolName::SearchKnowledge
+                | contracts::generated::ToolName::ReadKnowledge
+                | contracts::generated::ToolName::ReadSource
         )
     {
         return Err(Error::new("source_unavailable"));
@@ -204,19 +216,19 @@ pub async fn invoke(pool: &MySqlPool, ctx: &AccessContext, input: Value) -> Resu
                 | "upstream_failed"
         )
     {
-        let cid = runtime::locate_run(pool, text(&input, "run_id")?).await?;
+        let cid = runtime::locate_run(pool, &request.run_id).await?;
         let text_results = super::super::context_authority::CheckedTextResults::default();
         let mut tx = AppTx::begin(pool).await?;
         let conv = conversations::lock_conversation_in_tx(&mut tx, ctx, &cid).await?;
         conversations::assert_turn_in_tx(
             &tx,
             &conv,
-            text(&input, "run_id")?,
-            epoch(text(&input, "lease_epoch")?)?,
+            &request.run_id,
+            epoch(&request.lease_epoch)?,
         )?;
-        let run = runtime::lock_run_in_tx(&mut tx, text(&input, "run_id")?, &cid).await?;
+        let run = runtime::lock_run_in_tx(&mut tx, &request.run_id, &cid).await?;
         if let Some(tool) =
-            runtime::lock_tool_call_in_tx(&mut tx, &run, text(&input, "sdk_tool_call_id")?).await?
+            runtime::lock_tool_call_in_tx(&mut tx, &run, &request.sdk_tool_call_id).await?
             && tool.fingerprint
                 == fingerprint(&json!({"name":input["tool_name"],"arguments":input["arguments"]}))
         {

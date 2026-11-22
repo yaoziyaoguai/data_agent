@@ -68,7 +68,7 @@ pub async fn read_in_tx(
     let origin = row.get::<sqlx::types::Json<Value>, _>("draft_origin").0;
     let state = origin["status"]
         .as_str()
-        .expect("saved draft status")
+        .ok_or(crate::types::Error::new("unavailable"))?
         .to_owned();
     let body = (state == "pending").then(|| {
         let mut body = row.get::<sqlx::types::Json<Value>, _>("body").0;

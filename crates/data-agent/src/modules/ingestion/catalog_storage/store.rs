@@ -191,7 +191,12 @@ pub async fn save_catalog_table_in_tx(
             &ctx.space_id,
             &source,
             namespace,
-            (actual, &stored, complete, &retained.unwrap().0),
+            (
+                actual,
+                &stored,
+                complete,
+                &retained.ok_or(crate::types::Error::new("unavailable"))?.0,
+            ),
             table,
         )
         .await?;
@@ -368,16 +373,18 @@ pub async fn commit_catalog_page_in_tx(
         use sha2::{Digest, Sha256};
         let cursor = &page["next_cursor"];
         let cursor_key = fingerprint(cursor);
-        let sync_id = read["id"].as_str().expect("catalog read id");
+        let sync_id = read["id"]
+            .as_str()
+            .ok_or(crate::types::Error::new("unavailable"))?;
         let operation_id = format!("{:x}", Sha256::digest(format!("{sync_id}:{cursor_key}")));
         let scope = AccessContext {
             space_id: read["space_id"]
                 .as_str()
-                .expect("catalog read space")
+                .ok_or(crate::types::Error::new("unavailable"))?
                 .to_owned(),
             user_id: read["owner_id"]
                 .as_str()
-                .expect("catalog read owner")
+                .ok_or(crate::types::Error::new("unavailable"))?
                 .to_owned(),
             request_id: sync_id.to_owned(),
             table_access: None,

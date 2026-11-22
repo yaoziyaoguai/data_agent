@@ -48,11 +48,14 @@ pub(super) fn has_sources(snapshot: &Value) -> bool {
         .any(|key| !items(&snapshot[key]).is_empty())
 }
 
-fn push(snapshot: &mut Value, bucket: &str, reference: Value) {
-    let list = snapshot[bucket].as_array_mut().expect("authority bucket");
+fn push(snapshot: &mut Value, bucket: &str, reference: Value) -> Result<()> {
+    let list = snapshot[bucket]
+        .as_array_mut()
+        .ok_or(Error::new("stale_context"))?;
     if !list.contains(&reference) {
         list.push(reference);
     }
+    Ok(())
 }
 
 pub(super) fn knowledge_paths(snapshot: &Value) -> impl Iterator<Item = (&Value, &Value, &str)> {
@@ -86,11 +89,11 @@ pub fn merge(snapshot: &mut Value, dependencies: &Value) -> Result<()> {
             snapshot[bucket] = json!([]);
         }
         for reference in items(&dependencies[bucket]) {
-            push(snapshot, bucket, reference.clone());
+            push(snapshot, bucket, reference.clone())?;
         }
     }
     for reference in whole {
-        push(snapshot, "knowledge_entries", reference);
+        push(snapshot, "knowledge_entries", reference)?;
     }
     snapshot["dependency_schema"] = json!(6);
     Ok(())
@@ -102,22 +105,22 @@ fn declared_results(sources: &Value) -> impl Iterator<Item = (&Value, &Value)> {
         .map(|r| (&r["query_id"], &r["result_ref"]))
 }
 
-pub fn from_sources(sources: &Value) -> Value {
+pub fn from_sources(sources: &Value) -> Result<Value> {
     let mut snapshot = empty();
-    observe(&mut snapshot, &sources["knowledge_refs"]);
+    observe(&mut snapshot, &sources["knowledge_refs"])?;
     for (query, result) in declared_results(sources) {
-        push(&mut snapshot, "query_results", json!([query, result]));
+        push(&mut snapshot, "query_results", json!([query, result]))?;
     }
-    snapshot
+    Ok(snapshot)
 }
 
 pub(super) fn historical_sources(snapshot: &Value, actual: &Value) -> Result<Value> {
     let mut combined = empty();
     merge(&mut combined, snapshot)?;
     let records = std::mem::replace(&mut combined["historical_analyses"], json!([]));
-    merge(&mut combined, &from_sources(actual))?;
+    merge(&mut combined, &from_sources(actual)?)?;
     for record in items(&records) {
-        merge(&mut combined, &from_sources(&record["actual_sources"]))?;
+        merge(&mut combined, &from_sources(&record["actual_sources"])?)?;
     }
     Ok(combined)
 }
@@ -127,8 +130,8 @@ pub(super) fn observe_workspace_previews(snapshot: &mut Value, workspace: &Value
     let mut previews = empty();
     for (list, bucket) in [("memories", "memories"), ("selected_skills", "skills")] {
         for item in items(&workspace[list]) {
-            push(&mut previews, bucket, json!([item["id"], item["version"]]));
-            observe(&mut previews, &item["dependencies"]);
+            push(&mut previews, bucket, json!([item["id"], item["version"]]))?;
+            observe(&mut previews, &item["dependencies"])?;
         }
     }
     if has_sources(&previews) {
@@ -137,11 +140,15 @@ pub(super) fn observe_workspace_previews(snapshot: &mut Value, workspace: &Value
     Ok(())
 }
 
-pub fn observe(snapshot: &mut Value, data: &Value) {
-    observe_delivery(snapshot, data, true);
+pub fn observe(snapshot: &mut Value, data: &Value) -> Result<()> {
+    observe_delivery(snapshot, data, true)
 }
 
-pub(super) fn observe_delivery(snapshot: &mut Value, data: &Value, with_dependencies: bool) {
+pub(super) fn observe_delivery(
+    snapshot: &mut Value,
+    data: &Value,
+    with_dependencies: bool,
+) -> Result<()> {
     let leaves = std::iter::once(data)
         .chain(items(data))
         .chain(
@@ -164,13 +171,13 @@ pub(super) fn observe_delivery(snapshot: &mut Value, data: &Value, with_dependen
         // 退役工具仍可能重放已保存的旧回执，授权沿原交付对象和路径核对。
         if let Some(entries) = item["entries"].as_array() {
             let (id, version) = (&item["id"], &item["version"]);
-            push(snapshot, "knowledge", json!([id, version]));
+            push(snapshot, "knowledge", json!([id, version]))?;
             for entry in entries {
                 push(
                     snapshot,
                     "knowledge_entries",
                     json!([id, version, entry["path"]]),
-                );
+                )?;
             }
         }
         if item["current_version"].is_string() {
@@ -178,7 +185,7 @@ pub(super) fn observe_delivery(snapshot: &mut Value, data: &Value, with_dependen
                 snapshot,
                 "sources",
                 json!([item["source_id"], item["version"]]),
-            );
+            )?;
         }
         let supports = items(&item["supports"]);
         let included = |key: &str| items(&item[key]).iter().filter(|_| with_dependencies);
@@ -200,7 +207,7 @@ pub(super) fn observe_delivery(snapshot: &mut Value, data: &Value, with_dependen
             } else {
                 id.to_owned()
             };
-            push(snapshot, "sources", json!([id, version]));
+            push(snapshot, "sources", json!([id, version]))?;
         }
         let delivered_supports = supports
             .iter()
@@ -216,12 +223,12 @@ pub(super) fn observe_delivery(snapshot: &mut Value, data: &Value, with_dependen
         for r in refs {
             let [object, version, path] = ["object_id", "version", "path"].map(|key| &r[key]);
             if object.is_string() && version.is_string() && path.is_string() {
-                push(snapshot, "knowledge", json!([object, version]));
+                push(snapshot, "knowledge", json!([object, version]))?;
                 push(
                     snapshot,
                     "knowledge_entries",
                     json!([object, version, path]),
-                );
+                )?;
             }
         }
         let result_body = item["rows"].is_array()
@@ -234,7 +241,7 @@ pub(super) fn observe_delivery(snapshot: &mut Value, data: &Value, with_dependen
                 snapshot,
                 "query_results",
                 json!([item["query_id"], item["result_ref"]]),
-            );
+            )?;
         }
         let asset_body = item["state"] == "ok" && item["asset"].is_object();
         if let Some((entries, asset)) = match item["kind"].as_str() {
@@ -245,12 +252,13 @@ pub(super) fn observe_delivery(snapshot: &mut Value, data: &Value, with_dependen
             }
             _ => None,
         } {
-            push(snapshot, entries, json!([asset["id"], asset["version"]]));
+            push(snapshot, entries, json!([asset["id"], asset["version"]]))?;
         }
     }
+    Ok(())
 }
 
-fn pair(id: &Value, version: &Value) -> Result<(String, String)> {
+pub(super) fn pair(id: &Value, version: &Value) -> Result<(String, String)> {
     id.as_str()
         .zip(version.as_str())
         .map(|(id, v)| (id.into(), v.into()))
@@ -418,7 +426,7 @@ pub async fn generated_text_authority_in_tx(tx: &mut AppTx<'_>, run: &str) -> Re
         .ok_or(Error::new("stale_context"))?;
     snapshot
         .as_object_mut()
-        .expect("authority")
+        .ok_or(Error::new("stale_context"))?
         .remove("checkpoint_reset_required");
     Ok(snapshot)
 }
@@ -433,7 +441,7 @@ pub async fn merge_run_in_tx(tx: &mut AppTx<'_>, run: &str, dependencies: &Value
 
 pub async fn extend_run_in_tx(tx: &mut AppTx<'_>, run: &str, data: &Value) -> Result<()> {
     let mut snapshot = empty();
-    observe(&mut snapshot, data);
+    observe(&mut snapshot, data)?;
     merge_run_in_tx(tx, run, &snapshot).await
 }
 
@@ -452,7 +460,7 @@ mod tests {
             "supports":[{"content":"条件","reference":{"ref":{"object_id":"support","version":"2","path":"body"}}},
                 {"content":null,"reference":{"ref":{"object_id":"link","version":"1","path":"body"}}}]
         }],"memories":[{"id":"note"}],"tasks":[{"result_dependencies":[{"query_id":"old","result_ref":"hidden"}]}]}),
-        );
+        ).unwrap();
         assert_eq!(
             snapshot["knowledge_entries"],
             json!([
@@ -466,7 +474,8 @@ mod tests {
         observe(
             &mut snapshot,
             &json!({"results":{"query_id":"q","result_ref":"r","rows":[["正文"]]}}),
-        );
+        )
+        .unwrap();
         assert_eq!(
             result_keys(&snapshot, false).unwrap(),
             BTreeSet::from([("q".into(), "r".into(), false)])

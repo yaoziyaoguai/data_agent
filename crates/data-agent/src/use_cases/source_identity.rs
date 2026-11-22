@@ -78,7 +78,10 @@ pub(super) async fn search(
     request: &Value,
     budget: Option<&contracts::generated::ResponseBudget>,
 ) -> Result<Value> {
-    let query = request["query"].as_str().expect("validated query").trim();
+    let query = request["query"]
+        .as_str()
+        .ok_or(crate::types::Error::new("invalid_input"))?
+        .trim();
     if query.is_empty() {
         return Err(Error::new("invalid_input"));
     }
@@ -88,8 +91,8 @@ pub(super) async fn search(
         .as_array()
         .into_iter()
         .flatten()
-        .map(|kind| kind.as_str().expect("validated kind"))
-        .collect();
+        .map(|kind| kind.as_str().ok_or(Error::new("invalid_input")))
+        .collect::<Result<_>>()?;
     // hints保留在绑定内，但不作为权限/来源限制；目录按稳定标识排序。
     let binding = fingerprint(&json!({
         "view": "source_identity", "match_semantics": "whitespace_any_1",

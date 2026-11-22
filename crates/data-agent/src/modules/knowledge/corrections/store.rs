@@ -25,7 +25,7 @@ pub async fn record_in_tx(
 ) -> Result<()> {
     let key = input["input"]["operation_id"]
         .as_str()
-        .expect("validated operation");
+        .ok_or(crate::types::Error::new("invalid_input"))?;
     Operation::new(ctx, "semantic_correction", key, input)
         .complete(tx, value)
         .await

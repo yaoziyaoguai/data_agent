@@ -8,6 +8,7 @@ import type {
 } from "../../../../../packages/contracts/generated/boundary.ts";
 import { SemanticCorrections } from "./SemanticCorrections.tsx";
 import { KnowledgeCreator } from "./KnowledgeCreator.tsx";
+import { KnowledgeLineageView } from "./KnowledgeLineageView.tsx";
 import { KnowledgeDocument, documentRepresentatives } from "./KnowledgeDocument.tsx";
 import { useStableOperation } from "./semantic-commands.ts";
 import { KnowledgeDirectory } from "./KnowledgeDirectory.tsx";
@@ -46,9 +47,8 @@ function currentObject(previous: KnowledgeObject | undefined, incoming: Knowledg
   }
   return current;
 }
-function LineageAndEtl({object, tables, onOpen, onSaved, onCorrection, onSource, availableObjects, stagedEdits, onStage}: {
+function LineageAndEtl({object, onOpen, onSaved, onCorrection, onSource, availableObjects, stagedEdits, onStage}: {
   object: KnowledgeObject;
-  tables: KnowledgeObject[];
   onOpen: (id: string) => void;
   onSaved: (object: KnowledgeObject) => void;
   onCorrection: () => void;
@@ -59,24 +59,11 @@ function LineageAndEtl({object, tables, onOpen, onSaved, onCorrection, onSource,
 }) {
   const lineageEntry = object.entries.find(e => e.path === "lineage");
   const etlEntries = object.entries.filter(e => e.path === "etl");
-  const upstreamNames: string[] = (() => {
-    try {
-      const parsed: unknown = JSON.parse(lineageEntry?.effective_value ?? "[]");
-      return Array.isArray(parsed) && parsed.every(name => typeof name === "string") ? parsed : [];
-    } catch { return []; }
-  })();
   const editorProps = {canEdit: object.maintenance?.can_edit ?? false, onCorrection, onSaved, onSource, availableObjects, batchMode: !!onStage && object.maintenance?.can_edit === true, onStage};
   return (
     <article className="semantic-object lineage-object">
       <h3>血缘</h3>
-      {upstreamNames.length > 0 ? (
-        <ul className="lineage-list">
-          {upstreamNames.map(name => {
-            const target = tables.find(table => table.name === name && table.id !== object.id);
-            return <li key={name}>{target ? <button onClick={() => onOpen(target.id)} title="打开上游表">{name} ↗</button> : <span>{name}</span>}</li>;
-          })}
-        </ul>
-      ) : <p className="quiet">暂无上游表信息；血缘说明由来源分析生成，维护者可在下方补充。</p>}
+      <KnowledgeLineageView key={object.id} objectId={object.id} title={object.name} version={object.version} onOpen={onOpen}/>
       {lineageEntry && (
         <details className="technical-source">
           <summary>维护血缘说明</summary>
@@ -564,7 +551,7 @@ export function KnowledgePage({
               ) : (
                 <div className="semantic-groups">
                   {tab === "血缘与加工" && selected.kind === "table" && (
-                    <LineageAndEtl object={selected} tables={tables} onOpen={id => move(id)} onSaved={save} onCorrection={() => void refresh()} onSource={id => void showSource(id)} availableObjects={objects} stagedEdits={stagedEdits} onStage={batchMode ? stageEdit : undefined}/>
+                    <LineageAndEtl object={selected} onOpen={id => move(id)} onSaved={save} onCorrection={() => void refresh()} onSource={id => void showSource(id)} availableObjects={objects} stagedEdits={stagedEdits} onStage={batchMode ? stageEdit : undefined}/>
                   )}
                   {!["概览", "变更记录"].includes(tab) && <>
                     {relatedPage.loading && <p role="status">正在读取关联内容…</p>}

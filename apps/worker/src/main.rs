@@ -1,3 +1,4 @@
+#![cfg_attr(not(test), deny(clippy::unwrap_used, clippy::expect_used))]
 mod background;
 use data_agent::{
     modules::jobs,
@@ -203,18 +204,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let url = env::var("DATA_AGENT_BRIDGE_URL")?;
     let token = env::var("DATA_AGENT_INTERNAL_TOKEN")?;
     let bridge_url = reqwest::Url::parse(&url)?;
-    if bridge_url.scheme() != "http"
-        || bridge_url.host_str() != Some("127.0.0.1")
-        || token.len() < 32
-    {
-        return Err("loopback bridge and internal token required".into());
+    if !data_agent::upstream::http_allowed(&bridge_url)? || token.len() < 32 {
+        return Err("permitted bridge and internal token required".into());
     }
     let client = reqwest::Client::builder()
         .no_proxy()
+        .redirect(reqwest::redirect::Policy::none())
         .connect_timeout(Duration::from_secs(5))
         .build()?;
-    let change_sink =
-        reqwest::Url::parse(&env::var("DATA_AGENT_API_URL")?)?.join("/internal/live-changes")?;
+    let api = reqwest::Url::parse(&env::var("DATA_AGENT_API_URL")?)?;
+    if !data_agent::upstream::http_allowed(&api)? {
+        return Err("permitted API upstream required".into());
+    }
+    let change_sink = api.join("/internal/live-changes")?;
     data_agent::live_changes::install(data_agent::live_changes::Publisher::Worker {
         client: client.clone(),
         api: change_sink,
@@ -387,7 +389,9 @@ async fn run_delivery(
                 return Ok(());
             }
             let lease_epoch = data_agent::types::epoch(
-                envelope["lease_epoch"].as_str().expect("delivery lease"),
+                envelope["lease_epoch"]
+                    .as_str()
+                    .ok_or(Error::new("unavailable"))?,
             )?;
             let run_id = run_id.to_owned();
             let request = async {

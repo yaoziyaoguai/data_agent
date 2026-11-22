@@ -35,9 +35,13 @@ fn limits_match_only_direct_object_source_or_table() {
     assert!(gate.permits("field", "f", Some("p"), None));
     assert!(gate.permits("field", "f", None, Some("p")));
     assert!(gate.permits("table", "p", None, None));
-    assert!(!gate.allows_object(&json!({
-        "id":"f","kind":"field","related_ids":["p"],"mapping_state":"unknown"
-    })));
+    assert!(
+        !gate
+            .allows_object(&json!({
+                "id":"f","kind":"field","related_ids":["p"],"mapping_state":"unknown"
+            }))
+            .unwrap()
+    );
 }
 
 #[tokio::test]
@@ -75,8 +79,12 @@ async fn synchronized_document_recalls_its_own_windows_without_upstream_access()
     let scope = KnowledgeSearchScope::default();
     let permitted = gate(&[("document", id)]);
     let mut tx = AppTx::begin(&pool).await.unwrap();
-    assert!(permitted.allows_object(&object));
-    assert!(!gate(&[("document", "outside-document")]).allows_object(&object));
+    assert!(permitted.allows_object(&object).unwrap());
+    assert!(
+        !gate(&[("document", "outside-document")])
+            .allows_object(&object)
+            .unwrap()
+    );
     let allowed = allowed_records_in_tx(&mut tx, &ctx, Some(&permitted), &scope)
         .await
         .unwrap();
@@ -122,7 +130,8 @@ async fn synchronized_document_recalls_its_own_windows_without_upstream_access()
         include_raw: true,
         deadline: retrieval::vector::retrieval_deadline(),
     })
-    .await;
+    .await
+    .unwrap();
     assert_eq!(dense.dense_state, "available");
     assert!(
         !dense.values.is_empty(),

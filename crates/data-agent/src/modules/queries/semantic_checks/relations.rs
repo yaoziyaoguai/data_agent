@@ -23,7 +23,7 @@ fn relations_between<'a>(
 }
 
 pub(super) fn check_join(
-    expr: &Expr,
+    keys: JoinKeys<'_>,
     bindings: &[Binding<'_>],
     sums: &[Column],
     objects: &[Value],
@@ -55,7 +55,7 @@ pub(super) fn check_join(
     let left_id = structure["left_table"]["object_id"].as_str().unwrap_or("");
     let right_id = structure["right_table"]["object_id"].as_str().unwrap_or("");
     let mut actual = BTreeSet::new();
-    for (left, right) in join_pairs(expr).unwrap() {
+    for (left, right) in keys {
         let (Some(left), Some(right)) = (
             resolve_column(left, bindings),
             resolve_column(right, bindings),

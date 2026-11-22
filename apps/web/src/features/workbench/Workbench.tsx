@@ -15,15 +15,24 @@ import { SkillSelections } from "./SkillSelections.tsx";
 import { conversationTitle } from "./conversation-title.ts";
 import { QueryCard } from "./QueryCard.tsx";
 import { AnalysisReport } from "./AnalysisReport.tsx";
+import { KnowledgeEvidence } from "../knowledge/KnowledgeEvidence.tsx";
+import { QueryResultPanel } from "./QueryResultPanel.tsx";
+import "./workbench-dock.css";
 import { AssistantMessage } from "./AssistantMessage.tsx";
 import { objectReferenceLabels } from "./object-reference-labels.ts";
 import { ConversationFeed } from "./ConversationFeed.tsx";
+import { RunActivity } from "./RunActivity.tsx";
 import { ModelSelector } from "./ModelSelector.tsx";
 import { useLiveConversation } from "./useLiveConversation.ts";
 import { useModelSelection } from "./useModelSelection.ts";
 import { clearPendingSubmission, conversationStorageKey, draftStorageKey, pendingSubmissionKey, readPendingSubmission, settleSubmission, storePendingSubmission, writeDraft, type PendingSubmission } from "./conversation-storage.ts";
 const creationTime = (value?: string) => value ? new Date(value).toLocaleString("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false }) : "";
 const queryExecutionLabel = (state: string) => ({succeeded: "已执行", failed: "执行失败", running: "执行中", queued: "排队中", submitting: "提交中", submission_unknown: "提交确认中", canceled: "已取消", not_submitted: "未提交", awaiting_confirmation: "待确认"} as Record<string, string>)[state] ?? state;
+type WorkbenchDetail =
+  | { kind: "report"; reference: AnalysisReportRef }
+  | { kind: "results"; queryId: string }
+  | { kind: "evidence"; id: string; summary?: string; version?: string };
+
 export function Workbench({
   user,
   space,
@@ -31,7 +40,7 @@ export function Workbench({
   onLogout,
   onView,
   onManageSkills,
-  onEvidence,
+  onMaintainEvidence,
   spaceName,
 }: {
   user: string;
@@ -40,7 +49,7 @@ export function Workbench({
   onLogout: () => void;
   onView: (v: View) => void;
   onManageSkills: () => void;
-  onEvidence: (id: string, summary?: string, version?: string) => void;
+  onMaintainEvidence: (id: string) => void;
   spaceName: string;
 }) {
   const [cid, setCid] = useState<string | null>(() =>
@@ -67,8 +76,13 @@ export function Workbench({
   const [queryHistoryBusy, setQueryHistoryBusy] = useState(false);
   const queryHistoryGeneration = useRef(0);
   const pendingQueryJump = useRef<string | null>(null);
-  const [selectedReport, setSelectedReport] = useState<AnalysisReportRef | null>(null);
-  useEffect(() => { setSelectedReport(null); }, [cid, space, user]);
+  const [panel, setPanel] = useState<{ conversation: string | null; detail: WorkbenchDetail } | null>(null);
+  const detail = panel?.conversation === cid ? panel.detail : null;
+  const selectedReport = detail?.kind === "report" ? detail.reference : null;
+  const closePanel = () => setPanel(null);
+  const openPanel = (detail: WorkbenchDetail) => setPanel({conversation: cid, detail});
+  const openEvidence = (id: string, summary?: string, version?: string) => openPanel({kind: "evidence", id, summary, version});
+  useEffect(() => { setPanel(null); }, [cid]);
   const [historySearch, setHistorySearch] = useState("");
   const [pending, setPending] = useState<PendingSubmission | null>(null);
   const [pendingError, setPendingError] = useState("");
@@ -349,13 +363,11 @@ export function Workbench({
     (e) => e.type === "tool_result" || (e.type === "assistant_delta" && e.payload.attempt_id === currentRun?.attempt_id),
   ).at(-1);
   const writingAnswer = currentAttemptStarted && lastActivityEvent?.type === "assistant_delta";
-  const activityText = currentRun
-    ? currentRun.purpose === "query_result"
-      ? "正在解读查询结果"
-      : writingAnswer
-        ? "正在生成回答"
-        : currentRun.activity_label ?? (currentAttemptStarted ? "正在生成回答" : "正在处理本次请求")
-    : undefined;
+  const activityText = currentRun?.purpose === "query_result"
+    ? "正在解读查询结果"
+    : writingAnswer
+      ? "正在生成回答"
+      : currentRun?.activity_label ?? (currentAttemptStarted ? "正在生成回答" : "正在处理本次请求");
   const cancel = async () => {
     if (!cid || !currentRun) return;
     try {
@@ -409,6 +421,7 @@ export function Workbench({
       spaceName={spaceName}
       onNewConversation={() => { setCid(null); setText(localStorage.getItem(draftKey(null)) ?? ""); textarea.current?.focus(); }}
     >
+      <div className={"workbench-detail-layout" + (detail ? " has-workbench-detail" : "")}>
       <section
         className={
           "conversation " + (!snapshot?.messages.length ? "empty" : "")
@@ -460,7 +473,8 @@ export function Workbench({
             {conversationItems(snapshot, queries.queries).map(item => item.kind === "query" ? (
               <div key={item.key} className="message assistant query-message">
                 <div className="message-label">Data Agent · 查询</div>
-                <QueryCard query={item.query} authorityRevision={authorityRevision} onEvidence={onEvidence}/>
+                <QueryCard query={item.query} authorityRevision={authorityRevision} onEvidence={openEvidence}
+                  onOpenResults={() => openPanel({kind: "results", queryId: item.query.id})}/>
               </div>
             ) : item.kind === "query_notice" ? (
               <div key={item.key} className="query-notice" role="status">
@@ -474,7 +488,7 @@ export function Workbench({
                 }}>{item.query.text_unavailable ? "查看状态" : item.query.execution_state === "succeeded" ? "查看结果" : "查看查询"}</button>
               </div>
             ) : item.kind === "report" ? (
-              <div key={item.key} className="report-notice" role="status"><span>{item.conditionChanged ? "分析条件已更新，报告需重新整理" : "分析报告已保存"}</span><button className="text-link" onClick={() => setSelectedReport(item.reference)}>查看分析报告</button></div>
+              <div key={item.key} className="report-notice" role="status"><span>{item.conditionChanged ? "分析条件已更新，报告需重新整理" : "分析报告已保存"}</span><button className="text-link" onClick={() => openPanel({kind: "report", reference: item.reference})}>查看分析报告</button></div>
             ) : (() => { const m = item.message; const display = displayUserMessage(m.text, snapshot.tasks); return (
               <article
                 key={item.key}
@@ -513,16 +527,6 @@ export function Workbench({
                 本次生成已停止，已保存的消息仍可查看。
               </p>
             )}
-            {currentRun && (
-              <div className="activity" role="status">
-                <i />
-                {activityText}
-                {typeof currentRun.completed_steps === "number" && currentRun.completed_steps > 0
-                  ? `（已完成 ${currentRun.completed_steps} 步）`
-                  : ""}{" "}
-                <button onClick={() => void cancel()}>停止生成</button>
-              </div>
-            )}
           </div>
         )}
         <div className="conversation-feedback">
@@ -538,6 +542,7 @@ export function Workbench({
         {error && <p role="alert" className="error conversation-error">{error}</p>}
         </div>
         </ConversationFeed>
+        {currentRun && <RunActivity run={currentRun} label={activityText} onStop={() => void cancel()}/>}
         {cid && <SkillSelections key={"skills:" + space + ":" + user + ":" + cid} cid={cid} onManage={onManageSkills} refreshRevision={snapshot?.runs.map(run => run.run_id + ":" + run.state).join(",")}/> }
         <div className="composer">
           <label className="sr-only" htmlFor="question">
@@ -575,13 +580,14 @@ export function Workbench({
           </div>
         </div>
         <p className="footnote">Enter 发送 · Shift + Enter 换行</p>
+      </section>
         {selectedReport && selectedReport.conversation_id === cid && <AnalysisReport
           reference={snapshot?.tasks.find(task => task.id === selectedReport.task_id)?.report_ref ?? selectedReport}
           authorityRevision={authorityRevision}
           currentConditionVersion={snapshot?.tasks.find(task => task.id === selectedReport.task_id)?.condition_version}
-          onClose={() => setSelectedReport(null)}
+          onClose={closePanel}
           onQuery={queryId => {
-            setSelectedReport(null);
+            closePanel();
             window.requestAnimationFrame(() => {
               const target = document.getElementById("query-" + queryId);
               const previous = target?.closest<HTMLDetailsElement>("details.previous-query");
@@ -590,53 +596,61 @@ export function Workbench({
               target?.focus({ preventScroll: true });
             });
           }}
-          onEvidence={(id, summary, version) => { setSelectedReport(null); window.requestAnimationFrame(() => onEvidence(id, summary, version)); }}
+          onEvidence={openEvidence}
         />}
-        {deleteId && (
-          <Modal title="删除这个会话？" onClose={() => setDeleteId(null)}>
-            <p>
-              删除后不再加载此会话，未执行查询会取消；正在运行的查询会向平台申请取消。你的个人记忆和Skill可在“我的积累”单独管理。
-            </p>
-            <button
-              className="primary"
-              onClick={() => void removeConversation()}
-            >
-              删除此会话
-            </button>
-          </Modal>
-        )}
-        {showHistory && (
-          <Modal title="历史记录" onClose={() => setShowHistory(false)}>
-            <div className="history-tabs" role="group" aria-label="历史类型">
-              <button aria-pressed={historyTab === "conversations"} onClick={() => setHistoryTab("conversations")}>会话</button>
-              <button aria-pressed={historyTab === "queries"} onClick={() => setHistoryTab("queries")}>查询记录</button>
-            </div>
-            <label className="search-box">
-              <input
-                aria-label={historyTab === "conversations" ? "搜索会话" : "搜索查询"}
-                value={historySearch}
-                placeholder={historyTab === "conversations" ? "按标题搜索" : "按查询内容搜索"}
-                onChange={(e) => setHistorySearch(e.target.value)}
-              />
-            </label>
-            {historyTab === "conversations" ? <>
-            <nav className="history-dialog" aria-label="全部会话">
-              {historyItems.map(item => <div className="history-row" key={item.id}><button onClick={() => { setCid(item.id); setShowHistory(false); }}><span title={item.title}>{conversationTitle(item.title) || "未命名会话"}</span>{item.created_at && <small><time dateTime={item.created_at}>创建于 {creationTime(item.created_at)}</time></small>}</button><button className="history-delete" aria-label={"删除会话 " + (item.title || "未命名会话")} onClick={() => setDeleteId(item.id)}>删除</button></div>)}
-            </nav>
-            {!historyItems.length && !historyBusy && <p className="quiet">没有找到符合条件的会话，请调整搜索词。</p>}
-            {historyNext && <button disabled={historyBusy} onClick={() => void refreshHistory(historySearch, historyNext).catch(e => setError(e.message))}>加载更多会话</button>}
-            {historyBusy && <p role="status">正在查找会话…</p>}
-            </> : <>
-            <nav className="history-dialog" aria-label="全部查询">
-              {queryHistory.map(item => <div className="history-row" key={item.id}><button onClick={() => openQueryFromHistory(item)}><span title={item.summary}>{item.text_unavailable ? "正文已失效的查询" : item.summary || "未命名查询"}</span><small><time dateTime={item.created_at}>{creationTime(item.created_at)}</time> · {queryExecutionLabel(item.execution_state)}</small></button></div>)}
-            </nav>
-            {!queryHistory.length && !queryHistoryBusy && <p className="quiet">没有找到符合条件的查询，请调整搜索词。</p>}
-            {queryHistoryNext && <button disabled={queryHistoryBusy} onClick={() => void refreshQueryHistory(historySearch, queryHistoryNext).catch(e => setError(e.message))}>加载更多查询</button>}
-            {queryHistoryBusy && <p role="status">正在查找查询…</p>}
-            </>}
-          </Modal>
-        )}
-      </section>
+        {detail?.kind === "results" && <QueryResultPanel key={detail.queryId}
+          queryId={detail.queryId} authorityRevision={authorityRevision} onClose={closePanel}/>}
+        {detail?.kind === "evidence" && <Modal dock title="口径依据" className="evidence-dialog" onClose={closePanel}
+          footer={<><button onClick={() => { closePanel(); onMaintainEvidence(detail.id); }}>去维护此内容</button><button className="primary" onClick={closePanel}>返回对话</button></>}>
+          <div className="evidence-content">
+            <KnowledgeEvidence key={authorityRevision} id={detail.id} version={detail.version} querySummary={detail.summary}/>
+          </div>
+        </Modal>}
+      </div>
+      {deleteId && (
+        <Modal title="删除这个会话？" onClose={() => setDeleteId(null)}>
+          <p>
+            删除后不再加载此会话，未执行查询会取消；正在运行的查询会向平台申请取消。你的个人记忆和Skill可在“我的积累”单独管理。
+          </p>
+          <button
+            className="primary"
+            onClick={() => void removeConversation()}
+          >
+            删除此会话
+          </button>
+        </Modal>
+      )}
+      {showHistory && (
+        <Modal title="历史记录" onClose={() => setShowHistory(false)}>
+          <div className="history-tabs" role="group" aria-label="历史类型">
+            <button aria-pressed={historyTab === "conversations"} onClick={() => setHistoryTab("conversations")}>会话</button>
+            <button aria-pressed={historyTab === "queries"} onClick={() => setHistoryTab("queries")}>查询记录</button>
+          </div>
+          <label className="search-box">
+            <input
+              aria-label={historyTab === "conversations" ? "搜索会话" : "搜索查询"}
+              value={historySearch}
+              placeholder={historyTab === "conversations" ? "按标题搜索" : "按查询内容搜索"}
+              onChange={(e) => setHistorySearch(e.target.value)}
+            />
+          </label>
+          {historyTab === "conversations" ? <>
+          <nav className="history-dialog" aria-label="全部会话">
+            {historyItems.map(item => <div className="history-row" key={item.id}><button onClick={() => { setCid(item.id); setShowHistory(false); }}><span title={item.title}>{conversationTitle(item.title) || "未命名会话"}</span>{item.created_at && <small><time dateTime={item.created_at}>创建于 {creationTime(item.created_at)}</time></small>}</button><button className="history-delete" aria-label={"删除会话 " + (item.title || "未命名会话")} onClick={() => setDeleteId(item.id)}>删除</button></div>)}
+          </nav>
+          {!historyItems.length && !historyBusy && <p className="quiet">没有找到符合条件的会话，请调整搜索词。</p>}
+          {historyNext && <button disabled={historyBusy} onClick={() => void refreshHistory(historySearch, historyNext).catch(e => setError(e.message))}>加载更多会话</button>}
+          {historyBusy && <p role="status">正在查找会话…</p>}
+          </> : <>
+          <nav className="history-dialog" aria-label="全部查询">
+            {queryHistory.map(item => <div className="history-row" key={item.id}><button onClick={() => openQueryFromHistory(item)}><span title={item.summary}>{item.text_unavailable ? "正文已失效的查询" : item.summary || "未命名查询"}</span><small><time dateTime={item.created_at}>{creationTime(item.created_at)}</time> · {queryExecutionLabel(item.execution_state)}</small></button></div>)}
+          </nav>
+          {!queryHistory.length && !queryHistoryBusy && <p className="quiet">没有找到符合条件的查询，请调整搜索词。</p>}
+          {queryHistoryNext && <button disabled={queryHistoryBusy} onClick={() => void refreshQueryHistory(historySearch, queryHistoryNext).catch(e => setError(e.message))}>加载更多查询</button>}
+          {queryHistoryBusy && <p role="status">正在查找查询…</p>}
+          </>}
+        </Modal>
+      )}
     </WorkspaceShell>
   );
 }

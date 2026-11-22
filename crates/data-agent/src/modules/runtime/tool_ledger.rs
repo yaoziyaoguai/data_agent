@@ -52,13 +52,18 @@ pub async fn bind_answer_handoff_in_tx(
 
 pub async fn record_tool_receipt_in_tx(
     tx: &mut AppTx<'_>,
+    run: &LockedRun,
     tool: &LockedTool,
     receipt: &Value,
 ) -> Result<()> {
     if tool.state != "registered" {
         return Err(Error::new("version_conflict"));
     }
-    store::record_receipt(tx, tool, receipt).await
+    store::record_receipt(tx, tool, receipt).await?;
+    tx.notify(crate::live_changes::Change::Activity {
+        conversation_id: run.conversation_id.clone(),
+    });
+    Ok(())
 }
 
 pub async fn register_named_tool_in_tx(

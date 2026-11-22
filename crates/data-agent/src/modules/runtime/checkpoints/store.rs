@@ -23,12 +23,17 @@ pub(crate) const DELIVERY_HISTORY_SQL: &str = "history_chain AS (
 
 pub(crate) fn decode_delivery_history(
     row: &sqlx::mysql::MySqlRow,
-) -> super::super::DeliveryHistory {
+) -> Result<super::super::DeliveryHistory> {
+    #[derive(serde::Deserialize)]
+    struct Handoff {
+        sequence: u64,
+        handoff: Value,
+    }
     let mut handoffs = row
-        .get::<Option<sqlx::types::Json<Vec<Value>>>, _>("handoffs")
-        .map_or_else(Vec::new, |v| v.0);
-    handoffs.sort_by_key(|part| part["sequence"].as_u64().expect("answer part sequence"));
-    super::super::DeliveryHistory {
+        .try_get::<Option<sqlx::types::Json<Vec<Handoff>>>, _>("handoffs")?
+        .map_or_else(Vec::new, |value| value.0);
+    handoffs.sort_by_key(|part| part.sequence);
+    Ok(super::super::DeliveryHistory {
         checkpoint: row
             .get::<Option<sqlx::types::Json<Value>>, _>("checkpoint")
             .map(|v| v.0),
@@ -37,11 +42,8 @@ pub(crate) fn decode_delivery_history(
         task_resets: row
             .get::<Option<sqlx::types::Json<Vec<Value>>>, _>("task_resets")
             .map_or_else(Vec::new, |v| v.0),
-        answer_handoffs: handoffs
-            .into_iter()
-            .map(|mut part| part["handoff"].take())
-            .collect(),
-    }
+        answer_handoffs: handoffs.into_iter().map(|part| part.handoff).collect(),
+    })
 }
 pub(in crate::modules::runtime) async fn bind_legacy_delivery_checkpoint(
     tx: &mut AppTx<'_>,
@@ -171,6 +173,6 @@ mod tests {
             .push(history)
             .push(" SELECT * FROM delivery_history");
         let row = sql.build().fetch_one(tx.connection()).await.unwrap();
-        decode_delivery_history(&row)
+        decode_delivery_history(&row).unwrap()
     }
 }

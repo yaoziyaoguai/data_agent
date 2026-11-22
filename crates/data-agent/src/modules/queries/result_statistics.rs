@@ -1,6 +1,6 @@
 use crate::types::{Error, Result};
 use serde_json::{Value, json};
-use std::collections::BTreeMap;
+use std::{cmp::Ordering, collections::BTreeMap};
 
 /// 只统计实际交付的结果页；不重跑SQL，也不将分页或截断结果当成全量。
 pub fn page_statistics(result: &Value) -> Result<Value> {
@@ -21,7 +21,10 @@ pub fn page_statistics(result: &Value) -> Result<Value> {
         let mut occurrences = BTreeMap::new();
         let mut nulls = 0;
         let mut counts = [0_usize; 3];
-        let mut numeric = matches!(column["type"].as_str(), Some("integer" | "number"));
+        let numeric_column = matches!(column["type"].as_str(), Some("integer" | "number"));
+        let mut numeric = numeric_column;
+        let mut minimum: Option<(&str, DecimalKey)> = None;
+        let mut maximum: Option<(&str, DecimalKey)> = None;
         for row in rows {
             let value = &row[index];
             if value.is_null() {
@@ -30,17 +33,43 @@ pub fn page_statistics(result: &Value) -> Result<Value> {
                 let text = value.as_str().ok_or(Error::new("invalid_input"))?;
                 *occurrences.entry(text).or_insert(0_usize) += 1;
                 if numeric {
-                    if let Some(sign) = decimal_sign(text) {
-                        counts[(sign + 1) as usize] += 1;
+                    if let Some(key) = decimal_key(text) {
+                        counts[(key.sign + 1) as usize] += 1;
+                        if minimum
+                            .as_ref()
+                            .is_none_or(|(_, current)| key.compare(current).is_lt())
+                        {
+                            minimum = Some((text, key.clone()));
+                        }
+                        if maximum
+                            .as_ref()
+                            .is_none_or(|(_, current)| key.compare(current).is_gt())
+                        {
+                            maximum = Some((text, key));
+                        }
                     } else {
                         numeric = false;
                     }
                 }
             }
         }
+        let (min, max) = if numeric {
+            (
+                minimum.map(|(value, _)| value),
+                maximum.map(|(value, _)| value),
+            )
+        } else if numeric_column {
+            (None, None)
+        } else {
+            (
+                occurrences.keys().next().copied(),
+                occurrences.keys().next_back().copied(),
+            )
+        };
         statistics.push(json!({
             "column_index":index,"column_name":column["name"],
             "non_null_count":rows.len()-nulls,"null_count":nulls,"distinct_count":occurrences.len(),
+            "min":min,"max":max,
             "repeated_values":occurrences.iter().filter(|(_, count)| **count>1)
                 .map(|(value,count)|json!({"value":value,"count":count})).collect::<Vec<_>>(),
             "numeric_counts":if numeric {json!({"negative":counts[0],"zero":counts[1],"positive":counts[2]})} else {Value::Null}
@@ -56,40 +85,61 @@ pub fn page_statistics(result: &Value) -> Result<Value> {
     )
 }
 
-// 以十进制文本判断正负和零，不转浮点，避免大整数或极小数失真。
-fn decimal_sign(value: &str) -> Option<i8> {
-    let (mantissa, exponent) = value
-        .split_once(['e', 'E'])
-        .map_or((value, None), |(m, e)| (m, Some(e)));
-    if let Some(exponent) = exponent {
-        let digits = exponent.strip_prefix(['+', '-']).unwrap_or(exponent);
-        if digits.is_empty() || !digits.bytes().all(|b| b.is_ascii_digit()) {
-            return None;
-        }
+// 以有效数字和十进制量级比较，保留返回的原始文本，不把大数转换成 f64。
+#[derive(Clone)]
+struct DecimalKey {
+    sign: i8,
+    scale: i128,
+    digits: String,
+}
+
+impl DecimalKey {
+    fn compare(&self, other: &Self) -> Ordering {
+        self.sign.cmp(&other.sign).then_with(|| {
+            let magnitude = (self.scale, &self.digits).cmp(&(other.scale, &other.digits));
+            if self.sign < 0 {
+                magnitude.reverse()
+            } else {
+                magnitude
+            }
+        })
     }
-    let digits = mantissa.strip_prefix(['+', '-']).unwrap_or(mantissa);
-    let mut points = 0;
-    let mut digit_count = 0;
-    let mut nonzero = false;
-    for byte in digits.bytes() {
-        if byte == b'.' {
-            points += 1;
-        } else if byte.is_ascii_digit() {
-            digit_count += 1;
-            nonzero |= byte != b'0';
-        } else {
-            return None;
-        }
-    }
-    if digit_count == 0 || points > 1 {
+}
+
+pub fn is_decimal_cell(value: &str) -> bool {
+    decimal_key(value).is_some()
+}
+
+fn decimal_key(value: &str) -> Option<DecimalKey> {
+    let (mantissa, exponent) = match value.split_once(['e', 'E']) {
+        Some((mantissa, exponent)) => (mantissa, exponent.parse::<i64>().ok()?),
+        None => (value, 0),
+    };
+    let unsigned = mantissa.strip_prefix(['+', '-']).unwrap_or(mantissa);
+    let (whole, fraction) = unsigned.split_once('.').unwrap_or((unsigned, ""));
+    if unsigned.is_empty()
+        || (whole.is_empty() && fraction.is_empty())
+        || !whole
+            .bytes()
+            .chain(fraction.bytes())
+            .all(|byte| byte.is_ascii_digit())
+    {
         return None;
     }
-    Some(if !nonzero {
-        0
-    } else if mantissa.starts_with('-') {
-        -1
-    } else {
-        1
+    let digits = format!("{whole}{fraction}");
+    let significant = digits.trim_start_matches('0');
+    if significant.is_empty() {
+        return Some(DecimalKey {
+            sign: 0,
+            scale: 0,
+            digits: String::new(),
+        });
+    }
+    let leading_zeroes = digits.len() - significant.len();
+    Some(DecimalKey {
+        sign: if mantissa.starts_with('-') { -1 } else { 1 },
+        scale: whole.len() as i128 - leading_zeroes as i128 + i128::from(exponent),
+        digits: significant.trim_end_matches('0').to_owned(),
     })
 }
 
@@ -122,6 +172,10 @@ mod tests {
             stats["columns"][1]["numeric_counts"],
             json!({"negative":1,"zero":1,"positive":2})
         );
+        assert_eq!(stats["columns"][1]["min"], "-0.00001");
+        assert_eq!(stats["columns"][1]["max"], "9007199254740993");
+        assert_eq!(stats["columns"][0]["min"], "A");
+        assert_eq!(stats["columns"][0]["max"], "B");
         assert_eq!(stats["scope"], "complete_result");
     }
     #[test]

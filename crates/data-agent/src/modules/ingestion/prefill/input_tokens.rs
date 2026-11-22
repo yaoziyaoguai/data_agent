@@ -4,7 +4,13 @@ use crate::{
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::{collections::BTreeMap, io, sync::LazyLock};
+use sha2::{Digest, Sha256};
+use std::{
+    collections::BTreeMap,
+    fs, io,
+    path::{Path, PathBuf},
+    sync::LazyLock,
+};
 use tokenizers::Tokenizer;
 
 #[derive(Deserialize)]
@@ -18,37 +24,64 @@ struct ModelEncoding {
 }
 
 impl ModelEncoding {
-    fn load(tokenizer: &[u8], format: &[u8]) -> Self {
-        // 编译期固定的MIT资产由完整材料检查核对指纹，不接受部署时的任意替换。
-        Self {
-            tokenizer: Tokenizer::from_bytes(tokenizer).expect("pinned DeepSeek tokenizer"),
-            format: serde_json::from_slice(format).expect("pinned DeepSeek prompt format"),
-        }
+    fn load(
+        directory: &Path,
+        model: &str,
+        tokenizer_sha256: &str,
+        format_sha256: &str,
+    ) -> std::result::Result<Self, String> {
+        let tokenizer = verified_asset(
+            &directory.join(format!("{model}-tokenizer.json")),
+            tokenizer_sha256,
+        )?;
+        let format = verified_asset(
+            &directory.join(format!("{model}-format.json")),
+            format_sha256,
+        )?;
+        Ok(Self {
+            tokenizer: Tokenizer::from_bytes(&tokenizer)
+                .map_err(|error| format!("Invalid {model} tokenizer: {error}"))?,
+            format: serde_json::from_slice(&format)
+                .map_err(|error| format!("Invalid {model} prompt format: {error}"))?,
+        })
     }
 }
 
-static FLASH: LazyLock<ModelEncoding> = LazyLock::new(|| {
+fn verified_asset(path: &Path, sha256: &str) -> std::result::Result<Vec<u8>, String> {
+    let bytes = fs::read(path)
+        .map_err(|error| format!("Cannot read model resource {}: {error}", path.display()))?;
+    if format!("{:x}", Sha256::digest(&bytes)) != sha256 {
+        return Err(format!(
+            "Unexpected SHA-256 for model resource {}",
+            path.display()
+        ));
+    }
+    Ok(bytes)
+}
+
+fn encoding_directory() -> PathBuf {
+    std::env::var_os("DATA_AGENT_RESOURCES_DIR")
+        .map_or_else(
+            || PathBuf::from("crates/data-agent/resources"),
+            PathBuf::from,
+        )
+        .join("deepseek")
+}
+
+static FLASH: LazyLock<std::result::Result<ModelEncoding, String>> = LazyLock::new(|| {
     ModelEncoding::load(
-        include_bytes!(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/resources/deepseek/flash-tokenizer.json"
-        )),
-        include_bytes!(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/resources/deepseek/flash-format.json"
-        )),
+        &encoding_directory(),
+        "flash",
+        "c90dfa01249db1be4245780a052ede752e1361c612ac6d08e2bdada7d599476b",
+        "47ba348f139492c8e7fcd08fa52e6f25c591c2a7ac6f8fd47ff24f99665628df",
     )
 });
-static PRO: LazyLock<ModelEncoding> = LazyLock::new(|| {
+static PRO: LazyLock<std::result::Result<ModelEncoding, String>> = LazyLock::new(|| {
     ModelEncoding::load(
-        include_bytes!(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/resources/deepseek/pro-tokenizer.json"
-        )),
-        include_bytes!(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/resources/deepseek/pro-format.json"
-        )),
+        &encoding_directory(),
+        "pro",
+        "8f9f37ca37fdc4f5fd36d5cf4d3b0e8392edb4e894fd10cc0d70b4957c8633cf",
+        "2fe4bc210bce9bd7902524d68d9240bce2913b0f35e68c594f4a4f94b9f70811",
     )
 });
 
@@ -94,7 +127,9 @@ pub(super) fn published_input_tokens(
         "deepseek-flash" => &*FLASH,
         "deepseek-v4-pro" => &*PRO,
         _ => return Err(Error::new("invalid_input")),
-    };
+    }
+    .as_ref()
+    .map_err(|problem| Error::new("unavailable").with_message(problem.clone()))?;
     let mode = match profile.thinking_level.as_ref() {
         None | Some(ThinkingLevel::Off) => "off",
         Some(ThinkingLevel::Low) => "low",
@@ -114,7 +149,8 @@ pub(super) fn published_input_tokens(
             PythonSeparators,
         ))
         .map_err(|_| Error::new("invalid_input"))?;
-    let schema = String::from_utf8(schema).expect("JSON is UTF-8");
+    let schema = String::from_utf8(schema)
+        .map_err(|error| Error::new("unavailable").with_message(error.to_string()))?;
     // 一次编码完整公开prompt，不能把各段独立分词相加而漏掉跨边界的BPE行为。
     let prompt = format!(
         "{}{system}{}{schema}{}{user}{}",
@@ -125,4 +161,31 @@ pub(super) fn published_input_tokens(
         .encode(prompt, false)
         .map_err(|_| Error::new("invalid_input"))?;
     Ok(encoded.get_ids().len())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn tokenizer_assets_are_verified_before_parsing() {
+        let directory = Path::new(env!("CARGO_MANIFEST_DIR")).join("resources/deepseek");
+        let format = directory.join("flash-format.json");
+        let bytes = verified_asset(
+            &format,
+            "47ba348f139492c8e7fcd08fa52e6f25c591c2a7ac6f8fd47ff24f99665628df",
+        )
+        .unwrap();
+        assert!(!bytes.is_empty());
+        assert!(
+            verified_asset(&format, "bad-checksum")
+                .unwrap_err()
+                .contains("Unexpected SHA-256")
+        );
+        assert!(
+            verified_asset(&format.join("missing"), "bad-checksum")
+                .unwrap_err()
+                .contains("Cannot read model resource")
+        );
+    }
 }

@@ -27,24 +27,45 @@ pub async fn initialize(
 
 pub async fn catalog(pool: &MySqlPool, space: &str) -> Result<Value> {
     let snapshot = snapshot(pool, space).await?;
-    let services = snapshot["services"].as_array().unwrap();
-    let models = snapshot["models"]
+    let services = snapshot["services"]
         .as_array()
-        .unwrap()
-        .iter()
-        .filter(|m| {
-            m["enabled"] == true
-                && services
-                    .iter()
-                    .any(|s| s["id"] == m["service_id"] && s["enabled"] == true)
-        })
-        .collect::<Vec<_>>();
-    let default = models
-        .iter()
-        .find(|m| m["id"] == snapshot["default_model_id"]);
-    let options=models.iter().map(|m|json!({"id":m["id"],"label":m["label"],"thinking_options":m["thinking_levels"].as_array().unwrap().iter().map(|v|json!({"value":v,"label":match v.as_str().unwrap(){"off"=>"关闭","minimal"=>"最轻","low"=>"轻度","medium"=>"中等","high"=>"深度","xhigh"=>"更深",_=>"最高"}})).collect::<Vec<_>>()})).collect::<Vec<_>>();
+        .ok_or(Error::new("unavailable"))?;
+    let all_models = snapshot["models"]
+        .as_array()
+        .ok_or(Error::new("unavailable"))?;
+    let mut options = Vec::new();
+    let mut default = None;
+    for model in all_models.iter().filter(|model| {
+        model["enabled"] == true
+            && services
+                .iter()
+                .any(|service| service["id"] == model["service_id"] && service["enabled"] == true)
+    }) {
+        if model["id"] == snapshot["default_model_id"] {
+            default =
+                Some(json!({"model_id":model["id"],"thinking_level":model["default_thinking"]}));
+        }
+        let mut thinking = Vec::new();
+        for value in model["thinking_levels"]
+            .as_array()
+            .ok_or(Error::new("unavailable"))?
+        {
+            let label = match value.as_str() {
+                Some("off") => "关闭",
+                Some("minimal") => "最轻",
+                Some("low") => "轻度",
+                Some("medium") => "中等",
+                Some("high") => "深度",
+                Some("xhigh") => "更深",
+                Some("max") => "最高",
+                _ => return Err(Error::new("unavailable")),
+            };
+            thinking.push(json!({"value":value,"label":label}));
+        }
+        options.push(json!({"id":model["id"],"label":model["label"],"thinking_options":thinking}));
+    }
     Ok(
-        json!({"models":options,"default_selection":default.map(|m|json!({"model_id":m["id"],"thinking_level":m["default_thinking"]})),"requires_model":!snapshot["models"].as_array().unwrap().is_empty()}),
+        json!({"models":options,"default_selection":default,"requires_model":!all_models.is_empty()}),
     )
 }
 
@@ -56,8 +77,7 @@ pub fn validate_service(value: &Value) -> Result<()> {
         .map_err(|_| Error::new("invalid_model_endpoint"))?;
     let host = url.host_str().ok_or(Error::new("invalid_model_endpoint"))?;
     let test = std::env::var("DATA_AGENT_PROVIDER_TEST").as_deref() == Ok("1")
-        && host == "127.0.0.1"
-        && url.scheme() == "http";
+        && crate::upstream::http_allowed(&url)?;
     if !url.username().is_empty()
         || url.password().is_some()
         || url.query().is_some()
@@ -109,17 +129,12 @@ pub fn validate_model(value: &Value) -> Result<()> {
                 .with_message(capacity::range_message(context, input, output))
         })?;
     }
-    if !value["thinking_levels"]
+    let levels = value["thinking_levels"]
         .as_array()
-        .unwrap()
-        .contains(&value["default_thinking"])
+        .ok_or(Error::new("invalid_input"))?;
+    if !levels.contains(&value["default_thinking"])
         || value["output_limit"].as_u64() > value["input_limit"].as_u64()
-        || (value["reasoning_supported"] != true
-            && value["thinking_levels"]
-                .as_array()
-                .unwrap()
-                .iter()
-                .any(|level| level != "off"))
+        || (value["reasoning_supported"] != true && levels.iter().any(|level| level != "off"))
     {
         return Err(Error::new("invalid_input"));
     }
@@ -132,7 +147,9 @@ pub(super) fn validate_model_protocol(model: &Value, service: &Value) -> Result<
         return Err(Error::new("invalid_input"));
     }
     if service["api"] == "anthropic-messages" {
-        let levels = model["thinking_levels"].as_array().unwrap();
+        let levels = model["thinking_levels"]
+            .as_array()
+            .ok_or(Error::new("invalid_input"))?;
         let adaptive = model["anthropic_thinking_mode"] == "adaptive";
         if (!adaptive
             && levels

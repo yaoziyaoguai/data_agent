@@ -1,9 +1,7 @@
 use crate::types::{Error, Result, fingerprint};
-use serde::Deserialize;
 use serde_json::{Value, json};
 use std::sync::LazyLock;
 
-#[derive(Deserialize)]
 pub struct ModelSpec {
     pub model_id: String,
     pub dimension: usize,
@@ -12,10 +10,8 @@ pub struct ModelSpec {
     pub batch_limit: usize,
     pub input_bytes_limit: usize,
 }
-pub static SPEC: LazyLock<ModelSpec> = LazyLock::new(|| {
-    serde_json::from_str(include_str!("../../../../../infra/embedding-model.json"))
-        .expect("fixed embedding specification")
-});
+pub static SPEC: LazyLock<ModelSpec> =
+    LazyLock::new(|| include!(concat!(env!("OUT_DIR"), "/embedding_spec.rs")));
 
 // 百炼usage包含输入模板等开销，短问句也可能超过正文UTF-8字节数。
 // 每条预留64 tokens；该估算仍由真实usage核验，超限保留费用并熔断。
@@ -48,8 +44,7 @@ pub fn prepare(texts: &[String]) -> Result<PreparedEmbedding> {
     let url = reqwest::Url::parse(&endpoint).map_err(|_| Error::new("embedding_unconfigured"))?;
     let local_test = std::env::var("DATA_AGENT_EMBEDDING_TEST").as_deref() == Ok("1")
         && std::env::var("DATA_AGENT_MODE").as_deref() == Ok("development")
-        && url.scheme() == "http"
-        && url.host_str() == Some("127.0.0.1")
+        && crate::upstream::http_allowed(&url)?
         && url.port().is_some();
     if (!local_test && endpoint != SPEC.endpoint)
         || !url.username().is_empty()

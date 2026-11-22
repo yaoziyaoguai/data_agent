@@ -26,11 +26,7 @@ impl Milvus {
                 .map_err(|_| Error::new("vector_unconfigured"))?,
         )
         .map_err(|_| Error::new("invalid_input"))?;
-        if url.scheme() != "http"
-            || url.host_str() != Some("127.0.0.1")
-            || !url.username().is_empty()
-            || url.password().is_some()
-        {
+        if !crate::upstream::http_allowed(&url)? {
             return Err(Error::new("invalid_input"));
         }
         let collection = std::env::var("DATA_AGENT_VECTOR_COLLECTION")

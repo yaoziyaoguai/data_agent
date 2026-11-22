@@ -79,6 +79,7 @@ export interface Boundary {
     knowledgeEdit:                KnowledgeEditClass;
     knowledgeEditGroup?:          KnowledgeEditGroupElement;
     knowledgeEntry:               KnowledgeEntryElement;
+    knowledgeLineage?:            KnowledgeLineageClass;
     knowledgeList:                KnowledgeListClass;
     knowledgeListQuery:           KnowledgeListQueryClass;
     knowledgeObject:              KnowledgeObjectElement;
@@ -247,7 +248,7 @@ export interface AgentQueryResultsClass {
     rows?:                  Array<Array<null | string>>;
     saved_result_complete?: boolean;
     saved_row_count?:       number;
-    source?:                AgentQueryResultsSource;
+    source?:                string;
     /**
      * 应用对当前有权结果页计算的统计；历史客户端可省略。
      */
@@ -286,8 +287,6 @@ export interface PurpleQueryResultContentRange {
     total_chars: number;
 }
 
-export type AgentQueryResultsSource = "mock";
-
 /**
  * 应用对当前有权结果页计算的统计；历史客户端可省略。
  */
@@ -308,6 +307,14 @@ export interface ResultColumnStatisticsElement {
      * 不含NULL，按平台返回的原始文本去重；不模拟数据库排序规则。
      */
     distinct_count: number;
+    /**
+     * 当前统计范围的最大非空值，保留原始表示。
+     */
+    max?: null | string;
+    /**
+     * 当前统计范围的最小非空值，保留原始表示。
+     */
+    min?:           null | string;
     non_null_count: number;
     null_count:     number;
     numeric_counts: NumericValueCountsClass | null;
@@ -677,7 +684,7 @@ export interface QueryResultsElement {
     rows:                   Array<Array<null | string>>;
     saved_result_complete?: boolean;
     saved_row_count?:       number;
-    source:                 AgentQueryResultsSource;
+    source:                 string;
     /**
      * 应用对当前有权结果页计算的统计；历史客户端可省略。
      */
@@ -1180,11 +1187,11 @@ export interface SemanticMaintenanceClass {
      * 当前对象负责人：表来自 Datasight；独立人工对象默认创建者，超级维护者可调整。
      */
     maintainer_id: null | string;
-    source:        SemanticMaintenanceSource;
+    source:        Source;
     version:       string;
 }
 
-export type SemanticMaintenanceSource = "datasight" | "creator" | "system";
+export type Source = "datasight" | "creator" | "system";
 
 export interface SemanticMemberListClass {
     user_ids: string[];
@@ -2623,6 +2630,24 @@ export interface KnowledgeEditClass {
     value:             string;
 }
 
+export interface KnowledgeLineageClass {
+    downstream:      DownstreamElement[];
+    more_downstream: boolean;
+    upstream:        DownstreamElement[];
+}
+
+export interface DownstreamElement {
+    key_summary:  null | string;
+    kind:         DownstreamKind;
+    name:         string;
+    object_id:    string;
+    relationship: Relationship;
+}
+
+export type DownstreamKind = "table" | "metric" | "field" | "skill";
+
+export type Relationship = "table_relation" | "metric_query" | "field_reference" | "skill_dependency";
+
 export interface KnowledgeListClass {
     next_after_id:    null | string;
     objects:          KnowledgeObjectElement[];
@@ -3541,6 +3566,10 @@ export interface RunSnapshotElement {
      */
     attempt_id?: string;
     /**
+     * 已完成的工具动作、当前可读对象名称与真实耗时。仅作界面进度提示。
+     */
+    completed_step_summaries?: CompletedStepSummaryElement[];
+    /**
      * 该run已成功回执的工具调用计数；旧记录缺省。仅作进度展示，不作为执行依据。
      */
     completed_steps?: number;
@@ -3559,6 +3588,12 @@ export interface RunSnapshotElement {
     result_query_id?: null | string;
     run_id:           string;
     state:            RunSnapshotState;
+}
+
+export interface CompletedStepSummaryElement {
+    category:    string;
+    duration_ms: number;
+    target_name: null | string;
 }
 
 /**
@@ -3782,6 +3817,20 @@ export interface WorkbenchUpdateClass {
     query_list?: QueryListClass;
     runs?:       RunSnapshotElement[];
     tasks?:      TaskSnapshotElement[];
+}
+
+export interface KnowledgeLineage {
+    downstream:      KnowledgeLineageEdge[];
+    more_downstream: boolean;
+    upstream:        KnowledgeLineageEdge[];
+}
+
+export interface KnowledgeLineageEdge {
+    key_summary:  null | string;
+    kind:         DownstreamKind;
+    name:         string;
+    object_id:    string;
+    relationship: Relationship;
 }
 
 export interface CreateConversation {
@@ -4266,6 +4315,10 @@ export interface RunSnapshot {
      */
     attempt_id?: string;
     /**
+     * 已完成的工具动作、当前可读对象名称与真实耗时。仅作界面进度提示。
+     */
+    completed_step_summaries?: RunStepSummary[];
+    /**
      * 该run已成功回执的工具调用计数；旧记录缺省。仅作进度展示，不作为执行依据。
      */
     completed_steps?: number;
@@ -4284,6 +4337,12 @@ export interface RunSnapshot {
     result_query_id?: null | string;
     run_id:           string;
     state:            RunSnapshotState;
+}
+
+export interface RunStepSummary {
+    category:    string;
+    duration_ms: number;
+    target_name: null | string;
 }
 
 export interface TaskSnapshot {
@@ -4661,7 +4720,7 @@ export interface SemanticMaintenance {
      * 当前对象负责人：表来自 Datasight；独立人工对象默认创建者，超级维护者可调整。
      */
     maintainer_id: null | string;
-    source:        SemanticMaintenanceSource;
+    source:        Source;
     version:       string;
 }
 
@@ -6272,7 +6331,7 @@ export interface QueryResults {
     rows:                   Array<Array<null | string>>;
     saved_result_complete?: boolean;
     saved_row_count?:       number;
-    source:                 AgentQueryResultsSource;
+    source:                 string;
     /**
      * 应用对当前有权结果页计算的统计；历史客户端可省略。
      */
@@ -6314,6 +6373,14 @@ export interface ResultColumnStatistics {
      * 不含NULL，按平台返回的原始文本去重；不模拟数据库排序规则。
      */
     distinct_count: number;
+    /**
+     * 当前统计范围的最大非空值，保留原始表示。
+     */
+    max?: null | string;
+    /**
+     * 当前统计范围的最小非空值，保留原始表示。
+     */
+    min?:           null | string;
     non_null_count: number;
     null_count:     number;
     numeric_counts: NumericValueCounts | null;
@@ -6545,7 +6612,7 @@ export interface AgentQueryResults {
     rows?:                  Array<Array<null | string>>;
     saved_result_complete?: boolean;
     saved_row_count?:       number;
-    source?:                AgentQueryResultsSource;
+    source?:                string;
     /**
      * 应用对当前有权结果页计算的统计；历史客户端可省略。
      */

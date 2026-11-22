@@ -60,7 +60,11 @@ pub(super) async fn history(
             event["payload"]["content_page"] = page;
         }
         let mut limited = false;
-        while events.len() > 1 && serde_json::to_vec(&events).expect("history events").len() > 12000
+        while events.len() > 1
+            && serde_json::to_vec(&events)
+                .map_err(|_| crate::types::Error::new("unavailable"))?
+                .len()
+                > 12000
         {
             events.pop();
             limited = true;

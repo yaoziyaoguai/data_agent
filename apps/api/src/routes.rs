@@ -1,4 +1,7 @@
-use crate::State;
+use crate::{
+    State,
+    request::{ContractBody, ContractQuery, request_contracts},
+};
 use axum::{
     Json,
     extract::{Path, Query, State as AxumState},
@@ -14,6 +17,23 @@ use data_agent::{
 };
 use serde_json::{Value, json};
 use std::collections::HashMap;
+request_contracts!(
+    CreateConversation,
+    HistoryQuery,
+    MessageInput,
+    SnapshotRequest,
+    ToolInvocation,
+    AppendOutput,
+    FinishRun,
+    RefreshRunContext,
+    ReadCheckpoint,
+    ModelAttempt,
+    ReserveModelCall,
+    SendModelCall,
+    FinalizeModelCall,
+    CancelRun,
+);
+
 pub(crate) type ResponseResult = Result<axum::response::Response, (StatusCode, Json<Value>)>;
 pub(crate) fn failure(error: Error) -> (StatusCode, Json<Value>) {
     let request_id = id();
@@ -99,17 +119,14 @@ pub(crate) async fn user(state: &State, headers: &HeaderMap) -> Result<AccessCon
         table_access: None,
     })
 }
-pub(crate) async fn internal(
+pub(crate) async fn internal_for_run(
     state: &State,
     headers: &HeaderMap,
-    value: &Value,
+    run: &str,
 ) -> Result<AccessContext, Error> {
     if bearer(headers) != Some(state.internal_token.as_str()) {
         return Err(Error::new("unauthenticated"));
     }
-    let run = value["run_id"]
-        .as_str()
-        .ok_or(Error::new("invalid_input"))?;
     use_cases::deliver_run::context_for_run(&state.pool, run).await
 }
 
@@ -127,13 +144,6 @@ pub(crate) async fn catalog_user(
     use_cases::knowledge::catalog_reader(&user(state, headers).await?).await
 }
 
-pub(crate) async fn semantic_run(
-    state: &State,
-    headers: &HeaderMap,
-    body: &Value,
-) -> Result<AccessContext, Error> {
-    use_cases::knowledge::catalog_context(&internal(state, headers, body).await?).await
-}
 const SESSION_TTL_SECONDS: i64 = 7 * 24 * 3600;
 // 登录凭据只走一次Bearer验证；成功后签发随机会话令牌，Cookie不再携带原始凭据。
 pub async fn login(AxumState(state): AxumState<State>, headers: HeaderMap) -> impl IntoResponse {
@@ -177,11 +187,9 @@ async fn login_session(
 pub async fn create(
     AxumState(state): AxumState<State>,
     headers: HeaderMap,
-    Json(body): Json<Value>,
+    ContractBody { value: input, .. }: ContractBody<CreateConversation>,
 ) -> ResponseResult {
     let context = user(&state, &headers).await.map_err(failure)?;
-    let input =
-        contracts::decode::<CreateConversation>("CreateConversation", body).map_err(failure)?;
     use_cases::receive_message::create_conversation(&state.pool, &context, input)
         .await
         .map_err(failure)
@@ -191,10 +199,9 @@ pub async fn message(
     AxumState(state): AxumState<State>,
     headers: HeaderMap,
     Path(cid): Path<String>,
-    Json(body): Json<Value>,
+    ContractBody { value: input, .. }: ContractBody<MessageInput>,
 ) -> ResponseResult {
     let context = user(&state, &headers).await.map_err(failure)?;
-    let input = contracts::decode::<MessageInput>("MessageInput", body).map_err(failure)?;
     use_cases::receive_message::receive_message(
         &state.pool,
         &context,
@@ -209,15 +216,14 @@ pub async fn message(
 pub async fn history(
     AxumState(state): AxumState<State>,
     headers: HeaderMap,
-    Query(query): Query<HashMap<String, String>>,
+    ContractQuery(query): ContractQuery<HistoryQuery>,
 ) -> ResponseResult {
     let context = semantic_user(&state, &headers).await.map_err(failure)?;
-    contracts::validate("HistoryQuery", &json!(query)).map_err(failure)?;
     use_cases::read_conversation::list_history(
         &state.pool,
         &context,
-        query.get("before_id").map(String::as_str),
-        query.get("q").map_or("", String::as_str),
+        query.before_id.as_deref(),
+        query.q.as_deref().unwrap_or(""),
     )
     .await
     .map_err(failure)
@@ -253,12 +259,9 @@ pub async fn refresh_snapshot(
     AxumState(state): AxumState<State>,
     headers: HeaderMap,
     Path(cid): Path<String>,
-    Json(value): Json<Value>,
+    ContractBody { value: request, .. }: ContractBody<SnapshotRequest>,
 ) -> ResponseResult {
     let context = semantic_user(&state, &headers).await.map_err(failure)?;
-    contracts::validate("SnapshotRequest", &value).map_err(failure)?;
-    let request: SnapshotRequest =
-        serde_json::from_value(value).map_err(|_| failure(Error::new("invalid_input")))?;
     let before = request
         .before_seq
         .as_deref()
@@ -287,11 +290,11 @@ pub async fn refresh_snapshot(
 pub async fn register(
     AxumState(state): AxumState<State>,
     headers: HeaderMap,
-    Json(body): Json<Value>,
+    ContractBody { value: input, .. }: ContractBody<ToolInvocation>,
 ) -> ResponseResult {
-    let input =
-        contracts::decode::<ToolInvocation>("ToolInvocation", body.clone()).map_err(failure)?;
-    let context = internal(&state, &headers, &body).await.map_err(failure)?;
+    let context = internal_for_run(&state, &headers, &input.run_id)
+        .await
+        .map_err(failure)?;
     use_cases::invoke_tool::register_tool(&state.pool, &context, &input)
         .await
         .map_err(failure)
@@ -300,11 +303,11 @@ pub async fn register(
 pub async fn tool(
     AxumState(state): AxumState<State>,
     headers: HeaderMap,
-    Json(body): Json<Value>,
+    ContractBody { value: input, .. }: ContractBody<ToolInvocation>,
 ) -> ResponseResult {
-    let input =
-        contracts::decode::<ToolInvocation>("ToolInvocation", body.clone()).map_err(failure)?;
-    let context = internal(&state, &headers, &body).await.map_err(failure)?;
+    let context = internal_for_run(&state, &headers, &input.run_id)
+        .await
+        .map_err(failure)?;
     use_cases::invoke_tool::invoke_tool(&state.pool, &context, input)
         .await
         .map_err(failure)
@@ -313,10 +316,11 @@ pub async fn tool(
 pub async fn output(
     AxumState(state): AxumState<State>,
     headers: HeaderMap,
-    Json(body): Json<Value>,
+    ContractBody { value: input, .. }: ContractBody<AppendOutput>,
 ) -> ResponseResult {
-    let input = contracts::decode::<AppendOutput>("AppendOutput", body.clone()).map_err(failure)?;
-    let context = internal(&state, &headers, &body).await.map_err(failure)?;
+    let context = internal_for_run(&state, &headers, &input.run_id)
+        .await
+        .map_err(failure)?;
     use_cases::finish_run::append_output(&state.pool, &context, input)
         .await
         .map_err(failure)
@@ -325,12 +329,15 @@ pub async fn output(
 pub async fn finish(
     AxumState(state): AxumState<State>,
     headers: HeaderMap,
-    Json(body): Json<Value>,
+    ContractBody { value: input, .. }: ContractBody<FinishRun>,
 ) -> ResponseResult {
-    let input = contracts::decode::<FinishRun>("FinishRun", body.clone()).map_err(failure)?;
-    let context = semantic_run(&state, &headers, &body)
-        .await
-        .map_err(failure)?;
+    let context = use_cases::knowledge::catalog_context(
+        &internal_for_run(&state, &headers, &input.run_id)
+            .await
+            .map_err(failure)?,
+    )
+    .await
+    .map_err(failure)?;
     use_cases::finish_run::finish_run(&state.pool, &context, input)
         .await
         .map_err(failure)
@@ -339,14 +346,11 @@ pub async fn finish(
 pub async fn refresh_context(
     AxumState(state): AxumState<State>,
     headers: HeaderMap,
-    Json(body): Json<Value>,
+    ContractBody { value: input, .. }: ContractBody<RefreshRunContext>,
 ) -> ResponseResult {
-    let input = contracts::decode::<data_agent::contracts::generated::RefreshRunContext>(
-        "RefreshRunContext",
-        body.clone(),
-    )
-    .map_err(failure)?;
-    let context = internal(&state, &headers, &body).await.map_err(failure)?;
+    let context = internal_for_run(&state, &headers, &input.run_id)
+        .await
+        .map_err(failure)?;
     use_cases::deliver_run::refresh_context(&state.pool, &context, input)
         .await
         .map_err(failure)
@@ -355,13 +359,8 @@ pub async fn refresh_context(
 pub async fn read_checkpoint(
     AxumState(state): AxumState<State>,
     headers: HeaderMap,
-    Json(body): Json<Value>,
+    ContractBody { value: input, .. }: ContractBody<ReadCheckpoint>,
 ) -> ResponseResult {
-    let input = contracts::decode::<data_agent::contracts::generated::ReadCheckpoint>(
-        "ReadCheckpoint",
-        body,
-    )
-    .map_err(failure)?;
     if bearer(&headers) != Some(state.internal_token.as_str()) {
         return Err(failure(Error::new("unauthenticated")));
     }
@@ -377,9 +376,15 @@ pub async fn read_checkpoint(
     contracts::validate("Checkpoint", &checkpoint).map_err(failure)?;
     Ok(Json(checkpoint).into_response())
 }
-async fn model(state: State, headers: HeaderMap, body: Value, settle: bool) -> ResponseResult {
-    let input = contracts::decode::<ModelAttempt>("ModelAttempt", body.clone()).map_err(failure)?;
-    let context = internal(&state, &headers, &body).await.map_err(failure)?;
+async fn model(
+    state: State,
+    headers: HeaderMap,
+    input: ModelAttempt,
+    settle: bool,
+) -> ResponseResult {
+    let context = internal_for_run(&state, &headers, &input.run_id)
+        .await
+        .map_err(failure)?;
     use_cases::deliver_run::model_attempt(
         &state.pool,
         &context,
@@ -395,16 +400,16 @@ async fn model(state: State, headers: HeaderMap, body: Value, settle: bool) -> R
 pub async fn issue(
     AxumState(state): AxumState<State>,
     headers: HeaderMap,
-    Json(body): Json<Value>,
+    ContractBody { value: input, .. }: ContractBody<ModelAttempt>,
 ) -> ResponseResult {
-    model(state, headers, body, false).await
+    model(state, headers, input, false).await
 }
 pub async fn settle(
     AxumState(state): AxumState<State>,
     headers: HeaderMap,
-    Json(body): Json<Value>,
+    ContractBody { value: input, .. }: ContractBody<ModelAttempt>,
 ) -> ResponseResult {
-    model(state, headers, body, true).await
+    model(state, headers, input, true).await
 }
 
 pub async fn identity(AxumState(state): AxumState<State>, headers: HeaderMap) -> ResponseResult {
@@ -455,11 +460,11 @@ fn model_label(state: &State) -> &'static str {
 pub async fn reserve_model(
     AxumState(state): AxumState<State>,
     headers: HeaderMap,
-    Json(body): Json<Value>,
+    ContractBody { value: input, .. }: ContractBody<ReserveModelCall>,
 ) -> ResponseResult {
-    let input =
-        contracts::decode::<ReserveModelCall>("ReserveModelCall", body.clone()).map_err(failure)?;
-    let context = internal(&state, &headers, &body).await.map_err(failure)?;
+    let context = internal_for_run(&state, &headers, &input.run_id)
+        .await
+        .map_err(failure)?;
     use_cases::model_calls::reserve(&state.pool, &context, input)
         .await
         .map_err(failure)
@@ -468,11 +473,11 @@ pub async fn reserve_model(
 pub async fn send_model(
     AxumState(state): AxumState<State>,
     headers: HeaderMap,
-    Json(body): Json<Value>,
+    ContractBody { value: input, .. }: ContractBody<SendModelCall>,
 ) -> ResponseResult {
-    let input =
-        contracts::decode::<SendModelCall>("SendModelCall", body.clone()).map_err(failure)?;
-    let context = internal(&state, &headers, &body).await.map_err(failure)?;
+    let context = internal_for_run(&state, &headers, &input.run_id)
+        .await
+        .map_err(failure)?;
     use_cases::model_calls::send(&state.pool, &context, input)
         .await
         .map_err(failure)
@@ -481,11 +486,11 @@ pub async fn send_model(
 pub async fn finalize_model(
     AxumState(state): AxumState<State>,
     headers: HeaderMap,
-    Json(body): Json<Value>,
+    ContractBody { value: input, .. }: ContractBody<FinalizeModelCall>,
 ) -> ResponseResult {
-    let input = contracts::decode::<FinalizeModelCall>("FinalizeModelCall", body.clone())
+    let context = internal_for_run(&state, &headers, &input.run_id)
+        .await
         .map_err(failure)?;
-    let context = internal(&state, &headers, &body).await.map_err(failure)?;
     use_cases::model_calls::finalize(&state.pool, &context, input)
         .await
         .map_err(failure)
@@ -496,10 +501,12 @@ pub async fn cancel_run(
     AxumState(state): AxumState<State>,
     headers: HeaderMap,
     Path(cid): Path<String>,
-    Json(body): Json<Value>,
+    ContractBody {
+        value: input,
+        raw: body,
+    }: ContractBody<CancelRun>,
 ) -> ResponseResult {
     let context = user(&state, &headers).await.map_err(failure)?;
-    let input = contracts::decode::<CancelRun>("CancelRun", body.clone()).map_err(failure)?;
     let receipt = use_cases::cancel_run::cancel(&state.pool, &context, &cid, &input)
         .await
         .map_err(failure)?;
@@ -512,12 +519,15 @@ pub async fn cancel_run(
             .timeout(std::time::Duration::from_secs(2))
             .build()
             .map_err(|_| failure(Error::new("unavailable")))?;
-        let _ = client
+        let notification = client
             .post(format!("{url}/cancel-run"))
             .bearer_auth(state.internal_token.as_str())
             .json(&body)
             .send()
             .await;
+        if !matches!(notification, Ok(response) if response.status().is_success()) {
+            eprintln!("cancel_notification_unconfirmed run={}", input.run_id);
+        }
     }
     respond!(CancelReceipt, receipt)
 }

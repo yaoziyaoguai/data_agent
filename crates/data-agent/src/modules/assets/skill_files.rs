@@ -96,7 +96,8 @@ pub fn content(asset: &Value, file: &str) -> Result<String> {
                 .unwrap_or("")
                 .to_lowercase()
                 .replace('_', "-"),
-            serde_json::to_string(asset["scope"].as_str().unwrap_or("")).unwrap(),
+            serde_json::to_string(asset["scope"].as_str().unwrap_or(""))
+                .map_err(|_| crate::types::Error::new("unavailable"))?,
             asset["name"].as_str().unwrap_or(""),
             asset["scope"].as_str().unwrap_or(""),
             asset["body"].as_str().unwrap_or(""),

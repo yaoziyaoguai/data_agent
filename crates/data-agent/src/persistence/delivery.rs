@@ -82,7 +82,7 @@ pub(crate) async fn pending(pool: &MySqlPool, cid: &str, message: &str) -> Resul
             table_access: None,
         },
         lease_epoch: row.get("lease_epoch"),
-        history: runtime::decode_delivery_history(&row),
+        history: runtime::decode_delivery_history(&row)?,
         selected_skill_provenance: array(&row, "selected_skill_provenance"),
     };
     tx.commit().await?;
@@ -276,28 +276,28 @@ impl<'a> CheckpointProjection<'a> {
         ingestion::push_checkpoint_platform_heads(sql, &ctx.space_id, &self.platform_sources);
     }
 
-    fn decode(&self, row: &MySqlRow, ctx: &AccessContext) -> AuthorityHeads {
+    fn decode(&self, row: &MySqlRow, ctx: &AccessContext) -> Result<AuthorityHeads> {
         let heads: HashMap<String, Value> = row
             .get::<Option<Json<HashMap<String, Value>>>, _>("asset_sources")
             .map_or_else(HashMap::new, |v| v.0);
         let stored_assets = row
             .get::<Option<Json<HashMap<String, Value>>>, _>("checkpoint_assets")
             .map_or_else(HashMap::new, |v| v.0);
-        let assets: HashMap<_, _> = stored_assets
-            .into_iter()
-            .filter_map(|(id, asset)| {
-                let visible = asset["dependencies"]
-                    .as_array()
-                    .expect("declared asset dependencies")
-                    .iter()
-                    .all(|r| {
-                        heads.contains_key(
-                            r["object_id"].as_str().expect("declared asset dependency"),
-                        )
-                    });
-                visible.then_some((id, asset))
-            })
-            .collect();
+        let mut assets = HashMap::new();
+        for (id, asset) in stored_assets {
+            let dependencies = asset["dependencies"]
+                .as_array()
+                .ok_or(Error::new("unavailable"))?;
+            let visible = dependencies.iter().try_fold(true, |visible, reference| {
+                let id = reference["object_id"]
+                    .as_str()
+                    .ok_or(Error::new("unavailable"))?;
+                Ok::<_, Error>(visible && heads.contains_key(id))
+            })?;
+            if visible {
+                assets.insert(id, asset);
+            }
+        }
         let platform = row
             .get::<Option<Json<HashMap<String, String>>>, _>("checkpoint_platform_sources")
             .map_or_else(HashMap::new, |v| v.0);
@@ -320,11 +320,11 @@ impl<'a> CheckpointProjection<'a> {
                     assets.get(*id).is_some_and(|v| v["version"] == *revision)
                 })
         });
-        AuthorityHeads {
+        Ok(AuthorityHeads {
             objects: heads,
             assets,
             checkpoint_available,
-        }
+        })
     }
 }
 
@@ -348,7 +348,7 @@ pub(crate) async fn legacy_checkpoint_heads<'a>(
     authority.push_heads(&mut sql, ctx, false);
     sql.push(" SELECT ").push(CHECKPOINT_HEAD_COLUMNS);
     let row = sql.build().fetch_one(tx.connection()).await?;
-    let heads = authority.decode(&row, ctx);
+    let heads = authority.decode(&row, ctx)?;
     Ok(heads.checkpoint_available.then_some(heads.objects))
 }
 
@@ -414,11 +414,11 @@ pub(crate) async fn workspace<'a>(
         (b["created_at"].as_str(), b["id"].as_str())
             .cmp(&(a["created_at"].as_str(), a["id"].as_str()))
     });
-    observations.iter_mut().for_each(|q| {
+    for q in &mut observations {
         q.as_object_mut()
-            .expect("query observation")
+            .ok_or(crate::types::Error::new("unavailable"))?
             .remove("created_at");
-    });
+    }
     let declared_scopes = row
         .get::<Option<Json<HashMap<String, Vec<Value>>>>, _>("declared_scopes")
         .map_or_else(HashMap::new, |v| {
@@ -426,7 +426,7 @@ pub(crate) async fn workspace<'a>(
                 .map(|(id, values)| (id, values.into_iter().next()))
                 .collect()
         });
-    let heads = authority.decode(&row, ctx);
+    let heads = authority.decode(&row, ctx)?;
     Ok(Workspace {
         tasks: array(&row, "tasks")
             .into_iter()

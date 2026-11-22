@@ -133,7 +133,7 @@ mod tests {
             .collect::<Vec<_>>();
         for original in catalog["objects"].as_array().unwrap() {
             let mut object = original.clone();
-            super::prefill::refresh_facts(&mut object, &sources);
+            super::prefill::refresh_facts(&mut object, &sources).unwrap();
             for entry in object["entries"].as_array().unwrap() {
                 if original["kind"] == "field" && entry["path"] == "type" {
                     assert!(!entry["effective_value"].as_str().unwrap().is_empty());

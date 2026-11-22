@@ -268,7 +268,8 @@ async fn overview(
     queries: bool,
 ) -> Result<Value> {
     let mut result = if runs {
-        read_conversation::live_states(pool, context, cid, tasks).await?
+        let scoped = data_agent::use_cases::knowledge::catalog_context(context).await?;
+        read_conversation::live_states(pool, &scoped, cid, tasks).await?
     } else {
         json!({})
     };

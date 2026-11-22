@@ -56,7 +56,7 @@ pub fn search_preview(mut object: Value, query: &str) -> Value {
 }
 
 /// 按实际UTF8 JSON体积逐项交付。资产ID先全部保留，不能因裁剪跳过目录游标之前的资产。
-pub fn bounded_search_reply(data: Value) -> Value {
+pub fn bounded_search_reply(data: Value) -> crate::types::Result<Value> {
     let objects = items(&data, "objects");
     let memories = items(&data, "personal_memories");
     let skills = items(&data, "selected_skills");
@@ -73,7 +73,9 @@ pub fn bounded_search_reply(data: Value) -> Value {
             "returned_object_count":0,"omitted_objects":objects.iter().map(object_ref).collect::<Vec<_>>(),
             "note":"state只说明该次目录交付，正文和空间覆盖另看分页/检索范围。对象与资产可按同版标识补读；省略引用均为当前有权对象。"}});
     if bytes(&reply) > CONTENT_LIMIT {
-        return json!({"error":"request_too_large","hint":"当前资产与引用目录无法完整交付，请减小limit后重试。未推进资产游标。"});
+        return Ok(
+            json!({"error":"request_too_large","hint":"当前资产与引用目录无法完整交付，请减小limit后重试。未推进资产游标。"}),
+        );
     }
     // 来源限制是独立于检索范围的允许层；受限过滤时回执必须可与candidate_limit空结果区分。
     if data["source_limits"].is_object() {
@@ -106,7 +108,7 @@ pub fn bounded_search_reply(data: Value) -> Value {
         let delivered = reply["objects"].clone();
         let refs = reply["reply_coverage"]["omitted_objects"]
             .as_array_mut()
-            .expect("references");
+            .ok_or(crate::types::Error::new("unavailable"))?;
         if let Some(index) = refs.iter().position(|reference| {
             reference["object_id"] == object["id"] && reference["version"] == object["version"]
         }) {
@@ -114,24 +116,32 @@ pub fn bounded_search_reply(data: Value) -> Value {
         }
         reply["objects"]
             .as_array_mut()
-            .expect("objects")
+            .ok_or(crate::types::Error::new("unavailable"))?
             .push(compact_object(object.clone(), false));
-        reply["reply_coverage"]["returned_object_count"] =
-            json!(reply["objects"].as_array().expect("objects").len());
+        reply["reply_coverage"]["returned_object_count"] = json!(
+            reply["objects"]
+                .as_array()
+                .ok_or(crate::types::Error::new("unavailable"))?
+                .len()
+        );
         if bytes(&reply) > CONTENT_LIMIT {
             let last = reply["objects"]
                 .as_array_mut()
-                .expect("objects")
+                .ok_or(crate::types::Error::new("unavailable"))?
                 .last_mut()
-                .expect("last object");
+                .ok_or(crate::types::Error::new("unavailable"))?;
             *last = compact_object(object.clone(), true);
             bounded = true;
         }
         if bytes(&reply) > CONTENT_LIMIT {
             reply["objects"] = delivered;
             reply["reply_coverage"]["omitted_objects"] = omitted;
-            reply["reply_coverage"]["returned_object_count"] =
-                json!(reply["objects"].as_array().expect("objects").len());
+            reply["reply_coverage"]["returned_object_count"] = json!(
+                reply["objects"]
+                    .as_array()
+                    .ok_or(crate::types::Error::new("unavailable"))?
+                    .len()
+            );
             bounded = true;
         }
     }
@@ -146,7 +156,7 @@ pub fn bounded_search_reply(data: Value) -> Value {
         }
     }
     debug_assert!(bytes(&reply) <= CONTENT_LIMIT);
-    reply
+    Ok(reply)
 }
 
 fn items(data: &Value, key: &str) -> Vec<Value> {
@@ -154,7 +164,7 @@ fn items(data: &Value, key: &str) -> Vec<Value> {
 }
 
 fn bytes(value: &Value) -> usize {
-    serde_json::to_vec(value).expect("JSON value").len()
+    value.to_string().len()
 }
 
 fn object_ref(object: &Value) -> Value {
@@ -249,6 +259,7 @@ fn compact_object(object: Value, minimal: bool) -> Value {
     if let Some(dependencies) = object.get("structure_dependencies") {
         result["structure_dependencies"] = dependencies.clone();
     }
+    let mut entries = Vec::new();
     for entry in object["entries"].as_array().into_iter().flatten().take(3) {
         let text = entry["effective_value"].as_str().unwrap_or("");
         let body = text
@@ -278,11 +289,9 @@ fn compact_object(object: Value, minimal: bool) -> Value {
             "human_override":if entry["human_override"].is_null(){Value::Null}else{json!({"has_override":true})},
             "structure_available":available,"effective_structure":if full_structure{structure.clone()}else{Value::Null},
             "structure_page":{"complete":full_structure,"next_offset":if available && !full_structure{Some(0)}else{None}}});
-        result["entries"]
-            .as_array_mut()
-            .expect("entries")
-            .push(summary);
+        entries.push(summary);
     }
+    result["entries"] = Value::Array(entries);
     if let Some(retrieval) = object.get("retrieval") {
         let mut retrieval = retrieval.clone();
         if minimal {
@@ -306,7 +315,7 @@ mod tests {
         let scope = json!({"kinds":["document"],"related_object_id":"table-reference","business_domain":"业务域🌏".repeat(30)});
         let mut original = data(vec![]);
         original["search_scope"] = scope.clone();
-        let reply = bounded_search_reply(original);
+        let reply = bounded_search_reply(original).unwrap();
         assert_eq!(reply["search_scope"], scope);
         assert!(bytes(&reply) <= CONTENT_LIMIT);
     }
@@ -377,7 +386,8 @@ mod tests {
             &json!({"id":"manual","version":"7","matches":[{"entry_id":"rule",
                 "offset":offset,"length":window.chars().count(),
                 "content_hash":crate::types::fingerprint(&json!(window))}]}),
-        );
+        )
+        .unwrap();
         assert_eq!(original["retrieval"]["state"], "located");
         assert_eq!(original["retrieval"]["excerpts"][0]["text"], window);
         assert_eq!(original["retrieval"]["excerpts"][0]["offset"], offset);
@@ -393,8 +403,8 @@ mod tests {
             window.chars().take(160).collect::<String>()
         );
         assert_eq!(preview["entries_complete"], false);
-        let once = bounded_search_reply(data(vec![preview.clone()]));
-        let twice = bounded_search_reply(data(vec![once["objects"][0].clone()]));
+        let once = bounded_search_reply(data(vec![preview.clone()])).unwrap();
+        let twice = bounded_search_reply(data(vec![once["objects"][0].clone()])).unwrap();
         for object in [&preview, &once["objects"][0], &twice["objects"][0]] {
             assert_eq!(object["entries"][0]["content_page"], page);
             assert_eq!(
@@ -425,7 +435,7 @@ mod tests {
         let page = json!({"offset":offset,"total_chars":total,"complete":false,"next_offset":null});
         assert_eq!(preview["entries"][0]["content_page"], page);
         assert_eq!(preview["entries_complete"], false);
-        let reply = bounded_search_reply(data(vec![preview]));
+        let reply = bounded_search_reply(data(vec![preview])).unwrap();
         assert_eq!(reply["objects"][0]["entries"][0]["content_page"], page);
         assert_eq!(reply["objects"][0]["entries_complete"], false);
     }
@@ -447,7 +457,8 @@ mod tests {
             &json!({"id":"manual","version":"7","matches":[
             {"entry_id":"rule","offset":offset,"length":window.chars().count(),
              "content_hash":crate::types::fingerprint(&json!(window))}]}),
-        );
+        )
+        .unwrap();
         let preview = search_preview(original, "设备校准");
         assert_eq!(preview["entries_complete"], false);
         assert_eq!(
@@ -462,8 +473,8 @@ mod tests {
         assert_eq!(preview["retrieval"]["channel"], "vector");
         assert_eq!(preview["retrieval"]["excerpts"][0]["offset"], offset);
         assert_eq!(preview["retrieval"]["excerpts"][0]["total_chars"], total);
-        let reply = bounded_search_reply(data(vec![preview.clone()]));
-        let repeated = bounded_search_reply(reply.clone());
+        let reply = bounded_search_reply(data(vec![preview.clone()])).unwrap();
+        let repeated = bounded_search_reply(reply.clone()).unwrap();
         for delivered in [&reply, &repeated] {
             assert_eq!(delivered["objects"][0]["entries"], preview["entries"]);
             assert_eq!(delivered["objects"][0]["retrieval"], preview["retrieval"]);
@@ -489,7 +500,7 @@ mod tests {
             "offset":offset,"total_chars":total,"complete":false,"next_offset":null})
         );
         assert_eq!(preview["entries_complete"], false);
-        let reply = bounded_search_reply(data(vec![preview.clone()]));
+        let reply = bounded_search_reply(data(vec![preview.clone()])).unwrap();
         assert_eq!(reply["objects"][0]["entries"], preview["entries"]);
         assert_eq!(reply["objects"][0]["entries_complete"], false);
     }
@@ -499,7 +510,7 @@ mod tests {
         let objects = (0..30)
             .map(|index| search_preview(object(index), "设备校准有效期"))
             .collect::<Vec<_>>();
-        let reply = bounded_search_reply(data(objects.clone()));
+        let reply = bounded_search_reply(data(objects.clone())).unwrap();
         assert!(reply.get("error").is_none());
         assert!(bytes(&reply) <= CONTENT_LIMIT);
         let envelope =
@@ -553,7 +564,7 @@ mod tests {
         input["selected_skills"] = json!(skills);
         input["next_asset_after"] = json!("memory-29");
         input["asset_total"] = json!(100);
-        let reply = bounded_search_reply(input);
+        let reply = bounded_search_reply(input).unwrap();
         assert!(reply.get("error").is_none());
         assert!(bytes(&reply) <= CONTENT_LIMIT);
         assert_eq!(reply["next_asset_after"], "memory-29");
@@ -584,7 +595,7 @@ mod tests {
         let mut input = data(vec![]);
         input["personal_memories"] = json!([{"id":"a".repeat(SEARCH_REPLY_LIMIT),"kind":"memory","version":"1","body":"x","scope":"y"}]);
         input["next_asset_after"] = json!("never-advance");
-        let reply = bounded_search_reply(input);
+        let reply = bounded_search_reply(input).unwrap();
         assert_eq!(reply["error"], "request_too_large");
         assert!(reply.get("next_asset_after").is_none());
         assert!(bytes(&reply) < SEARCH_REPLY_LIMIT);
@@ -595,7 +606,7 @@ mod tests {
         let mut input = data(vec![]);
         input["search_coverage"] = json!({"state":"scope_empty","scope":{"kinds":["metric"],"business_domain":"设备管理"}});
         input["search_scope"] = json!({"kinds":["metric"],"business_domain":"设备管理","related_object_id":"known-table"});
-        let reply = bounded_search_reply(input);
+        let reply = bounded_search_reply(input).unwrap();
         assert_eq!(reply["objects"], json!([]));
         assert_eq!(reply["search_coverage"]["state"], "scope_empty");
         assert_eq!(

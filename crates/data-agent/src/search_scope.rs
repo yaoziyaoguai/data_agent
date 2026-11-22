@@ -18,8 +18,12 @@ impl KnowledgeSearchScope {
             .as_array()
             .into_iter()
             .flatten()
-            .map(|kind| kind.as_str().expect("已校验对象种类").to_owned())
-            .collect();
+            .map(|kind| {
+                kind.as_str()
+                    .map(str::to_owned)
+                    .ok_or(Error::new("invalid_input"))
+            })
+            .collect::<Result<_>>()?;
         let anchor = input["related_object_id"].as_str().map(str::to_owned);
         let domain = input["business_domain"].as_str().map(str::to_owned);
         if domain

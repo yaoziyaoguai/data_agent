@@ -206,7 +206,7 @@ pub async fn apply_preparation_in_tx(
             // 派生陈述只登记，不推进原文修订：同修订重写登记行，人工正文与版本保持不变。
             // 既有完整归档与索引待办身份都由保存owner保留，不在整理分支删除。
         } else {
-            super::super::store::next(&mut object, ctx);
+            super::super::store::next(&mut object, ctx)?;
         }
         super::project_object(&mut object);
         super::super::store::persist(tx, ctx, &object, &["*"]).await?;

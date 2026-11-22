@@ -1,6 +1,9 @@
 // Generated from packages/contracts/schema.json; do not edit.
 import type * as Boundary from './boundary.ts';
 export interface ContractTypes {
+  RunStepSummary: Boundary.RunStepSummary;
+  KnowledgeLineageEdge: Boundary.KnowledgeLineageEdge;
+  KnowledgeLineage: Boundary.KnowledgeLineage;
   CreateConversation: Boundary.CreateConversation;
   MessageInput: Boundary.MessageInput;
   TaskInput: Boundary.TaskInput;

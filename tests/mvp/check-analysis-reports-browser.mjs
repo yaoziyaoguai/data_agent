@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { chromium } from "playwright";
 import { createReportFixture, ok } from "./check-analysis-reports.mjs";
 import { logoutWorkspace } from "./experience-navigation.mjs";
@@ -11,7 +11,7 @@ await mkdir(directory, { recursive: true });
 const fixture = await createReportFixture({ web: true });
 const { h, cid, evidence, chart, reportPath, saveInput } = fixture;
 const browser = await chromium.launch();
-const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
+const page = await browser.newPage({ viewport: { width: 1279, height: 1000 } });
 page.setDefaultTimeout(12000);
 const focusDiagnostics = [];
 const layoutDiagnostics = [];
@@ -229,6 +229,57 @@ try {
     "真实聊天报告入口读到完整205点与原精确金额；跨任务来源各自显示条件且图表关联正确来源，正文不堆版本/技术ID；滚动、Tab圈与Escape返回保持原焦点和草稿",
   );
 
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await open();
+  const composer = page.getByLabel("你的数据问题");
+  const originalDraft = await composer.inputValue();
+  const [dockBox, inputBox] = await Promise.all([dialog().boundingBox(), composer.boundingBox()]);
+  assert.ok(dockBox.x >= inputBox.x + inputBox.width, "报告在输入框右侧停靠");
+  assert.ok(dockBox.width >= 570 && dockBox.y + dockBox.height <= 900, "右栏有效宽度且在视口内");
+  assert.equal(await dialog().evaluate(element => element.matches(":modal")), false);
+  await composer.fill("查阅报告时仍能补充");
+  assert.equal(await composer.inputValue(), "查阅报告时仍能补充");
+  assert.equal(await composer.evaluate(element => element === document.activeElement), true);
+  await page.screenshot({ path: directory + "/docked-report.png" });
+  await back().click();
+  await dialog().waitFor({state:"detached"});
+  assert.equal(await composer.inputValue(), "查阅报告时仍能补充");
+  await composer.fill(originalDraft);
+  checks.push("1440×900 报告停靠右栏，左栏输入可编辑，关闭后保留草稿");
+
+  const wideResult = page.getByRole("dialog", {name:"查询结果", exact:true});
+  const resultEntry = page.locator("#query-" + fixture.queries[1].id).getByRole("button", {name:"查看完整表格"});
+  await resultEntry.click();
+  await wideResult.getByRole("region", {name:"查询结果表格", exact:true}).waitFor();
+  assert.equal(await wideResult.evaluate(element => element.matches(":modal")), false);
+  const resultTable = wideResult.getByRole("region", {name:"查询结果表格", exact:true});
+  assert.equal(await resultTable.locator("tbody tr").count(), 100, "宽表使用完整结果页");
+  await wideResult.getByText("列统计 · 本页 100 行", {exact:true}).click();
+  const columnStats = wideResult.getByRole("region", {name:"查询列统计"});
+  const points = columnStats.getByRole("listitem").filter({has:page.getByText("point", {exact:true})});
+  for (const label of ["最小", "最大", "空值", "不同值"])
+    await points.getByText(label, {exact:true}).waitFor();
+  assert.deepEqual(await points.locator("dd").allTextContents(), ["1", "100", "0", "100"]);
+  await wideResult.getByRole("button", {name:"下一页", exact:true}).click();
+  await wideResult.getByText("第 2 页 · 100 行", {exact:true}).waitFor();
+  await wideResult.getByText("列统计 · 本页 100 行", {exact:true}).click();
+  assert.deepEqual(await points.locator("dd").allTextContents(), ["101", "200", "0", "100"]);
+  await wideResult.getByRole("button", {name:"下一页", exact:true}).click();
+  await wideResult.getByText("第 3 页 · 5 行", {exact:true}).waitFor();
+  assert.equal(await resultTable.locator("tbody tr").count(), 5);
+  await wideResult.getByText("列统计 · 本页 5 行", {exact:true}).click();
+  assert.deepEqual(await points.locator("dd").allTextContents(), ["201", "205", "0", "5"]);
+  await wideResult.getByRole("button", {name:"上一页", exact:true}).click();
+  await wideResult.getByText("第 2 页 · 100 行", {exact:true}).waitFor();
+  const exported = page.waitForEvent("download");
+  await wideResult.getByRole("link", {name:/下载 CSV/}).click();
+  const file = await readFile(await (await exported).path());
+  assert.deepEqual([...file.subarray(0,3)], [239,187,191], "CSV 含 UTF-8 BOM");
+  assert.equal(file.toString("utf8").trimEnd().split("\r\n").length, 206, "CSV 包含列头和 205 条实际结果");
+  await wideResult.getByRole("button", {name:"返回对话", exact:true}).last().click();
+  await wideResult.waitFor({state:"detached"});
+  checks.push("宽表停靠展示完整页和真实列统计，浏览器下载带 BOM 的全部 205 条真实结果");
+
   await page.setViewportSize({ width: 390, height: 844 });
   await open();
   await dialog().getByRole("heading", { name: title, exact: true }).waitFor();
@@ -334,6 +385,11 @@ try {
   pollingDiagnostics.permission = { before: ok(await h.request(reportPath())).status };
   try {
     await setPermissions(["alice"]);
+    const forbiddenCsv = await fetch(h.env.DATA_AGENT_API_URL + "/queries/" + fixture.queries[0].id + "/export.csv",
+      {headers:{authorization:"Bearer " + h.tokens.alice}});
+    assert.equal(forbiddenCsv.status, 403, "撤权后的 CSV 直接请求必须拒绝");
+    assert.equal(forbiddenCsv.headers.get("content-disposition"), null);
+    await forbiddenCsv.arrayBuffer();
     const denied = ok(await h.request(reportPath()));
     assert.equal(denied.status, "sources_unavailable");
     assert.equal(Object.hasOwn(denied, "report"), false);
@@ -358,7 +414,7 @@ try {
   assert.ok((await dialog().innerText()).includes("9007199254740993.01"));
   pollingDiagnostics.permission.restored = ok(await h.request(reportPath())).status;
   await queryCard.getByRole("region", {name:"查询结果表格"}).waitFor();
-  checks.push("保持报告和查询卡打开，平台权限事件撤下报告正文、图表及查询结果，权限恢复后自动读回");
+  checks.push("保持报告和查询卡打开，平台权限事件撤下报告正文、图表及查询结果，CSV 返回 403，恢复后自动读回");
 
   let refreshHeld = false, releaseRefresh, refreshError;
   let activeReads = 0, maxActiveReads = 0;
@@ -533,6 +589,83 @@ try {
   await dialog().waitFor({ state: "detached" });
   checks.push("非合同503坏响应单独场景：解码失败同样显示错误与重试，重试经真实API恢复");
 
+  const activityCid = await h.create();
+  const activityPrompt = "选取这张合成表并核对一项业务定义";
+  await fixture.begin(activityCid, activityPrompt);
+  const activityTask = await fixture.invoke("update_analysis_task", {
+    action:"create", goal:"核对合成表定义", options:[],
+    conditions:{...fixture.conditions, time_start:null, time_end:null, metric:null, group_by:[], filters:[], notes:""},
+  });
+  const table = ok(await h.request("/knowledge/table-demo_order_detail"));
+  const description = table.entries.find(item => item.path === "description");
+  const tableRef = {object_id:table.id, version:table.version, path:description.path};
+  const sourceQuery = await fixture.invoke("request_query", {
+    task_id: activityTask.task_id, condition_version: activityTask.condition_version,
+    sql:"SELECT COUNT(*) AS row_count FROM demo_order_detail", parameters:{},
+    target_id:"synthetic-sqlite", summary:"核对正式表说明的查询。", knowledge_refs:[tableRef],
+    replaces_query_id:null,
+  });
+  await page.reload();
+  await selectConversation(activityPrompt);
+  const progress = page.getByRole("region", {name:"运行进度", exact:true});
+  await progress.waitFor();
+  const read = await fixture.invoke("read_knowledge", {items:[{kind:"knowledge", ref:tableRef}]});
+  assert.equal(read.items[0].state, "ok");
+  await progress.getByText("正在阅读知识对象", {exact:true}).waitFor();
+  await progress.getByText(/已完成 [1-9][0-9]* 步/).click();
+  const renderedSteps = progress.getByRole("list", {name:"已完成的运行步骤"}).getByRole("listitem");
+  const readStep = renderedSteps.filter({hasText:/阅读知识对象/});
+  await readStep.waitFor();
+  assert.match(await readStep.innerText(), /\d+ ms/);
+  assert.ok((await readStep.innerText()).includes(table.name));
+  const sourceCard = page.locator("#query-" + sourceQuery.id);
+  await sourceCard.getByText("查看口径依据", {exact:true}).click();
+  await sourceCard.getByRole("button", {name:new RegExp(table.name)}).click();
+  const sourcePanel = page.getByRole("dialog", {name:"口径依据", exact:true});
+  await sourcePanel.getByRole("heading", {name:table.name, exact:true}).waitFor();
+  assert.equal(await sourcePanel.evaluate(element => element.matches(":modal")), false);
+  assert.ok((await sourcePanel.boundingBox()).x > (await composer.boundingBox()).x);
+  await sourcePanel.getByRole("button", {name:"返回对话", exact:true}).click();
+  await sourcePanel.waitFor({state:"detached"});
+  checks.push("真实查询的口径依据在大屏打开右栏，保留左侧输入");
+  await fixture.finish("已核对合成表定义。");
+  await progress.waitFor({state:"detached"});
+  checks.push("活跃运行显示最新读取动作，展开已完成步骤可见真实授权表名和毫秒用时");
+
+  const graph = ok(await h.request("/knowledge/" + table.id + "/lineage"));
+  assert.ok(graph.upstream.length && graph.downstream.length, "实际血缘包含上下游");
+  await page.getByRole("navigation", {name:"主导航"}).getByRole("button", {name:"语义管理"}).click();
+  const tableEntry = page.getByRole("navigation", {name:"语义对象"}).getByRole("button", {name:new RegExp(table.name)});
+  await tableEntry.click();
+  await page.getByRole("tab", {name:"血缘与加工"}).click();
+  const lineage = page.getByRole("group", {name:"血缘流向", exact:true});
+  await lineage.getByRole("region", {name:"上游来源表"}).getByRole("button", {name:graph.upstream[0].name, exact:true}).waitFor();
+  await lineage.getByRole("region", {name:"当前对象"}).getByText(table.name, {exact:true}).waitFor();
+  await lineage.getByRole("region", {name:"下游指标与受影响资产"}).getByRole("button", {
+    name:graph.downstream.find(edge => edge.kind !== "skill").name, exact:true,
+  }).waitFor();
+  assert.equal(await lineage.locator("svg").count(), 2);
+  const setTableReaders = async table_readers => {
+    const response = await fetch(h.env.DATA_AGENT_PLATFORM_URL + "/permissions", {
+      method:"POST",
+      headers:{authorization:"Bearer " + h.env.DATA_AGENT_INTERNAL_TOKEN, "content-type":"application/json"},
+      body:JSON.stringify({space_id:"demo", denied_query_users:[], table_readers}),
+    });
+    assert.equal(response.status, 200);
+    await response.arrayBuffer();
+  };
+  try {
+    await setTableReaders({alice:["raw_payments"]});
+    const hiddenGraph = await h.request("/knowledge/" + table.id + "/lineage");
+    assert.equal(hiddenGraph.status, 404, "撤销本表读权后的血缘端点不泄露对象");
+    assert.ok(!JSON.stringify(hiddenGraph.value).includes(table.name));
+  } finally {
+    await setTableReaders({});
+  }
+  assert.equal((await h.request("/knowledge/" + table.id + "/lineage")).status, 200);
+  checks.push("真实语义对象渲染三栏及 SVG 流向，撤销当前表读权返回 404，恢复后重新可读");
+
+  await page.getByRole("navigation", {name:"主导航"}).getByRole("button", {name:"工作台"}).click();
   await logoutWorkspace(page);
   await page.getByLabel("演示登录凭据").fill(h.tokens.bob);
   await page.getByRole("button", { name: "进入工作台 →", exact: true }).click();

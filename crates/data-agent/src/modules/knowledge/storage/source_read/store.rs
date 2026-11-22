@@ -238,7 +238,7 @@ pub async fn source_reference_objects_in_tx(
                     .map(|value| value.0);
                 object["entries"][0]["suggestion"]["evidence"]
                     .as_array_mut()
-                    .unwrap()
+                    .ok_or(crate::types::Error::new("unavailable"))?
                     .push(json!({"source_id":source,"version":revision}));
             }
         }

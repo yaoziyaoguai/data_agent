@@ -134,7 +134,12 @@ impl RawCandidates {
     }
 }
 
-pub async fn search(space: &str, query: &str, vector: Vec<f32>, limit: usize) -> Candidates {
+pub async fn search(
+    space: &str,
+    query: &str,
+    vector: Vec<f32>,
+    limit: usize,
+) -> Result<Candidates> {
     // 内部双类型集成入口：原文摘录通道显式启用（生产检索按可交付类型关闭）。
     search_scoped(ScopedQuery {
         space,
@@ -303,7 +308,7 @@ pub struct ScopedQuery<'a> {
 }
 
 // 协议检查入口只取一个深度；业务扩深与正文选择统一由knowledge用例驱动。
-pub async fn search_scoped(request: ScopedQuery<'_>) -> Candidates {
+pub async fn search_scoped(request: ScopedQuery<'_>) -> Result<Candidates> {
     let mut candidates = prepare_cursors(
         request.space,
         request.scope,
@@ -313,7 +318,7 @@ pub async fn search_scoped(request: ScopedQuery<'_>) -> Candidates {
     );
     candidates.dense_vector = request.vector;
     if !enabled() {
-        return candidates;
+        return Ok(candidates);
     }
     candidates.target = match call_at_deadline(request.deadline, index_target()).await {
         Ok(Ok(target)) => Some(target),
@@ -321,12 +326,12 @@ pub async fn search_scoped(request: ScopedQuery<'_>) -> Candidates {
             candidates.lexical_state = "unavailable";
             candidates.dense_state = "unavailable";
             candidates.bounded = true;
-            candidates.fail_channels();
-            return candidates;
+            candidates.fail_channels()?;
+            return Ok(candidates);
         }
     };
     if candidates.dense_vector.is_none() {
-        candidates.mark_embedding_unavailable();
+        candidates.mark_embedding_unavailable()?;
     }
     for channel in [
         ScanChannel::Lexical,
@@ -335,12 +340,12 @@ pub async fn search_scoped(request: ScopedQuery<'_>) -> Candidates {
         ScanChannel::RawDense,
     ] {
         while let Some(page) = candidates.next_page(channel, request.query, 1, request.limit) {
-            candidates.accept_page(fetch_page(page).await, request.allowed);
+            candidates.accept_page(fetch_page(page).await, request.allowed)?;
         }
     }
-    candidates.refresh_progress();
+    candidates.refresh_progress()?;
     candidates.bounded |= request.query.chars().count() > 1600;
-    candidates
+    Ok(candidates)
 }
 
 // 页请求拥有自己的输入，异步期间不借用整个候选集；组合层吸收已就绪结果。
@@ -400,7 +405,10 @@ pub async fn fetch_page(request: PageRequest) -> CandidatePage {
                 milvus,
                 &request.filter,
                 &output,
-                request.vector.as_deref().expect("dense query"),
+                request
+                    .vector
+                    .as_deref()
+                    .ok_or(crate::types::Error::new("unavailable"))?,
                 request.reserved,
                 request.offset,
                 request.deadline,
@@ -533,7 +541,11 @@ impl Candidates {
         })
     }
 
-    pub fn accept_page(&mut self, page: CandidatePage, allowed: Option<&AllowedRecords>) {
+    pub fn accept_page(
+        &mut self,
+        page: CandidatePage,
+        allowed: Option<&AllowedRecords>,
+    ) -> Result<()> {
         let CandidatePage {
             request,
             count,
@@ -541,38 +553,44 @@ impl Candidates {
             mut failed,
         } = page;
         // 向量过滤决定候选排名范围，宿主在接收外部响应时核同一允许集。
-        if let Some(allowed) = allowed
-            && rows.iter().any(|row| {
-                if request.channel.raw() {
-                    !allowed.allows_source(
-                        row["source_kind"].as_str().expect("decoded source kind"),
-                        row["source_id"].as_str().expect("decoded source id"),
-                    )
+        if let Some(allowed) = allowed {
+            let rejected = rows.iter().try_fold(false, |rejected, row| {
+                let visible = if request.channel.raw() {
+                    let kind = row["source_kind"]
+                        .as_str()
+                        .ok_or(Error::new("vector_unavailable"))?;
+                    let id = row["source_id"]
+                        .as_str()
+                        .ok_or(Error::new("vector_unavailable"))?;
+                    allowed.allows_source(kind, id)
                 } else {
-                    !allowed.allows_knowledge(row["id"].as_str().expect("decoded knowledge id"))
+                    let id = row["id"].as_str().ok_or(Error::new("vector_unavailable"))?;
+                    allowed.allows_knowledge(id)
+                };
+                Ok::<_, Error>(rejected || !visible)
+            })?;
+            if rejected {
+                rows.clear();
+                failed = true;
+            }
+        }
+        let identities = rows
+            .iter()
+            .map(|row| {
+                if request.channel.raw() {
+                    super::super::raw_record(row)
+                        .map(|key| format!("raw:{key}"))
+                        .ok_or(Error::new("vector_unavailable"))
+                } else {
+                    Ok(super::super::knowledge_record(row).to_owned())
                 }
             })
-        {
-            rows.clear();
-            failed = true;
-        }
-        self.budget.record(
-            request.reserved,
-            rows.iter().map(|row| {
-                if request.channel.raw() {
-                    format!(
-                        "raw:{}",
-                        super::super::raw_record(row).expect("validated raw location")
-                    )
-                } else {
-                    super::super::knowledge_record(row).to_owned()
-                }
-            }),
-        );
+            .collect::<Result<Vec<_>>>()?;
+        self.budget.record(request.reserved, identities.into_iter());
         let cursor = self
             .cursors
             .cursor_mut(request.channel)
-            .expect("dispatched cursor");
+            .ok_or(crate::types::Error::new("unavailable"))?;
         let shard = &mut cursor.shards[request.shard];
         shard.in_flight = false;
         shard.requested = true;
@@ -616,10 +634,10 @@ impl Candidates {
                     merge_by_score(std::mem::take(&mut self.raw.dense), rows, row_score);
             }
         }
-        self.refresh_progress();
+        self.refresh_progress()
     }
 
-    pub fn refresh_progress(&mut self) {
+    pub fn refresh_progress(&mut self) -> Result<()> {
         if let Some(cursor) = &self.cursors.lexical {
             self.lexical_progress = cursor.progress();
             if cursor.shards.is_empty() || self.lexical_progress.completed > 0 {
@@ -637,7 +655,11 @@ impl Candidates {
             }
         }
         if let Some(lexical) = &self.cursors.raw_lexical {
-            let dense = self.cursors.raw_dense.as_ref().expect("raw dense cursor");
+            let dense = self
+                .cursors
+                .raw_dense
+                .as_ref()
+                .ok_or(crate::types::Error::new("unavailable"))?;
             let l = lexical.progress();
             let d = dense.progress();
             self.raw_progress = Some(ChannelProgress {
@@ -670,9 +692,10 @@ impl Candidates {
         } else {
             "unavailable"
         };
+        Ok(())
     }
 
-    pub fn mark_embedding_unavailable(&mut self) {
+    pub fn mark_embedding_unavailable(&mut self) -> Result<()> {
         for channel in [ScanChannel::Dense, ScanChannel::RawDense] {
             if let Some(cursor) = self.cursors.cursor_mut(channel)
                 && !cursor.shards.is_empty()
@@ -682,10 +705,10 @@ impl Candidates {
         }
         self.dense_state = "unavailable";
         self.bounded = true;
-        self.refresh_progress();
+        self.refresh_progress()
     }
 
-    pub fn fail_channels(&mut self) {
+    pub fn fail_channels(&mut self) -> Result<()> {
         for channel in [
             ScanChannel::Lexical,
             ScanChannel::Dense,
@@ -699,10 +722,10 @@ impl Candidates {
                 cursor.failed = !cursor.shards.is_empty();
             }
         }
-        self.refresh_progress();
+        self.refresh_progress()
     }
 
-    pub fn stop_scans(&mut self, reason: &'static str) {
+    pub fn stop_scans(&mut self, reason: &'static str) -> Result<()> {
         for channel in [
             ScanChannel::Lexical,
             ScanChannel::Dense,
@@ -715,7 +738,7 @@ impl Candidates {
                 cursor.stopped = Some(reason);
             }
         }
-        self.refresh_progress();
+        self.refresh_progress()
     }
 }
 
@@ -774,5 +797,3 @@ pub(super) fn object_best_score(value: &Value) -> f64 {
             .fold(f64::NEG_INFINITY, f64::max)
     })
 }
-
-// 摘录行只带citation身份（source_key种类/来源id/修订/位置/hash）与通道原始

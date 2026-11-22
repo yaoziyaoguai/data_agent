@@ -69,7 +69,12 @@ async fn delivered_result_authority_in_tx(
         evidence_ids.extend(
             super::context_authority::items(&receipt["evidence_ids"])
                 .iter()
-                .map(|id| id.as_str().expect("stored evidence id").to_owned()),
+                .map(|id| {
+                    id.as_str()
+                        .map(str::to_owned)
+                        .ok_or(Error::new("unavailable"))
+                })
+                .collect::<Result<Vec<_>>>()?,
         );
     }
     if !evidence_ids.is_empty() {
@@ -82,7 +87,7 @@ async fn delivered_result_authority_in_tx(
         return Ok(None);
     }
     let mut snapshot =
-        super::context_authority::from_sources(&json!({"result_dependencies":direct}));
+        super::context_authority::from_sources(&json!({"result_dependencies":direct}))?;
     snapshot["historical_analyses"] = json!(historical);
     Ok(Some(snapshot))
 }
@@ -96,7 +101,9 @@ pub async fn finish_run(
     let mut tx = AppTx::begin(pool).await?;
     let mut conversation = conversations::lock_conversation_in_tx(&mut tx, context, &cid).await?;
     let mut run = runtime::lock_run_in_tx(&mut tx, &input.run_id, &cid).await?;
-    let fp = fingerprint(&serde_json::to_value(&input).expect("finish input"));
+    let fp = fingerprint(
+        &serde_json::to_value(&input).map_err(|_| crate::types::Error::new("unavailable"))?,
+    );
     if let Some(receipt) = completed_receipt(&run, &input, &fp)? {
         tx.commit().await?;
         return Ok(receipt);
@@ -166,7 +173,8 @@ pub async fn finish_run(
         runtime::save_checkpoint_in_tx(
             &mut tx,
             &run,
-            &serde_json::to_value(&input.checkpoint).expect("checkpoint"),
+            &serde_json::to_value(&input.checkpoint)
+                .map_err(|_| crate::types::Error::new("unavailable"))?,
         )
         .await?;
         tx.commit().await?;
@@ -201,7 +209,7 @@ pub async fn finish_run(
             Some(super::task_answers::check_results(pool, context, &input.run_id).await?)
         } else {
             // 普通正文核对本输入真正读取的结果；旧会话资料不参与准入或定稿。
-            let snapshot = delivered_results.expect("result sources");
+            let snapshot = delivered_results.ok_or(crate::types::Error::new("unavailable"))?;
             let mut results = super::context_authority::CheckedTextResults::default();
             results
                 .include(pool, context, std::slice::from_ref(&snapshot), false)
@@ -274,7 +282,9 @@ pub async fn finish_run(
             &run,
             parts,
             input.final_text.as_deref(),
-            checked_answer.as_ref().expect("checked parts"),
+            checked_answer
+                .as_ref()
+                .ok_or(crate::types::Error::new("invalid_input"))?,
             None,
         )
         .await?
@@ -286,7 +296,9 @@ pub async fn finish_run(
             &run,
             &[],
             input.final_text.as_deref(),
-            checked_answer.as_ref().expect("checked control"),
+            checked_answer
+                .as_ref()
+                .ok_or(crate::types::Error::new("invalid_input"))?,
             control_delivery.as_ref(),
         )
         .await?
@@ -302,7 +314,9 @@ pub async fn finish_run(
                 &conversation,
                 &run,
                 sdk_id,
-                checked_answer.as_ref().expect("checked answer"),
+                checked_answer
+                    .as_ref()
+                    .ok_or(crate::types::Error::new("invalid_input"))?,
             )
             .await?;
             if unit.text != final_text {
@@ -318,7 +332,9 @@ pub async fn finish_run(
                 &conversation,
                 &run,
                 binding,
-                checked_answer.as_ref().expect("checked rendered answer"),
+                checked_answer
+                    .as_ref()
+                    .ok_or(crate::types::Error::new("invalid_input"))?,
             )
             .await?;
             if unit.text != final_text {
@@ -361,7 +377,8 @@ pub async fn finish_run(
         runtime::save_checkpoint_in_tx(
             &mut tx,
             &run,
-            &serde_json::to_value(&input.checkpoint).expect("checkpoint"),
+            &serde_json::to_value(&input.checkpoint)
+                .map_err(|_| crate::types::Error::new("unavailable"))?,
         )
         .await?;
     }
@@ -369,7 +386,7 @@ pub async fn finish_run(
         runtime::save_output_answer_parts_in_tx(
             &mut tx,
             &run,
-            &serde_json::to_value(parts).expect("answer parts"),
+            &serde_json::to_value(parts).map_err(|_| crate::types::Error::new("unavailable"))?,
         )
         .await?;
     }
@@ -389,8 +406,10 @@ pub async fn finish_run(
         let mut refs = if let Some(parts) = &input.answer_parts {
             parts
                 .iter()
-                .map(|part| serde_json::to_value(&part.task_ref).expect("task ref"))
-                .collect()
+                .map(|part| {
+                    serde_json::to_value(&part.task_ref).map_err(|_| Error::new("unavailable"))
+                })
+                .collect::<Result<_>>()?
         } else if let Some(query_id) =
             conversations::result_query_for_message_in_tx(&mut tx, &cid, &run.message_id).await?
         {

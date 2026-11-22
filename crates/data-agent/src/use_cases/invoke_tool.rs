@@ -22,7 +22,10 @@ pub async fn register_tool(
         epoch(&input.lease_epoch)?,
     )?;
     let run = runtime::lock_run_in_tx(&mut tx, &input.run_id, &cid).await?;
-    let fp = fingerprint(&serde_json::to_value(&input.arguments).expect("tool input"));
+    let fp = fingerprint(
+        &serde_json::to_value(&input.arguments)
+            .map_err(|_| crate::types::Error::new("unavailable"))?,
+    );
     let operation_id = if let Some(tool) =
         runtime::lock_tool_call_in_tx(&mut tx, &run, &input.sdk_tool_call_id).await?
     {
@@ -36,7 +39,8 @@ pub async fn register_tool(
     runtime::save_checkpoint_in_tx(
         &mut tx,
         &run,
-        &serde_json::to_value(&input.checkpoint).expect("checkpoint"),
+        &serde_json::to_value(&input.checkpoint)
+            .map_err(|_| crate::types::Error::new("unavailable"))?,
     )
     .await?;
     tx.commit().await?;
@@ -54,7 +58,10 @@ pub async fn invoke_tool(
     let tool = runtime::lock_tool_call_in_tx(&mut tx, &run, &input.sdk_tool_call_id)
         .await?
         .ok_or(Error::new("version_conflict"))?;
-    let fp = fingerprint(&serde_json::to_value(&input.arguments).expect("tool input"));
+    let fp = fingerprint(
+        &serde_json::to_value(&input.arguments)
+            .map_err(|_| crate::types::Error::new("unavailable"))?,
+    );
     if tool.fingerprint != fp {
         return Err(Error::new("idempotency_conflict"));
     }
@@ -81,7 +88,7 @@ pub async fn invoke_tool(
         &input.arguments.goal,
     )
     .await?;
-    runtime::record_tool_receipt_in_tx(&mut tx, &tool, &receipt).await?;
+    runtime::record_tool_receipt_in_tx(&mut tx, &run, &tool, &receipt).await?;
     conversations::append_event_in_tx(
         &mut tx,
         &conversation,

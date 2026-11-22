@@ -1,6 +1,8 @@
 #[path = "knowledge/maintenance.rs"]
 mod maintenance;
-pub use maintenance::{edit, edit_batch, edit_entries};
+pub use maintenance::{
+    KnowledgeChange, KnowledgeVersionAction, edit, edit_batch, edit_entries, write,
+};
 #[path = "knowledge/catalog.rs"]
 mod catalog;
 pub(super) use catalog::semantic_object_in_tx;
@@ -18,7 +20,7 @@ use references::{
 mod indexing;
 use indexing::depends_on_source;
 pub(crate) use indexing::source_alias;
-pub use indexing::{process_index, rebuild_index};
+pub use indexing::{process_index, rebuild_index, rebuild_index_for_operation};
 #[path = "knowledge/search_cursor.rs"]
 mod search_cursor;
 use search_cursor::SavedCandidate;
@@ -43,7 +45,10 @@ use search_delivery::assemble_search_in_tx;
 
 use crate::{
     contracts,
-    contracts::generated::{SourceKey, SourceKeyKind},
+    contracts::generated::{
+        AnalysisPreferenceCommand, Directory, DirectoryView, KnowledgeListQuery,
+        MaintenanceDependentState, SourceKey, SourceKeyKind,
+    },
     modules::{access, ingestion, jobs, knowledge, retrieval, retrieval::source_segments},
     persistence::AppTx,
     search_scope::KnowledgeSearchScope,
@@ -52,10 +57,10 @@ use crate::{
 use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 use serde_json::{Value, json};
 use sqlx::MySqlPool;
-pub async fn initialize(pool: &MySqlPool) -> Result<()> {
+pub async fn initialize(pool: &MySqlPool, space: &str) -> Result<()> {
     let ctx = AccessContext {
         user_id: "synthetic-import".into(),
-        space_id: "demo".into(),
+        space_id: space.into(),
         request_id: id(),
         table_access: None,
     };
@@ -119,13 +124,19 @@ pub async fn catalog_context(ctx: &AccessContext) -> Result<AccessContext> {
     }
 }
 
-pub async fn list(pool: &MySqlPool, ctx: &AccessContext, input: &Value) -> Result<Value> {
-    contracts::validate("KnowledgeListQuery", input)?;
-    let query = input["q"].as_str();
-    let after = input["after_id"].as_str();
-    let related = input["related_id"].as_str();
-    let directory = input["directory"].as_str();
-    let state = input["state"].as_str();
+pub async fn list(
+    pool: &MySqlPool,
+    ctx: &AccessContext,
+    input: KnowledgeListQuery,
+) -> Result<Value> {
+    let query = input.q.as_deref();
+    let after = input.after_id.as_deref();
+    let related = input.related_id.as_deref();
+    let directory = input.directory;
+    let state = input.state.map(|state| match state {
+        MaintenanceDependentState::Enabled => "enabled",
+        MaintenanceDependentState::Disabled => "disabled",
+    });
     // 浏览检索（05切片4）：与工具路径共用组合推进——词法就绪即期限内预读，慢嵌入
     // 不饿死词法路；返回的objects/coverage已含预读复用后的最终装配。
     let searched = if let Some(query) = query.filter(|_| directory.is_none()) {
@@ -138,7 +149,7 @@ pub async fn list(pool: &MySqlPool, ctx: &AccessContext, input: &Value) -> Resul
         knowledge::read_in_tx(&mut tx, ctx, object, None, true).await?;
     }
     let (values, next, coverage) = if let Some(directory) = directory {
-        let ids = if directory == "maintained" {
+        let ids = if matches!(directory, Directory::Maintained) {
             Some(access::maintainable_ids_in_tx(&mut tx, ctx).await?)
         } else {
             None
@@ -150,7 +161,7 @@ pub async fn list(pool: &MySqlPool, ctx: &AccessContext, input: &Value) -> Resul
             query,
             state,
             ids.as_deref(),
-            input["directory_view"] == "grouped",
+            matches!(input.directory_view, Some(DirectoryView::Grouped)),
         )
         .await?;
         (values, next, None)
@@ -273,9 +284,9 @@ pub async fn set_table_analysis_preference(
     pool: &MySqlPool,
     ctx: &AccessContext,
     table: &str,
-    input: Value,
+    input: AnalysisPreferenceCommand,
 ) -> Result<Value> {
-    contracts::validate("AnalysisPreferenceCommand", &input)?;
+    let input = json!({"operation_id": input.operation_id, "expected_version": input.expected_version, "preferred": input.preferred});
     let mut tx = AppTx::begin(pool).await?;
     access::authorize_semantic_in_tx(&mut tx, ctx, table).await?;
     let object = knowledge::read_in_tx(&mut tx, ctx, table, None, true).await?;
@@ -320,48 +331,53 @@ pub(super) async fn valid_assets_in_tx(
     items: Vec<Value>,
     gate: Option<&super::source_limits::SourceGate>,
 ) -> Result<Vec<Value>> {
-    let ids: std::collections::BTreeSet<_> = items
+    let ids = items
         .iter()
         .flat_map(|asset| super::context_authority::items(&asset["dependencies"]))
         .map(|reference| {
             reference["object_id"]
                 .as_str()
-                .expect("asset dependency")
-                .to_owned()
+                .map(str::to_owned)
+                .ok_or(Error::new("unavailable"))
         })
-        .collect();
+        .collect::<Result<std::collections::BTreeSet<_>>>()?;
     let ids: Vec<_> = ids.into_iter().collect();
-    let versions: std::collections::HashMap<_, _> =
-        knowledge::candidate_meta_in_tx(tx, ctx, &ids, None)
-            .await?
-            .into_iter()
-            .filter(|object| {
-                object["state"] == "enabled" && gate.is_none_or(|gate| gate.allows_object(object))
-            })
-            .map(|object| {
-                (
-                    object["id"].as_str().expect("knowledge id").to_owned(),
-                    object["version"]
-                        .as_str()
-                        .expect("knowledge version")
-                        .to_owned(),
+    let mut versions = std::collections::HashMap::new();
+    for object in knowledge::candidate_meta_in_tx(tx, ctx, &ids, None).await? {
+        if object["state"] == "enabled"
+            && gate
+                .map(|gate| gate.allows_object(&object))
+                .transpose()?
+                .unwrap_or(true)
+        {
+            let key = super::context_authority::pair(&object["id"], &object["version"])?;
+            versions.insert(key.0, key.1);
+        }
+    }
+    let mut allowed = Vec::new();
+    for asset in items {
+        let dependencies = super::context_authority::items(&asset["dependencies"]);
+        let valid = dependencies.iter().try_fold(
+            gate.is_none() || !dependencies.is_empty(),
+            |valid, reference| {
+                let id = reference["object_id"]
+                    .as_str()
+                    .ok_or(Error::new("unavailable"))?;
+                Ok::<_, Error>(
+                    valid
+                        && versions
+                            .get(id)
+                            .is_some_and(|version| reference["version"] == version.as_str()),
                 )
-            })
-            .collect();
-    Ok(items
-        .into_iter()
-        .filter(|asset| {
-            let dependencies = super::context_authority::items(&asset["dependencies"]);
-            (gate.is_none() || !dependencies.is_empty())
-                && dependencies.iter().all(|reference| {
-                    let id = reference["object_id"].as_str().expect("asset dependency");
-                    versions
-                        .get(id)
-                        .is_some_and(|version| reference["version"] == version.as_str())
-                })
-        })
-        .collect())
+            },
+        )?;
+        if valid {
+            allowed.push(asset);
+        }
+    }
+    Ok(allowed)
 }
+
 pub async fn read_asset(pool: &MySqlPool, ctx: &AccessContext, asset: &str) -> Result<Value> {
     super::personal_assets::read(pool, ctx, asset).await
 }

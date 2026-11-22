@@ -17,7 +17,7 @@ const port=()=>new Promise(resolve=>{const server=net.createServer();server.list
 const apiPort=await port(),bridgePort=await port(),webPort=await port();
 const alice=randomBytes(32).toString('hex'),bob=randomBytes(32).toString('hex'),internal=randomBytes(32).toString('hex');
 const password=(await readFile(root+'/.local/infra/mysql-app-password','utf8')).trim();
-const env={...process.env,PI_OFFLINE:'1',DATA_AGENT_MODE:'development',DATA_AGENT_DATABASE_URL:'mysql://data_agent:'+encodeURIComponent(password)+'@127.0.0.1:13306/'+database,DATA_AGENT_DEV_IDENTITIES:JSON.stringify({[alice]:'alice',[bob]:'bob'}),DATA_AGENT_INTERNAL_TOKEN:internal,DATA_AGENT_API_PORT:String(apiPort),DATA_AGENT_API_URL:'http://127.0.0.1:'+apiPort,DATA_AGENT_BRIDGE_URL:'http://127.0.0.1:'+bridgePort,DATA_AGENT_BRIDGE_PORT:String(bridgePort),DATA_AGENT_LEASE_MS:'1500'};
+const env={...process.env,PI_OFFLINE:'1',DATA_AGENT_MODE:'development',DATA_AGENT_DEFAULT_SPACE_ID:'demo',DATA_AGENT_DATABASE_URL:'mysql://data_agent:'+encodeURIComponent(password)+'@127.0.0.1:13306/'+database,DATA_AGENT_DEV_IDENTITIES:JSON.stringify({[alice]:'alice',[bob]:'bob'}),DATA_AGENT_INTERNAL_TOKEN:internal,DATA_AGENT_API_PORT:String(apiPort),DATA_AGENT_API_URL:'http://127.0.0.1:'+apiPort,DATA_AGENT_BRIDGE_URL:'http://127.0.0.1:'+bridgePort,DATA_AGENT_BRIDGE_PORT:String(bridgePort),DATA_AGENT_LEASE_MS:'1500'};
 const processes=[];const logs=[];const checks=[];
 function start(name,command,args=[],extra={}){
  const child=spawn(command,args,{cwd:root,env:{...env,...extra},stdio:['ignore','pipe','pipe']});processes.push(child);const record={name,code:null,output:''};logs.push(record);

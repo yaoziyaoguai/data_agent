@@ -204,7 +204,7 @@ pub async fn claim_prefill_in_tx(tx: &mut AppTx<'_>, space: &str) -> Result<Opti
         .execute(tx.connection())
         .await?;
     Ok(Some(
-        json!({"id":id,"object_id":row.get::<String,_>("object_id"),"expected_version":row.get::<u64,_>("expected_version").to_string(),"input":row.get::<sqlx::types::Json<Value>,_>("input_json").0}),
+        json!({"id":id,"space_id":row.get::<String,_>("space_id"),"object_id":row.get::<String,_>("object_id"),"expected_version":row.get::<u64,_>("expected_version").to_string(),"input":row.get::<sqlx::types::Json<Value>,_>("input_json").0}),
     ))
 }
 pub async fn finish_prefill_in_tx(

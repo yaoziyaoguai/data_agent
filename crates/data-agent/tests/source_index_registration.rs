@@ -235,7 +235,9 @@ async fn unified_consumer_projects_document_source_into_shared_collection() {
     .await
     .unwrap();
     let query_vector = vectors.remove(0);
-    let unscoped = vector::search(&ctx.space_id, query, query_vector.clone(), 10).await;
+    let unscoped = vector::search(&ctx.space_id, query, query_vector.clone(), 10)
+        .await
+        .unwrap();
     assert_eq!(unscoped.raw.state, "available");
     assert!(
         unscoped
@@ -268,7 +270,8 @@ async fn unified_consumer_projects_document_source_into_shared_collection() {
         include_raw: true,
         deadline: vector::retrieval_deadline(),
     })
-    .await;
+    .await
+    .unwrap();
     assert_eq!(candidates.raw.state, "available");
     for channel in [&candidates.raw.lexical, &candidates.raw.dense] {
         assert!(!channel.is_empty(), "来源过滤后两路均须实际召回");

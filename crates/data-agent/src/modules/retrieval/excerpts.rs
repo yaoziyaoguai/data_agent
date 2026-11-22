@@ -1,10 +1,10 @@
-use crate::types::fingerprint;
+use crate::types::{Result, fingerprint};
 use serde_json::{Value, json};
 
 // 调用者已完成回源授权；只从当前正式正文重建片段，不信任索引摘要。
-pub fn attach_matches(space: &str, object: &mut Value, candidate: &Value) {
+pub fn attach_matches(space: &str, object: &mut Value, candidate: &Value) -> Result<()> {
     if object["id"] != candidate["id"] || object["version"] != candidate["version"] {
-        return;
+        return Ok(());
     }
     let mut excerpts = Vec::new();
     let mut legacy_locations = None;
@@ -17,9 +17,12 @@ pub fn attach_matches(space: &str, object: &mut Value, candidate: &Value) {
         let hit = if located_hit {
             hit
         } else {
-            let locations = legacy_locations
-                .get_or_insert_with(|| super::vector::fragment_locations(space, object));
-            let Some(location) = hit["fragment_id"].as_str().and_then(|id| locations.get(id))
+            if legacy_locations.is_none() {
+                legacy_locations = Some(super::vector::fragment_locations(space, object)?);
+            }
+            let Some(location) = hit["fragment_id"]
+                .as_str()
+                .and_then(|id| legacy_locations.as_ref()?.get(id))
             else {
                 continue;
             };
@@ -72,6 +75,7 @@ pub fn attach_matches(space: &str, object: &mut Value, candidate: &Value) {
             "向量命中缺少可核验的位置，目录开头不是命中片段。请用本对象id/version通过read_knowledge补读全文；需受控重建索引后才能补齐位置，本次未自动重建。"
         }
     });
+    Ok(())
 }
 
 /// 词法定位只使用当前有效正文；索引没有位置时也不能把目录开头冒称命中。
@@ -201,7 +205,7 @@ mod tests {
         let candidate = json!({"id":"manual","version":"7","matches":[
             hit("safety",prefix.chars().count(),rule),hit("safety",prefix.chars().count(),rule),
             hit("scope",0,"仅适用于检测设备。") ]});
-        attach_matches("demo", &mut object, &candidate);
+        attach_matches("demo", &mut object, &candidate).unwrap();
         assert_eq!(object["retrieval"]["state"], "located");
         assert_eq!(object["retrieval"]["excerpts"].as_array().unwrap().len(), 2);
         assert_eq!(object["retrieval"]["excerpts"][0]["text"], rule);
@@ -231,7 +235,7 @@ mod tests {
         let offset = prefix.chars().count() + lead.chars().count();
         let candidate = json!({"id":"manual","version":"7","matches":[hit("rule",offset,rule)]});
         let mut current = base.clone();
-        attach_matches("demo", &mut current, &candidate);
+        attach_matches("demo", &mut current, &candidate).unwrap();
         assert_eq!(current["retrieval"]["state"], "located");
         assert_eq!(
             current["retrieval"]["excerpts"],
@@ -241,7 +245,7 @@ mod tests {
         );
         let mut complete = json!({"id":"manual","version":"7","entries":[
             {"entry_id":"rule","path":"rule","effective_value":full}]});
-        attach_matches("demo", &mut complete, &candidate);
+        attach_matches("demo", &mut complete, &candidate).unwrap();
         assert_eq!(current["retrieval"], complete["retrieval"]);
         for bad in [
             json!({"entry_id":"rule","offset":offset,"length":rule.chars().count(),"content_hash":null}),
@@ -253,7 +257,8 @@ mod tests {
                 "demo",
                 &mut stale,
                 &json!({"id":"manual","version":"7","matches":[bad]}),
-            );
+            )
+            .unwrap();
             assert_eq!(stale["retrieval"]["state"], "unlocated");
             assert_eq!(stale["retrieval"]["excerpts"], json!([]));
         }
@@ -275,7 +280,8 @@ mod tests {
                 "demo",
                 &mut object,
                 &json!({"id":"manual","version":"2","matches":[bad]}),
-            );
+            )
+            .unwrap();
             assert_eq!(object["retrieval"]["state"], "unlocated");
             assert_eq!(object["retrieval"]["excerpts"], json!([]));
             assert!(
@@ -290,7 +296,8 @@ mod tests {
             "demo",
             &mut current,
             &json!({"id":"manual","version":"1","matches":[hit("body",0,"当前规则")]}),
-        );
+        )
+        .unwrap();
         assert!(current.get("retrieval").is_none());
     }
 
@@ -317,7 +324,8 @@ mod tests {
                 "demo",
                 &mut object,
                 &json!({"id":"manual","version":"7","matches":[current_hit,invalid_hit]}),
-            );
+            )
+            .unwrap();
             assert_eq!(object["retrieval"]["state"], "index_lag");
             assert_eq!(
                 object["retrieval"]["excerpts"],
@@ -342,7 +350,7 @@ mod tests {
         ]));
         let candidate = json!({"id":"manual","version":"2","matches":[{"fragment_id":key}]});
         let mut current = base.clone();
-        attach_matches("demo", &mut current, &candidate);
+        attach_matches("demo", &mut current, &candidate).unwrap();
         assert_eq!(current["retrieval"]["state"], "located");
         let excerpt = &current["retrieval"]["excerpts"][0];
         assert_eq!(excerpt["offset"], 560);
@@ -351,7 +359,7 @@ mod tests {
             text.chars().skip(560).take(360).collect::<String>()
         );
         let mut other_space = base;
-        attach_matches("other", &mut other_space, &candidate);
+        attach_matches("other", &mut other_space, &candidate).unwrap();
         assert_eq!(other_space["retrieval"]["state"], "unlocated");
     }
 
@@ -366,7 +374,7 @@ mod tests {
         let candidate = json!({"id":"manual","version":"5","matches":[
             hit("rule", prefix.chars().count(), "超过校准期限必须停用。"),
             {"entry_id":"old","offset":0,"length":8,"content_hash":"stale-hash"}]});
-        attach_matches("demo", &mut object, &candidate);
+        attach_matches("demo", &mut object, &candidate).unwrap();
         assert_eq!(object["retrieval"]["state"], "index_lag");
         assert_eq!(object["retrieval"]["excerpts"].as_array().unwrap().len(), 1);
         crate::contracts::validate("KnowledgeRetrieval", &object["retrieval"]).unwrap();
@@ -378,7 +386,8 @@ mod tests {
             &mut object2,
             &json!({"id":"manual","version":"5","matches":[
             {"entry_id":"old","offset":0,"length":8,"content_hash":"stale-hash"}]}),
-        );
+        )
+        .unwrap();
         assert_eq!(object2["retrieval"]["state"], "unlocated");
     }
 
@@ -467,7 +476,7 @@ mod tests {
         assert_eq!(object["retrieval"]["state"], "unlocated");
         let candidate =
             json!({"id":"manual","version":"1","matches":[hit("body",0,"当前适用规则")]});
-        attach_matches("demo", &mut object, &candidate);
+        attach_matches("demo", &mut object, &candidate).unwrap();
         let vector = object["retrieval"].clone();
         attach_lexical_matches(&mut object, "规则");
         assert_eq!(object["retrieval"], vector);

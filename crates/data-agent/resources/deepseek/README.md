@@ -1,6 +1,6 @@
 # DeepSeek 维护输入计量资产
 
-此目录保存维护请求计量使用的固定公开数据，归 `ingestion::prefill::input_tokens` 所有。运行时只在 Rust 内计数，不下载权重、不调用远程计数接口，也不启动新的服务。两个 tokenizer JSON 合计 12,734,403 字节，首次使用时各自在进程内解析并缓存。
+此目录保存维护请求计量使用的固定公开数据，归 `ingestion::prefill::input_tokens` 所有。运行时只在 Rust 内计数，不下载权重、不调用远程计数接口，也不启动新的服务。两个 tokenizer JSON 合计 12,734,403 字节。首次使用相应模型时从磁盘读取 tokenizer 与模板，先核对固定 SHA-256，再解析并在本进程缓存。部署时把 `DATA_AGENT_RESOURCES_DIR` 指向包含 `deepseek/` 的资产目录。仓库构建的开发实例默认使用同库资源目录。资产缺失或指纹不符时，维护预填会报错。
 
 - `manifest.json` 是型号、公开来源与 SHA-256 的记录。
 - `*-tokenizer.json` 是官方 tokenizer 数据，分别保留 Flash-1017 与 Pro-0813 的 added tokens。

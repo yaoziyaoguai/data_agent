@@ -61,34 +61,34 @@ pub(crate) fn decode_task_context(mut snapshot: Value) -> Result<Value> {
     );
     let recorded_version = snapshot
         .as_object_mut()
-        .expect("task context")
+        .ok_or(crate::types::Error::new("unavailable"))?
         .remove("stored_decision_state");
     if !snapshot["conditions"].is_null() {
         let revision = ConditionRevision::from_stored(
             snapshot["conditions"].clone(),
             recorded_version
                 .and_then(|v| v.as_u64())
-                .expect("condition revision") as u8,
+                .ok_or(crate::types::Error::new("unavailable"))? as u8,
         )?;
         snapshot["decision_state_version"] = json!(revision.decision_state.number());
         if let Some(pending) = revision.legacy_pending(epoch(
             snapshot["condition_version"]
                 .as_str()
-                .expect("condition version"),
+                .ok_or(crate::types::Error::new("unavailable"))?,
         )?)? {
             snapshot["legacy_pending"] = pending;
         }
     }
     let more = snapshot["has_more_clarifications"]
         .as_bool()
-        .expect("clarification presence");
+        .ok_or(crate::types::Error::new("unavailable"))?;
     if more {
         snapshot["context_complete"] = json!(false);
     }
     if snapshot["report_ref"].is_null() {
         snapshot
             .as_object_mut()
-            .expect("task context")
+            .ok_or(crate::types::Error::new("unavailable"))?
             .remove("report_ref");
     }
     Ok(snapshot)
@@ -256,7 +256,10 @@ pub async fn read_task_with_clarifications_in_tx(
     let mut snapshot = read_task_in_tx(tx, cid, task).await?;
     // 正式读取以本页问题和游标表达范围；正文来源保护在组装完成后继续执行。
     for key in ["has_more_clarifications", "context_complete"] {
-        snapshot.as_object_mut().expect("task snapshot").remove(key);
+        snapshot
+            .as_object_mut()
+            .ok_or(crate::types::Error::new("unavailable"))?
+            .remove(key);
     }
     let current_version = epoch(snapshot["condition_version"].as_str().unwrap_or("0"))?;
     let requested_version = version.unwrap_or(current_version);
@@ -270,7 +273,7 @@ pub async fn read_task_with_clarifications_in_tx(
         if snapshot["legacy_pending"].is_null() {
             snapshot
                 .as_object_mut()
-                .expect("task snapshot")
+                .ok_or(crate::types::Error::new("unavailable"))?
                 .remove("legacy_pending");
         }
         snapshot["decision_state_version"] = json!(revision.decision_state.number());
@@ -280,7 +283,10 @@ pub async fn read_task_with_clarifications_in_tx(
             json!(super::evidence::refs_in_tx(tx, cid, task, requested_version).await?);
         // 历史条件不能借当前任务文本带出另一个版本的资料；goal没有历史版本。
         for key in ["report_ref", "goal", "clarification"] {
-            snapshot.as_object_mut().expect("task snapshot").remove(key);
+            snapshot
+                .as_object_mut()
+                .ok_or(crate::types::Error::new("unavailable"))?
+                .remove(key);
         }
     }
     snapshot["note"] = json!(
@@ -304,7 +310,10 @@ pub async fn read_task_with_clarifications_in_tx(
         json!({"id":row.get::<String,_>("id"),"question":row.get::<String,_>("question"),"options":row.get::<sqlx::types::Json<Value>,_>("options").0})
     }).collect::<Vec<_>>();
     snapshot["next_clarification_after"] = if rows.len() > 8 {
-        clarifications.last().expect("bounded nonempty page")["id"].clone()
+        clarifications
+            .last()
+            .ok_or(crate::types::Error::new("unavailable"))?["id"]
+            .clone()
     } else {
         Value::Null
     };

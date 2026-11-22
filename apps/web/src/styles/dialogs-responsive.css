@@ -1,0 +1,263 @@
+dialog {
+  border: 1px solid #dde5ef;
+  border-radius: 13px;
+  padding: 0;
+  width: min(820px, calc(100vw - 32px));
+  max-height: 90dvh;
+  color: #3f5675;
+  box-shadow: 0 24px 90px #152b4930;
+}
+dialog::backdrop {
+  background: #1c2d4a50;
+  backdrop-filter: blur(3px);
+}
+.modal-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid #e8edf4;
+  padding: 20px 24px;
+  margin: 0;
+  flex-shrink: 0;
+}
+.modal-head h2 {
+  font-size: 19px;
+  font-weight: 500;
+  margin: 0;
+}
+.modal-head button {
+  border: 0;
+  background: none;
+  color: #8394ae;
+  font-size: 24px;
+}
+.form-label {
+  display: block;
+  font-size: 12px;
+  color: #6c7f9b;
+  margin: 14px 0;
+}
+.form-label input,
+.form-label select,
+.form-label textarea {
+  display: block;
+  width: 100%;
+  border: 1px solid #dfe6ef;
+  border-radius: 6px;
+  padding: 11px;
+  color: #435d81;
+  background: #fafbfd;
+  margin-top: 7px;
+  font-size: 12px;
+}
+.checkbox-label {
+  display: flex;
+  gap: 8px;
+  font-size: 12px;
+  margin: 18px 0;
+}
+.history-dialog {
+  display: grid;
+  gap: 10px;
+}
+.history-dialog button {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  text-align: left;
+  font-size: 12px;
+}
+.history-dialog small {
+  font-size: 9px;
+  color: #899ab2;
+}
+.composer {
+  margin-top: 30px;
+}
+.activity button {
+  border: 0;
+  background: none;
+  color: #607fae;
+  font-size: 11px;
+}
+.welcome h1 {
+  font-size: clamp(36px, 4vw, 54px);
+  font-weight: 500;
+  letter-spacing: -1.8px;
+}
+@media (max-width: 1050px) {
+  .knowledge-layout {
+    grid-template-columns: 175px minmax(0, 1fr);
+  }
+  .provenance-columns {
+    grid-template-columns: 1fr;
+  }
+  .management {
+    padding: 30px 25px;
+  }
+  .page-heading {
+    align-items: flex-start;
+  }
+  .asset-grid {
+    gap: 16px;
+  }
+  .object-heading {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+}
+@media (max-width: 700px) {
+  .sidebar {
+    position: static;
+    height: auto;
+    display: grid;
+  }
+  .primary-nav {
+    grid-column: 1/-1;
+    display: flex;
+    gap: 4px;
+    margin: 8px 0 0;
+    overflow: auto;
+  }
+  .primary-nav button {
+    padding: 7px 12px;
+    flex: 1;
+    justify-content: center;
+  }
+  .primary-nav small {
+    display: none;
+  }
+  .sidebar .history-nav {
+    display: none;
+  }
+  .history-all {
+    grid-column: 1/-1;
+    margin: 0;
+    padding: 3px 0;
+  }
+  .history-label {
+    display: flex;
+    grid-column: 1/-1;
+    margin: 7px 0 0;
+  }
+  .conversation {
+    padding: 27px 20px;
+  }
+  .query-card {
+    padding: 18px 15px;
+  }
+  .chart-row {
+    grid-template-columns: 65px 1fr 62px;
+    font-size: 10px;
+  }
+  .management {
+    padding: 27px 20px;
+  }
+  .page-heading {
+    display: block;
+    margin-bottom: 20px;
+  }
+  .page-heading > .actions,
+  .page-heading > button {
+    margin-top: 15px;
+  }
+  .knowledge-layout {
+    grid-template-columns: 1fr;
+  }
+  .object-list {
+    display: flex;
+    overflow: auto;
+    border-right: 0;
+    border-bottom: 1px solid #e6ebf2;
+    padding: 10px;
+    gap: 5px;
+  }
+  .object-list button {
+    min-width: 160px;
+    font-size: 12px;
+  }
+  .knowledge-content {
+    padding: 18px 15px;
+  }
+  .object-heading h2 {
+    font-size: 18px;
+  }
+  .tabs {
+    gap: 14px;
+  }
+  .tabs button {
+    font-size: 11px;
+  }
+  .asset-grid {
+    grid-template-columns: 1fr;
+  }
+  .asset-card {
+    padding: 20px;
+  }
+  .asset-empty {
+    padding: 45px 20px;
+  }
+  .query-card .actions {
+    gap: 6px;
+  }
+  .query-card .actions button {
+    padding: 8px 10px;
+    font-size: 10px;
+  }
+  .task summary {
+    display: block;
+  }
+  .task summary span {
+    display: block;
+    margin-top: 5px;
+  }
+  .result-toolbar {
+    gap: 10px;
+  }
+  .result-toolbar .text-link {
+    font-size: 10px;
+  }
+  dialog {
+    padding: 19px;
+  }
+  .primary-nav {
+    min-width: 0;
+  }
+  header {
+    gap: 15px;
+  }
+  .badge {
+    max-width: 135px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .example-grid {
+    display: grid;
+  }
+  .example {
+    text-align: left;
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  button,
+  a {
+    transition:
+      background 0.15s,
+      color 0.15s,
+      border-color 0.15s;
+  }
+  .query-card {
+    animation: appear 0.2s ease-out;
+  }
+  @keyframes appear {
+    from {
+      opacity: 0.3;
+      transform: translateY(4px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+}

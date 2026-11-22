@@ -45,7 +45,7 @@ pub(in crate::use_cases) fn search_reply(
     // 键摘要只用剩余空间，不能占掉正文、条件或续读位置。
     reply
         .as_object_mut()
-        .expect("search reply")
+        .ok_or(crate::types::Error::new("unavailable"))?
         .remove("key_hints");
     let original = reply.clone();
     let mut minimal = Vec::with_capacity(hits.len());
@@ -210,7 +210,9 @@ pub(in crate::use_cases) fn search_reply(
                     };
                 while low < high {
                     let keep = (low + high).div_ceil(2);
-                    *selected.last_mut().expect("selected support") =
+                    *selected
+                        .last_mut()
+                        .ok_or(crate::types::Error::new("unavailable"))? =
                         support_content(support, keep)?;
                     knowledge_support_page(&mut reply["hits"][index], selected.clone(), position)?;
                     if capacity.fits(&reply) {
@@ -220,7 +222,9 @@ pub(in crate::use_cases) fn search_reply(
                     }
                 }
                 if low > 0 {
-                    *selected.last_mut().expect("selected support") =
+                    *selected
+                        .last_mut()
+                        .ok_or(crate::types::Error::new("unavailable"))? =
                         support_content(support, low)?;
                     support_count += 1;
                 } else {
@@ -269,12 +273,15 @@ pub(in crate::use_cases) fn search_reply(
         reply["hits"][index] = item;
     }
     for key in ["personal_memories", "selected_skills"] {
-        let length = reply[key].as_array().expect("assets").len();
+        let length = reply[key]
+            .as_array()
+            .ok_or(crate::types::Error::new("unavailable"))?
+            .len();
         for index in 0..length {
             let full = assets
                 .iter()
                 .find(|asset| asset["id"] == reply[key][index]["id"])
-                .expect("directory asset");
+                .ok_or(crate::types::Error::new("unavailable"))?;
             for field in if key == "personal_memories" {
                 &["body", "scope"][..]
             } else {
@@ -450,7 +457,7 @@ fn restore_support_content(support: &mut Value, reply: &Value) -> Result<()> {
         support["content"] = json!(text.chars().skip(offset).take(length).collect::<String>());
         support
             .as_object_mut()
-            .expect("support")
+            .ok_or(crate::types::Error::new("unavailable"))?
             .remove("delivered_in");
     }
     Ok(())

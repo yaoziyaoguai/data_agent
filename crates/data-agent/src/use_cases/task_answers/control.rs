@@ -131,7 +131,7 @@ pub(in crate::use_cases) async fn reconnect_control_delivery_in_tx(
     };
     let fact_keys = current["facts"]
         .as_array()
-        .expect("control facts")
+        .ok_or(crate::types::Error::new("unavailable"))?
         .iter()
         .map(|fact| {
             json!([

@@ -6,7 +6,7 @@ fn source(body: String) -> Value {
 fn material(full: &[Value]) -> Value {
     let mut sources = full.to_vec();
     let mut gaps = Vec::new();
-    bound_bodies(&mut sources, &mut gaps);
+    bound_bodies(&mut sources, &mut gaps).unwrap();
     json!({"object":{"entries":[{"entry_id":"meaning","path":"meaning"}]},"sources":sources,
             "coverage":{"state":if gaps.is_empty(){"complete"}else{"incomplete"},"gaps":gaps}})
 }

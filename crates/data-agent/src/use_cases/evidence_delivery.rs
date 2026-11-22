@@ -54,7 +54,7 @@ pub(super) async fn assert_replay_in_tx(
     }
     let mut authority = super::context_authority::empty();
     let data = &receipt["data"];
-    super::context_authority::observe(&mut authority, data);
+    super::context_authority::observe(&mut authority, data)?;
     super::context_authority::observe_workspace_previews(&mut authority, data)?;
     let skill_refs = super::context_authority::items(&authority["skills"]);
     let has_skills = !skill_refs.is_empty();
@@ -68,7 +68,7 @@ pub(super) async fn assert_replay_in_tx(
                 .ok_or(Error::new("not_available"))?;
             super::context_authority::merge(
                 &mut skill_sources,
-                &super::personal_assets::skill_authority(asset),
+                &super::personal_assets::skill_authority(asset)?,
             )?;
         }
     }
@@ -86,8 +86,8 @@ pub(super) async fn assert_replay_in_tx(
     }
     if let Some(gate) = &projection.gate {
         let mut delivered = super::context_authority::empty();
-        super::context_authority::observe_delivery(&mut delivered, &receipt["data"], false);
-        super::context_authority::observe(&mut delivered, &Value::Array(asset_refs));
+        super::context_authority::observe_delivery(&mut delivered, &receipt["data"], false)?;
+        super::context_authority::observe(&mut delivered, &Value::Array(asset_refs))?;
         if has_skills {
             super::context_authority::merge(&mut delivered, &skill_sources)?;
         }
@@ -256,7 +256,7 @@ impl ResponseCapacity {
     }
 
     pub(super) fn fits(&self, value: &Value) -> bool {
-        let encoded = serde_json::to_string(value).expect("tool reply JSON");
+        let encoded = value.to_string();
         encoded.len() <= self.max_bytes && encoded.encode_utf16().count().div_ceil(4) <= self.tokens
     }
 }
@@ -348,7 +348,7 @@ pub(super) fn knowledge_reply(
                         json!(text.chars().skip(offset).take(length).collect::<String>());
                     support
                         .as_object_mut()
-                        .expect("support")
+                        .ok_or(crate::types::Error::new("unavailable"))?
                         .remove("delivered_in");
                 }
             }
@@ -373,7 +373,7 @@ pub(super) fn knowledge_reply(
     }
     let full_supports = reply["items"]
         .as_array()
-        .expect("items")
+        .ok_or(crate::types::Error::new("unavailable"))?
         .iter()
         .map(|item| item["supports"].as_array().cloned().unwrap_or_default())
         .collect::<Vec<_>>();
@@ -415,7 +415,10 @@ pub(super) fn knowledge_reply(
                     };
                 while low < high {
                     let keep = (low + high).div_ceil(2);
-                    *selected.last_mut().expect("selected support") = support_content(saved, keep)?;
+                    *selected
+                        .last_mut()
+                        .ok_or(crate::types::Error::new("unavailable"))? =
+                        support_content(saved, keep)?;
                     knowledge_support_page(&mut reply["items"][index], selected.clone(), position)?;
                     if capacity.fits(&reply) {
                         low = keep;
@@ -424,7 +427,10 @@ pub(super) fn knowledge_reply(
                     }
                 }
                 if low > 0 {
-                    *selected.last_mut().expect("selected support") = support_content(saved, low)?;
+                    *selected
+                        .last_mut()
+                        .ok_or(crate::types::Error::new("unavailable"))? =
+                        support_content(saved, low)?;
                     support_count += 1;
                 } else {
                     selected.pop();
@@ -506,7 +512,7 @@ pub(super) fn knowledge_reply(
     }
     let progressed = reply["items"]
         .as_array()
-        .expect("items")
+        .ok_or(crate::types::Error::new("unavailable"))?
         .iter()
         .any(|item| {
             item["state"] != "ok"
@@ -646,6 +652,7 @@ mod tests {
         let window = SearchContinuation::capture(&vector, &[vec![], vec![]], &[]).unwrap();
         let ranking = window
             .rank_window("unmatched", vector.lexical.clone())
+            .unwrap()
             .sequence;
         let search = KnowledgeSearch {
             objects: vec![],
@@ -688,6 +695,7 @@ mod tests {
                 assert_eq!(
                     restored
                         .rank_window("unmatched", vector.lexical.clone())
+                        .unwrap()
                         .sequence,
                     ranking[delivered..]
                 );

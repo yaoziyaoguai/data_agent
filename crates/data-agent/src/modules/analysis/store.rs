@@ -105,7 +105,9 @@ async fn split_task_in_tx(
         return Err(Error::new("clarification_required"));
     }
     let created = create_task_in_tx(tx, tasks, owner, operation, goal).await?;
-    let target = created["task_id"].as_str().expect("created task");
+    let target = created["task_id"]
+        .as_str()
+        .ok_or(crate::types::Error::new("unavailable"))?;
     sqlx::query(
         "INSERT INTO condition_revisions(task_id,version,body,decision_state_version) VALUES(?,1,?,2)",
     )
@@ -172,7 +174,9 @@ async fn migrate_legacy_decisions_in_tx(
     let items = pending
         .as_ref()
         .and_then(|pending| pending["items"].as_array());
-    let task = input["task_id"].as_str().expect("revise task");
+    let task = input["task_id"]
+        .as_str()
+        .ok_or(crate::types::Error::new("unavailable"))?;
     let mut linked = std::collections::HashSet::new();
     let mut historical_adoptions = Vec::new();
     for link in &migration.request.links {
@@ -217,8 +221,11 @@ async fn migrate_legacy_decisions_in_tx(
                     condition_revision_in_tx(tx, &tasks.conversation_id, task, version).await?;
                 proven = original.body == proof.conditions;
                 for field in fields {
-                    let field = serde_json::to_value(field).expect("condition field");
-                    let key = field.as_str().expect("condition field enum");
+                    let field = serde_json::to_value(field)
+                        .map_err(|_| crate::types::Error::new("invalid_input"))?;
+                    let key = field
+                        .as_str()
+                        .ok_or(crate::types::Error::new("invalid_input"))?;
                     proven &= original.body.get(key).is_some()
                         && original.body.get(key) == revised.body.get(key);
                 }
@@ -373,7 +380,9 @@ pub async fn apply_update_in_tx(
             .into_iter()
             .flatten()
         {
-            let key = key.as_str().expect("validated path");
+            let key = key
+                .as_str()
+                .ok_or(crate::types::Error::new("invalid_input"))?;
             if input["condition_patch"]["set"].get(key).is_some() {
                 return Err(crate::types::Error::new("invalid_input"));
             }
@@ -385,7 +394,7 @@ pub async fn apply_update_in_tx(
         }
         for (key, value) in input["condition_patch"]["set"]
             .as_object()
-            .expect("validated patch")
+            .ok_or(crate::types::Error::new("invalid_input"))?
         {
             conditions[key] = value.clone();
         }

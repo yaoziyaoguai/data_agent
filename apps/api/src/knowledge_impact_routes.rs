@@ -28,3 +28,19 @@ pub async fn read(
             .map_err(failure)?,
     )
 }
+
+pub async fn lineage(
+    AxumState(state): AxumState<State>,
+    headers: HeaderMap,
+    Path(object): Path<String>,
+) -> Result<
+    axum::Json<data_agent::contracts::generated::KnowledgeLineage>,
+    (axum::http::StatusCode, axum::Json<Value>),
+> {
+    let ctx = semantic_user(&state, &headers).await.map_err(failure)?;
+    Ok(axum::Json(
+        knowledge_impact::lineage(&state.pool, &ctx, &object)
+            .await
+            .map_err(failure)?,
+    ))
+}

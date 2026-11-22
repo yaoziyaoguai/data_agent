@@ -313,10 +313,6 @@ pub async fn embed(
     deadline: Option<tokio::time::Instant>,
 ) -> Result<Vec<Vec<f32>>> {
     let request = embedding::prepare(&texts)?;
-    // 当前公开MVP只有合成demo空间；静态接入范围在此入口检查一次。
-    if ctx.space_id != "demo" {
-        return Err(Error::new("not_available"));
-    }
     access::authorize_model("bailian")?;
     if let Binding::RawIndex(job, source, revision, texts_fingerprint) = &binding {
         let operation = raw_index_operation(&ctx.space_id, source, *revision, texts_fingerprint);

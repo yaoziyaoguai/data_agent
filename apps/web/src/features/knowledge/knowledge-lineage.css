@@ -1,0 +1,77 @@
+.lineage-flow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 24px minmax(0, .85fr) 24px minmax(0, 1.2fr);
+  grid-template-areas: "upstream upstream-link current downstream-link downstream";
+  align-items: start;
+  margin: 14px 0 20px;
+}
+.lineage-upstream { grid-area: upstream; }
+.lineage-upstream-link { grid-area: upstream-link; }
+.lineage-current { grid-area: current; }
+.lineage-downstream-link { grid-area: downstream-link; }
+.lineage-downstream { grid-area: downstream; }
+.lineage-flow section {
+  min-width: 0;
+  border: 1px solid #dfe6ef;
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: #fff;
+  overflow-wrap: anywhere;
+}
+.lineage-flow .lineage-current {
+  border-color: #bed0ed;
+  background: #f4f7fd;
+}
+.lineage-flow h4 {
+  margin: 0 0 8px;
+  color: #52657d;
+  font-size: 12px;
+}
+.lineage-connector {
+  display: block;
+  width: 100%;
+  margin-top: 28px;
+  color: #4673b9;
+}
+.lineage-nodes {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.lineage-nodes li {
+  display: grid;
+  gap: 3px;
+  padding: 6px 0;
+}
+.lineage-nodes li + li {
+  border-top: 1px solid #e3e8f1;
+}
+.lineage-nodes button {
+  font-weight: 600;
+  text-align: left;
+}
+.lineage-nodes small,
+.lineage-empty {
+  color: #52657d;
+  font-size: 12px;
+}
+.lineage-empty {
+  margin: 0;
+}
+.lineage-keys {
+  font-size: 11px;
+  font-family: ui-monospace, monospace;
+}
+
+@media (max-width: 950px) {
+  .lineage-flow {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: "upstream" "upstream-link" "current" "downstream-link" "downstream";
+    gap: 6px;
+  }
+  .lineage-connector {
+    width: 22px;
+    margin: 0 auto;
+    transform: rotate(90deg);
+  }
+}

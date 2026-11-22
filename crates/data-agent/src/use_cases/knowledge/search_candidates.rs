@@ -147,7 +147,7 @@ pub(super) async fn load_selected_in_tx(
         located["matches"][0]["content_hash"] =
             json!(fingerprint(&object["entries"][0]["effective_value"]));
     }
-    retrieval::attach_matches(&ctx.space_id, &mut object, &located);
+    retrieval::attach_matches(&ctx.space_id, &mut object, &located)?;
     let mut object = semantic_object_in_tx(tx, ctx, object).await?;
     if let Some(anchor) = &scope.anchor
         && object["id"] != *anchor

@@ -216,7 +216,7 @@ def main():
                 raise RuntimeError('官方模型配置无效')
             # 持久试验配置是本次模型选择的依据；.env仅保留本地默认值。
             model_credentials['DEEPSEEK_MODEL'] = model_profile['model_id']
-    env = dict(os.environ, PI_OFFLINE='1', DATA_AGENT_MODE='development', DATA_AGENT_TOOLSET='data', DATA_AGENT_PLATFORM_URL='http://127.0.0.1:'+str(ports['platform']),
+    env = dict(os.environ, PI_OFFLINE='1', DATA_AGENT_MODE='development', DATA_AGENT_DEFAULT_SPACE_ID=os.environ.get('DATA_AGENT_DEFAULT_SPACE_ID', 'demo'), DATA_AGENT_TOOLSET='data', DATA_AGENT_PLATFORM_URL='http://127.0.0.1:'+str(ports['platform']),
                DATA_AGENT_SYNTHETIC_SOURCE_DIRECTORY=str(source_directory),
                DATA_AGENT_DEMO_PROFILE=source_manifest.get('demo_profile', 'retail'),
                DATA_AGENT_PUBLIC_CONTENT_RETENTION=args.public_content_retention,

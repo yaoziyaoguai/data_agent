@@ -1,8 +1,34 @@
 use super::*;
+use crate::contracts::generated::{
+    KindElement, KnowledgeCreate, KnowledgeEdit, MemoryState, VersionCommand,
+};
 
 async fn authorize_edit_in_tx(tx: &mut AppTx<'_>, ctx: &AccessContext, object: &str) -> Result<()> {
     access::authorize_semantic_in_tx(tx, ctx, object).await?;
     knowledge::check_read_access_in_tx(tx, ctx, object).await
+}
+
+pub enum KnowledgeVersionAction {
+    Reanalyze,
+    ApplyProposal,
+    SetState(MemoryState),
+}
+
+pub enum KnowledgeChange<'a> {
+    Create {
+        request: KnowledgeCreate,
+        raw: Value,
+    },
+    Edit {
+        object: &'a str,
+        request: KnowledgeEdit,
+        raw: Value,
+    },
+    Version {
+        object: &'a str,
+        action: KnowledgeVersionAction,
+        request: VersionCommand,
+    },
 }
 
 pub async fn edit(
@@ -12,36 +38,64 @@ pub async fn edit(
     action: &str,
     input: Value,
 ) -> Result<Value> {
-    let mut tx = AppTx::begin(pool).await?;
-    if action == "create" {
-        contracts::validate("KnowledgeCreate", &input)?;
-        if input["kind"] == "table" || input["kind"] == "field" {
-            access::authorize_maintainer(ctx)?;
-        } else if !access::can_create_in_tx(&mut tx, ctx).await? {
-            return Err(Error::new("forbidden"));
+    let command = match action {
+        "create" => KnowledgeChange::Create {
+            request: contracts::decode_ref("KnowledgeCreate", &input)?,
+            raw: input,
+        },
+        "edit" => KnowledgeChange::Edit {
+            object: object.ok_or(Error::new("invalid_input"))?,
+            request: contracts::decode_ref("KnowledgeEdit", &input)?,
+            raw: input,
+        },
+        action => {
+            let action = match action {
+                "apply-proposal" => KnowledgeVersionAction::ApplyProposal,
+                "reanalyze" => KnowledgeVersionAction::Reanalyze,
+                "enabled" => KnowledgeVersionAction::SetState(MemoryState::Enabled),
+                "disabled" => KnowledgeVersionAction::SetState(MemoryState::Disabled),
+                "deleted" => KnowledgeVersionAction::SetState(MemoryState::Deleted),
+                _ => return Err(Error::new("invalid_input")),
+            };
+            KnowledgeChange::Version {
+                object: object.ok_or(Error::new("invalid_input"))?,
+                action,
+                request: contracts::decode("VersionCommand", input)?,
+            }
         }
-    } else {
-        let target = if action == "apply-proposal" {
-            knowledge::proposal_in_tx(&mut tx, ctx, object.ok_or(Error::new("invalid_input"))?)
-                .await?["object_id"]
-                .as_str()
-                .unwrap_or("")
-                .to_owned()
-        } else {
-            object.ok_or(Error::new("invalid_input"))?.to_owned()
-        };
-        authorize_edit_in_tx(&mut tx, ctx, &target).await?;
-    }
-    let mut v = match action {
-        "create" => {
-            let v =
-                if let Some(receipt) = knowledge::begin_create_in_tx(&mut tx, ctx, &input).await? {
-                    receipt
-                } else {
-                    check_input_structure_sources_in_tx(&mut tx, ctx, &input).await?;
-                    knowledge::create_in_tx(&mut tx, ctx, &input).await?
-                };
-            if v["kind"] == "table" || v["kind"] == "field" {
+    };
+    write(pool, ctx, command).await
+}
+
+pub async fn write(
+    pool: &MySqlPool,
+    ctx: &AccessContext,
+    command: KnowledgeChange<'_>,
+) -> Result<Value> {
+    let mut tx = AppTx::begin(pool).await?;
+    let changes_authority = matches!(
+        &command,
+        KnowledgeChange::Version {
+            action: KnowledgeVersionAction::SetState(_),
+            ..
+        }
+    );
+    let mut v = match command {
+        KnowledgeChange::Create { request, raw } => {
+            let platform_object = matches!(request.kind, KindElement::Table | KindElement::Field);
+            if platform_object {
+                access::authorize_maintainer(ctx)?;
+            } else if !access::can_create_in_tx(&mut tx, ctx).await? {
+                return Err(Error::new("forbidden"));
+            }
+            let v = if let Some(receipt) = knowledge::begin_create_in_tx(&mut tx, ctx, &raw).await?
+            {
+                receipt
+            } else {
+                check_input_structure_sources_in_tx(&mut tx, ctx, &raw).await?;
+                knowledge::create_in_tx(&mut tx, ctx, &raw).await?
+            };
+            if platform_object {
                 crate::use_cases::semantic_governance::register_object_in_tx(&mut tx, ctx, &v)
                     .await?;
             } else {
@@ -50,70 +104,96 @@ pub async fn edit(
             }
             v
         }
-        "edit" => {
-            contracts::validate("KnowledgeEdit", &input)?;
-            let object = object.ok_or(Error::new("invalid_input"))?;
-            apply_entry_edit_in_tx(&mut tx, ctx, object, &input).await?
+        KnowledgeChange::Edit {
+            object,
+            request,
+            raw,
+        } => {
+            authorize_edit_in_tx(&mut tx, ctx, object).await?;
+            apply_entry_edit_in_tx(
+                &mut tx,
+                ctx,
+                object,
+                &raw,
+                &request.entry_id,
+                request.clear_override == Some(true),
+            )
+            .await?
         }
-        "reanalyze" => {
-            contracts::validate("VersionCommand", &input)?;
-            let object = object.ok_or(Error::new("invalid_input"))?;
-            if let Some(mut receipt) =
-                knowledge::begin_reanalysis_in_tx(&mut tx, ctx, object, &input).await?
-            {
-                crate::use_cases::semantic_governance::decorate_in_tx(&mut tx, ctx, &mut receipt)
-                    .await?;
-                contracts::validate("KnowledgeObject", &receipt)?;
-                tx.commit().await?;
-                return Ok(receipt);
-            }
-            let old = knowledge::read_in_tx(&mut tx, ctx, object, None, true).await?;
-            let source = old["source_id"].as_str().ok_or(Error::new("unsupported"))?;
-            let version = ingestion::source_version_in_tx(&mut tx, &ctx.space_id, source).await?;
-            let (candidate, sources) = if source.starts_with("catalog-") {
-                let candidate =
-                    ingestion::catalog_candidate_in_tx(&mut tx, ctx, source, object).await?;
-                let sources =
-                    vec![ingestion::read_source_in_tx(&mut tx, ctx, source, version).await?];
-                (candidate, sources)
+        KnowledgeChange::Version {
+            object,
+            action,
+            request,
+        } => {
+            let target = if matches!(action, KnowledgeVersionAction::ApplyProposal) {
+                knowledge::proposal_in_tx(&mut tx, ctx, object).await?["object_id"]
+                    .as_str()
+                    .ok_or(Error::new("unavailable"))?
+                    .to_owned()
             } else {
-                let catalog = current_catalog_in_tx(&mut tx, ctx).await?;
-                let candidate = catalog["objects"]
-                    .as_array()
-                    .and_then(|a| a.iter().find(|v| v["id"] == object))
-                    .ok_or(Error::new("unsupported"))?
-                    .clone();
-                (candidate, sources_in_tx(&mut tx, ctx).await?)
+                object.to_owned()
             };
-            let updated =
-                knowledge::reanalyze_in_tx(&mut tx, ctx, object, &input, version, &candidate)
+            authorize_edit_in_tx(&mut tx, ctx, &target).await?;
+            let input = serde_json::to_value(request).map_err(|_| Error::new("invalid_input"))?;
+            match action {
+                KnowledgeVersionAction::Reanalyze => {
+                    if let Some(mut receipt) =
+                        knowledge::begin_reanalysis_in_tx(&mut tx, ctx, object, &input).await?
+                    {
+                        crate::use_cases::semantic_governance::decorate_in_tx(
+                            &mut tx,
+                            ctx,
+                            &mut receipt,
+                        )
+                        .await?;
+                        contracts::validate("KnowledgeObject", &receipt)?;
+                        tx.commit().await?;
+                        return Ok(receipt);
+                    }
+                    let old = knowledge::read_in_tx(&mut tx, ctx, object, None, true).await?;
+                    let source = old["source_id"].as_str().ok_or(Error::new("unsupported"))?;
+                    let version =
+                        ingestion::source_version_in_tx(&mut tx, &ctx.space_id, source).await?;
+                    let (candidate, sources) = if source.starts_with("catalog-") {
+                        let candidate =
+                            ingestion::catalog_candidate_in_tx(&mut tx, ctx, source, object)
+                                .await?;
+                        let sources = vec![
+                            ingestion::read_source_in_tx(&mut tx, ctx, source, version).await?,
+                        ];
+                        (candidate, sources)
+                    } else {
+                        let catalog = current_catalog_in_tx(&mut tx, ctx).await?;
+                        let candidate = catalog["objects"]
+                            .as_array()
+                            .and_then(|a| a.iter().find(|v| v["id"] == object))
+                            .ok_or(Error::new("unsupported"))?
+                            .clone();
+                        (candidate, sources_in_tx(&mut tx, ctx).await?)
+                    };
+                    let updated = knowledge::reanalyze_in_tx(
+                        &mut tx, ctx, object, &input, version, &candidate,
+                    )
                     .await?;
-            crate::use_cases::prefill_materials::queue_in_tx(&mut tx, ctx, &updated, sources)
-                .await?;
-            updated
+                    crate::use_cases::prefill_materials::queue_in_tx(
+                        &mut tx, ctx, &updated, sources,
+                    )
+                    .await?;
+                    updated
+                }
+                KnowledgeVersionAction::ApplyProposal => {
+                    knowledge::apply_proposal_in_tx(&mut tx, ctx, object, &input).await?
+                }
+                KnowledgeVersionAction::SetState(state) => {
+                    let state = match state {
+                        MemoryState::Enabled => "enabled",
+                        MemoryState::Disabled => "disabled",
+                        MemoryState::Deleted => "deleted",
+                    };
+                    knowledge::change_state_in_tx(&mut tx, ctx, object, &input, state).await?
+                }
+            }
         }
-        "apply-proposal" => {
-            contracts::validate("VersionCommand", &input)?;
-            knowledge::apply_proposal_in_tx(
-                &mut tx,
-                ctx,
-                object.ok_or(Error::new("invalid_input"))?,
-                &input,
-            )
-            .await?
-        }
-        state @ ("enabled" | "disabled" | "deleted") => {
-            contracts::validate("VersionCommand", &input)?;
-            knowledge::change_state_in_tx(
-                &mut tx,
-                ctx,
-                object.ok_or(Error::new("invalid_input"))?,
-                &input,
-                state,
-            )
-            .await?
-        }
-        _ => return Err(Error::new("invalid_input")),
     };
     // 模块内保存不含跨模块登记：这里补依赖目标指纹并排队来源扇出（幂等，重放不破坏）。
     crate::use_cases::dependency_registration::after_content_saved_in_tx(
@@ -131,7 +211,7 @@ pub async fn edit(
     .await?;
     crate::use_cases::semantic_governance::decorate_in_tx(&mut tx, ctx, &mut v).await?;
     contracts::validate("KnowledgeObject", &v)?;
-    if matches!(action, "enabled" | "disabled" | "deleted") {
+    if changes_authority {
         tx.notify(crate::live_changes::Change::Authority {
             space_id: ctx.space_id.clone(),
         });
@@ -147,11 +227,14 @@ async fn apply_entry_edit_in_tx(
     ctx: &AccessContext,
     object: &str,
     input: &Value,
+    entry_id: &str,
+    clear_override: bool,
 ) -> Result<Value> {
     if let Some(receipt) = knowledge::begin_edit_in_tx(tx, ctx, object, input).await? {
         return Ok(receipt);
     }
-    let source_value = checked_edit_source_in_tx(tx, ctx, object, input).await?;
+    let source_value =
+        checked_edit_source_in_tx(tx, ctx, object, input, entry_id, clear_override).await?;
     knowledge::save_edit_in_tx(tx, ctx, object, input, source_value.as_deref()).await
 }
 
@@ -160,8 +243,10 @@ async fn checked_edit_source_in_tx(
     ctx: &AccessContext,
     object: &str,
     input: &Value,
+    entry_id: &str,
+    clear_override: bool,
 ) -> Result<Option<String>> {
-    if input["clear_override"] != true {
+    if !clear_override {
         check_input_structure_sources_in_tx(tx, ctx, input).await?;
         if let Some(statements) = input["statements"].as_array() {
             let mut references = Vec::new();
@@ -195,13 +280,11 @@ async fn checked_edit_source_in_tx(
         }
     }
     let mut source_value = None;
-    if input["clear_override"] == true {
+    if clear_override {
         let old = knowledge::read_in_tx(tx, ctx, object, None, true).await?;
-        let entry = old["entries"].as_array().and_then(|entries| {
-            entries
-                .iter()
-                .find(|entry| entry["entry_id"] == input["entry_id"])
-        });
+        let entry = old["entries"]
+            .as_array()
+            .and_then(|entries| entries.iter().find(|entry| entry["entry_id"] == entry_id));
         // 旧条目尚未保存来源基础值时，用同版本候选补齐，不能把quote当正文。
         if entry.is_some_and(|entry| {
             entry["suggestion"]["value"].as_str().is_none()
@@ -221,11 +304,7 @@ async fn checked_edit_source_in_tx(
             };
             source_value = candidate["entries"]
                 .as_array()
-                .and_then(|entries| {
-                    entries
-                        .iter()
-                        .find(|entry| entry["entry_id"] == input["entry_id"])
-                })
+                .and_then(|entries| entries.iter().find(|entry| entry["entry_id"] == entry_id))
                 .and_then(|entry| entry["effective_value"].as_str())
                 .map(str::to_owned);
         }
@@ -240,24 +319,28 @@ pub async fn edit_entries(
     pool: &MySqlPool,
     ctx: &AccessContext,
     object: &str,
-    input: Value,
+    input: crate::contracts::generated::KnowledgeEntryBatch,
+    raw: Value,
 ) -> Result<Value> {
-    contracts::validate("KnowledgeEntryBatch", &input)?;
-    let edits = input["edits"]
-        .as_array()
-        .ok_or(Error::new("invalid_input"))?;
-    let operation = input["operation_id"]
-        .as_str()
-        .ok_or(Error::new("invalid_input"))?;
-    let base = epoch(input["expected_version"].as_str().unwrap_or(""))?;
+    let edits = raw["edits"].as_array().ok_or(Error::new("invalid_input"))?;
+    let operation = input.operation_id;
+    let base = epoch(&input.expected_version)?;
     let mut tx = AppTx::begin(pool).await?;
     authorize_edit_in_tx(&mut tx, ctx, object).await?;
     let mut v = Value::Null;
-    for (index, edit) in edits.iter().enumerate() {
+    for (index, (edit, request)) in edits.iter().zip(&input.edits).enumerate() {
         let mut entry = edit.clone();
         entry["operation_id"] = json!(format!("{operation}-{index}"));
         entry["expected_version"] = json!((base + index as u64).to_string());
-        v = apply_entry_edit_in_tx(&mut tx, ctx, object, &entry).await?;
+        v = apply_entry_edit_in_tx(
+            &mut tx,
+            ctx,
+            object,
+            &entry,
+            &request.entry_id,
+            request.clear_override == Some(true),
+        )
+        .await?;
     }
     crate::use_cases::dependency_registration::after_content_saved_in_tx(
         &mut tx,
@@ -306,15 +389,22 @@ pub async fn edit_batch(
     for (object, group) in objects.iter_mut().zip(&input.objects) {
         let mut paths = Vec::with_capacity(group.edits.len());
         for edit in &group.edits {
-            let edit = serde_json::to_value(edit).map_err(|_| Error::new("invalid_input"))?;
-            let source_value =
-                checked_edit_source_in_tx(&mut tx, ctx, &group.object_id, &edit).await?;
+            let raw = serde_json::to_value(edit).map_err(|_| Error::new("invalid_input"))?;
+            let source_value = checked_edit_source_in_tx(
+                &mut tx,
+                ctx,
+                &group.object_id,
+                &raw,
+                &edit.entry_id,
+                edit.clear_override == Some(true),
+            )
+            .await?;
             paths.push(
                 knowledge::apply_entry_in_tx(
                     &mut tx,
                     ctx,
                     object,
-                    &edit,
+                    &raw,
                     &input.operation_id,
                     source_value.as_deref(),
                 )

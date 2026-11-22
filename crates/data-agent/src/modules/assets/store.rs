@@ -4,12 +4,12 @@ use crate::{
 };
 use serde_json::{Value, json};
 use sqlx::Row;
-fn without_skill_sources(mut asset: Value) -> Value {
+fn without_skill_sources(mut asset: Value) -> Result<Value> {
     asset
         .as_object_mut()
-        .expect("stored asset")
+        .ok_or(crate::types::Error::new("unavailable"))?
         .remove("skill_sources");
-    asset
+    Ok(asset)
 }
 
 fn body_with_sources(r: &sqlx::mysql::MySqlRow) -> Value {
@@ -72,9 +72,7 @@ pub async fn read_in_tx(
     asset: &str,
     active: bool,
 ) -> Result<Value> {
-    Ok(without_skill_sources(
-        read_with_sources_in_tx(tx, ctx, asset, active).await?,
-    ))
+    without_skill_sources(read_with_sources_in_tx(tx, ctx, asset, active).await?)
 }
 
 pub async fn read_with_sources_in_tx(
@@ -129,8 +127,14 @@ pub async fn version_skill_sources_in_tx(
     tx: &mut AppTx<'_>,
     asset: &Value,
 ) -> Result<Option<Value>> {
-    let id = asset["id"].as_str().expect("saved asset ID");
-    let version = epoch(asset["version"].as_str().expect("saved asset version"))?;
+    let id = asset["id"]
+        .as_str()
+        .ok_or(crate::types::Error::new("unavailable"))?;
+    let version = epoch(
+        asset["version"]
+            .as_str()
+            .ok_or(crate::types::Error::new("unavailable"))?,
+    )?;
     let sources = sqlx::query_scalar::<_, Option<sqlx::types::Json<Value>>>(
         "SELECT JSON_EXTRACT(body,'$.skill_sources') FROM personal_asset_versions WHERE asset_id=? AND version=?",
     )
@@ -163,7 +167,7 @@ async fn persist(
         .bind(sqlx::types::Json(value))
         .execute(tx.connection())
         .await?;
-    let receipt = without_skill_sources(value.clone());
+    let receipt = without_skill_sources(value.clone())?;
     record_operation(tx, ctx, key, input, &receipt).await?;
     Ok(receipt)
 }
@@ -298,23 +302,26 @@ pub async fn save_with_skill_sources_in_tx(
             if old["kind"] != input["kind"] {
                 return Err(Error::new("invalid_input"));
             }
-            let replaces_contents = ["name", "body", "scope", "source_text"]
+            let replaces_contents = if ["name", "body", "scope", "source_text"]
                 .into_iter()
                 .all(|field| input[field] != old[field])
-                && input.get("files").is_some_and(|files| {
-                    // 完整人工重写可解除旧来源。沿用任何旧附件时仍保留来源。
-                    let previous = old["files"].as_array().expect("saved Skill files");
-                    files
-                        .as_array()
-                        .expect("checked Skill files")
-                        .iter()
-                        .all(|file| !previous.contains(file))
-                });
+                && let Some(files) = input.get("files")
+            {
+                // 完整人工重写可解除旧来源。沿用任何旧附件时仍保留来源。
+                let previous = old["files"].as_array().ok_or(Error::new("unavailable"))?;
+                files
+                    .as_array()
+                    .ok_or(Error::new("invalid_input"))?
+                    .iter()
+                    .all(|file| !previous.contains(file))
+            } else {
+                false
+            };
             skill_sources = if replaces_contents {
                 None
             } else {
                 old.as_object_mut()
-                    .expect("stored asset")
+                    .ok_or(crate::types::Error::new("unavailable"))?
                     .remove("skill_sources")
             };
             (

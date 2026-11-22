@@ -27,7 +27,7 @@ pub async fn saved_result_page(input: &Value) -> Result<Value> {
 async fn call_limited(path: &str, input: &Value, limit: Option<usize>) -> Result<Value> {
     let url = std::env::var("DATA_AGENT_PLATFORM_URL").map_err(|_| Error::new("unsupported"))?;
     let parsed = reqwest::Url::parse(&url).map_err(|_| Error::new("invalid_input"))?;
-    if parsed.scheme() != "http" || parsed.host_str() != Some("127.0.0.1") {
+    if !crate::upstream::http_allowed(&parsed)? {
         return Err(Error::new("invalid_input"));
     }
     let token =
@@ -94,7 +94,8 @@ struct ResultAuthority {
     owner_id: String,
     result_ref: String,
     state: String,
-    source: String,
+    #[serde(rename = "source")]
+    _source: String,
     saved_row_count: usize,
     #[serde(rename = "saved_result_complete")]
     _saved_result_complete: bool,
@@ -113,7 +114,6 @@ fn check_result_authority(
     }
     if response.result_ref != result_ref
         || response.state != "available"
-        || response.source != "mock"
         || response.saved_row_count > 1000
     {
         return Err(Error::new("result_unavailable"));

@@ -81,9 +81,10 @@ pub fn check_semantics(sql: &str, parameters: &Value, snapshot: &Value) -> Value
     {
         return unsupported("复杂LIMIT或分页子查询未检查。");
     }
-    if let Err(reason) = check_shape(select) {
-        return unsupported(reason);
-    }
+    let join_keys = match check_shape(select) {
+        Ok(keys) => keys,
+        Err(reason) => return unsupported(reason),
+    };
     let objects = snapshot["objects"]
         .as_array()
         .map(Vec::as_slice)
@@ -115,8 +116,7 @@ pub fn check_semantics(sql: &str, parameters: &Value, snapshot: &Value) -> Value
         .first()
         .and_then(|join| multi_grain_rewrite(&join.join_operator, &bindings, objects, &metrics));
     if !simple_projection {
-        let mut report =
-            unsupported("仅支持直接列及SUM(直接列)；其他聚合、换算、窗口和复杂表达式未检查。");
+        let mut checks = Vec::new();
         if let ([binding], [(metric, structure)]) = (bindings.as_slice(), metrics.as_slice())
             && binding.object.is_some_and(|table| {
                 ref_matches(&structure["table"], table) && table["column_names_complete"] == true
@@ -125,19 +125,17 @@ pub fn check_semantics(sql: &str, parameters: &Value, snapshot: &Value) -> Value
             && let Some(expected) = metric_expression(expression)
             && mixes_metric_boundary(select, &expected, binding)
         {
-            report["checks"].as_array_mut().unwrap().push(json!({
+            checks.push(json!({
                 "rule":"metric_boundary_mixed", "state":"warning", "evidence_refs":[object_ref(metric)],
                 "finding":"此列把已确认指标和空值样本加减合并，结果与登记口径不同。若需分别核对，请分列展示。",
                 "coverage_limit":"仅比对单表顶层投影中的加减项，不判定用户意图或执行权限。"
             }));
         }
-        if let Some(rewrite) = rewrite {
-            report["checks"]
-                .as_array_mut()
-                .expect("checks")
-                .push(rewrite);
-        }
-        return report;
+        checks.extend(rewrite);
+        return coverage_unsupported(
+            "仅支持直接列及SUM(直接列)；其他聚合、换算、窗口和复杂表达式未检查。",
+            checks,
+        );
     }
     let mut report = Report::default();
     report.add(
@@ -190,14 +188,8 @@ pub fn check_semantics(sql: &str, parameters: &Value, snapshot: &Value) -> Value
             "部分SUM列无法唯一对应完整列目录，相关聚合未检查。",
         );
     }
-    if let Some(join) = relation.joins.first() {
-        check_join(
-            join_constraint(&join.join_operator).unwrap(),
-            &bindings,
-            &sums,
-            objects,
-            &mut report,
-        );
+    if let Some(keys) = join_keys {
+        check_join(keys, &bindings, &sums, objects, &mut report);
     }
     report.checks.extend(rewrite);
     check_metrics(
@@ -244,8 +236,16 @@ impl Report {
 }
 
 fn unsupported(reason: &str) -> Value {
-    json!({"checks":[{"rule":"sql_shape","state":"not_checked","evidence_refs":[],
-        "finding":reason,"coverage_limit":LIMITATION}],"coverage":{"sql_shape":"unsupported",
+    coverage_unsupported(reason, Vec::new())
+}
+
+fn coverage_unsupported(reason: &str, mut checks: Vec<Value>) -> Value {
+    checks.insert(
+        0,
+        json!({"rule":"sql_shape","state":"not_checked","evidence_refs":[],
+        "finding":reason,"coverage_limit":LIMITATION}),
+    );
+    json!({"checks":checks,"coverage":{"sql_shape":"unsupported",
         "supported_scope":[],"missing_semantics":[],"unsupported_constructs":[reason]}})
 }
 
@@ -443,7 +443,9 @@ fn join_pairs(expr: &Expr) -> Option<Vec<(&Expr, &Expr)>> {
     }
 }
 
-fn check_shape(select: &Select) -> std::result::Result<(), &'static str> {
+type JoinKeys<'a> = Vec<(&'a Expr, &'a Expr)>;
+
+fn check_shape(select: &Select) -> std::result::Result<Option<JoinKeys<'_>>, &'static str> {
     if select.from.len() != 1 || select.from[0].joins.len() > 1 {
         return Err("仅支持一个FROM表和至多一个关联；多关联、逗号关联未检查。");
     }
@@ -476,14 +478,15 @@ fn check_shape(select: &Select) -> std::result::Result<(), &'static str> {
     {
         return Err("仅支持AND连接的直接列比较及空值条件；OR、子查询和复杂过滤未检查。");
     }
-    if let Some(join) = select.from[0].joins.first()
-        && join_constraint(&join.join_operator)
-            .and_then(join_pairs)
-            .is_none()
-    {
-        return Err("仅支持INNER/LEFT JOIN的AND等值列关联；其他关联未检查。");
-    }
-    Ok(())
+    select.from[0]
+        .joins
+        .first()
+        .map(|join| {
+            join_constraint(&join.join_operator)
+                .and_then(join_pairs)
+                .ok_or("仅支持INNER/LEFT JOIN的AND等值列关联；其他关联未检查。")
+        })
+        .transpose()
 }
 
 fn object_ref(object: &Value) -> Value {

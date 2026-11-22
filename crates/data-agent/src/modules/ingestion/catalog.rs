@@ -184,11 +184,7 @@ pub async fn fetch_page(cursor: Option<&str>, snapshot: Option<&str>) -> Result<
     let url =
         std::env::var("DATA_AGENT_PLATFORM_URL").map_err(|_| Error::new("source_unavailable"))?;
     let url = reqwest::Url::parse(&url).map_err(|_| Error::new("invalid_input"))?;
-    if url.scheme() != "http"
-        || url.host_str() != Some("127.0.0.1")
-        || url.username() != ""
-        || url.password().is_some()
-    {
+    if !crate::upstream::http_allowed(&url)? {
         return Err(Error::new("invalid_input"));
     }
     let token =
@@ -248,7 +244,7 @@ pub async fn fetch_page(cursor: Option<&str>, snapshot: Option<&str>) -> Result<
     contracts::validate("CatalogPage", &value)?;
     for table in value["tables"]
         .as_array()
-        .expect("validated catalog tables")
+        .ok_or(Error::new("invalid_input"))?
     {
         let size = serde_json::to_vec(table)
             .map_err(|_| Error::new("invalid_input"))?

@@ -13,16 +13,20 @@ pub async fn process_due(pool: &MySqlPool) -> Result<bool> {
     if mode.as_deref() == Some("disabled") {
         return Ok(false);
     }
-    let ctx = AccessContext {
-        user_id: "synthetic-prefill".into(),
-        space_id: "demo".into(),
-        request_id: id(),
-        table_access: None,
-    };
     let mut tx = AppTx::begin(pool).await?;
-    let Some(mut job) = ingestion::claim_prefill_in_tx(&mut tx, &ctx.space_id).await? else {
+    let space = access::default_space()?;
+    let Some(mut job) = ingestion::claim_prefill_in_tx(&mut tx, &space).await? else {
         tx.commit().await?;
         return Ok(false);
+    };
+    let ctx = AccessContext {
+        user_id: "synthetic-prefill".into(),
+        space_id: job["space_id"]
+            .as_str()
+            .ok_or(Error::new("invalid_input"))?
+            .to_owned(),
+        request_id: id(),
+        table_access: None,
     };
     let requester = job["input"]["prefill_requester"]
         .as_str()

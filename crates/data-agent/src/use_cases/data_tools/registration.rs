@@ -111,7 +111,10 @@ pub(super) async fn semantic_diagnostics_in_tx(
         match super::super::knowledge::assert_source_in_tx(tx, ctx, &object).await {
             Ok(()) => {
                 // 只读诊断把范围外对象记为覆盖缺口；正式保存路径在条件授权处已硬拒绝。
-                let within_limits = gate.is_none_or(|gate| gate.allows_object(&object));
+                let within_limits = gate
+                    .map(|gate| gate.allows_object(&object))
+                    .transpose()?
+                    .unwrap_or(true);
                 if within_limits {
                     valid.push(object);
                 } else {
@@ -217,7 +220,7 @@ pub(super) async fn protect_query_result_in_tx(
     let queries: Vec<&mut Value> = if data["queries"].is_array() {
         data["queries"]
             .as_array_mut()
-            .expect("query batch")
+            .ok_or(crate::types::Error::new("unavailable"))?
             .iter_mut()
             .collect()
     } else if data["id"].is_string() {
@@ -386,19 +389,23 @@ pub async fn recorded_rejection(
     ctx: &AccessContext,
     input: Value,
 ) -> Result<Value> {
-    contracts::validate("DataToolInvocation", &input)?;
+    let request = contracts::decode("DataToolInvocation", input.clone())?;
+    recorded_rejection_validated(pool, ctx, &request, input).await
+}
+
+pub async fn recorded_rejection_validated(
+    pool: &MySqlPool,
+    ctx: &AccessContext,
+    request: &contracts::generated::DataToolInvocation,
+    input: Value,
+) -> Result<Value> {
     let name = text(&input, "tool_name")?;
-    let cid = runtime::locate_run(pool, text(&input, "run_id")?).await?;
+    let cid = runtime::locate_run(pool, &request.run_id).await?;
     let mut tx = AppTx::begin(pool).await?;
     let conv = conversations::lock_conversation_in_tx(&mut tx, ctx, &cid).await?;
-    conversations::assert_turn_in_tx(
-        &tx,
-        &conv,
-        text(&input, "run_id")?,
-        epoch(text(&input, "lease_epoch")?)?,
-    )?;
-    let run = runtime::lock_run_in_tx(&mut tx, text(&input, "run_id")?, &cid).await?;
-    let tool = runtime::lock_tool_call_in_tx(&mut tx, &run, text(&input, "sdk_tool_call_id")?)
+    conversations::assert_turn_in_tx(&tx, &conv, &request.run_id, epoch(&request.lease_epoch)?)?;
+    let run = runtime::lock_run_in_tx(&mut tx, &request.run_id, &cid).await?;
+    let tool = runtime::lock_tool_call_in_tx(&mut tx, &run, &request.sdk_tool_call_id)
         .await?
         .ok_or(Error::new("not_available"))?;
     if tool.fingerprint != fingerprint(&json!({"name":name,"arguments":input["arguments"]})) {
@@ -413,21 +420,25 @@ pub async fn recorded_rejection(
     Ok(receipt)
 }
 pub async fn register(pool: &MySqlPool, ctx: &AccessContext, input: Value) -> Result<Value> {
-    contracts::validate("DataToolInvocation", &input)?;
+    let request = contracts::decode("DataToolInvocation", input.clone())?;
+    register_validated(pool, ctx, &request, input).await
+}
+
+pub async fn register_validated(
+    pool: &MySqlPool,
+    ctx: &AccessContext,
+    request: &contracts::generated::DataToolInvocation,
+    input: Value,
+) -> Result<Value> {
     let name = text(&input, "tool_name")?;
-    let cid = runtime::locate_run(pool, text(&input, "run_id")?).await?;
+    let cid = runtime::locate_run(pool, &request.run_id).await?;
     let mut tx = AppTx::begin(pool).await?;
     let conv = conversations::lock_conversation_in_tx(&mut tx, ctx, &cid).await?;
-    conversations::assert_turn_in_tx(
-        &tx,
-        &conv,
-        text(&input, "run_id")?,
-        epoch(text(&input, "lease_epoch")?)?,
-    )?;
-    let run = runtime::lock_run_in_tx(&mut tx, text(&input, "run_id")?, &cid).await?;
+    conversations::assert_turn_in_tx(&tx, &conv, &request.run_id, epoch(&request.lease_epoch)?)?;
+    let run = runtime::lock_run_in_tx(&mut tx, &request.run_id, &cid).await?;
     let fp = fingerprint(&json!({"name":name,"arguments":input["arguments"]}));
     let (operation, tool_contract_version) = if let Some(tool) =
-        runtime::lock_tool_call_in_tx(&mut tx, &run, text(&input, "sdk_tool_call_id")?).await?
+        runtime::lock_tool_call_in_tx(&mut tx, &run, &request.sdk_tool_call_id).await?
     {
         if tool.fingerprint != fp {
             return Err(Error::new("idempotency_conflict"));
@@ -438,14 +449,9 @@ pub async fn register(pool: &MySqlPool, ctx: &AccessContext, input: Value) -> Re
         contracts::validate(input_schema(name)?, &input["arguments"])?;
         let handoff =
             super::super::task_answers::register_in_tx(&mut tx, &conv, &run, &input).await?;
-        let operation = runtime::register_named_tool_in_tx(
-            &mut tx,
-            &run,
-            text(&input, "sdk_tool_call_id")?,
-            &fp,
-            name,
-        )
-        .await?;
+        let operation =
+            runtime::register_named_tool_in_tx(&mut tx, &run, &request.sdk_tool_call_id, &fp, name)
+                .await?;
         let args = &input["arguments"];
         let mut task = conversations::active_task_ref_in_tx(&mut tx, &conv).await?;
         let target = args["task_id"]

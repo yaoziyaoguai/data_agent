@@ -23,15 +23,25 @@ pub fn knowledge_record(row: &Value) -> &str {
 
 // 稳定业务位置跨通道去重，不把同一文档的不同位置压成一条。
 pub fn raw_record(row: &Value) -> Option<String> {
-    Some(format!(
-        "{}:{}:{}:{}:{}:{}",
+    Some(raw_record_key(
         row["source_kind"].as_str()?,
         row["source_id"].as_str()?,
         row["revision"].as_u64()?,
         row["offset"].as_u64()?,
         row["length"].as_u64()?,
-        row["segmentation_version"].as_str()?
+        row["segmentation_version"].as_str()?,
     ))
+}
+
+pub(crate) fn raw_record_key(
+    kind: &str,
+    id: &str,
+    revision: u64,
+    offset: u64,
+    length: u64,
+    segmentation: &str,
+) -> String {
+    format!("{kind}:{id}:{revision}:{offset}:{length}:{segmentation}")
 }
 
 // 知识命中行的通道分数：片段最高分；无分数的旧行按0参与合并。
@@ -656,7 +666,7 @@ pub fn asset_directory(
     query: &str,
     after: Option<&str>,
     limit: usize,
-) -> Value {
+) -> crate::types::Result<Value> {
     let tokens = tokens(query);
     items.retain(|v| {
         query == "*"
@@ -679,14 +689,20 @@ pub fn asset_directory(
     let total = items.len();
     if let Some(after) = after {
         let Some(index) = items.iter().position(|v| v["id"] == after) else {
-            return serde_json::json!({"memories":[],"selected_skills":[],"next_asset_after":null,"total":total,"cursor_invalid":true});
+            return Ok(
+                serde_json::json!({"memories":[],"selected_skills":[],"next_asset_after":null,"total":total,"cursor_invalid":true}),
+            );
         };
         items.drain(..=index);
     }
     let mut page = Vec::new();
     let mut next = None;
     for item in &items {
-        if page.len() >= limit || serde_json::to_vec(&page).expect("asset directory").len() > 10000
+        if page.len() >= limit
+            || serde_json::to_vec(&page)
+                .map_err(|_| crate::types::Error::new("unavailable"))?
+                .len()
+                > 10000
         {
             next = page.last().map(|v: &Value| v["id"].clone());
             break;
@@ -702,7 +718,9 @@ pub fn asset_directory(
         let (scope, scope_page) = text_page(item["scope"].as_str().unwrap_or(""), 0, 160);
         page.push(serde_json::json!({"id":item["id"],"object_id":format!("asset-{}",item["id"].as_str().unwrap_or("")),"kind":item["kind"],"version":item["version"],"name":name.chars().take(160).collect::<String>(),"name_complete":name_complete,"body":body,"content_page":content_page,"scope":scope,"scope_page":scope_page,"verified":item["verified"],"selected":item["selected"]}));
     }
-    serde_json::json!({"memories":page.iter().filter(|v|v["kind"]=="memory").collect::<Vec<_>>(),"selected_skills":page.iter().filter(|v|v["kind"]=="skill").collect::<Vec<_>>(),"order":page.iter().map(|v|&v["id"]).collect::<Vec<_>>(),"next_asset_after":next,"total":total})
+    Ok(
+        serde_json::json!({"memories":page.iter().filter(|v|v["kind"]=="memory").collect::<Vec<_>>(),"selected_skills":page.iter().filter(|v|v["kind"]=="skill").collect::<Vec<_>>(),"order":page.iter().map(|v|&v["id"]).collect::<Vec<_>>(),"next_asset_after":next,"total":total}),
+    )
 }
 
 pub fn bound_workspace(context: &mut Value) {

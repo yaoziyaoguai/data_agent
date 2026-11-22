@@ -56,7 +56,7 @@ fn report_body(
     contracts::validate("AnalysisReportRef", reference)?;
     let requested = input["evidence_ids"]
         .as_array()
-        .expect("validated evidence ids");
+        .ok_or(crate::types::Error::new("invalid_input"))?;
     if validated_evidence.len() != requested.len() {
         return Err(Error::new("invalid_evidence"));
     }
@@ -75,27 +75,33 @@ fn report_body(
         }
         evidence.push((*item).clone());
     }
-    for chart in input["charts"].as_array().expect("validated charts") {
-        let linked = evidence.iter().any(|item| {
-            item["findings"]
+    for chart in input["charts"]
+        .as_array()
+        .ok_or(crate::types::Error::new("invalid_input"))?
+    {
+        let mut linked = false;
+        'evidence: for item in &evidence {
+            for finding in item["findings"]
                 .as_array()
-                .expect("validated findings")
-                .iter()
-                .any(|finding| {
-                    finding["query_refs"]
-                        .as_array()
-                        .expect("validated query refs")
-                        .iter()
-                        .any(|query| {
-                            query["query_id"] == chart["query_id"]
-                                && query["result_ref"] == chart["result_ref"]
-                                && query["columns"].as_array().is_some_and(|columns| {
-                                    columns.contains(&chart["dimension_column"])
-                                        && columns.contains(&chart["measure_column"])
-                                })
+                .ok_or(Error::new("invalid_evidence"))?
+            {
+                for query in finding["query_refs"]
+                    .as_array()
+                    .ok_or(Error::new("invalid_evidence"))?
+                {
+                    if query["query_id"] == chart["query_id"]
+                        && query["result_ref"] == chart["result_ref"]
+                        && query["columns"].as_array().is_some_and(|columns| {
+                            columns.contains(&chart["dimension_column"])
+                                && columns.contains(&chart["measure_column"])
                         })
-                })
-        });
+                    {
+                        linked = true;
+                        break 'evidence;
+                    }
+                }
+            }
+        }
         if !linked {
             return Err(Error::new("invalid_evidence"));
         }
@@ -141,11 +147,13 @@ pub async fn save_report_in_tx(
     if let Some(saved) = receipt.begin(tx).await? {
         return Ok(saved);
     }
-    let task = input["task_id"].as_str().expect("validated task id");
+    let task = input["task_id"]
+        .as_str()
+        .ok_or(crate::types::Error::new("invalid_input"))?;
     let condition_version = epoch(
         input["condition_version"]
             .as_str()
-            .expect("validated version"),
+            .ok_or(crate::types::Error::new("invalid_input"))?,
     )?;
     let own = sqlx::query(
         "SELECT id FROM analysis_tasks WHERE id=? AND conversation_id=? AND owner_id=?",
@@ -191,13 +199,16 @@ pub async fn save_report_in_tx(
     .await?;
     let body = report_body(input, &reference, &created_at, validated_evidence)?;
     // M06回源比对不可变依据，薄组合层传入的校验结果不能替换已存正文。
-    for evidence in body["evidence"].as_array().expect("validated evidence") {
+    for evidence in body["evidence"]
+        .as_array()
+        .ok_or(crate::types::Error::new("invalid_input"))?
+    {
         let saved = read_evidence_in_tx(
             tx,
             ctx,
             evidence["reference"]["evidence_id"]
                 .as_str()
-                .expect("validated evidence id"),
+                .ok_or(crate::types::Error::new("invalid_input"))?,
         )
         .await?;
         if saved != *evidence {

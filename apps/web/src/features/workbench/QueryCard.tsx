@@ -33,10 +33,12 @@ export function QueryCard({
   query,
   authorityRevision,
   onEvidence,
+  onOpenResults,
 }: {
   query: QueryView;
   authorityRevision: number;
   onEvidence: (id: string, summary?: string, version?: string) => void;
+  onOpenResults: () => void;
 }) {
   const [result, setResult] = useState<QueryResults | null>(null);
   const [error, setError] = useState("");
@@ -160,7 +162,7 @@ export function QueryCard({
       {!readable && <p className="query-summary" role="status">查询来源已失效或无法核验，SQL、参数和结果已隐藏。查询状态仍会更新，运行中的查询仍可停止。</p>}
       {readable && query.execution_state !== "succeeded" && <p className="query-summary">{query.summary}</p>}
       {timeBasis && <p className="quiet query-time-basis">{timeBasis}</p>}
-      {readable && result && <QueryResultsView result={result} onShowSql={() => setShowSql(true)}/>}
+      {readable && result && <QueryResultsView result={result} onShowSql={() => setShowSql(true)} onOpenResults={onOpenResults}/>}
       {readable && query.execution_state === "succeeded" && <details className="query-conditions"><summary>本次查询条件</summary><p className="query-summary">{query.summary}</p></details>}
       {running ? <>
         <p className="quiet">{stopping ? "已发出停止请求，正在等待查询平台确认。你可以继续聊天。" : "正在后台运行，可以继续聊天或发起其他查询。"}</p>

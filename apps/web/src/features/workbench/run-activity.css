@@ -1,0 +1,47 @@
+.run-activity {
+  flex: 0 0 auto;
+  min-width: 0;
+  padding: 6px 0;
+  border-top: 1px solid #e3e8f1;
+  color: #52657d;
+  font-size: 12px;
+}
+.run-activity .activity {
+  justify-content: space-between;
+}
+.activity-current {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.activity-current i {
+  flex: 0 0 6px;
+}
+.run-activity .activity button {
+  flex-shrink: 0;
+}
+.run-steps summary {
+  padding: 3px 0;
+  cursor: pointer;
+}
+.run-step-count {
+  margin: 0;
+}
+.run-steps ol {
+  max-height: min(20dvh, 160px);
+  margin: 3px 0 0;
+  padding: 0 10px 0 24px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.run-steps li {
+  padding: 3px 0;
+  overflow-wrap: anywhere;
+}
+.step-duration {
+  float: right;
+  margin-left: 8px;
+  font-variant-numeric: tabular-nums;
+}

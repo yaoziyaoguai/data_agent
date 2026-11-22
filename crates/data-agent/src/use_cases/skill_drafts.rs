@@ -81,7 +81,10 @@ async fn evidence_in_tx(
     }
     super::knowledge::check_refs_in_tx(tx, ctx, &sources["knowledge_refs"]).await?;
     // 草稿归属保持当前版本；历史依据及查询分别按自己的原归属核对，不能改标为草稿条件。
-    for item in evidence.as_array().expect("checked evidence") {
+    for item in evidence
+        .as_array()
+        .ok_or(crate::types::Error::new("invalid_input"))?
+    {
         for dependency in item["validated_sources"]["result_dependencies"]
             .as_array()
             .ok_or(Error::new("invalid_evidence"))?
@@ -98,7 +101,7 @@ async fn result_sources(pool: &MySqlPool, ctx: &AccessContext, evidence: &Value)
     let sources = super::analysis_reports::sources(evidence)?;
     for reference in sources["result_dependencies"]
         .as_array()
-        .expect("checked sources")
+        .ok_or(crate::types::Error::new("invalid_input"))?
     {
         super::query_workflow::result_authority(
             pool,
@@ -120,24 +123,31 @@ async fn adopted_skill_authority(
     let references = runtime::read_skill_sources_in_tx(tx, cid, recovery_chain).await?;
     let ids = references
         .iter()
-        .map(|entry| entry[0].as_str().expect("saved Skill ID").to_owned())
-        .collect::<Vec<_>>();
+        .map(|entry| {
+            entry[0]
+                .as_str()
+                .map(str::to_owned)
+                .ok_or(Error::new("unavailable"))
+        })
+        .collect::<Result<Vec<_>>>()?;
     let assets = assets::read_enabled_in_tx(tx, ctx, &ids).await?;
     let mut authority = context_authority::empty();
     for reference in &references {
-        let id = reference[0].as_str().expect("saved Skill ID");
+        let id = reference[0]
+            .as_str()
+            .ok_or(crate::types::Error::new("unavailable"))?;
         let asset = assets
             .get(id)
             .filter(|asset| asset["version"] == reference[1])
             .ok_or(Error::new("stale_context"))?;
         context_authority::merge(
             &mut authority,
-            &super::personal_assets::skill_authority(asset),
+            &super::personal_assets::skill_authority(asset)?,
         )?;
         if !context_authority::items(&authority["source_skills"]).contains(reference) {
             authority["source_skills"]
                 .as_array_mut()
-                .expect("source Skill references")
+                .ok_or(crate::types::Error::new("unavailable"))?
                 .push(reference.clone());
         }
     }
@@ -239,12 +249,12 @@ pub async fn prepare_in_tx(
         AuthorityUse::Text(checked.text_results),
     )
     .await?;
-    let declared = context_authority::from_sources(&sources);
+    let declared = context_authority::from_sources(&sources)?;
     for reference in context_authority::items(&declared["query_results"]) {
         if !context_authority::items(&authority["source_query_results"]).contains(reference) {
             authority["source_query_results"]
                 .as_array_mut()
-                .expect("source query references")
+                .ok_or(crate::types::Error::new("unavailable"))?
                 .push(reference.clone());
         }
     }
@@ -254,7 +264,7 @@ pub async fn prepare_in_tx(
     let references = json!(
         evidence
             .as_array()
-            .expect("checked evidence")
+            .ok_or(crate::types::Error::new("invalid_input"))?
             .iter()
             .map(|item| item["reference"].clone())
             .collect::<Vec<_>>()
@@ -277,7 +287,7 @@ pub async fn prepare_in_tx(
     super::context_authority::merge_run_in_tx(
         tx,
         &run.id,
-        &super::context_authority::from_sources(&sources),
+        &super::context_authority::from_sources(&sources)?,
     )
     .await?;
     Ok(reference)
@@ -321,7 +331,10 @@ async fn check_text_in_tx(
     checked: &super::context_authority::CheckedTextResults,
 ) -> Result<()> {
     let evidence = check_pending_in_tx(tx, ctx, conversation, draft).await?;
-    let body = draft.body.as_ref().expect("pending draft body");
+    let body = draft
+        .body
+        .as_ref()
+        .ok_or(crate::types::Error::new("unavailable"))?;
     if body.get("skill_sources").is_some() {
         super::personal_assets::validate_skill_in_tx(tx, ctx, body, checked).await?;
     }
@@ -358,7 +371,9 @@ pub async fn read(pool: &MySqlPool, ctx: &AccessContext, draft_id: &str) -> Resu
     let evidence = local?;
     let authorities = [
         super::analysis_reports::evidence_authority(&evidence)?,
-        super::personal_assets::skill_authority(draft.body.as_ref().expect("pending draft body")),
+        super::personal_assets::skill_authority(
+            draft.body.as_ref().ok_or(Error::new("unavailable"))?,
+        )?,
     ];
     tx.commit().await?;
     let mut checked = super::context_authority::CheckedTextResults::default();
@@ -464,7 +479,7 @@ pub async fn confirm(pool: &MySqlPool, ctx: &AccessContext, input: &Value) -> Re
     let skill_sources = draft
         .body
         .as_ref()
-        .expect("pending draft body")
+        .ok_or(crate::types::Error::new("unavailable"))?
         .get("skill_sources")
         .cloned();
     let asset =

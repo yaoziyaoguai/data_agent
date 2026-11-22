@@ -1,5 +1,5 @@
 use crate::{
-    contracts,
+    contracts::generated::{CreateConversation, VersionCommand},
     modules::{analysis, assets, conversations, jobs, queries, runtime},
     persistence::AppTx,
     types::{AccessContext, Error, Result, id},
@@ -11,13 +11,12 @@ pub async fn cancel_task(
     ctx: &AccessContext,
     cid: &str,
     task: &str,
-    input: Value,
+    input: VersionCommand,
 ) -> Result<Value> {
-    contracts::validate("VersionCommand", &input)?;
     let mut tx = AppTx::begin(pool).await?;
     let conv = conversations::lock_conversation_in_tx(&mut tx, ctx, cid).await?;
-    let operation = input["operation_id"].as_str().expect("validated operation");
-    let command = json!({"action":"cancel_task","conversation_id":cid,"task_id":task,"expected_version":input["expected_version"]});
+    let operation = input.operation_id.as_str();
+    let command = json!({"action":"cancel_task","conversation_id":cid,"task_id":task,"expected_version":input.expected_version});
     if let Some(receipt) =
         analysis::begin_lifecycle_in_tx(&mut tx, ctx, operation, &command).await?
     {
@@ -26,10 +25,10 @@ pub async fn cancel_task(
     }
     // 会话锁覆盖任务写入口；先核对终态，重复取消不能撤回剩余任务的新运行。
     let current = analysis::read_task_in_tx(&mut tx, cid, task).await?;
-    if current["condition_version"] != input["expected_version"] {
+    if current["condition_version"] != input.expected_version {
         return Err(Error::new("version_conflict"));
     }
-    let receipt = json!({"operation_id":operation,"resource_id":task,"version":input["expected_version"],"state":"cancelled"});
+    let receipt = json!({"operation_id":operation,"resource_id":task,"version":input.expected_version,"state":"cancelled"});
     if current["lifecycle"] == "cancelled" {
         analysis::record_lifecycle_receipt_in_tx(&mut tx, ctx, operation, &command, &receipt)
             .await?;
@@ -65,11 +64,7 @@ pub async fn cancel_task(
         &mut tx,
         cid,
         task,
-        crate::types::epoch(
-            input["expected_version"]
-                .as_str()
-                .expect("validated version"),
-        )?,
+        crate::types::epoch(&input.expected_version)?,
     )
     .await?;
     let tasks = analysis::lock_tasks_in_tx(&mut tx, cid).await?;
@@ -137,9 +132,8 @@ pub async fn withdraw(
     ctx: &AccessContext,
     cid: &str,
     message: &str,
-    input: Value,
+    input: CreateConversation,
 ) -> Result<Value> {
-    contracts::validate("CreateConversation", &input)?;
     let mut tx = AppTx::begin(pool).await?;
     let conv = conversations::lock_conversation_in_tx(&mut tx, ctx, cid).await?;
     conversations::withdraw_in_tx(&mut tx, &conv, message).await?;
@@ -155,16 +149,15 @@ pub async fn withdraw(
     jobs::cancel_message_job_in_tx(&mut tx, message).await?;
     tx.commit().await?;
     Ok(
-        json!({"operation_id":input["operation_id"],"resource_id":message,"version":"0","state":"withdrawn"}),
+        json!({"operation_id":input.operation_id,"resource_id":message,"version":"0","state":"withdrawn"}),
     )
 }
 pub async fn delete(
     pool: &MySqlPool,
     ctx: &AccessContext,
     cid: &str,
-    input: Value,
+    input: CreateConversation,
 ) -> Result<Value> {
-    contracts::validate("CreateConversation", &input)?;
     let mut tx = AppTx::begin(pool).await?;
     let conv = conversations::lock_for_cleanup_in_tx(&mut tx, ctx, cid).await?;
     if !conv.deleted {
@@ -194,7 +187,5 @@ pub async fn delete(
         }
     }
     tx.commit().await?;
-    Ok(
-        json!({"operation_id":input["operation_id"],"resource_id":cid,"version":"0","state":"deleted"}),
-    )
+    Ok(json!({"operation_id":input.operation_id,"resource_id":cid,"version":"0","state":"deleted"}))
 }

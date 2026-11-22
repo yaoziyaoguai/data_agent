@@ -106,7 +106,7 @@ pub async fn save_document_in_tx(
         } else if input.get("source_url").is_some() {
             validate_document_metadata(tx, ctx, input).await?;
         }
-        next(&mut value, ctx);
+        next(&mut value, ctx)?;
         persist(tx, ctx, &value, &["*"]).await?;
         saved.push(value);
     }

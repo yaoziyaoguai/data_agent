@@ -11,7 +11,8 @@ fn business_domain_keeps_the_explicit_declaration_and_does_not_guess_from_words(
     refresh_facts(
         &mut present,
         &[json!({"source_id":"business-guide","version":"2","body":quote})],
-    );
+    )
+    .unwrap();
     assert_eq!(present["entries"][0]["effective_value"], "合成零售");
     assert_eq!(present["entries"][0]["source_facts"]["quote"], quote);
     assert_eq!(present["entries"][0]["source_facts"]["version"], "2");
@@ -21,7 +22,7 @@ fn business_domain_keeps_the_explicit_declaration_and_does_not_guess_from_words(
         &[
             json!({"source_id":"business-guide","version":"2","body":"仅提及合成零售，但域指定已撤下。"}),
         ],
-    );
+    ).unwrap();
     assert_eq!(missing["entries"][0]["source_facts"]["complete"], false);
     assert_eq!(missing["entries"][0]["effective_value"], "");
 }
@@ -37,7 +38,8 @@ fn authored_multiline_value_survives_escaped_source_and_expires_with_its_quote()
     refresh_facts(
         &mut current,
         &[json!({"source_id":"rules","version":"2","body":quote})],
-    );
+    )
+    .unwrap();
     assert_eq!(current["entries"][0]["effective_value"], value);
     assert_eq!(current["entries"][0]["source_facts"]["value"], value);
     assert_eq!(current["entries"][0]["suggestion"], json!({}));
@@ -45,7 +47,8 @@ fn authored_multiline_value_survives_escaped_source_and_expires_with_its_quote()
     refresh_facts(
         &mut removed,
         &[json!({"source_id":"rules","version":"3","body":"新定义不再包含旧映射"})],
-    );
+    )
+    .unwrap();
     assert_eq!(removed["entries"][0]["effective_value"], "");
     let mut manual = base;
     manual["entries"][0]["human_override"] = json!({"value":"人工当前解释"});
@@ -53,7 +56,8 @@ fn authored_multiline_value_survives_escaped_source_and_expires_with_its_quote()
     refresh_facts(
         &mut manual,
         &[json!({"source_id":"rules","version":"3","body":"新定义"})],
-    );
+    )
+    .unwrap();
     assert_eq!(manual["entries"][0]["effective_value"], "人工当前解释");
 }
 
@@ -194,7 +198,7 @@ fn prefill_keeps_structural_candidates_without_claiming_formal_projection() {
 #[test]
 fn review_draft_reuses_quotes_without_losing_per_entry_evidence() {
     let original = json!({"entries":[entry("meaning","含义",json!([])),entry("boundary","边界",json!(["缺口"]))]});
-    let compact = review_draft(&original);
+    let compact = review_draft(&original).unwrap();
     assert!(compact.to_string().len() < original.to_string().len());
     assert_eq!(compact["evidence_catalog"].as_array().unwrap().len(), 1);
     let mut restored = compact.clone();

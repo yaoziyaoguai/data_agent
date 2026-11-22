@@ -1,5 +1,10 @@
 use crate::{
-    contracts,
+    contracts::{
+        self,
+        generated::{
+            MemoryBudgetBindingKind, MemoryModelCall, MemoryModelCallAction, MemoryModelCallPurpose,
+        },
+    },
     modules::{assets, conversations, runtime},
     persistence::AppTx,
     types::{AccessContext, Error, Result, epoch, fingerprint},
@@ -181,7 +186,8 @@ pub async fn queue_in_tx(
     let profile = if let Some(scope) = scope {
         runtime::read_budget_profile_in_tx(tx, scope)
             .await?
-            .map(|p| serde_json::to_value(p).expect("profile"))
+            .map(|p| serde_json::to_value(p).map_err(|_| Error::new("unavailable")))
+            .transpose()?
     } else {
         std::env::var("DATA_AGENT_MODEL_PROFILE")
             .ok()
@@ -253,39 +259,33 @@ pub async fn process_index(pool: &MySqlPool) -> Result<bool> {
 }
 
 // 侧车无预算决定权；宿主从活动run或持久作业恢复原预算，结算不重新授予发送权。
-pub async fn model_call(pool: &MySqlPool, input: Value) -> Result<Value> {
-    contracts::validate("MemoryModelCall", &input)?;
-    let binding = &input["budget"];
+pub async fn model_call(pool: &MySqlPool, request: MemoryModelCall, input: Value) -> Result<Value> {
+    let binding = &request.budget;
     let mut tx = AppTx::begin(pool).await?;
-    if input["action"] == "finalize" {
+    if matches!(request.action, MemoryModelCallAction::Finalize) {
         let receipt = runtime::provider_calls::finish_in_tx(&mut tx, &input).await?;
         tx.commit().await?;
         return Ok(receipt);
     }
-    let budget = if binding["kind"] == "run" {
-        let run_id = binding["id"].as_str().unwrap_or("");
+    let budget = if matches!(binding.kind, MemoryBudgetBindingKind::Run) {
+        let run_id = binding.id.as_str();
         let ctx = super::deliver_run::context_for_run(pool, run_id).await?;
         let cid = runtime::locate_run(pool, run_id).await?;
         let conv = conversations::lock_conversation_in_tx(&mut tx, &ctx, &cid).await?;
-        conversations::assert_turn_in_tx(
-            &tx,
-            &conv,
-            run_id,
-            epoch(binding["epoch"].as_str().unwrap_or("0"))?,
-        )?;
+        conversations::assert_turn_in_tx(&tx, &conv, run_id, epoch(&binding.epoch)?)?;
         let run = runtime::lock_run_in_tx(&mut tx, run_id, &cid).await?;
         if run.state != "running" {
             return Err(Error::new("lease_lost"));
         }
-        if let Some(sdk) = binding["sdk_tool_call_id"].as_str() {
+        if let Some(sdk) = binding.sdk_tool_call_id.as_deref() {
             let tool = runtime::lock_tool_call_in_tx(&mut tx, &run, sdk)
                 .await?
                 .ok_or(Error::new("not_available"))?;
-            if binding["operation_id"] != tool.operation_id || tool.state != "registered" {
+            if binding.operation_id != tool.operation_id || tool.state != "registered" {
                 return Err(Error::new("not_available"));
             }
-        } else if binding["operation_id"] != format!("context-{}", run.message_id)
-            || input["purpose"] != "memory_embedding"
+        } else if binding.operation_id != format!("context-{}", run.message_id)
+            || !matches!(request.purpose, MemoryModelCallPurpose::MemoryEmbedding)
         {
             return Err(Error::new("not_available"));
         }
@@ -297,20 +297,18 @@ pub async fn model_call(pool: &MySqlPool, input: Value) -> Result<Value> {
             profile,
         )?
     } else {
-        let job =
-            assets::memory_index::read_job_in_tx(&mut tx, binding["id"].as_str().unwrap_or(""))
-                .await?;
+        let job = assets::memory_index::read_job_in_tx(&mut tx, binding.id.as_str()).await?;
         if job["state"] != "issued"
             || job["valid"] != true
-            || binding["epoch"] != job["epoch"]
-            || binding["operation_id"] != job["id"]
+            || job["epoch"] != binding.epoch
+            || job["id"] != binding.operation_id
         {
             return Err(Error::new("lease_lost"));
         }
         let ctx = AccessContext {
             user_id: job["owner_id"].as_str().unwrap_or("").to_owned(),
             space_id: job["space_id"].as_str().unwrap_or("").to_owned(),
-            request_id: binding["operation_id"].as_str().unwrap_or("").to_owned(),
+            request_id: binding.operation_id.clone(),
             table_access: None,
         };
         let asset = assets::read_in_tx(
@@ -322,7 +320,7 @@ pub async fn model_call(pool: &MySqlPool, input: Value) -> Result<Value> {
         .await?;
         if asset["version"] != job["asset"]["version"]
             || asset["body"] != job["asset"]["body"]
-            || input["purpose"] != "memory_embedding"
+            || !matches!(request.purpose, MemoryModelCallPurpose::MemoryEmbedding)
         {
             return Err(Error::new("version_conflict"));
         }

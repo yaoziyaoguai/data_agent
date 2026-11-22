@@ -274,7 +274,7 @@ pub(super) async fn checked_refs_in_tx(
             .map_err(|error| knowledge_reference_error(error, &r, "所选条目必要依据"))?;
         if let Some(gate) = gate
             && index <= direct
-            && !gate.allows_object(&v)
+            && !gate.allows_object(&v)?
         {
             return Err(Error::new("source_not_allowed"));
         }

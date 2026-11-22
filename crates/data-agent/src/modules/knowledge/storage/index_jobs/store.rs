@@ -15,7 +15,7 @@ pub async fn claim_index_batch_in_tx(
         .bind(&ctx.space_id).bind(require_frozen).bind(vector).bind(target).bind(vector).bind(vector).bind(if vector { 1_u32 } else { 64_u32 }).fetch_all(tx.connection()).await?;
     let mut jobs = Vec::new();
     for object_id in candidates {
-        let Some(current_version)=sqlx::query_scalar::<_,u64>("SELECT version FROM knowledge_objects WHERE id=? AND space_id=? FOR UPDATE SKIP LOCKED")
+        let Some((space_id,current_version))=sqlx::query_as::<_,(String,u64)>("SELECT space_id,version FROM knowledge_objects WHERE id=? AND space_id=? FOR UPDATE SKIP LOCKED")
             .bind(&object_id).bind(&ctx.space_id).fetch_optional(tx.connection()).await? else {continue;};
         let mut versions=sqlx::query_scalar::<_,u64>("SELECT version FROM knowledge_index_jobs WHERE target_kind='knowledge_entry' AND source_kind='' AND object_id=? AND version<? AND vector_state NOT IN ('indexed','bounded','superseded') ORDER BY version LIMIT 64")
             .bind(&object_id).bind(current_version).fetch_all(tx.connection()).await?;
@@ -70,7 +70,7 @@ pub async fn claim_index_batch_in_tx(
             .fetch_one(tx.connection())
             .await?
             .0;
-            jobs.push(json!({"object_id":object_id,"job_version":version.to_string(),"lease_epoch":epoch.to_string(),"object":object}));
+            jobs.push(json!({"space_id":space_id,"object_id":object_id,"job_version":version.to_string(),"lease_epoch":epoch.to_string(),"object":object}));
         }
     }
     Ok(jobs)
@@ -212,7 +212,7 @@ pub async fn claim_source_index_in_tx(
         convergence.build().execute(tx.connection()).await?;
     }
     let mut selection = sqlx::QueryBuilder::<sqlx::MySql>::new(
-        "SELECT source_kind,object_id,version,state,vector_state,vector_attempts,vector_target,lease_epoch \
+        "SELECT space_id,source_kind,object_id,version,state,vector_state,vector_attempts,vector_target,lease_epoch \
          FROM knowledge_index_jobs \
          WHERE target_kind='source_excerpt' AND space_id=",
     );
@@ -240,6 +240,7 @@ pub async fn claim_source_index_in_tx(
     let Some(row) = row else {
         return Ok(None);
     };
+    let space_id: String = row.try_get("space_id")?;
     let source_kind: String = row.get("source_kind");
     let object_id: String = row.get("object_id");
     let version: u64 = row.get("version");
@@ -272,6 +273,7 @@ pub async fn claim_source_index_in_tx(
     .execute(tx.connection())
     .await?;
     Ok(Some(json!({
+        "space_id":space_id,
         "target_kind":"source_excerpt",
         "source_kind":source_kind,
         "object_id":object_id,

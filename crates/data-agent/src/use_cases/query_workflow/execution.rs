@@ -20,7 +20,7 @@ pub(in crate::use_cases) async fn authorize_pending_execution(
         {
             queries::platform::check_execution_access(
                 ctx,
-                query["sql"].as_str().expect("stored SQL"),
+                query["sql"].as_str().ok_or(Error::new("unavailable"))?,
                 &query["parameters"],
             )
             .await?;
@@ -33,14 +33,22 @@ pub async fn process_due(pool: &MySqlPool, worker: &str) -> Result<bool> {
     let Some(job) = queries::claim_due(pool, worker).await? else {
         return Ok(false);
     };
+    let cid = job["conversation_id"]
+        .as_str()
+        .ok_or(Error::new("invalid_input"))?;
+    let qid = job["query_id"]
+        .as_str()
+        .ok_or(Error::new("invalid_input"))?;
+    let location = conversations::locate_conversation(pool, cid).await?;
     let ctx = AccessContext {
-        user_id: job["owner_id"].as_str().unwrap_or("").into(),
-        space_id: "demo".into(),
+        user_id: job["owner_id"]
+            .as_str()
+            .ok_or(Error::new("invalid_input"))?
+            .to_owned(),
+        space_id: location.space_id,
         request_id: id(),
         table_access: None,
     };
-    let cid = job["conversation_id"].as_str().unwrap_or("");
-    let qid = job["query_id"].as_str().unwrap_or("");
     // 与消息准备相同，两份future并行推进；续租等待查询行锁时不能暂停准备事务。
     let heartbeat = async {
         let mut interval = tokio::time::interval(std::time::Duration::from_secs(

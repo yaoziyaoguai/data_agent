@@ -100,10 +100,7 @@ pub fn id() -> String {
     uuid::Uuid::new_v4().to_string()
 }
 pub fn fingerprint(value: &Value) -> String {
-    format!(
-        "{:x}",
-        Sha256::digest(serde_json::to_vec(value).expect("JSON value"))
-    )
+    format!("{:x}", Sha256::digest(value.to_string()))
 }
 // SQL 后备与公共索引共用规范窗口；展示裁剪不改变内容身份。
 pub const KNOWLEDGE_PROJECTION: &str = "knowledge-statement-window-3";

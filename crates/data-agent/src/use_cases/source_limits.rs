@@ -63,7 +63,7 @@ impl SourceGate {
             || table.is_some_and(|id| self.member("platform", id))
     }
 
-    pub fn allows_object(&self, object: &Value) -> bool {
+    pub fn allows_object(&self, object: &Value) -> Result<bool> {
         let entries = items(&object["entries"]);
         let table = object["table_id"].as_str().or_else(|| {
             entries
@@ -71,23 +71,27 @@ impl SourceGate {
                 .find_map(|entry| entry["effective_structure"]["table"]["object_id"].as_str())
         });
         if self.permits(
-            object["kind"].as_str().expect("stored knowledge kind"),
-            object["id"].as_str().expect("stored knowledge id"),
+            object["kind"]
+                .as_str()
+                .ok_or(crate::types::Error::new("unavailable"))?,
+            object["id"]
+                .as_str()
+                .ok_or(crate::types::Error::new("unavailable"))?,
             None,
             table,
         ) {
-            return true;
+            return Ok(true);
         }
         let object_source = object["source_id"].as_str();
         if entries.is_empty() {
-            return object_source.is_some_and(|source| self.allows_source_arg(source));
+            return Ok(object_source.is_some_and(|source| self.allows_source_arg(source)));
         }
-        entries.iter().all(|entry| {
+        Ok(entries.iter().all(|entry| {
             entry["source_facts"]["source_id"]
                 .as_str()
                 .or(object_source)
                 .is_some_and(|source| self.allows_source_arg(source))
-        })
+        }))
     }
 
     pub fn allowed_sources(&self) -> &[SourceKey] {
@@ -225,17 +229,26 @@ pub(super) async fn authority_within_in_tx(
     }
     let ids = result_query_ids(authority)?;
     let queries = queries::read_map_in_tx(tx, ctx, &ids).await?;
-    if queries.len() != ids.len()
-        || queries
-            .values()
-            .any(|q| !gate.member("platform", q["target_id"].as_str().expect("query target")))
-    {
+    if queries.len() != ids.len() {
         return Ok(false);
+    }
+    for query in queries.values() {
+        let target = query["target_id"]
+            .as_str()
+            .ok_or(Error::new("unavailable"))?;
+        if !gate.member("platform", target) {
+            return Ok(false);
+        }
     }
     let ids: BTreeSet<_> = items(&authority["knowledge"])
         .iter()
-        .map(|item| item[0].as_str().expect("stored knowledge id").to_owned())
-        .collect();
+        .map(|item| {
+            item[0]
+                .as_str()
+                .map(str::to_owned)
+                .ok_or(Error::new("unavailable"))
+        })
+        .collect::<Result<_>>()?;
     let ids: Vec<_> = ids.into_iter().collect();
     let heads: std::collections::HashMap<_, _> =
         knowledge::candidate_meta_in_tx(tx, ctx, &ids, None)
@@ -243,21 +256,26 @@ pub(super) async fn authority_within_in_tx(
             .into_iter()
             .filter(|object| object["state"] == "enabled")
             .map(|object| {
-                (
-                    object["id"].as_str().expect("knowledge id").to_owned(),
-                    object,
-                )
+                let id = object["id"]
+                    .as_str()
+                    .ok_or(Error::new("unavailable"))?
+                    .to_owned();
+                Ok((id, object))
             })
-            .collect();
+            .collect::<Result<_>>()?;
     for (id, version, path) in knowledge_paths(authority) {
-        let id = id.as_str().expect("stored knowledge id");
+        let id = id.as_str().ok_or(crate::types::Error::new("unavailable"))?;
         let Some(head) = heads.get(id) else {
             return Ok(false);
         };
-        let version = version.as_str().expect("stored knowledge version");
+        let version = version
+            .as_str()
+            .ok_or(crate::types::Error::new("unavailable"))?;
         let selected = if head["version"] == version {
             if gate.permits(
-                head["kind"].as_str().expect("knowledge kind"),
+                head["kind"]
+                    .as_str()
+                    .ok_or(crate::types::Error::new("unavailable"))?,
                 id,
                 None,
                 head["table_id"].as_str(),
@@ -276,7 +294,7 @@ pub(super) async fn authority_within_in_tx(
             if !path.is_empty() {
                 let entries = archived["entries"]
                     .as_array_mut()
-                    .expect("archived entries");
+                    .ok_or(crate::types::Error::new("unavailable"))?;
                 entries.retain(|entry| entry["path"] == path || entry["entry_id"] == path);
                 if entries.is_empty() {
                     return Ok(false);
@@ -284,7 +302,7 @@ pub(super) async fn authority_within_in_tx(
             }
             archived
         };
-        if !gate.allows_object(&selected) {
+        if !gate.allows_object(&selected)? {
             return Ok(false);
         }
     }
@@ -386,7 +404,9 @@ pub(super) async fn bind_update_in_tx(
     if input["action"] == "route" {
         return Ok(());
     }
-    let action = input["action"].as_str().expect("tool action");
+    let action = input["action"]
+        .as_str()
+        .ok_or(crate::types::Error::new("invalid_input"))?;
     let task = input["task_id"].as_str().map(str::to_owned);
     let inherit = action == "split" && input["conditions"]["source_limits"].is_null();
     if !user_supplied && items(&input["condition_patch"]["unset"]).contains(&json!("source_limits"))

@@ -1,5 +1,5 @@
 use crate::{
-    contracts,
+    contracts::{self, generated::SaveAnalysisReport},
     modules::{analysis, conversations, queries},
     persistence::AppTx,
     types::{AccessContext, Error, Result, epoch, fingerprint},
@@ -57,7 +57,7 @@ pub fn sources(evidence: &Value) -> Result<Value> {
 }
 
 pub(super) fn evidence_authority(evidence: &Value) -> Result<Value> {
-    Ok(super::context_authority::from_sources(&sources(evidence)?))
+    super::context_authority::from_sources(&sources(evidence)?)
 }
 
 pub(super) async fn check_evidence_in_tx(
@@ -110,7 +110,7 @@ pub(super) async fn check_evidence_in_tx(
     }
     let adopted = sources(evidence)?;
     super::knowledge::check_refs_in_tx(tx, ctx, &adopted["knowledge_refs"]).await?;
-    let selected = super::context_authority::from_sources(&adopted);
+    let selected = super::context_authority::from_sources(&adopted)?;
     if !checked_text.allows(&selected, false) {
         return Err(Error::new("stale_context"));
     }
@@ -187,7 +187,10 @@ async fn result_sources(
     charts: &Value,
 ) -> Result<Vec<Value>> {
     let adopted = sources(evidence)?;
-    for reference in adopted["result_dependencies"].as_array().expect("checked") {
+    for reference in adopted["result_dependencies"]
+        .as_array()
+        .ok_or(crate::types::Error::new("invalid_input"))?
+    {
         super::query_workflow::result_authority(
             pool,
             ctx,
@@ -200,7 +203,7 @@ async fn result_sources(
     for chart in charts.as_array().ok_or(Error::new("invalid_input"))? {
         if !adopted["result_dependencies"]
             .as_array()
-            .expect("checked")
+            .ok_or(crate::types::Error::new("invalid_input"))?
             .iter()
             .any(|r| r["query_id"] == chart["query_id"] && r["result_ref"] == chart["result_ref"])
         {
@@ -232,7 +235,7 @@ async fn partial_chart_results(
     for chart in charts.as_array().ok_or(Error::new("invalid_input"))? {
         if !adopted["result_dependencies"]
             .as_array()
-            .expect("checked")
+            .ok_or(crate::types::Error::new("invalid_input"))?
             .iter()
             .any(|r| r["query_id"] == chart["query_id"] && r["result_ref"] == chart["result_ref"])
         {
@@ -300,9 +303,18 @@ pub async fn validate_sources(
     )
     .await?;
     let mut evidence = Vec::new();
-    for id in input["evidence_ids"].as_array().expect("validated") {
+    for id in input["evidence_ids"]
+        .as_array()
+        .ok_or(crate::types::Error::new("invalid_input"))?
+    {
         evidence.push(
-            analysis::read_evidence_in_tx(&mut tx, ctx, id.as_str().expect("validated")).await?,
+            analysis::read_evidence_in_tx(
+                &mut tx,
+                ctx,
+                id.as_str()
+                    .ok_or(crate::types::Error::new("invalid_input"))?,
+            )
+            .await?,
         );
     }
     let evidence = json!(evidence);
@@ -357,17 +369,17 @@ pub async fn save(
     ctx: &AccessContext,
     cid: &str,
     task: &str,
-    mut input: Value,
+    input: SaveAnalysisReport,
+    mut raw: Value,
 ) -> Result<Value> {
-    contracts::validate("SaveAnalysisReport", &input)?;
-    if input["task_id"] != task {
+    if input.task_id != task {
         return Err(Error::new("invalid_input"));
     }
-    let operation = text(&input, "operation_id")?.to_owned();
-    input
-        .as_object_mut()
-        .expect("validated")
+    let operation = input.operation_id;
+    raw.as_object_mut()
+        .ok_or(crate::types::Error::new("invalid_input"))?
         .remove("operation_id");
+    let input = raw;
     let mut tx = AppTx::begin(pool).await?;
     conversations::lock_conversation_in_tx(&mut tx, ctx, cid).await?;
     if let Some(receipt) =

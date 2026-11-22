@@ -188,7 +188,7 @@ pub async fn retire_source_objects_in_tx(
         for entry in object["entries"].as_array_mut().into_iter().flatten() {
             entry["review_state"] = json!("needs_review");
         }
-        next(&mut object, ctx);
+        next(&mut object, ctx)?;
         persist(tx, ctx, &object, &["*"]).await?;
         crate::modules::knowledge::structure::project_object(&mut object);
         crate::modules::knowledge::preparation::project_object(&mut object);

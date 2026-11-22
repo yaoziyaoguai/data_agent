@@ -1,6 +1,8 @@
 use crate::{
-    contracts,
-    contracts::generated::{SourceKey, SourceKeyKind},
+    contracts::{
+        self,
+        generated::{KnowledgeDocumentEdit, SourceKey, SourceKeyKind},
+    },
     modules::{access, jobs, knowledge},
     persistence::AppTx,
     types::{AccessContext, Error, Result, epoch},
@@ -99,20 +101,18 @@ pub async fn edit(
     pool: &MySqlPool,
     ctx: &AccessContext,
     object: &str,
-    input: Value,
+    input: KnowledgeDocumentEdit,
+    raw: Value,
 ) -> Result<Value> {
-    contracts::validate("KnowledgeDocumentEdit", &input)?;
     let mut tx = AppTx::begin(pool).await?;
     let parts = knowledge::document_parts_in_tx(&mut tx, ctx, object).await?;
-    if parts.len() > 1 && (input.get("related_ids").is_some() || input.get("source_url").is_some())
-    {
+    if parts.len() > 1 && (raw.get("related_ids").is_some() || raw.get("source_url").is_some()) {
         return Err(Error::new("invalid_input"));
     }
-    let mut submitted = input["parts"]
-        .as_array()
-        .ok_or(Error::new("invalid_input"))?
+    let mut submitted = input
+        .parts
         .iter()
-        .map(|part| part["id"].as_str().unwrap_or(""))
+        .map(|part| part.id.as_str())
         .collect::<Vec<_>>();
     submitted.sort_unstable();
     let mut expected = parts
@@ -134,19 +134,17 @@ pub async fn edit(
         .iter()
         .map(|part| part["id"].as_str().unwrap_or("").to_owned())
         .collect::<Vec<_>>();
-    let saved = knowledge::save_document_in_tx(&mut tx, ctx, object, &input, &order).await?;
+    let saved = knowledge::save_document_in_tx(&mut tx, ctx, object, &raw, &order).await?;
     // 模块内保存不含跨模块登记：补依赖目标指纹并排队来源扇出（幂等）。
     super::dependency_registration::after_content_saved_in_tx(&mut tx, ctx, &saved).await?;
     // 保存推进了文档修订：原子登记该修订的raw索引与语义准备，两作业互不等待。
     for part in &saved {
-        let expected = input["parts"]
-            .as_array()
-            .into_iter()
-            .flatten()
-            .find(|submitted| submitted["id"] == part["id"])
-            .and_then(|submitted| submitted["expected_version"].as_str())
-            .unwrap_or("");
-        if part["version"].as_str() != Some(expected) {
+        let expected = input
+            .parts
+            .iter()
+            .find(|submitted| part["id"] == submitted.id)
+            .ok_or(Error::new("version_conflict"))?;
+        if part["version"] != expected.expected_version {
             register_document_preparation_in_tx(&mut tx, &ctx.space_id, part).await?;
         }
     }

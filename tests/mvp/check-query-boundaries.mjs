@@ -179,7 +179,10 @@ try {
     { headers: { authorization: "Bearer " + h.tokens.alice } },
   );
   assert.equal(csv.status, 200);
-  const text = await csv.text();
+  assert.equal(csv.headers.get("content-length"), null, "the response does not buffer the CSV body");
+  const bytes = new Uint8Array(await csv.arrayBuffer());
+  assert.deepEqual(Array.from(bytes.subarray(0, 3)), [0xef, 0xbb, 0xbf]);
+  const text = new TextDecoder().decode(bytes);
   assert.ok(text.includes("-5"));
   assert.ok(text.includes("9007199254740993"));
   assert.ok(text.includes("'=SUM(A1)"));
@@ -201,6 +204,12 @@ try {
   assert.equal(result.truncated, true);
   assert.equal(result.result_complete, false);
   assert.equal(result.rows.length, 100);
+  assert.equal(result.statistics.scope, "page");
+  assert.deepEqual(
+    [result.statistics.columns[0].min, result.statistics.columns[0].max,
+      result.statistics.columns[0].null_count, result.statistics.columns[0].distinct_count],
+    ["1", "100", 0, 100],
+  );
   const tail = (await h.request("/queries/" + many.id + "/results?cursor=900")).value;
   assert.equal(tail.result_complete, false);
   assert.equal(tail.fetched_offset, "900");
@@ -289,8 +298,9 @@ try {
     name: "1000行截断与分页范围明确，单独尾页不声称结果完整",
     passed: true,
   });
-  await h.pausePlatform();
   await confirm(missing);
+  // 确认先完成实时表权限核验，Worker 仍暂停；故障注入针对随后提交。
+  await h.pausePlatform();
   await h.resumeWorker();
   await until(
     async () =>

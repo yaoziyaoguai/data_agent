@@ -4,6 +4,107 @@
   "title": "Boundary",
   "type": "object",
   "$defs": {
+    "RunStepSummary": {
+      "title": "RunStepSummary",
+      "type": "object",
+      "properties": {
+        "category": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "target_name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "duration_ms": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "category",
+        "target_name",
+        "duration_ms"
+      ],
+      "additionalProperties": false
+    },
+    "KnowledgeLineageEdge": {
+      "title": "KnowledgeLineageEdge",
+      "type": "object",
+      "properties": {
+        "object_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "table",
+            "metric",
+            "field",
+            "skill"
+          ]
+        },
+        "relationship": {
+          "type": "string",
+          "enum": [
+            "table_relation",
+            "metric_query",
+            "field_reference",
+            "skill_dependency"
+          ]
+        },
+        "key_summary": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "object_id",
+        "name",
+        "kind",
+        "relationship",
+        "key_summary"
+      ],
+      "additionalProperties": false
+    },
+    "KnowledgeLineage": {
+      "title": "KnowledgeLineage",
+      "type": "object",
+      "properties": {
+        "upstream": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/KnowledgeLineageEdge"
+          }
+        },
+        "downstream": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/KnowledgeLineageEdge"
+          }
+        },
+        "more_downstream": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "upstream",
+        "downstream",
+        "more_downstream"
+      ],
+      "additionalProperties": false
+    },
     "CreateConversation": {
       "type": "object",
       "properties": {
@@ -1153,6 +1254,13 @@
     "RunSnapshot": {
       "type": "object",
       "properties": {
+        "completed_step_summaries": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/RunStepSummary"
+          },
+          "description": "已完成的工具动作、当前可读对象名称与真实耗时。仅作界面进度提示。"
+        },
         "run_id": {
           "type": "string",
           "minLength": 1,
@@ -6248,9 +6356,8 @@
         },
         "source": {
           "type": "string",
-          "enum": [
-            "mock"
-          ]
+          "minLength": 1,
+          "maxLength": 64
         },
         "columns": {
           "type": "array",
@@ -9209,6 +9316,20 @@
       "title": "ResultColumnStatistics",
       "type": "object",
       "properties": {
+        "max": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "当前统计范围的最大非空值，保留原始表示。"
+        },
+        "min": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "当前统计范围的最小非空值，保留原始表示。"
+        },
         "column_index": {
           "type": "integer",
           "minimum": 0
@@ -14305,6 +14426,9 @@
     },
     "resultColumn": {
       "$ref": "#/$defs/ResultColumn"
+    },
+    "knowledgeLineage": {
+      "$ref": "#/$defs/KnowledgeLineage"
     },
     "queryResults": {
       "$ref": "#/$defs/QueryResults"

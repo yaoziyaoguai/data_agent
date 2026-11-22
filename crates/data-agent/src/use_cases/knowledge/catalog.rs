@@ -132,7 +132,7 @@ pub(super) async fn current_catalog_in_tx(
         {
             object["source_version"] = source["version"].clone();
         }
-        ingestion::prefill::refresh_facts(object, &sources);
+        ingestion::prefill::refresh_facts(object, &sources)?;
         ingestion::catalog::link_synthetic_documents(&ctx.space_id, object, &table_aliases);
     }
     Ok(catalog)

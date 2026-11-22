@@ -2,7 +2,7 @@ mod result_reading;
 pub use result_reading::agent_result_page;
 pub mod platform;
 mod result_statistics;
-pub use result_statistics::page_statistics;
+pub use result_statistics::{is_decimal_cell, page_statistics};
 mod saved_results;
 pub use saved_results::{
     SAVED_RESULT_LIMIT, SAVED_RESULT_MAX_PAGES, merge_saved_result_pages, saved_result_next_cursor,

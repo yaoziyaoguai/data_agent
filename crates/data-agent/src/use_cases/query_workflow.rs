@@ -1,9 +1,15 @@
+mod saved_results;
+pub use saved_results::{
+    agent_results, collect_saved_results, collect_saved_results_for_display, result_authority,
+    results,
+};
+pub(super) use saved_results::{check_result_authority, result_state_authority};
 mod execution;
 pub(super) use execution::authorize_pending_execution;
 pub use execution::process_due;
 
 use crate::{
-    contracts,
+    contracts::generated::ConfirmQuery,
     modules::{access, analysis, conversations, jobs, knowledge, queries, runtime},
     persistence::AppTx,
     types::{AccessContext, Error, Result, epoch, id},
@@ -63,7 +69,7 @@ pub async fn validate_text_in_tx(
         return Err(Error::new("not_available"));
     }
     conversations::assert_readable_in_tx(tx, ctx, cid).await?;
-    let authority = super::context_authority::from_sources(&query);
+    let authority = super::context_authority::from_sources(&query)?;
     if !checked.allows(&authority, false) {
         return Err(Error::new("stale_context"));
     }
@@ -71,7 +77,8 @@ pub async fn validate_text_in_tx(
     Ok(authority)
 }
 
-pub fn control_projection(mut query: Value) -> Value {
+pub fn control_projection(mut query: Value) -> Result<Value> {
+    let fields = query.as_object_mut().ok_or(Error::new("unavailable"))?;
     for key in [
         "sql",
         "parameters",
@@ -82,10 +89,10 @@ pub fn control_projection(mut query: Value) -> Value {
         "semantic_resolution",
         "time_basis",
     ] {
-        query.as_object_mut().expect("query").remove(key);
+        fields.remove(key);
     }
-    query["text_unavailable"] = json!(true);
-    query
+    fields.insert("text_unavailable".into(), json!(true));
+    Ok(query)
 }
 
 /// 查询正文读取的三种结局：Current=当前核验通过；Historical=严格
@@ -104,7 +111,7 @@ pub async fn protect_text_outcome_in_tx(
     query: &Value,
     checked: &super::context_authority::CheckedTextResults,
 ) -> Result<ProtectedText> {
-    let authority = super::context_authority::from_sources(query);
+    let authority = super::context_authority::from_sources(query)?;
     let strict = super::context_authority::validate_in_tx(
         tx,
         ctx,
@@ -184,7 +191,7 @@ pub async fn protect_text_in_tx(
             Ok(super::context_authority::empty())
         }
         ProtectedText::Restricted => {
-            *query = control_projection(query.clone());
+            *query = control_projection(query.clone())?;
             Ok(super::context_authority::empty())
         }
     }
@@ -257,7 +264,9 @@ pub async fn history(
             for row in rows.iter_mut().filter(|row| row["conversation_id"] == cid) {
                 protect_text_in_tx(&mut tx, ctx, &cid, row, &checked).await?;
                 // 核验历史来源所需的字段不属于列表的公共返回形状。
-                let fields = row.as_object_mut().expect("query history row");
+                let fields = row
+                    .as_object_mut()
+                    .ok_or(crate::types::Error::new("unavailable"))?;
                 fields.remove("knowledge_refs");
                 fields.remove("result_ref");
                 row["timeline_event_seq"] =
@@ -283,8 +292,17 @@ pub async fn history(
     Ok(json!({"queries":items,"next_before_id":next}))
 }
 
+async fn query_location(pool: &MySqlPool, qid: &str) -> Result<crate::types::RunLocation> {
+    let (cid, owner) = queries::locate(pool, qid).await?;
+    let location = conversations::locate_conversation(pool, &cid).await?;
+    if location.owner_id != owner {
+        return Err(Error::new("not_available"));
+    }
+    Ok(location)
+}
+
 pub async fn read(pool: &MySqlPool, ctx: &AccessContext, qid: &str) -> Result<Value> {
-    let location = queries::locate(pool, qid).await?;
+    let location = query_location(pool, qid).await?;
     access::authorize_owner(ctx, &location.owner_id, &location.space_id)?;
     let checked = check_text_results(pool, ctx, &location.conversation_id, Some(qid)).await?;
     let mut tx = AppTx::begin(pool).await?;
@@ -304,10 +322,10 @@ pub async fn confirm(
     pool: &MySqlPool,
     ctx: &AccessContext,
     qid: &str,
-    input: Value,
+    input: ConfirmQuery,
 ) -> Result<Value> {
-    contracts::validate("ConfirmQuery", &input)?;
-    let location = queries::locate(pool, qid).await?;
+    let input = json!({"operation_id": input.operation_id, "draft_version": input.draft_version, "condition_version": input.condition_version});
+    let location = query_location(pool, qid).await?;
     access::authorize_owner(ctx, &location.owner_id, &location.space_id)?;
     authorize_pending_execution(pool, ctx, &location.conversation_id, &[qid.into()]).await?;
     let checked = check_text_results(pool, ctx, &location.conversation_id, Some(qid)).await?;
@@ -487,14 +505,14 @@ async fn confirm_locked_in_tx(
     Ok(v)
 }
 pub async fn cancel(pool: &MySqlPool, ctx: &AccessContext, qid: &str) -> Result<Value> {
-    let location = queries::locate(pool, qid).await?;
+    let location = query_location(pool, qid).await?;
     access::authorize_owner(ctx, &location.owner_id, &location.space_id)?;
     let mut tx = AppTx::begin(pool).await?;
     let conv =
         conversations::lock_conversation_in_tx(&mut tx, ctx, &location.conversation_id).await?;
     let v = cancel_in_tx(&mut tx, ctx, &conv, qid).await?;
     tx.commit().await?;
-    Ok(control_projection(v))
+    control_projection(v)
 }
 pub(super) async fn cancel_in_tx(
     tx: &mut AppTx<'_>,
@@ -509,253 +527,6 @@ pub(super) async fn cancel_in_tx(
     record_terminal_in_tx(tx, conv, &v).await?;
     Ok(v)
 }
-pub async fn results(
-    pool: &MySqlPool,
-    ctx: &AccessContext,
-    qid: &str,
-    cursor: Option<&str>,
-) -> Result<Value> {
-    results_with(pool, ctx, qid, cursor, false).await
-}
-
-/// 展示路径的结果读取（04切片7）：知识引用按历史规则核验——版本漂移不隐藏
-/// 已存结果数据；对象撤下或上游被撤仍拒绝。保存/采用路径沿用results。
-async fn results_for_display(
-    pool: &MySqlPool,
-    ctx: &AccessContext,
-    qid: &str,
-    cursor: Option<&str>,
-) -> Result<Value> {
-    results_with(pool, ctx, qid, cursor, true).await
-}
-
-async fn results_with(
-    pool: &MySqlPool,
-    ctx: &AccessContext,
-    qid: &str,
-    cursor: Option<&str>,
-    history_refs: bool,
-) -> Result<Value> {
-    let v = read(pool, ctx, qid).await?;
-    if v["text_unavailable"] == true {
-        return Err(Error::new("stale_context"));
-    }
-    if v["execution_state"] != "succeeded" {
-        return Err(Error::new("result_unavailable"));
-    }
-    if history_refs {
-        history_knowledge_check(pool, ctx, &v["knowledge_refs"]).await?;
-    } else {
-        knowledge_check(pool, ctx, &v["knowledge_refs"]).await?;
-    }
-    let mut result = queries::platform::saved_result_page(
-        &json!({"query_id":qid,"owner_id":ctx.user_id,"cursor":cursor}),
-    )
-    .await?;
-    contracts::validate("QueryResults", &result)?;
-    if result["query_id"] != qid || result["result_ref"] != v["result_ref"] {
-        return Err(Error::new("result_unavailable"));
-    }
-    result["statistics"] = queries::page_statistics(&result)?;
-    if let Some(refs) = v["knowledge_refs"]
-        .as_array()
-        .filter(|refs| !refs.is_empty())
-    {
-        let mut tx = AppTx::begin(pool).await?;
-        let snapshot =
-            knowledge::semantic_snapshot_in_tx(&mut tx, ctx, &v["knowledge_refs"]).await?;
-        tx.commit().await?;
-        if let (Some(sql), Some(columns)) = (v["sql"].as_str(), result["columns"].as_array_mut()) {
-            queries::annotate_result_columns(sql, columns, &snapshot, refs);
-        }
-    }
-    Ok(result)
-}
-
-/// Agent读取投影沿用完整结果页的鉴权、来源和版本检查。
-pub async fn agent_results(
-    pool: &MySqlPool,
-    ctx: &AccessContext,
-    qid: &str,
-    input: &Value,
-) -> Result<Value> {
-    let cell_cursor = input["row_index"].as_u64().map(|row| row.to_string());
-    let cursor = if input["view"] == "cell" {
-        cell_cursor.as_deref()
-    } else {
-        input["cursor"].as_str()
-    };
-    let result = results(pool, ctx, qid, cursor).await?;
-    queries::agent_result_page(&result, input)
-}
-
-pub async fn result_authority(
-    pool: &MySqlPool,
-    ctx: &AccessContext,
-    qid: &str,
-    result_ref: &str,
-) -> Result<()> {
-    let location = queries::locate(pool, qid).await?;
-    let checked = check_text_results(pool, ctx, &location.conversation_id, Some(qid)).await?;
-    let mut tx = AppTx::begin(pool).await?;
-    validate_text_in_tx(&mut tx, ctx, &location.conversation_id, qid, &checked).await?;
-    tx.commit().await?;
-    check_result_authority(pool, ctx, qid, result_ref, false).await
-}
-
-/// 核对结果出处和现有平台访问。已保存的历史正文只免除结果 TTL。
-pub(super) async fn check_result_authority(
-    pool: &MySqlPool,
-    ctx: &AccessContext,
-    qid: &str,
-    result_ref: &str,
-    historical: bool,
-) -> Result<()> {
-    let mut tx = AppTx::begin(pool).await?;
-    let query = queries::read_in_tx(&mut tx, ctx, qid).await?;
-    conversations::assert_readable_in_tx(
-        &mut tx,
-        ctx,
-        query["conversation_id"]
-            .as_str()
-            .ok_or(Error::new("not_available"))?,
-    )
-    .await?;
-    if query["execution_state"] != "succeeded" || query["result_ref"].as_str() != Some(result_ref) {
-        return Err(Error::new(if historical {
-            "invalid_evidence"
-        } else {
-            "result_unavailable"
-        }));
-    }
-    if historical {
-        super::knowledge::history_check_refs_in_tx(&mut tx, ctx, &query["knowledge_refs"]).await?;
-    } else {
-        super::knowledge::check_refs_in_tx(&mut tx, ctx, &query["knowledge_refs"]).await?;
-    }
-    tx.commit().await?;
-    match queries::platform::result_authority(qid, &ctx.user_id, result_ref).await {
-        Err(error) if historical && error.code == "result_expired" => Ok(()),
-        result => result,
-    }
-}
-
-pub(super) async fn result_state_authority(
-    pool: &MySqlPool,
-    ctx: &AccessContext,
-    qid: &str,
-    reference: &str,
-) -> Result<()> {
-    check_result_authority(pool, ctx, qid, reference, false).await
-}
-
-/// 读取已保存页不会创建新查询；每一页复用正常结果读取的当前授权与依据检查。
-pub async fn collect_saved_results(
-    pool: &MySqlPool,
-    ctx: &AccessContext,
-    qid: &str,
-) -> Result<Value> {
-    collect_saved_results_with(pool, ctx, qid, true).await
-}
-
-/// 展示路径的已存结果收集（04切片7）：图表数据按结果状态授权交付，不做正文
-/// 严格核验——查询正文曾依赖的其他结果过期只影响口径说明，不隐藏本结果数据；
-/// 撤权类仍由结果状态授权拒绝。保存/采用路径继续用collect_saved_results。
-pub async fn collect_saved_results_for_display(
-    pool: &MySqlPool,
-    ctx: &AccessContext,
-    qid: &str,
-) -> Result<Value> {
-    collect_saved_results_with(pool, ctx, qid, false).await
-}
-
-async fn collect_saved_results_with(
-    pool: &MySqlPool,
-    ctx: &AccessContext,
-    qid: &str,
-    strict_text: bool,
-) -> Result<Value> {
-    let mut pages = Vec::new();
-    let mut cursor = None;
-    let mut received_bytes = 0_usize;
-    for _ in 0..queries::SAVED_RESULT_MAX_PAGES {
-        let page = if strict_text {
-            results(pool, ctx, qid, cursor.as_deref()).await?
-        } else {
-            results_for_display(pool, ctx, qid, cursor.as_deref()).await?
-        };
-        if page["fetched_offset"].as_str() != Some(cursor.as_deref().unwrap_or("0"))
-            || pages.first().is_some_and(|first: &Value| {
-                [
-                    "columns",
-                    "result_ref",
-                    "source",
-                    "data_freshness",
-                    "saved_row_count",
-                    "saved_result_complete",
-                    "truncated",
-                ]
-                .iter()
-                .any(|key| page[*key] != first[*key])
-            })
-        {
-            return Err(Error::new("result_unavailable"));
-        }
-        received_bytes = received_bytes
-            .checked_add(
-                serde_json::to_vec(&page)
-                    .map_err(|_| Error::new("result_unavailable"))?
-                    .len(),
-            )
-            .ok_or(Error::new("request_too_large"))?;
-        if received_bytes > queries::SAVED_RESULT_LIMIT {
-            return Err(Error::new("request_too_large"));
-        }
-        cursor = queries::saved_result_next_cursor(&page)?;
-        pages.push(page);
-        if cursor.is_none() {
-            let result = queries::merge_saved_result_pages(qid, &pages)?;
-            contracts::validate("QueryResults", &result)?;
-            let reference = result["result_ref"]
-                .as_str()
-                .ok_or(Error::new("result_unavailable"))?;
-            if strict_text {
-                result_authority(pool, ctx, qid, reference).await?;
-            } else if let Err(error) =
-                check_result_authority(pool, ctx, qid, reference, false).await
-            {
-                // 展示路径的知识引用已在results_for_display按历史规则核验（撤权类
-                // 在那层整份拒绝）；末次状态授权里的严格引用核验对版本漂移类失败
-                // 不隐藏图表数据（04切片7），撤权与过期类照常上抛——与展示路径
-                // 直接调用处的容忍清单一致。
-                if !matches!(
-                    error.code,
-                    "stale_context" | "stale_knowledge" | "invalid_input"
-                ) {
-                    return Err(error);
-                }
-            }
-            return Ok(result);
-        }
-    }
-    Err(Error::new("request_too_large"))
-}
-async fn knowledge_check(pool: &MySqlPool, ctx: &AccessContext, refs: &Value) -> Result<()> {
-    let mut tx = AppTx::begin(pool).await?;
-    super::knowledge::check_refs_in_tx(&mut tx, ctx, refs).await?;
-    tx.commit().await
-}
-
-async fn history_knowledge_check(
-    pool: &MySqlPool,
-    ctx: &AccessContext,
-    refs: &Value,
-) -> Result<()> {
-    let mut tx = AppTx::begin(pool).await?;
-    super::knowledge::history_check_refs_in_tx(&mut tx, ctx, refs).await?;
-    tx.commit().await
-}
-
 async fn record_terminal_in_tx(
     tx: &mut AppTx<'_>,
     conv: &conversations::LockedConversation,

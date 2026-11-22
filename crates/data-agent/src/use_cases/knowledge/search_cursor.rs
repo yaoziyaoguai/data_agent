@@ -87,9 +87,16 @@ impl SavedCandidate {
     pub(super) fn key(&self) -> String {
         match self {
             Self::Knowledge(_, _, record, _) => format!("k:{record}"),
-            Self::Raw(..) => format!(
+            Self::Raw(kind, id, revision, offset, length, _) => format!(
                 "raw:{}",
-                retrieval::raw_record(&self.row(0.)).expect("saved raw identity")
+                retrieval::raw_record_key(
+                    kind,
+                    id,
+                    *revision,
+                    *offset,
+                    *length,
+                    source_segments::SEGMENTATION_VERSION
+                )
             ),
         }
     }
@@ -197,18 +204,19 @@ impl From<SearchContinuation> for SearchContinuationWire {
                     hash.len() == 64 && hash.bytes().all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte)))) else {
                     compact.f.push((index, record.clone())); continue;
                 };
-                let (group, bytes) = if let Some(group) = groups.iter_mut().find(|(group, _)| group.r == template && group.b == base) {
-                    group
-                } else {
+                let group_index = groups.iter().position(|(group, _)| group.r == template && group.b == base)
+                    .unwrap_or(groups.len());
+                if group_index == groups.len() {
                     groups.push((CompactGroup { r: template, b: base, d: String::new(), u: vec![] }, vec![]));
-                    groups.last_mut().expect("new location group")
-                };
+                }
+                let (group, bytes) = &mut groups[group_index];
                 if let Some(hash) = hash {
                     bytes.extend_from_slice(&(index as u16).to_be_bytes());
                     bytes.extend_from_slice(&offset.to_be_bytes());
-                    for pair in hash.as_bytes().as_chunks::<2>().0.iter() {
-                        bytes.push(u8::from_str_radix(std::str::from_utf8(pair).expect("hex pair"), 16).expect("validated SHA-256"));
-                    }
+                    let nibble = |byte: u8| if byte.is_ascii_digit() { byte - b'0' } else { byte - b'a' + 10 };
+                    bytes.extend(hash.as_bytes().as_chunks::<2>().0.iter().map(|[high, low]| {
+                        nibble(*high) * 16 + nibble(*low)
+                    }));
                 } else {
                     group.u.push((index, offset));
                 }
@@ -344,9 +352,10 @@ impl TryFrom<SearchContinuationWire> for SearchContinuation {
                 return Err("invalid location group".into());
             }
             let hashed = bytes.as_chunks::<42>().0.iter().map(|item| {
-                let index =
-                    u16::from_be_bytes(item[..2].try_into().expect("fixed member index")) as usize;
-                let offset = u64::from_be_bytes(item[2..10].try_into().expect("fixed offset"));
+                let index = u16::from_be_bytes([item[0], item[1]]) as usize;
+                let offset = u64::from_be_bytes([
+                    item[2], item[3], item[4], item[5], item[6], item[7], item[8], item[9],
+                ]);
                 let hash = item[10..]
                     .iter()
                     .map(|byte| format!("{byte:02x}"))
@@ -731,7 +740,7 @@ impl SearchContinuation {
         self.retired.dedup();
     }
     /// 先用完整窗口恢复原通道排名，再去掉已交付/已否决成员，避免局部rank归零。
-    pub fn rank_window(&self, query: &str, objects: Vec<Value>) -> retrieval::CommonRank {
+    pub fn rank_window(&self, query: &str, objects: Vec<Value>) -> Result<retrieval::CommonRank> {
         let lexical = if self.sql_active {
             self.rows(4)
         } else {
@@ -750,12 +759,12 @@ impl SearchContinuation {
         rank.sequence.retain(|(_, key)| !self.suppresses(key));
         rank.objects
             .retain(|row| !self.suppresses(&format!("k:{}", retrieval::knowledge_record(row))));
-        rank.raw.retain(|row| {
-            !self.suppresses(&format!(
-                "raw:{}",
-                retrieval::raw_record(row).expect("saved raw identity")
-            ))
-        });
-        rank
+        for row in std::mem::take(&mut rank.raw) {
+            let key = retrieval::raw_record(&row).ok_or(Error::new("stale_cursor"))?;
+            if !self.suppresses(&format!("raw:{key}")) {
+                rank.raw.push(row);
+            }
+        }
+        Ok(rank)
     }
 }

@@ -236,7 +236,7 @@ pub(in crate::use_cases) async fn compose_in_tx(
                     .is_some_and(|sources| {
                         sources.iter().any(|source| {
                             source["query_id"].as_str()
-                                == Some(notification.as_ref().expect("matched").0.as_str())
+                                == notification.as_ref().map(|(id, ..)| id.as_str())
                                 && source["task_id"] == task["task_id"]
                                 && source["condition_version"] == task["condition_version"]
                         })
@@ -285,7 +285,7 @@ pub(in crate::use_cases) async fn compose_in_tx(
                     .is_some_and(|sources| {
                         sources.iter().any(|source| {
                             source["query_id"].as_str()
-                                == Some(notification.as_ref().expect("matched").0.as_str())
+                                == notification.as_ref().map(|(id, ..)| id.as_str())
                                 && source["task_id"] == task["task_id"]
                                 && source["condition_version"] == task["condition_version"]
                         })

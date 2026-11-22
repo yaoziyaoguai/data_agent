@@ -1,6 +1,6 @@
 use super::*;
 
-fn aggregate_search_objects(contents: Vec<Value>) -> Vec<Value> {
+fn aggregate_search_objects(contents: Vec<Value>) -> Result<Vec<Value>> {
     let mut objects: Vec<Value> = Vec::new();
     for content in contents {
         let Some(object) = objects.iter_mut().find(|object| {
@@ -10,7 +10,9 @@ fn aggregate_search_objects(contents: Vec<Value>) -> Vec<Value> {
             continue;
         };
         for entry in content["entries"].as_array().into_iter().flatten() {
-            let entries = object["entries"].as_array_mut().expect("knowledge entries");
+            let entries = object["entries"]
+                .as_array_mut()
+                .ok_or(crate::types::Error::new("unavailable"))?;
             if !entries
                 .iter()
                 .any(|seen| seen["entry_id"] == entry["entry_id"])
@@ -27,7 +29,9 @@ fn aggregate_search_objects(contents: Vec<Value>) -> Vec<Value> {
                 if object[key].is_null() {
                     object[key] = json!([]);
                 }
-                let references = object[key].as_array_mut().expect("dependency references");
+                let references = object[key]
+                    .as_array_mut()
+                    .ok_or(crate::types::Error::new("unavailable"))?;
                 if !references.contains(reference) {
                     references.push(reference.clone());
                 }
@@ -40,13 +44,13 @@ fn aggregate_search_objects(contents: Vec<Value>) -> Vec<Value> {
         {
             let excerpts = object["retrieval"]["excerpts"]
                 .as_array_mut()
-                .expect("located excerpts");
+                .ok_or(crate::types::Error::new("unavailable"))?;
             if !excerpts.contains(excerpt) && excerpts.len() < 3 {
                 excerpts.push(excerpt.clone());
             }
         }
     }
-    objects
+    Ok(objects)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -209,7 +213,7 @@ pub(super) async fn assemble_search_in_tx(
             SearchHit::SourceExcerpt { .. } => None,
         })
         .collect();
-    let objects = aggregate_search_objects(contents);
+    let objects = aggregate_search_objects(contents)?;
     let target = vector.target.as_deref().unwrap_or("unavailable");
     // R13：已证滞后与未核完分开记录。index_state 保持公开枚举；只有真实查到
     // 旧投影/漏索引才置index_lag，期限耗尽/读取超时只标记检查未完成并保留

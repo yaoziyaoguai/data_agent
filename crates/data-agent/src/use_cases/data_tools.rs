@@ -2,7 +2,7 @@ mod conversation_history;
 mod invoke;
 mod preflight;
 mod saved_analyses;
-pub use invoke::invoke;
+pub use invoke::{invoke, invoke_validated};
 
 use super::evidence_delivery::{SearchCursorInput, SearchScope, SearchSelection};
 use super::source_limits::SourceGate;
@@ -17,11 +17,12 @@ use serde_json::{Value, json};
 use sqlx::MySqlPool;
 mod registration;
 use registration::*;
-pub use registration::{recorded_rejection, register};
+pub use registration::{
+    recorded_rejection, recorded_rejection_validated, register, register_validated,
+};
 mod evidence;
 
 async fn execute(pool: &MySqlPool, ctx: &AccessContext, input: Value) -> Result<Value> {
-    contracts::validate("DataToolInvocation", &input)?;
     let name = text(&input, "tool_name")?;
     let args = &input["arguments"];
     let source_identity_view = name == "search_knowledge" && args["view"] == "source_identity";
@@ -195,7 +196,7 @@ async fn execute(pool: &MySqlPool, ctx: &AccessContext, input: Value) -> Result<
             )
             .await?;
             let reply = super::evidence_delivery::source_reply(
-                serde_json::to_value(reply).expect("source read reply"),
+                serde_json::to_value(reply).map_err(|_| crate::types::Error::new("unavailable"))?,
                 response_budget.as_ref(),
             )?;
             contracts::validate("SourceReadReply", &reply)?;
@@ -553,13 +554,16 @@ async fn execute(pool: &MySqlPool, ctx: &AccessContext, input: Value) -> Result<
             } else {
                 let mut dependencies = args["dependencies"]
                     .as_array()
-                    .expect("validated dependencies")
+                    .ok_or(crate::types::Error::new("invalid_input"))?
                     .clone();
                 // 修订提取使用旧正文，旧来源不能因新参数省略而脱离新版。
                 if extracted_memory.is_some()
                     && let Some(old) = &old
                 {
-                    for reference in old["dependencies"].as_array().expect("asset dependencies") {
+                    for reference in old["dependencies"]
+                        .as_array()
+                        .ok_or(crate::types::Error::new("unavailable"))?
+                    {
                         if !dependencies.contains(reference) {
                             dependencies.push(reference.clone());
                         }
@@ -598,7 +602,7 @@ async fn execute(pool: &MySqlPool, ctx: &AccessContext, input: Value) -> Result<
         _ => return Err(Error::new("unsupported")),
     };
     if evidence_read {
-        super::context_authority::observe(&mut delivery_authority, &data);
+        super::context_authority::observe(&mut delivery_authority, &data)?;
         tx.commit().await?;
         tx = AppTx::begin(pool).await?;
         conv = conversations::lock_conversation_in_tx(&mut tx, ctx, &cid).await?;
@@ -676,7 +680,7 @@ async fn execute(pool: &MySqlPool, ctx: &AccessContext, input: Value) -> Result<
     let mut receipt = json!({"operation_id":tool.operation_id,"tool_name":name,"tool_contract_version":tool.tool_contract_version,"data":data});
     if let Some(ids) = receipt["data"]
         .as_object_mut()
-        .expect("tool data")
+        .ok_or(crate::types::Error::new("unavailable"))?
         .remove("superseded_query_ids")
     {
         receipt["superseded_query_ids"] = ids;
@@ -738,7 +742,7 @@ async fn execute(pool: &MySqlPool, ctx: &AccessContext, input: Value) -> Result<
     }
     contracts::validate("DataToolOutcome", &receipt)?;
     if tool.state == "registered" {
-        runtime::record_tool_receipt_in_tx(&mut tx, &tool, &receipt).await?;
+        runtime::record_tool_receipt_in_tx(&mut tx, &run, &tool, &receipt).await?;
     }
     tx.commit().await?;
     Ok(receipt)

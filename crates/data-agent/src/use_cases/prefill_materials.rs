@@ -138,8 +138,8 @@ pub async fn collect_in_tx(
         }
     }
     let mut metadata =
-        prioritize_object_materials(object, &mut sources, table_name.as_deref(), &mut gaps);
-    let frozen = bound_bodies(&mut sources, &mut gaps);
+        prioritize_object_materials(object, &mut sources, table_name.as_deref(), &mut gaps)?;
+    let frozen = bound_bodies(&mut sources, &mut gaps)?;
     for entry in &mut metadata {
         let fact = &entry["source_facts"];
         if fact["quote"].is_string()
@@ -151,7 +151,7 @@ pub async fn collect_in_tx(
         {
             entry["source_facts"]
                 .as_object_mut()
-                .expect("metadata")
+                .ok_or(crate::types::Error::new("unavailable"))?
                 .remove("quote");
             entry["source_facts"]["complete"] = json!(false);
         }
@@ -178,7 +178,7 @@ fn prioritize_object_materials(
     sources: &mut [Value],
     table: Option<&str>,
     gaps: &mut Vec<Value>,
-) -> Vec<Value> {
+) -> Result<Vec<Value>> {
     let entries: Vec<_> = object["entries"].as_array().into_iter().flatten().collect();
     let mut metadata:Vec<_>=entries.iter().filter(|entry|matches!(entry["path"].as_str(),Some("ddl"|"etl"|"type"))).map(|entry|json!({"entry_id":entry["entry_id"],"path":entry["path"],
         "source_facts":{"source_id":entry["source_facts"]["source_id"],"version":entry["source_facts"]["version"],
@@ -237,7 +237,7 @@ fn prioritize_object_materials(
                 let metadata_index = metadata
                     .iter()
                     .position(|metadata| metadata["entry_id"] == entry["entry_id"])
-                    .expect("type metadata");
+                    .ok_or(crate::types::Error::new("unavailable"))?;
                 quotes.push((
                     metadata_index,
                     index,
@@ -288,7 +288,7 @@ fn prioritize_object_materials(
             source["supporting_excerpts"] = json!(parts);
         }
     }
-    metadata
+    Ok(metadata)
 }
 
 fn source_coverage(sources: &[Value]) -> Vec<Value> {
@@ -356,7 +356,7 @@ pub async fn freeze_review_in_tx(
 }
 
 // 按材料均分剩余额度，短材料释放余量；文档不会被排在前面的长SQL完全挤掉。
-fn bound_bodies(sources: &mut [Value], gaps: &mut Vec<Value>) -> Vec<Value> {
+fn bound_bodies(sources: &mut [Value], gaps: &mut Vec<Value>) -> Result<Vec<Value>> {
     let mut frozen = Vec::new();
     let mut order: Vec<_> = (0..sources.len()).collect();
     order.sort_by_key(|i| sources[*i]["body"].as_str().unwrap_or("").len());
@@ -412,7 +412,7 @@ fn bound_bodies(sources: &mut [Value], gaps: &mut Vec<Value>) -> Vec<Value> {
         if supports.is_empty() {
             source
                 .as_object_mut()
-                .expect("source")
+                .ok_or(crate::types::Error::new("unavailable"))?
                 .remove("supporting_excerpts");
         } else {
             source["supporting_excerpts"] = json!(supports);
@@ -443,7 +443,7 @@ fn bound_bodies(sources: &mut [Value], gaps: &mut Vec<Value>) -> Vec<Value> {
         }
         remaining = remaining + refund - end;
     }
-    frozen
+    Ok(frozen)
 }
 
 // 尽量在临近的换行或句末结束；巨型单行仍可裁剪，但范围明确且不声称语句完整。
@@ -700,7 +700,7 @@ fn review_material(input: &Value, draft: &Value, full: &[Value]) -> Result<Value
         projected["body"] = main_excerpt["body"].take();
         main_excerpt
             .as_object_mut()
-            .expect("excerpt")
+            .ok_or(crate::types::Error::new("unavailable"))?
             .remove("body");
         projected["body_range"] = main_excerpt;
         let supports: Vec<_> = visible
@@ -713,7 +713,7 @@ fn review_material(input: &Value, draft: &Value, full: &[Value]) -> Result<Value
         } else {
             projected
                 .as_object_mut()
-                .expect("source")
+                .ok_or(crate::types::Error::new("unavailable"))?
                 .remove("supporting_excerpts");
         }
         let complete = source["source_complete"]

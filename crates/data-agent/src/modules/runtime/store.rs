@@ -467,7 +467,7 @@ pub(super) async fn record_receipt(
     receipt: &Value,
 ) -> Result<()> {
     tx.assert_snapshot(&tool.transaction_id)?;
-    sqlx::query("UPDATE tool_calls SET state='succeeded',receipt=? WHERE operation_id=? AND state='registered'").bind(sqlx::types::Json(receipt)).bind(&tool.operation_id).execute(tx.connection()).await?;
+    sqlx::query("UPDATE tool_calls SET state='succeeded',receipt=?,completed_at=UTC_TIMESTAMP(3) WHERE operation_id=? AND state='registered'").bind(sqlx::types::Json(receipt)).bind(&tool.operation_id).execute(tx.connection()).await?;
     Ok(())
 }
 pub(super) async fn last_chunk_sequence(tx: &mut AppTx<'_>, run: &LockedRun) -> Result<u64> {
@@ -576,27 +576,58 @@ pub async fn read_runs_in_tx(tx: &mut AppTx<'_>, cid: &str) -> Result<Vec<Value>
     Ok(rows.iter().map(|r|json!({"run_id":r.get::<String,_>("id"),"state":r.get::<String,_>("state"),"lease_epoch":r.get::<u64,_>("lease_epoch").to_string(),"message_id":r.get::<String,_>("message_id"),"attempt_id":r.get::<String,_>("attempt_id")})).collect())
 }
 
-/// 运行中run的当前活动：最近一次登记的工具名与已成功回执计数。
-/// 历史行created_at为迁移默认值，同刻并列按operation_id稳定排序。
+pub struct ToolActivity {
+    pub tool: String,
+    pub completed: u64,
+    pub steps: Vec<CompletedStep>,
+}
+
+pub struct CompletedStep {
+    pub tool: String,
+    pub target_id: Option<String>,
+    pub duration_ms: u64,
+}
+
+/// 仅投影服务端认可的工具类别与对象 ID。正文、参数与原始工具回执不进入界面。
 pub async fn running_activity_in_tx(
     tx: &mut AppTx<'_>,
     cid: &str,
-) -> Result<std::collections::HashMap<String, (String, u64)>> {
+) -> Result<std::collections::HashMap<String, ToolActivity>> {
     let rows = sqlx::query(
-        "SELECT t.origin_run_id AS run_id,t.tool_name AS tool_name,t.state AS state \
+        "SELECT t.origin_run_id AS run_id,t.tool_name,t.state, \
+         TIMESTAMPDIFF(MICROSECOND,t.created_at,t.completed_at) DIV 1000 AS duration_ms, \
+         CASE \
+           WHEN t.tool_name='read_knowledge' AND JSON_LENGTH(t.receipt,'$.data.items')=1 \
+                AND JSON_VALUE(t.receipt,'$.data.items[0].state')='ok' \
+             THEN JSON_VALUE(t.receipt,'$.data.items[0].ref.object_id') \
+           WHEN t.tool_name='read_source' AND JSON_VALUE(t.receipt,'$.data.source.kind')='document' \
+             THEN JSON_VALUE(t.receipt,'$.data.source.id') \
+         END AS target_id \
          FROM tool_calls t JOIN agent_runs r ON r.id=t.origin_run_id \
          WHERE r.conversation_id=? AND r.state='running' ORDER BY t.created_at,t.operation_id",
     )
     .bind(cid)
     .fetch_all(tx.connection())
     .await?;
-    let mut activity = std::collections::HashMap::<String, (String, u64)>::new();
+    let mut activity = std::collections::HashMap::<String, ToolActivity>::new();
     for row in rows {
-        let run_id: String = row.get("run_id");
-        let entry = activity.entry(run_id).or_insert_with(|| (String::new(), 0));
-        entry.0 = row.get::<String, _>("tool_name");
+        let entry = activity
+            .entry(row.get("run_id"))
+            .or_insert_with(|| ToolActivity {
+                tool: String::new(),
+                completed: 0,
+                steps: Vec::new(),
+            });
+        entry.tool = row.get("tool_name");
         if row.get::<String, _>("state") == "succeeded" {
-            entry.1 += 1;
+            entry.completed += 1;
+            if let Some(duration) = row.get::<Option<i64>, _>("duration_ms") {
+                entry.steps.push(CompletedStep {
+                    tool: entry.tool.clone(),
+                    target_id: row.get("target_id"),
+                    duration_ms: u64::try_from(duration).map_err(|_| Error::new("unavailable"))?,
+                });
+            }
         }
     }
     Ok(activity)

@@ -21,10 +21,12 @@ fn snapshot_retains_original_cross_channel_order_after_first_delivery() {
         .unwrap();
     assert!(!encoded.contains("cursor must not retain"));
     let resumed = SearchContinuation::decode(&encoded).unwrap();
-    let rank = resumed.rank_window(
-        "unmatched",
-        vec![row("first", 0, 0.0), row("second", 280, 0.0)],
-    );
+    let rank = resumed
+        .rank_window(
+            "unmatched",
+            vec![row("first", 0, 0.0), row("second", 280, 0.0)],
+        )
+        .unwrap();
     assert_eq!(
         rank.sequence
             .iter()
@@ -58,7 +60,7 @@ fn merged_raw_delivery_retires_every_original_window_member() {
         .unwrap()
         .unwrap();
     let resumed = SearchContinuation::decode(&encoded).unwrap();
-    let rank = resumed.rank_window("unmatched", vec![]);
+    let rank = resumed.rank_window("unmatched", vec![]).unwrap();
     assert_eq!(
         rank.sequence
             .iter()
@@ -88,6 +90,7 @@ fn snapshot_returns_capacity_error_without_dropping_pending() {
                 "unmatched",
                 vec![json!({"id":"synthetic-object","version":"1","record_id":"pending"})]
             )
+            .unwrap()
             .sequence[0]
             .1,
         "k:pending"
@@ -140,7 +143,9 @@ fn thousand_canonical_windows_keep_every_pending_location_within_cursor_limit() 
     println!("compact_thousand_cursor_bytes={}", encoded.len());
     let restored = SearchContinuation::decode(&encoded).unwrap();
     restored.assert_pending_knowledge(&vector.lexical).unwrap();
-    let ranked = restored.rank_window("unmatched", vector.lexical.clone());
+    let ranked = restored
+        .rank_window("unmatched", vector.lexical.clone())
+        .unwrap();
     assert_eq!(
         ranked.sequence.len(),
         1000,
@@ -166,6 +171,7 @@ fn thousand_canonical_windows_keep_every_pending_location_within_cursor_limit() 
     assert!(
         resumed
             .rank_window("unmatched", vector.lexical)
+            .unwrap()
             .sequence
             .is_empty(),
         "窗口完成后只留原身份摘要去重"
@@ -196,7 +202,9 @@ fn thousand_two_channel_window_keeps_last_pending_position_within_cursor_limit()
         })
         .collect();
     let saved = SearchContinuation::capture(&vector, &[vec![], vec![]], &[]).unwrap();
-    let original = saved.rank_window("unmatched", vector.lexical.clone());
+    let original = saved
+        .rank_window("unmatched", vector.lexical.clone())
+        .unwrap();
     let pending = original.sequence.last().unwrap().clone();
     let delivered = original.sequence[..999]
         .iter()
@@ -214,7 +222,8 @@ fn thousand_two_channel_window_keeps_last_pending_position_within_cursor_limit()
     );
     let rank = SearchContinuation::decode(&encoded)
         .unwrap()
-        .rank_window("unmatched", vector.lexical);
+        .rank_window("unmatched", vector.lexical)
+        .unwrap();
     assert_eq!(
         rank.sequence,
         vec![pending],
@@ -245,10 +254,14 @@ fn compact_mixed_window_preserves_hashes_positions_channel_ranks_and_retirement(
     vector.raw.lexical = vec![raw(0, 2.0), raw(4000, 0.5)];
     vector.raw.dense = vec![raw(4000, -0.2), raw(0, -0.5)];
     let saved = SearchContinuation::capture(&vector, &[vec![], vec![]], &[]).unwrap();
-    let before = saved.rank_window("unmatched", vector.lexical.clone());
+    let before = saved
+        .rank_window("unmatched", vector.lexical.clone())
+        .unwrap();
     let encoded = saved.snapshot(&[], 65_536).unwrap().unwrap();
     let restored = SearchContinuation::decode(&encoded).unwrap();
-    let after = restored.rank_window("unmatched", vector.lexical.clone());
+    let after = restored
+        .rank_window("unmatched", vector.lexical.clone())
+        .unwrap();
     assert_eq!(
         before.sequence, after.sequence,
         "两通道共同原名次和负COSINE次序逐项相等"
@@ -287,7 +300,8 @@ fn compact_mixed_window_preserves_hashes_positions_channel_ranks_and_retirement(
         .unwrap();
     let resumed = SearchContinuation::decode(&encoded)
         .unwrap()
-        .rank_window("unmatched", vector.lexical.clone());
+        .rank_window("unmatched", vector.lexical.clone())
+        .unwrap();
     assert_eq!(
         resumed.sequence,
         before
@@ -320,6 +334,7 @@ fn compact_fifty_window_cursor_leaves_room_for_a_small_final_reply() {
     assert_eq!(
         restored
             .rank_window("unmatched", vector.lexical)
+            .unwrap()
             .sequence
             .len(),
         50
@@ -345,7 +360,7 @@ fn sql_null_hash_windows_fit_small_escaped_cursor_without_inventing_hashes() {
         })
         .collect::<Vec<_>>();
     let saved = SearchContinuation::capture(&vector, &[rows.clone(), rows.clone()], &[]).unwrap();
-    let original = saved.rank_window("unmatched", rows.clone());
+    let original = saved.rank_window("unmatched", rows.clone()).unwrap();
     let encoded = saved.snapshot(&[], 65_536).unwrap().unwrap();
     let outer = serde_json::to_string(&json!({"schema":1,"binding":"b".repeat(64),
         "scope":"s".repeat(64),"task":null,
@@ -371,7 +386,7 @@ fn sql_null_hash_windows_fit_small_escaped_cursor_without_inventing_hashes() {
     );
     let restored = SearchContinuation::decode(&encoded).unwrap();
     restored.assert_pending_knowledge(&rows).unwrap();
-    let ranked = restored.rank_window("unmatched", rows.clone());
+    let ranked = restored.rank_window("unmatched", rows.clone()).unwrap();
     assert_eq!(
         ranked.sequence, original.sequence,
         "SQL去重后的共同原名次逐项保留"
@@ -407,6 +422,7 @@ fn sql_null_hash_windows_fit_small_escaped_cursor_without_inventing_hashes() {
         SearchContinuation::decode(&next)
             .unwrap()
             .rank_window("unmatched", rows)
+            .unwrap()
             .sequence,
         original.sequence[1..],
         "不能重传已交位置或把剩余名次归零"
@@ -432,7 +448,7 @@ fn sql_null_hash_and_raw_preserve_common_ranks_and_legacy_cursor_restore() {
         "segmentation_version":"source-structure-1","distance":2.5}),
     ];
     let legacy = SearchContinuation::capture(&vector, &sql, &[]).unwrap();
-    let original = legacy.rank_window("unmatched", sql[0].clone());
+    let original = legacy.rank_window("unmatched", sql[0].clone()).unwrap();
     assert_eq!(
         original
             .sequence
@@ -447,6 +463,7 @@ fn sql_null_hash_and_raw_preserve_common_ranks_and_legacy_cursor_restore() {
         SearchContinuation::decode(&legacy_encoded)
             .unwrap()
             .rank_window("unmatched", sql[0].clone())
+            .unwrap()
             .sequence,
         original.sequence
     );
@@ -457,6 +474,7 @@ fn sql_null_hash_and_raw_preserve_common_ranks_and_legacy_cursor_restore() {
         SearchContinuation::decode(&encoded)
             .unwrap()
             .rank_window("unmatched", sql[0].clone())
+            .unwrap()
             .sequence,
         original.sequence,
         "SQL未知hash与raw原hash混排不能形成额外票或局部名次"
@@ -507,11 +525,12 @@ fn compact_sql_replacement_preserves_raw_interleaving_without_an_extra_vote() {
     let sql = [vec![row("first", 10), row("second", 1)], vec![]];
     let saved = SearchContinuation::capture(&vector, &sql, &[]).unwrap();
     let objects = vec![row("first", 0), row("second", 0)];
-    let original = saved.rank_window("unmatched", objects.clone());
+    let original = saved.rank_window("unmatched", objects.clone()).unwrap();
     let encoded = saved.snapshot(&[], 65536).unwrap().unwrap();
     let resumed = SearchContinuation::decode(&encoded)
         .unwrap()
-        .rank_window("unmatched", objects);
+        .rank_window("unmatched", objects)
+        .unwrap();
     assert_eq!(
         resumed.sequence, original.sequence,
         "SQL替代与raw词法共同原名次不能按各自局部名次重新混排"
@@ -655,12 +674,13 @@ fn sql_restores_one_lexical_order_and_successful_bm25_blocks_an_extra_vote() {
     let objects = vec![row("first", 0), row("second", 0)];
     let rank = SearchContinuation::decode(&encoded)
         .unwrap()
-        .rank_window("unmatched", objects.clone());
+        .rank_window("unmatched", objects.clone())
+        .unwrap();
     assert_eq!(rank.sequence[0].1, "k:second");
     assert!((rank.sequence[0].0 - 1.0 / 60.0).abs() < 1e-12);
     vector.lexical = vec![row("first", 10)];
     let saved = SearchContinuation::capture(&vector, &sql, &[]).unwrap();
-    let rank = saved.rank_window("unmatched", objects);
+    let rank = saved.rank_window("unmatched", objects).unwrap();
     assert_eq!(
         rank.sequence
             .iter()
@@ -696,6 +716,7 @@ fn exhausted_window_compacts_to_bookmark_without_replaying_delivered_records() {
                 "unmatched",
                 vec![json!({"id":"synthetic-object","version":"1","record_id":"first"})]
             )
+            .unwrap()
             .sequence
             .is_empty()
     );
@@ -713,10 +734,12 @@ fn negative_dense_scores_keep_their_place_relative_to_raw() {
         "offset":0,"length":20,"content_hash":"hash","segmentation_version":"source-structure-1","distance":-0.2}),
     ];
     let saved = SearchContinuation::capture(&vector, &[vec![], vec![]], &[]).unwrap();
-    let rank = saved.rank_window(
-        "unmatched",
-        vec![json!({"id":"synthetic-object","version":"1","record_id":"knowledge"})],
-    );
+    let rank = saved
+        .rank_window(
+            "unmatched",
+            vec![json!({"id":"synthetic-object","version":"1","record_id":"knowledge"})],
+        )
+        .unwrap();
     assert!(rank.sequence[0].1.starts_with("raw:"));
     assert!((rank.sequence[1].0 - 1.0 / 61.0).abs() < 1e-12);
 }

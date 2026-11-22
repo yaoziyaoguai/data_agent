@@ -3350,6 +3350,42 @@
         ]
       }
     },
+    "/knowledge/{id}/lineage": {
+      "get": {
+        "responses": {
+          "200": {
+            "description": "有权查看的直接血缘",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schema.json#/$defs/KnowledgeLineage"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "应用错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schema.json#/$defs/AppError"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
     "/knowledge/{id}/maintenance-impact": {
       "get": {
         "responses": {

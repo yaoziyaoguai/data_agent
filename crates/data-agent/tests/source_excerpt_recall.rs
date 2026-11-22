@@ -1644,7 +1644,8 @@ async fn gated_raw_source_round_trip_recalls_revision_and_reports_lag() {
         include_raw: true,
         deadline: retrieval_deadline(),
     })
-    .await;
+    .await
+    .unwrap();
     assert_eq!(candidates.raw.state, "available");
     assert!(
         !candidates.raw.lexical.is_empty(),

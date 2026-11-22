@@ -45,11 +45,13 @@ pub(super) async fn validate_sources_and_results(
         &mut tx,
         ctx,
         cid,
-        input["task_id"].as_str().expect("validated task"),
+        input["task_id"]
+            .as_str()
+            .ok_or(crate::types::Error::new("invalid_input"))?,
         epoch(
             input["condition_version"]
                 .as_str()
-                .expect("validated version"),
+                .ok_or(crate::types::Error::new("invalid_input"))?,
         )?,
     )
     .await?;
@@ -58,14 +60,19 @@ pub(super) async fn validate_sources_and_results(
     tx.commit().await?;
     let mut knowledge_refs = conditions["knowledge_refs"]
         .as_array()
-        .expect("validated conditions")
+        .ok_or(crate::types::Error::new("invalid_input"))?
         .clone();
-    for finding in input["findings"].as_array().expect("validated findings") {
+    for finding in input["findings"]
+        .as_array()
+        .ok_or(crate::types::Error::new("invalid_input"))?
+    {
         for reference in finding["query_refs"]
             .as_array()
-            .expect("validated query refs")
+            .ok_or(crate::types::Error::new("invalid_input"))?
         {
-            let qid = reference["query_id"].as_str().expect("validated id");
+            let qid = reference["query_id"]
+                .as_str()
+                .ok_or(crate::types::Error::new("invalid_input"))?;
             if let Some(previous) = references.get(qid)
                 && previous["result_ref"] != reference["result_ref"]
             {
@@ -75,7 +82,7 @@ pub(super) async fn validate_sources_and_results(
         }
         for reference in finding["knowledge_refs"]
             .as_array()
-            .expect("validated knowledge refs")
+            .ok_or(crate::types::Error::new("invalid_input"))?
         {
             if !knowledge_refs.contains(reference) {
                 knowledge_refs.push(reference.clone());
@@ -83,11 +90,11 @@ pub(super) async fn validate_sources_and_results(
         }
         if finding["query_refs"]
             .as_array()
-            .expect("validated")
+            .ok_or(crate::types::Error::new("invalid_input"))?
             .is_empty()
             && finding["knowledge_refs"]
                 .as_array()
-                .expect("validated")
+                .ok_or(crate::types::Error::new("invalid_input"))?
                 .is_empty()
         {
             return Err(Error::new("invalid_evidence"));
@@ -114,14 +121,17 @@ pub(super) async fn validate_sources_and_results(
             qid,
             reference["result_ref"]
                 .as_str()
-                .expect("validated result ref"),
+                .ok_or(crate::types::Error::new("invalid_input"))?,
         );
         query_coverage.push(json!({"query_id":qid,"result_ref":result["result_ref"],
             "saved_row_count":result["saved_row_count"],"saved_result_complete":result["saved_result_complete"],
             "result_complete":result["result_complete"],"received_rows":result["rows"].as_array().ok_or(Error::new("result_unavailable"))?.len()}));
         results.insert(qid.clone(), result);
     }
-    for finding in input["findings"].as_array().expect("validated") {
+    for finding in input["findings"]
+        .as_array()
+        .ok_or(crate::types::Error::new("invalid_input"))?
+    {
         validate_finding(finding, &results)?;
     }
     let sources = json!({"result_dependencies":references.iter().map(|(qid,r)|json!({"query_id":qid,"result_ref":r["result_ref"]})).collect::<Vec<_>>(),
@@ -148,11 +158,21 @@ pub(super) fn assert_query(
 }
 
 fn validate_finding(finding: &Value, results: &BTreeMap<String, Value>) -> Result<()> {
-    for reference in finding["query_refs"].as_array().expect("validated") {
+    for reference in finding["query_refs"]
+        .as_array()
+        .ok_or(crate::types::Error::new("invalid_input"))?
+    {
         let result = results
-            .get(reference["query_id"].as_str().expect("validated"))
+            .get(
+                reference["query_id"]
+                    .as_str()
+                    .ok_or(crate::types::Error::new("invalid_input"))?,
+            )
             .ok_or(Error::new("invalid_evidence"))?;
-        for column in reference["columns"].as_array().expect("validated") {
+        for column in reference["columns"]
+            .as_array()
+            .ok_or(crate::types::Error::new("invalid_input"))?
+        {
             if result["columns"]
                 .as_array()
                 .ok_or(Error::new("result_unavailable"))?
@@ -168,16 +188,19 @@ fn validate_finding(finding: &Value, results: &BTreeMap<String, Value>) -> Resul
             || result["rows"].as_array().is_none_or(Vec::is_empty))
             && finding["limitations"]
                 .as_array()
-                .expect("validated")
+                .ok_or(crate::types::Error::new("invalid_input"))?
                 .is_empty()
         {
             return Err(Error::new("invalid_evidence"));
         }
     }
-    for figure in finding["figures"].as_array().expect("validated") {
+    for figure in finding["figures"]
+        .as_array()
+        .ok_or(crate::types::Error::new("invalid_input"))?
+    {
         let reference = finding["query_refs"]
             .as_array()
-            .expect("validated")
+            .ok_or(crate::types::Error::new("invalid_input"))?
             .iter()
             .find(|r| {
                 r["query_id"] == figure["query_id"]
@@ -186,7 +209,9 @@ fn validate_finding(finding: &Value, results: &BTreeMap<String, Value>) -> Resul
                         .is_some_and(|columns| columns.contains(&figure["column"]))
             })
             .ok_or(Error::new("invalid_evidence"))?;
-        let result = &results[reference["query_id"].as_str().expect("validated")];
+        let result = &results[reference["query_id"]
+            .as_str()
+            .ok_or(crate::types::Error::new("invalid_input"))?];
         let column = result["columns"]
             .as_array()
             .ok_or(Error::new("result_unavailable"))?
@@ -196,7 +221,11 @@ fn validate_finding(finding: &Value, results: &BTreeMap<String, Value>) -> Resul
         let value = result["rows"]
             .as_array()
             .ok_or(Error::new("result_unavailable"))?
-            .get(figure["row_index"].as_u64().expect("validated") as usize)
+            .get(
+                figure["row_index"]
+                    .as_u64()
+                    .ok_or(crate::types::Error::new("invalid_input"))? as usize,
+            )
             .and_then(|row| row.as_array())
             .and_then(|row| row.get(column))
             .ok_or(Error::new("invalid_evidence"))?;
@@ -287,7 +316,7 @@ pub async fn save_in_tx(
     super::context_authority::merge_run_in_tx(
         tx,
         run_id,
-        &super::context_authority::from_sources(sources),
+        &super::context_authority::from_sources(sources)?,
     )
     .await?;
     analysis::save_evidence_in_tx(

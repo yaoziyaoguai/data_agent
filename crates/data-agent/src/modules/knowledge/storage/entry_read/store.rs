@@ -534,7 +534,11 @@ pub async fn read_entries_in_tx(
                 return Ok(None);
             }
             let mut value = location.clone();
-            for (field, expected) in expected.as_object().expect("location").iter() {
+            for (field, expected) in expected
+                .as_object()
+                .ok_or(crate::types::Error::new("unavailable"))?
+                .iter()
+            {
                 if value[field].is_null() {
                     value[field] = expected.clone();
                 }

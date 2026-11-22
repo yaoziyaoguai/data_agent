@@ -609,11 +609,11 @@ pub(super) async fn locked(
     }
     Ok(v)
 }
-pub(super) fn next(v: &mut Value, ctx: &AccessContext) {
-    v["version"] = json!(
-        (epoch(v["version"].as_str().unwrap_or("0")).expect("saved version") + 1).to_string()
-    );
+pub(super) fn next(v: &mut Value, ctx: &AccessContext) -> Result<()> {
+    let version = v["version"].as_str().ok_or(Error::new("unavailable"))?;
+    v["version"] = json!((epoch(version)? + 1).to_string());
     v["updated_by"] = json!(ctx.user_id);
+    Ok(())
 }
 pub async fn check_refs_in_tx(tx: &mut AppTx<'_>, ctx: &AccessContext, refs: &Value) -> Result<()> {
     for r in refs.as_array().ok_or(Error::new("invalid_input"))? {

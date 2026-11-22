@@ -53,7 +53,7 @@ pub(super) async fn search(
     let mut page = if initial_count == items.len() {
         stage.page
     } else {
-        retrieval::asset_directory(items.clone(), query, asset_after, limit)
+        retrieval::asset_directory(items.clone(), query, asset_after, limit)?
     };
     if !memory_candidates.is_empty() {
         let mut merged = Vec::new();
@@ -63,7 +63,7 @@ pub(super) async fn search(
                     && asset["id"] == hit["asset_id"]
                     && asset["version"] == hit["version"]
             }) {
-                let preview = retrieval::asset_directory(vec![asset.clone()], "*", None, 1);
+                let preview = retrieval::asset_directory(vec![asset.clone()], "*", None, 1)?;
                 merged.extend(
                     preview["memories"]
                         .as_array()
@@ -72,7 +72,11 @@ pub(super) async fn search(
                         .cloned(),
                 );
             }
-            if merged.len() >= limit || serde_json::to_vec(&merged).expect("memories").len() > 9000
+            if merged.len() >= limit
+                || serde_json::to_vec(&merged)
+                    .map_err(|_| crate::types::Error::new("unavailable"))?
+                    .len()
+                    > 9000
             {
                 break;
             }
@@ -370,7 +374,10 @@ pub(super) async fn search(
     let retained = super::super::context_authority::items(&reply["hits"]).len();
     for hit in search.hits.iter().take(retained) {
         if let super::super::knowledge::SearchHit::Knowledge { content, .. } = hit {
-            super::super::context_authority::observe(authority, &content["structure_dependencies"]);
+            super::super::context_authority::observe(
+                authority,
+                &content["structure_dependencies"],
+            )?;
         }
     }
     for preview in super::super::context_authority::items(&reply["selected_skills"]) {
@@ -378,7 +385,7 @@ pub(super) async fn search(
             .iter()
             .find(|asset| asset["id"] == preview["id"] && asset.get("skill_sources").is_some())
         {
-            let skill = super::super::personal_assets::skill_authority(asset);
+            let skill = super::super::personal_assets::skill_authority(asset)?;
             super::super::context_authority::merge(authority, &skill)?;
         }
     }
@@ -445,7 +452,7 @@ pub(super) async fn read_knowledge(
                             let canonical_reference=contracts::generated::EvidenceRef {path:selected_path.to_owned(),..reference.clone()};
                             // 范围先于正文，读取、采用和草稿共用owner核实的条目选择。
                             if let Some(gate) = source_gate
-                                && !gate.allows_object(&meta) {
+                                && !gate.allows_object(&meta)? {
                                 return Err(Error::new("source_not_allowed"));
                             }
                             super::super::knowledge::assert_selection_sources_in_tx(tx, ctx, &meta, selected_path).await
@@ -607,8 +614,11 @@ pub(super) async fn read_knowledge(
     for item in super::super::context_authority::items(&reply["items"]) {
         if item["state"] == "ok"
             && item["kind"] == "skill"
-            && let Some(proof) =
-                skill_sources.get(item["asset_ref"]["id"].as_str().expect("Skill reply ID"))
+            && let Some(proof) = skill_sources.get(
+                item["asset_ref"]["id"]
+                    .as_str()
+                    .ok_or(crate::types::Error::new("unavailable"))?,
+            )
         {
             super::super::context_authority::merge(authority, proof)?;
         }

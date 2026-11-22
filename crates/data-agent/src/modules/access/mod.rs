@@ -15,6 +15,23 @@ pub fn space_name() -> &'static str {
     space_name_cell()
 }
 
+pub fn default_space() -> Result<String> {
+    let space = std::env::var("DATA_AGENT_DEFAULT_SPACE_ID").map_err(|_| {
+        Error::new("invalid_input").with_message("缺少 DATA_AGENT_DEFAULT_SPACE_ID".into())
+    })?;
+    if space.is_empty()
+        || space.len() > 64
+        || !space
+            .bytes()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, b'-' | b'_'))
+    {
+        return Err(
+            Error::new("invalid_input").with_message("DATA_AGENT_DEFAULT_SPACE_ID 无效".into())
+        );
+    }
+    Ok(space)
+}
+
 #[derive(Clone)]
 pub struct DevelopmentIdentity {
     tokens: HashMap<String, AccessContext>,
@@ -39,7 +56,7 @@ impl SpaceMembers {
     }
 }
 impl DevelopmentIdentity {
-    pub fn from_config(mode: &str, config: &str) -> Result<Self> {
+    pub fn from_config(mode: &str, config: &str, space: &str) -> Result<Self> {
         if mode != "development" {
             return Err(Error::new("unauthenticated"));
         }
@@ -55,7 +72,7 @@ impl DevelopmentIdentity {
                     token,
                     AccessContext {
                         user_id,
-                        space_id: "demo".into(),
+                        space_id: space.into(),
                         request_id: id(),
                         table_access: None,
                     },

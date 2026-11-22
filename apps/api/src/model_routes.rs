@@ -1,3 +1,4 @@
+use crate::request::{ContractBody, request_contracts};
 use crate::{
     State,
     routes::{ResponseResult, failure, respond, user},
@@ -7,6 +8,7 @@ use axum::{
     extract::{Path, State as AxumState},
     http::HeaderMap,
 };
+use data_agent::contracts::generated::ReadModelConnection;
 use data_agent::{
     contracts,
     use_cases::{conversation_models, model_configuration},
@@ -111,19 +113,16 @@ pub async fn default_model(
 ) -> ResponseResult {
     save_configuration(state, headers, body, "default").await
 }
+request_contracts!(ReadModelConnection);
+
 pub async fn connection(
     AxumState(state): AxumState<State>,
     headers: HeaderMap,
-    Json(body): Json<Value>,
+    ContractBody { value: input, .. }: ContractBody<ReadModelConnection>,
 ) -> ResponseResult {
-    let context = crate::routes::internal(&state, &headers, &body)
+    let context = crate::routes::internal_for_run(&state, &headers, &input.run_id)
         .await
         .map_err(failure)?;
-    let input = contracts::decode::<data_agent::contracts::generated::ReadModelConnection>(
-        "ReadModelConnection",
-        body,
-    )
-    .map_err(failure)?;
     respond!(
         ModelConnection,
         model_configuration::connection(&state.pool, &context, input)

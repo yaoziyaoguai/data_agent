@@ -93,33 +93,27 @@ pub(super) fn fragments(space: &str, object: &Value) -> (Vec<Value>, bool) {
 pub(in crate::modules::retrieval) fn fragment_locations(
     space: &str,
     object: &Value,
-) -> std::collections::HashMap<String, Value> {
-    fragments(space, object)
-        .0
-        .into_iter()
-        .flat_map(|piece| {
-            let location = json!({
-                "entry_id":piece["entry_id"],"statement_id":piece["statement_id"],
-                "statement_offset":piece["statement_offset"],"offset":piece["char_offset"],
-                "length":piece["char_length"],"content_hash":piece["content_hash"]
-            });
-            let legacy = fingerprint(&json!([
-                space,
-                object["id"],
-                object["version"],
-                piece["entry_id"],
-                piece["char_offset"],
-                embedding::SPEC.version,
-            ]));
-            [
-                (
-                    piece["id"].as_str().expect("fragment id").to_owned(),
-                    location.clone(),
-                ),
-                (legacy, location),
-            ]
-        })
-        .collect()
+) -> Result<std::collections::HashMap<String, Value>> {
+    let mut locations = std::collections::HashMap::new();
+    for piece in fragments(space, object).0 {
+        let location = json!({
+            "entry_id":piece["entry_id"],"statement_id":piece["statement_id"],
+            "statement_offset":piece["statement_offset"],"offset":piece["char_offset"],
+            "length":piece["char_length"],"content_hash":piece["content_hash"]
+        });
+        let legacy = fingerprint(&json!([
+            space,
+            object["id"],
+            object["version"],
+            piece["entry_id"],
+            piece["char_offset"],
+            embedding::SPEC.version,
+        ]));
+        let id = piece["id"].as_str().ok_or(Error::new("unavailable"))?;
+        locations.insert(id.to_owned(), location.clone());
+        locations.insert(legacy, location);
+    }
+    Ok(locations)
 }
 
 // 不可变版本/片段键使重发可查证；旧任务只能删除比自己更旧的片段，不能覆盖新版。
