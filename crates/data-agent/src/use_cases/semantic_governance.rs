@@ -1,5 +1,4 @@
 use crate::{
-    contracts,
     modules::{access, knowledge},
     persistence::AppTx,
     types::{AccessContext, Error, Result, epoch, id},
@@ -114,7 +113,6 @@ pub async fn assign(
     input: Value,
     members: &access::SpaceMembers,
 ) -> Result<Value> {
-    contracts::validate("AssignSemanticMaintainer", &input)?;
     access::authorize_maintainer(ctx)?;
     members.require_member(ctx, input["maintainer_id"].as_str())?;
     let mut tx = AppTx::begin(pool).await?;
@@ -124,7 +122,6 @@ pub async fn assign(
     Ok(v)
 }
 pub async fn draft(pool: &MySqlPool, ctx: &AccessContext, input: Value) -> Result<Value> {
-    contracts::validate("ProposalDraftCommand", &input)?;
     let mut tx = AppTx::begin(pool).await?;
     let command = json!({"action":"draft","input":input});
     let v = if let Some(v) = knowledge::corrections::begin_in_tx(&mut tx, ctx, &command).await? {
@@ -166,7 +163,6 @@ async fn view_in_tx(
     let can_review = visible_in_tx(tx, ctx, &v, lock_authorization).await?;
     v["can_review"] = json!(can_review && v["state"] != "applied");
     v["can_revise"] = json!(v["submitter_id"] == ctx.user_id && v["state"] != "applied");
-    contracts::validate("SemanticCorrection", &v)?;
     Ok(v)
 }
 pub async fn read(pool: &MySqlPool, ctx: &AccessContext, correction: &str) -> Result<Value> {
@@ -256,14 +252,6 @@ pub async fn change(
     action: &str,
     input: Value,
 ) -> Result<Value> {
-    let schema = match action {
-        "submit" => "SubmitSemanticCorrection",
-        "revise" => "ReviseSemanticCorrection",
-        "review" => "ReviewSemanticCorrection",
-        "apply" => "ApplySemanticCorrection",
-        _ => return Err(Error::new("invalid_input")),
-    };
-    contracts::validate(schema, &input)?;
     let mut tx = AppTx::begin(pool).await?;
     let initial = if let Some(correction) = correction {
         Some(knowledge::corrections::read_in_tx(&mut tx, ctx, correction, false).await?)

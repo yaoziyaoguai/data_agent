@@ -10,13 +10,14 @@ const firstNotify = Promise.withResolvers();
 const releaseNotify = Promise.withResolvers();
 const resync = Promise.withResolvers();
 let delayAlice = false;
+let waitingForCatalog = 0;
 const platform = createServer(async (request, response) => {
   assert.equal(request.url, "/catalog-access");
   let body = "";
   for await (const part of request) body += part;
   const { user_id, space_id } = JSON.parse(body);
   if (delayAlice && user_id === "alice") {
-    slowRequested.resolve();
+    if (++waitingForCatalog === 16) slowRequested.resolve();
     await releaseSlow.promise;
   }
   response.writeHead(200, { "content-type": "application/json" });
@@ -88,13 +89,19 @@ try {
     return readUntil;
   };
 
-  const alice = await h.create("alice");
+  const alices = await Promise.all(Array.from({length:16}, () => h.create("alice")));
+  const alice = alices[0];
   const bob = await h.create("bob");
-  await subscribe(alice, "alice");
+  await Promise.all(alices.map(cid => subscribe(cid, "alice")));
   const readBob = await subscribe(bob, "bob");
   delayAlice = true;
   await h.send(alice, "合成等待权限投影", "alice");
-  await bounded(slowRequested.promise, "Alice 的平台权限请求未到达");
+  const fanout = await fetch(h.env.DATA_AGENT_API_URL + "/internal/live-changes", {
+    method: "POST", headers: {"content-type": "application/json", authorization: "Bearer " + h.env.DATA_AGENT_INTERNAL_TOKEN},
+    body: JSON.stringify(alices.slice(1).map(conversation_id => ({kind:"activity",conversation_id}))),
+  });
+  assert.equal(fanout.status,204);
+  await bounded(slowRequested.promise, "16 个同时等待的平台权限请求未到达");
   await h.send(bob, "合成独立对话实时消息", "bob");
   await bounded(readBob(frame => frame.includes("合成独立对话实时消息")), "Alice 的平台请求阻塞了 Bob 的事件流");
   await bounded(readBob(frame => {
@@ -119,7 +126,7 @@ try {
   await h.restartApi();
   assert.match(h.logs.find(log => log.name === "api").output, /exited code=0 signal=null/);
   assert.ok((await h.request("/conversations", undefined, "bob")).value.conversations.some(entry => entry.id === bob));
-  console.log(JSON.stringify({ passed: true, independentConversations: 2, projectedWhileBusy: 1,
+  console.log(JSON.stringify({ passed: true, independentConversations: alices.length + 1, projectedWhileBusy: 1,
     shutdownResync: 1, apiStoppedWithLiveSubscriptions: true, officialRequests: 0 }));
 } finally {
   releaseSlow.resolve();

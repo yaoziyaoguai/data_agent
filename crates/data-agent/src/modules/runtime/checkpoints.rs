@@ -17,7 +17,6 @@ pub async fn save_checkpoint_in_tx(
     run: &LockedRun,
     value: &Value,
 ) -> Result<()> {
-    contracts::validate("Checkpoint", value)?;
     if value["storage"]["kind"] == "host_checkpoint" {
         return Err(Error::new("invalid_input"));
     }

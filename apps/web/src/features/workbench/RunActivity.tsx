@@ -7,7 +7,7 @@ function Steps({ steps }: { steps: RunStepSummary[] }) {
   return <ol aria-label="已完成的运行步骤">
     {steps.map(({ category, target_name, duration_ms }, index) => <li key={index}>
       <span>{category}{target_name && <> · {target_name}</>}</span>
-      <span className="step-duration">{duration_ms.toLocaleString("zh-CN")} ms</span>
+      <span className="step-duration">{duration_ms === null ? "耗时不可用" : `${duration_ms.toLocaleString("zh-CN")} ms`}</span>
     </li>)}
   </ol>;
 }
@@ -54,6 +54,6 @@ export function CompletedRunSteps({ cid, runId, authorityRevision }: {
     {open && (!current ? <p role="status">正在读取运行步骤…</p>
       : current.steps === null ? <p role="alert">运行步骤暂时不可读取。</p>
       : current.steps.length ? <Steps steps={current.steps}/>
-      : <p className="quiet">本次没有记录到步骤耗时。</p>)}
+      : <p className="quiet">本次没有记录到工具步骤。</p>)}
   </details>;
 }

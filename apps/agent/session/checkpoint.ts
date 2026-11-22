@@ -16,7 +16,33 @@ export function exportCheckpoint(manager: SessionManager, authority?:string|null
   const header = manager.getHeader();
   if (!header) throw new Error('missing session header');
   const storage=storedReference(manager,verifyPersisted);
-  return { ...(authority?{authority_revision:authority}:{}), ...(authoritySnapshot?{authority_snapshot:authoritySnapshot}:{}), ...(storage?{storage}:{}), sdk_version: VERSION, entries: storage?[]:JSON.parse(JSON.stringify([header, ...manager.getEntries()])), leaf_id: manager.getLeafId() };
+  const leaf = manager.getLeafId();
+  const calls = new Set<string>();
+  // 只沿当前输入的父链读取工具 ID，避免复制整份历史或把已离开的分支算进来。
+  for (let id = leaf; id !== null;) {
+    const entry = manager.getEntry(id);
+    if (!entry) throw new Error('checkpoint_leaf_unavailable');
+    if (entry.type === 'message') {
+      const message = entry.message;
+      if (message.role === 'user' && !isRecoveryNotice(message)) break;
+      if (message.role === 'assistant') {
+        for (const part of message.content)
+          if (part.type === 'toolCall') calls.add(part.id);
+      }
+    } else if (entry.type === 'custom_message' && entry.customType === 'data_agent_current_input') {
+      const call = (entry.details as {sdk_tool_call_id?: string})?.sdk_tool_call_id;
+      if (typeof call === 'string') calls.add(call);
+      break;
+    }
+    id = entry.parentId;
+  }
+  return {
+    ...(authority ? {authority_revision: authority} : {}),
+    ...(authoritySnapshot ? {authority_snapshot: authoritySnapshot} : {}),
+    ...(storage ? {storage} : {}),
+    sdk_version: VERSION, leaf_id: leaf, branch_tool_call_ids: [...calls],
+    entries: storage ? [] : JSON.parse(JSON.stringify([header, ...manager.getEntries()])),
+  };
 }
 export function restoreCheckpoint(cwd: string, checkpoint: Checkpoint | null): SessionManager {
   if (!checkpoint) return createStoredSession(cwd);

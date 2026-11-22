@@ -9,7 +9,7 @@ pub(super) use execution::authorize_pending_execution;
 pub use execution::process_due;
 
 use crate::{
-    contracts::generated::ConfirmQuery,
+    contracts::generated::{ConfirmQuery, QueryList, QueryView},
     modules::{access, analysis, conversations, jobs, knowledge, queries, runtime},
     persistence::AppTx,
     types::{AccessContext, Error, Result, epoch, id},
@@ -197,23 +197,26 @@ pub async fn protect_text_in_tx(
     }
 }
 
-pub async fn list(pool: &MySqlPool, ctx: &AccessContext, cid: &str) -> Result<Value> {
+pub async fn list(pool: &MySqlPool, ctx: &AccessContext, cid: &str) -> Result<QueryList> {
     let checked = check_text_results(pool, ctx, cid, None).await?;
     let mut tx = AppTx::begin(pool).await?;
     conversations::lock_conversation_in_tx(&mut tx, ctx, cid).await?;
-    let mut queries = queries::list_in_tx(&mut tx, cid).await?;
+    let queries = queries::list_in_tx(&mut tx, cid).await?;
     let anchors = conversations::first_query_changed_seq_in_tx(&mut tx, cid).await?;
-    for query in &mut queries {
-        protect_text_in_tx(&mut tx, ctx, cid, query, &checked).await?;
-        query["timeline_event_seq"] = query["id"]
-            .as_str()
-            .and_then(|id| anchors.get(id))
-            .map(|seq| json!(seq))
-            .unwrap_or(Value::Null);
+    let mut views = Vec::with_capacity(queries.len());
+    for mut query in queries {
+        protect_text_in_tx(&mut tx, ctx, cid, &mut query, &checked).await?;
+        let mut view: QueryView =
+            serde_json::from_value(query).map_err(|_| Error::new("invalid_input"))?;
+        view.timeline_event_seq = anchors.get(&view.id).cloned();
+        views.push(view);
     }
     let blocked = conversations::confirmation_blocked_in_tx(&mut tx, cid).await?;
     tx.commit().await?;
-    Ok(json!({"queries":queries,"confirmation_blocked":blocked}))
+    Ok(QueryList {
+        queries: views,
+        confirmation_blocked: blocked,
+    })
 }
 /// 跨会话查询历史：按创建时间倒序，正文授权沿用会话内同一保护逻辑。
 /// 不可见会话（已删除/越权）的查询被过滤；每轮多取一页原料以判断是否还有更早记录。

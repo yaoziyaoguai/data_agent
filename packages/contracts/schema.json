@@ -36,7 +36,10 @@
           ]
         },
         "duration_ms": {
-          "type": "integer",
+          "type": [
+            "integer",
+            "null"
+          ],
           "minimum": 0
         }
       },
@@ -236,6 +239,13 @@
         },
         "storage": {
           "$ref": "#/$defs/CheckpointReference"
+        },
+        "branch_tool_call_ids": {
+          "description": "当前输入在 Pi 活动分支上保留的工具调用 ID。正式执行状态和来源权限仍由宿主核对。",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         }
       },
       "required": [

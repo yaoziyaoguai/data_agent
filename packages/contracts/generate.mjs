@@ -224,7 +224,7 @@ where D: serde::Deserializer<'de>, T: Deserialize<'de> {
         }
         this.emitLine(this.visibility, fieldName, ': ', rustType, ',');
       });
-      if (extensible) {
+      if (extensible || name === 'WorkspaceTask') {
         this.emitLine('#[serde(flatten)]');
         this.emitLine('pub extra: std::collections::BTreeMap<String, serde_json::Value>,');
       }
@@ -324,6 +324,8 @@ for (const [lang, file, rendererOptions] of [
   const { lines } = await quicktype({ inputData, lang, rendererOptions, inferDateTimes: false });
   let generated = note + lines.join('\n');
   if (file === 'boundary.rs') {
+    // 同一已校验报文直接用生成类型输出，映射的键序也要稳定。
+    generated = generated.replaceAll(/\bHashMap\b/g, 'BTreeMap');
     generated = execFileSync(process.env.RUSTFMT ?? path.join(homedir(), '.cargo/bin/rustfmt'),
       ['--edition', '2024', '--emit', 'stdout'], { input: generated, encoding: 'utf8' });
   }

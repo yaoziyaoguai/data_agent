@@ -1713,10 +1713,14 @@ export type ChatMessageRole = "user" | "assistant";
 export interface CheckpointClass {
     authority_revision?: null | string;
     authority_snapshot?: { [key: string]: unknown };
-    entries:             { [key: string]: unknown }[];
-    leaf_id:             null | string;
-    sdk_version:         SDKVersion;
-    storage?:            CheckpointReferenceClass;
+    /**
+     * 当前输入在 Pi 活动分支上保留的工具调用 ID。正式执行状态和来源权限仍由宿主核对。
+     */
+    branch_tool_call_ids?: string[];
+    entries:               { [key: string]: unknown }[];
+    leaf_id:               null | string;
+    sdk_version:           SDKVersion;
+    storage?:              CheckpointReferenceClass;
 }
 
 export type SDKVersion = "1.0.0" | "1.3.0" | "1.4.0";
@@ -3592,7 +3596,7 @@ export interface RunSnapshotElement {
 
 export interface CompletedStepSummaryElement {
     category:    string;
-    duration_ms: number;
+    duration_ms: number | null;
     target_name: null | string;
 }
 
@@ -3825,7 +3829,7 @@ export interface RunStepList {
 
 export interface RunStepSummary {
     category:    string;
-    duration_ms: number;
+    duration_ms: number | null;
     target_name: null | string;
 }
 
@@ -3965,10 +3969,14 @@ export interface EvidenceTaskRef {
 export interface Checkpoint {
     authority_revision?: null | string;
     authority_snapshot?: { [key: string]: unknown };
-    entries:             { [key: string]: unknown }[];
-    leaf_id:             null | string;
-    sdk_version:         SDKVersion;
-    storage?:            CheckpointReference;
+    /**
+     * 当前输入在 Pi 活动分支上保留的工具调用 ID。正式执行状态和来源权限仍由宿主核对。
+     */
+    branch_tool_call_ids?: string[];
+    entries:               { [key: string]: unknown }[];
+    leaf_id:               null | string;
+    sdk_version:           SDKVersion;
+    storage?:              CheckpointReference;
 }
 
 export interface CheckpointReference {

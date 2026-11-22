@@ -2,7 +2,9 @@ use crate::routes::ResponseResult;
 use crate::{
     State,
     request::{ContractBody, ContractQuery, RawContractBody, request_contracts},
-    routes::{catalog_user, failure, internal_for_run, respond, semantic_user, user},
+    routes::{
+        catalog_user, failure, internal_for_run, respond, semantic_user, user, wire_response,
+    },
 };
 use axum::{
     Json,
@@ -396,12 +398,10 @@ pub async fn queries(
     Path(cid): Path<String>,
 ) -> ResponseResult {
     let ctx = semantic_user(&state, &headers).await.map_err(failure)?;
-    respond!(
-        QueryList,
-        use_cases::query_workflow::list(&state.pool, &ctx, &cid)
-            .await
-            .map_err(failure)?,
-    )
+    use_cases::query_workflow::list(&state.pool, &ctx, &cid)
+        .await
+        .map_err(failure)
+        .map(|list| Json(list).into_response())
 }
 pub async fn query_history(
     AxumState(state): AxumState<State>,
@@ -508,8 +508,7 @@ pub async fn tool(
     let ctx = use_cases::knowledge::catalog_context(&ctx)
         .await
         .map_err(failure)?;
-    respond!(
-        DataToolOutcome,
+    wire_response::<DataToolOutcome>(
         use_cases::data_tools::invoke_validated(&state.pool, &ctx, &input, raw)
             .await
             .map_err(failure)?,
@@ -526,8 +525,7 @@ pub async fn tool_rejection(
     let ctx = use_cases::knowledge::catalog_context(&ctx)
         .await
         .map_err(failure)?;
-    respond!(
-        DataToolOutcome,
+    wire_response::<DataToolOutcome>(
         use_cases::data_tools::recorded_rejection_validated(&state.pool, &ctx, &input, raw)
             .await
             .map_err(failure)?,

@@ -106,7 +106,7 @@ async fn execute(pool: &MySqlPool, ctx: &AccessContext, input: Value) -> Result<
             .get("task_ref")
             .filter(|value| !value.is_null())
             .map(|value| {
-                serde_json::from_value(value.clone()).map_err(|_| Error::new("invalid_input"))
+                serde::Deserialize::deserialize(value).map_err(|_| Error::new("invalid_input"))
             })
             .transpose()?;
         super::evidence_delivery::current_task_in_tx(&mut tx, &conv, reference.as_ref()).await?
@@ -178,7 +178,7 @@ async fn execute(pool: &MySqlPool, ctx: &AccessContext, input: Value) -> Result<
         }
         "read_source" => {
             let request: contracts::generated::SourceReadInput =
-                serde_json::from_value(args.clone()).map_err(|_| Error::new("invalid_input"))?;
+                serde::Deserialize::deserialize(args).map_err(|_| Error::new("invalid_input"))?;
             let source = match request.citation.source.kind {
                 contracts::generated::SourceKeyKind::Document => {
                     format!("document-{}", request.citation.source.id)

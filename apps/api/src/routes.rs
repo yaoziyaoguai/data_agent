@@ -9,7 +9,7 @@ use axum::{
     response::IntoResponse,
 };
 use data_agent::{
-    contracts::{self, generated::*},
+    contracts::generated::*,
     modules::access,
     persistence::AppTx,
     types::{AccessContext, Error, id},
@@ -67,15 +67,28 @@ pub(crate) fn failure(error: Error) -> (StatusCode, Json<Value>) {
         ),
     )
 }
-pub(crate) fn success(_schema: &str, value: Value) -> ResponseResult {
+pub(crate) fn success<T: serde::de::DeserializeOwned + serde::Serialize>(
+    _schema: &str,
+    value: Value,
+) -> ResponseResult {
     #[cfg(debug_assertions)]
-    contracts::validate(_schema, &value).map_err(failure)?;
-    Ok(Json(value).into_response())
+    data_agent::contracts::validate(_schema, &value).map_err(failure)?;
+    wire_response::<T>(value)
+}
+
+pub(crate) fn wire_response<T: serde::de::DeserializeOwned + serde::Serialize>(
+    value: Value,
+) -> ResponseResult {
+    let body = T::deserialize(value).map_err(|_| failure(Error::new("invalid_input")))?;
+    Ok(Json(body).into_response())
 }
 
 macro_rules! respond {
     ($schema:ident, $body:expr $(,)?) => {
-        $crate::routes::success(stringify!($schema), $body)
+        $crate::routes::success::<data_agent::contracts::generated::$schema>(
+            stringify!($schema),
+            $body,
+        )
     };
 }
 pub(crate) use respond;
@@ -378,7 +391,7 @@ pub async fn read_checkpoint(
     .map_err(failure)?;
     // 宿主签发的是持久 JSON 的字节指纹。保持相同序列化，供 Bridge 核对原检查点。
     #[cfg(debug_assertions)]
-    contracts::validate("Checkpoint", &checkpoint).map_err(failure)?;
+    data_agent::contracts::validate("Checkpoint", &checkpoint).map_err(failure)?;
     Ok(Json(checkpoint).into_response())
 }
 async fn model(
@@ -535,4 +548,44 @@ pub async fn cancel_run(
         }
     }
     respond!(CancelReceipt, receipt)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::body::to_bytes;
+    use data_agent::contracts::generated::{ChatMessage, DataToolOutcome};
+
+    #[tokio::test]
+    async fn wire_responses_preserve_presence_and_filter_internal_fields() {
+        let response = wire_response::<ChatMessage>(json!({
+            "role":"user","text":"合成输入","attempt_id":null,"committed":true,
+            "message_id":null,"output_id":null,"private":"internal",
+        }))
+        .unwrap();
+        let bytes = to_bytes(response.into_body(), 4096).await.unwrap();
+        assert_eq!(
+            serde_json::from_slice::<Value>(&bytes).unwrap(),
+            json!({"role":"user","text":"合成输入","attempt_id":null,"committed":true}),
+        );
+
+        let task = json!({"id":"task","condition_version":"2","decision_state_version":2});
+        let response = respond!(WorkspaceTask, task.clone()).unwrap();
+        let bytes = to_bytes(response.into_body(), 4096).await.unwrap();
+        assert_eq!(serde_json::from_slice::<Value>(&bytes).unwrap(), task);
+    }
+
+    #[tokio::test]
+    async fn tool_response_map_has_stable_wire_order() {
+        let tool = json!({"operation_id":"tool","tool_name":"search_knowledge","data":{"c":3,"a":1,"b":2}});
+        for _ in 0..16 {
+            let response = wire_response::<DataToolOutcome>(tool.clone()).unwrap();
+            let bytes = to_bytes(response.into_body(), 4096).await.unwrap();
+            assert!(
+                std::str::from_utf8(&bytes)
+                    .unwrap()
+                    .contains(r#""data":{"a":1,"b":2,"c":3}"#)
+            );
+        }
+    }
 }

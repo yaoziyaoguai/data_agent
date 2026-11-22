@@ -115,6 +115,10 @@ try {
     assert.notEqual(run.attempt_id,prior.attempt_id);
     for(const key of ['conversation_id','recovery_chain_id','budget_scope_id','output_id','message_id']) assert.equal(run[key],prior[key]);
     assert.equal(run.tool_contract_version,2);
+    if (mode === 'committed') {
+      const active=(await h.snapshot(cid)).runs.find(item=>item.run_id===run.run_id);
+      assert.equal(active.completed_steps,1,'已提交的原步骤在恢复中的当前运行可见');
+    }
     recovering=true;
     try {await deliver(run,h.env.DATA_AGENT_API_URL,h.env.DATA_AGENT_INTERNAL_TOKEN,'');} catch(error){throw providerFailure??error;}
     if(providerFailure) throw providerFailure;
@@ -123,6 +127,9 @@ try {
     assert.equal(snapshot.messages.findLast(message=>message.role==='assistant'&&message.committed)?.text,expected);
     assert.equal(snapshot.events.filter(event=>event.type==='assistant_committed'&&event.payload.output_id===prior.output_id).length,1);
     assert.equal(snapshot.events.filter(event=>event.type==='task_changed'&&event.payload.routed===true&&event.payload.task_id===taskB.task_id).length,1);
+    const steps=ok(await h.request(`/conversations/${cid}/runs/${run.run_id}/steps`)).steps;
+    assert.deepEqual(steps.map(step=>step.category).sort(),['整理分析任务','读取分析任务'].sort(),
+      '最终回复保留实际接回的原步骤，排除该输入之前的动作');
     const after=row(); assert.equal(after.operation,before.operation); assert.equal(after.origin,prior.run_id); assert.equal(after.sequence,1);
     assert.deepEqual(after.handoff,before.handoff);
     assert.equal(h.sql(`SELECT JSON_OBJECT('n',COUNT(*)) FROM tool_calls WHERE sdk_tool_call_id='finalize-recovery-answer' AND conversation_id='${cid}'`)[0].n,1);

@@ -43,13 +43,6 @@ pub async fn save(
     input: Value,
 ) -> Result<Value> {
     access::authorize_model_configuration(ctx)?;
-    let contract = match kind {
-        "service" => "SaveModelService",
-        "model" => "SaveModelDefinition",
-        "default" => "SaveDefaultModel",
-        _ => return Err(Error::new("invalid_input")),
-    };
-    crate::contracts::validate(contract, &input)?;
     initialize(pool, ctx, profile).await?;
     match kind {
         "service" => {
@@ -60,7 +53,10 @@ pub async fn save(
             runtime::model_configuration::validate_model(&input)?;
             runtime::model_configuration::save_model(pool, ctx, input).await?;
         }
-        _ => runtime::model_configuration::default_model(pool, &ctx.space_id, input).await?,
+        "default" => {
+            runtime::model_configuration::default_model(pool, &ctx.space_id, input).await?
+        }
+        _ => return Err(Error::new("invalid_input")),
     }
     runtime::model_configuration::snapshot(pool, &ctx.space_id).await
 }

@@ -215,8 +215,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             get(semantic_routes::read).patch(semantic_routes::revise),
         )
         .route(
-            "/semantic-corrections/{id}/{action}",
-            post(semantic_routes::action),
+            "/semantic-corrections/{id}/review",
+            post(semantic_routes::review),
+        )
+        .route(
+            "/semantic-corrections/{id}/apply",
+            post(semantic_routes::apply),
         )
         .route(
             "/knowledge-proposals",

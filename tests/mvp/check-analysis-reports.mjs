@@ -30,6 +30,7 @@ export async function createReportFixture(options = {}) {
     const attach = (value) => {
       run = value;
       manager = SessionManager.inMemory("/synthetic/data-agent");
+      manager.appendMessage({role:"user",content:run.text,timestamp:Date.now()});
     };
     const binding = () => ({
       run_id: run.run_id,
@@ -42,6 +43,13 @@ export async function createReportFixture(options = {}) {
         run.workspace_context.authority_snapshot,
       );
     const invokeRaw = async (name, args, sdk = randomUUID()) => {
+      manager.appendMessage({
+        role:"assistant",content:[{type:"toolCall",id:sdk,name,arguments:args}],
+        api:"openai-completions",provider:"local_mock",model:"task_demo",
+        stopReason:"toolUse",timestamp:Date.now(),
+        usage:{input:0,output:0,cacheRead:0,cacheWrite:0,totalTokens:0,
+          cost:{input:0,output:0,cacheRead:0,cacheWrite:0,total:0}},
+      });
       const input = {
         ...binding(),
         sdk_tool_call_id: sdk,

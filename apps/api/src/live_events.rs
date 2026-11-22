@@ -268,13 +268,12 @@ impl LiveEvents {
                         }
                     }
                 };
-                let Ok(_permit) = live.projection_slots.acquire().await else {
-                    return;
-                };
                 if channel.receiver_count() == 0 {
                     continue;
                 }
-                if let Err(error) = deliver_state(&pool, &channel, &cid, update).await {
+                if let Err(error) =
+                    deliver_state(&pool, &live.projection_slots, &channel, &cid, update).await
+                {
                     eprintln!("live_event_projection_failed code={}", error.code);
                     drop(channel.send(Frame::Lagged));
                 }
@@ -285,6 +284,7 @@ impl LiveEvents {
 
 async fn deliver_state(
     pool: &MySqlPool,
+    slots: &Semaphore,
     channel: &broadcast::Sender<Frame>,
     cid: &str,
     update: ConversationChanges,
@@ -306,10 +306,12 @@ async fn deliver_state(
         }
     };
     let read_started = Instant::now();
+    let context = data_agent::use_cases::knowledge::catalog_context(&context).await?;
     let state = overview(
         pool,
         &context,
         cid,
+        slots,
         update.runs || update.tasks,
         update.tasks,
         update.queries,
@@ -326,18 +328,25 @@ async fn overview(
     pool: &MySqlPool,
     context: &AccessContext,
     cid: &str,
+    slots: &Semaphore,
     runs: bool,
     tasks: bool,
     queries: bool,
 ) -> Result<Value> {
-    let context = data_agent::use_cases::knowledge::catalog_context(context).await?;
     let mut result = if runs {
-        read_conversation::live_states(pool, &context, cid, tasks).await?
+        // 投影槽只覆盖本地任务和运行读取，平台权限、结果查证沿各自请求期限。
+        let _permit = slots
+            .acquire()
+            .await
+            .map_err(|_| Error::new("unavailable"))?;
+        read_conversation::live_states(pool, context, cid, tasks).await?
     } else {
         json!({})
     };
     if queries {
-        result["query_list"] = query_workflow::list(pool, &context, cid).await?;
+        result["query_list"] =
+            serde_json::to_value(query_workflow::list(pool, context, cid).await?)
+                .map_err(|_| Error::new("unavailable"))?;
     }
     Ok(result)
 }
@@ -354,7 +363,8 @@ pub async fn receive(
     Ok(StatusCode::NO_CONTENT)
 }
 
-type Stream = Sse<KeepAliveStream<ReceiverStream<std::result::Result<Event, Infallible>>>>;
+type OutboundEvent = std::result::Result<Event, Infallible>;
+type Stream = Sse<KeepAliveStream<ReceiverStream<OutboundEvent>>>;
 type HttpStream = std::result::Result<Stream, (StatusCode, Json<Value>)>;
 
 pub async fn conversation(
@@ -461,13 +471,26 @@ async fn listen(
                 replay(&state.pool, &context, &cid, &send, &mut cursor, first).await?;
                 if workbench {
                     initial_state_read = Instant::now();
-                    let initial = overview(&state.pool, &context, &cid, true, true, true).await?;
-                    send.send(Ok(Event::default()
-                        .event("workbench_state")
-                        .id(cursor.to_string())
-                        .data(initial.to_string())))
-                        .await
-                        .map_err(|_| Error::new("closed"))?;
+                    let context =
+                        data_agent::use_cases::knowledge::catalog_context(&context).await?;
+                    let initial = overview(
+                        &state.pool,
+                        &context,
+                        &cid,
+                        &state.live.projection_slots,
+                        true,
+                        true,
+                        true,
+                    )
+                    .await?;
+                    send_frame(
+                        &send,
+                        Event::default()
+                            .event("workbench_state")
+                            .id(cursor.to_string())
+                            .data(initial.to_string()),
+                    )
+                    .await?;
                 }
                 live = Some(connection);
             }
@@ -513,9 +536,7 @@ async fn listen(
                     }
                     Err(broadcast::error::RecvError::Closed) => return Ok::<_, Error>(None),
                 };
-                send.send(Ok(event))
-                    .await
-                    .map_err(|_| Error::new("closed"))?;
+                send_frame(&send, event).await?;
             }
         };
         let terminal = tokio::select! {
@@ -535,11 +556,8 @@ async fn listen(
             }
         };
         if let Some(event) = terminal {
-            tokio::select! {
-                biased;
-                _ = shutdown.changed() => {}
-                _ = send.send(Ok(event)) => {}
-            }
+            // 慢客户端接不下最后一帧时关闭流，重连仍从持久序号核对权限和补读。
+            drop(send.try_send(Ok(event)));
         }
     });
     Ok(Sse::new(ReceiverStream::new(receive)).keep_alive(
@@ -562,7 +580,7 @@ async fn replay(
     pool: &MySqlPool,
     context: &AccessContext,
     cid: &str,
-    send: &mpsc::Sender<std::result::Result<Event, Infallible>>,
+    send: &mpsc::Sender<OutboundEvent>,
     cursor: &mut u64,
     mut page: Vec<Value>,
 ) -> Result<()> {
@@ -574,16 +592,25 @@ async fn replay(
                     .as_str()
                     .ok_or(Error::new("invalid_input"))?,
             )?;
-            send.send(Ok(Event::default()
-                .id(cursor.to_string())
-                .data(event.to_string())))
-                .await
-                .map_err(|_| Error::new("closed"))?;
+            send_frame(
+                send,
+                Event::default()
+                    .id(cursor.to_string())
+                    .data(event.to_string()),
+            )
+            .await?;
         }
         if len < 1000 {
             return Ok(());
         }
         page = read_conversation::read_events(pool, context, cid, *cursor).await?;
+    }
+}
+
+async fn send_frame(send: &mpsc::Sender<OutboundEvent>, event: Event) -> Result<()> {
+    match tokio::time::timeout(Duration::from_secs(2), send.send(Ok(event))).await {
+        Ok(Ok(())) => Ok(()),
+        _ => Err(Error::new("closed")),
     }
 }
 
@@ -600,4 +627,24 @@ fn lagged_frame(recheck_authority: bool) -> Event {
         "{}"
     };
     Event::default().event("lagged").data(reason)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn a_client_that_stops_reading_releases_the_forwarder() {
+        let (send, _stalled_client) = mpsc::channel(1);
+        send_frame(&send, Event::default().data("first"))
+            .await
+            .unwrap();
+        let result = tokio::time::timeout(
+            Duration::from_secs(4),
+            send_frame(&send, Event::default().data("second")),
+        )
+        .await
+        .expect("慢客户端不能无限阻塞转发");
+        assert_eq!(result.unwrap_err().code, "closed");
+    }
 }

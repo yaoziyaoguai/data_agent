@@ -13,9 +13,9 @@
 // }
 
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
-pub type AuthoritySnapshot = HashMap<String, Option<serde_json::Value>>;
+pub type AuthoritySnapshot = BTreeMap<String, Option<serde_json::Value>>;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -833,10 +833,10 @@ pub struct ContentPageClass {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PurpleHistoricalAnalysis {
-    pub actual_sources: HashMap<String, Option<serde_json::Value>>,
-    pub conditions: Vec<HashMap<String, Option<serde_json::Value>>>,
+    pub actual_sources: BTreeMap<String, Option<serde_json::Value>>,
+    pub conditions: Vec<BTreeMap<String, Option<serde_json::Value>>>,
     pub content_fingerprint: String,
-    pub evidence: Vec<HashMap<String, Option<serde_json::Value>>>,
+    pub evidence: Vec<BTreeMap<String, Option<serde_json::Value>>>,
     pub generated_at: String,
     pub kind: HistoricalAnalysisKind,
     pub reference: Option<AnalysisReportRefClass>,
@@ -1437,8 +1437,10 @@ pub enum ChatMessageRole {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CheckpointClass {
     pub authority_revision: Option<String>,
-    pub authority_snapshot: Option<HashMap<String, Option<serde_json::Value>>>,
-    pub entries: Vec<HashMap<String, Option<serde_json::Value>>>,
+    pub authority_snapshot: Option<BTreeMap<String, Option<serde_json::Value>>>,
+    /// 当前输入在 Pi 活动分支上保留的工具调用 ID。正式执行状态和来源权限仍由宿主核对。
+    pub branch_tool_call_ids: Option<Vec<String>>,
+    pub entries: Vec<BTreeMap<String, Option<serde_json::Value>>>,
     pub leaf_id: Option<String>,
     pub sdk_version: SdkVersion,
     pub storage: Option<CheckpointReferenceClass>,
@@ -1715,7 +1717,7 @@ pub struct FluffySemanticResolution {
 pub struct CurrentRequestQueryInputClass {
     pub condition_version: String,
     pub knowledge_refs: Vec<EvidenceRefElement>,
-    pub parameters: HashMap<String, Option<serde_json::Value>>,
+    pub parameters: BTreeMap<String, Option<serde_json::Value>>,
     pub replaces_query_id: Option<String>,
     /// 省略继承目标条件版本已有采纳说明；兼容携带只核同义声明，不能独立另作决定。新任务未决定时登记clarifications，改变解释先同次修订条件。旧形状仅沿旧格式兼容。
     pub semantic_resolution: Option<IndigoSemanticResolution>,
@@ -1756,7 +1758,7 @@ pub enum TargetId {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DataToolInvocationClass {
     pub answer_handoff: Option<AnswerHandoffClass>,
-    pub arguments: HashMap<String, Option<serde_json::Value>>,
+    pub arguments: BTreeMap<String, Option<serde_json::Value>>,
     pub checkpoint: CheckpointClass,
     pub lease_epoch: String,
     /// 宿主按实际Pi投影与同批工具共享余量分配；不参与业务身份，不属于模型工具参数。历史调用可缺省。
@@ -1887,7 +1889,7 @@ pub struct DataToolOutcomeClass {
     /// 宿主成功回执声明需要Pi原生重投影的活动任务。省略表示无需调整。
     pub context_reset: Option<DataToolOutcomeContextReset>,
     pub control_delivery: Option<ControlDeliveryClass>,
-    pub data: HashMap<String, Option<serde_json::Value>>,
+    pub data: BTreeMap<String, Option<serde_json::Value>>,
     ///
     /// 宿主按本运行原通知query/task/condition及其原scope核验全部实际冻结答案后的覆盖事实；与control_delivery共同计算，不从source_query_ids推断。只随控制状态回执更新，不授来源或SQL权限。
     pub frozen_notification_covered: Option<bool>,
@@ -1942,7 +1944,7 @@ pub struct ControlDeliveryClass {
     pub task_refs: Vec<EvidenceTaskRefElement>,
     pub text: String,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub text_authority: Option<HashMap<String, Option<serde_json::Value>>>,
+    pub text_authority: Option<BTreeMap<String, Option<serde_json::Value>>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -2091,7 +2093,7 @@ pub struct EventElement {
     pub conversation_id: String,
     pub event_id: String,
     pub event_seq: String,
-    pub payload: HashMap<String, Option<serde_json::Value>>,
+    pub payload: BTreeMap<String, Option<serde_json::Value>>,
     pub schema_version: i64,
     #[serde(rename = "type")]
     pub event_type: EventType,
@@ -3192,9 +3194,9 @@ pub struct KnowledgeSearchReplyClass {
     /// 个人记忆检索通道：受限任务来源门生效时按资产真实来源过滤，仅无可证明同源记忆时标记excluded_by_source_limits；命中侧过滤事实见回执source_limits块。
     pub memory_retrieval: String,
     pub next_asset_after: Option<String>,
-    pub personal_memories: Vec<HashMap<String, Option<serde_json::Value>>>,
+    pub personal_memories: Vec<BTreeMap<String, Option<serde_json::Value>>>,
     pub search_coverage: KnowledgeSearchCoverageClass,
-    pub selected_skills: Vec<HashMap<String, Option<serde_json::Value>>>,
+    pub selected_skills: Vec<BTreeMap<String, Option<serde_json::Value>>>,
 }
 
 /// 旧条件未决的只读投影；索引来自原数组，basis-only旧项用索引0。不授采纳或执行权。
@@ -3848,7 +3850,7 @@ pub struct QueryViewElement {
     pub execution_state: String,
     pub id: String,
     pub knowledge_refs: Option<Vec<EvidenceRefElement>>,
-    pub parameters: Option<HashMap<String, Option<serde_json::Value>>>,
+    pub parameters: Option<BTreeMap<String, Option<serde_json::Value>>>,
     pub replaces_query_id: Option<String>,
     pub result_ref: Option<String>,
     /// 草稿工具回执的非阻断诊断；查询读取接口不承诺重现此报告。
@@ -4044,7 +4046,7 @@ pub struct RefreshRunContextClass {
 pub struct RequestQueryInputClass {
     pub condition_version: String,
     pub knowledge_refs: Vec<EvidenceRefElement>,
-    pub parameters: HashMap<String, Option<serde_json::Value>>,
+    pub parameters: BTreeMap<String, Option<serde_json::Value>>,
     pub replaces_query_id: Option<String>,
     /// 省略继承目标条件版本已有采纳说明；兼容携带只核同义声明，不能独立另作决定。新任务未决定时登记clarifications，改变解释先同次修订条件。旧形状仅沿旧格式兼容。
     pub semantic_resolution: Option<SemanticResolutionClass>,
@@ -4158,7 +4160,7 @@ pub struct WorkspaceContextClass {
     pub active_task_ref: Option<PurpleActiveTaskRef>,
     pub asset_counts: Option<PurpleAssetCounts>,
     pub authority_revision: String,
-    pub authority_snapshot: Option<HashMap<String, Option<serde_json::Value>>>,
+    pub authority_snapshot: Option<BTreeMap<String, Option<serde_json::Value>>>,
     pub control_delivery: Option<ControlDeliveryClass>,
     /// 启动/恢复/刷新时，宿主按原通知条件scope核验已冻结答案的覆盖事实。缺省不证明已覆盖，不能凭query_id命中扩大通知范围。
     pub frozen_notification_covered: Option<bool>,
@@ -4168,7 +4170,7 @@ pub struct WorkspaceContextClass {
     ///
     /// 个人记忆注入通道：mem0_authoritative按Mem0召回注入，directory_fallback为Mem0不可用退回目录。受限任务来源门生效时按资产真实来源过滤后仍注入同源记忆，仅无可证明同源资产或来源范围未知时不注入并标记excluded_by_source_limits；与search_knowledge回执中的同值口径一致。
     pub memory_retrieval: Option<MemoryRetrieval>,
-    pub query_observations: Vec<HashMap<String, Option<serde_json::Value>>>,
+    pub query_observations: Vec<BTreeMap<String, Option<serde_json::Value>>>,
     pub recent_messages: Vec<ChatMessageElement>,
     pub request_clock: Option<RequestClockClass>,
     /// 宿主查询终态通知身份；普通用户消息省略，不从文字前缀推断成功。
@@ -4267,7 +4269,7 @@ pub struct RunSnapshotElement {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CompletedStepSummaryElement {
     pub category: String,
-    pub duration_ms: i64,
+    pub duration_ms: Option<i64>,
     pub target_name: Option<String>,
 }
 
@@ -4744,7 +4746,7 @@ pub enum SourceWorkProgressStatus {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SqlInputClass {
     pub knowledge_refs: Option<Vec<EvidenceRefElement>>,
-    pub parameters: HashMap<String, Option<serde_json::Value>>,
+    pub parameters: BTreeMap<String, Option<serde_json::Value>>,
     pub sql: String,
     pub target_id: TargetId,
 }
@@ -4841,7 +4843,7 @@ pub struct RunStepList {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RunStepSummary {
     pub category: String,
-    pub duration_ms: i64,
+    pub duration_ms: Option<i64>,
     pub target_name: Option<String>,
 }
 
@@ -4985,8 +4987,11 @@ pub struct Checkpoint {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub authority_revision: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub authority_snapshot: Option<HashMap<String, Option<serde_json::Value>>>,
-    pub entries: Vec<HashMap<String, Option<serde_json::Value>>>,
+    pub authority_snapshot: Option<BTreeMap<String, Option<serde_json::Value>>>,
+    /// 当前输入在 Pi 活动分支上保留的工具调用 ID。正式执行状态和来源权限仍由宿主核对。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub branch_tool_call_ids: Option<Vec<String>>,
+    pub entries: Vec<BTreeMap<String, Option<serde_json::Value>>>,
     pub leaf_id: Option<String>,
     pub sdk_version: SdkVersion,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -5070,7 +5075,7 @@ pub struct WorkspaceContext {
     pub asset_counts: Option<FluffyAssetCounts>,
     pub authority_revision: String,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub authority_snapshot: Option<HashMap<String, Option<serde_json::Value>>>,
+    pub authority_snapshot: Option<BTreeMap<String, Option<serde_json::Value>>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub control_delivery: Option<ControlDelivery>,
     /// 启动/恢复/刷新时，宿主按原通知条件scope核验已冻结答案的覆盖事实。缺省不证明已覆盖，不能凭query_id命中扩大通知范围。
@@ -5084,7 +5089,7 @@ pub struct WorkspaceContext {
     /// 个人记忆注入通道：mem0_authoritative按Mem0召回注入，directory_fallback为Mem0不可用退回目录。受限任务来源门生效时按资产真实来源过滤后仍注入同源记忆，仅无可证明同源资产或来源范围未知时不注入并标记excluded_by_source_limits；与search_knowledge回执中的同值口径一致。
     #[serde(skip_serializing_if = "Option::is_none")]
     pub memory_retrieval: Option<MemoryRetrieval>,
-    pub query_observations: Vec<HashMap<String, Option<serde_json::Value>>>,
+    pub query_observations: Vec<BTreeMap<String, Option<serde_json::Value>>>,
     pub recent_messages: Vec<ChatMessage>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub request_clock: Option<RequestClock>,
@@ -5123,7 +5128,7 @@ pub struct ControlDelivery {
     pub task_refs: Vec<EvidenceTaskRef>,
     pub text: String,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub text_authority: Option<HashMap<String, Option<serde_json::Value>>>,
+    pub text_authority: Option<BTreeMap<String, Option<serde_json::Value>>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -5234,6 +5239,8 @@ pub struct WorkspaceTask {
     pub report_ref: Option<AnalysisReportRef>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub revision_origin: Option<LegacyRevisionOrigin>,
+    #[serde(flatten)]
+    pub extra: std::collections::BTreeMap<String, serde_json::Value>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -5373,7 +5380,7 @@ pub struct Event {
     pub conversation_id: String,
     pub event_id: String,
     pub event_seq: String,
-    pub payload: HashMap<String, Option<serde_json::Value>>,
+    pub payload: BTreeMap<String, Option<serde_json::Value>>,
     pub schema_version: i64,
     #[serde(rename = "type")]
     pub event_type: EventType,
@@ -6572,9 +6579,9 @@ pub struct KnowledgeSearchReply {
     /// 个人记忆检索通道：受限任务来源门生效时按资产真实来源过滤，仅无可证明同源记忆时标记excluded_by_source_limits；命中侧过滤事实见回执source_limits块。
     pub memory_retrieval: String,
     pub next_asset_after: Option<String>,
-    pub personal_memories: Vec<HashMap<String, Option<serde_json::Value>>>,
+    pub personal_memories: Vec<BTreeMap<String, Option<serde_json::Value>>>,
     pub search_coverage: KnowledgeSearchCoverage,
-    pub selected_skills: Vec<HashMap<String, Option<serde_json::Value>>>,
+    pub selected_skills: Vec<BTreeMap<String, Option<serde_json::Value>>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -6685,7 +6692,7 @@ pub struct ReadSourceInput {
 pub struct RequestQueryInput {
     pub condition_version: String,
     pub knowledge_refs: Vec<EvidenceRef>,
-    pub parameters: HashMap<String, Option<serde_json::Value>>,
+    pub parameters: BTreeMap<String, Option<serde_json::Value>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub replaces_query_id: Option<String>,
     /// 省略继承目标条件版本已有采纳说明；兼容携带只核同义声明，不能独立另作决定。新任务未决定时登记clarifications，改变解释先同次修订条件。旧形状仅沿旧格式兼容。
@@ -6756,7 +6763,7 @@ pub struct ProposalInput {
 pub struct DataToolInvocation {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub answer_handoff: Option<AnswerHandoff>,
-    pub arguments: HashMap<String, Option<serde_json::Value>>,
+    pub arguments: BTreeMap<String, Option<serde_json::Value>>,
     pub checkpoint: Checkpoint,
     pub lease_epoch: String,
     /// 宿主按实际Pi投影与同批工具共享余量分配；不参与业务身份，不属于模型工具参数。历史调用可缺省。
@@ -6803,7 +6810,7 @@ pub struct DataToolOutcome {
         skip_serializing_if = "Option::is_none"
     )]
     pub control_delivery: Option<Option<ControlDelivery>>,
-    pub data: HashMap<String, Option<serde_json::Value>>,
+    pub data: BTreeMap<String, Option<serde_json::Value>>,
     ///
     /// 宿主按本运行原通知query/task/condition及其原scope核验全部实际冻结答案后的覆盖事实；与control_delivery共同计算，不从source_query_ids推断。只随控制状态回执更新，不授来源或SQL权限。
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -6929,7 +6936,7 @@ pub struct SourceDocument {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SqlInput {
     pub knowledge_refs: Option<Vec<EvidenceRef>>,
-    pub parameters: HashMap<String, Option<serde_json::Value>>,
+    pub parameters: BTreeMap<String, Option<serde_json::Value>>,
     pub sql: String,
     pub target_id: TargetId,
 }
@@ -7762,10 +7769,10 @@ pub enum AnalysisReportPage {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FluffyHistoricalAnalysis {
-    pub actual_sources: HashMap<String, Option<serde_json::Value>>,
-    pub conditions: Vec<HashMap<String, Option<serde_json::Value>>>,
+    pub actual_sources: BTreeMap<String, Option<serde_json::Value>>,
+    pub conditions: Vec<BTreeMap<String, Option<serde_json::Value>>>,
     pub content_fingerprint: String,
-    pub evidence: Vec<HashMap<String, Option<serde_json::Value>>>,
+    pub evidence: Vec<BTreeMap<String, Option<serde_json::Value>>>,
     pub generated_at: String,
     pub kind: HistoricalAnalysisKind,
     pub reference: Option<AnalysisReportRef>,
@@ -8097,7 +8104,7 @@ pub struct StickySemanticResolution {
 pub struct CurrentRequestQueryInput {
     pub condition_version: String,
     pub knowledge_refs: Vec<EvidenceRef>,
-    pub parameters: HashMap<String, Option<serde_json::Value>>,
+    pub parameters: BTreeMap<String, Option<serde_json::Value>>,
     pub replaces_query_id: Option<String>,
     /// 省略继承目标条件版本已有采纳说明；兼容携带只核同义声明，不能独立另作决定。新任务未决定时登记clarifications，改变解释先同次修订条件。旧形状仅沿旧格式兼容。
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -8449,7 +8456,7 @@ pub struct QueryView {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub knowledge_refs: Option<Vec<EvidenceRef>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub parameters: Option<HashMap<String, Option<serde_json::Value>>>,
+    pub parameters: Option<BTreeMap<String, Option<serde_json::Value>>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub replaces_query_id: Option<String>,
     pub result_ref: Option<String>,

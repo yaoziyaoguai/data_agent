@@ -122,6 +122,11 @@ export function useLiveConversation(cid: string | null, space: string, user: str
       });
       stream.addEventListener("stream_closed", closeStream);
       stream.onerror = () => {
+        if (stream.readyState === EventSource.CLOSED) {
+          setAuthorityRevision(value => value + 1);
+          reconnect();
+          return;
+        }
         setSyncUnavailable(true);
         if (!published && current) {
           published = true;

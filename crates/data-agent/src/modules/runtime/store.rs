@@ -585,7 +585,7 @@ pub struct ToolActivity {
 pub struct CompletedStep {
     pub tool: String,
     pub target_id: Option<String>,
-    pub duration_ms: i64,
+    pub duration_ms: Option<i64>,
 }
 
 /// 仅投影服务端认可的工具类别与对象 ID。正文、参数与原始工具回执不进入界面。
@@ -595,7 +595,7 @@ pub async fn tool_activity_in_tx(
     run_id: Option<&str>,
 ) -> Result<std::collections::HashMap<String, ToolActivity>> {
     let rows = sqlx::query(
-        "SELECT t.origin_run_id AS run_id,t.tool_name,t.state, \
+        "SELECT r.id AS run_id,t.tool_name,t.state, \
          CASE WHEN t.completed_at>=t.created_at \
            THEN TIMESTAMPDIFF(MICROSECOND,t.created_at,t.completed_at) DIV 1000 \
          END AS duration_ms, \
@@ -606,8 +606,12 @@ pub async fn tool_activity_in_tx(
            WHEN t.tool_name='read_source' AND JSON_VALUE(t.receipt,'$.data.source.kind')='document' \
              THEN JSON_VALUE(t.receipt,'$.data.source.id') \
          END AS target_id \
-         FROM tool_calls t JOIN agent_runs r ON r.id=t.origin_run_id \
-         WHERE r.conversation_id=? AND (r.id=? OR (? IS NULL AND r.state='running')) \
+         FROM agent_runs r JOIN tool_calls t ON t.conversation_id=r.conversation_id \
+           AND t.recovery_chain_id=r.recovery_chain_id \
+         LEFT JOIN pi_checkpoints p ON p.recovery_chain_id=r.recovery_chain_id \
+         WHERE r.conversation_id=? AND ((r.id=? AND r.state='finished') OR (? IS NULL AND r.state='running')) \
+           AND COALESCE(JSON_CONTAINS(p.checkpoint,JSON_QUOTE(t.sdk_tool_call_id),'$.branch_tool_call_ids'), \
+                        r.id=t.origin_run_id) \
          ORDER BY t.created_at,t.operation_id",
     )
     .bind(cid)
@@ -627,13 +631,11 @@ pub async fn tool_activity_in_tx(
         entry.tool = row.get("tool_name");
         if row.get::<String, _>("state") == "succeeded" {
             entry.completed += 1;
-            if let Some(duration_ms) = row.get::<Option<i64>, _>("duration_ms") {
-                entry.steps.push(CompletedStep {
-                    tool: entry.tool.clone(),
-                    target_id: row.get("target_id"),
-                    duration_ms,
-                });
-            }
+            entry.steps.push(CompletedStep {
+                tool: entry.tool.clone(),
+                target_id: row.get("target_id"),
+                duration_ms: row.get("duration_ms"),
+            });
         }
     }
     Ok(activity)

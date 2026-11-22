@@ -31,18 +31,30 @@ export function validateEntries(entries:unknown[],sessionId?:string,leaf?:string
   if(leaf!==undefined&&leaf!==null&&(!seen.has(leaf)||leaf===header.id))throw new Error('checkpoint_leaf_unavailable');
   return entries as FileEntry[];
 }
-function readJournal(file:string,sessionId:string,leaf:string|null) {
+function openJournal(cwd:string,file:string,sessionId:string,leaf:string|null) {
   const path=sessionPath(file);
   if(!existsSync(path))throw new Error('checkpoint_storage_missing');
   const stat=lstatSync(path);
   if(!stat.isFile()||stat.isSymbolicLink())throw new Error('checkpoint_storage_invalid');
   const fd=openSync(path,constants.O_RDONLY|constants.O_NOFOLLOW);
+  let lineCount: number;
   try {
-    let text:string;try{text=new TextDecoder('utf-8',{fatal:true}).decode(readFileSync(fd));}catch{throw new Error('checkpoint_storage_invalid');}
-    if(!text.endsWith('\n')||text.length===0)throw new Error('checkpoint_storage_invalid');
-    let entries:unknown[];try{entries=text.slice(0,-1).split('\n').map(line=>JSON.parse(line));}catch{throw new Error('checkpoint_storage_invalid');}
-    return {path,entries:validateEntries(entries,sessionId,leaf)};
+    const text=new TextDecoder('utf-8',{fatal:true}).decode(readFileSync(fd));
+    if(!text.endsWith('\n'))throw new Error('checkpoint_storage_invalid');
+    const lines=text.slice(0,-1).split('\n');
+    // SDK 会跳过坏行并升级旧头部；先锁定持久格式，再核对它实际加载的条目数。
+    validateEntries([JSON.parse(lines[0])],sessionId);
+    lineCount=lines.length;
+  }catch(error){
+    if(error instanceof SyntaxError||error instanceof TypeError)throw new Error('checkpoint_storage_invalid');
+    throw error;
   }finally{closeSync(fd);}
+  const manager=SessionManager.open(path,dirname(path),cwd);
+  const entries=[manager.getHeader(),...manager.getEntries()];
+  if(entries.length!==lineCount)throw new Error('checkpoint_storage_invalid');
+  const verified=validateEntries(entries,sessionId,leaf);
+  if(leaf===null)manager.resetLeaf();else manager.branch(leaf);
+  return {manager,entries:verified};
 }
 function syncJournal(path:string) {
   chmodSync(path,0o600);
@@ -54,15 +66,8 @@ function syncJournal(path:string) {
 export function createStoredSession(cwd:string) {
   return SessionManager.create(cwd,privateDirectory());
 }
-function openJournal(cwd:string,path:string,sessionId:string,leaf:string|null) {
-  const manager=SessionManager.open(path,privateDirectory(),cwd);
-  if(manager.getSessionId()!==sessionId)throw new Error('checkpoint_storage_invalid');
-  if(leaf===null)manager.resetLeaf();else manager.branch(leaf);
-  return manager;
-}
 export function openStoredSession(cwd:string,file:string,sessionId:string,leaf:string|null) {
-  const {path}=readJournal(file,sessionId,leaf);
-  return openJournal(cwd,path,sessionId,leaf);
+  return openJournal(cwd,file,sessionId,leaf).manager;
 }
 export function importStoredSession(cwd:string,entries:unknown[],leaf:string|null) {
   const valid=validateEntries(entries,undefined,leaf);
@@ -75,11 +80,11 @@ export function importStoredSession(cwd:string,entries:unknown[],leaf:string|nul
       try{linkSync(temporary,path);}catch(error){if((error as NodeJS.ErrnoException).code!=='EEXIST')throw error;}
     }finally{if(existsSync(temporary))unlinkSync(temporary);}
   }
-  const existing=readJournal(file,sessionId,leaf).entries;
+  const {manager,entries:existing}=openJournal(cwd,file,sessionId,leaf);
   const byId=new Map(existing.map(entry=>[entry.id,entry]));
   if(valid.some(entry=>!isDeepStrictEqual(byId.get(entry.id),entry)))throw new Error('checkpoint_conflict');
   syncJournal(path);
-  return openJournal(cwd,path,sessionId,leaf);
+  return manager;
 }
 export function storedReference(manager:SessionManager,verifyPersisted=false) {
   const file=manager.getSessionFile();
@@ -91,7 +96,7 @@ export function storedReference(manager:SessionManager,verifyPersisted=false) {
     return null;
   }
   // 正常运行由SDK同步追加；异常出口才核内存leaf是否实际落盘。
-  if(verifyPersisted)readJournal(basename(file),manager.getSessionId(),manager.getLeafId());
+  if(verifyPersisted)openJournal(manager.getCwd(),basename(file),manager.getSessionId(),manager.getLeafId());
   syncJournal(file);
   return {kind:'pi_session' as const,file:basename(file),session_id:manager.getSessionId()};
 }

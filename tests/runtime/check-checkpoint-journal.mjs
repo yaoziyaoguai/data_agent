@@ -286,7 +286,15 @@ assert.equal(checkpoint.storage.kind,'pi_session');assert.deepEqual(checkpoint.e
 const path=manager.getSessionFile(),journal=readFileSync(path);
 assert.ok(journal.length>512*1024);assert.ok(Buffer.byteLength(JSON.stringify(checkpoint))<2048);
 assert.equal(lstatSync(path).mode&0o777,0o600);
-const restored=restoreCheckpoint(cwd,checkpoint);
+const entryLines=new Set(journal.toString('utf8').trimEnd().split('\n').slice(1));
+const parse=JSON.parse;
+let restoredEntryParses=0;
+let restored;
+try {
+ JSON.parse=function(source,...args){if(entryLines.has(source))restoredEntryParses++;return parse.call(this,source,...args);};
+ restored=restoreCheckpoint(cwd,checkpoint);
+} finally {JSON.parse=parse;}
+assert.equal(restoredEntryParses,manager.getEntries().length,'Pi 恢复时每条 JSONL 正文只解析一次');
 assert.equal(restored.getSessionId(),manager.getSessionId());assert.equal(restored.getLeafId(),checkpoint.leaf_id);
 assert.deepEqual(restored.getEntries(),manager.getEntries());
 assert.equal(restored.getEntries().filter(e=>e.type==='compaction').length,10);
@@ -346,4 +354,17 @@ for(const [size,loaded]of [['short',short],['long',manager]]){
 }
 console.log(JSON.stringify({exportCosts}));
 assert.ok(exportCosts.every(cost=>cost.reads===0&&cost.parses===0),'已加载会话健康导出不能反复整读或解析JSONL');
+const tool = id => assistant([{type:'toolCall',id,name:'search_knowledge',arguments:{query:'合成资料'}}], 'toolUse');
+short.appendMessage(tool('old-branch'));
+short.resetLeaf();
+short.appendMessage({role:'user',content:'按新来源继续同一输入',timestamp:2});
+short.appendCustomMessageEntry('data_agent_current_input','已切换来源',false,
+ {message_id:'same-input',sdk_tool_call_id:'switch-scope'});
+short.appendMessage(tool('adopted'));
+short.appendMessage({role:'user',content:'[宿主恢复原输入] 继续原请求',timestamp:3});
+short.appendMessage(tool('recovered'));
+assert.deepEqual(exportCheckpoint(short).branch_tool_call_ids,['recovered','adopted','switch-scope']);
+short.appendCustomMessageEntry('data_agent_current_input','旧范围切换',false,{message_id:'same-input'});
+short.appendMessage(tool('legacy-current'));
+assert.deepEqual(exportCheckpoint(short).branch_tool_call_ids,['legacy-current']);
 console.log(JSON.stringify({passed:true,...history,journalBytes:journal.length,referenceBytes:Buffer.byteLength(JSON.stringify(checkpoint)),envelopeBytes:body.length,nativeSessionPreserved:true,originalLeafPreserved:true,malformedFilesRejected:faults.length,exportCosts,officialRequests:0}));

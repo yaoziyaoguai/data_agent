@@ -1,18 +1,17 @@
-use crate::request::{ContractBody, request_contracts};
+use crate::request::{ContractBody, RawContractBody, request_contracts};
 use crate::{
     State,
     routes::{ResponseResult, failure, respond, user},
 };
 use axum::{
-    Json,
     extract::{Path, State as AxumState},
     http::HeaderMap,
 };
-use data_agent::contracts::generated::ReadModelConnection;
-use data_agent::{
-    contracts,
-    use_cases::{conversation_models, model_configuration},
+use data_agent::contracts::generated::{
+    ReadModelConnection, SaveDefaultModel, SaveModelDefinition, SaveModelSelection,
+    SaveModelService,
 };
+use data_agent::use_cases::{conversation_models, model_configuration};
 use serde_json::Value;
 
 pub async fn catalog(AxumState(state): AxumState<State>, headers: HeaderMap) -> ResponseResult {
@@ -37,10 +36,9 @@ pub async fn save(
     AxumState(state): AxumState<State>,
     headers: HeaderMap,
     Path(cid): Path<String>,
-    Json(body): Json<Value>,
+    ContractBody { value: input }: ContractBody<SaveModelSelection>,
 ) -> ResponseResult {
     let context = user(&state, &headers).await.map_err(failure)?;
-    let input = contracts::decode("SaveModelSelection", body).map_err(failure)?;
     let value = conversation_models::save(
         &state.pool,
         &context,
@@ -95,25 +93,31 @@ async fn save_configuration(
 pub async fn service(
     AxumState(state): AxumState<State>,
     headers: HeaderMap,
-    Json(body): Json<Value>,
+    RawContractBody { raw: body, .. }: RawContractBody<SaveModelService>,
 ) -> ResponseResult {
     save_configuration(state, headers, body, "service").await
 }
 pub async fn definition(
     AxumState(state): AxumState<State>,
     headers: HeaderMap,
-    Json(body): Json<Value>,
+    RawContractBody { raw: body, .. }: RawContractBody<SaveModelDefinition>,
 ) -> ResponseResult {
     save_configuration(state, headers, body, "model").await
 }
 pub async fn default_model(
     AxumState(state): AxumState<State>,
     headers: HeaderMap,
-    Json(body): Json<Value>,
+    RawContractBody { raw: body, .. }: RawContractBody<SaveDefaultModel>,
 ) -> ResponseResult {
     save_configuration(state, headers, body, "default").await
 }
-request_contracts!(ReadModelConnection);
+request_contracts!(
+    ReadModelConnection,
+    SaveModelSelection,
+    SaveModelService,
+    SaveModelDefinition,
+    SaveDefaultModel,
+);
 
 pub async fn connection(
     AxumState(state): AxumState<State>,
