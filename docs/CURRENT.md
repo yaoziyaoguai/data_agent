@@ -3,11 +3,11 @@
   "workflow": "development",
   "schema": 1,
   "phase": "repair",
-  "goal_revision": 250,
-  "environment": "2026-11-21 本轮仅使用临时测试实例与隔离 MySQL。上次日常实例更新在 2026-11-19，Web 27173、API 30780、Bridge 30781、平台 30790、Mem0 30791 均返回 200。沿用原数据库、合成身份、平台状态和两个原账本。Flash/high、v2、latest_only，维护预填关闭。原付费授权已于 2026-11-18 17:27 上海时间到期，历史报告可正常查看。当前控制进程和配置路径记在 .local/checks/internal-preview-release-95Bzzu/service.json。",
+  "goal_revision": 251,
+  "environment": "2026-11-22 本轮使用临时服务、隔离 MySQL、合成平台及本地协议端点。Mem0 验证使用真实 Milvus 与 SQLite，模型和 embedding 响应为本地合成。日常实例沿用 2026-11-19 的配置与数据，本轮没有重启。原付费授权于 2026-11-18 17:27 上海时间到期。",
   "verification": {
     "level": "increment",
-    "reason": "本次返工的 P1 已提交，P2 的离线构建、强类型与工作台验收见最新一节。I3 的历史真测、原题和成绩保留。",
+    "reason": "在已合并的 bf7da935 上修复审计确认的问题，局部回归见最新一节。I3 原题、正式绑定与历史真测记录继续有效。",
     "freshness": "content",
     "checks": [],
     "inputs": [
@@ -84,7 +84,7 @@
       "id": "I3-SEMANTIC-DOGFOOD",
       "phase": "I3",
       "status": "active",
-      "goal": "保留 Pi 1.4、容量、正式陈述词法、A12、J01 以及已验精读覆盖和新旧游标。P1 已独立封板。本轮完成源码行数与 Clippy 门禁、契约生成、外置分词资产和上游配置，以及 CSV 导出、语义血缘图、运行步骤和桌面双栏。用隔离 MySQL、合成平台和协议模型验证权限与界面行为后独立提交。",
+      "goal": "修复 bf7da935 审计确认的实时交付、CSV、资料回读和工作台问题。复用原 Pi 会话、工具回执与业务权限，保留 I3 原题、验收标准和历史结果。",
       "requirements": [
         "D01",
         "D02",
@@ -1288,9 +1288,27 @@
       "evidence": null
     }
   },
-  "reason": "按用户决定归档本地内测版，更新工作台与读者文档。I3 原题、50 条正式绑定与历史成绩保留。"
+  "reason": "最新审计修复采用局部合成验收；现有 I3 仍待真实模型复验。"
 }
 ---
+
+## 最新代码审计修复（2026-11-22）
+
+基线为 `bf7da935`，关联分支 `codex/workbench-audit-repairs`。独立复核确认了跨会话投影串行、停机通知丢失和重连后旧正文残留。提交后的正文广播与状态投影分开，过载或未确认时按原事件补读。历史目录只读本人会话，报告、结果、步骤和来源保持各自的当前权限核验。
+
+右栏支持保活页签和调宽，已完成步骤从对应回复按需回读。血缘可打开 Skill 及分页查看直接依赖。待核对方法可预览和丢弃，不能走普通启用绕过审核。CSV 按页分块并保留合法带符号文本。来源定位避免空键，词表首次读取失败可以恢复。Mem0 按真实租户串行对应写入，HTTP 同时处理上限为 32。API 在就绪前迁移，Worker 复用现有库，旧原型检查产物写入本地忽略目录。
+
+实跑证据在 `.local/checks/workbench-audit-repairs/`。跨会话投影和停机补读、20 个空闲工作台 60 秒事件和会话表零查询、50 帧无快照刷新、重连失权清屏均通过。Mem0 20 项本地测试和 200 次真实 Milvus/SQLite 请求通过，公式/精确数值 CSV、报告撤权恢复及 151 项归档原型检查已通过。`make verify verify-contracts`、35 项多任务边界、18 项报告浏览器检查和 16 项合成协议业务场景均通过。旧 MySQL 结构迁移后的原成功与拒绝回执均可接回。座舱离线参考执行 53 条 SQL，另有 12 项独立计算对照。本轮官方模型请求为零。
+
+方法草稿复用夹具明确传 `source_limits: null`，使同范围综合提交和改版后拒绝旧依赖分别到达原业务校验。任务答案边界夹具按现行默认 v2 启动，v1 用例显式构造持久旧运行。可读答案夹具改用现行 `prepare_analysis_answer` 与原生正文绑定，保留跨范围拒绝和单任务成功验收。退役版本在试图登记新调用时拒绝，保留已登记操作及原回执。缺失范围与不一致范围的拒绝继续由原用例检查。
+
+已保存方法的来源用例以显式登记的查询结果为准。撤权期间断言正文隐藏，恢复后核对字节内容与原版本。草稿本人丢弃沿用原失效写入，确认入口与原结果权限仍执行各自的校验。
+
+工具完成时间早于登记时间时，原步骤投影会使整份会话快照返回 503。隔离库已复现此路径，复测中又观测到三个自然产生的逆序记录。快照保留已完成计数，只省略无法成立的耗时。
+
+零售合成业务检查改从 `Conditions.filters` 核对渠道，沿用当前条件合同。S03 的原问题、时间范围、旧稿 409 与独立结果集对照继续按原标准检查。
+
+当前使用单 API 实例，继续实时核对外部表权限。多副本通知、真实平台与企业认证、历史保留策略需要各自的部署或产品依据。列统计按当前结果页展示。I3 的真实模型轨迹与 Source 08 原题尚未复验。
 
 ## P2 强类型、部署配置与工作台（本地验收通过）
 
@@ -6261,7 +6279,7 @@ SQL 执行目标单独记录方言、版本、允许语句与能力；只接受�
 - 合成离线验收：Python 3.14.7 / SQLite 3.53.4，13 条参考查询与 11 项结构、边界、错误关联反例检查全部通过。[运行记录](sources/evaluation/verification.json)。原型内嵌 DDL/加工 SQL 与源文件逐字符一致，三个指标 SQL 在同一数据上分别得到 12400 分、5 位客户、0.5。
 - 此前维护原型基线：13 字段展开、人工修改及确认、保存刷新、重预填保护、3 个加工上游、3 指标、4 文档版本和引用、两个模拟用户的记忆编辑/停用/删除等 49 项浏览器检查通过。[维护基线检查](../prototype/.checks/retail-browser-checks.json)。本轮整系统检查另行记录，旧报告不能代替新代码的验证。
 - 最近整体原型验证：独立 Chromium 中 **14 个场景、151 项断言全部通过，0 页面脚本异常**；13 个产品输入文件在测试前后哈希一致，交付前再次核对与当前源文件相符。[可重跑脚本](../prototype/.checks/verify-system.cjs)、[最新报告](../prototype/.checks/system-browser-checks.json)。覆盖导航、历史弹层、澄清、修订后禁止旧版确认、多任务结果归属、CSV、来源跳转及未保存语义保留、纠错、Skill 版本和停用、模拟用户隔离、刷新与取消；新增跨模块入口隐藏、当前任务和 SQL 查看版本保留、会话草稿分别恢复、旧草稿迁移及空白新对话复用检查。
-- 视觉及基础键盘检查：1440px 桌面、390px 手机下工作台、个人资产及六个语义标签页无文档水平溢出；手机结果首屏直接显示。Tab 焦点、新建图标名称、历史与 Skill 弹层 Esc 关闭和焦点返回通过；不等于完整可访问性审计。[首页](../prototype/.checks/system-flow-desktop-home.png)、[SQL 修订](../prototype/.checks/system-flow-sql-revision.png)、[结果](../prototype/.checks/system-flow-result.png)、[手机结果](../prototype/.checks/system-flow-mobile-focused-result.png)、[记忆](../prototype/.checks/conversation-assets-desktop.png)。第三轮检查发现的新会话空状态 `scrollTop` 错误已修复，并完成整轮复测。
+- 视觉及基础键盘检查：1440px 桌面、390px 手机下工作台、个人资产及六个语义标签页无文档水平溢出；手机结果首屏直接显示。Tab 焦点、新建图标名称、历史与 Skill 弹层 Esc 关闭和焦点返回通过；不等于完整可访问性审计。[首页](https://github.com/yaoziyaoguai/data_agent/blob/bf7da935f6e67479cee8c9ba320025eb306a5cd2/prototype/.checks/system-flow-desktop-home.png)、[SQL 修订](https://github.com/yaoziyaoguai/data_agent/blob/bf7da935f6e67479cee8c9ba320025eb306a5cd2/prototype/.checks/system-flow-sql-revision.png)、[结果](https://github.com/yaoziyaoguai/data_agent/blob/bf7da935f6e67479cee8c9ba320025eb306a5cd2/prototype/.checks/system-flow-result.png)、[手机结果](https://github.com/yaoziyaoguai/data_agent/blob/bf7da935f6e67479cee8c9ba320025eb306a5cd2/prototype/.checks/system-flow-mobile-focused-result.png)、[记忆](https://github.com/yaoziyaoguai/data_agent/blob/bf7da935f6e67479cee8c9ba320025eb306a5cd2/prototype/.checks/conversation-assets-desktop.png)。第三轮检查发现的新会话空状态 `scrollTop` 错误已修复，并完成整轮复测。
 - 讲解与架构：6 份 HTML 的脚本语法、可见按钮/下拉选择交互通过，无页面脚本异常；标准架构图重新生成，10 个节点、16 条关系，自动文字越界/重叠检查无问题。[HTML 检查](reviews/publication-20261003/html-browser-checks.json)、[架构检查](architecture/diagram-checks.json)。HTML 检查未覆盖宿主 widget API 与主题集成。
 - 文档与公开材料：本地链接核对通过，已知旧业务标记、内部引用、个人绝对路径、密钥样式和旧截图核对无残留。检查范围是当前工作文件，不能据此宣称整个 Git 对象库或所有可能的敏感内容已清除；旧材料私密归档与本地工具快照不属于公开内容。
 - 最近公开材料补检：扫描 60 份当时文本文件，未命中已知旧样例标识、个人绝对路径或密钥样式；工作台所有展示和测试仍使用合成资料。该历史轮次没有保存或使用用户密钥，没有提交、推送或发布。

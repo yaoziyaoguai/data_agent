@@ -94,7 +94,7 @@ make verify-infra
 | `make infra-status` | 查看专用栈的当前状态 |
 | `make prototype` | 在本机 8765 端口展示既有原型；端口已占用时沿用已有原型服务或先处理占用 |
 
-Node 构建及浏览器环境证据写入 `.local/checks/`；浏览器原报告和截图按原脚本写入 `prototype/.checks/`。dev_co 检查证据写入 `.project-workflow/`。本地生成日志不默认纳入 Git。
+Node 构建及浏览器环境证据写入 `.local/checks/`；归档原型的浏览器报告和截图写入 `.local/checks/prototype/`。dev_co 检查证据写入 `.project-workflow/`。本地生成日志不默认纳入 Git。
 
 ### 停止
 
@@ -111,8 +111,9 @@ make vm-stop
 
 `DATA_AGENT_HTTP_UPSTREAMS` 接受逗号分隔的主机名、IP 或 CIDR。未设置时只允许回环地址。容器部署可以显式填写上游服务名，例如 `platform,agent,mem0,milvus`，也可填写使用字面 IP 的私有子网。HTTP 客户端按配置的源直接请求。生产模型和嵌入仍沿各自的 HTTPS 及业务配置校验。
 
-部署可把原分词资产放在独立目录，通过 `DATA_AGENT_RESOURCES_DIR` 指向包含 `deepseek/` 的目录。预填首用按所选模型加载词表并校验固定 SHA-256。开发默认读仓库的资源目录。
+API、Pi Bridge 和 Mem0 默认监听 `127.0.0.1`，需要在隔离网络内互通时可设置 `DATA_AGENT_BIND_HOST=0.0.0.0`，再配置对应的上游地址。API 在报告健康前应用数据库迁移，Worker 在 API 就绪后启动并直接连接已迁移的库。Mem0 最多同时处理 32 个请求，繁忙时返回 `503 memory_busy`。
 
+分词加载依次使用显式 `DATA_AGENT_RESOURCES_DIR`、可执行文件旁的 `resources/` 或开发资源目录。前两种目录下均须有 `deepseek/`。词表按所选模型校验固定 SHA-256，读取成功后缓存。补齐缺失文件后可重新加载。
 
 环境脚本只为新建的项目环境生成本地开发密码，保存在忽略目录 `.local/infra/`，文件权限为 0600。已有文件不覆盖；它们通过只读 secret 文件交给相应服务。不能将该目录上传 GitHub。
 

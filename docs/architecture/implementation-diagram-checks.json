@@ -9,10 +9,10 @@
   "sources": {
     "implementation-views.md": "e13ddb89462fff3f72e5ab3d04e5c7a2a113fae1571707f6a527b6b13837d88d",
     "knowledge-modules.md": "ce77179fe584d7e9cdb6628429744725b9851e3dfcded2cc28390805f09d9fb8",
-    "runtime-modules.md": "6ff906573ade6f7e04068ccb5e4cd1379836bb8d2298f5d65c027578d2995e0d"
+    "runtime-modules.md": "0aae1bebab5068634521df442aeb6466c44a11b5547651181bffe742051707bc"
   },
   "renderedDiagrams": [
-    "F08"
+    "F05"
   ],
   "diagrams": [
     {
@@ -88,8 +88,8 @@
     {
       "id": "F05",
       "width": 681.5,
-      "height": 986,
-      "textCount": 22,
+      "height": 1116,
+      "textCount": 26,
       "outsideLabels": []
     },
     {

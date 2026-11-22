@@ -54,15 +54,15 @@ try {
     child.once('error', reject);
     child.once('exit', (code, signal) => resolve({ code, signal }));
   });
-  const report = JSON.parse(await readFile(path.join(prototype, '.checks/system-browser-checks.json'), 'utf8'));
+  const report = JSON.parse(await readFile(path.join(root, '.local/checks/prototype/system-browser-checks.json'), 'utf8'));
   const hash = async file => createHash('sha256').update(await readFile(path.join(root, file))).digest('hex');
   const evidence = {
     node: process.versions.node,
     playwright: JSON.parse(await readFile(path.join(root, 'node_modules/playwright/package.json'), 'utf8')).version,
     browser: JSON.parse(await readFile(path.join(root, 'node_modules/playwright-core/browsers.json'), 'utf8')).browsers.find(item => item.name === 'chromium'),
     inputHashes: { 'package-lock.json': await hash('package-lock.json'), 'scripts/check-browser.mjs': await hash('scripts/check-browser.mjs'), 'prototype/.checks/verify-system.cjs': await hash('prototype/.checks/verify-system.cjs') },
-    report: 'prototype/.checks/system-browser-checks.json',
-    reportSha256: await hash('prototype/.checks/system-browser-checks.json'),
+    report: '.local/checks/prototype/system-browser-checks.json',
+    reportSha256: await hash('.local/checks/prototype/system-browser-checks.json'),
     passed: result.code === 0 && report.passed === true,
     checkCount: report.checkCount,
     process: result,

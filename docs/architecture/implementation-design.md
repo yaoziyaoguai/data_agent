@@ -363,6 +363,10 @@ python3 docs/architecture/check-implementation.py
 
 派发准备的批量只读查询使用各模块声明的关系和字段。先在短事务取得带锁的输入、会话及检查点，结束后查平台授权。再按原会话代次锁定当前输入和恢复链原运行，从同一事务读任务、查询观察、资产及可读来源。作业续租和记录本次尝试一起条件更新。Worker 沿已核对的身份交付，资料撤权和范围变化仍按原来源证明及原生分支处理。查询数以实际派发实测为准，研发证据见 [CURRENT](../CURRENT.md)。
 
+实时通知在数据库提交后入队。API 先发送持久正文事件，再按会话合并刷新任务、运行和查询状态。状态投影有并发上限，各会话独立读取当前权限。通知积压或 Worker 未收到交付确认时发补读信号，客户端从持久记录按当前权限接续。API 停机时关闭订阅，Worker 等业务任务收尾后限时补发未确认通知。当前工作台仍按单 API 实例广播。
+
+回复底部按需读取该回复对应运行的工具步骤，直接使用原工具登记和完成时间。回读校验会话、用户和空间，目标名称按当前可读范围投影。对话历史目录只需要当前用户和空间，报告、结果及工具步骤仍各自核对当前来源权限。
+
 ### Pi 会话持久化与旧检查点迁移
 
 M11 使用锁定 Pi 的原生 `SessionManager.create/open/branch/resetLeaf`，在项目忽略的 `.local/pi-sessions` 保存完整 JSONL 会话树，包括原始消息、工具调用和原生 compaction。M08 在业务事务内保存精确 leaf、SDK session ID、私有文件名和 authority；请求不重复传输全部历史。引用提交前 M11 验证目标叶子已落盘并 fsync 文件及目录。恢复必须使用 MySQL 保存的 leaf，文件中的未确认后续分支保留但不进入本次上下文。目录 0700、文件 0600，文件缺失、损坏、错 session/leaf 和不安全路径明确失败。
@@ -916,7 +920,7 @@ M02保留公共knowledge_index_jobs的登记/领取职责，扩展待办目标�
 
 知识窄投影保留实际entry/statement、修订、原位置及补读信息；M02按已收到的规范record核同版长度与映射元信息，补缺失定位，并检查展示子区间仍在原entry/适用statement的规范窗口内；未知键或显式冲突按候选拒绝，不按query重定位、重读整entry或修写索引。适用陈述不能因缺冗余字段丢失其支持依赖；Milvus接入仅把显式空statement_id视为普通entry标记，缺身份时仍保留已给出的statement_offset交owner核验，不替外部冲突字段补成正确值。必要依赖和实际贡献来源由既有元信息/有效层索引/legacy窄引用取得，随内容传给最终核验，不能从裁小的正文推断完整依赖。v1装配、来源过滤及交付依赖登记复用这份依据，裁剪后仅登记实际可见内容对应的依赖，不以整对象回读维持兼容。
 
-内部完整检索由`use_cases/knowledge.rs::search_stage_outside_lock`接收`ScopedSearchRequest`，其中`drive_stage`拥有唯一推进循环：边界在范围准备前建立绝对期限，用例共享候选身份、分片深度、有效性及已读内容；`knowledge_embeddings::SearchLaunch`仅持原查询Embedding句柄，保留原授权/发送/结算，M04提供`next_page/fetch_page/accept_page`及共同融合。`ScopedSearchStage.search`的`KnowledgeSearch`保存按共同次序的`SearchHit::Knowledge`或`SourceExcerpt`、v1末端聚合`objects`、未交付定位`pending`及内部`scan_progress`。进度区分实际消费位置、实际轮数、主读取数和各分片状态；元信息未完成或出口才接回的候选只保留引用，后续交付前须正常重核，不能冒充已验证正文。知识规范身份使用`knowledge-statement-window-3`的360字符窗口/280步长，raw身份绑定`source-structure-1`及原来源/修订/字符窗口；相交raw合并保留全部成员身份，不退已消费额度。SQL后备在各自owner内以最多24个去重分布词筛候选，完整去重问句词项参与同一次SQL的名称/内容评分，再按相关性和稳定定位排序、以quota/OFFSET限制下行；词项覆盖不足仍如实表达，不增加通道票或在组合层重读正文评分。知识及raw索引覆盖探测同样受原期限限制，未完成报incomplete；知识覆盖还核同目标成功回执的`projection_version`，旧或缺失版本不报current，不因此自动重领作业或改变原Embedding身份，新公共集合仍由08显式切换。最终`assert_search_fresh_in_tx`按同一组实际命中重核来源和修订，原Embedding收尾仍可跨期。公开v1传`include_raw=false`且保资产目录；未配置Milvus原文通道的词法模式保留未整理文档的正文候选，按命中ref同版补读，不能因启用v2便把它们过滤为空；配置原文通道时，独立文档正文走raw、整理陈述保留知识身份；同步派生文档没有独立document原文索引，正文仍由现有知识窗口召回。各路只在原允许记录集中搜索，不因文档关联上游而扩大平台来源许可；覆盖核验也只要求相应owner负责的索引。双类型不另建调度模块，`hits/pending/scan_progress`均不是公开v2 Schema，公开v2装配与续读编码仍归06。验证状态与证据见CURRENT。
+内部完整检索由`use_cases/knowledge/search_stage.rs::search_stage_outside_lock`接收`ScopedSearchRequest`，其中`drive_stage`拥有唯一推进循环：边界在范围准备前建立绝对期限，用例共享候选身份、分片深度、有效性及已读内容；`knowledge_embeddings::SearchLaunch`仅持原查询Embedding句柄，保留原授权/发送/结算，M04提供`next_page/fetch_page/accept_page`及共同融合。`ScopedSearchStage.search`的`KnowledgeSearch`保存按共同次序的`SearchHit::Knowledge`或`SourceExcerpt`、v1末端聚合`objects`、未交付定位`pending`及内部`scan_progress`。进度区分实际消费位置、实际轮数、主读取数和各分片状态；元信息未完成或出口才接回的候选只保留引用，后续交付前须正常重核，不能冒充已验证正文。知识规范身份使用`knowledge-statement-window-3`的360字符窗口/280步长，raw身份绑定`source-structure-1`及原来源/修订/字符窗口；相交raw合并保留全部成员身份，不退已消费额度。SQL后备在各自owner内以最多24个去重分布词筛候选，完整去重问句词项参与同一次SQL的名称/内容评分，再按相关性和稳定定位排序、以quota/OFFSET限制下行；词项覆盖不足仍如实表达，不增加通道票或在组合层重读正文评分。知识及raw索引覆盖探测同样受原期限限制，未完成报incomplete；知识覆盖还核同目标成功回执的`projection_version`，旧或缺失版本不报current，不因此自动重领作业或改变原Embedding身份，新公共集合仍由08显式切换。最终`assert_search_fresh_in_tx`按同一组实际命中重核来源和修订，原Embedding收尾仍可跨期。目录检索传`include_raw=false`，旧 v1 回执按原合同接回。未配置Milvus原文通道的词法模式保留未整理文档的正文候选，按命中ref同版补读，不能因启用v2便把它们过滤为空；配置原文通道时，独立文档正文走raw、整理陈述保留知识身份；同步派生文档没有独立document原文索引，正文仍由现有知识窗口召回。各路只在原允许记录集中搜索，不因文档关联上游而扩大平台来源许可；覆盖核验也只要求相应owner负责的索引。双类型不另建调度模块，`hits/pending/scan_progress`均不是公开v2 Schema，公开v2装配与续读编码仍归06。验证状态与证据见CURRENT。
 
 | record_kind | 建索引的资料与身份 | 公共搜索hit的必要字段及补读 |
 | --- | --- | --- |

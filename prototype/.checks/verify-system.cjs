@@ -5,6 +5,8 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const assert = require('node:assert/strict');
 const root = path.resolve(__dirname, '..');
+const output = path.resolve(root, '../.local/checks/prototype');
+fs.mkdirSync(output, {recursive:true});
 const inputs = ['index.html','app.js','personal.js','knowledge.js','shell.js','shell.css','workbench.js','workbench.css','workbench-fixture.js','demo-source.js','demo-analysis.js','style.css','knowledge.css'];
 const hashes = () => Object.fromEntries(inputs.map(file => [file,crypto.createHash('sha256').update(fs.readFileSync(path.join(root,file))).digest('hex')]));
 const base = process.env.PROTOTYPE_URL || 'http://127.0.0.1:8765/';
@@ -25,7 +27,7 @@ const openConversation = async (page,id) => {await page.locator('[data-shell-his
 const completed = async (page,id) => {await page.waitForFunction(id=>workbenchDemo.getQueries().some(q=>q.id===id&&q.status==='completed'),id);return (await queries(page)).find(q=>q.id===id);};
 const confirm = async page => {await page.locator(wb('confirm')).click();return (await queries(page))[0];};
 const activeDb = async page => {const db=await read(page,dbKey('analyst-a'));return {db,c:db.conversations.find(c=>c.id===db.activeConversationId)};};
-const screenshot = async (page,name) => {const file=`system-flow-${name}.png`;await page.screenshot({path:path.join(__dirname,file),fullPage:true,animations:'disabled'});report.screenshots.push(file);};
+const screenshot = async (page,name) => {const file=`system-flow-${name}.png`;await page.screenshot({path:path.join(output,file),fullPage:true,animations:'disabled'});report.screenshots.push(file);};
 function cleanError(error){return String(error.message||error).replace(/https?:\/\/127\.0\.0\.1:\d+[^\s]*/g,'<local-preview>').replace(/\/Users\/[^\s]+/g,'<local-path>').slice(0,3000);}
 async function scenario(name,fn,viewport={width:1440,height:960}){
  const result={name,checks:[],passed:false};report.scenarios.push(result);
@@ -284,6 +286,6 @@ async function scenario(name,fn,viewport={width:1440,height:960}){
   await page.reload();await page.waitForTimeout(1600);const cancelledAfter=(await queries(page)).find(q=>q.id===cancelled.id);check('取消在刷新和到期后不变完成',cancelledAfter.status==='cancelled'&&cancelledAfter.rows===null);
  });
  await browser.close();report.completedAt=new Date().toISOString();report.finalInputHashes=hashes();report.inputsChangedDuringRun=JSON.stringify(report.inputHashes)!==JSON.stringify(report.finalInputHashes);report.passed=report.scenarios.every(s=>s.passed)&&report.pageErrors.length===0&&!report.inputsChangedDuringRun;report.checkCount=report.scenarios.reduce((n,s)=>n+s.checks.length,0);
- fs.writeFileSync(path.join(__dirname,'system-browser-checks.json'),JSON.stringify(report,null,2)+'\n');
+ fs.writeFileSync(path.join(output,'system-browser-checks.json'),JSON.stringify(report,null,2)+'\n');
  console.log(JSON.stringify({passed:report.passed,checkCount:report.checkCount,inputsChangedDuringRun:report.inputsChangedDuringRun,failures:report.scenarios.filter(s=>!s.passed).map(s=>({name:s.name,error:s.error})),pageErrors:report.pageErrors}));if(!report.passed)process.exitCode=1;
-})().catch(async error=>{report.fatal=cleanError(error);fs.writeFileSync(path.join(__dirname,'system-browser-checks.json'),JSON.stringify(report,null,2)+'\n');await browser?.close();console.error(cleanError(error));process.exitCode=1;});
+})().catch(async error=>{report.fatal=cleanError(error);fs.writeFileSync(path.join(output,'system-browser-checks.json'),JSON.stringify(report,null,2)+'\n');await browser?.close();console.error(cleanError(error));process.exitCode=1;});

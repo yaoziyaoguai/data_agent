@@ -249,7 +249,12 @@ const verifySql=async(cid,caseId)=>{
 const verifyNetScope=async(cid,channel)=>{
   const query=(await queries(cid)).at(-1);assert.ok(query,'未形成净收入SQL');
   const stored=h.sql(`SELECT body FROM condition_revisions WHERE task_id='${query.task_id}' AND version=${query.condition_version}`)[0];
-  assert.equal(stored.channel??null,channel);
+  assert.equal(stored.channel,null,'新条件通过通用 filters 保存渠道');
+  const savedChannels=stored.filters.flatMap(filter=>{
+    const match=filter.match(/^\s*channel\s*=\s*(['"]?)(web|app|store)\1\s*$/i);
+    return match?[match[2].toLowerCase()]:[];
+  });
+  assert.deepEqual(savedChannels,channel===null?[]:[channel]);
   const independent=JSON.parse(execFileSync('python3',['scripts/evaluate_business_sql.py'],{input:JSON.stringify({case_id:'net_revenue_scope',channel,sql:query.sql,parameters:query.parameters}),encoding:'utf8'}));
   assert.equal(independent.passed,true,'渠道范围与独立参考不符：'+JSON.stringify(independent));
   return {query,independent};
@@ -348,7 +353,7 @@ const scenarios=[
     await ask(cid,`[task:${old.task_id}] 只看app渠道，其他条件保持原样，给修订SQL`);
     const current=(await queries(cid)).at(-1);assert.equal(current.task_id,old.task_id);assert.notEqual(current.condition_version,old.condition_version);assert.equal(current.parameters.start,old.parameters.start);assert.equal(current.parameters.end,old.parameters.end);
     const readConditions=q=>h.sql(`SELECT body FROM condition_revisions WHERE task_id='${q.task_id}' AND version=${q.condition_version}`)[0];
-    const original=readConditions(old),stored=readConditions(current);assert.equal(stored.channel,'app');
+    const original=readConditions(old),stored=readConditions(current);
     assert.equal(original.time_start,'2026-01-01T00:00:00Z');assert.equal(original.time_end,'2026-02-01T00:00:00Z');assert.equal(original.timezone,'UTC');
     for(const key of ['time_start','time_end','timezone'])assert.equal(stored[key],original[key]);
     assert.equal((await h.request('/queries/'+old.id+'/confirm',{operation_id:randomUUID(),draft_version:old.draft_version,condition_version:old.condition_version})).status,409);
