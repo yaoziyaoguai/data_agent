@@ -17,11 +17,10 @@ const run = {
     query_observations: [], memories: [],
   },
 };
-const search = {objects: [
-  {id: 'metric-refund_rate', version: '7', entries_complete: false,
-    entries: [{path: 'definition', entry_id: 'definition', effective_value: '已确认的合成指标'}]},
-  {id: 'table-demo_order_detail', version: '3', entries: []},
-]};
+const reference = {object_id: 'metric-refund_rate', version: '7', path: 'sql'};
+const hit = (ref, definition, content_state) => ({record_kind: 'knowledge_entry', ref,
+  name: '合成退款率', kind: 'metric', definition, content_state});
+const search = {hits: [hit({...reference, path: 'definition'}, '已确认的合成指标', 'complete')]};
 const update = {task_id: 'refund-task', condition_version: '2', phase: 'investigating', conditions: {...conditions, metric: 'refund_rate'}};
 const receipt = (toolName, data) => ({role: 'toolResult', toolName,
   content: [{type: 'text', text: JSON.stringify(data)}]});
@@ -30,8 +29,7 @@ const action = (knowledge = search, reads = []) => syntheticAction(run, {message
   receipt('update_analysis_task', update), ...reads.map(data => receipt('read_knowledge', data)),
 ]});
 const page = (body, offset, nextOffset, totalChars, version = '7') => ({
-  id: 'metric-refund_rate', version,
-  entries: [{path: 'sql', entry_id: 'sql', effective_value: body,
+  items: [{kind: 'knowledge', ref: {...reference, version}, state: 'ok', content: body,
     content_page: {offset, next_offset: nextOffset, total_chars: totalChars,
       complete: offset === 0 && nextOffset === null}}],
 });
@@ -47,17 +45,14 @@ let passed = false;
 const previousDemoProfile = process.env.DATA_AGENT_DEMO_PROFILE;
 process.env.DATA_AGENT_DEMO_PROFILE = 'retail';
 try {
-  assert.deepEqual(action(), {tool: 'read_knowledge', args: {
-    object_id: 'metric-refund_rate', version: '7', entry_id: 'sql', offset: 0, limit: 4096,
-  }});
-  checks.push('搜索省略SQL条目时按已命中的对象和版本补读');
+  assert.deepEqual(action(), {tool: 'search_knowledge', args: {query: '合成退款率 sql', kinds: ['metric'], limit: 10}});
+  checks.push('搜索省略SQL条目时补查同一指标的引用，未编造未取得的条目');
 
-  const preview = structuredClone(search);
-  preview.objects[0].entries.push({path: 'sql', entry_id: 'sql', effective_value: sql.slice(0, 80),
-    content_page: {offset: 0, next_offset: 80, total_chars: sql.length, complete: false}});
-  assert.equal(action(preview).tool, 'read_knowledge');
+  const preview = {hits: [...search.hits, hit(reference, sql.slice(0, 80), 'partial')]};
+  const read = offset => ({tool: 'read_knowledge', args: {items: [{kind: 'knowledge', ref: reference, offset, limit: 4096}]}});
+  assert.deepEqual(action(preview), read(0));
   // 即使已看到FROM，分页标记仍可能说明后面的规则没有读全。
-  preview.objects[0].entries.at(-1).effective_value = sql;
+  preview.hits.at(-1).definition = sql;
   assert.equal(action(preview).tool, 'read_knowledge');
   checks.push('预览缺FROM或仍有未读正文时不能直接生成SQL');
 
@@ -66,42 +61,26 @@ try {
   const chars = [...longSql];
   const offset = 4096;
   const firstPage = page(chars.slice(0, offset).join(''), 0, offset, chars.length);
-  assert.deepEqual(action(search, [firstPage]), {tool: 'read_knowledge', args: {
-    object_id: 'metric-refund_rate', version: '7', entry_id: 'sql', offset, limit: 4096,
-  }});
+  assert.deepEqual(action(preview, [firstPage]), read(offset));
   checks.push('多页以Unicode字符位置和原版本继续读取');
 
   const lastPage = page(chars.slice(offset).join(''), offset, null, chars.length);
-  assert.equal(lastPage.entries[0].content_page.complete, false);
-  const complete = action(search, [firstPage, lastPage]);
+  assert.equal(lastPage.items[0].content_page.complete, false);
+  const complete = action(preview, [firstPage, lastPage]);
   assert.equal(complete.tool, 'request_query');
   assert.equal(complete.args.sql, `SELECT ${longExpression}\nFROM demo_order_detail`
     + '\nWHERE is_test = 0 AND paid_amount_cents > 0\n AND paid_at >= :start AND paid_at < :end');
   checks.push('连续页读完才生成查询，完整保留来源SQL表达式');
 
-  expectGap(action(search, [{error: 'not_available'}]));
+  for (const state of ['not_available', 'stale'])
+    expectGap(action(preview, [{items: [{kind: 'knowledge', ref: reference, state}]}]));
   checks.push('补读失败明确保留缺口');
 
-  expectGap(action(search, [page(sql, 0, null, sql.length, '8')]));
+  expectGap(action(preview, [page(sql, 0, null, sql.length, '8')]));
   checks.push('不同版本的正文不与命中对象拼接');
 
-  expectGap(action(search, [firstPage, page(chars.slice(offset + 1).join(''), offset + 1, null, chars.length)]));
+  expectGap(action(preview, [firstPage, page(chars.slice(offset + 1).join(''), offset + 1, null, chars.length)]));
   checks.push('分页存在缺口时不生成查询');
-  run.tool_contract_version = 2;
-  const reference = {object_id: 'metric-refund_rate', version: '7', path: 'sql'};
-  const hit = {record_kind: 'knowledge_entry', ref: reference, name: '合成退款率', kind: 'metric', definition: sql.slice(0, 80), content_state: 'partial'};
-  const currentSearch = {hits: [hit], personal_memories: []};
-  const currentPage = legacy => ({items: [{kind: 'knowledge', ref: {...reference, version: legacy.version}, state: 'ok',
-    content: legacy.entries[0].effective_value, content_page: legacy.entries[0].content_page}]});
-  assert.deepEqual(action(currentSearch), {tool: 'read_knowledge', args: {items: [{kind: 'knowledge', ref: reference, offset: 0, limit: 4096}]}});
-  const currentFirst = currentPage(firstPage), currentLast = currentPage(lastPage);
-  assert.deepEqual(action(currentSearch, [currentFirst]), {tool: 'read_knowledge', args: {items: [{kind: 'knowledge', ref: reference, offset, limit: 4096}]}});
-  const currentComplete = action(currentSearch, [currentFirst, currentLast]);
-  assert.equal(currentComplete.tool, 'request_query');
-  assert.equal(currentComplete.args.sql, complete.args.sql);
-  expectGap(action(currentSearch, [{items: [{kind: 'knowledge', ref: reference, state: 'not_available'}]}]));
-  expectGap(action(currentSearch, [{items: [{kind: 'knowledge', ref: reference, state: 'stale'}]}]));
-  checks.push('v2沿命中ref及逐项状态消费同版连续SQL页，旧版与不可用不生成查询');
   const rawCitation = {source: {kind: 'document', id: 'document-cockpit-asr-candidates'}, revision: '7', locator: {offset: 10, length: 20}};
   const cockpitRun = {text: 'ASR耗时怎样统计', tool_contract_version: 2, workspace_context: {tasks: [], query_observations: [], memories: []}};
   const rawAction = cockpitAction(cockpitRun, {messages: [{role: 'user', content: cockpitRun.text},
@@ -120,12 +99,14 @@ try {
   assert.equal(explain.tool, 'read_source');
   assert.deepEqual(explain.args.citation, citation);
   checks.push('v2座舱raw摘录与零售知识citation均按实际来源/修订读取');
-  const legacyZeroRun = {text: 'paid_amount_cents为0是什么意思', tool_contract_version: 1, workspace_context: {tasks: [], query_observations: [], memories: []}};
-  const legacyZero = syntheticAction(legacyZeroRun, {messages: [{role: 'user', content: legacyZeroRun.text},
-    receipt('search_knowledge', {objects: []}), receipt('read_source', {source_id: 'etl', version: '1', body: 'COALESCE(p.paid, 0)'}),
+  const zeroRun = {text: 'paid_amount_cents为0是什么意思', workspace_context: {tasks: [], query_observations: [], memories: []}};
+  const etl = {source: {kind: 'platform', id: 'etl'}, revision: '1', locator: {offset: 0, length: 19}};
+  const zero = syntheticAction(zeroRun, {messages: [{role: 'user', content: zeroRun.text},
+    receipt('search_knowledge', {hits: [{record_kind: 'source_excerpt', citation: etl, source_length: 19}]}),
+    receipt('read_source', {source: etl.source, revision: etl.revision, text: 'COALESCE(p.paid, 0)', next_locator: null}),
     receipt('update_analysis_task', {task_id: null, condition_version: null})]});
-  assert.match(legacyZero.text, /COALESCE|缺失|填.?0/);
-  checks.push('v1已读ETL的零付款解释保留原合同');
+  assert.match(zero.text, /COALESCE|缺失|填.?0/);
+  checks.push('按当前原文合同解释零付款，区分付款记录缺失');
   passed = true;
   console.log(JSON.stringify({passed, checks, officialRequests: 0}));
 } finally {

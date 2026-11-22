@@ -10,9 +10,35 @@ pub async fn directory_page_in_tx(
     grouped: bool,
 ) -> Result<(Vec<Value>, Option<String>)> {
     let ids = maintained_ids.map(|ids| json!(ids).to_string());
-    let rows = sqlx::query("SELECT body FROM knowledge_objects FORCE INDEX(PRIMARY) WHERE space_id=? AND state<>'deleted' AND (? IS NULL OR state=?) AND (? IS NULL OR id>?) AND (? IS NULL OR INSTR(LOWER(name),LOWER(?))>0) AND (? IS NULL OR JSON_CONTAINS(CAST(? AS JSON),JSON_QUOTE(id))) AND (?=0 OR JSON_UNQUOTE(JSON_EXTRACT(body,'$.kind')) NOT IN ('field','relationship')) ORDER BY id LIMIT 101")
-        .bind(&ctx.space_id).bind(state).bind(state).bind(after).bind(after)
-        .bind(name).bind(name).bind(&ids).bind(&ids).bind(grouped).fetch_all(tx.connection()).await?;
+    let mut sql = sqlx::QueryBuilder::<sqlx::MySql>::new(
+        "SELECT k.body FROM knowledge_objects k FORCE INDEX(PRIMARY) WHERE k.space_id=",
+    );
+    sql.push_bind(&ctx.space_id).push(" AND k.state<>'deleted'");
+    if let Some(state) = state {
+        sql.push(" AND k.state=").push_bind(state);
+    }
+    if let Some(after) = after {
+        sql.push(" AND k.id>").push_bind(after);
+    }
+    if let Some(name) = name {
+        sql.push(" AND INSTR(LOWER(k.name),LOWER(")
+            .push_bind(name)
+            .push("))>0");
+    }
+    if let Some(ids) = ids {
+        sql.push(" AND JSON_CONTAINS(CAST(")
+            .push_bind(ids)
+            .push(" AS JSON),JSON_QUOTE(k.id))");
+    }
+    if grouped {
+        sql.push(" AND k.kind NOT IN ('field','relationship')");
+    }
+    push_table_access(&mut sql, ctx);
+    let rows = sql
+        .push(" ORDER BY k.id LIMIT 101")
+        .build()
+        .fetch_all(tx.connection())
+        .await?;
     let next = if rows.len() > 100 {
         rows.get(99)
             .and_then(|r| body(r)["id"].as_str().map(str::to_owned))
@@ -28,8 +54,24 @@ pub async fn page_in_tx(
     after: Option<&str>,
     related: Option<&str>,
 ) -> Result<(Vec<Value>, Option<String>)> {
-    let rows=sqlx::query("SELECT body FROM knowledge_objects FORCE INDEX(PRIMARY) WHERE space_id=? AND state<>'deleted' AND (? IS NULL OR id>?) AND (? IS NULL OR JSON_CONTAINS(JSON_EXTRACT(body,'$.related_ids'),JSON_QUOTE(?))) ORDER BY id LIMIT 101")
-        .bind(&ctx.space_id).bind(after).bind(after).bind(related).bind(related).fetch_all(tx.connection()).await?;
+    let mut sql = sqlx::QueryBuilder::<sqlx::MySql>::new(
+        "SELECT k.body FROM knowledge_objects k FORCE INDEX(PRIMARY) WHERE k.space_id=",
+    );
+    sql.push_bind(&ctx.space_id).push(" AND k.state<>'deleted'");
+    if let Some(after) = after {
+        sql.push(" AND k.id>").push_bind(after);
+    }
+    if let Some(related) = related {
+        sql.push(" AND JSON_CONTAINS(JSON_EXTRACT(k.body,'$.related_ids'),JSON_QUOTE(")
+            .push_bind(related)
+            .push("))");
+    }
+    push_table_access(&mut sql, ctx);
+    let rows = sql
+        .push(" ORDER BY k.id LIMIT 101")
+        .build()
+        .fetch_all(tx.connection())
+        .await?;
     let next = if rows.len() > 100 {
         rows.get(99)
             .map(|r| body(r)["id"].as_str().unwrap_or("").to_owned())
@@ -157,7 +199,7 @@ pub async fn matching_content_in_tx(
     allowed: Option<&[String]>,
     quota: usize,
     consumed: usize,
-    include_raw: bool,
+    include_document_statements: bool,
 ) -> Result<Vec<Value>> {
     if quota == 0 || terms.is_empty() || allowed.is_some_and(|ids| ids.is_empty()) {
         return Ok(vec![]);
@@ -174,7 +216,7 @@ pub async fn matching_content_in_tx(
     .push_bind(sqlx::types::Json(scoring_terms))
     .push(
         ",'$[*]' COLUMNS(term JSON PATH '$')) AS q), \
-         entry_rows AS (SELECT k.id,k.version,k.name,k.kind,k.source_id, \
+         entry_rows AS (SELECT k.id,k.version,k.name,k.kind, \
          JSON_EXTRACT(j.e,'$.entry_id') AS entry_id, \
          JSON_EXTRACT(j.e,'$.path') AS path, \
          CASE WHEN k.kind='document' THEN JSON_EXTRACT(j.e,'$.suggestion.statements') \
@@ -223,11 +265,8 @@ pub async fn matching_content_in_tx(
          entries AS (SELECT /*+ NO_MERGE(e) */ e.id,e.version,e.name,e.kind,e.entry_id,e.path,NULL AS statement_id,e.label,e.is_query_example,e.question,e.parameters, \
              CAST(e.text AS CHAR CHARACTER SET utf8mb4) AS text,0 AS entry_offset \
            FROM entry_rows e LEFT JOIN mapping m ON m.id=e.id AND m.entry_id=e.entry_id AND m.path=e.path \
-           WHERE (e.kind='document' OR COALESCE(m.aligned,FALSE)=FALSE)",
-    )
-    .push(if include_raw { " AND (e.kind<>'document' OR e.source_id IS NOT NULL) " } else { " " })
-    .push(
-        "UNION ALL SELECT s.id,s.version,s.name,s.kind,s.entry_id,s.path,s.statement_id,s.label,s.is_query_example,s.question,s.parameters, \
+           WHERE (e.kind='document' OR COALESCE(m.aligned,FALSE)=FALSE) \
+           UNION ALL SELECT s.id,s.version,s.name,s.kind,s.entry_id,s.path,s.statement_id,s.label,s.is_query_example,s.question,s.parameters, \
              s.statement_text,IF(s.kind='document',0,s.base) AS entry_offset FROM mapped_statements s \
            JOIN mapping m ON m.id=s.id AND m.entry_id=s.entry_id AND m.path=s.path \
            WHERE s.kind='document' OR m.aligned=TRUE), \
@@ -275,7 +314,7 @@ pub async fn matching_content_in_tx(
              AS candidate_hit FROM windows) \
            SELECT id,version,kind,entry_id,path,statement_id,char_offset,statement_offset,char_length,name_hit,name_term_hits,term_hits \
            FROM scored WHERE (name_hit>0 OR candidate_hit) AND (kind<>'document' OR ")
-    .push(if include_raw { "TRUE" } else { "statement_id IS NULL" })
+    .push(if include_document_statements { "TRUE" } else { "statement_id IS NULL" })
     .push(") ORDER BY name_hit DESC,name_term_hits DESC,term_hits DESC,id,entry_id,path,statement_id,char_offset LIMIT ")
     .push_bind(quota as u64)
     .push(" OFFSET ")
@@ -374,24 +413,29 @@ pub async fn independent_document_candidate_in_tx(
     .await?)
 }
 
-// 范围∩启停的头清单（05接续）：v1硬范围与对象启停在同一入口换算为允许记录集，
-// 范围约束经JSON_TABLE在库内判定，不把body拉回应用。
+// 在同一查询中返回可检索的对象及其原文身份，不加载正文。
+#[derive(sqlx::FromRow)]
+pub struct SearchHead {
+    pub id: String,
+    pub version: u64,
+    pub kind: String,
+    pub source_id: Option<String>,
+    pub table_id: Option<String>,
+}
 pub async fn scoped_enabled_heads_in_tx(
     tx: &mut AppTx<'_>,
     ctx: &AccessContext,
     scope: &crate::search_scope::KnowledgeSearchScope,
-) -> Result<Vec<(String, u64)>> {
-    let mut sql = sqlx::QueryBuilder::<sqlx::MySql>::new(
-        "SELECT id,version FROM knowledge_objects WHERE space_id=",
-    );
-    sql.push_bind(&ctx.space_id).push(" AND state='enabled'");
-    scope.push_constraints(&mut sql, "id", "kind", "body");
-    sql.push(" ORDER BY id");
-    let rows = sql
-        .build_query_as::<(String, u64)>()
-        .fetch_all(tx.connection())
-        .await?;
-    Ok(rows)
+) -> Result<Vec<SearchHead>> {
+    let mut sql =
+        sqlx::QueryBuilder::<sqlx::MySql>::new("SELECT k.id,k.version,k.kind,k.source_id,");
+    sql.push(DIRECT_TABLE_ID)
+        .push(" FROM knowledge_objects k WHERE k.space_id=");
+    sql.push_bind(&ctx.space_id).push(" AND k.state='enabled'");
+    scope.push_constraints(&mut sql, "k.id", "k.kind", "k.body");
+    push_table_access(&mut sql, ctx);
+    sql.push(" ORDER BY k.id");
+    Ok(sql.build_query_as().fetch_all(tx.connection()).await?)
 }
 
 // 身份目录只按可读名称/标识选当前头；不检索正文，也不把hints当权限或硬过滤。
@@ -404,8 +448,9 @@ pub async fn identity_candidate_ids_in_tx(
     after: Option<&str>,
     limit: usize,
 ) -> Result<Vec<String>> {
-    let mut sql =
-        sqlx::QueryBuilder::<sqlx::MySql>::new("SELECT id FROM knowledge_objects WHERE space_id=");
+    let mut sql = sqlx::QueryBuilder::<sqlx::MySql>::new(
+        "SELECT k.id FROM knowledge_objects k WHERE k.space_id=",
+    );
     sql.push_bind(&ctx.space_id).push(" AND state='enabled'");
     if let Some(after) = after {
         sql.push(" AND id>").push_bind(after);
@@ -436,13 +481,38 @@ pub async fn identity_candidate_ids_in_tx(
         }
         sql.push(")");
     }
-    sql.push(" ORDER BY id LIMIT ")
+    push_table_access(&mut sql, ctx);
+    sql.push(" ORDER BY k.id LIMIT ")
         .push_bind(limit.min(31) as u32);
     Ok(sql.build_query_scalar().fetch_all(tx.connection()).await?)
 }
 
 // 候选按≤50分批只下行元信息与软排序匹配数；域/关联复用已发布范围规则，
 // 在owner内计算布尔匹配，不为排序装配候选正文，也不把提示写进WHERE过滤候选。
+pub(crate) fn push_workspace_dependency_heads(
+    sql: &mut sqlx::QueryBuilder<sqlx::MySql>,
+    ctx: &AccessContext,
+    checkpoint_objects: &std::collections::HashSet<&str>,
+    workspace: bool,
+) {
+    sql.push("workspace_dependency_ids AS (");
+    if workspace {
+        sql.push("SELECT /*+ NO_MERGE(w) */ ref.object_id FROM workspace_assets w,
+        JSON_TABLE(CAST(w.body AS JSON),'$.dependencies[*]' COLUMNS(object_id VARCHAR(64) PATH '$.object_id')) ref UNION DISTINCT ");
+    }
+    sql.push("SELECT ref.object_id FROM checkpoint_asset_heads a,
+        JSON_TABLE(CAST(a.dependencies AS JSON),'$[*]' COLUMNS(object_id VARCHAR(64) PATH '$.object_id')) ref
+        UNION DISTINCT SELECT object_id FROM JSON_TABLE(CAST(")
+        .push_bind(sqlx::types::Json(checkpoint_objects))
+        .push(" AS JSON),'$[*]' COLUMNS(object_id VARCHAR(64) PATH '$')) checkpoint_ids
+    ), workspace_dependency_heads AS (
+        SELECT k.id,k.version,k.kind,k.source_id,").push(DIRECT_TABLE_ID)
+        .push(" FROM workspace_dependency_ids d JOIN knowledge_objects k ON k.id=d.object_id WHERE k.space_id=")
+        .push_bind(&ctx.space_id).push(" AND k.state='enabled'");
+    push_table_access(sql, ctx);
+    sql.push(")");
+}
+
 pub async fn candidate_meta_in_tx(
     tx: &mut AppTx<'_>,
     ctx: &AccessContext,
@@ -452,8 +522,9 @@ pub async fn candidate_meta_in_tx(
     let mut values = Vec::new();
     for chunk in ids.chunks(50) {
         let mut query = sqlx::QueryBuilder::<sqlx::MySql>::new(
-            "SELECT k.id,k.name,k.version,k.state,k.kind,k.source_id,k.source_version,(0",
+            "SELECT k.id,k.name,k.version,k.state,k.kind,k.source_id,k.source_version,",
         );
+        query.push(DIRECT_TABLE_ID).push(",(0");
         if let Some(hints) = hints {
             if let Some(domain) = &hints.business_domain {
                 query.push("+EXISTS(SELECT 1 WHERE TRUE");
@@ -492,6 +563,7 @@ pub async fn candidate_meta_in_tx(
             keys.push_bind(id);
         }
         query.push(")");
+        push_table_access(&mut query, ctx);
         for row in query.build().fetch_all(tx.connection()).await? {
             let source_id: Option<String> = row.get("source_id");
             values.push(json!({
@@ -501,6 +573,7 @@ pub async fn candidate_meta_in_tx(
                 "state":row.get::<String,_>("state"),
                 "kind":row.get::<String,_>("kind"),
                 "source_id":source_id,
+                "table_id":row.get::<Option<String>,_>("table_id"),
                 "source_version":row.get::<u64,_>("source_version"),
                 "hint_match":row.get::<i64,_>("hint_match"),
             }));

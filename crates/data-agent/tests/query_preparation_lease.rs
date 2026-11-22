@@ -14,10 +14,9 @@ async fn claimed_query(pool: &MySqlPool, ctx: &AccessContext) -> Value {
         .await
         .unwrap();
     let tasks = analysis::lock_tasks_in_tx(&mut tx, &cid).await.unwrap();
-    let task =
-        analysis::create_task_in_tx(&mut tx, &tasks, &ctx.user_id, &id(), "合成查询租约", None)
-            .await
-            .unwrap();
+    let task = analysis::create_task_in_tx(&mut tx, &tasks, &ctx.user_id, &id(), "合成查询租约")
+        .await
+        .unwrap();
     let input = json!({"task_id":task["task_id"],"condition_version":"1","sql":"SELECT 17 AS value",
         "parameters":{},"target_id":"synthetic-sqlite","summary":"合成领取","knowledge_refs":[],"replaces_query_id":null});
     let query = queries::save_draft_in_tx(
@@ -29,7 +28,6 @@ async fn claimed_query(pool: &MySqlPool, ctx: &AccessContext) -> Value {
         &input,
         queries::DraftValidation {
             platform_report: &json!({"state":"passed","target_id":"synthetic-sqlite","target_version":"synthetic-v1"}),
-            text_authority: &json!({}),
             time_basis: None,
             semantic_resolution: None,
         },
@@ -78,6 +76,7 @@ async fn query_renewal_and_submission_handoff_require_a_live_original_claim() {
         user_id: "synthetic-business-user".into(),
         space_id: "demo".into(),
         request_id: id(),
+        table_access: None,
     };
     let job = claimed_query(&pool, &ctx).await;
     sqlx::query(

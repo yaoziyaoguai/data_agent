@@ -166,15 +166,11 @@ pub async fn assert_search_fresh_in_tx(
         .iter()
         .filter_map(|asset| asset["id"].as_str().map(str::to_owned))
         .collect::<Vec<_>>();
-    let assets = crate::modules::assets::current_versions_in_tx(tx, ctx, &asset_ids).await?;
+    let assets = crate::modules::assets::enabled_sources_in_tx(tx, ctx, &asset_ids).await?;
     for asset in &stage.items {
         let id = asset["id"].as_str().ok_or(Error::new("invalid_input"))?;
         let version = asset["version"].as_str().unwrap_or("");
-        if !assets
-            .get(&(id.to_owned(), version.to_owned()))
-            .copied()
-            .unwrap_or(false)
-        {
+        if !assets.contains_key(&(id.to_owned(), version.to_owned())) {
             return Err(Error::new("stale_knowledge"));
         }
     }

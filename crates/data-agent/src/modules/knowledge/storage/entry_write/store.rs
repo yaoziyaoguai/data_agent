@@ -472,8 +472,9 @@ pub async fn reanalyze_in_tx(
         Ok(value) => value,
         Err(error) => {
             // 预填会提交superseded回执；对象冲突不能顺带提交空操作占位。
-            sqlx::query("DELETE FROM knowledge_operations WHERE owner_id=? AND operation_id=? AND fingerprint=? AND JSON_TYPE(receipt)='NULL'")
-                .bind(&ctx.user_id).bind(key).bind(fingerprint(&command)).execute(tx.connection()).await?;
+            crate::persistence::receipts::Operation::new(ctx, "knowledge", key, &command)
+                .discard_pending(tx)
+                .await?;
             return Err(error);
         }
     };

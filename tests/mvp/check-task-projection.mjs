@@ -43,13 +43,13 @@ const provider = createServer(async (req, res) => {
     assert.ok(!raw.includes(outsideText), '轮内收紧后下一次普通请求不得携带旧材料/摘要');
     assert.ok(!raw.includes(skillName), '受限任务不预载范围外Skill目录');
     delta = {tool_calls:[{index:0,id:'read-allowed-document',type:'function',function:{
-      name:'read_knowledge',arguments:JSON.stringify({object_id:allowed.id,limit:6000})}}]};
+      name:'read_knowledge',arguments:JSON.stringify({items:[{kind:'knowledge',ref:{object_id:allowed.id,version:allowed.version,path:'body'},limit:6000}]})}}]};
   } else if (calls === (recover ? 2 : 3)) {
     assert.ok(!raw.includes(outsideText));
     assert.ok(raw.includes('每个语音轮次对应一次请求'));
-    delta = {tool_calls:[{index:0,id:'switch-analysis-task',type:'function',function:{
+    delta = {content:'按指定文档核对，每个语音轮次对应一次请求。',tool_calls:[{index:0,id:'switch-analysis-task',type:'function',function:{
       name:'update_analysis_task',arguments:JSON.stringify({action:'route',task_id:otherTask.task_id,
-        expected_version:otherTask.condition_version,goal:'',options:[]})}}]};
+        expected_version:otherTask.condition_version,goal:'',options:[],finalize_current_answer:true})}}]};
   } else {
     assert.ok(!raw.includes('每个语音轮次对应一次请求'), '切换任务移出前一任务工具正文');
     assert.ok(raw.includes(skillName), '切到无限制任务须恢复仍有效的已选Skill');
@@ -113,7 +113,7 @@ try {
     knowledge_refs:[],notes:'',source_limits:null};
   otherTask = await invoke('update_analysis_task',{action:'create',goal:'另一个语音分析目标',options:[],conditions});
   task = await invoke('update_analysis_task',{action:'create',goal:'说明语音轮次',options:[],conditions});
-  await invoke('read_knowledge',{object_id:outside.id});
+  await invoke('read_knowledge',{items:[{kind:'knowledge',ref:{object_id:outside.id,version:outside.version,path:'body'}}]});
   manager.appendCompaction('旧任务摘要：'+outsideText,null,100,{},true);
   // 独立理由：回执检查点的投影只有三条消息（均值约610字节），刚好压过deliver.ts
   // 自适应保留窗的600字节阈值，为大历史设计的2048窗使测试强制的Pi压缩在
@@ -165,8 +165,12 @@ try {
   const checkpoint = h.sql(`SELECT checkpoint FROM pi_checkpoints WHERE recovery_chain_id='${run.recovery_chain_id}'`)[0];
   const restored = restoreCheckpoint('/synthetic/data-agent',checkpoint);
   assert.equal(restored.getHeader().id,sessionId);
-  assert.ok(restored.getBranch().some(entry => entry.type==='message' && entry.message.role==='toolResult' && entry.message.toolCallId===scopeCall),
-    '原SDK调用和回执保留在会话记录中');
+  const resultIds = restored.getEntries().flatMap(entry =>
+    entry.type==='message' && entry.message.role==='toolResult' ? [entry.message.toolCallId] : []);
+  for (const id of [scopeCall, 'switch-analysis-task']) {
+    assert.equal(resultIds.filter(result => result===id).length, 1,
+      '原调用回执继续留在旧分支，切换范围不复制正文');
+  }
   assert.ok(!JSON.stringify(restored.buildSessionContext().messages).includes(outsideText));
   assert.ok(summaries>=1, '实际经过Pi原生摘要');
   assert.equal(h.sql(`SELECT JSON_OBJECT('count',COUNT(*)) FROM tool_calls WHERE sdk_tool_call_id='${scopeCall}'`)[0].count,1);

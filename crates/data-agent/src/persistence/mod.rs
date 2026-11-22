@@ -5,6 +5,9 @@ use crate::{
 pub use sqlx::MySqlPool;
 use sqlx::{MySql, MySqlConnection, Transaction};
 
+pub(crate) mod delivery;
+pub mod receipts;
+
 pub struct AppTx<'a> {
     transaction: Transaction<'a, MySql>,
     id: String,

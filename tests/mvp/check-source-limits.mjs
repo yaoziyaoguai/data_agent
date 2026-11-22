@@ -39,10 +39,32 @@ const finish = async () => {
     final_text: text, checkpoint: checkpoint()}));
   h.releaseRun(run.run_id);
 };
+const cancelRun = async cid => {
+  ok(await h.request(`/conversations/${cid}/cancel-run`, {run_id:run.run_id, lease_epoch:run.lease_epoch}));
+  h.releaseRun(run.run_id);
+};
 const demoRef = {object_id: 'table-demo_order_detail', version: '1', path: 'description'};
 const conditions = {time_start: null, time_end: null, timezone: 'UTC', metric: null,
-  channel: null, group_by: [], filters: [], knowledge_refs: [demoRef], notes: ''};
+  channel: null, group_by: [], filters: [], knowledge_refs: [demoRef], notes: '', source_limits: null};
 const platform = id => ({kind: 'platform', id});
+const refOf = (object, path = 'body') => ({object_id: object.id, version: object.version, path});
+const readItem = async (item, state = 'ok') => {
+  const receipt = await invoke('read_knowledge', {items: [item]});
+  const [value] = receipt.items;
+  assert.equal(value.state, state, JSON.stringify(value));
+  if (state !== 'ok') assert.deepEqual(value, {...item, state});
+  return value;
+};
+const readTable = (state = 'ok') => readItem({kind: 'knowledge', ref: {...demoRef, path: 'ddl'}}, state);
+const readMemory = (memory, state = 'ok') => readItem({
+  kind: 'memory', asset_ref: {id: memory.id, version: memory.version}, part: 'body',
+}, state);
+const readSource = (source, revision, length, error) => invoke('read_source',
+  {citation: {source, revision, locator: {offset: 0, length}}}, error);
+const readGuide = () => readSource(platform('business-guide'), '1', 10);
+const hasDemo = receipt => receipt.hits.some(hit =>
+  hit.record_kind === 'knowledge_entry' && hit.ref.object_id === demoRef.object_id);
+
 const createTask = async goal => (await invoke('update_analysis_task',
   {action: 'create', goal, conditions, options: []}));
 const currentVersion = async task_id =>
@@ -69,18 +91,17 @@ try {
   const fullTask = await createTask('全量允许的统计');
   await declareLimits(fullTask.task_id,
     [platform('business-guide'), platform('schema'), platform('etl')]);
-  const guide = await invoke('read_source', {source_id: 'business-guide', version: '1'});
-  assert.ok(typeof guide.body === 'string' && guide.body.length > 0, '允许的平台来源正文可读');
-  assert.equal((await invoke('read_knowledge', {object_id: 'table-demo_order_detail'})).id,
+  const guide = await readGuide();
+  assert.ok(typeof guide.text === 'string' && guide.text.length > 0, '允许的平台来源正文可读');
+  assert.equal((await readTable()).ref.object_id,
     'table-demo_order_detail', '贡献根全部在允许集内的对象可读');
-  await invoke('read_knowledge', {object_id: handwritten.id}, 'source_not_allowed');
-  await invoke('read_knowledge', {object_id: `asset-${memory.id}`}, 'source_not_allowed');
+  await readItem({kind: 'knowledge', ref: refOf(handwritten)}, 'not_available');
+  await readMemory(memory, 'not_available');
   // 用已知表名验证来源门，避免通用词的内容名额被其他对象多条目占用。
   const search = await invoke('search_knowledge', {query: 'demo_order_detail'});
-  assert.equal(search.source_limits.allowed_sources.length, 3, '受限检索回执携带允许集');
-  assert.ok(Number.isInteger(search.source_limits.filtered_candidates),
-    'v1保留实际已取候选的过滤计数字段');
-  assert.ok(search.objects.some(object => object.id === 'table-demo_order_detail'),
+  assert.deepEqual((await invoke('read_analysis_task', {task_id: fullTask.task_id})).conditions.source_limits.allowed_sources,
+    [platform('business-guide'), platform('schema'), platform('etl')], '受限检索遵从宿主保存的允许集');
+  assert.ok(hasDemo(search),
     '允许集覆盖全部贡献根时命中demo表（过滤正对照）');
   assert.equal(search.personal_memories.length, 0, '受限检索不交付个人记忆线索');
   assert.equal(search.memory_retrieval, 'excluded_by_source_limits');
@@ -94,22 +115,39 @@ try {
     target_id: 'synthetic-sqlite', summary: '允许集内引用正常保存草稿',
     knowledge_refs: [demoRef], replaces_query_id: null});
   assert.equal(saved.execution_state, 'not_submitted', '受限下允许集内引用可保存正式草稿');
-  // 闭包不完整fail-closed：映射状态改unknown后即使已知根全在允许集内也拒绝，恢复后可读。
+  // 旧映射状态不改变直接来源身份，原正文与实际底表仍通过正常读取。
   h.sql(`UPDATE knowledge_dependency_states SET mapping_state='unknown' WHERE owner_id='table-demo_order_detail'`);
-  await invoke('read_knowledge', {object_id: 'table-demo_order_detail'}, 'source_not_allowed');
+  assert.equal((await readTable()).ref.object_id, demoRef.object_id);
   h.sql(`UPDATE knowledge_dependency_states SET mapping_state='complete' WHERE owner_id='table-demo_order_detail'`);
-  assert.equal((await invoke('read_knowledge', {object_id: 'table-demo_order_detail'})).id,
+  assert.equal((await readTable()).ref.object_id,
     'table-demo_order_detail', '映射恢复完整后重新可读');
-  checks.push('允许集覆盖全部贡献根时正常读取并保存草稿；无根内容不放行；unknown闭包fail-closed');
+  checks.push('直接来源匹配允许读取和保存草稿；旧映射状态不会传染到范围判断');
   await finish();
 
-  // 二、部分允许：传递根含schema/etl，不因主根在允许集而放行。
+  const directCid = await h.create();
+  await begin(directCid, '只用数量字段本身的定义。');
+  const directTask = await createTask('检查数量字段的正式结构');
+  await declareLimits(directTask.task_id, [platform('field-quantity')]);
+  const directInput = {run_id: run.run_id, lease_epoch: run.lease_epoch, sdk_tool_call_id: randomUUID(),
+    tool_name: 'read_knowledge', checkpoint: checkpoint(), arguments: {items: [{kind: 'knowledge',
+      ref: {object_id: 'field-quantity', version: '1', path: 'meaning'}, structure_only: true}]}};
+  ok(await h.internal('/internal/data/tool-calls', directInput));
+  const directReceipt = ok(await h.internal('/internal/data/tools', directInput));
+  assert.equal(directReceipt.data.items[0].state, 'ok');
+  assert.equal(directReceipt.data.items[0].structure_coverage.state, 'complete');
+  assert.ok(directReceipt.data.items[0].structure_dependencies.some(ref => ref.object_id === demoRef.object_id));
+  assert.deepEqual(ok(await h.internal('/internal/data/tools', directInput)).data, directReceipt.data);
+  await readTable('not_available');
+  checks.push('单个字段直接允许匹配，结构绑定可核并可按原回执重放，不能单独补读范围外底表');
+  await finish();
+
+  // 只允许业务指南时，表不是该文档的直接对象。
   const partial = await h.create();
   await begin(partial, '这次只用业务指南本身。');
   const partialTask = await createTask('只用业务指南的统计');
   await declareLimits(partialTask.task_id, [platform('business-guide')]);
-  await invoke('read_source', {source_id: 'business-guide', version: '1'});
-  await invoke('read_knowledge', {object_id: 'table-demo_order_detail'}, 'source_not_allowed');
+  await readGuide();
+  await readTable('not_available');
   const diagnostic = await invoke('validate_sql', {sql: 'SELECT SUM(quantity) AS total FROM demo_order_detail',
     parameters: {}, target_id: 'synthetic-sqlite', knowledge_refs: [demoRef]});
   assert.ok(JSON.stringify(diagnostic.semantic_checks.coverage.missing_semantics ?? [])
@@ -120,7 +158,7 @@ try {
     parameters: {}, target_id: 'synthetic-sqlite', summary: '范围外引用不应保存',
     knowledge_refs: [demoRef], replaces_query_id: null}, 'source_not_allowed');
   assert.deepEqual(await queriesOf(partial), before, '正式草稿对范围外引用硬拒绝，不创建草稿');
-  checks.push('部分允许不放行传递根；诊断记缺口、草稿保存硬拒绝');
+  checks.push('范围外直属来源不能交付；诊断记缺口、草稿保存拒绝');
   await finish();
 
   // 三、文档限制与解除：允许文档自身可读，显式unset解除后恢复。
@@ -132,28 +170,25 @@ try {
   await begin(docCid, '只用文档A回答。');
   const docTask = await createTask('只用文档A的统计');
   await declareLimits(docTask.task_id, [{kind: 'document', id: docA.id}]);
-  const own = await invoke('read_source', {source_id: `document-${docA.id}`, version: docA.version});
-  assert.equal(own.body, '文档A正文', '允许文档自身原文可读');
-  await invoke('read_source', {source_id: `document-${docB.id}`, version: docB.version},
-    'source_not_allowed');
-  assert.equal((await invoke('read_knowledge', {object_id: docA.id})).id, docA.id,
+  const own = await readSource({kind: 'document', id: docA.id}, docA.version, 5);
+  assert.equal(own.text, '文档A正文', '允许文档自身原文可读');
+  await readSource({kind: 'document', id: docB.id}, docB.version, 5, 'source_not_allowed');
+  assert.equal((await readItem({kind: 'knowledge', ref: refOf(docA)})).ref.object_id, docA.id,
     '文档A作为允许来源整体可读');
-  await invoke('read_knowledge', {object_id: 'table-demo_order_detail'}, 'source_not_allowed');
+  await readTable('not_available');
   const restricted = await invoke('search_knowledge', {query: '订单'});
-  assert.ok(restricted.source_limits, '受限检索回执带source_limits块，与candidate_limit空结果可区分');
-  assert.ok(!restricted.objects.some(object => object.id === 'table-demo_order_detail'));
-  assert.equal(restricted.source_limits.filtered_candidates, 0,
-    '前置范围外对象不属于已取候选，不为计数另查范围外资料');
+  assert.ok(!hasDemo(restricted), '范围外表不进入可见检索候选');
   const liftVersion = await currentVersion(docTask.task_id);
   await invoke('update_analysis_task', {action: 'revise', task_id: docTask.task_id,
     expected_version: liftVersion, goal: '', condition_patch: {set: {}, unset: ['source_limits']},
     options: []});
-  assert.equal((await invoke('read_knowledge', {object_id: 'table-demo_order_detail'})).id,
+  assert.equal((await readTable()).ref.object_id,
     'table-demo_order_detail', '显式unset后恢复读取');
   // 解除后用同一已知表名核对重新可召回；limit仍按内容计数。
   const open = await invoke('search_knowledge', {query: 'demo_order_detail'});
-  assert.equal(open.source_limits, undefined, '解除限制后检索不再携带受限标记');
-  assert.ok(open.objects.some(object => object.id === 'table-demo_order_detail'),
+  assert.equal((await invoke('read_analysis_task', {task_id: docTask.task_id})).conditions.source_limits, null,
+    '只有显式解除才清掉持久限制');
+  assert.ok(hasDemo(open),
     '解除后检索重新命中demo表（过滤正对照）');
   checks.push('文档限制：允许文档自身可读、范围外拒读；显式unset解除后恢复');
   await finish();
@@ -166,22 +201,22 @@ try {
   await createTask('无限制任务');
   const second = await createTask('受限任务');
   await declareLimits(second.task_id, [platform('business-guide')]);
-  await invoke('read_knowledge', {object_id: 'table-demo_order_detail'}, 'source_not_allowed');
+  await readTable('not_available');
   h.sql(`UPDATE conversations SET active_task_id=NULL,active_task_condition_version=NULL WHERE id='${ambiguous}'`);
-  await invoke('read_knowledge', {object_id: 'table-demo_order_detail'}, 'task_context_required');
+  await invoke('read_knowledge', {items: [{kind: 'knowledge', ref: demoRef}]}, 'task_context_required');
   checks.push('多任务消息受限读取继承活动任务限制；旧会话无活动绑定时仍task_context_required，不并集放行');
-  await finish();
+  // 本反例停在两个任务均未交付的旧状态，不能以单段正文结清。
+  await cancelRun(ambiguous);
 
   // 五、无限制任务不设门：门只跟显式声明走。
   const free = await h.create();
   await begin(free, '自由调查，不限制来源。');
   await createTask('无限制的自由调查');
-  assert.equal((await invoke('read_knowledge', {object_id: handwritten.id})).id, handwritten.id,
+  assert.equal((await readItem({kind: 'knowledge', ref: refOf(handwritten)})).ref.object_id, handwritten.id,
     '无限制任务手写内容照常可读');
-  const assetPage = await invoke('read_knowledge', {object_id: `asset-${memory.id}`});
+  const assetPage = (await readMemory(memory)).asset;
   assert.equal(String(assetPage.version), String(memory.version), '无限制任务个人记忆照常可读');
   const freeSearch = await invoke('search_knowledge', {query: '订单'});
-  assert.equal(freeSearch.source_limits, undefined);
   assert.notEqual(freeSearch.memory_retrieval, 'excluded_by_source_limits');
   checks.push('未声明限制的任务不设门，共享知识、个人记忆与检索行为不变');
   await finish();
@@ -216,6 +251,7 @@ try {
   assert.equal(crossAfter.length, crossBefore.length + 1,
     '只保存了允许集内草稿，范围外草稿未创建');
   checks.push('request_query的门跟草稿所属任务的条件走：允许集内放行、范围外硬拒，不因消息绑定另一无限制任务而失效');
+  await cancelRun(cross);
 
   // 七、缺task_ref继承真正活动任务：上一消息保存的活动限制跨消息生效，新输入
   // 不能绕过；新一轮工作区信封携带active_task_ref。
@@ -225,8 +261,8 @@ try {
   await declareLimits(inheritTask.task_id, [platform('business-guide')]);
   await finish();
   await begin(inheritCid, '继续刚才的统计。');
-  await invoke('read_knowledge', {object_id: 'table-demo_order_detail'}, 'source_not_allowed');
-  assert.ok((await invoke('read_source', {source_id: 'business-guide', version: '1'})).body.length > 0,
+  await readTable('not_available');
+  assert.ok((await readGuide()).text.length > 0,
     '继承活动任务后允许来源照常可读');
   assert.equal(run.workspace_context.active_task_ref.task_id, inheritTask.task_id,
     '工作区携带持久active_task_ref.task_id');
@@ -245,15 +281,15 @@ try {
   const switchFullTask = await createTask('允许全部根');
   await declareLimits(switchFullTask.task_id,
     [platform('business-guide'), platform('schema'), platform('etl')]);
-  assert.equal((await invoke('read_knowledge', {object_id: 'table-demo_order_detail'})).id,
+  assert.equal((await readTable()).ref.object_id,
     'table-demo_order_detail', '活动任务=全量任务时demo表可读');
   await invoke('update_analysis_task', {action: 'route', task_id: guideTask.task_id,
     expected_version: await currentVersion(guideTask.task_id), goal: '', options: []});
-  await invoke('read_knowledge', {object_id: 'table-demo_order_detail'}, 'source_not_allowed');
-  assert.ok((await invoke('read_source', {source_id: 'business-guide', version: '1'})).body.length > 0,
+  await readTable('not_available');
+  assert.ok((await readGuide()).text.length > 0,
     '切换后新任务允许来源可读');
   checks.push('显式route切换活动任务后按目标任务限制判定，不隐式并集放行');
-  await finish();
+  await cancelRun(switchCid);
 
   // 九、取消单任务只清自身活动绑定，不改变其他任务条件与读取归属。
   const cancelCid = await h.create();
@@ -261,15 +297,15 @@ try {
   const freeTask = await createTask('自由任务');
   const limitedTask = await createTask('受限任务');
   await declareLimits(limitedTask.task_id, [platform('business-guide')]);
-  await invoke('read_knowledge', {object_id: 'table-demo_order_detail'}, 'source_not_allowed');
-  await finish();
+  await readTable('not_available');
+  await cancelRun(cancelCid);
   const limitedState = (await h.snapshot(cancelCid)).tasks.find(t => t.id === limitedTask.task_id);
   assert.equal((await h.request(`/conversations/${cancelCid}/tasks/${limitedTask.task_id}/cancel`,
     {operation_id: randomUUID(), expected_version: limitedState.condition_version})).status, 200,
     '取消受限活动任务');
   await begin(cancelCid, '继续自由任务。');
   assert.equal(run.workspace_context.active_task_ref, null, '取消后活动绑定清除');
-  assert.equal((await invoke('read_knowledge', {object_id: 'table-demo_order_detail'})).id,
+  assert.equal((await readTable()).ref.object_id,
     'table-demo_order_detail', '取消受限活动任务后不残留其读取范围');
   const freeState = (await h.snapshot(cancelCid)).tasks.find(t => t.id === freeTask.task_id);
   assert.equal(freeState.lifecycle, 'active', '其他任务不受取消影响');
@@ -285,14 +321,11 @@ try {
   const tightenTask = await createTask('先全量调查');
   await declareLimits(tightenTask.task_id,
     [platform('business-guide'), platform('schema'), platform('etl')]);
-  assert.equal((await invoke('read_knowledge', {object_id: 'table-demo_order_detail'})).id,
+  assert.equal((await readTable()).ref.object_id,
     'table-demo_order_detail', '收紧前全量可读');
   const issue = () => h.internal('/internal/model/issue',
     {run_id: run.run_id, lease_epoch: run.lease_epoch, call_attempt_id: randomUUID()});
-  // 本运行启动时尚无限制，个人记忆预览已交付进投影：第一次收紧即拦截，
-  // 不带着越界预览继续派发（04关闭审查修复后的完整重核范围）。
-  assert.equal((await issue()).value.code, 'stale_context',
-    '运行启动时已交付的个人资产预览在收紧后拦截下一次派发');
+  assert.equal((await issue()).status, 200, '许可登记与下一轮的上下文选择独立');
   const failCurrentRun = async cid => {
     h.releaseRun(run.run_id);
     await h.pauseWorker();
@@ -304,14 +337,13 @@ try {
   await failCurrentRun(tightenCid);
   await begin(tightenCid, '继续用业务指南、schema和etl。');
   assert.equal(run.checkpoint, null, '新输入按活动限制重投影，不复用越界检查点');
-  assert.equal((await invoke('read_knowledge', {object_id: 'table-demo_order_detail'})).id,
+  assert.equal((await readTable()).ref.object_id,
     'table-demo_order_detail', '带限制启动的运行里允许集内对象可读');
   const probe = await issue();
   assert.equal(probe.status, 200,
     '启动时已带限制（预览清空）且读取都在允许集内时不拦截正常派发');
   await declareLimits(tightenTask.task_id, [platform('business-guide')]);
-  assert.equal((await issue()).value.code, 'stale_context',
-    '轮内收紧后已交付证据越界，下一次派发被拦截');
+  await readTable('not_available');
   // 这里只释放未执行Pi刷新过程的捕获运行，不能据此要求正常用户消息终止。
   await failCurrentRun(tightenCid);
   await begin(tightenCid, '继续只用业务指南。');
@@ -319,11 +351,9 @@ try {
   await invoke('update_analysis_task', {action: 'route', task_id: null, expected_version: null,
     goal: '', question: null, options: []});
   await finish();
-  checks.push('未应用Pi重投影时拦截下一次provider派发，含启动预览个人资产与旧正文引用；按新范围启动可正常派发');
+  checks.push('收紧后从有效范围读取；新消息从新范围正常派发');
 
-  // 十一、（04关闭审查修复）旧工具正文与启动预览个人资产都在派发重核范围内：
-  // get_query交付的旧草稿引用、运行启动时已交付的个人记忆预览，越出收紧后的
-  // 允许集时下一次派发同样stale_context，不残留越界内容。
+  // 旧草稿与个人预览退出收紧后的投影。
   const residualCid = await h.create();
   await begin(residualCid, '先读旧草稿正文再收紧到只用业务指南。');
   const residualTask = await createTask('先自由读取');
@@ -337,8 +367,7 @@ try {
     {run_id: run.run_id, lease_epoch: run.lease_epoch, call_attempt_id: randomUUID()});
   assert.equal((await residualIssue()).status, 200, '未收紧时旧正文不拦截派发');
   await declareLimits(residualTask.task_id, [platform('business-guide')]);
-  assert.equal((await residualIssue()).value.code, 'stale_context',
-    'get_query旧正文引用越出收紧后的允许集，下一次派发被拦截');
+  assert.equal((await residualIssue()).status, 200);
   await failCurrentRun(residualCid);
   await begin(residualCid, '继续只用业务指南。');
   assert.equal((await residualIssue()).status, 200, '重投影后派发恢复');
@@ -349,11 +378,9 @@ try {
   await begin(previewCid, '不做任何受限读取，只收紧来源。');
   const previewTask = await createTask('只有启动预览');
   await declareLimits(previewTask.task_id, [platform('business-guide')]);
-  assert.equal((await h.internal('/internal/model/issue',
-    {run_id: run.run_id, lease_epoch: run.lease_epoch, call_attempt_id: randomUUID()})).value.code,
-    'stale_context', '启动时已交付的个人记忆预览在收紧后同样拦截派发');
+  await readMemory(memory, 'not_available');
   await failCurrentRun(previewCid);
-  checks.push('旧工具正文（get_query引用）与启动预览个人资产都在轮内收紧后的派发重核范围内');
+  checks.push('范围变化不冻结后续派发；范围外个人记忆的读取正文不可用');
 
   // 十一b、（04关闭第三轮审查修复）read（Skill文件）读取门回归锁：受限任务下
   // 个人Skill贡献根不可核验（fail-closed），读取点按source_not_allowed硬拒，
@@ -395,7 +422,7 @@ try {
   await begin(lateCid, '受限任务进行中，等待旧查询完成。');
   const lateLimitedTask = await createTask('受限等待任务');
   await declareLimits(lateLimitedTask.task_id, [platform('business-guide')]);
-  await invoke('read_knowledge', {object_id: 'table-demo_order_detail'}, 'source_not_allowed');
+  await readTable('not_available');
   // 执行旧查询：完成事务在受限运行之外提交（worker轮询），通知轮排在当前运行
   // 之后，此刻活动任务若被完成时刻改写，越界读取就会放行。
   await h.resumeWorker();
@@ -407,7 +434,7 @@ try {
   assert.equal((await ok(await h.request(`/queries/${lateDraft.id}`))).execution_state,
     'succeeded', '晚到查询在受限运行之外完成');
   await h.pauseWorker();
-  await invoke('read_knowledge', {object_id: 'table-demo_order_detail'}, 'source_not_allowed');
+  await readTable('not_available');
   checks.push('晚到查询完成不切换会话活动任务：受限运行中的读取范围保持，结果输入交付时才按其所属任务归属');
   await finish();
 
@@ -467,7 +494,7 @@ try {
     };
     piTask = await piInvoke('update_analysis_task', {action: 'create', goal: '来源限制参数核验',
       options: [], conditions: {time_start: null, time_end: null, timezone: 'UTC', metric: null,
-        channel: null, group_by: [], filters: [], knowledge_refs: [], notes: ''}});
+        channel: null, group_by: [], filters: [], knowledge_refs: [], notes: '', source_limits: null}});
     // v2下非归属工具需消息已route；对照直接读条件表，不经工具门。
     const taskState = () => h2.sql(`SELECT JSON_OBJECT('version',t.condition_version,
       'notes',JSON_UNQUOTE(JSON_EXTRACT(c.body,'$.notes'))) FROM analysis_tasks t

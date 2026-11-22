@@ -119,7 +119,7 @@ try {
   selected.suggestion = {value: '不得采用的旧建议', statements: [statement('synthetic-hidden', '不得采用的旧建议', '', true)]};
   const encoded = Buffer.from(JSON.stringify(object)).toString('hex');
   h.sql(`UPDATE knowledge_objects SET body=CAST(CONVERT(0x${encoded} USING utf8mb4) AS JSON) WHERE id='${object.id}';
-    UPDATE knowledge_versions SET body=CAST(CONVERT(0x${encoded} USING utf8mb4) AS JSON) WHERE object_id='${object.id}';
+    UPDATE knowledge_revisions SET archived_body=CAST(CONVERT(0x${encoded} USING utf8mb4) AS JSON) WHERE object_id='${object.id}';
     DELETE FROM knowledge_statements WHERE object_id='${object.id}';
     INSERT INTO knowledge_statements(object_id,version,statement_id,space_id,entry_path,layer,body)
       SELECT '${object.id}',1,JSON_UNQUOTE(JSON_EXTRACT(s.value,'$.statement_id')),'demo','body','human_override',s.value

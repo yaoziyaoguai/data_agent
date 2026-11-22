@@ -81,6 +81,7 @@ pub(crate) async fn recoverable_source_heads_in_tx(
             user_id: "synthetic-raw-index".into(),
             space_id: space,
             request_id: ctx.request_id.clone(),
+            table_access: None,
         };
         let value = match super::knowledge_sources::read_in_tx(tx, &body_ctx, &alias, Some(version))
             .await
@@ -197,7 +198,6 @@ async fn authorize_in_tx(
             if run.state != "running" {
                 return Err(Error::new("lease_lost"));
             }
-            super::context_authority::assert_run_in_tx(tx, ctx, &cid, run_id).await?;
             let tool = runtime::lock_tool_call_in_tx(
                 tx,
                 &run,
@@ -520,6 +520,15 @@ pub async fn search_scoped(
     allowed: Option<&vector::AllowedRecords>,
 ) -> Result<crate::use_cases::knowledge::KnowledgeSearch> {
     let deadline = vector::retrieval_deadline();
+    let resolved;
+    let allowed = if allowed.is_none() && ctx.table_access.is_some() {
+        let mut tx = AppTx::begin(pool).await?;
+        resolved = super::source_limits::allowed_records_in_tx(&mut tx, ctx, None, scope).await?;
+        tx.commit().await?;
+        Some(&resolved)
+    } else {
+        allowed
+    };
     let launch = launch_scoped(pool, ctx, query, input, false, allowed, deadline).await;
     let mut candidates = vector::Candidates::lexical();
     candidates.deadline = deadline;

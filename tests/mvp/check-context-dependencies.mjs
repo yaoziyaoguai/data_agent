@@ -6,9 +6,10 @@ import {exportCheckpoint} from '../../apps/agent/session/checkpoint.ts';
 import {harness} from './harness.mjs';
 const h=await harness({capture:true,env:{DATA_AGENT_LEASE_MS:'120000'}}),manager=SessionManager.inMemory('/synthetic/data-agent');
 let run,passed=false;const checks=[];
-const invoke=async(name,args)=>{
+const invoke=async(name,args,max_bytes,expectedStatus=200)=>{
  const input={run_id:run.run_id,lease_epoch:run.lease_epoch,sdk_tool_call_id:randomUUID(),tool_name:name,arguments:args,checkpoint:exportCheckpoint(manager)};
- assert.equal((await h.internal('/internal/data/tool-calls',input)).status,200);const r=await h.internal('/internal/data/tools',input);assert.equal(r.status,200,JSON.stringify(r.value));return r.value.data;
+ const registered=await h.internal('/internal/data/tool-calls',input);
+ assert.equal(registered.status,200,JSON.stringify(registered.value));const r=await h.internal('/internal/data/tools',max_bytes===undefined?input:{...input,response_budget:{max_bytes,estimated_tokens:max_bytes,projection_fingerprint:'0'.repeat(64)}});assert.equal(r.status,expectedStatus,JSON.stringify(r.value));return expectedStatus===200?r.value.data:r.value;
 };
 const issue=()=>h.internal('/internal/model/issue',{run_id:run.run_id,lease_epoch:run.lease_epoch,call_attempt_id:randomUUID()});
 const finish=async(text='已核对')=>{
@@ -21,11 +22,13 @@ try{
  for(let i=0;i<24;i++)assets.push((await h.request('/assets',{operation_id:randomUUID(),id:null,expected_version:null,kind:'memory',name:'合成偏好'+i,body:'合成展示偏好'+i,scope:'仅本人展示',verified:false,source_text:'本人录入',dependencies:[]})).value);
  const cid=await h.create();run=await h.capture(cid,'读取相关表');await h.pauseWorker();
  const delivered=run.workspace_context.memories.map(v=>v.id),omitted=assets.find(v=>!delivered.includes(v.id));assert.ok(omitted);
+ assert.ok(delivered.length>0,'拥有者能看到当前已交付的记忆');
  assert.deepEqual(new Set(run.workspace_context.authority_snapshot.memories.map(v=>v[0])),new Set(delivered));
  assert.equal((await h.request('/assets/'+omitted.id+'/disable',{operation_id:randomUUID(),expected_version:omitted.version})).status,200);
  assert.equal((await issue()).status,200);
- checks.push('启动材料裁剪后的实际记忆才登记依赖，被裁掉的记忆停用不影响会话');
- await invoke('read_knowledge',{object_id:'table-demo_order_detail'});await invoke('read_knowledge',{object_id:'table-raw_payments'});
+ checks.push('工作区只登记实际交付的记忆，被裁掉的记忆停用不影响会话');
+ const adopted = await invoke('read_knowledge',{items:['table-demo_order_detail','table-raw_payments'].map(object_id=>({kind:'knowledge',ref:{object_id,version:'1',path:'ddl'}}))});
+ assert.deepEqual(adopted.items.map(item=>item.state),['ok','ok']);
  await finish('旧资料结论-A');
  const unused=(await h.request('/knowledge/table-customer_tags')).value;assert.equal((await h.request('/knowledge/'+unused.id+'/disable',{operation_id:randomUUID(),expected_version:unused.version})).status,200);
  await h.resumeWorker();run=await h.capture(cid,'继续聊另一个问题');await h.pauseWorker();
@@ -33,8 +36,10 @@ try{
  assert.ok(refs.some(v=>v[0]==='table-demo_order_detail'));assert.ok(refs.some(v=>v[0]==='table-raw_payments'));assert.ok(!refs.some(v=>v[0]===unused.id));assert.equal((await issue()).status,200);
  const consumed=(await h.request('/knowledge/table-demo_order_detail')).value;
  assert.equal((await h.request('/knowledge/'+consumed.id+'/disable',{operation_id:randomUUID(),expected_version:consumed.version})).status,200);
- assert.equal((await issue()).value.code,'stale_context');
- checks.push('跨轮保留Pi检查点的早期读取依赖；无关改版不重建，旧已读资料撤回仍阻止模型发送');
+ const withdrawn=await invoke('read_knowledge',{items:[{kind:'knowledge',ref:{object_id:consumed.id,version:consumed.version,path:'ddl'}}]});
+ assert.equal(withdrawn.items[0].state,'not_available');
+ assert.equal((await issue()).status,200);
+ checks.push('跨轮保留Pi检查点的早期读取依赖；无关改版不重建，资料撤回后读取不可用');
  assert.equal((await h.request('/conversations/'+cid+'/messages/'+run.message_id+'/withdraw',{operation_id:randomUUID()})).status,200);h.releaseRun(run.run_id);
  h.sql(`UPDATE pi_checkpoints SET checkpoint=JSON_REMOVE(checkpoint,'$.authority_snapshot.dependency_schema') WHERE recovery_chain_id IN (SELECT recovery_chain_id FROM conversation_messages WHERE conversation_id='${cid}')`);
  await h.resumeWorker();run=await h.capture(cid,'重新调查新问题');await h.pauseWorker();assert.equal(run.checkpoint,null);assert.equal(run.workspace_context.authority_snapshot.dependency_schema,6);assert.equal((await issue()).status,200);
@@ -66,7 +71,7 @@ try{
   assert.equal(run.checkpoint,null);assert.equal(run.workspace_context.authority_snapshot.dependency_schema,6);assert.equal((await issue()).status,200);await finish();
  }
  checks.push('旧格式3可能遗漏案例依赖、格式4可能遗漏任务独立正文依赖；新输入均按SDK重建为格式6');
- // 搜索实际读回4条陈述，v1末端只交3条；依赖按保留的内容映射登记。
+ // 四条陈述通过当前 evidence 游标分两页交付，依赖只跟随已交付的命中。
  const trimmedCid=await h.create();await h.resumeWorker();run=await h.capture(trimmedCid,'核对合成陈述的当前边界');await h.pauseWorker();
  const sourceDocs=[],supportObjects=[];
  for(const label of ['甲','乙','丙','丁']){
@@ -93,7 +98,7 @@ try{
  });
  const encoded=Buffer.from(JSON.stringify(statementObject)).toString('hex');
  h.sql(`UPDATE knowledge_objects SET body=CAST(CONVERT(0x${encoded} USING utf8mb4) AS JSON) WHERE id='${statementObject.id}';
-  UPDATE knowledge_versions SET body=CAST(CONVERT(0x${encoded} USING utf8mb4) AS JSON) WHERE object_id='${statementObject.id}';
+  UPDATE knowledge_revisions SET archived_body=CAST(CONVERT(0x${encoded} USING utf8mb4) AS JSON) WHERE object_id='${statementObject.id}';
   UPDATE retrieval_documents SET body=CAST(CONVERT(0x${encoded} USING utf8mb4) AS JSON) WHERE object_id='${statementObject.id}';
   UPDATE knowledge_dependency_states SET mapping_state='unknown' WHERE owner_id='${statementObject.id}' AND owner_version=1;
   INSERT INTO knowledge_statements(object_id,version,statement_id,space_id,entry_path,layer,body)
@@ -104,20 +109,26 @@ try{
  const beforeSearch=h.sql(`SELECT authority_snapshot FROM agent_runs WHERE id='${run.run_id}'`)[0];
  assert.ok(!beforeSearch.knowledge.some(reference=>supportObjects.some(object=>object.id===reference[0])),'夹具支持未在搜索前交付');
  assert.ok(!beforeSearch.sources.some(reference=>sourceDocs.some(object=>'document-'+object.id===reference[0])),'夹具出处未在搜索前交付');
- const trimmed=await invoke('search_knowledge',{query:'authtrimneedle',limit:4});
- assert.equal(trimmed.search_coverage.candidate_count,4,'四条独立陈述必须都实际进入共同候选');
- assert.deepEqual(trimmed.objects.map(object=>object.id),[statementObject.id]);
- assert.deepEqual(trimmed.objects[0].entries.map(entry=>entry.entry_id),['rule-a','rule-b','rule-c']);
- assert.deepEqual(trimmed.objects[0].retrieval.excerpts.map(excerpt=>excerpt.entry_id),['rule-a','rule-b','rule-c'],
-  '第四条陈述的正文也不能经retrieval.excerpts旁路保留');
- for(const [index,entry] of trimmed.objects[0].entries.entries())assert.ok(entry.effective_value.includes(supportObjects[index].entries[0].effective_value));
+ const trimArgs={query:'authtrimneedle',limit:3};
+ const trimmed=await invoke('search_knowledge',trimArgs);
+ assert.deepEqual(trimmed.hits.map(hit=>hit.ref.object_id),Array(3).fill(statementObject.id));
+ const retained=trimmed.hits.map(hit=>statementObject.entries.findIndex(entry=>entry.path===hit.ref.path));
+ assert.equal(new Set(retained).size,3);
+ assert.ok(retained.every(index=>index>=0));
+ const omittedRule=statementObject.entries.find((_,index)=>!retained.includes(index));
+ assert.equal(JSON.stringify(trimmed).includes(omittedRule.effective_value),false,
+  '第四条陈述的正文不得经其他字段旁路交付');
+ for(const [index,hit] of trimmed.hits.entries())assert.equal(hit.definition,statementObject.entries[retained[index]].effective_value);
  const afterSearch=h.sql(`SELECT authority_snapshot FROM agent_runs WHERE id='${run.run_id}'`)[0];
- const expectedSupports=supportObjects.slice(0,3).map(object=>[object.id,object.version]);
- assert.deepEqual(afterSearch.knowledge.filter(reference=>supportObjects.some(object=>object.id===reference[0])),expectedSupports,
+ const expectedSupports=retained.map(index=>[supportObjects[index].id,supportObjects[index].version]).sort();
+ assert.deepEqual(afterSearch.knowledge.filter(reference=>supportObjects.some(object=>object.id===reference[0])).sort(),expectedSupports,
   '内嵌且最终可见的支持须登记；被裁掉的第四条支持不能登记');
- assert.deepEqual(afterSearch.sources.filter(reference=>sourceDocs.some(object=>'document-'+object.id===reference[0])),
-  sourceDocs.slice(0,3).map(object=>['document-'+object.id,object.version]),'陈述出处按实际保留内容登记，不把全对象核验清单当交付清单');
+ assert.deepEqual(afterSearch.sources.filter(reference=>sourceDocs.some(object=>'document-'+object.id===reference[0])).sort(),
+  retained.map(index=>['document-'+sourceDocs[index].id,sourceDocs[index].version]).sort(),'陈述出处按实际保留内容登记，不把全对象核验清单当交付清单');
  assert.equal((await issue()).status,200,'已交付映射的当前依赖应允许正常模型派发');
+ assert.match(trimmed.search_coverage.next,/^rc1:/);
+ const fourth=await invoke('search_knowledge',{...trimArgs,cursor:trimmed.search_coverage.next});
+ assert.deepEqual(fourth.hits.map(hit=>hit.ref.path),[omittedRule.path],'第四条独立陈述实际进入共同候选且能续读');
  await finish();
  checks.push('搜索四条陈述末端保留三条：内嵌可见支持和出处登记完整，第四条裁掉的支持与出处不进入authority');
  // legacy 没有陈述映射：只显示首条仍携带对象完整的必要来源。
@@ -139,25 +150,24 @@ try{
  });
  const legacyEncoded=Buffer.from(JSON.stringify(legacyObject)).toString('hex');
  h.sql(`UPDATE knowledge_objects SET body=CAST(CONVERT(0x${legacyEncoded} USING utf8mb4) AS JSON) WHERE id='${legacyObject.id}';
-  UPDATE knowledge_versions SET body=CAST(CONVERT(0x${legacyEncoded} USING utf8mb4) AS JSON) WHERE object_id='${legacyObject.id}';
+  UPDATE knowledge_revisions SET archived_body=CAST(CONVERT(0x${legacyEncoded} USING utf8mb4) AS JSON) WHERE object_id='${legacyObject.id}';
   UPDATE retrieval_documents SET body=CAST(CONVERT(0x${legacyEncoded} USING utf8mb4) AS JSON) WHERE object_id='${legacyObject.id}';
   UPDATE knowledge_dependency_states SET mapping_state='unknown' WHERE owner_id='${legacyObject.id}' AND owner_version=1`);
  const beforeLegacy=h.sql(`SELECT authority_snapshot FROM agent_runs WHERE id='${run.run_id}'`)[0];
  assert.ok(!beforeLegacy.sources.some(reference=>legacySources.some(object=>'document-'+object.id===reference[0])),
   '旧格式出处未在搜索前交付');
  const legacyReply=await invoke('search_knowledge',{query:'authlegacyneedle',limit:4});
- assert.equal(legacyReply.search_coverage.candidate_count,1,'旧格式只召回命中的一个规范内容项');
- assert.deepEqual(legacyReply.objects.map(object=>object.id),[legacyObject.id]);
- assert.deepEqual(legacyReply.objects[0].entries.map(entry=>entry.entry_id),['selected']);
- assert.deepEqual(legacyReply.objects[0].retrieval.excerpts.map(excerpt=>excerpt.entry_id),['selected']);
- const afterLegacy=h.sql(`SELECT authority_snapshot FROM agent_runs WHERE id='${run.run_id}'`)[0];
- assert.deepEqual(afterLegacy.sources.filter(reference=>legacySources.some(object=>'document-'+object.id===reference[0]))
-  .map(reference=>reference.join(':')).sort(),legacySources.map(object=>'document-'+object.id+':'+object.version).sort(),
-  '保留的旧格式内容须登记完整必要来源，不能按可见条目推窄');
+ assert.deepEqual(legacyReply.hits.map(hit=>hit.ref),[{object_id:legacyObject.id,version:legacyObject.version,path:'selected'}]);
  assert.equal((await issue()).status,200,'旧格式完整必要来源当前有效时允许正常模型派发');
- await finish();
- checks.push('旧格式只交付一个条目仍登记两个必要来源，不因窄读和末端裁剪收窄legacy依据');
- // 同 entry 的陈述共用目录前缀，实际可见内容仍按原坐标与 excerpts 区分。
+ const legacyRequired=legacySources[1];
+ assert.equal((await h.request('/knowledge/'+legacyRequired.id+'/disable',{operation_id:randomUUID(),expected_version:legacyRequired.version})).status,200);
+ const legacyRead=await invoke('read_knowledge',{items:[{kind:'knowledge',ref:legacyReply.hits[0].ref}]});
+ assert.ok(['stale','not_available'].includes(legacyRead.items[0].state),'旧格式的必要来源撤回后不得再交付正文');
+ assert.equal(legacyRead.items[0].content,undefined);
+ assert.equal((await h.request(`/conversations/${legacyCid}/messages/${run.message_id}/withdraw`,{operation_id:randomUUID()})).status,200);
+ h.releaseRun(run.run_id);
+ checks.push('旧格式只交付一个条目仍核对两个必要来源，未显示的必要来源撤回后拒绝再次交付');
+ // 同 entry 的陈述按 statement_id 提供独立坐标及续读。
  const sameEntryCid=await h.create();await h.resumeWorker();run=await h.capture(sameEntryCid,'核对同条目合成陈述');await h.pauseWorker();
  const sameEntrySources=[],sameEntrySupports=[];
  for(const label of ['甲','乙','丙','丁']){
@@ -188,7 +198,7 @@ try{
   human_override:null,review_state:'unverified'}];
  const sameEntryEncoded=Buffer.from(JSON.stringify(sameEntryObject)).toString('hex');
  h.sql(`UPDATE knowledge_objects SET body=CAST(CONVERT(0x${sameEntryEncoded} USING utf8mb4) AS JSON) WHERE id='${sameEntryObject.id}';
-  UPDATE knowledge_versions SET body=CAST(CONVERT(0x${sameEntryEncoded} USING utf8mb4) AS JSON) WHERE object_id='${sameEntryObject.id}';
+  UPDATE knowledge_revisions SET archived_body=CAST(CONVERT(0x${sameEntryEncoded} USING utf8mb4) AS JSON) WHERE object_id='${sameEntryObject.id}';
   UPDATE retrieval_documents SET body=CAST(CONVERT(0x${sameEntryEncoded} USING utf8mb4) AS JSON) WHERE object_id='${sameEntryObject.id}';
   UPDATE knowledge_dependency_states SET mapping_state='unknown' WHERE owner_id='${sameEntryObject.id}' AND owner_version=1;
   INSERT INTO knowledge_statements(object_id,version,statement_id,space_id,entry_path,layer,body)
@@ -199,42 +209,45 @@ try{
   '同条目支持未在搜索前交付');
  assert.ok(!beforeSameEntry.sources.some(reference=>sameEntrySources.some(object=>'document-'+object.id===reference[0])),
   '同条目出处未在搜索前交付');
- const sameEntryReply=await invoke('search_knowledge',{query:'authsameentryneedle',limit:4});
- assert.equal(sameEntryReply.search_coverage.candidate_count,4,'同entry的四条陈述仍分别计入规范候选');
- assert.deepEqual(sameEntryReply.objects.map(object=>object.id),[sameEntryObject.id]);
- const sameEntryDelivered=sameEntryReply.objects[0];
- assert.deepEqual(sameEntryDelivered.entries.map(entry=>entry.entry_id),['rules']);
- assert.equal(sameEntryDelivered.entries[0].effective_value,[...commonPrefix].slice(0,160).join(''),
-  '目录只显示共同前缀，不能据此把四条陈述都视为已交付');
- assert.equal(sameEntryDelivered.retrieval.excerpts.length,3,'第四条陈述不能经excerpt旁路交付');
- let sameEntryOffset=0;
- for(const [index,excerpt] of sameEntryDelivered.retrieval.excerpts.entries()){
-  assert.equal(excerpt.entry_id,'rules');assert.equal(excerpt.path,'rules');
-  assert.equal(excerpt.offset,sameEntryOffset,'相同前缀的不同陈述必须保留不同的原Unicode坐标');
-  assert.equal(excerpt.text,sameEntryStatements[index].text);
-  assert.equal(excerpt.length,[...sameEntryStatements[index].text].length);
-  assert.equal(excerpt.total_chars,[...sameEntryText].length);
-  sameEntryOffset+=[...sameEntryStatements[index].text].length+2;
- }
+ const sameArgs={query:'authsameentryneedle',limit:3};
+ const sameEntryReply=await invoke('search_knowledge',sameArgs);
+ assert.deepEqual(sameEntryReply.hits.map(hit=>hit.ref),Array(3).fill({object_id:sameEntryObject.id,version:'1',path:'rules'}));
+ const retainedStatements=sameEntryReply.hits.map(hit=>sameEntryStatements.findIndex(statement=>statement.statement_id===hit.statement_id));
+ assert.equal(new Set(retainedStatements).size,3);
+ assert.ok(retainedStatements.every(index=>index>=0));
+ const actualStatements=retainedStatements.map(index=>sameEntryStatements[index]);
+ const omittedStatement=sameEntryStatements.find((_,index)=>!retainedStatements.includes(index));
+ assert.deepEqual(sameEntryReply.hits.map(hit=>hit.definition),actualStatements.map(statement=>statement.text));
+ assert.equal(JSON.stringify(sameEntryReply).includes(omittedStatement.text),false);
  const afterSameEntry=h.sql(`SELECT authority_snapshot FROM agent_runs WHERE id='${run.run_id}'`)[0];
- assert.deepEqual(afterSameEntry.knowledge.filter(reference=>sameEntrySupports.some(object=>object.id===reference[0])),
-  sameEntrySupports.slice(0,3).map(object=>[object.id,object.version]),
+ assert.deepEqual(afterSameEntry.knowledge.filter(reference=>sameEntrySupports.some(object=>object.id===reference[0])).sort(),
+  retainedStatements.map(index=>[sameEntrySupports[index].id,sameEntrySupports[index].version]).sort(),
   '同entry不能只登记首条，也不能因前缀相同多登记被裁掉的第四条支持');
- assert.deepEqual(afterSameEntry.sources.filter(reference=>sameEntrySources.some(object=>'document-'+object.id===reference[0])),
-  sameEntrySources.slice(0,3).map(object=>['document-'+object.id,object.version]),
+ assert.deepEqual(afterSameEntry.sources.filter(reference=>sameEntrySources.some(object=>'document-'+object.id===reference[0])).sort(),
+  retainedStatements.map(index=>['document-'+sameEntrySources[index].id,sameEntrySources[index].version]).sort(),
   '同entry的出处按实际可见陈述登记');
  assert.equal((await issue()).status,200,'同entry可见陈述及其当前依赖允许正常模型派发');
+ const firstPage=await invoke('read_knowledge',{items:sameEntryReply.hits.map(({ref,statement_id})=>({kind:'knowledge',ref,statement_id,limit:168}))});
+ assert.deepEqual(firstPage.items.map(item=>item.content),actualStatements.map(statement=>[...statement.text].slice(0,168).join('')));
+ const restPage=await invoke('read_knowledge',{items:firstPage.items.map(({ref,statement_id,continuation})=>({kind:'knowledge',ref,statement_id,offset:continuation.content_next_offset}))});
+ assert.deepEqual(restPage.items.map((item,index)=>firstPage.items[index].content+item.content),actualStatements.map(statement=>statement.text),
+  '有相同Unicode前缀的不同陈述从各自坐标续读');
+ assert.match(sameEntryReply.search_coverage.next,/^rc1:/);
+ const rest=await invoke('search_knowledge',{...sameArgs,cursor:sameEntryReply.search_coverage.next});
+ assert.deepEqual(rest.hits.map(hit=>hit.statement_id),[omittedStatement.statement_id],'四条同entry陈述独立进入候选');
  await finish();
- checks.push('同entry四条陈述共享目录前缀，按前三个excerpt的原坐标登记支持与出处，第四条不新增登记');
- // 三类合成资料分别填满真实24KiB回执，独立检查最小目录与整项省略后的登记。
+ checks.push('同entry四条陈述共享前缀，按前三个实际命中登记支持与出处，原Unicode坐标各自续读');
+ // 三类合成资料在同一公开上限内用请求余量触发身份投影和整项省略。
  const storeCapacityObjects=objects=>{
   const statements=[];
   for(const object of objects){
    const encoded=Buffer.from(JSON.stringify(object)).toString('hex'),value=`CAST(CONVERT(0x${encoded} USING utf8mb4) AS JSON)`;
    statements.push(`INSERT INTO knowledge_objects(id,space_id,kind,name,version,state,body,source_id,source_version,updated_by)
     VALUES('${object.id}','demo','${object.kind}','${object.name}',1,'enabled',${value},NULL,0,'synthetic-test')`,
-    `INSERT INTO knowledge_versions(object_id,version,body) VALUES('${object.id}',1,${value})`,
-    `INSERT INTO retrieval_documents(object_id,space_id,version,body) VALUES('${object.id}','demo',1,${value})`);
+    `INSERT INTO knowledge_revisions(object_id,version,archived_body) VALUES('${object.id}',1,${value})`,
+    `INSERT INTO retrieval_documents(object_id,space_id,version,body) VALUES('${object.id}','demo',1,${value})`,
+    `INSERT INTO semantic_ownership(space_id,object_id,authority_id,maintainer_id,source,updated_by)
+     VALUES('demo','${object.id}','${object.id}','alice','creator','alice')`);
    for(const entry of object.entries)for(const statement of entry.suggestion.statements??[]){
     const body=Buffer.from(JSON.stringify(statement)).toString('hex');
     statements.push(`INSERT INTO knowledge_statements(object_id,version,statement_id,space_id,entry_path,layer,body)
@@ -283,43 +296,97 @@ try{
   const capacityCid=await h.create();await h.resumeWorker();run=await h.capture(capacityCid,'核对'+variant+'容量裁剪的实际采用范围');await h.pauseWorker();
   const before=h.sql(`SELECT authority_snapshot FROM agent_runs WHERE id='${run.run_id}'`)[0];
   assert.ok(!JSON.stringify(before).includes(prefix),'容量夹具未在搜索前交付');
-  const result=await invoke('search_knowledge',{query,limit:30});
-  assert.equal(result.search_coverage.candidate_count,30,'三十个规范内容必须实际进入搜索');
-  assert.equal(result.reply_coverage.state,'bounded');
-  assert.ok(Buffer.byteLength(JSON.stringify(result))<=24064,'正式回执须遵守既有内容容量');
-  const minimal=result.objects.filter(object=>object.entries.every(entry=>entry.effective_value==='')&&object.retrieval.excerpts.length===0);
-  const omitted=result.reply_coverage.omitted_objects;
-  assert.ok(minimal.length>0,'必须真实触发最小目录，不能只测三entry上限');
-  assert.ok(omitted.length>0,'必须真实触发整项省略');
-  assert.equal(result.objects.length+omitted.length,30,'被省略项须保留全部同版补读引用');
+  const args={query,limit:30}, maxBytes=4800;
+  const result=await invoke('search_knowledge',args,maxBytes);
+  assert.ok(Buffer.byteLength(JSON.stringify(result))<=maxBytes,'正式回执须遵守当次收窄后的内容容量');
+  assert.match(result.search_coverage.next,/^rc1:/);
+  const minimal=result.hits.filter(hit=>hit.definition===''&&hit.scope_text==='');
+  assert.ok(minimal.length>0,'必须真实触发最小目录');
+  assert.ok(result.hits.length<objects.length,'必须真实触发整项省略');
+  for(const hit of minimal) {
+   assert.equal(hit.content_state,'partial');
+   assert.equal(hit.continuation.content_next_offset,0);
+  }
   const after=h.sql(`SELECT authority_snapshot FROM agent_runs WHERE id='${run.run_id}'`)[0];
-  const visible=new Set(result.objects.map(object=>object.id)),withText=new Set(result.objects.filter(object=>object.entries.some(entry=>entry.effective_value!=='')||object.retrieval.excerpts.length>0).map(object=>object.id));
+  const visible=new Set(result.hits.map(hit=>hit.ref.object_id));
   assert.deepEqual(after.knowledge.filter(reference=>objects.some(object=>object.id===reference[0])).map(reference=>reference[0]).sort(),[...visible].sort(),
    '仅最终交付对象登记自身版本；omitted目录不能变成已采用对象');
-  const expected=variant==='mapped'?withText:visible;
   if(variant==='mapped'){
+   const emittedSupports=result.hits.flatMap(hit=>hit.supports)
+    .filter(support=>support.content?.length>0||support.delivered_in).map(support=>support.reference.ref.object_id).sort();
+   const emittedSources=result.hits.flatMap(hit=>hit.citations).map(citation=>'document-'+citation.source.id).sort();
    assert.deepEqual(after.knowledge.filter(reference=>supports.some(object=>object.id===reference[0])).map(reference=>reference[0]).sort(),
-    supports.filter((_,index)=>expected.has(objects[index].id)).map(object=>object.id).sort(),'最小目录零正文不能登记映射支持');
+    emittedSupports,'只登记实际交付的映射支持');
    assert.deepEqual(after.sources.filter(reference=>sources.some(object=>'document-'+object.id===reference[0])).map(reference=>reference[0]).sort(),
-    sources.filter((_,index)=>expected.has(objects[index].id)).map(object=>'document-'+object.id).sort(),'最小目录与整项省略均不登记未交付陈述出处');
+    emittedSources,'只登记实际交付命中携带的出处');
   }else if(variant==='legacy'){
-   assert.deepEqual(after.sources.filter(reference=>sources.some(object=>'document-'+object.id===reference[0])).map(reference=>reference[0]).sort(),
-    sources.filter((_,index)=>expected.has(objects[Math.floor(index/2)].id)).map(object=>'document-'+object.id).sort(),
-    '最小legacy目录仍登记两份完整必要来源，整项省略才不登记');
+   const emittedSources=result.hits.flatMap(hit=>hit.citations).map(citation=>'document-'+citation.source.id).sort();
+   assert.deepEqual(after.sources.filter(([id])=>sources.some(source=>'document-'+source.id===id)).map(([id])=>id).sort(),
+    emittedSources,'旧卡必要来源通过条目回源核验，只把交付出处登记为原文读取');
   }else{
-   for(const object of minimal){
-    const index=objects.findIndex(value=>value.id===object.id);
-    assert.deepEqual(object.structure_dependencies,[{object_id:tables[index].id,version:'1',path:'ddl'}],
-     '最小目录保留已核验的结构绑定及补读位置');
-    assert.equal(object.entries[0].effective_structure,null);
-    assert.equal(object.entries[0].structure_page.next_offset,0);
-   }
-   assert.deepEqual(after.knowledge.filter(reference=>tables.some(object=>object.id===reference[0])).map(reference=>reference[0]).sort(),
-    tables.filter((_,index)=>expected.has(objects[index].id)).map(object=>object.id).sort(),'结构依赖按最终保留目录登记，整项省略不登记');
+   assert.deepEqual(after.knowledge_entries.filter(([id])=>tables.some(table=>table.id===id)).sort(),
+    tables.filter((_,index)=>visible.has(objects[index].id)).map(table=>[table.id,table.version,'ddl']).sort(),
+    '结构绑定按实际保留命中登记底表、版本及DDL路径');
   }
   assert.equal((await issue()).status,200,'裁剪后登记的当前依赖须允许正常模型派发');
-  await finish();
-  checks.push(variant+'容量裁剪：最小目录'+minimal.length+'项、整项省略'+omitted.length+'项，正文/legacy完整来源/结构绑定按最终可见内容登记');
+  const reached=new Set(visible);
+  let cursor=result.search_coverage.next;
+  while(cursor!==null){
+   const page=await invoke('search_knowledge',{...args,cursor},24064);
+   assert.ok(Buffer.byteLength(JSON.stringify(page))<=24064);
+   assert.ok(page.hits.length>0,'游标必须推进，不能在容量裁剪后原地返回');
+   for(const hit of page.hits){
+    assert.equal(reached.has(hit.ref.object_id),false,'游标续页不得重复交付');
+    reached.add(hit.ref.object_id);
+   }
+   assert.ok(reached.size<=objects.length);
+   cursor=page.search_coverage.next;
+  }
+  assert.deepEqual([...reached].sort(),objects.map(object=>object.id).sort(),'三十个规范内容最终均按原游标交付');
+  if(variant==='mapped') await finish();
+  else {
+   const index=objects.findIndex(object=>object.id===minimal[0].ref.object_id);
+   const required=variant==='legacy'?sources[index*2+1]:tables[index];
+   const disabled=await h.request('/knowledge/'+required.id+'/disable',{operation_id:randomUUID(),expected_version:required.version});
+   assert.equal(disabled.status,200,JSON.stringify(disabled.value));
+   const args={items:[{kind:'knowledge',ref:minimal[0].ref}]};
+   if(variant==='legacy'){
+    const denied=await invoke('read_knowledge',args);
+    assert.ok(['stale','not_available'].includes(denied.items[0].state),'旧来源停用后拒绝交付条目');
+    assert.equal(denied.items[0].content,undefined);
+   }else{
+    const denied=await invoke('read_knowledge',args,undefined,409);
+    assert.equal(denied.code,'stale_knowledge');
+    assert.equal(denied.data,undefined,'结构绑定失效后拒绝整份正文回执');
+   }
+   assert.equal((await h.request(`/conversations/${capacityCid}/messages/${run.message_id}/withdraw`,{operation_id:randomUUID()})).status,200);
+   h.releaseRun(run.run_id);
+  }
+  checks.push(variant+'容量裁剪：'+minimal.length+'条最小命中，整项省略可按原游标续回，继续核验必要依赖');
  }
+ const changing = await h.request('/knowledge/table-raw_payments');
+ assert.equal(changing.status,200,JSON.stringify(changing.value));
+ const table = changing.value;
+ const beforeRef = {object_id:table.id,version:table.version,path:'ddl'};
+ const revisionCid=await h.create();await h.resumeWorker();
+ run=await h.capture(revisionCid,'核对支付表当前的结构。');await h.pauseWorker();
+ assert.equal((await invoke('read_knowledge',{items:[{kind:'knowledge',ref:beforeRef}]})).items[0].state,'ok');
+ await finish();
+ const description=table.entries.find(entry=>entry.path==='description');
+ assert.ok(description);
+ const revised=await h.request('/knowledge/'+table.id,{operation_id:randomUUID(),expected_version:table.version,
+  entry_id:description.entry_id,value:description.effective_value+' 结构说明经复核。',structured_value:description.effective_structure},'alice','PATCH');
+ assert.equal(revised.status,200,JSON.stringify(revised.value));assert.notEqual(revised.value.version,table.version);
+ await h.resumeWorker();run=await h.capture(revisionCid,'沿旧会话续聊，并重读当前表结构。');await h.pauseWorker();
+ assert.ok(run.checkpoint,'表仍启用可读，结构对象的普通改版不作废检查点');
+ const inline=await h.internal('/internal/checkpoints/read',{run_id:run.run_id,lease_epoch:run.lease_epoch});
+ assert.equal(inline.status,200,JSON.stringify(inline.value));
+ assert.deepEqual(inline.value.authority_snapshot.knowledge.find(([id])=>id===table.id),[table.id,table.version]);
+ const stale=await invoke('read_knowledge',{items:[{kind:'knowledge',ref:beforeRef}]});
+ assert.equal(stale.items[0].state,'stale','工具仍拒绝用旧精读版本冒充当前表结构');
+ assert.equal(stale.items[0].content,undefined);
+ assert.equal((await h.request(`/conversations/${revisionCid}/messages/${run.message_id}/withdraw`,{operation_id:randomUUID()})).status,200);
+ h.releaseRun(run.run_id);
+ checks.push('仍可读的结构对象改版保留旧Pi检查点与实际内联续接，精读仍拒绝过时版本');
  passed=true;console.log(JSON.stringify({passed,checks,officialRequests:0}));
 }finally{await writeFile('.local/checks/mvp-context-dependencies.json',JSON.stringify({passed,checks,officialRequests:0},null,2));await h.close();}

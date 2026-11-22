@@ -13,7 +13,7 @@ pub async fn find_skill_dependents_in_tx(
     can_admin: bool,
 ) -> Result<(Vec<Value>, Option<String>)> {
     // 归属和可见范围先于匹配、排序和分页；维护角色不扩大私人读取范围。
-    let rows = sqlx::query("SELECT body,owner_id,visibility FROM personal_assets WHERE space_id=? AND kind='skill' AND state<>'deleted' AND (owner_id=? OR visibility='space') AND (? IS NULL OR id>?) AND JSON_CONTAINS(JSON_EXTRACT(body,'$.dependencies'),JSON_OBJECT('object_id',?)) ORDER BY id LIMIT 51")
+    let rows = sqlx::query("SELECT body,owner_id,visibility FROM personal_assets WHERE space_id=? AND kind='skill' AND state IN ('enabled','disabled') AND (owner_id=? OR visibility='space') AND (? IS NULL OR id>?) AND JSON_CONTAINS(JSON_EXTRACT(body,'$.dependencies'),JSON_OBJECT('object_id',?)) ORDER BY id LIMIT 51")
         .bind(&ctx.space_id).bind(&ctx.user_id).bind(after).bind(after)
         .bind(target["id"].as_str()).fetch_all(tx.connection()).await?;
     let next = (rows.len() > 50).then(|| {

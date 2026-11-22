@@ -171,9 +171,9 @@ const provider = createServer(async (request, response) => {
       const result = JSON.parse(message.content);
       validateContract('KnowledgeSearchReply', result);
       assert.equal(result.hits.length, 2);
-      const semantic = result.hits.find(hit => hit.record_kind === 'knowledge_entry');
-      const original = result.hits.find(hit => hit.record_kind === 'source_excerpt');
-      assert.ok(semantic && original, '统一stage必须同时交付knowledge和raw，不设类型配额');
+      const semantic = result.hits.find(hit => hit.record_kind === 'knowledge_entry' && hit.kind === 'term');
+      const original = result.hits.find(hit => hit.record_kind === 'knowledge_entry' && hit.kind === 'document');
+      assert.ok(semantic && original, '统一搜索仍须同时交付正式术语和未整理独立文档');
       assert.deepEqual(semantic.ref, {object_id: knowledge.id, version: knowledge.version, path: 'body'});
       assert.equal(semantic.definition, definition);
       assert.equal(semantic.supports_complete, savedSupports ? true : null, '搜索完整性必须来自保存声明，历史仍unknown');
@@ -188,14 +188,12 @@ const provider = createServer(async (request, response) => {
         assert.equal(semantic.continuation.supports_next_cursor, null);
       }
       assert.equal(semantic.content_state, 'complete');
-      assert.deepEqual(original.citation, {source: {kind: 'document', id: source.id}, revision: source.version, locator: {offset: 0, length: [...rawText].length}});
-      assert.equal(original.source_length, [...rawText].length);
+      assert.deepEqual(original.ref, {object_id: source.id, version: source.version, path: 'body'});
       assert.equal(original.name, source.name);
-      assert.equal(original.text, rawText);
+      assert.equal(original.definition, rawText);
       assert.equal(original.content_state, 'complete');
       assert.equal(original.support_state, 'unknown');
-      assert.equal(original.semantic_status, 'pending');
-      assert.equal(Object.hasOwn(original, 'ref'), false);
+      assert.equal(original.supports_complete, null);
       const stored = h.sql(`SELECT receipt FROM tool_calls WHERE conversation_id='${run.conversation_id}' AND recovery_chain_id='${run.recovery_chain_id}' AND sdk_tool_call_id='evidence-search'`)[0];
       assert.ok(stored);
       if (typeof result.search_coverage.next === 'string')
@@ -204,7 +202,8 @@ const provider = createServer(async (request, response) => {
         'provider正文须与Rust冻结回执逐字段一致（公开游标投影除外），Pi不得二次改写');
       const authority = h.sql(`SELECT authority_snapshot FROM agent_runs WHERE id='${run.run_id}'`)[0];
       assert.ok(authority.knowledge.some(reference => reference[0] === knowledge.id && reference[1] === knowledge.version));
-      assert.ok(authority.sources.some(reference => reference[0] === 'document-' + source.id && reference[1] === source.version));
+      assert.ok(authority.knowledge.some(reference => reference[0] === source.id && reference[1] === source.version));
+      if (savedSupports) assert.ok(authority.sources.some(reference => reference[0] === 'document-' + source.id && reference[1] === source.version));
       providerTools.push(result);
       delta = {role: 'assistant', content: '已核对合成定义及异常复核条件。'};
     }
@@ -235,7 +234,7 @@ try {
   const document = await h.request('/knowledge', {operation_id: randomUUID(), kind: 'document', name: '合成异常手册', body: rawText, related_ids: []});
   assert.equal(document.status, 200, JSON.stringify(document.value)); source = document.value;
   await h.resumeWorker();
-  await until(() => indexed.has('knowledge_entry:' + knowledge.id) && indexed.has('source_excerpt:' + source.id), '正式消费者写入两类合成正文', 120000);
+  await until(() => indexed.has('knowledge_entry:' + knowledge.id) && indexed.has('knowledge_entry:' + source.id), '正式消费者写入合成术语与文档知识窗口', 120000);
   const cid = await h.create(); run = await h.capture(cid, '核对合成校准定义和异常复核要求。');
   await h.pauseWorker();
   assert.equal(run.tool_contract_version, 2, '专用验收run必须冻结显式合同2');
@@ -259,7 +258,7 @@ try {
   catch (error) {assert.deepEqual(providerErrors, [], JSON.stringify(providerErrors)); throw error;}
   h.releaseRun(run.run_id);
   assert.deepEqual(providerErrors, []); assert.equal(modelCalls, 4); assert.equal(providerTools.length, 2);
-  assert.ok(searches.some(search => search.success && search.collection === collection && search.filter.includes('kind == "source_excerpt"')), 'raw必须走正式公共Milvus通道');
+  assert.ok(searches.every(search => !search.filter.includes('kind == "source_excerpt"')), '普通文档不需要额外的原文召回');
   assert.ok(searches.some(search => search.success && search.collection === collection && search.filter.includes('kind in ["term","document"]')), 'knowledge必须按实际kinds走同一公共集合的知识通道');
   const snapshot = await h.snapshot(run.conversation_id);
   assert.equal(snapshot.runs.find(value => value.run_id === run.run_id).state, 'finished');
@@ -286,7 +285,7 @@ try {
   assert.equal(attempts.filter(attempt => attempt.state === 'issued').length, 0, '原模型attempt全部收尾');
   h.releaseRun(run.run_id); assert.deepEqual(providerErrors, []);
   passed = true;
-  console.log(JSON.stringify({passed, checks: ['显式合同2→统一stage→owner→Rust回执→Pi→实际provider逐字', '两类正文出处、历史unknown和当前authority保持', '人工保存的完整支持声明及实际承载例外逐字交付', '搜索5000B长支持沿原游标拼回，正文与公共位置独立且无悬空承载'], modelCalls, publicSearches: searches.length, officialRequests: 0}));
+  console.log(JSON.stringify({passed, checks: ['显式合同2→统一stage→owner→Rust回执→Pi→实际provider逐字', '术语与文档出处、历史unknown和当前authority保持', '人工保存的完整支持声明及实际承载例外逐字交付', '搜索5000B长支持沿原游标拼回，正文与公共位置独立且无悬空承载'], modelCalls, publicSearches: searches.length, officialRequests: 0}));
 } finally {
   globalThis.fetch = originalFetch;
   if (previousTest === undefined) delete process.env.DATA_AGENT_PROVIDER_TEST; else process.env.DATA_AGENT_PROVIDER_TEST = previousTest;

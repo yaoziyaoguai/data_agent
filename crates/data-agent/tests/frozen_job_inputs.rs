@@ -30,6 +30,7 @@ async fn prefill_review_uses_frozen_tail_without_fetching_source_text_again() {
         user_id: "alice".into(),
         space_id: "demo".into(),
         request_id: "frozen-review-tail".into(),
+        table_access: None,
     };
     let body = format!(
         "首部规则：金额以元保存。\n{}中段规则：按付款日归属。\n{}原文尾部例外：退款拒收不计入。\n",
@@ -87,6 +88,7 @@ async fn prefill_legacy_truncation_keeps_original_total_and_unread_ranges() {
         user_id: "alice".into(),
         space_id: "demo".into(),
         request_id: "frozen-review-legacy".into(),
+        table_access: None,
     };
     let prefix = format!("首部规则：金额以元保存。\n{}", "普通说明。\n".repeat(1000));
     let body = format!(
@@ -150,6 +152,7 @@ async fn terminal_prefill_releases_only_temporary_material_and_keeps_late_usage_
         user_id: "alice".into(),
         space_id: "frozen-prefill-terminal".into(),
         request_id: "frozen-prefill-terminal".into(),
+        table_access: None,
     };
     let profile = contracts::decode("ModelProfile", json!({
         "provider_id":"deepseek","model_id":"deepseek-flash","trial_id":"frozen-prefill-terminal-trial",
@@ -366,6 +369,7 @@ async fn resumed_preparation_releases_invalid_source_material_and_applies_enable
         user_id: "alice".into(),
         space_id: "demo".into(),
         request_id: "frozen-preparation-source-retired".into(),
+        table_access: None,
     };
     let profile = contracts::decode(
         "ModelProfile",

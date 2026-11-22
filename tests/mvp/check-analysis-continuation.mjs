@@ -48,18 +48,14 @@ const lastReply = (body) => {
 };
 const toolStep = (name, args, observe) => ({ name, args, observe });
 const finalStep = (text, observe) => ({ text, observe });
-// 来源未裁决（收窄上下文，无工具回执）期间暂停正文读取与执行工具，以及
-// Rust requires_source_context 必拒的纯受限工具（data_tools.rs 无豁免名单）；
-// 归属/来源身份/任务目录/取消保留。
-const pausedWhileUnresolved = [
-  "read",
+// 工具可见性与数据准入独立。未归属的工具调用仍由 Rust 拒绝。
+const availableTools = [
   "read_knowledge",
   "read_source",
   "request_query",
   "execute_query",
   "get_query",
   "prepare_analysis_answer",
-  "present_analysis_answer",
   "save_analysis_evidence",
   "save_analysis_report",
   "read_analysis_report",
@@ -67,44 +63,12 @@ const pausedWhileUnresolved = [
   "validate_sql",
   "prepare_skill_draft",
   "propose_semantic_change",
-];
-const keptWhileUnresolved = [
   "update_analysis_task",
   "read_conversation",
   "search_knowledge",
   "cancel_query",
   "manage_personal_asset",
 ];
-const assertToolVisibility = (body) => {
-  const names = body.tools.map((tool) => tool.function.name);
-  // 收窄请求以投影注入的宿主事实标记识别（custom消息转user进入真实payload）；
-  // 普通首请求允许全量工具。§6.1：来源未裁决期间暂停正文读取与执行工具，
-  // 以及宿主来源门必拒的纯受限工具；裁决后恢复。
-  const narrowed = body.messages.some((message) =>
-    typeof message.content === "string"
-      ? message.content.includes("来源尚未确定")
-      : Array.isArray(message.content) &&
-        message.content.some(
-          (part) => part.type === "text" && part.text.includes("来源尚未确定"),
-        ),
-  );
-  if (!narrowed) {
-    // 非收窄请求按原始契约可见全部受限工具（prepare/present随合同版本取舍，不在此列）。
-    for (const name of ["read_analysis_task", "validate_sql", "prepare_skill_draft", "propose_semantic_change"])
-      assert.ok(names.includes(name), "来源裁决后应恢复受限工具可见：" + name);
-    return;
-  }
-  for (const name of pausedWhileUnresolved)
-    assert.ok(
-      !names.includes(name),
-      "来源未裁决时不得可见正文读取或执行工具：" + name,
-    );
-  for (const name of keptWhileUnresolved)
-    assert.ok(
-      names.includes(name),
-      "来源未裁决时任务目录/取消等合法工具必须可见：" + name,
-    );
-};
 const provider = createServer(async (request, response) => {
   try {
     assert.equal(
@@ -139,19 +103,18 @@ const provider = createServer(async (request, response) => {
       );
       response.end("data: [DONE]\n\n");
     };
-    // Pi原生压缩摘要请求（较小max_tokens）：不占交付计划，也不适用正文payload断言。
-    if (body.max_tokens !== profile.output_limit) {
+    // Pi 原生摘要使用独立的系统提示，但可能和正文使用同一个输出上限。
+    if (body.messages.some(message => message.role === "system" &&
+        message.content.startsWith("You are a context summarization assistant."))) {
+      assert.ok(!body.tools?.length);
       calls++;
       serve({ role: "assistant", content: "已汇总先前对话：任务、查询、依据与冻结答案的身份保留。" }, "stop");
       return;
     }
     assert.deepEqual(body.thinking, { type: "disabled" });
-    assert.ok(
-      body.tools.some(
-        (value) => value.function.name === "save_analysis_evidence",
-      ),
-    );
-    assertToolVisibility(body);
+    const names = new Set(body.tools.map((tool) => tool.function.name));
+    for (const name of availableTools) assert.ok(names.has(name), "未开放工具：" + name);
+    assert.ok(!names.has("present_analysis_answer"), "新运行不得开放已退役工具");
     assert.ok(
       plan && plan.index < plan.steps.length,
       "计划外请求不能制造成功：" +
@@ -344,8 +307,7 @@ const captureResult = async (cid, query, expectedState = "succeeded") => {
     "执行消息不能假装是已经完成的结果唤醒",
   );
 };
-// v1合同：成功结果通知的解释由present_analysis_answer交付（数字经values绑定），
-// 依据保存保持独立步骤；该义务先于本包存在，计划在此补齐对应交付步骤。
+// 结果通知经 prepare 绑定数字，续用原验收答案；依据保存仍是独立步骤。
 const saveResult = async (
   cid,
   task,
@@ -394,8 +356,8 @@ const saveResult = async (
           ],
         };
       }),
-      toolStep("present_analysis_answer", (body) => {
-        // present执行前，最后的真实回执是保存依据的回执：核对独立保存的依据身份。
+      toolStep("prepare_analysis_answer", (body) => {
+        // 最后一条回执对应独立保存的依据。
         reference = lastReply(body);
         assert.deepEqual(Object.keys(reference).sort(), [
           "condition_version",
@@ -410,7 +372,6 @@ const saveResult = async (
           { query_id: query.id, result_ref: result.result_ref },
         ]);
         return {
-          template: answer.template,
           sources: [
             {
               query_id: query.id,
@@ -425,8 +386,9 @@ const saveResult = async (
           })),
         };
       }),
-      // present回执后工具循环还有一轮；答案已由present交付（messageDeferred），文本步仅收尾。
-      finalStep(answer.text),
+      finalStep(answer.template, (body) => assert.deepEqual(
+        Object.keys(lastReply(body).bindings).sort(), answer.values.map(value => value.name).sort(),
+      )),
     ],
     answer.text,
   );
@@ -442,6 +404,7 @@ const conditions = {
   group_by: ["month"],
   filters: ["is_test=0", "paid_amount_cents>0"],
   knowledge_refs: [],
+  source_limits: null,
   notes: "按付款月份归属截至快照成功退款；关联或贡献不证明因果。",
 };
 try {
@@ -473,6 +436,7 @@ try {
     "先给2026年一月至三月按月净收入SQL，排除测试及未付款。暂不执行。",
   );
   await completeRound("查正式指标后生成趋势草稿", [
+    toolStep("update_analysis_task", routeArgs({task_id: null, condition_version: null})),
     toolStep("search_knowledge", {
       query: "净收入",
       kinds: ["metric"],
@@ -481,23 +445,15 @@ try {
     toolStep(
       "read_knowledge",
       {
-        object_id: metric.id,
-        version: metric.version,
-        entry_id: "sql",
-        offset: 0,
-        limit: 4096,
+        items: [{kind:"knowledge",ref:{object_id:metric.id,version:metric.version,path:"sql"},limit:4096}],
       },
       (body) =>
         assert.ok(
-          lastReply(body).objects.some((value) => value.id === metric.id),
+          lastReply(body).hits.some((value) => value.ref?.object_id === metric.id),
         ),
     ),
     toolStep("read_knowledge", {
-      object_id: table.id,
-      version: table.version,
-      entry_id: "description",
-      offset: 0,
-      limit: 4096,
+      items: [{kind:"knowledge",ref:{object_id:table.id,version:table.version,path:"description"},limit:4096}],
     }),
     toolStep("update_analysis_task", {
       action: "create",
@@ -632,7 +588,7 @@ try {
       task_id: task.task_id,
       expected_version: task.condition_version,
       goal: "app付款明细",
-      condition_patch: { set: { channel: "app", group_by: [] }, unset: [] },
+      condition_patch: { set: { filters: [...conditions.filters, "channel='app'"], group_by: [] }, unset: [] },
       options: [],
     }),
     toolStep("request_query", (body) => {
@@ -690,18 +646,15 @@ try {
   const quarterSql =
     "SELECT SUM(d.paid_amount_cents) AS paid_cents,SUM(d.refunded_amount_cents) AS refund_cents,SUM(d.paid_amount_cents-d.refunded_amount_cents) AS net_cents,COUNT(DISTINCT d.customer_id) AS known_customers FROM demo_order_detail d WHERE d.is_test=0 AND d.paid_amount_cents>0 AND d.paid_at>='2026-01-01T00:00:00Z' AND d.paid_at<'2026-04-01T00:00:00Z' AND EXISTS (SELECT 1 FROM customer_tags t WHERE t.customer_id=d.customer_id AND t.tag IN ('vip','newsletter'))";
   await completeRound("跨表问题建立独立任务并读关联", [
+    toolStep("update_analysis_task", routeArgs({task_id: null, condition_version: null})),
     toolStep("search_knowledge", {
       query: "客户标签",
       kinds: ["relationship"],
-      related_object_id: table.id,
+      hints: {related_object_ids: [table.id]},
       limit: 5,
     }),
     toolStep("read_knowledge", {
-      object_id: relation.id,
-      version: relation.version,
-      entry_id: "join",
-      offset: 0,
-      limit: 4096,
+      items: [{kind:"knowledge",ref:{object_id:relation.id,version:relation.version,path:"join"},limit:4096}],
     }),
     toolStep("update_analysis_task", {
       action: "create",

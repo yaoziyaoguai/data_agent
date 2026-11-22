@@ -1,5 +1,10 @@
 use super::*;
 
+async fn authorize_edit_in_tx(tx: &mut AppTx<'_>, ctx: &AccessContext, object: &str) -> Result<()> {
+    access::authorize_semantic_in_tx(tx, ctx, object).await?;
+    knowledge::check_read_access_in_tx(tx, ctx, object).await
+}
+
 pub async fn edit(
     pool: &MySqlPool,
     ctx: &AccessContext,
@@ -25,7 +30,7 @@ pub async fn edit(
         } else {
             object.ok_or(Error::new("invalid_input"))?.to_owned()
         };
-        access::authorize_semantic_in_tx(&mut tx, ctx, &target).await?;
+        authorize_edit_in_tx(&mut tx, ctx, &target).await?;
     }
     let mut v = match action {
         "create" => {
@@ -246,7 +251,7 @@ pub async fn edit_entries(
         .ok_or(Error::new("invalid_input"))?;
     let base = epoch(input["expected_version"].as_str().unwrap_or(""))?;
     let mut tx = AppTx::begin(pool).await?;
-    access::authorize_semantic_in_tx(&mut tx, ctx, object).await?;
+    authorize_edit_in_tx(&mut tx, ctx, object).await?;
     let mut v = Value::Null;
     for (index, edit) in edits.iter().enumerate() {
         let mut entry = edit.clone();
@@ -288,7 +293,7 @@ pub async fn edit_batch(
     let command = json!({"action":"edit_batch","input":input});
     let mut tx = AppTx::begin(pool).await?;
     for group in &input.objects {
-        access::authorize_semantic_in_tx(&mut tx, ctx, &group.object_id).await?;
+        authorize_edit_in_tx(&mut tx, ctx, &group.object_id).await?;
     }
     if let Some(receipt) =
         knowledge::begin_entry_batch_in_tx(&mut tx, ctx, &input.operation_id, &command).await?

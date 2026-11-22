@@ -1,7 +1,7 @@
 import {createServer} from 'node:http';
 import {randomUUID} from 'node:crypto';
 // 合成供应商只负责协议回执，真实Pi负责工具调用、续接与终态。
-export async function modelProtocolFixture() {
+export async function modelProtocolFixture({ completionsReply } = {}) {
   const requests=[],errors=[],reasoningItems=[];let status=200,statusMessage='synthetic temporary error',withUsage=true,withReasoning=false,holdResult=false,releaseResult,answerNext=false;
   const server=createServer(async(req,res)=>{
     try {
@@ -10,13 +10,14 @@ export async function modelProtocolFixture() {
       if(status!==200){res.writeHead(status,{'content-type':'application/json'}).end(JSON.stringify({error:{type:'server_error',message:statusMessage}}));return;}
       const path=new URL(req.url,'http://synthetic').pathname;
       const api=path.endsWith('/responses')?'responses':path.endsWith('/v1/messages')?'anthropic':'completions';
+      const reply = api === 'completions' ? await completionsReply?.(body) : undefined;
       const inputs=body.messages??body.input;
       const last=inputs.findLast(item=>item.type!=='configuration_update');
       const finished=last?.role==='tool'||last?.type==='function_call_output'||last?.content?.some?.(p=>p.type==='tool_result');
       if(holdResult&&finished){holdResult=false;await new Promise(resolve=>releaseResult=resolve);}
-      const tool=(body.tools?.length||inputs.some(item=>item.type==='additional_tools'&&item.tools?.length))&&!finished&&!answerNext;answerNext=false;
-      const name='update_analysis_task',args={action:'route',task_id:null,expected_version:null,goal:'',question:null,options:[]},id='call_'+randomUUID().replaceAll('-','');
-      const text='合成模型已完成本轮调查并保留会话。';
+      const tool=reply ? Boolean(reply.name) : (body.tools?.length||inputs.some(item=>item.type==='additional_tools'&&item.tools?.length))&&!finished&&!answerNext;answerNext=false;
+      const name=reply?.name??'update_analysis_task',args=reply?.args??{action:'route',task_id:null,expected_version:null,goal:'',question:null,options:[]},id='call_'+randomUUID().replaceAll('-','');
+      const text=reply?.text??'合成模型已完成本轮调查并保留会话。';
       res.writeHead(200,{'content-type':'text/event-stream'});
       const emit=(value,event)=>res.write((event?'event: '+event+'\n':'')+'data: '+JSON.stringify(value)+'\n\n');
       if(api==='completions') {

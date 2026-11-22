@@ -1,9 +1,9 @@
 use data_agent::{
     modules::access,
-    persistence::MySqlPool,
+    persistence::{MySqlPool, receipts},
     types::{Result, id},
     use_cases::{
-        catalog_import, knowledge, personal_memory, query_workflow, semantic_prefill,
+        catalog_import, knowledge, model_calls, personal_memory, query_workflow, semantic_prefill,
         source_fanout, source_preparation,
     },
 };
@@ -124,7 +124,12 @@ pub fn start_session_cleanup(
         shutdown,
         "session_cleanup",
         |_| tokio::time::sleep(Duration::from_secs(60)),
-        |pool| async move { access::prune_sessions(&pool).await },
+        |pool| async move {
+            let sessions = access::prune_sessions(&pool).await?;
+            let receipts = receipts::prune_expired(&pool).await?;
+            let reservations = model_calls::release_abandoned_reservations(&pool).await?;
+            Ok(sessions || receipts || reservations)
+        },
     );
 }
 

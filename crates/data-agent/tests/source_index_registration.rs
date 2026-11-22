@@ -22,6 +22,7 @@ fn ctx() -> AccessContext {
         user_id: "source-index-registration".into(),
         space_id: "demo".into(),
         request_id: "source-index-registration".into(),
+        table_access: None,
     }
 }
 
@@ -133,7 +134,7 @@ async fn unified_consumer_projects_document_source_into_shared_collection() {
     for statement in [
         "DELETE FROM knowledge_index_jobs WHERE target_kind='source_excerpt' AND object_id='raw-registration-doc'",
         "DELETE FROM retrieval_source_projections WHERE source_id='raw-registration-doc'",
-        "DELETE FROM knowledge_versions WHERE object_id='raw-registration-doc'",
+        "UPDATE knowledge_revisions SET archived_body=NULL WHERE object_id='raw-registration-doc'",
         "DELETE FROM knowledge_objects WHERE id='raw-registration-doc'",
     ] {
         sqlx::query(statement).execute(&pool).await.unwrap();
@@ -142,7 +143,7 @@ async fn unified_consumer_projects_document_source_into_shared_collection() {
         .bind(document_id).bind(&ctx.space_id).bind("document").bind("登记回环文档").bind(1u64).bind("enabled")
         .bind(sqlx::types::Json(&document))
         .execute(&pool).await.unwrap();
-    sqlx::query("INSERT INTO knowledge_versions(object_id,version,body) VALUES(?,?,?)")
+    sqlx::query("INSERT INTO knowledge_revisions(object_id,version,archived_body) VALUES(?,?,?)")
         .bind(document_id)
         .bind(1u64)
         .bind(sqlx::types::Json(&document))
@@ -304,7 +305,7 @@ async fn unified_consumer_projects_document_source_into_shared_collection() {
     for statement in [
         "DELETE FROM knowledge_index_jobs WHERE target_kind='source_excerpt' AND object_id='raw-registration-doc'",
         "DELETE FROM retrieval_source_projections WHERE source_id='raw-registration-doc'",
-        "DELETE FROM knowledge_versions WHERE object_id='raw-registration-doc'",
+        "UPDATE knowledge_revisions SET archived_body=NULL WHERE object_id='raw-registration-doc'",
         "DELETE FROM knowledge_objects WHERE id='raw-registration-doc'",
     ] {
         sqlx::query(statement).execute(&pool).await.unwrap();

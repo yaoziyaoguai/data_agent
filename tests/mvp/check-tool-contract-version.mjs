@@ -19,8 +19,8 @@ const prefix = 'data_agent_test_' + randomBytes(8).toString('hex');
 const cases = [
   'delivery_preparation_longer_than_ttl_does_not_burn_an_undispatched_attempt',
   'delivery_preparation_maintains_claim_while_waiting_for_conversation_lock',
-  'historical_runs_and_receipts_remain_one_when_recovered_by_version_two_process',
-  'new_messages_use_the_explicit_version_independent_of_model_and_index_configuration',
+  'historical_receipts_keep_identity_when_recovery_uses_current_tools',
+  'fresh_messages_use_current_tools_independent_of_inherited_configuration',
   'registered_legacy_decisions_complete_within_contract_two_without_downgrading_new_state',
   'run_version_is_frozen_across_process_recovery',
 ].filter(name => !filter || name.includes(filter));

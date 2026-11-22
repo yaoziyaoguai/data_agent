@@ -57,7 +57,7 @@ try {
       source_facts: {complete: false, gap: '合成维护者明确指定'}, suggestion: {},
       human_override: {value: domain, edited_by: 'alice'}, review_state: 'confirmed'});
     const encoded = Buffer.from(JSON.stringify(object)).toString('hex');
-    h.sql(`UPDATE knowledge_objects SET body=CAST(CONVERT(0x${encoded} USING utf8mb4) AS JSON) WHERE id='${object.id}';UPDATE knowledge_versions SET body=CAST(CONVERT(0x${encoded} USING utf8mb4) AS JSON) WHERE object_id='${object.id}' AND version=${object.version};UPDATE retrieval_documents SET body=CAST(CONVERT(0x${encoded} USING utf8mb4) AS JSON) WHERE object_id='${object.id}' AND version=${object.version}`);
+    h.sql(`UPDATE knowledge_objects SET body=CAST(CONVERT(0x${encoded} USING utf8mb4) AS JSON) WHERE id='${object.id}';UPDATE knowledge_revisions SET archived_body=CAST(CONVERT(0x${encoded} USING utf8mb4) AS JSON) WHERE object_id='${object.id}' AND version=${object.version};UPDATE retrieval_documents SET body=CAST(CONVERT(0x${encoded} USING utf8mb4) AS JSON) WHERE object_id='${object.id}' AND version=${object.version}`);
     objects.push({object, domain});
   }
   await h.resumeWorker(); await until(() => objects.every(({object}) => indexed.has(object.id)), '正式消费者索引软排序合成条目', 120000);

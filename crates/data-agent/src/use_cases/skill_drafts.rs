@@ -1,11 +1,12 @@
 use crate::{
-    contracts,
     modules::{analysis, assets, conversations, queries, runtime},
     persistence::AppTx,
     types::{AccessContext, Error, Result, epoch},
 };
 use serde_json::{Value, json};
 use sqlx::MySqlPool;
+
+use super::context_authority::{self, AuthorityUse};
 
 fn text<'a>(value: &'a Value, key: &str) -> Result<&'a str> {
     value[key].as_str().ok_or(Error::new("invalid_input"))
@@ -110,15 +111,48 @@ async fn result_sources(pool: &MySqlPool, ctx: &AccessContext, evidence: &Value)
     Ok(())
 }
 
+async fn adopted_skill_authority(
+    tx: &mut AppTx<'_>,
+    ctx: &AccessContext,
+    cid: &str,
+    recovery_chain: &str,
+) -> Result<Value> {
+    let references = runtime::read_skill_sources_in_tx(tx, cid, recovery_chain).await?;
+    let ids = references
+        .iter()
+        .map(|entry| entry[0].as_str().expect("saved Skill ID").to_owned())
+        .collect::<Vec<_>>();
+    let assets = assets::read_enabled_in_tx(tx, ctx, &ids).await?;
+    let mut authority = context_authority::empty();
+    for reference in &references {
+        let id = reference[0].as_str().expect("saved Skill ID");
+        let asset = assets
+            .get(id)
+            .filter(|asset| asset["version"] == reference[1])
+            .ok_or(Error::new("stale_context"))?;
+        context_authority::merge(
+            &mut authority,
+            &super::personal_assets::skill_authority(asset),
+        )?;
+        if !context_authority::items(&authority["source_skills"]).contains(reference) {
+            authority["source_skills"]
+                .as_array_mut()
+                .expect("source Skill references")
+                .push(reference.clone());
+        }
+    }
+    Ok(authority)
+}
+
 pub async fn validate_sources(
     pool: &MySqlPool,
     ctx: &AccessContext,
     cid: &str,
-    message: &str,
+    input_identity: (&str, &str),
     input: &Value,
     checked: &mut super::context_authority::CheckedTextResults,
 ) -> Result<Value> {
-    contracts::validate("PrepareSkillDraftInput", input)?;
+    let (message, recovery_chain) = input_identity;
     let mut tx = AppTx::begin(pool).await?;
     let conversation = conversations::lock_conversation_in_tx(&mut tx, ctx, cid).await?;
     user_source_in_tx(
@@ -136,10 +170,12 @@ pub async fn validate_sources(
     )
     .await?;
     let evidence = evidence_in_tx(&mut tx, ctx, cid, &input["evidence_ids"], false).await?;
-    let authorities =
-        super::analysis_reports::evidence_authorities_in_tx(&mut tx, ctx, cid, &evidence).await?;
+    let authorities = [
+        super::analysis_reports::evidence_authority(&evidence)?,
+        adopted_skill_authority(&mut tx, ctx, cid, recovery_chain).await?,
+    ];
     tx.commit().await?;
-    checked.include_authorities(pool, ctx, &authorities).await?;
+    checked.include(pool, ctx, &authorities, false).await?;
     result_sources(pool, ctx, &evidence).await?;
     Ok(evidence)
 }
@@ -185,7 +221,7 @@ pub async fn prepare_in_tx(
     if evidence != *checked.evidence {
         return Err(Error::new("invalid_evidence"));
     }
-    let evidence_authority = super::analysis_reports::check_evidence_in_tx(
+    super::analysis_reports::check_evidence_in_tx(
         tx,
         ctx,
         &conversation.id,
@@ -193,11 +229,28 @@ pub async fn prepare_in_tx(
         checked.text_results,
     )
     .await?;
-    let mut authority =
-        super::context_authority::generated_text_authority_in_tx(tx, &run.id, input).await?;
-    super::context_authority::merge(&mut authority, &evidence_authority)?;
-    let authority = super::context_authority::to_persisted(&authority)?;
     let sources = super::analysis_reports::sources(&evidence)?;
+    let mut authority =
+        adopted_skill_authority(tx, ctx, &conversation.id, &run.recovery_chain_id).await?;
+    context_authority::validate_in_tx(
+        tx,
+        ctx,
+        &authority,
+        AuthorityUse::Text(checked.text_results),
+    )
+    .await?;
+    let declared = context_authority::from_sources(&sources);
+    for reference in context_authority::items(&declared["query_results"]) {
+        if !context_authority::items(&authority["source_query_results"]).contains(reference) {
+            authority["source_query_results"]
+                .as_array_mut()
+                .expect("source query references")
+                .push(reference.clone());
+        }
+    }
+    let skill_sources = (!context_authority::items(&authority["source_skills"]).is_empty()
+        || !context_authority::items(&authority["source_query_results"]).is_empty())
+        .then(|| json!({"source_skills": authority["source_skills"], "source_query_results": authority["source_query_results"]}));
     let references = json!(
         evidence
             .as_array()
@@ -218,24 +271,15 @@ pub async fn prepare_in_tx(
         input,
         &sources["knowledge_refs"],
         &references,
-        &authority,
+        skill_sources.as_ref(),
     )
     .await?;
-    super::context_authority::extend_run_in_tx(
+    super::context_authority::merge_run_in_tx(
         tx,
-        conversation,
         &run.id,
-        &sources["knowledge_refs"],
+        &super::context_authority::from_sources(&sources),
     )
     .await?;
-    super::context_authority::extend_result_dependencies_in_tx(
-        tx,
-        conversation,
-        &run.id,
-        &sources["result_dependencies"],
-    )
-    .await?;
-    super::context_authority::merge_run_in_tx(tx, &run.id, &authority).await?;
     Ok(reference)
 }
 
@@ -277,16 +321,13 @@ async fn check_text_in_tx(
     checked: &super::context_authority::CheckedTextResults,
 ) -> Result<()> {
     let evidence = check_pending_in_tx(tx, ctx, conversation, draft).await?;
+    let body = draft.body.as_ref().expect("pending draft body");
+    if body.get("skill_sources").is_some() {
+        super::personal_assets::validate_skill_in_tx(tx, ctx, body, checked).await?;
+    }
     super::analysis_reports::check_evidence_in_tx(tx, ctx, &conversation.id, &evidence, checked)
         .await?;
-    super::context_authority::validate_text_in_tx(
-        tx,
-        ctx,
-        &conversation.id,
-        draft.text_authority.as_ref().unwrap_or(&Value::Null),
-        checked,
-    )
-    .await
+    Ok(())
 }
 
 pub async fn read(pool: &MySqlPool, ctx: &AccessContext, draft_id: &str) -> Result<Value> {
@@ -315,17 +356,13 @@ pub async fn read(pool: &MySqlPool, ctx: &AccessContext, draft_id: &str) -> Resu
         return Ok(json!({"status":status,"reference":reference}));
     }
     let evidence = local?;
-    let mut authorities = super::analysis_reports::evidence_authorities_in_tx(
-        &mut tx,
-        ctx,
-        &conversation.id,
-        &evidence,
-    )
-    .await?;
-    authorities.push(draft.text_authority.clone().unwrap_or(Value::Null));
+    let authorities = [
+        super::analysis_reports::evidence_authority(&evidence)?,
+        super::personal_assets::skill_authority(draft.body.as_ref().expect("pending draft body")),
+    ];
     tx.commit().await?;
     let mut checked = super::context_authority::CheckedTextResults::default();
-    checked.include_authorities(pool, ctx, &authorities).await?;
+    checked.include(pool, ctx, &authorities, false).await?;
     if let Err(error) = result_sources(pool, ctx, &evidence).await {
         if !unavailable_source(&error) {
             return Err(error);
@@ -398,14 +435,6 @@ pub async fn confirm(pool: &MySqlPool, ctx: &AccessContext, input: &Value) -> Re
     if checked["status"] != "pending" {
         return Err(Error::new("not_available"));
     }
-    let mut source_tx = AppTx::begin(pool).await?;
-    let source_draft = assets::skill_drafts::read_in_tx(&mut source_tx, ctx, draft_id).await?;
-    let authority = source_draft.text_authority.clone().unwrap_or(Value::Null);
-    source_tx.commit().await?;
-    let mut checked_text = super::context_authority::CheckedTextResults::default();
-    checked_text
-        .include_authorities(pool, ctx, &[authority])
-        .await?;
     let mut tx = AppTx::begin(pool).await?;
     let conversation = conversations::lock_for_cleanup_in_tx(
         &mut tx,
@@ -418,7 +447,7 @@ pub async fn confirm(pool: &MySqlPool, ctx: &AccessContext, input: &Value) -> Re
         return super::personal_assets::project_receipt(pool, ctx, receipt).await;
     }
     let draft = assets::skill_drafts::read_in_tx(&mut tx, ctx, draft_id).await?;
-    check_text_in_tx(&mut tx, ctx, &conversation, &draft, &checked_text).await?;
+    check_pending_in_tx(&mut tx, ctx, &conversation, &draft).await?;
     let dependencies = draft.body.as_ref().ok_or(Error::new("not_available"))?["dependencies"]
         .as_array()
         .ok_or(Error::new("invalid_evidence"))?;
@@ -432,17 +461,14 @@ pub async fn confirm(pool: &MySqlPool, ctx: &AccessContext, input: &Value) -> Re
         return Err(Error::new("invalid_evidence"));
     }
     super::knowledge::check_refs_in_tx(&mut tx, ctx, &input["dependencies"]).await?;
-    let asset = assets::save_draft_in_tx(
-        &mut tx,
-        ctx,
-        input,
-        draft.body.as_ref().ok_or(Error::new("not_available"))?,
-        draft
-            .text_authority
-            .as_ref()
-            .ok_or(Error::new("stale_context"))?,
-    )
-    .await?;
+    let skill_sources = draft
+        .body
+        .as_ref()
+        .expect("pending draft body")
+        .get("skill_sources")
+        .cloned();
+    let asset =
+        assets::save_with_skill_sources_in_tx(&mut tx, ctx, input, false, skill_sources).await?;
     assets::skill_drafts::confirm_in_tx(&mut tx, ctx, draft_id, text(&asset, "id")?).await?;
     super::personal_memory::queue_in_tx(&mut tx, ctx, &asset, None, None).await?;
     tx.commit().await?;

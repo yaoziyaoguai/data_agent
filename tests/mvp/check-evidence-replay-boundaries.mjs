@@ -29,7 +29,16 @@ const begin = async (text, cid) => {
   const task = await invoke('update_analysis_task', {action: 'create', goal: text, options: [],
     conditions: {time_start: null, time_end: null, timezone: 'UTC', metric: null,
       channel: null, group_by: [], filters: [], knowledge_refs: [], notes: '', source_limits: null}});
-  assert.equal(task.receipt.source_context_ready, true);
+  const {task_id, condition_version} = task.receipt.data;
+  assert.equal(typeof task_id, 'string');
+  assert.equal(typeof condition_version, 'string');
+  const [active] = h.sql(`SELECT JSON_OBJECT('task_id',c.active_task_id,
+    'condition_version',CAST(r.version AS CHAR),'source_limit_type',JSON_TYPE(JSON_EXTRACT(r.body,'$.source_limits')))
+    FROM conversations c JOIN condition_revisions r
+      ON r.task_id=c.active_task_id AND r.version=c.active_task_condition_version
+    WHERE c.id='${run.conversation_id}'`);
+  assert.deepEqual(active, {task_id, condition_version, source_limit_type: 'NULL'},
+    '精读运行绑定的是已落库的明确不限源任务版本');
 };
 const ledger = input => h.sql(`SELECT JSON_OBJECT(
   'operation_id',operation_id,'origin_run_id',origin_run_id,
@@ -38,11 +47,21 @@ const ledger = input => h.sql(`SELECT JSON_OBJECT(
   'tool_contract_version',tool_contract_version,'fingerprint',arguments_fingerprint,
   'state',state,'receipt',receipt) FROM tool_calls
   WHERE conversation_id='${run.conversation_id}' AND sdk_tool_call_id='${input.sdk_tool_call_id}'`);
+const executeTool = async input => {
+  const response = await fetch(h.env.DATA_AGENT_API_URL + '/internal/data/tools', {
+    method: 'POST',
+    headers: {authorization: 'Bearer ' + h.env.DATA_AGENT_INTERNAL_TOKEN, 'content-type': 'application/json'},
+    body: JSON.stringify(input),
+  });
+  const wire = await response.text();
+  return {status: response.status, value: JSON.parse(wire), wire};
+};
 const invoke = async (name, args) => {
   const input = {run_id: run.run_id, lease_epoch: run.lease_epoch,
     sdk_tool_call_id: randomUUID(), tool_name: name, arguments: args, checkpoint: checkpoint()};
   const registered = ok(await h.internal('/internal/data/tool-calls', input));
-  const receipt = ok(await h.internal('/internal/data/tools', input));
+  const response = await executeTool(input);
+  const receipt = ok(response);
   validateContract('DataToolOutcome', receipt);
   assert.equal(receipt.operation_id, registered.operation_id);
   assert.equal(receipt.tool_name, name);
@@ -56,7 +75,7 @@ const invoke = async (name, args) => {
   assert.equal(saved[0].recovery_chain_id, run.recovery_chain_id);
   assert.equal(saved[0].tool_contract_version, 2);
   assert.deepEqual(saved[0].receipt, receipt, '保留Rust首次成功的最终序列化回执');
-  return {input, receipt, saved};
+  return {input, receipt, saved, wire: response.wire};
 };
 const rejectReplay = async (first, codes, label, forbidden) => {
   // 原封重传，不换sdk/operation，不修改ref、revision、task_ref或checkpoint。
@@ -273,6 +292,43 @@ try {
       '当前活动任务范围真实收紧后拒绝原' + first.input.tool_name + '回执，省略task_ref仍重核且不改账本',
       [[...allowedBody].slice(0, 8).join('')]);
   }
+  retire();
+
+  const table = ok(await h.request('/knowledge/table-demo_order_detail'));
+  const description = table.entries.find(entry => entry.path === 'description');
+  const ddl = table.entries.find(entry => entry.path === 'ddl');
+  assert.equal(table.source_id, 'schema');
+  assert.equal(description.source_facts.source_id, 'business-guide');
+  assert.equal(ddl.source_facts.source_id, 'schema');
+  await begin('先核对业务指南中的表说明，再切换为只用表结构来源。');
+  const platformScope = id => ({allowed_sources: [{kind: 'platform', id}],
+    origin_message_ids: [run.message_id]});
+  const sourceTask = (await invoke('update_analysis_task', {action: 'create', goal: '合成表的条目限源',
+    conditions: {...conditions, source_limits: platformScope('business-guide')}, options: []})).receipt.data;
+  const readTableEntry = entry => invoke('read_knowledge', {items: [{kind: 'knowledge',
+    ref: {object_id: table.id, version: table.version, path: entry.path}, limit: 8}]});
+  const descriptionRead = await readTableEntry(description);
+  assertKnowledgePage(descriptionRead, description.effective_value);
+  const registered = ok(await h.internal('/internal/data/tool-calls', descriptionRead.input));
+  assert.equal(registered.operation_id, descriptionRead.receipt.operation_id);
+  const replay = await executeTool(descriptionRead.input);
+  ok(replay);
+  assert.equal(replay.wire, descriptionRead.wire, '业务指南仍可用时返回同一操作的原始回执字节');
+  assert.deepEqual(ledger(descriptionRead.input), descriptionRead.saved);
+  checks.push('表说明沿直接来源业务指南交付，相同范围重放保持原回执字节及原操作');
+
+  const schemaOnly = platformScope('schema');
+  const changedSourceTask = (await invoke('update_analysis_task', {action: 'revise', task_id: sourceTask.task_id,
+    expected_version: sourceTask.condition_version, goal: '', options: [],
+    condition_patch: {set: {source_limits: schemaOnly}, unset: []}})).receipt.data;
+  assert.equal(changedSourceTask.task_id, sourceTask.task_id);
+  assert.notEqual(changedSourceTask.condition_version, sourceTask.condition_version);
+  const changedSourceConditions = (await invoke('read_analysis_task', {task_id: sourceTask.task_id})).receipt.data.conditions;
+  assert.deepEqual(changedSourceConditions.source_limits, schemaOnly);
+  assertKnowledgePage(await readTableEntry(ddl), ddl.effective_value);
+  await rejectReplay(descriptionRead, ['source_not_allowed', 'stale_context'],
+    '仅允许表结构来源时新读DDL成功，表说明仍不得借用同一表头的来源重放',
+    [descriptionRead.receipt.data.items[0].content]);
   retire();
 
   assert.equal(h.sql("SELECT JSON_OBJECT('n',COUNT(*)) FROM model_call_attempts")[0].n, 0,

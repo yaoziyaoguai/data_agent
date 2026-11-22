@@ -24,6 +24,7 @@ fn context(request_id: &str) -> AccessContext {
         user_id: "alice".into(),
         space_id: "demo".into(),
         request_id: request_id.into(),
+        table_access: None,
     }
 }
 

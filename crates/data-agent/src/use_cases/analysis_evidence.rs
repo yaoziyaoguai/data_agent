@@ -53,21 +53,8 @@ pub(super) async fn validate_sources_and_results(
         )?,
     )
     .await?;
-    super::context_authority::validate_condition_text_in_tx(
-        &mut tx,
-        ctx,
-        cid,
-        input["task_id"].as_str().expect("validated task"),
-        epoch(
-            input["condition_version"]
-                .as_str()
-                .expect("validated version"),
-        )?,
-        &conditions,
-        checked_text,
-    )
-    .await?;
-    super::knowledge::check_refs_in_tx(&mut tx, ctx, &conditions["knowledge_refs"]).await?;
+    super::knowledge::check_adoptable_refs_in_tx(&mut tx, ctx, &conditions["knowledge_refs"])
+        .await?;
     tx.commit().await?;
     let mut knowledge_refs = conditions["knowledge_refs"]
         .as_array()
@@ -115,11 +102,7 @@ pub(super) async fn validate_sources_and_results(
         let mut tx = AppTx::begin(pool).await?;
         let just_submitted =
             queries::is_confirmation_message_in_tx(&mut tx, ctx, qid, message_id).await?;
-        let query_authority = queries::text_authority_in_tx(&mut tx, ctx, qid).await?;
         tx.commit().await?;
-        checked_text
-            .include_authorities(pool, ctx, &[query_authority])
-            .await?;
         if just_submitted {
             return Err(Error::new("invalid_evidence"));
         }
@@ -127,6 +110,12 @@ pub(super) async fn validate_sources_and_results(
         if result["result_ref"] != reference["result_ref"] {
             return Err(Error::new("invalid_evidence"));
         }
+        checked_text.record_result(
+            qid,
+            reference["result_ref"]
+                .as_str()
+                .expect("validated result ref"),
+        );
         query_coverage.push(json!({"query_id":qid,"result_ref":result["result_ref"],
             "saved_row_count":result["saved_row_count"],"saved_result_complete":result["saved_result_complete"],
             "result_complete":result["result_complete"],"received_rows":result["rows"].as_array().ok_or(Error::new("result_unavailable"))?.len()}));
@@ -255,24 +244,7 @@ pub async fn save_in_tx(
         )?,
     )
     .await?;
-    let condition_authority = super::context_authority::validate_condition_text_in_tx(
-        tx,
-        ctx,
-        cid,
-        input["task_id"]
-            .as_str()
-            .ok_or(Error::new("invalid_input"))?,
-        epoch(
-            input["condition_version"]
-                .as_str()
-                .ok_or(Error::new("invalid_input"))?,
-        )?,
-        &conditions,
-        checked_text,
-    )
-    .await?;
-    super::context_authority::merge_run_in_tx(tx, run_id, &condition_authority).await?;
-    super::knowledge::check_refs_in_tx(tx, ctx, &conditions["knowledge_refs"]).await?;
+    super::knowledge::check_adoptable_refs_in_tx(tx, ctx, &conditions["knowledge_refs"]).await?;
     for reference in sources["result_dependencies"]
         .as_array()
         .ok_or(Error::new("invalid_evidence"))?
@@ -298,7 +270,6 @@ pub async fn save_in_tx(
         {
             return Err(Error::new("invalid_evidence"));
         }
-        super::knowledge::check_refs_in_tx(tx, ctx, &query["knowledge_refs"]).await?;
         let query_authority = super::query_workflow::validate_text_in_tx(
             tx,
             ctx,
@@ -312,17 +283,13 @@ pub async fn save_in_tx(
         // 引用成功结果也继承生成该查询时的来源，不能只留下结果自身的可读权限。
         super::context_authority::merge_run_in_tx(tx, run_id, &query_authority).await?;
     }
-    super::knowledge::check_refs_in_tx(tx, ctx, &sources["knowledge_refs"]).await?;
-    super::context_authority::extend_run_in_tx(tx, conv, run_id, sources).await?;
-    super::context_authority::extend_result_dependencies_in_tx(
+    super::knowledge::check_adoptable_refs_in_tx(tx, ctx, &sources["knowledge_refs"]).await?;
+    super::context_authority::merge_run_in_tx(
         tx,
-        conv,
         run_id,
-        &sources["result_dependencies"],
+        &super::context_authority::from_sources(sources),
     )
     .await?;
-    let authority =
-        super::context_authority::generated_text_authority_in_tx(tx, run_id, sources).await?;
     analysis::save_evidence_in_tx(
         tx,
         &tasks,
@@ -332,7 +299,6 @@ pub async fn save_in_tx(
         input,
         analysis::EvidenceSaveSources {
             references: sources,
-            text_authority: &authority,
         },
     )
     .await

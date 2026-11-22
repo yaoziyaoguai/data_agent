@@ -40,7 +40,7 @@ Data Agent 是面向产品、算法、数据分析和数据开发的工作台。
 
 其他用户发现口径有误，可以先保存私人纠错草稿，核对共享内容后提交建议。负责人可驳回，或接受后核对、编辑并保存。接受建议不会自动改写正式语义。页面展示对象负责人和本人可做的操作。
 
-Data Agent 的语义角色与 Datasight 的查询、取数和 SQL 执行权限分别校验。流程与接口见[语义维护设计](docs/semantic-retrieval-design.md#117-跨用户纠错与共享语义维护)。
+Data Agent 的语义维护角色与平台表权限分别校验。语义检索和详情使用平台为当前用户返回的可读表集合，相关字段、指标、关系及查询案例沿表授权。平台在提交 SQL 和读取已保存结果时核对当前权限。本地实现由合成平台提供，真实 Datasight 接入仍待验证。[语义维护设计](docs/semantic-retrieval-design.md#117-跨用户纠错与共享语义维护)
 
 ![当前语义管理页面：按表浏览合成语音链路资料，查看业务含义、结构化规则与维护入口](docs/images/semantic-management.jpg)
 
@@ -94,7 +94,7 @@ Data Agent 的语义角色与 Datasight 的查询、取数和 SQL 执行权限�
 
 ![共享语义与个人记忆分别检索，回源校验后供当前对话使用；报告和个人方法保留来源，再次读取时重新核验](docs/images/knowledge-recall.png)
 
-*检索候选回源核对权限、版本与状态。保存为报告或个人方法后，来源约束继续保留；来源失效时隐藏相关正文。*
+*检索候选回源核对权限、版本与状态。本人可查看原聊天和手动保存的个人资产。再次采用有来源的记忆和方法时，系统核对显式引用；报告与查询结果按各自的来源与平台权限读取。*
 
 这三类内容用途不同：
 
@@ -220,13 +220,13 @@ Ctrl+C 关闭应用进程，数据库与会话保留；结束后可用 `make inf
 
 超级维护者可从主导航“模型配置”添加服务地址、API Key和具体Model ID，管理能力、启停和新对话默认值。支持Pi原生Chat Completions、Responses、Anthropic Messages，兼容服务不要求Model ID已在SDK目录中；普通用户仅选择已启用模型。配置加密保存，修改影响新消息，旧消息与恢复沿原版本；停用阻止后续请求。操作与主密钥备份见[接入聊天模型](docs/development.md#通过管理页接入聊天模型)。
 
-本地服务只监听回环地址。`.env.example` 和 `apps/memory/config.example.json` 提供配置格式；凭据、运行数据库、会话和日志保存在被 Git 忽略的本地目录。`development.py` 默认工具合同 1、公共正文策略 `archive`；当前本地候选显式使用 `--tool-contract-version 2 --public-content-retention latest_only`。启动方式、端口、恢复及索引重建见[开发指南](docs/development.md)。
+本地服务只监听回环地址。`.env.example` 和 `apps/memory/config.example.json` 提供配置格式。凭据、运行数据库、会话和日志保存在被 Git 忽略的本地目录。新运行统一使用现行工具合同，公共正文默认采用 `archive`。试用实例可以显式选择 `--public-content-retention latest_only`。启动方式、端口、恢复及索引重建见[开发指南](docs/development.md)。
 
 本轮可用性收口的免费工程实例应使用独立运行目录、模拟模型和词法检索，并显式关闭维护收费通道；下面的命令会启动自己的 Worker，不用于恢复含收费待办的旧试用库：
 
 ```sh
 python3 scripts/development.py --model mock --prefill disabled --memory builtin --retrieval lexical \
-  --tool-contract-version 2 --public-content-retention latest_only \
+  --public-content-retention latest_only \
   --runtime-dir .local/checks/usability-local/runtime --port-offset 30000
 ```
 

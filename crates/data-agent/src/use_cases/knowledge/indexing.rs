@@ -19,6 +19,7 @@ pub async fn process_index(pool: &MySqlPool) -> Result<bool> {
         user_id: "synthetic-index".into(),
         space_id: "demo".into(),
         request_id: id(),
+        table_access: None,
     };
     let target = if vector {
         retrieval::vector::index_target().await?
@@ -84,6 +85,7 @@ pub async fn process_index(pool: &MySqlPool) -> Result<bool> {
                         user_id: "synthetic-raw-index".into(),
                         space_id: space,
                         request_id: job["lease_epoch"].as_str().unwrap_or("").to_owned(),
+                        table_access: None,
                     },
                     &alias,
                     Some(revision),

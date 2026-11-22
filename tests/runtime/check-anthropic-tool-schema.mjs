@@ -8,10 +8,10 @@ import schema from '../../packages/contracts/schema.json' with {type: 'json'};
 const provider = await modelProtocolFixture();
 const checks = [];
 try {
-  for (const version of [1, 2]) for (const api of ['anthropic-messages', 'openai-completions']) {
-    const definitions = dataTools({run: {tool_contract_version: version}}, null, '').tools;
+  for (const api of ['anthropic-messages', 'openai-completions']) {
+    const definitions = dataTools({run: {tool_contract_version: 2}}, null, '').tools;
     const definition = definitions.find(tool => tool.name === 'update_analysis_task');
-    const answerName = version === 1 ? 'present_analysis_answer' : 'prepare_analysis_answer';
+    const answerName = 'prepare_analysis_answer';
     const answer = definitions.find(tool => tool.name === answerName);
     const search = definitions.find(tool => tool.name === 'search_knowledge');
     const original = JSON.stringify(definition.parameters);
@@ -26,7 +26,7 @@ try {
     if (api === 'anthropic-messages') {
       const projected = tool.input_schema;
       for (const name of ['action', 'conditions', 'condition_patch', 'task_id', 'expected_version']) assert.ok(projected.properties[name], `${name}必须进入实际Anthropic HTTP`);
-      assert.deepEqual(projected.required, version === 1 ? ['action', 'options'] : ['action']);
+      assert.deepEqual(projected.required, ['action']);
       for (const name of ['conditions', 'condition_patch', 'clarifications', 'resolved_clarification_ids']) {
         assert.equal(projected.properties[name].description, schema.$defs.AnalysisUpdateFields.properties[name].description);
       }
@@ -34,20 +34,18 @@ try {
       assert.match(answerTool.description, /唯一小写name/);
       assert.match(answerTool.description, /observation_cutoff\/data_batch/);
       assert.match(answerTool.description, /同名角色用field_ref对齐/);
-      if (version === 2) {
-        assert.ok(JSON.stringify(projected).includes(schema.$defs.SourceKey.description), '独立工具须带来源键解释');
-        const searchTool = provider.requests.at(-1).body.tools.find(tool => tool.name === 'search_knowledge');
-        assert.ok(searchTool.input_schema.properties.source_selection, '非strict投影必须保留精确原文选择入口');
-        assert.match(searchTool.description, /version取object_version/);
-        assert.match(searchTool.description, /不扩许可/);
-      }
+      assert.ok(JSON.stringify(projected).includes(schema.$defs.SourceKey.description), '独立工具须带来源键解释');
+      const searchTool = provider.requests.at(-1).body.tools.find(tool => tool.name === 'search_knowledge');
+      assert.ok(searchTool.input_schema.properties.source_selection, '非strict投影必须保留精确原文选择入口');
+      assert.match(searchTool.description, /version取object_version/);
+      assert.match(searchTool.description, /不扩许可/);
       assert.ok(!projected.required.includes('conditions'), 'create分支required不能提升为无条件required');
       assert.ok(!projected.required.includes('task_id'), 'route分支required不能提升为无条件required');
     } else {
       assert.deepEqual(tool.function.parameters, definition.parameters, 'OpenAI保留完整原约束，不追加重复字段树');
     }
     assert.equal(JSON.stringify(definition.parameters), original, '协议投影不能修改Node权威工具合同');
-    checks.push({version, api, properties: Object.keys(tool.input_schema?.properties ?? {}), required: tool.input_schema?.required ?? []});
+    checks.push({api, properties: Object.keys(tool.input_schema?.properties ?? {}), required: tool.input_schema?.required ?? []});
   }
   assert.deepEqual(provider.errors, []);
   console.log(JSON.stringify({passed: true, checks, officialRequests: 0, limitation: 'Anthropic非strict仍不表达根if/then组合约束；Node/Rust原Schema继续执行权威校验。'}));

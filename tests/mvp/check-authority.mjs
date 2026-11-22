@@ -52,9 +52,11 @@ try {
   checks.push({name:'未交付给模型的表停用不阻断当前会话模型调用',passed:true});
   const knowledge = (await h.request("/knowledge/table-demo_order_detail"))
     .value;
-  const used = {run_id:run.run_id,lease_epoch:run.lease_epoch,sdk_tool_call_id:randomUUID(),tool_name:'read_knowledge',arguments:{object_id:knowledge.id},checkpoint:exportCheckpoint(SessionManager.inMemory('/synthetic/data-agent'))};
+  const used = {run_id:run.run_id,lease_epoch:run.lease_epoch,sdk_tool_call_id:randomUUID(),tool_name:'read_knowledge',arguments:{items:[{kind:'knowledge',ref:{object_id:knowledge.id,version:knowledge.version,path:'ddl'}}]},checkpoint:exportCheckpoint(SessionManager.inMemory('/synthetic/data-agent'))};
   assert.equal((await h.internal('/internal/data/tool-calls',used)).status,200);
-  assert.equal((await h.internal('/internal/data/tools',used)).status,200);
+  const read = await h.internal('/internal/data/tools',used);
+  assert.equal(read.status,200,JSON.stringify(read.value));
+  assert.equal(read.value.data.items[0].state,'ok');
 
   assert.equal(
     (
@@ -65,25 +67,18 @@ try {
     ).status,
     200,
   );
-  assert.equal(
-    (await h.internal("/internal/model/send", b)).value.code,
-    "stale_context",
-  );
-  assert.equal(
-    (
-      await h.internal("/internal/model/reserve", {
-        ...reserve,
-        call_attempt_id: randomUUID(),
-      })
-    ).value.code,
-    "stale_context",
-  );
+  const staleRead = await h.internal('/internal/data/tools', used);
+  assert.notEqual(staleRead.status, 200, '旧回执不能再次交付失效表的正文');
+  assert.equal((await h.internal('/internal/model/send', b)).status, 200);
+  assert.equal((await h.internal('/internal/model/reserve', {
+    ...reserve, call_attempt_id: randomUUID(),
+  })).status, 200);
   const ledger = h.sql(
     `SELECT JSON_OBJECT('state',state) FROM model_call_attempts WHERE id='${b.call_attempt_id}'`,
   )[0];
-  assert.equal(ledger.state, "reserved");
+  assert.equal(ledger.state, "issued");
   checks.push({
-    name: "运行中知识停用后reserve/send拒绝，已预留额度保留且未发送provider HTTP",
+    name: "知识停用拒绝旧正文回执，模型调用许可继续沿原账本登记",
     passed: true,
   });
   await h.request(
@@ -128,14 +123,23 @@ try {
   assert.equal((await h.internal("/internal/data/tool-calls",saveInput)).status,200);
   const saved=await h.internal("/internal/data/tools",saveInput);assert.equal(saved.status,200);
   const asset=saved.value.data;
-  const snapshot=h.sql(`SELECT authority_snapshot FROM agent_runs WHERE id='${next.run_id}'`)[0];
-  assert.ok(snapshot.memories.some(v=>v[0]===asset.id));
+  const memoryInput = {...input, sdk_tool_call_id:randomUUID(), tool_name:'read_knowledge',
+    arguments:{items:[{kind:'memory',asset_ref:{id:asset.id,version:asset.version},part:'body'}]}};
+  assert.equal((await h.internal('/internal/data/tool-calls',memoryInput)).status,200);
+  const visibleMemory=await h.internal('/internal/data/tools',memoryInput);
+  assert.equal(visibleMemory.status,200,JSON.stringify(visibleMemory.value));
+  assert.equal(visibleMemory.value.data.items[0].asset.body,'默认渠道=store');
   const checkpoint=h.sql(`SELECT checkpoint FROM pi_checkpoints WHERE recovery_chain_id='${next.recovery_chain_id}'`)[0];
-  assert.ok(checkpoint.authority_snapshot.memories.some(v=>v[0]===asset.id));
-  await h.request('/assets/'+asset.id+'/disable',{operation_id:randomUUID(),expected_version:asset.version});
+  assert.ok(checkpoint.authority_snapshot.memories.some(v=>v[0]===asset.id&&v[1]===asset.version));
+  assert.equal((await h.request('/assets/'+asset.id+'/disable',{operation_id:randomUUID(),expected_version:asset.version})).status,200);
+  for(const invocation of [saveInput,memoryInput]) {
+    const replay=await h.internal('/internal/data/tools',invocation);
+    assert.equal(JSON.stringify(replay.value).includes('默认渠道=store'),false,`${invocation.tool_name} 旧回执不再交付已停用记忆正文`);
+  }
+  checks.push({name:'本轮新memory可实际读取，停用后原保存与原读取回执均隐藏正文',passed:true});
+
   const nextBinding={run_id:next.run_id,lease_epoch:next.lease_epoch,call_attempt_id:randomUUID(),parameters_fingerprint:'b'.repeat(64),input_tokens_upper:profile.input_limit,output_tokens_max:profile.output_limit};
-  assert.equal((await h.internal('/internal/model/reserve',nextBinding)).value.code,'stale_context');
-  checks.push({name:'本轮新memory进入run与检查点清单，停用后立即拒绝下一模型调用',passed:true});
+  assert.equal((await h.internal('/internal/model/reserve',nextBinding)).status,200);
   h.releaseRun(next.run_id);
   h.sql(`UPDATE agent_runs SET state='interrupted' WHERE id='${next.run_id}';UPDATE conversations SET lease_owner=NULL,lease_until=NULL WHERE id='${cid}';UPDATE background_jobs SET state='queued',lease_owner=NULL,lease_until=NULL WHERE message_id='${next.message_id}';`);
   await h.resumeWorker();

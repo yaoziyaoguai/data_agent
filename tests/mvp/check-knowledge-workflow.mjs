@@ -27,7 +27,7 @@ const command = (version) => ({
 });
 try {
   await h.pauseWorker();
-  h.sql("DELETE FROM knowledge_index_jobs;DELETE FROM knowledge_versions;DELETE FROM knowledge_revisions;DELETE FROM knowledge_objects;DELETE FROM source_current;DELETE FROM source_revisions;DELETE FROM source_heads;DELETE FROM source_snapshots;");
+  h.sql("DELETE FROM knowledge_index_jobs;DELETE FROM knowledge_revisions;DELETE FROM knowledge_objects;DELETE FROM source_current;DELETE FROM source_revisions;DELETE FROM source_heads;");
   const importCommands=[1,2].map(()=>({operation_id:randomUUID()}));
   await h.resumeSourceSyncWorker(2);
   const imports=await Promise.all(importCommands.map(command=>synchronizeSources(h,command.operation_id)));
@@ -38,9 +38,9 @@ try {
   assert.deepEqual(platformHeads.map(v=>v.table_id),expectedTables);
   // 血缘修订后的合成平台元数据为第2版；来源快照仍从各自首版开始。
   assert.ok(platformHeads.every(v=>v.version===2));
-  const snapshots=()=>h.sql("SELECT JSON_OBJECT('id',source_id,'version',version) FROM source_snapshots ORDER BY source_id,version");
+  const snapshots=()=>h.sql("SELECT JSON_OBJECT('id',source_id,'version',version) FROM (SELECT source_id,version,body,archive_complete AS complete FROM source_revisions WHERE body IS NOT NULL) archive_rows ORDER BY source_id,version");
   assert.deepEqual(snapshots(),[...['schema','etl','business-guide','semantic-catalog'],...platformHeads.map(v=>v.id)].sort().map(id=>({id,version:1})));
-  const initialVersions=h.sql("SELECT JSON_OBJECT('heads',(SELECT COUNT(*) FROM knowledge_objects),'versions',(SELECT COUNT(*) FROM knowledge_versions))")[0];
+  const initialVersions=h.sql("SELECT JSON_OBJECT('heads',(SELECT COUNT(*) FROM knowledge_objects),'versions',(SELECT COUNT(*) FROM (SELECT object_id,version,archived_body AS body FROM knowledge_revisions WHERE archived_body IS NOT NULL) archive_rows))")[0];
   assert.ok(initialVersions.heads>20);assert.equal(initialVersions.versions,initialVersions.heads);
   const initialObjects=h.sql("SELECT JSON_OBJECT('id',id,'version',version,'state',state,'body',body) FROM knowledge_objects ORDER BY id");
   const initialSnapshots=snapshots();
@@ -60,7 +60,7 @@ try {
   assert.deepEqual(snapshots(),initialSnapshots);
   assert.deepEqual(h.sql("SELECT JSON_OBJECT('id',id,'version',version,'state',state,'body',body) FROM knowledge_objects ORDER BY id"),initialObjects);
   assert.deepEqual(h.sql("SELECT JSON_OBJECT('id',id,'object_id',object_id,'version',expected_version) FROM prefill_attempts ORDER BY id"),initialJobs);
-  assert.equal(h.sql("SELECT JSON_OBJECT('n',COUNT(*)) FROM knowledge_versions")[0].n,initialVersions.versions);
+  assert.equal(h.sql("SELECT JSON_OBJECT('n',COUNT(*)) FROM (SELECT object_id,version,archived_body AS body FROM knowledge_revisions WHERE archived_body IS NOT NULL) archive_rows")[0].n,initialVersions.versions);
   await h.resumeWorker();
   checks.push({name:'并发首次同步允许明确CAS冲突；四个内置来源和五个平台来源唯一，原operation保持回执及基线、新采集不增加版本或待办',passed:true,imports:importCommands.map((command,index)=>({command,response:imports[index]}))});
   const first = await h.request("/knowledge");
@@ -141,7 +141,7 @@ try {
   assert.equal(table.entries.find(entry => entry.entry_id === 'description').effective_value, input.value);
   assert.equal(table.name, catalogOnlyObject.name);
   assert.equal((await h.request('/sources/semantic-catalog')).value.version, '2');
-  assert.deepEqual(h.sql("SELECT JSON_OBJECT('id',source_id,'version',version) FROM source_snapshots WHERE source_id IN ('schema','etl','business-guide') ORDER BY source_id"), ['business-guide', 'etl', 'schema'].map(id => ({ id, version: 1 })));
+  assert.deepEqual(h.sql("SELECT JSON_OBJECT('id',source_id,'version',version) FROM (SELECT source_id,version,body,archive_complete AS complete FROM source_revisions WHERE body IS NOT NULL) archive_rows WHERE source_id IN ('schema','etl','business-guide') ORDER BY source_id"), ['business-guide', 'etl', 'schema'].map(id => ({ id, version: 1 })));
   const afterCatalog = table;
   const catalogJobs = h.sql("SELECT JSON_OBJECT('id',id,'object_id',object_id,'version',expected_version) FROM prefill_attempts ORDER BY id");
   assert.equal((await synchronizeSources(h)).value.status, 'completed');
@@ -165,7 +165,7 @@ try {
   assert.ok(concurrentSync.every(v=>v.status===200&&(v.value.status==='completed'||v.value.status==='failed'&&v.value.error_code==='version_conflict')),JSON.stringify(concurrentSync));
   table = (await h.request("/knowledge/" + id)).value;
   assert.equal(BigInt(table.version),BigInt(filled.value.version)+1n);
-  assert.deepEqual(h.sql("SELECT JSON_OBJECT('version',version) FROM source_snapshots WHERE source_id='schema' ORDER BY version"),[{version:1},{version:2}]);
+  assert.deepEqual(h.sql("SELECT JSON_OBJECT('version',version) FROM (SELECT source_id,version,body,archive_complete AS complete FROM source_revisions WHERE body IS NOT NULL) archive_rows WHERE source_id='schema' ORDER BY version"),[{version:1},{version:2}]);
   assert.equal(table.source_version, "2");
   assert.equal(
     table.entries.find((e) => e.entry_id === "description").effective_value,
@@ -481,9 +481,8 @@ try {
   const currentMetric = (await h.request("/knowledge/" + metricId)).value;
   assert.deepEqual(currentMetric.entries.find(entry => entry.entry_id === "definition")
     .effective_structure.table, { object_id: id, version: table.version });
-  const queryAuthority = h.sql(`SELECT text_authority FROM query_requests WHERE id='${stale.id}'`)[0];
-  assert.ok(queryAuthority.knowledge.some(([objectId, version]) => objectId === id && version === table.version));
-  assert.deepEqual(queryAuthority.memories, []);
+  const queryReferences = h.sql(`SELECT knowledge_refs FROM query_requests WHERE id='${stale.id}'`)[0];
+  assert.ok(queryReferences.some(ref => ref.object_id === currentMetric.id && ref.version === currentMetric.version));
   const queryState = () => h.sql(`SELECT JSON_OBJECT('confirmation',confirmation_state,'execution',execution_state,'key',confirmation_key,'lease',lease_epoch) FROM query_requests WHERE id='${stale.id}'`)[0];
   const beforeDisable = queryState();
   assert.equal(beforeDisable.key, null);

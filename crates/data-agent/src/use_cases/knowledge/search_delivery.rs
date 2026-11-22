@@ -272,38 +272,17 @@ pub(super) async fn assemble_search_in_tx(
                 .await?;
                 &resolved
             };
-            let documents = records
-                .sources
-                .iter()
-                .filter(|(kind, _)| kind == "document")
-                .map(|(_, id)| id.clone())
-                .collect::<Vec<_>>();
             let platform = records
                 .sources
                 .iter()
-                .filter(|(kind, _)| kind == "platform")
                 .map(|(_, id)| id.clone())
                 .collect::<Vec<_>>();
-            let mut sources = Vec::new();
-            for chunk in documents.chunks(50) {
-                for meta in
-                    knowledge::candidate_meta_in_tx(&mut coverage_tx, ctx, chunk, None).await?
-                {
-                    if meta["kind"] == "document" && meta["state"] == "enabled" {
-                        sources.push((
-                            "document".to_owned(),
-                            meta["id"].as_str().unwrap().to_owned(),
-                            epoch(meta["version"].as_str().unwrap_or(""))?,
-                        ));
-                    }
-                }
-            }
-            sources.extend(
+            let sources =
                 ingestion::source_versions_in_tx(&mut coverage_tx, &ctx.space_id, &platform)
                     .await?
                     .into_iter()
-                    .map(|(id, version)| ("platform".to_owned(), id, version)),
-            );
+                    .map(|(id, version)| ("platform".to_owned(), id, version))
+                    .collect::<Vec<_>>();
             if sources.len() != records.sources.len() {
                 return Ok::<_, Error>(false);
             }

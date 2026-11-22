@@ -1,6 +1,6 @@
 use crate::{
-    persistence::AppTx,
-    types::{AccessContext, Error, Result, epoch, fingerprint},
+    persistence::{AppTx, receipts::Operation},
+    types::{AccessContext, Error, Result, epoch},
 };
 use serde_json::Value;
 use sqlx::Row;
@@ -13,15 +13,9 @@ pub async fn begin_in_tx(
     let key = input["input"]["operation_id"]
         .as_str()
         .ok_or(Error::new("invalid_input"))?;
-    sqlx::query("INSERT INTO semantic_correction_operations(space_id,owner_id,operation_id,fingerprint,receipt) VALUES(?,?,?,?,CAST('null' AS JSON)) ON DUPLICATE KEY UPDATE operation_id=VALUES(operation_id)")
-        .bind(&ctx.space_id).bind(&ctx.user_id).bind(key).bind(fingerprint(input)).execute(tx.connection()).await?;
-    let row=sqlx::query("SELECT fingerprint,receipt FROM semantic_correction_operations WHERE space_id=? AND owner_id=? AND operation_id=? FOR UPDATE")
-        .bind(&ctx.space_id).bind(&ctx.user_id).bind(key).fetch_one(tx.connection()).await?;
-    if row.get::<String, _>("fingerprint") != fingerprint(input) {
-        return Err(Error::new("idempotency_conflict"));
-    }
-    let value = row.get::<sqlx::types::Json<Value>, _>("receipt").0;
-    Ok(if value.is_null() { None } else { Some(value) })
+    Operation::new(ctx, "semantic_correction", key, input)
+        .begin(tx)
+        .await
 }
 pub async fn record_in_tx(
     tx: &mut AppTx<'_>,
@@ -29,9 +23,12 @@ pub async fn record_in_tx(
     input: &Value,
     value: &Value,
 ) -> Result<()> {
-    sqlx::query("UPDATE semantic_correction_operations SET receipt=? WHERE space_id=? AND owner_id=? AND operation_id=?")
-        .bind(sqlx::types::Json(value)).bind(&ctx.space_id).bind(&ctx.user_id).bind(input["input"]["operation_id"].as_str()).execute(tx.connection()).await?;
-    Ok(())
+    let key = input["input"]["operation_id"]
+        .as_str()
+        .expect("validated operation");
+    Operation::new(ctx, "semantic_correction", key, input)
+        .complete(tx, value)
+        .await
 }
 pub async fn read_in_tx(
     tx: &mut AppTx<'_>,
@@ -59,9 +56,25 @@ pub async fn page_in_tx(
     managed: &[String],
     after: Option<&str>,
 ) -> Result<Vec<Value>> {
-    let ids = serde_json::to_string(managed).map_err(|_| Error::new("invalid_input"))?;
-    let rows=sqlx::query("SELECT body FROM semantic_corrections WHERE space_id=? AND id>? AND (?=1 OR submitter_id=? OR JSON_CONTAINS(CAST(? AS JSON),JSON_QUOTE(object_id))) ORDER BY id LIMIT 51")
-        .bind(&ctx.space_id).bind(after.unwrap_or("")).bind(admin).bind(&ctx.user_id).bind(ids).fetch_all(tx.connection()).await?;
+    let mut sql = sqlx::QueryBuilder::new(
+        "SELECT c.body FROM semantic_corrections c JOIN knowledge_objects k ON k.id=c.object_id AND k.space_id=c.space_id WHERE c.space_id=",
+    );
+    sql.push_bind(&ctx.space_id)
+        .push(" AND c.id>")
+        .push_bind(after.unwrap_or(""))
+        .push(" AND (")
+        .push_bind(admin)
+        .push("=1 OR c.submitter_id=")
+        .push_bind(&ctx.user_id)
+        .push(" OR JSON_CONTAINS( CAST(")
+        .push_bind(sqlx::types::Json(managed))
+        .push(" AS JSON),JSON_QUOTE(c.object_id)))");
+    super::super::store::push_table_access(&mut sql, ctx);
+    let rows = sql
+        .push(" ORDER BY c.id LIMIT 51")
+        .build()
+        .fetch_all(tx.connection())
+        .await?;
     Ok(rows
         .iter()
         .map(|r| r.get::<sqlx::types::Json<Value>, _>("body").0)

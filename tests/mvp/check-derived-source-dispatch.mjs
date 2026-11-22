@@ -5,7 +5,7 @@ import {SessionManager} from '@earendil-works/pi-coding-agent';
 import {exportCheckpoint} from '../../apps/agent/session/checkpoint.ts';
 import {harness} from './harness.mjs';
 
-// 正文仍可见时，其派生来源不能因本轮没有重复交付原文而免于派发核验。
+// 派生正文和结果在读取点检查当前来源权限。
 const h = await harness({capture: true, startWorker: false,
   env: {DATA_AGENT_LEASE_MS: '120000'}});
 const checks = [];
@@ -38,6 +38,8 @@ const finish = async () => {
 };
 const issue = () => h.internal('/internal/model/issue', {...binding(),
   call_attempt_id: randomUUID()});
+const sourceWindow = document => ({citation: {source: {kind: 'document', id: document.id},
+  revision: document.version, locator: {offset: 0, length: [...document.entries[0].effective_value].length}}});
 
 try {
   const document = ok(await h.request('/knowledge', {operation_id: randomUUID(),
@@ -46,7 +48,7 @@ try {
     kind: 'document', name: '范围外显示规则', body: '只按设备分组。', related_ids: []}));
   const otherCid = await h.create();
   await begin(otherCid, '先读取资料，然后限制到会话规则。');
-  await invoke('read_source', {source_id: `document-${other.id}`, version: other.version});
+  assert.equal((await invoke('read_source', sourceWindow(other))).text, '只按设备分组。');
   const otherTask = await invoke('update_analysis_task', {action: 'create',
     goal: '按范围外资料仅展示设备分组', options: [], conditions: {
       time_start: null, time_end: null, timezone: 'UTC', metric: null, channel: null,
@@ -65,17 +67,22 @@ try {
   await begin(otherCid, '继续只用会话规则。');
   assert.equal(run.checkpoint, null, '旧格式缺活动任务字段不能免除范围核验，应按新输入重建');
   const scopedTask = await invoke('read_analysis_task', {task_id: otherTask.task_id});
-  assert.equal(scopedTask.goal, undefined, '范围外来源的派生目标不能随任务补读进入受限上下文');
-  assert.ok(!JSON.stringify(run.workspace_context.tasks).includes('按范围外资料仅展示设备分组'),
-    '新轮启动快照也必须去掉范围外派生正文');
-  assert.equal((await issue()).status, 200, '只交付允许的任务控制信息后可继续调查');
+  assert.equal(scopedTask.goal, '按范围外资料仅展示设备分组', '本人已保存目标可读取');
+  assert.ok(!JSON.stringify(run.workspace_context).includes('只按设备分组。'));
+  const deniedSource = {...binding(), sdk_tool_call_id: randomUUID(), tool_name: 'read_source',
+    arguments: sourceWindow(other), checkpoint: checkpoint()};
+  ok(await h.internal('/internal/data/tool-calls', deniedSource));
+  assert.equal((await h.internal('/internal/data/tools', deniedSource)).value.code, 'source_not_allowed');
+  ok(await h.internal('/internal/data/tool-rejections', deniedSource));
+  assert.equal((await invoke('read_source', sourceWindow(document))).text, '语音轮次按会话分组展示。');
+  assert.equal((await issue()).status, 200, '只交付允许的实际资料后可继续调查');
   await invoke('update_analysis_task', {action: 'route', task_id: otherTask.task_id,
     expected_version: scopedTask.condition_version, goal: '', options: []});
   await finish();
-  checks.push('来源B的派生正文在只允许A时不进入启动快照和任务补读');
+  checks.push('旧检查点中的来源B正文在只允许A时不进入启动和原文补读，本人仍可查看已保存目标');
   const legacyCid = await h.create();
   await begin(legacyCid, '创建可自由调查的语音任务。');
-  await invoke('read_source', {source_id: `document-${other.id}`, version: other.version});
+  assert.equal((await invoke('read_source', sourceWindow(other))).text, '只按设备分组。');
   const legacyTask = await invoke('update_analysis_task', {action: 'create',
     goal: '旧会话语音调查', options: [], conditions: {
       time_start: null, time_end: null, timezone: 'UTC', metric: null, channel: null,
@@ -100,7 +107,7 @@ try {
   assert.ok(!JSON.stringify(run.workspace_context.tasks).includes('旧会话语音调查'),
     '尚未确定任务范围时启动只交付控制目录，不能先注入旧正文');
   const readInput = {...binding(), sdk_tool_call_id: randomUUID(), tool_name: 'read_source',
-    arguments: {source_id: `document-${other.id}`, version: other.version}, checkpoint: checkpoint()};
+    arguments: sourceWindow(other), checkpoint: checkpoint()};
   ok(await h.internal('/internal/data/tool-calls', readInput));
   assert.equal((await h.internal('/internal/data/tools', readInput)).value.code, 'task_context_required');
   ok(await h.internal('/internal/data/tool-rejections', readInput));
@@ -115,7 +122,9 @@ try {
     dependencies: [{object_id: document.id, version: document.version, path: 'body'}]}));
   const cid = await h.create();
   await begin(cid, '按显示规则建立任务，下一轮只用这份规则。');
-  await invoke('read_knowledge', {object_id: `asset-${memory.id}`, version: memory.version});
+  const memoryRead = await invoke('read_knowledge', {items: [{kind: 'memory',
+    asset_ref: {id: memory.id, version: memory.version}, part: 'body'}]});
+  assert.equal(memoryRead.items[0].asset.body, '优先展示会话分组');
   const task = await invoke('update_analysis_task', {action: 'create',
     goal: '按偏好展示会话分组', options: [], conditions: {
       time_start: null, time_end: null, timezone: 'UTC', metric: null, channel: null,
@@ -132,15 +141,20 @@ try {
     '受限启动投影保留同源记忆（R08）');
   const text = await invoke('read_analysis_task', {task_id: task.task_id});
   assert.equal(text.goal, '按偏好展示会话分组');
+  const delivered = await invoke('read_knowledge', {items: [{kind: 'memory',
+    asset_ref: {id: memory.id, version: memory.version}, part: 'body'}]});
+  assert.equal(delivered.items[0].asset.body, '优先展示会话分组');
   const allowed = await issue();
   assert.equal(allowed.status, 200,
     '来源仍可用的派生正文允许派发:' + JSON.stringify(allowed.value));
   ok(await h.request(`/assets/${memory.id}/disable`, {operation_id: randomUUID(),
     expected_version: memory.version}));
-  const denied = await issue();
-  assert.equal(denied.value.code, 'stale_context',
-    '派生正文的个人来源撤回后，下一次模型派发必须发现失效');
-  checks.push('受限任务保留合法派生正文，来源同轮撤回后下一次派发拒绝');
+  const disabled = await invoke('read_knowledge', {items: [{kind: 'memory',
+    asset_ref: {id: memory.id, version: memory.version}, part: 'body'}]});
+  assert.equal(disabled.items[0].state, 'not_available');
+  assert.ok(!JSON.stringify(disabled).includes('优先展示会话分组'));
+  assert.equal((await issue()).status, 200);
+  checks.push('受限任务可精读同源记忆，撤回后读取点拒绝交付，保留运行调用额度');
   passed = true;
   console.log(JSON.stringify({passed, checks, officialRequests: 0}));
 } finally {

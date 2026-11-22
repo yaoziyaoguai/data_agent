@@ -21,12 +21,11 @@ impl DecisionStateVersion {
 
 pub struct ConditionRevision {
     pub body: Value,
-    pub field_authorities: Value,
     pub decision_state: DecisionStateVersion,
 }
 
 impl ConditionRevision {
-    pub(super) fn from_stored(body: Value, fields: Value, version: u8) -> Result<Self> {
+    pub(super) fn from_stored(body: Value, version: u8) -> Result<Self> {
         let decision_state = match version {
             1 => DecisionStateVersion::Legacy,
             2 => DecisionStateVersion::Clarifications,
@@ -44,7 +43,6 @@ impl ConditionRevision {
         }
         Ok(Self {
             body,
-            field_authorities: fields,
             decision_state,
         })
     }

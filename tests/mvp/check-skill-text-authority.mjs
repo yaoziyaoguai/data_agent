@@ -11,10 +11,14 @@ const readAsset=async(id,user='alice')=>ok(await h.request('/assets',undefined,u
 const confirm=async draft=>ok(await h.request('/assets',assetInput({draft_id:draft.reference.draft_id,name:draft.name,body:draft.body,scope:draft.scope,files:draft.files,dependencies:draft.dependencies,source_text:draftInput.instruction_quote})));
 const begin=async()=>{await f.begin(cid,draftInput.instruction_quote);await f.invoke('update_analysis_task',{action:'route',task_id:task.task_id,expected_version:task.condition_version,goal:'',options:[]});};
 try {
- const marker='SYNTHETIC_SKILL_UNDECLARED_SOURCE';
+ const marker='SYNTHETIC_SKILL_DECLARED_SOURCE';
  const doc=ok(await h.request('/knowledge',{...command(),kind:'document',name:'草稿额外来源',body:marker,related_ids:[]}));
- await begin();await f.invoke('read_knowledge',{object_id:doc.id});
- const args={...draftInput,name:marker,body:'依据已读资料形成方法 '+marker,files:[{path:'references/notes.md',content:marker}]};
+ const incidental=ok(await h.request('/knowledge',{...command(),kind:'document',name:'仅浏览的资料',body:'无关候选，不写入任何证据。',related_ids:[]}));
+ await begin();
+ const read=await f.invoke('read_knowledge',{items:[{kind:'knowledge',ref:{object_id:doc.id,version:doc.version,path:'body'}},{kind:'knowledge',ref:{object_id:incidental.id,version:incidental.version,path:'body'}}]});
+ assert.deepEqual(read.items.map(item=>item.state),['ok','ok']);
+ const evidence=await f.invoke('save_analysis_evidence',{task_id:task.task_id,condition_version:task.condition_version,data_range:'合成资料',findings:[{text:'合成方法的明确参考',calculation:'按显式声明的文档整理',limitations:[],query_refs:[],knowledge_refs:[{object_id:doc.id,version:doc.version,path:'body'}],figures:[]}]});
+ const args={...draftInput,evidence_ids:[...draftInput.evidence_ids,evidence.evidence_id],name:marker,body:'依据已读资料形成方法 '+marker,files:[{path:'references/notes.md',content:marker}]};
  const confirmedRef=await f.invoke('prepare_skill_draft',args);
  const pendingRef=await f.invoke('prepare_skill_draft',{...args,name:'待确认 '+marker});await f.finish();
  const confirmedDraft=ok(await h.request('/assets/skill-drafts/'+confirmedRef.draft_id));
@@ -22,12 +26,15 @@ try {
  const published=ok(await h.request(`/assets/${asset.id}/publish`,{...command(),expected_version:asset.version,share_confirmed:true}));
  assert.ok(JSON.stringify(await readAsset(asset.id)).includes(marker));
  assert.ok(JSON.stringify(await readAsset(published.id,'bob')).includes(marker));
+ ok(await h.request(`/knowledge/${incidental.id}/disable`,{...command(),expected_version:incidental.version}));
+ assert.equal(ok(await h.request('/assets/skill-drafts/'+pendingRef.draft_id)).status,'pending');
+ assert.ok(JSON.stringify(await readAsset(published.id,'bob')).includes(marker));
  ok(await h.request(`/knowledge/${doc.id}/disable`,{...command(),expected_version:doc.version}));
  const pending=ok(await h.request('/assets/skill-drafts/'+pendingRef.draft_id));assert.equal(pending.status,'sources_unavailable');assert.equal(JSON.stringify(pending).includes(marker),false);
  for(const [id,user] of [[asset.id,'alice'],[published.id,'alice'],[published.id,'bob']]){const value=await readAsset(id,user);assert.equal(value.text_unavailable,true);assert.equal(JSON.stringify(value).includes(marker),false);}
  const impact=ok(await h.request(`/knowledge/${f.source.id}/maintenance-impact?`+new URLSearchParams({kind:'skill',expected_version:f.source.version})));
  assert.equal(JSON.stringify(impact).includes(marker),false);assert.ok(impact.items.some(item=>item.id===asset.id&&item.references.length>0));
- checks.push('证据之后才读取且未写dependencies的资料仍约束草稿；确认及发布副本继承，来源撤下后各入口隐藏');
+ checks.push('显式登记在证据中的文档约束草稿；确认及发布副本继承，来源撤下后各入口隐藏');
  // 独立副本可跨会话采用，但不传播祖先私人资产的读取权。
  const ancestor=ok(await h.request('/assets',assetInput({name:'私人原始方法',body:'独立的合成过程',scope:'个人方法'})));
  ok(await select(h,cid,ancestor));
@@ -45,7 +52,7 @@ try {
  checks.push('source_skills跨会话仅核出处权限/版本，无需重新选择祖先；发布不赋予别人私人出处权限，停用祖先使衍生正文失效');
  const resultCid=await h.create();
  await f.begin(resultCid,'准备固定合成查询，稍后确认后用于方法整理。');
- const resultTask=await f.invoke('update_analysis_task',{action:'create',goal:'合成结果方法',conditions:{time_start:null,time_end:null,timezone:'UTC',metric:null,channel:null,group_by:[],filters:[],knowledge_refs:[],notes:''},options:[]});
+ const resultTask=await f.invoke('update_analysis_task',{action:'create',goal:'合成结果方法',conditions:{time_start:null,time_end:null,timezone:'UTC',metric:null,channel:null,group_by:[],filters:[],knowledge_refs:[],notes:'',source_limits:null},options:[]});
  const query=await f.invoke('request_query',{task_id:resultTask.task_id,condition_version:resultTask.condition_version,sql:"SELECT 'SYNTHETIC_QUERY_SKILL_SOURCE' AS detail",parameters:{},target_id:'synthetic-sqlite',summary:'独立合成固定结果',knowledge_refs:[],replaces_query_id:null});
  await f.finish();ok(await h.request(`/queries/${query.id}/confirm`,{...command(),draft_version:query.draft_version,condition_version:query.condition_version}));
  const before=h.captured.length;await h.resumeWorker();

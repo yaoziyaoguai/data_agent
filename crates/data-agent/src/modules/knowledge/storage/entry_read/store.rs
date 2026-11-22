@@ -10,6 +10,7 @@ pub async fn read_entry_page_in_tx(
     offset: usize,
     limit: usize,
 ) -> Result<Value> {
+    check_read_access_in_tx(tx, ctx, &reference.object_id).await?;
     let version = epoch(&reference.version)?;
     if let Some(statement_id) = statement_id.filter(|_| !structure_only) {
         let row = sqlx::query(
@@ -261,6 +262,7 @@ pub async fn read_supports_in_tx(
     offset: usize,
     limit: usize,
 ) -> Result<Value> {
+    check_read_access_in_tx(tx, ctx, &reference.object_id).await?;
     if limit == 0 || limit > 50 {
         return Err(Error::new("invalid_input"));
     }
@@ -360,6 +362,7 @@ pub async fn read_support_content_in_tx(
     offset: usize,
     limit: usize,
 ) -> Result<Value> {
+    check_read_access_in_tx(tx, ctx, &reference.object_id).await?;
     let (statement_id, support_id) = support;
     if limit == 0 || limit > 8192 {
         return Err(Error::new("invalid_input"));
@@ -445,6 +448,7 @@ pub async fn read_entries_in_tx(
         .push_bind(version)
         .push(" AND k.state='enabled'");
     scope.push_constraints(&mut head_sql, "k.id", "k.kind", "k.body");
+    push_table_access(&mut head_sql, ctx);
     let head = head_sql.build().fetch_optional(tx.connection()).await?;
     let Some(head) = head else {
         return Ok(None);

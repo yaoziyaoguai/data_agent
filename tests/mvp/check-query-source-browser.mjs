@@ -25,9 +25,10 @@ try {
   const cp=()=>exportCheckpoint(manager,run.workspace_context.authority_revision,run.workspace_context.authority_snapshot);
   const tool=async(name,args)=>{const input={run_id:run.run_id,lease_epoch:run.lease_epoch,sdk_tool_call_id:randomUUID(),tool_name:name,arguments:args,checkpoint:cp()};ok(await h.internal('/internal/data/tool-calls',input));return ok(await h.internal('/internal/data/tools',input)).data;};
   const task=await tool('update_analysis_task',{action:'create',goal:'独立合成查询',conditions:{time_start:null,time_end:null,timezone:'UTC',metric:null,channel:null,group_by:[],filters:[],knowledge_refs:[],notes:''},options:[]});
-  await tool('read_knowledge',{object_id:source.id});
+  const sourceRef={object_id:source.id,version:source.version,path:'body'};
+  assert.equal((await tool('read_knowledge',{items:[{kind:'knowledge',ref:sourceRef}]})).items[0].state,'ok');
   const queries=[];
-  for(let index=0;index<3;index++) queries.push(await tool('request_query',{task_id:task.task_id,condition_version:task.condition_version,sql:'SELECT :label AS label',parameters:{label:marker+'_'+index},target_id:'synthetic-sqlite',summary:marker+'_'+index,knowledge_refs:[],replaces_query_id:null}));
+  for(let index=0;index<3;index++) queries.push(await tool('request_query',{task_id:task.task_id,condition_version:task.condition_version,sql:'SELECT :label AS label',parameters:{label:marker+'_'+index},target_id:'synthetic-sqlite',summary:marker+'_'+index,knowledge_refs:[sourceRef],replaces_query_id:null}));
   const text='合成查询已准备。';ok(await h.internal('/internal/outputs',{run_id:run.run_id,lease_epoch:run.lease_epoch,chunk_seq:'1',text}));ok(await h.internal('/internal/finish',{run_id:run.run_id,lease_epoch:run.lease_epoch,commit_id:run.output_id,final_text:text,checkpoint:cp()}));h.releaseRun(run.run_id);
   for(const query of queries)ok(await h.request('/queries/'+query.id+'/confirm',{operation_id:randomUUID(),draft_version:query.draft_version,condition_version:query.condition_version}));
   await h.resumeWorker();

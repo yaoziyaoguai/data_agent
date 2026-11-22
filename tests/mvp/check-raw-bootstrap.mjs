@@ -42,7 +42,7 @@ try {
   h.sql("UPDATE background_jobs SET lease_until=TIMESTAMPADD(HOUR,1,UTC_TIMESTAMP(3)) WHERE kind='prepare_source'");
   ok(await h.request('/knowledge-index/rebuilds', {operation_id: randomUUID()})); prepared = true;
   await h.resumeWorker();
-  await until(() => h.sql(`SELECT JSON_OBJECT('state',vector_state) FROM knowledge_index_jobs WHERE source_kind='document' AND object_id='${document.id}'`).some(row => row.state === 'indexed'), '新文档raw索引', 120000);
+  await until(() => h.sql(`SELECT JSON_OBJECT('state',vector_state) FROM knowledge_index_jobs WHERE target_kind='knowledge_entry' AND object_id='${document.id}'`).some(row => row.state === 'indexed'), '新文档知识窗口索引', 120000);
   assert.equal(h.sql(`SELECT JSON_OBJECT('count',COUNT(*)) FROM knowledge_statements WHERE object_id='${document.id}'`)[0].count, 0);
   const question = '只依据《集成校准观察窗》解释校准观察窗的起止，以及哪些回执应排除。不要执行SQL。';
   const run = await h.capture(await h.create(), question); await h.pauseWorker();
@@ -56,21 +56,26 @@ try {
     const receipt = ok(await h.internal('/internal/data/tools', input)); trace.push({name, args, data: receipt.data}); return receipt.data;
   };
   const search = await invoke('search_knowledge', {query: '第一条有效回执 取消后的晚到回执', kinds: ['document'], limit: 10});
-  const hit = search.hits.find(hit => hit.record_kind === 'source_excerpt' && hit.citation.source.id === document.id
-    && hit.text.includes('第一条有效回执'));
-  assert.ok(hit, JSON.stringify(search.hits.map(h => ({kind: h.record_kind, text: h.text?.slice(-200)}))));
-  assert.ok(hit.citation.locator.offset > 0, '只能定点读取尾部，不能先交整篇');
-  const read = await invoke('read_source', {citation: hit.citation});
-  assert.match(read.text, /用户提交开始，到第一条有效回执为止/);
-  assert.match(read.text, /用户取消后的晚到回执不计入/);
-  assert.ok([...read.text].length < [...body].length / 2);
+  const hit = search.hits.find(hit => hit.record_kind === 'knowledge_entry' && hit.ref.object_id === document.id
+    && hit.definition.includes('第一条有效回执'));
+  assert.ok(hit, JSON.stringify(search.hits.map(h => ({kind: h.record_kind, text: h.definition?.slice(-200)}))));
+  assert.deepEqual(hit.ref, {object_id: document.id, version: document.version, path: 'body'});
+  const index = body.indexOf(hit.definition);
+  assert.ok(index > 0, '只能定点读取尾部，不能先交整篇');
+  const offset = [...body.slice(0, index)].length;
+  const {items: [read]} = await invoke('read_knowledge', {items: [{kind: 'knowledge', ref: hit.ref, offset, limit: 360}]});
+  assert.equal(read.state, 'ok');
+  assert.equal(read.content_page.offset, offset);
+  assert.match(read.content, /用户提交开始，到第一条有效回执为止/);
+  assert.match(read.content, /用户取消后的晚到回执不计入/);
+  assert.ok([...read.content].length < [...body].length / 2);
   assert.equal(ok(await h.request('/conversations/' + run.conversation_id + '/queries')).queries.length, 0);
   await writeFile(directory + '/tool-trace.json', JSON.stringify(trace, null, 2));
   await writeFile(directory + '/source-and-index.json', JSON.stringify({document: document.id, revision: document.version,
     collection, body_sha256: createHash('sha256').update(body).digest('hex'), run_contract: run.tool_contract_version,
     environment: 'real MySQL/Milvus + local embedding protocol + host tools; model answer not tested', runtime: h.directory}, null, 2));
   h.releaseRun(run.run_id); passed = true;
-  console.log(JSON.stringify({passed, directory, checks: ['空业务知识起点', '正常同步28表', '未整理文档raw索引', '尾部起止与取消例外定点补读', '无查询执行'], officialRequests: 0}));
+  console.log(JSON.stringify({passed, directory, checks: ['空业务知识起点', '正常同步28表', '未整理文档的知识窗口索引', '尾部起止与取消例外定点补读', '无查询执行'], officialRequests: 0}));
 } finally {
   if (h) {h.sql("UPDATE background_jobs SET lease_until=NULL WHERE kind='prepare_source' AND lease_owner IS NULL"); await h.close();}
   await provider.close();

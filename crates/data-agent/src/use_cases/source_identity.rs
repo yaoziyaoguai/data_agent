@@ -2,13 +2,13 @@ use crate::{
     contracts,
     modules::{ingestion, knowledge},
     persistence::AppTx,
-    types::{AccessContext, Error, Result, epoch, fingerprint},
+    types::{AccessContext, Error, Result, fingerprint},
 };
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use sqlx::MySqlPool;
-use std::collections::{BTreeSet, HashSet};
+use std::collections::BTreeSet;
 
 use super::evidence_delivery::ResponseCapacity;
 
@@ -106,6 +106,7 @@ pub(super) async fn search(
         ingestion::readable_source_heads_in_tx(&mut tx, &ctx.space_id)
             .await?
             .into_iter()
+            .filter(|(id, _)| ctx.can_read_platform_source(id))
             .map(|(id, _)| id)
             .collect();
     let ids = match &resumed {
@@ -120,76 +121,35 @@ pub(super) async fn search(
         }
     };
     let metadata = knowledge::candidate_meta_in_tx(&mut tx, ctx, &ids, None).await?;
-    let mut objects = Vec::new();
-    for meta in &metadata {
-        if meta["kind"] != "document" {
-            objects.push((
-                meta["id"]
-                    .as_str()
-                    .ok_or(Error::new("not_available"))?
-                    .to_owned(),
-                epoch(
-                    meta["version"]
-                        .as_str()
-                        .ok_or(Error::new("not_available"))?,
-                )?,
-            ));
-        }
-    }
-    let roots = knowledge::dependency_index::contribution_roots_in_tx(&mut tx, &objects).await?;
-    let document_roots: BTreeSet<_> = roots
-        .iter()
-        .flat_map(|root| &root.sources)
-        .filter(|(kind, _)| kind == "document")
-        .map(|(_, id)| id.clone())
-        .collect();
-    let document_metadata = knowledge::candidate_meta_in_tx(
-        &mut tx,
-        ctx,
-        &document_roots.into_iter().collect::<Vec<_>>(),
-        None,
-    )
-    .await?;
-    let readable_documents: HashSet<_> = document_metadata
-        .iter()
-        .filter(|meta| meta["state"] == "enabled" && meta["kind"] == "document")
-        .filter_map(|meta| meta["id"].as_str())
-        .collect();
     let mut candidates = Vec::with_capacity(limit + 1);
     for id in ids {
         let meta = metadata
             .iter()
             .find(|meta| meta["id"] == id && meta["state"] == "enabled")
             .ok_or(Error::new("not_available"))?;
-        let mut source_keys = Vec::new();
-        let mut complete;
-        if meta["kind"] == "document" {
-            // 文档身份就是该文档；关联知识和派生陈述不改变它的原文身份。
-            source_keys.push(json!({"kind": "document", "id": id}));
-            complete = true;
+        let source_keys = if meta["kind"] == "document" {
+            vec![json!({"kind":"document","id":id})]
         } else {
-            let own = roots.iter().find(|root| root.owner_id == id);
-            complete = own.is_some_and(|root| root.unknown.is_empty());
-            for (kind, source) in own.into_iter().flat_map(|root| &root.sources) {
-                let readable = match kind.as_str() {
-                    "platform" => readable_platform.contains(source),
-                    "document" => readable_documents.contains(source.as_str()),
-                    _ => false,
-                };
-                if !readable || source_keys.len() == 1000 {
-                    complete = false;
-                    continue;
-                }
-                // 保留真正源级根；schema/semantic-catalog整包不能被重命名成单表范围。
-                source_keys.push(json!({"kind": kind, "id": source}));
-            }
-        }
+            [
+                Some(id.as_str()),
+                meta["table_id"].as_str(),
+                meta["source_id"]
+                    .as_str()
+                    .filter(|source| readable_platform.contains(*source)),
+            ]
+            .into_iter()
+            .flatten()
+            .collect::<BTreeSet<_>>()
+            .into_iter()
+            .map(|id| json!({"kind":"platform","id":id}))
+            .collect()
+        };
         candidates.push((
             Position::Knowledge(id),
             json!({
                 "record_kind": "source_identity", "name": meta["name"], "kind": meta["kind"],
                 "object_id": meta["id"], "object_version": meta["version"],
-                "source_keys": source_keys, "roots_complete": complete,
+                "source_keys": source_keys, "roots_complete": true,
             }),
         ));
     }

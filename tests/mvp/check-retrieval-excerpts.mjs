@@ -55,7 +55,7 @@ const records = async (id,target='knowledge_entry') => milvus('entities/query',{
 const waitIndexed = async ids => {
   await until(() => h.sql(`SELECT JSON_OBJECT('n',COUNT(*)) FROM knowledge_index_jobs WHERE object_id IN (${ids.map(id=>`'${id}'`).join(',')}) AND vector_state<>'indexed'`)[0].n===0,'isolated excerpt documents indexed',60000);
 };
-const assertExcerpt = (result,object,rule,entry='body') => {
+const assertBrowseExcerpt = (result,object,rule,entry='body') => {
   const actual=result.objects.find(value=>value.id===object.id);assert.ok(actual,JSON.stringify(result.search_coverage));
   assert.equal(actual.version,object.version);assert.equal(actual.retrieval.state,'located');
   const excerpt=actual.retrieval.excerpts.find(value=>value.entry_id===entry && value.text.includes(rule));
@@ -65,6 +65,33 @@ const assertExcerpt = (result,object,rule,entry='body') => {
   assert.equal(excerpt.total_chars,[...source].length);assert.ok(excerpt.offset>600);
   assert.match(actual.retrieval.note,/read_knowledge/);
   return {actual,excerpt};
+};
+
+const hasKnowledge = (result,id) => result.hits.some(hit=>hit.record_kind==='knowledge_entry'&&hit.ref.object_id===id);
+const channel = (result,name) => result.search_coverage.channels.find(value=>value.channel===name)?.state;
+const readKnowledge = async (ref,options={}) => {
+  const {items}=await invoke('read_knowledge',{items:[{kind:'knowledge',ref,...options}]});
+  assert.equal(items[0].state,'ok');
+  return items[0];
+};
+const assertExcerpt = (result,object,rule,entry='body') => {
+  const hit=result.hits.find(value=>value.record_kind==='knowledge_entry'&&
+    value.ref.object_id===object.id&&value.ref.path===entry&&value.definition.includes(rule));
+  assert.ok(hit,JSON.stringify({coverage:result.search_coverage,expected:{object_id:object.id,path:entry},
+    hits:result.hits.map(value=>({kind:value.record_kind,ref:value.ref,citation:value.citation?.source,
+      contains_rule:(value.definition??value.content??'').includes(rule)}))}));
+  assert.equal(hit.ref.version,object.version);
+  const source=object.entries.find(value=>value.path===entry).effective_value;
+  const index=source.indexOf(hit.definition);
+  assert.ok(index>=0);
+  const offset=[...source.slice(0,index)].length,length=[...hit.definition].length;
+  assert.ok(offset>600);
+  if(hit.statement_id===undefined){
+    assert.equal(hit.content_state,'partial','长条目命中不得冒称完整正文');
+    const end=offset+length;
+    assert.equal(hit.continuation.content_next_offset,end<[...source].length?end:null);
+  }
+  return {hit,offset,length};
 };
 
 try {
@@ -85,42 +112,44 @@ try {
   // 独立多条目资料夹具，在首次索引之前写入；不改现有业务样例或模型答案。
   for(const fixture of [laboratory,weather]) {
     const encoded=Buffer.from(JSON.stringify(fixture)).toString('hex');
-    h.sql(`UPDATE knowledge_objects SET body=CAST(CONVERT(0x${encoded} USING utf8mb4) AS JSON) WHERE id='${fixture.id}';UPDATE knowledge_versions SET body=CAST(CONVERT(0x${encoded} USING utf8mb4) AS JSON) WHERE object_id='${fixture.id}' AND version=1`);
+    h.sql(`UPDATE knowledge_objects SET body=CAST(CONVERT(0x${encoded} USING utf8mb4) AS JSON) WHERE id='${fixture.id}';UPDATE knowledge_revisions SET archived_body=CAST(CONVERT(0x${encoded} USING utf8mb4) AS JSON) WHERE object_id='${fixture.id}' AND version=1`);
   }
   // 裸SQL正文只落对象本体；真实保存路径会同步登记依赖索引（source_facts→
   // required/origin行）。此处补齐同等依赖行，撤回来源场景才落在真实判定路径上。
   h.sql(`INSERT IGNORE INTO knowledge_dependencies(owner_id,owner_version,space_id,entry_path,layer,purpose,role,effective,target_kind,target_id,target_revision,target_path,target_fingerprint) VALUES('${weather.id}',1,'demo','body','source_fact','required','origin',1,'document','${weatherSource.id}',${Number(weatherSource.version)},'','')`);
   await h.resumeWorker();await waitIndexed([laboratory.id,library.id,distractor.id,weather.id,weatherSource.id]);
-  assertExcerpt(await search(weatherRule),weather,weatherRule);
+  assertBrowseExcerpt(await search(weatherRule),weather,weatherRule);
   run=await h.capture(await h.create(),'核对检测设备和珍本借阅的业务限制');await h.pauseWorker();
   for (const [object,rule,entry] of [[laboratory,labRule,'body'],[library,libraryRule,'body'],[laboratory,secondaryRule,'retention']]) {
     const result=await invoke('search_knowledge',{query:rule,limit:10});
-    const {actual,excerpt}=assertExcerpt(result,object,rule,entry);
-    const delivered=actual.entries.find(value=>value.entry_id===entry);
-    const source=[...object.entries.find(value=>value.entry_id===entry).effective_value];
-    const offset=delivered.content_page.offset;
-    const length=[...delivered.effective_value].length;
-    assert.ok(Number.isInteger(offset) && offset>600,'交付正文保留命中窗口的原位置，不能冒称目录开头');
-    assert.ok(length>0 && length<source.length && offset+length<=source.length);
-    assert.equal(delivered.path,object.entries.find(value=>value.entry_id===entry).path);
-    assert.equal(delivered.effective_value,source.slice(offset,offset+length).join(''));
-    assert.equal(delivered.content_page.total_chars,source.length);
-    assert.equal(delivered.content_page.next_offset,offset+length<source.length?offset+length:null);
-    assert.equal(delivered.content_page.complete,false);
-    assert.equal(actual.entries_complete,false);
-    assert.equal(result.reply_coverage.state,'bounded');
-    const page=await invoke('read_knowledge',{object_id:actual.id,version:actual.version,entry_id:excerpt.entry_id,offset:excerpt.offset,limit:excerpt.length});
-    assert.equal(page.entries[0].effective_value,excerpt.text);
-    const prefix=await invoke('read_knowledge',{object_id:actual.id,version:actual.version,entry_id:entry,offset:0,limit:160});
-    assert.equal(prefix.entries[0].effective_value,source.slice(0,160).join(''));
-    assert.ok(!prefix.entries[0].effective_value.includes(rule),'显式补读的目录前缀与实际命中保持区分');
+    if (!hasKnowledge(result,object.id)) {
+      const browse=await search(rule);
+      console.log(JSON.stringify({read_path_comparison:{object_id:object.id,entry,
+        browse_ids:browse.objects.map(value=>value.id),
+        browse_has_rule:browse.objects.find(value=>value.id===object.id)?.retrieval?.excerpts
+          ?.some(excerpt=>excerpt.entry_id===entry && excerpt.text.includes(rule)) ?? false}}));
+    }
+    const {hit,offset,length}=assertExcerpt(result,object,rule,entry);
+    assert.ok(result.hits.every(value=>value.record_kind!=='source_excerpt'||
+      value.citation.source.kind==='platform'),'普通独立文档不再重复占用原文命中名额');
+    const source=[...object.entries.find(value=>value.path===entry).effective_value];
+    assert.ok(length>0&&length<source.length&&offset+length<=source.length);
+    const page=await readKnowledge(hit.ref,{offset,limit:length});
+    assert.equal(page.content,hit.definition);
+    assert.equal(page.content_page.offset,offset);
+    assert.equal(page.content_page.total_chars,source.length);
+    assert.equal(page.content_page.next_offset,hit.continuation.content_next_offset);
+    assert.equal(page.content_page.complete,false);
+    const prefix=await readKnowledge(hit.ref,{offset:0,limit:160});
+    assert.equal(prefix.content,source.slice(0,160).join(''));
+    assert.ok(!prefix.content.includes(rule),'显式补读的目录前缀与实际命中保持区分');
   }
   checks.push('检测设备与图书馆两个独立领域：同名干扰下交付600字之后的真实命中，Unicode位置与正式全文入口逐字一致');
   const multiple=await invoke('search_knowledge',{query:labRule+secondaryRule,limit:10});
-  const labHits=multiple.objects.find(value=>value.id===laboratory.id).retrieval.excerpts;
-  assert.ok(labHits.some(value=>value.entry_id==='body'));assert.ok(labHits.some(value=>value.entry_id==='retention'));
-  assert.ok(labHits.length<=3);
-  checks.push('同一对象的不同条目保留独立位置，最多三个片段，不以重叠窗口挤掉另一项规则');
+  const firstRule=assertExcerpt(multiple,laboratory,labRule);
+  const otherRule=assertExcerpt(multiple,laboratory,secondaryRule,'retention');
+  assert.notDeepEqual(firstRule.hit.ref,otherRule.hit.ref);
+  checks.push('同一对象的两项独立规则均保留，只用各自原路径和原位置精读');
 
   const original=await records(library.id);assert.ok(original.length>1);
   const legacy=original.map(record=>Object.fromEntries(Object.entries(record).filter(([key])=>!['entry_id','char_offset','char_length','content_hash'].includes(key))));
@@ -137,40 +166,34 @@ try {
     return {...record,char_offset:other.char_offset,char_length:other.char_length,content_hash:other.content_hash};
   });
   await milvus('entities/upsert',{data:shifted});
-  const mismatched=await invoke('search_knowledge',{query:libraryRule,limit:10,related_object_id:library.id});
-  assert.deepEqual(mismatched.objects,[],'同版另一合法窗口和正确hash不能冒用原record');
-  assert.equal(mismatched.search_coverage.candidate_count,9);
+  const mismatched=await invoke('search_knowledge',{query:libraryRule,limit:10,hints:{related_object_ids:[library.id]}});
+  assert.equal(hasKnowledge(mismatched,library.id),false,'同版另一合法窗口和正确hash不能冒用原record');
   assert.equal(mismatched.search_coverage.state,'bounded');
-  assert.equal(mismatched.search_coverage.channels.lexical.shards,1);
-  assert.equal(mismatched.search_coverage.channels.lexical.completed,1);
+  assert.equal(channel(mismatched,'bm25'),'available');
   const unknown=legacy.map(record=>({...record,id:'unknown-'+randomUUID()}));
   await milvus('entities/upsert',{data:unknown});
   await milvus('entities/delete',{filter:'id in '+JSON.stringify(original.map(value=>value.id))});
   const rejectedUnknown=await invoke('search_knowledge',{query:libraryRule,limit:10});
-  assert.ok(!rejectedUnknown.objects.some(value=>value.id===library.id),'未知键无合法定位时不能制造正文');
-  assert.equal(rejectedUnknown.search_coverage.channels.lexical.shards,1,'成功BM25不能追加SQL搜索票');
-  assert.equal(rejectedUnknown.search_coverage.channels.lexical.completed,1);
+  assert.equal(hasKnowledge(rejectedUnknown,library.id),false,'未知键无合法定位时不能制造正文');
+  assert.equal(channel(rejectedUnknown,'bm25'),'available');
   failSearch=true;searchRequests.length=0;
   const unknownResult=await invoke('search_knowledge',{query:libraryRule,limit:10});
   failSearch=false;
-  const {actual:unknownObject}=assertExcerpt(unknownResult,library,libraryRule);
-  assert.equal(unknownObject.retrieval.channel,'lexical');
-  assert.equal(unknownResult.search_coverage.channels.lexical.shards,2,'全败后的两个SQL owner替代词法');
-  assert.equal(unknownResult.search_coverage.channels.lexical.completed,2);
+  assertExcerpt(unknownResult,library,libraryRule);
+  assert.equal(channel(unknownResult,'dense'),'unavailable');
+  assert.equal(channel(unknownResult,'bm25'),'available');
   assert.ok(searchRequests.some(value=>value.channel==='sparse')&&searchRequests.every(value=>value.injected));
   await milvus('entities/delete',{filter:'id in '+JSON.stringify(unknown.map(value=>value.id))});
   await milvus('entities/upsert',{data:original.map(record=>({...record,char_offset:999999}))});
   const rejectedMalformed=await invoke('search_knowledge',{query:libraryRule,limit:10});
-  assert.ok(!rejectedMalformed.objects.some(value=>value.id===library.id),'显式越界位置不能被恢复成另一个命中');
-  assert.equal(rejectedMalformed.search_coverage.channels.lexical.shards,1);
-  assert.equal(rejectedMalformed.search_coverage.channels.lexical.completed,1);
+  assert.equal(hasKnowledge(rejectedMalformed,library.id),false,'显式越界位置不能被恢复成另一个命中');
+  assert.equal(channel(rejectedMalformed,'bm25'),'available');
   failSearch=true;searchRequests.length=0;
   const malformed=await invoke('search_knowledge',{query:libraryRule,limit:10});
   failSearch=false;
-  const {actual:malformedObject}=assertExcerpt(malformed,library,libraryRule);
-  assert.equal(malformedObject.retrieval.channel,'lexical');
-  assert.equal(malformed.search_coverage.channels.lexical.shards,2);
-  assert.equal(malformed.search_coverage.channels.lexical.completed,2);
+  assertExcerpt(malformed,library,libraryRule);
+  assert.equal(channel(malformed,'dense'),'unavailable');
+  assert.equal(channel(malformed,'bm25'),'available');
   assert.ok(searchRequests.some(value=>value.channel==='sparse')&&searchRequests.every(value=>value.injected));
   // 同一无字面词query分别验证合法dense、缺冗余定位恢复和全部位置损坏。
   const noLexicalQuery='nonlexicalneedle';
@@ -187,43 +210,34 @@ try {
     '合成原文有九个规范窗口；反向向量只降低排名，不从候选中删除窗口');
   const denseRecords=original.map(record=>({...record,vector:noLexicalEmbedding.map(value=>-value)}));
   await milvus('entities/upsert',{data:denseRecords.map(record=>record.id===tail.id?{...record,vector:noLexicalEmbedding}:record)});
-  const canonicalDense=await invoke('search_knowledge',{query:noLexicalQuery,limit:1,related_object_id:library.id});
-  const {actual:canonicalObject,excerpt:canonicalExcerpt}=assertExcerpt(canonicalDense,library,libraryRule);
-  assert.equal(canonicalObject.retrieval.channel,'vector');
-  assert.equal(canonicalDense.search_coverage.candidate_count,9);
-  assert.equal(canonicalDense.search_coverage.channels.lexical.completed,1);
-  assert.equal(canonicalDense.search_coverage.channels.lexical.shards,1);
-  assert.equal(canonicalDense.search_coverage.channels.lexical.exhausted,true);
+  const canonicalDense=await invoke('search_knowledge',{query:noLexicalQuery,limit:1,hints:{related_object_ids:[library.id]}});
+  const canonicalExcerpt=assertExcerpt(canonicalDense,library,libraryRule);
+  assert.equal(channel(canonicalDense,'dense'),'available');
+  assert.equal(channel(canonicalDense,'bm25'),'available');
   const missingDense={...legacy.find(record=>record.id===tail.id),vector:noLexicalEmbedding};
   await milvus('entities/upsert',{data:[missingDense]});
-  const restoredDense=await invoke('search_knowledge',{query:noLexicalQuery,limit:1,related_object_id:library.id});
-  const {actual:restoredObject,excerpt:restoredExcerpt}=assertExcerpt(restoredDense,library,libraryRule);
-  assert.equal(restoredObject.retrieval.channel,'vector','健康空BM25不能借SQL掩盖稳定键恢复');
-  assert.equal(restoredDense.search_coverage.candidate_count,9);
-  assert.equal(restoredDense.search_coverage.channels.lexical.completed,1);
-  assert.equal(restoredDense.search_coverage.channels.lexical.shards,1);
-  assert.equal(restoredDense.search_coverage.channels.lexical.exhausted,true);
+  const restoredDense=await invoke('search_knowledge',{query:noLexicalQuery,limit:1,hints:{related_object_ids:[library.id]}});
+  const restoredExcerpt=assertExcerpt(restoredDense,library,libraryRule);
+  assert.equal(channel(restoredDense,'dense'),'available');
+  assert.equal(channel(restoredDense,'bm25'),'available');
   assert.deepEqual(restoredExcerpt,canonicalExcerpt);
   assert.equal((await records(library.id)).find(record=>record.id===tail.id).entry_id,undefined,'查询不修写索引');
   await milvus('entities/upsert',{data:denseRecords.map(record=>({...record,char_offset:999999,
     vector:record.id===tail.id?noLexicalEmbedding:record.vector}))});
-  const noLexical=await invoke('search_knowledge',{query:noLexicalQuery,limit:1,related_object_id:library.id});
-  assert.deepEqual(noLexical.objects,[],'目标所有位置均非法时不能伪造目录正文或摘录');
-  assert.equal(noLexical.search_coverage.candidate_count,9);
+  const noLexical=await invoke('search_knowledge',{query:noLexicalQuery,limit:1,hints:{related_object_ids:[library.id]}});
+  assert.equal(hasKnowledge(noLexical,library.id),false,'目标所有位置均非法时不能伪造目录正文或摘录');
   assert.equal(noLexical.search_coverage.state,'bounded');
-  assert.equal(noLexical.search_coverage.channels.lexical.completed,1);
-  assert.equal(noLexical.search_coverage.channels.lexical.shards,1);
-  assert.equal(noLexical.search_coverage.channels.lexical.exhausted,true);
-  const knownReread=await invoke('read_knowledge',{object_id:library.id,version:library.version,
-    entry_id:'body',offset:canonicalExcerpt.offset,limit:canonicalExcerpt.length});
-  assert.equal(knownReread.entries[0].effective_value,canonicalExcerpt.text);
+  assert.equal(channel(noLexical,'bm25'),'available');
+  const knownReread=await readKnowledge(canonicalExcerpt.hit.ref,{
+    offset:canonicalExcerpt.offset,limit:canonicalExcerpt.length});
+  assert.equal(knownReread.content,canonicalExcerpt.hit.definition);
   await milvus('entities/upsert',{data:legacy});
   const embeddingsBefore=provider.requests.length;
   ok(await h.request('/knowledge-index/rebuilds',{operation_id:randomUUID()}));
   await h.resumeWorker();await waitIndexed([laboratory.id,library.id,distractor.id]);await h.pauseWorker();
   assert.equal(provider.requests.length,embeddingsBefore,'metadata repair reuses original embedding receipts');
   assert.ok((await records(library.id)).every(value=>value.entry_id==='body'));
-  assertExcerpt(await search(libraryRule),library,libraryRule);
+  assertBrowseExcerpt(await search(libraryRule),library,libraryRule);
   checks.push('未知键与显式越界不制造正文且成功BM25不加SQL票；整路故障时原SQL词法独立回源；无字面词dense合法/缺定位/坏位置正反控及同版补读，受控重建复用原向量回执');
 
   const statementFixture=ok(await h.request('/knowledge',{operation_id:randomUUID(),kind:'metric',
@@ -249,7 +263,7 @@ try {
     human_override:null,review_state:'unverified'}];
   const statementHex=Buffer.from(JSON.stringify(statementFixture)).toString('hex');
   h.sql(`UPDATE knowledge_objects SET body=CAST(CONVERT(0x${statementHex} USING utf8mb4) AS JSON) WHERE id='${statementFixture.id}';
-    UPDATE knowledge_versions SET body=CAST(CONVERT(0x${statementHex} USING utf8mb4) AS JSON) WHERE object_id='${statementFixture.id}' AND version=1;
+    UPDATE knowledge_revisions SET archived_body=CAST(CONVERT(0x${statementHex} USING utf8mb4) AS JSON) WHERE object_id='${statementFixture.id}' AND version=1;
     UPDATE knowledge_dependency_states SET mapping_state='unknown' WHERE owner_id='${statementFixture.id}' AND owner_version=1;
     INSERT INTO knowledge_statements(object_id,version,statement_id,space_id,entry_path,layer,body)
       SELECT '${statementFixture.id}',1,JSON_UNQUOTE(JSON_EXTRACT(s.value,'$.statement_id')),'demo','rules','model_suggestion',s.value
@@ -266,15 +280,15 @@ try {
   const statementEmbedding=(await statementEmbeddingResponse.json()).data[0].embedding;
   const statementDenseRows=statementRecords.map(row=>({...row,vector:row.id===statementRow.id?statementEmbedding:statementEmbedding.map(value=>-value)}));
   await milvus('entities/upsert',{data:statementDenseRows});
-  const statementArgs={query:statementQuery,limit:1,related_object_id:statementFixture.id};
+  const statementArgs={query:statementQuery,limit:1,hints:{related_object_ids:[statementFixture.id]}};
   const assertStatement=result=>{
-    const {actual,excerpt}=assertExcerpt(result,statementFixture,statementText,'rules');
-    assert.equal(actual.retrieval.channel,'vector');assert.equal(excerpt.text,statementBody);
-    assert.equal(excerpt.offset,statementBase);assert.equal(excerpt.total_chars,[...statementRendered].length);
-    assert.equal(result.search_coverage.candidate_count,4);
-    assert.equal(result.search_coverage.channels.lexical.completed,1);
-    assert.equal(result.search_coverage.channels.lexical.shards,1);
-    assert.equal(result.search_coverage.channels.lexical.exhausted,true,'真实BM25成功空且未追加SQL票');
+    const excerpt=assertExcerpt(result,statementFixture,statementText,'rules');
+    assert.equal(excerpt.hit.statement_id,'selected-rule');
+    assert.equal(excerpt.hit.definition,statementText);
+    assert.equal(excerpt.hit.scope_text,statementScope);
+    assert.equal(excerpt.offset,statementBase);
+    assert.equal(channel(result,'dense'),'available');
+    assert.equal(channel(result,'bm25'),'available');
     const authority=h.sql(`SELECT authority_snapshot FROM agent_runs WHERE id='${run.run_id}'`)[0];
     assert.deepEqual(authority.knowledge.filter(reference=>reference[0]===statementSupport.id),
       [[statementSupport.id,statementSupport.version]],'实际可见陈述的内嵌支持保留登记');
@@ -294,20 +308,16 @@ try {
   statementConflict.statement_offset=1;
   await milvus('entities/upsert',{data:[statementConflict]});
   const statementRejected=await invoke('search_knowledge',statementArgs);
-  assert.ok(statementRejected.objects.every(object=>
-    object.entries.every(entry=>!entry.effective_value.includes(statementBody))
-    &&object.retrieval.excerpts.every(excerpt=>!excerpt.text.includes(statementBody))),
+  assert.ok(statementRejected.hits.every(hit=>hit.record_kind!=='knowledge_entry'||
+    hit.ref.object_id!==statementFixture.id||
+    (hit.statement_id!=='selected-rule'&&!hit.definition.includes(statementText)&&!hit.scope_text.includes(statementScope))),
     '缺statement_id不能掩盖显式冲突的statement_offset，原record不得交付该陈述');
-  assert.equal(statementRejected.search_coverage.candidate_count,4);
   assert.equal(statementRejected.search_coverage.state,'bounded');
-  assert.equal(statementRejected.search_coverage.channels.lexical.completed,1);
-  assert.equal(statementRejected.search_coverage.channels.lexical.shards,1);
-  assert.equal(statementRejected.search_coverage.channels.lexical.exhausted,true);
-  assert.ok(statementRejected.objects.every(object=>object.retrieval.excerpts.every(excerpt=>
-    excerpt.entry_id!=='rules'||excerpt.offset<statementBase)),'拒绝的陈述不能由坏索引窗口旁路交付');
-  const statementReread=await invoke('read_knowledge',{object_id:statementFixture.id,version:statementFixture.version,
-    entry_id:'rules',offset:statementBase,limit:[...statementBody].length});
-  assert.equal(statementReread.entries[0].effective_value,statementBody);
+  assert.equal(channel(statementRejected,'bm25'),'available');
+  const statementReread=await readKnowledge(statementCanonical.hit.ref,{statement_id:'selected-rule'});
+  assert.equal(statementReread.content,statementBody);
+  assert.deepEqual(statementReread.content_page,{offset:0,total_chars:[...statementBody].length,
+    complete:true,next_offset:null});
   await milvus('entities/upsert',{data:statementRecords});
   checks.push('真实dense陈述缺冗余定位保原窗口及支持；缺身份不丢显式冲突坐标，健康空BM25不加SQL，原ref仍可补读');
 
@@ -340,10 +350,12 @@ try {
   // 改用平台来源——其正文由catalog的comment/ddl/columns组装，不受该上限约束。
   // 切块目标1200字符/段，约34万字符正文产生280+段、跨多个BATCH_SIZE批次；
   // 末段独有标记必须进入索引并可按定位读回。
+  const shortPlatformNeedle='shortplatformrawboundary';
   const manySegmentsTail='超长资料末段专有标记：分段批次推进校准词。';
   const manySegmentsComment=Array.from({length:12000},(_,i)=>`第${i}节常规业务说明，用于把正文推到数百段规模。`).join('\n')+'\n'+manySegmentsTail;
   await writeFile(h.directory+'/platform/catalog.json',JSON.stringify({source_namespace:'synthetic-segments',authoritative:true,tables:[
     {id:'many_segments_source',name:'many_segments_source',platform_version:'1',comment:manySegmentsComment,ddl:'CREATE TABLE many_segments_source (record_id INTEGER);',columns:[{id:'record_id',name:'record_id',data_type:'INTEGER',nullable:false,comment:'记录技术编号'}],node:{id:'load-many-segments',sql:'INSERT INTO many_segments_source SELECT record_id FROM synthetic_source;',upstream_ids:['synthetic_source']}},
+    {id:'short_platform_source',name:'short_platform_source',platform_version:'1',comment:shortPlatformNeedle,ddl:'CREATE TABLE short_platform_source (record_id INTEGER);',columns:[{id:'record_id',name:'record_id',data_type:'INTEGER',nullable:false,comment:'记录技术编号'}],node:{id:'load-short-platform',sql:'INSERT INTO short_platform_source SELECT record_id FROM synthetic_source;',upstream_ids:['synthetic_source']}},
   ]}));
   const sync=await synchronizeSources(h);
   assert.equal(sync.value.status,'completed',JSON.stringify(sync.value));
@@ -351,11 +363,14 @@ try {
   await h.resumeWorker();
   // catalog导入把表登记为知识对象catalog-{sha}，原文目标跟随该来源id；按
   // source_current里该表的实际来源身份定位，不假定等于表名。
-  const sourceKey=(()=>{const rows=h.sql(`SELECT JSON_OBJECT('id',source_id) FROM knowledge_objects WHERE source_id LIKE 'catalog-%' AND JSON_UNQUOTE(JSON_EXTRACT(body,'$.name'))='many_segments_source'`);return rows[0]?.id;})();
+  const catalogObjects=h.sql(`SELECT JSON_OBJECT('id',id,'source_id',source_id,'name',name) FROM knowledge_objects WHERE source_id LIKE 'catalog-%' AND name IN ('many_segments_source','short_platform_source') AND kind='table'`);
+  const sourceKey=catalogObjects.find(row=>row.name==='many_segments_source')?.source_id;
+  const shortPlatform=catalogObjects.find(row=>row.name==='short_platform_source');
   assert.ok(sourceKey,'catalog导入必须把超长表登记为知识对象');
+  assert.ok(shortPlatform?.source_id);
   await until(()=>{
-    const row=h.sql(`SELECT JSON_OBJECT('total',COUNT(*),'open',SUM(vector_state<>'indexed')) FROM knowledge_index_jobs WHERE target_kind='source_excerpt' AND source_kind='platform' AND object_id='${sourceKey}'`)[0];
-    return Number(row.total)>0&&Number(row.open)===0;
+    const row=h.sql(`SELECT JSON_OBJECT('total',COUNT(DISTINCT object_id),'open',SUM(vector_state<>'indexed')) FROM knowledge_index_jobs WHERE target_kind='source_excerpt' AND source_kind='platform' AND object_id IN ('${sourceKey}','${shortPlatform.source_id}')`)[0];
+    return Number(row.total)===2&&Number(row.open)===0;
   },'超长平台来源完成索引',300000);
   await h.pauseWorker();
   const segmentRows=await milvus('entities/query',{filter:`kind == "source_excerpt" && source_kind == "platform" && object_id == "${sourceKey}"`,outputFields:['id','object_id','object_version','char_offset','char_length','text','content_hash'],limit:1024,consistencyLevel:'Strong'});
@@ -370,13 +385,29 @@ try {
   const projection=h.sql(`SELECT JSON_OBJECT('complete',complete,'position',applied_position) FROM retrieval_source_projections WHERE source_kind='platform' AND source_id='${sourceKey}' ORDER BY revision DESC LIMIT 1`)[0];
   assert.equal(projection.complete,1,JSON.stringify(projection));
   assert.ok(Number(projection.position)>=sourceLength-64,'投影进度到正文终点：'+JSON.stringify(projection));
-  // v1检索不交付raw摘录（可交付类型前置），因此这里只断言索引事实，不冒称
-  // 该平台来源已经可被search_knowledge召回——raw公开分支归06。
-  // 超长来源索引耗时超过运行租约，工具调用身份已过期；改走同一条v1浏览检索
-  // 路径（include_raw同样为false），断言交付面而非依赖旧run。
-  const rawGuardMany=await search('分段批次推进校准词');
-  assert.ok(rawGuardMany.objects.every(value=>value.id!==sourceKey),'v1不交付raw摘录来源');
-  checks.push('真实280+段平台来源：末段独有标记入索引、摘录覆盖与投影进度都推进到正文终点，v1不交付raw');
+  // 超长索引处理可能超过上一个run租约。新对话经正式工具检索并按引用补读。
+  h.releaseRun(run.run_id);
+  await h.resumeWorker();
+  run=await h.capture(await h.create(),'在超长平台来源中核对独有的末段校准词。');
+  await h.pauseWorker();
+  const shortRows=await milvus('entities/query',{filter:`kind == "source_excerpt" && source_kind == "platform" && object_id == "${shortPlatform.source_id}"`,outputFields:['text'],limit:16,consistencyLevel:'Strong'});
+  assert.ok(shortRows.some(row=>row.text.includes(shortPlatformNeedle)),'短平台来源确有可匹配的原文向量记录');
+  const short=await invoke('search_knowledge',{query:shortPlatformNeedle,limit:10});
+  assert.ok(hasKnowledge(short,shortPlatform.id),'短平台资料仍能从知识窗口找到');
+  assert.ok(short.hits.every(hit=>hit.record_kind!=='source_excerpt'||
+    hit.citation.source.id!==shortPlatform.source_id),'短平台来源不占原文召回名额');
+  const raw=await invoke('search_knowledge',{query:'分段批次推进校准词',limit:10});
+  const rawTail=raw.hits.find(hit=>hit.record_kind==='source_excerpt'&&
+    hit.citation.source.kind==='platform'&&hit.citation.source.id===sourceKey&&hit.text.includes('分段批次推进校准词'));
+  assert.ok(rawTail,'当前正式工具必须能引用超长平台来源尾段');
+  assert.equal(rawTail.source_length,sourceLength);
+  assert.ok(rawTail.citation.locator.offset>100000);
+  const readTail=await invoke('read_source',{citation:rawTail.citation});
+  assert.equal(readTail.text,rawTail.text);
+  assert.deepEqual({source:readTail.source,revision:readTail.revision,locator:readTail.locator},
+    rawTail.citation);
+  assert.equal(readTail.source_length,sourceLength);
+  checks.push('已索引的平台短正文走知识窗口，真实280+段平台来源可召回末段并按原修订与定位逐字补读');
   passed=true;console.log(JSON.stringify({passed,checks,officialRequests:0}));
 } finally {
   await h?.close();

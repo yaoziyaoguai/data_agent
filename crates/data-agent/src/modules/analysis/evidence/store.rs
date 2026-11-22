@@ -1,8 +1,11 @@
 use super::super::store::LockedTasks;
 use crate::{
     contracts,
-    persistence::AppTx,
-    types::{AccessContext, Error, Result, epoch, fingerprint, id},
+    persistence::{
+        AppTx,
+        receipts::{self, Operation},
+    },
+    types::{AccessContext, Error, Result, epoch, id},
 };
 use serde_json::{Value, json};
 use sqlx::Row;
@@ -11,7 +14,6 @@ const MAX_EVIDENCE_BYTES: usize = 128 * 1024;
 
 pub struct EvidenceSaveSources<'a> {
     pub references: &'a Value,
-    pub text_authority: &'a Value,
 }
 
 /// 来源条件沿原任务版本读取；任务后来修订或取消不改写已经成功查询的含义。
@@ -73,7 +75,6 @@ pub async fn save_evidence_in_tx(
 ) -> Result<Value> {
     let EvidenceSaveSources {
         references: validated_sources,
-        text_authority,
     } = sources;
     tasks.assert_transaction(tx)?;
     if operation.is_empty()
@@ -85,21 +86,9 @@ pub async fn save_evidence_in_tx(
     }
     let cid = tasks.conversation_id();
     let command = json!({"input":input,"conversation_id":cid,"space_id":ctx.space_id});
-    let command_fingerprint = fingerprint(&command);
-    // 先查持久命令回执；恢复时不能因任务后来改版而重做同一副作用。
-    sqlx::query("INSERT INTO analysis_evidence_operations(owner_id,space_id,operation_id,conversation_id,fingerprint,receipt) VALUES(?,?,?,?,?,CAST('null' AS JSON)) ON DUPLICATE KEY UPDATE operation_id=VALUES(operation_id)")
-        .bind(&ctx.user_id).bind(&ctx.space_id).bind(operation).bind(cid).bind(&command_fingerprint).execute(tx.connection()).await?;
-    let saved=sqlx::query("SELECT space_id,conversation_id,fingerprint,receipt FROM analysis_evidence_operations WHERE owner_id=? AND operation_id=? FOR UPDATE")
-        .bind(&ctx.user_id).bind(operation).fetch_one(tx.connection()).await?;
-    if saved.get::<String, _>("fingerprint") != command_fingerprint
-        || saved.get::<String, _>("space_id") != ctx.space_id
-        || saved.get::<String, _>("conversation_id") != cid
-    {
-        return Err(Error::new("idempotency_conflict"));
-    }
-    let receipt = saved.get::<sqlx::types::Json<Value>, _>("receipt").0;
-    if !receipt.is_null() {
-        return Ok(receipt);
+    let receipt = Operation::new(ctx, "analysis_evidence", operation, &command);
+    if let Some(saved) = receipt.begin(tx).await? {
+        return Ok(saved);
     }
     contracts::validate("SaveAnalysisEvidenceInput", input)?;
     let task = input["task_id"]
@@ -111,11 +100,10 @@ pub async fn save_evidence_in_tx(
     let evidence_id = id();
     let reference = json!({"evidence_id":evidence_id,"conversation_id":cid,"task_id":task,"condition_version":version.to_string(),"result_dependencies":validated_sources["result_dependencies"]});
     contracts::validate("AnalysisEvidenceRef", &reference)?;
-    sqlx::query("INSERT INTO analysis_evidence(id,owner_id,space_id,conversation_id,task_id,condition_version,source_message_id,body,reference,text_authority) VALUES(?,?,?,?,?,?,?,?,?,?)")
+    sqlx::query("INSERT INTO analysis_evidence(id,owner_id,space_id,conversation_id,task_id,condition_version,source_message_id,body,reference) VALUES(?,?,?,?,?,?,?,?,?)")
         .bind(&evidence_id).bind(&ctx.user_id).bind(&ctx.space_id).bind(cid).bind(task).bind(version).bind(message_id)
-        .bind(sqlx::types::Json(&body)).bind(sqlx::types::Json(&reference)).bind(sqlx::types::Json(text_authority)).execute(tx.connection()).await?;
-    sqlx::query("UPDATE analysis_evidence_operations SET receipt=? WHERE owner_id=? AND operation_id=? AND fingerprint=?")
-        .bind(sqlx::types::Json(&reference)).bind(&ctx.user_id).bind(operation).bind(&command_fingerprint).execute(tx.connection()).await?;
+        .bind(sqlx::types::Json(&body)).bind(sqlx::types::Json(&reference)).execute(tx.connection()).await?;
+    receipt.complete(tx, &reference).await?;
     Ok(reference)
 }
 
@@ -133,22 +121,21 @@ pub async fn read_evidence_in_tx(
     Ok(body)
 }
 
-pub async fn read_evidence_authority_in_tx(
+pub async fn evidence_result_refs_in_tx(
     tx: &mut AppTx<'_>,
     ctx: &AccessContext,
-    evidence: &str,
-) -> Result<Value> {
-    Ok(sqlx::query_scalar::<_, Option<sqlx::types::Json<Value>>>(
-        "SELECT text_authority FROM analysis_evidence WHERE id=? AND owner_id=? AND space_id=?",
-    )
-    .bind(evidence)
-    .bind(&ctx.user_id)
-    .bind(&ctx.space_id)
-    .fetch_optional(tx.connection())
-    .await?
-    .ok_or(Error::new("not_available"))?
-    .map(|value| value.0)
-    .unwrap_or(Value::Null))
+    cid: &str,
+    ids: &[String],
+) -> Result<Vec<Value>> {
+    let references: Vec<sqlx::types::Json<Vec<Value>>> = sqlx::query_scalar(
+        "SELECT JSON_EXTRACT(reference,'$.result_dependencies') FROM analysis_evidence WHERE conversation_id=? AND owner_id=? AND space_id=? \
+         AND id IN (SELECT selected.id FROM JSON_TABLE(?,'$[*]' COLUMNS(id VARCHAR(64) PATH '$')) selected)",
+    ).bind(cid).bind(&ctx.user_id).bind(&ctx.space_id).bind(sqlx::types::Json(ids))
+    .fetch_all(tx.connection()).await?;
+    if references.len() != ids.len() {
+        return Err(Error::new("stale_context"));
+    }
+    Ok(references.into_iter().flat_map(|value| value.0).collect())
 }
 
 pub(in crate::modules::analysis) async fn refs_in_tx(
@@ -178,8 +165,7 @@ pub async fn delete_evidence_in_tx(
     if row.is_none() {
         return Err(Error::new("not_available"));
     }
-    sqlx::query("DELETE FROM analysis_evidence_operations WHERE owner_id=? AND space_id=? AND JSON_UNQUOTE(JSON_EXTRACT(receipt,'$.evidence_id'))=?")
-        .bind(&ctx.user_id).bind(&ctx.space_id).bind(evidence).execute(tx.connection()).await?;
+    receipts::delete_subject(tx, ctx, "analysis_evidence", "$.evidence_id", evidence).await?;
     sqlx::query("DELETE FROM analysis_evidence WHERE id=? AND owner_id=? AND space_id=?")
         .bind(evidence)
         .bind(&ctx.user_id)
@@ -194,8 +180,7 @@ pub async fn delete_conversation_evidence_in_tx(
     ctx: &AccessContext,
     cid: &str,
 ) -> Result<()> {
-    sqlx::query("DELETE FROM analysis_evidence_operations WHERE owner_id=? AND space_id=? AND conversation_id=?")
-        .bind(&ctx.user_id).bind(&ctx.space_id).bind(cid).execute(tx.connection()).await?;
+    receipts::delete_subject(tx, ctx, "analysis_evidence", "$.conversation_id", cid).await?;
     sqlx::query(
         "DELETE FROM analysis_evidence WHERE owner_id=? AND space_id=? AND conversation_id=?",
     )

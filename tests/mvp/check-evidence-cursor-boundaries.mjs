@@ -12,7 +12,7 @@ const query = 'syntheticcursorboundaries';
 const collections = Array.from({length: 2}, () => 'data_agent_test_' + randomUUID().replaceAll('-', ''));
 const vectorToken = (await readFile('.local/infra/milvus-root-password', 'utf8')).trim();
 const embedding = await embeddingProvider();
-const prepared = new Set(), indexed = new Set(), sourceRevisions = new Set(), checks = [], errors = [], searches = [], observations = [];
+const prepared = new Set(), indexed = new Set(), documentRevisions = new Set(), checks = [], errors = [], searches = [], observations = [];
 let h, run, manager, passed = false, documents = [];
 const ok = response => {assert.equal(response.status, 200, JSON.stringify(response.value)); return response.value;};
 const milvus = async (collection, path) => {
@@ -31,7 +31,7 @@ const proxy = createServer(async (request, response) => {
     if (request.url.endsWith('/upsert') && result.code === 0)
       for (const row of input.data ?? []) {
         indexed.add(row.object_id);
-        if (row.target === 'source_excerpt') sourceRevisions.add(row.object_id + ':' + row.object_version);
+        if (row.target === 'knowledge_entry' && row.kind === 'document') documentRevisions.add(row.object_id + ':' + row.object_version);
       }
     if (request.url.endsWith('/search')) searches.push({collection: input.collectionName, field: input.annsField, code: result.code});
     response.writeHead(upstream.status, {'content-type': 'application/json'}).end(text);
@@ -64,9 +64,8 @@ const invoke = async (name, args, expectedError) => {
 };
 const sourceState = (phase, id, revision) => {
   const jobs = h.sql(`SELECT JSON_OBJECT('target_kind',target_kind,'source_kind',source_kind,'object_id',object_id,'revision',CAST(version AS CHAR),'state',state,'vector_state',vector_state,'target',vector_target,'attempts',vector_attempts,'lease_epoch',CAST(lease_epoch AS CHAR),'lease_until',lease_until,'error',vector_error,'receipt',vector_receipt) FROM knowledge_index_jobs WHERE object_id='${id}' ORDER BY target_kind,version`);
-  const projections = h.sql(`SELECT JSON_OBJECT('source_kind',source_kind,'source_id',source_id,'revision',CAST(revision AS CHAR),'target',collection_target,'complete',complete,'position',applied_position) FROM retrieval_source_projections WHERE source_kind='document' AND source_id='${id}'`);
   const head = h.sql(`SELECT JSON_OBJECT('revision',CAST(version AS CHAR),'state',state) FROM knowledge_objects WHERE id='${id}'`)[0];
-  return {phase, id, revision, head, observedUpsert: sourceRevisions.has(id + ':' + revision), jobs, projections};
+  return {phase, id, revision, head, observedUpsert: documentRevisions.has(id + ':' + revision), jobs};
 };
 try {
   const profile = {provider_id: 'deepseek', model_id: 'deepseek-flash', trial_id: randomUUID(), price_version: '2026-10-04-peak-usd',
@@ -86,20 +85,20 @@ try {
   await h.resumeWorker(); await until(() => [...documents, ...terms].every(value => indexed.has(value.id))
     && h.sql(`SELECT JSON_OBJECT('n',COUNT(*)) FROM knowledge_index_jobs WHERE object_id IN (${[...documents, ...terms].map(value => `'${value.id}'`).join(',')}) AND vector_state<>'indexed'`)[0].n === 0,
     '正式消费者完成游标边界材料索引及就绪回执', 120000);
-  await begin('核对原文公共游标与当前来源修订。');
+  await begin('核对文档公共游标与当前来源修订。');
   const args = {query, kinds: ['document'], limit: 1};
   const first = await invoke('search_knowledge', args);
-  console.log(JSON.stringify({phase: 'raw-first', page: first}));
-  assert.equal(first.hits.length, 1); assert.equal(first.hits[0].record_kind, 'source_excerpt');
+  console.log(JSON.stringify({phase: 'document-first', page: first}));
+  assert.equal(first.hits.length, 1); assert.equal(first.hits[0].record_kind, 'knowledge_entry');
   assert.equal(typeof first.search_coverage.next, 'string');
-  const rest = documents.filter(value => value.id !== first.hits[0].citation.source.id); assert.equal(rest.length, 2);
+  const rest = documents.filter(value => value.id !== first.hits[0].ref.object_id); assert.equal(rest.length, 2);
   const scanCount = searches.length;
   const second = await invoke('search_knowledge', {...args, cursor: first.search_coverage.next});
-  assert.equal(second.hits.length, 1); assert.equal(second.hits[0].record_kind, 'source_excerpt');
-  assert.ok(rest.some(value => value.id === second.hits[0].citation.source.id), '续页交付另一份未交来源');
-  assert.equal(searches.length, scanCount, '原文未交窗口只重核owner，不重扫公共通道');
+  assert.equal(second.hits.length, 1); assert.equal(second.hits[0].record_kind, 'knowledge_entry');
+  assert.ok(rest.some(value => value.id === second.hits[0].ref.object_id), '续页交付另一份未交来源');
+  assert.equal(searches.length, scanCount, '文档未交窗口只重核owner，不重扫公共通道');
   // 本run从未交付第三份来源；换版只影响窗口内未交付候选，不先触发run观察失效。
-  const pending = rest.find(value => value.id !== second.hits[0].citation.source.id); assert.ok(pending);
+  const pending = rest.find(value => value.id !== second.hits[0].ref.object_id); assert.ok(pending);
   const changed = ok(await h.request('/knowledge/' + pending.id, {operation_id: randomUUID(), expected_version: pending.version,
     entry_id: 'body', value: query + ' 合成来源新版：必须重新核对修订。'}, 'alice', 'PATCH'));
   assert.notEqual(changed.version, pending.version);
@@ -110,11 +109,10 @@ try {
   try {
     await until(() => {
       ready = sourceState('edited-ready', pending.id, changed.version);
-      const target = ready.jobs.find(job => job.target_kind === 'source_excerpt' && job.source_kind === 'document' && job.revision === changed.version);
+      const target = ready.jobs.find(job => job.target_kind === 'knowledge_entry' && job.revision === changed.version);
       return ready.observedUpsert && target?.state === 'indexed' && target.vector_state === 'indexed'
-        && ready.jobs.filter(job => job.revision === changed.version).every(job => job.vector_state === 'indexed')
-        && ready.projections.some(projection => projection.revision === changed.version && projection.complete === 1 && projection.target === target.target);
-    }, '正式消费者完成修订原文索引及就绪回执', 120000);
+        && ready.jobs.filter(job => job.revision === changed.version).every(job => job.vector_state === 'indexed');
+    }, '正式消费者完成修订知识窗口索引及就绪回执', 120000);
   } finally {
     observations.push(ready ?? sourceState('edited-no-poll', pending.id, changed.version));
     console.log(JSON.stringify(observations.at(-1)));
@@ -122,7 +120,7 @@ try {
   await h.pauseWorker();
   // 原成功回执已登记旧来源；正式消费者换版结算后，旧公共游标沿窄读取恢复并明确stale。
   await invoke('search_knowledge', {...args, cursor: first.search_coverage.next}, 'stale_cursor');
-  checks.push('原文续页不重扫，正式来源换版后旧公共游标明确stale且拒绝重放不重做');
+  checks.push('文档续页不重扫，正式来源换版后旧公共游标明确stale且拒绝重放不重做');
 
   await begin('核对公共游标不能跨越当前任务来源范围变化。');
   await invoke('search_knowledge', {...args, cursor: first.search_coverage.next}, 'invalid_cursor');
@@ -131,12 +129,12 @@ try {
     filters: [], knowledge_refs: [], notes: '', source_limits: {allowed_sources: documents.map(value => ({kind: 'document', id: value.id})), origin_message_ids: [run.message_id]}};
   const task = await invoke('update_analysis_task', {action: 'create', goal: '合成来源范围游标', conditions, options: []});
   const scoped = await invoke('search_knowledge', args); assert.equal(typeof scoped.search_coverage.next, 'string');
-  const retainedId = scoped.hits[0].citation.source.id;
+  const retainedId = scoped.hits[0].ref.object_id;
   const revised = await invoke('update_analysis_task', {action: 'revise', task_id: task.task_id, expected_version: task.condition_version,
     goal: '', options: [], condition_patch: {set: {source_limits: {allowed_sources: [{kind: 'document', id: retainedId}], origin_message_ids: [run.message_id]}}, unset: []}});
   assert.notEqual(revised.condition_version, task.condition_version);
   await invoke('search_knowledge', {...args, cursor: scoped.search_coverage.next}, 'stale_cursor');
-  checks.push('正式收紧活动任务的来源范围后旧游标明确stale，不凭游标继续交范围外原文');
+  checks.push('正式收紧活动任务的来源范围后旧游标明确stale，不凭游标继续交范围外文档');
 
   await begin('核对公共索引真实目标切换后的游标绑定。');
   const termArgs = {query, kinds: ['term'], limit: 1};

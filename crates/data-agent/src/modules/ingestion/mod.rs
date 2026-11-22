@@ -1,7 +1,12 @@
 pub mod catalog;
 mod catalog_content;
+#[path = "catalog_storage/store.rs"]
+mod catalog_storage;
 pub mod prefill;
+#[path = "prefill_storage/store.rs"]
+mod prefill_storage;
 pub mod preparation;
+pub(crate) use store::push_checkpoint_platform_heads;
 pub use store::{
     begin_catalog_read_in_tx, catalog_candidate_in_tx, catalog_upstream_in_tx,
     check_catalog_read_in_tx, complete_catalog_namespace_in_tx, finish_catalog_read_in_tx,

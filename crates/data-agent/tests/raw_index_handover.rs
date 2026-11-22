@@ -38,7 +38,7 @@ async fn seed(pool: &sqlx::MySqlPool, resource: &str, version: u64) -> String {
     } else {
         sqlx::query("INSERT INTO source_heads(id,space_id,version,fingerprint) VALUES(?,'demo',?,'synthetic-handover') ON DUPLICATE KEY UPDATE version=VALUES(version)")
             .bind(resource).bind(version).execute(pool).await.unwrap();
-        sqlx::query("INSERT IGNORE INTO source_snapshots(source_id,version,body) VALUES(?,?,'合成旧作业原文')")
+        sqlx::query("INSERT IGNORE INTO source_revisions(source_id,version,body) VALUES(?,?,'合成旧作业原文')")
             .bind(resource).bind(version).execute(pool).await.unwrap();
     }
     let mut tx = AppTx::begin(pool).await.unwrap();
@@ -400,6 +400,7 @@ async fn rebuild_registers_current_sources_preserves_legacy_work_and_replays_onc
         user_id: "alice".into(),
         space_id: SPACE.into(),
         request_id: data_agent::types::id(),
+        table_access: None,
     };
     let prefix = format!("rebuild-{}", data_agent::types::id());
     let mut documents = Vec::new();
@@ -814,7 +815,7 @@ async fn production_handover_advances_past_unusable_due_prefix_without_changing_
                     .unwrap();
             }
             6 => {
-                sqlx::query("UPDATE source_snapshots SET complete=FALSE WHERE source_id=?")
+                sqlx::query("UPDATE source_revisions SET archive_complete=FALSE WHERE source_id=?")
                     .bind(&object)
                     .execute(&pool)
                     .await
@@ -907,7 +908,7 @@ async fn production_handover_advances_past_unusable_due_prefix_without_changing_
             .execute(&pool)
             .await
             .unwrap();
-        sqlx::query("DELETE FROM source_snapshots WHERE source_id=?")
+        sqlx::query("UPDATE source_revisions SET body=NULL WHERE source_id=?")
             .bind(object)
             .execute(&pool)
             .await
@@ -1199,6 +1200,7 @@ async fn handed_over_target_resumes_ledger_under_original_identities() {
         user_id: "handover-ledger-check".into(),
         space_id: SPACE.into(),
         request_id: "handover-ledger".into(),
+        table_access: None,
     };
     // 已发送批次只认原账本；当前配置缺失或不可解析都不能阻止接回旧回执，
     // 也不能提前把移交目标绑定到新trial。

@@ -78,7 +78,7 @@ export async function createReuseFixture(options = {}) {
     const task = await invoke("update_analysis_task", { action: "create", goal: "核对商品行口径",
       conditions: { time_start: null, time_end: null, timezone: "UTC", metric: null,
         channel: null, group_by: [], filters: [], knowledge_refs: [reference(source)],
-        notes: "只解释合成资料，不执行查询。" }, options: [] });
+        notes: "只解释合成资料，不执行查询。", source_limits: null }, options: [] });
     const evidence = await invoke("save_analysis_evidence", { task_id: task.task_id,
       condition_version: task.condition_version, data_range: "只解释资料，无查询数字。",
       findings: [{ text: "商品行数不能替代订单数。", calculation: "读取人工资料定义。",
@@ -204,12 +204,13 @@ async function checkHistoricalMethodSources(fixture, checks) {
   await fixture.finish();
 
   await writeFile(h.directory + "/platform/permissions.json", JSON.stringify({ denied_query_users: ["alice"] }));
+  assert.equal((await h.request(`/assets/${refs[1].draft_id}`)).status, 409);
+  assert.equal((await h.request(`/queries/${trend.query.id}/results`)).status, 403);
   const unavailable = ok(await h.request(`/assets/skill-drafts/${refs[1].draft_id}`));
   assert.equal(unavailable.status, "sources_unavailable");
   assert.equal(Object.hasOwn(unavailable, "body"), false);
-  const hidden = ok(await h.request("/assets")).assets.find(asset => asset.id === saved.id);
-  assert.equal(hidden.text_unavailable, true);
-  assert.equal(JSON.stringify(hidden).includes(input.body), false);
+  const stored = ok(await h.request("/assets")).assets.find(asset => asset.id === saved.id);
+  assert.equal(stored.body, input.body);
   await writeFile(h.directory + "/platform/permissions.json", "{}");
   await fixture.begin(cid, "修改方法当前任务的范围说明。");
   await fixture.invoke("update_analysis_task", { action: "revise", task_id: current.task_id,
@@ -217,7 +218,7 @@ async function checkHistoricalMethodSources(fixture, checks) {
     condition_patch: { set: { notes: "调整后的范围" }, unset: [] }, options: [] });
   await fixture.finish();
   assert.equal(ok(await h.request(`/assets/skill-drafts/${refs[2].draft_id}`)).status, "condition_changed");
-  checks.push("跨会话来源仍拒绝；任一历史查询撤权使待确认及已保存方法隐藏，草稿当前归属变化仍使其失效");
+  checks.push("跨会话来源仍拒绝；结果撤权使实际结果及依赖它的草稿不可读，已保存个人方法正文保留");
 }
 
 async function checkReuse() {
@@ -244,9 +245,10 @@ async function checkReuse() {
       expected_version: task.condition_version, goal: "", options: [] });
     const search = await fixture.invoke("search_knowledge", { query: "商品行",
       limit: 10, kinds: ["query_example"] });
-    assert.ok(search.objects.some(object => object.id === example.id));
-    const read = await fixture.invoke("read_knowledge", { object_id: example.id,
-      version: example.version });
+    assert.ok(search.hits.some(hit => hit.ref?.object_id === example.id));
+    const read = await fixture.invoke("read_knowledge", {
+      items: [{kind: "knowledge", ref: reference(example, "body"), structure_only: true}],
+    });
     assert.ok(JSON.stringify(read).includes("结果标签"));
     assert.ok(JSON.stringify(read).includes(source.id));
     const sql = exampleInput.structured_value.sql;
@@ -269,7 +271,7 @@ async function checkReuse() {
     const anotherInput = { ...draftInput, name: "未确认的来源保护方法" };
     const pendingDraft = await fixture.invoke("prepare_skill_draft", anotherInput, pendingSdk);
     assert.deepEqual(await fixture.invoke("prepare_skill_draft", anotherInput, pendingSdk), pendingDraft);
-    const origin = h.sql(`SELECT JSON_OBJECT('draft_operation',d.operation_id,'tool_operation',t.operation_id,'draft_origin',d.origin_run_id,'tool_origin',t.origin_run_id,'message',d.source_message_id) FROM skill_drafts d JOIN tool_calls t ON d.operation_id=t.operation_id WHERE d.id=${quote(pendingDraft.draft_id)} AND t.sdk_tool_call_id=${quote(pendingSdk)}`)[0];
+    const origin = h.sql(`SELECT JSON_OBJECT('draft_operation',JSON_UNQUOTE(JSON_EXTRACT(d.draft_origin,'$.operation_id')),'tool_operation',t.operation_id,'draft_origin',JSON_UNQUOTE(JSON_EXTRACT(d.draft_origin,'$.origin_run_id')),'tool_origin',t.origin_run_id,'message',JSON_UNQUOTE(JSON_EXTRACT(d.draft_origin,'$.reference.source_message_id'))) FROM personal_assets d JOIN tool_calls t ON JSON_UNQUOTE(JSON_EXTRACT(d.draft_origin,'$.operation_id'))=t.operation_id WHERE d.id=${quote(pendingDraft.draft_id)} AND t.sdk_tool_call_id=${quote(pendingSdk)}`)[0];
     assert.ok(origin);
     assert.equal(origin.draft_operation, origin.tool_operation);
     assert.equal(origin.draft_origin, origin.tool_origin);
@@ -296,12 +298,16 @@ async function checkReuse() {
     const pending = ok(await detail());
     assert.equal(pending.status, "pending");
     assert.equal(pending.name, draftInput.name);
-    assert.equal(ok(await h.request("/assets")).assets.some(a => a.name === draftInput.name), false);
+    const listedDraft = ok(await h.request("/assets")).assets.find(a => a.id === draftId);
+    assert.equal(listedDraft.state, "draft");
+    assert.equal(listedDraft.body, "");
+    assert.equal(ok(await h.request(`/assets/${draftId}`)).body, pending.body);
+    assert.equal((await h.request(`/assets/${draftId}`, undefined, "bob")).status, 404);
     assert.equal((await h.request(`/assets/skill-drafts/${draftId}`, undefined, "bob")).status, 404);
     assert.equal(JSON.stringify(ok(await h.request("/assets/skill-drafts", undefined, "bob"))).includes(draftId), false);
     assert.equal((await h.request(`/conversations/${cid}/skill-selections`, { ...command(),
       asset_id: draftId, version: "1" })).status, 404);
-    checks.push("私人待确认方法不进入正式资产或Skill选择；他人详情与目录不可读取");
+    checks.push("私人待确认方法在统一资产列表有独立状态，不能作为已选Skill；他人目录及详情不可读取");
 
     const confirmInput = assetInput({ draft_id: draftId, name: draftInput.name,
       body: draftInput.body + "\n确认前补充：字段含义以当前资料为准。", scope: draftInput.scope,
@@ -352,6 +358,7 @@ async function checkReuse() {
     const disabled = ok(await h.request(`/assets/${saved.id}/disable`, { ...command(), expected_version: saved.version }));
     const skills = ok(await impact(source, "skill"));
     assert.ok(skills.items.some(v => v.id === saved.id && v.state === "disabled"));
+    assert.equal(skills.items.some(v => v.id === pendingDraft.draft_id), false, "待确认草稿不是已建立的语义依赖");
     assert.equal(JSON.stringify(skills).includes(privateBob.id), false);
     assert.equal(JSON.stringify(skills).includes(privateBob.name), false);
     assert.equal(skills.next_after_id, null);
@@ -373,12 +380,10 @@ async function checkReuse() {
     await fixture.begin(cid, "重新查看这个案例，不要执行。");
     await fixture.invoke("update_analysis_task", { action: "route", task_id: task.task_id,
       expected_version: task.condition_version, goal: "", options: [] });
-    const stale = await fixture.invokeRaw("read_knowledge", { object_id: example.id, version: example.version });
-    assert.equal(stale.status, 409);
-    assert.equal(stale.value.code, "stale_knowledge");
-    assert.equal(Object.hasOwn(stale.value, "data"), false);
-    assert.equal(JSON.stringify(stale.value).includes(example.entries[0].effective_value), false);
-    assert.equal(JSON.stringify(stale.value).includes(queryExampleInput([]).structured_value.sql), false);
+    const stale = await fixture.invoke("read_knowledge", {items: [{kind: "knowledge", ref: reference(example, "body"), structure_only: true}]});
+    assert.equal(stale.items[0].state, "stale");
+    assert.equal(JSON.stringify(stale).includes(example.entries[0].effective_value), false);
+    assert.equal(JSON.stringify(stale).includes(queryExampleInput([]).structured_value.sql), false);
     await fixture.finish();
     checks.push("必要来源正文变化拒绝旧案例的当前读取，不交付旧正文或SQL；按ID保留旧版本直接依赖，不按名称猜规则");
 
@@ -460,7 +465,7 @@ async function checkReuse() {
     const deletedValidDraft = ok(await h.request(`/assets/skill-drafts/${deleting.draft.draft_id}`));
     assert.equal(deletedValidDraft.status, "sources_unavailable");
     assert.equal(JSON.stringify(deletedValidDraft).includes("删除会话前仍有效的方法"), false);
-    assert.equal(h.sql(`SELECT JSON_OBJECT('n',COUNT(*)) FROM skill_drafts WHERE conversation_id=${quote(cid)} AND state<>'confirmed' AND body IS NOT NULL`)[0].n, 0);
+    assert.equal(h.sql(`SELECT JSON_OBJECT('n',COUNT(*)) FROM personal_assets WHERE JSON_UNQUOTE(JSON_EXTRACT(draft_origin,'$.reference.conversation_id'))=${quote(cid)} AND state='draft'`)[0].n, 0);
     checks.push("来源变化后未确认草稿只返回失效状态且不能确认；删除会话清未确认内容，已确认独立方法保持");
 
     const staleMetric = ok(await h.request("/knowledge/metric-net_revenue"));
@@ -471,21 +476,24 @@ async function checkReuse() {
     const investigation = await h.create();
     await fixture.begin(investigation, "核对表改版后的资料，先不要执行查询。");
     const candidates = await fixture.invoke("search_knowledge", { query: "净收入", limit: 10 });
-    assert.ok(candidates.objects.some(object => object.id === staleMetric.id));
+    assert.ok(candidates.hits.some(hit => hit.ref?.object_id === staleMetric.id));
     const manifest = h.sql(`SELECT authority_snapshot FROM agent_runs WHERE id=${quote(fixture.run.run_id)}`)[0];
     assert.equal(manifest.knowledge.some(([id, version]) => id === table.id && version === table.version), false);
-    const currentTable = await fixture.invoke("read_knowledge", { object_id: table.id, version: changedTable.version });
-    assert.equal(currentTable.version, changedTable.version);
-    const metricClue = await fixture.invoke("read_knowledge", { object_id: staleMetric.id, version: staleMetric.version });
-    const oldRule = metricClue.entries.find(entry => entry.entry_id === "definition");
-    assert.equal(oldRule.effective_structure, null); assert.ok(oldRule.structure_gap);
+    const readTable = await fixture.invoke("read_knowledge", {items: [{kind: "knowledge", ref: reference(changedTable, "ddl")}]});
+    assert.equal(readTable.items[0].ref.version, changedTable.version);
+    const metricClue = await fixture.invoke("read_knowledge", {items: [{kind: "knowledge", ref: reference(staleMetric, "definition"), structure_only: true}]});
+    assert.equal(metricClue.items[0].effective_structure.kind, "metric");
+    assert.ok(metricClue.items[0].structure_dependencies.some(ref =>
+      ref.object_id === table.id && ref.path === "ddl" && ref.version === changedTable.version));
+    const explicitOldTable = await fixture.invoke("read_knowledge", {items: [{kind: "knowledge", ref: reference(table, "description")}]});
+    assert.equal(explicitOldTable.items[0].state, "stale");
     const investigationTask = await fixture.invoke("update_analysis_task", { action: "create", goal: "核对改版资料",
       conditions: { time_start: null, time_end: null, timezone: "UTC", metric: null, channel: null,
         group_by: [], filters: [], knowledge_refs: [], notes: "先查资料" }, options: [] });
     const oldRuleAdoption = await fixture.invokeRaw("request_query", { task_id: investigationTask.task_id,
       condition_version: investigationTask.condition_version, sql: "SELECT 1 AS value", parameters: {},
-      target_id: "synthetic-sqlite", summary: "尝试绑定已失效指标，应被拒绝。",
-      knowledge_refs: [reference(staleMetric, "definition")], replaces_query_id: null });
+      target_id: "synthetic-sqlite", summary: "尝试绑定已失效的表正文，应被拒绝。",
+      knowledge_refs: [reference(staleMetric, "definition"), reference(table, "description")], replaces_query_id: null });
     assert.equal(oldRuleAdoption.status, 409); assert.equal(oldRuleAdoption.value.code, "stale_knowledge");
     await fixture.finish();
     const indirectMetric = ok(await h.request("/knowledge", { ...command(), kind: "metric",
@@ -497,18 +505,20 @@ async function checkReuse() {
       { name: "只直接引用指标的案例" })));
     const indirectConversation = await h.create();
     await fixture.begin(indirectConversation, "读取只引用指标的查询案例，不执行。");
-    const indirectRead = await fixture.invoke("read_knowledge", { object_id: indirectCase.id,
-      version: indirectCase.version });
+    const indirectRequest = {items: [{kind: "knowledge", ref: reference(indirectCase, "body"), structure_only: true}]};
+    const indirectRead = (await fixture.invoke("read_knowledge", indirectRequest)).items[0];
     assert.ok(indirectRead.structure_dependencies.some(ref => ref.object_id === indirectMetric.id && ref.path === "body"));
     assert.ok(indirectRead.structure_dependencies.some(ref => ref.object_id === table.id && ref.version === changedTable.version && ref.path === "ddl"));
     const indirectAuthority = h.sql(`SELECT authority_snapshot FROM agent_runs WHERE id=${quote(fixture.run.run_id)}`)[0];
     assert.ok(indirectAuthority.knowledge.some(([id, version]) => id === table.id && version === changedTable.version));
     const changedAgain = ok(await h.request(`/knowledge/${table.id}`, { ...command(),
       expected_version: changedTable.version, entry_id: "description", value: "再次核对后的商品行说明。" }, "alice", "PATCH"));
-    const adoptedVersionChanged = await fixture.invokeRaw("read_knowledge", { object_id: indirectCase.id, version: indirectCase.version });
-    assert.equal(adoptedVersionChanged.status, 409); assert.equal(adoptedVersionChanged.value.code, "stale_context");
+    const adoptedVersionChanged = (await fixture.invoke("read_knowledge", indirectRequest)).items[0];
+    assert.equal(adoptedVersionChanged.effective_structure.kind, "query_example");
+    assert.ok(adoptedVersionChanged.structure_dependencies.some(ref =>
+      ref.object_id === table.id && ref.path === "ddl" && ref.version === changedAgain.version));
     assert.equal(changedAgain.version, (BigInt(changedTable.version) + 1n).toString());
-    checks.push("已撤下旧结构的线索允许补查，正式采用旧指标仍拒绝；案例→指标→表完整依赖进入实际清单，表改版仍使旧上下文失效");
+    checks.push("仅改表说明时按已核相同DDL继续使用结构，显式旧表正文仍拒绝；案例、指标与当前表的完整依赖进入实际清单");
     await checkHistoricalMethodSources(fixture, checks);
     passed = true;
   } finally {

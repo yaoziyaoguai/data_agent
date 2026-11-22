@@ -106,7 +106,7 @@ try {
     effective_value: '无关大条目。'.repeat(50_000)});
   const encoded = Buffer.from(JSON.stringify(object)).toString('hex');
   h.sql(`UPDATE knowledge_objects SET body=CAST(CONVERT(0x${encoded} USING utf8mb4) AS JSON) WHERE id='${object.id}';
-    UPDATE knowledge_versions SET body=CAST(CONVERT(0x${encoded} USING utf8mb4) AS JSON) WHERE object_id='${object.id}'`);
+    UPDATE knowledge_revisions SET archived_body=CAST(CONVERT(0x${encoded} USING utf8mb4) AS JSON) WHERE object_id='${object.id}'`);
   await h.resumeWorker(); run = await h.capture(await h.create(), '核对合成大条目中的指定窗口。'); await h.pauseWorker();
   assert.equal(run.tool_contract_version, 2);
   const manager = SessionManager.inMemory('/synthetic/evidence-read-boundaries');

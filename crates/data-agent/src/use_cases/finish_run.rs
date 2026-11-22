@@ -6,6 +6,7 @@ use crate::{
 };
 use serde_json::{Value, json};
 use sqlx::MySqlPool;
+use std::collections::BTreeSet;
 
 fn completed_receipt(
     run: &runtime::LockedRun,
@@ -45,6 +46,47 @@ pub async fn append_output(
     tx.commit().await?;
     Ok(json!({"chunk_seq":input.chunk_seq}))
 }
+
+async fn delivered_result_authority_in_tx(
+    tx: &mut AppTx<'_>,
+    ctx: &AccessContext,
+    run: &runtime::LockedRun,
+) -> Result<Option<Value>> {
+    let receipts = runtime::delivered_result_sources_in_tx(tx, run).await?;
+    let mut direct = Vec::new();
+    let mut historical = Vec::new();
+    let mut evidence_ids = BTreeSet::new();
+    for receipt in receipts {
+        if let Some(query_id) = receipt["query_id"].as_str() {
+            direct.push(json!({"query_id":query_id,"result_ref":receipt["result_ref"]}));
+        }
+        if let Some(results) = receipt["historical_results"]
+            .as_array()
+            .filter(|v| !v.is_empty())
+        {
+            historical.push(json!({"actual_sources":{"result_dependencies":results}}));
+        }
+        evidence_ids.extend(
+            super::context_authority::items(&receipt["evidence_ids"])
+                .iter()
+                .map(|id| id.as_str().expect("stored evidence id").to_owned()),
+        );
+    }
+    if !evidence_ids.is_empty() {
+        let ids = evidence_ids.into_iter().collect::<Vec<_>>();
+        direct.extend(
+            analysis::evidence_result_refs_in_tx(tx, ctx, &run.conversation_id, &ids).await?,
+        );
+    }
+    if direct.is_empty() && historical.is_empty() {
+        return Ok(None);
+    }
+    let mut snapshot =
+        super::context_authority::from_sources(&json!({"result_dependencies":direct}));
+    snapshot["historical_analyses"] = json!(historical);
+    Ok(Some(snapshot))
+}
+
 pub async fn finish_run(
     pool: &MySqlPool,
     context: &AccessContext,
@@ -144,9 +186,31 @@ pub async fn finish_run(
     } else {
         false
     };
-    let checked_parts = if input.answer_parts.is_some() || input.control_delivery_ref.is_some() {
+    let bound_answer = input.answer_parts.is_some()
+        || input.control_delivery_ref.is_some()
+        || input.answer_sdk_tool_call_id.is_some()
+        || input.rendered_answer_binding.is_some();
+    let delivered_results = if bound_answer {
+        None
+    } else {
+        delivered_result_authority_in_tx(&mut tx, context, &run).await?
+    };
+    let checked_answer = if bound_answer || delivered_results.is_some() {
         tx.commit().await?;
-        let checked = super::task_answers::check_results(pool, context, &input.run_id).await?;
+        let checked = if bound_answer {
+            Some(super::task_answers::check_results(pool, context, &input.run_id).await?)
+        } else {
+            // 普通正文核对本输入真正读取的结果；旧会话资料不参与准入或定稿。
+            let snapshot = delivered_results.expect("result sources");
+            let mut results = super::context_authority::CheckedTextResults::default();
+            results
+                .include(pool, context, std::slice::from_ref(&snapshot), false)
+                .await?;
+            if !results.allows(&snapshot, false) {
+                return Err(Error::new("stale_context"));
+            }
+            None
+        };
         tx = AppTx::begin(pool).await?;
         conversation = conversations::lock_conversation_in_tx(&mut tx, context, &cid).await?;
         run = runtime::lock_run_in_tx(&mut tx, &input.run_id, &cid).await?;
@@ -154,54 +218,10 @@ pub async fn finish_run(
             tx.commit().await?;
             return Ok(receipt);
         }
-        Some(checked)
+        checked
     } else {
         None
     };
-    let checked_answer = if (input.answer_sdk_tool_call_id.is_some()
-        || input.rendered_answer_binding.is_some())
-        && input.answer_parts.is_none()
-    {
-        // 已提交只接回事实；未提交的来源答案在事务外回源，再锁定原运行提交。
-        tx.commit().await?;
-        let checked =
-            super::context_authority::check_run_results(pool, context, &input.run_id).await?;
-        tx = AppTx::begin(pool).await?;
-        conversation = conversations::lock_conversation_in_tx(&mut tx, context, &cid).await?;
-        run = runtime::lock_run_in_tx(&mut tx, &input.run_id, &cid).await?;
-        if let Some(receipt) = completed_receipt(&run, &input, &fp)? {
-            tx.commit().await?;
-            return Ok(receipt);
-        }
-        Some(checked)
-    } else {
-        None
-    };
-    // 普通自然 final 同样要核本轮已采用的工具结果；提交前在锁外回源，
-    // 再在最终事务确认依赖清单未变。控制交付只核宿主事实，不在此列。
-    let checked_natural = if input.answer_parts.is_none()
-        && input.answer_sdk_tool_call_id.is_none()
-        && input.rendered_answer_binding.is_none()
-        && input.control_delivery_ref.is_none()
-    {
-        tx.commit().await?;
-        let checked =
-            super::context_authority::check_run_results(pool, context, &input.run_id).await?;
-        tx = AppTx::begin(pool).await?;
-        conversation = conversations::lock_conversation_in_tx(&mut tx, context, &cid).await?;
-        run = runtime::lock_run_in_tx(&mut tx, &input.run_id, &cid).await?;
-        if let Some(receipt) = completed_receipt(&run, &input, &fp)? {
-            tx.commit().await?;
-            return Ok(receipt);
-        }
-        Some(checked)
-    } else {
-        None
-    };
-    let mut answer_text_results = super::context_authority::CheckedTextResults::default();
-    if let Some(checked) = &checked_answer {
-        answer_text_results.include_run(checked);
-    }
     conversations::assert_turn_in_tx(
         &tx,
         &conversation,
@@ -219,9 +239,6 @@ pub async fn finish_run(
             .is_empty()
     {
         return Err(Error::new("invalid_evidence"));
-    }
-    if let Some(checked) = &checked_natural {
-        super::context_authority::assert_checked_run_in_tx(&mut tx, &run.id, checked).await?;
     }
     if input.answer_parts.is_some() && input.control_delivery_ref.is_some() {
         return Err(Error::new("invalid_input"));
@@ -257,7 +274,7 @@ pub async fn finish_run(
             &run,
             parts,
             input.final_text.as_deref(),
-            checked_parts.as_ref().expect("checked parts"),
+            checked_answer.as_ref().expect("checked parts"),
             None,
         )
         .await?
@@ -269,7 +286,7 @@ pub async fn finish_run(
             &run,
             &[],
             input.final_text.as_deref(),
-            checked_parts.as_ref().expect("checked control"),
+            checked_answer.as_ref().expect("checked control"),
             control_delivery.as_ref(),
         )
         .await?
@@ -279,19 +296,13 @@ pub async fn finish_run(
             .as_deref()
             .ok_or(Error::new("invalid_input"))?;
         let mut unit = if let Some(sdk_id) = &input.answer_sdk_tool_call_id {
-            super::context_authority::assert_checked_run_in_tx(
-                &mut tx,
-                &run.id,
-                checked_answer.as_ref().expect("checked answer"),
-            )
-            .await?;
             let (_, unit) = super::task_answers::single_answer_in_tx(
                 &mut tx,
                 context,
                 &conversation,
                 &run,
                 sdk_id,
-                &answer_text_results,
+                checked_answer.as_ref().expect("checked answer"),
             )
             .await?;
             if unit.text != final_text {
@@ -301,19 +312,13 @@ pub async fn finish_run(
             runtime::append_output_in_tx(&mut tx, &run, final_start, final_text).await?;
             unit
         } else if let Some(binding) = &input.rendered_answer_binding {
-            super::context_authority::assert_checked_run_in_tx(
-                &mut tx,
-                &run.id,
-                checked_answer.as_ref().expect("checked answer"),
-            )
-            .await?;
             let (_, unit) = super::task_answers::rendered_answer_in_tx(
                 &mut tx,
                 context,
                 &conversation,
                 &run,
                 binding,
-                &answer_text_results,
+                checked_answer.as_ref().expect("checked rendered answer"),
             )
             .await?;
             if unit.text != final_text {
@@ -370,12 +375,11 @@ pub async fn finish_run(
     }
     runtime::commit_run_in_tx(&mut tx, &run, &input.commit_id, &fp, &output).await?;
     if std::env::var("DATA_AGENT_TOOLSET").as_deref() == Ok("data") {
-        // v2无parts提交不能把范围不同的多个任务一起结清；范围确实一致才允许自然综合。
+        // 无parts提交不能把范围不同的多个任务一起结清；范围确实一致才允许自然综合。
         // 宿主结果通知沿原query/condition推进，不要求它为历史任务补交parts。
         // 旧answer_sdk单份与rendered单份同属无parts提交，沿用同一范围门，不只豁免旧回执。
         if input.answer_parts.is_none()
             && input.control_delivery_ref.is_none()
-            && run.tool_contract_version == 2
             && conversations::result_query_for_message_in_tx(&mut tx, &cid, &run.message_id)
                 .await?
                 .is_none()
@@ -395,9 +399,7 @@ pub async fn finish_run(
         } else {
             runtime::delivery_task_refs_in_tx(&mut tx, &run).await?
         };
-        if let Some(checked) = checked_parts
-            .as_ref()
-            .or_else(|| checked_answer.as_ref().map(|_| &answer_text_results))
+        if let Some(checked) = &checked_answer
             && let Some(reference) = super::task_answers::covered_notification_in_tx(
                 &mut tx,
                 context,

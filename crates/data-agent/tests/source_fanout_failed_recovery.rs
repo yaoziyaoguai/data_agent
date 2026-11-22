@@ -40,6 +40,7 @@ async fn arrange(pool: &MySqlPool, source: &str, error_code: Option<&str>, job_s
         user_id: "alice".into(),
         space_id: "demo".into(),
         request_id: format!("fanout-recovery-{source}"),
+        table_access: None,
     };
     sqlx::query("INSERT INTO source_heads(id,space_id,version,fingerprint) VALUES(?,?,?,?)")
         .bind(source)

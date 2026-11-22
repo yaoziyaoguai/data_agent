@@ -1,3 +1,17 @@
+#[path = "checkpoints/store.rs"]
+mod checkpoints;
+pub(super) use checkpoints::{bind_legacy_delivery_checkpoint, save_checkpoint};
+
+pub(crate) use checkpoints::{
+    DELIVERY_HISTORY_SQL, decode_delivery_history, push_legacy_checkpoint_run,
+};
+
+#[path = "budget/store.rs"]
+mod budget;
+pub(crate) use budget::DELIVERY_BUDGET_SQL;
+pub use budget::{budget_message_in_tx, read_budget_profile_in_tx};
+pub(super) use budget::{issue_call, open_budget, settle_call};
+
 use crate::{
     persistence::AppTx,
     types::{Error, Result, id},
@@ -47,6 +61,24 @@ pub async fn delivery_task_refs_in_tx(tx: &mut AppTx<'_>, run: &LockedRun) -> Re
         .map(|r| r.0["data"].clone())
         .filter(|v| v["task_id"].is_string() && v["condition_version"].is_string())
         .collect())
+}
+
+/// 只有本输入明确选用后的原生 Skill 文件精读才能成为衍生来源。
+pub async fn read_skill_sources_in_tx(
+    tx: &mut AppTx<'_>,
+    conversation: &str,
+    recovery_chain: &str,
+) -> Result<Vec<Value>> {
+    let refs: Vec<sqlx::types::Json<Value>> = sqlx::query_scalar(
+        "SELECT DISTINCT JSON_ARRAY(JSON_EXTRACT(receipt,'$.data.id'), JSON_EXTRACT(receipt,'$.data.version')) \
+         FROM tool_calls WHERE conversation_id=? AND recovery_chain_id=? AND tool_name='read' \
+         AND state='succeeded' AND JSON_UNQUOTE(JSON_EXTRACT(receipt,'$.data.kind'))='skill'",
+    )
+    .bind(conversation)
+    .bind(recovery_chain)
+    .fetch_all(tx.connection())
+    .await?;
+    Ok(refs.into_iter().map(|reference| reference.0).collect())
 }
 
 // 原控制事实归运行账本所有：本恢复链各成功回执携带的控制投影，按运行创建时序返回。
@@ -147,25 +179,20 @@ pub(super) async fn lock_run(tx: &mut AppTx<'_>, run_id: &str, cid: &str) -> Res
         transaction_id: tx.id().into(),
     })
 }
+// 同会话先锁输入，再锁本恢复链的原运行，和原派发写入的锁序一致。
+pub(crate) const DELIVERY_PREVIOUS_ATTEMPT_SQL: &str = "(SELECT JSON_ARRAY(output_id,attempt_id)
+    FROM agent_runs WHERE recovery_chain_id=m.recovery_chain_id
+    ORDER BY created_at DESC,id DESC LIMIT 1 FOR UPDATE) AS previous_attempt";
+
 pub(super) async fn start_run(
     tx: &mut AppTx<'_>,
     input: RunStart<'_>,
-) -> Result<(String, String, Option<String>)> {
+    previous: Option<(String, String)>,
+) -> Result<(LockedRun, Option<String>)> {
     tx.lock_rank(2)?;
-    let previous=sqlx::query("SELECT output_id,attempt_id,tool_contract_version FROM agent_runs WHERE recovery_chain_id=? ORDER BY created_at DESC,id DESC LIMIT 1 FOR UPDATE").bind(input.recovery_chain_id).fetch_optional(tx.connection()).await?;
-    // 恢复沿原账本版本；当前进程的选择只用于尚无运行的新chain。
-    let tool_contract_version = previous
-        .as_ref()
-        .map(|r| r.get::<u8, _>("tool_contract_version"))
-        .unwrap_or(input.tool_contract_version);
-    if !matches!(tool_contract_version, 1 | 2) {
-        return Err(Error::new("invalid_input"));
-    }
-    let output_id = previous
-        .as_ref()
-        .map(|r| r.get::<String, _>("output_id"))
-        .unwrap_or_else(id);
-    let replaces = previous.as_ref().map(|r| r.get::<String, _>("attempt_id"));
+    // 新运行使用当前合同，已登记工具仍使用各自的持久回执版本。
+    let (output_id, replaces) =
+        previous.map_or_else(|| (id(), None), |(output, attempt)| (output, Some(attempt)));
     let attempt_id = id();
     sqlx::query(
         "UPDATE agent_runs SET state='interrupted' WHERE conversation_id=? AND state='running'",
@@ -177,9 +204,28 @@ pub(super) async fn start_run(
         sqlx::query("UPDATE assistant_outputs SET state='superseded' WHERE attempt_id=? AND state!='committed'").bind(old).execute(tx.connection()).await?;
     }
     sqlx::query("INSERT INTO agent_runs(id,conversation_id,message_id,recovery_chain_id,budget_scope_id,tool_contract_version,lease_epoch,state,output_id,attempt_id,job_id,job_lease_epoch) VALUES(?,?,?,?,?,?,?,'running',?,?,?,?)")
- .bind(input.run_id).bind(input.conversation_id).bind(input.message_id).bind(input.recovery_chain_id).bind(input.budget_scope_id).bind(tool_contract_version).bind(input.lease_epoch).bind(&output_id).bind(&attempt_id).bind(input.job_id).bind(input.job_lease_epoch).execute(tx.connection()).await?;
+ .bind(input.run_id).bind(input.conversation_id).bind(input.message_id).bind(input.recovery_chain_id).bind(input.budget_scope_id).bind(input.tool_contract_version).bind(input.lease_epoch).bind(&output_id).bind(&attempt_id).bind(input.job_id).bind(input.job_lease_epoch).execute(tx.connection()).await?;
     sqlx::query("INSERT INTO assistant_outputs(attempt_id,output_id,run_id,state,replaces_attempt_id) VALUES(?,?,?,'streaming',?)").bind(&attempt_id).bind(&output_id).bind(input.run_id).bind(&replaces).execute(tx.connection()).await?;
-    Ok((output_id, attempt_id, replaces))
+    Ok((
+        LockedRun {
+            id: input.run_id.into(),
+            conversation_id: input.conversation_id.into(),
+            message_id: input.message_id.into(),
+            recovery_chain_id: input.recovery_chain_id.into(),
+            budget_scope_id: input.budget_scope_id.into(),
+            tool_contract_version: input.tool_contract_version,
+            lease_epoch: input.lease_epoch,
+            state: "running".into(),
+            output_id,
+            attempt_id,
+            commit_id: None,
+            commit_fingerprint: None,
+            job_id: input.job_id.into(),
+            job_lease_epoch: input.job_lease_epoch,
+            transaction_id: tx.id().into(),
+        },
+        replaces,
+    ))
 }
 pub(super) async fn lock_tool(
     tx: &mut AppTx<'_>,
@@ -352,32 +398,19 @@ pub(super) async fn bind_answer_handoff(
 
 pub async fn read_answer_handoffs_in_tx(tx: &mut AppTx<'_>, run: &LockedRun) -> Result<Vec<Value>> {
     tx.assert_snapshot(&run.transaction_id)?;
-    answer_handoffs_in_chain(tx, &run.conversation_id, &run.recovery_chain_id).await
-}
-
-pub async fn read_frozen_answer_authorities_in_tx(
-    tx: &mut AppTx<'_>,
-    conversation_id: &str,
-    recovery_chain_id: &str,
-) -> Result<Vec<Value>> {
-    Ok(
-        answer_handoffs_in_chain(tx, conversation_id, recovery_chain_id)
-            .await?
-            .into_iter()
-            .map(|handoff| handoff["authority"].clone())
-            .collect(),
-    )
-}
-
-async fn answer_handoffs_in_chain(
-    tx: &mut AppTx<'_>,
-    conversation_id: &str,
-    recovery_chain_id: &str,
-) -> Result<Vec<Value>> {
     let values: Vec<sqlx::types::Json<Value>> = sqlx::query_scalar(
         "SELECT answer_handoff FROM tool_calls WHERE conversation_id=? AND recovery_chain_id=? AND state='succeeded' AND answer_part_sequence IS NOT NULL ORDER BY answer_part_sequence",
-    ).bind(conversation_id).bind(recovery_chain_id).fetch_all(tx.connection()).await?;
+    ).bind(&run.conversation_id).bind(&run.recovery_chain_id).fetch_all(tx.connection()).await?;
     Ok(values.into_iter().map(|v| v.0).collect())
+}
+
+pub async fn delivered_result_sources_in_tx(
+    tx: &mut AppTx<'_>,
+    run: &LockedRun,
+) -> Result<Vec<Value>> {
+    tx.assert_snapshot(&run.transaction_id)?;
+    Ok(sqlx::query("SELECT JSON_OBJECT('query_id',JSON_VALUE(receipt,'$.data.results.query_id'),'result_ref',JSON_VALUE(receipt,'$.data.results.result_ref'),'evidence_ids',JSON_EXTRACT(receipt,'$.data.evidence_ids'),'historical_results',JSON_EXTRACT(receipt,'$.data.historical_analysis.actual_sources.result_dependencies')) FROM tool_calls WHERE conversation_id=? AND recovery_chain_id=? AND tool_name IN ('get_query','read_analysis_report') AND state='succeeded'")
+        .bind(&run.conversation_id).bind(&run.recovery_chain_id).map(|row: sqlx::mysql::MySqlRow| row.get::<sqlx::types::Json<Value>,_>(0).0).fetch_all(tx.connection()).await?)
 }
 
 pub async fn finalize_answer_handoff_in_tx(
@@ -435,50 +468,6 @@ pub(super) async fn record_receipt(
 ) -> Result<()> {
     tx.assert_snapshot(&tool.transaction_id)?;
     sqlx::query("UPDATE tool_calls SET state='succeeded',receipt=? WHERE operation_id=? AND state='registered'").bind(sqlx::types::Json(receipt)).bind(&tool.operation_id).execute(tx.connection()).await?;
-    Ok(())
-}
-pub(super) async fn read_checkpoint(tx: &mut AppTx<'_>, chain: &str) -> Result<Option<Value>> {
-    Ok(sqlx::query_scalar::<_, sqlx::types::Json<Value>>(
-        "SELECT checkpoint FROM pi_checkpoints WHERE recovery_chain_id=?",
-    )
-    .bind(chain)
-    .fetch_optional(tx.connection())
-    .await?
-    .map(|v| v.0))
-}
-pub(super) async fn bind_legacy_delivery_checkpoint(
-    tx: &mut AppTx<'_>,
-    run_id: &str,
-    checkpoint: &Value,
-) -> Result<()> {
-    sqlx::query("UPDATE agent_runs SET legacy_delivery_checkpoint=? WHERE id=? AND legacy_delivery_checkpoint IS NULL")
-        .bind(sqlx::types::Json(checkpoint)).bind(run_id).execute(tx.connection()).await?;
-    Ok(())
-}
-pub(super) async fn read_legacy_delivery_checkpoint(
-    tx: &mut AppTx<'_>,
-    run: &LockedRun,
-) -> Result<Value> {
-    tx.assert_snapshot(&run.transaction_id)?;
-    let value: Option<sqlx::types::Json<Value>> =
-        sqlx::query_scalar("SELECT legacy_delivery_checkpoint FROM agent_runs WHERE id=?")
-            .bind(&run.id)
-            .fetch_one(tx.connection())
-            .await?;
-    value.map(|v| v.0).ok_or(Error::new("not_available"))
-}
-pub(super) async fn save_checkpoint(
-    tx: &mut AppTx<'_>,
-    run: &LockedRun,
-    value: &Value,
-) -> Result<()> {
-    tx.assert_snapshot(&run.transaction_id)?;
-    let mut value = value.clone();
-    if let Some(authority) = read_authority_in_tx(tx, &run.id).await? {
-        value["authority_revision"] = json!(crate::types::fingerprint(&authority));
-        value["authority_snapshot"] = authority;
-    }
-    sqlx::query("INSERT INTO pi_checkpoints(recovery_chain_id,checkpoint) VALUES(?,?) ON DUPLICATE KEY UPDATE checkpoint=VALUES(checkpoint),version=version+1").bind(&run.recovery_chain_id).bind(sqlx::types::Json(value)).execute(tx.connection()).await?;
     Ok(())
 }
 pub(super) async fn last_chunk_sequence(tx: &mut AppTx<'_>, run: &LockedRun) -> Result<u64> {
@@ -582,86 +571,6 @@ pub(super) async fn commit_run(
     .await?;
     Ok(())
 }
-pub(super) async fn open_budget(
-    tx: &mut AppTx<'_>,
-    scope: &str,
-    message: &str,
-    limit: Option<u32>,
-    profile: Option<&crate::contracts::generated::ModelProfile>,
-) -> Result<()> {
-    tx.lock_rank(6)?;
-    sqlx::query(
-        "INSERT INTO budget_scopes(id,message_id,call_limit,model_profile) VALUES(?,?,?,?)",
-    )
-    .bind(scope)
-    .bind(message)
-    .bind(limit)
-    .bind(profile.map(sqlx::types::Json))
-    .execute(tx.connection())
-    .await?;
-    Ok(())
-}
-pub(super) async fn issue_call(tx: &mut AppTx<'_>, run: &LockedRun, attempt: &str) -> Result<()> {
-    tx.assert_snapshot(&run.transaction_id)?;
-    tx.lock_rank(3)?;
-    if sqlx::query("SELECT id FROM model_call_attempts WHERE id=? FOR UPDATE")
-        .bind(attempt)
-        .fetch_optional(tx.connection())
-        .await?
-        .is_some()
-    {
-        return Err(Error::new("idempotency_conflict"));
-    }
-    tx.lock_rank(6)?;
-    let budget = sqlx::query("SELECT * FROM budget_scopes WHERE id=? FOR UPDATE")
-        .bind(&run.budget_scope_id)
-        .fetch_one(tx.connection())
-        .await?;
-    if budget
-        .get::<Option<sqlx::types::Json<Value>>, _>("model_profile")
-        .is_some()
-    {
-        return Err(Error::new("not_available"));
-    }
-    if budget
-        .get::<Option<u32>, _>("call_limit")
-        .is_some_and(|limit| budget.get::<u32, _>("issued_calls") >= limit)
-    {
-        return Err(Error::new("budget_exhausted"));
-    }
-    sqlx::query(
-        "INSERT INTO model_call_attempts(id,budget_scope_id,run_id,state) VALUES(?,?,?,'issued')",
-    )
-    .bind(attempt)
-    .bind(&run.budget_scope_id)
-    .bind(&run.id)
-    .execute(tx.connection())
-    .await?;
-    sqlx::query("UPDATE budget_scopes SET issued_calls=issued_calls+1 WHERE id=?")
-        .bind(&run.budget_scope_id)
-        .execute(tx.connection())
-        .await?;
-    Ok(())
-}
-pub(super) async fn settle_call(tx: &mut AppTx<'_>, run: &LockedRun, attempt: &str) -> Result<()> {
-    tx.assert_snapshot(&run.transaction_id)?;
-    tx.lock_rank(3)?;
-    let row =
-        sqlx::query("SELECT state FROM model_call_attempts WHERE id=? AND run_id=? FOR UPDATE")
-            .bind(attempt)
-            .bind(&run.id)
-            .fetch_optional(tx.connection())
-            .await?
-            .ok_or(Error::new("not_available"))?;
-    let state: String = row.get("state");
-    if state != "settled" {
-        sqlx::query("UPDATE model_call_attempts SET state='settled' WHERE id=?")
-            .bind(attempt)
-            .execute(tx.connection())
-            .await?;
-    }
-    Ok(())
-}
 pub async fn read_runs_in_tx(tx: &mut AppTx<'_>, cid: &str) -> Result<Vec<Value>> {
     let rows=sqlx::query("SELECT id,state,lease_epoch,message_id,attempt_id FROM agent_runs WHERE conversation_id=? ORDER BY created_at,id").bind(cid).fetch_all(tx.connection()).await?;
     Ok(rows.iter().map(|r|json!({"run_id":r.get::<String,_>("id"),"state":r.get::<String,_>("state"),"lease_epoch":r.get::<u64,_>("lease_epoch").to_string(),"message_id":r.get::<String,_>("message_id"),"attempt_id":r.get::<String,_>("attempt_id")})).collect())
@@ -708,29 +617,6 @@ pub async fn locate_run_message(pool: &MySqlPool, run_id: &str) -> Result<String
         .ok_or(Error::new("not_available"))
 }
 
-pub async fn read_budget_profile_in_tx(
-    tx: &mut AppTx<'_>,
-    scope: &str,
-) -> Result<Option<crate::contracts::generated::ModelProfile>> {
-    let value = sqlx::query_scalar::<_, Option<sqlx::types::Json<Value>>>(
-        "SELECT model_profile FROM budget_scopes WHERE id=?",
-    )
-    .bind(scope)
-    .fetch_one(tx.connection())
-    .await?;
-    value
-        .map(|value| crate::contracts::decode("ModelProfile", value.0))
-        .transpose()
-}
-
-pub async fn budget_message_in_tx(tx: &mut AppTx<'_>, scope: &str) -> Result<String> {
-    sqlx::query_scalar("SELECT message_id FROM budget_scopes WHERE id=?")
-        .bind(scope)
-        .fetch_optional(tx.connection())
-        .await?
-        .ok_or(Error::new("not_available"))
-}
-
 pub(super) async fn interrupt_run(tx: &mut AppTx<'_>, run: &LockedRun) -> Result<()> {
     tx.assert_snapshot(&run.transaction_id)?;
     if run.state != "running" {
@@ -761,27 +647,6 @@ pub(super) async fn cancel_run(tx: &mut AppTx<'_>, run: &LockedRun) -> Result<()
     Ok(())
 }
 
-// LIMIT 保留派生表边界：只排序恢复链 ID，选定后才读完整 SDK 历史。
-const CONVERSATION_CHECKPOINT_SQL: &str = "SELECT p.checkpoint FROM (
-    SELECT r.recovery_chain_id
-    FROM agent_runs r JOIN pi_checkpoints c ON r.recovery_chain_id=c.recovery_chain_id
-    WHERE r.conversation_id=? AND r.state='finished'
-    ORDER BY r.lease_epoch DESC LIMIT 1
-) latest JOIN pi_checkpoints p ON p.recovery_chain_id=latest.recovery_chain_id";
-
-pub(super) async fn conversation_checkpoint(
-    tx: &mut AppTx<'_>,
-    cid: &str,
-) -> Result<Option<Value>> {
-    Ok(
-        sqlx::query_scalar::<_, sqlx::types::Json<Value>>(CONVERSATION_CHECKPOINT_SQL)
-            .bind(cid)
-            .fetch_optional(tx.connection())
-            .await?
-            .map(|v| v.0),
-    )
-}
-
 pub async fn reject_tool_in_tx(
     tx: &mut AppTx<'_>,
     tool: &LockedTool,
@@ -810,58 +675,6 @@ pub async fn read_authority_in_tx(tx: &mut AppTx<'_>, run: &str) -> Result<Optio
             .fetch_one(tx.connection())
             .await?;
     Ok(value.map(|v| v.0))
-}
-
-pub(super) struct OutputReadRecord {
-    pub attempt_id: String,
-    pub output_id: String,
-    pub state: String,
-    pub final_text: Option<String>,
-    pub answer_parts: Option<Value>,
-    pub read_binding: Option<Value>,
-    pub recovery_chain_id: String,
-    pub authority: Value,
-}
-
-pub(super) async fn output_read_records_in_tx(
-    tx: &mut AppTx<'_>,
-    cid: &str,
-    attempts: &[String],
-) -> Result<Vec<OutputReadRecord>> {
-    if attempts.is_empty() {
-        return Ok(Vec::new());
-    }
-    let mut sql = sqlx::QueryBuilder::<sqlx::MySql>::new(
-        "SELECT o.attempt_id,o.output_id,o.state,o.final_text,o.answer_parts,o.read_binding,r.recovery_chain_id,r.authority_snapshot \
-         FROM assistant_outputs o JOIN agent_runs r ON r.id=o.run_id WHERE r.conversation_id=",
-    );
-    sql.push_bind(cid).push(" AND o.attempt_id IN (");
-    let mut items = sql.separated(",");
-    for attempt in attempts {
-        items.push_bind(attempt);
-    }
-    sql.push(")");
-    let rows = sql.build().fetch_all(tx.connection()).await?;
-    Ok(rows
-        .into_iter()
-        .map(|row| OutputReadRecord {
-            attempt_id: row.get("attempt_id"),
-            output_id: row.get("output_id"),
-            state: row.get("state"),
-            final_text: row.get("final_text"),
-            answer_parts: row
-                .get::<Option<sqlx::types::Json<Value>>, _>("answer_parts")
-                .map(|value| value.0),
-            read_binding: row
-                .get::<Option<sqlx::types::Json<Value>>, _>("read_binding")
-                .map(|value| value.0),
-            recovery_chain_id: row.get("recovery_chain_id"),
-            authority: row
-                .get::<Option<sqlx::types::Json<Value>>, _>("authority_snapshot")
-                .map(|value| value.0)
-                .unwrap_or(Value::Null),
-        })
-        .collect())
 }
 
 pub struct TaskConditionUpdate {
@@ -917,146 +730,4 @@ pub async fn output_states_in_tx(
         .into_iter()
         .map(|row| (row.get("attempt_id"), row.get("state")))
         .collect())
-}
-
-// 仅读取旧NULL格式或活跃输出恢复链的成功答案、定稿和控制投影。
-pub(super) async fn output_read_sources_in_tx(
-    tx: &mut AppTx<'_>,
-    cid: &str,
-    chain: &str,
-) -> Result<Vec<Value>> {
-    let rows = sqlx::query(
-        "SELECT t.sdk_tool_call_id,\
-         CASE WHEN t.answer_part_sequence IS NOT NULL THEN t.answer_handoff END AS handoff,\
-         CASE WHEN t.tool_name='present_analysis_answer' THEN JSON_EXTRACT(t.receipt,'$.data') END AS answer,\
-         CASE WHEN t.tool_name='prepare_analysis_answer' THEN JSON_EXTRACT(t.receipt,'$.data') END AS prepared,\
-         JSON_EXTRACT(t.receipt,'$.control_delivery') AS control_delivery \
-         FROM tool_calls t JOIN agent_runs r ON r.id=t.origin_run_id \
-         AND r.conversation_id=t.conversation_id AND r.recovery_chain_id=t.recovery_chain_id \
-         WHERE t.conversation_id=? AND t.recovery_chain_id=? AND t.state='succeeded' \
-         AND (t.answer_part_sequence IS NOT NULL OR t.tool_name='present_analysis_answer' \
-         OR t.tool_name='prepare_analysis_answer' \
-         OR JSON_CONTAINS_PATH(t.receipt,'one','$.control_delivery')) \
-         ORDER BY t.answer_part_sequence,t.operation_id",
-    )
-    .bind(cid)
-    .bind(chain)
-    .fetch_all(tx.connection())
-    .await?;
-    Ok(rows
-        .into_iter()
-        .map(|row| {
-            json!({
-                "sdk_tool_call_id":row.get::<String, _>("sdk_tool_call_id"),
-                "handoff":row.get::<Option<sqlx::types::Json<Value>>, _>("handoff").map(|value| value.0),
-                "answer":row.get::<Option<sqlx::types::Json<Value>>, _>("answer").map(|value| value.0),
-                "prepared":row.get::<Option<sqlx::types::Json<Value>>, _>("prepared").map(|value| value.0),
-                "control_delivery":row.get::<Option<sqlx::types::Json<Value>>, _>("control_delivery").map(|value| value.0)
-            })
-        })
-        .collect())
-}
-
-pub(super) async fn output_read_chunks_in_tx(
-    tx: &mut AppTx<'_>,
-    cid: &str,
-    output: &OutputReadRecord,
-    attempt: &str,
-) -> Result<Vec<(u64, String)>> {
-    let rows = sqlx::query(
-        "SELECT c.chunk_seq,c.body FROM output_chunks c \
-         JOIN assistant_outputs o ON o.attempt_id=c.attempt_id JOIN agent_runs r ON r.id=o.run_id \
-         WHERE r.conversation_id=? AND r.recovery_chain_id=? AND o.output_id=? AND c.attempt_id=? \
-         ORDER BY c.chunk_seq",
-    )
-    .bind(cid)
-    .bind(&output.recovery_chain_id)
-    .bind(&output.output_id)
-    .bind(attempt)
-    .fetch_all(tx.connection())
-    .await?;
-    Ok(rows
-        .into_iter()
-        .map(|row| (row.get("chunk_seq"), row.get("body")))
-        .collect())
-}
-
-#[cfg(test)]
-mod checkpoint_selection_tests {
-    use super::*;
-
-    #[tokio::test]
-    async fn checkpoint_selection_preserves_large_history_and_latest_valid_run() {
-        let url = std::env::var("DATA_AGENT_DATABASE_URL").expect("isolated MySQL fixture");
-        let cid = std::env::var("DATA_AGENT_TEST_CONVERSATION_ID").expect("completed seed run");
-        let pool = MySqlPool::connect(&url).await.unwrap();
-        let mut tx = AppTx::begin(&pool).await.unwrap();
-        sqlx::query("SET SESSION sort_buffer_size=262144")
-            .execute(tx.connection())
-            .await
-            .unwrap();
-        let buffer: u64 = sqlx::query_scalar("SELECT @@SESSION.sort_buffer_size")
-            .fetch_one(tx.connection())
-            .await
-            .unwrap();
-        assert_eq!(buffer, 262144);
-        let seed: String = sqlx::query_scalar(
-            "SELECT id FROM agent_runs WHERE conversation_id=? AND state='finished' LIMIT 1",
-        )
-        .bind(&cid)
-        .fetch_one(tx.connection())
-        .await
-        .unwrap();
-        let mut expected = None;
-        for (epoch, state, has_checkpoint) in [
-            (10, "finished", true),
-            (20, "finished", true),
-            (30, "finished", false),
-            (40, "running", true),
-            (50, "failed", true),
-        ] {
-            let run = id();
-            let chain = id();
-            sqlx::query("INSERT INTO agent_runs(id,conversation_id,message_id,recovery_chain_id,budget_scope_id,lease_epoch,state,job_id,job_lease_epoch,output_id,attempt_id,created_at) SELECT ?,conversation_id,message_id,?,budget_scope_id,?,?,job_id,job_lease_epoch,output_id,attempt_id,TIMESTAMPADD(SECOND,?,created_at) FROM agent_runs WHERE id=?")
-                .bind(&run).bind(&chain).bind(epoch).bind(state).bind(-epoch).bind(&seed)
-                .execute(tx.connection()).await.unwrap();
-            if has_checkpoint {
-                let value = json!({"epoch":epoch,"history":"合成历史".repeat(60000)});
-                assert!(serde_json::to_vec(&value).unwrap().len() > 512 * 1024);
-                sqlx::query("INSERT INTO pi_checkpoints(recovery_chain_id,checkpoint) VALUES(?,?)")
-                    .bind(&chain)
-                    .bind(sqlx::types::Json(&value))
-                    .execute(tx.connection())
-                    .await
-                    .unwrap();
-                if epoch == 20 {
-                    expected = Some(value);
-                }
-            }
-        }
-        assert_eq!(
-            conversation_checkpoint(&mut tx, &cid).await.unwrap(),
-            expected
-        );
-        assert_eq!(conversation_checkpoint(&mut tx, &id()).await.unwrap(), None);
-        // 优化器可能先读取检查点表；强制该合法连接顺序，稳定覆盖宽 JSON 排序的反例。
-        let checkpoint_first = CONVERSATION_CHECKPOINT_SQL
-            .replacen("SELECT", "SELECT /*+ JOIN_ORDER(p,r) */", 1)
-            .replace(
-                "SELECT r.recovery_chain_id",
-                "SELECT /*+ JOIN_ORDER(c,r) */ r.recovery_chain_id",
-            );
-        let actual = sqlx::query_scalar::<_, sqlx::types::Json<Value>>(sqlx::AssertSqlSafe(
-            checkpoint_first,
-        ))
-        .bind(&cid)
-        .fetch_optional(tx.connection())
-        .await
-        .unwrap()
-        .map(|v| v.0);
-        assert_eq!(actual, expected);
-        // 不提交夹具行，后续仍验证原始会话的迁移和续聊。
-        drop(tx);
-        pool.close().await;
-    }
 }

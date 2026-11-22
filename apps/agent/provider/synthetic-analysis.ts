@@ -17,18 +17,6 @@ export function syntheticAction(
     return cockpitAction(run, context);
   const messages = context.messages.filter(message => !isRecoveryNotice(message));
   // 宿主参考会被Pi投影为user；合成模型按真实输入定位工具组，不能把参考当新问题。
-  // v2首窗（来源未裁决）的宿主投影内必须照常route；只有范围重置后的投影窗口
-  // （已有控制记录、pending刷新未应用）不能继续发工具调用：turn必须自然结束，
-  // turn_end应用投影刷新后继续，否则工具循环令turn永不结束、耗尽预算。
-  // 两个前缀与session/task-projection.ts的投影字面量保持一致。
-  const textOf = (message: (typeof messages)[number]) =>
-    typeof message.content === "string" ? message.content : message.content
-      .filter(part => part.type === "text").map(part => part.text).join("");
-  const projected = messages.filter(message => message.role === "user");
-  if (run.tool_contract_version === 2
-    && projected.some(message => textOf(message).startsWith("当前宿主事实："))
-    && projected.some(message => textOf(message).startsWith('{"sdk_tool_call_id"')))
-    return { text: "任务或资料范围已更新，本条输入按更新后的范围处理。" };
   const input = run.text;
   const lastUser = messages.findLastIndex((message) => message.role === "user" &&
     (typeof message.content === "string" ? message.content : message.content
@@ -92,8 +80,7 @@ export function syntheticAction(
     filters: ["is_test = 0", "paid_amount_cents > 0"],
     knowledge_refs: [],
     notes: "",
-    // v2任务条件必须显式声明范围；缺字段的任务范围未知，证据工具在归属门后全部被拒。
-    ...(run.tool_contract_version === 2 ? { source_limits: null } : {}),
+    source_limits: null,
   };
   if (previous && !previous.conditions && !has("read_analysis_task")) return { tool:"read_analysis_task", args:{task_id:previous.id} };
   const old = latest("read_analysis_task")?.conditions ?? previous?.conditions;
@@ -129,7 +116,7 @@ export function syntheticAction(
   });
   const route = (): SyntheticAction => update("route");
   // v2证据工具在归属裁决前会被拒：本条输入先route登记，再检索/执行/解释。
-  if (run.tool_contract_version === 2 && !has("update_analysis_task")) return route();
+  if (!has("update_analysis_task")) return route();
   if (input.startsWith("[已确认查询结果事件]")) {
     const qid = input.match(/query_id=([^，\s]+)/)?.[1];
     if (!has("get_query"))
@@ -145,7 +132,6 @@ export function syntheticAction(
       return {
         text: `查询状态为 ${result.query.execution_state}，尚无可解释的结果。`,
       };
-    if (run.tool_contract_version !== 2 && has("present_analysis_answer")) return {text: "结果已按实际来源交付。"};
     const columns = r.columns.slice(0, 10) as RecordValue[];
     const values: RecordValue[] = [];
     const rows = (r.rows as unknown[][]).slice(0, 5).map((_row, rowIndex) =>
@@ -158,16 +144,9 @@ export function syntheticAction(
     const template = "查询已完成。以下为实际结果预览，字段顺序及单位见查询卡片：\n\n" +
       (rows.map(row => "- " + row).join("\n") || "没有符合条件的行。") +
       "\n\n这里只展示部分预览；完整范围和下载以查询卡片为准。当前是固定合成演示，不代表真实模型的自主分析能力。";
-    if (run.tool_contract_version === 2) {
-      // v2两步：先prepare取得已核bindings，下一条正文以{{name}}引用，由宿主流式渲染交付。
-      if (has("prepare_analysis_answer")) return {text: template};
-      return {tool: "prepare_analysis_answer", args: {
-        sources: [{query_id: qid, result_ref: r.result_ref, columns: columns.map(column => column.name)}], values,
-      }};
-    }
-    return {tool: "present_analysis_answer", args: {
+    if (has("prepare_analysis_answer")) return {text: template};
+    return {tool: "prepare_analysis_answer", args: {
       sources: [{query_id: qid, result_ref: r.result_ref, columns: columns.map(column => column.name)}], values,
-      template,
     }};
   }
   if (
@@ -186,7 +165,7 @@ export function syntheticAction(
     if (!has("execute_query")) return {tool: "execute_query", args: {query_id: query.id, draft_version: query.draft_version, condition_version: query.condition_version, instruction_quote: run.text}};
     return {text: latest("execute_query").error ? "这份查询暂未执行，请核对条件后再试。" : "已提交这份 SQL，结果会显示在对话中。"};
   }
-  const inheritedRef = run.tool_contract_version === 2 && previous
+  const inheritedRef = previous
     ? conditions.knowledge_refs.find(ref => ref.object_id === 'metric-' + conditions.metric && ref.path === 'sql')
     : undefined;
   if (inheritedRef && !has('read_knowledge')) return {tool: 'read_knowledge', args: {
@@ -213,25 +192,22 @@ export function syntheticAction(
                     : /地区/.test(input)
                       ? "region 地区"
                       : input,
-        limit: run.tool_contract_version === 2 ? 5 : 20,
-        ...(run.tool_contract_version === 2 ? {kinds: ['metric']} : {}),
+        limit: 5, kinds: ['metric'],
       },
     };
   const knowledge = latest("search_knowledge") ?? {};
-  const objects: RecordValue[] = run.tool_contract_version === 2 ? [] : knowledge.objects ?? [];
-  if (run.tool_contract_version === 2) {
-    for (const receipt of tools.filter(tool => tool.name === 'search_knowledge')) {
-      for (const hit of receipt.data.hits ?? []) {
-        if (hit.record_kind !== 'knowledge_entry') continue;
-        let object = objects.find(object => object.id === hit.ref.object_id && object.version === hit.ref.version);
-        if (!object) {
-          object = {id: hit.ref.object_id, version: hit.ref.version, name: hit.name, ref: hit.ref, entries: []};
-          objects.push(object);
-        }
-        if (!object.entries.some((entry: RecordValue) => entry.path === hit.ref.path))
-          object.entries.push({entry_id: hit.ref.path, path: hit.ref.path, ref: hit.ref, effective_value: hit.definition,
-            content_page: {complete: hit.content_state === 'complete'}});
+  const objects: RecordValue[] = [];
+  for (const receipt of tools.filter(tool => tool.name === 'search_knowledge')) {
+    for (const hit of receipt.data.hits ?? []) {
+      if (hit.record_kind !== 'knowledge_entry') continue;
+      let object = objects.find(object => object.id === hit.ref.object_id && object.version === hit.ref.version);
+      if (!object) {
+        object = {id: hit.ref.object_id, version: hit.ref.version, name: hit.name, ref: hit.ref, entries: []};
+        objects.push(object);
       }
+      if (!object.entries.some((entry: RecordValue) => entry.path === hit.ref.path))
+        object.entries.push({entry_id: hit.ref.path, path: hit.ref.path, ref: hit.ref, effective_value: hit.definition,
+          content_page: {complete: hit.content_state === 'complete'}});
     }
   }
   if (inheritedRef && !objects.some(object => object.id === inheritedRef.object_id)) {
@@ -254,51 +230,44 @@ export function syntheticAction(
   if (zeroPayment || (/月底|含义|什么意思|解释|为什么|表结构/.test(input) && !revision)) {
     const sourceId = zeroPayment ? 'etl' : 'business-guide';
     let unavailable = false;
-    if (run.tool_contract_version === 2) {
-      const hits = tools.filter(tool => tool.name === 'search_knowledge').flatMap(tool => tool.data.hits ?? []);
-      const raw = hits.find((hit: RecordValue) => hit.record_kind === 'source_excerpt' && hit.citation.source.id === sourceId);
-      const citation = raw?.citation ?? hits.flatMap((hit: RecordValue) => hit.citations ?? [])
-        .find((citation: RecordValue) => citation.source.kind === 'platform' && citation.source.id === sourceId);
-      if (!citation) {
-        const entry = hits.find((hit: RecordValue) => hit.record_kind === 'knowledge_entry'
-          && hit.kind === 'document' && hit.ref.path === 'body');
-        if (!entry && tools.filter(tool => tool.name === 'search_knowledge').length === 1)
-          return {tool: 'search_knowledge', args: {query: zeroPayment ? '上游与加工 没有成功付款' : '收入 paid_at 下单日期', kinds: ['document'], limit: 5}};
-        let offset = 0;
-        let total: number | undefined;
-        unavailable = !entry;
-        for (const receipt of tools.filter(tool => tool.name === 'read_knowledge')) {
-          const item = receipt.data.items?.[0];
-          if (receipt.data.error || item?.kind !== 'knowledge' || item.state !== 'ok'
-            || item.ref.object_id !== entry?.ref.object_id || item.ref.version !== entry?.ref.version || item.ref.path !== entry?.ref.path
-            || item.content_page.offset !== offset || (total !== undefined && total !== item.content_page.total_chars)) {
-            unavailable = true; break;
-          }
-          total = item.content_page.total_chars;
-          offset += [...item.content].length;
-          if (item.content_page.next_offset !== (offset === total ? null : offset)) {unavailable = true; break;}
+    const hits = tools.filter(tool => tool.name === 'search_knowledge').flatMap(tool => tool.data.hits ?? []);
+    const raw = hits.find((hit: RecordValue) => hit.record_kind === 'source_excerpt' && hit.citation.source.id === sourceId);
+    const citation = raw?.citation ?? hits.flatMap((hit: RecordValue) => hit.citations ?? [])
+      .find((citation: RecordValue) => citation.source.kind === 'platform' && citation.source.id === sourceId);
+    if (!citation) {
+      const entry = hits.find((hit: RecordValue) => hit.record_kind === 'knowledge_entry'
+        && hit.kind === 'document' && hit.ref.path === 'body');
+      if (!entry && tools.filter(tool => tool.name === 'search_knowledge').length === 1)
+        return {tool: 'search_knowledge', args: {query: zeroPayment ? '上游与加工 没有成功付款' : '收入 paid_at 下单日期', kinds: ['document'], limit: 5}};
+      let offset = 0;
+      let total: number | undefined;
+      unavailable = !entry;
+      for (const receipt of tools.filter(tool => tool.name === 'read_knowledge')) {
+        const item = receipt.data.items?.[0];
+        if (receipt.data.error || item?.kind !== 'knowledge' || item.state !== 'ok'
+          || item.ref.object_id !== entry?.ref.object_id || item.ref.version !== entry?.ref.version || item.ref.path !== entry?.ref.path
+          || item.content_page.offset !== offset || (total !== undefined && total !== item.content_page.total_chars)) {
+          unavailable = true; break;
         }
-        if (!unavailable && (total === undefined || offset < total)) return {tool: 'read_knowledge', args: {
-          items: [{kind: 'knowledge', ref: entry.ref, offset, limit: 8000}],
-        }};
-      } else {
-        const read = latest('read_source');
-        unavailable = Boolean(read?.error) || Boolean(read && (read.source?.id !== citation.source.id || read.revision !== citation.revision));
-        if (!unavailable && (!read || read.next_locator)) return {tool: 'read_source', args: {
-          citation: {...citation, locator: read?.next_locator ?? (raw ? {offset: 0, length: raw.source_length} : citation.locator)}, limit: 8000,
-        }};
+        total = item.content_page.total_chars;
+        offset += [...item.content].length;
+        if (item.content_page.next_offset !== (offset === total ? null : offset)) {unavailable = true; break;}
       }
+      if (!unavailable && (total === undefined || offset < total)) return {tool: 'read_knowledge', args: {
+        items: [{kind: 'knowledge', ref: entry.ref, offset, limit: 8000}],
+      }};
     } else {
-      if (!has('read_source')) return {tool: 'read_source', args: {source_id: sourceId, version: '1'}};
-      unavailable = Boolean(latest('read_source')?.error);
+      const read = latest('read_source');
+      unavailable = Boolean(read?.error) || Boolean(read && (read.source?.id !== citation.source.id || read.revision !== citation.revision));
+      if (!unavailable && (!read || read.next_locator)) return {tool: 'read_source', args: {
+        citation: {...citation, locator: read?.next_locator ?? (raw ? {offset: 0, length: raw.source_length} : citation.locator)}, limit: 8000,
+      }};
     }
     if (!has('update_analysis_task')) return route();
     if (unavailable) return {text: '原文资料不可读取，尚未完成口径核对，没有生成或执行查询。'};
     return {
       text: zeroPayment
-        ? run.tool_contract_version === 2
-          ? 'paid_amount_cents是当前订单行的成功付款累计金额。成功付款记录缺失时，金额按现有加工约定填为0、paid_at为NULL；因此0可能表示没有成功付款记录，不能据此断言是零元成交，仍需核对成功付款事件和原订单。依据：已读取的加工或业务说明，当前为固定合成演示。'
-          : 'paid_amount_cents由成功charge事件按订单行汇总，LEFT JOIN没有匹配付款时使用COALESCE(p.paid, 0)。因此0可能表示没有成功付款记录，不能据此断言是零元成交；需要进一步查看成功付款事件和原订单。依据：etl v1的line_payments与COALESCE，以及业务说明3.1、4节。'
+        ? 'paid_amount_cents是当前订单行的成功付款累计金额。成功付款记录缺失时，金额按现有加工约定填为0、paid_at为NULL；因此0可能表示没有成功付款记录，不能据此断言是零元成交，仍需核对成功付款事件和原订单。依据：已读取的加工或业务说明，当前为固定合成演示。'
         : /月底/.test(input)
           ? '收入默认按 paid_at（当前行首笔成功付款时刻）归属，order_date 是下单日期。月底下单而次月支付的订单可能不属于1月支付收入；这里没有提供订单号和明细，不能断言某笔订单的支付时间或原因。依据：业务说明3.1、3.2、5.1。'
           : `已找到相关定义：${objects.slice(0, 3).map(o => o.name + '：' + o.entries.map((e: RecordValue) => e.effective_value).join('\n')).join('\n\n')}。可在语义管理查看相应版本与来源。`,
@@ -338,9 +307,11 @@ export function syntheticAction(
   const explicitChannel = input.match(
     /(?:只看|仅看|渠道(?:改成|为|是)?|看)\s*(web|app|store)/,
   )?.[1];
-  if (/全部渠道|所有渠道/.test(input)) conditions.channel = null;
+  const channelFilter = /^channel = '(web|app|store)'$/;
+  let selectedChannel = conditions.filters.map(filter => channelFilter.exec(filter)?.[1]).find(Boolean) ?? conditions.channel;
+  if (/全部渠道|所有渠道/.test(input)) selectedChannel = null;
   else if (explicitChannel)
-    conditions.channel = explicitChannel as Conditions["channel"];
+    selectedChannel = explicitChannel;
   else if (!previous) {
     const memories = [
       ...(knowledge.personal_memories ?? []),
@@ -352,10 +323,13 @@ export function syntheticAction(
     const value = saved?.state === "enabled" ? saved : memories.find((m: RecordValue) => /默认渠道=/.test(m.body));
     const channel = value?.body.match(/默认渠道=(web|app|store)/)?.[1];
     if (channel) {
-      conditions.channel = channel;
+      selectedChannel = channel;
       conditions.notes = "采用本人默认渠道偏好；当前明确要求优先。";
     }
   }
+  conditions.channel = null;
+  conditions.filters = conditions.filters.filter(filter => !channelFilter.test(filter));
+  if (selectedChannel) conditions.filters.push(`channel = '${selectedChannel}'`);
   if (/标签/.test(input) && /vip|newsletter/.test(input)) {
     const tagFilter="EXISTS (SELECT 1 FROM customer_tags t WHERE t.customer_id=demo_order_detail.customer_id AND t.tag IN ('vip','newsletter'))";
     if(!conditions.filters.includes(tagFilter)) conditions.filters.push(tagFilter);
@@ -367,9 +341,7 @@ export function syntheticAction(
   const table = objects.find((o) => o.id === "table-demo_order_detail");
   conditions.knowledge_refs = [metric, table]
     .filter(Boolean)
-    .map((o) => run.tool_contract_version === 2
-      ? o!.entries.find((entry: RecordValue) => entry.path === 'sql')?.ref ?? o!.ref
-      : {object_id: o!.id, version: o!.version, path: ''});
+    .map((o) => o!.entries.find((entry: RecordValue) => entry.path === 'sql')?.ref ?? o!.ref);
   // route回执只登记归属不带条件；create/revise/clarify回执才携带task_id+conditions。
   const taskRegistration = tools.find(tool => tool.name === "update_analysis_task"
     && tool.data.task_id && tool.data.conditions !== undefined);
@@ -413,14 +385,11 @@ export function syntheticAction(
       let total: number | undefined;
       metricSql = "";
       for (const read of sqlReads) {
-        const item = run.tool_contract_version === 2 ? read.data.items?.[0] : undefined;
-        const entry = run.tool_contract_version === 2
-          ? item?.kind === 'knowledge' && item.state === 'ok' && item.ref.path === 'sql'
-            ? {effective_value: item.content, content_page: item.content_page} : undefined
-          : read.data.entries?.find((item: RecordValue) => item.path === "sql");
+        const item = read.data.items?.[0];
+        const entry = item?.kind === 'knowledge' && item.state === 'ok' && item.ref.path === 'sql'
+          ? {effective_value: item.content, content_page: item.content_page} : undefined;
         const page = entry?.content_page;
-        if ((run.tool_contract_version === 2 ? item?.ref?.object_id : read.data.id) !== metric.id
-          || (run.tool_contract_version === 2 ? item?.ref?.version : read.data.version) !== metric.version
+        if (item?.ref?.object_id !== metric.id || item?.ref?.version !== metric.version
           || typeof entry?.effective_value !== "string" || page?.offset !== offset
           || (total !== undefined && page.total_chars !== total)) {
           return {text: "指标SQL补读未能取得同一版本的完整正文，保留调查缺口，没有生成查询。"};
@@ -433,15 +402,15 @@ export function syntheticAction(
         }
       }
       if (total === undefined || offset < total) {
-        if (run.tool_contract_version === 2 && !previewSql?.ref) {
+        if (!previewSql?.ref) {
           const query = metric.name + ' sql';
           const prior = tools.filter(tool => tool.name === 'search_knowledge');
           if (prior.length === 1) return {tool: 'search_knowledge', args: {query, kinds: ['metric'], limit: 10}};
           return {text: '指标SQL的引用未能检索到，保留调查缺口，没有生成查询。'};
         }
-        return {tool: "read_knowledge", args: run.tool_contract_version === 2
-          ? {items: [{kind: 'knowledge', ref: previewSql!.ref, offset, limit: 4096}]}
-          : {object_id: metric.id, version: metric.version, entry_id: previewSql?.entry_id ?? "sql", offset, limit: 4096}};
+        return {tool: "read_knowledge", args: {items: [
+          {kind: 'knowledge', ref: previewSql.ref, offset, limit: 4096},
+        ]}};
       }
     }
     let expression = metricSql?.match(/SELECT ([\s\S]*?)\nFROM/)?.[1];
@@ -457,14 +426,14 @@ export function syntheticAction(
       };
     const group = conditions.group_by;
     const aliases = group.map((g, i) => `${g} AS dimension_${i}`);
-    let sql = `SELECT ${[...aliases, expression].join(", ")}\nFROM demo_order_detail\nWHERE ${conditions.filters.join(" AND ")}\n AND paid_at >= :start AND paid_at < :end`;
+    let sql = `SELECT ${[...aliases, expression].join(", ")}\nFROM demo_order_detail\nWHERE ${conditions.filters.filter(filter => !channelFilter.test(filter)).join(" AND ")}\n AND paid_at >= :start AND paid_at < :end`;
     const parameters: RecordValue = {
       start: conditions.time_start,
       end: conditions.time_end,
     };
-    if (conditions.channel) {
+    if (selectedChannel) {
       sql += "\n AND channel = :channel";
-      parameters.channel = conditions.channel;
+      parameters.channel = selectedChannel;
     }
     if (group.length)
       sql += `\nGROUP BY ${group.join(", ")}\nORDER BY ${group.join(", ")}`;
@@ -477,7 +446,7 @@ export function syntheticAction(
         parameters,
         target_id: "synthetic-sqlite",
         replaces_query_id: previous ? workspace.query_observations.find(q => q.task_id === previous.id)?.id ?? null : null,
-        summary: `${conditions.time_start} 至 ${conditions.time_end}，UTC，截止不含。${conditions.channel ? "渠道 " + conditions.channel : "全部渠道"}；排除测试、只统计成功付款行。${conditions.notes} 指标：${conditions.metric}。`,
+        summary: `${conditions.time_start} 至 ${conditions.time_end}，UTC，截止不含。${selectedChannel ? "渠道 " + selectedChannel : "全部渠道"}；排除测试、只统计成功付款行。${conditions.notes} 指标：${conditions.metric}。`,
         knowledge_refs: conditions.knowledge_refs,
       },
     };

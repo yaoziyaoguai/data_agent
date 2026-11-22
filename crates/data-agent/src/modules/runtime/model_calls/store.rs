@@ -7,6 +7,62 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use sqlx::{MySqlPool, Row};
 
+const SEND_PERMIT_SECONDS: i32 = 30;
+const ABANDONED_RESERVATION_SECONDS: i32 = 10 * 60;
+
+pub async fn release_abandoned_reservations(pool: &MySqlPool, active: &[String]) -> Result<bool> {
+    const BATCH: usize = 32;
+    // 派发新租约会创建新 run。失效旧 run 无法用原 ID 续租。
+    let mut pending = sqlx::QueryBuilder::<sqlx::MySql>::new(
+        "SELECT id FROM model_call_attempts WHERE reservation_released_at IS NULL AND state IN ('reserved','issued','unknown') AND reserved_micros IS NOT NULL AND permit_expires_at<TIMESTAMPADD(SECOND,",
+    );
+    // 行上保存的是发送许可到期时间；十分钟从预占创建时起算。
+    pending
+        .push_bind(SEND_PERMIT_SECONDS - ABANDONED_RESERVATION_SECONDS)
+        .push(",UTC_TIMESTAMP(3))");
+    if !active.is_empty() {
+        pending.push(" AND run_id NOT IN (");
+        let mut params = pending.separated(",");
+        for run in active {
+            params.push_bind(run);
+        }
+        pending.push(")");
+    }
+    pending
+        .push(" ORDER BY permit_expires_at LIMIT ")
+        .push_bind(BATCH as u32);
+    let ids = pending
+        .build_query_scalar::<String>()
+        .fetch_all(pool)
+        .await?;
+    for id in &ids {
+        let mut tx = AppTx::begin(pool).await?;
+        let row = sqlx::query("SELECT budget_scope_id,state,reserved_micros FROM model_call_attempts WHERE id=? AND reservation_released_at IS NULL AND state IN ('reserved','issued','unknown') FOR UPDATE")
+            .bind(id).fetch_optional(tx.connection()).await?;
+        if let Some(row) = row {
+            let state: String = row.get("state");
+            let scope: String = row.get("budget_scope_id");
+            let reservation: u64 = row.get("reserved_micros");
+            let profile = read_budget_profile_in_tx(&mut tx, &scope)
+                .await?
+                .ok_or(Error::new("not_available"))?;
+            // 发送过的调用仍计入实际次数。只释放它的预留金额，迟到用量可沿原身份结算。
+            sqlx::query("UPDATE model_trials SET reserved_micros=reserved_micros-?,allocated_calls=allocated_calls-? WHERE id=?")
+                .bind(reservation).bind(u32::from(state == "reserved")).bind(&profile.trial_id)
+                .execute(tx.connection()).await?;
+            sqlx::query("UPDATE model_call_attempts SET reservation_released_at=UTC_TIMESTAMP(3),state=IF(state='issued','unknown',state) WHERE id=?")
+                .bind(id).execute(tx.connection()).await?;
+            tx.commit().await?;
+            eprintln!(
+                "model_reservation_released attempt={id} state={state} reserved_micros={reservation}"
+            );
+        } else {
+            tx.commit().await?;
+        }
+    }
+    Ok(ids.len() == BATCH)
+}
+
 #[derive(Deserialize, Serialize)]
 struct MaintenanceBudget {
     format_version: u8,
@@ -250,8 +306,8 @@ pub(super) async fn reserve_model_call(
     // 先登记调用身份，取得原预算配置后在同一事务内填写预留金额。
     let reservation = 0_u64;
     // 先插入调用身份，避免对不存在的UUID加间隙锁后再等trial锁；预算失败会回滚整笔事务。
-    let inserted = sqlx::query("INSERT INTO model_call_attempts(id,budget_scope_id,run_id,state,parameters_fingerprint,input_tokens_upper,output_tokens_max,reserved_micros,permit_expires_at) VALUES(?,?,?,'reserved',?,?,?,?,TIMESTAMPADD(SECOND,30,UTC_TIMESTAMP(3)))")
-        .bind(&input.call_attempt_id).bind(&run.budget_scope_id).bind(&run.id).bind(&input.parameters_fingerprint).bind(input.input_tokens_upper).bind(input.output_tokens_max).bind(reservation).execute(tx.connection()).await;
+    let inserted = sqlx::query("INSERT INTO model_call_attempts(id,budget_scope_id,run_id,state,parameters_fingerprint,input_tokens_upper,output_tokens_max,reserved_micros,permit_expires_at) VALUES(?,?,?,'reserved',?,?,?,?,TIMESTAMPADD(SECOND,?,UTC_TIMESTAMP(3)))")
+        .bind(&input.call_attempt_id).bind(&run.budget_scope_id).bind(&run.id).bind(&input.parameters_fingerprint).bind(input.input_tokens_upper).bind(input.output_tokens_max).bind(reservation).bind(SEND_PERMIT_SECONDS).execute(tx.connection()).await;
     if let Err(error) = inserted {
         if !error.as_database_error().is_some_and(|e| {
             e.try_downcast_ref::<sqlx::mysql::MySqlDatabaseError>()
@@ -405,7 +461,7 @@ pub(super) async fn finalize_model_call(
 ) -> Result<Value> {
     tx.assert_snapshot(&run.transaction_id)?;
     tx.lock_rank(3)?;
-    let row = sqlx::query("SELECT * FROM model_call_attempts WHERE id=? AND run_id=? FOR UPDATE")
+    let row = sqlx::query("SELECT *,reservation_released_at IS NOT NULL AS reservation_released FROM model_call_attempts WHERE id=? AND run_id=? FOR UPDATE")
         .bind(&input.call_attempt_id)
         .bind(&run.id)
         .fetch_optional(tx.connection())
@@ -501,8 +557,14 @@ pub(super) async fn finalize_model_call(
         > row.get::<Option<u32>, _>("input_tokens_upper").unwrap_or(0) as i64
         || i64::from(usage.output_tokens)
             > row.get::<Option<u32>, _>("output_tokens_max").unwrap_or(0) as i64;
+    let reservation = if row.get::<i64, _>("reservation_released") != 0 {
+        0
+    } else {
+        row.get::<Option<u64>, _>("reserved_micros")
+            .ok_or(Error::new("invalid_input"))?
+    };
     sqlx::query("UPDATE model_trials SET spent_micros=spent_micros+?,reserved_micros=reserved_micros-?,state=IF(?,'breached',state) WHERE id=?")
-        .bind(cost).bind(row.get::<Option<u64>,_>("reserved_micros").ok_or(Error::new("invalid_input"))?).bind(exceeds).bind(&profile.trial_id).execute(tx.connection()).await?;
+        .bind(cost).bind(reservation).bind(exceeds).bind(&profile.trial_id).execute(tx.connection()).await?;
     sqlx::query(
         "UPDATE model_call_attempts SET state='settled',actual_micros=?,usage_json=? WHERE id=?",
     )

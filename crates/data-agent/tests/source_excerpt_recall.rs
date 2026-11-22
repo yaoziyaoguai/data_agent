@@ -29,6 +29,7 @@ async fn document_windows_keep_entry_boundaries_without_transferring_unselected_
         user_id: "document-window-check".into(),
         space_id: "demo".into(),
         request_id: "document-window".into(),
+        table_access: None,
     };
     let id = "document-window-unicode";
     let document = json!({
@@ -136,6 +137,7 @@ async fn platform_citation_reads_only_requested_unicode_window() {
         user_id: "platform-window-check".into(),
         space_id: "demo".into(),
         request_id: "platform-window".into(),
+        table_access: None,
     };
     let prefix = "背景🌏。".repeat(20000);
     let selected = "窄读规则🧪e\u{301}：校验完成之后才能使用。";
@@ -156,7 +158,7 @@ async fn platform_citation_reads_only_requested_unicode_window() {
                 .bind(id).bind(id).bind(&body).execute(&pool).await.unwrap();
         } else {
             sqlx::query(
-                "INSERT INTO source_snapshots(source_id,version,body,complete) VALUES(?,1,?,TRUE)",
+                "INSERT INTO source_revisions(source_id,version,body,archive_complete) VALUES(?,1,?,TRUE)",
             )
             .bind(id)
             .bind(&body)
@@ -226,6 +228,7 @@ async fn document_windows_preserve_legacy_source_checks_and_empty_content() {
         user_id: "document-reference-check".into(),
         space_id: "demo".into(),
         request_id: "document-reference".into(),
+        table_access: None,
     };
     let id = "document-window-references";
     let sources = [
@@ -320,6 +323,7 @@ async fn source_recall_keeps_global_order_across_document_positions() {
         user_id: "source-order-check".into(),
         space_id: "demo".into(),
         request_id: "source-order".into(),
+        table_access: None,
     };
     let bodies = [
         (
@@ -397,6 +401,7 @@ async fn source_recall_preserves_database_failure_and_missing_source_distinction
         user_id: "source-recall-check".into(),
         space_id: "demo".into(),
         request_id: "source-recall-failure".into(),
+        table_access: None,
     };
     let hits = [
         json!({"source_kind":"platform", "source_id":"missing-recall-source",
@@ -442,6 +447,7 @@ async fn raw_stage_returns_preparation_state_and_rejects_revision_changed_after_
         user_id: "alice".into(),
         space_id: "demo".into(),
         request_id: "raw-stage-preparation".into(),
+        table_access: None,
     };
     let mut documents = Vec::new();
     for (state, marker) in [
@@ -570,6 +576,7 @@ async fn raw_stage_reads_tail_after_129_segments_from_saved_platform_consumer() 
         user_id: "alice".into(),
         space_id: "demo".into(),
         request_id: "raw-stage-long-source".into(),
+        table_access: None,
     };
     let marker = "rawstagelastsegmentneedle";
     let table = json!({
@@ -732,6 +739,7 @@ async fn raw_stage_keeps_healthy_raw_bm25_without_adding_sql_knowledge_vote() {
         user_id: "alice".into(),
         space_id: "demo".into(),
         request_id: "raw-stage-healthy-bm25".into(),
+        table_access: None,
     };
     let query = "rawstagerawhealthyneedle";
     let raw = data_agent::use_cases::knowledge::edit(&pool, &ctx, None, "create", json!({
@@ -810,6 +818,7 @@ async fn raw_stage_launches_dense_for_raw_only_allowed_sources() {
         user_id: "alice".into(),
         space_id: "demo".into(),
         request_id: "raw-stage-only-dense".into(),
+        table_access: None,
     };
     let query = "rawstageonlydenseprobe";
     let name = "合成设备校验原文";
@@ -925,6 +934,7 @@ async fn raw_stage_filters_old_segmentation_before_candidates_and_owner_reads() 
         user_id: "alice".into(),
         space_id: "demo".into(),
         request_id: "raw-segmentation-version".into(),
+        table_access: None,
     };
     let query = "rawversionneedle";
     let body = "rawversionneedle 合成版本规则：设备完成复核后方可使用。";
@@ -1025,6 +1035,7 @@ async fn raw_stage_reports_projection_lag_for_actual_allowed_sources() {
         user_id: "alice".into(),
         space_id: "demo".into(),
         request_id: "raw-scope-coverage".into(),
+        table_access: None,
     };
     let mut documents = Vec::new();
     for (name, body) in [
@@ -1173,6 +1184,7 @@ async fn raw_stage_merges_selected_overlapping_windows_without_refunding_identit
         user_id: "alice".into(),
         space_id: "demo".into(),
         request_id: "raw-overlap-stage".into(),
+        table_access: None,
     };
     let marker = "rawoverlapneedle";
     // 1200处的段落边界生成两个相交规范窗口，合并后的2000字符在既定2400上限内。
@@ -1309,6 +1321,7 @@ async fn raw_stage_preserves_a_high_knowledge_b_middle_a_low_and_v1_kind_scope()
         user_id: "alice".into(),
         space_id: "demo".into(),
         request_id: "raw-stage-order".into(),
+        table_access: None,
     };
     let marker = "rawstageorderneedle";
     let high = format!("{marker} ").repeat(20);
@@ -1540,6 +1553,7 @@ async fn gated_raw_source_round_trip_recalls_revision_and_reports_lag() {
         user_id: "raw-recall-check".into(),
         space_id: "demo".into(),
         request_id: "raw-recall-round-trip".into(),
+        table_access: None,
     };
     let source_id = "raw-recall-it";
     let body = format!(

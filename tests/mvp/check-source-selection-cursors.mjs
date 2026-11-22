@@ -231,7 +231,7 @@ try {
   const oldRevision = sourceVersion();
   assert.equal(String(oldRevision), revisionControl.data.hits[0].citation.revision);
   // 模拟原文 owner 已提交新修订、语义尚未换版的窗口。仅改隔离夹具中的来源。
-  h.sql("START TRANSACTION; INSERT INTO source_snapshots(source_id,version,body,complete) " +
+  h.sql("START TRANSACTION; INSERT INTO source_revisions(source_id,version,body,archive_complete) " +
     "SELECT id,version+1,'合成 DDL 新修订。',TRUE FROM source_heads WHERE id='schema'; " +
     "UPDATE source_heads SET version=version+1 WHERE id='schema'; COMMIT;");
   assert.equal(Number(sourceVersion()), Number(oldRevision) + 1);

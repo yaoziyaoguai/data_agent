@@ -21,7 +21,7 @@ pub async fn content_candidates_scoped_in_tx(
     allowed: Option<&[String]>,
     quota: usize,
     consumed: usize,
-    include_raw: bool,
+    include_document_statements: bool,
 ) -> Result<Vec<Value>> {
     if quota == 0 || terms.is_empty() || allowed.is_some_and(|ids| ids.is_empty()) {
         return Ok(vec![]);
@@ -39,7 +39,6 @@ pub async fn content_candidates_scoped_in_tx(
     .push(
         ",'$[*]' COLUMNS(term JSON PATH '$')) AS q), \
          entry_rows AS (SELECT r.object_id AS id,r.version, \
-         CASE WHEN JSON_TYPE(JSON_EXTRACT(r.body,'$.source_id'))='STRING' THEN JSON_UNQUOTE(JSON_EXTRACT(r.body,'$.source_id')) ELSE NULL END AS source_id, \
          CASE WHEN JSON_TYPE(JSON_EXTRACT(r.body,'$.name'))='STRING' \
               THEN JSON_UNQUOTE(JSON_EXTRACT(r.body,'$.name')) ELSE '' END AS name, \
          CASE WHEN JSON_TYPE(JSON_EXTRACT(r.body,'$.kind'))='STRING' \
@@ -97,11 +96,8 @@ pub async fn content_candidates_scoped_in_tx(
          entries AS (SELECT /*+ NO_MERGE(e) */ e.id,e.version,e.name,e.kind,e.entry_id,e.path,NULL AS statement_id,e.label,e.is_query_example,e.question,e.parameters, \
              CAST(e.text AS CHAR CHARACTER SET utf8mb4) AS text,0 AS entry_offset \
            FROM entry_rows e LEFT JOIN mapping m ON m.id=e.id AND m.entry_id=e.entry_id AND m.path=e.path \
-           WHERE (e.kind='document' OR COALESCE(m.aligned,FALSE)=FALSE)",
-    )
-    .push(if include_raw { " AND (e.kind<>'document' OR e.source_id IS NOT NULL) " } else { " " })
-    .push(
-        "UNION ALL SELECT s.id,s.version,s.name,s.kind,s.entry_id,s.path,s.statement_id,s.label,s.is_query_example,s.question,s.parameters, \
+           WHERE (e.kind='document' OR COALESCE(m.aligned,FALSE)=FALSE) \
+           UNION ALL SELECT s.id,s.version,s.name,s.kind,s.entry_id,s.path,s.statement_id,s.label,s.is_query_example,s.question,s.parameters, \
              s.statement_text,IF(s.kind='document',0,s.base) AS entry_offset FROM mapped_statements s \
            JOIN mapping m ON m.id=s.id AND m.entry_id=s.entry_id AND m.path=s.path \
            WHERE s.kind='document' OR m.aligned=TRUE), \
@@ -149,7 +145,7 @@ pub async fn content_candidates_scoped_in_tx(
              AS candidate_hit FROM windows) \
            SELECT id,version,kind,entry_id,path,statement_id,char_offset,statement_offset,char_length,name_hit,name_term_hits,term_hits \
            FROM scored WHERE (name_hit>0 OR candidate_hit) AND (kind<>'document' OR ")
-    .push(if include_raw { "TRUE" } else { "statement_id IS NULL" })
+    .push(if include_document_statements { "TRUE" } else { "statement_id IS NULL" })
     .push(") ORDER BY name_hit DESC,name_term_hits DESC,term_hits DESC,id,entry_id,path,statement_id,char_offset LIMIT ")
     .push_bind(quota as u64)
     .push(" OFFSET ")
@@ -212,6 +208,24 @@ pub async fn record_source_projection_in_tx(
     .execute(tx.connection())
     .await?;
     Ok(())
+}
+
+// 完成投影的 applied_position 是原文字符数；未完成投影只在已索引长正文后参与召回。
+pub async fn long_platform_source_ids_in_tx(
+    tx: &mut AppTx<'_>,
+    space: &str,
+) -> Result<std::collections::HashSet<String>> {
+    let ids = sqlx::query_scalar(
+        "SELECT source_id FROM retrieval_source_projections \
+         WHERE space_id=? AND source_kind='platform' AND embedding_model=? \
+           AND segmentation_version=? AND applied_position>100000",
+    )
+    .bind(space)
+    .bind(&super::embedding::SPEC.version)
+    .bind(super::source_segments::SEGMENTATION_VERSION_NUMBER)
+    .fetch_all(tx.connection())
+    .await?;
+    Ok(ids.into_iter().collect())
 }
 
 // 指定来源集合的投影覆盖：用于检索覆盖/滞后判断，输入限定在本题允许范围内，

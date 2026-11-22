@@ -1618,7 +1618,7 @@ export type AssetKind = "memory" | "skill";
 
 export type MemoryIndexState = "queued" | "issued" | "indexed" | "failed" | "superseded";
 
-export type AssetState = "enabled" | "disabled" | "deleted";
+export type AssetState = "enabled" | "disabled" | "deleted" | "draft";
 
 export interface AssetListClass {
     assets: AssetElement[];
@@ -2292,11 +2292,13 @@ export interface MemoryElement {
      */
     source_page?: ContentPageClass;
     source_text:  string;
-    state:        AssetState;
+    state:        MemoryState;
     verified:     boolean;
     version:      string;
     visibility?:  Visibility;
 }
+
+export type MemoryState = "enabled" | "disabled" | "deleted";
 
 export type ContentState = "complete" | "partial";
 
@@ -2504,7 +2506,7 @@ export interface KnowledgeObjectElement {
     semantic_relations?: SemanticRelationElement[];
     source_id:           null | string;
     source_version:      string;
-    state:               AssetState;
+    state:               MemoryState;
     /**
      * 平台移除与人工停用分开；重新出现只能恢复平台导致的停用。
      */
@@ -2796,7 +2798,7 @@ export interface KnowledgeSearchHitElement {
     object_version?: string;
     record_kind:     RecordKind;
     /**
-     * 来源映射是否完整；false时不得将空/部分映射当无来源。完整也不代表聚合整源符合用户细范围，更不代表读过正文。
+     * 列出的直属对象、表和来源身份是否完整；完整不代表整源符合用户指定范围或已读正文。
      */
     roots_complete?:    boolean;
     source_keys?:       SourceKeyElement[];
@@ -2871,6 +2873,10 @@ export interface KnowledgeSearchReplyClass {
     asset_cursor_invalid: boolean;
     asset_total:          number;
     hits:                 KnowledgeSearchHitElement[];
+    /**
+     * 多指标检索中已核验命中的表唯一键和关系关联键摘要。缺项应读取对应表和关系的完整结构。
+     */
+    key_hints?: string[];
     /**
      *
      * 个人记忆检索通道：受限任务来源门生效时按资产真实来源过滤，仅无可证明同源记忆时标记excluded_by_source_limits；命中侧过滤事实见回执source_limits块。
@@ -4059,7 +4065,7 @@ export interface ModelAssetPreview {
      */
     source_page?: ContentPage;
     source_text:  string;
-    state:        AssetState;
+    state:        MemoryState;
     verified:     boolean;
     version:      string;
     visibility?:  Visibility;
@@ -4505,7 +4511,7 @@ export interface KnowledgeObject {
     semantic_relations?: SemanticRelation[];
     source_id:           null | string;
     source_version:      string;
-    state:               AssetState;
+    state:               MemoryState;
     /**
      * 平台移除与人工停用分开；重新出现只能恢复平台导致的停用。
      */
@@ -5322,6 +5328,10 @@ export interface KnowledgeSearchReply {
     asset_cursor_invalid: boolean;
     asset_total:          number;
     hits:                 KnowledgeSearchHit[];
+    /**
+     * 多指标检索中已核验命中的表唯一键和关系关联键摘要。缺项应读取对应表和关系的完整结构。
+     */
+    key_hints?: string[];
     /**
      *
      * 个人记忆检索通道：受限任务来源门生效时按资产真实来源过滤，仅无可证明同源记忆时标记excluded_by_source_limits；命中侧过滤事实见回执source_limits块。

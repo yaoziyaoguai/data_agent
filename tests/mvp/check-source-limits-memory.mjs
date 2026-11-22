@@ -7,7 +7,7 @@ import {exportCheckpoint} from '../../apps/agent/session/checkpoint.ts';
 import {validateContract} from '../../packages/contracts/validate.ts';
 import {harness,until} from './harness.mjs';
 
-// 受限任务不注入个人记忆预览；已有任务正文仍继承完整出处。
+// 受限任务不注入来源不合规的个人记忆预览，真实结果另按来源约束。
 // 合成资料、隔离MySQL与本地Mem0替身验证来源限制与正常派发兼容。
 const indexes = new Map();
 const server = createServer(async (req, res) => {
@@ -92,7 +92,7 @@ try {
 
   const demoRef = {object_id: 'table-demo_order_detail', version: '1', path: 'description'};
   const conditions = {time_start: null, time_end: null, timezone: 'UTC', metric: null,
-    channel: null, group_by: [], filters: [], knowledge_refs: [demoRef], notes: ''};
+    channel: null, group_by: [], filters: [], knowledge_refs: [demoRef], notes: '', source_limits: null};
 
   const cid = await h.create();
   await begin(cid, '请记住金额展示偏好，先不查数据。');
@@ -102,9 +102,8 @@ try {
     '未受限启动预览个人记忆');
   validateContract('WorkspaceContext', run.workspace_context);
 
-  // 任务goal来自本轮模型输出：其goal_authority含创作期记忆出处。先在未受限轮
-  // 保存并执行一条查询（其正文权威含起草轮记忆预览），读取结果后创建任务——
-  // 任务出处同时携带记忆与查询引用，构成受限covers冲突的完整形态。
+  // 先在未受限轮建立查询并读取结果，随后为复用该结果的任务收紧来源，
+  // 验证历史派生资料不能绕过当前任务的允许集。
   const queryTask = await invoke('update_analysis_task',
     {action: 'create', goal: '按本人偏好统计金额', conditions, options: []});
   const draft = await invoke('request_query', {task_id: queryTask.task_id,
@@ -157,7 +156,12 @@ try {
   assert.deepEqual(childView.conditions.source_limits?.allowed_sources,
     [{kind: 'platform', id: 'business-guide'}],
     '结果通知不包含用户解除限制：拆分的完整条件null必须继承父任务范围');
-  await invoke('read_knowledge', {object_id: 'table-demo_order_detail'}, 'source_not_allowed');
+  const fromGuide = {kind: 'knowledge', ref: demoRef};
+  const outsideGuide = ['ddl', 'etl'].map(path => ({kind: 'knowledge', ref: {...demoRef, path}}));
+  const limitedRead = await invoke('read_knowledge', {items: [fromGuide, ...outsideGuide]});
+  assert.equal(limitedRead.items[0].state, 'ok', '表说明的正式来源是业务指南');
+  assert.deepEqual(limitedRead.items.slice(1), outsideGuide.map(item => ({...item,state:'not_available'})),
+    '只许业务指南时，结构和加工 SQL 都不能随原表交付');
   checks.push('结果通知中的任务拆分不能用null解除来源限制，子任务继承原允许集');
   await invoke('update_analysis_task', {action: 'route', task_id: citingTask.task_id,
     expected_version: (await invoke('read_analysis_task', {task_id: citingTask.task_id}))
@@ -172,7 +176,11 @@ try {
   assert.equal(run.workspace_context.memories.length, 0, '受限启动不注入无公共来源的个人记忆');
   validateContract('WorkspaceContext', run.workspace_context);
   const readBack = await invoke('read_analysis_task', {task_id: citingTask.task_id});
-  assert.equal(readBack.goal, undefined, '独立私人记忆与范围外结果的派生目标不进入受限上下文');
+  assert.equal(readBack.goal, '结合查询结果与本人偏好出结论', '本人仍可查看已保存任务目标');
+  const memoryItem = {kind: 'memory', asset_ref: {id: memory.id, version: memory.version}, part: 'body'};
+  assert.deepEqual((await invoke('read_knowledge', {items: [memoryItem]})).items,
+    [{...memoryItem, state: 'not_available'}], '实际范围外个人记忆不能补读');
+  await invoke('get_query', {query_id: draft.id}, 'source_not_allowed');
   let probe = await issue();
   assert.equal(probe.status, 200, JSON.stringify(probe.value));
   await invoke('update_analysis_task', {action: 'route', task_id: citingTask.task_id,
@@ -184,7 +192,8 @@ try {
   await begin(cid, '继续按业务指南核对。');
   assert.deepEqual(run.workspace_context.memories, []);
   const continued = await invoke('read_analysis_task', {task_id: citingTask.task_id});
-  assert.equal(continued.goal, undefined, '跨轮不恢复范围外派生正文');
+  assert.equal(continued.goal, '结合查询结果与本人偏好出结论');
+  assert.ok(!JSON.stringify(run.workspace_context).includes('金额按元展示'), '跨轮不恢复范围外记忆正文');
   probe = await issue();
   assert.equal(probe.status, 200, '隐藏范围外正文后仍能正常续轮');
 
@@ -234,6 +243,20 @@ try {
   checks.push('记忆侧车启用时受限任务按真实资产来源过滤：无可证明同源记忆时如实标记excluded_by_source_limits，'
     + '同源记忆经Mem0注入与检索保留且受限派发正常，无公共来源的记忆与范围外结果不能经任务正文或检索进入，'
     + '范围外get_query在交付前拒绝且原消息可继续；未受限启动照常Mem0权威预览');
+  const oldCid = await h.create();
+  await begin(oldCid, '建立历史任务后续接。');
+  const oldTask = await invoke('update_analysis_task', {action: 'create', goal: '历史来源声明',
+    options: [], conditions});
+  await finish();
+  // 迁移前任务没有来源声明，侧车不能把未知范围当成已确认无限制。
+  h.sql(`UPDATE condition_revisions SET body=JSON_REMOVE(body,'$.source_limits') WHERE task_id='${oldTask.task_id}'`);
+  await begin(oldCid, '继续历史任务并核对来源。');
+  assert.equal(run.workspace_context.memory_retrieval, 'excluded_by_source_limits');
+  assert.deepEqual(run.workspace_context.memories, []);
+  ok(await h.request(`/conversations/${oldCid}/messages/${run.message_id}/withdraw`,
+    {operation_id: randomUUID()}));
+  h.releaseRun(run.run_id);
+  checks.push('旧任务未声明来源范围时，Mem0 不重新注入主派发已排除的记忆');
   passed = true;
   console.log(JSON.stringify({passed, checks, officialRequests: 0}));
 } finally {

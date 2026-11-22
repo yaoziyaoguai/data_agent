@@ -173,6 +173,7 @@ impl RecoveryHarness {
                 user_id: "index-recovery-fixture".into(),
                 space_id: SPACE.into(),
                 request_id: "index-recovery".into(),
+                table_access: None,
             },
             target,
             restore,
@@ -190,7 +191,7 @@ impl RecoveryHarness {
         for statement in [
             format!("DELETE FROM knowledge_index_jobs WHERE object_id='{id}'"),
             format!("DELETE FROM retrieval_source_projections WHERE source_id='{id}'"),
-            format!("DELETE FROM knowledge_versions WHERE object_id='{id}'"),
+            format!("UPDATE knowledge_revisions SET archived_body=NULL WHERE object_id='{id}'"),
             format!("DELETE FROM knowledge_objects WHERE id='{id}'"),
             format!(
                 "DELETE FROM background_jobs WHERE kind='raw_source_index' AND resource_id='document-{id}'"
@@ -206,13 +207,15 @@ impl RecoveryHarness {
             .bind(id).bind(SPACE).bind("document").bind("恢复夹具文档").bind(1u64).bind("enabled")
             .bind(sqlx::types::Json(&document))
             .execute(&self.pool).await.unwrap();
-        sqlx::query("INSERT INTO knowledge_versions(object_id,version,body) VALUES(?,?,?)")
-            .bind(id)
-            .bind(1u64)
-            .bind(sqlx::types::Json(&document))
-            .execute(&self.pool)
-            .await
-            .unwrap();
+        sqlx::query(
+            "INSERT INTO knowledge_revisions(object_id,version,archived_body) VALUES(?,?,?)",
+        )
+        .bind(id)
+        .bind(1u64)
+        .bind(sqlx::types::Json(&document))
+        .execute(&self.pool)
+        .await
+        .unwrap();
         if register {
             let mut tx = AppTx::begin(&self.pool).await.unwrap();
             data_agent::use_cases::knowledge_documents::register_document_preparation_in_tx(
@@ -513,7 +516,7 @@ impl RecoveryHarness {
             for statement in [
                 format!("DELETE FROM knowledge_index_jobs WHERE object_id='{id}'"),
                 format!("DELETE FROM retrieval_source_projections WHERE source_id='{id}'"),
-                format!("DELETE FROM knowledge_versions WHERE object_id='{id}'"),
+                format!("UPDATE knowledge_revisions SET archived_body=NULL WHERE object_id='{id}'"),
                 format!("DELETE FROM knowledge_objects WHERE id='{id}'"),
                 format!(
                     "DELETE FROM background_jobs WHERE kind='raw_source_index' AND resource_id='document-{id}'"

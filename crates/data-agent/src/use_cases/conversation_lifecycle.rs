@@ -19,7 +19,7 @@ pub async fn cancel_task(
     let operation = input["operation_id"].as_str().expect("validated operation");
     let command = json!({"action":"cancel_task","conversation_id":cid,"task_id":task,"expected_version":input["expected_version"]});
     if let Some(receipt) =
-        analysis::lifecycle_receipt_in_tx(&mut tx, &ctx.user_id, operation, &command).await?
+        analysis::begin_lifecycle_in_tx(&mut tx, ctx, operation, &command).await?
     {
         tx.commit().await?;
         return Ok(receipt);
@@ -31,14 +31,8 @@ pub async fn cancel_task(
     }
     let receipt = json!({"operation_id":operation,"resource_id":task,"version":input["expected_version"],"state":"cancelled"});
     if current["lifecycle"] == "cancelled" {
-        analysis::record_lifecycle_receipt_in_tx(
-            &mut tx,
-            &ctx.user_id,
-            operation,
-            &command,
-            &receipt,
-        )
-        .await?;
+        analysis::record_lifecycle_receipt_in_tx(&mut tx, ctx, operation, &command, &receipt)
+            .await?;
         tx.commit().await?;
         return Ok(receipt);
     }
@@ -82,8 +76,7 @@ pub async fn cancel_task(
     analysis::cancel_task_in_tx(&mut tx, &tasks, task).await?;
     // 取消只清掉被取消任务自身的活动绑定；其他任务的条件与归属不变。
     conversations::clear_active_task_in_tx(&mut tx, &conv, task).await?;
-    analysis::record_lifecycle_receipt_in_tx(&mut tx, &ctx.user_id, operation, &command, &receipt)
-        .await?;
+    analysis::record_lifecycle_receipt_in_tx(&mut tx, ctx, operation, &command, &receipt).await?;
     for query in queries::list_in_tx(&mut tx, cid)
         .await?
         .iter()

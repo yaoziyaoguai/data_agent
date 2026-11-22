@@ -4,6 +4,7 @@ import { createServer } from "node:http";
 import { writeFile } from "node:fs/promises";
 import { SessionManager } from "@earendil-works/pi-coding-agent";
 import { exportCheckpoint } from "../../apps/agent/session/checkpoint.ts";
+import { validateContract } from "../../packages/contracts/validate.ts";
 import { harness } from "./harness.mjs";
 
 let preferredMemory;
@@ -81,7 +82,7 @@ const setFixture = (object) => {
   const encoded = Buffer.from(JSON.stringify(object)).toString("hex");
   // 创建后、索引之前构造明确域条目，当前接口没有追加语义条目的写入口。
   h.sql(
-    `UPDATE knowledge_objects SET body=CAST(CONVERT(0x${encoded} USING utf8mb4) AS JSON) WHERE id='${object.id}';UPDATE knowledge_versions SET body=CAST(CONVERT(0x${encoded} USING utf8mb4) AS JSON) WHERE object_id='${object.id}' AND version=${object.version};UPDATE retrieval_documents SET body=CAST(CONVERT(0x${encoded} USING utf8mb4) AS JSON) WHERE object_id='${object.id}' AND version=${object.version}`,
+    `UPDATE knowledge_objects SET body=CAST(CONVERT(0x${encoded} USING utf8mb4) AS JSON) WHERE id='${object.id}';UPDATE knowledge_revisions SET archived_body=CAST(CONVERT(0x${encoded} USING utf8mb4) AS JSON) WHERE object_id='${object.id}' AND version=${object.version};UPDATE retrieval_documents SET body=CAST(CONVERT(0x${encoded} USING utf8mb4) AS JSON) WHERE object_id='${object.id}' AND version=${object.version}`,
   );
 };
 const assignDomain = (object, domain) => {
@@ -94,7 +95,7 @@ const insertFixture = (object, space = "demo") => {
   assert.match(space, /^[A-Za-z0-9_-]+$/);
   const encoded = Buffer.from(JSON.stringify(object)).toString("hex");
   h.sql(
-    `INSERT INTO knowledge_objects(id,space_id,kind,name,version,state,body,source_id,source_version,updated_by) VALUES('${object.id}','${space}','${object.kind}','${object.name}',1,'enabled',CAST(CONVERT(0x${encoded} USING utf8mb4) AS JSON),NULL,0,'synthetic-test');INSERT INTO knowledge_versions(object_id,version,body) VALUES('${object.id}',1,CAST(CONVERT(0x${encoded} USING utf8mb4) AS JSON));INSERT INTO retrieval_documents(object_id,space_id,version,body) VALUES('${object.id}','${space}',1,CAST(CONVERT(0x${encoded} USING utf8mb4) AS JSON));INSERT INTO semantic_ownership(space_id,object_id,authority_id,source,updated_by) VALUES('${space}','${object.id}','${object.id}','system','synthetic-test')`,
+    `INSERT INTO knowledge_objects(id,space_id,kind,name,version,state,body,source_id,source_version,updated_by) VALUES('${object.id}','${space}','${object.kind}','${object.name}',1,'enabled',CAST(CONVERT(0x${encoded} USING utf8mb4) AS JSON),NULL,0,'synthetic-test');INSERT INTO knowledge_revisions(object_id,version,archived_body) VALUES('${object.id}',1,CAST(CONVERT(0x${encoded} USING utf8mb4) AS JSON));INSERT INTO retrieval_documents(object_id,space_id,version,body) VALUES('${object.id}','${space}',1,CAST(CONVERT(0x${encoded} USING utf8mb4) AS JSON));INSERT INTO semantic_ownership(space_id,object_id,authority_id,source,updated_by) VALUES('${space}','${object.id}','${object.id}','system','synthetic-test')`,
   );
 };
 const fixture = (id, name, body, domain, related = []) => ({
@@ -135,7 +136,14 @@ const invokeRaw = async (name, args, currentRun = run) => {
     ),
   };
   ok(await h.internal("/internal/data/tool-calls", input));
-  return h.internal("/internal/data/tools", input);
+  return h.internal(
+    "/internal/data/tools",
+    name === "search_knowledge" ? {
+      ...input,
+      // 24 KiB 验收计入 ToolOutput 信封，正文预算留出信封空间。
+      response_budget: {max_bytes: 24320, estimated_tokens: 6144, projection_fingerprint: "0".repeat(64)},
+    } : input,
+  );
 };
 const invoke = async (name, args, currentRun = run) => {
   const response = ok(await invokeRaw(name, args, currentRun));
@@ -143,15 +151,33 @@ const invoke = async (name, args, currentRun = run) => {
     const size = Buffer.byteLength(JSON.stringify(response));
     sizes.push(size);
     assert.ok(size <= 24576, `完整ToolOutput为${size} UTF8 bytes`);
-    assert.deepEqual(response.data.search_scope, {
-      kinds: args.kinds ?? [],
-      related_object_id: args.related_object_id ?? null,
-      business_domain: args.business_domain ?? null,
-    });
+    validateContract("KnowledgeSearchReply", response.data);
   }
   return response.data;
 };
 const search = (args) => invoke("search_knowledge", { limit: 10, ...args });
+const objectIds = (result) => [...new Set(result.hits
+  .filter((hit) => hit.record_kind === "knowledge_entry")
+  .map((hit) => hit.ref.object_id))];
+const readKnowledge = async (ref, options = {}) => {
+  const result = await invoke("read_knowledge", {items: [{kind: "knowledge", ref, ...options}]});
+  return result.items[0];
+};
+const issue = () => h.internal("/internal/model/issue", {
+  run_id: run.run_id,
+  lease_epoch: run.lease_epoch,
+  call_attempt_id: randomUUID(),
+});
+const replaceRun = async (text) => {
+  ok(await h.request(
+    `/conversations/${run.conversation_id}/messages/${run.message_id}/withdraw`,
+    {operation_id: randomUUID()},
+  ));
+  h.releaseRun(run.run_id);
+  await h.resumeWorker();
+  run = await h.capture(await h.create(), text);
+  await h.pauseWorker();
+};
 const asset = async (name, body, user = "alice") =>
   ok(
     await h.request(
@@ -246,6 +272,10 @@ try {
     suggestion: { value: leftDomain },
   });
   setFixture(inferred);
+  const confirmed = assignDomain(
+    await create("document", "inferredneedle", "维护者确认这是订单分析资料。"),
+    leftDomain,
+  );
   const tailRule =
     "长文尾部规则：🌏发生跨期退款时必须先确认采用付款归属还是退款发生时间。";
   const tail = assignDomain(
@@ -288,7 +318,7 @@ try {
     rightDomain,
   );
   const encoded = Buffer.from(JSON.stringify(filler)).toString("hex");
-  // 1000条均合法但属异域；目标ID排在后面，过滤后才应用候选上限。
+  // 1000条都是有效异域对象，且ID排在前面；稍后用明确的任务许可验证候选前过滤。
   h.sql(
     `SET SESSION cte_max_recursion_depth=1200;INSERT INTO knowledge_objects(id,space_id,kind,name,version,state,body,source_id,source_version,updated_by) WITH RECURSIVE n AS (SELECT 1 AS i UNION ALL SELECT i+1 FROM n WHERE i<1000) SELECT CONCAT('aa-scope-filler-',LPAD(i,4,'0')),'demo','document','precisionneedle',1,'enabled',JSON_SET(CAST(CONVERT(0x${encoded} USING utf8mb4) AS JSON),'$.id',CONCAT('aa-scope-filler-',LPAD(i,4,'0'))),NULL,0,'synthetic-test' FROM n;INSERT INTO retrieval_documents(object_id,space_id,version,body) SELECT id,space_id,version,body FROM knowledge_objects WHERE id LIKE 'aa-scope-filler-%';INSERT INTO semantic_ownership(space_id,object_id,authority_id,source,updated_by) SELECT space_id,id,id,'system','synthetic-test' FROM knowledge_objects WHERE id LIKE 'aa-scope-filler-%'`,
   );
@@ -347,83 +377,68 @@ try {
   // 故意模拟单个新对象的索引尚未写入，正式正文通道仍应按范围发现它。
   h.sql(`DELETE FROM retrieval_documents WHERE object_id='${leftDoc.id}'`);
 
-  const leftOnly = await search({
+  const leftRanked = await search({
     query: "scoped_same_rule",
     kinds: ["document"],
-    related_object_id: left.id,
-    business_domain: leftDomain,
+    hints: {related_object_ids: [left.id], business_domain: leftDomain},
   });
-  assert.deepEqual(
-    leftOnly.objects.map((object) => object.id),
-    [leftDoc.id],
-  );
-  const rightOnly = await search({
+  assert.deepEqual(objectIds(leftRanked), [leftDoc.id, rightDoc.id]);
+  const rightRanked = await search({
     query: "scoped_same_rule",
     kinds: ["document"],
-    related_object_id: right.id,
-    business_domain: rightDomain,
+    hints: {related_object_ids: [right.id], business_domain: rightDomain},
   });
-  assert.deepEqual(
-    rightOnly.objects.map((object) => object.id),
-    [rightDoc.id],
-  );
+  assert.deepEqual(objectIds(rightRanked), [rightDoc.id, leftDoc.id]);
   const structured = await search({
     query: "scoped_same_rule",
     kinds: ["metric"],
-    related_object_id: left.id,
-    business_domain: leftDomain,
+    hints: {related_object_ids: [left.id], business_domain: leftDomain},
   });
-  assert.deepEqual(
-    structured.objects.map((object) => object.id),
-    [metric.id],
-  );
-  const metricPreview = structured.objects[0];
-  assert.equal(metricPreview.entries[0].effective_structure, null);
-  assert.equal(metricPreview.entries[0].structure_page.complete, false);
-  assert.equal(metricPreview.entries[0].structure_page.next_offset, 0);
-  assert.ok(
-    metricPreview.structure_dependencies.some(
-      (reference) =>
-        reference.object_id === left.id && reference.version === left.version,
-    ),
-  );
+  assert.deepEqual(objectIds(structured), [metric.id]);
+  const metricHit = structured.hits.find((hit) => hit.record_kind === "knowledge_entry"
+    && hit.ref.object_id === metric.id && hit.ref.path === metric.entries[0].path);
+  assert.ok(metricHit, "应返回带结构的指标定义条目");
+  const metricRef = metricHit.ref;
+  const metricPreview = await readKnowledge(metricRef, {structure_only: true, limit: 100});
+  assert.equal(metricPreview.state, "ok");
+  assert.equal(metricPreview.effective_structure, null);
+  assert.equal(metricPreview.structure_page.complete, false);
+  assert.equal(metricPreview.structure_page.offset, 0);
+  assert.equal(metricPreview.structure_page.next_offset, 100);
+  assert.ok(metricPreview.structure_dependencies.some(
+    (reference) => reference.object_id === left.id && reference.version === left.version,
+  ));
   const adopted = h.sql(
     `SELECT authority_snapshot FROM agent_runs WHERE id='${run.run_id}'`,
   )[0];
-  assert.ok(
-    adopted.knowledge.some(
-      (reference) => reference[0] === left.id && reference[1] === left.version,
-    ),
-  );
+  assert.ok(adopted.knowledge.some(
+    (reference) => reference[0] === left.id && reference[1] === left.version,
+  ));
   const union = await search({
     query: "scoped_same_rule",
     kinds: ["document", "metric"],
-    related_object_id: left.id,
-    business_domain: leftDomain,
+    hints: {related_object_ids: [left.id], business_domain: leftDomain},
   });
-  assert.deepEqual(
-    union.objects.map((object) => object.id).sort(),
-    [leftDoc.id, metric.id].sort(),
-  );
+  assert.deepEqual(objectIds(union).sort(), [leftDoc.id, rightDoc.id, metric.id].sort());
   const notGuessed = await search({
     query: "inferredneedle",
-    business_domain: leftDomain,
+    hints: {business_domain: leftDomain},
   });
-  assert.deepEqual(notGuessed.objects, []);
-  checks.push(
-    "同名对象由种类、实际关联和人工明确业务域共同过滤；单对象索引积压仍可查当前正式正文；有效结构中的表引用可作为关联；模型猜测不能确定业务域",
-  );
+  assert.deepEqual(objectIds(notGuessed), [confirmed.id, inferred.id]);
+  checks.push("同名资料按表关联和已确认业务域排序，不缩小许可。索引积压时查正式正文，模型猜测不给域加权。");
+
   const longDomainResult = await search({
     query: "longdomainneedle",
     kinds: ["document"],
-    business_domain: longDomain,
+    hints: {business_domain: longDomain},
   });
-  assert.deepEqual(
-    longDomainResult.objects.map((object) => object.id),
-    [longDomainDoc.id],
-  );
-  assert.equal(longDomainResult.search_scope.business_domain, longDomain);
-  checks.push("合法120字符业务域仍完整回执并匹配，展示裁剪不能改变已应用范围");
+  assert.deepEqual(objectIds(longDomainResult), [longDomainDoc.id]);
+  const fullDomain = await readKnowledge({
+    object_id: longDomainDoc.id, version: longDomainDoc.version, path: "business_domain",
+  });
+  assert.equal(fullDomain.state, "ok");
+  assert.equal(fullDomain.content, longDomain);
+  checks.push("120字符的业务域提示可用，正式域条目全文可逐字精读");
 
   const revisedTable = ok(
     await h.request(
@@ -439,107 +454,48 @@ try {
     ),
   );
   assert.notEqual(revisedTable.version, left.version);
-  const blockedModelCall = await h.internal("/internal/model/issue", {
-    run_id: run.run_id,
-    lease_epoch: run.lease_epoch,
-    call_attempt_id: randomUUID(),
-  });
-  assert.equal(
-    blockedModelCall.value.code,
-    "stale_context",
-    JSON.stringify(blockedModelCall.value),
-  );
-  checks.push(
-    "大有效结构正文省略后仍登记派生表依赖；表改版阻止旧上下文继续发往模型",
-  );
-  // 上一轮已读取旧表/指标；改版后按正式入口开新轮，保留上下文有效性校验。
-  ok(
-    await h.request(
-      `/conversations/${run.conversation_id}/messages/${run.message_id}/withdraw`,
-      { operation_id: randomUUID() },
-    ),
-  );
-  h.releaseRun(run.run_id);
-  await h.resumeWorker();
-  run = await h.capture(await h.create(), "核对当前版本表关联的指标与本人提醒");
-  await h.pauseWorker();
-  const staleStructure = await search({
-    query: "scoped_same_rule",
-    kinds: ["metric"],
-    related_object_id: left.id,
-    business_domain: leftDomain,
-  });
-  assert.ok(!staleStructure.objects.some((object) => object.id === metric.id));
-  checks.push(
-    "仅靠结构关联且没有related_ids的指标，在引用表改版后不能借已失效结构进入关联范围",
-  );
+  ok(await issue());
+  checks.push("结构局部交付登记派生表依赖，表改版后当前 run 仍可处理后续模型调用");
+  // 实现设计 17.3.2：说明变更不撤下仍符合当前 DDL 的计算结构，旧版正文引用另行拒绝。
+  const currentStructure = await readKnowledge(metricRef, {structure_only: true, limit: 100});
+  assert.equal(currentStructure.state, "ok");
+  assert.equal(currentStructure.structure_coverage.state, "complete");
+  assert.ok(currentStructure.structure_dependencies.some((ref) =>
+    ref.object_id === left.id && ref.version === revisedTable.version && ref.path === "ddl"));
+  const oldTable = await readKnowledge({object_id: left.id, version: left.version, path: "ddl"});
+  assert.equal(oldTable.state, "stale");
+  assert.equal(Object.hasOwn(oldTable, "content"), false);
+  checks.push("同DDL的表说明改版后重核当前结构，显式旧修订的精读仍被拒绝");
 
-  const afterThousand = await search({
-    query: "precisionneedle",
-    kinds: ["document"],
-    business_domain: leftDomain,
-  });
-  assert.deepEqual(
-    afterThousand.objects.map((object) => object.id),
-    [target.id],
-  );
-  assert.equal(afterThousand.search_coverage.examined, undefined);
-  assert.equal(afterThousand.search_coverage.rejected, undefined);
-  checks.push(
-    "1000条有效异域资料排在前面，域过滤在候选上限前执行，目标仍可找到且不交付隐藏计数",
-  );
-  const narrow = await search({
-    query: "scoped_same_rule",
-    kinds: ["document"],
-    related_object_id: left.id,
-    business_domain: rightDomain,
-  });
-  assert.deepEqual(narrow.objects, []);
-  assert.match(narrow.note, /空结果不能证明不存在/);
-  assert.match(narrow.note, /用户限定范围内/);
-  assert.match(narrow.note, /扩大用户明确范围须先征得同意/);
+  await replaceRun("核对共享资料和停用过滤。");
   const broad = await search({
     query: "scoped_same_rule",
     kinds: ["document"],
   });
-  assert.deepEqual(
-    broad.objects.map((object) => object.id).sort(),
-    [leftDoc.id, rightDoc.id].sort(),
-  );
-  checks.push(
-    "窄范围无结果有明确已应用范围与覆盖说明，移除范围后可补查另一表及另一域",
-  );
+  assert.deepEqual(objectIds(broad).sort(), [leftDoc.id, rightDoc.id].sort());
 
   const located = await search({
     query: tailRule,
     kinds: ["document"],
-    business_domain: leftDomain,
+    hints: {business_domain: leftDomain},
   });
-  const tailHit = located.objects.find((object) => object.id === tail.id);
+  const tailHit = located.hits.find((hit) => hit.record_kind === "knowledge_entry"
+    && hit.ref.object_id === tail.id && hit.ref.path === "body" && hit.definition.includes(tailRule));
   assert.ok(tailHit);
-  assert.equal(tailHit.retrieval.channel, "lexical");
-  const excerpt = tailHit.retrieval.excerpts.find(
-    (value) => value.entry_id === "body" && value.text.includes(tailRule),
-  );
-  assert.ok(excerpt);
-  assert.ok(excerpt.offset > 600);
-  assert.equal(
-    excerpt.text,
-    [...tail.entries[0].effective_value]
-      .slice(excerpt.offset, excerpt.offset + excerpt.length)
-      .join(""),
-  );
-  const page = await invoke("read_knowledge", {
-    object_id: tailHit.id,
-    version: tailHit.version,
-    entry_id: excerpt.entry_id,
-    offset: excerpt.offset,
-    limit: excerpt.length,
-  });
-  assert.equal(page.entries[0].effective_value, excerpt.text);
-  checks.push(
-    "词法命中长文Unicode尾部，片段位置来自同版正式正文，并可逐字补读",
-  );
+  assert.equal(tailHit.ref.version, tail.version);
+  assert.equal(located.search_coverage.channels.find(({channel}) => channel === "bm25").state, "available");
+  const text = tail.entries[0].effective_value;
+  const index = text.indexOf(tailHit.definition);
+  assert.ok(index >= 0);
+  const offset = [...text.slice(0, index)].length;
+  const length = [...tailHit.definition].length;
+  assert.ok(offset > 600);
+  assert.equal(tailHit.definition, [...text].slice(offset, offset + length).join(""));
+  const page = await readKnowledge(tailHit.ref, {offset, limit: length});
+  assert.equal(page.state, "ok");
+  assert.equal(page.content, tailHit.definition);
+  assert.equal(page.content_page.offset, offset);
+  checks.push("词法命中长文Unicode尾部，片段位置来自同版正式正文，并可逐字补读");
 
   const oldIndex = Buffer.from(JSON.stringify(stale)).toString("hex");
   h.sql(
@@ -560,9 +516,9 @@ try {
   );
   const old = await search({
     query: "legacyneedle",
-    business_domain: leftDomain,
+    hints: {business_domain: leftDomain},
   });
-  assert.ok(!old.objects.some((object) => object.id === stale.id));
+  assert.ok(!objectIds(old).includes(stale.id));
   assert.ok(!JSON.stringify(old).includes("正文仅存在于旧版本"));
   ok(
     await h.request("/knowledge/" + leftDoc.id + "/disable", {
@@ -570,46 +526,32 @@ try {
       expected_version: leftDoc.version,
     }),
   );
-  // broad已把leftDoc实际交付给本run；停用后必须先拒绝旧上下文，再验证新轮过滤。
-  const staleRun = await invokeRaw("search_knowledge", {
-    query: "scoped_same_rule",
-    business_domain: leftDomain,
+  // broad 已交付旧回执。同一运行的新检索核对停用状态，旧回执不能阻断当前操作。
+  const current = await search({
+    query: "scoped_same_rule", hints: {business_domain: leftDomain},
   });
-  assert.equal(staleRun.status, 409);
-  assert.equal(staleRun.value.code, "stale_context");
-  ok(
-    await h.request(
-      `/conversations/${run.conversation_id}/messages/${run.message_id}/withdraw`,
-      { operation_id: randomUUID() },
-    ),
-  );
-  h.releaseRun(run.run_id);
-  await h.resumeWorker();
-  run = await h.capture(
-    await h.create(),
-    "核对停用过滤与本人可复用提醒的当前目录",
-  );
-  await h.pauseWorker();
-  assert.ok(
-    !(
-      await search({ query: "scoped_same_rule", business_domain: leftDomain })
-    ).objects.some((object) => object.id === leftDoc.id),
-  );
-  const denied = await invokeRaw("search_knowledge", {
-    query: "scope_hidden_body_marker",
-    related_object_id: foreign.id,
-  });
+  assert.ok(!objectIds(current).includes(leftDoc.id));
+  assert.ok(objectIds(current).includes(rightDoc.id));
+  const denied = await h.request("/knowledge?related_id=" + foreign.id);
   assert.equal(denied.status, 404);
   assert.ok(!JSON.stringify(denied.value).includes(foreign.name));
   assert.ok(!JSON.stringify(denied.value).includes("scope_hidden_body_marker"));
-  checks.push(
-    "旧索引不交付已撤正文，停用对象立即过滤，跨空间关联锚点拒绝且不泄露名称或内容",
-  );
+  const foreignHint = await search({
+    query: "scope_hidden_body_marker", hints: {related_object_ids: [foreign.id]},
+  });
+  assert.ok(!objectIds(foreignHint).includes(foreign.id));
+  const foreignRead = await readKnowledge({object_id: foreign.id, version: foreign.version, path: "body"});
+  assert.equal(foreignRead.state, "not_available");
+  assert.equal(Object.hasOwn(foreignRead, "content"), false);
+  assert.ok(!JSON.stringify(foreignHint).includes(foreign.name));
+  assert.ok(!JSON.stringify(foreignHint).includes("scope_hidden_body_marker"));
+  checks.push("旧索引不交付旧正文，停用即过滤。硬关联入口拒绝跨空间锚点，软提示也不泄露空间外内容");
 
+  await replaceRun("核对本人可复用提醒的目录与补读。");
   const personal = await search({
     query: "scope_personal_marker",
     kinds: ["metric"],
-    business_domain: rightDomain,
+    hints: {business_domain: rightDomain},
   });
   assert.ok(
     personal.personal_memories.some((value) => value.id === aliceAsset.id),
@@ -653,75 +595,91 @@ try {
     "Mem0首候选不挤掉目录页末项；目录游标绑定已交付项，续页覆盖全部本人资产",
   );
 
-  let cursor;
-  const deliveredAssets = new Set();
-  let firstLarge;
-  for (let index = 0; index < 35; index++) {
-    const current = await search({
-      query: "replybound",
-      limit: 30,
-      kinds: ["document"],
-      business_domain: "回执边界",
-      ...(cursor ? { asset_after: cursor } : {}),
-    });
-    if (!firstLarge) firstLarge = current;
-    assert.ok(["complete", "bounded"].includes(current.reply_coverage.state));
-    assert.equal(current.reply_coverage.byte_limit, 24576);
-    const visible = new Set([
-      ...current.objects.map((object) => object.id),
-      ...current.reply_coverage.omitted_objects.map((value) => value.object_id),
-    ]);
-    if (cursor) {
-      assert.deepEqual([...visible], [], "资产续页不重复派发公共知识检索");
-    } else {
-      assert.deepEqual(
-        [...visible].sort(),
-        largeDocs.map((object) => object.id).sort(),
-      );
+  const publicArgs = {
+    query: "replybound",
+    limit: 30,
+    kinds: ["document"],
+    hints: {business_domain: "回执边界"},
+  };
+  const firstLarge = await search(publicArgs);
+  const firstPublicIds = objectIds(firstLarge);
+  const deliveredDocs = new Set(firstPublicIds);
+  let cursor = firstLarge.search_coverage.next;
+  let deferred = null;
+  for (let index = 0; cursor && index < 35; index++) {
+    assert.match(cursor, /^rc1:/);
+    const next = await search({...publicArgs, cursor});
+    for (const id of objectIds(next)) {
+      assert.ok(!deliveredDocs.has(id), "公共游标不能重交已返回的窗口");
+      deliveredDocs.add(id);
     }
-    for (const memory of current.personal_memories) {
+    if (!deferred && next.hits.length > 0) deferred = next.hits[0].ref;
+    assert.notEqual(next.search_coverage.next, cursor);
+    cursor = next.search_coverage.next;
+  }
+  assert.equal(cursor, null);
+  assert.deepEqual([...deliveredDocs].sort(), largeDocs.map((object) => object.id).sort());
+  assert.ok(firstLarge.next_asset_after || firstLarge.search_coverage.next
+    || firstLarge.personal_memories.some((memory) => !memory.content_page.complete));
+  const supplement = await readKnowledge(deferred ?? firstLarge.hits[0].ref, {offset: 0, limit: 100});
+  assert.equal(supplement.state, "ok");
+  assert.ok(supplement.content.startsWith("可公开的长业务说明"));
+
+  const largeAssetIds = new Set(largeAssets.map((asset) => asset.id));
+  const deliveredAssets = new Set();
+  let assetAfter;
+  for (let index = 0; index < 35; index++) {
+    const page = await search({query: "*", limit: 30, ...(assetAfter ? {asset_after: assetAfter} : {})});
+    assert.deepEqual(page.hits, [], "只翻资产目录时不重复派发公共知识检索");
+    for (const memory of page.personal_memories) {
       assert.ok(!deliveredAssets.has(memory.id), "资产游标不重复交付已读项");
       deliveredAssets.add(memory.id);
-      assert.equal(memory.version, "1");
-      assert.ok(memory.content_page);
+      if (largeAssetIds.has(memory.id)) {
+        assert.equal(memory.version, "1");
+        assert.ok(memory.content_page);
+      }
     }
-    if (!current.next_asset_after) break;
-    assert.ok(
-      current.personal_memories.some(
-        (memory) => memory.id === current.next_asset_after,
-      ),
-      "游标不能指向未交付项",
-    );
-    assert.notEqual(current.next_asset_after, cursor);
-    cursor = current.next_asset_after;
+    if (!page.next_asset_after) {
+      assetAfter = null;
+      break;
+    }
+    assert.ok(page.personal_memories.some((memory) => memory.id === page.next_asset_after));
+    assert.notEqual(page.next_asset_after, assetAfter);
+    assetAfter = page.next_asset_after;
   }
-  assert.equal(firstLarge.reply_coverage.state, "bounded");
-  assert.equal(deliveredAssets.size, largeAssets.length);
-  const deferred =
-    firstLarge.reply_coverage.omitted_objects[0] ?? firstLarge.objects[0];
-  assert.ok(deferred);
-  const supplement = await invoke("read_knowledge", {
-    object_id: deferred.object_id ?? deferred.id,
-    version: deferred.version,
-    entry_id: "body",
-    offset: 0,
-    limit: 100,
-  });
-  assert.ok(
-    supplement.entries[0].effective_value.startsWith("可公开的长业务说明"),
-  );
+  assert.equal(assetAfter, null);
+  assert.ok(largeAssets.every(({id}) => deliveredAssets.has(id)));
   const memoryPreview = firstLarge.personal_memories[0];
   assert.ok(memoryPreview);
-  const memorySupplement = await invoke("read_knowledge", {
-    object_id: memoryPreview.object_id,
-    version: memoryPreview.version,
-    offset: 0,
-    limit: 100,
+  const memorySupplement = (await invoke("read_knowledge", {items: [{
+    kind: "memory", asset_ref: {id: memoryPreview.id, version: memoryPreview.version}, part: "body",
+    offset: 0, limit: 100,
+  }]})).items[0];
+  assert.equal(memorySupplement.state, "ok");
+  assert.ok(memorySupplement.asset.body.startsWith("replybound"));
+  checks.push("30份长资料和30份个人记忆的完整工具回执保持24 KiB。两个游标独立推进，补读保留原版本。");
+
+  await replaceRun("只看指定订单域目标文档，不读取其余来源。");
+  const task = await invoke("update_analysis_task", {action: "create", goal: "只检索指定订单域文档", options: [],
+    conditions: {time_start: null, time_end: null, timezone: "UTC", metric: null, channel: null,
+      group_by: [], filters: [], knowledge_refs: [], notes: "",
+      source_limits: {allowed_sources: [{kind: "document", id: target.id}], origin_message_ids: [run.message_id]}}});
+  assert.ok(task.task_id);
+  assert.deepEqual(task.conditions.source_limits.allowed_sources, [{kind: "document", id: target.id}]);
+  const afterThousand = await search({
+    query: "precisionneedle", kinds: ["document"], hints: {business_domain: leftDomain},
   });
-  assert.ok(memorySupplement.body.startsWith("replybound"));
-  checks.push(
-    "30份大共享对象和30份个人记忆的完整工具JSON回执<=24KiB；被裁对象保留同版补读引用，资产游标逐页完整且不跳项",
-  );
+  assert.deepEqual(objectIds(afterThousand), [target.id]);
+  assert.equal(afterThousand.search_coverage.examined, undefined);
+  assert.equal(afterThousand.search_coverage.rejected, undefined);
+  assert.ok(!JSON.stringify(afterThousand).includes("属于异域"));
+  const narrow = await search({
+    query: "scoped_same_rule", kinds: ["document"],
+    hints: {related_object_ids: [right.id], business_domain: rightDomain},
+  });
+  assert.deepEqual(narrow.hits, []);
+  assert.ok(!JSON.stringify(narrow).includes("独立支付口径"));
+  checks.push("1000条异域资料排在前面，用户来源许可先于候选上限。软提示不能越过许可，空结果保留已应用范围且不泄露隐藏计数。");
   passed = true;
   console.log(
     JSON.stringify({

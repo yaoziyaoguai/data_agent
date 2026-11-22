@@ -195,7 +195,7 @@ async fn drive_stage(
                             }
                         }
                     }
-                    SearchEvent::Page(page) => vector.accept_page(page),
+                    SearchEvent::Page(page) => vector.accept_page(page, allowed),
                     SearchEvent::Sql { source, reserved, result } => {
                         reads.deadline_capped |= sql[source].accept(&mut vector.budget, reserved, result)?;
                     }
@@ -241,16 +241,14 @@ async fn drive_stage(
                         let terms = terms.values.clone();
                         let scoring_terms = scoring_terms.clone();
                         let query = query.to_owned();
-                        // 仅有原文通道时才用其替代未整理文档；纯词法仍须保留可补读的正文候选。
-                        let raw_projection = include_raw && retrieval::vector::enabled();
                         events.spawn(async move {
                             let result = tokio::time::timeout_at(deadline, async {
                                 let mut tx = AppTx::begin(&pool).await?;
                                 let allowed = allowed.as_ref().map(|records| records.knowledge_ids.as_slice());
                                 let rows = if source == 0 {
-                                    knowledge::matching_content_in_tx(&mut tx, &ctx, &query, &terms, &scoring_terms, &scope, allowed, reserved, consumed, raw_projection).await?
+                                    knowledge::matching_content_in_tx(&mut tx, &ctx, &query, &terms, &scoring_terms, &scope, allowed, reserved, consumed, include_raw).await?
                                 } else {
-                                    retrieval::content_candidates_scoped_in_tx(&mut tx, &ctx.space_id, &query, &terms, &scoring_terms, &scope, allowed, reserved, consumed, raw_projection).await?
+                                    retrieval::content_candidates_scoped_in_tx(&mut tx, &ctx.space_id, &query, &terms, &scoring_terms, &scope, allowed, reserved, consumed, include_raw).await?
                                 };
                                 tx.commit().await?;
                                 Ok::<_, Error>(rows)
@@ -308,25 +306,6 @@ async fn drive_stage(
                     else { retrieval::rank_common(query, ranked, &channels, 1000, include_raw) };
                 reads.exact_checked = true;
                 if let Some(hints) = hints {
-                    // 原文文档沿同一owner窄元信息匹配；不为软排序读取正文或收窄允许集。
-                    let mut documents: Vec<String> = rank.raw.iter()
-                        .filter(|candidate| candidate["source_kind"] == "document")
-                        .filter_map(|candidate| candidate["source_id"].as_str())
-                        .filter(|id| !cache.meta.contains_key(*id))
-                        .map(str::to_owned).collect();
-                    documents.sort(); documents.dedup();
-                    for chunk in documents.chunks(50) {
-                        let values = match tokio::time::timeout_at(deadline,
-                            knowledge::candidate_meta_in_tx(&mut tx, ctx, chunk, Some(hints))).await {
-                            Ok(values) => values?,
-                            Err(_) => { reads.deadline_capped = true; break; }
-                        };
-                        for id in chunk { cache.meta.insert(id.clone(), None); }
-                        for value in values {
-                            cache.meta.insert(value["id"].as_str().unwrap_or_default().to_owned(), Some(value));
-                        }
-                    }
-                    if reads.deadline_capped { break; }
                     let mut matches = rank.objects.iter().map(|candidate| {
                         let score = candidate["id"].as_str().and_then(|id| cache.meta.get(id))
                             .and_then(Option::as_ref).and_then(|meta| meta["hint_match"].as_i64()).unwrap_or(0);
@@ -334,13 +313,7 @@ async fn drive_stage(
                     }).collect::<std::collections::HashMap<_, _>>();
                     for candidate in &rank.raw {
                         let id = candidate["source_id"].as_str().unwrap_or_default();
-                        let score = if candidate["source_kind"] == "document" {
-                            cache.meta.get(id).and_then(Option::as_ref)
-                                .filter(|meta| meta["version"].as_str().and_then(|value| value.parse::<u64>().ok()) == candidate["revision"].as_u64())
-                                .and_then(|meta| meta["hint_match"].as_i64()).unwrap_or(0)
-                        } else {
-                            i64::from(hints.related_object_ids.as_ref().is_some_and(|ids| ids.iter().any(|value| value == id)))
-                        };
+                        let score = i64::from(hints.related_object_ids.as_ref().is_some_and(|ids| ids.iter().any(|value| value == id)));
                         matches.insert(format!("raw:{}", retrieval::raw_record(candidate).expect("ranked raw identity")), score);
                     }
                     // 精确ID/名称优先级沿原score保留；同级才按提示稳定提升。
@@ -446,7 +419,7 @@ async fn drive_stage(
             break;
         };
         match event {
-            Ok(SearchEvent::Page(page)) => vector.accept_page(page),
+            Ok(SearchEvent::Page(page)) => vector.accept_page(page, allowed),
             Ok(SearchEvent::Sql {
                 source,
                 reserved,
@@ -647,11 +620,8 @@ pub async fn restore_search_stage_outside_lock(
                 continue;
             }
             let permitted = match record {
-                SavedCandidate::Knowledge(id, ..) => allowed.knowledge_ids.contains(id),
-                SavedCandidate::Raw(kind, id, ..) => allowed
-                    .sources
-                    .iter()
-                    .any(|source| source.0 == *kind && source.1 == *id),
+                SavedCandidate::Knowledge(id, ..) => allowed.allows_knowledge(id),
+                SavedCandidate::Raw(kind, id, ..) => allowed.allows_source(kind, id),
             };
             if !permitted {
                 validation = Err(Error::new("stale_cursor"));
@@ -723,17 +693,13 @@ pub(super) async fn finish_search_stage(
 ) -> Result<ScopedSearchStage> {
     // 资产/记忆读取与普通检索共用原目录入口，选择原文不改变个人资产能力。
     let mut tx = AppTx::begin(pool).await?;
-    let memories = crate::modules::assets::list_in_tx(&mut tx, ctx, true)
+    let mut assets: Vec<_> = crate::modules::assets::list_in_tx(&mut tx, ctx, true)
         .await?
         .into_iter()
         .filter(|v| v["kind"] == "memory")
         .collect();
-    let mut items =
-        valid_assets_in_tx(&mut tx, ctx, memories, request.cid, request.text_results).await?;
-    let selected = crate::modules::assets::selected_in_tx(&mut tx, ctx, request.cid).await?;
-    items.extend(
-        valid_assets_in_tx(&mut tx, ctx, selected, request.cid, request.text_results).await?,
-    );
+    assets.extend(crate::modules::assets::selected_in_tx(&mut tx, ctx, request.cid).await?);
+    let items = valid_assets_in_tx(&mut tx, ctx, assets, None).await?;
     let page = retrieval::asset_directory(
         items.clone(),
         request.query,

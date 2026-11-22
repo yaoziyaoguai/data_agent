@@ -266,7 +266,14 @@ async fn verified_sources(
             &conditions,
             checked,
         )
-        .await?;
+        .await
+        .map_err(|error| {
+            if matches!(error.code, "stale_knowledge" | "stale_source") {
+                Error::new("stale_context")
+            } else {
+                error
+            }
+        })?;
         let result = results
             .remove(qid)
             .ok_or(Error::new("result_unavailable"))?;
@@ -350,16 +357,8 @@ pub(super) async fn check_sources_in_tx(
         .await?;
         super::context_authority::merge(&mut sources, &authority)?;
     }
-    let mut result_sources = super::context_authority::empty();
-    result_sources["query_results"] = json!(
-        answer["result_dependencies"]
-            .as_array()
-            .ok_or(Error::new("invalid_evidence"))?
-            .iter()
-            .map(|reference| json!([reference["query_id"], reference["result_ref"]]))
-            .collect::<Vec<_>>()
-    );
-    if !checked.allows(&result_sources) {
+    let result_sources = super::context_authority::from_sources(answer);
+    if !checked.allows(&result_sources, false) {
         return Err(Error::new("stale_context"));
     }
     super::context_authority::merge(&mut sources, &result_sources)?;

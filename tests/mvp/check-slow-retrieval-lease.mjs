@@ -171,9 +171,9 @@ try {
     } else if (change === "dependency_source") {
       // 模拟已提交原文的新修订、知识尚未重整理的窗口；知识版本保持不变。
       assert.match(source, /^[\w-]+$/);
-      h.sql(`INSERT INTO source_snapshots(source_id,version,body)
+      h.sql(`INSERT INTO source_revisions(source_id,version,body)
         SELECT s.source_id,s.version+1,CONCAT(s.body,'\\n合成来源的新说明')
-        FROM source_snapshots s JOIN source_heads h ON h.id=s.source_id AND h.version=s.version
+        FROM (SELECT source_id,version,body,archive_complete AS complete FROM source_revisions WHERE body IS NOT NULL) s JOIN source_heads h ON h.id=s.source_id AND h.version=s.version
         WHERE h.id='${source}'; UPDATE source_heads SET version=version+1 WHERE id='${source}';`);
     }
     const snapshot = await until(async () => {

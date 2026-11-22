@@ -14,26 +14,55 @@ const raw=async(name,args)=>{const input={run_id:run.run_id,lease_epoch:run.leas
 const tool=async(name,args)=>ok(await raw(name,args)).data;
 const route=task=>tool('update_analysis_task',{action:'route',task_id:task.task_id,expected_version:task.condition_version,goal:'',options:[]});
 const finish=async()=>{const text='本轮合成检查已记录。';ok(await h.internal('/internal/outputs',{run_id:run.run_id,lease_epoch:run.lease_epoch,chunk_seq:'1',text}));ok(await h.internal('/internal/finish',{run_id:run.run_id,lease_epoch:run.lease_epoch,commit_id:run.output_id,final_text:text,checkpoint:cp()}));h.releaseRun(run.run_id);};
-const base={time_start:null,time_end:null,timezone:'UTC',metric:null,channel:null,group_by:[],filters:[],knowledge_refs:[],notes:''};
+const base={time_start:null,time_end:null,timezone:'UTC',metric:null,channel:null,group_by:[],filters:[],knowledge_refs:[],notes:'',source_limits:null};
 try{
  const marker='SYNTHETIC_RESULT_SOURCE_987654';const cid=await h.create();const userText='准备一条从零构造的合成查询，供后续确认与结果分析。';await begin(cid,userText);
  const original=await tool('update_analysis_task',{action:'create',goal:userText,conditions:base,options:[]});
- const query=await tool('request_query',{task_id:original.task_id,condition_version:original.condition_version,sql:`SELECT '${marker}' AS detail`,parameters:{},target_id:'synthetic-sqlite',summary:'从零构造的结果来源验证',knowledge_refs:[],replaces_query_id:null});
+ const split=Math.floor(marker.length/2);
+ const sql=`SELECT '${marker.slice(0,split)}' || '${marker.slice(split)}' AS detail`;
+ assert.ok(!sql.includes(marker),'保密探针只在实际结果出现，草稿 SQL 不重复完整探针');
+ const query=await tool('request_query',{task_id:original.task_id,condition_version:original.condition_version,sql,parameters:{},target_id:'synthetic-sqlite',summary:'从零构造的结果来源验证',knowledge_refs:[],replaces_query_id:null});
  await finish();ok(await h.request(`/queries/${query.id}/confirm`,{operation_id:randomUUID(),draft_version:query.draft_version,condition_version:query.condition_version}));
  const beforeCount=h.captured.length;await h.resumeWorker();const completed=await until(async()=>{const q=ok(await h.request(`/queries/${query.id}`));assert.notEqual(q.execution_state,'failed',JSON.stringify(q));return q.execution_state==='succeeded'?q:false;},'合成结果完成');
  attach(await until(()=>h.captured.slice(beforeCount).find(r=>r.conversation_id===cid),'结果唤醒'));await h.pauseWorker();
- const wakeText=run.text;const read=await tool('get_query',{query_id:query.id});assert.ok(JSON.stringify(read.results).includes(marker),'先实际交付平台结果');
- const wakeTask=await tool('update_analysis_task',{action:'create',goal:wakeText,conditions:base,options:[]});
- const derived=await tool('update_analysis_task',{action:'create',goal:'根据结果'+marker+'继续分析',conditions:{...base,notes:marker+'条件说明'},question:marker+'是否适用？',options:[marker+'口径','其他']});
- const originalDerivedInvocation=lastInput;
- const saved=h.sql(`SELECT goal_authority FROM analysis_tasks WHERE id='${wakeTask.task_id}'`)[0];assert.deepEqual(saved.query_results,[]);assert.ok(saved.source_query_results.some(pair=>pair[0]===query.id&&pair[1]===completed.result_ref),'结果唤醒原文不按真实用户原话豁免，持久正文保留结果来源');
+ const read=await tool('get_query',{query_id:query.id});
+ assert.ok(JSON.stringify(read.results).includes(marker),'先实际交付平台结果');
+ const resultInvocation=lastInput;
+ const saved=h.sql(`SELECT authority_snapshot FROM agent_runs WHERE id='${run.run_id}'`)[0];
+ assert.ok(saved.query_results.some(pair=>pair[0]===query.id&&pair[1]===completed.result_ref),
+  '结果唤醒不等于读取；真实读取后登记源结果和原版本');
  const issueBefore=h.sql(`SELECT JSON_OBJECT('calls',issued_calls) FROM budget_scopes WHERE id='${run.budget_scope_id}'`)[0];
- await h.pausePlatform();const unknown=await raw('read_analysis_task',{task_id:derived.task_id});assert.notEqual(unknown.status,200,'外部权限未知不能假成功');assert.equal(unknown.value.code,'outcome_unknown',JSON.stringify(unknown));assert.equal(JSON.stringify(unknown).includes(marker),false);const unknownInput=lastInput;await h.resumePlatform();
- const recovered=ok(await h.internal('/internal/data/tools',unknownInput)).data;assert.ok(recovered.goal.includes(marker),'外部服务恢复后正常合法正文仍可读取');
+ await h.pausePlatform();
+ const unknown=await raw('get_query',{query_id:query.id});
+ assert.notEqual(unknown.status,200,'外部权限未知不能假成功');
+ assert.equal(unknown.value.code,'outcome_unknown',JSON.stringify(unknown));
+ assert.equal(JSON.stringify(unknown).includes(marker),false);
+ const unknownInput=lastInput;
+ await h.resumePlatform();
+ const recovered=ok(await h.internal('/internal/data/tools',unknownInput)).data;
+ assert.ok(JSON.stringify(recovered.results).includes(marker),'外部服务恢复后正常合法结果仍可读取');
  assert.deepEqual(h.sql(`SELECT JSON_OBJECT('calls',issued_calls) FROM budget_scopes WHERE id='${run.budget_scope_id}'`)[0],issueBefore);
- checks.push('query_result真实交付后绑定正文；平台权限未知明确outcome_unknown，恢复后正文可读且未调用模型');
+ checks.push('实际get_query外部权限未知明确outcome_unknown，恢复后结果可读且未调用模型');
  await writeFile(h.directory+'/platform/permissions.json',JSON.stringify({denied_query_users:['alice']}));
- const replay=await h.internal('/internal/data/tools',originalDerivedInvocation);assert.equal(replay.status,200,JSON.stringify(replay));assert.equal(JSON.stringify(replay.value).includes(marker),false,'成功回执按已撤结果权限投影');
+ assert.equal((await h.request(`/queries/${query.id}/results`)).status,403,'同一份保存结果的当前平台权限已撤回');
+ const replay=await h.internal('/internal/data/tools',resultInvocation);
+ assert.equal(JSON.stringify(replay.value).includes(marker),false,'原SDK成功回执不得重放已撤权限的结果');
+ if(process.argv.includes('--check-legacy-result')){
+   h.sql(`UPDATE tool_calls SET tool_contract_version=1,receipt=JSON_SET(receipt,'$.tool_contract_version',1)
+     WHERE recovery_chain_id='${run.recovery_chain_id}' AND sdk_tool_call_id='${resultInvocation.sdk_tool_call_id}'`);
+   await writeFile(h.directory+'/platform/permissions.json','{}');
+   const legacy=ok(await h.internal('/internal/data/tools',resultInvocation));
+   assert.equal(legacy.tool_contract_version,1);
+   assert.equal(legacy.operation_id,(await h.internal('/internal/data/tool-calls',resultInvocation)).value.operation_id);
+   assert.ok(JSON.stringify(legacy.data.results).includes(marker),'合法旧成功回执仍能接回同一结果');
+   await writeFile(h.directory+'/platform/permissions.json',JSON.stringify({denied_query_users:['alice']}));
+   const rejectedLegacy=await h.internal('/internal/data/tools',resultInvocation);
+   assert.equal(rejectedLegacy.status,403,JSON.stringify(rejectedLegacy.value));
+   assert.ok(!JSON.stringify(rejectedLegacy.value).includes(marker));
+   checks.push('旧版原SDK成功结果回执可接回；同一回执撤权后只返回403');
+ }
+ assert.equal((await h.internal('/internal/model/issue',{run_id:run.run_id,lease_epoch:run.lease_epoch,call_attempt_id:randomUUID()})).status,
+  200,'结果撤权通过结果读取与本轮正式答复保护，不拒绝运行的模型调用额度');
  // R01：本轮已采用的查询结果撤权后，普通自然final必须在提交前拒绝，三类持久状态不推进。
  const finishText='本轮合成检查已记录。';
  ok(await h.internal('/internal/outputs',{run_id:run.run_id,lease_epoch:run.lease_epoch,chunk_seq:'1',text:finishText}));
@@ -55,13 +84,20 @@ try{
  // 被拒绝的运行按失败结束，下一轮只接最后一个已结清检查点；该检查点不得再携带已撤结果。
  assert.equal(run.checkpoint?.authority_snapshot?.query_results.some(pair=>pair[0]===query.id),false);
  assert.equal(JSON.stringify(run.workspace_context).includes(marker),false);
- const current=await tool('read_analysis_task',{task_id:derived.task_id});assert.equal(JSON.stringify(current).includes(marker),false);assert.ok(current.unavailable_condition_fields.includes('notes'));assert.equal(current.phase,'waiting_clarification');
- const history=await tool('read_analysis_task',{task_id:derived.task_id,condition_version:derived.condition_version});assert.equal(JSON.stringify(history).includes(marker),false);
- const wakeHidden=await tool('read_analysis_task',{task_id:wakeTask.task_id});assert.equal(wakeHidden.goal,undefined,'结果唤醒原文作为目标仍依赖结果来源');
- const originalVisible=await tool('read_analysis_task',{task_id:original.task_id});assert.equal(originalVisible.goal,userText,'真实用户原文仍可保留');
- await route(derived);await finish();await begin(cid,'下一轮继续当前任务。');assert.equal(JSON.stringify(run.workspace_context).includes(marker),false);assert.equal(run.workspace_context.tasks.find(t=>t.id===wakeTask.task_id).goal,undefined);
- assert.equal(run.workspace_context.authority_snapshot.query_results.some(pair=>pair[0]===query.id),false);await route(derived);await finish();
- checks.push('结果撤权后成功回执、当前/历史条件与跨重建两轮均隐藏，结果唤醒未豁免，真实用户原文保留');
+ const denied=await raw('get_query',{query_id:query.id});
+ assert.equal(JSON.stringify(denied.value).includes(marker),false);
+ if(denied.status===200)assert.equal(denied.value.data.results,null);
+ const httpDenied=await h.request(`/queries/${query.id}/results`);
+ assert.notEqual(httpDenied.status,200);
+ assert.equal(JSON.stringify(httpDenied.value).includes(marker),false);
+ const originalVisible=await tool('read_analysis_task',{task_id:original.task_id});
+ assert.equal(originalVisible.goal,userText,'真实用户原文仍可保留');
+ await route(original);await finish();
+ await begin(cid,'下一轮继续当前任务。');
+ assert.equal(JSON.stringify(run.workspace_context).includes(marker),false);
+ assert.equal(run.workspace_context.authority_snapshot.query_results.some(pair=>pair[0]===query.id),false);
+ await route(original);await finish();
+ checks.push('撤权限制成功回执和HTTP结果，后续两轮恢复和合法用户原文保留');
  passed=true;
 }finally{await writeFile('.local/checks/task-result-authority.json',JSON.stringify({passed,checks,officialRequests:0},null,2));await h.close();}
 console.log(JSON.stringify({passed,checks,officialRequests:0}));

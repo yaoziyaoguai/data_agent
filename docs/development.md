@@ -147,25 +147,25 @@ make vm-stop
 | MySQL | 8.4.11；API沿原数据库执行嵌入迁移。`202610300003_public_content_revisions.sql`和`202610300004_source_revisions.sql`新增必要修订元信息，不删旧全文档案 |
 | 公共索引 | Milvus 3.0.2；集合身份由当前配置记录，公共目标变更不改个人Mem0目标 |
 
-统一启动器提供三个显式选项，API、Worker和Pi Bridge共用同一选择；`environment.json`记录非秘密配置。未指定时保持`archive`、工具合同`1`与原数据库摘要公共集合，继承环境不会暗改这三个默认值。选项本身不启用向量或真实模型，也不迁移个人Mem0。
+统一启动器记录非秘密配置于 `environment.json`。默认采用 `archive` 和原数据库摘要对应的公共集合。新运行使用现行工具合同，旧操作用原登记身份精确接回。向量、模型与个人 Mem0 各自使用自己的配置。
 
 | 选项 | 作用 |
 | --- | --- |
 | `--public-content-retention archive\|latest_only` | 只改变新公共修订的全文保留策略；旧档、任务、SQL、输出、调用账本和个人资产版本保留 |
 | `--public-collection <name>` | 选择公共Milvus集合；不自动搬数据、不删除旧集合，切换后需由维护入口登记重建 |
-| `--tool-contract-version 1\|2` | 只决定新消息的工具合同；进行中的消息及已登记工具继续使用持久版本 |
+| `--prefill disabled\|proposal` | 关闭语义预填，或把模型复核后的表和字段说明写入负责人待审队列。提案模式需要单独配置维护模型及有效额度 |
 
 演练始终使用独立`.local`运行目录和合成库，按以下顺序执行。每一步保留原运行目录及数据库，停止该实例后重新启动统一版本；不能用新运行目录的空库冒充原状态升级。
 
-1. 先以兼容版本、`archive`、旧公共集合和v1启动。迁移与current回填从原身份继续；核对来源、知识、人工值及必要依赖。当前修订读current，旧修订只精确回旧archive；缺失旧全文明确不可读。
+1. 先用当前版本、`archive` 和原公共集合启动。迁移与current回填从原身份继续；核对来源、知识、人工值及必要依赖。当前修订读current，旧修订只精确回旧archive；缺失旧全文明确不可读。
 2. 核对实际读取、历史、authority和恢复入口，再显式选择`--public-content-retention latest_only`。新修订同事务保存current、版本元信息和待办；进行中整理/预填保留必要冻结材料，实际终态释放临时正文，unknown仍占原预算。已保存复核成果但尚未应用的整理若遇来源停用/删除，恢复时与原作业同事务收尾并释放材料；启用来源仍沿原成果应用，不重新调用模型。
 3. 停止原公共writer后，以`--public-collection <新集合>`启动同一实例。使用维护者页面“重建检索索引”或`POST /knowledge-index/rebuilds`登记当前知识与raw；重复同一`operation_id`接回原回执。旧raw作业的有效租约内不旁路，租约到期后由普通索引消费流程分批接续，保原作业身份、已用次数及冻结Embedding回执，无需另发维护操作。等待当前目标完成，核对中文、范围过滤及长文尾部。切换间隙允许明确降级和精确回读，旧集合保留且停写。
-4. 公共目标核验后，再显式选择`--tool-contract-version 2`。既有v1操作、原Pi session/确认leaf、operation/origin、预算与输出身份不改，模型profile和authority格式不由这个选项控制。
+4. 从原会话恢复，验证原 Pi 检查点、已完成回执以及原调用身份。新工具登记采用现行合同。
 5. 回退时先停新写。兼容版本可指向旧集合读取，并由当前owner核权限、修订和正文；也可恢复升级前的一致备份。新结构已有写入后，不能直接启动不认识它的旧writer。
 
 旧已登记的任务更新先按原wire指纹接回ledger；同v2中合法旧shape且registered无receipt的create/revise由宿主识别内部方言，按旧决定格式完成。新v2登记仍用CurrentAnalysisUpdate，模型不能选择兼容方言，迁移后的新状态不降版。草稿保存只要求LockedRun本条消息已归属及任务/条件/来源有效，其他旧失败输入仍由执行确认门检查；准备草稿不增加执行权。相关接缝为`check-tool-contract-version.mjs --filter=registered_legacy_decisions_`、`check-workflow-reliability.mjs`和`check-prefill-materials.mjs --field-evidence`，它们与真实效果分别报告。
 
-08的可复现入口及当轮结果保存在CURRENT。09验收实例显式采用`--tool-contract-version 2 --public-content-retention latest_only`；本地模拟层另选`--memory builtin --retrieval lexical`，真实层按有效授权选独立profile、库、公共集合与Mem0目标。启动后核首条run的合同和冻结profile，不能只核命令行。大窗口聊天配置通过管理员模型定义保存；启动器的旧部署profile仍受legacy合同限制，不能直接把900000输入塞入该格式，维护模型与聊天配置分开核对。局部升级会话、公共切换或本地协议通过，均不等于完成真实模型验收、发布或更新日常服务。没有获准端点和额度时，不执行上面的真实模型/向量配置；无费用检查使用测试脚本自建的回环协议端点。
+08的可复现入口及当轮结果保存在CURRENT。09验收实例显式采用`--public-content-retention latest_only`；本地模拟层另选`--memory builtin --retrieval lexical`，真实层按有效授权选独立profile、库、公共集合与Mem0目标。启动后核首条run的合同和冻结profile，不能只核命令行。大窗口聊天配置通过管理员模型定义保存；启动器的旧部署profile仍受legacy合同限制，不能直接把900000输入塞入该格式，维护模型与聊天配置分开核对。局部升级会话、公共切换或本地协议通过，均不等于完成真实模型验收、发布或更新日常服务。没有获准端点和额度时，不执行上面的真实模型/向量配置；无费用检查使用测试脚本自建的回环协议端点。
 
 ### 完整业务验证
 
@@ -219,7 +219,7 @@ python3 scripts/development.py --model deepseek \
 
 维护请求在`prepare_submission`内先组装system、实际user材料（含草稿、supports和quote_catalog）及展开后的同源工具Schema，再核请求体字节门与输入容量。输入计量由原owner内的`input_tokens`适配完成：按固定公开Flash-1017/Pro-0813编码格式组装完整prompt，function使用Python默认JSON分隔空格，再一次执行官方tokenizer的BPE；HTTP外层转义不重复计入，也不把独立分词片段简单相加。这样既拒绝字节门内的高密度输入，也保留原中文长材料的正常容量。公开编码token数超过`profile.input_limit`返回现有`payload_limit`，发生在维护预留/HTTP之前；实际`max_tokens`与预留仍取同份profile.output_limit，结算继续核真实usage。固定数据、MIT许可、指纹和隔离的Python独立参考环境见[编码资产说明](../crates/data-agent/resources/deepseek/README.md)。应用只使用Rust本地计数，未增加远程计数服务或新模型调用。
 
-需要保持维护模型通道关闭时，给现有启动器传`--prefill disabled`。它仅不设置整理/预填的profile与URL，聊天、检索、记忆及其原trial/数据库继续使用原配置；缺省`enabled`保持原启动行为。该选项可用于尚未取得维护发送条件的真实试用，不需要更换profile、trial或独立启动器。
+启动器的 `--prefill proposal` 将经模型复核的预填写入负责人待审队列，正式条目和人工覆盖在负责人采纳前保持原版本。传 `--prefill disabled` 关闭维护模型调用。聊天、检索、个人记忆及各自模型配置仍沿原入口。
 
 上述推导只覆盖已核对的公开编码器形状（两条纯文本消息、一个无namespace函数，无历史/图像/response_format），不是服务端输入硬限制。官方托管API未给出与公开编码器逐字相同的模板保证，off的强制工具选择也未在公开encoder中展开；本地检查不能据此声称所有托管别名/模板都有无条件硬上界。真实维护通道是否具备发送条件以CURRENT的具体证据为准，不能从配置了input_limit或固定模拟usage推断。公开依据：[Flash编码器](https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash-1017/blob/main/encoding/encoding.py)、[Pro编码器](https://huggingface.co/deepseek-ai/DeepSeek-V4-Pro-0813/blob/main/encoding/encoding_dsv4.py)、[官方用量说明](https://api-docs.deepseek.com/quick_start/token_usage/)；本轮保存的版本指纹与复核结果见CURRENT。
 
@@ -360,7 +360,7 @@ node tests/mvp/run-business-acceptance.mjs --audit
 
 聊天代表只支持原 S02 的两条固定自然消息，独立核验实际新草稿 SQL 后才发送明确执行消息，不调用确认 HTTP 接口替代聊天；平台实际 HTTP submit、原 message/query/task/condition/draft/budget、结果读取、流式与正式正文、刷新分别留证。正式解释须区分记录与实体：身份未知不能证明是已知人群之外的新实体，也不能证明多个匿名记录属于不同实体；有依据的已知下界及互斥集合求和仍可说明。协议固定答复只验证链路，真实模型数值通过也不自动表示解释正确。
 
-聊天模式复用原 profile/database，配置须另含 `platformDirectory`（原平台账本目录）及 `modelKeyFile`（该库原模型配置解密文件路径）；只登记路径，不复制或输出密钥。它接回原模型目录，不改服务修订或重建 trial，并记录账本 before/after、本次增量和实际模型派发数。复用前核有效窗口、查询/索引/记忆待办和所有 Worker/Bridge/Pi 执行者；启动本身可能产生费用。默认启动器的工具合同为 1、公共正文策略为 `archive`，本地候选显式传 `--tool-contract-version 2 --public-content-retention latest_only`。无费用 mock/builtin/lexical 候选不证明 hybrid、Mem0 或真实模型能力。`--output` 在启动前独占创建本次文件，非法路径或既有文件会拒绝；后续只更新该报告。浏览器在本次 `h.close()` 之前验证同库同对话，`keep` 仅保库。原 16 题 `--audit --quality-review` 的完整门槛保持。
+聊天模式复用原 profile/database，配置须另含 `platformDirectory`（原平台账本目录）及 `modelKeyFile`（该库原模型配置解密文件路径）；只登记路径，不复制或输出密钥。它接回原模型目录，不改服务修订或重建 trial，并记录账本 before/after、本次增量和实际模型派发数。复用前核有效窗口、查询/索引/记忆待办和所有 Worker/Bridge/Pi 执行者；启动本身可能产生费用。默认启动器的工具合同为 1、公共正文策略为 `archive`，本地候选显式传 `--public-content-retention latest_only`。无费用 mock/builtin/lexical 候选不证明 hybrid、Mem0 或真实模型能力。`--output` 在启动前独占创建本次文件，非法路径或既有文件会拒绝；后续只更新该报告。浏览器在本次 `h.close()` 之前验证同库同对话，`keep` 仅保库。原 16 题 `--audit --quality-review` 的完整门槛保持。
 
 业务入口记录S01–S05、B01–B08及B05保存失败变体的适用流程，并用独立SQLite数据核算Q02/Q04/Q05/Q06/Q10。同一入口还可运行P01–P05的初次/再次预填和人工保护，聊天与维护共用原trial账本。回环演示模型只有固定策略，证明宿主工具与流程可用；真实模型的解释、引用和缺口仍须独立审查。达到请求、费用或时间上限时保留已使用账本和未完成题目，不能自动重跑或以模拟输出补齐。Q01–Q13参考SQL及18种错误SQL另由独立验收器核对；不声称已验证全部题的模型生成质量。
 

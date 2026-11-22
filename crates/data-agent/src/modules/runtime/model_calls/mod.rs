@@ -7,6 +7,7 @@ use crate::{
 };
 use serde_json::Value;
 use sqlx::MySqlPool;
+pub use store::release_abandoned_reservations;
 
 pub async fn ensure_default_trial(pool: &MySqlPool, profile: &ModelProfile) -> Result<()> {
     store::ensure_default_trial(pool, profile).await

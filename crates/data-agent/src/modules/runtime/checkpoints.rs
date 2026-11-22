@@ -5,9 +5,13 @@ use crate::{
     types::{Error, Result, fingerprint},
 };
 use serde_json::{Value, json};
-pub async fn read_checkpoint_in_tx(tx: &mut AppTx<'_>, chain: &str) -> Result<Option<Value>> {
-    store::read_checkpoint(tx, chain).await
+pub struct DeliveryHistory {
+    pub checkpoint: Option<Value>,
+    pub same_input: bool,
+    pub answer_handoffs: Vec<Value>,
+    pub task_resets: Vec<Value>,
 }
+
 pub async fn save_checkpoint_in_tx(
     tx: &mut AppTx<'_>,
     run: &LockedRun,
@@ -33,13 +37,4 @@ pub async fn bind_delivery_checkpoint_in_tx(
     reference["entries"] = json!([]);
     reference["storage"] = json!({"kind":"host_checkpoint","fingerprint":fingerprint(checkpoint)});
     Ok(reference)
-}
-pub async fn read_delivery_checkpoint_in_tx(tx: &mut AppTx<'_>, run: &LockedRun) -> Result<Value> {
-    store::read_legacy_delivery_checkpoint(tx, run).await
-}
-pub async fn read_conversation_checkpoint_in_tx(
-    tx: &mut AppTx<'_>,
-    cid: &str,
-) -> Result<Option<serde_json::Value>> {
-    store::conversation_checkpoint(tx, cid).await
 }

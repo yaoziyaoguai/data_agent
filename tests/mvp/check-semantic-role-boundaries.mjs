@@ -157,7 +157,7 @@ try {
     const invalid = { ...command(), expected_version: doc.maintenance.version, maintainer_id: "nonexistent-member" };
     assert.equal((await h.request("/knowledge/" + doc.id + "/maintainer", invalid)).status, 400);
     assert.deepEqual((await read(doc.id)).maintenance, doc.maintenance);
-    assert.equal(h.sql(`SELECT JSON_OBJECT('n',COUNT(*)) FROM semantic_owner_operations WHERE operation_id='${invalid.operation_id}'`)[0].n, 0);
+    assert.equal(h.sql(`SELECT JSON_OBJECT('n',COUNT(*)) FROM idempotency_receipts WHERE domain='semantic_owner' AND operation_id='${invalid.operation_id}'`)[0].n, 0);
     const assign = { ...command(), expected_version: doc.maintenance.version, maintainer_id: "carol" };
     assert.equal((await h.request("/knowledge/" + doc.id + "/maintainer", assign, "bob")).status, 403);
     const assigned = await ok("/knowledge/" + doc.id + "/maintainer", assign);

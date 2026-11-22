@@ -44,7 +44,7 @@ async fn partial_channel_failure_preserves_results_and_reports_bounded() {
             result.dense_vector = Some(vec![0.01; 1024]);
         }
         while let Some(page) = result.next_page(channel, "范围检索", 1, 10) {
-            result.accept_page(fetch_page(page).await);
+            result.accept_page(fetch_page(page).await, Some(&allowed));
         }
     }
     assert_eq!(result.lexical_state, "available");
@@ -61,14 +61,17 @@ async fn healthy_shard_advances_after_another_shard_fails() {
         return;
     }
     let allowed = AllowedRecords {
-        knowledge_ids: (0..201).map(|i| format!("partial-{i:03}")).collect(),
+        knowledge_ids: (0..201)
+            .map(|i| format!("partial-{i:03}"))
+            .chain(["partial-target".into()])
+            .collect(),
         sources: vec![],
     };
     let deadline = retrieval_deadline();
     let scope = KnowledgeSearchScope::default();
     let mut candidates = prepare_cursors("demo", &scope, Some(&allowed), false, deadline);
     while let Some(page) = candidates.next_page(ScanChannel::Lexical, "后页专用", 1, 1) {
-        candidates.accept_page(fetch_page(page).await);
+        candidates.accept_page(fetch_page(page).await, Some(&allowed));
     }
     assert_eq!(candidates.lexical_state, "available");
     assert_eq!(candidates.lexical_progress.completed, 1);
@@ -81,7 +84,7 @@ async fn healthy_shard_advances_after_another_shard_fails() {
     let page = candidates
         .next_page(ScanChannel::Lexical, "后页专用", 2, 1)
         .expect("另一片失败不能阻止健康满页片继续");
-    candidates.accept_page(fetch_page(page).await);
+    candidates.accept_page(fetch_page(page).await, Some(&allowed));
     assert!(
         candidates
             .lexical
@@ -114,12 +117,12 @@ async fn successful_first_page_remains_available_after_later_page_fails() {
     let first = candidates
         .next_page(ScanChannel::Lexical, "后页失败", 1, 1)
         .unwrap();
-    candidates.accept_page(fetch_page(first).await);
+    candidates.accept_page(fetch_page(first).await, Some(&allowed));
     let later = candidates
         .next_page(ScanChannel::Lexical, "后页失败", 2, 1)
         .unwrap();
     assert_eq!(later.offset, 50);
-    candidates.accept_page(fetch_page(later).await);
+    candidates.accept_page(fetch_page(later).await, Some(&allowed));
     assert_eq!(candidates.lexical.len(), 50, "已经成功接收的首批内容保留");
     assert_eq!(
         candidates.lexical_state, "available",
@@ -146,7 +149,7 @@ async fn statement_locator_preserves_explicit_offset_without_identity() {
     let page = candidates
         .next_page(ScanChannel::Lexical, "陈述定位", 1, 3)
         .unwrap();
-    candidates.accept_page(fetch_page(page).await);
+    candidates.accept_page(fetch_page(page).await, Some(&allowed));
     assert_eq!(candidates.lexical_state, "available");
     assert_eq!(candidates.lexical.len(), 3);
     let location = |record| {
@@ -190,7 +193,7 @@ async fn fully_covered_channels_report_not_bounded() {
             result.dense_vector = Some(vec![0.01; 1024]);
         }
         while let Some(page) = result.next_page(channel, "全成功检索", 1, 10) {
-            result.accept_page(fetch_page(page).await);
+            result.accept_page(fetch_page(page).await, Some(&allowed));
         }
     }
     // R12/R14正例：两通道单页不满即真实穷尽、全成功，bounded只能来自实际执行
@@ -226,7 +229,7 @@ async fn failed_knowledge_channels_are_not_masked_by_unrequested_raw() {
             result.dense_vector = Some(vec![0.01; 1024]);
         }
         while let Some(page) = result.next_page(channel, "范围检索", 1, 10) {
-            result.accept_page(fetch_page(page).await);
+            result.accept_page(fetch_page(page).await, Some(&allowed));
         }
     }
     assert_eq!(result.state, "unavailable", "未执行raw不能算成功通道");

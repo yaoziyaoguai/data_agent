@@ -29,6 +29,7 @@ const condition = {
   filters: [],
   knowledge_refs: [],
   notes: "",
+  source_limits: null,
 };
 const invoke = async (name, args, sdk = randomUUID()) => {
   const input = {

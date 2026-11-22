@@ -154,9 +154,27 @@ for (const [lang, file, options] of [
         definition.allOf.forEach(walk);
         required=[...new Set(required)];
       } else required=definition.required??[];
-      const generatedName = {ControlDelivery: 'ControlDeliveryClass', ControlDeliveryFact: 'FactElement'}[name] ?? name;
-      content=content.replace(new RegExp('(pub struct '+generatedName+' \\{)([\\s\\S]*?)(\\n\\})'),(whole,head,body,tail)=>head+body.replace(/(\n\s*)(pub (\w+): Option<[^\n]+>)/g,(field,space,declaration,property)=>required.includes(property)||(composition&&properties[property]&&nullableProperty(properties[property]))?field:space+'#[serde(skip_serializing_if = "Option::is_none")]'+space+declaration)+tail);
+      const aliases = {ControlDelivery: ['ControlDeliveryClass'], ControlDeliveryFact: ['FactElement']}[name] ?? [];
+      for (const generatedName of [name, ...aliases]) {
+        content = content.replace(new RegExp('(pub struct '+generatedName+' \\{)([\\s\\S]*?)(\\n\\})'),
+          (_whole, head, body, tail) => head + body.replace(/(\n\s*)(pub (\w+): Option<[^\n]+>)/g, (field, space, declaration, property) => {
+            if (required.includes(property) || (composition && properties[property] && nullableProperty(properties[property]))) return field;
+            // 明确的null会清空工作区控制态；原回执的确认状态也须保留原值。
+            if ((name === 'DataToolOutcome' && property === 'control_delivery')
+              || (name === 'ControlDeliveryFact' && property === 'confirmation_state')) {
+              return space + '#[serde(default, deserialize_with = "deserialize_present", skip_serializing_if = "Option::is_none")]'
+                + space + declaration.replace(/: (Option<.*>)$/, ': Option<$1>');
+            }
+            return space + '#[serde(skip_serializing_if = "Option::is_none")]' + space + declaration;
+          }) + tail);
+      }
     }
+    // 历史条件缺失与显式不限来源是不同业务状态，HTTP读回需保留原值。
+    content = content.replace(/(?:    #\[serde\(skip_serializing_if = "Option::is_none"\)\]\n)?    pub source_limits: Option<([^<>\n]+)>,/g,
+      '    #[serde(default, deserialize_with = "deserialize_present", skip_serializing_if = "Option::is_none")]\n    pub source_limits: Option<Option<$1>>,');
+    // KnowledgeEntry 明确允许扩展来源字段，序列化保留 quote、value 等原始事实。
+    content = content.replace(/(pub struct KnowledgeEntry(?:SourceFacts|Suggestion|HumanOverride)(?:Class)? \{)\n\s+pub structured_value: Option<(\w+)>,\n\}/g,
+      '$1\n    #[serde(default, deserialize_with = "deserialize_present", skip_serializing_if = "Option::is_none")]\n    pub structured_value: Option<Option<$2>>,\n    #[serde(flatten)]\n    pub extra: std::collections::BTreeMap<String, serde_json::Value>,\n}');
     // 支持完整性的历史缺失与显式null均可解码，序列化仍保留各自原值。
     for (const name of ['SemanticStatement', 'PreparedStatement', 'HumanStatementInput']) {
       if (!definitions[name]?.properties?.supports_complete) continue;

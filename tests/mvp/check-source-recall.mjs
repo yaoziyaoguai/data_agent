@@ -128,7 +128,7 @@ try {
   if (!filter || filter === "synchronized_document_recalls_its_own_windows_without_upstream_access") {
     // 仅在隔离库准备上游夹具；用例通过正式owner保存并索引派生文档。
     h.sql("INSERT INTO source_heads(id,space_id,version,fingerprint) VALUES('synchronized-document-upstream','demo',1,'synthetic')");
-    h.sql("INSERT INTO source_snapshots(source_id,version,body,complete) VALUES('synchronized-document-upstream',1,CONCAT(REPEAT('无关背景。',300),' synchronizeddocumentneedle：复核完成后才可计入。',REPEAT('未选附录。',300)),TRUE)");
+    h.sql("INSERT INTO source_revisions(source_id,version,body,archive_complete) VALUES('synchronized-document-upstream',1,CONCAT(REPEAT('无关背景。',300),' synchronizeddocumentneedle：复核完成后才可计入。',REPEAT('未选附录。',300)),TRUE)");
     await cargoTests(h.env, ["--lib"], "synchronized_document_recalls_its_own_windows_without_upstream_access");
   }
   if (!filter || filter === "raw_allowed_records_include_readable_heads_without_task_gate") {

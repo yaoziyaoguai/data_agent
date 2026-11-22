@@ -124,6 +124,7 @@ async fn delivery_preparation_longer_than_ttl_does_not_burn_an_undispatched_atte
         user_id: "synthetic-lease-owner".into(),
         space_id: "synthetic-lease-space".into(),
         request_id: "synthetic-lease-request".into(),
+        table_access: None,
     };
     let observed = std::time::Instant::now();
     let initial_job = message(&pool, &ctx).await;
@@ -132,7 +133,8 @@ async fn delivery_preparation_longer_than_ttl_does_not_burn_an_undispatched_atte
         .unwrap();
     let initial = deliver_run::start_delivery(&pool, &initial_job, 120000)
         .await
-        .unwrap();
+        .unwrap()
+        .envelope;
     deliver_run::defer_busy_delivery(
         &pool,
         &ctx,
@@ -248,7 +250,7 @@ async fn delivery_preparation_longer_than_ttl_does_not_burn_an_undispatched_atte
         started.elapsed().as_millis() >= 2500,
         "必须实际覆盖超过TTL的准备等待"
     );
-    let envelope = result.unwrap();
+    let envelope = result.unwrap().envelope;
     assert_eq!(state.0["attempts"], 1);
     assert_eq!(state.0["runs"], 2);
     assert_eq!(state.0["job_epoch"], job.lease_epoch);
@@ -289,6 +291,7 @@ async fn delivery_preparation_maintains_claim_while_waiting_for_conversation_loc
         user_id: "synthetic-lease-owner".into(),
         space_id: "synthetic-lease-space".into(),
         request_id: "synthetic-claim-request".into(),
+        table_access: None,
     };
     let observed = std::time::Instant::now();
     let job = message(&pool, &ctx).await;
@@ -333,7 +336,7 @@ async fn delivery_preparation_maintains_claim_while_waiting_for_conversation_loc
         json!({"attempts":0,"epoch":job.lease_epoch,"valid":true})
     );
     assert!(started.elapsed().as_millis() >= 2500);
-    let envelope = result.unwrap();
+    let envelope = result.unwrap().envelope;
     let state: Value = sqlx::query_scalar("SELECT JSON_OBJECT('attempts',j.attempts,'job_valid',j.lease_until>UTC_TIMESTAMP(3),'conversation_valid',c.lease_until>UTC_TIMESTAMP(3),'scope',m.budget_scope_id,'chain',m.recovery_chain_id,'issued',b.issued_calls,'model_calls',(SELECT COUNT(*) FROM model_call_attempts a WHERE a.budget_scope_id=b.id)) FROM background_jobs j JOIN conversations c ON c.id=j.conversation_id JOIN conversation_messages m ON m.id=j.message_id JOIN budget_scopes b ON b.id=m.budget_scope_id WHERE j.id=?")
         .bind(&job.id).fetch_one(&pool).await.unwrap();
     assert_eq!(state["attempts"], 1);
@@ -495,7 +498,8 @@ async fn delivery_process() {
     let pool = persistence::connect(&url).await.unwrap();
     let value = deliver_run::start_delivery(&pool, &job, 120000)
         .await
-        .unwrap();
+        .unwrap()
+        .envelope;
     contracts::validate("RunEnvelope", &value).unwrap();
     let mut tx = AppTx::begin(&pool).await.unwrap();
     let run = runtime::lock_run_in_tx(
@@ -515,10 +519,9 @@ async fn delivery_process() {
 
 #[tokio::test]
 #[ignore = "requires exclusive isolated MySQL fixture; never runs against a daily service"]
-async fn historical_runs_and_receipts_remain_one_when_recovered_by_version_two_process() {
-    let url = fixture_database(
-        "historical_runs_and_receipts_remain_one_when_recovered_by_version_two_process",
-    );
+async fn historical_receipts_keep_identity_when_recovery_uses_current_tools() {
+    let url =
+        fixture_database("historical_receipts_keep_identity_when_recovery_uses_current_tools");
     let pool = MySqlPool::connect(&url).await.unwrap();
     let migrations = sqlx::migrate!("../../migrations");
     migrations.run_to(202610260003, &pool).await.unwrap();
@@ -532,6 +535,7 @@ async fn historical_runs_and_receipts_remain_one_when_recovered_by_version_two_p
         user_id: "synthetic-version-owner".into(),
         space_id: "synthetic-version-space".into(),
         request_id: "synthetic-version-request".into(),
+        table_access: None,
     };
     // 按旧writer建立数字scope；当前无上限入口不能用于迁移前的NOT NULL结构。
     let mut tx = AppTx::begin(&pool).await.unwrap();
@@ -605,8 +609,8 @@ async fn historical_runs_and_receipts_remain_one_when_recovered_by_version_two_p
     );
     let resumed = deliver_in_new_process(&url, &job, "2", "data_agent_test_tool_contract");
     assert_eq!(
-        resumed["tool_contract_version"], 1,
-        "原run缺省1，受控2不能改写旧chain"
+        resumed["tool_contract_version"], 2,
+        "恢复的新运行只用现行工具，原登记回执版本独立保存"
     );
     assert_eq!(resumed["output_id"], legacy_output);
     let mut tx = AppTx::begin(&pool).await.unwrap();
@@ -617,7 +621,7 @@ async fn historical_runs_and_receipts_remain_one_when_recovered_by_version_two_p
     )
     .await
     .unwrap();
-    assert_eq!(run.tool_contract_version, 1);
+    assert_eq!(run.tool_contract_version, 2);
     for (sdk_id, receipt) in [
         ("legacy-succeeded", &old_receipt),
         ("legacy-rejected", &rejection),
@@ -699,39 +703,37 @@ async fn historical_runs_and_receipts_remain_one_when_recovered_by_version_two_p
 
 #[tokio::test]
 #[ignore = "requires exclusive isolated MySQL fixture; never runs against a daily service"]
-async fn new_messages_use_the_explicit_version_independent_of_model_and_index_configuration() {
-    let url = fixture_database(
-        "new_messages_use_the_explicit_version_independent_of_model_and_index_configuration",
-    );
+async fn fresh_messages_use_current_tools_independent_of_inherited_configuration() {
+    let url =
+        fixture_database("fresh_messages_use_current_tools_independent_of_inherited_configuration");
     let pool = persistence::connect(&url).await.unwrap();
     let ctx = AccessContext {
         user_id: "synthetic-version-owner".into(),
         space_id: "synthetic-version-space".into(),
         request_id: "synthetic-version-request".into(),
+        table_access: None,
     };
-    for (version, collection, overrides, expected) in [
-        ("", "data_agent_test_tool_contract", vec![], 1),
-        ("1", "data_agent_test_tool_contract", vec![], 1),
-        ("2", "data_agent_shared_qwen1024", vec![], 2),
+    for (version, collection, overrides) in [
+        ("", "data_agent_test_tool_contract", vec![]),
+        ("1", "data_agent_test_tool_contract", vec![]),
+        ("2", "data_agent_shared_qwen1024", vec![]),
         (
             "2",
             "data_agent_test_tool_contract",
             vec![("DATA_AGENT_PROVIDER_TEST", "0")],
-            2,
         ),
         (
             "2",
             "data_agent_test_tool_contract",
             vec![("DATA_AGENT_MODE", "production")],
-            2,
         ),
-        ("2", "", vec![("DATA_AGENT_VECTOR_URL", "")], 2),
+        ("2", "", vec![("DATA_AGENT_VECTOR_URL", "")]),
     ] {
         let job = message(&pool, &ctx).await;
         let result = deliver_with_environment(&url, &job, version, collection, &overrides);
         assert_eq!(
-            result["tool_contract_version"], expected,
-            "新消息只采用显式工具合同选择，不借模型测试标记或公共索引配置判断"
+            result["tool_contract_version"], 2,
+            "新消息采用现行合同，遗留环境变量、模型和索引配置均不能切回旧合同"
         );
         let mut tx = AppTx::begin(&pool).await.unwrap();
         let run = runtime::lock_run_in_tx(
@@ -741,7 +743,7 @@ async fn new_messages_use_the_explicit_version_independent_of_model_and_index_co
         )
         .await
         .unwrap();
-        assert_eq!(run.tool_contract_version, expected);
+        assert_eq!(run.tool_contract_version, 2);
         jobs::cancel_message_job_in_tx(&mut tx, &job.message_id)
             .await
             .unwrap();
@@ -759,6 +761,7 @@ async fn run_version_is_frozen_across_process_recovery() {
         user_id: "synthetic-version-owner".into(),
         space_id: "synthetic-version-space".into(),
         request_id: "synthetic-version-request".into(),
+        table_access: None,
     };
     let job = message(&pool, &ctx).await;
     let first = deliver_in_new_process(&url, &job, "2", "data_agent_test_tool_contract");
@@ -968,6 +971,7 @@ async fn registered_legacy_decisions_complete_within_contract_two_without_downgr
         user_id: "synthetic-decision-owner".into(),
         space_id: "synthetic-decision-space".into(),
         request_id: id(),
+        table_access: None,
     };
     let job = message(&pool, &ctx).await;
     let envelope = deliver_with_environment(
@@ -1122,9 +1126,9 @@ async fn registered_legacy_decisions_complete_within_contract_two_without_downgr
     assert_eq!(replay["operation_id"], rejection["operation_id"]);
     assert_eq!(replay["tool_name"], rejection["tool_name"]);
     assert_eq!(replay["tool_contract_version"], 2);
-    assert_eq!(
-        replay["source_context_ready"], true,
-        "重放另附当前读取上下文，不改原拒绝data"
+    assert!(
+        replay.get("source_context_ready").is_none(),
+        "回执接回原拒绝，读取工具不再因来源状态冻结"
     );
     let mut tx = AppTx::begin(&pool).await.unwrap();
     let run = runtime::lock_run_in_tx(

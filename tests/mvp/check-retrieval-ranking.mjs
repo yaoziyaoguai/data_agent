@@ -47,7 +47,7 @@ const insert = (value, indexed = true) => {
   fixtures.set(value.id, value);
   const encoded = Buffer.from(JSON.stringify(value)).toString("hex");
   h.sql(`INSERT INTO knowledge_objects(id,space_id,kind,name,version,state,body,source_id,source_version,updated_by) VALUES('${value.id}','demo','${value.kind}','${value.name}',1,'enabled',CAST(CONVERT(0x${encoded} USING utf8mb4) AS JSON),NULL,0,'synthetic-test');
-    INSERT INTO knowledge_versions(object_id,version,body) SELECT id,version,body FROM knowledge_objects WHERE id='${value.id}';
+    INSERT INTO knowledge_revisions(object_id,version,archived_body) SELECT id,version,body FROM knowledge_objects WHERE id='${value.id}';
     ${indexed ? `INSERT INTO retrieval_documents(object_id,space_id,version,body) SELECT id,space_id,version,body FROM knowledge_objects WHERE id='${value.id}';` : ""}
     INSERT INTO semantic_ownership(space_id,object_id,authority_id,source,updated_by) VALUES('demo','${value.id}','${value.id}','system','synthetic-test')`);
 };
@@ -270,10 +270,10 @@ try {
     INSERT INTO knowledge_objects(id,space_id,kind,name,version,state,body,source_id,source_version,updated_by)
     WITH RECURSIVE n AS (SELECT 1 AS i UNION ALL SELECT i+1 FROM n WHERE i<1200)
     SELECT CONCAT('aa-rank-scale-',LPAD(i,4,'0')),'demo','document','合成干扰资料',1,'enabled',JSON_SET(CAST(CONVERT(0x${encoded} USING utf8mb4) AS JSON),'$.id',CONCAT('aa-rank-scale-',LPAD(i,4,'0'))),NULL,0,'synthetic-test' FROM n;
-    INSERT INTO knowledge_versions(object_id,version,body) SELECT id,version,body FROM knowledge_objects WHERE id LIKE 'aa-rank-scale-%';
+    INSERT INTO knowledge_revisions(object_id,version,archived_body) SELECT id,version,body FROM knowledge_objects WHERE id LIKE 'aa-rank-scale-%';
     INSERT INTO retrieval_documents(object_id,space_id,version,body) SELECT id,space_id,version,body FROM knowledge_objects WHERE id LIKE 'aa-rank-scale-%';
     INSERT INTO semantic_ownership(space_id,object_id,authority_id,source,updated_by) SELECT space_id,id,id,'system','synthetic-test' FROM knowledge_objects WHERE id LIKE 'aa-rank-scale-%'`);
-  assert.deepEqual(h.sql(`SELECT JSON_OBJECT('current',COUNT(*),'versioned',COUNT(v.object_id),'same',SUM(k.body=v.body)) FROM knowledge_objects k LEFT JOIN knowledge_versions v ON v.object_id=k.id AND v.version=k.version WHERE k.id LIKE 'aa-rank-scale-%'`),
+  assert.deepEqual(h.sql(`SELECT JSON_OBJECT('current',COUNT(*),'versioned',COUNT(v.object_id),'same',SUM(k.body=v.body)) FROM knowledge_objects k LEFT JOIN (SELECT object_id,version,archived_body AS body FROM knowledge_revisions WHERE archived_body IS NOT NULL) v ON v.object_id=k.id AND v.version=k.version WHERE k.id LIKE 'aa-rank-scale-%'`),
     [{ current: 1200, versioned: 1200, same: 1200 }]);
   const target = object(
     "zz-rank-scale-target",
@@ -323,16 +323,16 @@ try {
     INSERT INTO knowledge_objects(id,space_id,kind,name,version,state,body,source_id,source_version,updated_by)
     WITH RECURSIVE n AS (SELECT 1 AS i UNION ALL SELECT i+1 FROM n WHERE i<1200)
     SELECT CONCAT('bb-tail-scale-',LPAD(i,4,'0')),'demo','document','合成尾部干扰资料',1,'enabled',JSON_SET(CAST(CONVERT(0x${tailEncoded} USING utf8mb4) AS JSON),'$.id',CONCAT('bb-tail-scale-',LPAD(i,4,'0')),'$.entries[0].human_override.value',CONCAT('偶然提及 ',ELT(MOD(i-1,4)+1,'${tailTerms.join("','")}'),'，其他内容无关。'),'$.entries[0].effective_value',CONCAT('偶然提及 ',ELT(MOD(i-1,4)+1,'${tailTerms.join("','")}'),'，其他内容无关。')),NULL,0,'synthetic-test' FROM n;
-    INSERT INTO knowledge_versions(object_id,version,body) SELECT id,version,body FROM knowledge_objects WHERE id LIKE 'bb-tail-scale-%';
+    INSERT INTO knowledge_revisions(object_id,version,archived_body) SELECT id,version,body FROM knowledge_objects WHERE id LIKE 'bb-tail-scale-%';
     INSERT INTO retrieval_documents(object_id,space_id,version,body) SELECT id,space_id,version,body FROM knowledge_objects WHERE id LIKE 'bb-tail-scale-%';
     INSERT INTO semantic_ownership(space_id,object_id,authority_id,source,updated_by) SELECT space_id,id,id,'system','synthetic-test' FROM knowledge_objects WHERE id LIKE 'bb-tail-scale-%'`);
-  assert.deepEqual(h.sql(`SELECT JSON_OBJECT('current',COUNT(*),'versioned',COUNT(v.object_id),'same',SUM(k.body=v.body),'effective',SUM(JSON_EXTRACT(k.body,'$.entries[0].effective_value')=JSON_EXTRACT(k.body,'$.entries[0].human_override.value'))) FROM knowledge_objects k LEFT JOIN knowledge_versions v ON v.object_id=k.id AND v.version=k.version WHERE k.id LIKE 'bb-tail-scale-%'`),
+  assert.deepEqual(h.sql(`SELECT JSON_OBJECT('current',COUNT(*),'versioned',COUNT(v.object_id),'same',SUM(k.body=v.body),'effective',SUM(JSON_EXTRACT(k.body,'$.entries[0].effective_value')=JSON_EXTRACT(k.body,'$.entries[0].human_override.value'))) FROM knowledge_objects k LEFT JOIN (SELECT object_id,version,archived_body AS body FROM knowledge_revisions WHERE archived_body IS NOT NULL) v ON v.object_id=k.id AND v.version=k.version WHERE k.id LIKE 'bb-tail-scale-%'`),
     [{ current: 1200, versioned: 1200, same: 1200, effective: 1200 }]);
   for (const term of tailTerms) {
-    const [count] = h.sql(`SELECT COUNT(*) FROM knowledge_versions WHERE object_id LIKE 'bb-tail-scale-%' AND INSTR(JSON_UNQUOTE(JSON_EXTRACT(body,'$.entries[0].effective_value')),'${term}')>0`);
+    const [count] = h.sql(`SELECT COUNT(*) FROM (SELECT object_id,version,archived_body AS body FROM knowledge_revisions WHERE archived_body IS NOT NULL) archive_rows WHERE object_id LIKE 'bb-tail-scale-%' AND INSTR(JSON_UNQUOTE(JSON_EXTRACT(body,'$.entries[0].effective_value')),'${term}')>0`);
     assert.equal(count, 300, `${term}必须真实出现在弱干扰的同版有效正文中`);
   }
-  const [singleTermRows] = h.sql(`SELECT COUNT(*) FROM knowledge_versions WHERE object_id LIKE 'bb-tail-scale-%' AND (${tailTerms.map(term => `(INSTR(JSON_UNQUOTE(JSON_EXTRACT(body,'$.entries[0].effective_value')),'${term}')>0)`).join(' + ')})=1`);
+  const [singleTermRows] = h.sql(`SELECT COUNT(*) FROM (SELECT object_id,version,archived_body AS body FROM knowledge_revisions WHERE archived_body IS NOT NULL) archive_rows WHERE object_id LIKE 'bb-tail-scale-%' AND (${tailTerms.map(term => `(INSTR(JSON_UNQUOTE(JSON_EXTRACT(body,'$.entries[0].effective_value')),'${term}')>0)`).join(' + ')})=1`);
   assert.equal(singleTermRows, 1200, '每份弱干扰只含一个查询词');
   const tailStrong = object(
     "zz-tail-scale-strong",

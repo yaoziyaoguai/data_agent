@@ -3,6 +3,7 @@ mod maintenance_impact;
 mod store;
 mod structure;
 pub use maintenance_impact::find_dependents_in_tx;
+pub use store::check_read_access_in_tx;
 pub use store::live_table_ids_in_tx;
 pub use store::table_objects_in_tx;
 pub use store::{DocumentWindows, read_document_windows_in_tx, source_reference_objects_in_tx};
@@ -63,3 +64,5 @@ pub use store::{
     apply_entry_in_tx, begin_entry_batch_in_tx, lock_entry_batch_in_tx, persist_entry_batch_in_tx,
     record_entry_batch_in_tx,
 };
+
+pub(crate) use store::push_workspace_dependency_heads;

@@ -7,82 +7,54 @@ use crate::{
 use serde_json::Value;
 use sqlx::MySqlPool;
 
+pub async fn release_abandoned_reservations(pool: &MySqlPool) -> Result<bool> {
+    let active = conversations::active_run_leases(pool).await?;
+    runtime::release_abandoned_reservations(pool, &active).await
+}
+
 pub async fn reserve(
     pool: &MySqlPool,
     context: &AccessContext,
     input: ReserveModelCall,
 ) -> Result<Value> {
-    let cid = runtime::locate_run(pool, &input.run_id).await?;
-    let checked = super::context_authority::check_run_results(pool, context, &input.run_id).await?;
-    let mut tx = AppTx::begin(pool).await?;
-    let conversation = conversations::lock_conversation_in_tx(&mut tx, context, &cid).await?;
-    conversations::assert_turn_in_tx(
-        &tx,
-        &conversation,
-        &input.run_id,
-        epoch(&input.lease_epoch)?,
-    )?;
-    let run = runtime::lock_run_in_tx(&mut tx, &input.run_id, &cid).await?;
-    if run.state != "running" {
-        return Err(Error::new("lease_lost"));
-    }
-    super::context_authority::assert_run_in_tx(&mut tx, context, &cid, &input.run_id).await?;
-    super::context_authority::assert_checked_run_in_tx(&mut tx, &input.run_id, &checked).await?;
-    // 真实provider每次派发（普通请求与Pi压缩摘要）都先过宿主预检；轮内收紧
-    // 来源或切换活动任务后，已交付证据违反当前限制时按stale_context拦截。
-    let authority = runtime::read_authority_in_tx(&mut tx, &input.run_id).await?;
-    super::source_limits::assert_dispatch_projection_in_tx(
-        &mut tx,
-        context,
-        &conversation,
-        authority.as_ref(),
-    )
-    .await?;
-    let profile = runtime::read_budget_profile_in_tx(&mut tx, &run.budget_scope_id)
-        .await?
-        .ok_or(Error::new("model_unavailable"))?;
-    runtime::model_configuration::assert_active_in_tx(&mut tx, &context.space_id, &profile).await?;
+    let (mut tx, run) = authorize(pool, context, &input.run_id, &input.lease_epoch).await?;
     let receipt = runtime::reserve_model_call_in_tx(&mut tx, &run, &input).await?;
     tx.commit().await?;
     Ok(receipt)
 }
+
 pub async fn send(
     pool: &MySqlPool,
     context: &AccessContext,
     input: SendModelCall,
 ) -> Result<Value> {
-    let cid = runtime::locate_run(pool, &input.run_id).await?;
-    let checked = super::context_authority::check_run_results(pool, context, &input.run_id).await?;
-    let mut tx = AppTx::begin(pool).await?;
-    let conversation = conversations::lock_conversation_in_tx(&mut tx, context, &cid).await?;
-    conversations::assert_turn_in_tx(
-        &tx,
-        &conversation,
-        &input.run_id,
-        epoch(&input.lease_epoch)?,
-    )?;
-    let run = runtime::lock_run_in_tx(&mut tx, &input.run_id, &cid).await?;
-    if run.state != "running" {
-        return Err(Error::new("lease_lost"));
-    }
-    super::context_authority::assert_run_in_tx(&mut tx, context, &cid, &input.run_id).await?;
-    super::context_authority::assert_checked_run_in_tx(&mut tx, &input.run_id, &checked).await?;
-    let authority = runtime::read_authority_in_tx(&mut tx, &input.run_id).await?;
-    super::source_limits::assert_dispatch_projection_in_tx(
-        &mut tx,
-        context,
-        &conversation,
-        authority.as_ref(),
-    )
-    .await?;
-    let profile = runtime::read_budget_profile_in_tx(&mut tx, &run.budget_scope_id)
-        .await?
-        .ok_or(Error::new("model_unavailable"))?;
-    runtime::model_configuration::assert_active_in_tx(&mut tx, &context.space_id, &profile).await?;
+    let (mut tx, run) = authorize(pool, context, &input.run_id, &input.lease_epoch).await?;
     let receipt = runtime::send_model_call_in_tx(&mut tx, &run, &input).await?;
     tx.commit().await?;
     Ok(receipt)
 }
+
+async fn authorize<'a>(
+    pool: &'a MySqlPool,
+    context: &AccessContext,
+    id: &str,
+    lease: &str,
+) -> Result<(AppTx<'a>, runtime::LockedRun)> {
+    let cid = runtime::locate_run(pool, id).await?;
+    let mut tx = AppTx::begin(pool).await?;
+    let conversation = conversations::lock_conversation_in_tx(&mut tx, context, &cid).await?;
+    conversations::assert_turn_in_tx(&tx, &conversation, id, epoch(lease)?)?;
+    let run = runtime::lock_run_in_tx(&mut tx, id, &cid).await?;
+    if run.state != "running" {
+        return Err(Error::new("lease_lost"));
+    }
+    let profile = runtime::read_budget_profile_in_tx(&mut tx, &run.budget_scope_id)
+        .await?
+        .ok_or(Error::new("model_unavailable"))?;
+    runtime::model_configuration::assert_active_in_tx(&mut tx, &context.space_id, &profile).await?;
+    Ok((tx, run))
+}
+
 pub async fn finalize(
     pool: &MySqlPool,
     context: &AccessContext,

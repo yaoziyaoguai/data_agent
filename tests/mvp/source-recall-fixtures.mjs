@@ -11,7 +11,7 @@ export function seedRawAllowedSources(h) {
   ]) {
     h.sql(`INSERT INTO source_heads(id,space_id,version,fingerprint) VALUES('${id}','${ownerSpace}',3,'synthetic');`);
     if (current !== null) h.sql(`INSERT INTO source_current(source_id,space_id,adapter_id,source_kind,namespace,external_id,revision,body,complete,metadata,content_fingerprint,explanation_fingerprint,comparison_method,parsed,observed_metadata) VALUES('${id}','${ownerSpace}','synthetic','platform','raw-allowed','${id}',${current},REPEAT('合成正文。',20000),${Number(currentComplete)},'{}','synthetic','synthetic','exact',TRUE,'{}');`);
-    if (snapshotComplete !== null) h.sql(`INSERT INTO source_snapshots(source_id,version,body,complete) VALUES('${id}',3,REPEAT('合成旧文。',20000),${Number(snapshotComplete)});`);
+    if (snapshotComplete !== null) h.sql(`INSERT INTO source_revisions(source_id,version,body,archive_complete) VALUES('${id}',3,REPEAT('合成旧文。',20000),${Number(snapshotComplete)});`);
     if (retired) h.sql(`INSERT INTO catalog_platform_heads(source_id,platform_version,retired) VALUES('${id}',1,TRUE);`);
   }
 }

@@ -9,8 +9,9 @@ pub async fn lock_run_in_tx(tx: &mut AppTx<'_>, run_id: &str, cid: &str) -> Resu
 pub async fn start_run_in_tx(
     tx: &mut AppTx<'_>,
     input: RunStart<'_>,
-) -> Result<(String, String, Option<String>)> {
-    store::start_run(tx, input).await
+    previous: Option<(String, String)>,
+) -> Result<(LockedRun, Option<String>)> {
+    store::start_run(tx, input, previous).await
 }
 pub async fn commit_run_in_tx(
     tx: &mut AppTx<'_>,

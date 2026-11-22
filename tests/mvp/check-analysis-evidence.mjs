@@ -702,7 +702,7 @@ try {
   );
   assert.equal(
     h.sql(
-      `SELECT JSON_OBJECT('n',COUNT(*)) FROM analysis_evidence_operations WHERE conversation_id='${cid}'`,
+      `SELECT JSON_OBJECT('n',COUNT(*)) FROM idempotency_receipts WHERE domain='analysis_evidence' AND JSON_UNQUOTE(JSON_EXTRACT(response_json,'$.conversation_id'))='${cid}'`,
     )[0].n,
     0,
   );

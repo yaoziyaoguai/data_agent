@@ -95,10 +95,16 @@ try {
   scopedManager.appendMessage({role:'user',content:'普通追加不替换已有范围',timestamp:2});
   assert.throws(()=>scopedCapacity.check(),/model_input_limit/,'普通leaf追加仍必须计入长保留组');
   fixed-=1000;
+  const callId='synthetic-route';
+  scopedManager.appendMessage({role:'assistant',content:[{type:'toolCall',id:callId,name:'update_analysis_task',arguments:{action:'revise'}}],
+    api:'openai-completions',provider:'synthetic',model:'synthetic',stopReason:'toolUse',timestamp:3,
+    usage:{input:0,output:0,cacheRead:0,cacheWrite:0,totalTokens:0,cost:{input:0,output:0,cacheRead:0,cacheWrite:0,total:0}}});
+  scopedManager.appendMessage({role:'toolResult',toolCallId:callId,toolName:'update_analysis_task',
+    content:[{type:'text',text:'合成来源条件已保存'}],isError:false,timestamp:4});
   const oldLeaf=scopedManager.getLeafId();
   const projection=taskProjection(transport,scopedManager,()=>{fixed+=1000;});
-  projection.acceptReceipt({data:{},context_reset:{task_id:'synthetic-task',condition_version:'2'},source_context_ready:true},'synthetic-route');
-  assert.equal((await projection.extension.handlers.get('turn_end')[0]()).continue,true);
+  projection.acceptReceipt({data:{},context_reset:{task_id:'synthetic-task',condition_version:'2'}},callId);
+  assert.equal(await projection.extension.handlers.get('turn_end')[0](),undefined,'范围刷新不触发额外模型轮次');
   projection.check();
   assert.ok(scopedManager.getEntries().some(entry=>entry.id===retainedId),'原条目仍持久保留');
   assert.ok(!scopedManager.buildSessionProjection().entries.some(entry=>entry.sourceEntry.id===retainedId),'旧保留组已由Pi撤下');
@@ -106,7 +112,7 @@ try {
   checks.push('真实Pi范围替换后，同一容量检查器按新投影接受动态固定开销；普通追加仍核长保留组，原历史未删除');
   scopedManager.branch(oldLeaf);
   const rollback=taskProjection({...transport,post:async()=>{throw new Error('synthetic_refresh_failed');}},scopedManager,()=>assert.fail('失败刷新不能替换宿主事实'));
-  rollback.acceptReceipt({data:{},context_reset:{task_id:'synthetic-task',condition_version:'3'},source_context_ready:true},'synthetic-failed-route');
+  rollback.acceptReceipt({data:{},context_reset:{task_id:'synthetic-task',condition_version:'2'}},callId);
   await assert.rejects(()=>rollback.apply(),/synthetic_refresh_failed/);
   assert.equal(scopedManager.getLeafId(),oldLeaf);
   assert.throws(()=>scopedCapacity.check(),/model_input_limit/,'刷新回滚恢复原分支时必须重新计入原保留边界');

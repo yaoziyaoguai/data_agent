@@ -1,12 +1,13 @@
 use crate::{
     contracts,
-    modules::{access, assets, conversations, runtime},
+    modules::{access, assets, conversations},
     persistence::AppTx,
     types::{AccessContext, Error, Result},
 };
 use serde_json::{Value, json};
 use sqlx::MySqlPool;
-type CheckedText = super::context_authority::CheckedTextResults;
+
+use super::context_authority::{self, AuthorityUse, CheckedTextResults};
 
 pub(super) fn unavailable_text(error: &Error) -> bool {
     matches!(
@@ -20,164 +21,176 @@ pub(super) fn unavailable_text(error: &Error) -> bool {
     )
 }
 
-pub async fn ensure_field_authorities_in_tx(
-    tx: &mut AppTx<'_>,
-    ctx: &AccessContext,
-    asset: &Value,
-) -> Result<()> {
-    let id = asset["id"].as_str().ok_or(Error::new("invalid_input"))?;
-    if let Some(operations) =
-        assets::legacy_operation_ids_in_tx(tx, ctx, id, &asset["version"]).await?
-    {
-        let model_operations = runtime::recorded_tool_operations_in_tx(tx, &operations).await?;
-        assets::materialize_field_authorities_in_tx(
-            tx,
-            ctx,
-            id,
-            &asset["version"],
-            &model_operations,
-        )
-        .await?;
-    }
-    Ok(())
-}
-
-/// 私有字段归属不进入公开资产；缺失来源不能按空依赖交付。
-pub async fn authorities_in_tx(
-    tx: &mut AppTx<'_>,
-    ctx: &AccessContext,
-    asset: &Value,
-) -> Result<Vec<Value>> {
-    ensure_field_authorities_in_tx(tx, ctx, asset).await?;
-    let fields = assets::read_field_authorities_in_tx(
-        tx,
-        ctx,
-        asset["id"].as_str().ok_or(Error::new("invalid_input"))?,
-        &asset["version"],
-    )
-    .await?;
-    let mut authorities = Vec::new();
-    for field in assets::TEXT_FIELDS {
-        match fields[field]["origin"].as_str() {
-            Some("user") => (),
-            Some("generated") => {
-                let authority = fields[field]["authority"].clone();
-                super::context_authority::merge(
-                    &mut super::context_authority::empty(),
-                    &authority,
-                )?;
-                authorities.push(authority);
-            }
-            _ => return Err(Error::new("stale_context")),
+pub(super) fn skill_authority(asset: &Value) -> Value {
+    let mut authority = context_authority::from_sources(&json!({
+        "knowledge_refs": asset["dependencies"],
+    }));
+    if let Some(sources) = asset.get("skill_sources") {
+        for key in ["source_skills", "source_query_results"] {
+            authority[key] = sources[key].clone();
         }
     }
-    Ok(authorities)
+    authority
 }
 
-pub async fn text_authority_in_tx(
-    tx: &mut AppTx<'_>,
+pub(super) async fn checked_skills<'a>(
+    pool: &MySqlPool,
     ctx: &AccessContext,
-    cid: &str,
-    asset: &Value,
-    checked: &CheckedText,
-) -> Result<Value> {
-    super::knowledge::check_refs_in_tx(tx, ctx, &asset["dependencies"]).await?;
-    field_text_authority_in_tx(tx, ctx, cid, asset, checked).await
+    assets: impl Iterator<Item = &'a Value>,
+) -> Result<CheckedTextResults> {
+    let authorities = assets
+        .filter(|asset| asset.get("skill_sources").is_some())
+        .map(skill_authority)
+        .collect::<Vec<_>>();
+    let mut checked = CheckedTextResults::default();
+    checked.include(pool, ctx, &authorities, false).await?;
+    Ok(checked)
 }
 
-async fn field_text_authority_in_tx(
+pub(super) async fn checked_selected_skills(
+    pool: &MySqlPool,
+    ctx: &AccessContext,
+    conversation: &str,
+    ids: Option<&[&str]>,
+) -> Result<CheckedTextResults> {
+    let mut tx = AppTx::begin(pool).await?;
+    let selected = assets::selected_in_tx(&mut tx, ctx, conversation).await?;
+    tx.commit().await?;
+    checked_skills(
+        pool,
+        ctx,
+        selected.iter().filter(|asset| {
+            ids.is_none_or(|ids| ids.contains(&asset["id"].as_str().expect("saved Skill ID")))
+        }),
+    )
+    .await
+}
+
+pub(super) async fn validate_skill_in_tx(
     tx: &mut AppTx<'_>,
     ctx: &AccessContext,
-    cid: &str,
     asset: &Value,
-    checked: &CheckedText,
+    checked: &CheckedTextResults,
 ) -> Result<Value> {
-    let mut authority = super::context_authority::empty();
-    for source in authorities_in_tx(tx, ctx, asset).await? {
-        super::context_authority::validate_text_in_tx(tx, ctx, cid, &source, checked).await?;
-        super::context_authority::merge(&mut authority, &source)?;
+    let mut authority = skill_authority(asset);
+    let refs =
+        context_authority::validate_in_tx(tx, ctx, &authority, AuthorityUse::Text(checked)).await?;
+    context_authority::observe(&mut authority, &json!(refs));
+    Ok(authority)
+}
+
+pub(super) async fn authorize_skill_in_tx(
+    tx: &mut AppTx<'_>,
+    ctx: &AccessContext,
+    asset: &Value,
+    gate: Option<&super::source_limits::SourceGate>,
+    checked: &CheckedTextResults,
+) -> Result<Value> {
+    super::source_limits::assert_asset_in_tx(tx, ctx, gate, asset).await?;
+    let authority = validate_skill_in_tx(tx, ctx, asset, checked).await?;
+    if let Some(gate) = gate
+        && asset.get("skill_sources").is_some()
+        && !super::source_limits::authority_within_in_tx(tx, ctx, gate, &authority).await?
+    {
+        return Err(Error::new("source_not_allowed"));
     }
     Ok(authority)
 }
 
-pub async fn checked_assets(
-    pool: &MySqlPool,
-    ctx: &AccessContext,
-    items: &[Value],
-) -> Result<CheckedText> {
-    let mut tx = AppTx::begin(pool).await?;
-    let mut authorities = Vec::new();
-    for asset in items {
-        match authorities_in_tx(&mut tx, ctx, asset).await {
-            Ok(sources) => authorities.extend(sources),
-            Err(error) if unavailable_text(&error) => (),
-            Err(error) => return Err(error),
-        }
-    }
-    tx.commit().await?;
-    let mut checked = CheckedText::default();
-    checked.include_authorities(pool, ctx, &authorities).await?;
-    Ok(checked)
-}
-
-pub async fn project_in_tx(
+pub(super) async fn retain_authorized_skills_in_tx(
     tx: &mut AppTx<'_>,
     ctx: &AccessContext,
-    asset: &mut Value,
-    checked: &CheckedText,
+    assets: &mut Vec<Value>,
+    checked: &CheckedTextResults,
 ) -> Result<()> {
-    match field_text_authority_in_tx(tx, ctx, "", asset, checked).await {
-        Ok(_) => (),
-        Err(error) if unavailable_text(&error) => {
-            asset["name"] = json!("来源不可用，正文已隐藏");
-            asset["scope"] = json!("来源不可用，正文已隐藏");
-            asset["body"] = json!("");
-            asset["source_text"] = json!("");
-            asset["files"] = json!([]);
-            asset["dependencies"] = json!([]);
-            asset["text_unavailable"] = json!(true);
-        }
-        Err(error) => return Err(error),
-    }
+    let ids = assets
+        .iter()
+        .flat_map(|asset| context_authority::items(&asset["skill_sources"]["source_skills"]))
+        .map(|reference| reference[0].as_str().expect("saved ancestor ID").to_owned())
+        .collect::<std::collections::BTreeSet<_>>();
+    let enabled =
+        assets::enabled_sources_in_tx(tx, ctx, &ids.into_iter().collect::<Vec<_>>()).await?;
+    let dependency_ids = enabled
+        .values()
+        .flatten()
+        .map(|reference| {
+            reference["object_id"]
+                .as_str()
+                .expect("saved knowledge ID")
+                .to_owned()
+        })
+        .collect::<std::collections::BTreeSet<_>>();
+    let knowledge = crate::modules::knowledge::current_versions_in_tx(
+        tx,
+        ctx,
+        &dependency_ids.into_iter().collect::<Vec<_>>(),
+    )
+    .await?;
+    assets.retain(|asset| {
+        asset.get("skill_sources").is_none_or(|_| {
+            let authority = skill_authority(asset);
+            checked.allows(&authority, false)
+                && context_authority::items(&authority["source_skills"])
+                    .iter()
+                    .all(|reference| {
+                        enabled
+                            .get(&(
+                                reference[0].as_str().expect("saved ancestor ID").to_owned(),
+                                reference[1]
+                                    .as_str()
+                                    .expect("saved ancestor version")
+                                    .to_owned(),
+                            ))
+                            .is_some_and(|dependencies| {
+                                dependencies.iter().all(|reference| {
+                                    knowledge.get(&(
+                                        reference["object_id"]
+                                            .as_str()
+                                            .expect("saved knowledge ID")
+                                            .to_owned(),
+                                        reference["version"]
+                                            .as_str()
+                                            .expect("saved knowledge version")
+                                            .to_owned(),
+                                    )) == Some(&true)
+                                })
+                            })
+                    })
+        })
+    });
     Ok(())
 }
 
-pub async fn name_in_tx(
-    tx: &mut AppTx<'_>,
-    ctx: &AccessContext,
-    asset: &Value,
-    checked: &CheckedText,
-) -> Result<Value> {
-    ensure_field_authorities_in_tx(tx, ctx, asset).await?;
-    let fields = assets::read_field_authorities_in_tx(
-        tx,
-        ctx,
-        asset["id"].as_str().ok_or(Error::new("invalid_input"))?,
-        &asset["version"],
-    )
-    .await?;
-    let source = match fields["name"]["origin"].as_str() {
-        Some("user") => super::context_authority::empty(),
-        Some("generated") => fields["name"]["authority"].clone(),
-        _ => Value::Null,
-    };
-    match super::context_authority::validate_text_in_tx(tx, ctx, "", &source, checked).await {
-        Ok(()) => Ok(asset["name"].clone()),
-        Err(error) if unavailable_text(&error) => Ok(json!("来源不可用，正文已隐藏")),
-        Err(error) => Err(error),
+fn hide_skill(asset: &mut Value) {
+    for field in ["name", "scope"] {
+        asset[field] = json!("来源不可用，正文已隐藏");
     }
+    for field in ["body", "source_text"] {
+        asset[field] = json!("");
+    }
+    for field in ["files", "dependencies"] {
+        asset[field] = json!([]);
+    }
+    asset["text_unavailable"] = json!(true);
 }
 
-pub async fn read(pool: &MySqlPool, ctx: &AccessContext, id: &str) -> Result<Value> {
-    let mut tx = AppTx::begin(pool).await?;
-    let item = assets::read_in_tx(&mut tx, ctx, id, false).await?;
-    tx.commit().await?;
-    let checked = checked_assets(pool, ctx, &[item]).await?;
-    let mut tx = AppTx::begin(pool).await?;
-    let mut item = assets::read_in_tx(&mut tx, ctx, id, false).await?;
-    project_in_tx(&mut tx, ctx, &mut item, &checked).await?;
-    tx.commit().await?;
-    Ok(item)
+pub(super) async fn project_skill_in_tx(
+    tx: &mut AppTx<'_>,
+    ctx: &AccessContext,
+    asset: &mut Value,
+    checked: &CheckedTextResults,
+) -> Result<()> {
+    if let Err(error) = validate_skill_in_tx(tx, ctx, asset, checked).await {
+        if !unavailable_text(&error) {
+            return Err(error);
+        }
+        hide_skill(asset);
+    }
+    asset
+        .as_object_mut()
+        .expect("stored asset")
+        .remove("skill_sources");
+    Ok(())
 }
 
 pub(super) async fn project_receipt(
@@ -185,24 +198,72 @@ pub(super) async fn project_receipt(
     ctx: &AccessContext,
     mut asset: Value,
 ) -> Result<Value> {
-    let checked = checked_assets(pool, ctx, std::slice::from_ref(&asset)).await?;
+    if asset["kind"] != "skill" {
+        return Ok(asset);
+    }
     let mut tx = AppTx::begin(pool).await?;
-    project_in_tx(&mut tx, ctx, &mut asset, &checked).await?;
+    if let Some(proof) = assets::version_skill_sources_in_tx(&mut tx, &asset).await? {
+        asset["skill_sources"] = proof;
+    }
+    tx.commit().await?;
+    let checked = checked_skills(pool, ctx, std::iter::once(&asset)).await?;
+    let mut tx = AppTx::begin(pool).await?;
+    project_skill_in_tx(&mut tx, ctx, &mut asset, &checked).await?;
     tx.commit().await?;
     Ok(asset)
 }
 
+pub async fn read(pool: &MySqlPool, ctx: &AccessContext, id: &str) -> Result<Value> {
+    let mut tx = AppTx::begin(pool).await?;
+    let mut item = assets::read_with_sources_in_tx(&mut tx, ctx, id, false).await?;
+    tx.commit().await?;
+    if item["state"] == "draft" {
+        let draft = super::skill_drafts::read(pool, ctx, id).await?;
+        if draft["status"] != "pending" {
+            return Err(Error::new("stale_context"));
+        }
+        for key in ["name", "body", "scope", "files", "dependencies"] {
+            item[key] = draft[key].clone();
+        }
+        item.as_object_mut()
+            .expect("stored draft")
+            .remove("skill_sources");
+    } else if item["kind"] == "skill" {
+        let checked = checked_skills(pool, ctx, std::iter::once(&item)).await?;
+        let mut tx = AppTx::begin(pool).await?;
+        item = assets::read_with_sources_in_tx(&mut tx, ctx, id, false).await?;
+        project_skill_in_tx(&mut tx, ctx, &mut item, &checked).await?;
+        tx.commit().await?;
+    }
+    Ok(item)
+}
+
 pub async fn list(pool: &MySqlPool, ctx: &AccessContext) -> Result<Value> {
     let mut tx = AppTx::begin(pool).await?;
-    let items = assets::list_in_tx(&mut tx, ctx, false).await?;
+    let rows = assets::list_in_tx(&mut tx, ctx, false).await?;
     tx.commit().await?;
-    let checked = checked_assets(pool, ctx, &items).await?;
+    let checked = checked_skills(
+        pool,
+        ctx,
+        rows.iter().filter(|asset| asset["state"] != "draft"),
+    )
+    .await?;
     let mut tx = AppTx::begin(pool).await?;
     let mut v = assets::list_in_tx(&mut tx, ctx, false).await?;
     let can_admin = access::is_super_maintainer(ctx)?;
     for asset in &mut v {
         asset["can_edit"] = json!(assets::can_edit(ctx, asset, can_admin));
-        project_in_tx(&mut tx, ctx, asset, &checked).await?;
+        if asset["state"] == "draft" {
+            // 草稿目录不交付模型生成的正文、标题或范围。
+            hide_skill(asset);
+            asset["name"] = json!("待核对的 Skill");
+            asset["scope"] = json!("打开核对后查看适用范围");
+            let draft = asset.as_object_mut().expect("stored draft");
+            draft.remove("skill_sources");
+            draft.remove("text_unavailable");
+        } else if asset["kind"] == "skill" {
+            project_skill_in_tx(&mut tx, ctx, asset, &checked).await?;
+        }
     }
     tx.commit().await?;
     Ok(json!({"assets":v}))
@@ -216,11 +277,7 @@ pub async fn save(pool: &MySqlPool, ctx: &AccessContext, input: Value) -> Result
     let v = if let Some(receipt) = assets::begin_save_in_tx(&mut tx, ctx, &input).await? {
         receipt
     } else {
-        if let Some(id) = input["id"].as_str() {
-            let old = assets::read_in_tx(&mut tx, ctx, id, false).await?;
-            ensure_field_authorities_in_tx(&mut tx, ctx, &old).await?;
-        }
-        super::knowledge::check_refs_in_tx(&mut tx, ctx, &input["dependencies"]).await?;
+        super::knowledge::check_adoptable_refs_in_tx(&mut tx, ctx, &input["dependencies"]).await?;
         assets::save_authorized_in_tx(&mut tx, ctx, &input, access::is_super_maintainer(ctx)?)
             .await?
     };
@@ -240,13 +297,6 @@ pub async fn state(
         return Err(Error::new("invalid_input"));
     }
     let mut tx = AppTx::begin(pool).await?;
-    // 源正文失效不阻止启停/删除；这里只恢复归属证据，不要求正文可采用。
-    match assets::read_in_tx(&mut tx, ctx, asset, false).await {
-        Ok(old) => ensure_field_authorities_in_tx(&mut tx, ctx, &old).await?,
-        // 删除后仍允许同一成功操作取回原回执，由状态入口先核幂等身份。
-        Err(error) if error.code == "not_available" => (),
-        Err(error) => return Err(error),
-    }
     let v = assets::change_state_authorized_in_tx(
         &mut tx,
         ctx,
@@ -268,35 +318,55 @@ pub async fn select(
 ) -> Result<Value> {
     contracts::validate("SkillSelection", &input)?;
     let mut tx = AppTx::begin(pool).await?;
-    let conversation = conversations::lock_conversation_in_tx(&mut tx, ctx, cid).await?;
-    if let Some(receipt) = assets::selection_receipt_in_tx(&mut tx, ctx, cid, &input).await? {
-        tx.commit().await?;
-        return project_receipt(pool, ctx, receipt).await;
-    }
-    assert_selection_change_in_tx(&mut tx, &conversation).await?;
-    let item = assets::read_in_tx(
+    let item = assets::read_with_sources_in_tx(
         &mut tx,
         ctx,
-        input["asset_id"]
-            .as_str()
-            .ok_or(Error::new("invalid_input"))?,
+        input["asset_id"].as_str().expect("checked asset ID"),
+        true,
+    )
+    .await;
+    tx.commit().await?;
+    let checked = match item {
+        Ok(item) => checked_skills(pool, ctx, std::iter::once(&item)).await?,
+        Err(error) if unavailable_text(&error) => CheckedTextResults::default(),
+        Err(error) => return Err(error),
+    };
+    let mut tx = AppTx::begin(pool).await?;
+    let conversation = conversations::lock_conversation_in_tx(&mut tx, ctx, cid).await?;
+    if let Some(mut receipt) = assets::begin_selection_in_tx(&mut tx, ctx, cid, &input).await? {
+        // 原选用回执保持成功，过时正文不再交付。
+        match assets::read_with_sources_in_tx(
+            &mut tx,
+            ctx,
+            receipt["id"].as_str().expect("saved skill ID"),
+            true,
+        )
+        .await
+        {
+            Ok(current) if receipt["version"] == current["version"] => {
+                let mut current = current;
+                project_skill_in_tx(&mut tx, ctx, &mut current, &checked).await?;
+                if current["text_unavailable"] == true {
+                    hide_skill(&mut receipt);
+                }
+            }
+            Ok(_) => hide_skill(&mut receipt),
+            Err(error) if unavailable_text(&error) => hide_skill(&mut receipt),
+            Err(error) => return Err(error),
+        }
+        tx.commit().await?;
+        return Ok(receipt);
+    }
+    assert_selection_change_in_tx(&mut tx, &conversation).await?;
+    let v = assets::select_in_tx(&mut tx, ctx, cid, &input).await?;
+    let current = assets::read_with_sources_in_tx(
+        &mut tx,
+        ctx,
+        v["id"].as_str().expect("selected skill ID"),
         true,
     )
     .await?;
-    tx.commit().await?;
-    let checked = checked_assets(pool, ctx, &[item]).await;
-
-    // 网络校验不占会话锁；回来后重核幂等、忙闲、版本和来源再原子保存。
-    let mut tx = AppTx::begin(pool).await?;
-    let conversation = conversations::lock_conversation_in_tx(&mut tx, ctx, cid).await?;
-    if let Some(receipt) = assets::begin_selection_in_tx(&mut tx, ctx, cid, &input).await? {
-        tx.commit().await?;
-        return project_receipt(pool, ctx, receipt).await;
-    }
-    let checked = checked?;
-    assert_selection_change_in_tx(&mut tx, &conversation).await?;
-    let v = assets::select_in_tx(&mut tx, ctx, cid, &input).await?;
-    text_authority_in_tx(&mut tx, ctx, cid, &v, &checked).await?;
+    validate_skill_in_tx(&mut tx, ctx, &current, &checked).await?;
     tx.commit().await?;
     Ok(v)
 }
@@ -348,18 +418,22 @@ pub async fn publish(
     input: Value,
 ) -> Result<Value> {
     contracts::validate("PublishSkill", &input)?;
-    let source = read(pool, ctx, asset).await?;
-    if source["text_unavailable"] == true {
-        return Err(Error::new("stale_context"));
-    }
-    let checked = checked_assets(pool, ctx, &[source]).await?;
     let mut tx = AppTx::begin(pool).await?;
-    let source = assets::read_in_tx(&mut tx, ctx, asset, false).await?;
-    text_authority_in_tx(&mut tx, ctx, "", &source, &checked).await?;
-    let value = assets::publish_in_tx(&mut tx, ctx, asset, &input).await?;
-    super::knowledge::check_refs_in_tx(&mut tx, ctx, &value["dependencies"]).await?;
+    let item = assets::read_with_sources_in_tx(&mut tx, ctx, asset, false).await?;
     tx.commit().await?;
-    project_receipt(pool, ctx, value).await
+    let checked = checked_skills(pool, ctx, std::iter::once(&item)).await?;
+    let mut tx = AppTx::begin(pool).await?;
+    let value = assets::publish_in_tx(&mut tx, ctx, asset, &input).await?;
+    let published = assets::read_with_sources_in_tx(
+        &mut tx,
+        ctx,
+        value["id"].as_str().expect("published asset ID"),
+        false,
+    )
+    .await?;
+    validate_skill_in_tx(&mut tx, ctx, &published, &checked).await?;
+    tx.commit().await?;
+    Ok(value)
 }
 pub async fn selections(
     pool: &MySqlPool,
@@ -369,18 +443,9 @@ pub async fn selections(
 ) -> Result<Value> {
     let mut tx = AppTx::begin(pool).await?;
     conversations::lock_conversation_in_tx(&mut tx, ctx, cid).await?;
-    let before = assets::selection_page_in_tx(&mut tx, ctx, cid, after).await?;
+    let original = assets::selection_page_in_tx(&mut tx, ctx, cid, after).await?;
     tx.commit().await?;
-    let checked = checked_assets(
-        pool,
-        ctx,
-        &before
-            .iter()
-            .filter(|row| row["asset"].is_object())
-            .map(|row| row["asset"].clone())
-            .collect::<Vec<_>>(),
-    )
-    .await?;
+    let checked = checked_skills(pool, ctx, original.iter().map(|row| &row["asset"])).await?;
     let mut tx = AppTx::begin(pool).await?;
     let conversation = conversations::lock_conversation_in_tx(&mut tx, ctx, cid).await?;
     let change_blocked = selection_change_blocked_in_tx(&mut tx, &conversation).await?;
@@ -401,11 +466,16 @@ pub async fn selections(
         } else if asset["version"] != row["selected_version"] {
             "version_changed"
         } else {
-            match text_authority_in_tx(&mut tx, ctx, cid, asset, &checked).await {
-                Ok(_) => "available",
-                Err(e) if unavailable_text(&e) => "dependency_unavailable",
-                Err(e) => return Err(e),
-            }
+            "available"
+        };
+        let mut asset = asset.clone();
+        if !asset.is_null() {
+            project_skill_in_tx(&mut tx, ctx, &mut asset, &checked).await?;
+        }
+        let availability = if availability == "available" && asset["text_unavailable"] == true {
+            "dependency_unavailable"
+        } else {
+            availability
         };
         // name只承载资产身份；可用性由availability表达，删除或越界的资产name为null，
         // 界面侧按自己的fallback文案渲染，不在后端投影里重复。
@@ -467,12 +537,12 @@ pub(super) async fn read_skill_file_in_tx(
     conv: &crate::modules::conversations::LockedConversation,
     run: &str,
     path: &str,
-    checked: &CheckedText,
     gate: Option<&super::source_limits::SourceGate>,
+    checked: &CheckedTextResults,
 ) -> Result<Value> {
     let cid = conv.id.as_str();
     let (id, version, file) = assets::skill_files::parse_location(path)?;
-    let asset = assets::read_in_tx(tx, ctx, id, true).await?;
+    let asset = assets::read_with_sources_in_tx(tx, ctx, id, true).await?;
     if asset["kind"] != "skill" || asset["version"] != version {
         return Err(Error::new("stale_knowledge"));
     }
@@ -483,15 +553,12 @@ pub(super) async fn read_skill_file_in_tx(
     {
         return Err(Error::new("selection_required"));
     }
-    // 受限任务的读取门在读取点硬拒：资产按自身dependencies/字段authority核来源
-    //（不能拿资产ID查知识贡献根），否则成功交付会把skill正文写入skills桶，下一次
-    // 派发被"存在即残留"整轮stale_context且同输入不可恢复（04关闭审查修复）。
-    if let Some(gate) = gate {
-        super::source_limits::assert_asset_in_tx(tx, ctx, gate, &asset).await?;
-    }
-    let authority = text_authority_in_tx(tx, ctx, cid, &asset, checked).await?;
-    super::context_authority::merge_run_in_tx(tx, run, &authority).await?;
+    let authority = authorize_skill_in_tx(tx, ctx, &asset, gate, checked).await?;
     let text = assets::skill_files::content(&asset, file)?;
+    context_authority::merge_run_in_tx(tx, run, &authority).await?;
     assets::record_adoption_in_tx(tx, ctx, run, &asset, "read").await?;
-    Ok(json!({"id":id,"kind":"skill","version":version,"path":path,"text":text}))
+    Ok(
+        json!({"id":id,"kind":"skill","version":version,"path":path,"text":text,
+        "knowledge_refs":asset["dependencies"]}),
+    )
 }

@@ -57,6 +57,7 @@ impl DevelopmentIdentity {
                         user_id,
                         space_id: "demo".into(),
                         request_id: id(),
+                        table_access: None,
                     },
                 )
             })
@@ -167,6 +168,7 @@ mod tests {
             user_id: user.into(),
             space_id: space.into(),
             request_id: id(),
+            table_access: None,
         }
     }
     #[test]

@@ -95,19 +95,25 @@ try {
   await h.resumeWorker();
   const cid=await h.create(); run=await h.capture(cid,'先检查并展示SQL，不执行。'); await h.pauseWorker();
   const fullStructure=entry(table).effective_structure;
-  const first=await tool('read_knowledge',{object_id:table.id,version:table.version,entry_id:'description',structure_only:true,limit:32});
-  assert.equal(first.entries[0].effective_structure,null);
-  assert.equal(first.entries[0].structure_page.complete,false);
-  let text=first.entries[0].structure_text, next=first.entries[0].structure_page.next_offset;
+  const readItem=async (reference,options={})=>{
+    const {items}=await tool('read_knowledge',{items:[{kind:'knowledge',ref:reference,...options}]});
+    assert.equal(items[0].state,'ok');
+    return items[0];
+  };
+  const tableRef=ref(table,'description');
+  const first=await readItem(tableRef,{structure_only:true,limit:32});
+  assert.equal(first.effective_structure,null);
+  assert.equal(first.structure_page.complete,false);
+  let text=first.structure_text, next=first.structure_page.next_offset;
   while(next!==null){
-    const page=await tool('read_knowledge',{object_id:table.id,version:table.version,entry_id:'description',structure_only:true,offset:next,limit:32});
-    text+=page.entries[0].structure_text;next=page.entries[0].structure_page.next_offset;
+    const page=await readItem(tableRef,{structure_only:true,offset:next,limit:32});
+    text+=page.structure_text;next=page.structure_page.next_offset;
   }
   assert.deepEqual(JSON.parse(text),fullStructure);
   const beforeRelation=h.sql(`SELECT authority_snapshot FROM agent_runs WHERE id='${run.run_id}'`)[0];
   assert.ok(!beforeRelation.knowledge.some(reference=>reference[0]===lines.id));
-  const normal=await tool('read_knowledge',{object_id:relation.id,version:relation.version,entry_id:'body'});
-  assert.deepEqual(normal.entries[0].effective_structure,relationStructure);
+  const normal=await readItem(ref(relation,'body'));
+  assert.deepEqual(normal.effective_structure,relationStructure);
   assert.ok(normal.structure_dependencies.some(reference=>reference.object_id===lines.id&&reference.version===lines.version&&reference.path==='ddl'));
   const afterRelation=h.sql(`SELECT authority_snapshot FROM agent_runs WHERE id='${run.run_id}'`)[0];
   assert.ok(afterRelation.knowledge.some(reference=>reference[0]===lines.id&&reference[1]===lines.version));
@@ -144,9 +150,12 @@ try {
   assert.equal(beforeChange.status,200,JSON.stringify(beforeChange.value));
   const changed=(await patch(lines,'订单商品行资料已变化，原关联应重新核对',undefined)).value;
   assert.notEqual(changed.version,lines.version);
+  const prior=await tool('read_knowledge',{items:[{kind:'knowledge',ref:ref(lines,'description')}]});
+  assert.equal(prior.items[0].state,'stale');
+  assert.ok(!prior.items[0].content);
   const issued=await h.internal('/internal/model/issue',{run_id:run.run_id,lease_epoch:run.lease_epoch,call_attempt_id:randomUUID()});
-  assert.equal(issued.value.code,'stale_context',JSON.stringify(issued.value));
-  checks.push('只读关系规则也登记嵌套表版本；依赖变化阻止旧上下文继续发送模型');
+  assert.equal(issued.status,200,JSON.stringify(issued.value));
+  checks.push('只读关系登记原表版本；读取旧表内容拒绝，运行仍可取得调用许可');
   passed=true;
 }finally{
   await mkdir('.local/checks',{recursive:true});

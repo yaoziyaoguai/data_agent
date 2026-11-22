@@ -172,23 +172,19 @@ async fn notify_run_cancelled(
     client: &reqwest::Client,
     url: &str,
     token: &str,
-    envelope: &serde_json::Value,
+    run_id: &str,
+    lease_epoch: u64,
 ) {
     // 运行权已失效时通知Pi中止生成；精确run/代次不会影响后来持有者，未知用量仍保留。
     let result = client
         .post(format!("{url}/cancel-run"))
         .timeout(Duration::from_secs(2))
         .bearer_auth(token)
-        .json(
-            &serde_json::json!({"run_id":envelope["run_id"],"lease_epoch":envelope["lease_epoch"]}),
-        )
+        .json(&serde_json::json!({"run_id":run_id,"lease_epoch":lease_epoch.to_string()}))
         .send()
         .await;
     if !matches!(result,Ok(ref response) if response.status().is_success()) {
-        eprintln!(
-            "cancel_notification_unconfirmed run={}",
-            envelope["run_id"].as_str().unwrap_or("unknown")
-        );
+        eprintln!("cancel_notification_unconfirmed run={}", run_id);
     }
 }
 #[tokio::main]
@@ -372,45 +368,33 @@ async fn run_delivery(
         return Ok(());
     }
     match deliver_run::start_delivery(pool, job, ttl_ms).await {
-        Ok(envelope) => {
+        Ok(deliver_run::PreparedDelivery {
+            context,
+            mut envelope,
+        }) => {
             let run_id = envelope["run_id"]
                 .as_str()
                 .ok_or_else(|| Error::new("unavailable"))?;
-            let context = if storage_fault_injected("context") {
-                Err(Error::transient_storage())
-            } else {
-                deliver_run::context_for_run(pool, run_id).await
-            };
-            let context = match context {
-                Ok(context) => context,
-                Err(error) if is_transient(&error) => {
-                    // 运行已建立但上下文读取暂时失败：退回任务等待会话租约到期后重派，不结束worker。
-                    eprintln!(
-                        "worker_context_transient run={} code={}",
-                        run_id, error.code
-                    );
-                    if let Err(defer_error) = jobs::defer(pool, job).await {
-                        eprintln!(
-                            "worker_defer_rejected job={} code={}",
-                            job.id, defer_error.code
-                        );
-                    }
-                    return Ok(());
+            if storage_fault_injected("context") {
+                // 在准备与提交给 Pi 之间注入临时故障，仍沿原任务和恢复链重派。
+                eprintln!(
+                    "worker_context_transient run={} code=storage_unavailable",
+                    run_id
+                );
+                if let Err(error) = jobs::defer(pool, job).await {
+                    eprintln!("worker_defer_rejected job={} code={}", job.id, error.code);
                 }
-                Err(error) => {
-                    record_delivery_failure(job, error.code, || {
-                        deliver_run::fail_delivery(pool, job, error.code)
-                    })
-                    .await?;
-                    return Ok(());
-                }
-            };
-            let mut dispatch_envelope = envelope.clone();
+                return Ok(());
+            }
+            let lease_epoch = data_agent::types::epoch(
+                envelope["lease_epoch"].as_str().expect("delivery lease"),
+            )?;
+            let run_id = run_id.to_owned();
             let request = async {
                 data_agent::use_cases::personal_memory::prepare_workspace(
                     pool,
                     &context,
-                    &mut dispatch_envelope,
+                    &mut envelope,
                 )
                 .await
                 .map_err(|e| e.code)?;
@@ -418,7 +402,7 @@ async fn run_delivery(
                     .post(format!("{url}/resume-and-deliver"))
                     // Pi每次调用有超时；宿主按原请求限次并持续续租，不另设整轮截止。
                     .bearer_auth(token)
-                    .json(&dispatch_envelope)
+                    .json(&envelope)
                     .send()
                     .await
                     .map_err(|_| "bridge_unavailable")
@@ -426,15 +410,11 @@ async fn run_delivery(
             tokio::pin!(request);
             // 准备记忆上下文也会持会话锁。续租必须与request同时推进，
             // 不能在select分支内等待续租，饿死持锁的request。
-            let lease_epoch = envelope["lease_epoch"]
-                .as_str()
-                .ok_or_else(|| Error::new("invalid_input"))?
-                .parse::<u64>()
-                .map_err(|_| Error::new("invalid_input"))?;
             let (stop_heartbeat, mut stopped) = tokio::sync::oneshot::channel::<()>();
             let heartbeat = async {
                 let mut interval =
                     tokio::time::interval(Duration::from_millis(u64::from(ttl_ms) / 3));
+                interval.tick().await;
                 loop {
                     tokio::select! {
                         biased;
@@ -444,7 +424,7 @@ async fn run_delivery(
                     let renewed = if storage_fault_injected("renew") {
                         Err(Error::transient_storage())
                     } else {
-                        deliver_run::renew_delivery(pool, &context, run_id, lease_epoch, ttl_ms)
+                        deliver_run::renew_delivery(pool, &context, &run_id, lease_epoch, ttl_ms)
                             .await
                     };
                     match renewed {
@@ -478,7 +458,7 @@ async fn run_delivery(
                             let deferred = if storage_fault_injected("defer") {
                                 Err(Error::transient_storage())
                             } else {
-                                deliver_run::defer_busy_delivery(pool,&context,envelope["run_id"].as_str().ok_or_else(|| Error::new("unavailable"))?,envelope["lease_epoch"].as_str().ok_or_else(|| Error::new("invalid_input"))?.parse::<u64>().map_err(|_| Error::new("invalid_input"))?).await
+                                deliver_run::defer_busy_delivery(pool,&context,&run_id,lease_epoch).await
                             };
                             if let Err(error) = deferred {
                                 if is_transient(&error) {
@@ -496,20 +476,20 @@ async fn run_delivery(
                             if is_terminal_dispatch_failure(&code) {
                                 record_delivery_failure(job,&code,||deliver_run::fail_delivery(pool,job,&code)).await?;
                             } else {
-                                notify_run_cancelled(client,url,token,&envelope).await;
+                                notify_run_cancelled(client,url,token,&run_id,lease_epoch).await;
                             }
                         }
                         Ok(_) => {}
                         Err(transport) => {
                             eprintln!("delivery_interrupted job={} epoch={} transport={:?}",job.id,job.lease_epoch,transport);
-                            notify_run_cancelled(client,url,token,&envelope).await;
+                            notify_run_cancelled(client,url,token,&run_id,lease_epoch).await;
                         }
                     }
                  }
                  lost=&mut heartbeat=>{
                     if let Some(error) = lost {
                         eprintln!("delivery_lease_lost job={} code={}",job.id,error.code);
-                        notify_run_cancelled(client,url,token,&envelope).await;
+                        notify_run_cancelled(client,url,token,&run_id,lease_epoch).await;
                     }
                  }
             }

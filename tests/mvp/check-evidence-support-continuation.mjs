@@ -158,7 +158,7 @@ try {
   validateContract('KnowledgeObject', object);
   const encoded = Buffer.from(JSON.stringify(object)).toString('hex');
   h.sql(`UPDATE knowledge_objects SET body=CAST(CONVERT(0x${encoded} USING utf8mb4) AS JSON) WHERE id='${object.id}';
-    UPDATE knowledge_versions SET body=CAST(CONVERT(0x${encoded} USING utf8mb4) AS JSON) WHERE object_id='${object.id}';
+    UPDATE knowledge_revisions SET archived_body=CAST(CONVERT(0x${encoded} USING utf8mb4) AS JSON) WHERE object_id='${object.id}';
     INSERT INTO knowledge_statements(object_id,version,statement_id,space_id,entry_path,layer,body)
       SELECT '${object.id}',1,'synthetic-paged-rule','demo','body','human_override',s.value
       FROM knowledge_objects k,JSON_TABLE(k.body,'$.entries[0].human_override.statements[*]' COLUMNS(value JSON PATH '$')) s WHERE k.id='${object.id}'`);

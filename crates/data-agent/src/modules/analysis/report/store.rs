@@ -2,16 +2,19 @@ use super::super::evidence::read_evidence_in_tx;
 use super::super::store::{LockedTasks, assert_current_in_tx};
 use crate::{
     contracts,
-    persistence::AppTx,
-    types::{AccessContext, Error, Result, epoch, fingerprint, id},
+    persistence::{
+        AppTx,
+        receipts::{self, Operation},
+    },
+    types::{AccessContext, Error, Result, epoch, id},
 };
 use serde_json::{Value, json};
 use sqlx::Row;
 
 const MAX_REPORT_BYTES: usize = 768 * 1024;
 
-fn command_fingerprint(ctx: &AccessContext, cid: &str, input: &Value) -> String {
-    fingerprint(&json!({"input":input,"conversation_id":cid,"space_id":ctx.space_id}))
+fn report_command(ctx: &AccessContext, cid: &str, input: &Value) -> Value {
+    json!({"input":input,"conversation_id":cid,"space_id":ctx.space_id})
 }
 
 fn valid_id(value: &str) -> bool {
@@ -29,24 +32,18 @@ pub async fn report_receipt_in_tx(
     operation: &str,
     input: &Value,
 ) -> Result<Option<Value>> {
-    let row = sqlx::query("SELECT space_id,conversation_id,fingerprint,receipt FROM analysis_report_operations WHERE owner_id=? AND operation_id=?")
-        .bind(&ctx.user_id).bind(operation).fetch_optional(tx.connection()).await?;
-    let Some(row) = row else {
-        return Ok(None);
-    };
-    if row.get::<String, _>("fingerprint") != command_fingerprint(ctx, cid, input)
-        || row.get::<String, _>("space_id") != ctx.space_id
-        || row.get::<String, _>("conversation_id") != cid
-    {
-        return Err(Error::new("idempotency_conflict"));
-    }
-    let receipt = row.get::<sqlx::types::Json<Value>, _>("receipt").0;
-    Ok((!receipt.is_null()).then_some(receipt))
+    Operation::new(
+        ctx,
+        "analysis_report",
+        operation,
+        &report_command(ctx, cid, input),
+    )
+    .read(tx)
+    .await
 }
 
 pub struct ReportSaveSources<'a> {
     pub evidence: &'a [Value],
-    pub title_authorities: &'a Value,
 }
 
 fn report_body(
@@ -128,7 +125,6 @@ pub async fn save_report_in_tx(
 ) -> Result<Value> {
     let ReportSaveSources {
         evidence: validated_evidence,
-        title_authorities: text_authorities,
     } = sources;
     tasks.assert_transaction(tx)?;
     if !valid_id(operation) || !valid_id(message_id) {
@@ -136,21 +132,14 @@ pub async fn save_report_in_tx(
     }
     contracts::validate("SaveAnalysisReportInput", input)?;
     let cid = tasks.conversation_id();
-    let command_fingerprint = command_fingerprint(ctx, cid, input);
-    // 回执先于当前版本检查；旧操作恢复只接回原引用，不重建失效正文。
-    sqlx::query("INSERT INTO analysis_report_operations(owner_id,space_id,operation_id,conversation_id,fingerprint,receipt) VALUES(?,?,?,?,?,CAST('null' AS JSON)) ON DUPLICATE KEY UPDATE operation_id=VALUES(operation_id)")
-        .bind(&ctx.user_id).bind(&ctx.space_id).bind(operation).bind(cid).bind(&command_fingerprint).execute(tx.connection()).await?;
-    let saved = sqlx::query("SELECT space_id,conversation_id,fingerprint,receipt FROM analysis_report_operations WHERE owner_id=? AND operation_id=? FOR UPDATE")
-        .bind(&ctx.user_id).bind(operation).fetch_one(tx.connection()).await?;
-    if saved.get::<String, _>("fingerprint") != command_fingerprint
-        || saved.get::<String, _>("space_id") != ctx.space_id
-        || saved.get::<String, _>("conversation_id") != cid
-    {
-        return Err(Error::new("idempotency_conflict"));
-    }
-    let receipt = saved.get::<sqlx::types::Json<Value>, _>("receipt").0;
-    if !receipt.is_null() {
-        return Ok(receipt);
+    let receipt = Operation::new(
+        ctx,
+        "analysis_report",
+        operation,
+        &report_command(ctx, cid, input),
+    );
+    if let Some(saved) = receipt.begin(tx).await? {
+        return Ok(saved);
     }
     let task = input["task_id"].as_str().expect("validated task id");
     let condition_version = epoch(
@@ -215,8 +204,8 @@ pub async fn save_report_in_tx(
             return Err(Error::new("invalid_evidence"));
         }
     }
-    sqlx::query("INSERT INTO analysis_report_revisions(report_id,version,condition_version,source_message_id,body,text_authorities) VALUES(?,?,?,?,?,?)")
-        .bind(&report_id).bind(version).bind(condition_version).bind(message_id).bind(sqlx::types::Json(&body)).bind(sqlx::types::Json(text_authorities)).execute(tx.connection()).await?;
+    sqlx::query("INSERT INTO analysis_report_revisions(report_id,version,condition_version,source_message_id,body) VALUES(?,?,?,?,?)")
+        .bind(&report_id).bind(version).bind(condition_version).bind(message_id).bind(sqlx::types::Json(&body)).execute(tx.connection()).await?;
     if let Some(current) = current_version {
         let updated = sqlx::query("UPDATE analysis_reports SET version=?,reference=?,updated_at=UTC_TIMESTAMP(3) WHERE id=? AND version=?")
             .bind(version).bind(sqlx::types::Json(&reference)).bind(&report_id).bind(current).execute(tx.connection()).await?;
@@ -227,8 +216,7 @@ pub async fn save_report_in_tx(
         sqlx::query("INSERT INTO analysis_reports(id,owner_id,space_id,conversation_id,task_id,version,reference) VALUES(?,?,?,?,?,?,?)")
             .bind(&report_id).bind(&ctx.user_id).bind(&ctx.space_id).bind(cid).bind(task).bind(version).bind(sqlx::types::Json(&reference)).execute(tx.connection()).await?;
     }
-    sqlx::query("UPDATE analysis_report_operations SET receipt=? WHERE owner_id=? AND operation_id=? AND fingerprint=?")
-        .bind(sqlx::types::Json(&reference)).bind(&ctx.user_id).bind(operation).bind(&command_fingerprint).execute(tx.connection()).await?;
+    receipt.complete(tx, &reference).await?;
     Ok(reference)
 }
 
@@ -279,22 +267,6 @@ pub async fn report_ref_in_tx(tx: &mut AppTx<'_>, cid: &str, task: &str) -> Resu
     .map(|reference| reference.0))
 }
 
-pub async fn read_report_authorities_in_tx(
-    tx: &mut AppTx<'_>,
-    ctx: &AccessContext,
-    reference: &Value,
-) -> Result<Value> {
-    Ok(sqlx::query_scalar::<_, Option<sqlx::types::Json<Value>>>(
-        "SELECT r.text_authorities FROM analysis_reports h JOIN analysis_report_revisions r ON r.report_id=h.id WHERE h.owner_id=? AND h.space_id=? AND h.conversation_id=? AND h.id=? AND r.version=?",
-    )
-    .bind(&ctx.user_id).bind(&ctx.space_id)
-    .bind(reference["conversation_id"].as_str().ok_or(Error::new("invalid_input"))?)
-    .bind(reference["report_id"].as_str().ok_or(Error::new("invalid_input"))?)
-    .bind(epoch(reference["version"].as_str().ok_or(Error::new("invalid_input"))?)?)
-    .fetch_optional(tx.connection()).await?.ok_or(Error::new("not_available"))?
-    .map(|value| value.0).unwrap_or(Value::Null))
-}
-
 pub async fn delete_conversation_reports_in_tx(
     tx: &mut AppTx<'_>,
     ctx: &AccessContext,
@@ -302,8 +274,7 @@ pub async fn delete_conversation_reports_in_tx(
 ) -> Result<()> {
     sqlx::query("DELETE r FROM analysis_report_revisions r JOIN analysis_reports h ON h.id=r.report_id WHERE h.owner_id=? AND h.space_id=? AND h.conversation_id=?")
         .bind(&ctx.user_id).bind(&ctx.space_id).bind(cid).execute(tx.connection()).await?;
-    sqlx::query("DELETE FROM analysis_report_operations WHERE owner_id=? AND space_id=? AND conversation_id=?")
-        .bind(&ctx.user_id).bind(&ctx.space_id).bind(cid).execute(tx.connection()).await?;
+    receipts::delete_subject(tx, ctx, "analysis_report", "$.conversation_id", cid).await?;
     sqlx::query(
         "DELETE FROM analysis_reports WHERE owner_id=? AND space_id=? AND conversation_id=?",
     )

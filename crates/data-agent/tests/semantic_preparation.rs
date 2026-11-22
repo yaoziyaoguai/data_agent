@@ -17,6 +17,7 @@ async fn knowledge_without_prepared_relations_remains_readable_under_its_respons
         user_id: "alice".into(),
         space_id: "demo".into(),
         request_id: "synthetic-knowledge-without-preparation".into(),
+        table_access: None,
     };
     let mut tx = AppTx::begin(&pool).await.unwrap();
     let object = knowledge::create_in_tx(
@@ -54,6 +55,7 @@ async fn source_target_catalog_keeps_metadata_order_with_large_source_quotes() {
         user_id: "alice".into(),
         space_id: "demo".into(),
         request_id: "synthetic-wide-source-targets".into(),
+        table_access: None,
     };
     let source = "synthetic-wide-source-targets";
     let mut expected = Vec::new();
@@ -102,6 +104,7 @@ async fn prepared_statement_keeps_support_and_host_origin_without_replacing_huma
         user_id: "alice".into(),
         space_id: "demo".into(),
         request_id: "synthetic-source-preparation".into(),
+        table_access: None,
     };
     let mut tx = AppTx::begin(&pool).await.unwrap();
     let object = knowledge::create_in_tx(
@@ -179,6 +182,7 @@ async fn source_preparation_state_machine_guards_in_flight_calls_and_readiness()
         user_id: "alice".into(),
         space_id: "demo".into(),
         request_id: "synthetic-preparation-state".into(),
+        table_access: None,
     };
     let source = format!(
         "catalog-{}",

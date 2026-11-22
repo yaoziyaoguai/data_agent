@@ -46,7 +46,7 @@ const seed = (from, count) => h.sql(`SET SESSION cte_max_recursion_depth=${count
     NULL,0,'synthetic-test' FROM n;
   INSERT IGNORE INTO retrieval_documents(object_id,space_id,version,body)
     SELECT id,space_id,version,body FROM knowledge_objects WHERE id LIKE 'gran-%';
-  INSERT IGNORE INTO knowledge_versions(object_id,version,body)
+  INSERT IGNORE INTO knowledge_revisions(object_id,version,archived_body)
     SELECT id,version,body FROM knowledge_objects WHERE id LIKE 'gran-%';
   INSERT IGNORE INTO semantic_ownership(space_id,object_id,authority_id,source,updated_by)
     SELECT space_id,id,id,'system','synthetic-test' FROM knowledge_objects WHERE id LIKE 'gran-%'`);

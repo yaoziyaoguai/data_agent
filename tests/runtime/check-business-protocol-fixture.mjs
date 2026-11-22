@@ -18,11 +18,15 @@ try{
   const text='paid_amount_cents为0是什么意思';
   const content=await readFile('docs/sources/business-guide.md','utf8');
   const ref={object_id:'document-guide-3',version:'1',path:'body'};
-  for(const version of [1,2]){
-    const run={text,tool_contract_version:version,workspace_context:{tasks:[],query_observations:[],memories:[]}};
-    const reads=version===1?[receipt('search_knowledge',{objects:[]}),receipt('read_source',{source_id:'etl',version:'1',body:await readFile('docs/sources/etl.sql','utf8')})]
-      :[receipt('search_knowledge',{hits:[{record_kind:'knowledge_entry',kind:'document',ref,definition:'上游与加工'}]}),
-        receipt('read_knowledge',{items:[{kind:'knowledge',state:'ok',ref,content,content_page:{offset:0,total_chars:[...content].length,next_offset:null,complete:true}}]})];
+  const sql=await readFile('docs/sources/etl.sql','utf8');
+  const citation={source:{kind:'platform',id:'etl'},revision:'1',locator:{offset:0,length:[...sql].length}};
+  const run={text,tool_contract_version:2,workspace_context:{tasks:[],query_observations:[],memories:[]}};
+  for(const reads of [
+    [receipt('search_knowledge',{hits:[{record_kind:'source_excerpt',citation,source_length:[...sql].length}]}),
+      receipt('read_source',{source:citation.source,revision:citation.revision,text:sql,next_locator:null})],
+    [receipt('search_knowledge',{hits:[{record_kind:'knowledge_entry',kind:'document',ref,definition:'上游与加工'}]}),
+      receipt('read_knowledge',{items:[{kind:'knowledge',state:'ok',ref,content,content_page:{offset:0,total_chars:[...content].length,next_offset:null,complete:true}}]})],
+  ]){
     const explanation=syntheticAction(run,{messages:[{role:'user',content:text},...reads,receipt('update_analysis_task',{task_id:null})]});
     assert.match(explanation.text,/COALESCE|缺失|填.?0/);assert.match(explanation.text,/不能.*(断言|仅凭)/);
   }

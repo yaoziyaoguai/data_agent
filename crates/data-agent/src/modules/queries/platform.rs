@@ -1,4 +1,4 @@
-use crate::types::{Error, Result};
+use crate::types::{AccessContext, Error, Result};
 use serde::Deserialize;
 use serde_json::{Value, json};
 use std::time::Duration;
@@ -9,6 +9,7 @@ fn shared_client() -> Option<&'static reqwest::Client> {
         .get_or_init(|| {
             reqwest::Client::builder()
                 .no_proxy()
+                .redirect(reqwest::redirect::Policy::none())
                 .timeout(Duration::from_secs(5))
                 .build()
                 .ok()
@@ -132,6 +133,61 @@ pub async fn result_authority(query_id: &str, owner_id: &str, result_ref: &str) 
 
 pub async fn check(sql: &str, parameters: &Value) -> Result<Value> {
     call("/validate", &json!({"sql":sql,"parameters":parameters})).await
+}
+
+pub async fn check_execution_access(
+    ctx: &AccessContext,
+    sql: &str,
+    parameters: &Value,
+) -> Result<()> {
+    let report = call(
+        "/validate",
+        &json!({"sql":sql,"parameters":parameters,
+        "owner_id":ctx.user_id,"space_id":ctx.space_id}),
+    )
+    .await?;
+    if report["state"] != "passed" {
+        return Err(Error::new("sql_not_supported"));
+    }
+    Ok(())
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CatalogAccess {
+    space_id: String,
+    user_id: String,
+    pub namespace: String,
+    pub table_ids: Vec<String>,
+    pub legacy_table_names: Vec<String>,
+    pub complete_access: bool,
+}
+
+pub async fn catalog_access(ctx: &AccessContext) -> Result<CatalogAccess> {
+    let value = call_limited(
+        "/catalog-access",
+        &json!({"user_id":ctx.user_id,"space_id":ctx.space_id}),
+        Some(1024 * 1024),
+    )
+    .await
+    .map_err(|error| match error.code {
+        "forbidden" => error,
+        _ => Error::new("source_unavailable"),
+    })?;
+    let access: CatalogAccess =
+        serde_json::from_value(value).map_err(|_| Error::new("source_unavailable"))?;
+    if access.space_id != ctx.space_id
+        || access.user_id != ctx.user_id
+        || access.namespace.is_empty()
+        || access
+            .table_ids
+            .iter()
+            .chain(&access.legacy_table_names)
+            .any(|id| id.is_empty() || id.len() > 200)
+    {
+        return Err(Error::new("source_unavailable"));
+    }
+    Ok(access)
 }
 
 #[cfg(test)]

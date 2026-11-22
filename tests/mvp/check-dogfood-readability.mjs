@@ -99,7 +99,11 @@ try {
   const tables=directory.objects.filter(o=>o.kind==='table'&&o.name==='demo_order_detail');assert.equal(tables.length,2);assert.notEqual(tables[0].id,tables[1].id);
   assert.ok(directory.objects.some(o=>o.id===doc.id));
   assert.equal(ok(await h.request('/knowledge?directory=maintained&directory_view=grouped',undefined,'bob')).objects.length,0);
-  await page.getByRole('button',{name:'退出',exact:true}).click();await login('carol');await navigateWorkspace(page,'语义管理');
+  const loggedOut=page.waitForResponse(response=>response.url().endsWith('/api/session')&&response.request().method()==='DELETE');
+  await page.getByRole('button',{name:'退出',exact:true}).click();
+  assert.equal((await loggedOut).status(),200);
+  await page.getByLabel('演示登录凭据').waitFor();
+  await login('carol');await navigateWorkspace(page,'语义管理');
   await page.getByLabel('语义目录范围').selectOption('maintained');
   await page.locator('.directory-group').filter({has:page.getByRole('heading',{name:'业务文档',exact:true})}).getByRole('button',{name:/合成订单说明/}).waitFor();
   assert.equal(await page.locator('.directory-group[aria-label="字段"]').count(),0);

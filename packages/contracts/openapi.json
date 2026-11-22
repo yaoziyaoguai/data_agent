@@ -1420,6 +1420,42 @@
         }
       }
     },
+    "/assets/{id}": {
+      "get": {
+        "responses": {
+          "200": {
+            "description": "个人资产及来源核验后的待保存草稿",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schema.json#/$defs/Asset"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "应用错误；权限、版本、待归属、未知和服务失败保留独立code",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schema.json#/$defs/AppError"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
     "/assets/{id}/disable": {
       "post": {
         "responses": {

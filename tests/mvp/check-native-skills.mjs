@@ -38,7 +38,8 @@ try {
  const attachmentTail=await read({path:attachmentPath,offset:651,limit:100});
  assert.match(attachmentTail.content[0].text,/合成附件步骤 700/);
  assert.match((await read({path:`/skills/${chosen.id}/1/assets/template.csv`})).content[0].text,/month,value/);
- const legacy=(await invoke('read_knowledge',{object_id:'asset-'+chosen.id,version:'1'})).data;assert.equal(legacy.body,'');assert.equal(legacy.native_path,path);
+ const skill=(await invoke('read_knowledge',{items:[{kind:'skill',asset_ref:{id:chosen.id,version:'1'}}]})).data.items[0];
+ assert.equal(skill.state,'ok');assert.equal(skill.asset.body,'');assert.equal(skill.asset.native_path,path);
  // 越界/未选/旧版不抛异常：错误经Pi isError回执给模型，保留错误码供归属投影，且不泄露正文。
  for(const forbidden of ['/etc/passwd',`/skills/${chosen.id}/1/references/../SKILL.md`,`/skills/${unselected.id}/1/SKILL.md`,`/skills/${chosen.id}/9/SKILL.md`]){
   const denied=await read({path:forbidden});
@@ -50,7 +51,7 @@ try {
   assert.match(text,/"hint"\s*:/);
   assert.ok(!text.includes('合成步骤')&&!text.includes('合成参考内容'));
  }
- checks.push('Pi原生目录解析同名多选，受控read按行续读长文及附件，旧正文接口只返回路径，越界/未选/旧版以错误回执拒绝且不泄露正文');
+ checks.push('Pi原生目录解析同名多选，受控read按行续读长文及附件，批量补读只返回原生路径，越界/未选/旧版以错误回执拒绝且不泄露正文');
  const full=(await invoke('search_knowledge',{query:'*',limit:30})).data.selected_skills;assert.equal(full.length,23);
  const omitted=skills.find(v=>!run.workspace_context.selected_skills.some(s=>s.id===v.id));assert.ok(full.some(v=>v.id===omitted.id));
  assert.match((await read({path:`/skills/${omitted.id}/1/SKILL.md`,limit:20})).content[0].text,/合成步骤 1/);

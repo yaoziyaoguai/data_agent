@@ -43,7 +43,7 @@ try {
   entry.source_facts = {value: text, complete: false, gap: '合成定位资料'};
   const encoded = Buffer.from(JSON.stringify(object)).toString('hex');
   h.sql(`UPDATE knowledge_objects SET body=CAST(CONVERT(0x${encoded} USING utf8mb4) AS JSON) WHERE id='${object.id}';
-    UPDATE knowledge_versions SET body=CAST(CONVERT(0x${encoded} USING utf8mb4) AS JSON) WHERE object_id='${object.id}';
+    UPDATE knowledge_revisions SET archived_body=CAST(CONVERT(0x${encoded} USING utf8mb4) AS JSON) WHERE object_id='${object.id}';
     UPDATE retrieval_documents SET body=CAST(CONVERT(0x${encoded} USING utf8mb4) AS JSON) WHERE object_id='${object.id}'`);
   await h.resumeWorker();
   run = await h.capture(await h.create(), '核对合成资料中的定位文字');
@@ -58,26 +58,32 @@ try {
     assert.equal(reply.status,200,JSON.stringify(reply.value));
     return reply.value.data;
   };
+  const read = async (ref, {statement_id, offset, limit} = {}) => {
+    const reply = await invoke('read_knowledge',{items:[{kind:'knowledge',ref,statement_id,offset,limit}]});
+    assert.equal(reply.items[0].state,'ok');
+    return reply.items[0];
+  };
   const missStart = traffic.bytes;
-  assert.equal((await invoke('search_knowledge',{query:'zzunitmiss',limit:1})).objects.length,0);
+  assert.equal((await invoke('search_knowledge',{query:'zzunitmiss',limit:1})).hits.length,0);
   const missBytes = traffic.bytes-missStart;
   const hitStart = traffic.bytes;
   const hit = await invoke('search_knowledge',{query:'narunitneedle',limit:1});
   const hitBytes = traffic.bytes-hitStart;
-  assert.deepEqual(hit.objects.map(value=>value.id),[object.id]);
-  const excerpt = hit.objects[0].retrieval.excerpts[0];
-  assert.ok(excerpt.text.includes('narunitneedle'));
-  assert.ok(excerpt.offset > 70_000,'窗口必须保留原 Unicode 坐标');
-  assert.equal(excerpt.total_chars,[...text].length);
-  observations.hugeEntry = {missBytes,hitBytes,delta:hitBytes-missBytes,chars:[...text].length,excerpt};
+  assert.deepEqual(hit.hits.map(value=>value.ref.object_id),[object.id]);
+  const excerpt = hit.hits[0], length = [...excerpt.definition].length;
+  const offset = excerpt.continuation.content_next_offset - length;
+  assert.ok(excerpt.definition.includes('narunitneedle'));
+  assert.ok(offset > 70_000,'窗口必须保留原 Unicode 坐标');
+  assert.equal(excerpt.definition,[...text].slice(offset,offset+length).join(''));
+  observations.hugeEntry = {missBytes,hitBytes,delta:hitBytes-missBytes,chars:[...text].length,offset,length};
   assert.ok(hitBytes-missBytes < 50_000,
     '单个巨大命中 entry 只读所选窗口，不能传整条正文：'+JSON.stringify(observations.hugeEntry));
-  const reread = await invoke('read_knowledge',{object_id:object.id,version:object.version,
-    entry_id:entry.entry_id,offset:excerpt.offset,limit:excerpt.length});
-  assert.equal(reread.entries[0].effective_value,excerpt.text,'同版 entry/offset 必须能补读相同正文');
+  const reread = await read(excerpt.ref,{offset,limit:length});
+  assert.equal(reread.content,excerpt.definition,'同版 entry/offset 必须能补读相同正文');
+  assert.equal(reread.content_page.total_chars,[...text].length);
   checks.push('巨大命中entry只下行定点窗口，保留原总长度和Unicode坐标，正式工具同版补读一致');
 
-  // 第二个条目的第二条陈述只交付自身正文；原 entry 坐标仍可用于 v1 同版补读。
+  // 第二个条目的第二条陈述只交付自己的正文和范围，通过 statement_id 精读。
   const statementObject = structuredClone(object);
   statementObject.id = 'statement-location-fixture';
   statementObject.name = '非首陈述合成资料';
@@ -99,25 +105,22 @@ try {
   const statementHex = Buffer.from(JSON.stringify(statementObject)).toString('hex');
   h.sql(`INSERT INTO knowledge_objects(id,space_id,kind,name,version,state,body,source_id,source_version,updated_by)
       VALUES('${statementObject.id}','demo','metric','非首陈述合成资料',1,'enabled',CAST(CONVERT(0x${statementHex} USING utf8mb4) AS JSON),NULL,0,'synthetic-test');
-    INSERT INTO knowledge_versions(object_id,version,body) VALUES('${statementObject.id}',1,CAST(CONVERT(0x${statementHex} USING utf8mb4) AS JSON));
+    INSERT INTO knowledge_revisions(object_id,version,archived_body) VALUES('${statementObject.id}',1,CAST(CONVERT(0x${statementHex} USING utf8mb4) AS JSON));
     INSERT INTO retrieval_documents(object_id,space_id,version,body) VALUES('${statementObject.id}','demo',1,CAST(CONVERT(0x${statementHex} USING utf8mb4) AS JSON));
     INSERT INTO knowledge_statements(object_id,version,statement_id,space_id,entry_path,layer,body)
       SELECT '${statementObject.id}',1,JSON_UNQUOTE(JSON_EXTRACT(s.value,'$.statement_id')),'demo','rules','model_suggestion',s.value
       FROM JSON_TABLE(CAST(CONVERT(0x${statementHex} USING utf8mb4) AS JSON),'$.entries[1].suggestion.statements[*]' COLUMNS(value JSON PATH '$')) s`);
-  const statementHit = await invoke('search_knowledge',{query:'stunitneedle',limit:1});
-  assert.deepEqual(statementHit.objects.map(value=>value.id),[statementObject.id]);
-  const selectedExcerpt = statementHit.objects[0].retrieval.excerpts[0];
-  assert.equal(statementHit.search_coverage.candidate_count,1,'当前知识与SQL检索投影的相同statement规范身份只记一次');
-  observations.nonFirstStatement = {excerpt:selectedExcerpt,expectedOffset:[...firstStatement].length+2,
-    candidateCount:statementHit.search_coverage.candidate_count};
-  assert.equal(selectedExcerpt.entry_id,'rules');
-  assert.equal(selectedExcerpt.text,statementText,'规范 statement 窗口不能携带前一条陈述或按 query 临时制造窗口');
-  assert.equal(selectedExcerpt.offset,[...firstStatement].length+2);
-  assert.equal(selectedExcerpt.total_chars,[...rendered].length);
-  const statementReread = await invoke('read_knowledge',{object_id:statementObject.id,version:'1',
-    entry_id:'rules',offset:selectedExcerpt.offset,limit:selectedExcerpt.length});
-  assert.equal(statementReread.entries[0].effective_value,statementText);
-  checks.push('非首entry的非首statement独立定点读取，text/scope保留且原ref/offset可补读，SQL两来源规范身份只计一次');
+  const statementHit = await invoke('search_knowledge',{query:'stunitneedle',limit:3});
+  assert.deepEqual(statementHit.hits.map(value=>[value.ref.object_id,value.statement_id]),
+    [[statementObject.id,'selected-statement']],'来自两个检索通道的同一规范陈述只交付一次');
+  const selectedExcerpt = statementHit.hits[0];
+  observations.nonFirstStatement = {excerpt:selectedExcerpt};
+  assert.equal(selectedExcerpt.ref.path,'rules');
+  assert.equal(selectedExcerpt.definition,selectedText,'不得携带前一条陈述或临时制造窗口');
+  assert.equal(selectedExcerpt.scope_text,selectedScope);
+  const statementReread = await read(selectedExcerpt.ref,{statement_id:selectedExcerpt.statement_id});
+  assert.equal(statementReread.content,statementText);
+  checks.push('非首entry的非首statement独立定点读取，正文与范围各自保留，按原版本和陈述ID精读，跨通道不重复');
 
   const multiEntry = structuredClone(statementObject);
   multiEntry.id='multi-entry-location-fixture';multiEntry.name='多条目合成资料';
@@ -127,14 +130,13 @@ try {
   const multiHex=Buffer.from(JSON.stringify(multiEntry)).toString('hex');
   h.sql(`INSERT INTO knowledge_objects(id,space_id,kind,name,version,state,body,source_id,source_version,updated_by)
       VALUES('${multiEntry.id}','demo','metric','多条目合成资料',1,'enabled',CAST(CONVERT(0x${multiHex} USING utf8mb4) AS JSON),NULL,0,'synthetic-test');
-    INSERT INTO knowledge_versions(object_id,version,body) VALUES('${multiEntry.id}',1,CAST(CONVERT(0x${multiHex} USING utf8mb4) AS JSON));
+    INSERT INTO knowledge_revisions(object_id,version,archived_body) VALUES('${multiEntry.id}',1,CAST(CONVERT(0x${multiHex} USING utf8mb4) AS JSON));
     INSERT INTO retrieval_documents(object_id,space_id,version,body) VALUES('${multiEntry.id}','demo',1,CAST(CONVERT(0x${multiHex} USING utf8mb4) AS JSON))`);
   const multiHit=await invoke('search_knowledge',{query:'manyunitneedle',limit:3});
-  observations.multiEntry={objects:multiHit.objects.map(item=>({id:item.id,entries:item.entries.map(e=>e.entry_id)})),candidateCount:multiHit.search_coverage.candidate_count};
-  assert.equal(multiHit.objects.length,1,'v1只在交付末端聚合为一个对象');
-  assert.deepEqual(multiHit.objects[0].entries.map(e=>e.entry_id).sort(),['first','second','third']);
-  assert.equal(multiHit.search_coverage.candidate_count,3,'三个entry仍是三个规范内容候选');
-  checks.push('同对象三个同词entry分别占内容候选，v1末端聚为一个对象且保留三个正文');
+  observations.multiEntry={hits:multiHit.hits.map(hit=>hit.ref)};
+  assert.deepEqual(multiHit.hits.map(hit=>hit.ref.object_id),Array(3).fill(multiEntry.id));
+  assert.deepEqual(multiHit.hits.map(hit=>hit.ref.path).sort(),['first','second','third']);
+  checks.push('同一个对象的三个同词entry分别交付规范内容，一条不丢且不重复');
 
   // 同一个entry的两个规范窗口分别读回，末端聚合不能只留下第一处正文。
   const windowsObject=structuredClone(multiEntry);
@@ -145,24 +147,23 @@ try {
   const windowsHex=Buffer.from(JSON.stringify(windowsObject)).toString('hex');
   h.sql(`INSERT INTO knowledge_objects(id,space_id,kind,name,version,state,body,source_id,source_version,updated_by)
       VALUES('${windowsObject.id}','demo','metric','同条目多窗口合成资料',1,'enabled',CAST(CONVERT(0x${windowsHex} USING utf8mb4) AS JSON),NULL,0,'synthetic-test');
-    INSERT INTO knowledge_versions(object_id,version,body) VALUES('${windowsObject.id}',1,CAST(CONVERT(0x${windowsHex} USING utf8mb4) AS JSON));
+    INSERT INTO knowledge_revisions(object_id,version,archived_body) VALUES('${windowsObject.id}',1,CAST(CONVERT(0x${windowsHex} USING utf8mb4) AS JSON));
     INSERT INTO retrieval_documents(object_id,space_id,version,body) VALUES('${windowsObject.id}','demo',1,CAST(CONVERT(0x${windowsHex} USING utf8mb4) AS JSON))`);
   const windowsHit=await invoke('search_knowledge',{query:'sameworkunitneedle',limit:2});
-  assert.equal(windowsHit.search_coverage.candidate_count,2,'相交但不相同的知识窗口仍是两个规范候选');
-  assert.deepEqual(windowsHit.objects.map(item=>item.id),[windowsObject.id]);
-  assert.deepEqual(windowsHit.objects[0].entries.map(item=>item.entry_id),['rules']);
-  const windowsExcerpts=windowsHit.objects[0].retrieval.excerpts;
-  assert.deepEqual(windowsExcerpts.map(item=>item.offset),[0,280],'共同次序保留两个规范窗口原坐标');
-  for(const excerpt of windowsExcerpts){
-    assert.equal(excerpt.text,[...windowsText].slice(excerpt.offset,excerpt.offset+360).join(''));
-    assert.equal(excerpt.total_chars,[...windowsText].length);
-    const reread=await invoke('read_knowledge',{object_id:windowsObject.id,version:'1',entry_id:'rules',offset:excerpt.offset,limit:excerpt.length});
-    assert.equal(reread.entries[0].effective_value,excerpt.text);
+  assert.deepEqual(windowsHit.hits.map(hit=>hit.ref),Array(2).fill({object_id:windowsObject.id,version:'1',path:'rules'}));
+  const windowsExcerpts=windowsHit.hits.map(hit=>({hit,
+    offset:hit.continuation.content_next_offset-[...hit.definition].length})).sort((a,b)=>a.offset-b.offset);
+  assert.deepEqual(windowsExcerpts.map(item=>item.offset),[0,280],'两个规范窗口保留各自的原坐标');
+  for(const {hit,offset} of windowsExcerpts){
+    assert.equal(hit.definition,[...windowsText].slice(offset,offset+360).join(''));
+    const reread=await read(hit.ref,{offset,limit:[...hit.definition].length});
+    assert.equal(reread.content,hit.definition);
+    assert.equal(reread.content_page.total_chars,[...windowsText].length);
   }
-  assert.ok(windowsExcerpts[0].text.includes(firstRule));
-  assert.ok(windowsExcerpts[1].text.includes(secondRule));
-  observations.sameEntryWindows={candidateCount:windowsHit.search_coverage.candidate_count,excerpts:windowsExcerpts};
-  checks.push('同entry两个规范窗口分别计候选并回源，末端单entry仍保留两处正文与原offset，均可同版补读');
+  assert.ok(windowsExcerpts[0].hit.definition.includes(firstRule));
+  assert.ok(windowsExcerpts[1].hit.definition.includes(secondRule));
+  observations.sameEntryWindows={excerpts:windowsExcerpts};
+  checks.push('同一entry两处规范窗口独立交付，按原Unicode坐标和版本精读都逐字一致');
   const ownerEnv={...h.env};
   for(const name of ['DEEPSEEK_API_KEY','DEEPSEEK_BASE_URL','DEEPSEEK_MODEL',
     'DATA_AGENT_MODEL_PROFILE','DATA_AGENT_MODEL_FAULT','DATABASE_URL'])delete ownerEnv[name];

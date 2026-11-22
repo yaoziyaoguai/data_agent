@@ -8,7 +8,8 @@ pub(crate) use catalog::sync_catalog;
 use catalog::{current_catalog_in_tx, sources_in_tx};
 #[path = "knowledge/references.rs"]
 mod references;
-pub(super) use references::check_refs_for_task_in_tx;
+pub(super) use references::check_adoptable_refs_in_tx;
+pub(super) use references::{assert_selection_sources_in_tx, check_refs_for_task_in_tx};
 pub use references::{assert_source_in_tx, check_refs_in_tx, history_check_refs_in_tx};
 use references::{
     check_input_structure_sources_in_tx, checked_refs_in_tx, current_structure_refs_in_tx,
@@ -56,6 +57,7 @@ pub async fn initialize(pool: &MySqlPool) -> Result<()> {
         user_id: "synthetic-import".into(),
         space_id: "demo".into(),
         request_id: id(),
+        table_access: None,
     };
     let mut tx = AppTx::begin(pool).await?;
     let initialized =
@@ -72,6 +74,51 @@ pub async fn initialize(pool: &MySqlPool) -> Result<()> {
     super::semantic_governance::register_objects_in_tx(&mut tx, &ctx, &objects).await?;
     tx.commit().await
 }
+pub async fn catalog_reader(ctx: &AccessContext) -> Result<AccessContext> {
+    let access = crate::modules::queries::platform::catalog_access(ctx).await?;
+    let mut reader = ctx.clone();
+    reader.table_access = None;
+    if !access.complete_access {
+        let mut table_ids = access
+            .legacy_table_names
+            .into_iter()
+            .map(|id| format!("table-{id}"))
+            .collect::<std::collections::HashSet<_>>();
+        table_ids.extend(
+            access.table_ids.iter().map(|id| {
+                ingestion::catalog::table_object_id(&ctx.space_id, &access.namespace, id)
+            }),
+        );
+        let source_ids = access
+            .table_ids
+            .iter()
+            .map(|id| ingestion::catalog::source_id(&ctx.space_id, &access.namespace, id))
+            .collect();
+        reader.table_access = Some(std::sync::Arc::new(crate::types::TableAccess {
+            table_ids,
+            source_ids,
+            unavailable: false,
+        }));
+    }
+    Ok(reader)
+}
+
+pub async fn catalog_context(ctx: &AccessContext) -> Result<AccessContext> {
+    match catalog_reader(ctx).await {
+        Err(error) if error.code == "source_unavailable" => {
+            // 非目录操作仍可处理控制状态和独立资料，缺失的平台清单视为无表授权。
+            let mut reader = ctx.clone();
+            reader.table_access = Some(std::sync::Arc::new(crate::types::TableAccess {
+                table_ids: Default::default(),
+                source_ids: Default::default(),
+                unavailable: true,
+            }));
+            Ok(reader)
+        }
+        result => result,
+    }
+}
+
 pub async fn list(pool: &MySqlPool, ctx: &AccessContext, input: &Value) -> Result<Value> {
     contracts::validate("KnowledgeListQuery", input)?;
     let query = input["q"].as_str();
@@ -201,6 +248,9 @@ pub async fn source(
     source: &str,
     version: u64,
 ) -> Result<Value> {
+    if !ctx.can_read_platform_source(source) {
+        return Err(Error::new("not_available"));
+    }
     let mut tx = AppTx::begin(pool).await?;
     let v = super::knowledge_sources::read_in_tx(&mut tx, ctx, source, Some(version)).await?;
     tx.commit().await?;
@@ -264,27 +314,61 @@ pub async fn sync(pool: &MySqlPool, ctx: &AccessContext, key: &str) -> Result<Va
     super::catalog_import::sync(pool, ctx, key).await
 }
 
-pub async fn valid_assets_in_tx(
+pub(super) async fn valid_assets_in_tx(
     tx: &mut AppTx<'_>,
     ctx: &AccessContext,
     items: Vec<Value>,
-    cid: &str,
-    checked: &super::context_authority::CheckedTextResults,
+    gate: Option<&super::source_limits::SourceGate>,
 ) -> Result<Vec<Value>> {
-    let mut valid = Vec::new();
-    for item in items {
-        match super::personal_assets::text_authority_in_tx(tx, ctx, cid, &item, checked).await {
-            Ok(_) => valid.push(item),
-            Err(error) if super::personal_assets::unavailable_text(&error) => (),
-            Err(error) => return Err(error),
-        }
-    }
-    Ok(valid)
+    let ids: std::collections::BTreeSet<_> = items
+        .iter()
+        .flat_map(|asset| super::context_authority::items(&asset["dependencies"]))
+        .map(|reference| {
+            reference["object_id"]
+                .as_str()
+                .expect("asset dependency")
+                .to_owned()
+        })
+        .collect();
+    let ids: Vec<_> = ids.into_iter().collect();
+    let versions: std::collections::HashMap<_, _> =
+        knowledge::candidate_meta_in_tx(tx, ctx, &ids, None)
+            .await?
+            .into_iter()
+            .filter(|object| {
+                object["state"] == "enabled" && gate.is_none_or(|gate| gate.allows_object(object))
+            })
+            .map(|object| {
+                (
+                    object["id"].as_str().expect("knowledge id").to_owned(),
+                    object["version"]
+                        .as_str()
+                        .expect("knowledge version")
+                        .to_owned(),
+                )
+            })
+            .collect();
+    Ok(items
+        .into_iter()
+        .filter(|asset| {
+            let dependencies = super::context_authority::items(&asset["dependencies"]);
+            (gate.is_none() || !dependencies.is_empty())
+                && dependencies.iter().all(|reference| {
+                    let id = reference["object_id"].as_str().expect("asset dependency");
+                    versions
+                        .get(id)
+                        .is_some_and(|version| reference["version"] == version.as_str())
+                })
+        })
+        .collect())
 }
 pub async fn read_asset(pool: &MySqlPool, ctx: &AccessContext, asset: &str) -> Result<Value> {
     super::personal_assets::read(pool, ctx, asset).await
 }
 pub async fn source_head(pool: &MySqlPool, ctx: &AccessContext, source: &str) -> Result<Value> {
+    if !ctx.can_read_platform_source(source) {
+        return Err(Error::new("not_available"));
+    }
     let mut tx = AppTx::begin(pool).await?;
     let v = super::knowledge_sources::read_in_tx(&mut tx, ctx, source, None).await?;
     tx.commit().await?;

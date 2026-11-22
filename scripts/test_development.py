@@ -162,6 +162,7 @@ class StartupConfigurationTest(unittest.TestCase):
                 self.assertEqual(json.loads(env['DATA_AGENT_MODEL_PROFILE']), self.profile)
                 self.assertTrue(env['DATA_AGENT_DATABASE_URL'].endswith('/data_agent_trial_abc123'))
                 self.assertEqual(env['DATA_AGENT_TOOLSET'], 'data')
+                self.assertEqual(env['DATA_AGENT_PREFILL_MODE'], 'disabled')
                 self.assertNotIn('DATA_AGENT_PREFILL_PROFILE', env)
                 self.assertNotIn('DATA_AGENT_PREFILL_URL', env)
 
@@ -174,8 +175,7 @@ class StartupConfigurationTest(unittest.TestCase):
 
     def test_environment_record_contains_only_effective_non_secret_selections(self):
         self.argv.extend(['--model', 'deepseek', '--public-collection', 'upgraded_public_20261030',
-                          '--public-content-retention', 'latest_only', '--tool-contract-version', '2',
-                          '--port-offset', '100'])
+                          '--public-content-retention', 'latest_only', '--port-offset', '100'])
         main()
         self.assertEqual(json.loads((self.runtime / 'environment.json').read_text()), {
             'database': 'data_agent_trial_abc123',
@@ -191,7 +191,7 @@ class StartupConfigurationTest(unittest.TestCase):
                 env = call.kwargs['env']
                 self.assertEqual(env['DATA_AGENT_VECTOR_COLLECTION'], 'upgraded_public_20261030')
                 self.assertEqual(env['DATA_AGENT_PUBLIC_CONTENT_RETENTION'], 'latest_only')
-                self.assertEqual(env['DATA_AGENT_TOOL_CONTRACT_VERSION'], '2')
+                self.assertNotIn('DATA_AGENT_TOOL_CONTRACT_VERSION', env)
                 if call.args[0][0] in ('python3', 'node') and call.args[0][1] != 'apps/agent/server.ts':
                     self.assertNotIn('DEEPSEEK_API_KEY', env)
                 else:
@@ -212,9 +212,10 @@ class StartupConfigurationTest(unittest.TestCase):
                 env = call.kwargs['env']
                 self.assertEqual(env['DATA_AGENT_VECTOR_COLLECTION'], collection)
                 self.assertEqual(env['DATA_AGENT_PUBLIC_CONTENT_RETENTION'], 'archive')
-                self.assertEqual(env['DATA_AGENT_TOOL_CONTRACT_VERSION'], '1')
+                self.assertNotIn('DATA_AGENT_TOOL_CONTRACT_VERSION', env)
                 self.assertEqual(env['DATA_AGENT_MEMORY_URL'], 'http://127.0.0.1:8791')
                 self.assertEqual(json.loads(env['DATA_AGENT_MODEL_PROFILE']), self.profile)
+                self.assertEqual(env['DATA_AGENT_PREFILL_MODE'], 'proposal')
                 self.assertEqual(json.loads(env['DATA_AGENT_PREFILL_PROFILE']), self.profile)
                 self.assertEqual(env['DATA_AGENT_PREFILL_URL'], 'https://api.deepseek.com/chat/completions')
         metadata = json.loads((self.runtime / 'environment.json').read_text())
@@ -222,7 +223,7 @@ class StartupConfigurationTest(unittest.TestCase):
         self.assertEqual(metadata['memory_mode'], 'mem0')
         self.assertEqual(metadata['retrieval_mode'], 'hybrid')
         self.assertEqual(metadata['public_content_retention'], 'archive')
-        self.assertEqual(metadata['tool_contract_version'], 1)
+        self.assertEqual(metadata['tool_contract_version'], 2)
 
     def test_deepseek_lexical_builtin_needs_no_embedding_or_memory_configuration(self):
         self.key.unlink()
@@ -265,7 +266,8 @@ class StartupConfigurationTest(unittest.TestCase):
                 self.spawn.assert_not_called()
 
     def test_rollout_options_reject_unsupported_values(self):
-        for option, value in (('--public-content-retention', 'purge'), ('--tool-contract-version', '3')):
+        for option, value in (('--public-content-retention', 'purge'), ('--prefill', 'enabled'),
+                              ('--tool-contract-version', '1'), ('--tool-contract-version', '2')):
             with self.subTest(option=option), patch('sys.argv', ['development.py', option, value]), patch('sys.stderr', new_callable=io.StringIO) as errors:
                 with self.assertRaises(SystemExit) as rejected:
                     main()
@@ -282,7 +284,7 @@ class StartupConfigurationTest(unittest.TestCase):
             with self.subTest(command=call.args[0]):
                 env = call.kwargs['env']
                 self.assertEqual(env['DATA_AGENT_PUBLIC_CONTENT_RETENTION'], 'archive')
-                self.assertEqual(env['DATA_AGENT_TOOL_CONTRACT_VERSION'], '1')
+                self.assertNotIn('DATA_AGENT_TOOL_CONTRACT_VERSION', env)
                 for option in ('DATA_AGENT_EMBEDDING_URL', 'DATA_AGENT_EMBEDDING_PROFILE',
                                'DATA_AGENT_VECTOR_URL', 'DATA_AGENT_VECTOR_COLLECTION',
                                'DATA_AGENT_MEMORY_URL', 'DATA_AGENT_MEMORY_INDEX_TARGET'):
@@ -293,7 +295,7 @@ class StartupConfigurationTest(unittest.TestCase):
         self.key.unlink()
         self.argv.extend(['--model', 'protocol-test', '--model-url', 'http://127.0.0.1:28881',
                           '--public-collection', '_' + 'a' * 127,
-                          '--public-content-retention', 'latest_only', '--tool-contract-version', '2'])
+                          '--public-content-retention', 'latest_only'])
         main()
         self.assertEqual(len(self.spawn.call_args_list), 5)
         for call in self.spawn.call_args_list:
@@ -301,7 +303,7 @@ class StartupConfigurationTest(unittest.TestCase):
                 env = call.kwargs['env']
                 self.assertEqual(env['DATA_AGENT_VECTOR_COLLECTION'], '_' + 'a' * 127)
                 self.assertEqual(env['DATA_AGENT_PUBLIC_CONTENT_RETENTION'], 'latest_only')
-                self.assertEqual(env['DATA_AGENT_TOOL_CONTRACT_VERSION'], '2')
+                self.assertNotIn('DATA_AGENT_TOOL_CONTRACT_VERSION', env)
                 for option in ('DATA_AGENT_EMBEDDING_URL', 'DATA_AGENT_EMBEDDING_KEY_FILE',
                                'DATA_AGENT_EMBEDDING_PROFILE', 'DATA_AGENT_VECTOR_URL',
                                'DATA_AGENT_VECTOR_TOKEN_FILE', 'DATA_AGENT_MEMORY_URL'):

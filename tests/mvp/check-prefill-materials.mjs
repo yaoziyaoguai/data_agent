@@ -190,32 +190,44 @@ try{
   assert.equal((await h.internal('/internal/data/tool-calls',input)).status,200);
   return h.internal('/internal/data/tools',input);
  };
+ const readDescription=()=>invoke('read_knowledge',{items:[{kind:'knowledge',
+  ref:{object_id:target.id,version:current.version,path:'description'}}]});
+ const expectedSource='amount 以元保存；业务日按 Asia/Shanghai 划分。';
+ const readDocument=()=>invoke('read_source',{citation:{source:{kind:'document',id:doc.id},
+  revision:doc.version,locator:{offset:0,length:[...expectedSource].length}}});
  let r=await invoke('search_knowledge',{query:'derived_values',limit:10});assert.equal(r.status,200);assert.ok(JSON.stringify(r.value).includes(target.id));
- r=await invoke('read_knowledge',{object_id:target.id,version:current.version,entry_id:'description'});assert.equal(r.status,200);
- let details=JSON.parse(r.value.data.entries[0].suggestion.details);assert.ok(details.gaps.includes('税费规则尚未提供'));assert.ok(details.evidence.some(e=>e.source_id==='document-'+doc.id));
- r=await invoke('read_source',{source_id:'document-'+doc.id,version:doc.version});assert.equal(r.status,200);assert.equal(r.value.data.body,'amount 以元保存；业务日按 Asia/Shanghai 划分。');
+ r=await readDescription();assert.equal(r.status,200);
+ assert.equal(r.value.data.items[0].state,'ok');
+ const originalSuggestion=current.entries.find(entry=>entry.path==='description').suggestion;
+ assert.ok(originalSuggestion.gaps.includes('税费规则尚未提供'));
+ assert.ok(originalSuggestion.evidence.some(e=>e.source_id==='document-'+doc.id));
+ r=await readDocument();assert.equal(r.status,200);assert.equal(r.value.data.text,expectedSource);
  checks.push('文档引用在搜索、知识工具正文和来源工具三条路径均可读');
 
  await h.pauseWorker();
  const human=await h.request('/knowledge/'+target.id,{operation_id:randomUUID(),expected_version:current.version,entry_id:'description',value:'人工有效定义'},'alice','PATCH');assert.equal(human.status,200);
  await reanalyze();await h.resumeWorker();current=await wait('succeeded');
  assert.equal(current.entries[0].effective_value,'人工有效定义');
- r=await invoke('read_knowledge',{object_id:target.id,version:current.version,entry_id:'description'});assert.equal(r.value.code,'stale_context');
+ r=await readDescription();assert.equal(r.value.code,'stale_context');
  await freshReadRun();
- r=await invoke('read_knowledge',{object_id:target.id,version:current.version,entry_id:'description'});assert.equal(r.status,200,JSON.stringify(r.value));
- details=JSON.parse(r.value.data.entries[0].suggestion.details);assert.equal(details.value,'合成解释：description');assert.equal(r.value.data.entries[0].suggestion.application,'pending_review');
+ r=await readDescription();assert.equal(r.status,200,JSON.stringify(r.value));
+ assert.equal(r.value.data.items[0].state,'ok');
+ assert.equal(r.value.data.items[0].content,'人工有效定义');
+ const description=current.entries.find(entry=>entry.path==='description');
+ assert.equal(description.suggestion.value,'合成解释：description');
+ assert.notEqual(description.effective_value,description.suggestion.value);
  checks.push('人工有效值保留，候选解释、候选缺口与依据一起回传并标记未采用');
 
  block=true;await reanalyze();await until(()=>release,'预填等待文档改版');
  const changed=await h.request('/knowledge/'+doc.id,{operation_id:randomUUID(),expected_version:doc.version,entry_id:'body',value:'amount 以元保存；新版只适用于已支付记录。'},'alice','PATCH');assert.equal(changed.status,200);
  isolatePreparation();
  release();release=undefined;await wait('superseded');await freshReadRun();
- assert.equal((await invoke('read_source',{source_id:'document-'+doc.id,version:doc.version})).value.code,'stale_knowledge');
+ assert.equal((await readDocument()).value.code,'stale_source');
  checks.push('模型进行期间文档改版，旧建议不采用，旧来源版本不可继续读');
 
  await reanalyze();current=await wait('succeeded');
  assert.equal((await h.request('/knowledge/'+doc.id+'/disable',{operation_id:randomUUID(),expected_version:changed.value.version})).status,200);
- await freshReadRun();r=await invoke('read_knowledge',{object_id:target.id,version:current.version});assert.equal(r.value.code,'stale_knowledge');
+ await freshReadRun();r=await readDescription();assert.equal(r.status,200);assert.equal(r.value.data.items[0].state,'stale');
  const search=(await h.request('/knowledge?q=derived_values')).value;assert.ok(!search.objects.some(o=>o.id===target.id));
  checks.push('文档停用后引用它的知识无法继续用于读取或检索');
 

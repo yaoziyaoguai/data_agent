@@ -551,12 +551,13 @@ try {
   let goalTask = await invoke("update_analysis_task", {
     action: "create", goal: "保持原有分析目标", conditions, options: [],
   });
-  const storedGoal = () => h.sql(`SELECT JSON_OBJECT('goal',goal,'condition_version',goal_condition_version,'authority',goal_authority) FROM analysis_tasks WHERE id='${goalTask.task_id}'`)[0];
+  const storedGoal = () => h.sql(`SELECT JSON_OBJECT('goal',goal,'condition_version',goal_condition_version) FROM analysis_tasks WHERE id='${goalTask.task_id}'`)[0];
   const originalGoal = storedGoal();
   const goalSource = ok(await h.request("/knowledge", {
     operation_id: randomUUID(), kind: "document", name: "目标来源的合成说明", body: "此合成资料用于核对新目标来源，不应覆盖未修改的旧目标来源。", related_ids: [],
   }));
-  await invoke("read_knowledge", { object_id: goalSource.id, version: goalSource.version, entry_id: "body", offset: 0, limit: 4096 });
+  const goalRef = { object_id: goalSource.id, version: goalSource.version, path: "body" };
+  assert.equal((await invoke("read_knowledge", { items: [{ kind: "knowledge", ref: goalRef }] })).items[0].state, "ok");
   for (const invalid of [
     { action: "revise", task_id: goalTask.task_id, expected_version: goalTask.condition_version, options: [] },
     { action: "revise", task_id: goalTask.task_id, condition_patch: { set: {}, unset: [] }, options: [] },
@@ -571,12 +572,12 @@ try {
     action: "revise", task_id: goalTask.task_id, expected_version: goalTask.condition_version,
     condition_patch: { set: { notes: "只补充条件，不改目标" }, unset: [] }, options: [],
   });
-  assert.deepEqual(storedGoal(), originalGoal, "已有revise省略goal保持原正文、创建版本和来源");
+  assert.deepEqual(storedGoal(), originalGoal, "已有revise省略goal保持原正文和创建版本");
   goalTask = await invoke("update_analysis_task", {
     action: "clarify", task_id: goalTask.task_id, expected_version: goalTask.condition_version,
     condition_patch: { set: {}, unset: [] }, options: [], clarifications: [{ question: "另一个合成条件采用哪个范围？", options: ["全部", "指定范围"] }],
   });
-  assert.deepEqual(storedGoal(), originalGoal, "已有clarify省略goal不把新问题来源写进旧目标");
+  assert.deepEqual(storedGoal(), originalGoal, "已有clarify省略goal保留目标正文和创建版本");
   await invoke("update_analysis_task", routeArgs(goalTask));
   assert.deepEqual(storedGoal(), originalGoal, "route省略goal只登记归属");
   assert.equal(revisions(goalTask), 3);
@@ -584,7 +585,7 @@ try {
     action: "revise", task_id: goalTask.task_id, expected_version: goalTask.condition_version,
     goal: originalGoal.goal, condition_patch: { set: {}, unset: [] }, options: [],
   });
-  assert.deepEqual(storedGoal(), originalGoal, "显式重传同文仍保留原来源");
+  assert.deepEqual(storedGoal(), originalGoal, "显式重传同文仍保留原目标版本");
   goalTask = await invoke("update_analysis_task", {
     action: "revise", task_id: goalTask.task_id, expected_version: goalTask.condition_version,
     goal: "根据已读合成资料修订后的新目标", condition_patch: { set: {}, unset: [] }, options: [],
@@ -592,10 +593,9 @@ try {
   const rewrittenGoal = storedGoal();
   assert.equal(rewrittenGoal.goal, "根据已读合成资料修订后的新目标");
   assert.equal(rewrittenGoal.condition_version, Number(goalTask.condition_version));
-  assert.notDeepEqual(rewrittenGoal.authority, originalGoal.authority, "真实改写仍按已有规则绑定当前资料来源");
   assert.equal(openQuestions(goalTask).length, 1, "省略或改写目标均不自动解决未答问题");
   await finishManual("已补充条件并保留未答问题，没有执行查询。");
-  checks.push("创建含兼容分支必须有目标；已有revise/clarify/route省略goal保留目标正文、版本与来源，补丁/版本/澄清约束不放宽，显式改写仍重绑来源");
+  checks.push("创建含兼容分支必须有目标；已有revise/clarify/route省略goal保留目标正文与版本，补丁、版本和澄清约束不放宽，真正改写推进目标版本");
 
   const batchCid = await h.create();
   await begin(batchCid, "同一个联合分析需要确认分母和地区；两个问题分别回答。");
@@ -825,27 +825,19 @@ try {
     toolStep(
       "read_knowledge",
       {
-        object_id: metric.id,
-        version: metric.version,
-        entry_id: "sql",
-        offset: 0,
-        limit: 4096,
+        items: [{kind:"knowledge",ref:{object_id:metric.id,version:metric.version,path:"sql"},limit:4096}],
       },
       (body) =>
         assert.ok(
-          lastReply(body).objects.some((value) => value.id === metric.id),
+          lastReply(body).hits.some((value) => value.ref?.object_id === metric.id),
         ),
     ),
     toolStep(
       "read_knowledge",
       {
-        object_id: table.id,
-        version: table.version,
-        entry_id: "description",
-        offset: 0,
-        limit: 4096,
+        items: [{kind:"knowledge",ref:{object_id:table.id,version:table.version,path:"description"},limit:4096}],
       },
-      (body) => assert.equal(lastReply(body).id, metric.id),
+      (body) => { const item = lastReply(body).items[0]; assert.equal(item.state, 'ok'); assert.equal(item.ref.object_id, metric.id); },
     ),
     toolStep(
       "update_analysis_task",
@@ -855,7 +847,7 @@ try {
         conditions: baselineConditions,
         options: [],
       },
-      (body) => assert.equal(lastReply(body).id, table.id),
+      (body) => { const item = lastReply(body).items[0]; assert.equal(item.state, 'ok'); assert.equal(item.ref.object_id, table.id); },
     ),
     toolStep("request_query", (body) => {
       originalTask = lastReply(body);

@@ -46,7 +46,11 @@ export async function checkSkillRuntimeBoundaries(h, checks) {
   ok(await h.request(`/assets/${shared.id}/disable`,{operation_id:randomUUID(),expected_version:shared.version}));
   const issuance=await h.internal('/internal/model/issue',{run_id:pending.run_id,lease_epoch:pending.lease_epoch,call_attempt_id:randomUUID()});
   assert.equal(issuance.value.code,'stale_context');
-  await assert.rejects(data.tools.find(v=>v.name==='read').execute('public-read-after-disable',{path}));
+  const deniedRead=await data.tools.find(v=>v.name==='read').execute('public-read-after-disable',{path});
+  assert.equal(deniedRead.isError,true);
+  const deniedText=deniedRead.content.map(block=>block.text).join('');
+  assert.match(deniedText,/"error"\s*:\s*"(not_available|forbidden|stale_knowledge|stale_context)"/);
+  assert.ok(!deniedText.includes('只有受控读取才能看到的正文'));
   const job=h.sql(`SELECT JSON_OBJECT('id',id) FROM background_jobs WHERE message_id='${pending.message_id}'`)[0];
   const captured=h.captured.length;h.releaseRun(pending.run_id);
   h.sql(`UPDATE agent_runs SET state='interrupted' WHERE id='${pending.run_id}';UPDATE conversations SET lease_owner=NULL,lease_until=NULL WHERE id='${interruptedCid}';UPDATE background_jobs SET state='queued',lease_owner=NULL,lease_until=NULL WHERE message_id='${pending.message_id}';`);
@@ -83,7 +87,10 @@ export async function checkSkillRuntimeBoundaries(h, checks) {
   h.sql('RENAME TABLE source_heads TO temporarily_unavailable_source_heads');
   try {
     await assert.rejects(controlled.invokeRecorded('read','dependent-read',readArgs),/unavailable/);
-    assert.deepEqual(await controlled.invokeRecorded('update_analysis_task','dependent-route',routeArgs),routeReceipt);
+    const {frozen_notification_covered: _currentCoverage, ...savedOperation}=routeReceipt;
+    const replayed=await controlled.invokeRecorded('update_analysis_task','dependent-route',routeArgs);
+    assert.equal('frozen_notification_covered' in replayed,false,'历史操作回执不改写当前通知覆盖事实');
+    assert.deepEqual(replayed,savedOperation);
   } finally { h.sql('RENAME TABLE temporarily_unavailable_source_heads TO source_heads'); }
   assert.deepEqual(await controlled.invokeRecorded('read','dependent-read',readArgs),readReceipt);
   const operationCount=h.sql(`SELECT JSON_OBJECT('n',COUNT(*)) FROM tool_calls WHERE conversation_id='${dependentCid}' AND sdk_tool_call_id='dependent-read'`)[0];

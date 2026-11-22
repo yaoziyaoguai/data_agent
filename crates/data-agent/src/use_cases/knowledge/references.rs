@@ -4,6 +4,21 @@ pub async fn check_refs_in_tx(tx: &mut AppTx<'_>, ctx: &AccessContext, refs: &Va
     checked_refs_in_tx(tx, ctx, refs, None).await.map(|_| ())
 }
 
+// 写入时无法采用的引用是冲突；资料读取仍用 not_available 表示内容不可交付。
+pub(in crate::use_cases) async fn check_adoptable_refs_in_tx(
+    tx: &mut AppTx<'_>,
+    ctx: &AccessContext,
+    refs: &Value,
+) -> Result<()> {
+    check_refs_in_tx(tx, ctx, refs).await.map_err(|error| {
+        if error.code == "not_available" {
+            Error::new("stale_knowledge")
+        } else {
+            error
+        }
+    })
+}
+
 pub(in crate::use_cases) async fn check_refs_for_task_in_tx(
     tx: &mut AppTx<'_>,
     ctx: &AccessContext,
@@ -18,7 +33,32 @@ pub(super) async fn current_structure_refs_in_tx(
     ctx: &AccessContext,
     object: &Value,
 ) -> Result<Vec<Value>> {
-    let mut bindings = knowledge::read_current_bindings_in_tx(tx, ctx, object).await?;
+    // 指标的 SQL 和结构定义分别存放。只精读 SQL 时，仍需核同版定义绑定的底表。
+    let metric;
+    let object = if object["kind"] == "metric"
+        && object["entries"]
+            .as_array()
+            .is_some_and(|entries| entries.len() == 1 && entries[0]["path"] == "sql")
+    {
+        metric = knowledge::read_structure_refs_in_tx(
+            tx,
+            ctx,
+            object["id"]
+                .as_str()
+                .ok_or(Error::new("invalid_evidence"))?,
+            epoch(object["version"].as_str().unwrap_or(""))?,
+        )
+        .await?;
+        &metric
+    } else {
+        object
+    };
+    let mut bindings = knowledge::read_current_bindings_in_tx(tx, ctx, object)
+        .await
+        .map_err(|error| match error.code {
+            "not_available" => Error::new("stale_knowledge"),
+            _ => error,
+        })?;
     for binding in &mut bindings {
         if !binding.fingerprint.is_empty() {
             continue;
@@ -53,6 +93,7 @@ pub async fn history_check_refs_in_tx(
         let id = reference["object_id"]
             .as_str()
             .ok_or(Error::new("invalid_input"))?;
+        knowledge::check_read_access_in_tx(tx, ctx, id).await?;
         let version = crate::types::epoch(
             reference["version"]
                 .as_str()
@@ -190,6 +231,7 @@ pub(super) async fn checked_refs_in_tx(
     gate: Option<&crate::use_cases::source_limits::SourceGate>,
 ) -> Result<Vec<Value>> {
     let mut pending = refs.as_array().ok_or(Error::new("invalid_input"))?.clone();
+    let direct = pending.len();
     let mut checked = std::collections::HashSet::new();
     let mut references = Vec::new();
     let mut index = 0;
@@ -227,16 +269,42 @@ pub(super) async fn checked_refs_in_tx(
                 .await
                 .map_err(|error| knowledge_reference_error(error, &r, "结构绑定"))?,
         );
-        crate::use_cases::knowledge_sources::assert_selected_in_tx(tx, ctx, &v, &path)
+        assert_selection_sources_in_tx(tx, ctx, &v, &path)
             .await
             .map_err(|error| knowledge_reference_error(error, &r, "所选条目必要依据"))?;
-        if let Some(gate) = gate {
-            gate.assert_selection_in_tx(tx, &v, &path).await?;
+        if let Some(gate) = gate
+            && index <= direct
+            && !gate.allows_object(&v)
+        {
+            return Err(Error::new("source_not_allowed"));
         }
         pending.extend(knowledge::semantic_dependencies(&v));
         references.push(r);
     }
     Ok(references)
+}
+
+pub(in crate::use_cases) async fn assert_selection_sources_in_tx(
+    tx: &mut AppTx<'_>,
+    ctx: &AccessContext,
+    selection: &Value,
+    path: &str,
+) -> Result<()> {
+    if selection["mapping_state"] == "complete" {
+        return crate::use_cases::knowledge_sources::assert_selected_in_tx(
+            tx, ctx, selection, path,
+        )
+        .await;
+    }
+    // 旧卡还没有条目级映射。窄读补齐整卡必要来源，续页和重放复用同一判定。
+    let id = selection["id"]
+        .as_str()
+        .ok_or(Error::new("invalid_evidence"))?;
+    let card = knowledge::source_reference_objects_in_tx(tx, ctx, &[id.to_owned()])
+        .await?
+        .pop()
+        .ok_or(Error::new("not_available"))?;
+    crate::use_cases::knowledge_sources::assert_selected_in_tx(tx, ctx, &card, path).await
 }
 
 pub(super) async fn check_input_structure_sources_in_tx(

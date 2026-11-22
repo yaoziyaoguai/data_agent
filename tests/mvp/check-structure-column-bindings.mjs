@@ -70,7 +70,7 @@ try {
         structured_value:entry(table,'description').effective_structure},'alice','PATCH'));
       // 模拟原09已触及的latest-only条目：没有结构边或旧表全文，只保真实同版字段原文。
       h.sql(`DELETE FROM knowledge_dependencies WHERE owner_id='${field.id}' AND role='table_binding';
-        DELETE FROM knowledge_versions WHERE object_id='${table.id}' AND version<${table.version}`);
+        UPDATE knowledge_revisions SET archived_body=NULL WHERE object_id='${table.id}' AND version<${table.version}`);
       await writeFile(h.directory+'/structure-proof-before.json',JSON.stringify({
         type:ok(await h.request('/knowledge/'+field.id)).entries.find(e=>e.path==='type').source_facts,
         table:ok(await h.request('/knowledge/'+table.id)).entries.find(e=>e.path==='ddl'),
@@ -221,14 +221,14 @@ try {
       checks.push('合法的待复核人工规则仍可读取，不按 needs_review 一刀切拒绝');
 
       // 只推进输入来源的修订，知识对象必须由下面的 reanalyze 自己更新。
-      const source = h.sql("SELECT JSON_OBJECT('version',h.version,'body',s.body) FROM source_heads h JOIN source_snapshots s ON s.source_id=h.id AND s.version=h.version WHERE h.id='schema'")[0];
+      const source = h.sql("SELECT JSON_OBJECT('version',h.version,'body',s.body) FROM source_heads h JOIN (SELECT source_id,version,body,archive_complete AS complete FROM source_revisions WHERE body IS NOT NULL) s ON s.source_id=h.id AND s.version=h.version WHERE h.id='schema'")[0];
       const newSchema = source.body.replace(/CREATE TABLE demo_order_detail \([\s\S]*?\);/, ddl => ddl
         .replace('    line_id INTEGER NOT NULL,\n','')
         .replace('PRIMARY KEY (order_id, line_id)','PRIMARY KEY (order_id)'));
       assert.notEqual(newSchema,source.body);
       const version = Number(source.version)+1, body = Buffer.from(newSchema).toString('hex');
       const fingerprint = createHash('sha256').update(newSchema).digest('hex');
-      h.sql(`INSERT INTO source_snapshots(source_id,version,body,complete) VALUES('schema',${version},CONVERT(0x${body} USING utf8mb4),TRUE);
+      h.sql(`INSERT INTO source_revisions(source_id,version,body,archive_complete) VALUES('schema',${version},CONVERT(0x${body} USING utf8mb4),TRUE);
         UPDATE source_heads SET version=${version},fingerprint='${fingerprint}' WHERE id='schema';
         UPDATE source_current SET revision=${version},body=CONVERT(0x${body} USING utf8mb4) WHERE source_id='schema'`);
       table = ok(await h.request('/knowledge/'+table.id+'/reanalyze', {

@@ -154,14 +154,14 @@ try {
     assert.equal(memoryRequests.filter(request => request.path === '/index').length, 1);
     assert.equal(memoryIndexes.get(personalMemory.id).body, personalMemory.body);
     const oldIdentity = (await milvus(names[0], 'collections/describe')).collectionID;
-    const oldDocument = h.sql(`SELECT body FROM knowledge_versions WHERE object_id=${quote(document.id)} AND version=1`)[0];
+    const oldDocument = h.sql(`SELECT body FROM (SELECT object_id,version,archived_body AS body FROM knowledge_revisions WHERE archived_body IS NOT NULL) archive_rows WHERE object_id=${quote(document.id)} AND version=1`)[0];
     h.env.DATA_AGENT_PUBLIC_CONTENT_RETENTION = 'latest_only';
     await h.restartApi();
     const nextBody = originalBody + '\n新修订尾部条件：忽略取消和未知状态。';
     const updated = ok(await h.request('/knowledge/' + document.id, {operation_id:randomUUID(), expected_version:'1', entry_id:'body', value:nextBody, clear_override:false}, 'alice', 'PATCH'));
     assert.equal(updated.version, '2');
-    assert.deepEqual(h.sql(`SELECT body FROM knowledge_versions WHERE object_id=${quote(document.id)} AND version=1`)[0], oldDocument);
-    assert.equal(h.sql(`SELECT JSON_OBJECT('n',COUNT(*)) FROM knowledge_versions WHERE object_id=${quote(document.id)}`)[0].n, 1);
+    assert.deepEqual(h.sql(`SELECT body FROM (SELECT object_id,version,archived_body AS body FROM knowledge_revisions WHERE archived_body IS NOT NULL) archive_rows WHERE object_id=${quote(document.id)} AND version=1`)[0], oldDocument);
+    assert.equal(h.sql(`SELECT JSON_OBJECT('n',COUNT(*)) FROM (SELECT object_id,version,archived_body AS body FROM knowledge_revisions WHERE archived_body IS NOT NULL) archive_rows WHERE object_id=${quote(document.id)}`)[0].n, 1);
     const oldJobs = h.sql(`SELECT JSON_OBJECT('kind',target_kind,'version',version,'target',vector_target,'state',vector_state,'attempts',vector_attempts,'epoch',lease_epoch) FROM knowledge_index_jobs WHERE object_id=${quote(document.id)} AND version=1 ORDER BY target_kind`);
     assert.equal(oldJobs.length, 2);
     const beforeCut = requests.length;
@@ -195,8 +195,8 @@ try {
     const third = ok(await h.request('/knowledge/' + document.id, {operation_id:randomUUID(), expected_version:'2', entry_id:'body', value:thirdBody, clear_override:false}, 'alice', 'PATCH'));
     assert.equal(third.version, '3');
     await indexed(rebuilt.resource_id);
-    assert.equal(h.sql(`SELECT JSON_OBJECT('n',COUNT(*)) FROM knowledge_versions WHERE object_id=${quote(document.id)}`)[0].n, 1);
-    assert.deepEqual(h.sql(`SELECT body FROM knowledge_versions WHERE object_id=${quote(document.id)} AND version=1`)[0], oldDocument);
+    assert.equal(h.sql(`SELECT JSON_OBJECT('n',COUNT(*)) FROM (SELECT object_id,version,archived_body AS body FROM knowledge_revisions WHERE archived_body IS NOT NULL) archive_rows WHERE object_id=${quote(document.id)}`)[0].n, 1);
+    assert.deepEqual(h.sql(`SELECT body FROM (SELECT object_id,version,archived_body AS body FROM knowledge_revisions WHERE archived_body IS NOT NULL) archive_rows WHERE object_id=${quote(document.id)} AND version=1`)[0], oldDocument);
     assert.ok(requests.slice(beforeCut).filter(row => /\/(upsert|delete|create)$/.test(row.path)).every(row => row.collection === names[1]), '切换后的新修订也只能写B');
 
     h.env.DATA_AGENT_TOOL_CONTRACT_VERSION = '2';

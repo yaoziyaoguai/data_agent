@@ -92,7 +92,7 @@ try {
       objectBody.id = created.value.id;
       const encoded = Buffer.from(JSON.stringify(objectBody)).toString('hex');
       h.sql(`UPDATE knowledge_objects SET body=CAST(CONVERT(0x${encoded} USING utf8mb4) AS JSON) WHERE id='${objectBody.id}';
-        UPDATE knowledge_versions SET body=CAST(CONVERT(0x${encoded} USING utf8mb4) AS JSON) WHERE object_id='${objectBody.id}' AND version=1;
+        UPDATE knowledge_revisions SET archived_body=CAST(CONVERT(0x${encoded} USING utf8mb4) AS JSON) WHERE object_id='${objectBody.id}' AND version=1;
         UPDATE retrieval_documents SET body=CAST(CONVERT(0x${encoded} USING utf8mb4) AS JSON) WHERE object_id='${objectBody.id}'`);
       const bytes = Number(h.sql(`SELECT JSON_OBJECT('b',OCTET_LENGTH(body)) FROM knowledge_objects WHERE id='${objectBody.id}'`)[0].b);
       assert.ok(bytes > 60_000, '夹具对象须显著大于单条目读取量：'+bytes+'B');
@@ -137,7 +137,7 @@ try {
       const encoded = Buffer.from(JSON.stringify(objectBody)).toString('hex');
       h.sql(`INSERT INTO knowledge_objects(id,space_id,kind,name,version,state,body,source_id,source_version,updated_by)
         VALUES('${objectBody.id}','demo','document','窄读定位资料',1,'enabled',CAST(CONVERT(0x${encoded} USING utf8mb4) AS JSON),NULL,0,'synthetic-test');
-        INSERT INTO knowledge_versions(object_id,version,body) VALUES('${objectBody.id}',1,CAST(CONVERT(0x${encoded} USING utf8mb4) AS JSON));
+        INSERT INTO knowledge_revisions(object_id,version,archived_body) VALUES('${objectBody.id}',1,CAST(CONVERT(0x${encoded} USING utf8mb4) AS JSON));
         INSERT INTO retrieval_documents(object_id,space_id,version,body) VALUES('${objectBody.id}','demo',1,CAST(CONVERT(0x${encoded} USING utf8mb4) AS JSON));
         INSERT IGNORE INTO semantic_ownership(space_id,object_id,authority_id,source,updated_by) VALUES('demo','${objectBody.id}','${objectBody.id}','system','synthetic-test')`);
       const bytes = Number(h.sql(`SELECT JSON_OBJECT('b',OCTET_LENGTH(body)) FROM knowledge_objects WHERE id='${objectBody.id}'`)[0].b);
@@ -188,7 +188,7 @@ try {
       processing.human_override = null;
       const encoded = Buffer.from(JSON.stringify(table)).toString('hex');
       h.sql(`UPDATE knowledge_objects SET body=CAST(CONVERT(0x${encoded} USING utf8mb4) AS JSON) WHERE id='${table.id}';
-        UPDATE knowledge_versions SET body=CAST(CONVERT(0x${encoded} USING utf8mb4) AS JSON) WHERE object_id='${table.id}' AND version=${table.version}`);
+        UPDATE knowledge_revisions SET archived_body=CAST(CONVERT(0x${encoded} USING utf8mb4) AS JSON) WHERE object_id='${table.id}' AND version=${table.version}`);
       const bytes = Number(h.sql(`SELECT JSON_OBJECT('b',OCTET_LENGTH(body)) FROM knowledge_objects WHERE id='${table.id}'`)[0].b);
       assert.ok(bytes > 500_000, '关联表未选中SQL须显著大于结构窄投影');
       await h.resumeWorker();

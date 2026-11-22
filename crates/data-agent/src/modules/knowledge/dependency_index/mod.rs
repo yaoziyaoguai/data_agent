@@ -1,11 +1,10 @@
 mod store;
 
 pub use store::{
-    ContributionRoots, complete_members_in_tx, complete_selections_in_tx, contribution_roots_in_tx,
-    dependent_spaces_in_tx, dependents_in_tx, effective_required_in_tx, has_dependents_in_tx,
-    mapping_complete_in_tx, persist_in_tx, register_table_binding_in_tx, resolve_selection_in_tx,
-    selected_contribution_roots_in_tx, selected_dependencies_in_tx,
-    write_target_fingerprints_in_tx,
+    complete_members_in_tx, complete_selections_in_tx, dependent_spaces_in_tx, dependents_in_tx,
+    effective_required_in_tx, has_dependents_in_tx, mapping_complete_in_tx, persist_in_tx,
+    register_table_binding_in_tx, resolve_selection_in_tx, selected_contribution_roots_in_tx,
+    selected_dependencies_in_tx, write_target_fingerprints_in_tx,
 };
 
 use crate::types::{Error, Result};

@@ -48,61 +48,52 @@ export function cockpitAction(run: RunEnvelope, context: TranscriptContext): Syn
   const path = explanation ? "body" : "definition";
   let reference: EvidenceRef | undefined;
   let unavailable = false;
-  if (run.tool_contract_version === 2) {
-    // 来源门先路由：search等正文工具在来源未裁决时必拒，route回执翻转
-    // source_context_ready后隐藏投影解除，工具史恢复可见。
-    if (!latest("update_analysis_task")) return route();
-    if (!latest("search_knowledge")) return {tool: "search_knowledge", args: {
-      query: explanation ? /ASR/i.test(input) ? "端云识别与候选选择" : "合成范围与隐私来源" : "语音任务达成率",
-      kinds: [explanation ? "document" : "metric"], limit: 10,
+  if (!latest("update_analysis_task")) return route();
+  if (!latest("search_knowledge")) return {tool: "search_knowledge", args: {
+    query: explanation ? /ASR/i.test(input) ? "端云识别与候选选择" : "合成范围与隐私来源" : "语音任务达成率",
+    kinds: [explanation ? "document" : "metric"], limit: 10,
+  }};
+  const search = latest("search_knowledge")!;
+  const hit = search.hits?.find((item: RecordValue) => item.record_kind === "knowledge_entry"
+    && item.ref.object_id === objectId && item.ref.path === path);
+  const raw = search.hits?.find((item: RecordValue) => item.record_kind === 'source_excerpt'
+    && item.citation.source.kind === 'document' && item.citation.source.id === objectId);
+  if (!hit && raw && !search.error) {
+    const read = latest('read_source');
+    unavailable = Boolean(read?.error) || Boolean(read && (read.source?.id !== raw.citation.source.id || read.revision !== raw.citation.revision));
+    if (!unavailable && (!read || read.next_locator)) return {tool: 'read_source', args: {
+      citation: {...raw.citation, locator: read?.next_locator ?? {offset: 0, length: raw.source_length}}, limit: 8000,
     }};
-    const search = latest("search_knowledge")!;
-    const hit = search.hits?.find((item: RecordValue) => item.record_kind === "knowledge_entry"
-      && item.ref.object_id === objectId && item.ref.path === path);
-    const raw = search.hits?.find((item: RecordValue) => item.record_kind === 'source_excerpt'
-      && item.citation.source.kind === 'document' && item.citation.source.id === objectId);
-    if (!hit && raw && !search.error) {
-      const read = latest('read_source');
-      unavailable = Boolean(read?.error) || Boolean(read && (read.source?.id !== raw.citation.source.id || read.revision !== raw.citation.revision));
-      if (!unavailable && (!read || read.next_locator)) return {tool: 'read_source', args: {
-        citation: {...raw.citation, locator: read?.next_locator ?? {offset: 0, length: raw.source_length}}, limit: 8000,
-      }};
-    } else if (search.error || !hit) unavailable = true;
-    else {
-      reference = hit.ref;
-      // 容量触发的压缩只保留最近回执：可见页链内一致即可续读，续读点取
-      // 最后一页next_offset，不要求从0开始的完整分页史可见。
-      let resume: number | undefined;
-      let total: number | undefined;
-      let complete = false;
-      for (const read of tools.filter(tool => tool.name === "read_knowledge")) {
-        const item = read.data.items?.[0];
-        if (read.data.error || item?.kind !== "knowledge" || item.state !== "ok"
-          || item.ref.object_id !== reference!.object_id || item.ref.version !== reference!.version || item.ref.path !== reference!.path
-          || (total !== undefined && item.content_page.total_chars !== total)) {
-          unavailable = true;
-          break;
-        }
-        const page = item.content_page;
-        const advanced = page.offset + [...item.content].length;
-        if ((resume !== undefined && page.offset !== resume)
-          || page.next_offset !== (advanced === page.total_chars ? null : advanced)) {
-          unavailable = true;
-          break;
-        }
-        total = page.total_chars;
-        resume = page.next_offset ?? undefined;
-        complete = page.next_offset === null;
+  } else if (search.error || !hit) unavailable = true;
+  else {
+    reference = hit.ref;
+    // 容量触发的压缩只保留最近回执：可见页链内一致即可续读，续读点取
+    // 最后一页next_offset，不要求从0开始的完整分页史可见。
+    let resume: number | undefined;
+    let total: number | undefined;
+    let complete = false;
+    for (const read of tools.filter(tool => tool.name === "read_knowledge")) {
+      const item = read.data.items?.[0];
+      if (read.data.error || item?.kind !== "knowledge" || item.state !== "ok"
+        || item.ref.object_id !== reference!.object_id || item.ref.version !== reference!.version || item.ref.path !== reference!.path
+        || (total !== undefined && item.content_page.total_chars !== total)) {
+        unavailable = true;
+        break;
       }
-      if (!unavailable && !complete) return {tool: "read_knowledge", args: {
-        items: [{kind: "knowledge", ref: reference, offset: resume ?? 0, limit: 8000}],
-      }};
+      const page = item.content_page;
+      const advanced = page.offset + [...item.content].length;
+      if ((resume !== undefined && page.offset !== resume)
+        || page.next_offset !== (advanced === page.total_chars ? null : advanced)) {
+        unavailable = true;
+        break;
+      }
+      total = page.total_chars;
+      resume = page.next_offset ?? undefined;
+      complete = page.next_offset === null;
     }
-  } else {
-    if (!latest("read_knowledge")) return {tool: "read_knowledge", args: {object_id: objectId, entry_id: path, limit: 8000}};
-    const read = latest("read_knowledge")!;
-    unavailable = Boolean(read.error) || !read.entries?.some((entry: RecordValue) => entry.path === path);
-    if (!unavailable) reference = {object_id: read.id, version: read.version, path};
+    if (!unavailable && !complete) return {tool: "read_knowledge", args: {
+      items: [{kind: "knowledge", ref: reference, offset: resume ?? 0, limit: 8000}],
+    }};
   }
   if (unavailable) {
     if (!latest("update_analysis_task")) return route();
@@ -122,23 +113,10 @@ export function cockpitAction(run: RunEnvelope, context: TranscriptContext): Syn
   const refs = [reference!];
   const conditions: Conditions = {time_start:start+"T00:00:00Z",time_end:end+"T00:00:00Z",timezone:"UTC",metric:"task_completion_rate",
     channel:null,group_by:group === "total" ? [] : [group === "day" ? "activity_date" : "model_id"],filters:[],knowledge_refs:refs,
-    // 演示读全量同步来源，声明不受限；缺省时宿主把来源范围视为未知，readiness永不翻转。
     source_limits:null,
     notes:"采用快照日汇总中的合格语音轮次与任务达成数，零分母返回NULL，百分比在SQL计算。",
-    // 读取侧按宿主decision_state分形状：v1(Legacy)要求unresolved_differences，
-    // v2(Clarifications)按采纳说明禁该键；写入侧oneOf两边各自恰好命中一枝。
-    semantic_resolution: run.tool_contract_version === 2
-      ? {interpretation:"使用已读取的task_completion_rate定义，日汇总同轮次分子分母相加后计算。",basis:"unambiguous",user_quote:null,evidence_refs:refs}
-      : {interpretation:"使用已读取的task_completion_rate定义，日汇总同轮次分子分母相加后计算。",basis:"unambiguous",user_quote:null,unresolved_differences:[],evidence_refs:refs}};
-  // 每条新消息都必须先过update_analysis_task登记归属（独立目标create、追问route、
-  // 改条件revise）。v2来源门已在上面route；v1在此补登：此前静默复用active会让
-  // 消息停在message_pending，request_query被拒且finish重试耗尽（dogfood 2026-11-21）。
-  if (!tools.some(tool => tool.name === "update_analysis_task")) {
-    return {tool:"update_analysis_task",args:{action:"create",goal:input,conditions,options:[]}};
-  }
-  // v2来源门先route再取正文；route回执(routed:true,task_id可空)只证明归属落实。
-  // create属范围变更工具，context_reset后旧回执按设计移出上下文，任务身份以
-  // 刷新后的宿主workspace为准（active_task_ref/tasks），与真实模型的恢复路径一致。
+    semantic_resolution: {interpretation:"使用已读取的task_completion_rate定义，日汇总同轮次分子分母相加后计算。",basis:"unambiguous",user_quote:null,evidence_refs:refs}};
+  // route登记消息归属。首次定义完整统计任务后，才保存查询草稿。
   const created = tools.findLast(tool => tool.name === "update_analysis_task"
     && tool.data.task_id && !tool.data.routed)?.data
     ?? (active ? {task_id: active.id, condition_version: active.condition_version} : undefined);

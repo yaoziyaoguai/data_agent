@@ -311,7 +311,7 @@ const createMetricEntries=async(name,entries,kind='metric')=>{
  const encoded=Buffer.from(JSON.stringify(object)).toString('hex');
  const body=`CAST(CONVERT(0x${encoded} USING utf8mb4) AS JSON)`;
  h.sql(`UPDATE knowledge_objects SET body=${body} WHERE id='${object.id}';
-  UPDATE knowledge_versions SET body=${body} WHERE object_id='${object.id}' AND version=1;
+  UPDATE knowledge_revisions SET archived_body=${body} WHERE object_id='${object.id}' AND version=1;
   INSERT INTO retrieval_documents(object_id,space_id,version,body) VALUES('${object.id}','demo',1,${body})
    ON DUPLICATE KEY UPDATE version=VALUES(version),body=VALUES(body)`);
  return object;
@@ -515,7 +515,7 @@ try {
     source_facts:{complete:false,gap:'独立合成后页夹具'},suggestion:{},human_override:null,review_state:'unverified'}));
   const ghostEncoded=Buffer.from(JSON.stringify(ghost)).toString('hex');
   h.sql(`UPDATE knowledge_objects SET body=CAST(CONVERT(0x${ghostEncoded} USING utf8mb4) AS JSON) WHERE id='${ghost.id}';
-    UPDATE knowledge_versions SET body=CAST(CONVERT(0x${ghostEncoded} USING utf8mb4) AS JSON) WHERE object_id='${ghost.id}' AND version=1;
+    UPDATE knowledge_revisions SET archived_body=CAST(CONVERT(0x${ghostEncoded} USING utf8mb4) AS JSON) WHERE object_id='${ghost.id}' AND version=1;
     UPDATE retrieval_documents SET body=CAST(CONVERT(0x${ghostEncoded} USING utf8mb4) AS JSON) WHERE object_id='${ghost.id}'`);
   const pageTarget=await create('后页期间的合法正文',pageBody,[ghost.id],'metric');
   await h.resumeWorker();await waitIndexed([ghost.id,pageTarget.id]);
@@ -529,7 +529,7 @@ try {
     ...targetRows.map(row=>({...row,vector:pageVector})),
   ]});
   h.sql(`UPDATE knowledge_objects SET version=2,body=JSON_SET(body,'$.version','2') WHERE id='${ghost.id}';
-    INSERT INTO knowledge_versions(object_id,version,body) SELECT id,version,body FROM knowledge_objects WHERE id='${ghost.id}'`);
+    INSERT INTO knowledge_revisions(object_id,version,archived_body) SELECT id,version,body FROM knowledge_objects WHERE id='${ghost.id}'`);
   const fillers=Array.from({length:200},(_,i)=>({...structuredClone(shardTarget),
     id:'channel-shard-filler-'+String(i).padStart(3,'0'),name:'分片范围填充'+i,
     related_ids:[shardTarget.id],entries:[{entry_id:'body',path:'body',label:'正文',
@@ -541,7 +541,7 @@ try {
     const body=`CAST(CONVERT(0x${encoded} USING utf8mb4) AS JSON)`;
     return `INSERT INTO knowledge_objects(id,space_id,kind,name,version,state,body,source_id,source_version,updated_by)
       VALUES('${value.id}','demo','metric','${value.name}',1,'enabled',${body},NULL,0,'synthetic-test');
-      INSERT INTO knowledge_versions(object_id,version,body) VALUES('${value.id}',1,${body});
+      INSERT INTO knowledge_revisions(object_id,version,archived_body) VALUES('${value.id}',1,${body});
       INSERT INTO retrieval_documents(object_id,space_id,version,body) VALUES('${value.id}','demo',1,${body});`;
   }).join('\n'));
   const sqlSentinel=await create('仅SQL可达的分片哨兵',shardQuery+' sqlonlysentinel：不应被SQL补票交付。',[shardTarget.id],'metric');
@@ -1015,7 +1015,7 @@ try {
     const body=`CAST(CONVERT(0x${encoded} USING utf8mb4) AS JSON)`;
     return `INSERT INTO knowledge_objects(id,space_id,kind,name,version,state,body,source_id,source_version,updated_by)
       VALUES('${value.id}','demo','term','${value.name}',1,'enabled',${body},NULL,0,'synthetic-test');
-      INSERT INTO knowledge_versions(object_id,version,body) VALUES('${value.id}',1,${body});
+      INSERT INTO knowledge_revisions(object_id,version,archived_body) VALUES('${value.id}',1,${body});
       INSERT INTO retrieval_documents(object_id,space_id,version,body) VALUES('${value.id}','demo',1,${body});`;
   }).join('\n'));
   // term允许集≥202个对象切成两片：代理只对过滤器不含目标的片注入503，

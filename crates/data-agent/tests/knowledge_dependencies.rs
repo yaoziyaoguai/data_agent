@@ -156,6 +156,7 @@ async fn saving_layers_registers_dependencies_with_effective_flags_and_reverse_i
         user_id: "alice".into(),
         space_id: "demo".into(),
         request_id: "synthetic-dependency-index".into(),
+        table_access: None,
     };
     let mut tx = AppTx::begin(&pool).await.unwrap();
     let object = knowledge::create_in_tx(
@@ -456,6 +457,7 @@ async fn transitive_walk_finds_source_change_immediately_and_stops_cycles() {
         user_id: "alice".into(),
         space_id: "demo".into(),
         request_id: "synthetic-dependency-walk".into(),
+        table_access: None,
     };
     let prepare = |statement_target: &str, citation: Value, support: Value| {
         json!({"statements":[{
@@ -886,6 +888,7 @@ async fn history_check_tolerates_upstream_revision_but_not_revocation() {
         user_id: "alice".into(),
         space_id: "demo".into(),
         request_id: "synthetic-history-check".into(),
+        table_access: None,
     };
     let prepare = |statement_target: &str, citation: Value| {
         json!({"statements":[{
@@ -1032,7 +1035,7 @@ async fn history_check_tolerates_upstream_revision_but_not_revocation() {
     .await
     .unwrap();
     tx.commit().await.unwrap();
-    sqlx::query("DELETE FROM knowledge_versions WHERE object_id=?")
+    sqlx::query("UPDATE knowledge_revisions SET archived_body=NULL WHERE object_id=?")
         .bind(independent_id)
         .execute(&pool)
         .await
@@ -1060,6 +1063,7 @@ async fn legacy_fallback_without_index_rows_covers_transitive_revocation() {
         user_id: "alice".into(),
         space_id: "demo".into(),
         request_id: "synthetic-legacy-fallback".into(),
+        table_access: None,
     };
     let prepare = |statement_target: &str, citation: Value, support: Value| {
         json!({"statements":[{
@@ -1310,6 +1314,7 @@ async fn contribution_roots_close_over_effective_sources_and_flag_unproven_membe
         user_id: "alice".into(),
         space_id: "demo".into(),
         request_id: "synthetic-contribution-roots".into(),
+        table_access: None,
     };
     let prepare = |statement_target: &str, citation: Value, support: Value| {
         json!({"statements":[{
@@ -1452,11 +1457,11 @@ async fn contribution_roots_close_over_effective_sources_and_flag_unproven_membe
 
     // 批量取根：A的闭包传递包含锚点与D；B只含其引用的D。
     let mut tx = AppTx::begin(&pool).await.unwrap();
-    let roots = knowledge::dependency_index::contribution_roots_in_tx(
+    let roots = knowledge::dependency_index::selected_contribution_roots_in_tx(
         &mut tx,
         &[
-            (upstream_id.clone(), upstream_version),
-            (citing_id.clone(), citing_version),
+            (upstream_id.clone(), upstream_version).into(),
+            (citing_id.clone(), citing_version).into(),
         ],
     )
     .await
@@ -1507,9 +1512,9 @@ async fn contribution_roots_close_over_effective_sources_and_flag_unproven_membe
     .await
     .unwrap();
     let mut tx = AppTx::begin(&pool).await.unwrap();
-    let with_related = knowledge::dependency_index::contribution_roots_in_tx(
+    let with_related = knowledge::dependency_index::selected_contribution_roots_in_tx(
         &mut tx,
-        &[(upstream_id.clone(), upstream_version)],
+        &[(upstream_id.clone(), upstream_version).into()],
     )
     .await
     .unwrap();
@@ -1548,9 +1553,9 @@ async fn contribution_roots_close_over_effective_sources_and_flag_unproven_membe
         .unwrap();
     assert!(advanced_version > citing_version);
     let mut tx = AppTx::begin(&pool).await.unwrap();
-    let historical = knowledge::dependency_index::contribution_roots_in_tx(
+    let historical = knowledge::dependency_index::selected_contribution_roots_in_tx(
         &mut tx,
-        &[(upstream_id.clone(), upstream_version)],
+        &[(upstream_id.clone(), upstream_version).into()],
     )
     .await
     .unwrap();
@@ -1580,9 +1585,9 @@ async fn contribution_roots_close_over_effective_sources_and_flag_unproven_membe
         .parse::<u64>()
         .unwrap();
     let mut tx = AppTx::begin(&pool).await.unwrap();
-    let guide_roots = knowledge::dependency_index::contribution_roots_in_tx(
+    let guide_roots = knowledge::dependency_index::selected_contribution_roots_in_tx(
         &mut tx,
-        &[(guide_id.clone(), guide_version)],
+        &[(guide_id.clone(), guide_version).into()],
     )
     .await
     .unwrap();
@@ -1614,9 +1619,9 @@ async fn contribution_roots_close_over_effective_sources_and_flag_unproven_membe
         .parse::<u64>()
         .unwrap();
     let mut tx = AppTx::begin(&pool).await.unwrap();
-    let replaced_roots = knowledge::dependency_index::contribution_roots_in_tx(
+    let replaced_roots = knowledge::dependency_index::selected_contribution_roots_in_tx(
         &mut tx,
-        &[(upstream_id.clone(), replaced_version)],
+        &[(upstream_id.clone(), replaced_version).into()],
     )
     .await
     .unwrap();
@@ -1635,11 +1640,11 @@ async fn contribution_roots_close_over_effective_sources_and_flag_unproven_membe
         .await
         .unwrap();
     let mut tx = AppTx::begin(&pool).await.unwrap();
-    let unproven = knowledge::dependency_index::contribution_roots_in_tx(
+    let unproven = knowledge::dependency_index::selected_contribution_roots_in_tx(
         &mut tx,
         &[
-            (upstream_id.clone(), upstream_version),
-            (citing_id.clone(), citing_version),
+            (upstream_id.clone(), upstream_version).into(),
+            (citing_id.clone(), citing_version).into(),
         ],
     )
     .await
@@ -1764,11 +1769,11 @@ async fn contribution_roots_close_over_effective_sources_and_flag_unproven_membe
         .unwrap();
     assert_eq!(second_version, 3);
     let mut tx = AppTx::begin(&pool).await.unwrap();
-    let cyclic = knowledge::dependency_index::contribution_roots_in_tx(
+    let cyclic = knowledge::dependency_index::selected_contribution_roots_in_tx(
         &mut tx,
         &[
-            (first_id.clone(), first_version),
-            (second_id.clone(), second_version),
+            (first_id.clone(), first_version).into(),
+            (second_id.clone(), second_version).into(),
         ],
     )
     .await
@@ -1796,6 +1801,7 @@ async fn human_edit_kinds_separate_replacement_from_retained_sources() {
         user_id: "alice".into(),
         space_id: "demo".into(),
         request_id: "synthetic-human-edit-kinds".into(),
+        table_access: None,
     };
     let statement = |key: &str, path: &str, target: &str, version: &str, citation: Value| {
         json!({"key":key, "target":{"object_id":target,"version":version,"path":path},
@@ -2137,6 +2143,7 @@ async fn sql_search_stage_keeps_consumed_positions_separate_from_delivered_conte
         user_id: "alice".into(),
         space_id: "demo".into(),
         request_id: "synthetic-sql-scan-progress".into(),
+        table_access: None,
     };
     let mut tx = AppTx::begin(&pool).await.unwrap();
     let mut object = knowledge::create_in_tx(
@@ -2158,7 +2165,7 @@ async fn sql_search_stage_keeps_consumed_positions_separate_from_delivered_conte
     })).collect::<Vec<_>>());
     for statement in [
         "UPDATE knowledge_objects SET body=? WHERE id=?",
-        "UPDATE knowledge_versions SET body=? WHERE object_id=? AND version=1",
+        "UPDATE knowledge_revisions SET archived_body=? WHERE object_id=? AND version=1",
     ] {
         sqlx::query(statement)
             .bind(sqlx::types::Json(&object))
@@ -2209,6 +2216,7 @@ async fn search_stage_keeps_explicit_domain_in_owner_candidates() {
         user_id: "alice".into(),
         space_id: "demo".into(),
         request_id: "synthetic-sql-domain-scope".into(),
+        table_access: None,
     };
     let scope = data_agent::search_scope::KnowledgeSearchScope {
         kinds: vec!["document".into()],
@@ -2235,7 +2243,14 @@ async fn search_stage_keeps_explicit_domain_in_owner_candidates() {
     let heads = knowledge::scoped_enabled_heads_in_tx(&mut tx, &ctx, &scope)
         .await
         .unwrap();
-    assert_eq!(heads, vec![(id.clone(), 1)], "允许集须保留已确认业务域");
+    assert_eq!(
+        heads
+            .into_iter()
+            .map(|head| (head.id, head.version))
+            .collect::<Vec<_>>(),
+        vec![(id.clone(), 1)],
+        "允许集须保留已确认业务域"
+    );
     let allowed = vec![id.clone()];
     let terms = vec!["sqlscopeneedle".to_owned()];
     let knowledge_rows = knowledge::matching_content_in_tx(
@@ -2321,6 +2336,7 @@ async fn search_stage_keeps_full_query_scores_in_sql_owners() {
         user_id: "alice".into(),
         space_id: "demo".into(),
         request_id: "synthetic-full-query-scoring".into(),
+        table_access: None,
     };
     let query = (0..48)
         .map(|index| format!("qtoken{index:02}"))
@@ -2425,6 +2441,7 @@ async fn selected_content_rejects_record_window_drift_and_keeps_subranges() {
         user_id: "alice".into(),
         space_id: "demo".into(),
         request_id: "synthetic-record-window-binding".into(),
+        table_access: None,
     };
     let mut tx = AppTx::begin(&pool).await.unwrap();
     let mut object = knowledge::create_in_tx(
@@ -2446,7 +2463,7 @@ async fn selected_content_rejects_record_window_drift_and_keeps_subranges() {
     object["entries"][0]["effective_value"] = json!(text);
     for statement in [
         "UPDATE knowledge_objects SET body=? WHERE id=?",
-        "UPDATE knowledge_versions SET body=? WHERE object_id=? AND version=1",
+        "UPDATE knowledge_revisions SET archived_body=? WHERE object_id=? AND version=1",
     ] {
         sqlx::query(statement)
             .bind(sqlx::types::Json(&object))
@@ -2527,6 +2544,7 @@ async fn selected_content_restores_statement_fields_and_keeps_dependencies() {
         user_id: "alice".into(),
         space_id: "demo".into(),
         request_id: "synthetic-statement-locator".into(),
+        table_access: None,
     };
     let mut tx = AppTx::begin(&pool).await.unwrap();
     let support = knowledge::create_in_tx(
@@ -2570,7 +2588,7 @@ async fn selected_content_restores_statement_fields_and_keeps_dependencies() {
         "human_override":null,"review_state":"unverified"}]);
     for statement in [
         "UPDATE knowledge_objects SET body=? WHERE id=?",
-        "UPDATE knowledge_versions SET body=? WHERE object_id=? AND version=1",
+        "UPDATE knowledge_revisions SET archived_body=? WHERE object_id=? AND version=1",
     ] {
         sqlx::query(statement)
             .bind(sqlx::types::Json(&object))
@@ -2667,6 +2685,7 @@ async fn search_stage_keeps_consumed_candidates_when_metadata_crosses_deadline()
         user_id: "alice".into(),
         space_id: "demo".into(),
         request_id: "synthetic-pending-metadata-deadline".into(),
+        table_access: None,
     };
     let mut tx = AppTx::begin(&pool).await.unwrap();
     let mut object = knowledge::create_in_tx(
@@ -2689,7 +2708,7 @@ async fn search_stage_keeps_consumed_candidates_when_metadata_crosses_deadline()
     ]);
     for statement in [
         "UPDATE knowledge_objects SET body=? WHERE id=?",
-        "UPDATE knowledge_versions SET body=? WHERE object_id=? AND version=1",
+        "UPDATE knowledge_revisions SET archived_body=? WHERE object_id=? AND version=1",
     ] {
         sqlx::query(statement)
             .bind(sqlx::types::Json(&object))
@@ -2800,6 +2819,7 @@ async fn narrow_search_projection_rechecks_unshown_required_sources() {
         user_id: "alice".into(),
         space_id: "demo".into(),
         request_id: "synthetic-narrow-source-freshness".into(),
+        table_access: None,
     };
     let mut tx = AppTx::begin(&pool).await.unwrap();
     let source = knowledge::create_in_tx(
@@ -2833,7 +2853,7 @@ async fn narrow_search_projection_rechecks_unshown_required_sources() {
     }));
     for statement in [
         "UPDATE knowledge_objects SET body=? WHERE id=?",
-        "UPDATE knowledge_versions SET body=? WHERE object_id=? AND version=1",
+        "UPDATE knowledge_revisions SET archived_body=? WHERE object_id=? AND version=1",
         "UPDATE retrieval_documents SET body=? WHERE object_id=?",
     ] {
         sqlx::query(statement)
@@ -2896,6 +2916,7 @@ async fn search_filter_judges_effective_dependencies_not_legacy_refs() {
         user_id: "alice".into(),
         space_id: "demo".into(),
         request_id: "synthetic-search-filter".into(),
+        table_access: None,
     };
 
     // 平台来源首版：人工替换前的原始事实出处。
@@ -3225,6 +3246,7 @@ async fn content_fingerprint_tolerates_revision_only_advance() {
         user_id: "alice".into(),
         space_id: "demo".into(),
         request_id: "synthetic-content-fingerprint".into(),
+        table_access: None,
     };
 
     // 平台来源首版快照：验证平台目标同样填充内容指纹。
@@ -3235,12 +3257,14 @@ async fn content_fingerprint_tolerates_revision_only_advance() {
         .execute(&pool)
         .await
         .unwrap();
-    sqlx::query("INSERT INTO source_snapshots(source_id,version,body,complete) VALUES(?,1,?,TRUE)")
-        .bind("platform-feed-10")
-        .bind("稳定平台正文")
-        .execute(&pool)
-        .await
-        .unwrap();
+    sqlx::query(
+        "INSERT INTO source_revisions(source_id,version,body,archive_complete) VALUES(?,1,?,TRUE)",
+    )
+    .bind("platform-feed-10")
+    .bind("稳定平台正文")
+    .execute(&pool)
+    .await
+    .unwrap();
 
     // S：被采纳引用的文档；W：经平台事实与文档引用双通道登记依赖的对象。
     let mut tx = AppTx::begin(&pool).await.unwrap();
@@ -3395,6 +3419,7 @@ async fn partial_edit_keeps_sources_only_for_verbatim_retained_statements() {
         user_id: "alice".into(),
         space_id: "demo".into(),
         request_id: "synthetic-partial-edit".into(),
+        table_access: None,
     };
 
     // 指南承载陈述甲的出处，补充说明承载陈述乙的出处。
@@ -3610,6 +3635,7 @@ async fn structure_dependencies_and_computed_metrics_register_knowledge_targets(
         user_id: "alice".into(),
         space_id: "demo".into(),
         request_id: "synthetic-structure-dependencies".into(),
+        table_access: None,
     };
 
     // K：被示例依赖的表说明；M：示例实际输出的指标口径。
@@ -3769,6 +3795,7 @@ async fn saving_a_depended_object_registers_a_lightweight_fanout_job() {
         user_id: "alice".into(),
         space_id: "demo".into(),
         request_id: "synthetic-fanout-registration".into(),
+        table_access: None,
     };
     let fanout_jobs = async |object: &str| {
         sqlx::query(
@@ -3913,6 +3940,7 @@ async fn fanout_reopens_preparation_only_for_stale_dependents() {
         user_id: "alice".into(),
         space_id: "demo".into(),
         request_id: "synthetic-fanout-consumer".into(),
+        table_access: None,
     };
     let preparation_row = async |source: &str, revision: u64| {
         sqlx::query(

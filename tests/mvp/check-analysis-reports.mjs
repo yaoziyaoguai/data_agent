@@ -1321,8 +1321,10 @@ async function checkReports() {
       JSON.stringify({denied_query_users: ['alice']}));
     const blockedHistory = await fixture.invoke("get_query", {query_id: semanticQuery.id});
     assert.equal(blockedHistory.content_text, undefined, "首次读取历史查询前已撤权，不得交付SQL正文");
-    const blockedReport = await fixture.invoke("read_analysis_report", {task_id: documentTask.task_id});
-    assert.equal(blockedReport.content_text, undefined, "首次读取报告前已撤权，不得交付派生正文");
+    const blockedReport = await fixture.invoke("read_analysis_report", {task_id: conditionTask.task_id});
+    assert.equal(blockedReport.content_text, undefined, "首次读取带查询结果的报告前已撤权，不得交付正文");
+    const documentOnly = await fixture.invoke("read_analysis_report", {task_id: documentTask.task_id});
+    assert.ok(documentOnly.content_text?.includes("旧文档依据正文"), "无结果引用的报告按自身文档来源判断");
     await writeFile(h.directory + '/platform/permissions.json', '{}');
     const revisedModelReport = await fixture.invoke("read_analysis_report", {
       task_id: documentTask.task_id,
@@ -1362,8 +1364,7 @@ async function checkReports() {
     assert.equal((await dispatch()).status, 200, "结果过期不抹掉已交付的历史正文");
     await writeFile(h.directory + '/platform/permissions.json',
       JSON.stringify({denied_query_users: ['alice']}));
-    assert.equal((await dispatch()).value.code, 'stale_context',
-      "语义已改版且结果已过期时，平台撤权仍须阻止下一次派发");
+    assert.equal((await dispatch()).status, 200, "旧报告失权与下一次模型许可分别处理");
     unavailable(ok(await h.request(conditionPath)), "sources_unavailable");
     await writeFile(h.directory + '/platform/permissions.json', '{}');
     fixture.alterExpiry(semanticQuery, Date.now() / 1000 + 86400);
@@ -1372,8 +1373,7 @@ async function checkReports() {
     // 引用旧查询结果作为答案来源仍被拒绝，需按新输入重新建立口径。
     const historicalReference =
       revisedModelQuery.historical_analysis.actual_sources.result_dependencies[0];
-    const historicalAnswer = await fixture.invokeRaw("present_analysis_answer", {
-      template: "按历史口径说明{{value}}。",
+    const historicalAnswer = await fixture.invokeRaw("prepare_analysis_answer", {
       sources: [
         {
           query_id: historicalReference.query_id,
@@ -1445,7 +1445,6 @@ async function checkReports() {
     assert.equal((await h.request(reportPath())).status, 404);
     for (const table of [
       "analysis_reports",
-      "analysis_report_operations",
       "analysis_evidence",
     ])
       assert.equal(
@@ -1454,6 +1453,12 @@ async function checkReports() {
         )[0].n,
         0,
       );
+    assert.equal(
+      h.sql(
+        `SELECT JSON_OBJECT('n',COUNT(*)) FROM idempotency_receipts WHERE domain='analysis_report' AND JSON_UNQUOTE(JSON_EXTRACT(response_json,'$.conversation_id'))='${cid}'`,
+      )[0].n,
+      0,
+    );
     assert.equal(
       h.sql(
         `SELECT JSON_OBJECT('n',COUNT(*)) FROM analysis_report_revisions WHERE report_id IN ('${reference.report_id}','${documentReport.report_id}','${conditionReport.report_id}')`,

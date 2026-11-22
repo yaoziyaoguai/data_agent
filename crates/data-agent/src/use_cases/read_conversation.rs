@@ -1,6 +1,6 @@
 use crate::{
     contracts::generated::LoadedOutputRange,
-    modules::{analysis, conversations, queries, runtime},
+    modules::{analysis, conversations, runtime},
     persistence::AppTx,
     types::{AccessContext, Error, Result, epoch, fingerprint},
 };
@@ -35,202 +35,25 @@ fn activity_label(tool: &str) -> Option<&'static str> {
     })
 }
 
-async fn read_output_authorities_in_tx(
+// 事件正文是会话所有者已保存的记录。状态投影只处理跨页的提交与替换。
+async fn output_states(
     tx: &mut AppTx<'_>,
-    context: &AccessContext,
-    outputs: &mut [runtime::OutputReadBinding],
-) -> Result<()> {
-    for output in outputs {
-        for unit in &mut output.units {
-            let authority: Result<Value> = async {
-                let mut authority = super::context_authority::empty();
-                for source in &unit.authorities {
-                    super::context_authority::merge(&mut authority, source)?;
-                }
-                let mut results = super::context_authority::empty();
-                results["query_results"] = json!(
-                    unit.result_dependencies
-                        .iter()
-                        .map(|(qid, result_ref)| json!([qid, result_ref]))
-                        .collect::<Vec<_>>()
-                );
-                super::context_authority::merge(&mut authority, &results)?;
-                for (qid, _) in &unit.result_dependencies {
-                    let source = queries::text_authority_in_tx(tx, context, qid).await?;
-                    super::context_authority::merge(&mut authority, &source)?;
-                }
-                Ok(authority)
-            }
-            .await;
-            unit.authorities = vec![match authority {
-                Ok(authority) => authority,
-                Err(error)
-                    if matches!(
-                        error.code,
-                        "forbidden"
-                            | "not_available"
-                            | "stale_knowledge"
-                            | "stale_context"
-                            | "invalid_evidence"
-                    ) =>
-                {
-                    Value::Null
-                }
-                Err(error) => return Err(error),
-            }];
-        }
-    }
-    Ok(())
-}
-
-async fn history_text_readable_in_tx(
-    tx: &mut AppTx<'_>,
-    context: &AccessContext,
-    cid: &str,
-    authority: &Value,
-    checked: &super::context_authority::CheckedTextResults,
-) -> Result<bool> {
-    if !checked.allows_history(authority) {
-        return Ok(false);
-    }
-    match super::context_authority::validate_history_in_tx(tx, context, cid, authority).await {
-        Ok(()) => Ok(true),
-        Err(error)
-            if matches!(
-                error.code,
-                "forbidden"
-                    | "not_available"
-                    | "stale_knowledge"
-                    | "stale_context"
-                    | "invalid_evidence"
-            ) =>
-        {
-            Ok(false)
-        }
-        Err(error) => Err(error),
-    }
-}
-
-// snapshot消息和SSE重放共用来源投影；游标只选事件，不决定答案的来源边界。
-async fn protect_output_events(
-    pool: &MySqlPool,
-    context: &AccessContext,
     cid: &str,
     events: &mut [Value],
-    loaded_attempts: &[String],
 ) -> Result<HashMap<String, String>> {
-    const RESTRICTED_TEXT: &str = "部分内容因来源不可读而隐藏。";
-    let attempts: Vec<String> = events
+    let attempts = events
         .iter()
         .filter_map(|event| event["payload"]["attempt_id"].as_str().map(str::to_owned))
-        .chain(loaded_attempts.iter().cloned())
         .collect::<HashSet<_>>()
         .into_iter()
-        .collect();
-    if attempts.is_empty() {
-        return Ok(HashMap::new());
-    }
-    let mut tx = AppTx::begin(pool).await?;
-    conversations::lock_conversation_in_tx(&mut tx, context, cid).await?;
-    let mut outputs = runtime::read_output_bindings_in_tx(&mut tx, cid, &attempts).await?;
-    read_output_authorities_in_tx(&mut tx, context, &mut outputs).await?;
-    tx.commit().await?;
-    let authorities: Vec<Value> = outputs
-        .iter()
-        .flat_map(|output| {
-            output
-                .units
-                .iter()
-                .flat_map(|unit| unit.authorities.iter())
-                .chain(std::iter::once(&output.delta_authority))
-                .cloned()
-        })
-        .collect();
-    let mut checked = super::context_authority::CheckedTextResults::default();
-    checked.include_history(pool, context, &authorities).await?;
-
-    // 平台返回后重核当前状态和来源；已提交绑定不可变，不再重建正文。
-    let mut tx = AppTx::begin(pool).await?;
-    conversations::lock_conversation_in_tx(&mut tx, context, cid).await?;
-    let active_attempts = outputs
-        .iter()
-        .filter(|output| output.state != "committed")
-        .map(|output| output.attempt_id.clone())
         .collect::<Vec<_>>();
-    let mut active = runtime::read_output_bindings_in_tx(&mut tx, cid, &active_attempts).await?;
-    for output in &mut outputs {
-        if output.state != "committed" {
-            let index = active
-                .iter()
-                .position(|current| current.attempt_id == output.attempt_id)
-                .ok_or(Error::new("not_available"))?;
-            *output = active.swap_remove(index);
-        }
-    }
-    read_output_authorities_in_tx(&mut tx, context, &mut outputs).await?;
-    let states = runtime::output_states_in_tx(&mut tx, cid, &attempts).await?;
-    let mut projections = HashMap::new();
-    for mut output in outputs {
-        output.state = states
-            .get(&output.attempt_id)
-            .ok_or(Error::new("not_available"))?
-            .clone();
-        let mut readable = Vec::new();
-        for unit in &output.units {
-            let mut allowed = true;
-            for authority in &unit.authorities {
-                allowed &=
-                    history_text_readable_in_tx(&mut tx, context, cid, authority, &checked).await?;
-            }
-            readable.push(allowed);
-        }
-        let delta_readable =
-            history_text_readable_in_tx(&mut tx, context, cid, &output.delta_authority, &checked)
-                .await?;
-        projections.insert(
-            output.attempt_id.clone(),
-            (output, readable, delta_readable),
-        );
-    }
-    tx.commit().await?;
+    let states = runtime::output_states_in_tx(tx, cid, &attempts).await?;
     for event in events {
-        let Some((output, readable, delta_readable)) = event["payload"]["attempt_id"]
+        if let Some(state) = event["payload"]["attempt_id"]
             .as_str()
-            .and_then(|attempt| projections.get(attempt))
-        else {
-            continue;
-        };
-        event["payload"]["projection_state"] = json!(output.state);
-        if event["type"] == "assistant_committed" {
-            event["payload"]["text"] = json!(
-                output
-                    .units
-                    .iter()
-                    .zip(readable)
-                    .map(|(unit, allowed)| if *allowed {
-                        unit.text.as_str()
-                    } else {
-                        RESTRICTED_TEXT
-                    })
-                    .collect::<Vec<_>>()
-                    .join("\n\n---\n\n")
-            );
-        } else if event["type"] == "assistant_delta" {
-            let chunk = event["payload"]["chunk_seq"]
-                .as_str()
-                .and_then(|seq| seq.parse::<u64>().ok());
-            let bound = output.units.iter().position(|unit| {
-                unit.chunk_range.as_ref().is_some_and(|range| {
-                    range.attempt_id == output.attempt_id
-                        && chunk.is_some_and(|chunk| range.first <= chunk && chunk <= range.last)
-                })
-            });
-            let allowed = bound
-                .map(|index| readable[index])
-                .unwrap_or(*delta_readable && readable.iter().all(|allowed| *allowed));
-            if !allowed {
-                event["payload"]["text"] = json!(RESTRICTED_TEXT);
-            }
+            .and_then(|id| states.get(id))
+        {
+            event["payload"]["projection_state"] = json!(state);
         }
     }
     Ok(states)
@@ -255,18 +78,9 @@ pub async fn read_events(
 ) -> Result<Vec<Value>> {
     let mut tx = AppTx::begin(pool).await?;
     let mut events = conversations::read_events_in_tx(&mut tx, context, cid, after).await?;
+    output_states(&mut tx, cid, &mut events).await?;
     tx.commit().await?;
-    protect_output_events(pool, context, cid, &mut events, &[]).await?;
     Ok(events)
-}
-pub async fn project_live_events(
-    pool: &MySqlPool,
-    context: &AccessContext,
-    cid: &str,
-    events: &mut [Value],
-) -> Result<()> {
-    protect_output_events(pool, context, cid, events, &[]).await?;
-    Ok(())
 }
 
 pub async fn live_states(
@@ -275,32 +89,18 @@ pub async fn live_states(
     cid: &str,
     include_tasks: bool,
 ) -> Result<Value> {
-    let checked = if include_tasks {
-        Some(super::context_authority::check_task_text_results(pool, context, cid, None).await?)
-    } else {
-        None
-    };
     let mut tx = AppTx::begin(pool).await?;
     conversations::assert_readable_in_tx(&mut tx, context, cid).await?;
     let mut state = json!({"runs":run_states_in_tx(&mut tx, cid).await?});
-    if let Some(checked) = checked {
-        state["tasks"] = json!(task_states_in_tx(&mut tx, context, cid, &checked).await?);
+    if include_tasks {
+        state["tasks"] = json!(task_states_in_tx(&mut tx, cid).await?);
     }
     tx.commit().await?;
     Ok(state)
 }
 
-async fn task_states_in_tx(
-    tx: &mut AppTx<'_>,
-    context: &AccessContext,
-    cid: &str,
-    checked: &super::context_authority::CheckedTextResults,
-) -> Result<Vec<Value>> {
+async fn task_states_in_tx(tx: &mut AppTx<'_>, cid: &str) -> Result<Vec<Value>> {
     let mut tasks = analysis::read_tasks_in_tx(tx, cid).await?;
-    for task in &mut tasks {
-        super::context_authority::protect_task_context_in_tx(tx, context, cid, task, checked, None)
-            .await?;
-    }
     // §5：报告卡首次保存事件序号作为展示锚点；同一读取事务内组合，覆盖Snapshot与refresh同一路径。
     // 无保存事件的旧记录省略可选字段，不填0或null冒充锚点。
     let report_ids: Vec<String> = tasks
@@ -363,8 +163,6 @@ pub async fn read_page(
     after: Option<u64>,
     loaded: Option<&[LoadedOutputRange]>,
 ) -> Result<Value> {
-    let checked =
-        super::context_authority::check_task_text_results(pool, context, cid, None).await?;
     let mut tx = AppTx::begin(pool).await?;
     let conversation = conversations::lock_conversation_in_tx(&mut tx, context, cid).await?;
     let mut events = conversations::event_page_in_tx(&mut tx, &conversation, before, after).await?;
@@ -388,15 +186,10 @@ pub async fn read_page(
         events.extend(cached);
     }
     let last = conversations::last_event_seq_in_tx(&mut tx, &conversation).await?;
-    let tasks = task_states_in_tx(&mut tx, context, cid, &checked).await?;
+    let tasks = task_states_in_tx(&mut tx, cid).await?;
     let runs = run_states_in_tx(&mut tx, cid).await?;
+    let states = output_states(&mut tx, cid, &mut events).await?;
     tx.commit().await?;
-    let loaded_attempts = loaded_counts
-        .iter()
-        .map(|(range, _)| range.attempt_id.clone())
-        .collect::<Vec<_>>();
-    // 新页和全部已加载范围共用本次授权结果，不分别核权后混拼。
-    let states = protect_output_events(pool, context, cid, &mut events, &loaded_attempts).await?;
     let mut cached_events = events.split_off(page_len).into_iter();
     let mut output_projections = Vec::new();
     for (range, count) in loaded_counts {

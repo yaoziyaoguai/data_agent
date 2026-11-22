@@ -71,7 +71,7 @@ const provider = createServer(async (req, res) => {
       else assert.ok(restoredDocument.entries[0].effective_value.includes(tail));
       // 仅在本次隔离库移走正文，保持当前头/权限；复核到达后原样恢复供结果依赖登记。
       h.sql(`UPDATE knowledge_objects SET body=JSON_SET(body,'$.entries[0].effective_value','') WHERE id='${documentId}'`);
-      h.sql(`DELETE FROM knowledge_versions WHERE object_id='${documentId}'`);
+      h.sql(`UPDATE knowledge_revisions SET archived_body=NULL WHERE object_id='${documentId}'`);
     } else {
       assert.equal(pair.length, 2, '冻结尾部仍只用原分析与复核两次调用');
       const parts = [{...source.body_range, body: source.body}, ...(source.supporting_excerpts ?? [])];

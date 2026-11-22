@@ -11,7 +11,6 @@ import { KnowledgeReference } from "../../shared/KnowledgeReference.tsx";
 import { useUnsavedChanges } from "../../shared/UnsavedChanges.tsx";
 import { Tabs } from "../../shared/Tabs.tsx";
 import { SkillExamples } from "./SkillExamples.tsx";
-import { SkillDrafts, type PendingSkillDraft } from "./SkillDrafts.tsx";
 export function AssetsPage({
   user,
   initialTab = "memory",
@@ -24,11 +23,9 @@ export function AssetsPage({
 }) {
   const [assets, setAssets] = useState<Asset[]>([]);
   const [loadedUser, setLoadedUser] = useState(user);
-  const [editingDraft, setEditingDraft] = useState<PendingSkillDraft | null>(null);
-  const [draftRefresh, setDraftRefresh] = useState(0);
-  const [pendingDrafts, setPendingDrafts] = useState(0);
   const [tab, setTab] = useState<"memory" | "skill" | "shared">(initialTab);
   const [editing, setEditing] = useState<Asset | null | undefined>();
+  const editingDraft = editing?.state === "draft" ? editing : null;
   const [editingKind, setEditingKind] = useState<AssetKind>("memory");
   const [dependencies, setDependencies] = useState<EvidenceRef[]>([]);
   const [files, setFiles] = useState<SkillFile[]>([]);
@@ -50,7 +47,7 @@ export function AssetsPage({
   useEffect(() => {
     if (initialTab !== tab) {
       editorSession.current++; publicationSession.current++;
-      setEditing(undefined); setEditingDraft(null); setPublishing(null); setSuggesting(null); setSaving(false);
+      setEditing(undefined); setPublishing(null); setSuggesting(null); setSaving(false);
       setSearch(""); setStatusFilter(""); setTab(initialTab);
     }
   }, [initialTab]);
@@ -77,7 +74,7 @@ export function AssetsPage({
   };
   useEffect(() => {
     pageSession.current++;
-    setLoadedUser(user); setAssets([]); setEditing(undefined); setEditingDraft(null);
+    setLoadedUser(user); setAssets([]); setEditing(undefined);
     setPublishing(null); setSuggesting(null); setSaving(false);
     setName(""); setBody(""); setScope(""); setFiles([]); setDependencies([]);
     setError(""); setNotice(""); setBackgroundOutcome(""); setListError("");
@@ -92,7 +89,7 @@ export function AssetsPage({
   const edit = (asset: Asset | null) => {
     // 隐藏投影仅用于管理；占位名称和空附件不能被当作原内容再次保存。
     const content = asset?.text_unavailable ? null : asset;
-    setEditingDraft(null);
+
     initialEdit.current = JSON.stringify([content?.name ?? "", content?.body ?? "", content?.scope ?? "", content?.verified ?? false, content?.files ?? [], content?.dependencies ?? []]);
     editorSession.current++;
     setSaving(false);
@@ -109,18 +106,28 @@ export function AssetsPage({
     setScope(content?.scope ?? "");
     setVerified(content?.verified ?? false);
   };
-  const editDraft = (draft: PendingSkillDraft) => {
-    edit(null);
-    setEditingKind("skill"); setEditingDraft(draft);
-    setName(draft.name); setBody(draft.body); setScope(draft.scope);
-    setFiles(draft.files); setDependencies(draft.dependencies); setVerified(false);
-    initialEdit.current = JSON.stringify([draft.name, draft.body, draft.scope, false, draft.files, draft.dependencies]);
-  };
   const closeEditor = () => {
     editorSession.current++;
     setEditing(undefined);
-    setEditingDraft(null);
+
     setSaving(false);
+  };
+  const editAsset = async (asset: Asset) => {
+    if (asset.state !== "draft") {
+      edit(asset);
+      return;
+    }
+    const page = pageSession.current;
+    const selection = ++editorSession.current;
+    try {
+      const draft = await api("Asset", "/assets/" + asset.id);
+      if (page === pageSession.current && selection === editorSession.current) edit(draft);
+    } catch (error) {
+      if (page === pageSession.current && selection === editorSession.current) {
+        setError(error instanceof Error ? error.message : String(error));
+        void refresh();
+      }
+    }
   };
   const save = async () => {
     if (saving) return;
@@ -129,8 +136,8 @@ export function AssetsPage({
     setSaving(true); setError("");
     try {
       const input = {
-        id: editing?.id ?? null,
-        expected_version: editing?.version ?? null,
+        id: editingDraft ? null : editing?.id ?? null,
+        expected_version: editingDraft ? null : editing?.version ?? null,
         kind: editingKind,
         files,
         name,
@@ -139,7 +146,7 @@ export function AssetsPage({
         verified,
         source_text: editing?.text_unavailable ? "用户在个人积累页重新编写并保存" : editing?.source_text ?? "用户在个人积累页明确保存",
         dependencies,
-        ...(editingDraft ? {draft_id: editingDraft.reference.draft_id} : {}),
+        ...(editingDraft ? {draft_id: editingDraft.id} : {}),
       };
       const key = JSON.stringify(input);
       if (saveOperation.current.key !== key) saveOperation.current = {key, id: crypto.randomUUID()};
@@ -149,7 +156,6 @@ export function AssetsPage({
       if (session === editorSession.current) {
         confirmClose.markSaved();
         setEditing(undefined);
-        setEditingDraft(null); setDraftRefresh(value => value + 1);
         changeTab(saved.kind === "memory" ? "memory" : saved.visibility === "space" ? "shared" : "skill");
         setNotice(saved.visibility === "space" ? "公共方法已更新；使用中的会话需要重新选用。" : "已保存到你的个人积累，其他用户无法读取。");
       }
@@ -158,8 +164,8 @@ export function AssetsPage({
       if (page !== pageSession.current) return;
       if (session === editorSession.current && editingDraft && e instanceof Error && ["not_available", "invalid_evidence", "version_conflict", "stale_knowledge", "stale_context", "result_unavailable", "result_expired"].includes(e.message)) {
         closeEditor(); setName(""); setBody(""); setScope(""); setFiles([]); setDependencies([]);
-        setDraftRefresh(value => value + 1);
         setError("这份草稿的条件或来源已变化，未保存为个人 Skill。请在原对话重新准备。");
+        void refresh();
         return;
       }
       if (session === editorSession.current) setError(e instanceof Error && e.message === "skill_line_too_long" ? "方法或附件中有单行内容过长，请分行后保存（每行不超过 50 KiB）。" : e instanceof Error ? e.message : "保存失败");
@@ -212,11 +218,10 @@ export function AssetsPage({
         {value:"skill",label:<>我的 Skill <small>{assets.filter(a => a.kind === "skill" && a.visibility !== "space").length}</small></>},
         {value:"shared",label:<>空间公共 Skill <small>{assets.filter(a => a.visibility === "space").length}</small></>},
       ]}/>
-      <div className="asset-filters"><label className="search-box"><input aria-label="搜索资产" placeholder="搜索名称、内容或适用范围" value={search} onChange={event => setSearch(event.target.value)}/></label><select aria-label="资产状态" value={statusFilter} onChange={event => setStatusFilter(event.target.value)}><option value="">全部状态</option><option value="enabled">已启用</option><option value="disabled">已停用</option></select></div>
-      {tab === "skill" && <p className="quiet">Skill 是可重复使用的分析方法，选用后为当前对话提供步骤和注意事项。对话中保留的方法会以待核对保存状态出现在列表顶部。</p>}
+      <div className="asset-filters"><label className="search-box"><input aria-label="搜索资产" placeholder="搜索名称、内容或适用范围" value={search} onChange={event => setSearch(event.target.value)}/></label><select aria-label="资产状态" value={statusFilter} onChange={event => setStatusFilter(event.target.value)}><option value="">全部状态</option><option value="enabled">已启用</option><option value="disabled">已停用</option>{tab === "skill" && <option value="draft">待核对保存</option>}</select></div>
+      {tab === "skill" && <p className="quiet">Skill 是可重复使用的分析方法，选用后为当前对话提供步骤和注意事项。对话中保留的方法会以待核对保存状态出现在列表中。</p>}
       {tab === "shared" && <p className="quiet skill-sharing-note">本空间成员共享的分析方法。负责人维护正文，其他成员可以提出建议；使用时仍需明确选用。</p>}
       <div className="asset-grid">
-        {tab === "skill" && <SkillDrafts key={user} user={user} refreshKey={draftRefresh} onEdit={editDraft} onCount={setPendingDrafts}/>}
         {assets
           .filter(matches).filter(asset => (!statusFilter || asset.state === statusFilter) && [asset.name, asset.body, asset.scope].some(value => value.toLowerCase().includes(search.trim().toLowerCase())))
           .map((asset) => (
@@ -228,10 +233,10 @@ export function AssetsPage({
             >
               <div className="asset-main"><h2 title={asset.name}>{asset.name}</h2><p className="asset-body asset-excerpt">{asset.body.replace(/^#+\s*/gm, "")}</p></div>
               <div className="asset-scope"><p title={asset.scope}>{asset.scope}</p></div>
-              <div className="asset-state"><span className="status-pill">{asset.state === "enabled" ? "已启用" : "已停用"}</span><small>{asset.text_unavailable ? "暂不可用" : asset.verified ? "已核对" : "待核对"}</small></div>
+              <div className="asset-state"><span className="status-pill">{asset.state === "draft" ? "待核对保存" : asset.state === "enabled" ? "已启用" : "已停用"}</span><small>{asset.text_unavailable ? "暂不可用" : asset.verified ? "已核对" : "待核对"}</small></div>
               {asset.text_unavailable && <p role="status" className="quiet">来源已失效或无法核验，当前内容不能采用。你仍可停用、删除或重新编写。</p>}
-              <div className="actions asset-primary-actions">{asset.can_edit && <button onClick={() => edit(asset)}>{asset.text_unavailable ? "重写内容" : "编辑"}</button>}{asset.kind === "skill" && asset.state === "enabled" && !asset.text_unavailable && <button className="primary" onClick={() => void onUseSkill(asset).catch(e => setError(e.message))}>在当前对话选用</button>}</div>
-              <details className="asset-full-content"><summary>{asset.text_unavailable ? "管理这条记录" : "查看完整" + (asset.kind === "memory" ? "记忆" : "方法")}</summary>{!asset.text_unavailable && <><MarkdownContent text={asset.body}/><p><strong>适用范围：</strong>{asset.scope}</p></>}
+              <div className="actions asset-primary-actions">{asset.can_edit && <button onClick={() => void editAsset(asset)}>{asset.state === "draft" ? "核对并保存" : asset.text_unavailable ? "重写内容" : "编辑"}</button>}{asset.kind === "skill" && asset.state === "enabled" && !asset.text_unavailable && <button className="primary" onClick={() => void onUseSkill(asset).catch(e => setError(e.message))}>在当前对话选用</button>}</div>
+              <details className="asset-full-content" hidden={asset.state === "draft"}><summary>{asset.text_unavailable ? "管理这条记录" : "查看完整" + (asset.kind === "memory" ? "记忆" : "方法")}</summary>{!asset.text_unavailable && <><MarkdownContent text={asset.body}/><p><strong>适用范围：</strong>{asset.scope}</p></>}
               {asset.kind === "skill" && <p className="quiet skill-owner">{asset.visibility === "space" ? "空间公共" : "个人"} · 负责人 {asset.owner_id ?? user}</p>}
               {asset.memory_index_state && asset.memory_index_state !== "indexed" && (
                 <p className="asset-index-state" role="status">
@@ -246,7 +251,7 @@ export function AssetsPage({
               </details>
               {(asset.files ?? []).map(file => <details key={file.path}><summary>{file.path.replace(/^(references|assets)\//, "")}</summary><pre className="skill-preview">{file.content}</pre></details>)}
               <div className="actions">
-                {asset.can_edit && <>
+                {asset.can_edit && asset.state !== "draft" && <>
                 <button
                   onClick={() =>
                     void state(
@@ -268,7 +273,7 @@ export function AssetsPage({
           ))}
       </div>
       {assets.some(matches) && !assets.filter(matches).some(asset => (!statusFilter || asset.state === statusFilter) && [asset.name, asset.body, asset.scope].some(value => value.toLowerCase().includes(search.trim().toLowerCase())) ) && <div className="asset-empty"><p>没有符合当前条件的内容。</p><button onClick={() => { setSearch(""); setStatusFilter(""); }}>清除筛选</button></div>}
-      {!assets.some(matches) && pendingDrafts === 0 && (
+      {!assets.some(matches) && (
         <div className="asset-empty">
           <span>◇</span>
           <h2>

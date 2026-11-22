@@ -35,7 +35,7 @@ for(const mode of modes.filter(mode=>!selected||mode===selected)){
   const wait=state=>until(async()=>{const value=(await h.request('/knowledge/field-paid_at')).value;return value.prefill_status?.state===state?value:false;},mode+': '+state);
   try{
     const old=(await h.request('/knowledge/field-paid_at')).value;
-    const archives=h.sql(`SELECT JSON_OBJECT('version',version,'body',body) FROM knowledge_versions WHERE object_id='${old.id}' ORDER BY version`);
+    const archives=h.sql(`SELECT JSON_OBJECT('version',version,'body',body) FROM (SELECT object_id,version,archived_body AS body FROM knowledge_revisions WHERE archived_body IS NOT NULL) archive_rows WHERE object_id='${old.id}' ORDER BY version`);
     const revisions=h.sql(`SELECT JSON_OBJECT('n',COUNT(*)) FROM knowledge_revisions WHERE object_id='${old.id}'`)[0].n;
     const response=await h.request('/knowledge/field-paid_at/reanalyze',{operation_id:randomUUID(),expected_version:old.version});assert.equal(response.status,200);
     const expected=response.value.version;assert.equal(expected,String(Number(old.version)+1));
@@ -72,10 +72,10 @@ for(const mode of modes.filter(mode=>!selected||mode===selected)){
     if(success){assert.equal(value.entries.find(e=>e.entry_id==='meaning').effective_value,'完整两阶段合成说明');assert.equal(value.version,String(Number(expected)+1));assert.equal(calls,2);}
     else if(mode==='late_version_conflict'){
       assert.equal(value.version,String(Number(expected)+1));assert.equal(value.entries.find(e=>e.entry_id==='meaning').effective_value,'复核应用前人工改版');assert.equal(value.prefill_status.error_code,'stale_knowledge');
-      assert.equal(h.sql(`SELECT JSON_OBJECT('n',COUNT(*)) FROM knowledge_operations WHERE owner_id='synthetic-prefill' AND operation_id='prefill-${value.prefill_status.attempt_id}'`)[0].n,0,'superseded事务不能提交空操作占位');
+      assert.equal(h.sql(`SELECT JSON_OBJECT('n',COUNT(*)) FROM idempotency_receipts WHERE domain='knowledge' AND actor_id='synthetic-prefill' AND operation_id='prefill-${value.prefill_status.attempt_id}'`)[0].n,0,'superseded事务不能提交空操作占位');
       assert.equal(calls,2);
     }else{assert.equal(value.version,expected);assert.notEqual(value.entries.find(e=>e.entry_id==='meaning').effective_value,'完整两阶段合成说明');assert.equal(value.prefill_status.error_code,'model_unknown');}
-    assert.deepEqual(h.sql(`SELECT JSON_OBJECT('version',version,'body',body) FROM knowledge_versions WHERE object_id='${value.id}' ORDER BY version`),archives,'latest_only保留旧档基线且不新增全文');
+    assert.deepEqual(h.sql(`SELECT JSON_OBJECT('version',version,'body',body) FROM (SELECT object_id,version,archived_body AS body FROM knowledge_revisions WHERE archived_body IS NOT NULL) archive_rows WHERE object_id='${value.id}' ORDER BY version`),archives,'latest_only保留旧档基线且不新增全文');
     const committed=success||mode==='late_version_conflict'?2:1;
     const metadata=h.sql(`SELECT JSON_OBJECT('version',version,'by',updated_by,'paths',changed_paths,'fingerprint',fingerprint) FROM knowledge_revisions WHERE object_id='${value.id}' AND version>${Number(old.version)} ORDER BY version`);
     assert.deepEqual(metadata.map(row=>row.version),Array.from({length:committed},(_,index)=>Number(old.version)+index+1),'只为实际提交的current修订保存元信息');

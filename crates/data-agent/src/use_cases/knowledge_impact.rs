@@ -14,35 +14,6 @@ pub async fn read(
     input: Value,
 ) -> Result<Value> {
     contracts::validate("MaintenanceImpactQuery", &input)?;
-    // 依赖目录只展示资产名称，也必须按名称的持久出处检查；网络结果权限在事务外核验。
-    let checked = if input["kind"] == "skill" {
-        let mut tx = AppTx::begin(pool).await?;
-        let target = knowledge::read_in_tx(&mut tx, ctx, object, None, true).await?;
-        let (rows, _) = assets::find_skill_dependents_in_tx(
-            &mut tx,
-            ctx,
-            &target,
-            input["after_id"].as_str(),
-            access::is_super_maintainer(ctx)?,
-        )
-        .await?;
-        let mut candidates = Vec::new();
-        for row in rows {
-            candidates.push(
-                assets::read_in_tx(
-                    &mut tx,
-                    ctx,
-                    row["id"].as_str().ok_or(Error::new("invalid_input"))?,
-                    false,
-                )
-                .await?,
-            );
-        }
-        tx.commit().await?;
-        super::personal_assets::checked_assets(pool, ctx, &candidates).await?
-    } else {
-        super::context_authority::CheckedTextResults::default()
-    };
     let mut tx = AppTx::begin(pool).await?;
     let target = knowledge::read_in_tx(&mut tx, ctx, object, None, true).await?;
     if target["version"] != input["expected_version"] {
@@ -69,20 +40,31 @@ pub async fn read(
                     .clone();
         }
     }
-    if input["kind"] == "skill" {
-        for item in &mut items {
-            let asset = assets::read_in_tx(
-                &mut tx,
-                ctx,
-                item["id"].as_str().ok_or(Error::new("invalid_input"))?,
-                false,
-            )
-            .await?;
-            item["name"] =
-                super::personal_assets::name_in_tx(&mut tx, ctx, &asset, &checked).await?;
-        }
-    }
     tx.commit().await?;
+    if input["kind"] == "skill" {
+        let mut tx = AppTx::begin(pool).await?;
+        let ids = items
+            .iter()
+            .map(|item| item["id"].as_str().expect("saved Skill ID").to_owned())
+            .collect::<Vec<_>>();
+        let mut candidates =
+            assets::read_assets_with_sources_in_tx(&mut tx, ctx, &ids, false).await?;
+        tx.commit().await?;
+        let checked =
+            super::personal_assets::checked_skills(pool, ctx, candidates.values()).await?;
+        let mut tx = AppTx::begin(pool).await?;
+        for item in &mut items {
+            if let Some(mut skill) = candidates.remove(item["id"].as_str().expect("saved Skill ID"))
+            {
+                super::personal_assets::project_skill_in_tx(&mut tx, ctx, &mut skill, &checked)
+                    .await?;
+                item["name"] = skill["name"].clone();
+            } else {
+                item["name"] = json!("来源不可用，正文已隐藏");
+            }
+        }
+        tx.commit().await?;
+    }
     Ok(
         json!({"target":{"object_id":target["id"],"version":target["version"],"state":target["state"]},
         "kind":input["kind"],"scope":"direct_explicit_references","items":items,"next_after_id":next}),

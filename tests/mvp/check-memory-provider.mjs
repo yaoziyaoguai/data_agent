@@ -207,8 +207,10 @@ try{
  const source=await h.request('/knowledge',{operation_id:randomUUID(),kind:'document',name:'合成个人提醒依据',body:'仅依此文档检查单位。',related_ids:[]});assert.equal(source.status,200,JSON.stringify(source.value));
  h.env.DATA_AGENT_MEMORY_URL='';await h.restartApi();
  run=await h.capture(await h.create(),'请记住：以后金额使用元。');
- assert.equal((await invoke('read_knowledge',{object_id:source.value.id})).result.status,200);
- const generated=await invoke('manage_personal_asset',{action:'save_memory',...details,body:'仅按合成文档检查金额单位。',instruction_quote:run.text});assert.equal(generated.result.status,200,JSON.stringify(generated.result.value));
+ const sourceRef={object_id:source.value.id,version:source.value.version,path:'body'};
+ const sourceRead=await invoke('read_knowledge',{items:[{kind:'knowledge',ref:sourceRef}]});
+ assert.equal(sourceRead.result.status,200);assert.equal(sourceRead.result.value.data.items[0].state,'ok');
+ const generated=await invoke('manage_personal_asset',{action:'save_memory',...details,body:'仅按合成文档检查金额单位。',instruction_quote:run.text,dependencies:[sourceRef]});assert.equal(generated.result.status,200,JSON.stringify(generated.result.value));
  await stopCapturedInput();h.env.DATA_AGENT_MEMORY_URL='http://127.0.0.1:'+server.address().port;await h.restartApi();
  // 先建立独立字段来源夹具，避免它把下一条待修订记忆的旧版本也作为依据。
  const dependent=await h.request('/assets',{operation_id:randomUUID(),id:null,expected_version:null,kind:'memory',...details,body:'仅按合成文档检查金额单位。',source_text:'用户维护的合成提醒',dependencies:[{object_id:source.value.id,version:source.value.version,path:'body'}]});assert.equal(dependent.status,200,JSON.stringify(dependent.value));
@@ -216,17 +218,21 @@ try{
  const retained=await invoke('manage_personal_asset',{action:'update_memory',asset_id:dependent.value.id,expected_version:dependent.value.version,...details,instruction_quote:run.text});assert.equal(retained.result.status,200,JSON.stringify(retained.result.value));
  assert.deepEqual(retained.result.value.data.dependencies,dependent.value.dependencies,'提取用了旧正文，保存后保留旧显式依赖');
  const generatedRevision=await invoke('manage_personal_asset',{action:'update_memory',asset_id:generated.result.value.data.id,expected_version:'1',...details,instruction_quote:run.text});assert.equal(generatedRevision.result.status,200,JSON.stringify(generatedRevision.result.value));
- assert.notEqual((await h.request('/assets')).value.assets.find(v=>v.id===generated.result.value.data.id).text_unavailable,true,'来源有效时修订后的正文仍可用');
+ assert.deepEqual(generatedRevision.result.value.data.dependencies,[sourceRef]);
  await stopCapturedInput();
  assert.equal((await h.request('/knowledge/'+source.value.id+'/disable',{operation_id:randomUUID(),expected_version:source.value.version})).status,200);
- const hidden=(await h.request('/assets')).value.assets.find(v=>v.id===generated.result.value.data.id);assert.equal(hidden.text_unavailable,true,'旧字段authority随Mem0修订保留，撤下来源后新版正文隐藏');
  run=await h.capture(await h.create(),'修改我的合成检查提醒：改用秒展示。');
+ const generatedAsset=generatedRevision.result.value.data;
+ const blockedMemory={kind:'memory',asset_ref:{id:generatedAsset.id,version:generatedAsset.version},part:'body'};
+ const blockedRead=await invoke('read_knowledge',{items:[blockedMemory]});
+ assert.equal(blockedRead.result.status,200,JSON.stringify(blockedRead.result.value));
+ assert.deepEqual(blockedRead.result.value.data.items,[{...blockedMemory,state:'not_available'}]);
  const beforeUnavailable=requests.filter(v=>v.path==='/extract').length;
  const unavailable=await invoke('manage_personal_asset',{action:'update_memory',asset_id:dependent.value.id,expected_version:retained.result.value.data.version,...details,instruction_quote:run.text});
  assert.equal(requests.filter(v=>v.path==='/extract').length,beforeUnavailable,'旧依赖撤下时禁止向侧车发送旧正文，即使新参数省略该依赖');
  assert.equal(unavailable.result.status,404,JSON.stringify(unavailable.result.value));
  assert.equal((await h.request('/assets')).value.assets.find(v=>v.id===dependent.value.id).version,retained.result.value.data.version);
- checks.push('修订提取校验旧依赖；新版继承显式依赖及字段authority，后续撤下隐藏正文并阻止再次提取，旧正文零外发、资产不再升版');
+ checks.push('修订提取校验旧依赖；新版继承显式依赖，后续撤下禁止Agent读取及再次提取，旧正文零外发、资产不再升版');
  const bindExtraction=async()=>{
   const input={run_id:run.run_id,lease_epoch:run.lease_epoch,sdk_tool_call_id:randomUUID(),tool_name:'manage_personal_asset',arguments:{action:'save_memory',...details,instruction_quote:run.text},checkpoint:exportCheckpoint(manager)};
   const registered=await h.internal('/internal/data/tool-calls',input);assert.equal(registered.status,200,JSON.stringify(registered.value));

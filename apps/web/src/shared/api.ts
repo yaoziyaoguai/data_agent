@@ -1,3 +1,4 @@
+/// <reference types="vite/client" />
 import { decodeContract } from "../../../../packages/contracts/validate.ts";
 import type { ContractTypes } from "../../../../packages/contracts/generated/names.ts";
 export class ApiError extends Error {
@@ -35,5 +36,5 @@ export async function api<N extends keyof ContractTypes>(
   const value: unknown = await response.json();
   if (!response.ok)
     throw new ApiError(decodeContract<ContractTypes["AppError"]>("AppError", value));
-  return decodeContract<ContractTypes[N]>(schema, value);
+  return import.meta.env?.PROD ? value as ContractTypes[N] : decodeContract<ContractTypes[N]>(schema, value);
 }

@@ -28,14 +28,14 @@ try{
  assert.equal(saved.status,200,'合法重新预填不应被索引Worker死锁回滚');
  assert.equal(observed.workerSkippedLockedObject,true,'被锁对象不应阻塞其他对象索引');assert.equal(observed.objectWaiters,1);
  assert.equal(BigInt(saved.value.version),BigInt(original.version)+1n);
- const records=h.sql(`SELECT JSON_OBJECT('versions',(SELECT COUNT(*) FROM knowledge_versions WHERE object_id='${objectId}'),'jobs',(SELECT COUNT(*) FROM knowledge_index_jobs WHERE object_id='${objectId}' AND version=${saved.value.version}))`)[0];
+ const records=h.sql(`SELECT JSON_OBJECT('versions',(SELECT COUNT(*) FROM (SELECT object_id,version,archived_body AS body FROM knowledge_revisions WHERE archived_body IS NOT NULL) archive_rows WHERE object_id='${objectId}'),'jobs',(SELECT COUNT(*) FROM knowledge_index_jobs WHERE object_id='${objectId}' AND version=${saved.value.version}))`)[0];
  assert.deepEqual(records,{versions:2,jobs:1});
  await until(()=>h.sql(`SELECT JSON_OBJECT('state',state) FROM knowledge_index_jobs WHERE object_id='${objectId}' AND version=${saved.value.version}`)[0].state==='indexed','最新知识版本索引');
  assert.equal(h.sql(`SELECT JSON_OBJECT('state',vector_state) FROM knowledge_index_jobs WHERE object_id='${objectId}' AND version=${original.version}`)[0].state,'superseded');
  await h.pauseWorker();
  // 构造超过单轮清理上限的合法版本积压，核对后续轮次仍能清理尾部。
  h.sql(`UPDATE knowledge_objects SET version=72,body=JSON_SET(body,'$.version','72') WHERE id='${objectId}'`);
- h.sql(`INSERT INTO knowledge_versions(object_id,version,body) WITH RECURSIVE versions(n) AS (SELECT 3 UNION ALL SELECT n+1 FROM versions WHERE n<72) SELECT '${objectId}',n,JSON_SET(k.body,'$.version',CAST(n AS CHAR)) FROM versions CROSS JOIN knowledge_objects k WHERE k.id='${objectId}'`);
+ h.sql(`INSERT INTO knowledge_revisions(object_id,version,archived_body) WITH RECURSIVE versions(n) AS (SELECT 3 UNION ALL SELECT n+1 FROM versions WHERE n<72) SELECT '${objectId}',n,JSON_SET(k.body,'$.version',CAST(n AS CHAR)) FROM versions CROSS JOIN knowledge_objects k WHERE k.id='${objectId}'`);
  h.sql(`INSERT INTO knowledge_index_jobs(object_id,version) WITH RECURSIVE versions(n) AS (SELECT 3 UNION ALL SELECT n+1 FROM versions WHERE n<72) SELECT '${objectId}',n FROM versions`);
  await h.resumeWorker();
  await until(()=>h.sql(`SELECT JSON_OBJECT('n',COUNT(*)) FROM knowledge_index_jobs WHERE object_id='${objectId}' AND version<72 AND vector_state='superseded'`)[0].n===71,'多轮清理超过64条旧索引作业');

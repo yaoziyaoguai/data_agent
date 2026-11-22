@@ -72,11 +72,6 @@ pub async fn invoke_tool(
     if run.state != "running" {
         return Err(Error::new("lease_lost"));
     }
-    let message =
-        conversations::read_message_in_tx(&mut tx, &conversation, &run.message_id).await?;
-    // 旧工具也只对宿主绑定的完整用户原话确认独立来源，不能放行模型改写的目标。
-    let goal_authority = (message.user_supplied && input.arguments.goal == message.body)
-        .then(super::context_authority::empty);
     let tasks = analysis::lock_tasks_in_tx(&mut tx, &cid).await?;
     let receipt = analysis::create_task_in_tx(
         &mut tx,
@@ -84,7 +79,6 @@ pub async fn invoke_tool(
         &context.user_id,
         &tool.operation_id,
         &input.arguments.goal,
-        goal_authority.as_ref(),
     )
     .await?;
     runtime::record_tool_receipt_in_tx(&mut tx, &tool, &receipt).await?;

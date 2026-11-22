@@ -74,23 +74,21 @@ export async function deliver(
   // §4.2：已恢复Pi分支中旧结构化search回执的长游标只在模型投影中短化为rc1引用。
   // 只按details.operation_id准确关联成功回执，只追加Pi原生context edit：原entry、持久回执与
   // 原调用参数不变；原生压缩沿buildSessionProjection输入同一短引用。不扫正文、不改用户文字、
-  // 不重放原搜索；新回执（next已是rc1）与v1运行（解析仅限合同2回执）天然跳过。
-  if (run.tool_contract_version === 2) {
-    const editedTargets = new Set(branch.flatMap(entry => entry.type === 'context_edit' ? [entry.targetId] : []));
-    for (const entry of branch) {
-      if (entry.type !== 'message' || entry.message.role !== 'toolResult' || entry.message.isError
-        || entry.message.toolName !== 'search_knowledge' || editedTargets.has(entry.id)) continue;
-      const text = entry.message.content.find(part => part.type === 'text')?.text;
-      if (typeof text !== 'string') continue;
-      let data: {error?: unknown; memory_retrieval?: unknown; search_coverage?: {next?: unknown}};
-      try { data = JSON.parse(text); } catch { continue; }
-      const operationId = (entry.message.details as {operation_id?: unknown} | undefined)?.operation_id;
-      const next = data?.search_coverage?.next;
-      if (typeof operationId !== 'string' || data?.error !== undefined || data?.memory_retrieval === 'excluded_by_view'
-        || typeof next !== 'string' || !next || next.startsWith('rc1:')) continue;
-      manager.appendContextEdit(entry.id, {content: [{type: 'text', text: JSON.stringify(
-        {...data, search_coverage: {...data.search_coverage, next: 'rc1:' + operationId}})}]});
-    }
+  // 不重放原搜索；已经短化的游标和没有覆盖信息的旧回执直接跳过。
+  const editedTargets = new Set(branch.flatMap(entry => entry.type === 'context_edit' ? [entry.targetId] : []));
+  for (const entry of branch) {
+    if (entry.type !== 'message' || entry.message.role !== 'toolResult' || entry.message.isError
+      || entry.message.toolName !== 'search_knowledge' || editedTargets.has(entry.id)) continue;
+    const text = entry.message.content.find(part => part.type === 'text')?.text;
+    if (typeof text !== 'string') continue;
+    let data: {error?: unknown; memory_retrieval?: unknown; search_coverage?: {next?: unknown}};
+    try { data = JSON.parse(text); } catch { continue; }
+    const operationId = (entry.message.details as {operation_id?: unknown} | undefined)?.operation_id;
+    const next = data?.search_coverage?.next;
+    if (typeof operationId !== 'string' || data?.error !== undefined || data?.memory_retrieval === 'excluded_by_view'
+      || typeof next !== 'string' || !next || next.startsWith('rc1:')) continue;
+    manager.appendContextEdit(entry.id, {content: [{type: 'text', text: JSON.stringify(
+      {...data, search_coverage: {...data.search_coverage, next: 'rc1:' + operationId}})}]});
   }
   // 原输入恢复可从原生user条目或范围投影消息定位，不依赖压缩后的活动user仍可见。
   const roundStart = run.resume_same_input ? branch.findLastIndex(entry =>
@@ -143,12 +141,13 @@ export async function deliver(
       return selected?.grounded?.text ?? selected?.rendered?.display ?? selected?.natural ?? selected?.control?.text;
     },
   }) : null;
-  const projection = workspace ? taskProjection(transport, manager, workspace.replace) : null;
   let systemPrompt = "";
   let activeSession: AgentSession | undefined;
-  const responseCapacity: ReturnType<typeof toolResponseCapacity> | null = run.tool_contract_version === 2 ? toolResponseCapacity(run.model_profile, manager, () => ({
+  const projection = workspace ? taskProjection(transport, manager, workspace.replace,
+    () => activeSession?.refreshContext()) : null;
+  const responseCapacity = toolResponseCapacity(run.model_profile, manager, () => ({
     systemPrompt: activeSession?.systemPrompt ?? systemPrompt, tools: activeTools(), references: workspace?.contents() ?? [], usageTokens: activeSession?.getContextUsage()?.tokens,
-  })) : null;
+  }));
   const data = run.workspace_context
     ? dataTools(transport, manager, fault, (receipt, sdkId) => {
         workspace?.acceptReceipt(receipt);
@@ -368,8 +367,6 @@ export async function deliver(
   });
   activeSession = session;
   systemPrompt = session.systemPrompt;
-  // 来源未裁决时的可见工具由投影在每个模型请求边界统一收窄/恢复（§6.1）。
-  projection?.attachToolGate(names => session.setActiveToolsByName(names), data ? data.tools.map(tool => tool.name) : []);
   session.subscribe((event) => {
     if (event.type === 'compaction_end' && !event.result) {
       // Pi会捕获压缩追加失败；仅失败事件核落盘，健康导出仍不重读历史。
@@ -477,8 +474,7 @@ export async function deliver(
     session.refreshContext();
     // 仅从宿主确认leaf的当前有效投影接回答案；waiting快照本身不能证明Pi已完成调查。
     let recoveredControlReady = false;
-    if (run.resume_same_input && previousEntryIds && !pendingCalls.length
-      && run.workspace_context?.source_context_ready !== false) {
+    if (run.resume_same_input && previousEntryIds && !pendingCalls.length) {
       const current = manager.buildSessionProjection().entries.filter(entry => !previousEntryIds.has(entry.sourceEntry.id));
       const assistant = current.findLast(entry => entry.messages.some(message => message.role === "assistant"));
       const message = assistant?.messages.find(message => message.role === "assistant");
@@ -570,8 +566,7 @@ export async function deliver(
           settings.applyOverrides(requestCompaction);
       }
       // 完整提示/资料/历史先作保守预检；实际载荷仍由provider在预留/发送前检查。
-      // 未裁决时实际请求只发临时身份投影；原生compact却直读旧分支，等来源确定后再压缩。
-      if (!projection?.hidesSourceContext() && history.length > 2 && estimateRequestBytes(session.systemPrompt, history, activeTools(), workspace?.contents() ?? [], run.text) > payloadLimit - 4096) {
+      if (history.length > 2 && estimateRequestBytes(session.systemPrompt, history, activeTools(), workspace?.contents() ?? [], run.text) > payloadLimit - 4096) {
         try {
           onStage?.('native_compaction');
           await session.compact();
@@ -596,7 +591,7 @@ export async function deliver(
     await output.drain();
     if (checkpointFailure) throw checkpointFailure;
     projection?.check();
-    if (data && process.env.DATA_AGENT_TEST_COMPACT === "1" && !projection?.hidesSourceContext())
+    if (data && process.env.DATA_AGENT_TEST_COMPACT === "1")
       await session.compact();
     }
     const commitAnswer = async (): Promise<void> => {
@@ -620,7 +615,7 @@ export async function deliver(
       const finalizedParts = data?.answerParts() ?? [];
       const activeTask = run.workspace_context?.active_task_ref;
       const selectedDelivery = selectDelivery();
-      if (run.tool_contract_version === 2 && !needsResultAnswer()
+      if (!needsResultAnswer()
         && !selectedDelivery?.grounded && !selectedDelivery?.rendered && !selectedDelivery?.natural && !selectedDelivery?.control
         && (allTasksFrozen() || (activeTask && finalizedParts.some(part => part.task_ref.task_id === activeTask.task_id
           && part.task_ref.condition_version === activeTask.condition_version)))) {
@@ -634,9 +629,7 @@ export async function deliver(
       // 先处理真实模型失败/截断，再要求成功结果的来源正文；失败通知正常解释状态。
       if (data && needsResultAnswer()) {
         await session.sendCustomMessage({customType: "data_agent_answer_sources", display: false,
-          content: run.tool_contract_version === 2
-            ? "本轮是查询结果解释。请按原查询所属任务和条件核对get_query实际结果，先用prepare_analysis_answer绑定数值（数字、日期、行数通过values绑定，未返回的派生值不补算），再在下一条正文用{{name}}原样引用绑定值写出完整说明。其他任务已定稿的部分保留，需切任务时沿原route；不要重复执行查询。"
-            : "本轮是查询结果解释。请按原查询所属任务和条件核对get_query实际结果，完成必要操作后使用present_analysis_answer交付完整说明；数字、日期、行数通过values绑定，未返回的派生值不补算。其他任务已定稿的部分保留，需切任务时沿原route；不要重复执行查询。", details: {message_id: run.message_id}}, {triggerTurn: true});
+          content: "本轮是查询结果解释。请按原查询所属任务和条件核对get_query实际结果，先用prepare_analysis_answer绑定数值（数字、日期、行数通过values绑定，未返回的派生值不补算），再在下一条正文用{{name}}原样引用绑定值写出完整说明。其他任务已定稿的部分保留，需切任务时沿原route；不要重复执行查询。", details: {message_id: run.message_id}}, {triggerTurn: true});
         if (needsResultAnswer()) throw new Error("answer_sources_required");
         return commitAnswer();
       }
@@ -646,7 +639,7 @@ export async function deliver(
       if (!grounded && !rendered && !control && (final?.stopReason !== "stop" || final.content.some(part => part.type === "toolCall")))
         throw new Error("answer_message_incomplete");
       // v2正文已开始的{{标记必须全部对应已核bindings；未知/未闭合/超限沿Pi纠正语义交回一次。
-      if (!grounded && !rendered && run.tool_contract_version === 2 && natural
+      if (!grounded && !rendered && natural
         && (renderInvalid || natural.includes("{{")))
         throw new Error("answer_render_invalid");
       const finalText = grounded?.text ?? rendered?.display ?? natural ?? control?.text ?? "";
@@ -746,6 +739,12 @@ export async function deliver(
       });
     };
     try {
+      const reportHint = !notification && completedAssistant?.stopReason === "stop" && workspace?.reportRevisionHint();
+      if (reportHint && !signal.aborted && !allTasksFrozen()) {
+        // 原生续轮一次，继续使用本条用户消息、原任务和现有工具账本。
+        await session.sendCustomMessage({customType: "data_agent_report_revision", display: false,
+          content: reportHint, details: {message_id: run.message_id}}, {triggerTurn: true});
+      }
       await commitAnswer();
     } catch (error) {
       if (!data || !(error instanceof Error)

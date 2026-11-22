@@ -1,7 +1,7 @@
 use crate::{
     contracts,
-    persistence::AppTx,
-    types::{AccessContext, Error, Result, fingerprint, id},
+    persistence::{AppTx, receipts::Operation},
+    types::{AccessContext, Error, Result, id},
 };
 use serde_json::{Value, json};
 use sqlx::Row;
@@ -18,7 +18,6 @@ pub struct StoredDraft {
     pub state: String,
     pub body: Option<Value>,
     pub asset_id: Option<String>,
-    pub text_authority: Option<Value>,
 }
 
 impl StoredDraft {
@@ -45,23 +44,9 @@ impl StoredDraft {
     }
 }
 
-fn stored(row: &sqlx::mysql::MySqlRow) -> StoredDraft {
-    StoredDraft {
-        reference: row.get::<sqlx::types::Json<Value>, _>("reference").0,
-        state: row.get("state"),
-        body: row
-            .get::<Option<sqlx::types::Json<Value>>, _>("body")
-            .map(|body| body.0),
-        asset_id: row.get("asset_id"),
-        text_authority: row
-            .get::<Option<sqlx::types::Json<Value>>, _>("text_authority")
-            .map(|v| v.0),
-    }
-}
-
 pub async fn locate_in_tx(tx: &mut AppTx<'_>, ctx: &AccessContext, draft: &str) -> Result<Value> {
     sqlx::query_scalar::<_, sqlx::types::Json<Value>>(
-        "SELECT reference FROM skill_drafts WHERE id=? AND owner_id=? AND space_id=?",
+        "SELECT JSON_EXTRACT(draft_origin,'$.reference') FROM personal_assets WHERE id=? AND owner_id=? AND space_id=? AND draft_origin IS NOT NULL",
     )
     .bind(draft)
     .bind(&ctx.user_id)
@@ -77,10 +62,26 @@ pub async fn read_in_tx(
     ctx: &AccessContext,
     draft: &str,
 ) -> Result<StoredDraft> {
-    let row = sqlx::query("SELECT reference,state,body,asset_id,text_authority FROM skill_drafts WHERE id=? AND owner_id=? AND space_id=? FOR UPDATE")
+    let row = sqlx::query("SELECT body,draft_origin FROM personal_assets WHERE id=? AND owner_id=? AND space_id=? AND draft_origin IS NOT NULL FOR UPDATE")
         .bind(draft).bind(&ctx.user_id).bind(&ctx.space_id).fetch_optional(tx.connection()).await?
         .ok_or(Error::new("not_available"))?;
-    Ok(stored(&row))
+    let origin = row.get::<sqlx::types::Json<Value>, _>("draft_origin").0;
+    let state = origin["status"]
+        .as_str()
+        .expect("saved draft status")
+        .to_owned();
+    let body = (state == "pending").then(|| {
+        let mut body = row.get::<sqlx::types::Json<Value>, _>("body").0;
+        body["evidence_refs"] = origin["evidence_refs"].clone();
+        body["created_at"] = origin["created_at"].clone();
+        body
+    });
+    Ok(StoredDraft {
+        state,
+        body,
+        reference: origin["reference"].clone(),
+        asset_id: origin["asset_id"].as_str().map(str::to_owned),
+    })
 }
 
 pub async fn page_in_tx(
@@ -89,7 +90,7 @@ pub async fn page_in_tx(
     after: &str,
 ) -> Result<Vec<String>> {
     Ok(sqlx::query_scalar(
-        "SELECT id FROM skill_drafts WHERE owner_id=? AND space_id=? AND id>? ORDER BY id LIMIT 21",
+        "SELECT id FROM personal_assets WHERE owner_id=? AND space_id=? AND draft_origin IS NOT NULL AND id>? ORDER BY id LIMIT 21",
     )
     .bind(&ctx.user_id)
     .bind(&ctx.space_id)
@@ -105,48 +106,46 @@ pub async fn prepare_in_tx(
     input: &Value,
     dependencies: &Value,
     evidence_refs: &Value,
-    text_authority: &Value,
+    skill_sources: Option<&Value>,
 ) -> Result<Value> {
-    contracts::validate("PrepareSkillDraftInput", input)?;
     let reference = json!({"draft_id":id(),"conversation_id":origin.conversation_id,
         "task_id":input["task_id"],"condition_version":input["condition_version"],
         "source_message_id":origin.source_message_id});
     contracts::validate("SkillDraftRef", &reference)?;
-    let command = fingerprint(
+    let receipt = Operation::new(
+        ctx,
+        "skill_draft",
+        origin.operation_id,
         &json!({"input":input,"conversation_id":origin.conversation_id,
-        "source_message_id":origin.source_message_id,"origin_run_id":origin.origin_run_id}),
+            "source_message_id":origin.source_message_id,"origin_run_id":origin.origin_run_id}),
     );
+    if let Some(reference) = receipt.begin(tx).await? {
+        return Ok(reference);
+    }
     let created_at = sqlx::query_scalar::<_, String>(
         "SELECT DATE_FORMAT(UTC_TIMESTAMP(3),'%Y-%m-%dT%H:%i:%s.%fZ')",
     )
     .fetch_one(tx.connection())
     .await?;
-    let body = json!({"name":input["name"],"body":input["body"],"scope":input["scope"],
-        "files":input["files"],"dependencies":dependencies,"evidence_refs":evidence_refs,"created_at":created_at});
-    StoredDraft {
-        reference: reference.clone(),
-        state: "pending".into(),
-        body: Some(body.clone()),
-        asset_id: None,
-        text_authority: Some(text_authority.clone()),
+    let mut body = json!({"id":reference["draft_id"],"kind":"skill","state":"draft","version":"1",
+        "verified":false,"selected":false,"source_text":"","name":input["name"],"body":input["body"],
+        "scope":input["scope"],"files":input["files"],"dependencies":dependencies});
+    if let Some(sources) = skill_sources {
+        body["skill_sources"] = sources.clone();
     }
-    .view()?;
+    let origin = json!({"reference":reference,"status":"pending",
+        "evidence_refs":evidence_refs,"created_at":created_at,"operation_id":origin.operation_id,"origin_run_id":origin.origin_run_id});
+
     super::super::skill_files::validate(&json!("skill"), &input["files"])?;
     super::super::skill_files::content(
         &json!({"id":reference["draft_id"],"name":input["name"],"scope":input["scope"],"body":input["body"],"files":input["files"],"dependencies":dependencies}),
         "SKILL.md",
     )?;
-    sqlx::query("INSERT INTO skill_drafts(id,owner_id,space_id,conversation_id,source_message_id,origin_run_id,operation_id,fingerprint,reference,state,body,text_authority) VALUES(?,?,?,?,?,?,?,?,?,'pending',?,?) ON DUPLICATE KEY UPDATE operation_id=VALUES(operation_id)")
+    sqlx::query("INSERT INTO personal_assets(id,owner_id,space_id,version,kind,state,visibility,body,draft_origin) VALUES(?,?,?,1,'skill','draft','personal',?,?)")
         .bind(reference["draft_id"].as_str()).bind(&ctx.user_id).bind(&ctx.space_id)
-        .bind(origin.conversation_id).bind(origin.source_message_id).bind(origin.origin_run_id)
-        .bind(origin.operation_id).bind(&command).bind(sqlx::types::Json(&reference))
-        .bind(sqlx::types::Json(&body)).bind(sqlx::types::Json(text_authority)).execute(tx.connection()).await?;
-    let row = sqlx::query("SELECT fingerprint,reference FROM skill_drafts WHERE owner_id=? AND space_id=? AND operation_id=? FOR UPDATE")
-        .bind(&ctx.user_id).bind(&ctx.space_id).bind(origin.operation_id).fetch_one(tx.connection()).await?;
-    if row.get::<String, _>("fingerprint") != command {
-        return Err(Error::new("idempotency_conflict"));
-    }
-    Ok(row.get::<sqlx::types::Json<Value>, _>("reference").0)
+        .bind(sqlx::types::Json(&body)).bind(sqlx::types::Json(&origin)).execute(tx.connection()).await?;
+    receipt.complete(tx, &reference).await?;
+    Ok(reference)
 }
 
 pub async fn invalidate_in_tx(
@@ -158,7 +157,7 @@ pub async fn invalidate_in_tx(
     if !matches!(state, "condition_changed" | "sources_unavailable") {
         return Err(Error::new("invalid_input"));
     }
-    sqlx::query("UPDATE skill_drafts SET state=?,body=NULL WHERE id=? AND owner_id=? AND space_id=? AND state='pending'")
+    sqlx::query("UPDATE personal_assets SET state='deleted',body=JSON_OBJECT(),draft_origin=JSON_SET(draft_origin,'$.status',?,'$.evidence_refs',NULL) WHERE id=? AND owner_id=? AND space_id=? AND state='draft'")
         .bind(state).bind(draft).bind(&ctx.user_id).bind(&ctx.space_id).execute(tx.connection()).await?;
     Ok(())
 }
@@ -169,7 +168,7 @@ pub async fn confirm_in_tx(
     draft: &str,
     asset: &str,
 ) -> Result<()> {
-    let updated = sqlx::query("UPDATE skill_drafts SET state='confirmed',asset_id=?,body=NULL WHERE id=? AND owner_id=? AND space_id=? AND state='pending'")
+    let updated = sqlx::query("UPDATE personal_assets SET draft_origin=JSON_SET(draft_origin,'$.status','confirmed','$.asset_id',?,'$.evidence_refs',NULL) WHERE id=? AND owner_id=? AND space_id=? AND JSON_UNQUOTE(JSON_EXTRACT(draft_origin,'$.status'))='pending'")
         .bind(asset).bind(draft).bind(&ctx.user_id).bind(&ctx.space_id).execute(tx.connection()).await?;
     if updated.rows_affected() != 1 {
         return Err(Error::new("version_conflict"));
@@ -182,7 +181,7 @@ pub async fn delete_conversation_drafts_in_tx(
     ctx: &AccessContext,
     cid: &str,
 ) -> Result<()> {
-    sqlx::query("UPDATE skill_drafts SET state='sources_unavailable',body=NULL WHERE owner_id=? AND space_id=? AND conversation_id=? AND state<>'confirmed'")
+    sqlx::query("UPDATE personal_assets SET state='deleted',body=JSON_OBJECT(),draft_origin=JSON_SET(draft_origin,'$.status','sources_unavailable','$.evidence_refs',NULL) WHERE owner_id=? AND space_id=? AND JSON_UNQUOTE(JSON_EXTRACT(draft_origin,'$.reference.conversation_id'))=? AND state='draft'")
         .bind(&ctx.user_id).bind(&ctx.space_id).bind(cid).execute(tx.connection()).await?;
     Ok(())
 }

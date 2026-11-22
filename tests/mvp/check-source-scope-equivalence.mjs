@@ -52,7 +52,9 @@ try{
  const repeated=await revise('跨消息重申相同允许集',{source_limits:{allowed_sources:sources,origin_message_ids:[]}});
  assert.equal(repeated.step.context_reset,null,'仅声明消息身份改变不能清除同一范围上下文');assert.equal(repeated.step.native_compactions_added,0);
  assert.deepEqual(repeated.receipt.data.conditions.source_limits.origin_message_ids,[run.message_id],'新声明仍绑定本轮真实消息，不复用旧许可来源身份');
- const narrowed=await revise('实际收紧到schema',{source_limits:{allowed_sources:[key('schema')],origin_message_ids:[]}});assert.ok(narrowed.step.context_reset);assert.equal(narrowed.step.native_compactions_added,1);
+ const narrowed=await revise('实际收紧到schema',{source_limits:{allowed_sources:[key('schema')],origin_message_ids:[]}});assert.ok(narrowed.step.context_reset);assert.equal(narrowed.step.native_compactions_added,0,'实际范围变化从原生分支接续');
+ assert.equal(manager.getHeader().id,sessionId);
+ assert.ok(JSON.stringify(manager.getEntries()).includes(source.data.text),'原始证据仍保存在同一会话树');
  assert.equal(JSON.stringify(manager.buildSessionContext().messages).includes(source.data.text),false,'真正收紧后旧来源正文仍须移出');
  result.model_calls=h.sql(`SELECT JSON_OBJECT('count',COUNT(*)) FROM model_call_attempts WHERE budget_scope_id IN ('${originalRun.budget_scope_id}','${run.budget_scope_id}')`)[0].count;assert.equal(result.model_calls,0);result.passed=true;
 }catch(error){result.error=error.stack;throw error;}

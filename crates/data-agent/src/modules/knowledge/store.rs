@@ -39,6 +39,7 @@ pub use index_jobs::{
 };
 #[path = "storage/catalog_search/store.rs"]
 mod catalog_search;
+pub(crate) use catalog_search::push_workspace_dependency_heads;
 pub use catalog_search::{
     candidate_meta_in_tx, current_enabled_heads_in_tx, directory_page_in_tx,
     identity_candidate_ids_in_tx, independent_document_candidate_in_tx,
@@ -56,11 +57,77 @@ pub(super) use catalog_bindings::{
 };
 
 use crate::{
-    persistence::AppTx,
+    persistence::{AppTx, receipts::Operation},
     types::{AccessContext, Error, Result, epoch, fingerprint, id},
 };
 use serde_json::{Value, json};
 use sqlx::Row;
+
+const DIRECT_TABLE_ID: &str = "JSON_UNQUOTE(JSON_EXTRACT(\
+    JSON_EXTRACT(k.body,'$.entries[*].effective_structure.table.object_id'),'$[0]')) AS table_id";
+
+// k 是具有 id、kind、source_id、space_id、body 的正式对象行。关联字段使用同一平台表集合。
+pub(super) fn push_table_access(sql: &mut sqlx::QueryBuilder<sqlx::MySql>, ctx: &AccessContext) {
+    let Some(access) = &ctx.table_access else {
+        return;
+    };
+    let table_bindings = |alias| {
+        format!(
+            "\
+        COALESCE(JSON_EXTRACT({alias}.body,'$.related_ids'),JSON_ARRAY()),\
+        COALESCE(JSON_EXTRACT({alias}.body,'$.entries[*].effective_structure.table.object_id'),JSON_ARRAY()),\
+        COALESCE(JSON_EXTRACT({alias}.body,'$.entries[*].effective_structure.left_table.object_id'),JSON_ARRAY()),\
+        COALESCE(JSON_EXTRACT({alias}.body,'$.entries[*].effective_structure.right_table.object_id'),JSON_ARRAY())"
+        )
+    };
+    sql.push(" AND (k.kind<>'table' OR JSON_CONTAINS(")
+        .push_bind(sqlx::types::Json(&access.table_ids))
+        .push(",JSON_QUOTE(k.id))) AND (k.source_id IS NULL OR k.source_id NOT LIKE 'catalog-%' OR JSON_CONTAINS(")
+        .push_bind(sqlx::types::Json(&access.source_ids))
+        .push(",JSON_QUOTE(k.source_id))) AND ((k.kind='document' AND k.source_id IS NULL) OR NOT EXISTS(SELECT 1 FROM JSON_TABLE(JSON_MERGE_PRESERVE(")
+        .push(table_bindings("k"))
+        .push(",\
+            COALESCE(JSON_EXTRACT(k.body,'$.entries[*].effective_structure.dependencies[*].object_id'),JSON_ARRAY()),\
+            COALESCE(JSON_EXTRACT(k.body,'$.entries[*].effective_structure.computed_metrics[*].metric_ref.object_id'),JSON_ARRAY()),\
+            COALESCE(JSON_EXTRACT(k.body,'$.entries[*].effective_structure.verification.evidence_refs[*].object_id'),JSON_ARRAY())),\
+            '$[*]' COLUMNS(object_id VARCHAR(64) PATH '$')) refs \
+            JOIN knowledge_objects t ON t.id=refs.object_id AND t.space_id=k.space_id \
+            WHERE (t.kind='table' AND NOT JSON_CONTAINS(")
+        .push_bind(sqlx::types::Json(&access.table_ids))
+        .push(",JSON_QUOTE(t.id))) OR (t.kind IN ('field','metric','relationship') AND (\
+            (t.source_id LIKE 'catalog-%' AND NOT JSON_CONTAINS(")
+        .push_bind(sqlx::types::Json(&access.source_ids))
+        .push(",JSON_QUOTE(t.source_id))) OR EXISTS(SELECT 1 FROM JSON_TABLE(JSON_MERGE_PRESERVE(")
+        .push(table_bindings("t"))
+        .push("),'$[*]' COLUMNS(object_id VARCHAR(64) PATH '$')) bound \
+            JOIN knowledge_objects p ON p.id=bound.object_id AND p.space_id=t.space_id \
+            WHERE p.kind='table' AND NOT JSON_CONTAINS(")
+        .push_bind(sqlx::types::Json(&access.table_ids))
+        .push(",JSON_QUOTE(p.id)))))))");
+}
+
+pub async fn check_read_access_in_tx(
+    tx: &mut AppTx<'_>,
+    ctx: &AccessContext,
+    object: &str,
+) -> Result<()> {
+    if ctx.table_access.is_none() {
+        return Ok(());
+    }
+    let mut sql = sqlx::QueryBuilder::<sqlx::MySql>::new(
+        "SELECT 1 FROM knowledge_objects k WHERE k.space_id=",
+    );
+    sql.push_bind(&ctx.space_id)
+        .push(" AND k.id=")
+        .push_bind(object);
+    push_table_access(&mut sql, ctx);
+    sql.build_query_scalar::<i32>()
+        .fetch_optional(tx.connection())
+        .await?
+        .ok_or(Error::new("not_available"))
+        .map(|_| ())
+}
+
 fn body(row: &sqlx::mysql::MySqlRow) -> Value {
     let mut value = row.get::<sqlx::types::Json<Value>, _>("body").0;
     super::structure::project_object(&mut value);
@@ -73,27 +140,17 @@ pub(super) async fn begin_operation(
     key: &str,
     value: &Value,
 ) -> Result<Option<Value>> {
-    // 预占与正式写同事务；失败回滚，不留下空回执或重复版本。
-    sqlx::query("INSERT INTO knowledge_operations(owner_id,operation_id,fingerprint,receipt) VALUES(?,?,?,CAST('null' AS JSON)) ON DUPLICATE KEY UPDATE operation_id=VALUES(operation_id)")
-        .bind(&ctx.user_id).bind(key).bind(fingerprint(value)).execute(tx.connection()).await?;
-    let row = sqlx::query("SELECT fingerprint,receipt FROM knowledge_operations WHERE owner_id=? AND operation_id=? FOR UPDATE")
-        .bind(&ctx.user_id).bind(key).fetch_one(tx.connection()).await?;
-    let receipt = row.get::<sqlx::types::Json<Value>, _>("receipt").0;
-    let stored = row.get::<String, _>("fingerprint");
-    let legacy_reanalysis = value["action"] == "reanalyze"
-        && !receipt.is_null()
-        && stored
-            == fingerprint(
-                &json!({"object_id":value["object_id"],"input":value["input"],"source_version":receipt["source_version"]}),
-            );
-    if stored != fingerprint(value) && !legacy_reanalysis {
-        return Err(Error::new("idempotency_conflict"));
-    }
-    if !receipt.is_null() {
-        return Ok(Some(receipt));
-    }
-    Ok(None)
+    Operation::new(ctx, "knowledge", key, value)
+        .begin_with(tx, |stored, receipt| {
+            value["action"] == "reanalyze"
+                && !receipt.is_null()
+                && stored == fingerprint(
+                    &json!({"object_id":value["object_id"],"input":value["input"],"source_version":receipt["source_version"]}),
+                )
+        })
+        .await
 }
+
 pub(super) async fn record(
     tx: &mut AppTx<'_>,
     ctx: &AccessContext,
@@ -101,8 +158,9 @@ pub(super) async fn record(
     input: &Value,
     value: &Value,
 ) -> Result<()> {
-    sqlx::query("UPDATE knowledge_operations SET receipt=? WHERE owner_id=? AND operation_id=? AND fingerprint=?").bind(sqlx::types::Json(value)).bind(&ctx.user_id).bind(key).bind(fingerprint(input)).execute(tx.connection()).await?;
-    Ok(())
+    Operation::new(ctx, "knowledge", key, input)
+        .complete(tx, value)
+        .await
 }
 
 pub(super) async fn persist(
@@ -184,24 +242,15 @@ async fn persist_object(
     super::dependency_index::persist_in_tx(tx, ctx, &v).await?;
     // 保存只落本模块数据；目标指纹补记与来源扇出排队（跨模块读取与作业写入）
     // 由use_cases组合层在保存后执行，见after_content_saved_in_tx。
-    sqlx::query("INSERT INTO knowledge_revisions(object_id,version,updated_by,fingerprint,changed_paths) VALUES(?,?,?,?,?) ON DUPLICATE KEY UPDATE updated_by=VALUES(updated_by),fingerprint=VALUES(fingerprint),changed_paths=VALUES(changed_paths)")
+    sqlx::query("INSERT INTO knowledge_revisions(object_id,version,updated_by,fingerprint,changed_paths,archived_body) VALUES(?,?,?,?,?,?) ON DUPLICATE KEY UPDATE updated_by=VALUES(updated_by),fingerprint=VALUES(fingerprint),changed_paths=VALUES(changed_paths),archived_body=COALESCE(knowledge_revisions.archived_body,VALUES(archived_body))")
         .bind(v["id"].as_str())
         .bind(version)
         .bind(&ctx.user_id)
         .bind(&value_fingerprint)
         .bind(sqlx::types::Json(changed_paths))
+        .bind(retain_archive.then_some(sqlx::types::Json(&v)))
         .execute(tx.connection())
         .await?;
-    if retain_archive {
-        // 首次保存登记完整归档；已存在的同版归档原样保留，同修订整理只更新
-        // current/派生视图，不覆盖精确历史。
-        sqlx::query("INSERT INTO knowledge_versions(object_id,version,body) VALUES(?,?,?) ON DUPLICATE KEY UPDATE body=knowledge_versions.body")
-            .bind(v["id"].as_str())
-            .bind(version)
-            .bind(sqlx::types::Json(&v))
-            .execute(tx.connection())
-            .await?;
-    }
     Ok(())
 }
 // 返回实际新建的对象（已按保存路径投影）；调用方据此执行保存后组合（指纹补记/扇出）。
@@ -315,9 +364,14 @@ pub async fn read_in_tx(
     version: Option<u64>,
     manage: bool,
 ) -> Result<Value> {
-    let row = sqlx::query("SELECT body,state FROM knowledge_objects WHERE id=? AND space_id=?")
-        .bind(object)
-        .bind(&ctx.space_id)
+    let mut sql =
+        sqlx::QueryBuilder::new("SELECT k.body,k.state FROM knowledge_objects k WHERE k.id=");
+    sql.push_bind(object)
+        .push(" AND k.space_id=")
+        .push_bind(&ctx.space_id);
+    push_table_access(&mut sql, ctx);
+    let row = sql
+        .build()
         .fetch_optional(tx.connection())
         .await?
         .ok_or(Error::new("not_available"))?;
@@ -338,19 +392,9 @@ pub async fn read_in_tx(
         if !manage {
             return Err(Error::new("stale_knowledge"));
         }
-        return sqlx::query_scalar::<_, sqlx::types::Json<Value>>(
-            "SELECT body FROM knowledge_versions WHERE object_id=? AND version=?",
-        )
-        .bind(object)
-        .bind(version)
-        .fetch_optional(tx.connection())
-        .await?
-        .map(|v| {
-            let mut value = v.0;
-            super::structure::project_object(&mut value);
-            value
-        })
-        .ok_or(Error::new("not_available"));
+        return archived_revision_in_tx(tx, ctx, object, version)
+            .await?
+            .ok_or(Error::new("not_available"));
     }
     Ok(current)
 }
@@ -366,7 +410,8 @@ pub async fn archived_body_in_tx(
     object: &str,
     version: u64,
 ) -> Result<Option<Value>> {
-    let mut body = sqlx::query_scalar::<_, sqlx::types::Json<Value>>(
+    check_read_access_in_tx(tx, ctx, object).await?;
+    let body = sqlx::query_scalar::<_, sqlx::types::Json<Value>>(
         "SELECT body FROM knowledge_objects WHERE id=? AND version=? AND space_id=?",
     )
     .bind(object)
@@ -374,20 +419,40 @@ pub async fn archived_body_in_tx(
     .bind(&ctx.space_id)
     .fetch_optional(tx.connection())
     .await?;
-    if body.is_none() {
-        body = sqlx::query_scalar::<_, sqlx::types::Json<Value>>(
-            "SELECT v.body FROM knowledge_versions v \
-             JOIN knowledge_objects k ON k.id=v.object_id \
-             WHERE v.object_id=? AND v.version=? AND k.space_id=?",
-        )
-        .bind(object)
-        .bind(version)
-        .bind(&ctx.space_id)
+    match body {
+        Some(sqlx::types::Json(mut value)) => {
+            super::structure::project_object(&mut value);
+            Ok(Some(value))
+        }
+        None => archived_revision_in_tx(tx, ctx, object, version).await,
+    }
+}
+
+async fn archived_revision_in_tx(
+    tx: &mut AppTx<'_>,
+    ctx: &AccessContext,
+    object: &str,
+    version: u64,
+) -> Result<Option<Value>> {
+    // 同一个指标改版后可换底表，旧正文按旧绑定核当前用户的表集合。
+    let mut sql = sqlx::QueryBuilder::new(
+        "SELECT k.body FROM (SELECT o.id,o.space_id,o.kind,v.archived_body AS body, \
+         NULLIF(JSON_UNQUOTE(JSON_EXTRACT(v.archived_body,'$.source_id')),'null') AS source_id \
+         FROM knowledge_revisions v JOIN knowledge_objects o ON o.id=v.object_id \
+         WHERE v.archived_body IS NOT NULL AND v.object_id=",
+    );
+    sql.push_bind(object)
+        .push(" AND v.version=")
+        .push_bind(version)
+        .push(" AND o.space_id=")
+        .push_bind(&ctx.space_id)
+        .push(") k WHERE TRUE");
+    push_table_access(&mut sql, ctx);
+    let row = sql
+        .build_query_scalar::<sqlx::types::Json<Value>>()
         .fetch_optional(tx.connection())
         .await?;
-    }
-    Ok(body.map(|v| {
-        let mut value = v.0;
+    Ok(row.map(|sqlx::types::Json(mut value)| {
         super::structure::project_object(&mut value);
         value
     }))
@@ -399,19 +464,23 @@ pub async fn read_meta_in_tx(
     object: &str,
     version: Option<u64>,
 ) -> Result<Value> {
-    let row = sqlx::query(
-        "SELECT state, \
-         JSON_UNQUOTE(JSON_EXTRACT(body,'$.name')) AS name, \
-         JSON_UNQUOTE(JSON_EXTRACT(body,'$.kind')) AS kind, \
-         JSON_UNQUOTE(JSON_EXTRACT(body,'$.version')) AS version, \
-         JSON_LENGTH(JSON_EXTRACT(body,'$.entries[*].effective_value')) AS effective \
-         FROM knowledge_objects WHERE id=? AND space_id=?",
-    )
-    .bind(object)
-    .bind(&ctx.space_id)
-    .fetch_optional(tx.connection())
-    .await?
-    .ok_or(Error::new("not_available"))?;
+    let mut sql = sqlx::QueryBuilder::new(
+        "SELECT k.state, \
+         JSON_UNQUOTE(JSON_EXTRACT(k.body,'$.name')) AS name, \
+         JSON_UNQUOTE(JSON_EXTRACT(k.body,'$.kind')) AS kind, \
+         JSON_UNQUOTE(JSON_EXTRACT(k.body,'$.version')) AS version, \
+         JSON_LENGTH(JSON_EXTRACT(k.body,'$.entries[*].effective_value')) AS effective \
+         FROM knowledge_objects k WHERE k.id=",
+    );
+    sql.push_bind(object)
+        .push(" AND k.space_id=")
+        .push_bind(&ctx.space_id);
+    push_table_access(&mut sql, ctx);
+    let row = sql
+        .build()
+        .fetch_optional(tx.connection())
+        .await?
+        .ok_or(Error::new("not_available"))?;
     if row.get::<String, _>("state") != "enabled" {
         return Err(Error::new("not_available"));
     }
@@ -435,7 +504,7 @@ pub async fn read_revision_fingerprint_in_tx(
     version: u64,
 ) -> Result<String> {
     let row =
-        sqlx::query("SELECT fingerprint FROM knowledge_revisions WHERE object_id=? AND version=?")
+        sqlx::query("SELECT fingerprint FROM knowledge_revisions WHERE object_id=? AND version=? AND fingerprint IS NOT NULL")
             .bind(object)
             .bind(version)
             .fetch_optional(tx.connection())

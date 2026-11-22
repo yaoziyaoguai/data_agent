@@ -1,14 +1,12 @@
-use super::store::{self, LockedRun, OutputReadRecord};
+use super::store::{self, LockedRun};
 use crate::{
-    contracts::generated::{
-        AnswerHandoff, AnswerPartReference, AssistantOutputBinding, RenderedAnswerBinding,
-    },
+    contracts::generated::{AssistantOutputBinding, RenderedAnswerBinding},
     persistence::AppTx,
     types::{Error, Result},
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 
 // 单次字符串替换：替换值不再扫描、不递归解释；未闭合或未知标记拒绝。
 // 展示等式属输出职责，use_cases向下调用这一份实现，不复制第二份。
@@ -169,14 +167,6 @@ fn bound_output_text(
     Ok(text)
 }
 
-pub struct OutputReadBinding {
-    pub attempt_id: String,
-    pub output_id: String,
-    pub state: String,
-    pub units: Vec<OutputReadUnit>,
-    pub delta_authority: Value,
-}
-
 pub struct OutputReadUnit {
     pub text: String,
     pub authorities: Vec<Value>,
@@ -302,6 +292,19 @@ impl FinalOutput {
     }
 }
 
+#[derive(Deserialize)]
+struct SourceAnswer {
+    answer_text: String,
+    sources: Vec<AnswerResultSource>,
+    result_dependencies: Vec<AnswerResultSource>,
+}
+
+#[derive(Deserialize)]
+struct AnswerResultSource {
+    query_id: String,
+    result_ref: String,
+}
+
 /// 调用方已经核定的成功答案回执，连同原SDK身份保存为一份读取来源。
 pub fn answer_read_unit(answer: &Value, authority: Value, sdk: &str) -> Result<OutputReadUnit> {
     let answer: SourceAnswer =
@@ -321,137 +324,6 @@ pub fn answer_read_unit(answer: &Value, authority: Value, sdk: &str) -> Result<O
         answer_sdk_tool_call_id: Some(sdk.to_owned()),
         prepared_sdk_tool_call_id: None,
     })
-}
-
-fn persisted_read_units(output: &OutputReadRecord, value: &Value) -> Result<Vec<OutputReadUnit>> {
-    let binding: PersistedOutputReadBinding =
-        serde_json::from_value(value.clone()).map_err(|_| Error::new("invalid_evidence"))?;
-    let text = output
-        .final_text
-        .as_deref()
-        .ok_or(Error::new("invalid_evidence"))?;
-    if binding.schema != 1 || binding.units.is_empty() {
-        return Err(Error::new("invalid_evidence"));
-    }
-    let mut end = 0;
-    let mut units = Vec::new();
-    for unit in binding.units {
-        let separator = if units.is_empty() {
-            ""
-        } else {
-            ANSWER_SEPARATOR
-        };
-        if text.get(end..unit.start_byte) != Some(separator) || unit.authorities.is_empty() {
-            return Err(Error::new("invalid_evidence"));
-        }
-        let body = text
-            .get(unit.start_byte..unit.end_byte)
-            .ok_or(Error::new("invalid_evidence"))?;
-        end = unit.end_byte;
-        units.push(OutputReadUnit {
-            text: body.to_owned(),
-            authorities: unit.authorities,
-            result_dependencies: unit.result_dependencies,
-            chunk_range: unit.chunk_range,
-            answer_sdk_tool_call_id: unit.answer_sdk_tool_call_id,
-            prepared_sdk_tool_call_id: unit.prepared_sdk_tool_call_id,
-        });
-    }
-    if end != text.len() {
-        return Err(Error::new("invalid_evidence"));
-    }
-    Ok(units)
-}
-
-#[derive(Deserialize)]
-struct OutputReadSource {
-    sdk_tool_call_id: String,
-    handoff: Option<FrozenOutputSource>,
-    answer: Option<SourceAnswer>,
-    #[serde(default)]
-    prepared: Option<Value>,
-    control_delivery: Option<ControlOutputSource>,
-}
-
-#[derive(Deserialize)]
-struct FrozenOutputSource {
-    reference: AnswerPartReference,
-    handoff: AnswerHandoff,
-    #[serde(default)]
-    authority: Value,
-    title: String,
-}
-
-#[derive(Deserialize)]
-struct SourceAnswer {
-    answer_text: String,
-    sources: Vec<AnswerResultSource>,
-    result_dependencies: Vec<AnswerResultSource>,
-}
-
-#[derive(Deserialize)]
-struct AnswerResultSource {
-    query_id: String,
-    result_ref: String,
-}
-
-#[derive(Deserialize)]
-struct ControlOutputSource {
-    text: String,
-    #[serde(default)]
-    text_authority: Value,
-}
-
-/// 历史读取只接回原输出身份与来源；不取得运行租约，也不重新执行交付规则。
-pub async fn read_output_bindings_in_tx(
-    tx: &mut AppTx<'_>,
-    cid: &str,
-    attempts: &[String],
-) -> Result<Vec<OutputReadBinding>> {
-    let records = store::output_read_records_in_tx(tx, cid, attempts).await?;
-    let mut chains = HashMap::<String, Vec<OutputReadSource>>::new();
-    let mut bindings = Vec::new();
-    for output in records {
-        let units = if let Some(binding) = &output.read_binding {
-            persisted_read_units(&output, binding)
-        } else {
-            // 只有旧NULL格式及活跃未提交输出才接回工具链；新提交直接使用原文边界。
-            if !chains.contains_key(&output.recovery_chain_id) {
-                let sources = store::output_read_sources_in_tx(tx, cid, &output.recovery_chain_id)
-                    .await?
-                    .into_iter()
-                    .map(|value| {
-                        serde_json::from_value(value).map_err(|_| Error::new("invalid_evidence"))
-                    })
-                    .collect::<Result<Vec<_>>>()?;
-                chains.insert(output.recovery_chain_id.clone(), sources);
-            }
-            output_read_units_in_tx(tx, cid, &output, &chains[&output.recovery_chain_id]).await
-        };
-        let units = match units {
-            Ok(units) => units,
-            // 缺少原来源边界只限制本次输出，不能将末端run来源冒充整份历史。
-            Err(error) if matches!(error.code, "invalid_evidence" | "chunk_gap") => {
-                vec![OutputReadUnit {
-                    text: output.final_text.clone().unwrap_or_default(),
-                    authorities: vec![Value::Null],
-                    result_dependencies: Vec::new(),
-                    chunk_range: None,
-                    answer_sdk_tool_call_id: None,
-                    prepared_sdk_tool_call_id: None,
-                }]
-            }
-            Err(error) => return Err(error),
-        };
-        bindings.push(OutputReadBinding {
-            attempt_id: output.attempt_id,
-            output_id: output.output_id,
-            state: output.state,
-            units,
-            delta_authority: output.authority,
-        });
-    }
-    Ok(bindings)
 }
 
 // rendered分支的展示等式核验：hash对原模板，chunk范围对渲染后display；旧bound_output_text
@@ -517,258 +389,6 @@ pub fn prepared_dependencies(prepared: &Value) -> Result<Vec<(String, String)>> 
         }
     }
     Ok(dependencies)
-}
-
-// 参数为同一定稿读取所需的记录上下文；沿仓库惯例整体传递，不再拆一层私有结构。
-#[allow(clippy::too_many_arguments)]
-async fn answer_read_unit_in_tx(
-    tx: &mut AppTx<'_>,
-    cid: &str,
-    output: &OutputReadRecord,
-    sources: &[OutputReadSource],
-    authority: &Value,
-    sdk: Option<&str>,
-    binding: Option<&AssistantOutputBinding>,
-    rendered: Option<&RenderedAnswerBinding>,
-) -> Result<OutputReadUnit> {
-    let mut unit = OutputReadUnit {
-        text: String::new(),
-        authorities: vec![authority.clone()],
-        result_dependencies: Vec::new(),
-        chunk_range: None,
-        answer_sdk_tool_call_id: sdk.map(str::to_owned),
-        prepared_sdk_tool_call_id: None,
-    };
-    if let Some(sdk) = sdk {
-        let answer = sources
-            .iter()
-            .find(|source| source.sdk_tool_call_id == sdk)
-            .and_then(|source| source.answer.as_ref())
-            .ok_or(Error::new("invalid_evidence"))?;
-        unit.text.clone_from(&answer.answer_text);
-        for source in answer.sources.iter().chain(&answer.result_dependencies) {
-            let reference = (source.query_id.clone(), source.result_ref.clone());
-            if !unit.result_dependencies.contains(&reference) {
-                unit.result_dependencies.push(reference);
-            }
-        }
-    } else if let Some(rendered) = rendered {
-        let prepared = sources
-            .iter()
-            .find(|source| source.sdk_tool_call_id == rendered.prepared_sdk_tool_call_id)
-            .and_then(|source| source.prepared.as_ref())
-            .ok_or(Error::new("invalid_evidence"))?;
-        let display = rendered_display(rendered, prepared)?;
-        let chunks =
-            store::output_read_chunks_in_tx(tx, cid, output, &rendered.assistant.attempt_id)
-                .await?;
-        rendered_output_text(chunks, rendered, &display)?;
-        unit.text = display;
-        unit.result_dependencies = prepared_dependencies(prepared)?;
-        unit.chunk_range = Some(OutputChunkRange {
-            attempt_id: rendered.assistant.attempt_id.clone(),
-            first: crate::types::epoch(&rendered.first_chunk_seq)?,
-            last: crate::types::epoch(&rendered.last_chunk_seq)?,
-        });
-        unit.prepared_sdk_tool_call_id = Some(rendered.prepared_sdk_tool_call_id.clone());
-    } else {
-        let binding = binding.ok_or(Error::new("invalid_evidence"))?;
-        let (first, last) = bound_output_range(binding)?;
-        let chunks = store::output_read_chunks_in_tx(tx, cid, output, &binding.attempt_id).await?;
-        unit.text = bound_output_text(chunks, binding, first, last)?;
-        unit.chunk_range = Some(OutputChunkRange {
-            attempt_id: binding.attempt_id.clone(),
-            first,
-            last,
-        });
-    }
-    Ok(unit)
-}
-
-async fn frozen_read_unit_in_tx(
-    tx: &mut AppTx<'_>,
-    cid: &str,
-    output: &OutputReadRecord,
-    sources: &[OutputReadSource],
-    frozen: &FrozenOutputSource,
-) -> Result<OutputReadUnit> {
-    let mut unit = answer_read_unit_in_tx(
-        tx,
-        cid,
-        output,
-        sources,
-        &frozen.authority,
-        frozen.handoff.answer_sdk_tool_call_id.as_deref(),
-        frozen.handoff.assistant.as_ref(),
-        frozen.handoff.rendered_answer_binding.as_ref(),
-    )
-    .await?;
-    unit.text = format!("## {}\n\n{}", frozen.title, unit.text);
-    Ok(unit)
-}
-
-async fn output_read_units_in_tx(
-    tx: &mut AppTx<'_>,
-    cid: &str,
-    output: &OutputReadRecord,
-    sources: &[OutputReadSource],
-) -> Result<Vec<OutputReadUnit>> {
-    let frozen: Vec<_> = sources
-        .iter()
-        .filter_map(|source| source.handoff.as_ref())
-        .collect();
-    let Some(final_text) = &output.final_text else {
-        let mut units = Vec::new();
-        for part in frozen {
-            let attempt = part
-                .handoff
-                .assistant
-                .as_ref()
-                .map(|assistant| &assistant.attempt_id)
-                .or_else(|| {
-                    part.handoff
-                        .rendered_answer_binding
-                        .as_ref()
-                        .map(|rendered| &rendered.assistant.attempt_id)
-                });
-            if attempt == Some(&output.attempt_id) {
-                units.push(frozen_read_unit_in_tx(tx, cid, output, sources, part).await?);
-            }
-        }
-        return Ok(units);
-    };
-    if let Some(parts) = &output.answer_parts {
-        let parts: Vec<AnswerPartReference> =
-            serde_json::from_value(parts.clone()).map_err(|_| Error::new("invalid_evidence"))?;
-        let mut units = Vec::<OutputReadUnit>::new();
-        for reference in parts {
-            if let Some(sdk) = &reference.finalized_by_sdk_tool_call_id {
-                let part = frozen
-                    .iter()
-                    .find(|part| part.reference.finalized_by_sdk_tool_call_id.as_ref() == Some(sdk))
-                    .ok_or(Error::new("invalid_evidence"))?;
-                units.push(frozen_read_unit_in_tx(tx, cid, output, sources, part).await?);
-            } else {
-                let mut unit = answer_read_unit_in_tx(
-                    tx,
-                    cid,
-                    output,
-                    sources,
-                    &output.authority,
-                    reference.answer_sdk_tool_call_id.as_deref(),
-                    reference.output_binding.as_ref(),
-                    reference.rendered_answer_binding.as_ref(),
-                )
-                .await?;
-                let mut prefix = units
-                    .iter()
-                    .map(|unit| unit.text.as_str())
-                    .collect::<Vec<_>>()
-                    .join("\n\n---\n\n");
-                if !prefix.is_empty() {
-                    prefix.push_str("\n\n---\n\n");
-                }
-                // 边界来自已核原文的完整前缀与末项，不按正文分隔符猜切片。
-                let tail = final_text
-                    .strip_prefix(&prefix)
-                    .ok_or(Error::new("invalid_evidence"))?;
-                if !tail
-                    .strip_suffix(&format!("\n\n{}", unit.text))
-                    .is_some_and(|title| title.starts_with("## "))
-                {
-                    return Err(Error::new("invalid_evidence"));
-                }
-                unit.text = tail.to_owned();
-                units.push(unit);
-            }
-        }
-        if units
-            .iter()
-            .map(|unit| unit.text.as_str())
-            .collect::<Vec<_>>()
-            .join("\n\n---\n\n")
-            != *final_text
-        {
-            return Err(Error::new("invalid_evidence"));
-        }
-        return Ok(units);
-    }
-
-    // 单答案未另存SDK引用；同链成功回执与final_text严格相等是提交不变量。
-    let mut answer_unit: Option<OutputReadUnit> = None;
-    for source in sources.iter().filter(|source| {
-        source
-            .answer
-            .as_ref()
-            .is_some_and(|answer| answer.answer_text == *final_text)
-    }) {
-        let unit = answer_read_unit_in_tx(
-            tx,
-            cid,
-            output,
-            sources,
-            &output.authority,
-            Some(&source.sdk_tool_call_id),
-            None,
-            None,
-        )
-        .await?;
-        if let Some(saved) = &mut answer_unit {
-            for reference in unit.result_dependencies {
-                if !saved.result_dependencies.contains(&reference) {
-                    saved.result_dependencies.push(reference);
-                }
-            }
-        } else {
-            answer_unit = Some(unit);
-        }
-    }
-    if let Some(unit) = answer_unit {
-        return Ok(vec![unit]);
-    }
-
-    let mut units = Vec::new();
-    for part in frozen {
-        units.push(frozen_read_unit_in_tx(tx, cid, output, sources, part).await?);
-    }
-    let mut prefix = units
-        .iter()
-        .map(|unit| unit.text.as_str())
-        .collect::<Vec<_>>()
-        .join("\n\n---\n\n");
-    if !prefix.is_empty() {
-        prefix.push_str("\n\n---\n\n");
-    }
-    let controls: Vec<_> = sources
-        .iter()
-        .filter_map(|source| source.control_delivery.as_ref())
-        .filter(|control| format!("{}{}", prefix, control.text) == *final_text)
-        .collect();
-    if let Some(control) = controls.first() {
-        units.push(OutputReadUnit {
-            text: control.text.clone(),
-            authorities: controls
-                .iter()
-                .map(|control| control.text_authority.clone())
-                .collect(),
-            result_dependencies: Vec::new(),
-            chunk_range: None,
-            answer_sdk_tool_call_id: None,
-            prepared_sdk_tool_call_id: None,
-        });
-    } else if units.is_empty() {
-        units.push(OutputReadUnit {
-            text: final_text.clone(),
-            authorities: vec![output.authority.clone()],
-            result_dependencies: Vec::new(),
-            chunk_range: None,
-            answer_sdk_tool_call_id: None,
-            prepared_sdk_tool_call_id: None,
-        });
-    } else {
-        return Err(Error::new("invalid_evidence"));
-    }
-    Ok(units)
 }
 
 fn assemble_output(chunks: Vec<(u64, String)>, start_seq: u64) -> Result<String> {

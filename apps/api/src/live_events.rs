@@ -210,23 +210,8 @@ async fn deliver(
     pool: &MySqlPool,
     channel: &broadcast::Sender<Frame>,
     cid: &str,
-    mut update: ConversationChanges,
+    update: ConversationChanges,
 ) -> Result<()> {
-    let context = if let Some(scope) = update.context {
-        AccessContext {
-            user_id: scope.user_id,
-            space_id: scope.space_id,
-            request_id: id(),
-        }
-    } else {
-        let scope = conversations::locate_conversation(pool, cid).await?;
-        AccessContext {
-            user_id: scope.owner_id,
-            space_id: scope.space_id,
-            request_id: id(),
-        }
-    };
-    read_conversation::project_live_events(pool, &context, cid, &mut update.events).await?;
     for event in update.events {
         drop(
             channel.send(Frame::Timeline {
@@ -240,6 +225,22 @@ async fn deliver(
         );
     }
     if update.runs || update.tasks || update.queries {
+        let context = if let Some(scope) = update.context {
+            AccessContext {
+                user_id: scope.user_id,
+                space_id: scope.space_id,
+                request_id: id(),
+                table_access: None,
+            }
+        } else {
+            let scope = conversations::locate_conversation(pool, cid).await?;
+            AccessContext {
+                user_id: scope.owner_id,
+                space_id: scope.space_id,
+                request_id: id(),
+                table_access: None,
+            }
+        };
         let read_started = Instant::now();
         let state = overview(
             pool,
@@ -343,6 +344,7 @@ async fn stream_identity(
         user_id: session.user_id,
         space_id: session.space_id,
         request_id: id(),
+        table_access: None,
     };
     Ok((
         context,

@@ -20,6 +20,7 @@ fn context(space: &str) -> AccessContext {
         user_id: "alice".into(),
         space_id: space.into(),
         request_id: "source-current-compatibility".into(),
+        table_access: None,
     }
 }
 
@@ -65,7 +66,7 @@ async fn catalog_reads_use_same_revision_current_without_archive() {
     // 只在隔离夹具移除派生旧档，证明当前目录读取不依赖历史全文行。
     for statement in [
         "DELETE FROM catalog_table_snapshots WHERE source_id=? AND version=1",
-        "DELETE FROM source_snapshots WHERE source_id=? AND version=1",
+        "UPDATE source_revisions SET body=NULL WHERE source_id=? AND version=1",
     ] {
         sqlx::query(statement)
             .bind(&source)
@@ -216,7 +217,7 @@ async fn synthetic_writes_keep_current_and_head_in_one_transaction() {
     );
     tx.commit().await.unwrap();
     let visible: (u64, u64, i64) = sqlx::query_as(
-        "SELECT h.version,c.revision,(SELECT COUNT(*) FROM source_snapshots s WHERE s.source_id=h.id AND s.version=h.version) FROM source_heads h JOIN source_current c ON c.source_id=h.id WHERE h.id='schema'",
+        "SELECT h.version,c.revision,(SELECT COUNT(*) FROM (SELECT source_id,version,body,archive_complete AS complete FROM source_revisions WHERE body IS NOT NULL) s WHERE s.source_id=h.id AND s.version=h.version) FROM source_heads h JOIN source_current c ON c.source_id=h.id WHERE h.id='schema'",
     ).fetch_one(&pool).await.unwrap();
     assert_eq!(visible, (before + 1, before + 1, 1));
     pool.close().await;
@@ -313,7 +314,7 @@ async fn backfill_upgrades_current_without_archive_and_preserves_observation() {
     assert_eq!(save(&pool, &ctx, namespace, &observed).await, (1, false));
     for statement in [
         "DELETE FROM catalog_table_snapshots WHERE source_id=? AND version=1",
-        "DELETE FROM source_snapshots WHERE source_id=? AND version=1",
+        "UPDATE source_revisions SET body=NULL WHERE source_id=? AND version=1",
     ] {
         sqlx::query(statement)
             .bind(&source)
@@ -381,7 +382,7 @@ async fn effective_versions_use_current_completeness_and_exact_archive_fallback(
         save(&pool, &ctx, namespace, &table(id, comment)).await;
         sources.push(ingestion::catalog::source_id(&ctx.space_id, namespace, id));
     }
-    sqlx::query("DELETE FROM source_snapshots WHERE source_id=?")
+    sqlx::query("UPDATE source_revisions SET body=NULL WHERE source_id=?")
         .bind(&sources[0])
         .execute(&pool)
         .await
@@ -443,7 +444,7 @@ async fn comparison_reuses_retained_current_body_without_archive() {
     tx.commit().await.unwrap();
     for statement in [
         "DELETE FROM catalog_table_snapshots WHERE source_id=? AND version=1",
-        "DELETE FROM source_snapshots WHERE source_id=? AND version=1",
+        "UPDATE source_revisions SET body=NULL WHERE source_id=? AND version=1",
     ] {
         sqlx::query(statement)
             .bind(&source)
@@ -484,7 +485,7 @@ async fn comparison_reuses_retained_current_body_without_archive() {
     assert_eq!(save(&pool, &ctx, namespace, &observed).await, (2, true));
     // 兼容阶段仍保存新修订的两份旧档，尚未切换 latest-only。
     for statement in [
-        "SELECT COUNT(*) FROM source_snapshots WHERE source_id=? AND version=2",
+        "SELECT COUNT(*) FROM (SELECT source_id,version,body,archive_complete AS complete FROM source_revisions WHERE body IS NOT NULL) archive_rows WHERE source_id=? AND version=2",
         "SELECT COUNT(*) FROM catalog_table_snapshots WHERE source_id=? AND version=2",
     ] {
         assert_eq!(
@@ -515,7 +516,7 @@ async fn source_bodies_preserve_exact_revisions_when_current_has_no_archive() {
     latest["platform_version"] = json!("3");
     latest["comment"] = json!("当前第三版🧪e\u{301}。");
     assert_eq!(save(&pool, &ctx, namespace, &latest).await, (3, true));
-    sqlx::query("DELETE FROM source_snapshots WHERE source_id=? AND version IN (2,3)")
+    sqlx::query("UPDATE source_revisions SET body=NULL WHERE source_id=? AND version IN (2,3)")
         .bind(&source)
         .execute(&pool)
         .await

@@ -113,6 +113,7 @@ verify-code:
 verify-model-provider:
 	$(CARGO) build --offline --locked -p data-agent-api -p data-agent-worker
 	node tests/runtime/check-model-provider.mjs
+	node tests/mvp/check-model-reservation-release.mjs
 	node tests/runtime/check-model-admission.mjs
 
 .PHONY: verify-runtime-capacity verify-retrieval-lease verify-worker-storage-recovery verify-compatible-restore
@@ -306,6 +307,7 @@ verify-task-scope:
 verify-task-history:
 	$(CARGO) build --offline --locked -p data-agent-api -p data-agent-worker
 	node tests/mvp/check-analysis-reports.mjs
+	node tests/mvp/check-report-revision-continuation.mjs
 	node tests/mvp/check-historical-source-access.mjs
 	node tests/mvp/check-report-text-authority.mjs
 	node tests/mvp/check-query-text-authority.mjs
@@ -318,6 +320,7 @@ verify-query-workflow:
 	$(CARGO) build --offline --locked -p data-agent-api -p data-agent-worker
 	node tests/runtime/check-synthetic-knowledge-reading.mjs
 	node tests/mvp/check-query-workflow.mjs
+	node tests/mvp/check-query-grain-protocol.mjs
 	node tests/mvp/check-query-boundaries.mjs
 	node tests/mvp/check-request-clock.mjs
 	node tests/mvp/check-workflow-reliability.mjs
@@ -329,6 +332,7 @@ verify-knowledge-workflow:
 	$(CARGO) test --offline --locked -p data-agent --lib modules::assets::tests
 	$(CARGO) test --offline --locked -p data-agent --lib modules::retrieval::semantic_context_tests
 	node tests/mvp/check-knowledge-workflow.mjs
+	node tests/mvp/check-table-catalog-access.mjs
 	node tests/mvp/check-boundaries.mjs
 	node tests/mvp/check-lifecycle.mjs
 	node tests/mvp/check-mixed-task-cancellation.mjs

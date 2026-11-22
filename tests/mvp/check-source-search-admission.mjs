@@ -222,7 +222,6 @@ async function checkSettlementContinuation() {
   const fields = settlement.fields;
   const fieldsById = new Map(fields.map(field => [field.definitionId, field]));
   const expectedSource = {kind: 'platform', id: settlement.source};
-  const expectedRoots = new Set([{kind: 'platform', id: 'schema'}, expectedSource]);
   const excerpts = fields.map(field => field.text).sort();
   const may = {time_start: '2026-05-01T00:00:00Z', time_end: '2026-06-01T00:00:00Z'};
   const june = {time_start: '2026-06-01T00:00:00Z', time_end: '2026-07-01T00:00:00Z'};
@@ -267,7 +266,8 @@ async function checkSettlementContinuation() {
       for (const field of fields) {
         const directory = broad.hits.find(hit => hit.object_id === field.directoryId);
         assert.equal(directory?.name, field.name);
-        assert.deepEqual(directory.source_keys, [{kind: 'platform', id: 'schema'}]);
+        assert.deepEqual(new Set(directory.source_keys), new Set([directory.object_id, 'schema', 'table-demo_order_detail']
+          .map(id => ({kind: 'platform', id}))));
       }
       assert.ok(!broad.hits.some(hit => hit.source_keys.some(key => key.id === settlement.source)));
       const coverage = broad.search_coverage;
@@ -299,7 +299,8 @@ async function checkSettlementContinuation() {
         assert.equal(hit.kind, 'field');
         assert.equal(hit.name, field.name);
         assert.equal(hit.object_version, field.version);
-        assert.deepEqual(new Set(hit.source_keys), expectedRoots);
+        assert.deepEqual(new Set(hit.source_keys), new Set([expectedSource, ...[hit.object_id, 'table-demo_order_detail']
+          .map(id => ({kind: 'platform', id}))]));
       }
       const platform = rules.hits.filter(hit => !Object.hasOwn(hit, 'object_id'));
       assert.equal(platform.length, 1);
@@ -411,15 +412,16 @@ try {
     const targets = identity.hits.filter(hit => precise.objects.some(object => hit.object_id === object.id));
     assert.equal(targets.length, 2, '精确选择输入必须来自正式身份回执');
     assert.ok(targets.every(hit => hit.source_keys.some(source => source.id === precise.source)
-      && hit.source_keys.some(source => source.id === 'schema')), '字段整对象贡献根同时含获准原文和未准DDL');
+      && hit.source_keys.some(source => source.id === 'table-demo_order_detail')
+      && !hit.source_keys.some(source => source.id === 'schema')), '字段身份仅返回直接来源和直属表');
     const args = {query: 'syntheticprecisefirst syntheticprecisesecond', limit: 10};
     const baseline = await invoke('search_knowledge', args);
     evidence.source_selection = {identity, baseline, fixture: precise};
-    assert.ok(!baseline.hits.some(hit => hit.definition?.includes(precise.first)
-      || hit.definition?.includes(precise.second)), '整对象知识门不能因定位原文而放宽');
-    assert.ok(baseline.hits.some(hit => hit.record_kind === 'source_excerpt'
-      && hit.text.includes(precise.first) && hit.text.includes(precise.unrelated)),
-    '旧正式搜索实际命中的是含无关字段的广raw块，不能把预置偏移当成精确可达');
+    assert.ok(baseline.hits.some(hit => hit.record_kind === 'knowledge_entry'
+      && (hit.definition?.includes(precise.first) || hit.definition?.includes(precise.second))),
+    '直接获准字段通过知识通道召回');
+    assert.ok(!baseline.hits.some(hit => hit.record_kind === 'source_excerpt'
+      && hit.citation.source.id === precise.source), '短平台原文不进入普通召回');
     const selectedIdsOnly = await invoke('search_knowledge', {query: targets.map(hit => hit.object_id).join(' '), limit: 10,
       hints: {related_object_ids: targets.map(hit => hit.object_id)}});
     evidence.source_selection.ids_only = selectedIdsOnly;
@@ -539,9 +541,9 @@ try {
     source_facts: {source_id: upstream, version: '1', value: documentBody, complete: true, location: 'body', quote: documentBody}};
   const serialized = quote(JSON.stringify(saved));
   h.sql(`INSERT INTO source_heads(id,space_id,version,fingerprint) VALUES(${quote(upstream)},'demo',1,'synthetic');
-    INSERT INTO source_snapshots(source_id,version,body,complete) VALUES(${quote(upstream)},1,${quote(documentBody)},TRUE);
+    INSERT INTO source_revisions(source_id,version,body,archive_complete) VALUES(${quote(upstream)},1,${quote(documentBody)},TRUE);
     UPDATE knowledge_objects SET source_id=${quote(upstream)},source_version=1,body=${serialized} WHERE id=${quote(document.id)};
-    UPDATE knowledge_versions SET body=${serialized} WHERE object_id=${quote(document.id)} AND version=1;
+    UPDATE knowledge_revisions SET archived_body=${serialized} WHERE object_id=${quote(document.id)} AND version=1;
     DELETE FROM knowledge_dependencies WHERE owner_id=${quote(document.id)};
     INSERT INTO knowledge_dependencies(owner_id,owner_version,space_id,entry_path,layer,purpose,role,effective,target_kind,target_id,target_revision,target_path,target_fingerprint)
     VALUES(${quote(document.id)},1,'demo','body','source_fact','required','origin',1,'platform',${quote(upstream)},1,'','');`);
@@ -582,7 +584,7 @@ try {
       '--default-character-set=utf8mb4', '--skip-column-names'], {encoding: 'utf8',
       input: 'USE ' + new URL(h.env.DATA_AGENT_DATABASE_URL).pathname.slice(1) + ';EXPLAIN FORMAT=JSON ' + query}));
     const platformPlan = `WITH source AS (SELECT body,complete FROM source_current WHERE source_id=${quote(precise.source)} AND space_id='demo' AND revision=1
-      UNION ALL SELECT body,complete FROM source_snapshots WHERE source_id=${quote(precise.source)} AND version=1
+      UNION ALL SELECT body,complete FROM (SELECT source_id,version,body,archive_complete AS complete FROM source_revisions WHERE body IS NOT NULL) archive_rows WHERE source_id=${quote(precise.source)} AND version=1
       AND NOT EXISTS(SELECT 1 FROM source_current WHERE source_id=${quote(precise.source)} AND space_id='demo' AND revision=1)),
       located AS (SELECT body,complete,LOCATE(CAST(${quote(precise.first)} AS BINARY),CAST(body AS BINARY)) AS p FROM source)
       SELECT CHAR_LENGTH(CONVERT(LEFT(CAST(body AS BINARY),p-1) USING utf8mb4)) FROM located
@@ -617,7 +619,7 @@ try {
     assert.equal(repeatedDocumentSearch.search_coverage.state, 'bounded');
     h.releaseRun(run.run_id);
     h.sql(`UPDATE source_heads SET version=2 WHERE id=${quote(upstream)};
-      INSERT INTO source_snapshots(source_id,version,body,complete) VALUES(${quote(upstream)},2,'合成已变化的整对象依赖。',TRUE);`);
+      INSERT INTO source_revisions(source_id,version,body,archive_complete) VALUES(${quote(upstream)},2,'合成已变化的整对象依赖。',TRUE);`);
     await start([...allowed, {kind: 'platform', id: precise.source}], '文档整对象上游已换版，仍须保留其他合法来源。');
     const staleDocument = await invoke('search_knowledge', {query: needle, source_selection: [nestedSelection,
       {object_id: 'field-source-selection-1', version: '1'}]});
@@ -626,7 +628,7 @@ try {
     await invoke('read_source', {citation: nestedSearch.hits[0].citation}, 'stale_knowledge');
     h.releaseRun(run.run_id);
     h.sql(`UPDATE source_current SET complete=FALSE WHERE source_id=${quote(precise.source)} AND revision=1;
-      UPDATE source_snapshots SET complete=FALSE WHERE source_id=${quote(precise.source)} AND version=1;`);
+      UPDATE source_revisions SET archive_complete=FALSE WHERE source_id=${quote(precise.source)} AND version=1;`);
     await start([{kind: 'platform', id: precise.source}, {kind: 'platform', id: 'business-guide'}], '不完整原文不可交付，其他许可来源仍可读。');
     const incomplete = await invoke('search_knowledge', {query: needle, source_selection: [
       {object_id: 'field-source-selection-1', version: '1'}, precise.legalSelection]});
@@ -634,9 +636,9 @@ try {
     assertExactCoverage(incomplete, 'bounded', '缺必要完整原文时保留同批有效项及覆盖缺口');
     h.releaseRun(run.run_id);
     h.sql(`UPDATE source_current SET complete=TRUE WHERE source_id=${quote(precise.source)} AND revision=1;
-      UPDATE source_snapshots SET complete=TRUE WHERE source_id=${quote(precise.source)} AND version=1;
+      UPDATE source_revisions SET archive_complete=TRUE WHERE source_id=${quote(precise.source)} AND version=1;
       UPDATE source_heads SET version=2 WHERE id=${quote(precise.source)};
-      INSERT INTO source_snapshots(source_id,version,body,complete) VALUES(${quote(precise.source)},2,'合成新修订原文。',TRUE);`);
+      INSERT INTO source_revisions(source_id,version,body,archive_complete) VALUES(${quote(precise.source)},2,'合成新修订原文。',TRUE);`);
     await start([{kind: 'platform', id: precise.source}, {kind: 'platform', id: 'business-guide'}], '旧来源修订不能在新原文上套定位。');
     const oldSource = await invoke('search_knowledge', {query: needle, source_selection: [
       {object_id: 'field-source-selection-1', version: '1'}, precise.legalSelection]});
@@ -690,7 +692,7 @@ try {
       content.entries[0] = {...content.entries[0], effective_value: rawBody, human_override: null,
         suggestion: {statements: [statement]}};
       h.sql(`UPDATE knowledge_objects SET body=${quote(JSON.stringify(content))} WHERE id=${quote(cited.id)};
-        UPDATE knowledge_versions SET body=${quote(JSON.stringify(content))} WHERE object_id=${quote(cited.id)} AND version=1;
+        UPDATE knowledge_revisions SET archived_body=${quote(JSON.stringify(content))} WHERE object_id=${quote(cited.id)} AND version=1;
         INSERT INTO knowledge_statements(object_id,version,statement_id,space_id,entry_path,layer,body)
           VALUES(${quote(cited.id)},1,${quote(statement.statement_id)},'demo','body','model_suggestion',${quote(JSON.stringify(statement))});`);
       const read = {items: [{kind: 'knowledge', ref: {object_id: cited.id, version: cited.version, path: 'body'},
@@ -778,10 +780,10 @@ try {
   if (scenario === 'all' || scenario === 'incomplete-upstream') {
     const completenessAllowed = [...allowed, {kind: 'platform', id: upstream}];
     evidence.completeness_allowed_sources = completenessAllowed;
-    h.sql(`UPDATE source_snapshots SET complete=FALSE WHERE source_id=${quote(upstream)} AND version=1;
+    h.sql(`UPDATE source_revisions SET archive_complete=FALSE WHERE source_id=${quote(upstream)} AND version=1;
       UPDATE source_current SET complete=FALSE WHERE source_id=${quote(upstream)} AND revision=1;`);
     evidence.incomplete_source_state = h.sql(`SELECT JSON_OBJECT('head_version',h.version,'revision',s.version,'complete',s.complete)
-      FROM source_heads h JOIN source_snapshots s ON s.source_id=h.id AND s.version=h.version WHERE h.id=${quote(upstream)}`)[0];
+      FROM source_heads h JOIN (SELECT source_id,version,body,archive_complete AS complete FROM source_revisions WHERE body IS NOT NULL) s ON s.source_id=h.id AND s.version=h.version WHERE h.id=${quote(upstream)}`)[0];
     assert.equal(evidence.incomplete_source_state.head_version, 1);
     assert.equal(Boolean(evidence.incomplete_source_state.complete), false);
     await start(completenessAllowed, '文档和上游均获准，但同修订上游不完整时不得交付正文。');
@@ -789,10 +791,10 @@ try {
     evidence.checks.push('同修订上游complete=false仍拒绝文档知识正文，不以版本头匹配代替完整性');
     h.releaseRun(run.run_id);
     // Worker会把legacy快照落到current，恢复时须同时恢复真正优先读取的当前记录。
-    h.sql(`UPDATE source_snapshots SET complete=TRUE WHERE source_id=${quote(upstream)} AND version=1;
+    h.sql(`UPDATE source_revisions SET archive_complete=TRUE WHERE source_id=${quote(upstream)} AND version=1;
       UPDATE source_current SET complete=TRUE WHERE source_id=${quote(upstream)} AND revision=1;`);
     evidence.recovered_source_state = h.sql(`SELECT JSON_OBJECT('store','snapshot','revision',version,'complete',complete)
-      FROM source_snapshots WHERE source_id=${quote(upstream)} AND version=1;
+      FROM (SELECT source_id,version,body,archive_complete AS complete FROM source_revisions WHERE body IS NOT NULL) archive_rows WHERE source_id=${quote(upstream)} AND version=1;
       SELECT JSON_OBJECT('store','current','revision',revision,'complete',complete)
       FROM source_current WHERE source_id=${quote(upstream)}`);
     assert.ok(evidence.recovered_source_state.every(state => state.revision === 1 && Boolean(state.complete)));
@@ -809,9 +811,9 @@ try {
       effective_value: '无关附录正文，不含目标检索词。', suggestion: {}, human_override: null,
       source_facts: {source_id: unused, version: '1', value: '无关附录正文，不含目标检索词。', complete: true}});
     h.sql(`INSERT INTO source_heads(id,space_id,version,fingerprint) VALUES(${quote(unused)},'demo',1,'synthetic');
-      INSERT INTO source_snapshots(source_id,version,body,complete) VALUES(${quote(unused)},1,'不完整的未选来源。',FALSE);
+      INSERT INTO source_revisions(source_id,version,body,archive_complete) VALUES(${quote(unused)},1,'不完整的未选来源。',FALSE);
       UPDATE knowledge_objects SET body=${quote(JSON.stringify(withOtherEntry))} WHERE id=${quote(document.id)};
-      UPDATE knowledge_versions SET body=${quote(JSON.stringify(withOtherEntry))} WHERE object_id=${quote(document.id)} AND version=1;
+      UPDATE knowledge_revisions SET archived_body=${quote(JSON.stringify(withOtherEntry))} WHERE object_id=${quote(document.id)} AND version=1;
       INSERT INTO knowledge_dependencies(owner_id,owner_version,space_id,entry_path,layer,purpose,role,effective,target_kind,target_id,target_revision,target_path,target_fingerprint)
         VALUES(${quote(document.id)},1,'demo','other','source_fact','required','origin',1,'platform',${quote(unused)},1,'','');`);
     await start(completenessAllowed, '只读取body窗口，不读取另一个来源尚不完整的附录。');
@@ -820,7 +822,7 @@ try {
     evidence.checks.push('完整性核验按已交付path：未选条目不完整来源不阻断合法body');
     h.releaseRun(run.run_id);
     h.sql(`UPDATE knowledge_objects SET body=${serialized} WHERE id=${quote(document.id)};
-      UPDATE knowledge_versions SET body=${serialized} WHERE object_id=${quote(document.id)} AND version=1;
+      UPDATE knowledge_revisions SET archived_body=${serialized} WHERE object_id=${quote(document.id)} AND version=1;
       DELETE FROM knowledge_dependencies WHERE owner_id=${quote(document.id)} AND entry_path='other';`);
   }
   if (scenario === 'all' || scenario === 'document') {
@@ -846,7 +848,7 @@ try {
 
     // 上游换版仍使依赖它的文档失效；身份修正不能放过过期内容。
     h.sql(`UPDATE source_heads SET version=2 WHERE id=${quote(upstream)};
-      INSERT INTO source_snapshots(source_id,version,body,complete) VALUES(${quote(upstream)},2,'合成更新后的来源正文。',TRUE);`);
+      INSERT INTO source_revisions(source_id,version,body,archive_complete) VALUES(${quote(upstream)},2,'合成更新后的来源正文。',TRUE);`);
     await start(allowed, '检查上游换版后旧文档不能继续交付。');
     await invoke('read_source', {citation}, 'stale_knowledge');
     const staleSearch = await invoke('search_knowledge', {query: needle, limit: 10});
@@ -858,7 +860,7 @@ try {
   console.log(JSON.stringify(evidence));
 } finally {
   evidence.storage_at_close = h.sql(`SELECT JSON_OBJECT('store','head','version',version) FROM source_heads WHERE id='synthetic-source-search-upstream';
-    SELECT JSON_OBJECT('store','snapshot','version',version,'complete',complete) FROM source_snapshots WHERE source_id='synthetic-source-search-upstream';
+    SELECT JSON_OBJECT('store','snapshot','version',version,'complete',complete) FROM (SELECT source_id,version,body,archive_complete AS complete FROM source_revisions WHERE body IS NOT NULL) archive_rows WHERE source_id='synthetic-source-search-upstream';
     SELECT JSON_OBJECT('store','current','version',revision,'complete',complete) FROM source_current WHERE source_id='synthetic-source-search-upstream';
     SELECT JSON_OBJECT('store','object','id',id,'version',version,'state',state) FROM knowledge_objects WHERE source_id='synthetic-source-search-upstream';
     SELECT JSON_OBJECT('store','dependency','owner',owner_id,'version',owner_version,'path',entry_path,'effective',effective,'target',target_id,'target_revision',target_revision)

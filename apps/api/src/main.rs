@@ -161,6 +161,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             get(data_routes::assets).post(data_routes::save_asset),
         )
         .route("/assets/skill-drafts", get(skill_draft_routes::list))
+        .route("/assets/{id}", get(data_routes::asset))
         .route(
             "/assets/skill-drafts/{draft_id}",
             get(skill_draft_routes::read),

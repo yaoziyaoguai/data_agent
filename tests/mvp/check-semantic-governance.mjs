@@ -38,7 +38,7 @@ const edit = (o, user, value) =>
   );
 const versions = () =>
   h.sql(
-    `SELECT JSON_OBJECT('versions',(SELECT COUNT(*) FROM knowledge_versions),'jobs',(SELECT COUNT(*) FROM knowledge_index_jobs),'objects',(SELECT COUNT(*) FROM knowledge_objects))`,
+    `SELECT JSON_OBJECT('versions',(SELECT COUNT(*) FROM (SELECT object_id,version,archived_body AS body FROM knowledge_revisions WHERE archived_body IS NOT NULL) archive_rows),'jobs',(SELECT COUNT(*) FROM knowledge_index_jobs),'objects',(SELECT COUNT(*) FROM knowledge_objects))`,
   )[0];
 const content = (o) => ({
   object_id: o.id,

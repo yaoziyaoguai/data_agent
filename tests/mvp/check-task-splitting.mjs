@@ -20,9 +20,11 @@ const taskCount = cid => h.sql(`SELECT JSON_OBJECT('n',COUNT(*)) FROM analysis_t
 try {
   const cid = await h.create();
   await fixture.begin(cid, "我要比较收入、退款率和客户数，口径分别确认，先不要写 SQL。");
-  await fixture.invoke("read_knowledge", { object_id: fixture.source.id, version: fixture.source.version });
+  const sourceRef = reference(fixture.source);
+  const adopted = await fixture.invoke("read_knowledge", { items: [{ kind: "knowledge", ref: sourceRef }] });
+  assert.equal(adopted.items[0].state, "ok");
   const base = await update({ action: "create", goal: "比较收入、退款率和客户数",
-    conditions: { ...empty, knowledge_refs: [reference(fixture.source)] }, options: [] });
+    conditions: { ...empty, knowledge_refs: [sourceRef] }, options: [] });
   const common = await update({ action: "clarify", task_id: base.task_id, expected_version: base.condition_version,
     condition_patch: { set: {}, unset: [] }, options: [], clarifications: [
       { question: "收入采用付款月还是退款发生月？", options: ["付款月", "退款发生月"] },
@@ -31,8 +33,8 @@ try {
     ] });
   const original = await read(common);
   const [income, refund, customer] = common.opened_clarifications;
-  const originalQuestion = h.sql(`SELECT JSON_OBJECT('question',question,'options',options,'authority',text_authority) FROM clarifications WHERE id=${quote(income.id)}`)[0];
-  const originalFields = h.sql(`SELECT field_authorities FROM condition_revisions WHERE task_id=${quote(common.task_id)} AND version=${quote(common.condition_version)}`)[0];
+  const originalQuestion = h.sql(`SELECT JSON_OBJECT('question',question,'options',options) FROM clarifications WHERE id=${quote(income.id)}`)[0];
+  assert.deepEqual(original.conditions.knowledge_refs, [sourceRef]);
   await fixture.finish();
 
   await fixture.begin(cid, "只把收入独立出来，月份改为 2026 年 2 月，其余口径继续等我回答。");
@@ -54,10 +56,9 @@ try {
   assert.deepEqual(remaining.open_clarifications.map(q => q.id).sort(), [refund.id, customer.id].sort());
   assert.deepEqual(target.open_clarifications, [income]);
   assert.equal(target.conditions.time_start, incomeConditions.time_start);
-  const movedQuestion = h.sql(`SELECT JSON_OBJECT('question',question,'options',options,'authority',text_authority) FROM clarifications WHERE id=${quote(income.id)}`)[0];
+  const movedQuestion = h.sql(`SELECT JSON_OBJECT('question',question,'options',options) FROM clarifications WHERE id=${quote(income.id)}`)[0];
   assert.deepEqual(movedQuestion, originalQuestion);
-  const movedFields = h.sql(`SELECT field_authorities FROM condition_revisions WHERE task_id=${quote(detached.task_id)} AND version=1`)[0];
-  assert.deepEqual(movedFields.knowledge_refs, originalFields.knowledge_refs);
+  assert.deepEqual(target.conditions.knowledge_refs, [sourceRef]);
   const history = await fixture.invoke("read_analysis_task", { task_id: common.task_id, condition_version: "1" });
   assert.equal(history.is_historical, true);
   assert.deepEqual(history.current_open_clarification_ids.sort(), [refund.id, customer.id].sort());

@@ -1,6 +1,7 @@
+use crate::routes::ResponseResult;
 use crate::{
     State,
-    routes::{failure, success, user},
+    routes::{failure, respond, semantic_user, user},
 };
 use axum::{
     Json,
@@ -10,11 +11,10 @@ use axum::{
 use data_agent::use_cases::semantic_governance;
 use serde_json::Value;
 use std::collections::HashMap;
-type ResponseResult = Result<Json<Value>, (axum::http::StatusCode, Json<Value>)>;
 pub async fn access(AxumState(state): AxumState<State>, headers: HeaderMap) -> ResponseResult {
     let ctx = user(&state, &headers).await.map_err(failure)?;
-    success(
-        "SemanticAccess",
+    respond!(
+        SemanticAccess,
         semantic_governance::read_access(&state.pool, &ctx)
             .await
             .map_err(failure)?,
@@ -22,8 +22,8 @@ pub async fn access(AxumState(state): AxumState<State>, headers: HeaderMap) -> R
 }
 pub async fn members(AxumState(state): AxumState<State>, headers: HeaderMap) -> ResponseResult {
     let ctx = user(&state, &headers).await.map_err(failure)?;
-    success(
-        "SemanticMemberList",
+    respond!(
+        SemanticMemberList,
         semantic_governance::list_members(&ctx, &state.identities.members(&ctx))
             .map_err(failure)?,
     )
@@ -34,9 +34,9 @@ pub async fn assign(
     Path(id): Path<String>,
     Json(input): Json<Value>,
 ) -> ResponseResult {
-    let ctx = user(&state, &headers).await.map_err(failure)?;
-    success(
-        "SemanticMaintenance",
+    let ctx = semantic_user(&state, &headers).await.map_err(failure)?;
+    respond!(
+        SemanticMaintenance,
         semantic_governance::assign(
             &state.pool,
             &ctx,
@@ -53,9 +53,9 @@ pub async fn draft(
     headers: HeaderMap,
     Json(input): Json<Value>,
 ) -> ResponseResult {
-    let ctx = user(&state, &headers).await.map_err(failure)?;
-    success(
-        "Proposal",
+    let ctx = semantic_user(&state, &headers).await.map_err(failure)?;
+    respond!(
+        Proposal,
         semantic_governance::draft(&state.pool, &ctx, input)
             .await
             .map_err(failure)?,
@@ -66,12 +66,12 @@ pub async fn list(
     headers: HeaderMap,
     Query(query): Query<HashMap<String, String>>,
 ) -> ResponseResult {
-    let ctx = user(&state, &headers).await.map_err(failure)?;
+    let ctx = semantic_user(&state, &headers).await.map_err(failure)?;
     if query.keys().any(|k| k != "after_id") {
         return Err(failure(data_agent::types::Error::new("invalid_input")));
     }
-    success(
-        "SemanticCorrectionList",
+    respond!(
+        SemanticCorrectionList,
         semantic_governance::list(&state.pool, &ctx, query.get("after_id").map(String::as_str))
             .await
             .map_err(failure)?,
@@ -82,9 +82,9 @@ pub async fn read(
     headers: HeaderMap,
     Path(id): Path<String>,
 ) -> ResponseResult {
-    let ctx = user(&state, &headers).await.map_err(failure)?;
-    success(
-        "SemanticCorrection",
+    let ctx = semantic_user(&state, &headers).await.map_err(failure)?;
+    respond!(
+        SemanticCorrection,
         semantic_governance::read(&state.pool, &ctx, &id)
             .await
             .map_err(failure)?,
@@ -95,9 +95,9 @@ pub async fn submit(
     headers: HeaderMap,
     Json(input): Json<Value>,
 ) -> ResponseResult {
-    let ctx = user(&state, &headers).await.map_err(failure)?;
-    success(
-        "SemanticCorrection",
+    let ctx = semantic_user(&state, &headers).await.map_err(failure)?;
+    respond!(
+        SemanticCorrection,
         semantic_governance::change(&state.pool, &ctx, None, "submit", input)
             .await
             .map_err(failure)?,
@@ -109,9 +109,9 @@ pub async fn revise(
     Path(id): Path<String>,
     Json(input): Json<Value>,
 ) -> ResponseResult {
-    let ctx = user(&state, &headers).await.map_err(failure)?;
-    success(
-        "SemanticCorrection",
+    let ctx = semantic_user(&state, &headers).await.map_err(failure)?;
+    respond!(
+        SemanticCorrection,
         semantic_governance::change(&state.pool, &ctx, Some(&id), "revise", input)
             .await
             .map_err(failure)?,
@@ -123,12 +123,12 @@ pub async fn action(
     Path((id, action)): Path<(String, String)>,
     Json(input): Json<Value>,
 ) -> ResponseResult {
-    let ctx = user(&state, &headers).await.map_err(failure)?;
+    let ctx = semantic_user(&state, &headers).await.map_err(failure)?;
     if !matches!(action.as_str(), "review" | "apply") {
         return Err(failure(data_agent::types::Error::new("invalid_input")));
     }
-    success(
-        "SemanticCorrection",
+    respond!(
+        SemanticCorrection,
         semantic_governance::change(&state.pool, &ctx, Some(&id), &action, input)
             .await
             .map_err(failure)?,

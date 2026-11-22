@@ -1,24 +1,23 @@
+use crate::routes::ResponseResult;
 use crate::{
     State,
-    routes::{failure, success, user},
+    routes::{failure, respond, semantic_user},
 };
 use axum::{
-    Json,
     extract::{Path, Query, State as AxumState},
-    http::{HeaderMap, StatusCode},
+    http::HeaderMap,
 };
 use data_agent::use_cases;
-use serde_json::{Value, json};
+use serde_json::json;
 use std::collections::HashMap;
-type ResponseResult = Result<Json<Value>, (StatusCode, Json<Value>)>;
 
 pub async fn list(
     AxumState(state): AxumState<State>,
     headers: HeaderMap,
     Query(query): Query<HashMap<String, String>>,
 ) -> ResponseResult {
-    let ctx = user(&state, &headers).await.map_err(failure)?;
     data_agent::contracts::validate("AssetPageQuery", &json!(query)).map_err(failure)?;
+    let ctx = semantic_user(&state, &headers).await.map_err(failure)?;
     let value = use_cases::skill_drafts::list(
         &state.pool,
         &ctx,
@@ -26,7 +25,7 @@ pub async fn list(
     )
     .await
     .map_err(failure)?;
-    success("SkillDraftList", value)
+    respond!(SkillDraftList, value)
 }
 
 pub async fn read(
@@ -34,9 +33,9 @@ pub async fn read(
     headers: HeaderMap,
     Path(draft): Path<String>,
 ) -> ResponseResult {
-    let ctx = user(&state, &headers).await.map_err(failure)?;
+    let ctx = semantic_user(&state, &headers).await.map_err(failure)?;
     let value = use_cases::skill_drafts::read(&state.pool, &ctx, &draft)
         .await
         .map_err(failure)?;
-    success("SkillDraft", value)
+    respond!(SkillDraft, value)
 }

@@ -633,7 +633,7 @@ mod identity_filter_tests {
     fn narrow_entry_selection_sql_shape() {
         // 05切片2：entry_id提示与词条INSTR的OR组合，绑定次序与文本一致。
         let mut selected = sqlx::QueryBuilder::<sqlx::MySql>::new(
-            "SELECT j.entry FROM knowledge_versions v, JSON_TABLE(v.body,'$.entries[*]' COLUMNS(entry JSON PATH '$')) j WHERE v.object_id=",
+            "SELECT j.entry FROM knowledge_revisions v, JSON_TABLE(v.archived_body,'$.entries[*]' COLUMNS(entry JSON PATH '$')) j WHERE v.object_id=",
         );
         selected
             .push_bind("probe")
@@ -655,7 +655,7 @@ mod identity_filter_tests {
         let query = selected.build();
         assert_eq!(
             query.sql(),
-            "SELECT j.entry FROM knowledge_versions v, JSON_TABLE(v.body,'$.entries[*]' COLUMNS(entry JSON PATH '$')) j WHERE v.object_id=? AND v.version=? AND (JSON_UNQUOTE(JSON_EXTRACT(j.entry,'$.entry_id')) IN (?,?) OR INSTR(LOWER(CAST(j.entry AS CHAR)),?)>0)",
+            "SELECT j.entry FROM knowledge_revisions v, JSON_TABLE(v.archived_body,'$.entries[*]' COLUMNS(entry JSON PATH '$')) j WHERE v.object_id=? AND v.version=? AND (JSON_UNQUOTE(JSON_EXTRACT(j.entry,'$.entry_id')) IN (?,?) OR INSTR(LOWER(CAST(j.entry AS CHAR)),?)>0)",
             "生成的SQL文本"
         );
     }

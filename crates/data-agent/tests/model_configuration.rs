@@ -18,6 +18,7 @@ async fn configuration_is_scoped_and_frozen_service_remains_authoritative() {
         user_id: "alice".into(),
         space_id: space.into(),
         request_id: "synthetic-configuration".into(),
+        table_access: None,
     };
     let a = ctx("model-scope-a");
     let b = ctx("model-scope-b");

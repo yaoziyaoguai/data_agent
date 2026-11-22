@@ -133,6 +133,7 @@ async fn prepare_source(pool: &MySqlPool, job: &jobs::SourceJob) -> Result<()> {
             user_id: "synthetic-preparation".into(),
             space_id: space,
             request_id: job.lease.id.clone(),
+            table_access: None,
         };
         // 文档来源按Markdown分段，平台来源按SQL结构分段；引用身份随来源种类表达。
         let document = super::knowledge_sources::document_id(&source_id);

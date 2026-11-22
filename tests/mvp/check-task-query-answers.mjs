@@ -36,7 +36,7 @@ RustTransport.prototype.post=async function(path,name,input,...rest){
     finishRequests.push({recovering,input:structuredClone(input),workspace:structuredClone(this.run.workspace_context)});
     await writeFile(artifactDirectory+'/finish-requests.json',JSON.stringify(finishRequests,null,2)+'\n');
   }
-  const refresh=path==='/internal/context/refresh'?{input:structuredClone(input),facts:h.sql(`SELECT JSON_OBJECT('run_authority',r.authority_snapshot,'frozen',(SELECT JSON_ARRAYAGG(answer_handoff) FROM tool_calls WHERE recovery_chain_id=r.recovery_chain_id AND state='succeeded' AND answer_part_sequence IS NOT NULL),'tasks',(SELECT JSON_ARRAYAGG(JSON_OBJECT('id',id,'goal_authority',goal_authority)) FROM analysis_tasks WHERE conversation_id=r.conversation_id),'condition_authorities',(SELECT JSON_ARRAYAGG(c.field_authorities) FROM condition_revisions c JOIN analysis_tasks t ON t.id=c.task_id WHERE t.conversation_id=r.conversation_id),'clarification_authorities',(SELECT JSON_ARRAYAGG(text_authority) FROM clarifications WHERE conversation_id=r.conversation_id)) FROM agent_runs r WHERE r.id='${input.run_id}'`)}:null;
+  const refresh=path==='/internal/context/refresh'?{input:structuredClone(input),facts:h.sql(`SELECT JSON_OBJECT('run_authority',r.authority_snapshot,'frozen',(SELECT JSON_ARRAYAGG(answer_handoff) FROM tool_calls WHERE recovery_chain_id=r.recovery_chain_id AND state='succeeded' AND answer_part_sequence IS NOT NULL)) FROM agent_runs r WHERE r.id='${input.run_id}'`)}:null;
   if(refresh)refreshRequests.push(refresh);
   let receipt;
   try{receipt=await originalPost.call(this,path,name,input,...rest);}catch(error){

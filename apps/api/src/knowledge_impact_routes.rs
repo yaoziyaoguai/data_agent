@@ -1,9 +1,8 @@
 use crate::{
     State,
-    routes::{failure, success, user},
+    routes::{ResponseResult, failure, respond, semantic_user},
 };
 use axum::{
-    Json,
     extract::{Path, Query, State as AxumState},
     http::HeaderMap,
 };
@@ -16,14 +15,14 @@ pub async fn read(
     headers: HeaderMap,
     Path(object): Path<String>,
     Query(query): Query<HashMap<String, String>>,
-) -> Result<Json<Value>, (axum::http::StatusCode, Json<Value>)> {
-    let ctx = user(&state, &headers).await.map_err(failure)?;
+) -> ResponseResult {
+    let ctx = semantic_user(&state, &headers).await.map_err(failure)?;
     let input = query
         .into_iter()
         .map(|(key, value)| (key, json!(value)))
         .collect();
-    success(
-        "MaintenanceImpact",
+    respond!(
+        MaintenanceImpact,
         knowledge_impact::read(&state.pool, &ctx, &object, Value::Object(input))
             .await
             .map_err(failure)?,

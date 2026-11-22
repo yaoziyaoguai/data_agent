@@ -15,7 +15,7 @@ const read=async id => (await h.request('/knowledge/'+id)).value;
 const entry=(object,id) => object.entries.find(e=>e.entry_id===id);
 const patch=(object,input) => h.request('/knowledge/'+object.id,input,'alice','PATCH');
 const command=object=>({operation_id:randomUUID(),expected_version:object.version});
-const counts=()=>h.sql("SELECT JSON_OBJECT('objects',(SELECT COUNT(*) FROM knowledge_objects),'versions',(SELECT COUNT(*) FROM knowledge_versions),'operations',(SELECT COUNT(*) FROM knowledge_operations),'assets',(SELECT COUNT(*) FROM personal_assets),'asset_versions',(SELECT COUNT(*) FROM personal_asset_versions),'asset_operations',(SELECT COUNT(*) FROM asset_operations),'queued',(SELECT COUNT(*) FROM prefill_attempts))")[0];
+const counts=()=>h.sql("SELECT JSON_OBJECT('objects',(SELECT COUNT(*) FROM knowledge_objects),'versions',(SELECT COUNT(*) FROM (SELECT object_id,version,archived_body AS body FROM knowledge_revisions WHERE archived_body IS NOT NULL) archive_rows),'operations',(SELECT COUNT(*) FROM idempotency_receipts WHERE domain='knowledge'),'assets',(SELECT COUNT(*) FROM personal_assets),'asset_versions',(SELECT COUNT(*) FROM personal_asset_versions),'asset_operations',(SELECT COUNT(*) FROM idempotency_receipts WHERE domain='asset'),'queued',(SELECT COUNT(*) FROM prefill_attempts))")[0];
 const equalReceipts=responses=>{
   assert.ok(responses.every(r=>r.status===200),JSON.stringify(responses));
   for(const response of responses)assert.deepEqual(response.value,responses[0].value);
@@ -68,7 +68,7 @@ try{
   assert.deepEqual(counts(),{...before,objects:before.objects+1,versions:before.versions+1,operations:before.operations+1});
   before=counts();
   const edit={...command(doc),entry_id:'body',value:'合成更新正文'};
-  doc=await interleaved('knowledge_objects','knowledge_operations',doc.id,()=>patch(doc,edit));
+  doc=await interleaved('knowledge_objects','idempotency_receipts',doc.id,()=>patch(doc,edit));
   assert.equal(doc.version,'2');assert.equal(entry(doc,'body').effective_value,edit.value);
   assert.deepEqual(counts(),{...before,versions:before.versions+1,operations:before.operations+1});
   for(const action of ['disable','enable']){
@@ -90,7 +90,7 @@ try{
   assert.deepEqual(counts(),{...before,assets:before.assets+1,asset_versions:before.asset_versions+1,asset_operations:before.asset_operations+1});
   before=counts();
   const assetEdit={...assetInput,...command(asset),id:asset.id,body:'合成私人修订'};
-  asset=await interleaved('personal_assets','asset_operations',asset.id,()=>h.request('/assets',assetEdit));
+  asset=await interleaved('personal_assets','idempotency_receipts',asset.id,()=>h.request('/assets',assetEdit));
   assert.equal(asset.version,'2');assert.equal(asset.body,assetEdit.body);
   assert.deepEqual(counts(),{...before,asset_versions:before.asset_versions+1,asset_operations:before.asset_operations+1});
   for(const action of ['disable','enable']){
@@ -154,7 +154,7 @@ try{
   const canonical=value=>value&&typeof value==='object'?Array.isArray(value)?value.map(canonical):Object.fromEntries(Object.keys(value).sort().map(key=>[key,canonical(value[key])])):value;
   // 旧trial持久指纹证明source_version按字符串编码；升级不修改原账本。
   const legacyFingerprint=createHash('sha256').update(JSON.stringify(canonical({object_id:catalogTable.id,input:reanalysis,source_version:result.source_version}))).digest('hex');
-  h.sql(`UPDATE knowledge_operations SET fingerprint='${legacyFingerprint}' WHERE owner_id='alice' AND operation_id='${reanalysis.operation_id}'`);
+  h.sql(`UPDATE idempotency_receipts SET request_hash='${legacyFingerprint}' WHERE domain='knowledge' AND actor_id='alice' AND operation_id='${reanalysis.operation_id}'`);
   before=counts();assert.deepEqual((await h.request('/knowledge/'+catalogTable.id+'/reanalyze',reanalysis)).value,result);
   assert.equal((await h.request('/knowledge/'+field.id+'/reanalyze',reanalysis)).value.code,'idempotency_conflict');assert.deepEqual(counts(),before);
   const lineageOverride=await patch(result,{...command(result),entry_id:'lineage',value:'人工记录的待核血缘'});assert.equal(lineageOverride.status,200);

@@ -98,9 +98,11 @@ class ReadGuard:
     独立解析，因而不是语句内虚拟关系，照旧拒绝。探针经独立只读连接执行，不复用被
     授权语句的连接。"""
 
-    def __init__(self, tables, probe):
+    def __init__(self, tables, probe, denied_tables=()):
         self.tables, self.probe = tables, probe
         self.virtual = set()
+        self.denied_tables = denied_tables
+        self.denied = False
 
     def statement_local(self, name):
         quoted = '"' + name.replace('"', '""') + '"'
@@ -112,6 +114,9 @@ class ReadGuard:
 
     def __call__(self, action, first, second, _database, _trigger):
         if action == sqlite3.SQLITE_READ:
+            if first in self.denied_tables:
+                self.denied = True
+                return sqlite3.SQLITE_DENY
             if first in self.tables or first in self.virtual:
                 return sqlite3.SQLITE_OK
             if not first or first.startswith('sqlite_'):
@@ -173,6 +178,7 @@ class Platform:
         self.ttl=float(os.environ.get('DATA_AGENT_RESULT_TTL_SECONDS','86400'))
         self.unknown=os.environ.get('DATA_AGENT_MOCK_SUBMIT_UNKNOWN')=='1'
         self.catalog_file=directory/'catalog.json'
+        self.identities = set(json.loads(os.environ.get('DATA_AGENT_DEV_IDENTITIES', '{}')).values())
 
     def prepare_sources(self):
         if self.manifest_file.exists():
@@ -293,31 +299,100 @@ class Platform:
                 break
             page=candidate
         return reply(page)
-    def compile(self, payload):
+    def compile(self, payload, denied_tables=()):
         self.require_sources()
         sql=payload.get('sql',''); params=payload.get('parameters',{})
         if not isinstance(sql,str) or not sql.strip() or len(sql)>24000 or not isinstance(params,dict):
             return {'state':'rejected','reason':'invalid_input'}
+        guard = None
         try:
             with sqlite3.connect(f'file:{self.business}?mode=ro',uri=True) as db, \
                     contextlib.closing(sqlite3.connect(f'file:{self.business}?mode=ro',uri=True)) as probe:
-                db.set_authorizer(ReadGuard(self.allowed_tables, probe))
+                guard = ReadGuard(self.allowed_tables, probe, denied_tables)
+                db.set_authorizer(guard)
                 db.execute('EXPLAIN '+sql,params).fetchall()
             return {'state':'passed','reason':None,'target_id':'synthetic-sqlite','target_version':self.platform_version,'dialect':'SQLite','read_only':True}
         except (sqlite3.Error,ValueError,TypeError,OverflowError) as error:
+            if guard and guard.denied:
+                raise ValueError('forbidden') from error
             return {'state':'rejected','reason':'sql_not_supported','diagnostic':sql_diagnostic(error),'target_id':'synthetic-sqlite','target_version':self.platform_version,'dialect':'SQLite','read_only':True}
+    def permissions(self):
+        path = self.catalog_file.parent / 'permissions.json'
+        return json.loads(path.read_text()) if path.exists() else {}
+
+    def table_access(self, permissions, space, user):
+        # 兼容共享的合成目录。已配置的用户清单（含空集）保留用户的明确授权。
+        readers = permissions.get('table_readers', {}).get(space, {})
+        if user not in readers:
+            return None
+        allowed = readers[user]
+        if not isinstance(allowed, list) or any(not isinstance(table, str) for table in allowed):
+            raise ValueError('invalid_input')
+        return set(allowed)
+
+    def catalog_access(self, payload):
+        user = payload.get('user_id')
+        space = payload.get('space_id')
+        if space != 'demo' or not isinstance(user, str) or user not in self.identities:
+            raise ValueError('forbidden')
+        allowed = self.table_access(self.permissions(), space, user)
+        if allowed is None:
+            return {'space_id': space, 'user_id': user, 'namespace': 'synthetic-sqlite',
+                    'table_ids': [], 'legacy_table_names': [], 'complete_access': True}
+        catalog = json.loads(self.catalog_file.read_text()) if self.catalog_file.exists() else None
+        namespace = catalog['source_namespace'] if catalog else 'synthetic-sqlite'
+        if catalog:
+            by_id = {table['id']: table['name'] for table in catalog['tables']}
+        else:
+            by_id = dict.fromkeys(self.allowed_tables)
+        # 自定义目录和旧样例可以并存；同名目录键不得替其他旧表取得许可。
+        if not allowed <= set(by_id) | self.allowed_tables:
+            raise ValueError('invalid_input')
+        return {'space_id': space, 'user_id': user, 'namespace': namespace,
+                'table_ids': sorted(allowed & set(by_id)), 'legacy_table_names': sorted(allowed & self.allowed_tables),
+                'complete_access': False}
+
+    def query_denied_tables(self, permissions, space, owner):
+        if owner in permissions.get('denied_query_users', []):
+            raise ValueError('forbidden')
+        allowed = self.table_access(permissions, space, owner)
+        if allowed is None:
+            return set()
+        if self.catalog_file.exists():
+            catalog = json.loads(self.catalog_file.read_text())
+            allowed.update(table['name'] for table in catalog['tables'] if table['id'] in allowed)
+        return self.allowed_tables - allowed
+
     def operate(self,path,payload):
         if path=='/catalog': return self.catalog(payload)
-        if path=='/validate': return self.compile(payload)
+        if path=='/catalog-access': return self.catalog_access(payload)
+        if path=='/validate':
+            if 'owner_id' not in payload:
+                return self.compile(payload)
+            owner = payload['owner_id']
+            space = payload.get('space_id')
+            if not isinstance(owner,str) or space != 'demo':
+                raise ValueError('invalid_input')
+            return self.compile(payload, self.query_denied_tables(self.permissions(), space, owner))
         if path == '/permissions':
             space = payload.get('space_id')
             denied = payload.get('denied_query_users')
-            if not isinstance(space, str) or not space or not isinstance(denied, list) or any(not isinstance(user, str) for user in denied):
+            readers = payload.get('table_readers')
+            if (not isinstance(space, str) or not space or not isinstance(denied, list)
+                    or any(not isinstance(user, str) for user in denied)
+                    or ('table_readers' in payload and (not isinstance(readers, dict)
+                        or any(user not in self.identities or not isinstance(ids, list)
+                               or any(not isinstance(table, str) or not table for table in ids)
+                               for user, ids in readers.items())))):
                 raise ValueError('invalid_input')
             current = self.catalog_file.parent / 'permissions.json'
             with LOCK:
+                permissions = self.permissions()
+                permissions['denied_query_users'] = denied
+                if readers is not None:
+                    permissions.setdefault('table_readers', {})[space] = readers
                 pending = current.with_suffix('.new')
-                pending.write_text(json.dumps({'denied_query_users': denied}))
+                pending.write_text(json.dumps(permissions))
                 pending.replace(current)
             req = Request(
                 os.environ['DATA_AGENT_API_URL'] + '/internal/live-changes',
@@ -331,16 +406,15 @@ class Platform:
             return {'state': 'updated'}
         qid=payload.get('query_id'); owner=payload.get('owner_id')
         if not isinstance(qid,str) or not isinstance(owner,str): raise ValueError('invalid_input')
-        permission_file=self.catalog_file.parent/'permissions.json'
-        permissions=json.loads(permission_file.read_text()) if permission_file.exists() else {}
-        if path in ('/submit','/results','/result-authority') and owner in permissions.get('denied_query_users',[]): raise ValueError('forbidden')
+        permissions=self.permissions()
+        denied_tables = self.query_denied_tables(permissions, 'demo', owner) if path in ('/submit','/results','/result-authority') else set()
         with LOCK,sqlite3.connect(self.ledger) as db:
             db.row_factory=sqlite3.Row
             row=db.execute('SELECT * FROM submissions WHERE id=? AND owner=?',(qid,owner)).fetchone()
             if path=='/submit':
                 if payload.get('target_id') != 'synthetic-sqlite' or payload.get('target_version') != self.platform_version:
                     raise ValueError('version_conflict')
-                report=self.compile(payload)
+                report=self.compile(payload, denied_tables)
                 if report['state']!='passed': raise ValueError('sql_not_supported')
                 fp=hashlib.sha256(json.dumps(payload,sort_keys=True).encode()).hexdigest()
                 if row and row['fp']!=fp: raise ValueError('idempotency_conflict')
@@ -350,6 +424,10 @@ class Platform:
                 if self.unknown: raise ValueError('outcome_unknown')
                 return {'query_id':qid,'state':'running','result_ref':None,'source':'mock'}
             if not row: raise ValueError('not_available')
+            if path in ('/results','/result-authority') and denied_tables:
+                # 保存的 SQL 不重新取数。用同一 SQLite 授权回调核验当前表权限。
+                if self.compile(json.loads(row['payload']), denied_tables)['state'] != 'passed':
+                    raise ValueError('result_unavailable')
             if path=='/result-authority':
                 if time.time()>row['expires_at']: raise ValueError('result_expired')
                 if row['state']!='succeeded' or not row['result']: raise ValueError('result_unavailable')

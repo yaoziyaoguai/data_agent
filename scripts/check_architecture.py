@@ -30,8 +30,6 @@ OVERSIZED_BASELINE={
  'crates/data-agent/src/modules/ingestion/store.rs': '2bd810565a46875781cea1a8e81c047d18e26021be3e1569ffbe3a9f6b1f5328',
  'crates/data-agent/src/modules/knowledge/structure.rs': '7bc99f2217f077107811f929577e34f5cdc49c4259f9dd116363943bf2ba4c97',
  'crates/data-agent/src/modules/queries/semantic_checks.rs': '219983cf99a36af16d8617826edafbc6fdf60ebf6e4f0e8a1c73e674bc5a9ca5',
- 'crates/data-agent/src/modules/retrieval/mod.rs': 'ef5e59bbb7dd1216ee02c92953a374d1ec5f858397ca7077bddc22f9f4a74bf3',
- 'crates/data-agent/src/modules/retrieval/vector.rs': '06eeb7903d2aa3280b6a82cd650a0bd90611d74ef0a49f4725692ba95ca65a97',
  'crates/data-agent/src/modules/runtime/outputs.rs': '1afc170bf2c48ec6026349f1689a979ba771f946f2f68c0ba4312816675acac9',
  'crates/data-agent/src/modules/runtime/store.rs': '079f0d3117a58e19aa073e6e5eaa7ce495fb4824e3c0ffd731685d793df5d247',
  'crates/data-agent/src/use_cases/analysis_reports.rs': '8a45ec4358b5278c5c86b02cda9489aa2410a31ac293f6df1fc7805f74df106c',
@@ -57,6 +55,17 @@ def source_line_errors(root:Path)->list[str]:
     errors.append(f'{relative}: {lines} 行，源码上限为 800 行')
  return errors
 
+# The delivery read model composes explicitly exported CTE relations from their owners.
+# Real table names always keep their normal ownership checks.
+DELIVERY_RELATIONS = {
+ 'modules/analysis/task_context/store.rs': {'delivery_input', 'task_context'},
+ 'modules/assets/store.rs': {'delivery_input', 'workspace_assets'},
+ 'modules/conversations/delivery/store.rs': {'delivery_input', 'checkpoint_run'},
+ 'modules/knowledge/storage/catalog_search/store.rs': {'workspace_assets', 'workspace_dependency_ids', 'checkpoint_asset_heads'},
+ 'modules/queries/store.rs': {'delivery_input', 'readable_delivery_conversations'},
+ 'modules/runtime/checkpoints/store.rs': {'delivery_input', 'history_chain', 'delivery_history'},
+}
+
 def violations(root:Path)->list[str]:
  errors=source_line_errors(root);base=root/'crates/data-agent/src'
  for path in sorted(base.rglob('*.rs')):
@@ -74,6 +83,7 @@ def violations(root:Path)->list[str]:
    # CTE引用和JSON_TABLE函数不是持久表；CTE体内的实际表仍按owner检查。
    sql=re.sub(r'\\\n\s*',' ',source)
    ctes={name.lower() for name in re.findall(r'(?:\bWITH(?:\s+RECURSIVE)?|,)\s*([a-z_]+)\s+AS\s*\(',sql,re.I)}
+   ctes.update(DELIVERY_RELATIONS.get(name.as_posix(), ()))
    for match in re.finditer(r'\b(?:FROM|INTO|JOIN)\s+([a-z_]+)|\bUPDATE\s+([a-z_]+)\s+SET',sql,re.I):
     table=next(part for part in match.groups() if part)
     if not any(table.lower() in tables for tables in OWNERS.values()):

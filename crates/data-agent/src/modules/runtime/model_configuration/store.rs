@@ -385,62 +385,35 @@ pub async fn assert_active_in_tx(
     space: &str,
     profile: &ModelProfile,
 ) -> Result<()> {
-    // 与管理员修改共享空间配置锁；检查发生在发送许可事务内，之后不再重新选择端点。
-    let settings =
-        sqlx::query("SELECT space_id,managed FROM model_space_settings WHERE space_id=? FOR SHARE")
-            .bind(space)
-            .fetch_optional(tx.connection())
-            .await?;
-    if settings.is_none() {
-        return if profile.configured_model.is_none() {
-            Ok(())
-        } else {
-            Err(Error::new("model_unavailable"))
-        };
-    }
-    if let Some(config) = &profile.configured_model {
-        let model: Value =
-            sqlx::query_scalar("SELECT payload FROM model_definitions WHERE space_id=? AND id=?")
-                .bind(space)
-                .bind(&config.id)
-                .fetch_optional(tx.connection())
-                .await?
-                .ok_or(Error::new("model_unavailable"))?;
-        // 模型改绑服务后，旧运行仍检查自己的原服务状态。
-        let old = sqlx::query("SELECT payload FROM model_services WHERE space_id=? AND id=?")
-            .bind(space)
-            .bind(&config.service_id)
-            .fetch_optional(tx.connection())
-            .await?
-            .ok_or(Error::new("model_unavailable"))?;
-        let service: Value = old.get("payload");
-        if service["enabled"] != true || model["enabled"] != true {
-            return Err(Error::new("model_unavailable"));
-        }
-    } else if profile.provider_id == "deepseek"
-        && settings
-            .as_ref()
-            .is_some_and(|row| row.get::<bool, _>("managed"))
-    {
-        // 历史消息没有版本引用，其连接来自旧部署；不能随逻辑模型改绑到新服务。
-        let model: Option<Value> =
-            sqlx::query_scalar("SELECT payload FROM model_definitions WHERE space_id=? AND id=?")
-                .bind(space)
-                .bind(&profile.model_id)
-                .fetch_optional(tx.connection())
-                .await?;
-        let service: Option<Value> = sqlx::query_scalar(
-            "SELECT payload FROM model_services WHERE space_id=? AND id='deployment-deepseek'",
-        )
-        .bind(space)
-        .fetch_optional(tx.connection())
-        .await?;
-        if model.is_none_or(|m| m["enabled"] != true)
-            || service.is_none_or(|s| s["enabled"] != true)
+    // 与配置修改共享空间行锁。旧运行验证冻结时的服务，不能跟随逻辑模型改绑。
+    let configured = profile.configured_model.as_ref();
+    let model = configured.map_or(profile.model_id.as_str(), |m| m.id.as_str());
+    let service = configured.map_or("deployment-deepseek", |m| m.service_id.as_str());
+    let state: Option<(bool, bool)> = sqlx::query_as(
+        "SELECT s.managed, COALESCE(JSON_EXTRACT(d.payload,'$.enabled')=CAST('true' AS JSON)
+            AND JSON_EXTRACT(v.payload,'$.enabled')=CAST('true' AS JSON),FALSE)
+         FROM model_space_settings s
+         LEFT JOIN model_definitions d ON d.space_id=s.space_id AND d.id=?
+         LEFT JOIN model_services v ON v.space_id=s.space_id AND v.id=?
+         WHERE s.space_id=? FOR SHARE OF s",
+    )
+    .bind(model)
+    .bind(service)
+    .bind(space)
+    .fetch_optional(tx.connection())
+    .await?;
+    match state {
+        Some((managed, enabled))
+            if configured.is_some() || (managed && profile.provider_id == "deepseek") =>
         {
-            return Err(Error::new("model_unavailable"));
+            if !enabled {
+                return Err(Error::new("model_unavailable"));
+            }
         }
+        None if configured.is_some() => return Err(Error::new("model_unavailable")),
+        _ => {}
     }
+
     Ok(())
 }
 

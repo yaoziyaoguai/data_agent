@@ -107,13 +107,13 @@ try {
   checks.push('结构按最终容量保独立Unicode页，裁剪页和尾页不发布effective_structure');
 
   // 只修改隔离合成来源，仍由正式重分析与工具采用入口核当前列绑定。
-  const source = h.sql("SELECT JSON_OBJECT('version',h.version,'body',s.body) FROM source_heads h JOIN source_snapshots s ON s.source_id=h.id AND s.version=h.version WHERE h.id='schema'")[0];
+  const source = h.sql("SELECT JSON_OBJECT('version',h.version,'body',s.body) FROM source_heads h JOIN (SELECT source_id,version,body,archive_complete AS complete FROM source_revisions WHERE body IS NOT NULL) s ON s.source_id=h.id AND s.version=h.version WHERE h.id='schema'")[0];
   const schema = source.body.replace(/CREATE TABLE demo_order_detail \([\s\S]*?\);/, ddl => ddl
     .replace('    line_id INTEGER NOT NULL,\n', '').replace('PRIMARY KEY (order_id, line_id)', 'PRIMARY KEY (order_id)'));
   assert.notEqual(schema, source.body);
   const revision = Number(source.version) + 1, encoded = Buffer.from(schema).toString('hex');
   const fingerprint = createHash('sha256').update(schema).digest('hex');
-  h.sql(`INSERT INTO source_snapshots(source_id,version,body,complete) VALUES('schema',${revision},CONVERT(0x${encoded} USING utf8mb4),TRUE);
+  h.sql(`INSERT INTO source_revisions(source_id,version,body,archive_complete) VALUES('schema',${revision},CONVERT(0x${encoded} USING utf8mb4),TRUE);
     UPDATE source_heads SET version=${revision},fingerprint='${fingerprint}' WHERE id='schema';
     UPDATE source_current SET revision=${revision},body=CONVERT(0x${encoded} USING utf8mb4) WHERE source_id='schema'`);
   table = ok(await h.request('/knowledge/' + table.id + '/reanalyze', {operation_id: randomUUID(), expected_version: table.version}));

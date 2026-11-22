@@ -1,5 +1,5 @@
 use crate::{
-    modules::{analysis, queries},
+    modules::queries,
     persistence::AppTx,
     types::{AccessContext, Error, Result, fingerprint},
 };
@@ -111,22 +111,14 @@ fn report_projection(report: &Value) -> Value {
     })
 }
 
-// 保存全部实际出处，派生字段的个人来源与间接结果也不能只靠显式引用代表。
+// 保存分析采用的直接出处，历史投影只抽取已登记的出处。
 fn with_sources(mut entry: Value, authority: Value) -> Result<Value> {
-    let mut authority = super::context_authority::historical_sources(&authority)?;
-    super::context_authority::observe(&mut authority, &entry["actual_sources"]);
+    let authority =
+        super::context_authority::historical_sources(&authority, &entry["actual_sources"])?;
     let mut results = entry["actual_sources"]["result_dependencies"]
         .as_array()
         .cloned()
         .ok_or(Error::new("invalid_evidence"))?;
-    let mut direct = super::context_authority::empty();
-    direct["source_query_results"] = json!(
-        results
-            .iter()
-            .map(|reference| json!([reference["query_id"], reference["result_ref"]]))
-            .collect::<Vec<_>>()
-    );
-    super::context_authority::merge(&mut authority, &direct)?;
     for kind in ["query_results", "source_query_results"] {
         for pair in authority[kind].as_array().into_iter().flatten() {
             let reference = json!({"query_id":pair[0],"result_ref":pair[1]});
@@ -148,47 +140,13 @@ pub(super) async fn query_projection_in_tx(
 ) -> Result<Value> {
     let qid = query["id"].as_str().ok_or(Error::new("stale_context"))?;
     let created_at = queries::created_at_in_tx(tx, ctx, qid).await?;
-    let mut authority = queries::text_authority_in_tx(tx, ctx, qid).await?;
-    let fields = analysis::condition_text_authorities_in_tx(
-        tx,
-        query["conversation_id"]
-            .as_str()
-            .ok_or(Error::new("stale_context"))?,
-        query["task_id"]
-            .as_str()
-            .ok_or(Error::new("stale_context"))?,
-        crate::types::epoch(query["condition_version"].as_str().unwrap_or(""))?,
-    )
-    .await?;
-    for field in conditions
-        .as_object()
-        .ok_or(Error::new("stale_context"))?
-        .keys()
-    {
-        super::context_authority::merge(&mut authority, &fields[field])?;
-    }
+    let mut authority = super::context_authority::from_sources(query);
     super::context_authority::observe(&mut authority, &conditions["knowledge_refs"]);
     with_sources(query_projection(query, &created_at, conditions), authority)
 }
 
-pub(super) async fn report_projection_in_tx(
-    tx: &mut AppTx<'_>,
-    ctx: &AccessContext,
-    report: &Value,
-) -> Result<Value> {
-    let cid = report["reference"]["conversation_id"]
-        .as_str()
-        .ok_or(Error::new("stale_context"))?;
-    let mut authority = super::context_authority::empty();
-    let mut sources =
-        super::analysis_reports::evidence_authorities_in_tx(tx, ctx, cid, &report["evidence"])
-            .await?;
-    let titles = analysis::read_report_authorities_in_tx(tx, ctx, &report["reference"]).await?;
-    sources.push(titles["title"].clone());
-    sources.extend(titles["charts"].as_array().into_iter().flatten().cloned());
-    for source in sources {
-        super::context_authority::merge(&mut authority, &source)?;
-    }
+pub(super) fn report_projection_with_sources(report: &Value) -> Result<Value> {
+    let authority = super::analysis_reports::evidence_authority(&report["evidence"])?;
     with_sources(report_projection(report), authority)
 }
 
@@ -231,102 +189,9 @@ pub(super) fn carrying(entry: &Value) -> Value {
     snapshot
 }
 
-fn history_lookup_error(error: Error) -> Error {
-    if error.code == "not_available" {
-        Error::new("stale_context")
-    } else {
-        error
-    }
-}
-
-/// 事务内重建同一记录的投影并逐字比对；记录缺失或可核内容被改写时按
-/// stale_context保守失效。报告按引用的具体修订重建；查询重起草后不能
-/// 再证明原投影，沿已有上下文重建处理。
-pub(super) async fn assert_unchanged_in_tx(
-    tx: &mut AppTx<'_>,
-    ctx: &AccessContext,
-    entry: &Value,
-) -> Result<()> {
-    let reference = &entry["reference"];
-    match entry["kind"].as_str() {
-        Some("query") => {
-            let qid = reference["query_id"]
-                .as_str()
-                .ok_or(Error::new("stale_context"))?;
-            let query = queries::read_in_tx(tx, ctx, qid)
-                .await
-                .map_err(history_lookup_error)?;
-            if query["draft_version"] != reference["draft_version"] {
-                return Err(Error::new("stale_context"));
-            }
-            let conditions = analysis::read_evidence_conditions_in_tx(
-                tx,
-                ctx,
-                query["conversation_id"]
-                    .as_str()
-                    .ok_or(Error::new("stale_context"))?,
-                query["task_id"]
-                    .as_str()
-                    .ok_or(Error::new("stale_context"))?,
-                crate::types::epoch(query["condition_version"].as_str().unwrap_or(""))?,
-            )
-            .await?;
-            if query_projection_in_tx(tx, ctx, &query, &conditions).await? == *entry {
-                Box::pin(super::context_authority::validate_history_in_tx(
-                    tx,
-                    ctx,
-                    query["conversation_id"]
-                        .as_str()
-                        .ok_or(Error::new("stale_context"))?,
-                    &entry["actual_sources"]["authority"],
-                ))
-                .await?;
-                return Ok(());
-            }
-        }
-        Some("report") => {
-            let report = analysis::read_report_revision_in_tx(
-                tx,
-                ctx,
-                reference["conversation_id"].as_str().unwrap_or(""),
-                reference["report_id"].as_str().unwrap_or(""),
-                crate::types::epoch(reference["version"].as_str().unwrap_or(""))?,
-            )
-            .await
-            .map_err(history_lookup_error)?;
-            if report_projection_in_tx(tx, ctx, &report).await? == *entry {
-                Box::pin(super::analysis_reports::check_report_history_in_tx(
-                    tx,
-                    ctx,
-                    reference["conversation_id"].as_str().unwrap_or(""),
-                    &report,
-                ))
-                .await?;
-                return Ok(());
-            }
-        }
-        _ => return Err(Error::new("stale_context")),
-    }
-    Err(Error::new("stale_context"))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn history_lookup_preserves_storage_failures_and_retryability() {
-        let transient = history_lookup_error(Error::from(sqlx::Error::PoolTimedOut));
-        assert_eq!(transient.code, "unavailable");
-        assert!(transient.is_transient_storage());
-        let permanent = history_lookup_error(Error::new("unavailable"));
-        assert_eq!(permanent.code, "unavailable");
-        assert!(!permanent.is_transient_storage());
-        assert_eq!(
-            history_lookup_error(Error::new("not_available")).code,
-            "stale_context"
-        );
-    }
 
     #[test]
     fn derived_history_preserves_sources_without_recursive_copies() {

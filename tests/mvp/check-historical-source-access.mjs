@@ -82,8 +82,8 @@ try {
       name: '语音会话说明', body: '一个会话可以包含多个语音轮次。', related_ids: []}));
     const cid = await h.create();
     await begin(cid, '依据文档准备分析，先不执行。');
-    await invoke('read_knowledge', {object_id: doc.id});
     const ref = {object_id: doc.id, version: doc.version, path: 'body'};
+    assert.equal((await invoke('read_knowledge',{items:[{kind:'knowledge',ref}]})).items[0].state,'ok');
     const timeRoles = kind === 'query' ? [{role:'observation_cutoff',value:'2026-10-04T00:00:00Z',
       description:'保存时采用的合成观察截点',field_ref:null,evidence_refs:[ref]}] : [];
     const task = await invoke('update_analysis_task', {action: 'create', goal: '语音轮次统计',
@@ -118,15 +118,19 @@ try {
     if (kind === 'query') assert.deepEqual(JSON.parse(old.content_text).conditions.time_roles,timeRoles,
       '原时间依据仍随已核历史条件交付，不能从控制投影重新成为当前依据');
     assert.equal((await issue()).status, 200, '普通改版仍能复述历史正文');
-    h.sql(`DELETE FROM knowledge_versions WHERE object_id='${doc.id}' AND version=${doc.version}`);
+    h.sql(`UPDATE knowledge_revisions SET archived_body=NULL WHERE object_id='${doc.id}' AND version=${doc.version}`);
     const withoutOriginal = kind === 'query' ? await invoke('get_query', {query_id: query.id})
       : await invoke('read_analysis_report', {task_id: task.task_id});
     assert.equal(typeof withoutOriginal.content_text, 'string', '旧资料全文清理不隐藏已保存分析');
     assert.equal((await issue()).status, 200, '历史访问只依赖当前访问权与保存时来源记录');
     ok(await h.request(`/knowledge/${doc.id}/disable`, {operation_id: randomUUID(),
       expected_version: revised.version}));
-    assert.equal((await issue()).value.code, 'stale_context',
-      `${kind}历史正文的实际来源停用后，下一次派发必须拒绝`);
+    const unavailable = kind === 'query' ? await invoke('get_query', {query_id: query.id})
+      : await invoke('read_analysis_report', {task_id: task.task_id});
+    assert.equal(unavailable.content_text, undefined, `${kind}停用后再次读取不能交付历史正文`);
+    if (kind === 'query') assert.equal(unavailable.results, null);
+    else assert.equal(unavailable.status, 'sources_unavailable');
+    assert.equal((await issue()).status, 200, '后续派发保留当前运行许可');
     ok(await h.request(`/conversations/${cid}/messages/${run.message_id}/withdraw`,
       {operation_id: randomUUID()}));
     h.releaseRun(run.run_id);
@@ -139,11 +143,12 @@ try {
   const scopeTask = await invoke('update_analysis_task', {action: 'create', goal: '查询历史范围',
     conditions: {time_start: null, time_end: null, timezone: 'UTC', metric: null, channel: null,
       group_by: [], filters: [], knowledge_refs: [], notes: '', source_limits: null}, options: []});
-  await invoke('read_knowledge', {object_id: scopeDoc.id});
+  const scopeRef = {object_id: scopeDoc.id, version: scopeDoc.version, path: 'body'};
+  assert.equal((await invoke('read_knowledge',{items:[{kind:'knowledge',ref:scopeRef}]})).items[0].state,'ok');
   const scopedQuery = await invoke('request_query', {task_id: scopeTask.task_id,
     condition_version: scopeTask.condition_version, sql: "SELECT 7 AS voice_turns,'合成会话' AS category", parameters: {},
     target_id: 'synthetic-sqlite', summary: '保留历史轮次查询',
-    knowledge_refs: [{object_id: scopeDoc.id, version: scopeDoc.version, path: 'body'}], replaces_query_id: null});
+    knowledge_refs: [scopeRef], replaces_query_id: null});
   await invoke('execute_query', {query_id: scopedQuery.id, draft_version: scopedQuery.draft_version,
     condition_version: scopedQuery.condition_version, instruction_quote: run.text});
   await finish();
@@ -240,7 +245,7 @@ try {
   // 必须远小于正文体积：按钉住修订读body列会把整段正文再拉回应用；元信息核验只涉及
   // 修订号与complete标志。以实际数据量作证，不用耗时快慢充当读取粒度证明。
   h.sql(`UPDATE source_current SET body=CONCAT(body,REPEAT('历史核验大原文填充段。',350000))`);
-  h.sql(`UPDATE source_snapshots SET body=CONCAT(body,REPEAT('历史核验大原文填充段。',350000))`);
+  h.sql(`UPDATE source_revisions SET body=CONCAT(body,REPEAT('历史核验大原文填充段。',350000))`);
   await begin(scopeCid, '本次还要继续核对etl平台来源的历史。');
   const widened = await invoke('update_analysis_task', {action: 'revise', task_id: scopeTask.task_id,
     expected_version: expanded.condition_version, goal: '', options: [],
@@ -250,7 +255,8 @@ try {
   await finish();
   await begin(scopeCid, '继续核对大原文平台来源的历史。');
   const etlVersion = String(h.sql(`SELECT JSON_OBJECT('v',version) FROM source_heads WHERE id='etl'`)[0].v);
-  await invoke('read_source', {source_id: 'etl', version: etlVersion});
+  const etlWindow = await invoke('read_source',{citation:{source:{kind:'platform',id:'etl'},revision:etlVersion,locator:{offset:0,length:24}}});
+  assert.equal([...etlWindow.text].length,24);
   const before = shipped.bytes;
   await invoke('update_analysis_task', {action: 'route', task_id: scopeTask.task_id,
     expected_version: widened.condition_version, goal: '', options: []});

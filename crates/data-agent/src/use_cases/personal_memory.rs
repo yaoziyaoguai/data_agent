@@ -28,7 +28,6 @@ async fn checked_binding(
     if run.state != "running" {
         return Err(Error::new("lease_lost"));
     }
-    super::context_authority::assert_run_in_tx(&mut tx, ctx, &cid, run_id).await?;
     let tool = runtime::lock_tool_call_in_tx(
         &mut tx,
         &run,
@@ -215,6 +214,7 @@ pub async fn process_index(pool: &MySqlPool) -> Result<bool> {
             user_id: job["owner_id"].as_str().unwrap_or("").to_owned(),
             space_id: job["space_id"].as_str().unwrap_or("").to_owned(),
             request_id: job["id"].as_str().unwrap_or("").to_owned(),
+            table_access: None,
         };
         match super::personal_assets::read(pool, &ctx, index_asset["id"].as_str().unwrap_or(""))
             .await
@@ -256,21 +256,6 @@ pub async fn process_index(pool: &MySqlPool) -> Result<bool> {
 pub async fn model_call(pool: &MySqlPool, input: Value) -> Result<Value> {
     contracts::validate("MemoryModelCall", &input)?;
     let binding = &input["budget"];
-    let checked_asset = if input["action"] != "finalize" && binding["kind"] == "index" {
-        let mut tx = AppTx::begin(pool).await?;
-        let job =
-            assets::memory_index::read_job_in_tx(&mut tx, binding["id"].as_str().unwrap_or(""))
-                .await?;
-        tx.commit().await?;
-        let ctx = AccessContext {
-            user_id: job["owner_id"].as_str().unwrap_or("").to_owned(),
-            space_id: job["space_id"].as_str().unwrap_or("").to_owned(),
-            request_id: binding["operation_id"].as_str().unwrap_or("").to_owned(),
-        };
-        Some(super::personal_assets::checked_assets(pool, &ctx, &[job["asset"].clone()]).await?)
-    } else {
-        None
-    };
     let mut tx = AppTx::begin(pool).await?;
     if input["action"] == "finalize" {
         let receipt = runtime::provider_calls::finish_in_tx(&mut tx, &input).await?;
@@ -292,7 +277,6 @@ pub async fn model_call(pool: &MySqlPool, input: Value) -> Result<Value> {
         if run.state != "running" {
             return Err(Error::new("lease_lost"));
         }
-        super::context_authority::assert_run_in_tx(&mut tx, &ctx, &cid, run_id).await?;
         if let Some(sdk) = binding["sdk_tool_call_id"].as_str() {
             let tool = runtime::lock_tool_call_in_tx(&mut tx, &run, sdk)
                 .await?
@@ -327,6 +311,7 @@ pub async fn model_call(pool: &MySqlPool, input: Value) -> Result<Value> {
             user_id: job["owner_id"].as_str().unwrap_or("").to_owned(),
             space_id: job["space_id"].as_str().unwrap_or("").to_owned(),
             request_id: binding["operation_id"].as_str().unwrap_or("").to_owned(),
+            table_access: None,
         };
         let asset = assets::read_in_tx(
             &mut tx,
@@ -341,14 +326,7 @@ pub async fn model_call(pool: &MySqlPool, input: Value) -> Result<Value> {
         {
             return Err(Error::new("version_conflict"));
         }
-        super::personal_assets::text_authority_in_tx(
-            &mut tx,
-            &ctx,
-            "",
-            &asset,
-            checked_asset.as_ref().ok_or(Error::new("stale_context"))?,
-        )
-        .await?;
+        super::knowledge::check_refs_in_tx(&mut tx, &ctx, &asset["dependencies"]).await?;
         let scope = job["budget_scope_id"].as_str().map(str::to_owned);
         let profile = if let Some(scope) = &scope {
             runtime::read_budget_profile_in_tx(&mut tx, scope)
@@ -381,17 +359,11 @@ pub async fn prepare_workspace(
         .into_iter()
         .filter(|v| v["kind"] == "memory")
         .collect();
-    tx.commit().await?;
-    let checked_text = super::personal_assets::checked_assets(pool, ctx, &items).await?;
-    let mut tx = AppTx::begin(pool).await?;
     let cid = envelope["conversation_id"]
         .as_str()
         .unwrap_or("")
         .to_owned();
     let conv = conversations::lock_conversation_in_tx(&mut tx, ctx, &cid).await?;
-    // 来源限制同样约束派发前的记忆扩展（04关闭审查修复）：未知来源范围保守不注入；
-    // 已知受限范围按资产真实来源过滤后注入，只把同源资产写进运行权威，避免下一次
-    // 派发重核时拦截整个运行。
     let projection = super::source_limits::active_projection_in_tx(&mut tx, &conv).await?;
     if !projection.scope_known {
         tx.commit().await?;
@@ -399,17 +371,7 @@ pub async fn prepare_workspace(
         return Ok(());
     }
     let gate = projection.gate;
-    let mut items =
-        super::knowledge::valid_assets_in_tx(&mut tx, ctx, items, &cid, &checked_text).await?;
-    if let Some(gate) = &gate {
-        let mut kept = Vec::new();
-        for asset in items.drain(..) {
-            if super::source_limits::asset_within_in_tx(&mut tx, ctx, gate, &asset).await? {
-                kept.push(asset);
-            }
-        }
-        items = kept;
-    }
+    let items = super::knowledge::valid_assets_in_tx(&mut tx, ctx, items, gate.as_ref()).await?;
     tx.commit().await?;
     if items.is_empty() {
         if gate.is_some() {
@@ -436,23 +398,13 @@ pub async fn prepare_workspace(
         &run_id,
         epoch(envelope["lease_epoch"].as_str().unwrap_or("0"))?,
     )?;
-    super::context_authority::assert_run_in_tx(&mut tx, ctx, &cid, &run_id).await?;
     let current = assets::list_in_tx(&mut tx, ctx, true)
         .await?
         .into_iter()
         .filter(|v| v["kind"] == "memory")
         .collect();
-    let mut current =
-        super::knowledge::valid_assets_in_tx(&mut tx, ctx, current, &cid, &checked_text).await?;
-    if let Some(gate) = &gate {
-        let mut kept = Vec::new();
-        for asset in current.drain(..) {
-            if super::source_limits::asset_within_in_tx(&mut tx, ctx, gate, &asset).await? {
-                kept.push(asset);
-            }
-        }
-        current = kept;
-    }
+    let current =
+        super::knowledge::valid_assets_in_tx(&mut tx, ctx, current, gate.as_ref()).await?;
     let mut ranked = Vec::new();
     for candidate in result["candidates"].as_array().into_iter().flatten() {
         if let Some(asset) = current
@@ -482,31 +434,10 @@ pub async fn prepare_workspace(
     envelope["workspace_context"]["memory_retrieval"] = json!("mem0_authoritative");
     crate::modules::retrieval::bound_workspace(&mut envelope["workspace_context"]);
     let mut snapshot = envelope["workspace_context"]["authority_snapshot"].clone();
-    for preview in envelope["workspace_context"]["memories"]
-        .as_array()
-        .into_iter()
-        .flatten()
-    {
-        if let Some(asset) = current
-            .iter()
-            .find(|asset| asset["id"] == preview["id"] && asset["version"] == preview["version"])
-        {
-            let authority = super::personal_assets::text_authority_in_tx(
-                &mut tx,
-                ctx,
-                &cid,
-                asset,
-                &checked_text,
-            )
-            .await?;
-            super::context_authority::merge(&mut snapshot, &authority)?;
-        }
-    }
-    super::context_authority::observe(&mut snapshot, &envelope["workspace_context"]);
     super::context_authority::observe_workspace_previews(
         &mut snapshot,
         &envelope["workspace_context"],
-    );
+    )?;
     runtime::save_authority_in_tx(&mut tx, &run_id, &snapshot).await?;
     envelope["workspace_context"]["authority_revision"] = json!(fingerprint(&snapshot));
     envelope["workspace_context"]["authority_snapshot"] = snapshot;

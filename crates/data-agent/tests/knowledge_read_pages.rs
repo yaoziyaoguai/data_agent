@@ -23,6 +23,7 @@ fn context(request: &str) -> AccessContext {
         user_id: "alice".into(),
         space_id: "demo".into(),
         request_id: request.into(),
+        table_access: None,
     }
 }
 
@@ -85,7 +86,7 @@ async fn revision_reads_use_current_content_and_only_the_exact_legacy_archive() 
     current["version"] = json!("3");
     seed(&pool, &ctx, json!([current])).await;
     // 显式构造升级前旧档；当前修订没有历史全文行。
-    sqlx::query("DELETE FROM knowledge_versions WHERE object_id=?")
+    sqlx::query("UPDATE knowledge_revisions SET archived_body=NULL WHERE object_id=?")
         .bind(id)
         .execute(&pool)
         .await
@@ -94,7 +95,7 @@ async fn revision_reads_use_current_content_and_only_the_exact_legacy_archive() 
     legacy["version"] = json!("1");
     legacy["entries"][0]["human_override"]["value"] = json!("旧第一版\n逐字原文🧪。");
     legacy["entries"][0]["effective_value"] = json!("旧第一版\n逐字原文🧪。");
-    sqlx::query("INSERT INTO knowledge_versions(object_id,version,body) VALUES(?,1,?)")
+    sqlx::query("INSERT INTO knowledge_revisions(object_id,version,archived_body) VALUES(?,1,?)")
         .bind(id)
         .bind(sqlx::types::Json(&legacy))
         .execute(&pool)
@@ -102,7 +103,7 @@ async fn revision_reads_use_current_content_and_only_the_exact_legacy_archive() 
         .unwrap();
     assert_eq!(
         sqlx::query_scalar::<_, i64>(
-            "SELECT COUNT(*) FROM knowledge_versions WHERE object_id=? AND version=3"
+            "SELECT COUNT(*) FROM (SELECT object_id,version,archived_body AS body FROM knowledge_revisions WHERE archived_body IS NOT NULL) archive_rows WHERE object_id=? AND version=3"
         )
         .bind(id)
         .fetch_one(&pool)
@@ -198,7 +199,7 @@ async fn legacy_history_body_uses_same_revision_current_and_never_substitutes_fo
     );
     current["version"] = json!("3");
     seed(&pool, &ctx, json!([current])).await;
-    sqlx::query("DELETE FROM knowledge_versions WHERE object_id=?")
+    sqlx::query("UPDATE knowledge_revisions SET archived_body=NULL WHERE object_id=?")
         .bind(id)
         .execute(&pool)
         .await
@@ -206,7 +207,7 @@ async fn legacy_history_body_uses_same_revision_current_and_never_substitutes_fo
     let mut legacy = current.clone();
     legacy["version"] = json!("1");
     legacy["entries"][0]["effective_value"] = json!("精确旧版原文。");
-    sqlx::query("INSERT INTO knowledge_versions(object_id,version,body) VALUES(?,1,?)")
+    sqlx::query("INSERT INTO knowledge_revisions(object_id,version,archived_body) VALUES(?,1,?)")
         .bind(id)
         .bind(sqlx::types::Json(&legacy))
         .execute(&pool)
@@ -255,13 +256,13 @@ async fn index_claim_freezes_the_locked_current_revision_without_an_archive() {
         {"entry_id":"body","path":"body","source_facts":{},"suggestion":{},
             "human_override":{"value":"当前索引正文🧪。"},"effective_value":"当前索引正文🧪。"}
     ]))])).await;
-    sqlx::query("DELETE FROM knowledge_versions WHERE object_id=?")
+    sqlx::query("UPDATE knowledge_revisions SET archived_body=NULL WHERE object_id=?")
         .bind(id)
         .execute(&pool)
         .await
         .unwrap();
     assert_eq!(
-        sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM knowledge_versions WHERE object_id=?")
+        sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM (SELECT object_id,version,archived_body AS body FROM knowledge_revisions WHERE archived_body IS NOT NULL) archive_rows WHERE object_id=?")
             .bind(id)
             .fetch_one(&pool)
             .await
@@ -460,13 +461,13 @@ async fn canonical_statement_reads_keep_all_source_requirements_without_an_archi
                 "effective_value":format!("{earlier}\n\n{selected}")}
         ]))
     ])).await;
-    sqlx::query("DELETE FROM knowledge_versions WHERE object_id=?")
+    sqlx::query("UPDATE knowledge_revisions SET archived_body=NULL WHERE object_id=?")
         .bind(id)
         .execute(&pool)
         .await
         .unwrap();
     assert_eq!(
-        sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM knowledge_versions WHERE object_id=?")
+        sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM (SELECT object_id,version,archived_body AS body FROM knowledge_revisions WHERE archived_body IS NOT NULL) archive_rows WHERE object_id=?")
             .bind(id)
             .fetch_one(&pool)
             .await
@@ -573,13 +574,13 @@ async fn structure_references_read_the_current_effective_layer_without_an_archiv
                 "table":{"object_id":"current-table","version":"4"},"column":"reading","unit":null}},
             "effective_value":"当前结构正文。".repeat(18000)}
     ]))])).await;
-    sqlx::query("DELETE FROM knowledge_versions WHERE object_id=?")
+    sqlx::query("UPDATE knowledge_revisions SET archived_body=NULL WHERE object_id=?")
         .bind(id)
         .execute(&pool)
         .await
         .unwrap();
     assert_eq!(
-        sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM knowledge_versions WHERE object_id=?")
+        sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM (SELECT object_id,version,archived_body AS body FROM knowledge_revisions WHERE archived_body IS NOT NULL) archive_rows WHERE object_id=?")
             .bind(id)
             .fetch_one(&pool)
             .await
@@ -638,7 +639,7 @@ async fn dependency_fingerprints_use_exact_current_or_legacy_content_without_gue
     );
     current["version"] = json!("3");
     seed(&pool, &ctx, json!([current])).await;
-    sqlx::query("DELETE FROM knowledge_versions WHERE object_id=?")
+    sqlx::query("UPDATE knowledge_revisions SET archived_body=NULL WHERE object_id=?")
         .bind(target)
         .execute(&pool)
         .await
@@ -646,7 +647,7 @@ async fn dependency_fingerprints_use_exact_current_or_legacy_content_without_gue
     let mut legacy = current.clone();
     legacy["version"] = json!("1");
     legacy["entries"][0]["effective_value"] = json!("旧版内容");
-    sqlx::query("INSERT INTO knowledge_versions(object_id,version,body) VALUES(?,1,?)")
+    sqlx::query("INSERT INTO knowledge_revisions(object_id,version,archived_body) VALUES(?,1,?)")
         .bind(target)
         .bind(sqlx::types::Json(&legacy))
         .execute(&pool)

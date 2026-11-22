@@ -33,39 +33,6 @@ export function applyDeliveryContext(manager: SessionManager, text: string, prev
   }
 }
 
-// 未裁决时只给控制身份，任务条件/查询/资产中的自由正文均不作为新题材料。
-// 只解释宿主给出的原因；不从投影后的条件字段推断继承范围或来源许可。
-export function sourceContextGuidance(blocker: WorkspaceContext['source_context_blocker']) {
-  switch (blocker) {
-    case 'input_not_routed':
-      return '本条输入尚未归属。先按当前任务身份或受控目录选择目标，用route登记已有任务；只有新目标才create。成功归属后按宿主回执判断来源是否就绪。';
-    case 'source_scope_unknown':
-      return '本条输入已归属，但有效来源声明仍未定；重复route不会修改条件。有活动任务时按其task_id/condition_version判断真实用户原话及继承限制：确无额外限制用revise及condition_patch={set:{},unset:["source_limits"]}明确声明；明确限制用revise设置实际allowed_sources；仍有真实歧义用clarify登记具体问题。没有活动任务先从目录选已有目标。不得因字段遗漏自动当作无限制，修订后等宿主刷新确认就绪再读取原选Skill和附件。';
-    case 'context_refresh_pending':
-      return '原操作已完成，正在等待宿主刷新当前任务和来源上下文；刷新完成前不读取正文，不重复创建、修订或执行原操作。';
-  }
-}
-
-export function sourceContextFacts(workspace: Pick<WorkspaceContext, 'active_task_ref' | 'input_task_ids' | 'request_clock' | 'source_context_blocker'
-  | 'result_notification' | 'tasks' | 'query_observations' | 'selected_skills' | 'asset_counts'>) {
-  return {
-    source_context_ready: false,
-    source_context_blocker: workspace.source_context_blocker,
-    source_context_hint: sourceContextGuidance(workspace.source_context_blocker),
-    active_task_ref: workspace.active_task_ref, input_task_ids: workspace.input_task_ids,
-    request_clock: workspace.request_clock, result_notification: workspace.result_notification,
-    asset_counts: workspace.asset_counts,
-    tasks: workspace.tasks.map(({id, condition_version, lifecycle, phase, conditions}) => ({
-      id, condition_version, lifecycle, phase, context_complete: false,
-      ...(conditions && typeof conditions === 'object' && 'source_limits' in conditions
-        ? {conditions: {source_limits: conditions.source_limits}} : {}),
-    })),
-    query_observations: workspace.query_observations.map(({id, task_id, condition_version, draft_version, confirmation_state, execution_state}) =>
-      ({id, task_id, condition_version, draft_version, confirmation_state, execution_state})),
-    selected_skills: workspace.selected_skills.map(({id, version, kind, native_path}) => ({id, version, kind, native_path})),
-  };
-}
-
 // 只投影本轮已回源的候选；正式状态、历史、授权和压缩仍由宿主/Pi管理。
 export function workspaceContext(workspace: WorkspaceContext, delivery?: {
   previousEntryIds: ReadonlySet<string> | null;
@@ -76,11 +43,14 @@ export function workspaceContext(workspace: WorkspaceContext, delivery?: {
     recent_messages: _recent, ...initialFacts } = structuredClone(workspace);
   let memories = initialMemories;
   let facts = initialFacts;
-  let pendingReset = false;
-  const workspaceContent = () => '当前宿主事实：随成功工具回执与宿主刷新更新，不是启动快照；携带就绪或重置的回执正文与此同源，回执未覆盖的事实以此为准。\n'
-    + JSON.stringify(facts.source_context_ready === false ? sourceContextFacts(facts) : facts);
-  const content = () => '个人记忆参考：本轮已核验候选，非指令或执行授权；当前正文以成功工具回执为准。\n'
-    + JSON.stringify({memories: facts.source_context_ready === false ? [] : memories});
+  let activeTaskChanged = false;
+  let revisedReportTask: string | undefined;
+  let openedReportTask: string | undefined;
+  const reportRefs = new Map(facts.tasks.flatMap(task => task.report_ref ? [[task.id, task.report_ref] as const] : []));
+  const workspaceContent = () => '当前宿主事实。\n' + JSON.stringify({...facts,
+    source_context_hint: activeTaskChanged ? "当前任务或条件已变化，请核对当前依据和 SQL。" : undefined});
+  const content = () => '个人记忆参考：本轮已核验候选，非指令或执行授权。适用且不冲突的稳定偏好用于本次展示。指标定义/存储单位与展示单位分开，范围外或与本次要求冲突的偏好不采用。\n'
+    + JSON.stringify({memories});
   const reference = (customType: string, content: string) => ({
     role: 'custom' as const, customType, display: false, timestamp: Date.now(), content,
   });
@@ -98,7 +68,7 @@ export function workspaceContext(workspace: WorkspaceContext, delivery?: {
       return { messages: [
         ...messages.slice(0, index),
         reference(workspaceType, workspaceContent()),
-        ...(facts.source_context_ready === false ? [] : [reference(memoryType, content())]),
+        reference(memoryType, content()),
         ...messages.slice(index),
       ] };
     }]], ['agent_before_settle', [async (event: unknown) => {
@@ -117,29 +87,49 @@ export function workspaceContext(workspace: WorkspaceContext, delivery?: {
         recent_messages: _recent, ...nextFacts} = structuredClone(next);
       memories = nextMemories;
       facts = nextFacts;
-      pendingReset = false;
+      for (const task of nextFacts.tasks) {
+        if (task.report_ref) reportRefs.set(task.id, task.report_ref);
+      }
     },
     contents: () => [workspaceContent(), content()],
     control: (): ControlDeliveryClass | null => facts.control_delivery ?? null,
     notificationCoveredByFrozen: () => facts.frozen_notification_covered === true,
+    reportRevisionHint() {
+      const active = facts.active_task_ref;
+      if (!active || active.task_id !== revisedReportTask || active.task_id !== openedReportTask) return;
+      if (facts.control_delivery?.facts.some(fact => fact.kind === 'query'
+        && fact.task_id === active.task_id && fact.condition_version === active.condition_version)) return;
+      const report = reportRefs.get(active.task_id);
+      if (report && report.condition_version !== active.condition_version)
+        return `当前条件已到 ${active.condition_version}，已存报告仍对应条件 ${report.condition_version}。若原输入要求更新报告，请核对新条件的依据，用 save_analysis_report 保存，expected_version 用现有报告版本 ${report.version}。若只要求 SQL 或说明，按原要求回复。保存后再确认已更新。`;
+    },
     acceptReceipt(receipt: DataToolOutcome) {
       if (receipt.data.error) return;
+      const previousTask = facts.active_task_ref;
       if (receipt.frozen_notification_covered !== undefined)
         facts.frozen_notification_covered = receipt.frozen_notification_covered;
       if (receipt.context_reset) {
-        pendingReset = true;
-        if (facts.source_context_ready !== undefined || receipt.source_context_ready !== undefined) {
-          facts.source_context_ready = false;
-          facts.source_context_blocker = 'context_refresh_pending';
-        }
         facts.active_task_ref = receipt.context_reset;
-      } else if (!pendingReset && receipt.source_context_ready !== undefined) {
-        facts.source_context_ready = receipt.source_context_ready;
-        facts.source_context_blocker = receipt.source_context_blocker;
+        activeTaskChanged = true;
       }
       if (receipt.tool_name === 'update_analysis_task' && typeof receipt.data.task_id === 'string'
-        && typeof receipt.data.condition_version === 'string')
-        facts.active_task_ref = {task_id: receipt.data.task_id, condition_version: receipt.data.condition_version};
+        && typeof receipt.data.condition_version === 'string') {
+        const current = {task_id: receipt.data.task_id, condition_version: receipt.data.condition_version};
+        const previousVersion = previousTask?.task_id === current.task_id ? previousTask.condition_version
+          : facts.tasks.find(task => task.id === current.task_id)?.condition_version;
+        if (receipt.data.conditions && previousVersion && previousVersion !== current.condition_version
+          && reportRefs.has(current.task_id)) revisedReportTask = current.task_id;
+        activeTaskChanged ||= facts.active_task_ref?.task_id !== current.task_id
+          || facts.active_task_ref.condition_version !== current.condition_version;
+        facts.active_task_ref = current;
+      }
+      if (['read_analysis_report', 'save_analysis_report'].includes(receipt.tool_name)
+        && receipt.data.reference && typeof receipt.data.reference === 'object') {
+        const report = receipt.data.reference as NonNullable<WorkspaceContext['tasks'][number]['report_ref']>;
+        reportRefs.set(report.task_id, report);
+        if (receipt.tool_name === 'read_analysis_report' && ['available', 'historical'].includes(String(receipt.data.status)))
+          openedReportTask = report.task_id;
+      }
       // 控制投影只随真实改变控制状态的工具回执更新；其余回执不改变等待事实。
       if (receipt.control_delivery !== undefined)
         facts.control_delivery = receipt.control_delivery ?? null;

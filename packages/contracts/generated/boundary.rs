@@ -596,7 +596,12 @@ pub struct AnalysisEvidenceConditions {
     /// 当前格式仅记录已采用解释及依据，未决由clarifications表达；省略继承，null只清说明，未要求所有任务填写。旧形状按宿主持久格式标记兼容，读取不迁移。
     pub semantic_resolution: Option<QueryViewQuerySemanticResolution>,
     /// null表示本题显式未声明额外来源限制；字段缺失表示旧条件版本未记录新式限制，不能证明用户从未限制。撤销必须显式unset并来自真实用户修改。
-    pub source_limits: Option<SourceLimitsClass>,
+    #[serde(
+        default,
+        deserialize_with = "deserialize_present",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub source_limits: Option<Option<SourceLimitsClass>>,
     /// 时间区间的不包含终点。按明确的业务时区解析后转为UTC完整时间戳，以Z结尾；整月结束为下一月起点，不能写本月最后一天。未指定时为null。
     pub time_end: Option<String>,
     /// 时间口径角色；统计起止仍沿time_start/time_end，request_clock和平台data_freshness不冒充用户截点。字段缺失表示旧版本未记录。
@@ -960,7 +965,12 @@ pub struct PurpleConditionSet {
     /// 只更新已采用解释及来源；null/unset只清说明，不解决开放问题。旧未决通过明确legacy_resolution_migration转换。
     pub semantic_resolution: Option<QueryViewQuerySemanticResolution>,
     /// 设置来源限制；撤销使用unset source_limits，不接受设为空集。
-    pub source_limits: Option<SourceLimitsClass>,
+    #[serde(
+        default,
+        deserialize_with = "deserialize_present",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub source_limits: Option<Option<SourceLimitsClass>>,
     /// 修改区间的不包含终点，按业务时区解析后填写UTC完整时间戳，以Z结尾；整月结束为下一月起点。清空使用unset；未修改则省略。
     pub time_end: Option<String>,
     /// 整体替换时间口径角色；清空使用unset。
@@ -1248,6 +1258,7 @@ pub enum MemoryIndexState {
 pub enum AssetState {
     Deleted,
     Disabled,
+    Draft,
     Enabled,
 }
 
@@ -1623,7 +1634,12 @@ pub struct FluffyConditionSet {
     /// 只更新已采用解释及来源；null/unset只清说明，不解决开放问题。旧未决通过明确legacy_resolution_migration转换。
     pub semantic_resolution: Option<PurpleSemanticResolution>,
     /// 设置来源限制；撤销使用unset source_limits，不接受设为空集。
-    pub source_limits: Option<SourceLimitsClass>,
+    #[serde(
+        default,
+        deserialize_with = "deserialize_present",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub source_limits: Option<Option<SourceLimitsClass>>,
     /// 修改区间的不包含终点，按业务时区解析后填写UTC完整时间戳，以Z结尾；整月结束为下一月起点。清空使用unset；未修改则省略。
     pub time_end: Option<String>,
     /// 整体替换时间口径角色；清空使用unset。
@@ -1662,7 +1678,12 @@ pub struct PurpleConditions {
     /// 当前格式仅记录已采用解释及依据，未决由clarifications表达；省略继承，null只清说明，未要求所有任务填写。旧形状按宿主持久格式标记兼容，读取不迁移。
     pub semantic_resolution: Option<FluffySemanticResolution>,
     /// null表示本题显式未声明额外来源限制；字段缺失表示旧条件版本未记录新式限制，不能证明用户从未限制。撤销必须显式unset并来自真实用户修改。
-    pub source_limits: Option<SourceLimitsClass>,
+    #[serde(
+        default,
+        deserialize_with = "deserialize_present",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub source_limits: Option<Option<SourceLimitsClass>>,
     /// 时间区间的不包含终点。按明确的业务时区解析后转为UTC完整时间戳，以Z结尾；整月结束为下一月起点，不能写本月最后一天。未指定时为null。
     pub time_end: Option<String>,
     /// 时间口径角色；统计起止仍沿time_start/time_end，request_clock和平台data_freshness不冒充用户截点。字段缺失表示旧版本未记录。
@@ -1928,8 +1949,12 @@ pub struct FactElement {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub clarification_id: Option<String>,
     pub condition_version: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub confirmation_state: Option<String>,
+    #[serde(
+        default,
+        deserialize_with = "deserialize_present",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub confirmation_state: Option<Option<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub execution_state: Option<FactExecutionState>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -2160,10 +2185,18 @@ pub struct MemoryElement {
     /// 来源原话的独立字符分页。缺省source_text为空但保留总长和补读位置；以entry_id=source_text和同一资产版本读取。
     pub source_page: Option<ContentPageClass>,
     pub source_text: String,
-    pub state: AssetState,
+    pub state: MemoryState,
     pub verified: bool,
     pub version: String,
     pub visibility: Option<Visibility>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum MemoryState {
+    Deleted,
+    Disabled,
+    Enabled,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -2521,7 +2554,7 @@ pub struct KnowledgeObjectElement {
     pub semantic_relations: Option<Vec<SemanticRelationElement>>,
     pub source_id: Option<String>,
     pub source_version: String,
-    pub state: AssetState,
+    pub state: MemoryState,
     /// 平台移除与人工停用分开；重新出现只能恢复平台导致的停用。
     pub state_origin: Option<StateOrigin>,
     pub updated_by: String,
@@ -2551,7 +2584,14 @@ pub struct KnowledgeEntryElement {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct KnowledgeEntryHumanOverride {
-    pub structured_value: Option<KnowledgeEntryQueryExampleStructure>,
+    #[serde(
+        default,
+        deserialize_with = "deserialize_present",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub structured_value: Option<Option<KnowledgeEntryQueryExampleStructure>>,
+    #[serde(flatten)]
+    pub extra: std::collections::BTreeMap<String, serde_json::Value>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -2565,7 +2605,14 @@ pub enum ReviewState {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct KnowledgeEntrySourceFacts {
-    pub structured_value: Option<KnowledgeEntryQueryExampleStructure>,
+    #[serde(
+        default,
+        deserialize_with = "deserialize_present",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub structured_value: Option<Option<KnowledgeEntryQueryExampleStructure>>,
+    #[serde(flatten)]
+    pub extra: std::collections::BTreeMap<String, serde_json::Value>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -2602,7 +2649,14 @@ pub struct SemanticSupportElement {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct KnowledgeEntrySuggestion {
-    pub structured_value: Option<KnowledgeEntryQueryExampleStructure>,
+    #[serde(
+        default,
+        deserialize_with = "deserialize_present",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub structured_value: Option<Option<KnowledgeEntryQueryExampleStructure>>,
+    #[serde(flatten)]
+    pub extra: std::collections::BTreeMap<String, serde_json::Value>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -3004,7 +3058,7 @@ pub struct KnowledgeSearchHitElement {
     /// 若有知识对象，这是当前对象版本，不是已读正文引用。
     pub object_version: Option<String>,
     pub record_kind: RecordKind,
-    /// 来源映射是否完整；false时不得将空/部分映射当无来源。完整也不代表聚合整源符合用户细范围，更不代表读过正文。
+    /// 列出的直属对象、表和来源身份是否完整；完整不代表整源符合用户指定范围或已读正文。
     pub roots_complete: Option<bool>,
     pub source_keys: Option<Vec<SourceKeyElement>>,
     pub citations: Option<Vec<SourceCitationElement>>,
@@ -3093,6 +3147,8 @@ pub struct KnowledgeSearchReplyClass {
     pub asset_cursor_invalid: bool,
     pub asset_total: i64,
     pub hits: Vec<KnowledgeSearchHitElement>,
+    /// 多指标检索中已核验命中的表唯一键和关系关联键摘要。缺项应读取对应表和关系的完整结构。
+    pub key_hints: Option<Vec<String>>,
     ///
     /// 个人记忆检索通道：受限任务来源门生效时按资产真实来源过滤，仅无可证明同源记忆时标记excluded_by_source_limits；命中侧过滤事实见回执source_limits块。
     pub memory_retrieval: String,
@@ -4989,18 +5045,29 @@ pub struct ControlDelivery {
     pub fingerprint: String,
     pub task_refs: Vec<EvidenceTaskRef>,
     pub text: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub text_authority: Option<HashMap<String, Option<serde_json::Value>>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ControlDeliveryFact {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub clarification_id: Option<String>,
     pub condition_version: String,
-    pub confirmation_state: Option<String>,
+    #[serde(
+        default,
+        deserialize_with = "deserialize_present",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub confirmation_state: Option<Option<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub execution_state: Option<FactExecutionState>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub has_more: Option<bool>,
     pub kind: FactKind,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub query_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub question: Option<String>,
     pub task_id: String,
 }
@@ -5026,7 +5093,7 @@ pub struct ModelAssetPreview {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub source_page: Option<ContentPage>,
     pub source_text: String,
-    pub state: AssetState,
+    pub state: MemoryState,
     pub verified: bool,
     pub version: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -5524,7 +5591,7 @@ pub struct KnowledgeObject {
     pub semantic_relations: Option<Vec<SemanticRelation>>,
     pub source_id: Option<String>,
     pub source_version: String,
-    pub state: AssetState,
+    pub state: MemoryState,
     /// 平台移除与人工停用分开；重新出现只能恢复平台导致的停用。
     #[serde(skip_serializing_if = "Option::is_none")]
     pub state_origin: Option<StateOrigin>,
@@ -5601,12 +5668,26 @@ pub struct QueryExampleVerification {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct KnowledgeEntryHumanOverrideClass {
-    pub structured_value: Option<KnowledgeEntryQueryExampleStructureClass>,
+    #[serde(
+        default,
+        deserialize_with = "deserialize_present",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub structured_value: Option<Option<KnowledgeEntryQueryExampleStructureClass>>,
+    #[serde(flatten)]
+    pub extra: std::collections::BTreeMap<String, serde_json::Value>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct KnowledgeEntrySourceFactsClass {
-    pub structured_value: Option<KnowledgeEntryQueryExampleStructureClass>,
+    #[serde(
+        default,
+        deserialize_with = "deserialize_present",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub structured_value: Option<Option<KnowledgeEntryQueryExampleStructureClass>>,
+    #[serde(flatten)]
+    pub extra: std::collections::BTreeMap<String, serde_json::Value>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -5679,7 +5760,14 @@ pub struct SemanticReference {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct KnowledgeEntrySuggestionClass {
-    pub structured_value: Option<KnowledgeEntryQueryExampleStructureClass>,
+    #[serde(
+        default,
+        deserialize_with = "deserialize_present",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub structured_value: Option<Option<KnowledgeEntryQueryExampleStructureClass>>,
+    #[serde(flatten)]
+    pub extra: std::collections::BTreeMap<String, serde_json::Value>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -6024,8 +6112,12 @@ pub struct ConditionSet {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub semantic_resolution: Option<ConditionsQuerySemanticResolution>,
     /// 设置来源限制；撤销使用unset source_limits，不接受设为空集。
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub source_limits: Option<SourceLimits>,
+    #[serde(
+        default,
+        deserialize_with = "deserialize_present",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub source_limits: Option<Option<SourceLimits>>,
     /// 修改区间的不包含终点，按业务时区解析后填写UTC完整时间戳，以Z结尾；整月结束为下一月起点。清空使用unset；未修改则省略。
     #[serde(skip_serializing_if = "Option::is_none")]
     pub time_end: Option<String>,
@@ -6094,8 +6186,12 @@ pub struct Conditions {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub semantic_resolution: Option<ConditionsQuerySemanticResolution>,
     /// null表示本题显式未声明额外来源限制；字段缺失表示旧条件版本未记录新式限制，不能证明用户从未限制。撤销必须显式unset并来自真实用户修改。
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub source_limits: Option<SourceLimits>,
+    #[serde(
+        default,
+        deserialize_with = "deserialize_present",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub source_limits: Option<Option<SourceLimits>>,
     /// 时间区间的不包含终点。按明确的业务时区解析后转为UTC完整时间戳，以Z结尾；整月结束为下一月起点，不能写本月最后一天。未指定时为null。
     pub time_end: Option<String>,
     /// 时间口径角色；统计起止仍沿time_start/time_end，request_clock和平台data_freshness不冒充用户截点。字段缺失表示旧版本未记录。
@@ -6389,6 +6485,9 @@ pub struct KnowledgeSearchReply {
     pub asset_cursor_invalid: bool,
     pub asset_total: i64,
     pub hits: Vec<KnowledgeSearchHit>,
+    /// 多指标检索中已核验命中的表唯一键和关系关联键摘要。缺项应读取对应表和关系的完整结构。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub key_hints: Option<Vec<String>>,
     ///
     /// 个人记忆检索通道：受限任务来源门生效时按资产真实来源过滤，仅无可证明同源记忆时标记excluded_by_source_limits；命中侧过滤事实见回执source_limits块。
     pub memory_retrieval: String,
@@ -6618,8 +6717,12 @@ pub struct DataToolOutcome {
     /// 宿主成功回执声明需要Pi原生重投影的活动任务。省略表示无需调整。
     #[serde(skip_serializing_if = "Option::is_none")]
     pub context_reset: Option<DataToolOutcomeContextResetClass>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub control_delivery: Option<ControlDelivery>,
+    #[serde(
+        default,
+        deserialize_with = "deserialize_present",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub control_delivery: Option<Option<ControlDelivery>>,
     pub data: HashMap<String, Option<serde_json::Value>>,
     ///
     /// 宿主按本运行原通知query/task/condition及其原scope核验全部实际冻结答案后的覆盖事实；与control_delivery共同计算，不从source_query_ids推断。只随控制状态回执更新，不授来源或SQL权限。
@@ -7826,7 +7929,12 @@ pub struct TentacledConditionSet {
     /// 只更新已采用解释及来源；null/unset只清说明，不解决开放问题。旧未决通过明确legacy_resolution_migration转换。
     pub semantic_resolution: Option<TentacledSemanticResolution>,
     /// 设置来源限制；撤销使用unset source_limits，不接受设为空集。
-    pub source_limits: Option<SourceLimits>,
+    #[serde(
+        default,
+        deserialize_with = "deserialize_present",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub source_limits: Option<Option<SourceLimits>>,
     /// 修改区间的不包含终点，按业务时区解析后填写UTC完整时间戳，以Z结尾；整月结束为下一月起点。清空使用unset；未修改则省略。
     pub time_end: Option<String>,
     /// 整体替换时间口径角色；清空使用unset。
@@ -7865,7 +7973,12 @@ pub struct FluffyConditions {
     /// 当前格式仅记录已采用解释及依据，未决由clarifications表达；省略继承，null只清说明，未要求所有任务填写。旧形状按宿主持久格式标记兼容，读取不迁移。
     pub semantic_resolution: Option<StickySemanticResolution>,
     /// null表示本题显式未声明额外来源限制；字段缺失表示旧条件版本未记录新式限制，不能证明用户从未限制。撤销必须显式unset并来自真实用户修改。
-    pub source_limits: Option<SourceLimits>,
+    #[serde(
+        default,
+        deserialize_with = "deserialize_present",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub source_limits: Option<Option<SourceLimits>>,
     /// 时间区间的不包含终点。按明确的业务时区解析后转为UTC完整时间戳，以Z结尾；整月结束为下一月起点，不能写本月最后一天。未指定时为null。
     pub time_end: Option<String>,
     /// 时间口径角色；统计起止仍沿time_start/time_end，request_clock和平台data_freshness不冒充用户截点。字段缺失表示旧版本未记录。

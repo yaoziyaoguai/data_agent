@@ -10,6 +10,11 @@ use crate::{
 use serde_json::{Value, json};
 use sqlx::{MySqlPool, Row};
 
+pub async fn active_run_leases(pool: &MySqlPool) -> Result<Vec<String>> {
+    Ok(sqlx::query_scalar("SELECT lease_owner FROM conversations WHERE lease_owner IS NOT NULL AND lease_until>UTC_TIMESTAMP(3) AND deleted=FALSE")
+        .fetch_all(pool).await?)
+}
+
 pub async fn locate_conversation(pool: &MySqlPool, cid: &str) -> Result<RunLocation> {
     let row = sqlx::query("SELECT owner_id,space_id FROM conversations WHERE id=?")
         .bind(cid)
@@ -50,6 +55,7 @@ pub struct Message {
     pub conversation_id: String,
     pub body: String,
     pub user_supplied: bool,
+    pub result_query_id: Option<String>,
     pub recovery_chain_id: String,
     pub budget_scope_id: String,
     pub disposition: String,
@@ -112,6 +118,15 @@ pub async fn lock_for_cleanup_in_tx(
 ) -> Result<LockedConversation> {
     tx.lock_rank(1)?;
     let row=sqlx::query("SELECT *,COALESCE(lease_until>UTC_TIMESTAMP(3),0) AS lease_valid FROM conversations WHERE id=? FOR UPDATE").bind(cid).fetch_optional(tx.connection()).await?.ok_or(Error::new("not_available"))?;
+    locked_conversation(tx, context, cid, &row)
+}
+
+pub(super) fn locked_conversation(
+    tx: &AppTx<'_>,
+    context: &AccessContext,
+    cid: &str,
+    row: &sqlx::mysql::MySqlRow,
+) -> Result<LockedConversation> {
     let owner_id: String = row.get("owner_id");
     let space_id: String = row.get("space_id");
     if owner_id != context.user_id || space_id != context.space_id {
@@ -198,9 +213,11 @@ pub async fn find_message_in_tx(
     }
     Ok(None)
 }
-fn message_from_row(row: &sqlx::mysql::MySqlRow) -> Message {
+pub(super) fn message_from_row(row: &sqlx::mysql::MySqlRow) -> Message {
+    let key: &str = row.get("client_key");
     Message {
-        user_supplied: !row.get::<String, _>("client_key").starts_with("server:"),
+        user_supplied: !key.starts_with("server:"),
+        result_query_id: key.strip_prefix("server:query-result:").map(str::to_owned),
         id: row.get("id"),
         conversation_id: row.get("conversation_id"),
         body: row.get("body"),
@@ -252,6 +269,7 @@ pub async fn accept_message_in_tx(
         conversation_id: locked.id.clone(),
         body: body.into(),
         user_supplied: !key.starts_with("server:"),
+        result_query_id: None,
         recovery_chain_id: id(),
         budget_scope_id: id(),
         disposition: "pending".into(),
@@ -506,14 +524,6 @@ pub async fn other_input_blocks_confirmation_in_tx(
     Ok(count > 0)
 }
 // 消息序号表达真实交互次序；随机任务ID仅作同一消息内的稳定排序。
-pub async fn recent_task_ids_in_tx(
-    tx: &mut AppTx<'_>,
-    locked: &LockedConversation,
-) -> Result<Vec<String>> {
-    current(tx, locked)?;
-    Ok(sqlx::query_scalar("SELECT COALESCE(b.task_id,m.routed_task_id) AS task_id FROM conversation_messages m JOIN conversation_events e ON e.conversation_id=m.conversation_id AND e.event_type='message' AND JSON_UNQUOTE(JSON_EXTRACT(e.payload,'$.message_id'))=m.id LEFT JOIN conversation_message_tasks b ON b.message_id=m.id WHERE m.conversation_id=? AND m.disposition<>'withdrawn' AND COALESCE(b.task_id,m.routed_task_id) IS NOT NULL GROUP BY COALESCE(b.task_id,m.routed_task_id) ORDER BY MAX(e.event_seq) DESC,task_id")
-        .bind(&locked.id).fetch_all(tx.connection()).await?)
-}
 pub async fn delete_in_tx(tx: &mut AppTx<'_>, locked: &LockedConversation) -> Result<()> {
     current(tx, locked)?;
     sqlx::query("UPDATE conversations SET deleted=1,lease_owner=NULL,lease_until=NULL WHERE id=?")
@@ -556,6 +566,7 @@ pub async fn enqueue_result_input_in_tx(
         conversation_id: locked.id.clone(),
         body: text.into(),
         user_supplied: false,
+        result_query_id: Some(query_id.into()),
         recovery_chain_id: id(),
         budget_scope_id: budget.into(),
         disposition: "pending".into(),
@@ -703,6 +714,7 @@ mod tests {
             user_id: "locking-user".into(),
             space_id: "demo".into(),
             request_id: id(),
+            table_access: None,
         };
         let mut tx = AppTx::begin(&pool).await.unwrap();
         let cid = create_conversation_in_tx(&mut tx, &context, &id())

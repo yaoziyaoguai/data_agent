@@ -51,7 +51,7 @@ try{
  const callsNow=()=>h.sql("SELECT JSON_OBJECT('id',id,'state',state) FROM maintenance_model_calls ORDER BY id");
  // 整理应用回执是对象数组；普通编辑回执是单个对象。按回执形状识别应用身份，
  // 不预测内部指纹格式，只核旧批身份保留且新批不再复用同一操作。
- const applyOperations=()=>h.sql("SELECT JSON_OBJECT('operation_id',operation_id) FROM knowledge_operations WHERE JSON_TYPE(receipt)='ARRAY' ORDER BY operation_id").map(row=>row.operation_id);
+ const applyOperations=()=>h.sql("SELECT JSON_OBJECT('operation_id',operation_id) FROM idempotency_receipts WHERE domain='knowledge' AND JSON_TYPE(response_json)='ARRAY' ORDER BY operation_id").map(row=>row.operation_id);
 
  // 首轮：整理到ready并成功应用，冻结首批调用与应用身份。
  await h.resumeWorker();

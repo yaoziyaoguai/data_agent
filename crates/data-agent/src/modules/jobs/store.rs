@@ -106,6 +106,24 @@ pub async fn renew_lease_in_tx(
     Ok(())
 }
 
+// 派发确认在同一个守卫更新里续租和记录本次尝试。
+pub async fn start_delivery_attempt_in_tx(
+    tx: &mut AppTx<'_>,
+    job: &ClaimedJob,
+    ttl_ms: u32,
+) -> Result<()> {
+    tx.lock_rank(8)?;
+    let changed = sqlx::query("UPDATE background_jobs SET lease_until=TIMESTAMPADD(MICROSECOND,?,UTC_TIMESTAMP(3)),
+        attempts=IF(attempts<4,attempts+1,attempts)
+        WHERE id=? AND lease_epoch=? AND lease_owner=? AND state='running' AND lease_until>UTC_TIMESTAMP(3)")
+        .bind(ttl_ms*1000).bind(&job.id).bind(job.lease_epoch).bind(&job.worker_id)
+        .execute(tx.connection()).await?;
+    if changed.rows_affected() != 1 {
+        return Err(Error::new("lease_lost"));
+    }
+    Ok(())
+}
+
 pub async fn begin_attempt_in_tx(tx: &mut AppTx<'_>, job: &ClaimedJob) -> Result<()> {
     assert_job_in_tx(tx, &job.id, job.lease_epoch).await?;
     sqlx::query("UPDATE background_jobs SET attempts=attempts+1 WHERE id=? AND attempts<4")

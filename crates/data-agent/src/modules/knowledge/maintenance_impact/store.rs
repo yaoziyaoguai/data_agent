@@ -21,10 +21,23 @@ pub async fn find_dependents_in_tx(
     let mut cursor = after.map(str::to_owned);
     let mut values = Vec::new();
     loop {
-        let rows = sqlx::query("SELECT body FROM knowledge_objects WHERE space_id=? AND state<>'deleted' AND (? IS NULL OR id>?) AND (JSON_SEARCH(body,'one',?,NULL,'$.related_ids','$.entries') IS NOT NULL OR JSON_SEARCH(body,'one',?,NULL,'$.source_id','$.entries') IS NOT NULL) ORDER BY id LIMIT 101")
-            .bind(&ctx.space_id).bind(&cursor).bind(&cursor)
-            .bind(&target_pattern).bind(&source_pattern)
-            .fetch_all(tx.connection()).await?;
+        let mut sql =
+            sqlx::QueryBuilder::new("SELECT k.body FROM knowledge_objects k WHERE k.space_id=");
+        sql.push_bind(&ctx.space_id).push(" AND k.state<>'deleted'");
+        if let Some(cursor) = &cursor {
+            sql.push(" AND k.id>").push_bind(cursor);
+        }
+        sql.push(" AND (JSON_SEARCH(k.body,'one',")
+            .push_bind(&target_pattern)
+            .push(",NULL,'$.related_ids','$.entries') IS NOT NULL OR JSON_SEARCH(k.body,'one',")
+            .push_bind(&source_pattern)
+            .push(",NULL,'$.source_id','$.entries') IS NOT NULL)");
+        super::super::store::push_table_access(&mut sql, ctx);
+        let rows = sql
+            .push(" ORDER BY k.id LIMIT 101")
+            .build()
+            .fetch_all(tx.connection())
+            .await?;
         let finished = rows.len() < 101;
         for row in rows {
             let mut object = row.get::<sqlx::types::Json<Value>, _>("body").0;

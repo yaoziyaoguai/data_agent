@@ -55,8 +55,9 @@ try {
   // 模拟旧版本持久记录漏带扩展字段；原条件修订仍可核实声明。
   h.sql(`UPDATE condition_revisions SET body=JSON_REMOVE(body,'$.source_limits')
     WHERE task_id='${task.task_id}' AND version=${task.condition_version}`);
-  const read = async id => {
-    const args = {object_id: id};
+  const read = async document => {
+    const ref = {object_id: document.id, version: document.version, path: 'body'};
+    const args = {items: [{kind: 'knowledge', ref} ]};
     const input = {...binding(), sdk_tool_call_id: randomUUID(), tool_name: 'read_knowledge',
       arguments: args, checkpoint: checkpoint()};
     ok(await h.internal('/internal/data/tool-calls', input));
@@ -64,14 +65,14 @@ try {
     if (reply.status !== 200) ok(await h.internal('/internal/data/tool-rejections', input));
     return reply;
   };
-  assert.equal((await read(outside.id)).value.code, 'source_not_allowed',
+  assert.equal(ok(await read(outside)).data.items[0].state, 'not_available',
     '旧条件字段缺失时必须沿原修订继承限制，不能默认为无限制');
-  assert.equal((await read(allowed.id)).status, 200);
+  assert.equal(ok(await read(allowed)).data.items[0].state, 'ok');
   checks.push('旧记录缺字段时从同任务原修订恢复限制');
 
   h.sql(`UPDATE condition_revisions SET body=JSON_REMOVE(body,'$.source_limits')
     WHERE task_id='${task.task_id}'`);
-  assert.equal((await read(outside.id)).value.code, 'task_context_required',
+  assert.equal((await read(outside)).value.code, 'task_context_required',
     '所有原条件均未知时应先核实任务范围，不能猜无限制');
   // 仍可读取任务及真实用户消息，供Pi理解原限制并修订，随后继续同一输入。
   assert.equal((await invoke('read_analysis_task', {task_id: task.task_id})).id, task.task_id);
@@ -84,15 +85,23 @@ try {
   const restored = await invoke('read_analysis_task', {task_id: task.task_id});
   assert.deepEqual(restored.conditions.source_limits.origin_message_ids, [run.message_id],
     '限制采纳记录由宿主绑定真实消息，不接受模型自报来源身份');
-  assert.equal((await read(outside.id)).value.code, 'source_not_allowed');
-  assert.equal((await read(allowed.id)).status, 200);
+  assert.equal(ok(await read(outside)).data.items[0].state, 'not_available');
+  assert.equal(ok(await read(allowed)).data.items[0].state, 'ok');
   await finish();
   await begin(cid, '继续按照原范围。');
-  assert.equal((await read(outside.id)).value.code, 'source_not_allowed');
+  assert.equal(ok(await read(outside)).data.items[0].state, 'not_available');
   await invoke('update_analysis_task', {action: 'route', task_id: null,
     expected_version: null, goal: '', options: []});
   await finish();
   checks.push('未知限制可读原用户输入重新确认，宿主绑定来源身份且跨轮保持');
+
+  await begin(await h.create(), '只按我点名的材料调查，先记录问题。');
+  const undeclared = await invoke('update_analysis_task', {action: 'create', goal: '确认材料范围',
+    options: [], conditions: {time_start: null, time_end: null, timezone: 'UTC',
+      metric: null, channel: null, group_by: [], filters: [], knowledge_refs: [], notes: ''}});
+  assert.equal(undeclared.conditions.source_limits, undefined, '新任务缺少声明仍是未知');
+  assert.equal((await read(outside)).value.code, 'task_context_required');
+  checks.push('现行创建命令省略范围不得放行现成正文');
   passed = true;
   console.log(JSON.stringify({passed, checks, officialRequests: 0}));
 } finally {

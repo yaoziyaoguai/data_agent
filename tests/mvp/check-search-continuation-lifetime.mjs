@@ -42,7 +42,7 @@ const insert = (h, value) => {
   const encoded = Buffer.from(JSON.stringify(value)).toString('hex');
   h.sql(`INSERT INTO knowledge_objects(id,space_id,kind,name,version,state,body,source_id,source_version,updated_by)
     VALUES('${value.id}','demo','${value.kind}','${value.name}',1,'enabled',CAST(CONVERT(0x${encoded} USING utf8mb4) AS JSON),NULL,0,'synthetic-test');
-    INSERT INTO knowledge_versions(object_id,version,body) VALUES('${value.id}',1,CAST(CONVERT(0x${encoded} USING utf8mb4) AS JSON));
+    INSERT INTO knowledge_revisions(object_id,version,archived_body) VALUES('${value.id}',1,CAST(CONVERT(0x${encoded} USING utf8mb4) AS JSON));
     INSERT INTO retrieval_documents(object_id,space_id,version,body) VALUES('${value.id}','demo',1,CAST(CONVERT(0x${encoded} USING utf8mb4) AS JSON));
     INSERT IGNORE INTO semantic_ownership(space_id,object_id,authority_id,source,updated_by) VALUES('demo','${value.id}','${value.id}','system','synthetic-test')`);
 };
@@ -255,7 +255,7 @@ try {
 
   // 索引完成后换版：两批旧版资料的元信息核验按版本绑定失效，占用候选但不交付。
   h.sql(`UPDATE knowledge_objects SET version=2 WHERE id IN ('life-invalid-a','life-invalid-b');
-    INSERT INTO knowledge_versions(object_id,version,body) SELECT object_id,2,body FROM knowledge_versions
+    INSERT INTO knowledge_revisions(object_id,version,archived_body) SELECT object_id,2,body FROM (SELECT object_id,version,archived_body AS body FROM knowledge_revisions WHERE archived_body IS NOT NULL) archive_rows
       WHERE version=1 AND object_id IN ('life-invalid-a','life-invalid-b')`);
 
   // 受控向量：dense名次 validA > invalidA > invalidB > cross > last，末项位置超过首窗1000候选。

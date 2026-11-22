@@ -101,8 +101,8 @@ pub async fn write_target_fingerprints_in_tx(
         let tuple_list = placeholders(chunk.len(), 2);
         let mut query = sqlx::query(sqlx::AssertSqlSafe(format!(
             "SELECT id AS object_id,version,body FROM knowledge_objects WHERE (id,version) IN ({tuple_list}) \
-             UNION ALL SELECT v.object_id,v.version,v.body FROM knowledge_versions v \
-             WHERE (v.object_id,v.version) IN ({tuple_list}) AND NOT EXISTS \
+             UNION ALL SELECT v.object_id,v.version,v.archived_body FROM knowledge_revisions v \
+             WHERE (v.object_id,v.version) IN ({tuple_list}) AND v.archived_body IS NOT NULL AND NOT EXISTS \
              (SELECT 1 FROM knowledge_objects k WHERE k.id=v.object_id AND k.version=v.version)"
         )));
         for _ in 0..2 {
@@ -352,7 +352,7 @@ pub async fn resolve_selection_in_tx(
     if indexed {
         return Ok(Some(selection.clone()));
     }
-    let paths = sqlx::query_scalar::<_,String>("SELECT DISTINCT JSON_UNQUOTE(JSON_EXTRACT(e,'$.path')) FROM (SELECT body FROM knowledge_objects WHERE id=? AND version=? UNION ALL SELECT body FROM knowledge_versions WHERE object_id=? AND version=?) o,JSON_TABLE(o.body,'$.entries[*]' COLUMNS(e JSON PATH '$')) j WHERE BINARY JSON_UNQUOTE(JSON_EXTRACT(e,'$.path'))=BINARY ? OR BINARY JSON_UNQUOTE(JSON_EXTRACT(e,'$.entry_id'))=BINARY ?")
+    let paths = sqlx::query_scalar::<_,String>("SELECT DISTINCT JSON_UNQUOTE(JSON_EXTRACT(e,'$.path')) FROM (SELECT body FROM knowledge_objects WHERE id=? AND version=? UNION ALL SELECT archived_body AS body FROM knowledge_revisions WHERE object_id=? AND version=?) o,JSON_TABLE(o.body,'$.entries[*]' COLUMNS(e JSON PATH '$')) j WHERE BINARY JSON_UNQUOTE(JSON_EXTRACT(e,'$.path'))=BINARY ? OR BINARY JSON_UNQUOTE(JSON_EXTRACT(e,'$.entry_id'))=BINARY ?")
         .bind(&selection.object_id).bind(selection.version).bind(&selection.object_id).bind(selection.version)
         .bind(&selection.path).bind(&selection.path).fetch_all(tx.connection()).await?;
     Ok(if paths.len() == 1 {
@@ -477,18 +477,6 @@ pub struct ContributionRoots {
     // 闭包经停的不可证明成员（无状态行或unknown）。非空时闭包不完整，sources只是
     // 已知部分，调用方必须按不通过处理，不得当空集合或已核验放行。
     pub unknown: Vec<(String, u64)>,
-}
-
-pub async fn contribution_roots_in_tx(
-    tx: &mut AppTx<'_>,
-    roots: &[(String, u64)],
-) -> Result<Vec<ContributionRoots>> {
-    let selections: Vec<_> = roots
-        .iter()
-        .cloned()
-        .map(DependencySelection::from)
-        .collect();
-    selected_contribution_roots_in_tx(tx, &selections).await
 }
 
 pub async fn selected_contribution_roots_in_tx(

@@ -2850,6 +2850,37 @@
     "roundtrip": true
   },
   {
+    "name": "clarification tool receipt omits fields belonging to query facts",
+    "schema": "DataToolOutcome",
+    "value": {
+      "operation_id": "original-operation",
+      "tool_name": "update_analysis_task",
+      "tool_contract_version": 2,
+      "data": {"task_id": "synthetic-task", "condition_version": "1"},
+      "control_delivery": {
+        "text": "请输入时间范围。",
+        "task_refs": [{"task_id": "synthetic-task", "condition_version": "1"}],
+        "facts": [{"kind": "clarification", "task_id": "synthetic-task", "condition_version": "1", "clarification_id": "synthetic-question", "question": "请输入时间范围。", "has_more": false}],
+        "fingerprint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
+    "name": "task tool receipt explicitly clears obsolete control delivery",
+    "schema": "DataToolOutcome",
+    "value": {
+      "operation_id": "original-operation",
+      "tool_name": "update_analysis_task",
+      "tool_contract_version": 2,
+      "data": {},
+      "control_delivery": null
+    },
+    "valid": true,
+    "roundtrip": true
+  },
+  {
     "name": "rejected data tool outcome carries original tool v2",
     "schema": "DataToolOutcome",
     "value": {

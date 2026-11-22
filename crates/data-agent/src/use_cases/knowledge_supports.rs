@@ -552,6 +552,7 @@ mod tests {
             user_id: "alice".into(),
             space_id: "support-cursor-fingerprint".into(),
             request_id: "support-cursor-fingerprint".into(),
+            table_access: None,
         };
         let object_id = "support-fingerprint-doc";
         let source = SourceKey {

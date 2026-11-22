@@ -1,7 +1,7 @@
 use crate::{
     live_changes::Change,
-    persistence::AppTx,
-    types::{AccessContext, Error, Result, epoch, fingerprint},
+    persistence::{AppTx, receipts::Operation},
+    types::{AccessContext, Error, Result, epoch},
 };
 use serde_json::{Value, json};
 use sqlx::{MySqlPool, Row};
@@ -278,22 +278,13 @@ pub async fn assign_in_tx(
     let key = input["operation_id"]
         .as_str()
         .ok_or(Error::new("invalid_input"))?;
-    let fp = fingerprint(&json!([object, input]));
-    let previous=sqlx::query("SELECT fingerprint,receipt FROM semantic_owner_operations WHERE space_id=? AND owner_id=? AND operation_id=? FOR UPDATE")
-        .bind(&ctx.space_id).bind(&ctx.user_id).bind(key).fetch_optional(tx.connection()).await?;
-    if let Some(previous) = previous {
-        if previous.get::<String, _>("fingerprint") != fp {
-            return Err(Error::new("idempotency_conflict"));
+    let operation = Operation::new(ctx, "semantic_owner", key, &json!([object, input]));
+    operation.execute(tx, async |tx| {
+        if row.get::<u64, _>("version") != epoch(input["expected_version"].as_str().unwrap_or(""))? {
+            return Err(Error::new("version_conflict"));
         }
-        return Ok(previous.get::<sqlx::types::Json<Value>, _>("receipt").0);
-    }
-    if row.get::<u64, _>("version") != epoch(input["expected_version"].as_str().unwrap_or(""))? {
-        return Err(Error::new("version_conflict"));
-    }
-    sqlx::query("UPDATE semantic_ownership SET maintainer_id=?,source='system',version=version+1,updated_by=? WHERE space_id=? AND object_id=?")
-        .bind(input["maintainer_id"].as_str()).bind(&ctx.user_id).bind(&ctx.space_id).bind(object).execute(tx.connection()).await?;
-    let v = maintenance_in_tx(tx, ctx, object).await?;
-    sqlx::query("INSERT INTO semantic_owner_operations(space_id,owner_id,operation_id,fingerprint,receipt) VALUES(?,?,?,?,?)")
-        .bind(&ctx.space_id).bind(&ctx.user_id).bind(key).bind(fp).bind(sqlx::types::Json(&v)).execute(tx.connection()).await?;
-    Ok(v)
+        sqlx::query("UPDATE semantic_ownership SET maintainer_id=?,source='system',version=version+1,updated_by=? WHERE space_id=? AND object_id=?")
+            .bind(input["maintainer_id"].as_str()).bind(&ctx.user_id).bind(&ctx.space_id).bind(object).execute(tx.connection()).await?;
+        maintenance_in_tx(tx, ctx, object).await
+    }).await
 }

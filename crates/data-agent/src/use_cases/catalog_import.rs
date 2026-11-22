@@ -133,6 +133,7 @@ async fn apply_page(pool: &MySqlPool, job: &jobs::SourceJob) -> Result<()> {
         user_id: read["owner_id"].as_str().unwrap_or("").into(),
         space_id: read["space_id"].as_str().unwrap_or("").into(),
         request_id: job.resource_id.clone(),
+        table_access: None,
     };
     access::authorize_maintainer(&ctx)?;
     ingestion::start_catalog_page_in_tx(&mut tx, &read).await?;
@@ -256,6 +257,7 @@ async fn apply_table(
     let (version, changed) =
         ingestion::save_catalog_table_in_tx(tx, ctx, read, page_namespace, table).await?;
     let objects = ingestion::catalog::objects(ctx, page_namespace, table, version)?;
+    let prefill = std::env::var("DATA_AGENT_PREFILL_MODE").ok();
     // 新对象与既有对象使用同一个来源/知识小事务；人工值仍通过正式合并规则保护。
     for candidate in &objects {
         let id = candidate["id"].as_str().unwrap_or("");
@@ -285,10 +287,16 @@ async fn apply_table(
                 std::slice::from_ref(&updated),
             )
             .await?;
-            let preferred = ingestion::read_analysis_preference_in_tx(tx, ctx, &updated)
-                .await?
-                .is_some_and(|v| v["preferred"] == true);
-            if created && version == 1 && !preferred {
+            if prefill.as_deref() == Some("disabled") {
+                continue;
+            }
+            if created
+                && version == 1
+                && prefill.as_deref() != Some("proposal")
+                && !ingestion::read_analysis_preference_in_tx(tx, ctx, &updated)
+                    .await?
+                    .is_some_and(|v| v["preferred"] == true)
+            {
                 continue;
             }
             let sources = vec![
@@ -304,7 +312,9 @@ async fn apply_table(
                 tx,
                 ctx,
                 &updated,
-                &json!({"sources":sources,"catalog_import_id":read["id"]}),
+                &json!({"sources":sources,"catalog_import_id":read["id"],
+                    "prefill_requester":if prefill.as_deref() == Some("proposal")
+                        {read["owner_id"].clone()} else {Value::Null}}),
             )
             .await?;
         }

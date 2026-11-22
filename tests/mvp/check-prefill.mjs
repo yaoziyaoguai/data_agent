@@ -4,7 +4,7 @@ import {createServer} from 'node:http';
 import {randomUUID} from 'node:crypto';
 import {mkdir,copyFile,readFile,writeFile} from 'node:fs/promises';
 import {harness,until} from './harness.mjs';
-const checks=[];let passed=false,calls=0,mode='valid',release,arrived,expectedThinking='off',expectedOutput=2048;
+const checks=[];let passed=false,calls=0,mode='valid',release,expectedThinking='off',expectedOutput=2048;
 const contractDocument=JSON.parse(await readFile('packages/contracts/schema.json','utf8'));
 const resultSchema=contractDocument.$defs.PrefillResult;
 // 发给模型的单一工具参数必须自包含：传递引用到的本地定义随参数附带，缺一个模型端就会遇到未解析引用。
@@ -38,7 +38,7 @@ const provider=createServer(async(req,res)=>{
  assert.deepEqual(input.object.related_ids,['table-demo_order_detail']);
  assert.ok(input.object.metadata.some(e=>e.path==='type'&&e.source_facts.quote.includes('paid_amount_cents TEXT NOT NULL')));
  assert.ok(input.object.metadata.every(e=>!('effective_value' in e)&&!('suggestion' in e)&&!('human_override' in e)));
- if(mode==='review_blocked' && input.draft || mode==='blocked'){arrived?.();await new Promise(r=>release=r);}
+ if(mode==='review_blocked' && input.draft || mode==='blocked')await new Promise(r=>release=r);
  const output={entries:[{entry_id:'meaning',value:'新版合成语义建议',gaps:['税费拆分没有资料'],evidence:[{source_id:guide.source_id,version:guide.version,location:'字段说明',quote:mode==='invalid' || mode==='review_invalid' && input.draft?'来源中绝不存在的原文':guide.body.slice(0,50)}]}]};
  if(mode==='empty')output.entries=[];
  if(mode==='facts_only')output.entries[0].entry_id='type';
@@ -46,7 +46,8 @@ const provider=createServer(async(req,res)=>{
  res.writeHead(200,{'content-type':'application/json'});res.end(JSON.stringify({choices:[{finish_reason:'tool_calls',message:{tool_calls:[{type:'function',function:{name:'submit_semantic_prefill',arguments:(mode==='review_malformed'&&input.draft?'{{invalid':JSON.stringify(output))}}]}}],...(mode==='usage_missing' || mode==='review_usage_missing' && input.draft?{}:{usage:{prompt_tokens:100,completion_tokens:80}})}));
 });await new Promise(r=>provider.listen(0,'127.0.0.1',r));
 const directory='.local/checks/prefill-sources-'+randomUUID();await mkdir(directory,{recursive:true});for(const name of ['schema.sql','etl.sql','business-guide.md','semantic-catalog.json'])await copyFile('docs/sources/'+name,directory+'/'+name);
-const profile={provider_id:'deepseek',model_id:'deepseek-flash',trial_id:randomUUID(),price_version:'2026-10-04-peak-usd',input_limit:32768,output_limit:2048,trial_call_limit:22,trial_cost_micros:'300000',request_call_limit:9,toolset:'data',payload_bytes_limit:65536};
+// 最多同时保留三笔未知预占，再为下一次请求预留。使用本地协议模型，22 次调用断言不变。
+const profile={provider_id:'deepseek',model_id:'deepseek-flash',trial_id:randomUUID(),price_version:'2026-10-04-peak-usd',input_limit:32768,output_limit:2048,trial_call_limit:22,trial_cost_micros:'1400000',request_call_limit:9,toolset:'data',payload_bytes_limit:65536};
 let h;
 try{
  h=await harness({platformSourceDirectory:process.cwd()+'/docs/sources',env:{DATA_AGENT_SYNTHETIC_SOURCE_DIRECTORY:process.cwd()+'/'+directory}});await h.pauseWorker();
@@ -83,7 +84,7 @@ try{
   const before=await reanalyze();v=await wait('invalid_prefill');assert.equal(v.version,before.version);
   checks.push({name:'不完整预填明确失败且不应用建议：'+mode,passed:true});
  }
- mode='blocked';const started=new Promise(r=>arrived=r);await reanalyze();await started;v=(await h.request('/knowledge/'+object)).value;
+ mode='blocked';release=undefined;await reanalyze();await until(()=>release,'预填分析已发出');v=(await h.request('/knowledge/'+object)).value;
  const edit=await h.request('/knowledge/'+object,{operation_id:randomUUID(),expected_version:v.version,entry_id:'meaning',value:'分析期间人工纠正',clear_override:false},'alice','PATCH');assert.equal(edit.status,200);release();v=await wait('superseded');assert.equal(v.entries.find(e=>e.path==='meaning').effective_value,'分析期间人工纠正');
  checks.push({name:'模型进行期间人工编辑，新人工版本保留，迟到分析不覆盖',passed:true});
  mode='valid';await reanalyze();v=await wait('succeeded');assert.equal(v.entries.find(e=>e.path==='meaning').effective_value,'分析期间人工纠正');assert.equal(v.entries.find(e=>e.path==='meaning').suggestion.value,'新版合成语义建议');
@@ -96,7 +97,7 @@ try{
  h.sql("DELETE FROM background_jobs WHERE kind='prepare_source'");await h.resumeWorker();
  mode='usage_missing';const before=await reanalyze();v=await wait('unknown');assert.equal(v.version,before.version);const ledger=h.sql(`SELECT JSON_OBJECT('calls',allocated_calls,'reserved',reserved_micros) FROM model_trials WHERE id='${profile.trial_id}'`)[0];assert.equal(ledger.calls,10);assert.ok(ledger.reserved>0);await new Promise(r=>setTimeout(r,400));assert.equal(calls,10);
  checks.push({name:'建议合法但usage缺失：不应用、回执未知、保留预算且不自动重试',passed:true});
- mode='blocked';const sent=new Promise(r=>arrived=r);await reanalyze();await sent;
+ mode='blocked';release=undefined;await reanalyze();await until(()=>release,'退出测试的预填分析已发出');
  await h.pauseWorker();h.sql("UPDATE prefill_attempts SET issued_until=TIMESTAMPADD(SECOND,-1,UTC_TIMESTAMP(3)) WHERE state='issued'");release();await h.resumeWorker();await wait('unknown');await new Promise(r=>setTimeout(r,400));assert.equal(calls,11);
  checks.push({name:'每个重传命令最多两次维护调用；发送后进程退出，过期标记unknown且不自动重发',passed:true});
 
@@ -110,7 +111,7 @@ try{
   assert.equal(receipt.state,reviewMode==='review_usage_missing'?'issued':'settled');
   checks.push({name:'复核失败保留分析/复核产物，正式版本不应用第一轮：'+reviewMode,passed:true});
  }
- mode='review_blocked';const reviewing=new Promise(r=>arrived=r);await reanalyze();await reviewing;
+ mode='review_blocked';release=undefined;await reanalyze();await until(()=>release,'预填复核已发出');
  const reviewOld=(await h.request('/knowledge/'+object)).value;
  assert.equal((await h.request('/knowledge/'+object,{operation_id:randomUUID(),expected_version:reviewOld.version,entry_id:'meaning',value:'复核期间人工纠正',clear_override:false},'alice','PATCH')).status,200);
  release();await wait('superseded');assert.equal((await h.request('/knowledge/'+object)).value.entries.find(e=>e.path==='meaning').effective_value,'复核期间人工纠正');
@@ -137,5 +138,21 @@ try{
   checks.push({name:`预填分析及复核实际请求沿用${level}思考深度与${output}输出上限，两次usage全部结算`,passed:true});
   await h.close();h=null;
  }
+ expectedThinking='off';expectedOutput=2048;
+ const proposalProfile={...profile,trial_id:randomUUID(),trial_call_limit:2};
+ h=await harness({platformSourceDirectory:process.cwd()+'/docs/sources',env:{
+  DATA_AGENT_SYNTHETIC_SOURCE_DIRECTORY:process.cwd()+'/'+directory,
+  DATA_AGENT_PREFILL_MODE:'proposal',
+  DATA_AGENT_PREFILL_PROFILE:JSON.stringify(proposalProfile),
+  DATA_AGENT_PREFILL_TEST:'1',DATA_AGENT_PREFILL_URL:'http://127.0.0.1:'+provider.address().port}});
+ const beforeProposalCalls=calls;
+ const formal=await reanalyze();
+ const proposed=await wait('succeeded');
+ assert.equal(calls-beforeProposalCalls,2);
+ assert.equal(proposed.version,formal.version);
+ assert.equal(proposed.entries.find(e=>e.path==='meaning').effective_value,formal.entries.find(e=>e.path==='meaning').effective_value);
+ const proposals=h.sql("SELECT body FROM semantic_change_proposals WHERE owner_id='alice' AND state='open'");
+ assert.ok(proposals.some(item=>item.object_id===object && item.base_version===formal.version && item.value==='新版合成语义建议'));
+ checks.push({name:'提案模式保留正式语义正文与版本，分析与复核结果进入负责人待审队列',passed:true});
  passed=true;console.log(JSON.stringify({passed,checks,officialRequests:0,calls}));
 }finally{release?.();if(h)await h.close();await new Promise(r=>provider.close(r));await writeFile('.local/checks/mvp-prefill.json',JSON.stringify({passed,checks,officialRequests:0,calls},null,2));}

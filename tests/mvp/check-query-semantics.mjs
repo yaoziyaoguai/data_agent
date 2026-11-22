@@ -135,8 +135,9 @@ try {
 
   // 语义决策的依据同样来自模型参数，不能先污染authority再让下一次请求失败。
   const referenceDoc = ok(await h.request('/knowledge', {operation_id:randomUUID(),kind:'document',name:'合成引用核对',body:'合成金额只用于边界核对。',related_ids:[]}));
-  await invoke('read_knowledge',{object_id:referenceDoc.id});
   const realReference={object_id:referenceDoc.id,version:referenceDoc.version,path:'body'};
+  const referenceRead = (await invoke('read_knowledge',{items:[{kind:'knowledge',ref:realReference}]})).receipt.data;
+  assert.equal(referenceRead.items[0].state,'ok');
   const invalidReference={...realReference,object_id:referenceDoc.id+'-missing'};
   const queriesBeforeInvalid=await readQueries();
   const authorityBeforeInvalid=h.sql(`SELECT JSON_OBJECT('knowledge',JSON_EXTRACT(authority_snapshot,'$.knowledge')) FROM agent_runs WHERE id='${run.run_id}'`)[0];
@@ -172,7 +173,7 @@ try {
     conditions: { time_start: null, time_end: null, timezone: "UTC", metric: "synthetic_completed_amount",
       channel: null, group_by: [], filters: [], knowledge_refs: [], notes: "" } })).receipt.data;
   const oldPending = resolution("needs_clarification", null, ["按创建时间还是完成时间归属"]);
-  h.sql(`UPDATE condition_revisions SET decision_state_version=1,body=JSON_SET(body,'$.semantic_resolution',CAST(CONVERT(0x${Buffer.from(JSON.stringify(oldPending)).toString("hex")} USING utf8mb4) AS JSON)),field_authorities=JSON_SET(field_authorities,'$.semantic_resolution',JSON_EXTRACT(field_authorities,'$.metric')) WHERE task_id='${alignTask.task_id}' AND version=1`);
+  h.sql(`UPDATE condition_revisions SET decision_state_version=1,body=JSON_SET(body,'$.semantic_resolution',CAST(CONVERT(0x${Buffer.from(JSON.stringify(oldPending)).toString("hex")} USING utf8mb4) AS JSON)) WHERE task_id='${alignTask.task_id}' AND version=1`);
   // 每次取当前条件版本：修订后旧版本会先撞version_conflict，测不到目标错误码。
   const alignQuery = async extra => ({ task_id: alignTask.task_id,
     condition_version: (await taskVersion()).condition_version,
@@ -342,7 +343,7 @@ try {
     // 仅布置升级前持久格式；后续回答、回执与修订全部经真实业务入口产生。
     const legacyResolution = { interpretation: "待核对合成指标与分组。", basis: "explicit_user", user_quote: "伪造的历史采纳原话",
       adoption_message_id: run.message_id, unresolved_differences: ["指标采用哪种口径？", "保留按渠道分组吗？"] };
-    h.sql(`UPDATE condition_revisions SET decision_state_version=1,body=JSON_SET(body,'$.semantic_resolution',CAST(CONVERT(0x${Buffer.from(JSON.stringify(legacyResolution)).toString("hex")} USING utf8mb4) AS JSON)),field_authorities=JSON_SET(field_authorities,'$.semantic_resolution',JSON_EXTRACT(field_authorities,'$.metric')) WHERE task_id='${legacy.task_id}' AND version=1`);
+    h.sql(`UPDATE condition_revisions SET decision_state_version=1,body=JSON_SET(body,'$.semantic_resolution',CAST(CONVERT(0x${Buffer.from(JSON.stringify(legacyResolution)).toString("hex")} USING utf8mb4) AS JSON)) WHERE task_id='${legacy.task_id}' AND version=1`);
     // 格式标记不能把损坏的旧JSON字符串解释成没有决定；仍走同一公共读取边界。
     try {
       h.sql(`UPDATE condition_revisions SET body=JSON_SET(body,'$.semantic_resolution',CAST(JSON_EXTRACT(body,'$.semantic_resolution') AS CHAR)) WHERE task_id='${legacy.task_id}' AND version=1`);
@@ -354,7 +355,7 @@ try {
       h.sql(`UPDATE condition_revisions SET body=JSON_SET(body,'$.semantic_resolution',CAST(CONVERT(0x${Buffer.from(JSON.stringify(legacyResolution)).toString("hex")} USING utf8mb4) AS JSON)) WHERE task_id='${legacy.task_id}' AND version=1`);
     }
     let current = await readTask(legacy);
-    await writeFile(h.directory + "/decision-state-initial.json", JSON.stringify({ current, stored: h.sql(`SELECT JSON_OBJECT('version',version,'decision_state_version',decision_state_version,'body',body,'fields',field_authorities) FROM condition_revisions WHERE task_id='${legacy.task_id}' AND version=1`) }, null, 2) + "\n");
+    await writeFile(h.directory + "/decision-state-initial.json", JSON.stringify({ current, stored: h.sql(`SELECT JSON_OBJECT('version',version,'decision_state_version',decision_state_version,'body',body) FROM condition_revisions WHERE task_id='${legacy.task_id}' AND version=1`) }, null, 2) + "\n");
     assert.deepEqual(current.conditions.semantic_resolution, legacyResolution, "旧格式夹具必须是原对象，不能把JSON字符串当旧决定");
     assert.ok(current.legacy_pending, "旧未决必须随当前任务以原版本/稳定索引交付");
     assert.deepEqual(current.legacy_pending.items.map(item => item.text), legacyResolution.unresolved_differences, "旧未决通过只读索引交付，不能伪装成新采纳");
@@ -425,7 +426,7 @@ try {
       clarifications: [{ question: "原口径仍需选择。", options: ["甲", "乙"] }] })).receipt.data;
     const missingQuestion = basisOnly.opened_clarifications[0].id;
     const basisResolution = { ...resolution("needs_clarification"), interpretation: "原口径仍需选择。" };
-    h.sql(`UPDATE condition_revisions SET decision_state_version=1,body=JSON_SET(body,'$.semantic_resolution',CAST(CONVERT(0x${Buffer.from(JSON.stringify(basisResolution)).toString("hex")} USING utf8mb4) AS JSON)),field_authorities=JSON_SET(field_authorities,'$.semantic_resolution',JSON_EXTRACT(field_authorities,'$.metric')) WHERE task_id='${basisOnly.task_id}' AND version=1;UPDATE clarifications SET state='resolved' WHERE id='${missingQuestion}'`);
+    h.sql(`UPDATE condition_revisions SET decision_state_version=1,body=JSON_SET(body,'$.semantic_resolution',CAST(CONVERT(0x${Buffer.from(JSON.stringify(basisResolution)).toString("hex")} USING utf8mb4) AS JSON)) WHERE task_id='${basisOnly.task_id}' AND version=1;UPDATE clarifications SET state='resolved' WHERE id='${missingQuestion}'`);
     const oldBasis = await readTask(basisOnly);
     assert.equal(oldBasis.legacy_pending.items.length, 1, "basis-only旧阻断不能遗漏");
     await invoke("update_analysis_task", { action: "revise", task_id: basisOnly.task_id, expected_version: basisOnly.condition_version,

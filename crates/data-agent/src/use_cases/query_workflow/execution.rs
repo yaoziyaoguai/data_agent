@@ -1,5 +1,34 @@
 use super::*;
 
+pub(in crate::use_cases) async fn authorize_pending_execution(
+    pool: &MySqlPool,
+    ctx: &AccessContext,
+    cid: &str,
+    ids: &[String],
+) -> Result<()> {
+    let mut tx = AppTx::begin(pool).await?;
+    let queries = queries::read_map_in_tx(&mut tx, ctx, ids).await?;
+    tx.commit().await?;
+    for id in ids {
+        let query = queries
+            .get(id)
+            .filter(|query| query["conversation_id"] == cid)
+            .ok_or(Error::new("not_available"))?;
+        // 原确认和后续重放用同一草稿身份；只有首次授权需要问平台当前 SQL 表权限。
+        if query["confirmation_state"] == "awaiting_confirmation"
+            && query["execution_state"] == "not_submitted"
+        {
+            queries::platform::check_execution_access(
+                ctx,
+                query["sql"].as_str().expect("stored SQL"),
+                &query["parameters"],
+            )
+            .await?;
+        }
+    }
+    Ok(())
+}
+
 pub async fn process_due(pool: &MySqlPool, worker: &str) -> Result<bool> {
     let Some(job) = queries::claim_due(pool, worker).await? else {
         return Ok(false);
@@ -8,6 +37,7 @@ pub async fn process_due(pool: &MySqlPool, worker: &str) -> Result<bool> {
         user_id: job["owner_id"].as_str().unwrap_or("").into(),
         space_id: "demo".into(),
         request_id: id(),
+        table_access: None,
     };
     let cid = job["conversation_id"].as_str().unwrap_or("");
     let qid = job["query_id"].as_str().unwrap_or("");
@@ -34,6 +64,11 @@ pub async fn process_due(pool: &MySqlPool, worker: &str) -> Result<bool> {
         let pending = queries::read_in_tx(&mut preflight, &ctx, qid).await?;
         preflight.commit().await?;
         // unknown 只查证、取消只发送控制操作；不能因旧正文失效而重新提交或中止查证。
+        let ctx = if pending["execution_state"] == "queued" && pending["cancel_state"] == "none" {
+            super::super::knowledge::catalog_context(&ctx).await?
+        } else {
+            ctx.clone()
+        };
         let checked = if pending["execution_state"] == "queued" && pending["cancel_state"] == "none"
         {
             Some(check_text_results(pool, &ctx, cid, Some(qid)).await?)

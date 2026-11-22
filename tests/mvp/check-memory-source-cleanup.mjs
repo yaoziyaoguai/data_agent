@@ -30,14 +30,15 @@ try {
  const cid=await h.create();await h.resumeWorker();run=await h.capture(cid,'请记住以后金额使用元。');await h.pauseWorker();
  const manager=SessionManager.inMemory('/synthetic/data-agent');const cp=()=>exportCheckpoint(manager,run.workspace_context.authority_revision,run.workspace_context.authority_snapshot);
  const tool=async(name,args)=>{const input={run_id:run.run_id,lease_epoch:run.lease_epoch,sdk_tool_call_id:randomUUID(),tool_name:name,arguments:args,checkpoint:cp()};ok(await h.internal('/internal/data/tool-calls',input));return ok(await h.internal('/internal/data/tools',input)).data;};
- await tool('read_knowledge',{object_id:source.id});
- const asset=await tool('manage_personal_asset',{action:'save_memory',name:'显示偏好',body:'金额用元 '+marker,scope:'金额显示',instruction_quote:run.text,verified:false,dependencies:[]});
+ const sourceRef={object_id:source.id,version:source.version,path:'body'};
+ assert.equal((await tool('read_knowledge',{items:[{kind:'knowledge',ref:sourceRef}]})).items[0].state,'ok');
+ const asset=await tool('manage_personal_asset',{action:'save_memory',name:'显示偏好',body:'金额用元 '+marker,scope:'金额显示',instruction_quote:run.text,verified:false,dependencies:[sourceRef]});
  await tool('update_analysis_task',{action:'route',task_id:null,expected_version:null,goal:'',options:[]});
  const final='已保存合成偏好';ok(await h.internal('/internal/outputs',{run_id:run.run_id,lease_epoch:run.lease_epoch,chunk_seq:'1',text:final}));ok(await h.internal('/internal/finish',{run_id:run.run_id,lease_epoch:run.lease_epoch,commit_id:run.output_id,final_text:final,checkpoint:cp()}));h.releaseRun(run.run_id);
  h.env.DATA_AGENT_MEMORY_URL=sidecar;await h.restartApi();await h.resumeWorker();
  await until(()=>indexed.get(asset.id)?.state==='enabled','initial source-bound index');assert.ok(indexed.get(asset.id).body.includes(marker));
  ok(await h.request(`/knowledge/${source.id}/disable`,{operation_id:randomUUID(),expected_version:source.version}));
- const disabled=ok(await h.request(`/assets/${asset.id}/disable`,{operation_id:randomUUID(),expected_version:asset.version}));assert.equal(disabled.text_unavailable,true);
+ const disabled=ok(await h.request(`/assets/${asset.id}/disable`,{operation_id:randomUUID(),expected_version:asset.version}));assert.equal(disabled.state,'disabled');
  await until(()=>indexed.get(asset.id)?.state==='disabled','invalid source still permits disable cleanup');
  const attempts=requests.filter(value=>value.input.asset.state==='disabled');assert.equal(attempts.length,2);assert.equal(attempts[0].input.operation_id,attempts[1].input.operation_id);assert.deepEqual(attempts[0].input.asset,attempts[1].input.asset,'same cleanup retry keeps stable fingerprint inputs');assert.equal(attempts[0].input.extraction_operation_id,attempts[1].input.extraction_operation_id);
  const deleted=ok(await h.request(`/assets/${asset.id}/delete`,{operation_id:randomUUID(),expected_version:disabled.version}));

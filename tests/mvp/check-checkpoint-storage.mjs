@@ -46,11 +46,18 @@ try {
  await h.resumeWorker();const next=await h.capture(cid,'再说明支付时间的口径');await h.pauseWorker();
  assert.equal(next.checkpoint.storage.kind,'pi_session');assert.equal(next.checkpoint.storage.session_id,manager.getSessionId());
  assert.equal((await h.internal('/internal/checkpoints/read',{run_id:next.run_id,lease_epoch:next.lease_epoch})).status,404,'新引用不伪装为旧内联迁移');
- const document=(await h.request('/knowledge/table-demo_order_detail')).value;
- assert.equal((await h.request('/knowledge/'+document.id+'/disable',{operation_id:crypto.randomUUID(),expected_version:document.version})).status,200);
+ // 使这个检查点实际采用的直接依据失效，不以展示目录中的其他对象替代。
+ const [reference] = next.workspace_context.authority_snapshot.knowledge;
+ assert.ok(reference, '恢复后的历史须包含至少一项直接知识依据');
+ const [objectId, version] = reference;
+ assert.equal((await h.request('/knowledge/'+objectId+'/disable',{operation_id:crypto.randomUUID(),expected_version:version})).status,200);
  // 本运行的授权快照失效后，不得回读原始SDK历史。
  h.sql(`UPDATE agent_runs SET legacy_delivery_checkpoint=CAST(${sqlString(legacy)} AS JSON) WHERE id='${next.run_id}'`);
- assert.equal((await h.internal('/internal/checkpoints/read',{run_id:next.run_id,lease_epoch:next.lease_epoch})).value.code,'stale_context');
+ const invalidated = await h.internal('/internal/checkpoints/read',{run_id:next.run_id,lease_epoch:next.lease_epoch});
+ assert.equal(invalidated.status,409);
+ assert.equal(invalidated.value.code,'stale_context');
+ const send = await h.internal('/internal/model/issue',{run_id:next.run_id,lease_epoch:next.lease_epoch,call_attempt_id:crypto.randomUUID()});
+ assert.equal(send.status,200,'受限历史读取拒绝不撤销运行的调用额度');
  passed=true;
  console.log(JSON.stringify({passed,legacyBytes,referenceBytes:Buffer.byteLength(JSON.stringify(current)),journalBytes:readFileSync(restored.getSessionFile()).length,checks:['大旧检查点以小交付迁移','不可变原值与指纹','正式API工具登记及finish以小引用提交','同原生session续聊','内部权限/租约/终态/失效依据拒绝'],officialRequests:0}));
 }finally{await h.close();}

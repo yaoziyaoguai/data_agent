@@ -49,7 +49,7 @@ const insert = (h, value) => {
   const encoded = Buffer.from(JSON.stringify(value)).toString('hex');
   h.sql(`INSERT INTO knowledge_objects(id,space_id,kind,name,version,state,body,source_id,source_version,updated_by)
     VALUES('${value.id}','demo','${value.kind}','${value.name}',1,'enabled',CAST(CONVERT(0x${encoded} USING utf8mb4) AS JSON),NULL,0,'synthetic-test');
-    INSERT INTO knowledge_versions(object_id,version,body) VALUES('${value.id}',1,CAST(CONVERT(0x${encoded} USING utf8mb4) AS JSON));
+    INSERT INTO knowledge_revisions(object_id,version,archived_body) VALUES('${value.id}',1,CAST(CONVERT(0x${encoded} USING utf8mb4) AS JSON));
     INSERT INTO retrieval_documents(object_id,space_id,version,body) VALUES('${value.id}','demo',1,CAST(CONVERT(0x${encoded} USING utf8mb4) AS JSON));
     INSERT IGNORE INTO semantic_ownership(space_id,object_id,authority_id,source,updated_by) VALUES('demo','${value.id}','${value.id}','system','synthetic-test')`);
 };

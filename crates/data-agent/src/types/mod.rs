@@ -130,6 +130,26 @@ pub struct AccessContext {
     pub user_id: String,
     pub space_id: String,
     pub request_id: String,
+    pub table_access: Option<std::sync::Arc<TableAccess>>,
+}
+
+#[derive(Debug)]
+pub struct TableAccess {
+    pub table_ids: std::collections::HashSet<String>,
+    pub source_ids: std::collections::HashSet<String>,
+    pub unavailable: bool,
+}
+
+impl AccessContext {
+    pub fn can_read_platform_source(&self, id: &str) -> bool {
+        self.table_access.as_ref().is_none_or(|access| {
+            if id.starts_with("catalog-") {
+                access.source_ids.contains(id)
+            } else {
+                !matches!(id, "schema" | "etl" | "semantic-catalog")
+            }
+        })
+    }
 }
 #[derive(Clone, Debug)]
 pub struct RunLocation {

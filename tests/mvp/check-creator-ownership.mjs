@@ -48,7 +48,7 @@ const assign = async (id, owner) => {
 };
 const counts = () =>
   h.sql(
-    "SELECT JSON_OBJECT('objects',(SELECT COUNT(*) FROM knowledge_objects),'versions',(SELECT COUNT(*) FROM knowledge_versions),'jobs',(SELECT COUNT(*) FROM knowledge_index_jobs),'operations',(SELECT COUNT(*) FROM knowledge_operations))",
+    "SELECT JSON_OBJECT('objects',(SELECT COUNT(*) FROM knowledge_objects),'versions',(SELECT COUNT(*) FROM (SELECT object_id,version,archived_body AS body FROM knowledge_revisions WHERE archived_body IS NOT NULL) archive_rows),'jobs',(SELECT COUNT(*) FROM knowledge_index_jobs),'operations',(SELECT COUNT(*) FROM idempotency_receipts WHERE domain='knowledge'))",
   )[0];
 try {
   assert.deepEqual(await ok("/semantic-access", undefined, "bob"), {
@@ -146,7 +146,7 @@ try {
   assert.equal(pair[0].id, pair[1].id);
   assert.equal(
     h.sql(
-      `SELECT JSON_OBJECT('n',COUNT(*)) FROM knowledge_versions WHERE object_id=${quoted(pair[0].id)}`,
+      `SELECT JSON_OBJECT('n',COUNT(*)) FROM (SELECT object_id,version,archived_body AS body FROM knowledge_revisions WHERE archived_body IS NOT NULL) archive_rows WHERE object_id=${quoted(pair[0].id)}`,
     )[0].n,
     1,
   );

@@ -105,6 +105,7 @@ async fn archive_mode_keeps_full_revisions_and_same_revision_document_preparatio
         user_id: "alice".into(),
         space_id: "archive-compatibility".into(),
         request_id: "archive-compatibility".into(),
+        table_access: None,
     };
     let mut tx = AppTx::begin(&pool).await.unwrap();
     let original = knowledge::create_in_tx(&mut tx, &ctx, &json!({"operation_id":"archive-create-document","kind":"document","name":"合成兼容文档","body":"兼容模式文档原文。","related_ids":[],"source_url":null,"structured_value":null})).await.unwrap();
@@ -113,7 +114,7 @@ async fn archive_mode_keeps_full_revisions_and_same_revision_document_preparatio
         data_agent::contracts::decode("SourceKey", json!({"kind":"document","id":id})).unwrap();
     tx.commit().await.unwrap();
     let archive_before: Value = sqlx::query_scalar::<_, sqlx::types::Json<Value>>(
-        "SELECT body FROM knowledge_versions WHERE object_id=? AND version=1",
+        "SELECT body FROM (SELECT object_id,version,archived_body AS body FROM knowledge_revisions WHERE archived_body IS NOT NULL) archive_rows WHERE object_id=? AND version=1",
     )
     .bind(&id)
     .fetch_one(&pool)
@@ -254,7 +255,7 @@ async fn archive_mode_keeps_full_revisions_and_same_revision_document_preparatio
         "issued窗口同样保留首次冻结配置"
     );
     let archive_after: Value = sqlx::query_scalar::<_, sqlx::types::Json<Value>>(
-        "SELECT body FROM knowledge_versions WHERE object_id=? AND version=1",
+        "SELECT body FROM (SELECT object_id,version,archived_body AS body FROM knowledge_revisions WHERE archived_body IS NOT NULL) archive_rows WHERE object_id=? AND version=1",
     )
     .bind(&id)
     .fetch_one(&pool)
@@ -266,7 +267,7 @@ async fn archive_mode_keeps_full_revisions_and_same_revision_document_preparatio
         "同修订整理保留既有完整归档字节"
     );
     assert_eq!(
-        sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM knowledge_versions WHERE object_id=?")
+        sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM (SELECT object_id,version,archived_body AS body FROM knowledge_revisions WHERE archived_body IS NOT NULL) archive_rows WHERE object_id=?")
             .bind(id)
             .fetch_one(&pool)
             .await
@@ -286,7 +287,7 @@ async fn archive_mode_keeps_full_revisions_and_same_revision_document_preparatio
     );
     let source = ingestion::catalog::source_id(&ctx.space_id, namespace, "retained_events");
     for query in [
-        "SELECT COUNT(*) FROM source_snapshots WHERE source_id=?",
+        "SELECT COUNT(*) FROM (SELECT source_id,version,body,archive_complete AS complete FROM source_revisions WHERE body IS NOT NULL) archive_rows WHERE source_id=?",
         "SELECT COUNT(*) FROM catalog_table_snapshots WHERE source_id=?",
     ] {
         assert_eq!(
@@ -312,6 +313,7 @@ async fn new_knowledge_revisions_keep_current_and_metadata_without_growing_the_l
         user_id: "alice".into(),
         space_id: "public-content-retention".into(),
         request_id: "public-content-retention".into(),
+        table_access: None,
     };
     let object = "retained-current-rule";
     let mut tx = AppTx::begin(&pool).await.unwrap();
@@ -328,14 +330,16 @@ async fn new_knowledge_revisions_keep_current_and_metadata_without_growing_the_l
         .unwrap();
     tx.commit().await.unwrap();
     // 显式保留升级前精确旧档；新策略不能改写或删除该历史行。
-    sqlx::query("INSERT IGNORE INTO knowledge_versions(object_id,version,body) VALUES(?,1,?)")
-        .bind(object)
-        .bind(sqlx::types::Json(&original))
-        .execute(&pool)
-        .await
-        .unwrap();
+    sqlx::query(
+        "INSERT IGNORE INTO knowledge_revisions(object_id,version,archived_body) VALUES(?,1,?)",
+    )
+    .bind(object)
+    .bind(sqlx::types::Json(&original))
+    .execute(&pool)
+    .await
+    .unwrap();
     let baseline = sqlx::query_scalar::<_, String>(
-        "SELECT CAST(body AS CHAR) FROM knowledge_versions WHERE object_id=? AND version=1",
+        "SELECT CAST(body AS CHAR) FROM (SELECT object_id,version,archived_body AS body FROM knowledge_revisions WHERE archived_body IS NOT NULL) archive_rows WHERE object_id=? AND version=1",
     )
     .bind(object)
     .fetch_one(&pool)
@@ -357,7 +361,7 @@ async fn new_knowledge_revisions_keep_current_and_metadata_without_growing_the_l
     );
     tx.commit().await.unwrap();
     assert_eq!(
-        sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM knowledge_versions WHERE object_id=?")
+        sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM (SELECT object_id,version,archived_body AS body FROM knowledge_revisions WHERE archived_body IS NOT NULL) archive_rows WHERE object_id=?")
             .bind(object)
             .fetch_one(&pool)
             .await
@@ -367,7 +371,7 @@ async fn new_knowledge_revisions_keep_current_and_metadata_without_growing_the_l
     );
     assert_eq!(
         sqlx::query_scalar::<_, String>(
-            "SELECT CAST(body AS CHAR) FROM knowledge_versions WHERE object_id=? AND version=1"
+            "SELECT CAST(body AS CHAR) FROM (SELECT object_id,version,archived_body AS body FROM knowledge_revisions WHERE archived_body IS NOT NULL) archive_rows WHERE object_id=? AND version=1"
         )
         .bind(object)
         .fetch_one(&pool)
@@ -443,6 +447,7 @@ async fn catalog_revisions_keep_current_metadata_and_exact_legacy_content_withou
         user_id: "alice".into(),
         space_id: "catalog-content-retention".into(),
         request_id: "catalog-content-retention".into(),
+        table_access: None,
     };
     let namespace = "synthetic-retained-catalog";
     let original = catalog_table("升级前目录内容🧪。");
@@ -452,12 +457,12 @@ async fn catalog_revisions_keep_current_metadata_and_exact_legacy_content_withou
     );
     let source = ingestion::catalog::source_id(&ctx.space_id, namespace, "retained_events");
     let object = ingestion::catalog::table_object_id(&ctx.space_id, namespace, "retained_events");
-    sqlx::query("INSERT IGNORE INTO source_snapshots(source_id,version,body,complete) SELECT source_id,revision,body,complete FROM source_current WHERE source_id=?")
+    sqlx::query("INSERT IGNORE INTO source_revisions(source_id,version,body,archive_complete) SELECT source_id,revision,body,complete FROM source_current WHERE source_id=?")
         .bind(&source).execute(&pool).await.unwrap();
     sqlx::query("INSERT IGNORE INTO catalog_table_snapshots(source_id,version,namespace,body) SELECT source_id,revision,namespace,metadata FROM source_current WHERE source_id=?")
         .bind(&source).execute(&pool).await.unwrap();
     let old_body = sqlx::query_scalar::<_, String>(
-        "SELECT body FROM source_snapshots WHERE source_id=? AND version=1",
+        "SELECT body FROM (SELECT source_id,version,body,archive_complete AS complete FROM source_revisions WHERE body IS NOT NULL) archive_rows WHERE source_id=? AND version=1",
     )
     .bind(&source)
     .fetch_one(&pool)
@@ -483,7 +488,7 @@ async fn catalog_revisions_keep_current_metadata_and_exact_legacy_content_withou
         "相同来源内容不重复推进修订"
     );
     for query in [
-        "SELECT COUNT(*) FROM source_snapshots WHERE source_id=?",
+        "SELECT COUNT(*) FROM (SELECT source_id,version,body,archive_complete AS complete FROM source_revisions WHERE body IS NOT NULL) archive_rows WHERE source_id=?",
         "SELECT COUNT(*) FROM catalog_table_snapshots WHERE source_id=?",
     ] {
         let count = sqlx::query_scalar::<_, i64>(query)
@@ -605,6 +610,7 @@ async fn catalog_retirement_keeps_the_current_tombstone_and_metadata_without_new
         user_id: "alice".into(),
         space_id: "retired-content-retention".into(),
         request_id: "retired-content-retention".into(),
+        table_access: None,
     };
     let namespace = "synthetic-retained-retirement";
     assert_eq!(
@@ -612,10 +618,10 @@ async fn catalog_retirement_keeps_the_current_tombstone_and_metadata_without_new
         (1, true)
     );
     let source = ingestion::catalog::source_id(&ctx.space_id, namespace, "retained_events");
-    sqlx::query("INSERT IGNORE INTO source_snapshots(source_id,version,body,complete) SELECT source_id,revision,body,complete FROM source_current WHERE source_id=?")
+    sqlx::query("INSERT IGNORE INTO source_revisions(source_id,version,body,archive_complete) SELECT source_id,revision,body,complete FROM source_current WHERE source_id=?")
         .bind(&source).execute(&pool).await.unwrap();
     let baseline = sqlx::query_scalar::<_, String>(
-        "SELECT body FROM source_snapshots WHERE source_id=? AND version=1",
+        "SELECT body FROM (SELECT source_id,version,body,archive_complete AS complete FROM source_revisions WHERE body IS NOT NULL) archive_rows WHERE source_id=? AND version=1",
     )
     .bind(&source)
     .fetch_one(&pool)
@@ -636,7 +642,7 @@ async fn catalog_retirement_keeps_the_current_tombstone_and_metadata_without_new
     );
     tx.commit().await.unwrap();
     assert_eq!(
-        sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM source_snapshots WHERE source_id=?")
+        sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM (SELECT source_id,version,body,archive_complete AS complete FROM source_revisions WHERE body IS NOT NULL) archive_rows WHERE source_id=?")
             .bind(&source)
             .fetch_one(&pool)
             .await
@@ -646,7 +652,7 @@ async fn catalog_retirement_keeps_the_current_tombstone_and_metadata_without_new
     );
     assert_eq!(
         sqlx::query_scalar::<_, String>(
-            "SELECT body FROM source_snapshots WHERE source_id=? AND version=1"
+            "SELECT body FROM (SELECT source_id,version,body,archive_complete AS complete FROM source_revisions WHERE body IS NOT NULL) archive_rows WHERE source_id=? AND version=1"
         )
         .bind(&source)
         .fetch_one(&pool)
@@ -696,9 +702,10 @@ async fn synthetic_source_revisions_keep_current_and_metadata_without_growing_th
         user_id: "alice".into(),
         space_id: "demo".into(),
         request_id: "synthetic-content-retention".into(),
+        table_access: None,
     };
     let baseline = sqlx::query_as::<_, (u64, String)>(
-        "SELECT version,body FROM source_snapshots WHERE source_id='schema' ORDER BY version",
+        "SELECT version,body FROM (SELECT source_id,version,body,archive_complete AS complete FROM source_revisions WHERE body IS NOT NULL) archive_rows WHERE source_id='schema' ORDER BY version",
     )
     .fetch_all(&pool)
     .await
@@ -734,7 +741,7 @@ async fn synthetic_source_revisions_keep_current_and_metadata_without_growing_th
     tx.commit().await.unwrap();
     assert_eq!(
         sqlx::query_as::<_, (u64, String)>(
-            "SELECT version,body FROM source_snapshots WHERE source_id='schema' ORDER BY version"
+            "SELECT version,body FROM (SELECT source_id,version,body,archive_complete AS complete FROM source_revisions WHERE body IS NOT NULL) archive_rows WHERE source_id='schema' ORDER BY version"
         )
         .fetch_all(&pool)
         .await
@@ -799,6 +806,7 @@ async fn document_preparation_preserves_the_legacy_archive_and_independent_raw_i
         user_id: "alice".into(),
         space_id: "document-content-retention".into(),
         request_id: "document-content-retention".into(),
+        table_access: None,
     };
     let object = "retained-original-document";
     let original_text = "人工文档原文🧪e\u{301}，整理只补充解释。";
@@ -824,14 +832,14 @@ async fn document_preparation_preserves_the_legacy_archive_and_independent_raw_i
     .await
     .unwrap();
     tx.commit().await.unwrap();
-    sqlx::query("INSERT INTO knowledge_versions(object_id,version,body) VALUES(?,1,?)")
+    sqlx::query("INSERT INTO knowledge_revisions(object_id,version,archived_body) VALUES(?,1,?)")
         .bind(object)
         .bind(sqlx::types::Json(&original))
         .execute(&pool)
         .await
         .unwrap();
     let baseline = sqlx::query_scalar::<_, String>(
-        "SELECT CAST(body AS CHAR) FROM knowledge_versions WHERE object_id=? AND version=1",
+        "SELECT CAST(body AS CHAR) FROM (SELECT object_id,version,archived_body AS body FROM knowledge_revisions WHERE archived_body IS NOT NULL) archive_rows WHERE object_id=? AND version=1",
     )
     .bind(object)
     .fetch_one(&pool)
@@ -878,7 +886,7 @@ async fn document_preparation_preserves_the_legacy_archive_and_independent_raw_i
     tx.commit().await.unwrap();
     assert_eq!(
         sqlx::query_scalar::<_, String>(
-            "SELECT CAST(body AS CHAR) FROM knowledge_versions WHERE object_id=? AND version=1"
+            "SELECT CAST(body AS CHAR) FROM (SELECT object_id,version,archived_body AS body FROM knowledge_revisions WHERE archived_body IS NOT NULL) archive_rows WHERE object_id=? AND version=1"
         )
         .bind(object)
         .fetch_optional(&pool)

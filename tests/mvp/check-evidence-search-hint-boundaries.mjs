@@ -74,26 +74,26 @@ try {
   const baseline = await invoke('search_knowledge', args);
   assert.equal(baseline.hits.length, 1);
   if (scenario === 'raw') {
-    assert.equal(baseline.hits[0].record_kind, 'source_excerpt');
-    const target = objects.find(value => value.id !== baseline.hits[0].citation.source.id);
+    assert.equal(baseline.hits[0].record_kind, 'knowledge_entry');
+    const target = objects.find(value => value.id !== baseline.hits[0].ref.object_id);
     const hinted = await invoke('search_knowledge', {...args, hints: {related_object_ids: [target.id]}});
-    observations.baseline = baseline.hits.map(hit => hit.citation.source.id);
-    observations.hinted = hinted.hits.map(hit => hit.citation.source.id);
+    observations.baseline = baseline.hits.map(hit => hit.ref.object_id);
+    observations.hinted = hinted.hits.map(hit => hit.ref.object_id);
     observations.target = target.id;
     console.log(JSON.stringify({scenario, ...observations}));
-    assert.equal(hinted.hits[0].citation.source.id, target.id, 'raw-only文档也必须在limit主读取前应用相关对象软提示');
-    const seen = new Set(hinted.hits.map(hit => hit.citation.source.id));
+    assert.equal(hinted.hits[0].ref.object_id, target.id, '未整理文档的知识候选也必须在limit主读取前应用软提示');
+    const seen = new Set(hinted.hits.map(hit => hit.ref.object_id));
     let cursor = hinted.search_coverage.next;
     for (let page = 0; cursor && page < 4; page++) {
       const next = await invoke('search_knowledge', {...args, hints: {related_object_ids: [target.id]}, cursor});
       for (const hit of next.hits) {
-        assert.equal(hit.record_kind, 'source_excerpt');
-        assert.equal(seen.has(hit.citation.source.id), false); seen.add(hit.citation.source.id);
+        assert.equal(hit.record_kind, 'knowledge_entry');
+        assert.equal(seen.has(hit.ref.object_id), false); seen.add(hit.ref.object_id);
       }
       assert.notEqual(next.search_coverage.next, cursor); cursor = next.search_coverage.next;
     }
     assert.equal(cursor, null); assert.deepEqual([...seen].sort(), objects.map(value => value.id).sort());
-    checks.push('raw-only相关提示在首次及恢复窗口生效，未匹配文档仍完整交付且无硬过滤');
+    checks.push('文档定位窗口的相关提示在首次及恢复生效，未匹配文档仍完整交付且无硬过滤');
   } else {
     assert.equal(baseline.hits[0].record_kind, 'knowledge_entry');
     assert.equal(baseline.hits[0].ref.object_id, objects[0].id, '精确名称基线应优先');

@@ -56,44 +56,8 @@ pub fn sources(evidence: &Value) -> Result<Value> {
     Ok(json!({"result_dependencies":results,"knowledge_refs":knowledge}))
 }
 
-pub(super) async fn evidence_authorities_in_tx(
-    tx: &mut AppTx<'_>,
-    ctx: &AccessContext,
-    cid: &str,
-    evidence: &Value,
-) -> Result<Vec<Value>> {
-    let mut authorities = Vec::new();
-    for item in evidence.as_array().ok_or(Error::new("invalid_evidence"))? {
-        let reference = &item["reference"];
-        if reference["conversation_id"] != cid {
-            return Err(Error::new("invalid_evidence"));
-        }
-        authorities.push(
-            analysis::read_evidence_authority_in_tx(tx, ctx, text(reference, "evidence_id")?)
-                .await?,
-        );
-        let conditions = analysis::condition_text_authorities_in_tx(
-            tx,
-            cid,
-            text(reference, "task_id")?,
-            epoch(text(reference, "condition_version")?)?,
-        )
-        .await?;
-        authorities.extend(
-            conditions
-                .as_object()
-                .into_iter()
-                .flat_map(|fields| fields.values().cloned()),
-        );
-        for dependency in item["validated_sources"]["result_dependencies"]
-            .as_array()
-            .ok_or(Error::new("invalid_evidence"))?
-        {
-            authorities
-                .push(queries::text_authority_in_tx(tx, ctx, text(dependency, "query_id")?).await?);
-        }
-    }
-    Ok(authorities)
+pub(super) fn evidence_authority(evidence: &Value) -> Result<Value> {
+    Ok(super::context_authority::from_sources(&sources(evidence)?))
 }
 
 pub(super) async fn check_evidence_in_tx(
@@ -114,12 +78,6 @@ pub(super) async fn check_evidence_in_tx(
         if current != *item {
             return Err(Error::new("invalid_evidence"));
         }
-        let text_authority =
-            analysis::read_evidence_authority_in_tx(tx, ctx, text(reference, "evidence_id")?)
-                .await?;
-        super::context_authority::validate_text_in_tx(tx, ctx, cid, &text_authority, checked_text)
-            .await?;
-        super::context_authority::merge(&mut authority, &text_authority)?;
         let conditions = analysis::read_evidence_conditions_in_tx(
             tx,
             ctx,
@@ -131,17 +89,6 @@ pub(super) async fn check_evidence_in_tx(
         if conditions != item["conditions"] {
             return Err(Error::new("invalid_evidence"));
         }
-        let condition_authority = super::context_authority::validate_condition_text_in_tx(
-            tx,
-            ctx,
-            cid,
-            text(reference, "task_id")?,
-            epoch(text(reference, "condition_version")?)?,
-            &conditions,
-            checked_text,
-        )
-        .await?;
-        super::context_authority::merge(&mut authority, &condition_authority)?;
         // 每份依据分别核对原归属；报告所在任务不能把另一版本的查询改标为当前结果。
         for dependency in item["validated_sources"]["result_dependencies"]
             .as_array()
@@ -163,112 +110,11 @@ pub(super) async fn check_evidence_in_tx(
     }
     let adopted = sources(evidence)?;
     super::knowledge::check_refs_in_tx(tx, ctx, &adopted["knowledge_refs"]).await?;
-    Ok(authority)
-}
-
-fn title_authorities(
-    input: &Value,
-    previous: &Value,
-    previous_authorities: &Value,
-    generated: &Value,
-) -> Value {
-    let preserve = |values: Vec<Value>| {
-        let mut authority = generated.clone();
-        for value in values {
-            if super::context_authority::merge(&mut authority, &value).is_err() {
-                return Value::Null;
-            }
-        }
-        authority
-    };
-    let title = preserve(if previous["title"] == input["title"] {
-        vec![previous_authorities["title"].clone()]
-    } else {
-        vec![]
-    });
-    let charts = input["charts"]
-        .as_array()
-        .into_iter()
-        .flatten()
-        .map(|chart| {
-            // 图表重排或改配置不清除未改标题的来源；同文来自多个旧图时保守保留并集。
-            preserve(
-                previous["charts"]
-                    .as_array()
-                    .into_iter()
-                    .flatten()
-                    .enumerate()
-                    .filter(|(_, old)| old["title"] == chart["title"])
-                    .map(|(index, _)| previous_authorities["charts"][index].clone())
-                    .collect(),
-            )
-        })
-        .collect::<Vec<_>>();
-    json!({"title":title,"charts":charts})
-}
-
-async fn candidate_title_authorities_in_tx(
-    tx: &mut AppTx<'_>,
-    ctx: &AccessContext,
-    cid: &str,
-    input: &Value,
-    generated: &Value,
-) -> Result<Value> {
-    let previous = match analysis::read_report_in_tx(tx, ctx, cid, text(input, "task_id")?).await {
-        Ok(report) => report,
-        Err(error) if error.code == "not_available" => Value::Null,
-        Err(error) => return Err(error),
-    };
-    let authorities = if previous.is_null() {
-        Value::Null
-    } else {
-        analysis::read_report_authorities_in_tx(tx, ctx, &previous["reference"]).await?
-    };
-    Ok(title_authorities(input, &previous, &authorities, generated))
-}
-
-fn report_authorities(report: &Value, authorities: &Value) -> Vec<Value> {
-    let mut selected = vec![authorities["title"].clone()];
-    selected.extend(
-        report["charts"]
-            .as_array()
-            .into_iter()
-            .flatten()
-            .enumerate()
-            .map(|(index, _)| authorities["charts"][index].clone()),
-    );
-    selected
-}
-
-async fn check_titles_in_tx(
-    tx: &mut AppTx<'_>,
-    ctx: &AccessContext,
-    cid: &str,
-    report: &Value,
-    authorities: &Value,
-    checked_text: &super::context_authority::CheckedTextResults,
-) -> Result<Value> {
-    let mut adopted = super::context_authority::empty();
-    for authority in report_authorities(report, authorities) {
-        super::context_authority::validate_text_in_tx(tx, ctx, cid, &authority, checked_text)
-            .await?;
-        super::context_authority::merge(&mut adopted, &authority)?;
+    let selected = super::context_authority::from_sources(&adopted);
+    if !checked_text.allows(&selected, false) {
+        return Err(Error::new("stale_context"));
     }
-    Ok(adopted)
-}
-
-async fn check_report_in_tx(
-    tx: &mut AppTx<'_>,
-    ctx: &AccessContext,
-    cid: &str,
-    report: &Value,
-    checked_text: &super::context_authority::CheckedTextResults,
-) -> Result<Value> {
-    let mut authority =
-        check_evidence_in_tx(tx, ctx, cid, &report["evidence"], checked_text).await?;
-    let titles = analysis::read_report_authorities_in_tx(tx, ctx, &report["reference"]).await?;
-    let title_authority = check_titles_in_tx(tx, ctx, cid, report, &titles, checked_text).await?;
-    super::context_authority::merge(&mut authority, &title_authority)?;
+    super::context_authority::merge(&mut authority, &selected)?;
     Ok(authority)
 }
 
@@ -313,26 +159,6 @@ pub(super) async fn check_report_history_in_tx(
         if conditions != item["conditions"] {
             return Err(Error::new("invalid_evidence"));
         }
-        // 正文与条件的来源快照仍按记录引用核验（历史规则）：撤源/停用/缺闭包
-        // 照样拒绝，只是版本漂移不再隐藏。
-        let evidence_authority =
-            analysis::read_evidence_authority_in_tx(tx, ctx, text(reference, "evidence_id")?)
-                .await?;
-        super::context_authority::validate_history_in_tx(tx, ctx, cid, &evidence_authority).await?;
-        let fields = analysis::condition_text_authorities_in_tx(
-            tx,
-            cid,
-            text(reference, "task_id")?,
-            epoch(text(reference, "condition_version")?)?,
-        )
-        .await?;
-        for key in item["conditions"]
-            .as_object()
-            .ok_or(Error::new("invalid_evidence"))?
-            .keys()
-        {
-            super::context_authority::validate_history_in_tx(tx, ctx, cid, &fields[key]).await?;
-        }
         history_refs_in_tx(tx, ctx, &conditions["knowledge_refs"]).await?;
         history_refs_in_tx(tx, ctx, &item["validated_sources"]["knowledge_refs"]).await?;
         for finding in item["findings"]
@@ -348,10 +174,6 @@ pub(super) async fn check_report_history_in_tx(
             let query = queries::read_in_tx(tx, ctx, text(dependency, "query_id")?).await?;
             super::analysis_evidence::assert_query(&query, cid, reference, dependency)?;
         }
-    }
-    let titles = analysis::read_report_authorities_in_tx(tx, ctx, &report["reference"]).await?;
-    for authority in report_authorities(report, &titles) {
-        super::context_authority::validate_history_in_tx(tx, ctx, cid, &authority).await?;
     }
     Ok(())
 }
@@ -484,24 +306,12 @@ pub async fn validate_sources(
         );
     }
     let evidence = json!(evidence);
-    let mut authorities = evidence_authorities_in_tx(&mut tx, ctx, cid, &evidence).await?;
-    let titles = candidate_title_authorities_in_tx(
-        &mut tx,
-        ctx,
-        cid,
-        input,
-        &super::context_authority::empty(),
-    )
-    .await?;
-    authorities.extend(report_authorities(input, &titles));
+    let authorities = [evidence_authority(&evidence)?];
     tx.commit().await?;
-    checked_text
-        .include_authorities(pool, ctx, &authorities)
-        .await?;
+    checked_text.include(pool, ctx, &authorities, false).await?;
     let mut tx = AppTx::begin(pool).await?;
     conversations::lock_conversation_in_tx(&mut tx, ctx, cid).await?;
     check_evidence_in_tx(&mut tx, ctx, cid, &evidence, checked_text).await?;
-    check_titles_in_tx(&mut tx, ctx, cid, input, &titles, checked_text).await?;
     tx.commit().await?;
     result_sources(pool, ctx, &evidence, &input["charts"]).await?;
     Ok(evidence)
@@ -510,7 +320,6 @@ pub async fn validate_sources(
 pub struct ReportWrite<'a> {
     pub operation_id: &'a str,
     pub message_id: &'a str,
-    pub model_run_id: Option<&'a str>,
 }
 
 pub async fn save_in_tx(
@@ -526,19 +335,9 @@ pub async fn save_in_tx(
     let ReportWrite {
         operation_id: operation,
         message_id: message,
-        model_run_id,
     } = write;
     let tasks = analysis::lock_tasks_in_tx(tx, cid).await?;
-    let evidence_authority = check_evidence_in_tx(tx, ctx, cid, evidence, checked_text).await?;
-    let generated = if let Some(run) = model_run_id {
-        super::context_authority::merge_run_in_tx(tx, run, &evidence_authority).await?;
-        super::context_authority::generated_text_authority_in_tx(tx, run, &sources(evidence)?)
-            .await?
-    } else {
-        super::context_authority::empty()
-    };
-    let titles = candidate_title_authorities_in_tx(tx, ctx, cid, input, &generated).await?;
-    check_titles_in_tx(tx, ctx, cid, input, &titles, checked_text).await?;
+    check_evidence_in_tx(tx, ctx, cid, evidence, checked_text).await?;
     analysis::save_report_in_tx(
         tx,
         &tasks,
@@ -548,7 +347,6 @@ pub async fn save_in_tx(
         input,
         analysis::ReportSaveSources {
             evidence: evidence.as_array().ok_or(Error::new("invalid_evidence"))?,
-            title_authorities: &titles,
         },
     )
     .await
@@ -591,7 +389,6 @@ pub async fn save(
         ReportWrite {
             operation_id: &operation,
             message_id: &message,
-            model_run_id: None,
         },
         &input,
         &evidence,
@@ -637,8 +434,7 @@ async fn read_view(
     let report = analysis::read_report_in_tx(&mut tx, ctx, cid, task_id).await?;
     let reference = report["reference"].clone();
     let history = check_report_history_in_tx(&mut tx, ctx, cid, &report).await;
-    let projection =
-        super::historical_analysis::report_projection_in_tx(&mut tx, ctx, &report).await;
+    let projection = super::historical_analysis::report_projection_with_sources(&report);
     tx.commit().await?;
     if let Err(error) = history {
         if revoked_source(&error) {
@@ -650,9 +446,9 @@ async fn read_view(
     let projection = projection?;
     let authority = &projection["actual_sources"]["authority"];
     checked_text
-        .include_history(pool, ctx, std::slice::from_ref(authority))
+        .include(pool, ctx, std::slice::from_ref(authority), true)
         .await?;
-    if !checked_text.allows_history(authority) {
+    if !checked_text.allows(authority, true) {
         return Ok(unavailable_view(&reference));
     }
     let no_charts = json!([]);
@@ -685,10 +481,9 @@ async fn read_view(
         }
         return Err(error);
     }
-    let current_projection =
-        super::historical_analysis::report_projection_in_tx(&mut tx, ctx, &latest).await?;
+    let current_projection = super::historical_analysis::report_projection_with_sources(&latest)?;
     if current_projection != projection
-        || !checked_text.allows_history(&current_projection["actual_sources"]["authority"])
+        || !checked_text.allows(&current_projection["actual_sources"]["authority"], true)
     {
         return Err(Error::new("version_conflict"));
     }
@@ -752,7 +547,7 @@ async fn historical_page(
     conversations::lock_conversation_in_tx(&mut tx, ctx, cid).await?;
     check_report_history_in_tx(&mut tx, ctx, cid, &view["report"]).await?;
     view["historical_analysis"] =
-        super::historical_analysis::report_projection_in_tx(&mut tx, ctx, &view["report"]).await?;
+        super::historical_analysis::report_projection_with_sources(&view["report"])?;
     tx.commit().await?;
     view["status"] = json!("historical");
     report_page(&view, input)
@@ -786,27 +581,15 @@ pub async fn read_for_agent(
         tx.commit().await?;
         return Err(Error::new("version_conflict"));
     }
-    // 报告自身记录的依据/条件/标题引用先进入本轮已核集合（04关闭审查修复）：
-    // 严格核验按报告记录的引用判定，不因当前运行尚未采用其上游结果而把完全
-    // 有效的报告误判stale降级为历史投影。
-    let authorities = async {
-        let mut authorities =
-            evidence_authorities_in_tx(&mut tx, ctx, cid, &report["evidence"]).await?;
-        let titles =
-            analysis::read_report_authorities_in_tx(&mut tx, ctx, &report["reference"]).await?;
-        authorities.extend(report_authorities(&report, &titles));
-        Ok::<_, Error>(authorities)
-    }
-    .await;
+    let authorities = evidence_authority(&report["evidence"]).map(|authority| [authority]);
     tx.commit().await?;
     let strict = match authorities {
         Ok(authorities) => {
-            checked_text
-                .include_authorities(pool, ctx, &authorities)
-                .await?;
+            checked_text.include(pool, ctx, &authorities, false).await?;
             let mut tx = AppTx::begin(pool).await?;
             conversations::lock_conversation_in_tx(&mut tx, ctx, cid).await?;
-            let strict = check_report_in_tx(&mut tx, ctx, cid, &report, checked_text).await;
+            let strict =
+                check_evidence_in_tx(&mut tx, ctx, cid, &report["evidence"], checked_text).await;
             tx.commit().await?;
             strict
         }
@@ -837,8 +620,7 @@ pub async fn assert_page_in_tx(
         // 与事务外读取核对同一修订及实际页，防止分页期间换成另一份正文。
         let report = analysis::read_report_in_tx(tx, ctx, cid, text(input, "task_id")?).await?;
         let entry = &page["historical_analysis"];
-        let projection =
-            super::historical_analysis::report_projection_in_tx(tx, ctx, &report).await?;
+        let projection = super::historical_analysis::report_projection_with_sources(&report)?;
         let expected = report_page(
             &json!({"status":"historical","historical_analysis":projection,
             "reference":report["reference"],"report":report}),
@@ -848,7 +630,7 @@ pub async fn assert_page_in_tx(
             return Err(Error::new("version_conflict"));
         }
         check_report_history_in_tx(tx, ctx, cid, &report).await?;
-        if !checked_text.allows_history(&entry["actual_sources"]["authority"]) {
+        if !checked_text.allows(&entry["actual_sources"]["authority"], true) {
             return Err(Error::new("not_available"));
         }
         return Ok(super::historical_analysis::carrying(entry));
@@ -861,7 +643,7 @@ pub async fn assert_page_in_tx(
     if report["reference"] != page["reference"] || changed(&task, &report) {
         return Err(Error::new("version_conflict"));
     }
-    let authority = check_report_in_tx(tx, ctx, cid, &report, checked_text).await?;
+    let authority = check_evidence_in_tx(tx, ctx, cid, &report["evidence"], checked_text).await?;
     if sources(&report["evidence"])? != checked["sources"] {
         return Err(Error::new("invalid_evidence"));
     }
@@ -871,35 +653,6 @@ pub async fn assert_page_in_tx(
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn unchanged_and_reordered_titles_preserve_their_sources() {
-        let mut first = super::super::context_authority::empty();
-        first["memories"] = json!([["private-memory", "1"]]);
-        let mut second = super::super::context_authority::empty();
-        second["knowledge"] = json!([["private-definition", "2"]]);
-        let previous = json!({"title":"原报告标题","charts":[{"title":"图甲"},{"title":"图乙"}]});
-        let sources = json!({"title":first,"charts":[first,second]});
-        let input = json!({"title":"人工重写标题","charts":[{"title":"图乙"},{"title":"图甲"}]});
-        let changed = title_authorities(
-            &input,
-            &previous,
-            &sources,
-            &super::super::context_authority::empty(),
-        );
-        assert_eq!(changed["title"], super::super::context_authority::empty());
-        // 旧whole-object引用规范为全对象空路径，重排仍必须带回完整原依赖。
-        let mut normalized_second = second.clone();
-        normalized_second["knowledge_entries"] = json!([["private-definition", "2", ""]]);
-        assert_eq!(changed["charts"], json!([normalized_second, first]));
-        let mut legacy = sources;
-        legacy["charts"][0] = Value::Null;
-        let generated = title_authorities(&input, &previous, &legacy, &second);
-        assert!(
-            generated["charts"][1].is_null(),
-            "相同标题不能用新的模型来源掩盖原来的未知来源"
-        );
-    }
 
     #[test]
     fn report_text_pages_preserve_unicode_and_bind_the_revision_with_a_byte_limit() {

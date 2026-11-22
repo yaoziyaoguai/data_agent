@@ -33,7 +33,7 @@ const insert = (h, value) => {
   const encoded = Buffer.from(JSON.stringify(value)).toString('hex');
   h.sql(`INSERT INTO knowledge_objects(id,space_id,kind,name,version,state,body,source_id,source_version,updated_by)
     VALUES('${value.id}','demo','${value.kind}','${value.name}',1,'enabled',CAST(CONVERT(0x${encoded} USING utf8mb4) AS JSON),NULL,0,'synthetic-test');
-    INSERT INTO knowledge_versions(object_id,version,body) VALUES('${value.id}',1,CAST(CONVERT(0x${encoded} USING utf8mb4) AS JSON));
+    INSERT INTO knowledge_revisions(object_id,version,archived_body) VALUES('${value.id}',1,CAST(CONVERT(0x${encoded} USING utf8mb4) AS JSON));
     INSERT INTO retrieval_documents(object_id,space_id,version,body) VALUES('${value.id}','demo',1,CAST(CONVERT(0x${encoded} USING utf8mb4) AS JSON));
     INSERT IGNORE INTO semantic_ownership(space_id,object_id,authority_id,source,updated_by) VALUES('demo','${value.id}','${value.id}','system','synthetic-test')`);
 };
@@ -327,9 +327,9 @@ try {
   // 来源门只看对象启停不看版本，召回照常返回。阶段B的引用源换版到2：fatal对象
   // 按version 1引用，正文核验阶段失效。
   h.sql(`UPDATE knowledge_objects SET version=2 WHERE id LIKE 'adv-ghost-%';
-    INSERT INTO knowledge_versions(object_id,version,body) SELECT object_id,2,body FROM knowledge_versions WHERE version=1 AND object_id LIKE 'adv-ghost-%';
+    INSERT INTO knowledge_revisions(object_id,version,archived_body) SELECT object_id,2,body FROM (SELECT object_id,version,archived_body AS body FROM knowledge_revisions WHERE archived_body IS NOT NULL) archive_rows WHERE version=1 AND object_id LIKE 'adv-ghost-%';
     UPDATE knowledge_objects SET version=2 WHERE id='adv-source-doc';
-    INSERT INTO knowledge_versions(object_id,version,body) SELECT object_id,2,body FROM knowledge_versions WHERE object_id='adv-source-doc' AND version=1`);
+    INSERT INTO knowledge_revisions(object_id,version,archived_body) SELECT object_id,2,body FROM (SELECT object_id,version,archived_body AS body FROM knowledge_revisions WHERE archived_body IS NOT NULL) archive_rows WHERE object_id='adv-source-doc' AND version=1`);
 
   // 词法成功空、Embedding晚到时，不得为尚未派发的dense虚增到第5轮。
   provider.setDelay(800);
@@ -369,7 +369,7 @@ try {
         ? value + (219-ghostOrder.indexOf(row))*1e-4 : value)}
     : {...row, vector:targetVector})});
   h.sql(`UPDATE knowledge_objects SET version=2 WHERE id='${denseGhost.id}';
-    INSERT INTO knowledge_versions(object_id,version,body) SELECT object_id,2,body FROM knowledge_versions WHERE object_id='${denseGhost.id}' AND version=1`);
+    INSERT INTO knowledge_revisions(object_id,version,archived_body) SELECT object_id,2,body FROM (SELECT object_id,version,archived_body AS body FROM knowledge_revisions WHERE archived_body IS NOT NULL) archive_rows WHERE object_id='${denseGhost.id}' AND version=1`);
   requests.length=0;
   const denseResult=await search(denseQuery,1,{related_object_id:denseGhost.id});
   observations.denseAfter200={objects:denseResult.objects.map(item=>item.id),coverage:denseResult.search_coverage,requests:requests.slice()};
@@ -498,10 +498,10 @@ try {
   await upsertRows(roundRows.map(row=>({...row,vector:cosineVector(roundVector,
     row.object_id===roundGhost.id?0.98:0.7)})));
   h.sql(`UPDATE knowledge_objects SET version=2 WHERE id IN ('${smallGhost.id}','${raceGhost.id}','${roundGhost.id}');
-    INSERT INTO knowledge_versions(object_id,version,body) SELECT object_id,2,body FROM knowledge_versions
+    INSERT INTO knowledge_revisions(object_id,version,archived_body) SELECT object_id,2,body FROM (SELECT object_id,version,archived_body AS body FROM knowledge_revisions WHERE archived_body IS NOT NULL) archive_rows
       WHERE version=1 AND object_id IN ('${smallGhost.id}','${raceGhost.id}','${roundGhost.id}');
     UPDATE knowledge_objects SET version=3 WHERE id='adv-source-doc';
-    INSERT INTO knowledge_versions(object_id,version,body) SELECT object_id,3,body FROM knowledge_versions
+    INSERT INTO knowledge_revisions(object_id,version,archived_body) SELECT object_id,3,body FROM (SELECT object_id,version,archived_body AS body FROM knowledge_revisions WHERE archived_body IS NOT NULL) archive_rows
       WHERE object_id='adv-source-doc' AND version=2`);
 
   // 原B只证明读满30即停；这里须确实读失败两次后，继续同一offset并补读第3次。

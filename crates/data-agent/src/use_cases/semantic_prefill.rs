@@ -9,16 +9,24 @@ use sqlx::MySqlPool;
 
 // 固定分析与依据复核各一次；没有Agent规划循环，网络与业务提交分开。
 pub async fn process_due(pool: &MySqlPool) -> Result<bool> {
+    let mode = std::env::var("DATA_AGENT_PREFILL_MODE").ok();
+    if mode.as_deref() == Some("disabled") {
+        return Ok(false);
+    }
     let ctx = AccessContext {
         user_id: "synthetic-prefill".into(),
         space_id: "demo".into(),
         request_id: id(),
+        table_access: None,
     };
     let mut tx = AppTx::begin(pool).await?;
     let Some(mut job) = ingestion::claim_prefill_in_tx(&mut tx, &ctx.space_id).await? else {
         tx.commit().await?;
         return Ok(false);
     };
+    let requester = job["input"]["prefill_requester"]
+        .as_str()
+        .map(str::to_owned);
     let attempt_id = job["id"]
         .as_str()
         .ok_or(Error::new("invalid_input"))?
@@ -243,6 +251,14 @@ pub async fn process_due(pool: &MySqlPool) -> Result<bool> {
         Err(error) => Err(error),
     };
     match valid {
+        Ok(candidate) if mode.as_deref() == Some("proposal") || requester.is_some() => {
+            let submitted =
+                submit_proposals_in_tx(&mut tx, &ctx, attempt, &candidate, requester.as_deref())
+                    .await?;
+            let mut saved = history.clone();
+            saved["proposal_ids"] = json!(submitted);
+            ingestion::finish_prefill_in_tx(&mut tx, attempt, "succeeded", &saved, None).await?;
+        }
         Ok(candidate) => {
             let command = json!({"operation_id":format!("prefill-{attempt}"),"expected_version":job["expected_version"]});
             let applied = knowledge::reanalyze_in_tx(
@@ -299,6 +315,58 @@ pub async fn process_due(pool: &MySqlPool) -> Result<bool> {
     }
     tx.commit().await?;
     Ok(true)
+}
+
+async fn submit_proposals_in_tx(
+    tx: &mut AppTx<'_>,
+    ctx: &AccessContext,
+    attempt: &str,
+    candidate: &Value,
+    requester: Option<&str>,
+) -> Result<Vec<String>> {
+    let object = candidate["id"]
+        .as_str()
+        .ok_or(Error::new("invalid_prefill"))?;
+    let maintenance = access::maintenance_snapshot_in_tx(tx, ctx, object).await?;
+    let reviewer = maintenance["maintainer_id"]
+        .as_str()
+        .or(requester)
+        .ok_or(Error::new("not_available"))?;
+    let reviewer = AccessContext {
+        user_id: reviewer.to_owned(),
+        ..ctx.clone()
+    };
+    let mut ids = Vec::new();
+    for entry in candidate["entries"].as_array().into_iter().flatten() {
+        let suggestion = &entry["suggestion"];
+        let Some(value) = suggestion["value"]
+            .as_str()
+            .filter(|value| !value.trim().is_empty())
+        else {
+            continue;
+        };
+        if !entry["human_override"].is_null() || suggestion["analysis_state"] != "validated" {
+            continue;
+        }
+        let proposal_id = crate::types::fingerprint(&json!([attempt, entry["entry_id"]]));
+        let source = suggestion["evidence"]
+            .as_array()
+            .and_then(|items| items.first())
+            .ok_or(Error::new("invalid_prefill"))?;
+        let quote = source["quote"]
+            .as_str()
+            .unwrap_or("")
+            .chars()
+            .take(500)
+            .collect::<String>();
+        let input = json!({"object_id":object,"base_version":candidate["version"],
+            "entry_id":entry["entry_id"],"value":value,
+            "reason":format!("自动预填建议。来源修订 {}：{}", source["version"], quote),
+            "evidence":[{"object_id":object,"version":candidate["version"],"path":entry["entry_id"]}]});
+        knowledge::propose_in_tx(tx, &reviewer, &proposal_id, &input).await?;
+        ids.push(proposal_id);
+    }
+    Ok(ids)
 }
 
 fn prepare(
