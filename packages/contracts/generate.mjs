@@ -28,6 +28,8 @@ const referenceUnions = new Set(['EvidenceReadResult', 'SemanticResolution']);
 const definitionAliases = {
   ControlDeliveryClass: 'ControlDelivery',
   FactElement: 'ControlDeliveryFact',
+  ConditionsQuerySemanticResolution: 'SemanticResolution',
+  QueryViewQuerySemanticResolution: 'SemanticResolution',
 };
 const openKnowledgeEntries = new Set(
   ['SourceFacts', 'Suggestion', 'HumanOverride'].flatMap(kind =>
@@ -54,9 +56,10 @@ function classShape(definition) {
   const composition = !definition.type && !definition.properties && !!definition.allOf;
   const shape = { properties: {}, required: new Set(), composition };
   if (definition.oneOf) {
-    const required = definition.oneOf[0].required ?? [];
+    const branches = definition.oneOf.map(resolve);
+    const required = branches[0].required ?? [];
     shape.required = new Set(required.filter(field =>
-      definition.oneOf.every(branch => branch.required?.includes(field))));
+      branches.every(branch => branch.required?.includes(field))));
     return shape;
   }
   const walk = (property) => {
@@ -79,6 +82,13 @@ function classShape(definition) {
 const classShapes = new Map(Object.entries(definitions)
   .filter(([, definition]) => definition.type === 'object' || definition.oneOf || definition.allOf)
   .map(([name, definition]) => [name, classShape(definition)]));
+// quicktype 会按根报文生成不同的内联结构名。空值语义仍来自同一原始字段定义。
+for (const [names, schema] of [
+  [['FluffyChannels', 'PurpleChannels'], definitions.SearchCoverage.properties.channels],
+  [['FluffyResultNotification', 'PurpleResultNotification'], definitions.WorkspaceContext.properties.result_notification],
+]) {
+  for (const name of names) classShapes.set(name, classShape(schema));
+}
 
 function semanticAlias(renderer, type, publicName) {
   const kind = type.getProperties().get('kind');

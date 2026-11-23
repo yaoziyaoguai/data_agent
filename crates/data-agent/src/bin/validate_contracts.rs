@@ -110,6 +110,22 @@ fn main() {
                         contracts::decode::<WorkspaceContext>(name, value).expect("generated type"),
                     )
                     .expect("serialize"),
+                    "Conditions" => serde_json::to_value(
+                        contracts::decode::<Conditions>(name, value).expect("generated type"),
+                    )
+                    .expect("serialize"),
+                    "KnowledgeList" => serde_json::to_value(
+                        contracts::decode::<KnowledgeList>(name, value).expect("generated type"),
+                    )
+                    .expect("serialize"),
+                    "QueryList" => serde_json::to_value(
+                        contracts::decode::<QueryList>(name, value).expect("generated type"),
+                    )
+                    .expect("serialize"),
+                    "WorkbenchUpdate" => serde_json::to_value(
+                        contracts::decode::<WorkbenchUpdate>(name, value).expect("generated type"),
+                    )
+                    .expect("serialize"),
                     "ModelProfile" => serde_json::to_value(
                         contracts::decode::<ModelProfile>(name, value).expect("generated type"),
                     )

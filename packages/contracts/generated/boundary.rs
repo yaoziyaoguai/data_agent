@@ -624,14 +624,17 @@ pub enum ConditionsChannel {
 pub struct QueryViewQuerySemanticResolution {
     ///
     /// explicit_user：null=本轮新采纳，由宿主核对user_quote为本轮完整原话后绑定真实消息身份；非空=复制继承原已验证决策的消息身份，不接受模型自由填写。其余basis为null。
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub adoption_message_id: Option<String>,
     /// 真实用户明确选择、确无实质歧义、或仍需澄清；资料支持某公式不等于用户选择它。
     pub basis: SemanticResolutionBasis,
     /// 支撑该口径决策的依据引用；旧调用缺失按空数组解码。
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub evidence_refs: Option<Vec<EvidenceRefElement>>,
     /// 本稿采用的指标、分子/分母、时间等关键口径及选择依据；不能把自己刚写入任务的假设当作用户采用。
     pub interpretation: String,
     /// 仍会改变答案且未获选择的分子、分母、时间归属等差异；有差异必须先澄清，不能默认写稿。
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub unresolved_differences: Option<Vec<String>>,
     /// explicit_user逐字填写本条真实用户完整原话，保留否定、前提、例外和换行，不截取子串；其余为null。
     pub user_quote: Option<String>,
@@ -2907,6 +2910,7 @@ pub struct SearchCoverageClass {
 pub struct PurpleChannels {
     pub dense: DenseClass,
     pub lexical: DenseClass,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub raw: Option<DenseClass>,
 }
 
@@ -4224,6 +4228,7 @@ pub struct PurpleResultNotification {
     pub execution_state: ResultNotificationExecutionState,
     pub query_id: String,
     /// 原查询所属任务和条件版本，由宿主绑定；恢复已切任务时不依赖最近查询观察窗口。旧通知缺字段沿原兼容路径读取。
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub task_ref: Option<EvidenceTaskRefElement>,
 }
 
@@ -5233,6 +5238,7 @@ pub struct FluffyResultNotification {
     pub execution_state: ResultNotificationExecutionState,
     pub query_id: String,
     /// 原查询所属任务和条件版本，由宿主绑定；恢复已切任务时不依赖最近查询观察窗口。旧通知缺字段沿原兼容路径读取。
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub task_ref: Option<EvidenceTaskRef>,
 }
 
@@ -5954,6 +5960,7 @@ pub struct SearchCoverage {
 pub struct FluffyChannels {
     pub dense: ChannelProgress,
     pub lexical: ChannelProgress,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub raw: Option<ChannelProgress>,
 }
 
@@ -6236,14 +6243,17 @@ pub struct ConditionSet {
 pub struct ConditionsQuerySemanticResolution {
     ///
     /// explicit_user：null=本轮新采纳，由宿主核对user_quote为本轮完整原话后绑定真实消息身份；非空=复制继承原已验证决策的消息身份，不接受模型自由填写。其余basis为null。
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub adoption_message_id: Option<String>,
     /// 真实用户明确选择、确无实质歧义、或仍需澄清；资料支持某公式不等于用户选择它。
     pub basis: SemanticResolutionBasis,
     /// 支撑该口径决策的依据引用；旧调用缺失按空数组解码。
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub evidence_refs: Option<Vec<EvidenceRef>>,
     /// 本稿采用的指标、分子/分母、时间等关键口径及选择依据；不能把自己刚写入任务的假设当作用户采用。
     pub interpretation: String,
     /// 仍会改变答案且未获选择的分子、分母、时间归属等差异；有差异必须先澄清，不能默认写稿。
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub unresolved_differences: Option<Vec<String>>,
     /// explicit_user逐字填写本条真实用户完整原话，保留否定、前提、例外和换行，不截取子串；其余为null。
     pub user_quote: Option<String>,

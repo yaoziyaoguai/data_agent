@@ -13786,5 +13786,196 @@
         9
       ]
     }
+  },
+  {
+    "name": "query list preserves adopted and unresolved semantics",
+    "schema": "QueryList",
+    "valid": true,
+    "roundtrip": true,
+    "value": {
+      "queries": [
+        {
+          "id": "query-source",
+          "conversation_id": "conversation-source",
+          "task_id": "task-source",
+          "condition_version": "1",
+          "draft_version": "1",
+          "target_id": "synthetic-sqlite",
+          "confirmation_state": "confirmed",
+          "execution_state": "running",
+          "cancel_state": "none",
+          "result_ref": null,
+          "check_state": "passed",
+          "error": null,
+          "sql": "SELECT 1",
+          "parameters": {},
+          "summary": "合成查询",
+          "knowledge_refs": [],
+          "semantic_resolution": {
+            "interpretation": "按原始记录为分母，按完成记录为分子",
+            "basis": "unambiguous",
+            "user_quote": null
+          }
+        },
+        {
+          "id": "legacy-query",
+          "conversation_id": "conversation-source",
+          "task_id": "task-source",
+          "condition_version": "1",
+          "draft_version": "1",
+          "target_id": "synthetic-sqlite",
+          "confirmation_state": "confirmed",
+          "execution_state": "running",
+          "cancel_state": "none",
+          "result_ref": null,
+          "check_state": "passed",
+          "error": null,
+          "sql": "SELECT 1",
+          "parameters": {},
+          "summary": "合成查询",
+          "knowledge_refs": [],
+          "semantic_resolution": {
+            "interpretation": "按原始记录为分母，按完成记录为分子",
+            "basis": "needs_clarification",
+            "user_quote": null,
+            "unresolved_differences": [
+              "确认统计粒度"
+            ]
+          }
+        }
+      ],
+      "confirmation_blocked": false
+    }
+  },
+  {
+    "name": "live workbench preserves adopted query cards",
+    "schema": "WorkbenchUpdate",
+    "valid": true,
+    "roundtrip": true,
+    "value": {
+      "query_list": {
+        "queries": [
+          {
+            "id": "query-source",
+            "conversation_id": "conversation-source",
+            "task_id": "task-source",
+            "condition_version": "1",
+            "draft_version": "1",
+            "target_id": "synthetic-sqlite",
+            "confirmation_state": "confirmed",
+            "execution_state": "running",
+            "cancel_state": "none",
+            "result_ref": null,
+            "check_state": "passed",
+            "error": null,
+            "sql": "SELECT 1",
+            "parameters": {},
+            "summary": "合成查询",
+            "knowledge_refs": [],
+            "semantic_resolution": {
+              "interpretation": "按原始记录为分母，按完成记录为分子",
+              "basis": "unambiguous",
+              "user_quote": null
+            }
+          },
+          {
+            "id": "legacy-query",
+            "conversation_id": "conversation-source",
+            "task_id": "task-source",
+            "condition_version": "1",
+            "draft_version": "1",
+            "target_id": "synthetic-sqlite",
+            "confirmation_state": "confirmed",
+            "execution_state": "running",
+            "cancel_state": "none",
+            "result_ref": null,
+            "check_state": "passed",
+            "error": null,
+            "sql": "SELECT 1",
+            "parameters": {},
+            "summary": "合成查询",
+            "knowledge_refs": [],
+            "semantic_resolution": {
+              "interpretation": "按原始记录为分母，按完成记录为分子",
+              "basis": "needs_clarification",
+              "user_quote": null,
+              "unresolved_differences": [
+                "确认统计粒度"
+              ]
+            }
+          }
+        ],
+        "confirmation_blocked": false
+      }
+    }
+  },
+  {
+    "name": "conditions preserve adopted semantics with required null quote",
+    "schema": "Conditions",
+    "valid": true,
+    "roundtrip": true,
+    "value": {
+      "time_start": null,
+      "time_end": null,
+      "timezone": "UTC",
+      "metric": null,
+      "channel": null,
+      "group_by": [],
+      "filters": [],
+      "knowledge_refs": [],
+      "notes": "",
+      "semantic_resolution": {
+        "interpretation": "按原始记录为分母，按完成记录为分子",
+        "basis": "unambiguous",
+        "user_quote": null
+      }
+    }
+  },
+  {
+    "name": "lexical knowledge list omits the raw channel",
+    "schema": "KnowledgeList",
+    "valid": true,
+    "roundtrip": true,
+    "value": {
+      "objects": [],
+      "next_after_id": null,
+      "retrieval_mode": "lexical_authoritative",
+      "search_coverage": {
+        "state": "candidate_limit",
+        "candidate_limit": 2000,
+        "channels": {
+          "lexical": {
+            "rounds": 1,
+            "shards": 1,
+            "completed": 1,
+            "exhausted": true
+          },
+          "dense": {
+            "rounds": 1,
+            "shards": 1,
+            "completed": 1,
+            "exhausted": true
+          }
+        }
+      }
+    }
+  },
+  {
+    "name": "old result notification omits a missing task reference",
+    "schema": "WorkspaceContext",
+    "valid": true,
+    "roundtrip": true,
+    "value": {
+      "tasks": [],
+      "recent_messages": [],
+      "selected_skills": [],
+      "memories": [],
+      "query_observations": [],
+      "authority_revision": "1",
+      "result_notification": {
+        "query_id": "query-a",
+        "execution_state": "succeeded"
+      }
+    }
   }
 ]
