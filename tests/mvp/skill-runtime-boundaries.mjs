@@ -7,7 +7,7 @@ import {selectedSkillResources} from '../../apps/agent/session/skills.ts';
 import {dataTools} from '../../apps/agent/tools/data-tools.ts';
 import {RustTransport} from '../../apps/agent/transport/client.ts';
 import {deliver} from '../../apps/agent/session/deliver.ts';
-import {exportCheckpoint} from '../../apps/agent/session/checkpoint.ts';
+import {exportCheckpoint, restoreCheckpoint} from '../../apps/agent/session/checkpoint.ts';
 import {taskProjection} from '../../apps/agent/session/task-projection.ts';
 import {assetInput, ok, select} from './skill-fixtures.mjs';
 import {until} from './harness.mjs';
@@ -276,4 +276,132 @@ export async function checkSkillRuntimeBoundaries(h, checks) {
   assert.deepEqual(answers, [[409,'stale_context',false],[200,null,true]],
     '结果通知已精读的 Skill 停用后拒绝定稿，普通回答只见目录的 Skill 停用后继续定稿');
   checks.push('查询结果通知与普通回答按实际精读 Skill 定稿，停用目录项不影响独立结果');
+}
+
+// 续聊沿用的 Pi 分支留有此前各轮的精读正文：在途停用须拒绝，之后的草稿继承出处；同轮切范围后旧正文已离开新分支，草稿不再继承。
+export async function checkSkillRoundBoundaries(h, checks) {
+  const command = () => ({operation_id: randomUUID()});
+  const reference = (object, path = 'body') => ({object_id: object.id, version: object.version, path});
+  const conditions = {time_start: null, time_end: null, timezone: 'UTC', metric: null, channel: null, group_by: [], filters: [], knowledge_refs: [], notes: '只解释合成资料，不执行查询。', source_limits: null};
+  const usage = {input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: {input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0}};
+  const envelope = turn => ({run_id: turn.run_id, lease_epoch: turn.lease_epoch});
+  const path = skill => `/skills/${skill.id}/${skill.version}/SKILL.md`;
+  const saved = turn => h.sql(`SELECT checkpoint FROM pi_checkpoints WHERE recovery_chain_id='${turn.recovery_chain_id}'`)[0];
+  const open = async (cid, text, checkpoint) => {
+    await h.resumeWorker();
+    const turn = await h.capture(cid, text);
+    await h.pauseWorker();
+    const manager = checkpoint ? restoreCheckpoint('/synthetic/data-agent', checkpoint) : SessionManager.inMemory('/synthetic/data-agent');
+    manager.appendMessage({role: 'user', content: text, timestamp: Date.now()});
+    return {turn, manager, transport: new RustTransport(turn, h.env.DATA_AGENT_API_URL, h.env.DATA_AGENT_INTERNAL_TOKEN)};
+  };
+  const finish = async ({turn, manager}, text) => {
+    ok(await h.internal('/internal/outputs', {...envelope(turn), chunk_seq: '1', text}));
+    const completion = await h.internal('/internal/finish', {...envelope(turn), commit_id: turn.output_id, final_text: text, checkpoint: exportCheckpoint(manager)});
+    h.releaseRun(turn.run_id);
+    return completion;
+  };
+  const read = async (tools, skill, sdk) => (await tools.invokeRecorded('read', sdk, {path: path(skill)})).data.text;
+  const evidenceInput = (task, version, text, knowledge_refs) => ({task_id: task, condition_version: version, data_range: '只解释合成资料，无查询数字。',
+    findings: [{text, calculation: '读取人工资料与所选方法。', limitations: ['没有运行查询。'], query_refs: [], knowledge_refs, figures: []}]});
+  const readAsset = async id => ok(await h.request('/assets')).assets.find(item => item.id === id);
+  const confirm = (draft, quote) => h.request('/assets', assetInput({draft_id: draft.reference.draft_id, name: draft.name, body: draft.body, scope: draft.scope, files: draft.files, dependencies: draft.dependencies, source_text: quote}));
+
+  const inFlight = ok(await h.request('/assets', assetInput({body: '续聊在途核对的合成方法正文。'})));
+  const inFlightCid = await h.create(); ok(await select(h, inFlightCid, inFlight));
+  const first = await open(inFlightCid, '读取合成方法，等我继续。');
+  const firstTools = dataTools(first.transport, first.manager, '');
+  await firstTools.invokeRecorded('update_analysis_task', 'in-flight-route',
+    {action: 'route', task_id: null, expected_version: null, goal: '', question: null, options: []});
+  assert.match(await read(firstTools, inFlight, 'in-flight-read'), /续聊在途核对的合成方法正文/);
+  ok(await finish(first, '合成方法已读取。'));
+  const continued = await open(inFlightCid, '继续用刚才已读的方法解释。', saved(first.turn));
+  assert.equal(continued.turn.checkpoint?.leaf_id, saved(first.turn).leaf_id, '续聊沿用含旧正文的 Pi 分支');
+  assert.notEqual(continued.turn.recovery_chain_id, first.turn.recovery_chain_id);
+  assert.deepEqual(continued.turn.workspace_context.authority_snapshot.active_skill_reads, []);
+  assert.deepEqual(continued.turn.workspace_context.authority_snapshot.source_skills, [[inFlight.id, inFlight.version]]);
+  await dataTools(continued.transport, continued.manager, '').invokeRecorded('update_analysis_task', 'continued-route',
+    {action: 'route', task_id: null, expected_version: null, goal: '', question: null, options: []});
+  ok(await h.request(`/assets/${inFlight.id}/disable`, {...command(), expected_version: inFlight.version}));
+  const continuedText = '合成方法已解释。';
+  ok(await h.internal('/internal/outputs', {...envelope(continued.turn), chunk_seq: '1', text: continuedText}));
+  const attempt = {...envelope(continued.turn), call_attempt_id: randomUUID()};
+  const refused = [
+    await h.internal('/internal/model/issue', attempt),
+    await h.internal('/internal/model/send', {...attempt, call_attempt_id: randomUUID(), parameters_fingerprint: '7'.repeat(64)}),
+    await h.internal('/internal/finish', {...envelope(continued.turn), commit_id: continued.turn.output_id,
+      final_text: continuedText, checkpoint: exportCheckpoint(continued.manager)}),
+  ];
+  assert.deepEqual(refused.map(result => [result.status, result.value.code]),
+    [[409, 'stale_context'], [409, 'stale_context'], [409, 'stale_context']],
+    '续聊在途停用上一轮精读的 Skill 后，模拟发送、正式发送和自然定稿都拒绝');
+  ok(await h.request(`/conversations/${inFlightCid}/messages/${continued.turn.message_id}/withdraw`, command()));
+  h.releaseRun(continued.turn.run_id);
+  checks.push('续聊沿用的 Pi 分支保留上一轮精读；在途停用后模拟发送、正式发送及自然定稿均以 stale_context 拒绝');
+
+  const doc = ok(await h.request('/knowledge', {...command(), kind: 'document', name: '续聊草稿合成口径',
+    body: '一行一个商品行，行数不能当订单数。', related_ids: []}));
+  const retained = ok(await h.request('/assets', assetInput({body: '续聊草稿出处的合成方法正文。'})));
+  const retainedCid = await h.create(); ok(await select(h, retainedCid, retained));
+  const reading = await open(retainedCid, '读取合成方法并记录依据。');
+  const readingTools = dataTools(reading.transport, reading.manager, '');
+  const task = (await readingTools.invokeRecorded('update_analysis_task', 'retained-task',
+    {action: 'create', goal: '核对合成方法', conditions, options: []})).data;
+  assert.equal(task.error, undefined);
+  assert.match(await read(readingTools, retained, 'retained-read'), /续聊草稿出处的合成方法正文/);
+  const evidence = (await readingTools.invokeRecorded('save_analysis_evidence', 'retained-evidence',
+    evidenceInput(task.task_id, task.condition_version, '合成方法按商品行核对。', [reference(doc)]))).data;
+  assert.equal(evidence.error, undefined);
+  ok(await finish(reading, '合成方法已读取。'));
+  const followUp = '继续把刚才核对的方法整理成我的个人 Skill 草稿，保存前让我核对。';
+  const second = await open(retainedCid, followUp, saved(reading.turn));
+  assert.equal(second.turn.checkpoint?.leaf_id, saved(reading.turn).leaf_id, '草稿所在续聊沿用含旧正文的 Pi 分支');
+  const secondTools = dataTools(second.transport, second.manager, '');
+  await secondTools.invokeRecorded('update_analysis_task', 'retained-route',
+    {action: 'route', task_id: task.task_id, expected_version: task.condition_version, goal: '', options: []});
+  const inheritedDraft = (await secondTools.invokeRecorded('prepare_skill_draft', 'retained-draft',
+    {task_id: task.task_id, condition_version: task.condition_version, instruction_quote: followUp, evidence_ids: [evidence.evidence_id],
+      name: '续聊整理的合成方法', body: '先按商品行核对口径，再展示 SQL 并等待确认。', scope: '仅合成商品行资料', files: []})).data;
+  assert.equal(inheritedDraft.error, undefined);
+  ok(await finish(second, '草稿已准备好，请核对保存。'));
+  const inherited = ok(await confirm(ok(await h.request('/assets/skill-drafts/' + inheritedDraft.draft_id)), followUp));
+  ok(await h.request(`/assets/${retained.id}/disable`, {...command(), expected_version: retained.version}));
+  assert.equal((await readAsset(inherited.id)).text_unavailable, true, '续聊草稿继承上一轮精读的出处');
+
+  const table = ok(await h.request('/knowledge/table-demo_order_detail'));
+  const narrowedSkill = ok(await h.request('/assets', assetInput({body: '依赖核验后才可读取的合成正文',
+    dependencies: [reference(table, table.entries[0].entry_id)]})));
+  const scopedCid = await h.create(); ok(await select(h, scopedCid, narrowedSkill));
+  const scopedText = '先核对选用的方法，再只用表 table-demo_order_detail 整理成我的个人 Skill 草稿，保存前让我核对。';
+  const scoped = await open(scopedCid, scopedText);
+  const projection = taskProjection(scoped.transport, scoped.manager, () => {});
+  const scopedTools = dataTools(scoped.transport, scoped.manager, '', (receipt, sdk) => projection.acceptReceipt(receipt, sdk));
+  const scopedCall = async (name, args) => {
+    const sdk = randomUUID();
+    scoped.manager.appendMessage({role: 'assistant', api: 'openai-completions', provider: 'local_mock', model: 'task_demo',
+      content: [{type: 'toolCall', id: sdk, name, arguments: args}], stopReason: 'toolUse', timestamp: Date.now(), usage});
+    const receipt = await scopedTools.invokeRecorded(name, sdk, args);
+    assert.equal(receipt.data.error, undefined, JSON.stringify(receipt.data));
+    scoped.manager.appendMessage({role: 'toolResult', toolCallId: sdk, toolName: name, ...await scopedTools.formatResult(name, args, receipt), timestamp: Date.now()});
+    return receipt;
+  };
+  const scopedTask = (await scopedCall('update_analysis_task', {action: 'create', goal: '核对合成订单表', options: [], conditions})).data;
+  await projection.apply();
+  await scopedCall('read', {path: path(narrowedSkill)});
+  await projection.apply();
+  const narrowed = await scopedCall('update_analysis_task', {action: 'revise', task_id: scopedTask.task_id,
+    expected_version: scopedTask.condition_version, options: [], condition_patch: {set: {source_limits: {
+      allowed_sources: [{kind: 'platform', id: table.id}], origin_message_ids: []}}, unset: []}});
+  assert.ok(narrowed.context_reset);
+  await projection.apply();
+  const scopedEvidence = (await scopedCall('save_analysis_evidence',
+    evidenceInput(scopedTask.task_id, narrowed.context_reset.condition_version, '按合成订单表结构核对。', [reference(table, 'ddl')]))).data;
+  const scopedDraft = (await scopedCall('prepare_skill_draft', {task_id: scopedTask.task_id, condition_version: narrowed.context_reset.condition_version,
+    instruction_quote: scopedText, evidence_ids: [scopedEvidence.evidence_id], name: '限定订单表的合成方法',
+    body: '先核对合成订单表结构，再展示 SQL 并等待确认。', scope: '仅合成订单表', files: []})).data;
+  ok(await finish(scoped, '已按限定范围准备好草稿。'));
+  const independent = ok(await confirm(ok(await h.request('/assets/skill-drafts/' + scopedDraft.draft_id)), scopedText));
+  ok(await h.request(`/assets/${narrowedSkill.id}/disable`, {...command(), expected_version: narrowedSkill.version}));
+  assert.notEqual((await readAsset(independent.id)).text_unavailable, true, '切范围后的草稿不继承已离开新分支的精读');
+  checks.push('草稿只继承当前 Pi 分支保留的精读：续聊继承上一轮出处，同轮切范围后不再继承旧正文');
 }

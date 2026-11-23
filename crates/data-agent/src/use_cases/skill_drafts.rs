@@ -116,11 +116,11 @@ pub async fn validate_sources(
     pool: &MySqlPool,
     ctx: &AccessContext,
     cid: &str,
-    input_identity: (&str, &str),
+    input_identity: (&str, &str, &str),
     input: &Value,
     checked: &mut super::context_authority::CheckedTextResults,
 ) -> Result<Value> {
-    let (message, recovery_chain) = input_identity;
+    let (message, recovery_chain, run_id) = input_identity;
     let mut tx = AppTx::begin(pool).await?;
     let conversation = conversations::lock_conversation_in_tx(&mut tx, ctx, cid).await?;
     let message = conversations::read_message_in_tx(&mut tx, &conversation, message).await?;
@@ -135,8 +135,14 @@ pub async fn validate_sources(
     let evidence = evidence_in_tx(&mut tx, ctx, cid, &input["evidence_ids"], false).await?;
     let authorities = [
         super::analysis_reports::evidence_authority(&evidence)?,
-        super::personal_assets::read_skill_authority_in_tx(&mut tx, ctx, cid, recovery_chain, None)
-            .await?,
+        super::personal_assets::read_skill_authority_in_tx(
+            &mut tx,
+            ctx,
+            cid,
+            recovery_chain,
+            Some(run_id),
+        )
+        .await?,
     ];
     tx.commit().await?;
     checked.include(pool, ctx, &authorities, false).await?;
@@ -194,7 +200,7 @@ pub async fn prepare_in_tx(
         ctx,
         &conversation.id,
         &run.recovery_chain_id,
-        None,
+        Some(&run.id),
     )
     .await?;
     context_authority::validate_in_tx(

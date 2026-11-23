@@ -49,9 +49,18 @@ pub(super) async fn read_skill_authority_in_tx(
     };
     let references =
         if let Some(reads) = snapshot.as_ref().and_then(|s| s.get("active_skill_reads")) {
-            reads.as_array().ok_or(Error::new("stale_context"))?.clone()
+            let mut references = reads.as_array().ok_or(Error::new("stale_context"))?.clone();
+            // 续聊沿用的 Pi 分支仍留有此前各轮的工具正文，跨轮保留的精读同样要在途核对。
+            if let Some(snapshot) = &snapshot {
+                for reference in context_authority::items(&snapshot["source_skills"]) {
+                    if !references.contains(reference) {
+                        references.push(reference.clone());
+                    }
+                }
+            }
+            references
         } else {
-            // 旧检查点未分开保存目录和精读，仍沿原回执核对。草稿继承也沿完整输入的精读来源。
+            // 旧检查点未分开保存目录和精读，仍沿原回执核对。
             let mut references = runtime::read_skill_sources_in_tx(tx, cid, recovery_chain).await?;
             if let Some(snapshot) = &snapshot {
                 references.retain(|r| context_authority::items(&snapshot["skills"]).contains(r));

@@ -469,20 +469,24 @@ pub(super) async fn prepare(
             )
             .await?,
         ),
-        "prepare_skill_draft" => Some(
-            super::super::skill_drafts::validate_sources(
-                pool,
-                ctx,
-                &cid,
-                (
-                    &runtime::locate_run_message(pool, text(input, "run_id")?).await?,
-                    &recovery_chain,
-                ),
-                args,
-                &mut text_results,
+        "prepare_skill_draft" => {
+            let run_id = text(input, "run_id")?;
+            Some(
+                super::super::skill_drafts::validate_sources(
+                    pool,
+                    ctx,
+                    &cid,
+                    (
+                        &runtime::locate_run_message(pool, run_id).await?,
+                        &recovery_chain,
+                        run_id,
+                    ),
+                    args,
+                    &mut text_results,
+                )
+                .await?,
             )
-            .await?,
-        ),
+        }
         _ => None,
     };
     let extracted_memory = super::super::personal_memory::extract(pool, ctx, input).await?;

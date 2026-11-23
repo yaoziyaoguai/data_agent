@@ -10,7 +10,7 @@ import {deliver} from '../../apps/agent/session/deliver.ts';
 import {exportCheckpoint, restoreCheckpoint} from '../../apps/agent/session/checkpoint.ts';
 import {assetInput, editInput, ok, select} from './skill-fixtures.mjs';
 import {harness, until} from './harness.mjs';
-import {checkSkillRuntimeBoundaries} from './skill-runtime-boundaries.mjs';
+import {checkSkillRoundBoundaries, checkSkillRuntimeBoundaries} from './skill-runtime-boundaries.mjs';
 const h=await harness({capture:true,env:{DATA_AGENT_LEASE_MS:'120000'}});
 const originalPost=RustTransport.prototype.post, originalRegister=ModelRuntime.prototype.registerProvider;
 const checks=[];let passed=false,run,interrupt=false,observedRead=false;
@@ -111,5 +111,6 @@ try {
  checks.push('Pi 续聊中保留实际精读 Skill 的来源，停用后隐藏使用过该方法的历史回答');
  RustTransport.prototype.post=originalPost;ModelRuntime.prototype.registerProvider=originalRegister;
  await checkSkillRuntimeBoundaries(h,checks);
+ await checkSkillRoundBoundaries(h,checks);
  passed=true;console.log(JSON.stringify({passed,checks,officialRequests:0}));
 } finally {RustTransport.prototype.post=originalPost;ModelRuntime.prototype.registerProvider=originalRegister;await writeFile('.local/checks/native-skills.json',JSON.stringify({passed,checks},null,2));await h.close();}
