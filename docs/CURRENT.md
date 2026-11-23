@@ -3,11 +3,11 @@
   "workflow": "development",
   "schema": 1,
   "phase": "repair",
-  "goal_revision": 254,
-  "environment": "2026-11-23 使用隔离 MySQL、合成平台、本地协议和 Chromium 复验 2da0bb9 工作台审计。实际模型验证仍待授权。",
+  "goal_revision": 255,
+  "environment": "2026-11-23 在隔离 MySQL、合成平台、本地协议和 Chromium 上完成 ec954f0 基线的 F-01 收口补丁和宿主串行签收。通知验收在基线有 7 个场景失败，实际模型冒烟仍待授权。",
   "verification": {
     "level": "increment",
-    "reason": "按 2da0bb9 工作台审计复验查询卡、已存正文撤权、Skill 定稿、SSE 退避以及旧 Pi 检查点。I3 沿原绑定的真实模型题目和验收标准继续。",
+    "reason": "按 ec954f0 审计完成 F-01 收口补丁和宿主串行门禁。绑定的通知验收在基线失败，五处原因已定位并待决定。I3 的真实模型冒烟仍待授权。",
     "freshness": "content",
     "checks": [],
     "inputs": [
@@ -1288,9 +1288,68 @@
       "evidence": null
     }
   },
-  "reason": "工作台修复及独立复核证据见最新一节。I3 仍待真实模型复验。"
+  "reason": "F-01 收口补丁与宿主串行签收见最新一节。通知验收在基线失败待决定，真实模型冒烟待授权。"
 }
 ---
+
+## F-01 收口补丁与宿主串行签收（2026-11-23）
+
+基线 `ec954f0`，工作分支 `codex/skill-provenance-closure`。本轮按独立审计的四步收口计划完成前两步：计划清单内的门禁全部通过，本增量绑定的通知验收在基线即有 7 个场景失败。真实模型冒烟和里程碑标签均未开始。
+
+### 修复 F-01
+
+续聊沿用的 Pi 分支留有此前各轮读过的 Skill 正文，在途核权此前只看本轮的 `active_skill_reads`。现在它与跨轮保留的 `source_skills` 合并后核对，续聊中停用仍在当前分支的 Skill，模拟发送、正式发送和自然定稿都返回 `409 stale_context`。见 [personal_assets](../crates/data-agent/src/use_cases/personal_assets.rs)。
+
+草稿的来源核验此前不查在途停用，只按消息恢复链扫描已登记调用：同轮切范围后会继承已离开分支的精读，跨轮续聊又漏记上一轮精读。`validate_sources` 改为带本输入的 `run_id`，预检和正式准备两条入口都传入，草稿只继承当前 Pi 分支保留的精读。见 [skill_drafts](../crates/data-agent/src/use_cases/skill_drafts.rs) 和 [preflight](../crates/data-agent/src/use_cases/data_tools/preflight.rs)。三个文件现为 671、437、686 行，未改动临近 800 行上限的 `scan.rs` 与 `deliver_run.rs`。这一行为同步到[实现设计](architecture/implementation-design.md)的 Skill 来源一段。
+
+**验收与要求变更（仅新增场景）：** `NATIVE-SKILL-BOUNDARY` 原值 11 项，新值 13 项。原因是审计 F-01 证明续聊在途停用和切范围后的草稿溯源没有覆盖。独立依据是审计给出的两组最小复验，以及「工作台答复与查询回读修复（2026-11-23）」确认的「续聊继续保留 Pi 中已经读过的 Skill 来源」：保留下来的来源同样要在途核对。影响是只增加断言，原 11 项和预期文字不变。
+
+两条新断言在补丁前先后失败，日志为 `.local/checks/f01-red.log` 和 `f01-red-all.log`。补丁后 `node tests/mvp/check-native-skills.mjs` 13 项通过，`cargo fmt --check`、`clippy` 和 `python3 scripts/check_architecture.py` 通过。针对性回归 `check-skill-text-authority`、`check-knowledge-reuse` 和 `check-analysis-continuation` 通过，日志在 `.local/checks/closeout/f01-check-*.log`。
+
+### 宿主串行签收
+
+源码仅含 F-01。重建 `data-agent-api` 与 `data-agent-worker` 后 8 步门禁逐个串行运行，退出码全部为 0，正式模型请求为 0。汇总在 `.local/checks/closeout/step2-summary.txt`，各步日志为同目录的 `step2-<名称>.log`。
+
+- `make verify-contracts` 通过，Rust 与 TypeScript 共享契约 701 例。`npm run check:bridge` 通过，含 40 个回合和 10 份健康导出摘要。
+- `check-grounded-answers --history-browser` 10 项、`check-task-query-answers --history-permissions` 5 次模型调用、`check-table-catalog-access` 7 项和 `check-native-skills` 13 项通过。
+- `check-live-workbench` 通过：5 种断流重连；20 个浏览器空闲 60 秒读取事件和会话表 0 次；50 个输出帧触发重新读取快照或查询列表 0 次。
+- `make verify` 通过：准备材料 608 项、引文 42 条、链接 420 条，投递检查 16 项单测，座舱材料 29 项，前端构建，以及 fmt、clippy 和环境检查。
+
+签收所用二进制构建于 17:26。归因实验结束后，同一份 F-01 源码在 18:44 再次重建，源码差异与保存的补丁 `f01-rust.patch` 逐字节一致。
+
+记录更新后复核：`cargo fmt --all --check`、`python3 scripts/check_architecture.py`、`git diff --check`、`make verify-delivery verify-materials` 通过；18:44 构建的二进制上 `check-native-skills` 13 项通过，正式模型请求为 0。工作区为 5 个 F-01 文件、本记录和设计文档的一句同步，`crates` 差异与 `f01-rust.patch` 逐字节一致，契约与 HEAD 相同。汇总在 `.local/checks/closeout/final-summary.txt`。
+
+### 绑定验收 `QUERY-NOTIFICATION-SOURCES` 在基线失败
+
+`node tests/mvp/check-result-notification-answers.mjs` 不在计划的串行清单内，是本增量绑定的一条验收。11 个场景按 `--case` 逐个运行，仅含 F-01 的二进制上有 7 个失败。纯净 `ec954f0` 二进制上逐个重跑，11 个场景的退出码、失败位置和失败消息与仅含 F-01 时完全相同，见下表。对照在 `.local/checks/closeout/compare-matrix.txt`，原始日志为同目录的 `baseline-<场景>.log` 和 `attrib3-P-<场景>.log`。
+
+| 场景 | 退出码 | 失败位置 | 原因 |
+| --- | --- | --- | --- |
+| `failed` | 1 | 脚本 214 行 | ① |
+| `cancelled` | 1 | 脚本 214 行 | ① |
+| `unavailable` | 1 | 脚本 92 行，次生报错 | ② |
+| `v2-frozen-late-condition` | 0 | | |
+| `mixed-no-parts` | 0 | | |
+| `mixed-frozen-tail` | 1 | 脚本 384 行，`409 stale_context` | ③ |
+| `mixed-frozen-cover` | 0 | | |
+| `mixed-frozen-scope` | 1 | 脚本 255 行 `/internal/finish`，`409 invalid_evidence` | ④ |
+| `mixed-recovery` | 0 | | |
+| `legacy-present-recovery` | 1 | 脚本 92 行，次生报错 | ⑤ |
+| `p-negative` | 1 | 脚本 686 行，次生报错 | ⑤ |
+
+五处原因都早于本轮。本轮没有改动契约、产品和这条脚本的断言。
+
+- ① 会话快照里普通 run 的 `result_query_id` 由 Rust 写出显式 `null`。`ee49e6e` 起出站响应经生成类型重新序列化，生成类型省略了这个可空字段，脚本断言它等于 `null` 时字段不存在。把该字段加入生成器的显式保留名单并重新生成后两个场景通过，见实验补丁 `f01-plus-nullfix.patch` 的契约部分。没有应用侧代码读取这个字段。
+- ② 场景在通知前撤回读权，期望 `get_query` 返回带 `results.error === "forbidden"` 的视图。`4e1f2a6` 起 `get_query` 直接以 `forbidden` 拒绝整次调用，与「工作台答复与查询回读修复（2026-11-23）」的「已有结果的表权限由平台核定」一致，实际回复是 `{"error":"forbidden","outcome":"rejected"}`。合成端连续三次返回 500，脚本只保留最后一次报错。
+- ③ 渲染冻结中断后重放已登记成功的 `prepare_analysis_answer` 回执，整份答案的来源核验按直接结果取键，重放路径的结果表只含带历史标记的键，有效结果被判为未核。`4e1f2a6` 给结果键加上历史标记时没有对齐重放路径。这是产品回归，探针输出在 `probe365.txt`。
+- ④ 场景首轮创建范围不同的任务 A 和 C，再用无 parts 的草稿正文一次结清。`4e1f2a6` 起新 run 固定为 v2，自然范围门去掉版本条件后适用于全部 run，拒绝范围不同的多个任务一起结清。场景加入于 2026-11-06，当时新 run 默认 v1。同循环其余四个场景里两个任务的范围相同，不触发这道门。
+- ⑤ 两个场景让新 run 调用 `present_analysis_answer`。`4e1f2a6` 把它移出工具目录，只保留旧登记的重放，调用在 Pi 层返回 `Tool present_analysis_answer not found`。
+
+这条脚本最后一次记录通过在「Pi 1.4 当前收口结果（2026-11-18）」。五处都没有修：①③ 要改契约生成和来源核验，②④⑤ 要改已登记场景的机制，需要先取得决定。对齐 ② 的观察后其余断言能否通过尚未验证：一次探查运行在服务健康检查阶段超时，当时宿主 15 分钟平均负载 56，未重试，超时与负载的因果关系没有单独证实。
+
+真实模型冒烟的前提是本地协议门禁全绿，通知验收恢复前不满足。仓库没有 CI 工作流和标签。
+
+**本轮用户明确授权：改动分批提交、合入默认分支并推送到 GitHub，由其他 coding agent 独立审计。** 分两批：修复连同测试为一批，设计文档和本记录为一批。默认分支沿用在 `codex/semantic-maintenance-prototype`。这项授权不代表产品验收完成，也不包括里程碑标签和 CI 门禁，两者仍待授权。归档前 `make verify-code`、`make verify-contracts`、`make verify-architecture`、`make verify-delivery` 和 `make verify-materials` 全部退出码 0，汇总在 `.local/checks/closeout/prearchive-summary.txt`。
 
 ## 工作台答复与查询回读修复（2026-11-23）
 
