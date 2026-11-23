@@ -92,6 +92,11 @@ pub fn merge(snapshot: &mut Value, dependencies: &Value) -> Result<()> {
             push(snapshot, bucket, reference.clone())?;
         }
     }
+    if snapshot.get("active_skill_reads").is_some() {
+        for reference in items(&dependencies["active_skill_reads"]) {
+            push(snapshot, "active_skill_reads", reference.clone())?;
+        }
+    }
     for reference in whole {
         push(snapshot, "knowledge_entries", reference)?;
     }
@@ -424,11 +429,22 @@ pub async fn generated_text_authority_in_tx(tx: &mut AppTx<'_>, run: &str) -> Re
         .await?
         .filter(complete)
         .ok_or(Error::new("stale_context"))?;
-    snapshot
+    let fields = snapshot
         .as_object_mut()
-        .ok_or(Error::new("stale_context"))?
-        .remove("checkpoint_reset_required");
+        .ok_or(Error::new("stale_context"))?;
+    fields.remove("checkpoint_reset_required");
+    fields.remove("active_skill_reads");
     Ok(snapshot)
+}
+
+pub(super) async fn record_skill_read_in_tx(
+    tx: &mut AppTx<'_>,
+    run: &str,
+    mut authority: Value,
+    asset: &Value,
+) -> Result<()> {
+    authority["active_skill_reads"] = json!([[asset["id"], asset["version"]]]);
+    merge_run_in_tx(tx, run, &authority).await
 }
 
 pub async fn merge_run_in_tx(tx: &mut AppTx<'_>, run: &str, dependencies: &Value) -> Result<()> {

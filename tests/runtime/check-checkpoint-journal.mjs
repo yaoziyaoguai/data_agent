@@ -2,10 +2,13 @@ import assert from 'node:assert/strict';
 import fs, {readFileSync,writeFileSync,lstatSync,unlinkSync,symlinkSync} from 'node:fs';
 import {syncBuiltinESMExports} from 'node:module';
 import {SessionManager} from '@earendil-works/pi-coding-agent';
-import {restoreCheckpoint,exportCheckpoint} from '../../apps/agent/session/checkpoint.ts';
+import {restoreCheckpoint,restoreAdoptedSteps,exportCheckpoint} from '../../apps/agent/session/checkpoint.ts';
+import {taskProjection} from '../../apps/agent/session/task-projection.ts';
 import {createDeliveryServer} from '../../apps/agent/transport/server.ts';
 import {appendLongHistory} from './checkpoint-fixture.mjs';
 import {createServer} from 'node:http';
+import {once} from 'node:events';
+import {createConnection} from 'node:net';
 import {deliver} from '../../apps/agent/session/deliver.ts';
 import {mkdirSync} from 'node:fs';
 
@@ -309,9 +312,59 @@ const empty=restoreCheckpoint(cwd,{...checkpoint,leaf_id:null});assert.equal(emp
 let dispatches=0;const token='synthetic-token';
 const server=createDeliveryServer('http://127.0.0.1:1',token,async(run)=>{dispatches++;assert.equal(run.checkpoint.storage.session_id,manager.getSessionId());});
 const body=Buffer.from(JSON.stringify({run_id:'run-1',conversation_id:'conversation-1',recovery_chain_id:'chain-1',lease_epoch:'1',budget_scope_id:'scope-1',output_id:'output-1',attempt_id:'attempt-1',message_id:'message-1',request_id:'request-1',text:'继续原长期会话',checkpoint,model_profile:null}));
-const response={statusCode:200,writeHead(code){this.statusCode=code;return this;},end(){return this;}};
-await server.listeners('request')[0]({url:'/resume-and-deliver',method:'POST',headers:{authorization:'Bearer '+token},async *[Symbol.asyncIterator](){yield body;}},response);
-assert.equal(response.statusCode,200);assert.equal(dispatches,1);
+await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
+try {
+ const response=await fetch('http://127.0.0.1:'+server.address().port+'/resume-and-deliver',{
+  method:'POST',headers:{authorization:'Bearer '+token},body,
+ });
+ assert.equal(response.status,200);assert.equal(await response.text(),'finished');assert.equal(dispatches,1);
+} finally { await new Promise(resolve=>server.close(resolve)); }
+const dispatchStarted = Promise.withResolvers();
+const finishDispatch = Promise.withResolvers();
+let duringDrain = 0;
+const draining = createDeliveryServer('http://127.0.0.1:1',token,async()=>{
+ duringDrain++;
+ dispatchStarted.resolve();
+ await finishDispatch.promise;
+});
+await new Promise(resolve=>draining.listen(0,'127.0.0.1',resolve));
+const packet = content => Buffer.concat([Buffer.from(
+ `POST /resume-and-deliver HTTP/1.1\r\nHost: localhost\r\nAuthorization: Bearer ${token}\r\nContent-Length: ${content.length}\r\n\r\n`,
+),content]);
+const pooled = createConnection(draining.address().port,'127.0.0.1');
+const idle = createConnection(draining.address().port,'127.0.0.1');
+let received = '';
+pooled.on('data',chunk=>{received+=chunk;});
+const disconnected = once(pooled,'close',{signal:AbortSignal.timeout(4000)});
+try {
+ const health = once(idle,'data',{signal:AbortSignal.timeout(4000)});
+ idle.write('GET /health HTTP/1.1\r\nHost: localhost\r\n\r\n');
+ const [healthy] = await health;
+ assert.match(healthy.toString(),/HTTP\/1\.1 200 OK/);
+ const idleDisconnected = once(idle,'close',{signal:AbortSignal.timeout(4000)});
+ pooled.write(packet(body));
+ await dispatchStarted.promise;
+ const stopped = once(draining,'close',{signal:AbortSignal.timeout(4000)});
+ draining.drain();
+ await idleDisconnected;
+ const next = {...JSON.parse(body),conversation_id:'next-conversation'};
+ const refused = once(draining,'request',{signal:AbortSignal.timeout(4000)});
+ pooled.write(packet(Buffer.from(JSON.stringify(next))));
+ const [,response] = await refused;
+ assert.equal(response.statusCode,409,'已接入的池连接在停机后也要明确拒绝新派发');
+ finishDispatch.resolve();
+ await Promise.all([stopped,disconnected]);
+ assert.equal(duringDrain,1,'停机中的池连接不能接纳下一次派发');
+ assert.match(received,/HTTP\/1\.1 200 OK/);
+ assert.match(received,/connection: close/i);
+ assert.match(received,/finished/);
+} finally {
+ finishDispatch.resolve();
+ pooled.destroy();
+ idle.destroy();
+ draining.close();
+ draining.closeAllConnections();
+}
 const inline=exportCheckpoint(SessionManager.inMemory(cwd));
 const legacy=SessionManager.inMemory(cwd,undefined,[manager.getHeader(),...manager.getEntries()]);legacy.branch(checkpoint.leaf_id);
 const migrated=restoreCheckpoint(cwd,exportCheckpoint(legacy));
@@ -366,5 +419,62 @@ short.appendMessage(tool('recovered'));
 assert.deepEqual(exportCheckpoint(short).branch_tool_call_ids,['recovered','adopted','switch-scope']);
 short.appendCustomMessageEntry('data_agent_current_input','旧范围切换',false,{message_id:'same-input'});
 short.appendMessage(tool('legacy-current'));
-assert.deepEqual(exportCheckpoint(short).branch_tool_call_ids,['legacy-current']);
-console.log(JSON.stringify({passed:true,...history,journalBytes:journal.length,referenceBytes:Buffer.byteLength(JSON.stringify(checkpoint)),envelopeBytes:body.length,nativeSessionPreserved:true,originalLeafPreserved:true,malformedFilesRejected:faults.length,exportCosts,officialRequests:0}));
+assert.equal(exportCheckpoint(short).branch_tool_call_ids,undefined,'旧切换标记用原记录回退');
+
+const scoped = SessionManager.inMemory('/synthetic/data-agent');
+scoped.appendMessage({role:'user',content:'按两个来源分别回答',timestamp:1});
+const root = scoped.getLeafId();
+scoped.appendMessage(tool('discarded-branch'));
+scoped.branch(root);
+const result = (id,details) => scoped.appendMessage({role:'toolResult',toolCallId:id,
+  toolName:'update_analysis_task',content:[{type:'text',text:'合成操作完成'}],details,isError:false,timestamp:2});
+const frozenParts = [{finalized_by_sdk_tool_call_id:'freeze-first',
+  task_ref:{task_id:'first',condition_version:'1'},scope_fingerprint:'a'.repeat(64)}];
+for (const id of ['search-first','read-first','freeze-first']) {
+  scoped.appendMessage(tool(id));
+  result(id,id==='freeze-first'?{data:{},answer_parts:frozenParts}:{data:{}});
+}
+const workspace = {selected_skills:[]};
+const transport = {run:{text:'按两个来源分别回答',message_id:'same-input',workspace_context:workspace,
+  answer_parts:frozenParts},
+  async post(){return workspace;},binding(){return {};}};
+const projection = taskProjection(transport,scoped,()=>{});
+const switchReceipt = {data:{},context_reset:{task_id:'second',condition_version:'1'}};
+scoped.appendMessage(tool('unadopted-read'));
+result('unadopted-read',{data:{}});
+scoped.appendMessage(tool('route-second'));
+result('route-second',switchReceipt);
+projection.acceptReceipt(switchReceipt,'route-second');
+await projection.apply();
+scoped.appendMessage(tool('search-second'));
+result('search-second',{data:{}});
+const bothParts = [...frozenParts,{finalized_by_sdk_tool_call_id:'freeze-second',
+  task_ref:{task_id:'second',condition_version:'1'},scope_fingerprint:'b'.repeat(64)}];
+scoped.appendMessage(tool('freeze-second'));
+result('freeze-second',{data:{},answer_parts:bothParts});
+const adoptedCalls = new Set(['search-first','read-first','freeze-first','route-second','search-second','freeze-second']);
+const older = exportCheckpoint(scoped);
+assert.deepEqual(new Set(older.branch_tool_call_ids),adoptedCalls);
+// 发布过的旧标记保留切换调用 ID，但尚无定稿步骤引用。
+delete older.entries.find(entry => entry.type==='custom_message' && entry.customType==='data_agent_current_input').details.adopted_tool_call_ids;
+older.branch_tool_call_ids = ['freeze-second','search-second','route-second'];
+const resumed = restoreCheckpoint(cwd,older);
+const modelMessages = resumed.buildSessionContext().messages;
+restoreAdoptedSteps(resumed,resumed.getBranch(),'same-input',bothParts);
+const adoptedRestore = restoreCheckpoint(cwd,exportCheckpoint(resumed));
+assert.deepEqual(new Set(exportCheckpoint(adoptedRestore).branch_tool_call_ids),adoptedCalls);
+assert.deepEqual(adoptedRestore.buildSessionContext().messages,modelMessages,'已定稿步骤恢复不能把旧正文加回模型输入');
+const entryCount = adoptedRestore.getEntryCount();
+restoreAdoptedSteps(adoptedRestore,adoptedRestore.getBranch(),'same-input',bothParts);
+assert.equal(adoptedRestore.getEntryCount(),entryCount,'恢复同一旧标记不能重复追加');
+const third = taskProjection({...transport,run:{...transport.run,answer_parts:bothParts}},adoptedRestore,()=>{});
+const thirdReceipt = {data:{},context_reset:{task_id:'third',condition_version:'1'}};
+for (const [id,details] of [['unadopted-second-read',{data:{}}],['route-third',thirdReceipt]]) {
+  adoptedRestore.appendMessage(tool(id));
+  adoptedRestore.appendMessage({role:'toolResult',toolCallId:id,toolName:'update_analysis_task',
+    content:[{type:'text',text:'合成操作完成'}],details,isError:false,timestamp:3});
+}
+third.acceptReceipt(thirdReceipt,'route-third');
+await third.apply();
+assert.deepEqual(new Set(exportCheckpoint(adoptedRestore).branch_tool_call_ids),new Set([...adoptedCalls,'route-third']));
+console.log(JSON.stringify({passed:true,...history,journalBytes:journal.length,referenceBytes:Buffer.byteLength(JSON.stringify(checkpoint)),envelopeBytes:body.length,nativeSessionPreserved:true,originalLeafPreserved:true,legacyAdoptedStepsPreserved:true,malformedFilesRejected:faults.length,exportCosts,officialRequests:0}));

@@ -1,7 +1,7 @@
 import {createSyntheticSourceInfo, formatSkillsForPrompt, type ContextWithSystemEvent, type Extension, type SessionManager} from '@earendil-works/pi-coding-agent';
 import type {DataToolOutcome, WorkspaceContext} from '../../../packages/contracts/generated/boundary.ts';
 import type {RustTransport} from '../transport/client.ts';
-import {exportCheckpoint} from './checkpoint.ts';
+import {currentInputToolCalls, exportCheckpoint, isRecoveryNotice} from './checkpoint.ts';
 import {selectedSkillResources} from './skills.ts';
 
 export function taskProjection(transport: RustTransport, manager: SessionManager,
@@ -31,12 +31,25 @@ export function taskProjection(transport: RustTransport, manager: SessionManager
       && entry.message.toolCallId === sdkId);
     if (result?.type !== 'message' || result.message.role !== 'toolResult') throw new Error('checkpoint_conflict');
 
+    const inputStart = history.findLastIndex(entry => entry.type === 'message' &&
+      entry.message.role === 'user' && !isRecoveryNotice(entry.message));
+    const inputHistory = history.slice(Math.max(0, inputStart));
+    const finalized = inputHistory.findLast(entry => {
+      if (entry.type !== 'message' || entry.message.role !== 'toolResult' || entry.message.isError) return false;
+      const {toolCallId} = entry.message;
+      return transport.run.answer_parts?.some(part => part.finalized_by_sdk_tool_call_id === toolCallId);
+    });
+    // 已定稿回答的步骤跨来源保留。未采用的前序调查不带进新分支。
+    const {adopted: prior} = currentInputToolCalls(manager, originalLeaf, true);
+    const adopted = finalized
+      ? [...new Set([...currentInputToolCalls(manager, finalized.id, true).ids, ...prior])]
+      : prior;
     // 保留旧树和原控制回执。新来源下，普通请求与 Pi 摘要从同一个原生分支开始。
     manager.resetLeaf();
     manager.appendMessage({role: 'user', content: transport.run.text, timestamp: result.message.timestamp});
     manager.appendCustomMessageEntry('data_agent_current_input',
       '任务或来源范围已更新。沿当前用户消息和最新工作区继续，已完成的操作无需重做。',
-      false, {message_id: transport.run.message_id, sdk_tool_call_id: sdkId});
+      false, {message_id: transport.run.message_id, sdk_tool_call_id: sdkId, adopted_tool_call_ids: adopted});
     try {
       const next = await transport.post('/internal/context/refresh', 'RefreshRunContext', {
         ...transport.binding(), sdk_tool_call_id: sdkId, checkpoint: exportCheckpoint(manager),

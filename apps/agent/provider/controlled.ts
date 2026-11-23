@@ -201,6 +201,8 @@ export function guardedModelStream(
           if (!permission.send_allowed) throw new Error("model_receipt_unknown");
         } catch (error) {
           diagnose(error, phase.current, '/internal/model/send', Date.now() - phase.started);
+          if (error instanceof Error && error.message === "stale_context")
+            admissionError = error.message;
           throw error;
         }
         sent = true;

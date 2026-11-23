@@ -403,7 +403,7 @@ async fn model(
     let context = internal_for_run(&state, &headers, &input.run_id)
         .await
         .map_err(failure)?;
-    use_cases::deliver_run::model_attempt(
+    use_cases::model_calls::mock_attempt(
         &state.pool,
         &context,
         &input.run_id,

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { execFileSync, spawn } from "node:child_process";
 import { once } from "node:events";
+import { createServer } from "node:http";
 import { harness, until } from "./harness.mjs";
 
 const h = await harness({ startWorker: false });
@@ -48,7 +49,28 @@ try {
   for (const name of names) assert.match(log(), new RegExp("worker_background_stopped name=" + name + "\\b"));
   assert.match(log(), /exited code=0 signal=null/);
   assert.deepEqual(h.sql("SELECT JSON_QUOTE(id) FROM user_sessions"), [active]);
-  console.log(JSON.stringify({ passed: true, stopped: names, expiredAndRevokedRemoved: 2, liveSessionPreserved: true, officialRequests: 0 }));
+  const bridge = h.env.DATA_AGENT_BRIDGE_URL;
+  const unavailable = createServer();
+  await new Promise(resolve => unavailable.listen(0, "127.0.0.1", resolve));
+  h.env.DATA_AGENT_BRIDGE_URL = "http://127.0.0.1:" + unavailable.address().port;
+  await new Promise(resolve => unavailable.close(resolve));
+  const cid = await h.create();
+  const accepted = await h.send(cid, "说明合成查询需要确认");
+  const job = () => h.sql(`SELECT JSON_OBJECT('attempts',attempts,'epoch',lease_epoch,'state',state)
+    FROM background_jobs WHERE message_id='${accepted.message_id}'`)[0];
+  await h.resumeWorker();
+  await until(() => {
+    const current = job();
+    return current.epoch >= 5 && current.attempts === 0 && current.state === "queued";
+  }, "Bridge 未就绪时连续五次归还未接纳的尝试");
+  await h.pauseWorker();
+  assert.equal(job().attempts, 0);
+  h.env.DATA_AGENT_BRIDGE_URL = bridge;
+  await h.resumeWorker();
+  const finished = await h.finished(cid);
+  assert.equal(finished.runs.filter(run => run.state === "finished").length, 1);
+  assert.equal(job().attempts, 1);
+  console.log(JSON.stringify({ passed: true, stopped: names, expiredAndRevokedRemoved: 2, liveSessionPreserved: true, queuedWorkResumed: true, officialRequests: 0 }));
 } finally {
   if (holder && holder.exitCode === null) holder.stdin.end("ROLLBACK;\n");
   await h.close();

@@ -78,6 +78,7 @@ try {
  for(const sample of [
   {stage:'reserve',reason:'timeout',httpStatus:null},
   {stage:'send',reason:'model_receipt_unknown',httpStatus:409},
+  {stage:'send',reason:'stale_context',httpStatus:409},
   {stage:'reserve',reason:'budget_exhausted',httpStatus:409},
   {stage:'finalize',reason:'invalid_response',httpStatus:200},
   {stage:'finalize',reason:'invalid_response',httpStatus:200,providerStatus:503},
@@ -106,7 +107,7 @@ try {
    const result=events.at(-1).error;
    // Pi在error事件即结束流；本地直接HTTP回执的清理微任务结束后再撤销fetch替身。
    await new Promise(resolve=>setImmediate(resolve));
-   assert.equal(result.errorMessage,sample.stage==='finalize'?'model_finalize_unconfirmed':sample.reason==='budget_exhausted'?'model_budget_exhausted':'model_request_failed');
+   assert.equal(result.errorMessage,sample.stage==='finalize'?'model_finalize_unconfirmed':sample.reason==='budget_exhausted'?'model_budget_exhausted':sample.reason==='stale_context'?'stale_context':'model_request_failed');
    assert.equal(provider.requests.length-before,sample.stage==='finalize'?1:0,'仅结算失败发生于真实provider请求之后');
    assert.equal(diagnostics.length,sample.providerStatus?2:1,'各失败阶段应各有一条受控诊断，不能吞掉结算失败');
    if(sample.providerStatus){

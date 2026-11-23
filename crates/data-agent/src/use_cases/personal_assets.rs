@@ -3,7 +3,7 @@ use crate::{
         AssetSave, AssetState, PublishSkill, ReviewSkillSuggestion, SkillSelection,
         SkillSelectionRemoval, SuggestSkill, VersionCommand,
     },
-    modules::{access, assets, conversations},
+    modules::{access, assets, conversations, runtime},
     persistence::AppTx,
     types::{AccessContext, Error, Result},
 };
@@ -34,6 +34,73 @@ pub(super) fn skill_authority(asset: &Value) -> Result<Value> {
         }
     }
     Ok(authority)
+}
+
+pub(super) async fn read_skill_authority_in_tx(
+    tx: &mut AppTx<'_>,
+    ctx: &AccessContext,
+    cid: &str,
+    recovery_chain: &str,
+    active_run: Option<&str>,
+) -> Result<Value> {
+    let snapshot = match active_run {
+        Some(run_id) => runtime::read_authority_in_tx(tx, run_id).await?,
+        None => None,
+    };
+    let references =
+        if let Some(reads) = snapshot.as_ref().and_then(|s| s.get("active_skill_reads")) {
+            reads.as_array().ok_or(Error::new("stale_context"))?.clone()
+        } else {
+            // 旧检查点未分开保存目录和精读，仍沿原回执核对。草稿继承也沿完整输入的精读来源。
+            let mut references = runtime::read_skill_sources_in_tx(tx, cid, recovery_chain).await?;
+            if let Some(snapshot) = &snapshot {
+                references.retain(|r| context_authority::items(&snapshot["skills"]).contains(r));
+            }
+            references
+        };
+    let ids = references
+        .iter()
+        .map(|reference| context_authority::pair(&reference[0], &reference[1]))
+        .collect::<Result<Vec<_>>>()?;
+    let current = assets::read_enabled_in_tx(
+        tx,
+        ctx,
+        &ids.iter().map(|(id, _)| id.clone()).collect::<Vec<_>>(),
+    )
+    .await?;
+    let mut authority = context_authority::empty();
+    for ((id, version), reference) in ids.into_iter().zip(references) {
+        let asset = current
+            .get(&id)
+            .filter(|asset| asset["version"] == version)
+            .ok_or(Error::new("stale_context"))?;
+        context_authority::merge(&mut authority, &skill_authority(asset)?)?;
+        let sources = authority["source_skills"]
+            .as_array_mut()
+            .ok_or(Error::new("unavailable"))?;
+        if !sources.contains(&reference) {
+            sources.push(reference);
+        }
+    }
+    Ok(authority)
+}
+
+pub(super) async fn assert_read_skill_authority_in_tx(
+    tx: &mut AppTx<'_>,
+    ctx: &AccessContext,
+    authority: &Value,
+    checked: &CheckedTextResults,
+) -> Result<()> {
+    context_authority::validate_in_tx(tx, ctx, authority, AuthorityUse::Text(checked))
+        .await
+        .map(|_| ())
+        .map_err(|error| {
+            if unavailable_text(&error) {
+                Error::new("stale_context")
+            } else {
+                error
+            }
+        })
 }
 
 pub(super) async fn checked_skills<'a>(
@@ -564,7 +631,7 @@ pub(super) async fn read_skill_file_in_tx(
     }
     let authority = authorize_skill_in_tx(tx, ctx, &asset, gate, checked).await?;
     let text = assets::skill_files::content(&asset, file)?;
-    context_authority::merge_run_in_tx(tx, run, &authority).await?;
+    context_authority::record_skill_read_in_tx(tx, run, authority, &asset).await?;
     assets::record_adoption_in_tx(tx, ctx, run, &asset, "read").await?;
     Ok(
         json!({"id":id,"kind":"skill","version":version,"path":path,"text":text,

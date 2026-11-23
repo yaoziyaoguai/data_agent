@@ -243,7 +243,18 @@ async fn prepare_delivery(
         if invalidated {
             // 丢弃未完成输入的检查点会换SDK调用身份；结束本输入后由新消息重新调查。
             if resume_same_input {
-                return Err(Error::new("stale_context"));
+                // 查不到实时权限与确知撤权不同，保留原检查点等待平台恢复。
+                return Err(Error::new(
+                    if context
+                        .table_access
+                        .as_ref()
+                        .is_some_and(|access| access.unavailable)
+                    {
+                        "source_unavailable"
+                    } else {
+                        "stale_context"
+                    },
+                ));
             }
             checkpoint = None;
         } else if scope_changed {
@@ -259,6 +270,9 @@ async fn prepare_delivery(
             .as_ref()
             .map(|v| v["authority_snapshot"].clone())
             .unwrap_or_else(super::context_authority::empty);
+        if !resume_same_input || checkpoint.is_none() {
+            snapshot["active_skill_reads"] = json!([]);
+        }
         // 历史只由Pi恢复；完整原话可经read_conversation分页补读，不再注入300字副本。
         if invalidated || !projection.scope_known {
             tasks
@@ -387,6 +401,10 @@ async fn verify_checkpoint_results(
             Err(error) if error.code == "result_expired" && *historical => {
                 result_proofs.push((key, result.clone()))
             }
+            Err(error) if matches!(error.code, "outcome_unknown" | "upstream_failed") => {
+                // 交付前只读查证尚未完成，原作业及账本可以等待平台恢复。
+                return Err(Error::new("source_unavailable"));
+            }
             Err(error)
                 if matches!(
                     error.code,
@@ -444,28 +462,6 @@ pub async fn context_for_run(pool: &MySqlPool, run_id: &str) -> Result<AccessCon
         request_id,
         table_access: None,
     })
-}
-pub async fn model_attempt(
-    pool: &MySqlPool,
-    context: &AccessContext,
-    run_id: &str,
-    lease: &str,
-    attempt: &str,
-    settle: bool,
-) -> Result<Value> {
-    let cid = runtime::locate_run(pool, run_id).await?;
-    let mut tx = AppTx::begin(pool).await?;
-    let conversation = conversations::lock_conversation_in_tx(&mut tx, context, &cid).await?;
-    conversations::assert_turn_in_tx(&tx, &conversation, run_id, epoch(lease)?)?;
-    let run = runtime::lock_run_in_tx(&mut tx, run_id, &cid).await?;
-    if settle {
-        runtime::settle_model_call_in_tx(&mut tx, &run, attempt).await?;
-    } else {
-        access::authorize_model("local_mock")?;
-        runtime::issue_model_call_in_tx(&mut tx, &run, attempt).await?;
-    }
-    tx.commit().await?;
-    Ok(json!({"state":if settle {"settled"}else{"issued"}}))
 }
 pub async fn renew_delivery(
     pool: &MySqlPool,
@@ -582,6 +578,7 @@ pub async fn refresh_context(
     .await?;
     // 仅实际来源集合改变时，Pi 从同一会话的新分支接续，不再采用旧分支材料。
     let mut snapshot = super::context_authority::empty();
+    snapshot["active_skill_reads"] = json!([]);
     let text_results = available_results(&result_proofs, &asset_sources);
     let WorkspaceAssets {
         memories,

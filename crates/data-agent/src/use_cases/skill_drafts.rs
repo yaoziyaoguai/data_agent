@@ -114,46 +114,6 @@ async fn result_sources(pool: &MySqlPool, ctx: &AccessContext, evidence: &Value)
     Ok(())
 }
 
-async fn adopted_skill_authority(
-    tx: &mut AppTx<'_>,
-    ctx: &AccessContext,
-    cid: &str,
-    recovery_chain: &str,
-) -> Result<Value> {
-    let references = runtime::read_skill_sources_in_tx(tx, cid, recovery_chain).await?;
-    let ids = references
-        .iter()
-        .map(|entry| {
-            entry[0]
-                .as_str()
-                .map(str::to_owned)
-                .ok_or(Error::new("unavailable"))
-        })
-        .collect::<Result<Vec<_>>>()?;
-    let assets = assets::read_enabled_in_tx(tx, ctx, &ids).await?;
-    let mut authority = context_authority::empty();
-    for reference in &references {
-        let id = reference[0]
-            .as_str()
-            .ok_or(crate::types::Error::new("unavailable"))?;
-        let asset = assets
-            .get(id)
-            .filter(|asset| asset["version"] == reference[1])
-            .ok_or(Error::new("stale_context"))?;
-        context_authority::merge(
-            &mut authority,
-            &super::personal_assets::skill_authority(asset)?,
-        )?;
-        if !context_authority::items(&authority["source_skills"]).contains(reference) {
-            authority["source_skills"]
-                .as_array_mut()
-                .ok_or(crate::types::Error::new("unavailable"))?
-                .push(reference.clone());
-        }
-    }
-    Ok(authority)
-}
-
 pub async fn validate_sources(
     pool: &MySqlPool,
     ctx: &AccessContext,
@@ -182,7 +142,8 @@ pub async fn validate_sources(
     let evidence = evidence_in_tx(&mut tx, ctx, cid, &input["evidence_ids"], false).await?;
     let authorities = [
         super::analysis_reports::evidence_authority(&evidence)?,
-        adopted_skill_authority(&mut tx, ctx, cid, recovery_chain).await?,
+        super::personal_assets::read_skill_authority_in_tx(&mut tx, ctx, cid, recovery_chain, None)
+            .await?,
     ];
     tx.commit().await?;
     checked.include(pool, ctx, &authorities, false).await?;
@@ -240,8 +201,14 @@ pub async fn prepare_in_tx(
     )
     .await?;
     let sources = super::analysis_reports::sources(&evidence)?;
-    let mut authority =
-        adopted_skill_authority(tx, ctx, &conversation.id, &run.recovery_chain_id).await?;
+    let mut authority = super::personal_assets::read_skill_authority_in_tx(
+        tx,
+        ctx,
+        &conversation.id,
+        &run.recovery_chain_id,
+        None,
+    )
+    .await?;
     context_authority::validate_in_tx(
         tx,
         ctx,

@@ -337,7 +337,8 @@ pub(super) async fn replay_receipt_in_tx(
         let authority =
             super::super::personal_assets::validate_skill_in_tx(tx, ctx, &asset, text_results)
                 .await?;
-        super::super::context_authority::merge_run_in_tx(tx, run_id, &authority).await?;
+        super::super::context_authority::record_skill_read_in_tx(tx, run_id, authority, &asset)
+            .await?;
     }
     if name == "manage_personal_asset" && receipt["data"]["kind"] == "memory" {
         let data = &receipt["data"];

@@ -408,7 +408,13 @@ async fn run_delivery(
                     .json(&envelope)
                     .send()
                     .await
-                    .map_err(|_| "bridge_unavailable")
+                    .map_err(|error| {
+                        if error.is_connect() {
+                            "bridge_not_ready"
+                        } else {
+                            "bridge_unavailable"
+                        }
+                    })
             };
             tokio::pin!(request);
             // 准备记忆上下文也会持会话锁。续租必须与request同时推进，
@@ -456,22 +462,26 @@ async fn run_delivery(
                             eprintln!("delivery_renew_after_dispatch job={} code={}", job.id, error.code);
                         }
                     }
-                    match result {
-                        Ok(response) if response.status()==reqwest::StatusCode::CONFLICT => {
-                            let deferred = if storage_fault_injected("defer") {
-                                Err(Error::transient_storage())
+                    // 建连失败或桥接明确拒收时没有发起 Agent 执行，可以原样归还尝试。
+                    if matches!(&result, Ok(response) if response.status()==reqwest::StatusCode::CONFLICT)
+                        || matches!(&result, Err("bridge_not_ready"))
+                    {
+                        let deferred = if storage_fault_injected("defer") {
+                            Err(Error::transient_storage())
+                        } else {
+                            deliver_run::defer_busy_delivery(pool,&context,&run_id,lease_epoch).await
+                        };
+                        if let Err(error) = deferred {
+                            if is_transient(&error) {
+                                // 桥接未接纳但回退失败：保持领取，租约到期自然重派。
+                                eprintln!("delivery_defer_transient job={} code={}",job.id,error.code);
                             } else {
-                                deliver_run::defer_busy_delivery(pool,&context,&run_id,lease_epoch).await
-                            };
-                            if let Err(error) = deferred {
-                                if is_transient(&error) {
-                                    // 桥接未接纳但回退失败：保持领取，租约到期自然重派。
-                                    eprintln!("delivery_defer_transient job={} code={}",job.id,error.code);
-                                } else {
-                                    eprintln!("delivery_defer_rejected job={} code={}",job.id,error.code);
-                                }
+                                eprintln!("delivery_defer_rejected job={} code={}",job.id,error.code);
                             }
                         }
+                        return Ok(());
+                    }
+                    match result {
                         Ok(response) if !response.status().is_success() => {
                             let status=response.status().as_u16();
                             let code=dispatch_failure_code(response).await;
@@ -502,7 +512,7 @@ async fn run_delivery(
             if is_transient(&error) {
                 // 建立运行的事务未确认，不持久化为业务失败；原任务租约到期后核对并恢复。
                 eprintln!("worker_start_transient job={} code={}", job.id, error.code);
-            } else if error.code == "lease_lost" {
+            } else if matches!(error.code, "lease_lost" | "source_unavailable") {
                 let deferred = if storage_fault_injected("defer_lease") {
                     Err(Error::transient_storage())
                 } else {

@@ -41,5 +41,5 @@ const server = createDeliveryServer(apiUrl, token, deliver, process.env.DATA_AGE
 server.listen(port, host, () => {
   console.log('startup service=bridge stage=listening elapsed_ms=' + Math.round(performance.now() - started) + ' port=' + port);
 });
-process.once('SIGINT', () => server.close());
-process.once('SIGTERM', () => server.close());
+process.once('SIGINT', () => server.drain());
+process.once('SIGTERM', () => server.drain());

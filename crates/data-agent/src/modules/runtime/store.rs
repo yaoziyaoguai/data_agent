@@ -611,7 +611,7 @@ pub async fn tool_activity_in_tx(
          LEFT JOIN pi_checkpoints p ON p.recovery_chain_id=r.recovery_chain_id \
          WHERE r.conversation_id=? AND ((r.id=? AND r.state='finished') OR (? IS NULL AND r.state='running')) \
            AND COALESCE(JSON_CONTAINS(p.checkpoint,JSON_QUOTE(t.sdk_tool_call_id),'$.branch_tool_call_ids'), \
-                        r.id=t.origin_run_id) \
+                        r.state='running' OR r.id=t.origin_run_id) \
          ORDER BY t.created_at,t.operation_id",
     )
     .bind(cid)

@@ -36,7 +36,7 @@ import { mockStream } from "../provider/mock.ts";
 import { selectedSkillResources } from "./skills.ts";
 import { resources } from "./resources.ts";
 import { workspaceContext, applyDeliveryContext } from "./workspace-context.ts";
-import { restoreCheckpoint, exportCheckpoint, RECOVERY_NOTICE } from "./checkpoint.ts";
+import { restoreCheckpoint, restoreAdoptedSteps, exportCheckpoint, RECOVERY_NOTICE } from "./checkpoint.ts";
 import { decodeContract } from "../../../packages/contracts/validate.ts";
 import { outputStream } from "./output-stream.ts";
 import { renderedStream } from "./render.ts";
@@ -71,6 +71,7 @@ export async function deliver(
   onStage?.('context_setup');
   const frozen = run.answer_parts ?? [];
   const branch = manager.getBranch();
+  if (run.resume_same_input && frozen.length) restoreAdoptedSteps(manager, branch, run.message_id, frozen);
   // §4.2：已恢复Pi分支中旧结构化search回执的长游标只在模型投影中短化为rc1引用。
   // 只按details.operation_id准确关联成功回执，只追加Pi原生context edit：原entry、持久回执与
   // 原调用参数不变；原生压缩沿buildSessionProjection输入同一短引用。不扫正文、不改用户文字、

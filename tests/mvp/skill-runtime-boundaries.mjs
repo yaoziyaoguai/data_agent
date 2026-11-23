@@ -7,6 +7,8 @@ import {selectedSkillResources} from '../../apps/agent/session/skills.ts';
 import {dataTools} from '../../apps/agent/tools/data-tools.ts';
 import {RustTransport} from '../../apps/agent/transport/client.ts';
 import {deliver} from '../../apps/agent/session/deliver.ts';
+import {exportCheckpoint} from '../../apps/agent/session/checkpoint.ts';
+import {taskProjection} from '../../apps/agent/session/task-projection.ts';
 import {assetInput, ok, select} from './skill-fixtures.mjs';
 import {until} from './harness.mjs';
 
@@ -41,10 +43,24 @@ export async function checkSkillRuntimeBoundaries(h, checks) {
   await h.resumeWorker();const pending = await h.capture(interruptedCid,'读取公共方法后继续');await h.pauseWorker();
   const manager=SessionManager.inMemory('/synthetic/data-agent');manager.appendMessage({role:'user',content:pending.text,timestamp:Date.now()});
   const data = dataTools(new RustTransport(pending,h.env.DATA_AGENT_API_URL,h.env.DATA_AGENT_INTERNAL_TOKEN),manager,'');
+  const binding = {run_id:pending.run_id,lease_epoch:pending.lease_epoch};
+  await data.invokeRecorded('update_analysis_task','public-skill-route',
+    {action:'route',task_id:null,expected_version:null,goal:'',question:null,options:[]});
   const path=`/skills/${shared.id}/1/SKILL.md`;
   const originalRead=await data.tools.find(v=>v.name==='read').execute('public-read',{path});
   assert.match(originalRead.content[0].text,/只有受控读取才能看到的正文/);
+  const finalText='合成方法使用结论。';
+  ok(await h.internal('/internal/outputs',{...binding,chunk_seq:'1',text:finalText}));
   ok(await h.request(`/assets/${shared.id}/disable`,{operation_id:randomUUID(),expected_version:shared.version}));
+  const issuance=await h.internal('/internal/model/issue',{...binding,call_attempt_id:randomUUID()});
+  const sending=await h.internal('/internal/model/send',{...binding,call_attempt_id:randomUUID(),
+    parameters_fingerprint:'7'.repeat(64)});
+  const completion=await h.internal('/internal/finish',{...binding,commit_id:pending.output_id,
+    final_text:finalText,checkpoint:exportCheckpoint(manager)});
+  for(const result of [issuance,sending,completion]){
+    assert.equal(result.status,409,JSON.stringify(result.value));
+    assert.equal(result.value.code,'stale_context');
+  }
   const deniedRead=await data.tools.find(v=>v.name==='read').execute('public-read-after-disable',{path});
   assert.equal(deniedRead.isError,true);
   const deniedText=deniedRead.content.map(block=>block.text).join('');
@@ -60,7 +76,7 @@ export async function checkSkillRuntimeBoundaries(h, checks) {
   assert.equal(next.checkpoint,null);
   assert.ok(!next.workspace_context.selected_skills.some(v=>v.id===shared.id));
   ok(await h.request(`/conversations/${interruptedCid}/messages/${next.message_id}/withdraw`,{operation_id:randomUUID()}));h.releaseRun(next.run_id);
-  checks.push('公共Skill停用后读工具及原输入恢复拒绝；新输入继续派发且不含已停用Skill和旧检查点');
+  checks.push('公共Skill停用后下一次模型发送、普通定稿、再次精读及原输入恢复拒绝；新输入无旧正文并能继续');
   shared=ok(await h.request(`/assets/${shared.id}/enable`,{operation_id:randomUUID(),expected_version:'2'}));
   // 公共方法已经选用，也不能替代平台的执行授权。
   const queryCid = await h.create(); ok(await select(h,queryCid,shared));
@@ -97,6 +113,13 @@ export async function checkSkillRuntimeBoundaries(h, checks) {
   const readReceipt = await controlled.invokeRecorded('read','dependent-read',readArgs);
   const routeReceipt = await controlled.invokeRecorded('update_analysis_task','dependent-route',routeArgs);
   assert.match(readReceipt.data.text,/依赖核验后才可读取/);
+  await writeFile(permissionsPath,JSON.stringify({table_readers:{demo:{alice:[]}}}));
+  const revokedDependency = await h.internal('/internal/model/issue',{
+    run_id:dependentRun.run_id,lease_epoch:dependentRun.lease_epoch,call_attempt_id:randomUUID(),
+  });
+  assert.equal(revokedDependency.status,409);
+  assert.equal(revokedDependency.value.code,'stale_context');
+  await writeFile(permissionsPath,'{}');
   h.sql('RENAME TABLE source_heads TO temporarily_unavailable_source_heads');
   try {
     await assert.rejects(controlled.invokeRecorded('read','dependent-read',readArgs),/unavailable/);
@@ -108,6 +131,70 @@ export async function checkSkillRuntimeBoundaries(h, checks) {
   assert.deepEqual(await controlled.invokeRecorded('read','dependent-read',readArgs),readReceipt);
   const operationCount=h.sql(`SELECT JSON_OBJECT('n',COUNT(*)) FROM tool_calls WHERE conversation_id='${dependentCid}' AND sdk_tool_call_id='dependent-read'`)[0];
   assert.equal(operationCount.n,1);
-  ok(await h.request(`/conversations/${dependentCid}/messages/${dependentRun.message_id}/withdraw`,{operation_id:randomUUID()}));h.releaseRun(dependentRun.run_id);
-  checks.push('依赖核验故障时重复read明确失败，恢复后原身份可重试；已提交写操作仍接回原回执');
+  await h.pausePlatform();
+  const priorAttempts = h.sql(`SELECT JSON_OBJECT('n',attempts) FROM background_jobs WHERE message_id='${dependentRun.message_id}'`)[0].n;
+  const preceding = h.captured.length;
+  h.releaseRun(dependentRun.run_id);
+  h.sql(`UPDATE agent_runs SET state='interrupted' WHERE id='${dependentRun.run_id}';
+    UPDATE conversations SET lease_owner=NULL,lease_until=NULL WHERE id='${dependentCid}';
+    UPDATE background_jobs SET state='queued',lease_owner=NULL,lease_until=NULL WHERE message_id='${dependentRun.message_id}';`);
+  await h.resumeWorker();
+  await until(()=>h.logs.some(log=>log.output.includes('delivery_rejected')&&log.output.includes('code=source_unavailable')),
+    '暂时无法核验平台权限时，等待原输入恢复');
+  assert.equal(h.sql(`SELECT JSON_OBJECT('n',attempts) FROM background_jobs WHERE message_id='${dependentRun.message_id}'`)[0].n,priorAttempts);
+  assert.equal(h.captured.length,preceding);
+  await h.resumePlatform();
+  const resumed=await until(()=>h.captured.slice(preceding).find(run=>run.message_id===dependentRun.message_id),
+    '平台恢复后接回原输入');
+  await h.pauseWorker();
+  assert.equal(resumed.resume_same_input,true);
+  assert.equal(resumed.recovery_chain_id,dependentRun.recovery_chain_id);
+  assert.equal(resumed.budget_scope_id,dependentRun.budget_scope_id);
+  ok(await h.request(`/conversations/${dependentCid}/messages/${dependentRun.message_id}/withdraw`,{operation_id:randomUUID()}));h.releaseRun(resumed.run_id);
+  checks.push('Skill 依赖撤权阻断发送，回执可沿原身份重读；平台暂不可达等待原输入，恢复后保留原恢复链和预算');
+
+  const scopedCid = await h.create(); ok(await select(h,scopedCid,dependent));
+  await h.resumeWorker();
+  const scopedRun = await h.capture(scopedCid,'先核对选用的方法，然后只用表 table-demo_order_detail 继续分析。');
+  await h.pauseWorker();
+  const scopedManager = SessionManager.inMemory('/synthetic/data-agent');
+  scopedManager.appendMessage({role:'user',content:scopedRun.text,timestamp:Date.now()});
+  const scopedTransport = new RustTransport(scopedRun,h.env.DATA_AGENT_API_URL,h.env.DATA_AGENT_INTERNAL_TOKEN);
+  const projection = taskProjection(scopedTransport,scopedManager,()=>{});
+  const scopedTools = dataTools(scopedTransport,scopedManager,'',(receipt,sdk)=>projection.acceptReceipt(receipt,sdk));
+  const scopedCall = async(name,args) => {
+    const sdk = randomUUID();
+    scopedManager.appendMessage({role:'assistant',api:'openai-completions',provider:'local_mock',model:'task_demo',
+      content:[{type:'toolCall',id:sdk,name,arguments:args}],stopReason:'toolUse',timestamp:Date.now(),
+      usage:{input:0,output:0,cacheRead:0,cacheWrite:0,totalTokens:0,cost:{input:0,output:0,cacheRead:0,cacheWrite:0,total:0}}});
+    const receipt = await scopedTools.invokeRecorded(name,sdk,args);
+    assert.equal(receipt.data.error,undefined,JSON.stringify(receipt.data));
+    scopedManager.appendMessage({role:'toolResult',toolCallId:sdk,toolName:name,...await scopedTools.formatResult(name,args,receipt),timestamp:Date.now()});
+    return receipt;
+  };
+  const first = await scopedCall('update_analysis_task',{action:'create',goal:'核对合成订单表',options:[],conditions:{
+    time_start:null,time_end:null,timezone:'UTC',metric:null,channel:null,group_by:[],filters:[],
+    knowledge_refs:[],notes:'仅核对口径',source_limits:null,
+  }});
+  await projection.apply();
+  await scopedCall('read',readArgs);
+  const containsRead = () => JSON.stringify(scopedManager.buildSessionContext().messages).includes('依赖核验后才可读取');
+  assert.equal(containsRead(),true);
+  const narrowed = await scopedCall('update_analysis_task',{action:'revise',task_id:first.data.task_id,
+    expected_version:first.data.condition_version,options:[],condition_patch:{set:{source_limits:{
+      allowed_sources:[{kind:'platform',id:table.id}],origin_message_ids:[]}},unset:[]}});
+  assert.ok(narrowed.context_reset);
+  await projection.apply();
+  assert.equal(containsRead(),false);
+  assert.ok(scopedRun.workspace_context.selected_skills.some(asset=>asset.id===dependent.id));
+  ok(await h.request(`/assets/${dependent.id}/disable`,{operation_id:randomUUID(),expected_version:dependent.version}));
+  const allowed = {...scopedTransport.binding(),call_attempt_id:randomUUID()};
+  ok(await h.internal('/internal/model/issue',allowed));
+  ok(await h.internal('/internal/model/settle',allowed));
+  const scopedText = '当前任务已按合成订单表限定资料范围。';
+  ok(await h.internal('/internal/outputs',{...scopedTransport.binding(),chunk_seq:'1',text:scopedText}));
+  ok(await h.internal('/internal/finish',{...scopedTransport.binding(),commit_id:scopedRun.output_id,
+    final_text:scopedText,checkpoint:exportCheckpoint(scopedManager)}));
+  h.releaseRun(scopedRun.run_id);
+  checks.push('真实范围切换移除旧精读、保留可选描述，停用旧正文所属 Skill 不阻断新分支');
 }

@@ -28,8 +28,13 @@ function failureCode(error: unknown): string {
 
 export function createDeliveryServer(apiUrl:string,token:string,dispatch:typeof deliver,fault='') {
   const active=new Map<string,{run:RunEnvelope,controller:AbortController}>();
-  return createServer(async(request,response)=>{
+  let draining=false;
+  const server=createServer(async(request,response)=>{
     let deliveryStage: DeliveryStage | 'delivery' = 'delivery';
+    if(draining){
+      // 409 沿用桥接未接纳的合同，Worker 归还本次交付尝试。
+      response.writeHead(request.url==='/health'?503:409,{'connection':'close'}).end();return;
+    }
     if(request.url==='/health'&&request.method==='GET'){response.end('ok');return;}
     if(request.headers.authorization!=='Bearer '+token){console.error('bridge_auth_rejected');response.writeHead(401).end();return;}
     if(request.method!=='POST'||!['/resume-and-deliver','/cancel-run'].includes(request.url??'')){response.writeHead(404).end();return;}
@@ -46,7 +51,9 @@ export function createDeliveryServer(apiUrl:string,token:string,dispatch:typeof 
       run=decodeContract<RunEnvelope>('RunEnvelope',JSON.parse(text));
       if(active.has(run.conversation_id)){response.writeHead(409).end();return;}
       const controller=new AbortController();active.set(run.conversation_id,{run,controller});acquired=true;
-      await dispatch(run,apiUrl,token,fault,controller.signal,stage=>{deliveryStage=stage;});response.writeHead(200).end('finished');
+      await dispatch(run,apiUrl,token,fault,controller.signal,stage=>{deliveryStage=stage;});
+      if(draining)response.setHeader('connection','close');
+      response.writeHead(200).end('finished');
     }catch(error){
       const code=failureCode(error),host=rustRequestFailure(error);
       const errorKind=error instanceof Error&&['Error','TypeError','SyntaxError','TimeoutError','AbortError'].includes(error.name)?error.name:'other';
@@ -57,7 +64,13 @@ export function createDeliveryServer(apiUrl:string,token:string,dispatch:typeof 
         code,error_kind:errorKind,path:host?.path??null,http_status:host?.status??null,
         elapsed_ms:host?.elapsedMs??null,reason:host?.reason??(code==='unexpected_error'?'other':code)}));
       // 失败码随响应体返回，worker据此区分确定性配置失败与可重试中断。
+      if(draining)response.setHeader('connection','close');
       response.writeHead(500,{'content-type':'application/json'}).end(JSON.stringify({code}));}
     finally{if(acquired&&run)active.delete(run.conversation_id);}
   });
+  return Object.assign(server,{drain(){
+    draining=true;
+    // 已锁定的 Node 在关闭监听时会一并关闭空闲 HTTP 连接。
+    server.close();
+  }});
 }

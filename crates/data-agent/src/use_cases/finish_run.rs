@@ -203,21 +203,37 @@ pub async fn finish_run(
     } else {
         delivered_result_authority_in_tx(&mut tx, context, &run).await?
     };
-    let checked_answer = if bound_answer || delivered_results.is_some() {
+    let read_skills = if !bound_answer && input.final_text.is_some() {
+        Some(
+            super::personal_assets::read_skill_authority_in_tx(
+                &mut tx,
+                context,
+                &cid,
+                &run.recovery_chain_id,
+                Some(&run.id),
+            )
+            .await?,
+        )
+        .filter(super::context_authority::has_sources)
+    } else {
+        None
+    };
+    let checked_answer = if bound_answer || delivered_results.is_some() || read_skills.is_some() {
         tx.commit().await?;
         let checked = if bound_answer {
             Some(super::task_answers::check_results(pool, context, &input.run_id).await?)
         } else {
-            // 普通正文核对本输入真正读取的结果；旧会话资料不参与准入或定稿。
-            let snapshot = delivered_results.ok_or(crate::types::Error::new("unavailable"))?;
+            // 普通正文核对本输入真正采用的结果和 Skill。
             let mut results = super::context_authority::CheckedTextResults::default();
-            results
-                .include(pool, context, std::slice::from_ref(&snapshot), false)
-                .await?;
-            if !results.allows(&snapshot, false) {
-                return Err(Error::new("stale_context"));
+            for snapshot in delivered_results.iter().chain(&read_skills) {
+                results
+                    .include(pool, context, std::slice::from_ref(snapshot), false)
+                    .await?;
+                if !results.allows(snapshot, false) {
+                    return Err(Error::new("stale_context"));
+                }
             }
-            None
+            Some(results)
         };
         tx = AppTx::begin(pool).await?;
         conversation = conversations::lock_conversation_in_tx(&mut tx, context, &cid).await?;
@@ -225,6 +241,12 @@ pub async fn finish_run(
         if let Some(receipt) = completed_receipt(&run, &input, &fp)? {
             tx.commit().await?;
             return Ok(receipt);
+        }
+        if let (Some(authority), Some(results)) = (&read_skills, &checked) {
+            super::personal_assets::assert_read_skill_authority_in_tx(
+                &mut tx, context, authority, results,
+            )
+            .await?;
         }
         checked
     } else {
