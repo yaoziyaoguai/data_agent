@@ -31,6 +31,12 @@ async fn results_with(
 ) -> Result<Value> {
     let v = read(pool, ctx, qid).await?;
     if v["text_unavailable"] == true {
+        if v["execution_state"] == "succeeded" {
+            let result = v["result_ref"]
+                .as_str()
+                .ok_or(Error::new("result_unavailable"))?;
+            queries::platform::result_authority(qid, &ctx.user_id, result).await?;
+        }
         return Err(Error::new("stale_context"));
     }
     if v["execution_state"] != "succeeded" {

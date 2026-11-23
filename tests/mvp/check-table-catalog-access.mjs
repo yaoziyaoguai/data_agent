@@ -108,9 +108,9 @@ try {
     conditions: {time_start: null, time_end: null, timezone: 'UTC', metric: null, channel: null,
       group_by: [], filters: [], knowledge_refs: [], notes: '', source_limits: null}, question: null, options: [],
   })).response).data;
-  const draft = async (task, sql, summary) => ok((await call('request_query', {
+  const draft = async (task, sql, summary, knowledge_refs = []) => ok((await call('request_query', {
     task_id: task.task_id, condition_version: task.condition_version, sql,
-    target_id: 'synthetic-sqlite', replaces_query_id: null, summary, parameters: {}, knowledge_refs: [],
+    target_id: 'synthetic-sqlite', replaces_query_id: null, summary, parameters: {}, knowledge_refs,
   })).response).data;
   const finish = async text => {
     ok(await h.internal('/internal/outputs', {...identity(run), chunk_seq: '1', text}));
@@ -123,14 +123,27 @@ try {
   }, 'bob');
   const task = await createTask('统计订单明细行数');
   const query = await draft(task, 'SELECT COUNT(*) AS total FROM demo_order_detail', '合成订单明细行数');
+  const referenced = await draft(task, 'SELECT COUNT(*) AS total FROM demo_order_detail',
+    '按已核表结构统计行数', [ref(original)]);
   await finish('查询草稿已保存。');
   const originalConfirmation = randomUUID();
   ok(await confirm(query, originalConfirmation));
+  ok(await confirm(referenced));
   await h.resumeWorker();
   await until(async () => (await request('/queries/'+query.id, 'bob')).value.execution_state === 'succeeded', 'saved result');
+  await until(async () => (await request('/queries/'+referenced.id, 'bob')).value.execution_state === 'succeeded', 'saved result with semantic references');
   const results = '/queries/'+query.id+'/results';
   assert.ok(ok(await request(results, 'bob')).rows.length > 0);
   assert.equal((await request(results, 'alice')).status, 404);
+  const referencedPaths = ["results", "export.csv"].map(path => '/queries/'+referenced.id+'/'+path);
+  for (const path of referencedPaths) {
+    const allowed = await fetch(h.env.DATA_AGENT_API_URL + path, {
+      headers: {authorization: "Bearer " + h.tokens.bob},
+    });
+    assert.equal(allowed.status, 200, path);
+    assert.ok((await allowed.text()).length > 0);
+    assert.equal((await request(path, 'alice')).status, 404, path);
+  }
 
   manager = SessionManager.inMemory('/synthetic/data-agent');
   const conversation = await h.create('bob');
@@ -177,6 +190,12 @@ try {
 
   await setRights({alice: ['raw_payments'], bob: ['raw_payments']});
   assert.equal((await request(results, 'bob')).status, 403);
+  for (const path of referencedPaths) {
+    const denied = await request(path, 'bob');
+    assert.equal(denied.status, 403, JSON.stringify(denied.value));
+    assert.equal(denied.value.code, 'forbidden');
+    assert.equal((await request(path, 'alice')).status, 404, path);
+  }
   const rejected = await confirm(orderDraft);
   assert.equal(rejected.status, 403, JSON.stringify(rejected.value));
   assert.equal(rejected.value.code, 'forbidden');
