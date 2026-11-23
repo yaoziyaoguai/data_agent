@@ -458,23 +458,35 @@ assert.deepEqual(new Set(older.branch_tool_call_ids),adoptedCalls);
 // 发布过的旧标记保留切换调用 ID，但尚无定稿步骤引用。
 delete older.entries.find(entry => entry.type==='custom_message' && entry.customType==='data_agent_current_input').details.adopted_tool_call_ids;
 older.branch_tool_call_ids = ['freeze-second','search-second','route-second'];
-const resumed = restoreCheckpoint(cwd,older);
-const modelMessages = resumed.buildSessionContext().messages;
-restoreAdoptedSteps(resumed,resumed.getBranch(),'same-input',bothParts);
-const adoptedRestore = restoreCheckpoint(cwd,exportCheckpoint(resumed));
-assert.deepEqual(new Set(exportCheckpoint(adoptedRestore).branch_tool_call_ids),adoptedCalls);
-assert.deepEqual(adoptedRestore.buildSessionContext().messages,modelMessages,'已定稿步骤恢复不能把旧正文加回模型输入');
-const entryCount = adoptedRestore.getEntryCount();
-restoreAdoptedSteps(adoptedRestore,adoptedRestore.getBranch(),'same-input',bothParts);
-assert.equal(adoptedRestore.getEntryCount(),entryCount,'恢复同一旧标记不能重复追加');
-const third = taskProjection({...transport,run:{...transport.run,answer_parts:bothParts}},adoptedRestore,()=>{});
-const thirdReceipt = {data:{},context_reset:{task_id:'third',condition_version:'1'}};
-for (const [id,details] of [['unadopted-second-read',{data:{}}],['route-third',thirdReceipt]]) {
-  adoptedRestore.appendMessage(tool(id));
-  adoptedRestore.appendMessage({role:'toolResult',toolCallId:id,toolName:'update_analysis_task',
-    content:[{type:'text',text:'合成操作完成'}],details,isError:false,timestamp:3});
+for (const hasRouteId of [true,false]) {
+  const legacy = structuredClone(older);
+  const expected = new Set(adoptedCalls);
+  if (!hasRouteId) {
+    legacy.entries[0].id = SessionManager.inMemory(cwd).getSessionId();
+    delete legacy.entries.find(entry => entry.type==='custom_message' && entry.customType==='data_agent_current_input').details.sdk_tool_call_id;
+    delete legacy.branch_tool_call_ids;
+    expected.delete('route-second');
+  }
+  const resumed = restoreCheckpoint(cwd,legacy);
+  const modelMessages = resumed.buildSessionContext().messages;
+  restoreAdoptedSteps(resumed,resumed.getBranch(),'same-input',bothParts);
+  const adoptedRestore = restoreCheckpoint(cwd,exportCheckpoint(resumed));
+  const restored = exportCheckpoint(adoptedRestore);
+  if (hasRouteId) assert.deepEqual(new Set(restored.branch_tool_call_ids),expected);
+  else assert.equal(restored.branch_tool_call_ids,undefined,'旧标记缺切换调用 ID 时仍沿用原记录');
+  assert.deepEqual(adoptedRestore.buildSessionContext().messages,modelMessages,'已定稿步骤恢复不能把旧正文加回模型输入');
+  const entryCount = adoptedRestore.getEntryCount();
+  restoreAdoptedSteps(adoptedRestore,adoptedRestore.getBranch(),'same-input',bothParts);
+  assert.equal(adoptedRestore.getEntryCount(),entryCount,'恢复同一旧标记不能重复追加');
+  const third = taskProjection({...transport,run:{...transport.run,answer_parts:bothParts}},adoptedRestore,()=>{});
+  const thirdReceipt = {data:{},context_reset:{task_id:'third',condition_version:'1'}};
+  for (const [id,details] of [['unadopted-second-read',{data:{}}],['route-third',thirdReceipt]]) {
+    adoptedRestore.appendMessage(tool(id));
+    adoptedRestore.appendMessage({role:'toolResult',toolCallId:id,toolName:'update_analysis_task',
+      content:[{type:'text',text:'合成操作完成'}],details,isError:false,timestamp:3});
+  }
+  third.acceptReceipt(thirdReceipt,'route-third');
+  await third.apply();
+  assert.deepEqual(new Set(exportCheckpoint(adoptedRestore).branch_tool_call_ids),new Set([...expected,'route-third']));
 }
-third.acceptReceipt(thirdReceipt,'route-third');
-await third.apply();
-assert.deepEqual(new Set(exportCheckpoint(adoptedRestore).branch_tool_call_ids),new Set([...adoptedCalls,'route-third']));
 console.log(JSON.stringify({passed:true,...history,journalBytes:journal.length,referenceBytes:Buffer.byteLength(JSON.stringify(checkpoint)),envelopeBytes:body.length,nativeSessionPreserved:true,originalLeafPreserved:true,legacyAdoptedStepsPreserved:true,malformedFilesRejected:faults.length,exportCosts,officialRequests:0}));

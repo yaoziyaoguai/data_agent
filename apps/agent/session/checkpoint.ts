@@ -56,7 +56,7 @@ export function restoreAdoptedSteps(manager: SessionManager, branch: SessionEntr
   const marker = branch[markerIndex];
   if (marker?.type !== 'custom_message') return;
   const details = marker.details as CurrentInputMarker;
-  if (!details.sdk_tool_call_id || details.adopted_tool_call_ids !== undefined ||
+  if (details.adopted_tool_call_ids !== undefined ||
     branch.slice(markerIndex + 1).some(entry => entry.type === 'custom' && entry.customType === 'data_agent_adopted_steps')) return;
 
   // 旧标记缺步骤。用Rust已定稿的引用在已加载的Pi树上找原回执，只采纳对应父链。
