@@ -184,6 +184,8 @@ Mem0 最多同时执行 32 个业务请求，额外 16 个连接用于接收请�
 - `make verify-mvp-browser`：正式页面、历史、草稿、SQL/结果/图表/CSV，桌面和手机。
 - `make verify-mvp-regression`：代码、原协议/恢复/锁边界、Pi会话与原生压缩、完整工具协议。
 
+工作台历史权限可用 `node tests/mvp/check-grounded-answers.mjs --history-browser` 核对两页已加载答案、SSE 重放和平台故障后的读取。用 `node tests/mvp/check-task-query-answers.mjs --history-permissions` 核对冻结的组合答案只隐藏撤权部分，并验证明细过期时的历史正文。获取结果及 CSV 的逐用户撤权用 `node tests/mvp/check-table-catalog-access.mjs`。这些检查沿用隔离 MySQL、合成平台和本地模型协议。
+
 MySQL集成测试串行运行。查询跟踪、索引和语义预填在同一Worker中的独立异步任务运行；同一Pi会话仍串行。检索融合精确名称、关键词与Milvus候选，所有命中回源核对权限、当前版本、状态与来源。向量不可用时返回明确降级；候选限额和索引积压均标明覆盖不足。常用表可优先分析表及字段，普通表首次只做基础导入并可检索，深入分析按需发起；来源改版仍自动重分析全部受影响对象。配置版本独立于知识版本。预填固定分析和依据复核各一次，只有两轮引用/格式和当前版本全部通过才应用，人工值保留。回环协议与真实模型质量分别验收。
 
 ### 在同一对话中等待多项查询
