@@ -137,8 +137,7 @@ pub async fn create_knowledge(
         request: input,
         raw,
     };
-    respond!(
-        KnowledgeObject,
+    wire_response::<KnowledgeObject>(
         use_cases::knowledge::write(&state.pool, &ctx, command)
             .await
             .map_err(failure)?,
@@ -156,8 +155,7 @@ pub async fn edit_knowledge(
         request: input,
         raw,
     };
-    respond!(
-        KnowledgeObject,
+    wire_response::<KnowledgeObject>(
         use_cases::knowledge::write(&state.pool, &ctx, command)
             .await
             .map_err(failure)?,
@@ -170,8 +168,7 @@ pub async fn edit_knowledge_entries(
     RawContractBody { value: input, raw }: RawContractBody<KnowledgeEntryBatch>,
 ) -> ResponseResult {
     let ctx = semantic_user(&state, &headers).await.map_err(failure)?;
-    respond!(
-        KnowledgeObject,
+    wire_response::<KnowledgeObject>(
         use_cases::knowledge::edit_entries(&state.pool, &ctx, &object, input, raw)
             .await
             .map_err(failure)?,
@@ -209,8 +206,7 @@ pub async fn knowledge_action(
         action,
         request: input,
     };
-    respond!(
-        KnowledgeObject,
+    wire_response::<KnowledgeObject>(
         use_cases::knowledge::write(&state.pool, &ctx, command)
             .await
             .map_err(failure)?,
@@ -552,8 +548,7 @@ pub async fn apply_proposal(
         action: KnowledgeVersionAction::ApplyProposal,
         request: input,
     };
-    respond!(
-        KnowledgeObject,
+    wire_response::<KnowledgeObject>(
         use_cases::knowledge::write(&state.pool, &ctx, command)
             .await
             .map_err(failure)?,

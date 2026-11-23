@@ -596,8 +596,14 @@ async function checkReports() {
     );
 
     await fixture.begin(cid, "保存刚才的报告修订，不重新执行SQL。");
+    // 新输入只含本轮原话，没有旧报告正文。随后的追加工具调用不能改变此前提。
+    assert.deepEqual(fixture.checkpoint.entries.map(entry => entry.type), ["session", "message"]);
+    const input = fixture.checkpoint.entries[1];
+    assert.equal(input.message.role, "user");
+    assert.equal(input.message.content, fixture.run.text);
+    assert.equal(fixture.checkpoint.leaf_id, input.id);
     await fixture.route(fixture.task);
-    // 新的空原生检查点没有旧报告正文；再增加依据，原报告选中项均不在任务最近5项中。
+    // 再增加依据，原报告选中项均不在任务最近5项中。
     for (let index = 0; index < 6; index++)
       await fixture.saveResultEvidence(
         fixture.task,
@@ -613,10 +619,6 @@ async function checkReports() {
         (value) => !selectedIds.includes(value.evidence_id),
       ),
     );
-    assert.ok(
-      fixture.checkpoint.entries.every((entry) => entry.type === "session"),
-    );
-    assert.equal(fixture.checkpoint.leaf_id, null);
     const restored = await fixture.invoke("read_analysis_report", {
       task_id: fixture.task.task_id,
     });

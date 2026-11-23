@@ -292,7 +292,6 @@ pub async fn validate_sources(
     input: &Value,
     checked_text: &mut super::context_authority::CheckedTextResults,
 ) -> Result<Value> {
-    contracts::validate("SaveAnalysisReportInput", input)?;
     let mut tx = AppTx::begin(pool).await?;
     conversations::lock_conversation_in_tx(&mut tx, ctx, cid).await?;
     analysis::assert_current_in_tx(
@@ -505,9 +504,7 @@ async fn read_view(
     } else {
         "available"
     };
-    let view = json!({"status":status,"reference":reference,"report":report,"chart_results":chart_results});
-    contracts::validate("AnalysisReportView", &view)?;
-    Ok(view)
+    Ok(json!({"status":status,"reference":reference,"report":report,"chart_results":chart_results}))
 }
 
 pub async fn read(
@@ -574,7 +571,6 @@ pub async fn read_for_agent(
     input: &Value,
     checked_text: &mut super::context_authority::CheckedTextResults,
 ) -> Result<Value> {
-    contracts::validate("ReadAnalysisReportInput", input)?;
     let view = read_view(pool, ctx, cid, text(input, "task_id")?, false, checked_text).await?;
     if view["status"] == "condition_changed" {
         return historical_page(pool, ctx, cid, view, input).await;
