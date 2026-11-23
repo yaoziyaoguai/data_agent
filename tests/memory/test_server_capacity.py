@@ -7,6 +7,7 @@ from select import select
 import socket
 import sys
 import threading
+from contextlib import ExitStack
 from types import SimpleNamespace
 import unittest
 
@@ -17,6 +18,52 @@ from server import MemoryServer
 
 
 class MemoryServerCapacityTests(unittest.TestCase):
+    def test_full_connections_wait_for_a_reader_instead_of_resetting_post(self):
+        class Server(MemoryServer):
+            client_io_timeout = 1
+
+        arrived, release = threading.Event(), threading.Event()
+        lock = threading.Lock()
+        workers = set()
+
+        def handle(*_):
+            with lock:
+                workers.add(threading.get_ident())
+                if len(workers) == MemoryServer.worker_limit:
+                    arrived.set()
+            if not release.wait(8):
+                raise TimeoutError("合成慢提取未释放")
+            return {"operation_id": "op", "body": "合成记忆", "replayed": False}
+
+        token = "test-token"
+        body = json.dumps({"operation_id": "op", "owner_id": "alice", "space_id": "test",
+                           "message": "合成消息", "quote": "合成消息",
+                           "budget": {"kind": "run", "id": "run", "epoch": "1",
+                                      "sdk_tool_call_id": "call", "operation_id": "op"}}).encode().ljust(65536)
+        with Server(("127.0.0.1", 0), SimpleNamespace(handle=handle), token) as server:
+            loop = threading.Thread(target=server.serve_forever)
+            loop.start()
+            try:
+                url = f"http://127.0.0.1:{server.server_port}/extract"
+                with httpx.Client(trust_env=False, timeout=10, headers={"Authorization": "Bearer " + token}) as client, ThreadPoolExecutor(MemoryServer.worker_limit) as calls, ExitStack() as sockets:
+                    active = [calls.submit(client.post, url, content=body) for _ in range(MemoryServer.worker_limit)]
+                    try:
+                        self.assertTrue(arrived.wait(5))
+                        for _ in range(MemoryServer.connection_limit - MemoryServer.worker_limit):
+                            incomplete = sockets.enter_context(socket.create_connection(server.server_address, timeout=2))
+                            incomplete.sendall(
+                                f"POST /extract HTTP/1.1\r\nHost: localhost\r\nAuthorization: Bearer {token}\r\nContent-Length: {len(body)}\r\n\r\n".encode() + body[:1024]
+                            )
+                        response = client.post(url, content=body)
+                        self.assertEqual(response.status_code, 503)
+                        self.assertEqual(response.json(), {"error": "memory_busy"})
+                    finally:
+                        release.set()
+                    self.assertEqual([call.result().status_code for call in active], [200] * MemoryServer.worker_limit)
+            finally:
+                server.shutdown()
+                loop.join()
+
     def test_incomplete_http_request_releases_its_connection(self):
         class Server(MemoryServer):
             client_io_timeout = 0.25

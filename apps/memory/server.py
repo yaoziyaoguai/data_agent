@@ -22,6 +22,13 @@ ROOT = Path(__file__).resolve().parents[2]
 CONTRACT = json.loads((ROOT / "packages/contracts/schema.json").read_text())
 ROUTES = {"/extract": ("MemoryExtractionRequest", "MemoryExtractionReceipt"),
           "/index": ("MemoryIndexRequest", "MemoryIndexReceipt"), "/search": ("MemorySearchRequest", "MemorySearchReceipt")}
+VALIDATORS = {
+    name: jsonschema.Draft202012Validator(
+        {"$ref": "#/$defs/" + name, "$defs": CONTRACT["$defs"]},
+        format_checker=jsonschema.Draft202012Validator.FORMAT_CHECKER,
+    )
+    for schemas in ROUTES.values() for name in schemas
+}
 
 
 class MemoryServer(ThreadingHTTPServer):
@@ -39,11 +46,10 @@ class MemoryServer(ThreadingHTTPServer):
         super().__init__(address, MemoryHandler)
 
     def process_request(self, request, client_address):
+        # 正文读取槽满时暂停接入，让监听队列施加反压，避免重置已发送的 POST。
+        self.connections.acquire()
         request.settimeout(self.client_io_timeout)
-        if self.connections.acquire(blocking=False):
-            self.workers.submit(self.serve_request, request, client_address)
-        else:
-            self.shutdown_request(request)
+        self.workers.submit(self.serve_request, request, client_address)
 
     def serve_request(self, request, client_address):
         try:
@@ -54,10 +60,6 @@ class MemoryServer(ThreadingHTTPServer):
     def server_close(self):
         super().server_close()
         self.workers.shutdown()
-
-
-def validate(name, value):
-    jsonschema.Draft202012Validator({"$ref": "#/$defs/" + name, "$defs": CONTRACT["$defs"]}).validate(value)
 
 
 class MemoryHandler(BaseHTTPRequestHandler):
@@ -93,9 +95,9 @@ class MemoryHandler(BaseHTTPRequestHandler):
         try:
             request_schema, response_schema = ROUTES[self.path]
             request = json.loads(body)
-            validate(request_schema, request)
+            VALIDATORS[request_schema].validate(request)
             value = self.server.service.handle(self.path, request)
-            validate(response_schema, value)
+            VALIDATORS[response_schema].validate(value)
             status = 200
         except (json.JSONDecodeError, jsonschema.ValidationError, ValueError):
             status, value = 400, {"error": "invalid_input"}
