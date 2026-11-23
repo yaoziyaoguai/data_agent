@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { Asset, AssetKind, EvidenceRef, SkillFile } from "../../../../../packages/contracts/generated/boundary.ts";
-import { api } from "../../shared/api.ts";
+import { api, ApiError } from "../../shared/api.ts";
 import { SkillFilesEditor } from "./SkillFilesEditor.tsx";
 import { PublishSkill } from "./PublishSkill.tsx";
 import { SkillSuggestions } from "./SkillSuggestions.tsx";
@@ -126,7 +126,9 @@ export function AssetsPage({
       if (page === pageSession.current && selection === editorSession.current) edit(draft);
     } catch (error) {
       if (page === pageSession.current && selection === editorSession.current) {
-        setError(error instanceof Error ? error.message : String(error));
+        setError(error instanceof ApiError && ["stale_context", "not_available"].includes(error.code)
+          ? "这份草稿的原条件或来源已变化。若来源暂时不可读，可以恢复权限后重试。"
+          : error instanceof Error ? error.message : String(error));
         void refresh();
       }
     }
@@ -225,7 +227,7 @@ export function AssetsPage({
       {tab === "shared" && <p className="quiet skill-sharing-note">本空间成员共享的分析方法。负责人维护正文，其他成员可以提出建议；使用时仍需明确选用。</p>}
       <div className="asset-grid">
         {assets
-          .filter(matches).filter(asset => (!statusFilter || asset.state === statusFilter) && [asset.name, asset.body, asset.scope].some(value => value.toLowerCase().includes(search.trim().toLowerCase())))
+          .filter(matches).filter(asset => (!statusFilter || (asset.state === statusFilter && !asset.draft_status)) && [asset.name, asset.body, asset.scope].some(value => value.toLowerCase().includes(search.trim().toLowerCase())))
           .map((asset) => (
             <article
               key={asset.id}
@@ -235,12 +237,12 @@ export function AssetsPage({
             >
               <div className="asset-main"><h2 title={asset.name}>{asset.name}</h2><p className="asset-body asset-excerpt">{asset.body.replace(/^#+\s*/gm, "")}</p></div>
               <div className="asset-scope"><p title={asset.scope}>{asset.scope}</p></div>
-              <div className="asset-state"><span className="status-pill">{asset.state === "draft" ? "待核对保存" : asset.state === "enabled" ? "已启用" : "已停用"}</span><small>{asset.text_unavailable ? "暂不可用" : asset.verified ? "已核对" : "待核对"}</small></div>
+              <div className="asset-state"><span className="status-pill">{asset.draft_status ? "已失效" : asset.state === "draft" ? "待核对保存" : asset.state === "enabled" ? "已启用" : "已停用"}</span>{!asset.draft_status && <small>{asset.text_unavailable ? "暂不可用" : asset.verified ? "已核对" : "待核对"}</small>}</div>
               {asset.text_unavailable && <p role="status" className="quiet">来源已失效或无法核验，当前内容不能采用。你仍可停用、删除或重新编写。</p>}
-              <div className="actions asset-primary-actions">{asset.can_edit && <button onClick={() => void editAsset(asset)}>{asset.state === "draft" ? "核对并保存" : asset.text_unavailable ? "重写内容" : "编辑"}</button>}{asset.kind === "skill" && asset.state === "enabled" && !asset.text_unavailable && <button className="primary" onClick={() => void onUseSkill(asset).catch(e => setError(e.message))}>在当前对话选用</button>}
+              <div className="actions asset-primary-actions">{asset.can_edit && !asset.draft_status && <button onClick={() => void editAsset(asset)}>{asset.state === "draft" ? "核对并保存" : asset.text_unavailable ? "重写内容" : "编辑"}</button>}{asset.kind === "skill" && asset.state === "enabled" && !asset.text_unavailable && <button className="primary" onClick={() => void onUseSkill(asset).catch(e => setError(e.message))}>在当前对话选用</button>}
                 {asset.state === "draft" && asset.can_edit && <button className="text-link" onClick={() => void state(asset, "delete")}>丢弃草稿</button>}
               </div>
-              {asset.state === "draft" ?
+              {asset.draft_status ? null : asset.state === "draft" ?
                 <details className="asset-full-content" open={previewDraft === asset.id} onToggle={event => {
                   const open = event.currentTarget.open;
                   setPreviewDraft(previous => open ? asset.id : previous === asset.id ? null : previous);

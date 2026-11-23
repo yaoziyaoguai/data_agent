@@ -29,12 +29,16 @@ export function useLiveConversation(cid: string | null, space: string, user: str
     let busy = false;
     let gap = false;
     let published = false;
+    let retry: ReturnType<typeof setTimeout> | undefined;
+    let retryDelay = 1000;
+    let recheckAuthority = false;
     const update = (next: ConversationSnapshot) => {
       current = next;
       if (published) setSnapshot(next);
     };
     const closeStream = () => {
       controller.abort();
+      clearTimeout(retry);
       source?.close();
       source = undefined;
       current = null;
@@ -45,10 +49,16 @@ export function useLiveConversation(cid: string | null, space: string, user: str
       setSyncUnavailable(true);
     };
     const reconnect = () => {
+      clearTimeout(retry);
       source?.close();
       source = undefined;
       if (busy) gap = true;
       else void readSnapshot();
+    };
+    const scheduleReconnect = () => {
+      clearTimeout(retry);
+      retry = setTimeout(reconnect, retryDelay);
+      retryDelay = Math.min(retryDelay * 2, 5000);
     };
     const readSnapshot = async (older = false) => {
       if (signal.aborted || busy || (older && !current?.has_older)) return;
@@ -62,13 +72,20 @@ export function useLiveConversation(cid: string | null, space: string, user: str
         if (signal.aborted) return;
         update(mergeSnapshot(current, next, older));
         setSyncUnavailable(false);
-        if (!older) connect();
+        if (!older) {
+          if (recheckAuthority) {
+            recheckAuthority = false;
+            setAuthorityRevision(value => value + 1);
+          }
+          connect();
+        }
       } catch (error) {
         if (signal.aborted) return;
         if (error instanceof ApiError && ["unauthenticated", "forbidden", "not_available"].includes(error.code)) {
           closeStream();
         } else {
           setSyncUnavailable(true);
+          if (!older && !source) scheduleReconnect();
         }
       } finally {
         busy = false;
@@ -83,10 +100,12 @@ export function useLiveConversation(cid: string | null, space: string, user: str
       const stream = new EventSource("/api/conversations/" + cid + "/events?view=workbench&after_seq=" + current.last_event_seq);
       source = stream;
       let opened = false;
+      let interrupted = false;
       stream.onopen = () => {
-        if (opened) {
+        retryDelay = 1000;
+        if (opened || interrupted) {
           // 断开期间可能漏掉不带事件序号的权限变化，已展示段落按当前权限补读。
-          setAuthorityRevision(value => value + 1);
+          recheckAuthority = true;
           reconnect();
           return;
         }
@@ -122,12 +141,13 @@ export function useLiveConversation(cid: string | null, space: string, user: str
       });
       stream.addEventListener("stream_closed", closeStream);
       stream.onerror = () => {
+        interrupted = true;
+        setSyncUnavailable(true);
         if (stream.readyState === EventSource.CLOSED) {
-          setAuthorityRevision(value => value + 1);
-          reconnect();
+          recheckAuthority = true;
+          scheduleReconnect();
           return;
         }
-        setSyncUnavailable(true);
         if (!published && current) {
           published = true;
           setSnapshot(current);
@@ -139,6 +159,7 @@ export function useLiveConversation(cid: string | null, space: string, user: str
     void readSnapshot();
     return () => {
       controller.abort();
+      clearTimeout(retry);
       source?.close();
       requestOlder.current = () => {};
       requestReconnect.current = () => {};

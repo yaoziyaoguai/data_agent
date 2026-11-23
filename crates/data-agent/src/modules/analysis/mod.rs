@@ -36,8 +36,9 @@ pub use store::{
 mod task_context;
 pub(crate) use task_context::{DELIVERY_SOURCE_LIMITS_SQL, TASK_CONTEXT_SQL, decode_task_context};
 pub use task_context::{
-    active_task_sources_unrestricted_in_tx, clarification_preview_for_task_in_tx,
-    condition_revision_in_tx, context_in_tx, current_condition_revision_in_tx,
-    declared_source_limits_in_tx, read_task_in_tx, read_task_with_clarifications_in_tx,
-    read_tasks_in_tx, recovery_state_in_tx, source_limits_at_version_in_tx, task_directory_in_tx,
+    active_condition_versions_in_tx, active_task_sources_unrestricted_in_tx,
+    clarification_preview_for_task_in_tx, condition_revision_in_tx, context_in_tx,
+    current_condition_revision_in_tx, declared_source_limits_in_tx, read_task_in_tx,
+    read_task_with_clarifications_in_tx, read_tasks_in_tx, recovery_state_in_tx,
+    source_limits_at_version_in_tx, task_directory_in_tx,
 };

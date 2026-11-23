@@ -1213,6 +1213,8 @@ pub struct AssetElement {
     pub body: String,
     pub can_edit: Option<bool>,
     pub dependencies: Vec<EvidenceRefElement>,
+    /// 待核对草稿所用条件已修订或任务已取消。该草稿只能丢弃。
+    pub draft_status: Option<DraftStatus>,
     pub files: Option<Vec<SkillFileElement>>,
     pub id: String,
     pub kind: AssetKind,
@@ -1228,6 +1230,13 @@ pub struct AssetElement {
     pub verified: bool,
     pub version: String,
     pub visibility: Option<Visibility>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DraftStatus {
+    #[serde(rename = "condition_changed")]
+    ConditionChanged,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -6063,6 +6072,9 @@ pub struct Asset {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub can_edit: Option<bool>,
     pub dependencies: Vec<EvidenceRef>,
+    /// 待核对草稿所用条件已修订或任务已取消。该草稿只能丢弃。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub draft_status: Option<DraftStatus>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub files: Option<Vec<SkillFile>>,
     pub id: String,

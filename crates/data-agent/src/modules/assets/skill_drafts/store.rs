@@ -1,5 +1,5 @@
 use crate::{
-    contracts,
+    contracts::{self, generated::SkillDraftRef},
     persistence::{AppTx, receipts::Operation},
     types::{AccessContext, Error, Result, id},
 };
@@ -39,31 +39,29 @@ impl StoredDraft {
         } else if self.state == "confirmed" {
             value["asset_id"] = json!(self.asset_id.as_ref().ok_or(Error::new("invalid_input"))?);
         }
-        contracts::validate("SkillDraft", &value)?;
         Ok(value)
     }
-}
-
-pub async fn locate_in_tx(tx: &mut AppTx<'_>, ctx: &AccessContext, draft: &str) -> Result<Value> {
-    sqlx::query_scalar::<_, sqlx::types::Json<Value>>(
-        "SELECT JSON_EXTRACT(draft_origin,'$.reference') FROM personal_assets WHERE id=? AND owner_id=? AND space_id=? AND draft_origin IS NOT NULL",
-    )
-    .bind(draft)
-    .bind(&ctx.user_id)
-    .bind(&ctx.space_id)
-    .fetch_optional(tx.connection())
-    .await?
-    .map(|value| value.0)
-    .ok_or(Error::new("not_available"))
 }
 
 pub async fn read_in_tx(
     tx: &mut AppTx<'_>,
     ctx: &AccessContext,
     draft: &str,
+    for_update: bool,
 ) -> Result<StoredDraft> {
-    let row = sqlx::query("SELECT body,draft_origin FROM personal_assets WHERE id=? AND owner_id=? AND space_id=? AND draft_origin IS NOT NULL FOR UPDATE")
-        .bind(draft).bind(&ctx.user_id).bind(&ctx.space_id).fetch_optional(tx.connection()).await?
+    let mut query = sqlx::QueryBuilder::<sqlx::MySql>::new(
+        "SELECT body,draft_origin FROM personal_assets WHERE id=? AND owner_id=? AND space_id=? AND draft_origin IS NOT NULL",
+    );
+    if for_update {
+        query.push(" FOR UPDATE");
+    }
+    let row = query
+        .build()
+        .bind(draft)
+        .bind(&ctx.user_id)
+        .bind(&ctx.space_id)
+        .fetch_optional(tx.connection())
+        .await?
         .ok_or(Error::new("not_available"))?;
     let origin = row.get::<sqlx::types::Json<Value>, _>("draft_origin").0;
     let state = origin["status"]
@@ -82,6 +80,21 @@ pub async fn read_in_tx(
         reference: origin["reference"].clone(),
         asset_id: origin["asset_id"].as_str().map(str::to_owned),
     })
+}
+
+pub async fn pending_references_in_tx(
+    tx: &mut AppTx<'_>,
+    ctx: &AccessContext,
+) -> Result<Vec<SkillDraftRef>> {
+    let rows: Vec<sqlx::types::Json<SkillDraftRef>> = sqlx::query_scalar(
+        "SELECT JSON_EXTRACT(draft_origin,'$.reference') FROM personal_assets
+         WHERE owner_id=? AND space_id=? AND state='draft'",
+    )
+    .bind(&ctx.user_id)
+    .bind(&ctx.space_id)
+    .fetch_all(tx.connection())
+    .await?;
+    Ok(rows.into_iter().map(|value| value.0).collect())
 }
 
 pub async fn page_in_tx(

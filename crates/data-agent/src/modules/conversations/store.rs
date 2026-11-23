@@ -247,6 +247,25 @@ pub async fn read_message_in_tx(
     .ok_or(Error::new("not_available"))?;
     Ok(message_from_row(&row))
 }
+pub async fn read_message_snapshot_in_tx(
+    tx: &mut AppTx<'_>,
+    context: &AccessContext,
+    cid: &str,
+    message_id: &str,
+) -> Result<Message> {
+    let row = sqlx::query(
+        "SELECT m.* FROM conversation_messages m JOIN conversations c ON c.id=m.conversation_id
+         WHERE m.id=? AND c.id=? AND c.owner_id=? AND c.space_id=? AND c.deleted=FALSE",
+    )
+    .bind(message_id)
+    .bind(cid)
+    .bind(&context.user_id)
+    .bind(&context.space_id)
+    .fetch_optional(tx.connection())
+    .await?
+    .ok_or(Error::new("not_available"))?;
+    Ok(message_from_row(&row))
+}
 pub async fn accept_message_in_tx(
     tx: &mut AppTx<'_>,
     locked: &LockedConversation,

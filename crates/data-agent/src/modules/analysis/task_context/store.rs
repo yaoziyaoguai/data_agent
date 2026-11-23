@@ -25,6 +25,30 @@ pub async fn read_tasks_in_tx(tx: &mut AppTx<'_>, cid: &str) -> Result<Vec<Value
     Ok(result)
 }
 
+pub async fn active_condition_versions_in_tx(
+    tx: &mut AppTx<'_>,
+    tasks: &[&str],
+) -> Result<std::collections::HashMap<String, String>> {
+    let mut versions = std::collections::HashMap::new();
+    for chunk in tasks.chunks(256) {
+        let mut query = sqlx::QueryBuilder::<sqlx::MySql>::new(
+            "SELECT id,CAST(condition_version AS CHAR) FROM analysis_tasks WHERE lifecycle='active' AND id IN (",
+        );
+        let mut ids = query.separated(",");
+        for task in chunk {
+            ids.push_bind(task);
+        }
+        ids.push_unseparated(")");
+        versions.extend(
+            query
+                .build_query_as::<(String, String)>()
+                .fetch_all(tx.connection())
+                .await?,
+        );
+    }
+    Ok(versions)
+}
+
 pub(crate) const TASK_CONTEXT_SQL: &str = "task_context AS (
     SELECT t.id, JSON_OBJECT('id',t.id,'goal',t.goal,'condition_version',CAST(t.condition_version AS CHAR),
        'phase',t.phase,'lifecycle',t.lifecycle,'conditions',c.body,'stored_decision_state',c.decision_state_version,

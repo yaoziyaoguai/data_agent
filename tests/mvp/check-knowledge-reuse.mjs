@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
+import { execFileSync, spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
+import { once } from "node:events";
 import { writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -213,7 +215,9 @@ async function checkHistoricalMethodSources(fixture, checks) {
   const unavailable = ok(await h.request(`/assets/skill-drafts/${refs[1].draft_id}`));
   assert.equal(unavailable.status, "sources_unavailable");
   assert.equal(Object.hasOwn(unavailable, "body"), false);
-  const stored = ok(await h.request("/assets")).assets.find(asset => asset.id === saved.id);
+  const listing = ok(await h.request("/assets")).assets;
+  assert.equal(listing.find(asset => asset.id === refs[1].draft_id).draft_status, undefined);
+  const stored = listing.find(asset => asset.id === saved.id);
   assert.equal(stored.text_unavailable, true);
   assert.equal(stored.body, "");
   await writeFile(h.directory + "/platform/permissions.json", "{}");
@@ -222,13 +226,51 @@ async function checkHistoricalMethodSources(fixture, checks) {
   assert.equal(restored.version, saved.version);
   assert.deepEqual(ok(await h.request(`/assets/${refs[1].draft_id}`)), originalPreview);
   assert.deepEqual(ok(await h.request(`/assets/skill-drafts/${refs[1].draft_id}`)), drafts[1]);
+  const container = execFileSync("docker", ["--context", "colima-data-agent", "ps",
+    "--filter", "label=com.docker.compose.project=data-agent",
+    "--filter", "label=com.docker.compose.service=mysql", "--format", "{{.ID}}"], { encoding: "utf8" }).trim();
+  const db = new URL(h.env.DATA_AGENT_DATABASE_URL).pathname.slice(1);
+  assert.match(db, /^data_agent_test_[a-f0-9]+$/);
+  const holder = spawn("docker", ["--context", "colima-data-agent", "exec", "-i", container, "mysql",
+    "--defaults-extra-file=/run/secrets/mysql_root_client", "--batch", "--unbuffered", "--skip-column-names"]);
+  const released = once(holder, "exit");
+  let lockOutput = "";
+  holder.stdout.on("data", chunk => { lockOutput += chunk; });
+  holder.stdin.write(`USE ${db}; START TRANSACTION;
+    SELECT id FROM conversations WHERE id=${quote(cid)} FOR UPDATE;
+    SELECT id FROM conversation_messages WHERE id=${quote(refs[1].source_message_id)} FOR UPDATE;
+    SELECT id FROM personal_assets WHERE id=${quote(refs[1].draft_id)} FOR UPDATE;
+    SELECT 'draft_locks_held';\n`);
+  try {
+    await until(() => lockOutput.includes("draft_locks_held"), "会话、消息和草稿行已锁");
+    const read = async path => {
+      const response = await fetch(h.env.DATA_AGENT_API_URL + path, {
+        headers: { authorization: "Bearer " + h.tokens.alice },
+        signal: AbortSignal.timeout(5000),
+      });
+      assert.equal(response.status, 200);
+      return response.json();
+    };
+    const [preview, page] = await Promise.all([
+      read(`/assets/${refs[1].draft_id}`),
+      read("/assets/skill-drafts"),
+    ]);
+    assert.deepEqual(preview, originalPreview);
+    assert.ok(page.drafts.some(draft => draft.reference.draft_id === refs[1].draft_id));
+  } finally {
+    holder.stdin.end("ROLLBACK;\n");
+    assert.equal((await released)[0], 0);
+  }
   await fixture.begin(cid, "修改方法当前任务的范围说明。");
   await fixture.invoke("update_analysis_task", { action: "revise", task_id: current.task_id,
     expected_version: current.condition_version,
     condition_patch: { set: { notes: "调整后的范围" }, unset: [] }, options: [] });
   await fixture.finish();
   assert.equal(ok(await h.request(`/assets/skill-drafts/${refs[2].draft_id}`)).status, "condition_changed");
-  checks.push("跨会话来源拒绝；撤权隐藏结果、草稿及显式引用结果的方法正文，恢复后读回原草稿及已保存版本");
+  const expired = ok(await h.request("/assets")).assets.find(asset => asset.id === refs[2].draft_id);
+  assert.equal(expired.draft_status, "condition_changed");
+  assert.equal(expired.body, "");
+  checks.push("跨会话来源拒绝；临时撤权可恢复原草稿，预览和列表不等待写锁，旧条件草稿标记失效");
 }
 
 async function checkReuse() {

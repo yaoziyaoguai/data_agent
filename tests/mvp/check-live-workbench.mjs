@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { chromium } from "playwright";
-import { harness } from "./harness.mjs";
+import { harness, until } from "./harness.mjs";
 
 const h = await harness({ capture: true, web: true, startWorker: false, env: { DATA_AGENT_LEASE_MS: "120000" } });
 const browser = await chromium.launch();
@@ -11,6 +11,52 @@ try {
   });
   assert.equal(login.status, 200);
   const cookie = /^data_agent_session=([^;]+)/.exec(login.headers.get("set-cookie"))[1];
+  const failures = ["connecting", "closed", "repeated-closed"];
+  for (const failure of failures) {
+    const context = await browser.newContext();
+    await context.addCookies([{ name: "data_agent_session", value: cookie, url: h.url }]);
+    await context.addInitScript(({ cid, failure }) => {
+      localStorage.setItem("data-agent.conversation." + JSON.stringify(["demo", "alice"]), cid);
+      const NativeEventSource = window.EventSource;
+      window.EventSource = class extends NativeEventSource {
+        constructor(...args) {
+          super(...args);
+          if (failure === "connecting" && !window.firstSseErrorInjected) {
+            window.firstSseErrorInjected = true;
+            // 模拟浏览器在首次握手尚未 open 时送达的 error，实际重连请求仍走原 SSE。
+            queueMicrotask(() => this.dispatchEvent(new Event("error")));
+          }
+          this.addEventListener("workbench_state", () => { window.workbenchEventsReady = true; });
+        }
+      };
+    }, { cid, failure });
+    try {
+      const page = await context.newPage();
+      let snapshotReads = 0;
+      const streams = [];
+      const unavailable = { status: 503, json: { code: "unavailable", message: "unavailable",
+        request_id: "synthetic-sse-restart", retryable: true } };
+      await page.route("**/snapshot", route =>
+        ++snapshotReads === 2 && failure === "closed" ? route.fulfill(unavailable) : route.continue());
+      const streamFailures = failure === "closed" ? 1 : failure === "repeated-closed" ? 2 : 0;
+      await page.route("**/events?*", route => {
+        streams.push({time:performance.now(), snapshotReads});
+        return streams.length <= streamFailures ? route.fulfill(unavailable) : route.continue();
+      });
+      await page.goto(h.url + "/#workbench", { waitUntil: "domcontentloaded" });
+      await until(() => snapshotReads >= (failure === "connecting" ? 2 : 3) && streams.length >= Math.max(2, streamFailures + 1),
+        "首次连接失败后快照补读与重连", 15000);
+      await page.waitForFunction(() => window.workbenchEventsReady);
+      if (failure === "repeated-closed") {
+        assert.equal(streams.length, 3);
+        assert.ok(streams[1].time - streams[0].time >= 900, "快照成功时连续断流仍须等待后再连");
+        assert.ok(streams[2].time - streams[1].time >= 1900, "快照成功不能重置事件流退避");
+        assert.equal(streams[2].snapshotReads - streams[0].snapshotReads, 2);
+      }
+    } finally {
+      await context.close();
+    }
+  }
   const pages = [];
   let snapshots = 0, queryLists = 0;
   // 本机 Vite 用 HTTP/1.1。同源六连接是浏览器上限，压测用 20 个独立客户端。
@@ -74,7 +120,7 @@ try {
   assert.equal(resync.status, 204);
   await rejected;
   await pages[0].getByText(expected, { exact: true }).waitFor({ state: "hidden" });
-  console.log(JSON.stringify({ passed: true, browserClients: 20, idleSeconds: 60, idleSql, frames: 50, snapshotRefreshes: 0, queryListRefreshes: 0, revokedReplayCleared: true, officialRequests: 0 }));
+  console.log(JSON.stringify({ passed: true, reconnectCases: failures.length, browserClients: 20, idleSeconds: 60, idleSql, frames: 50, snapshotRefreshes: 0, queryListRefreshes: 0, revokedReplayCleared: true, officialRequests: 0 }));
 } finally {
   await browser.close();
   await h.close();

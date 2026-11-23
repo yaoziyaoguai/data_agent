@@ -1599,9 +1599,13 @@ export interface AppendOutputClass {
 }
 
 export interface AssetElement {
-    body:                string;
-    can_edit?:           boolean;
-    dependencies:        EvidenceRefElement[];
+    body:         string;
+    can_edit?:    boolean;
+    dependencies: EvidenceRefElement[];
+    /**
+     * 待核对草稿所用条件已修订或任务已取消。该草稿只能丢弃。
+     */
+    draft_status?:       DraftStatus;
     files?:              SkillFileElement[];
     id:                  string;
     kind:                AssetKind;
@@ -1620,6 +1624,8 @@ export interface AssetElement {
     version:           string;
     visibility?:       Visibility;
 }
+
+export type DraftStatus = "condition_changed";
 
 export type AssetKind = "memory" | "skill";
 
@@ -4908,9 +4914,13 @@ export interface AssetList {
 }
 
 export interface Asset {
-    body:                string;
-    can_edit?:           boolean;
-    dependencies:        EvidenceRef[];
+    body:         string;
+    can_edit?:    boolean;
+    dependencies: EvidenceRef[];
+    /**
+     * 待核对草稿所用条件已修订或任务已取消。该草稿只能丢弃。
+     */
+    draft_status?:       DraftStatus;
     files?:              SkillFile[];
     id:                  string;
     kind:                AssetKind;

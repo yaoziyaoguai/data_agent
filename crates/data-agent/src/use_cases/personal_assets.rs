@@ -3,7 +3,7 @@ use crate::{
         AssetSave, AssetState, PublishSkill, ReviewSkillSuggestion, SkillSelection,
         SkillSelectionRemoval, SuggestSkill, VersionCommand,
     },
-    modules::{access, assets, conversations, runtime},
+    modules::{access, analysis, assets, conversations, runtime},
     persistence::AppTx,
     types::{AccessContext, Error, Result},
 };
@@ -317,6 +317,22 @@ pub async fn list(pool: &MySqlPool, ctx: &AccessContext) -> Result<Value> {
     .await?;
     let mut tx = AppTx::begin(pool).await?;
     let mut v = assets::list_in_tx(&mut tx, ctx, false).await?;
+    let expired = if v.iter().any(|asset| asset["state"] == "draft") {
+        let refs = assets::skill_drafts::pending_references_in_tx(&mut tx, ctx).await?;
+        let ids = refs
+            .iter()
+            .map(|reference| reference.task_id.as_str())
+            .collect::<Vec<_>>();
+        let versions = analysis::active_condition_versions_in_tx(&mut tx, &ids).await?;
+        refs.into_iter()
+            .filter_map(|reference| {
+                (versions.get(&reference.task_id) != Some(&reference.condition_version))
+                    .then_some(reference.draft_id)
+            })
+            .collect::<std::collections::HashSet<_>>()
+    } else {
+        std::collections::HashSet::new()
+    };
     let can_admin = access::is_super_maintainer(ctx)?;
     for asset in &mut v {
         asset["can_edit"] = json!(assets::can_edit(ctx, asset, can_admin));
@@ -330,6 +346,12 @@ pub async fn list(pool: &MySqlPool, ctx: &AccessContext) -> Result<Value> {
                 .ok_or(crate::types::Error::new("unavailable"))?;
             draft.remove("skill_sources");
             draft.remove("text_unavailable");
+            let draft_id = draft["id"].as_str().ok_or(Error::new("unavailable"))?;
+            if expired.contains(draft_id) {
+                draft.insert("draft_status".into(), json!("condition_changed"));
+                draft.insert("name".into(), json!("已失效的 Skill 草稿"));
+                draft.insert("scope".into(), json!("原任务条件已变化或任务已取消"));
+            }
         } else if asset["kind"] == "skill" {
             project_skill_in_tx(&mut tx, ctx, asset, &checked).await?;
         }

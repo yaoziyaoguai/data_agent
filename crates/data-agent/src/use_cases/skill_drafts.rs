@@ -27,17 +27,15 @@ fn unavailable_source(error: &Error) -> bool {
 
 async fn user_source_in_tx(
     tx: &mut AppTx<'_>,
-    conversation: &conversations::LockedConversation,
-    message_id: &str,
+    message: &conversations::Message,
     quote: Option<&str>,
 ) -> Result<()> {
-    let message = conversations::read_message_in_tx(tx, conversation, message_id).await?;
     if !message.user_supplied
         || message.disposition == "withdrawn"
         || (quote.is_some()
             && (message.disposition != "pending"
                 || quote.map(str::trim) != Some(message.body.trim())))
-        || conversations::result_query_for_message_in_tx(tx, &conversation.id, &message.id)
+        || conversations::result_query_for_message_in_tx(tx, &message.conversation_id, &message.id)
             .await?
             .is_some()
     {
@@ -125,13 +123,8 @@ pub async fn validate_sources(
     let (message, recovery_chain) = input_identity;
     let mut tx = AppTx::begin(pool).await?;
     let conversation = conversations::lock_conversation_in_tx(&mut tx, ctx, cid).await?;
-    user_source_in_tx(
-        &mut tx,
-        &conversation,
-        message,
-        Some(text(input, "instruction_quote")?),
-    )
-    .await?;
+    let message = conversations::read_message_in_tx(&mut tx, &conversation, message).await?;
+    user_source_in_tx(&mut tx, &message, Some(text(input, "instruction_quote")?)).await?;
     analysis::assert_current_in_tx(
         &mut tx,
         cid,
@@ -165,13 +158,8 @@ pub async fn prepare_in_tx(
     input: &Value,
     checked: CheckedDraftSources<'_>,
 ) -> Result<Value> {
-    user_source_in_tx(
-        tx,
-        conversation,
-        &run.message_id,
-        Some(text(input, "instruction_quote")?),
-    )
-    .await?;
+    let message = conversations::read_message_in_tx(tx, conversation, &run.message_id).await?;
+    user_source_in_tx(tx, &message, Some(text(input, "instruction_quote")?)).await?;
     conversations::assert_routed_in_tx(tx, conversation, &run.message_id).await?;
     if !conversations::message_task_ids_in_tx(tx, conversation, &run.message_id)
         .await?
@@ -263,27 +251,31 @@ pub async fn prepare_in_tx(
 async fn check_pending_in_tx(
     tx: &mut AppTx<'_>,
     ctx: &AccessContext,
-    conversation: &conversations::LockedConversation,
     draft: &assets::skill_drafts::StoredDraft,
+    locked: Option<&conversations::LockedConversation>,
 ) -> Result<Value> {
-    if draft.state != "pending" || conversation.deleted {
+    if draft.state != "pending" {
         return Err(Error::new("not_available"));
     }
     let reference = &draft.reference;
-    user_source_in_tx(
-        tx,
-        conversation,
-        text(reference, "source_message_id")?,
-        None,
-    )
-    .await?;
-    let task = analysis::read_task_in_tx(tx, &conversation.id, text(reference, "task_id")?).await?;
+    let cid = text(reference, "conversation_id")?;
+    let mid = text(reference, "source_message_id")?;
+    let message = if let Some(conversation) = locked {
+        if conversation.deleted {
+            return Err(Error::new("not_available"));
+        }
+        conversations::read_message_in_tx(tx, conversation, mid).await?
+    } else {
+        conversations::read_message_snapshot_in_tx(tx, ctx, cid, mid).await?
+    };
+    user_source_in_tx(tx, &message, None).await?;
+    let task = analysis::read_task_in_tx(tx, cid, text(reference, "task_id")?).await?;
     if task["condition_version"] != reference["condition_version"] || task["lifecycle"] != "active"
     {
         return Err(Error::new("version_conflict"));
     }
     let body = draft.body.as_ref().ok_or(Error::new("invalid_input"))?;
-    let evidence = evidence_in_tx(tx, ctx, &conversation.id, &body["evidence_refs"], true).await?;
+    let evidence = evidence_in_tx(tx, ctx, cid, &body["evidence_refs"], true).await?;
     if super::analysis_reports::sources(&evidence)?["knowledge_refs"] != body["dependencies"] {
         return Err(Error::new("invalid_evidence"));
     }
@@ -293,11 +285,10 @@ async fn check_pending_in_tx(
 async fn check_text_in_tx(
     tx: &mut AppTx<'_>,
     ctx: &AccessContext,
-    conversation: &conversations::LockedConversation,
     draft: &assets::skill_drafts::StoredDraft,
     checked: &super::context_authority::CheckedTextResults,
 ) -> Result<()> {
-    let evidence = check_pending_in_tx(tx, ctx, conversation, draft).await?;
+    let evidence = check_pending_in_tx(tx, ctx, draft, None).await?;
     let body = draft
         .body
         .as_ref()
@@ -305,14 +296,20 @@ async fn check_text_in_tx(
     if body.get("skill_sources").is_some() {
         super::personal_assets::validate_skill_in_tx(tx, ctx, body, checked).await?;
     }
-    super::analysis_reports::check_evidence_in_tx(tx, ctx, &conversation.id, &evidence, checked)
-        .await?;
+    super::analysis_reports::check_evidence_in_tx(
+        tx,
+        ctx,
+        text(&draft.reference, "conversation_id")?,
+        &evidence,
+        checked,
+    )
+    .await?;
     Ok(())
 }
 
 pub async fn read(pool: &MySqlPool, ctx: &AccessContext, draft_id: &str) -> Result<Value> {
     let mut tx = AppTx::begin(pool).await?;
-    let reference = assets::skill_drafts::locate_in_tx(&mut tx, ctx, draft_id).await?;
+    let draft = assets::skill_drafts::read_in_tx(&mut tx, ctx, draft_id, false).await?;
     let unavailable_view = |error: Error| {
         let status = if error.code == "version_conflict" {
             "condition_changed"
@@ -321,18 +318,14 @@ pub async fn read(pool: &MySqlPool, ctx: &AccessContext, draft_id: &str) -> Resu
         } else {
             return Err(error);
         };
-        Ok(json!({"status":status,"reference":reference}))
+        Ok(json!({"status":status,"reference":draft.reference}))
     };
-    let conversation =
-        conversations::lock_for_cleanup_in_tx(&mut tx, ctx, text(&reference, "conversation_id")?)
-            .await?;
-    let draft = assets::skill_drafts::read_in_tx(&mut tx, ctx, draft_id).await?;
     if draft.state != "pending" {
         let view = draft.view()?;
         tx.commit().await?;
         return Ok(view);
     }
-    let evidence = match check_pending_in_tx(&mut tx, ctx, &conversation, &draft).await {
+    let evidence = match check_pending_in_tx(&mut tx, ctx, &draft, None).await {
         Ok(evidence) => evidence,
         Err(error) => {
             tx.commit().await?;
@@ -351,14 +344,11 @@ pub async fn read(pool: &MySqlPool, ctx: &AccessContext, draft_id: &str) -> Resu
     if let Err(error) = result_sources(pool, ctx, &evidence).await {
         return unavailable_view(error);
     }
-    // 网络查证后重新锁来源；删除或条件修订不能让迟到读回旧正文。
+    // 网络查证后读取最新快照，预览不占用会话、消息或草稿的写锁。
     let mut tx = AppTx::begin(pool).await?;
-    let conversation =
-        conversations::lock_for_cleanup_in_tx(&mut tx, ctx, text(&reference, "conversation_id")?)
-            .await?;
-    let current = assets::skill_drafts::read_in_tx(&mut tx, ctx, draft_id).await?;
+    let current = assets::skill_drafts::read_in_tx(&mut tx, ctx, draft_id, false).await?;
     if current.state == "pending"
-        && let Err(error) = check_text_in_tx(&mut tx, ctx, &conversation, &current, &checked).await
+        && let Err(error) = check_text_in_tx(&mut tx, ctx, &current, &checked).await
     {
         tx.commit().await?;
         return unavailable_view(error);
@@ -411,8 +401,8 @@ pub async fn confirm(pool: &MySqlPool, ctx: &AccessContext, input: &Value) -> Re
         tx.commit().await?;
         return super::personal_assets::project_receipt(pool, ctx, receipt).await;
     }
-    let draft = assets::skill_drafts::read_in_tx(&mut tx, ctx, draft_id).await?;
-    check_pending_in_tx(&mut tx, ctx, &conversation, &draft).await?;
+    let draft = assets::skill_drafts::read_in_tx(&mut tx, ctx, draft_id, true).await?;
+    check_pending_in_tx(&mut tx, ctx, &draft, Some(&conversation)).await?;
     let dependencies = draft.body.as_ref().ok_or(Error::new("not_available"))?["dependencies"]
         .as_array()
         .ok_or(Error::new("invalid_evidence"))?;

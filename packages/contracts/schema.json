@@ -3177,6 +3177,11 @@
         "selected": {
           "type": "boolean"
         },
+        "draft_status": {
+          "type": "string",
+          "const": "condition_changed",
+          "description": "待核对草稿所用条件已修订或任务已取消。该草稿只能丢弃。"
+        },
         "memory_index_state": {
           "type": "string",
           "enum": [
