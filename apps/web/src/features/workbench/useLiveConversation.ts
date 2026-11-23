@@ -26,7 +26,8 @@ export function useLiveConversation(cid: string | null, space: string, user: str
     const { signal } = controller;
     let current: ConversationSnapshot | null = null;
     let source: EventSource | undefined;
-    let busy = false;
+    let reading: "latest" | "older" | null = null;
+    let olderPending = false;
     let gap = false;
     let published = false;
     let retry: ReturnType<typeof setTimeout> | undefined;
@@ -52,17 +53,24 @@ export function useLiveConversation(cid: string | null, space: string, user: str
       clearTimeout(retry);
       source?.close();
       source = undefined;
-      if (busy) gap = true;
+      if (reading) gap = true;
       else void readSnapshot();
     };
     const scheduleReconnect = () => {
+      source?.close();
+      source = undefined;
       clearTimeout(retry);
       retry = setTimeout(reconnect, retryDelay);
       retryDelay = Math.min(retryDelay * 2, 5000);
     };
     const readSnapshot = async (older = false) => {
-      if (signal.aborted || busy || (older && !current?.has_older)) return;
-      busy = true;
+      if (signal.aborted || (older && !current?.has_older)) return;
+      if (reading) {
+        if (older && reading === "latest") olderPending = true;
+        return;
+      }
+      reading = older ? "older" : "latest";
+      let merged = false;
       if (older) setLoadingOlder(true);
       try {
         const next = await api("SnapshotRefresh", "/conversations/" + cid + "/snapshot", "POST", {
@@ -71,6 +79,7 @@ export function useLiveConversation(cid: string | null, space: string, user: str
         }, undefined, signal);
         if (signal.aborted) return;
         update(mergeSnapshot(current, next, older));
+        merged = true;
         setSyncUnavailable(false);
         if (!older) {
           if (recheckAuthority) {
@@ -88,10 +97,16 @@ export function useLiveConversation(cid: string | null, space: string, user: str
           if (!older && !source) scheduleReconnect();
         }
       } finally {
-        busy = false;
+        reading = null;
         if (!signal.aborted) {
           if (older) setLoadingOlder(false);
-          if (gap) { gap = false; reconnect(); }
+          if (gap) {
+            gap = false;
+            reconnect();
+          } else if (olderPending && merged) {
+            olderPending = false;
+            void readSnapshot(true);
+          }
         }
       }
     };
@@ -101,8 +116,19 @@ export function useLiveConversation(cid: string | null, space: string, user: str
       source = stream;
       let opened = false;
       let interrupted = false;
+      const unavailable = () => {
+        setSyncUnavailable(true);
+        if (!published && current) {
+          published = true;
+          setSnapshot(current);
+        }
+        recheckAuthority = true;
+      };
+      const invalidFrame = () => {
+        unavailable();
+        scheduleReconnect();
+      };
       stream.onopen = () => {
-        retryDelay = 1000;
         if (opened || interrupted) {
           // 断开期间可能漏掉不带事件序号的权限变化，已展示段落按当前权限补读。
           recheckAuthority = true;
@@ -110,7 +136,6 @@ export function useLiveConversation(cid: string | null, space: string, user: str
           return;
         }
         opened = true;
-        setSyncUnavailable(false);
       };
       stream.onmessage = message => {
         if (!current || signal.aborted) return;
@@ -118,7 +143,7 @@ export function useLiveConversation(cid: string | null, space: string, user: str
           const event = decodeContract<Event>("Event", JSON.parse(message.data));
           update(appendLiveEvent(current, event));
         } catch {
-          reconnect();
+          invalidFrame();
         }
       };
       stream.addEventListener("workbench_state", message => {
@@ -129,10 +154,12 @@ export function useLiveConversation(cid: string | null, space: string, user: str
             // 首次展示正文时，查询卡与重复 SQL 的折叠依据必须一同到达。
             setQueries(next.query_list);
             published = true;
+            retryDelay = 1000;
+            setSyncUnavailable(false);
           }
           update({ ...current, tasks: next.tasks ?? current.tasks, runs: next.runs ?? current.runs });
         } catch {
-          reconnect();
+          invalidFrame();
         }
       });
       stream.addEventListener("lagged", message => {
@@ -142,15 +169,9 @@ export function useLiveConversation(cid: string | null, space: string, user: str
       stream.addEventListener("stream_closed", closeStream);
       stream.onerror = () => {
         interrupted = true;
-        setSyncUnavailable(true);
+        unavailable();
         if (stream.readyState === EventSource.CLOSED) {
-          recheckAuthority = true;
           scheduleReconnect();
-          return;
-        }
-        if (!published && current) {
-          published = true;
-          setSnapshot(current);
         }
       };
     };

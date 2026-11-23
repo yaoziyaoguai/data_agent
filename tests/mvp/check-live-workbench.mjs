@@ -11,8 +11,12 @@ try {
   });
   assert.equal(login.status, 200);
   const cookie = /^data_agent_session=([^;]+)/.exec(login.headers.get("set-cookie"))[1];
-  const failures = ["connecting", "closed", "repeated-closed"];
+  const failures = ["connecting", "closed", "repeated-closed", "invalid-event", "invalid-overview"];
+  const malformedCid = await h.create();
+  const savedMessage = "断流前已保存的合成消息";
+  const saved = await h.send(malformedCid, savedMessage);
   for (const failure of failures) {
+    const malformed = failure.startsWith("invalid-");
     const context = await browser.newContext();
     await context.addCookies([{ name: "data_agent_session", value: cookie, url: h.url }]);
     await context.addInitScript(({ cid, failure }) => {
@@ -26,10 +30,12 @@ try {
             // 模拟浏览器在首次握手尚未 open 时送达的 error，实际重连请求仍走原 SSE。
             queueMicrotask(() => this.dispatchEvent(new Event("error")));
           }
-          this.addEventListener("workbench_state", () => { window.workbenchEventsReady = true; });
+          this.addEventListener("workbench_state", event => {
+            if (JSON.parse(event.data).query_list) window.workbenchEventsReady = true;
+          });
         }
       };
-    }, { cid, failure });
+    }, { cid: malformed ? malformedCid : cid, failure });
     try {
       const page = await context.newPage();
       let snapshotReads = 0;
@@ -38,16 +44,24 @@ try {
         request_id: "synthetic-sse-restart", retryable: true } };
       await page.route("**/snapshot", route =>
         ++snapshotReads === 2 && failure === "closed" ? route.fulfill(unavailable) : route.continue());
-      const streamFailures = failure === "closed" ? 1 : failure === "repeated-closed" ? 2 : 0;
+      const streamFailures = failure === "closed" ? 1 : failure === "repeated-closed" || malformed ? 2 : 0;
       await page.route("**/events?*", route => {
         streams.push({time:performance.now(), snapshotReads});
-        return streams.length <= streamFailures ? route.fulfill(unavailable) : route.continue();
+        if (streams.length > streamFailures) return route.continue();
+        if (!malformed) return route.fulfill(unavailable);
+        return route.fulfill({ status: 200, contentType: "text/event-stream", body:
+          failure === "invalid-event" ? 'data: {"event_seq":17}\n\n' : 'event: workbench_state\ndata: {"query_list":null}\n\n' });
       });
       await page.goto(h.url + "/#workbench", { waitUntil: "domcontentloaded" });
+      if (malformed) {
+        await page.getByText("暂时无法更新对话。", { exact: false }).waitFor({ timeout: 5000 });
+        await page.locator("#main-content").getByText(savedMessage, { exact: true }).waitFor({ timeout: 5000 });
+        assert.ok(streams.length < 3, "收到有效工作台事件前就能读已保存消息");
+      }
       await until(() => snapshotReads >= (failure === "connecting" ? 2 : 3) && streams.length >= Math.max(2, streamFailures + 1),
         "首次连接失败后快照补读与重连", 15000);
       await page.waitForFunction(() => window.workbenchEventsReady);
-      if (failure === "repeated-closed") {
+      if (failure === "repeated-closed" || malformed) {
         assert.equal(streams.length, 3);
         assert.ok(streams[1].time - streams[0].time >= 900, "快照成功时连续断流仍须等待后再连");
         assert.ok(streams[2].time - streams[1].time >= 1900, "快照成功不能重置事件流退避");
@@ -57,6 +71,10 @@ try {
       await context.close();
     }
   }
+  const withdrawn = await h.request(`/conversations/${malformedCid}/messages/${saved.message_id}/withdraw`, {
+    operation_id: "withdraw-synthetic-disconnect-message",
+  });
+  assert.equal(withdrawn.status, 200, JSON.stringify(withdrawn.value));
   const pages = [];
   let snapshots = 0, queryLists = 0;
   // 本机 Vite 用 HTTP/1.1。同源六连接是浏览器上限，压测用 20 个独立客户端。
