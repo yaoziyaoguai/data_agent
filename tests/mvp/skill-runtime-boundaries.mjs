@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {randomUUID} from 'node:crypto';
+import {createHash, randomUUID} from 'node:crypto';
 import {writeFile} from 'node:fs/promises';
 import {SessionManager, ModelRuntime} from '@earendil-works/pi-coding-agent';
 import {createAssistantMessageEventStream} from '@earendil-works/pi-ai';
@@ -197,4 +197,83 @@ export async function checkSkillRuntimeBoundaries(h, checks) {
     final_text:scopedText,checkpoint:exportCheckpoint(scopedManager)}));
   h.releaseRun(scopedRun.run_id);
   checks.push('真实范围切换移除旧精读、保留可选描述，停用旧正文所属 Skill 不阻断新分支');
+
+  const answers = [];
+  for (const notification of [true, false]) {
+    const answerSkill = ok(await h.request('/assets', assetInput({body:'合成行数解释方法。'})));
+    const answerCid = await h.create();
+    ok(await select(h, answerCid, answerSkill));
+    await h.resumeWorker();
+    let turn = await h.capture(answerCid, '准备合成金额查询，先不执行。');
+    await h.pauseWorker();
+    const journal = SessionManager.inMemory('/synthetic/data-agent');
+    const envelope = () => ({run_id:turn.run_id, lease_epoch:turn.lease_epoch});
+    const invoke = async (tool_name, args, sdk = randomUUID()) => {
+      const input = {...envelope(), sdk_tool_call_id:sdk, tool_name, arguments:args,
+        checkpoint:exportCheckpoint(journal)};
+      ok(await h.internal('/internal/data/tool-calls',input));
+      const receipt = ok(await h.internal('/internal/data/tools',input));
+      assert.ok(receipt.data.error == null, JSON.stringify(receipt.data));
+      return receipt.data;
+    };
+    const finishPlain = async text => {
+      ok(await h.internal('/internal/outputs',{...envelope(),chunk_seq:'1',text}));
+      ok(await h.internal('/internal/finish',{...envelope(),commit_id:turn.output_id,
+        final_text:text,checkpoint:exportCheckpoint(journal)}));
+      h.releaseRun(turn.run_id);
+    };
+    const task = await invoke('update_analysis_task',{action:'create',goal:'合成金额查询',options:[],conditions:{
+      time_start:null,time_end:null,timezone:'UTC',metric:null,channel:null,group_by:[],filters:[],
+      knowledge_refs:[],notes:'',source_limits:null,
+    }});
+    const preparedQuery = await invoke('request_query',{task_id:task.task_id,condition_version:task.condition_version,
+      sql:'SELECT 42 AS amount',parameters:{},target_id:'synthetic-sqlite',summary:'合成金额',knowledge_refs:[]});
+    await finishPlain('合成查询已准备。');
+    ok(await h.request('/queries/'+preparedQuery.id+'/confirm',{operation_id:randomUUID(),
+      draft_version:preparedQuery.draft_version,condition_version:preparedQuery.condition_version}));
+    await h.resumeWorker();
+    turn = await until(()=>h.captured.find(value=>value.workspace_context?.result_notification?.query_id===preparedQuery.id),
+      '合成结果通知');
+    await h.pauseWorker();
+    if (!notification) {
+      await finishPlain('结果已保存，可以继续解释。');
+      await h.resumeWorker();
+      turn = await h.capture(answerCid, '显示已保存的合成金额。');
+      await h.pauseWorker();
+    }
+    assert.equal(Boolean(turn.workspace_context.result_notification),notification);
+    assert.ok(turn.workspace_context.selected_skills.some(asset=>asset.id===answerSkill.id));
+    await invoke('update_analysis_task',{action:'route',task_id:task.task_id,expected_version:task.condition_version,options:[]});
+    if (notification) {
+      const used = await invoke('read',{path:`/skills/${answerSkill.id}/${answerSkill.version}/SKILL.md`});
+      assert.match(used.text,/合成行数解释方法/);
+    }
+    const result = (await invoke('get_query',{query_id:preparedQuery.id})).results;
+    const sdk = randomUUID();
+    const preparation = await invoke('prepare_analysis_answer',{
+      sources:[{query_id:preparedQuery.id,result_ref:result.result_ref,columns:['amount']}],
+      values:[{name:'amount',kind:'cell',query_id:preparedQuery.id,column:'amount',row_index:0}],
+    },sdk);
+    assert.equal(preparation.bindings.amount,'42');
+    const source = '合成金额{{amount}}分。';
+    const text = '合成金额42分。'+preparation.required_suffix;
+    journal.appendMessage({role:'assistant',api:'openai-completions',provider:'local_mock',model:'task_demo',
+      content:[{type:'text',text:source}],stopReason:'stop',timestamp:Date.now(),
+      usage:{input:0,output:0,cacheRead:0,cacheWrite:0,totalTokens:0,cost:{input:0,output:0,cacheRead:0,cacheWrite:0,total:0}}});
+    ok(await h.internal('/internal/outputs',{...envelope(),chunk_seq:'1',text}));
+    ok(await h.request(`/assets/${answerSkill.id}/disable`,{
+      operation_id:randomUUID(),expected_version:answerSkill.version}));
+    const completion = await h.internal('/internal/finish',{...envelope(),commit_id:turn.output_id,
+      final_text:text,checkpoint:exportCheckpoint(journal), rendered_answer_binding:{
+        assistant:{entry_id:journal.getLeafId(),attempt_id:turn.attempt_id,stop_reason:'stop',tool_call_ids:[],
+          text_sha256:createHash('sha256').update(source).digest('hex'),first_chunk_seq:'1',last_chunk_seq:'1'},
+        source_text:source,prepared_sdk_tool_call_id:sdk,first_chunk_seq:'1',last_chunk_seq:'1',
+      }});
+    const stored = h.sql(`SELECT JSON_OBJECT('state',state) FROM assistant_outputs WHERE attempt_id='${turn.attempt_id}'`)[0].state;
+    answers.push([completion.status,completion.value.code ?? null,stored === 'committed']);
+    h.releaseRun(turn.run_id);
+  }
+  assert.deepEqual(answers, [[409,'stale_context',false],[200,null,true]],
+    '结果通知已精读的 Skill 停用后拒绝定稿，普通回答只见目录的 Skill 停用后继续定稿');
+  checks.push('查询结果通知与普通回答按实际精读 Skill 定稿，停用目录项不影响独立结果');
 }

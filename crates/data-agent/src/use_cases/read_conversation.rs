@@ -8,6 +8,8 @@ use serde_json::{Value, json};
 use sqlx::MySqlPool;
 use std::collections::{HashMap, HashSet};
 
+use super::context_authority::{self, AuthorityUse, CheckedTextResults};
+
 // 运行活动中文提示：与use_cases::data_tools收录的工具名一一映射；未知工具不猜文案。
 fn activity_label(tool: &str) -> Option<&'static str> {
     Some(match tool {
@@ -35,28 +37,184 @@ fn activity_label(tool: &str) -> Option<&'static str> {
     })
 }
 
-// 事件正文是会话所有者已保存的记录。状态投影只处理跨页的提交与替换。
-async fn output_states(
+async fn read_output_history(
     tx: &mut AppTx<'_>,
     cid: &str,
-    events: &mut [Value],
-) -> Result<HashMap<String, String>> {
+    events: &[Value],
+    loaded: Option<&[LoadedOutputRange]>,
+) -> Result<Vec<runtime::OutputHistory>> {
     let attempts = events
         .iter()
         .filter_map(|event| event["payload"]["attempt_id"].as_str().map(str::to_owned))
+        .chain(
+            loaded
+                .into_iter()
+                .flatten()
+                .map(|range| range.attempt_id.clone()),
+        )
         .collect::<HashSet<_>>()
         .into_iter()
         .collect::<Vec<_>>();
-    let states = runtime::output_states_in_tx(tx, cid, &attempts).await?;
-    for event in events {
-        if let Some(state) = event["payload"]["attempt_id"]
-            .as_str()
-            .and_then(|id| states.get(id))
-        {
-            event["payload"]["projection_state"] = json!(state);
+    runtime::read_output_history_in_tx(tx, cid, &attempts).await
+}
+
+fn bind_result_dependencies(output: &mut runtime::OutputHistory) {
+    context_authority::exclude_skill_previews(&mut output.delta_authority);
+    if let Ok(units) = &mut output.units {
+        for unit in units {
+            let mut authority = context_authority::empty();
+            authority["query_results"] = json!(unit.result_dependencies);
+            let merged = unit
+                .authorities
+                .iter()
+                .try_for_each(|source| context_authority::merge(&mut authority, source));
+            unit.authorities = vec![match merged {
+                Ok(()) => authority,
+                Err(_) => Value::Null,
+            }];
         }
     }
-    Ok(states)
+}
+
+async fn history_readable(
+    tx: &mut AppTx<'_>,
+    context: &AccessContext,
+    checked: &CheckedTextResults,
+    authority: &Value,
+) -> Result<bool> {
+    if !checked.allows(authority, true) {
+        return Ok(false);
+    }
+    match context_authority::validate_in_tx(tx, context, authority, AuthorityUse::Historical).await
+    {
+        Ok(_) => Ok(true),
+        Err(error)
+            if super::personal_assets::unavailable_text(&error)
+                || matches!(error.code, "invalid_evidence" | "stale_source") =>
+        {
+            Ok(false)
+        }
+        Err(error) => Err(error),
+    }
+}
+
+// 快照与 SSE 重放只投影原提交的来源边界。平台核权放在事务外，已提交的原文无需重建。
+async fn project_output_history(
+    pool: &MySqlPool,
+    context: &AccessContext,
+    cid: &str,
+    mut outputs: Vec<runtime::OutputHistory>,
+    events: &mut [Value],
+) -> Result<HashMap<String, String>> {
+    const RESTRICTED: &str = "部分内容因来源不可读而隐藏。";
+    if outputs.is_empty() {
+        return Ok(HashMap::new());
+    }
+    for output in &mut outputs {
+        bind_result_dependencies(output);
+    }
+    let authorities = outputs
+        .iter()
+        .flat_map(|output| {
+            output
+                .units
+                .iter()
+                .flatten()
+                .flat_map(|unit| unit.authorities.iter())
+                .chain(std::iter::once(&output.delta_authority))
+        })
+        .filter(|authority| context_authority::has_sources(authority))
+        .cloned()
+        .collect::<Vec<_>>();
+    let mut checked = CheckedTextResults::default();
+    checked
+        .include_output_history(pool, context, &authorities)
+        .await?;
+
+    let mut tx = AppTx::begin(pool).await?;
+    conversations::lock_conversation_in_tx(&mut tx, context, cid).await?;
+    let active = outputs
+        .iter()
+        .filter(|output| output.state != "committed")
+        .map(|output| output.attempt_id.clone())
+        .collect::<Vec<_>>();
+    let mut current = runtime::read_output_history_in_tx(&mut tx, cid, &active)
+        .await?
+        .into_iter()
+        .map(|output| (output.attempt_id.clone(), output))
+        .collect::<HashMap<_, _>>();
+    let mut projections = HashMap::new();
+    for mut output in outputs {
+        if output.state != "committed" {
+            output = current
+                .remove(&output.attempt_id)
+                .ok_or(Error::new("not_available"))?;
+            bind_result_dependencies(&mut output);
+        }
+        let mut displayed = Vec::new();
+        let mut chunks = Vec::new();
+        let mut all_readable = output.units.is_ok();
+        if let Ok(units) = output.units {
+            for unit in units {
+                let readable =
+                    history_readable(&mut tx, context, &checked, &unit.authorities[0]).await?;
+                all_readable &= readable;
+                displayed.push(if readable {
+                    unit.text
+                } else {
+                    RESTRICTED.to_owned()
+                });
+                if let Some(range) = unit.chunk_range {
+                    chunks.push((range, readable));
+                }
+            }
+        }
+        let delta_readable = output.state != "superseded"
+            && all_readable
+            && history_readable(&mut tx, context, &checked, &output.delta_authority).await?;
+        let body = if displayed.is_empty() {
+            RESTRICTED.to_owned()
+        } else {
+            displayed.join(runtime::ANSWER_SEPARATOR)
+        };
+        projections.insert(
+            output.attempt_id,
+            (output.state, body, chunks, delta_readable),
+        );
+    }
+    tx.commit().await?;
+    for event in events {
+        let Some(attempt) = event["payload"]["attempt_id"].as_str() else {
+            continue;
+        };
+        let Some((state, body, chunks, delta_readable)) = projections.get(attempt) else {
+            continue;
+        };
+        let kind = event["type"].as_str();
+        if kind == Some("assistant_delta") {
+            let sequence = epoch(
+                event["payload"]["chunk_seq"]
+                    .as_str()
+                    .ok_or(Error::new("invalid_input"))?,
+            )?;
+            let readable = chunks
+                .iter()
+                .find(|(range, _)| {
+                    range.attempt_id == attempt && (range.first..=range.last).contains(&sequence)
+                })
+                .map_or(*delta_readable, |(_, readable)| *readable);
+            if !readable {
+                event["payload"]["text"] = json!(RESTRICTED);
+            }
+        } else if kind == Some("assistant_committed") {
+            event["payload"]["text"] = json!(body);
+        }
+        event["payload"]["projection_state"] = json!(state);
+    }
+    Ok(projections
+        .into_iter()
+        .map(|(attempt, (state, ..))| (attempt, state))
+        .collect())
 }
 
 pub async fn list_history(
@@ -78,8 +236,12 @@ pub async fn read_events(
 ) -> Result<Vec<Value>> {
     let mut tx = AppTx::begin(pool).await?;
     let mut events = conversations::read_events_in_tx(&mut tx, context, cid, after).await?;
-    output_states(&mut tx, cid, &mut events).await?;
+    let outputs = read_output_history(&mut tx, cid, &events, None).await?;
     tx.commit().await?;
+    if !outputs.is_empty() {
+        let context = super::knowledge::catalog_context(context).await?;
+        project_output_history(pool, &context, cid, outputs, &mut events).await?;
+    }
     Ok(events)
 }
 
@@ -263,8 +425,9 @@ pub async fn read_page(
     let last = conversations::last_event_seq_in_tx(&mut tx, &conversation).await?;
     let tasks = task_states_in_tx(&mut tx, cid).await?;
     let runs = run_states_in_tx(&mut tx, context, cid).await?;
-    let states = output_states(&mut tx, cid, &mut events).await?;
+    let outputs = read_output_history(&mut tx, cid, &events, loaded).await?;
     tx.commit().await?;
+    let states = project_output_history(pool, context, cid, outputs, &mut events).await?;
     let mut cached_events = events.split_off(page_len).into_iter();
     let mut output_projections = Vec::new();
     for (range, count) in loaded_counts {

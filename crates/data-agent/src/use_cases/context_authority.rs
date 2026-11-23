@@ -6,6 +6,7 @@ use crate::{
 };
 use serde_json::{Value, json};
 use sqlx::MySqlPool;
+use std::borrow::Cow;
 use std::collections::{BTreeMap, BTreeSet, btree_map::Entry};
 
 const ASSETS: [&str; 3] = ["memories", "skills", "source_skills"];
@@ -100,8 +101,30 @@ pub fn merge(snapshot: &mut Value, dependencies: &Value) -> Result<()> {
     for reference in whole {
         push(snapshot, "knowledge_entries", reference)?;
     }
+    if let Some(previews) = dependencies.get("skill_preview_sources") {
+        merge_skill_preview_sources(snapshot, previews)?;
+    }
     snapshot["dependency_schema"] = json!(6);
     Ok(())
+}
+
+pub(super) fn merge_skill_preview_sources(snapshot: &mut Value, sources: &Value) -> Result<()> {
+    let preview = snapshot
+        .as_object_mut()
+        .ok_or(Error::new("stale_context"))?
+        .entry("skill_preview_sources")
+        .or_insert_with(empty);
+    merge(preview, sources)
+}
+
+pub(super) fn including_skill_previews(snapshot: &Value) -> Result<Cow<'_, Value>> {
+    if let Some(previews) = snapshot.get("skill_preview_sources") {
+        let mut authority = snapshot.clone();
+        merge(&mut authority, previews)?;
+        Ok(Cow::Owned(authority))
+    } else {
+        Ok(Cow::Borrowed(snapshot))
+    }
 }
 
 fn declared_results(sources: &Value) -> impl Iterator<Item = (&Value, &Value)> {
@@ -133,11 +156,20 @@ pub(super) fn historical_sources(snapshot: &Value, actual: &Value) -> Result<Val
 // 预览本文进入模型；所选 Skill 名称和范围同样属于其版本。
 pub(super) fn observe_workspace_previews(snapshot: &mut Value, workspace: &Value) -> Result<()> {
     let mut previews = empty();
-    for (list, bucket) in [("memories", "memories"), ("selected_skills", "skills")] {
-        for item in items(&workspace[list]) {
-            push(&mut previews, bucket, json!([item["id"], item["version"]]))?;
-            observe(&mut previews, &item["dependencies"])?;
-        }
+    for item in items(&workspace["memories"]) {
+        push(
+            &mut previews,
+            "memories",
+            json!([item["id"], item["version"]]),
+        )?;
+        observe(&mut previews, &item["dependencies"])?;
+    }
+    for item in items(&workspace["selected_skills"]) {
+        push(
+            &mut previews,
+            "skills",
+            json!([item["id"], item["version"]]),
+        )?;
     }
     if has_sources(&previews) {
         merge(snapshot, &previews)?;
@@ -299,6 +331,11 @@ pub(super) fn result_query_ids(snapshot: &Value) -> Result<Vec<String>> {
 #[derive(Default)]
 pub struct CheckedTextResults(BTreeMap<ResultKey, bool>);
 
+enum ResultProofFailure {
+    Propagate,
+    HideHistoricalOutput,
+}
+
 impl CheckedTextResults {
     pub async fn include(
         &mut self,
@@ -306,6 +343,40 @@ impl CheckedTextResults {
         ctx: &AccessContext,
         snapshots: &[Value],
         historical: bool,
+    ) -> Result<()> {
+        self.check_results(
+            pool,
+            ctx,
+            snapshots,
+            historical,
+            ResultProofFailure::Propagate,
+        )
+        .await
+    }
+
+    pub(super) async fn include_output_history(
+        &mut self,
+        pool: &MySqlPool,
+        ctx: &AccessContext,
+        snapshots: &[Value],
+    ) -> Result<()> {
+        self.check_results(
+            pool,
+            ctx,
+            snapshots,
+            true,
+            ResultProofFailure::HideHistoricalOutput,
+        )
+        .await
+    }
+
+    async fn check_results(
+        &mut self,
+        pool: &MySqlPool,
+        ctx: &AccessContext,
+        snapshots: &[Value],
+        historical: bool,
+        failure: ResultProofFailure,
     ) -> Result<()> {
         for key in snapshots
             .iter()
@@ -324,7 +395,9 @@ impl CheckedTextResults {
                 Ok(_) => true,
                 Err(error)
                     if super::personal_assets::unavailable_text(&error)
-                        || error.code == "invalid_evidence" =>
+                        || error.code == "invalid_evidence"
+                        || (matches!(failure, ResultProofFailure::HideHistoricalOutput)
+                            && matches!(error.code, "outcome_unknown" | "upstream_failed")) =>
                 {
                     false
                 }
@@ -429,12 +502,32 @@ pub async fn generated_text_authority_in_tx(tx: &mut AppTx<'_>, run: &str) -> Re
         .await?
         .filter(complete)
         .ok_or(Error::new("stale_context"))?;
-    let fields = snapshot
-        .as_object_mut()
-        .ok_or(Error::new("stale_context"))?;
-    fields.remove("checkpoint_reset_required");
-    fields.remove("active_skill_reads");
+    exclude_skill_previews(&mut snapshot);
     Ok(snapshot)
+}
+
+pub(super) fn exclude_skill_previews(snapshot: &mut Value) {
+    if let Value::Object(fields) = snapshot {
+        fields.remove("checkpoint_reset_required");
+        fields.remove("skill_preview_sources");
+        // 目录仍可用于检查点核权；答案只继承当前 Pi 分支实际读取的文件。
+        if let Some(reads) = fields.remove("active_skill_reads") {
+            fields.insert("skills".into(), reads);
+        }
+    }
+}
+
+pub(super) fn start_input_skill_reads(snapshot: &mut Value) -> Result<()> {
+    // 旧 Pi 分支仍保留上一轮工具正文；新输入只清本轮精读登记。
+    let reads = snapshot
+        .get("active_skill_reads")
+        .unwrap_or(&snapshot["skills"])
+        .clone();
+    for reference in items(&reads) {
+        push(snapshot, "source_skills", reference.clone())?;
+    }
+    snapshot["active_skill_reads"] = json!([]);
+    Ok(())
 }
 
 pub(super) async fn record_skill_read_in_tx(
@@ -443,7 +536,9 @@ pub(super) async fn record_skill_read_in_tx(
     mut authority: Value,
     asset: &Value,
 ) -> Result<()> {
-    authority["active_skill_reads"] = json!([[asset["id"], asset["version"]]]);
+    let reference = json!([asset["id"], asset["version"]]);
+    push(&mut authority, "source_skills", reference.clone())?;
+    authority["active_skill_reads"] = json!([reference]);
     merge_run_in_tx(tx, run, &authority).await
 }
 

@@ -72,11 +72,13 @@ pub(super) async fn assert_replay_in_tx(
             )?;
         }
     }
-    super::context_authority::merge(&mut authority, &skill_sources)?;
+    if has_skills {
+        super::context_authority::merge_skill_preview_sources(&mut authority, &skill_sources)?;
+    }
     let asset_refs = super::context_authority::validate_in_tx(
         tx,
         ctx,
-        &authority,
+        super::context_authority::including_skill_previews(&authority)?.as_ref(),
         super::context_authority::AuthorityUse::Text(checked),
     )
     .await?;

@@ -747,16 +747,24 @@ pub async fn task_condition_update_in_tx(
     }))
 }
 
-pub async fn output_states_in_tx(
+pub(super) async fn output_history_in_tx(
     tx: &mut AppTx<'_>,
     cid: &str,
     attempts: &[String],
-) -> Result<std::collections::HashMap<String, String>> {
+) -> Result<Vec<super::outputs::OutputHistoryRow>> {
     if attempts.is_empty() {
         return Ok(Default::default());
     }
     let mut sql = sqlx::QueryBuilder::<sqlx::MySql>::new(
-        "SELECT o.attempt_id,o.state FROM assistant_outputs o JOIN agent_runs r ON r.id=o.run_id WHERE r.conversation_id=",
+        "SELECT o.attempt_id,o.state,o.final_text,o.read_binding,r.authority_snapshot,
+         CASE WHEN o.state='committed' AND o.read_binding IS NULL THEN (
+           SELECT JSON_ARRAYAGG(JSON_OBJECT('authority',JSON_EXTRACT(t.answer_handoff,'$.authority'),
+             'answer',IF(t.tool_name='present_analysis_answer',JSON_EXTRACT(t.receipt,'$.data'),NULL)))
+           FROM tool_calls t WHERE t.conversation_id=r.conversation_id AND t.recovery_chain_id=r.recovery_chain_id
+             AND t.state='succeeded' AND (t.answer_part_sequence IS NOT NULL OR (t.tool_name='present_analysis_answer'
+             AND CAST(JSON_UNQUOTE(JSON_EXTRACT(t.receipt,'$.data.answer_text')) AS BINARY)=CAST(o.final_text AS BINARY)))
+         ) END AS legacy_sources
+         FROM assistant_outputs o JOIN agent_runs r ON r.id=o.run_id WHERE r.conversation_id=",
     );
     sql.push_bind(cid).push(" AND o.attempt_id IN (");
     let mut items = sql.separated(",");
@@ -767,6 +775,19 @@ pub async fn output_states_in_tx(
     let rows = sql.build().fetch_all(tx.connection()).await?;
     Ok(rows
         .into_iter()
-        .map(|row| (row.get("attempt_id"), row.get("state")))
+        .map(|row| super::outputs::OutputHistoryRow {
+            attempt_id: row.get("attempt_id"),
+            state: row.get("state"),
+            final_text: row.get("final_text"),
+            binding: row
+                .get::<Option<sqlx::types::Json<Value>>, _>("read_binding")
+                .map(|v| v.0),
+            authority: row
+                .get::<Option<sqlx::types::Json<Value>>, _>("authority_snapshot")
+                .map_or(Value::Null, |v| v.0),
+            legacy_sources: row
+                .get::<Option<sqlx::types::Json<Value>>, _>("legacy_sources")
+                .map(|v| v.0),
+        })
         .collect())
 }

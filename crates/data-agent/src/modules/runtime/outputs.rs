@@ -196,7 +196,7 @@ impl OutputChunkRange {
     }
 }
 
-const ANSWER_SEPARATOR: &str = "\n\n---\n\n";
+pub(crate) const ANSWER_SEPARATOR: &str = "\n\n---\n\n";
 
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -216,6 +216,122 @@ struct PersistedOutputReadUnit {
     answer_sdk_tool_call_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     prepared_sdk_tool_call_id: Option<String>,
+}
+
+pub(super) struct OutputHistoryRow {
+    pub attempt_id: String,
+    pub state: String,
+    pub final_text: Option<String>,
+    pub binding: Option<Value>,
+    pub authority: Value,
+    pub legacy_sources: Option<Value>,
+}
+
+pub struct OutputHistory {
+    pub attempt_id: String,
+    pub state: String,
+    pub units: Result<Vec<OutputReadUnit>>,
+    pub delta_authority: Value,
+}
+
+#[derive(Deserialize)]
+struct LegacyAnswerSource {
+    authority: Option<Value>,
+    answer: Option<SourceAnswer>,
+}
+
+impl OutputHistoryRow {
+    fn read_units(&mut self) -> Result<Vec<OutputReadUnit>> {
+        if self.state != "committed" {
+            return Ok(Vec::new());
+        }
+        let text = self
+            .final_text
+            .take()
+            .ok_or(Error::new("invalid_evidence"))?;
+        let Some(binding) = self.binding.take() else {
+            // 旧行只整份展示，复用原运行、冻结项和按原文匹配的成功答案依据。
+            let mut authorities = vec![self.authority.clone()];
+            let mut results = Vec::new();
+            if let Some(sources) = self.legacy_sources.take() {
+                let sources: Vec<LegacyAnswerSource> =
+                    serde_json::from_value(sources).map_err(|_| Error::new("invalid_evidence"))?;
+                for source in sources {
+                    authorities.extend(source.authority);
+                    if let Some(answer) = source.answer {
+                        results.extend(
+                            answer
+                                .sources
+                                .into_iter()
+                                .chain(answer.result_dependencies)
+                                .map(|source| (source.query_id, source.result_ref)),
+                        );
+                    }
+                }
+            }
+            return Ok(vec![OutputReadUnit {
+                text,
+                authorities,
+                result_dependencies: results,
+                chunk_range: None,
+                answer_sdk_tool_call_id: None,
+                prepared_sdk_tool_call_id: None,
+            }]);
+        };
+        let binding: PersistedOutputReadBinding =
+            serde_json::from_value(binding).map_err(|_| Error::new("invalid_evidence"))?;
+        if binding.schema != 1 || binding.units.is_empty() {
+            return Err(Error::new("invalid_evidence"));
+        }
+        let mut end = 0;
+        let mut units = Vec::new();
+        for unit in binding.units {
+            let separator = if units.is_empty() {
+                ""
+            } else {
+                ANSWER_SEPARATOR
+            };
+            if text.get(end..unit.start_byte) != Some(separator) || unit.authorities.is_empty() {
+                return Err(Error::new("invalid_evidence"));
+            }
+            let body = text
+                .get(unit.start_byte..unit.end_byte)
+                .ok_or(Error::new("invalid_evidence"))?;
+            end = unit.end_byte;
+            units.push(OutputReadUnit {
+                text: body.to_owned(),
+                authorities: unit.authorities,
+                result_dependencies: unit.result_dependencies,
+                chunk_range: unit.chunk_range,
+                answer_sdk_tool_call_id: unit.answer_sdk_tool_call_id,
+                prepared_sdk_tool_call_id: unit.prepared_sdk_tool_call_id,
+            });
+        }
+        if end != text.len() {
+            return Err(Error::new("invalid_evidence"));
+        }
+        Ok(units)
+    }
+}
+
+pub async fn read_output_history_in_tx(
+    tx: &mut AppTx<'_>,
+    cid: &str,
+    attempts: &[String],
+) -> Result<Vec<OutputHistory>> {
+    let rows = store::output_history_in_tx(tx, cid, attempts).await?;
+    Ok(rows
+        .into_iter()
+        .map(|mut row| {
+            let units = row.read_units();
+            OutputHistory {
+                attempt_id: row.attempt_id,
+                state: row.state,
+                units,
+                delta_authority: row.authority,
+            }
+        })
+        .collect())
 }
 
 /// 正文和来源边界在实际拼接时一起产生，读取不重新解释标题或Markdown。

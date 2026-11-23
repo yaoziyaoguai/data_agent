@@ -17,10 +17,11 @@ pub use model_calls::{
     reserve_maintenance_in_tx, reserve_model_call_in_tx, send_model_call_in_tx,
     settle_maintenance_in_tx,
 };
+pub(crate) use outputs::ANSWER_SEPARATOR;
 pub use outputs::{
-    FinalOutput, OutputChunkRange, OutputReadUnit, answer_read_unit, append_output_in_tx,
-    display_from_preparation, prepared_dependencies, read_bound_output_in_tx,
-    read_output_text_in_tx, read_rendered_in_tx, substitute,
+    FinalOutput, OutputChunkRange, OutputHistory, OutputReadUnit, answer_read_unit,
+    append_output_in_tx, display_from_preparation, prepared_dependencies, read_bound_output_in_tx,
+    read_output_history_in_tx, read_output_text_in_tx, read_rendered_in_tx, substitute,
 };
 pub use runs::{
     cancel_run_in_tx, commit_run_in_tx, interrupt_run_in_tx, lock_run_in_tx, start_run_in_tx,
@@ -54,6 +55,4 @@ pub use store::assert_tools_settled_in_tx;
 pub use store::{read_authority_in_tx, save_authority_in_tx};
 
 pub use store::budget_message_in_tx;
-pub use store::{
-    TaskConditionUpdate, delivery_task_refs_in_tx, output_states_in_tx, task_condition_update_in_tx,
-};
+pub use store::{TaskConditionUpdate, delivery_task_refs_in_tx, task_condition_update_in_tx};

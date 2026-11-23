@@ -115,8 +115,20 @@ try{
     ok(await h.internal('/internal/data/tool-calls',input));const receipt=ok(await h.internal('/internal/data/tools',input));
     manager.appendMessage({role:'toolResult',toolCallId:sdk,toolName:name,content:[{type:'text',text:JSON.stringify(receipt.data)}],details:receipt,isError:false,timestamp:Date.now()});return receipt.data;
   };
+  const finishSetup=async text=>{
+    ok(await h.internal('/internal/outputs',{run_id:run.run_id,lease_epoch:run.lease_epoch,chunk_seq:'1',text}));
+    ok(await h.internal('/internal/finish',{run_id:run.run_id,lease_epoch:run.lease_epoch,commit_id:run.output_id,final_text:text,
+      checkpoint:exportCheckpoint(manager,run.workspace_context.authority_revision,run.workspace_context.authority_snapshot)}));
+    h.releaseRun(run.run_id);
+  };
   const conditionsB=historyPermissions?{...conditions,source_limits:{allowed_sources:[{kind:'document',id:docB.id}],origin_message_ids:[run.message_id]}}:conditions;
   taskB=await invoke('update_analysis_task',{action:'create',goal:secondTitle,conditions:conditionsB,options:[]});
+  if(historyPermissions){
+    // 两个限源范围不能共用一条无份数绑定的前置答复，分别建立任务再验原通知的组合交付。
+    await finishSetup('合成乙任务和使用范围已保存。');
+    await h.resumeWorker();run=await h.capture(cid,'继续准备合成甲的金额草稿。');await h.pauseWorker();
+    manager.appendMessage({role:'user',content:run.text,timestamp:Date.now()});
+  }
   taskA=await invoke('update_analysis_task',{action:'create',goal:firstTitle,conditions,options:[]});
   query=await invoke('request_query',{task_id:taskA.task_id,condition_version:taskA.condition_version,
     sql:"SELECT '9007199254740993.01' AS amount",parameters:{},target_id:'synthetic-sqlite',summary:'合成精确金额',knowledge_refs:[],replaces_query_id:null});
@@ -131,11 +143,7 @@ try{
   const otherQuery=mixedOwner?await invoke('request_query',{task_id:taskB.task_id,condition_version:taskB.condition_version,
     sql:'SELECT 7 AS amount',parameters:{},target_id:'synthetic-sqlite',summary:'合成乙金额',knowledge_refs:[],replaces_query_id:null}):null;
   if(mixedOwner)await invoke('update_analysis_task',{action:'route',task_id:taskA.task_id,expected_version:taskA.condition_version,options:[]});
-  const prepared='合成查询草稿已准备。';
-  ok(await h.internal('/internal/outputs',{run_id:run.run_id,lease_epoch:run.lease_epoch,chunk_seq:'1',text:prepared}));
-  ok(await h.internal('/internal/finish',{run_id:run.run_id,lease_epoch:run.lease_epoch,commit_id:run.output_id,final_text:prepared,
-    checkpoint:exportCheckpoint(manager,run.workspace_context.authority_revision,run.workspace_context.authority_snapshot)}));
-  h.releaseRun(run.run_id);
+  await finishSetup('合成查询草稿已准备。');
   if(otherQuery){
     ok(await h.request('/queries/'+otherQuery.id+'/confirm',{operation_id:randomUUID(),draft_version:otherQuery.draft_version,condition_version:otherQuery.condition_version}));
     await h.resumeWorker();

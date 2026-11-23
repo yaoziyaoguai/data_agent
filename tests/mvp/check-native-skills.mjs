@@ -86,10 +86,29 @@ try {
  assert.ok(restoreCheckpoint('/synthetic/data-agent',saved).getBranch().some(v=>v.type==='message'&&v.message.role==='toolResult'&&v.message.toolName==='read'&&v.message.content[0].text.includes('合成步骤 1')));
  assert.ok(restoreCheckpoint('/synthetic/data-agent',saved).getBranch().some(v=>v.type==='message'&&v.message.role==='toolResult'&&v.message.toolCallId==='attachment-read-call'&&v.message.content[0].text.includes('合成附件步骤 1')));
  checks.push('read成功后丢回执，新Worker运行沿原operation与预算恢复，Pi接到原生分页文本而非原始JSON；700行同版附件可分段读取，已成功附件读取亦保留原operation/origin并恢复');
+ await h.resumeWorker();const continued=await h.capture(recovery,'继续用刚才已读的方法解释');await h.pauseWorker();
+ assert.equal(continued.checkpoint?.leaf_id,saved.leaf_id,'原 Skill 正文仍在沿用的 Pi 分支');
+ const continuedManager=restoreCheckpoint('/synthetic/data-agent',saved);
+ continuedManager.appendMessage({role:'user',content:continued.text,timestamp:Date.now()});
+ const continuedTransport=new RustTransport(continued,h.env.DATA_AGENT_API_URL,h.env.DATA_AGENT_INTERNAL_TOKEN);
+ const continuedTools=dataTools(continuedTransport,continuedManager,'');
+ const routed=await continuedTools.invokeRecorded('update_analysis_task','route-followup-skill',
+  {action:'route',task_id:null,expected_version:null,options:[]});
+ assert.equal(routed.data.error,undefined);
+ const continuedText='合成步骤 1 仍来自刚才读取的方法。';
+ ok(await h.internal('/internal/outputs',{...continuedTransport.binding(),chunk_seq:'1',text:continuedText}));
+ ok(await h.internal('/internal/finish',{...continuedTransport.binding(),commit_id:continued.output_id,
+  final_text:continuedText,checkpoint:exportCheckpoint(continuedManager)}));
+ h.releaseRun(continued.run_id);
+ assert.equal((await h.snapshot(recovery)).messages.find(m=>m.output_id===continued.output_id)?.text,continuedText);
  const changed=ok(await h.request('/assets',editInput(chosen,{body:'新方法'})));
  await h.resumeWorker();const nextRun=await h.capture(recovery,'继续新的问题');await h.pauseWorker();assert.equal(nextRun.checkpoint,null);assert.ok(!nextRun.workspace_context.selected_skills.some(v=>v.id===changed.id));
  checks.push('改版后下一轮重建旧Pi上下文，旧选择不自动升级或带入旧正文');
  ok(await h.request(`/conversations/${recovery}/messages/${nextRun.message_id}/withdraw`,{operation_id:randomUUID()}));h.releaseRun(nextRun.run_id);
+ ok(await h.request(`/assets/${changed.id}/disable`,{operation_id:randomUUID(),expected_version:changed.version}));
+ assert.equal((await h.snapshot(recovery)).messages.find(m=>m.output_id===continued.output_id)?.text,
+  '部分内容因来源不可读而隐藏。','跨轮未重复读取的实际 Skill 正文仍绑定原来源');
+ checks.push('Pi 续聊中保留实际精读 Skill 的来源，停用后隐藏使用过该方法的历史回答');
  RustTransport.prototype.post=originalPost;ModelRuntime.prototype.registerProvider=originalRegister;
  await checkSkillRuntimeBoundaries(h,checks);
  passed=true;console.log(JSON.stringify({passed,checks,officialRequests:0}));

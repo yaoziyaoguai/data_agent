@@ -386,7 +386,7 @@ pub(super) async fn search(
             .find(|asset| asset["id"] == preview["id"] && asset.get("skill_sources").is_some())
         {
             let skill = super::super::personal_assets::skill_authority(asset)?;
-            super::super::context_authority::merge(authority, &skill)?;
+            super::super::context_authority::merge_skill_preview_sources(authority, &skill)?;
         }
     }
     Ok(reply)
@@ -620,7 +620,7 @@ pub(super) async fn read_knowledge(
                     .ok_or(crate::types::Error::new("unavailable"))?,
             )
         {
-            super::super::context_authority::merge(authority, proof)?;
+            super::super::context_authority::merge_skill_preview_sources(authority, proof)?;
         }
     }
     contracts::validate("KnowledgeReadReply", &reply)?;

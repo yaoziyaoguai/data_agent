@@ -203,7 +203,7 @@ pub async fn finish_run(
     } else {
         delivered_result_authority_in_tx(&mut tx, context, &run).await?
     };
-    let read_skills = if !bound_answer && input.final_text.is_some() {
+    let read_skills = if input.final_text.is_some() && input.control_delivery_ref.is_none() {
         Some(
             super::personal_assets::read_skill_authority_in_tx(
                 &mut tx,
@@ -220,21 +220,19 @@ pub async fn finish_run(
     };
     let checked_answer = if bound_answer || delivered_results.is_some() || read_skills.is_some() {
         tx.commit().await?;
-        let checked = if bound_answer {
-            Some(super::task_answers::check_results(pool, context, &input.run_id).await?)
+        let mut checked = if bound_answer {
+            super::task_answers::check_results(pool, context, &input.run_id).await?
         } else {
-            // 普通正文核对本输入真正采用的结果和 Skill。
-            let mut results = super::context_authority::CheckedTextResults::default();
-            for snapshot in delivered_results.iter().chain(&read_skills) {
-                results
-                    .include(pool, context, std::slice::from_ref(snapshot), false)
-                    .await?;
-                if !results.allows(snapshot, false) {
-                    return Err(Error::new("stale_context"));
-                }
-            }
-            Some(results)
+            super::context_authority::CheckedTextResults::default()
         };
+        for snapshot in delivered_results.iter().chain(&read_skills) {
+            checked
+                .include(pool, context, std::slice::from_ref(snapshot), false)
+                .await?;
+            if !checked.allows(snapshot, false) {
+                return Err(Error::new("stale_context"));
+            }
+        }
         tx = AppTx::begin(pool).await?;
         conversation = conversations::lock_conversation_in_tx(&mut tx, context, &cid).await?;
         run = runtime::lock_run_in_tx(&mut tx, &input.run_id, &cid).await?;
@@ -242,13 +240,13 @@ pub async fn finish_run(
             tx.commit().await?;
             return Ok(receipt);
         }
-        if let (Some(authority), Some(results)) = (&read_skills, &checked) {
+        if let Some(authority) = &read_skills {
             super::personal_assets::assert_read_skill_authority_in_tx(
-                &mut tx, context, authority, results,
+                &mut tx, context, authority, &checked,
             )
             .await?;
         }
-        checked
+        Some(checked)
     } else {
         None
     };
@@ -258,7 +256,8 @@ pub async fn finish_run(
         &input.run_id,
         epoch(&input.lease_epoch)?,
     )?;
-    if std::env::var("DATA_AGENT_TOOLSET").as_deref() == Ok("data") {
+    let data_toolset = std::env::var("DATA_AGENT_TOOLSET").as_deref() == Ok("data");
+    if data_toolset {
         conversations::assert_routed_in_tx(&mut tx, &conversation, &run.message_id).await?;
     }
     // 已冻结的前项不能借省略新字段落回单答案提交；宿主控制交付有独立引用。
@@ -368,11 +367,12 @@ pub async fn finish_run(
         } else {
             runtime::OutputReadUnit {
                 text: final_text.to_owned(),
-                authorities: vec![
-                    runtime::read_authority_in_tx(&mut tx, &run.id)
+                authorities: vec![if data_toolset {
+                    super::context_authority::generated_text_authority_in_tx(&mut tx, &run.id)
                         .await?
-                        .unwrap_or(Value::Null),
-                ],
+                } else {
+                    super::context_authority::empty()
+                }],
                 result_dependencies: Vec::new(),
                 chunk_range: None,
                 answer_sdk_tool_call_id: None,
@@ -413,7 +413,7 @@ pub async fn finish_run(
         .await?;
     }
     runtime::commit_run_in_tx(&mut tx, &run, &input.commit_id, &fp, &output).await?;
-    if std::env::var("DATA_AGENT_TOOLSET").as_deref() == Ok("data") {
+    if data_toolset {
         // 无parts提交不能把范围不同的多个任务一起结清；范围确实一致才允许自然综合。
         // 宿主结果通知沿原query/condition推进，不要求它为历史任务补交parts。
         // 旧answer_sdk单份与rendered单份同属无parts提交，沿用同一范围门，不只豁免旧回执。

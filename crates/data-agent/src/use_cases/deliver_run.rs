@@ -80,8 +80,15 @@ async fn prepare_delivery(
                 .map(super::personal_assets::skill_authority),
         )
         .collect::<Result<Vec<_>>>()?;
-    if let Some(previous) = &checkpoint {
-        authorities.push(previous["authority_snapshot"].clone());
+    let checkpoint_authority = checkpoint
+        .as_ref()
+        .map(|previous| {
+            super::context_authority::including_skill_previews(&previous["authority_snapshot"])
+                .map(std::borrow::Cow::into_owned)
+        })
+        .transpose()?;
+    if let Some(previous) = &checkpoint_authority {
+        authorities.push(previous.clone());
     }
     let result_proofs = verify_checkpoint_results(pool, &context, &authorities).await?;
     let mut tx = AppTx::begin(pool).await?;
@@ -122,9 +129,9 @@ async fn prepare_delivery(
             .map(|v| super::source_limits::previous_task(&v["authority_snapshot"]))
             .transpose()?
             .flatten();
-        let checkpoint_sources = checkpoint.as_ref().and_then(|previous| {
-            delivery::CheckpointSources::deserialize(&previous["authority_snapshot"]).ok()
-        });
+        let checkpoint_sources = checkpoint_authority
+            .as_ref()
+            .and_then(|previous| delivery::CheckpointSources::deserialize(previous).ok());
         let result_objects = result_proofs
             .iter()
             .flat_map(|(_, result)| result.objects.iter().map(String::as_str));
@@ -230,12 +237,11 @@ async fn prepare_delivery(
             &result_proofs,
             &projection,
         )?;
-        let (invalidated, scope_changed) = if let Some(previous) = &checkpoint {
-            let invalidated = !text_results.allows(&previous["authority_snapshot"], false)
-                || previous["authority_snapshot"]["checkpoint_reset_required"] == true
+        let (invalidated, scope_changed) = if let Some(previous) = &checkpoint_authority {
+            let invalidated = !text_results.allows(previous, false)
+                || previous["checkpoint_reset_required"] == true
                 || !checkpoint_sources_available;
-            let scope_changed = projection
-                .scope_changed(&previous["authority_snapshot"], previous_scope.as_ref())?;
+            let scope_changed = projection.scope_changed(previous, previous_scope.as_ref())?;
             (invalidated, scope_changed)
         } else {
             (false, false)
@@ -271,7 +277,7 @@ async fn prepare_delivery(
             .map(|v| v["authority_snapshot"].clone())
             .unwrap_or_else(super::context_authority::empty);
         if !resume_same_input || checkpoint.is_none() {
-            snapshot["active_skill_reads"] = json!([]);
+            super::context_authority::start_input_skill_reads(&mut snapshot)?;
         }
         // 历史只由Pi恢复；完整原话可经read_conversation分页补读，不再注入300字副本。
         if invalidated || !projection.scope_known {
@@ -349,10 +355,12 @@ pub async fn read_delivery_checkpoint(
     let (context, cid, checkpoint) = delivery::legacy_checkpoint(pool, run_id, lease).await?;
     // 旧内联历史经由桥接请求交付，再核一次领取租约和当前可读来源。
     let context = &super::knowledge::catalog_context(&context).await?;
-    let snapshot = &checkpoint["authority_snapshot"];
-    let sources = delivery::CheckpointSources::deserialize(snapshot)
+    let snapshot =
+        super::context_authority::including_skill_previews(&checkpoint["authority_snapshot"])?;
+    let sources = delivery::CheckpointSources::deserialize(snapshot.as_ref())
         .map_err(|_| Error::new("stale_context"))?;
-    let proofs = verify_checkpoint_results(pool, context, std::slice::from_ref(snapshot)).await?;
+    let proofs =
+        verify_checkpoint_results(pool, context, std::slice::from_ref(snapshot.as_ref())).await?;
     let mut tx = AppTx::begin(pool).await?;
     let conversation = conversations::lock_conversation_in_tx(&mut tx, context, &cid).await?;
     conversations::assert_turn_in_tx(&tx, &conversation, run_id, lease)?;
@@ -362,7 +370,7 @@ pub async fn read_delivery_checkpoint(
     let heads = delivery::legacy_checkpoint_heads(&mut tx, context, &sources, objects)
         .await?
         .ok_or(Error::new("stale_context"))?;
-    if !available_results(&proofs, &heads).allows(snapshot, false) {
+    if !available_results(&proofs, &heads).allows(&snapshot, false) {
         return Err(Error::new("stale_context"));
     }
     tx.commit().await?;
@@ -653,7 +661,7 @@ fn observe_previews(
                 .as_str()
                 .ok_or(crate::types::Error::new("unavailable"))?,
         ) {
-            super::context_authority::merge(snapshot, authority)?;
+            super::context_authority::merge_skill_preview_sources(snapshot, authority)?;
         }
     }
     Ok(())

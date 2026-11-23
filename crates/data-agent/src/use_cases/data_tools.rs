@@ -659,7 +659,7 @@ async fn execute(pool: &MySqlPool, ctx: &AccessContext, input: Value) -> Result<
         super::context_authority::validate_in_tx(
             &mut tx,
             ctx,
-            &delivery_authority,
+            super::context_authority::including_skill_previews(&delivery_authority)?.as_ref(),
             super::context_authority::AuthorityUse::Text(&text_results),
         )
         .await
