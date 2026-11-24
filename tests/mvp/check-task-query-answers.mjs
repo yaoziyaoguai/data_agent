@@ -165,6 +165,8 @@ try{
       arguments:{template:'甲金额{{a}}，乙金额{{b}}。',sources:[{query_id:query.id,result_ref:a.results.result_ref,columns:['amount']},{query_id:otherQuery.id,result_ref:b.results.result_ref,columns:['amount']}],
         values:[{name:'a',kind:'cell',query_id:query.id,column:'amount',row_index:0},{name:'b',kind:'cell',query_id:otherQuery.id,column:'amount',row_index:0}]},
       checkpoint:exportCheckpoint(manager)};
+    // v2目录不再登记present；本例保留旧present回执形态，升级前的登记按实际运行预写后接回。
+    await h.legacyAnswerRegistration(run,answerInput.sdk_tool_call_id,answerInput.arguments);
     ok(await h.internal('/internal/data/tool-calls',answerInput));
     const answer=ok(await h.internal('/internal/data/tools',answerInput));
     assert.equal(answer.data.answer_text,'甲金额9007199254740993.01，乙金额7。');
@@ -191,6 +193,18 @@ try{
       h.sql(`UPDATE tool_calls SET receipt=CONVERT(0x${original.bytes} USING utf8mb4) WHERE ${where}`);
     }
     assert.deepEqual(h.sql(`SELECT JSON_OBJECT('bytes',HEX(CAST(receipt AS CHAR CHARACTER SET utf8mb4))) FROM tool_calls WHERE ${where}`)[0],original);
+    assert.deepEqual(ok(await h.internal('/internal/data/tools',answerInput)),answer,'成功旧答案回执按当前读权重放');
+    // 撤权后同一重放按实时结果权限拒绝且不带回执正文；恢复后仍回原回执。
+    const permissions=h.directory+'/platform/permissions.json';
+    try{
+      await writeFile(permissions,JSON.stringify({denied_query_users:['alice']}));
+      const revoked=await h.internal('/internal/data/tools',answerInput);
+      assert.equal(revoked.status,409);assert.equal(revoked.value.code,'stale_context');
+      assert.equal(revoked.value.data?.answer_text,undefined);
+    }finally{
+      await unlink(permissions);
+    }
+    assert.deepEqual(ok(await h.internal('/internal/data/tools',answerInput)),answer);
   }else{
   controller=new AbortController();
   if(mode==='normal'){

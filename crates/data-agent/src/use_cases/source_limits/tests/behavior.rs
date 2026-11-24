@@ -208,6 +208,23 @@ async fn raw_allowed_records_include_readable_heads_without_task_gate() {
     knowledge::seed_in_tx(&mut tx, &ctx, &json!({"objects":objects}))
         .await
         .unwrap();
+    // 封板后普通原文召回只含已索引超过10万字符的平台来源；三个可读来源在此都已索引。
+    let projection = |source: &'static str, chars: u64| retrieval::SourceProjection {
+        source_kind: "platform".into(),
+        source_id: source.into(),
+        space_id: ctx.space_id.clone(),
+        revision: 3,
+        collection_target: "raw-allowed".into(),
+        embedding_model: retrieval::embedding::SPEC.version.clone(),
+        segmentation_version: retrieval::source_segments::SEGMENTATION_VERSION_NUMBER,
+        applied_position: chars,
+        complete: true,
+    };
+    for source in [CURRENT, "raw-allowed-legacy", "raw-allowed-old-current"] {
+        retrieval::record_source_projection_in_tx(&mut tx, &projection(source, 100_001))
+            .await
+            .unwrap();
+    }
     let unscoped = KnowledgeSearchScope::default();
     let kind = |kind: &str| KnowledgeSearchScope {
         kinds: vec![kind.into()],
@@ -224,8 +241,8 @@ async fn raw_allowed_records_include_readable_heads_without_task_gate() {
     let legacy = ("platform", "raw-allowed-legacy");
     let old_current = ("platform", "raw-allowed-old-current");
     let active_ids = [DOCUMENT, FIELD, TABLE];
-    let open_sources = [doc, current, legacy, old_current];
-    let limited_sources = [doc, current, legacy];
+    let open_sources = [current, legacy, old_current];
+    let limited_sources = [current, legacy];
     let restricted = gate(&[
         doc,
         current,
@@ -235,11 +252,12 @@ async fn raw_allowed_records_include_readable_heads_without_task_gate() {
     ]);
     for (scope, gate, ids, sources) in [
         (&unscoped, None, Some(&active_ids[..]), &open_sources[..]),
-        (&documents, None, None, &[doc][..]),
+        // 文档摘录不进入普通原文召回，按源精读另走知识通道。
+        (&documents, None, None, &[][..]),
         (&table, None, None, &[current][..]),
         // 字段引用不授整篇平台原文权限。
         (&field, None, Some(&[FIELD][..]), &[][..]),
-        (&documents, Some(&restricted), None, &[doc][..]),
+        (&documents, Some(&restricted), None, &[][..]),
         (&unscoped, Some(&restricted), None, &limited_sources[..]),
     ] {
         let found = allowed_records_in_tx(&mut tx, &ctx, gate, scope)
@@ -255,6 +273,24 @@ async fn raw_allowed_records_include_readable_heads_without_task_gate() {
             assert_eq!(found.knowledge_ids, ids, "{scope:?}");
         }
     }
+    // 可读且在允许集内、但原文字符数不超过10万的平台来源同样不进入原文允许集。
+    let old_only = gate(&[old_current]);
+    let found = allowed_records_in_tx(&mut tx, &ctx, Some(&old_only), &unscoped)
+        .await
+        .unwrap();
+    let actual = found
+        .sources
+        .iter()
+        .map(|(kind, id)| (kind.as_str(), id.as_str()))
+        .collect::<Vec<_>>();
+    assert_eq!(actual, [old_current], "{:?}", found.sources);
+    retrieval::record_source_projection_in_tx(&mut tx, &projection(old_current.1, 100_000))
+        .await
+        .unwrap();
+    let found = allowed_records_in_tx(&mut tx, &ctx, Some(&gate(&[old_current])), &unscoped)
+        .await
+        .unwrap();
+    assert!(found.sources.is_empty(), "{:?}", found.sources);
     tx.commit().await.unwrap();
     pool.close().await;
 }

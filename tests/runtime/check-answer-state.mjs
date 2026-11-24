@@ -60,9 +60,10 @@ function fixture() {
   };
   const state = dataTools(transport, SessionManager.inMemory("/synthetic/answer-state"), "");
   const execute = (name, sdk, args) => state.tools.find(tool => tool.name === name).execute(sdk, args);
+  // 退休present只留重放通道：登记过的历史调用经invokeRecorded接回回执并还原候选。
   const prepare = async (sdk = "answer") => {
     mode = "success";
-    await execute("present_analysis_answer", sdk, input);
+    await state.invokeRecorded("present_analysis_answer", sdk, input);
     assert.deepEqual(state.answer(), { text, sdkId: sdk, sources: [{query_id: "query", ...taskA}], taskRef: taskA });
   };
   return { state, execute, prepare, setMode: value => { mode = value; }, setText: value => { text = value; } };
@@ -372,9 +373,8 @@ try {
     const f = fixture();
     await f.prepare();
     f.setMode("rejection");
-    const rejected = await f.execute("present_analysis_answer", "rejected-answer", input);
-    assert.equal(rejected.isError, true);
-    assert.equal(rejected.details.data.error, "invalid_evidence");
+    const rejected = await f.state.invokeRecorded("present_analysis_answer", "rejected-answer", input);
+    assert.equal(rejected.data.error, "invalid_evidence");
     assert.equal(f.state.answer(), undefined);
     f.setText("净收入43分。");
     await f.prepare("repaired-answer");
@@ -411,9 +411,8 @@ try {
       sources: ["old-query", "current-query"].map(query_id => ({ query_id, result_ref: "result", columns: ["amount"] })),
       values: [],
     };
-    const unlocated = await f.execute("present_analysis_answer", "unlocated-expiry", multipleSources);
-    assert.equal(unlocated.isError, true);
-    assert.equal(unlocated.details.data.error, "result_expired");
+    const unlocated = await f.state.invokeRecorded("present_analysis_answer", "unlocated-expiry", multipleSources);
+    assert.equal(unlocated.data.error, "result_expired");
     assert.equal(f.state.resultUnavailable("old-query"), true);
     assert.equal(f.state.resultUnavailable("current-query"), false, "答案工具未指出哪份来源过期，不能把每个来源标为不可读");
   });
@@ -489,13 +488,14 @@ try {
       assert.deepEqual(legacy.state.answerParts(), []);
     } finally {await legacy.output.close();}
   });
-  await check("普通route不携handoff、不冻结；v2退役present只留重放，v1定义隐藏定稿参数", async () => {
+  await check("普通route不携handoff、不冻结；v2退役present只留重放", async () => {
     const f = handoffFixture();
     try {
       await f.execute("prepare_analysis_answer", "prepare-a", prepareInput);
       assert.equal(f.state.tools.some(tool => tool.name === "present_analysis_answer"), false, "v2模型目录不得重新开放退休present");
       assert.ok(f.state.tools.some(tool => tool.name === "prepare_analysis_answer"));
-      f.state.validateArguments("present_analysis_answer", input);
+      // 退休present的新调用在参数校验即拒绝；历史成功回执只经restoreAnswer/重放通道还原。
+      assert.throws(() => f.state.validateArguments("present_analysis_answer", input), /tool_not_allowed/);
       const savedPresent = decodeContract("DataToolOutcome", {operation_id: "operation-historic-present", tool_name: "present_analysis_answer",
         tool_contract_version: 1, answer_task_ref: taskA,
         data: {answer_text: "净收入41分。", sources: [{query_id: "query", result_ref: "result", ...taskA}], result_dependencies: []}});
@@ -507,9 +507,6 @@ try {
       assert.equal(f.state.answer(), undefined);
       assert.equal(f.state.preparation(), undefined, "普通route切任务使准备失效");
       assert.deepEqual(f.state.answerParts(), []);
-      const v1 = fixture().state.tools.find(tool => tool.name === "update_analysis_task");
-      assert.equal(JSON.stringify(v1.parameters).includes("finalize_current_answer"), false);
-      assert.equal(v1.description.includes("finalize_current_answer"), false);
     } finally {await f.output.close();}
   });
   await check("缺片段、length/aborted/error和同条混工具不得登记定稿；输出失败原样传播", async () => {

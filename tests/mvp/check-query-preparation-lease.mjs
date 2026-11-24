@@ -42,7 +42,8 @@ const queryProxy=createServer(async(request,response)=>{
 try{
   const cid=await h.create();await h.resumeWorker();run=await h.capture(cid,'明确执行这个独立合成查询，慢准备仍沿原授权。');await h.pauseWorker();
   const original=run;
-  const task=await tool('update_analysis_task',{action:'create',goal:'慢准备后仍只提交一次',conditions:{time_start:null,time_end:null,timezone:'UTC',metric:null,channel:null,group_by:[],filters:[],knowledge_refs:[],notes:''},options:[]});
+  // 任务须显式声明来源范围（null为不限），草稿登记才视作范围已知。
+  const task=await tool('update_analysis_task',{action:'create',goal:'慢准备后仍只提交一次',conditions:{time_start:null,time_end:null,timezone:'UTC',metric:null,channel:null,group_by:[],filters:[],knowledge_refs:[],notes:'',source_limits:null},options:[]});
   query=await tool('request_query',{task_id:task.task_id,condition_version:task.condition_version,sql:'SELECT 17 AS sample_value',parameters:{},target_id:'synthetic-sqlite',summary:'合成慢准备查询',knowledge_refs:[],replaces_query_id:null});
   await tool('execute_query',{query_id:query.id,draft_version:query.draft_version,condition_version:query.condition_version,instruction_quote:run.text});
   await finish();evidence.authorized=state();

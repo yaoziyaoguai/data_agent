@@ -12,8 +12,9 @@ const h = await harness({capture:true,profile,env:{DATA_AGENT_LEASE_MS:'120000',
 const manager = SessionManager.inMemory('/synthetic/data-agent');
 const checks = [];
 const draftBoundary=process.argv.includes('--draft-boundary');
-let run, passed = false, platformFixture, releaseValidation, lockHolder, targetVersion;
-const conditions = {time_start:'2026-01-01T00:00:00Z',time_end:'2026-02-01T00:00:00Z',timezone:'UTC',metric:'net_revenue',channel:null,group_by:[],filters:[],knowledge_refs:[],notes:''};
+let run, passed = false, platformFixture, releaseValidation, lockHolder, targetVersion, catalogAccess;
+// 任务须显式声明来源范围（null为不限），草稿登记才视作范围已知。
+const conditions = {time_start:'2026-01-01T00:00:00Z',time_end:'2026-02-01T00:00:00Z',timezone:'UTC',metric:'net_revenue',channel:null,group_by:[],filters:[],knowledge_refs:[],notes:'',source_limits:null};
 const checkpoint = () => exportCheckpoint(manager,run.workspace_context.authority_revision,run.workspace_context.authority_snapshot);
 const invoke = async (tool_name,args) => {
   const input={run_id:run.run_id,lease_epoch:run.lease_epoch,sdk_tool_call_id:randomUUID(),tool_name,arguments:args,checkpoint:checkpoint()};
@@ -42,6 +43,10 @@ const pausePlatform=async()=>{
     assert.equal(response.status,200,'屏障前先查证真实合成平台结果');
     resultAuthorities.set(authorityKey(body),await response.json());
   }
+  // 数据工具执行、查询读取和确认都会先查证平台目录访问；停平台前记下同身份的真实合成平台回执。
+  const access=await fetch(h.env.DATA_AGENT_PLATFORM_URL+'/catalog-access',{method:'POST',headers:{authorization:'Bearer '+h.env.DATA_AGENT_INTERNAL_TOKEN,'content-type':'application/json'},body:JSON.stringify({user_id:'alice',space_id:'demo'})});
+  assert.equal(access.status,200,'屏障前先查证真实合成平台目录访问');
+  catalogAccess=await access.json();
   await h.pausePlatform();
 };
 const platformServer=handler=>createServer(async(req,res)=>{
@@ -53,6 +58,19 @@ const platformServer=handler=>createServer(async(req,res)=>{
     const authority=resultAuthorities.get(authorityKey(body));
     res.writeHead(authority?200:404,{'content-type':'application/json'});
     res.end(JSON.stringify(authority??{code:'not_available'}));
+    return;
+  }
+  if(req.url==='/catalog-access'){
+    // 目录查证来自每个数据入口，不是被测的校验或提交；只回放同身份的真实合成平台回执。
+    const same=body.user_id===catalogAccess.user_id&&body.space_id===catalogAccess.space_id;
+    res.writeHead(same?200:404,{'content-type':'application/json'});
+    res.end(JSON.stringify(same?catalogAccess:{code:'not_available'}));
+    return;
+  }
+  // 首次确认先带owner核对当前SQL表权限；草稿校验不带owner，仍由各屏障截住。
+  if(req.url==='/validate'&&body.owner_id!==undefined){
+    res.writeHead(200,{'content-type':'application/json'});
+    res.end(JSON.stringify({state:'passed',target_id:'synthetic-sqlite',target_version:targetVersion,dialect:'SQLite',read_only:true}));
     return;
   }
   await handler(req,res,body);
@@ -87,7 +105,7 @@ try {
     h.sql(`UPDATE background_jobs SET state='failed' WHERE message_id='${failed.message_id}';
       UPDATE conversation_messages SET disposition='failed' WHERE id='${failed.message_id}'`);
     await start(cid);
-    const task=await update({conditions:{...conditions,source_limits:null}});
+    const task=await update({});
     const prepared=await draft(task,'SELECT 17 AS amount');
     assert.equal(prepared.execution_state,'not_submitted');assert.equal(prepared.confirmation_state,'awaiting_confirmation');
     const refused=await confirm(prepared);assert.equal(refused.status,409,JSON.stringify(refused.value));
@@ -142,7 +160,9 @@ try {
   assert.equal((await h.internal('/internal/data/tool-rejections',replayInput)).value.code,'not_available');
   const concurrentRevisions=await Promise.all(Array.from({length:process.argv.includes('--revision-interleaving-probe')?1:24},()=>h.internal('/internal/data/tools',replayInput)));
   assert.ok(concurrentRevisions.every(r=>r.status===200),JSON.stringify(concurrentRevisions.filter(r=>r.status!==200)));
-  for(const receipt of concurrentRevisions)assert.deepEqual(receipt.value,concurrentRevisions[0].value);
+  // 重放按合同剥离当前通知覆盖事实（registration.rs replay_receipt），其余回执逐字一致。
+  const {frozen_notification_covered: _creatorCoverage, ...concurrentOriginal} = concurrentRevisions[0].value;
+  for(const {value} of concurrentRevisions){const {frozen_notification_covered: _replayCoverage, ...replayed} = value;assert.deepEqual(replayed,concurrentOriginal);}
   assert.equal((await h.internal('/internal/data/tool-rejections',replayInput)).value.code,'not_available');
   assert.equal(h.sql(`SELECT JSON_OBJECT('n',COUNT(*)) FROM query_requests WHERE replaces_query_id='${replayAncestor.id}'`)[0].n,1);
   await finish();
@@ -168,7 +188,10 @@ try {
   // InnoDB锁队列使B先读空回执，再由已排队A保存，B第二事务才取得锁。
   await releaseConversation();
   const [firstReceipt,retransmittedReceipt]=await Promise.all([firstRevision,retransmittedRevision]);
-  assert.equal(firstReceipt.status,200);assert.equal(retransmittedReceipt.status,200,JSON.stringify(retransmittedReceipt.value));assert.deepEqual(retransmittedReceipt.value,firstReceipt.value);
+  assert.equal(firstReceipt.status,200);assert.equal(retransmittedReceipt.status,200,JSON.stringify(retransmittedReceipt.value));
+  const {frozen_notification_covered: _firstCoverage, ...interleavedOriginal} = firstReceipt.value;
+  const {frozen_notification_covered: _retransmittedCoverage, ...retransmitted} = retransmittedReceipt.value;
+  assert.deepEqual(retransmitted,interleavedOriginal);
   assert.equal(validationCount,1,'B在第二事务接回回执，不再请求平台检查');
   assert.equal(h.sql(`SELECT JSON_OBJECT('n',COUNT(*)) FROM query_requests WHERE replaces_query_id='${interleavedAncestor.id}'`)[0].n,1);
   await finish();await new Promise(r=>platformFixture.close(r));platformFixture=undefined;await h.resumePlatform();
@@ -298,9 +321,13 @@ try {
   assert.deepEqual(simultaneousResults.map(r=>r.status).sort(),[200,409]);
   assert.equal(simultaneousResults.find(r=>r.status===409).value.code,'idempotency_conflict');
   const changed=await h.request('/assets',{operation_id:randomUUID(),id:a.id,expected_version:a.version,kind:'skill',name:a.name,body:'修订后的方法',scope:a.scope,verified:false,source_text:'本人修订',dependencies:[]});assert.equal(changed.status,200);
-  assert.deepEqual((await h.request(`/conversations/${cid}/skill-selections`,selection)).value,chosen.value);
+  // 原选用回执保持成功（身份与selected不变），但已改版Skill的过时正文不再交付。
+  const replayedSelection=(await h.request(`/conversations/${cid}/skill-selections`,selection)).value;
+  assert.equal(replayedSelection.id,chosen.value.id);assert.equal(replayedSelection.selected,true);
+  assert.equal(replayedSelection.text_unavailable,true);assert.equal(replayedSelection.body,'');
+  assert.equal(JSON.stringify(replayedSelection).includes('合成分析方法'),false);
   await start(cid);assert.equal(run.workspace_context.selected_skills.length,0);await finish();
-  checks.push({id:'IA09',name:'同操作同参返回原回执，跨资产/会话异参拒绝；重传旧回执不重新激活已改版Skill',passed:true});
+  checks.push({id:'IA09',name:'同操作同参返回原回执，跨资产/会话异参拒绝；重传旧回执不重新激活已改版Skill，过时正文不回流',passed:true});
 
   await pausePlatform();
   let submits=0,lookups=0,mode='reject';

@@ -232,7 +232,8 @@ try {
       frozen_natural_tail_two_units_one_task:true,evidence_saved_after_freeze:true});
   }
   if (!sameTaskOnly) {
-  // 控制正文只采用自身可读字段；成功重放抑制失效投影须撤下旧候选，原持久回执不改写。
+  // 控制正文只采用本人任务的可读字段；来源停用不隐藏本人任务文字，成功重放保持仍有效的
+  // 控制候选，原持久回执不改写。失效投影的撤下另由下方任务改版场景覆盖。
   {
     const marker = "SYNTHETIC_REVOKED_CONTROL_TEXT";
     const doc = ok(await h.request("/knowledge", { operation_id: randomUUID(), kind: "document",
@@ -264,41 +265,31 @@ try {
     projected.acceptReceipt({operation_id: "synthetic-rejected-control", tool_name: "request_query", data: {error: "version_conflict"}, control_delivery: null});
     assert.equal(projected.control().fingerprint, original.control_delivery.fingerprint, "失败回执不能改变控制候选");
     projected.acceptReceipt(replay);
-    assert.equal(projected.control(), null, "Node成功回执必须撤下旧控制候选");
-    assert.equal(JSON.stringify(replay).includes(marker), false, "失效文字不能经控制旁路泄漏");
-    assert.equal(replay.control_delivery, null, "成功回执必须显式null撤下旧控制候选");
-    const rejected = await h.internal("/internal/finish", { ...binding(), commit_id: run.output_id,
+    assert.equal(projected.control().fingerprint, original.control_delivery.fingerprint,
+      "任务版本未变时成功重放保持原控制候选");
+    assert.deepEqual(replay.control_delivery, original.control_delivery, "本人任务已保存的问题与选项不随来源停用隐藏");
+    ok(await h.internal("/internal/finish", { ...binding(), commit_id: run.output_id,
       final_text: original.control_delivery.text, control_delivery_ref: { fingerprint: original.control_delivery.fingerprint },
-      checkpoint: checkpoint() });
-    assert.equal(rejected.status, 409, JSON.stringify(rejected.value));
-    assert.equal(rejected.value.code, "stale_context");
+      checkpoint: checkpoint() }));
     const snapshot = await h.snapshot(cid);
-    assert.equal(snapshot.messages.some(message => message.role === "assistant" && message.committed), false);
+    assert.equal(snapshot.messages.find(message => message.role === "assistant" && message.committed)?.text,
+      original.control_delivery.text, "已保存的问题与选项经控制正文正式交付");
     assert.equal(snapshot.tasks.find(item => item.id === task.task_id).phase, "waiting_clarification");
-    assert.deepEqual(h.sql(`SELECT JSON_OBJECT('commit',commit_id,'message',m.disposition) FROM agent_runs r
-      JOIN conversation_messages m ON m.id=r.message_id WHERE r.id=${quote(run.run_id)}`)[0],
-      { commit: null, message: "pending" });
-    const stored = h.sql(`SELECT receipt FROM tool_calls WHERE operation_id=${quote(original.operation_id)}`)[0];
-    assert.deepEqual(stored, original, "当前可见投影不能覆盖原成功存储");
-    // 结束被拒绝的旧输入；下一轮仍按字段保护读取持久等待状态。
-    h.sql(`UPDATE agent_runs SET state='failed' WHERE id=${quote(run.run_id)};
-      UPDATE conversations SET lease_owner=NULL,lease_until=NULL WHERE id=${quote(cid)};
-      UPDATE background_jobs SET state='failed',lease_owner=NULL,lease_until=NULL WHERE message_id=${quote(run.message_id)};
-      UPDATE conversation_messages SET disposition='failed' WHERE id=${quote(run.message_id)};`);
+    assert.deepEqual(h.sql(`SELECT receipt FROM tool_calls WHERE operation_id=${quote(original.operation_id)}`)[0], original,
+      "重放与正式提交不能改写原成功存储");
+    // 下一轮仍读到本人任务的持久等待状态。
     h.releaseRun(run.run_id);
     await begin(cid, "继续核对可读的任务状态。");
-    assert.equal(JSON.stringify(run.workspace_context).includes(marker), false, "启动工作区也不能绕过字段保护");
     const safeInput = { ...binding(), sdk_tool_call_id: randomUUID(), tool_name: "update_analysis_task",
       arguments: { action: "route", task_id: task.task_id, expected_version: original.data.condition_version, options: [] }, checkpoint: checkpoint() };
     ok(await h.internal("/internal/data/tool-calls", safeInput));
     const safe = ok(await h.internal("/internal/data/tools", safeInput));
-    assert.ok(safe.control_delivery, "隐去标题和问题后仍可确认持久等待事实");
-    assert.equal(JSON.stringify(safe).includes(marker), false);
+    assert.ok(safe.control_delivery.text.includes(marker + "采用哪个口径？"), "下一轮仍确认已保存的等待问题");
     ok(await h.internal("/internal/finish", { ...binding(), commit_id: run.output_id,
       final_text: safe.control_delivery.text, control_delivery_ref: { fingerprint: safe.control_delivery.fingerprint }, checkpoint: checkpoint() }));
     h.releaseRun(run.run_id);
-    checks.push({ case: "control-text-authority", rejected: "stale_context", replay_clears_control: true,
-      legal_control_after_protection: true, unrelated_source_ignored: true });
+    checks.push({ case: "control-text-authority", task_text_kept_after_source_disable: true,
+      replay_keeps_control: true, control_committed: true, unrelated_source_ignored: true });
   }
 
   // 旧控制回执没有文字authority；任务改名后不能用新goal来源为旧正文作保。
@@ -489,7 +480,8 @@ try {
       plan = {label: restart ? "control-restart-input" : "control-next-input", index: 0, steps: [
         {name: "update_analysis_task", args: {action: "route", task_id: task.task_id, expected_version: task.condition_version, options: []}, observe: body => {
           const input = JSON.stringify(body.messages);
-          assert.ok(!input.includes(fabricated), "新输入归属前也不得发送被替代草稿");
+          // 本人已提交的自然正文不随新输入的归属状态擦除，执行事实另由控制快照核对。
+          assert.equal(input.includes(fabricated), true, "新输入归属前同样保留已提交的自然正文");
           assert.ok(input.includes(task.task_id), "来源未裁决时仍保留route所需任务控制身份");
         }},
         step,

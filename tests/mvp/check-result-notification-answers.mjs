@@ -24,7 +24,7 @@ const lastReply = body => {
   return JSON.parse(message.content);
 };
 let h, run, manager, plan, protocolFailure, passed = false;
-let calls = 0, interrupted = false, renderFreeze = false, legacyPresent = false;
+let calls = 0, interrupted = false, renderFreeze = false;
 let controller, frozenBaseline, frozenPrepareSdk;
 const checks = [];
 const requests = [];
@@ -38,9 +38,6 @@ RustTransport.prototype.post = async function(path, name, input, ...rest) {
   // 渲染冻结中断：定稿route登记落账后立即中断，恢复只能沿原登记接回。
   const freezeRendered = renderFreeze && !interrupted && path === "/internal/data/tool-calls"
     && input.arguments?.finalize_current_answer === true;
-  // 旧present中断：v1登记落账后中断，恢复在升级后的v2目录下回放。
-  const interruptPresent = legacyPresent && !interrupted && path === "/internal/data/tool-calls"
-    && input.tool_name === "present_analysis_answer";
   const receipt = await originalPost.call(this, path, name, input, ...rest);
   if (receipt.frozen_notification_covered !== undefined) coverageReceipts.push({
     run_id: input.run_id, finalized: input.arguments?.finalize_current_answer === true,
@@ -54,10 +51,6 @@ RustTransport.prototype.post = async function(path, name, input, ...rest) {
     frozenBaseline = h.sql(`SELECT JSON_OBJECT('bytes',HEX(CAST(receipt AS CHAR CHARACTER SET utf8mb4)),'origin',origin_run_id,'operation',operation_id) FROM tool_calls WHERE conversation_id=${quote(run.conversation_id)} AND sdk_tool_call_id=${quote(frozenPrepareSdk)}`)[0];
     interrupted = true; controller.abort();
     throw new Error("synthetic_rendered_freeze_interrupted");
-  }
-  if (interruptPresent) {
-    interrupted = true; controller.abort();
-    throw new Error("synthetic_present_interrupted");
   }
   return receipt;
 };
@@ -191,9 +184,15 @@ try {
       { name: "get_query", args: { query_id: query.id }, observe: body => assert.equal(lastReply(body).task_id, task.task_id) },
       { text: example.answer, observe: body => {
         const result = lastReply(body);
-        assert.equal(result.query.execution_state, example.state);
-        if (example.label === "unavailable") assert.equal(result.results.error, "forbidden");
-        else assert.equal(result.results, null);
+        if (example.label === "unavailable") {
+          // 单表无读权时整调用返回拒绝回执，不携带查询状态或结果正文。
+          assert.equal(result.error, "forbidden");
+          assert.equal(result.outcome, "rejected");
+          assert.ok(!("query" in result) && !("results" in result), "撤权回执不得携带查询或结果");
+        } else {
+          assert.equal(result.query.execution_state, example.state);
+          assert.equal(result.results, null);
+        }
         if (example.label === "failed") assert.match(result.query.error_details.message, /overflow/);
       } },
     ] };
@@ -241,16 +240,25 @@ try {
     const extraRefs = scopeDocument ? [{ object_id: scopeDocument.id, version: scopeDocument.version, path: 'body' }] : [];
     const cid = await h.create();
     await h.resumeWorker();
-    attach(await h.capture(cid, '准备合成金额查询，随后确认执行。' + (scopeReachability ? 'A仅用合成平台，C另可使用合成C独立金额说明。' : '')));
+    attach(await h.capture(cid, '准备合成金额查询，随后确认执行。' + (scopeReachability ? 'A仅用合成平台。' : '')));
     await h.pauseWorker();
     const taskA = await tool("update_analysis_task", { action: "create", goal: "核对合成金额", conditions: scopeReachability
       ? { ...conditions, source_limits: { allowed_sources: [{ kind: 'platform', id: 'synthetic-sqlite' }], origin_message_ids: [run.message_id] } } : conditions, options: [] });
     const query = await tool("request_query", { task_id: taskA.task_id, condition_version: taskA.condition_version,
       sql: "SELECT 99 AS value", parameters: {}, target_id: "synthetic-sqlite", summary: "合成旧条件金额", knowledge_refs: [], replaces_query_id: null });
+    const draftText = "合成查询草稿已准备，尚未执行。";
+    // 限源的A与不限源的C分两轮建稿：自然草稿正文不能同时跨两种来源范围结算。
+    if (scopeReachability) {
+      ok(await h.internal("/internal/outputs", { ...binding(), chunk_seq: "1", text: draftText }));
+      ok(await h.internal("/internal/finish", { ...binding(), commit_id: run.output_id, final_text: draftText, checkpoint: checkpoint() }));
+      h.releaseRun(run.run_id);
+      await h.resumeWorker();
+      attach(await h.capture(cid, '准备仅作来源的独立金额查询，随后确认执行。C另可使用合成C独立金额说明。'));
+      await h.pauseWorker();
+    }
     const taskC = await tool("update_analysis_task", { action: "create", goal: "仅作来源的独立金额", conditions, options: [] });
     const otherQuery = await tool("request_query", { task_id: taskC.task_id, condition_version: taskC.condition_version,
       sql: "SELECT 17 AS value", parameters: {}, target_id: "synthetic-sqlite", summary: "合成独立来源金额", knowledge_refs: extraRefs, replaces_query_id: null });
-    const draftText = "合成查询草稿已准备，尚未执行。";
     ok(await h.internal("/internal/outputs", { ...binding(), chunk_seq: "1", text: draftText }));
     ok(await h.internal("/internal/finish", { ...binding(), commit_id: run.output_id, final_text: draftText, checkpoint: checkpoint() }));
     h.releaseRun(run.run_id);
@@ -548,7 +556,8 @@ try {
     h.releaseRun(run.run_id);
   }
 
-  // 旧present恢复：v1登记落账后被中断，恢复前升级v2目录，pending调用仍沿原登记回放并提交。
+  // 旧present恢复：升级前已登记的present落账后被中断；v2目录不再提供该工具，
+  // pending调用仍沿原登记接回并提交，不追加模型回合。
   if (enabled("legacy-present-recovery")) {
     const cid = await h.create();
     await h.resumeWorker();
@@ -574,22 +583,32 @@ try {
     const pArgs = { template: "旧回执恢复金额{{value}}。",
       sources: [{ query_id: query.id, result_ref: null, columns: ["value"] }],
       values: [{ name: "value", kind: "cell", query_id: query.id, column: "value", row_index: 0 }] };
-    // v1的present回执本身是完整答案：中断登记、恢复回放后无需再补正文模型调用。
-    plan = { label: "legacy-present-recovery", index: 0, steps: [
-      { name: "update_analysis_task", args: { action: "route", task_id: taskA.task_id,
-        expected_version: taskA.condition_version, options: [] } },
-      { name: "get_query", args: { query_id: query.id } },
-      { name: "present_analysis_answer", args: pArgs, observe: body => {
-        pArgs.sources[0].result_ref = lastReply(body).results.result_ref;
-      } },
-    ] };
-    protocolFailure = null;
-    legacyPresent = true; interrupted = false; controller = new AbortController();
-    await assert.rejects(deliver(run, h.env.DATA_AGENT_API_URL, h.env.DATA_AGENT_INTERNAL_TOKEN, "", controller.signal),
-      /synthetic_present_interrupted|run_cancelled|model_run_failed/);
-    legacyPresent = false;
-    if (protocolFailure) throw protocolFailure;
-    assert.equal(interrupted, true);
+    // v2目录下Pi对目录外工具直接回"not found"，升级前的半轮按原账本构造：
+    // route与get_query已有回执，present只登记未执行，检查点叶停在待执行调用。
+    const usage = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0,
+      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } };
+    const assistantCall = (name, args) => {
+      const sdk = randomUUID();
+      manager.appendMessage({ role: "assistant", content: [{ type: "toolCall", id: sdk, name, arguments: args }],
+        api: "openai-completions", provider: "local_mock", model: "task_demo", stopReason: "toolUse", usage, timestamp: Date.now() });
+      return { ...binding(), sdk_tool_call_id: sdk, tool_name: name, arguments: args, checkpoint: checkpoint() };
+    };
+    const completed = async (name, args) => {
+      const input = assistantCall(name, args);
+      ok(await h.internal("/internal/data/tool-calls", input));
+      const receipt = ok(await h.internal("/internal/data/tools", input));
+      manager.appendMessage({ role: "toolResult", toolCallId: input.sdk_tool_call_id, toolName: name,
+        content: [{ type: "text", text: JSON.stringify(receipt.data) }], details: receipt, isError: false, timestamp: Date.now() });
+      return receipt.data;
+    };
+    manager.appendMessage({ role: "user", content: run.text, timestamp: Date.now() });
+    await completed("update_analysis_task", { action: "route", task_id: taskA.task_id,
+      expected_version: taskA.condition_version, options: [] });
+    pArgs.sources[0].result_ref = (await completed("get_query", { query_id: query.id })).results.result_ref;
+    const legacy = assistantCall("present_analysis_answer", pArgs);
+    const legacyOperation = await h.legacyAnswerRegistration(run, legacy.sdk_tool_call_id, pArgs);
+    assert.deepEqual(ok(await h.internal("/internal/data/tool-calls", legacy)),
+      { operation_id: legacyOperation, tool_contract_version: 2 }, "待执行旧present沿原登记接回，不另立操作");
     const prior = run, captured = h.captured.length;
     h.releaseRun(prior.run_id);
     h.sql(`UPDATE agent_runs SET state='interrupted' WHERE id=${quote(prior.run_id)};
@@ -600,24 +619,24 @@ try {
     await h.pauseWorker();
     assert.equal(run.resume_same_input, true);
     assert.equal(run.recovery_chain_id, prior.recovery_chain_id);
-    // 恢复前升级合同：pending的旧present必须在v2目录下经原登记回放。
-    h.sql(`UPDATE agent_runs SET tool_contract_version=2 WHERE id=${quote(run.run_id)}`);
-    run.tool_contract_version = 2;
+    // 旧present回执本身是完整答案：恢复只接回待执行调用，不设任何正文模型步骤。
     const callsBefore = calls;
+    plan = { label: "legacy-present-recovery", index: 0, steps: [] };
     protocolFailure = null;
     try { await deliver(run, h.env.DATA_AGENT_API_URL, h.env.DATA_AGENT_INTERNAL_TOKEN, ""); }
     catch (error) { throw protocolFailure ?? error; }
-    assert.equal(plan.index, plan.steps.length);
     assert.equal(calls - callsBefore, 0, "旧present回执即完整答案，恢复零新增模型调用");
     const snapshot = await h.snapshot(cid);
     assert.equal(snapshot.messages.findLast(message => message.role === "assistant" && message.committed).text, "旧回执恢复金额99。");
     assert.equal(h.sql(`SELECT JSON_OBJECT('n',COUNT(*)) FROM tool_calls WHERE conversation_id=${quote(cid)} AND recovery_chain_id=${quote(run.recovery_chain_id)} AND tool_name='present_analysis_answer' AND state='succeeded'`)[0].n, 1, "旧present按原登记接回并成功");
+    assert.deepEqual(h.sql(`SELECT JSON_OBJECT('operation',operation_id,'sdk',sdk_tool_call_id,'origin',origin_run_id,'version',tool_contract_version) FROM tool_calls WHERE recovery_chain_id=${quote(run.recovery_chain_id)} AND tool_name='present_analysis_answer'`),
+      [{ operation: legacyOperation, sdk: legacy.sdk_tool_call_id, origin: prior.run_id, version: 2 }], "恢复沿原登记的操作、调用号与来源run接回");
     const budget = h.sql(`SELECT JSON_OBJECT('id',r.budget_scope_id,'limit',b.call_limit,'calls',b.issued_calls) FROM agent_runs r JOIN budget_scopes b ON b.id=r.budget_scope_id WHERE r.id=${quote(run.run_id)}`)[0];
     assert.equal(budget.id, originalBudget);
     assert.equal(budget.limit, 24);
-    assert.equal(budget.calls, 3);
-    checks.push({ case: "legacy-present-recovery", committed: true, model_calls: 3, present_calls: 1,
-      resumed_under_v2: true, extra_calls: calls - callsBefore });
+    assert.equal(budget.calls, 0);
+    checks.push({ case: "legacy-present-recovery", committed: true, model_calls: 0, present_calls: 1,
+      legacy_registration_reused: true, extra_calls: calls - callsBefore });
     h.releaseRun(run.run_id);
   }
 
@@ -662,47 +681,48 @@ try {
     const originalBudget = h.sql(`SELECT JSON_OBJECT('id',budget_scope_id) FROM query_requests WHERE id=${quote(q.id)}`)[0].id;
     const pState = ok(await h.request(`/queries/${p.id}`));
     const qState = ok(await h.request(`/queries/${q.id}`));
-    const pArgs = { template: "P查询结果{{value}}。",
-      sources: [{ query_id: p.id, result_ref: null, columns: ["value"] }],
+    const pArgs = { sources: [{ query_id: p.id, result_ref: null, columns: ["value"] }],
       values: [{ name: "value", kind: "cell", query_id: p.id, column: "value", row_index: 0 }] };
-    const qArgs = { template: "Q查询结果{{value}}。",
-      sources: [{ query_id: q.id, result_ref: null, columns: ["value"] }],
+    const qArgs = { sources: [{ query_id: q.id, result_ref: null, columns: ["value"] }],
       values: [{ name: "value", kind: "cell", query_id: q.id, column: "value", row_index: 0 }] };
     let qAnswer;
+    // v2答案分两步：prepare绑定P数值，正文以{{value}}引用后定稿为同版P的成功答案。
     plan = { label: "p-negative", index: 0, steps: [
       { name: "get_query", args: { query_id: p.id } },
-      { name: "present_analysis_answer", args: pArgs, observe: body => {
+      { name: "prepare_analysis_answer", args: pArgs, observe: body => {
         pArgs.sources[0].result_ref = lastReply(body).results.result_ref;
       } },
-      { text: "P已解释。", observe: body => {
-        assert.equal(lastReply(body).answer_text, "P查询结果7。");
+      { text: "P查询结果{{value}}。", observe: body => {
+        assert.deepEqual(lastReply(body).bindings, { value: "7" }, "P答案只绑定P查询数值");
       } },
       { name: "get_query", args: { query_id: q.id }, observe: body => {
         const request = JSON.stringify(body.messages.slice(-2));
         assert.match(request, /本轮是查询结果解释/, "只有P答案时必须补Q结果答案");
-        assert.match(request, /present_analysis_answer/);
+        assert.match(request, /prepare_analysis_answer/);
       } },
-      { name: "present_analysis_answer", args: qArgs, observe: body => {
+      { name: "prepare_analysis_answer", args: qArgs, observe: body => {
         qArgs.sources[0].result_ref = lastReply(body).results.result_ref;
       } },
-      { text: "", observe: body => { qAnswer = lastReply(body).answer_text; } },
+      { text: "Q查询结果{{value}}。", observe: body => {
+        qAnswer = "Q查询结果" + lastReply(body).bindings.value + "。";
+      } },
     ] };
     protocolFailure = null;
     try { await deliver(run, h.env.DATA_AGENT_API_URL, h.env.DATA_AGENT_INTERNAL_TOKEN, ""); }
     catch (error) { throw protocolFailure ?? error; }
     assert.equal(plan.index, plan.steps.length);
-    assert.ok(qAnswer, "补答后必须取得Q答案");
+    assert.equal(qAnswer, "Q查询结果99。", "补答后必须取得Q答案");
     const snapshot = await h.snapshot(cid);
     assert.equal(snapshot.messages.findLast(message => message.role === "assistant" && message.committed).text, qAnswer);
     assert.ok(!qAnswer.includes("P查询结果"), "同版P答案不能冒充Q通知");
     assert.deepEqual(ok(await h.request(`/queries/${p.id}`)), pState, "P查询不因Q通知重执行或改写");
     assert.deepEqual(ok(await h.request(`/queries/${q.id}`)), qState, "Q查询不因补答重执行或改写");
-    assert.equal(h.sql(`SELECT JSON_OBJECT('n',COUNT(*)) FROM tool_calls WHERE origin_run_id=${quote(run.run_id)} AND tool_name='present_analysis_answer'`)[0].n, 2);
+    assert.equal(h.sql(`SELECT JSON_OBJECT('n',COUNT(*)) FROM tool_calls WHERE origin_run_id=${quote(run.run_id)} AND tool_name='prepare_analysis_answer'`)[0].n, 2);
     const budget = h.sql(`SELECT JSON_OBJECT('id',r.budget_scope_id,'limit',b.call_limit,'calls',b.issued_calls) FROM agent_runs r JOIN budget_scopes b ON b.id=r.budget_scope_id WHERE r.id=${quote(run.run_id)}`)[0];
     assert.equal(budget.id, originalBudget);
     assert.equal(budget.limit, 24);
     assert.equal(budget.calls, 6);
-    checks.push({ case: "p-negative", committed: true, present_calls: 2, answer: qAnswer, model_calls: 6 });
+    checks.push({ case: "p-negative", committed: true, prepare_calls: 2, answer: qAnswer, model_calls: 6 });
     h.releaseRun(run.run_id);
   }
 

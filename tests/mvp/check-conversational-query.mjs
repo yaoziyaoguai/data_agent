@@ -13,13 +13,13 @@ import {assetInput, select} from './skill-fixtures.mjs';
 
 // 真实控制入口、MySQL与合成SQLite；主动构造工具输入验证宿主边界，语言意图另测。
 const sourceAdmission = process.argv.includes('--source-admission');
-const h = await harness({capture:true, env:{DATA_AGENT_LEASE_MS:'120000', DATA_AGENT_QUERY_DELAY_SECONDS:'0.1',
-  DATA_AGENT_TOOL_CONTRACT_VERSION:sourceAdmission?'2':'1'}});
+const h = await harness({capture:true, env:{DATA_AGENT_LEASE_MS:'120000', DATA_AGENT_QUERY_DELAY_SECONDS:'0.1'}});
 const manager = SessionManager.inMemory('/synthetic/data-agent');
 const checks = [];
 let run, passed = false, projection, sourceTools;
 const traces = [];
-const conditions = {time_start:'2026-01-01T00:00:00Z',time_end:'2026-02-01T00:00:00Z',timezone:'UTC',metric:'net_revenue',channel:null,group_by:[],filters:[],knowledge_refs:[],notes:'',...(sourceAdmission?{source_limits:null}:{})};
+// 任务须显式声明来源范围（null为不限），草稿登记才视作范围已知。
+const conditions = {time_start:'2026-01-01T00:00:00Z',time_end:'2026-02-01T00:00:00Z',timezone:'UTC',metric:'net_revenue',channel:null,group_by:[],filters:[],knowledge_refs:[],notes:'',source_limits:null};
 const checkpoint = () => exportCheckpoint(manager,run.workspace_context.authority_revision,run.workspace_context.authority_snapshot);
 const bindSourceTools = () => {
   assert.equal(run.tool_contract_version,2);
@@ -31,7 +31,7 @@ const bindSourceTools = () => {
 };
 const begin = async (cid,text) => {
   await h.resumeWorker();run = await h.capture(cid,text,120000);await h.pauseWorker();
-  if(sourceAdmission)bindSourceTools();else assert.equal(run.tool_contract_version,1);
+  if(sourceAdmission)bindSourceTools();else assert.equal(run.tool_contract_version,2);
   return run;
 };
 const tool = async (name,args,expectedError,sdk=randomUUID()) => {
@@ -45,7 +45,7 @@ const tool = async (name,args,expectedError,sdk=randomUUID()) => {
     manager.appendMessage({role:'toolResult',toolCallId:sdk,toolName:name,
       ...await sourceTools.formatResult(name,args,receipt),timestamp:Date.now()});
     const refreshed = await projection.apply();
-    traces.push({message:run.message_id,budget:run.budget_scope_id,sdk,receipt,refreshed,ready:run.workspace_context.source_context_ready});
+    traces.push({message:run.message_id,budget:run.budget_scope_id,sdk,receipt,refreshed});
     return {data:receipt.data,receipt,sdk};
   }
   const input = {run_id:run.run_id,lease_epoch:run.lease_epoch,sdk_tool_call_id:sdk,tool_name:name,arguments:args,checkpoint:checkpoint()};
@@ -78,18 +78,20 @@ try {
       name:'合成统计定义',body:'本次统计采用用户明确给出的月份。',related_ids:[]});
     assert.equal(allowed.status,200,JSON.stringify(allowed.value));
     const scopedCid=await h.create();await begin(scopedCid,'只用合成统计定义，按一月出稿，不执行。');
-    assert.equal(run.workspace_context.source_context_ready,false);
-    assert.ok(!workspaceContext(run.workspace_context).contents().join('\n').includes(preference.value.body),
-      '来源尚未就绪时Pi资源不把个人正文交给模型');
+    // 来源不限的新会话按本人资产交付记忆预览；任务声明来源限制后才退出模型上下文。
+    assert.ok(run.workspace_context.memories.some(item=>item.id===preference.value.id&&item.body===preference.value.body),
+      '来源不限时Pi资源交付本人记忆预览');
     const scoped=(await tool('update_analysis_task',{action:'create',goal:run.text,options:[],
       conditions:{...conditions,source_limits:{allowed_sources:[{kind:'document',id:allowed.value.id}],
         origin_message_ids:[run.message_id]}}})).data;
-    assert.notEqual(scoped.context_complete,false,'用户明确日期不依赖未交付的个人记忆');
+    assert.notEqual(scoped.context_complete,false,'用户明确日期不依赖个人记忆');
     const scopedQuery=await draft(scoped);
     assert.equal((await tool('get_query',{query_id:scopedQuery.id})).data.query.sql,scopedQuery.sql,
-      '同范围保存的草稿可立即补读，不应夹带未交付记忆而自我拒绝');
+      '同范围保存的草稿可立即补读，不因启动时交付的记忆预览而被拒绝');
     await finish();
     await begin(scopedCid,'只把统计月份改为二月，来源限制保持，不执行。');
+    assert.ok(!workspaceContext(run.workspace_context).contents().join('\n').includes(preference.value.body),
+      '任务限制来源后Pi资源不把范围外个人正文交给模型');
     assert.equal(run.workspace_context.query_observations.find(query => query.id === scopedQuery.id).confirmation_state,
       'awaiting_confirmation', '草稿观察必须同时交付有效性，未提交不能代替可执行状态');
     const revised=(await tool('update_analysis_task',{action:'revise',task_id:scoped.task_id,
@@ -102,7 +104,7 @@ try {
     assert.equal(continued.conditions.time_start,'2026-02-01T00:00:00Z');
     assert.deepEqual(continued.conditions.source_limits.allowed_sources,[{kind:'document',id:allowed.value.id}]);
     assert.equal(revised.data.condition_version,continued.condition_version);await finish();
-    checks.push('v2归属前不交付或绑定个人预览；限制来源后日期和草稿可读，跨轮只改月份仍保留原来源');
+    checks.push('v2来源不限时交付本人记忆预览，任务限制来源后不再交付；限制来源后日期和草稿可读，跨轮只改月份仍保留原来源');
 
     const historyCid=await h.create();await begin(historyCid,'先建立允许个人偏好的普通分析。');
     const historyTask=await createTask();
@@ -118,8 +120,9 @@ try {
       conditions,options:[]})).data;
     const directory=(await tool('read_conversation',{after_seq:'0',task_directory:true})).data;
     const title=directory.tasks.find(task=>task.id===derived.task_id);
-    assert.equal(title.goal,undefined,'控制目录仍隐藏带来源的派生标题');
-    assert.doesNotMatch(title.note,/来源已失效/,'目录省略正文不能宣称真实来源已经失效');
+    assert.equal(title.goal,derivedGoal,'本人派生标题保留，控制目录不再按来源擦除正文');
+    // 目录条目不再逐项带省略说明；整份目录摘要都不得把省略正文说成来源失效。
+    assert.doesNotMatch(JSON.stringify(directory),/来源已失效/,'目录摘要不能宣称真实来源已经失效');
     assert.equal((await tool('read_analysis_task',{task_id:derived.task_id})).data.goal,derivedGoal,
       '来源已就绪时，合法派生正文仍可通过正式任务读取获得');
     await finish();await begin(historyCid,'新建独立分析，只用合成统计定义，不采用之前的个人偏好。');
@@ -131,11 +134,10 @@ try {
     const independentDraft=await draft(independent);
     assert.equal((await tool('get_query',{query_id:independentDraft.id})).data.query.sql,independentDraft.sql);
     const oldTask=(await tool('read_analysis_task',{task_id:historyTask.task_id})).data;
-    assert.ok(oldTask.unavailable_condition_fields.includes('notes'),
-      '旧任务已实际采用的个人正文仍受来源限制，新任务修复不能清洗旧依赖');
-    assert.equal(oldTask.conditions.notes,undefined);
+    assert.equal(oldTask.conditions.notes,preference.value.body,
+      '本人任务条件里的原话保留，不再按来源逐字段隐藏；新任务的范围限制不改写旧任务条件');
     await finish();
-    checks.push('已有个人记忆历史的会话新建受限任务：保留检查点授权，新目标和条件不继承未交付旧正文');
+    checks.push('已有个人记忆历史的会话新建受限任务：保留检查点授权，新任务条件独立，本人旧目标与条件正文继续可读');
 
     const recoveryCid=await h.create();
     const selected=await h.request('/assets',assetInput({name:'合成计划核对方法',body:'先阅读配套清单，再核对分析计划。',
@@ -143,48 +145,33 @@ try {
     assert.equal(selected.status,200,JSON.stringify(selected.value));
     assert.equal((await select(h,recoveryCid,selected.value)).status,200);
     await begin(recoveryCid,'按已选方法及附件检查分析计划，先不执行查询。');
-    assert.equal(run.workspace_context.source_context_blocker,'input_not_routed');
     assert.equal(run.workspace_context.asset_counts.selected_skills,1,'本条输入尚未归属不撤销明确选用');
     const {source_limits:_unrestricted,...undecidedConditions}=conditions;
     const undecided=await tool('update_analysis_task',{action:'create',goal:'合成计划核对',conditions:undecidedConditions,options:[]});
-    assert.equal(undecided.receipt.source_context_ready,false);
-    assert.equal(undecided.receipt.source_context_blocker,'source_scope_unknown');
-    assert.equal(run.workspace_context.source_context_blocker,'source_scope_unknown','创建后原刷新不能丢失阻断原因');
     assert.equal(run.workspace_context.asset_counts.selected_skills,1,'创建后的刷新保留明确选用事实');
     assert.deepEqual(run.workspace_context.selected_skills,[],'保留选用数量不放开预览或正文');
     const unknownRoute=await route(undecided.data);
     assert.equal(unknownRoute.receipt.data.routed,true);
-    assert.equal(unknownRoute.receipt.source_context_blocker,'source_scope_unknown');
-    // 旧v2持久回执缺少新原因；实际恢复先经过Rust回源补齐，不能直接拿旧JSON冒充出站回执。
+    // 同一SDK调用重放已成功的route回执：接回原归属操作，已存回执不改写。
     const routeWhere=`operation_id='${unknownRoute.receipt.operation_id}'`;
-    h.sql(`UPDATE tool_calls SET receipt=JSON_REMOVE(receipt,'$.source_context_blocker') WHERE ${routeWhere}`);
-    const legacyRoute=h.sql(`SELECT receipt FROM tool_calls WHERE ${routeWhere}`)[0];
-    assert.equal(legacyRoute.source_context_ready,false);
-    assert.equal(legacyRoute.source_context_blocker,undefined);
+    const storedRoute=h.sql(`SELECT receipt FROM tool_calls WHERE ${routeWhere}`)[0];
     const replayedRoute=await tool('update_analysis_task',{action:'route',goal:'',task_id:undecided.data.task_id,
       expected_version:undecided.data.condition_version,options:[]},undefined,unknownRoute.sdk);
     assert.equal(replayedRoute.receipt.operation_id,unknownRoute.receipt.operation_id);
     assert.deepEqual(replayedRoute.data,unknownRoute.data,'接回原归属操作，不重新修改条件');
-    assert.equal(replayedRoute.receipt.source_context_ready,false);
-    assert.equal(replayedRoute.receipt.source_context_blocker,'source_scope_unknown');
-    assert.equal(run.workspace_context.source_context_blocker,'source_scope_unknown');
-    assert.deepEqual(h.sql(`SELECT receipt FROM tool_calls WHERE ${routeWhere}`)[0],legacyRoute,
-      '只补当前出站控制事实，不追改历史成功回执');
+    assert.deepEqual(h.sql(`SELECT receipt FROM tool_calls WHERE ${routeWhere}`)[0],storedRoute,
+      '重放成功回执不追改历史成功回执');
     const path=`/skills/${selected.value.id}/${selected.value.version}/references/guide.md`;
     await tool('read',{path,limit:30},'task_context_required');
     const declared=await tool('update_analysis_task',{action:'revise',task_id:undecided.data.task_id,
       expected_version:undecided.data.condition_version,condition_patch:{set:{},unset:['source_limits']},options:[]});
-    assert.equal(declared.receipt.source_context_ready,true);
-    assert.equal(declared.receipt.source_context_blocker,undefined);
-    assert.equal(run.workspace_context.source_context_ready,true);
-    assert.equal(run.workspace_context.source_context_blocker,undefined,'就绪刷新须移除旧阻断原因');
     assert.ok(run.workspace_context.selected_skills.some(skill=>skill.id===selected.value.id&&skill.version===selected.value.version));
     await tool('read',{path,limit:30});
     const attachment=manager.buildSessionContext().messages.findLast(message=>message.role==='toolResult'&&message.toolName==='read');
     assert.ok(attachment.content.some(part=>part.type==='text'&&part.text.includes('核对统计对象与观察范围')));
     assert.equal((await h.request(`/conversations/${recoveryCid}/queries`)).value.queries.length,0,'恢复只读方法，不生成执行授权或查询');
     await finish();
-    checks.push('v2创建遗漏来源与成功route均明确仍未决；原刷新保留原因，显式修订后原选Skill附件可读且无查询副作用');
+    checks.push('v2创建遗漏来源后仍未决，读附件须先确定范围；成功route回执按原样重放，显式修订后原选Skill附件可读且无查询副作用');
 
     const cid=await h.create();await begin(cid,'先保存合成SQL，暂不执行。');
     const task=await createTask(),q=await draft(task,'SELECT 17 AS sample_value',{});
@@ -193,22 +180,21 @@ try {
     assert.equal((await read(q)).confirmation_state,'awaiting_confirmation');await finish();
     await begin(cid,'执行刚才保存的合成SQL，保留原条件。');
     const executionMessage=run.message_id,executionBudget=run.budget_scope_id;
-    assert.equal(run.workspace_context.source_context_ready,false);
     const before=savedAuthorization(q);
-    const blocked=await tool('get_query',{query_id:q.id},'task_context_required');
-    assert.match(blocked.data.hint,/source_context_ready=true/);
-    assert.match(blocked.data.hint,/继续原请求/);
-    assert.equal(blocked.data.recovery.query.query_id,q.id);
+    // 就绪门已随架构减负移除：活动任务已声明来源范围时，未归属的新消息可直接补读已存草稿，读取不登记归属、确认或授权。
+    const unread=await tool('get_query',{query_id:q.id});
+    assert.deepEqual([unread.data.query.id,unread.data.query.sql,unread.data.query.draft_version,
+      unread.data.query.confirmation_state,unread.data.query.execution_state],
+      [q.id,q.sql,q.draft_version,'awaiting_confirmation','not_submitted'],'未归属消息补读到同一份未确认草稿');
+    assert.deepEqual(messageRouting(),{routing:'pending',task:null,applied:0,relations:0},'补读不登记消息归属');
+    assert.deepEqual(savedAuthorization(q),before,'补读不登记确认或预算');
     const routed=await route(task);
-    assert.equal(routed.receipt.source_context_ready,true);
     assert.match(routed.receipt.control_delivery.text,/已保存，尚未提交执行/,
       '用户已明确执行时，未登记授权的持久状态不能描述成需要用户再次确认');
     assert.doesNotMatch(routed.receipt.control_delivery.text,/等待确认/);
     assert.ok(routed.receipt.control_delivery.facts.some(fact=>fact.query_id===q.id
       &&fact.confirmation_state==='awaiting_confirmation'&&fact.execution_state==='not_submitted'),
       '中性状态文案不提前授权或伪称已提交');
-    assert.equal(run.workspace_context.source_context_ready,true,'采用真实宿主回执及必要刷新确认来源就绪');
-    assert.equal(projection.hidesSourceContext(),false);
     const currentTask=(await tool('read_analysis_task',{task_id:task.task_id})).data;
     assert.equal(currentTask.condition_version,originalTask.condition_version);
     assert.deepEqual(currentTask.conditions,originalTask.conditions,'route不改条件');
@@ -225,15 +211,14 @@ try {
     await h.pauseWorker();bindSourceTools();
     assert.equal(run.budget_scope_id,executionBudget,'结果通知沿原执行预算');
     assert.deepEqual((await tool('get_query',{query_id:q.id})).data.results.rows,[['17']]);await finish();
-    checks.push('v2来源未就绪真实拒绝；route及必要刷新就绪后读当前草稿并确认，条件/草稿版本保持，授权和结果通知沿原执行消息预算');
+    checks.push('活动任务已声明来源范围时未归属消息可补读草稿且不登记归属或授权；route后读当前草稿并确认，条件/草稿版本保持，授权和结果通知沿原执行消息预算');
 
     const multiCid=await h.create();await begin(multiCid,'准备两份无限制来源的独立合成SQL，不执行。');
     const leftTask=await createTask(),left=await draft(leftTask,'SELECT 31 AS value',{});
     const rightTask=await createTask(),right=await draft(rightTask,'SELECT 37 AS value',{});await finish();
     await begin(multiCid,'分别执行刚才展示的两份合成SQL，保留原条件。');
     const batchMessage=run.message_id,batchBudget=run.budget_scope_id;
-    const routedLeft=await route(leftTask);assert.equal(routedLeft.receipt.source_context_ready,true);
-    assert.equal(projection.hidesSourceContext(),false);
+    await route(leftTask);
     for(const query of [left,right]){
       const actual=(await tool('get_query',{query_id:query.id})).data.query;
       assert.equal(actual.id,query.id);assert.equal(actual.sql,query.sql);assert.equal(actual.confirmation_state,'awaiting_confirmation');
@@ -602,6 +587,6 @@ try {
 } finally {
   await mkdir('.local/checks',{recursive:true});
   await writeFile(`.local/checks/conversational-query${sourceAdmission?'-source-admission':''}.json`,JSON.stringify({passed,checks,traces,
-    toolContractVersion:sourceAdmission?2:1,officialRequests:0,platform:'executable synthetic SQLite',model:'controlled tool inputs'},null,2));
+    toolContractVersion:2,officialRequests:0,platform:'executable synthetic SQLite',model:'controlled tool inputs'},null,2));
   await h.close();console.log(JSON.stringify({passed,checks,officialRequests:0}));
 }

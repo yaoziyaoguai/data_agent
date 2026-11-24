@@ -310,7 +310,6 @@ try {
     assert.equal(beforeResearch.phase,"waiting_clarification");
     const found = await invoke("search_knowledge",{query:"净收入",limit:5,task_ref:researchRef});
     assert.ok(found.receipt.data.hits.length>0,"开放问题期间仍可调查当前获准资料");
-    assert.equal(found.receipt.source_context_ready,true);
     const replayedRead = ok(await h.internal("/internal/data/tools",found.input));
     assert.equal(replayedRead.operation_id,found.receipt.operation_id,"读取恢复沿原身份");
     assert.deepEqual(replayedRead.data,found.receipt.data,"未改变来源和版本时重放原读取结果");

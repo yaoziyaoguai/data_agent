@@ -206,9 +206,13 @@ try{
 
  await h.pauseWorker();
  const human=await h.request('/knowledge/'+target.id,{operation_id:randomUUID(),expected_version:current.version,entry_id:'description',value:'人工有效定义'},'alice','PATCH');assert.equal(human.status,200);
+ const priorVersion=current.version;
  await reanalyze();await h.resumeWorker();current=await wait('succeeded');
  assert.equal(current.entries[0].effective_value,'人工有效定义');
- r=await readDescription();assert.equal(r.value.code,'stale_context');
+ // 封板后不按run新旧整次拒绝：旧run以改版前版本读取仍判失效，按当前版本读到人工生效值。
+ r=await invoke('read_knowledge',{items:[{kind:'knowledge',ref:{object_id:target.id,version:priorVersion,path:'description'}}]});
+ assert.equal(r.status,200,JSON.stringify(r.value));assert.equal(r.value.data.items[0].state,'stale');
+ r=await readDescription();assert.equal(r.status,200,JSON.stringify(r.value));assert.equal(r.value.data.items[0].state,'ok');assert.equal(r.value.data.items[0].content,'人工有效定义');
  await freshReadRun();
  r=await readDescription();assert.equal(r.status,200,JSON.stringify(r.value));
  assert.equal(r.value.data.items[0].state,'ok');
@@ -227,9 +231,12 @@ try{
 
  await reanalyze();current=await wait('succeeded');
  assert.equal((await h.request('/knowledge/'+doc.id+'/disable',{operation_id:randomUUID(),expected_version:changed.value.version})).status,200);
- await freshReadRun();r=await readDescription();assert.equal(r.status,200);assert.equal(r.value.data.items[0].state,'stale');
+ // 封板后按条目核对：人工生效值不采用候选所引文档，仍可读；采用该文档建议的条目判失效。
+ await freshReadRun();r=await readDescription();assert.equal(r.status,200,JSON.stringify(r.value));assert.equal(r.value.data.items[0].state,'ok');assert.equal(r.value.data.items[0].content,'人工有效定义');
+ r=await invoke('read_knowledge',{items:[{kind:'knowledge',ref:{object_id:target.id,version:current.version,path:'grain'}}]});
+ assert.equal(r.status,200,JSON.stringify(r.value));assert.equal(r.value.data.items[0].state,'stale');
  const search=(await h.request('/knowledge?q=derived_values')).value;assert.ok(!search.objects.some(o=>o.id===target.id));
- checks.push('文档停用后引用它的知识无法继续用于读取或检索');
+ checks.push('文档停用后采用它的条目无法继续读取，对象不再可检索；人工生效值仍可读');
 
  // 自动重分析的下游先入库，上游在第二页更新；冻结时必须使用第二页新版本。
  await h.pauseWorker();rows[0]=table('derived_values','2',['raw_values']);rows[50]=table('raw_values','2');await sync();await h.resumeWorker();current=await wait('succeeded');

@@ -44,6 +44,8 @@ const cancelRun = async cid => {
   h.releaseRun(run.run_id);
 };
 const demoRef = {object_id: 'table-demo_order_detail', version: '1', path: 'description'};
+// 表说明原出处为业务指南；DDL原出处为schema，只允许业务指南时属范围外直属来源。
+const ddlRef = {...demoRef, path: 'ddl'};
 const conditions = {time_start: null, time_end: null, timezone: 'UTC', metric: null,
   channel: null, group_by: [], filters: [], knowledge_refs: [demoRef], notes: '', source_limits: null};
 const platform = id => ({kind: 'platform', id});
@@ -141,22 +143,27 @@ try {
   checks.push('单个字段直接允许匹配，结构绑定可核并可按原回执重放，不能单独补读范围外底表');
   await finish();
 
-  // 只允许业务指南时，表不是该文档的直接对象。
+  // 只允许业务指南时，表说明原出处即该指南可作草稿依据；DDL原出处为schema，才是范围外直属来源。
   const partial = await h.create();
   await begin(partial, '这次只用业务指南本身。');
   const partialTask = await createTask('只用业务指南的统计');
   await declareLimits(partialTask.task_id, [platform('business-guide')]);
   await readGuide();
   await readTable('not_available');
+  const admitted = await invoke('request_query', {task_id: partialTask.task_id,
+    condition_version: await currentVersion(partialTask.task_id), sql: 'SELECT 1 AS ok',
+    parameters: {}, target_id: 'synthetic-sqlite', summary: '表说明引用属允许来源',
+    knowledge_refs: [demoRef], replaces_query_id: null});
+  assert.equal(admitted.execution_state, 'not_submitted', '表说明原出处为业务指南，允许集内引用可保存草稿');
   const diagnostic = await invoke('validate_sql', {sql: 'SELECT SUM(quantity) AS total FROM demo_order_detail',
-    parameters: {}, target_id: 'synthetic-sqlite', knowledge_refs: [demoRef]});
+    parameters: {}, target_id: 'synthetic-sqlite', knowledge_refs: [ddlRef]});
   assert.ok(JSON.stringify(diagnostic.semantic_checks.coverage.missing_semantics ?? [])
     .includes('来源允许范围'), '只读诊断把范围外引用记为覆盖缺口');
   const before = await queriesOf(partial);
   await invoke('request_query', {task_id: partialTask.task_id,
     condition_version: await currentVersion(partialTask.task_id), sql: 'SELECT 2 AS ok',
     parameters: {}, target_id: 'synthetic-sqlite', summary: '范围外引用不应保存',
-    knowledge_refs: [demoRef], replaces_query_id: null}, 'source_not_allowed');
+    knowledge_refs: [ddlRef], replaces_query_id: null}, 'source_not_allowed');
   assert.deepEqual(await queriesOf(partial), before, '正式草稿对范围外引用硬拒绝，不创建草稿');
   checks.push('范围外直属来源不能交付；诊断记缺口、草稿保存拒绝');
   await finish();
@@ -223,6 +230,7 @@ try {
 
   // 六、草稿的门跟草稿所属任务走，不按消息绑定集：本消息只绑无限制任务时，
   // 为受限任务保存草稿仍按该任务限制硬拒/放行（不能借无限制消息绕过或误伤）。
+  // 同一DDL引用在允许全部根的任务放行，在只允许业务指南的任务硬拒。
   const cross = await h.create();
   await begin(cross, '建立全量允许的受限任务。');
   const limFull = await createTask('全量受限任务');
@@ -240,12 +248,12 @@ try {
     condition_version: await currentVersion(limFull.task_id),
     sql: 'SELECT SUM(quantity) AS total FROM demo_order_detail', parameters: {},
     target_id: 'synthetic-sqlite', summary: '跨任务草稿按其所属任务的限制放行',
-    knowledge_refs: [demoRef], replaces_query_id: null});
+    knowledge_refs: [ddlRef], replaces_query_id: null});
   assert.equal(crossSaved.execution_state, 'not_submitted', '消息未绑定受限任务不绕过其限制判定');
   await invoke('request_query', {task_id: limPartial.task_id,
     condition_version: await currentVersion(limPartial.task_id),
     sql: 'SELECT SUM(quantity) AS total FROM demo_order_detail', parameters: {},
-    target_id: 'synthetic-sqlite', summary: '范围外引用不应保存', knowledge_refs: [demoRef],
+    target_id: 'synthetic-sqlite', summary: '范围外引用不应保存', knowledge_refs: [ddlRef],
     replaces_query_id: null}, 'source_not_allowed');
   const crossAfter = await queriesOf(cross);
   assert.equal(crossAfter.length, crossBefore.length + 1,

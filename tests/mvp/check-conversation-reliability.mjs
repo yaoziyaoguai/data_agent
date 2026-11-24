@@ -23,6 +23,8 @@ const composer=()=>page.getByRole('textbox',{name:'你的数据问题'});
 const send=()=>page.getByRole('button',{name:'发送 ↑',exact:true});
 const retry=()=>page.getByRole('button',{name:'重试原消息',exact:true});
 const login=async user=>{await page.goto(h.url);await page.getByLabel('演示登录凭据').fill(h.tokens[user]);await page.getByRole('button',{name:'进入工作台 →'}).click();await composer().waitFor();};
+// 登出回执到达前整页跳转会取消DELETE，旧会话继续有效；先等回执再切换用户。
+const logout=async()=>{const done=page.waitForResponse(response=>new URL(response.url()).pathname==='/api/session'&&response.request().method()==='DELETE');await page.getByRole('button',{name:'退出',exact:true}).click();await done;};
 const readPending=()=>page.evaluate(key=>JSON.parse(localStorage.getItem(key)),pendingKey());
 const counts=cid=>h.sql(`SELECT JSON_OBJECT('messages',(SELECT COUNT(*) FROM conversation_messages WHERE conversation_id='${cid}'),'budgets',(SELECT COUNT(*) FROM budget_scopes b JOIN conversation_messages m ON b.message_id=m.id WHERE m.conversation_id='${cid}'),'jobs',(SELECT COUNT(*) FROM background_jobs WHERE conversation_id='${cid}'))`)[0];
 const storedCid=()=>page.evaluate(key=>localStorage.getItem(key),conversationKey());
@@ -108,9 +110,9 @@ try {
 
   const isolated=droppedResponse(`**/api/conversations/${created.conversation_id}/messages`);await isolated.install();
   await composer().fill('Alice 合成设备故障记录');await send().click();await isolated.accepted;await composer().fill('Alice 私人待写草稿');isolated.release();await retry().waitFor();const alicePending=await readPending();
-  await page.getByRole('button',{name:'退出',exact:true}).click();await login('bob');
+  await logout();await login('bob');
   assert.equal(await retry().count(),0);assert.equal(await composer().inputValue(),'');
-  await composer().fill('Bob 独立草稿');await page.getByRole('button',{name:'退出',exact:true}).click();await login('alice');await retry().waitFor();
+  await composer().fill('Bob 独立草稿');await logout();await login('alice');await retry().waitFor();
   assert.equal(await composer().inputValue(),'Alice 私人待写草稿');assert.deepEqual((await readPending()).input,alicePending.input);
   const spaceRoute=async route=>{const response=await route.fetch();const identity=await response.json();await route.fulfill({response,json:{...identity,space_id:'synthetic-other-space'}});};
   await page.route('**/api/session',spaceRoute);await page.reload();await composer().waitFor();assert.equal(await retry().count(),0);assert.equal(await composer().inputValue(),'');
@@ -129,7 +131,7 @@ try {
     if(removal==='ui') {
       await page.getByRole('button',{name:'查看全部会话 ↗',exact:true}).click();await page.getByRole('button',{name:'删除会话 '+title,exact:true}).click();
       await page.getByRole('dialog',{name:'删除这个会话？'}).getByRole('button',{name:'删除此会话',exact:true}).click();await page.getByRole('dialog',{name:'删除这个会话？'}).waitFor({state:'detached'});
-      await page.getByRole('dialog',{name:'全部会话'}).getByRole('button',{name:'关闭',exact:true}).click();await until(async()=>await storedCid()===null,'deleted current conversation released');assert.equal(await composer().inputValue(),freshDraft);
+      await page.getByRole('dialog',{name:'历史记录'}).getByRole('button',{name:'关闭',exact:true}).click();await until(async()=>await storedCid()===null,'deleted current conversation released');assert.equal(await composer().inputValue(),freshDraft);
     } else ok(await h.request('/conversations/'+target,{operation_id:randomUUID()},'alice','DELETE'));
     await retry().click();await until(async()=>await readPending()===null,'unavailable target releases pending');
     await page.getByText('原对话已删除或不可访问，无法继续核对原消息是否已保存。已结束这次重试；请新建对话继续。',{exact:true}).waitFor();
@@ -148,8 +150,8 @@ try {
   await page.evaluate(({key,legacy})=>{localStorage.removeItem(key);localStorage.setItem('data-agent.conversation.alice',legacy);localStorage.setItem('data-agent.draft.alice.'+legacy,'可读旧会话的草稿');localStorage.setItem('data-agent.draft.alice.new','无法判定空间的新草稿');},{key:conversationKey(),legacy});
   await page.reload();await until(async()=>await storedCid()===legacy,'legacy readable conversation migrated');await until(async()=>await composer().inputValue()==='可读旧会话的草稿','legacy draft migrated');
   assert.equal(await page.evaluate(()=>localStorage.getItem('data-agent.draft.alice.new')),'无法判定空间的新草稿');assert.equal(await page.evaluate(()=>localStorage.getItem('data-agent.conversation.alice')),null);
-  await page.getByRole('button',{name:'退出',exact:true}).click();await login('bob');await page.evaluate(({legacy,key})=>{localStorage.removeItem(key);localStorage.setItem('data-agent.conversation.bob',legacy);localStorage.setItem('data-agent.draft.bob.'+legacy,'不可读旧会话草稿');},{legacy,key:conversationKey('demo','bob')});await page.reload();await composer().waitFor();await page.waitForTimeout(800);assert.notEqual(await composer().inputValue(),'不可读旧会话草稿');assert.equal(await page.evaluate(key=>localStorage.getItem(key),conversationKey('demo','bob')),null);
-  await page.getByRole('button',{name:'退出',exact:true}).click();await login('alice');await openConversation(legacy);
+  await logout();await login('bob');await page.evaluate(({legacy,key})=>{localStorage.removeItem(key);localStorage.setItem('data-agent.conversation.bob',legacy);localStorage.setItem('data-agent.draft.bob.'+legacy,'不可读旧会话草稿');},{legacy,key:conversationKey('demo','bob')});await page.reload();await composer().waitFor();await page.waitForTimeout(800);assert.notEqual(await composer().inputValue(),'不可读旧会话草稿');assert.equal(await page.evaluate(key=>localStorage.getItem(key),conversationKey('demo','bob')),null);
+  await logout();await login('alice');await openConversation(legacy);
   checks.push('旧会话经服务端授权后迁移关联草稿；不可读会话不迁移，无会话旧草稿留存且不归入任意空间');
 
   const firstSnapshot=await h.snapshot(legacy);const merged=mergeSnapshot(null,firstSnapshot);const empty=(await h.request(`/conversations/${legacy}/snapshot?after_seq=${firstSnapshot.last_event_seq}`)).value;
@@ -157,15 +159,18 @@ try {
   const requestTimes=[];const countRequest=request=>{const method=request.method(),path=new URL(request.url()).pathname;if(path.startsWith('/api/')&&(method==='GET'||method==='POST'&&path.endsWith('/snapshot')))requestTimes.push({time:Date.now(),method,path});};page.on('request',countRequest);
   await page.waitForTimeout(8000);requestTimes.length=0;const idleStart=Date.now();await page.waitForTimeout(30000);await page.waitForTimeout(30000);const idle=requestTimes.splice(0);measurements.idleWindowMs=Date.now()-idleStart;measurements.idleRequests=idle.length;measurements.idlePaths=idle.map(item=>item.path);
   assert.ok(idle.length<=15,`idle requests ${idle.length}/60s exceeds 15`);
-  await visibility(true);await page.waitForTimeout(300);requestTimes.length=0;await page.waitForTimeout(5000);assert.equal(requestTimes.length,0);const resumed=Date.now();await visibility(false);await until(()=>requestTimes.some(item=>item.path.endsWith('/snapshot')),'visible refresh',2000);measurements.visibilityRefreshMs=Date.now()-resumed;
-  page.off('request',countRequest);checks.push('完整60秒空闲窗口API读取（GET及snapshot POST）不超过15次，空增量复用历史引用；可见性事件夹具隐藏期间零请求，恢复立即读取');
+  await visibility(true);await page.waitForTimeout(300);requestTimes.length=0;await page.waitForTimeout(5000);assert.equal(requestTimes.length,0);await visibility(false);await page.waitForTimeout(2000);
+  // 返工后对话增量只走事件流：恢复可见不重读会话快照，事件流保持可用。
+  assert.ok(requestTimes.every(item=>!item.path.endsWith('/snapshot')),JSON.stringify(requestTimes.map(item=>item.path)));assert.equal(await page.getByRole('status').filter({hasText:'暂时无法更新对话'}).count(),0);
+  page.off('request',countRequest);checks.push('完整60秒空闲窗口API读取（GET及snapshot POST）不超过15次，空增量复用历史引用；可见性事件夹具隐藏期间零请求，恢复可见后沿事件流续接、不重读快照');
 
   const manager=SessionManager.inMemory('/synthetic/data-agent');const active=await h.create();await openConversation(active);await h.resumeWorker();
   const run=await h.capture(active,'检查合成设备状态，仅准备查询');await h.pauseWorker();
   const checkpoint=()=>exportCheckpoint(manager,run.workspace_context.authority_revision,run.workspace_context.authority_snapshot);
   const invoke=async(name,args)=>{const input={run_id:run.run_id,lease_epoch:run.lease_epoch,sdk_tool_call_id:randomUUID(),tool_name:name,arguments:args,checkpoint:checkpoint()};ok(await h.internal('/internal/data/tool-calls',input));return ok(await h.internal('/internal/data/tools',input)).data;};
   await page.evaluate(()=>window.dispatchEvent(new Event('focus')));await page.getByRole('button',{name:'停止生成',exact:true}).waitFor({timeout:2500});
-  const task=await invoke('update_analysis_task',{action:'create',goal:'核对合成设备区域与检查次数',conditions:{time_start:null,time_end:null,timezone:'UTC',metric:null,channel:null,group_by:[],filters:[],knowledge_refs:[],notes:''},options:[]});
+  // 任务须显式声明来源范围（null为不限），登记才视作范围已知。
+  const task=await invoke('update_analysis_task',{action:'create',goal:'核对合成设备区域与检查次数',conditions:{time_start:null,time_end:null,timezone:'UTC',metric:null,channel:null,group_by:[],filters:[],knowledge_refs:[],notes:'',source_limits:null},options:[]});
   const queries=[];for(const region of ['north','south'])queries.push(await invoke('request_query',{task_id:task.task_id,condition_version:task.condition_version,sql:`SELECT '${region}' AS region, 7 AS inspections`,parameters:{},target_id:'synthetic-sqlite',replaces_query_id:null,summary:`合成设备${region}检查`,knowledge_refs:[]}));
   await invoke('update_analysis_task',{action:'route',task_id:task.task_id,expected_version:task.condition_version,goal:'',options:[]});
   const final='SQL已准备好。';ok(await h.internal('/internal/outputs',{run_id:run.run_id,lease_epoch:run.lease_epoch,chunk_seq:'1',text:final}));ok(await h.internal('/internal/finish',{run_id:run.run_id,lease_epoch:run.lease_epoch,commit_id:run.output_id,final_text:final,checkpoint:checkpoint()}));h.releaseRun(run.run_id);
@@ -173,9 +178,11 @@ try {
   for(const query of queries)await until(async()=>ok(await h.request('/queries/'+query.id)).execution_state==='running','query started');
   await until(async()=>await page.getByRole('heading',{name:'查询运行中',exact:true}).count()===2,'running queries visible',2500);
   await composer().fill('两条查询运行期间保留的新草稿');await visibility(true);ok(await h.request(`/queries/${queries[1].id}/cancel`,{operation_id:randomUUID()}));await until(async()=>ok(await h.request('/queries/'+queries[1].id)).execution_state==='cancelled','hidden query cancelled');const cancelStart=Date.now();await visibility(false);await page.locator('#query-'+queries[1].id).getByRole('heading',{name:'已取消',exact:true}).waitFor({timeout:2500});measurements.cancelVisibilityMs=Date.now()-cancelStart;
-  const activeTimes=[];const activeRequests=request=>{if(new URL(request.url()).pathname===`/api/conversations/${active}/snapshot`)activeTimes.push(Date.now());};page.on('request',activeRequests);await page.waitForTimeout(3000);page.off('request',activeRequests);assert.ok(activeTimes.length>=3);measurements.activeSnapshotIntervalsMs=activeTimes.slice(1).map((time,index)=>time-activeTimes[index]);assert.ok(measurements.activeSnapshotIntervalsMs.every(time=>time<1500));
+  const activeTimes=[];const activeRequests=request=>{if(new URL(request.url()).pathname===`/api/conversations/${active}/snapshot`)activeTimes.push(Date.now());};page.on('request',activeRequests);await page.waitForTimeout(3000);page.off('request',activeRequests);
+  // 查询状态沿事件流到达：活动运行期间没有定时重读会话快照。
+  assert.equal(activeTimes.length,0);
   execFileSync('python3',['-c','import sqlite3,sys\nwith sqlite3.connect(sys.argv[1]) as db: db.execute("UPDATE submissions SET ready_at=0 WHERE id=?",(sys.argv[2],))',h.directory+'/platform/submissions.sqlite',queries[0].id]);await until(async()=>ok(await h.request('/queries/'+queries[0].id)).execution_state==='succeeded','synthetic query completed');const resultStart=Date.now();await page.locator('#query-'+queries[0].id).getByRole('cell',{name:'north',exact:true}).waitFor({timeout:2500});measurements.resultRenderMs=Date.now()-resultStart;assert.equal(await composer().inputValue(),'两条查询运行期间保留的新草稿');assert.equal(await page.locator('#query-'+queries[1].id).getByRole('heading',{name:'已取消',exact:true}).count(),1);
-  checks.push('实际活动运行快速显示停止入口，两条独立合成查询持续快速刷新；隐藏时取消、可见时接回，另一条结果归原查询且草稿保留');
+  checks.push('实际活动运行快速显示停止入口，两条独立合成查询状态沿事件流到达且不定时重读快照；隐藏时取消、可见时接回，另一条结果归原查询且草稿保留');
   assert.deepEqual(errors,[]);passed=true;console.log(JSON.stringify({passed,checks,measurements,officialRequests:0}));
 } finally {
   await page.screenshot({path:directory+'/last-state.png',fullPage:true}).catch(()=>{});

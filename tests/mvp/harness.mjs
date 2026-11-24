@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { spawn, execFileSync } from "node:child_process";
 import { readFile, mkdir, writeFile } from "node:fs/promises";
-import { randomUUID, randomBytes } from "node:crypto";
+import { createHash, randomUUID, randomBytes } from "node:crypto";
 import net from "node:net";
 import { createDeliveryServer } from "../../apps/agent/transport/server.ts";
 export async function until(fn, label, ms = 20000) {
@@ -365,6 +365,23 @@ export async function harness(options = {}) {
         body: JSON.stringify(body),
       });
       return { status: r.status, value: await r.json() };
+    },
+    // 旧答案工具不再接受新登记；升级前留下的登记用实际运行及其活动任务预写，
+    // 工具名与参数指纹保持原登记，随后仍经正式登记与执行入口接回。返回原操作号。
+    async legacyAnswerRegistration(run, sdk, args) {
+      const body = JSON.stringify({ name: "present_analysis_answer", arguments: args }, (_key, value) =>
+        value && typeof value === "object" && !Array.isArray(value)
+          ? Object.fromEntries(Object.keys(value).sort().map(key => [key, value[key]])) : value);
+      const operation = randomUUID();
+      sql(`INSERT INTO tool_calls(operation_id,conversation_id,recovery_chain_id,sdk_tool_call_id,
+        origin_run_id,tool_contract_version,tool_name,arguments_fingerprint,state,created_at,task_id,task_condition_version,execution_started)
+        SELECT '${operation}',r.conversation_id,r.recovery_chain_id,'${sdk}',r.id,2,
+          'present_analysis_answer','${createHash("sha256").update(body).digest("hex")}','registered',UTC_TIMESTAMP(3),t.id,t.condition_version,FALSE
+        FROM agent_runs r JOIN conversations c ON c.id=r.conversation_id
+        JOIN analysis_tasks t ON t.id=c.active_task_id WHERE r.id='${run.run_id}'`);
+      assert.equal(sql(`SELECT JSON_OBJECT('n',COUNT(*)) FROM tool_calls WHERE operation_id='${operation}'`)[0].n, 1,
+        "预写升级前登记要求运行所属会话已有活动任务");
+      return operation;
     },
     async capture(cid, text, waitMs = 20000) {
       const message = await send(cid, text);
