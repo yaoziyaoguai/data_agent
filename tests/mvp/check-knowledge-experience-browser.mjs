@@ -18,21 +18,28 @@ const editBody=(document, update)=>({operation_id:randomUUID(),body:update(docum
 const nav=name=>navigateWorkspace(page,name);
 const login=async user=>{await page.goto(h.url);await page.getByLabel('演示登录凭据').fill(h.tokens[user]);await page.getByRole('button',{name:'进入工作台 →'}).click();await nav('语义管理');await page.goto(h.url+'/#knowledge?object=table-demo_order_detail');await page.getByRole('heading',{name:'demo_order_detail',exact:true}).waitFor();};
 try {
-  let initialDirectoryReturned=false;
+  // 普通用户没有“我负责的对象”，空目录视图改用全部对象加无结果筛选；两处首批读取由本项放行，保证切换先于返回。
+  let releaseInitial, heldInitial=0, activeInitial=0;
+  const initialHeld=new Promise(resolve=>releaseInitial=resolve);
   const initialDirectoryPattern=url=>url.pathname==='/api/knowledge'&&url.search==='?directory=all&directory_view=grouped';
   await page.route(initialDirectoryPattern,async route=>{
-    const response=await route.fetch();await new Promise(resolve=>setTimeout(resolve,2600));
-    await route.fulfill({response});initialDirectoryReturned=true;
+    heldInitial++;activeInitial++;
+    try{const response=await route.fetch();await initialHeld;await route.fulfill({response});}
+    finally{activeInitial--;}
   });
   try{
     await login('bob');
-    await page.getByLabel('语义目录范围',{exact:true}).selectOption('maintained');
-    await page.getByText('你目前没有负责的内容。可切换到全部对象查看并提出建议。',{exact:true}).waitFor();
-    await until(()=>initialDirectoryReturned,'initial slow directory result');
+    await page.getByLabel('语义目录范围',{exact:true}).selectOption('all');
+    await until(()=>heldInitial>=2,'directory of all objects in flight');
+    await page.getByLabel('管理目录名称').fill('不存在的名字');
+    await page.getByText('没有符合当前条件的内容。',{exact:true}).waitFor();
+    releaseInitial();
+    await until(()=>activeInitial===0,'held directory results delivered');
     await page.waitForTimeout(200);
-    assert.equal(await page.locator('.object-heading').count(),0,'late initial list must not restore a table after switching to an empty owned directory');
-    checks.push('首批慢目录返回时保留用户已切换的空负责目录选择');
-  }finally{await page.unroute(initialDirectoryPattern);}
+    assert.equal(await page.locator('.object-heading').count(),0,'late initial list must not restore a table after switching to an empty directory view');
+    assert.equal(await page.locator('.directory-group').count(),0,'late unfiltered directory must not refill the filtered empty view');
+    checks.push('首批慢目录返回时保留用户已切换的空目录视图');
+  }finally{releaseInitial();await page.unroute(initialDirectoryPattern);}
   await logoutWorkspace(page);
   await login('alice');
   const tableEntry=page.locator('.semantic-entry').first();
@@ -57,24 +64,32 @@ try {
     if(proposalFailed)return route.continue();proposalFailed=true;
     return route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({code:'unavailable',message:'合成建议读取故障',request_id:'slow-refresh-failure',retryable:true})});
   });
+  // 语义页不定时刷新目录，只随空间目录变更信号刷新；信号经Worker与合成平台共用的通知接口发出。
+  const catalogChanged=async()=>{
+    const response=await fetch(h.env.DATA_AGENT_API_URL+'/internal/live-changes',{method:'POST',headers:{authorization:'Bearer '+h.env.DATA_AGENT_INTERNAL_TOKEN,'content-type':'application/json'},body:JSON.stringify([{kind:'catalog',space_id:'demo'}])});
+    assert.equal(response.status,204,'catalog change signal accepted');
+  };
   try{
+    await catalogChanged();
     await until(()=>firstFinished,'slow refresh completed',15000);
     assert.equal(maxActiveRefreshes,1,'a failed child must not release a refresh batch while its slow sibling is pending');
-    assert.equal(await tableEntry.locator('textarea').inputValue(),'慢刷新期间保留的合成草稿。','automatic refresh preserves an open draft');
+    assert.equal(await tableEntry.locator('textarea').inputValue(),'慢刷新期间保留的合成草稿。','refresh on a change signal preserves an open draft');
     await page.getByRole('alert').filter({hasText:'unavailable'}).waitFor();
     await page.unroute('**/api/knowledge-proposals');
-    await until(()=>secondStarted,'next automatic refresh starts after completion');
+    await catalogChanged();
+    await until(()=>secondStarted,'next change signal starts a refresh only after completion');
     await tableEntry.getByRole('button',{name:'保存修改',exact:true}).click();
     await tableEntry.locator('.entry-value').filter({hasText:/^慢刷新期间保留的合成草稿。$/}).waitFor();
     releaseSavedRefresh();
     await until(()=>refreshReads>=3&&activeRefreshes===0,'saved refresh is eventually drained');
     assert.equal(maxActiveRefreshes,1,'saving during a refresh must coalesce without overlapping batches');
     assert.equal(await tableEntry.locator('.entry-value').innerText(),'慢刷新期间保留的合成草稿。','late list data cannot overwrite the saved object version');
-    await until(()=>leavingRefreshStarted,'ordinary automatic refresh remains enabled');
+    await catalogChanged();
+    await until(()=>leavingRefreshStarted,'refresh on an ordinary change signal remains enabled');
     await nav('工作台');
     const readsAfterLeaving=refreshReads;
-    await page.waitForTimeout(2900);
-    assert.equal(refreshReads,readsAfterLeaving,'leaving the page stops future refresh batches');
+    await catalogChanged();await page.waitForTimeout(2900);
+    assert.equal(refreshReads,readsAfterLeaving,'leaving the page stops further refresh batches');
     checks.push('超过2秒的目录读取与子请求失败不叠加刷新；草稿保留，在途保存最终补刷新且旧版本不覆盖，离开停止调度');
   }finally{releaseSavedRefresh();await page.unroute(refreshPattern);await page.unroute('**/api/knowledge-proposals');}
   if(!process.argv.includes('--refresh-only')){
@@ -112,19 +127,21 @@ try {
   let releaseSearch, intercepted=false; const heldSearch=new Promise(resolve=>releaseSearch=resolve);
   await page.route('**/api/knowledge?q=*',async route=>{const response=await route.fetch();intercepted=true;await heldSearch;await route.fulfill({response});});
   await page.getByLabel('搜索语义对象').fill('demo');await until(()=>intercepted,'old search in flight');
-  await page.getByLabel('语义目录范围',{exact:true}).selectOption('maintained');
-  await page.getByText('你目前没有负责的内容。可切换到全部对象查看并提出建议。',{exact:true}).waitFor();
-  assert.equal(await page.locator('.object-heading').count(),0,'empty owned directory must not retain someone else’s table');
+  await page.getByLabel('语义目录范围',{exact:true}).selectOption('all');
+  await page.getByLabel('管理目录名称').fill('不存在的名字');await page.getByText('没有符合当前条件的内容。',{exact:true}).waitFor();
+  assert.equal(await page.locator('.object-heading').count(),0,'empty directory view must not retain someone else’s table');
   const searchResponse=page.waitForResponse(response=>response.url().includes('/knowledge?q='));releaseSearch();await searchResponse;await page.waitForTimeout(200);assert.equal(await page.locator('.object-heading').count(),0,'late search must not restore a table from another directory');await page.unroute('**/api/knowledge?q=*');
-  await page.getByLabel('管理目录名称').fill('不存在的名字');await page.getByText('没有符合当前条件的内容。',{exact:true}).waitFor();assert.equal(await page.locator('.object-heading').count(),0);
-  checks.push('Bob空负责目录及无结果筛选不保留Alice表详情');
+  checks.push('Bob空目录视图不保留Alice表详情，迟到的搜索结果也不恢复');
   const catalog=await fetch(h.env.DATA_AGENT_PLATFORM_URL+'/catalog',{method:'POST',headers:{authorization:'Bearer '+h.env.DATA_AGENT_INTERNAL_TOKEN,'content-type':'application/json'},body:JSON.stringify({limit:50})}).then(r=>r.json());
   await writeFile(h.directory+'/platform/catalog.json',JSON.stringify({source_namespace:catalog.source_namespace,tables:catalog.tables.map(table=>({...table,maintainer_id:'bob'}))}));
   assert.equal((await synchronizeSources(h)).value.status, 'completed');
+  // 维护身份随目录变更事件重新读取后，“我负责的对象”才对Bob出现。
+  await page.getByRole('option',{name:'我负责的对象'}).waitFor({state:'attached'});
+  await page.getByLabel('语义目录范围',{exact:true}).selectOption('maintained');
   await page.getByLabel('管理目录名称').fill('demo_order_detail');await page.getByRole('button',{name:'刷新目录',exact:true}).click();
   const list=page.getByRole('navigation',{name:'语义对象'});await list.getByRole('button').filter({has:page.getByText('demo_order_detail',{exact:true})}).first().click();
   const entry=page.locator('.semantic-entry').first();await entry.getByRole('button',{name:'编辑',exact:true}).click();await entry.locator('textarea').fill('Bob负责的合成表说明。');await entry.getByRole('button',{name:'保存修改',exact:true}).click();await entry.locator('.entry-value').filter({hasText:/^Bob负责的合成表说明。$/}).waitFor();
-  checks.push('mock Datasight维护人改为Bob后，Bob可从负责目录编辑并持久保存表语义');
+  checks.push('mock Datasight维护人改为Bob后，Bob成为维护者，可从负责目录编辑并持久保存表语义');
   for(const width of [1440,390]){await page.setViewportSize({width,height:1000});assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));await page.screenshot({path:directory+'/semantics-'+width+'.png',animations:'disabled'});}
   await page.setViewportSize({width:1440,height:1000});
 
@@ -139,6 +156,8 @@ try {
   assert.match((await read()).body,/用户整篇编辑的补充/);
   await reader.getByRole('button',{name:'编辑文档',exact:true}).click();dialog=page.getByRole('dialog');await dialog.getByLabel('文档正文',{exact:true}).fill('未保存的草稿，必须保留。');
   await page.route('**/knowledge/document-guide-1/document', route => route.request().method() === 'GET' ? route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({code:'unavailable',message:'合成读取故障',request_id:'document-read-failure',retryable:true})}) : route.continue());
+  // 文档只在进入页面和回到窗口时重读，不按固定间隔轮询：这次失败的刷新由窗口唤醒触发。
+  await page.evaluate(()=>window.dispatchEvent(new Event('focus')));
   await reader.getByRole('alert').waitFor();assert.equal(await dialog.getByLabel('文档正文',{exact:true}).inputValue(),'未保存的草稿，必须保留。');await page.unroute('**/knowledge/document-guide-1/document');
   original=await read();ok(await h.request(documentPath,editBody(original,v=>v+'\n并发修改。'),'alice','PATCH'));
   await reader.getByText(/并发修改。/).waitFor();assert.equal(await dialog.getByLabel('文档正文',{exact:true}).inputValue(),'未保存的草稿，必须保留。');

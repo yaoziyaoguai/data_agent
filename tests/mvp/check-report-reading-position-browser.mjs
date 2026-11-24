@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import { chromium } from "playwright";
 import { createReportFixture, ok } from "./check-analysis-reports.mjs";
 import { until } from "./harness.mjs";
@@ -81,8 +81,13 @@ try {
       assert.equal(await selectedCard.locator("tbody tr").count(), preview.length, "当前页在途读取保留已读行");
       assert.equal(await chartCard.getByRole("img").count(), 1, "已有合法分类图表保持当前选择");
       const releasedAt = Date.now(); release();
-      await until(() => starts.length >= 2 && active === 0 || routeError, "当前页完成后普通刷新", 40000); if (routeError) throw routeError;
-      assert.ok(starts[1] - releasedAt >= 1500); assert.equal(maxActive, 1);
+      await until(() => active === 0 || routeError, "当前页读取完成"); if (routeError) throw routeError;
+      // 结果卡不定时再读：读完后空闲没有新请求，窗口唤醒只补一次当前页读取。
+      await page.waitForTimeout(2400);
+      assert.equal(starts.length, 1, "前次读取完成后空闲不再定时重读");
+      await refresh();
+      await until(() => starts.length >= 2 && active === 0 || routeError, "重新聚焦后核对当前页", 40000); if (routeError) throw routeError;
+      assert.equal(maxActive, 1);
       const after = { ...await geometry(), dimension: await dimension.inputValue(), measure: await measure.inputValue() };
       assert.ok(Math.abs(after.top - before.top) < 3); assert.ok(Math.abs(after.composer.y - before.composer.y) < 3);
       assert.equal(after.draft, before.draft); assert.equal(after.dimension, before.dimension); assert.equal(after.measure, before.measure);
@@ -92,26 +97,34 @@ try {
     await chartCard.getByRole("button", { name: "表格", exact: true }).click();
     assert.deepEqual(await selectedCard.locator("tbody tr").allTextContents(), preview);
     await page.screenshot({ path: directory + "/current-page.png" });
-    checks.push("已读当前页慢读取合并focus/visibility与周期，完成后约2秒再读；保留10行预览、分页元数据、表图选择、焦点、会话滚动与草稿，不读取后续页");
+    checks.push("已读当前页慢读取合并focus/visibility，读完后空闲不再定时重读，窗口唤醒补读一次；保留10行预览、分页元数据、表图选择、焦点、会话滚动与草稿，不读取后续页");
 
     const state = () => h.sql("SELECT JSON_OBJECT('runs',(SELECT COUNT(*) FROM agent_runs),'submissions',(SELECT SUM(submission_attempts) FROM query_requests))")[0];
-    const domainBefore = state(), permissions = h.directory + "/platform/permissions.json";
-    let original; try { original = await readFile(permissions); } catch (error) { if (error.code !== "ENOENT") throw error; }
+    const domainBefore = state();
+    const setPermissions = async denied => {
+      const response = await fetch(h.env.DATA_AGENT_PLATFORM_URL + "/permissions", {
+        method: "POST",
+        headers: { authorization: "Bearer " + h.env.DATA_AGENT_INTERNAL_TOKEN, "content-type": "application/json" },
+        body: JSON.stringify({ space_id: "demo", denied_query_users: denied }),
+      });
+      assert.equal(response.status, 200, "平台撤权及变更事件已提交");
+    };
     try {
-      await writeFile(permissions, JSON.stringify({ denied_query_users: ["alice"] }), { mode: 0o600 });
+      await setPermissions(["alice"]);
       const denied = await h.request(resultPath); assert.equal(denied.status, 403); assert.equal(denied.value.code, "forbidden");
-      await until(async () => await page.locator(".result-panel").count() === 0, "普通读取撤下全部已读结果表格与图表", 40000);
+      // 不触发 focus 或重开：平台主动通知撤权，每张已打开的结果卡各自重验。
+      await until(async () => await page.locator(".result-panel").count() === 0, "权限通知撤下全部已读结果表格与图表", 40000);
       assert.equal(await page.getByRole("link", { name: "下载 CSV ↓", exact: true }).count(), 0);
       assert.ok(resultRequests.some(read => read.status === 403), "记录实际浏览器结果读取的权限拒绝");
       measurements.resultPermission = { before: 200, denied: denied.status };
       await page.screenshot({ path: directory + "/permission-denied.png" });
-    } finally { if (original === undefined) await unlink(permissions); else await writeFile(permissions, original); }
+    } finally { await setPermissions([]); }
     for (const query of [...fixture.queries.filter((_, index) => index !== 3), fixture.foreignQuery])
       await page.locator("#query-" + query.id).locator("tbody tr").first().waitFor();
     assert.deepEqual(await selectedCard.locator("tbody tr").allTextContents(), preview);
     assert.deepEqual(state(), domainBefore, "权限回读不能发起模型运行或重复提交SQL");
     assert.equal(await composer.inputValue(), before.draft);
-    checks.push("真实结果200→403→200，普通轮询撤下已读表格/图表/下载入口并恢复原页，保留草稿，模型运行与SQL提交数不变");
+    checks.push("真实结果200→403→200，权限通知撤下已读表格/图表/下载入口并自动恢复原页，保留草稿，模型运行与SQL提交数不变");
 
     let lateHeld = false, releaseLate, lateDone = false, lateError, lateRequest;
     const lateBlocker = new Promise(resolve => { releaseLate = resolve; });

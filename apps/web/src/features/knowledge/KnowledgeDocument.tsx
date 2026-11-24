@@ -36,8 +36,9 @@ export function DocumentName({ object }: { object: KnowledgeObject }) {
   return <>{object.kind === "document" && object.source_id ? title || "业务文档" : object.name}</>;
 }
 
-export function KnowledgeDocument({ object, onSaved, onCorrection, onOpen }: {
+export function KnowledgeDocument({ object, catalogRevision, onSaved, onCorrection, onOpen }: {
   object: KnowledgeObject;
+  catalogRevision: number;
   onSaved: (parts: KnowledgeObject[]) => void;
   onCorrection: () => void;
   onOpen?: () => void;
@@ -59,12 +60,12 @@ export function KnowledgeDocument({ object, onSaved, onCorrection, onOpen }: {
       finally { pending = false; }
     };
     void refresh();
-    // A-02：不再按固定间隔轮询；进入页面和回到窗口时读取，保存已在本地合并。
+    // A-02：不再按固定间隔轮询；进入页面、目录变更和回到窗口时读取，保存已在本地合并。
     const wake = () => { if (!window.document.hidden) void refresh(); };
     window.addEventListener("focus", wake);
     window.document.addEventListener("visibilitychange", wake);
     return () => { live = false; window.removeEventListener("focus", wake); window.document.removeEventListener("visibilitychange", wake); };
-  }, [object.id, object.version, object.maintenance?.version, revision]);
+  }, [object.id, object.version, object.maintenance?.version, catalogRevision, revision]);
   if (!document) return <section className="document-reader">{error ? <p role="alert">{error} <button onClick={() => setRevision(v => v + 1)}>重新读取文档</button></p> : <p role="status">正在读取整篇文档…</p>}</section>;
   const grouped = document.parts.length > 1;
   const sourceLinks = [...new Set(document.parts.flatMap(part => part.entries.map(entry => entry.human_override?.source_url).filter((url): url is string => typeof url === "string" && /^https?:\/\//i.test(url))))];
@@ -94,7 +95,7 @@ export function KnowledgeDocument({ object, onSaved, onCorrection, onOpen }: {
       {document.parts.map(part => <div key={part.id} className="document-section-tools"><strong>{grouped ? part.name : "文档正文"}</strong><span>负责人：{part.maintenance?.maintainer_id ?? "暂未指定"}</span>{part.entries.filter(e => e.entry_id === "body").map(entry => <ProposeCorrection key={entry.entry_id} object={part} entry={entry} onSaved={onCorrection}/>)}</div>)}
     </details>
     {editing && <DocumentEditor key={editing.generation} document={editing.document} objectId={object.id} onClose={() => { ++editGeneration.current; setEditing(null); }} onSaved={value => {
-      // 已放弃的保存由轮询读取结果，旧回执不能关闭后来打开的草稿。
+      // 已放弃的保存由目录变更后的读取带回，旧回执不能关闭后来打开的草稿。
       if (editing.generation !== editGeneration.current) return;
       ++readGeneration.current; setDocument(value); onSaved(value.parts); setEditing(null);
     }}/>}

@@ -123,6 +123,8 @@ export function KnowledgePage({
   const [nextAfter, setNextAfter] = useState<string | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
   const [relatedPage, setRelatedPage] = useState<{parent: string; ids: string[]; next: string | null; loading: boolean; failed: boolean}>({parent: "", ids: [], next: null, loading: false, failed: false});
+  // 多章文档只有代表章节进入关联目录，其余章节改版不改变它的版本；文档阅读区按目录变更信号自行重读。
+  const [catalogRevision, setCatalogRevision] = useState(0);
   const relatedGeneration = useRef(0);
   const [matches, setMatches] = useState<KnowledgeObject[]>([]);
   const [searchLimited, setSearchLimited] = useState(false);
@@ -221,6 +223,7 @@ export function KnowledgePage({
     stream.addEventListener("catalog_changed", () => {
       relatedChanged = true;
       setDirectoryRevision(revision => revision + 1);
+      setCatalogRevision(revision => revision + 1);
       void run();
     });
     stream.addEventListener("corrections_changed", () => setCorrectionsRevision(revision => revision + 1));
@@ -557,7 +560,7 @@ export function KnowledgePage({
                     {!relatedPage.loading && !relatedPage.failed && visibleGroups.length === 0 && <p className="quiet">{tab === "血缘与加工" ? "暂无其他关联对象。" : entryFilter !== "all" && tab === "字段语义" ? "当前筛选下没有匹配的字段。" : "当前已读取的内容中没有此类关联。"}</p>}
                     {(relatedPage.next || relatedPage.failed) && <button disabled={relatedPage.loading} onClick={() => void loadRelated(current, relatedPage.next)}>{relatedPage.failed ? "重试关联内容" : "加载更多关联内容"}</button>}
                   </>}
-                  {documentRepresentatives(visibleGroups).map((o) => o.kind === "document" ? <KnowledgeDocument key={o.source_id ?? o.id} object={o} onOpen={o.id !== current ? () => selectObject(o) : undefined} onSaved={parts => { refresh(); setDirectoryRevision(value => value + 1); setObjects(old => { const byId = new Map(old.map(o => [o.id, o])); for (const part of parts) byId.set(part.id, currentObject(byId.get(part.id), part)); return [...byId.values()]; }); }} onCorrection={() => void refresh()}/> : (
+                  {documentRepresentatives(visibleGroups).map((o) => o.kind === "document" ? <KnowledgeDocument key={o.source_id ?? o.id} object={o} catalogRevision={catalogRevision} onOpen={o.id !== current ? () => selectObject(o) : undefined} onSaved={parts => { refresh(); setDirectoryRevision(value => value + 1); setObjects(old => { const byId = new Map(old.map(o => [o.id, o])); for (const part of parts) byId.set(part.id, currentObject(byId.get(part.id), part)); return [...byId.values()]; }); }} onCorrection={() => void refresh()}/> : (
                     <article key={o.id} className={"semantic-object" + (o.kind === "field" ? " field-object" : "")}>
                       {o.id !== current && o.kind !== "field" && (
                         <h3>
