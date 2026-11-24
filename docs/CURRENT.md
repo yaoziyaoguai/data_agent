@@ -3,11 +3,11 @@
   "workflow": "development",
   "schema": 1,
   "phase": "repair",
-  "goal_revision": 255,
-  "environment": "2026-11-23 在隔离 MySQL、合成平台、本地协议和 Chromium 上完成 ec954f0 基线的 F-01 收口补丁和宿主串行签收。通知验收在基线有 7 个场景失败，实际模型冒烟仍待授权。",
+  "goal_revision": 257,
+  "environment": "2026-11-24 在隔离 MySQL、合成平台、本地协议和 Chromium 上完成本地试用前的剩余修复：上一节 11 条待决项逐条裁决，目录刷新、结果卡权限再读、结构缺口和文档原文向量目标四处修复落地，受影响的非绑定脚本逐份运行。48 项可运行绑定验收的终轮重跑进行中，正式模型请求为 0；2 项缺输入未运行，真实模型冒烟仍待授权。",
   "verification": {
     "level": "increment",
-    "reason": "按 ec954f0 审计完成 F-01 收口补丁和宿主串行门禁。绑定的通知验收在基线失败，五处原因已定位并待决定。I3 的真实模型冒烟仍待授权。",
+    "reason": "按委托裁决上一节的 11 条待决项并完成四处修复，受影响的非绑定脚本已逐份运行；绑定验收终轮重跑进行中。2 项缺输入，真实模型冒烟仍待授权。",
     "freshness": "content",
     "checks": [],
     "inputs": [
@@ -452,7 +452,7 @@
             "C06",
             "C08"
           ],
-          "expected": "慢响应及子请求失败不叠加整页刷新，草稿/分页/跨用户和保存版本保持，在途保存补刷新且离开停止；正常自动刷新保留，零真实模型。",
+          "expected": "慢响应及子请求失败不叠加整页刷新，草稿/分页/跨用户和保存版本保持，在途保存补刷新且离开停止；正常自动刷新保留，零真实模型。2026-11-24续轮修订：语义页自工作台返工起不再定时刷新目录，本项的刷新改由鉴权通知接口发出的目录变更信号触发，离开后另发一次信号确认没有新批次；普通用户没有「我负责的对象」选项，空目录视图改用全部对象加无结果筛选；平台目录把维护人改为Bob并同步后，页面随目录变更信号重读访问角色，「我负责的对象」才对Bob出现；文档阅读区的失败刷新改由窗口唤醒触发；多章文档的非代表章节被他人保存后，阅读区随目录变更信号重读，原并发修改保留草稿的断言不变；原“正常自动刷新保留”按事件刷新核验。",
           "evidence_kind": "runtime",
           "command": [
             "node",
@@ -537,7 +537,7 @@
             "C05",
             "C07"
           ],
-          "expected": "生产attachToolGate参与同一Pi消息：隐藏工具由SDK拒绝且零Rust派发，不伪造Rust回执；可见读取的task_context_required固定hint与安全恢复身份进入实际payload，不含条件/SQL/问题/旧正文；实际route及必要宿主刷新确认就绪后实际get_query/execute。成功route但来源仍未知、错误或缺字段不能解锁；旧来源/摘要/资产、原session/操作身份和v1兼容保持。合同替身不替代真实Rust或真实模型。",
+          "expected": "生产attachToolGate参与同一Pi消息：隐藏工具由SDK拒绝且零Rust派发，不伪造Rust回执；可见读取的task_context_required固定hint与安全恢复身份进入实际payload，不含条件/SQL/问题/旧正文；实际route及必要宿主刷新确认就绪后实际get_query/execute。成功route但来源仍未知、错误或缺字段不能解锁；旧来源/摘要/资产、原session/操作身份和v1兼容保持。合同替身不替代真实Rust或真实模型。2026-11-24续轮修订：v2就绪门已随4e1f2a6移除：读取与执行工具始终在实际payload，不以route或来源就绪解锁；回执带context_reset时先完成宿主范围刷新，同范围route不重建会话并保留原范围与已选Skill。原“实际route及必要宿主刷新确认就绪后实际get_query/execute”“成功route但来源仍未知、错误或缺字段不能解锁”两句按此更正，task_context_required固定hint的断言、场景和其余文字不变。",
           "evidence_kind": "runtime",
           "command": [
             "node",
@@ -556,7 +556,7 @@
             "C07",
             "A02"
           ],
-          "expected": "真实Rust/MySQL的v2来源准入保持条件/草稿版本与原预算；单条就绪后读取并授权一次，结果通知沿原执行预算。两份无限制未确认稿仅先route A，读A/B不另route B，先后项失效证明本批零新增确认/关联/授权、原route不回滚；再同消息/预算新operation合法集合各一次合成平台提交。v1默认原直接执行、阻塞、批量及恢复场景另实际执行，不以v2代替。",
+          "expected": "真实Rust/MySQL的v2来源准入保持条件/草稿版本与原预算；单条就绪后读取并授权一次，结果通知沿原执行预算。两份无限制未确认稿仅先route A，读A/B不另route B，先后项失效证明本批零新增确认/关联/授权、原route不回滚；再同消息/预算新operation合法集合各一次合成平台提交。v1默认原直接执行、阻塞、批量及恢复场景另实际执行，不以v2代替。2026-11-24修订：来源就绪回执字段已随封板移除，准入只看任务是否声明范围。来源不限时交付本人记忆预览，任务限定来源后不再交付；活动任务已声明范围时，未归属的新消息可补读已存草稿，补读不登记归属、确认或授权，route后读取并授权一次；控制目录与旧任务条件保留本人正文；成功route回执按原样重放。默认入口场景同样改按合同2执行，场景与断言不变。",
           "evidence_kind": "runtime",
           "command": [
             "node",
@@ -595,7 +595,7 @@
             "C07",
             "A02"
           ],
-          "expected": "默认v1完整聊天查询回归实际运行，保直接执行/原子归属、拒绝、阻塞、恢复、批量、权限及原消息/操作/预算断言；仅capture和首条自动归属完成显式等待120秒，原until默认20秒保持。",
+          "expected": "默认v1完整聊天查询回归实际运行，保直接执行/原子归属、拒绝、阻塞、恢复、批量、权限及原消息/操作/预算断言；仅capture和首条自动归属完成显式等待120秒，原until默认20秒保持。2026-11-24修订：封板后新运行固定合同2，本项按合同2运行同一组12个场景，默认入口建任务显式声明来源不限。",
           "evidence_kind": "runtime",
           "command": [
             "node",
@@ -613,7 +613,7 @@
             "A03",
             "A10"
           ],
-          "expected": "复用原查询来源回归，提交前撤源保authorization_error终态拦截且零平台提交，unknown后仍按原身份查证/取消；不删除来源/权限/版本核验，不变更原SQL或授权预算。",
+          "expected": "复用原查询来源回归，提交前撤源保authorization_error终态拦截且零平台提交，unknown后仍按原身份查证/取消；不删除来源/权限/版本核验，不变更原SQL或授权预算。2026-11-24修订：已授权结果的HTTP读取可跨同空间会话，模型工具get_query只读当前会话的查询；草稿正式采用的知识停用后首次确认返回409 stale_context；只读过而未采用已停用文档的修订不再在平台预检前拒绝；validate_sql同一SDK调用再次执行时按当前来源重新诊断，不引用已停用关系，依赖它的规则记为未检查或省略。",
           "evidence_kind": "runtime",
           "command": [
             "node",
@@ -630,7 +630,7 @@
             "C07",
             "A01"
           ],
-          "expected": "保留正式21项原场景与失败/未知后的候选失效断言，受控Rust响应按已验证宿主归属/来源字段补合同；原B自然回答保持4轮。与已确认普通final/合法混源要求冲突的断言须按修复包记录旧值、新值及独立依据，不把旧全部行为不变当作保留错误限制的理由。",
+          "expected": "保留正式21项原场景与失败/未知后的候选失效断言，受控Rust响应按已验证宿主归属/来源字段补合同；原B自然回答保持4轮。与已确认普通final/合法混源要求冲突的断言须按修复包记录旧值、新值及独立依据，不把旧全部行为不变当作保留错误限制的理由。2026-11-24修订：封板后新run不再提供present_analysis_answer，涉及它的登记改为旧登记重放通道，v1专属的隐藏字段断言随v1目录移除；脚本为22项。",
           "evidence_kind": "runtime",
           "command": [
             "node",
@@ -683,7 +683,7 @@
             "C05",
             "C07"
           ],
-          "expected": "开放问题为唯一新式未决状态，采纳信息与条件在同次修订保存。原两旧未决经过真实部分回答和无关字段修订后明确转换，按所指字段及原回执核对，仍保另一题、旧版本和操作身份；缺历史依据的resolved恢复open，basis-only不遗漏；确认同值、原采纳及split两稿继承，无歧义直出稿，不新增强制采纳槽或模型回合。",
+          "expected": "开放问题为唯一新式未决状态，采纳信息与条件在同次修订保存。原两旧未决经过真实部分回答和无关字段修订后明确转换，按所指字段及原回执核对，仍保另一题、旧版本和操作身份；缺历史依据的resolved恢复open，basis-only不遗漏；确认同值、原采纳及split两稿继承，无歧义直出稿，不新增强制采纳槽或模型回合。2026-11-24修订：来源就绪回执字段已随封板移除，不再断言。",
           "evidence_kind": "runtime",
           "command": [
             "node",
@@ -736,7 +736,7 @@
             "C03",
             "C05"
           ],
-          "expected": "显式知识引用和结构用途分别核验；当前字段在相关DDL未变时可采用，按path核实际依赖；真实DDL/来源变化及撤权仍正确。 相关正文相同仍核登记版本的下游必要依赖；缺旧指纹仅用真实同版原文补证或定点重整。 entry选择贯穿全部有效贡献来源、草稿来源门及正式答案/报告历史读取，登记/游走去重保留同对象不同entry；未选来源撤回不隐藏所选历史，旧无范围仍整对象，历史普通改版容忍且已选来源撤回仍限制。",
+          "expected": "显式知识引用和结构用途分别核验；当前字段在相关DDL未变时可采用，按path核实际依赖；真实DDL/来源变化及撤权仍正确。 相关正文相同仍核登记版本的下游必要依赖；缺旧指纹仅用真实同版原文补证或定点重整。 entry选择贯穿全部有效贡献来源、草稿来源门及正式答案/报告历史读取，登记/游走去重保留同对象不同entry；未选来源撤回不隐藏所选历史，旧无范围仍整对象，历史普通改版容忍且已选来源撤回仍限制。2026-11-24修订：读取夹具按合同2的参数形状（items内ref.path与structure_only），回执取items[0]，缺口断言改为structure_coverage.notes非空且structure_text为空；每个条目登记各自文档的来源身份。封板后草稿来源门只比较所选条目的来源身份，原related贡献越界文档的草稿拒绝负例随之下调为待决，不再由本项断言，是否恢复对贡献行的核验待用户决定。2026-11-24续轮修订：确认封板语义：草稿来源门只比较所选条目自己的来源身份，related贡献行不再单独核验，上述负例退役；“entry选择贯穿全部有效贡献来源、草稿来源门”据此读作所选条目自身的必要来源与结构依赖。只读读取不再因结构绑定不成立而整次失败：依赖表DDL改版、登记旧表版本且没有结构边的条目，文字照常交付、结构留缺口；正式采用和停用后的读取仍拒绝。",
           "evidence_kind": "runtime",
           "command": [
             "node",
@@ -769,7 +769,7 @@
             "C04",
             "C05"
           ],
-          "expected": "当前消息正确归属时可保存未执行草稿，其他失败未归属消息仍阻断执行；当前未归属、版本变化和授权原边界保留。",
+          "expected": "当前消息正确归属时可保存未执行草稿，其他失败未归属消息仍阻断执行；当前未归属、版本变化和授权原边界保留。2026-11-24修订：任务显式声明来源不限；合成平台补目录访问与带owner的只读预检回执；控制回执比较前去掉宿主计算的frozen_notification_covered；Skill选用回执重放保留成功并标记正文不可用。",
           "evidence_kind": "runtime",
           "command": [
             "node",
@@ -786,7 +786,7 @@
             "C05",
             "C07"
           ],
-          "expected": "正常Pi stop且无工具的完整同任务说明，在SQL等待时无需额外finalize即可正式保存和刷新；新检查点含完整final及原绑定、finish未提交时，经实际deliver/Rust恢复模型调用增量0，原entry/attempt/片段可追溯，SQL仍待确认未执行。保原显式冻结兼容、错误/截断/未完成工具、撤源及B冻结/A控制；原吞全部自然末条断言按交付修复包显式修订。",
+          "expected": "正常Pi stop且无工具的完整同任务说明，在SQL等待时无需额外finalize即可正式保存和刷新；新检查点含完整final及原绑定、finish未提交时，经实际deliver/Rust恢复模型调用增量0，原entry/attempt/片段可追溯，SQL仍待确认未执行。保原显式冻结兼容、错误/截断/未完成工具、撤源及B冻结/A控制；原吞全部自然末条断言按交付修复包显式修订。2026-11-24修订：控制正文核权场景改为重放保持控制指纹、定稿被接受且提交正文等于原控制正文；新输入归属前保留本人已提交的自然正文。",
           "evidence_kind": "runtime",
           "command": [
             "node",
@@ -818,7 +818,7 @@
             "C05",
             "C07"
           ],
-          "expected": "已打开结果卡沿当前页接口单在途普通轮询，撤权撤下缓存表图与下载、恢复可读，过期停止；完成后计时，保持阅读/图表/草稿/焦点，离开取消，不遍历后续cursor页、不触发查询或模型。",
+          "expected": "已打开结果卡沿当前页接口单在途普通轮询，撤权撤下缓存表图与下载、恢复可读，过期停止；完成后计时，保持阅读/图表/草稿/焦点，离开取消，不遍历后续cursor页、不触发查询或模型。2026-11-24续轮修订：结果卡不再定时再读：当前页读取与focus、visibility合并，读完后空闲不再重读，窗口唤醒补读一次；撤权经权限通知撤下已读表格、图表和下载入口，恢复后读回原页；离开后取消或忽略迟到响应。原“普通轮询”“完成后计时”按事件驱动核验，其余断言不变。",
           "evidence_kind": "runtime",
           "command": [
             "node",
@@ -887,13 +887,13 @@
             "C07",
             "A01"
           ],
-          "expected": "真实成功回执同一source三元组覆盖原通知，多来源不丢候选。answer_task_ref表示原工具登记，不将通知run所有答案改绑通知；普通/通知/旧冻结分别消费原证明，旧receipt只补返回副本，原字节不改。覆盖先冻结B再交A混源末项、只有B已合法覆盖A通知两接缝；Rust整体覆盖/finish只推进显式owner及原通知条件，其他来源任务不结清。恢复、结果不可用例外、旧条件和各自scope保持。2026-11-06正常入口已证宽B冻结误覆盖窄A，默认接缝新增mixed-frozen-scope：宿主frozen_notification_covered按原通知scope与控制义务共同计算，Node不再凭query ID判覆盖，B保留且A沿自身范围另交付。",
+          "expected": "真实成功回执同一source三元组覆盖原通知，多来源不丢候选。answer_task_ref表示原工具登记，不将通知run所有答案改绑通知；普通/通知/旧冻结分别消费原证明，旧receipt只补返回副本，原字节不改。覆盖先冻结B再交A混源末项、只有B已合法覆盖A通知两接缝；Rust整体覆盖/finish只推进显式owner及原通知条件，其他来源任务不结清。恢复、结果不可用例外、旧条件和各自scope保持。2026-11-06正常入口已证宽B冻结误覆盖窄A，默认接缝新增mixed-frozen-scope：宿主frozen_notification_covered按原通知scope与控制义务共同计算，Node不再凭query ID判覆盖，B保留且A沿自身范围另交付。2026-11-24修订：撤权后通知读取观察整次调用的forbidden/rejected拒绝回执；跨范围场景分两轮建稿，定稿门不变；升级前已登记的旧答案调用按原登记形态预写后接回，新run不再登记它；同任务异查询负例改经prepare_analysis_answer，仍须拒绝；成功答案回执重放前在事务锁外按当前权限补核回执内结果，撤权后重放拒绝。",
           "evidence_kind": "runtime",
           "command": [
             "node",
             "tests/mvp/check-result-notification-answers.mjs"
           ],
-          "timeout_seconds": 360
+          "timeout_seconds": 480
         },
         {
           "id": "DELIVERY-CONTEXT-CONSISTENCY",
@@ -942,7 +942,7 @@
             "C07",
             "A01"
           ],
-          "expected": "真实Rust成功混源答案按首次登记owner冻结和组合，全部来源各保原task/condition/result/scope；新回执answer_task_ref与登记矛盾明确拒绝。来源任务不反推交付owner，不合并许可或重写旧回执字节；通知与原条件覆盖另由QUERY-NOTIFICATION-SOURCES核验。",
+          "expected": "真实Rust成功混源答案按首次登记owner冻结和组合，全部来源各保原task/condition/result/scope；新回执answer_task_ref与登记矛盾明确拒绝。来源任务不反推交付owner，不合并许可或重写旧回执字节；通知与原条件覆盖另由QUERY-NOTIFICATION-SOURCES核验。2026-11-24修订：旧答案登记按原登记形态预写后接回，重放与原回执一致；单表撤权后重放返回409 stale_context且不带回执正文，恢复后重放仍等于原回执。",
           "evidence_kind": "runtime",
           "command": [
             "node",
@@ -1104,7 +1104,7 @@
             "C05",
             "C06"
           ],
-          "expected": "普通维护配置无默认累计门，真实隔离存储与本地协议验证费用预留、unknown保留、原trial/operation恢复及索引回执；不产生官方调用。",
+          "expected": "普通维护配置无默认累计门，真实隔离存储与本地协议验证费用预留、unknown保留、原trial/operation恢复及索引回执；不产生官方调用。2026-11-24修订：工具回执自4e6008e起按通道报告覆盖，本项改按KnowledgeSearchCoverage逐通道断言：exact与bm25为available；嵌入正常时dense为available，维度错误、回执丢失、缺usage和预算禁止时dense为unavailable且reasons含channel_unavailable；state为bounded的断言不变。2026-11-24续轮修订：文档保存不再登记原文向量目标。原文目标的完整回执重用和缺回执批次沿冻结trial如实失败两处断言，夹具由平台原文目标承担；另断言两份经正式接口保存的文档没有原文目标。",
           "evidence_kind": "runtime",
           "command": [
             "node",
@@ -1141,7 +1141,7 @@
             "C03",
             "C07"
           ],
-          "expected": "真实Pi当前v2与legacy目录/参数合同一致；v2非澄清动作无options合法，v1原合同及条件语义不放宽。",
+          "expected": "真实Pi当前v2与legacy目录/参数合同一致；v2非澄清动作无options合法，v1原合同及条件语义不放宽。2026-11-24修订：模型目录只含现行合同2，v1目录断言随封板移除；request_query与update_analysis_task的决策合同继续用原合同用例核实际接受行为。",
           "evidence_kind": "runtime",
           "command": [
             "node",
@@ -1157,7 +1157,7 @@
             "C03",
             "C05"
           ],
-          "expected": "真实Pi normalize之前拒绝非法set.source_limits:null且同次无部分修改；未知仍隔离、合法unset须真实用户来源证明、原条件版本保持。",
+          "expected": "真实Pi normalize之前拒绝非法set.source_limits:null且同次无部分修改；未知仍隔离、合法unset须真实用户来源证明、原条件版本保持。2026-11-24修订：场景二、六的否定引用改用表的DDL条目（原出处为schema），并增加一份只引用表说明条目的草稿作正向对照。",
           "evidence_kind": "runtime",
           "command": [
             "node",
@@ -1223,7 +1223,7 @@
             "C05",
             "C07"
           ],
-          "expected": "完整Rust lib使用隔离MySQL和有效Pi夹具，包含标题规范表示、重排来源与未知null、原5个DB门控；后续source-recall原断言保持，不将缺环境当通过。",
+          "expected": "完整Rust lib使用隔离MySQL和有效Pi夹具，包含标题规范表示、重排来源与未知null、原5个DB门控；后续source-recall原断言保持，不将缺环境当通过。2026-11-24修订：原文召回夹具改用已索引超过10万字符的平台来源，lib用例、7条raw_stage_*集成用例和source-recall代理核对同一正文和版本，lib用例另核可读且在允许集内、但原文字符数不超过10万的平台来源不进入原文允许集；文档原文的dense召回随P1退役，查询与原文无字面交集、只能由dense向量命中的断言不变。",
           "evidence_kind": "runtime",
           "command": [
             "node",
@@ -1240,7 +1240,7 @@
             "C05",
             "C08"
           ],
-          "expected": "托管模型不因撤环境profile失效；真实停用导致拒绝时草稿保留且无消息/预算/任务新增，恢复可发送；保原浏览器交互和重复提交断言。",
+          "expected": "托管模型不因撤环境profile失效；真实停用导致拒绝时草稿保留且无消息/预算/任务新增，恢复可发送；保原浏览器交互和重复提交断言。2026-11-24修订：历史对话框按「历史记录」定位；登出等到会话删除回执后再切换用户；页面恢复可见后不重读会话快照，查询运行期间没有定时快照请求，对话增量沿事件流到达；建任务显式声明来源不限。",
           "evidence_kind": "runtime",
           "command": [
             "node",
@@ -1256,7 +1256,7 @@
             "C05",
             "C07"
           ],
-          "expected": "当前完整实际准备请求（系统/schema/草稿/supports）与输入预留上界及输出cap建立直接证据，正确单位；代表中文/SQL/支持材料仍可处理，非仅payload字节通过。",
+          "expected": "当前完整实际准备请求（系统/schema/草稿/supports）与输入预留上界及输出cap建立直接证据，正确单位；代表中文/SQL/支持材料仍可处理，非仅payload字节通过。2026-11-24修订：知识对象改版后不再按run新旧整次拒绝：之前读过它的旧run按改版前版本读返回200且该条目为stale，按当前版本读为ok；停用被引用的文档后，采用该文档建议的条目为stale，人工生效值的条目仍为ok，对象不再可检索。",
           "evidence_kind": "runtime",
           "command": [
             "node",
@@ -1288,9 +1288,215 @@
       "evidence": null
     }
   },
-  "reason": "F-01 收口补丁与宿主串行签收见最新一节。通知验收在基线失败待决定，真实模型冒烟待授权。"
+  "reason": "本地试用前的剩余修复见最新一节。绑定验收终轮重跑进行中，2 项缺输入，真实模型冒烟待授权。"
 }
 ---
+
+## 本地试用前的剩余修复（2026-11-24）
+
+基线仍是 `5f6e4d0` 加上一节的工作树，没有新提交。用户要弄清开始本地试用前还剩哪些问题、该怎么解决，看过上一节的 11 条待决项后，把要求层面的判断交给本轮，要求按正常的工程逻辑确认建议并继续修复。本节先给裁决，再给修复、验收变更、文字同步和验证。裁决都可以否决；推翻其中任何一条都是产品改动，要连同对应的测试一起迁回。
+
+### 裁决
+
+- **`related` 依赖行。** 确认封板语义：草稿来源门只比较所选条目自己的来源身份，贡献正文的依赖行不再单独核验，上一节退役的负例不恢复。封板时已裁决「限源比较直接对象、直属表和来源身份」，恢复对贡献行的核验是一道新的产品门，试用前不新增。已知后果：条目的 `related` 行引用范围外文档时，引用它的查询和证据仍被接受。
+- **普通用户的维护入口。** 确认 P-04。上一节把失败原因写错了一处，已在原处更正。角色由是否负责对象推导：`read_access` 把超级维护者配置里的用户记为 `super_maintainer`，负责或可创建对象的记为 `maintainer`，其余是 `user`。平台目录把维护人改成 Bob 并同步后，页面随目录变更信号重读访问角色，「我负责的对象」对 Bob 出现，保存由服务端接受。基线失败是因为旧脚本让当时不负责任何对象的 Bob 选这个范围。服务端的 `can_edit` 没有改。
+- **结果卡的定时再读。** 确认事件驱动，不再定时读取，见下面第三条修复。
+- **按 run 新旧的整次拒绝。** 保持封板行为，不恢复整次拒绝。
+- **DDL 指纹不一致。** 只读读取不再整次失败，见下面第四条修复；正式采用和写路径继续严格。
+- **没有来源身份的知识条目。** 保持现状。只读查询试用库 `data_agent_trial_b0a479e652337b67`：547 个对象全部启用，1661 条启用条目全部带 `source_facts.source_id`，没有会被限源草稿拒绝的存量条目。
+- **文档原文的向量索引。** 停掉，见下面第五条修复。
+- **来源准入。** 确认封板语义，设计文档、契约说明和门禁 08 的文字同步到当前行为，见“文字同步”。
+- **通知验收的时间余量。** 放宽绑定超时，360 秒改为 480 秒。上一轮实测 308 秒，本轮 358 秒，余量 2 秒。`make verify-increment --complete` 按这个超时终止进程，余量这么小会在宿主负载高时把一次会通过的运行判成失败。超时是防挂起的保护，不是性能要求；脚本内部各步的时限和全部断言没有改。
+- **`validate_sql` 对已停用来源的宽容、只读过未采用已停用文档的 run。** 保持基线行为和用户已确认的预期。
+
+### 修复
+
+- **目录刷新改按事件核验。** `DIRECTORY-REFRESH` 的脚本 [check-knowledge-experience-browser.mjs](../tests/mvp/check-knowledge-experience-browser.mjs) 改了四处。Bob 的空目录视图：普通用户没有「我负责的对象」选项，改为选全部对象加无结果筛选，首批慢目录返回和迟到的搜索结果都不得恢复表详情。目录刷新：脚本经鉴权通知接口 `/internal/live-changes` 发目录变更信号，离开页面后再发一次，确认没有新批次。维护人改为 Bob：同步后页面随目录变更信号重读访问角色，「我负责的对象」出现，Bob 从负责目录编辑并保存表语义，这一段保留。文档阅读区：失败的刷新由窗口唤醒触发。
+- **文档阅读区随目录变更重读。** 这是上条迁移时露出的一处产品缺口。多章文档只有代表章节进入关联目录，其余章节被他人保存时代理章节的版本不变；阅读区从 A-02 起只在进入页面和回到窗口时读取，编辑器打开期间看不到这次保存。[KnowledgePage.tsx](../apps/web/src/features/knowledge/KnowledgePage.tsx) 收到目录变更信号时递增 `catalogRevision`，[KnowledgeDocument.tsx](../apps/web/src/features/knowledge/KnowledgeDocument.tsx) 的读取随它重读，草稿和并发冲突的保留逻辑不变。探针 `.local/checks/audit2/roundd/diag-doc-refresh.mjs` 修复前后各跑一次：场景同门禁：先由编辑器完成一次全文保存，读取故障由窗口唤醒触发，然后另一会话保存末章。去掉修复时，目录变更信号到达后阅读区没有重读，8 秒后并发修改的正文仍不出现（`diag-red.log`）；保留修复时，保存后阅读区重读整篇文档，正文出现，编辑框里的草稿未动（`diag.log`）。
+- **结果卡改按事件核验。** `QUERY-RESULT-PERMISSION-POLL` 的脚本 [check-report-reading-position-browser.mjs](../tests/mvp/check-report-reading-position-browser.mjs) 原来等当前页读完后约 2 秒的定时再读，并靠改写权限文件等普通轮询撤下结果。新脚本核：慢读取与 focus、visibility 合并，读完后空闲 2.4 秒内没有新请求，窗口唤醒只补读一次；撤权经合成平台的 `/permissions` 接口提交，权限通知撤下已读表格、图表和下载入口，恢复后自动读回原页；离开后迟到响应不恢复旧结果。产品没有改。
+- **DDL 指纹不一致不再让只读读取整次失败。** 上一轮的 `check_delivered_refs_in_tx` 只放过结构绑定步骤的 `invalid_input` 和 `unsupported`。还剩一种：条目登记了旧表版本，没有结构边，表 DDL 改版后指纹对不上，读后复核返回 `stale_knowledge`，整次读取失败。[references](../crates/data-agent/src/use_cases/knowledge/references.rs) 把读后复核拆成两段。依赖表读不到（停用、删除、撤权）仍返回 `stale_knowledge` 并拒绝。依赖表已读齐而绑定对不上当前 DDL 时，已按缺口交付的读取不再拒绝。采用、写入和检索候选的核验仍走 `check_refs_in_tx`。修复前同一脚本读取表说明返回 `409 stale_knowledge`（`g19.log`），修复后 9 组通过（`g19c.log`）。
+- **文档不再登记原文向量目标。** 文档原文的索引目标此前在保存时登记、在显式重建时补登记，由统一消费者写入向量集合；`4e1f2a6` 起原文召回只查平台摘录，这些向量的费用照付、召回不到。[knowledge_documents](../crates/data-agent/src/use_cases/knowledge_documents.rs) 的 `register_document_preparation_in_tx` 只排队语义准备；[raw_index_handover](../crates/data-agent/src/use_cases/raw_index_handover.rs) 的显式重建只补登记当前可读的平台来源。封板前登记的文档原文目标和旧 raw 队列里的文档作业不受影响，仍由原移交入口和统一消费者收敛；模块层的登记入口保持与来源类别无关。试用库没有原文目标行，也没有旧 raw 作业，不需要迁移。这条改的是 2026-10-24 已通过端到端验收的行为，当时的要求是「保存当前原文原子登记raw索引和语义准备」，验收脚本是 `check-document-preparation`。
+
+### 验收与要求变更
+
+**验收与要求变更（`DIRECTORY-REFRESH`）：** 原值五处。普通用户 Bob 选「我负责的对象」，目录为空。语义页定时刷新目录，脚本等下一次自动刷新。离开页面后等 2.9 秒确认不再刷新。文档阅读区的失败刷新靠定时读取。门禁文字写“正常自动刷新保留”。新值：Bob 选全部对象加无结果筛选；刷新由目录变更信号触发，离开后再发一次信号；阅读区的失败刷新由窗口唤醒触发；多章文档的非代表章节被他人保存后，阅读区随目录变更信号重读。原因是 11-21 的返工把目录和阅读区的定时读取换成了事件，「空间目录只广播变更信号，对象及版本经现有有权目录接口返回。」；P-04 把维护入口收窄到维护者角色，角色又由负责对象推导。独立依据是「工作台首批返工验收（2026-11-21）」的上面那句，以及「data_agent.html 审计确认问题修复（2026-11-21）」的「P-04 普通用户的语义页收窄为只读“数据字典”，维护动作、影响面板、常用表开关与预填/整理状态仅维护者可见」。影响是草稿保留、在途保存补刷新、旧版本不覆盖、慢响应不叠加刷新和离开后停止这几条断言不变，Bob 保存表语义的场景保留。
+
+**验收与要求变更（`QUERY-RESULT-PERMISSION-POLL`）：** 原值两处。结果卡沿当前页接口单在途普通轮询，当前页读完后约 2 秒定时再读。撤权后靠轮询撤下已读结果。新值：读完后空闲不再重读，focus 与 visibility 合并，窗口唤醒补读一次；撤权经权限通知撤下已读结果，恢复后自动读回原页。原因是「报告和查询结果按权限通知或窗口唤醒重验」，定时再读已经不存在。独立依据是「工作台首批返工验收（2026-11-21）」的这句。影响是单在途、阅读位置、图表、草稿、焦点、离开取消和不读后续页的断言不变。定时再读原是权限撤销后的一条后备保障，「最后一次通知失败时，在线页面可能等到重连才更新」这一已知限制随之保留，没有新增兜底。
+
+**验收与要求变更（`STRUCTURAL-BINDING-ADOPTION`）：** 两处。其一，`related`。原值有一条负例：条目 0 的依赖行改记为 `related`，并插入一条引用越界文档的贡献行，期望草稿被来源门拒绝；上一节把它退役并记为待决。新值确认退役，门禁文字里「entry选择贯穿全部有效贡献来源、草稿来源门」读作所选条目自身的必要来源与结构依赖。原因是封板后的草稿来源门只比较所选条目的来源身份。独立依据是「限源比较直接对象、直属表和来源身份」。影响见裁决第一条。其二，新增第九组。依赖表 DDL 改版后，登记旧表版本且没有结构边的条目，`read_knowledge` 交付文字，`structure_only` 读取留缺口；把它正式采用进任务条件返回 `stale_knowledge`，依赖表停用后读取仍拒绝。原值这里整次返回 409。独立依据是「旧检查点按当前对象启停及表级读权接续，结构绑定留在工具、SQL 校验、确认及答案交付」和[实现设计](architecture/implementation-design.md)的「内部结构绑定按已证相关DDL及当前结构核验并返回本次实际依赖。旧调用仍可读写文字。」。影响是前七组场景和断言不变。
+
+**验收与要求变更（`SHARED-EMBEDDING-POLICY`）：** 原值用两份经接口保存的文档做原文目标夹具：长文的原文目标取得完整回执，预算耗尽时另一份的原文目标冻结原预算并失败，重建集合后前者零调用收敛、后者如实失败。新值把两处夹具换成平台来源，待办行按登记入口写入的形状直接登记；断言不变，另加一条：两份文档保存并完成索引后，空间里没有文档原文目标。原因是文档不再登记原文目标，而原文召回自 `4e1f2a6` 起只查平台摘录。独立依据是[实现设计](architecture/implementation-design.md)的「普通原文召回只考虑已索引超过 10 万字符的平台来源，独立文档统一以知识条目定位。」和[语义检索设计](semantic-retrieval-design.md)的「独立文档以知识条目切出原位摘录。」。影响是费用预留、unknown 保留、trial 恢复和 384 维集合拒绝的断言不变。
+
+**验收与要求变更（`CORE09-ERROR-HANDOFF`）：** 只改门禁文字。原值写 v2 来源就绪后才能调用 `get_query`/`execute`，route 成功但来源仍未知不能解锁。新值写读取与执行工具始终在 payload 里，回执带 `context_reset` 时先完成宿主范围刷新。原因是 `4e1f2a6` 移除了就绪门。独立依据是「工具集始终可用」。脚本、场景和断言没有改。
+
+**未绑定的脚本和 Rust 用例随“文档不再登记原文向量目标”调整。** 原因和独立依据同 `SHARED-EMBEDDING-POLICY`。
+
+- `check-document-preparation.mjs`：原值在创建、整理完成和保存第 2 版三处断言文档登记了 raw 索引待办；新值三处断言没有原文向量目标，整理作业的登记、成果和预算断言不变。改动前通过（`base-docprep.log`）。
+- `check-index-target.mjs`：原值用新建文档的原文目标证明不兼容集合在领取前被拒绝；新值改用直接登记的平台原文目标。改动前通过（`base-idxtarget.log`）。
+- `check-retrieval-allowed-set.mjs`：原值等待七份文档的原文行索引完成，并把一份范围外文档的原文行改回 pending；新值等待它们的知识行，不再改原文行。这条脚本改动前后都在 97 行失败，见“未执行与未处理”。
+- `check-hybrid-retrieval.mjs`：原值断言两份规则文档的原文摘录入索引、长文文档的原文尾段入索引、文档 raw 作业收尾、两个整理夹具各有可查原文目标。新值把原文夹具换成两个平台来源，断言相同，另断言空间里没有文档原文目标；整理夹具改核知识索引目标。改动前 改动前的运行在文档原文那一段和 Rust 门控测试通过之后，停在第三次全量重建索引，被 50 分钟的看门狗终止，那段时间宿主负载在 75 到 125 之间（`base-hybrid.log`、`load.log`），没有完整的通过记录。改动后的结果见“验证”。。
+- `check-shared-index-todo.mjs`：原值的并发场景经接口新建文档，断言知识和原文两个目标都完成；新值在旧知识轮询响应被截住后登记一个平台原文目标，断言它一次领取后完成、尾部可见。代理的 SQL 分类器跟着换成平台来源的头查询。它的基线本来就是红的：HEAD 的 `unified_consumer_projects_document_source_into_shared_collection` 断言“无来源限制的BM25必须召回登记文档”，而原文召回只查平台摘录（`base-runner.log`）。
+- `source_index_registration.rs`：原值一条用例经保存入口登记文档原文目标，并断言文档摘录可召回。新值拆成两条。一条断言文档保存只排一项 `prepare_source`、没有原文目标；配改动前的库它失败在“文档保存不登记原文向量目标”，实际 1、期望 0（`base-red-registration.log`）。另一条保留封板前登记的文档原文目标收敛到投影完成，用同一正文的平台来源作召回正例，断言原文通道不返回文档摘录。
+- `raw_index_handover.rs`：原值用 70 份文档验证显式重建补登记，用一份文档验证旧租约到期后接续。新值改用 72 个平台来源和 4 份文档；平台来源里外空间、停用、不可读各一个，有效旧租约和失败终态各一个；另断言 4 份文档不登记，文档的旧 raw 作业不被显式重建接管。旧 raw 作业的文档移交仍由 `production_handover_advances_past_unusable_due_prefix_without_changing_it` 覆盖，那条用例没有改。两条用例随场景改名：`rebuild_registers_platform_sources_preserves_legacy_work_and_replays_once` 和 `legacy_document_target_converges_while_recall_stays_platform_only`。
+- `index_recovery.rs`：恢复夹具里的文档原文行改为直接经登记入口建立。
+
+**没有改的一份。** `check-public-index-upgrade.mjs` 在这项改动之前就通不过，两种模式都不在绑定验收里。默认模式在脚本 237 行断言“切B后真实中文检索必须召回原长文尾部”，文档原文的召回自封板起已不存在；`--owner` 模式不先准备向量集合，Rust 用例 `production_handover_advances_past_unusable_due_prefix_without_changing_it` 以 `vector_unavailable` 失败（`base-upgrade.log`、`base-upgrade-owner.log`）。改动后默认模式在 118 行失败，那里断言显式重建补登记文档原文目标（`rd-public-index-upgrade.log`）。本轮没有改这份脚本；修好它要把原文夹具换成已索引超过 10 万字符的平台来源，并让 owner 模式先准备集合。
+
+### 文字同步
+
+- 设计文档里“先 route、宿主确认就绪后才恢复工具”的说明改成封板后的准入规则：[实现设计](architecture/implementation-design.md) 六处（执行授权、控制回执、来源恢复反馈、`read_source` 控制提示、v2 证据准入、固定 hint），[runtime-modules](architecture/runtime-modules.md) 一处，[语义检索设计](semantic-retrieval-design.md) 两处。`execution/semantic-runtime` 下的 `interaction-continuation-repairs.md` 和 `CONTINUATION_PROMPT.md` 是归档的执行规格，文首已写明当前状态只看本文件，没有改。
+- `packages/contracts/schema.json` 里 `source_context_ready`、`source_context_blocker` 和 `SourceContextBlocker` 的说明改为旧字段：宿主不再产出，只为读取封板前的回执和快照保留。字段和枚举没有删，契约用例里它们仍是合法输入；重新生成了 `boundary.rs` 和 `boundary.ts`。
+- [实现设计](architecture/implementation-design.md) 17.6.1 的保存与后台处理、`source_excerpt` 的建索引资料和去重说明，按“原文向量目标只属于平台来源”改写；同节检索段里“独立文档正文走raw”一句同步。
+
+### 验证
+
+二进制是 19:07 分开重建的 `data-agent-api`（SHA-256 `3881a12a76c2fc7d8ce6b7ca61f6126faa4666bc40c8ffdfeae392e28f167118`）和 `data-agent-worker`（`2f61ce2086ba9b4e235eb3b21ccb9b31bab839c123961d458176ae6778815c3c`），摘要保存在 `.local/checks/audit2/roundd/bin-roundd.sha256`。重建前 fmt 检查、clippy（全部目标，零警告）和 `tsc --noEmit` 通过。正式模型请求为 0。下面没有写目录的日志都在 `.local/checks/audit2/roundd/`。
+
+- **改动前对照。** 用第 4 项改动之前的二进制配 HEAD 的源文件和脚本串行运行（`base-chain.log`）。`check-document-preparation` 和 `check-index-target` 通过。`check-shared-index-todo` 失败在 HEAD 用例 `unified_consumer_projects_document_source_into_shared_collection`，断言“无来源限制的BM25必须召回登记文档”。新用例 `document_save_queues_semantic_preparation_without_raw_target` 配改动前的库失败在“文档保存不登记原文向量目标”，实际 1、期望 0（`base-red-registration.log`）；同一轮里 `legacy_document_target_converges_while_recall_stays_platform_only` 通过。`check-public-index-upgrade` 默认模式失败在脚本 237 行，`--owner` 模式失败在 `vector_unavailable`。`check-hybrid-retrieval` 见上一节清单。
+- **受第 4 条影响的脚本，改动后。** `check-shared-index-todo` 通过：`source_index_registration` 3 条、`raw_index_handover` 7 条、`index_recovery` 7 条，收尾的并发场景 4 项检查。`SHARED-EMBEDDING-POLICY` 10 项通过，96 秒。`check-document-preparation` 2 项通过。`check-index-target` 4 项通过。`check-public-index-upgrade` 仍在 118 行失败，`check-retrieval-allowed-set` 的 HEAD 版本和当前版本都在 97 行失败。对齐过程中改掉两处测试自身的问题：重建用例的清理只删原文行，留下 4 条没有对象的知识行，收尾等待超时（`diag-runner.log`）；代理按旧文本识别领取语句，而领取语句自 `5e5e189` 起多了 `SELECT space_id,` 前缀，事件顺序断言取不到领取事件。
+- **绑定验收终轮。** 48 项自 19:33 起在最终二进制上串行运行，本记录写入时进行中：第一段 4 项已通过，其余随后补记。
+- **混合检索长电池。** 排在终轮之后，本记录写入时尚未开始。
+- **静态门禁。** 本记录写入时尚未运行。
+- **文档阅读区探针。** 见“修复”第二条的 `diag-red.log` 和 `diag.log`。
+- **验证范围。** 本机的隔离 MySQL、合成平台、回环协议端和 Chromium，不代表真实模型、部署或用户验收。
+
+### 未执行与未处理
+
+- 真实模型冒烟、里程碑标签和 CI 门禁仍未开始，前者需要授权。`make infra-up && make dev` 是试用的启动动作，留给用户执行。
+- `make verify-increment` 未运行，增量仍为 active，审查状态为 pending。改动未提交、未推送。
+- `INTEGRATED-EVIDENCE` 和 `SOURCE-TRAJECTORY-EVIDENCE` 仍缺输入，没有运行。
+- `check-public-index-upgrade.mjs` 和 `check-retrieval-allowed-set.mjs` 是两条改动前后都失败的非绑定脚本。后者在脚本 97 行按合同 1 取 `objects`，新运行的回执按合同 2 只有 `hits`，HEAD 版本在同一行同样失败（`rd-allowed-set-baseline.log`）。本轮对它的两处小改，第一处（第 80 行的等待）被执行到，第二处是删掉一条不再匹配任何行的 UPDATE，没有机会执行到。修好它要按合同 2 重写读取和检索断言。
+- 其余非绑定旧脚本没有全量对齐。本轮只跑了受“文档不再登记原文向量目标”影响的几份和 48 项绑定验收。
+- `update_analysis_task` 的回执重放不重新核验 `knowledge_refs`，上一节的记录没有变。
+- 本会话之外的两件事，都没有动：`target/` 在 16:17 被整体删除，本轮重建后 api 和 worker 的摘要与上一轮不同；一个 16:21 启动、父进程已不在的合成平台进程（PID 9832，目录 `.local/checks/mvp-9f349d78c0a063df`，端口 52241）和同名测试库 `data_agent_test_9f349d78c0a063df`。
+- 本轮自己的残留已清：基线长电池被看门狗终止后留下的 api、worker、桥接和合成平台进程，测试库 `data_agent_test_c058c26f3fcbd9b6`，Milvus 集合 `da_app_5749f9ce78214f2f8de5f5a6ae49fd0d` 及其 `_legacy`。
+- 宿主负载在本轮验证期间多次超过 50，最高约 125（`load.log`）。负载高时的超时按失败处理，不计入通过。
+
+
+## 审计收口修复与绑定验收对齐（2026-11-24）
+
+基线 `5f6e4d0`，工作分支 `codex/semantic-maintenance-prototype`。本轮按第二份独立审计修完通知验收 `QUERY-NOTIFICATION-SOURCES` 的五处原因和审计点名的另外两条绑定验收，并在最终二进制上逐条运行本增量绑定的 50 项验收。审计在全量 50 项里点名通知验收和另外两条。纯净 `5f6e4d0` 二进制配 HEAD 脚本实际有 19 项失败：3 项是审计点名的，13 项的脚本没有随 11-18 至 11-22 的合同和来源规则修订同步，3 项没有随 11-21 的工作台返工同步。本轮修好 17 项，其中 `STRUCTURAL-BINDING-ADOPTION` 背后是一处产品回归；`DIRECTORY-REFRESH` 和 `QUERY-RESULT-PERMISSION-POLL` 与后来已裁决的要求冲突，留给用户决定。审计清单之外另修 3 处产品问题。正式模型请求为 0，改动留在工作区。
+
+### 产品修复
+
+- **契约保留显式空值（审计 ①）。** [生成器](../packages/contracts/generate.mjs)把 `RunSnapshot.result_query_id` 加入显式保留名单，给 `RunSnapshotElement` 配置 `RunSnapshot` 别名，重新生成 `packages/contracts/generated/boundary.rs`。Rust 契约校验补上 `RunSnapshot` 分支，此前这个名称在校验程序里原样透传。契约用例新增 3 例：用户请求的 run 显式 `result_query_id:null`，旧快照省略可选字段，工作台更新同时带 `null`、省略和已关联三种 run；701 例变为 704 例。
+- **成功答案回执重放前补核（审计 ③）。** [preflight](../crates/data-agent/src/use_cases/data_tools/preflight.rs)先在短事务里加锁读出已登记回执并提交，在事务和行锁之外按当前查看者用回执里的结果补调 `text_results.include(..., false)`，再按同一加锁顺序重新锁定并复核租约。`allows(..., false)` 不放宽。审计建议在加锁前读回执，那需要新增一个无锁读取函数，并把会话、回合和租约的核对挪到读取之后；现有写法与「架构减负实施（2026-11-22，P1 验收通过）」的「派发保留锁外平台权限请求和二次重锁」同构。文件 722 行，比审计估计多 2 行，距 800 行上限 78 行。
+- **控制投影回执补核来源。** `update_analysis_task`、`request_query`、`execute_query` 每次调用先核本 run 冻结答案的结果权限。此前只有带 `finalize_current_answer` 的 `update_analysis_task` 才核；`4e1f2a6` 起结果键带历史标记，未核的键让宿主算出的 `frozen_notification_covered` 失真。只做审计 ④ 的两轮建稿时，`mixed-frozen-scope` 仍在定稿处返回 `409 invalid_evidence`。
+- **草稿采用的知识停用后按依据失效拒绝。** [query_workflow](../crates/data-agent/src/use_cases/query_workflow.rs)把草稿正式采用的知识已停用、已删除或无权读取映射为 `stale_context`，HTTP 状态由 404 变为 409。`4e1f2a6` 起首次确认返回 `not_available`，与「架构减负实施（2026-11-22，P1 验收通过）」的「底表停用时，原待确认回归实测返回 `409 stale_context`」和 `check-knowledge-workflow.mjs` 的「知识停用后旧SQL不能确认」不符。
+- **结构缺口不再让整次读取失败。** `4e1f2a6` 起，读取工具返回前用上下文权威复核刚交付的引用。复核沿采用路径核对结构绑定，条目的列已不在当前 DDL 时返回 `invalid_input`，整次调用变成 HTTP 400。读取本身按缺口合同交付：`effective_structure` 为空，`structure_coverage.state` 为 `missing_semantics`。受影响的是 `read_knowledge`、`search_knowledge` 和 `read_source` 的读后复核；检索命中里有一条含结构缺口的条目时，这次检索也整次失败。[references](../crates/data-agent/src/use_cases/knowledge/references.rs) 新增 `check_delivered_refs_in_tx`，只供[上下文权威](../crates/data-agent/src/use_cases/context_authority.rs)的读后复核调用：结构绑定步骤的 `invalid_input` 和 `unsupported` 不再拒绝整份正文。停用、撤权和来源失效照常拒绝；采用、写入和检索候选的核验仍走 `check_refs_in_tx`。缺口场景的断言没有改。独立依据是「架构减负实施（2026-11-22，P1 验收通过）」的「旧检查点按当前对象启停及表级读权接续，结构绑定留在工具、SQL 校验、确认及答案交付」和[实现设计](architecture/implementation-design.md)的「内部结构绑定按已证相关DDL及当前结构核验并返回本次实际依赖。旧调用仍可读写文字。」。没有新增 Rust 单元测试：回归由 `STRUCTURAL-BINDING-ADOPTION` 的后三个夹具和未绑定的 `check-context-dependencies.mjs` 覆盖，检索命中的影响面由探针确认。
+
+### 通知验收与混源验收的夹具（审计 ②④⑤⑥）
+
+- **② `unavailable`。** 通知前撤回读权后，`get_query` 的观察改为整次调用返回 `{"error":"forbidden","outcome":"rejected"}`，不带查询状态和结果。
+- **④ `mixed-frozen-scope`。** 限源的 A 与不限源的 C 分两轮建稿，草稿正文不变，自然范围门和定稿门保留。审计只要求拆成两轮，上面的控制投影修复是这条场景转绿的另一处原因。
+- **⑤ `legacy-present-recovery`。** 按升级前的账本构造半轮，`route` 与 `get_query` 已有回执，`present_analysis_answer` 只登记未执行；恢复沿原操作号、SDK 调用号和来源 run 接回。审计写的是预写 v1 登记；`preflight` 对版本不是 2 的未执行登记直接返回 `outcome_unknown`，所以登记行只保留旧工具名和原参数指纹，合同版本随 run 记为 2。
+- **⑤ `p-negative`。** 两次 `present_analysis_answer` 改为 `prepare_analysis_answer`，正文以 `{{value}}` 绑定数值后定稿。同任务异查询的冒充仍须拒绝。
+- **⑥ `--mixed-owner`。** 同样预写旧登记后接回，重放与原回执一致。另补单表撤权后重放返回 `409 stale_context` 且不带回执正文、恢复后重放等于原回执；此前没有断言覆盖撤权后的重放。
+- **⑥ 默认聊天查询。** 合同版本断言由 1 改为 2，新建任务显式声明来源不限。审计给出的另一条路「在测试环境显式注入 v1 种子」不可行，新 run 的合同版本没有环境入口。
+
+预写登记统一走 [harness](../tests/mvp/harness.mjs) 的 `legacyAnswerRegistration`，指纹是排序后登记参数 JSON 的 SHA-256。
+
+### 绑定验收在基线的失败
+
+纯净 `5f6e4d0` 二进制配 HEAD 脚本，19 项绑定验收失败。18 项由换成基线二进制再换回的对照运行证明，见 `.local/checks/audit2/` 的 `attrib-chain-summary.txt`、`gate49-attrib-summary.txt`、`baseline-*.log`、`base-*.log` 和 `gate10-attrib-baseline.log`。`LIBRARY-STORAGE-REGRESSIONS` 的 Rust 用例编译工作区，换二进制不能归因：它第一次失败的日志被后来的通过运行覆盖，剩余的运行证据是 `queue-summary.txt` 里 `agent-library exit=1` 的两行，其余由提交对照确定，见该项记录。通知验收的 7 个场景见上一节；`--mixed-owner` 在脚本 168 行返回 `unsupported`，默认聊天查询在脚本 34 行断言合同版本。其余 16 项如下。
+
+| 绑定验收 | 脚本 | 基线失败位置 | 原因 |
+| --- | --- | --- | --- |
+| `SOURCE-ADMITTED-QUERY` | `check-conversational-query.mjs --source-admission` | 脚本 81 行 | 就绪门已移除 |
+| `QUERY-PREPARATION-LEASE` | `check-query-preparation-lease.mjs` | 脚本 46 行，`409 task_context_required` | 任务未声明来源范围 |
+| `QUERY-TEXT-AUTHORITY` | `check-query-text-authority.mjs` | 脚本 40 行，`409 task_context_required` | 任务未声明来源范围；其后另有一处产品回归 |
+| `CORE09-ANSWER-STATE` | `check-answer-state.mjs` | 脚本 564 行 | 新 run 不能登记 `present_analysis_answer` |
+| `CLARIFICATION-DECISION-STATE` | `check-query-semantics.mjs --decision-state` | 脚本 313 行 | 就绪回执字段已移除 |
+| `DRAFT-EXECUTION-BOUNDARY` | `check-workflow-reliability.mjs` | 脚本 114 行，`409 task_context_required` | 任务未声明来源范围 |
+| `SAME-TASK-EXPLANATION` | `check-waiting-task-delivery.mjs` | 脚本 267 行 | 控制正文不再随来源停用擦除 |
+| `CURRENT-TOOL-PARAMETERS` | `check-tool-schema.mjs` | 脚本 52 行 | 模型目录只有合同 2 |
+| `SOURCE-NULL-BOUNDARY` | `check-source-limits.mjs` | 脚本 156 行 | 表说明的原出处已是业务指南 |
+| `STRUCTURAL-BINDING-ADOPTION` | `check-structure-column-bindings.mjs` | 脚本 128 行，保存证据返回 `409 source_not_allowed` | 夹具条目没有来源身份；修好后露出上面的产品回归 |
+| `SHARED-EMBEDDING-POLICY` | `check-shared-embedding.mjs` | 脚本 37 行，`vector_state` 为 `undefined` | 工具回执自 `4e6008e` 起按通道报告覆盖 |
+| `LIBRARY-STORAGE-REGRESSIONS` | `check-agent-library.mjs` | lib 用例 `raw_allowed_records_include_readable_heads_without_task_gate`、7 条 `raw_stage_*` 集成用例和代理断言 | 仍断言文档原文召回，P1 起原文召回只用平台来源 |
+| `PREFILL-RESERVATION-BOUND` | `check-prefill-materials.mjs` | 脚本 211 行，错误码为 `undefined`，期望 `stale_context` | 封板后不再按 run 新旧整次拒绝 |
+| `COMPOSER-MODEL-REJECTION` | `check-conversation-reliability.mjs` | 脚本 132 行，等不到「全部会话」对话框 | 对话框已改名，其后另有 4 处 |
+| `DIRECTORY-REFRESH` | `check-knowledge-experience-browser.mjs` | 脚本 29 行，普通用户选不到「我负责的对象」 | 维护入口只对维护者角色可见，见「需要决定」 |
+| `QUERY-RESULT-PERMISSION-POLL` | `check-report-reading-position-browser.mjs --query-results` | 脚本 84 行，`timeout: 当前页完成后普通刷新` | 结果卡不再定时再读，见「需要决定」 |
+
+下列记录中，“P1 验收调整”指 `.local/checks/workbench-rework/architecture-reduction/test-changes.md` 的行号，该清单由「架构减负实施（2026-11-22，P1 验收通过）」引用。表中 16 项的脚本，在 `.local/checks` 和本文件里都没有它们在致败改动之后的通过记录。封板轮留下的运行日志只覆盖其中三项，都早于 `4e1f2a6` 提交（11-22 14:36），不能证明提交后的代码：`SOURCE-NULL-BOUNDARY` 11-22 12:40 通过；`DRAFT-EXECUTION-BOUNDARY` 最后一次运行是 11-21 21:25；`LIBRARY-STORAGE-REGRESSIONS` 的 lib 用例 11-22 01:08 通过，集成用例和代理 11-21 20:54 通过。P1 验收调整第 71–97 行的旧测试迁移多数写着「语法已检，整条未跑」，第 131 行写着「适配测试不代表已通过」。本文件正文没有提到 `check-knowledge-experience-browser.mjs` 和 `check-query-preparation-lease.mjs`；`check-source-limits.mjs` 只在 P1 小节里留有上面那次运行，其余脚本最新的小节日期在 10-26 到 11-15 之间。
+
+**验收与要求变更（`QUERY-NOTIFICATION-SOURCES`）：** 原值是上一节五处原因对应的 11 个场景。新值是上面的 ②④⑤ 三条。原因是 `4e1f2a6` 起新 run 固定为合同 2。独立依据是审计对 ②④⑤ 的逐行核实，以及「工作台答复与查询回读修复（2026-11-23）」的「已有结果的表权限由平台核定」和「退役的答案工具从原登记形态进入旧回执续接」。影响是场景数、全部产品安全门和 `p-negative` 的同任务防冒充断言不变。`legacy-present-recovery` 原来在合同 1 的 run 上靠合成中断制造半轮，恢复前把 run 升到合同 2，旧登记在合同 2 目录下回放，预算范围累计发出 3 次模型调用。新 run 从一开始就是合同 2，Pi 对目录外的工具直接回 not found，这条路径不再出现；新值按升级前的账本预写半轮后接回，预算范围的模型调用由 3 次变为 0 次。
+
+**验收与要求变更（`ANSWER-OWNER-SOURCES`）：** 原值在合同 1 的 run 上新登记 `present_analysis_answer`。新值预写旧登记后接回，重放等于原回执，撤权后重放拒绝。原因同上。独立依据是审计 ③ 的同一补核路径，以及「架构减负实施（2026-11-22，P1 验收通过）」的「旧成功结果撤权与跨用户拒绝另有实际结果断言」。影响是只增加断言，owner 冻结、来源保留和矛盾回执拒绝不变。
+
+**验收与要求变更（`CONVERSATIONAL-QUERY-V1`）：** 原值断言新 run 的合同版本为 1，默认入口建任务不声明来源。新值断言为 2，条件显式 `source_limits:null`。原因是 `deliver_run.rs` 对新 run 固定合同 2。独立依据是[实现设计](architecture/implementation-design.md)的「新运行使用工具合同2」和 P1 验收调整第 137 行「普通用户未声明附加来源限制时在建立任务明确使用 `null`」。影响只在这两处夹具，12 组场景的断言不变。
+
+**验收与要求变更（`SOURCE-ADMITTED-QUERY`）：** 原值的五组场景围绕 `source_context_ready` 就绪门：未就绪时不交付个人记忆，`get_query` 返回 `task_context_required` 并提示等待就绪，回执带 `source_context_blocker`。新值按范围是否已知准入。来源不限的新会话交付本人记忆预览，任务限制来源后不再交付。创建时遗漏来源仍未决，读附件须先确定范围。同一 SDK 调用重放成功的 `route` 回执接回原操作，已存回执不改写。活动任务已声明范围时，未归属的新消息可补读已存草稿，读取不登记归属、确认或授权，`route` 后读取并授权一次。控制目录的派生标题和旧任务条件里的原话保留。原因是 `4e1f2a6` 移除就绪门，脚本没有同步。独立依据是「架构减负实施（2026-11-22，P1 验收通过）」的「工具集始终可用」「本人历史正文不擦除」「新任务省略来源声明仍表示未知；可补读本人任务和原话，读取资料须先确定范围」，P1 验收调整第 12、77、159 行，以及封板后的 `source_limits.rs`。影响是未归属消息补读草稿被拒这一条不再断言；两份未确认稿只先 `route` A、零新增确认/关联/授权、每查询一次合成平台提交的断言保留。准入语义本身见「需要决定」里的“来源准入不再要求先归属”。
+
+**验收与要求变更（`QUERY-PREPARATION-LEASE`）：** 原值建任务的条件不含来源声明。新值显式 `source_limits:null`。原因是封板后未声明即范围未知。独立依据是「新任务省略来源声明仍表示未知」和 P1 验收调整第 104、109 行，两处都要求无额外来源限制的任务显式声明 `null`。影响只是夹具一个字段，租约、提交次数和 M07 断言不变。
+
+**验收与要求变更（`QUERY-TEXT-AUTHORITY`）：** 原值有五处。建任务不声明来源。跨会话读结果只经 HTTP，模型工具一臂没有覆盖。只读过已停用文档的 run，其修订和 `validate_sql` 在平台预检前拒绝。采用的关系停用后，同一 SDK 调用重放期望 `stale_context` 且不访问平台。另有一处 `meaningRef` 先用后定义，来自 `77ac70e6`。新值：条件显式声明来源不限；模型工具 `get_query` 只读当前会话的查询，其他会话返回 `not_available`，HTTP 结果读取跨同空间会话照常；只有正式采用已停用文档的修订在预检前拒绝，旧稿保持待确认；`validate_sql` 重放时重新诊断，不引用已停用关系，依赖它的规则记为未检查或省略，覆盖缺口增加；`meaningRef` 改为按契约说明在任务上登记语义裁决。原因依次是封板、`4684083` 起工具按会话限定、「用户确认撤销对未登记的旁读文档自动连带隐藏的旧预期」、只读工具重放重新执行。独立依据是「当前修复：一般性根因与完整闭环（2026-10-20）」的「跨会话查询来源必须核对原会话空间/删除状态及其私有来源闭包」、上述用户确认、「语义整理增量（2026-10-24–25，已完整关闭）」的「validate_sql（范围外引用退化为覆盖缺口note）」，以及 P1 验收调整第 86、104、109 行。影响是不再断言重放时不访问平台：重新诊断会把 SQL 再送到只读平台预检，不是提交。
+
+**验收与要求变更（`CORE09-ANSWER-STATE`）：** 原值经执行入口登记 `present_analysis_answer`，并断言合同 1 目录的 `update_analysis_task` 隐藏 `finalize_current_answer`。新值把登记过的历史调用经 `invokeRecorded` 接回回执，`validateArguments` 对 `present_analysis_answer` 抛 `tool_not_allowed`，合同 1 目录断言移除。原因是 `4e1f2a6` 把它移出工具目录。独立依据是「退役的答案工具从原登记形态进入旧回执续接」和 P1 验收调整第 55、137 行。影响是门禁文字写「正式21项」，脚本在基线和现在都是 22 项，按实际数量修订文字。
+
+**验收与要求变更（`CLARIFICATION-DECISION-STATE`）：** 原值断言 `found.receipt.source_context_ready` 为 `true`。新值删除这一条。原因是字段随就绪门移除。独立依据是 P1 验收调整第 159 行「被废弃的 `source_context_ready` 工具冻结回执字段不再断言」。影响是其余条件版本、操作身份和澄清状态断言不变。
+
+**验收与要求变更（`DRAFT-EXECUTION-BOUNDARY`）：** 原值建任务不声明来源；合成平台不提供 `/catalog-access`，`/validate` 回执不带 `owner_id`；重放比较包含宿主计算的 `frozen_notification_covered`；Skill 选用回执重放期望带正文。新值：条件显式声明来源不限；合成平台转发真实的 `/catalog-access` 响应并返回带 owner 的只读预检回执；比较前去掉 `frozen_notification_covered`；Skill 选用回执重放保持成功并标记正文不可用。原因是 `4e1f2a6` 起派发读取目录访问、登记路径按 owner 预检。独立依据是「模型派发诊断与 OpenAI 接入（2026-11-06，限定工程独审通过，真实通知失败/OpenAI待凭据；本包停止）」的「启动/恢复/刷新均由宿主给当前事实」，该字段是宿主每次给出的当前事实，不属于持久回执；[实现设计](architecture/implementation-design.md)第 4 条的「已登记操作按原形状接回回执，模型采用内容仍做当前有效性核验」；P1 验收调整第 104、109 行对来源不限任务的显式声明。影响是其余重放逐字一致。
+
+**验收与要求变更（`SAME-TASK-EXPLANATION`）：** 原值在来源停用后要求成功重放撤下控制候选、`control_delivery` 为空、定稿返回 409，并要求新输入归属前不发送被替代的草稿正文。新值要求控制正文保留、重放保持原控制候选且指纹不变、定稿被接受并提交等于原控制正文的助手消息；新输入归属前保留本人已提交的自然正文。原因是「本人会话与个人资产保留正文，移除递归字段级污点和历史文本擦除」。独立依据是该句、「实际被采用的资料、资产及结果按现有权限重新核对」，以及 P1 验收调整第 77、94、96 行；诊断确认基线上被替代的正文同时出现在模型输入和已提交的助手中。影响是失效投影的撤下不再由这条场景覆盖。
+
+**验收与要求变更（`CURRENT-TOOL-PARAMETERS`）：** 原值循环核对合同 1、2 两套模型目录。新值只核合同 2；`request_query` 与 `update_analysis_task` 的决策合同继续用原合同用例核实际接受行为。原因是模型目录只有合同 2。独立依据是「新运行使用工具合同2」和 P1 验收调整第 67 行「退役现行工具目录的v1测试分支」。影响是 19 个工具的参数合同和必填边界照常核对。
+
+**验收与要求变更（`SOURCE-NULL-BOUNDARY`）：** 原值场景二、六用表说明条目作否定引用，只允许业务指南的任务期望拒绝，基线实际返回 200。新值把否定引用改为同表的 DDL 条目，另加一份只引用表说明条目的草稿作正向对照。原因是封板后的草稿来源门只比较引用自己的来源身份，表说明条目的原出处是业务指南，只允许业务指南的任务引用它不越界，基线返回 200 是封板后的行为。脚本 11-22 12:40 在提交前的工作区通过过，共 15 组；提交后的基线二进制配同一脚本在 156 行失败。独立依据是「限源比较直接对象、直属表和来源身份」和 P1 验收调整第 125 行「原 unknown 传递闭包拒绝改为直接来源身份不变时可读。范围外实际读取、显式声明/继承、查询草稿拒绝和 Pi 原生切换场景保留」；第 105 行记着 `description` 原出处为 `business-guide`，「`ddl` 与 `etl` 原出处分别为另两源」。影响是范围外引用硬拒的场景保留，只换了越界条目。
+
+**验收与要求变更（`STRUCTURAL-BINDING-ADOPTION`）：** 原值的读取夹具用合同 1 的参数形状，按 `entry_id` 读，回执取整对象，断言 `entries[0].structure_gap`。来源限制场景的两个条目只登记「不完整」和缺口说明，没有来源身份。另有一条负例把条目 0 的依赖行改记为 `related`，并插入一条引用越界文档的贡献行，期望草稿拒绝。新值：读取夹具按合同 2 传 `items` 里的 `ref.path` 和 `structure_only`，回执取 `items[0]`，缺口断言改为 `structure_coverage.notes` 非空且 `structure_text` 为空；每个条目登记各自文档的来源身份；`related` 贡献的负例退役，检查标签同步。原因是合同 2 的读取形状、封板后的来源身份模型，以及封板后的草稿来源门只比较所选条目的来源身份。独立依据是「新运行使用工具合同2」，「架构减负实施（2026-11-22，P1 验收通过）」的「限源比较直接对象、直属表和来源身份」，以及 P1 验收调整第 52 行。影响：结构缺口的三个场景及其断言不变，条目规范化后贯穿采用、草稿来源门和正式答案的范围断言不变；`related` 行贡献越界正文时草稿不再被来源门拒绝，门禁文字里「entry选择贯穿全部有效贡献来源、草稿来源门」不再完整成立，见「需要决定」。
+
+**验收与要求变更（`SHARED-EMBEDDING-POLICY`）：** 原值五处断言工具回执的 `search_coverage.vector_state`，其中维度错误、回执丢失、缺 usage 和预算禁止四处嵌入失败时也断言为 `available`。新值按合同 `KnowledgeSearchCoverage` 逐通道断言：`exact` 和 `bm25` 为 `available`；嵌入正常时 `dense` 为 `available`，上述四处 `dense` 为 `unavailable` 且 `reasons` 含 `channel_unavailable`。四处 `state` 为 `bounded` 的断言不变。原因是 `4e6008e` 把工具回执改成按通道报告，同一次提交仍留下旧字段断言，脚本从那时起不能通过；`vector_state` 只属于知识列表接口的 `SearchCoverage`。独立依据是「前轮关闭后复审修复实施（2026-10-31—11-01，已完成，以下为历史）」的 R14「dense整路真实失败仍报available；修复为仅真实`succeeded`分片作保，bm25另认SQL替代票」和 R12。dense 没有替代票，整路失败即不可用；切片五的通道隔离真值表只在任一执行路成功时成立，这四处没有 dense 成功分片。影响是费用结算、重放不重发和预算断言不变。
+
+**验收与要求变更（`LIBRARY-STORAGE-REGRESSIONS`）：** 原值用知识文档做原文召回夹具：lib 用例断言文档的原文片段进入允许集，`source_excerpt_recall.rs` 的 7 条 `raw_stage_*` 集成用例和代理脚本断言文档原文经 dense 召回。新值把夹具换成已索引超过 10 万字符的平台来源，核对同一正文和版本；lib 用例另加一对断言：同一个只含它的来源门下，已完成的投影记为已索引 10 万零 1 个字符时它在原文允许集内，记为 10 万个字符时不在。原因是「普通原文召回仅使用已索引超过 10 万字符的平台来源，按源定点精读仍可读取获准的短来源」。`4e1f2a6` 把原文召回固定到平台来源，同一提交对这三份文件只按合并后的修订表调整了归档夹具，场景没有跟着召回规则改。这三处最后一次通过都在该提交之前：lib 用例 11-22 01:08，集成用例和代理 11-21 20:54。独立依据是上面那句，以及 P1 验收调整第 10、47、56 行，这三行写着「相同原场景和断言」。影响是「查询与原文无字面交集，只能由可控dense向量命中」的断言不变。夹具有两处随平台来源调整：平台原文按 SQL 格式分段，非 SQL 文本回落到段落结构，T6 的正文结尾补一个句号，长度仍是 2000 字符；T3 的夹具不再带标题，原标签是「查询与原文及标题无字面交集，只能由可控dense向量命中」。
+
+**验收与要求变更（`COMPOSER-MODEL-REJECTION`）：** 原值五处。历史对话框按「全部会话」定位。点「退出」后不等回执就整页跳转登录下一位用户。页面恢复可见后 2 秒内应有 `/snapshot` 请求。两条查询运行期间 3 秒内至少 3 次快照请求且间隔小于 1500 毫秒。建任务不声明来源。新值：对话框按「历史记录」定位；登出等到 `DELETE /api/session` 的响应再跳转；恢复可见后 2 秒内没有 `/snapshot` 请求，状态栏不出现「暂时无法更新对话」；查询运行期间快照请求为 0；任务显式 `source_limits:null`。原因依次是 U-04 改名、脚本竞态、11-21 返工把对话增量改为事件流、封板后未声明即范围未知。登出是脚本竞态：整页跳转会取消在途的 DELETE，旧会话继续有效，见 `diag-logout.log`。独立依据是「data_agent.html 审计确认问题修复（2026-11-21）」的「U-04 历史记录改会话/查询双栏」，「工作台首批返工验收（2026-11-21）」的「首次建连补读历史，稳态直收事件和更新视图。新消息、分段、查询状态、报告和权限变更各自触发更新」和「50 帧无快照及查询列表重拉」，「工作台返工封板复验（2026-11-21）」的「两个旧轮询等待使用真实消息事件触发」，以及「新任务省略来源声明仍表示未知」。登出等待的先例是 P1 验收调整第 18 行「等真实登出 DELETE 200 与登录入口可见后再导航；原业务与时限断言保留。」，来源声明见第 104、109 行。影响是 60 秒空闲读取不超过 15 次、隐藏期间零请求、真实停用保留草稿且零新增、重复提交只保存一次的断言不变。这项在 11-15 已记为已知失败，轮询断言此后没有更新。
+
+**验收与要求变更（`PREFILL-RESERVATION-BOUND`）：** 原值两处。人工改写条目并重分析后，之前读过该对象的旧 run 再读整次返回 `stale_context`。停用被引用的文档后，新 run 读该对象得到整条 `stale`。新值：旧 run 按改版前版本读，返回 200 且该条目为 `stale`；按当前版本读，条目为 `ok` 且是人工生效值。停用文档后，人工生效值的条目为 `ok`，采用该文档建议的 `grain` 条目为 `stale`，对象不再可检索。原因是封板移除了按 run 新旧的整次拒绝和递归字段级污点。独立依据是「旧检查点按当前对象启停及表级读权接续」和「本人会话与个人资产保留正文，移除递归字段级污点和历史文本擦除。实际平台结果和有真实结果依赖的报告继续查验访问」。P1 验收调整第 83 行给这条脚本写的是「语法已检，整条未跑」。影响是输入预留上界和输出 cap 的直接证据断言不变；旧 run 能否继续调用读取工具见「需要决定」。
+
+### 需要决定
+
+- **`related` 依赖行不再受草稿来源门核验。** 封板后「限源比较直接对象、直属表和来源身份」，草稿来源门只比较所选条目自己的来源身份，不再比较为这个条目贡献正文的依赖行。一个来源在范围内的条目，如果有 `related` 行引用范围外的文档，引用它的查询和证据仍被接受。`STRUCTURAL-BINDING-ADOPTION` 原来有一条负例覆盖它，本轮按封板后的实现对齐时退役了这条负例。要么确认 P1：门禁文字里的「全部有效贡献来源」随之修订；要么恢复对贡献行的核验，那是产品改动，负例要迁回。本轮没有改产品。（续轮确认封板语义，见下一节。）
+- **`DIRECTORY-REFRESH` 与普通用户的维护入口。** 绑定文字和脚本要求普通用户 Bob 在平台目录的负责人改为自己后，能从「我负责的对象」编辑并保存表语义。11-21 的 P-04 把语义页的维护入口收窄到维护者角色，`canMaintain` 只看角色，Bob 选不到「我负责的对象」。服务端的 `can_edit` 仍按负责人身份判定，没有角色限制，接口照样接受 Bob 的修改，只是界面不再提供入口。要么确认 P-04：退役这条场景并修订门禁文字，同时决定服务端对普通角色负责人的写授权是否保留；要么恢复按负责人身份开放维护入口，那是产品改动。本轮没有改脚本，这项在基线和现在都失败。（续轮更正一处事实并转绿：角色由是否负责对象推导，平台目录把维护人改成 Bob 并同步后，“我负责的对象”对 Bob 出现；失败的原因只是旧脚本让当时不负责任何对象的 Bob 选这个范围。见下一节。）
+- **`QUERY-RESULT-PERMISSION-POLL` 的定时再读。** 绑定文字要求结果卡在当前页读完后约 2 秒定时再读，脚本等这次读取，基线和现在都超时。11-21 返工后，报告和查询结果「按权限通知或窗口唤醒重验」，不再定时读取。定时再读是权限撤销后撤下已打开结果卡的一条保障；「工作台首批返工验收（2026-11-21）」自己记着「最后一次通知失败时，在线页面可能等到重连才更新」。要么确认事件驱动并修订门禁文字和这条场景，要么恢复定时再读。本轮没有改脚本。（续轮确认事件驱动并转绿，见下一节。）
+- **按 run 新旧的整次拒绝已移除。** 封板前，知识对象改版后，之前读过它的旧 run 再读会整次返回 `stale_context`。现在旧 run 可以继续调用读取工具，按当前版本读到新正文，按旧版本读得到条目级 `stale`。本轮按「旧检查点按当前对象启停及表级读权接续」对齐了 `PREFILL-RESERVATION-BOUND`。旧 run 的模型上下文里还留着改版前的正文，是否需要一次整次拒绝由用户决定。
+- **DDL 指纹不一致造成的缺口仍让整次读取失败。** 本轮的修复只放过结构绑定步骤的 `invalid_input` 和 `unsupported`。来源 DDL 改版造成指纹不一致时，读取先交付缺口，读后复核仍返回 `stale_knowledge`，整次调用失败；同一 run 里先完整交付、之后 DDL 才变化的情况沿用封板前的行为，读后复核不拒绝，写路径仍严格。没有证据说明哪一种是要求的行为，本轮没有改。（续轮已修只读路径：读后复核不再因结构绑定对不上当前 DDL 而拒绝，依赖表读不到仍拒绝，见下一节。）
+- **没有来源身份的知识条目。** 封板后，限源任务的正式草稿引用没有 `source_facts.source_id` 的条目会被 `source_not_allowed` 拒绝，而把它采用进任务条件时不设这道门。存量知识里有多少这类条目没有统计。本轮只给夹具补了来源身份。
+- **文档原文的向量索引。** 原文召回固定到平台来源后，文档原文的索引目标仍会登记和处理，这些向量的费用照付，但召回不到。`SHARED-EMBEDDING-POLICY` 后半段仍在断言文档原文目标被索引。是停掉这条索引，还是保留它等召回放开，由用户决定。（续轮已停掉，见下一节。）
+- **来源准入不再要求先归属。** `4e1f2a6` 移除 v2 就绪门后，活动任务已声明范围时，未归属的新消息可以直接补读已存草稿，也可以凭完整原话直接执行并自动归属。本轮按封板后的实现对齐了 `SOURCE-ADMITTED-QUERY`。设计文档仍写 route 先行：[实现设计](architecture/implementation-design.md) 三处（来源就绪、`source_context_blocker`、`task_context_required`），[runtime-modules](architecture/runtime-modules.md) 一处，[semantic-retrieval-design](semantic-retrieval-design.md) 两处，`docs/execution/semantic-runtime/` 下的 `interaction-continuation-repairs.md` 和 `CONTINUATION_PROMPT.md`，以及本文件门禁 08 的文字。要么确认封板语义，随后同步这些文字；要么恢复 route 先行门，那是产品改动，已迁的测试要迁回。建议确认封板语义：它是 P1 已裁决的「工具集始终可用」的直接结果，恢复先归属是一道新的产品门。（续轮确认封板语义并同步了文字，见下一节。）
+- **通知验收的时间余量。** `QUERY-NOTIFICATION-SOURCES` 实跑 308 秒，绑定超时 360 秒，余量 52 秒。宿主负载高时会超时，超时不算通过。是否放宽绑定超时由用户决定。
+- **`validate_sql` 对已停用来源的宽容。** 只读工具重放会重新执行。草稿正式采用的关系停用后，诊断不报风险，把依赖它的规则记为未检查或省略，并在覆盖缺口里列出。基线行为相同，本轮只补了断言。
+- **只读过、未采用已停用文档的 run。** 修订和 `validate_sql` 不再在平台预检前拒绝，只有正式采用的引用才拒绝。这来自「用户确认撤销对未登记的旁读文档自动连带隐藏的旧预期」，本轮对齐了断言。
+
+### 验证
+
+最终源码重建 `data-agent-api` 和 `data-agent-worker` 后，可运行的 48 项绑定验收在 06:23 至 07:18 逐条串行运行，46 项退出码为 0，正式模型请求为 0。汇总在 `.local/checks/audit2/final-master-summary.txt` 和同目录的 `final-F1-summary.txt` 至 `final-F4-summary.txt`，各步日志为 `final-<名称>.log`。二进制的 SHA-256 保存在 `bin-current.sha256`，纯净 `5f6e4d0` 的副本在 `bin-baseline/`。运行结束后摘要未变，宿主上没有残留的 harness 进程。
+
+- 审计点名的三条脚本通过。`QUERY-NOTIFICATION-SOURCES` 11 个场景 308 秒，绑定超时 360 秒；`CONVERSATIONAL-QUERY-V1` 12 组 202 秒；`check-task-query-answers.mjs` 的默认模式、`--history-permissions`、`--natural-recovery` 和 `--mixed-owner` 四次运行都通过。
+- 基线失败的另外 14 项通过。`SOURCE-ADMITTED-QUERY` 5 组，`QUERY-PREPARATION-LEASE` 20 个采样、实际提交 1 次，`QUERY-TEXT-AUTHORITY` 9 组，`CORE09-ANSWER-STATE` 22 组，`CLARIFICATION-DECISION-STATE` 4 组，`DRAFT-EXECUTION-BOUNDARY` 14 组，`SAME-TASK-EXPLANATION` 16 组，`CURRENT-TOOL-PARAMETERS` 19 个工具，`SOURCE-NULL-BOUNDARY` 15 组，`STRUCTURAL-BINDING-ADOPTION` 8 组，`SHARED-EMBEDDING-POLICY` 10 组，`LIBRARY-STORAGE-REGRESSIONS` 的 lib 用例 217 条通过、2 条忽略，`source_excerpt_recall` 14 条通过，`PREFILL-RESERVATION-BOUND` 5 组，`COMPOSER-MODEL-REJECTION` 9 组。
+- `DIRECTORY-REFRESH` 和 `QUERY-RESULT-PERMISSION-POLL` 退出码为 1，失败位置与基线相同，分别是脚本 29 行和 84 行。`INTEGRATED-EVIDENCE` 和 `SOURCE-TRAJECTORY-EVIDENCE` 缺输入，没有运行。
+- 42 份运行日志带正式模型请求数，全部为 0。`check-request-policy.mjs` 和 5 份纯 Python 检查没有计数字段，前者只连本地回环的合成端。
+- 结构缺口的回归由探针确认：修复前，读取含结构缺口的表说明条目返回 `400 invalid_input`，检索命中它时整次检索也返回 400；修复后都返回 200。修复后的同一组二进制上 `check-context-dependencies.mjs` 14 组通过，其中含资料撤回后读取不可用和精读拒绝过时版本两组。探针输出在 `probe-g19-prefix.log` 和 `probe-g19-postfix.log`。
+- 静态门禁在本记录写入后重跑，10 步退出码全部为 0，汇总在 `end-static-summary.txt`，各步日志为 `end-<名称>.log`。`make verify-code` 通过，Clippy 零警告。`make verify-architecture` 通过，含结构检查 13 项单测和加锁运行时检查。`make verify-contracts` 共享契约 704 例。`knowledge_dependencies` 集成用例 20 条通过；它不在任何绑定验收和 `make verify` 里，本轮补跑。`make verify` 通过，含准备材料 624 项、引文 42 条、链接 436 条，投递检查 16 项单测，座舱材料 29 项，前端构建，以及 fmt、clippy 和环境检查。`make verify-pi-transport` 通过；`npm run check:bridge` 通过，含 40 个回合和 10 份健康导出摘要。重跑前后 api 和 worker 的摘要与上面的一致。
+- 第一次终轮运行时结构检查失败：`LIBRARY-STORAGE-REGRESSIONS` 的补测夹具在协调层测试里直接写了删除投影的 SQL。改为经存储层的投影登记改写同一条投影后，`make verify-code` 和这条验收重跑通过，日志为 `refix-verify-code.log` 和 `refix-agent-library.log`。改动只在测试代码，二进制摘要未变。
+- 验证范围是本机的隔离 MySQL、合成平台、回环协议端和 Chromium，不代表真实模型、部署或用户验收。
+
+### 未执行与未处理
+
+- 真实模型冒烟、里程碑标签和 CI 门禁未开始，前者的授权尚未取得。
+- `make verify-increment` 未运行。增量仍为 active，审查状态为 pending，完整模式无法通过。
+- 改动未提交、未推送。
+- `INTEGRATED-EVIDENCE` 和 `SOURCE-TRAJECTORY-EVIDENCE` 的输入 `.local/dogfood-runs/qa-usability-20261116/` 在本机不存在，未能运行。
+- 审计提到的非绑定旧脚本（如 `check-time-roles.mjs`、`check-clarification.mjs`）没有对齐，本轮不跑全套历史回归。P1 验收调整第 71–97 行的 27 条旧测试迁移里 21 条写着「语法已检，整条未跑」，`make verify` 不运行 `cargo test`；这批脚本和 Rust 用例在封板后没有再运行过，本轮只补跑了 50 项绑定验收。
+- 设计文档和 `packages/contracts/schema.json` 里 P1 退役的名称没有清理，门禁 08 的文字仍写 route 先行，等上方「来源准入」的决定。（续轮已同步，见下一节。）
+- `update_analysis_task` 的回执重放不重新核验 `data.conditions.knowledge_refs`：基线上引用后来停用的文档仍返回 200。这是设计问题，本轮没有改。
+- 通知验收里并发重复重放的路径在很窄的竞态下仍可能给答案工具返回 `stale_context`。已知的触发条件是同一工具调用被两个请求同时重放，本轮的补核覆盖不到这一种。
+- `validate_sql` 重放会重新执行，把 SQL 再送到只读平台预检一次；它和 `request_query`、`read_knowledge` 对 `table-demo_order_detail#description` 在只允许业务指南时的判断不一致，前者不报越界。
+- 被中断或超时的验收会留下 api 进程和测试库。本轮只清理了本仓库二进制启动的进程，测试库没有清理。
+- `PREFILL-VISIBLE-EVIDENCE` 和 `PREFILL-RESERVATION-BOUND` 需要 `.local/tokenizer-reference-venv`，Makefile 不创建它。本轮在本机建了这个环境。
+- 三处小遗留没有动。`validate_contracts.rs` 只对 71 个名称做生成类型解码，其余 68 个名称的 251 例在 Rust 侧只做 Schema 校验、原样透传；这些名称的生成类型里 38 个带可空字段省略属性，704 例在顶层字段上没有一例给出这样的显式 `null`，契约 ① 同类的省略在这些名称上不会被门禁发现。`check-grounded-answers.mjs` 仍用内联 SQL 预写旧登记，与 harness 的 `legacyAnswerRegistration` 重复。测试仍在传 `DATA_AGENT_TOOL_CONTRACT_VERSION`，产品代码已不读它。
+
 
 ## F-01 收口补丁与宿主串行签收（2026-11-23）
 
