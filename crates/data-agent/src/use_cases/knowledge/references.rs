@@ -1,7 +1,22 @@
 use super::*;
 
 pub async fn check_refs_in_tx(tx: &mut AppTx<'_>, ctx: &AccessContext, refs: &Value) -> Result<()> {
-    checked_refs_in_tx(tx, ctx, refs, None).await.map(|_| ())
+    checked_refs_in_tx(tx, ctx, refs, None, false)
+        .await
+        .map(|_| ())
+}
+
+// 上下文权威核的是已交付引用：结构列已不在当前DDL、表DDL已改版或旧绑定补不了证的条目
+// 由读取按缺口交付，不因此拒绝整份正文；停用、撤权等失效仍拒绝，采用路径继续走
+// check_refs_in_tx。
+pub async fn check_delivered_refs_in_tx(
+    tx: &mut AppTx<'_>,
+    ctx: &AccessContext,
+    refs: &Value,
+) -> Result<()> {
+    checked_refs_in_tx(tx, ctx, refs, None, true)
+        .await
+        .map(|_| ())
 }
 
 // 写入时无法采用的引用是冲突；资料读取仍用 not_available 表示内容不可交付。
@@ -25,7 +40,9 @@ pub(in crate::use_cases) async fn check_refs_for_task_in_tx(
     refs: &Value,
     gate: Option<&crate::use_cases::source_limits::SourceGate>,
 ) -> Result<()> {
-    checked_refs_in_tx(tx, ctx, refs, gate).await.map(|_| ())
+    checked_refs_in_tx(tx, ctx, refs, gate, false)
+        .await
+        .map(|_| ())
 }
 
 pub(super) async fn current_structure_refs_in_tx(
@@ -33,32 +50,56 @@ pub(super) async fn current_structure_refs_in_tx(
     ctx: &AccessContext,
     object: &Value,
 ) -> Result<Vec<Value>> {
+    let (object, bindings) = table_bindings_in_tx(tx, ctx, object).await?;
+    proven_structure_refs_in_tx(tx, ctx, &object, bindings).await
+}
+
+// 依赖表读不到（停用、删除、撤权）只在这里返回stale_knowledge；绑定是否仍对当前
+// DDL成立归下一段，读取已按缺口交付时不据此拒绝正文。
+async fn table_bindings_in_tx<'a>(
+    tx: &mut AppTx<'_>,
+    ctx: &AccessContext,
+    object: &'a Value,
+) -> Result<(
+    std::borrow::Cow<'a, Value>,
+    Vec<knowledge::CurrentTableBinding>,
+)> {
     // 指标的 SQL 和结构定义分别存放。只精读 SQL 时，仍需核同版定义绑定的底表。
-    let metric;
     let object = if object["kind"] == "metric"
         && object["entries"]
             .as_array()
             .is_some_and(|entries| entries.len() == 1 && entries[0]["path"] == "sql")
     {
-        metric = knowledge::read_structure_refs_in_tx(
-            tx,
-            ctx,
-            object["id"]
-                .as_str()
-                .ok_or(Error::new("invalid_evidence"))?,
-            epoch(object["version"].as_str().unwrap_or(""))?,
+        std::borrow::Cow::Owned(
+            knowledge::read_structure_refs_in_tx(
+                tx,
+                ctx,
+                object["id"]
+                    .as_str()
+                    .ok_or(Error::new("invalid_evidence"))?,
+                epoch(object["version"].as_str().unwrap_or(""))?,
+            )
+            .await?,
         )
-        .await?;
-        &metric
     } else {
-        object
+        std::borrow::Cow::Borrowed(object)
     };
-    let mut bindings = knowledge::read_current_bindings_in_tx(tx, ctx, object)
+    let bindings = knowledge::read_current_bindings_in_tx(tx, ctx, &object)
         .await
         .map_err(|error| match error.code {
             "not_available" => Error::new("stale_knowledge"),
             _ => error,
         })?;
+    Ok((object, bindings))
+}
+
+// 依赖表已读齐；登记时的DDL或指纹对不上当前DDL，结构就不能采用。
+async fn proven_structure_refs_in_tx(
+    tx: &mut AppTx<'_>,
+    ctx: &AccessContext,
+    object: &Value,
+    mut bindings: Vec<knowledge::CurrentTableBinding>,
+) -> Result<Vec<Value>> {
     for binding in &mut bindings {
         if !binding.fingerprint.is_empty() {
             continue;
@@ -224,11 +265,13 @@ fn knowledge_reference_error(error: Error, reference: &Value, usage: &str) -> Er
 }
 
 // 交付案例时保留实际核验过的传递依赖，后续上下文只校验这些明确引用。
+// structure_gap_delivered：调用方已把结构列不在当前DDL的条目按缺口交付。
 pub(super) async fn checked_refs_in_tx(
     tx: &mut AppTx<'_>,
     ctx: &AccessContext,
     refs: &Value,
     gate: Option<&crate::use_cases::source_limits::SourceGate>,
+    structure_gap_delivered: bool,
 ) -> Result<Vec<Value>> {
     let mut pending = refs.as_array().ok_or(Error::new("invalid_input"))?.clone();
     let direct = pending.len();
@@ -264,11 +307,27 @@ pub(super) async fn checked_refs_in_tx(
         if !checked.insert(key) {
             continue;
         }
-        pending.extend(
-            current_structure_refs_in_tx(tx, ctx, &v)
-                .await
-                .map_err(|error| knowledge_reference_error(error, &r, "结构绑定"))?,
-        );
+        // 依赖表停用、撤权仍拒绝。读取已把不成立的绑定换成缺口，复核不因此拒绝整份正文。
+        let gap = |error: &Error| {
+            structure_gap_delivered
+                && matches!(
+                    error.code,
+                    "stale_knowledge" | "invalid_input" | "unsupported"
+                )
+        };
+        match table_bindings_in_tx(tx, ctx, &v).await {
+            Ok((object, bindings)) => {
+                match proven_structure_refs_in_tx(tx, ctx, &object, bindings).await {
+                    Ok(dependencies) => pending.extend(dependencies),
+                    Err(error) if gap(&error) => {}
+                    Err(error) => return Err(knowledge_reference_error(error, &r, "结构绑定")),
+                }
+            }
+            Err(error)
+                if structure_gap_delivered
+                    && matches!(error.code, "invalid_input" | "unsupported") => {}
+            Err(error) => return Err(knowledge_reference_error(error, &r, "结构绑定")),
+        }
         assert_selection_sources_in_tx(tx, ctx, &v, &path)
             .await
             .map_err(|error| knowledge_reference_error(error, &r, "所选条目必要依据"))?;

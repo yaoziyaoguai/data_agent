@@ -171,7 +171,7 @@ pub(in crate::use_cases) async fn semantic_object_in_tx(
         if object["kind"] == "query_example" && dependencies.is_empty() {
             None
         } else {
-            match checked_refs_in_tx(tx, ctx, &json!(dependencies), None).await {
+            match checked_refs_in_tx(tx, ctx, &json!(dependencies), None, false).await {
                 Ok(references) => Some(references),
                 Err(error) if matches!(error.code, "stale_knowledge" | "not_available") => None,
                 Err(error) => return Err(error),

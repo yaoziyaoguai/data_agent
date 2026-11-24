@@ -408,6 +408,13 @@ impl CheckedTextResults {
         Ok(())
     }
 
+    // 并入另一份已核结果，已有判定（含撤权）保持首次核验值。
+    pub(super) fn extend(&mut self, other: CheckedTextResults) {
+        for (key, allowed) in other.0 {
+            self.0.entry(key).or_insert(allowed);
+        }
+    }
+
     pub(super) fn record_checked_result(&mut self, key: ResultKey, allowed: bool) {
         self.0.insert(key, allowed);
     }
@@ -474,7 +481,7 @@ pub async fn validate_in_tx(
     if historical {
         knowledge::history_check_refs_in_tx(tx, ctx, &refs).await?;
     } else {
-        knowledge::check_refs_in_tx(tx, ctx, &refs).await?;
+        knowledge::check_delivered_refs_in_tx(tx, ctx, &refs).await?;
     }
     let mut revisions = Vec::new();
     for r in items(&snapshot["sources"]) {

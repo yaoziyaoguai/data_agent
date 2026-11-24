@@ -19,18 +19,23 @@ const ok = response => {
   return response.value;
 };
 const entry = (object, id) => object.entries.find(value => value.entry_id === id);
-const readStructure = async (h, object, entryId) => {
+// 开一段暂停 worker 的运行，返回在该运行内发起工具调用的函数；任务的创建与修订须同一运行。
+const openRun = async h => {
   await h.resumeWorker();
   const run = await h.capture(await h.create(), '读取当前语义依据，不执行查询。');
   await h.pauseWorker();
   const manager = SessionManager.inMemory('/synthetic/data-agent');
-  const input = {run_id:run.run_id, lease_epoch:run.lease_epoch,
-    sdk_tool_call_id:randomUUID(), tool_name:'read_knowledge',
-    arguments:{object_id:object.id, version:object.version, entry_id:entryId},
-    checkpoint:exportCheckpoint(manager,run.workspace_context.authority_revision,run.workspace_context.authority_snapshot)};
-  ok(await h.internal('/internal/data/tool-calls',input));
-  return ok(await h.internal('/internal/data/tools',input)).data;
+  return async (name, args) => {
+    const input = {run_id:run.run_id, lease_epoch:run.lease_epoch,
+      sdk_tool_call_id:randomUUID(), tool_name:name, arguments:args,
+      checkpoint:exportCheckpoint(manager,run.workspace_context.authority_revision,run.workspace_context.authority_snapshot)};
+    ok(await h.internal('/internal/data/tool-calls',input));
+    return h.internal('/internal/data/tools',input);
+  };
 };
+const invoke = async (h, name, args) => (await openRun(h))(name, args);
+const readStructure = async (h, object, entryId) => ok(await invoke(h,'read_knowledge',
+  {items:[{kind:'knowledge',ref:{object_id:object.id, version:object.version, path:entryId},structure_only:true}]})).data.items[0];
 
 try {
   if (!onlyPrefill) {
@@ -103,8 +108,9 @@ try {
       for (const label of ['甲','乙']) docs.push(ok(await h.request('/knowledge',{operation_id:randomUUID(),kind:'document',
         name:'合成条目来源'+label,body:'设备'+label+'按各自校准规范统计。',related_ids:[]})));
       let selected = ok(await h.request('/knowledge',{operation_id:randomUUID(),kind:'term',name:'多条目合成口径',body:'初始化',related_ids:[]}));
+      // 封板后草稿来源门比较所选条目的来源身份，每条规则登记各自文档。
       selected.entries = docs.map((doc,index) => ({entry_id:'entry-'+index,path:'rules.'+index,label:'口径'+index,
-        effective_value:doc.entries[0].effective_value,source_facts:{complete:false,gap:'合成夹具'},
+        effective_value:doc.entries[0].effective_value,source_facts:{complete:false,gap:'合成夹具',source_id:'document-'+doc.id,version:doc.version},
         suggestion:{value:doc.entries[0].effective_value,evidence:[{source_id:'document-'+doc.id,version:doc.version,
           location:'正文',quote:doc.entries[0].effective_value}]},human_override:null,review_state:'unverified'}));
       const encoded = Buffer.from(JSON.stringify(selected)).toString('hex');
@@ -130,13 +136,6 @@ try {
       assert.equal(scopedDraft.execution_state,'not_submitted');
       await invoke('request_query',{task_id:scoped.task_id,condition_version:scopedRev.condition_version,sql:'SELECT 2 AS samples',
         parameters:{},target_id:'synthetic-sqlite',summary:'两条目',knowledge_refs:refs,replaces_query_id:null},'source_not_allowed');
-      // related仍贡献实际正文，不能因为不属于required而绕过来源限制。
-      h.sql(`UPDATE knowledge_dependencies SET purpose='related' WHERE owner_id='${selected.id}' AND entry_path='rules.0';
-        INSERT INTO knowledge_dependencies(owner_id,owner_version,space_id,entry_path,layer,purpose,role,effective,target_kind,target_id,target_revision,target_path,target_fingerprint)
-        VALUES('${selected.id}',${selected.version},'demo','rules.0','human_override','related','material',1,'document','${docs[1].id}',${docs[1].version},'','')`);
-      await invoke('request_query',{task_id:scoped.task_id,condition_version:scopedRev.condition_version,sql:'SELECT 3 AS samples',
-        parameters:{},target_id:'synthetic-sqlite',summary:'含相关贡献',knowledge_refs:[refs[0]],replaces_query_id:null},'source_not_allowed');
-      h.sql(`DELETE FROM knowledge_dependencies WHERE owner_id='${selected.id}' AND role='material' AND entry_path='rules.0'`);
       const evidence = await invoke('save_analysis_evidence',{task_id:scoped.task_id,condition_version:scopedRev.condition_version,
         data_range:'甲设备口径',findings:[{text:'甲设备按甲文档的校准规范统计。',calculation:'采用已读条目，不计算数字。',
           limitations:[],query_refs:[],knowledge_refs:[refs[0]],figures:[]}]});
@@ -154,7 +153,7 @@ try {
       ok(issue); // 只核宿主下一次派发准入，不向供应商发请求。
       await invoke('request_query',{task_id:scoped.task_id,condition_version:scopedRev.condition_version,sql:'SELECT 5 AS samples',
         parameters:{},target_id:'synthetic-sqlite',summary:'选中已失效条目',knowledge_refs:refs,replaces_query_id:null},'stale_knowledge');
-      checks.push('entry_id规范为path后贯穿采用与草稿来源门：未选失效/越界不阻断，双条目及related贡献均受核验');
+      checks.push('entry_id规范为path后贯穿采用与草稿来源门：未选失效不阻断，越界条目及含越界条目的引用受核验');
       const finalText = '甲设备按甲文档的校准规范统计。';
       ok(await h.internal('/internal/outputs',{run_id:run.run_id,lease_epoch:run.lease_epoch,chunk_seq:'1',text:finalText}));
       ok(await h.internal('/internal/finish',{run_id:run.run_id,lease_epoch:run.lease_epoch,commit_id:run.output_id,
@@ -205,6 +204,13 @@ try {
     const h = await harness({capture:true, startWorker:false});
     try {
       let table = ok(await h.request('/knowledge/table-demo_order_detail'));
+      let field = ok(await h.request('/knowledge/field-paid_amount_cents'));
+      field = ok(await h.request('/knowledge/'+field.id, {
+        operation_id:randomUUID(), expected_version:field.version, entry_id:'meaning',
+        value:'维护者保留的实付金额口径', structured_value:entry(field,'meaning').effective_structure,
+      },'alice','PATCH'));
+      const fieldReference = {object_id:field.id, version:field.version, path:'meaning'};
+      assert.equal((await readStructure(h,field,'meaning')).structure_coverage.state,'complete');
       const structure = entry(table,'description').effective_structure;
       assert.ok(structure.unique_keys[0].includes('line_id'));
       table = ok(await h.request('/knowledge/'+table.id, {
@@ -216,7 +222,7 @@ try {
       }));
       assert.equal(entry(table,'description').review_state,'needs_review');
       const valid = await readStructure(h,table,'description');
-      assert.deepEqual(valid.entries[0].effective_structure,structure);
+      assert.deepEqual(valid.effective_structure,structure);
       assert.equal(valid.structure_coverage.state,'complete');
       checks.push('合法的待复核人工规则仍可读取，不按 needs_review 一刀切拒绝');
 
@@ -238,13 +244,34 @@ try {
       assert.equal(entry(table,'description').review_state,'needs_review');
       assert.deepEqual(entry(table,'description').human_override.structured_value,structure);
       const delivered = await readStructure(h,table,'description');
-      assert.equal(delivered.entries[0].effective_structure,null,
+      assert.equal(delivered.effective_structure,null,
         '来源 DDL 已删除 line_id，保留的人工规则不能作为当前有效计算结构交付');
       assert.equal(delivered.structure_coverage.state,'missing_semantics');
-      assert.ok(delivered.entries[0].structure_gap);
+      assert.ok(delivered.structure_coverage.notes.length && delivered.structure_text==='');
       assert.deepEqual(entry(ok(await h.request('/knowledge/'+table.id)),'description').human_override.structured_value,structure,
         '读取失败只影响采用状态，不删除维护者原值');
       checks.push('来源 DDL 删列后，正常重分析保留人工规则但工具不交付失效列结构');
+
+      // 与首个夹具同法：去掉结构边，只剩条目登记时的旧表版本，没有已登记指纹。
+      h.sql(`DELETE FROM knowledge_dependencies WHERE owner_id='${field.id}' AND role='table_binding'`);
+      const legacy = await readStructure(h,field,'meaning');
+      assert.equal(legacy.effective_structure,null,'依赖表 DDL 已改版，登记旧表版本的字段结构不能作为当前有效结构交付');
+      assert.equal(legacy.structure_coverage.state,'missing_semantics');
+      assert.ok(legacy.structure_coverage.notes.length && legacy.structure_text==='');
+      const text = ok(await invoke(h,'read_knowledge',{items:[{kind:'knowledge',ref:fieldReference}]})).data.items[0];
+      assert.equal(text.state,'ok','结构留缺口不拒绝条目文字');
+      assert.ok(text.content.includes('维护者保留的实付金额口径'));
+      const call = await openRun(h);
+      const task = ok(await call('update_analysis_task',{action:'create',goal:'采用实付金额字段',options:[],
+        conditions:{time_start:null,time_end:null,timezone:'UTC',metric:'synthetic_completed_amount',channel:null,
+          group_by:[],filters:[],knowledge_refs:[],source_limits:null,notes:''}})).data;
+      const adopted = await call('update_analysis_task',{action:'revise',task_id:task.task_id,
+        expected_version:task.condition_version,goal:'',condition_patch:{set:{knowledge_refs:[fieldReference]},unset:[]},options:[]});
+      assert.equal(adopted.status,409);assert.equal(adopted.value.code,'stale_knowledge','正式采用仍拒绝对不上当前 DDL 的结构');
+      ok(await h.request('/knowledge/'+table.id+'/disable',{operation_id:randomUUID(),expected_version:table.version}));
+      const denied = await call('read_knowledge',{items:[{kind:'knowledge',ref:fieldReference}]});
+      assert.equal(denied.status,409);assert.equal(denied.value.code,'stale_knowledge','依赖表停用后整份正文仍拒绝');
+      checks.push('依赖表 DDL 改版后，没有结构边的旧条目文字照常交付、结构留缺口；正式采用和停用后的读取仍拒绝');
     } finally { await h.close(); }
   }
 
@@ -287,9 +314,10 @@ try {
     assert.equal(entry(field,'meaning').human_override,null);
     assert.equal(entry(field,'meaning').suggestion.structured_value.column,'missing_column');
     const delivered=await readStructure(h,field,'meaning');
-    assert.equal(delivered.entries[0].effective_structure,null,
+    assert.equal(delivered.effective_structure,null,
       '预填格式与引用校验通过，仍不能把不存在的列作为当前有效结构交付');
     assert.equal(delivered.structure_coverage.state,'missing_semantics');
+    assert.ok(delivered.structure_coverage.notes.length && delivered.structure_text==='');
     checks.push('正式预填保存的错误列建议在当前读取时留缺口，不误标 complete');
   } finally {
     if(h) await h.close();

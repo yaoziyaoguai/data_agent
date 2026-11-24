@@ -190,7 +190,7 @@ pub(super) async fn load_selected_in_tx(
         }
         let mut dependencies = current_structure_refs_in_tx(tx, ctx, &references).await?;
         dependencies.extend(knowledge::semantic_dependencies(&references));
-        let checked = match checked_refs_in_tx(tx, ctx, &json!(dependencies), None).await {
+        let checked = match checked_refs_in_tx(tx, ctx, &json!(dependencies), None, false).await {
             Ok(references) => references,
             Err(error) if matches!(error.code, "stale_knowledge" | "not_available") => {
                 return Ok(None);

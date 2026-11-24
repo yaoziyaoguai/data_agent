@@ -9,7 +9,9 @@ use catalog::{current_catalog_in_tx, sources_in_tx};
 mod references;
 pub(super) use references::check_adoptable_refs_in_tx;
 pub(super) use references::{assert_selection_sources_in_tx, check_refs_for_task_in_tx};
-pub use references::{assert_source_in_tx, check_refs_in_tx, history_check_refs_in_tx};
+pub use references::{
+    assert_source_in_tx, check_delivered_refs_in_tx, check_refs_in_tx, history_check_refs_in_tx,
+};
 use references::{
     check_input_structure_sources_in_tx, checked_refs_in_tx, current_structure_refs_in_tx,
 };
