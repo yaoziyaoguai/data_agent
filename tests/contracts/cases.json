@@ -13977,5 +13977,58 @@
         "execution_state": "succeeded"
       }
     }
+  },
+  {
+    "name": "user request run keeps an explicit null result query",
+    "schema": "RunSnapshot",
+    "valid": true,
+    "roundtrip": true,
+    "value": {
+      "run_id": "run-user",
+      "state": "running",
+      "lease_epoch": "1",
+      "purpose": "user_request",
+      "result_query_id": null
+    }
+  },
+  {
+    "name": "legacy run snapshot omits optional run fields",
+    "schema": "RunSnapshot",
+    "valid": true,
+    "roundtrip": true,
+    "value": {
+      "run_id": "run-legacy",
+      "state": "finished",
+      "lease_epoch": "1"
+    }
+  },
+  {
+    "name": "workbench runs keep null, omitted and linked result queries",
+    "schema": "WorkbenchUpdate",
+    "valid": true,
+    "roundtrip": true,
+    "value": {
+      "runs": [
+        {
+          "run_id": "run-user",
+          "state": "running",
+          "lease_epoch": "1",
+          "purpose": "user_request",
+          "result_query_id": null
+        },
+        {
+          "run_id": "run-legacy",
+          "state": "finished",
+          "lease_epoch": "1"
+        },
+        {
+          "run_id": "run-notice",
+          "state": "finished",
+          "lease_epoch": "1",
+          "purpose": "query_result",
+          "result_query_id": "query-a"
+        }
+      ]
+    }
   }
 ]

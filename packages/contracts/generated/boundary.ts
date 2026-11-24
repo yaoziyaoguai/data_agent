@@ -2129,11 +2129,12 @@ export interface DataToolOutcomeClass {
     frozen_notification_covered?: boolean;
     operation_id:                 string;
     /**
-     * 未就绪原因，由原判定同次产出；就绪时省略。旧回执可缺省，不据缺省推断已就绪，恢复时采用当前宿主事实。
+     * 旧字段：宿主不再产出，仅为读取移除前的回执保留；恢复时采用当前宿主事实。
      */
     source_context_blocker?: SourceContextBlocker;
     /**
-     * 宿主核对本消息归属和来源声明后的正文准入状态；不由模型填写。若context_reset存在，Pi先完成既有重投影/刷新再采用新正文。
+     *
+     * 旧字段：宿主不再产出来源就绪状态，v2不设来源就绪门，准入沿活动任务的来源声明；仅为读取移除前的回执保留，不由模型填写。若context_reset存在，Pi先完成既有重投影/刷新再采用新正文。
      */
     source_context_ready?: boolean;
     /**
@@ -2211,11 +2212,11 @@ export type FactExecutionState = "not_submitted" | "queued" | "submitting" | "ru
 export type FactKind = "query" | "clarification";
 
 /**
- * 未就绪原因，由原判定同次产出；就绪时省略。旧回执可缺省，不据缺省推断已就绪，恢复时采用当前宿主事实。
+ * 旧字段：宿主不再产出，仅为读取移除前的回执保留；恢复时采用当前宿主事实。
  *
- * 既有来源准入判定的阻断原因：本条输入未归属、有效来源声明未定、或等待原上下文刷新。仅用于恢复指导，不授予权限或改变来源范围。
+ * 旧字段：v2来源就绪门移除前由原准入判定给出的阻断原因，宿主不再产出，仅为读取移除前的回执和快照保留；不用于恢复指导，不授予权限或改变来源范围。
  *
- * 与本快照source_context_ready同次计算的未就绪原因；仅控制信息，不含来源正文。就绪时省略，旧快照缺省仍沿原准入行为。
+ * 旧字段：移除前的未就绪原因，宿主不再产出，仅为读取移除前的快照保留；仅控制信息，不含来源正文。
  */
 export type SourceContextBlocker = "input_not_routed" | "source_scope_unknown" | "context_refresh_pending";
 
@@ -3525,12 +3526,11 @@ export interface WorkspaceContextClass {
     result_notification?: PurpleResultNotification;
     selected_skills:      MemoryElement[];
     /**
-     * 与本快照source_context_ready同次计算的未就绪原因；仅控制信息，不含来源正文。就绪时省略，旧快照缺省仍沿原准入行为。
+     * 旧字段：移除前的未就绪原因，宿主不再产出，仅为读取移除前的快照保留；仅控制信息，不含来源正文。
      */
     source_context_blocker?: SourceContextBlocker;
     /**
-     *
-     * 当前输入已归属且来源范围可确定，才可将证据正文交给模型。false时只提供用户原话及控制/来源身份元信息，保留同一Pi会话而暂不发送旧资料正文。v2派发和刷新由宿主计算；旧v1缺省不改变原行为。
+     * 旧字段：宿主不再产出来源就绪状态，v2不设来源就绪门，准入沿活动任务的来源声明；仅为读取移除前的快照保留，不据其推断当前准入。
      */
     source_context_ready?: boolean;
     tasks:                 WorkspaceTaskElement[];
@@ -4076,12 +4076,11 @@ export interface WorkspaceContext {
     result_notification?: FluffyResultNotification;
     selected_skills:      ModelAssetPreview[];
     /**
-     * 与本快照source_context_ready同次计算的未就绪原因；仅控制信息，不含来源正文。就绪时省略，旧快照缺省仍沿原准入行为。
+     * 旧字段：移除前的未就绪原因，宿主不再产出，仅为读取移除前的快照保留；仅控制信息，不含来源正文。
      */
     source_context_blocker?: SourceContextBlocker;
     /**
-     *
-     * 当前输入已归属且来源范围可确定，才可将证据正文交给模型。false时只提供用户原话及控制/来源身份元信息，保留同一Pi会话而暂不发送旧资料正文。v2派发和刷新由宿主计算；旧v1缺省不改变原行为。
+     * 旧字段：宿主不再产出来源就绪状态，v2不设来源就绪门，准入沿活动任务的来源声明；仅为读取移除前的快照保留，不据其推断当前准入。
      */
     source_context_ready?: boolean;
     tasks:                 WorkspaceTask[];
@@ -5621,11 +5620,12 @@ export interface DataToolOutcome {
     frozen_notification_covered?: boolean;
     operation_id:                 string;
     /**
-     * 未就绪原因，由原判定同次产出；就绪时省略。旧回执可缺省，不据缺省推断已就绪，恢复时采用当前宿主事实。
+     * 旧字段：宿主不再产出，仅为读取移除前的回执保留；恢复时采用当前宿主事实。
      */
     source_context_blocker?: SourceContextBlocker;
     /**
-     * 宿主核对本消息归属和来源声明后的正文准入状态；不由模型填写。若context_reset存在，Pi先完成既有重投影/刷新再采用新正文。
+     *
+     * 旧字段：宿主不再产出来源就绪状态，v2不设来源就绪门，准入沿活动任务的来源声明；仅为读取移除前的回执保留，不由模型填写。若context_reset存在，Pi先完成既有重投影/刷新再采用新正文。
      */
     source_context_ready?: boolean;
     /**

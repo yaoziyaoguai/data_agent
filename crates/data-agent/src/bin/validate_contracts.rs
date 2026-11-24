@@ -126,6 +126,10 @@ fn main() {
                         contracts::decode::<WorkbenchUpdate>(name, value).expect("generated type"),
                     )
                     .expect("serialize"),
+                    "RunSnapshot" => serde_json::to_value(
+                        contracts::decode::<RunSnapshot>(name, value).expect("generated type"),
+                    )
+                    .expect("serialize"),
                     "ModelProfile" => serde_json::to_value(
                         contracts::decode::<ModelProfile>(name, value).expect("generated type"),
                     )

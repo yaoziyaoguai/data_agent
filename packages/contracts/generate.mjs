@@ -28,6 +28,7 @@ const referenceUnions = new Set(['EvidenceReadResult', 'SemanticResolution']);
 const definitionAliases = {
   ControlDeliveryClass: 'ControlDelivery',
   FactElement: 'ControlDeliveryFact',
+  RunSnapshotElement: 'RunSnapshot',
   ConditionsQuerySemanticResolution: 'SemanticResolution',
   QueryViewQuerySemanticResolution: 'SemanticResolution',
 };
@@ -38,6 +39,7 @@ const openKnowledgeEntries = new Set(
 const explicitNull = new Map([
   ['DataToolOutcome', 'control_delivery'],
   ['ControlDeliveryFact', 'confirmation_state'],
+  ['RunSnapshot', 'result_query_id'],
   ...['SemanticStatement', 'PreparedStatement', 'HumanStatementInput'].map(name =>
     [name, 'supports_complete']),
 ]);

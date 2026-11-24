@@ -1906,9 +1906,10 @@ pub struct DataToolOutcomeClass {
     /// 宿主按本运行原通知query/task/condition及其原scope核验全部实际冻结答案后的覆盖事实；与control_delivery共同计算，不从source_query_ids推断。只随控制状态回执更新，不授来源或SQL权限。
     pub frozen_notification_covered: Option<bool>,
     pub operation_id: String,
-    /// 未就绪原因，由原判定同次产出；就绪时省略。旧回执可缺省，不据缺省推断已就绪，恢复时采用当前宿主事实。
+    /// 旧字段：宿主不再产出，仅为读取移除前的回执保留；恢复时采用当前宿主事实。
     pub source_context_blocker: Option<SourceContextBlocker>,
-    /// 宿主核对本消息归属和来源声明后的正文准入状态；不由模型填写。若context_reset存在，Pi先完成既有重投影/刷新再采用新正文。
+    ///
+    /// 旧字段：宿主不再产出来源就绪状态，v2不设来源就绪门，准入沿活动任务的来源声明；仅为读取移除前的回执保留，不由模型填写。若context_reset存在，Pi先完成既有重投影/刷新再采用新正文。
     pub source_context_ready: Option<bool>,
     /// 本次条件修订实际作废的未提交SQL草稿ID；宿主同事务生成，消费者撤下旧观察。缺省表示旧回执未提供该信息，不据此推定草稿有效。
     pub superseded_query_ids: Option<Vec<String>>,
@@ -2004,11 +2005,11 @@ pub enum FactKind {
     Query,
 }
 
-/// 未就绪原因，由原判定同次产出；就绪时省略。旧回执可缺省，不据缺省推断已就绪，恢复时采用当前宿主事实。
+/// 旧字段：宿主不再产出，仅为读取移除前的回执保留；恢复时采用当前宿主事实。
 ///
-/// 既有来源准入判定的阻断原因：本条输入未归属、有效来源声明未定、或等待原上下文刷新。仅用于恢复指导，不授予权限或改变来源范围。
+/// 旧字段：v2来源就绪门移除前由原准入判定给出的阻断原因，宿主不再产出，仅为读取移除前的回执和快照保留；不用于恢复指导，不授予权限或改变来源范围。
 ///
-/// 与本快照source_context_ready同次计算的未就绪原因；仅控制信息，不含来源正文。就绪时省略，旧快照缺省仍沿原准入行为。
+/// 旧字段：移除前的未就绪原因，宿主不再产出，仅为读取移除前的快照保留；仅控制信息，不含来源正文。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SourceContextBlocker {
@@ -4189,10 +4190,9 @@ pub struct WorkspaceContextClass {
     /// 宿主查询终态通知身份；普通用户消息省略，不从文字前缀推断成功。
     pub result_notification: Option<PurpleResultNotification>,
     pub selected_skills: Vec<MemoryElement>,
-    /// 与本快照source_context_ready同次计算的未就绪原因；仅控制信息，不含来源正文。就绪时省略，旧快照缺省仍沿原准入行为。
+    /// 旧字段：移除前的未就绪原因，宿主不再产出，仅为读取移除前的快照保留；仅控制信息，不含来源正文。
     pub source_context_blocker: Option<SourceContextBlocker>,
-    ///
-    /// 当前输入已归属且来源范围可确定，才可将证据正文交给模型。false时只提供用户原话及控制/来源身份元信息，保留同一Pi会话而暂不发送旧资料正文。v2派发和刷新由宿主计算；旧v1缺省不改变原行为。
+    /// 旧字段：宿主不再产出来源就绪状态，v2不设来源就绪门，准入沿活动任务的来源声明；仅为读取移除前的快照保留，不据其推断当前准入。
     pub source_context_ready: Option<bool>,
     pub tasks: Vec<WorkspaceTaskElement>,
 }
@@ -4262,20 +4262,31 @@ pub struct RevisionOriginClass {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RunSnapshotElement {
     /// 运行中run最近一次已登记工具调用的中文动作提示，由服务端映射工具名生成；无工具调用的旧记录缺省。
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub activity_label: Option<String>,
     /// 本run当前生成尝试身份，用于识别正文增量归属；旧快照可缺省。
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub attempt_id: Option<String>,
     /// 已完成的工具动作、当前可读对象名称与真实耗时。仅作界面进度提示。
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub completed_step_summaries: Option<Vec<CompletedStepSummaryElement>>,
     /// 该run已成功回执的工具调用计数；旧记录缺省。仅作进度展示，不作为执行依据。
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub completed_steps: Option<i32>,
     pub lease_epoch: String,
     /// 来自已有持久记录的触发消息身份；旧快照可缺省。
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub message_id: Option<String>,
     /// user_request为用户消息触发；query_result为查询结果通知触发。旧快照可缺省，缺省时按中性处理提示展示。
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub purpose: Option<RunSnapshotPurpose>,
     /// 结果通知run关联的原查询ID，来自conversations可信server:query-result消息关联；仅purpose=query_result时非null。
-    pub result_query_id: Option<String>,
+    #[serde(
+        default,
+        deserialize_with = "deserialize_present",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub result_query_id: Option<Option<String>>,
     pub run_id: String,
     pub state: RunSnapshotState,
 }
@@ -5111,11 +5122,10 @@ pub struct WorkspaceContext {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub result_notification: Option<FluffyResultNotification>,
     pub selected_skills: Vec<ModelAssetPreview>,
-    /// 与本快照source_context_ready同次计算的未就绪原因；仅控制信息，不含来源正文。就绪时省略，旧快照缺省仍沿原准入行为。
+    /// 旧字段：移除前的未就绪原因，宿主不再产出，仅为读取移除前的快照保留；仅控制信息，不含来源正文。
     #[serde(skip_serializing_if = "Option::is_none")]
     pub source_context_blocker: Option<SourceContextBlocker>,
-    ///
-    /// 当前输入已归属且来源范围可确定，才可将证据正文交给模型。false时只提供用户原话及控制/来源身份元信息，保留同一Pi会话而暂不发送旧资料正文。v2派发和刷新由宿主计算；旧v1缺省不改变原行为。
+    /// 旧字段：宿主不再产出来源就绪状态，v2不设来源就绪门，准入沿活动任务的来源声明；仅为读取移除前的快照保留，不据其推断当前准入。
     #[serde(skip_serializing_if = "Option::is_none")]
     pub source_context_ready: Option<bool>,
     pub tasks: Vec<WorkspaceTask>,
@@ -5423,8 +5433,12 @@ pub struct RunSnapshot {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub purpose: Option<RunSnapshotPurpose>,
     /// 结果通知run关联的原查询ID，来自conversations可信server:query-result消息关联；仅purpose=query_result时非null。
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub result_query_id: Option<String>,
+    #[serde(
+        default,
+        deserialize_with = "deserialize_present",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub result_query_id: Option<Option<String>>,
     pub run_id: String,
     pub state: RunSnapshotState,
 }
@@ -6838,10 +6852,11 @@ pub struct DataToolOutcome {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub frozen_notification_covered: Option<bool>,
     pub operation_id: String,
-    /// 未就绪原因，由原判定同次产出；就绪时省略。旧回执可缺省，不据缺省推断已就绪，恢复时采用当前宿主事实。
+    /// 旧字段：宿主不再产出，仅为读取移除前的回执保留；恢复时采用当前宿主事实。
     #[serde(skip_serializing_if = "Option::is_none")]
     pub source_context_blocker: Option<SourceContextBlocker>,
-    /// 宿主核对本消息归属和来源声明后的正文准入状态；不由模型填写。若context_reset存在，Pi先完成既有重投影/刷新再采用新正文。
+    ///
+    /// 旧字段：宿主不再产出来源就绪状态，v2不设来源就绪门，准入沿活动任务的来源声明；仅为读取移除前的回执保留，不由模型填写。若context_reset存在，Pi先完成既有重投影/刷新再采用新正文。
     #[serde(skip_serializing_if = "Option::is_none")]
     pub source_context_ready: Option<bool>,
     /// 本次条件修订实际作废的未提交SQL草稿ID；宿主同事务生成，消费者撤下旧观察。缺省表示旧回执未提供该信息，不据此推定草稿有效。
