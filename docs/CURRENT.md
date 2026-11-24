@@ -4,10 +4,10 @@
   "schema": 1,
   "phase": "repair",
   "goal_revision": 257,
-  "environment": "2026-11-24 在隔离 MySQL、合成平台、本地协议和 Chromium 上完成本地试用前的剩余修复：上一节 11 条待决项逐条裁决，目录刷新、结果卡权限再读、结构缺口和文档原文向量目标四处修复落地，受影响的非绑定脚本逐份运行。48 项可运行绑定验收的终轮重跑进行中，正式模型请求为 0；2 项缺输入未运行，真实模型冒烟仍待授权。",
+  "environment": "2026-11-24 在隔离 MySQL、合成平台、本地协议和 Chromium 上完成本地试用前的剩余修复：上一节 11 条待决项逐条裁决，四处修复落地，受影响的非绑定脚本逐份运行。最终二进制上 48 项可运行绑定验收通过，其中 1 项在负载尖峰时首次失败、单独重跑通过；静态门禁 10 步通过，正式模型请求为 0。2 项缺输入未运行，混合检索长电池只验证了前缀，真实模型冒烟仍待授权。",
   "verification": {
     "level": "increment",
-    "reason": "按委托裁决上一节的 11 条待决项并完成四处修复，受影响的非绑定脚本已逐份运行；绑定验收终轮重跑进行中。2 项缺输入，真实模型冒烟仍待授权。",
+    "reason": "按委托裁决上一节的 11 条待决项并完成四处修复，受影响的非绑定脚本已逐份运行；最终二进制上 48 项绑定验收通过，其中 1 项在负载尖峰后重跑通过，静态门禁通过。2 项缺输入，长电池只验证前缀，真实模型冒烟仍待授权。",
     "freshness": "content",
     "checks": [],
     "inputs": [
@@ -1288,7 +1288,7 @@
       "evidence": null
     }
   },
-  "reason": "本地试用前的剩余修复见最新一节。绑定验收终轮重跑进行中，2 项缺输入，真实模型冒烟待授权。"
+  "reason": "本地试用前的剩余修复见最新一节。48 项绑定验收通过，1 项重跑通过；静态门禁通过；2 项缺输入，混合检索长电池只验证了前缀，真实模型冒烟待授权。"
 }
 ---
 
@@ -1354,23 +1354,24 @@
 
 - **改动前对照。** 用第 4 项改动之前的二进制配 HEAD 的源文件和脚本串行运行（`base-chain.log`）。`check-document-preparation` 和 `check-index-target` 通过。`check-shared-index-todo` 失败在 HEAD 用例 `unified_consumer_projects_document_source_into_shared_collection`，断言“无来源限制的BM25必须召回登记文档”。新用例 `document_save_queues_semantic_preparation_without_raw_target` 配改动前的库失败在“文档保存不登记原文向量目标”，实际 1、期望 0（`base-red-registration.log`）；同一轮里 `legacy_document_target_converges_while_recall_stays_platform_only` 通过。`check-public-index-upgrade` 默认模式失败在脚本 237 行，`--owner` 模式失败在 `vector_unavailable`。`check-hybrid-retrieval` 见上一节清单。
 - **受第 4 条影响的脚本，改动后。** `check-shared-index-todo` 通过：`source_index_registration` 3 条、`raw_index_handover` 7 条、`index_recovery` 7 条，收尾的并发场景 4 项检查。`SHARED-EMBEDDING-POLICY` 10 项通过，96 秒。`check-document-preparation` 2 项通过。`check-index-target` 4 项通过。`check-public-index-upgrade` 仍在 118 行失败，`check-retrieval-allowed-set` 的 HEAD 版本和当前版本都在 97 行失败。对齐过程中改掉两处测试自身的问题：重建用例的清理只删原文行，留下 4 条没有对象的知识行，收尾等待超时（`diag-runner.log`）；代理按旧文本识别领取语句，而领取语句自 `5e5e189` 起多了 `SELECT space_id,` 前缀，事件顺序断言取不到领取事件。
-- **绑定验收终轮。** 48 项自 19:33 起在最终二进制上串行运行，本记录写入时进行中：第一段 4 项已通过，其余随后补记。
-- **混合检索长电池。** 排在终轮之后，本记录写入时尚未开始。
-- **静态门禁。** 本记录写入时尚未运行。
+- **绑定验收终轮。** 48 项自 19:33 至 20:39 在最终二进制上串行运行，共 66 分钟。47 项首次退出码为 0；汇总在 `rd-F1-summary.txt` 到 `rd-F4-summary.txt` 和 `rd-master2-summary.txt`，各步日志为 `rd-<名称>.log`。每份汇总开头的二进制摘要与 `bin-roundd.sha256` 一致，四段结束时都没有残留的 harness 进程。带计数的 39 份日志正式模型请求全部为 0。唯一首次失败的是 `CONTRACT-RECOVERY-SUITE`：Rust 用例 `delivery_preparation_maintains_claim_while_waiting_for_conversation_lock` 的到期断言失败，睡眠 1100 毫秒后租约还剩 72 毫秒；同一时刻宿主负载从 27 升到 67（`rd-contract-recovery.log`、`load.log`）。同一条用例 3 分钟前在 `CORE09-PREPARATION-LEASE` 里通过，20:49 单独重跑这条门禁，7 条全部通过（`rd-contract-recovery-rerun.log`）。到期断言的余量只有 100 毫秒，负载尖峰时会误报；本轮没有改交付和租约代码。几条相关门禁的数字：`QUERY-NOTIFICATION-SOURCES` 11 个场景 358 秒，`SHARED-EMBEDDING-POLICY` 10 项，`STRUCTURAL-BINDING-ADOPTION` 9 组，`DIRECTORY-REFRESH` 10 项，`QUERY-RESULT-PERMISSION-POLL` 3 项，`LIBRARY-STORAGE-REGRESSIONS` 的 lib 用例 217 条通过、`source_excerpt_recall` 14 条通过。
+- **混合检索长电池。** 没有取得完整通过记录。改动后的整条电池 20:39 启动，3 分钟后宿主负载升到 80 以上，主动终止并清掉残留。随后在负载 5 左右时只跑了到整理夹具为止的前缀（`hybrid-prefix.mjs` 是原脚本去掉后半段，覆盖本轮改动的全部段落）：1204 张表和 2408 个对象索引 846 秒，索引、集合、BM25 区分、原文夹具、尾部覆盖、文档原文目标为 0、整理夹具共 7 项检查通过，Milvus 查询 3693 次，正式模型请求为 0（`rd-hybrid-prefix.log`）。脚本在打印结果后按设计以 `PREFIX_DONE` 退出，退出码为 1。后半段的丢库重建、崩溃收尾和回执丢失各场景本轮没有改，也没有在改动后运行。
+- **静态门禁。** 20:46 至 20:48 串行运行，10 步退出码全部为 0，api 和 worker 的摘要前后一致（`st-static-summary.txt`，各步日志为 `st-<名称>.log`）。`make verify-code` 通过，含 fmt、零警告的 clippy、`tsc --noEmit` 和前端构建；`make verify-architecture` 通过，含结构检查 13 项单测和加锁运行时检查；`make verify-delivery` 和 `make verify-materials` 通过，准备材料 638 项、引文 42 条、链接 450 条；`make verify-contracts` 共享契约 704 例；`knowledge_dependencies` 集成用例 20 条通过；`make verify` 通过，含投递检查 16 项单测和座舱材料 29 项；`make verify-pi-transport` 通过；`npm run check:bridge` 通过，含 40 个回合和 10 份健康导出摘要。本记录补入后再跑一次 `verify-delivery`、`verify-materials` 和 `git diff --check`，结果见 `post-static-summary.txt`。
 - **文档阅读区探针。** 见“修复”第二条的 `diag-red.log` 和 `diag.log`。
 - **验证范围。** 本机的隔离 MySQL、合成平台、回环协议端和 Chromium，不代表真实模型、部署或用户验收。
 
 ### 未执行与未处理
 
 - 真实模型冒烟、里程碑标签和 CI 门禁仍未开始，前者需要授权。`make infra-up && make dev` 是试用的启动动作，留给用户执行。
-- `make verify-increment` 未运行，增量仍为 active，审查状态为 pending。改动未提交、未推送。
+- `make verify-increment` 未运行，增量仍为 active，审查状态为 pending。
+- 按用户要求分 9 批提交到 `codex/semantic-maintenance-prototype` 并推送（`5f6e4d0..7b10289`）。中间提交没有逐个单独构建，只有最终工作树经过上面的检查；本记录随其后的记录提交补入。
 - `INTEGRATED-EVIDENCE` 和 `SOURCE-TRAJECTORY-EVIDENCE` 仍缺输入，没有运行。
 - `check-public-index-upgrade.mjs` 和 `check-retrieval-allowed-set.mjs` 是两条改动前后都失败的非绑定脚本。后者在脚本 97 行按合同 1 取 `objects`，新运行的回执按合同 2 只有 `hits`，HEAD 版本在同一行同样失败（`rd-allowed-set-baseline.log`）。本轮对它的两处小改，第一处（第 80 行的等待）被执行到，第二处是删掉一条不再匹配任何行的 UPDATE，没有机会执行到。修好它要按合同 2 重写读取和检索断言。
 - 其余非绑定旧脚本没有全量对齐。本轮只跑了受“文档不再登记原文向量目标”影响的几份和 48 项绑定验收。
 - `update_analysis_task` 的回执重放不重新核验 `knowledge_refs`，上一节的记录没有变。
 - 本会话之外的两件事，都没有动：`target/` 在 16:17 被整体删除，本轮重建后 api 和 worker 的摘要与上一轮不同；一个 16:21 启动、父进程已不在的合成平台进程（PID 9832，目录 `.local/checks/mvp-9f349d78c0a063df`，端口 52241）和同名测试库 `data_agent_test_9f349d78c0a063df`。
 - 本轮自己的残留已清：基线长电池被看门狗终止后留下的 api、worker、桥接和合成平台进程，测试库 `data_agent_test_c058c26f3fcbd9b6`，Milvus 集合 `da_app_5749f9ce78214f2f8de5f5a6ae49fd0d` 及其 `_legacy`。
-- 宿主负载在本轮验证期间多次超过 50，最高约 125（`load.log`）。负载高时的超时按失败处理，不计入通过。
+- 宿主负载在本轮验证期间每 30 秒采样一次，259 次里 17 次超过 50，最高 162（`load.log`）。负载高时的超时按失败处理，不计入通过；`CONTRACT-RECOVERY-SUITE` 的首次失败和长电池没有跑完都发生在负载尖峰。
 
 
 ## 审计收口修复与绑定验收对齐（2026-11-24）

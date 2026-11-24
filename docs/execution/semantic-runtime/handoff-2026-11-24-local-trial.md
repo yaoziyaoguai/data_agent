@@ -12,21 +12,21 @@
 | 四处修复：目录刷新、结果卡权限再读、结构缺口、文档原文向量目标 | 代码和相关测试已改完 |
 | 设计文档、契约说明 | 已同步到封板后的行为 |
 | 受“文档原文向量目标”影响的非绑定脚本和 Rust 用例 | 已对齐并逐份运行。两份改动前后都失败的旧脚本没有修，见 3.2 |
-| 48 项可运行的绑定验收 | 在最终二进制上串行重跑，结果写入 CURRENT“验证” |
-| 混合检索长电池、静态门禁 | 排在终轮之后 |
-| 提交与推送 | 按用户要求分批提交到当前分支并推送，清单见第 5 节 |
+| 48 项可运行的绑定验收 | 在最终二进制上串行重跑：47 项首次通过，`CONTRACT-RECOVERY-SUITE` 在宿主负载尖峰时首次失败、单独重跑通过。见 CURRENT“验证” |
+| 静态门禁 | 10 步通过 |
+| 混合检索长电池 | 只验证了到整理夹具为止的前缀，覆盖本轮改动的全部段落；整条电池在当前宿主负载下没有跑完 |
+| 提交与推送 | 按用户要求分 9 批提交到当前分支并推送，清单见第 5 节；终轮结果随其后的记录提交补入 |
 
 ## 2. 接下来要做的事
 
-按顺序：
+本轮的修复和验证已经做完，剩下的事按先后：
 
-1. 跑完 48 项绑定验收的终轮。失败项逐条归因：本轮引入、改动前就失败，还是宿主负载。
-2. 跑 `node tests/mvp/check-hybrid-retrieval.mjs`。正常负载下约 45 分钟，含三次全量索引。
-3. 跑静态门禁：`make verify-code`、`make verify-architecture`、`make verify-delivery`、`make verify-materials`、`make verify-contracts`、`make verify`、`make verify-pi-transport`、`npm run check:bridge`，以及 `knowledge_dependencies` 集成用例。
-4. 把结果写进 CURRENT 的“验证”，再提交一次记录。
-5. 用户启动试用：`make infra-up && make dev`。试用库有 547 条知识条目待索引，首次启动由 Worker 处理。
+1. 用户启动试用：`make infra-up && make dev`。试用库有 547 条知识条目待索引，首次启动由 Worker 处理。
+2. 可选：宿主安静时（负载 10 以下）完整跑一次 `node tests/mvp/check-hybrid-retrieval.mjs`，约 45 分钟，含三次全量索引。本轮只验证了它的前半段。
+3. 可选：修两份改动前后都失败的旧脚本，见 3.2 的 Q1、Q2。
+4. 关闭增量之前：真实模型冒烟需要授权；`make verify-increment --complete` 还缺两项验收的输入（Q5）。
 
-不在这一轮的事：真实模型冒烟（需要授权）、里程碑标签和 CI、`make verify-increment --complete`、修两份旧脚本、清理不是本轮启动的残留进程和测试库。
+不在这一轮的事：真实模型冒烟（需要授权）、里程碑标签和 CI、清理不是本轮启动的残留进程和测试库。
 
 ## 3. 问题、原因和代码位置
 
@@ -51,7 +51,8 @@
 | Q1 | `check-public-index-upgrade.mjs` 两种模式都失败 | [第 119 行](../../../tests/mvp/check-public-index-upgrade.mjs)、第 237 行；`--owner` 模式不先准备向量集合 | 不在绑定验收里，改动前就失败。修法：原文夹具换成已索引超过 10 万字符的平台来源，owner 模式先准备集合 |
 | Q2 | `check-retrieval-allowed-set.mjs` 在第 97 行失败 | [第 97 行](../../../tests/mvp/check-retrieval-allowed-set.mjs) | 按合同 1 取 `objects`，新运行的回执按合同 2 只有 `hits`。HEAD 版本在同一行失败。要按合同 2 重写读取和检索断言 |
 | Q3 | `update_analysis_task` 的回执重放不重新核验 `knowledge_refs` | `crates/data-agent/src/use_cases` 的任务回执重放 | 设计问题，两轮都没有改 |
-| Q4 | 宿主负载、被整体删除的 `target/`、不是本轮启动的合成平台进程和测试库 | 环境记录见 CURRENT“未执行与未处理” | 没有动。宿主负载多次超过 50 时，带时限的验收会误报失败 |
+| Q4 | 宿主负载、被整体删除的 `target/`、不是本轮启动的合成平台进程和测试库 | 环境记录见 CURRENT“未执行与未处理” | 没有动。本轮采样 259 次有 17 次负载超过 50，最高 162；`CONTRACT-RECOVERY-SUITE` 的首次失败和长电池没有跑完都发生在负载尖峰 |
+| Q6 | 到期断言余量小 | `crates/data-agent/tests/tool_contract_version.rs` 第 357 行 | 租约 1000 毫秒、只多睡 100 毫秒就断言到期，负载尖峰时虚拟机时钟走得慢会误报。本轮没有改 |
 | Q5 | `INTEGRATED-EVIDENCE` 和 `SOURCE-TRAJECTORY-EVIDENCE` 缺输入 | `.local/dogfood-runs/qa-usability-20261116/` 在本机不存在 | 没有运行 |
 
 ## 4. 裁决清单
@@ -74,19 +75,21 @@
 
 ## 5. 提交清单
 
-按依赖顺序，每个提交只列主题：
+按依赖顺序：
 
-1. `fix(contracts)`：契约保留显式空值；旧就绪字段的说明改为旧字段；重新生成类型。
-2. `fix(authority)`：结构缺口不再让只读读取整次失败，含 `check-structure-column-bindings.mjs`。
-3. `fix(authority)`：成功答案回执重放前补核；草稿采用的知识停用后确认返回 `stale_context`。
-4. `fix(index)`：文档不再登记原文向量目标，含相关 Rust 用例和脚本。
-5. `test(retrieval)`：原文召回夹具改用平台来源。
-6. `fix(web)`：文档阅读区随目录变更信号重读，含两条浏览器门禁脚本。
-7. `test`：绑定验收脚本随封板后的合同和来源规则对齐。
-8. `docs`：设计文档同步封板后的准入规则和“原文向量目标只属于平台来源”。
-9. `docs`：CURRENT 记录和本文件。
+| 提交 | 内容 |
+| --- | --- |
+| `80c4031` fix(contracts) | 契约保留显式空值；旧就绪字段的说明改为旧字段；重新生成类型 |
+| `e3a903f` fix(authority) | 结构缺口不再让只读读取整次失败，含 `check-structure-column-bindings.mjs` |
+| `032c7a6` fix(authority) | 成功答案回执重放前补核；草稿采用的知识停用后确认返回 `stale_context` |
+| `a7e8e64` fix(index) | 文档不再登记原文向量目标，含相关 Rust 用例和脚本 |
+| `3736a10` test(retrieval) | 原文召回夹具改用平台来源 |
+| `d91a68f` fix(web) | 文档阅读区随目录变更信号重读，含两条浏览器门禁脚本 |
+| `d5d8f7e` test | 绑定验收脚本随封板后的合同和来源规则对齐 |
+| `a1d0cdb` docs | 设计文档同步封板后的准入规则和“原文向量目标只属于平台来源” |
+| `7b10289` docs | CURRENT 记录和本文件 |
 
-提交时的验证状态写在 CURRENT“验证”里。中间提交没有逐个单独构建，只有最终工作树经过完整检查。
+终轮结果随其后的一个 `docs` 提交补入。中间提交没有逐个单独构建，只有最终工作树经过完整检查；验证状态写在 CURRENT“验证”。
 
 ## 6. 验证证据
 
@@ -98,7 +101,9 @@
 - `prebuild-summary.txt`、`bin-roundd.sha256`：fmt、clippy、类型检查和两个二进制的摘要。
 - `rd-new-summary.txt`、`rd-new2-summary.txt`：受影响的非绑定脚本。
 - `rd-F1-summary.txt` 到 `rd-F4-summary.txt`、`rd-master2-summary.txt`：绑定验收终轮。
-- `st-static-summary.txt`：静态门禁。
+- `rd-contract-recovery.log`、`rd-contract-recovery-rerun.log`：负载尖峰时的首次失败和单独重跑。
+- `rd-hybrid-prefix.log`：混合检索长电池的前缀。
+- `st-static-summary.txt`、`post-static-summary.txt`：静态门禁。
 - `load.log`：宿主负载采样。
 
 ## 7. 接手提示
