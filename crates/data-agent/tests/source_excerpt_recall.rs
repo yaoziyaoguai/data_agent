@@ -18,6 +18,70 @@ use data_agent::{
 use serde_json::{Value, json};
 use sqlx::Row;
 
+// 封板后普通原文召回只使用平台来源。原文场景把同一正文登记为平台来源，经正式
+// 消费者写入索引；切块格式随之是Sql，含非SQL字符的正文回退到段落结构。
+async fn saved_platform_source(pool: &sqlx::MySqlPool, id: &str, body: &str) -> SourceKey {
+    // 夹具SQL经连接池自动提交；AppTx的底层连接是crate私有，外部测试按公共入口组装。
+    sqlx::query(
+        "INSERT INTO source_heads(id,space_id,version,fingerprint) VALUES(?,'demo',1,'synthetic')",
+    )
+    .bind(id)
+    .execute(pool)
+    .await
+    .unwrap();
+    sqlx::query(
+        "INSERT INTO source_current(source_id,space_id,adapter_id,source_kind,namespace,\
+         external_id,revision,body,complete,metadata,content_fingerprint,\
+         explanation_fingerprint,comparison_method,parsed,observed_metadata) \
+         VALUES(?,'demo','synthetic','platform','synthetic',?,1,?,TRUE,'{}','synthetic',\
+         'synthetic','exact',TRUE,'{}')",
+    )
+    .bind(id)
+    .bind(id)
+    .bind(body)
+    .execute(pool)
+    .await
+    .unwrap();
+    let key = SourceKey {
+        kind: SourceKeyKind::Platform,
+        id: id.to_owned(),
+    };
+    let mut tx = AppTx::begin(pool).await.unwrap();
+    data_agent::modules::knowledge::register_source_index_target_in_tx(
+        &mut tx, "demo", &key, 1, None,
+    )
+    .await
+    .unwrap();
+    tx.commit().await.unwrap();
+    key
+}
+
+async fn indexed_platform_source(pool: &sqlx::MySqlPool, id: &str, body: &str) -> SourceKey {
+    let key = saved_platform_source(pool, id, body).await;
+    while data_agent::use_cases::knowledge::process_index(pool)
+        .await
+        .unwrap()
+    {}
+    key
+}
+
+// 只推进平台来源修订：旧修订的索引命中不得再解释为当前正文。
+async fn revise_platform_source(pool: &sqlx::MySqlPool, id: &str, revision: u64, body: &str) {
+    sqlx::query("UPDATE source_heads SET version=? WHERE id=?")
+        .bind(revision)
+        .bind(id)
+        .execute(pool)
+        .await
+        .unwrap();
+    sqlx::query("UPDATE source_current SET revision=?,body=? WHERE source_id=?")
+        .bind(revision)
+        .bind(body)
+        .bind(id)
+        .execute(pool)
+        .await
+        .unwrap();
+}
+
 #[tokio::test]
 async fn document_windows_keep_entry_boundaries_without_transferring_unselected_text() {
     let Ok(url) = std::env::var("DATA_AGENT_DATABASE_URL") else {
@@ -449,18 +513,18 @@ async fn raw_stage_returns_preparation_state_and_rejects_revision_changed_after_
         request_id: "raw-stage-preparation".into(),
         table_access: None,
     };
-    let mut documents = Vec::new();
+    let mut sources = Vec::new();
     for (state, marker) in [
         ("pending", "rawstagependingneedle"),
         ("failed", "rawstagefailedneedle"),
     ] {
-        let object = data_agent::use_cases::knowledge::edit(
-            &pool, &ctx, None, "create",
-            json!({"operation_id":format!("raw-stage-create-{state}"),"kind":"document",
-                "name":format!("合成原文状态{state}"),"body":format!("{marker}：未付款订单不产生退款，运费除外。"),
-                "related_ids":[],"source_url":null}),
-        ).await.unwrap();
-        let source = format!("document-{}", object["id"].as_str().unwrap());
+        let source = format!("raw-stage-{state}");
+        saved_platform_source(
+            &pool,
+            &source,
+            &format!("{marker}：未付款订单不产生退款，运费除外。"),
+        )
+        .await;
         let mut tx = AppTx::begin(&pool).await.unwrap();
         data_agent::modules::ingestion::preparation::ensure_preparation_in_tx(
             &mut tx,
@@ -483,17 +547,17 @@ async fn raw_stage_returns_preparation_state_and_rejects_revision_changed_after_
             .unwrap();
         }
         tx.commit().await.unwrap();
-        documents.push((state, marker, object));
+        sources.push((state, marker, source));
     }
     while data_agent::use_cases::knowledge::process_index(&pool)
         .await
         .unwrap()
     {}
-    for (state, marker, object) in &documents {
+    for (state, marker, source) in &sources {
         let scope = KnowledgeSearchScope::default();
         let allowed = data_agent::modules::retrieval::vector::AllowedRecords {
             knowledge_ids: Vec::new(),
-            sources: vec![("document".into(), object["id"].as_str().unwrap().to_owned())],
+            sources: vec![("platform".into(), source.clone())],
         };
         let stage = data_agent::use_cases::knowledge::search_stage_outside_lock(
             &pool,
@@ -536,16 +600,13 @@ async fn raw_stage_returns_preparation_state_and_rejects_revision_changed_after_
             .await
             .unwrap();
         tx.commit().await.unwrap();
-        data_agent::use_cases::knowledge::edit(
+        revise_platform_source(
             &pool,
-            &ctx,
-            object["id"].as_str(),
-            "edit",
-            json!({"operation_id":format!("raw-stage-change-{state}"),"expected_version":"1",
-                "entry_id":"body","value":"新修订改变了原文条款，旧位置不能解释为新正文。"}),
+            source,
+            2,
+            "新修订改变了原文条款，旧位置不能解释为新正文。",
         )
-        .await
-        .unwrap();
+        .await;
         let mut tx = AppTx::begin(&pool).await.unwrap();
         let error =
             data_agent::use_cases::knowledge::assert_search_fresh_in_tx(&mut tx, &ctx, &stage)
@@ -742,14 +803,12 @@ async fn raw_stage_keeps_healthy_raw_bm25_without_adding_sql_knowledge_vote() {
         table_access: None,
     };
     let query = "rawstagerawhealthyneedle";
-    let raw = data_agent::use_cases::knowledge::edit(&pool, &ctx, None, "create", json!({
-        "operation_id":"raw-stage-healthy-create","kind":"document","name":"合成可用原文",
-        "body":format!("{query}：已保存原文的条款，运费除外。"),"related_ids":[],"source_url":null
-    })).await.unwrap();
-    while data_agent::use_cases::knowledge::process_index(&pool)
-        .await
-        .unwrap()
-    {}
+    let raw = indexed_platform_source(
+        &pool,
+        "raw-stage-healthy",
+        &format!("{query}：已保存原文的条款，运费除外。"),
+    )
+    .await;
     let sql_only = data_agent::use_cases::knowledge::edit(&pool, &ctx, None, "create", json!({
         "operation_id":"raw-stage-sql-only-create","kind":"term","name":query,
         "body":format!("{query}：未索引的SQL知识强项，不可在已有BM25成功页时加票。"),"related_ids":[],"source_url":null
@@ -757,7 +816,7 @@ async fn raw_stage_keeps_healthy_raw_bm25_without_adding_sql_knowledge_vote() {
     let scope = KnowledgeSearchScope::default();
     let allowed = data_agent::modules::retrieval::vector::AllowedRecords {
         knowledge_ids: vec![sql_only["id"].as_str().unwrap().to_owned()],
-        sources: vec![("document".into(), raw["id"].as_str().unwrap().to_owned())],
+        sources: vec![("platform".into(), raw.id.clone())],
     };
     let stage = data_agent::use_cases::knowledge::search_stage_outside_lock(
         &pool,
@@ -789,7 +848,7 @@ async fn raw_stage_keeps_healthy_raw_bm25_without_adding_sql_knowledge_vote() {
         panic!("健康raw通道正文必须保留");
     };
     assert!(content["text"].as_str().unwrap().contains(query));
-    assert_eq!(content["citation"]["source"]["id"], raw["id"]);
+    assert_eq!(content["citation"]["source"]["id"], raw.id.as_str());
     assert_eq!(
         stage.search.coverage["candidate_count"], 1,
         "未索引SQL强项不得进入共同候选计数"
@@ -821,34 +880,16 @@ async fn raw_stage_launches_dense_for_raw_only_allowed_sources() {
         table_access: None,
     };
     let query = "rawstageonlydenseprobe";
-    let name = "合成设备校验原文";
     let body = "合成校准规定：设备校验完成之前不得投入使用。";
     assert!(
-        [name, body]
-            .iter()
-            .all(|text| text.chars().all(|ch| !query.contains(ch))),
-        "查询与原文及标题无字面交集，只能由可控dense向量命中"
+        body.chars().all(|ch| !query.contains(ch)),
+        "查询与原文无字面交集，只能由可控dense向量命中"
     );
-    let raw = data_agent::use_cases::knowledge::edit(
-        &pool,
-        &ctx,
-        None,
-        "create",
-        json!({
-            "operation_id":"raw-stage-only-dense-create","kind":"document","name":name,
-            "body":body,"related_ids":[],"source_url":null
-        }),
-    )
-    .await
-    .unwrap();
-    while data_agent::use_cases::knowledge::process_index(&pool)
-        .await
-        .unwrap()
-    {}
+    let raw = indexed_platform_source(&pool, "raw-stage-only-dense", body).await;
     let scope = KnowledgeSearchScope::default();
     let allowed = data_agent::modules::retrieval::vector::AllowedRecords {
         knowledge_ids: Vec::new(),
-        sources: vec![("document".into(), raw["id"].as_str().unwrap().to_owned())],
+        sources: vec![("platform".into(), raw.id.clone())],
     };
     let deadline = data_agent::modules::retrieval::vector::retrieval_deadline();
     let launch = data_agent::use_cases::launch_search_embedding(
@@ -896,7 +937,7 @@ async fn raw_stage_launches_dense_for_raw_only_allowed_sources() {
     assert_eq!(content["text"], body);
     assert_eq!(
         content["citation"]["source"],
-        json!({"kind":"document","id":raw["id"]})
+        json!({"kind":"platform","id":raw.id})
     );
     assert_eq!(content["citation"]["revision"], "1");
     assert_eq!(content["citation"]["locator"]["offset"], 0);
@@ -912,7 +953,7 @@ async fn raw_stage_launches_dense_for_raw_only_allowed_sources() {
     tx.commit().await.unwrap();
     eprintln!(
         "raw_only_dense hits=1 candidates=1 source={} chars={}",
-        raw["id"],
+        raw.id,
         body.chars().count()
     );
     pool.close().await;
@@ -938,25 +979,10 @@ async fn raw_stage_filters_old_segmentation_before_candidates_and_owner_reads() 
     };
     let query = "rawversionneedle";
     let body = "rawversionneedle 合成版本规则：设备完成复核后方可使用。";
-    let saved = data_agent::use_cases::knowledge::edit(
-        &pool,
-        &ctx,
-        None,
-        "create",
-        json!({
-            "operation_id":"raw-version-create","kind":"document","name":"合成切块版本资料",
-            "body":body,"related_ids":[],"source_url":null
-        }),
-    )
-    .await
-    .unwrap();
-    while data_agent::use_cases::knowledge::process_index(&pool)
-        .await
-        .unwrap()
-    {}
+    let saved = indexed_platform_source(&pool, "raw-segmentation-version", body).await;
     let allowed = data_agent::modules::retrieval::vector::AllowedRecords {
         knowledge_ids: vec![],
-        sources: vec![("document".into(), saved["id"].as_str().unwrap().to_owned())],
+        sources: vec![("platform".into(), saved.id.clone())],
     };
     let scope = KnowledgeSearchScope::default();
     let deadline = retrieval_deadline();
@@ -1010,7 +1036,7 @@ async fn raw_stage_filters_old_segmentation_before_candidates_and_owner_reads() 
         panic!("raw-only仅交付原文");
     };
     assert_eq!(content["text"], body);
-    assert_eq!(content["citation"]["source"]["id"], saved["id"]);
+    assert_eq!(content["citation"]["source"]["id"], saved.id.as_str());
     let mut tx = AppTx::begin(&pool).await.unwrap();
     data_agent::use_cases::knowledge::assert_search_fresh_in_tx(&mut tx, &ctx, &stage)
         .await
@@ -1037,31 +1063,28 @@ async fn raw_stage_reports_projection_lag_for_actual_allowed_sources() {
         request_id: "raw-scope-coverage".into(),
         table_access: None,
     };
-    let mut documents = Vec::new();
-    for (name, body) in [
-        ("A", "rawcoveragealpha 合成设备复核规则。"),
-        ("B", "rawcoveragebeta 合成独立运输规则。"),
-    ] {
-        documents.push(data_agent::use_cases::knowledge::edit(&pool, &ctx, None, "create", json!({
-            "operation_id":format!("raw-coverage-create-{name}"),"kind":"document","name":format!("合成覆盖{name}"),
-            "body":body,"related_ids":[],"source_url":null
-        })).await.unwrap());
-        if name == "A" {
-            while data_agent::use_cases::knowledge::process_index(&pool)
-                .await
-                .unwrap()
-            {}
-        }
-    }
-    let a = documents[0]["id"].as_str().unwrap().to_owned();
-    let b = documents[1]["id"].as_str().unwrap().to_owned();
+    // A已索引，B只登记未索引：范围内有待索引原文时必须如实报告。
+    let a = indexed_platform_source(
+        &pool,
+        "raw-coverage-a",
+        "rawcoveragealpha 合成设备复核规则。",
+    )
+    .await
+    .id;
+    let b = saved_platform_source(
+        &pool,
+        "raw-coverage-b",
+        "rawcoveragebeta 合成独立运输规则。",
+    )
+    .await
+    .id;
     let inspect = |ids: Vec<String>, include_raw, query: &'static str| {
         let pool = pool.clone();
         let ctx = ctx.clone();
         async move {
             let allowed = data_agent::modules::retrieval::vector::AllowedRecords {
                 knowledge_ids: vec![],
-                sources: ids.into_iter().map(|id| ("document".into(), id)).collect(),
+                sources: ids.into_iter().map(|id| ("platform".into(), id)).collect(),
             };
             let scope = KnowledgeSearchScope::default();
             data_agent::use_cases::knowledge::search_stage_outside_lock(
@@ -1127,10 +1150,10 @@ async fn raw_stage_reports_projection_lag_for_actual_allowed_sources() {
     ] {
         // 仅隔离夹具的投影标量失配；真实集合和正式内容保持不动。
         let previous: String = sqlx::query_scalar(sqlx::AssertSqlSafe(format!(
-            "SELECT CAST({column} AS CHAR) FROM retrieval_source_projections WHERE source_kind='document' AND source_id=?"
+            "SELECT CAST({column} AS CHAR) FROM retrieval_source_projections WHERE source_kind='platform' AND source_id=?"
         ))).bind(&b).fetch_one(&pool).await.unwrap();
         sqlx::query(sqlx::AssertSqlSafe(format!(
-            "UPDATE retrieval_source_projections SET {column}={invalid} WHERE source_kind='document' AND source_id=?"
+            "UPDATE retrieval_source_projections SET {column}={invalid} WHERE source_kind='platform' AND source_id=?"
         ))).bind(&b).execute(&pool).await.unwrap();
         assert_eq!(
             inspect(vec![a.clone(), b.clone()], true, "rawcoveragealpha")
@@ -1141,21 +1164,10 @@ async fn raw_stage_reports_projection_lag_for_actual_allowed_sources() {
             "覆盖必须绑定当前{column}"
         );
         sqlx::query(sqlx::AssertSqlSafe(format!(
-            "UPDATE retrieval_source_projections SET {column}=? WHERE source_kind='document' AND source_id=?"
+            "UPDATE retrieval_source_projections SET {column}=? WHERE source_kind='platform' AND source_id=?"
         ))).bind(previous).bind(&b).execute(&pool).await.unwrap();
     }
-    data_agent::use_cases::knowledge::edit(
-        &pool,
-        &ctx,
-        Some(&b),
-        "edit",
-        json!({
-            "operation_id":"raw-coverage-next-revision","expected_version":"1","entry_id":"body",
-            "value":"rawcoveragebeta 合成运输规则已修订。"
-        }),
-    )
-    .await
-    .unwrap();
+    revise_platform_source(&pool, &b, 2, "rawcoveragebeta 合成运输规则已修订。").await;
     let revised = inspect(vec![b], true, "rawcoveragebeta").await;
     assert!(revised.search.hits.is_empty(), "旧修订索引不能交付");
     assert_eq!(
@@ -1188,36 +1200,22 @@ async fn raw_stage_merges_selected_overlapping_windows_without_refunding_identit
     };
     let marker = "rawoverlapneedle";
     // 1200处的段落边界生成两个相交规范窗口，合并后的2000字符在既定2400上限内。
+    // 结尾句号让Sql切块回退到段落结构；纯标识符正文只会按语句末尾切成一块。
     let body = format!(
-        "{}{}{}\n\n{}",
+        "{}{}{}\n\n{}。",
         "甲".repeat(1100),
         marker,
         "甲".repeat(1198 - 1100 - marker.len()),
-        "乙".repeat(800)
+        "乙".repeat(799)
     );
-    let saved = data_agent::use_cases::knowledge::edit(
-        &pool,
-        &ctx,
-        None,
-        "create",
-        json!({
-            "operation_id":"raw-overlap-create","kind":"document","name":"合成相交窗口资料",
-            "body":body,"related_ids":[],"source_url":null
-        }),
-    )
-    .await
-    .unwrap();
-    let source_id = saved["id"].as_str().unwrap().to_owned();
-    let key = SourceKey {
-        kind: SourceKeyKind::Document,
-        id: source_id.clone(),
-    };
+    let key = indexed_platform_source(&pool, "raw-overlap", &body).await;
+    let source_id = key.id.clone();
     let parts = segment_source(
         &SourceText {
             source: &key,
             revision: "1",
             text: &body,
-            format: SourceFormat::Markdown,
+            format: SourceFormat::Sql,
             background: &[],
         },
         None,
@@ -1234,13 +1232,9 @@ async fn raw_stage_merges_selected_overlapping_windows_without_refunding_identit
         parts.segments[0].citation.locator.offset + parts.segments[0].citation.locator.length
             > parts.segments[1].citation.locator.offset
     );
-    while data_agent::use_cases::knowledge::process_index(&pool)
-        .await
-        .unwrap()
-    {}
     let allowed = data_agent::modules::retrieval::vector::AllowedRecords {
         knowledge_ids: vec![],
-        sources: vec![("document".into(), source_id.clone())],
+        sources: vec![("platform".into(), source_id.clone())],
     };
     let scope = KnowledgeSearchScope::default();
     let stage = data_agent::use_cases::knowledge::search_stage_outside_lock(
@@ -1333,28 +1327,27 @@ async fn raw_stage_preserves_a_high_knowledge_b_middle_a_low_and_v1_kind_scope()
     );
     let medium = format!("{marker} ");
     let body_b = format!("{}{}", medium, "丙".repeat(300 - medium.chars().count()));
-    let mut saved = Vec::new();
-    for (kind, name, body) in [
-        ("document", "合成一般规则与独立例外", &body_a),
-        ("term", "合成中间条款", &body_b),
-    ] {
-        saved.push(data_agent::use_cases::knowledge::edit(&pool, &ctx, None, "create", json!({
-            "operation_id":format!("raw-stage-order-{}", saved.len()),"kind":kind,"name":name,
-            "body":body,"related_ids":[],"source_url":null
-        })).await.unwrap());
-    }
-    let id_a = saved[0]["id"].as_str().unwrap().to_owned();
-    let id_b = saved[1]["id"].as_str().unwrap().to_owned();
-    let key_a = SourceKey {
-        kind: SourceKeyKind::Document,
-        id: id_a.clone(),
-    };
+    let term = data_agent::use_cases::knowledge::edit(
+        &pool,
+        &ctx,
+        None,
+        "create",
+        json!({
+            "operation_id":"raw-stage-order-1","kind":"term","name":"合成中间条款",
+            "body":body_b,"related_ids":[],"source_url":null
+        }),
+    )
+    .await
+    .unwrap();
+    let id_b = term["id"].as_str().unwrap().to_owned();
+    let key_a = saved_platform_source(&pool, "raw-stage-order-a", &body_a).await;
+    let id_a = key_a.id.clone();
     let parts = segment_source(
         &SourceText {
             source: &key_a,
             revision: "1",
             text: &body_a,
-            format: SourceFormat::Markdown,
+            format: SourceFormat::Sql,
             background: &[],
         },
         None,
@@ -1376,7 +1369,7 @@ async fn raw_stage_preserves_a_high_knowledge_b_middle_a_low_and_v1_kind_scope()
     let scope = KnowledgeSearchScope::default();
     let allowed = data_agent::modules::retrieval::vector::AllowedRecords {
         knowledge_ids: vec![id_b.clone()],
-        sources: vec![("document".into(), id_a.clone())],
+        sources: vec![("platform".into(), id_a.clone())],
     };
     let mut request = data_agent::use_cases::knowledge::ScopedSearchRequest {
         query: marker,

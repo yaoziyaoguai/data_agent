@@ -69,7 +69,7 @@ const proxy = createServer(async (req, res) => {
     if (req.url.endsWith("/upsert")) {
       const legacyRows = [];
       for (const row of input.data || []) {
-        if (row.kind === "source_excerpt" && row.source_kind === "document" && row.text.includes(rawOnlyDenseBody)) {
+        if (row.kind === "source_excerpt" && row.source_kind === "platform" && row.text.includes(rawOnlyDenseBody)) {
           rawOnlyDense.indexed.push({ id: row.id, source: row.object_id, controlledVector: isRawOnlyDenseVector(row.vector) });
         }
         if (row.kind === "source_excerpt" && row.text.includes(rawVersionQuery)) {
@@ -160,9 +160,9 @@ try {
       "受控查询向量必须实际透传真实Milvus dense请求");
     assert.ok(dense.some(request => request.ids.includes(rawOnlyDense.indexed[0].id)),
       "真实dense结果必须包含正式消费者写入的raw片段");
-    assert.ok(rawOnlyDense.searches.every(request => request.filter.includes('source_kind == "document"')
+    assert.ok(rawOnlyDense.searches.every(request => request.filter.includes('source_kind == "platform"')
       && request.filter.includes(JSON.stringify(rawOnlyDense.indexed[0].source))),
-      "raw各路实际请求必须携带合法document允许集");
+      "raw各路实际请求必须携带合法platform允许集");
   }
   if (executed.includes("raw_stage_filters_old_segmentation_before_candidates_and_owner_reads")) {
     assert.equal(rawVersionRows.length, 1);
