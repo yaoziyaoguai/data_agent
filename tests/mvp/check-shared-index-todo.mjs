@@ -9,7 +9,8 @@ import { harness, until } from "./harness.mjs";
 import { embeddingProvider } from "./embedding-provider.mjs";
 
 // 公共索引待办的登记与统一消费：平台与文档同ID为独立目标、新登记不进旧队列、
-// 统一消费者完成切块/向量写入/投影进度并让原文通道可召回。
+// 封板前登记的文档原文目标经统一消费者收敛而普通原文召回只返回平台来源、
+// 显式重建只登记平台来源。
 const targets = ["source_index_registration", "raw_index_handover", "index_recovery"];
 const target = process.argv.find(value => value.startsWith("--target="))?.slice(9);
 const filter = process.argv.find(value => value.startsWith("--filter="))?.slice(9);
@@ -39,7 +40,7 @@ const proxy = createServer(async (req, res) => {
 });
 await new Promise(resolve => proxy.listen(0, "127.0.0.1", resolve));
 
-// 只延迟真实知识轮询响应；其快照已产生后再经正式HTTP提交新文档。
+// 只延迟真实知识轮询响应；其快照已产生后再登记新的平台原文目标。
 // 后续领取、来源头、Embedding和Milvus均透传，不能制造数据库结果。
 const sockets = new Set(), databaseEvents = [], proxyErrors = [];
 let armed = false, held = false, releasePoll, pollReady;
@@ -69,8 +70,8 @@ const sqlProxy = net.createServer(socket => {
   const statements = new Map(), buffered = [];
   let authenticated = false, hello = false, preparing, current, buffering = false;
   const classify = sql => sql.startsWith("SELECT DISTINCT k.id FROM knowledge_objects k JOIN knowledge_index_jobs j") ? "knowledge-poll"
-    : sql.startsWith("SELECT source_kind,object_id,version,state,vector_state,vector_attempts,vector_target,lease_epoch") ? "raw-claim"
-    : sql.startsWith("SELECT space_id,version FROM knowledge_objects WHERE id=? AND state='enabled'") ? "source-head" : null;
+    : sql.startsWith("SELECT space_id,source_kind,object_id,version,state,vector_state,vector_attempts,vector_target,lease_epoch") ? "raw-claim"
+    : sql.startsWith("SELECT space_id,version FROM source_heads WHERE id=?") ? "source-head" : null;
   const client = frames((frame, payload) => {
     if (!authenticated) { hello = true; upstream.write(frame); return; }
     if (payload[0] === 0x16) { preparing = classify(payload.subarray(1).toString()); current = null; }
@@ -157,34 +158,35 @@ try {
       timer = setTimeout(() => reject(new Error("未观察到真实知识轮询响应")), 10000);
     })]);
   } finally { clearTimeout(timer); }
+  // 平台来源的正文先入库，旧知识轮询响应被截住后再登记原文目标，行形状与登记
+  // 入口写入的一致；文档保存已不登记原文目标，不再承担这个并发场景。
+  const source = "tail-marker-" + randomUUID().replaceAll("-", "");
   const body = "开头说明。" + Array.from({ length: 400 }, (_, i) => "第" + i + "行常规填充内容，用于把标记推到原文末尾。").join("") + "末尾专有标记：尾部锚点漂移校准专用词。";
-  const saved = await h.request("/knowledge", {
-    operation_id: randomUUID(), kind: "document", name: "long_tail_marker", body, source_url: null, related_ids: [],
-  });
-  assert.equal(saved.status, 200, JSON.stringify(saved.value));
-  const document = saved.value;
-  databaseEvents.push({ kind: "document", stage: "committed", at: Date.now() });
+  h.sql(`INSERT INTO source_heads(id,space_id,version,fingerprint) VALUES('${source}','demo',1,'synthetic');`);
+  h.sql(`INSERT INTO source_current(source_id,space_id,adapter_id,source_kind,namespace,external_id,revision,body,complete,metadata,content_fingerprint,explanation_fingerprint,comparison_method,parsed,observed_metadata) VALUES('${source}','demo','synthetic','platform','index-todo','${source}',1,'${body}',1,'{}','synthetic','synthetic','exact',TRUE,'{}');`);
+  h.sql(`INSERT INTO knowledge_index_jobs(target_kind,source_kind,object_id,version,space_id,origin_job_id,vector_attempts) VALUES('source_excerpt','platform','${source}',1,'demo',NULL,0);`);
+  databaseEvents.push({ kind: "source", stage: "committed", at: Date.now() });
   assert.ok(databaseEvents.findIndex(event => event.stage === "actual-response-held") < databaseEvents.length - 1);
   releasePoll();
-  const jobs = () => h.sql(`SELECT JSON_OBJECT('kind',target_kind,'state',vector_state,'attempts',vector_attempts,'error',vector_error,'receipt',vector_receipt) FROM knowledge_index_jobs WHERE object_id='${document.id}' ORDER BY target_kind`);
+  const jobs = () => h.sql(`SELECT JSON_OBJECT('kind',target_kind,'state',vector_state,'attempts',vector_attempts,'error',vector_error,'receipt',vector_receipt) FROM knowledge_index_jobs WHERE target_kind='source_excerpt' AND object_id='${source}'`);
   await until(() => {
     const state = jobs();
-    return state.length === 2 && state.every(row => !["pending", "sending", "unknown"].includes(row.state));
-  }, "并发保存文档的两个索引目标完成", 30000);
+    return state.length === 1 && !["pending", "sending", "unknown"].includes(state[0].state);
+  }, "旧轮询快照之后登记的原文目标完成", 30000);
   const state = jobs();
   console.log(JSON.stringify({ stage: "concurrent-source-index", database, jobs: state, events: databaseEvents, proxyErrors, officialRequests: 0 }));
   assert.deepEqual(proxyErrors, []);
-  assert.equal(state.find(row => row.kind === "knowledge_entry").state, "indexed");
-  assert.equal(state.find(row => row.kind === "source_excerpt").state, "indexed", "旧知识轮询快照不得把随后提交的新文档原文退役");
-  assert.ok(state.every(row => row.attempts === 1 && row.error === null), "正常新文档只领取一次、不靠重试修补误退役");
+  assert.equal(state[0].kind, "source_excerpt");
+  assert.equal(state[0].state, "indexed", "旧知识轮询快照不得把随后登记的新原文退役");
+  assert.ok(state[0].attempts === 1 && state[0].error === null, "正常新原文只领取一次、不靠重试修补误退役");
   const claimed = databaseEvents.findIndex(event => event.kind === "raw-claim");
   const sourceHead = databaseEvents.findIndex(event => event.kind === "source-head");
-  assert.ok(claimed > databaseEvents.findIndex(event => event.kind === "document") && sourceHead > claimed);
-  const projection = h.sql(`SELECT JSON_OBJECT('revision',revision,'position',applied_position,'complete',complete) FROM retrieval_source_projections WHERE source_kind='document' AND source_id='${document.id}'`);
+  assert.ok(claimed > databaseEvents.findIndex(event => event.kind === "source") && sourceHead > claimed);
+  const projection = h.sql(`SELECT JSON_OBJECT('revision',revision,'position',applied_position,'complete',complete) FROM retrieval_source_projections WHERE source_kind='platform' AND source_id='${source}'`);
   assert.deepEqual(projection, [{ revision: 1, position: [...body].length, complete: 1 }]);
   const response = await fetch("http://127.0.0.1:19531/v2/vectordb/entities/query", {
     method: "POST", headers: { "content-type": "application/json", authorization: "Bearer root:" + token },
-    body: JSON.stringify({ dbName: "default", collectionName: collection, filter: `kind == "source_excerpt" && object_id == "${document.id}"`, outputFields: ["id", "char_offset", "char_length", "text"], limit: 64, consistencyLevel: "Strong" }),
+    body: JSON.stringify({ dbName: "default", collectionName: collection, filter: `kind == "source_excerpt" && source_kind == "platform" && object_id == "${source}"`, outputFields: ["id", "char_offset", "char_length", "text"], limit: 64, consistencyLevel: "Strong" }),
   });
   const indexed = await response.json();
   assert.equal(indexed.code, 0, JSON.stringify(indexed));
@@ -193,10 +195,10 @@ try {
   await h.pauseWorker();
   armed = false;
   console.log(JSON.stringify({ passed: true, officialRequests: 0, checks: [
-    "平台/文档同ID是两个独立索引目标；新登记不再进入旧raw队列",
-    "统一消费者完成文档原文切块、向量写入、投影进度与尾部覆盖，原文通道可召回",
-    "旧raw积压有界移交：事务中断无双领取记录、重复移交幂等、有效租约不抢、移交后可领取",
-    "知识轮询后并发提交的新文档原文不误退役，一次领取后完整尾部可见",
+    "平台/文档同ID是两个独立索引目标；新登记不再进入旧raw队列；文档保存只排队语义准备",
+    "封板前登记的文档原文目标经统一消费者收敛到投影完成，普通原文召回只返回平台来源",
+    "旧raw积压有界移交：事务中断无双领取记录、重复移交幂等、有效租约不抢、移交后可领取；显式重建只登记平台来源",
+    "知识轮询后登记的新平台原文不误退役，一次领取后完整尾部可见",
   ] }));
   }
 } finally {

@@ -202,13 +202,8 @@ pub async fn write(
         &[v.clone()],
     )
     .await?;
-    // 保存文档原文（创建或改版）即原子登记raw索引与语义准备；两作业互不等待。
-    crate::use_cases::knowledge_documents::register_document_preparation_in_tx(
-        &mut tx,
-        &ctx.space_id,
-        &v,
-    )
-    .await?;
+    // 保存文档原文（创建或改版）即排队语义准备；独立文档不登记原文向量目标。
+    crate::use_cases::knowledge_documents::register_document_preparation_in_tx(&mut tx, &v).await?;
     crate::use_cases::semantic_governance::decorate_in_tx(&mut tx, ctx, &mut v).await?;
     contracts::validate("KnowledgeObject", &v)?;
     if changes_authority {
@@ -348,12 +343,7 @@ pub async fn edit_entries(
         &[v.clone()],
     )
     .await?;
-    crate::use_cases::knowledge_documents::register_document_preparation_in_tx(
-        &mut tx,
-        &ctx.space_id,
-        &v,
-    )
-    .await?;
+    crate::use_cases::knowledge_documents::register_document_preparation_in_tx(&mut tx, &v).await?;
     crate::use_cases::semantic_governance::decorate_in_tx(&mut tx, ctx, &mut v).await?;
     contracts::validate("KnowledgeObject", &v)?;
     tx.commit().await?;
@@ -417,12 +407,8 @@ pub async fn edit_batch(
     crate::use_cases::dependency_registration::after_content_saved_in_tx(&mut tx, ctx, &objects)
         .await?;
     for object in &mut objects {
-        crate::use_cases::knowledge_documents::register_document_preparation_in_tx(
-            &mut tx,
-            &ctx.space_id,
-            object,
-        )
-        .await?;
+        crate::use_cases::knowledge_documents::register_document_preparation_in_tx(&mut tx, object)
+            .await?;
         crate::use_cases::semantic_governance::decorate_in_tx(&mut tx, ctx, object).await?;
     }
     let receipt = json!({"objects":objects});

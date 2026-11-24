@@ -48,9 +48,9 @@ const invoke = async (name,args) => {
 };
 const search = async query => ok(await h.request('/knowledge?q='+encodeURIComponent(query)));
 const create = async (name,body) => ok(await h.request('/knowledge',{operation_id:randomUUID(),kind:'document',name,body,source_url:null,related_ids:[]}));
-// 同一文档的knowledge_entry与source_excerpt两目标共用object_id（05切片1/2起同库
-// 共存）：按target区分行。此处断言的是知识片段的定位元数据，原文摘录行entry_id
-// 合法为空，不参与该断言。
+// knowledge_entry与source_excerpt同库共存：按target区分行。独立文档只登记
+// knowledge_entry目标，原文摘录行只来自平台来源。此处断言的是知识片段的定位元数据，
+// 原文摘录行entry_id合法为空，不参与该断言。
 const records = async (id,target='knowledge_entry') => milvus('entities/query',{filter:`object_id == "${id}" && target == "${target}"`,outputFields:['id','object_id','object_version','kind','space_id','model','vector','text','target','projection_version','entry_id','entry_path','statement_id','statement_offset','char_offset','char_length','content_hash'],limit:512,consistencyLevel:'Strong'});
 const waitIndexed = async ids => {
   await until(() => h.sql(`SELECT JSON_OBJECT('n',COUNT(*)) FROM knowledge_index_jobs WHERE object_id IN (${ids.map(id=>`'${id}'`).join(',')}) AND vector_state<>'indexed'`)[0].n===0,'isolated excerpt documents indexed',60000);

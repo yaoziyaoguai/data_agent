@@ -19,6 +19,11 @@ const tool=async(query,sdk=randomUUID())=>{
  assert.equal((await h.internal('/internal/data/tool-calls',input)).status,200);
  return {input,result:await h.internal('/internal/data/tools',input)};
 };
+// 合同KnowledgeSearchCoverage按通道如实报告：dense没有SQL替代票，嵌入失败即不可用，词法两路照常。
+const lexical=[{channel:'exact',state:'available'},{channel:'bm25',state:'available'}],dense=state=>[...lexical,{channel:'dense',state}];
+const coverage=result=>result.result.value.data.search_coverage,denseUnavailable=result=>{
+ assert.deepEqual(coverage(result).channels,dense('unavailable'));assert.ok(coverage(result).reasons.includes('channel_unavailable'));
+};
 try{
  h=await harness({capture:true,profile,startWorker:false,env:{...provider.env,DATA_AGENT_VECTOR_URL:'http://127.0.0.1:19531',DATA_AGENT_VECTOR_COLLECTION:collection,DATA_AGENT_VECTOR_TOKEN_FILE:process.cwd()+'/.local/infra/milvus-root-password'}});
  const prepared=await h.request('/knowledge-index/rebuilds',{operation_id:randomUUID()});assert.equal(prepared.status,200,JSON.stringify(prepared.value));
@@ -34,7 +39,7 @@ try{
  checks.push('独立1024维集合；丢失集合后重建复用持久向量，未新增模型调用');
  await h.resumeWorker();run=await h.capture(await h.create(),'请查找合成收入指标的定义与统计时间');
  provider.setDelay(2300);const first=await tool('净收入');provider.setDelay(0);
- assert.equal(first.result.status,200);assert.equal(first.result.value.data.search_coverage.vector_state,'available');
+ assert.equal(first.result.status,200);assert.deepEqual(coverage(first).channels,dense('available'));
  const count=provider.requests.length;assert.equal((await h.internal('/internal/data/tools',first.input)).status,200);assert.equal(provider.requests.length,count);
  const calls=h.sql("SELECT JSON_OBJECT('scope',budget_scope_id,'state',state,'purpose',purpose,'usage',usage_json) FROM model_call_attempts WHERE budget_scope_id IS NOT NULL AND purpose='knowledge_embedding'");
  assert.equal(calls.length,1);assert.equal(calls[0].scope,run.budget_scope_id);assert.equal(calls[0].state,'settled');assert.equal(calls[0].usage.input_tokens,18);
@@ -47,28 +52,37 @@ try{
  checks.push('已拒绝的工具重放不再外发付费向量请求');
  provider.setMode('dimension');const malformed=await tool('合成向量坏维度');
  // 切片五起嵌入失败不再整路清空：词法通道照常执行，降级经state=bounded如实表达。
- assert.equal(malformed.result.value.data.search_coverage.vector_state,'available');
+ denseUnavailable(malformed);
  assert.equal(malformed.result.value.data.search_coverage.state,'bounded');
  assert.equal(h.sql("SELECT JSON_OBJECT('n',COUNT(*)) FROM model_call_attempts WHERE state='settled' AND purpose='knowledge_embedding' AND response_json IS NULL")[0].n,1);
  checks.push('向量维度错误明确降级（词法照常、bounded如实），已收到usage仍结算');
  provider.setMode('lost');const lost=await tool('合成未知回执');const sent=provider.requests.length;
- assert.equal(lost.result.value.data.search_coverage.vector_state,'available');
+ denseUnavailable(lost);
  assert.equal(lost.result.value.data.search_coverage.state,'bounded');provider.setMode('ok');
  await h.restartApi();await h.internal('/internal/data/tools',lost.input);assert.equal(provider.requests.length,sent);
  assert.equal(h.sql("SELECT JSON_OBJECT('n',COUNT(*)) FROM model_call_attempts WHERE state='unknown' AND purpose='knowledge_embedding'")[0].n,1);
  assert.ok(h.sql(`SELECT JSON_OBJECT('reserved',reserved_micros) FROM model_trials WHERE id='${profile.trial_id}'`)[0].reserved>0);
  checks.push('云端回执未知保留预留；API重启后同工具不换ID重发');
  provider.setMode('usage');const badUsage=await tool('合成缺少用量');provider.setMode('ok');
- assert.equal(badUsage.result.value.data.search_coverage.vector_state,'available');
+ denseUnavailable(badUsage);
  assert.equal(badUsage.result.value.data.search_coverage.state,'bounded');
  const before=provider.requests.length;
  h.sql(`UPDATE model_trials SET state='breached' WHERE id='${profile.trial_id}'`);
- const denied=await tool('预算用尽后的请求');assert.equal(denied.result.value.data.search_coverage.vector_state,'available');
+ const denied=await tool('预算用尽后的请求');denseUnavailable(denied);
  assert.equal(denied.result.value.data.search_coverage.state,'bounded');
  assert.equal(provider.requests.length,before);
  checks.push('无usage保持未知；额度禁止外发且词法通道可继续使用');
  await h.pauseWorker();
+ // 原文目标夹具是平台来源：文档保存已不登记原文向量目标。夹具按登记入口写入的
+ // 待办行直接登记，不改预算账本。
+ const registerPlatformRaw=(id,body)=>{
+  h.sql(`INSERT INTO source_heads(id,space_id,version,fingerprint) VALUES('${id}','demo',1,'synthetic');`);
+  h.sql(`INSERT INTO source_current(source_id,space_id,adapter_id,source_kind,namespace,external_id,revision,body,complete,metadata,content_fingerprint,explanation_fingerprint,comparison_method,parsed,observed_metadata) VALUES('${id}','demo','synthetic','platform','shared-embedding','${id}',1,'${body}',1,'{}','synthetic','synthetic','exact',TRUE,'{}');`);
+  h.sql(`INSERT INTO knowledge_index_jobs(target_kind,source_kind,object_id,version,space_id,origin_job_id,vector_attempts) VALUES('source_excerpt','platform','${id}',1,'demo',NULL,0);`);
+ };
+ const received='platform-raw-complete-receipt',missing='platform-raw-missing-receipt';
  const longDocument=await h.request('/knowledge',{operation_id:randomUUID(),kind:'document',name:'合成长文分批续租',body:'合成长文说明业务口径。'.repeat(400),source_url:null,related_ids:[]});assert.equal(longDocument.status,200);
+ registerPlatformRaw(received,'合成长文说明业务口径。'.repeat(400));
  let batches=0;provider.setDelay(300);
  provider.onRequest(request=>{
   // 注入屏障只跟随该知识作业的真实操作身份，不受原文任务请求影响。
@@ -81,39 +95,42 @@ try{
  });
  await h.resumeWorker();
  await until(()=>h.sql(`SELECT JSON_OBJECT('state',vector_state) FROM knowledge_index_jobs WHERE target_kind='knowledge_entry' AND object_id='${longDocument.value.id}'`)[0]?.state==='indexed','长文分批有效租约续期',20000);
- await until(()=>h.sql(`SELECT JSON_OBJECT('state',vector_state) FROM knowledge_index_jobs WHERE target_kind='source_excerpt' AND source_kind='document' AND object_id='${longDocument.value.id}'`)[0]?.state==='indexed','原文目标取得完整回执后再进入重建用例',20000);
+ await until(()=>h.sql(`SELECT JSON_OBJECT('state',vector_state) FROM knowledge_index_jobs WHERE target_kind='source_excerpt' AND source_kind='platform' AND object_id='${received}'`)[0]?.state==='indexed','原文目标取得完整回执后再进入重建用例',20000);
  await h.pauseWorker();provider.onRequest(()=>{});provider.setDelay(0);assert.ok(batches>=2);
  assert.ok(leaseObservations[1].seconds>110,'next batch renews a still-valid lease');
  checks.push('长文在下一付费批次前续接有效租约，不受原领取剩余时间限制');
  const maintenance=JSON.parse(provider.env.DATA_AGENT_EMBEDDING_PROFILE);
  h.sql(`UPDATE model_trials SET call_limit=allocated_calls+1 WHERE id='${maintenance.trial_id}'`);
  const partial=await h.request('/knowledge',{operation_id:randomUUID(),kind:'document',name:'合成部分索引预算',body:'合成退款业务解释。'.repeat(400),source_url:null,related_ids:[]});assert.equal(partial.status,200);
+ registerPlatformRaw(missing,'合成退款业务解释。'.repeat(400));
  await h.resumeWorker();
  await until(()=>h.sql(`SELECT JSON_OBJECT('state',vector_state) FROM knowledge_index_jobs WHERE target_kind='knowledge_entry' AND object_id='${partial.value.id}'`)[0]?.state==='unknown','部分片段成功后原预算耗尽',20000);
  await until(()=>{
-  const row=h.sql(`SELECT JSON_OBJECT('state',vector_state,'profile',embedding_profile) FROM knowledge_index_jobs WHERE target_kind='source_excerpt' AND source_kind='document' AND object_id='${partial.value.id}'`)[0];
+  const row=h.sql(`SELECT JSON_OBJECT('state',vector_state,'profile',embedding_profile) FROM knowledge_index_jobs WHERE target_kind='source_excerpt' AND source_kind='platform' AND object_id='${missing}'`)[0];
   return ['unknown','failed'].includes(row?.state)&&row.profile?.trial_id===maintenance.trial_id;
  },'原文目标实际冻结原预算并耗尽，才更换当前配置',20000);
+ // 两份文档经正式接口保存并完成索引，空间内不得出现文档原文目标。
+ assert.equal(h.sql("SELECT JSON_OBJECT('n',COUNT(*)) FROM knowledge_index_jobs WHERE target_kind='source_excerpt' AND source_kind='document'")[0].n,0,'文档保存不登记原文向量目标');
  await h.pauseWorker();const paid=provider.requests.length;
  const nextProfile={...maintenance,trial_id:'replacement_'+randomUUID()};h.env.DATA_AGENT_EMBEDDING_PROFILE=JSON.stringify(nextProfile);
  await milvus('collections/drop');assert.equal((await h.request('/knowledge-index/rebuilds',{operation_id:randomUUID()})).status,200);await h.resumeWorker();
  await until(()=>h.sql(`SELECT JSON_OBJECT('state',vector_state) FROM knowledge_index_jobs WHERE target_kind='knowledge_entry' AND object_id='${partial.value.id}'`)[0]?.state==='failed','集合重建仍沿用原预算',45000);
  await until(()=>{
-  const rows=h.sql(`SELECT JSON_OBJECT('id',object_id,'state',vector_state) FROM knowledge_index_jobs WHERE target_kind='source_excerpt' AND source_kind='document' AND object_id IN ('${partial.value.id}','${longDocument.value.id}')`);
-  return rows.find(row=>row.id===longDocument.value.id)?.state==='indexed'&&rows.find(row=>row.id===partial.value.id)?.state==='failed';
+  const rows=h.sql(`SELECT JSON_OBJECT('id',object_id,'state',vector_state) FROM knowledge_index_jobs WHERE target_kind='source_excerpt' AND source_kind='platform' AND object_id IN ('${missing}','${received}')`);
+  return rows.find(row=>row.id===received)?.state==='indexed'&&rows.find(row=>row.id===missing)?.state==='failed';
  },'重建后的两类原文目标按各自旧回执和冻结预算收敛',45000);
  // 原文目标与知识对象同表后，重建重绑会让原文目标补齐缺回执的分批；预算不变量
  // 是：补调用只记原冻结trial、新trial零使用、知识对象trial不变。
  await h.pauseWorker();const extra=provider.requests.length-paid;
  assert.equal(h.sql(`SELECT JSON_OBJECT('n',COUNT(*)) FROM model_call_attempts WHERE trial_id='${nextProfile.trial_id}'`)[0].n,0,'重建补索引不能换trial补额');
  assert.equal(h.sql(`SELECT JSON_OBJECT('profile',embedding_profile) FROM knowledge_index_jobs WHERE target_kind='knowledge_entry' AND object_id='${partial.value.id}'`)[0].profile.trial_id,maintenance.trial_id);
- const reboundSources=h.sql(`SELECT JSON_OBJECT('obj',object_id,'state',vector_state,'error',vector_error,'profile',embedding_profile) FROM knowledge_index_jobs WHERE target_kind='source_excerpt' AND source_kind='document' AND object_id IN ('${partial.value.id}','${longDocument.value.id}')`);
- assert.equal(reboundSources.find(row=>row.obj===longDocument.value.id)?.state,'indexed','已有完整回执的原文目标重绑零调用收敛');
- assert.equal(reboundSources.find(row=>row.obj===partial.value.id)?.state,'failed','冻结trial耗尽的原文目标不换trial补批，如实失败');
- assert.equal(reboundSources.find(row=>row.obj===longDocument.value.id)?.profile.trial_id,maintenance.trial_id);
- assert.equal(reboundSources.find(row=>row.obj===partial.value.id)?.profile.trial_id,maintenance.trial_id);
+ const reboundSources=h.sql(`SELECT JSON_OBJECT('obj',object_id,'state',vector_state,'error',vector_error,'profile',embedding_profile) FROM knowledge_index_jobs WHERE target_kind='source_excerpt' AND source_kind='platform' AND object_id IN ('${missing}','${received}')`);
+ assert.equal(reboundSources.find(row=>row.obj===received)?.state,'indexed','已有完整回执的原文目标重绑零调用收敛');
+ assert.equal(reboundSources.find(row=>row.obj===missing)?.state,'failed','冻结trial耗尽的原文目标不换trial补批，如实失败');
+ assert.equal(reboundSources.find(row=>row.obj===received)?.profile.trial_id,maintenance.trial_id);
+ assert.equal(reboundSources.find(row=>row.obj===missing)?.profile.trial_id,maintenance.trial_id);
  assert.equal(h.sql(`SELECT JSON_OBJECT('n',COUNT(*)) FROM model_trials WHERE id='${nextProfile.trial_id}'`)[0].n,0,'根本不用的当前trial不登记');
- checks.push(`部分索引后重建集合并更换当前配置，原对象预算绑定保留，耗尽不换trial补额；原文目标回执重用零调用、缺回执批次沿用冻结trial如实失败`);
+ checks.push(`部分索引后重建集合并更换当前配置，原对象预算绑定保留，耗尽不换trial补额；平台原文目标回执重用零调用、缺回执批次沿用冻结trial如实失败，文档不登记原文目标`);
  // 只替换测试集合；正式调用不能静默把既有384维库当成1024维。
  await milvus('collections/drop');await milvus('collections/create',{dimension:384,idType:'VarChar',autoID:false,primaryFieldName:'id',vectorFieldName:'vector',metricType:'COSINE',params:{max_length:'128',enableDynamicField:true}});
  const incompatible=await h.request('/knowledge-index/rebuilds',{operation_id:randomUUID()});assert.notEqual(incompatible.status,200);assert.equal(incompatible.value.code,'vector_dimension_mismatch');

@@ -63,6 +63,15 @@ try{
  // 中文含义词与否定区分样本：原文无需等待整理即可进入索引并按BM25通道召回。
  const unpaid=await h.request('/knowledge',{operation_id:randomUUID(),kind:'document',name:'unpaid_refund_rule',body:'未付款订单不产生退款，首次申请免费处理，最终解释以协议为准。',source_url:null,related_ids:[]});assert.equal(unpaid.status,200,JSON.stringify(unpaid.value));
  const paid=await h.request('/knowledge',{operation_id:randomUUID(),kind:'document',name:'paid_refund_rule',body:'已付款订单可以申请退款，最终退款扣除手续费，运费除外。',source_url:null,related_ids:[]});assert.equal(paid.status,200,JSON.stringify(paid.value));
+ // 原文目标的夹具是平台来源：文档保存不登记原文向量目标。夹具按登记入口写入的
+ // 待办行直接登记，与导入的平台来源同经统一消费者入索引。
+ const registerPlatformRaw=(id,body)=>{
+  h.sql(`INSERT INTO source_heads(id,space_id,version,fingerprint) VALUES('${id}','demo',1,'synthetic');`);
+  h.sql(`INSERT INTO source_current(source_id,space_id,adapter_id,source_kind,namespace,external_id,revision,body,complete,metadata,content_fingerprint,explanation_fingerprint,comparison_method,parsed,observed_metadata) VALUES('${id}','demo','synthetic','platform','hybrid-retrieval','${id}',1,'${body}',1,'{}','synthetic','synthetic','exact',TRUE,'{}');`);
+  h.sql(`INSERT INTO knowledge_index_jobs(target_kind,source_kind,object_id,version,space_id,origin_job_id,vector_attempts) VALUES('source_excerpt','platform','${id}',1,'demo',NULL,0);`);
+ };
+ const ruleSource='unpaid-refund-rule-raw';
+ registerPlatformRaw(ruleSource,'未付款订单不产生退款，首次申请免费处理，最终解释以协议为准。');
  await h.resumeWorker();
  await waitCurrentIndex('应用千表索引全部完成');
  created=true;buildSeconds=(performance.now()-start)/1000;
@@ -102,21 +111,22 @@ try{
  assert.ok(amUnpaid>=0,'最终+协议组合可召回未付款规则: '+JSON.stringify(amNames));
  if(amPaid>=0)assert.ok(amUnpaid<amPaid,'同词异义：同含“最终”，协议解释先于退款手续费');
  checks.push({name:'限定词（首次/最终/除外）参与区分；同词“最终”靠共现词消歧（协议解释vs退款手续费）'});
- // 05切片3：统一公共索引消费者——文档与平台原文不等整理即入代次索引
- // （kind=source_excerpt带source_kind/修订/位置），v1知识检索不把摘录冒充知识对象。
+ // 05切片3：统一公共索引消费者——平台原文不等整理即入代次索引（kind=source_excerpt带
+ // source_kind/修订/位置），文档不登记原文目标，v1知识检索不把摘录冒充知识对象。
  let excerptRows=[];
  await until(async()=>{
-  excerptRows=await call0('entities/query',{collectionName:collection,filter:`kind == "source_excerpt" && object_id == "${unpaid.value.id}"`,outputFields:['id','source_kind','object_version','char_offset','char_length','text'],limit:16,consistencyLevel:'Strong'});
+  excerptRows=await call0('entities/query',{collectionName:collection,filter:`kind == "source_excerpt" && source_kind == "platform" && object_id == "${ruleSource}"`,outputFields:['id','source_kind','object_version','char_offset','char_length','text'],limit:16,consistencyLevel:'Strong'});
   return excerptRows.length>0;
  },'raw摘录已入索引',60000);
  assert.ok(excerptRows.some(r=>(r.text||'').includes('未付款订单不产生退款')),'摘录正文含否定原文');
- for(const row of excerptRows){assert.equal(row.source_kind,'document');assert.ok(Number(row.object_version)>=1);assert.ok(Number(row.char_length)>0);}
- // 原文尾部：长文档把专有标记放到正文末尾，末块必须入索引且覆盖推进到正文终点。
+ for(const row of excerptRows){assert.equal(row.source_kind,'platform');assert.ok(Number(row.object_version)>=1);assert.ok(Number(row.char_length)>0);}
+ // 原文尾部：长文把专有标记放到正文末尾，登记后末块必须入索引且覆盖推进到正文终点。
  const tailBody='开头说明。'+Array.from({length:400},(_,i)=>'第'+i+'行常规填充内容，用于把标记推到原文末尾。').join('')+'末尾专有标记：尾部锚点漂移校准专用词。';
  const tailDoc=await h.request('/knowledge',{operation_id:randomUUID(),kind:'document',name:'long_tail_marker',body:tailBody,source_url:null,related_ids:[]});assert.equal(tailDoc.status,200,JSON.stringify(tailDoc.value));
+ const tailSource='long-tail-marker-raw';registerPlatformRaw(tailSource,tailBody);
  let tailRows=[];
  await until(async()=>{
-  tailRows=await call0('entities/query',{collectionName:collection,filter:`kind == "source_excerpt" && object_id == "${tailDoc.value.id}"`,outputFields:['id','char_offset','char_length','text'],limit:64,consistencyLevel:'Strong'});
+  tailRows=await call0('entities/query',{collectionName:collection,filter:`kind == "source_excerpt" && object_id == "${tailSource}"`,outputFields:['id','char_offset','char_length','text'],limit:64,consistencyLevel:'Strong'});
   // 等标记本身出现：摘录按批次推进，首批落地不代表末尾批次已到。
   return tailRows.some(r=>(r.text||'').includes('尾部锚点漂移校准'));
  },'长文末尾标记入摘录索引',120000);
@@ -132,26 +142,27 @@ try{
  assert.ok(platformExcerpts.length>0,'平台来源原文同样不等整理即入摘录索引');
  const rawGuard=await query('未付款订单首次申请免费处理吗');
  assert.ok(rawGuard.objects.length>0&&rawGuard.objects.every(o=>o.kind!=='source_excerpt'),'v1知识检索不冒充raw摘录');
- // 作业如实收尾：文档目标结算、全库原文目标无失败（1204个平台来源目标量大，
+ // 作业如实收尾：夹具的原文目标结算、全库原文目标无失败（1204个平台来源目标量大，
  // 不要求在断言时限内全部完成，剩余保持真实pending由worker继续推进）。
  await until(()=>{
-  const docJobs=h.sql(`SELECT JSON_OBJECT('open',SUM(vector_state IN ('pending','sending','unknown')),'failed',SUM(vector_state='failed')) FROM knowledge_index_jobs WHERE target_kind='source_excerpt' AND source_kind='document' AND object_id IN ('${unpaid.value.id}','${paid.value.id}')`)[0];
-  return Number(docJobs.open||0)===0&&Number(docJobs.failed||0)===0;
- },'文档raw作业收尾',60000);
+  const fixtureJobs=h.sql(`SELECT JSON_OBJECT('open',SUM(vector_state IN ('pending','sending','unknown')),'failed',SUM(vector_state='failed')) FROM knowledge_index_jobs WHERE target_kind='source_excerpt' AND source_kind='platform' AND object_id IN ('${ruleSource}','${tailSource}')`)[0];
+  return Number(fixtureJobs.open||0)===0&&Number(fixtureJobs.failed||0)===0;
+ },'平台raw作业收尾',60000);
+ assert.equal(h.sql("SELECT JSON_OBJECT('n',COUNT(*)) FROM knowledge_index_jobs WHERE target_kind='source_excerpt' AND source_kind='document'")[0].n,0,'文档保存不登记原文向量目标');
  const rawFailed=h.sql("SELECT JSON_OBJECT('failed',SUM(vector_state='failed')) FROM knowledge_index_jobs WHERE target_kind='source_excerpt'")[0].failed;
  assert.equal(Number(rawFailed||0),0,'raw作业不得失败');
- checks.push({name:'统一索引消费者：文档与平台原文不等整理即入代次索引（kind=source_excerpt带source_kind/修订/位置/正文），作业如实收尾，v1不冒充raw'});
- // 整理状态≠索引滞后：pending与failed是两个独立夹具，各自有可查raw且状态如实，
+ checks.push({name:'统一索引消费者：平台原文不等整理即入代次索引（kind=source_excerpt带source_kind/修订/位置/正文），文档不登记原文目标，作业如实收尾，v1不冒充raw'});
+ // 整理状态≠索引滞后：pending与failed是两个独立夹具，各自有可查知识索引且状态如实，
  // 已完成索引照常召回，覆盖回执不因整理状态误报index_state未就绪。本电池不配置
  // 整理模型（没有真实模型授权），两个夹具按整理消费者写库的同一行形状显式建立：
- // 真实文档来源、真实原文目标、明确的semantic_status与error_code，不用“有行才
+ // 真实文档来源、真实知识索引目标、明确的semantic_status与error_code，不用“有行才
  // failed、否则pending”的分支冒充双覆盖。
  await h.pauseWorker();
  const prepState=source=>h.sql(`SELECT JSON_OBJECT('status',semantic_status,'error',error_code) FROM source_preparations WHERE source_id='${source}' ORDER BY method_version DESC LIMIT 1`)[0];
- const rawRowsOf=source=>{
-  // 整理来源身份对文档带document-前缀，公共索引目标用裸对象id；平台两者相同。
+ const entryRowsOf=source=>{
+  // 整理来源身份对文档带document-前缀，公共索引目标用裸对象id。
   const bare=source.startsWith('document-')?source.slice('document-'.length):source;
-  return h.sql(`SELECT JSON_OBJECT('n',COUNT(*)) FROM knowledge_index_jobs WHERE target_kind='source_excerpt' AND object_id='${bare}'`)[0].n;
+  return h.sql(`SELECT JSON_OBJECT('n',COUNT(*)) FROM knowledge_index_jobs WHERE target_kind='knowledge_entry' AND object_id='${bare}'`)[0].n;
  };
  const fixtures=[
   {source:`document-${unpaid.value.id}`,revision:unpaid.value.version,status:'pending',error:null},
@@ -160,7 +171,7 @@ try{
  for(const fixture of fixtures){
   h.sql(`INSERT INTO source_preparations(source_id,space_id,revision,method_version,input_fingerprint,dependency_fingerprint,semantic_status,error_code,unresolved) VALUES('${fixture.source}','demo',${fixture.revision},'semantic-preparation-2','fixture-input','fixture-dependency','${fixture.status}',${fixture.error===null?'NULL':`'${fixture.error}'`},CAST('[]' AS JSON)) ON DUPLICATE KEY UPDATE semantic_status=VALUES(semantic_status),error_code=VALUES(error_code),frozen_batch=NULL,pending_draft=NULL,call_state=NULL,issued_until=NULL`);
   assert.deepEqual(prepState(fixture.source),{status:fixture.status,error:fixture.error},`${fixture.status}夹具状态如实`);
-  assert.ok(Number(rawRowsOf(fixture.source))>0,`${fixture.status}夹具仍有可查原文目标`);
+  assert.ok(Number(entryRowsOf(fixture.source))>0,`${fixture.status}夹具仍有可查知识索引目标`);
  }
  const afterState=await query('未付款订单首次申请免费处理吗');
  assert.equal(afterState.search_coverage.index_state,'current','pending/failed整理状态都不误报索引未就绪');
@@ -178,7 +189,7 @@ try{
  // 移除夹具行：它们只证明整理状态与索引覆盖分离，不改变本电池后续消费。
  for(const fixture of fixtures)h.sql(`DELETE FROM source_preparations WHERE source_id='${fixture.source}' AND method_version='semantic-preparation-2' AND input_fingerprint='fixture-input'`);
  await h.resumeWorker();
- checks.push({name:'整理状态≠索引滞后：pending与failed两个独立夹具各有可查原文目标且状态如实，index_state仍current，已完成索引照常召回'});
+ checks.push({name:'整理状态≠索引滞后：pending与failed两个独立夹具各有可查知识索引目标且状态如实，index_state仍current，已完成索引照常召回'});
  // 同千表集合保留原门控回环；其余raw反例在check-source-recall专用协议环境完整执行。
  await h.pauseWorker();
  const queriesBeforeRecall=queries;

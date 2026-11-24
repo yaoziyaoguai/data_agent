@@ -392,8 +392,11 @@ async fn handover_only_moves_sources_owned_by_the_requested_space() {
     pool.close().await;
 }
 
+// 显式重建只补登记当前可读的平台来源：超过单批64项；旧队列的可用工作沿原身份
+// 接回并保留冻结额度，有效租约与失败终态原样保留；外空间、停用、不可读来源和
+// 独立文档不登记；同操作并发与重放只执行一次，不排语义准备。
 #[tokio::test]
-async fn rebuild_registers_current_sources_preserves_legacy_work_and_replays_once() {
+async fn rebuild_registers_platform_sources_preserves_legacy_work_and_replays_once() {
     let Some(url) = test_url() else { return };
     let pool = connect(&url).await.unwrap();
     let ctx = AccessContext {
@@ -403,32 +406,56 @@ async fn rebuild_registers_current_sources_preserves_legacy_work_and_replays_onc
         table_access: None,
     };
     let prefix = format!("rebuild-{}", data_agent::types::id());
+    let mut sources = Vec::new();
+    for index in 0..72 {
+        let source = format!("{prefix}-{index}");
+        // 夹具同时提供真实owner；外空间、停用与不可读三类不得进入本空间重建。
+        let space = if index == 0 { "other-space" } else { SPACE };
+        sqlx::query("INSERT INTO source_heads(id,space_id,version,fingerprint) VALUES(?,?,1,'synthetic-handover')")
+            .bind(&source).bind(space).execute(&pool).await.unwrap();
+        sqlx::query(
+            "INSERT INTO source_revisions(source_id,version,body) VALUES(?,1,'合成待补登平台原文')",
+        )
+        .bind(&source)
+        .execute(&pool)
+        .await
+        .unwrap();
+        match index {
+            1 => {
+                sqlx::query("INSERT INTO catalog_platform_heads(source_id,platform_version,namespace,platform_table_id,retired) VALUES(?,1,'synthetic-rebuild',?,TRUE)")
+                    .bind(&source).bind(&source).execute(&pool).await.unwrap();
+            }
+            2 => {
+                sqlx::query("UPDATE source_revisions SET archive_complete=FALSE WHERE source_id=?")
+                    .bind(&source)
+                    .execute(&pool)
+                    .await
+                    .unwrap();
+            }
+            _ => {}
+        }
+        sources.push(source);
+    }
     let mut documents = Vec::new();
-    for index in 0..70 {
-        let object = format!("{prefix}-{index}");
-        let (space, state, source, text) = match index {
-            0 => ("other-space", "enabled", None, "合成外空间原文"),
-            1 => (SPACE, "disabled", None, "合成停用原文"),
-            2 => (SPACE, "enabled", None, "   "),
-            3 => (SPACE, "enabled", Some("schema"), "合成来源派生章节"),
-            _ => (SPACE, "enabled", None, "合成待补登当前原文"),
-        };
-        let body = json!({"id":object,"kind":"document","state":state,"version":"1","source_id":source,
-            "entries":[{"entry_id":"body","path":"body","effective_value":text}]});
-        sqlx::query("INSERT INTO knowledge_objects(id,space_id,kind,name,version,state,body,source_id,source_version,updated_by) VALUES(?,?,'document','合成补登文档',1,?,?,?,0,'rebuild-test')")
-            .bind(&object).bind(space).bind(state).bind(sqlx::types::Json(body)).bind(source).execute(&pool).await.unwrap();
+    for index in 0..4 {
+        let object = format!("{prefix}-doc-{index}");
+        let body = json!({"id":object,"kind":"document","state":"enabled","version":"1","source_id":null,
+            "entries":[{"entry_id":"body","path":"body","effective_value":"合成待补登文档原文"}]});
+        sqlx::query("INSERT INTO knowledge_objects(id,space_id,kind,name,version,state,body,source_id,source_version,updated_by) VALUES(?,?,'document','合成补登文档',1,'enabled',?,NULL,0,'rebuild-test')")
+            .bind(&object).bind(SPACE).bind(sqlx::types::Json(body)).execute(&pool).await.unwrap();
         documents.push(object);
     }
-    let inherited = seed(&pool, &format!("document-{}", documents[4]), 1).await;
+    seed(&pool, &format!("document-{}", documents[0]), 1).await;
+    let inherited = seed(&pool, &sources[4], 1).await;
     sqlx::query("UPDATE background_jobs SET attempts=2 WHERE id=?")
         .bind(&inherited)
         .execute(&pool)
         .await
         .unwrap();
-    let live = seed(&pool, &format!("document-{}", documents[5]), 1).await;
+    let live = seed(&pool, &sources[5], 1).await;
     sqlx::query("UPDATE background_jobs SET state='running',attempts=1,lease_owner='old-worker',lease_until=TIMESTAMPADD(SECOND,120,UTC_TIMESTAMP(3)) WHERE id=?")
         .bind(&live).execute(&pool).await.unwrap();
-    let failed = seed(&pool, &format!("document-{}", documents[6]), 1).await;
+    let failed = seed(&pool, &sources[6], 1).await;
     sqlx::query("UPDATE background_jobs SET state='failed',attempts=3 WHERE id=?")
         .bind(&failed)
         .execute(&pool)
@@ -440,8 +467,8 @@ async fn rebuild_registers_current_sources_preserves_legacy_work_and_replays_onc
         &mut tx,
         SPACE,
         &SourceKey {
-            kind: SourceKeyKind::Document,
-            id: documents[4].clone(),
+            kind: SourceKeyKind::Platform,
+            id: sources[4].clone(),
         },
         1,
         None,
@@ -450,7 +477,7 @@ async fn rebuild_registers_current_sources_preserves_legacy_work_and_replays_onc
     .unwrap();
     tx.commit().await.unwrap();
     sqlx::query("UPDATE knowledge_index_jobs SET embedding_profile=? WHERE target_kind='source_excerpt' AND object_id=?")
-        .bind(sqlx::types::Json(&frozen)).bind(&documents[4]).execute(&pool).await.unwrap();
+        .bind(sqlx::types::Json(&frozen)).bind(&sources[4]).execute(&pool).await.unwrap();
     let prepare_before: i64 =
         sqlx::query_scalar("SELECT COUNT(*) FROM background_jobs WHERE kind='prepare_source'")
             .fetch_one(&pool)
@@ -463,34 +490,47 @@ async fn rebuild_registers_current_sources_preserves_legacy_work_and_replays_onc
     );
     let receipt = left.unwrap();
     assert_eq!(right.unwrap(), receipt, "并发同操作接回原回执");
-    for (index, object) in documents.iter().enumerate() {
-        let current = todo(&pool, object).await;
-        if index < 4 || index == 5 {
+    for (index, source) in sources.iter().enumerate() {
+        let current = todo(&pool, source).await;
+        if index < 3 || index == 5 {
             assert!(
                 current.is_none(),
-                "外空间、停用、空正文、派生章节和有效旧租约不旁路补登：{index}"
+                "外空间、停用、不可读来源和有效旧租约不旁路补登：{index}"
             );
         } else {
-            assert!(current.is_some(), "超过单批64项的当前来源均补登：{index}");
+            assert!(
+                current.is_some(),
+                "超过单批64项的当前平台来源均补登：{index}"
+            );
         }
     }
+    for object in &documents {
+        assert!(
+            todo(&pool, object).await.is_none(),
+            "独立文档不登记原文向量目标"
+        );
+    }
     assert_eq!(
-        todo(&pool, &documents[4]).await.unwrap(),
-        ("document".into(), 1, 2, inherited.clone())
+        legacy_state(&pool, &format!("document-{}", documents[0]))
+            .await
+            .0,
+        "queued",
+        "显式重建不接管独立文档的旧raw作业，由生产循环的到期移交收敛"
+    );
+    assert_eq!(
+        todo(&pool, &sources[4]).await.unwrap(),
+        ("platform".into(), 1, 2, inherited.clone())
     );
     let preserved:sqlx::types::Json<Value> = sqlx::query_scalar("SELECT embedding_profile FROM knowledge_index_jobs WHERE target_kind='source_excerpt' AND object_id=?")
-        .bind(&documents[4]).fetch_one(&pool).await.unwrap();
+        .bind(&sources[4]).fetch_one(&pool).await.unwrap();
     assert_eq!(preserved.0, frozen, "移交和重建不重绑冻结额度");
     assert_eq!(
-        legacy_state(&pool, &format!("document-{}", documents[5])).await,
+        legacy_state(&pool, &sources[5]).await,
         ("running".into(), 1)
     );
+    assert_eq!(legacy_state(&pool, &sources[6]).await, ("failed".into(), 3));
     assert_eq!(
-        legacy_state(&pool, &format!("document-{}", documents[6])).await,
-        ("failed".into(), 3)
-    );
-    assert_eq!(
-        legacy_state(&pool, &format!("document-{}", documents[4])).await,
+        legacy_state(&pool, &sources[4]).await,
         ("finished".into(), 2)
     );
     let before:Vec<(String,u64,u32,String)> = sqlx::query_as("SELECT object_id,lease_epoch,vector_attempts,vector_target FROM knowledge_index_jobs WHERE target_kind='source_excerpt' AND object_id LIKE ? ORDER BY object_id")
@@ -510,26 +550,45 @@ async fn rebuild_registers_current_sources_preserves_legacy_work_and_replays_onc
             .await
             .unwrap();
     assert_eq!(prepare_after, prepare_before, "纯索引重建不排语义准备");
-    for object in &documents {
+    for id in sources.iter().chain(&documents) {
         sqlx::query("DELETE FROM knowledge_index_jobs WHERE object_id=?")
-            .bind(object)
+            .bind(id)
             .execute(&pool)
             .await
             .unwrap();
-        sqlx::query("DELETE FROM background_jobs WHERE kind='raw_source_index' AND resource_id=?")
-            .bind(format!("document-{object}"))
+        sqlx::query(
+            "DELETE FROM background_jobs WHERE kind='raw_source_index' AND resource_id IN (?,?)",
+        )
+        .bind(id)
+        .bind(format!("document-{id}"))
+        .execute(&pool)
+        .await
+        .unwrap();
+        sqlx::query("DELETE FROM source_revisions WHERE source_id=?")
+            .bind(id)
+            .execute(&pool)
+            .await
+            .unwrap();
+        sqlx::query("DELETE FROM source_heads WHERE id=?")
+            .bind(id)
             .execute(&pool)
             .await
             .unwrap();
         sqlx::query("DELETE FROM knowledge_objects WHERE id=?")
-            .bind(object)
+            .bind(id)
             .execute(&pool)
             .await
             .unwrap();
     }
+    sqlx::query("DELETE FROM catalog_platform_heads WHERE source_id=?")
+        .bind(&sources[1])
+        .execute(&pool)
+        .await
+        .unwrap();
     pool.close().await;
 }
 
+// 旧raw作业挂在平台来源上：显式重建遇有效旧租约不登记，到期后只由生产循环接回。
 #[tokio::test]
 async fn rebuild_live_legacy_lease_resumes_after_expiry_in_production_index_loop() {
     let Some(url) = test_url() else { return };
@@ -546,17 +605,14 @@ async fn rebuild_live_legacy_lease_resumes_after_expiry_in_production_index_loop
         .0;
     let client = reqwest::Client::new();
     let operation = json!({"operation_id": data_agent::types::id()});
-    let object = format!("expiry-{}", data_agent::types::id());
-    let resource = format!("document-{object}");
+    let resource = format!("expiry-{}", data_agent::types::id());
     let body = (0..400)
         .map(|i| format!("第{i}行合成租约接续资料：到期后必须沿原索引作业完成原文投影。\n"))
         .collect::<String>();
     let old = seed(&pool, &resource, 1).await;
-    let document = json!({"id":object,"kind":"document","state":"enabled","version":"1","source_id":null,
-        "entries":[{"entry_id":"body","path":"body","effective_value":body}]});
-    sqlx::query("UPDATE knowledge_objects SET body=? WHERE id=?")
-        .bind(sqlx::types::Json(document))
-        .bind(&object)
+    sqlx::query("UPDATE source_revisions SET body=? WHERE source_id=?")
+        .bind(&body)
+        .bind(&resource)
         .execute(&pool)
         .await
         .unwrap();
@@ -564,14 +620,14 @@ async fn rebuild_live_legacy_lease_resumes_after_expiry_in_production_index_loop
         .bind(&old).execute(&pool).await.unwrap();
 
     let key = SourceKey {
-        kind: SourceKeyKind::Document,
-        id: object.clone(),
+        kind: SourceKeyKind::Platform,
+        id: resource.clone(),
     };
     let source = SourceText {
         source: &key,
         revision: "1",
         text: &body,
-        format: SourceFormat::Markdown,
+        format: SourceFormat::Sql,
         background: &[],
     };
     let mut pieces = Vec::new();
@@ -704,16 +760,16 @@ async fn rebuild_live_legacy_lease_resumes_after_expiry_in_production_index_loop
         .expect("旧租约到期后，生产process_index必须自动接回原raw作业");
     assert_eq!(
         resumed,
-        ("document".into(), 1, 3, old.clone()),
+        ("platform".into(), 1, 3, old.clone()),
         "保原身份和2次尝试，仅消费时再加1"
     );
     assert_eq!(legacy_state(&pool, &resource).await, ("finished".into(), 2));
-    let state: (String, sqlx::types::Json<Value>) = sqlx::query_as("SELECT vector_state,embedding_profile FROM knowledge_index_jobs WHERE target_kind='source_excerpt' AND source_kind='document' AND object_id=?")
-        .bind(&object).fetch_one(&pool).await.unwrap();
+    let state: (String, sqlx::types::Json<Value>) = sqlx::query_as("SELECT vector_state,embedding_profile FROM knowledge_index_jobs WHERE target_kind='source_excerpt' AND source_kind='platform' AND object_id=?")
+        .bind(&resource).fetch_one(&pool).await.unwrap();
     assert_eq!(state.0, "indexed", "真实切块、Embedding与Milvus写入完成");
     assert_eq!(state.1.0, frozen, "新批沿原配置冻结，不为到期恢复重绑额度");
-    let projection: (u64, u64, bool) = sqlx::query_as("SELECT revision,applied_position,complete FROM retrieval_source_projections WHERE source_kind='document' AND source_id=?")
-        .bind(&object).fetch_one(&pool).await.unwrap();
+    let projection: (u64, u64, bool) = sqlx::query_as("SELECT revision,applied_position,complete FROM retrieval_source_projections WHERE source_kind='platform' AND source_id=?")
+        .bind(&resource).fetch_one(&pool).await.unwrap();
     assert_eq!(projection, (1, body.chars().count() as u64, true));
     let ledger_after: sqlx::types::Json<Value> = sqlx::query_scalar("SELECT JSON_OBJECT('id',id,'state',state,'trial',trial_id,'operation',operation_id,'parameters',parameters_fingerprint,'reserved',reserved_micros,'actual',actual_micros,'usage',usage_json,'response',response_json) FROM model_call_attempts WHERE id=?")
         .bind(&attempt).fetch_one(&pool).await.unwrap();
@@ -721,7 +777,7 @@ async fn rebuild_live_legacy_lease_resumes_after_expiry_in_production_index_loop
         ledger_after.0, ledger_before.0,
         "旧成功批只回放，账本与原trial逐字段不变"
     );
-    let prefix = format!("{object}%");
+    let prefix = format!("{resource}%");
     let jobs_before: Vec<(String, u64, u32)> = sqlx::query_as("SELECT vector_state,lease_epoch,vector_attempts FROM knowledge_index_jobs WHERE object_id LIKE ? ORDER BY target_kind")
         .bind(&prefix).fetch_all(&pool).await.unwrap();
     let replay = client

@@ -217,9 +217,18 @@ impl RecoveryHarness {
         .await
         .unwrap();
         if register {
+            // 文档保存已不登记原文目标；封板前登记的文档原文行是恢复夹具，
+            // 直接经knowledge登记入口建立，身份与保存路径原子登记时相同。
             let mut tx = AppTx::begin(&self.pool).await.unwrap();
-            data_agent::use_cases::knowledge_documents::register_document_preparation_in_tx(
-                &mut tx, SPACE, &document,
+            knowledge::register_source_index_target_in_tx(
+                &mut tx,
+                SPACE,
+                &SourceKey {
+                    kind: SourceKeyKind::Document,
+                    id: id.to_owned(),
+                },
+                1,
+                None,
             )
             .await
             .unwrap();

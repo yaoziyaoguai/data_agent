@@ -6,7 +6,7 @@ use crate::{
 };
 use sqlx::MySqlPool;
 
-async fn current_sources_in_tx(tx: &mut AppTx<'_>, space: &str) -> Result<Vec<(SourceKey, u64)>> {
+async fn platform_sources_in_tx(tx: &mut AppTx<'_>, space: &str) -> Result<Vec<(SourceKey, u64)>> {
     let mut sources = Vec::new();
     for (id, revision) in ingestion::readable_source_heads_in_tx(tx, space).await? {
         sources.push((
@@ -17,6 +17,12 @@ async fn current_sources_in_tx(tx: &mut AppTx<'_>, space: &str) -> Result<Vec<(S
             revision,
         ));
     }
+    Ok(sources)
+}
+
+// 旧积压移交仍覆盖独立文档：封板前登记的文档旧作业要沿原身份收敛。
+async fn current_sources_in_tx(tx: &mut AppTx<'_>, space: &str) -> Result<Vec<(SourceKey, u64)>> {
+    let mut sources = platform_sources_in_tx(tx, space).await?;
     for (id, revision) in knowledge::independent_document_heads_in_tx(tx, space).await? {
         sources.push((
             SourceKey {
@@ -75,13 +81,14 @@ pub async fn hand_over_in_tx(tx: &mut AppTx<'_>, space: &str) -> Result<u64> {
     Ok(moved)
 }
 
-// 显式重建只补登记当前可读来源；旧有效租约不能经新队列旁路领取。
+// 显式重建只补登记当前可读平台来源：独立文档以知识条目定位，不再登记原文目标；
+// 旧有效租约不能经新队列旁路领取。
 pub(super) async fn rebuild_sources_in_tx(
     tx: &mut AppTx<'_>,
     space: &str,
     target: &str,
 ) -> Result<()> {
-    let sources = current_sources_in_tx(tx, space).await?;
+    let sources = platform_sources_in_tx(tx, space).await?;
     for chunk in sources.chunks(64) {
         let aliases: Vec<_> = chunk
             .iter()

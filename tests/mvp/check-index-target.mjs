@@ -87,6 +87,11 @@ try {
 
   const document = await h.request("/knowledge", { operation_id: randomUUID(), kind: "document", name: "合成旧集合拒写", body: "原文只写入已明确准备的公共索引目标。", source_url: null, related_ids: [] });
   assert.equal(document.status, 200);
+  // 文档保存不登记原文向量目标；原文待办由夹具按登记入口写入的形状直接登记平台来源。
+  const source = "incompatible-target-raw";
+  h.sql(`INSERT INTO source_heads(id,space_id,version,fingerprint) VALUES('${source}','demo',1,'synthetic');`);
+  h.sql(`INSERT INTO source_current(source_id,space_id,adapter_id,source_kind,namespace,external_id,revision,body,complete,metadata,content_fingerprint,explanation_fingerprint,comparison_method,parsed,observed_metadata) VALUES('${source}','demo','synthetic','platform','index-target','${source}',1,'原文只写入已明确准备的公共索引目标。',1,'{}','synthetic','synthetic','exact',TRUE,'{}');`);
+  h.sql(`INSERT INTO knowledge_index_jobs(target_kind,source_kind,object_id,version,space_id,origin_job_id,vector_attempts) VALUES('source_excerpt','platform','${source}',1,'demo',NULL,0);`);
   const beforeEmbedding = provider.requests.length;
   const beforeRequests = requests.length;
   const exitCode = await new Promise((resolve, reject) => {
@@ -97,7 +102,7 @@ try {
   assert.equal(exitCode, 0);
   assert.equal(provider.requests.length, beforeEmbedding, "不兼容目标不产生Embedding调用");
   assert.ok(requests.slice(beforeRequests).every(request => !request.path.endsWith("/upsert")));
-  const job = h.sql(`SELECT JSON_OBJECT('state',vector_state,'attempts',vector_attempts) FROM knowledge_index_jobs WHERE target_kind='source_excerpt' AND source_kind='document' AND object_id='${document.value.id}' AND version=1`)[0];
+  const job = h.sql(`SELECT JSON_OBJECT('state',vector_state,'attempts',vector_attempts) FROM knowledge_index_jobs WHERE target_kind='source_excerpt' AND source_kind='platform' AND object_id='${source}' AND version=1`)[0];
   assert.equal(job.state, "pending");
   assert.equal(job.attempts, 0);
   checks.push("统一消费者领取前拒绝不兼容目标，原待办保持pending且未消耗重试或Embedding");

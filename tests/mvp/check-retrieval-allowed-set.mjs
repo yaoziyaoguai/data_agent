@@ -77,7 +77,7 @@ try {
   const unrelated = ok(await h.request('/knowledge', { operation_id: randomUUID(), kind: 'document',
     name: '无关资料', body: '本资料不含查询口径，只描述归档流程。', source_url: null, related_ids: [] }));
   await h.resumeWorker();
-  await until(() => h.sql(`SELECT JSON_OBJECT('n',COUNT(*)) FROM knowledge_index_jobs WHERE target_kind='source_excerpt' AND object_id IN ('${allowed.id}','${unrelated.id}',${noisy.map(doc => `'${doc.id}'`).join(',')}) AND vector_state<>'indexed'`)[0].n === 0, '受限检索资料完成原文索引', 60000);
+  await until(() => h.sql(`SELECT JSON_OBJECT('n',COUNT(*)) FROM knowledge_index_jobs WHERE target_kind='knowledge_entry' AND object_id IN ('${allowed.id}','${unrelated.id}',${noisy.map(doc => `'${doc.id}'`).join(',')}) AND vector_state<>'indexed'`)[0].n === 0, '受限检索资料完成知识索引', 60000);
   await h.pauseWorker();
 
   const cid = await h.create();
@@ -205,13 +205,12 @@ try {
       { kind: 'document', id: allowed.id } ], origin_message_ids: [run.message_id] } }, unset: [] } });
   await invoke('update_analysis_task', { action: 'route', task_id: coverageTask.task_id,
     expected_version: coverageRevised.condition_version, goal: '', options: [] });
-  const markPending = (target, id) => h.sql(`UPDATE knowledge_index_jobs SET vector_state='pending',vector_target=NULL WHERE target_kind='${target}' AND object_id='${id}'`);
-  markPending('knowledge_entry', unrelated.id);
-  markPending('source_excerpt', unrelated.id);
+  const markPending = id => h.sql(`UPDATE knowledge_index_jobs SET vector_state='pending',vector_target=NULL WHERE target_kind='knowledge_entry' AND object_id='${id}'`);
+  markPending(unrelated.id);
   const outsideLag = await invoke('search_knowledge', { query: phrase, limit: 3 });
   assert.equal(outsideLag.search_coverage.index_state, 'current',
-    '范围外知识/原文待办不得把本题报成未就绪：' + JSON.stringify(outsideLag.search_coverage));
-  markPending('knowledge_entry', allowed.id);
+    '范围外知识待办不得把本题报成未就绪：' + JSON.stringify(outsideLag.search_coverage));
+  markPending(allowed.id);
   await milvus('entities/delete', { filter: `object_id == "${allowed.id}"` });
   const ownLag = await invoke('search_knowledge', { query: '氍毹魍魉绮语', limit: 3 });
   assert.equal(ownLag.objects.length, 0, '本题对象未索引且词法无命中：零候选');

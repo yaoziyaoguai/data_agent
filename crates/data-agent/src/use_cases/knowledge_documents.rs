@@ -1,8 +1,5 @@
 use crate::{
-    contracts::{
-        self,
-        generated::{KnowledgeDocumentEdit, SourceKey, SourceKeyKind},
-    },
+    contracts::{self, generated::KnowledgeDocumentEdit},
     modules::{access, jobs, knowledge},
     persistence::AppTx,
     types::{AccessContext, Error, Result, epoch},
@@ -137,7 +134,7 @@ pub async fn edit(
     let saved = knowledge::save_document_in_tx(&mut tx, ctx, object, &raw, &order).await?;
     // 模块内保存不含跨模块登记：补依赖目标指纹并排队来源扇出（幂等）。
     super::dependency_registration::after_content_saved_in_tx(&mut tx, ctx, &saved).await?;
-    // 保存推进了文档修订：原子登记该修订的raw索引与语义准备，两作业互不等待。
+    // 保存推进了文档修订：原子排队该修订的语义准备。
     for part in &saved {
         let expected = input
             .parts
@@ -145,7 +142,7 @@ pub async fn edit(
             .find(|submitted| part["id"] == submitted.id)
             .ok_or(Error::new("version_conflict"))?;
         if part["version"] != expected.expected_version {
-            register_document_preparation_in_tx(&mut tx, &ctx.space_id, part).await?;
+            register_document_preparation_in_tx(&mut tx, part).await?;
         }
     }
     let result = present(&mut tx, ctx, saved).await?;
@@ -153,11 +150,11 @@ pub async fn edit(
     Ok(result)
 }
 
-// 保存当前原文即原子登记raw索引与语义准备；空正文没有可整理内容，
-// 文档分册与停用对象不属于单文档原文，不在此登记。
+// 保存当前原文即排队语义准备；空正文没有可整理内容，文档分册与停用对象
+// 不属于单文档原文，不在此登记。独立文档以知识条目定位：原文向量通道只
+// 保留给平台来源（scan只查platform摘录），文档保存不再登记原文向量目标。
 pub async fn register_document_preparation_in_tx(
     tx: &mut AppTx<'_>,
-    space: &str,
     document: &Value,
 ) -> Result<()> {
     if document["kind"] != "document"
@@ -181,19 +178,6 @@ pub async fn register_document_preparation_in_tx(
         .as_str()
         .and_then(|value| value.parse::<u64>().ok())
         .ok_or(Error::new("invalid_input"))?;
-    // 原文索引目标经knowledge公开入口登记进公共待办（SourceKey身份贯穿写入与
-    // 清旧）；语义整理仍走原prepare_source队列，两作业互不等待。
-    knowledge::register_source_index_target_in_tx(
-        tx,
-        space,
-        &SourceKey {
-            kind: SourceKeyKind::Document,
-            id: id.to_owned(),
-        },
-        version,
-        None,
-    )
-    .await?;
     let source = format!("document-{id}");
     jobs::enqueue_source_in_tx(tx, "prepare_source", &source, version).await?;
     Ok(())
