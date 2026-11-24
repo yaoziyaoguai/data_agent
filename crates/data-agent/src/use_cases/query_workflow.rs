@@ -73,7 +73,14 @@ pub async fn validate_text_in_tx(
     if !checked.allows(&authority, false) {
         return Err(Error::new("stale_context"));
     }
-    super::knowledge::check_refs_in_tx(tx, ctx, &query["knowledge_refs"]).await?;
+    // 草稿采用的知识已停用、删除或无权读取属于依据失效，确认合同归入 stale_context；
+    // not_available 只表示查询本身不存在、跨用户或不属于当前会话。
+    super::knowledge::check_refs_in_tx(tx, ctx, &query["knowledge_refs"])
+        .await
+        .map_err(|error| match error.code {
+            "not_available" => Error::new("stale_context"),
+            _ => error,
+        })?;
     Ok(authority)
 }
 

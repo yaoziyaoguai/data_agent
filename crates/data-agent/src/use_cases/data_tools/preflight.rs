@@ -61,17 +61,13 @@ pub(super) async fn prepare(
             .collect(),
         _ => Vec::new(),
     };
-    let mut text_results = if matches!(
+    let query_id = args["query_id"].as_str();
+    // 控制投影按本run冻结答案核对通知覆盖，这类工具先在锁外核本run结果；查询类另并本查询结果。
+    let control_tools = matches!(
         name,
-        "request_query"
-            | "get_query"
-            | "execute_query"
-            | "present_analysis_answer"
-            | "prepare_analysis_answer"
-    ) {
-        super::super::query_workflow::check_text_results(pool, ctx, &cid, args["query_id"].as_str())
-            .await?
-    } else if name == "update_analysis_task" && args["finalize_current_answer"] == true {
+        "update_analysis_task" | "request_query" | "execute_query"
+    );
+    let mut text_results = if control_tools {
         super::super::task_answers::check_results(pool, ctx, text(input, "run_id")?).await?
     } else if !skill_ids.is_empty() || (name == "search_knowledge" && !source_identity_view) {
         super::super::personal_assets::checked_selected_skills(
@@ -84,25 +80,38 @@ pub(super) async fn prepare(
     } else {
         super::super::context_authority::CheckedTextResults::default()
     };
+    if matches!(
+        name,
+        "request_query"
+            | "get_query"
+            | "execute_query"
+            | "present_analysis_answer"
+            | "prepare_analysis_answer"
+    ) {
+        text_results.extend(
+            super::super::query_workflow::check_text_results(pool, ctx, &cid, query_id).await?,
+        );
+    }
     // 短引用只在本轮已核会话/租约的短事务里展开；原登记参数与指纹保持短引用。
     {
-        let mut tx = AppTx::begin(pool).await?;
-        let conv = conversations::lock_conversation_in_tx(&mut tx, ctx, &cid).await?;
-        conversations::assert_turn_in_tx(
-            &tx,
-            &conv,
-            text(input, "run_id")?,
-            epoch(text(input, "lease_epoch")?)?,
-        )?;
-        let run = runtime::lock_run_in_tx(&mut tx, text(input, "run_id")?, &cid).await?;
+        let (mut tx, mut conv, mut run, mut tool) = lock_tool_call(pool, ctx, input, &cid).await?;
         recovery_chain = run.recovery_chain_id.clone();
-        let tool = runtime::lock_tool_call_in_tx(&mut tx, &run, text(input, "sdk_tool_call_id")?)
-            .await?
-            .ok_or(Error::new("version_conflict"))?;
         if tool.fingerprint != fingerprint(&json!({"name":name,"arguments":args})) {
             return Err(Error::new("idempotency_conflict"));
         }
         tool_contract_version = tool.tool_contract_version;
+        // 成功答案回执只带已核来源；重放前在事务与行锁之外按当前查看者补核回执内结果权限，
+        // 再重新锁定并复核租约，锁内的原任务范围核验不变。
+        if let Some(receipt) = &tool.receipt
+            && tool.state == "succeeded"
+            && matches!(name, "present_analysis_answer" | "prepare_analysis_answer")
+            && receipt["data"]["error"].is_null()
+        {
+            let results = super::super::context_authority::from_sources(&receipt["data"])?;
+            tx.commit().await?;
+            text_results.include(pool, ctx, &[results], false).await?;
+            (tx, conv, run, tool) = lock_tool_call(pool, ctx, input, &cid).await?;
+        }
         if let Some(receipt) = &tool.receipt
             && (tool_contract_version != 2
                 || tool.state == "rejected"
@@ -683,4 +692,31 @@ pub(super) async fn prepare(
         search_gate: source_selection_gate,
         search_stage,
     })))
+}
+
+// 按会话、run、工具行加锁并复核租约；平台核权后重新走同一加锁顺序。
+async fn lock_tool_call<'a>(
+    pool: &'a MySqlPool,
+    ctx: &AccessContext,
+    input: &Value,
+    cid: &str,
+) -> Result<(
+    AppTx<'a>,
+    conversations::LockedConversation,
+    runtime::LockedRun,
+    runtime::LockedTool,
+)> {
+    let mut tx = AppTx::begin(pool).await?;
+    let conv = conversations::lock_conversation_in_tx(&mut tx, ctx, cid).await?;
+    conversations::assert_turn_in_tx(
+        &tx,
+        &conv,
+        text(input, "run_id")?,
+        epoch(text(input, "lease_epoch")?)?,
+    )?;
+    let run = runtime::lock_run_in_tx(&mut tx, text(input, "run_id")?, cid).await?;
+    let tool = runtime::lock_tool_call_in_tx(&mut tx, &run, text(input, "sdk_tool_call_id")?)
+        .await?
+        .ok_or(Error::new("version_conflict"))?;
+    Ok((tx, conv, run, tool))
 }
