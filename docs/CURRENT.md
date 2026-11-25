@@ -3,11 +3,11 @@
   "workflow": "development",
   "schema": 1,
   "phase": "repair",
-  "goal_revision": 257,
-  "environment": "2026-11-24 在隔离 MySQL、合成平台、本地协议和 Chromium 上完成本地试用前的剩余修复：上一节 11 条待决项逐条裁决，四处修复落地，受影响的非绑定脚本逐份运行。最终二进制上 48 项可运行绑定验收通过，其中 1 项在负载尖峰时首次失败、单独重跑通过；静态门禁 10 步通过，正式模型请求为 0。2 项缺输入未运行，混合检索长电池只验证了前缀，真实模型冒烟仍待授权。",
+  "goal_revision": 258,
+  "environment": "2026-11-25 按针对 4d7d29d 的独立审计做本地试用收尾：清掉孤儿进程和空测试库，恢复类验收的到期等待余量由 100 毫秒放宽到 350 毫秒，启动验收脚本过时的费用上限已修正。产品代码没有改。快速门禁三项通过；make verify-startup 仍在最后一步失败，原因已定位；试用库副本上的首次启动演练通过。正式模型请求为 0。",
   "verification": {
     "level": "increment",
-    "reason": "按委托裁决上一节的 11 条待决项并完成四处修复，受影响的非绑定脚本已逐份运行；最终二进制上 48 项绑定验收通过，其中 1 项在负载尖峰后重跑通过，静态门禁通过。2 项缺输入，长电池只验证前缀，真实模型冒烟仍待授权。",
+    "reason": "按针对 4d7d29d 的独立审计完成本地试用收尾：环境清场，恢复类验收的到期余量放宽后两次运行通过，启动验收脚本过时的费用上限已修正。产品代码零改动。make verify-startup 仍未通过，脚本按旧流程等待预填直接应用；真实模型冒烟仍待授权。",
     "freshness": "content",
     "checks": [],
     "inputs": [
@@ -1288,9 +1288,48 @@
       "evidence": null
     }
   },
-  "reason": "本地试用前的剩余修复见最新一节。48 项绑定验收通过，1 项重跑通过；静态门禁通过；2 项缺输入，混合检索长电池只验证了前缀，真实模型冒烟待授权。"
+  "reason": "本地试用收尾见最新一节。产品代码零改动；恢复类验收余量放宽后两次通过；快速门禁三项通过，启动验收脚本仍按旧流程等待、未通过；试用库副本上的首次启动演练通过；真实模型冒烟待授权。"
 }
 ---
+
+## 本地试用收尾（2026-11-25）
+
+基线是 `4d7d29d`。用户带来一份针对这个快照的独立审计（本机下载目录里的 `data_agent_4d7d29d.html`），结论是产品代码不用再动，收尾只剩两处工程微调、两份非绑定旧脚本的归置，以及清场、重编、快速门禁、提交打标和启动试用；用户要求照此认真执行。本节记逐条核对后的实际处理。产品代码没有改，`crates/data-agent/src` 和 `apps/` 与基线一致，改动的是两份测试和两份文档。审计有三处说法与事实不符：构建写法、试用库的待索引条数，以及 `make verify-startup` 能否通过，见下面“处理”和“验证”里的对应条目。
+
+### 处理
+
+- **构建写法没有改（审计 FIX-01）。** 审计把 `Makefile` 第 114、133、138 行等 20 处 `cargo build … -p data-agent-api -p data-agent-worker` 列为必改，理由是这种写法会静默跳过其中一个二进制的重链。依据是上一份交接文档第 7 节的一句提示，那句提示写错了。对照实验（`exp-dual.log`）每次先改动一个源文件再构建，比较两个二进制的修改时间和 inode：同一次调用带两个 `-p`，改库源码后两个二进制都重链；只改 worker 源码只重链 worker；只改 api 源码只重链 api；分开构建的结果相同。10 月 31 日看到的“打印 Finished、二进制没动”出在另一条命令上：`-p data-agent-api -p data-agent-worker -p data-agent --bin validate_contracts`。`--bin` 是目标过滤，api 和 worker 两个包没有名字匹配的目标，不会被构建，实验复现了这一点。`Makefile` 里没有这种写法。交接文档那一句已在原处更正。
+- **恢复类验收的到期等待余量放宽（审计 FIX-02）。** [tool_contract_version.rs](../crates/data-agent/tests/tool_contract_version.rs) 的 `delivery_preparation_maintains_claim_while_waiting_for_conversation_lock` 在会话锁释放、采样确认租约有效后，睡到 TTL 加余量再断言租约已过期。余量从 100 毫秒改为 350 毫秒，其余没有改，见“验收与要求变更”。
+- **启动验收过时的费用上限修正。** 审计的快速门禁要求 `make verify-startup` 退出码为 0，它在最后一步 [check-model-startup.mjs](../tests/mvp/check-model-startup.mjs) 失败。诊断副本把等待窗口从 20 秒放宽到 240 秒并打印作业状态（`diag-model-startup.log`）：页面点“重新预填”后接口返回 200、对象版本从 1 到 2；预填尝试先是 `queued`，8 秒时变成 `budget_unavailable`，错误码 `budget_exhausted`；240 秒内模型端点没有收到预填请求。原因在脚本自己的试验配置：`trial_cost_micros` 是 300,000 微美元，从 10 月 6 日起没变过；`4e6008e`（11 月 18 日）起维护调用按完整输入窗口预留费用，Flash 档一次预留 317,031 微美元，超过整个试验的费用上限。上限改为 Flash 档 320,000、Pro 档 1,400,000，见“验收与要求变更”。改完后这条脚本仍然过不了，原因见“未执行与未处理”。
+- **两份非绑定旧脚本按归档处理（审计 FIX-03）。** `check-retrieval-allowed-set.mjs` 和 `check-public-index-upgrade.mjs` 没有改。审计建议按合同 2 对齐，估计约 35 行，实际不是小改：前者整份按合同 1 写成，用 `related_object_id`、`objects` 和 `asset_after`，还断言不执行原文通道；后者的默认模式围绕召回一份长文档的原文尾段，而文档原文的召回自 `4e1f2a6` 起已不存在。50 项绑定验收的命令都不引用这两份脚本。审计有一处说得不准：它们并非不在任何门禁里，`make verify-upgrade-index` 和 `make verify-hybrid-scope` 仍会调用，这两个目标会在对应的那一行失败。本轮没有把它们从目标里摘掉：按合同 2 和平台来源重写，还是直接退役，留给用户决定；摘掉以后这两个目标不再失败，也就不再提醒公共向量集合切换和限源召回这两块还缺能跑通的检查。
+- **环境清场（审计 Stage 01）。** 核对命令行、父进程和启动时间后，结束 11 月 24 日 16:21 启动的合成平台进程（PID 9832，目录 `.local/checks/mvp-9f349d78c0a063df`，端口 52241，父进程已是 launchd），删除该目录，按准确名称删除同名测试库。删除前该库有 0 张表，没有连接。现在数据库只剩 `data_agent` 和试用库 `data_agent_trial_b0a479e652337b67`，Milvus 没有集合，常用端口没有监听。没有找到定时清理 `target/` 的任务：与本仓库同名的 LaunchAgent 是一个没有加载的挂载任务，当前也没有别的 agent 会话在这个目录里工作。11 月 24 日 16:17 删除 `target/` 的来源仍未确认。负载降不到审计要求的 4 以下：本轮采样到的 1 分钟负载在 5 到 51 之间，占用来自 Chrome、iTerm2、ChatGPT 桌面端、Lark、Defender 和 Colima 虚拟机，都不是本会话的进程，没有动。
+
+### 验收与要求变更
+
+**验收与要求变更（`CONTRACT-RECOVERY-SUITE`）：** 原值：用例 `delivery_preparation_maintains_claim_while_waiting_for_conversation_lock` 在会话锁释放并采样确认租约有效后，睡 1000 + 100 毫秒，再采样并断言租约已过期。新值：睡 1000 + 350 毫秒，采样之后的断言不变：租约无效，`renew_claim` 和 `start_delivery` 返回 `lease_lost`，租约字段没有被改动，下一个 Worker 以加一的代次领取。原因：租约到期按数据库时钟判断，数据库在 Colima 虚拟机里，宿主负载高时虚拟机时钟落后于本机睡眠。独立依据是两次运行留下的采样：11 月 24 日失败的那次，本机睡 1112 毫秒，数据库时钟只走了 907 毫秒，租约还剩 71.7 毫秒；随后通过的那次也只多出 152.6 毫秒。350 毫秒的余量盖得住这两次实测的偏差。影响：这条用例多等 250 毫秒，门禁 300 秒的超时不变；交付和租约代码没有改。
+
+**未绑定的 `make verify-startup`（`check-model-startup.mjs`）：** 原值：试验配置的费用上限 Flash 档和 Pro 档都是 300,000 微美元。新值：Flash 档 320,000，Pro 档 1,400,000。原因见“处理”第三条。独立依据是[固定资产说明](../crates/data-agent/resources/deepseek/README.md)：维护调用的输入按完整总窗口 1,048,576 个 token 预留，Flash 每百万输入、输出是 0.30 和 1.20 美元，Pro 是 1.32 和 3.96 美元，单位为整数微美元并向上取整。按这份依据，脚本的配置（输出上限 2048）下一次预留是 Flash 317,031、Pro 1,392,231 微美元；脚本自己断言六次调用的实际费用合计是 Flash 624、Pro 2258 微美元，新上限都盖得住。影响：调用次数上限仍是 6，对调用序列、实际费用和预留归零的断言没有改。这个上限只是脚本给自己场景的授权额度，不对应任何产品默认值。
+
+### 验证
+
+两个二进制最后构建于 11:24 和 11:23，之后的 `make dev` 所用的工作区构建不再改动它们：`data-agent-api`（SHA-256 `e6e79b3376b4c7da88a8ec68cca2bd30810ca3d3a1be3e179104e91f762b2661`）和 `data-agent-worker`（`6cc4525db9bd270c95ce44b5b4df52fc35ba28e3a6d77cab7a2d98aeb1672670`），摘要保存在 `.local/checks/audit2/rounde/bin-rounde.sha256`。正式模型请求为 0。下面没有写目录的日志都在 `.local/checks/audit2/rounde/`。
+
+- **快速门禁（审计 Stage 04，`stage04-summary.txt`）。** `make verify-code`、`make verify-contracts` 和 `node tests/mvp/check-tool-contract-version.mjs --label=final-closeout` 退出码为 0，分别用时 36、17、49 秒。`make verify-startup` 退出码为 2，见下面第三条。
+- **`CONTRACT-RECOVERY-SUITE`。** 用绑定命令原样运行一次（`cr-1.log`），再用审计的标签运行一次（`s4-contract-recovery.log`），两次都是 7 条通过、0 条失败。到期采样时租约分别已过期 365.5 和 372.8 毫秒，本机睡眠约 1.36 秒里数据库时钟走了约 1.36 秒；这两次运行期间宿主的 1 分钟负载在 9 到 19 之间。负载尖峰下虚拟机时钟的偏差会不会超过 350 毫秒，本轮没有复现条件，未验证。
+- **`make verify-startup`。** 前三步通过：工作区构建和前端构建，`test_development.py` 23 条，`scripts/development.py --check` 输出“本地启动、页面与2个开发身份检查通过。”，API 就绪用时 40 秒和 31 秒。最后一步 `check-model-startup.mjs` 两次失败在同一处：等待“current prefill applied” 20 秒超时（`s4-verify-startup.log`、`verify-startup-2.log`）。两次的区别在模型端点收到的请求：修正费用上限前只有两次聊天；修正后是两次聊天加两次预填。修正后再用诊断副本观察 60 秒（`diag-model-startup-2.log`）：5.9 秒时预填状态是 `succeeded`，试验账本记 4 次调用、实际费用 372 微美元、预留 0，两条维护调用都已结算，有 1 条待审提案，对象版本始终是 2。Pro 档同样收到两次预填请求（`model-startup-pro.log`）。正式启动方式下的预填链路是通的；脚本过不了，是因为它等的是对象版本加一。
+- **静态检查。** 13:13 至 13:14 串行运行，四步退出码都是 0，两个二进制的摘要前后一致（`pre-static-summary.txt`）。新节的引文和链接核对通过；`make verify` 通过，含准备材料 642 项、引文 42 条、链接 454 条、投递检查 16 项单测、座舱材料检查、`check:node`、fmt、零警告的 clippy 和依赖环境检查；`git diff --check` 通过；`make verify-architecture` 通过，含结构检查 13 项单测和加锁运行时检查。记录定稿后又跑了一次 `verify-delivery`、`verify-materials`、引文与链接核对和 `git diff --check`，结果见 `post-static-summary.txt`。
+- **试用库首次启动演练（不计入验收）。** 审计和上一份交接文档都说试用库有 547 条知识条目待索引，首次启动由 Worker 秒级消化，这与库里的状态不符：这 547 行的 `state` 都是 `indexed`，向量状态是 `pending`，词法模式不会改它，启动后 Worker 没有东西要处理。首次启动真正要做的是在原库上补跑 12 个迁移，库里有 69 个，仓库有 81 个。为了在用户动手之前确认这一步，把试用库导出并恢复成临时库，用正式启动器（默认的本机模拟模型和词法检索）在独立端口启动两次，日志留的是第二次（`dryrun.log`）：第一次的检索词是资料里没有的“订单”和“退款”，返回 0 个对象，第二次换成资料里的词。两次迁移都补到 81 个，API 就绪 7.5 到 8.5 秒；以 alice 登录返回 200，4 个历史会话可读；知识检索“语音”“唤醒”“意图”“重试”分别返回 8、2、1、1 个对象，对象详情返回 200；Worker 日志为空，索引作业和后台作业的数量前后一致。结束后临时库、导出文件和运行目录已删除，试用库本身只被读取。这不是用户验收，也不代表真实模型下的表现。动手前另留了一份试用库导出在 `.local/backups/`，不进 Git，首次启动正常后可以删除。
+- **验证范围。** 本机的隔离 MySQL、合成平台、回环协议端和 Chromium，不代表真实模型、部署或用户验收。
+
+### 未执行与未处理
+
+- `make verify-startup` 的退出码仍不是 0。`check-model-startup.mjs` 等“重新预填”之后对象版本加一，这是直接应用预填结果的旧流程；启动器的 `--prefill` 自 `4e6008e` 起只有 `disabled` 和 `proposal` 两档，默认把模型复核后的说明写进负责人的待审队列，对象版本不变。脚本最后一次修改是 10 月 25 日，最后一次通过记录是 10 月 17 日；“语义整理增量（2026-10-24–25，已完整关闭）”的“来源级准备消费（2026-10-24接手后新增，端到端已通）”一节已把它列为既有失败，当时失败在首次重预填返回 `code=unsupported`。要让它通过，得把两次“重新预填”改成等待提案、再由负责人采纳，页面步骤和断言都要重写，本轮没有做。它不在 50 项绑定验收里。
+- 试用里“重新预填”的结果进入待审提案，不会直接写进条目。按[开发文档](development.md)的说明，提案模式需要单独配置维护模型及有效额度；默认 `make dev` 用本机模拟模型，不配置维护模型，这项功能在默认启动下不可用。审计的三条手工冒烟不经过它。
+- `make verify-upgrade-index` 和 `make verify-hybrid-scope` 仍会在那两份旧脚本处失败。
+- 真实模型冒烟和 CI 门禁没有做；`make verify-increment` 没有运行，增量仍是 active，审查状态为 pending。启动试用（`make infra-up && make dev`）和审计里的三条手工冒烟留给用户，需要用户自己的聊天模型密钥。
+- 按审计 Stage 05 提交到 `codex/semantic-maintenance-prototype` 并打本地标签 `local-trial-20261125`。审计没有要求推送，本轮没有推送。
+- 本轮的启动类运行覆盖了“来源级准备消费（2026-10-24接手后新增，端到端已通）”一节引用的一份本地证据 `.local/checks/mvp-model-startup-launcher-error.log`，10 月 24 日那次失败的内容已不在；同一处引用的 `.local/checks/check-model-startup-recheck.log` 现在也不在，本轮的删除规则匹配不到这个文件名，不是本轮删的。`scripts/development.py --check` 每运行一次会留下一个 `data_agent_trial_` 开头的临时库，本轮两次运行留下的两个已删除；这些库与试用库同前缀，按通配符清理会误伤。
+- 混合检索长电池、其余非绑定旧脚本和 `update_analysis_task` 回执重放不重核引用，状态与上一节相同，本轮没有涉及。
 
 ## 本地试用前的剩余修复（2026-11-24）
 

@@ -6,8 +6,9 @@ import {randomUUID,randomBytes} from 'node:crypto';
 import {chromium} from 'playwright';
 import {harness,until} from './harness.mjs';
 const database='data_agent_trial_'+randomBytes(8).toString('hex');
-const profile={provider_id:'deepseek',model_id:'deepseek-flash',trial_id:randomUUID(),price_version:'2026-10-04-peak-usd',input_limit:32768,output_limit:2048,trial_call_limit:6,trial_cost_micros:'300000',request_call_limit:6,toolset:'data',payload_bytes_limit:65536};
-if(process.argv.includes('--pro')) Object.assign(profile,{model_id:'deepseek-v4-pro',price_version:'2026-10-05-pro-peak-usd',thinking_level:'high'});
+// 费用上限要盖住一次维护调用的预留：输入按完整窗口计价，Flash 为 317,031 微美元，Pro 为 1,392,231 微美元。
+const profile={provider_id:'deepseek',model_id:'deepseek-flash',trial_id:randomUUID(),price_version:'2026-10-04-peak-usd',input_limit:32768,output_limit:2048,trial_call_limit:6,trial_cost_micros:'320000',request_call_limit:6,toolset:'data',payload_bytes_limit:65536};
+if(process.argv.includes('--pro')) Object.assign(profile,{model_id:'deepseek-v4-pro',price_version:'2026-10-05-pro-peak-usd',thinking_level:'high',trial_cost_micros:'1400000'});
 const path='.local/checks/model-startup-'+randomUUID()+'.json';await writeFile(path,JSON.stringify({database,profile}),{mode:0o600});
 const portOffset=process.argv.includes('--pro')?18100:18000;const runtimeDir='.local/checks/startup-'+randomUUID();const webUrl='http://127.0.0.1:'+(5173+portOffset);
 const calls=[];let launcher,browser,page,h,passed=false,output='';const checks=[],mutations=[];

@@ -350,7 +350,8 @@ async fn delivery_preparation_maintains_claim_while_waiting_for_conversation_loc
         .await
         .unwrap();
 
-    tokio::time::sleep(std::time::Duration::from_millis(u64::from(ttl_ms) + 100)).await;
+    // 数据库时钟在虚拟机里，宿主高负载时会落后于本机睡眠，余量要盖住这段偏差。
+    tokio::time::sleep(std::time::Duration::from_millis(u64::from(ttl_ms) + 350)).await;
     let expired = lease_sample(&pool, &job, observed, "actually_expired")
         .await
         .unwrap();
