@@ -18,15 +18,15 @@ page.on("pageerror", (e) => {
   console.error("browser_error", e.message);
 });
 const table = "table-demo_order_detail";
-const login = async (user) => {
+const login = async (user, expectedHeading = "语义管理") => {
   await page.goto(h.url);
   await page.getByLabel("演示登录凭据").fill(h.tokens[user]);
   await page.getByRole("button", { name: "进入工作台 →" }).click();
   await page
-    .getByRole("button", { name: /语义管理/ })
-    .first()
+    .getByRole("navigation", { name: "主导航" })
+    .getByRole("button", { name: expectedHeading, exact: true })
     .click();
-  await page.getByRole("heading", { name: "语义管理", exact: true }).waitFor();
+  await page.getByRole("heading", { name: expectedHeading, exact: true }).waitFor();
   await page.goto(h.url + '/#knowledge?object=' + table);
   await page.getByRole('heading', {name: 'demo_order_detail', exact: true}).waitFor();
 };
@@ -56,11 +56,8 @@ try {
   );
   assert.equal((await synchronizeSources(h)).value.status, 'completed');
   const original = (await h.request("/knowledge/" + table)).value;
-  await login("bob");
-  await page
-    .getByText(/负责人：carol/)
-    .first()
-    .waitFor();
+  await login("bob", "数据字典");
+  await entry().waitFor();
   assert.equal(
     await entry().getByRole("button", { name: "编辑", exact: true }).count(),
     0,
@@ -180,7 +177,7 @@ try {
   await page.getByRole("button", { name: "确认驳回", exact: true }).click();
   await page.getByRole("dialog").waitFor({ state: "detached" });
   await logout();
-  await login("bob");
+  await login("bob", "数据字典");
   await page
     .locator('[data-correction-id="' + second.id + '"]')
     .getByText("已驳回", { exact: true })

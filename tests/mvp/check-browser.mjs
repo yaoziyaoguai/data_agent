@@ -16,6 +16,7 @@ const errors = [];
 page.on("pageerror", (e) => errors.push(e.message));
 const check = (name) => checks.push({ name, passed: true });
 let passed = false;
+let releaseSave, releaseOldPreference, releaseOldKnowledge;
 const screenshot = async (name) =>
   page.screenshot({
     path: ".local/checks/mvp-" + name + ".png",
@@ -40,18 +41,16 @@ try {
   await page.getByRole("heading", { name: "SQL 已准备好", exact: true }).waitFor();
   await screenshot("sql-desktop");
   check("正式页面登录、提问、展示完整SQL，刷新接回待确认草稿");
-  let releaseSave;
-  let savedResponse;
-  const saved = new Promise(r => { savedResponse=r; });
+  let savedResponse = false;
   const delayed = new Promise(r => { releaseSave=r; });
   await page.route("**/api/conversations/*/messages", async route => {
     const response = await route.fetch();
-    savedResponse();
+    savedResponse = true;
     await delayed;
     await route.fulfill({ response });
   }, { times:1 });
   await send("谢谢");
-  await saved;
+  await until(() => savedResponse, "保存请求已送达", 10000);
   await page.getByLabel("你的数据问题").fill("保存期间写下的新草稿");
   releaseSave();
   await page.getByRole("button", {name:"发送 ↑",exact:true}).waitFor();
@@ -93,14 +92,15 @@ try {
   const preferenceSwitch=page.getByRole("switch",{name:"常用表优先分析"});
   await preferenceSwitch.waitFor();
   assert.equal(await preferenceSwitch.getAttribute("aria-checked"),"false");
-  let releaseOldPreference;
-  let oldPreferenceArrived;
-  const oldPreferenceReady=new Promise(r=>{oldPreferenceArrived=r;});
+  let oldPreferenceSeen = false;
   const oldPreferenceDelay=new Promise(r=>{releaseOldPreference=r;});
   await page.route("**/api/knowledge/table-demo_order_detail",async route=>{
-    const response=await route.fetch();oldPreferenceArrived();await oldPreferenceDelay;await route.fulfill({response});
+    const response=await route.fetch();oldPreferenceSeen=true;await oldPreferenceDelay;await route.fulfill({response});
   },{times:1});
-  await oldPreferenceReady;
+  // 语义详情按对象选中变化重读（已取消固定轮询）：通过重新触发搜索选中使旧详情请求真实在途并有界等待。
+  await page.getByLabel("搜索语义对象").fill("demo_order");
+  await until(()=>oldPreferenceSeen,"旧对象详情请求在途",10000);
+  await preferenceSwitch.waitFor();
   await preferenceSwitch.click();
   await until(async()=>await preferenceSwitch.getAttribute("aria-checked")==="true","常用范围已保存");
   releaseOldPreference();
@@ -113,18 +113,26 @@ try {
   assert.doesNotMatch(await searchTable.innerText(),/常用/);
   await page.getByLabel("搜索语义对象").fill("");
   await page.getByRole('heading', {name: 'demo_order_detail', exact: true}).waitFor();
-  check("常用表开关持久保存、目录标识更新，晚到旧轮询不回退配置，关闭仍保留语义");
-  let releaseOldKnowledge;
-  let oldKnowledgeArrived;
-  const oldKnowledgeReady = new Promise(r => { oldKnowledgeArrived = r; });
+  check("常用表开关持久保存、目录标识更新，晚到旧详情响应不回退配置，关闭仍保留语义");
+  let oldKnowledgeSeen = false;
   const oldKnowledgeDelay = new Promise(r => { releaseOldKnowledge = r; });
   await page.route(/\/api\/knowledge\?directory=all&directory_view=grouped$/, async route => {
     const response = await route.fetch();
-    oldKnowledgeArrived();
+    oldKnowledgeSeen = true;
     await oldKnowledgeDelay;
     await route.fulfill({ response });
   }, { times: 1 });
-  await oldKnowledgeReady;
+  // 语义目录随空间 catalog 变更信号刷新（与 check-knowledge-experience-browser 一致），不靠无上限裸等。
+  const catalogSignal = await fetch(h.env.DATA_AGENT_API_URL + "/internal/live-changes", {
+    method: "POST",
+    headers: {
+      authorization: "Bearer " + h.env.DATA_AGENT_INTERNAL_TOKEN,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify([{ kind: "catalog", space_id: "demo" }]),
+  });
+  assert.equal(catalogSignal.status, 204);
+  await until(() => oldKnowledgeSeen, "旧目录刷新请求在途", 10000);
   await description.getByRole("button", { name: "编辑", exact: true }).click();
   await description.getByRole("textbox").fill("人工核对：订单商品行");
   await description
@@ -205,6 +213,9 @@ try {
   }
   throw error;
 } finally {
+  releaseSave?.();
+  releaseOldPreference?.();
+  releaseOldKnowledge?.();
   await writeFile(
     ".local/checks/mvp-browser.json",
     JSON.stringify({ passed, checks, errors }, null, 2),

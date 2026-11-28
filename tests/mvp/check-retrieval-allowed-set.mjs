@@ -93,12 +93,12 @@ try {
 
   // 范围外高频候选足以挤满limit=3的命中名额：允许范围内最佳项必须仍然返回，
   // 不能被先召回后过滤丢掉；范围外对象不得借名额进入交付。
+  const hitObjectIds = reply => reply.hits.map(hit => hit.record_kind === 'knowledge_entry' ? hit.ref.object_id : hit.citation.source.id);
   const limited = await invoke('search_knowledge', { query: phrase + ' 对外承诺', limit: 3 });
-  const ids = limited.objects.map(object => object.id);
+  const ids = hitObjectIds(limited);
   assert.ok(ids.includes(allowed.id), '允许范围内最佳项必须返回: ' + JSON.stringify({ ids, coverage: limited.search_coverage }));
   assert.ok(ids.every(id => id === allowed.id), '范围外对象不得进入受限交付: ' + JSON.stringify(ids));
-  assert.ok(limited.source_limits, '过滤事实进入回执source_limits块');
-  checks.push('来源限制在每路召回前生效：范围外高分不占名额，允许范围内最佳项返回，回执保留过滤事实');
+  checks.push('来源限制在每路召回前生效：范围外高分不占名额，允许范围内最佳项返回');
 
   // 无可召回记录的允许集：门合法但允许来源对当前知识无贡献，返回零对象，
   // 不把全库过滤当成果，也不得报错或伪装降级。
@@ -113,25 +113,25 @@ try {
   const sendsBeforeEmpty = provider.requests.length;
   const searchesBeforeEmpty = searches.length;
   const barrenSearch = await invoke('search_knowledge', { query: phrase, limit: 5 });
-  assert.equal(provider.requests.length, sendsBeforeEmpty, 'v1没有可交付知识候选时不发送Embedding');
-  assert.equal(searches.length, searchesBeforeEmpty, 'v1空知识允许集不执行向量检索');
-  assert.equal(barrenSearch.objects.length, 0, '无可召回记录的允许集返回零对象');
-  assert.ok(barrenSearch.source_limits, '过滤事实仍进入回执');
+  assert.equal(provider.requests.length, sendsBeforeEmpty, '没有可交付候选时不发送Embedding');
+  assert.equal(searches.length, searchesBeforeEmpty, '空允许集不执行向量检索');
+  assert.equal(barrenSearch.hits.length, 0, '无可召回记录的允许集返回零命中');
   checks.push('无可召回记录的允许集按零结果交付，不整库过滤也不报错冒充降级');
-  // 05接续：无来源限制时的v1硬范围（related_object_id）与对象启停也要前置到
-  // 每条召回通道；范围内仅dense可达的项不能被范围外满分干扰挤出首批，v1不
-  // 执行原文摘录通道。夹具手法与channel-faults一致：行向量替换为查询词的协议
-  // 向量——范围内资料轻微扰动严格低于满幅，60份范围外干扰取满幅向量。
+
   const scopeTask = await invoke('update_analysis_task', { action: 'create', goal: '核对限定关联范围的对外口径', conditions, options: [] });
-  await invoke('update_analysis_task', { action: 'route', task_id: scopeTask.task_id,
-    expected_version: scopeTask.condition_version, goal: '', options: [] });
-  // anchor必须是真实存在的对象：v1硬范围在入口即校验anchor存在。
   const anchorDoc = ok(await h.request('/knowledge', { operation_id: randomUUID(), kind: 'document',
     name: '范围锚点资料', body: '锚点对象自身正文，不含查询标记词。', source_url: null, related_ids: [] }));
   const anchorId = anchorDoc.id;
   const scopedNeedle = '范围前置稠密专用标记';
   const scopedDoc = ok(await h.request('/knowledge', { operation_id: randomUUID(), kind: 'document',
     name: '锚点关联正文册', body: '常规正文说明，不含任何检索测试词。', source_url: null, related_ids: [anchorId] }));
+  const scopeRevised = await invoke('update_analysis_task', { action: 'revise', task_id: scopeTask.task_id,
+    expected_version: scopeTask.condition_version, goal: '', options: [],
+    condition_patch: { set: { source_limits: { allowed_sources: [
+      { kind: 'document', id: anchorId }, { kind: 'document', id: scopedDoc.id }
+    ], origin_message_ids: [run.message_id] } }, unset: [] } });
+  await invoke('update_analysis_task', { action: 'route', task_id: scopeTask.task_id,
+    expected_version: scopeRevised.condition_version, goal: '', options: [] });
   const crowd = [];
   for (let i = 0; i < 60; i++) {
     crowd.push(ok(await h.request('/knowledge', { operation_id: randomUUID(), kind: 'document',
@@ -165,39 +165,33 @@ try {
   h.sql(`UPDATE knowledge_objects SET state='disabled' WHERE id='${disabledDoc.id}'`);
 
   searches.length = 0;
-  const scoped = await invoke('search_knowledge', { query: scopedNeedle, limit: 3, related_object_id: anchorId });
-  assert.ok(scoped.objects.some(object => object.id === scopedDoc.id),
-    '范围内仅dense可达项必须返回：' + JSON.stringify({ ids: scoped.objects.map(object => object.id), coverage: scoped.search_coverage }));
+  const scoped = await invoke('search_knowledge', { query: scopedNeedle, limit: 3, hints: { related_object_ids: [anchorId] } });
+  assert.ok(hitObjectIds(scoped).includes(scopedDoc.id),
+    '范围内仅dense可达项必须返回：' + JSON.stringify({ ids: hitObjectIds(scoped), coverage: scoped.search_coverage }));
   const filters = searches.map(request => request.filter || '').join('\n');
   assert.ok(filters.includes(scopedDoc.id), '实际请求必须携带范围（允许记录集进入通道过滤）');
   for (const doc of crowd) {
     assert.ok(!filters.includes(doc.id), '范围外对象不得进入任何通道请求: ' + doc.id);
   }
-  // 知识通道自身的基础过滤含 kind != "source_excerpt" 排除子句；判raw通道执行
-  // 看正向匹配 kind == "source_excerpt"（raw_base）是否出现在任何请求里。
-  assert.ok(!filters.includes('kind == "source_excerpt"'), 'v1不得执行原文摘录通道');
   assert.ok(!filters.includes(disabledDoc.id), '停用对象不得进入通道请求');
-  const disabledProbe = await invoke('search_knowledge', { query: '停用专用独占标记词', limit: 3, related_object_id: anchorId });
-  assert.ok(!disabledProbe.objects.some(object => object.id === disabledDoc.id), '停用对象不进入交付');
-  checks.push('v1硬范围与启停前置到每路召回：范围内dense可达项不被范围外挤出，实际请求携带范围，v1不执行raw通道，停用对象不召回');
+  const disabledProbe = await invoke('search_knowledge', { query: '停用专用独占标记词', limit: 3, hints: { related_object_ids: [anchorId] } });
+  assert.ok(!hitObjectIds(disabledProbe).includes(disabledDoc.id), '停用对象不进入交付');
+  checks.push('v2允许范围与启停前置到每路召回：范围内dense可达项不被范围外挤出，实际请求携带范围，停用对象不召回');
 
   // 公共向量连接已配置时，个人资产目录仍不得派发公共检索。
   const callsBeforeAssets=provider.requests.length;
   searches.length=0;
   const assets=await invoke('search_knowledge',{query:'*',limit:1});
-  assert.deepEqual(assets.objects,[],'资产目录不混入公共知识命中');
+  assert.deepEqual(assets.hits,[],'资产目录不混入公共知识命中');
   assert.equal(searches.length,0,'query=*不派发公共BM25/dense查询');
   assert.equal(provider.requests.length,callsBeforeAssets,'资产目录不发送查询Embedding');
-  const continuedAssets=await invoke('search_knowledge',{query:phrase,limit:1,asset_after:'synthetic-missing-asset'});
-  assert.deepEqual(continuedAssets.objects,[],'资产续页不混入公共知识命中');
+  const continuedAssets=await invoke('search_knowledge',{query:'*',limit:1,asset_after:'synthetic-missing-asset'});
+  assert.deepEqual(continuedAssets.hits,[],'资产目录续页不混入公共知识命中');
   assert.equal(continuedAssets.asset_cursor_invalid,true,'未知资产游标仍返回原目录状态');
-  assert.equal(searches.length,0,'asset_after不派发公共BM25/dense查询');
+  assert.equal(searches.length,0,'query=*与asset_after续页不派发公共BM25/dense查询');
   assert.equal(provider.requests.length,callsBeforeAssets,'资产续页不发送查询Embedding');
-  checks.push('向量连接已配置时query=*和asset_after仍走原个人资产目录，无公共检索或查询Embedding');
+  checks.push('向量连接已配置时query=*个人资产目录与asset_after续页仍走原目录，无公共检索或查询Embedding');
 
-  // 索引覆盖按本题实际范围计核（05接续，审计缺口6）：来源限制外的无关待办不能
-  // 把本题报成未就绪；本题自己的待办即使在零命中时也要如实报incomplete。v1不
-  // 交付raw，原文待办不混入本次覆盖。
   const coverageTask = await invoke('update_analysis_task', { action: 'create', goal: '核对索引覆盖范围', conditions, options: [] });
   const coverageRevised = await invoke('update_analysis_task', { action: 'revise', task_id: coverageTask.task_id,
     expected_version: coverageTask.condition_version, goal: '', options: [],
@@ -208,14 +202,14 @@ try {
   const markPending = id => h.sql(`UPDATE knowledge_index_jobs SET vector_state='pending',vector_target=NULL WHERE target_kind='knowledge_entry' AND object_id='${id}'`);
   markPending(unrelated.id);
   const outsideLag = await invoke('search_knowledge', { query: phrase, limit: 3 });
-  assert.equal(outsideLag.search_coverage.index_state, 'current',
+  assert.ok(!outsideLag.search_coverage.reasons.includes('index_lag'),
     '范围外知识待办不得把本题报成未就绪：' + JSON.stringify(outsideLag.search_coverage));
   markPending(allowed.id);
   await milvus('entities/delete', { filter: `object_id == "${allowed.id}"` });
   const ownLag = await invoke('search_knowledge', { query: '氍毹魍魉绮语', limit: 3 });
-  assert.equal(ownLag.objects.length, 0, '本题对象未索引且词法无命中：零候选');
-  assert.equal(ownLag.search_coverage.index_state, 'incomplete', '本题未索引时零命中也如实报告：' + JSON.stringify(ownLag.search_coverage));
-  checks.push('索引覆盖只按本题实际范围与当前修订计核：范围外pending不误报未就绪，本题未索引时零命中仍如实报incomplete，v1不把raw待办混入覆盖');
+  assert.equal(ownLag.hits.length, 0, '本题对象未索引且词法无命中：零候选');
+  assert.ok(ownLag.search_coverage.reasons.includes('index_lag'), '本题未索引时零命中也如实报告index_lag：' + JSON.stringify(ownLag.search_coverage));
+  checks.push('索引覆盖只按本题实际范围与当前修订计核：范围外pending不误报index_lag，本题未索引时零命中仍如实报index_lag');
 
   passed = true;
   console.log(JSON.stringify({ passed, checks, officialRequests: 0 }));

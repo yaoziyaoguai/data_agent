@@ -20,7 +20,7 @@ const profile = {
   trial_cost_micros: "300000",
   request_call_limit: 12,
   toolset: "data",
-  payload_bytes_limit: 65536,
+  payload_bytes_limit: 131072,
 };
 let h;
 let passed = false;
@@ -41,6 +41,7 @@ const conditions = {
   filters: ["is_test=0"],
   knowledge_refs: refs,
   notes: "",
+  source_limits: null,
 };
 // Pi 1.0.0的原生摘要协议；无工具请求必须同时符合系统提示和会话摘要模板。
 const summarySystemPrompt =
@@ -142,7 +143,7 @@ const provider = createServer(async (req, res) => {
     agentCalls++;
     assert.deepEqual(
       body.tools.map((tool) => tool.function.name).sort(),
-      [...expectedTools].sort(),
+      expectedTools.filter((name) => name !== "present_analysis_answer").sort(),
     );
     assert.ok(body.tools.some((tool) => tool.function.name === "read"));
     assert.ok(
@@ -157,26 +158,33 @@ const provider = createServer(async (req, res) => {
   if (!summary && (agentCalls === 2 || agentCalls === 3)) {
     name = "read_knowledge";
     args = {
-      object_id: document.id,
-      version: document.version,
-      entry_id: "body",
-      offset: agentCalls === 2 ? 0 : 32000,
-      limit: 2048,
+      items: [
+        {
+          kind: "knowledge",
+          ref: {
+            object_id: document.id,
+            version: document.version,
+            path: "body",
+          },
+          offset: agentCalls === 2 ? 0 : 80000,
+          limit: 16384,
+        },
+      ],
     };
   }
   if (!summary && agentCalls === 3) {
     const firstPage = JSON.parse(
       body.messages.findLast((m) => m.role === "tool").content,
     );
-    assert.equal(firstPage.entries[0].content_page.complete, false);
-    assert.equal(firstPage.entries[0].effective_value.length, 2048);
+    assert.equal(firstPage.items[0].content_state, "partial");
+    assert.equal(firstPage.items[0].content.length, 16384);
   }
   if (!summary && agentCalls === 4) {
     const lastPage = JSON.parse(
       body.messages.findLast((m) => m.role === "tool").content,
     );
-    assert.ok(lastPage.entries[0].effective_value.includes("尾部合成口径"));
-    assert.equal(lastPage.entries[0].content_page.complete, false);
+    assert.ok(lastPage.items[0].content.includes("尾部合成口径"));
+    assert.equal(lastPage.items[0].content_state, "partial");
     name = "update_analysis_task";
     args = {
       action: "create",
@@ -339,7 +347,7 @@ try {
       operation_id: randomUUID(),
       kind: "document",
       name: "净收入长文合成说明",
-      body: "合成文档".repeat(8000) + "尾部合成口径：退款按支付行归属。",
+      body: "合成文档".repeat(20000) + "尾部合成口径：退款按支付行归属。" + "补充说明".repeat(500),
       related_ids: ["table-demo_order_detail"],
       source_url: null,
     })

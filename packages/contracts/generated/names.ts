@@ -241,6 +241,9 @@ export interface ContractTypes {
   ModelConnection: Boundary.ModelConnection;
   AnalysisAnswerSource: Boundary.AnalysisAnswerSource;
   AnalysisAnswerValue: Boundary.AnalysisAnswerValue;
+  AnalysisComparisonRowMatch: Boundary.AnalysisComparisonRowMatch;
+  AnalysisComparisonOperand: Boundary.AnalysisComparisonOperand;
+  AnalysisAnswerComparison: Boundary.AnalysisAnswerComparison;
   PresentAnalysisAnswerInput: Boundary.PresentAnalysisAnswerInput;
   PrepareAnalysisAnswerInput: Boundary.PrepareAnalysisAnswerInput;
   SourceKey: Boundary.SourceKey;

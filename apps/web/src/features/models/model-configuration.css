@@ -121,9 +121,16 @@
   gap: 14px;
 }
 .configuration-dialog fieldset {
-  border: 1px solid #dce2eb;
-  border-radius: 5px;
-  padding: 12px;
+  border: 1px solid var(--line, #e2e8f0);
+  border-radius: 8px;
+  padding: 14px 16px;
+  background: #fcfdff;
+}
+.configuration-dialog fieldset > legend {
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--ink, #1e293b);
+  padding: 0 6px;
 }
 .configuration-levels {
   display: flex;

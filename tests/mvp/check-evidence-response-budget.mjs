@@ -443,8 +443,8 @@ try {
   await capacityRecovery(false);
   await capacityRecovery(true);
   assert.equal(calls, originalCalls + combinations.reduce((sum, value) => sum + value.calls, 0));
-  // §6.1可见性断言必须真实命中过收窄首请求；每个新输入的首请求都应被收窄。
-  assert.ok(narrowedRequests >= 4, '四个新输入run的首请求都必须是来源未裁决的收窄请求，实际 ' + narrowedRequests);
+  // 4e1f2a6移除v2来源就绪收窄门后，每轮完整工具集始终可见；宿主边界仍由Rust按当前范围核验。
+  assert.equal(narrowedRequests, 0, '移除就绪工具收窄门后，新输入首请求保持完整工具集，实际 ' + narrowedRequests);
   passed = true;
   console.log(JSON.stringify({passed, checks, calls, originalCalls, narrowedRequests, combinations, officialRequests: 0}));
 } finally {

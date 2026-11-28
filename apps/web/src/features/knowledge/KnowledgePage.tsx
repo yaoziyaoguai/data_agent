@@ -137,6 +137,12 @@ export function KnowledgePage({
   const [source, setSource] = useState<SourceDocument | null>(null);
   const [proposals, setProposals] = useState<Proposal[]>([]);
   const refreshRequest = useRef<() => void>(() => {});
+  const replaceAllRef = useRef(false);
+  const previousUserRef = useRef(user);
+  if (previousUserRef.current !== user) {
+    previousUserRef.current = user;
+    replaceAllRef.current = true;
+  }
   const activeObject = useRef(current);
   activeObject.current = current;
   const [authorityRevision, setAuthorityRevision] = useState(0);
@@ -149,6 +155,9 @@ export function KnowledgePage({
   const canMaintain = role === "maintainer" || role === "super_maintainer";
   // U-02：条目快速筛选与批量核对暂存；stagedEdits 以“对象:条目”为键，提交时按对象分组。
   const [entryFilter, setEntryFilter] = useState<"all" | "suggested" | "overridden" | "missing">("all");
+  const [fieldQuery, setFieldQuery] = useState("");
+  const [activeCorrectionsCount, setActiveCorrectionsCount] = useState(0);
+  useEffect(() => { setFieldQuery(""); }, [current]);
   const [batchMode, setBatchMode] = useState(false);
   const [stagedEdits, setStagedEdits] = useState<Record<string, StagedEntry>>({});
   const [diffOpen, setDiffOpen] = useState(false);
@@ -174,30 +183,59 @@ export function KnowledgePage({
       if (inFlight) { pending = true; return; }
       inFlight = true;
       const readRelated = relatedChanged;
+      const dropRemoved = replaceAllRef.current;
       relatedChanged = false;
+      const requestedCurrent = activeObject.current;
       try {
         // 子请求失败也须等同批读取结束，避免提前释放在途状态。
-        const [knowledge, proposals, access] = await Promise.allSettled([
+        const [knowledge, proposals, access, currentDetail] = await Promise.allSettled([
           api("KnowledgeList", "/knowledge?directory=all&directory_view=grouped", "GET", undefined, undefined, signal),
           api("ProposalList", "/knowledge-proposals", "GET", undefined, undefined, signal),
           api("SemanticAccess", "/semantic-access", "GET", undefined, undefined, signal),
+          ...(dropRemoved && requestedCurrent
+            ? [api("KnowledgeObject", "/knowledge/" + requestedCurrent, "GET", undefined, undefined, signal)]
+            : []),
         ]);
         if (!live) return;
         if (knowledge.status === "rejected") throw knowledge.reason;
         if (proposals.status === "rejected") throw proposals.reason;
         if (access.status === "rejected") throw access.reason;
+        if (dropRemoved) replaceAllRef.current = false;
         const page = knowledge.value;
-        if (!initialized) {
+        const fallbackTableId = page.objects.find(object => object.kind === "table")?.id || "";
+        const stillVisible =
+          page.objects.some(object => object.id === requestedCurrent) ||
+          (currentDetail?.status === "fulfilled" && currentDetail.value.id === requestedCurrent);
+        if (!initialized || dropRemoved) {
           initialized = true;
           setNextAfter(page.next_after_id);
-          if (directorySelection.current.scope === "tables" && !directorySelection.current.query.trim()) setCurrent(previous => previous || page.objects.find(object => object.kind === "table")?.id || "");
+          if (!dropRemoved && directorySelection.current.scope === "tables" && !directorySelection.current.query.trim()) setCurrent(previous => previous || fallbackTableId);
         }
-        setObjects(old => { const byId = new Map(old.map(object => [object.id, object])); for (const value of page.objects) byId.set(value.id, currentObject(byId.get(value.id), value)); return [...byId.values()]; });
+        setObjects(old => {
+          const oldById = new Map(old.map(object => [object.id, object]));
+          const byId = dropRemoved ? new Map<string, KnowledgeObject>() : new Map(oldById);
+          for (const value of page.objects) byId.set(value.id, currentObject(oldById.get(value.id), value));
+          if (dropRemoved && currentDetail?.status === "fulfilled") {
+            byId.set(currentDetail.value.id, currentObject(oldById.get(currentDetail.value.id), currentDetail.value));
+          }
+          return [...byId.values()];
+        });
+        if (dropRemoved && requestedCurrent && !stillVisible) {
+          setCurrent(previous => previous === requestedCurrent ? fallbackTableId : previous);
+        }
         setProposals(proposals.value.proposals);
         setCanAdmin(access.value.can_admin);
         setCanCreate(access.value.can_create);
-        setRole(access.value.highest_role);
-        if (readRelated && activeObject.current) await loadRelated(activeObject.current, null, true);
+        setRole(old => {
+          if (old !== null && old !== access.value.highest_role) {
+            window.dispatchEvent(new Event("workspace-role-refresh"));
+          }
+          return access.value.highest_role;
+        });
+        const relatedTarget = dropRemoved && activeObject.current === requestedCurrent && !stillVisible
+          ? fallbackTableId
+          : activeObject.current;
+        if ((readRelated || dropRemoved) && relatedTarget) await loadRelated(relatedTarget, null, true);
       } catch (e) {
         if (live) setError(e instanceof Error ? e.message : "目录读取失败");
       } finally {
@@ -208,7 +246,7 @@ export function KnowledgePage({
     refreshRequest.current = () => { void run(); };
     const stream = new EventSource("/api/workspace/events");
     const refreshAuthority = () => {
-      setObjects([]);
+      replaceAllRef.current = true;
       setMatches([]);
       setSource(null);
       setAuthorityRevision(revision => revision + 1);
@@ -316,11 +354,11 @@ export function KnowledgePage({
     const tableIds = new Set(tables.map(table => table.id));
     for (const table of tables) repeatedNames.set(table.name, (repeatedNames.get(table.name) ?? 0) + 1);
     const values = query ? matches.map(match => objects.find(object => object.id === match.id) ?? match) : tables;
-    return values.map(object => <button key={object.id} aria-current={object.id === current ? "true" : undefined}
+    return values.map(object => <button key={object.id} title={object.name} aria-current={object.id === current ? "true" : undefined}
       onClick={() => move(object.id)}>
       <span>{object.name}</span>
       {(repeatedNames.get(object.name) ?? 0) > Number(tableIds.has(object.id)) && <KnowledgeOrigin object={object}/>}
-      <small>{knowledgeKindLabels[object.kind]}{object.analysis_preference?.preferred ? " · 常用" : ""}</small>
+      <small>{knowledgeKindLabels[object.kind]}{object.kind === "field" && object.name.includes(".") ? ` · ${object.name.split(".")[0]}` : ""}{object.analysis_preference?.preferred ? " · 常用" : ""}</small>
     </button>);
   }, [tables, matches, query, objects, current, move]);
   const save = (v: KnowledgeObject) => {
@@ -405,9 +443,14 @@ export function KnowledgePage({
     missing: scopeEntries.filter(e => entryCategory(e) === "missing").length,
   };
   const pendingReviewCount = scopeEntries.filter(e => e.review_state !== "confirmed" || entryCategory(e) === "suggested").length;
-  // 字段语义按字段整体匹配筛选；概览在条目级过滤，其他页签不参与筛选。
-  const visibleGroups = tab === "字段语义" && entryFilter !== "all"
-    ? groups.filter(o => o.entries.some(entryMatchesFilter))
+  // 字段语义按字段整体匹配筛选与即时搜索；概览在条目级过滤，其他页签不参与筛选。
+  const normalizedFieldQuery = fieldQuery.trim().toLowerCase();
+  const visibleGroups = tab === "字段语义"
+    ? groups.filter(o =>
+        (entryFilter === "all" || o.entries.some(entryMatchesFilter)) &&
+        (!normalizedFieldQuery ||
+          o.name.toLowerCase().includes(normalizedFieldQuery) ||
+          o.entries.some(e => e.effective_value.toLowerCase().includes(normalizedFieldQuery))))
     : groups;
   const stagedKey = (objectId: string, entryId: string) => objectId + ":" + entryId;
   const stagedList = Object.entries(stagedEdits).map(([key, edit]) => ({key, ...edit}));
@@ -449,24 +492,36 @@ export function KnowledgePage({
         <div>
           <h1>{canMaintain ? "语义管理" : "数据字典"}</h1>
         </div>
-        {canMaintain && <div className="actions">
-          <details className="maintenance-menu"><summary>维护操作</summary><div className="actions">
-          <button
-            onClick={()=>{setMaintenanceNotice("");void sourceSync.synchronize();}}
-            disabled={!canAdmin || sourceSync.busy}
+        <div className="actions">
+          <a
+            href="#semantic-corrections"
+            className="corrections-jump"
+            onClick={e => {
+              e.preventDefault();
+              document.getElementById("semantic-corrections")?.scrollIntoView({ behavior: "smooth", block: "start" });
+            }}
           >
-            {sourceSync.label}
-          </button>
-          {canAdmin && <button onClick={()=>void rebuild()} disabled={rebuilding}>{rebuilding?"正在排队…":"重建检索索引"}</button>}</div></details>
-          <KnowledgeCreator user={user} canCreate={canCreate} relatedId={current} onCreated={v => {
-            refresh();
-            // 新建成功后清除旧筛选，并取消旧目录请求，避免刚保存的对象被切走。
-            setCreatedObjectId(v.id);
-            setQuery("");
-            setObjects(old => [...old.filter(o => o.id !== v.id), v]);
-            move(v.id, "概览", directoryScope === "tables" ? "maintained" : directoryScope);
-          }}/>
-        </div>}
+            语义纠错协作{activeCorrectionsCount > 0 ? ` · ${activeCorrectionsCount}` : " ↓"}
+          </a>
+          {canMaintain && <>
+            <details className="maintenance-menu"><summary>维护操作</summary><div className="actions">
+            <button
+              onClick={()=>{setMaintenanceNotice("");void sourceSync.synchronize();}}
+              disabled={!canAdmin || sourceSync.busy}
+            >
+              {sourceSync.label}
+            </button>
+            {canAdmin && <button onClick={()=>void rebuild()} disabled={rebuilding}>{rebuilding?"正在排队…":"重建检索索引"}</button>}</div></details>
+            <KnowledgeCreator user={user} canCreate={canCreate} relatedId={current} onCreated={v => {
+              refresh();
+              // 新建成功后清除旧筛选，并取消旧目录请求，避免刚保存的对象被切走。
+              setCreatedObjectId(v.id);
+              setQuery("");
+              setObjects(old => [...old.filter(o => o.id !== v.id), v]);
+              move(v.id, "概览", directoryScope === "tables" ? "maintained" : directoryScope);
+            }}/>
+          </>}
+        </div>
       </div>
       <div className="knowledge-toolbar"><label className="form-label directory-scope">语义目录范围
         <select aria-label="语义目录范围" value={directoryScope} onChange={e => move(e.target.value === "tables" ? tables[0]?.id ?? "" : "", "概览", e.target.value as "tables" | "all" | "maintained")}>
@@ -526,7 +581,7 @@ export function KnowledgePage({
                   )}
                 </div>
               </div>
-              {canMaintain && <SemanticMaintainer object={selected} onSaved={()=>{setDirectoryRevision(value => value + 1);void refresh();}}/>}
+              {canMaintain && (selected.kind !== "document" || !selected.source_id) && <SemanticMaintainer object={selected} onSaved={()=>{setDirectoryRevision(value => value + 1);void refresh();}}/>}
               {canMaintain && <KnowledgeMaintenanceImpact objectId={selected.id} version={selected.version}/>}
               {canMaintain && selected.prefill_status && selected.prefill_status.state !== "succeeded" && <p className="quiet" role="status">{({queued:"正在等待补充语义说明",issued:"正在分析资料，补充说明",budget_unavailable:"自动补充暂不可用，仍可人工维护",superseded:"资料已变化，本次分析未采用",unknown:"分析暂未完成，请稍后查看状态",invalid_prefill:"本次分析未通过检查，已有内容保留"} as Record<string,string>)[selected.prefill_status.state] ?? "分析状态待核对"}</p>}
               {canMaintain && selected.preparation_status && <p className="quiet" role="status">{({queued:"正在排队整理来源原文",running:"正在分批整理来源原文",analysis:"正在分析来源批次",review:"正在复核来源批次",partial:"来源整理完成但存在未解释内容",failed:"来源整理失败，已有内容保留",superseded:"已被新修订的整理取代",unknown:"来源整理结果不确定，等待复核"} as Record<string,string>)[selected.preparation_status.state] ?? "来源整理状态待核对"}</p>}
@@ -548,6 +603,17 @@ export function KnowledgePage({
                   </> : <span className="quiet">当前对象由他人负责，仅支持逐条修改</span> : null}
                 </div>
               )}
+              {selected.kind === "table" && tab === "字段语义" && (
+                <label className="search-box field-search-bar">
+                  <span>⌕</span>
+                  <input
+                    aria-label="查找当前表字段"
+                    placeholder="按字段名或中文说明筛选当前表字段"
+                    value={fieldQuery}
+                    onChange={e => setFieldQuery(e.target.value)}
+                  />
+                </label>
+              )}
               {tab === "变更记录" ? (
                 <VersionHistory object={selected} />
               ) : (
@@ -557,7 +623,7 @@ export function KnowledgePage({
                   )}
                   {!["概览", "变更记录"].includes(tab) && <>
                     {relatedPage.loading && <p role="status">正在读取关联内容…</p>}
-                    {!relatedPage.loading && !relatedPage.failed && visibleGroups.length === 0 && <p className="quiet">{tab === "血缘与加工" ? "暂无其他关联对象。" : entryFilter !== "all" && tab === "字段语义" ? "当前筛选下没有匹配的字段。" : "当前已读取的内容中没有此类关联。"}</p>}
+                    {!relatedPage.loading && !relatedPage.failed && visibleGroups.length === 0 && <p className="quiet">{tab === "血缘与加工" ? "暂无其他关联对象。" : (entryFilter !== "all" || normalizedFieldQuery) && tab === "字段语义" ? "当前筛选下没有匹配的字段。" : "当前已读取的内容中没有此类关联。"}</p>}
                     {(relatedPage.next || relatedPage.failed) && <button disabled={relatedPage.loading} onClick={() => void loadRelated(current, relatedPage.next)}>{relatedPage.failed ? "重试关联内容" : "加载更多关联内容"}</button>}
                   </>}
                   {documentRepresentatives(visibleGroups).map((o) => o.kind === "document" ? <KnowledgeDocument key={o.source_id ?? o.id} object={o} catalogRevision={catalogRevision} onOpen={o.id !== current ? () => selectObject(o) : undefined} onSaved={parts => { refresh(); setDirectoryRevision(value => value + 1); setObjects(old => { const byId = new Map(old.map(o => [o.id, o])); for (const part of parts) byId.set(part.id, currentObject(byId.get(part.id), part)); return [...byId.values()]; }); }} onCorrection={() => void refresh()}/> : (
@@ -617,7 +683,7 @@ export function KnowledgePage({
           {!selected && <div className="knowledge-empty"><h2>选择要查看的内容</h2><p>左侧只列出符合当前范围的内容。没有匹配时，可调整范围或搜索条件。</p></div>}
         </div>
       </div>
-      <SemanticCorrections key={user} user={user} revision={correctionsRevision} proposals={proposals} onSaved={()=>void refresh()}/>
+      <SemanticCorrections key={user} user={user} revision={correctionsRevision} proposals={proposals} canApplyProposal={objectId => canAdmin || Boolean(objects.find(o => o.id === objectId)?.maintenance?.can_edit)} onProposalApplied={object => save(object)} onActiveCountChange={setActiveCorrectionsCount} onSaved={()=>void refresh()}/>
       {error && (
         <p role="alert" className="error">
           {error}

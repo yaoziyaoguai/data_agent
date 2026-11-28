@@ -166,7 +166,8 @@ export async function deliver(
           first_chunk_seq: String(final.first),
           last_chunk_seq: String(lastChunk),
         })};
-      })
+      },
+      () => Boolean(projection?.hasPendingReset()))
     : null;
   // 复用Pi公开loadout；未开放的工具不作为当前固定成本重复预留，发送硬门仍核实际协议。
   const activeTools = (): Tool[] => {
@@ -378,7 +379,11 @@ export async function deliver(
       }
     }
     if (event.type === 'tool_execution_end') {
-      responseCapacity?.accept(event.result, event.toolCallId);
+      const toolResult = event.result as {content?: unknown; details?: {data?: {error?: unknown}}} | undefined;
+      const capacityPayload = toolResult?.details?.data?.error === 'tool_response_capacity'
+        ? toolResult.details.data
+        : (toolResult && 'content' in toolResult ? {content: toolResult.content} : event.result);
+      responseCapacity?.accept(capacityPayload as Record<string, unknown>, event.toolCallId);
       // Pi参数校验和未知工具可在execute之前失败，同样使未冻结候选失效。
       if (event.isError) data?.invalidateAnswer();
     }
@@ -390,7 +395,7 @@ export async function deliver(
       messageOutputStart = messageDeferred ? undefined : finalStartChunk;
       // 正文渲染只绑定本条开始时已成功的prepare；条内prepare的值不倒填此前正文。
       messagePrepare = messageDeferred ? undefined : data?.preparation();
-      messageRenderer = messagePrepare ? renderedStream(messagePrepare.bindings) : undefined;
+      messageRenderer = messagePrepare ? renderedStream(messagePrepare.bindings, messagePrepare.requiredMarkers) : undefined;
       renderedFinal = undefined;
       renderInvalid = false;
     }
@@ -627,10 +632,12 @@ export async function deliver(
         });
         return;
       }
+      // 已成功prepare但本条模板存在未知/未闭合/漏引比较标记时，优先按render_invalid纠正（复用原prepare回执，不重做工具）。
+      if (renderInvalid) throw new Error("answer_render_invalid");
       // 先处理真实模型失败/截断，再要求成功结果的来源正文；失败通知正常解释状态。
       if (data && needsResultAnswer()) {
         await session.sendCustomMessage({customType: "data_agent_answer_sources", display: false,
-          content: "本轮是查询结果解释。请按原查询所属任务和条件核对get_query实际结果，先用prepare_analysis_answer绑定数值（数字、日期、行数通过values绑定，未返回的派生值不补算），再在下一条正文用{{name}}原样引用绑定值写出完整说明。其他任务已定稿的部分保留，需切任务时沿原route；不要重复执行查询。", details: {message_id: run.message_id}}, {triggerTurn: true});
+          content: `本轮是查询结果解释（本次完成通知对应的查询为 query_id=${notification?.query_id ?? ""}）。请对该已完成的通知查询调用get_query核对实际结果，先用prepare_analysis_answer在sources中包含该query_id并绑定数值及组间高低/持平/缺样本比较（values与comparisons，未返回的派生值不补算），再在下一条正文用{{name}}原样引用已核绑定值与比较短语写出完整说明；本轮是系统结果唤醒，不能对轮内新建的未提交草稿调用execute_query。其他任务已定稿的部分保留，需切任务时沿原route；不要重复执行查询。`, details: {message_id: run.message_id}}, {triggerTurn: true});
         if (needsResultAnswer()) throw new Error("answer_sources_required");
         return commitAnswer();
       }
@@ -757,7 +764,7 @@ export async function deliver(
         content: error.message === "message_pending"
           ? "宿主拒绝本次交付：message_pending，当前原始用户消息尚未通过update_analysis_task登记归属。原回答尚未正式提交。请基于原消息及已取得资料，自主登记新任务或归属已有任务；如需要澄清，先持久保存question和options，再用中文回复用户。沿用已有任务和工具回执，不重建已成功操作。完成后重新给出完整回答。"
           : error.message === "answer_render_invalid"
-          ? "宿主拒绝本次交付：answer_render_invalid，正文中的{{name}}标记未全部对应已核bindings或未正确闭合。原回答尚未正式提交。请仅引用prepare_analysis_answer回执中已核定的绑定名，在下一条消息重新写出完整中文正文；文字与数字来自绑定值，不自行改写或补算。沿用已有任务、工具回执与准备结果，不重复已成功操作。"
+          ? "宿主拒绝本次交付：answer_render_invalid，正文中的{{name}}标记未全部对应已核bindings、未正确闭合，或漏引了comparisons中已核定的比较标记。原回答尚未正式提交。请仅引用prepare_analysis_answer回执中已核定的绑定名（含全部comparisons标记），在下一条消息重新写出完整中文正文；文字与数字来自绑定值，不自行改写或补算。沿用已有任务、工具回执与准备结果，不重复已成功操作。"
           : "宿主拒绝本次交付：model_output_limit，模型明确报告输出被长度上限截断，原回答尚未正式提交。请围绕原用户问题和已查资料，重新给出更简洁但完整的中文回答，不承接半句话。保留已成功的任务和工具回执，不重复已成功操作；沿原消息和预算继续。",
         display: false,
         details: { message_id: run.message_id, recovery_chain_id: run.recovery_chain_id },

@@ -570,6 +570,7 @@ verify-semantic-governance:
 
 .PHONY: verify-cockpit
 verify-cockpit:
+	$(CARGO) build --offline --locked -p data-agent-api -p data-agent-worker
 	$(PYTHON) docs/sources/cockpit/verify.py
 	$(PYTHON) docs/dogfood/cockpit/verify.py
-	node tests/mvp/check-cockpit-source.mjs
+	node tests/mvp/check-cockpit-source.mjs --v2

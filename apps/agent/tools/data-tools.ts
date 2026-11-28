@@ -22,7 +22,7 @@ const definitions = {
   ],
   execute_query: [
     "ExecuteQueryInput",
-    "仅提交明确授权SQL，instruction_quote逐字保留当前完整原话（否定/限定/换行/粘贴）。按宿主完成来源准入，就绪后get_query核稿。单条给query_id/draft_version/condition_version，多条queries给本消息授权全集，不混形状/逐一route。整批同事务核验，拒绝不新增确认/关联/授权，既有route保持；已确认只接原状态，其他待处理消息可阻塞。版本/澄清/授权沿系统规则，重放不重执行/转预算，明确重跑先建新查询。",
+    "仅提交明确授权SQL，instruction_quote逐字保留当前完整原话（否定/限定/换行/粘贴）。每条用户消息仅可调用一次本工具（成功即消费本消息授权，后续系统结果唤醒不能再执行新SQL）；用户要求直接查数时，须在本轮将正式指标SQL（确需编码/覆盖核对可与探查SQL并入queries批次）一次备齐提交，勿只交探查SQL留待唤醒轮再执行。单条给query_id/draft_version/condition_version，多条queries给本消息授权全集，不混形状/逐一route。整批同事务核验，拒绝不新增确认/关联/授权，既有route保持；已确认只接原状态，其他待处理消息可阻塞。重放不重执行/转预算，明确重跑先建新查询。",
   ],
   get_query: [
     "GetQueryInput",
@@ -34,7 +34,7 @@ const definitions = {
   ],
   save_analysis_evidence: [
     "SaveAnalysisEvidenceInput",
-    "按真实task_id/condition_version存结论/依据，可用有效历史条件。findings含结论、计算、限制、资料/query_refs；figures绑query_id/列/整个保存结果从0起的row_index/精确value，金额用字符串。查询须属依据原任务/条件且成功，result_ref真实；get_query补页，空/部分结果标limitations/data_range。宿主只核引用/数值，不证因果；新查询逐条聊天授权。回执给evidence_id/已核依赖。",
+    "按真实task_id/condition_version存结论/依据，可用有效历史条件。findings含结论、计算、限制、资料/query_refs；同条finding的figures引用的每个column都必须列在该finding对应query_id的query_refs.columns内；figures绑query_id/列/整个保存结果从0起的row_index/与get_query返回的results.rows[row_index][col_index]原始单元格JSON类型及内容严格全等的value（如encoding=decimal_string时原样传rows里的精确字符串，原单元格为number/boolean/null时原样传对应JSON类型，不做字符串与数值互转或舍入）。查询须属依据原任务/条件且成功，result_ref真实；get_query补页，空/部分结果标limitations/data_range。宿主只核引用/数值，不证因果；新查询逐条聊天授权。回执给evidence_id/已核依赖。",
   ],
   save_analysis_report: [
     "SaveAnalysisReportInput",
@@ -66,10 +66,10 @@ const definitions = {
   ],
   prepare_analysis_answer: [
     "PrepareAnalysisAnswerInput",
-    "准备有来源的定量说明数值，不执行SQL、不定稿、不冻结任务。sources给query_id/result_ref/真实columns；values以唯一小写name绑cell(列/绝对row_index)、statistic(行数/列计数)、parameter(原参数)、metadata(data_freshness/saved_row_count)、observation_cutoff/data_batch(草稿的用户截点/批次，同名角色用field_ref对齐)。format可选：style=raw直显原值，decimal/percent给precision(0-12)按十进制半值远离零舍入，展示舍入如实说明、不称无损；NULL沿空值展示；非数字不自算单位。回执给已核bindings与required_suffix；随后正常正文一次写完，用{{name}}原样引用绑定值，不在正文另写派生数字或SQL块。未返回的差值/环比/合计不补算，说明缺口另给草稿。概念/纯保存确认不用本工具，自然回答。",
+    "准备有来源的定量数值与比较结论，不执行SQL、不定稿、不冻结任务。sources给query_id/result_ref/真实columns；values以唯一小写name绑cell(列/绝对row_index)、statistic(行数/列计数)、parameter(原参数)、metadata(data_freshness/saved_row_count)、observation_cutoff/data_batch(草稿截点/批次，同名角色用field_ref对齐)。format可选：style=raw直显原值，decimal/percent给precision(0-12)按十进制半值远离零舍入，展示舍入如实说明；NULL沿空值展示。凡正文（含主动补充的读法要点/对比小结）比较两组/两期/两项谁高、谁低、持平或一侧缺样本，须在comparisons以唯一name绑left/right(label配row_index或唯一row_match，可选sample_column、expected_relation)，宿主核定higher/lower/equal/insufficient_data并写入bindings，正文必须用{{name}}引用该比较短语；未在comparisons绑定的比较只列数值、不手写高低结论。未返回的差值/环比/合计不补算。概念/纯保存确认不用本工具。",
   ] as const,
-  update_analysis_task: ["CurrentAnalysisUpdate", "登记本条消息归属，返回task_id/condition_version；已有任务使用当前版本。create新目标，route追问或浏览，revise/clarify更新原目标，split分离独立目标。参数的默认、条件修订、澄清与显式旧格式迁移规则见Schema。source_limits省略继承；新任务无附加限制显式null，许可未知不能猜null或允许集。route只归属，不改条件；仅修订同目标SQL时给replaces_query_id。opened_clarifications为本次新问题，has_more_clarifications须read_analysis_task续读。普通说明在最后正文完成；中途定稿用route的finalize_current_answer，查询数字先prepare_analysis_answer绑定。"] as const,
-  request_query: ["CurrentRequestQueryInput", "保存已核口径的SQL草稿，不执行。度量与诊断列的口径分离、保存前一致性核对按系统说明执行。草稿继承目标task_id/condition_version的条件与采纳说明；semantic_resolution省略即可，兼容携带只能与该版本已有说明相同，不能在此另作决定。需要改变解释先同次revise；真实未决登记clarifications，普通无歧义任务不强填采纳对象。修改旧SQL必给其replaces_query_id使旧待执行稿失效，独立查询给null。semantic_checks是非阻断诊断，不授执行权。"] as const,
+  update_analysis_task: ["CurrentAnalysisUpdate", "登记本条消息归属，返回task_id/condition_version；已有任务使用当前版本。create新目标，route追问或浏览，revise/clarify更新原目标，split分离独立目标。参数的默认、条件修订、澄清与显式旧格式迁移规则见Schema。source_limits省略继承；用户未限制来源时新任务显式填null，用户明确指定/排除可用来源时严禁填null且勿与source_identity同轮并行提交null（先单独调用search_knowledge(view=\"source_identity\", kinds=[\"table\",\"document\"])查明source_keys填入allowed_sources，origin_message_ids传[]由宿主绑定；单表限源取table-表名键、不取整包schema）。route只归属，不改条件；仅修订同目标SQL时给replaces_query_id。opened_clarifications为本次新问题，has_more_clarifications须read_analysis_task续读。普通说明在最后正文完成；中途定稿用route的finalize_current_answer，查询数字先prepare_analysis_answer绑定。"] as const,
+  request_query: ["CurrentRequestQueryInput", "保存已核口径的SQL草稿，不执行；summary简述查询指标、范围与分组（持久作标题，不写未执行等临时态）。继承目标task_id/condition_version的条件与采纳说明；semantic_resolution省略即可，兼容携带须与该版一致，改解释先revise，未决登记clarifications，无歧义不强填。改旧SQL必给replaces_query_id作废旧稿，独立查询给null。semantic_checks非阻断且不授执行权。"] as const,
   search_knowledge: [
   'KnowledgeSearchInput',
   'view=source_identity只列身份，未读正文，无语义召回。空白分词任一匹配，稳定ID分页。完整字段名、表名或文档名窄查。对象可筛kinds，无对象平台源按名/ID查并省略kinds。source_keys区分同名目录与正式定义，roots_complete只说明直属身份是否齐全。bounded带next且目标仍缺，窄查或续页，再按用户许可定conditions.source_limits，许可不明先问。限读原文用object_id/object_version填evidence的source_selection（version取object_version），取citation再read_source。不扩许可，不授派生知识/结构采用权。两视图cursor不互用。默认evidence遵来源门，kinds=document取文档条目摘录，普通平台原文只召回已索引的超长来源。hits按相关性返knowledge_entry/source_excerpt，用ref/citation补读，raw不可作知识ref。content_state指本项，support_state与supports_complete分别指支持交付、提取完整性，unknown仍可能有例外。search_coverage示覆盖，空结果不能判不存在。本人有效资产用query=*或asset_after单独翻页。',
@@ -125,12 +125,13 @@ export type AnswerCandidate = {
   taskRef?: EvidenceTaskRef;
   sources: {query_id: string; task_id: string; condition_version: string}[];
 };
-// 一次已核定的数值绑定：不是答案完成、不覆盖通知，仅侘认证正文渲染标记。
+// 一次已核定的数值与比较绑定：不是答案完成、不覆盖通知，仅供认证正文渲染标记。
 export type Preparation = {
   sdkId: string;
   taskRef?: EvidenceTaskRef;
   sources: AnswerCandidate["sources"];
   bindings: Record<string, string>;
+  requiredMarkers?: string[];
   requiredSuffix: string;
 };
 export class UnregisteredToolCallError extends Error {
@@ -167,6 +168,7 @@ export function dataTools(
   responseBudget?: (sdkId: string, usageTokens?: number | null) => import('../../../packages/contracts/generated/boundary.ts').ResponseBudget | undefined,
   answerOutput?: {start: () => number | undefined; drain: () => Promise<number>},
   renderedCandidate?: () => {binding: (lastChunk: number) => RenderedAnswerBinding} | undefined,
+  hasPendingReset?: () => boolean,
 ) {
   let answer: AnswerCandidate | undefined;
   let preparation: Preparation | undefined;
@@ -216,7 +218,13 @@ export function dataTools(
         && typeof source.task_id === "string" && typeof source.condition_version === "string")
         sources.push({query_id: source.query_id, task_id: source.task_id, condition_version: source.condition_version});
     }
+    const requiredMarkers: string[] = [];
+    for (const item of Array.isArray(receipt.data.comparisons) ? receipt.data.comparisons : []) {
+      if (item && typeof item === "object" && "name" in item && typeof item.name === "string")
+        requiredMarkers.push(item.name);
+    }
     preparation = {sdkId, sources, bindings: receipt.data.bindings as Record<string, string>,
+      ...(requiredMarkers.length ? {requiredMarkers} : {}),
       requiredSuffix: receipt.data.required_suffix,
       ...(receipt.answer_task_ref ? {taskRef: receipt.answer_task_ref} : {})};
   };
@@ -352,7 +360,8 @@ export function dataTools(
     const statusNote = typeof status === "string" ? statusNotes[status] : undefined;
     // 阶段感知提示：核对通过且待确认、尚未提交时，明确下一步就是提交，避免模型
     // 误把get_query当任务终点而stop（J01）。
-    const executeHint = name === "get_query" && query && typeof query === "object" && !Array.isArray(query)
+    const executeHint = name === "get_query" && !transport.run.workspace_context?.result_notification
+      && query && typeof query === "object" && !Array.isArray(query)
       && "confirmation_state" in query && query.confirmation_state === "awaiting_confirmation"
       && "check_state" in query && query.check_state === "passed"
       && "execution_state" in query && query.execution_state === "not_submitted"
@@ -377,7 +386,8 @@ export function dataTools(
     const parameters = expand(schema.$defs[parameterContract], new Set<string>(), true, true) as Record<string, unknown>;
     if (name === 'update_analysis_task') {
       const [fields, , required] = parameters.allOf as Record<string, unknown>[];
-      parameters.allOf = [fields, required];
+      delete parameters.allOf;
+      Object.assign(parameters, fields, required);
     }
     return {
       ...(name === "read" ? {promptSnippet: nativeSkillRead.promptSnippet, promptGuidelines: nativeSkillRead.promptGuidelines} : {}),
@@ -386,20 +396,42 @@ export function dataTools(
       // 工具共享运行来源清单，按顺序核验并扩展，避免同批调用相互制造过期快照。
       executionMode: "sequential",
       ...(name === "update_analysis_task" ? {
-        // Pi在schema校验前静默删除校验失败的可选null，非法set.source_limits:null
+        // Pi在schema校验前静默删除校验失败的可选null，非法set.<field>:null或unset:null
         // 会因此被当作空改成功执行；在参数进入该路径前就地拒绝并指明合法写法。
         prepareArguments: (args: unknown) => {
-          const patch = args && typeof args === "object" && "condition_patch" in args
+          const conditionPatch = args && typeof args === "object" && "condition_patch" in args
             && args.condition_patch && typeof args.condition_patch === "object"
-            && "set" in args.condition_patch && args.condition_patch.set
-            && typeof args.condition_patch.set === "object" ? args.condition_patch.set : undefined;
+            ? args.condition_patch as Record<string, unknown> : undefined;
+          if (conditionPatch && "unset" in conditionPatch && conditionPatch.unset === null)
+            throw new Error("invalid_condition_patch_null: condition_patch.unset不接受null；无需清空字段时省略unset或传[]，清空已有字段请传字段名数组");
+          const patch = conditionPatch?.set && typeof conditionPatch.set === "object" && !Array.isArray(conditionPatch.set)
+            ? conditionPatch.set as Record<string, unknown> : undefined;
           if (patch && "source_limits" in patch && patch.source_limits === null)
             throw new Error("invalid_source_limits_null: set.source_limits不接受null；已有任务撤销来源限制用unset:[\"source_limits\"]，新任务无额外限制在create的conditions.source_limits显式null");
+          if (patch) {
+            if ("timezone" in patch && patch.timezone === null)
+              throw new Error("invalid_condition_patch_null: set.timezone不接受null；未修改时区请省略timezone，修改时区请填写有效时区标识");
+            for (const field of ["time_start", "time_end", "metric", "channel", "group_by", "filters", "knowledge_refs", "notes", "time_roles"]) {
+              if (field in patch && patch[field] === null)
+                throw new Error(`invalid_condition_patch_null: set.${field}不接受null；清空已有条件请改用unset:[\"${field}\"]，未修改请省略该字段`);
+            }
+          }
           return args;
         },
       } : {}),
       parameters: Type.Unsafe(parameters as TSchema),
       execute: async (id, args, signal, _onUpdate, context) => {
+        if (hasPendingReset?.()) {
+          invalidateAnswer();
+          return {
+            content: [{type: "text" as const, text: JSON.stringify({
+              error: "context_reset_pending",
+              message: "前序操作已切换任务或资料范围；本次调用未执行，等本回合工作区刷新后按最新范围继续。",
+            })}],
+            details: undefined,
+            isError: true,
+          };
+        }
         const candidate = currentAnswer();
         invalidateAnswer();
         // read参数在入口decode一次，生成类型直传提交与格式化；其余工具沿用统一契约校验。

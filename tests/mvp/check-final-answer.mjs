@@ -200,6 +200,7 @@ const investigate = (finalText) => [
       filters: [],
       knowledge_refs: [],
       notes: "只解释合成示例，不执行SQL。",
+      source_limits: null,
     },
   }),
   tool(
@@ -208,11 +209,18 @@ const investigate = (finalText) => [
       task = lastTool(body);
       assert.ok(task.task_id);
       return {
-        object_id: document.id,
-        version: document.version,
-        entry_id: "body",
-        offset: 0,
-        limit: 4000,
+        items: [
+          {
+            kind: "knowledge",
+            ref: {
+              object_id: document.id,
+              version: document.version,
+              path: "body",
+            },
+            offset: 0,
+            limit: 4000,
+          },
+        ],
       };
     },
     provisional,
@@ -221,8 +229,8 @@ const investigate = (finalText) => [
     "save_analysis_evidence",
     (body) => {
       const source = lastTool(body);
-      assert.equal(source.id, document.id);
-      assert.match(source.entries[0].effective_value, /12345/);
+      assert.equal(source.items[0].ref.object_id, document.id);
+      assert.match(source.items[0].content, /12345/);
       return {
         task_id: task.task_id,
         condition_version: task.condition_version,

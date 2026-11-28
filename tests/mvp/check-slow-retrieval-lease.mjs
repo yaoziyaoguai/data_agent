@@ -54,7 +54,7 @@ const provider = createServer(async (request, response) => {
       } else {
         const result = JSON.parse(active.visibleResult);
         assert.ok(!result.error, active.visibleResult);
-        assert.ok(result.objects.some((object) => object.id === active.document.id));
+        assert.ok(result.hits.some((hit) => hit.ref?.object_id === active.document.id));
         assert.ok(active.visibleResult.includes(active.marker), "正常搜索必须实际交付命中文档正文");
         delta = { role: "assistant", content: "合成资料检索完成，当前资料有效。" };
       }
@@ -201,7 +201,7 @@ try {
       assert.ok(!JSON.stringify(search.receipt).includes(marker));
       assert.ok(!JSON.stringify(snapshot.messages).includes(marker));
     } else {
-      assert.ok(search.receipt.data.objects.some((object) => object.id === document.id));
+      assert.ok(search.receipt.data.hits.some((hit) => hit.ref?.object_id === document.id));
     }
     checks.push({
       name: change === "dependency_source" ? "结构依赖的原始来源改版也在检索提交前拒绝" : change === "disable" ? "提交前停用资料明确拒绝且不混正文" : "慢检索期间会话行可锁且Worker持续续租",

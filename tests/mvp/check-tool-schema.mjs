@@ -45,8 +45,9 @@ function validationSchema(value) {
 const tools = dataTools({run: {tool_contract_version: 2}}, null, "").tools;
 assert.deepEqual(tools.map((tool) => tool.name).sort(), Object.keys(contracts).sort());
 // 模型只看到展开后的参数；引用位置上的动作/来源说明也是对外工具合同。
-const taskFields = tools.find(tool => tool.name === "update_analysis_task").parameters.allOf
-  .find(branch => branch.properties).properties;
+const taskParameters = tools.find(tool => tool.name === "update_analysis_task").parameters;
+assert.equal(taskParameters.type, "object");
+const taskFields = taskParameters.properties;
 for (const field of ["conditions", "condition_patch"]) {
   assert.equal(taskFields[field].description, schema.$defs.AnalysisUpdateFields.properties[field].description,
     `${field} 的调用说明不能在展开引用时丢失`);

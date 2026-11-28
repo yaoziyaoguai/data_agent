@@ -2,6 +2,9 @@ import { validateContract, decodeContract } from '../../../packages/contracts/va
 import type { RunEnvelope, AppError } from '../../../packages/contracts/generated/boundary.ts';
 import type { ContractTypes } from '../../../packages/contracts/generated/names.ts';
 import { createHash } from 'node:crypto';
+import { Agent } from 'undici';
+
+const hostDispatcher = new Agent({ headersTimeout: 750_000, bodyTimeout: 750_000 });
 
 const responses = {
   '/internal/tool-calls':'OperationReceipt', '/internal/data/tool-calls':'OperationReceipt','/internal/data/tools':'DataToolOutcome', '/internal/tools':'ToolOutcome',
@@ -39,7 +42,8 @@ export class RustTransport {
       const response = await fetch(this.apiUrl + path, {
         method: 'POST', headers: { 'content-type': 'application/json', authorization: 'Bearer ' + this.token },
         body: JSON.stringify(input), signal: AbortSignal.timeout(path === "/internal/data/tools" ? 735000 : 10000),
-      });
+        dispatcher: hostDispatcher,
+      } as RequestInit & { dispatcher: Agent });
       status = response.status;
       reason = 'invalid_response';
       if (!response.ok) {

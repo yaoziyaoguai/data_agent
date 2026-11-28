@@ -42,9 +42,9 @@ mod catalog_search;
 pub(crate) use catalog_search::push_workspace_dependency_heads;
 pub use catalog_search::{
     candidate_meta_in_tx, current_enabled_heads_in_tx, directory_page_in_tx,
-    identity_candidate_ids_in_tx, independent_document_candidate_in_tx,
-    independent_document_heads_in_tx, matching_content_in_tx, matching_in_tx,
-    matching_scoped_in_tx, page_in_tx, scoped_enabled_heads_in_tx,
+    enabled_tables_by_name_in_tx, identity_candidate_ids_in_tx,
+    independent_document_candidate_in_tx, independent_document_heads_in_tx, matching_content_in_tx,
+    matching_in_tx, matching_scoped_in_tx, page_in_tx, scoped_enabled_heads_in_tx,
 };
 #[path = "storage/catalog_bindings/store.rs"]
 mod catalog_bindings;
@@ -94,12 +94,12 @@ pub(super) fn push_table_access(sql: &mut sqlx::QueryBuilder<sqlx::MySql>, ctx: 
             JOIN knowledge_objects t ON t.id=refs.object_id AND t.space_id=k.space_id \
             WHERE (t.kind='table' AND NOT JSON_CONTAINS(")
         .push_bind(sqlx::types::Json(&access.table_ids))
-        .push(",JSON_QUOTE(t.id))) OR (t.kind IN ('field','metric','relationship') AND (\
+        .push(",JSON_QUOTE(t.id))) OR (t.kind IN ('field','metric','relationship','query_example','term') AND (\
             (t.source_id LIKE 'catalog-%' AND NOT JSON_CONTAINS(")
         .push_bind(sqlx::types::Json(&access.source_ids))
         .push(",JSON_QUOTE(t.source_id))) OR EXISTS(SELECT 1 FROM JSON_TABLE(JSON_MERGE_PRESERVE(")
         .push(table_bindings("t"))
-        .push("),'$[*]' COLUMNS(object_id VARCHAR(64) PATH '$')) bound \
+        .push(",COALESCE(JSON_EXTRACT(t.body,'$.entries[*].effective_structure.dependencies[*].object_id'),JSON_ARRAY())),'$[*]' COLUMNS(object_id VARCHAR(64) PATH '$')) bound \
             JOIN knowledge_objects p ON p.id=bound.object_id AND p.space_id=t.space_id \
             WHERE p.kind='table' AND NOT JSON_CONTAINS(")
         .push_bind(sqlx::types::Json(&access.table_ids))

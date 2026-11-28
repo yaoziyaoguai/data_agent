@@ -30,8 +30,9 @@ async function checkPermissionSnapshotDuringAssignment() {
     evidence: [{ object_id: table.id, version: table.version, path: table.entries[0].entry_id }], share_confirmed: true,
   }, "carol");
   const database = new URL(h.env.DATA_AGENT_DATABASE_URL).pathname.slice(1);
-  const container = execFileSync("docker", ["--context", "colima-data-agent", "ps", "--filter", "label=com.docker.compose.project=data-agent", "--filter", "label=com.docker.compose.service=mysql", "--format", "{{.ID}}"], { encoding: "utf8" }).trim();
-  const writer = spawn("docker", ["--context", "colima-data-agent", "exec", "-i", container, "mysql", "--defaults-extra-file=/run/secrets/mysql_root_client", "--batch", "--raw", "--unbuffered", "--skip-column-names", database], { stdio: ["pipe", "pipe", "pipe"] });
+  const dockerContext = process.env.DATA_AGENT_DOCKER_CONTEXT || (process.platform === "darwin" ? "colima-data-agent" : "default");
+  const container = execFileSync("docker", ["--context", dockerContext, "ps", "--filter", "label=com.docker.compose.project=data-agent", "--filter", "label=com.docker.compose.service=mysql", "--format", "{{.ID}}"], { encoding: "utf8" }).trim();
+  const writer = spawn("docker", ["--context", dockerContext, "exec", "-i", container, "mysql", "--defaults-extra-file=/run/secrets/mysql_root_client", "--batch", "--raw", "--unbuffered", "--skip-column-names", database], { stdio: ["pipe", "pipe", "pipe"] });
   let output = "", error = "";
   writer.stdout.on("data", data => { output += data; });
   writer.stderr.on("data", data => { error += data; });

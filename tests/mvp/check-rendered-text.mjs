@@ -78,11 +78,39 @@ runCase([...template], "逐字符");
   assert.equal(renderer.push("值{{nested}}尾"), "值a{{b}}c尾");
   assert.equal(renderer.finish("").ok, true);
 }
+// 行内反引号代码段保留下划线等字面事实，正文外转义Markdown控制符；任意切分点流式一致。
+{
+  const codeBindings = {batch: "synthetic_snapshot_2026-10-04", cell: "a_b`[x](y)"};
+  const codeTemplate = "批次 `{{batch}}` 与 ``{{cell}}``，正文 {{batch}}，尾反引号`";
+  const expected = "批次 `synthetic_snapshot_2026-10-04` 与 ``a_b'[x](y)``，正文 synthetic\\_snapshot\\_2026-10-04，尾反引号`";
+  for (const pieces of [[codeTemplate], [...codeTemplate], ...Array.from({length: codeTemplate.length - 1}, (_, i) => [codeTemplate.slice(0, i + 1), codeTemplate.slice(i + 1)])]) {
+    const renderer = renderedStream(codeBindings);
+    let streamed = "";
+    for (const piece of pieces) streamed += renderer.push(piece);
+    const finished = renderer.finish("");
+    assert.equal(finished.ok, true);
+    assert.equal(streamed + finished.emit, finished.display);
+    assert.equal(finished.display, expected);
+  }
+}
 // 嵌套双花括号按未知名拒绝（与Rust first-"}}”切分一致）。
 {
   const renderer = renderedStream(bindings);
   renderer.push("{{ra{{te}}}");
   assert.equal(renderer.finish("").ok, false);
+}
+// 必选比较标记（requiredMarkers）：已准备的比较结论必须在正文引用，漏引不定稿。
+{
+  const cmpBindings = {asr_cmp: "cloud 低于 edge", nlu_cmp: "cloud 高于 edge"};
+  const missingOne = renderedStream(cmpBindings, ["asr_cmp", "nlu_cmp"]);
+  missingOne.push("仅引用 {{nlu_cmp}}，漏掉另一项并手写高低。");
+  assert.equal(missingOne.finish("").ok, false);
+
+  const allUsed = renderedStream(cmpBindings, ["asr_cmp", "nlu_cmp"]);
+  allUsed.push("asr {{asr_cmp}}；nlu {{nlu_cmp}}。");
+  const finished = allUsed.finish("");
+  assert.equal(finished.ok, true);
+  assert.equal(finished.display, "asr cloud 低于 edge；nlu cloud 高于 edge。");
 }
 // 空白或超限正文不定稿。
 {

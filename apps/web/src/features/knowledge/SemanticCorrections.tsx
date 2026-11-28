@@ -9,6 +9,7 @@ import {
 import { ReviewCorrection } from "./ReviewCorrection.tsx";
 import { CorrectionDiff } from "./CorrectionDiff.tsx";
 import type {
+  KnowledgeObject,
   Proposal,
   SemanticCorrection,
   SemanticCorrectionList,
@@ -23,13 +24,20 @@ export function SemanticCorrections({
   user,
   revision,
   proposals,
+  canApplyProposal,
+  onProposalApplied,
+  onActiveCountChange,
   onSaved,
 }: {
   user: string;
   revision: number;
   proposals: Proposal[];
+  canApplyProposal?: (objectId: string) => boolean;
+  onProposalApplied?: (object: KnowledgeObject) => void;
+  onActiveCountChange?: (count: number) => void;
   onSaved: () => void;
 }) {
+  const [applyingId, setApplyingId] = useState<string | null>(null);
   const [items, setItems] = useState<SemanticCorrection[]>([]),
     [next, setNext] = useState<string | null>(null),
     [error, setError] = useState("");
@@ -88,15 +96,41 @@ export function SemanticCorrections({
     onSaved();
     setReload((v) => v + 1);
   };
+  const applyProposal = async (proposal: Proposal) => {
+    if (applyingId) return;
+    setApplyingId(proposal.id);
+    setError("");
+    try {
+      const updated = await api(
+        "KnowledgeObject",
+        "/knowledge-proposals/" + proposal.id + "/apply",
+        "POST",
+        {
+          operation_id: crypto.randomUUID(),
+          expected_version: proposal.base_version,
+        },
+      );
+      onProposalApplied?.(updated);
+      saved();
+    } catch (e) {
+      setError(message(e));
+    } finally {
+      setApplyingId(null);
+    }
+  };
+  const activeCount = proposals.length + items.filter(c => c.state === "submitted" || c.state === "accepted").length;
+  useEffect(() => {
+    onActiveCountChange?.(activeCount);
+  }, [activeCount, onActiveCountChange]);
   const loadMore = () => setPageCount((v) => v + 1);
   return (
-    <section className="proposal-panel" aria-label="语义纠错协作">
+    <section id="semantic-corrections" className="proposal-panel" aria-label="语义纠错协作">
       <h2>语义纠错协作</h2>
       <p className="quiet">
         我的提交与需要我处理的建议。接受后需另行核对、编辑并保存。
       </p>
       {proposals.length > 0 && (
-        <details>
+        <details open={proposals.some((p) => canApplyProposal?.(p.object_id))}>
           <summary>我的私人草稿 · {proposals.length}</summary>
           {proposals.map((p) => (
             <article key={p.id}>
@@ -105,9 +139,20 @@ export function SemanticCorrections({
               </strong>
               <p>{p.reason}</p>
               <blockquote>{p.value}</blockquote>
-              <button onClick={() => setCompose({ content: p })}>
-                整理并提交给负责人
-              </button>
+              <div className="actions">
+                {canApplyProposal?.(p.object_id) && (
+                  <button
+                    className="primary"
+                    disabled={applyingId === p.id}
+                    onClick={() => void applyProposal(p)}
+                  >
+                    {applyingId === p.id ? "保存中…" : "直接采用并保存"}
+                  </button>
+                )}
+                <button onClick={() => setCompose({ content: p })}>
+                  整理并提交给负责人
+                </button>
+              </div>
             </article>
           ))}
         </details>

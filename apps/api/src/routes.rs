@@ -533,8 +533,13 @@ pub async fn cancel_run(
     if receipt["state"] == "cancelled"
         && let Ok(url) = std::env::var("DATA_AGENT_BRIDGE_URL")
     {
+        let parsed = reqwest::Url::parse(&url).map_err(|_| failure(Error::new("invalid_input")))?;
+        if !data_agent::upstream::http_allowed(&parsed).map_err(failure)? {
+            return Err(failure(Error::new("invalid_input")));
+        }
         let client = reqwest::Client::builder()
             .no_proxy()
+            .redirect(reqwest::redirect::Policy::none())
             .timeout(std::time::Duration::from_secs(2))
             .build()
             .map_err(|_| failure(Error::new("unavailable")))?;

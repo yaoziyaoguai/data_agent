@@ -48,9 +48,10 @@ try{
   await tool('execute_query',{query_id:query.id,draft_version:query.draft_version,condition_version:query.condition_version,instruction_quote:run.text});
   await finish();evidence.authorized=state();
   assert.equal(evidence.authorized.state,'queued');assert.equal(evidence.authorized.message,original.message_id);assert.equal(evidence.authorized.budget,original.budget_scope_id);
-  const container=execFileSync('docker',['--context','colima-data-agent','ps','--filter','label=com.docker.compose.project=data-agent','--filter','label=com.docker.compose.service=mysql','--format','{{.ID}}'],{encoding:'utf8'}).trim();
+  const dockerContext=process.env.DATA_AGENT_DOCKER_CONTEXT||(process.platform==='darwin'?'colima-data-agent':'default');
+  const container=execFileSync('docker',['--context',dockerContext,'ps','--filter','label=com.docker.compose.project=data-agent','--filter','label=com.docker.compose.service=mysql','--format','{{.ID}}'],{encoding:'utf8'}).trim();
   assert.match(container,/^[a-f0-9]+$/);
-  held=spawn('docker',['--context','colima-data-agent','exec','-i',container,'mysql','--defaults-extra-file=/run/secrets/mysql_root_client','--batch','--raw','--unbuffered','--skip-column-names'],{stdio:['pipe','pipe','pipe']});
+  held=spawn('docker',['--context',dockerContext,'exec','-i',container,'mysql','--defaults-extra-file=/run/secrets/mysql_root_client','--batch','--raw','--unbuffered','--skip-column-names'],{stdio:['pipe','pipe','pipe']});
   heldExit=new Promise(resolve=>held.once('close',(code,signal)=>resolve({code,signal})));
   held.stdout.on('data',chunk=>{lockOutput+=chunk;});held.stderr.on('data',chunk=>{lockError+=chunk;});
   const database=new URL(h.env.DATA_AGENT_DATABASE_URL).pathname.slice(1);

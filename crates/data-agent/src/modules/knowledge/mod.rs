@@ -41,9 +41,9 @@ pub use store::{
 
 pub use store::{
     candidate_meta_in_tx, current_enabled_heads_in_tx, current_versions_in_tx,
-    identity_candidate_ids_in_tx, independent_document_candidate_in_tx,
-    independent_document_heads_in_tx, index_coverage_in_tx, index_rebuild_receipt_in_tx,
-    rebuild_index_in_tx, rebuild_source_index_in_tx,
+    enabled_tables_by_name_in_tx, identity_candidate_ids_in_tx,
+    independent_document_candidate_in_tx, independent_document_heads_in_tx, index_coverage_in_tx,
+    index_rebuild_receipt_in_tx, rebuild_index_in_tx, rebuild_source_index_in_tx,
 };
 
 pub use store::{bound_index_embedding_in_tx, freeze_index_embedding_in_tx};

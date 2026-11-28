@@ -583,7 +583,9 @@ pub struct AnalysisEvidenceElement {
     pub validated_sources: AnalysisEvidenceSourcesClass,
 }
 
-/// 新建任务必须完整给出；未指定的可空标量用JSON null，列表用[]，notes用空字符串，timezone按宿主业务时区。
+/// 新建任务必须完整给出；未指定的可空标量用JSON
+/// null，列表用[]，notes用空字符串，timezone按宿主业务时区。若用户未附加额外资料来源限制，source_limits须显式填JSON
+/// null（省略会保留来源范围未知并阻断取证）；若用户明确限定或排除资料来源，严禁填null（先单独调用search_knowledge(view="source_identity")查明source_keys再create填SourceLimits，或create时省略source_limits待核明身份后经revise写入set.source_limits）。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AnalysisEvidenceConditions {
     pub channel: Option<ConditionsChannel>,
@@ -594,7 +596,8 @@ pub struct AnalysisEvidenceConditions {
     pub notes: String,
     /// 当前格式仅记录已采用解释及依据，未决由clarifications表达；省略继承，null只清说明，未要求所有任务填写。旧形状按宿主持久格式标记兼容，读取不迁移。
     pub semantic_resolution: Option<QueryViewQuerySemanticResolution>,
-    /// null表示本题显式未声明额外来源限制；字段缺失表示旧条件版本未记录新式限制，不能证明用户从未限制。撤销必须显式unset并来自真实用户修改。
+    ///
+    /// null仅在用户未附加任何来源限制时使用；用户明确限定或排除表、文档等来源时严禁填null（须先经search_knowledge(view="source_identity")查明允许项的source_keys填入SourceLimits，单表取table-表名键而非schema，origin_message_ids传[]）。字段缺失表示范围尚未核实/旧版未记录。撤销必须显式unset并来自真实用户修改。
     #[serde(
         default,
         deserialize_with = "deserialize_present",
@@ -656,7 +659,7 @@ pub enum SemanticResolutionBasis {
 pub struct SourceLimitsClass {
     /// 非空允许集；限制跟稳定来源身份走，实际读取仍核对当前修订。
     pub allowed_sources: Vec<SourceKeyElement>,
-    /// 由宿主绑定的真实消息身份；不接受模型自由填写。
+    /// 由宿主绑定的真实消息身份；模型调用时传[]占位，由宿主改写为本条真实消息ID，不接受自由填写其他ID。
     pub origin_message_ids: Vec<String>,
 }
 
@@ -718,12 +721,18 @@ pub struct AnalysisFigureElement {
     pub label: String,
     pub query_id: String,
     pub row_index: i32,
-    pub value: Option<Value>,
+    ///
+    /// 必须与get_query返回的results.rows[row_index][col_index]原始单元格JSON类型及内容严格全等（不按column.type主观转换）：如encoding=decimal_string时rows单元格为JSON字符串须原样传该string，rows单元格本身为JSON
+    /// number/boolean/null时原样传对应JSON类型，禁止做字符串与数值互转或舍入格式化。
+    pub value: Option<AnalysisFigureValue>,
 }
 
+///
+/// 必须与get_query返回的results.rows[row_index][col_index]原始单元格JSON类型及内容严格全等（不按column.type主观转换）：如encoding=decimal_string时rows单元格为JSON字符串须原样传该string，rows单元格本身为JSON
+/// number/boolean/null时原样传对应JSON类型，禁止做字符串与数值互转或舍入格式化。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
-pub enum Value {
+pub enum AnalysisFigureValue {
     Bool(bool),
     Double(f64),
     PurpleString(String),
@@ -731,6 +740,8 @@ pub enum Value {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AnalysisQueryReferenceElement {
+    ///
+    /// 本条finding实际引用的结果列名列表（在查询结果columns中须唯一存在）；同条finding的figures中引用的每个column都必须包含在对应query_id的columns内。
     pub columns: Vec<String>,
     pub query_id: String,
     pub result_ref: String,
@@ -906,7 +917,9 @@ pub struct AnalysisUpdateClass {
     ///
     /// 修改已存任务条件时必填，action用revise或clarify；set指定新值，unset可省略（省略即不清空任何字段，null非法）。route禁止携带condition_patch，因为route只登记归属。
     pub condition_patch: Option<AnalysisUpdateConditionPatch>,
-    /// 新建任务必须完整给出；未指定的可空标量用JSON null，列表用[]，notes用空字符串，timezone按宿主业务时区。
+    /// 新建任务必须完整给出；未指定的可空标量用JSON
+    /// null，列表用[]，notes用空字符串，timezone按宿主业务时区。若用户未附加额外资料来源限制，source_limits须显式填JSON
+    /// null（省略会保留来源范围未知并阻断取证）；若用户明确限定或排除资料来源，严禁填null（先单独调用search_knowledge(view="source_identity")查明source_keys再create填SourceLimits，或create时省略source_limits待核明身份后经revise写入set.source_limits）。
     pub conditions: Option<AnalysisEvidenceConditions>,
     /// 新建任务省略此字段（也接受JSON null）；已有任务必须提供工具回执中的当前版本数字字符串。
     pub expected_version: Option<String>,
@@ -1606,7 +1619,9 @@ pub struct CurrentAnalysisUpdateClass {
     ///
     /// 修改已存任务条件时必填，action用revise或clarify；set指定新值，unset可省略（省略即不清空任何字段，null非法）。route禁止携带condition_patch，因为route只登记归属。
     pub condition_patch: Option<PurpleConditionPatch>,
-    /// 新建任务必须完整给出；未指定的可空标量用JSON null，列表用[]，notes用空字符串，timezone按宿主业务时区。
+    /// 新建任务必须完整给出；未指定的可空标量用JSON
+    /// null，列表用[]，notes用空字符串，timezone按宿主业务时区。若用户未附加额外资料来源限制，source_limits须显式填JSON
+    /// null（省略会保留来源范围未知并阻断取证）；若用户明确限定或排除资料来源，严禁填null（先单独调用search_knowledge(view="source_identity")查明source_keys再create填SourceLimits，或create时省略source_limits待核明身份后经revise写入set.source_limits）。
     pub conditions: Option<PurpleConditions>,
     /// 新建任务省略此字段（也接受JSON null）；已有任务必须提供工具回执中的当前版本数字字符串。
     pub expected_version: Option<String>,
@@ -1681,7 +1696,9 @@ pub struct PurpleSemanticResolution {
     pub user_quote: Option<String>,
 }
 
-/// 新建任务必须完整给出；未指定的可空标量用JSON null，列表用[]，notes用空字符串，timezone按宿主业务时区。
+/// 新建任务必须完整给出；未指定的可空标量用JSON
+/// null，列表用[]，notes用空字符串，timezone按宿主业务时区。若用户未附加额外资料来源限制，source_limits须显式填JSON
+/// null（省略会保留来源范围未知并阻断取证）；若用户明确限定或排除资料来源，严禁填null（先单独调用search_knowledge(view="source_identity")查明source_keys再create填SourceLimits，或create时省略source_limits待核明身份后经revise写入set.source_limits）。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PurpleConditions {
     pub channel: Option<ConditionsChannel>,
@@ -1692,7 +1709,8 @@ pub struct PurpleConditions {
     pub notes: String,
     /// 当前格式仅记录已采用解释及依据，未决由clarifications表达；省略继承，null只清说明，未要求所有任务填写。旧形状按宿主持久格式标记兼容，读取不迁移。
     pub semantic_resolution: Option<FluffySemanticResolution>,
-    /// null表示本题显式未声明额外来源限制；字段缺失表示旧条件版本未记录新式限制，不能证明用户从未限制。撤销必须显式unset并来自真实用户修改。
+    ///
+    /// null仅在用户未附加任何来源限制时使用；用户明确限定或排除表、文档等来源时严禁填null（须先经search_knowledge(view="source_identity")查明允许项的source_keys填入SourceLimits，单表取table-表名键而非schema，origin_message_ids传[]）。字段缺失表示范围尚未核实/旧版未记录。撤销必须显式unset并来自真实用户修改。
     #[serde(
         default,
         deserialize_with = "deserialize_present",
@@ -3785,10 +3803,64 @@ pub struct PreparedStatementElement {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PresentAnalysisAnswerInputClass {
+    ///
+    /// 组间/期次/指标比较列表：凡正文（含读法要点与小结）要陈述谁高、谁低、持平或某侧缺样本，须在此绑定并在正文用{{name}}输出；未绑定comparisons时只陈述数值，勿手写高低方向。
+    pub comparisons: Option<Vec<ComparisonElement>>,
     pub sources: Vec<AnalysisAnswerSourceElement>,
-    /// 解释模板，定量结果用{{name}}引用values；正常语义数字（如零分母说明、年份、编号）可以直写，SQL代码块仍不放模板。定性解释必须有依据，不写未经证实的因果。
+    ///
+    /// 解释模板，定量结果与比较短语用{{name}}引用values/comparisons；正常语义数字（如零分母说明、年份、编号）可以直写，SQL代码块仍不放模板。定性解释必须有依据，不写未经证实的因果。
     pub template: String,
     pub values: Vec<AnalysisAnswerValueElement>,
+}
+
+/// 精确十进制核定left相对right的高低/持平/缺样本，产出原子绑定短语。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ComparisonElement {
+    pub column: String,
+    /// 可选方向核对：与真实结果不一致时拒绝。
+    pub expected_relation: Option<ExpectedRelation>,
+    pub left: LeftClass,
+    pub name: String,
+    pub query_id: String,
+    pub right: LeftClass,
+    /// 可选样本量列；任一侧为0或NULL判insufficient_data。
+    pub sample_column: Option<String>,
+}
+
+/// 可选方向核对：与真实结果不一致时拒绝。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ExpectedRelation {
+    Equal,
+    Higher,
+    #[serde(rename = "insufficient_data")]
+    InsufficientData,
+    Lower,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LeftClass {
+    pub column: Option<String>,
+    /// 展示主体名，须与该行维度一致。
+    pub label: String,
+    pub query_id: Option<String>,
+    pub row_index: Option<i32>,
+    /// 唯一维度键值定位行；完整结果0行判insufficient_data，多行拒绝。
+    pub row_match: Option<Vec<RowMatchElement>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RowMatchElement {
+    pub column: String,
+    pub value: RowMatchValue,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum RowMatchValue {
+    Bool(bool),
+    Integer(i64),
+    PurpleString(String),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -6162,7 +6234,9 @@ pub struct AnalysisUpdateFields {
     /// 修改已存任务条件时必填，action用revise或clarify；set指定新值，unset可省略（省略即不清空任何字段，null非法）。route禁止携带condition_patch，因为route只登记归属。
     #[serde(skip_serializing_if = "Option::is_none")]
     pub condition_patch: Option<ConditionPatch>,
-    /// 新建任务必须完整给出；未指定的可空标量用JSON null，列表用[]，notes用空字符串，timezone按宿主业务时区。
+    /// 新建任务必须完整给出；未指定的可空标量用JSON
+    /// null，列表用[]，notes用空字符串，timezone按宿主业务时区。若用户未附加额外资料来源限制，source_limits须显式填JSON
+    /// null（省略会保留来源范围未知并阻断取证）；若用户明确限定或排除资料来源，严禁填null（先单独调用search_knowledge(view="source_identity")查明source_keys再create填SourceLimits，或create时省略source_limits待核明身份后经revise写入set.source_limits）。
     #[serde(skip_serializing_if = "Option::is_none")]
     pub conditions: Option<Conditions>,
     /// 新建任务省略此字段（也接受JSON null）；已有任务必须提供工具回执中的当前版本数字字符串。
@@ -6278,7 +6352,7 @@ pub struct ConditionsQuerySemanticResolution {
 pub struct SourceLimits {
     /// 非空允许集；限制跟稳定来源身份走，实际读取仍核对当前修订。
     pub allowed_sources: Vec<SourceKey>,
-    /// 由宿主绑定的真实消息身份；不接受模型自由填写。
+    /// 由宿主绑定的真实消息身份；模型调用时传[]占位，由宿主改写为本条真实消息ID，不接受自由填写其他ID。
     pub origin_message_ids: Vec<String>,
 }
 
@@ -6296,7 +6370,9 @@ pub struct TimeRole {
     pub value: Option<String>,
 }
 
-/// 新建任务必须完整给出；未指定的可空标量用JSON null，列表用[]，notes用空字符串，timezone按宿主业务时区。
+/// 新建任务必须完整给出；未指定的可空标量用JSON
+/// null，列表用[]，notes用空字符串，timezone按宿主业务时区。若用户未附加额外资料来源限制，source_limits须显式填JSON
+/// null（省略会保留来源范围未知并阻断取证）；若用户明确限定或排除资料来源，严禁填null（先单独调用search_knowledge(view="source_identity")查明source_keys再create填SourceLimits，或create时省略source_limits待核明身份后经revise写入set.source_limits）。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Conditions {
     pub channel: Option<ConditionsChannel>,
@@ -6308,7 +6384,8 @@ pub struct Conditions {
     /// 当前格式仅记录已采用解释及依据，未决由clarifications表达；省略继承，null只清说明，未要求所有任务填写。旧形状按宿主持久格式标记兼容，读取不迁移。
     #[serde(skip_serializing_if = "Option::is_none")]
     pub semantic_resolution: Option<ConditionsQuerySemanticResolution>,
-    /// null表示本题显式未声明额外来源限制；字段缺失表示旧条件版本未记录新式限制，不能证明用户从未限制。撤销必须显式unset并来自真实用户修改。
+    ///
+    /// null仅在用户未附加任何来源限制时使用；用户明确限定或排除表、文档等来源时严禁填null（须先经search_knowledge(view="source_identity")查明允许项的source_keys填入SourceLimits，单表取table-表名键而非schema，origin_message_ids传[]）。字段缺失表示范围尚未核实/旧版未记录。撤销必须显式unset并来自真实用户修改。
     #[serde(
         default,
         deserialize_with = "deserialize_present",
@@ -6352,7 +6429,9 @@ pub struct AnalysisUpdate {
     /// 修改已存任务条件时必填，action用revise或clarify；set指定新值，unset可省略（省略即不清空任何字段，null非法）。route禁止携带condition_patch，因为route只登记归属。
     #[serde(skip_serializing_if = "Option::is_none")]
     pub condition_patch: Option<ConditionPatch>,
-    /// 新建任务必须完整给出；未指定的可空标量用JSON null，列表用[]，notes用空字符串，timezone按宿主业务时区。
+    /// 新建任务必须完整给出；未指定的可空标量用JSON
+    /// null，列表用[]，notes用空字符串，timezone按宿主业务时区。若用户未附加额外资料来源限制，source_limits须显式填JSON
+    /// null（省略会保留来源范围未知并阻断取证）；若用户明确限定或排除资料来源，严禁填null（先单独调用search_knowledge(view="source_identity")查明source_keys再create填SourceLimits，或create时省略source_limits待核明身份后经revise写入set.source_limits）。
     #[serde(skip_serializing_if = "Option::is_none")]
     pub conditions: Option<Conditions>,
     /// 新建任务省略此字段（也接受JSON null）；已有任务必须提供工具回执中的当前版本数字字符串。
@@ -7570,11 +7649,16 @@ pub struct AnalysisFigure {
     pub label: String,
     pub query_id: String,
     pub row_index: i32,
-    pub value: Option<Value>,
+    ///
+    /// 必须与get_query返回的results.rows[row_index][col_index]原始单元格JSON类型及内容严格全等（不按column.type主观转换）：如encoding=decimal_string时rows单元格为JSON字符串须原样传该string，rows单元格本身为JSON
+    /// number/boolean/null时原样传对应JSON类型，禁止做字符串与数值互转或舍入格式化。
+    pub value: Option<AnalysisFigureValue>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AnalysisQueryReference {
+    ///
+    /// 本条finding实际引用的结果列名列表（在查询结果columns中须唯一存在）；同条finding的figures中引用的每个column都必须包含在对应query_id的columns内。
     pub columns: Vec<String>,
     pub query_id: String,
     pub result_ref: String,
@@ -8007,7 +8091,9 @@ pub struct CurrentAnalysisUpdate {
     /// 修改已存任务条件时必填，action用revise或clarify；set指定新值，unset可省略（省略即不清空任何字段，null非法）。route禁止携带condition_patch，因为route只登记归属。
     #[serde(skip_serializing_if = "Option::is_none")]
     pub condition_patch: Option<FluffyConditionPatch>,
-    /// 新建任务必须完整给出；未指定的可空标量用JSON null，列表用[]，notes用空字符串，timezone按宿主业务时区。
+    /// 新建任务必须完整给出；未指定的可空标量用JSON
+    /// null，列表用[]，notes用空字符串，timezone按宿主业务时区。若用户未附加额外资料来源限制，source_limits须显式填JSON
+    /// null（省略会保留来源范围未知并阻断取证）；若用户明确限定或排除资料来源，严禁填null（先单独调用search_knowledge(view="source_identity")查明source_keys再create填SourceLimits，或create时省略source_limits待核明身份后经revise写入set.source_limits）。
     #[serde(skip_serializing_if = "Option::is_none")]
     pub conditions: Option<FluffyConditions>,
     /// 新建任务省略此字段（也接受JSON null）；已有任务必须提供工具回执中的当前版本数字字符串。
@@ -8093,7 +8179,9 @@ pub struct TentacledSemanticResolution {
     pub user_quote: Option<String>,
 }
 
-/// 新建任务必须完整给出；未指定的可空标量用JSON null，列表用[]，notes用空字符串，timezone按宿主业务时区。
+/// 新建任务必须完整给出；未指定的可空标量用JSON
+/// null，列表用[]，notes用空字符串，timezone按宿主业务时区。若用户未附加额外资料来源限制，source_limits须显式填JSON
+/// null（省略会保留来源范围未知并阻断取证）；若用户明确限定或排除资料来源，严禁填null（先单独调用search_knowledge(view="source_identity")查明source_keys再create填SourceLimits，或create时省略source_limits待核明身份后经revise写入set.source_limits）。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FluffyConditions {
     pub channel: Option<ConditionsChannel>,
@@ -8104,7 +8192,8 @@ pub struct FluffyConditions {
     pub notes: String,
     /// 当前格式仅记录已采用解释及依据，未决由clarifications表达；省略继承，null只清说明，未要求所有任务填写。旧形状按宿主持久格式标记兼容，读取不迁移。
     pub semantic_resolution: Option<StickySemanticResolution>,
-    /// null表示本题显式未声明额外来源限制；字段缺失表示旧条件版本未记录新式限制，不能证明用户从未限制。撤销必须显式unset并来自真实用户修改。
+    ///
+    /// null仅在用户未附加任何来源限制时使用；用户明确限定或排除表、文档等来源时严禁填null（须先经search_knowledge(view="source_identity")查明允许项的source_keys填入SourceLimits，单表取table-表名键而非schema，origin_message_ids传[]）。字段缺失表示范围尚未核实/旧版未记录。撤销必须显式unset并来自真实用户修改。
     #[serde(
         default,
         deserialize_with = "deserialize_present",
@@ -8308,10 +8397,52 @@ pub struct ModelConnection {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PresentAnalysisAnswerInput {
+    ///
+    /// 组间/期次/指标比较列表：凡正文（含读法要点与小结）要陈述谁高、谁低、持平或某侧缺样本，须在此绑定并在正文用{{name}}输出；未绑定comparisons时只陈述数值，勿手写高低方向。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub comparisons: Option<Vec<AnalysisAnswerComparison>>,
     pub sources: Vec<AnalysisAnswerSource>,
-    /// 解释模板，定量结果用{{name}}引用values；正常语义数字（如零分母说明、年份、编号）可以直写，SQL代码块仍不放模板。定性解释必须有依据，不写未经证实的因果。
+    ///
+    /// 解释模板，定量结果与比较短语用{{name}}引用values/comparisons；正常语义数字（如零分母说明、年份、编号）可以直写，SQL代码块仍不放模板。定性解释必须有依据，不写未经证实的因果。
     pub template: String,
     pub values: Vec<AnalysisAnswerValue>,
+}
+
+/// 精确十进制核定left相对right的高低/持平/缺样本，产出原子绑定短语。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AnalysisAnswerComparison {
+    pub column: String,
+    /// 可选方向核对：与真实结果不一致时拒绝。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub expected_relation: Option<ExpectedRelation>,
+    pub left: AnalysisComparisonOperand,
+    pub name: String,
+    pub query_id: String,
+    pub right: AnalysisComparisonOperand,
+    /// 可选样本量列；任一侧为0或NULL判insufficient_data。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sample_column: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AnalysisComparisonOperand {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub column: Option<String>,
+    /// 展示主体名，须与该行维度一致。
+    pub label: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub query_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub row_index: Option<i32>,
+    /// 唯一维度键值定位行；完整结果0行判insufficient_data，多行拒绝。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub row_match: Option<Vec<AnalysisComparisonRowMatch>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AnalysisComparisonRowMatch {
+    pub column: String,
+    pub value: RowMatchValue,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -8354,9 +8485,14 @@ pub struct FluffyFormat {
     pub style: Style,
 }
 
-/// 准备数值绑定：不接收template、不返回完整answer_text；成功回执提供bindings与required_suffix，正文由Pi下一次自然生成。
+///
+/// 准备数值与比较绑定：不接收template、不返回完整answer_text；成功回执提供bindings、可选comparisons与required_suffix，正文由Pi下一次自然生成。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PrepareAnalysisAnswerInput {
+    ///
+    /// 组间/期次/指标比较列表：凡正文（含读法要点与小结）要陈述谁高、谁低、持平或某侧缺样本，须在此绑定并在正文用{{name}}输出；未绑定comparisons时只陈述数值，勿手写高低方向。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub comparisons: Option<Vec<AnalysisAnswerComparison>>,
     pub sources: Vec<AnalysisAnswerSource>,
     pub values: Vec<AnalysisAnswerValue>,
 }

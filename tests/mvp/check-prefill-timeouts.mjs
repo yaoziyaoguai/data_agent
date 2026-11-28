@@ -50,9 +50,10 @@ for(const mode of modes.filter(mode=>!selected||mode===selected)){
     }else if(mode==='late_version_conflict'){
       await gate;
       const current=(await h.request('/knowledge/field-paid_at')).value,attempt=current.prefill_status.attempt_id;
-      const container=execFileSync('docker',['--context','colima-data-agent','ps','--filter','label=com.docker.compose.project=data-agent','--filter','label=com.docker.compose.service=mysql','--format','{{.ID}}'],{encoding:'utf8'}).trim();assert.match(container,/^[a-f0-9]+$/);
+      const dockerContext=process.env.DATA_AGENT_DOCKER_CONTEXT||(process.platform==='darwin'?'colima-data-agent':'default');
+      const container=execFileSync('docker',['--context',dockerContext,'ps','--filter','label=com.docker.compose.project=data-agent','--filter','label=com.docker.compose.service=mysql','--format','{{.ID}}'],{encoding:'utf8'}).trim();assert.match(container,/^[a-f0-9]+$/);
       const database=new URL(h.env.DATA_AGENT_DATABASE_URL).pathname.slice(1);assert.match(database,/^data_agent_test_[a-f0-9]+$/);
-      blocker=spawn('docker',['--context','colima-data-agent','exec','-i',container,'mysql','--defaults-extra-file=/run/secrets/mysql_root_client','--batch','--raw','--unbuffered','--skip-column-names'],{stdio:['pipe','pipe','pipe']});
+      blocker=spawn('docker',['--context',dockerContext,'exec','-i',container,'mysql','--defaults-extra-file=/run/secrets/mysql_root_client','--batch','--raw','--unbuffered','--skip-column-names'],{stdio:['pipe','pipe','pipe']});
       let output='';blocker.stdout.on('data',chunk=>output+=chunk);
       // 资料核对现在锁住目标直到提交；在目标锁之前挂起，允许人工版本先提交。
       blocker.stdin.write(`USE ${database}; START TRANSACTION; SELECT space_id FROM source_sync_locks FOR UPDATE; SELECT 'held';\n`);

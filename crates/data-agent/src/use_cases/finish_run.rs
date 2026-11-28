@@ -203,6 +203,7 @@ pub async fn finish_run(
     } else {
         delivered_result_authority_in_tx(&mut tx, context, &run).await?
     };
+    let data_toolset = std::env::var("DATA_AGENT_TOOLSET").as_deref() == Ok("data");
     let read_skills = if input.final_text.is_some() && input.control_delivery_ref.is_none() {
         Some(
             super::personal_assets::read_skill_authority_in_tx(
@@ -256,7 +257,6 @@ pub async fn finish_run(
         &input.run_id,
         epoch(&input.lease_epoch)?,
     )?;
-    let data_toolset = std::env::var("DATA_AGENT_TOOLSET").as_deref() == Ok("data");
     if data_toolset {
         conversations::assert_routed_in_tx(&mut tx, &conversation, &run.message_id).await?;
     }

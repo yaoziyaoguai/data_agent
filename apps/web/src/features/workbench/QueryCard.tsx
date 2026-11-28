@@ -133,9 +133,14 @@ export function QueryCard({
   const queryError = query.error === "outcome_unknown"
     ? stopping ? "暂时无法确认是否已停止，系统会继续核对。" : "暂时无法确认查询状态，系统会继续核对。"
     : query.error_details?.message ?? query.error;
-  const sql = readable ? (
+  const renderSqlBlock = (includeToolbar: boolean) => readable ? (
     <div className="query-sql">
-      <div className="query-sql-toolbar"><span>{query.execution_state === "succeeded" ? "实际执行的 SQL" : "SQL"}</span><button onClick={() => void copy()} aria-label="复制 SQL" title="复制 SQL 及绑定参数">{copied ? "已复制" : "复制 SQL"}</button></div>
+      {includeToolbar && (
+        <div className="query-sql-toolbar">
+          <span>{query.execution_state === "succeeded" ? "实际执行的 SQL" : "SQL"}</span>
+          <button type="button" onClick={() => void copy()} aria-label="复制 SQL" title="复制 SQL 及绑定参数">{copied ? "已复制" : "复制 SQL"}</button>
+        </div>
+      )}
       <pre><code>{query.sql}</code></pre>
       {Object.keys(parameters).length > 0 && <dl className="parameters" aria-label="绑定参数">
         {Object.entries(parameters).map(([key, value]) => (
@@ -144,6 +149,8 @@ export function QueryCard({
       </dl>}
     </div>
   ) : null;
+  const sql = renderSqlBlock(true);
+  const collapsedSql = renderSqlBlock(false);
   const content = (
     <section
       id={"query-" + query.id}
@@ -162,12 +169,14 @@ export function QueryCard({
       {!readable && <p className="query-summary" role="status">查询来源已失效或无法核验，SQL、参数和结果已隐藏。查询状态仍会更新，运行中的查询仍可停止。</p>}
       {readable && query.execution_state !== "succeeded" && <p className="query-summary">{query.summary}</p>}
       {timeBasis && <p className="quiet query-time-basis">{timeBasis}</p>}
-      {readable && result && <QueryResultsView result={result} onShowSql={() => setShowSql(true)} onOpenResults={onOpenResults}/>}
+      {readable && result && <QueryResultsView result={result} copiedSql={copied} onCopySql={query.sql ? () => void copy() : undefined} onShowSql={() => setShowSql(true)} onOpenResults={onOpenResults}/>}
       {readable && query.execution_state === "succeeded" && <details className="query-conditions"><summary>本次查询条件</summary><p className="query-summary">{query.summary}</p></details>}
       {running ? <>
         <p className="quiet">{stopping ? "已发出停止请求，正在等待查询平台确认。你可以继续聊天。" : "正在后台运行，可以继续聊天或发起其他查询。"}</p>
         {readable && <details className="running-sql"><summary>查看 SQL 和参数</summary>{sql}</details>}
-      </> : sql}
+      </> : query.execution_state === "succeeded" && result ? (
+        readable && <details className="executed-sql"><summary>实际执行的 SQL</summary>{collapsedSql}</details>
+      ) : sql}
       {readable && !!references.length && <details className="query-evidence"><summary>查看口径依据</summary><div className="evidence-row">{references.map(ref => <KnowledgeReference key={ref.object_id + ref.path} id={ref.object_id} path={ref.path} onOpen={id => onEvidence(id, query.summary, ref.version)}/>)}</div></details>}
       {readable && query.execution_state === "succeeded" && !result && !["result_expired", "forbidden", "not_available", "unauthenticated"].includes(error) && <p className="quiet">{busy ? "正在读取查询结果…" : <button onClick={() => readResult.current?.()}>重新读取结果</button>}</p>}
       {query.execution_state === "submission_unknown" && !stopping && (

@@ -6,27 +6,94 @@ use crate::{
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
-// 单次字符串替换：替换值不再扫描、不递归解释；未闭合或未知标记拒绝。
+fn advance_code_span(segment: &str, code_ticks: &mut usize, newlines: &mut usize) {
+    let mut chars = segment.chars().peekable();
+    while let Some(c) = chars.next() {
+        if c == '`' {
+            *newlines = 0;
+            let mut run = 1usize;
+            while chars.peek() == Some(&'`') {
+                chars.next();
+                run += 1;
+            }
+            if *code_ticks == 0 {
+                *code_ticks = run;
+            } else if *code_ticks == run {
+                *code_ticks = 0;
+            }
+        } else if c == '\n' {
+            *newlines += 1;
+            if *newlines >= 2 {
+                *code_ticks = 0;
+            }
+        } else if c != '\r' {
+            *newlines = 0;
+        }
+    }
+}
+
+// 正文外转义Markdown控制字符防止链接/表格注入；行内反引号代码段内保留原字面值（不注入反斜杠）。
+fn format_bound(rendered: &str, in_code_span: bool) -> String {
+    rendered.chars().fold(String::new(), |mut output, c| {
+        if c == '\n' || c == '\r' {
+            output.push(' ');
+        } else if in_code_span {
+            output.push(if c == '`' { '\'' } else { c });
+        } else {
+            if matches!(
+                c,
+                '\\' | '`' | '*' | '_' | '[' | ']' | '<' | '>' | '|' | '#'
+            ) {
+                output.push('\\');
+            }
+            output.push(c);
+        }
+        output
+    })
+}
+
+// 单次字符串替换：替换值不再扫描、不递归解释；未闭合、未知或漏引必选比较标记拒绝。
 // 展示等式属输出职责，use_cases向下调用这一份实现，不复制第二份。
 pub fn substitute(template: &str, bindings: &BTreeMap<String, String>) -> Result<String> {
+    substitute_required(template, bindings, &[])
+}
+
+pub fn substitute_required(
+    template: &str,
+    bindings: &BTreeMap<String, String>,
+    required_markers: &[String],
+) -> Result<String> {
     let mut output = String::new();
     let mut remaining = template;
+    let mut code_ticks = 0usize;
+    let mut newlines = 0usize;
+    let mut used = BTreeSet::new();
     while let Some(start) = remaining.find("{{") {
-        output.push_str(&remaining[..start]);
+        let prefix = &remaining[..start];
+        advance_code_span(prefix, &mut code_ticks, &mut newlines);
+        output.push_str(prefix);
         let after = &remaining[start + 2..];
         let end = after.find("}}").ok_or(Error::new("invalid_evidence"))?;
-        output.push_str(
-            bindings
-                .get(&after[..end])
-                .ok_or(Error::new("invalid_evidence"))?,
-        );
+        let name = &after[..end];
+        let raw = bindings.get(name).ok_or(Error::new("invalid_evidence"))?;
+        used.insert(name);
+        let formatted = format_bound(raw, code_ticks > 0);
+        if !formatted.is_empty() {
+            newlines = 0;
+        }
+        output.push_str(&formatted);
         remaining = &after[end + 2..];
     }
-    if remaining.contains("}}") {
+    if remaining.contains("}}")
+        || required_markers
+            .iter()
+            .any(|marker| !used.contains(marker.as_str()))
+    {
         return Err(Error::new("invalid_evidence"));
     }
+    advance_code_span(remaining, &mut code_ticks, &mut newlines);
     output.push_str(remaining);
     Ok(output)
 }
@@ -46,7 +113,19 @@ pub fn display_from_preparation(source_text: &str, prepared: &Value) -> Result<S
                 .to_owned(),
         );
     }
-    let mut display = substitute(source_text, &bindings)?;
+    let mut required = Vec::new();
+    if let Some(comparisons) = prepared.get("comparisons").and_then(Value::as_array) {
+        for item in comparisons {
+            let name = item["name"]
+                .as_str()
+                .ok_or(Error::new("invalid_evidence"))?;
+            if !bindings.contains_key(name) {
+                return Err(Error::new("invalid_evidence"));
+            }
+            required.push(name.to_owned());
+        }
+    }
+    let mut display = substitute_required(source_text, &bindings, &required)?;
     display.push_str(
         prepared["required_suffix"]
             .as_str()

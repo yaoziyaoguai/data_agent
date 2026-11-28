@@ -81,6 +81,7 @@ export function taskProjection(transport: RustTransport, manager: SessionManager
   };
   return {
     extension, apply,
+    hasPendingReset: () => Boolean(pending),
     acceptReceipt(receipt: DataToolOutcome, sdkId: string) {
       if (!receipt.data.error && receipt.context_reset) pending = sdkId;
     },

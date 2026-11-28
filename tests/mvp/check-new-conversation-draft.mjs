@@ -117,7 +117,7 @@ try {
   await page.getByRole('alert').filter({hasText: '请先返回工作台确认上一条消息的接收状态'}).waitFor();
   assert.equal(h.sql("SELECT COUNT(*) FROM conversations WHERE owner_id='alice'")[0], beforeCount);
   assert.equal(h.sql("SELECT COUNT(*) FROM skill_selections WHERE conversation_id='" + uncertainCid + "'")[0], 0);
-  await navigate('工作台');
+  await page.getByRole('dialog', {name: '选用分析方法', exact: true}).getByRole('button', {name: '关闭', exact: true}).click();
   await page.getByRole('button', {name: '重试原消息', exact: true}).click();
   await until(async () => attempts.length === 2 && await page.evaluate(() => localStorage.getItem('data-agent.pending-message.["demo","alice"]')) === null, '原消息回执核对完成');
   assert.equal(await input.inputValue(), '回执未知时新写的运输核对草稿');

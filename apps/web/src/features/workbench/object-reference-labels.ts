@@ -2,8 +2,28 @@ import type { QueryView, Snapshot } from "../../../../../packages/contracts/gene
 import type { ObjectReferenceLabels } from "../../shared/markdown-object-references.ts";
 
 type ObjectReference = { id: string; kind: string; name: string };
-const shortName = (value: unknown) => typeof value === "string"
-  ? [...value.replace(/\s+/g, " ").trim()].slice(0, 70).join("") : "";
+function shortName(value: unknown): string {
+  if (typeof value !== "string") return "";
+  const normalized = value
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/「/g, "“")
+    .replace(/」/g, "”");
+  if (!normalized) return "";
+  const firstClause = normalized.split(/[。！？；\n]/)[0]?.trim() || normalized;
+  const chars = [...firstClause];
+  if (chars.length <= 36 && firstClause.length === normalized.length) return firstClause;
+  let slice = chars.slice(0, Math.min(chars.length, 36)).join("");
+  const pairs: [string, string][] = [["(", ")"], ["（", "）"], ["[", "]"], ["【", "】"], ["“", "”"]];
+  for (const [open, close] of pairs) {
+    const lastOpen = slice.lastIndexOf(open);
+    if (lastOpen > 6 && slice.indexOf(close, lastOpen) < 0) slice = slice.slice(0, lastOpen);
+  }
+  const comma = Math.max(slice.lastIndexOf("，"), slice.lastIndexOf("、"), slice.lastIndexOf(", "));
+  if (chars.length > 36 && comma >= 12) slice = slice.slice(0, comma);
+  slice = slice.replace(/[，、：:；;,.(\[（【“\s]+$/u, "");
+  return slice + (slice.length < normalized.length ? "…" : "");
+}
 
 // 只使用当前有权快照与事件中的身份，不从助手正文反推对象或请求额外私人资料。
 export function objectReferenceLabels(snapshot: Snapshot | null, queries: QueryView[]): ObjectReferenceLabels {

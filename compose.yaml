@@ -11,7 +11,7 @@ x-milvus-image: &milvus-image milvusdb/milvus:v3.0.2@sha256:5f13bf88e110a517911c
 services:
   mysql:
     image: mysql:8.4.11@sha256:6ea90827b1100f8f2ae306a539f86d2c264a26ed435a2a9f75551dd5c3aeb242
-    platform: linux/arm64
+    platform: ${DATA_AGENT_DOCKER_PLATFORM:-linux/arm64}
     restart: unless-stopped
     mem_limit: 2048m
     environment:
@@ -38,7 +38,7 @@ services:
 
   etcd:
     image: quay.io/coreos/etcd:v3.5.25@sha256:52f17f7e56e4f7239f0320dbfcbcc24721163d7d78ae710b466af3254ccf6366
-    platform: linux/arm64
+    platform: ${DATA_AGENT_DOCKER_PLATFORM:-linux/arm64}
     restart: unless-stopped
     mem_limit: 384m
     environment:
@@ -58,7 +58,7 @@ services:
 
   minio:
     image: milvusdb/minio:RELEASE.2024-12-18T13-15-44Z@sha256:1dce27c494a16bae114774f1cec295493f3613142713130c2d22dd5696be6ad3
-    platform: linux/arm64
+    platform: ${DATA_AGENT_DOCKER_PLATFORM:-linux/arm64}
     restart: unless-stopped
     mem_limit: 384m
     environment:
@@ -79,7 +79,7 @@ services:
 
   milvus-volume-init:
     image: *milvus-image
-    platform: linux/arm64
+    platform: ${DATA_AGENT_DOCKER_PLATFORM:-linux/arm64}
     user: "0:0"
     network_mode: none
     read_only: true
@@ -95,7 +95,7 @@ services:
 
   milvus:
     image: *milvus-image
-    platform: linux/arm64
+    platform: ${DATA_AGENT_DOCKER_PLATFORM:-linux/arm64}
     restart: unless-stopped
     mem_limit: 3584m
     command: ["milvus", "run", "standalone"]

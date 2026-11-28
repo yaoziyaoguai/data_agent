@@ -30,7 +30,7 @@ try {
   const document=(await h.request('/knowledge/document-guide-5')).value;
   assert.ok(metric.id&&document.id);
   const refs=[metric,document].map(object=>({object_id:object.id,version:object.version,path:object.entries[0].path}));
-  const task=await invoke('update_analysis_task',{action:'create',task_id:null,expected_version:null,goal:'核对资料并返回对话',conditions:{time_start:null,time_end:null,timezone:'UTC',metric:null,channel:null,group_by:[],filters:[],knowledge_refs:refs,notes:''},question:null,options:[]});
+  const task=await invoke('update_analysis_task',{action:'create',task_id:null,expected_version:null,goal:'核对资料并返回对话',conditions:{time_start:null,time_end:null,timezone:'UTC',metric:null,channel:null,group_by:[],filters:[],knowledge_refs:refs,source_limits:null,notes:''},question:null,options:[]});
   const draft=async(sql,summary)=>invoke('request_query',{task_id:task.task_id,condition_version:task.condition_version,sql,parameters:{},target_id:'synthetic-sqlite',replaces_query_id:null,summary,knowledge_refs:refs});
   const completed=await draft("WITH RECURSIVE n(x) AS (SELECT 1 UNION ALL SELECT x+1 FROM n WHERE x<25) SELECT x, 'synthetic_text_for_horizontal_scroll' AS original_text_without_wrapping, 9007199254740993 AS original_integer_without_precision_loss, NULL AS missing_value_for_preview FROM n",'合成明细与口径依据');
   const running=await draft('SELECT 42 AS value','阅读资料时继续执行的查询');

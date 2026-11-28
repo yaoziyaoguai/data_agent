@@ -11,7 +11,7 @@ let historyOutput,historyAttempt;
 const append=(cid,from,to)=>{
  const rows=[];for(let n=from;n<=to;n++){
   const type=n===199||n===200?'assistant_delta':n===201?'assistant_committed':'message';
-  const payload=type==='message'?{message_id:'history-'+n,text:'历史消息 '+n}:{output_id:historyOutput,attempt_id:historyAttempt,text:n===201?'跨页完整回答':'跨页局部片段'};
+  const payload=type==='message'?{message_id:'history-'+n,text:'历史消息 '+n}:{output_id:historyOutput,attempt_id:historyAttempt,...(type==='assistant_delta'?{chunk_seq:String(n-198)}:{}),text:n===201?'跨页完整回答':'跨页局部片段'};
   rows.push(`(${q(randomUUID())},${q(cid)},${n},${q(type)},${q(JSON.stringify(payload))})`);
  }
  h.sql('INSERT INTO conversation_events(event_id,conversation_id,event_seq,event_type,payload) VALUES'+rows.join(',')+`;UPDATE conversations SET event_seq=${to} WHERE id=${q(cid)};`);
@@ -35,7 +35,9 @@ try{
  await page.goto(h.url);await page.getByLabel('演示登录凭据').fill(h.tokens.alice);await page.getByRole('button',{name:'进入工作台 →',exact:true}).click();
  await page.evaluate(id=>localStorage.setItem('data-agent.conversation.["demo","alice"]',id),cid);await page.reload();await page.getByText('历史消息 1200',{exact:true}).waitFor();
  await page.getByRole('button',{name:'加载更早的消息',exact:true}).click();await page.getByText('历史消息 1',{exact:true}).waitFor();assert.equal(await page.getByText('跨页完整回答',{exact:true}).count(),1);assert.equal(await page.getByText('跨页局部片段',{exact:true}).count(),0);
- append(cid,1201,1250);await page.getByText('历史消息 1250',{exact:true}).waitFor();
+ append(cid,1201,1250);
+ assert.equal((await h.internal('/internal/live-changes',[{kind:'resync'}])).status,204);
+ await page.getByText('历史消息 1250',{exact:true}).waitFor();
  for(const n of [1,198,202,250,1200,1201,1250])assert.equal(await page.getByText('历史消息 '+n,{exact:true}).count(),1);
  assert.equal(await page.locator('.message.user').count(),1247);assert.equal(await page.getByRole('button',{name:'加载更早的消息',exact:true}).count(),0);
  checks.push({name:'正式工作台1200事件加载旧页后再增50事件，连续保留历史，无重复key；跨页回答只显示最终文本',passed:true});
@@ -55,8 +57,10 @@ try{
  await page.getByRole('button',{name:/语义管理/}).click();
  const directory=page.getByRole('navigation',{name:'语义对象'});
  await directory.getByRole('button',{name:'加载更多语义对象',exact:true}).click();await directory.getByRole('button',{name:/^分页表150/}).waitFor();
- // 后台刷新现为目录参数化的首页拉取（不带after_id游标）；等它发生后再翻第三页，验证游标不被重置。
- await page.waitForResponse(r=>{const u=new URL(r.url());return u.pathname==='/api/knowledge'&&u.searchParams.get('directory')==='all'&&!u.searchParams.has('after_id')&&!u.searchParams.has('q')&&r.status()===200;});
+ // 后台刷新现由SSE目录事件触发首页拉取（不带after_id游标）；触发后再翻第三页，验证游标不被重置。
+ const refreshPromise=page.waitForResponse(r=>{const u=new URL(r.url());return u.pathname==='/api/knowledge'&&u.searchParams.get('directory')==='all'&&!u.searchParams.has('after_id')&&!u.searchParams.has('q')&&r.status()===200;});
+ assert.equal((await h.internal('/internal/live-changes',[{kind:'catalog',space_id:'demo'}])).status,204);
+ await refreshPromise;
  await directory.getByRole('button',{name:'加载更多语义对象',exact:true}).click();await directory.getByRole('button',{name:/^分页表230/}).waitFor();
  checks.push({name:'语义目录超过200对象，加载第二页后经过轮询仍可继续第三页；后台刷新不重置游标',passed:true});
  await page.getByLabel('搜索语义对象').fill(doc.name);await directory.getByRole('button',{name:new RegExp(doc.name)}).click();

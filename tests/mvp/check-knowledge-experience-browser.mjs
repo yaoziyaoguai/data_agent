@@ -16,7 +16,7 @@ const ok=result=>{assert.equal(result.status,200,JSON.stringify(result.value));r
 const read=async()=>ok(await h.request(documentPath));
 const editBody=(document, update)=>({operation_id:randomUUID(),body:update(document.body),parts:document.parts.map(part=>({id:part.id,expected_version:part.version}))});
 const nav=name=>navigateWorkspace(page,name);
-const login=async user=>{await page.goto(h.url);await page.getByLabel('演示登录凭据').fill(h.tokens[user]);await page.getByRole('button',{name:'进入工作台 →'}).click();await nav('语义管理');await page.goto(h.url+'/#knowledge?object=table-demo_order_detail');await page.getByRole('heading',{name:'demo_order_detail',exact:true}).waitFor();};
+const login=async (user, expectedNav='语义管理')=>{await page.goto(h.url);await page.getByLabel('演示登录凭据').fill(h.tokens[user]);await page.getByRole('button',{name:'进入工作台 →'}).click();await nav('^'+expectedNav+'$');await page.goto(h.url+'/#knowledge?object=table-demo_order_detail');await page.getByRole('heading',{name:'demo_order_detail',exact:true}).waitFor();};
 try {
   // 普通用户没有“我负责的对象”，空目录视图改用全部对象加无结果筛选；两处首批读取由本项放行，保证切换先于返回。
   let releaseInitial, heldInitial=0, activeInitial=0;
@@ -28,7 +28,7 @@ try {
     finally{activeInitial--;}
   });
   try{
-    await login('bob');
+    await login('bob', '数据字典');
     await page.getByLabel('语义目录范围',{exact:true}).selectOption('all');
     await until(()=>heldInitial>=2,'directory of all objects in flight');
     await page.getByLabel('管理目录名称').fill('不存在的名字');
@@ -123,7 +123,7 @@ try {
   changed=await read();ok(await h.request(documentPath,editBody(changed,()=>original.body),'alice','PATCH'));
   checks.push('序言、标题、增删章节、表格、代码块和尾部空行可全文保存并逐字还原；来源重分析不复活已删章节');
 
-  await login('bob');
+  await login('bob', '数据字典');
   let releaseSearch, intercepted=false; const heldSearch=new Promise(resolve=>releaseSearch=resolve);
   await page.route('**/api/knowledge?q=*',async route=>{const response=await route.fetch();intercepted=true;await heldSearch;await route.fulfill({response});});
   await page.getByLabel('搜索语义对象').fill('demo');await until(()=>intercepted,'old search in flight');

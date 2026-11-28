@@ -82,10 +82,11 @@ const withdrawResults = async cid => {
   }
 };
 const holdConversation=async cid=>{
-  const container=execFileSync('docker',['--context','colima-data-agent','ps','--filter','label=com.docker.compose.project=data-agent','--filter','label=com.docker.compose.service=mysql','--format','{{.ID}}'],{encoding:'utf8'}).trim();
+  const dockerContext=process.env.DATA_AGENT_DOCKER_CONTEXT||(process.platform==='darwin'?'colima-data-agent':'default');
+  const container=execFileSync('docker',['--context',dockerContext,'ps','--filter','label=com.docker.compose.project=data-agent','--filter','label=com.docker.compose.service=mysql','--format','{{.ID}}'],{encoding:'utf8'}).trim();
   assert.match(container,/^[a-f0-9]+$/);
   const database=new URL(h.env.DATA_AGENT_DATABASE_URL).pathname.slice(1);assert.match(database,/^data_agent_test_[a-f0-9]+$/);
-  lockHolder=spawn('docker',['--context','colima-data-agent','exec','-i',container,'mysql','--defaults-extra-file=/run/secrets/mysql_root_client','--batch','--raw','--unbuffered','--skip-column-names'],{stdio:['pipe','pipe','pipe']});
+  lockHolder=spawn('docker',['--context',dockerContext,'exec','-i',container,'mysql','--defaults-extra-file=/run/secrets/mysql_root_client','--batch','--raw','--unbuffered','--skip-column-names'],{stdio:['pipe','pipe','pipe']});
   let output='';lockHolder.stdout.on('data',chunk=>output+=chunk);
   lockHolder.stdin.write(`USE ${database};\nSTART TRANSACTION;\nSELECT id FROM conversations WHERE id='${cid}' FOR UPDATE;\nSELECT 'held';\n`);
   await until(()=>output.includes('held'),'MySQL会话锁已持有');

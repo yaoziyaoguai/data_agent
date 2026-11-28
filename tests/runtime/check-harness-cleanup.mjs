@@ -3,7 +3,7 @@ import {fork, execFileSync} from 'node:child_process';
 import {once} from 'node:events';
 import {writeFile} from 'node:fs/promises';
 import {fileURLToPath} from 'node:url';
-import {harness, until} from '../mvp/harness.mjs';
+import {DOCKER_CONTEXT, harness, until} from '../mvp/harness.mjs';
 
 if (process.argv.includes('--child')) {
   const h = await harness({capture:true, startWorker:false});
@@ -11,9 +11,9 @@ if (process.argv.includes('--child')) {
   process.send({database:new URL(h.env.DATA_AGENT_DATABASE_URL).pathname.slice(1), pids,
     inheritedDatabaseUrl:Object.hasOwn(h.env, 'DATABASE_URL')});
 } else {
-  const container = execFileSync('docker', ['--context','colima-data-agent','ps','--filter','label=com.docker.compose.project=data-agent','--filter','label=com.docker.compose.service=mysql','--format','{{.ID}}'], {encoding:'utf8'}).trim();
+  const container = execFileSync('docker', ['--context',DOCKER_CONTEXT,'ps','--filter','label=com.docker.compose.project=data-agent','--filter','label=com.docker.compose.service=mysql','--format','{{.ID}}'], {encoding:'utf8'}).trim();
   assert.match(container, /^[a-f0-9]+$/);
-  const sql = query => execFileSync('docker', ['--context','colima-data-agent','exec','-i',container,'mysql','--defaults-extra-file=/run/secrets/mysql_root_client','--batch','--skip-column-names'], {input:query,encoding:'utf8'}).trim();
+  const sql = query => execFileSync('docker', ['--context',DOCKER_CONTEXT,'exec','-i',container,'mysql','--defaults-extra-file=/run/secrets/mysql_root_client','--batch','--skip-column-names'], {input:query,encoding:'utf8'}).trim();
   const alive = pid => {try {process.kill(pid,0); return true;} catch {return false;}};
   const checks = []; let passed = false;
   try {

@@ -38,8 +38,24 @@ pub async fn propose_in_tx(
     Ok(v)
 }
 pub async fn proposals_in_tx(tx: &mut AppTx<'_>, ctx: &AccessContext) -> Result<Vec<Value>> {
-    let rows=sqlx::query("SELECT body FROM semantic_change_proposals WHERE owner_id=? AND space_id=? AND state='open'").bind(&ctx.user_id).bind(&ctx.space_id).fetch_all(tx.connection()).await?;
-    Ok(rows.iter().map(body).collect())
+    let rows = sqlx::query(
+        "SELECT body FROM semantic_change_proposals WHERE owner_id=? AND space_id=? AND state='open'",
+    )
+    .bind(&ctx.user_id)
+    .bind(&ctx.space_id)
+    .fetch_all(tx.connection())
+    .await?;
+    let mut visible = Vec::with_capacity(rows.len());
+    for row in &rows {
+        let item = body(row);
+        let object = item["object_id"].as_str().unwrap_or("");
+        match check_read_access_in_tx(tx, ctx, object).await {
+            Ok(()) => visible.push(item),
+            Err(error) if error.code == "not_available" => {}
+            Err(error) => return Err(error),
+        }
+    }
+    Ok(visible)
 }
 pub async fn apply_proposal_in_tx(
     tx: &mut AppTx<'_>,

@@ -16,7 +16,17 @@ import time
 from urllib.request import ProxyHandler, Request, build_opener
 
 ROOT = Path(__file__).resolve().parents[2]
-ALLOWED_FUNCTIONS = {'sum','count','min','max','avg','coalesce','nullif','round','strftime','date','datetime','substr','lower','upper','replace','char','abs','length','row_number','rank','dense_rank','lag','lead','total','ifnull','cast'}
+ALLOWED_FUNCTIONS = {
+    'sum','count','min','max','avg','total','group_concat','string_agg',
+    'coalesce','nullif','ifnull','iif','typeof','cast',
+    'like','glob','substr','substring','trim','ltrim','rtrim','instr',
+    'lower','upper','replace','char','length','octet_length','char_length','character_length',
+    'concat','concat_ws','printf','format','unicode','hex','quote',
+    'round','abs','sign','ceil','ceiling','floor','trunc','mod','pow','power','sqrt','ln','log','log10','log2','exp',
+    'strftime','date','datetime','time','julianday','unixepoch','timediff',
+    'row_number','rank','dense_rank','ntile','percent_rank','cume_dist','lag','lead','first_value','last_value','nth_value',
+    'json','json_extract','json_type','json_valid','json_array_length','json_quote',
+}
 LOCK = threading.Lock()
 BUSINESS_SOURCE_FILES = ('schema.sql', 'seed.sql', 'etl.sql')
 SOURCE_FILES = BUSINESS_SOURCE_FILES + ('knowledge-manifest.json',)
@@ -407,7 +417,7 @@ class Platform:
         qid=payload.get('query_id'); owner=payload.get('owner_id')
         if not isinstance(qid,str) or not isinstance(owner,str): raise ValueError('invalid_input')
         permissions=self.permissions()
-        denied_tables = self.query_denied_tables(permissions, 'demo', owner) if path in ('/submit','/results','/result-authority') else set()
+        denied_tables = self.query_denied_tables(permissions, 'demo', owner) if path in ('/submit','/status','/results','/result-authority') else set()
         with LOCK,sqlite3.connect(self.ledger) as db:
             db.row_factory=sqlite3.Row
             row=db.execute('SELECT * FROM submissions WHERE id=? AND owner=?',(qid,owner)).fetchone()
@@ -446,7 +456,7 @@ class Platform:
                 try:
                     with sqlite3.connect(f'file:{self.business}?mode=ro',uri=True) as source, \
                             contextlib.closing(sqlite3.connect(f'file:{self.business}?mode=ro',uri=True)) as probe:
-                        source.set_authorizer(ReadGuard(self.allowed_tables, probe))
+                        source.set_authorizer(ReadGuard(self.allowed_tables, probe, denied_tables))
                         source.set_progress_handler(lambda: int(time.monotonic()>deadline),1000)
                         cursor=source.execute(args['sql'],args.get('parameters',{}))
                         rows=cursor.fetchmany(1001); truncated=len(rows)>1000; rows=rows[:1000]

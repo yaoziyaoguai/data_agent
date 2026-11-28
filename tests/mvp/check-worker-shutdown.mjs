@@ -20,11 +20,12 @@ try {
   assert.ok(indexes.some(value => value.index === "sessions_by_owner" && value.columns === "space_id,user_id"));
   assert.ok(indexes.some(value => value.index === "sessions_by_expiration" && value.columns === "expires_at"));
 
-  const container = execFileSync("docker", ["--context", "colima-data-agent", "ps",
+  const dockerContext = process.env.DATA_AGENT_DOCKER_CONTEXT || (process.platform === "darwin" ? "colima-data-agent" : "default");
+  const container = execFileSync("docker", ["--context", dockerContext, "ps",
     "--filter", "label=com.docker.compose.project=data-agent",
     "--filter", "label=com.docker.compose.service=mysql", "--format", "{{.ID}}"], { encoding: "utf8" }).trim();
   assert.match(container, /^[a-f0-9]+$/);
-  holder = spawn("docker", ["--context", "colima-data-agent", "exec", "-i", container, "mysql",
+  holder = spawn("docker", ["--context", dockerContext, "exec", "-i", container, "mysql",
     "--defaults-extra-file=/run/secrets/mysql_root_client", "--batch", "--unbuffered", "--skip-column-names"]);
   let output = "";
   holder.stdout.on("data", chunk => { output += chunk; });

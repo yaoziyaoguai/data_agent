@@ -127,7 +127,7 @@ try {
   }
   manager.appendMessage({role: 'user', content: '读取本轮合成文档，保留原回执。', timestamp: Date.now()});
   const calls = documents.map((document, index) => ({type: 'toolCall', id: 'retained-document-' + index,
-    name: 'read_knowledge', arguments: {object_id: document.id, version: '1', offset: 0, limit: 8192}}));
+    name: 'read_knowledge', arguments: {items: [{kind: 'knowledge', ref: {object_id: document.id, version: '1', path: 'body'}, offset: 0, limit: 8192}]}}));
   manager.appendMessage({...assistant(calls), stopReason: 'toolUse'});
   // 按真实宿主接口先登记、执行工具，构造需要split-turn压缩的已持久化工具批次。
   for (const call of calls) {
@@ -159,8 +159,8 @@ try {
   for (const call of calls) {
     const result = projection.find(message => message.role === 'toolResult' && message.toolCallId === call.id);
     assert.ok(result, '近期整个工具批次必须保留：' + call.id);
-    const body = JSON.parse(result.content.find(part => part.type === 'text').text).entries.find(entry => entry.entry_id === 'body').effective_value;
-    assert.equal(body, documents.find(document => document.id === call.arguments.object_id).body);
+    const body = JSON.parse(result.content.find(part => part.type === 'text').text).items[0].content;
+    assert.equal(body, documents.find(document => document.id === call.arguments.items[0].ref.object_id).body);
   }
   checks.push({name: '中型新profile原生split-turn双摘要，两类输出沿冻结O且实际输入受限，近期工具正文逐字保留',
     summaryRequests: firstRequests.filter(request => request.kind !== 'ordinary')});

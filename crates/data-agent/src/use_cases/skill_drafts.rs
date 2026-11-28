@@ -386,16 +386,10 @@ pub async fn confirm(pool: &MySqlPool, ctx: &AccessContext, input: &Value) -> Re
     if input["kind"] != "skill" || !input["id"].is_null() || !input["expected_version"].is_null() {
         return Err(Error::new("invalid_input"));
     }
-    let mut tx = AppTx::begin(pool).await?;
-    if let Some(receipt) = assets::begin_save_in_tx(&mut tx, ctx, input).await? {
-        tx.commit().await?;
-        return super::personal_assets::project_receipt(pool, ctx, receipt).await;
-    }
-    tx.commit().await?;
+    let supplied = input["dependencies"]
+        .as_array()
+        .ok_or(Error::new("invalid_input"))?;
     let checked = read(pool, ctx, draft_id).await?;
-    if checked["status"] != "pending" {
-        return Err(Error::new("not_available"));
-    }
     let mut tx = AppTx::begin(pool).await?;
     let conversation = conversations::lock_for_cleanup_in_tx(
         &mut tx,
@@ -407,14 +401,14 @@ pub async fn confirm(pool: &MySqlPool, ctx: &AccessContext, input: &Value) -> Re
         tx.commit().await?;
         return super::personal_assets::project_receipt(pool, ctx, receipt).await;
     }
+    if checked["status"] != "pending" {
+        return Err(Error::new("not_available"));
+    }
     let draft = assets::skill_drafts::read_in_tx(&mut tx, ctx, draft_id, true).await?;
     check_pending_in_tx(&mut tx, ctx, &draft, Some(&conversation)).await?;
     let dependencies = draft.body.as_ref().ok_or(Error::new("not_available"))?["dependencies"]
         .as_array()
         .ok_or(Error::new("invalid_evidence"))?;
-    let supplied = input["dependencies"]
-        .as_array()
-        .ok_or(Error::new("invalid_input"))?;
     if !dependencies
         .iter()
         .all(|reference| supplied.contains(reference))

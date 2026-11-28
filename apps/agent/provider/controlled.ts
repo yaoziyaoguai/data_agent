@@ -81,7 +81,7 @@ export function guardedModelStream(
           : error instanceof TypeError ? 'network' : 'other');
         console.error(JSON.stringify({
           event: 'model_dispatch_failed', stage: failedStage,
-          run_id: transport.run.run_id, call_attempt_id,
+          run_id: transport.run?.run_id ?? transport.binding().run_id, call_attempt_id,
           path: host?.path ?? path,
           elapsed_ms: host?.elapsedMs ?? elapsedMs,
           reserved, sent,
@@ -271,8 +271,11 @@ export function guardedModelStream(
               });
             if (connection.api === 'anthropic-messages' && profile.toolset === 'data') {
               const task = getCurrentTools(context.messages).find(tool => tool.name === 'update_analysis_task');
-              // Pi非strict只取根properties/required；仅投影已核的任务合同，条件约束仍由Node/Rust执行。
-              const branches = (task?.parameters as Record<string, unknown> | undefined)?.allOf as {type?: string; properties?: Record<string, unknown>; required?: string[]}[] | undefined;
+              const taskParams = task?.parameters as Record<string, unknown> | undefined;
+              // 兼容缺少根properties的旧组合Schema；已有根properties时由Pi原生非strict投影。
+              const branches = !taskParams?.properties
+                ? (taskParams?.allOf as {type?: string; properties?: Record<string, unknown>; required?: string[]}[] | undefined)
+                : undefined;
               if (branches) {
                 const fields = branches[0], required = branches.at(-1)?.required;
                 if (![2, 3].includes(branches.length) || fields?.type !== 'object' || !fields.properties?.action || !required)
@@ -300,29 +303,53 @@ export function guardedModelStream(
               connection.api === "openai-responses"
                 ? payload.input
                 : payload.messages;
+            const additionalToolLists =
+              connection.api === "openai-responses" && Array.isArray(messages)
+                ? messages
+                    .filter(
+                      (item: { type?: unknown }) =>
+                        item && typeof item === "object" && item.type === "additional_tools",
+                    )
+                    .map((item: { tools?: unknown }) => item.tools)
+                : [];
             if (
               !Array.isArray(messages) ||
               (profile.toolset !== "data" && messages.length > 8) ||
               (payload.tools !== undefined && !Array.isArray(payload.tools)) ||
-              (profile.toolset !== "data" && payload.tools?.length !== 1)
+              additionalToolLists.some((list) => !Array.isArray(list)) ||
+              (profile.toolset !== "data" &&
+                (payload.tools?.length ?? 0) +
+                  additionalToolLists.reduce<number>(
+                    (sum, list) => sum + (Array.isArray(list) ? list.length : 0),
+                    0,
+                  ) !==
+                  1)
             )
               throw new Error("provider_payload_invalid");
-            if (profile.toolset === "data" && payload.tools !== undefined) {
-              const names = payload.tools.map(
-                (tool: { name?: unknown; function?: { name?: unknown } }) =>
-                  connection.api === "openai-completions"
-                    ? tool?.function?.name
-                    : tool?.name,
-              );
-              if (
-                names.length > dataToolNames.size ||
-                new Set(names).size !== names.length ||
-                names.some(
-                  (name: unknown) =>
-                    typeof name !== "string" || !dataToolNames.has(name),
+            const toolLists: unknown[][] = [
+              ...(Array.isArray(payload.tools) ? [payload.tools] : []),
+              ...(additionalToolLists as unknown[][]),
+            ];
+            if (profile.toolset === "data" && toolLists.length > 0) {
+              for (const list of toolLists) {
+                const names = list.map(
+                  (tool: unknown) => {
+                    const entry = tool as { name?: unknown; function?: { name?: unknown } } | null;
+                    return connection.api === "openai-completions"
+                      ? entry?.function?.name
+                      : entry?.name;
+                  },
+                );
+                if (
+                  names.length > dataToolNames.size ||
+                  new Set(names).size !== names.length ||
+                  names.some(
+                    (name: unknown) =>
+                      typeof name !== "string" || !dataToolNames.has(name),
+                  )
                 )
-              )
-                throw new Error("provider_payload_invalid");
+                  throw new Error("provider_payload_invalid");
+              }
             }
             if (
               Buffer.byteLength(JSON.stringify(payload), "utf8") >

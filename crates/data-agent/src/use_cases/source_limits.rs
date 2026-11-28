@@ -97,6 +97,27 @@ impl SourceGate {
     pub fn allowed_sources(&self) -> &[SourceKey] {
         &self.0
     }
+
+    pub(crate) fn allows_delivery_result(
+        &self,
+        result: &crate::persistence::delivery::DeliveryResult,
+        sources: &std::collections::HashMap<String, Value>,
+    ) -> bool {
+        self.allows_source_arg(&result.target_id)
+            || result.sql_table_ids.as_ref().is_some_and(|ids| {
+                !ids.is_empty()
+                    && ids.iter().all(|id| {
+                        sources.get(id).is_some_and(|head| {
+                            self.permits(
+                                "table",
+                                id,
+                                head["source_id"].as_str(),
+                                head["table_id"].as_str(),
+                            )
+                        })
+                    })
+            })
+    }
 }
 
 // 沿活动任务解析。旧消息缺少活动绑定时仍须能证明来源范围。
@@ -236,7 +257,8 @@ pub(super) async fn authority_within_in_tx(
         let target = query["target_id"]
             .as_str()
             .ok_or(Error::new("unavailable"))?;
-        if !gate.member("platform", target) {
+        let sql = query["sql"].as_str().ok_or(Error::new("unavailable"))?;
+        if !query_within_in_tx(tx, ctx, gate, target, sql, false).await? {
             return Ok(false);
         }
     }
@@ -307,6 +329,44 @@ pub(super) async fn authority_within_in_tx(
         }
     }
     Ok(true)
+}
+
+pub(super) async fn query_within_in_tx(
+    tx: &mut AppTx<'_>,
+    ctx: &AccessContext,
+    gate: &SourceGate,
+    target_id: &str,
+    sql: &str,
+    allow_table_free: bool,
+) -> Result<bool> {
+    if gate.member("platform", target_id) {
+        return Ok(true);
+    }
+    if allow_table_free && queries::is_table_free_select(sql) {
+        return Ok(true);
+    }
+    let Some(tables) = queries::referenced_tables(sql) else {
+        return Ok(false);
+    };
+    if tables.is_empty() {
+        return Ok(false);
+    }
+    let names: Vec<_> = tables.into_iter().collect();
+    let found = knowledge::enabled_tables_by_name_in_tx(tx, ctx, &names).await?;
+    Ok(names.iter().all(|name| {
+        let mut matches = found.iter().filter(|(sql_name, _)| sql_name == name);
+        matches
+            .next()
+            .filter(|_| matches.next().is_none())
+            .is_some_and(|(_, head)| {
+                gate.permits(
+                    "table",
+                    &head.id,
+                    head.source_id.as_deref(),
+                    head.table_id.as_deref(),
+                )
+            })
+    }))
 }
 
 pub(super) async fn assert_asset_in_tx(

@@ -223,7 +223,7 @@ Pi `get_query` 的默认 `view=rows` 在已鉴权的固定保存结果上按序�
 | 对外操作 | 输入 → 输出 | 关键校验、副作用与幂等 |
 | --- | --- | --- |
 | `lock_requests_in_tx` | 锁定会话/任务、查询请求 ID 集合 → `LockedQueryRequest` 集合 | 按 ID 锁定请求及其确认/取消状态；只读状态接口不能替代此锁；提交与取消竞争使用同一组锁 |
-| `check_sql`（纯操作） | SQL、参数、目标能力快照 → 检查报告/指纹 | 检查完整 AST、单条只读、函数和外部访问；未知能力/语法返回 `unsupported` |
+| `check_sql`（纯操作） | SQL、参数、目标能力快照 → 检查报告/指纹 | 检查完整 AST、单条只读、函数、外部访问及聚合分组歧义（返回具体未分组列的可修正 `sql_not_supported` 诊断，保留明细/合法分组/窗口/纯整体汇总）；未知能力/语法返回 `unsupported`，平台仍核定语法、只读与表权限 |
 | `begin_revision_in_tx / save_draft_in_tx` | 条件快照、SQL、依据、目标版本、报告、预算范围、可选 `replaces_query_id` → 草稿版本/待确认请求 | SQL修订声明与消息归属同事务，声明后即失效目标旧稿，再进行外部检查。route声明须带task_id/expected_version/replaces_query_id；request_query可直接完成声明。引用限同用户/会话/任务/目标，检查失败也不恢复旧稿。独立新查询传null；已确认原查询独立收尾；已有后继的祖先不能再次修订 |
 | `hold_pending_in_tx / supersede_pending_in_tx` | 任务范围、消息/条件修订引用 → 受影响请求 ID | 明确补充先置 `modifying`；新修订置 `superseded`；不改变已确认或执行中的请求 |
 | `release_pending_in_tx` | 需释放的消息阻塞及同事务剩余阻塞快照 → 可恢复请求 | 仅撤回或确定不影响时恢复未失效请求；不得复活已替代的草稿 |

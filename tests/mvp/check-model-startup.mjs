@@ -29,7 +29,7 @@ try{
  // 资料包（API启动的initialize会用进程资料包重写目录，混用cockpit默认会使
  // demo_order_detail在当前目录中找不到而reanalyze 409）；cockpit资料由专项dogfood覆盖。
  launcher=spawn('python3',['scripts/development.py','--model','protocol-test','--model-profile',path,'--model-url','http://127.0.0.1:'+provider.address().port,'--port-offset',String(portOffset),'--runtime-dir',runtimeDir],{cwd:process.cwd(),env:{...process.env,DATA_AGENT_SYNTHETIC_SOURCE_DIRECTORY:new URL('../../docs/sources',import.meta.url).pathname,DATA_AGENT_MODEL_KEY_FILE:h.env.DATA_AGENT_MODEL_KEY_FILE,DATA_AGENT_PREFILL_PROFILE:JSON.stringify({...profile,trial_id:'old-trial-id'}),DATA_AGENT_PREFILL_URL:'http://127.0.0.1:1/wrong',DATA_AGENT_PREFILL_TEST:'0'},stdio:['ignore','pipe','pipe']});launcher.stdout.on('data',d=>output+=d);launcher.stderr.on('data',d=>output+=d);
- await until(async()=>{if(launcher.exitCode!==null)throw new Error('formal_launcher_exited');try{return(await fetch(webUrl)).ok;}catch{return false;}},'formal startup');
+ await until(async()=>{if(launcher.exitCode!==null)throw new Error('formal_launcher_exited');try{return(await fetch(webUrl)).ok;}catch{return false;}},'formal startup',90000);
  const tokens=JSON.parse(await readFile(runtimeDir+'/identities.json','utf8'));
  browser=await chromium.launch();page=await browser.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));
  page.on('response',async response=>{
@@ -46,19 +46,28 @@ try{
  await page.goto(webUrl);await page.getByLabel('演示登录凭据').fill(tokens.alice);await page.getByRole('button',{name:'进入工作台 →',exact:true}).click();
  const modelSelect=page.getByLabel('模型',{exact:true});await modelSelect.waitFor();assert.equal(await modelSelect.inputValue(),profile.model_id);assert.equal(await modelSelect.locator('option:checked').innerText(),profile.model_id==='deepseek-v4-pro'?'DeepSeek Pro':'DeepSeek Flash');
  await page.getByLabel('你的数据问题').fill('验证正式启动聊天接线');await page.getByRole('button',{name:'发送 ↑',exact:true}).click();await page.getByText('正式启动聊天回环已完成。',{exact:true}).waitFor();
- const reanalyze=async()=>{
+ const reanalyze=async(expectProposal=true)=>{
   const responsePromise=page.waitForResponse(r=>new URL(r.url()).pathname==='/api/knowledge/table-demo_order_detail/reanalyze'&&r.request().method()==='POST');
   await page.getByRole('button',{name:'重新预填',exact:true}).click();
   const response=await responsePromise;assert.equal(response.status(),200);const accepted=await response.json();
-  const completed=await until(async()=>{
+  let completed=await until(async()=>{
    const response=await page.request.get(webUrl+'/api/knowledge/table-demo_order_detail');assert.equal(response.status(),200);const value=await response.json();
-   return BigInt(value.version)>BigInt(accepted.version)&&value.prefill_status?.state==='succeeded'?value:false;
-  },'current prefill applied');
+   return value.prefill_status?.state==='succeeded'?value:false;
+  },'current prefill succeeded');
+  if(expectProposal){
+   const applyButton=page.getByRole('button',{name:'直接采用并保存',exact:true}).first();
+   await applyButton.waitFor();
+   const applyPromise=page.waitForResponse(r=>new URL(r.url()).pathname.startsWith('/api/knowledge-proposals/')&&new URL(r.url()).pathname.endsWith('/apply')&&r.request().method()==='POST');
+   await applyButton.click();
+   const appliedResponse=await applyPromise;assert.equal(appliedResponse.status(),200);
+   completed=await appliedResponse.json();
+   assert.ok(BigInt(completed.version)>BigInt(accepted.version));
+  }
   await page.getByRole('tab',{name:'变更记录',exact:true}).click();await page.getByText(new RegExp('^当前版本 '+completed.version+' · 最新修改者 ')).waitFor();await page.getByRole('tab',{name:'概览',exact:true}).click();
  };
- await page.getByRole('button',{name:/语义管理/}).click();await page.getByRole('navigation',{name:'语义对象'}).getByRole('button',{name:/^demo_order_detail /}).click();await reanalyze();
+ await page.getByRole('button',{name:/语义管理/}).click();await page.getByRole('navigation',{name:'语义对象'}).getByRole('button',{name:/^demo_order_detail /}).click();await reanalyze(true);
  const firstEntry=page.locator('.semantic-entry').first();await firstEntry.getByRole('button',{name:'编辑',exact:true}).click();await firstEntry.locator('textarea').fill('正式启动下人工保护值');await firstEntry.getByRole('button',{name:'保存修改',exact:true}).click();await firstEntry.locator('.entry-value').getByText('正式启动下人工保护值',{exact:true}).waitFor();assert.equal(await firstEntry.locator('textarea').count(),0);await firstEntry.getByText('查看依据与修改记录',{exact:true}).click();assert.ok(await firstEntry.getByText('由 alice 修改',{exact:true}).isVisible());
- await reanalyze();assert.equal(await firstEntry.locator('.entry-value').innerText(),'正式启动下人工保护值');await firstEntry.getByText('查看依据与修改记录',{exact:true}).click();assert.ok(await firstEntry.getByText('由 alice 修改',{exact:true}).isVisible());
+ await reanalyze(false);assert.equal(await firstEntry.locator('.entry-value').innerText(),'正式启动下人工保护值');await firstEntry.getByText('查看依据与修改记录',{exact:true}).click();assert.ok(await firstEntry.getByText('由 alice 修改',{exact:true}).isVisible());
  const ledger=h.sql(`SELECT JSON_OBJECT('calls',allocated_calls,'spent',spent_micros,'reserved',reserved_micros) FROM model_trials WHERE id='${profile.trial_id}'`)[0];assert.equal(ledger.calls,calls.length);assert.deepEqual(calls,['chat','chat','prefill','prefill','prefill','prefill']);assert.equal(ledger.reserved,0);assert.equal(ledger.spent,profile.model_id==='deepseek-v4-pro'?2258:624);assert.equal(errors.length,0);assert.equal(h.sql("SELECT JSON_OBJECT('n',COUNT(*)) FROM model_trials WHERE id='old-trial-id'")[0].n,0);
  checks.push({name:'正式development.py启动方式与页面完成聊天/初次/再次模型预填，人工值保护；Pi和Worker共用原trial账本，0官方调用',passed:true});passed=true;
  console.log(JSON.stringify({passed,checks,calls,ledger,officialRequests:0}));

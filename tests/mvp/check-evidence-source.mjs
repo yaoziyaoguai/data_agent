@@ -27,8 +27,8 @@ const provider = createServer(async (request, response) => {
       locator: {offset: 5, length: 8}};
     let delta;
     if (calls === 1) {
-      // §6.1：route回执裁决来源并刷新投影前，正文读取工具不可见，route单独成轮。
-      assert.ok(!input.tools.some(tool => tool.function?.name === 'read_source'), '未route前read_source不可见');
+      // 4e1f2a6移除前端就绪隐藏门后读取工具始终在payload可见，未route前由Rust task_context_required硬门拦截（见下方第135行）。
+      assert.ok(input.tools.some(tool => tool.function?.name === 'read_source'), '4e1f2a6起read_source始终可见，由Rust硬门拦截未归属调用');
       assert.ok(input.tools.some(tool => tool.function?.name === 'update_analysis_task'), '控制工具route始终可见');
       delta = {role: 'assistant', tool_calls: [
         {index: 0, id: 'source-route', type: 'function', function: {name: 'update_analysis_task', arguments: JSON.stringify({action: 'route', task_id: null, expected_version: null, goal: '', question: null, options: []})}},
@@ -54,8 +54,7 @@ const provider = createServer(async (request, response) => {
       const stored = h.sql(`SELECT receipt FROM tool_calls WHERE conversation_id='${run.conversation_id}' AND recovery_chain_id='${run.recovery_chain_id}' AND sdk_tool_call_id='${sdkId}'`)[0];
       assert.deepEqual(result, stored.data, 'provider收到Rust冻结的原文回执');
       const authority = h.sql(`SELECT authority_snapshot FROM agent_runs WHERE id='${run.run_id}'`)[0];
-      assert.ok(authority.sources.some(reference => reference[0] === 'document-' + source.id && reference[1] === source.version), '实际原文交付进入当前修订依赖');
-      assert.ok(authority.evidence_reads.some(read => read.category === 'source' && read.source_kind === 'document' && read.id === source.id), '原文读取进入活动任务来源重核清单');
+      assert.ok(authority.sources.some(reference => reference[0] === 'document-' + source.id && reference[1] === source.version), '实际原文交付进入当前修订与活动范围依赖快照');
       delivered.push(result);
       if (calls === 3) {
         assert.equal(result.text, '甲🌏e');
@@ -130,6 +129,10 @@ try {
   const identityDocument = await h.request('/knowledge', {operation_id: randomUUID(), kind: 'document',
     name: '合成身份目录文档', body: identityMarker, related_ids: []});
   assert.equal(identityDocument.status, 200, JSON.stringify(identityDocument.value));
+  // 4e1f2a6起空会话无活动任务时按无限制处理；存在未声明source_limits的活动任务时，正文/取证读取触发task_context_required，而source_identity仍可发现身份。
+  const undeclaredTask = await invoke('update_analysis_task', {action: 'create', goal: '来源范围待核实的任务',
+    conditions: {time_start: null, time_end: null, timezone: 'UTC', metric: null, channel: null,
+      group_by: [], filters: [], knowledge_refs: [], notes: ''}, options: []});
   const authorityBeforeIdentity = h.sql(`SELECT authority_snapshot FROM agent_runs WHERE id='${run.run_id}'`)[0];
   const embeddingBeforeIdentity = embedding.requests.length;
   await invoke('read_source', {citation}, 'task_context_required');
@@ -193,14 +196,18 @@ try {
   assert.equal(tableIdentity.hits[0].object_id, 'table-demo_order_detail');
   assert.equal(tableIdentity.hits[0].object_version, '1');
   assert.equal(tableIdentity.hits[0].roots_complete, true);
-  assert.deepEqual(tableIdentity.hits[0].source_keys, ['business-guide', 'etl', 'schema'].map(id => ({kind: 'platform', id})),
-    '表身份必须返回真实源级贡献根，不能把整包schema伪装成单表来源');
+  assert.deepEqual(tableIdentity.hits[0].source_keys, ['schema', 'table-demo_order_detail'].map(id => ({kind: 'platform', id})),
+    '4e1f2a6起表身份返回单表稳定身份与可读直属source_id');
+  // 规范与实现分歧记录：implementation-design.md L765 仍保留旧句“roots_complete仅证明贡献根映射完整”，
+  // 而 4e1f2a6/a1d0cdb（L736/L742 及 schema.json:4857）已将 source_identity 改为直属身份比对且不读映射表。
+  // 保留未知映射检验（一）：mapping_state='unknown' 时直属 source_keys 绝不退化为空（不能当无来源）。
   h.sql(`UPDATE knowledge_dependency_states SET mapping_state='unknown' WHERE owner_id='table-demo_order_detail' AND owner_version=1`);
   try {
-    const unknownRoots = await invoke('search_knowledge', {view: 'source_identity', query: 'table-demo_order_detail', kinds: ['table']});
-    validateContract('KnowledgeSearchReply', unknownRoots); assert.equal(unknownRoots.hits.length, 1);
-    assert.equal(unknownRoots.hits[0].roots_complete, false, '映射缺失必须明确标为不完整');
-    assert.deepEqual(unknownRoots.hits[0].source_keys, []);
+    const unknownMappingIdentity = await invoke('search_knowledge', {view: 'source_identity', query: 'table-demo_order_detail', kinds: ['table']});
+    validateContract('KnowledgeSearchReply', unknownMappingIdentity); assert.equal(unknownMappingIdentity.hits.length, 1);
+    assert.deepEqual(unknownMappingIdentity.hits[0].source_keys, ['schema', 'table-demo_order_detail'].map(id => ({kind: 'platform', id})),
+      'mapping_state=unknown下直属身份不退化为空数组');
+    assert.equal(unknownMappingIdentity.hits[0].roots_complete, true);
   } finally {
     h.sql(`UPDATE knowledge_dependency_states SET mapping_state='complete' WHERE owner_id='table-demo_order_detail' AND owner_version=1`);
   }
@@ -308,7 +315,28 @@ try {
   assert.deepEqual(h.sql(`SELECT authority_snapshot FROM agent_runs WHERE id='${run.run_id}'`)[0], authorityBeforeIdentity);
   checks.push('元信息权限与个人资产隔离、keyset分页、查询/kinds/hints绑定及字节/token容量续读');
 
-  await invoke('update_analysis_task', {action: 'route', task_id: null, expected_version: null, goal: '', question: null, options: []});
+  await invoke('update_analysis_task', {action: 'revise', task_id: undeclaredTask.task_id,
+    expected_version: undeclaredTask.condition_version, goal: '',
+    condition_patch: {set: {}, unset: ['source_limits']}, options: []});
+  // 保留未知映射检验（二）：等价覆盖“映射不完整不能当无来源”（references.rs:352 + knowledge_sources.rs:173）。
+  // mapping_state='complete' 时窄读 description 只核本条目来源 business-guide@1；
+  // mapping_state='unknown' 时窄读回退核验整卡全部必要来源，etl 换版即返回 stale，绝不当无额外来源放行。
+  h.sql(`UPDATE source_heads SET version=2 WHERE id='etl'`);
+  try {
+    const completeNarrow = await invoke('read_knowledge', {items: [{kind: 'knowledge',
+      ref: {object_id: 'table-demo_order_detail', version: '1', path: 'description'}}]});
+    assert.equal(completeNarrow.items[0].state, 'ok', '映射完整时窄读仅核所选条目自身来源');
+    h.sql(`UPDATE knowledge_dependency_states SET mapping_state='unknown' WHERE owner_id='table-demo_order_detail' AND owner_version=1`);
+    try {
+      const unknownNarrow = await invoke('read_knowledge', {items: [{kind: 'knowledge',
+        ref: {object_id: 'table-demo_order_detail', version: '1', path: 'description'}}]});
+      assert.equal(unknownNarrow.items[0].state, 'stale', 'mapping_state=unknown不能当无来源：窄读回退整卡必要来源核验');
+    } finally {
+      h.sql(`UPDATE knowledge_dependency_states SET mapping_state='complete' WHERE owner_id='table-demo_order_detail' AND owner_version=1`);
+    }
+  } finally {
+    h.sql(`UPDATE source_heads SET version=1 WHERE id='etl'`);
+  }
   await invoke('search_knowledge', {...directoryArgs, view: 'evidence', cursor: identityCursor}, 'invalid_cursor');
   await invoke('search_knowledge', {query: directoryArgs.query, kinds: directoryArgs.kinds, limit: directoryArgs.limit,
     hints: directoryArgs.hints, cursor: identityCursor}, 'invalid_cursor');

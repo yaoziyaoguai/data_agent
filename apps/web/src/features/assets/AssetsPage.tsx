@@ -208,6 +208,9 @@ export function AssetsPage({
     }
   };
   const matches = (asset: Asset) => tab === "memory" ? asset.kind === "memory" : asset.kind === "skill" && (tab === "shared" ? asset.visibility === "space" : asset.visibility !== "space");
+  const filteredAssets = assets
+    .filter(matches)
+    .filter(asset => (!statusFilter || (asset.state === statusFilter && !asset.draft_status)) && [asset.name, asset.body, asset.scope].some(value => value.toLowerCase().includes(search.trim().toLowerCase())));
   if (loadedUser !== user) return <section className="management assets-page"><h1>我的积累</h1><p role="status">正在载入你的个人积累…</p></section>;
   return (
     <section className="management assets-page">
@@ -226,8 +229,7 @@ export function AssetsPage({
       {tab === "skill" && <p className="quiet">Skill 是可重复使用的分析方法，选用后为当前对话提供步骤和注意事项。对话中保留的方法会以待核对保存状态出现在列表中。</p>}
       {tab === "shared" && <p className="quiet skill-sharing-note">本空间成员共享的分析方法。负责人维护正文，其他成员可以提出建议；使用时仍需明确选用。</p>}
       <div className="asset-grid">
-        {assets
-          .filter(matches).filter(asset => (!statusFilter || (asset.state === statusFilter && !asset.draft_status)) && [asset.name, asset.body, asset.scope].some(value => value.toLowerCase().includes(search.trim().toLowerCase())))
+        {filteredAssets
           .map((asset) => (
             <article
               key={asset.id}
@@ -261,7 +263,7 @@ export function AssetsPage({
                 <summary>查看来源与依赖</summary>
                 <p>{asset.source_text}</p>
                 {asset.dependencies.map(reference => <p key={reference.object_id + reference.path}><KnowledgeReference id={reference.object_id} path={reference.path}/></p>)}
-                <details className="technical-details"><summary>维护记录</summary><p>版本 {asset.version} · 记录编号 {asset.id}</p><pre>{JSON.stringify(asset.dependencies, null, 2)}</pre></details>
+                <div className="technical-meta"><span>版本 {asset.version}</span><span>关联依据 {asset.dependencies.length} 项</span></div>
               </details>
               {(asset.files ?? []).map(file => <details key={file.path}><summary>{file.path.replace(/^(references|assets)\//, "")}</summary><pre className="skill-preview">{file.content}</pre></details>)}
               <div className="actions">
@@ -286,7 +288,7 @@ export function AssetsPage({
             </article>
           ))}
       </div>
-      {assets.some(matches) && !assets.filter(matches).some(asset => (!statusFilter || asset.state === statusFilter) && [asset.name, asset.body, asset.scope].some(value => value.toLowerCase().includes(search.trim().toLowerCase())) ) && <div className="asset-empty"><p>没有符合当前条件的内容。</p><button onClick={() => { setSearch(""); setStatusFilter(""); }}>清除筛选</button></div>}
+      {assets.some(matches) && filteredAssets.length === 0 && <div className="asset-empty"><p>没有符合当前条件的内容。</p><button onClick={() => { setSearch(""); setStatusFilter(""); }}>清除筛选</button></div>}
       {!assets.some(matches) && (
         <div className="asset-empty">
           <span>◇</span>
@@ -336,7 +338,7 @@ export function AssetsPage({
               aria-label="内容"
               disabled={saving}
               rows={5}
-              placeholder={editingKind === "skill" ? "告诉 Agent 应该先确认什么、怎样分析、最后如何汇报。普通文字即可。" : "例如：我的周报金额统一以元展示，临时要求优先。"}
+              placeholder={editingKind === "skill" ? "告诉 Agent 应该先确认什么、怎样分析、最后如何汇报。普通文字即可。" : "例如：耗时指标默认展示 P95 与样本量，临时要求优先。"}
               value={body}
               onChange={(e) => { setBody(e.target.value); setVerified(false); }}
             />
@@ -348,7 +350,7 @@ export function AssetsPage({
               aria-label="适用范围与例外"
               value={scope}
               onChange={(e) => { setScope(e.target.value); setVerified(false); }}
-              placeholder="例如：仅用于收入周报；时间或口径不清时先问我"
+              placeholder="例如：仅用于月度指标核对；时间或口径不清时先问我"
             />
           </label>
           {editingKind === "skill" && <details className="asset-attachments" open={files.length > 0}><summary>补充说明与报告模板（可选）{files.length > 0 ? ` · ${files.length} 份` : ""}</summary><SkillFilesEditor files={files} onChange={value => { setFiles(value); setVerified(false); }} disabled={saving}/></details>}

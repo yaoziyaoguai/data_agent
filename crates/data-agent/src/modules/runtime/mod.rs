@@ -22,6 +22,7 @@ pub use outputs::{
     FinalOutput, OutputChunkRange, OutputHistory, OutputReadUnit, answer_read_unit,
     append_output_in_tx, display_from_preparation, prepared_dependencies, read_bound_output_in_tx,
     read_output_history_in_tx, read_output_text_in_tx, read_rendered_in_tx, substitute,
+    substitute_required,
 };
 pub use runs::{
     cancel_run_in_tx, commit_run_in_tx, interrupt_run_in_tx, lock_run_in_tx, start_run_in_tx,

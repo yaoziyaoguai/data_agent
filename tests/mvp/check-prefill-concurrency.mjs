@@ -20,9 +20,10 @@ try{
   assert.equal((await h.request('/knowledge/field-'+field+'/reanalyze',{operation_id:randomUUID(),expected_version:old.version})).status,200);
  }
  await h.resumeWorker();await until(()=>firstResponse,'首个Worker发起HTTP');
- const container=execFileSync('docker',['--context','colima-data-agent','ps','--filter','label=com.docker.compose.project=data-agent','--filter','label=com.docker.compose.service=mysql','--format','{{.ID}}'],{encoding:'utf8'}).trim();
+ const dockerContext=process.env.DATA_AGENT_DOCKER_CONTEXT||(process.platform==='darwin'?'colima-data-agent':'default');
+ const container=execFileSync('docker',['--context',dockerContext,'ps','--filter','label=com.docker.compose.project=data-agent','--filter','label=com.docker.compose.service=mysql','--format','{{.ID}}'],{encoding:'utf8'}).trim();
  const database=new URL(h.env.DATA_AGENT_DATABASE_URL).pathname.slice(1);assert.match(database,/^data_agent_test_[a-f0-9]+$/);
- blocker=spawn('docker',['--context','colima-data-agent','exec','-i',container,'mysql','--defaults-extra-file=/run/secrets/mysql_root_client','--default-character-set=utf8mb4','--batch','--raw','--skip-column-names','--unbuffered'],{stdio:['pipe','pipe','pipe']});
+ blocker=spawn('docker',['--context',dockerContext,'exec','-i',container,'mysql','--defaults-extra-file=/run/secrets/mysql_root_client','--default-character-set=utf8mb4','--batch','--raw','--skip-column-names','--unbuffered'],{stdio:['pipe','pipe','pipe']});
  let stdout='';blocker.stdout.on('data',v=>stdout+=v.toString());
  blocker.stdin.write(`USE ${database}; START TRANSACTION; SELECT id FROM model_trials WHERE id='${profile.trial_id}' FOR UPDATE; SELECT 'locked';\n`);
  await until(()=>stdout.includes('locked'),'固定trial竞争窗口');

@@ -132,7 +132,21 @@ pub async fn result_authority(query_id: &str, owner_id: &str, result_ref: &str) 
 }
 
 pub async fn check(sql: &str, parameters: &Value) -> Result<Value> {
-    call("/validate", &json!({"sql":sql,"parameters":parameters})).await
+    let report = call("/validate", &json!({"sql":sql,"parameters":parameters})).await?;
+    if report["state"] == "passed"
+        && let Some(diagnostic) = super::grouping_validation::check_grouping_ambiguity(sql)
+    {
+        return Ok(json!({
+            "state": "rejected",
+            "reason": "sql_not_supported",
+            "diagnostic": diagnostic,
+            "target_id": report["target_id"],
+            "target_version": report["target_version"],
+            "dialect": report["dialect"],
+            "read_only": report["read_only"],
+        }));
+    }
+    Ok(report)
 }
 
 pub async fn check_execution_access(
@@ -146,7 +160,9 @@ pub async fn check_execution_access(
         "owner_id":ctx.user_id,"space_id":ctx.space_id}),
     )
     .await?;
-    if report["state"] != "passed" {
+    if report["state"] != "passed"
+        || super::grouping_validation::check_grouping_ambiguity(sql).is_some()
+    {
         return Err(Error::new("sql_not_supported"));
     }
     Ok(())

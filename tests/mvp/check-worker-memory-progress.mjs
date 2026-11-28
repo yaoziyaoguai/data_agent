@@ -24,7 +24,8 @@ const server=createServer(async(request,response)=>{
           FROM agent_runs WHERE id='${lockedRun}'`)[0];
         const database=new URL(h.env.DATA_AGENT_DATABASE_URL).pathname.slice(1);
         assert.match(database,/^data_agent_test_[a-f0-9]+$/);
-        lockClient=spawn('docker',['--context','colima-data-agent','exec','-i','data-agent-mysql-1',
+        const dockerContext=process.env.DATA_AGENT_DOCKER_CONTEXT||(process.platform==='darwin'?'colima-data-agent':'default');
+        lockClient=spawn('docker',['--context',dockerContext,'exec','-i','data-agent-mysql-1',
           'mysql','--defaults-extra-file=/run/secrets/mysql_root_client','--batch','--raw','--unbuffered',database,
           '-e',`START TRANSACTION; SELECT id FROM agent_runs WHERE id='${lockedRun}' FOR UPDATE; SELECT 'workspace_run_locked'; DO SLEEP(3); COMMIT;`]);
         lockClient.stdout.on('data',chunk=>{lockOutput+=chunk;});

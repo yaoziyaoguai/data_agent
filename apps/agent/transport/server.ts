@@ -31,9 +31,13 @@ export function createDeliveryServer(apiUrl:string,token:string,dispatch:typeof 
   let draining=false;
   const server=createServer(async(request,response)=>{
     let deliveryStage: DeliveryStage | 'delivery' = 'delivery';
-    if(draining){
-      // 409 沿用桥接未接纳的合同，Worker 归还本次交付尝试。
-      response.writeHead(request.url==='/health'?503:409,{'connection':'close'}).end();return;
+    if(draining&&request.url!=='/cancel-run'){
+      // 409 沿用桥接未接纳的合同，Worker 归还本次交付尝试；先同步设置状态码再排空请求体以避免 TCP RST。
+      response.statusCode=request.url==='/health'?503:409;
+      response.setHeader('connection','close');
+      let drained=0;
+      try{for await(const chunk of request){drained+=Buffer.isBuffer(chunk)?chunk.length:Buffer.byteLength(chunk);if(drained>512*1024)break;}}catch{}
+      response.end();return;
     }
     if(request.url==='/health'&&request.method==='GET'){response.end('ok');return;}
     if(request.headers.authorization!=='Bearer '+token){console.error('bridge_auth_rejected');response.writeHead(401).end();return;}
@@ -46,7 +50,9 @@ export function createDeliveryServer(apiUrl:string,token:string,dispatch:typeof 
       if(request.url==='/cancel-run'){
         const input=decodeContract<CancelRun>('CancelRun',JSON.parse(text));
         const entry=[...active.values()].find(e=>e.run.run_id===input.run_id&&e.run.lease_epoch===input.lease_epoch);
-        entry?.controller.abort();response.writeHead(200).end('cancel_notified');return;
+        entry?.controller.abort();
+        if(draining)response.setHeader('connection','close');
+        response.writeHead(200).end('cancel_notified');return;
       }
       run=decodeContract<RunEnvelope>('RunEnvelope',JSON.parse(text));
       if(active.has(run.conversation_id)){response.writeHead(409).end();return;}
@@ -68,6 +74,8 @@ export function createDeliveryServer(apiUrl:string,token:string,dispatch:typeof 
       response.writeHead(500,{'content-type':'application/json'}).end(JSON.stringify({code}));}
     finally{if(acquired&&run)active.delete(run.conversation_id);}
   });
+  server.keepAliveTimeout=95_000;
+  server.headersTimeout=100_000;
   return Object.assign(server,{drain(){
     draining=true;
     // 已锁定的 Node 在关闭监听时会一并关闭空闲 HTTP 连接。

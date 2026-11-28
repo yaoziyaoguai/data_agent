@@ -571,6 +571,7 @@ pub async fn refresh_context(
         asset_sources,
         active_source_skills,
         observations,
+        notification,
         input_tasks,
         ..
     } = delivery::workspace(
@@ -601,15 +602,17 @@ pub async fn refresh_context(
         &result_proofs,
         &projection,
     )?;
-    let mut visible_tasks = Vec::new();
+    let (mut active, mut others) = (Vec::new(), Vec::new());
     for task in tasks {
         if projection.scope_known && task["id"] == baseline["task_id"] {
-            visible_tasks.insert(0, task);
+            active.push(task);
         } else {
-            visible_tasks.push(task_identity(&task));
+            others.push(task_identity(&task));
         }
     }
-    visible_tasks.truncate(24.max(input_tasks.len()));
+    active.extend(others);
+    active.truncate(24.max(input_tasks.len()));
+    let visible_tasks = active;
     let mut visible = json!({"request_clock":message.request_clock,"input_task_ids":input_tasks,
         "active_task_ref":baseline,"tasks":visible_tasks,"recent_messages":[],
         "selected_skills":selected,"memories":memories,"query_observations":observations,
@@ -619,6 +622,10 @@ pub async fn refresh_context(
             .await?;
     visible["control_delivery"] = delivery.control_delivery.unwrap_or(Value::Null);
     visible["frozen_notification_covered"] = json!(delivery.frozen_notification_covered);
+    if let Some(query) = notification {
+        visible["result_notification"] = json!({"query_id":query["id"],"execution_state":query["execution_state"],
+            "task_ref":{"task_id":query["task_id"],"condition_version":query["condition_version"]}});
+    }
     crate::modules::retrieval::bound_workspace(&mut visible);
     observe_previews(&mut snapshot, &visible, &selected_provenance)?;
     snapshot["active_task"] = baseline;
@@ -737,7 +744,7 @@ fn workspace_assets(
                     result_proofs.iter().any(|((id, reference, _), result)| {
                         pair[0] == id.as_str()
                             && pair[1] == reference.as_str()
-                            && gate.allows_source_arg(&result.target_id)
+                            && gate.allows_delivery_result(result, sources)
                     })
                 })
             {
@@ -775,20 +782,13 @@ mod tests {
 
     #[test]
     fn delivery_failure_preserves_public_reasons_and_hides_internal_details() {
-        for code in [
-            "stale_context",
-            "forbidden",
-            "budget_exhausted",
-            "unavailable",
-            "retry_exhausted",
-            "provider_configuration_invalid",
-            "model_input_limit",
-            "model_retry_exhausted",
-            "model_usage_unknown",
-            "model_auth_failed",
-        ] {
-            assert_eq!(delivery_failure_code(code), json!(code));
-        }
+        let codes = "stale_context forbidden budget_exhausted unavailable retry_exhausted \
+            provider_configuration_invalid model_input_limit model_retry_exhausted model_usage_unknown model_auth_failed";
+        assert!(
+            codes
+                .split_whitespace()
+                .all(|c| delivery_failure_code(c) == json!(c))
+        );
         assert_eq!(
             delivery_failure_code("internal_database_detail: synthetic"),
             json!("unavailable")

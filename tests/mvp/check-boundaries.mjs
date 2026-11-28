@@ -72,6 +72,7 @@ const conditions = () => ({
   filters: ["is_test=0"],
   knowledge_refs: [],
   notes: "",
+  source_limits: null,
 });
 try {
   const cid = await h.create();
@@ -90,9 +91,9 @@ try {
     dependencies: [],
   };
   const skill = (await h.request("/assets", assetInput)).value;
-  const readArgs = { object_id: "asset-" + skill.id };
+  const readArgs = { path: `/skills/${skill.id}/${skill.version}/SKILL.md` };
   assert.equal(
-    (await invoke("read_knowledge", readArgs)).result.value.code,
+    (await invoke("read", readArgs)).result.value.code,
     "selection_required",
   );
   const selection = {
@@ -110,13 +111,23 @@ try {
   await h.resumeWorker();
   run = await h.capture(cid, "仅本次读取已选方法，不要记住");
   await h.pauseWorker();
-  assert.equal((await invoke("read_knowledge", readArgs)).result.status, 200);
+  const adoptedRead = await invoke("read", readArgs);
+  assert.equal(adoptedRead.result.status, 200);
   const disabledSkill = await h.request("/assets/" + skill.id + "/disable", {
     operation_id: randomUUID(),
     expected_version: skill.version,
   });
   assert.equal(disabledSkill.status, 200);
-  assert.equal((await invoke("read_knowledge", readArgs)).result.value.code, "stale_context");
+  assert.equal((await invoke("read", readArgs)).result.status, 404);
+  assert.equal(
+    (await h.internal("/internal/model/send", {
+      run_id: run.run_id,
+      lease_epoch: run.lease_epoch,
+      call_attempt_id: randomUUID(),
+      parameters_fingerprint: "a".repeat(64),
+    })).value.code,
+    "stale_context",
+  );
   // 停用会使已采用它的运行失效；撤回旧输入后，新运行仍不能读到停用正文。
   assert.equal((await h.request("/conversations/" + cid + "/messages/" + run.message_id + "/withdraw", {
     operation_id: randomUUID(),
@@ -125,7 +136,7 @@ try {
   await h.resumeWorker();
   run = await h.capture(cid, "仅本次继续边界检查，不要记住");
   await h.pauseWorker();
-  assert.equal((await invoke("read_knowledge", readArgs)).result.status, 404);
+  assert.equal((await invoke("read", readArgs)).result.status, 404);
   check("工具侧拒绝未选用/停用Skill，选用当前版本才可读正文");
   const rejected = (
     await invoke("manage_personal_asset", {
@@ -236,10 +247,10 @@ try {
   });
   assert.equal(saved.result.status, 200);
   await h.pausePlatform();
-  assert.deepEqual(
-    (await h.internal("/internal/data/tools", saved.input)).value,
-    saved.result.value,
-  );
+  const replayedSaved = (await h.internal("/internal/data/tools", saved.input)).value;
+  assert.equal("frozen_notification_covered" in replayedSaved, false);
+  const { frozen_notification_covered: _savedCoverage, ...expectedSaved } = saved.result.value;
+  assert.deepEqual(replayedSaved, expectedSaved);
   await h.resumePlatform();
   check("已保存SQL草稿回执重放不依赖平台再次可用");
   const taskB = (

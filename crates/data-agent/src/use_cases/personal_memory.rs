@@ -216,18 +216,39 @@ pub async fn process_index(pool: &MySqlPool) -> Result<bool> {
     };
     let mut index_asset = job["asset"].clone();
     if index_asset["state"] == "enabled" {
-        let ctx = AccessContext {
+        let base_ctx = AccessContext {
             user_id: job["owner_id"].as_str().unwrap_or("").to_owned(),
             space_id: job["space_id"].as_str().unwrap_or("").to_owned(),
             request_id: job["id"].as_str().unwrap_or("").to_owned(),
             table_access: None,
+        };
+        let ctx = if std::env::var("DATA_AGENT_PLATFORM_URL").is_ok() {
+            super::knowledge::catalog_context(&base_ctx).await?
+        } else {
+            base_ctx
         };
         match super::personal_assets::read(pool, &ctx, index_asset["id"].as_str().unwrap_or(""))
             .await
         {
             Ok(asset)
                 if asset["text_unavailable"] != true
-                    && asset["version"] == index_asset["version"] => {}
+                    && asset["version"] == index_asset["version"] =>
+            {
+                let mut tx = AppTx::begin(pool).await?;
+                let check =
+                    super::knowledge::check_refs_in_tx(&mut tx, &ctx, &asset["dependencies"]).await;
+                tx.commit().await?;
+                if let Err(error) = check {
+                    let code = if super::personal_assets::unavailable_text(&error) {
+                        "stale_context"
+                    } else {
+                        error.code
+                    };
+                    return assets::memory_index::complete(pool, &job, Some(code))
+                        .await
+                        .map(|_| true);
+                }
+            }
             Ok(_) => {
                 return assets::memory_index::complete(pool, &job, Some("stale_context"))
                     .await
@@ -261,6 +282,23 @@ pub async fn process_index(pool: &MySqlPool) -> Result<bool> {
 // 侧车无预算决定权；宿主从活动run或持久作业恢复原预算，结算不重新授予发送权。
 pub async fn model_call(pool: &MySqlPool, request: MemoryModelCall, input: Value) -> Result<Value> {
     let binding = &request.budget;
+    let index_catalog = if !matches!(request.action, MemoryModelCallAction::Finalize)
+        && matches!(binding.kind, MemoryBudgetBindingKind::Index)
+        && std::env::var("DATA_AGENT_PLATFORM_URL").is_ok()
+    {
+        let mut pre = AppTx::begin(pool).await?;
+        let job = assets::memory_index::read_job_in_tx(&mut pre, binding.id.as_str()).await?;
+        pre.commit().await?;
+        let base_ctx = AccessContext {
+            user_id: job["owner_id"].as_str().unwrap_or("").to_owned(),
+            space_id: job["space_id"].as_str().unwrap_or("").to_owned(),
+            request_id: binding.operation_id.clone(),
+            table_access: None,
+        };
+        Some(super::knowledge::catalog_context(&base_ctx).await?)
+    } else {
+        None
+    };
     let mut tx = AppTx::begin(pool).await?;
     if matches!(request.action, MemoryModelCallAction::Finalize) {
         let receipt = runtime::provider_calls::finish_in_tx(&mut tx, &input).await?;
@@ -305,12 +343,12 @@ pub async fn model_call(pool: &MySqlPool, request: MemoryModelCall, input: Value
         {
             return Err(Error::new("lease_lost"));
         }
-        let ctx = AccessContext {
+        let ctx = index_catalog.unwrap_or_else(|| AccessContext {
             user_id: job["owner_id"].as_str().unwrap_or("").to_owned(),
             space_id: job["space_id"].as_str().unwrap_or("").to_owned(),
             request_id: binding.operation_id.clone(),
             table_access: None,
-        };
+        });
         let asset = assets::read_in_tx(
             &mut tx,
             &ctx,

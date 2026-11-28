@@ -390,6 +390,50 @@ fn scalar(expr: &Expr) -> bool {
     matches!(unnested(expr), Expr::Value(_))
 }
 
+fn literal_expr(expr: &Expr) -> bool {
+    match unnested(expr) {
+        Expr::Value(_) => true,
+        Expr::UnaryOp { expr, .. } => literal_expr(expr),
+        _ => false,
+    }
+}
+
+pub fn is_table_free_select(sql: &str) -> bool {
+    let Ok(statements) = Parser::new(&SQLiteDialect {})
+        .with_recursion_limit(32)
+        .try_with_sql(sql)
+        .and_then(|mut parser| parser.parse_statements())
+    else {
+        return false;
+    };
+    let [Statement::Query(query)] = statements.as_slice() else {
+        return false;
+    };
+    if query.with.is_some()
+        || !query.pipe_operators.is_empty()
+        || query.order_by.is_some()
+        || query.limit_clause.is_some()
+    {
+        return false;
+    }
+    let SetExpr::Select(select) = query.body.as_ref() else {
+        return false;
+    };
+    select.from.is_empty()
+        && select.selection.is_none()
+        && select.having.is_none()
+        && matches!(
+            &select.group_by,
+            GroupByExpr::Expressions(exprs, modifiers) if exprs.is_empty() && modifiers.is_empty()
+        )
+        && select.projection.iter().all(|item| match item {
+            SelectItem::UnnamedExpr(expr) | SelectItem::ExprWithAlias { expr, .. } => {
+                literal_expr(expr)
+            }
+            _ => false,
+        })
+}
+
 fn simple_predicate(expr: &Expr) -> bool {
     match unnested(expr) {
         Expr::BinaryOp {

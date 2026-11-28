@@ -6,7 +6,7 @@ import { exportCheckpoint } from '../../apps/agent/session/checkpoint.ts';
 import { harness, until } from './harness.mjs';
 const h=await harness({capture:true,env:{DATA_AGENT_LEASE_MS:'120000',DATA_AGENT_QUERY_DELAY_SECONDS:'0.1'}});
 const manager=SessionManager.inMemory('/synthetic/data-agent');
-const conditions={time_start:'2026-01-01T00:00:00Z',time_end:'2026-02-01T00:00:00Z',timezone:'UTC',metric:'net_revenue',channel:null,group_by:[],filters:['is_test=0'],knowledge_refs:[],notes:'保持订单口径'};
+const conditions={time_start:'2026-01-01T00:00:00Z',time_end:'2026-02-01T00:00:00Z',timezone:'UTC',metric:'net_revenue',channel:null,group_by:[],filters:['is_test=0'],knowledge_refs:[],notes:'保持订单口径',source_limits:null};
 const checks=[];let passed=false;let run;
 const invoke=async(tool_name,args)=>{
  const input={run_id:run.run_id,lease_epoch:run.lease_epoch,sdk_tool_call_id:randomUUID(),tool_name,arguments:args,checkpoint:exportCheckpoint(manager,run.workspace_context.authority_revision,run.workspace_context.authority_snapshot)};

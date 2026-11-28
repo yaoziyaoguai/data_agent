@@ -149,7 +149,7 @@ try{
   if(publicIndex){ok(await h.request('/knowledge-index/rebuilds',{operation_id:randomUUID()}));preparedCollection=true;}
   docA=ok(await h.request('/knowledge',{operation_id:randomUUID(),kind:'document',name:'合成甲专用材料',body:sourceA,related_ids:[]}));
   docB=ok(await h.request('/knowledge',{operation_id:randomUUID(),kind:'document',name:'合成乙专用材料',body:sourceB,related_ids:[]}));
-  if(publicIndex)await until(()=>h.sql(`SELECT JSON_OBJECT('n',COUNT(*)) FROM knowledge_index_jobs WHERE object_id IN ('${docA.id}','${docB.id}') AND vector_state='indexed'`)[0].n===4,'两份来源的raw与知识正文均进入本次公共集合',120000);
+  if(publicIndex)await until(()=>h.sql(`SELECT JSON_OBJECT('n',COUNT(*)) FROM knowledge_index_jobs WHERE object_id IN ('${docA.id}','${docB.id}') AND vector_state='indexed'`)[0].n===2,'两份文档的知识窗口进入本次公共集合',120000);
   const cid=await h.create();
   if(upgrade){
     legacyPhase=true;run=await h.capture(cid,'升级前先建立并解释一个独立合成目标，不使用外部材料。');await h.pauseWorker();
@@ -211,7 +211,7 @@ try{
   taskA=await invoke('update_analysis_task',{action:'create',goal:'合成甲解释',conditions:scoped(docA),options:[]});
   if(publicIndex){
     searchA=await invoke('search_knowledge',{query:'SYNTHETIC_SCOPE_A_PRIVATE_BODY',kinds:['document']});
-    assert.ok(searchA.hits.some(hit=>hit.kind==='knowledge_entry'?hit.ref.object_id===docA.id:hit.citation.source.id===docA.id),'正式v2公共检索必须交付甲当前内容');
+    assert.ok(searchA.hits.some(hit=>hit.record_kind==='knowledge_entry'?hit.ref.object_id===docA.id:hit.citation.source.id===docA.id),'正式v2公共检索必须交付甲当前内容');
     assert.ok(!JSON.stringify(searchA).includes(sourceB),'甲来源检索不能交付乙正文');
   }
   await invoke('read_knowledge',{items:[{kind:'knowledge',ref:{object_id:docA.id,version:docA.version,path:'body'}}]});

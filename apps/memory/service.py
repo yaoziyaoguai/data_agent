@@ -143,6 +143,7 @@ class MemoryService:
             if previous["state"] != "prepared":
                 raise MemoryError(previous.get("error", "memory_operation_unknown"))
             return {"operation_id": r["operation_id"], "body": previous["body"], "replayed": True}
+        pending_ids = []
         try:
             if r["quote"] not in r["message"]:
                 raise MemoryError("memory_unavailable")
@@ -155,8 +156,9 @@ class MemoryService:
             result = self.memory.add([{"role": "user", "content": r["message"]}], user_id=self.tenant(r), run_id=r["operation_id"],
                 metadata={"owner_id": r["owner_id"], "space_id": r["space_id"], "commit_state": "pending", "operation_id": r["operation_id"]}, infer=True,
                 prompt=prompt)
-            self.check_calls()
             items = result.get("results", [])
+            pending_ids = [v["id"] for v in items if isinstance(v, dict) and isinstance(v.get("id"), str)]
+            self.check_calls()
             if not items or any(not isinstance(v.get("memory"), str) or not v["memory"].strip() for v in items):
                 raise MemoryError("memory_extraction_empty")
             body = "\n".join(v["memory"].strip() for v in items)
@@ -166,6 +168,11 @@ class MemoryService:
             self.store.write_operation(key, fp, "prepared", {"body": body, "ids": [v["id"] for v in items], "owner_id": r["owner_id"], "space_id": r["space_id"]})
             return {"operation_id": r["operation_id"], "body": body, "replayed": False}
         except Exception as e:
+            for memory_id in pending_ids:
+                try:
+                    self.memory.delete(memory_id)
+                except Exception:
+                    pass
             code = getattr(getattr(self, 'gateway', None), 'failure', None) or (str(e) if isinstance(e, MemoryError) else "memory_operation_unknown")
             self.store.write_operation(key, fp, "failed", {"error": code})
             raise MemoryError(code) from None
@@ -180,6 +187,15 @@ class MemoryService:
         version = int(asset["version"])
         receipt = {"operation_id": r["operation_id"], "state": "ready" if asset["state"] == "enabled" else "removed"}
         if current and current["version"] > version:
+            if r.get("extraction_operation_id"):
+                row = self.store.db.execute("SELECT state,result FROM operations WHERE id=?", ("extract:" + r["extraction_operation_id"],)).fetchone()
+                if row and row[0] == "prepared":
+                    for memory_id in json.loads(row[1]).get("ids", []):
+                        if memory_id not in current["memory_ids"]:
+                            try:
+                                self.memory.delete(memory_id)
+                            except Exception:
+                                pass
             return {**receipt, "state": "superseded"}
         if previous and previous["state"] == "completed":
             return previous["receipt"]

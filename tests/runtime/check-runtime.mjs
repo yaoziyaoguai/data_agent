@@ -4,14 +4,16 @@ import {spawn,execFileSync} from 'node:child_process';
 import {readFile,mkdir,writeFile} from 'node:fs/promises';
 import {randomBytes,randomUUID} from 'node:crypto';
 import net from 'node:net';
+import http from 'node:http';
 import {chromium} from 'playwright';
 import {validateContract} from '../../packages/contracts/validate.ts';
 
 const root=process.cwd();const sandbox=root+'/.local/checks';await mkdir(sandbox,{recursive:true});
-const container=execFileSync('docker',['--context','colima-data-agent','ps','--filter','label=com.docker.compose.project=data-agent','--filter','label=com.docker.compose.service=mysql','--format','{{.ID}}'],{encoding:'utf8'}).trim();
+const dockerContext=process.env.DATA_AGENT_DOCKER_CONTEXT||(process.platform==='darwin'?'colima-data-agent':'default');
+const container=execFileSync('docker',['--context',dockerContext,'ps','--filter','label=com.docker.compose.project=data-agent','--filter','label=com.docker.compose.service=mysql','--format','{{.ID}}'],{encoding:'utf8'}).trim();
 assert.ok(/^[a-f0-9]+$/.test(container),'专用MySQL未运行');
 const database='data_agent_test_'+randomBytes(8).toString('hex');
-function sql(query){return execFileSync('docker',['--context','colima-data-agent','exec','-i',container,'mysql','--defaults-extra-file=/run/secrets/mysql_root_client','--batch','--skip-column-names'],{input:query,encoding:'utf8',stdio:['pipe','pipe','pipe']}).trim();}
+function sql(query){return execFileSync('docker',['--context',dockerContext,'exec','-i',container,'mysql','--defaults-extra-file=/run/secrets/mysql_root_client','--batch','--skip-column-names'],{input:query,encoding:'utf8',stdio:['pipe','pipe','pipe']}).trim();}
 function data(query){const value=sql('USE '+database+'; '+query);return value?value.split('\n').map(v=>JSON.parse(v)):[];}
 const port=()=>new Promise(resolve=>{const server=net.createServer();server.listen(0,'127.0.0.1',()=>{const p=server.address().port;server.close(()=>resolve(p));});});
 const apiPort=await port(),bridgePort=await port(),webPort=await port();
@@ -38,7 +40,7 @@ async function create(){const result=await request('/conversations',{operation_i
 async function snapshot(cid){const result=await request('/conversations/'+cid+'/snapshot');assert.equal(result.status,200);validateContract('Snapshot',result.value);return result.value;}
 async function finished(cid){return until(async()=>{const s=await snapshot(cid);return s.runs.some(r=>r.state==='finished')?s:false;},'finished '+cid,15000);}
 function counts(cid){return data(`SELECT JSON_OBJECT('tasks',(SELECT COUNT(*) FROM analysis_tasks WHERE conversation_id='${cid}'),'tools',(SELECT COUNT(*) FROM tool_calls WHERE conversation_id='${cid}'),'outputs',(SELECT COUNT(*) FROM agent_runs WHERE conversation_id='${cid}' AND state='finished'))`)[0];}
-let browser;
+let browser,brokenBridge;
 try{
  sql('CREATE DATABASE '+database+'; GRANT ALL ON '+database+'.* TO data_agent;');
  if(process.argv.includes('--locking')){execFileSync(process.env.HOME+'/.cargo/bin/cargo',['test','--locked','-p','data-agent','locking_','--','--nocapture'],{env,cwd:root,stdio:['ignore','pipe','pipe']});checks.push({name:'锁内当前读取、事务快照归属、锁序及并发领取',passed:true});await writeFile(sandbox+'/runtime-locking.json',JSON.stringify({passed:true,checks},null,2)+'\n');console.log(JSON.stringify({passed:true,checks}));}else{
@@ -135,15 +137,18 @@ try{
  assert.deepEqual(counts(busyCid),{tasks:2,tools:2,outputs:2});assert.equal(data(`SELECT JSON_OBJECT('attempts',attempts) FROM background_jobs WHERE message_id='${busyFirst.value.message_id}'`)[0].attempts,1);
  await stop(worker);await stop(otherWorker);await stop(bridge);checks.push({name:'两个Worker串行推进同会话，会话忙不消耗交付次数',passed:true});
  bridge=start('failure_recovery_bridge','node',['apps/agent/server.ts']);await healthy(bridgePort,bridge);await stop(bridge);
+ brokenBridge=http.createServer((_req,res)=>{res.writeHead(500,{'content-type':'application/json'}).end('{"code":"unexpected_error"}');});
+ await new Promise(resolve=>brokenBridge.listen(bridgePort,'127.0.0.1',resolve));
  worker=start('exhausted_worker','target/debug/data-agent-worker');
  const failedCid=await create();await request('/conversations/'+failedCid+'/messages',{client_message_id:randomUUID(),text:'验证交付失败可见状态'});
  const failed=await until(async()=>{const s=await snapshot(failedCid);return s.runs.length===4&&s.runs.every(r=>r.state==='failed')?s:false;},'bounded retry exhaustion',15000);
  assert.ok(failed.events.some(e=>e.type==='run_failed'));assert.deepEqual(counts(failedCid),{tasks:0,tools:0,outputs:0});
  assert.equal(data(`SELECT JSON_OBJECT('state',state,'attempts',attempts) FROM background_jobs WHERE conversation_id='${failedCid}'`)[0].state,'failed');
+ await new Promise(resolve=>brokenBridge.close(resolve));brokenBridge=undefined;
  await stop(worker);checks.push({name:'真实交付连续失败后明确终止，页面可读失败状态',passed:true});
  }
  const mode=process.argv.includes('--flow')?'flow':process.argv.includes('--recovery')?'recovery':'all';
  const report={passed:true,checks,provider:'local_mock',piSdk:PI_SDK_VERSION,mysql:'real local MySQL',limits:'不证明DeepSeek或真实平台能力',logs};await writeFile(sandbox+'/runtime-'+mode+'.json',JSON.stringify(report,null,2)+'\n');console.log(JSON.stringify({passed:true,checks}));
 }
 }catch(error){await writeFile(sandbox+'/runtime-failure.json',JSON.stringify({error:String(error),checks,logs},null,2));throw error;}
-finally{if(browser)await browser.close();for(const child of processes.reverse())await stop(child);sql('DROP DATABASE IF EXISTS '+database+';');}
+finally{if(brokenBridge)await new Promise(resolve=>brokenBridge.close(resolve));if(browser)await browser.close();for(const child of processes.reverse())await stop(child);sql('DROP DATABASE IF EXISTS '+database+';');}

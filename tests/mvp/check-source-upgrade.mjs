@@ -63,10 +63,11 @@ const current = source => h.sql(`SELECT JSON_OBJECT('source_id',source_id,'revis
   'fingerprint',content_fingerprint) FROM source_current WHERE source_id=${quote(source)}`)[0];
 const countCurrent = ids => h.sql(`SELECT JSON_OBJECT('n',COUNT(*)) FROM source_current WHERE source_id IN (${ids.map(quote).join(',')})`)[0].n;
 async function hold(query) {
-  const container = execFileSync('docker', ['--context', 'colima-data-agent', 'ps', '--filter', 'label=com.docker.compose.project=data-agent',
+  const dockerContext = process.env.DATA_AGENT_DOCKER_CONTEXT || (process.platform === 'darwin' ? 'colima-data-agent' : 'default');
+  const container = execFileSync('docker', ['--context', dockerContext, 'ps', '--filter', 'label=com.docker.compose.project=data-agent',
     '--filter', 'label=com.docker.compose.service=mysql', '--format', '{{.ID}}'], {encoding: 'utf8'}).trim();
   assert.match(container, /^[a-f0-9]+$/);
-  const child = spawn('docker', ['--context', 'colima-data-agent', 'exec', '-i', container, 'mysql', '--defaults-extra-file=/run/secrets/mysql_root_client',
+  const child = spawn('docker', ['--context', dockerContext, 'exec', '-i', container, 'mysql', '--defaults-extra-file=/run/secrets/mysql_root_client',
     '--default-character-set=utf8mb4', '--batch', '--raw', '--unbuffered', '--skip-column-names', database], {stdio: ['pipe', 'pipe', 'pipe']});
   let output = '', errors = '';
   child.stdout.on('data', value => output += value); child.stderr.on('data', value => errors += value);

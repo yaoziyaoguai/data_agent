@@ -11,7 +11,8 @@ const filter = process.argv.find(value => value.startsWith('--filter='))?.slice(
 if (filter) assert.match(filter, /^[a-z0-9_]+$/);
 const label = process.argv.find(value => value.startsWith('--label='))?.slice(8) ?? 'run';
 assert.match(label, /^[a-z0-9-]+$/);
-const container = execFileSync('docker', ['--context','colima-data-agent','ps','--filter',
+const dockerContext = process.env.DATA_AGENT_DOCKER_CONTEXT || (process.platform === 'darwin' ? 'colima-data-agent' : 'default');
+const container = execFileSync('docker', ['--context',dockerContext,'ps','--filter',
   'label=com.docker.compose.project=data-agent','--filter','label=com.docker.compose.service=mysql',
   '--format','{{.ID}}'], {encoding:'utf8'}).trim();
 assert.match(container, /^[a-f0-9]+$/);
@@ -25,7 +26,7 @@ const cases = [
   'run_version_is_frozen_across_process_recovery',
 ].filter(name => !filter || name.includes(filter));
 const databases = Object.fromEntries(cases.map((name,index) => [name,prefix+'_'+index]));
-const sql = query => execFileSync('docker', ['--context','colima-data-agent','exec','-i',container,
+const sql = query => execFileSync('docker', ['--context',dockerContext,'exec','-i',container,
   'mysql','--defaults-extra-file=/run/secrets/mysql_root_client','--batch','--skip-column-names'],
   {input:query, encoding:'utf8', stdio:['pipe','pipe','pipe']});
 const command = ['test','--offline','--locked','-p','data-agent','--test','tool_contract_version',

@@ -13,6 +13,9 @@ try {
  await page.getByLabel('你的数据问题').waitFor();await page.reload();
  await page.getByLabel('你的数据问题').fill('尚未发送的分析问题');
  await page.getByRole('button',{name:'＋ 选用分析方法',exact:true}).click();
+ const picker=page.getByRole('dialog',{name:'选用分析方法',exact:true});
+ await picker.waitFor();
+ await picker.getByRole('button',{name:'去我的积累管理',exact:true}).click();
  assert.match(await page.getByRole('tab',{selected:true}).innerText(),/^我的 Skill/);
  await page.getByRole('tab',{name:/^空间公共 Skill/}).click();assert.match(await page.getByRole('tab',{selected:true}).innerText(),/^空间公共 Skill/);
  await page.getByRole('tab',{name:/^我的 Skill/}).click();

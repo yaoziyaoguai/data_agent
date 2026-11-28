@@ -30,6 +30,12 @@ assert.equal(ast.children[0].children[3].url, `https://example.org/${known}`);
 assert.equal(ast.children[1].value, `SELECT '${known}' AS value`);
 const memory = randomUUID();
 assert.equal(objectReferenceLabels({ tasks: [], events: [{ type: "memory_saved", payload: { asset_id: memory } }] }, [])[memory], "个人记忆");
+const verboseQueryId = randomUUID();
+const verboseLabel = objectReferenceLabels(
+  { tasks: [], events: [] },
+  [{ id: verboseQueryId, summary: "口径：采用公共指标「语音任务达成率」(task_completion_rate)，分子=task_completed_count（final_outcome=completed 的轮次数）。时间：按日汇总。" }],
+)[verboseQueryId];
+assert.equal(verboseLabel, "查询「口径：采用公共指标“语音任务达成率”… 」".replace("… ", "…"));
 
 const f = await createReuseFixture({ web: true });
 const { h, cid } = f;

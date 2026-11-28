@@ -15,7 +15,7 @@ async fn rejection_data_in_tx(
             "本次执行授权被拒绝，未新增执行授权。instruction_quote须逐字包含本轮真实用户完整原话，包括粘贴SQL、换行、否定和限定；系统结果唤醒不能授权。先核对查询当前SQL、参数、状态和版本；若只是漏引原话且本轮仍有有效执行要求，可用新的工具调用修正，不必再次询问用户；不得修改已登记调用参数或另建查询。已提交查询只接回状态，未知先按原身份查证，不能换ID重做。任务、版本、权限与预算检查保持。"
         }
         (_, "task_context_required") => {
-            "本条输入尚缺有效任务归属或资料范围裁决。先按受控任务目录或本回执recovery.task中的task_id/condition_version核对目标。已有任务用update_analysis_task（action=route，task_id取该目标，expected_version取condition_version，options=[]）登记本条输入；目标或范围确需修改时用revise，新目标才create。归属后沿原请求继续。执行已有SQL应先get_query核对该query的SQL、参数和版本，再execute_query；需要条件或依据时按当前范围补读，不重造草稿或无故改为澄清。继承原许可，来源仍未知不能自动补source_limits=null或扩大范围；新任务确无额外来源限制才显式声明null。"
+            "本条输入尚缺有效任务归属或资料范围裁决。先按受控任务目录或本回执recovery.task核对目标。若recovery.task.source_limits_declared为true，已有任务用update_analysis_task（action=route，task_id取该目标，expected_version取condition_version，options=[]）登记本条输入；若source_limits_declared为false（route不会补来源声明），须对照本任务真实用户原话：用户确未附加来源限制（如create漏填source_limits）用revise传condition_patch={set:{},unset:[\"source_limits\"]}显式记为无限制，用户明确限制了来源则先search_knowledge(view=source_identity)核明身份后用revise设置set.source_limits，历史旧任务范围仍未知时先read_analysis_task/read_conversation查证、不得盲补null或编造允许集；新目标才create（无额外限制须显式填conditions.source_limits=null）。确定归属和范围后沿原请求继续。执行已有SQL应先get_query核对该query的SQL、参数和版本，再execute_query；需要条件或依据时按当前范围补读，不重造草稿或无故改为澄清。"
         }
         (_, "stale_knowledge") => {
             "知识正文版本、结构绑定或必要依据已变化，本次未保存或执行。先用search_knowledge定位可读的当前条目，再用read_knowledge补读正文和所需结构；structure_only返回本次实际结构依赖。重新采用前核对object_id/version/path及任务许可，不能只替换版本数字。若原文或结构依据无法核实，保留具体缺口。"
@@ -77,7 +77,16 @@ async fn rejection_data_in_tx(
             | "invalid_evidence"
     ) {
         let args = &input["arguments"];
-        let mut task = args["task_id"].as_str().map(str::to_owned);
+        let mut task = args["task_id"]
+            .as_str()
+            .or_else(|| args["task_ref"]["task_id"].as_str())
+            .map(str::to_owned);
+        if task.is_none()
+            && error.code == "task_context_required"
+            && let Some((active, _)) = conversations::active_task_ref_in_tx(tx, conv).await?
+        {
+            task = Some(active);
+        }
         if let Some(query_id) = args["query_id"].as_str() {
             match queries::read_in_tx(tx, ctx, query_id).await {
                 Ok(query) if query["conversation_id"] == conv.id => {

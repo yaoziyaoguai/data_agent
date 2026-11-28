@@ -5,7 +5,7 @@ import {writeFile} from 'node:fs/promises';
 import {SessionManager} from '@earendil-works/pi-coding-agent';
 import {exportCheckpoint} from '../../apps/agent/session/checkpoint.ts';
 import {deliver} from '../../apps/agent/session/deliver.ts';
-import {harness} from './harness.mjs';
+import {harness, until} from './harness.mjs';
 import {assetInput, select as selectSkill} from './skill-fixtures.mjs';
 
 // 04切片2：source_limits消费侧硬门。来源身份跟任务条件走；只用合成资料与隔离MySQL。
@@ -529,6 +529,87 @@ try {
     await h2.close();
     await new Promise(resolve => piProvider.close(resolve));
   }
+
+  // 十四、表级来源门贯通SQL草稿、执行结果与答案绑定；越界底表（含漏填knowledge_refs）
+  // 在草稿与结果读取双端拦截，且未声明source_limits时recovery.task如实暴露source_limits_declared=false。
+  const tableGateCid = await h.create();
+  await begin(tableGateCid, '先建未声明来源范围的任务核对恢复信息，再切换表级限源核对SQL与结果。');
+  const {source_limits: _omittedLimits, ...omittedConditions} = conditions;
+  const omittedTask = await invoke('update_analysis_task',
+    {action: 'create', goal: '未声明来源范围的任务', conditions: omittedConditions, options: []});
+  const missingScopeRejection = await invoke('search_knowledge', {query: 'demo_order_detail'}, 'task_context_required');
+  assert.equal(missingScopeRejection.recovery?.task?.task_id, omittedTask.task_id);
+  assert.equal(missingScopeRejection.recovery?.task?.source_limits_declared, false,
+    '未声明source_limits时recovery.task明确返回source_limits_declared=false');
+  await invoke('update_analysis_task', {action: 'revise', task_id: omittedTask.task_id,
+    expected_version: omittedTask.condition_version, goal: '',
+    condition_patch: {set: {}, unset: ['source_limits']}, options: []});
+  const outsideExecuted = await invoke('request_query', {task_id: omittedTask.task_id,
+    condition_version: await currentVersion(omittedTask.task_id),
+    sql: 'SELECT COUNT(*) AS customer_cnt FROM dim_customers', parameters: {},
+    target_id: 'synthetic-sqlite', summary: '自由任务下查询客户维表',
+    knowledge_refs: [], replaces_query_id: null});
+  await finish();
+  ok(await h.request(`/queries/${outsideExecuted.id}/confirm`, {operation_id: randomUUID(),
+    draft_version: outsideExecuted.draft_version, condition_version: outsideExecuted.condition_version}));
+  const seenNotifications = new Set(h.captured.map(value => value.message_id));
+  await h.resumeWorker();
+  const outsideNotified = await until(async () => h.captured
+    .find(value => value.conversation_id === tableGateCid && !seenNotifications.has(value.message_id)),
+    'outside query result notification', 40000);
+  await h.pauseWorker();
+  seenNotifications.add(outsideNotified.message_id);
+  run = outsideNotified;
+  manager = SessionManager.inMemory('/synthetic/data-agent');
+  await finish();
+  await begin(tableGateCid, '只允许使用demo_order_detail表查订单数量，不允许读dim_customers或其他表。');
+  const tableOnlyTask = await invoke('update_analysis_task', {action: 'create',
+    goal: '只查demo_order_detail表', options: [],
+    conditions: {...conditions, knowledge_refs: [], source_limits: {
+      allowed_sources: [platform('table-demo_order_detail')], origin_message_ids: []}}});
+  const registeredTableGate = await invoke('read_analysis_task', {task_id: tableOnlyTask.task_id});
+  assert.deepEqual(registeredTableGate.conditions?.source_limits, {
+    allowed_sources: [platform('table-demo_order_detail')],
+    origin_message_ids: [run.message_id],
+  }, '任务条件明确持久化非空source_limits并由宿主绑定origin_message_ids');
+  const blockedReadKnowledge = await invoke('read_knowledge', {
+    items: [{kind: 'knowledge', ref: {object_id: 'table-dim_customers', path: 'ddl', version: '1'}}],
+  });
+  assert.equal(blockedReadKnowledge.items?.[0]?.state, 'not_available',
+    '范围外表的知识条目在表级来源门下不可交付');
+  await invoke('request_query', {task_id: tableOnlyTask.task_id,
+    condition_version: tableOnlyTask.condition_version,
+    sql: 'SELECT d.order_id FROM demo_order_detail d JOIN dim_customers c ON d.customer_id = c.customer_id',
+    parameters: {}, target_id: 'synthetic-sqlite', summary: '漏填knowledge_refs但越界关联dim_customers',
+    knowledge_refs: [], replaces_query_id: null}, 'source_not_allowed');
+  await invoke('get_query', {query_id: outsideExecuted.id}, 'source_not_allowed');
+  const allowedTableQuery = await invoke('request_query', {task_id: tableOnlyTask.task_id,
+    condition_version: tableOnlyTask.condition_version,
+    sql: 'SELECT SUM(quantity) AS total_qty FROM demo_order_detail',
+    parameters: {}, target_id: 'synthetic-sqlite', summary: '仅查允许表demo_order_detail',
+    knowledge_refs: [], replaces_query_id: null});
+  seenNotifications.add(run.message_id);
+  await finish();
+  ok(await h.request(`/queries/${allowedTableQuery.id}/confirm`, {operation_id: randomUUID(),
+    draft_version: allowedTableQuery.draft_version, condition_version: allowedTableQuery.condition_version}));
+  await h.resumeWorker();
+  const allowedNotified = await until(async () => h.captured
+    .find(value => value.conversation_id === tableGateCid && !seenNotifications.has(value.message_id)),
+    'allowed table query result notification', 40000);
+  await h.pauseWorker();
+  run = allowedNotified;
+  manager = SessionManager.inMemory('/synthetic/data-agent');
+  const allowedResult = await invoke('get_query', {query_id: allowedTableQuery.id, view: 'rows'});
+  assert.ok(allowedResult.results, '表级允许集内查询结果无需synthetic-sqlite整库键即可在结果通知轮读取');
+  const preparedUnderGate = await invoke('prepare_analysis_answer', {
+    sources: [{query_id: allowedTableQuery.id, result_ref: allowedResult.query.result_ref,
+      columns: ['total_qty']}],
+    values: [{name: 'total_qty', query_id: allowedTableQuery.id, kind: 'cell',
+      row_index: 0, column: 'total_qty'}],
+  });
+  assert.deepEqual(Object.keys(preparedUnderGate.bindings), ['total_qty']);
+  await finish();
+  checks.push('表级来源门贯通草稿、结果通知轮读取与答案绑定：越界SQL与结果硬拒，允许表查询结果与prepare_analysis_answer正常通过');
 
   const result = {passed: true, checks, officialRequests: 0};
   await writeFile('.local/checks/mvp-source-limits.json', JSON.stringify(result, null, 2));

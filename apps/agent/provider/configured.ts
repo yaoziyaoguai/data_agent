@@ -119,6 +119,7 @@ export async function configuredModel(
             ? {
                 compat: {
                   ...compat,
+                  supportsStrictTools: false,
                   forceAdaptiveThinking:
                     profile.configured_model.anthropic_thinking_mode ===
                     "adaptive",

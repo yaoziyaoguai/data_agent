@@ -278,6 +278,9 @@ pub async fn read_source_in_tx(
     id: &str,
     version: u64,
 ) -> Result<Value> {
+    if id.starts_with("catalog-") && !ctx.can_read_platform_source(id) {
+        return Err(Error::new("not_available"));
+    }
     let current = source_version_in_tx(tx, &ctx.space_id, id).await?;
     if let Some(row) = sqlx::query(
         "SELECT body,complete FROM source_current WHERE source_id=? AND space_id=? AND revision=?",

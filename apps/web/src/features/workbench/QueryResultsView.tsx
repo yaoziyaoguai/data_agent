@@ -16,8 +16,10 @@ export function chartColumns(result: QueryResults) {
   return { dimensions, measures };
 }
 
-export function QueryResultsView({ result, onShowSql, onOpenResults }: {
+export function QueryResultsView({ result, copiedSql, onCopySql, onShowSql, onOpenResults }: {
   result: QueryResults;
+  copiedSql?: boolean;
+  onCopySql?: () => void;
   onShowSql: () => void;
   onOpenResults: () => void;
 }) {
@@ -37,10 +39,9 @@ export function QueryResultsView({ result, onShowSql, onOpenResults }: {
   const range = high - low || 1;
   const zero = -low / range * 100;
   return <div className="result-panel">
-    {result.rows.length === 1 && !dimensions.length && <div className="result-values">{measures.map(index => <div key={index}><span>{columnLabel(result.columns[index])}{result.columns[index].unit ? `（${result.columns[index].unit}）` : ""}</span><strong>{result.rows[0][index] ?? "NULL"}</strong></div>)}</div>}
     <div className="result-toolbar">
       <div className="segmented" aria-label="结果展示"><button aria-pressed={mode === "table" || !canChart} onClick={() => setMode("table")}>表格</button><button aria-pressed={mode === "chart" && canChart} disabled={!canChart} title={canChart ? "按分类和指标查看" : "当前结果缺少适合绘图的分类与数值指标"} onClick={() => setMode("chart")}>图表</button></div>
-      <div className="result-actions"><button className="text-link" onClick={onShowSql}>最终 SQL</button><button className="text-link" onClick={onOpenResults}>查看完整表格</button><QueryCsvDownload queryId={result.query_id}/></div>
+      <div className="result-actions">{onCopySql && <button type="button" className="text-link" aria-label="复制 SQL" title="复制 SQL 及绑定参数" onClick={onCopySql}>{copiedSql ? "已复制" : "复制 SQL"}</button>}<button type="button" className="text-link" onClick={onShowSql}>最终 SQL</button><button type="button" className="text-link" onClick={onOpenResults}>查看完整表格</button><QueryCsvDownload queryId={result.query_id}/></div>
     </div>
     {result.truncated && <p className="result-limit">结果已截断：下载也仅包含平台当前保存的结果。</p>}
     {!result.truncated && !result.result_complete && !result.next_cursor && <p className="result-limit">平台返回部分结果，下载仅包含当前可用的数据。</p>}

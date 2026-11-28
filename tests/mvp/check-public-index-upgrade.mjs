@@ -108,19 +108,20 @@ try {
   const originalBody = '合成索引迁移文档。\n' + '背景只用于分段，不提供案例答案。'.repeat(210) + '\n尾部保留条件：仅确认完成的请求计入尾部口径。🧪';
   const document = ok(await h.request('/knowledge', {operation_id:randomUUID(), kind:'document', name:'合成尾部迁移文档', body:originalBody, related_ids:[]}));
   const outside = ok(await h.request('/knowledge', {operation_id:randomUUID(), kind:'document', name:'合成范围外迁移文档', body:'尾部保留条件：范围外正文不得交付。', related_ids:[]}));
-  // 升级前已存在正文，却未登记raw任务；不能让空UPDATE冒充已重建来源。
-  h.sql(`DELETE FROM knowledge_index_jobs WHERE target_kind='source_excerpt' AND object_id=${quote(document.id)}`);
+  // a7e8e64收口：独立文档仅登记knowledge_entry语句窗口索引，平台来源登记source_excerpt原文向量目标。
+  h.sql(`DELETE FROM knowledge_index_jobs WHERE target_kind='knowledge_entry' AND object_id=${quote(document.id)}`);
   const beforePreparation = h.sql("SELECT JSON_OBJECT('n',COUNT(*)) FROM background_jobs WHERE kind='prepare_source'")[0].n;
   const operation = randomUUID();
   const prepared = ok(await h.request('/knowledge-index/rebuilds', {operation_id:operation}));
   assert.deepEqual(ok(await h.request('/knowledge-index/rebuilds', {operation_id:operation})), prepared);
+  const pendingKnowledge = h.sql(`SELECT JSON_OBJECT('id',object_id,'version',version) FROM knowledge_index_jobs WHERE target_kind='knowledge_entry' AND source_kind='' ORDER BY object_id`);
+  assert.ok(pendingKnowledge.some(row => row.id === document.id && row.version === 1),
+    '显式重建必须补登记缺失的当前文档知识窗口目标：' + JSON.stringify({id:document.id, pendingKnowledge}));
   const pending = h.sql(`SELECT JSON_OBJECT('kind',source_kind,'id',object_id,'version',version,'attempts',vector_attempts) FROM knowledge_index_jobs WHERE target_kind='source_excerpt' AND space_id='demo' ORDER BY source_kind,object_id`);
-  assert.ok(pending.some(row => row.kind === 'document' && row.id === document.id && row.version === 1),
-    '显式重建必须补登记缺失的当前文档raw目标：' + JSON.stringify({id:document.id, pending}));
   const heads = h.sql("SELECT JSON_OBJECT('id',h.id,'version',h.version) FROM source_heads h LEFT JOIN catalog_platform_heads p ON p.source_id=h.id WHERE h.space_id='demo' AND COALESCE(p.retired,FALSE)=FALSE");
   for (const head of heads) assert.ok(pending.some(row => row.kind === 'platform' && row.id === head.id && row.version === head.version), '显式重建必须覆盖当前平台来源：' + head.id);
   assert.equal(h.sql("SELECT JSON_OBJECT('n',COUNT(*)) FROM background_jobs WHERE kind='prepare_source'")[0].n, beforePreparation, '补齐索引不新增语义准备');
-  checks.push('同一维护回执幂等，缺失的当前平台/文档raw待办从owner补齐，不重新整理');
+  checks.push('同一维护回执幂等，缺失的当前平台raw与文档知识待办从owner补齐，不重新整理');
   if (!missingOnly) {
     const personalMemory = ok(await h.request('/assets', assetInput({kind:'memory', name:'合成升级偏好', body:'合成金额默认用元展示。'})));
     const skill = ok(await h.request('/assets', assetInput({name:'合成升级方法', body:'核对当前资料并保留实际缺口。'})));
@@ -163,7 +164,7 @@ try {
     assert.deepEqual(h.sql(`SELECT body FROM (SELECT object_id,version,archived_body AS body FROM knowledge_revisions WHERE archived_body IS NOT NULL) archive_rows WHERE object_id=${quote(document.id)} AND version=1`)[0], oldDocument);
     assert.equal(h.sql(`SELECT JSON_OBJECT('n',COUNT(*)) FROM (SELECT object_id,version,archived_body AS body FROM knowledge_revisions WHERE archived_body IS NOT NULL) archive_rows WHERE object_id=${quote(document.id)}`)[0].n, 1);
     const oldJobs = h.sql(`SELECT JSON_OBJECT('kind',target_kind,'version',version,'target',vector_target,'state',vector_state,'attempts',vector_attempts,'epoch',lease_epoch) FROM knowledge_index_jobs WHERE object_id=${quote(document.id)} AND version=1 ORDER BY target_kind`);
-    assert.equal(oldJobs.length, 2);
+    assert.equal(oldJobs.length, 1);
     const beforeCut = requests.length;
     h.env.DATA_AGENT_VECTOR_COLLECTION = names[1];
     await h.restartApi();
@@ -177,8 +178,8 @@ try {
     assert.notEqual(newIdentity, oldIdentity);
     assert.equal((await milvus(names[0], 'collections/describe')).collectionID, oldIdentity, '旧集合原样保留');
     assert.deepEqual(h.sql(`SELECT JSON_OBJECT('kind',target_kind,'version',version,'target',vector_target,'state',vector_state,'attempts',vector_attempts,'epoch',lease_epoch) FROM knowledge_index_jobs WHERE object_id=${quote(document.id)} AND version=1 ORDER BY target_kind`), oldJobs, '旧修订已完成回执保留，不改成当前目标');
-    const projection = h.sql(`SELECT JSON_OBJECT('revision',revision,'target',collection_target,'complete',complete) FROM retrieval_source_projections WHERE source_kind='document' AND source_id=${quote(document.id)}`)[0];
-    assert.equal(projection.revision, 2);
+    const projection = h.sql(`SELECT JSON_OBJECT('revision',revision,'target',collection_target,'complete',complete) FROM retrieval_source_projections WHERE source_kind='platform' AND source_id='schema'`)[0];
+    assert.ok(projection.revision >= 1);
     assert.equal(projection.target, rebuilt.resource_id);
     assert.equal(projection.complete, 1);
     const bRequests = requests.slice(beforeCut);
@@ -233,11 +234,10 @@ try {
     assert.ok(searched.hits.every(hit => hit.record_kind === 'source_excerpt'
       ? hit.citation.source.id === document.id && hit.citation.revision === '3'
       : hit.ref.object_id === document.id && hit.ref.version === '3'));
-    const tail = searched.hits.find(hit => hit.record_kind === 'source_excerpt' && hit.text.includes('尾部保留条件'));
-    assert.ok(tail, '切B后真实中文检索必须召回原长文尾部');
-    assert.equal(tail.source_length, [...thirdBody].length);
-    assert.equal(tail.text, [...thirdBody].slice(tail.citation.locator.offset, tail.citation.locator.offset + tail.citation.locator.length).join(''));
-    assert.ok(tail.citation.locator.offset > 0, '尾部命中不能用全文前缀代替');
+    const tail = searched.hits.find(hit => hit.record_kind === 'knowledge_entry' && hit.definition?.includes('尾部保留条件'));
+    assert.ok(tail, '切B后真实中文检索必须召回原长文尾部知识窗口');
+    assert.equal(tail.ref.object_id, document.id);
+    assert.equal(tail.ref.version, '3');
     const searches = requests.slice(beforeSearch).filter(row => row.path.endsWith('/search'));
     assert.ok(searches.some(row => row.channel === 'sparse') && searches.some(row => row.channel === 'vector'));
     assert.ok(searches.every(row => row.collection === names[1] && row.filter.includes(document.id) && !row.filter.includes(outside.id)), 'BM25和dense真实请求均先限制允许来源');

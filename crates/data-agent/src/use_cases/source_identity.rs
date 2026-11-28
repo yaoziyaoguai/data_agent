@@ -131,7 +131,14 @@ pub(super) async fn search(
             .find(|meta| meta["id"] == id && meta["state"] == "enabled")
             .ok_or(Error::new("not_available"))?;
         let source_keys = if meta["kind"] == "document" {
-            vec![json!({"kind":"document","id":id})]
+            let mut keys = vec![json!({"kind":"document","id":id})];
+            if let Some(source) = meta["source_id"]
+                .as_str()
+                .filter(|source| readable_platform.contains(*source))
+            {
+                keys.push(json!({"kind":"platform","id":source}));
+            }
+            keys
         } else {
             [
                 Some(id.as_str()),

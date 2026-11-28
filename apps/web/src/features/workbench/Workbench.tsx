@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useState, useRef, useMemo, useSyncExternalStore } from "react";
 import type {
-  QueryHistory,
+  Asset,
   QueryHistoryItem,
   HistoryItem,
   AnalysisReportRef,
@@ -13,6 +13,8 @@ import { Tabs } from "../../shared/Tabs.tsx";
 import { Modal } from "../../shared/Modal.tsx";
 import { conversationItems, displayUserMessage } from "./conversation-timeline.ts";
 import { SkillSelections } from "./SkillSelections.tsx";
+import { ConversationSkillPicker } from "./ConversationSkillPicker.tsx";
+import { ConversationHistoryModal, formatConversationCreationTime as creationTime } from "./ConversationHistoryModal.tsx";
 import { conversationTitle } from "./conversation-title.ts";
 import { QueryCard } from "./QueryCard.tsx";
 import { AnalysisReport } from "./AnalysisReport.tsx";
@@ -21,14 +23,31 @@ import { QueryResultPanel } from "./QueryResultPanel.tsx";
 import "./workbench-dock.css";
 import { AssistantMessage } from "./AssistantMessage.tsx";
 import { objectReferenceLabels } from "./object-reference-labels.ts";
-import { ConversationFeed } from "./ConversationFeed.tsx";
+import { ConversationFeed, type FeedScrollMemory } from "./ConversationFeed.tsx";
 import { CompletedRunSteps, RunActivity } from "./RunActivity.tsx";
 import { ModelSelector } from "./ModelSelector.tsx";
 import { useLiveConversation } from "./useLiveConversation.ts";
 import { useModelSelection } from "./useModelSelection.ts";
 import { clearPendingSubmission, conversationStorageKey, draftStorageKey, pendingSubmissionKey, readPendingSubmission, settleSubmission, storePendingSubmission, writeDraft, type PendingSubmission } from "./conversation-storage.ts";
-const creationTime = (value?: string) => value ? new Date(value).toLocaleString("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false }) : "";
-const queryExecutionLabel = (state: string) => ({succeeded: "已执行", failed: "执行失败", running: "执行中", queued: "排队中", submitting: "提交中", submission_unknown: "提交确认中", canceled: "已取消", not_submitted: "未提交", awaiting_confirmation: "待确认"} as Record<string, string>)[state] ?? state;
+const runFailureReason = (code: unknown): string => ({
+  model_auth_failed: "模型凭据无效或无权限，请检查模型配置中的 API Key。",
+  model_quota_exhausted: "模型供应商账户额度不足。",
+  model_budget_exhausted: "本次会话或试验预算已用尽。",
+  budget_exhausted: "本次会话或试验预算已用尽。",
+  provider_model_unavailable: "所选模型在供应商侧不可用，请检查 Model ID。",
+  model_unavailable: "所选模型或关联服务已停用，请重新选择模型。",
+  provider_configuration_invalid: "模型或思考档位配置与供应商协议不匹配。",
+  model_input_limit: "请求内容超过模型的输入或请求体字节上限（可在模型配置中调大请求体 MiB）。",
+  request_too_large: "请求内容超过模型的输入或请求体字节上限（可在模型配置中调大请求体 MiB）。",
+  model_output_limit: "模型输出超过配置的最大输出上限。",
+  model_limits_exceeded: "模型调用超出配置的输入或输出上限。",
+  model_timeout: "模型响应超时。",
+  model_rate_limited: "模型请求触发限流，请稍后重试。",
+  retry_exhausted: "模型服务连续临时失败，请稍后重试。",
+  model_retry_exhausted: "模型服务连续临时失败，请稍后重试。",
+  stale_context: "对话引用的表权限、知识或资产状态已变化。",
+  source_unavailable: "平台权限或来源服务暂时不可达，请稍后重试。",
+} as Record<string, string>)[String(code ?? "")] ?? "";
 type WorkbenchDetail =
   | { kind: "report"; reference: AnalysisReportRef }
   | { kind: "results"; queryId: string }
@@ -37,7 +56,7 @@ type WorkbenchDetail =
 const panelLabel = {report: "分析报告", results: "查询结果", evidence: "口径依据"};
 const wideQuery = "(min-width: 1280px)";
 const dockMinimum = 36;
-const dockMaximum = 64;
+const dockMaximum = 60;
 const clampDockWidth = (width: number) => Math.min(dockMaximum, Math.max(dockMinimum, width));
 const dockedViewport = () => window.matchMedia(wideQuery).matches;
 const subscribeViewport = (listener: () => void) => {
@@ -47,29 +66,54 @@ const subscribeViewport = (listener: () => void) => {
 };
 
 
+function describeConversationFocus(target: EventTarget | null): string | null {
+  if (!(target instanceof HTMLElement)) return null;
+  if (target.id === "question") return "#question";
+  const card = target.closest<HTMLElement>(".query-card[id]");
+  if (card?.id) return "#" + CSS.escape(card.id);
+  if (target.classList.contains("skill-selection-trigger")) return 'button[aria-label="＋ 选用分析方法"]';
+  return null;
+}
+
 export function Workbench({
   user,
   space,
   modelLabel,
   onLogout,
   onView,
+  onSelectSkill,
   onManageSkills,
   onMaintainEvidence,
   spaceName,
+  savedContext,
+  onContextChange,
+  onScrollChange,
+  onFocusSelectorChange,
+  onReturnFocusConsumed,
 }: {
   user: string;
   space: string;
   modelLabel: string;
   onLogout: () => void;
   onView: (v: View) => void;
+  onSelectSkill: (asset: Asset) => Promise<string>;
   onManageSkills: () => void;
   onMaintainEvidence: (id: string) => void;
   spaceName: string;
+  savedContext?: { cid: string | null; title: string; scroll: FeedScrollMemory | null } | null;
+  onContextChange?: (cid: string | null, title: string) => void;
+  onScrollChange?: (state: { scrollTop: number; followLatest: boolean }) => void;
+  onFocusSelectorChange?: (selector: string | null) => void;
+  onReturnFocusConsumed?: () => void;
 }) {
   const [cid, setCid] = useState<string | null>(() =>
     localStorage.getItem(conversationStorageKey(space, user)),
   );
-  const [history, setHistory] = useState<HistoryItem[]>([]);
+  const [showSkillPicker, setShowSkillPicker] = useState(false);
+  const [skillRefreshRevision, setSkillRefreshRevision] = useState(0);
+  const [recentHistory, setRecentHistory] = useState<HistoryItem[]>([]);
+  const [selectedHistoryTitle, setSelectedHistoryTitle] = useState<Record<string, string>>({});
+  const [appliedMessageIds, setAppliedMessageIds] = useState<string[]>([]);
   const model = useModelSelection(space, user, cid);
   const { snapshot, queries, loadingOlder, syncUnavailable, authorityRevision, requestOlder, requestReconnect } = useLiveConversation(cid, space, user);
   const technicalIdsKey = "data-agent.technical-identifiers." + JSON.stringify([space, user]);
@@ -83,17 +127,12 @@ export function Workbench({
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
   const [showHistory, setShowHistory] = useState(false);
-  // U-04：历史记录分“会话/查询记录”两栏；查询记录跨会话检索并可跳回原对话。
-  const [historyTab, setHistoryTab] = useState<"conversations" | "queries">("conversations");
-  const [queryHistory, setQueryHistory] = useState<QueryHistoryItem[]>([]);
-  const [queryHistoryNext, setQueryHistoryNext] = useState<string | null>(null);
-  const [queryHistoryBusy, setQueryHistoryBusy] = useState(false);
-  const queryHistoryGeneration = useRef(0);
   const pendingQueryJump = useRef<string | null>(null);
   const docked = useSyncExternalStore(subscribeViewport, dockedViewport, () => false);
-  const [dockWidth, setDockWidth] = useState(60);
+  const [dockWidth, setDockWidth] = useState(48);
   const dock = useRef<HTMLDivElement>(null);
   const returnPanelFocus = useRef<{opener: HTMLElement | null} | null>(null);
+  const focusMovedWithinDock = useRef(false);
   const [panel, setPanel] = useState<{
     conversation: string | null;
     views: (WorkbenchDetail & {opener: HTMLElement | null})[];
@@ -101,11 +140,11 @@ export function Workbench({
   } | null>(null);
   const open = panel?.conversation === cid ? panel : null;
   const closePanel = () => {
-    if (docked && open && dock.current?.contains(document.activeElement)) {
+    if (open && (!docked || dock.current?.contains(document.activeElement))) {
       returnPanelFocus.current = {opener: open.views.find(view => view.kind === open.active)?.opener ?? null};
     }
     setPanel(previous => {
-      if (!previous || !docked) return null;
+      if (!previous) return null;
       const views = previous.views.filter(view => view.kind !== previous.active);
       const last = views.at(-1);
       return last ? { ...previous, views, active: last.kind } : null;
@@ -113,9 +152,10 @@ export function Workbench({
   };
   const openPanel = (detail: WorkbenchDetail) => {
     const focused = document.activeElement;
+    focusMovedWithinDock.current = Boolean(docked && focused instanceof HTMLElement && dock.current?.contains(focused));
     const view = {...detail, opener: focused instanceof HTMLElement ? focused : null};
     setPanel(previous => {
-      const views = docked && previous?.conversation === cid ? previous.views : [];
+      const views = previous?.conversation === cid ? previous.views : [];
       const next = views.some(existing => existing.kind === detail.kind)
         ? views.map(existing => existing.kind === detail.kind ? view : existing)
         : [...views, view];
@@ -124,26 +164,35 @@ export function Workbench({
   };
   const openEvidence = (id: string, summary?: string, version?: string) => openPanel({kind: "evidence", id, summary, version});
   useEffect(() => { setPanel(null); }, [cid]);
-  const [historySearch, setHistorySearch] = useState("");
   const [pending, setPending] = useState<PendingSubmission | null>(null);
   const [pendingError, setPendingError] = useState("");
   const [unavailableSubmissionDraft, setUnavailableSubmissionDraft] = useState<string | null>(null);
   const sendingRef = useRef(false);
   const mounted = useRef(true);
-  const [historyNext, setHistoryNext] = useState<string | null>(null);
-  const historyGeneration = useRef(0);
-  const [historyBusy, setHistoryBusy] = useState(false);
-  const [deleteId, setDeleteId] = useState<string | null>(null);
   const textarea = useRef<HTMLTextAreaElement>(null);
   useLayoutEffect(() => {
     const pending = returnPanelFocus.current;
-    if (!pending) return;
-    returnPanelFocus.current = null;
-    const target = pending.opener?.getClientRects().length && pending.opener !== document.body
-      ? pending.opener
-      : dock.current?.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]') ?? textarea.current;
-    target?.focus({preventScroll: true});
-  }, [open]);
+    if (pending) {
+      returnPanelFocus.current = null;
+      const target = pending.opener?.getClientRects().length && pending.opener !== document.body
+        ? pending.opener
+        : dock.current?.querySelector<HTMLElement>('.workbench-dock-view:not([hidden]) .modal-head button')
+          ?? dock.current?.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]')
+          ?? textarea.current;
+      target?.focus({ preventScroll: true });
+      return;
+    }
+    const activeElement = document.activeElement;
+    const hiddenDockFocus =
+      activeElement instanceof HTMLElement &&
+      Boolean(dock.current?.contains(activeElement)) &&
+      Boolean(activeElement.closest("[hidden]"));
+    if (docked && open && (focusMovedWithinDock.current || !activeElement || activeElement === document.body || hiddenDockFocus)) {
+      focusMovedWithinDock.current = false;
+      const dockBack = dock.current?.querySelector<HTMLElement>('.workbench-dock-view:not([hidden]) .modal-head button');
+      dockBack?.focus({ preventScroll: true });
+    }
+  }, [open, docked]);
   useLayoutEffect(() => {
     const input = textarea.current;
     if (!input) return;
@@ -193,45 +242,16 @@ export function Workbench({
     }).catch(() => {});
     return () => { current = false; };
   }, [space, user]);
-  const refreshHistory = async (query = historySearch, before?: string) => {
-    const generation = ++historyGeneration.current;
-    setHistoryBusy(true);
-    try {
-      const params = new URLSearchParams({ q: query });
-      if (before) params.set("before_id", before);
-      const page = await api("History", "/conversations?" + params);
-      if (generation !== historyGeneration.current) return;
-      setHistory(old => before ? [...old, ...page.conversations.filter(v => !old.some(o => o.id === v.id))] : page.conversations);
-      setHistoryNext(page.next_before_id);
-    } finally {
-      if (generation === historyGeneration.current) setHistoryBusy(false);
-    }
+  const refreshHistory = async () => {
+    const page = await api("History", "/conversations?q=");
+    if (mounted.current) setRecentHistory(page.conversations);
   };
   useEffect(() => {
-    const timer = window.setTimeout(() => { void refreshHistory().catch(e => setError(e.message)); }, 150);
-    return () => { window.clearTimeout(timer); ++historyGeneration.current; };
-  }, [space, user, historySearch]);
-  const refreshQueryHistory = async (query = historySearch, before?: string) => {
-    const generation = ++queryHistoryGeneration.current;
-    setQueryHistoryBusy(true);
-    try {
-      const params = new URLSearchParams({ q: query });
-      if (before) params.set("before_id", before);
-      const page: QueryHistory = await api("QueryHistory", "/queries?" + params);
-      if (generation !== queryHistoryGeneration.current) return;
-      setQueryHistory(old => before ? [...old, ...page.queries.filter(v => !old.some(o => o.id === v.id))] : page.queries);
-      setQueryHistoryNext(page.next_before_id);
-    } finally {
-      if (generation === queryHistoryGeneration.current) setQueryHistoryBusy(false);
-    }
-  };
-  useEffect(() => {
-    if (historyTab !== "queries") return;
-    const timer = window.setTimeout(() => { void refreshQueryHistory().catch(e => setError(e.message)); }, 150);
-    return () => { window.clearTimeout(timer); ++queryHistoryGeneration.current; };
-  }, [space, user, historySearch, historyTab]);
+    void refreshHistory().catch(() => {});
+  }, [space, user]);
   useEffect(() => {
     setError("");
+    setAppliedMessageIds([]);
     setText(localStorage.getItem(draftKey(cid)) ?? "");
     if (cid) localStorage.setItem(conversationStorageKey(space, user), cid);
     else localStorage.removeItem(conversationStorageKey(space, user));
@@ -340,7 +360,6 @@ export function Workbench({
     window.requestAnimationFrame(attempt);
   };
   const openQueryFromHistory = (item: QueryHistoryItem) => {
-    setShowHistory(false);
     if (item.conversation_id === cid) { jumpToQuery(item.id); return; }
     pendingQueryJump.current = item.id;
     setCid(item.conversation_id);
@@ -374,20 +393,12 @@ export function Workbench({
         { operation_id: crypto.randomUUID() },
       );
     } catch (e) {
-      setError(e instanceof Error && e.message === "input_already_applied" ? "这条输入已经应用到任务。请补充新消息修订条件，不能撤回已经生效的修改。" : String(e));
-    }
-  };
-  const removeConversation = async () => {
-    if (!deleteId) return;
-    try {
-      await api("MutationReceipt", "/conversations/" + deleteId, "DELETE", {
-        operation_id: crypto.randomUUID(),
-      });
-      if (deleteId === cid) setCid(null);
-      setDeleteId(null);
-      await refreshHistory();
-    } catch (e) {
-      setError(String(e));
+      if (e instanceof Error && e.message === "input_already_applied") {
+        setAppliedMessageIds(old => old.includes(message) ? old : [...old, message]);
+        setError("这条输入已经应用到任务。请补充新消息修订条件，不能撤回已经生效的修改。");
+      } else {
+        setError(String(e));
+      }
     }
   };
   const canLoadOlder = snapshot?.has_older;
@@ -439,18 +450,17 @@ export function Workbench({
     changeText(value);
     textarea.current?.focus();
   };
-  const historyItems = history;
   const side = (
     <>
       <div className="history-label">最近对话</div>
       <nav className="history-nav" aria-label="会话历史">
-        {history.slice(0, 12).map((item, index) => (
+        {recentHistory.slice(0, 12).map((item, index) => (
           <button
             key={item.id}
             aria-current={cid === item.id ? "true" : undefined}
             onClick={() => setCid(item.id)}
           >
-            <span title={item.title}>{conversationTitle(item.title) || "会话 " + (history.length - index)}</span>
+            <span title={item.title}>{conversationTitle(item.title) || "会话 " + (recentHistory.length - index)}</span>
             {item.created_at && <small><time dateTime={item.created_at}>创建于 {creationTime(item.created_at)}</time></small>}
           </button>
         ))}
@@ -458,20 +468,42 @@ export function Workbench({
       <button className="history-all" onClick={() => setShowHistory(true)}>
         查看全部会话 ↗
       </button>
-      {!history.length && (
+      {!recentHistory.length && (
         <p className="quiet">从第一个问题开始，记录会保存在这里。</p>
       )}
     </>
   );
+  const resolvedTitle = useMemo(() => {
+    if (!cid) return "新对话";
+    const matched = recentHistory.find(item => item.id === cid)?.title ?? selectedHistoryTitle[cid];
+    if (matched) return conversationTitle(matched) || "对话";
+    if (savedContext?.cid === cid && savedContext.title) return savedContext.title;
+    const firstUser = snapshot?.messages.find(m => m.role === "user")?.text;
+    if (firstUser) return conversationTitle(firstUser) || "对话";
+    return "正在载入对话…";
+  }, [cid, recentHistory, selectedHistoryTitle, savedContext, snapshot]);
+  useEffect(() => {
+    onContextChange?.(cid, resolvedTitle);
+  }, [cid, resolvedTitle, onContextChange]);
+  const loadingConversation = cid !== null && snapshot === null && !syncUnavailable;
+  const hasMessages = (snapshot?.messages.length ?? 0) > 0;
+  const initialMemory = savedContext?.cid === cid ? savedContext.scroll : null;
+  useLayoutEffect(() => {
+    if (!cid && initialMemory?.restoreFocus) {
+      textarea.current?.focus({ preventScroll: true });
+      onReturnFocusConsumed?.();
+    }
+  }, [cid, initialMemory, onReturnFocusConsumed]);
+
   return (
     <WorkspaceShell
       user={user}
       modelLabel={model.models.find(item => item.id === model.selection?.model_id)?.label ?? modelLabel}
       onLogout={onLogout}
       view="workbench"
-      onView={onView}
+      onView={v => { setShowSkillPicker(false); onView(v); }}
       sidebar={side}
-      title={conversationTitle(history.find(item => item.id === cid)?.title ?? "") || "新对话"}
+      title={resolvedTitle}
       spaceName={spaceName}
       onNewConversation={() => { setCid(null); setText(localStorage.getItem(draftKey(null)) ?? ""); textarea.current?.focus(); }}
     >
@@ -479,11 +511,26 @@ export function Workbench({
         style={docked && open ? {gridTemplateColumns: `minmax(0, 1fr) 8px ${dockWidth}%`} : undefined}>
       <section
         className={
-          "conversation " + (!snapshot?.messages.length ? "empty" : "")
+          "conversation " + (!cid && !hasMessages ? "empty" : "")
         }
+        onFocusCapture={event => {
+          const selector = describeConversationFocus(event.target);
+          if (selector) onFocusSelectorChange?.(selector);
+        }}
       >
-        <ConversationFeed key={"feed:" + user + ":" + (cid ?? "new")} firstEventSeq={snapshot?.first_event_seq}>
-        {!snapshot?.messages.length ? (
+        <ConversationFeed
+          key={"feed:" + user + ":" + (cid ?? "new")}
+          firstEventSeq={snapshot?.first_event_seq}
+          hasMessages={hasMessages}
+          initialMemory={initialMemory}
+          onScrollChange={onScrollChange}
+          onReturnFocusConsumed={onReturnFocusConsumed}
+        >
+        {loadingConversation ? (
+          <div className="conversation-loading" role="status" aria-live="polite">
+            正在载入对话内容…
+          </div>
+        ) : !snapshot?.messages.length ? (
           <div className="welcome">
             <h1>
               把数据问题，
@@ -513,17 +560,21 @@ export function Workbench({
           </div>
         ) : (
           <div className="messages" aria-live="polite">
-            {Object.keys(objectReferences).length > 0 && (
-              <button type="button" className="text-link" aria-pressed={showTechnicalIds} onClick={() => {
-                const next = !showTechnicalIds;
-                setShowTechnicalIds(next);
-                localStorage.setItem(technicalIdsKey, String(next));
-              }}>{showTechnicalIds ? "隐藏技术标识" : "显示技术标识"}</button>
-            )}
-            {canLoadOlder && (
-              <button className="history-all" onClick={() => void loadOlder()}>
-                加载更早的消息
-              </button>
+            {(Object.keys(objectReferences).length > 0 || canLoadOlder) && (
+              <div className="messages-toolbar">
+                {Object.keys(objectReferences).length > 0 && (
+                  <button type="button" className="text-link" aria-pressed={showTechnicalIds} onClick={() => {
+                    const next = !showTechnicalIds;
+                    setShowTechnicalIds(next);
+                    localStorage.setItem(technicalIdsKey, String(next));
+                  }}>{showTechnicalIds ? "隐藏技术标识" : "显示技术标识"}</button>
+                )}
+                {canLoadOlder && (
+                  <button className="history-all" onClick={() => void loadOlder()}>
+                    加载更早的消息
+                  </button>
+                )}
+              </div>
             )}
             {conversationItems(snapshot, queries.queries).map(item => item.kind === "query" ? (
               <div key={item.key} className="message assistant query-message">
@@ -565,16 +616,21 @@ export function Workbench({
                 )}
               </article>
             ); })())}
-            {failedInputs.map((e) => (
-              <p className="error" key={e.event_id}>
-                这条输入未完成。撤回后可核对旧SQL，或重新补充条件。
-                <button
-                  onClick={() => void withdraw(String(e.payload.message_id))}
-                >
-                  撤回未完成输入
-                </button>
-              </p>
-            ))}
+            {failedInputs.map((e) => {
+              const messageId = String(e.payload.message_id);
+              const reason = runFailureReason(e.payload.code);
+              const alreadyApplied = appliedMessageIds.includes(messageId);
+              return (
+                <p className="error" key={e.event_id}>
+                  这条输入未完成。{reason ? reason + " " : ""}{alreadyApplied ? "条件修改已生效，请直接补充新消息继续。" : "撤回后可核对旧SQL，或重新补充条件。"}
+                  {!alreadyApplied && (
+                    <button onClick={() => void withdraw(messageId)}>
+                      撤回未完成输入
+                    </button>
+                  )}
+                </p>
+              );
+            })}
             {latestRun?.state === "failed" && (
               <p className="error">
                 有一轮处理失败，已保存的记录仍可回看。可补充消息继续。
@@ -601,7 +657,7 @@ export function Workbench({
         </div>
         </ConversationFeed>
         {currentRun && <RunActivity run={currentRun} label={activityText} onStop={() => void cancel()}/>}
-        {cid && <SkillSelections key={"skills:" + space + ":" + user + ":" + cid} cid={cid} onManage={onManageSkills} refreshRevision={snapshot?.runs.map(run => run.run_id + ":" + run.state).join(",")}/> }
+        {cid && <SkillSelections key={"skills:" + space + ":" + user + ":" + cid} cid={cid} onManage={onManageSkills} refreshRevision={skillRefreshRevision + ":" + (snapshot?.runs.map(run => run.run_id + ":" + run.state).join(",") ?? "")}/> }
         <div className="composer">
           <label className="sr-only" htmlFor="question">
             你的数据问题
@@ -626,7 +682,7 @@ export function Workbench({
             }}
           />
           <div className="composer-footer">
-            <div className="composer-tools"><button className="skill-selection-trigger" aria-label="＋ 选用分析方法" onClick={onManageSkills}><Icon name="spark"/><span>分析方法</span></button><ModelSelector models={model.models} selection={model.selection} disabled={sending || model.busy} onChange={selection => void model.change(selection)} /></div>
+            <div className="composer-tools"><button type="button" className="skill-selection-trigger" aria-label="＋ 选用分析方法" onClick={() => setShowSkillPicker(true)}><Icon name="spark"/><span>分析方法</span></button><ModelSelector models={model.models} selection={model.selection} disabled={sending || model.busy} onChange={selection => void model.change(selection)} /></div>
             <button
               aria-label={sending ? "保存中…" : "发送 ↑"}
               className="send-button"
@@ -659,22 +715,28 @@ export function Workbench({
             onChange={active => setPanel(previous => previous ? { ...previous, active } : null)}/>}
           {open.views.map(view => {
             const active = view.kind === open.active;
-            if (!docked && !active) return null;
-            return <div key={view.kind} className={docked ? "workbench-dock-view" : undefined} hidden={!active}>
+            const nextView = open.views.filter(item => item.kind !== view.kind).at(-1);
+            const closeLabel = nextView ? "返回" + panelLabel[nextView.kind] : "返回对话";
+            return <div key={view.kind} className={docked ? "workbench-dock-view" : undefined} hidden={docked ? !active : undefined}>
               {view.kind === "report" && <AnalysisReport key={view.reference.report_id}
                 reference={snapshot?.tasks.find(task => task.id === view.reference.task_id)?.report_ref ?? view.reference}
-                authorityRevision={authorityRevision} docked={docked}
+                authorityRevision={authorityRevision} docked={docked} active={active} closeLabel={closeLabel} closeTitle={closeLabel}
                 currentConditionVersion={snapshot?.tasks.find(task => task.id === view.reference.task_id)?.condition_version}
                 onClose={closePanel}
                 onQuery={queryId => {
-                  if (!docked) closePanel();
+                  if (!docked) setPanel(null);
                   jumpToQuery(queryId);
                 }}
                 onEvidence={openEvidence}/>}
               {view.kind === "results" && <QueryResultPanel key={view.queryId}
-                queryId={view.queryId} authorityRevision={authorityRevision} docked={docked} onClose={closePanel}/>}
-              {view.kind === "evidence" && <Modal docked={docked} title="口径依据" className="evidence-dialog" onClose={closePanel}
-                footer={<><button onClick={() => { closePanel(); onMaintainEvidence(view.id); }}>去维护此内容</button><button className="primary" onClick={closePanel}>返回对话</button></>}>
+                queryId={view.queryId} authorityRevision={authorityRevision} docked={docked} active={active} closeLabel={closeLabel} closeTitle={closeLabel} onClose={closePanel}/>}
+              {view.kind === "evidence" && <Modal docked={docked} active={active} restoreFocusOnClose={false} closeTitle={closeLabel} title="口径依据" closeLabel={closeLabel} className="evidence-dialog" onClose={closePanel}
+                footer={<button onClick={() => {
+                  const openerSelector = describeConversationFocus(view.opener);
+                  if (openerSelector) onFocusSelectorChange?.(openerSelector);
+                  setPanel(null);
+                  onMaintainEvidence(view.id);
+                }}>去维护此内容</button>}>
                 <div className="evidence-content">
                   <KnowledgeEvidence key={authorityRevision} id={view.id} version={view.version} querySummary={view.summary}/>
                 </div>
@@ -683,49 +745,34 @@ export function Workbench({
           })}
         </div>}
       </div>
-      {deleteId && (
-        <Modal title="删除这个会话？" onClose={() => setDeleteId(null)}>
-          <p>
-            删除后不再加载此会话，未执行查询会取消；正在运行的查询会向平台申请取消。你的个人记忆和Skill可在“我的积累”单独管理。
-          </p>
-          <button
-            className="primary"
-            onClick={() => void removeConversation()}
-          >
-            删除此会话
-          </button>
-        </Modal>
+      {showSkillPicker && (
+        <ConversationSkillPicker
+          cid={cid}
+          onClose={() => setShowSkillPicker(false)}
+          onSelectSkill={onSelectSkill}
+          onSelectionChanged={nextCid => {
+            if (nextCid && nextCid !== cid) setCid(nextCid);
+            setSkillRefreshRevision(value => value + 1);
+          }}
+          onManageSkills={onManageSkills}
+        />
       )}
       {showHistory && (
-        <Modal title="历史记录" onClose={() => setShowHistory(false)}>
-          <div className="history-tabs" role="group" aria-label="历史类型">
-            <button aria-pressed={historyTab === "conversations"} onClick={() => setHistoryTab("conversations")}>会话</button>
-            <button aria-pressed={historyTab === "queries"} onClick={() => setHistoryTab("queries")}>查询记录</button>
-          </div>
-          <label className="search-box">
-            <input
-              aria-label={historyTab === "conversations" ? "搜索会话" : "搜索查询"}
-              value={historySearch}
-              placeholder={historyTab === "conversations" ? "按标题搜索" : "按查询内容搜索"}
-              onChange={(e) => setHistorySearch(e.target.value)}
-            />
-          </label>
-          {historyTab === "conversations" ? <>
-          <nav className="history-dialog" aria-label="全部会话">
-            {historyItems.map(item => <div className="history-row" key={item.id}><button onClick={() => { setCid(item.id); setShowHistory(false); }}><span title={item.title}>{conversationTitle(item.title) || "未命名会话"}</span>{item.created_at && <small><time dateTime={item.created_at}>创建于 {creationTime(item.created_at)}</time></small>}</button><button className="history-delete" aria-label={"删除会话 " + (item.title || "未命名会话")} onClick={() => setDeleteId(item.id)}>删除</button></div>)}
-          </nav>
-          {!historyItems.length && !historyBusy && <p className="quiet">没有找到符合条件的会话，请调整搜索词。</p>}
-          {historyNext && <button disabled={historyBusy} onClick={() => void refreshHistory(historySearch, historyNext).catch(e => setError(e.message))}>加载更多会话</button>}
-          {historyBusy && <p role="status">正在查找会话…</p>}
-          </> : <>
-          <nav className="history-dialog" aria-label="全部查询">
-            {queryHistory.map(item => <div className="history-row" key={item.id}><button onClick={() => openQueryFromHistory(item)}><span title={item.summary}>{item.text_unavailable ? "正文已失效的查询" : item.summary || "未命名查询"}</span><small><time dateTime={item.created_at}>{creationTime(item.created_at)}</time> · {queryExecutionLabel(item.execution_state)}</small></button></div>)}
-          </nav>
-          {!queryHistory.length && !queryHistoryBusy && <p className="quiet">没有找到符合条件的查询，请调整搜索词。</p>}
-          {queryHistoryNext && <button disabled={queryHistoryBusy} onClick={() => void refreshQueryHistory(historySearch, queryHistoryNext).catch(e => setError(e.message))}>加载更多查询</button>}
-          {queryHistoryBusy && <p role="status">正在查找查询…</p>}
-          </>}
-        </Modal>
+        <ConversationHistoryModal
+          space={space}
+          user={user}
+          onClose={() => setShowHistory(false)}
+          onSelectConversation={(id, selectedTitle) => {
+            if (selectedTitle) setSelectedHistoryTitle(old => ({ ...old, [id]: selectedTitle }));
+            setCid(id);
+          }}
+          onSelectQuery={openQueryFromHistory}
+          onConversationDeleted={deletedId => {
+            if (deletedId === cid) setCid(null);
+            void refreshHistory().catch(() => {});
+          }}
+          onError={setError}
+        />
       )}
     </WorkspaceShell>
   );

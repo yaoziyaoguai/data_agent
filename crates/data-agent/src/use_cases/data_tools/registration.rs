@@ -71,6 +71,19 @@ pub(super) async fn request_conditions_in_tx(
     let draft_gate = super::super::source_limits::resolve_for_task_in_tx(tx, cid, task).await?;
     super::super::knowledge::check_refs_for_task_in_tx(tx, ctx, &references, draft_gate.as_ref())
         .await?;
+    if let Some(gate) = draft_gate.as_ref()
+        && !super::super::source_limits::query_within_in_tx(
+            tx,
+            ctx,
+            gate,
+            text(args, "target_id")?,
+            text(args, "sql")?,
+            true,
+        )
+        .await?
+    {
+        return Err(Error::new("source_not_allowed"));
+    }
     Ok(conditions)
 }
 

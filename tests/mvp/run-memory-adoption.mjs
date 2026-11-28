@@ -113,9 +113,10 @@ if(stage==='collect-pilot'){
   const next=await create();const row=await ask(next,'请按正式定义给出2026年1月支付客户数的SQL，注意我的检查提醒。');sqlCheck(row,'Q02');
  });
 }
-const container=execFileSync('docker',['--context','colima-data-agent','ps','--filter','label=com.docker.compose.project=data-agent','--filter','label=com.docker.compose.service=mysql','--format','{{.ID}}'],{encoding:'utf8'}).trim();
+const dockerContext=process.env.DATA_AGENT_DOCKER_CONTEXT||(process.platform==='darwin'?'colima-data-agent':'default');
+const container=execFileSync('docker',['--context',dockerContext,'ps','--filter','label=com.docker.compose.project=data-agent','--filter','label=com.docker.compose.service=mysql','--format','{{.ID}}'],{encoding:'utf8'}).trim();
 assert.match(container,/^[a-f0-9]+$/);assert.match(config.database,/^data_agent_trial_[a-f0-9]+$/);assert.match(config.profile.trial_id,/^[a-f0-9-]+$/);
 const sql=`USE ${config.database};SELECT JSON_OBJECT('calls',allocated_calls,'spent_micros',spent_micros,'reserved_micros',reserved_micros,'state',state) FROM model_trials WHERE id='${config.profile.trial_id}';SELECT JSON_OBJECT('id',id,'purpose',purpose,'state',state,'operation_id',operation_id,'usage',usage_json,'price_version',price_version) FROM model_call_attempts;`;
-const rows=execFileSync('docker',['--context','colima-data-agent','exec','-i',container,'mysql','--defaults-extra-file=/run/secrets/mysql_root_client','--batch','--raw','--skip-column-names'],{input:sql,encoding:'utf8'}).trim().split('\n').map(v=>JSON.parse(v));
+const rows=execFileSync('docker',['--context',dockerContext,'exec','-i',container,'mysql','--defaults-extra-file=/run/secrets/mysql_root_client','--batch','--raw','--skip-column-names'],{input:sql,encoding:'utf8'}).trim().split('\n').map(v=>JSON.parse(v));
 report.ledger=rows.shift();report.calls=rows;report.lastUpdatedAt=new Date().toISOString();report.runnerHash=createHash('sha256').update(await readFile(import.meta.filename)).digest('hex');await save();
 console.log(JSON.stringify({ledger:report.ledger,evidence:reportPath}));

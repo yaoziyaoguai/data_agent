@@ -1,6 +1,5 @@
 .analysis-report-dialog { width: min(1000px, calc(100vw - 32px)); }
-.analysis-report-dialog .modal-head > button { font-size: 14px; color: #2f60b8; min-height: 44px; }
-.analysis-report-body { color: #26344a; }
+.analysis-report-body { color: var(--ink-body, #27364b); }
 .analysis-report-body .report-heading { display: block; height: auto; padding: 0 0 18px; border: 0; }
 .report-heading h3 { margin: 0 0 6px; font-size: 25px; line-height: 1.4; overflow-wrap: anywhere; }
 .report-heading p, .report-chart-caption { margin: 0; color: #52657d; font-size: 12px; }
@@ -32,8 +31,8 @@
 .report-chart > figcaption { font-size: 16px; font-weight: 600; margin-bottom: 12px; overflow-wrap: anywhere; }
 .report-chart > figcaption small { display: block; margin-top: 3px; font-weight: 400; color: #52657d; font-size: 12px; }
 .report-chart-scroll { max-height: 480px; overflow: auto; overscroll-behavior: contain; border: 1px solid #e3e8f1; border-radius: 6px; padding: 12px; }
-.report-bars { min-width: 560px; }
-.report-bar-row { display: grid; grid-template-columns: minmax(110px, 1fr) minmax(180px, 3fr) minmax(130px, 1.3fr); align-items: center; gap: 14px; margin: 8px 0; font-size: 12px; }
+.report-bars { min-width: 0; }
+.report-bar-row { display: grid; grid-template-columns: minmax(60px, 0.9fr) minmax(88px, 2fr) minmax(80px, auto); align-items: center; gap: 10px; margin: 8px 0; font-size: 12px; }
 .report-bar-row > span, .report-bar-row > strong { overflow-wrap: anywhere; }
 .report-bar-row > strong { text-align: right; font-variant-numeric: tabular-nums; font-weight: 500; }
 .report-bar-track { position: relative; height: 18px; background: #f3f6fa; }

@@ -407,7 +407,9 @@ export interface AnalysisEvidenceElement {
 }
 
 /**
- * 新建任务必须完整给出；未指定的可空标量用JSON null，列表用[]，notes用空字符串，timezone按宿主业务时区。
+ * 新建任务必须完整给出；未指定的可空标量用JSON
+ * null，列表用[]，notes用空字符串，timezone按宿主业务时区。若用户未附加额外资料来源限制，source_limits须显式填JSON
+ * null（省略会保留来源范围未知并阻断取证）；若用户明确限定或排除资料来源，严禁填null（先单独调用search_knowledge(view="source_identity")查明source_keys再create填SourceLimits，或create时省略source_limits待核明身份后经revise写入set.source_limits）。
  */
 export interface AnalysisEvidenceConditions {
     channel:        ConditionsChannel | null;
@@ -421,7 +423,8 @@ export interface AnalysisEvidenceConditions {
      */
     semantic_resolution?: QueryViewQuerySemanticResolution | null;
     /**
-     * null表示本题显式未声明额外来源限制；字段缺失表示旧条件版本未记录新式限制，不能证明用户从未限制。撤销必须显式unset并来自真实用户修改。
+     *
+     * null仅在用户未附加任何来源限制时使用；用户明确限定或排除表、文档等来源时严禁填null（须先经search_knowledge(view="source_identity")查明允许项的source_keys填入SourceLimits，单表取table-表名键而非schema，origin_message_ids传[]）。字段缺失表示范围尚未核实/旧版未记录。撤销必须显式unset并来自真实用户修改。
      */
     source_limits?: SourceLimitsClass | null;
     /**
@@ -499,7 +502,7 @@ export interface SourceLimitsClass {
      */
     allowed_sources: [SourceKeyElement, ...SourceKeyElement[]];
     /**
-     * 由宿主绑定的真实消息身份；不接受模型自由填写。
+     * 由宿主绑定的真实消息身份；模型调用时传[]占位，由宿主改写为本条真实消息ID，不接受自由填写其他ID。
      */
     origin_message_ids: string[];
 }
@@ -558,10 +561,19 @@ export interface AnalysisFigureElement {
     label:     string;
     query_id:  string;
     row_index: number;
-    value:     boolean | number | null | string;
+    /**
+     *
+     * 必须与get_query返回的results.rows[row_index][col_index]原始单元格JSON类型及内容严格全等（不按column.type主观转换）：如encoding=decimal_string时rows单元格为JSON字符串须原样传该string，rows单元格本身为JSON
+     * number/boolean/null时原样传对应JSON类型，禁止做字符串与数值互转或舍入格式化。
+     */
+    value: boolean | number | null | string;
 }
 
 export interface AnalysisQueryReferenceElement {
+    /**
+     *
+     * 本条finding实际引用的结果列名列表（在查询结果columns中须唯一存在）；同条finding的figures中引用的每个column都必须包含在对应query_id的columns内。
+     */
     columns:    [string, ...string[]];
     query_id:   string;
     result_ref: string;
@@ -954,12 +966,61 @@ export interface PreparedSupportElement {
 export type PreparedSupportRole = "prerequisite" | "exception" | "calculation_dependency";
 
 export interface PresentAnalysisAnswerInputClass {
-    sources: [AnalysisAnswerSourceElement, ...AnalysisAnswerSourceElement[]];
     /**
-     * 解释模板，定量结果用{{name}}引用values；正常语义数字（如零分母说明、年份、编号）可以直写，SQL代码块仍不放模板。定性解释必须有依据，不写未经证实的因果。
+     *
+     * 组间/期次/指标比较列表：凡正文（含读法要点与小结）要陈述谁高、谁低、持平或某侧缺样本，须在此绑定并在正文用{{name}}输出；未绑定comparisons时只陈述数值，勿手写高低方向。
+     */
+    comparisons?: ComparisonElement[];
+    sources:      [AnalysisAnswerSourceElement, ...AnalysisAnswerSourceElement[]];
+    /**
+     *
+     * 解释模板，定量结果与比较短语用{{name}}引用values/comparisons；正常语义数字（如零分母说明、年份、编号）可以直写，SQL代码块仍不放模板。定性解释必须有依据，不写未经证实的因果。
      */
     template: string;
     values:   AnalysisAnswerValueElement[];
+}
+
+/**
+ * 精确十进制核定left相对right的高低/持平/缺样本，产出原子绑定短语。
+ */
+export interface ComparisonElement {
+    column: string;
+    /**
+     * 可选方向核对：与真实结果不一致时拒绝。
+     */
+    expected_relation?: ExpectedRelation;
+    left:               LeftClass;
+    name:               string;
+    query_id:           string;
+    right:              LeftClass;
+    /**
+     * 可选样本量列；任一侧为0或NULL判insufficient_data。
+     */
+    sample_column?: string;
+}
+
+/**
+ * 可选方向核对：与真实结果不一致时拒绝。
+ */
+export type ExpectedRelation = "higher" | "lower" | "equal" | "insufficient_data";
+
+export interface LeftClass {
+    column?: string;
+    /**
+     * 展示主体名，须与该行维度一致。
+     */
+    label:      string;
+    query_id?:  string;
+    row_index?: number;
+    /**
+     * 唯一维度键值定位行；完整结果0行判insufficient_data，多行拒绝。
+     */
+    row_match?: [RowMatchElement, ...RowMatchElement[]];
+}
+
+export interface RowMatchElement {
+    column: string;
+    value:  boolean | number | string;
 }
 
 export interface ProposalDraftCommandClass {
@@ -1470,7 +1531,9 @@ export interface AnalysisUpdateClass {
      */
     condition_patch?: AnalysisUpdateConditionPatch;
     /**
-     * 新建任务必须完整给出；未指定的可空标量用JSON null，列表用[]，notes用空字符串，timezone按宿主业务时区。
+     * 新建任务必须完整给出；未指定的可空标量用JSON
+     * null，列表用[]，notes用空字符串，timezone按宿主业务时区。若用户未附加额外资料来源限制，source_limits须显式填JSON
+     * null（省略会保留来源范围未知并阻断取证）；若用户明确限定或排除资料来源，严禁填null（先单独调用search_knowledge(view="source_identity")查明source_keys再create填SourceLimits，或create时省略source_limits待核明身份后经revise写入set.source_limits）。
      */
     conditions?: AnalysisEvidenceConditions;
     /**
@@ -1802,7 +1865,9 @@ export interface CurrentAnalysisUpdateClass {
      */
     condition_patch?: PurpleConditionPatch;
     /**
-     * 新建任务必须完整给出；未指定的可空标量用JSON null，列表用[]，notes用空字符串，timezone按宿主业务时区。
+     * 新建任务必须完整给出；未指定的可空标量用JSON
+     * null，列表用[]，notes用空字符串，timezone按宿主业务时区。若用户未附加额外资料来源限制，source_limits须显式填JSON
+     * null（省略会保留来源范围未知并阻断取证）；若用户明确限定或排除资料来源，严禁填null（先单独调用search_knowledge(view="source_identity")查明source_keys再create填SourceLimits，或create时省略source_limits待核明身份后经revise写入set.source_limits）。
      */
     conditions?: PurpleConditions;
     /**
@@ -1911,7 +1976,9 @@ export interface PurpleSemanticResolution {
 }
 
 /**
- * 新建任务必须完整给出；未指定的可空标量用JSON null，列表用[]，notes用空字符串，timezone按宿主业务时区。
+ * 新建任务必须完整给出；未指定的可空标量用JSON
+ * null，列表用[]，notes用空字符串，timezone按宿主业务时区。若用户未附加额外资料来源限制，source_limits须显式填JSON
+ * null（省略会保留来源范围未知并阻断取证）；若用户明确限定或排除资料来源，严禁填null（先单独调用search_knowledge(view="source_identity")查明source_keys再create填SourceLimits，或create时省略source_limits待核明身份后经revise写入set.source_limits）。
  */
 export interface PurpleConditions {
     channel:        ConditionsChannel | null;
@@ -1925,7 +1992,8 @@ export interface PurpleConditions {
      */
     semantic_resolution?: FluffySemanticResolution | null;
     /**
-     * null表示本题显式未声明额外来源限制；字段缺失表示旧条件版本未记录新式限制，不能证明用户从未限制。撤销必须显式unset并来自真实用户修改。
+     *
+     * null仅在用户未附加任何来源限制时使用；用户明确限定或排除表、文档等来源时严禁填null（须先经search_knowledge(view="source_identity")查明允许项的source_keys填入SourceLimits，单表取table-表名键而非schema，origin_message_ids传[]）。字段缺失表示范围尚未核实/旧版未记录。撤销必须显式unset并来自真实用户修改。
      */
     source_limits?: SourceLimitsClass | null;
     /**
@@ -4983,7 +5051,9 @@ export interface AnalysisUpdateFields {
      */
     condition_patch?: ConditionPatch;
     /**
-     * 新建任务必须完整给出；未指定的可空标量用JSON null，列表用[]，notes用空字符串，timezone按宿主业务时区。
+     * 新建任务必须完整给出；未指定的可空标量用JSON
+     * null，列表用[]，notes用空字符串，timezone按宿主业务时区。若用户未附加额外资料来源限制，source_limits须显式填JSON
+     * null（省略会保留来源范围未知并阻断取证）；若用户明确限定或排除资料来源，严禁填null（先单独调用search_knowledge(view="source_identity")查明source_keys再create填SourceLimits，或create时省略source_limits待核明身份后经revise写入set.source_limits）。
      */
     conditions?: Conditions;
     /**
@@ -5115,7 +5185,7 @@ export interface SourceLimits {
      */
     allowed_sources: [SourceKey, ...SourceKey[]];
     /**
-     * 由宿主绑定的真实消息身份；不接受模型自由填写。
+     * 由宿主绑定的真实消息身份；模型调用时传[]占位，由宿主改写为本条真实消息ID，不接受自由填写其他ID。
      */
     origin_message_ids: string[];
 }
@@ -5144,7 +5214,9 @@ export interface TimeRole {
 }
 
 /**
- * 新建任务必须完整给出；未指定的可空标量用JSON null，列表用[]，notes用空字符串，timezone按宿主业务时区。
+ * 新建任务必须完整给出；未指定的可空标量用JSON
+ * null，列表用[]，notes用空字符串，timezone按宿主业务时区。若用户未附加额外资料来源限制，source_limits须显式填JSON
+ * null（省略会保留来源范围未知并阻断取证）；若用户明确限定或排除资料来源，严禁填null（先单独调用search_knowledge(view="source_identity")查明source_keys再create填SourceLimits，或create时省略source_limits待核明身份后经revise写入set.source_limits）。
  */
 export interface Conditions {
     channel:        ConditionsChannel | null;
@@ -5158,7 +5230,8 @@ export interface Conditions {
      */
     semantic_resolution?: ConditionsQuerySemanticResolution | null;
     /**
-     * null表示本题显式未声明额外来源限制；字段缺失表示旧条件版本未记录新式限制，不能证明用户从未限制。撤销必须显式unset并来自真实用户修改。
+     *
+     * null仅在用户未附加任何来源限制时使用；用户明确限定或排除表、文档等来源时严禁填null（须先经search_knowledge(view="source_identity")查明允许项的source_keys填入SourceLimits，单表取table-表名键而非schema，origin_message_ids传[]）。字段缺失表示范围尚未核实/旧版未记录。撤销必须显式unset并来自真实用户修改。
      */
     source_limits?: SourceLimits | null;
     /**
@@ -5203,7 +5276,9 @@ export interface AnalysisUpdate {
      */
     condition_patch?: ConditionPatch;
     /**
-     * 新建任务必须完整给出；未指定的可空标量用JSON null，列表用[]，notes用空字符串，timezone按宿主业务时区。
+     * 新建任务必须完整给出；未指定的可空标量用JSON
+     * null，列表用[]，notes用空字符串，timezone按宿主业务时区。若用户未附加额外资料来源限制，source_limits须显式填JSON
+     * null（省略会保留来源范围未知并阻断取证）；若用户明确限定或排除资料来源，严禁填null（先单独调用search_knowledge(view="source_identity")查明source_keys再create填SourceLimits，或create时省略source_limits待核明身份后经revise写入set.source_limits）。
      */
     conditions?: Conditions;
     /**
@@ -6275,10 +6350,19 @@ export interface AnalysisFigure {
     label:     string;
     query_id:  string;
     row_index: number;
-    value:     boolean | number | null | string;
+    /**
+     *
+     * 必须与get_query返回的results.rows[row_index][col_index]原始单元格JSON类型及内容严格全等（不按column.type主观转换）：如encoding=decimal_string时rows单元格为JSON字符串须原样传该string，rows单元格本身为JSON
+     * number/boolean/null时原样传对应JSON类型，禁止做字符串与数值互转或舍入格式化。
+     */
+    value: boolean | number | null | string;
 }
 
 export interface AnalysisQueryReference {
+    /**
+     *
+     * 本条finding实际引用的结果列名列表（在查询结果columns中须唯一存在）；同条finding的figures中引用的每个column都必须包含在对应query_id的columns内。
+     */
     columns:    [string, ...string[]];
     query_id:   string;
     result_ref: string;
@@ -6677,7 +6761,9 @@ export interface CurrentAnalysisUpdate {
      */
     condition_patch?: FluffyConditionPatch;
     /**
-     * 新建任务必须完整给出；未指定的可空标量用JSON null，列表用[]，notes用空字符串，timezone按宿主业务时区。
+     * 新建任务必须完整给出；未指定的可空标量用JSON
+     * null，列表用[]，notes用空字符串，timezone按宿主业务时区。若用户未附加额外资料来源限制，source_limits须显式填JSON
+     * null（省略会保留来源范围未知并阻断取证）；若用户明确限定或排除资料来源，严禁填null（先单独调用search_knowledge(view="source_identity")查明source_keys再create填SourceLimits，或create时省略source_limits待核明身份后经revise写入set.source_limits）。
      */
     conditions?: FluffyConditions;
     /**
@@ -6786,7 +6872,9 @@ export interface TentacledSemanticResolution {
 }
 
 /**
- * 新建任务必须完整给出；未指定的可空标量用JSON null，列表用[]，notes用空字符串，timezone按宿主业务时区。
+ * 新建任务必须完整给出；未指定的可空标量用JSON
+ * null，列表用[]，notes用空字符串，timezone按宿主业务时区。若用户未附加额外资料来源限制，source_limits须显式填JSON
+ * null（省略会保留来源范围未知并阻断取证）；若用户明确限定或排除资料来源，严禁填null（先单独调用search_knowledge(view="source_identity")查明source_keys再create填SourceLimits，或create时省略source_limits待核明身份后经revise写入set.source_limits）。
  */
 export interface FluffyConditions {
     channel:        ConditionsChannel | null;
@@ -6800,7 +6888,8 @@ export interface FluffyConditions {
      */
     semantic_resolution?: StickySemanticResolution | null;
     /**
-     * null表示本题显式未声明额外来源限制；字段缺失表示旧条件版本未记录新式限制，不能证明用户从未限制。撤销必须显式unset并来自真实用户修改。
+     *
+     * null仅在用户未附加任何来源限制时使用；用户明确限定或排除表、文档等来源时严禁填null（须先经search_knowledge(view="source_identity")查明允许项的source_keys填入SourceLimits，单表取table-表名键而非schema，origin_message_ids传[]）。字段缺失表示范围尚未核实/旧版未记录。撤销必须显式unset并来自真实用户修改。
      */
     source_limits?: SourceLimits | null;
     /**
@@ -7033,12 +7122,56 @@ export interface ModelConnection {
 }
 
 export interface PresentAnalysisAnswerInput {
-    sources: [AnalysisAnswerSource, ...AnalysisAnswerSource[]];
     /**
-     * 解释模板，定量结果用{{name}}引用values；正常语义数字（如零分母说明、年份、编号）可以直写，SQL代码块仍不放模板。定性解释必须有依据，不写未经证实的因果。
+     *
+     * 组间/期次/指标比较列表：凡正文（含读法要点与小结）要陈述谁高、谁低、持平或某侧缺样本，须在此绑定并在正文用{{name}}输出；未绑定comparisons时只陈述数值，勿手写高低方向。
+     */
+    comparisons?: AnalysisAnswerComparison[];
+    sources:      [AnalysisAnswerSource, ...AnalysisAnswerSource[]];
+    /**
+     *
+     * 解释模板，定量结果与比较短语用{{name}}引用values/comparisons；正常语义数字（如零分母说明、年份、编号）可以直写，SQL代码块仍不放模板。定性解释必须有依据，不写未经证实的因果。
      */
     template: string;
     values:   AnalysisAnswerValue[];
+}
+
+/**
+ * 精确十进制核定left相对right的高低/持平/缺样本，产出原子绑定短语。
+ */
+export interface AnalysisAnswerComparison {
+    column: string;
+    /**
+     * 可选方向核对：与真实结果不一致时拒绝。
+     */
+    expected_relation?: ExpectedRelation;
+    left:               AnalysisComparisonOperand;
+    name:               string;
+    query_id:           string;
+    right:              AnalysisComparisonOperand;
+    /**
+     * 可选样本量列；任一侧为0或NULL判insufficient_data。
+     */
+    sample_column?: string;
+}
+
+export interface AnalysisComparisonOperand {
+    column?: string;
+    /**
+     * 展示主体名，须与该行维度一致。
+     */
+    label:      string;
+    query_id?:  string;
+    row_index?: number;
+    /**
+     * 唯一维度键值定位行；完整结果0行判insufficient_data，多行拒绝。
+     */
+    row_match?: [AnalysisComparisonRowMatch, ...AnalysisComparisonRowMatch[]];
+}
+
+export interface AnalysisComparisonRowMatch {
+    column: string;
+    value:  boolean | number | string;
 }
 
 export interface AnalysisAnswerSource {
@@ -7080,11 +7213,17 @@ export interface FluffyFormat {
 }
 
 /**
- * 准备数值绑定：不接收template、不返回完整answer_text；成功回执提供bindings与required_suffix，正文由Pi下一次自然生成。
+ *
+ * 准备数值与比较绑定：不接收template、不返回完整answer_text；成功回执提供bindings、可选comparisons与required_suffix，正文由Pi下一次自然生成。
  */
 export interface PrepareAnalysisAnswerInput {
-    sources: [AnalysisAnswerSource, ...AnalysisAnswerSource[]];
-    values:  AnalysisAnswerValue[];
+    /**
+     *
+     * 组间/期次/指标比较列表：凡正文（含读法要点与小结）要陈述谁高、谁低、持平或某侧缺样本，须在此绑定并在正文用{{name}}输出；未绑定comparisons时只陈述数值，勿手写高低方向。
+     */
+    comparisons?: AnalysisAnswerComparison[];
+    sources:      [AnalysisAnswerSource, ...AnalysisAnswerSource[]];
+    values:       AnalysisAnswerValue[];
 }
 
 export interface SourceSyncAccepted {

@@ -315,7 +315,8 @@ provider.onRequest(async requestBody => {
   call.settlement = {attempt: call.issued[0].i};
   const database = new URL(h.env.DATA_AGENT_DATABASE_URL).pathname.slice(1);
   assert.match(database, /^data_agent_test_[a-f0-9]+$/);
-  const child = spawn('docker', ['--context', 'colima-data-agent', 'exec', 'data-agent-mysql-1',
+  const dockerContext = process.env.DATA_AGENT_DOCKER_CONTEXT || (process.platform === 'darwin' ? 'colima-data-agent' : 'default');
+  const child = spawn('docker', ['--context', dockerContext, 'exec', 'data-agent-mysql-1',
     'mysql', '--defaults-extra-file=/run/secrets/mysql_root_client', '--batch', '--unbuffered',
     '--skip-column-names', '-e', `USE ${database}; SET SESSION innodb_lock_wait_timeout=5; START TRANSACTION;
     SELECT id FROM model_call_attempts WHERE id='${call.issued[0].i}' AND operation_id='${call.operation}'

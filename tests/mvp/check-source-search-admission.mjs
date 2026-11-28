@@ -111,7 +111,7 @@ if (sourceDirectory) {
       const search = input.tools.find(tool => tool.function.name === 'search_knowledge')?.function;
       assert.ok(search?.parameters.properties.cursor && search.parameters.properties.source_selection);
       assert.match(search.description, /完整字段名、表名或文档名窄查.*目标仍缺.*窄查或续页/);
-      if (!activeSettlement) assert.equal(canReadSource, providerCalls >= 3);
+      if (!activeSettlement) assert.equal(canReadSource, true);
       const result = id => {
         const direct = input.messages.find(message => message.role === 'tool' && message.tool_call_id === id);
         if (direct) return JSON.parse(direct.content);
@@ -242,7 +242,7 @@ async function checkSettlementContinuation() {
     let index = 0;
     activeSettlement = {stage, reply: ({messages, canReadSource, result, tool}) => {
       assert.ok(index < steps.length, 'Pi 发起了未预期的额外调用');
-      assert.equal(canReadSource, index >= readyAt, 'read_source 须随实际范围就绪状态投影');
+      assert.equal(canReadSource, true, '4e1f2a6移除就绪收窄门后read_source始终可见');
       assert.ok(messages.includes(JSON.stringify(text)), '每次实际请求带本轮完整用户输入');
       return steps[index++](result, (...args) => ({tool_calls: [tool(...args)]}), tool);
     }};
@@ -576,10 +576,11 @@ try {
     assert.equal(documentRead.locator.offset, [...precise.prefix].length);
     assert.equal(documentRead.source_length, [...documentBody].length);
     assert.ok(!JSON.stringify(nestedSearch).includes('UNRELATED_SOURCE_SELECTION_FIELD'));
-    const container = execFileSync('docker', ['--context', 'colima-data-agent', 'ps',
+    const dockerContext = process.env.DATA_AGENT_DOCKER_CONTEXT || (process.platform === 'darwin' ? 'colima-data-agent' : 'default');
+    const container = execFileSync('docker', ['--context', dockerContext, 'ps',
       '--filter', 'label=com.docker.compose.project=data-agent', '--filter', 'label=com.docker.compose.service=mysql',
       '--format', '{{.ID}}'], {encoding: 'utf8'}).trim();
-    const explain = query => JSON.parse(execFileSync('docker', ['--context', 'colima-data-agent', 'exec', '-i',
+    const explain = query => JSON.parse(execFileSync('docker', ['--context', dockerContext, 'exec', '-i',
       container, 'mysql', '--defaults-extra-file=/run/secrets/mysql_root_client', '--batch', '--raw',
       '--default-character-set=utf8mb4', '--skip-column-names'], {encoding: 'utf8',
       input: 'USE ' + new URL(h.env.DATA_AGENT_DATABASE_URL).pathname.slice(1) + ';EXPLAIN FORMAT=JSON ' + query}));

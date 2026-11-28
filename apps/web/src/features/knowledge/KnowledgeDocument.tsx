@@ -10,6 +10,7 @@ import { Tabs } from "../../shared/Tabs.tsx";
 import { semanticError, useStableOperation } from "./semantic-commands.ts";
 import { KnowledgeStatus } from "./KnowledgeStatus.tsx";
 import { KnowledgeBusinessDomain } from "./KnowledgeBusinessDomain.tsx";
+import { SemanticMaintainer } from "./SemanticMaintainer.tsx";
 
 // 只有明确共享文档来源的章节合在一起；同名资料仍是不同文档。
 export function documentRepresentatives(objects: KnowledgeObject[]) {
@@ -92,7 +93,7 @@ export function KnowledgeDocument({ object, catalogRevision, onSaved, onCorrecti
     {sourceLinks.map((url, index) => <p className="quiet" key={url}><a href={url} target="_blank" rel="noopener noreferrer">打开来源链接{sourceLinks.length > 1 ? ` ${index + 1}` : ""} ↗</a>{!document.body.trim() && " · 正文尚未录入，Agent无法据此解释业务。"}</p>)}
     <details className="document-maintenance"><summary>维护与纠错</summary>
       <p className="quiet">{document.can_edit ? "你可以编辑本文。保存会同时核对全文的修改状态。" : "本文由各章节的负责人维护；你可以提出纠错建议。"}</p>
-      {document.parts.map(part => <div key={part.id} className="document-section-tools"><strong>{grouped ? part.name : "文档正文"}</strong><span>负责人：{part.maintenance?.maintainer_id ?? "暂未指定"}</span>{part.entries.filter(e => e.entry_id === "body").map(entry => <ProposeCorrection key={entry.entry_id} object={part} entry={entry} onSaved={onCorrection}/>)}</div>)}
+      {document.parts.map(part => <div key={part.id} className="document-section-tools"><strong>{grouped ? part.name : "文档正文"}</strong>{grouped && part.maintenance ? <SemanticMaintainer object={part} onSaved={() => setRevision(v => v + 1)}/> : <span>负责人：{part.maintenance?.maintainer_id ?? "暂未指定"}</span>}{part.entries.filter(e => e.entry_id === "body").map(entry => <ProposeCorrection key={entry.entry_id} object={part} entry={entry} onSaved={onCorrection}/>)}</div>)}
     </details>
     {editing && <DocumentEditor key={editing.generation} document={editing.document} objectId={object.id} onClose={() => { ++editGeneration.current; setEditing(null); }} onSaved={value => {
       // 已放弃的保存由目录变更后的读取带回，旧回执不能关闭后来打开的草稿。

@@ -234,7 +234,15 @@ try {
       periodicReads.push({ at: Date.now(), status: response.status() });
   };
   page.on("response", observeRead);
-  try { await until(() => periodicReads.length >= 2, "报告打开期间完成两次普通刷新", 40000); }
+  try {
+    // 报告打开后空闲不再定时轮询（A-02）；由两次受控窗口聚焦唤醒触发重读并核对保位。
+    await page.waitForTimeout(2400);
+    assert.equal(periodicReads.length, 0, "报告空闲阅读期间不再定时轮询");
+    await refresh();
+    await until(() => periodicReads.length >= 1, "首次窗口唤醒重读完成", 15000);
+    await refresh();
+    await until(() => periodicReads.length >= 2, "二次窗口唤醒重读完成", 15000);
+  }
   finally { page.off("response", observeRead); }
   assert.ok(periodicReads.every(read => read.status === 200));
   const readingAfter = { ...await geometry(), reportTop: await reportBody.evaluate(element => element.scrollTop) };

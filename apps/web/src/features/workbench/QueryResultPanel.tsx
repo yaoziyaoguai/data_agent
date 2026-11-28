@@ -6,10 +6,13 @@ import { QueryColumnStatistics, QueryCsvDownload, QueryResultTable } from "./Que
 
 type Page = { cursor: string | null; authorityRevision: number; retry: number };
 
-export function QueryResultPanel({ queryId, authorityRevision, docked, onClose }: {
+export function QueryResultPanel({ queryId, authorityRevision, docked, active = true, closeLabel = "返回对话", closeTitle, onClose }: {
   queryId: string;
   authorityRevision: number;
   docked: boolean;
+  active?: boolean;
+  closeLabel?: string;
+  closeTitle?: string;
   onClose: () => void;
 }) {
   const [pages, setPages] = useState<(string | null)[]>([null]);
@@ -49,8 +52,7 @@ export function QueryResultPanel({ queryId, authorityRevision, docked, onClose }
   const page = loaded && loaded.cursor === cursor && loaded.authorityRevision === authorityRevision && loaded.retry === retry ? loaded : null;
   const result = page && "result" in page ? page.result : null;
 
-  return <Modal docked={docked} title="查询结果" closeLabel="返回对话" className="full-result-dialog" onClose={onClose}
-    footer={<button className="primary" onClick={onClose}>返回对话</button>}>
+  return <Modal docked={docked} active={active} restoreFocusOnClose={false} closeTitle={closeTitle ?? closeLabel} title="查询结果" closeLabel={closeLabel} className="full-result-dialog" onClose={onClose}>
     {page === null && <p role="status">正在核对查询结果…</p>}
     {page && "error" in page && <p role="alert">{page.error} <button onClick={() => setRetry(value => value + 1)}>重试</button></p>}
     {result && <>

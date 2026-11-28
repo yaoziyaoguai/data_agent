@@ -21,6 +21,7 @@ pub(crate) struct DeliveryResult {
     pub reference: String,
     pub target_id: String,
     pub objects: Vec<String>,
+    pub sql_table_ids: Option<Vec<String>>,
 }
 
 pub(crate) async fn result_heads(
@@ -35,18 +36,64 @@ pub(crate) async fn result_heads(
     conversations::push_readable_delivery_conversations(&mut sql, ctx);
     queries::push_delivery_result_heads(&mut sql, &ctx.user_id, ids);
     let rows = sql.build().fetch_all(pool).await?;
-    Ok(rows
+    let mut parsed_rows = Vec::with_capacity(rows.len());
+    let mut all_table_names = std::collections::BTreeSet::new();
+    for row in rows {
+        let Some(reference) = row.get::<Option<String>, _>("result_ref") else {
+            continue;
+        };
+        let sql_text: String = row.get("sql_text");
+        let tables = queries::referenced_tables(&sql_text);
+        if let Some(names) = &tables {
+            all_table_names.extend(names.iter().cloned());
+        }
+        parsed_rows.push((
+            row.get::<String, _>("id"),
+            reference,
+            row.get::<String, _>("target_id"),
+            array::<String>(&row, "object_ids"),
+            tables,
+        ));
+    }
+    let resolved_tables = if all_table_names.is_empty() {
+        Vec::new()
+    } else {
+        let mut tx = AppTx::begin(pool).await?;
+        let names: Vec<_> = all_table_names.into_iter().collect();
+        let found = knowledge::enabled_tables_by_name_in_tx(&mut tx, ctx, &names).await?;
+        tx.commit().await?;
+        found
+    };
+    Ok(parsed_rows
         .into_iter()
-        .filter_map(|row| {
-            let reference = row.get::<Option<String>, _>("result_ref")?;
-            Some((
-                row.get("id"),
+        .map(|(id, reference, target_id, mut objects, tables)| {
+            let sql_table_ids = tables.filter(|names| !names.is_empty()).and_then(|names| {
+                let mut ids = Vec::with_capacity(names.len());
+                for name in names {
+                    let mut matches = resolved_tables
+                        .iter()
+                        .filter(|(sql_name, _)| *sql_name == name);
+                    let head = matches.next().filter(|_| matches.next().is_none())?;
+                    ids.push(head.1.id.clone());
+                }
+                Some(ids)
+            });
+            if let Some(table_ids) = &sql_table_ids {
+                for tid in table_ids {
+                    if !objects.contains(tid) {
+                        objects.push(tid.clone());
+                    }
+                }
+            }
+            (
+                id,
                 DeliveryResult {
                     reference,
-                    target_id: row.get("target_id"),
-                    objects: array(&row, "object_ids"),
+                    target_id,
+                    objects,
+                    sql_table_ids,
                 },
-            ))
+            )
         })
         .collect())
 }

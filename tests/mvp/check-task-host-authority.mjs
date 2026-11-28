@@ -26,7 +26,7 @@ const finish=async()=>{
   commit_id:run.output_id,final_text:text,checkpoint:cp()}));
  h.releaseRun(run.run_id);
 };
-const base={time_start:null,time_end:null,timezone:'UTC',metric:null,channel:null,group_by:[],filters:[],knowledge_refs:[],notes:''};
+const base={time_start:null,time_end:null,timezone:'UTC',metric:null,channel:null,group_by:[],filters:[],knowledge_refs:[],notes:'',source_limits:null};
 try{
  for(const kind of ['knowledge','memory','source','skill']){
   const marker='SYNTHETIC_UNATTRIBUTED_'+kind.toUpperCase();

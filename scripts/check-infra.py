@@ -51,8 +51,19 @@ def containers() -> tuple[dict[str, str], dict]:
         image_lock = locked["milvus" if service == "milvus-volume-init" else service]
         expected = image_lock["tag"] + "@" + image_lock["index_digest"]
         require(record["Config"]["Image"] == expected, f"镜像与锁定值不一致：{service}")
+        expected_arch = infra.expected_arch()
         image = json.loads(infra.run(infra.docker_args("image", "inspect", record["Image"]), capture=True).stdout)[0]
-        require(image["Architecture"] == "arm64" and image["Os"] == "linux", f"镜像不是原生 linux/arm64：{service}")
+        require(image["Architecture"] == expected_arch and image["Os"] == "linux",
+                f"镜像不是原生 linux/{expected_arch}：{service}")
+        arch_digest = image_lock.get(f"{expected_arch}_digest")
+        repo_digests = image.get("RepoDigests") or []
+        if arch_digest and repo_digests:
+            repo_prefix = image_lock["tag"].split(":")[0] + "@"
+            require(
+                repo_prefix + image_lock["index_digest"] in repo_digests
+                or repo_prefix + arch_digest in repo_digests,
+                f"镜像仓库摘要与锁定值不一致：{service}",
+            )
         if service == "milvus":
             require(record["Config"].get("User") not in ("", "0", "0:0", "root"), "正式 Milvus 进程不能以 root 用户运行。")
         expected_ports = {
@@ -200,7 +211,7 @@ def main() -> int:
     try:
         infra.validate_secrets()
         ids, report["containers"] = containers()
-        print("容器健康、ARM64 镜像锁定、本机端口及运行用户检查通过。", flush=True)
+        print(f"容器健康、原生 linux/{infra.expected_arch()} 镜像锁定、本机端口及运行用户检查通过。", flush=True)
         report["mysql"] = mysql_smoke(ids["mysql"])
         print("MySQL 临时数据库建表、写入、读取、清理通过。", flush=True)
         report["milvus"] = milvus_smoke()

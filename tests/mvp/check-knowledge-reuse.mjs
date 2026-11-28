@@ -226,12 +226,13 @@ async function checkHistoricalMethodSources(fixture, checks) {
   assert.equal(restored.version, saved.version);
   assert.deepEqual(ok(await h.request(`/assets/${refs[1].draft_id}`)), originalPreview);
   assert.deepEqual(ok(await h.request(`/assets/skill-drafts/${refs[1].draft_id}`)), drafts[1]);
-  const container = execFileSync("docker", ["--context", "colima-data-agent", "ps",
+  const dockerContext = process.env.DATA_AGENT_DOCKER_CONTEXT || (process.platform === "darwin" ? "colima-data-agent" : "default");
+  const container = execFileSync("docker", ["--context", dockerContext, "ps",
     "--filter", "label=com.docker.compose.project=data-agent",
     "--filter", "label=com.docker.compose.service=mysql", "--format", "{{.ID}}"], { encoding: "utf8" }).trim();
   const db = new URL(h.env.DATA_AGENT_DATABASE_URL).pathname.slice(1);
   assert.match(db, /^data_agent_test_[a-f0-9]+$/);
-  const holder = spawn("docker", ["--context", "colima-data-agent", "exec", "-i", container, "mysql",
+  const holder = spawn("docker", ["--context", dockerContext, "exec", "-i", container, "mysql",
     "--defaults-extra-file=/run/secrets/mysql_root_client", "--batch", "--unbuffered", "--skip-column-names"]);
   const released = once(holder, "exit");
   let lockOutput = "";

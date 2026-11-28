@@ -544,17 +544,24 @@ pub(super) async fn finalize_model_call(
         .await?
         .ok_or(Error::new("not_available"))?;
     tx.lock_rank(7)?;
-    sqlx::query("SELECT id FROM model_trials WHERE id=? FOR UPDATE")
-        .bind(&profile.trial_id)
-        .fetch_one(tx.connection())
-        .await?;
+    let trial = sqlx::query(
+        "SELECT spent_micros,cost_limit_micros FROM model_trials WHERE id=? FOR UPDATE",
+    )
+    .bind(&profile.trial_id)
+    .fetch_one(tx.connection())
+    .await?;
     let cost = model_cost(
         &profile,
         usage.input_tokens as u64,
         usage.output_tokens as u64,
     )?;
-    let exceeds = i64::from(usage.input_tokens)
-        > row.get::<Option<u32>, _>("input_tokens_upper").unwrap_or(0) as i64
+    let next_spent = trial.get::<u64, _>("spent_micros").saturating_add(cost);
+    let cost_exceeded = trial
+        .get::<Option<u64>, _>("cost_limit_micros")
+        .is_some_and(|limit| next_spent > limit);
+    let exceeds = cost_exceeded
+        || i64::from(usage.input_tokens)
+            > row.get::<Option<u32>, _>("input_tokens_upper").unwrap_or(0) as i64
         || i64::from(usage.output_tokens)
             > row.get::<Option<u32>, _>("output_tokens_max").unwrap_or(0) as i64;
     let reservation = if row.get::<i64, _>("reservation_released") != 0 {

@@ -1,40 +1,63 @@
 dialog {
-  border: 1px solid #dde5ef;
-  border-radius: 13px;
+  border: 1px solid var(--border, #e3e8ef);
+  border-radius: 12px;
   padding: 0;
   width: min(820px, calc(100vw - 32px));
   max-height: 90dvh;
-  color: #3f5675;
-  box-shadow: 0 24px 90px #152b4930;
+  color: var(--ink-body, #1f2735);
+  box-shadow: 0 20px 60px rgba(15, 23, 42, 0.16);
 }
 dialog::backdrop {
-  background: #1c2d4a50;
-  backdrop-filter: blur(3px);
+  background: rgba(18, 22, 31, 0.36);
 }
 .modal-head {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  border-bottom: 1px solid #e8edf4;
-  padding: 20px 24px;
+  gap: 14px;
+  border-bottom: 1px solid var(--border, #e3e8ef);
+  padding: 14px 20px;
   margin: 0;
   flex-shrink: 0;
+  background: var(--surface, #fff);
 }
 .modal-head h2 {
-  font-size: 19px;
-  font-weight: 500;
+  font-size: 17px;
+  font-weight: 600;
   margin: 0;
+  color: var(--ink, #12161f);
 }
-.modal-head button {
+.modal-head button.modal-close-button {
   border: 0;
   background: none;
-  color: #8394ae;
-  font-size: 24px;
+  color: var(--ink-secondary, #3c4657);
+  font-size: 20px;
+  line-height: 1;
+  border-radius: 6px;
+}
+.modal-head button.modal-close-button:hover {
+  background: var(--subtle, #eef2f6);
+  color: var(--ink, #12161f);
+}
+.modal-head button.modal-back-button {
+  border: 1px solid var(--control, #c8d1dc);
+  background: var(--surface, #fff);
+  color: var(--ink, #12161f);
+  font-size: 13px;
+  font-weight: 500;
+  padding: 6px 12px;
+  border-radius: var(--radius-sm, 6px);
+  white-space: nowrap;
+}
+.modal-head button.modal-back-button:hover {
+  background: var(--raised, #f7f9fb);
+  border-color: #aebac8;
 }
 .form-label {
   display: block;
-  font-size: 12px;
-  color: #6c7f9b;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink-secondary, #3c4657);
   margin: 14px 0;
 }
 .form-label input,
@@ -42,142 +65,109 @@ dialog::backdrop {
 .form-label textarea {
   display: block;
   width: 100%;
-  border: 1px solid #dfe6ef;
-  border-radius: 6px;
-  padding: 11px;
-  color: #435d81;
-  background: #fafbfd;
+  border: 1px solid var(--control, #c8d1dc);
+  border-radius: var(--radius-md, 8px);
+  padding: 9px 11px;
+  min-height: 38px;
+  color: var(--ink-body, #1f2735);
+  background: var(--surface, #fff);
   margin-top: 7px;
-  font-size: 12px;
+  font-size: 13px;
 }
 .checkbox-label {
   display: flex;
+  align-items: center;
   gap: 8px;
-  font-size: 12px;
-  margin: 18px 0;
+  font-size: 13px;
+  color: var(--ink-secondary, #3c4657);
+  margin: 16px 0;
 }
 .history-dialog {
   display: grid;
-  gap: 10px;
+  gap: 8px;
 }
 .history-dialog button {
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 4px;
   text-align: left;
-  font-size: 12px;
+  font-size: 13px;
 }
 .history-dialog small {
-  font-size: 9px;
-  color: #899ab2;
-}
-.composer {
-  margin-top: 30px;
+  font-size: 12px;
+  color: var(--muted, #515b6d);
 }
 .activity button {
   border: 0;
   background: none;
-  color: #607fae;
-  font-size: 11px;
+  color: var(--accent, #176076);
+  font-size: 12px;
 }
-.welcome h1 {
-  font-size: clamp(36px, 4vw, 54px);
-  font-weight: 500;
-  letter-spacing: -1.8px;
-}
+
 @media (max-width: 1050px) {
   .knowledge-layout {
-    grid-template-columns: 175px minmax(0, 1fr);
+    grid-template-columns: 220px minmax(0, 1fr);
   }
   .provenance-columns {
     grid-template-columns: 1fr;
   }
   .management {
-    padding: 30px 25px;
+    padding: 22px 20px;
   }
   .page-heading {
     align-items: flex-start;
-  }
-  .asset-grid {
-    gap: 16px;
   }
   .object-heading {
     align-items: flex-start;
     flex-wrap: wrap;
   }
 }
+
 @media (max-width: 700px) {
-  .sidebar {
-    position: static;
-    height: auto;
-    display: grid;
-  }
-  .primary-nav {
-    grid-column: 1/-1;
-    display: flex;
-    gap: 4px;
-    margin: 8px 0 0;
-    overflow: auto;
-  }
-  .primary-nav button {
-    padding: 7px 12px;
-    flex: 1;
-    justify-content: center;
-  }
-  .primary-nav small {
-    display: none;
-  }
-  .sidebar .history-nav {
-    display: none;
-  }
-  .history-all {
-    grid-column: 1/-1;
+  .workspace-sheet {
     margin: 0;
-    padding: 3px 0;
-  }
-  .history-label {
-    display: flex;
-    grid-column: 1/-1;
-    margin: 7px 0 0;
+    border-radius: 0;
+    border-left: 0;
+    border-right: 0;
+    border-bottom: 0;
+    min-height: calc(100dvh - var(--topbar-height, 48px));
   }
   .conversation {
-    padding: 27px 20px;
+    padding: 20px 16px;
   }
   .query-card {
-    padding: 18px 15px;
+    padding: 16px 14px;
   }
   .chart-row {
     grid-template-columns: 65px 1fr 62px;
-    font-size: 10px;
+    font-size: 12px;
   }
   .management {
-    padding: 27px 20px;
+    padding: 18px 16px 32px;
   }
   .page-heading {
-    display: block;
-    margin-bottom: 20px;
-  }
-  .page-heading > .actions,
-  .page-heading > button {
-    margin-top: 15px;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
   }
   .knowledge-layout {
     grid-template-columns: 1fr;
   }
   .object-list {
     display: flex;
-    overflow: auto;
+    overflow-x: auto;
     border-right: 0;
-    border-bottom: 1px solid #e6ebf2;
+    border-bottom: 1px solid var(--border, #e3e8ef);
     padding: 10px;
-    gap: 5px;
+    gap: 6px;
   }
   .object-list button {
-    min-width: 160px;
+    min-width: 180px;
+    flex: 0 0 auto;
     font-size: 12px;
   }
   .knowledge-content {
-    padding: 18px 15px;
+    padding: 16px;
   }
   .object-heading h2 {
     font-size: 18px;
@@ -186,45 +176,27 @@ dialog::backdrop {
     gap: 14px;
   }
   .tabs button {
-    font-size: 11px;
-  }
-  .asset-grid {
-    grid-template-columns: 1fr;
-  }
-  .asset-card {
-    padding: 20px;
+    font-size: 13px;
   }
   .asset-empty {
-    padding: 45px 20px;
+    padding: 40px 20px;
   }
   .query-card .actions {
     gap: 6px;
   }
   .query-card .actions button {
-    padding: 8px 10px;
-    font-size: 10px;
+    padding: 7px 10px;
+    font-size: 12px;
   }
   .task summary {
     display: block;
   }
   .task summary span {
     display: block;
-    margin-top: 5px;
+    margin-top: 4px;
   }
-  .result-toolbar {
-    gap: 10px;
-  }
-  .result-toolbar .text-link {
-    font-size: 10px;
-  }
-  dialog {
-    padding: 19px;
-  }
-  .primary-nav {
-    min-width: 0;
-  }
-  header {
-    gap: 15px;
+  dialog:not(.modal) {
+    padding: 18px;
   }
   .badge {
     max-width: 135px;
@@ -232,32 +204,14 @@ dialog::backdrop {
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  .example-grid {
-    display: grid;
-  }
-  .example {
-    text-align: left;
-  }
 }
+
 @media (prefers-reduced-motion: no-preference) {
   button,
   a {
     transition:
-      background 0.15s,
-      color 0.15s,
-      border-color 0.15s;
-  }
-  .query-card {
-    animation: appear 0.2s ease-out;
-  }
-  @keyframes appear {
-    from {
-      opacity: 0.3;
-      transform: translateY(4px);
-    }
-    to {
-      opacity: 1;
-      transform: none;
-    }
+      background 0.15s ease-out,
+      color 0.15s ease-out,
+      border-color 0.15s ease-out;
   }
 }

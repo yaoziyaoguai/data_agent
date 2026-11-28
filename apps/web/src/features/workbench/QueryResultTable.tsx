@@ -9,7 +9,9 @@ export function QueryResultTable({ columns, rows }: Pick<QueryResults, "columns"
     <table>
       <thead><tr>{columns.map((column, index) => {
         const meaning = [column.display_label, column.unit].filter(Boolean).join(" · ");
-        return <th key={index} scope="col" className={meaning ? "annotated" : undefined}>
+        const numeric = ["integer", "number"].includes(column.type) && !isResultIdentifier(column.name);
+        const classes = [meaning && "annotated", numeric && "numeric"].filter(Boolean).join(" ");
+        return <th key={index} scope="col" className={classes || undefined}>
           {column.name}{meaning && <small className="column-meaning">{meaning}</small>}
         </th>;
       })}</tr></thead>

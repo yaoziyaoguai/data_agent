@@ -175,11 +175,13 @@ pub async fn recovery_state_in_tx(tx: &mut AppTx<'_>, cid: &str, task: &str) -> 
     .bind(task)
     .fetch_all(tx.connection())
     .await?;
+    let source_limits_declared = declared_source_limits_in_tx(tx, cid, task).await?.is_some();
     Ok(json!({
         "task_id":task,
         "condition_version":row.get::<u64,_>("condition_version").to_string(),
         "lifecycle":row.get::<String,_>("lifecycle"),
         "phase":row.get::<String,_>("phase"),
+        "source_limits_declared":source_limits_declared,
         "open_clarification_ids":ids.iter().take(8).collect::<Vec<_>>(),
         "has_more_clarifications":ids.len()>8,
         "read_tool":{"name":"read_analysis_task","arguments":{"task_id":task}}

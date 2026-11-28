@@ -11,9 +11,10 @@ try{
  const original=(await h.request('/knowledge/'+objectId)).value;
  h.sql("UPDATE knowledge_index_jobs SET state='indexed'");
  h.sql(`UPDATE knowledge_index_jobs SET state='pending' WHERE object_id IN ('${objectId}','${markerId}')`);
- const container=execFileSync('docker',['--context','colima-data-agent','ps','--filter','label=com.docker.compose.project=data-agent','--filter','label=com.docker.compose.service=mysql','--format','{{.ID}}'],{encoding:'utf8'}).trim();
+ const dockerContext=process.env.DATA_AGENT_DOCKER_CONTEXT||(process.platform==='darwin'?'colima-data-agent':'default');
+ const container=execFileSync('docker',['--context',dockerContext,'ps','--filter','label=com.docker.compose.project=data-agent','--filter','label=com.docker.compose.service=mysql','--format','{{.ID}}'],{encoding:'utf8'}).trim();
  const database=new URL(h.env.DATA_AGENT_DATABASE_URL).pathname.slice(1);assert.match(database,/^data_agent_test_[a-f0-9]+$/);
- gate=spawn('docker',['--context','colima-data-agent','exec','-i',container,'mysql','--defaults-extra-file=/run/secrets/mysql_root_client','--batch','--raw','--skip-column-names','--unbuffered'],{stdio:['pipe','pipe','pipe']});
+ gate=spawn('docker',['--context',dockerContext,'exec','-i',container,'mysql','--defaults-extra-file=/run/secrets/mysql_root_client','--batch','--raw','--skip-column-names','--unbuffered'],{stdio:['pipe','pipe','pipe']});
  let stdout='';gate.stdout.on('data',v=>stdout+=v.toString());
  gate.stdin.write(`USE ${database}; START TRANSACTION; SELECT id FROM knowledge_objects WHERE id='${objectId}' FOR UPDATE; SELECT 'object_locked';\n`);
  await until(()=>stdout.includes('object_locked'),'语义对象竞争窗口');

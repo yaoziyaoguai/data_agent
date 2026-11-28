@@ -24,7 +24,7 @@ try{
  await h.resumeWorker();run=await until(()=>h.captured.find(v=>v.message_id===accepted.message_id),'first captured time');await h.pauseWorker();
  assert.deepEqual(run.request_clock,stamp);assert.deepEqual(run.workspace_context.request_clock,stamp);
  const history=(await invoke('read_conversation',{after_seq:'0'})).result;assert.equal(history.status,200);assert.deepEqual(history.value.data.events[0].payload.request_clock,stamp);
- const conditions={time_start:'2025-11-30T16:00:00Z',time_end:'2025-12-31T16:00:00Z',timezone:'Asia/Shanghai',metric:'net_revenue',channel:null,group_by:[],filters:['is_test=0','paid_amount_cents>0'],knowledge_refs:[],notes:'独立边界检查：2026年1月2日上海业务日的上个月为2025年12月；此处只验证宿主时钟和恢复，并非模拟模型准确率。'};
+ const conditions={time_start:'2025-11-30T16:00:00Z',time_end:'2025-12-31T16:00:00Z',timezone:'Asia/Shanghai',metric:'net_revenue',channel:null,group_by:[],filters:['is_test=0','paid_amount_cents>0'],knowledge_refs:[],notes:'独立边界检查：2026年1月2日上海业务日的上个月为2025年12月；此处只验证宿主时钟和恢复，并非模拟模型准确率。',source_limits:null};
  const sdk=randomUUID();const taskArgs={action:'create',task_id:null,expected_version:null,goal:'上个月净收入',conditions,question:null,options:[]};
  const task=(await invoke('update_analysis_task',taskArgs,sdk)).result.value.data;
  h.releaseRun(run.run_id);

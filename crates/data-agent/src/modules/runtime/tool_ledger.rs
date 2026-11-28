@@ -79,3 +79,47 @@ pub async fn register_named_tool_in_tx(
     });
     Ok(operation)
 }
+
+pub(super) fn step_target_ids(tool_name: &str, receipt: Option<&Value>) -> Vec<String> {
+    let Some(data) = receipt.and_then(|r| r.get("data")) else {
+        return Vec::new();
+    };
+    let mut ids = Vec::new();
+    if tool_name == "read_knowledge" {
+        for item in data["items"].as_array().into_iter().flatten() {
+            if item["state"] == "ok"
+                && let Some(id) = item["ref"]["object_id"].as_str()
+                && !ids.iter().any(|existing| existing == id)
+            {
+                ids.push(id.to_owned());
+            }
+        }
+    } else if tool_name == "read_source"
+        && data["source"]["kind"] == "document"
+        && let Some(id) = data["source"]["id"].as_str()
+    {
+        ids.push(id.to_owned());
+    }
+    ids
+}
+
+#[cfg(test)]
+mod tests {
+    use super::step_target_ids;
+    use serde_json::json;
+
+    #[test]
+    fn extracts_deduplicated_ok_targets_from_batched_reads() {
+        let receipt = json!({"data":{"items":[
+            {"state":"ok","ref":{"object_id":"metric-a","path":"definition"}},
+            {"state":"ok","ref":{"object_id":"metric-a","path":"sql"}},
+            {"state":"not_available","ref":{"object_id":"table-hidden","path":"columns"}},
+            {"state":"ok","asset_ref":{"id":"mem-1"}},
+            {"state":"ok","ref":{"object_id":"metric-b","path":"definition"}}
+        ]}});
+        assert_eq!(
+            step_target_ids("read_knowledge", Some(&receipt)),
+            vec!["metric-a".to_owned(), "metric-b".to_owned()]
+        );
+    }
+}

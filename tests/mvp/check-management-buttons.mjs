@@ -54,14 +54,29 @@ try{
  await entry().getByRole('button',{name:'编辑',exact:true}).click();await entry().getByRole('button',{name:'清除人工覆盖',exact:true}).click();await until(async()=>!(await entry().innerText()).includes('人工合成说明'),'清除覆盖');
  await entry().getByText('查看依据与修改记录',{exact:true}).click();await entry().getByRole('button',{name:'查看来源正文 ↗',exact:true}).click();await page.getByRole('dialog').waitFor();assert.ok((await page.getByRole('dialog').innerText()).length>100);await discardEditor(page);
  await page.getByRole('tab',{name:'变更记录',exact:true}).click();await page.getByLabel('查看历史版本').fill('1');await click('读取版本');await page.locator('.knowledge-content .markdown-content').first().waitFor();
- await page.getByRole('tab',{name:'概览',exact:true}).click();await page.locator('.object-heading').getByRole('button',{name:'停用',exact:true}).click();await page.locator('.object-heading').getByRole('button',{name:'启用',exact:true}).click();
+ await page.getByRole('tab',{name:'概览',exact:true}).click();
+ // 同步来源触发的后台语义预填可能刚推进表版本；先对齐最新对象版本再验证启停切换。
+ await page.goto(h.url+'/#knowledge?object=table-demo_order_detail');await page.getByRole('heading',{name:'demo_order_detail',exact:true}).waitFor();
+ await until(async()=>{
+  if(await page.locator('.object-heading').getByRole('button',{name:'启用',exact:true}).count()>0)return true;
+  const currentObj=(await h.request('/knowledge/table-demo_order_detail')).value;
+  if(currentObj.prefill_status&&['queued','issued'].includes(currentObj.prefill_status.state))return false;
+  assert.equal((await h.internal('/internal/live-changes',[{kind:'catalog',space_id:'demo'}])).status,204);
+  await page.locator('.object-heading').getByRole('button',{name:'停用',exact:true}).click();
+  await page.waitForTimeout(200);
+  return await page.locator('.object-heading').getByRole('button',{name:'启用',exact:true}).count()>0;
+ },'停用样例表生效',30000);
+ await page.locator('.object-heading').getByRole('button',{name:'启用',exact:true}).click();
  await page.locator('.object-heading').getByRole('button',{name:'停用',exact:true}).waitFor();
  checks.push('同步、未配置索引重建的503提示、放弃编辑、清除覆盖、来源正文、历史版本、对象启停实际点按');
  const target=(await h.request('/knowledge/table-demo_order_detail')).value;
  const proposal={id:randomUUID(),object_id:target.id,base_version:target.version,entry_id:'description',value:'合成审查：每行是一条订单商品明细',reason:'按钮测试的合成修改建议',evidence:[{object_id:target.id,version:target.version,path:'description'}],state:'open'};
  const quoted=value=>"'"+value.replaceAll("'","''")+"'";
  h.sql(`INSERT INTO semantic_change_proposals(id,owner_id,space_id,body) VALUES(${quoted(proposal.id)},'alice','demo',${quoted(JSON.stringify(proposal))})`);
- await page.getByText(/我的私人草稿 · 1/).click();
+ assert.equal((await h.internal('/internal/live-changes',[{kind:'catalog',space_id:'demo'}])).status,204);
+ const draftDetails=page.locator('details').filter({has:page.getByText(/我的私人草稿 · 1/)});
+ await draftDetails.waitFor();
+ if(await draftDetails.getAttribute('open')===null)await draftDetails.locator('summary').click();
  await page.getByText(proposal.reason,{exact:true}).waitFor();
  assert.equal((await h.request('/knowledge-proposals',undefined,'bob')).value.proposals.length,0);
  await click('整理并提交给负责人');await page.getByLabel(/已核对以上内容可共享/).check();await click('确认提交给负责人');await page.getByRole('dialog').waitFor({state:'detached'});

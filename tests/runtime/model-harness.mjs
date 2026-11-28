@@ -7,14 +7,15 @@ import {createDeliveryServer} from '../../apps/agent/transport/server.ts';
 
 export const trialProfile=trial_id=>({provider_id:'deepseek',model_id:'deepseek-flash',trial_id,price_version:'2026-10-04-peak-usd',input_limit:4096,output_limit:1024,trial_call_limit:6,trial_cost_micros:'50000'});
 export async function until(action,label,ms=10000){const end=Date.now()+ms;while(Date.now()<end){const v=await action();if(v)return v;await new Promise(r=>setTimeout(r,50));}throw new Error('timeout: '+label);}
-export async function stop(child){if(!child||child.exitCode!==null||child.signalCode!==null)return;child.kill('SIGTERM');await new Promise(r=>child.once('exit',r));}
+export async function stop(child){if(!child||child.exitCode!==null||child.signalCode!==null)return;child.kill('SIGTERM');await Promise.race([new Promise(r=>child.once('exit',r)),new Promise(r=>setTimeout(r,2000))]);if(child.exitCode===null&&child.signalCode===null){child.kill('SIGKILL');await new Promise(r=>child.once('exit',r));}}
 const freePort=()=>new Promise(resolve=>{const s=net.createServer();s.listen(0,'127.0.0.1',()=>{const p=s.address().port;s.close(()=>resolve(p));});});
 
 // 本地协议测试创建临时数据库；官方小样保留自己的数据库与原试验ID供审计。
 export async function modelHarness(profile,{database,keep=false}={}){
  const root=process.cwd();database??='data_agent_test_'+randomBytes(8).toString('hex');assert.match(database,/^data_agent_(test|trial)_[a-f0-9]+$/);
- const container=execFileSync('docker',['--context','colima-data-agent','ps','--filter','label=com.docker.compose.project=data-agent','--filter','label=com.docker.compose.service=mysql','--format','{{.ID}}'],{encoding:'utf8'}).trim();assert.match(container,/^[a-f0-9]+$/);
- const rawSql=q=>execFileSync('docker',['--context','colima-data-agent','exec','-i',container,'mysql','--defaults-extra-file=/run/secrets/mysql_root_client','--batch','--raw','--default-character-set=utf8mb4','--skip-column-names'],{input:q,encoding:'utf8',stdio:['pipe','pipe','pipe']}).trim();
+ const dockerContext=process.env.DATA_AGENT_DOCKER_CONTEXT||(process.platform==='darwin'?'colima-data-agent':'default');
+ const container=execFileSync('docker',['--context',dockerContext,'ps','--filter','label=com.docker.compose.project=data-agent','--filter','label=com.docker.compose.service=mysql','--format','{{.ID}}'],{encoding:'utf8'}).trim();assert.match(container,/^[a-f0-9]+$/);
+ const rawSql=q=>execFileSync('docker',['--context',dockerContext,'exec','-i',container,'mysql','--defaults-extra-file=/run/secrets/mysql_root_client','--batch','--raw','--default-character-set=utf8mb4','--skip-column-names'],{input:q,encoding:'utf8',stdio:['pipe','pipe','pipe']}).trim();
  rawSql('CREATE DATABASE IF NOT EXISTS '+database+'; GRANT ALL ON '+database+'.* TO data_agent;');
  const query=q=>{const v=rawSql('USE '+database+'; '+q);return v?v.split('\n').map(s=>JSON.parse(s)):[];};
  const apiPort=await freePort(),bridgePort=await freePort();const token=randomBytes(32).toString('hex'),alice=randomBytes(32).toString('hex'),bob=randomBytes(32).toString('hex');
@@ -27,7 +28,7 @@ export async function modelHarness(profile,{database,keep=false}={}){
  let dispatch=async()=>{throw new Error('dispatch not configured');};
  const bridge=createDeliveryServer(env.DATA_AGENT_API_URL,token,(...args)=>dispatch(...args));await new Promise(r=>bridge.listen(bridgePort,'127.0.0.1',r));
  const request=async(path,body,{user='alice',internal=false}={})=>{const res=await fetch(env.DATA_AGENT_API_URL+path,{method:body?'POST':'GET',headers:{authorization:'Bearer '+(internal?token:user==='bob'?bob:alice),'content-type':'application/json'},body:body?JSON.stringify(body):undefined});return {status:res.status,value:await res.json()};};
- async function setProfile(next){await stop(api);env.DATA_AGENT_MODEL_PROFILE=JSON.stringify(next);api=start('target/debug/data-agent-api');await until(async()=>{try{return(await fetch(env.DATA_AGENT_API_URL+'/health')).ok;}catch{return false;}},'api health');}
+ async function setProfile(next){await stop(api);env.DATA_AGENT_MODEL_PROFILE=JSON.stringify(next);api=start('target/debug/data-agent-api');await until(async()=>{try{return(await fetch(env.DATA_AGENT_API_URL+'/health')).ok;}catch{return false;}},'api health',75000);}
  await setProfile(profile);
  return {database,env,token,query,request,getLogs:()=>logs,setProfile,
   async run(text,execute){

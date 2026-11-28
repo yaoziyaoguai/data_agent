@@ -1,5 +1,11 @@
-import type { ModelService, SaveModelDefinition, SaveModelService } from "../../../../../packages/contracts/generated/boundary.ts";
-import { deepseekInitialValues, deepseekLongOutput, levels, levelLabel, protocolLabel, type ModelDraft } from "./model-configuration-draft.ts";
+import { useEffect, useState } from "react";
+import type { ModelService, SaveModelService } from "../../../../../packages/contracts/generated/boundary.ts";
+import { capacityProblem, deepseekInitialValues, deepseekLongOutput, levels, levelLabel, protocolLabel, type ModelDraft } from "./model-configuration-draft.ts";
+
+function formatPayloadMib(bytes: number | undefined): string {
+  if (bytes === undefined) return "";
+  return String(Number((bytes / 1048576).toFixed(6)));
+}
 
 export function ServiceFields({
   draft,
@@ -159,53 +165,86 @@ export function ModelFields({
   const budgetThinking =
     protocol === "anthropic-messages" &&
     draft.anthropic_thinking_mode !== "adaptive";
+  const [payloadMib, setPayloadMib] = useState(() =>
+    formatPayloadMib(draft.payload_bytes_limit),
+  );
+  useEffect(() => {
+    const parsed =
+      payloadMib.trim() === "" ? undefined : Number(payloadMib);
+    const currentBytes =
+      parsed !== undefined && Number.isFinite(parsed)
+        ? Math.round(parsed * 1048576)
+        : undefined;
+    if (currentBytes !== draft.payload_bytes_limit) {
+      setPayloadMib(formatPayloadMib(draft.payload_bytes_limit));
+    }
+  }, [draft.payload_bytes_limit]);
   return (
     <>
-      <label>
-        所属服务
-        <select
-          aria-label="所属服务"
-          required
-          value={draft.service_id}
-          onChange={(e) => {
-            const next = { ...draft, service_id: e.target.value };
-            if (
-              services.find((service) => service.id === next.service_id)
-                ?.api !== "anthropic-messages"
-            )
-              delete next.anthropic_thinking_mode;
-            change(next);
-          }}
-        >
-          {services.map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.name}
-              {s.enabled ? "" : "（已停用）"}
-            </option>
-          ))}
-        </select>
-      </label>
-      <div className="configuration-grid">
+      <fieldset>
+        <legend>所属服务与模型标识</legend>
         <label>
-          Model ID
-          <input
+          所属服务
+          <select
+            aria-label="所属服务"
             required
-            maxLength={200}
-            value={draft.model_id}
-            placeholder="供应商提供的模型标识"
-            onChange={(e) => change({ ...draft, model_id: e.target.value })}
-          />
+            value={draft.service_id}
+            onChange={(e) => {
+              const next = { ...draft, service_id: e.target.value };
+              const targetApi = services.find(
+                (service) => service.id === next.service_id,
+              )?.api;
+              if (targetApi !== "anthropic-messages") {
+                delete next.anthropic_thinking_mode;
+              } else if (next.anthropic_thinking_mode !== "adaptive") {
+                const filtered = next.thinking_levels.filter(
+                  (level) => level !== "xhigh" && level !== "max",
+                );
+                const [first, ...rest] = filtered.length
+                  ? filtered
+                  : (["off"] as const);
+                next.thinking_levels = [first, ...rest];
+                if (
+                  !([first, ...rest] as ModelDraft["default_thinking"][]).includes(
+                    next.default_thinking,
+                  )
+                ) {
+                  next.default_thinking = first;
+                }
+              }
+              change(next);
+            }}
+          >
+            {services.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name}
+                {s.enabled ? "" : "（已停用）"}
+              </option>
+            ))}
+          </select>
         </label>
-        <label>
-          展示名称
-          <input
-            required
-            maxLength={100}
-            value={draft.label}
-            onChange={(e) => change({ ...draft, label: e.target.value })}
-          />
-        </label>
-      </div>
+        <div className="configuration-grid" style={{ marginTop: 10 }}>
+          <label>
+            Model ID
+            <input
+              required
+              maxLength={200}
+              value={draft.model_id}
+              placeholder="供应商提供的模型标识"
+              onChange={(e) => change({ ...draft, model_id: e.target.value })}
+            />
+          </label>
+          <label>
+            展示名称
+            <input
+              required
+              maxLength={100}
+              value={draft.label}
+              onChange={(e) => change({ ...draft, label: e.target.value })}
+            />
+          </label>
+        </div>
+      </fieldset>
       {protocol === "anthropic-messages" && (
         <label>
           Anthropic 思考方式
@@ -213,8 +252,26 @@ export function ModelFields({
             aria-label="Anthropic 思考方式"
             value={draft.anthropic_thinking_mode ?? "budget"}
             onChange={(e) => {
-              if (e.target.value === "budget" || e.target.value === "adaptive")
-                change({ ...draft, anthropic_thinking_mode: e.target.value });
+              if (e.target.value === "budget") {
+                const filtered = draft.thinking_levels.filter(
+                  (level) => level !== "xhigh" && level !== "max",
+                );
+                const [first, ...rest] = filtered.length
+                  ? filtered
+                  : (["off"] as const);
+                change({
+                  ...draft,
+                  anthropic_thinking_mode: "budget",
+                  thinking_levels: [first, ...rest],
+                  default_thinking: ([first, ...rest] as ModelDraft["default_thinking"][]).includes(
+                    draft.default_thinking,
+                  )
+                    ? draft.default_thinking
+                    : first,
+                });
+              } else if (e.target.value === "adaptive") {
+                change({ ...draft, anthropic_thinking_mode: "adaptive" });
+              }
             }}
           >
             <option value="budget">思考预算（传统模型）</option>
@@ -344,11 +401,23 @@ export function ModelFields({
             </button>
           </div>
         )}
-        {draft.context_window === undefined && (
-          <p className="configuration-help">
-            尚未声明总上下文；保存前需按此型号已核实的能力填写。历史消息仍按原配置执行。
-          </p>
-        )}
+        {(() => {
+          if (draft.context_window === undefined) {
+            return (
+              <p className="capacity-summary warning">
+                尚未声明总上下文；保存前需按此型号已核实的能力填写。历史消息仍按原配置执行。
+              </p>
+            );
+          }
+          const problem = capacityProblem(draft);
+          return (
+            <p className={"capacity-summary" + (problem ? " warning" : "")}>
+              {problem
+                ? `容量校验提示：${problem}`
+                : `已声明容量关系：总窗口 ${draft.context_window.toLocaleString()} tokens · 单次输入上限 ${(draft.input_limit ?? 0).toLocaleString()} · 单次输出上限 ${(draft.output_limit ?? 0).toLocaleString()}`}
+            </p>
+          );
+        })()}
         <div className="configuration-grid">
           {(
             [
@@ -396,21 +465,19 @@ export function ModelFields({
               required
               min={2048 / 1048576}
               max={8}
-              step={1 / 1048576}
-              value={
-                draft.payload_bytes_limit === undefined
-                  ? ""
-                  : draft.payload_bytes_limit / 1048576
-              }
-              onChange={(e) =>
+              step="any"
+              value={payloadMib}
+              onChange={(e) => {
+                const raw = e.target.value;
+                setPayloadMib(raw);
+                const parsed = raw.trim() === "" ? NaN : Number(raw);
                 change({
                   ...draft,
-                  payload_bytes_limit:
-                    e.target.value === ""
-                      ? draft.payload_bytes_limit
-                      : Math.round(Number(e.target.value) * 1048576),
-                })
-              }
+                  payload_bytes_limit: Number.isFinite(parsed)
+                    ? Math.round(parsed * 1048576)
+                    : undefined,
+                });
+              }}
             />
           </label>
           <label>

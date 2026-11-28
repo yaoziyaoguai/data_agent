@@ -17,12 +17,12 @@ const errors = [];
 page.on("pageerror", (e) => errors.push(e.message));
 const directory = ".local/checks/creator-ownership-browser";
 await mkdir(directory, { recursive: true });
-async function login(user) {
+async function login(user, expectedNav = "语义管理") {
   await page.goto(h.url);
   await page.getByLabel("演示登录凭据").fill(h.tokens[user]);
   await page.getByRole("button", { name: "进入工作台 →" }).click();
-  await navigateWorkspace(page, '语义管理');
-  await page.getByRole("heading", { name: "语义管理", exact: true }).waitFor();
+  await navigateWorkspace(page, expectedNav);
+  await page.getByRole("heading", { name: expectedNav, exact: true }).waitFor();
 }
 async function logout() {
   await logoutWorkspace(page);
@@ -122,20 +122,37 @@ try {
     });
   }
   await logout();
-  await login("carol");
+  await login("carol", "数据字典");
+  assert.equal(
+    (await h.request("/semantic-access", undefined, "carol")).value.can_create,
+    false,
+  );
+  assert.equal(
+    await page
+      .getByRole("button", { name: "录入业务文档", exact: true })
+      .count(),
+    0,
+  );
+  assert.equal(
+    await page
+      .getByRole("button", { name: "录入指标", exact: true })
+      .count(),
+    0,
+  );
+  await sync("carol");
+  await page.getByRole("heading", { name: "语义管理", exact: true }).waitFor();
   assert.equal(
     await page
       .getByRole("button", { name: "录入业务文档", exact: true })
       .isDisabled(),
-    true,
+    false,
   );
   assert.equal(
     await page
       .getByRole("button", { name: "录入指标", exact: true })
       .isDisabled(),
-    true,
+    false,
   );
-  await sync("carol");
   // 获取表维护资格后可创建自己的对象，但仍不能编辑 Bob 的文档。
   await page.getByLabel("搜索语义对象").fill("合成创建者文档");
   await page

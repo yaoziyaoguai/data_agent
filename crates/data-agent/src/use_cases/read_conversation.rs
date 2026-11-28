@@ -328,7 +328,7 @@ async fn step_names<'a>(
             activity
                 .steps
                 .iter()
-                .filter_map(|step| step.target_id.clone())
+                .flat_map(|step| step.target_ids.iter().cloned())
         })
         .collect();
     knowledge::candidate_meta_in_tx(tx, ctx, &targets.into_iter().collect::<Vec<_>>(), None)
@@ -351,15 +351,16 @@ fn step_summaries(
         .steps
         .iter()
         .filter_map(|step| {
+            let resolved: Vec<&str> = step
+                .target_ids
+                .iter()
+                .filter_map(|id| names.get(id).map(String::as_str))
+                .collect();
             Some(RunStepSummary {
                 category: activity_label(&step.tool)?
                     .trim_start_matches("正在")
                     .to_owned(),
-                target_name: step
-                    .target_id
-                    .as_ref()
-                    .and_then(|id| names.get(id))
-                    .cloned(),
+                target_name: (!resolved.is_empty()).then(|| resolved.join("、")),
                 duration_ms: step.duration_ms,
             })
         })

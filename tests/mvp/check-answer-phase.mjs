@@ -6,7 +6,7 @@ import {exportCheckpoint} from '../../apps/agent/session/checkpoint.ts';
 import {harness,until} from './harness.mjs';
 
 const h=await harness({capture:true,env:{DATA_AGENT_LEASE_MS:'120000',DATA_AGENT_QUERY_DELAY_SECONDS:'0'}});
-const conditions={time_start:null,time_end:null,timezone:'UTC',metric:'net_revenue',channel:null,group_by:[],filters:[],knowledge_refs:[],notes:''};
+const conditions={time_start:null,time_end:null,timezone:'UTC',metric:'net_revenue',channel:null,group_by:[],filters:[],knowledge_refs:[],notes:'',source_limits:null};
 let run,manager,passed=false;const checks=[];
 const checkpoint=()=>exportCheckpoint(manager,run.workspace_context.authority_revision,run.workspace_context.authority_snapshot);
 const attach=r=>{run=r;manager=SessionManager.inMemory('/synthetic/data-agent');};

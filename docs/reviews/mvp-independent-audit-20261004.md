@@ -35,7 +35,7 @@
 - **要求：**知识模块 M02 的 effective_value 必须有明确取值规则；AGENTS 第 4、7 条要求边界数据有效、人工编辑可靠。
 - **触发：**在语义管理中新建一个人工文档，编辑正文，点击“清除人工覆盖”。
 - **实现：**[KnowledgePage.tsx](../../apps/web/src/features/knowledge/KnowledgePage.tsx):120–123 对这种文档显示清除按钮。[knowledge/store.rs](../../crates/data-agent/src/modules/knowledge/store.rs):212 创建的 suggestion 是空对象；第 175–178 行清除时直接读取不存在的 suggestion.value，Rust serde_json 得到 null，并在第 197 行保存新版本。
-- **提交顺序：**[use_cases/knowledge.rs](../../crates/data-agent/src/use_cases/knowledge.rs):123 先提交事务，随后 [data_routes.rs](../../apps/api/src/data_routes.rs):74–78 调用响应校验。[schema.json](../../packages/contracts/schema.json):1336 要求 effective_value 为 string，因而返回 invalid_input，但数据库已经变化。
+- **提交顺序：**[use_cases/knowledge/mod.rs](../../crates/data-agent/src/use_cases/knowledge/mod.rs):123 先提交事务，随后 [data_routes.rs](../../apps/api/src/data_routes.rs):74–78 调用响应校验。[schema.json](../../packages/contracts/schema.json):1336 要求 effective_value 为 string，因而返回 invalid_input，但数据库已经变化。
 - **影响：**用户看见保存失败，实际版本却已推进；再次读取该对象、或返回包含该对象的知识列表时仍会被响应契约拒绝。旧正文在历史版本中，不能描述为不可恢复的删除。
 - **证据范围：**完整静态路径，加实际 JS 契约探针：原人工条目通过，清除后 null 被拒绝。探针只验证输出形状，不冒称执行了 Rust 存储或数据库。
 - **修复与验收：**为无来源、无建议的条目明确清除语义，确保生成的正式对象在提交前有效。补“纯人工正文 → 清除 → 读取对象/列表 → 再编辑”及失败不落坏状态的测试。

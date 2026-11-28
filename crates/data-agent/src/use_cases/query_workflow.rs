@@ -25,9 +25,16 @@ pub async fn check_text_results(
     let mut tx = AppTx::begin(pool).await?;
     conversations::assert_readable_in_tx(&mut tx, ctx, cid).await?;
     let mut historical = Vec::new();
+    let mut unexecuted = Vec::new();
     for query in queries::list_in_tx(&mut tx, cid).await? {
         if qid.is_some_and(|id| query["id"] != id) {
             continue;
+        }
+        if ctx.table_access.is_some()
+            && query["result_ref"].is_null()
+            && let (Some(id), Some(sql)) = (query["id"].as_str(), query["sql"].as_str())
+        {
+            unexecuted.push((id.to_owned(), sql.to_owned(), query["parameters"].clone()));
         }
         let conditions = analysis::read_evidence_conditions_in_tx(
             &mut tx,
@@ -53,7 +60,31 @@ pub async fn check_text_results(
     }
     tx.commit().await?;
     let mut checked = super::context_authority::CheckedTextResults::default();
+    checked.include(pool, ctx, &historical, false).await?;
     checked.include(pool, ctx, &historical, true).await?;
+    if let Some(access) = ctx.table_access.as_deref() {
+        for (id, sql, parameters) in unexecuted {
+            if queries::is_table_free_select(&sql) {
+                continue;
+            }
+            if access.unavailable {
+                checked.record_denied_query(&id);
+                continue;
+            }
+            match queries::platform::check_execution_access(ctx, &sql, &parameters).await {
+                Ok(()) => {}
+                Err(error)
+                    if matches!(
+                        error.code,
+                        "sql_not_supported" | "forbidden" | "not_available"
+                    ) =>
+                {
+                    checked.record_denied_query(&id);
+                }
+                Err(error) => return Err(error),
+            }
+        }
+    }
     Ok(checked)
 }
 
@@ -69,6 +100,9 @@ pub async fn validate_text_in_tx(
         return Err(Error::new("not_available"));
     }
     conversations::assert_readable_in_tx(tx, ctx, cid).await?;
+    if !checked.allows_query(qid) {
+        return Err(Error::new("stale_context"));
+    }
     let authority = super::context_authority::from_sources(&query)?;
     if !checked.allows(&authority, false) {
         return Err(Error::new("stale_context"));
@@ -118,6 +152,11 @@ pub async fn protect_text_outcome_in_tx(
     query: &Value,
     checked: &super::context_authority::CheckedTextResults,
 ) -> Result<ProtectedText> {
+    if let Some(qid) = query["id"].as_str()
+        && !checked.allows_query(qid)
+    {
+        return Ok(ProtectedText::Restricted);
+    }
     let authority = super::context_authority::from_sources(query)?;
     let strict = super::context_authority::validate_in_tx(
         tx,
@@ -277,6 +316,7 @@ pub async fn history(
                 let fields = row
                     .as_object_mut()
                     .ok_or(crate::types::Error::new("unavailable"))?;
+                fields.remove("parameters");
                 fields.remove("knowledge_refs");
                 fields.remove("result_ref");
                 row["timeline_event_seq"] =

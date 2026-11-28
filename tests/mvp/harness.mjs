@@ -49,6 +49,9 @@ const freePort = () =>
       s.close(() => resolve(p));
     });
   });
+export const DOCKER_CONTEXT =
+  process.env.DATA_AGENT_DOCKER_CONTEXT ||
+  (process.platform === "darwin" ? "colima-data-agent" : "default");
 export async function harness(options = {}) {
   const root = process.cwd();
   const name = randomBytes(8).toString("hex");
@@ -58,7 +61,7 @@ export async function harness(options = {}) {
     "docker",
     [
       "--context",
-      "colima-data-agent",
+      DOCKER_CONTEXT,
       "ps",
       "--filter",
       "label=com.docker.compose.project=data-agent",
@@ -75,7 +78,7 @@ export async function harness(options = {}) {
       "docker",
       [
         "--context",
-        "colima-data-agent",
+        DOCKER_CONTEXT,
         "exec",
         "-i",
         container,
@@ -364,7 +367,8 @@ export async function harness(options = {}) {
         },
         body: JSON.stringify(body),
       });
-      return { status: r.status, value: await r.json() };
+      const text = await r.text();
+      return { status: r.status, value: text ? JSON.parse(text) : null };
     },
     // 旧答案工具不再接受新登记；升级前留下的登记用实际运行及其活动任务预写，
     // 工具名与参数指纹保持原登记，随后仍经正式登记与执行入口接回。返回原操作号。

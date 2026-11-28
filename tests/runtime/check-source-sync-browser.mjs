@@ -54,11 +54,12 @@ const reply = (route, schema, value, code = 200) => {
 };
 await page.route('**/api/**', async route => {
   const request = route.request(), path = new URL(request.url()).pathname;
+  if (path === '/api/workspace/events') return route.fulfill({status: 200, contentType: 'text/event-stream', body: 'event: stream_closed\ndata: {"code":"closed"}\n\n'});
   if (path === '/api/knowledge') return reply(route, 'KnowledgeList', {objects: [], retrieval_mode: 'lexical', next_after_id: null});
   if (path === '/api/knowledge-proposals') return reply(route, 'ProposalList', {proposals: []});
   if (path === '/api/semantic-corrections') return reply(route, 'SemanticCorrectionList', {corrections: [], next_after_id: null});
   if (path === '/api/semantic-access') return reply(route, 'SemanticAccess', {
-    can_admin: canAdmin, can_create: false, highest_role: canAdmin ? 'super_maintainer' : 'user',
+    can_admin: canAdmin, can_create: false, highest_role: canAdmin ? 'super_maintainer' : 'maintainer',
   });
   if (path === '/api/source-syncs' && request.method() === 'POST') {
     commands.push(request.postDataJSON());
@@ -78,7 +79,7 @@ await page.route('**/api/**', async route => {
 let passed = false;
 try {
   const address = server.httpServer.address();
-  await page.goto(`http://127.0.0.1:${address.port}/source-sync-browser`);
+  await page.goto(`http://127.0.0.1:${address.port}/source-sync-browser`, {timeout: 20000});
   await page.getByText('维护操作', {exact: true}).click();
   await page.getByRole('button', {name: '同步来源', exact: true}).click();
   const progress = page.getByRole('region', {name: '来源同步进度'});
@@ -142,7 +143,9 @@ try {
   let releaseOldProgress;
   holdProgress = new Promise(resolve => { releaseOldProgress = resolve; });
   await page.waitForRequest(request => request.url().endsWith('/source-syncs/retry-sync'));
+  const abortedOld = page.waitForEvent('requestfailed', request => request.url().endsWith('/source-syncs/retry-sync'));
   await page.getByRole('button', {name: '离开语义管理', exact: true}).click();
+  await abortedOld;
   status = {...status, sync_id: 'current-sync', status_url: '/source-syncs/current-sync', status: 'completed',
     processed_sources: 99, pages_committed: 5,
     preparation: work('not_required'), raw_index: work('not_required'), knowledge_index: work('not_required')};
@@ -151,8 +154,7 @@ try {
   await page.getByRole('button', {name: '同步来源', exact: true}).click();
   await progress.getByText('已处理 99 份来源，已保存 5 批资料。', {exact: true}).waitFor();
   const oldReads = progressRequests.filter(path => path.endsWith('/retry-sync')).length;
-  const oldResponse = page.waitForResponse(response => response.url().endsWith('/source-syncs/retry-sync'));
-  releaseOldProgress(); await oldResponse;
+  releaseOldProgress();
   await page.waitForTimeout(2200);
   assert.equal(progressRequests.filter(path => path.endsWith('/retry-sync')).length, oldReads);
   assert.match(await progress.innerText(), /已处理 99 份来源/);

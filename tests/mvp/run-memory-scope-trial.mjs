@@ -80,9 +80,10 @@ if(process.argv.includes('--audit')){
   if(row.state!=='completed')break;
  }
  assert.match(config.database,/^data_agent_trial_[a-f0-9]+$/);
- const container=execFileSync('docker',['--context','colima-data-agent','ps','--filter','label=com.docker.compose.project=data-agent','--filter','label=com.docker.compose.service=mysql','--format','{{.ID}}'],{encoding:'utf8'}).trim();assert.match(container,/^[a-f0-9]+$/);
+ const dockerContext=process.env.DATA_AGENT_DOCKER_CONTEXT||(process.platform==='darwin'?'colima-data-agent':'default');
+ const container=execFileSync('docker',['--context',dockerContext,'ps','--filter','label=com.docker.compose.project=data-agent','--filter','label=com.docker.compose.service=mysql','--format','{{.ID}}'],{encoding:'utf8'}).trim();assert.match(container,/^[a-f0-9]+$/);
  const sql=`USE ${config.database};SELECT JSON_OBJECT('calls',allocated_calls,'spent_micros',spent_micros,'reserved_micros',reserved_micros,'state',state) FROM model_trials;SELECT JSON_OBJECT('id',id,'purpose',purpose,'state',state,'usage',usage_json) FROM model_call_attempts;`;
- const rows=execFileSync('docker',['--context','colima-data-agent','exec','-i',container,'mysql','--defaults-extra-file=/run/secrets/mysql_root_client','--batch','--raw','--skip-column-names'],{input:sql,encoding:'utf8'}).trim().split('\n').map(s=>JSON.parse(s));
+ const rows=execFileSync('docker',['--context',dockerContext,'exec','-i',container,'mysql','--defaults-extra-file=/run/secrets/mysql_root_client','--batch','--raw','--skip-column-names'],{input:sql,encoding:'utf8'}).trim().split('\n').map(s=>JSON.parse(s));
  report.ledger=rows.shift();report.calls=rows;await save();
  if(report.rows.some(r=>r.state==='failed'))process.exitCode=1;
 }

@@ -136,6 +136,13 @@ fn declared_results(sources: &Value) -> impl Iterator<Item = (&Value, &Value)> {
 pub fn from_sources(sources: &Value) -> Result<Value> {
     let mut snapshot = empty();
     observe(&mut snapshot, &sources["knowledge_refs"])?;
+    if sources["id"].is_string() && sources["result_ref"].is_string() {
+        push(
+            &mut snapshot,
+            "query_results",
+            json!([sources["id"], sources["result_ref"]]),
+        )?;
+    }
     for (query, result) in declared_results(sources) {
         push(&mut snapshot, "query_results", json!([query, result]))?;
     }
@@ -292,6 +299,14 @@ pub(super) fn observe_delivery(
             push(snapshot, entries, json!([asset["id"], asset["version"]]))?;
         }
     }
+    for item in items(&data["personal_memories"]) {
+        if item["id"].is_string() && item["version"].is_string() {
+            push(snapshot, "memories", json!([item["id"], item["version"]]))?;
+            if with_dependencies {
+                observe(snapshot, &item["dependencies"])?;
+            }
+        }
+    }
     Ok(())
 }
 
@@ -329,7 +344,10 @@ pub(super) fn result_query_ids(snapshot: &Value) -> Result<Vec<String>> {
 }
 
 #[derive(Default)]
-pub struct CheckedTextResults(BTreeMap<ResultKey, bool>);
+pub struct CheckedTextResults {
+    results: BTreeMap<ResultKey, bool>,
+    denied_queries: BTreeSet<String>,
+}
 
 enum ResultProofFailure {
     Propagate,
@@ -385,7 +403,7 @@ impl CheckedTextResults {
             .into_iter()
             .flatten()
         {
-            let Entry::Vacant(entry) = self.0.entry(key) else {
+            let Entry::Vacant(entry) = self.results.entry(key) else {
                 continue;
             };
             let (query, result, history) = entry.key();
@@ -410,23 +428,32 @@ impl CheckedTextResults {
 
     // 并入另一份已核结果，已有判定（含撤权）保持首次核验值。
     pub(super) fn extend(&mut self, other: CheckedTextResults) {
-        for (key, allowed) in other.0 {
-            self.0.entry(key).or_insert(allowed);
+        for (key, allowed) in other.results {
+            self.results.entry(key).or_insert(allowed);
         }
+        self.denied_queries.extend(other.denied_queries);
     }
 
     pub(super) fn record_checked_result(&mut self, key: ResultKey, allowed: bool) {
-        self.0.insert(key, allowed);
+        self.results.insert(key, allowed);
     }
 
     pub(super) fn record_result(&mut self, query: &str, result: &str) {
         self.record_checked_result((query.into(), result.into(), false), true);
     }
 
+    pub(super) fn record_denied_query(&mut self, query: &str) {
+        self.denied_queries.insert(query.into());
+    }
+
+    pub(super) fn allows_query(&self, query: &str) -> bool {
+        !self.denied_queries.contains(query)
+    }
+
     pub(super) fn allows(&self, snapshot: &Value, historical: bool) -> bool {
         complete(snapshot)
             && result_keys(snapshot, historical)
-                .is_ok_and(|keys| keys.iter().all(|key| self.0.get(key) == Some(&true)))
+                .is_ok_and(|keys| keys.iter().all(|key| self.results.get(key) == Some(&true)))
     }
 }
 
@@ -500,6 +527,14 @@ pub async fn validate_in_tx(
         })
     {
         return Err(Error::new("stale_source"));
+    }
+    for record in items(&snapshot["historical_analyses"]) {
+        if let Some(sources) = record["actual_sources"]
+            .get("authority")
+            .filter(|v| !v.is_null())
+        {
+            Box::pin(validate_in_tx(tx, ctx, sources, AuthorityUse::Historical)).await?;
+        }
     }
     Ok(asset_refs)
 }

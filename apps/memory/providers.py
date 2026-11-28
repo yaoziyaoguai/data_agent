@@ -22,7 +22,7 @@ class ModelGateway:
         # 请求内状态按线程隔离：/search与/extract并发时预算绑定与失败标记互不串用。
         self._state = threading.local()
         self.token = os.environ["DATA_AGENT_INTERNAL_TOKEN"]
-        self.key = os.environ["DEEPSEEK_API_KEY"]
+        self.key = os.environ.get("MEMORY_MODEL_API_KEY") or os.environ.get("DEEPSEEK_API_KEY", "")
         self.embedding_key = Path(config["embedding_key_file"]).read_text().strip()
 
     @property
@@ -77,6 +77,10 @@ class ModelGateway:
 
     def _call(self, purpose, payload, input_upper):
         raw = json.dumps(payload, ensure_ascii=False).encode()
+        endpoint = self.config["embedding_url"] if purpose == "memory_embedding" else self.config["model_url"]
+        key = self.embedding_key if purpose == "memory_embedding" else self.key
+        if not key:
+            raise MemoryError("memory_unavailable")
         if not self.binding or input_upper < 1 or input_upper > (8192 if purpose == "memory_embedding" else 65536):
             raise MemoryError("memory_unavailable")
         envelope = {"action": "issue", "budget": self.binding, "call_attempt_id": str(uuid.uuid4()),
@@ -87,8 +91,6 @@ class ModelGateway:
             raise MemoryError("memory_operation_unknown")
         start, usage = time.monotonic(), None
         try:
-            endpoint = self.config["embedding_url"] if purpose == "memory_embedding" else self.config["model_url"]
-            key = self.embedding_key if purpose == "memory_embedding" else self.key
             r = self.client.post(endpoint, headers={"Authorization": "Bearer " + key}, json=payload)
             if r.status_code != 200:
                 raise MemoryError("memory_unavailable")
@@ -120,11 +122,18 @@ class BudgetedLLM:
         self.gateway = gateway
 
     def generate_response(self, messages, response_format=None, **_kwargs):
-        payload = {"model": "deepseek-flash", "messages": messages, "max_tokens": 4096,
-                   "thinking": {"type": "disabled"}, "stream": False}
+        model_id = self.gateway.config.get("model_id", "deepseek-flash")
+        payload = {"model": model_id, "messages": messages, "max_tokens": 4096,
+                   "stream": False}
+        if model_id.startswith("deepseek"):
+            payload["thinking"] = {"type": "disabled"}
         if response_format:
             payload["response_format"] = response_format
-        value = self.gateway.call("memory_extraction", payload, len(json.dumps(payload, ensure_ascii=False).encode()))
+        raw_text = json.dumps(payload, ensure_ascii=False)
+        if len(raw_text) + TOKEN_OVERHEAD_PER_TEXT > 65536:
+            raise MemoryError("memory_unavailable")
+        upper = min(65536, len(raw_text.encode("utf-8")) + TOKEN_OVERHEAD_PER_TEXT)
+        value = self.gateway.call("memory_extraction", payload, upper)
         choice = value["choices"][0]
         if choice.get("finish_reason") != "stop":
             raise MemoryError("memory_unavailable")
@@ -141,8 +150,11 @@ class BudgetedEmbedding:
     def embed_batch(self, texts, memory_action=None):
         if not texts or len(texts) > 20 or any(not text for text in texts):
             raise MemoryError("memory_unavailable")
+        if sum(len(t) + TOKEN_OVERHEAD_PER_TEXT for t in texts) > 8192:
+            raise MemoryError("memory_unavailable")
+        upper = min(8192, sum(len(t.encode("utf-8")) + TOKEN_OVERHEAD_PER_TEXT for t in texts))
         value = self.gateway.call("memory_embedding", {"model": "qwen3.7-text-embedding", "input": texts,
-                                  "dimensions": 1024, "encoding_format": "float"}, sum(len(t.encode()) + TOKEN_OVERHEAD_PER_TEXT for t in texts))
+                                  "dimensions": 1024, "encoding_format": "float"}, upper)
         items = sorted(value["data"], key=lambda x: x["index"])
         if [v["index"] for v in items] != list(range(len(texts))):
             raise MemoryError("memory_unavailable")

@@ -9,6 +9,8 @@ use serde_json::{Value, json};
 use sqlx::MySqlPool;
 use std::{collections::BTreeMap, str::FromStr};
 
+mod comparisons;
+
 fn text<'a>(value: &'a Value, key: &str) -> Result<&'a str> {
     value[key].as_str().ok_or(Error::new("invalid_input"))
 }
@@ -174,28 +176,18 @@ fn formatted(value: &Value, format: Option<&Value>) -> Result<String> {
     ))
 }
 
-// 来源文本只作为字面值显示，不能把结果单元格变成Markdown链接或控制结构。
-fn escaped(rendered: &str) -> String {
-    rendered.chars().fold(String::new(), |mut output, c| {
-        if matches!(
-            c,
-            '\\' | '`' | '*' | '_' | '[' | ']' | '<' | '>' | '|' | '#'
-        ) {
-            output.push('\\');
-        }
-        if c == '\n' || c == '\r' {
-            output.push(' ');
-        } else {
-            output.push(c);
-        }
-        output
-    })
+// 绑定值保留单行字面事实（供回执与代码段直显）；Markdown上下文转义统一在substitute按位置处理。
+fn single_line(rendered: &str) -> String {
+    rendered
+        .chars()
+        .map(|c| if c == '\n' || c == '\r' { ' ' } else { c })
+        .collect()
 }
 
-fn binding_values(
+fn prepare_bindings(
     input: &Value,
     sources: &BTreeMap<String, (Value, Value)>,
-) -> Result<BTreeMap<String, String>> {
+) -> Result<(BTreeMap<String, String>, Vec<Value>)> {
     let mut bindings = BTreeMap::new();
     for binding in input["values"]
         .as_array()
@@ -207,13 +199,14 @@ fn binding_values(
             binding.get("format").filter(|format| !format.is_null()),
         )?;
         if bindings
-            .insert(name.to_owned(), escaped(&rendered))
+            .insert(name.to_owned(), single_line(&rendered))
             .is_some()
         {
             return Err(Error::new("invalid_input"));
         }
     }
-    Ok(bindings)
+    let resolved_comparisons = comparisons::resolve_all(input, sources, &mut bindings)?;
+    Ok((bindings, resolved_comparisons))
 }
 
 // 部分结果的范围说明只在确有缺口时追加一次；完整结果为空串。
@@ -229,8 +222,16 @@ fn required_suffix(sources: &BTreeMap<String, (Value, Value)>) -> &'static str {
 
 // present沿原模板语义；数字字符禁令已随格式化合同移除，SQL代码块仍不放模板。
 fn render(input: &Value, sources: &BTreeMap<String, (Value, Value)>) -> Result<String> {
-    let bindings = binding_values(input, sources)?;
-    let mut output = crate::modules::runtime::substitute(text(input, "template")?, &bindings)?;
+    let (bindings, comparisons) = prepare_bindings(input, sources)?;
+    let required: Vec<String> = comparisons
+        .iter()
+        .filter_map(|item| item["name"].as_str().map(str::to_owned))
+        .collect();
+    let mut output = crate::modules::runtime::substitute_required(
+        text(input, "template")?,
+        &bindings,
+        &required,
+    )?;
     if output.contains("```") {
         return Err(Error::new("invalid_evidence"));
     }
@@ -305,7 +306,7 @@ pub async fn present(
     )
 }
 
-// 一次准备：只产出已核定的数值绑定与范围后缀，不生成正文、不定稿、不覆盖通知。
+// 一次准备：只产出已核定的数值/比较绑定与范围后缀，不生成正文、不定稿、不覆盖通知。
 pub async fn prepare(
     pool: &MySqlPool,
     ctx: &AccessContext,
@@ -317,9 +318,17 @@ pub async fn prepare(
     contracts::validate("PrepareAnalysisAnswerInput", input)?;
     let (references, sources) =
         verified_sources(pool, ctx, cid, message_id, input, checked).await?;
-    Ok(json!({"bindings":binding_values(input, &sources)?,
-        "required_suffix":required_suffix(&sources),
-        "sources":references,"result_dependencies":input["sources"]}))
+    let (bindings, comparisons) = prepare_bindings(input, &sources)?;
+    let mut payload = json!({
+        "bindings": bindings,
+        "required_suffix": required_suffix(&sources),
+        "sources": references,
+        "result_dependencies": input["sources"],
+    });
+    if !comparisons.is_empty() {
+        payload["comparisons"] = json!(comparisons);
+    }
+    Ok(payload)
 }
 
 pub async fn check_in_tx(
@@ -545,6 +554,30 @@ mod tests {
         assert!(
             crate::modules::runtime::display_from_preparation("已开始 {{未闭合", &complete)
                 .is_err()
+        );
+        // 行内代码段保留原始下划线/标识符事实，正文外仍转义Markdown控制字符；空行重置未闭合反引号。
+        let batch = json!({
+            "bindings": {
+                "batch": "synthetic_snapshot_2026-10-04",
+                "cell": "a_b`[x](https://example.org)"
+            },
+            "required_suffix": ""
+        });
+        assert_eq!(
+            crate::modules::runtime::display_from_preparation(
+                "代码 `{{batch}}` 与 ``{{cell}}``，正文 {{batch}}。",
+                &batch
+            )
+            .unwrap(),
+            "代码 `synthetic_snapshot_2026-10-04` 与 ``a_b'[x](https://example.org)``，正文 synthetic\\_snapshot\\_2026-10-04。"
+        );
+        assert_eq!(
+            crate::modules::runtime::display_from_preparation(
+                "孤立 ` 反引号分段\n\n下一段 {{cell}}",
+                &batch
+            )
+            .unwrap(),
+            "孤立 ` 反引号分段\n\n下一段 a\\_b\\`\\[x\\](https://example.org)"
         );
     }
 }

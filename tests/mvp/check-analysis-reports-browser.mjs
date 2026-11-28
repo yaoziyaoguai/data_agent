@@ -261,6 +261,19 @@ try {
     return element.scrollTop;
   });
   assert.ok(readingPosition > 0, "报告应有可保留的阅读位置");
+  const reportKnowledgeRef = dialog().locator(".report-finding .evidence-row button").first();
+  if ((await reportKnowledgeRef.count()) > 0) {
+    await reportKnowledgeRef.click();
+    const stackedEvidence = page.getByRole("dialog", {name:"口径依据", exact:true});
+    const backToReportBtn = stackedEvidence.getByRole("button", {name:"返回分析报告", exact:true});
+    await backToReportBtn.waitFor();
+    assert.equal((await backToReportBtn.innerText()).trim(), "← 返回分析报告");
+    assert.equal(await stackedEvidence.evaluate(el => el.contains(document.activeElement)), true);
+    await page.keyboard.press("Escape");
+    await stackedEvidence.waitFor({state:"detached"});
+    await dialog().waitFor();
+    assert.equal(await reportKnowledgeRef.evaluate(element => element === document.activeElement), true);
+  }
   const inspectedResult = page.locator("#query-" + fixture.queries[1].id)
     .getByRole("button", {name:"查看完整表格"});
   await inspectedResult.click();
@@ -268,8 +281,10 @@ try {
   await dockTabs.getByRole("tab", {name:"分析报告", exact:true}).click();
   assert.equal(await reportBody.evaluate(element => element.scrollTop), readingPosition);
   await dockTabs.getByRole("tab", {name:"查询结果", exact:true}).click();
-  await page.getByRole("dialog", {name:"查询结果", exact:true})
-    .getByRole("button", {name:"返回对话", exact:true}).last().press("Enter");
+  const backFromResultsToReport = page.getByRole("dialog", {name:"查询结果", exact:true})
+    .getByRole("button", {name:"返回分析报告", exact:true}).last();
+  assert.equal((await backFromResultsToReport.innerText()).trim(), "← 返回分析报告");
+  await backFromResultsToReport.press("Enter");
   await dialog().waitFor();
   assert.equal(await inspectedResult.evaluate(element => element === document.activeElement), true);
   checks.push("右栏报告与结果页签切换保留滚动，定位左栏查询保持报告打开，键盘关闭时还原焦点");

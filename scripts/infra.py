@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""管理本项目独立的 ARM64 开发依赖；不切换全局 Docker context。"""
+"""管理本项目独立的本地开发依赖（macOS ARM64 Colima 或 Linux 原生 Docker）；不切换全局 Docker context。"""
 
 import argparse
 import json
@@ -14,9 +14,24 @@ import sys
 from datetime import datetime, timezone
 
 
+def expected_arch() -> str:
+    machine = platform.machine().lower()
+    if machine in ("arm64", "aarch64"):
+        return "arm64"
+    if machine in ("x86_64", "amd64"):
+        return "amd64"
+    raise RuntimeError(f"当前启动配置不支持的 CPU 架构：{platform.machine()}")
+
+
+def expected_platform() -> str:
+    return f"linux/{expected_arch()}"
+
+
 ROOT = Path(__file__).resolve().parents[1]
 SECRET_DIR = ROOT / ".local" / "infra"
-CONTEXT = "colima-data-agent"
+CONTEXT = os.environ.get("DATA_AGENT_DOCKER_CONTEXT") or (
+    "colima-data-agent" if platform.system() == "Darwin" else "default"
+)
 PROJECT = "data-agent"
 SECRET_FILES = (
     "mysql-root-password", "mysql-app-password", "mysql-root-client.cnf",
@@ -25,14 +40,15 @@ SECRET_FILES = (
 )
 
 
-def compose_args(*args: str) -> list[str]:
-    # 独立 Compose CLI；显式忽略项目 .env，避免读取已有配置或凭据。
-    return ["docker-compose", "--env-file", "/dev/null", "--project-directory", str(ROOT),
-            "--project-name", PROJECT, "--file", str(ROOT / "compose.yaml"), *args]
-
-
 def docker_args(*args: str) -> list[str]:
     return ["docker", "--context", CONTEXT, *args]
+
+
+def compose_args(*args: str) -> list[str]:
+    # 优先兼容独立 docker-compose，Linux 下同时支持 Docker Compose v2 插件；显式忽略项目 .env。
+    prefix = ["docker-compose"] if shutil.which("docker-compose") else docker_args("compose")
+    return [*prefix, "--env-file", "/dev/null", "--project-directory", str(ROOT),
+            "--project-name", PROJECT, "--file", str(ROOT / "compose.yaml"), *args]
 
 
 def tool_env() -> dict[str, str]:
@@ -41,6 +57,7 @@ def tool_env() -> dict[str, str]:
                 "COMPOSE_FILE", "COMPOSE_PROJECT_NAME", "COMPOSE_PROFILES"):
         env.pop(key, None)
     env["DOCKER_CONTEXT"] = CONTEXT
+    env["DATA_AGENT_DOCKER_PLATFORM"] = expected_platform()
     env["COMPOSE_ANSI"] = "never"
     return env
 
@@ -110,16 +127,37 @@ def prepare() -> None:
     print("已生成本项目随机开发秘密（.local/infra，全部 0600，不输出内容）。")
 
 
+def require_compose_cli() -> None:
+    if shutil.which("docker-compose") is not None:
+        return
+    try:
+        run(docker_args("compose", "version"), capture=True, timeout=15)
+    except (OSError, subprocess.SubprocessError) as error:
+        raise RuntimeError("缺少命令：docker-compose 或 docker compose 插件") from error
+
+
 def start() -> None:
-    if platform.system() != "Darwin" or platform.machine() not in ("arm64", "aarch64"):
-        raise RuntimeError("当前启动配置面向 macOS ARM64，未配置其他平台或 x86 模拟。")
-    for name in ("colima", "docker", "docker-compose"):
-        if shutil.which(name) is None:
-            raise RuntimeError(f"缺少命令：{name}")
-    prepare()
-    run(["colima", "start", "--profile", PROJECT, "--cpus", "4", "--memory", "6", "--disk", "30",
-         "--mount", str(ROOT / "infra"), "--mount", str(SECRET_DIR),
-         "--activate=false", "--ssh-config=false", "--binfmt=false"], timeout=900)
+    system = platform.system()
+    arch = expected_arch()
+    if system == "Darwin":
+        if arch != "arm64":
+            raise RuntimeError("macOS 启动配置仅支持 ARM64，未配置 x86 模拟。")
+        for name in ("colima", "docker"):
+            if shutil.which(name) is None:
+                raise RuntimeError(f"缺少命令：{name}")
+        require_compose_cli()
+        prepare()
+        run(["colima", "start", "--profile", PROJECT, "--cpus", "4", "--memory", "6", "--disk", "30",
+             "--mount", str(ROOT / "infra"), "--mount", str(SECRET_DIR),
+             "--activate=false", "--ssh-config=false", "--binfmt=false"], timeout=900)
+    elif system == "Linux":
+        if shutil.which("docker") is None:
+            raise RuntimeError("缺少命令：docker")
+        require_compose_cli()
+        prepare()
+        run(docker_args("info"), capture=True, timeout=30)
+    else:
+        raise RuntimeError(f"当前启动配置仅支持 macOS ARM64 或 Linux（amd64/arm64），当前为：{system}")
     run(compose_args("config", "--quiet"))
     run(compose_args("up", "--detach", "--pull", "missing", "--quiet-pull",
                      "--wait", "--wait-timeout", "240"), timeout=2100)
@@ -145,8 +183,11 @@ def main() -> int:
             print("仅移除本项目容器和网络；命名卷和开发秘密保留。")
         elif command == "vm-stop":
             run(compose_args("stop"))
-            run(["colima", "stop", "--profile", PROJECT])
-            print("本项目容器及独立 VM 已停止；命名卷和开发秘密保留。")
+            if platform.system() == "Darwin":
+                run(["colima", "stop", "--profile", PROJECT])
+                print("本项目容器及独立 VM 已停止；命名卷和开发秘密保留。")
+            else:
+                print("本项目容器已停止（Linux 原生环境无独立 Colima VM）；命名卷和开发秘密保留。")
     except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as error:
         # 不回显命令输出或配置正文；CLI 自身只执行无秘密参数的命令。
         print(f"基础设施操作未完成：{type(error).__name__}: {error}", file=sys.stderr)

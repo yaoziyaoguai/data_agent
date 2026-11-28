@@ -584,7 +584,7 @@ pub struct ToolActivity {
 
 pub struct CompletedStep {
     pub tool: String,
-    pub target_id: Option<String>,
+    pub target_ids: Vec<String>,
     pub duration_ms: Option<i64>,
 }
 
@@ -599,13 +599,7 @@ pub async fn tool_activity_in_tx(
          CASE WHEN t.completed_at>=t.created_at \
            THEN TIMESTAMPDIFF(MICROSECOND,t.created_at,t.completed_at) DIV 1000 \
          END AS duration_ms, \
-         CASE \
-           WHEN t.tool_name='read_knowledge' AND JSON_LENGTH(t.receipt,'$.data.items')=1 \
-                AND JSON_VALUE(t.receipt,'$.data.items[0].state')='ok' \
-             THEN JSON_VALUE(t.receipt,'$.data.items[0].ref.object_id') \
-           WHEN t.tool_name='read_source' AND JSON_VALUE(t.receipt,'$.data.source.kind')='document' \
-             THEN JSON_VALUE(t.receipt,'$.data.source.id') \
-         END AS target_id \
+         IF(t.tool_name IN ('read_knowledge','read_source'),t.receipt,NULL) AS step_receipt \
          FROM agent_runs r JOIN tool_calls t ON t.conversation_id=r.conversation_id \
            AND t.recovery_chain_id=r.recovery_chain_id \
          LEFT JOIN pi_checkpoints p ON p.recovery_chain_id=r.recovery_chain_id \
@@ -630,10 +624,13 @@ pub async fn tool_activity_in_tx(
             });
         entry.tool = row.get("tool_name");
         if row.get::<String, _>("state") == "succeeded" {
+            let receipt = row
+                .get::<Option<sqlx::types::Json<Value>>, _>("step_receipt")
+                .map(|v| v.0);
             entry.completed += 1;
             entry.steps.push(CompletedStep {
+                target_ids: super::tool_ledger::step_target_ids(&entry.tool, receipt.as_ref()),
                 tool: entry.tool.clone(),
-                target_id: row.get("target_id"),
                 duration_ms: row.get("duration_ms"),
             });
         }

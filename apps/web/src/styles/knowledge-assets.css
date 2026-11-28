@@ -17,8 +17,8 @@
   margin: 8px 0;
 }
 .page-heading p {
-  font-size: 12px;
-  color: #7d8ca2;
+  font-size: 13px;
+  color: var(--ink-muted, #53647b);
   margin: 0;
 }
 .search-box {
@@ -26,24 +26,24 @@
   align-items: center;
   gap: 10px;
   background: #fafbfd;
-  border: 1px solid #e0e6ef;
+  border: 1px solid var(--line, #e2e8f0);
   border-radius: 7px;
   padding: 9px 13px;
   margin: 18px 0;
-  color: #8598b4;
+  color: var(--ink-muted, #53647b);
 }
 .search-box input {
   background: none;
   border: 0;
   outline: 0;
   width: 100%;
-  color: #475f7f;
-  font-size: 12px;
+  color: var(--ink-body, #27364b);
+  font-size: 13px;
 }
 .knowledge-layout {
   display: grid;
-  grid-template-columns: 220px minmax(0, 1fr);
-  border: 1px solid #e2e8f0;
+  grid-template-columns: 244px minmax(0, 1fr);
+  border: 1px solid var(--line, #e2e8f0);
   border-radius: 10px;
   overflow: hidden;
 }
@@ -57,18 +57,19 @@
 }
 .object-list button {
   display: block;
-  padding: 12px;
-  overflow-wrap: anywhere;
+  padding: 10px 12px;
+  overflow-wrap: break-word;
+  word-break: break-word;
   font:
-    12px/1.6 ui-monospace,
+    12px/1.55 ui-monospace,
     SFMono-Regular,
     monospace;
 }
 .object-list small {
   display: block;
-  color: #8b9bb1;
-  font: 10px/1.7 sans-serif;
-  margin-top: 5px;
+  color: var(--ink-muted, #53647b);
+  font: 12px/1.5 var(--font-sans, sans-serif);
+  margin-top: 4px;
 }
 .directory-scope { max-width: 240px; }
 .directory-filters { display: grid; gap: 8px; margin-bottom: 12px; }
@@ -99,15 +100,16 @@
   border-bottom: 2px solid transparent;
   background: none;
   padding: 12px 0;
-  color: #8190a6;
-  font-size: 12px;
+  color: var(--ink-muted, #53647b);
+  font-size: 13px;
 }
 .tabs button[aria-selected="true"] {
-  color: #2e5faf;
-  border-bottom-color: #2e5faf;
+  color: var(--brand-ink, #1f4c9e);
+  border-bottom-color: var(--brand, #2557b8);
+  font-weight: 600;
 }
 .tabs small {
-  font-size: 10px;
+  font-size: 12px;
 }
 .semantic-object h3 {
   font-weight: 550;
@@ -115,9 +117,9 @@
   margin: 16px 0;
 }
 .semantic-object h3 small {
-  color: #8696ac;
+  color: var(--ink-muted, #53647b);
   font-weight: 400;
-  font-size: 11px;
+  font-size: 12px;
 }
 .semantic-entry {
   padding: 15px 0;
@@ -135,31 +137,31 @@
   margin-left: auto;
 }
 .provenance {
-  font-size: 9px;
-  color: #8195b1;
-  border: 1px solid #e2eaf4;
-  padding: 2px 6px;
-  border-radius: 3px;
+  font-size: 12px;
+  color: var(--ink-muted, #53647b);
+  border: 1px solid #d8e3f0;
+  padding: 2px 7px;
+  border-radius: 4px;
 }
 .provenance.human {
-  background: #edf4ef;
-  border-color: #dce9e0;
-  color: #6c8876;
+  background: var(--success-bg, #eaf6ef);
+  border-color: #cce5d5;
+  color: var(--success, #1f6a48);
 }
 .review-mark {
-  font-size: 9px;
-  color: #b58b4c;
+  font-size: 12px;
+  color: var(--warning, #784512);
 }
 .entry-value {
-  font-size: 12px;
+  font-size: 13px;
   white-space: pre-wrap;
-  line-height: 1.9;
+  line-height: 1.85;
   overflow-wrap: anywhere;
-  color: #4a607e;
+  color: var(--ink-body, #27364b);
 }
 .provenance-detail {
-  font-size: 10px;
-  color: #8292a8;
+  font-size: 12px;
+  color: var(--ink-muted, #53647b);
   margin: 12px 0;
 }
 .provenance-detail summary {
@@ -173,7 +175,7 @@
 .provenance-columns pre {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-  font-size: 10px;
+  font-size: 12px;
 }
 .provenance-columns h4 {
   font-weight: 500;
@@ -233,8 +235,8 @@
   border-left: 2px solid #d3dff1;
   padding: 4px 13px;
   margin: 22px 0;
-  color: #6a7d98;
-  font-size: 11px;
+  color: var(--ink-muted, #53647b);
+  font-size: 12px;
 }
 .asset-scope strong {
   font-weight: 500;
@@ -243,11 +245,11 @@
   margin: 5px 0;
 }
 .asset-scope small {
-  font-size: 10px;
+  font-size: 12px;
 }
 .asset-card details {
-  color: #8393aa;
-  font-size: 10px;
+  color: var(--ink-muted, #53647b);
+  font-size: 12px;
   margin: 16px 0;
 }
 .asset-card pre {
@@ -256,15 +258,15 @@
 }
 .asset-empty {
   text-align: center;
-  padding: 75px 30px;
+  padding: 64px 30px;
   background: #fafbfd;
   border: 1px dashed #dde5f0;
   border-radius: 12px;
   margin-top: 28px;
 }
 .asset-empty > span {
-  font-size: 40px;
-  color: #9aafd0;
+  font-size: 36px;
+  color: #7c93b6;
 }
 .asset-empty h2 {
   font-size: 20px;
@@ -272,14 +274,14 @@
   letter-spacing: -0.5px;
 }
 .asset-empty p {
-  color: #8493a9;
-  font-size: 12px;
+  color: var(--ink-muted, #53647b);
+  font-size: 13px;
 }
 .notice {
   font-size: 12px;
-  color: #557a62;
-  background: #f3f8f4;
-  border: 1px solid #e3ede5;
+  color: var(--success, #1f6a48);
+  background: var(--success-bg, #eaf6ef);
+  border: 1px solid #cce5d5;
   border-radius: 7px;
   padding: 12px 15px;
   margin-top: 25px;

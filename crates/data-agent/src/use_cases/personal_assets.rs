@@ -104,7 +104,7 @@ pub(super) async fn assert_read_skill_authority_in_tx(
         .await
         .map(|_| ())
         .map_err(|error| {
-            if unavailable_text(&error) {
+            if unavailable_text(&error) || error.code == "stale_source" {
                 Error::new("stale_context")
             } else {
                 error

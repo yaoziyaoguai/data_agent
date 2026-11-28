@@ -4,12 +4,12 @@ import { deriveCapacityPlan, capacityRangeMessage } from "../../../../../package
 // 旧配置缺新容量字段时允许编辑中为空；提交前由必填与容量校验补齐。
 export type ModelDraft = Omit<
   SaveModelDefinition,
-  "context_window" | "request_timeout_ms" | "capability_source"
+  "context_window" | "payload_bytes_limit" | "request_timeout_ms" | "capability_source"
 > &
   Partial<
     Pick<
       SaveModelDefinition,
-      "context_window" | "request_timeout_ms" | "capability_source"
+      "context_window" | "payload_bytes_limit" | "request_timeout_ms" | "capability_source"
     >
   >;
 // DeepSeek已核对1M窗口的待验初值（实现设计17.7）；其他型号按已核实文档声明，不默认1M。
@@ -55,11 +55,11 @@ export function modelDraft(value: ModelDefinition): ModelDraft {
 }
 
 export function initialCapacity() {
-  // 未选定具体型号时不推测总窗口；其余字段是可编辑的请求策略初值。
+  // 未选定具体型号时不推测总窗口；请求体默认给足多轮工具调查余量（2 MiB），仍可按供应商调整。
   return {
     input_limit: 65536,
     output_limit: 8192,
-    payload_bytes_limit: 131072,
+    payload_bytes_limit: 2097152,
     request_timeout_ms: 90000,
     capability_source: "admin_declared" as const,
   };
@@ -69,10 +69,11 @@ export function initialCapacity() {
 export function capacityProblem(draft: ModelDraft): string {
   if (
     draft.context_window === undefined ||
+    draft.payload_bytes_limit === undefined ||
     draft.request_timeout_ms === undefined ||
     draft.capability_source === undefined
   )
-    return "请填写总上下文、请求超时和能力来源。";
+    return "请填写总上下文、请求体上限、请求超时和能力来源。";
   const plan = deriveCapacityPlan(
     draft.context_window,
     draft.input_limit,

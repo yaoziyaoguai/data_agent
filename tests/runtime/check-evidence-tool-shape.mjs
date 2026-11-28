@@ -24,7 +24,8 @@ for (const version of [undefined, 1, 2]) {
   // 新调用只开放现行工具。下方 restoreTool 独立核对历史原参数和回执。
   assert.doesNotMatch(taskParameters, /"(?:web|app|store)"/,
     '当前任务参数不能把旧零售渠道当作分析候选；业务渠道通过通用 filters 表达');
-  const fields = taskTool.parameters.allOf.find(branch => branch.properties).properties;
+  assert.equal(taskTool.parameters.type, 'object');
+  const fields = taskTool.parameters.properties;
   assert.deepEqual(fields.conditions.properties.channel, {type: 'null'}, '完整条件保留空兼容字段');
   assert.equal(Object.hasOwn(fields.condition_patch.properties.set.properties, 'channel'), false,
     '当前条件补丁不再引导写旧渠道字段，历史字段仍可通过 unset 清除');

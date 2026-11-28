@@ -76,17 +76,22 @@ def model_database(configuration):
     return database
 
 
+def docker_context():
+    return os.environ.get('DATA_AGENT_DOCKER_CONTEXT') or ('colima-data-agent' if sys.platform == 'darwin' else 'default')
+
+
 def prepare_mock_database(runtime_directory):
     # 每个运行目录有独立持久演示库；换资料不会把旧查询挂到另一份结果上。
     database = 'data_agent_trial_' + hashlib.sha256(str(runtime_directory).encode()).hexdigest()[:16]
+    context = docker_context()
     container = subprocess.check_output([
-        'docker', '--context', 'colima-data-agent', 'ps',
+        'docker', '--context', context, 'ps',
         '--filter', 'label=com.docker.compose.project=data-agent',
         '--filter', 'label=com.docker.compose.service=mysql', '--format', '{{.ID}}',
     ], text=True).strip()
     if not re.fullmatch(r'[a-f0-9]+', container):
         raise RuntimeError('请先运行 make infra-up')
-    subprocess.run(['docker', '--context', 'colima-data-agent', 'exec', '-i', container,
+    subprocess.run(['docker', '--context', context, 'exec', '-i', container,
                     'mysql', '--defaults-extra-file=/run/secrets/mysql_root_client'],
                    input=f'CREATE DATABASE IF NOT EXISTS {database}; GRANT ALL ON {database}.* TO data_agent;',
                    text=True, capture_output=True, check=True)

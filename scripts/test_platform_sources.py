@@ -205,7 +205,30 @@ class PlatformSourceTest(unittest.TestCase):
             self.assertEqual(guard(sqlite3.SQLITE_ATTACH, None, None, 'x.db', None), deny)
             self.assertEqual(guard(sqlite3.SQLITE_PRAGMA, 'main', 'journal_mode', None, None), deny)
             self.assertEqual(guard(sqlite3.SQLITE_FUNCTION, None, 'count', None, None), ok)
+            self.assertEqual(guard(sqlite3.SQLITE_FUNCTION, None, 'like', None, None), ok)
             self.assertEqual(guard(sqlite3.SQLITE_FUNCTION, None, 'load_extension', None, None), deny)
+            self.assertEqual(guard(sqlite3.SQLITE_FUNCTION, None, 'sqlite_version', None, None), deny)
+            self.assertEqual(guard(sqlite3.SQLITE_FUNCTION, None, 'random', None, None), deny)
+        common_readonly_sql = """
+            SELECT
+                COUNT(*) AS matched_rows,
+                GROUP_CONCAT(DISTINCT UPPER(TRIM(SUBSTRING(order_id, 1, 3)))) AS prefixes,
+                SUM(IIF(INSTR(order_id, 'O') > 0, 1, 0)) AS o_count,
+                JSON_EXTRACT('{"channel":"voice"}', '$.channel') AS channel_tag,
+                CEIL(1.2) AS rounded_up,
+                UNIXEPOCH('2026-02-01T00:00:00Z') AS ts_sec,
+                FIRST_VALUE(order_id) OVER (ORDER BY order_id) AS first_order
+            FROM demo_order_detail
+            WHERE order_id LIKE 'O%'
+        """
+        self.assertEqual(platform.compile({'sql': common_readonly_sql})['state'], 'passed')
+        for forbidden_fn_sql in (
+            'SELECT sqlite_version()',
+            'SELECT random()',
+        ):
+            rejected = platform.compile({'sql': forbidden_fn_sql})
+            self.assertEqual(rejected['state'], 'rejected')
+            self.assertEqual(rejected['reason'], 'sql_not_supported')
 
     def change_source(self):
         with (self.sources / 'etl.sql').open('a') as output:

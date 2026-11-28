@@ -3732,6 +3732,135 @@
           }
         }
       }
+    },
+    "/health": {
+      "get": {
+        "responses": {
+          "200": {
+            "description": "服务存活检查",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string",
+                  "const": "ok"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/internal/context/refresh": {
+      "post": {
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "./schema.json#/$defs/RefreshRunContext"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "当前运行任务与结果通知快照",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schema.json#/$defs/WorkspaceContext"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "应用错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schema.json#/$defs/AppError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/internal/model/connection": {
+      "post": {
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "./schema.json#/$defs/ReadModelConnection"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "内部运行模型连接参数",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schema.json#/$defs/ModelConnection"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "应用错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schema.json#/$defs/AppError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/internal/live-changes": {
+      "post": {
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "kind"
+                  ],
+                  "properties": {
+                    "kind": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "已接收后台已提交变更通知"
+          },
+          "default": {
+            "description": "应用错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schema.json#/$defs/AppError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   }
 }

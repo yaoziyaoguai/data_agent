@@ -32,7 +32,7 @@ const route = task => tool("update_analysis_task",
 const baseConditions = {
   time_start: "2026-01-01T00:00:00Z", time_end: "2026-02-01T00:00:00Z", timezone: "UTC",
   metric: "net_revenue", channel: null, group_by: [], filters: [], knowledge_refs: [],
-  notes: "合成时间口径验收",
+  notes: "合成时间口径验收", source_limits: null,
 };
 const declaredConditions = {...baseConditions, time_roles: [
   {role: "event_time", description: "订单发生时间", field_ref: "ordered_at", value: null, evidence_refs: []},

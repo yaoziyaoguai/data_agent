@@ -33,8 +33,22 @@ export async function api<N extends keyof ContractTypes>(
     },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
-  const value: unknown = await response.json();
-  if (!response.ok)
-    throw new ApiError(decodeContract<ContractTypes["AppError"]>("AppError", value));
-  return import.meta.env?.PROD ? value as ContractTypes[N] : decodeContract<ContractTypes[N]>(schema, value);
+  const text = await response.text();
+  let value: unknown = null;
+  if (text) {
+    try {
+      value = JSON.parse(text);
+    } catch {
+      throw new Error(response.ok ? "invalid_response" : "unavailable");
+    }
+  }
+  if (!response.ok) {
+    try {
+      throw new ApiError(decodeContract<ContractTypes["AppError"]>("AppError", value));
+    } catch (error) {
+      if (error instanceof ApiError) throw error;
+      throw new Error("unavailable");
+    }
+  }
+  return decodeContract<ContractTypes[N]>(schema, value);
 }

@@ -14030,5 +14030,128 @@
         }
       ]
     }
+  },
+  {
+    "name": "prepare analysis answer binds verified comparisons by row index and row match",
+    "schema": "PrepareAnalysisAnswerInput",
+    "valid": true,
+    "roundtrip": true,
+    "value": {
+      "sources": [
+        {
+          "query_id": "query-a",
+          "result_ref": "result-a",
+          "columns": [
+            "group_key",
+            "sample_count",
+            "success_rate"
+          ]
+        }
+      ],
+      "values": [
+        {
+          "name": "alpha_rate",
+          "kind": "cell",
+          "query_id": "query-a",
+          "row_index": 0,
+          "column": "success_rate",
+          "format": {
+            "style": "percent",
+            "precision": 2
+          }
+        }
+      ],
+      "comparisons": [
+        {
+          "name": "rate_cmp",
+          "query_id": "query-a",
+          "column": "success_rate",
+          "sample_column": "sample_count",
+          "expected_relation": "lower",
+          "left": {
+            "label": "alpha",
+            "row_index": 0
+          },
+          "right": {
+            "label": "beta",
+            "row_match": [
+              {
+                "column": "group_key",
+                "value": "beta"
+              }
+            ]
+          }
+        }
+      ]
+    }
+  },
+  {
+    "name": "prepare analysis answer rejects comparison operand with both row_index and row_match",
+    "schema": "PrepareAnalysisAnswerInput",
+    "valid": false,
+    "value": {
+      "sources": [
+        {
+          "query_id": "query-a",
+          "result_ref": "result-a",
+          "columns": [
+            "success_rate"
+          ]
+        }
+      ],
+      "values": [],
+      "comparisons": [
+        {
+          "name": "rate_cmp",
+          "query_id": "query-a",
+          "column": "success_rate",
+          "left": {
+            "label": "alpha",
+            "row_index": 0,
+            "row_match": [
+              {
+                "column": "group_key",
+                "value": "alpha"
+              }
+            ]
+          },
+          "right": {
+            "label": "beta",
+            "row_index": 1
+          }
+        }
+      ]
+    }
+  },
+  {
+    "name": "prepare analysis answer rejects comparison operand missing row locator",
+    "schema": "PrepareAnalysisAnswerInput",
+    "valid": false,
+    "value": {
+      "sources": [
+        {
+          "query_id": "query-a",
+          "result_ref": "result-a",
+          "columns": [
+            "success_rate"
+          ]
+        }
+      ],
+      "values": [],
+      "comparisons": [
+        {
+          "name": "rate_cmp",
+          "query_id": "query-a",
+          "column": "success_rate",
+          "left": {
+            "label": "alpha"
+          },
+          "right": {
+            "label": "beta",
+            "row_index": 1
+          }
+        }
+      ]
+    }
   }
 ]

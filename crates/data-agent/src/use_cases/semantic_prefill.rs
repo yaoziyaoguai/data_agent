@@ -73,6 +73,9 @@ pub async fn process_due(pool: &MySqlPool) -> Result<bool> {
                     Some(error.code),
                 )
                 .await?;
+                tx.notify(crate::live_changes::Change::Catalog {
+                    space_id: ctx.space_id.clone(),
+                });
                 tx.commit().await?;
                 return Ok(true);
             }
@@ -83,12 +86,12 @@ pub async fn process_due(pool: &MySqlPool) -> Result<bool> {
     let (profile, request) = match prepared {
         Ok(v) => v,
         Err(error) => {
-            finish_error(pool, attempt, &error).await?;
+            finish_error(pool, &ctx.space_id, attempt, &error).await?;
             return Ok(true);
         }
     };
     if let Err(error) = runtime::configure_trial(pool, &profile).await {
-        finish_error(pool, attempt, &error).await?;
+        finish_error(pool, &ctx.space_id, attempt, &error).await?;
         return Ok(true);
     }
     let mut tx = AppTx::begin(pool).await?;
@@ -109,6 +112,9 @@ pub async fn process_due(pool: &MySqlPool) -> Result<bool> {
             Some(error.code),
         )
         .await?;
+        tx.notify(crate::live_changes::Change::Catalog {
+            space_id: ctx.space_id.clone(),
+        });
         tx.commit().await?;
         return Ok(true);
     }
@@ -126,6 +132,9 @@ pub async fn process_due(pool: &MySqlPool) -> Result<bool> {
                 Some(error.code),
             )
             .await?;
+            tx.notify(crate::live_changes::Change::Catalog {
+                space_id: ctx.space_id.clone(),
+            });
             tx.commit().await?;
             return Ok(true);
         }
@@ -148,6 +157,9 @@ pub async fn process_due(pool: &MySqlPool) -> Result<bool> {
             Some(error.code),
         )
         .await?;
+        tx.notify(crate::live_changes::Change::Catalog {
+            space_id: ctx.space_id.clone(),
+        });
         tx.commit().await?;
         return Ok(true);
     }
@@ -163,6 +175,9 @@ pub async fn process_due(pool: &MySqlPool) -> Result<bool> {
                 Some(error.code),
             )
             .await?;
+            tx.notify(crate::live_changes::Change::Catalog {
+                space_id: ctx.space_id.clone(),
+            });
             tx.commit().await?;
             return Ok(true);
         }
@@ -179,6 +194,9 @@ pub async fn process_due(pool: &MySqlPool) -> Result<bool> {
             Some(error.code),
         )
         .await?;
+        tx.notify(crate::live_changes::Change::Catalog {
+            space_id: ctx.space_id.clone(),
+        });
         tx.commit().await?;
         return Ok(true);
     }
@@ -195,6 +213,9 @@ pub async fn process_due(pool: &MySqlPool) -> Result<bool> {
                 Some(error.code),
             )
             .await?;
+            tx.notify(crate::live_changes::Change::Catalog {
+                space_id: ctx.space_id.clone(),
+            });
             tx.commit().await?;
             return Ok(true);
         }
@@ -218,6 +239,9 @@ pub async fn process_due(pool: &MySqlPool) -> Result<bool> {
             Some(error.code),
         )
         .await?;
+        tx.notify(crate::live_changes::Change::Catalog {
+            space_id: ctx.space_id.clone(),
+        });
         tx.commit().await?;
         return Ok(true);
     }
@@ -235,6 +259,9 @@ pub async fn process_due(pool: &MySqlPool) -> Result<bool> {
                 Some(error.code),
             )
             .await?;
+            tx.notify(crate::live_changes::Change::Catalog {
+                space_id: ctx.space_id.clone(),
+            });
             tx.commit().await?;
             return Ok(true);
         }
@@ -317,6 +344,9 @@ pub async fn process_due(pool: &MySqlPool) -> Result<bool> {
             .await?;
         }
     }
+    tx.notify(crate::live_changes::Change::Catalog {
+        space_id: ctx.space_id.clone(),
+    });
     tx.commit().await?;
     Ok(true)
 }
@@ -396,7 +426,12 @@ fn error_state(error: &Error) -> &'static str {
         _ => "invalid_prefill",
     }
 }
-async fn finish_error(pool: &MySqlPool, attempt: &str, error: &Error) -> Result<()> {
+async fn finish_error(
+    pool: &MySqlPool,
+    space_id: &str,
+    attempt: &str,
+    error: &Error,
+) -> Result<()> {
     let mut tx = AppTx::begin(pool).await?;
     ingestion::finish_prefill_in_tx(
         &mut tx,
@@ -406,6 +441,9 @@ async fn finish_error(pool: &MySqlPool, attempt: &str, error: &Error) -> Result<
         Some(error.code),
     )
     .await?;
+    tx.notify(crate::live_changes::Change::Catalog {
+        space_id: space_id.to_owned(),
+    });
     tx.commit().await
 }
 async fn check_current_in_tx(tx: &mut AppTx<'_>, ctx: &AccessContext, job: &Value) -> Result<()> {

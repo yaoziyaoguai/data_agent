@@ -118,6 +118,9 @@ pub async fn assign(
     let mut tx = AppTx::begin(pool).await?;
     knowledge::read_in_tx(&mut tx, ctx, object, None, true).await?;
     let v = access::assign_in_tx(&mut tx, ctx, object, &input).await?;
+    tx.notify(crate::live_changes::Change::Catalog {
+        space_id: ctx.space_id.clone(),
+    });
     tx.commit().await?;
     Ok(v)
 }

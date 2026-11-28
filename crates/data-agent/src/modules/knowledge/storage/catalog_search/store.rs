@@ -438,6 +438,46 @@ pub async fn scoped_enabled_heads_in_tx(
     Ok(sql.build_query_as().fetch_all(tx.connection()).await?)
 }
 
+pub async fn enabled_tables_by_name_in_tx(
+    tx: &mut AppTx<'_>,
+    ctx: &AccessContext,
+    names: &[String],
+) -> Result<Vec<(String, SearchHead)>> {
+    if names.is_empty() {
+        return Ok(Vec::new());
+    }
+    let mut tables = Vec::new();
+    for chunk in names.chunks(100) {
+        let mut sql = sqlx::QueryBuilder::<sqlx::MySql>::new(
+            "SELECT LOWER(k.name) AS sql_name,k.id,k.version,k.kind,k.source_id,",
+        );
+        sql.push(DIRECT_TABLE_ID)
+            .push(" FROM knowledge_objects k WHERE k.space_id=");
+        sql.push_bind(&ctx.space_id)
+            .push(" AND k.state='enabled' AND k.kind='table' AND LOWER(k.name) IN (");
+        let mut items = sql.separated(",");
+        for name in chunk {
+            items.push_bind(name.to_ascii_lowercase());
+        }
+        sql.push(")");
+        push_table_access(&mut sql, ctx);
+        sql.push(" ORDER BY k.id");
+        for row in sql.build().fetch_all(tx.connection()).await? {
+            tables.push((
+                row.get::<String, _>("sql_name"),
+                SearchHead {
+                    id: row.get("id"),
+                    version: row.get("version"),
+                    kind: row.get("kind"),
+                    source_id: row.get("source_id"),
+                    table_id: row.get("table_id"),
+                },
+            ));
+        }
+    }
+    Ok(tables)
+}
+
 // 身份目录只按可读名称/标识选当前头；不检索正文，也不把hints当权限或硬过滤。
 // 返回顺序与id keyset一致，调用方额外取一项判断续页并按实际交付位置推进。
 pub async fn identity_candidate_ids_in_tx(

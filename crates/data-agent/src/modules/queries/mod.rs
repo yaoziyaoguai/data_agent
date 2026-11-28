@@ -8,7 +8,11 @@ pub use saved_results::{
     SAVED_RESULT_LIMIT, SAVED_RESULT_MAX_PAGES, merge_saved_result_pages, saved_result_next_cursor,
 };
 mod semantic_checks;
-pub use semantic_checks::{annotate_result_columns, check_semantics};
+pub use semantic_checks::{annotate_result_columns, check_semantics, is_table_free_select};
+mod grouping_validation;
+pub use grouping_validation::check_grouping_ambiguity;
+mod table_references;
+pub use table_references::referenced_tables;
 mod store;
 pub use store::task_waiting_phase_in_tx;
 pub(crate) use store::{DELIVERY_QUERY_SQL, push_delivery_result_heads};

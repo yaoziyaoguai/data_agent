@@ -17,10 +17,10 @@ const verifyResults=(tools,calls)=>{
   assert.deepEqual(calls.map(call=>call.id).sort(),sdkIds().sort());
   for(let index=0;index<ids.length;index++){
     const tool=tools.find(tool=>tool.id==='context-read-'+index),value=JSON.parse(tool.text);
-    assert.equal(value.id,ids[index]);const body=value.entries.find(entry=>entry.entry_id==='body').effective_value;
+    assert.equal(value.items[0].ref.object_id,ids[index]);const body=value.items[0].content;
     const difference=[...body].findIndex((c,i)=>c!==bodies[index][i]);
     assert.equal(body.length,8192,JSON.stringify({length:body.length,chars:[...body].length,difference,around:body.slice(difference-5,difference+12),expected:bodies[index].slice(difference-5,difference+12)}));assert.equal(body,bodies[index]);
-    const call=calls.find(call=>call.id===tool.id);assert.equal(call.name,'read_knowledge');assert.equal(call.arguments.object_id,ids[index]);
+    const call=calls.find(call=>call.id===tool.id);assert.equal(call.name,'read_knowledge');assert.equal(call.arguments.items[0].ref.object_id,ids[index]);
   }
   assert.equal(calls.find(call=>call.id==='context-task').name,'update_analysis_task');
 };
@@ -33,8 +33,8 @@ const provider=createServer(async(req,res)=>{
   if(summary)delta={role:'assistant',content:'合成历史摘要：原输入及工具已登记，保留原回执并完成说明。'};
   else if(step++===0){
     delta={role:'assistant',reasoning_content:'合成推断'.repeat(1000),tool_calls:[
-      {index:0,id:'context-task',type:'function',function:{name:'update_analysis_task',arguments:JSON.stringify({action:'create',goal:'解释合成长文资料',conditions:{time_start:'2026-01-01T00:00:00Z',time_end:'2026-02-01T00:00:00Z',timezone:'UTC',metric:'net_revenue',channel:null,group_by:[],filters:[],knowledge_refs:[],notes:''},question:null,options:[]})}},
-      ...ids.map((id,index)=>({index:index+1,id:'context-read-'+index,type:'function',function:{name:'read_knowledge',arguments:JSON.stringify({object_id:id,version:'1',offset:0,limit:8192})}})),
+      {index:0,id:'context-task',type:'function',function:{name:'update_analysis_task',arguments:JSON.stringify({action:'create',goal:'解释合成长文资料',conditions:{time_start:'2026-01-01T00:00:00Z',time_end:'2026-02-01T00:00:00Z',timezone:'UTC',metric:'net_revenue',channel:null,group_by:[],filters:[],knowledge_refs:[],notes:'',source_limits:null},question:null,options:[]})}},
+      ...ids.map((id,index)=>({index:index+1,id:'context-read-'+index,type:'function',function:{name:'read_knowledge',arguments:JSON.stringify({items:[{kind:'knowledge',ref:{object_id:id,version:'1',path:'body'},offset:0,limit:8192}]})}})),
     ]};
   }else{
     assert.equal(oversized,false,'最小工具组超限的续答应在网络发送前终止');

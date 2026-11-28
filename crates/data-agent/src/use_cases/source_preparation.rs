@@ -89,6 +89,12 @@ pub async fn process_due(pool: &MySqlPool) -> Result<bool> {
                     error.code,
                 )
                 .await?;
+                if let Some((space_id, _)) =
+                    super::knowledge_sources::resolve_source_head_in_tx(&mut tx, &job.resource_id)
+                        .await?
+                {
+                    tx.notify(crate::live_changes::Change::Catalog { space_id });
+                }
             }
             tx.commit().await?;
         }
@@ -478,6 +484,9 @@ async fn apply_and_advance(
         &unresolved,
     )
     .await?;
+    tx.notify(crate::live_changes::Change::Catalog {
+        space_id: ctx.space_id.clone(),
+    });
     tx.commit().await?;
     if next_cursor.is_null() {
         let mut tx = AppTx::begin(pool).await?;

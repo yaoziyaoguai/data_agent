@@ -41,7 +41,7 @@
 
 ### ALIGN-02 / P1：通用表预填缺少关联文档与上游资料
 
-[knowledge.rs](../../crates/data-agent/src/use_cases/knowledge.rs) 第 149–154 行，`catalog-` 对象重新预填只读取当前表的一个来源；合成零售分支会读整套允许资料。[catalog_import.rs](../../crates/data-agent/src/use_cases/catalog_import.rs) 第 111–120 行，自动分析也只打包当前表来源。
+[knowledge/mod.rs](../../crates/data-agent/src/use_cases/knowledge/mod.rs) 第 149–154 行，`catalog-` 对象重新预填只读取当前表的一个来源；合成零售分支会读整套允许资料。[catalog_import.rs](../../crates/data-agent/src/use_cases/catalog_import.rs) 第 111–120 行，自动分析也只打包当前表来源。
 
 [catalog.rs](../../crates/data-agent/src/modules/ingestion/catalog.rs) 第 20 行的快照包含本表元数据、DDL、注释、节点 SQL、上游 ID；没有读取上游正文和另行维护的关联文档。[prefill.rs](../../crates/data-agent/src/modules/ingestion/prefill.rs) 第 251–281 行固定材料包，唯一模型工具是提交结果，无法自行补读。
 

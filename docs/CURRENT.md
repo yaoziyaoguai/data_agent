@@ -3,11 +3,11 @@
   "workflow": "development",
   "schema": 1,
   "phase": "repair",
-  "goal_revision": 259,
-  "environment": "2026-11-25 按针对 4d7d29d 的独立审计做本地试用收尾，随后按用户拍板推送封板提交并首次启动试用：清掉孤儿进程和空测试库，恢复类验收的到期等待余量由 100 毫秒放宽到 350 毫秒，启动验收脚本过时的费用上限已修正。产品代码没有改。快速门禁三项通过；make verify-startup 仍在最后一步失败，三份过期脚本留到下一轮。试用库补齐 12 个迁移后首次启动正常，已与启动前备份逐表比对。正式模型请求为 0。",
+  "goal_revision": 267,
+  "environment": "2026-11-26 在 Linux x86_64（Ubuntu 24.04）开发机完成真实 DeepSeek Flash 工作台输出质量修复、封存盲测对账、自留盲测 #1 比较方向修复、正常单轮路径与 SQL 底表来源门对齐、显式限源持久化与依据读回对账、M07 聚合分组折叠歧义拦截收尾，以及双方合议的全站工作台/数据字典/个人积累/模型配置 UX 改版、390px 实机复测收尾与独立子代理审计闭环。",
   "verification": {
     "level": "increment",
-    "reason": "按针对 4d7d29d 的独立审计完成本地试用收尾并首次启动试用：环境清场，恢复类验收的到期余量放宽后两次运行通过，启动验收脚本过时的费用上限已修正。产品代码零改动。make verify-startup 仍未通过，三份过期脚本按用户拍板留到下一轮；试用库补齐迁移后首次启动正常，已与启动前备份逐表比对；真实模型冒烟待用户完成。",
+    "reason": "定位并修复限源样本 d8a66ac3 因 SQLite 放行未分组裸列混用聚合（漏写 GROUP BY build_id）将全表合计 201/458 错挂到 SB2 的缺陷；在 M07 查询检查边界复用 sqlparser 返回具体歧义列的可修正诊断，完成零模型端到端重放（含多参数标量 MIN/MAX 与 COLLATE NOCASE 正反例）及逐字节原样限源真实网页小样核验。",
     "freshness": "content",
     "checks": [],
     "inputs": [
@@ -160,6 +160,10 @@
         ".gitignore",
         "data_agent.html",
         "compose.yaml",
+        "scripts/infra.py",
+        "scripts/check-infra.py",
+        "infra/images.lock.json",
+        "infra/README.md",
         "scripts/check_architecture.py",
         ".cargo/config.toml",
         "infra/model-profile.example.json",
@@ -994,7 +998,7 @@
             "C07",
             "A02"
           ],
-          "expected": "原v2口径正文与实体身份解释规则经正式工具装配和原生Pi进入实际provider消息；记录存在不推成新增实体，有依据的下界和互斥集合合并仍允许。只证明接线，真实语义另审，原Q02参考不变。",
+          "expected": "原v2口径正文与实体身份解释规则经正式工具装配和原生Pi进入实际provider消息；记录存在不推成新增实体，有依据的下界和互斥集合合并仍允许。只证明接线，真实语义另审，原Q02参考不变。2026-11-25修订：update_analysis_task参数提供根级type:\"object\"与properties，根allOf保留全部条件分支与AdoptedSemanticResolution约束。",
           "evidence_kind": "runtime",
           "command": [
             "node",
@@ -1141,7 +1145,7 @@
             "C03",
             "C07"
           ],
-          "expected": "真实Pi当前v2与legacy目录/参数合同一致；v2非澄清动作无options合法，v1原合同及条件语义不放宽。2026-11-24修订：模型目录只含现行合同2，v1目录断言随封板移除；request_query与update_analysis_task的决策合同继续用原合同用例核实际接受行为。",
+          "expected": "真实Pi当前v2与legacy目录/参数合同一致；v2非澄清动作无options合法，v1原合同及条件语义不放宽。2026-11-24修订：模型目录只含现行合同2，v1目录断言随封板移除；request_query与update_analysis_task的决策合同继续用原合同用例核实际接受行为。2026-11-25/26修订：update_analysis_task参数提供根级type:\"object\"与properties（由expand展开AdoptedSemanticResolution，不重复追加冗余allOf副本），根allOf保留全部动作条件分支。",
           "evidence_kind": "runtime",
           "command": [
             "node",
@@ -1288,9 +1292,319 @@
       "evidence": null
     }
   },
-  "reason": "本地试用收尾与首次启动见最新一节。产品代码零改动；恢复类验收余量放宽后两次通过；快速门禁三项通过，启动验收脚本按旧流程等待、未通过；封板提交与标签已推送；试用库补齐 12 个迁移后首次启动正常，三份过期脚本留到下一轮；真实模型冒烟待用户完成。"
+  "reason": "Linux x86_64 适配、P0/P1 修复、2026-11-26 真实 DeepSeek Flash 输出质量与 M07 聚合分组收尾，以及双方合议的工作台与管理页 UX 改版、实机复测收尾与独立审计闭环见最新六节。"
 }
 ---
+
+## 工作台与语义/资产体验联合改版、实机复测收尾与独立审计闭环（2026-11-26 UX 增量）
+
+针对管理侧 Mac 实机试用与最终验收完整归档包（`.local/checks/ux-joint-20261126-615160bf7/全量试用资料/Data-Agent-试用与最终验收.zip`，`SHA-256 = 9a79b333f0b7f965c5930d46568868bd8b8ebc38eff2bdb2b215c3ab6abe0859`，共 52 个文件、9 段录屏，含两段真实 Flash 对话、最初两份提案、双方定案、最终验收与两轮审计）确认的六项取舍及四项复杂度减法，在不改后端契约与业务权限边界、不为特定试用题写特判、零新增第三方前端依赖、收尾阶段零新增计费模型调用的前提下，完成工作台、数据字典/语义管理、我的积累与模型配置的成套体验收敛，并通过原独立子代理终审 `approved` 与主控对最终构建 `483b7217293d595d` 的独立复验闭环。
+
+### 1. 合议范围与独立审计问题修复落地
+
+- **会话三态加载、多轮阅读锚点与跨页原位/焦点返回（[main.tsx](../apps/web/src/main.tsx)、[ConversationFeed.tsx](../apps/web/src/features/workbench/ConversationFeed.tsx)、[Workbench.tsx](../apps/web/src/features/workbench/Workbench.tsx)）：**
+  - 区分首屏核对登录态（`checking`）、确认无消息新对话（`empty`）与读取已有历史会话（`loading`）三态；已登录刷新与切换会话零帧闪现登录表单或新对话欢迎屏。
+  - 首次打开多轮纯阅读长回答历史会话时，自动定位于最新一轮提问起始处（同屏可读最新提问与开头结论，流式与查询卡贴底追问保持跟随）；从工作台进入数据字典/我的积累再点「← 返回刚才的分析」时，精确恢复原会话标题、未发草稿、滚动位置（`y` 坐标不变）及工作台有意义键盘焦点（离开前曾聚焦对话内控件则归还该控件，直接从侧栏切页则以 `preventScroll: true` 归还 `#question` 输入框，消除焦点落回 `BODY` 导致 `Tab` 从顶栏重走的问题）。
+- **查询确认前直读审阅、执行后结果先行与长标识表格可读（[QueryCard.tsx](../apps/web/src/features/workbench/QueryCard.tsx)、[QueryResultsView.tsx](../apps/web/src/features/workbench/QueryResultsView.tsx)、[QueryResultTable.tsx](../apps/web/src/features/workbench/QueryResultTable.tsx)、[workspace-foundation.css](../apps/web/src/styles/workspace-foundation.css)、[conversation-results.css](../apps/web/src/styles/conversation-results.css)）：**
+  - `not_submitted` SQL 草稿与绑定参数保持默认直接展开供确认前审阅；`succeeded` 查询先展示结果表/图与工具栏（`复制 SQL`、`最终 SQL`、`查看完整表格`、`下载 CSV ↓`），移除单值结果重复大字块，数值列 `th.numeric` 与 `td.numeric` 同步等宽右对齐，完整 `实际执行的 SQL` 改为按需展开（结果过期或不可读时仍默认展开）。
+  - 收窄全局表格 `nowrap` 作用范围，让回答正文 Markdown 表格在 `1440px`/`1280px` 下对同格多张长技术表名与中文说明自然折行同屏可读，`390px` 下严格限定在 `.message-table-scroll` 内局部滚动；修复顶部 `显示技术标识` 按钮拉满整行的原生灰框样式。
+- **详情单关闭入口、真实返回目的地文案、`1280px` / `48%` 双侧可读停靠与报告↔口径依据状态保留（[Modal.tsx](../apps/web/src/shared/Modal.tsx)、[Workbench.tsx](../apps/web/src/features/workbench/Workbench.tsx)、[AnalysisReport.tsx](../apps/web/src/features/workbench/AnalysisReport.tsx)、[QueryResultPanel.tsx](../apps/web/src/features/workbench/QueryResultPanel.tsx)、[analysis-report.css](../apps/web/src/features/workbench/analysis-report.css)）：**
+  - 统一在面板固定顶栏保留唯一 `13px` 返回按钮（修复 `24px` 巨字破绽并移除底栏重复返回按钮，`口径依据` 保留独立「去维护此内容」次级按钮），且按钮可见文字与无障碍名称（`aria-label`）均反映真实返回目的地（单层面板显示「← 返回对话」，从报告进入口径依据或完整表格等多级栈层显示「← 返回分析报告」）；桌面 `>= 1280px` 默认右栏占比由 `60%` 收敛至 `48%`（可调范围 `36%–60%`），收敛报告条形图列宽下限避免默认截断右侧数值。
+  - 修复独立审计与主控复测检出的 `B-02`：`< 1280px` 栈式打开 `分析报告 -> 口径依据` 时保持下层报告挂载并同步管理 `<dialog>` `close()`/`showModal()`；`>= 1280px` 从停靠报告真实点击口径引用打开 `口径依据` 时在 `openPanel` 同步标记停靠区内部切层并直接将焦点移入证据面板顶栏返回按钮，确保无需预先点击证据面板即可直接按 `Escape` 返回报告，完整保留报告滚动位置、已展开依据块、原口径引用按钮焦点且零额外重发 `/report` 请求。
+- **工作台原位选用/移除分析方法与空面板单一入口（[ConversationSkillPicker.tsx](../apps/web/src/features/workbench/ConversationSkillPicker.tsx)、[ConversationHistoryModal.tsx](../apps/web/src/features/workbench/ConversationHistoryModal.tsx)）：**
+  - 点击输入区 `＋ 选用分析方法` 原位弹出当前会话方法面板（支持个人/空间公共筛选、即时搜索、一键选用、按 `selection_id` 缓存幂等 `operation_id` 移除），无已启用方法时合并为底栏唯一的「去我的积累管理」入口；历史记录弹窗首屏与空词切页签改为立即加载，消除 `150ms` 假空态闪现。
+- **角色用词对齐、字段即时查找、无裸 JSON、同源容量提示与 `390px` 双行输入区（[tokens.css](../apps/web/src/styles/tokens.css)、[WorkspaceRole.tsx](../apps/web/src/shared/WorkspaceRole.tsx)、[WorkspaceShell.tsx](../apps/web/src/shared/WorkspaceShell.tsx)、[KnowledgePage.tsx](../apps/web/src/features/knowledge/KnowledgePage.tsx)、[AssetsPage.tsx](../apps/web/src/features/assets/AssetsPage.tsx)、[ModelConfigurationFields.tsx](../apps/web/src/features/models/ModelConfigurationFields.tsx)、[workspace-layout.css](../apps/web/src/styles/workspace-layout.css)）：**
+  - 普通用户主导航、面包屑与页头统一为「数据字典」（与维护者「语义管理」极性一致并提升角色上下文避免跨页重复闪跳）；表内 `字段语义` 页签新增即时字段搜索框，页头提供「语义纠错协作」锚点；资产详情清除裸 `JSON.stringify` 代码块，模型配置表单复用 `capacityProblem` 同源展示容量关系；提炼全站色彩与 `>= 12px` 字号令牌（对比度 `5.64:1–14.63:1`）。
+  - 针对实机复测 `390px-原始实机截图.jpg` 暴露的窄屏已配置模型下说明按钮与发送按钮重叠 `10px`、`DeepSeek Flash` 末尾被裁与“思考”断成两行问题，将 `<= 700px` 输入区底栏改为双行网格（首行完整展示模型、单行“思考”与档位及说明按钮，次行左置分析方法、右置发送），实测 5 个控件两两矩形零相交、模型与档位文字完整无裁切。
+- **严格遵守合议减法：** 不写特定题干前缀正则裁剪、不对未全量加载的分页关联硬标虚数角标、不拆碎懒加载或引入新 UI 运行时依赖。
+
+### 2. 验收与要求变更
+
+本次未删减任何安全、只读、权限隔离或幂等负例；因双方明确确认的交互调整及 A-02 取消空闲轮询后的历史等待方式对齐，同步更新以下浏览器验收断言并逐项登记：
+
+1. **[check-conversation-experience-browser.mjs](../tests/mvp/check-conversation-experience-browser.mjs)（第 37–52 行）**
+   - **原值**：`succeeded` 查询卡不点击即直接断言 `<pre>` 可见文本，且旧断言要求查询卡位于确认消息 `"执行上面这条"` 之后（`>`）。
+   - **新值**：`not_submitted` 草稿仍默认直接展开 SQL 与参数；`succeeded` 查询默认折叠完整 SQL、先点击 `<summary>实际执行的 SQL</summary>` 再核对 `<pre>` 与 `绑定参数`；时间线断言对齐已生效的 `§6.3` 持久首次锚点契约（查询卡留在原起草位置 `<` 确认消息，完成通知 `.query-notice` 追加在确认消息之后 `>`）。
+   - **原因与独立依据**：双方共同决定（`.local/checks/ux-joint-20261126-615160bf7/joint-decision.md` §1.2）及 `§6.3` 防重排契约（[check-conversation-timeline.mjs](../tests/mvp/check-conversation-timeline.mjs) 第 15–24 行）。
+   - **影响范围**：仅更新已完成查询的默认折叠展开步骤与旧脚本滞后的时间线顺序表达式；确认前 SQL 直读、`message_pending` 暂停确认与运行中查询停止断言不变。
+2. **[check-asset-experience-browser.mjs](../tests/mvp/check-asset-experience-browser.mjs)（第 15–18 行）与 [check-new-conversation-draft.mjs](../tests/mvp/check-new-conversation-draft.mjs)（第 120 行）**
+   - **原值**：点击输入区 `＋ 选用分析方法` 直接整页跳离工作台进入 `我的积累 -> 我的 Skill`；新对话未知回执阻断后通过主导航点回 `工作台`。
+   - **新值**：点击 `＋ 选用分析方法` 在工作台原位打开 `选用分析方法` 弹窗（未知回执阻断时在原位弹窗展示 `role="alert"` 并拒绝新建会话，关闭弹窗即可重试原消息；点击弹窗底栏 `去我的积累管理` 或已选区 `管理与选用` 仍进入 `我的积累 -> 我的 Skill` 全库维护）。
+   - **原因与独立依据**：录屏 `03-会话选用方法.mp4` 暴露整页跳走打断提问流，依据双方共同决定（`joint-decision.md` §1.4）改为原位选用面板 + 全库管理入口。
+   - **影响范围**：消除输入中断；草稿与模型设置保留、跨用户隔离、未知回执防重建会话及待核对草稿防绕过启用断言全部保留。
+3. **[check-knowledge-experience-browser.mjs](../tests/mvp/check-knowledge-experience-browser.mjs)（第 19、31、126 行，绑定 `DIRECTORY-REFRESH`）、[check-semantic-governance-browser.mjs](../tests/mvp/check-semantic-governance-browser.mjs)（第 21–29、59、180 行）与 [check-creator-ownership-browser.mjs](../tests/mvp/check-creator-ownership-browser.mjs)（第 20–26、125–155 行）**
+   - **原值**：普通用户 `bob` / `carol`（升任维护者前 `highest_role === "user"`）点击主导航 `语义管理`（治理脚本同时等待维护者专属 `H1=语义管理` 与禁用态录入按钮）。
+   - **新值**：普通用户升权前主导航、面包屑与 `H1` 统一校验为 `数据字典`（只读字典不暴露维护录入按钮、保留 `提出纠错` 与协作闭环），经平台目录同步升任维护者后自动切换并校验为 `语义管理` 及启用态录入按钮。
+   - **原因与独立依据**：双方共同决定（`joint-decision.md` §1.5）对齐普通分析用户入口名称与 P-04 只读字典收窄语义。
+   - **影响范围**：仅更新普通用户导航与页头名称断言；跨用户 `403`、私人草稿对他人不可见、接受建议不直接改正式语义等权限断言全部保留。
+4. **[check-report-reading-position-browser.mjs](../tests/mvp/check-report-reading-position-browser.mjs)（第 236–246 行，绑定 `REL-READING`）、[check-browser.mjs](../tests/mvp/check-browser.mjs)（第 95–138 行）与 [check-management-buttons.mjs](../tests/mvp/check-management-buttons.mjs)（第 57–79 行）**
+   - **原值**：残留 A-02 取消空闲轮询前的无触发等待（`check-report-reading-position-browser.mjs` 默认报告分支空等两次后台刷新 40 秒超时、`check-browser.mjs` 无超时裸等对象与目录旧轮询、`check-management-buttons.mjs` 直接 SQL 插入草稿后未发 `catalog` 信号且重复点击已默认展开的草稿 `<details>`）。
+   - **新值**：对齐产品真实唤醒与 SSE 信号重读机制——报告阅读测试先核验空闲 `2.4s` 零轮询，再派发两次受控 `focus` 唤醒验证滚动/展开/焦点/草稿保位（与同脚本 `--query-results` 分支一致）；`check-browser.mjs` 通过真实搜索重选与 `catalog` 信号触发在途旧请求并用 `10s` 有界等待验证晚到旧响应不回退；`check-management-buttons.mjs` 在同步预填就绪后验证启停并在 SQL 插入草稿后发送 `catalog` 信号。
+   - **原因与独立依据**：独立审计报告 [ux-joint-implementation-review-20261126.md](reviews/ux-joint-implementation-review-20261126.md) `B-03` 与主控回归阻塞定位确认，属历史轮询测试预期滞后于 A-02 事件/焦点驱动设计。
+   - **影响范围**：消除无界等待卡死与空闲轮询过期超时，完整保留晚到旧响应防覆盖与阅读位置保留断言。
+5. **[check-analysis-reports-browser.mjs](../tests/mvp/check-analysis-reports-browser.mjs)（第 264–290 行，绑定 `REPORT-PERMISSION-POLL`）**
+   - **原值**：右栏同时打开 `分析报告` 与 `查询结果` 多级栈时，顶层 `查询结果` 面板的返回按钮仍按固定文案 `"返回对话"` 查找（实际点击后返回 `分析报告`）。
+   - **新值**：多级栈层返回按钮可见文字与无障碍名（`aria-label`）统一反映真实返回目的地 `"返回分析报告"`（`← 返回分析报告`），单层面板保持 `"返回对话"`（`← 返回对话`）；同时新增从停靠报告真实点击口径引用后不先聚焦证据面板、直接按 `Escape` 返回报告并归还原引用按钮焦点的断言。
+   - **原因与独立依据**：主控在 `controller-final-report/9e9cd86a7078fdb5/parent-check.json` 实测确认并明确要求可见文字与无障碍名均反映真实目的地（不只写 `title`），且真实点击后直接按 `Escape` 生效。
+   - **影响范围**：消除多级面板返回文案与实际跳转目标不符的误导；报告权限撤下、恢复重读、滚动保留与 CSV 下载断言全部保留。
+
+### 3. 分层验证证据、构建标识与独立审计闭环
+
+- **构建标识与常驻预览状态（开发环境）：**
+  - Git 基线提交：`28baf17ebca8304d4d24948c436b3a52ecea73a4`（保留工作树既有未提交后端与文档修改，未执行提交、推送或生产部署）。
+  - 打包产物目录：`.local/web-build/`（由独立 `tmux` 会话 `data-agent-preview` 在 `http://127.0.0.1:4173/` 常驻提供并代理 `/api` 至 `:8780`，`/api/health` = `200 ok`）：
+    - `index.html`：`SHA-256 = 483b7217293d595d7431b4e021eb9f45d86b54562b3f7dd248f643bbbd7d8635`
+    - `assets/index-CYxZfkBi.js`（`989.21 kB` / gzip `273.22 kB`）：`SHA-256 = b1c664e3121991bb4b82227b147e343bee534b1f2d164405c5a88256c6477a3b`
+    - `assets/index-BbKU-ZuJ.css`（`62.51 kB` / gzip `12.76 kB`）：`SHA-256 = fc9670ec2080191c4fb2ad4e7e0a860fdd69ce44c994ae8a4a39922b4ab82e90`
+- **常驻预览真实历史只读核验（0 次新增模型调用）：**
+  - `.local/checks/ux-joint-20261126-615160bf7/verification/live-preview-4173.json` 及同目录实截（含 `live-4173-bob-390px-retest-fixed.png`、`live-4173-bob-390px-bounds.json`、`live-4173-report-fixed-1280x720.png`、`live-4173-report-fixed-390x844.png`）：验证在线资源哈希逐字节一致、Alice/Bob 刷新零闪屏、Bob `390px` 已配置模型下 5 个输入区控件两两零相交且 `DeepSeek Flash` / 单行 `思考` 无裁切、空方法面板单一入口、侧栏查字典搜 `argument_unit` 返回原题 `y` 不变且焦点恢复至 `#question`、以及已存真实报告 `dfd761b8` 在 `1440/1280/1279/390` 四视口下条形图无截断与 `分析报告 ↔ 口径依据` 保位归还焦点。
+- **隔离合成环境与模拟模型回归套件（0 次新增计费模型调用）：**
+  - 本次联合 UX 专项验收：`.local/checks/ux-joint-20261126-615160bf7/verification/report.json`（覆盖非调分普通业务问法与六张合成长表名折行、确认前 SQL 审阅与 CSV 导出、原位方法选用/移除、表内字段即时查找、全页 `>= 12px` 扫描）。
+  - 浏览器与工程门禁：`check-conversation-timeline.mjs`、`check-conversation-experience-browser.mjs`、`check-asset-experience-browser.mjs`、`check-new-conversation-draft.mjs`、`check-knowledge-experience-browser.mjs`、`check-workspace-role-browser.mjs`、`check-evidence-return-browser.mjs`、`check-experience-optimization.mjs`、`check-analysis-reports-browser.mjs`、`check-browser.mjs`、`check-history-browser.mjs`、`check-report-reading-position-browser.mjs`（含默认报告分支与 `--query-results`）、`check-management-buttons.mjs`、`check-semantic-governance-browser.mjs`，以及 `make verify`、`make verify-contracts`、`make verify-architecture`、`npm run check:types` 全部通过。
+- **独立子代理审计与后续待决策观察记录：**
+  - 公开独立审计报告（结论 `approved`）位于 [ux-joint-implementation-review-20261126.md](reviews/ux-joint-implementation-review-20261126.md)，本地详版与四视口实测 JSON 位于 `.local/checks/ux-joint-20261126-615160bf7/independent-audit.md` 及 `audit-scratch/final-483b7217-audit.json`；主控独立复验 `483b7217293d595d` 已通过。
+  - 后续试用观察（留待用户决策，本轮不擅加硬规则或特判）：① 真实 Flash 对话中模型对简单口径提问的回答篇幅偏长；② 分析报告关键指标数值块对比率字段当前直接展示原始小数（如 `0.4166666666666667`）而非统一百分比格式。
+
+## 限源会话未分组聚合错挂合计定向收尾与真机小样验收（2026-11-26 终审收尾）
+
+针对管理侧在限源会话 `d8a66ac3` 网页回答中核到的实际错答——将 `SB2`（`176/398`）与 `SB3`（`25/60`）两个版本的总计 `201/458 = 43.89%` 错标为 `SB2` 并称 `SB3` 缺样本——本节先零模型重放原 SQL 与回执定位放行环节，经架构合议在 M07 查询检查边界完成最小通用修复，归档全部原始失败与现场记录，并用零模型端到端重放（含管理侧两组 SQLite 内存对照反例）及一次逐字节原样限源真实网页小样完成收尾核验。
+
+### 1. 零模型重放定位：合计 `201/458` 为何能挂到 `SB2`
+
+在原合成库 `.local/development-cockpit/platform/business.sqlite` 与提交账本 `submissions.sqlite` 上零模型重放 `d8a66ac3` 的三条真实查询：
+
+- **SQL 构造与 SQLite 方言放行：** 模型在版本拆分查询 `a70ad6bb-9d84-47bf-85aa-cef72f2c9de5` 中基于全量模板（`b10622fe-79d8-4a45-b0e0-1d5ee4c5fcd0`）在 `SELECT` 头加了裸列 `build_id`、末尾加了 `ORDER BY task_completion_rate DESC, build_id`，漏写 `GROUP BY build_id`。由于 [server.py](../apps/platform-mock/server.py) `compile()` 仅运行 SQLite `EXPLAIN`，而 SQLite 非标准方言允许聚合查询混选不在 `GROUP BY` 中的裸列（执行时全表折叠为 1 行合计并取任意一行的 `build_id`），`/validate` 返回 `state: "passed"`；同时 `semantic_checks` 按契约非阻断且将 `HAVING`/`COALESCE`/`CAST` 标为未检查，使 `a70ad6bb` 直接通过 `execute_query`。
+- **下游结果不可逆污染：** SQLite 执行 `a70ad6bb` 返回单行 `[["SB2", "201", "458", "0.4388646288209607"]]`（而补上 `GROUP BY build_id` 在同库同参数下返回 `[['SB2', 176, 398, 0.44221105527638194], ['SB3', 25, 60, 0.4166666666666667]]`）。结果表一旦把全表合计写进 `build_id='SB2'` 并抹掉 `SB3`，后续 `get_query` 与 `prepare_analysis_answer`（`row_match` 找不到 `SB3` 遂返回 `insufficient_data`）无法在结果层区分“未分组折叠污染”与“8 月真实无 `SB3` 记录”。
+
+### 2. 已合议的 M07 分组歧义检查实现（保持平台语法/权限职责与既有契约）
+
+- **在 M07 查询检查与提交复核边界复用 `sqlparser`（[grouping_validation.rs](../crates/data-agent/src/modules/queries/grouping_validation.rs)、[platform.rs](../crates/data-agent/src/modules/queries/platform.rs)、[mod.rs](../crates/data-agent/src/modules/queries/mod.rs)，同步 [implementation-design.md](architecture/implementation-design.md) 与 [runtime-modules.md](architecture/runtime-modules.md)）：**
+  - 平台 `/validate` 仍先行核定语法、只读与表权限；仅当平台返回 `state == "passed"` 时，叠加 `check_grouping_ambiguity`（`SQLiteDialect`，`recursion_limit = 32`，不新增外部依赖、不改 `store.rs` `begin_revision_in_tx` 历史卡状态、不改外部协议）。
+  - 对每个独立 `SELECT` 作用域（CTE、集合运算分支、派生表、标量/`IN`/`EXISTS` 子查询各自独立）：仅在存在非空 `GROUP BY`、`HAVING` 或本层无 `OVER` 聚合函数时进入分组检查；若 `SELECT` 投影、`HAVING` 或本层 `ORDER BY` 含未列入 `GROUP BY` 的非聚合本层列（或顶层 `*`/`t.*`），返回既有 `state: "rejected", reason: "sql_not_supported"` 与 `diagnostic: {"code": "ungrouped_aggregate_column", "message": "..."}` 并列出具体歧义列名（如 `build_id`），由既有 `save_draft_in_tx` 记为 `check_state = "rejected"` 并在 `confirm_in_tx` 硬性阻断确认执行。
+  - **严格收窄于仓库支持的 SQLite 方言并覆盖管理侧两组内存对照反例：**
+    1. **区分单参数聚合与多参数逐行标量 `MIN`/`MAX`：** 在 SQLite 中单参数 `MIN(x)`/`MAX(x)` 为聚合函数，而多参数 `MIN(x, y, ...)`/`MAX(x, y, ...)` 为逐行标量函数（两行 `(A,5)`、`(b,-3)` 上 `SELECT cohort, MAX(n,0) FROM sample` 返回两行 `A=5`、`b=0`）；`is_aggregate_function` 按参数个数区分，普通明细不误拦，同时若多参数 `MAX(n,0)` 与真实聚合 `SUM(n)` 同处无 `GROUP BY` 的 `SELECT` 则穿透检查参数列 `n`。
+    2. **覆盖 `COLLATE` 等完整表达式包装：** 统一通过 `for_each_child_expr` 覆盖 `Expr::Collate`、`JsonAccess`、`CompoundFieldAccess`、`Cast`/`Convert`、`Case`、`Substring`/`Trim`/`Overlay` 等子节点遍历，配合 `canonical_expr_key` 与 `GroupScope`（含 `GROUP BY 1` 序号、SQLite 投影别名 `GROUP BY alias`、外层相关子查询限定列）：`(A,5)`、`(b,-3)` 上 `SELECT cohort COLLATE NOCASE, SUM(n) FROM sample`（SQLite 原生折叠为 `A=2`）被拦截并指出 `cohort`，补齐 `GROUP BY cohort COLLATE NOCASE` 后正常放行并返回两组。
+    3. **100% 保留普通明细、窗口函数、条件聚合与纯整体汇总：** `SELECT * FROM ... LIMIT 1`、`SUM(...) OVER (...)`、`COUNT(*) FILTER (WHERE ...)` 以及合法全量汇总 `b10622fe`（`SELECT COALESCE(SUM(...), 0) ... HAVING :start = ...`，无任何未分组列）全部正常通过。
+
+### 3. 归档保留、零模型重放与唯一一次原字节限源网页小样结果
+
+- **原始失败样本与现场完整保留：** 原会话 `d8a66ac3-ef39-4e62-b251-7af2b5876edb` 及其 3 条查询（`a70ad6bb`、`b10622fe`、`40f27a14`）、回执和平台 `submissions.sqlite` 记录原样保留于数据库与工作台侧栏，同时额外归档副本 `.local/checks/data-quality-review/live-restricted-ungrouped-attempt.json` / `.png` / `-turn1.png`（原 `live-restricted-verified.*`、`live-restricted-null-attempt.*`、`live-restricted-control.*` 均原字节未动）。
+- **零模型端到端重放（`.local/checks/data-quality-review/offline-grouping-replay.json`，`model_call_attempts = 0`）：**
+  - 原错稿 `a70ad6bb` 在 `validate_sql` 与 `request_query` 均返回 `check_state: "rejected", error: "sql_not_supported", error_details.code: "ungrouped_aggregate_column"`（明确点名 `build_id`），尝试 `execute_query` 被 `version_conflict` 硬拒；越界表 `syn_software_build` 仍返回 `source_not_allowed`；多参数 `MAX(task_completed_count, 0)` 放行、未分组 `build_id COLLATE NOCASE` 拒绝并点名 `build_id`、补齐 `GROUP BY build_id COLLATE NOCASE` 放行。
+  - 修订后的 `GROUP BY build_id` 草稿（`replaces_query_id` 无需改动 `begin_revision_in_tx` 即可正常提交执行）返回两行 `[['SB2','176','398','0.44221105527638194'], ['SB3','25','60','0.4166666666666667']]`，合法纯整体汇总 `b10622fe` 返回 `[['201','458','0.4388646288209607']]`，`prepare_analysis_answer` 核定 `SB3 低于 SB2`（`41.67%` vs `44.22%`）。
+- **逐字节原样限源真实网页小样核验（会话 `6f595b21-fb21-4226-b8d6-ff337d6a369f`，归档于 `.local/checks/data-quality-review/live-restricted-grouped-verified.json` 及截图 `live-restricted-grouped-verified.png`）：**
+  - **输入与来源边界：** 用户提问与原限源样本逐字节一致（`promptByteIdenticalToArchived: true`）；`condition_revisions` v1 持久化非空 `allowed_sources: [{"kind":"document","id":"document-cockpit-metrics-analysis"},{"kind":"platform","id":"table-syn_daily_voice_experience"}]` 及宿主绑定 `origin_message_ids`；两条执行成功的 SQL（`8b5e5e81` 按 `GROUP BY build_id`、`bbf2a624` 按 `CASE ... END AS version_label ... GROUP BY version_label`）均只读允许表 `syn_daily_voice_experience`，未触碰任何被排除文档或表，且模型在本轮顺带成功调用了 `save_analysis_evidence`。
+  - **独立分子分母与网页可见结论逐项吻合：** 对比 `business.sqlite` 独立 SQL 真值（`SB2`: `176/398 = 0.44221105527638194`；`SB3`: `25/60 = 0.4166666666666667`），两条查询返回结果与工作台网页最终呈现完全一致：**`SB3` 分子 `25`、分母 `60`、语音任务达成率 `41.67%`**；**`SB2` 分子 `176`、分母 `398`、语音任务达成率 `44.22%`**；比较结论以 `SB3` 为主语明确展示**「SB3 低于 SB2」**；发布通道 `release_track` 如实说明因 `syn_software_build` 与《身份、版本与能力》在排除范围内而保留为缺口。
+- **通过的项目规定检查与离线回归（0 次新增模型调用）：** `make verify`（含 `verify-materials` 814 项、`verify-delivery` 16 项单测、`verify-fixture` 零售 29/29 与座舱 30 指标 84 次 SQL 校验、`verify-node`、`verify-rust`）、`make verify-architecture`（`scripts/check_architecture.py`、`tests/architecture`、`check-runtime.mjs --locking`）、`make verify-contracts`（707 例）、`make verify-code`（`fmt`/`clippy -D warnings`/`tsc`/`vite build`）、`cargo test --offline --locked -p data-agent --lib modules::queries::`（43/43 全绿，含 `grouping_validation` 4/4 与 `table_references` 2/2）、`node tests/mvp/check-workflow-reliability.mjs`（14/14）、`node tests/mvp/check-query-text-authority.mjs`（9/9）、`node tests/mvp/check-source-limits.mjs`（16/16）、`node tests/mvp/check-query-semantics.mjs --decision-state`（v2 决策态全绿）、`node tests/mvp/check-evidence-source.mjs`（10 组全绿）。管理侧已独立核对导出的两条查询结果、最终网页答复与离线重放并确认业务效果验收通过；本地开发机与工作台保持在线，未提交或推送。
+
+## 显式限源范围持久化与分析依据保存/报告读回两项残留修复（2026-11-26 补修验收）
+
+针对上一节诚实披露的两项真实残留——① `live-restricted-null-attempt.json`（会话 `2952df31`）虽在 SQL 中只读了允许表，但建任务时与 `source_identity` 同轮并行提交了 `source_limits: null`（限源仅写进 `notes`）；② `live-single-turn-retest.json`（会话 `dfd761b8`）中可选 `save_analysis_evidence` 因 `query_refs.columns` 漏列与错误回执无具体原因被拒——本节在不改变既有权限与严格校验语义的前提下完成通用修复，保留原失败样本，并在本机工作台完成端到端读写与粒度核对。
+
+### 1. 残留 ①：显式来源限制在首次业务查询前按真实身份非空持久化与粒度/越界验证
+
+- **根因定位（从 `live-restricted-null-attempt.json` 建任务调用查起）：**
+  1. [schema.json](../packages/contracts/schema.json) 中 `SourceLimits.origin_message_ids` 为必填数组但说明仅写“不接受模型自由填写”、未说明模型传 `[]` 由宿主改写，且 `Conditions.source_limits` 与 `AnalysisUpdateFields.conditions` 未明确禁止在用户限源时将 `create(source_limits: null)` 与 `source_identity` 同轮并行发出；一旦 `create` 先写入 `null`（表示显式无限制），后续 `search_knowledge(view="evidence")` 不再触发 `task_context_required`，模型遂遗漏回写非空允许集。
+  2. [source_identity.rs](../crates/data-agent/src/use_cases/source_identity.rs) 对平台同步生成的 `document` 对象此前只返回 `{"kind":"document","id":id}`，未并列返回其可读直属平台文件身份 `meta["source_id"]`（而文档内提取条目的原文 `citation.source` 与同源指标定义依赖该直属文件身份）。
+- **通用修复：**
+  - 在 [source_identity.rs](../crates/data-agent/src/use_cases/source_identity.rs) 中，当 `kind == "document"` 且其直属 `source_id` 属于当前用户可读平台源时，在 `source_keys` 中并列返回 `{"kind":"document","id":id}` 与 `{"kind":"platform","id":source_id}`（人工新建无平台源文档仍只返回单个 `document` 键，保持原有契约）。
+  - 在 [schema.json](../packages/contracts/schema.json)、[resources.ts](../apps/agent/session/resources.ts)、[data-tools.ts](../apps/agent/tools/data-tools.ts) 对齐两步顺序与必填占位说明：用户明确限定/排除表或文档时严禁传 `null`（不得与 `source_identity` 同轮并行提交 `null`），先单独调用 `search_knowledge(view="source_identity", kinds=["table","document"])` 核明身份，再于首次业务查询前写入非空 `conditions.source_limits`（单表取 `table-<表名>` 键而非整包 `schema`，`origin_message_ids` 传 `[]` 由宿主绑定）。
+- **旧样本与新工作台实测分别记录：**
+  - **保留历史 `null` 样本（`2952df31`，`.local/checks/data-quality-review/live-restricted-null-attempt.json` / `.png`）：** 仅证明模型生成的两条 SQL 只读了允许表 `syn_daily_voice_experience`，因 `condition_revisions` 登记为 `source_limits: null`，不能证明用户指定的边界已在系统任务条件中受控生效。
+  - **修复后同原话工作台实测（会话 `d8a66ac3-ef39-4e62-b251-7af2b5876edb`，归档于 `.local/checks/data-quality-review/live-restricted-verified.json` 及截图 `live-restricted-verified-turn1.png`、`live-restricted-verified.png`）：**
+    1. **首次业务查询前非空持久化记录：** 首轮第 1 个工具调用即为 `search_knowledge(view="source_identity", query="指标公式与分析口径 syn_daily_voice_experience", kinds=["table","document"])`，第 2 个调用 `update_analysis_task(create)` 在任何业务检索与 SQL 草稿前于 `condition_revisions`（`version="1"`）持久化非空范围：
+       - `{"kind": "platform", "id": "cockpit-metrics-analysis"}` —— **严格对应《指标公式与分析口径》单份材料**：核对 [knowledge-manifest.json](sources/cockpit/knowledge-manifest.json) `source_ids` 与 [semantic-catalog.json](sources/cockpit/semantic-catalog.json) `source_bundle`，`"cockpit-metrics-analysis"` 仅唯一映射文件 `documents/metrics-analysis.md`（即《指标公式与分析口径》）；其余 13 篇文档各自具有独立 `source_id`（如 `"cockpit-identity-and-version"`、`"cockpit-overview"`），全部 28 张物理表的 `table-*` 头对象 `source_id` 均为 `"schema"`，因此该底层别名仅覆盖《指标公式与分析口径》本篇材料及其内嵌指标条目，绝不放行其他文档或其他表。
+       - `{"kind": "platform", "id": "table-syn_daily_voice_experience"}` —— **严格对应用户点名的单张日表 `syn_daily_voice_experience`**（未取整包 `"schema"`）。
+       - `origin_message_ids: ["477c61fc-06bc-4f33-bedc-3e03460bcc7c"]` —— 由宿主绑定本轮真实用户消息 ID。
+    2. **允许表可查可读：** 在该非空 `source_limits` 下，针对 `syn_daily_voice_experience` 的三条查询（`a70ad6bb`、`b10622fe`、`40f27a14`）全部通过 `request_query`、`execute_query`、结果通知轮 `get_query` 与 `prepare_analysis_answer` 并如实说明 `release_track` 属排除表缺口（注：模型在 `a70ad6bb` 套用单行指标 SQL 模板加选 `build_id` 时漏写 `GROUP BY build_id`，致 SQLite 返回全表合并行 `201/458` 而未拆出 `SB3` 行，按不反复抽样凑通过率原则原样保留披露）。
+    3. **其他文档与其他表均被现有权限挡在范围外（同一会话实测账本）：** 在同一任务条件版本 `1`（`route` 保持 `source_limits` 不变）下发起越界核验，`read_knowledge` 读取被排除文档 `document-cockpit-identity-and-version#body`（《身份、版本与能力》）与被排除表 `table-syn_software_build#ddl` 均返回 `state: "not_available"`；`request_query` 提交 `SELECT * FROM syn_software_build LIMIT 5` 与另一张字段说明同样出现在 `metrics-analysis.md` 中的日表 `SELECT * FROM syn_daily_stage_latency LIMIT 5`，均在草稿阶段被 `SourceGate` 以 `outcome: "rejected", error: "source_not_allowed"` 硬拒（证明 `"cockpit-metrics-analysis"` 绝不授予其他表的查询权）。此外离线门禁 [check-source-limits.mjs](../tests/mvp/check-source-limits.mjs) 第 14 项同步断言了 `read_analysis_task` 非空 `source_limits` 读回、越界表 `read_knowledge` `not_available`、越界 `JOIN` 草稿与范围外结果 `source_not_allowed`。
+
+### 2. 残留 ②：`save_analysis_evidence` 按查询回执原生列与值类型走通保存及正常产品入口读回对账
+
+- **根因校正（严格区分首轮唯一漏列与后续类型诊断/重试）：**
+  - 原样本 `.local/checks/data-quality-review/live-single-turn-retest.json`（会话 `dfd761b8`）永久保留。将该次失败请求中的全部 **9 项 `figures`** 按同一真实 `query_id`（`d1f7d951-d769-4f77-b40e-eb6465858050`）、`row_index` 与 `GET /queries/{id}/results` 原始响应逐项核对确认：该查询整数与比率列均声明 `encoding: "decimal_string"`，**首轮提交的 9 项 `figures` JSON 类型与值当时全部正确（不存在“把数值误写成字符串”的问题），唯一触发拒绝的原因是第 2 条 finding 的 `query_refs[0].columns` 仅列了 `["build_id", "task_completion_rate", "asr_exact_match_rate"]`，漏列了同条 `figures[2]` 引用的 `"observed_days"`**；加之原 [analysis_evidence.rs](../crates/data-agent/src/use_cases/analysis_evidence.rs) 返回无具体原因的通用 `invalid_evidence` 提示（[schema.json](../packages/contracts/schema.json) `AnalysisQueryReference.columns` 亦缺说明），导致模型未能在首轮定位漏列。
+  - **通用修复与重试过程区分：** 在 [analysis_evidence.rs](../crates/data-agent/src/use_cases/analysis_evidence.rs) `validate_finding` 完整保留原有全部严格校验的前提下，同时补齐了① `figures` 引用列缺失于同条 `query_refs.columns`、② `query_refs.columns` 列名不存在/重名、③ `figure.value` 与 `results.rows` 原始单元格 JSON 类型或值不一致三类精确诊断 `hint`（其中 JSON 类型校验与单元测试 `native_sqlite_numeric_cells_reject_stringified_figures_and_missing_query_ref_columns` 作为跨平台通用防线保留，并非首轮 `dfd761b8` 失败原因），并在 [schema.json](../packages/contracts/schema.json) 与 [data-tools.ts](../apps/agent/tools/data-tools.ts) 补齐列包含关系与原样复制 `results.rows` 单元格规则。后续在线复测首轮重试（`call_00_waL16Y1prJSIuJ7S0Wm15862`）实际命中的是列名拼写检查（误写 `"task_completion_count"`），模型据此提示修正并在归属消息后一次保存成功。
+- **复用原会话与原查询结果的保存及正常产品入口读回对账（归档于 `.local/checks/data-quality-review/live-evidence-readback-verified.json` 及截图 `live-evidence-readback-verified.png`）：**
+  - **优先复用已有证据：** 直接在原会话 `dfd761b8-627b-430e-8791-8af48679d659` 复用已成功执行的查询 `d1f7d951-d769-4f77-b40e-eb6465858050`（未重跑或新增任何 SQL，会话查询总数保持 `1`），成功保存 `evidence_id = "8d86bfa9-9f1f-440b-bb23-6da35ceafe10"`（全部 3 条 finding 的 `query_refs[0].columns` 均完整包含 `"observed_days"`）与正式报告 `report_id = "d8b2f003-7589-4827-9755-1808569b901f"`（`version="1"`），保存回执、快照任务 `evidence_refs`/`report_ref` 与报告内 `reference.evidence_id` 完全一致。
+  - **正常产品双入口读回与逐项对账：** 经正常产品 HTTP 接口 `GET /conversations/dfd761b8-627b-430e-8791-8af48679d659/tasks/df2bc9ef-579e-4cee-ac10-48fefb07ab59/report`（`status: "available"`）以及在 Web 工作台点击「查看分析报告」打开 `AnalysisReport` 面板读回已存记录，将 `report.evidence[0].findings` 全部 **9 项 `figures`**（`SB3` 达成率 `"0.4166666666666667"`、转写一致率 `"0.88"`、`observed_days` `"7"`；`SB2` 达成率 `"0.44221105527638194"`、转写一致率 `"0.8540372670807453"`、`observed_days` `"30"`；`SB4` `observed_days` `"0"`、`eligible_turn_count` `"0"`、`asr_labeled_turn_count` `"0"`）与 `GET /queries/d1f7d951-d769-4f77-b40e-eb6465858050/results` 的 `rows[row_index][col_index]` 逐单元格比对：`in_query_ref_columns` 9/9 为 `true`，JSON 值类型（`decimal_string` 精确字符串）与数值内容 9/9 完全一致。
+
+### 3. 离线回归收口、`evidence-source.json` 首轮未过原因与 `mapping_state=unknown` 规范/实现核对
+
+- **`check-evidence-source.mjs`（`evidence-source.json`）本轮首次运行未过的真实原因：** 该辅助门禁脚本（`Makefile:437`）建于 `4e6008e`（2026-11-18），未包含在 `d5d8f7e`（2026-11-24）同步的 15 个绑定验收脚本内，因此残留了 `4e1f2a6`（2026-11-22 封板重构）已移除的三处旧实现假设：① 第 31 行断言未 `route` 前前端隐藏 `read_source`（`4e1f2a6` 移除 `attachToolGate` 后改为工具始终可见、由 Rust `task_context_required` 入口核验，见 `7b10289` 既有验收记录）；② 第 58 行读取已随 `4e1f2a6` 合并移除的 `authority.evidence_reads`（现统一保存在第 57 行已断言的 `authority.sources`）；③ 第 134 行在零任务空会话上预期 `task_context_required`（`4e1f2a6` `active_task_sources_unrestricted_in_tx` 将空会话视为无限制，须先存在未声明 `source_limits` 的活动任务才触发 `task_context_required`）。
+- **`mapping_state=unknown` 规范与历史实现分歧记录及保留检验（验收与要求变更说明）：**
+  - **规范与实现分歧：** [implementation-design.md](architecture/implementation-design.md) 第 765 行仍保留 `4e1f2a6` 前旧句“roots_complete 仅证明贡献根映射完整……映射不完整不能当无来源”；而 `4e1f2a6` 与 `a1d0cdb` 已在第 736、742 行及 [schema.json](../packages/contracts/schema.json) 第 4857 行将 `source_identity` 与来源筛选改为**直属身份**（对象 `id`、`table_id`、可读直属 `source_id`），[source_identity.rs](../crates/data-agent/src/use_cases/source_identity.rs) 不再查询 `knowledge_dependency_states`，直属 `roots_complete` 恒为 `true`（因此 [check-evidence-source.mjs](../tests/mvp/check-evidence-source.mjs) 原第 196–205 行预期表 `source_keys` 返回传递根 `['business-guide','etl','schema']` 及 `mapping_state='unknown'` 时返回 `roots_complete=false, source_keys=[]` 与 `4e1f2a6` 现行直属身份实现不一致，现更新表直属 `source_keys` 预期为 `['schema','table-demo_order_detail']`）。
+  - **有效契约与保留的双重 `mapping_state='unknown'` 检验（不删未知映射负例）：** 在现行代码中，“映射不完整不能当无来源”由 [references.rs](../crates/data-agent/src/use_cases/knowledge/references.rs) `assert_selection_sources_in_tx`（`L352–L367`）与 [knowledge_sources.rs](../crates/data-agent/src/use_cases/knowledge_sources.rs) `assert_selected_in_tx`（`L173–L186`）共同落实：当 `mapping_state != 'complete'` 时，窄读单一条目不能把未知条目映射当作无其他来源依赖，必须回退核验整张知识卡的全部 `requirements(object)`（此外 `dependency_index/store.rs:457` 对历史引用同样将非 `complete` 列入 `unknown` 回退核验）。已在 [check-evidence-source.mjs](../tests/mvp/check-evidence-source.mjs) 明确保留并实测两项 `mapping_state='unknown'` 检验：① `source_identity` 在 `mapping_state='unknown'` 下直属 `source_keys` 保持非空 `['schema','table-demo_order_detail']`、绝不退化为空数组；② 令另一条目来源 `etl` 升版至 `2` 时，`mapping_state='complete'` 下窄读 `table-demo_order_detail#description` 为 `ok`，而 `mapping_state='unknown'` 下窄读同一路径回退整卡必要来源核验并返回 `stale`（连同既有 `check-context-dependencies.mjs`、`check-retrieval-excerpts.mjs`、`check-source-limits.mjs:121` 共同覆盖）。
+- **最终离线回归结果：** `check-evidence-source.mjs`（10 组全绿，`passed: true, calls: 4, officialRequests: 0`）、`check-evidence-tool-shape.mjs`（11 项全绿）、`check-source-limits.mjs`（16 项全绿）、`check-tool-schema.mjs`、`make verify-contracts`（707 例）、`make verify-code`、`check_architecture.py`、`cargo test analysis_evidence`（4/4）与 `table_references`（3/3）、`make verify-materials`、`make verify-delivery` 全部退出 0 通过。
+
+## 正常单轮路径收尾、SQL 底表来源门对齐与双路径验收（2026-11-26 收尾）
+
+针对上一节真实尝试 #2 靠改为两轮并添加「不额外限制资料来源」及 `build_id` 才成功、而真实尝试 #1（`bb37e785`，普通单轮问法）仍让用户拿不到回答的实际缺陷，本节定位完整根因、完成局部通用修复，并用**逐字节原样的首次单轮原文**与**明确限制来源的单轮对照**完成收尾验收（保留全部历史失败与中间运行证据，不扩大收费样本）。
+
+### 1. 首次普通单轮路径失败的真实根因（订正上一节初步猜测）
+
+回查尝试 #1（`bb37e785`）完整 Pi 会话账本与 [source_limits.rs](../crates/data-agent/src/use_cases/source_limits.rs)、[source_identity.rs](../crates/data-agent/src/use_cases/source_identity.rs) 确认，此前“模型把 `catalog-*` 误写成 `table-*`”的初步判断不完整（`source_identity` 对表返回的正式 `source_keys` 本就是 `table-<name>` 与 `schema`），真实链路是三处缺陷叠加：
+
+1. **新建任务省略 `source_limits` 与恢复提示误导自设允许集：** [schema.json](../packages/contracts/schema.json) 的 `AnalysisUpdateFields.conditions` 原说明只写了“未指定的可空标量用 JSON null”，未点明无附加来源限制时 `source_limits` 须显式填 `null`；模型省略该键后任务落入“来源范围未知”并连续触发 `task_context_required`，而 [invoke.rs](../crates/data-agent/src/use_cases/data_tools/invoke.rs) 对 `search_knowledge`/`read_knowledge`/`validate_sql` 未填入活动任务的 `recovery.task`（且 [store.rs](../crates/data-agent/src/modules/analysis/task_context/store.rs) 未暴露 `source_limits_declared: false`），提示语又易被误读为既有任务禁止声明无限制，导致模型在 3 次 `route` 无效后于 `revise` 时自行拼出非空 `allowed_sources`。
+2. **查询结果来源门只认不可发现的执行引擎 `target_id`：** 原 [source_limits.rs](../crates/data-agent/src/use_cases/source_limits.rs) `authority_within_in_tx`（以及 [deliver_run.rs](../crates/data-agent/src/use_cases/deliver_run.rs) 资产查询来源判断）对已执行查询结果仅检查 `gate.member("platform", query["target_id"])`（即 `"synthetic-sqlite"`）。但 `"synthetic-sqlite"` 是执行引擎目标而非 `source_identity` 可发现的资料来源，导致凡任务带有非空 `source_limits`（无论是模型误设还是用户真实限源），SQL 执行完成后的 `get_query` 与 `prepare_analysis_answer` 必定触发 `source_not_allowed`；与此同时，草稿入口 `request_query` 此前只核对模型自报的 `knowledge_refs`，未核对 SQL 实际读取的物理底表。
+3. **单轮一次执行授权边界与结果唤醒提示未写明：** 每条真实用户消息仅能授权一次 `execute_query`（成功即标 `applied`，后续系统 `query_result` 唤醒运行不能再授权新 SQL）。原 [data-tools.ts](../apps/agent/tools/data-tools.ts) 未说明该单次边界，导致中间复测会话 `6cf7bca6`（保留于 `.local/checks/data-quality-review/live-single-turn-probe-attempt.json`）首轮只提交探查 SQL 留待唤醒轮再查主指标；唤醒轮中 `get_query` 又对新草稿误发 `phase_note` 催促 `execute_query`、且 [deliver.ts](../apps/agent/session/deliver.ts) `data_agent_answer_sources` 未指明完成通知对应的 `query_id`，致使模型漏绑探查查询而触发 `answer_sources_required`。
+
+### 2. 最小通用修复与独立取舍判断（供管理侧独立复核）
+
+- **实施的局部修复：**
+  - **来源声明与恢复事实清晰化（不代填 `null`）：** 在 [schema.json](../packages/contracts/schema.json)、[resources.ts](../apps/agent/session/resources.ts)、[data-tools.ts](../apps/agent/tools/data-tools.ts) 写明无附加限源显式填 `source_limits: null`、明确限源先经 `source_identity` 查 `source_keys` 写入 `conditions.source_limits`（单表取 `table-<表名>` 键而非整包 `schema`）；在 [store.rs](../crates/data-agent/src/modules/analysis/task_context/store.rs) 与 [invoke.rs](../crates/data-agent/src/use_cases/data_tools/invoke.rs) 补齐 `recovery.task.source_limits_declared` 布尔控制状态与准确恢复指引。
+  - **SQL 实际物理底表解析与表级来源门贯通：** 新增 [table_references.rs](../crates/data-agent/src/modules/queries/table_references.rs) `queries::referenced_tables`（遍历 SQLite 单条 `Query` 的 CTE、`JOIN`、集合运算及全部子查询/`FILTER`/窗口表达式，排除语句内 CTE 别名；多语句、表函数、跨库限定或未知 AST 分支一律返回 `None` fail-closed）与 [store.rs](../crates/data-agent/src/modules/knowledge/storage/catalog_search/store.rs) `enabled_tables_by_name_in_tx`，在 [registration.rs](../crates/data-agent/src/use_cases/data_tools/registration.rs) `request_query`、[source_limits.rs](../crates/data-agent/src/use_cases/source_limits.rs) `authority_within_in_tx` 及 [delivery.rs](../crates/data-agent/src/persistence/delivery.rs) / [deliver_run.rs](../crates/data-agent/src/use_cases/deliver_run.rs) 统一按“显式平台 `target_id` 许可，或 SQL 全部实际物理表均匹配唯一可读启用表头且通过 `SourceGate::permits`”判门。
+  - **单轮批量提交与结果唤醒提示校准：** 在 [data-tools.ts](../apps/agent/tools/data-tools.ts) 写明每条用户消息仅可调用一次 `execute_query`（主查询与必要的编码探查可同批提交），结果通知轮屏蔽未提交草稿的 `executeHint`，并在 [deliver.ts](../apps/agent/session/deliver.ts) 结果解释提示中指明目标通知 `query_id`。
+- **独立技术取舍判断：**
+  1. **哪条现有产品约定需要这段改动：** [implementation-design.md](architecture/implementation-design.md) 第 17.3–17.4 节（`L732–L747`、`L765`、`L787`）明确约定“用户明确来源限制要检查所有实际贡献内容的来源，不能只检查模型自报”、“声明 `allowed_sources` 时按对象自身、直属表或直接来源的稳定身份与允许集比较”、“聚合 `semantic-catalog`/`schema` 整包不能被解释成某张表或子域”，且 `SourceKey` 契约禁止模型臆造 `source_identity` 未返回的键。要让“明确限制到指定表/文档”的任务既能正常读取该表查询结果并完成答案绑定、又不能越界读其他表，必须把查询结果的来源判定从不可发现的引擎名 `"synthetic-sqlite"` 对齐到 SQL 实际贡献数据的物理底表。
+  2. **为什么更小的修复不够用或会破坏边界：** ① 若只修 `source_limits: null` 与单轮提示而不改 `authority_within_in_tx`，普通无限制问题虽能过，但任何真实设置单表/文档 `source_limits` 的任务在 SQL 完成后仍会在 `get_query` / `prepare_analysis_answer` 报 `source_not_allowed`；② 若把 `"synthetic-sqlite"` 暴露给 `source_identity` 或见任意平台键即放行整库 `target_id`，会把单表许可放大为整库放行，模型只需漏填 `knowledge_refs` 即可 `JOIN` 读取被禁表；③ 若只检查 `query.knowledge_refs` 而不解析 `query.sql`，则把硬边界建立在模型自报数组（可传空数组）上，违背“硬约束由程序执行”的工程规则。
+  3. **变更如何保持（并收紧）原有权限含义：** ① **平台表级权限（Datasight / `AccessContext.table_access` 及平台 `/validate`、`/submit`、`/results`、`/result-authority`）保持完全独立与权威**，`enabled_tables_by_name_in_tx` 复用同一 `push_table_access` 过滤，`source_limits` 仅作为会话内进一步收窄的交集，绝不授予或替代任何平台表权限；② **纯文档/纯指南限源语义不变且草稿入口更严**：无表 SQL（如 `SELECT 7 AS voice_turns`）的执行结果因无允许底表支撑，在未显式允许平台 `target_id` 时仍返回 `false`（原样保持 `check-historical-source-access.mjs` 与 `check-source-limits-memory.mjs`），显式携带 `{"kind":"platform","id":"synthetic-sqlite"}` 的历史测试继续兼容，而触及未获准物理表的 SQL 现在在 `request_query` 草稿阶段即被 `source_not_allowed` 提前硬拒。
+
+### 3. 双路径真实验收结果、截图 `save_analysis_evidence` 区分说明与通过回归
+
+- **路径 A：首次原文逐字单轮复测（会话 `dfd761b8-627b-430e-8791-8af48679d659`，归档于 `.local/checks/data-quality-review/live-single-turn-retest.json` 及截图 `live-single-turn-retest.png`）：通过。**
+  - **题面核验：** 与失败基线 `bb37e785`（`live-comparison-attempt1-failed.json`）逐字节完全相同，未加「不额外限制资料来源」、未点明 `build_id`、单轮直发。
+  - **执行与对账：** 新建任务直接显式 `source_limits: null`，单轮提交并执行 SQL `d1f7d951`（`user_request` `6040bc84` 与 `query_result` `c730a696` 均 `finished`，任务阶段 `answered`）；模型自主通过 `prepare_analysis_answer` 绑定 23 项 `values` 与 4 项 `comparisons`（含 `sample_column`），页面最终渲染：`SB3`（`synthetic-voice-3.0`）达成率 **`41.67%`（`25/60`）**、转写一致率 **`88.00%`（`44/50`）**；`SB2`（`synthetic-voice-2.0`）达成率 **`44.22%`（`176/398`）**、转写一致率 **`85.40%`（`275/322`）**；`SB4`（`synthetic-voice-4.0`）两项均为 **`NULL（空值）（0/0）`**；以 `SB3` 为主语渲染出**「语音任务达成率：SB3 低于 SB2」「有标签转写一致率：SB3 高于 SB2」**及两项**「SB4 缺少有效样本，暂无法与 SB3 比较」**，与独立 SQLite 真值完全一致。
+  - **截图与正文中 `save_analysis_evidence` 被拒的真实原因及与查询回答的区别：**
+    - **职责区别：** 对话中的查询结果回答由 `prepare_analysis_answer` + `RenderedAnswerBinding` 承担（按 [implementation-design.md](architecture/implementation-design.md) `L791`，普通分析回答无需强制保存分析依据或正式报告）；而 `save_analysis_evidence`（[analysis_evidence.rs](../crates/data-agent/src/use_cases/analysis_evidence.rs) `L201–L236`）是供后续组装正式报告（`save_analysis_report`）的可选依据落库工具，要求每条 `finding.query_refs[].columns` 完整包含本条 `figures[].column`，且 `figure.value` 与平台返回行的原始 JSON 类型及值严格全等（不做数值与字符串强转）。
+    - **本次被拒事实（详见上节补修核实）：** `dfd761b8` 中 `prepare_analysis_answer` 与最终回答交付均正常成功；模型在回答之外自发调用了一次 `save_analysis_evidence`，因第 2 条 finding 的 `query_refs.columns` 漏列了 `figures` 引用的 `"observed_days"` 列（注：平台列为 `encoding: "decimal_string"`，字符串值本身符合平台返回格式，真正触发拒绝的是漏列加通用无具体原因提示），被 `analysis_evidence.rs` 以 `invalid_evidence` 拒绝，已在最新补修节走通保存与报告入口读回对账。
+- **路径 B：相同代码下的明确限制来源单轮对照（会话 `2952df31-d05d-400f-8907-8d7a330e0a65`，归档于 `.local/checks/data-quality-review/live-restricted-control.json` 及截图 `live-restricted-control.png`）：SQL 与回答遵守限源，同时如实记录任务字段残留。**
+  - **题面与实际读取行为：** 限定仅使用《指标公式与分析口径》文档和 `syn_daily_voice_experience` 表，排除《身份、版本与能力》文档与 `syn_software_build` 表，要求查 2026 年 8 月 `SB3` 与 `SB2` 达成率高低并查 `release_track`。同冻结代码下提交执行的两条 SQL（`ce475e89`、`42851aa4`）均只查询被允许的 `syn_daily_voice_experience` 表，全程未读被排除表或文档，`user_request` 与两次 `query_result` 均 `finished`，经 `prepare_analysis_answer`（含 `comparisons`）渲染出 `SB3` `41.67%`（`25/60`）、`SB2` `44.22%`（`176/398`）、`SB3 低于 SB2`，并明确说明 `release_track` 仅存在于已排除的 `syn_software_build` 表、本次按限源作为缺口不予提供。
+  - **数据库核查发现的真实残留（诚实披露）：** 核查 `2952df31`（及前一次中间尝试 `9dbfa8c5`，保留于 `live-restricted-probe-attempt.json`）的 `condition_revisions` 表可见，模型在调用 `source_identity` 之前先调用了 `update_analysis_task(create)`，把限源要求写进了 `conditions.notes` 而将 `conditions.source_limits` 填成了 `null`。因此表级硬门的端到端强制拦截与放行（`allowed_sources: [{"kind":"platform","id":"table-demo_order_detail"}]` 下拦截漏报 `knowledge_refs` 的越界 `JOIN dim_customers` 草稿、拦截范围外历史结果、放行允许表 `get_query` 与 `prepare_analysis_answer`）由离线集成门禁 `check-source-limits.mjs` 第 14 场景确定性证明；真实会话中模型将自然语言限源自觉先查 `source_identity` 落入非空 `conditions.source_limits` 的提示顺序已在收尾时补入 [resources.ts](../apps/agent/session/resources.ts) 与 [data-tools.ts](../apps/agent/tools/data-tools.ts)，按既定预算不再追加收费样本。
+- **实际通过的回归检查清单：**
+  - `make verify-contracts`（707 例跨语言契约正反例）
+  - `make verify-code`（`cargo fmt --check`、`cargo clippy --all-targets -- -D warnings`、`tsc --noEmit`、`vite build`）
+  - `python3 scripts/check_architecture.py`（模块依赖、SQL 归属与单文件 `<= 800` 行）
+  - `cargo test --offline --locked -p data-agent --lib table_references`（3/3，含 CTE/JOIN/子查询/`FILTER` 识别与表函数/跨库/多语句 fail-closed）
+  - `node tests/mvp/check-source-limits.mjs`（16/16，含新增第 14 项表级来源门贯通草稿、结果通知轮 `get_query` 与 `prepare_analysis_answer` 及越界底表硬拒）
+  - `node tests/mvp/check-source-limits-memory.mjs`（3/3）
+  - `node tests/mvp/check-historical-source-access.mjs`（5/5）
+  - `node tests/mvp/check-conversational-query.mjs`（12/12）
+  - `node tests/mvp/check-query-text-authority.mjs`（9/9）
+  - `node tests/mvp/check-answer-comparisons.mjs`（区分原封不动旧请求重放与受控比较组件验证）
+  - `npm run check:bridge`、`node tests/mvp/check-tool-schema.mjs`、`node tests/runtime/check-capacity-boundaries.mjs`、`node tests/mvp/check-result-notification-answers.mjs`
+  - `make verify-materials`、`make verify-delivery`
+
+### 4. 诚实保留的真实残留边界
+
+1. **自然语言限源到结构化 `conditions.source_limits` 的模型遵从边界：** 宿主校验已保存的 `source_limits` 身份与实际贡献来源，但不做自然语言意图解析器；若模型面对用户限源原话仍显式提交 `source_limits: null`（如 `2952df31` 写进 `notes`），服务端硬门不会替模型从自然语言反推允许集（与 [implementation-design.md](architecture/implementation-design.md) `L773` 一致）。
+2. **SQL 底表 AST 解析与未来真实数仓视图/外部目录边界：** 当前合成 SQLite 平台只有单命名空间物理表（无视图/同义词），`queries::referenced_tables` 可在本地精确闭合；后续适配器接入含视图、物化视图或多 catalog 的真实数据平台时，查询触及的真实底表/来源集合须由平台编译/血缘接口返回并与 `SourceGate` 核对，不能仅靠客户端 SQL 标识符解析推断视图展开后的上游表。
+3. **可选 `comparisons` 与可选 `save_analysis_evidence` 的既有边界：** 原封不动旧无 `comparisons` 请求（或模型未填 `comparisons`、在占位符外围加否定/主观修辞）仍可绕过比较核验；`save_analysis_evidence` 要求 `figure.value` 与 `get_query` `results.rows` 原始单元格 JSON 类型及内容严格全等（如 `decimal_string` 编码列须传精确字符串，原生 `number`/`boolean`/`null` 列须传对应 JSON 类型），其拒绝只阻断可选依据归档、不影响 `prepare_analysis_answer` 的对话回答交付。
+
+## 可核对比较结论通用修复与三层区分验收（2026-11-26 续）
+
+用户用独立汇总与原始明细核对了上一节封存盲测 #2（`SI_CONTACT`：`10`、`3`；`SI_VOLUME`：`9`、`6`），确认首答两行四个数完全一致；同时指出自留盲测 #1 存在实际解读错误（数字全对，但把 `asr`、`route` 端云谁高谁低说反），要求将该轮永久保留为**「数值通过、解读失败」**，定位相反结论为何能进入最终回答，用最小通用方式覆盖**高、低、持平、数据不足**四类比较结论（不特判厂商/阶段/题目、不做关键词黑名单、不改评分），并在验收中严格区分「原封不动重放发生错误时的旧请求」与「正常 Pi 流程是否自主生成并使用新绑定」。
+
+### 1. 相反结论进入最终回答的根因
+
+核查自留盲测 #1 的真实 Pi 会话与工具账本（`prepare_analysis_answer` 调用含 30 项标量 `values`）确认：
+
+- **仅有标量单元格绑定、缺少成对比较事实原语。** 原 [schema.json](../packages/contracts/schema.json) 的 `PrepareAnalysisAnswerInput` 仅支持 `values`（绑定单个 `cell`、`statistic`、`parameter`、`metadata`），既不在工具回执中产出组间/期次/指标比较关系，也没有比较短语占位符。
+- **符号占位符遮蔽数值相对大小，自由散文无宿主核验。** 模型在编写最终模板时只能看到 `asr cloud {{asr_cloud_rate}} vs edge {{asr_edge_rate}}`、`route cloud {{route_cloud_rate}} vs edge {{route_edge_rate}}` 等符号名而看不到位置上的具体数字，遂在概括句将 `asr`、`route` 与 `nlu` 合并手写为「cloud 成功率高于 edge 或接近」；而 [outputs.rs](../crates/data-agent/src/modules/runtime/outputs.rs) 与 [render.ts](../apps/agent/session/render.ts) 只替换 `{{name}}`，无法感知未经绑定的方向断言。
+
+### 2. 最小通用修复（零关键词黑名单、零业务特判）
+
+- **同源契约扩展可选 `comparisons`（[schema.json](../packages/contracts/schema.json) 及重生成的 `boundary.ts` / `boundary.rs` / `names.ts`）。** 为 `PrepareAnalysisAnswerInput` 与 `PresentAnalysisAnswerInput` 新增可选 `comparisons`（`AnalysisAnswerComparison`），支持按 `row_index` 或唯一维度键值 `row_match` 定位 `left` / `right` 操作数，可选指定样本量列 `sample_column` 与方向预期 `expected_relation`（`higher` / `lower` / `equal` / `insufficient_data`）。
+- **宿主精确十进制四态核定与防反标校验（[comparisons.rs](../crates/data-agent/src/use_cases/analysis_answers/comparisons.rs)、[analysis_answers.rs](../crates/data-agent/src/use_cases/analysis_answers.rs)）。**
+  - 按 `rust_decimal::Decimal` 精确比较（不经浮点往返）产出原子绑定短语写入 `bindings[name]` 并附回执 `comparisons` 明细：`higher`（`"{left} 高于 {right}"`）、`lower`（`"{left} 低于 {right}"`）、`equal`（`"{left} 与 {right} 持平"`）、`insufficient_data`（完整结果 0 行命中、指标列为 `NULL` 或 `sample_column <= 0/NULL` 时按缺样侧生成 `"{side} 缺少有效样本，暂无法与 {other} 比较"` 或双侧缺样本说明；未读齐的部分结果 0 行命中直接以 `invalid_evidence` 拒绝，防止截断页误判缺样本）。
+  - 若调用方提供 `expected_relation` 且与真实结果不符，或 `left` / `right` 标签与所指行的字符串维度值对调，宿主直接拒绝 `prepare_analysis_answer` 并返回 `comparison_mismatch` 与真实关系提示。
+- **已准备比较标记必引约束与结果唤醒轮就地纠正（[outputs.rs](../crates/data-agent/src/modules/runtime/outputs.rs)、[render.ts](../apps/agent/session/render.ts)、[deliver.ts](../apps/agent/session/deliver.ts)、[data-tools.ts](../apps/agent/tools/data-tools.ts)、[resources.ts](../apps/agent/session/resources.ts)）。** 凡在 `comparisons` 中核定的标记名必须在正文模板中至少引用一次 `{{name}}`，漏引即按 `answer_render_invalid` / `invalid_evidence` 拦截定稿；同时修复 [deliver.ts](../apps/agent/session/deliver.ts) 在 `query_result` 轮次中 `needsResultAnswer()` 早于 `renderInvalid` 判定的顺序问题，使漏引/错标时优先复用原已成功 `prepare` 回执就地纠正正文，无需重复调用工具。
+
+### 3. 三层严格区分验收结果
+
+1. **原封不动重放发生错误时的历史请求（[check-answer-comparisons.mjs](../tests/mvp/check-answer-comparisons.mjs) `unmodifiedHistoricalReplay`）：照旧送出反向文字。**
+   - 直接读取自留盲测 #1 发生错误时的原 `prepare_analysis_answer` 参数（仅 30 项 `values`，无 `comparisons`）与原助手模板正文，在最新 Rust + Pi `deliver()` 上原样重放：由于 `comparisons` 为可选字段（纯列举题如封存盲测 #2 无需比较短语）且宿主不做自然语言逐句关键词扫描，静态重放该历史请求仍会原样输出「asr、nlu、route 是 cloud 成功率高于 edge 或接近」。
+2. **受控比较引擎组件验证（[check-answer-comparisons.mjs](../tests/mvp/check-answer-comparisons.mjs) `component_manual_comparisons` + Rust 单测，0 外部请求）：仅证明宿主组件机制。**
+   - 在合成座舱库上复用自留盲测 #1 的 9 行查询结果人工构造 `comparisons`：验证 `asr` 错误预期 `expected_relation="higher"` 被当场拒绝并返回真实 `lower`、行与标签写反被拒绝、正文漏引 `{{asr_rate_cmp}}` 被 `deliver()` 以 `answer_render_invalid` 拦截并在同会话纠正后输出 `asr成功率 cloud 低于 edge`、`nlu成功率 cloud 高于 edge`、`route平均耗时 cloud 与 edge 持平`（`70.0` vs `70.0`）、`tts阶段 cloud 缺少有效样本，暂无法与 edge 比较` 及换向 `edge 高于 cloud`。此项仅记为组件验证。
+3. **正常 Pi 流程两次真实尝试的完整结果与实际差异（同代码、同运行实例，一败一成并列保留）：**
+   - **代码与系统/工具提示不变性：** 两次真实尝试运行于同一个未重启的本地工作台守护进程，8 个相关源文件与契约（含 `resources.ts` 系统提示、`data-tools.ts` 工具描述、`schema.json`）的 SHA-256 指纹完全相同；两轮用户提问均**未出现任何工具名（如 `prepare_analysis_answer`）、参数名（如 `comparisons`、`sample_column`）或 `{{name}}` 标记语法提示**。
+   - **真实尝试 #1（会话 `bb37e785-6a88-4b2e-93d9-bf1b2d971a8c`，归档于 `.local/checks/data-quality-review/live-comparison-attempt1-failed.json`）：失败，未进入 `prepare_analysis_answer`。**
+     - **实际输入（单轮直跑）：** *「请直接查出并执行 SQL：看 2026 年 8 月软件版本 SB3、SB2、SB4 各自的语音任务达成率与有标签转写一致率，保留原始版本编码，并以 SB3 为主语分别对比 SB2、SB4 说明两项指标谁高谁低或是否缺样本。」*
+     - **首轮失败完整链路：** ① 首轮 `user_request` 运行（`0cebdf74`）中，模型检索知识后自行调用 `update_analysis_task(revise)` 将 `conditions.source_limits.allowed_sources` 收窄为 `[{"kind":"platform","id":"table-syn_daily_voice_experience"},{"kind":"platform","id":"table-syn_software_build"}, ...]`（把知识对象 ID `table-*` 误填成平台表来源身份 `catalog-*`），随后起草并提交执行了 2 条 SQL（`c87821a6` 查版本维表映射、`3a98bf3f` 联表汇总 8 月两项指标），首轮回复「两条 SQL 已确认并提交执行…」后正常 `finished`；② 两条查询在 SQLite 执行成功后，分别触发两次 `query_result` 唤醒运行（`26440e66` 与 `5f9f5155`）；③ 在两次 `query_result` 运行中，模型调用 `get_query` 读取结果时，宿主来源门按任务 `source_limits` 核对查询底层平台表来源 `catalog-syn_daily_voice_experience` / `catalog-syn_software_build`，因不在模型误填的 `table-*` 白名单内而连续拒绝 `source_not_allowed`；系统结果唤醒不能越权放宽用户消息绑定的 `source_limits`，且 [data-tools.ts](../apps/agent/tools/data-tools.ts) 的 `unavailableQueries` 未将 `get_query` 的 `source_not_allowed` 视为结果不可读以豁免结果解释义务，最终 [deliver.ts](../apps/agent/session/deliver.ts) 在提交阶段抛出 `answer_sources_required`，两次 `query_result` 均以 `failed` 告终，**全程未到达 `prepare_analysis_answer`**。
+   - **真实尝试 #2（会话 `f869159b-eddf-49e1-ac34-6de12d0ea5f2`，归档于 `.local/checks/data-quality-review/live-comparison-verify.json` 及截图 `live-comparison-verify.png`）：成功，模型自主提交 4 项 `comparisons` 并渲染。**
+     - **与尝试 #1 的实际输入差异（诚实披露人工改写项）：** 改为与基线/自留盲测 #1 相同的两轮确认流程，把泛称「软件版本」明确为字段名 `build_id`，并在第 1 轮用户提问中显式加了括号说明**「（不额外限制资料来源）」**（第 1 轮：*「帮我看下 2026 年 8 月各软件构建（build_id：SB3、SB2、SB4）的语音任务达成率与有标签转写一致率（不额外限制资料来源），先查清口径并保存 SQL 草稿，先别执行。」* → 第 2 轮：*「确认执行刚才保存的 SQL 草稿，保留原始 build_id 编码，并以 SB3 为主语分别对比 SB2、SB4 说明两项指标谁高谁低或是否缺样本。」*）。这一改写**人工绕开了尝试 #1 的 `source_limits` 自设陷阱**，但**未以任何形式提示比较绑定工具名或参数写法**。
+     - **模型自主生成与渲染结果：** `query_result` 轮（`75485601`）读取 3 行结果后，`DeepSeek Flash` 自主在 `prepare_analysis_answer` 中构造了 4 项 `comparisons`（首次因命名含数字 `sb3_vs_sb2_completion` 触发既有 `^[a-z][a-z_]*$` Schema 校验，当轮自动改为 `three_vs_two_completion`、`three_vs_four_completion`、`three_vs_two_asr`、`three_vs_four_asr`，并主动填写 `sample_column: "eligible_turn_count"` / `"asr_labeled_turn_count"`），在模板中以 `{{three_vs_two_completion}}` 等引用；浏览器最终展示**「任务达成率：SB3 低于 SB2（41.67% vs 44.22%）；对 SB4 这项比较，SB4 缺少有效样本，暂无法与 SB3 比较。」「有标签转写一致率：SB3 高于 SB2（88.00% vs 85.40%）；对 SB4 这项比较，SB4 缺少有效样本，暂无法与 SB3 比较。」**，与 `business.sqlite` 独立真值完全一致。
+
+### 4. 诚实保留的覆盖边界（含原封不动旧请求仍可绕过的情形）
+
+在遵守「`comparisons` 保持可选、不做逐句关键词黑名单扫描、不特判题目」的前提下，当前机制的实际覆盖边界如下：
+
+- **原封不动旧请求（或未来未填 `comparisons` 的请求）仍可直接绕过比较绑定：** 因为 `PrepareAnalysisAnswerInput` 仅要求 `sources` 与 `values` 必填、`comparisons` 为可选（以兼容无需比较的纯列举/单值回答，如封存盲测 #2），宿主只在调用方实际传入 `comparisons` 时才核定关系并强制正文引用对应 `{{name}}`。因此，拿发生错误时原封不动的旧请求（仅含 `values` + 手写比较散文模板）重放，或者未来某轮模型只填 `values` 而不填 `comparisons`（以及虽填了部分 `comparisons` 却在正文额外手写另一句未绑定的比较），宿主均**不会拦截**，反向文字仍可能进入最终回答。
+- **单轮直跑下模型自设错误 `source_limits` 的独立阻塞未在本轮改动：** 如真实尝试 #1（`bb37e785`）所示，当用户未声明「不限制来源」且模型在 `revise` 时误将 `table-*` 对象 ID 写入 `source_limits` 时，`query_result` 轮次会在 `get_query` 被 `source_not_allowed` 拦截并以 `answer_sources_required` 失败，根本走不到 `prepare_analysis_answer`。
+- **占位符外围自然语言语义反转或主观幅度修辞：** `{{name}}` 保证替换短语本身（主语、方向、客体）原子准确，但若模型在占位符前后加否定词、未经证实的因果归因，或用「接近/显著」等主观词修饰微小差值，宿主字符串替换不解析句法。
+- **两侧标签均为行内不存在的自定义描述词且未填 `expected_relation`：** 防反标规则依赖标签命中对侧行的字符串维度值；若跨查询使用「本月/上月」等不在结果单元格中出现的自定义标签且模型把两侧 `row_index` 写反、同时省略 `expected_relation`，宿主只能按实际传入行计算。
+
+## 真实模型工作台输出质量诊断、通用修复与独立样本核验（2026-11-26）
+
+在工作台「模型配置」接入真实 `DeepSeek Flash`（`deepseek-flash`，默认 `low` 思考档位）执行正常对话试用后，用户反馈刚看到的实际工作台输出效果不理想，要求先保留脱敏基线、定位从原始来源到用户输出的首次偏离点并做最小通用修复，完成同题复测后冻结代码，再用两条未参与调试的独立样本核验（其中第 2 条由用户在代码封存后现场给出题面）。
+
+### 1. 修复前基线与四处根因定位
+
+修复前真实两轮对话（2026-07-01 至 2026-07-07 各车型任务完成率：先查口径存草稿、再授权执行解读）已脱敏归档于 `.local/checks/data-quality-review/before-baseline.json`，原始会话仍保留在本地试用库可随时对照。从平台原始来源到浏览器 DOM 的首次偏离点如下：
+
+- **行内代码段绑定值被无条件反斜杠转义篡改事实。** 平台 `source-manifest.json` 与查询结果元数据中的真实批次标识为 `synthetic_snapshot_2026-10-04`（无反斜杠），但 [analysis_answers.rs](../crates/data-agent/src/use_cases/analysis_answers.rs) 的 `binding_values` 在返回 `prepare_analysis_answer` 绑定字典前无视上下文统一调用 Markdown 转义，再由 [render.ts](../apps/agent/session/render.ts) 与 [outputs.rs](../crates/data-agent/src/modules/runtime/outputs.rs) 原样拼入模板；当模型按常规 Markdown 将标识符放入行内代码反引号 `` `{{freshness}}` `` 时，CommonMark 在代码段内不解析反斜杠转义，导致持久正文与页面直接显示字面篡改值 `synthetic\_snapshot\_2026-10-04`。
+- **对象引用标签硬截断长摘要产生残损半句与嵌套引号。** [object-reference-labels.ts](../apps/web/src/features/workbench/object-reference-labels.ts) 直接对 `query.summary` 取前 70 字符且不处理嵌套 `「」` 或未闭合括号，导致默认隐藏 UUID 视图把正文中的查询引用替换成 `查询「口径：采用公共指标「语音任务达成率」(task_completion_rate)，分子=task_completed_count（final」`。
+- **查询持久化摘要与助手正文混入临时草稿态及内部协议字段。** [data-tools.ts](../apps/agent/tools/data-tools.ts) 中 `request_query` 未说明 `summary` 会持久用作查询卡片条件标题与完成通知，模型把「仅生成草稿，未执行。」写进 `summary`，执行成功后页面出现 `查询完成 · …仅生成草稿，未执行。` 的自相矛盾；同时 [resources.ts](../apps/agent/session/resources.ts) 仅写「按回执表达」，未区分自然中文状态说明与内部协议字段，导致三轮回复首句堆砌 `query_id …，draft_version 1，check_state=passed，confirmation_state=awaiting_confirmation，execution_state=not_submitted`。
+- **批量知识读取在「查看运行步骤」中丢失全部对象名。** [store.rs](../crates/data-agent/src/modules/runtime/store.rs) 的 `tool_activity_in_tx` 仅在 `JSON_LENGTH(items) = 1` 时提取 `target_id`，而模型按工具说明批量读取 2–3 个条目（含同一对象的 `definition` 与 `sql`）时，3 次「阅读知识对象」步骤的 `target_name` 全部退化为 `null`。
+
+### 2. 最小通用修复与门禁验证
+
+- **上下文感知的绑定值替换（[analysis_answers.rs](../crates/data-agent/src/use_cases/analysis_answers.rs)、[outputs.rs](../crates/data-agent/src/modules/runtime/outputs.rs)、[render.ts](../apps/agent/session/render.ts)）。** `binding_values` 保留单行原始字面事实（不再向工具回执注入反斜杠）；Rust `substitute` 与 Node 流式 `renderedStream` 按同一状态机跟踪模板中的行内反引号代码围栏（空行重置，流式尾部反引号先缓存定长后再推进）：代码段外继续转义 `\`、`` ` ``、`*`、`_`、`[`、`]`、`<`、`>`、`|`、`#` 防止链接/表格注入，代码段内保留 `_` 等原始标识符字面值（仅将内嵌 `` ` `` 转为 `'` 防越界闭合）。
+- **分句与括号平衡的对象引用缩写（[object-reference-labels.ts](../apps/web/src/features/workbench/object-reference-labels.ts)）。** 将内层 `「」` 转为 `“”`，超长摘要优先按首句与分句标点截断、回退未闭合括号/引号并补 `…`，保留短标题原样不变。
+- **批量知识读取步骤对象名投影（[tool_ledger.rs](../crates/data-agent/src/modules/runtime/tool_ledger.rs)、[store.rs](../crates/data-agent/src/modules/runtime/store.rs)、[read_conversation.rs](../crates/data-agent/src/use_cases/read_conversation.rs)）。** 按原顺序提取 `read_knowledge` 所有 `state == "ok"` 的去重 `object_id`，经既有 `candidate_meta_in_tx` 权限与启用状态过滤后以 `、` 拼接展示（撤权对象仍自动隐去）；同时移除 [data-tools.ts](../apps/agent/tools/data-tools.ts) 展开 `update_analysis_task` 时重复推入 `allOf` 的冗余 `adoptedResolution` 副本（减少约 5.5 KB 工具载荷）。
+- **面向用户的自然表达与持久化摘要边界（[resources.ts](../apps/agent/session/resources.ts)、[data-tools.ts](../apps/agent/tools/data-tools.ts)）。** 明确 `request_query.summary` 持久概括查询指标、范围与分组（不写「未执行」等临时状态），面向用户按回执事实用自然中文说明，不罗列内部协议状态键或原始 UUID。
+- **回归验证。** `make verify-code`、`python3 scripts/check_architecture.py`、`cargo test -p data-agent --lib analysis_answers`、`cargo test -p data-agent --lib tool_ledger`、[check-rendered-text.mjs](../tests/mvp/check-rendered-text.mjs)（含逐字符与全切点流式一致性）、[check-tool-schema.mjs](../tests/mvp/check-tool-schema.mjs)、`make verify-pi-transport`、[check-analysis-reports-browser.mjs](../tests/mvp/check-analysis-reports-browser.mjs) 及 [check-object-references-browser.mjs](../tests/mvp/check-object-references-browser.mjs) AST/标签单测均通过。
+
+### 3. 同题真实复测、代码冻结与独立盲测核验
+
+- **同题复测（`.local/checks/data-quality-review/after-retest.json`）。** 重启本地工作台后在真实浏览器以完全相同的两轮输入新建会话复测：第 1 轮先核对口径并保存草稿不执行，第 2 轮授权执行并自动唤醒解读；`SM3`（`21/36 = 58.3%`）、`SM1`（`16/36 = 44.4%`）、`SM2`（`8/32 = 25.0%`）与独立查询平台 `business.sqlite` 真值完全一致；首句协议字段堆砌、半截断引用标签、完成后「仅生成草稿，未执行」矛盾横幅全部消除，「查看运行步骤」正确显示 `阅读知识对象 · 语音任务达成率` 等批量读取对象名（历史基线会话的 3 条批量读取步骤也同步恢复对象名展示）。
+- **代码冻结与独立样本 #1（`.local/checks/data-quality-review/holdout1.json`，保留结论：数值通过、解读失败）。** 记录 9 个修改源文件的 SHA-256 冻结指纹后，使用全新表与双指标问题执行两轮真实测试（*「帮我看下 2026 年 8 月各语音链路阶段（stage）的阶段尝试成功率与阶段平均耗时，先查清口径并给出 SQL 草稿，先别执行。」* → *「确认执行刚才保存的 SQL 草稿，按结果列明各阶段（保留原英文 stage 编码）、成功率、平均耗时以及平台返回的数据新鲜度批次。」*）：
+  - **数值通过项：** 模型依据公共指标定义主动按强制要求的 `stage × endpoint_kind`（`edge`/`cloud`）拆分并加 `HAVING` 整日边界保护；第 2 轮执行返回 9 行共 27 项绑定指标值（如 `asr/cloud: 339, 78.17%, 1222.9 ms`、`tts/edge: 472, 97.03%, 419.7 ms` 等）与独立查询 `business.sqlite` 100% 一致，正确指出 `tts/cloud` 无记录属覆盖缺失而非 0，页面 DOM 中数据新鲜度批次清晰渲染为 `synthetic_snapshot_2026-10-04`（无反斜杠污染），3 次批量「阅读知识对象」步骤名完整显示，浏览器 `pageerror` 为 0，核验后 9 个冻结文件哈希完全未变。
+  - **解读失败项（原样保留作后续比较绑定修复基线）：** 在独立样本 #1 正文「读法要点」的自由文字概括中，`deepseek-flash`（`low` 思考档位）将 `asr`、`route` 与 `nlu` 一并写成「cloud 成功率高于 edge 或接近」，与同句括号内准确引用的绑定数值（`asr cloud 78.17% vs edge 88.64%`、`route cloud 65.18% vs edge 77.65%`）方向相反。该轮原始产物与会话原样保留为「数值通过、解读失败」，根因定位与受控比较绑定修复见上一节。
+- **用户封存盲测样本 #2（`.local/checks/data-quality-review/user-blind-holdout2-settled.json`）。** 在核验全部 9 个冻结文件 SHA-256 指纹未变后，在工作台新建会话原样输入用户封存题面（*「看 2026 年 9 月 11～16 日（含首尾、所有版本），把 SI_CONTACT 和 SI_VOLUME 各自被选中的轮次数、任务完成轮次数按选中量从高到低列出来，保留可复制的原始意图编码。」*）：
+  - **首次实际回答结果：** 首轮请求即完成口径核对、提交执行日粒度表 `syn_daily_intent_outcome` 查询（区间 `[2026-09-11, 2026-09-17)`、排他快照 `2026-10-04T00:00:00Z`、跨全部 `build_id`）并在首次 `query_result` 运行交付结果表：第 1 行 `` `SI_CONTACT` ``（被选中轮次数 `10`、任务完成轮次数 `3`、涉及 build 数 `1`、覆盖日-build 行数 `5`），第 2 行 `` `SI_VOLUME` ``（被选中轮次数 `9`、任务完成轮次数 `6`、涉及 build 数 `1`、覆盖日-build 行数 `5`）；严格按选中量降序排列，行内代码段中的原始意图编码 `SI_CONTACT` 与 `SI_VOLUME` 均无反斜杠转义污染、可直接复制，同时主动说明任务完成量顺序相反（`6` 高于 `3`）属于不同终态子集维度而非矛盾，并指出 6 天窗口各仅覆盖 5 行属无样本而非 0 轮（自动化浏览器脚本随后还按首答附带的待确认补充核对草稿多发了一轮确认，进一步核实单一版本为 `SB3` 及各自缺失日期，首答正文与首次绑定回执已完整独立存档）。
+
+## Linux x86_64 适配、试用阻塞修复与过期门禁修齐（2026-11-25）
+
+用户在全新 Linux `x86_64`（Ubuntu 24.04）机器上对全仓执行深度审计后，明确指示按“1. 当前机器启动、2. 修复、3. 修齐”三步一体推进：在本机配齐锁定工具链与跨平台基础设施、修复 P0 试用阻塞项与 P1 权限/回放/Mem0/传输/前端问题、同步静态产物并修齐过期门禁，完成独立代码审查并拉起持久化本地试用工作台。正式外部模型与外部 Embedding 请求为 0。
+
+### 1. 跨平台基础设施与本机工具链适配（`B-03`）
+
+- [compose.yaml](../compose.yaml)、[infra.py](../scripts/infra.py)、[check-infra.py](../scripts/check-infra.py)、[development.py](../scripts/development.py)、[README.md](../infra/README.md) 及测试夹具（[harness.mjs](../tests/mvp/harness.mjs)、[model-harness.mjs](../tests/runtime/model-harness.mjs)、[check-runtime.mjs](../tests/runtime/check-runtime.mjs)、[check-harness-cleanup.mjs](../tests/runtime/check-harness-cleanup.mjs) 等）取消对 macOS `colima-data-agent`、`linux/arm64` 与旧 `docker-compose` 单二进制的硬编码：macOS 继续走专用 `colima-data-agent` 上下文与 `arm64` 摘要，Linux 自动识别 `default` 上下文、`amd64`/`arm64` 锁定镜像摘要与 `docker compose` v2 插件；同时为 [harness.mjs](../tests/mvp/harness.mjs) 的 `internal()` 补齐 `204 No Content` 空响应解析，为 [model-harness.mjs](../tests/runtime/model-harness.mjs) 补齐与 `check-runtime.mjs` 一致的 75 秒新库初始化时限及 `stop()` 2 秒 `SIGTERM` 后 `SIGKILL` 兜底。
+
+### 2. P0 试用阻塞项修复（`B-01`..`B-06`）
+
+- **合成平台只读函数白名单与延迟鉴权（`B-01`）。** [server.py](../apps/platform-mock/server.py) 扩展纯只读 SQLite 标量、聚合、窗口、日期时间、数学与 JSON 提取函数（`like`、`glob`、`substring`、`trim`、`instr`、`concat`、`concat_ws`、`printf`、`format`、`iif`、`typeof`、`group_concat`、`string_agg`、`first_value`、`last_value`、`nth_value`、`ntile`、`percent_rank`、`cume_dist`、`time`、`julianday`、`unixepoch`、`timediff`、`ceil`、`ceiling`、`floor`、`trunc`、`mod`、`pow`、`power`、`sqrt`、`ln`、`log`、`log10`、`log2`、`exp`、`sign`、`json`、`json_extract`、`json_type`、`json_valid`、`json_array_length`、`json_quote`），继续拒绝 `load_extension`、`sqlite_version`、`random`、`randomblob`、`zeroblob`、`json_each`；并在 `/status` 延迟执行 SQL 时补传 `denied_tables`。
+- **`update_analysis_task` 跨供应商工具 Schema 与协议兼容（`B-02`）。** [data-tools.ts](../apps/agent/tools/data-tools.ts) 将 `CurrentAnalysisUpdate` 展开后的字段分支与 `required: ["action"]` 合并至根级 `{ type: "object", properties, required: ["action"], additionalProperties: false, allOf }`，根 `allOf` 完整保留 5 条动作条件规则与 `AdoptedSemanticResolution` 覆盖约束；[configured.ts](../apps/agent/provider/configured.ts) 为 `anthropic-messages` 显式关闭 `supportsStrictTools`（`openai-responses` 保持默认输出 `strict: false`）；[controlled.ts](../apps/agent/provider/controlled.ts) 支持校验 `openai-responses` 的 `additional_tools` 列表，并修复轻量 `transport` 无 `run` 对象时诊断日志空指针吞掉 `model_budget_exhausted` 的问题。
+- **同批工具范围切换阻断与刷新通知保留（`B-04`）。** [task-projection.ts](../apps/agent/session/task-projection.ts)、[deliver.ts](../apps/agent/session/deliver.ts) 与 [data-tools.ts](../apps/agent/tools/data-tools.ts) 接入 `hasPendingReset()`：同批前序工具产生 `context_reset` 时，后续工具不再向宿主提交会被 `resetLeaf()` 抹除上下文的数据库写操作，直接返回 `isError: true` 与 `context_reset_pending`；[deliver_run.rs](../crates/data-agent/src/use_cases/deliver_run.rs) 在 `refresh_context` 有效租约保护下恢复返回 `result_notification`。
+- **条件补丁非空字段传 `null` 明确拦截（`B-05`）。** [data-tools.ts](../apps/agent/tools/data-tools.ts) 的 `prepareArguments` 扩展拦截 `condition_patch.unset === null` 与 `condition_patch.set` 全部 10 个非空可选字段传 `null`，避免被 Pi 参数预处理静默删键变为空改，并给出精确 `unset` 或省略指引。
+- **模型配置默认容量与工作台错误提示（`B-06`）。** [model-configuration-draft.ts](../apps/web/src/features/models/model-configuration-draft.ts) 将新建模型默认 `payload_bytes_limit` 由 `131072`（`0.125 MiB`，难以容纳 19 个工具定义加多轮上下文）提升至 `2097152`（`2 MiB`）；[ModelConfigurationFields.tsx](../apps/web/src/features/models/ModelConfigurationFields.tsx) 修复「请求体 MiB」输入框全选退格清空与切入 `anthropic-messages` 非 `adaptive` 模式时的 `xhigh`/`max` 档位过滤；[Workbench.tsx](../apps/web/src/features/workbench/Workbench.tsx) 为 `run_failed` 展示可读中文错误说明，并在确认 `input_already_applied` 后隐藏已应用消息的撤回按钮。
+
+### 3. P1 权限重核、回放、Mem0、传输与前端修复（`S-01`..`S-11`）
+
+- **查询结果与记忆权限重核（`S-01`、`S-02`、`S-03`）。** [context_authority.rs](../crates/data-agent/src/use_cases/context_authority.rs) 在 `from_sources` 补齐已成功查询的 `query_results` 登记、在 `observe_delivery` 补齐 `personal_memories` 及依赖观察、在 `validate_in_tx` 递归校验 `historical_analyses`；[query_workflow.rs](../crates/data-agent/src/use_cases/query_workflow.rs)、[semantic_checks.rs](../crates/data-agent/src/modules/queries/semantic_checks.rs) 与 [queries/store.rs](../crates/data-agent/src/modules/queries/store.rs) 同时记录严格与历史结果权限键（保留结果 TTL 过期的历史展示语义，撤权则隐藏），对受限表访问上下文下的未执行涉表查询补做执行权限核验（无表常量 `SELECT` 在平台离线重放时不依赖平台在线，涉表查询在平台目录离线时失败关闭），并在 `history` 返回前剥离内部 `parameters`；[personal_assets.rs](../crates/data-agent/src/use_cases/personal_assets.rs) 的 `assert_read_skill_authority_in_tx` 补映射 `stale_source -> stale_context`。运行内仅读过而未采用的已停用知识保持 2026-11-24 已确认裁决（拒绝旧回执重放、不中断当前 run 模型发送许可，输出快照读取及新一轮/恢复时严格重核）。
+- **Mem0 中文字符准入、未提交向量清理与实时目录核验（`S-04`）。** [providers.py](../apps/memory/providers.py) 按 Unicode 字符数执行长度准入（消除中文 UTF-8 三倍字节惩罚），同时以 `min(上限, UTF-8字节数 + TOKEN_OVERHEAD_PER_TEXT)` 向宿主申报字节级 BPE 安全预占上界，并支持可选 `MEMORY_MODEL_API_KEY` / `DEEPSEEK_API_KEY`；[service.py](../apps/memory/service.py) 在 `/extract` 失败与 `/index` `superseded` 时清理 `pending` 向量；[personal_memory.rs](../crates/data-agent/src/use_cases/personal_memory.rs) 在索引执行与模型许可前接入实时 `catalog_context` 核验依赖。
+- **目录、提案、事务、预算与内部路由边界（`S-08`、`S-10`、`S-11`）。** [ingestion/store.rs](../crates/data-agent/src/modules/ingestion/store.rs) 为 `catalog-*` 原文读取补齐 `can_read_platform_source`；[knowledge/store.rs](../crates/data-agent/src/modules/knowledge/store.rs) 二跳表读权过滤覆盖 `query_example`、`term` 与结构依赖；[proposals/store.rs](../crates/data-agent/src/modules/knowledge/storage/proposals/store.rs) 过滤无权读取对象的提案；[skill_drafts.rs](../crates/data-agent/src/use_cases/skill_drafts.rs) 将 `confirm` 的幂等占位与业务校验合并进同一事务；[model_calls/store.rs](../crates/data-agent/src/modules/runtime/model_calls/store.rs) 在迟到 `finalize` 结算时补核 `cost_limit_micros` 熔断；[request.rs](../apps/api/src/request.rs) 与 [routes.rs](../apps/api/src/routes.rs) 在解包契约请求体前先校验 `/internal/*` 与用户凭据（确保未认证请求稳定返回 `401`），并为 `cancel_run` 桥接通知补齐上游 URL 白名单与禁重定向；[semantic_prefill.rs](../crates/data-agent/src/use_cases/semantic_prefill.rs)、[source_preparation.rs](../crates/data-agent/src/use_cases/source_preparation.rs)、[semantic_governance.rs](../crates/data-agent/src/use_cases/semantic_governance.rs) 补发 `Change::Catalog` 实时通知；[openapi.json](../packages/contracts/openapi.json) 补齐 `/health`、`/internal/context/refresh`、`/internal/model/connection`、`/internal/live-changes` 四个路由契约。
+- **Bridge 传输超时与前端交互修复（`S-05`..`S-09`、`S-11`）。** [client.ts](../apps/agent/transport/client.ts) 与 [server.ts](../apps/agent/transport/server.ts) 为 `RustTransport` 配置 750 秒 Undici 超时、调大 Bridge `keepAliveTimeout=95s`/`headersTimeout=100s`、在 `draining` 期间排空请求体并放行 `/cancel-run`；[deliver.ts](../apps/agent/session/deliver.ts) 消除工具结果容量双倍计费；[render.ts](../apps/agent/session/render.ts) 消除跨块 `}}` 边界敏感性；[useLiveConversation.ts](../apps/web/src/features/workbench/useLiveConversation.ts) 修复断线「重新连接」按钮失效；[KnowledgePage.tsx](../apps/web/src/features/knowledge/KnowledgePage.tsx) 以组件级 `replaceAllRef` 与纯函数更新兼顾 SSE 重连草稿保留和撤权对象立即剔除；[Workbench.tsx](../apps/web/src/features/workbench/Workbench.tsx) 隔离侧栏近期会话与全部会话弹窗搜索词；[SemanticCorrections.tsx](../apps/web/src/features/knowledge/SemanticCorrections.tsx) 增加提案「直接采用并保存」按钮；[api.ts](../apps/web/src/shared/api.ts)、[WorkspaceShell.tsx](../apps/web/src/shared/WorkspaceShell.tsx)、[AssetsPage.tsx](../apps/web/src/features/assets/AssetsPage.tsx)、[KnowledgeDocument.tsx](../apps/web/src/features/knowledge/KnowledgeDocument.tsx) 分别修复生产环境契约校验与非 JSON 错误兜底、移动端抽屉导航关闭、空资产切换残留与多章文档分章维护人展示。
+
+### 4. 图册、清单与门禁修齐
+
+- 重新生成 [manifest.json](../docs/dogfood/cockpit/manifest.json)，更新 [Makefile](../Makefile) 的 `verify-cockpit`（补齐 `data-agent-api`/`data-agent-worker` 构建依赖与 `--v2` 参数）；重渲染并通过 [implementation-atlas.html](../docs/architecture/implementation-atlas.html) 及 31 张模块架构图校验；修复 `docs/reviews/` 下 4 份历史文档的相对链接。
+- 上一节留待下一轮处理的三份过期门禁脚本（[check-model-startup.mjs](../tests/mvp/check-model-startup.mjs)、[check-public-index-upgrade.mjs](../tests/mvp/check-public-index-upgrade.mjs)、[check-retrieval-allowed-set.mjs](../tests/mvp/check-retrieval-allowed-set.mjs)）及关联回归脚本已在本轮对齐现行契约并实跑通过。
+
+### 5. 验收与要求变更
+
+- **绑定验收 `CURRENT-TOOL-PARAMETERS`（[check-tool-schema.mjs](../tests/mvp/check-tool-schema.mjs)）与 `ENTITY-EXPLANATION-PROVIDER`（[check-evidence-tool-shape.mjs](../tests/runtime/check-evidence-tool-shape.mjs)）：** 原值：从 `update_analysis_task.parameters.allOf` 分支查找 `.properties` 读取字段说明与条件定义。新值：断言根级 `parameters.type === "object"` 并直接从根 `parameters.properties` 读取字段（根 `allOf` 仍保留全部动作条件分支与 `AdoptedSemanticResolution` 约束）。原因：修复 `B-02` 使 `update_analysis_task` 满足 OpenAI Function Schema 根级 `type: "object"` 与 `properties` 要求。独立依据：OpenAI Responses / Chat Completions 工具协议要求及 `schema.json` 中 `CurrentAnalysisUpdate` 同源定义（78 条契约样本校验结果完全一致）。影响：仅字段树读取位置由 `allOf[0].properties` 移至根 `properties`，参数校验强弱不变。
+- **非绑定门禁 `make verify-startup`（[check-model-startup.mjs](../tests/mvp/check-model-startup.mjs)）：** 原值：正式启动等待默认 20 秒；点击「重新预填」后等待对象版本直接加一。新值：正式启动等待 90 秒（对齐启动器 75 秒 API + 25 秒各服务窗口）；首次「重新预填」等待 `prefill_status.state === "succeeded"` 后点击新增的「直接采用并保存」（`POST /knowledge-proposals/{id}/apply`）验证对象升版，二次「重新预填」（已有人工覆盖值）验证 `succeeded` 且人工保护值不变。原因：`4e6008e` 起启动器默认 `--prefill proposal` 模式，预填生成待审提案而非直接改写正式对象。独立依据：上一节记录及 [SemanticCorrections.tsx](../apps/web/src/features/knowledge/SemanticCorrections.tsx) / `POST /knowledge-proposals/{id}/apply` 既有后端接口。影响：完整恢复正式启动、聊天回环、两次模型预填提案采纳与人工覆盖保护端到端门禁，6 次调用与试验账本费用断言不变。
+- **非绑定门禁 [check-public-index-upgrade.mjs](../tests/mvp/check-public-index-upgrade.mjs) 与 [check-task-answer-scope.mjs](../tests/mvp/check-task-answer-scope.mjs)：** 原值：断言独立文档生成 `source_excerpt` 原文向量目标（2/4 条）并召回文档 `source_excerpt` 尾段；按 `space_id='demo'` 筛选 `knowledge_entry` 作业；使用旧字段名 `hit.kind`。新值：独立文档仅核验 `knowledge_entry` 语句窗口索引（`source_kind=''`，1/2 条），平台来源继续核验 `source_excerpt` 原文索引目标，命中类别字段对齐 `hit.record_kind`。原因与独立依据：`a7e8e64` 及上一节已确认裁决「文档不再登记原文向量目标」与 `KnowledgeSearchHit` 现行契约。影响：公共集合双写切换、个人资产隔离与平台原文回源核验保持不变。
+- **非绑定门禁 [check-evidence-response-budget.mjs](../tests/mvp/check-evidence-response-budget.mjs) 与 [check-source-search-admission.mjs](../tests/mvp/check-source-search-admission.mjs)：** 原值：断言新输入首请求收窄可见工具集（`narrowedRequests >= 4`、`canReadSource` 随步骤解锁）。新值：断言完整工具集始终可见（`narrowedRequests === 0`、`canReadSource === true`）。原因与独立依据：`4e1f2a6` 及 `CORE09-ERROR-HANDOFF` 已确认移除 v2 来源就绪工具收窄门。影响：宿主范围准入与预算裁剪断言不变。
+- **非绑定门禁 v1 -> v2 工具契约与载荷基线同步（[check-boundaries.mjs](../tests/mvp/check-boundaries.mjs)、[check-retrieval-allowed-set.mjs](../tests/mvp/check-retrieval-allowed-set.mjs)、[check-data-provider.mjs](../tests/mvp/check-data-provider.mjs)、[check-configured-compaction.mjs](../tests/mvp/check-configured-compaction.mjs)、[check-large-tool-context.mjs](../tests/mvp/check-large-tool-context.mjs)、[check-final-answer.mjs](../tests/mvp/check-final-answer.mjs)、[check-slow-retrieval-lease.mjs](../tests/mvp/check-slow-retrieval-lease.mjs)）：** 原值：使用已退役的 v1 工具名或字段（`read_knowledge` 读 Skill、单对象读取参数、结果 `.objects`、`present_analysis_answer`、`related_object_id`、非 `*` 查询加 `asset_after` 纯目录续页、重放比较含 `frozen_notification_covered`、`check-data-provider.mjs` 测试 `payload_bytes_limit: 65536`）。新值：对齐现行合同 2（Pi 原生 `read` 读 Skill 并核验停用后 `/internal/model/send` 报 `stale_context`、批量 `items`、`.hits`、`hints.related_object_ids`、`query: "*"` 配合 `asset_after` 纯资产目录续页、剥离 `frozen_notification_covered` 比较重放、`check-data-provider.mjs` 调为 `131072` 容纳 19 个工具 Schema 并同步加长合成文档使分页仍保持 `partial`）。独立依据：合同 2 `schema.json` 及 `DRAFT-EXECUTION-BOUNDARY` 既有修订。影响：各脚本核心安全、恢复、压缩与范围过滤断言完整保留。
+- **非绑定门禁事件驱动与运行时夹具同步（[check-runtime.mjs](../tests/runtime/check-runtime.mjs)、[check-history-browser.mjs](../tests/mvp/check-history-browser.mjs)、[check-source-sync-browser.mjs](../tests/runtime/check-source-sync-browser.mjs) 及 6 份脚本补必填 `source_limits: null`）：** 原值：`check-runtime.mjs` 以停止 Bridge 端口（`ECONNREFUSED`）等待 4 次重试耗尽；`check-history-browser.mjs` 手写 `assistant_delta` 缺 `chunk_seq` 并等旧轮询刷新；`check-source-sync-browser.mjs` 离开页面后等待已取消请求的响应事件。新值：`check-runtime.mjs` 用返回受控 `500 {"code":"unexpected_error"}` 的本地 stub 验证 4 次重试耗尽与 `run_failed`（`1a7f6f8` 起建连失败归还尝试）；`check-history-browser.mjs` 补 `chunk_seq` 并经 `/internal/live-changes` 触发事件刷新；`check-source-sync-browser.mjs` 核对离开页面主动 `AbortController` 取消事件（`requestfailed`）与非超级维护者角色。独立依据：`1a7f6f8`、工作台 SSE 事件化改造与 P-04 角色规则。影响：连续失败终止、1200+50 跨页事件去重与离开页面停止轮询的核心断言不变。
+
+### 6. 独立审查、验证与剩余边界
+
+- **独立代码审查。** 由未参与本轮编码实现的只读审查子代理完成全量 diff 初审与两轮修复复核，审查记录见 [linux-trial-and-audit-repairs-review-20261125.md](reviews/linux-trial-and-audit-repairs-review-20261125.md)，结论为 `passed`。
+- **实际执行通过的门禁。** `make verify`（含 `verify-materials`、`verify-delivery`、`verify-fixture`、`verify-node`、`verify-rust`）、`make verify-browser`、`make verify-infra`、`make verify-code`、`make verify-contracts`、`make verify-cockpit`、`python3 docs/architecture/check-implementation.py`、`python3 scripts/test_platform_sources.py`、`node tests/mvp/check-agent-library.mjs`（218 项隔离 MySQL Rust 库单测与锁/检查点回归）、`node tests/mvp/check-tool-schema.mjs`、`make verify-pi-transport`、`make verify-startup`、`make verify-memory`、`make verify-runtime-regression`、`node tests/runtime/check-configured-provider.mjs`、`make verify-model-provider`、`node tests/mvp/check-model-configuration.mjs`、`node tests/mvp/check-configured-compaction.mjs`、`node tests/mvp/check-authority.mjs`、`node tests/mvp/check-boundaries.mjs`、`node tests/mvp/check-context-dependencies.mjs`、`node tests/mvp/check-query-boundaries.mjs`、`node tests/mvp/check-query-text-authority.mjs`、`node tests/mvp/check-table-catalog-access.mjs`、`node tests/mvp/check-task-projection.mjs`、`node tests/mvp/check-slow-retrieval-lease.mjs`、`node tests/mvp/check-public-index-upgrade.mjs`、`node tests/mvp/check-retrieval-allowed-set.mjs`、`node tests/runtime/check-source-sync-browser.mjs`、`node tests/mvp/check-history-browser.mjs`、`node tests/mvp/check-semantic-role-boundaries-browser.mjs` 及 `git diff --check` 全部退出码为 0。
+- **剩余边界与已知限制。** 本轮全部验证均基于本机真实 MySQL、Milvus、Chromium 与本地合成协议端点，正式外部模型请求为 0，真实外部供应商（OpenAI / Anthropic / DeepSeek）端到端冒烟仍需用户在「模型配置」页填入自有 API Key 后验证；未纳入本轮改动的已知边界包括：部分非读取类工具（如 `update_analysis_task`、`save_analysis_evidence`、`save_analysis_report`、`prepare_skill_draft`、`propose_semantic_change`）与 `POST /knowledge-proposals` 的幂等缓存重放未二次重核表读权、Mem0 `infer=False` 在 `unknown` 后写 Milvus 失败仍保持 `unknown`、`journal.ts` 按设计对残损尾行拒绝整文件、以及 `verify-hybrid-scope` 中其余未绑定的合同 1 长电池旧脚本（`check-retrieval-ranking.mjs`、`check-retrieval-channel-faults.mjs` 等）留待后续按需迁移。
 
 ## 本地试用收尾（2026-11-25）
 

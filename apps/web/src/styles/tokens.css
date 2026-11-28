@@ -1,0 +1,74 @@
+:root {
+  /* Framed-sheet (seed 654287967): cool slate L-frame, white inset work sheet, near-black primary, mineral teal data accent */
+  --ground: #f3f5f8;
+  --surface: #ffffff;
+  --raised: #f7f9fb;
+  --subtle: #eef2f6;
+  --active: #e5eaf1;
+  --border: #e3e8ef;
+  --rule: #edf1f5;
+  --control: #c8d1dc;
+
+  --text: #12161f;
+  --ink: #12161f;
+  --ink-body: #1f2735;
+  --ink-secondary: #3c4657;
+  --ink-muted: #515b6d;
+  --muted: #515b6d;
+  --faint: #5d6779;
+
+  --primary: #171c26;
+  --primary-hover: #0d1118;
+  --accent: #176076;
+  --accent-hover: #124d5f;
+  --accent-soft: #e6f2f6;
+  --accent-border: #b8dce6;
+
+  /* Compatibility aliases across feature modules */
+  --bg-canvas: var(--surface);
+  --bg-surface: var(--raised);
+  --bg-subtle: var(--subtle);
+  --bg-selected: var(--active);
+  --brand: var(--primary);
+  --brand-hover: var(--primary-hover);
+  --brand-ink: var(--accent);
+  --line: var(--border);
+  --line-strong: var(--control);
+
+  --danger: #a6242c;
+  --danger-bg: #ffedea;
+  --danger-border: #f5c6c2;
+  --success: #1b6b46;
+  --success-bg: #e2f7ec;
+  --success-border: #bce6cf;
+  --warning: #85420e;
+  --warning-bg: #fff8e6;
+  --warning-border: #f2d794;
+
+  --chart-1: #176076;
+  --chart-2: #2b6cb0;
+  --chart-3: #9c650c;
+
+  --sheet-inset: 8px;
+  --radius-sheet: 14px;
+  --radius-lg: 10px;
+  --radius-md: 8px;
+  --radius-sm: 6px;
+  --sidebar-width: 228px;
+  --topbar-height: 48px;
+
+  --font-sans: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "PingFang SC", "Noto Sans SC", "Microsoft YaHei", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+}
+
+::selection {
+  background: #d4ecf3;
+  color: #10252d;
+}
+
+:where(button) {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  padding: 0;
+}

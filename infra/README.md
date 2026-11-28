@@ -9,7 +9,7 @@
 | etcd | 3.5.25 | Milvus 3.0.2 官方 Compose 配套版本 |
 | MinIO | RELEASE.2024-12-18T13-15-44Z，milvusdb/minio | Milvus 3.0.2 官方 Compose 配套版本 |
 
-[images.lock.json](images.lock.json) 记录 2026-10-03 核对的多架构 index digest、ARM64 manifest digest 和公开来源。[compose.yaml](../compose.yaml) 同时固定 tag、index digest 与 `linux/arm64`；烟测进一步检查实际容器使用的镜像及架构。已缓存的固定镜像会复用，首次缺少镜像时才拉取。
+[images.lock.json](images.lock.json) 记录 2026-10-03 核对的多架构 index digest、ARM64 manifest digest 和公开来源。[compose.yaml](../compose.yaml) 同时固定 tag、多架构 index digest 与宿主架构（macOS Apple Silicon 为 `linux/arm64`，Linux `x86_64` 自动使用 `linux/amd64`，可通过 `DATA_AGENT_DOCKER_PLATFORM` 显式指定）；烟测进一步检查实际容器使用的镜像及本机原生架构。已缓存的固定镜像会复用，首次缺少镜像时才拉取。
 
 ## 与官方示例的差异
 
